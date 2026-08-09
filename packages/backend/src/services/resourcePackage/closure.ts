@@ -402,6 +402,22 @@ export async function walkExportClosure(
     )
   }
 
+  // 框架 built-in **不能自己当根**（用户拍板 2026-08-09）。
+  //
+  // built-in 作为闭包**依赖**照旧支持：它进闭包是为了遍历依赖和改写引用，最终不产 op、
+  // 只留 `builtins` 声明，导入侧按名字绑到对端自己 seed 的那一个。但 built-in 自己当根，
+  // 整个包会是**零资源**——导入它等于什么都不做，而这个退化形态要在 preview / commit /
+  // finalize / 前端各写一遍「零 entry 也算有效」的特例。用一个 4xx 消灭这一整类边界，
+  // 比让四层都长出特判划算得多。
+  //
+  // 拦在这里而不是各路由：六类导出入口共用 walkExportClosure，一处即全覆盖。
+  if (rootResource.builtin === true) {
+    throw new ValidationError(
+      'package-builtin-root-not-exportable',
+      `'${rootResource.name}' is a framework built-in ${root.type}; every instance ships its own copy. To share a workflow that uses it, export that workflow instead.`,
+    )
+  }
+
   const resources = [...byKey.values()]
   assertNoDuplicateNames(resources)
   return { root: rootResource, resources, callRefs }

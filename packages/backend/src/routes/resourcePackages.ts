@@ -157,7 +157,16 @@ function parseRootFence(c: Context): Record<string, unknown> {
   }
   for (const key of FENCE_STRING) {
     const raw = c.req.query(key)
-    if (raw !== undefined && raw !== '') out[key] = raw
+    if (raw === undefined) continue
+    // 显式传了却是空 ⇒ 拒绝，**不能**当成「没传」。
+    //
+    // 静默降级是这里最坏的一档：`?expectedConfigHash=` 会返回 200 + 一个完全没有
+    // 保护的 zip，而 `?expectedConfigHash=wrong` 才 409。调用方（尤其是拼 URL 时
+    // 变量取空的前端）会以为自己有「所见非所得」防护，实际什么都没有。
+    if (raw === '') {
+      throw new ValidationError('package-invalid', `${key} must not be empty`)
+    }
+    out[key] = raw
   }
   return out
 }

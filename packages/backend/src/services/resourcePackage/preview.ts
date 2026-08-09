@@ -230,7 +230,15 @@ export function expectTokenOf(
       return { expectedConfigHash: pluginOperationConfigHashOf(rowToPluginLike(row)) }
     case 'workflow':
     case 'workgroup':
-      return { expectedVersion: Number(row.version ?? 1) }
+      // `version` 只被**内容**写路径推进（definition / 成员 / 设置）。ACL 写路径
+      // （`updateResourceAcl`）改的是 `visibility` / grants，只推 `aclRevision` 与
+      // `updatedAt`，**不动 version** —— 少了下面这一维，「把工作流从 private 改成
+      // public」这类改动对 fence 完全不可见：页面上看到的还是 v3，导出的也是 v3，
+      // 但它的可见面已经换了一个。
+      return {
+        expectedVersion: Number(row.version ?? 1),
+        expectedAclRevision: Number(row.aclRevision ?? 0),
+      }
   }
 }
 

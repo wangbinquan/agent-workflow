@@ -40,9 +40,7 @@ import {
   workgroupMembers,
   workgroups,
 } from '../src/db/schema'
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { decodeZip } from '../src/services/skill-zip'
-import { encodeZip, type ZipFile } from '../src/util/zip'
 import { createManagedSkillWithFiles } from '../src/services/skill'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
@@ -80,31 +78,6 @@ async function makeInstance(): Promise<{ db: DbClient; appHome: string }> {
     updatedAt: Date.now(),
   } as never)
   return { db, appHome }
-}
-
-/** 改写包内 manifest.yaml 后重新打包（只用于构造 tampered 输入）。 */
-function repackWithManifest(
-  zip: Uint8Array,
-  mutate: (m: Record<string, unknown>) => Record<string, unknown>,
-): Uint8Array {
-  const files: ZipFile[] = []
-  for (const entry of decodeZip(zip)) {
-    if (entry.isDir) continue
-    files.push({
-      path: entry.path,
-      bytes:
-        entry.path === 'manifest.yaml'
-          ? new TextEncoder().encode(
-              stringifyYaml(
-                mutate(
-                  parseYaml(new TextDecoder().decode(entry.bytes())) as Record<string, unknown>,
-                ),
-              ),
-            )
-          : entry.bytes(),
-    })
-  }
-  return encodeZip(files)
 }
 
 // 二进制辅助文件：utf-8 解码会破坏它，所以它同时锁住「字节原样」。
@@ -740,17 +713,24 @@ describe('Q6 · 框架 built-in：照常导出、标记出来、导入时自动�
   })
 })
 
-describe('AC-9 · **built-in 作为导出根**：产物必须能被自己的 parser 接受', () => {
-  // 这条锁的是一次真实缺陷（设计门 P1）。`builtin:` 这第五种 wire 形态最初只加进了
-  // `bundle/payload.ts` 的私有 regex，没进统一的 `ResourceRefAst` / 域 codec。于是
-  // 三处各说各话：serializer **生成** `builtin:` 根（写 `local:` 会判 dangling-root），
-  // 而 `RootRefSchema` 只认 `local:` / `external:`、`parse.ts` 又硬要求根 `local:` 且
-  // 出现在 `manifest.resources` 里。实测导出一个 built-in 工作流，产物被**自己的
-  // parser** 判 `package-invalid`。
+describe('AC-9 · built-in 的两种位置：作**依赖**支持，作**根**拒绝', () => {
+  // 这一段的历史值得留着。`builtin:` 这第五种 wire 形态最初只加进了 `bundle/payload.ts`
+  // 的私有 regex，没进统一的 `ResourceRefAst` / 域 codec，于是 serializer 生成它、而
+  // `RootRefSchema` 与 `parse.ts` 不认它——导出一个 built-in 根，产物被**自己的 parser**
+  // 判 `package-invalid`。
   //
-  // 用往返而不是源码断言：源码里有没有 `builtin` 这几个字母，挡不住「四处 regex 各
-  // 认各的」——只有真跑一遍 export→parse 才会暴露。
-  test('导出 built-in 工作流 → 解析成功，rootRef 是 builtin: 且不入 resources', async () => {
+  // 我第一次"修好"它时只跑了 `export → parse` 就宣布通了。实现门随后指出：后面还有
+  // `preview` 只遍历 ops（零 op ⇒ 零 entry）、`commit` 的 `translatedBundle` 硬要求
+  // `local:` 根、`finalizeInTx` 第二道 local-only 守卫、前端要求 entries 非空——**整条
+  // 导入链根本走不通**。而我为那个修复写的"真实往返"用例，恰好也停在 parse，盲区与缺陷
+  // 完全重合。
+  //
+  // 教训写在这里，因为它比这条 AC 本身更通用：**一个只覆盖到你改动那一层的往返测试，
+  // 不叫往返测试**。同文件其他往返用例都跑到 commit，唯独这条没有。
+  //
+  // 最终语义由用户拍板：built-in 作根 → 导出侧 422 拒绝（消灭「零资源空包」这一整类
+  // 边界，而不是让四层各长一个特例）；built-in 作**依赖**照旧完整支持。
+  test('built-in 作为**根** ⇒ 导出侧 422 拒绝，且给出可操作的下一步', async () => {
     const src = await makeInstance()
     try {
       const builtinId = ulid()
@@ -766,56 +746,132 @@ describe('AC-9 · **built-in 作为导出根**：产物必须能被自己的 par
         updatedAt: 1,
       } as never)
 
-      const pkg = await exportResourcePackage(
+      const err = await exportResourcePackage(
         src.db,
         actorOf('u1'),
         { type: 'workflow', id: builtinId },
         { appHome: src.appHome },
+      ).then(
+        () => null,
+        (e: unknown) => e as { code?: string; message?: string; status?: number },
       )
-      const parsed = await parseResourcePackage(pkg.zip)
-
-      expect(parsed.bundle.rootRef).toBe('builtin:workflow/aw-builtin-probe')
-      // built-in 不产 create op、不入 resources —— 导入侧「自动忽略」靠的正是这一点。
-      expect(parsed.bundle.ops).toHaveLength(0)
-      expect(parsed.manifest.resources).toHaveLength(0)
-      expect(parsed.manifest.builtins).toEqual([{ type: 'workflow', name: 'aw-builtin-probe' }])
-      // 根仍要能报出类型/名字（receipt 要用）。
-      expect(parsed.manifest.root).toMatchObject({ type: 'workflow', name: 'aw-builtin-probe' })
+      expect(err?.code).toBe('package-builtin-root-not-exportable')
+      // 文案要告诉用户**下一步做什么**，否则 422 只是一堵墙。
+      expect(err?.message).toContain('export that workflow instead')
     } finally {
       removeTempDirSync(src.appHome)
     }
   })
 
-  test('manifest.root 与 builtin rootRef 不一致 ⇒ 拒绝（不能只信其中一处）', async () => {
+  test('built-in 作为**依赖** ⇒ 完整走通 export → parse → preview → commit，并绑到对端自己的 built-in', async () => {
+    // 这条是上面那个教训的正面兑现：跑完**整条链**，而且用**两个实例**——目标实例的
+    // built-in 是另一个 id，只有按名字绑定才可能对上。只到 parse 为止的版本发现不了
+    // 「preview 零 entry」「commit 拒 local 根」这类下游断裂。
     const src = await makeInstance()
+    const dst = await makeInstance()
     try {
-      const builtinId = ulid()
-      await src.db.insert(workflows).values({
-        id: builtinId,
-        name: 'aw-builtin-probe2',
+      const srcBuiltin = ulid()
+      await src.db.insert(agents).values({
+        id: srcBuiltin,
+        name: 'aw-skill-merger',
         description: '',
-        definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+        outputs: '[]',
+        permission: '{}',
+        skills: '[]',
+        dependsOn: '[]',
+        mcp: '[]',
+        plugins: '[]',
+        frontmatterExtra: '{}',
+        bodyMd: '',
         ownerUserId: '__system__',
         visibility: 'public',
         builtin: true,
         createdAt: 1,
         updatedAt: 1,
       } as never)
+      const wfId = ulid()
+      await src.db.insert(workflows).values({
+        id: wfId,
+        name: 'uses-builtin',
+        description: '',
+        definition: JSON.stringify({
+          $schema_version: 4,
+          inputs: [],
+          edges: [],
+          nodes: [{ id: 'n1', kind: 'agent-single', agentId: srcBuiltin }],
+        }),
+        ownerUserId: 'u1',
+        visibility: 'private',
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+
       const pkg = await exportResourcePackage(
         src.db,
         actorOf('u1'),
-        { type: 'workflow', id: builtinId },
+        { type: 'workflow', id: wfId },
         { appHome: src.appHome },
       )
-      // 篡改 manifest.root.name，让它与 bundle.rootRef 指向不同的 built-in。
-      const tampered = repackWithManifest(pkg.zip, (m) => {
-        ;(m.root as { name: string }).name = 'aw-something-else'
-        return m
+      const parsed = await parseResourcePackage(pkg.zip)
+
+      // built-in 不产 op、不入 resources，只留一条依赖声明。
+      expect(parsed.manifest.builtins).toEqual([{ type: 'agent', name: 'aw-skill-merger' }])
+      expect(parsed.manifest.resources.map((r) => r.type)).toEqual(['workflow'])
+      expect(parsed.bundle.rootRef).toBe(`local:${parsed.manifest.root.slug}`)
+
+      // 目标实例的同名 built-in 是**另一个 id**。
+      const dstBuiltin = ulid()
+      expect(dstBuiltin).not.toBe(srcBuiltin)
+      await dst.db.insert(agents).values({
+        id: dstBuiltin,
+        name: 'aw-skill-merger',
+        description: '',
+        outputs: '[]',
+        permission: '{}',
+        skills: '[]',
+        dependsOn: '[]',
+        mcp: '[]',
+        plugins: '[]',
+        frontmatterExtra: '{}',
+        bodyMd: '',
+        ownerUserId: '__system__',
+        visibility: 'public',
+        builtin: true,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+
+      const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+        box,
+        importId: ulid(),
       })
-      await expect(parseResourcePackage(tampered)).rejects.toMatchObject({
-        code: 'package-invalid',
-      })
+      const receipt = await commitResourcePackage(
+        { db: dst.db, appHome: dst.appHome, box },
+        actorOf('u1'),
+        {
+          pkg: parsed,
+          previewToken: preview.previewToken,
+          decisions: preview.entries.map((e) => ({
+            localSlug: e.localSlug,
+            action: 'new' as const,
+          })),
+        },
+      )
+      expect(receipt.root).toMatchObject({ resourceType: 'workflow', action: 'create' })
+
+      // 落地的 definition 必须指向**目标实例**的 built-in id，不是源实例那个。
+      const landed = dst.db
+        .select()
+        .from(workflows)
+        .all()
+        .find((r) => r.name === 'uses-builtin')
+      const def = JSON.parse(String(landed?.definition ?? '{}')) as {
+        nodes?: Array<{ agentId?: unknown }>
+      }
+      expect(def.nodes?.[0]?.agentId).toBe(dstBuiltin)
+      expect(def.nodes?.[0]?.agentId).not.toBe(srcBuiltin)
     } finally {
+      removeTempDirSync(dst.appHome)
       removeTempDirSync(src.appHome)
     }
   })

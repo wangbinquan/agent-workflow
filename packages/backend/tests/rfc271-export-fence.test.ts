@@ -15,11 +15,13 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, mcps, users, workflows } from '../src/db/schema'
+import { agents, mcps, plugins, skills, users, workflows, workgroups } from '../src/db/schema'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
+import { expectTokenOf } from '../src/services/resourcePackage/preview'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const actorOf = (id: string): Actor =>
@@ -197,8 +199,12 @@ describe('AC-12 · mcp 用 configHash（形态与 agent 不同，取自同一份
   })
 })
 
-describe('AC-12 · workflow 仍用 expectedVersion（不得因为补齐别的类型而回归）', () => {
-  test('对得上导出成功；对不上 409', async () => {
+describe('AC-12 · workflow / workgroup：version + aclRevision 两维', () => {
+  // 这两类曾经**只**比 `version`。问题在于 `version` 只被内容写路径推进
+  // （definition / 成员 / 设置），而 ACL 写路径改的是 visibility / grants，只推
+  // `aclRevision` 与 `updatedAt`。于是「把工作流从 private 改成 public」对 fence
+  // 完全不可见：页面上是 v3、导出的也是 v3，但它的可见面已经换了一个。
+  test('两维都对上 ⇒ 成功；version 对不上 ⇒ 409', async () => {
     const { db, appHome } = await seed()
     const wfId = ulid()
     await db.insert(workflows).values({
@@ -209,6 +215,7 @@ describe('AC-12 · workflow 仍用 expectedVersion（不得因为补齐别的类
       ownerUserId: 'u1',
       visibility: 'private',
       version: 2,
+      aclRevision: 0,
       createdAt: 1,
       updatedAt: 1,
     } as never)
@@ -217,7 +224,7 @@ describe('AC-12 · workflow 仍用 expectedVersion（不得因为补齐别的类
       db,
       actorOf('u1'),
       { type: 'workflow', id: wfId },
-      { appHome, expect: { expectedVersion: 2 } },
+      { appHome, expect: { expectedVersion: 2, expectedAclRevision: 0 } },
     )
     expect(ok.zip.byteLength).toBeGreaterThan(0)
 
@@ -227,7 +234,228 @@ describe('AC-12 · workflow 仍用 expectedVersion（不得因为补齐别的类
           db,
           actorOf('u1'),
           { type: 'workflow', id: wfId },
-          { appHome, expect: { expectedVersion: 1 } },
+          { appHome, expect: { expectedVersion: 1, expectedAclRevision: 0 } },
+        ),
+      ),
+    ).toBe('package-root-changed')
+  })
+
+  test('**只有 ACL 漂移**（version 不变）也必须 409 —— 这是补这一维的全部理由', async () => {
+    const { db, appHome } = await seed()
+    const wfId = ulid()
+    await db.insert(workflows).values({
+      id: wfId,
+      name: 'wf-acl',
+      description: '',
+      definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+      ownerUserId: 'u1',
+      visibility: 'private',
+      version: 3,
+      aclRevision: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+
+    // 模拟 ACL 写路径：只推 aclRevision / visibility，**不动 version**。
+    await db
+      .update(workflows)
+      .set({ visibility: 'public', aclRevision: 1, updatedAt: 2 } as never)
+      .where(eq(workflows.id, wfId))
+
+    expect(
+      await codeOf(
+        exportResourcePackage(
+          db,
+          actorOf('u1'),
+          { type: 'workflow', id: wfId },
+          // 页面加载时看到的是 v3 / acl 0。
+          { appHome, expect: { expectedVersion: 3, expectedAclRevision: 0 } },
+        ),
+      ),
+    ).toBe('package-root-changed')
+  })
+
+  test('workgroup 同形（两维齐；缺一维 ⇒ package-invalid）', async () => {
+    const { db, appHome } = await seed()
+    const wgId = ulid()
+    await db.insert(workgroups).values({
+      id: wgId,
+      name: 'squad',
+      description: '',
+      instructions: '',
+      mode: 'free_collab',
+      leaderMemberId: null,
+      shareOutputs: true,
+      directMessages: false,
+      blackboard: false,
+      maxRounds: 20,
+      completionGate: false,
+      clarifyBudget: 3,
+      fanOut: false,
+      ownerUserId: 'u1',
+      visibility: 'private',
+      version: 5,
+      aclRevision: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+
+    const ok = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workgroup', id: wgId },
+      { appHome, expect: { expectedVersion: 5, expectedAclRevision: 2 } },
+    )
+    expect(ok.zip.byteLength).toBeGreaterThan(0)
+
+    expect(
+      await codeOf(
+        exportResourcePackage(
+          db,
+          actorOf('u1'),
+          { type: 'workgroup', id: wgId },
+          { appHome, expect: { expectedVersion: 5 } },
+        ),
+      ),
+    ).toBe('package-invalid')
+  })
+})
+
+describe('AC-12 · skill 三维（contentVersion + metaRevision + aclRevision）', () => {
+  // 技能是唯一三维的：只改 description 会推 metaRevision 而 contentVersion 不变，
+  // 只带后者的 fence 完全看不见这次修改。
+  const seedSkill = async (db: DbClient): Promise<string> => {
+    const id = ulid()
+    await db.insert(skills).values({
+      id,
+      name: 'helper',
+      description: '',
+      sourceKind: 'managed',
+      managedPath: null,
+      ownerUserId: 'u1',
+      visibility: 'private',
+      contentVersion: 4,
+      metaRevision: 2,
+      aclRevision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+    return id
+  }
+
+  test('三维齐且都对 ⇒ 成功', async () => {
+    const { db, appHome } = await seed()
+    const id = await seedSkill(db)
+    const ok = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'skill', id },
+      {
+        appHome,
+        expect: { expectedContentVersion: 4, expectedMetaRevision: 2, expectedAclRevision: 1 },
+      },
+    )
+    expect(ok.zip.byteLength).toBeGreaterThan(0)
+  })
+
+  test('**只有 metaRevision 漂移** ⇒ 409（内容没变不等于没改）', async () => {
+    const { db, appHome } = await seed()
+    const id = await seedSkill(db)
+    expect(
+      await codeOf(
+        exportResourcePackage(
+          db,
+          actorOf('u1'),
+          { type: 'skill', id },
+          {
+            appHome,
+            expect: { expectedContentVersion: 4, expectedMetaRevision: 1, expectedAclRevision: 1 },
+          },
+        ),
+      ),
+    ).toBe('package-root-changed')
+  })
+
+  test('少给一维 ⇒ package-invalid（不能只比给了的那两维）', async () => {
+    const { db, appHome } = await seed()
+    const id = await seedSkill(db)
+    expect(
+      await codeOf(
+        exportResourcePackage(
+          db,
+          actorOf('u1'),
+          { type: 'skill', id },
+          { appHome, expect: { expectedContentVersion: 4, expectedMetaRevision: 2 } },
+        ),
+      ),
+    ).toBe('package-invalid')
+  })
+})
+
+describe('AC-12 · plugin 用 configHash（含安装态，不只是配置文本）', () => {
+  const seedPlugin = async (db: DbClient): Promise<string> => {
+    const id = ulid()
+    await db.insert(plugins).values({
+      id,
+      name: 'fmt',
+      description: '',
+      spec: 'npm:some-plugin@1.0.0',
+      sourceKind: 'npm',
+      enabled: true,
+      cachedPath: '/tmp/p/1',
+      resolvedVersion: '1.0.0',
+      installedAt: 100,
+      ownerUserId: 'u1',
+      visibility: 'private',
+      aclRevision: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+    return id
+  }
+
+  test('错的 hash ⇒ 409；不给 fence ⇒ 正常导出', async () => {
+    const { db, appHome } = await seed()
+    const id = await seedPlugin(db)
+    expect(
+      await codeOf(
+        exportResourcePackage(
+          db,
+          actorOf('u1'),
+          { type: 'plugin', id },
+          { appHome, expect: { expectedConfigHash: 'nope' } },
+        ),
+      ),
+    ).toBe('package-root-changed')
+
+    const ok = await exportResourcePackage(db, actorOf('u1'), { type: 'plugin', id }, { appHome })
+    expect(ok.zip.byteLength).toBeGreaterThan(0)
+  })
+
+  test('**只改 enabled** 也要让 hash 变 —— 安装/启用态属于导出语义的一部分', async () => {
+    const { db, appHome } = await seed()
+    const id = await seedPlugin(db)
+    // 先拿到当前 hash（用一次成功导出证明它是对的）。
+    const before = expectTokenOf('plugin', {
+      ...(db
+        .select()
+        .from(plugins)
+        .all()
+        .find((r) => r.id === id) as Record<string, unknown>),
+    }) as { expectedConfigHash: string }
+
+    await db
+      .update(plugins)
+      .set({ enabled: false } as never)
+      .where(eq(plugins.id, id))
+
+    expect(
+      await codeOf(
+        exportResourcePackage(
+          db,
+          actorOf('u1'),
+          { type: 'plugin', id },
+          { appHome, expect: before },
         ),
       ),
     ).toBe('package-root-changed')

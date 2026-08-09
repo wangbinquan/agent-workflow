@@ -310,12 +310,11 @@ export function serializeClosure(
   const rawBundle = {
     bundleVersion: BUNDLE_VERSION,
     ops,
-    // ⚠️ built-in 根同样**不产 op**，写成 `local:` 会让 parser 在
-    // 「local root 必须出现在 manifest.resources」上判 `bundle-dangling-root`
-    // （built-in 恰好被排除出 resources）。用 `builtin:` 让它自描述。
-    rootRef: builtinOfId.has(closure.root.id)
-      ? `builtin:${closure.root.type}/${closure.root.name}`
-      : `local:${slugOfId.get(closure.root.id)!}`,
+    // built-in **不能自己当根**（`walkExportClosure` 已 422 拦下），所以根一定有
+    // create op、一定有 slug。曾经这里为 built-in 根写 `builtin:`，但那条路要求
+    // preview / commit / finalize / 前端各长一个「零 entry 也算有效」的特例，
+    // 收益只是一个导入后什么都不做的空包——改为在导出侧消灭这一整类边界。
+    rootRef: `local:${slugOfId.get(closure.root.id)!}`,
   }
 
   // 导出端必须吃自己的机器契约。没有这道最终校验，坏的 legacy/corrupt 行会让 API
