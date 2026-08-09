@@ -82,18 +82,69 @@ export const WINDOWS_INTERPRETER_CANDIDATES: Readonly<Record<ScriptLanguage, str
 }
 
 /**
- * Derive Git for Windows' `bash.exe` from a resolved `git` path.
- * Returns null when the shape does not match, rather than guessing.
+ * Derive Git for Windows' `bash.exe` candidates from a resolved `git` path.
+ *
+ * Git for Windows puts THREE directories on PATH — `cmd\`, `mingw64\bin\`
+ * (or `mingw32\bin\`) and sometimes `usr\bin\` — and which one `which('git')`
+ * hits depends purely on PATH ORDER. The first version of this function assumed
+ * the `<root>\cmd\git.exe` shape and went up exactly two levels, so on a host
+ * where `mingw64\bin` sorts first it computed
+ * `<root>\mingw64\bin\bash.exe`, which does not exist, and every bash script
+ * node failed with `script-interpreter-missing`. That is exactly what the
+ * GitHub `windows-latest` runner does — RFC-253 T41's e2e caught it the first
+ * time anything in this repo actually EXECUTED a script node on real Windows
+ * (run 31324148366: `which(git)="…\Git\mingw64\bin\git.exe"
+ * derived="…\Git\mingw64\bin\bash.exe" exists=false`).
+ *
+ * So: walk UP from git's directory (capped at 3 ancestors, which covers
+ * `<root>\mingw64\bin`) and offer `<ancestor>\bin\bash.exe` plus
+ * `<ancestor>\usr\bin\bash.exe` at each level. This is still not guessing —
+ * every candidate goes through `existsSync` + a `--version` probe before it is
+ * used, and every candidate stays UNDER git's own install root, so the WSL
+ * launcher at `System32\bash.exe` remains unreachable by construction.
+ */
+export function gitBashCandidatesFromGitPath(
+  gitPath: string,
+  dirnameOf: (p: string) => string,
+): string[] {
+  if (gitPath.length === 0) return []
+  const out: string[] = []
+  let dir = dirnameOf(gitPath)
+  // 向上走的**终止条件是形状**，不是层数：只要当前目录名还是 Git for Windows 的已知
+  // 中间层就继续，否则立刻停。这样 `<root>\\cmd\\git.exe` 只上一层、
+  // `<root>\\mingw64\\bin\\git.exe` 上两层，而**永远走不到盘根**——先前用「上 3 层」
+  // 封顶的写法会一路捞出 `C:\\bin\\bash.exe`，那既越过了 git 的安装树，也就失去了
+  // 「WSL 启动器不可达」这个承重不变量的依据。
+  const INTERMEDIATE = new Set(['bin', 'cmd', 'mingw64', 'mingw32', 'usr'])
+  for (;;) {
+    const parent = dirnameOf(dir)
+    if (parent.length === 0 || parent === dir) break
+    const name = dir
+      .slice(parent.length)
+      .replace(/^[\\/]+/, '')
+      .toLowerCase()
+    if (!INTERMEDIATE.has(name)) break
+    for (const suffix of ['bin\\bash.exe', 'usr\\bin\\bash.exe']) {
+      const candidate = `${parent}\\${suffix}`
+      if (!out.includes(candidate)) out.push(candidate)
+    }
+    dir = parent
+  }
+  return out
+}
+
+/**
+ * Back-compat single-answer form: the FIRST candidate, or null.
+ *
+ * Kept because it names the canonical `<root>\cmd\git.exe` → `<root>\bin\bash.exe`
+ * shape that most Windows installs still hit; callers that need the full
+ * PATH-order-independent set use {@link gitBashCandidatesFromGitPath}.
  */
 export function gitBashFromGitPath(
   gitPath: string,
   dirnameOf: (p: string) => string,
 ): string | null {
-  if (gitPath.length === 0) return null
-  const cmdDir = dirnameOf(gitPath)
-  const root = dirnameOf(cmdDir)
-  if (root.length === 0 || root === cmdDir) return null
-  return `${root}\\bin\\bash.exe`
+  return gitBashCandidatesFromGitPath(gitPath, dirnameOf)[0] ?? null
 }
 
 /** Deadline for the one-shot `--version` probe (impl-gate 3.4). */
@@ -165,11 +216,12 @@ export function describeInterpreterResolution(
     const git = which('git')
     parts.push(`which(git)=${git === null || git.length === 0 ? 'null' : JSON.stringify(git)}`)
     if (git !== null && git.length > 0) {
-      const derived = gitBashFromGitPath(git, win32.dirname)
+      const derived = gitBashCandidatesFromGitPath(git, win32.dirname)
       parts.push(
-        `derived=${derived === null ? 'null (git path shape did not match <root>\\cmd\\git.exe)' : JSON.stringify(derived)}`,
+        derived.length === 0
+          ? 'derived=[] (git path had no usable ancestor)'
+          : `derived=${JSON.stringify(derived)} (each exists=${derived.map((d) => exists(d)).join(',')})`,
       )
-      if (derived !== null) parts.push(`exists=${exists(derived)}`)
     }
   } else {
     const candidates = interpreterCandidatePaths(
@@ -204,8 +256,7 @@ export function interpreterCandidatePaths(
     // is the HOST's flavour, so on a POSIX box it sees no separators in
     // `C:\...\git.exe` and returns '.'. Windows paths need the win32 parser
     // regardless of who is doing the parsing.
-    const bash = gitBashFromGitPath(git, win32.dirname)
-    return bash === null ? [] : [bash]
+    return gitBashCandidatesFromGitPath(git, win32.dirname)
   }
   const out: string[] = []
   for (const name of WINDOWS_INTERPRETER_CANDIDATES[language]) {

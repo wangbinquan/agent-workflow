@@ -15,6 +15,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   WINDOWS_INTERPRETER_CANDIDATES,
   describeInterpreterResolution,
+  gitBashCandidatesFromGitPath,
   gitBashFromGitPath,
   interpreterCandidatePaths,
 } from '@/services/scriptRun'
@@ -59,8 +60,35 @@ describe('RFC-254 T22 — interpreter resolution', () => {
       return null
     }
     const candidates = interpreterCandidatePaths('bash', 'win32', 'bash', which)
-    expect(candidates).toEqual([win('C:/Program Files/Git/bin/bash.exe')])
+    // 规范布局的首选仍是 `<root>\bin\bash.exe`；其余候选是 PATH 顺序保险（见下一条）。
+    expect(candidates[0]).toBe(win('C:/Program Files/Git/bin/bash.exe'))
+    // 承重不变量：任何候选都不许落到 WSL 启动器上——它们全部只在 git 自己的安装树下。
     expect(candidates.some((c) => c.toLowerCase().includes('system32'))).toBe(false)
+  })
+
+  // 2026-08-09 回归锁：真 bug，不是假想。GH `windows-latest` 上 `Bun.which('git')`
+  // 命中的是 `mingw64\bin\git.exe` 而不是 `cmd\git.exe`，旧实现固定往上两级，于是
+  // 推出不存在的 `…\Git\mingw64\bin\bash.exe`，**所有 bash 脚本节点**以
+  // `script-interpreter-missing` 失败（run 31324148366 的逐环诊断实证）。
+  // Git for Windows 把 cmd\ 、mingw64\bin\ 、usr\bin\ 都放进 PATH，命中哪个纯看
+  // PATH 顺序 —— 所以这不是 CI 特例，是任何 mingw64\bin 靠前的 Windows 机器。
+  test('Windows bash 在 git 由 mingw64\\bin 命中时仍能找到真正的 bash', () => {
+    const which = (cmd: string): string | null =>
+      cmd === 'git' ? win('C:/Program Files/Git/mingw64/bin/git.exe') : null
+    const candidates = interpreterCandidatePaths('bash', 'win32', 'bash', which)
+    expect(candidates).toContain(win('C:/Program Files/Git/bin/bash.exe'))
+    expect(candidates).toContain(win('C:/Program Files/Git/usr/bin/bash.exe'))
+    expect(candidates.some((c) => c.toLowerCase().includes('system32'))).toBe(false)
+  })
+
+  test('候选集覆盖 usr\\bin 布局，且逐级向上不越过 3 层', () => {
+    const dirname = (p: string): string => p.slice(0, Math.max(0, p.lastIndexOf('\\')))
+    const got = gitBashCandidatesFromGitPath(win('C:/Program Files/Git/cmd/git.exe'), dirname)
+    expect(got[0]).toBe(win('C:/Program Files/Git/bin/bash.exe'))
+    expect(got).toContain(win('C:/Program Files/Git/usr/bin/bash.exe'))
+    // 3 层封顶 × 每层 2 个后缀 ⇒ 至多 6 个，不会一路走到盘根去捞 `C:\bin\bash.exe`
+    expect(got.length).toBeLessThanOrEqual(6)
+    expect(got.every((c) => c.startsWith(win('C:/Program Files')))).toBe(true)
   })
 
   test('Windows bash yields nothing when git is absent — no guessing', () => {
@@ -128,7 +156,7 @@ describe('interpreter 解析失败必须带出逐环结果', () => {
     expect(d).not.toContain('derived=')
   })
 
-  test('win32 bash：推导出了路径但文件不存在时，路径与 exists 都在', () => {
+  test('win32 bash：推导出候选但都不存在时，候选集与逐个 exists 都在', () => {
     const d = describeInterpreterResolution(
       'bash',
       {},
@@ -138,12 +166,13 @@ describe('interpreter 解析失败必须带出逐环结果', () => {
     )
     expect(d).toContain('cmd\\\\git.exe')
     expect(d).toContain('bin\\\\bash.exe')
-    expect(d).toContain('exists=false')
+    expect(d).toContain('each exists=')
+    expect(d).toContain('false')
   })
 
-  test('win32 bash：git 路径形状不匹配时说明是形状问题，而不是谎报路径', () => {
+  test('win32 bash：git 路径没有可用祖先时明说，而不是谎报一个路径', () => {
     const d = describeInterpreterResolution('bash', {}, 'win32', () => 'git.exe', noExists)
-    expect(d).toContain('derived=null')
+    expect(d).toContain('derived=[]')
   })
 
   test('非 bash 走候选链，逐个报 exists', () => {
