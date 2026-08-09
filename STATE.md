@@ -70,26 +70,33 @@
 > 免登录**（路径不在 `PUBLIC_PATH_PREFIXES` 里，身份仍由 multiAuth 强制）；六条导出
 > **必须字面量注册**，`for` 循环 + 模板路径会让它们绕开契约覆盖守卫。
 >
-> **批次 G 进行中**（前端）：
-> - `T34/T36/T38/T39`（`6cf9370e`）—— `ResourcePackageImportDialog`（**零自写 chrome**，
->   全走 `Dialog`/`Select`/`Form`/`StatusChip`/三个状态组件，源码层断言锁住）、
->   `lib/resource-package-download.ts`（`safeDownloadBaseName` 从 `workflow-draft-export.ts`
->   抽出——后者在批次 I 要整个删掉）、中英 i18n、6 条对话框测试。已登记进 RFC-198 的
->   overlay 双向棘轮。
-> - `T35`（`8e38f81e`）—— `ResourcePackageExportButton`：六类共用的公共组件 + 8 条测试。
+> **批次 G / H / J 完工**：
+> - `G`（`6cf9370e` / `8e38f81e` / `ea27d81f` / `d9e786f7`）—— 导入对话框（**零自写
+>   chrome**，源码层断言锁住）、导出按钮、六类列表页导入入口、六类详情页导出入口。
+>   `ResourceSplitPage` 最小扩展了一个 `listActions` 槽（不 fork）。
+> - `H`（`c5bdc0f0`）—— CLI 两条命令。`--as-user` 强制且构造与 HTTP 同构的 Actor；
+>   `--name` 命中多行时**报错列出候选**要求改用 `--id`（`workflows.name` 非唯一）；
+>   `--plan` 与 `--on-conflict` 互斥。
+> - `J` —— `docs/resource-bundles.md`（表达层 + 引擎 + 14 条不变量的要点）与
+>   `docs/resource-packages.md`（包格式、manifest 字段、导出四道门、导入两步与绑定、
+>   崩溃收敛、CLI、**失败原因对照表**）。
 >
-> **G 余下 = 把这两个组件接进页面**：
-> - `T35` 六类**详情/编辑页**挂导出按钮（`agents.detail` / `mcps.detail` /
->   `plugins.detail` / `skills.*` / 工作流编辑页 / 工作组编辑页）。⚠️ 这些页用的是
->   split + Tabs 布局，动作区位置各不相同，**需逐页确认**再挂，别硬塞。
->   工作流那条是**原地改名**（既有「导出 YAML」→「导出配置包」，属能力下线 C1 的前置）。
-> - `T37` 六类**列表页**挂导入入口（复用同一个 `ResourcePackageImportDialog`）+ 导入后
->   刷新列表。
+> ⚠️ **只剩批次 I（能力下线 C1–C6）未做**。本轮试拆了 C1（两条旧路由）后发现级联面
+> 比预期深：`downloadWorkflowServerExport` 仍在编辑页调 `/api/workflows/:id/export`，
+> 而 C3 的本地草稿导出又挂在 `WorkflowDraftStatus` 的 `onExportLocal` prop 上，牵动
+> 救援态 UI 与四个测试文件。**半拆会让编辑页导出按钮运行时 404，比不拆更糟**，故已
+> 回滚 C1，树保持一致、门禁全绿。
 >
-> **再往后**：H（CLI，T40–42：两条命令都必须 `--as-user` 并构造与 HTTP 同构的 Actor；
-> 导出要支持 `--id`，因为同 owner 可有两个同名工作流）→ I（能力下线 C1–C6，**最后做**，
-> 前面全绿才拆旧的；逐条对照 proposal 的能力影响清单）→ J（文档与记档）→ 收尾门禁 +
-> Codex 实现门。
+> **批次 I 的接手顺序**（建议一次做完，别分批）：
+> ① 前端先拆：`WorkflowImportDialog.tsx`（C2）+ `workflows.tsx` 的 import 按钮/状态；
+> `workflow-draft-export.ts`（C3）+ `workflows.edit.tsx` 的两处调用 + `WorkflowDraftStatus`
+> 的 `onExportLocal` prop + 救援态按钮。
+> ② 再拆后端两条路由（C1）与 `services/workflow.yaml.ts` 里只服务它们的部分
+> （⚠️ `workflowDefinitionToSelectors` / `stripCallWorkflowNodeIds` **保留**，别人还在用）。
+> ③ 契约注册表删对应两条；`rfc271-capability-removal.test.ts` + design §9 表格六项的
+> 显式改判（**intent 测试套改判限定四处、其余零改判**）。
+>
+> **再往后**：H（CLI，T40–42> 拆完 I 之后：收尾完整门禁 + Codex 实现门。
 >
 > ⚠️ **接手提醒**：`9da5cc63` 的 CI 在 macos shard 2/4 单点红了一条 `rfc108-resume-safety`，代码路径与本轮零交集、本机 24 次并发复跑全绿，机制未定；已把该用例改成能自证的形态并登记 `docs/audit-backlog.md`（第八条），**下次再红先看日志分流，别急着改产品代码**。
 
