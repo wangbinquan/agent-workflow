@@ -59,11 +59,20 @@
 >   不是只签摘要——设计期两版被否掉的绕法都已写进测试。别人的资源**可 reuse 不可
 >   overwrite**（两条独立规则）。身份棘轮 134 → 136。
 >
-> **下一步**：`T27`（commit：验签 → duplicate lookup **先于** exp 检查 → 断言用户提交的
-> `(target,expect)` 是签名基线里的一对 → 服务端重算 allowedActions → 翻译成
-> `ResourceBundle` → 调引擎）、`T28`（package provider，**`revalidateInTx` 必须实现**，
-> `ops` 为空时也要走，否则全 reuse 的包完全免检）、`T29` 测试；然后批次 F（路由/client）→
-> G（前端）→ H（CLI）→ I（能力下线 C1–C6）→ J（文档）。
+> - `T27/T28/T29`（`feced214`）—— 提交与 package provider。四条承重性质各有测试：
+>   duplicate lookup **先于**过期检查（反了会让「成功但响应丢失、过期后重试」进不了
+>   replay）、`(target,expect)` 必须是签名基线里的一对、`allowedActions` 服务端重算、
+>   **reuse 也要复核**（`revalidateInTx`；留空则全 reuse 的包一个 op 都没有、完全免检）。
+>   `expectTokenOf` 收成 preview 与 revalidate 的单一事实源。
+>
+> **批次 F 完工**（`63421532` + `9db8400b`）—— 六条导出 + 两条导入路由、契约注册表登记、
+> client 薄封装、路由准入契约测试。两个易踩点已写进注释与测试：**`publicReason` 不等于
+> 免登录**（路径不在 `PUBLIC_PATH_PREFIXES` 里，身份仍由 multiAuth 强制）；六条导出
+> **必须字面量注册**，`for` 循环 + 模板路径会让它们绕开契约覆盖守卫。
+>
+> **下一步**：批次 G（前端：导出按钮 + 导入对话框，务必复用 `Dialog`/`Select`/`Form`
+> 等公共组件，见 CLAUDE.md 的前台风格强制原则）→ H（CLI）→ I（能力下线 C1–C6：**逐条
+> 对照 proposal 的能力影响清单**）→ J（文档与记档）→ 收尾门禁 + Codex 实现门。
 >
 > ⚠️ **接手提醒**：`9da5cc63` 的 CI 在 macos shard 2/4 单点红了一条 `rfc108-resume-safety`，代码路径与本轮零交集、本机 24 次并发复跑全绿，机制未定；已把该用例改成能自证的形态并登记 `docs/audit-backlog.md`（第八条），**下次再红先看日志分流，别急着改产品代码**。
 
