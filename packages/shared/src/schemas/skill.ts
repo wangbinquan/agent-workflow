@@ -67,6 +67,20 @@ export const SkillContentSchema = z.object({
    * for backward compatibility: readers that predate T4 simply ignore it.
    */
   token: z.string().optional(),
+  /**
+   * 这一份正文**自己那一版**的数值 revision。
+   *
+   * `token` 对前端是**不透明**的（见 `skillToken.ts` 的契约），所以前端无法从它判断
+   * 「我手上这份正文是哪一版」。而详情页的 metadata 与 content 是**两个独立查询**：
+   * 慢到达的 content v1 可以和已经刷新的 metadata v2 并存，页面显示 v1 正文、导出却
+   * 按 metadata 的 v2 三维 revision 发 fence，后端如实导出 v2 —— 用户看到的和导出的
+   * 不是同一版（实现门第四轮 P2-5）。
+   *
+   * 加这两个数值让页面能**在不解码 token 的前提下**发现「两个查询不同版」并停手。
+   * `optional` 是向后兼容：旧客户端忽略它即可。
+   */
+  contentVersion: z.number().int().nonnegative().optional(),
+  metaRevision: z.number().int().nonnegative().optional(),
 })
 export type SkillContent = z.infer<typeof SkillContentSchema>
 

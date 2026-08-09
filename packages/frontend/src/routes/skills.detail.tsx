@@ -174,6 +174,25 @@ function SkillDetailPage() {
   // cache have no GET epoch, so they receive a new local publication epoch here.
   // A GET issued before a later write receipt is rejected by the global token
   // floor even if it completes last.
+  /**
+   * 手上这份正文与 metadata 查询是不是**同一版**。
+   *
+   * 不解码 `token`——它对前端是不透明的（`skillToken.ts` 的契约）。后端在 content 响应里
+   * 一并回传了同快照的数值 revision，这里只做数值比较。
+   *
+   * ⚠️ **两个字段都要在才比**。第一版只判了 `contentVersion` 缺失就放行，然后照样去比
+   * `metaRevision`——于是一个只带 `contentVersion` 的响应（旧后端、或任何部分实现）会
+   * 拿 `undefined` 去比一个真实的数字，恒判「不同版」、把导出**永久禁用**。
+   * 判据是「拿不到证据 ⇒ 不阻塞」，而不是「拿不全证据 ⇒ 当作证否」。
+   */
+  const skillRevisionsAgree =
+    meta.data === undefined ||
+    content.data?.contentVersion === undefined ||
+    content.data.metaRevision === undefined
+      ? true
+      : content.data.contentVersion === meta.data.contentVersion &&
+        content.data.metaRevision === meta.data.metaRevision
+
   useEffect(() => {
     if (content.data === undefined || meta.data === undefined) return
     const issuedEpoch =
@@ -932,7 +951,13 @@ function SkillDetailPage() {
               aggregate.dirty ||
               operationBusy ||
               aggregate.outcomeUnknown ||
-              meta.data === undefined
+              meta.data === undefined ||
+              // ⚠️ metadata 与 content 是**两个独立查询**：慢到达的 content v1 可以和已经
+              // 刷新的 metadata v2 并存。此时页面显示的是 v1 正文，而 fence 取自 metadata
+              // 的 v2 —— 后端会如实导出 v2，**用户看到的和导出的不是同一版**（实现门第四轮
+              // P2-5）。没有「所见」就谈不上「所见即所得」，所以两边不同版时停手，而不是
+              // 挑一个发出去。
+              !skillRevisionsAgree
             }
             disabledReason={t('resourcePackage.saveBeforeExport')}
           />

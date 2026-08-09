@@ -555,6 +555,10 @@ export async function readSkillContent(
     bodyMd: parsed.body,
     frontmatterExtra: rest,
     token,
+    // 与 `token` 同一快照的数值形态：token 对前端不透明，前端要靠这两个数才能判断
+    // 「手上这份正文与 metadata 查询是不是同一版」。
+    contentVersion: skill.contentVersion,
+    metaRevision: gen.metaRevision,
   }
 }
 

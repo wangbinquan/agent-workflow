@@ -286,21 +286,47 @@ async function findMissingBuiltins(
   db: DbClient,
   declared: readonly { type: string; name: string }[],
 ): Promise<Array<{ type: string; name: string }>> {
-  const missing: Array<{ type: string; name: string }> = []
+  // ⚠️ **按类型批量查一次**，不要逐项查。第一版是逐个 built-in 串行一条 SQL：一个合法
+  // 的包（远低于上传上限）里放 20000 个不同的 `builtin:agent/bN` 引用，就是 20000 次
+  // 串行查询、实测约 1547ms —— 预检是**未认证内容驱动**的路径，这种线性放大等于把
+  // 「上传一个包」变成一个廉价的服务端放大器。
+  const wantedByType = new Map<'agent' | 'workflow', Set<string>>()
+  const unsupported: Array<{ type: string; name: string }> = []
   for (const want of declared) {
-    // schema 已把 type 收窄到 agent | workflow，这里只是把它接回 ACL_TABLES 的键。
+    // schema 已把 type 收窄到 agent | workflow；这里兜的是 legacy / 手工构造的包。
     if (want.type !== 'agent' && want.type !== 'workflow') {
-      missing.push(want)
+      unsupported.push(want)
       continue
     }
-    const table = ACL_TABLES[want.type]
+    const set = wantedByType.get(want.type) ?? new Set<string>()
+    set.add(want.name)
+    wantedByType.set(want.type, set)
+  }
+
+  const presentByType = new Map<string, Set<string>>()
+  for (const [type, names] of wantedByType) {
+    const table = ACL_TABLES[type]
     const rows = (await db
       .select()
       .from(table)
-      .where(eq(table.name, want.name))) as unknown as Array<Record<string, unknown>>
-    if (!rows.some((row) => row.builtin === true)) missing.push(want)
+      .where(inArray(table.name, [...names]))) as unknown as Array<Record<string, unknown>>
+    presentByType.set(
+      type,
+      // 判据必须与导入期 `resolveIdentityRef` 的 built-in 分支一致：同名 **且**
+      // `builtin = true`。只按名字查会绑上用户自建的同名资源。
+      new Set(rows.filter((row) => row.builtin === true).map((row) => String(row.name))),
+    )
   }
-  return missing
+
+  // 保持 `declared` 的原顺序输出，报错文案才稳定可读。
+  return [
+    ...unsupported,
+    ...declared.filter(
+      (want) =>
+        (want.type === 'agent' || want.type === 'workflow') &&
+        !(presentByType.get(want.type)?.has(want.name) ?? false),
+    ),
+  ]
 }
 
 export async function buildPackagePreview(

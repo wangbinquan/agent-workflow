@@ -265,3 +265,56 @@ describe('③ fence 值缺失时不得发出空 fence', () => {
     expect(spy.mock.calls[0]?.[2]).toEqual({ expectedConfigHash: 'abc123' })
   })
 })
+
+describe('④ skill 页面：两个查询不同版时不得导出', () => {
+  // metadata 与 content 是**两个独立查询**。实现门第四轮的 P2-5 给了具体时序：
+  //   1. `/content` 读到 v1，响应因文件读取慢还没到；
+  //   2. 另一个写者保存 v2；
+  //   3. `/api/skills/S` 返回 metadata v2；
+  //   4. 迟到的 content v1 到达，成为页面**可见正文**；
+  //   5. 导出按钮却发 metadata 的 v2 三维 revision，后端如实导出 v2。
+  // 用户看到 v1、导出 v2，而 fence 一路绿灯——它保护的是「metadata 没变」，不是
+  // 「你看到的东西没变」。
+  //
+  // 修法不解码 `token`（它对前端不透明），而是让 content 响应一并回传同快照的数值
+  // revision，页面数值比较后停手。这条守卫盯住那个 `disabled` 条件不被顺手删掉。
+  const src = readFileSync(
+    resolve(import.meta.dirname, '..', 'src', 'routes', 'skills.detail.tsx'),
+    'utf8',
+  )
+
+  test('页面按数值 revision 判定同版，并把它接进导出的 disabled', () => {
+    expect(src).toContain('const skillRevisionsAgree =')
+    expect(src).toContain('content.data.contentVersion === meta.data.contentVersion')
+    expect(src).toContain('content.data.metaRevision === meta.data.metaRevision')
+    expect(src).toContain('!skillRevisionsAgree')
+  })
+
+  test('**两个字段都要在才比** —— 只有一个时按「拿不到证据」放行', () => {
+    // 这条是踩出来的。第一版只判了 `contentVersion` 缺失就放行，然后照样去比
+    // `metaRevision`：一个只带 `contentVersion` 的响应（旧后端、或任何部分实现）会拿
+    // `undefined` 去比一个真实数字，恒判「不同版」、把导出**永久禁用**。现有的
+    // `skills-split-page` mock 正是这种形状，当场变红。
+    //
+    // 判据必须是「拿不到证据 ⇒ 不阻塞」，不是「拿不全证据 ⇒ 当作证否」——后者会把一条
+    // 防护变成一个恒真的故障。
+    expect(src).toContain('content.data?.contentVersion === undefined ||')
+    expect(src).toContain('content.data.metaRevision === undefined')
+  })
+
+  test('不解码 token —— 它对前端是不透明的', () => {
+    // 解码 token 能达到同样效果，但会让前端依赖一个被明确声明为 opaque 的编码，
+    // 从此后端改不动它。这条把那条路堵死。
+    expect(src).not.toContain('decodeSkillToken')
+    expect(src).not.toContain('base64url')
+  })
+
+  test('后端 content 响应确实带上了这两个数值（否则上面的判定恒为 true）', () => {
+    const service = readFileSync(
+      resolve(import.meta.dirname, '..', '..', 'backend', 'src', 'services', 'skill.ts'),
+      'utf8',
+    )
+    expect(service).toContain('contentVersion: skill.contentVersion')
+    expect(service).toContain('metaRevision: gen.metaRevision')
+  })
+})

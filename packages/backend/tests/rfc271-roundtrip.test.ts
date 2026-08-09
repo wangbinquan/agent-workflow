@@ -1189,3 +1189,120 @@ describe('AC-9 · **交集**：built-in 根 + 它自己的 built-in 依赖', () 
     }
   })
 })
+
+describe('AC-9 · 预检的 built-in 校验必须**与数量无关**（第四轮 P2-3：串行 N+1）', () => {
+  // 预检是**未认证内容驱动**的路径：请求体就是用户上传的包。第一版对每个 manifest
+  // built-in 串行执行一次查询，于是一个远低于上传上限的合法包（20000 个不同的
+  // `builtin:agent/bN` 引用）就能让服务端跑 20000 次串行 SQL，实测约 1547ms ——
+  // 「上传一个包」变成了一个廉价的放大器。
+  //
+  // ⚠️ 这条**不测毫秒数**。计时断言在满载 runner 上必然变 flaky（本仓已有多条同类
+  // 教训），而且它测的是机器而不是算法。测的是**查询次数与 built-in 数量无关**：
+  // 数量翻十倍，查询次数不变。
+  const countSelects = (
+    db: DbClient,
+    tables: readonly unknown[],
+  ): { db: DbClient; n: () => number } => {
+    let n = 0
+    const proxied = new Proxy(db as object, {
+      get(target, property, receiver) {
+        const original = Reflect.get(target, property, receiver)
+        if (property !== 'select' || typeof original !== 'function') {
+          return typeof original === 'function' ? original.bind(target) : original
+        }
+        return (...args: unknown[]) => {
+          const builder = original.apply(target, args)
+          return new Proxy(builder as object, {
+            get(qt, qp, qr) {
+              const m = Reflect.get(qt, qp, qr)
+              if (qp !== 'from' || typeof m !== 'function') {
+                return typeof m === 'function' ? m.bind(qt) : m
+              }
+              return (t: unknown) => {
+                if (tables.includes(t)) n += 1
+                return m.call(qt, t)
+              }
+            },
+          })
+        }
+      },
+    }) as unknown as DbClient
+    return { db: proxied, n: () => n }
+  }
+
+  const packageWithBuiltinRefs = async (count: number): Promise<Uint8Array> => {
+    const src = await makeInstance()
+    try {
+      const ids: string[] = []
+      for (let i = 0; i < count; i += 1) {
+        const id = ulid()
+        ids.push(id)
+        await src.db.insert(agents).values({
+          id,
+          name: `aw-builtin-${i}`,
+          description: '',
+          outputs: '[]',
+          permission: '{}',
+          skills: '[]',
+          dependsOn: '[]',
+          mcp: '[]',
+          plugins: '[]',
+          frontmatterExtra: '{}',
+          bodyMd: '',
+          ownerUserId: '__system__',
+          visibility: 'public',
+          builtin: true,
+          createdAt: 1,
+          updatedAt: 1,
+        } as never)
+      }
+      const wfId = ulid()
+      await src.db.insert(workflows).values({
+        id: wfId,
+        name: `uses-${count}`,
+        description: '',
+        definition: JSON.stringify({
+          $schema_version: 4,
+          inputs: [],
+          edges: [],
+          nodes: ids.map((id, i) => ({ id: `n${i}`, kind: 'agent-single', agentId: id })),
+        }),
+        ownerUserId: 'u1',
+        visibility: 'private',
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      const pkg = await exportResourcePackage(
+        src.db,
+        actorOf('u1'),
+        { type: 'workflow', id: wfId },
+        { appHome: src.appHome },
+      )
+      return pkg.zip
+    } finally {
+      removeTempDirSync(src.appHome)
+    }
+  }
+
+  test('built-in 数量 ×10，预检对 agents 表的查询次数不变', async () => {
+    const small = await parseResourcePackage(await packageWithBuiltinRefs(3))
+    const large = await parseResourcePackage(await packageWithBuiltinRefs(30))
+    expect(small.manifest.builtins).toHaveLength(3)
+    expect(large.manifest.builtins).toHaveLength(30)
+
+    const counted = async (pkg: typeof small): Promise<number> => {
+      const dst = await makeInstance()
+      try {
+        const { db: proxied, n } = countSelects(dst.db, [agents])
+        await buildPackagePreview(proxied, actorOf('u1'), pkg, { box, importId: ulid() }).catch(
+          () => undefined, // 对端没有这些 built-in，预检会拒——查询次数照样算数。
+        )
+        return n()
+      } finally {
+        removeTempDirSync(dst.appHome)
+      }
+    }
+
+    expect(await counted(large)).toBe(await counted(small))
+  })
+})
