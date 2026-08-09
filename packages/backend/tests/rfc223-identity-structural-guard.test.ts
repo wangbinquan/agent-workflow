@@ -130,7 +130,9 @@ const EXACT_ALLOWANCE_ROWS = [
   // and the name fallback is visibility-fenced (see closure.ts).
   // RFC-243 PR-4 — workgroup-leaf closure freeze name surfaces (same
   // deterministic oldest-ULID selector rule as the workflow side).
-  'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fNewExpression:0580e9b46ee19382f709\u001f1\u001fportable-selector\u001fnew Set(rows.map((r) => String(r.name)))',
+  // RFC-271 privacy fence: suggested import names only collide with rows owned
+  // by the importing actor; hidden rows from other owners must not influence it.
+  'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fNewExpression:be5e5774c05b6d80827e\u001f1\u001fowner-uniqueness\u001fnew Set( rows.filter((row) => row.ownerUserId === actor.user.id).map((row) => String(row.name)), )',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'sql-name-selector\u001fpackages/backend/src/cli/package.ts\u001frunExport\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/closure.ts\u001fresolveCallTarget\u001fCallExpression:613b1a0045d8d1a4940b\u001f1\u001fportable-selector\u001fvisible.find((r) => r.id === idHint && rowName(r) === name)',
