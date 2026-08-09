@@ -5,6 +5,7 @@
 // config vs claude system-prompt-file differ too much for one ctx), so it lives
 // in ./spawn.ts (buildClaudeSpawn) rather than on this object.
 
+import type { DeclaredRuntimeCapabilities, StartupInventory } from '../types'
 import type {
   BusinessNodeSpawnContext,
   NormalizedEvent,
@@ -24,7 +25,7 @@ import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import {
   parseEvent,
   parseResultError,
-  parseSkillInventory,
+  parseStartupInventory,
   parseUnusableMcpServers,
 } from './events'
 import { buildClaudeSpawn } from './spawn'
@@ -96,10 +97,11 @@ export const claudeCodeDriver: RuntimeDriver = {
   parseUnusableMcpServers(line: string): readonly string[] | null {
     return parseUnusableMcpServers(line)
   },
-  // 2026-08-09 — the same init event also enumerates the skills claude loaded;
-  // a staged skill missing there means the node cannot use what it declared.
-  parseSkillInventory(line: string): readonly string[] | null {
-    return parseSkillInventory(line)
+  // 2026-08-09 — the same init event enumerates the tools, subagents and skills
+  // claude actually loaded; anything the platform injected and does not find
+  // there means the node cannot use what it declared.
+  parseStartupInventory(line: string): StartupInventory | null {
+    return parseStartupInventory(line)
   },
   // RFC-143 — capability methods. PR-1 delegates to the existing free functions.
   defaultBinary(config: RuntimeBinaryConfig): string[] {
@@ -234,7 +236,16 @@ export const claudeCodeDriver: RuntimeDriver = {
       ctx.injectedMemoryBlock !== null
         ? `${ctx.agent.bodyMd}\n\n${ctx.injectedMemoryBlock}`
         : ctx.agent.bodyMd
-    const claudeAgents = toClaudeAgents(ctx.dependents)
+    // 2026-08-09 — dependents now carry their OWN resolved model and their own
+    // permission-derived load set. `gate` is computed just below, so the
+    // ceiling is read after it; see `claudeAgents` further down.
+    const claudeAgentsOf = (
+      parentTools: readonly string[] | null,
+    ): ReturnType<typeof toClaudeAgents> =>
+      toClaudeAgents(ctx.dependents, {
+        profileByName: ctx.resolvedParamsByAgent,
+        parentTools,
+      })
     // RFC-113 (Codex P1-3): claude's model is the RUNTIME's, not the agent's.
     // The root entry of resolvedParamsByAgent carries the frozen root profile.
     const rootParams = ctx.resolvedParamsByAgent.get(ctx.agent.name)
@@ -264,6 +275,46 @@ export const claudeCodeDriver: RuntimeDriver = {
     const stagedSkillNames = skillsUsable
       ? ctx.skills.filter((skill) => skill.sourceKind === 'managed').map((skill) => skill.name)
       : []
+    // A gated parent has a load set to cap members with; an unconstrained one
+    // (bypassPermissions) has none, and keeps the historical entry shape.
+    const claudeAgents = claudeAgentsOf(gate === null ? null : gate.tools)
+    if (claudeAgents !== null && claudeAgents.warnings.length > 0) {
+      ctx.log.warn('claude-dependent-capability-capped', {
+        agent: ctx.agent.name,
+        nodeRunId: ctx.nodeRunId,
+        warnings: claudeAgents.warnings,
+      })
+    }
+    // 2026-08-09 — plugins are an opencode concept with no claude counterpart.
+    // That is by design, but a node whose agent SELECTED plugins and then ran
+    // on claude got exactly nothing, with the plugin names appearing only in a
+    // diagnostics field nobody reads. Say it out loud instead.
+    const enabledPlugins = ctx.plugins.filter((plugin) => plugin.enabled !== false)
+    if (enabledPlugins.length > 0) {
+      ctx.log.warn('claude-plugins-unsupported', {
+        agent: ctx.agent.name,
+        nodeRunId: ctx.nodeRunId,
+        plugins: enabledPlugins.map((plugin) => plugin.name),
+        detail: 'the claude-code runtime has no plugin surface; these are not loaded',
+      })
+    }
+    // The single source for both the run-log line and the runner's fail-closed
+    // check — one derivation, so the diagnostics cannot claim something the
+    // check does not verify (or vice versa).
+    const declaredTools = gate === null ? undefined : claudeToolsValue(gate).split(',')
+    const declaredAgentNames = claudeAgents === null ? [] : Object.keys(claudeAgents.agents)
+    const declaredCapabilities: DeclaredRuntimeCapabilities | undefined = (() => {
+      const declared: DeclaredRuntimeCapabilities = {}
+      // `Task` is derived from the closure, so it is part of what must load.
+      if (declaredTools !== undefined) {
+        const tools = declaredTools.filter((tool) => tool.length > 0)
+        if (declaredAgentNames.length > 0 && !tools.includes('Task')) tools.push('Task')
+        if (tools.length > 0) declared.tools = tools
+      }
+      if (declaredAgentNames.length > 0) declared.agents = declaredAgentNames
+      if (stagedSkillNames.length > 0) declared.skills = stagedSkillNames
+      return Object.keys(declared).length > 0 ? declared : undefined
+    })()
     // RFC-242 T2 — a permission-gated business node executes a byte-frozen
     // copy, same TOCTOU fence as the intent path. The seam is the SAME one the
     // credential bridge already uses: a test runtimeCmd means a mock head
@@ -393,7 +444,7 @@ export const claudeCodeDriver: RuntimeDriver = {
             mcpServerNames: Object.keys(claudeMcp.mcpServers),
           }
         : {}),
-      ...(claudeAgents !== null ? { agentsJson: JSON.stringify(claudeAgents) } : {}),
+      ...(claudeAgents !== null ? { agentsJson: JSON.stringify(claudeAgents.agents) } : {}),
       // 2026-08-04 — frozen per-runtime extraArgs (fork-private flags). Root
       // params only: claude subagents share this one process, so per-process
       // argv can only come from the root's runtime.
@@ -414,12 +465,11 @@ export const claudeCodeDriver: RuntimeDriver = {
       ...(localWrapperByName === undefined || localWrapperByName.size === 0
         ? {}
         : { fencedMcpServers: [...localWrapperByName.keys()] }),
-      // 2026-08-09: same contract for skills. Declared ONLY when this node can
-      // actually invoke them — an unconstrained node always can (bypass loads
-      // every built-in), a gated one only when the mapping granted `Skill`.
-      // `project` skills are excluded: claude self-discovers those from the
-      // repo, so the platform staged nothing and has nothing to prove.
-      ...(stagedSkillNames.length === 0 ? {} : { stagedSkills: stagedSkillNames }),
+      // 2026-08-09: everything this spawn injected and must therefore see
+      // loaded. `tools` only for a gated node — bypassPermissions has no load
+      // set to prove. `project` skills are excluded: claude self-discovers
+      // those from the repo, so the platform staged nothing to prove.
+      ...(declaredCapabilities === undefined ? {} : { declaredCapabilities }),
       // §4.4: same diagnostic fields the runner used to derive from the (built-
       // for-both-runtimes) inline config — byte-equal log line, claude included.
       diagnostics: {
@@ -428,8 +478,21 @@ export const claudeCodeDriver: RuntimeDriver = {
         inlineTemperature: rootParams?.temperature ?? null,
         mcpCount: claudeMcp !== null ? Object.keys(claudeMcp.mcpServers).length : 0,
         mcpKeys: claudeMcp !== null ? Object.keys(claudeMcp.mcpServers) : [],
-        pluginCount: ctx.plugins.filter((p) => p.enabled !== false).length,
-        pluginNames: ctx.plugins.filter((p) => p.enabled !== false).map((p) => p.name),
+        // 2026-08-09 — this line is the operator's only view of "what actually
+        // went into this spawn", so it must not claim an injection that never
+        // happens. `pluginCount`/`pluginNames` reported the SELECTED plugins on
+        // a runtime that has no plugin surface at all: the log said N, the
+        // process loaded zero. Renamed to say what is true, matching the
+        // opencode side's `machineConfigIgnoredPlugins` (RFC-256), which exists
+        // for exactly this reason — "report the count so that limit is visible
+        // in the run log instead of looking like a silent no-op".
+        pluginsIgnoredUnsupported: enabledPlugins.length,
+        pluginsIgnoredNames: enabledPlugins.map((p) => p.name),
+        // The three injected surfaces the runner then PROVES against claude's
+        // startup inventory — same values, one derivation.
+        skillNames: stagedSkillNames,
+        subagentNames: declaredAgentNames,
+        declaredToolNames: declaredCapabilities?.tools ?? [],
         // 2026-08-04 audit (P2-9): diagnostics existed to answer "what actually
         // landed in this spawn assembly", but carried none of the decisions that
         // silently REMOVE capability — so "this node loaded zero tools", "its

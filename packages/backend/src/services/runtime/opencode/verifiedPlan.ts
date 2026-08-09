@@ -996,6 +996,12 @@ export async function buildVerifiedOpencodeBusinessPlan(
         mcpCount: Object.keys(plannedMcp.config).length,
         // RFC-251: report the encoded selection, not a structural zero.
         pluginCount: shippedPlugins.length,
+        // 2026-08-09 — the run log carried model/mcp/plugin but never the other
+        // two injected surfaces, so "which skills and which subagents did this
+        // node actually get" was unanswerable from the log alone. Same names the
+        // verified inventory attests, so the two cannot disagree.
+        skillNames: [...frozenSkillBlockById.values()].map((block) => block.name).sort(),
+        subagentNames: ctx.dependents.map((dep) => dep.name),
       },
       cleanup: async () => {
         await assertOpencodeStoreUnlocked(layout.sessionDbPath)

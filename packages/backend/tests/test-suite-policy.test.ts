@@ -185,6 +185,16 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // staging and inventory-parsing mechanisms those cases guard are covered
   // platform-agnostically by the other 13 cases in the file, which run on win32.
   'packages/backend/tests/claude-skill-injection-2026-08-09.test.ts#skipIf': 4,
+  // 2026-08-09 dependsOn 注入：五条 POSIX-only。它们都要 `buildBusinessSpawn` 真的
+  // 建出受控计划，而那条路径会 byte-freeze 运行时头——fixture 的替身二进制是
+  // chmod 过的 `#!/bin/sh` 脚本，在 win32 上既封不了也起不来（与上面 rfc242 /
+  // skill-injection 的计划用例同一原因）。这些用例锁的 argv / `--agents` 形态由
+  // 同文件另外 13 条纯函数用例平台无关地覆盖，win32 上照跑。
+  'packages/backend/tests/claude-dependency-injection-2026-08-09.test.ts#skipIf': 5,
+  // 2026-08-09 启动清单校验：三条 POSIX-only。两条要真的建出受控计划（byte-freeze
+  // 的替身二进制是 `#!/bin/sh` 脚本），一条是 runner describe，其假运行时同样是
+  // POSIX 脚本。parser 与判据本身由同文件的纯函数用例平台无关地覆盖。
+  'packages/backend/tests/runtime-startup-inventory-2026-08-09.test.ts#skipIf': 3,
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is

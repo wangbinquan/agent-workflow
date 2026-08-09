@@ -29,7 +29,12 @@
 //
 // Leaf module: imports ONLY runtime types → no module-init cycle.
 
-import type { NormalizedEvent, NormalizedEventKind, NormalizedTokenDelta } from '../types'
+import type {
+  NormalizedEvent,
+  NormalizedEventKind,
+  NormalizedTokenDelta,
+  StartupInventory,
+} from '../types'
 
 export function parseEvent(line: string): NormalizedEvent | null {
   let parsed: unknown
@@ -96,19 +101,21 @@ export function parseUnusableMcpServers(line: string): readonly string[] | null 
 }
 
 /**
- * 2026-08-09 — the `system/init` event's SKILL inventory: every skill name the
- * runtime actually loaded for this turn (bundled ones included).
+ * 2026-08-09 — the `system/init` event's CAPABILITY inventory: what the runtime
+ * actually loaded for this turn (its own built-ins included).
  *
- * Measured on claude 2.1.226: `init.skills` is a flat string array of canonical
- * skill names, and the canonical name is the DIRECTORY name under the skills
- * dir — the frontmatter `name:` only becomes `displayName`. That is exactly the
- * key `stageSkills` writes, so the platform can compare its staged names
- * against this list literally.
+ * Measured on claude 2.1.226, the init event carries all three lists the
+ * platform injects into:
+ *   · `tools`  — the loaded built-in set, i.e. exactly what `--tools` pruned to;
+ *   · `agents` — every addressable subagent type, `--agents` entries + built-ins;
+ *   · `skills` — canonical skill names, which are the DIRECTORY names under the
+ *                skills dir (frontmatter `name:` only becomes `displayName`),
+ *                so they compare literally against what `stageSkills` wrote.
  *
- * Returns null for any line that carries no such inventory (keep looking).
- * `[]` is a real answer: the runtime loaded nothing.
+ * Returns null for any line carrying none of them (keep looking). A present but
+ * empty array is a real answer — the runtime loaded nothing of that kind.
  */
-export function parseSkillInventory(line: string): readonly string[] | null {
+export function parseStartupInventory(line: string): StartupInventory | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(line)
@@ -118,9 +125,21 @@ export function parseSkillInventory(line: string): readonly string[] | null {
   if (!parsed || typeof parsed !== 'object') return null
   const evt = parsed as Record<string, unknown>
   if (evt.type !== 'system' || evt.subtype !== 'init') return null
-  const skills = evt.skills
-  if (!Array.isArray(skills)) return null
-  return skills.filter((name): name is string => typeof name === 'string' && name.length > 0)
+  const names = (value: unknown): readonly string[] | undefined =>
+    Array.isArray(value)
+      ? value.filter((name): name is string => typeof name === 'string' && name.length > 0)
+      : undefined
+  const inventory: { tools?: readonly string[]; agents?: readonly string[] } & {
+    skills?: readonly string[]
+  } = {}
+  const tools = names(evt.tools)
+  const agents = names(evt.agents)
+  const skills = names(evt.skills)
+  if (tools !== undefined) inventory.tools = tools
+  if (agents !== undefined) inventory.agents = agents
+  if (skills !== undefined) inventory.skills = skills
+  // An init event that enumerates none of the three tells us nothing.
+  return tools === undefined && agents === undefined && skills === undefined ? null : inventory
 }
 
 /** ISO-8601 `timestamp` → ms epoch; undefined when absent/unparseable. */

@@ -282,6 +282,27 @@ export interface ClaudeDeclaredControlArgv {
    * Skill tool (system surfaces, the read-only intent set, the MCP playground).
    */
   skillsGranted?: boolean
+  /**
+   * 2026-08-09 — this spawn carries a NON-EMPTY dependsOn closure (`--agents`),
+   * so the platform loads `Task` regardless of what the agent's own permission
+   * says. `Task` is the only way to reach a subagent, and until now it was
+   * gated on the user writing `task: 'allow'` while `--agents` went out
+   * unconditionally: a node that declared dependencies registered them and then
+   * could not call a single one, with no diagnostic anywhere.
+   *
+   * opencode has derived this from the closure since RFC-251
+   * (`hermetic.ts:864-868` opens `task` iff `allowedTaskTargets.length > 0`) and
+   * never consults the user's permission for it. Deriving it here is what makes
+   * one agent definition mean the same thing on both runtimes.
+   *
+   * Does this widen the blast radius? MEASURED on 2.1.226: no. A subagent's
+   * tool pool is the PARENT's loaded set — the built-in `general-purpose`
+   * declares `tools:["*"]` and still reported exactly `Agent, Read` under a
+   * `--tools Read,Task` parent. So `Task` cannot be used to reach a capability
+   * the parent does not already load; the built-ins it also exposes are
+   * capped by the same ceiling.
+   */
+  subagentsGranted?: boolean
 }
 
 /**
@@ -312,12 +333,27 @@ export interface ClaudeDeclaredControlArgv {
  * Flag ORDER is part of the contract (argv golden locks); callers append their
  * own model/prompt/session flags after this group.
  */
+/**
+ * 2026-08-09 — the LOADED set actually emitted: the mapped tools plus `Task`
+ * when this spawn carries a dependsOn closure. Appended (never reordered) so
+ * every existing golden argv stays byte-identical, and de-duped so an agent
+ * that already declared `task: 'allow'` does not produce `Task,Task`.
+ * An empty mapped set stays empty unless subagents are actually present.
+ */
+function claudeLoadedTools(input: ClaudeDeclaredControlArgv): string {
+  if (input.subagentsGranted !== true) return input.tools
+  const loaded = input.tools.split(',').filter((tool) => tool.length > 0)
+  if (loaded.includes('Task')) return input.tools
+  loaded.push('Task')
+  return loaded.join(',')
+}
+
 export function claudeDeclaredControlArgv(input: ClaudeDeclaredControlArgv): string[] {
   return [
     '--permission-mode',
     'dontAsk',
     '--tools',
-    input.tools,
+    claudeLoadedTools(input),
     ...(input.mcpConfigFile === undefined ? [] : ['--mcp-config', input.mcpConfigFile]),
     '--strict-mcp-config',
     '--setting-sources',
@@ -385,6 +421,11 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
           // and the all-deny system surface never do.
           ...(businessGated && /(^|,)Skill(,|$)/.test(ctx.businessTools ?? '')
             ? { skillsGranted: true }
+            : {}),
+          // 2026-08-09: the closure itself grants Task — same derivation
+          // opencode uses, and `--agents` is exactly "the closure is non-empty".
+          ...(businessGated && ctx.agentsJson !== undefined && ctx.agentsJson.length > 0
+            ? { subagentsGranted: true }
             : {}),
         })
       : [

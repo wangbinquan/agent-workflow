@@ -23,6 +23,7 @@ import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
 import { buildOpencodeSpawn } from '../src/services/runtime/opencode/spawn'
 import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
 import { toClaudeAgents, toClaudeMcpConfig } from '../src/services/runtime/claudeCode/inject'
+import { claudeBusinessGate } from '../src/services/runtime/claudeCode/permissionMap'
 import { createLogger } from '../src/util/log'
 import type { RuntimeProfile } from '../src/services/runtimeRegistry'
 
@@ -241,7 +242,17 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
       expect(plan.cmd.slice(0, 3)).toEqual(['bun', 'run', '/mock-claude.ts'])
       // 收口前公式的 flag 面。
       const mcpJson = JSON.stringify(toClaudeMcpConfig(ctx.mcps))
-      const agentsJson = JSON.stringify(toClaudeAgents(ctx.dependents))
+      // 2026-08-09 显式改判：`--agents` 不再只是 {description,prompt}。每个
+      // dependent 现在带自己解析出的 model，以及自己 permission 推出的 tools
+      // （上限是父的装载集，且永不含 Task）。收口前的 runner 公式丢掉了这两样
+      // ——dep 跑父的模型、拿父的全部工具——所以这里对拍的是**新公式**，参数与
+      // driver 同源。
+      const agentsJson = JSON.stringify(
+        toClaudeAgents(ctx.dependents, {
+          profileByName: ctx.resolvedParamsByAgent,
+          parentTools: claudeBusinessGate(ctx.agent.permission)?.tools ?? null,
+        })?.agents,
+      )
       const cmdStr = plan.cmd.join(' ')
       expect(plan.cmd).toContain('--mcp-config')
       expect(plan.cmd[plan.cmd.indexOf('--mcp-config') + 1]).toBe(mcpJson)
@@ -260,16 +271,23 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
       // D16：per-attempt CLAUDE_CONFIG_DIR = <runRoot>/.claude。
       expect(plan.env.CLAUDE_CONFIG_DIR).toBe(join(runRoot, '.claude'))
       expect(plan.env.GIT_COMMITTER_EMAIL).toBe('ada@x.io')
-      // 诊断字段与收口前 runner 的日志派生一致（claude 也带 plugin 字段——
-      // 它忽略 plugins 但日志历史形状如此）。
+      // 2026-08-09 显式改判：这条日志是运维看「这次 spawn 到底注入了什么」的
+      // 唯一窗口，所以它不能声称一个根本不发生的注入。`pluginCount`/`pluginNames`
+      // 在一个**没有插件面**的运行时上报告「选中的插件数」——日志说 N、进程装载 0，
+      // 就是在说谎。改名说实话，与 opencode 侧 `machineConfigIgnoredPlugins`
+      // （RFC-256）同一命名法。同时补上此前完全缺席的三类真实注入面，它们与
+      // runner 的 fail-closed 校验**同一份派生**，构造上不可能互相矛盾。
       expect(plan.diagnostics).toEqual({
         inlineModel: 'opus',
         inlineVariant: 'v1',
         inlineTemperature: 0.3,
         mcpCount: 1,
         mcpKeys: ['search'],
-        pluginCount: 1,
-        pluginNames: ['tracer'],
+        pluginsIgnoredUnsupported: 1,
+        pluginsIgnoredNames: ['tracer'],
+        skillNames: [],
+        subagentNames: ['helper-agent'],
+        declaredToolNames: ['Bash', 'Task'],
         // 2026-08-04 审计 P2-9：能力**被移除**的事实此前只在 daemon 日志里。
         // diagnostics 本就是「这次 spawn 装配里实际落了什么」的通道。
         businessTools: 'Bash',
@@ -308,8 +326,12 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
         inlineTemperature: null,
         mcpCount: 0,
         mcpKeys: [],
-        pluginCount: 0,
-        pluginNames: [],
+        // 2026-08-09：同上改判。空闭包 ⇒ 无 subagent、无 Task。
+        pluginsIgnoredUnsupported: 0,
+        pluginsIgnoredNames: [],
+        skillNames: [],
+        subagentNames: [],
+        declaredToolNames: ['Bash'],
         // 2026-08-04 审计 P2-9：能力**被移除**的事实此前只在 daemon 日志里。
         // diagnostics 本就是「这次 spawn 装配里实际落了什么」的通道。
         businessTools: 'Bash',

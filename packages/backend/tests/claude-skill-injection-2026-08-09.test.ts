@@ -43,7 +43,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from '../src/services/runner'
 import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
-import { parseSkillInventory } from '../src/services/runtime/claudeCode/events'
+import { parseStartupInventory } from '../src/services/runtime/claudeCode/events'
 import {
   buildClaudeSpawn,
   claudeDeclaredControlArgv,
@@ -351,19 +351,22 @@ describe('parseSkillInventory 读 claude 的启动技能清单', () => {
     JSON.stringify({ type: 'system', subtype: 'init', session_id: 's', skills })
 
   test('init 的 skills 数组 → 名字清单', () => {
-    expect(parseSkillInventory(init(['pdf-tools', 'debug']))).toEqual(['pdf-tools', 'debug'])
-    expect(parseSkillInventory(init([]))).toEqual([])
+    expect(parseStartupInventory(init(['pdf-tools', 'debug']))?.skills).toEqual([
+      'pdf-tools',
+      'debug',
+    ])
+    expect(parseStartupInventory(init([]))?.skills).toEqual([])
   })
 
   test('非 init / 无 skills 字段 / 非 JSON ⇒ null（继续找下一行）', () => {
-    expect(parseSkillInventory('not json')).toBeNull()
-    expect(parseSkillInventory(JSON.stringify({ type: 'assistant' }))).toBeNull()
-    expect(parseSkillInventory(JSON.stringify({ type: 'system', subtype: 'status' }))).toBeNull()
-    expect(parseSkillInventory(init(undefined))).toBeNull()
+    expect(parseStartupInventory('not json')).toBeNull()
+    expect(parseStartupInventory(JSON.stringify({ type: 'assistant' }))).toBeNull()
+    expect(parseStartupInventory(JSON.stringify({ type: 'system', subtype: 'status' }))).toBeNull()
+    expect(parseStartupInventory(init(undefined))).toBeNull()
   })
 
   test('脏项被过滤，不会把 null 当成技能名', () => {
-    expect(parseSkillInventory(init(['ok', null, 42, '']))).toEqual(['ok'])
+    expect(parseStartupInventory(init(['ok', null, 42, '']))?.skills).toEqual(['ok'])
   })
 })
 
@@ -378,7 +381,7 @@ describe('spawn plan 声明「平台 stage 了哪些技能」', () => {
           skills: [{ name: 'pdf-tools', sourceKind: 'managed', sourcePath: snapshot }],
         }),
       )
-      expect(plan.stagedSkills).toEqual(['pdf-tools'])
+      expect(plan.declaredCapabilities?.skills).toEqual(['pdf-tools'])
     },
   )
 
@@ -393,7 +396,7 @@ describe('spawn plan 声明「平台 stage 了哪些技能」', () => {
           skills: [{ name: 'pdf-tools', sourceKind: 'managed', sourcePath: snapshot }],
         }),
       )
-      expect(plan.stagedSkills).toBeUndefined()
+      expect(plan.declaredCapabilities?.skills).toBeUndefined()
     },
   )
 
@@ -407,7 +410,7 @@ describe('spawn plan 声明「平台 stage 了哪些技能」', () => {
         { name: 'repo-local', sourceKind: 'project' },
       ]
       const plan = await claudeCodeDriver.buildBusinessSpawn(mkCtx(f, { skills }))
-      expect(plan.stagedSkills).toEqual(['pdf-tools'])
+      expect(plan.declaredCapabilities?.skills).toEqual(['pdf-tools'])
     },
   )
 })
@@ -479,7 +482,7 @@ describe.skipIf(process.platform === 'win32')(
         cmd: [fakeRuntime(f.base, inventory)],
         env: {},
         stdin: { mode: 'pipe', data: 'x' },
-        stagedSkills: ['pdf-tools'],
+        declaredCapabilities: { skills: ['pdf-tools'] },
       })
       try {
         return await runNode({
@@ -518,7 +521,7 @@ describe.skipIf(process.platform === 'win32')(
       const f = fixture('claude-skills-runner-missing-')
       const result = await runWithInventory(f, 'nr-skill-missing', ['debug', 'code-review'])
       expect(result.status).toBe('failed')
-      expect(result.errorMessage).toContain('skill-unavailable')
+      expect(result.errorMessage).toContain('runtime-capability-missing')
       expect(result.errorMessage).toContain('pdf-tools')
     }, 30_000)
 

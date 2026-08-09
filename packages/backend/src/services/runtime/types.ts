@@ -151,19 +151,23 @@ export interface SpawnPlan {
    */
   fencedMcpServers?: readonly string[]
   /**
-   * 2026-08-09 — skill names the PLATFORM staged into this spawn's config dir
-   * for a node that can actually invoke them. Same contract as
-   * `fencedMcpServers`: a declared capability the runtime does not report at
-   * startup fails the node instead of letting the model run a whole turn
-   * without it and still report success.
+   * 2026-08-09 — what the PLATFORM injected and the runtime must therefore
+   * report as loaded at startup. The runner intersects this with the runtime's
+   * own startup inventory and fails the node on any absence.
    *
-   * This exists because the failure it guards shipped twice in five days —
-   * `--disable-slash-commands` (2026-08-04) and then `--setting-sources ""`
-   * (2026-08-09) each switched off every staged skill with nothing anywhere
-   * saying so. Only set where the node is supposed to use skills; omitted
-   * otherwise (nothing to prove).
+   * Three failures in five days had the identical shape — closure resolved,
+   * injection emitted, runtime silently without it, zero diagnostics anywhere:
+   * `--disable-slash-commands` (2026-08-04) switched every staged skill off;
+   * `--setting-sources ""` (2026-08-09) meant the skill dir was never scanned;
+   * `--agents` shipped unconditionally while `Task` stayed unloaded, so the
+   * subagents were registered and uncallable. Patching each flag cannot stop
+   * the fourth one — proving the capability arrived can.
+   *
+   * Absence is the only verdict: extra entries are the runtime's own built-ins
+   * and none of the platform's business. A field left undefined means "nothing
+   * to prove here" (an unconstrained spawn has no load set to check).
    */
-  stagedSkills?: readonly string[]
+  declaredCapabilities?: DeclaredRuntimeCapabilities
   /** Which process layer owns platform containment for this plan. */
   sandboxTopology?: SpawnSandboxTopology
   /**
@@ -813,8 +817,31 @@ export interface RuntimeDriver {
    * carry no such inventory. The runner checks `SpawnPlan.stagedSkills` against
    * it, so only skills the platform itself staged can fail a node this way.
    */
-  parseSkillInventory?(line: string): readonly string[] | null
+  /**
+   * 2026-08-09 — the capabilities this startup line reports as LOADED for the
+   * turn (the runtime's own built-ins included). Returns null for lines that
+   * carry no such inventory, and a field is undefined when this runtime does
+   * not enumerate that kind. The runner checks `SpawnPlan.declaredCapabilities`
+   * against it, so only what the platform itself injected can fail a node.
+   *
+   * A runtime that never reports an inventory simply never triggers the check:
+   * being unable to prove a capability arrived is not proof that it did not.
+   */
+  parseStartupInventory?(line: string): StartupInventory | null
 }
+
+/** What the platform injected into one spawn and expects to see loaded. */
+export interface DeclaredRuntimeCapabilities {
+  /** Built-in tools the spawn requires (omitted when the spawn is unconstrained). */
+  tools?: readonly string[]
+  /** dependsOn closure members injected as subagents. */
+  agents?: readonly string[]
+  /** Managed skills staged into the private config dir. */
+  skills?: readonly string[]
+}
+
+/** The runtime's own answer to the same three questions, read off its startup line. */
+export type StartupInventory = DeclaredRuntimeCapabilities
 
 /** RFC-237 — inputs for `captureSessionsToSink?`. The sink slice is structural
  *  (sessionEventSink.ts imports from this module, so the nominal

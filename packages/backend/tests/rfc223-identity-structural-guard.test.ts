@@ -88,6 +88,10 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/runner.ts\u001frunNode\u001fCallExpression:c4fcc147e09c28523846\u001f1\u001fruntime-protocol\u001fresolvedParamsByAgent.has(dep.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runner.ts\u001frunNode\u001fCallExpression:ed70f7ab8579a8b397af\u001f1\u001fruntime-protocol\u001fresolvedParamsByAgent.set(dep.name, { model: r.model, variant: r.variant, temperature: r.temperature, steps: r.steps, maxSteps: r.maxSteps, })',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/claudeCode/driver.ts\u001fbuildBusinessSpawn\u001fCallExpression:d6aa73917b11a05318bb\u001f1\u001fruntime-protocol\u001fctx.resolvedParamsByAgent.get(ctx.agent.name)',
+  // 2026-08-09：claude 侧与 verifiedPlan.ts 那条逐成员 profile 查找同构——每个闭包
+  // 成员从 root 用的同一张 name-keyed 表里解析自己的 model。此前 claude 整个丢掉了
+  // per-dependent profile，子代理一律跑父的模型。
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeAgents\u001fCallExpression:fb1d46a23078739a1d5f\u001f1\u001fruntime-protocol\u001fopts?.profileByName?.get(dep.name)',
   // RFC-242 T5: lookup side of the same wrapper map (see netlessMcp.ts above).
   'collection-name-identity\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeMcpConfig\u001fCallExpression:608b8baf7ebd19ab2171\u001f1\u001fruntime-protocol\u001flocalWrapperByName?.get(m.name)',
   // RFC-242 T5: the MCP name IS claude's `--mcp-config` registry key, so the
@@ -135,8 +139,6 @@ const EXACT_ALLOWANCE_ROWS = [
   // RFC-271 privacy fence: suggested import names only collide with rows owned
   // by the importing actor; hidden rows from other owners must not influence it.
   'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fNewExpression:be5e5774c05b6d80827e\u001f1\u001fowner-uniqueness\u001fnew Set( rows.filter((row) => row.ownerUserId === actor.user.id).map((row) => String(row.name)), )',
-  'collection-name-identity\u001fpackages/backend/src/services/closureNameConflict.ts\u001ffindClosureNameConflicts\u001fCallExpression:31928c2705d337feda11\u001f1\u001finjection-validation\u001fidsByName.get(r.name)',
-  'collection-name-identity\u001fpackages/backend/src/services/closureNameConflict.ts\u001ffindClosureNameConflicts\u001fCallExpression:7e3ec55af914c2797e3d\u001f1\u001finjection-validation\u001fidsByName.set(r.name, set)',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/commit.ts\u001fmakePackageProvider\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fbuiltin-binding\u001feq(table.name, name)',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'sql-name-selector\u001fpackages/backend/src/cli/package.ts\u001frunExport\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
@@ -193,7 +195,9 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/shared/src/prompt.ts\u001frenderUserPrompt\u001fCallExpression:1a3cbb12cf7ce497f06a\u001f1\u001fport-or-protocol-name\u001fPROMPT_INJECTED_PORT_NAMES.has(name)',
   'collection-name-identity\u001fpackages/shared/src/systemChannelPorts.ts\u001f<root>\u001fNewExpression:40923b6150888c390e51\u001f1\u001fport-or-protocol-name\u001fnew Set( Object.entries(SYSTEM_CHANNEL_PORTS) .filter(([, spec]) => spec.promptInjected) .map(([name]) => name), )',
   'frontend-name-key\u001fpackages/backend/src/services/runner.ts\u001frunNode\u001fBinaryExpression:d8cf512d7a0026109a14\u001f1\u001fport-or-protocol-name\u001foutputs[name] = norm',
-  'frontend-name-key\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeAgents\u001fBinaryExpression:7556d98e1f0ee2471bef\u001f1\u001fruntime-protocol\u001fagents[dep.name] = { description: dep.description, prompt: dep.bodyMd }',
+  // 2026-08-09 指纹改判：条目值从 {description,prompt} 变为携带该 dependent 自己的
+  // model 与 permission 推出的 tools。registry 键仍是 claude `--agents` 的协议名。
+  'frontend-name-key\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeAgents\u001fBinaryExpression:687e5cb3407a2a67f269\u001f1\u001fruntime-protocol\u001fagents[dep.name] = entry',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeMcpConfig\u001fBinaryExpression:f8ebc86bd322dfcdc9a9\u001f2\u001fruntime-protocol\u001fservers[m.name] = entry',
   // RFC-242 T5: the wrapped local entry — same claude protocol registry key as
   // the raw entry above, only its value changes (wrapper instead of raw command).
@@ -438,7 +442,6 @@ describe('RFC-223 T15 structural identity guard', () => {
     // 名字查一次。**它恰恰不是**「按名字解析身份」：命中多行时**报错并列出候选
     // id**，要求用户改用 `--id`——`workflows.name` 非唯一，猜一行就是选错资源。
     // RFC-271 收尾显式改判：137 -> 140，三条，都是**有意的按名字**：
-    //   · `closureNameConflict.ts` 的 `idsByName` 两处 —— 这个模块的职责就是
     //     **找出闭包内的同名冲突**（运行时注入按名字组织：技能按名字建目录、MCP
     //     按名字写 mcpServers key，两个同名资源会静默互相覆盖）。按名字聚合是它的
     //     目的本身，且它先按 id 去重，只把「不同 id 共享同一名字」判成冲突。
@@ -446,7 +449,13 @@ describe('RFC-223 T15 structural identity guard', () => {
     //     **按名字**绑定：源库 id 在对端没有任何意义，复制一份只会得到 owner 错、
     //     `builtin=false` 的同名副本。查询额外用 `builtin=true` 兜底，所以它不会
     //     绑到某个碰巧同名的用户资源。
-    expect(findings.length).toBe(140)
+    // 2026-08-09 显式改判：140 → 141。claude 的 `toClaudeAgents` 现在逐成员解析
+    // 自己的 RFC-113 profile（`profileByName.get(dep.name)`），与 opencode 侧
+    // `verifiedPlan.ts` / `inlineConfig.ts` 早已允许的同名查找**逐字同构**——
+    // `resolvedParamsByAgent` 本来就是 name-keyed 的运行时协议表（runner 建、
+    // root 也这样读）。此前 claude 根本不查这张表，每个子代理都跑父的模型。
+    // 同批次的 `agents[dep.name] = entry` 只是既有条目的指纹改判，不增计数。
+    expect(findings.length).toBe(139)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three

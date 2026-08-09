@@ -79,23 +79,29 @@ function depAgent(name: string, bodyMd: string, description = 'd'): Agent {
   }
 }
 
+// 2026-08-09：返回形状从裸 registry 改为 `{agents, warnings}`——每个 dependent 现在
+// 还携带自己的 model 与 permission 推出的 tools，而「父的装载集是硬上界」这条能力
+// 损失必须能被调用方说出来。以下三条只随形状改判，断言的语义一字未变。
 describe('toClaudeAgents (RFC-111 PR-C)', () => {
   it('maps dependents to { name: { description, prompt } }; empty → null', () => {
     expect(toClaudeAgents([])).toBeNull()
-    const agents = toClaudeAgents([depAgent('reviewer', 'You review.', 'Reviews code')])
-    expect(agents).toEqual({ reviewer: { description: 'Reviews code', prompt: 'You review.' } })
+    const out = toClaudeAgents([depAgent('reviewer', 'You review.', 'Reviews code')])
+    expect(out?.agents).toEqual({
+      reviewer: { description: 'Reviews code', prompt: 'You review.' },
+    })
+    expect(out?.warnings).toEqual([])
   })
 
   it('dedupes by name (first wins)', () => {
-    const agents = toClaudeAgents([depAgent('a', 'first'), depAgent('a', 'second')])
-    expect(Object.keys(agents!)).toEqual(['a'])
-    expect(agents!.a?.prompt).toBe('first')
+    const out = toClaudeAgents([depAgent('a', 'first'), depAgent('a', 'second')])
+    expect(Object.keys(out!.agents)).toEqual(['a'])
+    expect(out!.agents.a?.prompt).toBe('first')
   })
 
   it('keeps a valid prototype-shaped dependent name as an own registry key', () => {
-    const agents = toClaudeAgents([depAgent('constructor', 'constructor prompt')])
-    expect(Object.hasOwn(agents ?? {}, 'constructor')).toBe(true)
-    const entry = Object.getOwnPropertyDescriptor(agents ?? {}, 'constructor')?.value as
+    const out = toClaudeAgents([depAgent('constructor', 'constructor prompt')])
+    expect(Object.hasOwn(out?.agents ?? {}, 'constructor')).toBe(true)
+    const entry = Object.getOwnPropertyDescriptor(out?.agents ?? {}, 'constructor')?.value as
       | { prompt: string }
       | undefined
     expect(entry?.prompt).toBe('constructor prompt')
