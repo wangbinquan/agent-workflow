@@ -162,7 +162,16 @@ export function buildManifest(
     /** 解析不到的 call 目标（late-bound）。导入后它们仍按名字在启动期解析。 */
     danglingCallRefs: closure.callRefs
       .filter((c) => c.resolvedId === null)
-      .map((c) => ({ from: c.fromId, nodeId: c.nodeId, type: c.targetType, name: c.name })),
+      // ⚠️ `from` 写**包内 slug**，不是源库 id。写 `c.fromId` 会让源实例的 ULID
+      // 泄漏进 manifest —— 包必须与源系统 id 无关（那是它能跨实例搬运的前提），
+      // 而这个字段只是给人看「哪个资源引用了这个解析不到的 call 目标」，slug 足够
+      // 且在对端仍然有意义。
+      .map((c) => ({
+        from: serialized.slugOfId.get(c.fromId) ?? c.fromId,
+        nodeId: c.nodeId,
+        type: c.targetType,
+        name: c.name,
+      })),
   }
 }
 

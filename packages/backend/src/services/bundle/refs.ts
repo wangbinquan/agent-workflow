@@ -55,7 +55,18 @@ export async function resolveIdentityRef(
   if (ref.startsWith('builtin:')) {
     const spec = ref.slice('builtin:'.length)
     const slash = spec.indexOf('/')
+    const declared = slash < 0 ? '' : spec.slice(0, slash)
     const name = slash < 0 ? '' : spec.slice(slash + 1)
+    // ⚠️ **声明类型必须与槽类型一致**。wire schema 是六类共用的，所以
+    // `mcp: ['builtin:agent/x']` 能过词法层；不校验的话解析器会丢掉 wire 里的
+    // `agent`、改用槽类型 `mcp` 去查 `mcps.builtin` —— 那一列**不存在**，drizzle
+    // 生成非法 SQL、整个 commit 变成 500 internal-error（而不是 4xx）。
+    if (declared !== type) {
+      throw new ValidationError(
+        'bundle-ref-invalid',
+        `builtin ref '${ref}' declares '${declared}' but the slot expects '${type}'`,
+      )
+    }
     const id = await ctx.resolveBuiltin?.(type, name)
     if (id === undefined || id === null) {
       // fail closed：本实例没有同名 built-in 是**环境前提缺失**（manifest 的

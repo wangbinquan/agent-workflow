@@ -534,6 +534,11 @@ function makePackageProvider(
     // 自己 seed 的那一个。只认 `builtin = true` 的行——同名的普通资源不算数，
     // 否则「忽略 built-in」会退化成「绑到某个碰巧同名的用户资源」。
     resolveBuiltin: async (type, name) => {
+      // 第二道防线（refs.ts 已按槽类型校验过声明类型）：**只有 agents / workflows
+      // 两张表有 `builtin` 列**。对其余四类拼 `eq(table.builtin, true)` 会让 drizzle
+      // 生成非法 SQL ⇒ 500 而不是 4xx。这里直接判「没有 built-in」，交给调用点
+      // fail closed。
+      if (type !== 'agent' && type !== 'workflow') return null
       const table = ACL_TABLES[type]
       const row = db
         .select({ id: table.id })

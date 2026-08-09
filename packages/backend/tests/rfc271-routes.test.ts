@@ -12,6 +12,10 @@
 //  ③ 六条导出**必须是字面量路径**：契约覆盖守卫按 `path: '<字面量>'` 抓取，写成
 //     `for` 循环 + 模板字符串会让它们静静躺在守卫之外。
 
+//
+// 覆盖验收条款：AC-30 / AC-30b（导入端点 tokenAccess:allow；缺该类写权限时含该类新资源的包提交被拒）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

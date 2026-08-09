@@ -14,6 +14,10 @@
 // 技能 / MCP / 插件 / dependsOn 闭包一个字节都不在文件里，导入到另一个实例必然
 // 悬空。那不是「功能少一点」，是一个会稳定产出坏结果的出口。
 
+//
+// 覆盖验收条款：AC-31 / AC-32 / AC-33 / AC-34（两条旧路由不再注册 / 前端 YAML 路径消失 / C4 分轴正反例 / C6 传递不可见 422）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'

@@ -209,7 +209,7 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
   （`local:` / `external:` / **`project:<name>`**），`project-skill` **只在该槽**合法。
   **project 是非资源叶子**：不入 `walkClosure` 队列、不查 row/ACL、不进 `(type,name)` 去重门，
   只产出 payload 边 + 去重后的 `requirements.projectSkills`。
-  managed 的编码规则：闭包内 → `local:<slug>`；**builtin / `__system__` → `external:builtin/<type>/<name>`**
+  managed 的编码规则：闭包内 → `local:<slug>`；**builtin / `__system__` → `builtin:<type>/<name>`**（实现期改判 2026-08-09：原写 `external:builtin/<type>/<name>`，那是把 built-in 嵌套进 `external:` 前缀下，而 `external:` 的语义是「指向本实例已有行的 token」——解析器会把整串 `builtin/agent/x` 当成一个外部 id 去查，必然 422。改成与 `local:`/`external:`/`project:`/`name:` **并列的独立前缀**，语义与解析都更直白）
   （导入按名字绑本地内置件，本地没有则预检页报错）。⚠️ 否则一个今天合法可跑的代理（含 `{kind:'project'}`
   技能）**无法 round-trip**——`external:` 兜不住它（无资源行可解析）。
 - **AC-B2f** 🆕 **调度器不再裸读字段**：`scheduler.ts` 四处 `agentId` 直读收成一个

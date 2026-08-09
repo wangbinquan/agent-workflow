@@ -9,7 +9,7 @@
 // 有人以「补齐权限校验」为由把它加回去。
 
 //
-// 覆盖验收条款：AC-2b（同名重复门）/ AC-7b / AC-7c / AC-7d（反向锁） / AC-8（特权节点按轴判定）
+// 覆盖验收条款：AC-2b（同名重复门）/ AC-7b / AC-7c / AC-7d（反向锁） / AC-8（特权节点按轴判定） / AC-3（闭包完整：工作流→代理/子工作流/工作组，代理→技能+MCP+插件+dependsOn）/ AC-4（闭包去重去环）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
 import { describe, expect, test } from 'bun:test'

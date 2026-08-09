@@ -13,7 +13,7 @@
 //    这里对第二条做直接的反例断言。
 
 //
-// 覆盖验收条款：AC-14b（同名多候选全部列出）/ AC-24c（token 由 preview 下发原样回传）/ AC-24d（伪造 previewToken 被拒） / AC-14（预检逐条列出类型/名字/本地匹配/可选动作）/ AC-15（覆盖仅限自己拥有的）/ AC-16（新建副本默认名不冲突且可改）
+// 覆盖验收条款：AC-14b（同名多候选全部列出）/ AC-24c（token 由 preview 下发原样回传）/ AC-24d（伪造 previewToken 被拒） / AC-14（预检逐条列出类型/名字/本地匹配/可选动作）/ AC-15（覆盖仅限自己拥有的）/ AC-16（新建副本默认名不冲突且可改） / AC-2（manifest.resources 是权威清单，包内未登记文件 → 拒绝）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
 import { describe, expect, test } from 'bun:test'

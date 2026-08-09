@@ -462,23 +462,95 @@ describe('R0 · 导出产物与源系统 id 无关（导入后由新实例重建
         const pkg = await exportResourcePackage(src.db, actorOf('u1'), root, {
           appHome: src.appHome,
         })
-        const bundle = new TextDecoder().decode(
-          decodeZip(pkg.zip)
-            .find((e) => e.path === 'bundle.json')!
-            .bytes(),
-        )
-        expect({ root: root.type, hasExternal: bundle.includes('external:') }).toEqual({
+        // ⚠️ 扫**整个 zip**，不是只扫 bundle.json。第一版只查 bundle.json，于是
+        // `manifest.danglingCallRefs[].from` 里泄漏的源 ULID 完全没被发现。
+        const whole = decodeZip(pkg.zip)
+          .map((e) => `${e.path}\n${new TextDecoder().decode(e.bytes())}`)
+          .join('\n')
+        expect({ root: root.type, hasExternal: whole.includes('external:') }).toEqual({
           root: root.type,
           hasExternal: false,
         })
-        // 闭包里每个资源的**源 id** 都不得出现在包里。
-        for (const r of src.db.select().from(agents).all()) {
-          expect({ root: root.type, leaked: bundle.includes(r.id) }).toEqual({
+        // ⚠️ 枚举**六类**资源的源 id，不是只枚举 agents。第一版只查 agents 表，
+        // 工作流 / 技能 / MCP / 工作组的 id 泄漏一律看不见。
+        const sourceIds = [
+          ...src.db
+            .select()
+            .from(agents)
+            .all()
+            .map((r) => r.id),
+          ...src.db
+            .select()
+            .from(workflows)
+            .all()
+            .map((r) => r.id),
+          ...src.db
+            .select()
+            .from(skills)
+            .all()
+            .map((r) => r.id),
+          ...src.db
+            .select()
+            .from(mcps)
+            .all()
+            .map((r) => r.id),
+          ...src.db
+            .select()
+            .from(workgroups)
+            .all()
+            .map((r) => r.id),
+        ]
+        for (const id of sourceIds) {
+          expect({ root: root.type, id, leaked: whole.includes(id) }).toEqual({
             root: root.type,
+            id,
             leaked: false,
           })
         }
       }
+    } finally {
+      removeTempDirSync(src.appHome)
+    }
+  })
+  test('dangling call 目标：manifest 的 `from` 写包内 slug，不泄漏源 ULID', async () => {
+    // 这是实现门实测到的泄漏点：`manifest.danglingCallRefs[].from` 直接写了
+    // `callRefs.fromId`（源库 ULID）。而上面那条守卫的第一版只扫 bundle.json，
+    // 完全看不到 manifest —— 所以这条用例必须**单独**造出 dangling ref。
+    const src = await makeInstance()
+    try {
+      await src.db.insert(workflows).values({
+        id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        name: 'caller',
+        description: '',
+        definition: JSON.stringify({
+          $schema_version: 4,
+          inputs: [],
+          edges: [],
+          nodes: [{ id: 'c1', kind: 'call-workflow', workflowName: 'does-not-exist' }],
+        }),
+        ownerUserId: 'u1',
+        visibility: 'private',
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+
+      const pkg = await exportResourcePackage(
+        src.db,
+        actorOf('u1'),
+        { type: 'workflow', id: '01ARZ3NDEKTSV4RRFFQ69G5FAV' },
+        { appHome: src.appHome },
+      )
+      const manifest = new TextDecoder().decode(
+        decodeZip(pkg.zip)
+          .find((e) => e.path === 'manifest.yaml')!
+          .bytes(),
+      )
+      // dangling 条目确实产出了（否则这条用例什么都没测）。
+      expect(manifest).toContain('does-not-exist')
+      // 但源库 id 不得出现。
+      expect(manifest).not.toContain('01ARZ3NDEKTSV4RRFFQ69G5FAV')
+      // `from` 用的是包内 slug。
+      expect(manifest).toContain('workflow-caller')
     } finally {
       removeTempDirSync(src.appHome)
     }

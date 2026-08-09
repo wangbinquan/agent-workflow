@@ -295,7 +295,12 @@ export function serializeClosure(
   const bundle = {
     bundleVersion: BUNDLE_VERSION,
     ops,
-    rootRef: `local:${slugOfId.get(closure.root.id)!}`,
+    // ⚠️ built-in 根同样**不产 op**，写成 `local:` 会让 parser 在
+    // 「local root 必须出现在 manifest.resources」上判 `bundle-dangling-root`
+    // （built-in 恰好被排除出 resources）。用 `builtin:` 让它自描述。
+    rootRef: builtinOfId.has(closure.root.id)
+      ? `builtin:${closure.root.type}/${closure.root.name}`
+      : `local:${slugOfId.get(closure.root.id)!}`,
   } as unknown as ResourceBundle
 
   return { bundle, secrets, slugOfId }
@@ -378,7 +383,20 @@ function liftWorkflowDefinition(
           : slugOfId.get(resolved.resolvedId)
       // 目标在包里 ⇒ `local:`；否则退回 late-bound 的名字域（**导出方也可能根本
       // 看不见那一行**，这正是 `name:` 形态存在的理由）。
-      node[refField] = targetSlug === undefined ? `name:${kind}/${name}` : `local:${targetSlug}`
+      //
+      // ⚠️ built-in 目标**必须**走名字域：它进闭包但**不产 create op**，写成
+      // `local:<slug>` 会让导入侧解析到一个本次并不会创建的 slug ⇒ 整包
+      // `bundle-dangling-local-ref`。call 槽的 `name:` 语义恰好就是「按名字绑对端
+      // 自己那一个」，与 built-in 的绑定语义一致，所以这里复用它而不是引入
+      // `builtin:`（call 槽的 wire schema 也只认 local/external/name）。
+      const resolvedIsBuiltin =
+        resolved?.resolvedId !== undefined &&
+        resolved.resolvedId !== null &&
+        builtinOfId.has(resolved.resolvedId)
+      node[refField] =
+        targetSlug === undefined || resolvedIsBuiltin
+          ? `name:${kind}/${name}`
+          : `local:${targetSlug}`
       delete node[nameField]
       delete node[idField]
     }

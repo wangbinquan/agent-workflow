@@ -32,16 +32,49 @@ const TEST_DIRS = [
   resolve(REPO, 'e2e'),
 ]
 
+/**
+ * 把一条加粗声明展开成它实际声明的全部 AC 编号。
+ *
+ * `AC-26/27` -> [AC-26, AC-27]；`AC-30/30b` -> [AC-30, AC-30b]；
+ * `AC-31~34` -> [AC-31, AC-32, AC-33, AC-34]；其余原样。
+ */
+export function expandAcDeclaration(raw: string): string[] {
+  const body = raw.slice('AC-'.length)
+  const range = body.match(/^([0-9]+)~([0-9]+)$/)
+  if (range !== null) {
+    const from = Number(range[1])
+    const to = Number(range[2])
+    if (from <= to && to - from < 100) {
+      return Array.from({ length: to - from + 1 }, (_, i) => `AC-${from + i}`)
+    }
+  }
+  return body.split('/').map((part) => `AC-${part}`)
+}
+
+/**
+ * **唯一被批准的改判条款**。每一条都必须在 design/proposal 里同时留下删除线与
+ * 「【已改判】」说明，两边缺一不可。
+ *
+ * · AC-11（超 SKILL_ZIP_LIMITS 就 422）—— 用户拍板「技能整棵树进包、不设任何上限」，
+ *   截断会产出一个「看起来成功」的残包，比大包糟得多。
+ */
+const APPROVED_SUPERSEDED = new Set<string>(['AC-11'])
+
 /** design/proposal/plan 里**加粗定义**的 AC 编号 —— 真值来源，不手抄。 */
 function declaredAcs(): string[] {
   const found = new Set<string>()
   for (const name of readdirSync(RFC_DIR)) {
     if (!name.endsWith('.md')) continue
     const src = readFileSync(resolve(RFC_DIR, name), 'utf8')
-    // `**AC-7d**` / `**AC-B2h**` / `**AC-K1**` —— 只认加粗的那种，正文里顺带提到
-    // 一个编号不算「定义」。
-    for (const m of src.matchAll(/\*\*(AC-(?:[0-9]+|B[0-9]+|K[0-9]+)[a-z]?)\*\*/g)) {
-      found.add(m[1]!)
+    // 只认**加粗**的那种，正文里顺带提到一个编号不算「定义」。
+    //
+    // ⚠️ 文档里有**三种**写法，只认第一种会漏掉 8 条（实测 AC-26/27、AC-30/30b、
+    // AC-31~34 全部抽不到，于是删掉它们的实现与测试守卫照样绿）：
+    //   ① 单个     `**AC-7d**` / `**AC-B2h**` / `**AC-K1**`
+    //   ② 斜杠复合 `**AC-26/27**` / `**AC-30/30b**`
+    //   ③ 波浪范围 `**AC-31~34**`
+    for (const m of src.matchAll(/\*\*(AC-[0-9A-Za-z/~]+)\*\*/g)) {
+      for (const id of expandAcDeclaration(m[1]!)) found.add(id)
     }
     // **显式改判**的条款不再要求覆盖：`~~**AC-11**~~ 【已改判…】`。
     // 这条出口是必要的——产品决策会取消某条 AC（AC-11 就是用户拍板「技能整棵树进包、
@@ -49,6 +82,10 @@ function declaredAcs(): string[] {
     // ⚠️ 但它必须**显式**：删掉 AC 或悄悄改文案都不算，必须留下删除线 + 改判说明，
     // 让下一个人看得见「这条为什么不见了」。
     for (const m of src.matchAll(/~~\*\*(AC-[0-9A-Za-z]+)\*\*~~\s*\*\*【已改判/g)) {
+      // ⚠️ **只认白名单里的那几条**。不锁死的话，给任意一条 AC 包上删除线 +
+      // 「已改判」就能把它连同它的测试一起免掉 —— 豁免出口本身变成绕过守卫的手段。
+      // 要新增豁免，必须**同时**改这里（一次显式的、看得见的授权动作）。
+      if (!APPROVED_SUPERSEDED.has(m[1]!)) continue
       found.delete(m[1]!)
     }
   }
@@ -75,7 +112,12 @@ function testCorpus(): string {
       if (!name.endsWith('.ts') && !name.endsWith('.tsx')) continue
       if (name === SELF) continue // 自身不算证据，否则错误信息里的编号会自匹配
       const src = readFileSync(resolve(dir, name), 'utf8')
-      if (!name.includes('rfc271') && !src.includes('RFC-271')) continue
+      // ⚠️ 判据必须是**显式声明**，不能是「内容里出现过 RFC-271」：
+      // `rfc270-privileged-node-read-lens.test.ts` 只因一句迁移注释提到 RFC-271，
+      // 就让它里面 RFC-270 的 AC-2/3/4 成了 RFC-271 这三个编号的唯一命中 —— 又一种
+      // 跨 RFC 顶替。所以只认①文件名带 rfc271，或②文件头写了「覆盖验收条款：」这个
+      // 锚点（那是作者明确声明「本文件覆盖 RFC-271 的哪几条」）。
+      if (!name.includes('rfc271') && !src.includes('覆盖验收条款：')) continue
       chunks.push(src)
     }
   }

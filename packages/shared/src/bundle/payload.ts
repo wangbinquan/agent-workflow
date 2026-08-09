@@ -37,12 +37,13 @@ import { WorkgroupModeSchema, WorkgroupSwitchesSchema } from '../schemas/workgro
  * 按名字绑到对端自己 seed 的那一个 —— 复制一份只会在对端多出 owner 错、
  * `builtin=false` 的同名副本，而真正的 built-in 仍在原处。
  */
-export const BundleIdentityRefWireSchema = z
-  .string()
-  .regex(
-    /^(local:[a-z0-9][a-z0-9_-]{0,63}|external:[A-Za-z0-9._:#/-]{1,128}|builtin:(agent|workflow)\/.{1,256})$/,
-    { message: 'must be local:<slug>, external:<token> or builtin:<type>/<name>' },
-  )
+export const BundleIdentityRefWireSchema = z.string().regex(
+  // ⚠️ 名字段用 `\S`（非空白）而不是 `.`：`.` 会把尾随空格当成名字的一部分，
+  // 于是 `builtin:agent/foo ` 通过词法层、再靠「查不到」fail closed。资源名字
+  // 永远不含空白，这一层挡掉比留给语义层更早也更准。
+  /^(local:[a-z0-9][a-z0-9_-]{0,63}|external:[A-Za-z0-9._:#/-]{1,128}|builtin:(agent|workflow)\/\S{1,256})$/,
+  { message: 'must be local:<slug>, external:<token> or builtin:<type>/<name>' },
+)
 
 /** 上面两种 + `project:<name>`。**仅** agent 的 `skills` 槽（R8-P1-1）。 */
 export const BundleAgentSkillRefWireSchema = z

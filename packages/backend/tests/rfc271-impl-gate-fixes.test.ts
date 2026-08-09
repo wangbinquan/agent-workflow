@@ -7,6 +7,10 @@
 // 跨实例往返（P1-3 技能树 / P1-4 工作组 / P1-2 脱敏 / P1-1 写权限）在
 // `rfc271-roundtrip.test.ts`，那条才是根因防护；这里补的是其余各条。
 
+//
+// 覆盖验收条款：AC-12（根资源 exact-revision 保护）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

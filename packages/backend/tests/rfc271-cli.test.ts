@@ -10,7 +10,7 @@
 //     同时给说明用户没想清楚哪个说了算——与其挑一个，不如让他明确。
 
 //
-// 覆盖验收条款：AC-26b（CLI 根选择器 --id） / AC-28（--plan/--apply/--on-conflict 互斥）/ AC-29（CLI 的权限、owner 归属与网页逐条一致）
+// 覆盖验收条款：AC-26b（CLI 根选择器 --id） / AC-28（--plan/--apply/--on-conflict 互斥）/ AC-29（CLI 的权限、owner 归属与网页逐条一致） / AC-26 / AC-27（两条命令都必须 --as-user，缺则报错退出）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
 import { describe, expect, test } from 'bun:test'
