@@ -10,25 +10,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type {
-  CreateWorkflow,
-  ImportWorkflowRequest,
-  ImportWorkflowResult,
-  ImportRefSelection,
-  Workflow,
-  WorkflowDetail,
-  WorkflowRevision,
-} from '@agent-workflow/shared'
+import type { CreateWorkflow, Workflow, WorkflowDetail } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useResourceList } from '@/hooks/useResourceList'
 import { describeApiError } from '@/i18n'
 import { QuickCreateDialog } from '@/components/QuickCreateDialog'
 import { ResourceBadges } from '@/components/ResourceBadges'
-import {
-  WorkflowImportDialog,
-  type WorkflowImportMode,
-  type WorkflowImportOverwrite,
-} from '@/components/WorkflowImportDialog'
 import { ResourceGalleryPage, type GalleryCardItem } from '@/components/gallery/ResourceGalleryPage'
 import { WORKFLOW_ICON } from '@/components/icons/resourceIcons'
 import { buildQuickCreateWorkflowPayload } from '@/lib/workflow-form'
@@ -139,30 +126,6 @@ function WorkflowsPage() {
     })
   }, [openCreate, routeNavigate, search.create])
 
-  const [importOpen, setImportOpen] = useState(false)
-  const importTriggerRef = useRef<HTMLButtonElement | null>(null)
-  async function importWorkflow(
-    yaml: string,
-    mode: WorkflowImportMode,
-    overwrite?: WorkflowImportOverwrite,
-    selections: ImportRefSelection[] = [],
-  ): Promise<void> {
-    await postYaml(yaml, mode, overwrite, selections)
-    await qc.invalidateQueries({ queryKey: ['workflows'] })
-  }
-
-  async function refreshImportConflict(workflowId: string): Promise<WorkflowRevision> {
-    const current = await api.get<WorkflowDetail>(
-      `/api/workflows/${encodeURIComponent(workflowId)}`,
-    )
-    return {
-      workflowId: current.id,
-      version: current.version,
-      snapshotHash: current.snapshotHash,
-      updatedAt: current.updatedAt,
-    }
-  }
-
   // Gallery items — updatedAt desc (freshest first). Node count derives from
   // the definition the list API already returns (schema defaults nodes: []).
   const items = useMemo<GalleryCardItem[] | undefined>(
@@ -224,24 +187,12 @@ function WorkflowsPage() {
       {t('workflows.newButton')}
     </button>
   )
-  const importActions = (
-    <button
-      ref={importTriggerRef}
-      type="button"
-      className="btn"
-      onClick={() => setImportOpen(true)}
-      data-testid="workflow-import-trigger"
-    >
-      {t('workflows.importButton')}
-    </button>
-  )
 
   return (
     <ResourceGalleryPage
       title={t('workflows.title')}
       headerActions={
         <>
-          {importActions}
           <ResourcePackageImportEntry
             invalidateKeys={[
               ['agents'],
@@ -260,7 +211,20 @@ function WorkflowsPage() {
           {createAction}
         </>
       }
-      emptyHeaderActions={importActions}
+      // 空列表时创建 CTA 移进 EmptyState，导入**留在 header**——一个空实例最常见的
+      // 下一步就是「把别处的配置搬过来」，藏进空状态里反而更难找。
+      emptyHeaderActions={
+        <ResourcePackageImportEntry
+          invalidateKeys={[
+            ['agents'],
+            ['skills'],
+            ['mcps'],
+            ['plugins'],
+            ['workflows'],
+            ['workgroups'],
+          ]}
+        />
+      }
       emptyAction={createAction}
       emptyIcon={WORKFLOW_ICON}
       items={items}
@@ -305,36 +269,6 @@ function WorkflowsPage() {
         triggerRef={createTriggerRef}
         testidPrefix="workflow"
       />
-      <WorkflowImportDialog
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        onImport={importWorkflow}
-        onRefreshConflict={refreshImportConflict}
-        triggerRef={importTriggerRef}
-      />
     </ResourceGalleryPage>
   )
-}
-
-/** RFC-199 structured import: no raw YAML/query fallback and overwrite is
- * bound to the exact revision shown by the conflict dialog. */
-export async function postYaml(
-  yamlText: string,
-  mode: WorkflowImportMode,
-  overwrite?: WorkflowImportOverwrite,
-  selections: ImportRefSelection[] = [],
-): Promise<ImportWorkflowResult> {
-  let body: ImportWorkflowRequest
-  if (mode === 'overwrite') {
-    if (overwrite === undefined) {
-      throw new Error('workflow overwrite requires the conflict revision fence')
-    }
-    body =
-      selections.length > 0
-        ? { yamlText, mode, overwrite, selections }
-        : { yamlText, mode, overwrite }
-  } else {
-    body = selections.length > 0 ? { yamlText, mode, selections } : { yamlText, mode }
-  }
-  return api.post<ImportWorkflowResult>('/api/workflows/import', body)
 }

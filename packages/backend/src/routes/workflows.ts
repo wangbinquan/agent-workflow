@@ -11,10 +11,8 @@ import {
   CopyWorkflowRequestSchema,
   CreateWorkflowSchema,
   DeleteWorkflowSchema,
-  ImportWorkflowRequestSchema,
   UpdateWorkflowSchema,
   WorkflowDraftValidationRequestSchema,
-  WorkflowExactRevisionSchema,
   WorkflowValidationRequestSchema,
 } from '@agent-workflow/shared'
 import type { WorkflowDetail, WorkflowExactRevision } from '@agent-workflow/shared'
@@ -59,11 +57,7 @@ import {
   workflowDefinitionCandidateHashOf,
   workflowValidationContextHashOf,
 } from '@/services/workflow.validator'
-import {
-  importWorkflowYaml,
-  stringifyWorkflowYaml,
-  workflowDefinitionToSelectors,
-} from '@/services/workflow.yaml'
+import {} from '@/services/workflow.yaml'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 
@@ -357,102 +351,13 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
-  // P-4-08: YAML export / import.
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/workflows/:id/export',
-      permissions: ['workflows:read'],
-      tokenAccess: 'allow',
-      summary: 'Export a workflow as YAML',
-    },
-    async (c) => {
-      // Capture once: ACL, exact-revision guard and YAML bytes are all derived
-      // from this same immutable detail. Never re-read latest after the guard.
-      const workflow = await loadVisibleWorkflow(actorOf(c), c.req.param('id'))
-      const query = Object.fromEntries(
-        Object.entries(c.req.queries()).map(([key, values]) => [
-          key,
-          values.length === 1 ? values[0] : values,
-        ]),
-      )
-      const parsed = WorkflowExactRevisionSchema.safeParse({
-        ...query,
-        expectedVersion: parseExactPositiveInteger(
-          typeof query.expectedVersion === 'string' ? query.expectedVersion : undefined,
-        ),
-      })
-      if (!parsed.success) {
-        throw new ValidationError(
-          'workflow-export-invalid',
-          'invalid exact workflow export query',
-          {
-            issues: parsed.error.issues,
-          },
-        )
-      }
-      const revision = assertExactWorkflowRevision(
-        workflow,
-        parsed.data,
-        'workflow-version-mismatch',
-      )
-      await deps.workflowExactOperationHook?.({ operation: 'export', revision })
-      // RFC-223: emit portable name+owner selectors. Backup export keeps full
-      // fidelity and does not go through this route.
-      const yaml = stringifyWorkflowYaml(
-        serializeWorkflowFor(
-          {
-            ...workflow,
-            definition: await workflowDefinitionToSelectors(
-              deps.db,
-              actorOf(c),
-              workflow.definition,
-            ),
-          },
-          workflowReadLensFor(actorOf(c)),
-        ),
-      )
-      return c.body(yaml, 200, {
-        'content-type': 'application/yaml; charset=utf-8',
-        'content-disposition': `attachment; filename="${c.req.param('id')}.yaml"`,
-      })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/workflows/import',
-      permissions: ['workflows:create'],
-      tokenAccess: 'allow',
-      summary: 'Import a workflow from YAML',
-    },
-    async (c) => {
-      const parsed = ImportWorkflowRequestSchema.safeParse(await safeJson(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError('workflow-import-invalid', 'invalid workflow import payload', {
-          issues: parsed.error.issues,
-        })
-      }
-      const actor = actorOf(c)
-      const result = await importWorkflowYaml(deps.db, parsed.data, { kind: 'actor', actor })
-      // Both arms carry a definition, in different shapes: `created` returns a
-      // workflow record, `overwritten` returns a save receipt.
-      const body =
-        result.outcome === 'created'
-          ? {
-              ...result,
-              workflow: serializeWorkflowFor(result.workflow, workflowReadLensFor(actor)),
-            }
-          : {
-              ...result,
-              receipt: serializeWorkflowReceiptFor(result.receipt, workflowReadLensFor(actor)),
-            }
-      return c.json(body, result.outcome === 'created' ? 201 : 200)
-    },
-  )
+  // RFC-271 C1/C2：`GET /api/workflows/:id/export`（单文件 YAML 导出）与
+  // `POST /api/workflows/import`（裸 YAML 导入）已下线，由配置包取代
+  // （`/api/workflows/:id/export-package` + `/api/resource-packages/*`）。
+  //
+  // 下线的理由不是「换个格式」：YAML 导出只序列化工作流自己的 `definition`，代理
+  // 背后的技能 / MCP / 插件 / dependsOn 闭包**一个字节都不在文件里**，导入到另一个
+  // 实例必然悬空。那不是「功能少一点」，是一个会稳定产出坏结果的出口。
 
   // RFC-099 — GET/PUT /api/workflows/:id/acl
   mountAclEndpoints(app, deps, {
@@ -469,12 +374,6 @@ async function safeJson(req: Request): Promise<unknown> {
   } catch {
     return {}
   }
-}
-
-function parseExactPositiveInteger(raw: string | undefined): number | undefined {
-  if (raw === undefined || !/^[1-9][0-9]*$/.test(raw)) return undefined
-  const value = Number(raw)
-  return Number.isSafeInteger(value) ? value : undefined
 }
 
 function assertExactWorkflowRevision(

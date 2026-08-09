@@ -116,7 +116,6 @@ const OVERLAY_CALLSITES = {
   'components/DetailHeaderActions.tsx': { family: 'resource-management', count: 1 },
   'components/QuickCreateDialog.tsx': { family: 'resource-management', count: 1 },
   'components/RenameDialog.tsx': { family: 'resource-management', count: 1 },
-  'components/WorkflowImportDialog.tsx': { family: 'resource-management', count: 1 },
   'components/agent-ports/AgentPortDialog.tsx': { family: 'resource-management', count: 1 },
   'components/agents/DependencyAutodetectDialog.tsx': {
     family: 'resource-management',

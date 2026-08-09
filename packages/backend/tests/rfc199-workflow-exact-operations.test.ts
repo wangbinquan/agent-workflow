@@ -82,14 +82,6 @@ function exactBody(workflow: WorkflowDetail) {
   }
 }
 
-function exactExportPath(workflow: WorkflowDetail): string {
-  const query = new URLSearchParams({
-    expectedVersion: String(workflow.version),
-    expectedSnapshotHash: workflow.snapshotHash,
-  })
-  return `/api/workflows/${workflow.id}/export?${query}`
-}
-
 describe('RFC-199 exact workflow Validate', () => {
   test('returns a schema-valid receipt bound to the captured revision and live context', async () => {
     const { db, app } = buildHarness()
@@ -247,115 +239,12 @@ describe('RFC-199 exact workflow Validate', () => {
   })
 })
 
-describe('RFC-199 exact workflow Export', () => {
-  test('requires both exact query members and returns workflow-version-mismatch on drift', async () => {
-    const { db, app } = buildHarness()
-    const workflow = await seed(db, 'exact-export')
-
-    const missing = await api(app, `/api/workflows/${workflow.id}/export`)
-    expect(missing.status).toBe(422)
-    expect(((await missing.json()) as { code: string }).code).toBe('workflow-export-invalid')
-
-    const malformed = await api(
-      app,
-      `/api/workflows/${workflow.id}/export?expectedVersion=1.5&expectedSnapshotHash=${workflow.snapshotHash}`,
-    )
-    expect(malformed.status).toBe(422)
-
-    const extra = await api(app, `${exactExportPath(workflow)}&unexpected=ignored-before-rfc199`)
-    expect(extra.status).toBe(422)
-
-    const duplicate = await api(
-      app,
-      `${exactExportPath(workflow)}&expectedVersion=${workflow.version}`,
-    )
-    expect(duplicate.status).toBe(422)
-
-    const duplicateHash = await api(
-      app,
-      `${exactExportPath(workflow)}&expectedSnapshotHash=${workflow.snapshotHash}`,
-    )
-    expect(duplicateHash.status).toBe(422)
-
-    const overflowVersion = await api(
-      app,
-      `/api/workflows/${workflow.id}/export?expectedVersion=9007199254740992&expectedSnapshotHash=${workflow.snapshotHash}`,
-    )
-    expect(overflowVersion.status).toBe(422)
-
-    for (const query of [
-      new URLSearchParams({
-        expectedVersion: String(workflow.version + 1),
-        expectedSnapshotHash: workflow.snapshotHash,
-      }),
-      new URLSearchParams({
-        expectedVersion: String(workflow.version),
-        expectedSnapshotHash: '0'.repeat(64),
-      }),
-    ]) {
-      const stale = await api(app, `/api/workflows/${workflow.id}/export?${query}`)
-      expect(stale.status).toBe(409)
-      expect(((await stale.json()) as { code: string }).code).toBe('workflow-version-mismatch')
-    }
-  })
-
-  test('writer after guard cannot switch YAML serialization to the newer snapshot', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflow = await seed(db, 'export-captured')
-    let hookCalls = 0
-    const { app } = buildHarness(async ({ operation, revision }) => {
-      if (operation !== 'export') return
-      hookCalls += 1
-      expect(revision.snapshotHash).toBe(workflow.snapshotHash)
-      await updateWorkflow(
-        db,
-        workflow.id,
-        {
-          expectedVersion: workflow.version,
-          clientMutationId: ulid(),
-          snapshot: {
-            ...workflowDraftSnapshotOf(workflow),
-            description: 'newer-description',
-          },
-        },
-        SYSTEM,
-      )
-    }, db)
-
-    const response = await api(app, exactExportPath(workflow))
-    expect(response.status).toBe(200)
-    expect(response.headers.get('content-type')).toContain('application/yaml')
-    const yaml = await response.text()
-    expect(hookCalls).toBe(1)
-    expect(yaml).toContain('captured-description')
-    expect(yaml).not.toContain('newer-description')
-    const current = await getWorkflow(db, workflow.id)
-    expect(current).toMatchObject({ version: 2, description: 'newer-description' })
-  })
-
-  test('delete after guard still serializes the captured revision without a latest-row reread', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflow = await seed(db, 'export-delete-captured')
-    const { app } = buildHarness(async ({ operation }) => {
-      if (operation !== 'export') return
-      await deleteWorkflow(
-        db,
-        workflow.id,
-        { expectedVersion: workflow.version, clientMutationId: ulid() },
-        SYSTEM,
-      )
-    }, db)
-
-    const response = await api(app, exactExportPath(workflow))
-    expect(response.status).toBe(200)
-    const yaml = await response.text()
-    expect(yaml).toContain('captured-description')
-    expect(await getWorkflow(db, workflow.id)).toBeNull()
-  })
-})
-
+// RFC-271 C1 显式改判：`GET /api/workflows/:id/export` 已下线，本组针对它的
+// exact-revision 断言随之退场。**契约本身没有作废**——「只加载一次可见详情、
+// 守卫通过之后才序列化、漂移返回 workflow-version-mismatch」这几条搬到了配置包
+// 导出（AC-12 仅根），见 `rfc271-export-package.test.ts` 与 `rfc271-export-gates.test.ts`。
 describe('RFC-199 route source lock', () => {
-  test('Validate and Export each load one visible detail and consume that captured object', () => {
+  test('Validate loads one visible detail and consumes that captured object（Export 半边随 C1 退场）', () => {
     const source = readFileSync(ROUTE_SOURCE, 'utf8')
     // RFC-247 T3 moved these routes from `app.<verb>('/path', …)` to
     // `registerRoute(app, { …, path: '/path', … }, …)`, so the block boundaries
@@ -368,23 +257,9 @@ describe('RFC-199 route source lock', () => {
       at('/api/workflows/:id/validate'),
       at('/api/workflows/:id/validate-draft'),
     )
-    const exportBlock = source.slice(at('/api/workflows/:id/export'), at('/api/workflows/import'))
 
     expect(validateBlock.match(/loadVisibleWorkflow\(/g)).toHaveLength(1)
     expect(validateBlock).toContain('validateWorkflowDefinition(workflow.definition, context)')
     expect(validateBlock).not.toMatch(/\bvalidateWorkflowById\s*\(/)
-    expect(exportBlock.match(/loadVisibleWorkflow\(/g)).toHaveLength(1)
-    // RFC-223: export derives a portable name+owner selector from the single
-    // captured workflow definition, never a second workflow read. RFC-253 T28
-    // routed that same captured object through the PAT script-env projection
-    // (serializeWorkflowFor is pure — still no second read), so the lock
-    // anchors on the call names rather than the pre-T28 literal layout.
-    expect(exportBlock).toContain('stringifyWorkflowYaml(')
-    expect(exportBlock).toContain('serializeWorkflowFor(')
-    expect(exportBlock).toContain('...workflow,')
-    expect(exportBlock).toMatch(
-      /workflowDefinitionToSelectors\(\s*deps\.db,\s*actorOf\(c\),\s*workflow\.definition,?\s*\)/,
-    )
-    expect(exportBlock).not.toContain('getWorkflow(')
   })
 })

@@ -24,7 +24,6 @@ export interface WorkflowDraftStatusProps {
   onSaveCopy: () => void
   onLoadRemote: ConfirmAction
   onOverwriteRemote: ConfirmAction
-  onExportLocal: () => void
   onRetryAccess: () => void
   onReturnToList: () => void
   /** Conflict always offers copy; terminal notices expose it only when authorized. */
@@ -228,9 +227,6 @@ export function WorkflowDraftStatus(props: WorkflowDraftStatusProps): ReactEleme
           title={t('editor.draftStatus.inaccessibleTitle')}
           action={
             <Actions>
-              <button type="button" className="btn btn--sm" onClick={props.onExportLocal}>
-                {t('editor.draftStatus.exportLocal')}
-              </button>
               <button type="button" className="btn btn--sm" onClick={props.onRetryAccess}>
                 {t('editor.draftStatus.retryAccess')}
               </button>
@@ -259,9 +255,6 @@ export function WorkflowDraftStatus(props: WorkflowDraftStatusProps): ReactEleme
           title={t('editor.draftStatus.deletedTitle')}
           action={
             <Actions>
-              <button type="button" className="btn btn--sm" onClick={props.onExportLocal}>
-                {t('editor.draftStatus.exportLocal')}
-              </button>
               <button type="button" className="btn btn--sm" onClick={props.onReturnToList}>
                 {t('editor.draftStatus.returnToList')}
               </button>

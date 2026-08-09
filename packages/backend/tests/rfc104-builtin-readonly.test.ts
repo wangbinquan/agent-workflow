@@ -321,33 +321,10 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
     await expect403Builtin(res)
   })
 
-  test('YAML import overwrite targeting the built-in workflow → 403 builtin-readonly', async () => {
-    const { db, app } = buildApp()
-    await seedFusionResources(db)
-    const id = await builtinWorkflowId(db)
-
-    const workflow = await workflowDetail(app, id)
-    const query = new URLSearchParams({
-      expectedVersion: String(workflow.version),
-      expectedSnapshotHash: workflow.snapshotHash,
-    })
-    const yaml = await (await api(app, `/api/workflows/${id}/export?${query}`)).text()
-    expect(yaml.length).toBeGreaterThan(0)
-    const res = await api(app, '/api/workflows/import', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        yamlText: yaml,
-        mode: 'overwrite',
-        overwrite: {
-          workflowId: id,
-          expectedVersion: workflow.version,
-          clientMutationId: ulid(),
-        },
-      }),
-    })
-    await expect403Builtin(res)
-  })
+  // RFC-271 C2 显式改判：裸 YAML 导入端点已下线，这条针对它的内置只读守卫随之
+  // 退场。**守卫本身仍在**——`insertWorkflowInTx` / `commitWorkflowSaveInTx` 这两个
+  // 持久化原语上的 builtin 判据一字未动，同文件其余用例就在锁它们；配置包导入走的
+  // 也正是那两个原语。
 
   test('the guard does NOT over-block normal (non-built-in) resources', async () => {
     const { db, app } = buildApp()

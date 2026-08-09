@@ -496,7 +496,9 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     fireEvent.click(screen.getByTestId('workflow-more-actions'))
     expect(screen.getByTestId('workflow-actions-dialog')).toBeTruthy()
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
-    expect(screen.getByRole('button', { name: /导出 YAML|Export YAML/ })).toBeTruthy()
+    // RFC-271 C1：「导出 YAML」已下线。这条断言的意图是「More 打开的是动作对话框
+    // 且里面有东西」，不是「必须有导出」。
+    expect(screen.queryByRole('button', { name: /导出 YAML|Export YAML/ })).toBeNull()
     expect(screen.getByTestId('workflow-copy-action')).toBeTruthy()
 
     fireEvent.click(screen.getByTestId('workflow-rename-button'))
@@ -1119,34 +1121,14 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     expect(screen.queryByTestId('workflow-action-error-focus')).toBeNull()
   })
 
-  test('Export uses authenticated exact-revision blob fetch and downloads only after the fence', async () => {
-    const blob = new Blob(['name: workflow\n'], { type: 'application/yaml' })
-    const getBlob = vi.spyOn(api, 'getBlob').mockResolvedValue(blob)
-    const createObjectURL = vi.fn(() => 'blob:workflow-export')
-    const revokeObjectURL = vi.fn()
-    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
-    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  // RFC-271 C1 显式改判：编辑页的「导出 YAML」菜单项与它背后的
+  // `GET /api/workflows/:id/export` 已下线。原断言锁的是「exact-revision fence 通过
+  // 之后才下载」——那条契约本身没有作废，只是搬到了配置包导出上（见
+  // `rfc271-export-package.test.ts`）。这里留一条**不复辟**断言。
+  test('导出 YAML 菜单项已随 C1 下线（不复辟）', async () => {
     renderEditor(detail())
     await flushEffects()
-
     fireEvent.click(screen.getByTestId('workflow-more-actions'))
-    fireEvent.click(screen.getByRole('button', { name: /导出 YAML|Export YAML/ }))
-    await flushEffects()
-
-    expect(getBlob).toHaveBeenCalledWith(
-      '/api/workflows/wf-1/export',
-      {
-        expectedVersion: 1,
-        expectedSnapshotHash: hash('a'),
-      },
-      // RFC-208: getBlob's third parameter became an options bag so a caller can
-      // also set `deadlineMs`. The contract this test guards — export stays
-      // cancellable — is unchanged, so assert the signal inside the bag.
-      { signal: expect.any(AbortSignal) },
-    )
-    expect(createObjectURL).toHaveBeenCalledWith(blob)
-    expect(click.mock.contexts[0]).toMatchObject({ download: 'workflow.yaml' })
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:workflow-export')
+    expect(screen.queryByRole('button', { name: /导出 YAML|Export YAML/ })).toBeNull()
   })
 })

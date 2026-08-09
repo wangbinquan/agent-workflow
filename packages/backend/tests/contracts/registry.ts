@@ -24,7 +24,6 @@ import { z } from 'zod'
 import {
   AgentSchema,
   ErrorResponseSchema,
-  ImportWorkflowResultSchema,
   McpSchema,
   OverviewResponseSchema,
   ScheduledTaskListItemSchema,
@@ -369,20 +368,6 @@ export const ENDPOINTS: EndpointSpec[] = [
         }
       },
       schema: WorkflowDraftValidationReceiptSchema,
-    },
-  },
-  { method: 'GET', path: '/api/workflows/:id/export' },
-  {
-    method: 'POST',
-    path: '/api/workflows/import',
-    happy: {
-      body: {
-        mode: 'new',
-        yamlText:
-          "name: contract-imported-workflow\ndescription: ''\ndefinition:\n  $schema_version: 4\n  inputs: []\n  nodes: []\n  edges: []\n",
-      },
-      status: 201,
-      schema: ImportWorkflowResultSchema,
     },
   },
 

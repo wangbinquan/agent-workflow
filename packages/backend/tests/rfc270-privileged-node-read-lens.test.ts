@@ -211,8 +211,12 @@ describe('RFC-270 · 接线：每个定义出口都过镜头', () => {
   test('routes/workflows.ts 的每次 serialize 调用都传 workflowReadLensFor', () => {
     const routes = src('routes/workflows.ts')
     const calls = routes.match(/serializeWorkflow(?:Receipt)?For\(/g) ?? []
-    // 列表 / 详情 / create / copy / PUT 回执 / YAML 导出 / import 两分支。
-    expect(calls.length).toBe(8)
+    // RFC-271 C1/C2 显式改判：8 → 5。YAML 导出与导入两条端点下线，随之少掉三个
+    // 出口（export 的 record、import 的 created record 与 overwritten receipt）。
+    // **守卫的意图一字未改**：每一个把定义交出去的出口都必须过镜头，少传一次就是
+    // 一条未经权限裁剪的通道。数字下调是因为出口真的少了，不是要求放宽了。
+    // 列表 / 详情 / create / copy / PUT 回执。
+    expect(calls.length).toBe(5)
     // 旧的单轴形参一个都不许残留 —— 它现在编译不过，这条是给「有人把签名改回去」
     // 留的可读信号。
     expect(routes).not.toContain('actor.source)')

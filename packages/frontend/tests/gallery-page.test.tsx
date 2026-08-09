@@ -499,7 +499,7 @@ describe('ResourceGalleryPage shell', () => {
 })
 
 describe('/workflows gallery assembly (T3)', () => {
-  test('genuine empty list exposes one create CTA in EmptyState while import stays in the header', async () => {
+  test('genuine empty list exposes one create CTA in EmptyState while package import stays in the header', async () => {
     installFetch([])
     const list = await import('../src/routes/workflows')
     renderWithRouter(list.Route.options.component as () => React.ReactElement, '/workflows')
@@ -510,7 +510,10 @@ describe('/workflows gallery assembly (T3)', () => {
     expect(within(empty).getByTestId('workflow-new-button')).toBeTruthy()
     const header = screen.getByRole('banner')
     expect(within(header).queryByTestId('workflow-new-button')).toBeNull()
-    expect(within(header).getByRole('button', { name: enUS.workflows.importButton })).toBeTruthy()
+    // RFC-271 C2 显式改判：header 里的入口从「导入 YAML」换成**配置包导入**。
+    // 意图不变（空列表时创建 CTA 在 EmptyState、导入留在 header），换的是入口背后
+    // 的东西——裸 YAML 会产出必然悬空的工作流，配置包带着整棵闭包。
+    expect(within(header).getByTestId('import-package-entry')).toBeTruthy()
     expect(
       within(empty).getByTestId('workflow-new-button').classList.contains('btn--primary'),
     ).toBe(true)

@@ -62,7 +62,6 @@ function callbacks(): Omit<WorkflowDraftStatusProps, 'state' | 'canSaveCopy'> {
     onSaveCopy: vi.fn(),
     onLoadRemote: vi.fn(),
     onOverwriteRemote: vi.fn(),
-    onExportLocal: vi.fn(),
     onRetryAccess: vi.fn(),
     onReturnToList: vi.fn(),
   }
@@ -210,10 +209,12 @@ describe('<WorkflowDraftStatus />', () => {
     expect(screen.queryByText(/工作流已删除$/)).toBeNull()
     expect(screen.queryByRole('button', { name: '另存为副本' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: '导出本地 YAML' }))
+    // RFC-271 C3 显式改判：救援态的「导出本地 YAML」已下线——它产出的单文件 YAML
+    // 只含工作流自己的 definition，闭包一个字节都不在里面，导入必然悬空。救援路径
+    // 保留的是「另存为副本 / 重试访问 / 返回列表」这三条真能救回工作的动作。
+    expect(screen.queryByRole('button', { name: '导出本地 YAML' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '重试访问' }))
     fireEvent.click(screen.getByRole('button', { name: '返回工作流列表' }))
-    expect(actions.onExportLocal).toHaveBeenCalledTimes(1)
     expect(actions.onRetryAccess).toHaveBeenCalledTimes(1)
     expect(actions.onReturnToList).toHaveBeenCalledTimes(1)
 
@@ -222,15 +223,14 @@ describe('<WorkflowDraftStatus />', () => {
     expect(actions.onSaveCopy).toHaveBeenCalledTimes(1)
   })
 
-  test('deleted retains export/back and conditionally exposes save-copy', () => {
+  test('deleted retains back and conditionally exposes save-copy（C3 后不再有导出）', () => {
     const actions = callbacks()
     const view = render(<WorkflowDraftStatus state={state('deleted')} {...actions} />)
     expect(screen.getByText('Workflow deleted')).not.toBeNull()
     expect(screen.queryByRole('button', { name: 'Save as copy' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export local YAML' }))
+    expect(screen.queryByRole('button', { name: 'Export local YAML' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Return to workflows' }))
-    expect(actions.onExportLocal).toHaveBeenCalledTimes(1)
     expect(actions.onReturnToList).toHaveBeenCalledTimes(1)
 
     view.rerender(<WorkflowDraftStatus state={state('deleted')} {...actions} canSaveCopy />)

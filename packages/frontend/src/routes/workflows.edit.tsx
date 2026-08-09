@@ -37,10 +37,6 @@ import {
 import type { CanvasSelection } from '@/components/canvas/nodes/types'
 import { workflowNameError, workflowRenameError } from '@/lib/workflow-form'
 import { makeWorkflowDeleteRequest } from '@/lib/workflow-save-wire'
-import {
-  downloadWorkflowLocalDraft,
-  downloadWorkflowServerExport,
-} from '@/lib/workflow-draft-export'
 import { isWorkflowDraftUnsafeToLeave } from '@/lib/workflow-editor-draft'
 import { AclPanel } from '@/components/AclPanel'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -625,7 +621,6 @@ export function WorkflowEditorLoaded({
   const exactActionAbortRef = useRef<AbortController | null>(null)
   const [validatePending, setValidatePending] = useState(false)
   const [validationFocusRequest, setValidationFocusRequest] = useState(0)
-  const [exportPending, setExportPending] = useState(false)
   const [copyPending, setCopyPending] = useState(false)
   const [copyActionError, setCopyActionError] = useState<unknown>(null)
   const [preparingLaunch, setPreparingLaunch] = useState(false)
@@ -728,33 +723,6 @@ export function WorkflowEditorLoaded({
       if (exactActionAbortRef.current === abort) exactActionAbortRef.current = null
       exactActionRef.current = null
       setValidatePending(false)
-    }
-  }
-  const handleExport = async (): Promise<void> => {
-    if (exactActionRef.current !== null) return
-    const abort = new AbortController()
-    exactActionRef.current = 'export'
-    exactActionAbortRef.current = abort
-    setExportPending(true)
-    setActionError(null)
-    try {
-      const saved = await controller.ensureSaved({ signal: abort.signal })
-      const blob = await api.getBlob(
-        `/api/workflows/${encodeURIComponent(workflowId)}/export`,
-        {
-          expectedVersion: saved.server.version,
-          expectedSnapshotHash: saved.server.snapshotHash,
-        },
-        { signal: abort.signal },
-      )
-      assertActionRevision(saved)
-      downloadWorkflowServerExport(blob, saved.snapshot.name)
-    } catch (error) {
-      recordExactActionError(error)
-    } finally {
-      if (exactActionAbortRef.current === abort) exactActionAbortRef.current = null
-      exactActionRef.current = null
-      setExportPending(false)
     }
   }
   const handleCopy = async (): Promise<void> => {
@@ -1047,7 +1015,6 @@ export function WorkflowEditorLoaded({
               onSaveCopy={controller.requestCopy}
               onLoadRemote={confirmAuthoritativeRemoteLoad}
               onOverwriteRemote={controller.confirmOverwrite}
-              onExportLocal={() => downloadWorkflowLocalDraft(controller.state.local)}
               onRetryAccess={controller.retryAccess}
               onReturnToList={() => {
                 // The terminal Notice action is itself the user's explicit decision
@@ -1181,18 +1148,6 @@ export function WorkflowEditorLoaded({
             <ErrorBanner error={copyActionError} />
           )}
           <div className="workflow-editor-action-list">
-            <button
-              type="button"
-              className="workflow-editor-action-list__item"
-              disabled={exactActionRef.current !== null}
-              onClick={() => {
-                setModalSurface('none')
-                void handleExport()
-              }}
-            >
-              <strong>{exportPending ? t('editor.exporting') : t('editor.exportYaml')}</strong>
-              <span>{t('editor.exportTitle')}</span>
-            </button>
             <button
               type="button"
               className="workflow-editor-action-list__item"

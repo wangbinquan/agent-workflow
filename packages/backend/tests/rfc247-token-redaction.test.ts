@@ -446,9 +446,13 @@ describe('RFC-253 T28 — script env masked on the workflow token channel', () =
       resolve(import.meta.dir, '..', 'src', 'routes/workflows.ts'),
       'utf8',
     )
-    // records: list + detail + create + copy + export(YAML) + import(created)
-    expect(routes.split('serializeWorkflowFor(').length - 1).toBeGreaterThanOrEqual(6)
-    // receipts: update (PUT) + import(overwritten)
-    expect(routes.split('serializeWorkflowReceiptFor(').length - 1).toBeGreaterThanOrEqual(2)
+    // RFC-271 C1/C2 显式改判：6 → 4、2 → 1。YAML 导出与导入两条端点下线，随之少掉
+    // 三个出口（export 的 record、import 的 created record 与 overwritten receipt）。
+    // **守卫的意图一字未改**：每一个把工作流交出去的出口都必须过投影，少一个就是
+    // 一条未脱敏的通道。数字下调是因为出口真的少了，不是因为放宽了要求。
+    // records: list + detail + create + copy
+    expect(routes.split('serializeWorkflowFor(').length - 1).toBeGreaterThanOrEqual(4)
+    // receipts: update (PUT)
+    expect(routes.split('serializeWorkflowReceiptFor(').length - 1).toBeGreaterThanOrEqual(1)
   })
 })

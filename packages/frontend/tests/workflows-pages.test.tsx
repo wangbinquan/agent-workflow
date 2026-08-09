@@ -568,45 +568,6 @@ describe('/workflows quick-create dialog', () => {
     expect(name.value).toBe('')
     expect((screen.getByTestId('workflow-create-confirm') as HTMLButtonElement).disabled).toBe(true)
   })
-
-  test('workflow import success refreshes the gallery, shows result, and restores trigger focus', async () => {
-    const state = { workflows: [], calls: [] as Recorded['calls'] }
-    installFetch(state)
-    await renderPage('/workflows')
-    const trigger = await screen.findByTestId('workflow-import-trigger')
-    const getsBefore = state.calls.filter(
-      (call) => call.method === 'GET' && call.url.endsWith('/api/workflows'),
-    ).length
-
-    fireEvent.click(trigger)
-    const file = new File(['name: imported\n'], 'imported.yaml', { type: 'application/yaml' })
-    Object.defineProperty(file, 'text', {
-      value: vi.fn().mockResolvedValue('name: imported\n'),
-    })
-    fireEvent.change(await screen.findByTestId('workflow-import-file'), {
-      target: { files: [file] },
-    })
-    fireEvent.click(screen.getByTestId('workflow-import-submit'))
-
-    expect(await screen.findByTestId('workflow-import-result')).toBeTruthy()
-    const importCall = state.calls.find((call) => call.url.includes('/api/workflows/import'))
-    expect(importCall?.url).not.toContain('onConflict')
-    expect(importCall?.body).toEqual({ yamlText: 'name: imported\n', mode: 'fail' })
-    await waitFor(() => {
-      const gets = state.calls.filter(
-        (call) => call.method === 'GET' && call.url.endsWith('/api/workflows'),
-      ).length
-      expect(gets).toBeGreaterThan(getsBefore)
-    })
-
-    const footerClose = document.querySelector<HTMLButtonElement>(
-      '[data-testid="workflow-import-dialog"] .dialog__footer .btn--primary',
-    )
-    expect(footerClose).not.toBeNull()
-    fireEvent.click(footerClose!)
-    await waitFor(() => expect(screen.queryByTestId('workflow-import-dialog')).toBeNull())
-    expect(document.activeElement).toBe(screen.getByTestId('workflow-import-trigger'))
-  })
 })
 
 describe('/workflows search validation', () => {
@@ -626,79 +587,11 @@ describe('/workflows search validation', () => {
   })
 })
 
-describe('postYaml uses the structured RFC-199 import wire', () => {
-  test('flat 422 → ApiError carries workflow-name-invalid (was http-422)', async () => {
-    installFetch(
-      { workflows: [], calls: [] },
-      {
-        importResponse: {
-          status: 422,
-          body: { ok: false, code: 'workflow-name-invalid', message: 'name must match …' },
-        },
-      },
-    )
-    const { postYaml } = await import('../src/routes/workflows')
-    await expect(postYaml('name: Bad Legacy Name\n', 'fail')).rejects.toMatchObject({
-      code: 'workflow-name-invalid',
-    })
-  })
-
-  test('flat 409 keeps workflow-import-conflict (the overwrite/new prompt branch key)', async () => {
-    installFetch(
-      { workflows: [], calls: [] },
-      {
-        importResponse: {
-          status: 409,
-          body: { ok: false, code: 'workflow-import-conflict', message: 'id collides' },
-        },
-      },
-    )
-    const { postYaml } = await import('../src/routes/workflows')
-    await expect(postYaml('name: x\n', 'fail')).rejects.toMatchObject({
-      code: 'workflow-import-conflict',
-    })
-  })
-
-  test('overwrite posts the exact conflict fence and refuses a missing fence', async () => {
-    const state = { workflows: [], calls: [] as Recorded['calls'] }
-    installFetch(state, {
-      importResponse: {
-        status: 200,
-        body: {
-          outcome: 'overwritten',
-          receipt: { outcome: 'committed' },
-        },
-      },
-    })
-    const { postYaml } = await import('../src/routes/workflows')
-    const overwrite = {
-      workflowId: 'wf-existing',
-      expectedVersion: 9,
-      clientMutationId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
-    }
-
-    await postYaml('id: wf-existing\n', 'overwrite', overwrite)
-    expect(state.calls.find((call) => call.url.includes('/api/workflows/import'))?.body).toEqual({
-      yamlText: 'id: wf-existing\n',
-      mode: 'overwrite',
-      overwrite,
-    })
-    await expect(postYaml('id: wf-existing\n', 'overwrite')).rejects.toThrow(
-      /requires the conflict revision fence/,
-    )
-  })
-
-  test('the import UI routes coded errors through the shared decoders (source lock)', () => {
-    const list = readSrc('routes/workflows.tsx')
-    expect(list).toContain("api.post<ImportWorkflowResult>('/api/workflows/import', body)")
-    expect(list).toContain('<WorkflowImportDialog')
-    expect(list).not.toContain('extractErrorBody(')
-    expect(list).not.toContain('onConflict')
-    expect(list).not.toContain("'content-type': 'text/yaml'")
-    expect(list).not.toContain('window.prompt')
-  })
-})
-
+// RFC-271 C2 显式改判：`postYaml` 与 `POST /api/workflows/import` 已下线，配置包
+// 取代了它。原因不是「换个格式」——裸 YAML 导入只带工作流自己的 definition，代理
+// 背后的技能 / MCP / 插件 / dependsOn 闭包一个字节都不在里面，导入必然悬空。
+// 那几条断言（422/409 错误码映射、overwrite 必须带 revision fence）随该端点一并
+// 退场；配置包侧的等价保障在 `rfc271-import-commit.test.ts`。
 describe('/workflows/new removal wiring', () => {
   test('the retired /workflows/new URL redirects to the list page', async () => {
     installFetch({ workflows: [], calls: [] })
