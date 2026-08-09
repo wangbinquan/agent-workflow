@@ -182,6 +182,20 @@ describe('<Dialog />', () => {
     expect(document.activeElement?.getAttribute('data-testid')).toBe('body-action')
   })
 
+  test('default initial focus skips hidden file inputs and hidden subtrees', async () => {
+    render(
+      <Dialog open onClose={() => {}} title="Import package">
+        <input hidden type="file" data-testid="hidden-file-input" />
+        <div hidden>
+          <button data-testid="hidden-action">hidden action</button>
+        </div>
+        <button data-testid="choose-file">Choose package</button>
+      </Dialog>,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('choose-file')
+  })
+
   test('data-dialog-autofocus wins over the implicit body candidate', async () => {
     render(
       <Dialog
@@ -208,6 +222,12 @@ describe('<Dialog />', () => {
         <Dialog open onClose={() => {}} title="t">
           <button data-testid="body-first">first</button>
           <button data-testid="body-last">last</button>
+          <div hidden>
+            <button data-testid="hidden-trap-target">hidden</button>
+          </div>
+          <div aria-hidden="true">
+            <button data-testid="aria-hidden-trap-target">aria hidden</button>
+          </div>
         </Dialog>
       </>,
     )

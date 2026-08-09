@@ -25,11 +25,10 @@ describe('RFC-198 visual infrastructure source gates', () => {
     expect(source).toContain("await expect(userMenu).toContainText('e2e_admin')")
     expect(source).toContain('await page.clock.setFixedTime(HOMEPAGE_VISUAL_TIME)')
     expect(source).toContain("'workflow-node-picker-1179-large-human-dark.png'")
-    // One declaration plus six locator screenshot callsites.
-    expect(source.match(/COMPONENT_SNAPSHOT_OPTS/g)).toHaveLength(7)
+    // One declaration plus five locator screenshot callsites.
+    expect(source.match(/COMPONENT_SNAPSHOT_OPTS/g)).toHaveLength(6)
     for (const snapshot of [
       'mobile-nav-open.png',
-      'page-header-actions.png',
       'table-edge.png',
       'empty-state.png',
       'dialog-footer.png',
@@ -47,7 +46,7 @@ describe('RFC-198 visual infrastructure source gates', () => {
     expect(lockfile).toContain('@playwright/test@1.60.0')
     expect(readme).toContain('mcr.microsoft.com/playwright:v1.60.0-noble')
     expect(readme).toContain('bun run test:visual -- --update-snapshots')
-    expect(readme).toContain('46 pixel baselines')
+    expect(readme).toContain('45 pixel baselines')
     expect(readme).not.toContain('RUN_VISUAL_REGRESSION=1 bun run e2e')
     expect(workflow).toContain('runs-on: ubuntu-24.04')
     expect(workflow).toContain("bun-version: '1.3.13'")

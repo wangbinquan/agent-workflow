@@ -145,7 +145,10 @@ test('admin same-name MCP actions remain bound to the selected tenant id', async
   expect(probed.status()).toBe(200)
   expect(((await probed.json()) as { mcpId: string }).mcpId).toBe(mcpB.id)
 
-  await page.getByTestId('detail-delete-button').click()
+  await page.getByTestId('detail-more-actions').click()
+  const actions = page.getByTestId('detail-actions-dialog')
+  await expect(actions).toBeVisible()
+  await actions.getByTestId('detail-delete-button').click()
   const dialog = page.getByRole('dialog')
   await dialog.getByTestId('confirm-input').fill('shared-mcp')
   const deleteResponse = page.waitForResponse(

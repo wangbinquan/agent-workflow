@@ -196,6 +196,30 @@ async function pollUntilTerminal(
   return waitForStatus(daemon, taskId, (s) => TERMINAL.has(s), timeoutMs, 'terminal')
 }
 
+async function resumeTaskThroughUi(
+  page: Page,
+  daemon: DaemonHandle,
+  taskId: string,
+): Promise<void> {
+  const resumeResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return response.request().method() === 'POST' && url.pathname === `/api/tasks/${taskId}/resume`
+  })
+
+  await page.getByRole('button', { name: /resume task/i }).click()
+  expect((await resumeResponse).ok()).toBe(true)
+
+  // `interrupted` is itself terminal. Wait for the accepted resume to move
+  // the persisted task out of that stale state before polling for completion.
+  await waitForStatus(
+    daemon,
+    taskId,
+    (status) => status !== 'interrupted',
+    10_000,
+    'resume-left-interrupted',
+  )
+}
+
 async function primeAuthLocalStorage(page: Page, daemon: DaemonHandle): Promise<void> {
   await page.addInitScript(
     ({ baseUrl, token }) => {
@@ -256,7 +280,7 @@ test('SIGKILL daemon mid-task → restart → task=interrupted → click Resume 
 
       // Click Resume task — the button comes from i18n 'tasks.resumeButton'
       // = 'Resume task' under en-US.
-      await page.getByRole('button', { name: /resume task/i }).click()
+      await resumeTaskThroughUi(page, daemonB, taskId)
 
       // Task reaches done.
       const final = await pollUntilTerminal(daemonB, taskId, 30_000)
@@ -396,7 +420,7 @@ test('multiple SIGKILL → restart cycles, final resume reaches done (idempotent
         timeout: 15_000,
       })
 
-      await page.getByRole('button', { name: /resume task/i }).click()
+      await resumeTaskThroughUi(page, daemonC, taskId)
       const final = await pollUntilTerminal(daemonC, taskId, 30_000)
       expect(final).toBe('done')
     } finally {

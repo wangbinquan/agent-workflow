@@ -56,7 +56,7 @@ export interface DialogProps {
 }
 
 const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  'a[href]:not([hidden]), button:not([disabled]):not([hidden]), textarea:not([disabled]):not([hidden]), input:not([disabled]):not([type="hidden"]):not([hidden]), select:not([disabled]):not([hidden]), [tabindex]:not([tabindex="-1"]):not([hidden])'
 
 // Module-level stack of currently-OPEN dialog panels, in mount order. Nested
 // dialogs (RFC-099's owner-transfer dialog lives inside the permissions
@@ -101,6 +101,7 @@ function tryFocus(target: HTMLElement | null | undefined): boolean {
 
 function isAvailableFocusTarget(target: HTMLElement | null | undefined): target is HTMLElement {
   if (target === null || target === undefined || !target.isConnected) return false
+  if (target.closest('[hidden], [inert], [aria-hidden="true"]') !== null) return false
   if ('disabled' in target && (target as HTMLButtonElement).disabled) return false
   return target.getAttribute('aria-disabled') !== 'true'
 }
@@ -114,8 +115,10 @@ export function resolveInitialDialogFocus(
   const marked = panel.querySelector<HTMLElement>('[data-dialog-autofocus]')
   if (isAvailableFocusTarget(marked)) return marked
   const body = panel.querySelector<HTMLElement>('.dialog__body')
-  const bodyTarget = body?.querySelector<HTMLElement>(FOCUSABLE)
-  return isAvailableFocusTarget(bodyTarget) ? bodyTarget : panel
+  const bodyTarget = Array.from(body?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []).find(
+    isAvailableFocusTarget,
+  )
+  return bodyTarget ?? panel
 }
 
 export function Dialog(props: DialogProps): ReactElement | null {
@@ -233,7 +236,9 @@ export function Dialog(props: DialogProps): ReactElement | null {
       if (panel === null) return
       const ae = document.activeElement
       if (ae !== null && ae !== document.body && isFocusInsideDialog(panel, ae)) return
-      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
+      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        isAvailableFocusTarget,
+      )
       const target =
         direction === 'backward'
           ? (focusables.at(-1) ?? panel)

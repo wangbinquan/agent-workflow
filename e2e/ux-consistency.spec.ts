@@ -17,7 +17,6 @@ const FIXTURE_WORKFLOW = 'ux-fixture-workflow'
 
 let daemon: DaemonHandle
 let fixtureAgentId = ''
-let fixtureWorkflowId = ''
 
 type AppTheme = 'system' | 'light' | 'dark'
 
@@ -78,7 +77,7 @@ async function seedRepresentativeResources(): Promise<void> {
     bodyMd: '',
   })) as { id: string }
   fixtureAgentId = agent.id
-  const workflow = (await postFixture('/api/workflows', {
+  await postFixture('/api/workflows', {
     name: FIXTURE_WORKFLOW,
     description: 'RFC-198 gallery fixture',
     definition: {
@@ -87,13 +86,27 @@ async function seedRepresentativeResources(): Promise<void> {
       nodes: [],
       edges: [],
     },
-  })) as { id: string }
-  fixtureWorkflowId = workflow.id
+  })
 }
 
 async function openAgents(page: Page): Promise<void> {
   await page.goto(`${daemon.baseUrl}/agents`)
   await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
+}
+
+async function openWorkflowPackageDialog(page: Page): Promise<{
+  trigger: Locator
+  dialog: Locator
+}> {
+  const trigger = page.getByTestId('workflow-new-button')
+  await trigger.click()
+  const createDialog = page.getByTestId('workflow-create-dialog').getByRole('dialog')
+  await expect(createDialog).toBeVisible()
+  await createDialog.getByTestId('workflow-create-package').click()
+  await expect(createDialog).toHaveCount(0)
+  const dialog = page.getByRole('dialog', { name: 'Import config package' })
+  await expect(dialog).toBeVisible()
+  return { trigger, dialog }
 }
 
 async function expectNoPageOverflow(page: Page): Promise<void> {
@@ -329,13 +342,18 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible()
     await expect(page.getByTestId(`workflow-card-${FIXTURE_WORKFLOW}`)).toBeVisible()
     await expect(page.getByTestId('workflow-new-button')).toBeVisible()
-    const importTrigger = page.getByTestId('workflow-import-trigger')
-    await importTrigger.click()
-    const importDialog = page.getByTestId('workflow-import-dialog').getByRole('dialog')
+    const { trigger, dialog: importDialog } = await openWorkflowPackageDialog(page)
     await expectWithinViewport(importDialog)
     await page.keyboard.press('Escape')
     await expect(importDialog).toHaveCount(0)
-    await expect(importTrigger).toBeFocused()
+    const createDialog = page.getByTestId('workflow-create-dialog').getByRole('dialog')
+    await expect(createDialog).toBeVisible()
+    expect(await createDialog.evaluate((dialog) => dialog.contains(document.activeElement))).toBe(
+      true,
+    )
+    await page.keyboard.press('Escape')
+    await expect(createDialog).toHaveCount(0)
+    await expect(trigger).toBeFocused()
     await expectNoPageOverflow(page)
 
     await openAgents(page)
@@ -943,13 +961,16 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await page.waitForURL(/\/workflows\?scope=all$/)
     await expect(page.getByTestId('workflow-create-dialog')).toHaveCount(0)
 
-    const trigger = page.getByTestId('workflow-import-trigger')
+    const trigger = page.getByTestId('workflow-new-button')
     await trigger.focus()
     await page.keyboard.press('Enter')
-    const importDialog = page.getByTestId('workflow-import-dialog').getByRole('dialog')
+    const reopenedCreateDialog = page.getByTestId('workflow-create-dialog').getByRole('dialog')
+    await expect(reopenedCreateDialog).toBeVisible()
+    await reopenedCreateDialog.getByTestId('workflow-create-package').click()
+    const importDialog = page.getByRole('dialog', { name: 'Import config package' })
     await expectWithinViewport(importDialog)
-    await expect(page.getByTestId('workflow-import-file-button')).toBeFocused()
-    await expect(page.getByTestId('workflow-import-submit')).toBeInViewport()
+    await expect(page.getByTestId('package-import-file-button')).toBeFocused()
+    await expect(page.getByTestId('package-import-preview')).toBeInViewport()
     expect(
       await importDialog
         .locator('.dialog__body')
@@ -957,35 +978,14 @@ test.describe('RFC-198 global UX browser matrix', () => {
     ).toBe(true)
     await expectNoPageOverflow(page)
 
-    const yaml = [
-      `id: ${fixtureWorkflowId}`,
-      `name: ${FIXTURE_WORKFLOW}`,
-      'description: RFC-198 conflict fixture',
-      'definition:',
-      '  $schema_version: 1',
-      '  inputs: []',
-      '  nodes: []',
-      '  edges: []',
-      '',
-    ].join('\n')
-    await page.getByTestId('workflow-import-file').setInputFiles({
-      name: 'existing-workflow.yaml',
-      mimeType: 'application/yaml',
-      buffer: Buffer.from(yaml),
-    })
-    await page.getByTestId('workflow-import-submit').click()
-    const conflict = page.getByTestId('workflow-import-conflict')
-    await expect(conflict).toBeVisible()
-    await expectWithinViewport(conflict)
-    await expect(page.getByTestId('workflow-import-choice-new')).toHaveAttribute(
-      'aria-checked',
-      'true',
-    )
-    await page.getByTestId('workflow-import-choice-overwrite').click()
-    await page.getByTestId('workflow-import-submit').click()
-    await expect(page.getByTestId('workflow-import-result')).toBeVisible()
-    await page.getByTestId('workflow-import-close').click()
+    await page.keyboard.press('Escape')
     await expect(importDialog).toHaveCount(0)
+    await expect(reopenedCreateDialog).toBeVisible()
+    expect(
+      await reopenedCreateDialog.evaluate((dialog) => dialog.contains(document.activeElement)),
+    ).toBe(true)
+    await page.keyboard.press('Escape')
+    await expect(reopenedCreateDialog).toHaveCount(0)
     await expect(trigger).toBeFocused()
   })
 
@@ -1088,8 +1088,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expectNoPageOverflow(page)
 
     await page.goto(`${daemon.baseUrl}/workflows`)
-    await page.getByTestId('workflow-import-trigger').click()
-    const dialog = page.getByTestId('workflow-import-dialog').getByRole('dialog')
+    const { dialog } = await openWorkflowPackageDialog(page)
     await expect(dialog).toHaveCSS('background-color', 'rgb(28, 32, 40)')
     await expectNoPageOverflow(page)
   })

@@ -128,7 +128,7 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
   await expect(header.locator('.page__meta')).toContainText(`${workgroup.id} · v1`)
   await expect(header.locator('.btn--primary')).toHaveCount(1)
   await expect(header.getByTestId('workgroup-launch-button')).toHaveText('Launch task')
-  await expect(header.getByTestId('workgroup-more-actions')).toHaveText('More actions')
+  await expect(header.getByTestId('workgroup-more-actions')).toHaveText('More')
   const headerActionFonts = await header.evaluate((element) => {
     const launch = element.querySelector<HTMLElement>('[data-testid="workgroup-launch-button"]')
     const more = element.querySelector<HTMLElement>('[data-testid="workgroup-more-actions"]')

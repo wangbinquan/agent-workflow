@@ -103,6 +103,13 @@ async function expectAxeClean(page: Page, label: string, include?: string): Prom
   ).toEqual([])
 }
 
+async function openAgentAcl(page: Page): Promise<void> {
+  await page.getByTestId('detail-more-actions').click()
+  const actions = page.getByTestId('detail-actions-dialog')
+  await expect(actions).toBeVisible()
+  await actions.getByTestId('acl-dialog-button').click()
+}
+
 const AGENT_NAME = 'rfc099-secret-agent'
 
 test.beforeAll(async () => {
@@ -162,12 +169,11 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   await carolPage.goto(`${daemon.baseUrl}/agents`)
   await expect(carolPage.getByRole('link', { name: AGENT_NAME }).first()).toBeVisible()
 
-  // (1) alice opens the detail page → top-right 「Permissions」 button →
-  // the AclPanel dialog shows her as owner and she flips visibility to
-  // private. (RFC-099 follow-up unified ALL permission surfaces behind this
-  // header button.)
+  // (1) alice opens the detail page → More → Permissions. The AclPanel dialog
+  // shows her as owner and she flips visibility to private. Secondary resource
+  // administration shares this More surface across all detail pages.
   await alicePage.goto(`${daemon.baseUrl}/agents/${agentId}`)
-  await alicePage.getByTestId('acl-dialog-button').click()
+  await openAgentAcl(alicePage)
   await expect(alicePage.getByTestId('acl-panel')).toBeVisible()
   await expect(alicePage.getByTestId('acl-panel')).toContainText('alice99')
   await alicePage.getByTestId('acl-visibility-private').click()
@@ -185,7 +191,7 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   // list is PORTALED to document.body (the original in-panel dropdown was
   // clipped by .dialog__body's scroll region and unclickable — the user-
   // reported "搜索用户无法点击" bug this flow now locks).
-  await alicePage.getByTestId('acl-dialog-button').click()
+  await openAgentAcl(alicePage)
   await alicePage.getByTestId('acl-members-input').click()
   await alicePage.getByTestId('acl-members-input').fill('carol')
   await alicePage.getByTestId('acl-members-option-carol99').click()
@@ -197,7 +203,7 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   // (user report: "转让所有者的弹窗弹出来后，界面必死"), so every
   // interaction below would time out. Type into the picker, then Escape:
   // only the INNER dialog closes; the permissions dialog must survive.
-  await alicePage.getByTestId('acl-dialog-button').click()
+  await openAgentAcl(alicePage)
   await alicePage.getByTestId('acl-transfer-owner').click()
   const transferInput = alicePage.getByTestId('acl-transfer-input')
   await expect(transferInput).toBeVisible()
@@ -210,7 +216,7 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   // (4) carol sees it again; her panel (behind the same header button) is
   // read-only (no save / transfer).
   await carolPage.goto(`${daemon.baseUrl}/agents/${agentId}`)
-  await carolPage.getByTestId('acl-dialog-button').click()
+  await openAgentAcl(carolPage)
   await expect(carolPage.getByTestId('acl-panel')).toBeVisible()
   await expect(carolPage.getByTestId('acl-panel')).toContainText('alice99')
   await expect(carolPage.getByTestId('acl-save')).toHaveCount(0)

@@ -6178,7 +6178,9 @@ details.form-section[open] > summary {
   min-inline-size: 0;
   width: 100%;
   margin: 0;
-  padding: 0;
+  /* Keep every card's external focus ring inside its owning scroll region,
+     including a single alternative action at the end of QuickCreate. */
+  padding: var(--focus-ring-gutter);
   border: 0;
 }
 
@@ -14532,6 +14534,10 @@ mark.prior-comment-anchor[data-active='true'] {
   width: calc(100vw - 48px);
   height: calc(100vh - 48px);
   max-height: none;
+  /* A full-canvas panel already has a modal overlay and a visible border.
+     The large floating-panel shadow would paint beyond the slim viewport
+     margin, where it is clipped and can be mistaken for focus-within ink. */
+  box-shadow: none;
 }
 .dialog--full .changes__drill {
   flex: 1 1 auto;

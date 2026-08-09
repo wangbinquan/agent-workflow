@@ -1,4 +1,4 @@
-# visual-regression — 46 pixel baselines
+# visual-regression — 45 pixel baselines
 
 Specs: `e2e/visual-regression.spec.ts` and `e2e/rfc250-visual-states.spec.ts`. Baselines live in each
 spec's `*-snapshots/` directory. Coverage belongs to RFC-054/198/199/219/246/249/250.
@@ -28,17 +28,16 @@ Threshold: `maxDiffPixelRatio: 0.002` (0.2%) per RFC-054 plan §risk 9.
 | 736×900 compact  | RFC-249 repository-group inline node settings                                                                                                |
 | 390×844 mobile   | seeded home + navigation, workflow gallery, agent split detail, settings, task detail, editor modes, RFC-249 batch mode                      |
 
-The 31 scenes each own a full-page baseline. Six focused locator baselines lock
-mobile navigation open, PageHeader actions, a real overflowing TableViewport
-edge, an empty state, a Dialog footer, and the deterministic dynamic-workflow
-preview canvas so the full-page 0.2% threshold cannot hide a small but important
-local regression.
+The 31 scenes each own a full-page baseline. Five focused locator baselines lock
+mobile navigation open, a real overflowing TableViewport edge, an empty state, a
+Dialog footer, and the deterministic dynamic-workflow preview canvas so the
+full-page 0.2% threshold cannot hide a small but important local regression.
 
 RFC-250 adds nine populated high-risk baselines: PAT permission matrix and masked reveal; Task
 Wizard dirty guard at desktop and 390px; complex Workflow readable and explicit-overview cameras;
 Clarify local-only durability; grouped Changes navigation; and Agent resource-integrity feedback.
 Five are full-page locks and four are focused dialog/panel locks. Together with the canonical
-suite's 31 full-page and six focused baselines, the entry point compares 46 PNGs.
+suite's 31 full-page and five focused baselines, the entry point compares 45 PNGs.
 
 RFC-250 also deliberately refreshes six canonical baselines. `mobile-settings-network` records the
 44px coarse/mobile Switch target. The five `workflow-editor-*` baselines record readable-first

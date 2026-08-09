@@ -724,10 +724,9 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await page.goto(`${requireDaemon().baseUrl}/workflows`)
     await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible()
     await waitForStableAuthenticatedShell(page)
-    await expect(page.locator('.page__actions')).toHaveScreenshot(
-      'page-header-actions.png',
-      COMPONENT_SNAPSHOT_OPTS,
-    )
+    // Package import is a creation method now. A genuinely empty gallery keeps
+    // one primary CTA in EmptyState and must not resurrect a header action row.
+    await expect(page.locator('.page__actions')).toHaveCount(0)
     await expect(page.locator('.empty-state')).toHaveScreenshot(
       'empty-state.png',
       COMPONENT_SNAPSHOT_OPTS,
