@@ -1585,6 +1585,27 @@ export interface Resources {
       workgroupDesc: string
     }
   }
+  resourcePackage: {
+    importTitle: string
+    file: string
+    fileHint: string
+    working: string
+    emptyPackage: string
+    commit: string
+    finalName: string
+    target: string
+    notYours: string
+    secretsNotice_one: string
+    secretsNotice_other: string
+    importedCount_one: string
+    importedCount_other: string
+    exportPackage: string
+    action: {
+      new: string
+      reuse: string
+      overwrite: string
+    }
+  }
   common: {
     pagination: { aria: string; prev: string; next: string; pageOf: string }
     done: string
@@ -6702,6 +6723,27 @@ export const zhCN: Resources = {
       workflowDesc: '一个代理干活、另一个代理评审，在画布上连起来并启动。',
       workgroup: '让一组代理协作',
       workgroupDesc: '组一个小队，指定组长与成员，然后交给它一个目标。',
+    },
+  },
+  resourcePackage: {
+    importTitle: '导入配置包',
+    file: '配置包文件',
+    fileHint: '从本实例或其它 Agent Workflow 实例导出的 .zip。',
+    working: '处理中…',
+    emptyPackage: '这个包里没有资源。',
+    commit: '导入',
+    finalName: '新名字',
+    target: '已有资源',
+    notYours: '属于他人',
+    secretsNotice_one: '有 {{count}} 处凭据字段已被脱敏，导入后需要重新填写。',
+    secretsNotice_other: '有 {{count}} 处凭据字段已被脱敏，导入后需要重新填写。',
+    importedCount_one: '已导入 {{count}} 个资源。',
+    importedCount_other: '已导入 {{count}} 个资源。',
+    exportPackage: '导出配置包',
+    action: {
+      new: '新建',
+      reuse: '复用已有',
+      overwrite: '覆盖我的',
     },
   },
   common: {

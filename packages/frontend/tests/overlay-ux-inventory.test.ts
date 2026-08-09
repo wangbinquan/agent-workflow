@@ -126,6 +126,10 @@ const OVERLAY_CALLSITES = {
   'components/mcps/McpRuntimeTestDialog.tsx': { family: 'resource-management', count: 2 },
   'components/repos/BatchImportDialog.tsx': { family: 'resource-management', count: 1 },
   // RFC-249: bulk-source dialog and its residual-draft confirmation.
+  // RFC-271：配置包导入是一次「选文件 → 预检 → 逐条决策 → 提交」的多步确认，
+  // 走**一个** full-size Dialog 而不是分几个弹窗——中途换弹窗会丢掉用户已经做出的
+  // 逐条选择（那些选择只在这个组件的 state 里）。
+  'components/ResourcePackageImportDialog.tsx': { family: 'resource-management', count: 1 },
   'components/repos/RepoBulkAddDialog.tsx': { family: 'resource-management', count: 2 },
   // RFC-249: editor dialog, residual-draft confirmation, and subtree-delete confirmation.
   'components/repos/RepoGroupEditor.tsx': { family: 'resource-management', count: 3 },

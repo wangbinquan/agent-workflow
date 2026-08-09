@@ -1533,6 +1533,28 @@ export const enUS: Resources = {
       workgroupDesc: 'Form a squad, pick a lead and a worker, then hand it a goal.',
     },
   },
+  resourcePackage: {
+    importTitle: 'Import config package',
+    file: 'Package file',
+    fileHint: 'A .zip exported from this or another Agent Workflow instance.',
+    working: 'Working…',
+    emptyPackage: 'This package contains no resources.',
+    commit: 'Import',
+    finalName: 'New name',
+    target: 'Existing resource',
+    notYours: 'owned by someone else',
+    secretsNotice_one: '{{count}} credential field was redacted; re-enter it after importing.',
+    secretsNotice_other:
+      '{{count}} credential fields were redacted; re-enter them after importing.',
+    importedCount_one: 'Imported {{count}} resource.',
+    importedCount_other: 'Imported {{count}} resources.',
+    exportPackage: 'Export config package',
+    action: {
+      new: 'Create new',
+      reuse: 'Reuse existing',
+      overwrite: 'Overwrite mine',
+    },
+  },
   common: {
     pagination: {
       aria: 'Pagination',
