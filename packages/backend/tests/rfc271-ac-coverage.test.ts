@@ -210,12 +210,87 @@ function testCorpus(): string {
 }
 
 /**
- * 去掉行注释与块注释后的源码。**只用于「这里有没有真断言」这类判断**——它不是一个
- * 正确的 TS 词法分析器（字符串字面量里的 `//` 会被误伤），但对本用途足够：我们要的是
- * 「把注释掉的 `expect(` 排除掉」，误伤方向是更严格，安全。
+ * 判断一份源码里是否**真的**存在断言调用。
+ *
+ * ⚠️ 第一版是「正则删注释后再 `includes('expect(')`」，实现门第五轮实测它**两个方向
+ * 都错**：
+ *   · 假绿：`const evidence = "https://expect("` —— 为了不误伤 URL 我给 `//` 加了「前面
+ *     不是冒号」的特判，于是字符串字面量里的 `expect(` 原样留下，一个零断言的文件被判
+ *     有断言；
+ *   · 假红：`const s = "a//b"; expect(1).toBe(1)` —— 普通字符串里的 `//` 被当成行注释，
+ *     把其后**真实的**断言一起删掉。
+ * 我当时在注释里写「误伤方向是更严格，安全」，这个论断本身是错的。
+ *
+ * 正解不是把正则修得更花哨（那条路只会继续长特判），而是**换判据**：逐字符扫一遍，
+ * 显式跟踪「是否在字符串 / 模板串 / 注释里」。这是个小状态机，几十行，但它对
+ * 「什么是代码」给的是**定义**而不是近似。
  */
-function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+function hasRealAssertion(src: string): boolean {
+  const NEEDLE = 'expect('
+  let i = 0
+  let state: 'code' | 'line' | 'block' | 'sq' | 'dq' | 'tpl' = 'code'
+  while (i < src.length) {
+    const c = src[i]!
+    const next = src[i + 1]
+    if (state === 'code') {
+      if (c === '/' && next === '/') {
+        state = 'line'
+        i += 2
+        continue
+      }
+      if (c === '/' && next === '*') {
+        state = 'block'
+        i += 2
+        continue
+      }
+      if (c === "'") {
+        state = 'sq'
+        i += 1
+        continue
+      }
+      if (c === '"') {
+        state = 'dq'
+        i += 1
+        continue
+      }
+      if (c === '`') {
+        state = 'tpl'
+        i += 1
+        continue
+      }
+      if (src.startsWith(NEEDLE, i)) return true
+      i += 1
+      continue
+    }
+    if (state === 'line') {
+      if (c === '\n') state = 'code'
+      i += 1
+      continue
+    }
+    if (state === 'block') {
+      if (c === '*' && next === '/') {
+        state = 'code'
+        i += 2
+        continue
+      }
+      i += 1
+      continue
+    }
+    // 字符串 / 模板串：转义字符整体跳过，避免 `'\''` 之类提前收尾。
+    if (c === '\\') {
+      i += 2
+      continue
+    }
+    if (
+      (state === 'sq' && c === "'") ||
+      (state === 'dq' && c === '"') ||
+      (state === 'tpl' && c === '`')
+    ) {
+      state = 'code'
+    }
+    i += 1
+  }
+  return false
 }
 
 describe('RFC-271 验收条款的覆盖棘轮', () => {
@@ -292,10 +367,23 @@ describe('RFC-271 验收条款的覆盖棘轮', () => {
         //
         // 一条声称「注释不算覆盖」的守卫，自己被一行注释绕过——这比没有守卫更糟，因为
         // 它会让人以为这一面已经被守住了。
-        if (!stripComments(src).includes('expect(')) offenders.push(name)
+        if (!hasRealAssertion(src)) offenders.push(name)
       }
     }
     expect(offenders).toEqual([])
+  })
+
+  test('断言探测器本身：字符串里的 expect( 不算，字符串里的 // 不吃掉真断言', () => {
+    // 这两条是实现门第五轮给出的**具体**反例，直接钉成用例。
+    expect(hasRealAssertion('const evidence = "https://expect("')).toBe(false)
+    expect(hasRealAssertion("const s = 'a//b'; expect(1).toBe(1)")).toBe(true)
+    // 常规两支也要在。
+    expect(hasRealAssertion('// expect(')).toBe(false)
+    expect(hasRealAssertion('/* expect( */')).toBe(false)
+    expect(hasRealAssertion('test("x", () => { expect(1).toBe(1) })')).toBe(true)
+    // 模板串与转义。
+    expect(hasRealAssertion('const t = `//${x}`; expect(2).toBe(2)')).toBe(true)
+    expect(hasRealAssertion("const q = '\\''; // expect(")).toBe(false)
   })
 
   test('边界匹配确实生效（前缀不得顶替）', () => {

@@ -1284,6 +1284,48 @@ describe('AC-9 · 预检的 built-in 校验必须**与数量无关**（第四轮
     }
   }
 
+  test('**最大合法输入**：65536 个 built-in 声明，预检必须给出业务错误而不是 500', async () => {
+    // 第五轮 P2-3。把 N+1 换成一条**无界**的 `IN` 只是换了个形状的问题：SQLite 的绑定
+    // 变量有上限，实测一个 6.8MB（远低于上传上限）的合法包声明 65536 个 built-in，就让
+    // `inArray` 抛 `SQLite query expected 0 values, received 65536`，预检 500。
+    //
+    // 预检是**未认证内容驱动**的路径，500 比慢更糟：慢只是慢，500 是把用户输入变成了
+    // 服务端错误。
+    //
+    // ⚠️ 上一版的查询次数守卫**掩盖了这条**——它只比 3 项与 30 项，而且 `.catch(() =>
+    // undefined)` 把异常吞了。这里必须断言**具体的业务错误码**，不能只断言「没抛」。
+    const dst = await makeInstance()
+    try {
+      const declared = Array.from({ length: 65536 }, (_, i) => ({
+        type: 'agent' as const,
+        name: `aw-builtin-${i}`,
+      }))
+      const fake = {
+        manifest: {
+          builtins: declared,
+          resources: [],
+          root: { slug: 'x', type: 'agent', name: 'x' },
+        },
+        bundle: { bundleVersion: 1, ops: [] },
+        files: new Map<string, Uint8Array>(),
+        digest: 'd',
+      } as unknown as Parameters<typeof buildPackagePreview>[2]
+
+      const err = await buildPackagePreview(dst.db, actorOf('u1'), fake, {
+        box,
+        importId: ulid(),
+      }).then(
+        () => null,
+        (e: unknown) => e as { code?: string; message?: string },
+      )
+      // 业务错误码，不是 SQLite 抛出来的内部错误。
+      expect(err?.code).toBe('package-builtin-missing')
+      expect(err?.message ?? '').not.toContain('SQLite')
+    } finally {
+      removeTempDirSync(dst.appHome)
+    }
+  })
+
   test('built-in 数量 ×10，预检对 agents 表的查询次数不变', async () => {
     const small = await parseResourcePackage(await packageWithBuiltinRefs(3))
     const large = await parseResourcePackage(await packageWithBuiltinRefs(30))
@@ -1294,8 +1336,13 @@ describe('AC-9 · 预检的 built-in 校验必须**与数量无关**（第四轮
       const dst = await makeInstance()
       try {
         const { db: proxied, n } = countSelects(dst.db, [agents])
+        // ⚠️ 只吞**预期的业务拒绝**，不要 `.catch(() => undefined)` 把任何异常都吞掉
+        // ——第五轮实测那种写法会掩盖「只查一次、但查询本身失败」这类新问题。
         await buildPackagePreview(proxied, actorOf('u1'), pkg, { box, importId: ulid() }).catch(
-          () => undefined, // 对端没有这些 built-in，预检会拒——查询次数照样算数。
+          (e: unknown) => {
+            const code = (e as { code?: string }).code
+            if (code !== 'package-builtin-missing') throw e
+          },
         )
         return n()
       } finally {

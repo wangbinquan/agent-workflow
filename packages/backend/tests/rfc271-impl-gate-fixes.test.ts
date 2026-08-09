@@ -166,10 +166,22 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
     )
     // 末端复核现在要 actor —— 它不只比「产物变没变」，还要重新跑一次**授权复核**
     // （闭包成员的 grant 可能在导出中途被撤销；实现门第四轮的 P1-2 就是这条漏检）。
-    expect(exportSrc).toContain('assertClosureStillCurrent(db, actor, closure)')
-    // 而且产物比较不能再用引擎的 CAS token：它对 workflow/workgroup 漏 ACL、对另外
-    // 四类又把不进包的 ACL 维算进去 ⇒ 一边漏检一边误拒（P2-2）。
-    expect(exportSrc).toContain('artifactTokenOf(resource.row) !== artifactTokenOf(current)')
+    expect(exportSrc).toContain(
+      'assertClosureStillCurrent(db, actor, closure, skillTrees, serialized)',
+    )
+    // 产物比较必须拿**序列化器自己的产出**比，不能拿「行」去近似「包」：
+    //  · 用引擎 CAS token 会一边漏检（workflow/workgroup 漏 ACL）一边误拒（另四类把
+    //    不进包的 ACL 维算进去）——第四轮 P2-2；
+    //  · 退而求其次的「整行减 ACL 列」同样错：插件的 cachedPath/resolvedVersion/
+    //    installedAt 是本机安装态、根本不进包，而一次正常 reinstall 恰好只动这三列
+    //    ⇒ 两次导出逐字节相同却报 changed——第五轮 P2-2。
+    expect(exportSrc).toContain('const refreshed = serializeClosure(')
+    expect(exportSrc).not.toContain('ARTIFACT_IRRELEVANT_COLUMNS')
+    // 授权复核必须排在 root fence 明文比较之前（第五轮 P2-1 的状态 oracle）。
+    expect(
+      exportSrc.indexOf('await assertClosureStillCurrent(') <
+        exportSrc.indexOf('await assertRootStillCurrent('),
+    ).toBe(true)
     expect(exportSrc).toContain('package-root-changed')
   })
 

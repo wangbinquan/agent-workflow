@@ -22,6 +22,7 @@ import {
   assertPrivilegedNodesExportable,
   attachWorkgroupMembers,
   walkExportClosure,
+  type ClosureResource,
   type ExportClosure,
 } from './closure'
 import { expectTokenOf } from './preview'
@@ -179,15 +180,17 @@ export async function exportResourcePackage(
     skillTrees.set(r.id, await readSkillTree(db, opts.appHome, r.id))
   }
 
+  // ⚠️ **授权复核必须排在任何 root fence 明文比较之前**。
+  //
+  // 之前的顺序是 `assertRootStillCurrent`（客户端 fence）在前、闭包复核在后，于是 root
+  // 的授权被绕到了 fence 之后：撤权之后再导出，若 root 同时被推到 v2，返回的是
+  // `package-root-changed ... now 2` —— 一个此刻**已经对你不可见**的资源，却把它的精确
+  // revision 报了出来。不泄露 ZIP，但在竞态窗口里成了状态 oracle。
+  const serialized = serializeClosure(closure, skillTrees)
+  await assertClosureStillCurrent(db, actor, closure, skillTrees, serialized)
   // exact fence 必须包住所有 live 读取。旧实现只在 walkClosure 后比较一次，随后读取
   // 技能文件树/工作组 roster 的窗口里根仍可变化，最终却带着旧 expected 成功 200。
   await assertRootStillCurrent(db, closure.root.type, closure.root.id, opts.expect)
-  // Client only knows the root revision, but the exporter itself knows the exact revision of
-  // every transitive member it captured. Recheck that internal snapshot after all live reads so
-  // an agent@v1 row cannot be combined with an MCP/skill/workgroup that changed halfway through.
-  await assertClosureStillCurrent(db, actor, closure)
-
-  const serialized = serializeClosure(closure, skillTrees)
   const manifest = buildManifest(closure, serialized, {
     // 调用方给时间戳（路由传 `Date.now()`）。留成参数是为了让测试能断言
     // 「同一份闭包导出两次字节相同」——见 `encodeZip` 的可复现要求。
@@ -297,7 +300,7 @@ async function assertRootStillCurrent(
  * 闭包成员在**所有 live 读取之后**的两道复核 —— 它们回答的是**两个不同的问题**，
  * 必须分开做（实现门第四轮的 P1-2 / P2-2 就是把它们混成一件事的代价）：
  *
- *  ① **产物还是那个产物吗**（`artifactTokenOf`）—— 防「agent@v1 的行 + 半路改过的
+ *  ① **产物还是那个产物吗**（逐 slug 比 `serializeClosure` 的产出）—— 防「agent@v1 的行 + 半路改过的
  *     MCP」这种拼接快照；
  *  ② **你现在还有权导出它吗**（`isVisibleRow`）—— 防**授权在导出中途被撤销**。
  *
@@ -319,6 +322,8 @@ async function assertClosureStillCurrent(
   db: DbClient,
   actor: Actor,
   closure: ExportClosure,
+  skillTrees: ReadonlyMap<string, SkillTree>,
+  captured: SerializedPackage,
 ): Promise<void> {
   const byType = new Map<AclResourceType, Array<(typeof closure.resources)[number]>>()
   for (const resource of closure.resources) {
@@ -327,7 +332,8 @@ async function assertClosureStillCurrent(
     byType.set(resource.type, list)
   }
 
-  for (const [type, captured] of byType) {
+  const fresh: ClosureResource[] = []
+  for (const [type, group] of byType) {
     const table = ACL_TABLES[type]
     const rows = (await db
       .select()
@@ -335,19 +341,17 @@ async function assertClosureStillCurrent(
       .where(
         inArray(
           table.id,
-          captured.map((resource) => resource.id),
+          group.map((resource) => resource.id),
         ),
       )) as unknown as Array<Record<string, unknown>>
-    // ⚠️ 必须走**与闭包遍历同一条装载路径**：工作组的成员在独立表 `workgroup_members`，
-    // 由 `attachWorkgroupMembers` 在装载层补进 `row.members`。裸 `select` 拿到的行没有
-    // 这个字段，而捕获时的行有 —— 整行比较会**恒不相等**，把每一次工作组导出都变成
-    // 假 `package-root-changed`（实测：R0 往返用例当场变红）。
+    // ⚠️ 必须走**与闭包遍历同一条装载路径**：工作组成员在独立表 `workgroup_members`，
+    // 由 `attachWorkgroupMembers` 在装载层补进 `row.members`。裸 select 拿到的行没有
+    // 这个字段，比较时会恒不相等。
     if (type === 'workgroup') await attachWorkgroupMembers(db, rows)
     const currentById = new Map(rows.map((row) => [String(row.id), row]))
-    // grant **重新查**，不能复用闭包遍历时缓存的那一份——被撤销的授权正是要抓的东西。
     const grants = new Set(await listGrantedResourceIds(db, actor, type))
 
-    for (const resource of captured) {
+    for (const resource of group) {
       const current = currentById.get(resource.id)
       const isRoot = resource.type === closure.root.type && resource.id === closure.root.id
       const changeCode = isRoot ? 'package-root-changed' : 'package-closure-changed'
@@ -357,50 +361,50 @@ async function assertClosureStillCurrent(
           `${type} '${resource.id}' vanished during export; retry from a fresh snapshot`,
         )
       }
-
-      // ② 授权复核。报 `package-export-ref-unavailable` 而不是 `*-changed`：这不是
-      // 「重试一次就好」的竞态，是「你现在没有这个权限」——错误码要说对是哪一种。
+      // ② 授权复核**排在产物复核之前**：终态不可见时，连「它变没变」都不该回答。
       if (!isVisibleRow(actor, current as never, grants)) {
         throw new ValidationError(
           'package-export-ref-unavailable',
           `cannot export ${type} '${resource.id}': it is no longer available to you`,
         )
       }
-
-      // ① 产物复核。
-      if (artifactTokenOf(resource.row) !== artifactTokenOf(current)) {
-        throw new ConflictError(
-          changeCode,
-          `${type} '${resource.id}' changed during export; retry from a fresh snapshot`,
-        )
-      }
+      fresh.push({ ...resource, row: current })
     }
   }
-}
 
-/**
- * 「这一行有没有以**会进包**的方式变过」。
- *
- * 判据是**整行减去 ACL 列**，而不是逐类型手写一份「哪些字段进包」——那种清单会随
- * schema 漂移，而漂移的方向永远是漏掉新字段（本 RFC 已经栽过两次：序列化器按想象的
- * 列名读行、闭合性扫描扫一个不存在的字段名）。整行做基线则**只会误报、不会漏报**，
- * 而误报在这里是安全的一侧。
- *
- * 排除的四列都是 ACL 写路径会动而**不进包**的（包不携带任何权属信息——决策 4/12）：
- * `ownerUserId` / `visibility` / `aclRevision`，以及 `updatedAt`——它被 ACL 写一并推进，
- * 留着它等于没排除前三个。排掉 `updatedAt` 不会漏掉真实内容变更：任何内容写同时
- * 也会改内容列（definition / bodyMd / config / …）。
- */
-const ARTIFACT_IRRELEVANT_COLUMNS = new Set([
-  'ownerUserId',
-  'visibility',
-  'aclRevision',
-  'updatedAt',
-])
-
-function artifactTokenOf(row: Record<string, unknown>): string {
-  const entries = Object.entries(row)
-    .filter(([key]) => !ARTIFACT_IRRELEVANT_COLUMNS.has(key))
-    .sort(([a], [b]) => a.localeCompare(b))
-  return JSON.stringify(entries)
+  // ① 产物复核：**拿序列化器自己的产出比**，不是比行。
+  //
+  // 曾经的判据是「整行减掉四个 ACL 列」。它连着错了两次，而且是同一个病因——**用「行」
+  // 去近似「包」**：
+  //   · 第一次：`updatedAt` 被 ACL 写路径推进，于是把 agent 改成 public（包字节一个都
+  //     不变）会误报 `package-closure-changed`；靠再排除一列补救；
+  //   · 第二次：插件的 `cachedPath` / `resolvedVersion` / `installedAt` 是**本机安装态**，
+  //     序列化器根本不输出它们，而一次正常的 `reinstallPlugin` 恰好只动这三列 ⇒ 两次
+  //     导出逐字节相同（实测 3110B 一致），却报 `package-closure-changed`。
+  //
+  // 排除清单在累积例外，这是选错轴的信号。改成拿**同一个 `serializeClosure`** 跑一遍
+  // 新行，逐 slug 比它产出的 op：这是「什么进包」的唯一事实源，对将来新增的列自动免疫，
+  // 既不会把不进包的字段算进来，也不会漏掉进包的字段。
+  const refreshed = serializeClosure({ ...closure, resources: fresh }, skillTrees)
+  const opBySlug = (pkg: SerializedPackage): Map<string, string> => {
+    const out = new Map<string, string>()
+    for (const op of pkg.bundle.ops) {
+      const slug = (op as { slug?: string }).slug
+      if (slug !== undefined) out.set(slug, JSON.stringify(op))
+    }
+    return out
+  }
+  const before = opBySlug(captured)
+  const after = opBySlug(refreshed)
+  for (const resource of closure.resources) {
+    // built-in 不产 op（按名字绑对端自己那一个），没有产物可比。
+    const slug = captured.slugOfId.get(resource.id)
+    if (slug === undefined) continue
+    if (before.get(slug) === after.get(slug)) continue
+    const isRoot = resource.type === closure.root.type && resource.id === closure.root.id
+    throw new ConflictError(
+      isRoot ? 'package-root-changed' : 'package-closure-changed',
+      `${resource.type} '${resource.id}' changed during export; retry from a fresh snapshot`,
+    )
+  }
 }

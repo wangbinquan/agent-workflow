@@ -29,6 +29,15 @@ import { resourceTypeOfOp, opSlug } from '@/services/bundle/provider'
 import type { PackageManifest, ParsedPackage } from './parse'
 import { missingImportPermissions } from './importPermissions'
 
+/**
+ * built-in 存在性查询的分块大小。
+ *
+ * SQLite 的绑定变量有上限（默认 999，Bun 的 bun:sqlite 更宽但仍有限），而 manifest 里
+ * 声明多少个 built-in 完全由**上传者**决定。取一个远低于任何实现上限的值：分块带来的
+ * 额外往返是 O(n/500) 次本地查询，与「让用户输入把预检打成 500」相比可以忽略。
+ */
+const BUILTIN_LOOKUP_CHUNK = 500
+
 /** 预检有效期。过期后必须重新 preview——基线可能已经变了。 */
 export const PREVIEW_TTL_MS = 30 * 60 * 1000
 
@@ -306,16 +315,25 @@ async function findMissingBuiltins(
   const presentByType = new Map<string, Set<string>>()
   for (const [type, names] of wantedByType) {
     const table = ACL_TABLES[type]
-    const rows = (await db
-      .select()
-      .from(table)
-      .where(inArray(table.name, [...names]))) as unknown as Array<Record<string, unknown>>
-    presentByType.set(
-      type,
+    const present = new Set<string>()
+    // ⚠️ **分块**。把 N+1 换成一条无界的 `IN` 只是把问题换了个形状：SQLite 的绑定变量
+    // 有上限，实测一个合法包（6.8MB，远低于上传上限）声明 65536 个 built-in 就让
+    // `inArray` 抛 `SQLite query expected 0 values, received 65536`，预检直接 500。
+    // 预检是**未认证内容驱动**的路径，500 比慢更糟：慢只是慢，500 是把用户输入变成了
+    // 服务端错误。
+    const all = [...names]
+    for (let i = 0; i < all.length; i += BUILTIN_LOOKUP_CHUNK) {
+      const rows = (await db
+        .select()
+        .from(table)
+        .where(inArray(table.name, all.slice(i, i + BUILTIN_LOOKUP_CHUNK)))) as unknown as Array<
+        Record<string, unknown>
+      >
       // 判据必须与导入期 `resolveIdentityRef` 的 built-in 分支一致：同名 **且**
       // `builtin = true`。只按名字查会绑上用户自建的同名资源。
-      new Set(rows.filter((row) => row.builtin === true).map((row) => String(row.name))),
-    )
+      for (const row of rows.filter((row) => row.builtin === true)) present.add(String(row.name))
+    }
+    presentByType.set(type, present)
   }
 
   // 保持 `declared` 的原顺序输出，报错文案才稳定可读。

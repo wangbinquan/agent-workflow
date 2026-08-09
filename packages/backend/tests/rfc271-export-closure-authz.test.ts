@@ -28,7 +28,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, resourceGrants, users, workflows } from '../src/db/schema'
+import { agents, plugins, resourceGrants, users, workflows } from '../src/db/schema'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
 import { removeTempDirSync } from './fixtures/tempDir'
 
@@ -298,6 +298,121 @@ describe('AC-7 · 产物复核：**不改变字节**的 ACL 漂移不得误拒',
           ),
         ),
       ).toBe('package-closure-changed')
+    } finally {
+      removeTempDirSync(appHome)
+    }
+  })
+})
+
+describe('AC-7 · 产物复核拿**序列化器的产出**比，不是拿「行」近似「包」', () => {
+  // 第五轮 P2-2。判据一路退化的轨迹值得留着：
+  //   · v1 用引擎 CAS token ⇒ workflow/workgroup 漏检 ACL、另四类误拒 ACL 漂移；
+  //   · v2 改「整行减 ACL 四列」⇒ 插件的 `cachedPath` / `resolvedVersion` / `installedAt`
+  //     是**本机安装态**、序列化器根本不输出，而一次正常 `reinstallPlugin` 恰好只动这
+  //     三列 ⇒ 两次导出**逐字节相同**却报 `package-closure-changed`。
+  //
+  // 排除清单在累积例外，说明轴选错了。v3 拿同一个 `serializeClosure` 跑一遍新行、逐 slug
+  // 比它产出的 op——「什么进包」的唯一事实源，对将来新增的列自动免疫。
+  test('闭包里的插件在导出中途被重装（只动本机安装态）⇒ 不得误拒', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc271-plugin-'))
+    try {
+      await seedUser(db, 'u1')
+      const pluginId = ulid()
+      await db.insert(plugins).values({
+        id: pluginId,
+        name: 'fmt',
+        description: '',
+        spec: 'npm:p@1.0.0',
+        sourceKind: 'npm',
+        enabled: true,
+        cachedPath: '/cache/a',
+        resolvedVersion: '1.0.0',
+        installedAt: 1,
+        ownerUserId: 'u1',
+        visibility: 'private',
+        aclRevision: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      const agentId = ulid()
+      await seedAgent(db, agentId, 'uses-plugin', 'u1', 'private')
+      await db
+        .update(agents)
+        .set({ plugins: JSON.stringify([pluginId]) } as never)
+        .where(eq(agents.id, agentId))
+
+      // 闭包捕获插件行之后、末端复核读它之前，模拟一次正常重装：**只**换安装态三列，
+      // `spec` / `enabled` / `description` 一个字都不动。
+      const raced = dbWithMidExportWrite(db, plugins, 2, () => {
+        db.update(plugins)
+          .set({ cachedPath: '/cache/b', resolvedVersion: '1.0.1', installedAt: 2 })
+          .where(eq(plugins.id, pluginId))
+          .run()
+      })
+
+      const pkg = await exportResourcePackage(
+        raced,
+        actorOf('u1'),
+        { type: 'agent', id: agentId },
+        { appHome, exportedAt: 0 },
+      )
+      expect(pkg.zip.byteLength).toBeGreaterThan(0)
+    } finally {
+      removeTempDirSync(appHome)
+    }
+  })
+})
+
+describe('AC-7 · 授权复核排在 root fence 之前（不做状态 oracle）', () => {
+  // 第五轮 P2-1。之前 `assertRootStillCurrent`（客户端 fence）跑在闭包复核之前，于是
+  // root 的授权被绕到了 fence 之后：撤权之后再导出、若 root 同时被推到 v2，返回的是
+  // `package-root-changed ... now 2` —— 一个此刻**已经对你不可见**的资源，却把它的精确
+  // revision 报了出来。不泄露 ZIP，但在竞态窗口里是个状态 oracle。
+  test('root 失去可见性且同时被改 ⇒ 报「不可用」，不得报出 now <version>', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc271-oracle-'))
+    try {
+      await seedUser(db, 'reader')
+      await seedUser(db, 'owner')
+      const rootId = ulid()
+      await db.insert(workflows).values({
+        id: rootId,
+        name: 'shared',
+        description: '',
+        definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+        ownerUserId: 'owner',
+        visibility: 'private',
+        version: 1,
+        aclRevision: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      await db.insert(resourceGrants).values({
+        resourceType: 'workflow',
+        resourceId: rootId,
+        userId: 'reader',
+        addedBy: 'owner',
+        addedAt: 1,
+      } as never)
+
+      const raced = dbWithMidExportWrite(db, workflows, 2, () => {
+        db.delete(resourceGrants).where(eq(resourceGrants.resourceId, rootId)).run()
+        db.update(workflows).set({ version: 2, updatedAt: 2 }).where(eq(workflows.id, rootId)).run()
+      })
+
+      const err = await exportResourcePackage(
+        raced,
+        actorOf('reader'),
+        { type: 'workflow', id: rootId },
+        { appHome, expect: { expectedVersion: 1 } },
+      ).then(
+        () => null,
+        (e: unknown) => e as { code?: string; message?: string },
+      )
+      expect(err?.code).toBe('package-export-ref-unavailable')
+      // 关键：**不能**把当前 revision 报出来。
+      expect(err?.message ?? '').not.toContain('now 2')
     } finally {
       removeTempDirSync(appHome)
     }
