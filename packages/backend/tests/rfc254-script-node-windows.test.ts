@@ -14,6 +14,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   WINDOWS_INTERPRETER_CANDIDATES,
+  describeInterpreterResolution,
   gitBashFromGitPath,
   interpreterCandidatePaths,
 } from '@/services/scriptRun'
@@ -108,5 +109,72 @@ describe('RFC-254 T23 — script environment', () => {
 
   test('ordinary author keys stay allowed', () => {
     expect(scriptReservedEnvKeyIssue('MY_API_BASE')).toBeNull()
+  })
+})
+
+// 2026-08-09 —— RFC-253 T41 的 e2e 第一次在真 Windows 上执行脚本节点就红了，而
+// `script-interpreter-missing` 当时只报得出 `no bash interpreter available on this host`：
+// 解析链四环（which 命中什么 / 推导出什么 / 是否存在 / --version 是否通过）失败时长得
+// 一模一样，为了知道是哪一环断的，多推了一轮 CI。这组用例锁住「结论必须带过程」。
+describe('interpreter 解析失败必须带出逐环结果', () => {
+  const noExists = () => false
+  const yesExists = () => true
+
+  test('win32 bash：which(git) 落空时点名是这一环', () => {
+    const d = describeInterpreterResolution('bash', {}, 'win32', () => null, noExists)
+    expect(d).toContain('platform=win32')
+    expect(d).toContain('which(git)=null')
+    // 没有 git 就没有推导，不该编出一个路径来
+    expect(d).not.toContain('derived=')
+  })
+
+  test('win32 bash：推导出了路径但文件不存在时，路径与 exists 都在', () => {
+    const d = describeInterpreterResolution(
+      'bash',
+      {},
+      'win32',
+      () => 'C:\\Program Files\\Git\\cmd\\git.exe',
+      noExists,
+    )
+    expect(d).toContain('cmd\\\\git.exe')
+    expect(d).toContain('bin\\\\bash.exe')
+    expect(d).toContain('exists=false')
+  })
+
+  test('win32 bash：git 路径形状不匹配时说明是形状问题，而不是谎报路径', () => {
+    const d = describeInterpreterResolution('bash', {}, 'win32', () => 'git.exe', noExists)
+    expect(d).toContain('derived=null')
+  })
+
+  test('非 bash 走候选链，逐个报 exists', () => {
+    const d = describeInterpreterResolution(
+      'python',
+      {},
+      'win32',
+      (cmd) => (cmd === 'py' ? 'C:\\Windows\\py.exe' : null),
+      yesExists,
+    )
+    expect(d).toContain('candidates=')
+    expect(d).toContain('py.exe')
+    expect(d).toContain('exists=true')
+  })
+
+  test('候选为空时明说是 PATH 上没有，而不是含糊其辞', () => {
+    const d = describeInterpreterResolution('node', {}, 'linux', () => null, noExists)
+    expect(d).toContain('candidates=[]')
+    expect(d).toContain('nothing on PATH')
+  })
+
+  test('管理员覆盖失败时点名是覆盖项，并给出它是否存在', () => {
+    const d = describeInterpreterResolution(
+      'bash',
+      { bash: '/opt/nope/bash' },
+      'linux',
+      () => null,
+      noExists,
+    )
+    expect(d).toContain('administrator override')
+    expect(d).toContain('/opt/nope/bash')
+    expect(d).toContain('exists=false')
   })
 })

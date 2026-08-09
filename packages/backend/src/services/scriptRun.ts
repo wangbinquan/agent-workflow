@@ -138,6 +138,55 @@ export async function resolveScriptInterpreter(
  * finds `System32\bash.exe`, the WSL launcher, and would run the author's
  * script inside a different operating system entirely.
  */
+/**
+ * Why a language resolved to no usable interpreter — the trace, not just the verdict.
+ *
+ * 起因（2026-08-09）：RFC-253 T41 的 e2e 第一次在真 Windows 上执行脚本节点就红了，而
+ * `script-interpreter-missing` 当时只说得出 `no bash interpreter available on this host`。
+ * 那句话对排障的人零价值 —— 解析链有四环（`which` 命中什么 / 由它推导出什么路径 /
+ * 该路径是否存在 / `--version` 探测是否通过），四环失败长得一模一样。排一次障要么读源码
+ * 反推，要么像本轮一样多推一轮 CI 才拿得到原因。
+ *
+ * 只在**失败路径**上调用，成功路径一个字节不变。
+ */
+export function describeInterpreterResolution(
+  language: ScriptLanguage,
+  overrides: Partial<Record<ScriptLanguage, string>>,
+  platform: NodeJS.Platform = process.platform,
+  which: (cmd: string) => string | null = (cmd) => Bun.which(cmd),
+  exists: (p: string) => boolean = existsSync,
+): string {
+  const override = overrides[language]
+  if (override !== undefined && override.length > 0) {
+    return `administrator override ${JSON.stringify(override)} (exists=${exists(override)}) failed its --version probe`
+  }
+  const parts: string[] = [`platform=${platform}`]
+  if (platform === 'win32' && language === 'bash') {
+    const git = which('git')
+    parts.push(`which(git)=${git === null || git.length === 0 ? 'null' : JSON.stringify(git)}`)
+    if (git !== null && git.length > 0) {
+      const derived = gitBashFromGitPath(git, win32.dirname)
+      parts.push(
+        `derived=${derived === null ? 'null (git path shape did not match <root>\\cmd\\git.exe)' : JSON.stringify(derived)}`,
+      )
+      if (derived !== null) parts.push(`exists=${exists(derived)}`)
+    }
+  } else {
+    const candidates = interpreterCandidatePaths(
+      language,
+      platform,
+      INTERPRETER_SPEC[language].binary,
+      which,
+    )
+    parts.push(
+      candidates.length === 0
+        ? 'candidates=[] (nothing on PATH)'
+        : `candidates=${JSON.stringify(candidates)} (each exists=${candidates.map((c) => exists(c)).join(',')})`,
+    )
+  }
+  return parts.join(' ')
+}
+
 export function interpreterCandidatePaths(
   language: ScriptLanguage,
   platform: NodeJS.Platform,

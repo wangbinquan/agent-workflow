@@ -95,7 +95,11 @@ import {
 } from './sandbox'
 import { ensureScriptDepsEnv, ScriptDepsInstallError, type ScriptDepsEnv } from './scriptDepsEnv'
 import { extractScriptPorts } from './scriptPorts'
-import { resolveScriptInterpreter, runScriptProcess } from './scriptRun'
+import {
+  describeInterpreterResolution,
+  resolveScriptInterpreter,
+  runScriptProcess,
+} from './scriptRun'
 import type { DbClient } from '@/db/client'
 import type { ContainmentCoordinator } from '@/services/sandbox'
 import {
@@ -4362,7 +4366,11 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
       reason: 'script-interpreter-missing',
       extra: {
         finishedAt: Date.now(),
-        errorMessage: `no ${language} interpreter available on this host`,
+        // 带上解析链的逐环结果，而不是只报结论——四环（which / 推导 / 存在 / 探测）
+        // 失败时长得一模一样，光看结论排不了障（RFC-253 T41 的 Windows 首红实证）。
+        errorMessage:
+          `no ${language} interpreter available on this host: ` +
+          describeInterpreterResolution(language, opts.scriptInterpreters ?? {}),
         failureCode: 'script-interpreter-missing',
       },
     })
