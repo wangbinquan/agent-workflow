@@ -45,7 +45,6 @@ import { canViewResource, isResourceAdminActor, isResourceOwner } from '@/servic
 import { getSkillById, getSkillPreconditionTokenById } from '@/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
-import { trySetTaskStatus } from '@/services/lifecycle'
 import { cancelTask, getTask, startTask, type StartTaskDeps } from '@/services/task'
 import { createWorkflow } from '@/services/workflow'
 import { ConflictError, NotFoundError } from '@/util/errors'
@@ -322,14 +321,29 @@ export async function seedFusionResources(db: DbClient): Promise<void> {
         `stable built-in agent id '${SKILL_MERGER_AGENT_ID}' is occupied`,
       )
     }
-    db.update(agents)
-      .set({
-        ownerUserId: SYSTEM_USER_ID,
-        visibility: 'public',
-        builtin: true,
-      })
-      .where(eq(agents.id, SKILL_MERGER_AGENT_ID))
-      .run()
+    // 归一**改变了导出语义**：这一行从「用户资源」变成「框架内置件」之后，同一个包
+    // 从「创建一个 agent」变成「自动忽略、绑定对端自己的 built-in」。所以它必须推进
+    // exact-revision token，否则拿着旧 fence 的导出方会静默拿到一个语义完全不同的包。
+    //
+    // ⚠️ 只在**真的发生归一**时推进。`seedFusionResources` 每次启动都跑，无条件 bump
+    // 会让每次重启都作废所有在途 fence——那等于把一个安全机制变成噪音源，用户学会的
+    // 第一件事就是忽略 409。
+    const agentDrift =
+      mergerById.ownerUserId !== SYSTEM_USER_ID ||
+      mergerById.visibility !== 'public' ||
+      mergerById.builtin !== true
+    if (agentDrift) {
+      db.update(agents)
+        .set({
+          ownerUserId: SYSTEM_USER_ID,
+          visibility: 'public',
+          builtin: true,
+          updatedAt: Date.now(),
+          aclRevision: (mergerById.aclRevision ?? 0) + 1,
+        })
+        .where(eq(agents.id, SKILL_MERGER_AGENT_ID))
+        .run()
+    }
   } else {
     await createAgent(
       db,
@@ -365,16 +379,27 @@ export async function seedFusionResources(db: DbClient): Promise<void> {
       )
     }
     const repaired = repairFusionWorkflowAgentId(workflowById.definition)
-    db.update(workflows)
-      .set({
-        definition: repaired.definition,
-        ...(repaired.changed ? { version: workflowById.version + 1 } : {}),
-        ownerUserId: SYSTEM_USER_ID,
-        visibility: 'public',
-        builtin: true,
-      })
-      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-      .run()
+    // 同 agent 路径：归一改变导出语义，须推进 token；但 `version` 只在 definition 真被
+    // 修复时才加（它是**内容**维度），归属漂移走 `aclRevision` 那一维。
+    const workflowDrift =
+      workflowById.ownerUserId !== SYSTEM_USER_ID ||
+      workflowById.visibility !== 'public' ||
+      workflowById.builtin !== true
+    if (repaired.changed || workflowDrift) {
+      db.update(workflows)
+        .set({
+          definition: repaired.definition,
+          ...(repaired.changed ? { version: workflowById.version + 1 } : {}),
+          ownerUserId: SYSTEM_USER_ID,
+          visibility: 'public',
+          builtin: true,
+          ...(workflowDrift
+            ? { aclRevision: (workflowById.aclRevision ?? 0) + 1, updatedAt: Date.now() }
+            : {}),
+        })
+        .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+        .run()
+    }
   } else {
     await createWorkflow(
       db,
@@ -1602,37 +1627,28 @@ export async function rejectFusion(
 // ---------------------------------------------------------------------------
 
 /**
- * RFC-170 T6 (Codex re-review F12) — cancel a fusion's engine task, covering EVERY
- * state it can be in: pending/running via cancelTask, and PARKED
- * awaiting_human/awaiting_review (its mandatory clarify round — cancelTask refuses
- * those) via a direct CAS terminalize so the RFC-053 reconciler abandons the
- * orphaned clarify session instead of leaking a worker/workspace forever.
+ * RFC-170 T6 (Codex re-review F12) — cancel a fusion's engine task in every
+ * cancelable state. RFC-202 made cancelTask authoritative for pending, running,
+ * awaiting_human, and awaiting_review; keeping the old direct parked-task CAS
+ * here would bypass cancelTask's terminal sweep and its task-scoped review
+ * mutation coordinator.
  */
 async function cancelFusionEngineTask(db: DbClient, taskId: string): Promise<void> {
   // RFC-170 T6 (Codex re-review F12): a task can FLIP between the read and the
-  // cancel (running→awaiting_human makes cancelTask refuse; parked→pending makes
-  // the narrow trySetTaskStatus miss). Reading once + swallowing the miss leaves
-  // the engine task alive under a canceled fusion. Instead RE-READ and retry the
-  // state-appropriate cancel until the task is terminal (bounded — the fusion is
-  // already canceled, so it must settle; the bound guards a pathological oscillation).
+  // cancel. Reading once + swallowing the miss leaves the engine task alive
+  // under a canceled fusion. Instead RE-READ and retry cancelTask until the task
+  // is terminal (bounded — the fusion is already canceled, so it must settle;
+  // the bound guards a pathological oscillation).
   for (let attempt = 0; attempt < 8; attempt++) {
     const task = await getTask(db, taskId)
     if (task === null || TERMINAL_TASK.has(task.status)) return // gone or terminal → done
-    if (task.status === 'pending' || task.status === 'running') {
+    if (
+      task.status === 'pending' ||
+      task.status === 'running' ||
+      task.status === 'awaiting_human' ||
+      task.status === 'awaiting_review'
+    ) {
       await cancelTask(db, taskId).catch(() => undefined)
-    } else if (task.status === 'awaiting_human' || task.status === 'awaiting_review') {
-      // Parked in its mandatory clarify round; cancelTask refuses those, so
-      // terminalize directly. The RFC-053 reconciler then abandons the orphaned
-      // clarify session. (A full clarify node_run/round/session teardown is a
-      // task-layer concern tracked as a follow-up — see §6g.)
-      await trySetTaskStatus({
-        db,
-        taskId,
-        to: 'canceled',
-        allowedFrom: ['awaiting_human', 'awaiting_review'],
-        extra: { finishedAt: Date.now(), errorSummary: 'fusion canceled' },
-        reason: 'fusion: terminalize parked engine task',
-      }).catch(() => false)
     }
     // Loop: re-read next iteration; if the cancel landed we return at the top.
   }

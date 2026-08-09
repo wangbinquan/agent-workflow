@@ -16,6 +16,12 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import {
+  ResourceRefAstSchema,
+  decodeBundleIdentityRef,
+  encodeBundleIdentityRef,
+  resourceRefKey,
+} from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
 import { agents, workflows } from '../src/db/schema'
 import {
@@ -242,7 +248,36 @@ describe('builtin call lowering —— 真实 builtin id + wire 权威名字', (
 })
 
 describe('builtin 作为**导出根**：产物必须能被自己的 parser 接受', () => {
-  test('统一 AST 少一个变体的代价 —— 导出的包自己解析不了', () => {
+  test('统一抽象是**可执行契约**：调真 schema / 真 codec，不是搜源码字符串', () => {
+    // 上一版这条只 `readFileSync` + `toContain('k: \'builtin\'')`。实现门指出它的
+    // 盲区：源码里有那几个字母，挡不住「类型联合里加了变体、而 `ResourceRefAstSchema`
+    // 的 discriminatedUnion 漏了它」——那正是真实发生过的事（AST 有 builtin 变体，
+    // schema 没有，于是任何跨进程/落盘校验都会把合法 builtin 引用判非法）。
+    //
+    // 源码文本断言只配当兜底；能调 API 的地方就该调 API。
+    const ref = { k: 'builtin', type: 'workflow', name: 'aw-skill-fusion' } as const
+
+    // ① schema 必须认这个变体（discriminatedUnion 漏一支就在这里红）。
+    expect(ResourceRefAstSchema.safeParse(ref).success).toBe(true)
+
+    // ② 编解码必须**往返**：encoder 产出的东西 decoder 要读得回来，且逐字相同。
+    const wire = encodeBundleIdentityRef(ref)
+    expect(wire).toBe('builtin:workflow/aw-skill-fusion')
+    expect(decodeBundleIdentityRef(wire!)).toEqual(ref)
+
+    // ③ 类型必须**收窄**到有 builtin 列的两张表。六类 ACL type 全放进来会造出一种
+    // 任何 resolver 都兑现不了的非法状态（`skills.builtin` 那一列根本不存在）。
+    expect(ResourceRefAstSchema.safeParse({ k: 'builtin', type: 'skill', name: 'x' }).success).toBe(
+      false,
+    )
+
+    // ④ key 必须把三要素都算进去，否则两个不同 built-in 会去重成一个。
+    expect(resourceRefKey(ref)).not.toBe(
+      resourceRefKey({ k: 'builtin', type: 'agent', name: 'aw-skill-fusion' }),
+    )
+  })
+
+  test('源码层兜底：不得再出现第二处私有 regex（可执行断言够不到的那部分）', () => {
     // 这条锁的是一次真实缺陷：`builtin:` 最初只加进了 `bundle/payload.ts` 的私有
     // regex，没进统一的 `ResourceRefAst` / 域 codec。于是三处各说各话 ——
     //   · serializer 给 built-in 根写 `builtin:`（写 `local:` 会判 dangling-root）

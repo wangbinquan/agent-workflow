@@ -60,6 +60,91 @@ export function expandAcDeclaration(raw: string): string[] {
  */
 const APPROVED_SUPERSEDED = new Set<string>(['AC-11'])
 
+/**
+ * 已知的验收条款**全集快照**（2026-08-09）。真值集必须**包含**它的每一条。
+ *
+ * 为什么不是「数量下限」：我先写的是 `acs.length >= 66`，反向验证时发现它挡不住去粗体
+ * ——`**AC-12**` 在 proposal / design / plan 里都加粗，去掉一处后集合去重仍是 66，守卫
+ * 一声不响。数量只能发现「某条在**唯一**一处被去粗体」，而这恰恰是最少见的情形。
+ *
+ * 所以照 RFC-223 的 allowlist 手法钉**具体编号**：任何一条从文档里消失（去粗体、删除、
+ * 改名）都会点名报出来，必须**显式改判**——从这个列表里删掉它，并在 commit 里说明它
+ * 为什么不再是验收条款。新增 AC 不需要动这里（超集即可）。
+ */
+const KNOWN_ACS: readonly string[] = [
+  'AC-1',
+  'AC-2',
+  'AC-2b',
+  'AC-3',
+  'AC-4',
+  'AC-4b',
+  'AC-5',
+  'AC-6',
+  'AC-7',
+  'AC-7b',
+  'AC-7c',
+  'AC-7d',
+  'AC-8',
+  'AC-9',
+  'AC-10',
+  // ⚠️ AC-11 **不在**这里：它是已批准的改判条款，由 `APPROVED_SUPERSEDED` 单独
+  // 跟踪，`declaredAcs()` 会把它滤掉。两处都列会让这条守卫恒红。
+  'AC-12',
+  'AC-13',
+  'AC-14',
+  'AC-14b',
+  'AC-15',
+  'AC-15b',
+  'AC-16',
+  'AC-17',
+  'AC-18',
+  'AC-19',
+  'AC-20',
+  'AC-20b',
+  'AC-21',
+  'AC-22',
+  'AC-23',
+  'AC-24',
+  'AC-24c',
+  'AC-24d',
+  'AC-24e',
+  'AC-24f',
+  'AC-24g',
+  'AC-24h',
+  'AC-25',
+  'AC-25b',
+  'AC-26',
+  'AC-26b',
+  'AC-27',
+  'AC-28',
+  'AC-29',
+  'AC-30',
+  'AC-30b',
+  'AC-30c',
+  'AC-31',
+  'AC-32',
+  'AC-33',
+  'AC-34',
+  'AC-B1',
+  'AC-B2',
+  'AC-B2b',
+  'AC-B2c',
+  'AC-B2d',
+  'AC-B2e',
+  'AC-B2f',
+  'AC-B2g',
+  'AC-B2h',
+  'AC-B3',
+  'AC-B3b',
+  'AC-B4',
+  'AC-B4b',
+  'AC-B4c',
+  'AC-B5',
+  'AC-B6',
+  'AC-K1',
+  'AC-K2',
+]
+
 /** design/proposal/plan 里**加粗定义**的 AC 编号 —— 真值来源，不手抄。 */
 function declaredAcs(): string[] {
   const found = new Set<string>()
@@ -129,6 +214,15 @@ describe('RFC-271 验收条款的覆盖棘轮', () => {
     const acs = declaredAcs()
     // 先自证抽取有效：抽不到编号说明正则或路径坏了，那样下面的断言会**假绿**。
     expect(acs.length).toBeGreaterThan(50)
+
+    // **真值数棘轮**（实现门第三轮补）。上面那条 `> 50` 太松：真值只认加粗的
+    // `**AC-x**`，所以在文档里把某一条的粗体去掉——一次看起来纯排版的编辑——就能让它
+    // **静默退出真值集**，从此没人再要求它被覆盖。实测把 `**AC-12**` 改成 `AC-12`：
+    // 真值 69 → 68，而守卫一声不响。
+    //
+    // 与 RFC-223 的 allowlist 同一手法：钉住**具体编号**，任何一条消失都点名报出来。
+    const vanished = KNOWN_ACS.filter((ac) => !acs.includes(ac))
+    expect(vanished).toEqual([])
     expect(acs).toContain('AC-1')
     expect(acs).toContain('AC-B1')
     expect(acs).toContain('AC-K1')
@@ -162,6 +256,30 @@ describe('RFC-271 验收条款的覆盖棘轮', () => {
     const corpus = testCorpus()
     const unnamed = engineOwned.filter((i) => !new RegExp(`${i}(?![0-9])`).test(corpus))
     expect(unnamed).toEqual([])
+  })
+
+  test('点名 AC 的文件必须真的有断言 —— 注释不算覆盖', () => {
+    // 实现门第三轮的第二个假绿面：语料是**整份源码含注释**，最终只 regex 搜编号。
+    // 于是把一个文件的行为断言全删光、只留文件头那句 `// 覆盖验收条款：AC-12`，
+    // 棘轮照样报「已覆盖」。
+    //
+    // 完全堵死需要把「哪条断言对应哪条 AC」也机械化，那个代价远超收益（作者会开始
+    // 写敷衍的一对一断言来喂守卫）。这里取一个便宜且有效的下限：**凡是声明了自己
+    // 覆盖某些 AC 的文件，必须真的在跑断言**。它挡不住「断言写得烂」，但挡得住
+    // 「断言被删干净、锚点留着」——那正是重构时最容易发生、也最难肉眼发现的一种。
+    const offenders: string[] = []
+    for (const dir of TEST_DIRS) {
+      if (!existsSync(dir)) continue
+      for (const name of readdirSync(dir)) {
+        if (!name.endsWith('.ts') && !name.endsWith('.tsx')) continue
+        if (name === SELF) continue
+        const src = readFileSync(resolve(dir, name), 'utf8')
+        if (!src.includes('覆盖验收条款：')) continue
+        // `expect(` 是本仓所有测试的断言入口（bun:test 与 vitest 同名）。
+        if (!src.includes('expect(')) offenders.push(name)
+      }
+    }
+    expect(offenders).toEqual([])
   })
 
   test('边界匹配确实生效（前缀不得顶替）', () => {
