@@ -21,7 +21,12 @@ import type {
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
-import { parseEvent, parseResultError, parseUnusableMcpServers } from './events'
+import {
+  parseEvent,
+  parseResultError,
+  parseSkillInventory,
+  parseUnusableMcpServers,
+} from './events'
 import { buildClaudeSpawn } from './spawn'
 import { toClaudeAgents, toClaudeMcpConfig } from './inject'
 import { pickRuntimeHead } from '../head'
@@ -90,6 +95,11 @@ export const claudeCodeDriver: RuntimeDriver = {
   // server that is not `connected` there loses its tools for the whole turn.
   parseUnusableMcpServers(line: string): readonly string[] | null {
     return parseUnusableMcpServers(line)
+  },
+  // 2026-08-09 — the same init event also enumerates the skills claude loaded;
+  // a staged skill missing there means the node cannot use what it declared.
+  parseSkillInventory(line: string): readonly string[] | null {
+    return parseSkillInventory(line)
   },
   // RFC-143 — capability methods. PR-1 delegates to the existing free functions.
   defaultBinary(config: RuntimeBinaryConfig): string[] {
@@ -246,6 +256,14 @@ export const claudeCodeDriver: RuntimeDriver = {
         warnings: gate.warnings,
       })
     }
+    // 2026-08-09 — what the platform stages AND the node can invoke. An
+    // unconstrained node loads every built-in (bypass), a gated one only what
+    // the mapping granted; either way `project` skills are claude's own
+    // discovery, never ours.
+    const skillsUsable = gate === null || gate.tools.includes('Skill')
+    const stagedSkillNames = skillsUsable
+      ? ctx.skills.filter((skill) => skill.sourceKind === 'managed').map((skill) => skill.name)
+      : []
     // RFC-242 T2 — a permission-gated business node executes a byte-frozen
     // copy, same TOCTOU fence as the intent path. The seam is the SAME one the
     // credential bridge already uses: a test runtimeCmd means a mock head
@@ -396,6 +414,12 @@ export const claudeCodeDriver: RuntimeDriver = {
       ...(localWrapperByName === undefined || localWrapperByName.size === 0
         ? {}
         : { fencedMcpServers: [...localWrapperByName.keys()] }),
+      // 2026-08-09: same contract for skills. Declared ONLY when this node can
+      // actually invoke them — an unconstrained node always can (bypass loads
+      // every built-in), a gated one only when the mapping granted `Skill`.
+      // `project` skills are excluded: claude self-discovers those from the
+      // repo, so the platform staged nothing and has nothing to prove.
+      ...(stagedSkillNames.length === 0 ? {} : { stagedSkills: stagedSkillNames }),
       // §4.4: same diagnostic fields the runner used to derive from the (built-
       // for-both-runtimes) inline config — byte-equal log line, claude included.
       diagnostics: {

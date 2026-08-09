@@ -150,6 +150,20 @@ export interface SpawnPlan {
    * declares and still report success.
    */
   fencedMcpServers?: readonly string[]
+  /**
+   * 2026-08-09 — skill names the PLATFORM staged into this spawn's config dir
+   * for a node that can actually invoke them. Same contract as
+   * `fencedMcpServers`: a declared capability the runtime does not report at
+   * startup fails the node instead of letting the model run a whole turn
+   * without it and still report success.
+   *
+   * This exists because the failure it guards shipped twice in five days —
+   * `--disable-slash-commands` (2026-08-04) and then `--setting-sources ""`
+   * (2026-08-09) each switched off every staged skill with nothing anywhere
+   * saying so. Only set where the node is supposed to use skills; omitted
+   * otherwise (nothing to prove).
+   */
+  stagedSkills?: readonly string[]
   /** Which process layer owns platform containment for this plan. */
   sandboxTopology?: SpawnSandboxTopology
   /**
@@ -793,6 +807,13 @@ export interface RuntimeDriver {
    * can fail a node this way.
    */
   parseUnusableMcpServers?(line: string): readonly string[] | null
+  /**
+   * 2026-08-09 — skill names this startup line reports as LOADED for the turn
+   * (the runtime's own bundled skills included). Returns null for lines that
+   * carry no such inventory. The runner checks `SpawnPlan.stagedSkills` against
+   * it, so only skills the platform itself staged can fail a node this way.
+   */
+  parseSkillInventory?(line: string): readonly string[] | null
 }
 
 /** RFC-237 — inputs for `captureSessionsToSink?`. The sink slice is structural

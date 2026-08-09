@@ -177,6 +177,14 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // containment mechanism unused on win32 (D1). 8 all-fail describes + materialize-
   // dependent mixed-describe cases skip; demand/config describes run on win32.
   'packages/backend/tests/rfc242-claude-netless-mcp.test.ts#skipIf': 21,
+  // 2026-08-09 claude skill injection: four POSIX-only cases. Three build a
+  // gated business plan, which byte-freezes the runtime head — the fixture's
+  // stand-in binary is a chmod'd `#!/bin/sh` script (unsealable/unspawnable on
+  // win32, same reason as the rfc242 plan cases above). The fourth is the
+  // runner describe, whose fake runtime is the same POSIX script. The argv,
+  // staging and inventory-parsing mechanisms those cases guard are covered
+  // platform-agnostically by the other 13 cases in the file, which run on win32.
+  'packages/backend/tests/claude-skill-injection-2026-08-09.test.ts#skipIf': 4,
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is

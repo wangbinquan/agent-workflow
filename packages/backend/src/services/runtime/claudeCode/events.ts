@@ -95,6 +95,34 @@ export function parseUnusableMcpServers(line: string): readonly string[] | null 
   return unusable
 }
 
+/**
+ * 2026-08-09 — the `system/init` event's SKILL inventory: every skill name the
+ * runtime actually loaded for this turn (bundled ones included).
+ *
+ * Measured on claude 2.1.226: `init.skills` is a flat string array of canonical
+ * skill names, and the canonical name is the DIRECTORY name under the skills
+ * dir — the frontmatter `name:` only becomes `displayName`. That is exactly the
+ * key `stageSkills` writes, so the platform can compare its staged names
+ * against this list literally.
+ *
+ * Returns null for any line that carries no such inventory (keep looking).
+ * `[]` is a real answer: the runtime loaded nothing.
+ */
+export function parseSkillInventory(line: string): readonly string[] | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(line)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object') return null
+  const evt = parsed as Record<string, unknown>
+  if (evt.type !== 'system' || evt.subtype !== 'init') return null
+  const skills = evt.skills
+  if (!Array.isArray(skills)) return null
+  return skills.filter((name): name is string => typeof name === 'string' && name.length > 0)
+}
+
 /** ISO-8601 `timestamp` → ms epoch; undefined when absent/unparseable. */
 function extractTimestamp(evt: Record<string, unknown>): number | undefined {
   const raw = evt.timestamp

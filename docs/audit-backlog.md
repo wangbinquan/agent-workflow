@@ -163,6 +163,21 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   `--disable-slash-commands`，而 `claude --help`（本机 2.x 实测）该 flag 的官方释义就是 **"Disable all skills"**
   ——不是注释写的「defense-in-depth against config-dir skills」。同一次 spawn 里还照常 stage skill 整树
   （`spawn.ts:245`）并把 `skill:'allow'` 翻成 `--tools …,Skill`（`permissionMap.ts:72`）。三者互相矛盾。
+- ✅ **(P0，已修 2026-08-09) 同一处的下一层：`--setting-sources ""` 让技能目录根本不被扫描**。上一条修完，
+  技能**仍然一个都进不去**——用户报「agent 依赖里配了 skill，运行时报找不到 skill」。受控 argv 无条件发
+  `--setting-sources ""`，而 CLI 的用户级技能扫描是 `Tg("userSettings") && Y0r(join(Hn(),"skills"), …)`
+  （`Hn()` = `CLAUDE_CONFIG_DIR`），`Tg` 读 `allowedSettingSources`，`""` 经 `zkc("")` 解析成 `[]`
+  ⇒ `$CLAUDE_CONFIG_DIR/skills/*` 整个目录不 readdir，模型调用回 `Unknown skill:`（本机 2.1.226 二进制
+  反查 + init 清单实测三组对照：`""`→技能不可见 / `user`→可见 / 不带该 flag→可见）。**结构性讽刺**：拿到
+  `Skill` 工具的唯一途径是声明 permission，而声明 permission 的唯一后果就是进受控分支拿到 `""`——用户
+  唯一会**故意开启技能**的配置，正好是唯一必挂的配置。修法：授予 Skill ⇒ 发 `--setting-sources user`
+  （user-settings 根就是平台每次 attempt 新建的私有 config dir，`project`/`local` 仍关死）。
+  **连带封一个提权面**：开 `user` 后技能目录里只要有 `.claude-plugin/plugin.json`，CLI 就把它当**插件**
+  加载（实测 init 的 `plugins[]` 出现 `<name>@skills-dir`），而插件可带 hooks/agents/mcpServers ——
+  `""` 此前只是碰巧一起挡住了；`stageSkills` 现按 basename 精确剔除该目录。**并补上缺失的证明**：
+  `SpawnPlan.stagedSkills` + `driver.parseSkillInventory` + runner 对 init 技能清单做 fail-closed
+  （与 RFC-242 T5 的 `fencedMcpServers` 同构）——五天内同一种「开关静默关掉本节点能力」出两次且全链零告警，
+  这类失能必须能自己变红。
 - ✅ **(P0，已修 2026-08-04) claude 的部分 permission 声明 ⇒ 零工具且无告警**：`permissionMap.ts:110-155` 无 `'*'` 键时
   baseline 为 deny，且纯 deny 声明**不产生任何 warning**。一份从 opencode 直译的 `{bash:'deny'}` 变成
   `--tools ""`（help 原文 "Use \"\" to disable all tools"）。opencode 侧内置 defaults 是 `{"*":"allow",…}`

@@ -1751,6 +1751,15 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     let terminalResultError: string | undefined
     /** The inventory arrives once, in the runtime's first event. */
     let fencedMcpInventorySeen = false
+    // 2026-08-09 — the same contract for SKILLS. Two consecutive flag bugs
+    // (`--disable-slash-commands`, then `--setting-sources ""`) each silently
+    // switched off every skill the platform had just staged, and nothing in the
+    // pipeline noticed: the node ran a full turn without the capability it
+    // declared and reported done. The runtime enumerates what it loaded at
+    // startup, so check the staged names against it and fail loudly instead.
+    const stagedSkills = new Set(plan.stagedSkills ?? [])
+    let stagedSkillFailure: string | undefined
+    let skillInventorySeen = false
     const failControlBarrier = (): void => {
       controlFailureCode ??= 'execution-identity-control-failed'
       startKill()
@@ -1805,6 +1814,25 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             log.warn('claude-mcp-netless-unusable', {
               nodeRunId: opts.nodeRunId,
               servers: missing,
+            })
+            startKill()
+          }
+        }
+      }
+      if (stagedSkills.size > 0 && !skillInventorySeen) {
+        // Same one-shot shape as the MCP inventory above: null = keep looking.
+        const loaded = driver.parseSkillInventory?.(line) ?? null
+        if (loaded !== null) {
+          skillInventorySeen = true
+          const present = new Set(loaded)
+          const missing = [...stagedSkills].filter((name) => !present.has(name)).sort()
+          if (missing.length > 0) {
+            stagedSkillFailure =
+              `skill-unavailable: the runtime did not load staged skill(s) ${missing.join(', ')}; ` +
+              'the node would have run without the skills it declares'
+            log.warn('runtime-staged-skill-missing', {
+              nodeRunId: opts.nodeRunId,
+              skills: missing,
             })
             startKill()
           }
@@ -2148,6 +2176,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // attempt) and it is not an execution-identity violation.
       status = 'failed'
       errorMessage = fencedMcpFailure
+    } else if (stagedSkillFailure !== undefined) {
+      // Also no failureCode: a skill can go missing for transient reasons (a
+      // quarantined snapshot, a partially written tree), and the retry costs
+      // one node run against a capability loss that would otherwise ship as a
+      // confident wrong answer.
+      status = 'failed'
+      errorMessage = stagedSkillFailure
     } else if (streamPumpFailed) {
       status = 'failed'
       errorMessage = `${runtime} stream persistence failed`

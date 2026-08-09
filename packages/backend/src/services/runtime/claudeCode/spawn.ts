@@ -245,7 +245,8 @@ export interface ClaudeDeclaredControlArgv {
   allowedTools?: string
   /**
    * True when the load set grants the `Skill` tool, i.e. this node is SUPPOSED
-   * to be able to use its managed skills.
+   * to be able to use its managed skills. Controls TWO flags, because skills
+   * need both a tool and a discovery source:
    *
    * 2026-08-04 audit: `--disable-slash-commands` was emitted unconditionally on
    * the strength of a comment calling it "defense-in-depth against config-dir
@@ -255,6 +256,27 @@ export interface ClaudeDeclaredControlArgv {
    * dir (`prepareClaudeConfigDir`) and had `skill: 'allow'` translated into
    * `--tools …,Skill` then had every one of those skills switched off, with no
    * warning anywhere. Three parts of one spawn contradicting each other.
+   *
+   * 2026-08-09, the layer under it: with the tool restored the skills STILL did
+   * not exist, because user-scope skill discovery is gated on the setting
+   * sources. Read from the 2.1.226 binary — the loader is
+   *
+   *     let r = join(Hn(), "skills")            // Hn() = CLAUDE_CONFIG_DIR
+   *     Tg("userSettings") && !s ? Y0r(r, "userSettings", t) : []
+   *
+   * with `Tg(x) = fC().includes(x)`, `fC()` reading `allowedSettingSources`, and
+   * `--setting-sources ""` parsing to `[]`. So `""` means claude never even
+   * readdir's `$CLAUDE_CONFIG_DIR/skills`, and the model's Skill call comes back
+   * `Unknown skill: <name>`. Measured on the same build: `""` → 15 bundled
+   * skills and nothing staged; `user` → the staged skill appears.
+   *
+   * `user` is the minimal opening: the user-settings ROOT is `Hn()`, i.e. the
+   * private per-attempt config dir the platform just created, which holds only
+   * what `prepareClaudeConfigDir` put there (`skills/` + the bridged
+   * credential). No `settings.json` / `agents/` / `commands/` exists to be read,
+   * and `project` / `local` stay closed so the repo cannot inject anything.
+   * `stageSkills` strips `.claude-plugin` so a staged tree cannot come back as a
+   * plugin (hooks!) through the door this opens.
    *
    * Default false keeps the historical shape for every caller that grants no
    * Skill tool (system surfaces, the read-only intent set, the MCP playground).
@@ -279,7 +301,8 @@ export interface ClaudeDeclaredControlArgv {
  *  - `--strict-mcp-config` — UNCONDITIONAL: with no `--mcp-config` it means
  *    zero MCP servers; with one it means exactly that file and nothing
  *    inherited;
- *  - `--setting-sources ""` — cuts user/project/local settings;
+ *  - `--setting-sources` — `""` cuts user/project/local settings, but `user` is
+ *    REQUIRED to make the node's own skills exist at all (see `skillsGranted`);
  *  - `--disable-slash-commands` — the CLI's documented effect is "Disable all
  *    skills", so it is emitted ONLY when the load set grants no `Skill` tool.
  *    Sending it while ALSO staging the node's managed skills and granting
@@ -298,7 +321,9 @@ export function claudeDeclaredControlArgv(input: ClaudeDeclaredControlArgv): str
     ...(input.mcpConfigFile === undefined ? [] : ['--mcp-config', input.mcpConfigFile]),
     '--strict-mcp-config',
     '--setting-sources',
-    '',
+    // `user` = the private per-attempt config dir ONLY (see `skillsGranted`);
+    // without it claude never scans `$CLAUDE_CONFIG_DIR/skills`.
+    input.skillsGranted === true ? 'user' : '',
     ...(input.skillsGranted === true ? [] : ['--disable-slash-commands']),
     ...(input.allowedTools === undefined ? [] : ['--allowedTools', input.allowedTools]),
   ]

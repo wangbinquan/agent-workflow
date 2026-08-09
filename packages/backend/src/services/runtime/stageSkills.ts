@@ -19,8 +19,29 @@
 // Leaf module: imports nothing from runner.ts / drivers → no module-init cycle.
 
 import { cpSync, mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type { Logger } from '@/util/log'
+
+/**
+ * 2026-08-09 — the one directory name a staged skill tree may NOT carry.
+ *
+ * Claude Code loads a `<skills-dir>/<name>/` entry that contains `.claude-plugin`
+ * as a PLUGIN (`<name>@skills-dir`), not merely as a skill — measured on 2.1.226:
+ * staging a skill with `.claude-plugin/plugin.json` makes it show up in the
+ * `system/init` event's `plugins[]`. A plugin may declare hooks, agents and MCP
+ * servers, so that path turns "the node selected a skill" into arbitrary command
+ * execution at hook points.
+ *
+ * Until 2026-08-09 the claude spawn happened to be immune because
+ * `--setting-sources ""` disabled user-scope discovery wholesale — the same flag
+ * that also made the node's skills not work at all. Restoring skills (`user`)
+ * removes that accidental cover, so the exclusion has to be explicit and here,
+ * at the ONE place a skill tree crosses into a runtime config dir.
+ *
+ * Exact basename match: `.claude-plugin.md` and friends are ordinary files and
+ * are staged untouched.
+ */
+const EXCLUDED_SKILL_ENTRY = '.claude-plugin'
 
 /** Minimal skill shape (structurally matches runner.ts ResolvedSkill). */
 export interface StagedSkill {
@@ -48,8 +69,24 @@ export function stageSkills(
     // Ensure parent exists (skillsDir already does, but defensive).
     mkdirSync(dirname(dst), { recursive: true })
     try {
-      // RFC-178: managed-only — copy the whole snapshot dir.
-      cpSync(skill.sourcePath, dst, { recursive: true })
+      // RFC-178: managed-only — copy the whole snapshot dir, minus the one
+      // entry that would re-enter the runtime as a PLUGIN (see above). A
+      // directory rejected here takes its whole subtree with it.
+      let excluded = 0
+      cpSync(skill.sourcePath, dst, {
+        recursive: true,
+        filter: (src) => {
+          if (basename(src) !== EXCLUDED_SKILL_ENTRY) return true
+          excluded += 1
+          return false
+        },
+      })
+      if (excluded > 0) {
+        log.warn('skill tree carried .claude-plugin; excluded from the staged copy', {
+          name: skill.name,
+          entries: excluded,
+        })
+      }
     } catch (err) {
       if (opts?.bestEffort !== true) throw err
       log.warn('skill injection failed', {
