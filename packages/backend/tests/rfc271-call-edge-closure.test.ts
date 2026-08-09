@@ -13,6 +13,10 @@
 //  ③ **v1 存量闭包仍可读**。`tasks.refClosureJson` 里躺着 name-keyed 的 JSON，
 //     零迁移是硬要求。
 
+//
+// 覆盖验收条款：AC-B2g（边身份契约）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import {
   callEdgeKey,

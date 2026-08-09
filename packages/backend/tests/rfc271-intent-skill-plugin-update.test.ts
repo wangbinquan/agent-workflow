@@ -9,6 +9,10 @@
 //   · **他人拥有的仍然强制 copy** —— `ownerUserId` 那条判据一字未动
 // 少了后一半，这个改动就从「能力扩张」变成了越权。
 
+//
+// 覆盖验收条款：AC-K1（自己的 skill/plugin 可原地更新）/ AC-K2（他人的仍强制 copy）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

@@ -10,6 +10,11 @@
 //     翻译结果就是零 op。要求 `.min(1)` 会让它在 parse 阶段就失败、根本进不了
 //     journal。但空 bundle **不等于免检**——引擎仍要跑 selectedExternalFence。
 
+//
+// 覆盖验收条款：AC-B1（ResourceBundle 表达）/ AC-B3（12 分支严格 discriminated union）
+//   / AC-B3b（payload 逐字段对照正式 schema）/ AC-B6（ops 可空）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { BundleSchema, collectBundleRefIssues } from '../src/bundle/bundle'
 import { BUNDLE_MAX_OPS, BundleOpSchema } from '../src/bundle/op'

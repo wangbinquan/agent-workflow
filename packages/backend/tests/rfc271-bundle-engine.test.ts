@@ -11,6 +11,10 @@
 //   I9  收敛的 active set / 10 分钟下限 / 补偿失败不终态化
 //   T12 每个 update 目标在事务内断言 owner ——— 「只能覆盖自己的」
 
+//
+// 覆盖验收条款：AC-15b（update 目标须归 actor 所有，最终事务拒伪造覆盖）/ AC-20b（pre-commit 失败零可见） / AC-24f（重放三态）/ AC-B4（承重不变量）/ AC-B4b（事务钩子）/ AC-B6（ops 可空）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -276,6 +280,96 @@ describe('pre-commit 失败 ⇒ 零可见 + journal failed', () => {
     ).rejects.toBeDefined()
     expect(await deps.db.select().from(agents)).toHaveLength(0)
     expect(deps.db.select().from(resourceBundleApplies).get()?.state).toBe('failed')
+  })
+})
+
+// I7 与 I13 此前**只有源码事实、没有测试**：`invariants.md` 的对照表把它们标成
+// 「已验证」，靠的是「我读过代码，那几行确实在同一个 dbTxSync 里」。那不是回归防护
+// ——把 `finalizeInTx` 挪出事务、或把 journal 的 committed 写成独立事务，源码看着
+// 仍然合理，而两条不变量已经没了。
+//
+// 引擎早就留好了注入点（`faults.inTxAfterOps`），但它**一个测试都没用过**。这两条
+// 就用它：在 big tx 内部、各 op 的 commit 内核之后抛错，然后断言**什么都没留下**。
+// 资源、receipt、journal 三者只要有一个逃出事务，这里就会红。
+describe('I13 · commit 内核 / receipt / journal 共处同一 big tx', () => {
+  test('big tx 内部（各 op 之后）抛错 ⇒ 资源与 journal committed 一起消失', async () => {
+    const deps = makeDeps()
+    const provider = makeProvider()
+    await expect(
+      applyResourceBundle(
+        {
+          ...deps,
+          faults: {
+            inTxAfterOps: () => {
+              throw new Error('exploded inside the big tx')
+            },
+          },
+        },
+        { bundle: bundleOf([agentCreate('a')]), provider },
+      ),
+    ).rejects.toBeDefined()
+
+    // ① 资源没落库 —— commit 内核的写与这次抛错在同一事务。
+    expect(await deps.db.select().from(agents)).toHaveLength(0)
+    // ② journal 没到 committed。若 journal 的状态写在事务之外，这里会是 'committed'
+    //    而资源却不存在 —— 那正是「幂等重放返回一个从未发生过的 receipt」的成因。
+    const row = deps.db.select().from(resourceBundleApplies).get()
+    expect(row?.state).toBe('failed')
+    expect(row?.receiptJson ?? null).toBeNull()
+  })
+
+  test('同一幂等键重放：上一次是 failed ⇒ 409，而不是返回半个 receipt', async () => {
+    const deps = makeDeps()
+    const provider = makeProvider()
+    const boom = {
+      ...deps,
+      faults: {
+        inTxAfterOps: () => {
+          throw new Error('exploded inside the big tx')
+        },
+      },
+    }
+    const bundle = bundleOf([agentCreate('a')])
+    await expect(applyResourceBundle(boom, { bundle, provider })).rejects.toBeDefined()
+    // 同一个 provider ⇒ 同一个 idempotencyKey。三态里的 failed 分支。
+    const err = await applyResourceBundle(deps, { bundle, provider }).then(
+      () => null,
+      (e: unknown) => e as { code?: string },
+    )
+    expect(err?.code).toBe('bundle-apply-failed-replay')
+    expect(await deps.db.select().from(agents)).toHaveLength(0)
+  })
+})
+
+describe('I7 · finalizeInTx 与资源写同事务、且在 journal committed 之前', () => {
+  test('finalizeInTx 抛错 ⇒ 资源回滚（它没有在事务外单独跑）', async () => {
+    const deps = makeDeps()
+    const provider = makeProvider({
+      finalizeInTx: () => {
+        throw new Error('finalize exploded')
+      },
+    })
+    await expect(
+      applyResourceBundle(deps, { bundle: bundleOf([agentCreate('a')]), provider }),
+    ).rejects.toBeDefined()
+    expect(await deps.db.select().from(agents)).toHaveLength(0)
+    expect(deps.db.select().from(resourceBundleApplies).get()?.state).toBe('failed')
+  })
+
+  test('finalizeInTx 拿得到 receipt（它在 receipt 之后、journal committed 之前）', async () => {
+    const deps = makeDeps()
+    let seen: { applied: unknown[] } | null = null
+    const provider = makeProvider({
+      finalizeInTx: (_tx, receipt) => {
+        seen = receipt as { applied: unknown[] }
+      },
+    })
+    await applyResourceBundle(deps, { bundle: bundleOf([agentCreate('a')]), provider })
+    // 顺序是承重的：provenance / commitSeq 这类伴随写入需要 receipt 的内容，
+    // 而它们必须与资源写、journal committed 原子发生。
+    expect(seen).not.toBeNull()
+    expect((seen as unknown as { applied: unknown[] }).applied).toHaveLength(1)
+    expect(deps.db.select().from(resourceBundleApplies).get()?.state).toBe('committed')
   })
 })
 

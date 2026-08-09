@@ -9,6 +9,10 @@
 //  ③ `--plan` 与 `--on-conflict` **互斥**：一个是逐条显式决策，一个是一刀切默认，
 //     同时给说明用户没想清楚哪个说了算——与其挑一个，不如让他明确。
 
+//
+// 覆盖验收条款：AC-26b（CLI 根选择器 --id）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

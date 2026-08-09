@@ -10,6 +10,10 @@
 //  ④ **reuse 也要复核**。它不产 op，没有任何 commit 内核会替它把关，而用户确认的正是
 //     「复用**这一版**」——`revalidateInTx` 就是为这条存在的；留空则全 reuse 的包完全免检。
 
+//
+// 覆盖验收条款：AC-21（新建归导入者 + private + 零 grants）/ AC-24（内容级 exact token CAS） / AC-24e（稳定 importId 进 wire）/ AC-24h（reuse 目标在 big tx 内复核）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'

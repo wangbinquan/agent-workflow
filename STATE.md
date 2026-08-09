@@ -163,27 +163,30 @@
 > 同一个提交」。**教训**：多人工作树下 `git add` 前要逐个确认文件归属，`mine.txt`
 > 那种「按 `git status` 全量筛」的做法会连带别人的中间态。
 >
-> 🔴 **交接给 UX session：批次 G 引入的前端 UI 回归，CI 的 e2e 腿因此持续红**
-> （`a3cc99ca` run 31297879784；**用户已拍板由做 UX 重构的那个 session 一并处理**，
-> 我不碰 `packages/frontend/**`）。此前一直被掩盖——`focus-ring-clip.spec.ts` 在
-> 「找不到 `Import YAML` 按钮」上提前失败，那个对话框与相关页面**从未真正被扫到**；
-> 选择器修好后 18 处裁剪一次性暴露。精确诊断在 `docs/audit-backlog.md`：
+> ✅ **已闭环（2026-08-09）：批次 G 的前端 UI 回归 + 视觉基线**。UX session 完成前端
+> 重构（`085c4e15` 统一导入导出 UX / `ebad9fca` 修焦点与 CI 覆盖）并接上视觉基线
+> （`71c23b2d` + `52b1400e`）。**CI 与 `visual-regression-nightly` 在 `52b1400e` 双双
+> success**，本机 `gate:local` 6m13s 全绿（backend 四分片 9702 pass / frontend 全过）。
 >
-> - `/workgroups/{id}` 5 处 —— 我加的 `Export config package` 按钮所在的
->   `.page__meta` / `.page__heading` 四边 `0px of room`，**容器缺
->   `var(--focus-ring-gutter)` 的 padding**（这一处可能不在重构范围内，需单独确认）。
-> - `/workflows/{id}(editor)` 4 处 —— header 加按钮后 `Launch task` 只剩 `0.8px`；
->   同根因让 `rfc250-workflow-camera` 报 `workflow-more-actions` 在 1280px 溢出。
-> - `/workflows(import-dialog)` 9 处 —— `.dialog__panel` 的 `[focus-within]` 环
->   `paints 40–60px out, only 24px of room`；`ux-consistency` 的 1280 light 也卡这里。
->   规则**无豁免通道**（测试原话 "There is NO waiver channel"）。前两类会被那次重构
->   （导入入口移进创建流程 + 重写 `ResourcePackageImportDialog`）直接覆盖。
+> 那 18 处焦点环裁剪值得记一句**测试方法论**：它们在批次 G 交付时就存在，却因为
+> `focus-ring-clip.spec.ts` 卡在「找不到 `Import YAML` 按钮」这一**前置步骤**而从未被
+> 扫到。守卫测试失败在前置步骤上时，它宣称覆盖的那部分等于**根本没跑**——比它笼统地
+> 红更危险。把「选择器没命中」与「断言不成立」分开报，才不会让一次红掩盖一整片盲区。
 >
-> ⏳ **未完成收尾（已登记 backlog）**：`visual-regression-nightly` 自 `ea27d81f`
-> （批次 G「六类列表页接入导入入口」）起持续红 —— 新增视觉场景后**基线未更新**。
-> 那不是缺陷而是流程没走完（该 workflow 文件头写明：首次 hosted run 故意红并产出
-> 实际 PNG，人工审核后提交 Linux 基线）。**建议等并发的前端重构落地后一次性更新**，
-> 否则要更新两遍。它不是硬门禁，但挂着的每一天真正的视觉回归都发现不了。
+> ✅ **验收清单 17 条已逐条核实并勾**（`design/RFC-271-.../plan.md` 末尾，每条写明证据
+> 落在哪个测试）。其中前两条改成**机械核查**——新增
+> `packages/backend/tests/rfc271-ac-coverage.test.ts`：从 design 文档抽取 AC 与
+> `invariants.md` 的归属列作为真值，逐条要求在测试中被点名。这么做的直接原因是收尾时
+> 实测到 **62 条 AC 里 30 条没被点名**（行为都有覆盖，但测试标题写的是任务号 `T14` 或
+> 行为描述），而清单照样可以被勾绿。补齐过程中守卫又抓到一条**假绿**：`AC-B3` 被
+> `AC-B3b` 前缀顶替（我第一版核查脚本用的是固定字符串匹配），故守卫改用编号 +
+> 非字母数字边界。
+>
+> ⚠️ 同一轮核实还发现 **I7 / I13 只有源码事实、没有测试**——`invariants.md` 的对照表把
+> 它们标成「已验证」，依据是「我读过代码，那几行确实在同一个 `dbTxSync` 里」。那不是
+> 回归防护。已补 4 条注入式测试（用引擎里早就留好、却**一个测试都没用过**的
+> `faults.inTxAfterOps`），并做**反向验证**：把 `finalizeInTx` 移出事务，两条 I7 立刻
+> 变红。**「读过代码所以对」不能当验收证据**——这条适用于所有靠人工对照的不变量清单。
 >
 > ⚠️ **接手提醒**：`9da5cc63` 的 CI 在 macos shard 2/4 单点红了一条 `rfc108-resume-safety`，代码路径与本轮零交集、本机 24 次并发复跑全绿，机制未定；已把该用例改成能自证的形态并登记 `docs/audit-backlog.md`（第八条），**下次再红先看日志分流，别急着改产品代码**。
 

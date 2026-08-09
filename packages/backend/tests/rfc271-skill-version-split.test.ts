@@ -15,6 +15,10 @@
 //     全部已提交技能——放进 publish 里，先发布的那个已经 mark 回来了，而后一个还
 //     没发布的技能仍带着上一代的 admission。
 
+//
+// 覆盖验收条款：AC-24g（noop 仍进 big tx fence）/ AC-25（走既有内核）/ AC-25b（覆盖失败不留部分提交）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

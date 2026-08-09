@@ -9,6 +9,10 @@
 // 预铸的**资源 id**（不是名字），各 prepare* 内核靠它接受「同 bundle 内尚未落库
 // 的目标」。晚于 preflight 预铸，一个引用同包新建 agent 的工作组必然报错。
 
+//
+// 覆盖验收条款：AC-B4c（dependency planner + pending seams）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import type { BundleOp } from '@agent-workflow/shared'
 import {

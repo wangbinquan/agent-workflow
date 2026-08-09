@@ -8,6 +8,10 @@
 // ——最后一条用**反向锁**钉住（可见但缺该类型权限点 ⇒ 必须导出成功），防止未来
 // 有人以「补齐权限校验」为由把它加回去。
 
+//
+// 覆盖验收条款：AC-2b（同名重复门）/ AC-7b / AC-7c / AC-7d（反向锁）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'

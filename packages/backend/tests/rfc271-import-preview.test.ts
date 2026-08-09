@@ -12,6 +12,10 @@
 //      **从未确认过**的那一版，签名仍有效，于是 CAS 覆盖了另一个内容。
 //    这里对第二条做直接的反例断言。
 
+//
+// 覆盖验收条款：AC-14b（同名多候选全部列出）/ AC-24c（token 由 preview 下发原样回传）/ AC-24d（伪造 previewToken 被拒）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { resolve } from 'node:path'

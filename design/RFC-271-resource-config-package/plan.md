@@ -175,8 +175,8 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 - **T26** `preview.ts`：逐条匹配（`ownMatches[]` 可多个）+ 动作可选性 + 建议名 + 权限缺口 +
   密钥字段 + 稳定 `importId` + **`previewToken`** + 内置件 + 人类席位。
   ⚠️ **`previewToken` 要签死整套基线**（`importId‖actor‖packageDigest‖exp‖
-  canonical(每条目的候选 id / 各候选 expect / 允许动作)），**不是只签 digest**——只签 digest
-  时客户端换掉某条的 `expect` 仍能通过（R5-P1-A）。
+canonical(每条目的候选 id / 各候选 expect / 允许动作)），**不是只签 digest**——只签 digest
+时客户端换掉某条的 `expect` 仍能通过（R5-P1-A）。
 - **T27** `commit.ts`：**① 验签 → ② duplicate lookup（命中走 I3 三态、不查 exp）→ ③ 仅首次
   claim 查 exp**（顺序是承重的：先查 exp 会让「成功但响应丢失、过期后重试」进不了 replay）
   → 断言用户提交的 `(target, expect)` **是该条目签名基线里的一对** → 服务端重算
@@ -207,7 +207,7 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 - **T34** `lib/resource-package-download.ts`（抽出 `safeDownloadBaseName`）。
 - **T35** 六类详情/编辑页「更多操作」导出入口（工作流那条原地改名）。
 - **T36** `components/ResourcePackageImportDialog.tsx`（`<Dialog size="full">` + `.segmented`
-  + `<Select>` + `<Field>/<TextInput>` + `<StatusChip>`，零自写 chrome）。
+  - `<Select>` + `<Field>/<TextInput>` + `<StatusChip>`，零自写 chrome）。
 - **T37** 六类列表页导入入口 + 统一入口 + 类型不符跳转 + 导入报告视图。
 - **T38** 中英双语 i18n（⚠️ i18n 值里禁字面 `**`）。
 - **T39** 前端两个测试文件 + **视觉对齐自查**（与 `/agents`、`/workflows`、`/repos`、
@@ -250,47 +250,66 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 
 ## PR / commit 拆分
 
-| # | 内容 | 独立可绿 |
-|---|---|---|
-| 1 | 批次 A（表达层） | ✅ 纯 shared |
-| 1b | **批次 A′（统一引用模型）** | ✅ **独立 commit，触及 scheduler 热路径需单独可回滚** |
-| 2 | 批次 B（引擎 + 新表） | ✅ 引擎有自己的测试，尚无消费者 |
-| 3 | **批次 C（intent 能力扩张）** | ✅ **单独推并跑完 CI** |
-| 4 | 批次 D + F 导出半边 | ✅ |
-| 5 | 批次 E + F 导入半边 + G + H | ✅ |
-| 6 | 批次 I + J | ✅ |
+| #   | 内容                          | 独立可绿                                              |
+| --- | ----------------------------- | ----------------------------------------------------- |
+| 1   | 批次 A（表达层）              | ✅ 纯 shared                                          |
+| 1b  | **批次 A′（统一引用模型）**   | ✅ **独立 commit，触及 scheduler 热路径需单独可回滚** |
+| 2   | 批次 B（引擎 + 新表）         | ✅ 引擎有自己的测试，尚无消费者                       |
+| 3   | **批次 C（intent 能力扩张）** | ✅ **单独推并跑完 CI**                                |
+| 4   | 批次 D + F 导出半边           | ✅                                                    |
+| 5   | 批次 E + F 导入半边 + G + H   | ✅                                                    |
+| 6   | 批次 I + J                    | ✅                                                    |
 
 ## 验收清单
 
-- [ ] AC-B1…B6 + AC-K1/K2 + AC-1…AC-34 逐条有测试点名
-- [ ] **I1–I14 逐条枚举**（不是「12 条」）
-- [ ] **AC-24d：伪造 `previewToken`（换文件+换摘要）被拒**
-- [ ] **§1.1b lowering：external 目标同时落 name + id，`name:` 只落 name 不落 cache**
-- [ ] **selectedExternalFence：reuse 目标在 big tx 内复核，`ops=[]` 也要走**
-- [ ] **冻结闭包按节点键控 + v1 name-keyed 存量仍可读**
-- [ ] **导出拒绝同名重复资源**
-- [ ] **AC-K1/K2：自己的 skill/plugin 可原地更新、他人的仍强制 copy**
-- [ ] **AC-15b：伪造 overwrite 他人资源被最终事务拒绝**
-- [ ] AC-6：六类文档脱敏后仍过各自严格 schema
-- [ ] AC-7b：零匹配 vs 全不可见逐字节相同
-- [ ] AC-7c：与 `freezeCallClosure` 逐字一致（cache 优先）
-- [ ] AC-7d：反向锁（可见但缺类型权限点 → 导出成功）
-- [ ] AC-20：journal 各 phase 边界注入中断 + 重启收敛到二态之一
-- [ ] AC-25b：技能覆盖失败后两个技能都没被改
-- [ ] `bun run gate:local` 全绿；推后按 exact SHA 查 CI
-- [ ] Codex 实现门跑一次并修 findings
+> **收尾核实（2026-08-09）**：勾选依据写在每条后面。前两条改成**机械核查**，由
+> `packages/backend/tests/rfc271-ac-coverage.test.ts` 每次跑测试时重新验证——人工勾
+> 清单的问题在收尾时实测到了：62 条 AC 里 30 条其实没被点名（行为有覆盖，但测试标题
+> 用的是任务号 `T14` 或行为描述），清单却可以被勾成绿的。
+
+- [x] AC-B1…B6 + AC-K1/K2 + AC-1…AC-34 逐条有测试点名 —— **62 条全部点名**，由
+      `rfc271-ac-coverage.test.ts` 从文档抽取真值后逐条核查（不手抄列表，新增 AC 自动纳入）。
+      补齐时抓到一条假绿：`AC-B3` 被 `AC-B3b` 前缀顶替，故守卫用编号 + 非字母数字边界匹配。
+- [x] **I1–I14 逐条枚举**（不是「12 条」）—— 同一条守卫按 `invariants.md` 对照表的**归属列**
+      抽取：归引擎的 11 条逐条要求点名，`intent 特有` 的 I10–I12 本 RFC 不需要故排除。
+      核实时发现 **I7 / I13 只有源码事实、没有测试**（对照表标着「已验证」，靠的是读代码），
+      已补 4 条注入式测试并做**反向验证**：把 `finalizeInTx` 移出事务，两条 I7 立刻变红。
+- [x] **AC-24d：伪造 `previewToken`（换文件+换摘要）被拒** —— `rfc271-import-preview.test.ts`
+- [x] **§1.1b lowering：external 目标同时落 name + id，`name:` 只落 name 不落 cache** ——
+      `rfc271-impl-gate-fixes.test.ts`（实现门 P2-3：只扫 update target 会让纯 reuse 的包必挂）
+- [x] **selectedExternalFence：reuse 目标在 big tx 内复核，`ops=[]` 也要走** ——
+      `rfc271-import-commit.test.ts`「④ reuse 也要复核」
+- [x] **冻结闭包按节点键控 + v1 name-keyed 存量仍可读** —— `rfc271-call-edge-closure.test.ts`
+- [x] **导出拒绝同名重复资源** —— `rfc271-export-gates.test.ts`「④ 同名重复门」
+- [x] **AC-K1/K2：自己的 skill/plugin 可原地更新、他人的仍强制 copy** ——
+      `rfc271-intent-skill-plugin-update.test.ts` T14/T15 双向锁
+- [x] **AC-15b：伪造 overwrite 他人资源被最终事务拒绝** —— `rfc271-bundle-engine.test.ts` + `rfc271-mcp-owner-fence.test.ts`（`commitMcpUpdateInTx` 的 owner 围栏）
+- [x] AC-6：六类文档脱敏后仍过各自严格 schema —— `rfc271-serialize.test.ts` +
+      `rfc271-bundle-secrets.test.ts`
+- [x] AC-7b：零匹配 vs 全不可见逐字节相同 —— `rfc271-zip-roundtrip.test.ts`
+- [x] AC-7c：与 `freezeCallClosure` 逐字一致（cache 优先）—— `rfc271-export-gates.test.ts`
+- [x] AC-7d：反向锁（可见但缺类型权限点 → 导出成功）—— `rfc271-export-gates.test.ts`
+- [x] AC-20：journal 各 phase 边界注入中断 + 重启收敛到二态之一 —— `rfc271-bundle-engine.test.ts`
+      「I9 · 收敛」；实现门补上了**生产调用点**（此前收敛器只有定义，`cli/start.ts` 没接）
+- [x] AC-25b：技能覆盖失败后两个技能都没被改 —— `rfc271-skill-version-split.test.ts`「② abort」
+- [x] `bun run gate:local` 全绿；推后按 exact SHA 查 CI —— gate 6m13s 全绿
+      （backend 4 分片 9702 pass / frontend 全过）；CI 与 `visual-regression-nightly` 在
+      `52b1400e` 均 success
+- [x] Codex 实现门跑一次并修 findings —— 报 13 条（6×P1 + 7×P2），**逐条核实全部属实、全部已修**，
+      锁在 `rfc271-impl-gate-fixes.test.ts` + `rfc271-roundtrip.test.ts`（真 DB/真 FS 跨实例往返，
+      是 4 条 P1 的根因防护）
 
 ## 风险与回滚
 
-| 风险 | 缓解 |
-|---|---|
-| 决策 27 误伤 intent 既有 copy 语义 | AC-K2 双向锁；`ownerUserId` 判据一字不动；独立 commit 先推 |
-| 泛化丢掉某条既有不变量 | 开工前列不变量清单，泛化后逐条对照 + 点名测试 |
-| **决策 29 动了 scheduler 热路径** | 批次 A′ 独立 commit；wire 零变更（既有拼写全保留）⇒ intent/存量 definition 零改判；六域正反例 + 字节级拼写断言 |
-| ~~新旧 journal 并存~~ | **随 intent 不迁移而消失**：`intent_apply_journal` 一字不动 |
-| `skill-update` 拆分回归 | 既有 `commitSkillVersion` 退化为四段顺序组合、保留 `noop` |
-| 盘子过大 | 六个独立可绿的 commit |
-| C1/C2/C6 打断既有自动化 | 已逐条呈用户确认；发布说明点名 |
+| 风险                               | 缓解                                                                                                           |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 决策 27 误伤 intent 既有 copy 语义 | AC-K2 双向锁；`ownerUserId` 判据一字不动；独立 commit 先推                                                     |
+| 泛化丢掉某条既有不变量             | 开工前列不变量清单，泛化后逐条对照 + 点名测试                                                                  |
+| **决策 29 动了 scheduler 热路径**  | 批次 A′ 独立 commit；wire 零变更（既有拼写全保留）⇒ intent/存量 definition 零改判；六域正反例 + 字节级拼写断言 |
+| ~~新旧 journal 并存~~              | **随 intent 不迁移而消失**：`intent_apply_journal` 一字不动                                                    |
+| `skill-update` 拆分回归            | 既有 `commitSkillVersion` 退化为四段顺序组合、保留 `noop`                                                      |
+| 盘子过大                           | 六个独立可绿的 commit                                                                                          |
+| C1/C2/C6 打断既有自动化            | 已逐条呈用户确认；发布说明点名                                                                                 |
 
 **回滚**：批次 I 之前任何时点可停（新路径纯增量）。批次 C 若出问题回滚该 commit 即可——
 但注意它**不只动一个分支**：含 plugin 的 prestage / artifact / 收敛三处。

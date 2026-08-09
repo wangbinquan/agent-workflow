@@ -17,6 +17,10 @@
 // resolver 的行为契约在 `rfc271-runtime-ref.test.ts`；本文件锁的是「四处调用点
 // 各自映射到自己的归属」这件事——运行时巨型组件难直接覆盖，按仓规保留源码层断言。
 
+//
+// 覆盖验收条款：AC-B2c（统一引用模型）/ AC-B2e（解析契约五属性）/ AC-B2f（调度器不裸读）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'

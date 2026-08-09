@@ -18,6 +18,10 @@
 // 资源去重门都要跳过它，但它**必须**能在 agent.skills 槽里往返，否则一个今天
 // 完全合法、能跑的代理无法 round-trip。
 
+//
+// 覆盖验收条款：AC-B2（域收窄）/ AC-B2b（name: late-bound）/ AC-B2d（wire 零变更）/ AC-B2h（agent skills 专属 codec）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
