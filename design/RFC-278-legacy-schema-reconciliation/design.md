@@ -1,6 +1,6 @@
 # RFC-278 · 技术设计
 
-状态：In Progress（用户已批准，并要求 live schema 精简）。先读 [`proposal.md`](./proposal.md) 的边界与 C1–C7。
+状态：Done（2026-08-10；`52196e1d`，CI 31380410981，live migration 与 UI probe 全绿）。先读 [`proposal.md`](./proposal.md) 的边界与 C1–C7。
 
 ## 1. 已验证现场
 

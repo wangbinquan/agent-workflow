@@ -1,6 +1,6 @@
 # RFC-278 · 实施计划
 
-状态：In Progress（用户已批准；实施按 live schema 精简方向调整）
+状态：Done（2026-08-10；`52196e1d`，CI 31380410981，live migration 与 UI probe 全绿）
 
 ## 1. 边界
 
@@ -40,5 +40,5 @@
 - [x] recovery 数据等值、旧 MCP receipt reset、retired tables 删除、最终 physical canonical、second reopen 通过。
 - [x] 无 retired runtime launcher/sandbox/identity 入口回流。
 - [x] full local gate 与真实 OpenCode probe 成功。
-- [ ] exact/containing SHA CI 终态成功。
-- [ ] 真实 DB 自动备份后升级；quick/FK/schema admission 与 UI probe 均通过。
+- [x] exact SHA `52196e1d` 的 CI 31380410981 终态成功（36 jobs）。
+- [x] 真实 DB 自动备份后升级；quick/FK/schema admission 与 UI probe 均通过。

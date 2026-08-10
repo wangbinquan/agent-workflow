@@ -1,6 +1,6 @@
 # RFC-278 · 历史迁移漂移受控收敛
 
-状态：In Progress（2026-08-10；用户已批准实施，并要求 live schema 该精简则精简）
+状态：Done（2026-08-10；`52196e1d`，CI 31380410981，live migration 与 UI probe 全绿）
 
 ## 1. 背景
 
