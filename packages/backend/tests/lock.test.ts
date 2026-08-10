@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { acquireLock, DaemonLockHeldError, writePidFileForTest } from '../src/util/lock'
+import {
+  acquireLock,
+  adoptCurrentProcessLock,
+  DaemonLockHeldError,
+  writePidFileForTest,
+} from '../src/util/lock'
 
 describe('flock (PID-file)', () => {
   let tmp: string
@@ -43,6 +48,24 @@ describe('flock (PID-file)', () => {
     } finally {
       first.release()
     }
+  })
+
+  test('a Bun watch generation can adopt a lock owned by its current process', () => {
+    const firstGeneration = acquireLock(lockPath)
+    try {
+      const replacementGeneration = adoptCurrentProcessLock(lockPath)
+      expect(replacementGeneration.pid).toBe(process.pid)
+      expect(replacementGeneration.path).toBe(lockPath)
+      replacementGeneration.release()
+      expect(existsSync(lockPath)).toBe(false)
+    } finally {
+      firstGeneration.release()
+    }
+  })
+
+  test('lock adoption refuses a PID other than the current process', () => {
+    writePidFileForTest(lockPath, process.pid + 1)
+    expect(() => adoptCurrentProcessLock(lockPath)).toThrow('not owned by current process')
   })
 
   test('release is idempotent and unlinks the PID file', () => {

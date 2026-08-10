@@ -18,7 +18,7 @@
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
-import type { WorkflowEdge } from '@agent-workflow/shared'
+import type { WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
 import { resolveUpstreamInputs } from '../src/services/scheduler'
@@ -312,5 +312,72 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
 
     expect(inputs).toEqual({ normal: 'REAL-DATAFLOW' })
     expect(consumed).toEqual({ source: '01SOURCE' })
+  })
+
+  test('PB7: prompt-injected system channels never become ordinary upstream inputs', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    await seedRunWithOutput(
+      db,
+      taskId,
+      'source',
+      { id: '01SOURCE', status: 'done' },
+      { out: 'REAL-DATAFLOW' },
+    )
+    await seedRunWithOutput(
+      db,
+      taskId,
+      'questioner',
+      { id: '01QUESTIONER', status: 'done' },
+      { __clarify__: 'REAL-CROSS-CLARIFY-DEPENDENCY' },
+    )
+    await seedRunWithOutput(
+      db,
+      taskId,
+      'cross',
+      { id: '01CROSS', status: 'done' },
+      {
+        to_questioner: 'PROMPT-INJECTED-QUESTIONER-RESPONSE',
+        to_designer: 'PROMPT-INJECTED-DESIGNER-FEEDBACK',
+      },
+    )
+    await seedRunWithOutput(
+      db,
+      taskId,
+      'clarify',
+      { id: '01CLARIFY', status: 'done' },
+      { answers: 'PROMPT-INJECTED-CLARIFY-RESPONSE' },
+    )
+
+    const edges = [
+      edge('source', 'out', 'sink', 'normal'),
+      edge('cross', 'to_questioner', 'sink', '__clarify_response__'),
+      edge('clarify', 'answers', 'sink', '__clarify_response__'),
+      edge('cross', 'to_designer', 'sink', '__external_feedback__'),
+      edge('questioner', '__clarify__', 'cross', 'questions'),
+    ]
+    const definition: WorkflowDefinition = {
+      $schema_version: 4,
+      inputs: [],
+      nodes: [
+        { id: 'source', kind: 'agent-single' },
+        { id: 'questioner', kind: 'agent-single' },
+        { id: 'cross', kind: 'clarify-cross-agent' },
+        { id: 'clarify', kind: 'clarify' },
+        { id: 'sink', kind: 'agent-single' },
+      ],
+      edges,
+    }
+
+    const sink = await resolveUpstreamInputs(db, taskId, edges, 'sink', 0, log, definition)
+    expect(sink.inputs).toEqual({ normal: 'REAL-DATAFLOW' })
+    expect(sink.consumed).toEqual({ source: '01SOURCE' })
+
+    // The agent question edge into cross-agent clarify is deliberately a real
+    // dependency. Only the prompt-injected response/feedback directions skip
+    // ordinary dataflow resolution.
+    const cross = await resolveUpstreamInputs(db, taskId, edges, 'cross', 0, log, definition)
+    expect(cross.inputs).toEqual({ questions: 'REAL-CROSS-CLARIFY-DEPENDENCY' })
+    expect(cross.consumed).toEqual({ questioner: '01QUESTIONER' })
   })
 })

@@ -83,6 +83,34 @@ describe('parseSessionTree — root composition', () => {
     })
     expect(tree.sessionId).toBe('derived-root')
   })
+
+  test('unparsed stdout and stderr remain visible as coalesced diagnostics', () => {
+    const tree = parseSessionTree({
+      rootSessionId: null,
+      promptText: null,
+      startedAt: null,
+      primaryAgentName: 'coder',
+      events: [
+        evt({ sessionId: null, kind: 'text', payload: 'usage: agent-workflow <command>' }),
+        evt({ sessionId: null, kind: 'text', payload: 'commands: start | stop | status' }),
+        evt({ sessionId: null, kind: 'stderr', payload: 'unknown subcommand: probe' }),
+      ],
+    })
+
+    expect(tree.sessionId).toBe('(unknown)')
+    expect(tree.messages).toEqual([
+      expect.objectContaining({
+        kind: 'assistant-text',
+        text: 'usage: agent-workflow <command>\ncommands: start | stop | status',
+        messageId: null,
+      }),
+      expect.objectContaining({
+        kind: 'assistant-text',
+        text: '[stderr]\nunknown subcommand: probe',
+        messageId: null,
+      }),
+    ])
+  })
 })
 
 describe('parseSessionTree — tool calls', () => {

@@ -213,6 +213,15 @@ export interface RunNodeOptions {
    *  `runIdsWithOutput` signal (design.md §2.4). Preserves the pre-RFC-184
    *  invariant that host runs write zero node_run_outputs rows. */
   persistDeclaredOutputs?: boolean
+  /**
+   * Defaults to true. Workgroup host turns set false because their projected
+   * wg_* list contains both required and optional protocol ports; the
+   * role-specific parser immediately after runNode is the authority that
+   * rejects a missing required port. The generic runner otherwise cannot tell
+   * an optional omitted wg_messages from a broken output and emits a false
+   * warning on every valid quiet worker turn.
+   */
+  warnMissingDeclaredPorts?: boolean
   /** Skills used by this agent. */
   skills: ResolvedSkill[]
   /**
@@ -1589,7 +1598,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         } else {
           const parsed = parseEnvelope(envelope, opts.agent.outputs, envelopeNonce)
           outputs = Object.fromEntries(parsed.ports)
-          if (parsed.missingDeclared.length > 0) {
+          if (parsed.missingDeclared.length > 0 && opts.warnMissingDeclaredPorts !== false) {
             log.warn('agent omitted declared ports', {
               missing: parsed.missingDeclared,
               nodeRunId: opts.nodeRunId,

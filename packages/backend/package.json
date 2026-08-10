@@ -8,7 +8,7 @@
     "agent-workflow": "src/main.ts"
   },
   "scripts": {
-    "dev": "bun run --watch src/main.ts start",
+    "dev": "AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS=35000 bun run --watch src/main.ts start",
     "start": "bun run src/main.ts start",
     "build": "echo 'use scripts/build-binary.ts (M5)'",
     "lint": "eslint src tests --max-warnings=0 --cache --cache-strategy content --cache-location ../../node_modules/.cache/eslint/backend",

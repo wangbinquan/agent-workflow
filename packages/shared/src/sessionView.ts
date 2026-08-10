@@ -224,6 +224,14 @@ export function parseSessionTree(input: ParseSessionInput): SessionTree {
     const tools = new Map<string, SessionToolCall | SessionSubagentCall>()
     const textsByMessageId = new Map<string, SessionAssistantText>()
     const reasoningByMessageId = new Map<string, SessionAssistantReasoning>()
+    // A failed launcher can emit only plain stdout/stderr (no runtime JSON
+    // envelope and therefore no session id). Those rows are still the most
+    // useful execution evidence; dropping them makes a non-zero event count
+    // open into an empty Session panel. Coalesce adjacent lines from the same
+    // stream so a CLI usage dump stays readable instead of becoming dozens of
+    // one-line message blocks.
+    let rawDiagnostic: SessionAssistantText | null = null
+    let rawDiagnosticKind: 'text' | 'stderr' | null = null
     // Claude dialect: exact-duplicate guard for user-message text. The same
     // subagent prompt line can arrive from both the live stream and the
     // captured transcript (and is re-synthesized from task_started.prompt).
@@ -367,7 +375,28 @@ export function parseSessionTree(input: ParseSessionInput): SessionTree {
 
     for (const evt of bucket) {
       const parsed = parsedByEvt.get(evt) ?? null
-      if (parsed === null || !isRecord(parsed)) continue
+      if (!isRecord(parsed)) {
+        if ((evt.kind === 'text' || evt.kind === 'stderr') && evt.payload !== '') {
+          if (rawDiagnostic !== null && rawDiagnosticKind === evt.kind) {
+            rawDiagnostic.text += `\n${evt.payload}`
+          } else {
+            rawDiagnostic = {
+              kind: 'assistant-text',
+              text: evt.kind === 'stderr' ? `[stderr]\n${evt.payload}` : evt.payload,
+              ts: evt.ts,
+              messageId: null,
+            }
+            rawDiagnosticKind = evt.kind
+            messages.push(rawDiagnostic)
+          }
+          continue
+        }
+        rawDiagnostic = null
+        rawDiagnosticKind = null
+        continue
+      }
+      rawDiagnostic = null
+      rawDiagnosticKind = null
       const part = parsed.part
       if (!isRecord(part)) {
         handleClaudeRow(evt, parsed)

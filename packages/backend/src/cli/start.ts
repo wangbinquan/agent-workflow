@@ -52,12 +52,12 @@ import {
   setMemoryDistillLangProvider,
   startMemoryDistillLoop,
 } from '@/services/memoryDistillScheduler'
-import { acquireLock, DaemonLockHeldError, type Lock } from '@/util/lock'
+import { acquireLock, adoptCurrentProcessLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
-import { startControlListener } from '@/services/controlListener'
+import { readControlFile, requestShutdown, startControlListener } from '@/services/controlListener'
 import { buildWebSocketAdapter } from '@/ws/server'
 import { isBootstrapRequired } from '@/services/authLoginPolicy'
 import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -66,6 +66,68 @@ import { join } from 'node:path'
 export interface StartOptions {
   port?: number
   host?: string
+}
+
+const MAX_DEV_LOCK_HANDOFF_MS = 60_000
+
+function devLockHandoffMs(): number {
+  const raw = process.env.AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS
+  if (raw === undefined) return 0
+  const parsed = Number(raw)
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) return 0
+  return Math.min(parsed, MAX_DEV_LOCK_HANDOFF_MS)
+}
+
+/**
+ * Bun --watch keeps the old generation alive until its replacement is ready.
+ * A daemon cannot become ready while the old generation owns the PID lock, so
+ * waiting alone deadlocks. Dev daemons advertise handoff eligibility in their
+ * authenticated loopback control file; the replacement asks that exact PID to
+ * drain, then waits for its lock. Normal `start` daemons never opt in and retain
+ * the fail-fast singleton contract.
+ */
+async function acquireStartLock(
+  lockPath: string,
+  onWait: (owner: DaemonLockHeldError, maxWaitMs: number) => void,
+  onShutdownRequested: (owner: DaemonLockHeldError) => void,
+  onSameProcessAdopted: (owner: DaemonLockHeldError) => void,
+): Promise<Lock> {
+  const maxWaitMs = devLockHandoffMs()
+  const deadline = Date.now() + maxWaitMs
+  let announced = false
+  let shutdownRequested = false
+  for (;;) {
+    try {
+      return acquireLock(lockPath)
+    } catch (error) {
+      const remaining = deadline - Date.now()
+      if (!(error instanceof DaemonLockHeldError) || maxWaitMs === 0 || remaining <= 0) {
+        throw error
+      }
+      if (error.pid === process.pid) {
+        const adopted = adoptCurrentProcessLock(lockPath)
+        onSameProcessAdopted(error)
+        return adopted
+      }
+      if (!announced) {
+        announced = true
+        onWait(error, maxWaitMs)
+      }
+      if (!shutdownRequested) {
+        const endpoint = readControlFile(Paths.controlFile)
+        if (endpoint !== null && endpoint.pid === error.pid) {
+          // The endpoint belongs to the live lock owner, but only an old dev
+          // generation may be replaced. A manually started daemon stays safe.
+          if (endpoint.devWatch !== true) throw error
+          const outcome = await requestShutdown(endpoint, Math.min(5_000, remaining))
+          if (outcome !== 'accepted') throw error
+          shutdownRequested = true
+          onShutdownRequested(error)
+        }
+      }
+      await Bun.sleep(Math.min(50, remaining))
+    }
+  }
 }
 
 /** RFC-213 — human-facing fail-closed message: list backups + the restore command. */
@@ -139,7 +201,29 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // 2. Single-instance lock.
   let lock: Lock
   try {
-    lock = acquireLock(Paths.lock)
+    lock = await acquireStartLock(
+      Paths.lock,
+      (owner, maxWaitMs) => {
+        log.info('waiting for previous daemon lock handoff', {
+          replacementPid: process.pid,
+          pid: owner.pid,
+          lock: owner.lockPath,
+          maxWaitMs,
+        })
+      },
+      (owner) => {
+        log.info('requested previous dev daemon shutdown', {
+          pid: owner.pid,
+          lock: owner.lockPath,
+        })
+      },
+      (owner) => {
+        log.info('adopted current-process lock for Bun watch generation', {
+          pid: owner.pid,
+          lock: owner.lockPath,
+        })
+      },
+    )
   } catch (err) {
     if (err instanceof DaemonLockHeldError) {
       log.error('another daemon is already running', { pid: err.pid, lock: err.lockPath })
@@ -904,6 +988,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // SAME `shutdown()`.
   const controlListener = startControlListener({
     controlFilePath: Paths.controlFile,
+    devWatch: devLockHandoffMs() > 0,
     onShutdown: () => {
       removeDaemonInfo()
       void shutdown('control-shutdown')

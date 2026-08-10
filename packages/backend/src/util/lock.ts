@@ -95,6 +95,34 @@ export function acquireLock(lockPath: string): Lock {
   throw new Error(`acquireLock: failed to acquire ${lockPath} after retry`)
 }
 
+/**
+ * Adopt the PID lock across an in-process Bun `--watch` generation restart.
+ *
+ * Bun tears down the old generation's servers but evaluates the replacement in
+ * the same OS process, so the normal process-exit lock cleanup never runs. This
+ * helper is deliberately narrower than stale-lock recovery: it succeeds only
+ * when the file still names this exact process. Callers must separately gate it
+ * to an explicit development-watch mode.
+ */
+export function adoptCurrentProcessLock(lockPath: string): Lock {
+  const pid = readPidFromLock(lockPath)
+  if (pid !== process.pid) {
+    throw new Error(`cannot adopt ${lockPath}: lock is not owned by current process ${process.pid}`)
+  }
+
+  let released = false
+  const release = (): void => {
+    if (released) return
+    released = true
+    try {
+      if (readPidFromLock(lockPath) === pid) unlinkSync(lockPath)
+    } catch {
+      // Lock file gone or unreadable; nothing to do.
+    }
+  }
+  return { release, path: lockPath, pid }
+}
+
 /** Read the daemon PID from a lock file. Returns null if missing/garbled. */
 export function readPidFromLock(lockPath: string): number | null {
   try {

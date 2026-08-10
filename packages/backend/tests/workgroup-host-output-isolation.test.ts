@@ -36,6 +36,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from '../src/services/runner'
 import { renderWgProtocolBlock, wgHostRolePorts } from '../src/services/workgroup/context'
+import type { Logger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -245,7 +246,11 @@ function runLeader(
   h: Harness,
   nodeRunId: string,
   agent: Agent,
-  opts: { persistDeclaredOutputs?: boolean } = {},
+  opts: {
+    persistDeclaredOutputs?: boolean
+    warnMissingDeclaredPorts?: boolean
+    log?: Logger
+  } = {},
 ): Promise<Awaited<ReturnType<typeof runNode>>> {
   return withEnv(
     {
@@ -269,8 +274,12 @@ function runLeader(
         appHome: h.appHome,
         opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
         db: h.db,
+        ...(opts.log === undefined ? {} : { log: opts.log }),
         ...(opts.persistDeclaredOutputs !== undefined
           ? { persistDeclaredOutputs: opts.persistDeclaredOutputs }
+          : {}),
+        ...(opts.warnMissingDeclaredPorts !== undefined
+          ? { warnMissingDeclaredPorts: opts.warnMissingDeclaredPorts }
           : {}),
       }),
   )
@@ -320,6 +329,27 @@ describe('RFC-184 — host projection over real runNode', () => {
     expect(await outputRows(h.db, nodeRunId)).toHaveLength(0)
   })
 
+  test('valid host omission of optional wg_messages does not emit a false warning', async () => {
+    const warnings: string[] = []
+    const log: Logger = {
+      debug: () => {},
+      info: () => {},
+      warn: (message) => warnings.push(message),
+      error: () => {},
+      child: () => log,
+    }
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const result = await runLeader(h, nodeRunId, projectLeader(makeCoderAgent()), {
+      persistDeclaredOutputs: false,
+      warnMissingDeclaredPorts: false,
+      log,
+    })
+
+    expect(result.status).toBe('done')
+    expect(result.outputs[WG_PORT_MESSAGES]).toBe('')
+    expect(warnings).not.toContain('agent omitted declared ports')
+  })
+
   // 对照：同样投影 agent，但不传守卫（缺省 persist）→ 落库。证明"零行"确由守卫产生，
   // 而非投影本身；也证明守卫只作用于 host 轮（缺省＝普通节点行为）。
   test('WITHOUT the guard the same run WOULD persist rows (guard is load-bearing)', async () => {
@@ -350,6 +380,7 @@ describe('RFC-184 — source wiring locks', () => {
     const src = read('scheduler.ts')
     expect(src).toContain('outputKinds: undefined')
     expect(src).toContain('persistDeclaredOutputs: false')
+    expect(src).toContain('warnMissingDeclaredPorts: false')
     expect(src).toContain("v !== ''")
   })
 

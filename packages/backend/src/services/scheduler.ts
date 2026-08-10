@@ -1015,7 +1015,9 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         agent: hostAgent,
         // RFC-184 §2.4: host runs never persist their protocol ports into
         // node_run_outputs (they'd trip clarify-aging runIdsWithOutput).
-        ...(req.hostOutputPorts !== undefined ? { persistDeclaredOutputs: false } : {}),
+        ...(req.hostOutputPorts !== undefined
+          ? { persistDeclaredOutputs: false, warnMissingDeclaredPorts: false }
+          : {}),
         runtime: frozen.protocol,
         runtimeBinary: frozen.binary,
         runtimeParams: frozen.params,
@@ -9338,12 +9340,21 @@ export async function resolveUpstreamInputs(
   parents?: ReadonlyMap<string, string>,
 ): Promise<{ inputs: Record<string, string>; consumed: Record<string, string> }> {
   const grouped = new Map<string, string[]>()
-  // Fanout boundary edges are structural mirrors, not ordinary row-to-row
-  // dataflow. wrapper-input values are injected by dispatchFanoutShard and
-  // wrapper-output values are materialized by runFanoutWrapperNode. Reading
-  // either here would observe the still-running wrapper/aggregator row, warn
-  // about a "missing" upstream, and rely on a later overwrite to be correct.
-  const incoming = edges.filter((e) => e.target.nodeId === nodeId && e.boundary === undefined)
+  const kindById = new Map(definition?.nodes.map((node) => [node.id, node.kind]) ?? [])
+  // Fanout boundary edges are structural mirrors, and clarify/cross-clarify
+  // response edges are prompt-injected system channels — neither is ordinary
+  // row-to-row dataflow. Reading them here would either observe a still-running
+  // wrapper/channel row (and emit a false "missing upstream" warning) or, when
+  // an older channel output exists, inject it into a reserved agent input and
+  // record false consumed provenance. Keep agent.__clarify__ → cross-clarify:
+  // channelEdgeDataflowSkip deliberately treats that direction as a real
+  // dependency when the target kind is clarify-cross-agent.
+  const incoming = edges.filter(
+    (e) =>
+      e.target.nodeId === nodeId &&
+      e.boundary === undefined &&
+      !channelEdgeDataflowSkip(e, (targetId) => kindById.get(targetId)),
+  )
   // RFC-074 provenance: which upstream node_run each source edge actually read.
   // Keyed by source nodeId — all edges from the same source resolve to the same
   // picked run, so this stays consistent across multi-port fan-in.

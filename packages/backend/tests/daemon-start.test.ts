@@ -303,6 +303,62 @@ printf '%s\\n' 'stub-opencode custom-build'
       await first.exited
     }
   })
+
+  test('a dev watcher start cannot replace a regular daemon', async () => {
+    const first = spawnDaemon(env)
+    try {
+      const { url } = await waitForReady(first.stdout, 10_000)
+
+      const second = spawnDaemon({ ...env, AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS: '3000' })
+      expect(await second.exited).toBe(1)
+      expect(await new Response(second.stderr).text()).toContain(
+        'another daemon is already running',
+      )
+
+      // Probing a regular owner's control endpoint must not send it a shutdown
+      // request as a side effect of starting the development command.
+      expect((await fetch(`${url}health`)).status).toBe(200)
+    } finally {
+      first.kill('SIGTERM')
+      await first.exited
+    }
+  })
+
+  test('dev watcher replacement drains the previous generation before taking its lock', async () => {
+    const devEnv = { ...env, AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS: '3000' }
+    const first = spawnDaemon(devEnv)
+    let second: ReturnType<typeof spawnDaemon> | undefined
+    try {
+      await waitForReady(first.stdout, 10_000)
+      second = spawnDaemon(devEnv)
+
+      // Bun --watch does not retire the old generation until its replacement
+      // is ready. The replacement must therefore request the old dev daemon's
+      // normal graceful shutdown itself; waiting for Bun creates a deadlock.
+      const [firstExitCode, { url }] = await Promise.all([
+        first.exited,
+        waitForReady(second.stdout, 10_000),
+      ])
+      expect(firstExitCode).toBe(0)
+      const health = await fetch(`${url}health`)
+      expect(health.status).toBe(200)
+    } finally {
+      try {
+        first.kill('SIGTERM')
+      } catch {
+        /* already stopped */
+      }
+      await first.exited
+      if (second !== undefined) {
+        try {
+          second.kill('SIGTERM')
+        } catch {
+          /* old behavior exits before the handoff */
+        }
+        await second.exited
+      }
+    }
+  }, 15_000)
 })
 
 // --- helpers ---

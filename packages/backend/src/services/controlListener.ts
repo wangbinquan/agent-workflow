@@ -51,6 +51,8 @@ export interface ControlEndpoint {
   nonce: string
   /** The daemon's pid, so `stop` can fall back without re-reading the lock. */
   pid: number
+  /** Whether another Bun dev-watch generation may request a graceful handoff. */
+  devWatch?: true
 }
 
 export interface ControlListener {
@@ -70,6 +72,8 @@ export interface ControlListener {
 export function startControlListener(options: {
   controlFilePath: string
   onShutdown: () => void
+  /** Advertise that this daemon belongs to the package's Bun dev watcher. */
+  devWatch?: boolean
   /** Injected for tests; defaults to the real platform. */
   platform?: NodeJS.Platform
 }): ControlListener {
@@ -112,6 +116,7 @@ export function startControlListener(options: {
     url: `http://${server.hostname}:${server.port}`,
     nonce,
     pid: process.pid,
+    ...(options.devWatch === true ? { devWatch: true as const } : {}),
   }
   writeControlFile(options.controlFilePath, endpoint, platform)
 
@@ -167,7 +172,13 @@ export function readControlFile(path: string, contents?: string): ControlEndpoin
     // Loopback only, always — a control file naming any other host is either
     // corrupt or planted, and either way must not be POSTed to.
     if (!candidate.url.startsWith('http://127.0.0.1:')) return null
-    return { url: candidate.url, nonce: candidate.nonce, pid: candidate.pid }
+    if (candidate.devWatch !== undefined && candidate.devWatch !== true) return null
+    return {
+      url: candidate.url,
+      nonce: candidate.nonce,
+      pid: candidate.pid,
+      ...(candidate.devWatch === true ? { devWatch: true as const } : {}),
+    }
   } catch {
     return null
   }
