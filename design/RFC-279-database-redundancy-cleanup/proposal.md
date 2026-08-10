@@ -1,6 +1,6 @@
 # RFC-279 · 数据库冗余字段收口
 
-状态：In Progress（2026-08-10；能力影响已批准，实现与完整本地门禁已通过，等待发布 CI）
+状态：Done（2026-08-10；实现 `fa4fdcc3` 已进入 `main`，exact-SHA 主 CI run 31396152948 的 36 个 job 与 git-protocols-e2e run 31396155818 全部成功）
 
 ## 1. 背景
 

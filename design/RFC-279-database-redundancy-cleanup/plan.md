@@ -1,6 +1,6 @@
 # RFC-279 · 实施计划
 
-状态：In Progress；用户已批准 proposal §4，0146 已落库，实现与完整本地门禁已通过，等待发布 CI。
+状态：Done；用户已批准 proposal §4，实现 `fa4fdcc3` 已进入 `main`，exact-SHA 主 CI 与 git-protocols-e2e 均终态成功。
 
 ## T1 · RFC 与基线
 
@@ -41,7 +41,7 @@
 - [x] backend typecheck、lint、format、depcheck、backend 全量。
 - [x] `bun run gate:local`（7m14s；四个 backend 分片、shared 1972、frontend 6259，零失败）。
 - [x] 精确 diff/path 复核，不覆盖并发 WIP；实现门复审无新增 finding。
-- [ ] 用户已授权；等待 exact-path commit/push，并按 exact/containing SHA 报 CI。
+- [x] 用户已授权；exact-path 实现提交 `fa4fdcc3` 已推送，远端祖先证明通过；主 CI run 31396152948（36/36）与 git-protocols-e2e run 31396155818 成功。
 
 ## 拆分建议
 

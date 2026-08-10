@@ -1,6 +1,6 @@
 # RFC-279 · 技术设计
 
-状态：Approved / Implemented。先读 [`proposal.md`](./proposal.md) 的能力影响清单与 AC-1～AC-9。
+状态：Done（实现 `fa4fdcc3`；exact-SHA CI 全绿）。先读 [`proposal.md`](./proposal.md) 的能力影响清单与 AC-1～AC-9。
 
 ## 1. Migration 排序与并发边界
 
