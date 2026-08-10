@@ -7,9 +7,9 @@
 //       dispatch survives a later edit of the mutable runtimes row — resume /
 //       frozenRuntimeOfSession read the snapshot; legacy runtime_params_json
 //       (no __configDir key) reads back as the protocol default;
-//   (4) spawn: custom env/name land in the business spawn env + skills staging
-//       path for BOTH drivers, and the DEFAULT env var name is ABSENT when a
-//       custom one is configured;
+//   (4) spawn: OpenCode custom env/name land in its run config; Claude keeps the
+//       inherited user config/auth env and uses the frozen name for an ephemeral
+//       worktree project-config skill projection (RFC-276 natural runtime);
 //   (5) the runner-preamble redundancy fix: claude business spawns create no
 //       `.opencode` dir (pre-RFC-154 the runtime-blind preamble staged skills
 //       into `.opencode` even for claude — a dead copy);
@@ -286,6 +286,8 @@ function mkSpawnCtx(
   runRoot: string,
   overrides: Partial<BusinessNodeSpawnContext>,
 ): BusinessNodeSpawnContext {
+  const worktreePath = join(runRoot, 'worktree')
+  mkdirSync(worktreePath, { recursive: true })
   return {
     agent: mkAgent('root-agent'),
     prompt: 'P',
@@ -295,7 +297,7 @@ function mkSpawnCtx(
     plugins: [],
     resolvedParamsByAgent: new Map(),
     skills: [],
-    worktreePath: '/wt',
+    worktreePath,
     runRoot,
     configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
     wantsInventory: false,
@@ -305,7 +307,7 @@ function mkSpawnCtx(
   }
 }
 
-describe('RFC-154 spawn — custom config-dir profile lands in env + staging path', () => {
+describe('RFC-154 spawn — frozen config-dir profile lands in the runtime-native projection', () => {
   test('opencode: custom env/name → FOO_DIR set, OPENCODE_CONFIG_DIR absent, skills under .foo', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc154-oc-'))
     // Codex impl-gate P2: even when the DAEMON's own environment carries the
@@ -346,44 +348,66 @@ describe('RFC-154 spawn — custom config-dir profile lands in env + staging pat
     }
   })
 
-  test('claude: custom env/name → BAR_DIR set, CLAUDE_CONFIG_DIR absent, skills under .bar, NO .opencode (redundancy fix)', async () => {
+  test('claude: custom name → worktree .bar skills while inherited auth config remains untouched', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc154-cc-'))
-    // Codex impl-gate P2 (claude side): poison the daemon env with the default
-    // key — the custom-env spawn must scrub it (see the opencode twin above).
+    const skillSource = join(runRoot, 'skill-source')
+    mkdirSync(skillSource, { recursive: true })
+    writeFileSync(join(skillSource, 'SKILL.md'), 'managed')
+    // Natural Claude must preserve the operator's real config/auth root. The
+    // runtime row's custom env name is not redirected to a fresh directory;
+    // configDir.name instead selects the project discovery path in the worktree.
     const prevEnv = process.env.CLAUDE_CONFIG_DIR
+    const prevCustomEnv = process.env.BAR_DIR
     process.env.CLAUDE_CONFIG_DIR = '/stale/daemon/value'
+    delete process.env.BAR_DIR
     try {
       const ctx = mkSpawnCtx(runRoot, {
-        runtimeCmd: ['cc'], // test head → credential bridge off
+        runtimeCmd: ['cc'],
         configDir: { env: 'BAR_DIR', name: '.bar' },
-        skills: [],
+        skills: [{ name: 'managed', sourceKind: 'managed', sourcePath: skillSource }],
       })
       const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(ctx)
-      expect(plan.env.BAR_DIR).toBe(join(runRoot, '.bar'))
-      expect(plan.env.CLAUDE_CONFIG_DIR).toBeUndefined()
-      expect(existsSync(join(runRoot, '.bar', 'skills'))).toBe(true)
+      expect(plan.env.BAR_DIR).toBeUndefined()
+      expect(plan.env.CLAUDE_CONFIG_DIR).toBe('/stale/daemon/value')
+      const projected = join(ctx.worktreePath, '.bar', 'skills', 'managed', 'SKILL.md')
+      expect(readFileSync(projected, 'utf8')).toBe('managed')
       // Regression lock (RFC-154): pre-154 the runner's runtime-blind preamble
       // created `.opencode` for EVERY run incl. claude — a dead copy the claude
       // binary never read. Locks the runner-preamble removal.
       expect(existsSync(join(runRoot, '.opencode'))).toBe(false)
+      await plan.cleanup?.()
+      expect(existsSync(projected)).toBe(false)
     } finally {
       if (prevEnv === undefined) delete process.env.CLAUDE_CONFIG_DIR
       else process.env.CLAUDE_CONFIG_DIR = prevEnv
+      if (prevCustomEnv === undefined) delete process.env.BAR_DIR
+      else process.env.BAR_DIR = prevCustomEnv
       rmSync(runRoot, { recursive: true, force: true })
     }
   })
 
-  test('claude: default profile → CLAUDE_CONFIG_DIR at <runRoot>/.claude (golden anchor)', async () => {
+  test('claude: default profile → worktree .claude projection without setting CLAUDE_CONFIG_DIR', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc154-cc2-'))
+    const skillSource = join(runRoot, 'skill-source')
+    mkdirSync(skillSource, { recursive: true })
+    writeFileSync(join(skillSource, 'SKILL.md'), 'managed')
+    const prevEnv = process.env.CLAUDE_CONFIG_DIR
+    delete process.env.CLAUDE_CONFIG_DIR
     try {
       const ctx = mkSpawnCtx(runRoot, {
         runtimeCmd: ['cc'],
         configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
+        skills: [{ name: 'managed', sourceKind: 'managed', sourcePath: skillSource }],
       })
       const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(ctx)
-      expect(plan.env.CLAUDE_CONFIG_DIR).toBe(join(runRoot, '.claude'))
-      expect(existsSync(join(runRoot, '.claude', 'skills'))).toBe(true)
+      expect(plan.env.CLAUDE_CONFIG_DIR).toBeUndefined()
+      const projected = join(ctx.worktreePath, '.claude', 'skills', 'managed', 'SKILL.md')
+      expect(readFileSync(projected, 'utf8')).toBe('managed')
+      await plan.cleanup?.()
+      expect(existsSync(projected)).toBe(false)
     } finally {
+      if (prevEnv === undefined) delete process.env.CLAUDE_CONFIG_DIR
+      else process.env.CLAUDE_CONFIG_DIR = prevEnv
       rmSync(runRoot, { recursive: true, force: true })
     }
   })
