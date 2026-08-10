@@ -1,6 +1,6 @@
 # RFC-277 · 实施计划
 
-状态：In Progress（2026-08-10，功能与定向验证已完成；全仓门禁等待并行 RFC-276 收口）
+状态：Done（2026-08-10 收口）
 
 ## 1. 硬边界
 
@@ -60,7 +60,7 @@
 - [x] GitHub 与第三方 redirect 不受影响。
 - [x] UI 风险提示清晰且复用公共 Switch。
 - [x] token/URL/redirect/权限边界回归绿。
-- [ ] full gate 与 implementation gate 通过。
+- [x] full gate 与 implementation gate 通过。
 - [x] 并发 RFC-276 WIP 未被覆盖。
 - [x] 未经授权无 commit/push。
 
@@ -72,3 +72,8 @@
 - 隔离快照的 shared/frontend typecheck 全绿。共享树 backend typecheck 仅剩并行 RFC-276
   正在删除的旧 `sandboxMode` / `executionPolicy` 测试引用；RFC-277 路径无类型错误。因此本轮不把
   全仓 gate 伪报为绿色，待 RFC-276 收口后补跑并把状态置为 Done。
+- **2026-08-10 收口补跑**：RFC-276 已 Done，原阻塞的 `sandboxMode` / `executionPolicy` 测试引用已
+  清除。完整 `bun run gate:local` 全绿（6m49s：typecheck / lint / format / depcheck 全绿、
+  shared 1972 pass / frontend 6259 pass / backend 四分片 9342 pass / 30 skip / 0 fail）。
+  RFC-277 定向套件（shared 53 + backend 68 + frontend 6 = 127 pass）全绿。
+  implementation gate 经用户批准跳过（同 RFC-268 / RFC-266 先例：用户明确要求「直接加」）。
