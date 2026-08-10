@@ -23,9 +23,8 @@
 // git-bash（`<root>\cmd\git.exe` → `<root>\bin\bash.exe`）而不是裸 `which('bash')`——后者会
 // 命中 `System32\bash.exe`（WSL 启动器）。GitHub 三个 runner 都预装 Git，故三平台可跑。
 //
-// 不勾 `network: deny` 是刻意的：harness 把 daemon 起在 `sandboxMode: 'off'`，而 RFC-253 的
-// fail-closed 语义是 `outer-netless-v1` 在 enforce/warn/off **三档一律 blocked**（实现门 F1
-// 那条），勾上等于让这条链必然拿不到准入。默认档 `allow` 才是这里要覆盖的形状。
+// RFC-276 后脚本使用自然子进程路径；本用例不再声明或测试已退役的
+// network-deny / 平台隔离准入，只验证用户业务链本身。
 
 import { expect, test, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'

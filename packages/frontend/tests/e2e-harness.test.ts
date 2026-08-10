@@ -129,6 +129,9 @@ setInterval(() => {}, 1_000)
       expect(existsSync(handle.home)).toBe(true)
       expect(handle.token).toBe('ABC123')
       expect(handle.bootstrapToken).toBe('ABC123')
+      expect(JSON.parse(readFileSync(join(handle.home, 'config.json'), 'utf8'))).not.toHaveProperty(
+        'sandboxMode',
+      )
       await handle.stop()
       expect(existsSync(handle.home)).toBe(false)
       handle = undefined

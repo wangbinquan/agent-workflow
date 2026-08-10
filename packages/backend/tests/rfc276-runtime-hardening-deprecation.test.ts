@@ -15,6 +15,7 @@ const ACTIVE_ROOTS = [
   resolve(REPO_ROOT, 'packages/backend/src'),
   resolve(REPO_ROOT, 'packages/shared/src'),
   resolve(REPO_ROOT, 'packages/frontend/src'),
+  resolve(REPO_ROOT, 'e2e'),
 ]
 
 interface ActiveFile {

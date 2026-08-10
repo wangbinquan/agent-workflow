@@ -18,6 +18,9 @@ d96a5c729f71bcdc10531cc8aef6ee7c3885ef94:packages/backend/tests/rfc269-code-host
 a7d1e3183176a31d733899c31d6613240de6870e:packages/backend/tests/rfc269-code-host-connections.test.ts:generic-api-key:195
 a7d1e3183176a31d733899c31d6613240de6870e:packages/backend/tests/rfc269-code-host-connections.test.ts:generic-api-key:228
 a7d1e3183176a31d733899c31d6613240de6870e:packages/backend/tests/rfc269-code-host-execution.test.ts:generic-api-key:69
+# RFC-277 在同一假凭据后增加 TLS 字段，新提交重新触发了历史指纹；
+# 当前行已改为同行 `gitleaks:allow`，下面只钉已推送的历史 commit。
+af5d0826921bb01e6085194f19c7ae81784ebedc:packages/backend/tests/rfc269-code-host-execution.test.ts:generic-api-key:80
 
 # RFC-271 配置包脱敏投影的测试夹具。它们是**合成**串（`FAKEtok_` / `FAKEq_`），
 # 用来验证 argv 只换命中项、URL 换值后仍是合法 http URL 这两条判据。

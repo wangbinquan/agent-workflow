@@ -73,11 +73,10 @@ function ghDeps(
   overrides: Partial<Parameters<typeof executeCodeHostCall>[1]> = {},
 ): Parameters<typeof executeCodeHostCall>[1] {
   return {
-    // gitleaks:allow
     connection: {
       provider: 'github',
       baseUrl: GH_BASE,
-      token: 'aw-fixture-gh-5678',
+      token: 'aw-fixture-gh-5678', // gitleaks:allow
       rejectUnauthorized: true,
     },
     ctx: { ports: {}, trigger: null },

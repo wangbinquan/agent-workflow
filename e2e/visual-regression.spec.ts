@@ -60,7 +60,6 @@ const VISUAL_RUNTIME_STATUS = {
       isDefault: false,
     },
   ],
-  sandbox: { mode: 'off', mechanism: null, available: false },
 } as const
 
 let daemon: DaemonHandle | undefined
