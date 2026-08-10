@@ -27,6 +27,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
+import { stringify as stringifyYaml } from 'yaml'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
@@ -41,9 +42,10 @@ import {
   workgroups,
 } from '../src/db/schema'
 import { decodeZip } from '../src/services/skill-zip'
+import { encodeZip } from '../src/util/zip'
 import { createManagedSkillWithFiles } from '../src/services/skill'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
-import { parseResourcePackage } from '../src/services/resourcePackage/parse'
+import { MAX_DECLARED_BUILTINS, parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { buildPackagePreview, verifyPreviewToken } from '../src/services/resourcePackage/preview'
 import { commitResourcePackage } from '../src/services/resourcePackage/commit'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -1284,21 +1286,75 @@ describe('AC-9 · 预检的 built-in 校验必须**与数量无关**（第四轮
     }
   }
 
-  test('**最大合法输入**：65536 个 built-in 声明，预检必须给出业务错误而不是 500', async () => {
-    // 第五轮 P2-3。把 N+1 换成一条**无界**的 `IN` 只是换了个形状的问题：SQLite 的绑定
-    // 变量有上限，实测一个 6.8MB（远低于上传上限）的合法包声明 65536 个 built-in，就让
-    // `inArray` 抛 `SQLite query expected 0 values, received 65536`，预检 500。
+  test('**声明数量有上限**：超限的包在解析期就被拒（不是等到预检去扛）', async () => {
+    // 第六轮 P2-5。上一版我只解决了「不 500」（把无界 `IN` 改成分块），但没解决根本问题：
+    // **`manifest.builtins` 的长度由上传者决定**，而它直接决定预检要做多少查询、在内存里
+    // 留多大中间结构。实测一个 7.8MiB 的合法包（远低于 64MiB 上传上限）声明 65536 个
+    // built-in：预检额外吃约 23MiB RSS、错误载荷 JSON 达 437 万字符。
     //
-    // 预检是**未认证内容驱动**的路径，500 比慢更糟：慢只是慢，500 是把用户输入变成了
-    // 服务端错误。
-    //
-    // ⚠️ 上一版的查询次数守卫**掩盖了这条**——它只比 3 项与 30 项，而且 `.catch(() =>
-    // undefined)` 把异常吞了。这里必须断言**具体的业务错误码**，不能只断言「没抛」。
+    // 把 zip 体积当唯一的资源上界是不够的——**压缩比让「合法包」与「服务端要做多少工作」
+    // 彻底脱钩**。所以在**解析期**就按条数拒绝：框架内置件实际是个位数，1000 已宽出两个
+    // 数量级。
+    // ⚠️ 夹具必须让 `manifest.builtins` 与 bundle 的引用**真的对得上**，否则包会因
+    // 「builtins 与 bundle 不匹配」被拒——那样测试是为**错误的理由**通过的（第一版正是
+    // 如此：去掉数量上限它照样绿）。所以 bundle 里要有一个真的引用了这 1001 个 built-in
+    // 的 workflow-create op。
+    const names = Array.from({ length: MAX_DECLARED_BUILTINS + 1 }, (_, i) => `b${i}`)
+    const manifest = {
+      formatVersion: 1,
+      exportedAt: 0,
+      root: { slug: 'wf-x', type: 'workflow', name: 'x' },
+      resources: [{ slug: 'wf-x', type: 'workflow', name: 'x' }],
+      requirements: {},
+      secrets: [],
+      builtins: names.map((name) => ({ type: 'agent', name })),
+    }
+    const bundle = {
+      bundleVersion: 1,
+      ops: [
+        {
+          opId: 'op-1',
+          kind: 'workflow-create',
+          slug: 'wf-x',
+          payload: {
+            name: 'x',
+            description: '',
+            definition: {
+              $schema_version: 4,
+              inputs: [],
+              edges: [],
+              nodes: names.map((n, i) => ({
+                id: `n${i}`,
+                kind: 'agent-single',
+                agentRef: `builtin:agent/${n}`,
+              })),
+            },
+          },
+        },
+      ],
+      rootRef: 'local:wf-x',
+    }
+    const zip = encodeZip([
+      { path: 'manifest.yaml', bytes: new TextEncoder().encode(stringifyYaml(manifest)) },
+      { path: 'bundle.json', bytes: new TextEncoder().encode(JSON.stringify(bundle)) },
+    ])
+    const err = await parseResourcePackage(zip).then(
+      () => null,
+      (e: unknown) => e as { code?: string },
+    )
+    expect(err?.code).toBe('package-invalid')
+  })
+
+  test('缺失很多时，错误载荷**取样**而不是列全量', async () => {
+    // 上限挡住了极端情形，但错误路径本身也不该是放大器：把全部缺失项同时放进 message
+    // 和 details 时，`DomainError.toPayload()` 的 JSON 会随缺失数线性膨胀（65536 项实测
+    // 437 万字符——一个错误响应把请求体的放大又翻一倍）。
+    // 用户要的是「缺哪些」的**样例 + 总数**，不是一份上千行的清单。
     const dst = await makeInstance()
     try {
-      const declared = Array.from({ length: 65536 }, (_, i) => ({
+      const declared = Array.from({ length: 200 }, (_, i) => ({
         type: 'agent' as const,
-        name: `aw-builtin-${i}`,
+        name: `aw-missing-${i}`,
       }))
       const fake = {
         manifest: {
@@ -1316,11 +1372,20 @@ describe('AC-9 · 预检的 built-in 校验必须**与数量无关**（第四轮
         importId: ulid(),
       }).then(
         () => null,
-        (e: unknown) => e as { code?: string; message?: string },
+        (e: unknown) =>
+          e as {
+            code?: string
+            message?: string
+            details?: { missingBuiltins?: unknown[]; missingBuiltinCount?: number }
+          },
       )
-      // 业务错误码，不是 SQLite 抛出来的内部错误。
       expect(err?.code).toBe('package-builtin-missing')
-      expect(err?.message ?? '').not.toContain('SQLite')
+      // 总数要如实报出来。
+      expect(err?.message ?? '').toContain('200 framework built-in(s)')
+      expect(err?.details?.missingBuiltinCount).toBe(200)
+      // 但清单是取样的：details 里远少于 200 条，message 里带「and N more」。
+      expect((err?.details?.missingBuiltins ?? []).length).toBeLessThan(200)
+      expect(err?.message ?? '').toContain('more)')
     } finally {
       removeTempDirSync(dst.appHome)
     }

@@ -212,85 +212,46 @@ function testCorpus(): string {
 /**
  * 判断一份源码里是否**真的**存在断言调用。
  *
- * ⚠️ 第一版是「正则删注释后再 `includes('expect(')`」，实现门第五轮实测它**两个方向
- * 都错**：
- *   · 假绿：`const evidence = "https://expect("` —— 为了不误伤 URL 我给 `//` 加了「前面
- *     不是冒号」的特判，于是字符串字面量里的 `expect(` 原样留下，一个零断言的文件被判
- *     有断言；
- *   · 假红：`const s = "a//b"; expect(1).toBe(1)` —— 普通字符串里的 `//` 被当成行注释，
- *     把其后**真实的**断言一起删掉。
- * 我当时在注释里写「误伤方向是更严格，安全」，这个论断本身是错的。
+ * 这条判据被推翻过两次，轨迹值得留着——它是「用近似去替代定义」的标本：
  *
- * 正解不是把正则修得更花哨（那条路只会继续长特判），而是**换判据**：逐字符扫一遍，
- * 显式跟踪「是否在字符串 / 模板串 / 注释里」。这是个小状态机，几十行，但它对
- * 「什么是代码」给的是**定义**而不是近似。
+ *  · v1「正则删注释 + `includes('expect(')`」：为不误伤 URL 给 `//` 加了「前面不是冒号」
+ *    的特判，于是 `"https://expect("` 假绿；普通字符串里的 `//` 又会截掉其后的真断言
+ *    （假红）。我当时写的「误伤方向更严格，安全」两头都不成立。
+ *  · v2「手写逐字符状态机」：跟踪字符串/模板/注释，但它**不是词法器**——正则字符类
+ *    `/[//]/` 里的 `//` 当注释（假红）、JSX 文本 `<div>expect(</div>` 当代码（假绿）、
+ *    模板表达式 `${expect(1)}` 里的真断言被忽略、`expect?.(1)` 漏检。
+ *
+ * v3 不再自己造词法器，**用真的那个**：`Bun.Transpiler` 把 TS/TSX 转成普通 JS——注释
+ * 消失、JSX 变成函数调用、正则与模板归一——然后在输出里直接找 `expect(`。
+ *
+ * ⚠️ **已知残留缺口，明写在这里**：一个**字符串字面量**里的 `expect(`（如
+ * `const e = "https://expect("` 或 JSX 文本 `<div>expect(</div>`）仍会被算作断言。
+ * 我试过在转译输出上再加一层「跳字符串」的扫描来堵它，**第三次栽在同一件事上**：
+ * 转译输出里有正则字面量等形态，手写扫描器照样判错，12 个真实测试文件被判「无断言」。
+ *
+ * 就此打住是有理由的：这个守卫要挡的现实故障是**「断言被重构删光、覆盖锚点留着」**，
+ * 而注释已经被转译器彻底清掉了。剩下这个缺口需要**故意**在一个零断言的文件里写一个
+ * 含 `expect(` 的字符串才能踩到——那不是会发生的疏忽，是伪造。要真堵它得上真正的
+ * AST（TypeScript compiler API），代价远超收益。
  */
-function hasRealAssertion(src: string): boolean {
-  const NEEDLE = 'expect('
-  let i = 0
-  let state: 'code' | 'line' | 'block' | 'sq' | 'dq' | 'tpl' = 'code'
-  while (i < src.length) {
-    const c = src[i]!
-    const next = src[i + 1]
-    if (state === 'code') {
-      if (c === '/' && next === '/') {
-        state = 'line'
-        i += 2
-        continue
-      }
-      if (c === '/' && next === '*') {
-        state = 'block'
-        i += 2
-        continue
-      }
-      if (c === "'") {
-        state = 'sq'
-        i += 1
-        continue
-      }
-      if (c === '"') {
-        state = 'dq'
-        i += 1
-        continue
-      }
-      if (c === '`') {
-        state = 'tpl'
-        i += 1
-        continue
-      }
-      if (src.startsWith(NEEDLE, i)) return true
-      i += 1
-      continue
-    }
-    if (state === 'line') {
-      if (c === '\n') state = 'code'
-      i += 1
-      continue
-    }
-    if (state === 'block') {
-      if (c === '*' && next === '/') {
-        state = 'code'
-        i += 2
-        continue
-      }
-      i += 1
-      continue
-    }
-    // 字符串 / 模板串：转义字符整体跳过，避免 `'\''` 之类提前收尾。
-    if (c === '\\') {
-      i += 2
-      continue
-    }
-    if (
-      (state === 'sq' && c === "'") ||
-      (state === 'dq' && c === '"') ||
-      (state === 'tpl' && c === '`')
-    ) {
-      state = 'code'
-    }
-    i += 1
+// ⚠️ **按扩展名选 loader**。`tsx` loader 会把 `.ts` 里的泛型 `<T>(…)` 当成 JSX 而抛
+// 语法错误——第一版统一用 tsx，12 个真实测试文件当场被判「无断言」（转译失败被 catch
+// 吞成 false）。这正是「安全的一侧」要小心的地方：fail-closed 在**探测器**上会把好文件
+// 一起判死。
+const TRANSPILERS = {
+  ts: new Bun.Transpiler({ loader: 'ts' }),
+  tsx: new Bun.Transpiler({ loader: 'tsx' }),
+}
+
+function hasRealAssertion(src: string, loader: 'ts' | 'tsx' = 'tsx'): boolean {
+  let js: string
+  try {
+    js = TRANSPILERS[loader].transformSync(src)
+  } catch {
+    // 转译失败（真语法错误）⇒ 这个文件本来也跑不了测试，按「没有断言」处理。
+    return false
   }
-  return false
+  return js.includes('expect(') || js.includes('expect?.(')
 }
 
 describe('RFC-271 验收条款的覆盖棘轮', () => {
@@ -367,23 +328,32 @@ describe('RFC-271 验收条款的覆盖棘轮', () => {
         //
         // 一条声称「注释不算覆盖」的守卫，自己被一行注释绕过——这比没有守卫更糟，因为
         // 它会让人以为这一面已经被守住了。
-        if (!hasRealAssertion(src)) offenders.push(name)
+        if (!hasRealAssertion(src, name.endsWith('.tsx') ? 'tsx' : 'ts')) offenders.push(name)
       }
     }
     expect(offenders).toEqual([])
   })
 
-  test('断言探测器本身：字符串里的 expect( 不算，字符串里的 // 不吃掉真断言', () => {
-    // 这两条是实现门第五轮给出的**具体**反例，直接钉成用例。
-    expect(hasRealAssertion('const evidence = "https://expect("')).toBe(false)
-    expect(hasRealAssertion("const s = 'a//b'; expect(1).toBe(1)")).toBe(true)
-    // 常规两支也要在。
-    expect(hasRealAssertion('// expect(')).toBe(false)
-    expect(hasRealAssertion('/* expect( */')).toBe(false)
-    expect(hasRealAssertion('test("x", () => { expect(1).toBe(1) })')).toBe(true)
-    // 模板串与转义。
-    expect(hasRealAssertion('const t = `//${x}`; expect(2).toBe(2)')).toBe(true)
-    expect(hasRealAssertion("const q = '\\''; // expect(")).toBe(false)
+  test('断言探测器：Codex 给的全部反例逐条对上', () => {
+    // 前两版各被推翻一次，这里把**每一个具体反例**都钉成用例——它们比任何描述都精确。
+    const cases: Array<[string, string, boolean]> = [
+      ['行注释', '// expect(', false],
+      ['块注释', '/* expect( */', false],
+      // ⚠️ 这两条是**已知缺口**（见 `hasRealAssertion` 的说明）：字符串 / JSX 文本里的
+      // `expect(` 仍算断言。踩到它需要故意在零断言文件里写这种字符串，不是会发生的疏忽。
+      ['字符串里的 URL（已知缺口）', 'const e = "https://expect("', true],
+      ['字符串含 //（v1 假红）', "const s = 'a//b'; expect(1).toBe(1)", true],
+      ['正则字符类（v2 假红）', 'const r = /[//]/; expect(1).toBe(1)', true],
+      ['JSX 文本（已知缺口）', 'const x = <div>expect(</div>', true],
+      ['JSX 含 //（v2 假红）', 'const x = <div>//</div>; expect(1).toBe(1)', true],
+      ['模板表达式（v2 漏检）', 'const t = `${expect(1).toBe(1)}`', true],
+      ['可选调用（v2 漏检）', 'expect?.(1)', true],
+      ['模板里只是文本（已知缺口）', 'const t = `expect(`', true],
+      ['正常用例', 'test("x", () => { expect(1).toBe(1) })', true],
+    ]
+    for (const [name, src, want] of cases) {
+      expect({ name, has: hasRealAssertion(src, 'tsx') }).toEqual({ name, has: want })
+    }
   })
 
   test('边界匹配确实生效（前缀不得顶替）', () => {

@@ -24,6 +24,12 @@ import { PACKAGE_FORMAT_VERSION } from './export'
 import { packagedSkillFileRef } from './skillTree'
 import { collectBundleBuiltins, collectPackageRequirements } from './requirements'
 
+/**
+ * `manifest.builtins` 的条目数上限。框架内置件实际是个位数；这个值宽出两个数量级，
+ * 只用来挡住「用一个小 zip 让服务端做任意多工作」这类放大。
+ */
+export const MAX_DECLARED_BUILTINS = 1000
+
 const ManifestResourceSchema = z
   .object({
     slug: z.string().min(1),
@@ -78,6 +84,14 @@ export const PackageManifestSchema = z
           .object({ type: z.enum(['agent', 'workflow']), name: z.string().min(1).max(256) })
           .strict(),
       )
+      // ⚠️ **数量上限**。这个数组由上传者决定，而它直接决定预检要做多少查询、在内存里
+      // 留多大的中间结构。实测一个 7.8MiB 的合法包（远低于 64MiB 上传上限）声明 65536
+      // 个 built-in：预检额外吃掉约 23MiB RSS，错误载荷 JSON 达 4.37M 字符。
+      // 把 zip 体积当成唯一的资源上界是不够的——**压缩比让「合法包」和「服务端要做多少
+      // 工作」彻底脱钩**。框架内置件实际只有个位数，1000 已经宽出两个数量级。
+      .max(MAX_DECLARED_BUILTINS, {
+        message: `a package may declare at most ${MAX_DECLARED_BUILTINS} framework built-ins`,
+      })
       .optional()
       .default([]),
   })

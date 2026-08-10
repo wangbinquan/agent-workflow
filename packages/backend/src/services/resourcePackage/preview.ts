@@ -38,6 +38,9 @@ import { missingImportPermissions } from './importPermissions'
  */
 const BUILTIN_LOOKUP_CHUNK = 500
 
+/** 错误里最多列出几个缺失的 built-in（其余只报总数）。 */
+const MISSING_BUILTIN_SAMPLE = 20
+
 /** 预检有效期。过期后必须重新 preview——基线可能已经变了。 */
 export const PREVIEW_TTL_MS = 30 * 60 * 1000
 
@@ -371,12 +374,22 @@ export async function buildPackagePreview(
   // 已经逐条选完动作、填完凭据、点了提交，才被告知这个包在本实例根本装不了。
   const missingBuiltins = await findMissingBuiltins(db, pkg.manifest.builtins)
   if (missingBuiltins.length > 0) {
+    // ⚠️ 错误载荷**取样**，不要把全部缺失项塞进 message + details。
+    // 两处都放全量时，65536 个缺失项让 `DomainError.toPayload()` 的 JSON 达 437 万字符
+    // ——一个错误响应把请求体的放大又翻了一倍。上限（`MAX_DECLARED_BUILTINS`）已经挡住
+    // 极端情形，但错误路径本身也不该是放大器：用户要的是「缺哪些」的**样例 + 总数**，
+    // 不是一份可能有上千行的清单。
+    const sample = missingBuiltins.slice(0, MISSING_BUILTIN_SAMPLE)
+    const suffix =
+      missingBuiltins.length > sample.length
+        ? ` (and ${missingBuiltins.length - sample.length} more)`
+        : ''
     throw new ValidationError(
       'package-builtin-missing',
-      `this instance is missing ${missingBuiltins.length} framework built-in(s) required by the package: ${missingBuiltins
+      `this instance is missing ${missingBuiltins.length} framework built-in(s) required by the package: ${sample
         .map((b) => `${b.type}/${b.name}`)
-        .join(', ')}`,
-      { missingBuiltins },
+        .join(', ')}${suffix}`,
+      { missingBuiltins: sample, missingBuiltinCount: missingBuiltins.length },
     )
   }
 
