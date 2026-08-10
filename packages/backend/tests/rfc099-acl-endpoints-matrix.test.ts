@@ -137,7 +137,6 @@ const CASES: ResourceCase[] = [
       await db.insert(skills).values({
         ...row,
         description: 'acl matrix subject',
-        sourceKind: 'managed',
         managedPath: `skills/${KEY}/files/`,
         ownerUserId,
         visibility: 'private',

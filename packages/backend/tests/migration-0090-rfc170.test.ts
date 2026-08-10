@@ -56,12 +56,13 @@ describe('migration 0090 (RFC-170 skills storage/ACL) — schema + constraints',
   // origin_source_id / authority_owner_user_id (external/source-only). 0090's
   // creation + backfill of those is still exercised in the "backfill derivation"
   // block below (frozen at 0090, so it never sees 0092). Here we lock only the
-  // 0090 columns that SURVIVE at HEAD.
+  // 0090 columns that SURVIVE at HEAD (RFC-279 later drops migration_marker).
   test('skills gained the surviving identity/lifecycle columns', () => {
     const c = cols(db, 'skills')
-    for (const col of ['meta_revision', 'migration_marker', 'reservation_state', 'version_state']) {
+    for (const col of ['meta_revision', 'reservation_state', 'version_state']) {
       expect(c).toContain(col)
     }
+    expect(c).not.toContain('migration_marker')
   })
 
   // RFC-178 (0092) dropped the skill_sources table entirely, so its 0090 columns

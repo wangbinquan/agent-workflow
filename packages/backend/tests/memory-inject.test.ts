@@ -499,7 +499,7 @@ describe('injectMemoryForRun', () => {
       .values({
         id: 'cr-1',
         urlHash: 'aabbccdd',
-        url,
+        urlRedacted: url,
         localPath: '/tmp/r',
         lastFetchedAt: Date.now(),
         createdAt: Date.now(),
@@ -524,7 +524,7 @@ describe('injectMemoryForRun', () => {
       .values({
         id: 'cr-priv',
         urlHash: 'ddccbbaa',
-        url: 'https://x-access-token:TOKEN@github.com/acme/priv.git',
+        urlRedacted: 'https://***@github.com/acme/priv.git',
         localPath: '/tmp/priv',
         lastFetchedAt: Date.now(),
         createdAt: Date.now(),

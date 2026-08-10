@@ -1,16 +1,16 @@
 // LOCKS: RFC-204 impl-gate P0-2 (Codex 2026-07-22) — the cold-clone path seals
 // the credentialed URL AT INSERT time when a SecretBox is wired in, so a fresh
-// private-repo row never persists its token as plaintext in db.sqlite/WAL while
-// waiting for the next `ensureCredentialsSealed` pass (daemon start / pre-backup).
+// private-repo row never persists its token as plaintext in db.sqlite/WAL.
 //
-// Mutation proof: revert gitRepoCache's cold INSERT to `url: input.url, urlEnc:
-// null` and the first test goes red (row.url is the plaintext, urlEnc is null).
+// Mutation proof: drop the cold INSERT's urlEnc write and the first test goes
+// red; reintroduce a plaintext schema column and the physical-column assertion
+// goes red.
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
@@ -49,14 +49,20 @@ describe('RFC-204 impl-gate P0-2 — cold clone seals at insert', () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-RFC204-sealHome-'))
   })
 
-  test('with a SecretBox: row stores url_enc + blanked url, and it round-trips', async () => {
+  test('with a SecretBox: row stores url_enc, has no plaintext column, and round-trips', async () => {
     const url = pathToFileURL(await seedRepo('sealme')).href
     const res = await resolveCachedRepo({ db, appHome, secretBox: box }, { url })
     const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, res.cached.id)).get()
     expect(row).toBeDefined()
     if (row === undefined) return
     // No plaintext credentialed URL sits in the DB.
-    expect(row.url).toBe('')
+    expect(
+      (
+        db.all<{ name: string }>(sql`PRAGMA table_info(cached_repos)`) as Array<{
+          name: string
+        }>
+      ).map((column) => column.name),
+    ).not.toContain('url')
     expect(row.urlEnc).not.toBeNull()
     // The sealed form recovers the exact original URL for a reuse-by-id launch.
     expect(unsealRepoUrl(row, box)).toBe(url)
@@ -64,13 +70,21 @@ describe('RFC-204 impl-gate P0-2 — cold clone seals at insert', () => {
     expect(row.urlRedacted).not.toBeNull()
   })
 
-  test('without a SecretBox: legacy plaintext stays (startup gate seals later)', async () => {
+  test('without a SecretBox: persistence is safe and the usable URL is process-client scoped', async () => {
     const url = pathToFileURL(await seedRepo('plain')).href
     const res = await resolveCachedRepo({ db, appHome }, { url })
     const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, res.cached.id)).get()
     expect(row).toBeDefined()
     if (row === undefined) return
-    expect(row.url).toBe(url)
     expect(row.urlEnc).toBeNull()
+    expect(row.urlRedacted).toBe(url)
+    expect(unsealRepoUrl(row, undefined)).toBeNull()
+    expect(unsealRepoUrl(row, undefined, db)).toBe(url)
+    const reopenedDb = createInMemoryDb(MIGRATIONS)
+    try {
+      expect(unsealRepoUrl(row, undefined, reopenedDb)).toBeNull()
+    } finally {
+      reopenedDb.$client.close()
+    }
   })
 })

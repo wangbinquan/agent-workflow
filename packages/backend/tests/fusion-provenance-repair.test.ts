@@ -14,7 +14,6 @@ function addSkill(db: DbClient, id: string): void {
     .values({
       id,
       name: `name-${id}`,
-      sourceKind: 'managed',
       managedPath: `skills/${id}/files`,
       contentVersion: 10,
       versionState: 'snapshot-authoritative',

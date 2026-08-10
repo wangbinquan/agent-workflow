@@ -54,17 +54,19 @@ afterAll(() => rmSync(legacyMigrations, { recursive: true, force: true }))
 function makeRepo(db: DbClient, slug: string): string {
   const id = ulid()
   const now = Date.now()
-  db.insert(cachedRepos)
-    .values({
-      id,
-      urlHash: slug.padEnd(8, '0').slice(0, 8),
-      url: `https://git.example/${slug}.git`,
-      localPath: `/tmp/repos/${slug}`,
-      defaultBranch: 'main',
-      lastFetchedAt: now,
-      createdAt: now,
-    })
-    .run()
+  const url = `https://git.example/${slug}.git`
+  // This fixture intentionally stops at 0133, where the historical plaintext
+  // column still exists. Use raw SQL instead of the HEAD ORM projection (0147
+  // removes that column) so the frozen physical schema remains authoritative.
+  db.run(sql`
+    INSERT INTO cached_repos (
+      id, url_hash, url, url_redacted, local_path, default_branch,
+      last_fetched_at, created_at
+    ) VALUES (
+      ${id}, ${slug.padEnd(8, '0').slice(0, 8)}, ${url}, ${url},
+      ${`/tmp/repos/${slug}`}, 'main', ${now}, ${now}
+    )
+  `)
   return id
 }
 

@@ -23,7 +23,7 @@ describe('migration 0008 (RFC-024 cached_repos + tasks.repoUrl)', () => {
       .values({
         id: ulid(),
         urlHash: 'abcd1234',
-        url: 'git@github.com:foo/bar.git',
+        urlRedacted: 'git@github.com:foo/bar.git',
         localPath: '/tmp/repos/abcd1234-bar',
         defaultBranch: 'main',
         lastFetchedAt: now,
@@ -43,7 +43,7 @@ describe('migration 0008 (RFC-024 cached_repos + tasks.repoUrl)', () => {
         .values({
           id: ulid(),
           urlHash: 'abcd1234',
-          url: 'git@github.com:foo/bar.git',
+          urlRedacted: 'git@github.com:foo/bar.git',
           localPath: '/tmp/repos/dupe',
           defaultBranch: null,
           lastFetchedAt: now,
@@ -59,7 +59,7 @@ describe('migration 0008 (RFC-024 cached_repos + tasks.repoUrl)', () => {
       .values({
         id: ulid(),
         urlHash: 'deadbeef',
-        url: 'https://example.com/foo.git',
+        urlRedacted: 'https://example.com/foo.git',
         localPath: '/tmp/repos/deadbeef-foo',
         defaultBranch: null,
         lastFetchedAt: now,

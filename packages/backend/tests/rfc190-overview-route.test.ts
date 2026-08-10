@@ -231,7 +231,7 @@ async function seedResources(h: Harness): Promise<void> {
     {
       id: 'repo-1',
       urlHash: 'aaaa1111',
-      url: 'https://example.com/a.git',
+      urlRedacted: 'https://example.com/a.git',
       localPath: '/tmp/aw-repos/a',
       defaultBranch: 'main',
       lastFetchedAt: now,
@@ -240,7 +240,7 @@ async function seedResources(h: Harness): Promise<void> {
     {
       id: 'repo-2',
       urlHash: 'bbbb2222',
-      url: 'https://example.com/b.git',
+      urlRedacted: 'https://example.com/b.git',
       localPath: '/tmp/aw-repos/b',
       defaultBranch: 'main',
       lastFetchedAt: now,

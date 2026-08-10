@@ -102,7 +102,7 @@ async function seedSkill(
   visibility: 'public' | 'private',
   ownerUserId: string,
 ): Promise<void> {
-  await db.insert(skills).values({ id, name, sourceKind: 'managed', visibility, ownerUserId })
+  await db.insert(skills).values({ id, name, visibility, ownerUserId })
 }
 
 /** Insert a minimal enabled plugin row (id + name) owned by `ownerUserId`. */

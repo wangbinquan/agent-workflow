@@ -50,12 +50,18 @@ import { detachRepoFromAllGroups, groupsReferencingRepo } from '@/services/repoG
 import { loadConfig } from '@/config'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import {
+  forgetVolatileRepoUrl,
+  rememberVolatileRepoUrl,
+  unsealRepoUrl,
+} from '@/services/repoCredentials'
 
 const log = createLogger('git-repo-cache')
 
 const DEFAULT_CLONE_TIMEOUT_MS = 30 * 60 * 1000
 
 const sha1Hex = (s: string) => createHash('sha1').update(s).digest('hex')
+const UNAVAILABLE_REPO_URL = '<url unavailable>'
 
 /** Per-URL serialization. Same urlHash → second caller awaits the first. */
 const urlQueue = new KeyedSerialQueue<string>()
@@ -177,11 +183,9 @@ export interface GitRepoCacheDeps {
   syncBranches?: string[]
   /**
    * RFC-204 impl-gate P0-2 — seal the credentialed URL AT INSERT time on the
-   * cold-clone path. When present, a fresh row stores `url_enc` + a blanked
-   * `url` instead of the plaintext, so a private repo's token never lingers in
-   * db.sqlite/WAL waiting for the next `ensureCredentialsSealed` pass (daemon
-   * start / pre-backup). Omitted (tests / key-less installs) → legacy plaintext,
-   * which the startup gate still seals later.
+   * cold-clone path. When present, a fresh row stores `url_enc`; when omitted
+   * (tests / custom embedding), the safe display URL is still persisted but no
+   * recoverable plaintext is written to SQLite.
    */
   secretBox?: SecretBox
 }
@@ -223,12 +227,10 @@ export interface FastForwardOutcome {
 function rowToCached(row: typeof cachedRepos.$inferSelect, referencingTaskCount = 0): CachedRepo {
   return {
     id: row.id,
-    // RFC-204: the plaintext `url` no longer leaves the daemon — cached_repos is
-    // a shared pool behind `repos:read` (user baseline), so emitting it handed
+    // RFC-204: the original URL never leaves the daemon — cached_repos is a
+    // shared pool behind `repos:read` (user baseline), so emitting it would hand
     // every logged-in user the credentials in other people's private repo URLs.
-    // Prefer the stored redacted column; fall back to redacting the legacy one
-    // so rows predating the sealing gate are still safe.
-    urlRedacted: row.urlRedacted ?? redactGitUrl(row.url),
+    urlRedacted: row.urlRedacted ?? UNAVAILABLE_REPO_URL,
     // Historical slugs can embed `?access_token=` (parseGitUrl keeps the query
     // in parsed.path), so the path needs redacting on the wire too.
     localPath: redactSensitiveString(row.localPath),
@@ -437,7 +439,8 @@ export async function resolveCachedRepo(
             .all()
           const cand = candidates[0]
           if (cand === undefined) return undefined
-          const candParsed = parseGitUrl(cand.url)
+          const candPlain = unsealRepoUrl(cand, deps.secretBox, deps.db)
+          const candParsed = candPlain === null ? null : parseGitUrl(candPlain)
           const candNewHash =
             candParsed !== null ? gitUrlCacheKeyWith(candParsed, sha1Hex).hash : null
           if (candNewHash !== hash) return undefined // lossy collision — NOT our repo
@@ -693,19 +696,15 @@ export async function resolveCachedRepo(
 
     const ts = now()
     const id = ulid()
-    // RFC-204 impl-gate P0-2: seal the credentialed URL at INSERT time so a
-    // cold-cloned private repo never persists its token as plaintext. Without a
-    // SecretBox (tests / key-less installs) fall back to the legacy plaintext
-    // column, which the startup sealing gate converts on the next run.
+    // RFC-204/RFC-279: seal at INSERT when a key is available. Key-less test /
+    // embedding shapes retain only the redacted display form, never plaintext.
     const box = deps.secretBox
     const urlEnc = box !== undefined ? box.seal(input.url) : null
-    const storedUrl = box !== undefined ? '' : input.url
     deps.db
       .insert(cachedRepos)
       .values({
         id,
         urlHash: hash,
-        url: storedUrl,
         urlEnc,
         // RFC-204: store the safe display form rather than deriving it per read.
         urlRedacted: redacted,
@@ -718,6 +717,7 @@ export async function resolveCachedRepo(
         lastSubmoduleSyncError: null,
       })
       .run()
+    if (box === undefined) rememberVolatileRepoUrl(deps.db, id, input.url)
     log.info('cloned new cached repo', { url: redacted, hash, localPath: cacheDir })
     // RFC-165 (F19-r3): the COLD path must resolve requested refs to their
     // remote-tracking state too — the source may carry a non-default local
@@ -761,7 +761,6 @@ export async function resolveCachedRepo(
         {
           id,
           urlHash: hash,
-          url: storedUrl,
           urlEnc,
           urlRedacted: redacted,
           localPath: cacheDir,
@@ -876,7 +875,7 @@ export async function refreshCachedRepo(
     throw new NotFoundError('cached-repo-not-found', `cached repo ${id} not found`)
   }
   const now = deps.now ?? Date.now
-  const redacted = redactGitUrl(row.url)
+  const redacted = row.urlRedacted ?? UNAVAILABLE_REPO_URL
   const submodule = resolveSubmoduleParams(deps.submoduleMode, deps.submoduleJobs)
 
   return await withUrlLock(row.urlHash, async () => {
@@ -997,7 +996,7 @@ export async function deleteCachedRepo(
   // 免得他解决了一个再撞另一个。
   const groups = groupsReferencingRepo(deps.db, row.id)
   if ((count > 0 || groups.length > 0) && !options.force) {
-    throw new CachedRepoHasReferencesError(count, redactGitUrl(row.url), groups)
+    throw new CachedRepoHasReferencesError(count, row.urlRedacted ?? UNAVAILABLE_REPO_URL, groups)
   }
   return await withUrlLock(row.urlHash, async () => {
     try {
@@ -1009,7 +1008,7 @@ export async function deleteCachedRepo(
       await rm(row.localPath, { recursive: true, force: true })
     } catch (err) {
       log.warn('failed to rm cache dir; deleting DB row anyway', {
-        url: redactGitUrl(row.url),
+        url: row.urlRedacted ?? UNAVAILABLE_REPO_URL,
         err: (err as Error).message,
       })
     }
@@ -1032,6 +1031,7 @@ export async function deleteCachedRepo(
       }
       tx.delete(cachedRepos).where(eq(cachedRepos.id, id)).run()
     })
+    forgetVolatileRepoUrl(deps.db, id)
     return { deletedLocalPath: row.localPath }
   })
 }

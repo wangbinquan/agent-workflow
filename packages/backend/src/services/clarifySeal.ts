@@ -31,8 +31,8 @@
 // EXCEPT the RFC-136 re-answer path: a sealed question whose every non-echo entry is
 // still 待指派 (dispatched_at IS NULL AND staged_at IS NULL — e.g. moved back out of
 // 待下发) may be RE-sealed, overwriting its answers_json value in place (用户拍板
-// 直接覆盖，无 prior_answer_snapshot_json / reopen_count — those stay dormant for the
-// future RFC-120 AC-11 打回 flow). Any staged/dispatched entry keeps the 409.
+// 直接覆盖；RFC-279 删除了从未实现的 reopen 持久状态。Any staged/dispatched entry
+// keeps the 409.
 
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 

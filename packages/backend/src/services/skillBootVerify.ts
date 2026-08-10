@@ -345,14 +345,11 @@ export function runBootSnapshotReverify(
     })
     .from(skills)
     .where(
-      and(
-        eq(skills.sourceKind, 'managed'),
-        inArray(skills.versionState, [
-          'snapshot-authoritative',
-          'snapshot-unverified',
-          'quarantined',
-        ]),
-      ),
+      inArray(skills.versionState, [
+        'snapshot-authoritative',
+        'snapshot-unverified',
+        'quarantined',
+      ]),
     )
     .orderBy(skills.id)
     .all() as Array<ReverifySkill & { versionState: string; reservationState: string }>

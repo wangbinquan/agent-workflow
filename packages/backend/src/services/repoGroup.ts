@@ -17,7 +17,6 @@ import {
   RepoGroupLayoutError,
   flattenRepoGroup,
   normalizeMountPath,
-  redactGitUrl,
   validateRepoGroupNodes,
 } from '@agent-workflow/shared'
 import { and, eq, inArray, like, sql } from 'drizzle-orm'
@@ -97,10 +96,10 @@ function loadAllGroups(db: DbClient): Map<string, FlattenableGroup> {
   const repoUrlById = new Map(
     (
       db
-        .select({ id: cachedRepos.id, url: cachedRepos.url, urlRedacted: cachedRepos.urlRedacted })
+        .select({ id: cachedRepos.id, urlRedacted: cachedRepos.urlRedacted })
         .from(cachedRepos)
-        .all() as Array<{ id: string; url: string; urlRedacted: string | null }>
-    ).map((row) => [row.id, row.urlRedacted ?? redactGitUrl(row.url)]),
+        .all() as Array<{ id: string; urlRedacted: string | null }>
+    ).map((row) => [row.id, row.urlRedacted ?? '<url unavailable>']),
   )
 
   const byId = new Map<string, FlattenableGroup>()
@@ -160,10 +159,10 @@ export function previewRepoGroupLayout(
   const urlById = new Map(
     (
       db
-        .select({ id: cachedRepos.id, url: cachedRepos.url, urlRedacted: cachedRepos.urlRedacted })
+        .select({ id: cachedRepos.id, urlRedacted: cachedRepos.urlRedacted })
         .from(cachedRepos)
-        .all() as Array<{ id: string; url: string; urlRedacted: string | null }>
-    ).map((row) => [row.id, row.urlRedacted ?? redactGitUrl(row.url)]),
+        .all() as Array<{ id: string; urlRedacted: string | null }>
+    ).map((row) => [row.id, row.urlRedacted ?? '<url unavailable>']),
   )
 
   let normalized: Array<{ path: string; attachment: RepoGroupNodeInput['attachment'] }>

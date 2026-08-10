@@ -52,7 +52,7 @@ beforeEach(async () => {
   // exercising the endpoints' own behavior behind it.
   await db.insert(cachedRepos).values({
     id: 'cr-repos-suite',
-    url: 'file:///aw-repos-suite',
+    urlRedacted: 'file:///aw-repos-suite',
     urlHash: 'aw-repos-suite-hash',
     localPath: baseTmp,
     defaultBranch: 'main',

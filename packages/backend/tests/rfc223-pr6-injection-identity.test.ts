@@ -74,7 +74,6 @@ async function seedManagedSkill(
     id,
     name,
     description: '',
-    sourceKind: 'managed',
     managedPath: skillFilesRel(id),
     ownerUserId,
   })

@@ -28,13 +28,12 @@ describe('migration 0098 (RFC-204 repo credential sealing columns)', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('legacy cached_repos insert omitting the new columns → both null', () => {
+  test('cached_repos still permits migration-era null credential columns', () => {
     const now = Date.now()
     db.insert(cachedRepos)
       .values({
         id: ulid(),
         urlHash: 'a1b2c3d4',
-        url: 'https://x-access-token:TOK@github.com/foo/bar.git',
         localPath: '/tmp/repos/a1b2c3d4-bar',
         lastFetchedAt: now,
         createdAt: now,
@@ -46,14 +45,12 @@ describe('migration 0098 (RFC-204 repo credential sealing columns)', () => {
     expect(row?.urlRedacted).toBeNull()
   })
 
-  test('url_enc / url_redacted round-trip independently of the legacy url column', () => {
+  test('url_enc / url_redacted round-trip without a plaintext column', () => {
     const now = Date.now()
     db.insert(cachedRepos)
       .values({
         id: ulid(),
         urlHash: 'beefcafe',
-        // the sealing gate blanks the legacy column once the pair is populated
-        url: '',
         urlEnc: 'c2VhbGVkLWJsb2I=',
         urlRedacted: 'https://***@github.com/foo/bar.git',
         localPath: '/tmp/repos/beefcafe-bar',
@@ -63,7 +60,6 @@ describe('migration 0098 (RFC-204 repo credential sealing columns)', () => {
       .run()
 
     const row = db.select().from(cachedRepos).all()[0]
-    expect(row?.url).toBe('')
     expect(row?.urlEnc).toBe('c2VhbGVkLWJsb2I=')
     expect(row?.urlRedacted).toBe('https://***@github.com/foo/bar.git')
   })

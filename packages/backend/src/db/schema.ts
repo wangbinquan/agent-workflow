@@ -330,7 +330,6 @@ export const skills = sqliteTable(
     // RFC-178: skills are managed-only (external / parent-directory sources
     // removed in migration 0092). external_path / source_id + the skill_sources
     // table were dropped there.
-    sourceKind: text('source_kind', { enum: ['managed'] }).notNull(),
     managedPath: text('managed_path'), // e.g. 'skills/{id}/files/' relative to app dir
     // RFC-099 ACL (see agents table comment).
     ownerUserId: text('owner_user_id'),
@@ -346,7 +345,6 @@ export const skills = sqliteTable(
     // dormant until batch-B code wires them. See design.md §1/§3/§4/§7a/§8/§10.
     aclRevision: integer('acl_revision').notNull().default(0), // §8 aclRevision CAS
     metaRevision: integer('meta_revision').notNull().default(0), // §1 metaRevision monotonic
-    migrationMarker: text('migration_marker'), // §4: NULL|'migrated'|'pending-decision'
     reservationState: text('reservation_state', { enum: ['reserving', 'ready'] })
       .notNull()
       .default('ready'), // §9 creation reservation; non-ready is invisible
@@ -415,10 +413,9 @@ export const skillVersions = sqliteTable(
 // version-write). `phase` records the last COMMITted step; recovery is a pure
 // function of (phase, op-scoped FS probe). No `skills` FK cascade — recovery is
 // by op_id ownership, not row lifetime.
-// RFC-178: the TS `kind` enum dropped `replace` (source-conflict) + `adopt-managed`
-// (external adoption); the DB CHECK from migration 0090 keeps the wider superset
-// (no table rebuild — no row ever carries the removed kinds). `next_skill_id` +
-// `precondition_json` are retained but dormant (they served those removed ops).
+// RFC-279 rebuilt the physical CHECK to the same four current kinds and removed
+// the retired two-id slot. `precondition_json` remains part of current reserve /
+// migrate recovery authority.
 // -----------------------------------------------------------------------------
 export const skillOperations = sqliteTable(
   'skill_operations',
@@ -433,7 +430,6 @@ export const skillOperations = sqliteTable(
     stagingPath: text('staging_path'),
     backupPath: text('backup_path'),
     candidatePath: text('candidate_path'),
-    nextSkillId: text('next_skill_id'), // RFC-178: dormant (was replace's 2nd skillId)
     candidateFingerprint: text('candidate_fingerprint'),
     backupFingerprint: text('backup_fingerprint'),
     targetVersion: integer('target_version'),
@@ -455,10 +451,9 @@ export const skillOperations = sqliteTable(
 
 // -----------------------------------------------------------------------------
 // skill_operation_locks — RFC-170 §6a/G6-2 universal mutual-exclusion primitive.
-// Every op INSERTs a row per affected skillId in its intent tx; PK conflict on
-// any target = 409 busy. Held until phase='done' (released same tx). This is
-// what locks the SECOND id (replace's next_skill_id) that the ops-table
-// partial-unique cannot. Boot recovers active ops (locks held) then GCs orphans.
+// Every op INSERTs one row for its skillId in the intent tx; PK conflict = 409
+// busy. Held until phase='done' (released same tx). Boot recovers active ops
+// (locks held) then GCs orphans.
 // -----------------------------------------------------------------------------
 export const skillOperationLocks = sqliteTable('skill_operation_locks', {
   lockedSkillId: text('locked_skill_id').primaryKey(),
@@ -804,10 +799,6 @@ export const cachedRepos = sqliteTable(
   {
     id: text('id').primaryKey(), // ULID
     urlHash: text('url_hash').notNull().unique(), // 8-hex sha1 of canonical URL
-    // RFC-204: legacy plaintext column. The sealing gate blanks it to '' once
-    // url_enc/url_redacted are populated; nothing reads it after that. Dropping
-    // the column is deferred to 0099 (SQLite drop = table rebuild).
-    url: text('url').notNull(),
     /** RFC-204: `secretBox.seal(原始URL)` — the ONLY place the credential lives. */
     urlEnc: text('url_enc'),
     /** RFC-204: `redactGitUrl(原始URL)` — the only form allowed out on the wire. */
@@ -2784,16 +2775,12 @@ export const taskQuestions = sqliteTable(
     confirmedAt: integer('confirmed_at'),
     lastReassignedBy: text('last_reassigned_by'),
     lastReassignedAt: integer('last_reassigned_at'),
-    reopenCount: integer('reopen_count').notNull().default(0),
-    // Pre-edit answer snapshot captured at reopen (audit of the "解冻前" value).
-    priorAnswerSnapshotJson: text('prior_answer_snapshot_json'),
     // RFC-120 §15 — manual question (自主新增/复制; migration 0065). For a
     // source_kind='manual' row a human authored the question/instruction directly:
-    // manual_title is the title (DTO questionTitle), manual_body is the instruction
-    // injected as External Feedback when the assigned node reruns (DTO answerSummary).
+    // question_title is the title, manual_body is the instruction injected as
+    // External Feedback when the assigned node reruns (DTO answerSummary).
     // manual_created_by is the audit-only author id — NEVER enters an agent prompt
     // (RFC-099 prompt-isolation). All NULL for clarify rows (golden-lock).
-    manualTitle: text('manual_title'),
     manualBody: text('manual_body'),
     manualCreatedBy: text('manual_created_by'),
     createdAt: integer('created_at')

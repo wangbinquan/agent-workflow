@@ -238,7 +238,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
     await runGit(a.cached.localPath, ['remote', 'set-url', 'origin', unreachableUrl])
     await db
       .update(cachedRepos)
-      .set({ url: unreachableUrl, urlHash: hash })
+      .set({ urlRedacted: unreachableUrl, urlHash: hash })
       .where(eq(cachedRepos.id, a.cached.id))
 
     let err: unknown

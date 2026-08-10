@@ -214,7 +214,6 @@ export async function createManagedSkillWithFiles(
           id,
           name: meta.name,
           description: meta.description,
-          sourceKind: 'managed',
           managedPath: skillFilesRel(id),
           // RFC-231: every user-created resource starts private with ACL rev 0.
           ...initialAcl,
@@ -339,7 +338,6 @@ export async function stageManagedSkill(
           id,
           name: meta.name,
           description: meta.description,
-          sourceKind: 'managed',
           managedPath: skillFilesRel(id),
           ...initialAcl,
           reservationState: 'reserving',

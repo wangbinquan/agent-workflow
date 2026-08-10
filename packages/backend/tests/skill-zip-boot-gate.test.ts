@@ -102,7 +102,6 @@ function insertBareRow(
       id,
       name,
       description: 'bare',
-      sourceKind: 'managed',
       managedPath: `skills/${id}/files`,
       visibility: 'public',
       createdAt: now,

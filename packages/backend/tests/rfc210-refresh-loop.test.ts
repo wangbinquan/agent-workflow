@@ -39,9 +39,9 @@ async function seed(
 ): Promise<void> {
   for (const r of rows) {
     await db.run(sql`
-      INSERT INTO cached_repos (id, url_hash, url, url_redacted, local_path,
+      INSERT INTO cached_repos (id, url_hash, url_redacted, local_path,
         last_fetched_at, created_at, last_auto_refresh_at)
-      VALUES (${r.id}, ${r.id}, '', ${'https://x/' + r.id}, ${'/tmp/' + r.id},
+      VALUES (${r.id}, ${r.id}, ${'https://x/' + r.id}, ${'/tmp/' + r.id},
         ${r.fetchedAt}, 0, ${r.autoRefreshAt})
     `)
   }

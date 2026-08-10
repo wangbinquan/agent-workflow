@@ -26,11 +26,13 @@ import {
 } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { runGit } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const sha1 = (s: string) => createHash('sha1').update(s).digest('hex')
+const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 19))
 
 let db: DbClient
 let tmp: string
@@ -89,7 +91,7 @@ describe('RFC-165 T4 — file cache key v2 + verified lazy re-key', () => {
     const url = pathToFileURL(repo).href
     // First resolve creates the row under the NEW hash; downgrade it to the
     // legacy hash to simulate a pre-165 cache.
-    const first = await resolveCachedRepo({ db, appHome }, { url })
+    const first = await resolveCachedRepo({ db, appHome, secretBox }, { url })
     const parsed = parseGitUrl(url)!
     const newHash = gitUrlCacheKeyWith(parsed, sha1).hash
     const legacyHash = gitUrlLegacyFileCacheKeyWith(parsed, sha1)!.hash
@@ -100,7 +102,7 @@ describe('RFC-165 T4 — file cache key v2 + verified lazy re-key', () => {
       .where(eq(cachedRepos.urlHash, newHash))
 
     const mirrorsBefore = readdirSync(join(appHome, 'repos')).length
-    const second = await resolveCachedRepo({ db, appHome }, { url })
+    const second = await resolveCachedRepo({ db, appHome, secretBox }, { url })
     // Same mirror adopted (no second clone), row re-keyed to the new hash.
     expect(second.cached.localPath).toBe(first.cached.localPath)
     expect(readdirSync(join(appHome, 'repos')).length).toBe(mirrorsBefore)
@@ -123,7 +125,7 @@ describe('RFC-165 T4 — file cache key v2 + verified lazy re-key', () => {
     expect(gitUrlLegacyFileCacheKeyWith(parsedSuffixed, sha1)!.hash).toBe(legacyPlain)
 
     // Cache the SUFFIXED repo, then downgrade its row to the shared legacy key.
-    const firstSuffixed = await resolveCachedRepo({ db, appHome }, { url: urlSuffixed })
+    const firstSuffixed = await resolveCachedRepo({ db, appHome, secretBox }, { url: urlSuffixed })
     const newSuffixedHash = gitUrlCacheKeyWith(parsedSuffixed, sha1).hash
     await db
       .update(cachedRepos)
@@ -132,7 +134,7 @@ describe('RFC-165 T4 — file cache key v2 + verified lazy re-key', () => {
 
     // Resolving the PLAIN repo finds the legacy row, VERIFIES, rejects it
     // (different repo!) and cold-clones its own mirror.
-    const plainResolved = await resolveCachedRepo({ db, appHome }, { url: urlPlain })
+    const plainResolved = await resolveCachedRepo({ db, appHome, secretBox }, { url: urlPlain })
     expect(plainResolved.cold).toBe(true)
     expect(plainResolved.cached.localPath).not.toBe(firstSuffixed.cached.localPath)
     const rows = await db.select().from(cachedRepos)

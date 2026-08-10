@@ -23,7 +23,7 @@ describe('migration 0017 (RFC-034 cached_repos submodule columns)', () => {
       .values({
         id: ulid(),
         urlHash: 'a1b2c3d4',
-        url: 'git@github.com:foo/bar.git',
+        urlRedacted: 'git@github.com:foo/bar.git',
         localPath: '/tmp/repos/a1b2c3d4-bar',
         defaultBranch: 'main',
         lastFetchedAt: now,
@@ -43,7 +43,7 @@ describe('migration 0017 (RFC-034 cached_repos submodule columns)', () => {
       .values({
         id: ulid(),
         urlHash: 'beefcafe',
-        url: 'git@github.com:foo/with-subs.git',
+        urlRedacted: 'git@github.com:foo/with-subs.git',
         localPath: '/tmp/repos/beefcafe',
         defaultBranch: 'main',
         lastFetchedAt: now,
@@ -66,7 +66,7 @@ describe('migration 0017 (RFC-034 cached_repos submodule columns)', () => {
       .values({
         id: ulid(),
         urlHash: 'feedface',
-        url: 'git@github.com:foo/clean.git',
+        urlRedacted: 'git@github.com:foo/clean.git',
         localPath: '/tmp/repos/feedface',
         defaultBranch: 'main',
         lastFetchedAt: now,

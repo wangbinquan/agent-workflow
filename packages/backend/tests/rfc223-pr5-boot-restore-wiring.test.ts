@@ -308,14 +308,15 @@ async function makeSkillBackup(
   const dbPath = join(appHome, 'db.sqlite')
   const db = openDb({ path: dbPath, migrationsFolder })
   const raw = sqliteOf(db)
-  raw
-    .query(
-      `INSERT INTO skills
+  const skillInsert = legacySchema
+    ? `INSERT INTO skills
          (id, name, source_kind, managed_path, content_version,
           reservation_state, version_state)
-       VALUES (?, ?, 'managed', ?, 1, 'ready', 'snapshot-authoritative')`,
-    )
-    .run(id, name, `skills/${name}/files`)
+       VALUES (?, ?, 'managed', ?, 1, 'ready', 'snapshot-authoritative')`
+    : `INSERT INTO skills
+         (id, name, managed_path, content_version, reservation_state, version_state)
+       VALUES (?, ?, ?, 1, 'ready', 'snapshot-authoritative')`
+  raw.query(skillInsert).run(id, name, `skills/${name}/files`)
   if (legacySchema) {
     raw
       .query(

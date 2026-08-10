@@ -333,7 +333,7 @@ export async function listTaskQuestions(
         taskId: e.taskId,
         originNodeRunId: null,
         questionId: e.questionId,
-        questionTitle: e.manualTitle ?? e.questionTitle,
+        questionTitle: e.questionTitle,
         sourceKind: 'manual',
         roleKind: e.roleKind,
         sourceNodeId: null,
@@ -349,7 +349,7 @@ export async function listTaskQuestions(
         // Manual questions are always sealed — the human-authored instruction IS the
         // answer/content; there is no separate human-answer step to seal.
         sealed: true,
-        reopenCount: e.reopenCount,
+        reopenCount: 0,
         answerSummary: e.manualBody ?? null,
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
@@ -392,7 +392,7 @@ export async function listTaskQuestions(
       autoDispatchDeferred:
         e.autoDispatchDeferredAt !== null && e.dispatchedAt === null && e.stagedAt !== null,
       sealed,
-      reopenCount: e.reopenCount,
+      reopenCount: 0,
       answerSummary: summarizeAnswer(round, e.questionId, sealed),
       createdAt: e.createdAt,
       updatedAt: e.updatedAt,
@@ -1379,7 +1379,6 @@ export async function createManualTaskQuestion(
         loopIter: 0,
         defaultTargetNodeId: null,
         overrideTargetNodeId: target,
-        manualTitle: title,
         manualBody: body,
         manualCreatedBy: actor.userId,
         // §15: a handler is required → the row is created staged (待下发) so the park gate

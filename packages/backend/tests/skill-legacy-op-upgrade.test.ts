@@ -348,7 +348,6 @@ function seedLegacyRow(
     .values({
       id,
       name,
-      sourceKind: 'managed',
       managedPath: `skills/${name}/files`,
       contentVersion: opts.withVersion ? 1 : 0,
       reservationState: opts.reservationState ?? 'ready',
@@ -381,7 +380,6 @@ function seedCanonicalRow(db: DbClient, appHome: string, id: string, name: strin
     .values({
       id,
       name,
-      sourceKind: 'managed',
       managedPath: skillFilesRel(id),
       contentVersion: 1,
       reservationState: 'ready',

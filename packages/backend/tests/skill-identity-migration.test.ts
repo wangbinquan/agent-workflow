@@ -253,7 +253,6 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       .values({
         id: huskId,
         name: owner.id,
-        sourceKind: 'managed',
         managedPath: skillFilesRel(huskId),
         contentVersion: 0,
         reservationState: 'ready',
@@ -277,7 +276,6 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       .values({
         id: 'legacy-alias-row',
         name: owner.id,
-        sourceKind: 'managed',
         managedPath: `skills/${owner.id}/files`,
         contentVersion: 0,
         reservationState: 'ready',
@@ -303,7 +301,6 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       .values({
         id: targetId,
         name: 'target',
-        sourceKind: 'managed',
         managedPath: skillFilesRel(targetId),
         contentVersion: 0,
         reservationState: 'reserving',
@@ -421,7 +418,6 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       .values({
         id,
         name: 'reserve-v1',
-        sourceKind: 'managed',
         managedPath: skillFilesRel(id),
         contentVersion: 1,
         reservationState: 'reserving',
@@ -768,7 +764,6 @@ function seedLegacySkill(
       id,
       name,
       description: '',
-      sourceKind: 'managed',
       managedPath,
       contentVersion: versions,
       reservationState: 'ready',
@@ -824,7 +819,6 @@ function seedCanonicalSkill(
       id,
       name,
       description: '',
-      sourceKind: 'managed',
       managedPath: skillFilesRel(id),
       contentVersion: 1,
       reservationState: 'ready',

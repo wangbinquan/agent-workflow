@@ -81,7 +81,6 @@ function seedRepo(db: DbClient, slug: string): string {
     .values({
       id,
       urlHash: `${slug}00000000`.slice(0, 8),
-      url: `https://tok:secret@git.example/${slug}.git`,
       urlRedacted: `https://git.example/${slug}.git`,
       localPath: join(tmpdir(), 'repos', slug),
       defaultBranch: 'main',

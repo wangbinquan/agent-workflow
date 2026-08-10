@@ -280,7 +280,7 @@ describe('computeEligibleScopes', () => {
       .values({
         id: 'cr-1',
         urlHash: 'aabbccdd',
-        url: 'https://github.com/acme/web.git',
+        urlRedacted: 'https://github.com/acme/web.git',
         localPath: '/tmp/r',
         lastFetchedAt: Date.now(),
         createdAt: Date.now(),

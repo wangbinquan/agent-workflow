@@ -32,6 +32,7 @@ import { ulid } from 'ulid'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, taskSpaceNodes } from '../src/db/schema'
+import { rememberVolatileRepoUrl } from '../src/services/repoCredentials'
 import { createRepoGroup, updateRepoGroup } from '../src/services/repoGroup'
 import { createWorkflow } from '../src/services/workflow'
 import { getTask, materializeSpace, startTask } from '../src/services/task'
@@ -87,20 +88,21 @@ function seedRepo(name: string, files: Record<string, string>): { id: string; pa
 
   const id = ulid()
   const now = Date.now()
+  const url = pathToFileURL(dir).href
   db.insert(cachedRepos)
     .values({
       id,
       urlHash: `${name}00000000`.slice(0, 8),
       // RFC-254: `file://${winPath}` is malformed on Windows (`file://C:\…`);
       // pathToFileURL yields the valid `file:///C:/…` git can actually clone.
-      url: pathToFileURL(dir).href,
-      urlRedacted: pathToFileURL(dir).href,
+      urlRedacted: url,
       localPath: dir,
       defaultBranch: 'main',
       lastFetchedAt: now,
       createdAt: now,
     })
     .run()
+  rememberVolatileRepoUrl(db, id, url)
   return { id, path: dir }
 }
 

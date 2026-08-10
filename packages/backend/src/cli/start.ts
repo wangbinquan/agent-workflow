@@ -4,7 +4,7 @@ import { createSecretBox } from '@/auth/secretBox'
 import { setPushCredentialResolver } from '@/services/gitCredential'
 import { tokenAuditRetentionDays } from '@/services/mcpSurface'
 import { pruneTokenAudit } from '@/services/tokenAudit'
-import { ensureCredentialsSealed } from '@/services/repoCredentials'
+import { ensureCredentialsSealed, unsealRepoUrl } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
@@ -372,8 +372,16 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     : 0
   log.info('db ready', { path: Paths.db, dbVersion })
 
+  // RFC-279: migration 0147 can leave a direct-upgrade legacy URL under a
+  // closed escrow prefix. Create the daemon SecretBox and converge credentials
+  // immediately after openDb, before any recovery, seeder, scheduler, or HTTP
+  // behavior can observe the database.
+  const secretBox = createSecretBox(Paths.secretKeyFile)
+  log.info('secret box ready', { keyFile: Paths.secretKeyFile })
+  ensureCredentialsSealed(db, secretBox)
+
   // 5a. RFC-223 PR-5: the ONE fail-closed skill identity barrier. It must be
-  // the first production DB/FS behavior after migrations: recover every
+  // the first skill DB/FS behavior after credential convergence: recover every
   // legacy/current structural op while locks remain evidence, migrate
   // skills/{name} -> skills/{id}, and prove DB/FS/FK consistency before users,
   // orphan reaping, reconcilers, seeders, schedulers, fusion, or HTTP can run.
@@ -545,37 +553,20 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const token = ensureTokenFile(Paths.tokenFile)
   log.info('token ready', { tokenFile: Paths.tokenFile })
 
-  // 6b. RFC-036 secret box (generate-on-first-run, chmod 600). Used to seal
-  // OIDC client_secret values at rest. Losing the file makes every
-  // previously-stored secret unreadable — flag it in backup docs.
-  const secretBox = createSecretBox(Paths.secretKeyFile)
-  log.info('secret box ready', { keyFile: Paths.secretKeyFile })
-
-  // 6c. RFC-204 — seal repo credentials at rest. Idempotent and network-free
-  // (it never re-clones), so it is safe on every boot and cannot stall an
-  // upgrade on an unreachable remote.
-  ensureCredentialsSealed(db, secretBox)
   // RFC-205 G1 — push credential resolver: the mirror origin is
   // credential-free now, so the framework's own auto-push leases the secret
   // per push (askpass file, never argv/env/on-disk-config). Agents can't reach
   // it: no resolver in their process, no credential in the worktree's origin.
   setPushCredentialResolver(async (taskId) => {
     const rows = await db
-      .select({ urlEnc: cachedRepos.urlEnc, url: cachedRepos.url })
+      .select({ urlEnc: cachedRepos.urlEnc })
       .from(cachedRepos)
       .innerJoin(tasks, eq(tasks.cachedRepoId, cachedRepos.id))
       .where(eq(tasks.id, taskId))
       .limit(1)
     const row = rows[0]
     if (row === undefined) return null
-    if (row.urlEnc !== null) {
-      try {
-        return secretBox.unseal(row.urlEnc)
-      } catch {
-        return null
-      }
-    }
-    return row.url !== '' ? row.url : null
+    return unsealRepoUrl(row, secretBox)
   })
 
   // RFC-238 — complete boot recovery before accepting a playground request.

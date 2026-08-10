@@ -347,7 +347,6 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
       id,
       name: 'legacy',
       description: 'd',
-      sourceKind: 'managed',
       managedPath: `skills/${id}/files`,
       versionState: 'legacy-unbackfilled',
       contentVersion: 0,

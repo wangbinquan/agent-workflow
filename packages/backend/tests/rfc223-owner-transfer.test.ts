@@ -52,7 +52,7 @@ async function seedResource(
       await db.insert(agents).values({ id, name, ...acl })
       break
     case 'skill':
-      await db.insert(skills).values({ id, name, sourceKind: 'managed', ...acl })
+      await db.insert(skills).values({ id, name, ...acl })
       break
     case 'mcp':
       await db.insert(mcps).values({ id, name, type: 'local', ...acl })

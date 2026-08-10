@@ -8,9 +8,10 @@
 // workflows but NOT `secret.key`, so a sealed DB in a backup is genuinely safe.
 //
 // Scope of the unseal: almost nothing needs the plaintext. Warm fetches run
-// against the mirror's own `origin`, the file:// re-key and the refresh/delete
-// diagnostics read `url_redacted`, and refTaskCount now joins `cached_repo_id`.
-// The single reader is the reuse-by-cachedRepoId launch branch.
+// against the mirror's own `origin`; refresh/delete diagnostics read
+// `url_redacted`; and refTaskCount joins `cached_repo_id`. The remaining readers
+// are credential leases, reuse-by-cachedRepoId, webhook collision verification,
+// and verified file:// legacy re-keying.
 //
 // NOT a boundary against local runtime children: they run at the daemon's uid
 // and can read files available to that account. This module protects API,
@@ -25,6 +26,7 @@ import {
 import { DomainError } from '@/util/errors'
 import { and, eq, sql } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
+import { TextDecoder } from 'node:util'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { cachedRepos, scheduledTasks, taskRepos, tasks } from '@/db/schema'
@@ -34,6 +36,50 @@ import { redactSensitiveString } from '@/util/redact'
 const log = createLogger('repo-credentials')
 
 const sha1Hex = (s: string): string => createHash('sha1').update(s).digest('hex')
+const LEGACY_URL_ESCROW_PREFIX = 'aw-legacy-url-hex-v1:'
+const utf8Fatal = new TextDecoder('utf-8', { fatal: true })
+const volatileRepoUrls = new WeakMap<DbClient, Map<string, string>>()
+
+/**
+ * Key-less embeddings may keep using a just-created cache row in this process,
+ * but the original URL must never be persisted. The WeakMap is deliberately
+ * scoped to the DbClient identity: a reopen creates a new client and therefore
+ * cannot recover this volatile capability.
+ */
+export function rememberVolatileRepoUrl(db: DbClient, id: string, url: string): void {
+  let byId = volatileRepoUrls.get(db)
+  if (byId === undefined) {
+    byId = new Map()
+    volatileRepoUrls.set(db, byId)
+  }
+  byId.set(id, url)
+}
+
+export function forgetVolatileRepoUrl(db: DbClient, id: string): void {
+  volatileRepoUrls.get(db)?.delete(id)
+}
+
+function decodeLegacyUrlEscrow(value: string): string {
+  const hex = value.slice(LEGACY_URL_ESCROW_PREFIX.length)
+  if (hex.length === 0 || hex.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(hex)) {
+    throw new DomainError(
+      'cached-repo-legacy-url-escrow-invalid',
+      'cached repo legacy URL escrow is malformed; refusing to continue',
+      500,
+    )
+  }
+  try {
+    const plain = utf8Fatal.decode(Buffer.from(hex, 'hex'))
+    if (plain.length === 0) throw new Error('empty escrow')
+    return plain
+  } catch {
+    throw new DomainError(
+      'cached-repo-legacy-url-escrow-invalid',
+      'cached repo legacy URL escrow is malformed; refusing to continue',
+      500,
+    )
+  }
+}
 
 /** Seal a repo URL for storage. */
 export function sealRepoUrl(secretBox: SecretBox, url: string): string {
@@ -43,15 +89,20 @@ export function sealRepoUrl(secretBox: SecretBox, url: string): string {
 /**
  * Recover the usable (credentialed) URL for a cached repo row.
  *
- * Falls back to the legacy plaintext column so a row that has not been through
- * the sealing gate yet — or an install running without a SecretBox, e.g. tests —
- * keeps working. Returns null only when neither form is present.
+ * Migration escrow is deliberately rejected here: only the first boot sealing
+ * gate may decode it. Without ciphertext/key, callers may recover only the
+ * current DbClient's deliberately volatile capability; otherwise returns null.
  */
 export function unsealRepoUrl(
-  row: { url: string; urlEnc: string | null },
+  row: { id?: string; urlEnc: string | null },
   secretBox: SecretBox | undefined,
+  db?: DbClient,
 ): string | null {
   if (row.urlEnc !== null && row.urlEnc.length > 0) {
+    if (row.urlEnc.startsWith(LEGACY_URL_ESCROW_PREFIX)) {
+      log.warn('cached repo legacy URL escrow reached an ordinary read path')
+      return null
+    }
     if (secretBox === undefined) {
       // Sealed at rest but no key wired in — refuse rather than fall back to a
       // blanked plaintext column and launch against the wrong thing.
@@ -67,7 +118,10 @@ export function unsealRepoUrl(
       return null
     }
   }
-  return row.url.length > 0 ? row.url : null
+  if (db !== undefined && row.id !== undefined) {
+    return volatileRepoUrls.get(db)?.get(row.id) ?? null
+  }
+  return null
 }
 
 /** Columns whose historical values may embed a `?access_token=` style secret. */
@@ -139,7 +193,7 @@ export function ensureCredentialsSealed(
       .select()
       .from(cachedRepos)
       .all()
-      .filter((r) => hasQueryCredential(r.url.length > 0 ? r.url : (r.urlRedacted ?? '')))
+      .filter((r) => hasQueryCredential(r.urlRedacted ?? ''))
     if (credentialed.length > 0) {
       throw new DomainError(
         'backup-credentialed-path',
@@ -153,18 +207,38 @@ export function ensureCredentialsSealed(
     }
   }
 
-  // 1. Seal cached_repos and blank the plaintext column.
+  // 1. Convert migration escrow to real ciphertext and repair a missing safe
+  // display form from decryptable ciphertext. Ordinary readers never decode
+  // the closed escrow prefix.
+  const pending = db.select().from(cachedRepos).all()
+  const escrowPending = pending.some((row) => row.urlEnc?.startsWith(LEGACY_URL_ESCROW_PREFIX))
+  if (escrowPending && secretBox === undefined) {
+    throw new DomainError(
+      'cached-repo-legacy-url-escrow-key-unavailable',
+      'cached repo legacy URL escrow requires SecretBox sealing before startup can continue',
+      500,
+    )
+  }
   if (secretBox !== undefined) {
-    const pending = db.select().from(cachedRepos).all()
     for (const row of pending) {
-      if (row.urlRedacted !== null && row.url.length === 0) continue // already sealed
-      const plain = row.url.length > 0 ? row.url : null
-      if (plain === null) continue
+      if (row.urlEnc === null || row.urlEnc.length === 0) continue
+      const isEscrow = row.urlEnc.startsWith(LEGACY_URL_ESCROW_PREFIX)
+      if (!isEscrow && row.urlRedacted !== null) continue
+      let plain: string
+      if (isEscrow) {
+        plain = decodeLegacyUrlEscrow(row.urlEnc)
+      } else {
+        try {
+          plain = secretBox.unseal(row.urlEnc)
+        } catch {
+          log.warn('failed to repair cached repo redaction (wrong or lost secret.key?)')
+          continue
+        }
+      }
       db.update(cachedRepos)
         .set({
-          urlEnc: row.urlEnc ?? sealRepoUrl(secretBox, plain),
-          urlRedacted: row.urlRedacted ?? redactGitUrl(plain),
-          url: '',
+          urlEnc: isEscrow ? sealRepoUrl(secretBox, plain) : row.urlEnc,
+          urlRedacted: redactGitUrl(plain),
         })
         .where(eq(cachedRepos.id, row.id))
         .run()

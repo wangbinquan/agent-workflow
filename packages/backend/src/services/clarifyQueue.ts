@@ -231,9 +231,8 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
   for (const e of visible) {
     let render: FlatClarifyEntry | undefined
     if (e.sourceKind === 'manual') {
-      const hasContent =
-        (e.manualTitle ?? '').trim().length > 0 || (e.manualBody ?? '').trim().length > 0
-      if (hasContent) render = { manualTitle: e.manualTitle, manualBody: e.manualBody }
+      const hasContent = e.questionTitle.trim().length > 0 || (e.manualBody ?? '').trim().length > 0
+      if (hasContent) render = { manualTitle: e.questionTitle, manualBody: e.manualBody }
     } else {
       const round = roundByOrigin.get(e.originNodeRunId)
       // RFC-172 (route 2): when the caller is shard-scoped (workgroup member), keep a clarify

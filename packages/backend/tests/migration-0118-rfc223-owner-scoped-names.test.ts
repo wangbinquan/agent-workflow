@@ -37,10 +37,21 @@ function insertResource(
       raw.exec(`INSERT INTO agents (id, name, owner_user_id) VALUES ('${id}', '${name}', ${owner})`)
       return
     case 'skills':
-      raw.exec(
-        `INSERT INTO skills (id, name, source_kind, owner_user_id)
-         VALUES ('${id}', '${name}', 'managed', ${owner})`,
-      )
+      if (
+        (raw.query("PRAGMA table_info('skills')").all() as Array<{ name: string }>).some(
+          (column) => column.name === 'source_kind',
+        )
+      ) {
+        raw.exec(
+          `INSERT INTO skills (id, name, source_kind, owner_user_id)
+           VALUES ('${id}', '${name}', 'managed', ${owner})`,
+        )
+      } else {
+        raw.exec(
+          `INSERT INTO skills (id, name, owner_user_id)
+           VALUES ('${id}', '${name}', ${owner})`,
+        )
+      }
       return
     case 'mcps':
       raw.exec(

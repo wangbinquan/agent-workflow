@@ -19,7 +19,7 @@ import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, scheduledTasks, taskRepos, tasks, workflows } from '../src/db/schema'
-import { gitUrlCacheKeyWith, parseGitUrl } from '@agent-workflow/shared'
+import { gitUrlCacheKeyWith, parseGitUrl, redactGitUrl } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
 import { ensureCredentialsSealed, unsealRepoUrl } from '../src/services/repoCredentials'
 
@@ -42,7 +42,8 @@ function seedRepo(db: DbClient, id: string, url: string, hash = hashOf(url)): vo
     .values({
       id,
       urlHash: hash,
-      url,
+      urlEnc: box.seal(url),
+      urlRedacted: redactGitUrl(url),
       localPath: `/tmp/repos/${hash}`,
       lastFetchedAt: now,
       createdAt: now,
@@ -93,13 +94,12 @@ describe('RFC-204 T7 — credential sealing gate', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('seals the credential and blanks the plaintext column', () => {
+  test('keeps a current sealed credential readable without a plaintext column', () => {
     seedRepo(db, 'cr-1', CRED_URL)
     const r = ensureCredentialsSealed(db, box)
-    expect(r.sealed).toBe(1)
+    expect(r.sealed).toBe(0)
 
     const row = db.select().from(cachedRepos).all()[0]!
-    expect(row.url).toBe('')
     expect(row.urlEnc).not.toBeNull()
     expect(row.urlRedacted).toBe('https://***@github.com/acme/private.git')
     // the ciphertext must not simply be the secret in disguise
@@ -124,7 +124,7 @@ describe('RFC-204 T7 — credential sealing gate', () => {
   test('is idempotent — a second run changes nothing', () => {
     seedRepo(db, 'cr-1', CRED_URL)
     const first = ensureCredentialsSealed(db, box)
-    expect(first.sealed).toBe(1)
+    expect(first.sealed).toBe(0)
     const before = JSON.stringify(db.select().from(cachedRepos).all())
 
     const second = ensureCredentialsSealed(db, box)
@@ -171,15 +171,17 @@ describe('RFC-204 T7 — credential sealing gate', () => {
     // that re-resolved the URL would hang the daemon boot here.
     seedRepo(db, 'cr-gone', CRED_URL)
     const r = ensureCredentialsSealed(db, box)
-    expect(r.sealed).toBe(1)
-    expect(db.select().from(cachedRepos).all()[0]?.url).toBe('')
+    expect(r.sealed).toBe(0)
+    expect(db.select().from(cachedRepos).all()[0]?.urlEnc).not.toBeNull()
   })
 
-  test('without a SecretBox nothing is sealed and nothing is destroyed', () => {
+  test('without a SecretBox ciphertext is preserved but cannot be read', () => {
     seedRepo(db, 'cr-1', CRED_URL)
     const r = ensureCredentialsSealed(db, undefined)
     expect(r.sealed).toBe(0)
-    expect(db.select().from(cachedRepos).all()[0]?.url).toBe(CRED_URL)
+    const row = db.select().from(cachedRepos).all()[0]!
+    expect(row.urlEnc).not.toBeNull()
+    expect(unsealRepoUrl(row, undefined)).toBeNull()
   })
 
   test('a sealed row read without the key fails closed rather than guessing', () => {
@@ -314,8 +316,8 @@ describe('RFC-204 impl-gate P0-1 — backup refuses a query-credential on-disk p
       .values({
         id: ulid(),
         urlHash: 'h1',
-        url: 'https://h/r.git?access_token=TOPSECRET',
-        urlRedacted: null,
+        urlEnc: box.seal('https://h/r.git?access_token=TOPSECRET'),
+        urlRedacted: 'https://h/r.git?access_token=***',
         localPath: '/h/.agent-workflow/repos/h1-r.git-access_token-TOPSECRET',
         defaultBranch: 'main',
         lastFetchedAt: 1,
@@ -324,7 +326,7 @@ describe('RFC-204 impl-gate P0-1 — backup refuses a query-credential on-disk p
       .run()
 
     // Startup context (no flag): must NOT block — the daemon has to boot. It
-    // seals the URL column (blanks it) but leaves urlRedacted with the query key.
+    // keeps the sealed URL and leaves urlRedacted with the query key.
     expect(() => ensureCredentialsSealed(db, box)).not.toThrow()
 
     // Backup context: refuse — the local_path still embeds the plaintext token.
@@ -343,8 +345,8 @@ describe('RFC-204 impl-gate P0-1 — backup refuses a query-credential on-disk p
       .values({
         id: ulid(),
         urlHash: 'h2',
-        url: 'https://h/clean.git',
-        urlRedacted: null,
+        urlEnc: box.seal('https://h/clean.git'),
+        urlRedacted: 'https://h/clean.git',
         localPath: '/h/.agent-workflow/repos/h2-clean',
         defaultBranch: 'main',
         lastFetchedAt: 1,

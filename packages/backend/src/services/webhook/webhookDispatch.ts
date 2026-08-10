@@ -184,7 +184,7 @@ export async function resolveRepoForEvent(
     // F-17：url_hash 是 8-hex sha1 截断（git-url.ts:293-295 自认碰撞风险）。
     // 人工启动时人眼可见仓名，webhook 自动化下碰撞 = 静默在错误仓库上跑任务
     // 并用写凭据 push —— 桶命中后 unseal 原 URL 做 canonical 等值复核。
-    const plain = unsealRepoUrl({ url: row.url, urlEnc: row.urlEnc }, secretBox)
+    const plain = unsealRepoUrl(row, secretBox)
     if (plain !== null) {
       const rowParsed = parseGitUrl(plain)
       if (

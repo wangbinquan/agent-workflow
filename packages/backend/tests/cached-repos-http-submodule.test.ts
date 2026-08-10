@@ -57,7 +57,7 @@ describe('cached-repos HTTP RFC-034 submodule telemetry', () => {
       .values({
         id: ulid(),
         urlHash: 'aaaa1111',
-        url: 'git@github.com:foo/with-subs.git',
+        urlRedacted: 'git@github.com:foo/with-subs.git',
         localPath: '/tmp/aw-mock-cache/aaaa1111',
         defaultBranch: 'main',
         lastFetchedAt: now,
@@ -72,7 +72,7 @@ describe('cached-repos HTTP RFC-034 submodule telemetry', () => {
       .values({
         id: ulid(),
         urlHash: 'bbbb2222',
-        url: 'git@github.com:foo/no-subs.git',
+        urlRedacted: 'git@github.com:foo/no-subs.git',
         localPath: '/tmp/aw-mock-cache/bbbb2222',
         defaultBranch: 'main',
         lastFetchedAt: now,

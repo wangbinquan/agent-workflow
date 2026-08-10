@@ -312,7 +312,6 @@ describe('RFC-257 T6 · resolveRepoForEvent（AC-8）', () => {
     await db.insert(cachedRepos).values({
       id,
       urlHash: key.hash,
-      url: '',
       urlEnc: box.seal(url),
       urlRedacted: url,
       localPath: `/repos/${id}`,
@@ -344,7 +343,6 @@ describe('RFC-257 T6 · resolveRepoForEvent（AC-8）', () => {
     await h.db.insert(cachedRepos).values({
       id: 'cr-evil',
       urlHash: key.hash,
-      url: '',
       urlEnc: box.seal('https://gitlab.example.com/other/repo.git'),
       urlRedacted: 'x',
       localPath: '/repos/cr-evil',

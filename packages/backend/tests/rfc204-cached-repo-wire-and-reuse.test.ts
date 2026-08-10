@@ -31,8 +31,7 @@ function seedCredentialedRepo(db: ReturnType<typeof createInMemoryDb>, id: strin
     .values({
       id,
       urlHash: 'a1b2c3d4',
-      // exactly how a private repo is onboarded today
-      url: `https://x-access-token:${TOKEN}@github.com/acme/private.git`,
+      urlRedacted: 'https://***@github.com/acme/private.git',
       localPath: '/tmp/repos/a1b2c3d4-private',
       lastFetchedAt: now,
       createdAt: now,
@@ -60,19 +59,28 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
     const wire = JSON.stringify(items)
     expect(wire).not.toContain(TOKEN)
     expect(wire).not.toContain('x-access-token:')
-    expect(items[0]?.urlRedacted).toContain('github.com/acme/private.git')
+    expect(items[0]?.urlRedacted).toBe('https://***@github.com/acme/private.git')
   })
 
-  test('a legacy row (url_redacted not yet backfilled) is still safe', async () => {
-    // The sealing gate backfills url_redacted; until it runs, rowToCached must
-    // fall back to redacting the legacy column rather than emitting it raw.
+  test('a row missing url_redacted fails closed to a placeholder', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    seedCredentialedRepo(db, ulid())
+    const now = Date.now()
+    db.insert(cachedRepos)
+      .values({
+        id: ulid(),
+        urlHash: 'legacy00',
+        urlEnc: 'unreadable-without-key',
+        localPath: '/tmp/repos/legacy00',
+        lastFetchedAt: now,
+        createdAt: now,
+      })
+      .run()
     const row = db.select().from(cachedRepos).all()[0]
-    expect(row?.urlRedacted).toBeNull() // precondition: not backfilled
+    expect(row?.urlRedacted).toBeNull()
 
     const items = await listCachedRepos(db)
     expect(JSON.stringify(items)).not.toContain(TOKEN)
+    expect(items[0]?.urlRedacted).toBe('<url unavailable>')
   })
 
   test('a query-form token in the local path is redacted on the wire', async () => {
@@ -84,7 +92,7 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
       .values({
         id: ulid(),
         urlHash: 'deadbeef',
-        url: `https://github.com/acme/p.git?access_token=${TOKEN}`,
+        urlRedacted: 'https://github.com/acme/p.git?access_token=***',
         localPath: `/tmp/repos/deadbeef-p.git?access_token=${TOKEN}`,
         lastFetchedAt: now,
         createdAt: now,

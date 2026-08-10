@@ -295,7 +295,6 @@ describe('lazy backfill + reconcile', () => {
       .values({
         id,
         name,
-        sourceKind: 'managed',
         managedPath: `skills/${id}/files`,
       })
       .run()

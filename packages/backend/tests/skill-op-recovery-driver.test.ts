@@ -32,7 +32,7 @@ describe('recoverSkillOperations — boot driver', () => {
   function seedSkill(name: string): string {
     const id = ulid()
     db.insert(skills)
-      .values({ id, name, sourceKind: 'managed', managedPath: `skills/${name}/files` })
+      .values({ id, name, managedPath: `skills/${name}/files` })
       .run()
     return id
   }

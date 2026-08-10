@@ -653,7 +653,7 @@ export async function resolveRepoSourceSingle(
         `cached repo '${specCachedRepoId}' not found`,
       )
     }
-    const plain = unsealRepoUrl(row, deps.secretBox)
+    const plain = unsealRepoUrl(row, deps.secretBox, deps.db)
     if (plain === null) {
       throw new DomainError(
         'cached-repo-credential-unavailable',

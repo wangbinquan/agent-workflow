@@ -77,7 +77,6 @@ describe('RFC-223 PR-7 — canonical id resource routes', () => {
     await db.insert(skills).values({
       id: skill!.id,
       name: skill!.name,
-      sourceKind: 'managed',
       managedPath: `skills/${skill!.id}/files/`,
       ownerUserId: alice.id,
     })

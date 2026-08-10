@@ -65,7 +65,6 @@ describe('RFC-170 reserve op', () => {
       .values({
         id,
         name: 'pending',
-        sourceKind: 'managed',
         managedPath: 'skills/pending/files',
         reservationState: 'reserving',
       })
@@ -83,7 +82,6 @@ describe('RFC-170 reserve op', () => {
         .values({
           id,
           name: 'half',
-          sourceKind: 'managed',
           managedPath: 'skills/half/files',
           reservationState: 'reserving',
         })
@@ -113,7 +111,6 @@ describe('RFC-170 reserve op', () => {
         .values({
           id,
           name: 'done1',
-          sourceKind: 'managed',
           managedPath: 'skills/done1/files',
           reservationState: 'reserving',
         })

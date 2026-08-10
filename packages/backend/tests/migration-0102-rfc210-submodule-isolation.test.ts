@@ -93,8 +93,9 @@ describe('migration 0102 — RFC-210 submodule isolation columns', () => {
     withMigratedDb((db) => {
       // A legacy-shaped insert must still work — the columns are additive.
       db.run(
-        `INSERT INTO cached_repos (id, url_hash, url, local_path, last_fetched_at, created_at)
-         VALUES ('r1', 'h1', '', '/tmp/r1', 0, 0)`,
+        `INSERT INTO cached_repos (
+           id, url_hash, url_redacted, local_path, last_fetched_at, created_at
+         ) VALUES ('r1', 'h1', 'https://example.test/r1', '/tmp/r1', 0, 0)`,
       )
       const row = db.query(`SELECT last_auto_refresh_at FROM cached_repos WHERE id='r1'`).get() as {
         last_auto_refresh_at: number | null

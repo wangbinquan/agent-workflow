@@ -61,7 +61,6 @@ function seed(appHome: string): void {
     .values({
       id: ulid(),
       urlHash: 'abcd1234',
-      url: '',
       urlEnc: sealRepoUrl(box, 'https://user:token@github.com/a/b.git'),
       localPath: '/x',
       lastFetchedAt: 0,

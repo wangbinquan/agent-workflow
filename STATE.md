@@ -2,6 +2,8 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+🚧 **进行中 RFC（In Progress，2026-08-10 完整本地门禁已通过）：[RFC-279 数据库冗余字段收口](design/RFC-279-database-redundancy-cleanup/proposal.md)** —— 用户已批准清理 P1 + P2 七列。0147 以 fail-closed guard 删除 managed-only/休眠/重复状态，旧 `cached_repos.url` 直升先落 closed escrow、再在任何业务行为前用 SecretBox 密封；Skill 与 task-question wire 保持兼容，skill operation 收窄为当前四 kind + 单 ID lock。迁移反向保护、滚动升级及定向 service suites 已绿，`gate:local` 7m14s 全绿（backend 四分片、shared 1972、frontend 6259），等待发布 CI。
+
 ✅ **已完成 RFC（Done，2026-08-10）：[RFC-278 历史迁移漂移受控收敛](design/RFC-278-legacy-schema-reconciliation/proposal.md)** —— `52196e1d` 只放行 8 个 exact tag/when/hash aliases，并按用户“表该精简精简”要求以 0145 无损收敛 recovery、清空重建短期 MCP receipt、删除 `recent_repos` 与一次性 legacy runtime archive；最终 physical admission 仍 fail closed，未恢复任何 RFC-276 安全加固入口。真实 live 自动备份后完成 141→145：recovery 19 行前后 digest 一致、receipt 1→0、退役表删除、quick/FK 全绿、`/health` 报 dbVersion 145/runningTasks 0；设置页同一 OpenCode“测试”按钮现场返回“符合（session captured, nonce echoed）”。低并发完整 `gate:local` 全绿（backend 9319 pass / 30 skip，shared 1970，frontend 6258），精确 SHA CI run 31380410981 共 36 jobs 全部成功。
 
 🚧 **进行中 RFC（In Progress，2026-08-10 功能与定向验证已完成）：[RFC-277 GitLab 连接 TLS 证书校验开关](design/RFC-277-gitlab-tls-verification/proposal.md)** —— 默认与存量继续校验证书；仅允许 GitLab 显式设置 `rejectUnauthorized:false`，测试连接与真实代码平台调用消费同一持久化值，第三方重定向不继承。shared 52、backend 68+27、frontend 5 与精确 lint/format/diff 均绿；全仓 backend typecheck 只剩并行 RFC-276 正在删除的旧 `sandboxMode` / `executionPolicy` 测试引用，待其收口后补跑 full gate 并置 Done。

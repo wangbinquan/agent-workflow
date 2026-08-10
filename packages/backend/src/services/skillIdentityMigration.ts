@@ -482,15 +482,6 @@ function assertRecoveryPreconditions(
     .from(skillOperationLocks)
     .all()
   for (const op of active) {
-    // RFC-178 retired the only two-id structural operation. A non-null
-    // next_skill_id on any currently supported kind is therefore not a lock
-    // capability to honor; it is malformed durable state that must fail-stop.
-    if (op.nextSkillId !== null) {
-      throw new ValidationError(
-        'skill-migration-operation-authority-invalid',
-        `active ${op.kind} operation ${op.opId} has an unsupported next_skill_id`,
-      )
-    }
     if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(op.opId)) {
       throw new ValidationError(
         'skill-migration-operation-id-invalid',
@@ -929,14 +920,6 @@ function preflightPhysicalOwnershipGraph(
       }
     }
     addRootClaim(op.skillId, operationRoot, `active ${op.kind} operation root`)
-
-    if (op.nextSkillId !== null) {
-      addPhysicalClaim(
-        op.nextSkillId,
-        skillRootAbs(appHome, op.nextSkillId),
-        `active ${op.kind} next-skill root`,
-      )
-    }
 
     for (const [column, storedPath] of [
       ['staging_path', op.stagingPath],

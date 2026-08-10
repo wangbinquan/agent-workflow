@@ -193,8 +193,8 @@ function rowToSkillVersion(row: SkillVersionRow, skillName: string): SkillVersio
 /**
  * Lazily snapshot a managed skill's CURRENT files/ as v1 when it has no
  * skill_versions rows yet (legacy skill created before this RFC). Idempotent;
- * called at the top of every version-funnel access. No-op for non-managed
- * skills or skills whose files/ has no SKILL.md (e.g. mid-create).
+ * called at the top of every version-funnel access. No-op when files/ has no
+ * SKILL.md (e.g. mid-create).
  */
 export function ensureInitialSkillVersion(
   db: DbClient,
@@ -202,7 +202,7 @@ export function ensureInitialSkillVersion(
   skillId: string,
 ): void {
   const skill = loadSkillRow(db, skillId)
-  if (!skill || skill.sourceKind !== 'managed') return
+  if (!skill) return
   if (versionRows(db, skillId).length > 0) return
   const filesDir = skillFilesAbs(opts.appHome, skillId)
   if (!existsSync(join(filesDir, 'SKILL.md'))) return
@@ -299,11 +299,7 @@ export function backfillLegacySkillVersions(
     .select()
     .from(skills)
     .where(
-      and(
-        eq(skills.sourceKind, 'managed'),
-        eq(skills.versionState, 'legacy-unbackfilled'),
-        eq(skills.reservationState, 'ready'),
-      ),
+      and(eq(skills.versionState, 'legacy-unbackfilled'), eq(skills.reservationState, 'ready')),
     )
     .all() as SkillRow[]
   let backfilled = 0
@@ -516,13 +512,6 @@ export function stageSkillVersion(
 ): StagedSkillVersion {
   const skill = loadSkillRow(db, skillId)
   if (!skill) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
-  if (skill.sourceKind !== 'managed') {
-    throw new ConflictError(
-      'skill-not-managed',
-      `skill '${skill.name}' is not managed; cannot version`,
-    )
-  }
-
   if (commit.source !== 'initial') ensureInitialSkillVersion(db, opts, skillId)
 
   const cur = loadSkillRow(db, skillId)
@@ -954,7 +943,7 @@ export function restoreSkillVersion(
  * write re-syncs), so we accept it rather than risk data loss.
  */
 export function reconcileSkillLiveFiles(db: DbClient, opts: SkillVersionFsOptions): void {
-  const rows = db.select().from(skills).where(eq(skills.sourceKind, 'managed')).all() as SkillRow[]
+  const rows = db.select().from(skills).all() as SkillRow[]
   for (const skill of rows) {
     try {
       ensureInitialSkillVersion(db, opts, skill.id)

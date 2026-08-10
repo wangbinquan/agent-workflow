@@ -210,14 +210,12 @@ describe('RFC-223 AC10 portable import reference resolution', () => {
     await db.insert(skills).values({
       id: 'skill-a',
       name: 'lint',
-      sourceKind: 'managed',
       ownerUserId: 'owner-a',
       visibility: 'public',
     })
     await db.insert(skills).values({
       id: 'skill-b',
       name: 'lint',
-      sourceKind: 'managed',
       ownerUserId: 'owner-b',
       visibility: 'public',
     })

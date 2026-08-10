@@ -189,7 +189,6 @@ describe('RFC-223 ordinary reference final-transaction fences', () => {
           await db.insert(skills).values({
             id,
             name: `skill-${id}`,
-            sourceKind: 'managed',
             ownerUserId: 'target-owner',
             visibility: 'public',
           })

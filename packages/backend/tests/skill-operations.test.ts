@@ -2,10 +2,8 @@
 //
 // Locks in the two-phase-commit invariants:
 //   - beginOperation writes phase='intent'+active=1 AND acquires locks same-tx;
-//   - the UNIVERSAL exclusion is the locks table, NOT the ops partial-unique —
-//     a replace locking old+new must exclude a single-id op on the NEW id, which
-//     the ops-table `(skill_id) WHERE active=1` cannot (its row's skill_id=old).
-//     G6-2 was the round-6 finding; the cross-id test below locks it in.
+//   - the UNIVERSAL exclusion is the locks table; RFC-279 removed the retired
+//     two-id slot, so every current op acquires exactly its primary skill lock;
 //   - locks live until finishOperation (done), released same-tx; abandon also
 //     releases; boot GCs orphan locks only after active-op recovery.
 
@@ -63,19 +61,6 @@ describe('skillOperations primitives', () => {
     // The failed begin rolled back — still exactly one active op + one lock.
     expect(listActiveOps(db).filter((o) => o.skillId === skillId)).toHaveLength(1)
     expect(locksFor(skillId)).toBe(1)
-  })
-
-  test('G6-2: a two-id op (nextSkillId) locks both ids; a single-id op on the NEW id is excluded', () => {
-    const oldId = ulid()
-    const newId = ulid()
-    // RFC-178: the two-id lock capability is retained (dormant — the `replace` op
-    // that used it was removed); exercise it here with a valid kind + nextSkillId.
-    begin({ skillId: oldId, kind: 'reserve', nextSkillId: newId })
-    expect(locksFor(oldId)).toBe(1)
-    expect(locksFor(newId)).toBe(1)
-    // A delete whose OWN skill_id is newId — the ops partial-unique (keyed on the
-    // op row's skill_id = oldId) would NOT catch this; only the lock on newId does.
-    expect(() => begin({ skillId: newId, kind: 'delete' })).toThrow(ConflictError)
   })
 
   test('advancePhase moves the phase + persists a fingerprint patch', () => {

@@ -81,7 +81,7 @@ describe('GET /api/repos/refs|files path allowlist (route)', () => {
     const { app, userToken, db } = await harness()
     await db.insert(cachedRepos).values({
       id: 'cr1',
-      url: 'https://github.com/acme/x',
+      urlRedacted: 'https://github.com/acme/x',
       urlHash: 'h1',
       localPath: '/home/aw/repos/x',
       defaultBranch: 'main',

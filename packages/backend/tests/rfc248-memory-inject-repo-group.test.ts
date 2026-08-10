@@ -34,7 +34,6 @@ function seedRepo(slug: string): string {
     .values({
       id,
       urlHash: `${slug}00000000`.slice(0, 8),
-      url: `https://git.example/${slug}.git`,
       urlRedacted: `https://git.example/${slug}.git`,
       localPath: `/tmp/${slug}`,
       defaultBranch: 'main',

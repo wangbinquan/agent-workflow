@@ -4,7 +4,7 @@
 // Two concerns:
 //   1. At HEAD the migration DROPPED the external/source columns + the
 //      skill_sources table (and its index), and KEPT the managed columns
-//      (incl. migration_marker, retained for RFC-170's managed migrate op).
+//      (RFC-279 later removes migration_marker and source_kind at HEAD).
 //   2. The reference-cleanup + row deletion is CORRECT: replay 0000..0091
 //      (external columns still present), populate external + managed skills +
 //      agents that reference them, then exec the real 0092 SQL and assert:
@@ -63,7 +63,6 @@ describe('migration 0092 (RFC-178) — schema at HEAD', () => {
     }
     for (const kept of [
       'managed_path',
-      'migration_marker', // retained for RFC-170's managed migrate op
       'version_state',
       'reservation_state',
       'content_version',
@@ -72,6 +71,8 @@ describe('migration 0092 (RFC-178) — schema at HEAD', () => {
     ]) {
       expect(c).toContain(kept)
     }
+    expect(c).not.toContain('migration_marker')
+    expect(c).not.toContain('source_kind')
   })
 
   test('skill_sources table + skills_source_id_idx are gone', () => {
@@ -82,11 +83,7 @@ describe('migration 0092 (RFC-178) — schema at HEAD', () => {
     expect(idx.length).toBe(0)
   })
 
-  // NOTE: the DB `source_kind` CHECK is intentionally left as the superset
-  // IN ('managed','external') — DROP COLUMN doesn't rebuild it, and tightening a
-  // dead enum value via a full table rebuild isn't worth the risk (design §2/§4).
-  // The TS `sourceKind` enum is narrowed to 'managed', and no code produces
-  // 'external' anymore, so the wider DB CHECK is harmless.
+  // RFC-279 physically removes the managed-only source_kind discriminator.
 })
 
 // -----------------------------------------------------------------------------

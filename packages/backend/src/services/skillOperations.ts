@@ -10,10 +10,7 @@
 //   ⑤ finishOperation sets phase='done' + active=0 and releases locks same-tx.
 //
 // skill_operation_locks is the UNIVERSAL exclusion primitive (G6-2): EVERY op
-// inserts one lock row per affected skillId (single-id ops lock 1; the two-id
-// lock capability via next_skill_id is retained but dormant since RFC-178 removed
-// the `replace` op that used it). PK conflict on any target → ConflictError (409
-// busy). The second-id lock guards what the ops-table partial-unique cannot.
+// inserts one lock row for its skillId. PK conflict → ConflictError (409 busy).
 // Locks are held until phase='done' (released in finishOperation's tx), so a
 // swap-committed-but-backup-not-cleaned window still excludes a new-id op.
 //
@@ -32,7 +29,7 @@ import { ConflictError, ValidationError } from '@/util/errors'
  * source skills gone) and `adopt-managed` (external adoption — external skills
  * gone); neither was ever produced (no beginOperation emitted them). The DB CHECK
  * from migration 0090 keeps the wider superset (harmless — no row ever carries the
- * removed kinds), so no table rebuild is needed.
+ * removed kinds). RFC-279 narrowed the physical CHECK to this same set.
  */
 export type SkillOpKind = 'reserve' | 'migrate' | 'delete' | 'version-write'
 
@@ -51,8 +48,6 @@ export type SkillOpPhase =
 export interface BeginOperationSpec {
   skillId: string
   kind: SkillOpKind
-  /** replace/reserve-into-slot: the SECOND affected skillId, also locked. */
-  nextSkillId?: string
   stagingPath?: string
   backupPath?: string
   candidatePath?: string
@@ -98,15 +93,14 @@ export function releaseOpLocks(tx: DbTxSync, opId: string): void {
 
 /**
  * §6a step ①: durably record intent. INSERTs the op row at phase='intent',
- * active=1, and acquires locks for the skill (plus nextSkillId when present) in
+ * active=1, and acquires the lock for the skill in
  * the SAME tx — so a crash after this leaves a recoverable, locked op. Returns
  * the generated opId. Wrap in dbTxSync; a busy-lock throw rolls the whole tx
  * back (no orphan op row).
  */
 export function beginOperation(tx: DbTxSync, spec: BeginOperationSpec): string {
   const opId = ulid()
-  const affected = spec.nextSkillId ? [spec.skillId, spec.nextSkillId] : [spec.skillId]
-  acquireOpLocks(tx, opId, affected)
+  acquireOpLocks(tx, opId, [spec.skillId])
   tx.insert(skillOperations)
     .values({
       opId,
@@ -114,7 +108,6 @@ export function beginOperation(tx: DbTxSync, spec: BeginOperationSpec): string {
       kind: spec.kind,
       phase: 'intent',
       active: 1,
-      nextSkillId: spec.nextSkillId ?? null,
       stagingPath: spec.stagingPath ?? null,
       backupPath: spec.backupPath ?? null,
       candidatePath: spec.candidatePath ?? null,
