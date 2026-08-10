@@ -130,6 +130,7 @@ afterEach(() => {
   cleanup()
   clearToken()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('McpRuntimeTestDialog', () => {
@@ -173,7 +174,54 @@ describe('McpRuntimeTestDialog', () => {
     expect(typeof createBodies[0]?.clientMessageId).toBe('string')
   })
 
-  test('retries a response-lost next message with the same idempotency token', async () => {
+  // Regression: LAN HTTP is not a secure context, so Web Crypto exposes
+  // getRandomValues() but may omit randomUUID(). Starting an MCP runtime test
+  // must still mint stable idempotency keys instead of failing before the POST.
+  test('starts when crypto.randomUUID is unavailable in an insecure context', async () => {
+    const originalCrypto = globalThis.crypto
+    vi.stubGlobal('crypto', {
+      getRandomValues: originalCrypto.getRandomValues.bind(originalCrypto),
+    })
+    const createBodies: Array<Record<string, unknown>> = []
+    try {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (request, init) => {
+        const path = requestPath(request)
+        const method = init?.method ?? 'GET'
+        if (path === '/api/runtimes') return runtimes()
+        if (path === '/api/mcps/mcp-1/runtime-test-session') {
+          return new Response(null, { status: 204 })
+        }
+        if (path === '/api/mcps/mcp-1/runtime-test-sessions' && method === 'POST') {
+          createBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
+          return json({ sessionId: 'session-1', acceptedTurnId: 'turn-1' }, 202)
+        }
+        if (path === '/api/mcps/mcp-1/runtime-test-sessions/session-1') {
+          return json(session('running'))
+        }
+        return json({ ok: false, code: 'not-found', message: path }, 404)
+      })
+      renderDialog()
+      await openDialog()
+      const composer = await screen.findByTestId('mcp-runtime-test-composer')
+      fireEvent.change(composer, { target: { value: 'exercise this MCP over LAN HTTP' } })
+      const start = screen.getByTestId('mcp-runtime-test-start')
+      await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false))
+      fireEvent.click(start)
+
+      await waitFor(() => expect(createBodies).toHaveLength(1))
+      expect(createBodies[0]?.clientCreateId).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
+      expect(createBodies[0]?.clientMessageId).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
+      expect(createBodies[0]?.clientCreateId).not.toBe(createBodies[0]?.clientMessageId)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  test('retries a response-lost next message without crypto.randomUUID', async () => {
+    const originalCrypto = globalThis.crypto
+    vi.stubGlobal('crypto', {
+      getRandomValues: originalCrypto.getRandomValues.bind(originalCrypto),
+    })
     const messageBodies: Array<Record<string, unknown>> = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (request, init) => {
       const path = requestPath(request)

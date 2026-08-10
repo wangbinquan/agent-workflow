@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { ulid } from 'ulid'
 import {
   McpRuntimeTestSessionDtoSchema,
   type McpRuntimeTestCreateReceipt,
@@ -155,8 +156,8 @@ export function McpRuntimeTestDialog(props: McpRuntimeTestDialogProps): ReactEle
       if (createIdsRef.current?.key !== key) {
         createIdsRef.current = {
           key,
-          clientCreateId: crypto.randomUUID(),
-          clientMessageId: crypto.randomUUID(),
+          clientCreateId: ulid(),
+          clientMessageId: ulid(),
         }
       }
       const ids = createIdsRef.current
@@ -213,7 +214,7 @@ export function McpRuntimeTestDialog(props: McpRuntimeTestDialogProps): ReactEle
     }): Promise<McpRuntimeTestSessionDto> => {
       const key = JSON.stringify([input.session.id, input.message])
       if (messageIdRef.current?.key !== key) {
-        messageIdRef.current = { key, clientMessageId: crypto.randomUUID() }
+        messageIdRef.current = { key, clientMessageId: ulid() }
       }
       const receipt = await api.post<McpRuntimeTestMessageReceipt>(
         `${exactPath(props.mcpId, input.session.id)}/messages`,
