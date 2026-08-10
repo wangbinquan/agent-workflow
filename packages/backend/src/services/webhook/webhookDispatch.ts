@@ -372,7 +372,7 @@ async function launchViaExecutor(
       deps.configPath,
       actor.user.id,
       resolveOpencodeCmd(deps.configPath),
-      undefined,
+      deps.secretBox,
     ),
     // 对齐 buildScheduleLaunch：闭包解析在重建的 owner actor 可见性内。
     launchActor: actor,
