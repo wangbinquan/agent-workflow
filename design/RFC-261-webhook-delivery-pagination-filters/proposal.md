@@ -22,7 +22,8 @@ API 虽有 `before`(receivedAt 游标)参数,前端从未使用,仓内也零消�
 ## 2. 目标
 
 1. 列表顶部显示**当前过滤条件下的总条数**。
-2. **页码分页**(用户拍板,推翻 load-more 备选):上一页 / 下一页 + 第 x / y 页,每页 50 条。
+2. **页码分页**(用户拍板,推翻 load-more 备选):上一页 / 下一页 + 第 x / y 页 +
+   输入页码直接跳转,每页 50 条。
 3. **按事件类型过滤**:9 类闭集内部事件(`CODE_HOST_EVENT_TYPES`)下拉。
 4. **按仓库过滤**:下拉选择(用户拍板),选项 = 投递表 `repo_path` 的 distinct 值
    (即保留窗内出现过的仓库)。
@@ -59,8 +60,9 @@ API 虽有 `before`(receivedAt 游标)参数,前端从未使用,仓内也零消�
   GC 只触待清行)。`/repos` 的 distinct 用 **loose index scan**(递归 CTE,K×logN 寻位)
   而非朴素 `SELECT DISTINCT`(全索引扫描)。全部判据以 `EXPLAIN QUERY PLAN` 实证
   (design §2.1)。
-- **D8**:深页 OFFSET 成本(O(offset) 索引游走)接受——分页 UI 只有上一页/下一页,
-  人工浏览深度有界;不为此引入 cursor 混合方案。
+- **D8(用户追加拍板,2026-08-10)**:深页 OFFSET 成本(O(offset) 索引游走)接受;
+  实际投递记录可达数百页,仅上一页/下一页无法实用,因此公共分页原语补充页码输入+
+  按钮/Enter 直接跳转。跳转值按 `[1,pageCount]` 钳制;仍不为此引入 cursor 混合方案。
 - **D10(用户拍板 2026-08-07:「两个下拉框放右侧太丑了,好歹做下 UX 设计」)**:
   初版把两个裸 Select 靠 `justify-content: space-between` 甩到过滤栏右端,和总数
   挤在一起。三个真实缺陷:①**选中后 Select 只显示值**(`push` / `acme/api`),
@@ -94,8 +96,8 @@ API 虽有 `before`(receivedAt 游标)参数,前端从未使用,仓内也零消�
 
 ## 6. 用户故事
 
-- 管理员在投递 tab 选「事件 = pipeline_failed、仓库 = group/repo-a」,立刻看到「共 N 条」
-  并逐页翻看该仓流水线失败的到达史,而不是只能看全仓混排的最近 50 条。
+- 管理员在投递 tab 选「事件 = pipeline_failed、仓库 = group/repo-a」,立刻看到「共 N 条」,
+  可逐页翻看或直接跳到第 237 页查历史,而不是只能看全仓混排的最近 50 条。
 - 普通成员(只读,RFC-260)用同样的过滤与分页排障自己仓库的事件是否到达(replay 仍不可见)。
 
 ## 7. 验收标准(可证伪)
@@ -111,7 +113,8 @@ API 虽有 `before`(receivedAt 游标)参数,前端从未使用,仓内也零消�
 - AC-5:`GET /api/webhook-deliveries/repos` 返回去重升序、排除 NULL;user 角色可读,
   PAT 可读(`tokenAccess:'allow'`);契约注册表含该新路径。
 - AC-6:前端事件/仓库下拉改变后,请求携带对应参数且页码复位为 1;总数展示为过滤后的
-  `total`;上一页在第 1 页禁用、下一页在末页禁用。
+  `total`;上一页在第 1 页禁用、下一页在末页禁用;页码输入可通过按钮或 Enter
+  直接发起 `page=N`,越界值钳制到首/末页,空值或小数不发起翻页。
 - AC-7:数据缩水(过滤切换/GC)导致当前页 > pageCount 时,前端钳回末页,不停留在空页。
 - AC-8:`isAdmin=false` 只读视图下过滤与分页照常可用(replay 按 RFC-260 继续隐藏)。
 - AC-9:迁移 0139 在全新库与存量库上都可应用;索引组七枚齐备(dedupe/endpoint_time/

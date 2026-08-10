@@ -1711,7 +1711,16 @@ export interface Resources {
     }
   }
   common: {
-    pagination: { aria: string; prev: string; next: string; pageOf: string }
+    pagination: {
+      aria: string
+      prev: string
+      next: string
+      pageOf: string
+      jumpFormAria: string
+      jumpLabel: string
+      jumpAction: string
+      jumpActionAria: string
+    }
     done: string
     searchEllipsis: string
     searchCards: string
@@ -6994,6 +7003,10 @@ export const zhCN: Resources = {
       prev: '上一页',
       next: '下一页',
       pageOf: '第 {{page}} / {{pageCount}} 页',
+      jumpFormAria: '跳转到指定页',
+      jumpLabel: '页码',
+      jumpAction: '跳转',
+      jumpActionAria: '跳转到该页',
     },
     done: '完成',
     searchEllipsis: '搜索…',

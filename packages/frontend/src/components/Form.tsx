@@ -178,7 +178,10 @@ interface NumberInputProps {
   max?: number
   step?: number
   disabled?: boolean
+  /** Optional compact/contextual classes appended after the standard `form-input`. */
+  className?: string
   'data-testid'?: string
+  onFocus?: FocusEventHandler<HTMLInputElement>
 }
 
 export function NumberInput({
@@ -189,11 +192,13 @@ export function NumberInput({
   max,
   step,
   disabled,
+  className,
   'data-testid': testid,
+  onFocus,
 }: NumberInputProps) {
   return (
     <input
-      className="form-input"
+      className={className === undefined ? 'form-input' : `form-input ${className}`}
       type="number"
       value={value ?? ''}
       onChange={(e) => {
@@ -211,6 +216,7 @@ export function NumberInput({
       step={step}
       disabled={disabled}
       data-testid={testid}
+      onFocus={onFocus}
     />
   )
 }

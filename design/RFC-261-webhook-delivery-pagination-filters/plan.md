@@ -21,7 +21,8 @@
 ## T2 — 前端
 
 - 新公共组件 `components/Pagination.tsx` + `.pagination` 样式 + `common.pagination.*`
-  i18n(zh/en/类型)+ `pagination.test.tsx`。
+  i18n(zh/en/类型)+ `pagination.test.tsx`;用户 2026-08-10 追加直接跳页,扩展为
+  上下页 + 页码输入按钮/Enter 提交 + 越界钳制。
 - `DeliveriesPanel`:两个 Select 过滤 + 总数展示(`totalCount` 替换 `resultCount`)+
   `<Pagination>` + 页码复位/钳制;`.webhook-filterbar__selects` 样式加法。
 - i18n 新 keys(事件/仓库下拉 label 与 aria、totalCount)zh/en/类型同步。

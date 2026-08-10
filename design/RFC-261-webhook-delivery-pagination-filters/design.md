@@ -85,10 +85,15 @@ GET /api/webhook-deliveries/repos → string[]
 ```
 
 - `<nav aria-label={t('common.pagination.aria')}>` + 上一页/下一页(`.btn .btn--sm`)+
-  「第 x / y 页」文案(`common.pagination.pageOf`,插值 `{page, pageCount}`)。
+  「第 x / y 页」文案(`common.pagination.pageOf`,插值 `{page, pageCount}`)+
+  页码 `NumberInput` + 跳转按钮。输入放在 `<form>` 内,点按钮或按 Enter 共用同一提交路径。
+- 页码框默认显示当前页,聚焦时全选,输入新页码无需先手动删除原值。
 - 第 1 页禁用上一页、末页禁用下一页;`pageCount<=1` 时仍渲染(禁用态)保持布局稳定。
-- 样式 `.pagination` 命名空间(flex + gap,贴既有 `.btn` 体系,无自造 chrome)。
-- i18n:`common.pagination.{aria,prev,next,pageOf}` zh/en 双语。
+- 目标页是整数时钳制到 `[1,pageCount]` 后交给 `onPageChange`;空值/小数恢复当前页且不触发。
+- 样式 `.pagination` 命名空间(flex-wrap + gap,贴既有 `.btn` / `.form-input`
+  体系,无自造 chrome);520px 以下跳页表单独占一行。
+- i18n:`common.pagination.{aria,prev,next,pageOf,jumpFormAria,jumpLabel,jumpAction,jumpActionAria}`
+  zh/en 双语。
 
 ### 3.1b 公共组件 `components/FilterBar.tsx`(D10)
 
@@ -123,7 +128,7 @@ GET /api/webhook-deliveries/repos → string[]
 - 计数:`resultCount`(「{{count}} 条记录」)改为 `totalCount`(「共 {{total}} 条」),
   数据源从 `rows.length` 改为 `data.total`;D10 后它是筛选栏**之外**、表格上方的
   `.webhook-deliveries__meta` 行(不再与下拉挤在一起)。
-- 底部 `<Pagination>`;空态判定从 `status === 'all'` 扩为「三过滤均为 all/空」,
+- 底部 `<Pagination>`(含上下页与页码直跳);空态判定从 `status === 'all'` 扩为「三过滤均为 all/空」,
   且筛选态空态带清除按钮(`user-directory` 空态同款出路)。
 - 过滤栏布局(D10):走 `FilterBar`/`FilterField`;RFC-261 初版的
   `.webhook-filterbar` / `.webhook-filterbar__selects` 及其媒体查询块**删除**
@@ -152,6 +157,7 @@ GET /api/webhook-deliveries/repos → string[]
 | 场景                                    | 行为                                                                               |
 | --------------------------------------- | ---------------------------------------------------------------------------------- |
 | page 越界(手工 API / 数据缩水)          | 空 items + 正确 total(offset ≥ total 短路,不发行查询);前端钳回末页                 |
+| 跳页输入为空/小数/越界                  | 空/小数恢复当前页且不请求;越界整数钳制至首/末页后请求                              |
 | `limit=-1` / 小数 / ±Infinity(手工 API) | `Number.isFinite`+trunc 钳制 → 默认/边界值,零 500、零全表 dump(P1-①)               |
 | 保留期大幅收缩后的首次 sweep            | 分批删除(每批独立事务),百万级清理不冻结事件环、不物化 id 大数组(P1-②)              |
 | 存量 config 手写 body>row 后的任意 PUT  | 422 `webhook-retention-invalid` 直至修正(合并后全量校验,RFC-255 同款姿势;有测试锁) |
@@ -198,14 +204,16 @@ batch)` 循环,单批默认 10000——D9' 让「保留期收缩」成为一等�
 
 前端:
 
-1. `pagination.test.tsx`:组件禁用边界 / onPageChange / nav role 与 aria(D6)。
+1. `pagination.test.tsx`:组件禁用边界 / onPageChange / nav role 与 aria(D6),
+   直接跳页表单提交、页码同步、首末页钳制与空/小数拒绝。
    1b. `filter-bar.test.tsx`(D10):role=group + 可访问名、控件落在 `__controls`、
    trailing 缺省时连 `__actions` 容器都不渲染、FilterField 可见标签与控件同 field。
    面板侧断言(rfc261 前端测试)锁:筛选栏含三控件、两标签可见、总数在栏外、
    清除按钮的出现/消失与复位效果(AC-13)。视觉自查:本地 dev server + Chrome
    实拍空闲态与激活态两张(CLAUDE.md 前端一致性规程第 4 条)。
 2. `rfc261-webhook-delivery-pagination.test.tsx`:mock api——下拉改变请求参数与页码
-   复位、repos 选项渲染、总数展示、翻页请求 page=2、越界钳回、isAdmin=false 照常
+   复位、repos 选项渲染、总数展示、上下页与数百页场景直接跳转请求 `page=N`、
+   越界钳回、isAdmin=false 照常
    (AC-6/7/8)。
 3. 既有 rfc257-pages-inline / rfc260-readonly-view 中受 `resultCount`/数组形状影响的
    断言逐处改判。

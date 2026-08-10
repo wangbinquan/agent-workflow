@@ -1,5 +1,5 @@
 // RFC-261 — DeliveriesPanel 分页 + 事件/仓库过滤集成锁（proposal AC-6/7/8）：
-//   封套消费（总数展示）、翻页请求 page=N、过滤变更携带参数且页码复位 1、
+//   封套消费（总数展示）、上下页 / 直接跳页请求 page=N、过滤变更携带参数且页码复位 1、
 //   仓库下拉选项来自 /repos、越界页钳回、只读（isAdmin=false）下过滤分页照常。
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -35,6 +35,8 @@ const ROW = {
 let requests: URL[] = []
 /** 打开后：page>=3 的列表响应模拟数据缩水（pageCount 掉到 1），触发钳制。 */
 let shrinkAtPage3 = false
+let responseTotal = 120
+let responsePageCount = 3
 
 function listRequests(): URL[] {
   return requests.filter((u) => u.pathname.endsWith('/api/webhook-deliveries'))
@@ -43,6 +45,8 @@ function listRequests(): URL[] {
 beforeEach(async () => {
   requests = []
   shrinkAtPage3 = false
+  responseTotal = 120
+  responsePageCount = 3
   await i18n.changeLanguage('en-US')
   setBaseUrl(`http://rfc261-${crypto.randomUUID()}.test`)
   setToken('tok')
@@ -57,7 +61,12 @@ beforeEach(async () => {
       if (shrinkAtPage3 && page >= 3) {
         return jsonResponse({ items: [], total: 40, page, pageCount: 1 })
       }
-      return jsonResponse({ items: [ROW], total: 120, page, pageCount: 3 })
+      return jsonResponse({
+        items: [ROW],
+        total: responseTotal,
+        page,
+        pageCount: responsePageCount,
+      })
     }
     return jsonResponse([])
   })
@@ -167,6 +176,22 @@ describe('RFC-261 · 投递面板分页与过滤', () => {
     )
     await waitFor(() => expect(screen.getByText('Page 2 of 3')).toBeTruthy())
     expect(pageBtn('Previous').disabled).toBe(false)
+  })
+
+  test('几百页时可直接跳转，请求指定 page 并更新页码文案', async () => {
+    responseTotal = 15_000
+    responsePageCount = 300
+    mount()
+    await waitFor(() => expect(screen.getByTestId('webhook-delivery-dl1')).toBeTruthy())
+
+    const input = screen.getByRole('spinbutton', { name: 'Page number' })
+    fireEvent.change(input, { target: { value: '237' } })
+    fireEvent.click(pageBtn('Go to page'))
+
+    await waitFor(() =>
+      expect(listRequests().some((u) => u.searchParams.get('page') === '237')).toBe(true),
+    )
+    await waitFor(() => expect(screen.getByText('Page 237 of 300')).toBeTruthy())
   })
 
   test('事件过滤 → 请求带 eventType 且页码复位 1（AC-6）', async () => {
