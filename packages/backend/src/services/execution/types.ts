@@ -14,6 +14,7 @@ import type {
   StartTask,
   StartWorkgroupTask,
   TaskStatus,
+  TriggerContext,
 } from '@agent-workflow/shared'
 import type { MultipartFilePart } from '@/services/launchMultipart'
 import type { UploadLimits } from '@/services/upload'
@@ -35,7 +36,15 @@ export type ExecutionInvoker =
   | { type: 'node'; parentTaskId: string; parentNodeRunId: string; invocationDepth: number }
   // RFC-257 — a webhook trigger fire (stamps tasks.webhook_trigger_id /
   // webhook_fire_id, same run-history-attribution discipline as `scheduled`).
-  | { type: 'webhook'; webhookTriggerId: string; webhookFireId: string }
+  // RFC-269: triggerContext is execution input, not post-launch metadata. It
+  // must ride the same request so the initial task INSERT publishes all three
+  // fields before scheduler can observe the row.
+  | {
+      type: 'webhook'
+      webhookTriggerId: string
+      webhookFireId: string
+      triggerContext: TriggerContext
+    }
 
 /**
  * Kind-discriminated start request (top-level `kind` discriminant so TS

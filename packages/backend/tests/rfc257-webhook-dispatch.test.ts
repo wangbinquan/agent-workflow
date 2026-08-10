@@ -62,7 +62,13 @@ type Harness = {
   endpoint: WebhookEndpointRow
   ownerId: string
   workflowId: string
-  launched: Array<{ taskId: string; kind: string; fireId: string; payload: unknown }>
+  launched: Array<{
+    taskId: string
+    kind: string
+    fireId: string
+    payload: unknown
+    triggerContext: unknown
+  }>
   canceled: string[]
   launchError: { current: Error | null }
 }
@@ -125,12 +131,16 @@ async function harness(): Promise<Harness> {
         startedAt: Date.now(),
         webhookTriggerId: invoker.webhookTriggerId,
         webhookFireId: invoker.webhookFireId,
+        triggerContextJson: JSON.stringify(invoker.triggerContext),
       })
       launched.push({
         taskId,
         kind: rendered.kind,
         fireId: invoker.webhookFireId,
         payload: rendered.payload,
+        // RFC-269 regression: the context must already be part of the launch
+        // request. A post-launch UPDATE races scheduler's one-time task read.
+        triggerContext: (invoker as typeof invoker & { triggerContext?: unknown }).triggerContext,
       })
       return taskId
     },
@@ -366,6 +376,13 @@ describe('RFC-257 T6 · dispatch 集成', () => {
     expect(fires.map((f) => f.outcome)).toEqual(['launched', 'launched'])
     expect(new Set(fires.map((f) => f.triggerId))).toEqual(new Set([t1, t2]))
     expect(h.launched.length).toBe(2)
+    for (const launch of h.launched) {
+      expect(launch.triggerContext).toMatchObject({
+        repo_path: 'platform/api',
+        mr_iid: '42',
+      })
+      expect(launch.triggerContext).not.toHaveProperty('event_json')
+    }
     // invoker 的 fireId = fires 行 id；tasks 行 stamped（AC-18 归属链）
     for (const fire of fires) {
       const task = (

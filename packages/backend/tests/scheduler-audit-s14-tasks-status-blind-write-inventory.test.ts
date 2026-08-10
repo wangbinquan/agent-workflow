@@ -80,12 +80,6 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // T4/T6 把该写点随 handler 本体下沉 services/workgroup/configActions.ts
   // （updateTaskConfig 是 workgroupConfigJson 的唯一 UPDATE 属主）。
   'services/workgroup/configActions.ts': 1,
-  // RFC-269：webhook 启动成功后把归一化事件信封的**变量投影**快照进
-  // `tasks.trigger_context_json`（供 code-host-call 节点的 {{trigger.*}} 取值）。
-  // 只写这一个新增列、绝不碰 `status`：写点在 taskId 已经拿到之后、recordFire
-  // 之前，且用 try/catch 包住 —— 快照失败不该把一次已经成功的启动倒推成
-  // launch-failed（节点届时以 code-host-trigger-context-missing 给出可读原因）。
-  'services/webhook/webhookDispatch.ts': 1,
   // RFC-243 §4.3 — cancelTask 的级联标记补写：cascade 收尾在行已 canceled
   // （status 由调度器或 fallback CAS 落定）之后，把 errorMessage 幂等改写为
   // 'canceled-by-parent-cascade'（WHERE status='canceled' 守卫，绝不翻状态）。

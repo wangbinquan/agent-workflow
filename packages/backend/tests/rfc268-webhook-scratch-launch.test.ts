@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { isTerminalTaskStatus, type CodeHostEvent } from '@agent-workflow/shared'
+import { isTerminalTaskStatus, triggerContextOf, type CodeHostEvent } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
@@ -183,7 +183,12 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
     expect(new Set(launched.map((task) => task.webhookTriggerId))).toEqual(
       new Set(triggerRows.map((row) => row.id)),
     )
+    const expectedTriggerContext = triggerContextOf(event)
     for (const task of launched) {
+      // All three execution kinds must receive the same pre-launch projection;
+      // event_json is deliberately excluded by triggerContextOf.
+      expect(JSON.parse(task.triggerContextJson!)).toEqual(expectedTriggerContext)
+      expect(JSON.parse(task.triggerContextJson!)).not.toHaveProperty('event_json')
       expect(task.spaceKind).toBe('scratch')
       expect(task.repoPath).toBe(task.worktreePath)
       expect(

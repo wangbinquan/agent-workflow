@@ -101,6 +101,7 @@ async function harness() {
         startedAt: Date.now(),
         webhookTriggerId: invoker.webhookTriggerId,
         webhookFireId: invoker.webhookFireId,
+        triggerContextJson: JSON.stringify(invoker.triggerContext),
       })
       return taskId
     },

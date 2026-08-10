@@ -28,12 +28,14 @@ function depsForInvoker(deps: StartTaskDeps, req: StartExecutionRequest): StartT
     return { ...deps, scheduledTaskId: invoker.scheduledTaskId }
   }
   if (invoker.type === 'webhook') {
-    // RFC-257: mirror the scheduled stamp — the launch service writes both ids
-    // onto the task row atomically with the INSERT.
+    // RFC-257/RFC-269: attribution and trigger inputs share one publication
+    // boundary. startTask writes them in the initial INSERT before scheduler is
+    // kicked; a follow-up UPDATE would race scheduler's one-time task read.
     return {
       ...deps,
       webhookTriggerId: invoker.webhookTriggerId,
       webhookFireId: invoker.webhookFireId,
+      triggerContext: invoker.triggerContext,
     }
   }
   if (invoker.type === 'node') {

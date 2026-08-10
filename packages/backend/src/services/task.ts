@@ -17,6 +17,7 @@ import type {
   TaskNodeRuns,
   TaskRepo,
   TaskSummary,
+  TriggerContext,
 } from '@agent-workflow/shared'
 import type { DwState } from '@agent-workflow/shared'
 import {
@@ -356,6 +357,13 @@ export interface StartTaskDeps {
    */
   webhookTriggerId?: string
   webhookFireId?: string
+  /**
+   * RFC-269 — projected webhook variables consumed by code-host-call nodes.
+   * This is execution input and therefore MUST be serialized into the initial
+   * task INSERT, before scheduler can read/cache the row. Undefined means a
+   * non-webhook launch; an empty object is still a webhook context.
+   */
+  triggerContext?: TriggerContext
   /**
    * RFC-164: workgroup launch payload. `snapshotJson` REPLACES the workflow
    * row's definition as the frozen workflow_snapshot (the builtin host row is
@@ -2298,6 +2306,11 @@ async function startTaskImpl(
           // RFC-257: webhook-trigger attribution, same atomic-stamp discipline.
           webhookTriggerId: deps.webhookTriggerId ?? null,
           webhookFireId: deps.webhookFireId ?? null,
+          // RFC-269: publish trigger inputs in this same task-row INSERT. The
+          // scheduler starts only after this transaction commits and reads the
+          // task row once, so a later UPDATE is observably too late.
+          triggerContextJson:
+            deps.triggerContext === undefined ? null : JSON.stringify(deps.triggerContext),
           // RFC-164: workgroup link + runtime config copy (NULL = not a workgroup task).
           workgroupId: deps.workgroupLaunch?.workgroupId ?? null,
           workgroupConfigJson: deps.workgroupLaunch?.configJson ?? null,
