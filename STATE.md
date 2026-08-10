@@ -2,6 +2,8 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+🚧 **进行中 RFC（In Progress，2026-08-10 用户已批准）：[RFC-278 历史迁移漂移受控收敛](design/RFC-278-legacy-schema-reconciliation/proposal.md)** —— RFC-276 后 OpenCode 深探测报错已实证为旧 daemon 生成退役 argv、调用新 CLI 的代际错配；当前 main 对同一真实 OpenCode 探测 `conforms=true`。同代重启又被 RFC-275 点名 8 个真实 legacy receipt hash；真实备份副本还确认 recovery legacy DDL/comments/indexes、MCP create-receipt FK/CHECK 与退役表差异。按用户“表该精简精简”要求，0145 只放行 8 个 exact tag/when/hash aliases：recovery 逐列无损收敛、短期 MCP receipt 清空重建，并删除 `recent_repos` 与一次性 legacy runtime archive；最终 physical admission 仍 fail closed，不恢复任何 RFC-276 安全加固入口。真实备份副本已验证 141→145、recovery 19 行 digest 不变、receipt 1→0、退役表删除、quick/FK/reopen 全绿；低并发完整 `gate:local` 全绿（backend 9319 pass / 30 skip，shared 1970，frontend 6258），真实 GLM OpenCode smoke 再次 `conforms=true`，待推送 CI 与 live 同代切换。
+
 🚧 **进行中 RFC（In Progress，2026-08-10 功能与定向验证已完成）：[RFC-277 GitLab 连接 TLS 证书校验开关](design/RFC-277-gitlab-tls-verification/proposal.md)** —— 默认与存量继续校验证书；仅允许 GitLab 显式设置 `rejectUnauthorized:false`，测试连接与真实代码平台调用消费同一持久化值，第三方重定向不继承。shared 52、backend 68+27、frontend 5 与精确 lint/format/diff 均绿；全仓 backend typecheck 只剩并行 RFC-276 正在删除的旧 `sandboxMode` / `executionPolicy` 测试引用，待其收口后补跑 full gate 并置 Done。
 
 ✅ **已完成 RFC（Done，2026-08-10）：[RFC-276 运行期安全加固废弃化与自然执行恢复](design/RFC-276-runtime-hardening-deprecation/proposal.md)** —— `70deb522` 原子删除 sandbox/containment、verified identity、hermetic store、netless 与平台强制能力围栏，业务 agent 与 Intent 回到自然 runtime；auth/ACL、secret redaction、输入路径防御、DB/进程恢复、用户显式 permission/readonly 保留。Claude runtime 可显式开启 `IS_SANDBOX=1` CLI 兼容标记，默认关闭且不启用 sandbox 或平台防护。`778b1436` 更新 Linux 视觉基线，`079c20b9` 关闭重启迁移与 gitleaks 缺口；final SHA 主 CI 31372492430 与 visual 31372492427 终态成功，真实 OpenCode 集成 31369561214 与 Windows 平台门 31369561256 亦成功。

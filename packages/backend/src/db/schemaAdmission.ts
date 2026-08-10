@@ -43,6 +43,34 @@ export type SchemaDifference =
 const MAX_REPORTED_DIFFERENCES = 50
 const MAX_EXPECTED_PHYSICAL_SCHEMA_CACHE_ENTRIES = 8
 
+// RFC-278 — exact receipts observed in the long-lived production database.
+// These are closed, full SHA-256 aliases for historical SQL bytes that were
+// applied before shared-main migration files reached their canonical form.
+// The expected tag and timestamp are still checked at the same chain index;
+// all other history edits continue to fail admission.
+const LEGACY_MIGRATION_HASHES: Readonly<Record<string, readonly string[]>> = {
+  '0052_rfc108_recovery_events': [
+    '3b5f02214e1c06a1b05ab2eaef4d1209815d60198850eba9ad4a899fa14c96f0',
+  ],
+  '0069_rfc129_review_selection_stale': [
+    '547c53f30c3a8a8fd4df278ce0310e4a2a89f3683b6336559c31093b669f4e24',
+  ],
+  '0084_rfc164_workgroup_tasks': [
+    '8c9f8244e564b54951c284a5ed7f20f0c9077d621ff7d49465420490182024b7',
+  ],
+  '0085_rfc165_task_space': ['033da7e58069bce3c90c3f2688f018417fceb5bc0995577ce828a351590800a3'],
+  '0095_rfc189_wg_round': ['ae58ca1a757cc36c41af5b1a8a077a3bda436924ae074acf5a408babb5ccdfca'],
+  '0107_rfc217_clarify_unify_t17': [
+    '7d9cc403ede0aea34d7a6557ff0f10de73a8adb04fad09430e973c94aee2b1b4',
+  ],
+  '0125_rfc238_mcp_runtime_playground': [
+    '475944d58ef1c8341ed86e3c88ce080aebcef8dbc23548ea43345be3a8eee450',
+  ],
+  '0139_rfc261_webhook_delivery_scale': [
+    '1c14427b8a7f740617841f759c302f9efbe0ab611e3dd23b553c4a6a1ded794e',
+  ],
+}
+
 export class DbSchemaDriftError extends Error {
   public readonly differences: readonly SchemaDifference[]
   public readonly totalDifferences: number
@@ -154,7 +182,7 @@ export function assertMigrationHistory(
       })
       continue
     }
-    if (!/^[0-9a-f]{64}$/.test(actualHash) || actualHash !== expected.hash) {
+    if (!/^[0-9a-f]{64}$/.test(actualHash) || !migrationHashMatches(expected, actualHash)) {
       differences.push({
         kind: 'migration-hash',
         tag: expected.tag,
@@ -185,6 +213,13 @@ export function assertMigrationHistory(
   if (differences.length > 0) {
     throw new DbSchemaDriftError(input.dbPath, input.stage, differences)
   }
+}
+
+function migrationHashMatches(expected: ExpectedMigration, actualHash: string): boolean {
+  return (
+    actualHash === expected.hash ||
+    LEGACY_MIGRATION_HASHES[expected.tag]?.includes(actualHash) === true
+  )
 }
 
 function normalizeReceiptWhen(value: unknown): string {

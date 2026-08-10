@@ -1009,6 +1009,13 @@
       "when": 1788278400018,
       "tag": "0144_rfc276_runtime_hardening_deprecation",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "6",
+      "when": 1788278400019,
+      "tag": "0145_rfc278_legacy_schema_reconciliation",
+      "breakpoints": true
     }
   ]
 }

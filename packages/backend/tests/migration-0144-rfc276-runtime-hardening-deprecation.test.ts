@@ -12,7 +12,7 @@ const HASH_B = 'b'.repeat(64)
 const HASH_C = 'c'.repeat(64)
 const tempDirs: string[] = []
 
-function freezeThrough0143(): string {
+function freezeThrough(maxIdx: number): string {
   const dir = mkdtempSync(join(tmpdir(), 'rfc276-0144-'))
   tempDirs.push(dir)
   cpSync(MIGRATIONS, dir, { recursive: true })
@@ -20,7 +20,7 @@ function freezeThrough0143(): string {
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
     entries: Array<{ idx: number }>
   }
-  journal.entries = journal.entries.filter((entry) => entry.idx <= 142)
+  journal.entries = journal.entries.filter((entry) => entry.idx <= maxIdx)
   writeFileSync(journalPath, `${JSON.stringify(journal, null, 2)}\n`)
   return dir
 }
@@ -46,7 +46,7 @@ describe('migration 0144 RFC-276 runtime hardening deprecation', () => {
   test('archives removed state before upgrading a populated 0143 database', () => {
     const raw = new Database(':memory:')
     raw.exec('PRAGMA foreign_keys = ON')
-    migrate(drizzle(raw), { migrationsFolder: freezeThrough0143() })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough(142) })
 
     const definition = JSON.stringify({
       nodes: [
@@ -181,7 +181,9 @@ describe('migration 0144 RFC-276 runtime hardening deprecation', () => {
       )
       .run(HASH_A, HASH_B, HASH_C, HASH_A)
 
-    migrate(drizzle(raw), { migrationsFolder: MIGRATIONS })
+    // Keep this migration-specific assertion pinned through 0144. RFC-278's
+    // following migration intentionally drops the one-time rollback archive.
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough(143) })
 
     expect(columns(raw, 'agents')).not.toContain('network')
     expect(columns(raw, 'runtimes')).toContain('is_sandbox')
@@ -291,7 +293,7 @@ describe('migration 0144 RFC-276 runtime hardening deprecation', () => {
     const raw = new Database(':memory:')
     raw.exec('PRAGMA foreign_keys = ON')
     migrate(drizzle(raw), { migrationsFolder: MIGRATIONS })
-    expect(tableExists(raw, 'rfc276_legacy_runtime_archive')).toBe(true)
+    expect(tableExists(raw, 'rfc276_legacy_runtime_archive')).toBe(false)
     expect(tableExists(raw, 'runtime_session_leases')).toBe(true)
     expect(tableExists(raw, 'mcp_runtime_test_session_leases')).toBe(true)
     expect(tableExists(raw, 'opencode_session_owners')).toBe(false)
