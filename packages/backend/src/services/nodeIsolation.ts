@@ -151,9 +151,8 @@ export interface CanonRepo {
  * 2026-08-04 incident: a task whose canonical worktree VANISHED from disk (the
  * observed row pointed into the ephemeral `iso/` space, which is cleaned after
  * runs) must fail its node runs loudly at iso-setup time. Letting the dead path
- * fall through to the spawn produced an ENOENT that Bun blames on argv[0] — the
- * sandbox wrapper (`posix_spawn '/usr/bin/bwrap'`) — plus a per-retry failure
- * storm, because the runner-level spawn failure sits INSIDE the retry loop
+ * fall through to the spawn produced an ENOENT that Bun blames on argv[0], plus
+ * a per-retry failure storm, because the runner-level spawn failure sits INSIDE the retry loop
  * while iso-setup failures fail the node once, before admission/spawn.
  */
 export class CanonicalWorktreeMissingError extends Error {
@@ -208,10 +207,10 @@ export async function createNodeIso(opts: {
   log?: Logger
 }): Promise<IsoHandle> {
   // 2026-08-04 incident gate: a canonical worktree that does not EXIST fails
-  // fast here — before the retry loop, containment admission and the spawn.
+  // fast here — before the retry loop and spawn.
   // The passthrough below used to swallow it (missing ⇒ "not a git repo") and
   // hand the dead path to the runner as cwd, where Bun's ENOENT names argv[0]
-  // (the sandbox wrapper) instead of the missing directory. Probed for EVERY
+  // instead of the missing directory. Probed for EVERY
   // repo, not just the primary — any missing member breaks the run the same way.
   for (const repo of opts.canonRepos) {
     if (!existsSync(repo.worktreePath)) throw new CanonicalWorktreeMissingError(repo.worktreePath)

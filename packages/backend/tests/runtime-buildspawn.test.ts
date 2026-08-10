@@ -16,8 +16,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { opencodeDriver } from '@/services/runtime/opencode/driver'
 import { claudeCodeDriver } from '@/services/runtime/claudeCode/driver'
-import { claudeSandboxEnv } from '@/services/runtime/claudeCode/spawn'
-import type { SystemAgentSpawnContext } from '@/services/runtime/types'
+import { buildClaudeMcpTestSpawn } from '@/services/runtime/claudeCode/mcpTest'
+import type { McpTestSpawnContext, SystemAgentSpawnContext } from '@/services/runtime/types'
+import { createLogger } from '@/util/log'
 
 const BASE: SystemAgentSpawnContext = {
   agentName: 'aw-memory-distiller',
@@ -26,11 +27,10 @@ const BASE: SystemAgentSpawnContext = {
   prompt: 'USER PROMPT',
   worktreePath: '/tmp/wt',
   runDir: '/tmp/run',
-  testOnlyUnverifiedRuntime: true,
 }
 
 describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
-  test('argv = opencode run/--agent/--format json/--thinking/--dangerously/-- <prompt>; stdin ignored', async () => {
+  test('argv = opencode run/--agent/--format json/--thinking/--auto/-- <prompt>; stdin ignored', async () => {
     const plan = await opencodeDriver.buildSpawn(BASE)
     // Prompt is the trailing positional after `--` (opencode strict-parser safety
     // for `-`-leading prompts) — see runtime/opencode/spawn.ts buildCommand.
@@ -42,7 +42,7 @@ describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
       '--format',
       'json',
       '--thinking',
-      '--dangerously-skip-permissions',
+      '--auto',
       '--',
       'USER PROMPT',
     ])
@@ -80,9 +80,9 @@ describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
     expect(plan.cmd.slice(-2)).toEqual(['--', 'USER PROMPT'])
   })
 
-  // IS_SANDBOX is a claude-code-only root-gate escape hatch; opencode has no
-  // root guard (verified in its source), so its env must stay uninjected.
-  test('does NOT inject IS_SANDBOX (root gate is claude-code-specific)', async () => {
+  // IS_SANDBOX is a Claude CLI compatibility marker and is not part of the
+  // OpenCode environment contract.
+  test('does NOT inject the Claude-only IS_SANDBOX compatibility marker', async () => {
     const prev = process.env.IS_SANDBOX
     delete process.env.IS_SANDBOX
     try {
@@ -115,14 +115,9 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
         '--verbose',
         '--permission-mode',
       ])
-      // RFC-242 §3: the system-agent path no longer bypasses permissions — it
-      // materializes `all-deny` as an EMPTY built-in load set. Semantics only
-      // TIGHTEN here (distiller/smoke never called a tool).
-      expect(plan.cmd).not.toContain('bypassPermissions')
-      expect(plan.cmd).toContain('dontAsk')
-      const toolsAt = plan.cmd.indexOf('--tools')
-      expect(toolsAt).toBeGreaterThan(-1)
-      expect(plan.cmd[toolsAt + 1]).toBe('')
+      expect(plan.cmd).toContain('bypassPermissions')
+      expect(plan.cmd).not.toContain('dontAsk')
+      expect(plan.cmd).not.toContain('--tools')
       expect(plan.cmd).toContain('--model')
       expect(plan.cmd).toContain('anthropic/claude-haiku')
       expect(plan.cmd).toContain('--append-system-prompt-file')
@@ -139,18 +134,11 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
     })
   })
 
-  // 2026-08-06 probe fidelity (GLM-fork incident): the conformance probe must
-  // build the BUSINESS dispatch shape — a fork whose gateway/model mapping
-  // lives in its settings passes every business run but failed every probe
-  // under the declared-control shape (`--setting-sources ""` cuts the fork's
-  // config layer; `--model` alone cannot compensate). The declared-control
-  // shape stays the default for every OTHER system caller (test above).
-  test('probeDispatchShape → business-unconstrained argv (probe tests what dispatch runs)', async () => {
+  test('probe and system calls share the natural argv shape', async () => {
     await withTmp(async (dir) => {
       const plan = await claudeCodeDriver.buildSpawn({
         ...BASE,
         runDir: dir,
-        probeDispatchShape: true,
       })
       expect(plan.cmd).toContain('bypassPermissions')
       expect(plan.cmd).not.toContain('dontAsk')
@@ -180,56 +168,72 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
     })
   })
 
-  // Regression lock: claude ≥2.x exits 1 ("--dangerously-skip-permissions cannot
-  // be used with root/sudo privileges") on bypassPermissions when getuid()===0
-  // and env.IS_SANDBOX !== '1' (exact-string check). Root daemons could not run
-  // ANY claude-code node/smoke/distiller spawn without injecting the flag; the
-  // uid gate keeps non-root env pristine (Codex P1: never spoof where the gate
-  // wouldn't fire). CI is never uid 0, so the root branch is pinned via the
-  // pure-function oracle and the spread-order source assert below.
-  test('claudeSandboxEnv: IS_SANDBOX=1 iff uid 0 (root bypassPermissions gate)', () => {
-    expect(claudeSandboxEnv(0)).toEqual({ IS_SANDBOX: '1' })
-    expect(claudeSandboxEnv(501)).toEqual({})
-    expect(claudeSandboxEnv(undefined)).toEqual({})
-  })
-
-  test('env: IS_SANDBOX follows the uid gate, no unconditional spoof', async () => {
+  test('env: IS_SANDBOX is default-off, scrubs ambient state, and explicit-on injects 1', async () => {
     await withTmp(async (dir) => {
       const prev = process.env.IS_SANDBOX
-      delete process.env.IS_SANDBOX
+      process.env.IS_SANDBOX = 'ambient'
       try {
-        const got = (await claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir })).env.IS_SANDBOX
-        if (process.getuid?.() === 0) expect(got).toBe('1')
-        else expect(got).toBeUndefined()
+        const off = await claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir })
+        expect(off.env.IS_SANDBOX).toBeUndefined()
+        const on = await claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir, isSandbox: true })
+        expect(on.env.IS_SANDBOX).toBe('1')
       } finally {
-        if (prev !== undefined) process.env.IS_SANDBOX = prev
+        if (prev === undefined) delete process.env.IS_SANDBOX
+        else process.env.IS_SANDBOX = prev
       }
     })
   })
 
-  // Source-level bottom line for the branch CI cannot execute (uid 0): the
-  // helper must be spread AFTER the static env keys, so a root daemon's
-  // injected '1' overrides an inherited IS_SANDBOX=0 instead of losing to it.
-  // (RFC-154: the config-dir env key became computed — the anchor tracks the
-  // new form `[ctx.configDirEnv ?? ...]: configDir` instead of the old literal.
-  // RFC-237: the tail spread became a ternary — legacy branch keeps
-  // claudeSandboxEnv, the declared-control branch injects hardening instead;
-  // BOTH must sit after the config-dir key, so the anchor now tracks the
-  // ternary spelling.)
-  test('source: claudeSandboxEnv spread after the config-dir env key (override precedence)', () => {
+  test('source: runtime-controlled IS_SANDBOX assignment follows ambient scrubbing', () => {
     const src = readFileSync(
       join(import.meta.dir, '../src/services/runtime/claudeCode/spawn.ts'),
       'utf-8',
     )
-    // RFC-237 unification: BOTH branches flow through assembleClaudeEnv, whose
-    // invariant tail spreads claudeSandboxEnv AFTER the config-dir key (and
-    // after the hardening set), so a uid-0 daemon's '1' always wins.
-    expect(src).toContain('const env = assembleClaudeEnv({')
-    const anchor = src.indexOf('[assembly.configDirEnv]: assembly.configDir,')
-    const hardening = src.indexOf('assembly.hardening ? CLAUDE_READONLY_HARDENING_ENV')
-    const spread = src.indexOf('...claudeSandboxEnv(uid),')
-    expect(anchor).toBeGreaterThan(-1)
-    expect(hardening).toBeGreaterThan(anchor)
-    expect(spread).toBeGreaterThan(hardening)
+    const inherit = src.indexOf('for (const [key, value] of Object.entries(source))')
+    const scrub = src.indexOf("key.toUpperCase() === 'IS_SANDBOX'")
+    const toggle = src.indexOf('assembly.isSandbox === true')
+    const marker = src.indexOf("env.IS_SANDBOX = '1'")
+    expect(inherit).toBeGreaterThan(-1)
+    expect(scrub).toBeGreaterThan(inherit)
+    expect(toggle).toBeGreaterThan(scrub)
+    expect(marker).toBeGreaterThan(toggle)
+  })
+
+  test('MCP-test Claude spawn consumes the same default-off runtime toggle', async () => {
+    await withTmp(async (dir) => {
+      const base: McpTestSpawnContext = {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        agentName: 'mcp-test',
+        systemPrompt: 'MCP TEST',
+        prompt: 'PING',
+        executionMaterial: {
+          codec: 'mcp-test-execution-material-v1',
+          mcpId: 'mcp-1',
+          runtimeKey: 'fixture',
+          type: 'local',
+          opencodeEntry: {},
+          claudeEntry: { command: 'fixture' },
+          root: dir,
+        },
+        model: null,
+        worktreePath: '/tmp/wt',
+        sessionRoot: dir,
+        runDir: join(dir, 'off'),
+        configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
+        log: createLogger('runtime-buildspawn-test'),
+      }
+      const off = await buildClaudeMcpTestSpawn(base)
+      expect(off.env.IS_SANDBOX).toBeUndefined()
+      await off.cleanup?.()
+
+      const on = await buildClaudeMcpTestSpawn({
+        ...base,
+        runDir: join(dir, 'on'),
+        isSandbox: true,
+      })
+      expect(on.env.IS_SANDBOX).toBe('1')
+      await on.cleanup?.()
+    })
   })
 })

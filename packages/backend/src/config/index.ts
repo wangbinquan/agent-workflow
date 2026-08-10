@@ -24,6 +24,11 @@ import { ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('config')
+const DEPRECATED_RUNTIME_HARDENING_KEYS = [
+  'sandboxMode',
+  'businessToolchainPaths',
+  'inheritMachineOpencodeConfig',
+] as const
 
 /**
  * Read the config from disk WITHOUT any write side effect (RFC-216 §2/§3):
@@ -31,11 +36,9 @@ const log = createLogger('config')
  *   - present + valid   → fully-typed Config (defaults backfilled)
  *   - present + corrupt → throws (bad JSON / schema mismatch), same message as before
  *
- * `loadConfig` is the write-on-missing wrapper around this. Read-only callers —
- * the `agent-workflow sandbox` preflight, whose whole contract is "touches no
- * files" — must use THIS, because `loadConfig` materializes defaults to disk on
- * a fresh machine (which would create ~/.agent-workflow/config.json out of a
- * pure diagnostic command).
+ * `loadConfig` is the write-on-missing wrapper around this. Callers that promise
+ * no filesystem mutation must use THIS, because `loadConfig` materializes
+ * defaults on a fresh machine.
  */
 export function readConfig(path: string): Config | null {
   assertConfigPath(path)
@@ -68,7 +71,7 @@ export function readConfig(path: string): Config | null {
  */
 export function loadConfig(path: string): Config {
   const existing = readConfig(path)
-  if (existing !== null) return existing
+  if (existing !== null) return migrateDeprecatedRuntimeHardeningConfig(path, existing)
 
   log.info('no config found, writing defaults', { path })
   saveConfigRaw(path, DEFAULT_CONFIG)
@@ -118,12 +121,15 @@ function assertConfigPath(path: string): void {
 
 /** Atomic write: tempfile + rename. Exported for tests only. */
 export function saveConfigRaw(path: string, cfg: Config): void {
+  saveConfigValueAtomic(path, cfg)
+}
+
+function saveConfigValueAtomic(path: string, cfg: unknown): void {
   assertConfigPath(path)
   mkdirSync(dirname(path), { recursive: true })
   const tmp = join(dirname(path), `.config.json.tmp-${process.pid}-${Date.now()}`)
-  // RFC-255: 0600 like secret.key and db.sqlite. This file now carries sealed
-  // provider credentials, and the default 0644 would have made it readable by
-  // every local account — weaker than the opencode auth store it replaces.
+  // Config may contain provider credentials; keep it private from other local
+  // accounts instead of accepting the default 0644 mode.
   writeFileSync(tmp, JSON.stringify(cfg, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600 })
   try {
     renameSync(tmp, path)
@@ -144,6 +150,48 @@ export function saveConfigRaw(path: string, cfg: Config): void {
     }
     throw err
   }
+}
+
+/**
+ * RFC-276 one-time config migration. `readConfig` remains side-effect free;
+ * ordinary daemon loads atomically remove the three retired runtime-hardening
+ * switches. The byte-exact predecessor is retained next to config.json, and a
+ * mismatched pre-existing backup stops the rewrite instead of overwriting it.
+ */
+function migrateDeprecatedRuntimeHardeningConfig(path: string, parsed: Config): Config {
+  const originalText = readFileSync(path, 'utf8')
+  const raw = JSON.parse(originalText) as unknown
+  if (!isPlainObject(raw)) return parsed
+  if (!DEPRECATED_RUNTIME_HARDENING_KEYS.some((key) => Object.hasOwn(raw, key))) return parsed
+
+  const cleaned: Record<string, unknown> = { ...raw }
+  for (const key of DEPRECATED_RUNTIME_HARDENING_KEYS) delete cleaned[key]
+  const validated = ConfigSchema.safeParse(mergeDefaults(cleaned))
+  if (!validated.success) {
+    throw new Error(`config: RFC-276 migration failed: ${JSON.stringify(validated.error.issues)}`)
+  }
+
+  const backupPath = `${path}.pre-rfc276-runtime-hardening.bak`
+  if (existsSync(backupPath)) {
+    if (readFileSync(backupPath, 'utf8') !== originalText) {
+      throw new Error(`config: refusing RFC-276 migration because backup differs: ${backupPath}`)
+    }
+  } else {
+    writeFileSync(backupPath, originalText, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+    try {
+      chmodSync(backupPath, 0o600)
+    } catch {
+      // Filesystems without POSIX modes still retain the recovery copy.
+    }
+  }
+
+  saveConfigValueAtomic(path, cleaned)
+  log.warn('removed deprecated runtime-hardening config keys', {
+    path,
+    backupPath,
+    keys: DEPRECATED_RUNTIME_HARDENING_KEYS,
+  })
+  return validated.data
 }
 
 /**

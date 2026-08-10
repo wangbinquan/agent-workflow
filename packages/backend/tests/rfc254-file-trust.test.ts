@@ -1,19 +1,20 @@
-// RFC-254 T0a (D22) — the verified store's file-trust primitive.
+// RFC-254 T0a (D22) — cross-platform sensitive-file and identity checks.
 //
 // The design gate (P0-C) found the three trust proofs — privacy, not-a-link,
 // same-object — spelled inline as POSIX arithmetic across six files, where
 // Windows would answer nonsense: Node synthesizes `mode` from the read-only
 // attribute (a writable file reports 0o666 regardless of its ACL) and `ino` is
 // 0 or unstable on NTFS. These cases lock the contract that replaced it, and in
-// particular that an unprovable platform FAILS rather than skipping.
+// particular that an unprovable platform reports a failure rather than skipping.
 
 import { describe, expect, test } from 'bun:test'
 import {
   PRIVATE_FILE_MODE,
-  SEALED_EXEC_MODE,
+  OWNER_READ_EXECUTE_MODE,
   assertPrivateRegularFile,
   assertPrivateRegularFileByPath,
   assertPrivateRegularFileByPathSync,
+  assertSameDirectoryIdentity,
   assertSameFileIdentity,
   assertUnopenedPrivateFile,
   assertUnopenedPrivateFileByPath,
@@ -26,6 +27,7 @@ import {
 function stats(overrides: Partial<TrustStats> & { mode?: number } = {}): TrustStats {
   return {
     isFile: () => overrides.isFile?.() ?? true,
+    isDirectory: () => overrides.isDirectory?.() ?? false,
     isSymbolicLink: () => overrides.isSymbolicLink?.() ?? false,
     mode: overrides.mode ?? 0o100600,
     dev: overrides.dev ?? 1,
@@ -47,8 +49,7 @@ describe('RFC-254 file trust primitive', () => {
     })
 
     test('rejects group/other-readable modes', () => {
-      // 0o640 is the classic "harmless" relaxation; the store's threat model
-      // has no other local principal it trusts, so it is not harmless here.
+      // 0o640 grants a second local principal access, so it is not owner-only.
       expect(assertPrivateRegularFile(stats({ mode: 0o100640 }), 'linux')).toEqual({
         trusted: false,
         reason: 'not-private',
@@ -66,18 +67,18 @@ describe('RFC-254 file trust primitive', () => {
       })
     })
 
-    test('supports the sealed read+execute mode', () => {
+    test('supports the owner read+execute mode', () => {
       expect(
-        assertPrivateRegularFile(stats({ mode: 0o100500 }), 'linux', SEALED_EXEC_MODE),
+        assertPrivateRegularFile(stats({ mode: 0o100500 }), 'linux', OWNER_READ_EXECUTE_MODE),
       ).toEqual({ trusted: true })
       expect(
-        assertPrivateRegularFile(stats({ mode: 0o100700 }), 'linux', SEALED_EXEC_MODE),
+        assertPrivateRegularFile(stats({ mode: 0o100700 }), 'linux', OWNER_READ_EXECUTE_MODE),
       ).toEqual({ trusted: false, reason: 'not-private' })
     })
 
     test('win32 fails CLOSED with a legible reason, never a silent pass', () => {
       // The whole point of D22. A win32 verdict of `trusted: true` here would
-      // let a receipt claim "verified" over a file nothing verified.
+      // let a caller treat an unproven privacy property as owner-only.
       expect(assertPrivateRegularFile(stats(), 'win32')).toEqual({
         trusted: false,
         reason: 'platform-unsupported',
@@ -140,9 +141,7 @@ describe('RFC-254 file trust primitive', () => {
     })
 
     test('does NOT judge size — callers own that rule', () => {
-      // Locked deliberately: the manifest wants byte-exact equality, the
-      // control ACK wants a ceiling. Folding either in here would silently
-      // change the other.
+      // Locked deliberately: callers apply their own size equality or ceiling.
       expect(assertSameFileIdentity(stats({ size: 10 }), stats({ size: 99 }), 'linux')).toEqual({
         trusted: true,
       })
@@ -178,13 +177,37 @@ describe('RFC-254 file trust primitive', () => {
     })
   })
 
+  describe('assertSameDirectoryIdentity', () => {
+    const directory = (
+      overrides: Partial<Pick<TrustStats, 'dev' | 'ino' | 'isSymbolicLink'>> = {},
+    ): TrustStats => stats({ ...overrides, isFile: () => false, isDirectory: () => true })
+
+    test('accepts the same real directory and rejects replacement or a link', () => {
+      expect(assertSameDirectoryIdentity(directory(), directory(), 'linux')).toEqual({
+        trusted: true,
+      })
+      expect(assertSameDirectoryIdentity(directory(), directory({ ino: 999 }), 'linux')).toEqual({
+        trusted: false,
+        reason: 'identity-changed',
+      })
+      expect(
+        assertSameDirectoryIdentity(
+          directory(),
+          directory({ isSymbolicLink: () => true }),
+          'linux',
+        ),
+      ).toEqual({ trusted: false, reason: 'not-directory' })
+    })
+  })
+
   describe('bigint stats (Node { bigint: true } variant)', () => {
-    // sourceGuard and hermetic stat with `bigint: true` to keep the full
-    // permission word. The typechecker found this when the primitive first
+    // Some callers stat with `bigint: true` to keep the full permission word.
+    // The typechecker found this when the primitive first
     // landed with number-only fields — a reminder that "same shape" is not the
     // same as "same representation".
     const big = (o: Partial<Record<'dev' | 'ino' | 'mode' | 'size', bigint>> = {}): TrustStats => ({
       isFile: () => true,
+      isDirectory: () => false,
       isSymbolicLink: () => false,
       mode: o.mode ?? 0o100600n,
       dev: o.dev ?? 1n,
@@ -216,9 +239,9 @@ describe('RFC-254 file trust primitive', () => {
     })
   })
 
-  test('PRIVATE_FILE_MODE is the mode the verified store actually writes', () => {
+  test('owner-only mode constants keep their exact POSIX values', () => {
     expect(PRIVATE_FILE_MODE).toBe(0o600)
-    expect(SEALED_EXEC_MODE).toBe(0o500)
+    expect(OWNER_READ_EXECUTE_MODE).toBe(0o500)
   })
 })
 

@@ -144,28 +144,6 @@ export const ConfigSchema = z.object({
   /** Prepared dependency environments unused for this long are collected. */
   scriptEnvTtlDays: z.number().int().positive().default(30),
 
-  // --- RFC-256 machine opencode config inheritance ---
-  /**
-   * Let the platform's OpenCode processes read the operator's own global
-   * OpenCode configuration (`~/.config/opencode/`, `$HOME/.opencode/`) again.
-   *
-   * RFC-224 sealed this off, which silently broke two things at once: models
-   * declared in a machine `opencode.json` disappeared from every picker (the
-   * probe runs in a private HOME/XDG sandbox and therefore sees an empty
-   * config), and runs against a provider defined there failed with
-   * `auth-invalid`. Both had worked since the platform existed.
-   *
-   * What this does NOT re-open: repository `.opencode/` and `opencode.json`
-   * stay rejected (source guard + OPENCODE_DISABLE_PROJECT_CONFIG) — a cloned
-   * repo injecting config into an agent process is the surface RFC-224 was
-   * actually written for. Session store, cache and state stay private, so
-   * session ownership and resume are unaffected.
-   *
-   * Set false for a deployment that wants the fully sealed posture back,
-   * accepting that only platform-declared runtimes and providers will work.
-   */
-  inheritMachineOpencodeConfig: z.boolean().default(true),
-
   // --- RFC-108 task auto-check & recovery (all default-safe; auto-execution OFF) ---
   /** T18: auto-resume daemon-restart-interrupted tasks at boot. Default OFF. */
   autoResumeOnBoot: z.boolean().default(false),
@@ -230,51 +208,6 @@ export const ConfigSchema = z.object({
   /** 投递整行删除天数（审计窗口）。见 webhookDeliveryBodyRetentionDays。 */
   webhookDeliveryRowRetentionDays: z.number().int().min(1).max(3650).default(90),
 
-  // --- RFC-205 runtime sandbox ---
-  /** OS-level FS sandbox around agent processes (macOS sandbox-exec / Linux
-   *  bwrap): 'enforce' = refuse to launch tasks when the mechanism is
-   *  unavailable; 'warn' (default) = degrade to unsandboxed with a loud alert;
-   *  'off' = never wrap (pre-RFC-205 behaviour). */
-  sandboxMode: z.enum(['enforce', 'warn', 'off']).default('warn'),
-  /**
-   * Absolute directories exposed READ-ONLY to a business agent's shell and its
-   * local MCP children, and prepended to their PATH.
-   *
-   * 2026-08-04 sandbox audit: the fenced child's PATH is a fixed
-   * `/usr/bin:/bin` plus one sealed copy of Bun. On a normal deployment that
-   * means `node`, `npm`, `npx`, `cargo`, `go` and every version-manager shim
-   * are simply absent, so the "Code" half of Code→Audit→Fix answers `command
-   * not found` — and the model only sees exit 127, with nothing saying the
-   * platform replaced its PATH. Declaring the toolchain here is the supported
-   * way to give it back.
-   *
-   * EMPTY BY DEFAULT: this widens what model-controlled processes may execute,
-   * so it is an explicit administrator decision, never inferred from the
-   * daemon's own PATH. Entries are validated here (absolute, normalized, no
-   * `..`, not the filesystem root) and re-checked at spawn time; the child
-   * boundary additionally refuses any entry that would contain the private
-   * home / appHome / tmp masks, which rules out `/` and `/home`.
-   */
-  businessToolchainPaths: z
-    .array(
-      z
-        .string()
-        .min(1)
-        .refine(
-          (value) =>
-            value.startsWith('/') &&
-            value !== '/' &&
-            !value.includes('\0') &&
-            !value.split('/').includes('..') &&
-            !value.endsWith('/'),
-          {
-            message:
-              'must be an absolute, normalized directory path without ".." and without a trailing slash',
-          },
-        ),
-    )
-    .max(16)
-    .default([]),
   /** Take a raw (byte-copy) pre-migration backup before applying pending
    *  migrations on boot, so a botched upgrade can be rolled back. */
   backupOnMigration: z.boolean().default(true),
@@ -357,13 +290,9 @@ export const ConfigSchema = z.object({
   // --- RFC-234 intent builder (design §5) ---
   /**
    * RFC-234 — runtime profile NAME the intent-builder system agent runs on.
-   * Unlike the other internal agents this selection is FAIL-CLOSED on
-   * capability: only runtimes whose driver declares the 'intent-read-v1'
-   * narrowed permission profile are admitted (RFC-237 — opencode via the
-   * verified system path; claude-code via the declared-control sealed spawn);
-   * routes/config.ts rejects anything else at save time, including the
-   * inherited default when this is unset and defaultRuntime changes. Unset →
-   * inherit `defaultRuntime` (re-checked at launch time).
+   * RFC-276: Intent Builder uses the selected runtime's natural system-agent
+   * spawn shape. There is no platform permission profile or capability gate.
+   * Unset → inherit `defaultRuntime`.
    */
   intentBuilderRuntime: z.string().min(1).optional(),
   /** RFC-234 — output language of generated artifacts (prompts/descriptions).
@@ -642,7 +571,6 @@ export const DEFAULT_CONFIG: Config = {
   scriptInterpreters: {}, // RFC-253 — empty ⇒ resolve every language from PATH
   scriptDepsInstallTimeoutMs: 10 * 60 * 1000,
   scriptEnvTtlDays: 30,
-  inheritMachineOpencodeConfig: true, // RFC-256 — pre-RFC-224 behavior restored
   // RFC-108 auto-recovery knobs — auto-execution OFF by default (decision D1).
   autoResumeOnBoot: false,
   autoRepair: {},
@@ -663,8 +591,6 @@ export const DEFAULT_CONFIG: Config = {
   // RFC-261 webhook 投递保留
   webhookDeliveryBodyRetentionDays: 30,
   webhookDeliveryRowRetentionDays: 90,
-  sandboxMode: 'warn',
-  businessToolchainPaths: [],
   backupOnMigration: true,
   sqliteSynchronous: 'NORMAL',
   walCheckpointIntervalMs: 0,

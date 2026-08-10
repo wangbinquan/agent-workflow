@@ -53,7 +53,6 @@ import {
   findQuestionerNodeForCrossClarify,
   isInlineMarkdownItemKind,
   isMergeStateSettled,
-  isPermanentRuntimeFailure,
   resolveClarifySessionMode,
   resolveCrossClarifySessionMode,
   resolveKeyOf,
@@ -81,18 +80,11 @@ import {
   readScriptEnv,
   readScriptLanguage,
   scriptOutputMode,
-  resolveScriptNetwork,
   resolveScriptReadonly,
   SCRIPT_PERMANENT_FAILURE_CODES,
   type ScriptLanguage,
 } from '@agent-workflow/shared'
 import { runRootFor } from './inventory'
-import {
-  buildRunSandboxCtx,
-  ContainmentAdmissionAborted,
-  ContainmentAdmissionError,
-  type SandboxCtx,
-} from './sandbox'
 import { ensureScriptDepsEnv, ScriptDepsInstallError, type ScriptDepsEnv } from './scriptDepsEnv'
 import { extractScriptPorts } from './scriptPorts'
 import {
@@ -101,7 +93,6 @@ import {
   runScriptProcess,
 } from './scriptRun'
 import type { DbClient } from '@/db/client'
-import type { ContainmentCoordinator } from '@/services/sandbox'
 import {
   clarifyRounds,
   nodeRunEvents,
@@ -191,13 +182,7 @@ import {
   wrapperExternalUpstreamSources,
   wrapperRevivalEvidence,
 } from '@/services/dispatchFrontier'
-import {
-  alertSandboxDegradedOnce,
-  resolveSandboxDegradedIfHealthy,
-  runNode,
-  type ResolvedSkill,
-  type RunResult,
-} from '@/services/runner'
+import { runNode, type ResolvedSkill, type RunResult } from '@/services/runner'
 import { forcedPortPathsForTask, toContainerRelative } from '@/services/portArtifacts'
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
 import {
@@ -316,8 +301,6 @@ export interface RunTaskOptions {
   taskId: string
   db: DbClient
   appHome: string
-  /** One daemon-scoped admission authority, threaded to every runNode path. */
-  containmentCoordinator?: ContainmentCoordinator
   /** Override opencode binary command (tests inject mock-opencode). */
   opencodeCmd?: string[]
   log?: Logger
@@ -1101,9 +1084,6 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         mcps: injection.mcps,
         plugins: injection.plugins,
         appHome: opts.appHome,
-        ...(opts.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: opts.containmentCoordinator }),
         ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
         db,
         log,
@@ -1486,19 +1466,12 @@ export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFoll
   }
 }
 
-/**
- * RFC-224: a permanent execution-identity failure cannot be repaired by
- * replaying the same frozen inputs. A closed verified stream is the deliberate
- * transient exception. Keep this predicate exported and pure so the scheduler
- * loop's retry-consumption contract has a direct unit oracle.
- */
 export function shouldRetryNodeFailure(failureCode: FailureCode | null | undefined): boolean {
   // 2026-08-04 audit: a terminal error the RUNTIME reported about itself (auth
   // rejected, usage limit, gateway error) does not become true by replaying the
-  // same inputs. It is not an execution-identity code, so the identity-scoped
-  // predicate below would call it retryable and burn the whole budget.
+  // same inputs.
   if (failureCode === 'runtime-result-error') return false
-  return !isPermanentRuntimeFailure(failureCode)
+  return true
 }
 
 async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeResult> {
@@ -1955,6 +1928,7 @@ async function maybeRunCommitPush(
             temperature: rt.temperature,
             steps: rt.steps,
             maxSteps: rt.maxSteps,
+            isSandbox: rt.isSandbox,
           },
           configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
         })
@@ -1986,9 +1960,6 @@ async function maybeRunCommitPush(
           mcps: [],
           plugins: [],
           appHome: state.opts.appHome,
-          ...(state.opts.containmentCoordinator === undefined
-            ? {}
-            : { containmentCoordinator: state.opts.containmentCoordinator }),
           db,
           log: log.child('commit'),
           gitUserName: task.gitUserName,
@@ -2844,6 +2815,7 @@ async function resolveMergeConflicts(
         temperature: rt.temperature,
         steps: rt.steps,
         maxSteps: rt.maxSteps,
+        isSandbox: rt.isSandbox,
       },
       configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
     })
@@ -2875,9 +2847,6 @@ async function resolveMergeConflicts(
       mcps: [],
       plugins: [],
       appHome: state.opts.appHome,
-      ...(state.opts.containmentCoordinator === undefined
-        ? {}
-        : { containmentCoordinator: state.opts.containmentCoordinator }),
       db,
       log: log.child('merge'),
       gitUserName: task.gitUserName,
@@ -3700,9 +3669,6 @@ function buildChildDeps(state: SchedulerState): StartTaskDeps {
     actorUserId:
       (state.task as unknown as { ownerUserId?: string | null }).ownerUserId ?? undefined,
     ...(opts.opencodeCmd !== undefined ? { opencodeCmd: opts.opencodeCmd } : {}),
-    ...(opts.containmentCoordinator !== undefined
-      ? { containmentCoordinator: opts.containmentCoordinator }
-      : {}),
     appHome: opts.appHome,
     ...(opts.defaultPerNodeTimeoutMs !== undefined
       ? { defaultPerNodeTimeoutMs: opts.defaultPerNodeTimeoutMs }
@@ -4072,8 +4038,8 @@ async function launchCallWorkgroupChild(
  * RFC-269 — one outbound code-host API call.
  *
  * Deliberately much shorter than `runScriptNode`: there is no iso worktree (it
- * writes no files), no subprocess (the daemon issues the request itself, so it
- * never enters the containment admission surface), and **no node-level retry
+ * writes no files), no subprocess (the daemon issues the request itself), and
+ * **no node-level retry
  * loop**. That last one is a decision, not an omission: the executor already
  * retries at the HTTP layer where it can tell a safe retry from an unsafe one
  * (D18 — 429 always, 5xx/network only for idempotent methods). Re-running the
@@ -4300,7 +4266,6 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
     return { kind: 'failed', summary: `script node ${node.id} has no language`, message: 'invalid' }
   }
   const isReadonly = resolveScriptReadonly(node)
-  const networkDeny = resolveScriptNetwork(node) === 'deny'
 
   const { inputs: upstreamInputs, consumed: consumedUpstream } = await resolveUpstreamInputs(
     db,
@@ -4395,33 +4360,30 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
   // pool it comes from changed).
   const releaseScript = await scriptSem.acquire()
 
-  // A readonly script runs IN PLACE against the canonical worktree with the
-  // whole tree (and the git common dir) mounted read-only, so there is nothing
-  // to isolate and nothing to merge back.
+  // Every script runs in an isolated worktree. A readonly script may write to
+  // that disposable copy, but the copy is never merged back into canonical.
   let isoHandle: IsoHandle | null = null
   const isoKeyRunId = nodeRunId
-  if (!isReadonly) {
-    try {
-      isoHandle = await createIsoUnderLock({
-        writeSem,
-        appHome: opts.appHome,
-        taskId,
-        db,
-        isoKeyRunId,
-        canonRepos: state.repos,
-        log,
-      })
-    } catch (err) {
-      releaseScript()
-      log.warn('script iso worktree setup failed', {
-        nodeId: node.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
-      return {
-        kind: 'failed',
-        summary: 'isolated worktree setup failed',
-        message: 'iso-setup-failed',
-      }
+  try {
+    isoHandle = await createIsoUnderLock({
+      writeSem,
+      appHome: opts.appHome,
+      taskId,
+      db,
+      isoKeyRunId,
+      canonRepos: state.repos,
+      log,
+    })
+  } catch (err) {
+    releaseScript()
+    log.warn('script iso worktree setup failed', {
+      nodeId: node.id,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return {
+      kind: 'failed',
+      summary: 'isolated worktree setup failed',
+      message: 'iso-setup-failed',
     }
   }
 
@@ -4481,7 +4443,6 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
         interpreter,
         isoHandle,
         isReadonly,
-        networkDeny,
         language,
       })
       if (outcome.kind === 'done') {
@@ -4498,7 +4459,7 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
       }
     }
 
-    if (succeeded && isoHandle !== null && !isoHandle.passthrough) {
+    if (succeeded && !isReadonly && isoHandle !== null && !isoHandle.passthrough) {
       const merge = await mergeBackAndSettle({
         db,
         writeSem,
@@ -4526,7 +4487,7 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
     }
   } finally {
     releaseScript()
-    if (isoHandle !== null && !succeeded) {
+    if (isoHandle !== null && (!succeeded || isReadonly)) {
       await discardNodeIso(isoHandle, log, writeSem).catch(() => {})
     }
   }
@@ -4548,7 +4509,6 @@ interface ScriptAttemptArgs {
   interpreter: Awaited<ReturnType<typeof resolveScriptInterpreter>> & object
   isoHandle: IsoHandle | null
   isReadonly: boolean
-  networkDeny: boolean
   language: ScriptLanguage
 }
 
@@ -4557,7 +4517,7 @@ type ScriptAttemptOutcome =
   | { kind: 'failed'; summary: string; message: string }
   | { kind: 'canceled'; message: string }
 
-/** One attempt: containment → deps → spawn → ports → terminal row. */
+/** One attempt: dependencies → spawn → ports → terminal row. */
 async function runOneScriptAttempt(
   state: SchedulerState,
   a: ScriptAttemptArgs,
@@ -4566,12 +4526,9 @@ async function runOneScriptAttempt(
   const runDir = runRootFor(taskId, a.nodeRunId)
   mkdirSync(runDir, { recursive: true })
 
-  // 2026-08-04 audit: a readonly node has no iso handle, and falling back to
-  // `task.worktreePath` put it in the TOP-LEVEL tree — inside a git/loop
-  // wrapper the canonical for this scope is `state.scopeRoot` (§D9 above calls
-  // using task.worktreePath there "the exact bug this RFC roots out"). The
-  // node then read stale content that predates whatever the wrapper's earlier
-  // nodes wrote, with no error, and the sandbox allowed the wrong tree.
+  // The iso handle is created before every attempt, including readonly. The
+  // scope-root fallback exists only for defensive compatibility with a
+  // passthrough handle implementation.
   const worktreePath = a.isoHandle?.repos[0]?.isoWorktreePath ?? state.scopeRoot
   // Every repo this attempt may touch — the boundary must match the paths
   // `AW_REPOS_JSON` hands the script, not just the primary one.
@@ -4586,100 +4543,8 @@ async function runOneScriptAttempt(
           name: state.repos[i]?.mountPath ?? r.worktreeDirName,
           path: r.isoWorktreePath,
         }))
-  const worktreeRoots = repoProjection.map((r) => r.path)
-
-  // Containment first: for a netless node the profile is fail-closed, so an
-  // unavailable fence throws here — BEFORE the process exists and before any
-  // side effect (D23).
-  let sandboxCtx: SandboxCtx | undefined
-  let installerSandbox: Parameters<typeof buildRunSandboxCtx>[0] = null
-  if (opts.containmentCoordinator !== undefined) {
-    try {
-      // impl-gate M1: the profile must reflect EVERY boundary this node is
-      // relying on, not just the network one. A readonly node skipped its
-      // isolated worktree because the read-only mount was promised — so that
-      // mount has to be fail-closed too, or `off`/degraded silently produces
-      // "no isolation AND no boundary". `outer-netless-v1` already carries the
-      // filesystem requirements, so it covers the both-flags case.
-      const profileId = a.networkDeny
-        ? 'outer-netless-v1'
-        : a.isReadonly
-          ? 'outer-readonly-v1'
-          : 'runner-filesystem-v1'
-      const plan = await opts.containmentCoordinator.admit(profileId, {
-        ...(opts.signal === undefined ? {} : { signal: opts.signal }),
-      })
-      // impl-gate M3: the installer reuses THIS admission's provider but never
-      // its network posture — dependencies must install even for a netless node
-      // (D15), so the netless flag is deliberately not carried over.
-      installerSandbox = plan.sandbox
-      const base = buildRunSandboxCtx(plan.sandbox, taskId, worktreePath, runDir, worktreeRoots)
-      if (base !== undefined) {
-        sandboxCtx = {
-          ...base,
-          ...(a.networkDeny ? { networkDeny: true } : {}),
-          // A readonly node has no isolated worktree — it runs against
-          // canonical — so the read-only promise has to be a boundary, not a
-          // convention the script is trusted to keep.
-          ...(a.isReadonly ? { readOnlyWorktrees: true } : {}),
-        }
-      }
-      // 2026-08-04 audit: a degraded `warn` admission was announced on the
-      // agent path and completely silent here, so a script node could run with
-      // no boundary and leave no user-visible trace at all. Same alert, same
-      // per-task dedupe.
-      if (
-        sandboxCtx !== undefined &&
-        sandboxCtx.mode === 'warn' &&
-        (!sandboxCtx.status.available || plan.receipt.reasonCodes.length > 0)
-      ) {
-        await alertSandboxDegradedOnce(
-          db,
-          taskId,
-          plan.receipt.reasonCodes.join(', ') || sandboxCtx.status.detail,
-          log,
-        )
-      } else if (sandboxCtx !== undefined && sandboxCtx.status.available) {
-        await resolveSandboxDegradedIfHealthy(db, taskId, log)
-      }
-    } catch (err) {
-      if (err instanceof ContainmentAdmissionAborted) {
-        return { kind: 'canceled', message: 'containment-admission-aborted' }
-      }
-      const message = err instanceof Error ? err.message : String(err)
-      // 2026-08-04 audit: name the boundary THIS node demanded. All three
-      // profiles used to report the network fence, so a readonly node was told
-      // a mechanism it never requested was unavailable.
-      const failureCode = a.networkDeny
-        ? ('script-network-fence-unavailable' as const)
-        : a.isReadonly
-          ? ('script-readonly-fence-unavailable' as const)
-          : ('script-containment-unavailable' as const)
-      // The receipt's reason codes are the only thing that distinguishes
-      // "install bubblewrap" from "containment is switched off" — dropping
-      // them left the operator with no route back.
-      const reasonCodes =
-        err instanceof ContainmentAdmissionError ? err.receipt.reasonCodes.join(', ') : ''
-      const detail = reasonCodes === '' ? message : `${message} (${reasonCodes})`
-      await setNodeRunStatus({
-        db,
-        nodeRunId: a.nodeRunId,
-        to: 'failed',
-        allowedFrom: ['pending', 'running'],
-        reason: failureCode,
-        extra: { finishedAt: Date.now(), errorMessage: detail, failureCode },
-      })
-      broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
-      return {
-        kind: 'failed',
-        summary: `containment unavailable: ${detail}`,
-        message: failureCode,
-      }
-    }
-  }
-
-  // Dependencies: installed with network access even when the node itself is
-  // netless (D15) — the install happens before the author's code runs.
+  // Dependencies are deterministic and prebuilt-only, but otherwise run with
+  // the daemon's natural toolchain and network access.
   let depsEnv: ScriptDepsEnv | null = null
   const specs = readScriptDependencies(a.node)
   if (specs.length > 0) {
@@ -4691,15 +4556,6 @@ async function runOneScriptAttempt(
         interpreterVersion: a.interpreter.version,
         specs,
         timeoutMs: opts.scriptDepsInstallTimeoutMs ?? 10 * 60 * 1000,
-        // impl-gate M3: the installer used to run with NO containment at all
-        // — pip/npm as the daemon, with `secret.key` and `db.sqlite` readable.
-        // The build directory takes the `runDir` slot because that slot IS
-        // "the one private writable root", which is exactly the installer's
-        // requirement; no task worktree is reachable, and network stays on.
-        sandboxFor: (buildDir) =>
-          installerSandbox === null
-            ? undefined
-            : buildRunSandboxCtx(installerSandbox, taskId, buildDir, buildDir),
         ...(opts.signal === undefined ? {} : { signal: opts.signal }),
         onLine: async (stream: 'stdout' | 'stderr', line: string) => {
           await db.insert(nodeRunEvents).values({
@@ -4728,14 +4584,6 @@ async function runOneScriptAttempt(
       })
       broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
       return { kind: 'failed', summary: message, message: 'script-deps-install-failed' }
-    }
-    // The prepared environment is mounted READ-ONLY: two nodes can share one
-    // environment, so a writable mount would be a cross-node injection channel.
-    if (depsEnv !== null && sandboxCtx !== undefined) {
-      sandboxCtx = {
-        ...sandboxCtx,
-        readOnlyAllowSubtrees: [...(sandboxCtx.readOnlyAllowSubtrees ?? []), depsEnv.rootDir],
-      }
     }
   }
 
@@ -4783,7 +4631,6 @@ async function runOneScriptAttempt(
       ? {}
       : { timeoutMs: opts.defaultPerNodeTimeoutMs }),
     ...(opts.signal === undefined ? {} : { signal: opts.signal }),
-    ...(sandboxCtx === undefined ? {} : { sandbox: sandboxCtx }),
     gitUserName: task.gitUserName,
     gitUserEmail: task.gitUserEmail,
     onSpawned: async ({ pid, spawnBinaryPath }) => {
@@ -6101,9 +5948,6 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           mcps,
           plugins,
           appHome: opts.appHome,
-          ...(opts.containmentCoordinator === undefined
-            ? {}
-            : { containmentCoordinator: opts.containmentCoordinator }),
           ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
           db,
           log: log.child('run'),
@@ -7901,9 +7745,6 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       mcps: injection.mcps,
       plugins: injection.plugins,
       appHome: opts.appHome,
-      ...(opts.containmentCoordinator === undefined
-        ? {}
-        : { containmentCoordinator: opts.containmentCoordinator }),
       ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
       ...(Object.keys(inputPortKinds).length > 0 ? { inputPortKinds } : {}),
       db,
@@ -8331,9 +8172,6 @@ async function dispatchFanoutAggregatorAttempt(
       mcps: injection.mcps,
       plugins: injection.plugins,
       appHome: opts.appHome,
-      ...(opts.containmentCoordinator === undefined
-        ? {}
-        : { containmentCoordinator: opts.containmentCoordinator }),
       ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
       db,
       log,

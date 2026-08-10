@@ -20,60 +20,7 @@ export const EMPTY_RUNTIME_PROFILE: RuntimeProfile = {
   temperature: null,
   steps: null,
   maxSteps: null,
-}
-
-/**
- * RFC-073: global permission injected at the TOP LEVEL of OPENCODE_CONFIG_CONTENT
- * (not under any agent). opencode folds a top-level `permission` into
- * `config.permission` (config/config.ts), which `agent/agent.ts:124` reads as
- * `user` and merges into EVERY agent's ruleset (`:290` `merge(defaults, user)`).
- * Because `session/prompt.ts`'s `ctx.ask` and `session/llm.ts:resolveTools`
- * recompute the ruleset per-session from the CURRENT session's agent.permission,
- * this reaches the root AND every nested subagent — without relying on
- * opencode's subagent permission forwarding (subagent-permissions.ts only
- * forwards external_directory/deny, never allow).
- *
- *   "*": "allow"       — evaluate() (permission/evaluate.ts) returns allow for
- *                        every permission on every session, so `ask()` never
- *                        publishes `permission.asked`. Kills the subagent
- *                        deadlock: `opencode run`'s loop only replies to the
- *                        ROOT session's permission (cli/cmd/run.ts:708 skips
- *                        child sessions) and we have no reverse channel in CLI
- *                        mode, so a child's `permission.asked` would otherwise
- *                        block forever.
- *   "question": "deny" — Permission.disabled (permission/index.ts:293-302,
- *                        called from llm.ts:resolveTools) drops the `question`
- *                        tool from the model's tool list on every session, so
- *                        the agent can't invoke it → no `question.asked`
- *                        deadlock (run.ts has no question.asked handler at all).
- *                        Orthogonal to our own clarify flow, which travels via
- *                        the `<workflow-clarify>` envelope (shared/clarify.ts),
- *                        not opencode's question tool.
- *
- * ORDER IS LOAD-BEARING: `Permission.disabled` resolves a tool via `findLast`.
- * For `question` BOTH `{*,allow}` and `{question,deny}` match; the LAST wins.
- * `question` MUST stay AFTER `*` or it is not disabled. Locked by
- * runner-permission-inject.test.ts (serialization-order assertion).
- */
-export const AW_GLOBAL_PERMISSION: Record<string, string> = {
-  '*': 'allow',
-  question: 'deny',
-}
-
-/**
- * RFC-073: strip any `question` key from an agent's own permission overrides
- * before injecting it under `agent.<name>.permission`. opencode merges the
- * per-agent permission LAST (agent.ts:306), so a `question: "allow"` there
- * would override the global `question: "deny"` from AW_GLOBAL_PERMISSION and
- * revive the deadlock-prone question tool. No product surface sets this today;
- * the guard is defensive + future-proof. Other keys pass through verbatim.
- */
-function sanitizeInjectedAgentPermission(
-  permission: Record<string, unknown>,
-): Record<string, unknown> {
-  if (!('question' in permission)) return permission
-  const { question: _dropped, ...rest } = permission
-  return rest
+  isSandbox: false,
 }
 
 /**
@@ -85,16 +32,17 @@ function sanitizeInjectedAgentPermission(
 export function buildInlineAgentEntry(
   agent: Agent,
   // RFC-113: model/variant/temperature/steps/maxSteps now come from the agent's
-  // RUNTIME (resolved + frozen at dispatch), NOT from the agent or a node
+  // RUNTIME (resolved at dispatch), NOT from the agent or a node
   // override. The caller passes the resolved profile for THIS agent.
   params: RuntimeProfile = EMPTY_RUNTIME_PROFILE,
 ): Record<string, unknown> {
   const inlineAgent: Record<string, unknown> = {
     prompt: agent.bodyMd,
     description: agent.description,
-    // RFC-073: drop any `question:"allow"` so it can't override the global
-    // `question:"deny"` (AW_GLOBAL_PERMISSION) and revive the question tool.
-    permission: sanitizeInjectedAgentPermission(agent.permission),
+    // RFC-276: the author's explicit permission map is the only platform
+    // permission overlay. OpenCode's own `--auto` semantics handle all
+    // unspecified operations; the platform no longer adds a global allow/deny.
+    permission: agent.permission,
     // Platform-only fields live under `options` so opencode passes them through
     // without trying to parse. The runner doesn't read these back; they exist
     // for observability when an operator dumps `opencode debug agent`.
@@ -129,8 +77,6 @@ export function buildInlineConfig(
    * defeating the eager-install + cache contract.
    */
   plugin?: Array<string | [string, Record<string, unknown>]>
-  /** RFC-073: global permission injected at the top level — see AW_GLOBAL_PERMISSION. */
-  permission?: Record<string, string>
 } {
   const map: Record<string, Record<string, unknown>> = {
     [agent.name]: buildInlineAgentEntry(agent, paramsByAgent.get(agent.name)),
@@ -147,14 +93,7 @@ export function buildInlineConfig(
     agent: Record<string, Record<string, unknown>>
     mcp?: Record<string, Record<string, unknown>>
     plugin?: Array<string | [string, Record<string, unknown>]>
-    permission?: Record<string, string>
   } = { agent: map }
-  // RFC-073: inject global permission at the TOP LEVEL of the inline config
-  // (= OPENCODE_CONFIG_CONTENT) so opencode folds it into `config.permission`
-  // → every agent + every nested subagent. Roots out the subagent
-  // permission.asked / question.asked deadlock at the source. See
-  // AW_GLOBAL_PERMISSION for the full mechanism + the load-bearing key order.
-  out.permission = AW_GLOBAL_PERMISSION
   // RFC-028: emit the mcp record only when at least one ENABLED entry exists.
   // Disabled entries are skipped entirely to keep the env-var compact AND to
   // avoid masking a same-name inherited entry from repo .opencode/config.json
@@ -167,8 +106,8 @@ export function buildInlineConfig(
   }
   if (Object.keys(mcpMap).length > 0) out.mcp = mcpMap
   // RFC-031: emit the plugin array only when at least one ENABLED entry
-  // resolves. RFC-251 moved the encoding rules to `pluginSpec.ts` so the
-  // verified path's controlled config (hermetic.ts) shares one implementation.
+  // resolves. RFC-251 moved the encoding rules to `pluginSpec.ts` so all
+  // OpenCode assembly paths share one implementation.
   const pluginArr = buildPluginSpecArray(plugins)
   if (pluginArr.length > 0) out.plugin = pluginArr
   return out

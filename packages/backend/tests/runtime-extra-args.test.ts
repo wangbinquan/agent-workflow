@@ -81,6 +81,8 @@ describe('validateExtraArgs — fail-closed write gate', () => {
   test('capability declaration: claude driver opts in, opencode stays fail-closed', () => {
     expect(getRuntimeDriver('claude-code').acceptsExtraArgs).toBe(true)
     expect(getRuntimeDriver('opencode').acceptsExtraArgs).toBeUndefined()
+    expect(getRuntimeDriver('claude-code').acceptsSandboxCompatibilityMarker).toBe(true)
+    expect(getRuntimeDriver('opencode').acceptsSandboxCompatibilityMarker).toBeUndefined()
   })
 
   test('null / empty → NULL (no column value)', () => {
@@ -95,17 +97,19 @@ describe('validateExtraArgs — fail-closed write gate', () => {
     )
   })
 
-  test('platform-owned flags are rejected — exact and =-joined', () => {
+  test('transport/product-owned flags are rejected — exact and =-joined', () => {
     for (const bad of [
       ['--model', 'x'],
       ['--permission-mode', 'bypassPermissions'],
-      ['--settings=/tmp/s.json'],
       ['--mcp-config', '/tmp/m.json'],
       ['--dangerously-skip-permissions'],
       ['-p'],
     ]) {
       expect(() => validateExtraArgs('claude-code', bad)).toThrow(/platform-owned/)
     }
+    expect(validateExtraArgs('claude-code', ['--settings=/tmp/s.json'])).toBe(
+      '["--settings=/tmp/s.json"]',
+    )
   })
 
   test('a bare leading token is rejected (would become the prompt positional)', () => {
@@ -194,20 +198,23 @@ describe('registry persistence + frozen snapshot', () => {
     )
   })
 
-  test('frozen runtime snapshot carries extraArgs; later row edits do not re-route', async () => {
+  test('frozen runtime snapshot carries extraArgs and isSandbox; later row edits do not re-route', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedBuiltinRuntimes(db)
     await createRuntime(db, {
       name: 'codeagent',
       protocol: 'claude-code',
       extraArgs: ['--skip-safe-check'],
+      isSandbox: true,
     })
     const runId = await seedRun(db)
     const first = await resolveFrozenRuntime(db, runId, 'codeagent', null)
     expect(first.params.extraArgs).toEqual(['--skip-safe-check'])
-    await updateRuntime(db, 'codeagent', { extraArgs: ['--other-flag'] })
+    expect(first.params.isSandbox).toBe(true)
+    await updateRuntime(db, 'codeagent', { extraArgs: ['--other-flag'], isSandbox: false })
     const resumed = await resolveFrozenRuntime(db, runId, 'codeagent', null)
     expect(resumed.params.extraArgs).toEqual(['--skip-safe-check'])
+    expect(resumed.params.isSandbox).toBe(true)
   })
 })
 

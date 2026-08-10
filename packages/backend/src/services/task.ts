@@ -72,12 +72,8 @@ import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type { SecretBox } from '@/auth/secretBox'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { canonicalRepoKeysWire } from '@/services/repoLabels'
-import type { ContainmentCoordinator } from '@/services/sandbox'
-import { getRuntimeDriver } from '@/services/runtime'
-import { loadMcpsByIds } from '@/services/mcpClosure'
 import { buildLaunchCollabRows } from '@/services/taskCollab'
 import { getWorkflow } from '@/services/workflow'
-import { assertWorkflowExecutionPolicy } from '@/services/taskLaunchGate'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { materializingSpaces } from '@/services/gc'
@@ -209,8 +205,6 @@ export interface StartTaskDeps {
    */
   secretBox?: SecretBox
   db: DbClient
-  /** Daemon-scoped RFC-233 admission authority. */
-  containmentCoordinator?: ContainmentCoordinator
   /** Override app home (tests). Defaults to `Paths.root`. */
   appHome?: string
   /** Default per-node timeout (ms). Defaults from settings; tests can pin. */
@@ -851,7 +845,6 @@ export function runtimeConfigOpts(
     | 'defaultPerNodeTimeoutMs'
     | 'defaultNodeRetries'
     | 'defaultRuntime'
-    | 'containmentCoordinator'
     | 'maxActiveChildTasks'
     | 'maxInvocationDepth'
   >,
@@ -913,9 +906,6 @@ export function runtimeConfigOpts(
       ? { defaultNodeRetries: deps.defaultNodeRetries }
       : {}),
     ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
-    ...(deps.containmentCoordinator !== undefined
-      ? { containmentCoordinator: deps.containmentCoordinator }
-      : {}),
   }
 }
 
@@ -1893,56 +1883,6 @@ async function startTaskImpl(
       )
     }
   }
-  // RFC-224 final service funnel. Route/multipart/schedule faces reject even
-  // earlier, but internal startTask callers must not be able to bypass the
-  // effective OpenCode model/plugin/dependent policy. This remains before
-  // source resolution, cloning, worktree creation, or task-row writes.
-  const resolvedAgents = await assertWorkflowExecutionPolicy(
-    deps.db,
-    effectiveDefinition,
-    deps.defaultRuntime,
-  )
-  // RFC-233: early UX preview is evaluated only after the same canonical
-  // agent-runtime resolution that dispatch freezes. Mixed-runtime workflows
-  // preview every distinct driver demand; final per-spawn admission remains
-  // fresh and authoritative.
-  if (deps.containmentCoordinator !== undefined) {
-    const requestedMcpIds = [...new Set(resolvedAgents.flatMap(({ agent }) => agent.mcp))]
-    const mcpsById = new Map(
-      (await loadMcpsByIds(deps.db, requestedMcpIds)).map((mcp) => [mcp.id, mcp]),
-    )
-    const profiles = [
-      ...new Set(
-        resolvedAgents.map(({ agent, runtime }) => {
-          const driver = getRuntimeDriver(runtime.protocol)
-          return (
-            driver.businessContainmentProfile?.({
-              agent,
-              mcps: agent.mcp.flatMap((id) => {
-                const mcp = mcpsById.get(id)
-                return mcp === undefined ? [] : [mcp]
-              }),
-            }) ?? driver.containmentProfile
-          )
-        }),
-      ),
-    ]
-    const previews = await Promise.all(
-      profiles.map((profile) => deps.containmentCoordinator!.preview(profile)),
-    )
-    const blocked = previews.find((preview) => preview.receipt.decision === 'blocked')
-    if (blocked !== undefined) {
-      throw new DomainError(
-        'sandbox-unavailable',
-        `sandboxMode=enforce but containment profile '${blocked.receipt.profileId}' is not qualified ` +
-          `(${blocked.receipt.reasonCodes.join(',') || 'unknown'}); install it ` +
-          `(macOS: sandbox-exec ships with the OS; Linux: install bubblewrap) ` +
-          `or lower sandboxMode to 'warn'/'off' in Settings`,
-        409,
-      )
-    }
-  }
-
   // RFC-175 (§2c): immediate-submit OCC guard for relaunch. When present, reject
   // if the workflow we're about to snapshot has a different `version` than the
   // one the relaunch normalized its inputs against — so inputs validated against

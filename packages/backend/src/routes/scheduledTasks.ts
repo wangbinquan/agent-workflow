@@ -231,9 +231,7 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
       const actor = actorOf(c)
       const existing = await loadVisible(deps, actor, c.req.param('id'))
       requireWriteAccess(actor, existing)
-      const launch =
-        deps.buildScheduleLaunch ??
-        buildScheduleLaunch(deps.db, deps.configPath, deps.containmentCoordinator)
+      const launch = deps.buildScheduleLaunch ?? buildScheduleLaunch(deps.db, deps.configPath)
       const result = await runScheduleNow(
         deps.db,
         existing.id,

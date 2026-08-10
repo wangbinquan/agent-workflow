@@ -24,9 +24,9 @@ export interface OpencodeCommandOptions {
   /**
    * Probed version of the binary this argv will be fed to (drivers read it
    * from util/opencode-version-registry). Picks the auto-approve flag
-   * SPELLING — see resolveAutoApproveFlag. Omitted/null/unparseable → the
-   * legacy spelling (deliberate: every test stub reports ≤1.14.99 or is never
-   * probed, so the golden argv and both stub families stay byte-identical).
+   * SPELLING — see resolveAutoApproveFlag. Omitted/null/unparseable defaults
+   * to the current `--auto` spelling; a positively identified older binary gets
+   * the legacy spelling.
    */
   binaryVersion?: string | null
 }
@@ -44,23 +44,18 @@ export const OPENCODE_AUTO_FLAG_RENAME_VERSION = '1.18.0'
  * 2026-07-21 legacy-CLI incident: a newer strict parser removed the legacy
  * spelling, swallowed the "Unknown argument" line, and printed only `run`
  * usage before exit 1. This compatibility mapping belongs solely to the
- * test-only `opencode run` seam; production admission uses the direct API
- * behavior codec and never compares this version boundary.
- *
- * Unknown (null/undefined/unparseable) → LEGACY spelling, deliberately:
- *  - RFC-227 production uses the behavior-qualified direct API and never reaches this
- *    `opencode run` compatibility seam;
- *  - the TS mocks (`['bun','run',…]` heads) and the six e2e shell stubs
- *    keep their historical argv byte-for-byte unless explicitly probed.
+ * production CLI path as well as tests. Unknown versions default to the current
+ * spelling so an un-warmed production registry can still launch current
+ * OpenCode; only a parsed version below 1.18 selects the removed legacy flag.
  */
 export function resolveAutoApproveFlag(
   binaryVersion: string | null | undefined,
 ): '--auto' | '--dangerously-skip-permissions' {
-  if (binaryVersion == null) return '--dangerously-skip-permissions'
+  if (binaryVersion == null) return '--auto'
   // Normalize through extractVersion FIRST: compareSemver returns 0 ("equal")
   // for unparseable input, which would silently pick `--auto` for garbage.
   const parsed = extractVersion(binaryVersion)
-  if (parsed === null) return '--dangerously-skip-permissions'
+  if (parsed === null) return '--auto'
   return compareSemver(parsed, OPENCODE_AUTO_FLAG_RENAME_VERSION) >= 0
     ? '--auto'
     : '--dangerously-skip-permissions'

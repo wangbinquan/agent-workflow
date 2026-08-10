@@ -16,7 +16,6 @@ import {
   configDirEnvProblem,
   configDirNameProblem,
   DEFAULT_CONFIG_DIR_PROFILE,
-  executionPolicyViolations,
   type RuntimeConfigDirProfile,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
@@ -65,6 +64,13 @@ export interface RuntimeProfile {
   steps: number | null
   maxSteps: number | null
   /**
+   * RFC-276 — opt-in Claude CLI compatibility marker. true injects
+   * IS_SANDBOX=1 into that runtime's child process; it does not enable or
+   * attest an OS sandbox. Legacy frozen runtime_params_json is normalized to
+   * false by parseFrozenParams before it becomes a RuntimeProfile.
+   */
+  isSandbox: boolean
+  /**
    * 2026-08-04 — extra argv tokens appended to every spawn (claude-code
    * protocol only; fork-private flags like CodeAgent's `--skip-safe-check`).
    * Optional so historical frozen-params JSON and profile literals stay valid;
@@ -80,6 +86,8 @@ export interface RuntimeRow extends RuntimeProfile {
   binaryPath: string | null
   /** RFC-118: false = disabled (hidden from agent/default pickers, kept in list). */
   enabled: boolean
+  /** Persisted, deterministic form of RuntimeProfile.isSandbox. */
+  isSandbox: boolean
   /** RFC-154: config-dir injection overrides — NULL = protocol default. */
   configDirEnv: string | null
   configDirName: string | null
@@ -103,6 +111,7 @@ export interface RuntimeExecutionProfileFingerprint extends Readonly<RuntimeProf
   readonly binaryPath: string | null
   readonly configDirEnv: string | null
   readonly configDirName: string | null
+  readonly isSandbox: boolean
 }
 
 export interface RuntimeProbeTarget {
@@ -140,6 +149,7 @@ export interface ResolvedRuntime extends RuntimeProfile {
   name: string
   protocol: RuntimeKind
   binaryPath: string | null
+  isSandbox: boolean
   /** RFC-154: resolved config-dir profile (row overrides folded over the protocol default). */
   configDir: RuntimeConfigDirProfile
 }
@@ -150,6 +160,7 @@ const NULL_PROFILE: RuntimeProfile = {
   temperature: null,
   steps: null,
   maxSteps: null,
+  isSandbox: false,
   extraArgs: null,
 }
 
@@ -275,6 +286,7 @@ export interface RuntimeView extends RuntimeProfile {
   binaryPath: string | null
   /** RFC-118: false = disabled (filtered from agent/default pickers, kept in list). */
   enabled: boolean
+  isSandbox: boolean
   /** RFC-113: this row is the global default (name === config.defaultRuntime). */
   isDefault: boolean
   /** RFC-154: raw config-dir overrides (NULL = protocol default) — edit-form prefill. */
@@ -295,6 +307,7 @@ export function runtimeProfileOf(
     temperature: row.temperature,
     steps: row.steps,
     maxSteps: row.maxSteps,
+    isSandbox: row.isSandbox === true,
     // A DB row carries the raw column; an already-materialized profile (frozen
     // params) carries the array. Either way the output always has the key, so
     // probe fingerprints and views stay shape-stable.
@@ -344,6 +357,7 @@ function receiptMatchesTarget(receipt: unknown, target: RuntimeProbeTarget): unk
     storedFingerprint.temperature !== f.temperature ||
     storedFingerprint.steps !== f.steps ||
     storedFingerprint.maxSteps !== f.maxSteps ||
+    storedFingerprint.isSandbox !== f.isSandbox ||
     storedFingerprint.configDirEnv !== f.configDirEnv ||
     storedFingerprint.configDirName !== f.configDirName
   ) {
@@ -534,18 +548,14 @@ function validateProtocol(protocol: string): asserts protocol is RuntimeProtocol
 }
 
 /**
- * RFC-112 Codex P3 + 2026-07-31 closeout: a single executable path, not a
- * shell string with args — and the SAME shape the exec-time seal accepts
- * (`runtime/binarySnapshot.ts` `resolveSingleExecutable`: one absolute path,
- * or one bare PATH token with no separators). Saving `./bin/opencode` or
- * `opencode --flag` used to succeed and then fail mysteriously at spawn with
- * `execution-identity-untrusted-binary`; the mismatch is now rejected at the
- * boundary the admin is actually looking at.
+ * A runtime binary is one executable path or PATH token, not a shell command
+ * with embedded arguments. Extra arguments have their own typed field. Reject
+ * ambiguous values at the admin write boundary instead of letting spawn parse
+ * them differently later.
  *
  * Deliberately filesystem-free: existence/executability stays with the
- * advisory probe (`POST /api/runtimes/probe`). A stat here would be a
- * TOCTOU illusion (the seal re-checks at exec) and would block the legitimate
- * "configure before install" flow.
+ * advisory probe (`POST /api/runtimes/probe`). A stat here would also block the
+ * legitimate "configure before install" flow.
  */
 function validateBinaryPath(binaryPath: string | null | undefined): string | null {
   if (binaryPath === null || binaryPath === undefined) return null
@@ -647,16 +657,20 @@ export interface RuntimeProfileInput {
   temperature?: number | null
   steps?: number | null
   maxSteps?: number | null
+  /** RFC-276: inject IS_SANDBOX=1 for claude-code compatibility; default false. */
+  isSandbox?: boolean
   /** 2026-08-04 — extra argv tokens; validated against the protocol in
    *  create/update (NOT in profilePatch, which has no protocol context). */
   extraArgs?: string[] | null
 }
 
 /** Validate + normalize profile params into the row columns (only present keys).
- *  extraArgs is deliberately NOT handled here — its validation needs the
+ *  extraArgs / isSandbox are deliberately NOT handled here — their validation needs the
  *  protocol, so create/update call validateExtraArgs themselves. */
-function profilePatch(input: RuntimeProfileInput): Partial<Omit<RuntimeProfile, 'extraArgs'>> {
-  const out: Partial<Omit<RuntimeProfile, 'extraArgs'>> = {}
+function profilePatch(
+  input: RuntimeProfileInput,
+): Partial<Omit<RuntimeProfile, 'extraArgs' | 'isSandbox'>> {
+  const out: Partial<Omit<RuntimeProfile, 'extraArgs' | 'isSandbox'>> = {}
   const str = (v: string | null | undefined): string | null =>
     typeof v === 'string' && v.trim().length > 0 ? v.trim() : null
   if (input.model !== undefined) out.model = str(input.model)
@@ -677,14 +691,14 @@ function profilePatch(input: RuntimeProfileInput): Partial<Omit<RuntimeProfile, 
   return out
 }
 
-function assertRuntimeProfilePolicy(protocol: RuntimeProtocol, model: string | null): void {
-  const violation = executionPolicyViolations({ protocol, model })[0]
-  if (violation !== undefined) {
-    throw new ValidationError(violation.code, violation.code, {
-      field: violation.field,
-      permanent: true,
-    })
+function validateIsSandbox(protocol: RuntimeProtocol, value: boolean | undefined): boolean {
+  if (value === true && getRuntimeDriver(protocol).acceptsSandboxCompatibilityMarker !== true) {
+    throw new ValidationError(
+      'runtime-is-sandbox-unsupported',
+      `isSandbox is not supported by the '${protocol}' runtime driver (only drivers declaring acceptsSandboxCompatibilityMarker consume it)`,
+    )
   }
+  return value === true
 }
 
 export interface CreateRuntimeInput extends RuntimeProfileInput {
@@ -698,21 +712,15 @@ export interface CreateRuntimeInput extends RuntimeProfileInput {
   createdBy?: string | null
 }
 
-export async function createRuntime(
-  db: DbClient,
-  input: CreateRuntimeInput,
-  opts?: { enforceExecutionPolicy?: boolean },
-): Promise<RuntimeRow> {
+export async function createRuntime(db: DbClient, input: CreateRuntimeInput): Promise<RuntimeRow> {
   validateName(input.name)
   validateProtocol(input.protocol)
   const profile = profilePatch(input)
-  if (opts?.enforceExecutionPolicy === true) {
-    assertRuntimeProfilePolicy(input.protocol, profile.model ?? null)
-  }
   const binaryPath = validateBinaryPath(input.binaryPath)
   const configDirEnv = validateConfigDirEnv(input.configDirEnv)
   const configDirName = validateConfigDirName(input.configDirName)
   const extraArgsJson = validateExtraArgs(input.protocol as RuntimeProtocol, input.extraArgs)
+  const isSandbox = validateIsSandbox(input.protocol as RuntimeProtocol, input.isSandbox)
   const existing = await getRuntime(db, input.name)
   if (existing !== null)
     throw new ConflictError('runtime-exists', `runtime '${input.name}' already exists`)
@@ -724,6 +732,7 @@ export async function createRuntime(
     configDirEnv,
     configDirName,
     extraArgsJson,
+    isSandbox,
     lastProbeJson: input.lastProbeJson ?? null,
     createdBy: input.createdBy ?? null,
     ...profile,
@@ -751,17 +760,10 @@ export async function updateRuntime(
   db: DbClient,
   name: string,
   input: UpdateRuntimeInput,
-  opts?: { enforceExecutionPolicy?: boolean },
 ): Promise<RuntimeRow> {
   const row = await getRuntime(db, name)
   if (row === null) throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
   const profile = profilePatch(input)
-  if (opts?.enforceExecutionPolicy === true) {
-    // `null` is an explicit patch value, not a missing field. Using `??` here
-    // would fall back to the old model, pass policy, and then persist NULL.
-    const nextModel = input.model !== undefined ? (profile.model ?? null) : row.model
-    assertRuntimeProfilePolicy(row.protocol, nextModel)
-  }
   const now = Date.now()
   const patch: Record<string, unknown> = { updatedAt: now, ...profile }
   let executionProfileChanged =
@@ -770,6 +772,11 @@ export async function updateRuntime(
     (profile.temperature !== undefined && profile.temperature !== row.temperature) ||
     (profile.steps !== undefined && profile.steps !== row.steps) ||
     (profile.maxSteps !== undefined && profile.maxSteps !== row.maxSteps)
+  if (input.isSandbox !== undefined) {
+    const isSandbox = validateIsSandbox(row.protocol, input.isSandbox)
+    patch.isSandbox = isSandbox
+    executionProfileChanged ||= isSandbox !== row.isSandbox
+  }
   if (input.extraArgs !== undefined) {
     const extraArgsJson = validateExtraArgs(row.protocol, input.extraArgs)
     patch.extraArgsJson = extraArgsJson
@@ -856,6 +863,7 @@ export async function cacheRuntimeProbe(
           : eq(runtimes.temperature, f.temperature),
         f.steps === null ? isNull(runtimes.steps) : eq(runtimes.steps, f.steps),
         f.maxSteps === null ? isNull(runtimes.maxSteps) : eq(runtimes.maxSteps, f.maxSteps),
+        eq(runtimes.isSandbox, f.isSandbox),
         f.configDirEnv === null
           ? isNull(runtimes.configDirEnv)
           : eq(runtimes.configDirEnv, f.configDirEnv),

@@ -229,8 +229,8 @@ export async function exportResourcePackage(
  * · mcp / plugin         → `expectedConfigHash`
  *
  * 两条不能省的理由：
- *  · 只给 `expectedVersion` 只覆盖 workflow / workgroup —— 另一标签把 agent 的
- *    `network` 从 deny 改成 allow 后，原标签点导出会**静默导出新版本**而不是 409；
+ *  · 只给 `expectedVersion` 只覆盖 workflow / workgroup —— 另一标签修改 agent
+ *    正文后，原标签点导出会**静默导出新版本**而不是 409；
  * * ⚠️ 想给 workflow / workgroup 补一维 `expectedAclRevision` 之前先看 `expectTokenOf`
  * 的注释：实测 ACL 漂移产出**逐字节相同**的包，加那一维只会打红六个前端入口。
  */

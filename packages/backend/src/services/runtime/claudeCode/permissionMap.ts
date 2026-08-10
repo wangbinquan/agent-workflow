@@ -1,9 +1,9 @@
-// RFC-242 T1 — the frozen `agent.permission` → Claude tool-gate mapping.
+// RFC-242 T1 — stable `agent.permission` → Claude tool-gate mapping.
 //
 // `agent.permission` IS opencode's permission vocabulary (verbatim passthrough,
 // RFC-073 / `shared/schemas/agent.ts`), and Claude has no equivalent: opencode
 // grades ACTION CLASSES three ways, Claude prunes a LOADED TOOL SET by name.
-// There is no natural bijection, so the translation is an explicit, frozen,
+// There is no natural bijection, so the translation is an explicit,
 // test-locked contract rather than an inference.
 //
 // Source of truth for both vocabularies (read, not remembered):
@@ -44,7 +44,7 @@ const GRANTABLE = [
 export type GrantableClaudeTool = (typeof GRANTABLE)[number]
 
 /**
- * The frozen table. Keys are opencode permission keys; values are the Claude
+ * The stable table. Keys are opencode permission keys; values are the Claude
  * tools that key governs. Keys absent here grant nothing (fail closed).
  *
  * Deliberate notes:
@@ -55,8 +55,8 @@ export type GrantableClaudeTool = (typeof GRANTABLE)[number]
  *    would let an `edit: deny` agent still create files.
  *  - `list` has no Claude counterpart (Glob covers enumeration) → maps to
  *    nothing; it neither grants nor denies on its own.
- *  - `external_directory` is a PATH domain, not a tool → not part of the load
- *    set (§ handled by cwd containment, not by --tools).
+ *  - `external_directory` is a path rule, not a tool name, so a `--tools`
+ *    load-set cannot represent it.
  *  - `lsp` / `doom_loop` / `todowrite` / `question` have no grantable Claude
  *    equivalent in a business node → intentionally empty.
  */
@@ -176,18 +176,9 @@ export function claudeToolsValue(gate: ClaudeToolGate): string {
 }
 
 /**
- * RFC-242 — the SINGLE definition of "this claude business node is controlled".
- *
- * A node is controlled iff its agent declared a permission map: that is what
- * turns on the tool gate (T2), the byte-frozen binary (T2b) and the local-MCP
- * network fence (T5). An agent with NO declaration stays unconstrained by the
- * user decision of 2026-07-31 (existing workflows must not break), and every
- * one of those mechanisms must agree on that fact — `businessContainmentProfile`
- * decides the containment DEMAND before the spawn is built, while
- * `buildBusinessSpawn` decides what to MATERIALIZE, and a drift between the two
- * would either over-block a launch or promise a boundary that never gets built.
- *
- * Returns the gate (controlled) or null (unconstrained).
+ * The single definition of whether a Claude business node has an explicit
+ * tool load-set. No declaration means the CLI keeps its normal tool defaults;
+ * a declared map is translated above and passed as `--tools`.
  */
 export function claudeBusinessGate(permission: AgentPermission | undefined): ClaudeToolGate | null {
   const declared = permission ?? {}

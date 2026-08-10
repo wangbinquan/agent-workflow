@@ -12,7 +12,6 @@ import {
   mcpRuntimeTestEvents,
   mcpRuntimeTestSessions,
   mcpRuntimeTestTurns,
-  opencodeMcpTestSessionOwners,
   runtimes,
   users,
 } from '../src/db/schema'
@@ -24,8 +23,6 @@ import {
   McpRuntimeTestService,
 } from '../src/services/mcpRuntimeTest'
 import { getRuntimeDriver } from '../src/services/runtime'
-import { deriveHermeticOpencodeLayout } from '../src/services/runtime/opencode/hermetic'
-import { opencodeMcpTestSessionStore } from '../src/services/runtime/opencode/verifiedMcpTestPlan'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunOptions,
@@ -157,7 +154,6 @@ describe('RFC-238 MCP runtime test service', () => {
           pid: 10 + runs,
           spawnedAt: now,
           spawnBinaryPath: canonicalBinaryPath('opencode'),
-          spawnCommandDigest: 'b'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-session')
         await opts.eventSink?.append({
@@ -237,7 +233,6 @@ describe('RFC-238 MCP runtime test service', () => {
           pid: 20 + runIndex,
           spawnedAt: now,
           spawnBinaryPath: canonicalBinaryPath('opencode'),
-          spawnCommandDigest: 'c'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-cancel')
         nativeSessionObserved = true
@@ -304,7 +299,6 @@ describe('RFC-238 MCP runtime test service', () => {
           pid: 25,
           spawnedAt: 1,
           spawnBinaryPath: canonicalBinaryPath('opencode'),
-          spawnCommandDigest: 'c'.repeat(64),
         })
         return await new Promise<SystemAgentRunResult>((resolveRun) => {
           const finish = () =>
@@ -362,7 +356,6 @@ describe('RFC-238 MCP runtime test service', () => {
           pid: 30,
           spawnedAt: 1,
           spawnBinaryPath: canonicalBinaryPath('opencode'),
-          spawnCommandDigest: 'd'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-idempotent')
         await opts.eventSink?.markTerminal('complete')
@@ -441,7 +434,6 @@ describe('RFC-238 MCP runtime test service', () => {
           pid: 300 + runs,
           spawnedAt: runs,
           spawnBinaryPath: canonicalBinaryPath('opencode'),
-          spawnCommandDigest: 'd'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-message-replay')
         await opts.eventSink?.markTerminal('complete')
@@ -476,54 +468,6 @@ describe('RFC-238 MCP runtime test service', () => {
     await waitFor(async () => (await service.get(actor, mcp.id, idle.id)).inFlightTurnId === null)
     expect(runs).toBe(2)
     expect((await service.get(actor, mcp.id, idle.id)).turns).toHaveLength(2)
-  })
-
-  test('an execution-identity failure blocks native resume even when the runtime reports the old root', async () => {
-    const { db, mcp, root } = await seed()
-    let runs = 0
-    const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
-      runFn: async (opts) => {
-        runs += 1
-        await opts.eventSink?.setRootSessionId('native-identity-failure')
-        if (runs === 1) return successResult(opts, 'native-identity-failure')
-        return {
-          ...successResult(opts, 'native-identity-failure', 'identity-failed'),
-          failureCode: 'execution-identity-control-failed',
-        }
-      },
-    })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
-    const created = await service.create(actor, mcp, {
-      expectedMcpConfigHash: hash,
-      runtimeName: 'test-opencode',
-      message: 'establish native identity',
-      clientCreateId: 'create-identity-failure',
-      clientMessageId: 'message-identity-failure-1',
-    })
-    await waitFor(
-      async () => (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
-    )
-    const idle = await service.get(actor, mcp.id, created.sessionId)
-    await service.message(actor, mcp, idle.id, {
-      message: 'identity proof fails',
-      clientMessageId: 'message-identity-failure-2',
-      expectedSessionVersion: idle.sessionVersion,
-    })
-    await waitFor(
-      async () => (await service.get(actor, mcp.id, created.sessionId)).status === 'ended',
-    )
-
-    const ended = await service.get(actor, mcp.id, created.sessionId)
-    expect(ended.endReason).toBe('runtime-identity-changed')
-    expect(ended.continuationBlockedReason).toBe('runtime-identity-changed')
-    expect(ended.nativeSessionReady).toBe(false)
-    expect(ended.turns[1]?.status).toBe('failed')
-    expect(ended.turns[1]?.failureCode).toBe('execution-identity-control-failed')
   })
 
   test('transcripts are owner-only while system admin audit requires an exact id', async () => {
@@ -620,7 +564,7 @@ describe('RFC-238 MCP runtime test service', () => {
         })
         planReady = true
         await proceed
-        await plan.preSpawnVerify?.()
+        await plan.beforeSpawn?.()
         spawnAttempts += 1
         return successResult(opts, 'must-not-spawn')
       },
@@ -663,20 +607,17 @@ describe('RFC-238 MCP runtime test service', () => {
         if (opts.buildPlan === undefined || opts.onSpawned === undefined) {
           throw new Error('missing process-boundary hooks')
         }
-        const plan = await opts.buildPlan({
+        await opts.buildPlan({
           driver: getRuntimeDriver(opts.protocol),
           worktreePath: join(root, 'worktree'),
           runDir: join(root, 'run'),
           log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} } as never,
         })
-        await plan.preSpawnVerify?.()
         now += MCP_RUNTIME_TEST_TURN_TIMEOUT_MS
         await opts.onSpawned({
           pid: 7331,
           spawnedAt: now,
           spawnBinaryPath: canonicalBinaryPath('opencode'),
-          rawCommandDigest: 'c'.repeat(64),
-          spawnCommandDigest: 'd'.repeat(64),
         })
         promptDelivered = true
         return successResult(opts, 'must-not-prompt')
@@ -707,8 +648,6 @@ describe('RFC-238 MCP runtime test service', () => {
       failureCode: 'mcp-test-turn-timeout',
       pid: null,
       spawnBinaryPath: canonicalBinaryPath('opencode'),
-      rawCommandDigest: 'c'.repeat(64),
-      spawnCommandDigest: 'd'.repeat(64),
     })
   })
 
@@ -726,7 +665,6 @@ describe('RFC-238 MCP runtime test service', () => {
           pid: 4241 + runs,
           spawnedAt: 1,
           spawnBinaryPath: canonicalBinaryPath('opencode'),
-          spawnCommandDigest: 'e'.repeat(64),
         })
         if (runs > 1) {
           await opts.eventSink?.setRootSessionId('native-replacement')
@@ -826,14 +764,12 @@ describe('RFC-238 MCP runtime test service', () => {
         runtimeName: 'test-opencode',
         runtimeProtocol: 'opencode',
         runtimeSnapshotJson: '{}',
-        runtimeFingerprint: 'b'.repeat(64),
         runtimeBinaryPath: canonicalBinaryPath('opencode'),
         nativeSessionState: 'pending',
         inFlightTurnId: 'orphan-turn',
         turnSeq: 1,
         sessionVersion: 1,
         scratchRoot,
-        sessionStoreRoot: join(scratchRoot, 'run'),
         cleanupState: 'not-started',
         createdAt: 900,
         updatedAt: 900,
@@ -852,7 +788,6 @@ describe('RFC-238 MCP runtime test service', () => {
         pid: 5151,
         spawnedAt: 910,
         spawnBinaryPath: canonicalBinaryPath('opencode'),
-        spawnCommandDigest: 'c'.repeat(64),
         startedAt: 905,
         createdAt: 900,
       })
@@ -891,19 +826,13 @@ describe('RFC-238 MCP runtime test service', () => {
     ).toBe(5151)
   })
 
-  test('boot releases a proven OpenCode lease and preserves a completely captured session', async () => {
+  test('boot preserves a completely captured native session after the old child is gone', async () => {
     const { db, mcp, root } = await seed()
     const sessionId = 'recovered-opencode-session'
     const turnId = 'recovered-opencode-turn'
     const runtimeSessionId = 'native-recovered-opencode'
     const scratchRoot = join(root, 'mcp-runtime-tests', sessionId)
-    const sessionStoreRoot = opencodeMcpTestSessionStore({
-      appHome: root,
-      sessionId,
-    }).root
-    const sessionStoreDbPath = deriveHermeticOpencodeLayout(sessionStoreRoot).sessionDbPath
     mkdirSync(scratchRoot, { recursive: true })
-    mkdirSync(sessionStoreRoot, { recursive: true })
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
@@ -920,19 +849,13 @@ describe('RFC-238 MCP runtime test service', () => {
         runtimeName: 'test-opencode',
         runtimeProtocol: 'opencode',
         runtimeSnapshotJson: '{}',
-        runtimeFingerprint: 'b'.repeat(64),
         runtimeBinaryPath: canonicalBinaryPath('opencode'),
-        runtimeBinaryDigest: 'c'.repeat(64),
-        mcpExecutionDigest: 'd'.repeat(64),
-        sessionContractDigest: 'e'.repeat(64),
         runtimeSessionId,
         nativeSessionState: 'ready',
         inFlightTurnId: turnId,
         turnSeq: 1,
         sessionVersion: 1,
         scratchRoot,
-        sessionStoreRoot,
-        sessionStoreDbPath,
         cleanupState: 'not-started',
         createdAt: 900,
         updatedAt: 900,
@@ -951,26 +874,8 @@ describe('RFC-238 MCP runtime test service', () => {
         pid: 8181,
         spawnedAt: 910,
         spawnBinaryPath: canonicalBinaryPath('opencode'),
-        spawnCommandDigest: 'f'.repeat(64),
         startedAt: 905,
         createdAt: 900,
-      })
-      .run()
-    db.insert(opencodeMcpTestSessionOwners)
-      .values({
-        runtimeSessionId,
-        testSessionId: sessionId,
-        createdTurnId: turnId,
-        currentTurnId: turnId,
-        identityDigest: '1'.repeat(64),
-        runtimeBinaryDigest: 'c'.repeat(64),
-        sessionContractDigest: 'e'.repeat(64),
-        sessionStoreKey: opencodeMcpTestSessionStore({ appHome: root, sessionId }).key,
-        projectId: 'project-recovered',
-        protocolCodec: 'opencode-direct-v1',
-        leaseTurnId: turnId,
-        leaseAcquiredAt: 910,
-        leaseNonceDigest: '2'.repeat(64),
       })
       .run()
 
@@ -989,14 +894,7 @@ describe('RFC-238 MCP runtime test service', () => {
     expect(recovered.idleDeadlineAt).toBe(1_000 + MCP_RUNTIME_TEST_IDLE_MS)
     expect(recovered.turns[0]?.status).toBe('interrupted')
     expect(recovered.turns[0]?.captureState).toBe('complete')
-    expect(
-      db
-        .select({ turnId: opencodeMcpTestSessionOwners.leaseTurnId })
-        .from(opencodeMcpTestSessionOwners)
-        .where(eq(opencodeMcpTestSessionOwners.runtimeSessionId, runtimeSessionId))
-        .get()?.turnId,
-    ).toBeNull()
-    expect(existsSync(sessionStoreRoot)).toBe(true)
+    expect(existsSync(scratchRoot)).toBe(true)
   })
 
   test('graceful shutdown reaps the turn, preserves a proven native session, and rejects new work', async () => {
@@ -1011,7 +909,6 @@ describe('RFC-238 MCP runtime test service', () => {
           pid: 6161,
           spawnedAt: 10,
           spawnBinaryPath: canonicalBinaryPath('opencode'),
-          spawnCommandDigest: 'f'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-shutdown')
         running = true
@@ -1071,7 +968,6 @@ describe('RFC-238 MCP runtime test service', () => {
           pid: 6262,
           spawnedAt: 10,
           spawnBinaryPath: canonicalBinaryPath('opencode'),
-          spawnCommandDigest: 'f'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-ending-shutdown')
         running = true
@@ -1130,7 +1026,6 @@ describe('RFC-238 MCP runtime test service', () => {
           pid: 7171,
           spawnedAt: now,
           spawnBinaryPath: canonicalBinaryPath('opencode'),
-          spawnCommandDigest: 'e'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-timeout')
         running = true
@@ -1187,8 +1082,7 @@ describe('RFC-238 MCP runtime test service', () => {
     })
     await service.start()
     const scratchRoot = join(root, 'mcp-runtime-tests', 'expired-queued-session')
-    const sessionStoreRoot = join(scratchRoot, 'session-store')
-    mkdirSync(sessionStoreRoot, { recursive: true })
+    mkdirSync(scratchRoot, { recursive: true })
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
@@ -1205,7 +1099,6 @@ describe('RFC-238 MCP runtime test service', () => {
         runtimeName: 'claude-code',
         runtimeProtocol: 'claude-code',
         runtimeSnapshotJson: '{}',
-        runtimeFingerprint: 'b'.repeat(64),
         runtimeBinaryPath: '/mock/claude',
         runtimeSessionId: 'native-expired-queued',
         nativeSessionState: 'ready',
@@ -1213,7 +1106,6 @@ describe('RFC-238 MCP runtime test service', () => {
         turnSeq: 2,
         sessionVersion: 2,
         scratchRoot,
-        sessionStoreRoot,
         cleanupState: 'not-started',
         createdAt: 1,
         updatedAt: 2,
@@ -1370,7 +1262,6 @@ describe('RFC-238 MCP runtime test service', () => {
         runtimeName: 'claude-code',
         runtimeProtocol: 'claude-code',
         runtimeSnapshotJson: '{}',
-        runtimeFingerprint: 'b'.repeat(64),
         runtimeBinaryPath: '/mock/claude',
         runtimeSessionId: 'native-blocked-queued',
         nativeSessionState: 'ready',
@@ -1379,7 +1270,6 @@ describe('RFC-238 MCP runtime test service', () => {
         sessionVersion: 2,
         continuationBlockedReason: 'mcp-config-changed',
         scratchRoot,
-        sessionStoreRoot: join(scratchRoot, 'session-store'),
         cleanupState: 'not-started',
         createdAt: 1,
         updatedAt: 2,
@@ -1426,14 +1316,12 @@ describe('RFC-238 MCP runtime test service', () => {
         runtimeName: 'claude-code',
         runtimeProtocol: 'claude-code',
         runtimeSnapshotJson: '{}',
-        runtimeFingerprint: 'b'.repeat(64),
         runtimeBinaryPath: '/mock/claude',
         nativeSessionState: 'pending',
         inFlightTurnId: 'queued-turn',
         turnSeq: 1,
         sessionVersion: 1,
         scratchRoot,
-        sessionStoreRoot: join(scratchRoot, 'run'),
         cleanupState: 'not-started',
         createdAt: 1,
         updatedAt: 1,
@@ -1470,8 +1358,7 @@ describe('RFC-238 MCP runtime test service', () => {
   test('boot keeps a proven native session active when a later queued turn never spawned', async () => {
     const { db, mcp, root } = await seed()
     const scratchRoot = join(root, 'mcp-runtime-tests', 'queued-resume-session')
-    const sessionStoreRoot = join(scratchRoot, 'session-store')
-    mkdirSync(sessionStoreRoot, { recursive: true })
+    mkdirSync(scratchRoot, { recursive: true })
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
@@ -1488,7 +1375,6 @@ describe('RFC-238 MCP runtime test service', () => {
         runtimeName: 'claude-code',
         runtimeProtocol: 'claude-code',
         runtimeSnapshotJson: '{}',
-        runtimeFingerprint: 'b'.repeat(64),
         runtimeBinaryPath: '/mock/claude',
         runtimeSessionId: 'native-queued-resume',
         nativeSessionState: 'ready',
@@ -1496,7 +1382,6 @@ describe('RFC-238 MCP runtime test service', () => {
         turnSeq: 2,
         sessionVersion: 2,
         scratchRoot,
-        sessionStoreRoot,
         cleanupState: 'not-started',
         createdAt: 1,
         updatedAt: 2,
@@ -1546,7 +1431,7 @@ describe('RFC-238 MCP runtime test service', () => {
     expect(recovered.idleDeadlineAt).toBe(10 + MCP_RUNTIME_TEST_IDLE_MS)
     expect(recovered.turns[1]?.status).toBe('interrupted')
     expect(recovered.turns[1]?.captureState).toBe('complete')
-    expect(existsSync(sessionStoreRoot)).toBe(true)
+    expect(existsSync(scratchRoot)).toBe(true)
   })
 
   test('periodic reconciliation retries pending cleanup and expires old create receipts', async () => {
@@ -1567,13 +1452,11 @@ describe('RFC-238 MCP runtime test service', () => {
         runtimeName: 'claude-code',
         runtimeProtocol: 'claude-code',
         runtimeSnapshotJson: '{}',
-        runtimeFingerprint: 'b'.repeat(64),
         runtimeBinaryPath: '/mock/claude',
         nativeSessionState: 'ready',
         turnSeq: 0,
         sessionVersion: 1,
         scratchRoot,
-        sessionStoreRoot: join(scratchRoot, 'store'),
         cleanupState: 'pending',
         cleanupErrorCode: 'mcp-test-cleanup-failed',
         createdAt: 1,

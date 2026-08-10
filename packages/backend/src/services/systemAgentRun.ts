@@ -2,8 +2,7 @@
 // primitive.
 //
 // memoryDistiller and runtimeSmoke each hand-roll the same lifecycle:
-//   scratch dir (worktree/ + run/, 0700) → containment admit (once, before any
-//   store touch) → driver.buildSpawn → wrapSpawnPlanSandbox → Bun.spawn
+//   scratch dir (worktree/ + run/, 0700) → driver.buildSpawn → Bun.spawn
 //   (detached) → capped drains → timeout TERM→KILL→reap-deadline escalation →
 //   reap-then-cleanup barrier → scratch removal (retain on failure).
 // This module is the third caller's extraction of that skeleton (design §1 —
@@ -13,8 +12,6 @@
 // Differences from both precedents, by design:
 //  - `seedFiles` — the platform writes the working-directory dump BEFORE spawn
 //    (the intent agent has no tools to fetch anything itself).
-//  - `systemPermissionProfile` — forwarded to the driver (RFC-234 §1.1 frozen
-//    enum; 'intent-read-v1' is only provable on the opencode verified path).
 //  - scratch lives under a caller-supplied APP-HOME parent, not the OS tmpdir,
 //    so failed-run remnants have a deterministic GC owner (design §1.2 /
 //    Codex design-gate P1-7). Success removes; failure retains and reports
@@ -24,31 +21,14 @@
 
 import { lstatSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
-import type {
-  RuntimeDriver,
-  SpawnPlan,
-  SystemAgentOutputEvidence,
-  SystemPermissionProfile,
-} from '@/services/runtime/types'
-import {
-  wrapSpawnPlanSandbox,
-  type ContainmentRequirementProfileId,
-  type ContainmentCoordinator,
-  type PreparedContainmentPlan,
-  type SandboxCtx,
-} from '@/services/sandbox'
+import type { RuntimeDriver, SpawnPlan, SystemAgentOutputEvidence } from '@/services/runtime/types'
 import { createLogger, type Logger } from '@/util/log'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 import { isLexicallyInsideForHost } from '@/util/platformExec'
 import { killProcessTree } from '@/util/process'
-import {
-  isExecutionIdentityFailureCode,
-  maskDiagnosticsText,
-  type ExecutionIdentityFailureCode,
-} from '@agent-workflow/shared'
-import { parseExecutionIdentityFailureOutput } from '@/services/runtime/opencode/failure'
+import { maskDiagnosticsText } from '@agent-workflow/shared'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import type {
   SessionCaptureIncompleteReason,
@@ -85,10 +65,9 @@ export interface SystemAgentRunOptions {
   configDirEnv?: string | null
   configDirName?: string | null
   model?: string | null
+  /** RFC-276: opt-in Claude CLI compatibility marker; default false. */
+  isSandbox?: boolean
   seedFiles?: readonly SystemAgentSeedFile[]
-  systemPermissionProfile?: SystemPermissionProfile
-  /** RFC-233 daemon-scoped admission authority; admit runs EXACTLY ONCE here. */
-  containmentCoordinator?: ContainmentCoordinator
   /** App-home parent for scratch dirs (deterministic GC owner). */
   scratchParent: string
   /** Scratch leaf name (e.g. the turn id); default random. */
@@ -100,11 +79,8 @@ export interface SystemAgentRunOptions {
   abortSignal?: AbortSignal
   /** RFC-235: auxiliary ordered Session event capture; never gates business output. */
   eventSink?: SystemAgentEventSinkV1
-  bridgeCredentials?: boolean
   log?: Logger
-  /** Explicit dependency-injection seam for legacy mock-binary tests. */
-  testOnlyUnverifiedRuntime?: boolean
-  /** Branded production command head (see SystemAgentSpawnContext.opencodeCmd). */
+  /** Optional OpenCode command head (primarily for tests/custom launchers). */
   opencodeCmd?: readonly string[]
   /**
    * RFC-238: closed product adapters may supply a driver-owned plan without
@@ -115,11 +91,8 @@ export interface SystemAgentRunOptions {
     driver: RuntimeDriver
     worktreePath: string
     runDir: string
-    containment?: PreparedContainmentPlan
     log: Logger
   }) => Promise<SpawnPlan>
-  /** Capability-specific admission profile; defaults to runner-filesystem-v1. */
-  containmentProfile?: ContainmentRequirementProfileId
   /**
    * Called after spawn and before piped stdin is delivered. A failure triggers
    * the normal TERM→KILL→reap barrier and no successful result is returned.
@@ -128,18 +101,7 @@ export interface SystemAgentRunOptions {
     pid: number | null
     spawnedAt: number
     spawnBinaryPath: string
-    rawCommandDigest?: string
-    spawnCommandDigest: string
   }) => void | Promise<void>
-  /**
-   * Verified persistent launchers emit a private marker on stderr and wait for
-   * an ACK before prompting. Product adapters consume it here; consumed frames
-   * never enter user-visible stderr/events.
-   */
-  onControlLine?: (input: {
-    line: string
-    control: Exclude<NonNullable<SpawnPlan['control']>, { kind: 'none' }>
-  }) => Promise<{ kind: 'stderr'; line: string } | { kind: 'session-ready'; sessionId: string }>
   /** Session-owned scratch survives successful turns; end/idle removes it. */
   retainScratchOnSuccess?: boolean
 }
@@ -154,7 +116,6 @@ export type SystemAgentRunStatus =
    *  application error (claude `result` with `is_error:true` — auth/API
    *  failures that previously masqueraded as a missing envelope). */
   | 'result-error'
-  | 'identity-failed'
   | 'unreaped'
 
 export interface SystemAgentRunResult {
@@ -165,7 +126,6 @@ export interface SystemAgentRunResult {
   /** Capped stderr tail, credential-masked. */
   stderrTail: string
   durationMs: number
-  failureCode?: ExecutionIdentityFailureCode
   /** RFC-237 (P2-4): masked terminal error text for `status: 'result-error'`. */
   resultError?: string
   capturedSessionId?: string
@@ -231,10 +191,9 @@ export function releaseSystemAgentScratch(input: {
  * timeout/abort/cancel settled as `unreaped` (a system agent was effectively
  * unkillable there). Route through the shared platform-aware primitive instead:
  * POSIX still group-kills via `-pid` (byte-identical); Windows walks the tree
- * with `taskkill /T /F`. That is best-effort (the main runner's fallback when no
- * Job Object was adopted), which is sufficient here because system agents run in
- * an ephemeral scratch dir — provable reap gates persistent-store reuse, which
- * this path does not have.
+ * with `taskkill /T /F`. That is best-effort when no Job Object was adopted;
+ * system agents use an ephemeral scratch directory and still apply a bounded
+ * reap deadline.
  */
 function killGroup(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
   try {
@@ -265,12 +224,6 @@ async function settlesWithin(promise: Promise<unknown>, timeoutMs: number): Prom
   }
 }
 
-function identityFailureCode(error: unknown): ExecutionIdentityFailureCode | null {
-  if (error === null || typeof error !== 'object') return null
-  const code = (error as { code?: unknown }).code
-  return isExecutionIdentityFailureCode(code) ? code : null
-}
-
 /** Reject traversal/absolute seed paths BEFORE any filesystem write. */
 export function assertSafeSeedPath(worktreeDir: string, relPath: string): string {
   if (relPath.length === 0 || isAbsolute(relPath)) {
@@ -283,34 +236,6 @@ export function assertSafeSeedPath(worktreeDir: string, relPath: string): string
     throw new Error(`unsafe seed path: ${relPath}`)
   }
   return abs
-}
-
-function systemSandboxCtx(
-  worktreeDir: string,
-  runDir: string,
-  plan: SpawnPlan,
-): SandboxCtx | undefined {
-  const provider = plan.containment?.sandbox
-  if (provider === undefined) return undefined
-  return {
-    mode: provider.mode,
-    status: provider.status,
-    appHome: provider.appHome,
-    taskWorktrees: [
-      worktreeDir,
-      ...(plan.sessionStore === undefined ? [] : [plan.sessionStore.root]),
-    ],
-    runDir,
-    ...(plan.readOnlySubtrees === undefined ? {} : { readOnlySubtrees: plan.readOnlySubtrees }),
-    // 2026-08-04 audit: this field was silently DROPPED by three of the four
-    // SandboxCtx assemblers (only `runner.ts` consumed it). It is latent today
-    // because no system plan ships plugins — the moment one does, RFC-251's
-    // Linux `file://<cachedPath>` ENOENT returns with no assertion to catch it.
-    ...(plan.readOnlyAllowSubtrees === undefined
-      ? {}
-      : { readOnlyAllowSubtrees: plan.readOnlyAllowSubtrees }),
-    ...(provider.wrapCommand === undefined ? {} : { wrapCommand: provider.wrapCommand }),
-  }
 }
 
 /**
@@ -391,21 +316,6 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
     outputEvidence: { ...outputEvidence },
     ...extra,
   })
-
-  // ── containment admit: exactly once, before any store/scratch side effect ──
-  let preparedContainment: PreparedContainmentPlan | undefined
-  if (opts.containmentCoordinator !== undefined) {
-    try {
-      // System agents expose no model-controlled shell/MCP child — including
-      // 'intent-read-v1', whose only additions are in-process read tools.
-      preparedContainment = await opts.containmentCoordinator.admit(
-        opts.containmentProfile ?? 'runner-filesystem-v1',
-      )
-    } catch (error) {
-      const failureCode = identityFailureCode(error) ?? 'execution-identity-containment-required'
-      return fail('identity-failed', { failureCode })
-    }
-  }
 
   // ── scratch layout + seed files (platform-side; agent never fetches) ──
   try {
@@ -513,22 +423,16 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
                 driver,
                 worktreePath: worktreeDir,
                 runDir,
-                ...(preparedContainment === undefined ? {} : { containment: preparedContainment }),
                 log,
               })
             : await driver.buildSpawn({
                 agentName: opts.agentName,
                 systemPrompt: opts.systemPrompt,
                 ...(opts.model != null && opts.model !== '' ? { model: opts.model } : {}),
+                isSandbox: opts.isSandbox === true,
                 prompt: opts.prompt,
                 worktreePath: worktreeDir,
                 runDir,
-                ...(preparedContainment === undefined
-                  ? {}
-                  : {
-                      appHome: preparedContainment.sandbox.appHome,
-                      containment: preparedContainment,
-                    }),
                 ...(opts.runtimeBinary != null && opts.runtimeBinary !== ''
                   ? { runtimeBinary: opts.runtimeBinary }
                   : {}),
@@ -538,28 +442,10 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
                 ...(opts.configDirName != null && opts.configDirName !== ''
                   ? { configDirName: opts.configDirName }
                   : {}),
-                ...(opts.bridgeCredentials !== undefined
-                  ? { bridgeCredentials: opts.bridgeCredentials }
-                  : {}),
                 log,
-                ...(opts.testOnlyUnverifiedRuntime === true
-                  ? { testOnlyUnverifiedRuntime: true }
-                  : {}),
                 ...(opts.opencodeCmd === undefined ? {} : { opencodeCmd: opts.opencodeCmd }),
-                ...(opts.systemPermissionProfile === undefined
-                  ? {}
-                  : { systemPermissionProfile: opts.systemPermissionProfile }),
               })
-        if (preparedContainment !== undefined) {
-          plan = {
-            ...plan,
-            containment: preparedContainment,
-            sandboxTopology: preparedContainment.spawnTopology,
-          }
-        }
       } catch (err) {
-        const failureCode = identityFailureCode(err)
-        if (failureCode !== null) return fail('identity-failed', { failureCode })
         return fail('spawn-failed', {
           stderrTail: maskDiagnosticsText(
             `failed to prepare spawn: ${err instanceof Error ? err.message : String(err)}`,
@@ -569,12 +455,8 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
 
       let spawnCmd: string[] | undefined
       try {
-        await plan.preSpawnVerify?.()
-        spawnCmd = wrapSpawnPlanSandbox(
-          plan.cmd,
-          systemSandboxCtx(worktreeDir, runDir, plan),
-          plan.sandboxTopology,
-        )
+        await plan.beforeSpawn?.()
+        spawnCmd = plan.cmd
         child = Bun.spawn({
           ...platformSpawnOptionsForHost(),
           cmd: spawnCmd,
@@ -586,23 +468,13 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
           detached: true,
         })
         if (opts.onSpawned !== undefined) {
-          const rawCommandDigest = createHash('sha256')
-            .update(JSON.stringify(plan.cmd))
-            .digest('hex')
           await opts.onSpawned({
             pid: typeof child.pid === 'number' ? child.pid : null,
             spawnedAt: Date.now(),
             spawnBinaryPath: plan.cmd[0] ?? '',
-            rawCommandDigest,
-            spawnCommandDigest: createHash('sha256').update(JSON.stringify(spawnCmd)).digest('hex'),
           })
         }
       } catch (err) {
-        // RFC-237 (P1-3): a preSpawnVerify seal-mutation rejection carries an
-        // execution-identity code — surface it as identity-failed, not as a
-        // generic start failure.
-        const failureCode = identityFailureCode(err)
-        if (failureCode !== null) return fail('identity-failed', { failureCode })
         // 2026-08-04: Bun's posix_spawn ENOENT names argv[0] even when the
         // missing path is the cwd — probe both so the tail blames the right one.
         return fail('spawn-failed', {
@@ -624,7 +496,6 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       }
 
       const liveChild = child
-      const activePlan = plan as SpawnPlan
       let terminating = false
       // RFC-254: every timer in this escalation chain must stay REF'D — the
       // race can only settle through the END of the chain, and the SIGKILL in
@@ -832,23 +703,6 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         readStream(
           child.stderr as ReadableStream<Uint8Array> | undefined,
           async (line) => {
-            const control = activePlan.control
-            if (
-              opts.onControlLine !== undefined &&
-              control !== undefined &&
-              control.kind !== 'none'
-            ) {
-              const handled = await opts.onControlLine({ line, control })
-              if (handled.kind === 'session-ready') {
-                if (sessionId !== undefined && sessionId !== handled.sessionId) {
-                  throw new Error('runtime control/session stream id mismatch')
-                }
-                sessionId = handled.sessionId
-                await setSinkRoot(handled.sessionId)
-                return
-              }
-              line = handled.line
-            }
             const remaining = STDERR_TAIL_CAP - Buffer.byteLength(stderrText, 'utf8')
             if (remaining > 0) {
               stderrText += Buffer.from(`${line}\n`, 'utf8').subarray(0, remaining).toString('utf8')
@@ -880,7 +734,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       ])
       if (exitOutcome.kind === 'unreaped') {
         await settlesWithin(cancelDrains(), CHILD_REAP_DEADLINE_MS)
-        return fail('unreaped', { failureCode: 'execution-identity-store-unsafe' })
+        return fail('unreaped')
       }
       childReaped = true
       const exitCode = exitOutcome.exitCode
@@ -909,19 +763,6 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       }
 
       const stderrTail = maskDiagnosticsText(stderrText.slice(0, STDERR_TAIL_CAP))
-      const launcherFailure =
-        plan.diagnostics?.verifiedIdentity === true
-          ? parseExecutionIdentityFailureOutput(stderrText)
-          : null
-      if (launcherFailure !== null) {
-        await markSinkTerminal('complete')
-        return fail('identity-failed', {
-          failureCode: launcherFailure,
-          exitCode,
-          stderrTail,
-        })
-      }
-
       // RFC-237 — post-exit child-session sweep is a driver capability now
       // (opencode: private-store SQLite walk; claude omits it — the full main
       // session already streamed through parseEvent into the sink).
@@ -935,9 +776,6 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
           rootSessionId: sessionId,
           sink: opts.eventSink,
           log,
-          ...(plan.sessionStore === undefined
-            ? {}
-            : { sessionStoreDbPath: plan.sessionStore.dbPath }),
         })
         if (captured.failed) {
           await failSink('child-capture-failed', captured.failureReason)
@@ -1010,14 +848,13 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
     })
     if (!finalized.reaped) {
       result = fail('unreaped', {
-        failureCode: 'execution-identity-store-unsafe',
         scratchRetained: true,
       })
     } else if (!finalized.cleanupSucceeded) {
       result = {
-        ...(result ?? fail('identity-failed')),
-        status: 'identity-failed',
-        failureCode: 'execution-identity-store-unsafe',
+        ...(result ?? fail('spawn-failed')),
+        status: 'spawn-failed',
+        stderrTail: 'runtime cleanup failed',
         scratchRetained: true,
       }
     } else if (result !== undefined) {

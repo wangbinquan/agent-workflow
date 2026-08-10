@@ -64,7 +64,6 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     db: deps.db,
     configPath: deps.configPath,
     appHome: deps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
-    containmentCoordinator: deps.containmentCoordinator,
     runFn: deps.mcpRuntimeTestDependencies?.runFn,
     now: deps.mcpRuntimeTestDependencies?.now,
     capacity: deps.mcpRuntimeTestDependencies?.capacity,

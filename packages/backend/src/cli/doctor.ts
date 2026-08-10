@@ -6,16 +6,12 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSecretBox } from '@/auth/secretBox'
 import { statMetadataIsAuthoritative } from '@/util/fileTrust'
-import { loadConfig, readConfig } from '@/config'
+import { loadConfig } from '@/config'
 import { quickCheckDbFile } from '@/db/integrity'
 import { countEmbeddedSqlMigrations, IS_EMBEDDED } from '@/embed'
 import { capabilitiesFromVersion, MIN_GIT_VERSION, parseGitVersion } from '@/services/gitVersion'
-import { createBuiltinContainmentCoordinator } from '@/services/containmentComposition'
 import { getRuntimeDriver } from '@/services/runtime'
-import type { SandboxMode } from '@/services/sandbox/guidance'
-import { probeSandboxMechanism } from '@/services/sandbox/probe'
 import { Paths } from '@/util/paths'
-import { makeBoundedSpawn } from './sandbox'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 export interface CheckResult {
@@ -88,89 +84,8 @@ export async function doctorCommand(): Promise<DoctorResult> {
   checks.push(checkBackups())
   checks.push(checkSealedCredentials())
 
-  // 9. RFC-216/RFC-233: exact OpenCode containment profile. Only
-  //    enforce+unavailable is a genuine failure; warn/off remain informational.
-  checks.push(await checkSandbox())
-
   const ok = checks.every((c) => c.ok)
   return { ok, checks }
-}
-
-/**
- * RFC-216/RFC-233 — exact containment health. Bounded discovery supplies
- * diagnostics; readiness comes from the same production coordinator/profile as
- * spawn admission. `ok = !(enforce && !available)`; a corrupt
- * config is caught here (assume warn) so it can NEVER propagate and truncate the
- * whole doctor report — the config corruption itself is reported by checkConfig.
- * The `agent-workflow sandbox` exit-2-on-corrupt semantics belong to that command
- * only; doctor keeps its CheckResult contract.
- */
-export async function checkSandbox(
-  deps: {
-    boundedSpawn?: ReturnType<typeof makeBoundedSpawn>
-    configPath?: string
-    platform?: NodeJS.Platform
-    qualifyBwrapFilesystem?: () => Promise<string>
-    qualifyBwrapFull?: (canonicalPath: string) => Promise<void>
-    qualifySeatbelt?: () => Promise<void>
-  } = {},
-): Promise<CheckResult> {
-  const name = 'sandbox'
-  let mode: SandboxMode = 'warn'
-  let configNote = ''
-  try {
-    const cfg = readConfig(deps.configPath ?? Paths.config)
-    mode = (cfg?.sandboxMode ?? 'warn') as SandboxMode
-  } catch {
-    configNote = '（config 不可读，按 warn 判定；见 config 检查）'
-  }
-
-  const bounded = deps.boundedSpawn ?? makeBoundedSpawn()
-  const platform = deps.platform ?? process.platform
-  const discoveryStatus = await probeSandboxMechanism(platform, bounded.spawn)
-  const coordinator = createBuiltinContainmentCoordinator({
-    mode: mode === 'off' ? 'warn' : mode,
-    appHome: Paths.root,
-    platform,
-    discoveryStatus,
-    ...(deps.qualifyBwrapFilesystem === undefined
-      ? {}
-      : { qualifyBwrapFilesystem: deps.qualifyBwrapFilesystem }),
-    ...(deps.qualifyBwrapFull === undefined ? {} : { qualifyBwrapFull: deps.qualifyBwrapFull }),
-    ...(deps.qualifySeatbelt === undefined ? {} : { qualifySeatbelt: deps.qualifySeatbelt }),
-  })
-  const exact = await coordinator.preview('model-child-netless-v1')
-  const status = {
-    mechanism: discoveryStatus.mechanism,
-    available: exact.receipt.decision === 'contained',
-    detail: exact.receipt.reasonCodes.length === 0 ? null : exact.receipt.reasonCodes.join(','),
-  }
-
-  const detail = status.detail ?? 'unknown'
-  if (mode === 'off') {
-    return {
-      name,
-      ok: true,
-      message: status.available
-        ? `沙箱由配置关闭（精确资格检查可用：${status.mechanism ?? 'sandbox'}）${configNote}`
-        : `沙箱由配置关闭（精确资格检查不可用：${detail}）${configNote}`,
-    }
-  }
-  if (status.available) {
-    return { name, ok: true, message: `${status.mechanism ?? 'sandbox'} 可用${configNote}` }
-  }
-  if (mode === 'enforce') {
-    return {
-      name,
-      ok: false,
-      message: `enforce 档但 OpenCode 必要隔离能力不可用（${detail}）——相关任务将被拒绝；见 \`agent-workflow sandbox\`${configNote}`,
-    }
-  }
-  return {
-    name,
-    ok: true,
-    message: `必要隔离能力不可用（${detail}）；warn 档任务将显式降级运行，安装指引见 \`agent-workflow sandbox\`${configNote}`,
-  }
 }
 
 /**

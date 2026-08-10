@@ -10,7 +10,7 @@ import type { DbTxSync } from '@/db/txSync'
 import {
   mcpRuntimeTestCreateReceipts,
   mcpRuntimeTestSessions,
-  opencodeMcpTestSessionOwners,
+  mcpRuntimeTestSessionLeases,
   resourceGrants,
   runtimes,
   users,
@@ -45,7 +45,7 @@ function endNow(
 function blockAfterTurn(
   tx: DbTxSync,
   session: SessionRow,
-  reason: 'mcp-config-changed' | 'runtime-profile-changed' | 'runtime-identity-changed',
+  reason: 'mcp-config-changed' | 'runtime-profile-changed',
   now: number,
 ): void {
   tx.update(mcpRuntimeTestSessions)
@@ -189,7 +189,7 @@ export function transitionInheritedRuntimeTestsInTx(
       )
       .all()
     for (const session of sessions) {
-      blockAfterTurn(tx, session, 'runtime-identity-changed', input.now)
+      blockAfterTurn(tx, session, 'runtime-profile-changed', input.now)
     }
   }
 }
@@ -213,7 +213,7 @@ export function transitionOwnerRuntimeTestsInTx(
 }
 
 /**
- * Final MCP-delete DB barrier. Process/store cleanup happens before entering
+ * Final MCP-delete DB barrier. Process/scratch cleanup happens before entering
  * the canonical MCP mutation; these dependent rows are removed only inside
  * the same transaction that deletes the MCP itself.
  */
@@ -238,8 +238,8 @@ export function deletePreparedMcpRuntimeTestsInTx(tx: DbTxSync, mcpId: string): 
     )
   }
   for (const session of sessions) {
-    tx.delete(opencodeMcpTestSessionOwners)
-      .where(eq(opencodeMcpTestSessionOwners.testSessionId, session.id))
+    tx.delete(mcpRuntimeTestSessionLeases)
+      .where(eq(mcpRuntimeTestSessionLeases.testSessionId, session.id))
       .run()
     tx.delete(mcpRuntimeTestSessions).where(eq(mcpRuntimeTestSessions.id, session.id)).run()
   }

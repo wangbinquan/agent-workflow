@@ -54,6 +54,9 @@
 //                                    so the runner captures it into RunResult.sessionId.
 //                                    Default ULID-style synthetic id when set to '1';
 //                                    any other value is treated as the literal id.
+//   MOCK_OPENCODE_EMIT_SESSION_AGENT optional agent-name filter for the session
+//                                    event when one scheduler test spawns several
+//                                    agents under the same environment.
 //   MOCK_OPENCODE_WRITE_INVENTORY_FROM
 //                                    RFC-029: path to a JSON fixture. When set AND
 //                                    OPENCODE_AW_INVENTORY_OUT is also set, the mock
@@ -301,7 +304,11 @@ if (env.MOCK_OPENCODE_WRITE_FILE && forceFail) {
 // `sessionID` somewhere in the stream; the runner grabs the first one it
 // sees. We synthesize that here for inline-mode tests. `1` produces a stable
 // fake id; any other string is used verbatim.
-if (env.MOCK_OPENCODE_EMIT_SESSION_ID) {
+if (
+  env.MOCK_OPENCODE_EMIT_SESSION_ID &&
+  (env.MOCK_OPENCODE_EMIT_SESSION_AGENT === undefined ||
+    env.MOCK_OPENCODE_EMIT_SESSION_AGENT === argv[agentFlagIdx + 1])
+) {
   const sessionID =
     env.MOCK_OPENCODE_EMIT_SESSION_ID === '1'
       ? 'opc_mock_session_01'

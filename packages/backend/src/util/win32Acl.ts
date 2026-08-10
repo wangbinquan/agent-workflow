@@ -1,50 +1,16 @@
-// RFC-254 T40b — the win32 half of the store's file-PRIVACY proof.
+// RFC-254 T40b — Windows privacy checks for sensitive files.
 //
-// WHY THIS EXISTS
-// ---------------
-// `util/fileTrust.ts` proves a sensitive file is platform-private. On POSIX that
-// is `mode & 0o777 === 0o600`. On Windows `fs.Stats.mode` is SYNTHESIZED from the
-// read-only attribute (a writable file reports 0o666 whatever its ACL says), so
-// the POSIX arithmetic there is meaningless — `fileTrust` returns
-// `platform-unsupported` (fail-closed) and the whole verified path refuses to run
-// on Windows. This module supplies the real answer: read the file's DACL and
-// prove it grants access to nobody outside {the current user, the OS TCB}.
+// POSIX mode bits cannot describe a Windows DACL: Node synthesizes `Stats.mode`
+// from the read-only attribute, so a writable file commonly reports 0666 no
+// matter which principals the ACL grants. This module reads the real DACL and
+// accepts only the current user plus the operating-system administrators.
 //
-// MEASURED FACTS (Windows 11, Bun 1.3.14, 2026-08-06 — drove the design, not guessed)
-// ------------------------------------------------------------------------------------
-//  - A file created under `%USERPROFILE%` (where `~/.agent-workflow` and
-//    `os.tmpdir()` both live) inherits a DACL of exactly
-//        D:(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;<userSID>)
-//    i.e. SYSTEM + BUILTIN\Administrators + the user, and NOTHING broader. That is
-//    already the achievable Windows equivalent of 0o600: SYSTEM/Administrators are
-//    the OS TCB (an admin can take-ownership of any file on any OS — out of the
-//    threat model everywhere), and no other unprivileged principal is granted.
-//  - `icacls <f> /save` writes the SID-based SDDL (locale-INDEPENDENT, unlike the
-//    human-readable `icacls <f>` listing) as UTF-16LE: line 1 = basename,
-//    line 2 = `D:...` SDDL. It costs ~106ms cold; `Get-Acl` via PowerShell costs
-//    ~1166ms cold, which is why this uses icacls.
-//  - Granting Everyone:R injects `(A;;FR;;;WD)` — detectable: `WD` ∉ whitelist.
+// `icacls /save` supplies locale-independent SID-based SDDL and works on both
+// x64 and ARM64 Windows, unlike Bun FFI on builds without TinyCC. Async and sync
+// entry points share the same parser/verdict; only process invocation differs.
 //
-// WHY icacls AND NOT bun:ffi(advapi32)
-// ------------------------------------
-// `bun:ffi`'s `dlopen()` is absent on the Windows ARM64 Bun build (TinyCC disabled
-// — see `util/windowsJobObject.ts`), which is the user's acceptance machine. An
-// FFI reader would degrade to fail-closed there, i.e. the verified path would STILL
-// refuse on ARM64 — defeating the purpose. `icacls`/`whoami` are built-ins shipped
-// on every Windows edition and both arches, so they are the only mechanism.
-//
-// SYNC + ASYNC TWINS
-// ------------------
-// Some callers are async (storeHygiene, verifiedManifest); the control-ACK path is
-// sync (`openSync`/`fstatSync`). Rather than ripple async through security-critical
-// sync code, this module exposes both: the pure verification core is shared, only
-// the `spawn`/`spawnSync` runner differs. The ACK check runs once per launch, so
-// its ~200ms of synchronous `spawnSync` is negligible.
-//
-// The rule, same as `fileTrust`: a platform/tool that cannot PROVE privacy FAILS
-// with a legible reason, never silently passes. If `icacls`/`whoami` are missing or
-// their output is unparseable, every function here fails closed.
-
+// If the ACL tools are unavailable or their output cannot be parsed, the check
+// returns a legible failure instead of treating privacy as proven.
 import { spawn, spawnSync } from 'node:child_process'
 import { readFileSync, unlinkSync } from 'node:fs'
 import { readFile, unlink } from 'node:fs/promises'
@@ -63,7 +29,7 @@ const ADMINISTRATORS_ALIAS = 'BA'
 // Administrator is the local root-equivalent and Domain Admins administer the
 // domain, so a grant to either is not a privacy leak (they can take ownership of
 // anything regardless). MEASURED on the GitHub windows-latest x64 runner, which
-// runs as RID-500: every store file's DACL reads `...(A;;FA;;;LA)` for the user,
+// runs as RID-500: an owner-only file's DACL reads `...(A;;FA;;;LA)` for the user,
 // so without `LA` here the primitive rejected its own owner's ACE as non-private.
 const LOCAL_ADMIN_ALIAS = 'LA'
 const DOMAIN_ADMINS_ALIAS = 'DA'
@@ -259,7 +225,7 @@ export async function assertWindowsFilePrivate(path: string): Promise<FileTrustV
  * SET a protected owner+TCB DACL on a directory so every file created under it
  * inherits it — belt-and-suspenders against machines whose `%USERPROFILE%` DACL
  * carries extra ACEs (corporate GPO often adds a "Domain Users" grant, which would
- * otherwise make `assertWindowsFilePrivate` correctly fail closed for store files).
+ * otherwise make `assertWindowsFilePrivate` correctly reject sensitive files).
  *
  *   icacls <dir> /inheritance:r /grant:r *<userSid>:(OI)(CI)F *SYSTEM... *Admins...
  *
@@ -268,10 +234,8 @@ export async function assertWindowsFilePrivate(path: string): Promise<FileTrustV
  * Fails closed if the user SID or icacls is unavailable.
  */
 export async function sealDirectoryOwnerOnly(dirPath: string): Promise<FileTrustVerdict> {
-  // Host-frozen: a no-op success off win32, so the guarded plan modules
-  // (verifiedPlan/verifiedSystemPlan/verifiedManifest — forbidden `process.platform`
-  // by RFC-227/T11c) can call it UNCONDITIONALLY and let the platform branch live
-  // here. POSIX keeps its mode-based privacy; no icacls spawn happens there.
+  // The platform branch lives here so callers can apply the same privacy API on
+  // every host. POSIX keeps mode-based privacy; no icacls spawn happens there.
   if (process.platform !== 'win32') return trusted
   const userSid = await getCurrentUserSid()
   if (userSid === null) return deny('platform-unsupported')

@@ -14,22 +14,17 @@
 //      all tools）——节点起得来、模型出话、一个工具都没有，且不产生任何 warning。
 
 import { describe, expect, test } from 'bun:test'
-import { claudeDeclaredControlArgv } from '../src/services/runtime/claudeCode/spawn'
+import { claudeExplicitPermissionArgv } from '../src/services/runtime/claudeCode/spawn'
 import { mapAgentPermissionToClaudeTools } from '../src/services/runtime/claudeCode/permissionMap'
 
-describe('--disable-slash-commands 只在没有授予 Skill 时下发', () => {
-  test('未授予 Skill ⇒ 仍然下发（历史形状不变）', () => {
-    const argv = claudeDeclaredControlArgv({ tools: 'Read,Grep' })
-    expect(argv).toContain('--disable-slash-commands')
-  })
-
-  test('授予了 Skill ⇒ 不下发，否则等于把该节点的技能全部关掉', () => {
-    const argv = claudeDeclaredControlArgv({ tools: 'Read,Skill', skillsGranted: true })
+describe('显式 permission 不再附带平台 discovery fence', () => {
+  test('只物化用户声明的工具集合', () => {
+    const argv = claudeExplicitPermissionArgv({ tools: 'Read,Skill' })
     expect(argv).not.toContain('--disable-slash-commands')
-    // 其余受控 flag 一个都不能少——本修复只放开这一个。
-    expect(argv).toContain('--strict-mcp-config')
-    expect(argv).toContain('--setting-sources')
+    expect(argv).not.toContain('--strict-mcp-config')
+    expect(argv).not.toContain('--setting-sources')
     expect(argv.slice(0, 2)).toEqual(['--permission-mode', 'dontAsk'])
+    expect(argv).toContain('Read,Skill')
   })
 })
 

@@ -179,9 +179,6 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
               })
             }
           },
-          ...(deps.containmentCoordinator === undefined
-            ? {}
-            : { containmentCoordinator: deps.containmentCoordinator }),
           ...(deps.intentTestDependencies?.runFn === undefined
             ? {}
             : { runFn: deps.intentTestDependencies.runFn }),
@@ -566,13 +563,11 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      const cfg = loadConfig(deps.configPath)
       const receipt = await applyIntentChangeset(
         {
           db: deps.db,
           appHome,
           actor,
-          executionPolicy: { defaultRuntime: cfg.defaultRuntime ?? null },
         },
         {
           sessionId: c.req.param('id'),

@@ -844,6 +844,7 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
       {
         MOCK_OPENCODE_CLARIFY_BODY: clarifyBody,
         MOCK_OPENCODE_EMIT_SESSION_ID: 'opc_Q0',
+        MOCK_OPENCODE_EMIT_SESSION_AGENT: 'questioner',
         MOCK_OPENCODE_CAPTURE_ARGV_TO: argvPath,
       },
       () =>
@@ -878,6 +879,7 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
       {
         MOCK_OPENCODE_OUTPUTS: JSON.stringify({ main: 'done' }),
         MOCK_OPENCODE_EMIT_SESSION_ID: 'opc_Q0',
+        MOCK_OPENCODE_EMIT_SESSION_AGENT: 'questioner',
         MOCK_OPENCODE_CAPTURE_ARGV_TO: argvPath,
       },
       () =>

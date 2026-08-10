@@ -233,7 +233,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   })
   afterEach(() => h?.cleanup())
 
-  test('HEAD journal has 143 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 144 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -351,7 +351,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // （workgroup 交付约定 + 可翻译系统消息元数据；存量交付约定回填 files）。
     // RFC-277 bumped to 143 with 0143_rfc277_gitlab_tls_verification
     // （GitLab 可显式关闭 TLS 证书校验；存量连接默认继续校验）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(143)
+    // RFC-276 bumped to 144 with 0144_rfc276_runtime_hardening_deprecation
+    // （运行时加固废弃；先归档移除字段，再切换到普通会话互斥租约）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(144)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

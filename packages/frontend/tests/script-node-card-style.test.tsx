@@ -23,7 +23,6 @@ const scriptDefinition = {
   language: 'python',
   script: "print('ok')\n",
   dependencies: ['requests==2.32.3', 'pyyaml==6.0.2'],
-  network: 'deny',
   readonly: true,
   position: { x: 120, y: 80 },
 } as unknown as WorkflowNode
@@ -42,7 +41,6 @@ describe('script canvas card visual contract', () => {
       title: 'Verify release',
       language: 'python',
       dependencyCount: 2,
-      networkDenied: true,
       scriptReadonly: true,
     })
   })
@@ -66,7 +64,6 @@ describe('script canvas card visual contract', () => {
       'python',
     )
     expect(container.querySelector('[data-testid="script-node-deps"]')?.textContent).toContain('2')
-    expect(container.querySelector('[data-testid="script-node-network-deny"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="script-node-readonly"]')).not.toBeNull()
   })
 

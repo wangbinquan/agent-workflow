@@ -10,15 +10,11 @@
 // endpoints in RFC-135.
 
 import { z } from 'zod'
-import { EXECUTION_IDENTITY_FAILURE_CODES } from '../executionIdentity'
 
 export const RuntimeStatusStateSchema = z.enum([
   'not-found',
   'unlaunchable',
-  'available-unverified',
   'protocol-incompatible',
-  'containment-blocked',
-  'degraded',
   'ready',
 ])
 export type RuntimeStatusState = z.infer<typeof RuntimeStatusStateSchema>
@@ -31,16 +27,6 @@ export type RuntimeStatusState = z.infer<typeof RuntimeStatusStateSchema>
  * version nullable telemetry and selects compatibility by observed protocol
  * behavior. Other protocols retain their established availability semantics.
  */
-export const RuntimeCapabilityStrengthSchema = z.enum(['strong', 'best-effort', 'absent'])
-
-export const RuntimeContainmentReceiptSchema = z.object({
-  providerId: z.string().min(1).nullable(),
-  mode: z.enum(['enforce', 'warn', 'off']),
-  capabilities: z.record(z.string().min(1), RuntimeCapabilityStrengthSchema),
-  available: z.boolean(),
-  degradedReasons: z.array(z.string().min(1)),
-})
-
 export const RuntimeStatusEntrySchema = z.object({
   name: z.string(),
   protocol: z.enum(['opencode', 'claude-code']),
@@ -53,56 +39,12 @@ export const RuntimeStatusEntrySchema = z.object({
   reportedVersion: z.string().nullable().optional(),
   /** Behavior contract selected by a full Runtime Test, never a version range. */
   protocolCodec: z.string().min(1).optional(),
-  containment: RuntimeContainmentReceiptSchema.optional(),
   isDefault: z.boolean(),
-  /**
-   * RFC-224: stable, non-secret diagnosis for an execution-identity admission
-   * failure. Optional so responses from pre-RFC-224 daemons remain parseable.
-   */
-  failureCode: z.enum(EXECUTION_IDENTITY_FAILURE_CODES).optional(),
 })
 export type RuntimeStatusEntry = z.infer<typeof RuntimeStatusEntrySchema>
 
-/**
- * RFC-205 D6 — FS-sandbox observability block on GET /api/runtimes/status.
- * `mode` echoes the effective config.sandboxMode; `mechanism` is what the
- * boot-time probe identified for this platform (kept even when the trial run
- * failed, so the UI can name what is missing; null = unsupported platform /
- * not probed); `available` is the trial-run verdict.
- */
-export const SandboxStatusSchema = z.object({
-  mode: z.enum(['enforce', 'warn', 'off']),
-  /** RFC-233 additive fields; `mode` remains the legacy effective alias. */
-  configuredMode: z.enum(['enforce', 'warn', 'off']).optional(),
-  effectiveMode: z.enum(['enforce', 'warn', 'off']).optional(),
-  restartRequired: z.boolean().optional(),
-  policyGeneration: z.number().int().nonnegative().optional(),
-  probeGeneration: z.number().int().nonnegative().nullable().optional(),
-  probeCheckedAt: z.number().int().nonnegative().nullable().optional(),
-  coordinatorBootId: z.string().min(1).optional(),
-  admissionGeneration: z.number().int().nonnegative().optional(),
-  probeState: z.enum(['ready', 'partial', 'unavailable']).optional(),
-  decision: z.enum(['contained', 'degraded', 'off', 'blocked']).optional(),
-  profileId: z.string().min(1).optional(),
-  requirementDigest: z
-    .string()
-    .regex(/^[0-9a-f]{64}$/)
-    .optional(),
-  // RFC-227: provider ids are extensible (for example a future Windows Job
-  // Object/AppContainer provider), not a Linux/macOS closed enum.
-  mechanism: z.string().min(1).nullable(),
-  available: z.boolean(),
-  providerId: z.string().min(1).nullable().optional(),
-  capabilities: z.record(z.string().min(1), RuntimeCapabilityStrengthSchema).optional(),
-  degradedReasons: z.array(z.string().min(1)).optional(),
-  reasonCodes: z.array(z.string().min(1)).optional(),
-})
-export type SandboxStatus = z.infer<typeof SandboxStatusSchema>
-
 export const RuntimesStatusResponseSchema = z.object({
   runtimes: z.array(RuntimeStatusEntrySchema),
-  /** RFC-205 D6 — optional so pre-sandbox daemon responses stay parseable. */
-  sandbox: SandboxStatusSchema.optional(),
 })
 export type RuntimesStatusResponse = z.infer<typeof RuntimesStatusResponseSchema>
 

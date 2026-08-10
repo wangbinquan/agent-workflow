@@ -3,7 +3,6 @@
 // **逐字段对照正式 create/snapshot schema**（AC-B3b），不是「相对 Intent*Payload
 // 的差异」。R7-P1-2 / R7-P2-10 各查出一处因为照抄 intent 版而丢字段的缺陷：
 //
-//   · agent.network —— CreateAgentSchema 有、IntentAgentPayloadSchema 没有。
 //     照抄 intent 版 ⇒ 导出再导入会静默回落成 'deny'，执行行为改变。
 //   · plugin 的字段名 —— 正式是 `options`，intent 是 `optionsJson`。两处规范打架
 //     会让 exporter/importer 各按一处实现 ⇒ 严格 parse 失败或选项丢失。
@@ -182,8 +181,6 @@ export const BundleAgentPayloadSchema = z
     /** runtime PROFILE NAME（不是资源引用——runtime 不是六类 ACL 资源之一）。
      *  它进 manifest.requirements.runtimes，导入方需自备同名执行档。 */
     runtime: z.string().min(1).max(128).optional(),
-    /** ⚠️ AC-B3b：intent 版没有这个字段，照抄会让导入后静默回落成 'deny'。 */
-    network: z.enum(['deny', 'allow']).optional(),
     permission: AgentPermissionSchema.default({}),
     /** 第四个槽位域：唯一允许 `project:` 的地方。 */
     skills: z.array(BundleAgentSkillRefWireSchema).max(64).default([]),

@@ -103,7 +103,6 @@ function insertIdleSession(
       runtimeName: input.runtimeName ?? 'opencode',
       runtimeProtocol: 'opencode',
       runtimeSnapshotJson: '{}',
-      runtimeFingerprint: HASH,
       runtimeBinaryPath: '/mock/opencode',
       runtimeSessionId: `native-${input.id}`,
       nativeSessionState: 'ready',
@@ -111,7 +110,6 @@ function insertIdleSession(
       sessionVersion: 1,
       idleDeadlineAt: 600_001,
       scratchRoot: `/tmp/${input.id}`,
-      sessionStoreRoot: `/tmp/${input.id}-store`,
       cleanupState: 'not-started',
       createdAt: 1,
       updatedAt: 1,
@@ -268,8 +266,8 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
       await invalidateInheritedRuntimeProbeReceipts(db, ['opencode'])
       expect(lifecycle(db, 'session-inherited')).toMatchObject({
         status: 'ending',
-        endReason: 'runtime-identity-changed',
-        blocked: 'runtime-identity-changed',
+        endReason: 'runtime-profile-changed',
+        blocked: 'runtime-profile-changed',
       })
     }
 

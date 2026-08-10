@@ -1087,9 +1087,8 @@ export type EnvelopeFollowupReason =
  * previously an implicit branch buried at the tail of the startsWith chain.
  *
  * `Record<FollowupFailureCode, …>` makes adding an envelope-protocol code
- * without a policy row a compile error. RFC-224 execution-identity failures
- * deliberately live in the wider `FailureCode` domain but are absent here:
- * unchanged-input retries cannot repair them.
+ * without a policy row a compile error. Runtime launch failures live outside
+ * this map because an envelope follow-up cannot repair them.
  */
 export const FOLLOWUP_POLICY: Record<FollowupFailureCode, { reason: EnvelopeFollowupReason }> = {
   'envelope-missing': { reason: 'envelope-missing' },
@@ -1105,9 +1104,9 @@ export const FOLLOWUP_POLICY: Record<FollowupFailureCode, { reason: EnvelopeFoll
  * Single routing oracle for envelope follow-up eligibility.
  *
  * The input intentionally accepts the complete persisted failure union (and
- * defensive unknown values). Execution-identity failures and unrecognized
- * legacy strings return `undefined`; callers must not infer retryability from
- * the mere presence of a machine-readable code.
+ * defensive unknown values). Runtime failures and unrecognized legacy strings
+ * return `undefined`; callers must not infer retryability from the mere
+ * presence of a machine-readable code.
  */
 export function followupPolicyForFailure(
   failureCode: unknown,

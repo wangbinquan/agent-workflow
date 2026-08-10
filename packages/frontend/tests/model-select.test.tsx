@@ -86,14 +86,14 @@ describe('ModelSelect render', () => {
     expect(onChange).toHaveBeenLastCalledWith('openai/foo')
   })
 
-  test('untrusted-binary model load uses localized title + hint and hides wire text', async () => {
+  test('model load failure uses localized title + hint and hides wire text', async () => {
     await i18n.changeLanguage('en-US')
     const raw = 'RAW_BACKEND_SECRET /private/sealed/opencode'
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
         JSON.stringify({
           ok: false,
-          code: 'execution-identity-untrusted-binary',
+          code: 'opencode-models-failed',
           message: raw,
         }),
         {
@@ -104,19 +104,15 @@ describe('ModelSelect render', () => {
     )
 
     wrap(<ModelSelect value={undefined} onChange={() => {}} />)
-    expect(
-      await screen.findByText(
-        'The selected OpenCode executable could not be frozen and verified for this run.',
-      ),
-    ).toBeTruthy()
+    expect(await screen.findByText('Failed to fetch the model list.')).toBeTruthy()
     expect(
       screen.getByText(
-        'Check the configured executable path and permissions, then run the runtime test again.',
+        'Check that the runtime works and the network / proxy is reachable, then retry.',
       ),
     ).toBeTruthy()
     const banner = screen.getByTestId('model-select-load-error')
     expect(banner.textContent).not.toContain(raw)
-    expect(banner.textContent).not.toContain('execution-identity-untrusted-binary')
+    expect(banner.textContent).not.toContain('opencode-models-failed')
   })
 
   test('persisted value not in list switches to custom mode', async () => {

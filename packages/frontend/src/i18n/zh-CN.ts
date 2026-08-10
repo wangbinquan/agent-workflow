@@ -281,13 +281,9 @@ export interface Resources {
       item: {
         ready: string
         readyNoVersion: string
-        availableUnverifiedVersion: string
-        availableUnverified: string
         missing: string
         unlaunchable: string
         protocolIncompatible: string
-        containmentBlocked: string
-        degraded: string
       }
     }
     section: {
@@ -1404,7 +1400,6 @@ export interface Resources {
       intentHint: string
       intentRuntime: string
       intentRuntimeHint: string
-      intentRuntimeClaudeNote: string
       intentLang: string
       intentLangHint: string
       intentLangDefault: string
@@ -1527,26 +1522,6 @@ export interface Resources {
       sourceDiscovery: string
       testEndpointMissing: string
       testJwksUnreachable: string
-    }
-    // RFC-205 T5 — Settings → Runtime sandbox status chip + sandboxMode control.
-    sandbox: {
-      title: string
-      chipActive: string
-      chipUnavailable: string
-      chipOff: string
-      modeLabel: string
-      modeEnforce: string
-      modeWarn: string
-      modeOff: string
-      modeHint: string
-      enforceUnavailable: string
-      reasonCodes: string
-      cliHint: string
-      warnDegraded: string
-      lifetimeBestEffort: string
-      mismatchTitle: string
-      mismatchBody: string
-      applyConfigured: string
     }
   }
   onboarding: {
@@ -1860,13 +1835,13 @@ export interface Resources {
     fieldConfigDirNameHint: string
     fieldExtraArgs: string
     fieldExtraArgsHint: string
+    fieldIsSandbox: string
+    fieldIsSandboxHint: string
     configDirEnvInvalid: string
     configDirEnvReserved: string
     configDirNameInvalid: string
     fieldModel: string
     fieldModelHint: string
-    modelRequired: string
-    modelRequiredChip: string
     fieldVariant: string
     fieldTemperature: string
     fieldSteps: string
@@ -1887,7 +1862,6 @@ export interface Resources {
       'network-blocked': string
       'model-call-failed': string
       'stream-nonconforming': string
-      'execution-identity-failed': string
     }
   }
   agents: {
@@ -2932,7 +2906,6 @@ export interface Resources {
         S4: string
         S5: string
         S6: string
-        'sandbox-degraded': string
       }
       // RFC-057: UI strings for the repair dialog + confirm modal. The
       // option-specific labels (R1.approveRun.label / etc.) live at root
@@ -4737,7 +4710,6 @@ export interface Resources {
     label: string
     dependencyCount_one: string
     dependencyCount_other: string
-    networkDeny: string
     readonly: string
   }
   scriptInspector: {
@@ -4769,8 +4741,6 @@ export interface Resources {
     envValue: string
     envAdd: string
     envRemove: string
-    networkDeny: string
-    networkDenyHint: string
     readonly: string
     readonlyHint: string
     noViewPermission: { title: string; body: string }
@@ -5286,11 +5256,6 @@ export interface Resources {
       S6: {
         acknowledge: { label: string; desc: string }
       }
-      // RFC-205 / 2026-08-04 audit: degraded containment — the fix is on the
-      // host or in Settings, so the in-product option is an acknowledge.
-      'sandbox-degraded': {
-        acknowledge: { label: string; desc: string }
-      }
     }
   }
   // RFC-099 — ownership ACL + attribution UI
@@ -5684,13 +5649,9 @@ export const zhCN: Resources = {
       item: {
         ready: '{{name}} v{{version}}',
         readyNoVersion: '{{name}} 可用',
-        availableUnverifiedVersion: '{{name}} v{{version}} · 协议尚未测试',
-        availableUnverified: '{{name}} 可执行 · 协议尚未测试',
         missing: '{{name}} 未找到',
         unlaunchable: '{{name}} 无法启动',
         protocolIncompatible: '{{name}} 协议不兼容',
-        containmentBlocked: '{{name}} 被隔离策略阻止',
-        degraded: '{{name}} 可运行 · 隔离已降级',
       },
     },
     section: {
@@ -6617,13 +6578,9 @@ export const zhCN: Resources = {
       narrativeTitle: '变更导读',
       narrativeHint: '为任务代码变更生成总述、分组一句话与推荐阅读顺序的内置 agent（RFC-239）。',
       intentTitle: '意图构建',
-      intentHint:
-        '把自然语言目标转成工作流/工作组/代理/技能变更集的内置 agent（RFC-234）；需选择能实施只读构建 profile 的运行时。',
+      intentHint: '把自然语言目标转成工作流/工作组/代理/技能变更集的内置 agent（RFC-234）。',
       intentRuntime: '意图构建运行时',
-      intentRuntimeHint:
-        '仅可选能实施只读意图构建 profile 的运行时；留空继承全局默认（默认值同样须满足）。',
-      intentRuntimeClaudeNote:
-        'Claude Code 通过声明式 CLI 权限实施只读（封印二进制 + 工具白名单）。两种运行时均不做启动后的配置验证（attestation）。',
+      intentRuntimeHint: '用于生成意图变更集的运行时；留空继承全局默认。',
       intentLang: '产物语言',
       intentLangHint: '生成的 prompt/描述所用语言；默认跟随使用者输入语言。',
       intentLangDefault: '跟随输入',
@@ -6760,30 +6717,6 @@ export const zhCN: Resources = {
       testEndpointMissing: '未配置',
       testJwksUnreachable: 'JWKS 已配置但不可达——携带 id_token 的登录将失败。',
     },
-    sandbox: {
-      title: '运行时沙箱',
-      chipActive: '沙箱：{{mechanism}}',
-      chipUnavailable: '沙箱不可用',
-      chipOff: '沙箱关闭',
-      modeLabel: '沙箱模式',
-      modeEnforce: '强制',
-      modeWarn: '告警',
-      modeOff: '关闭',
-      modeHint:
-        '强制（enforce）：沙箱机制不可用时拒绝启动新任务；告警（warn）：不可用时降级为无沙箱运行并发出告警；关闭（off）：从不启用沙箱。',
-      enforceUnavailable:
-        '当前 provider 未满足全部必要隔离能力；强制档位下，新任务与在跑任务的后续节点都会被拒绝。',
-      warnDegraded:
-        '隔离能力已降级。告警档位仍允许执行，但模型可触达的子进程可能访问宿主资源或网络。',
-      lifetimeBestEffort:
-        '当前 provider 已启用文件系统与网络隔离基线，但此平台对子孙进程生命周期的清理仅为尽力而为。',
-      reasonCodes: '原因：{{codes}}',
-      cliHint: '在服务器上运行 `agent-workflow sandbox` 查看安装 / 修复指引。',
-      mismatchTitle: '已保存模式与当前生效模式不一致',
-      mismatchBody:
-        '配置文件保存的是 {{configured}}，当前 daemon 仍使用 {{effective}}。可立即应用已保存模式，或重启 daemon。',
-      applyConfigured: '立即应用已保存模式',
-    },
   },
   onboarding: {
     title: '欢迎使用 Agent Workflow',
@@ -6875,7 +6808,7 @@ export const zhCN: Resources = {
     },
   },
   guide: {
-    // RFC-211 §12 impl-gate P3-1（2026-07-21）：沙盒时代死键随 example 概念一并清除，仅存 tour 启动页 9 个活键。
+    // 已退役的示例流程死键随概念一并清除，仅保留 tour 启动页活键。
     title: '上手引导',
     handholdIntro: '想让我在真实界面上一步步带你走一遍？从建代理到启动任务、看结果，全程高亮指引。',
     startTour: '手把手带我走一遍',
@@ -7148,13 +7081,14 @@ export const zhCN: Resources = {
     fieldExtraArgs: '附加命令行参数',
     fieldExtraArgsHint:
       '追加到该运行时每次启动 argv 末尾的 fork 私有参数（如 --skip-safe-check）。平台保留的参数会在保存时被拒绝。仅 claude-code 协议可用。',
+    fieldIsSandbox: '设置 IS_SANDBOX=1',
+    fieldIsSandboxHint:
+      '仅用于 Claude CLI 兼容；不会启用 OS 沙箱，也不会增加平台安全防护。默认关闭。',
     configDirEnvInvalid: '必须是合法的环境变量名（字母、数字、下划线，不以数字开头）。',
     configDirEnvReserved: '该变量名被平台保留（会与注入机制冲突），请换一个。',
     configDirNameInvalid: '必须是单层目录名：不能含路径分隔符，也不能是 "." 或 ".."。',
     fieldModel: '模型',
-    fieldModelHint: '该运行时上的 agent 启动时所用模型。OpenCode 必须显式选择模型。',
-    modelRequired: '请先选择显式模型，再保存或测试此 OpenCode 运行时。',
-    modelRequiredChip: '需要模型',
+    fieldModelHint: '可选：传给该运行时的模型。留空时由 CLI 使用自己的默认值。',
     fieldVariant: '变体',
     fieldTemperature: '温度',
     fieldSteps: '步数',
@@ -7175,7 +7109,6 @@ export const zhCN: Resources = {
       'network-blocked': '网络不可达',
       'model-call-failed': '模型调用失败',
       'stream-nonconforming': '不符合',
-      'execution-identity-failed': '执行身份校验失败',
     },
   },
   agents: {
@@ -8519,15 +8452,12 @@ export const zhCN: Resources = {
       'script-port-missing': '脚本的信封里缺少已声明的输出端口。',
       'script-interpreter-missing': '宿主上找不到该脚本语言的解释器。',
       'script-deps-install-failed': '脚本依赖安装失败。',
-      'script-network-fence-unavailable':
-        '该节点声明了禁止出网，但宿主无法提供网络围栏，已拒绝执行。',
-      'script-readonly-fence-unavailable':
-        '该节点声明了只读，但宿主无法提供只读边界，已拒绝执行——只读节点直接跑在规范工作区上，边界缺失时它比普通节点更危险。',
-      'script-containment-unavailable':
-        '隔离机制不可用，而当前档位要求强制隔离，已拒绝执行。可在服务器上运行 `agent-workflow sandbox` 查看安装 / 修复指引。',
       'script-spawn-failed': '脚本进程无法启动。',
       'runtime-result-error':
         '运行时报告了终止错误（鉴权被拒 / 用量额度 / 网关错误），不是提示词或输出协议的问题。详情见错误信息；重试同样的输入不会改变结果。',
+      'runtime-stream-interrupted': '运行时输出流在结果安全持久化之前中断。',
+      'runtime-stream-interrupted__hint':
+        '自动重试次数耗尽后，可点「继续任务」启动新的运行时进程。',
       'envelope-missing': '代理没有按约定格式输出结果（缺少输出信封）。',
       'envelope-missing__hint': '通常是模型没有遵循输出协议——可点「继续任务」重试该节点。',
       'clarify-and-output-both': '代理同时提交了反问与结果，格式冲突。',
@@ -8537,67 +8467,6 @@ export const zhCN: Resources = {
       'envelope-port-malformed': '代理输出的端口标签不完整（可能被截断）。',
       'port-validation-failed': '代理输出的端口内容未通过校验。',
       'port-validation-failed__hint': '查看节点详情里的端口校验信息，点「继续任务」重试。',
-      'execution-identity-untrusted-binary':
-        '所选 OpenCode 可执行文件无法为本次运行完成冻结与校验。',
-      'execution-identity-untrusted-binary__hint':
-        '请检查配置的可执行文件路径与权限，然后重新运行运行时测试。',
-      'execution-identity-sandbox-required':
-        '本次 OpenCode 运行要求平台隔离，但所需能力当前不可用。',
-      'execution-identity-sandbox-required__hint':
-        '请启用受支持的隔离 provider；也可显式选择「警告」或「关闭」接受降级运行。',
-      'execution-identity-containment-required':
-        '当前生效策略要求平台隔离，但本次运行未通过所需 capability 的精确资格检查。',
-      'execution-identity-containment-required__hint':
-        '请到「设置 → 运行时」查看生效档位与原因；若已保存「警告/关闭」，请立即应用该档位，或修复 provider 后重试。',
-      'execution-identity-project-config-unsupported':
-        '工作区含有无法安全隔离的 OpenCode 项目配置。',
-      'execution-identity-project-config-unsupported__hint':
-        '请移除错误详情指出的项目配置或符号链接，再发起新运行。',
-      // RFC-251 已废弃下面三个码：现在没有任何路径会产生它们，但升级前失败的
-      // 任务仍带着它们，故保留文案用于历史渲染。
-      'execution-identity-plugin-unsupported':
-        '历史失败：这个任务运行时，OpenCode 运行时还不支持插件。',
-      'execution-identity-plugin-unsupported__hint': '该限制已经移除，重新运行不会再被它挡住。',
-      'execution-identity-dependent-unsupported':
-        '历史失败：这个任务运行时，OpenCode 运行时还不支持调用其他代理。',
-      'execution-identity-dependent-unsupported__hint': '该限制已经移除，重新运行不会再被它挡住。',
-      'execution-identity-instance-changed':
-        '历史失败：当时的身份校验发现 OpenCode server 实例发生了变化；该校验已不再执行。',
-      'execution-identity-instance-changed__hint': '该校验步骤已经移除，重新运行不会再被它挡住。',
-      'execution-identity-model-unresolved': '本次运行没有显式选择 OpenCode 模型。',
-      'execution-identity-model-unresolved__hint':
-        '请为生效运行时选择 provider/model，再重新发起。',
-      'execution-identity-auth-invalid': '所选 provider 凭据不符合已验证的认证契约。',
-      'execution-identity-auth-invalid__hint': '请更新 provider API 凭据后重新发起新运行。',
-      'execution-identity-provider-untrusted': '所选模型 provider 与已验证的运行时清单不一致。',
-      'execution-identity-provider-untrusted__hint':
-        '请选择当前 OpenCode 运行时实际提供的 provider/model；若使用自定义 provider，请检查它是否仍存在、端点与模型清单是否与配置一致。',
-      'execution-identity-bootstrap-failed': 'OpenCode 在模型执行前未通过启动完整性检查。',
-      'execution-identity-bootstrap-failed__hint': '请查看运行时诊断，修复主机环境后重新发起。',
-      'execution-identity-mismatch': 'OpenCode 最终解析的执行配置与密封配置不一致。',
-      'execution-identity-mismatch__hint': '请移除外部覆盖、修正运行时配置后重新发起新运行。',
-      'execution-identity-source-changed': '启动期间工作区的执行身份来源发生了变化。',
-      'execution-identity-source-changed__hint': '请停止并发配置修改，再重新发起新运行。',
-      'execution-identity-skill-mismatch': '生成不可变快照期间，所选托管技能发生了变化。',
-      'execution-identity-skill-mismatch__hint': '请完成技能更新、重新加载代理配置后再发起。',
-      'execution-identity-session-mismatch': 'OpenCode 会话与本任务运行的密封身份不一致。',
-      'execution-identity-session-mismatch__hint': '请创建新会话，不要复用本任务链之外创建的会话。',
-      'execution-identity-session-owned': 'OpenCode 会话已被另一个活动运行租用。',
-      'execution-identity-session-owned__hint': '请等待活动运行结束，或先修复其生命周期再继续。',
-      'execution-identity-control-failed': '已验证 launcher 与调度器未能完成控制握手。',
-      'execution-identity-control-failed__hint': '请查看 daemon 诊断，解决控制故障后重新发起。',
-      'execution-identity-stream-failed': '已验证 OpenCode 事件流不符合预期协议。',
-      'execution-identity-stream-failed__hint':
-        '请查看运行时诊断后重新发起；系统不会自动重试此故障。',
-      'execution-identity-timeout': 'OpenCode 身份校验或直接执行超时。',
-      'execution-identity-timeout__hint': '请检查 provider 与主机健康状态后重新发起。',
-      'execution-identity-custom-provider-disabled':
-        '历史失败：该运行选中的模型属于一个已停用的平台自定义 provider（该功能已移除）。',
-      'execution-identity-custom-provider-disabled__hint':
-        '现在改由机器自身的 opencode 配置提供模型，重新发起即可。',
-      'execution-identity-store-unsafe': 'OpenCode 私有会话存储未通过安全检查。',
-      'execution-identity-store-unsafe__hint':
-        '确认没有活动运行后，修复或移除错误详情指出的私有存储。',
       summary: {
         snapshotLost: '任务的工作区快照丢失，无法从原位置继续。',
         snapshotInvalid: '任务的工作区快照已失效。',
@@ -8667,8 +8536,6 @@ export const zhCN: Resources = {
         S4: 'task 长时间处于 pending，调度器未拣选',
         S5: 'task 在 running 且存在活跃 node_run，但事件流长时间停滞',
         S6: 'task 在 awaiting_review/awaiting_human，但所有成员（属主+协作者）均非活跃，无人可应答',
-        'sandbox-degraded':
-          '隔离档位为 warn，但宿主无法提供隔离边界，本任务在边界被削弱（或缺失）的情况下运行过',
       },
       repair: {
         openButton: '修复…',
@@ -10481,7 +10348,6 @@ export const zhCN: Resources = {
     // 中文无单复数变化，两档同文——与仓内 wgRow_one/_other 先例一致。
     dependencyCount_one: '{{count}} 个依赖',
     dependencyCount_other: '{{count}} 个依赖',
-    networkDeny: '无网络',
     readonly: '只读',
   },
   scriptInspector: {
@@ -10517,8 +10383,6 @@ export const zhCN: Resources = {
     envValue: '值',
     envAdd: '新增变量',
     envRemove: '删除变量',
-    networkDeny: '禁止访问网络',
-    networkDenyHint: '依赖照常安装；脚本本身在无网环境下执行。',
     readonly: '只读工作区',
     readonlyHint: '不建隔离工作区、不合并回写。脚本无法修改仓库文件。',
     noViewPermission: {
@@ -10721,59 +10585,6 @@ export const zhCN: Resources = {
     'ws-unknown-channel': '实时通道不存在。',
     'internal-error': '服务内部错误。',
     'internal-error__hint': '稍后重试；若持续出现，请查看 daemon 日志。',
-    // RFC-224：API/save/probe 与任务失败复用同一组稳定文案。
-    'execution-identity-untrusted-binary': '$t(tasks.failure.execution-identity-untrusted-binary)',
-    'execution-identity-untrusted-binary__hint':
-      '$t(tasks.failure.execution-identity-untrusted-binary__hint)',
-    'execution-identity-sandbox-required': '$t(tasks.failure.execution-identity-sandbox-required)',
-    'execution-identity-sandbox-required__hint':
-      '$t(tasks.failure.execution-identity-sandbox-required__hint)',
-    'execution-identity-containment-required':
-      '$t(tasks.failure.execution-identity-containment-required)',
-    'execution-identity-containment-required__hint':
-      '$t(tasks.failure.execution-identity-containment-required__hint)',
-    'execution-identity-project-config-unsupported':
-      '$t(tasks.failure.execution-identity-project-config-unsupported)',
-    'execution-identity-project-config-unsupported__hint':
-      '$t(tasks.failure.execution-identity-project-config-unsupported__hint)',
-    'execution-identity-model-unresolved': '$t(tasks.failure.execution-identity-model-unresolved)',
-    'execution-identity-model-unresolved__hint':
-      '$t(tasks.failure.execution-identity-model-unresolved__hint)',
-    'execution-identity-auth-invalid': '$t(tasks.failure.execution-identity-auth-invalid)',
-    'execution-identity-auth-invalid__hint':
-      '$t(tasks.failure.execution-identity-auth-invalid__hint)',
-    'execution-identity-provider-untrusted':
-      '$t(tasks.failure.execution-identity-provider-untrusted)',
-    'execution-identity-provider-untrusted__hint':
-      '$t(tasks.failure.execution-identity-provider-untrusted__hint)',
-    'execution-identity-bootstrap-failed': '$t(tasks.failure.execution-identity-bootstrap-failed)',
-    'execution-identity-bootstrap-failed__hint':
-      '$t(tasks.failure.execution-identity-bootstrap-failed__hint)',
-    'execution-identity-mismatch': '$t(tasks.failure.execution-identity-mismatch)',
-    'execution-identity-mismatch__hint': '$t(tasks.failure.execution-identity-mismatch__hint)',
-    'execution-identity-source-changed': '$t(tasks.failure.execution-identity-source-changed)',
-    'execution-identity-source-changed__hint':
-      '$t(tasks.failure.execution-identity-source-changed__hint)',
-    'execution-identity-skill-mismatch': '$t(tasks.failure.execution-identity-skill-mismatch)',
-    'execution-identity-skill-mismatch__hint':
-      '$t(tasks.failure.execution-identity-skill-mismatch__hint)',
-    'execution-identity-session-mismatch': '$t(tasks.failure.execution-identity-session-mismatch)',
-    'execution-identity-session-mismatch__hint':
-      '$t(tasks.failure.execution-identity-session-mismatch__hint)',
-    'execution-identity-session-owned': '$t(tasks.failure.execution-identity-session-owned)',
-    'execution-identity-session-owned__hint':
-      '$t(tasks.failure.execution-identity-session-owned__hint)',
-    'execution-identity-control-failed': '$t(tasks.failure.execution-identity-control-failed)',
-    'execution-identity-control-failed__hint':
-      '$t(tasks.failure.execution-identity-control-failed__hint)',
-    'execution-identity-stream-failed': '$t(tasks.failure.execution-identity-stream-failed)',
-    'execution-identity-stream-failed__hint':
-      '$t(tasks.failure.execution-identity-stream-failed__hint)',
-    'execution-identity-timeout': '$t(tasks.failure.execution-identity-timeout)',
-    'execution-identity-timeout__hint': '$t(tasks.failure.execution-identity-timeout__hint)',
-    'execution-identity-store-unsafe': '$t(tasks.failure.execution-identity-store-unsafe)',
-    'execution-identity-store-unsafe__hint':
-      '$t(tasks.failure.execution-identity-store-unsafe__hint)',
     'invalid-json': '请求内容不是有效 JSON。',
     'invalid-body': '请求内容不合法。',
     'import-ref-unresolved': '导入内容引用了当前不可用的资源。',
@@ -11064,9 +10875,6 @@ export const zhCN: Resources = {
     'workgroup-config-conflict__hint': '刷新房间后重新调整成员。',
     'workgroup-member-running': '该成员仍在执行派单，暂时不能移除。',
     'workgroup-config-empty': '没有任何改动可保存。',
-    'sandbox-unavailable': '隔离机制在本机不可用，而当前档位要求强制隔离，任务未启动。',
-    'sandbox-unavailable__hint':
-      '在服务器上运行 `agent-workflow sandbox` 查看安装 / 修复指引（Linux 装 bubblewrap、开启非特权用户命名空间），或到「设置 → 运行时」把隔离档位调为 warn。',
     // --- repo / git / worktree（用户可触发子集，其余走域兜底） ---
     'repo-url-invalid': '仓库地址不受支持或格式错误。',
     'repo-clone-failed': 'git clone 失败。',
@@ -11742,12 +11550,6 @@ export const zhCN: Resources = {
         acknowledge: {
           label: '确认知悉（不改数据）',
           desc: '该任务所有成员（属主+协作者）均非活跃，无人能应答 review/clarify。恢复需重新启用被停用的用户、邀请新协作者或转移属主——属于用户管理操作，不在修复引擎内。确认仅关闭该告警。',
-        },
-      },
-      'sandbox-degraded': {
-        acknowledge: {
-          label: '确认知悉（不改数据）',
-          desc: '隔离档位为 warn 且宿主无法提供边界，本任务在边界被削弱的情况下跑过。真正的修法在宿主侧：在服务器上运行 `agent-workflow sandbox` 查看安装 / 修复指引（Linux 装 bubblewrap、开启非特权用户命名空间），或到「设置 → 运行时」改隔离档位。确认仅关闭该告警。',
         },
       },
     },

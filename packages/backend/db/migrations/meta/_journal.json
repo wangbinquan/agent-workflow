@@ -1002,6 +1002,13 @@
       "when": 1788278400017,
       "tag": "0143_rfc277_gitlab_tls_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "6",
+      "when": 1788278400018,
+      "tag": "0144_rfc276_runtime_hardening_deprecation",
+      "breakpoints": true
     }
   ]
 }

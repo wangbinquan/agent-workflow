@@ -11,7 +11,7 @@
 // privileged-node-redaction.test.ts` 里那条「脱敏∘回填后敏感投影不变」的不变式
 // 测试是这条约束的守门人。
 //
-// ⚠ 绝不脱敏枚举字段。`language` / `network` / `readonly` / `provider` /
+// ⚠ 绝不脱敏枚举字段。`language` / `readonly` / `provider` /
 // `request.method` / `allowDestructive` / `timeoutMs` 一律原样透出：把它们脱成
 // `'***'` 会让 `ScriptNodeSchema` / `CodeHostCallNodeSchema` 严格解析失败，而
 // `workflow.validator.ts` 正是拿这两个 schema 做严格再解析的（脚本 :1180 /
@@ -47,7 +47,7 @@ export function lensIsTransparent(lens: PrivilegedNodeLens): boolean {
 /**
  * 脚本节点里 `scripts:author` 治理的**内容**字段。
  *
- * 刻意不含 `language` / `network` / `readonly` / `outputs`：前三个是枚举、
+ * 刻意不含 `language` / `readonly` / `outputs`：前两个是结构字段、
  * `outputs` 是端口名（下游连线按名字引用它，遮了整张图的拓扑就断了）。
  */
 export const SCRIPT_REDACTED_FIELDS = ['script', 'env', 'dependencies'] as const

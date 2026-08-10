@@ -277,7 +277,7 @@ describe('runSystemAgent', () => {
     expect(existsSync(target)).toBe(true)
   })
 
-  test('plan cleanup failure is an identity failure even when scratch is intentionally retained', async () => {
+  test('plan cleanup failure is a spawn failure even when scratch is intentionally retained', async () => {
     const scratchParent = scratchParentDir()
     const r = await runSystemAgent({
       ...baseOpts(scratchParent, '/bin/sh'),
@@ -296,8 +296,8 @@ describe('runSystemAgent', () => {
       }),
     })
     expect(r).toMatchObject({
-      status: 'identity-failed',
-      failureCode: 'execution-identity-store-unsafe',
+      status: 'spawn-failed',
+      stderrTail: 'runtime cleanup failed',
       scratchRetained: true,
     })
     expect(existsSync(join(scratchParent, 'turn-cleanup-failure'))).toBe(true)
@@ -419,34 +419,16 @@ describe('runSystemAgent', () => {
     expect(JSON.stringify(warnings)).toContain('‹redacted›')
   })
 
-  // RFC-234 e2e seam: an UNBRANDED opencodeCmd rides the same legacy escape
-  // the business path has (only reachable from tests / the e2e binary where
-  // production branding is compiled out); a BRANDED command without the
-  // explicit test flag must still hit the verified system plan (here: fails
-  // identity because no auth/attestation exists — the fail-closed posture).
-  test('opencodeCmd branding decides verified vs legacy system path', async () => {
+  test('an explicit OpenCode command head follows the ordinary system path', async () => {
     process.env.MOCK_OPENCODE_ECHO_PROMPT = '1'
-    const { markProductionOpencodeCommand } = await import('../src/util/opencode')
     const scratchParent = scratchParentDir()
     const binary = wrapperFor(MOCK_OPENCODE)
 
-    const { testOnlyUnverifiedRuntime: _drop, ...optsWithoutFlag } = baseOpts(scratchParent, binary)
-    // Unbranded command, no test flag → legacy path runs the stub fine.
-    const legacy = await runSystemAgent({
-      ...optsWithoutFlag,
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParent, binary),
       opencodeCmd: binary,
-      scratchName: 'turn-unbranded',
+      scratchName: 'turn-explicit-head',
     })
-    expect(legacy.status).toBe('ok')
-
-    // Branded command, no test flag → verified plan → identity failure
-    // (source-run tests have no sealed binary/auth; must NOT silently fall
-    // back to the legacy spawn).
-    const verified = await runSystemAgent({
-      ...optsWithoutFlag,
-      opencodeCmd: markProductionOpencodeCommand([...binary]),
-      scratchName: 'turn-branded',
-    })
-    expect(verified.status).toBe('identity-failed')
+    expect(result.status).toBe('ok')
   })
 })

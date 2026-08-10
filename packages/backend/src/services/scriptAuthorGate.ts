@@ -82,6 +82,6 @@ export function assertScriptAuthorAllowed(input: {
 
   throw new ForbiddenError(
     'script-author-forbidden',
-    'changing a script node (its body, language, dependencies, environment, network or write mode, its inbound wiring, or its wrapper placement) requires the scripts:author permission',
+    'changing a script node (its body, language, dependencies, environment or write mode, its inbound wiring, or its wrapper placement) requires the scripts:author permission',
   )
 }

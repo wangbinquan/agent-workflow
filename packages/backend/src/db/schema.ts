@@ -45,10 +45,6 @@ export const agents = sqliteTable(
     // were dropped (DROP via migration 0057) — generation params now live solely
     // on the runtime profile (RFC-113); the agent only SELECTS a runtime by name.
     runtime: text('runtime'),
-    // RFC-252 G4: 'deny' | 'allow' | NULL. NULL = 未表态 = deny（存量行全是 NULL，
-    // 行为必须字节不变）。只有精确 'allow' 才是授权：mapper 对 NULL **省略**而不是
-    // 透出 null，杜绝下游用 `?? ` / 真值判断把「没表态」读成「放行」。
-    network: text('network'),
     permission: text('permission').notNull().default('{}'), // JSON: opencode permission schema
     skills: text('skills').notNull().default('[]'), // JSON string[]
     // RFC-022: agent name list (JSON string[]) of agents this one transitively
@@ -140,6 +136,10 @@ export const runtimes = sqliteTable('runtimes', {
   temperature: real('temperature'),
   steps: integer('steps'),
   maxSteps: integer('max_steps'),
+  // RFC-276: Claude CLI compatibility toggle. This only controls whether the
+  // child receives IS_SANDBOX=1; it does not enable or attest an OS sandbox.
+  // Off by default so natural runtime execution stays the baseline.
+  isSandbox: integer('is_sandbox', { mode: 'boolean' }).notNull().default(false),
   // RFC-154: config-dir injection overrides for custom forks that renamed the
   // env var / leaf dir they discover their config dir through. NULL = protocol
   // default (shared DEFAULT_CONFIG_DIR_PROFILE: OPENCODE_CONFIG_DIR/.opencode,
@@ -152,20 +152,16 @@ export const runtimes = sqliteTable('runtimes', {
   /**
    * 2026-08-04 (CodeAgent/GLM fork deployment): extra argv tokens appended to
    * every spawn of this runtime (JSON string array; NULL = none). claude-code
-   * protocol only — forks carry private flags (`--skip-safe-check`) official
-   * binaries reject, while opencode's verified serve argv is sealed and takes
-   * no user tokens. Platform-owned flags are rejected at write time
-   * (validateExtraArgs); frozen into runtime_params_json like the profile.
+   * protocol only — Claude-compatible forks may carry private flags that the
+   * official binary rejects. Platform-owned flags are rejected at write time
+   * (validateExtraArgs); values are snapshotted into runtime_params_json.
    */
   extraArgsJson: text('extra_args_json'),
-  // RFC-112/RFC-224: target-bound deep-smoke receipt (JSON); NULL = never
-  // probed/invalidated. Display-only — conformance is advisory (an admin may
-  // save an auth-unverified custom runtime).
+  // Target-bound smoke receipt (JSON); NULL = never probed/invalidated.
+  // Display-only — conformance is advisory.
   lastProbeJson: text('last_probe_json'),
-  // RFC-224: persisted generation for the exact execution target described by
-  // last_probe_json. Profile edits and inherited daemon-config binary changes
-  // bump it, so an in-flight probe can CAS only against the target it actually
-  // exercised (including mutations that live outside SQLite).
+  // Persisted generation for the runtime target described by last_probe_json.
+  // Profile edits bump it so an in-flight probe can CAS against what it tested.
   probeFence: integer('probe_fence').notNull().default(0),
   createdBy: text('created_by'), // admin users.id who registered it (audit; NULL for built-ins)
   createdAt: integer('created_at')
@@ -2818,41 +2814,32 @@ export const taskQuestions = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
-// RFC-224 — immutable OpenCode session provenance + single-writer lease.
-//
-// Multiple node_runs may link to one session during inline resume; this table
-// is the sole owner. Only task_id is a physical FK: created/lease run ids are
-// logical pointers so pruning run history cannot cascade-delete session state.
+// A runtime-native conversation may have at most one writer. This is a product
+// concurrency lease only: it carries no executable/config/store provenance.
+// Only task_id is a physical FK; node-run ids remain logical pointers so
+// pruning run history cannot cascade-delete a still-observable session.
 // -----------------------------------------------------------------------------
-export const opencodeSessionOwners = sqliteTable(
-  'opencode_session_owners',
+export const runtimeSessionLeases = sqliteTable(
+  'runtime_session_leases',
   {
-    sessionId: text('session_id').primaryKey(),
+    protocol: text('protocol', { enum: ['opencode', 'claude-code'] }).notNull(),
+    sessionId: text('session_id').notNull(),
     taskId: text('task_id')
       .notNull()
       .references(() => tasks.id, { onDelete: 'cascade' }),
     nodeId: text('node_id').notNull(),
     createdNodeRunId: text('created_node_run_id').notNull(),
-    identityDigest: text('identity_digest').notNull(),
-    runtimeBinaryDigest: text('runtime_binary_digest').notNull(),
-    sessionContractDigest: text('session_contract_digest').notNull(),
-    sessionStoreKey: text('session_store_key').notNull(),
-    projectId: text('project_id').notNull(),
-    protocolCodec: text('protocol_codec').notNull(),
-    reportedVersion: text('reported_version'),
     leaseNodeRunId: text('lease_node_run_id'),
     leaseNonceDigest: text('lease_nonce_digest'),
     leasedAt: integer('leased_at'),
   },
   (t) => ({
-    sessionStoreKeyUnique: uniqueIndex('uniq_opencode_session_owners_store_key').on(
-      t.sessionStoreKey,
-    ),
-    taskIdx: index('idx_opencode_session_owners_task').on(t.taskId),
-    createdRunIdx: index('idx_opencode_session_owners_created_run').on(t.createdNodeRunId),
-    leaseRunIdx: index('idx_opencode_session_owners_lease_run').on(t.leaseNodeRunId),
+    pk: primaryKey({ columns: [t.protocol, t.sessionId] }),
+    taskIdx: index('idx_runtime_session_leases_task').on(t.taskId),
+    createdRunIdx: index('idx_runtime_session_leases_created_run').on(t.createdNodeRunId),
+    leaseRunIdx: index('idx_runtime_session_leases_lease_run').on(t.leaseNodeRunId),
     leaseAllOrNone: check(
-      'opencode_session_owners_lease_all_or_none',
+      'runtime_session_leases_all_or_none',
       sql`(
         (
           ${t.leaseNodeRunId} IS NULL
@@ -2867,17 +2854,21 @@ export const opencodeSessionOwners = sqliteTable(
         )
       )`,
     ),
+    protocolShape: check(
+      'runtime_session_leases_protocol_shape',
+      sql`${t.protocol} IN ('opencode', 'claude-code')`,
+    ),
   }),
 )
 
 // -----------------------------------------------------------------------------
-// RFC-238 — private, multi-turn MCP runtime playground state.
+// RFC-238 — multi-turn MCP runtime playground state.
 //
 // A logical test session owns one runtime-native conversation and accepts at
 // most one turn at a time. Closing the UI never mutates these rows; only an
 // accepted message clears the idle deadline, and turn settlement reinstates the
 // 10-minute deadline. MCP/user FKs are RESTRICT so destructive resource
-// mutations must first cross the process-reap + store-cleanup barrier.
+// mutations must first cross the process-reap + scratch-cleanup barrier.
 // -----------------------------------------------------------------------------
 export const mcpRuntimeTestSessions = sqliteTable(
   'mcp_runtime_test_sessions',
@@ -2903,7 +2894,7 @@ export const mcpRuntimeTestSessions = sqliteTable(
         'runtime-disabled',
         'runtime-deleted',
         'runtime-profile-changed',
-        'runtime-identity-changed',
+        'runtime-session-reset',
         'capture-truncated',
         'capture-incomplete',
         'session-unusable',
@@ -2917,12 +2908,8 @@ export const mcpRuntimeTestSessions = sqliteTable(
     }).notNull(),
     /** Secret-free frozen runtime profile used for resume drift checks. */
     runtimeSnapshotJson: text('runtime_snapshot_json').notNull(),
-    runtimeFingerprint: text('runtime_fingerprint').notNull(),
     /** Internal-only exact executable path; never projected to the API. */
     runtimeBinaryPath: text('runtime_binary_path').notNull(),
-    runtimeBinaryDigest: text('runtime_binary_digest'),
-    mcpExecutionDigest: text('mcp_execution_digest'),
-    sessionContractDigest: text('session_contract_digest'),
     runtimeSessionId: text('runtime_session_id'),
     nativeSessionState: text('native_session_state', {
       enum: ['pending', 'ready', 'unusable'],
@@ -2937,17 +2924,11 @@ export const mcpRuntimeTestSessions = sqliteTable(
       enum: [
         'mcp-config-changed',
         'runtime-profile-changed',
-        'runtime-identity-changed',
-        'mcp-execution-changed',
         'capture-truncated',
         'capture-incomplete',
-        'session-root-mismatch',
-        'session-store-missing',
       ],
     }),
     scratchRoot: text('scratch_root').notNull(),
-    sessionStoreRoot: text('session_store_root').notNull(),
-    sessionStoreDbPath: text('session_store_db_path'),
     cleanupState: text('cleanup_state', {
       enum: ['not-started', 'pending', 'complete', 'quarantined'],
     })
@@ -3013,9 +2994,7 @@ export const mcpRuntimeTestSessions = sqliteTable(
       sql`length(${t.clientCreateDigest}) = 64
         AND ${t.clientCreateDigest} NOT GLOB '*[^0-9a-f]*'
         AND length(${t.mcpConfigHash}) = 64
-        AND ${t.mcpConfigHash} NOT GLOB '*[^0-9a-f]*'
-        AND length(${t.runtimeFingerprint}) = 64
-        AND ${t.runtimeFingerprint} NOT GLOB '*[^0-9a-f]*'`,
+        AND ${t.mcpConfigHash} NOT GLOB '*[^0-9a-f]*'`,
     ),
     enumShape: check(
       'mcp_runtime_test_sessions_enum_shape',
@@ -3029,7 +3008,7 @@ export const mcpRuntimeTestSessions = sqliteTable(
             'user', 'idle-timeout', 'mcp-deleted', 'mcp-disabled',
             'mcp-config-changed', 'access-revoked', 'runtime-disabled',
             'runtime-deleted', 'runtime-profile-changed',
-            'runtime-identity-changed', 'capture-truncated',
+            'runtime-session-reset', 'capture-truncated',
             'capture-incomplete', 'session-unusable'
           )
         )
@@ -3037,35 +3016,11 @@ export const mcpRuntimeTestSessions = sqliteTable(
           ${t.continuationBlockedReason} IS NULL
           OR ${t.continuationBlockedReason} IN (
             'mcp-config-changed', 'runtime-profile-changed',
-            'runtime-identity-changed', 'mcp-execution-changed',
-            'capture-truncated', 'capture-incomplete',
-            'session-root-mismatch', 'session-store-missing'
+            'capture-truncated', 'capture-incomplete'
           )
         )
         AND ${t.turnSeq} >= 0
         AND ${t.sessionVersion} >= 0`,
-    ),
-    digestShape: check(
-      'mcp_runtime_test_sessions_digest_shape',
-      sql`(
-        (
-          ${t.runtimeBinaryDigest} IS NULL
-          AND ${t.mcpExecutionDigest} IS NULL
-          AND ${t.sessionContractDigest} IS NULL
-        )
-        OR
-        (
-          ${t.runtimeBinaryDigest} IS NOT NULL
-          AND ${t.mcpExecutionDigest} IS NOT NULL
-          AND ${t.sessionContractDigest} IS NOT NULL
-          AND length(${t.runtimeBinaryDigest}) = 64
-          AND ${t.runtimeBinaryDigest} NOT GLOB '*[^0-9a-f]*'
-          AND length(${t.mcpExecutionDigest}) = 64
-          AND ${t.mcpExecutionDigest} NOT GLOB '*[^0-9a-f]*'
-          AND length(${t.sessionContractDigest}) = 64
-          AND ${t.sessionContractDigest} NOT GLOB '*[^0-9a-f]*'
-        )
-      )`,
     ),
   }),
 )
@@ -3097,8 +3052,6 @@ export const mcpRuntimeTestTurns = sqliteTable(
     pid: integer('pid'),
     spawnedAt: integer('spawned_at'),
     spawnBinaryPath: text('spawn_binary_path'),
-    rawCommandDigest: text('raw_command_digest'),
-    spawnCommandDigest: text('spawn_command_digest'),
     exitCode: integer('exit_code'),
     failureCode: text('failure_code'),
     stderrTail: text('stderr_tail'),
@@ -3156,31 +3109,6 @@ export const mcpRuntimeTestTurns = sqliteTable(
             'succeeded', 'failed', 'canceled', 'timed_out', 'interrupted'
           )
           AND ${t.finishedAt} IS NOT NULL
-        )`,
-    ),
-    digestShape: check(
-      'mcp_runtime_test_turns_digest_shape',
-      sql`(
-          ${t.rawCommandDigest} IS NULL
-          OR (
-            length(${t.rawCommandDigest}) = 64
-            AND ${t.rawCommandDigest} NOT GLOB '*[^0-9a-f]*'
-          )
-        )
-        AND (
-          (
-            ${t.spawnedAt} IS NULL
-            AND ${t.spawnBinaryPath} IS NULL
-            AND ${t.spawnCommandDigest} IS NULL
-          )
-          OR
-          (
-            ${t.spawnedAt} IS NOT NULL
-            AND ${t.spawnBinaryPath} IS NOT NULL
-            AND ${t.spawnCommandDigest} IS NOT NULL
-            AND length(${t.spawnCommandDigest}) = 64
-            AND ${t.spawnCommandDigest} NOT GLOB '*[^0-9a-f]*'
-          )
         )`,
     ),
   }),
@@ -3259,28 +3187,22 @@ export const mcpRuntimeTestCreateReceipts = sqliteTable(
   }),
 )
 
-// OpenCode playground ownership deliberately does not reuse the task/business
-// owner table: a test session is not a Task or NodeRun.
-export const opencodeMcpTestSessionOwners = sqliteTable(
-  'opencode_mcp_test_session_owners',
+// Playground native-session single-writer lease. It deliberately does not
+// reuse the task lease table because a playground turn is not a NodeRun.
+export const mcpRuntimeTestSessionLeases = sqliteTable(
+  'mcp_runtime_test_session_leases',
   {
-    runtimeSessionId: text('runtime_session_id').primaryKey(),
+    protocol: text('protocol', { enum: ['opencode', 'claude-code'] }).notNull(),
+    runtimeSessionId: text('runtime_session_id').notNull(),
     testSessionId: text('test_session_id')
       .notNull()
-      .references(() => mcpRuntimeTestSessions.id, { onDelete: 'restrict' }),
+      .references(() => mcpRuntimeTestSessions.id, { onDelete: 'cascade' }),
     createdTurnId: text('created_turn_id')
       .notNull()
       .references(() => mcpRuntimeTestTurns.id, { onDelete: 'restrict' }),
     currentTurnId: text('current_turn_id')
       .notNull()
       .references(() => mcpRuntimeTestTurns.id, { onDelete: 'restrict' }),
-    identityDigest: text('identity_digest').notNull(),
-    runtimeBinaryDigest: text('runtime_binary_digest').notNull(),
-    sessionContractDigest: text('session_contract_digest').notNull(),
-    sessionStoreKey: text('session_store_key').notNull(),
-    projectId: text('project_id').notNull(),
-    protocolCodec: text('protocol_codec').notNull(),
-    reportedVersion: text('reported_version'),
     leaseTurnId: text('lease_turn_id').references(() => mcpRuntimeTestTurns.id, {
       onDelete: 'restrict',
     }),
@@ -3288,10 +3210,12 @@ export const opencodeMcpTestSessionOwners = sqliteTable(
     leaseNonceDigest: text('lease_nonce_digest'),
   },
   (t) => ({
-    testSessionUnique: uniqueIndex('uniq_opencode_mcp_test_owners_session').on(t.testSessionId),
-    storeUnique: uniqueIndex('uniq_opencode_mcp_test_owners_store_key').on(t.sessionStoreKey),
+    pk: primaryKey({ columns: [t.protocol, t.runtimeSessionId] }),
+    testSessionUnique: uniqueIndex('uniq_mcp_runtime_test_session_leases_test_session').on(
+      t.testSessionId,
+    ),
     leaseAllOrNone: check(
-      'opencode_mcp_test_owners_lease_all_or_none',
+      'mcp_runtime_test_session_leases_all_or_none',
       sql`(
         (
           ${t.leaseTurnId} IS NULL
@@ -3306,14 +3230,9 @@ export const opencodeMcpTestSessionOwners = sqliteTable(
         )
       )`,
     ),
-    digestShape: check(
-      'opencode_mcp_test_owners_digest_shape',
-      sql`length(${t.identityDigest}) = 64
-        AND ${t.identityDigest} NOT GLOB '*[^0-9a-f]*'
-        AND length(${t.runtimeBinaryDigest}) = 64
-        AND ${t.runtimeBinaryDigest} NOT GLOB '*[^0-9a-f]*'
-        AND length(${t.sessionContractDigest}) = 64
-        AND ${t.sessionContractDigest} NOT GLOB '*[^0-9a-f]*'
+    shape: check(
+      'mcp_runtime_test_session_leases_shape',
+      sql`${t.protocol} IN ('opencode', 'claude-code')
         AND (
           ${t.leaseNonceDigest} IS NULL
           OR (

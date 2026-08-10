@@ -18,7 +18,7 @@
 // The boundary group is the valuable one and it is NOT symmetric, which is
 // why it is enumerated field by field:
 //   - the sensitive projection of a script node covers id, language, script,
-//     outputs, dependencies, env, network, readonly, inbound edges and wrapper
+//     outputs, dependencies, env, readonly, inbound edges and wrapper
 //     ancestry (shared/scriptNode.ts serializeScriptSensitiveProjectionV1);
 //   - but rehydration only restores `script` / `env` / `dependencies`
 //     (SCRIPT_REDACTED_FIELDS) — and for code-host `params` / `request`.
@@ -126,7 +126,6 @@ const SCRIPT_NODE = {
   script: 'print("secret business logic")',
   dependencies: ['requests==2.32.3'],
   env: { TOKEN: 'real-value-in-storage' },
-  network: 'deny',
   readonly: true,
 } as const
 
@@ -534,7 +533,6 @@ describe('boundary: a plain user updating a workflow that already has a script n
   // SCRIPT_REDACTED_FIELDS: visible to the author, still untouchable.
   const untouchable: Array<[string, Record<string, unknown>]> = [
     ['language', { language: 'bash' }],
-    ['network', { network: 'allow' }],
     ['readonly', { readonly: false }],
     ['outputs', { outputs: [{ name: 'extra' }] }],
     ['id', { id: 'renamed' }],

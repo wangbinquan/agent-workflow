@@ -1,7 +1,7 @@
 // OpenCode binary discovery + observational version probe.
 //
-// RFC-227: reported versions are telemetry only. Actual compatibility is
-// decided by the verified direct-API behavior contract, never by semver.
+// Reported versions are telemetry only; runtime execution uses the configured
+// command directly and does not make semver an admission boundary.
 
 import { createLogger } from './log'
 import { loadConfig } from '@/config'
@@ -15,38 +15,6 @@ import { platformSpawnOptionsForHost } from '@/util/platformExec'
 export { compareSemver, extractVersion } from './semver'
 
 const log = createLogger('opencode')
-const PRODUCTION_OPENCODE_COMMANDS = new WeakSet<string[]>()
-
-/**
- * Compile-time-only Playwright seam.
- *
- * The shipped binary is always built with this symbol defined as `false`.
- * CI may additionally compile a distinct `agent-workflow-e2e-*` executable
- * with it set to `true`, allowing the browser harness's deterministic shell
- * fixture to travel through the existing unbranded dependency-injection path.
- * There is deliberately no env/config/HTTP switch that can enable this in a
- * production executable.
- */
-declare const AW_E2E_UNVERIFIED_OPENCODE: boolean
-const IS_E2E_UNVERIFIED_OPENCODE_BUILD =
-  typeof AW_E2E_UNVERIFIED_OPENCODE !== 'undefined' && AW_E2E_UNVERIFIED_OPENCODE
-
-/**
- * Production launch-head provenance. Tests historically inject thousands of
- * untrusted mock arrays through the same option; an in-memory brand lets the
- * driver keep that explicit dependency seam without mistaking config-derived
- * commands for test fixtures (or trusting a path/name convention).
- */
-export function markProductionOpencodeCommand(command: string[]): string[] {
-  if (IS_E2E_UNVERIFIED_OPENCODE_BUILD) return command
-  PRODUCTION_OPENCODE_COMMANDS.add(command)
-  return command
-}
-
-export function isProductionOpencodeCommand(command: readonly string[]): boolean {
-  return PRODUCTION_OPENCODE_COMMANDS.has(command as string[])
-}
-
 /**
  * RFC-135: optional knobs for the `--version` probes (opencode + claude-code).
  * Omitting both fields is byte-identical to the historical behavior for
@@ -190,7 +158,7 @@ export function resolveOpencodeCmd(configPath: string): string[] | undefined {
   try {
     const cfg = loadConfig(configPath)
     if (typeof cfg.opencodePath === 'string' && cfg.opencodePath.length > 0) {
-      return markProductionOpencodeCommand([cfg.opencodePath])
+      return [cfg.opencodePath]
     }
   } catch {
     // config unreadable — fall back to default PATH lookup

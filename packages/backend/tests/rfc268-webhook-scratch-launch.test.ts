@@ -79,7 +79,6 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
       {
         ownerUserId: owner.id,
         actor,
-        executionPolicy: { defaultRuntime: RUNTIME },
       },
     )
     const workgroup = await createWorkgroup(

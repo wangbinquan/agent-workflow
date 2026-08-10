@@ -9,7 +9,7 @@
 // 决策。红了 = 收口引入了行为漂移，先回滚该处重做（design §6）。
 
 import { describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -87,11 +87,33 @@ const log = createLogger('rfc143-test')
 
 /** 全量原材料的 ctx（inventory 默认关，逐 case 打开）。 */
 function mkCtx(runRoot: string, overrides: Partial<BusinessNodeSpawnContext> = {}) {
+  const worktreePath = join(runRoot, 'worktree')
+  mkdirSync(worktreePath, { recursive: true })
   const agent = mkAgent('root-agent')
   const dep = mkAgent('helper-agent')
   const params = new Map<string, RuntimeProfile>([
-    ['root-agent', { model: 'opus', variant: 'v1', temperature: 0.3, steps: null, maxSteps: 40 }],
-    ['helper-agent', { model: 'mini', variant: null, temperature: null, steps: 5, maxSteps: null }],
+    [
+      'root-agent',
+      {
+        model: 'opus',
+        variant: 'v1',
+        temperature: 0.3,
+        steps: null,
+        maxSteps: 40,
+        isSandbox: true,
+      },
+    ],
+    [
+      'helper-agent',
+      {
+        model: 'mini',
+        variant: null,
+        temperature: null,
+        steps: 5,
+        maxSteps: null,
+        isSandbox: false,
+      },
+    ],
   ])
   const ctx: BusinessNodeSpawnContext = {
     agent,
@@ -103,7 +125,7 @@ function mkCtx(runRoot: string, overrides: Partial<BusinessNodeSpawnContext> = {
     resolvedParamsByAgent: params,
     skills: [],
     resumeSessionId: 'ses_42',
-    worktreePath: '/wt',
+    worktreePath,
     runRoot,
     // RFC-154: the runner always supplies the frozen/default profile.
     configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
@@ -160,7 +182,6 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
         agent: Record<string, Record<string, unknown>>
         mcp?: Record<string, unknown>
         plugin?: unknown[]
-        permission?: Record<string, string>
       }
       // 织入结果：primary prompt 尾接 memory block；dependent 不织入。
       expect(cfg.agent['root-agent']?.prompt).toBe(
@@ -175,7 +196,7 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
       expect(cfg.plugin).toEqual([
         ['file:///tmp/aw-plugins/tracer/node_modules/tracer', { key: 'v-tracer' }],
       ] as never)
-      expect(cfg.permission).toEqual({ '*': 'allow', question: 'deny' })
+      expect('permission' in cfg).toBe(false)
 
       // §4.4 诊断回传 = 收口前 runner 从 inline config 派生的同一组字段。
       expect(plan.diagnostics).toEqual({
@@ -256,7 +277,7 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
       const cmdStr = plan.cmd.join(' ')
       expect(plan.cmd).toContain('--mcp-config')
       expect(plan.cmd[plan.cmd.indexOf('--mcp-config') + 1]).toBe(mcpJson)
-      expect(cmdStr).toContain('--strict-mcp-config')
+      expect(cmdStr).not.toContain('--strict-mcp-config')
       expect(plan.cmd[plan.cmd.indexOf('--agents') + 1]).toBe(agentsJson)
       // RFC-113：model 来自 root 的 FROZEN runtime profile。
       expect(plan.cmd[plan.cmd.indexOf('--model') + 1]).toBe('opus')
@@ -268,8 +289,10 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
       expect(readFileSync(sysFile ?? '', 'utf8')).toBe(
         '## body of root-agent\n\n## Injected memory\n- fact A',
       )
-      // D16：per-attempt CLAUDE_CONFIG_DIR = <runRoot>/.claude。
-      expect(plan.env.CLAUDE_CONFIG_DIR).toBe(join(runRoot, '.claude'))
+      // RFC-276：不再改写 CLAUDE_CONFIG_DIR；机器环境按 Claude 原生规则继承。
+      expect(plan.env.CLAUDE_CONFIG_DIR).toBe(process.env.CLAUDE_CONFIG_DIR)
+      // runtime profile 显式开启后注入兼容标记，但它不表示 OS 沙箱。
+      expect(plan.env.IS_SANDBOX).toBe('1')
       expect(plan.env.GIT_COMMITTER_EMAIL).toBe('ada@x.io')
       // 2026-08-09 显式改判：这条日志是运维看「这次 spawn 到底注入了什么」的
       // 唯一窗口，所以它不能声称一个根本不发生的注入。`pluginCount`/`pluginNames`
@@ -286,14 +309,14 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
         pluginsIgnoredUnsupported: 1,
         pluginsIgnoredNames: ['tracer'],
         skillNames: [],
+        skillProjectConfigPath: join(ctx.worktreePath, '.claude'),
         subagentNames: ['helper-agent'],
-        declaredToolNames: ['Bash', 'Task'],
+        subagentProjectConfigPath: join(ctx.worktreePath, '.claude'),
+        declaredToolNames: ['Bash'],
         // 2026-08-04 审计 P2-9：能力**被移除**的事实此前只在 daemon 日志里。
         // diagnostics 本就是「这次 spawn 装配里实际落了什么」的通道。
         businessTools: 'Bash',
         businessToolWarnings: [],
-        declaredNetwork: null,
-        networkEnforced: false,
       })
     } finally {
       rmSync(runRoot, { recursive: true, force: true })
@@ -330,14 +353,14 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
         pluginsIgnoredUnsupported: 0,
         pluginsIgnoredNames: [],
         skillNames: [],
+        skillProjectConfigPath: join(ctx.worktreePath, '.claude'),
         subagentNames: [],
+        subagentProjectConfigPath: join(ctx.worktreePath, '.claude'),
         declaredToolNames: ['Bash'],
         // 2026-08-04 审计 P2-9：能力**被移除**的事实此前只在 daemon 日志里。
         // diagnostics 本就是「这次 spawn 装配里实际落了什么」的通道。
         businessTools: 'Bash',
         businessToolWarnings: [],
-        declaredNetwork: null,
-        networkEnforced: false,
       })
     } finally {
       rmSync(runRoot, { recursive: true, force: true })

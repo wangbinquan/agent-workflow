@@ -28,7 +28,6 @@ import type { WebhookDispatcher, WebhookEndpointRow } from '@/services/webhook/d
 import { cancelExecution, startExecution } from '@/services/execution/executor'
 import type { ExecutionInvoker } from '@/services/execution/types'
 import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
-import type { ContainmentCoordinator } from '@/services/sandbox'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { markDelivery } from '@/services/webhook/deliveryStore'
 import {
@@ -73,7 +72,6 @@ export type WebhookDispatchDeps = {
   db: DbClient
   configPath: string
   secretBox: SecretBox
-  containmentCoordinator?: ContainmentCoordinator
   /** per-dispatch 读取（对齐 scheduledTaskScheduler 的 per-tick cfg.defaultRuntime）。 */
   getDefaultRuntime: () => Promise<string | null | undefined>
   /**
@@ -375,7 +373,6 @@ async function launchViaExecutor(
       actor.user.id,
       resolveOpencodeCmd(deps.configPath),
       undefined,
-      deps.containmentCoordinator,
     ),
     // 对齐 buildScheduleLaunch：闭包解析在重建的 owner actor 可见性内。
     launchActor: actor,

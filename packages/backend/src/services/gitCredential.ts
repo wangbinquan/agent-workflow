@@ -3,9 +3,8 @@
 // same-uid readable on linux).
 //
 // Mechanism: a `credential.helper` pointing at THIS binary's hidden
-// `__git-credential` subcommand (the `verifiedSelfCommand` pattern). The daemon
-// writes the username/password to a 0600 one-shot file under appHome (inside the
-// sandbox DENY zone — the agent cannot read it even while it exists), wires git
+// `__git-credential` subcommand. The daemon writes the username/password to a
+// 0600 one-shot file under appHome, wires git
 // with `-c credential.helper= -c credential.helper=!<self __git-credential>`,
 // and deletes the file as soon as the git subprocess exits. git invokes the
 // helper with the credential-helper protocol (`get`/`store`/`erase` in argv,
@@ -45,10 +44,8 @@ import { IS_EMBEDDED } from '@/embed'
 
 const GIT_CREDENTIAL_SUBCOMMAND = '__git-credential'
 
-// Mirror of `verifiedSelfCommand` (sealedSubprocess.ts): invoke THIS binary's
-// hidden subcommand. Embedded = the compiled binary; dev = `bun run main.ts`.
-// Kept here rather than imported to avoid coupling the git service to the
-// opencode sealed-subprocess module; the shape is asserted equivalent in tests.
+// Invoke THIS binary's hidden subcommand. Embedded = the compiled binary; dev =
+// `bun run main.ts`.
 function gitCredentialSelfArgv(): string[] {
   if (IS_EMBEDDED) return [process.execPath, GIT_CREDENTIAL_SUBCOMMAND]
   const mainPath = resolve(import.meta.dir, '..', 'main.ts')

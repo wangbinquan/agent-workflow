@@ -303,13 +303,9 @@ export const enUS: Resources = {
       item: {
         ready: '{{name}} v{{version}}',
         readyNoVersion: '{{name}} ok',
-        availableUnverifiedVersion: '{{name}} v{{version}} · protocol not tested',
-        availableUnverified: '{{name}} available · protocol not tested',
         missing: '{{name}} not found',
         unlaunchable: '{{name}} cannot start',
         protocolIncompatible: '{{name}} protocol incompatible',
-        containmentBlocked: '{{name}} blocked by isolation policy',
-        degraded: '{{name}} available · isolation degraded',
       },
     },
     section: {
@@ -1293,12 +1289,10 @@ export const enUS: Resources = {
         'Built-in agent that writes the overview, per-group sentences and reading order for a task change (RFC-239).',
       intentTitle: 'Intent builder',
       intentHint:
-        'Turns natural-language goals into workflow/workgroup/agent/skill changesets (RFC-234); requires a runtime whose driver enforces the read-only build profile.',
+        'Turns natural-language goals into workflow/workgroup/agent/skill changesets (RFC-234).',
       intentRuntime: 'Intent builder runtime',
       intentRuntimeHint:
-        'Only runtimes that can enforce the read-only intent profile are admissible; empty inherits the global default (which must also qualify).',
-      intentRuntimeClaudeNote:
-        'Claude Code enforces the read-only profile via declared CLI permissions (sealed binary + tool allow-list). Neither runtime performs a post-launch config attestation.',
+        'Runtime used to generate intent changesets; empty inherits the global default.',
       intentLang: 'Artifact language',
       intentLangHint:
         'Language for generated prompts/descriptions; defaults to mirroring the user input.',
@@ -1445,30 +1439,6 @@ export const enUS: Resources = {
       testEndpointMissing: 'not configured',
       testJwksUnreachable: 'JWKS is configured but unreachable — id_token sign-ins will fail.',
     },
-    sandbox: {
-      title: 'Runtime sandbox',
-      chipActive: 'Sandbox: {{mechanism}}',
-      chipUnavailable: 'Sandbox unavailable',
-      chipOff: 'Sandbox off',
-      modeLabel: 'Sandbox mode',
-      modeEnforce: 'Enforce',
-      modeWarn: 'Warn',
-      modeOff: 'Off',
-      modeHint:
-        'Enforce: refuse to launch new tasks while the sandbox mechanism is unavailable; Warn: degrade to unsandboxed runs with an alert; Off: never sandbox.',
-      enforceUnavailable:
-        'The active provider does not satisfy every required containment capability — under Enforce, both new launches AND the next node of a running task are refused.',
-      warnDegraded:
-        'Containment is degraded. Runs are permitted in Warn mode, but model-reachable child processes may access host resources or the network.',
-      lifetimeBestEffort:
-        'This provider enforces the filesystem and network baseline, but descendant lifetime cleanup is best effort on this platform.',
-      reasonCodes: 'Reason: {{codes}}',
-      cliHint: 'Run `agent-workflow sandbox` on the server for install/fix guidance.',
-      mismatchTitle: 'Saved and effective modes differ',
-      mismatchBody:
-        'Saved mode is {{configured}}, while this daemon is still using {{effective}}. Apply the saved mode now or restart the daemon.',
-      applyConfigured: 'Apply saved mode',
-    },
   },
   onboarding: {
     title: 'Welcome to Agent Workflow',
@@ -1562,9 +1532,8 @@ export const enUS: Resources = {
     },
   },
   guide: {
-    // RFC-211 §12 impl-gate P3-1 (2026-07-21): the sandbox-era keys (provision/
-    // cleanup/artifacts/step.*/…) died with the example concept; only the tour
-    // launcher's 9 live keys remain.
+    // The retired example-flow keys died with that concept; only the tour
+    // launcher's live keys remain.
     title: 'Guided tour',
     handholdIntro:
       'Want me to walk you through the real screens, step by step? From building an agent to launching a task and reading the result — highlighted the whole way.',
@@ -1848,6 +1817,9 @@ export const enUS: Resources = {
     fieldExtraArgs: 'Extra CLI args',
     fieldExtraArgsHint:
       'Fork-private flags appended to every spawn of this runtime (e.g. --skip-safe-check). Platform-owned flags are rejected on save. claude-code protocol only.',
+    fieldIsSandbox: 'Set IS_SANDBOX=1',
+    fieldIsSandboxHint:
+      'Claude CLI compatibility only. This does not enable an OS sandbox or add platform protections. Off by default.',
     configDirEnvInvalid:
       'Must be a legal env var name (letters, digits, underscores; not starting with a digit).',
     configDirEnvReserved: 'This variable name is reserved by the platform — pick another.',
@@ -1855,9 +1827,7 @@ export const enUS: Resources = {
       'Must be a single directory name: no path separators, and not "." or "..".',
     fieldModel: 'Model',
     fieldModelHint:
-      'The model agents on this runtime spawn with. OpenCode requires an explicit model.',
-    modelRequired: 'Select an explicit model before saving or testing this OpenCode runtime.',
-    modelRequiredChip: 'model required',
+      'Optional model passed to this runtime. Empty lets the CLI use its own default.',
     fieldVariant: 'Variant',
     fieldTemperature: 'Temperature',
     fieldSteps: 'Steps',
@@ -1881,7 +1851,6 @@ export const enUS: Resources = {
       'network-blocked': 'endpoint unreachable',
       'model-call-failed': 'model call failed',
       'stream-nonconforming': 'not conforming',
-      'execution-identity-failed': 'execution identity failed',
     },
   },
   agents: {
@@ -3336,15 +3305,13 @@ export const enUS: Resources = {
       'script-interpreter-missing':
         'No interpreter for that script language is available on this host.',
       'script-deps-install-failed': 'Installing the script’s dependencies failed.',
-      'script-network-fence-unavailable':
-        'The node declared no network access but the host cannot provide a network fence, so it was refused.',
-      'script-readonly-fence-unavailable':
-        'The node declared read-only but the host cannot provide a read-only boundary, so it was refused — a read-only node runs directly against the canonical workspace, which makes it more dangerous than a normal one without that boundary.',
-      'script-containment-unavailable':
-        'Containment is unavailable while the current mode requires it, so the node was refused. Run `agent-workflow sandbox` on the server for install/fix guidance.',
       'script-spawn-failed': 'The script process could not be started.',
       'runtime-result-error':
         'The runtime reported a terminal error (auth rejected, usage limit, or a gateway error) — not a prompt or output-protocol problem. See the error detail; retrying the same input will not change it.',
+      'runtime-stream-interrupted':
+        'The runtime output stream was interrupted before its output could be persisted safely.',
+      'runtime-stream-interrupted__hint':
+        'Use Resume to start a fresh runtime process after the automatic retry budget is exhausted.',
       'envelope-missing':
         'The agent did not produce output in the agreed format (missing output envelope).',
       'envelope-missing__hint':
@@ -3359,90 +3326,6 @@ export const enUS: Resources = {
       'port-validation-failed': "The agent's port output failed validation.",
       'port-validation-failed__hint':
         'Check the port validation info in the node drawer, then Resume to retry.',
-      'execution-identity-untrusted-binary':
-        'The selected OpenCode executable could not be frozen and verified for this run.',
-      'execution-identity-untrusted-binary__hint':
-        'Check the configured executable path and permissions, then run the runtime test again.',
-      'execution-identity-sandbox-required':
-        'This OpenCode run requires platform containment, but the required capabilities are unavailable.',
-      'execution-identity-sandbox-required__hint':
-        'Enable a supported containment provider, or explicitly choose Warn/Off to accept a degraded run.',
-      'execution-identity-containment-required':
-        'The effective policy requires platform containment, but this run did not pass exact capability qualification.',
-      'execution-identity-containment-required__hint':
-        'Open Settings → Runtime to inspect the effective mode and reason. Apply the saved Warn/Off mode there, or repair the provider and retry.',
-      'execution-identity-project-config-unsupported':
-        'The workspace contains OpenCode project configuration that cannot be safely isolated.',
-      'execution-identity-project-config-unsupported__hint':
-        'Remove the reported project configuration or symlink, then launch a new run.',
-      // RFC-251 retired these three codes. Nothing emits them any more, but
-      // tasks that failed before the upgrade still carry them, so the strings
-      // stay for historical rendering.
-      'execution-identity-plugin-unsupported':
-        'Historical failure: plugins were not supported on the OpenCode runtime when this task ran.',
-      'execution-identity-plugin-unsupported__hint':
-        'That restriction has since been removed — a new run is no longer blocked by it.',
-      'execution-identity-dependent-unsupported':
-        'Historical failure: delegating to other agents was not supported on the OpenCode runtime when this task ran.',
-      'execution-identity-dependent-unsupported__hint':
-        'That restriction has since been removed — a new run is no longer blocked by it.',
-      'execution-identity-instance-changed':
-        'Historical failure: the OpenCode server instance changed during an identity verification this version no longer performs.',
-      'execution-identity-instance-changed__hint':
-        'That verification step has since been removed — a new run is no longer blocked by it.',
-      'execution-identity-model-unresolved': 'No explicit OpenCode model is selected for this run.',
-      'execution-identity-model-unresolved__hint':
-        'Choose a provider/model on the effective runtime, then launch again.',
-      'execution-identity-auth-invalid':
-        'The selected provider credentials do not match the verified authentication contract.',
-      'execution-identity-auth-invalid__hint':
-        'Update the provider API credentials and retry with a new run.',
-      'execution-identity-provider-untrusted':
-        'The selected model provider does not match the verified runtime inventory.',
-      'execution-identity-provider-untrusted__hint':
-        'Choose a provider/model exposed by the selected OpenCode runtime; for a custom provider, check that it still exists and that its endpoint and model list match the configuration.',
-      'execution-identity-bootstrap-failed':
-        'OpenCode failed its verified startup check before model execution.',
-      'execution-identity-bootstrap-failed__hint':
-        'Review runtime diagnostics, correct the host setup, then launch a new run.',
-      'execution-identity-mismatch':
-        'The resolved OpenCode execution settings differ from the sealed settings.',
-      'execution-identity-mismatch__hint':
-        'Remove external overrides and launch a new run after correcting the runtime configuration.',
-      'execution-identity-source-changed': 'The workspace identity surface changed during startup.',
-      'execution-identity-source-changed__hint':
-        'Stop concurrent configuration changes and launch a new run.',
-      'execution-identity-skill-mismatch':
-        'A selected managed skill changed while its immutable snapshot was being prepared.',
-      'execution-identity-skill-mismatch__hint':
-        'Finish the skill update, reload the agent configuration, and launch a new run.',
-      'execution-identity-session-mismatch':
-        'The OpenCode session does not match this task run’s sealed identity.',
-      'execution-identity-session-mismatch__hint':
-        'Launch a fresh session; do not reuse a session created outside this task chain.',
-      'execution-identity-session-owned':
-        'The OpenCode session is already leased by another active run.',
-      'execution-identity-session-owned__hint':
-        'Wait for the active run to finish or repair its lifecycle before resuming.',
-      'execution-identity-control-failed':
-        'The verified launcher and scheduler could not complete their control handshake.',
-      'execution-identity-control-failed__hint':
-        'Inspect daemon diagnostics and launch a new run after the control failure is resolved.',
-      'execution-identity-stream-failed':
-        'The verified OpenCode event stream violated the expected protocol.',
-      'execution-identity-stream-failed__hint':
-        'Inspect runtime diagnostics and launch a new run; automatic retry is disabled.',
-      'execution-identity-timeout': 'OpenCode identity verification or direct execution timed out.',
-      'execution-identity-timeout__hint':
-        'Check the provider and host health, then launch a new run.',
-      'execution-identity-custom-provider-disabled':
-        'Historical failure: the run selected a model from a platform custom provider that was disabled (the feature has since been removed).',
-      'execution-identity-custom-provider-disabled__hint':
-        "Models now come from the machine's own OpenCode configuration; launch again.",
-      'execution-identity-store-unsafe':
-        'The private OpenCode session store failed its safety check.',
-      'execution-identity-store-unsafe__hint':
-        'Repair or remove the reported private store after confirming no run is active.',
       summary: {
         snapshotLost: "The task's workspace snapshot is gone; it cannot continue in place.",
         snapshotInvalid: "The task's workspace snapshot is no longer valid.",
@@ -3516,8 +3399,6 @@ export const enUS: Resources = {
         S4: 'Task pending without scheduler pickup',
         S5: 'Task running with active node_run(s) but events stopped landing',
         S6: 'Task awaiting review/clarify but every member (owner + collaborators) is inactive — nobody can answer',
-        'sandbox-degraded':
-          'Containment mode is warn but the host could not provide a boundary; this task ran with a reduced (or absent) one',
       },
       repair: {
         openButton: 'Repair…',
@@ -5460,7 +5341,6 @@ export const enUS: Resources = {
     label: 'script',
     dependencyCount_one: '{{count}} dep',
     dependencyCount_other: '{{count}} deps',
-    networkDeny: 'offline',
     readonly: 'read-only',
   },
   scriptInspector: {
@@ -5499,8 +5379,6 @@ export const enUS: Resources = {
     envValue: 'Value',
     envAdd: 'Add variable',
     envRemove: 'Remove variable',
-    networkDeny: 'Deny network access',
-    networkDenyHint: 'Dependencies still install; the script itself runs with no network.',
     readonly: 'Read-only worktree',
     readonlyHint:
       'Skips the isolated worktree and merge-back. The script cannot modify repository files.',
@@ -5739,59 +5617,6 @@ export const enUS: Resources = {
     'ws-unknown-channel': 'Unknown live channel.',
     'internal-error': 'Internal server error.',
     'internal-error__hint': 'Retry later; if it persists, check the daemon logs.',
-    // RFC-224: API/save/probe surfaces reuse the same stable copy as task failures.
-    'execution-identity-untrusted-binary': '$t(tasks.failure.execution-identity-untrusted-binary)',
-    'execution-identity-untrusted-binary__hint':
-      '$t(tasks.failure.execution-identity-untrusted-binary__hint)',
-    'execution-identity-sandbox-required': '$t(tasks.failure.execution-identity-sandbox-required)',
-    'execution-identity-sandbox-required__hint':
-      '$t(tasks.failure.execution-identity-sandbox-required__hint)',
-    'execution-identity-containment-required':
-      '$t(tasks.failure.execution-identity-containment-required)',
-    'execution-identity-containment-required__hint':
-      '$t(tasks.failure.execution-identity-containment-required__hint)',
-    'execution-identity-project-config-unsupported':
-      '$t(tasks.failure.execution-identity-project-config-unsupported)',
-    'execution-identity-project-config-unsupported__hint':
-      '$t(tasks.failure.execution-identity-project-config-unsupported__hint)',
-    'execution-identity-model-unresolved': '$t(tasks.failure.execution-identity-model-unresolved)',
-    'execution-identity-model-unresolved__hint':
-      '$t(tasks.failure.execution-identity-model-unresolved__hint)',
-    'execution-identity-auth-invalid': '$t(tasks.failure.execution-identity-auth-invalid)',
-    'execution-identity-auth-invalid__hint':
-      '$t(tasks.failure.execution-identity-auth-invalid__hint)',
-    'execution-identity-provider-untrusted':
-      '$t(tasks.failure.execution-identity-provider-untrusted)',
-    'execution-identity-provider-untrusted__hint':
-      '$t(tasks.failure.execution-identity-provider-untrusted__hint)',
-    'execution-identity-bootstrap-failed': '$t(tasks.failure.execution-identity-bootstrap-failed)',
-    'execution-identity-bootstrap-failed__hint':
-      '$t(tasks.failure.execution-identity-bootstrap-failed__hint)',
-    'execution-identity-mismatch': '$t(tasks.failure.execution-identity-mismatch)',
-    'execution-identity-mismatch__hint': '$t(tasks.failure.execution-identity-mismatch__hint)',
-    'execution-identity-source-changed': '$t(tasks.failure.execution-identity-source-changed)',
-    'execution-identity-source-changed__hint':
-      '$t(tasks.failure.execution-identity-source-changed__hint)',
-    'execution-identity-skill-mismatch': '$t(tasks.failure.execution-identity-skill-mismatch)',
-    'execution-identity-skill-mismatch__hint':
-      '$t(tasks.failure.execution-identity-skill-mismatch__hint)',
-    'execution-identity-session-mismatch': '$t(tasks.failure.execution-identity-session-mismatch)',
-    'execution-identity-session-mismatch__hint':
-      '$t(tasks.failure.execution-identity-session-mismatch__hint)',
-    'execution-identity-session-owned': '$t(tasks.failure.execution-identity-session-owned)',
-    'execution-identity-session-owned__hint':
-      '$t(tasks.failure.execution-identity-session-owned__hint)',
-    'execution-identity-control-failed': '$t(tasks.failure.execution-identity-control-failed)',
-    'execution-identity-control-failed__hint':
-      '$t(tasks.failure.execution-identity-control-failed__hint)',
-    'execution-identity-stream-failed': '$t(tasks.failure.execution-identity-stream-failed)',
-    'execution-identity-stream-failed__hint':
-      '$t(tasks.failure.execution-identity-stream-failed__hint)',
-    'execution-identity-timeout': '$t(tasks.failure.execution-identity-timeout)',
-    'execution-identity-timeout__hint': '$t(tasks.failure.execution-identity-timeout__hint)',
-    'execution-identity-store-unsafe': '$t(tasks.failure.execution-identity-store-unsafe)',
-    'execution-identity-store-unsafe__hint':
-      '$t(tasks.failure.execution-identity-store-unsafe__hint)',
     'invalid-json': 'The request body is not valid JSON.',
     'invalid-body': 'Invalid request body.',
     'import-ref-unresolved': 'An imported resource reference is not available.',
@@ -6138,10 +5963,6 @@ export const enUS: Resources = {
     'workgroup-member-running':
       'This member still owns a running assignment and cannot be removed.',
     'workgroup-config-empty': 'There are no changes to save.',
-    'sandbox-unavailable':
-      'Containment is unavailable on this host while the current mode requires it, so the task was not started.',
-    'sandbox-unavailable__hint':
-      'Run `agent-workflow sandbox` on the server for install/fix guidance (install bubblewrap and enable unprivileged user namespaces on Linux), or set Settings → Runtime → sandbox mode to warn.',
     // --- repo / git / worktree（用户可触发子集，其余走域兜底） ---
     'repo-url-invalid': 'Unsupported or malformed Git URL.',
     'repo-clone-failed': 'git clone failed.',
@@ -6845,12 +6666,6 @@ export const enUS: Resources = {
         acknowledge: {
           label: 'Acknowledge (no DB change)',
           desc: 'Every member (owner + collaborators) of this task is inactive, so nobody can answer the review/clarify. Recover by re-activating a disabled user, inviting a collaborator, or transferring ownership — a user-management action outside the repair engine. Acknowledging only resolves the alert.',
-        },
-      },
-      'sandbox-degraded': {
-        acknowledge: {
-          label: 'Acknowledge (no DB change)',
-          desc: 'Containment mode is warn and the host could not provide a boundary, so this task ran with a reduced one. The real fix is on the host: run `agent-workflow sandbox` on the server for install/repair guidance (install bubblewrap, enable unprivileged user namespaces on Linux), or change Settings → Runtime → sandbox mode. Acknowledging only resolves the alert.',
         },
       },
     },

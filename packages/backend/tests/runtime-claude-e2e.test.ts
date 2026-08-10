@@ -194,6 +194,7 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
             temperature: null,
             steps: null,
             maxSteps: null,
+            isSandbox: false,
           },
         }),
     )
@@ -245,7 +246,7 @@ describe('runNode — claude injection parity (RFC-111 PR-C)', () => {
   })
   afterEach(() => h.cleanup())
 
-  test('mcp → --mcp-config + --strict-mcp-config; dependsOn closure → --agents; skill copied', async () => {
+  test('mcp → --mcp-config; dependsOn closure → --agents; skill copied', async () => {
     const agent = makeAgent({ name: 'primary' })
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     // a managed skill on disk
@@ -289,7 +290,7 @@ describe('runNode — claude injection parity (RFC-111 PR-C)', () => {
     expect(result.status).toBe('done')
     const argv = JSON.parse(readFileSync(argvFile, 'utf-8').trim()) as string[]
     expect(argv).toContain('--mcp-config')
-    expect(argv).toContain('--strict-mcp-config')
+    expect(argv).not.toContain('--strict-mcp-config')
     expect(argv).toContain('--agents')
     // the mcp/agents JSON payloads are present + well-formed
     const mcpJson = JSON.parse(argv[argv.indexOf('--mcp-config') + 1]!) as {
@@ -298,9 +299,9 @@ describe('runNode — claude injection parity (RFC-111 PR-C)', () => {
     expect(mcpJson.mcpServers.fs).toBeDefined()
     const agentsJson = JSON.parse(argv[argv.indexOf('--agents') + 1]!) as Record<string, unknown>
     expect(agentsJson.reviewer).toBeDefined()
-    // managed skill copied into CLAUDE_CONFIG_DIR/skills
-    // managed skill present in CLAUDE_CONFIG_DIR/skills at RUN time (the run dir
-    // is cleaned up afterwards, so the mock captures it live).
+    // Managed skill is projected into the project-native .claude/skills path at
+    // run time; the runner removes its entries afterwards, so the mock captures
+    // it while the child is live.
     const injectedSkills = JSON.parse(readFileSync(skillsCapFile, 'utf-8')) as string[]
     expect(injectedSkills).toContain('my-skill')
   })

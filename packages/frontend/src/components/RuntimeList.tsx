@@ -20,14 +20,12 @@ import {
   configDirEnvProblem,
   configDirNameProblem,
   DEFAULT_CONFIG_DIR_PROFILE,
-  isExecutionIdentityFailureCode,
-  type ExecutionIdentityFailureCode,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ChipsInput } from '@/components/ChipsInput'
-import { Field, NumberInput, TextInput } from '@/components/Form'
+import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { ModelSelect } from '@/components/ModelSelect'
 import { StatusChip } from '@/components/StatusChip'
@@ -39,7 +37,6 @@ import {
   writeConfigPatch,
 } from '@/lib/config-resource'
 import { ConfigAmbiguousWriteError } from '@/lib/config-receipts'
-import { describeTaskFailure } from '@/lib/task-failure'
 
 export const RUNTIMES_QUERY_KEY = ['runtimes'] as const
 
@@ -53,10 +50,8 @@ interface SmokeResult {
     | 'network-blocked'
     | 'model-call-failed'
     | 'stream-nonconforming'
-    | 'execution-identity-failed'
   conforms: boolean
   detail: string
-  failureCode?: ExecutionIdentityFailureCode | null
   sawNonce?: boolean
   sawEnvelope?: boolean
   exitCode?: number | null
@@ -75,6 +70,8 @@ interface RuntimeView {
   temperature: number | null
   steps: number | null
   maxSteps: number | null
+  /** RFC-276: optional Claude CLI compatibility marker; not an OS sandbox. */
+  isSandbox: boolean
   /** 2026-08-04 — extra argv tokens (claude-code forks only, e.g. --skip-safe-check). */
   extraArgs?: string[] | null
   // RFC-154: config-dir injection overrides (null = protocol default).
@@ -98,38 +95,13 @@ function smokeChipKind(probe: SmokeResult | null): 'success' | 'warn' | 'danger'
   return 'danger'
 }
 
-function executionIdentitySmokeCopy(probe: SmokeResult | null) {
-  if (
-    probe?.outcome !== 'execution-identity-failed' ||
-    !isExecutionIdentityFailureCode(probe.failureCode)
-  ) {
-    return null
-  }
-  return describeTaskFailure({ failureCode: probe.failureCode })
-}
-
-function RuntimeSmokeDetail({
-  smoke,
-  identityOnly = false,
-  testid,
-}: {
-  smoke: SmokeResult | null
-  identityOnly?: boolean
-  testid: string
-}) {
+function RuntimeSmokeDetail({ smoke, testid }: { smoke: SmokeResult | null; testid: string }) {
   if (smoke === null) return null
-  const copy = executionIdentitySmokeCopy(smoke)
-  if (copy === null && identityOnly) return null
   return (
     <div data-testid={testid}>
       <p className="muted" style={{ margin: '4px 0 0 0', fontSize: 12 }}>
-        {copy?.title ?? smoke.detail}
+        {smoke.detail}
       </p>
-      {copy?.hint !== undefined && (
-        <p className="muted" style={{ margin: '2px 0 0 0', fontSize: 12 }}>
-          {copy.hint}
-        </p>
-      )}
     </div>
   )
 }
@@ -275,15 +247,6 @@ export function RuntimeList({
                     ? t('runtimes.smokeUntested')
                     : t(`runtimes.smoke.${rt.lastProbe.outcome}`)}
                 </StatusChip>
-                {rt.protocol === 'opencode' && (rt.model === null || rt.model.trim() === '') && (
-                  <StatusChip
-                    kind="danger"
-                    size="sm"
-                    data-testid={`runtime-model-missing-${rt.name}`}
-                  >
-                    {t('runtimes.modelRequiredChip')}
-                  </StatusChip>
-                )}
               </div>
               <div className="runtime-list__meta">
                 <code className="runtime-list__binary">
@@ -291,7 +254,6 @@ export function RuntimeList({
                 </code>
                 <RuntimeSmokeDetail
                   smoke={rt.lastProbe}
-                  identityOnly
                   testid={`runtime-smoke-detail-${rt.name}`}
                 />
               </div>
@@ -302,10 +264,7 @@ export function RuntimeList({
                   <button
                     type="button"
                     className="btn btn--xs"
-                    disabled={
-                      setDefault.isPending ||
-                      (rt.protocol === 'opencode' && (rt.model === null || rt.model.trim() === ''))
-                    }
+                    disabled={setDefault.isPending}
                     onClick={() => setDefault.mutate(rt.name)}
                   >
                     {t('runtimes.setDefault')}
@@ -314,15 +273,7 @@ export function RuntimeList({
                 <button
                   type="button"
                   className="btn btn--xs"
-                  disabled={
-                    probe.isPending ||
-                    (rt.protocol === 'opencode' && (rt.model === null || rt.model.trim() === ''))
-                  }
-                  title={
-                    rt.protocol === 'opencode' && (rt.model === null || rt.model.trim() === '')
-                      ? t('runtimes.modelRequired')
-                      : undefined
-                  }
+                  disabled={probe.isPending}
                   onClick={() => probe.mutate(rt.name)}
                 >
                   {t('runtimes.test')}
@@ -425,6 +376,7 @@ function RuntimeFormDialog(props: {
   // 2026-08-04: extra argv tokens (claude-code forks only — e.g. CodeAgent's
   // --skip-safe-check). The backend validateExtraArgs is the semantic gate.
   const [extraArgs, setExtraArgs] = useState<string[]>(props.existing?.extraArgs ?? [])
+  const [isSandbox, setIsSandbox] = useState(props.existing?.isSandbox ?? false)
   // Inline form gate (Codex impl-gate P3) — same shared predicates the backend
   // validators throw from, so the two layers can't drift. Empty = unset = valid.
   const envProblem = configDirEnv.trim() === '' ? null : configDirEnvProblem(configDirEnv.trim())
@@ -439,7 +391,6 @@ function RuntimeFormDialog(props: {
   const configDirNameError =
     nameProblem === 'invalid-leaf' ? t('runtimes.configDirNameInvalid') : undefined
   const isOpencode = protocol === 'opencode'
-  const modelRequired = isOpencode && (model === undefined || model.trim() === '')
   // Codex P3: the claude spawn path consumes ONLY `model` — variant / temperature
   // / steps / maxSteps are all opencode-only, so null them out for claude (else a
   // user could save a Claude runtime param that never affects execution).
@@ -455,6 +406,7 @@ function RuntimeFormDialog(props: {
     // 2026-08-04: claude-code only (backend rejects it on opencode) — mirror
     // the variant/temperature pattern and null it out on protocol switch.
     extraArgs: !isOpencode && extraArgs.length > 0 ? extraArgs : null,
+    isSandbox: !isOpencode && isSandbox,
   })
 
   const test = useMutation({
@@ -464,6 +416,7 @@ function RuntimeFormDialog(props: {
         binaryPath: binaryPath.trim(),
         ...(model !== undefined && model.trim() !== '' ? { model: model.trim() } : {}),
         ...(!isOpencode && extraArgs.length > 0 ? { extraArgs } : {}),
+        ...(!isOpencode && isSandbox ? { isSandbox: true } : {}),
       }),
     onSuccess: (r) => setSmoke(r.smoke),
   })
@@ -504,7 +457,7 @@ function RuntimeFormDialog(props: {
           <button
             type="button"
             className="btn"
-            disabled={test.isPending || binaryPath.trim() === '' || modelRequired}
+            disabled={test.isPending || binaryPath.trim() === ''}
             onClick={() => test.mutate()}
           >
             {test.isPending ? t('runtimes.testing') : t('runtimes.testBinary')}
@@ -521,8 +474,7 @@ function RuntimeFormDialog(props: {
               // RFC-154: invalid config-dir overrides block Save (inline errors
               // explain why); the backend validators are the second line.
               configDirEnvError !== undefined ||
-              configDirNameError !== undefined ||
-              modelRequired
+              configDirNameError !== undefined
             }
             onClick={() => save.mutate()}
           >
@@ -590,12 +542,7 @@ function RuntimeFormDialog(props: {
           (O1(a)) so the model is free-text + a "save first" hint — showing the
           DEFAULT opencode list there would invite saving a model the fork doesn't
           have. claude (incl. forks) is a static list → a "not probed" note. */}
-      <Field
-        label={t('runtimes.fieldModel')}
-        hint={t('runtimes.fieldModelHint')}
-        required={isOpencode}
-        error={modelRequired ? t('runtimes.modelRequired') : undefined}
-      >
+      <Field label={t('runtimes.fieldModel')} hint={t('runtimes.fieldModelHint')}>
         {isEdit ? (
           <ModelSelect value={model} onChange={setModel} runtimeName={name} />
         ) : (
@@ -619,14 +566,23 @@ function RuntimeFormDialog(props: {
       {/* 2026-08-04: fork-private extra argv tokens (claude-code only). The
           backend rejects platform-owned flags; here we only collect tokens. */}
       {!isOpencode && (
-        <Field label={t('runtimes.fieldExtraArgs')} hint={t('runtimes.fieldExtraArgsHint')}>
-          <ChipsInput
-            value={extraArgs}
-            onChange={setExtraArgs}
-            placeholder="--skip-safe-check"
-            testidPrefix="runtime-extra-args"
+        <>
+          <Switch
+            checked={isSandbox}
+            onChange={setIsSandbox}
+            label={t('runtimes.fieldIsSandbox')}
+            hint={t('runtimes.fieldIsSandboxHint')}
+            data-testid="runtime-is-sandbox"
           />
-        </Field>
+          <Field label={t('runtimes.fieldExtraArgs')} hint={t('runtimes.fieldExtraArgsHint')}>
+            <ChipsInput
+              value={extraArgs}
+              onChange={setExtraArgs}
+              placeholder="--skip-safe-check"
+              testidPrefix="runtime-extra-args"
+            />
+          </Field>
+        </>
       )}
       {isOpencode && (
         <div className="form-grid form-grid--cols-2">

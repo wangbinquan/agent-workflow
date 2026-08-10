@@ -14,7 +14,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
 const LEGACY_DIGEST = 'b'.repeat(64)
 
-function freezeThrough0120(): string {
+function freezeThrough(maxIdx: number): string {
   const dir = mkdtempSync(join(tmpdir(), 'rfc227-0121-'))
   tempDirs.push(dir)
   cpSync(MIGRATIONS, dir, { recursive: true })
@@ -22,7 +22,7 @@ function freezeThrough0120(): string {
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
     entries: Array<{ idx: number }>
   }
-  journal.entries = journal.entries.filter((entry) => entry.idx <= 119)
+  journal.entries = journal.entries.filter((entry) => entry.idx <= maxIdx)
   writeFileSync(journalPath, `${JSON.stringify(journal, null, 2)}\n`)
   return dir
 }
@@ -62,10 +62,10 @@ describe('migration 0121 RFC-227 OpenCode provenance', () => {
   test('preserves owner and lease while replacing version-bound provenance', () => {
     const raw = new Database(':memory:')
     raw.exec('PRAGMA foreign_keys = ON')
-    migrate(drizzle(raw), { migrationsFolder: freezeThrough0120() })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough(119) })
     seedLegacyOwner(raw)
 
-    migrate(drizzle(raw), { migrationsFolder: MIGRATIONS })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough(120) })
 
     const columns = raw.query("PRAGMA table_info('opencode_session_owners')").all() as Array<{
       name: string

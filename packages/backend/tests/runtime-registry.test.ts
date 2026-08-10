@@ -99,6 +99,20 @@ describe('createRuntime (RFC-112 PR-A)', () => {
     expect(row.protocol).toBe('opencode')
     expect(row.binaryPath).toBe(canonicalBinaryPath('my-oc'))
     expect(row.createdBy).toBe('admin-1')
+    expect(row.isSandbox).toBe(false)
+  })
+
+  test('isSandbox defaults off, is supported only by claude-code, and round-trips', async () => {
+    const claude = await createRuntime(db, {
+      name: 'claude-compat',
+      protocol: 'claude-code',
+      isSandbox: true,
+    })
+    expect(claude.isSandbox).toBe(true)
+
+    await expect(
+      createRuntime(db, { name: 'oc-misleading', protocol: 'opencode', isSandbox: true }),
+    ).rejects.toMatchObject({ code: 'runtime-is-sandbox-unsupported' })
   })
 
   test('RFC-153: names are not reserved — recreate collides on uniqueness, not reservation', async () => {
@@ -202,6 +216,17 @@ describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {
     })
     expect(changedWithFreshReceipt.lastProbeJson).toBe(freshReceipt)
     expect(changedWithFreshReceipt.probeFence).toBe(2)
+  })
+
+  test('changing isSandbox invalidates the runtime smoke receipt and bumps its fence', async () => {
+    await createRuntime(db, { name: 'claude-compat', protocol: 'claude-code' })
+    const receipt = JSON.stringify({ outcome: 'conforms', conforms: true })
+    await updateRuntime(db, 'claude-compat', { lastProbeJson: receipt })
+
+    const changed = await updateRuntime(db, 'claude-compat', { isSandbox: true })
+    expect(changed.isSandbox).toBe(true)
+    expect(changed.lastProbeJson).toBeNull()
+    expect(changed.probeFence).toBe(1)
   })
 
   test('delete blocked while an agent references it', async () => {
@@ -431,12 +456,10 @@ describe('migrateConfigIntoBuiltins (RFC-153 F2 — protocol-guarded backfill)',
   })
 })
 
-// 2026-07-31 closeout — save-time binaryPath validation now mirrors the
-// exec-time seal contract (binarySnapshot.resolveSingleExecutable: one
-// absolute canonical path, or one bare PATH token). Before this, a relative
-// fragment / arg-string saved fine and only died at spawn with
-// `execution-identity-untrusted-binary`, far from the admin who typed it.
-describe('binaryPath save-time validation mirrors the seal contract', () => {
+// Save-time binaryPath validation accepts one absolute canonical path or one
+// bare PATH token. Relative fragments and argument strings fail near the admin
+// input instead of much later at process spawn.
+describe('binaryPath save-time validation', () => {
   test('accepts an absolute canonical path and a bare PATH token', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedBuiltinRuntimes(db)

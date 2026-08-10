@@ -59,9 +59,8 @@ export function openDb(opts: OpenDbOptions): DbClient {
   let sqlite: Database
   try {
     sqlite = new Database(opts.path, { create: true })
-    // RFC-205 D9 — best-effort 0600, matching secret.key: the DB holds every
-    // sealed credential and umask-default perms leak it to other local users.
-    // (Same-uid agents are handled by the sandbox, not by mode bits.)
+    // Best-effort 0600, matching secret.key: the DB holds credentials and
+    // umask-default permissions could expose them to other local accounts.
     try {
       chmodSync(opts.path, 0o600)
     } catch {

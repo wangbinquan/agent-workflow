@@ -427,17 +427,15 @@ describe('distillTick', () => {
     expect(row.lastError).toContain('boom')
   })
 
-  test('RFC-224 identity failure is permanent on attempt 1 and persists only the stable code', async () => {
+  test('ordinary runtime failure follows the normal retry budget', async () => {
     const { taskId } = seedTask(db)
     await enqueueDistillJob(db, {
       sourceKind: 'clarify',
-      sourceEventId: 'identity-failure',
+      sourceEventId: 'runtime-failure',
       taskId,
       debounceMs: 0,
     })
-    const failure = Object.assign(new Error('secret path must not persist'), {
-      code: 'execution-identity-untrusted-binary',
-    })
+    const failure = new Error('runtime launch failed')
 
     const result = await distillTick({
       db,
@@ -448,10 +446,10 @@ describe('distillTick', () => {
     })
     const row = db.select().from(memoryDistillJobs).all()[0]!
     expect(result.failed).toBe(1)
-    expect(row.status).toBe('failed')
+    expect(row.status).toBe('pending')
     expect(row.attempts).toBe(1)
-    expect(row.lastError).toBe('execution-identity-untrusted-binary')
-    expect(row.finishedAt).not.toBeNull()
+    expect(row.lastError).toBe('runtime launch failed')
+    expect(row.finishedAt).toBeNull()
   })
 
   test('honors DISTILL_BATCH_LIMIT (≤ 5 distinct debounce keys per tick)', async () => {

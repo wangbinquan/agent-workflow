@@ -607,22 +607,13 @@ describe('repository test entrypoint', () => {
       resolve(root, 'packages', 'backend', 'src', 'util', 'opencode.ts'),
       'utf8',
     )
-    const runtimeBinary = readFileSync(
-      resolve(
-        root,
-        'packages',
-        'backend',
-        'src',
-        'services',
-        'runtime',
-        'opencode',
-        'runtimeBinary.ts',
-      ),
+    const opencodeDriver = readFileSync(
+      resolve(root, 'packages', 'backend', 'src', 'services', 'runtime', 'opencode', 'driver.ts'),
       'utf8',
     )
     for (const [name, source] of [
       ['opencode.ts', opencodeUtil],
-      ['runtimeBinary.ts', runtimeBinary],
+      ['opencode/driver.ts', opencodeDriver],
       ...workflowSources.map(({ name, source }) => [name, source] as const),
     ]) {
       expect(source, name).not.toContain('MIN_OPENCODE_VERSION')

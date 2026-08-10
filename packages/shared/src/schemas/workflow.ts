@@ -856,10 +856,6 @@ export type ScriptLanguage = z.infer<typeof ScriptLanguageSchema>
  *  `outputs` is for; two ways to do the same thing would only add ambiguity. */
 export const SCRIPT_DEFAULT_OUTPUT_PORT = 'stdout' as const
 
-/** D4 — network posture. Absent resolves to 'allow' (see resolveScriptNetwork). */
-export const ScriptNetworkSchema = z.enum(['allow', 'deny'])
-export type ScriptNetwork = z.infer<typeof ScriptNetworkSchema>
-
 export const SCRIPT_BODY_MAX = 256 * 1024
 export const SCRIPT_MAX_OUTPUT_PORTS = 32
 export const SCRIPT_MAX_DEPENDENCIES = 64
@@ -893,18 +889,26 @@ export const ScriptNodeSchema = WorkflowNodeSchema.extend({
     .optional(),
   /** Process env overlay (D10); key rules reuse the MCP validator. */
   env: z.record(z.string(), z.string()).optional(),
-  network: ScriptNetworkSchema.optional(),
-  /** true ⇒ no iso worktree, no merge-back, worktree mounted read-only (D8). */
+  /** true ⇒ no iso worktree, no merge-back (D8). */
   readonly: z.boolean().optional(),
-}).passthrough()
+})
+  .passthrough()
+  .superRefine((node, ctx) => {
+    if (Object.prototype.hasOwnProperty.call(node, 'network')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['network'],
+        message: 'network has been removed and is no longer enforced',
+      })
+    }
+  })
 export type ScriptNode = z.infer<typeof ScriptNodeSchema>
 
 // --- RFC-269 Code-host call node ---------------------------------------------
 //
 // One outbound GitLab/GitHub API call, issued by the daemon itself with the
-// administrator-configured base URL + token. No model process, no subprocess,
-// no session — so it never enters the containment admission surface, and the
-// token never reaches an agent process or a model context.
+// administrator-configured base URL + token. No model process, subprocess or
+// session is created, and the token never reaches an agent process or model context.
 //
 // `$schema_version` deliberately NOT bumped: RFC-243 (call-workflow /
 // call-workgroup) and RFC-253 (script) both added node kinds without one. The

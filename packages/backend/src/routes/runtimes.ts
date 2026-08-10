@@ -6,7 +6,6 @@
 
 import type { Hono } from 'hono'
 import { z } from 'zod'
-import { isExecutionIdentityFailureCode } from '@agent-workflow/shared'
 import { loadConfig } from '@/config'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
@@ -29,7 +28,6 @@ import {
 import type { RuntimeKind } from '@/services/runtime'
 import { getRuntimeDriver } from '@/services/runtime'
 import { smokeRuntime as productionSmokeRuntime, type SmokeResult } from '@/services/runtimeSmoke'
-import { withRuntimeOpencodeSnapshot as productionRuntimeOpencodeSnapshot } from '@/services/runtime/opencode/runtimeBinary'
 import { getMcpRuntimeTestService, isRuntimeMcpTestEligible } from '@/services/mcpRuntimeTest'
 import { Paths } from '@/util/paths'
 
@@ -41,6 +39,7 @@ const ProbeBody = z.object({
   protocol: ProtocolSchema,
   binaryPath: z.string().min(1),
   model: z.string().min(1).optional(),
+  isSandbox: z.boolean().optional(),
   // 2026-08-04 — shape-only here; the registry's validateExtraArgs is the
   // semantic gate (protocol / reserved flags / token rules) at save time. A
   // pre-save probe passes them through so Test reproduces the future dispatch.
@@ -54,6 +53,7 @@ const ProfileFields = {
   temperature: z.number().min(0).max(2).nullable().optional(),
   steps: z.number().int().positive().nullable().optional(),
   maxSteps: z.number().int().positive().nullable().optional(),
+  isSandbox: z.boolean().optional(),
 }
 
 // RFC-154: config-dir injection overrides. Shape-only here — the semantic
@@ -122,14 +122,10 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     db: deps.db,
     configPath: deps.configPath,
     appHome: deps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
-    containmentCoordinator: deps.containmentCoordinator,
     runFn: deps.mcpRuntimeTestDependencies?.runFn,
     now: deps.mcpRuntimeTestDependencies?.now,
     capacity: deps.mcpRuntimeTestDependencies?.capacity,
   })
-  const withRuntimeOpencodeSnapshot =
-    deps.runtimeDiagnosticTestDependencies?.withRuntimeOpencodeSnapshot ??
-    productionRuntimeOpencodeSnapshot
   const smokeRuntime =
     deps.runtimeDiagnosticTestDependencies?.smokeRuntime ?? productionSmokeRuntime
 
@@ -157,10 +153,9 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
-  // RFC-135 / RFC-226 — live light status for the homepage hero: every ENABLED
-  // runtime is probed `--version` in parallel against the binary a dispatch
-  // would use. OpenCode treats the output only as telemetry; protocol behavior
-  // and containment capabilities are independent axes.
+  // RFC-135 — live light status for the homepage hero: every ENABLED runtime is
+  // probed `--version` in parallel against the binary a dispatch would use.
+  // This is advisory availability telemetry and does not alter child launch.
   // `runtime:read` mirrors the legacy /api/runtime/* gate (server.ts) — this
   // spawns registered binaries, so a narrowed PAT without the permission must
   // not reach it.
@@ -184,8 +179,6 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       const configured = cfg.defaultRuntime ?? 'opencode'
       const defaultName = rows.some((r) => r.name === configured) ? configured : 'opencode'
       const timeoutMs = statusProbeTimeoutMs()
-      const containmentPlan = await deps.containmentCoordinator?.observe('model-child-netless-v1')
-      const containment = containmentPlan?.runtimeReceipt ?? null
       const runtimes = await Promise.all(
         rows.map(async (row) => {
           const binary = resolveRuntimeBinary(row, cfg)
@@ -193,127 +186,29 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
           // here (opencode-only installs keep the claude-code builtin enabled)
           // and the homepage polls every 60s — the response already carries the
           // failure, so per-probe warns would just flood the log (D5/§6).
-          const probe =
-            row.protocol === 'opencode'
-              ? await withRuntimeOpencodeSnapshot([binary], async (snapshot) => {
-                  const verified = await getRuntimeDriver(row.protocol).probe(snapshot, {
-                    timeoutMs,
-                    quiet: true,
-                  })
-                  return { ...verified, binary }
-                }).catch((error: unknown) => {
-                  const code =
-                    typeof error === 'object' &&
-                    error !== null &&
-                    'code' in error &&
-                    isExecutionIdentityFailureCode(error.code)
-                      ? error.code
-                      : 'execution-identity-untrusted-binary'
-                  return {
-                    binary,
-                    version: null,
-                    compatible: false,
-                    incompatibleReason: code,
-                    ran: false,
-                    snapshotFailure:
-                      typeof error === 'object' &&
-                      error !== null &&
-                      'reason' in error &&
-                      error.reason === 'not-found'
-                        ? ('not-found' as const)
-                        : ('unlaunchable' as const),
-                  }
-                })
-              : await getRuntimeDriver(row.protocol).probe(binary, {
-                  timeoutMs,
-                  quiet: true,
-                })
+          const probe = await getRuntimeDriver(row.protocol).probe(binary, {
+            timeoutMs,
+            quiet: true,
+          })
           const availabilityState =
-            row.protocol === 'opencode'
-              ? 'snapshotFailure' in probe
-                ? probe.snapshotFailure
-                : probe.ran === true
-                  ? ('available-unverified' as const)
-                  : ('unlaunchable' as const)
-              : probe.ran === true && probe.compatible
+            probe.ran === true
+              ? probe.compatible
                 ? ('ready' as const)
-                : ('not-found' as const)
-          // 2026-08-04 audit: containment is a RUNTIME-NEUTRAL axis (RFC-227
-          // forbids OS/vendor names as capability criteria), and
-          // `sandboxEnforceBlocked` + the coordinator's admission apply to every
-          // protocol — claude business nodes even request the same
-          // `model-child-netless-v1` bundle. Gating this projection on
-          // `protocol === 'opencode'` meant the claude row NEVER showed
-          // blocked/degraded: the status page said "available" while every task
-          // on that runtime failed at dispatch. That is the exact deployment
-          // shape of the 2026-08-04 production incident.
-          const state =
-            availabilityState === 'available-unverified' && containment !== null
-              ? containment.mode === 'enforce' && containment.degradedReasons.length > 0
-                ? ('containment-blocked' as const)
-                : containment.mode === 'warn' && containment.degradedReasons.length > 0
-                  ? ('degraded' as const)
-                  : availabilityState
-              : availabilityState
+                : ('protocol-incompatible' as const)
+              : ('not-found' as const)
           return {
             name: row.name,
             protocol: row.protocol,
             binary: probe.binary,
-            // RFC-227: OpenCode version output is telemetry. A lightweight
-            // status can prove availability but only Runtime Test / execution
-            // selects the behavior codec.
-            ok: state === 'ready' || state === 'available-unverified' || state === 'degraded',
+            ok: availabilityState === 'ready',
             version: probe.version,
             reportedVersion: probe.version,
-            state,
-            ...(containment !== null ? { containment } : {}),
+            state: availabilityState,
             isDefault: row.name === defaultName,
-            ...(isExecutionIdentityFailureCode(probe.incompatibleReason)
-              ? { failureCode: probe.incompatibleReason }
-              : {}),
           }
         }),
       )
-      // Exact profile projection from the same coordinator used at spawn.
-      const sandbox =
-        containmentPlan !== undefined
-          ? {
-              mode: containmentPlan.receipt.mode,
-              effectiveMode: containmentPlan.receipt.mode,
-              configuredMode: cfg.sandboxMode,
-              restartRequired: cfg.sandboxMode !== containmentPlan.receipt.mode,
-              policyGeneration: containmentPlan.receipt.policyGeneration,
-              probeGeneration: containmentPlan.receipt.probeGeneration,
-              probeCheckedAt: containmentPlan.receipt.probeCheckedAt,
-              coordinatorBootId: containmentPlan.receipt.coordinatorBootId,
-              admissionGeneration: containmentPlan.receipt.admissionGeneration,
-              decision: containmentPlan.receipt.decision,
-              profileId: containmentPlan.receipt.profileId,
-              requirementDigest: containmentPlan.receipt.requirementDigest,
-              probeState:
-                containmentPlan.receipt.decision === 'contained'
-                  ? ('ready' as const)
-                  : Object.values(containmentPlan.receipt.capabilities).some(
-                        (strength) => strength === 'strong',
-                      )
-                    ? ('partial' as const)
-                    : ('unavailable' as const),
-              mechanism: containmentPlan.sandbox.status.mechanism,
-              available: containmentPlan.receipt.decision === 'contained',
-              providerId: containment?.providerId ?? null,
-              capabilities: containment?.capabilities ?? {},
-              degradedReasons: containment?.degradedReasons ?? [],
-              reasonCodes: containmentPlan.receipt.reasonCodes,
-            }
-          : {
-              mode: cfg.sandboxMode,
-              effectiveMode: cfg.sandboxMode,
-              configuredMode: cfg.sandboxMode,
-              restartRequired: false,
-              mechanism: null,
-              available: false,
-            }
-      return c.json({ runtimes, sandbox })
+      return c.json({ runtimes })
     },
   )
 
@@ -337,13 +232,10 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
         binaryPath: body.binaryPath,
         config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
         ...(body.model !== undefined ? { model: body.model } : {}),
+        isSandbox: body.isSandbox === true,
         ...(body.extraArgs !== undefined && body.extraArgs.length > 0
           ? { extraArgs: body.extraArgs }
           : {}),
-        bridgeCredentials: true,
-        ...(deps.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: deps.containmentCoordinator }),
       })
       return c.json({ smoke: result })
     },
@@ -374,33 +266,27 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
           binaryPath: body.binaryPath,
           config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
           ...(typeof body.model === 'string' ? { model: body.model } : {}),
+          isSandbox: body.isSandbox === true,
           ...(Array.isArray(body.extraArgs) && body.extraArgs.length > 0
             ? { extraArgs: body.extraArgs }
             : {}),
-          bridgeCredentials: true,
-          ...(deps.containmentCoordinator === undefined
-            ? {}
-            : { containmentCoordinator: deps.containmentCoordinator }),
         })
       }
-      let row = await createRuntime(
-        deps.db,
-        {
-          name: body.name,
-          protocol: body.protocol,
-          binaryPath: body.binaryPath ?? null,
-          configDirEnv: body.configDirEnv,
-          configDirName: body.configDirName,
-          createdBy: actor.user.id,
-          model: body.model,
-          variant: body.variant,
-          temperature: body.temperature,
-          steps: body.steps,
-          maxSteps: body.maxSteps,
-          extraArgs: body.extraArgs,
-        },
-        { enforceExecutionPolicy: true },
-      )
+      let row = await createRuntime(deps.db, {
+        name: body.name,
+        protocol: body.protocol,
+        binaryPath: body.binaryPath ?? null,
+        configDirEnv: body.configDirEnv,
+        configDirName: body.configDirName,
+        createdBy: actor.user.id,
+        model: body.model,
+        variant: body.variant,
+        temperature: body.temperature,
+        steps: body.steps,
+        maxSteps: body.maxSteps,
+        isSandbox: body.isSandbox,
+        extraArgs: body.extraArgs,
+      })
       const cfg = loadConfig(deps.configPath)
       if (smoke !== undefined) {
         const target = runtimeProbeTargetOf(row, resolveRuntimeBinary(row, cfg))
@@ -433,22 +319,18 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const name = c.req.param('name')
       const body = parseBody(UpdateBody, await c.req.json().catch(() => ({})))
-      const row = await updateRuntime(
-        deps.db,
-        name,
-        {
-          ...(body.binaryPath !== undefined ? { binaryPath: body.binaryPath } : {}),
-          ...(body.configDirEnv !== undefined ? { configDirEnv: body.configDirEnv } : {}),
-          ...(body.configDirName !== undefined ? { configDirName: body.configDirName } : {}),
-          ...(body.extraArgs !== undefined ? { extraArgs: body.extraArgs } : {}),
-          model: body.model,
-          variant: body.variant,
-          temperature: body.temperature,
-          steps: body.steps,
-          maxSteps: body.maxSteps,
-        },
-        { enforceExecutionPolicy: true },
-      )
+      const row = await updateRuntime(deps.db, name, {
+        ...(body.binaryPath !== undefined ? { binaryPath: body.binaryPath } : {}),
+        ...(body.configDirEnv !== undefined ? { configDirEnv: body.configDirEnv } : {}),
+        ...(body.configDirName !== undefined ? { configDirName: body.configDirName } : {}),
+        ...(body.extraArgs !== undefined ? { extraArgs: body.extraArgs } : {}),
+        model: body.model,
+        variant: body.variant,
+        temperature: body.temperature,
+        steps: body.steps,
+        maxSteps: body.maxSteps,
+        isSandbox: body.isSandbox,
+      })
       await runtimeTests.reconcileDurableIntents()
       const cfg = loadConfig(deps.configPath)
       return c.json({
@@ -540,11 +422,8 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
         binaryPath,
         config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
         ...(row.model !== null ? { model: row.model } : {}),
+        isSandbox: row.isSandbox,
         ...(rowExtraArgs !== null ? { extraArgs: rowExtraArgs } : {}),
-        bridgeCredentials: true,
-        ...(deps.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: deps.containmentCoordinator }),
       })
       return withRuntimeProbeConfigFence(deps.configPath, async () => {
         // A row with binaryPath=NULL inherits the protocol path from config.json.

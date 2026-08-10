@@ -87,35 +87,6 @@ describe('RFC-143 (B) 能力接口', () => {
     expect(cc.defaultBinary({} as never)).toEqual(['claude'])
   })
 
-  it('OpenCode 从冻结的 child surface 派生最小 containment profile', () => {
-    const profile = getRuntimeDriver('opencode').businessContainmentProfile
-    expect(profile).toBeFunction()
-    expect(
-      profile!({
-        agent: { permission: { bash: 'deny' } } as never,
-        mcps: [],
-      }),
-    ).toBe('runner-filesystem-v1')
-    expect(
-      profile!({
-        agent: { permission: { bash: 'allow' } } as never,
-        mcps: [],
-      }),
-    ).toBe('model-child-netless-v1')
-    expect(
-      profile!({
-        agent: { permission: { bash: 'deny' } } as never,
-        mcps: [{ type: 'local', enabled: true }] as never,
-      }),
-    ).toBe('model-child-netless-v1')
-    expect(
-      profile!({
-        agent: { permission: { bash: 'deny' } } as never,
-        mcps: [{ type: 'local', enabled: false }] as never,
-      }),
-    ).toBe('runner-filesystem-v1')
-  })
-
   it('claude listModels 是静态表、恒 cached、忽略 binary', async () => {
     const cc = getRuntimeDriver('claude-code')
     const r = await cc.listModels('ignored')
@@ -132,10 +103,6 @@ describe('RFC-143 (B) 能力接口', () => {
     const spawnCalls: string[] = []
     const mockDriver = {
       kind: 'opencode', // 借用已有 kind 满足 RuntimeKind union（真第三 kind 需 widen union）
-      containmentProfile: 'model-child-netless-v1',
-      // RFC-237: 能力声明字段——第三 kind 不声明任何窄化 profile 时,intent
-      // admission 对它 fail-closed(空数组即完整表达)。
-      narrowedSystemPermissionProfiles: [],
       minVersion: '0.0.0',
       parseEvent: () => null,
       buildSpawn: async () => ({ cmd: ['mock'], env: {} }),
@@ -227,9 +194,8 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     // 白名单）。新正则把三种逃逸拼写全部纳入。
     const offenders: string[] = []
     const kindDiscriminationAllowlist = new Set([
-      // RFC-224 deliberately gives OpenCode a stricter official-snapshot
-      // diagnostic path and a runner ownership barrier. These are security
-      // capabilities, not spawn assembly bypasses.
+      // Runtime administration and business session handling have product
+      // reasons to inspect protocol-specific capabilities at their boundary.
       'routes/runtimes.ts',
       'services/runner.ts',
       // RFC-237: boot-time probe prewarm keyed off config.defaultRuntime — a
@@ -275,7 +241,7 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
       expect(kindDiscrimination.test(escaped)).toBe(true)
     }
     for (const legit of [
-      `getRuntimeDriver(runtime.protocol).narrowedSystemPermissionProfiles.includes('intent-read-v1')`,
+      `getRuntimeDriver(runtime.protocol).buildSpawn(ctx)`,
       `protocol: 'opencode',`,
       `const kind = resolved.protocol`,
     ]) {
@@ -286,8 +252,8 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
   it('runner 业务 spawn 走 driver.buildBusinessSpawn（不再直调两个 spawn 自由函数）', () => {
     const src = SRC('services/runner.ts')
     expect(src).toContain('driver.buildBusinessSpawn(')
-    expect(src).toContain('repoWorktreePaths:')
-    expect(src).toContain('opts.templateMeta.repos?.map((repo) => repo.worktreePath)')
+    expect(src).toContain('worktreePath: opts.worktreePath')
+    expect(src).toContain('runRoot,')
     expect(src).not.toContain('buildOpencodeSpawn(')
     expect(src).not.toContain('buildClaudeSpawn(')
     expect(src).not.toContain('toClaudeMcpConfig')
@@ -304,9 +270,10 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     expect(src).not.toContain('buildClaudeSpawn')
   })
 
-  it('memoryDistiller 无 protocol 判别（env 覆盖内化进 opencode driver、凭据桥无条件传递）', () => {
+  it('memoryDistiller 无 protocol 判别（spawn 与 transcript capture 均走 driver capability）', () => {
     const src = SRC('services/memoryDistiller.ts')
-    expect(src).toContain('bridgeCredentials: true')
+    expect(src).toContain('getRuntimeDriver(protocol).captureDistillSession?.(')
+    expect(src).not.toContain('bridgeCredentials')
     // 锁读取形态（注释可提及）：env 覆盖不再在 distiller 侧读取，回退逻辑在
     // opencode driver 的 buildSpawn 里。
     expect(src).not.toContain('process.env.AGENT_WORKFLOW_OPENCODE_BIN')
@@ -314,9 +281,9 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     expect(driverSrc).toContain('process.env.AGENT_WORKFLOW_OPENCODE_BIN')
   })
 
-  it('claude 凭据桥决策内化在 driver（test 头存在 ⇒ 桥关闭，CI 不碰 keychain）', () => {
+  it('claude driver 继承自然认证环境，不再装配凭据桥', () => {
     const src = SRC('services/runtime/claudeCode/driver.ts')
-    expect(src).toContain('bridgeCredentials: ctx.runtimeCmd === undefined')
+    expect(src).not.toContain('bridgeCredentials:')
   })
 
   describe('opencode buildSpawn 的 AGENT_WORKFLOW_OPENCODE_BIN 回退（原 distiller 专属分支）', () => {
@@ -332,7 +299,6 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
       prompt: 'P',
       worktreePath: '/wt',
       runDir: '/rd',
-      testOnlyUnverifiedRuntime: true,
     }
 
     it('无显式 binary 时回退 env 覆盖；显式 runtimeBinary 优先', async () => {

@@ -1,41 +1,14 @@
-// RFC-254 T0a (D22) — the single place that decides whether a file on disk may
-// be trusted as platform-private.
+// Cross-platform privacy, file-kind and same-object checks for sensitive files
+// and no-follow worktree reads.
 //
-// WHY THIS EXISTS
-// ---------------
-// The verified-execution store proves three things about every sensitive file
-// it writes or reads back — the launch manifest, the control ACK, the sealed
-// inputs, the byte-frozen binary, the store-hygiene lock probes:
+// The shared rules are:
+//   1. only the owner (plus the OS administrator boundary) may access the file;
+//   2. a checked path must not be a symbolic-link redirection;
+//   3. the opened handle must still name the object described before open.
 //
-//   1. PRIVACY  — nobody but us can read or write it.
-//   2. NOT-A-LINK — the name we checked is the object we opened, not a
-//      redirection someone planted between the two.
-//   3. IDENTITY — the handle we ended up holding is the same object `lstat`
-//      described a moment ago (the TOCTOU half).
-//
-// Until now each of those was spelled inline, six files over, as POSIX
-// arithmetic: `(mode & 0o777) !== 0o600`, `O_NOFOLLOW`, `dev`/`ino` equality.
-// That is not merely unportable — on Windows it is actively misleading. Node
-// synthesizes `mode` from the read-only attribute (a writable file reports
-// 0o666 whatever its ACL says), and `ino` is 0 or unstable on NTFS. So the
-// POSIX spelling on Windows can both reject a perfectly private file and — if
-// anyone ever "fixed" it by relaxing the comparison — accept a world-writable
-// one. The RFC-254 design gate (P0-C) called this out as the single most
-// dangerous scattered assumption in the verified path.
-//
-// The rule this module enforces, and the reason it returns a REASON rather
-// than a boolean: a platform that cannot yet prove privacy must FAIL, loudly
-// and diagnosably, never silently skip the check. Skipping is how a receipt
-// ends up claiming "verified" over a file nothing verified (the same failure
-// mode RFC-253 hit with its containment receipts). `win32` therefore answers
-// `platform-unsupported` here, which callers map onto their existing
-// store-unsafe failure — the same OUTCOME Windows already gets today from the
-// mode arithmetic, but with a reason an operator can act on.
-//
-// Every function is pure over a `Stats`-shaped input plus an explicit
-// `platform`, so both branches are exercised on whatever OS runs the suite.
-
-// The win32 DACL readers for the path-aware privacy wrappers. Imported only by the
+// POSIX exposes these facts through mode/dev/ino. Windows requires the DACL and
+// platform-specific identity handling. The functions return a reasoned verdict
+// and take an explicit platform so both branches remain testable on every host.
 // `...ForHost` wrappers below; the pure `assert*` functions and their tests never
 // touch them, so this module's testability is unchanged. Both a Promise-returning
 // and a sync twin exist because the control-ACK path is synchronous.
@@ -43,12 +16,14 @@ import { assertWindowsFilePrivate, assertWindowsFilePrivateSync } from './win32A
 
 /** The only mode a platform-private file may carry on POSIX. */
 export const PRIVATE_FILE_MODE = 0o600
-/** The only mode a sealed (read+execute, never writable) tree may carry. */
-export const SEALED_EXEC_MODE = 0o500
+/** Mode for an owner-readable/executable file that must not be writable. */
+export const OWNER_READ_EXECUTE_MODE = 0o500
 
 export type FileTrustFailure =
   /** Not a regular file (directory, fifo, socket, device). */
   | 'not-regular-file'
+  /** Not a real directory. */
+  | 'not-directory'
   /** Permission bits grant access to somebody other than the owner. */
   | 'not-private'
   /** The path is a symbolic link / reparse point. */
@@ -70,14 +45,11 @@ const TRUSTED: FileTrustVerdict = { trusted: true }
 const deny = (reason: FileTrustFailure): FileTrustVerdict => ({ trusted: false, reason })
 
 /**
- * The minimal identity pair. Callers that persisted an identity across
- * process boundaries (the claude netless projection stores `dev`/`ino` as
- * scalars in its manifest) have this without a live `Stats`.
+ * The minimal identity pair for comparing filesystem objects across checks.
  */
 export interface FileIdentity {
-  // `number | bigint` because Node's `bigint: true` stat variant is in use in
-  // parts of this codebase (sourceGuard/hermetic read mode as bigint to keep
-  // the full permission word). Comparison is by value, so mixing the two
+  // `number | bigint` because Node's `bigint: true` stat variant preserves the
+  // full permission word. Comparison is by value, so mixing the two
   // representations of the SAME identity would be a false mismatch — callers
   // must not compare a bigint stat against a number stat, and in practice
   // never do: both operands always come from the same stat call style.
@@ -88,6 +60,7 @@ export interface FileIdentity {
 /** The subset of `fs.Stats` these assertions read. */
 export interface TrustStats extends FileIdentity {
   isFile: () => boolean
+  isDirectory: () => boolean
   isSymbolicLink: () => boolean
   /** `bigint` when the caller used Node's `{ bigint: true }` stat variant. */
   mode: number | bigint
@@ -99,9 +72,8 @@ export interface TrustStats extends FileIdentity {
  *
  * POSIX can: mode bits and dev/ino are exactly those facts. Windows cannot —
  * the answer lives in the DACL and in `FileIndex`/`VolumeSerialNumber`, which
- * `fs.Stats` does not carry. A win32 implementation is a separate task
- * (RFC-254 T0a win32 half); until it lands, this seam keeps the verified path
- * fail-closed rather than approximately-correct.
+ * `fs.Stats` does not carry, so path-aware wrappers consult the Windows ACL
+ * implementation instead of approximating the answer.
  */
 export function statMetadataIsAuthoritative(platform: NodeJS.Platform): boolean {
   return platform !== 'win32'
@@ -174,11 +146,8 @@ export function assertUnopenedPrivateFile(
  * Fail closed when the index is absent: a `0` pair means the filesystem gave
  * no identity, and two "0" objects must NOT be treated as the same file.
  *
- * Size is deliberately NOT part of this. Callers disagree about it on purpose
- * — the launch manifest demands byte-exact equality (it was just written and
- * must not have been rewritten), while the control ACK only enforces a
- * ceiling (it is legitimately still being appended when first read). Folding
- * either rule in here would silently retighten or loosen the other.
+ * Size is deliberately NOT part of this. Callers own their own equality or
+ * ceiling policy; folding either one in here would silently change the other.
  */
 export function assertSameFileIdentity(
   before: FileIdentity,
@@ -189,6 +158,20 @@ export function assertSameFileIdentity(
   if (platform === 'win32' && (BigInt(opened.ino) === 0n || BigInt(before.ino) === 0n)) {
     // Filesystem supplied no file index (FAT / some network shares): cannot
     // prove identity, so fail closed rather than match another indexless object.
+    return deny('platform-unsupported')
+  }
+  if (opened.dev !== before.dev || opened.ino !== before.ino) return deny('identity-changed')
+  return TRUSTED
+}
+
+/** Same-object identity check for directory cleanup ownership. */
+export function assertSameDirectoryIdentity(
+  before: FileIdentity,
+  opened: TrustStats,
+  platform: NodeJS.Platform,
+): FileTrustVerdict {
+  if (!opened.isDirectory() || opened.isSymbolicLink()) return deny('not-directory')
+  if (platform === 'win32' && (BigInt(opened.ino) === 0n || BigInt(before.ino) === 0n)) {
     return deny('platform-unsupported')
   }
   if (opened.dev !== before.dev || opened.ino !== before.ino) return deny('identity-changed')
@@ -308,9 +291,8 @@ export function assertUnopenedPrivateFileForHost(
   )
 }
 
-// Sync twins for the control-ACK path (`controlProtocol.ts` uses `openSync`/
-// `fstatSync`). Same verdict as the async wrappers; only the win32 DACL read is
-// synchronous (`spawnSync icacls`), which runs once per launch.
+// Sync twins for callers that use `openSync`/`fstatSync`. Same verdict as the
+// async wrappers; only the win32 DACL read is synchronous (`spawnSync icacls`).
 export function assertPrivateRegularFileForHostSync(
   path: string,
   stats: TrustStats,
@@ -344,4 +326,11 @@ export function assertSameFileIdentityForHost(
   opened: TrustStats,
 ): FileTrustVerdict {
   return assertSameFileIdentity(before, opened, process.platform)
+}
+
+export function assertSameDirectoryIdentityForHost(
+  before: FileIdentity,
+  opened: TrustStats,
+): FileTrustVerdict {
+  return assertSameDirectoryIdentity(before, opened, process.platform)
 }

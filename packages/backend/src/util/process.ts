@@ -32,58 +32,10 @@ export function isProcessAlive(pid: number): boolean {
  * exit, EPERM, or a pre-RFC-098 pid that is not a group leader). Returns
  * false when no signal could be delivered at all.
  */
-export function killProcessTree(
-  pid: number,
-  signal: KillTreeSignal,
-  opts?: {
-    /**
-     * True when `pid` is a sandbox MONITOR that merely supervises the real
-     * child (Linux bwrap outer wrapper), not the runtime itself.
-     *
-     * 2026-08-04, verified in a Debian container with bubblewrap 0.8.0 rather
-     * than reasoned about: a plain group SIGTERM reaches the monitor at the
-     * same instant as the runtime, the monitor exits on TERM, and
-     * `--die-with-parent` then SIGKILLs the PID namespace's init — taking the
-     * whole namespace with it. The probe process observed `INNER_GOT_TERM` and
-     * was killed BEFORE finishing a 0.3 s cleanup, so the advertised 10 s grace
-     * was worth roughly zero: no session abort, no session-DB flush, no final
-     * stdout. macOS (sandbox-exec execs in place, no supervisor) honoured the
-     * full window — two OSes, two cancellation semantics.
-     *
-     * With this flag the graceful phase signals every OTHER member of the group
-     * and leaves the monitor alone; bwrap exits by itself once its child does.
-     * Same container, same probe: `INNER_GOT_TERM` AND `INNER_CLEAN_EXIT`.
-     *
-     * Only meaningful for a graceful signal — the escalation must still take
-     * the monitor down, so SIGKILL always goes to the whole group.
-     */
-    groupLeaderIsSandboxMonitor?: boolean
-  },
-): boolean {
+export function killProcessTree(pid: number, signal: KillTreeSignal): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false
-  // RFC-254 T4: Windows has no process groups, so everything below — the group
-  // signal, the monitor-aware graceful phase, `ps`-based enumeration — has no
-  // equivalent. The whole path diverges here rather than being patched
-  // in-line, which also keeps the POSIX behaviour (including the RFC-252
-  // sandbox-monitor semantics verified in a Debian container) byte-identical.
+  // Windows has no POSIX process groups, so use the Job Object / taskkill path.
   if (process.platform === 'win32') return killProcessTreeWin32(pid)
-  if (opts?.groupLeaderIsSandboxMonitor === true && signal !== 'SIGKILL') {
-    const members = processGroupMembers(pid).filter((member) => member !== pid)
-    if (members.length > 0) {
-      let delivered = false
-      for (const member of members) {
-        try {
-          process.kill(member, signal)
-          delivered = true
-        } catch {
-          // Already gone; other members may still be signalable.
-        }
-      }
-      if (delivered) return true
-    }
-    // No enumerable members (ps unavailable, or the child already exited) —
-    // fall through to the group signal rather than delivering nothing.
-  }
   try {
     process.kill(-pid, signal)
     return true
@@ -104,9 +56,7 @@ export function killProcessTree(
  *   1. The run's Job Object, when one was adopted at spawn. Termination is
  *      atomic over the whole job, so nothing forked mid-call escapes.
  *   2. `taskkill /T /F` otherwise. That walks a SNAPSHOT of the tree, so a
- *      process spawned during the walk survives. It is best-effort cleanup and
- *      — per the design gate — must never be treated as proof that a runtime
- *      store may be reclaimed.
+ *      process spawned during the walk survives, so it remains best-effort.
  *
  * The signal is deliberately not forwarded: Windows draws no SIGTERM/SIGKILL
  * distinction for a non-console child, and the caller's grace window has
@@ -145,9 +95,8 @@ const ownedTrees = new Map<number, ProcessTreeOwnership>()
 /**
  * Adopt a freshly spawned pid into a kill-on-close Job Object (win32 only).
  *
- * Returns true when the strong guarantee is in force. False means the caller
- * falls back to enumerative cleanup and MUST NOT claim the tree was provably
- * reaped — that distinction is the whole point of P0-D.
+ * Returns true when Job Object ownership is active. False means the caller
+ * falls back to enumerative cleanup.
  */
 export function adoptSpawnedProcessTree(pid: number): boolean {
   if (process.platform !== 'win32') return false
@@ -176,9 +125,7 @@ export function releaseProcessTreeOwnership(pid: number): void {
  * POSIX: the process group IS the tree, so signalling it with 0 is exact.
  * Windows: the answer is the Job Object's active-process count; WITHOUT a job
  * there is no authoritative answer at all, which is why `null` is a distinct
- * outcome from `false`. A caller deciding whether to reclaim a runtime store
- * must treat "cannot tell" as "not safe" — reclaiming while a descendant still
- * holds the store is the data-corruption path the design gate identified.
+ * outcome from `false`.
  */
 export function isProcessTreeAlive(pid: number): boolean | null {
   if (!Number.isInteger(pid) || pid <= 0) return false
@@ -194,24 +141,6 @@ export function isProcessTreeAlive(pid: number): boolean | null {
   } catch (err) {
     const e = err as NodeJS.ErrnoException
     return e.code === 'EPERM'
-  }
-}
-
-/** Host pids sharing `pid`'s process group. Empty when `ps` is unavailable. */
-export function processGroupMembers(pid: number): number[] {
-  try {
-    const out = Bun.spawnSync(['ps', '-e', '-o', 'pid=,pgid='])
-    if (out.exitCode !== 0) return []
-    const members: number[] = []
-    for (const line of new TextDecoder().decode(out.stdout).split('\n')) {
-      const [rawPid, rawPgid] = line.trim().split(/\s+/)
-      if (rawPid === undefined || rawPgid === undefined) continue
-      const memberPid = Number(rawPid)
-      if (Number.isInteger(memberPid) && Number(rawPgid) === pid) members.push(memberPid)
-    }
-    return members
-  } catch {
-    return []
   }
 }
 

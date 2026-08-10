@@ -2,9 +2,8 @@
 //
 // WHAT IS BEING PROVEN
 // --------------------
-// The verified launcher reclaims a runtime store once it believes the process
-// tree is gone. On POSIX "the tree" is a process group, which the kernel tracks
-// for us. Windows has no groups, and the RFC's first draft proposed
+// On POSIX the child tree is owned through a process group. Windows has no
+// groups, and the RFC's first draft proposed
 // `taskkill /T` + a single-PID liveness check — which the design gate rejected
 // because taskkill walks a SNAPSHOT (anything forked during the walk escapes)
 // and a single-PID check says nothing about descendants. A surviving grandchild
@@ -67,7 +66,7 @@ async function main(): Promise<void> {
       `\nSKIPPED: job objects unavailable (${diagnosis.reason}).\n` +
         'On Windows ARM64 the shipped Bun build disables TinyCC, so bun:ffi dlopen()\n' +
         'is absent. The platform then falls back to taskkill, which per design gate\n' +
-        'P0-D must NOT be treated as proof that a runtime store can be reclaimed.\n' +
+        'P0-D remains best-effort rather than authoritative tree ownership.\n' +
         'Re-run on the x64 build (the RFC-254 D6 release target) to exercise this.\n',
     )
     process.exit(0)

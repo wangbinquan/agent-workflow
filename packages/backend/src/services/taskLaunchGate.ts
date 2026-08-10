@@ -13,10 +13,6 @@ import type { DbClient } from '@/db/client'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { getWorkflow } from '@/services/workflow'
-import {
-  resolveAgentIdsExecutionPolicy,
-  type ResolvedAgentExecutionPolicy,
-} from '@/services/executionPolicy'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { loadWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 
@@ -31,14 +27,12 @@ export async function assertWorkflowLaunchable(
   db: DbClient,
   actor: Actor,
   workflowId: string,
-  defaultRuntime?: string | null,
 ): Promise<LaunchableWorkflow> {
   const wf = await getWorkflow(db, workflowId)
   if (wf === null || !(await canViewResource(db, actor, 'workflow', wf))) {
     throw new NotFoundError('workflow-not-found', `workflow '${workflowId}' not found`)
   }
   assertNotBuiltin('workflow', wf)
-  await assertWorkflowExecutionPolicy(db, wf.definition, defaultRuntime)
   // RFC-243 实现门 P1-2: launch is the ENFORCEMENT point of the call-node
   // rules — thread the candidate so 4f/4g (upload inputs / output collisions /
   // unwired inputs / cycles) actually gate here, not only in unit tests.
@@ -58,23 +52,4 @@ export async function assertWorkflowLaunchable(
     )
   }
   return wf
-}
-
-/**
- * Effective-runtime gate shared by route preflight, scheduled save/fire and
- * startTask's final service funnel. The persisted workflow schema is flat:
- * wrapper membership points at node ids, so every agent-single node is found
- * by this single pass, including wrapper inner nodes.
- */
-export async function assertWorkflowExecutionPolicy(
-  db: DbClient,
-  definition: LaunchableWorkflow['definition'],
-  defaultRuntime?: string | null,
-): Promise<ResolvedAgentExecutionPolicy[]> {
-  const agentIds = (definition.nodes ?? []).flatMap((node) =>
-    node.kind === 'agent-single' && typeof node.agentId === 'string' && node.agentId.length > 0
-      ? [node.agentId]
-      : [],
-  )
-  return resolveAgentIdsExecutionPolicy(db, agentIds, defaultRuntime)
 }

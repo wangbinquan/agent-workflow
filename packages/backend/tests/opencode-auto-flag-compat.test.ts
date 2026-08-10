@@ -9,7 +9,7 @@
 //
 // 修法（本文件锁定的三段线）：
 //   1. spawn.ts resolveAutoApproveFlag —— 按二进制版本选拼写；未知/不可解析
-//      一律旧拼写（golden 与两族测试桩零漂移；真实二进制永远先被 boot 探测）。
+//      默认当前 `--auto`，只对已证实 <1.18 的二进制使用旧拼写。
 //   2. util/opencode-version-registry —— probeOpencode 成功即记录 binary→version
 //      （daemon 启动在监听前必探默认二进制），driver 组装 spawn 时查表。
 //   3. driver 两条 spawn 路径（system buildSpawn / business buildBusinessSpawn）
@@ -58,17 +58,15 @@ describe('resolveAutoApproveFlag — version gate', () => {
     }
   })
 
-  test('未知（null/undefined/空串）→ 旧拼写（桩零漂移的根基）', () => {
-    expect(resolveAutoApproveFlag(undefined)).toBe(LEGACY)
-    expect(resolveAutoApproveFlag(null)).toBe(LEGACY)
-    expect(resolveAutoApproveFlag('')).toBe(LEGACY)
+  test('未知（null/undefined/空串）→ 当前 --auto', () => {
+    expect(resolveAutoApproveFlag(undefined)).toBe('--auto')
+    expect(resolveAutoApproveFlag(null)).toBe('--auto')
+    expect(resolveAutoApproveFlag('')).toBe('--auto')
   })
 
-  test('不可解析的垃圾串 → 旧拼写（compareSemver 对垃圾返回 0，裸比较会误选 --auto）', () => {
-    // 这是个真实的坑：compareSemver('garbage','1.18.0') === 0 ⇒ >=0 ⇒ --auto。
-    // resolveAutoApproveFlag 必须先 extractVersion 归一化。
-    expect(resolveAutoApproveFlag('garbage')).toBe(LEGACY)
-    expect(resolveAutoApproveFlag('stub-opencode')).toBe(LEGACY)
+  test('不可解析的字符串 → 当前 --auto', () => {
+    expect(resolveAutoApproveFlag('garbage')).toBe('--auto')
+    expect(resolveAutoApproveFlag('stub-opencode')).toBe('--auto')
   })
 
   test('带前后缀的版本串走 extractVersion 归一化（v 前缀 / 预发布尾巴）', () => {
@@ -130,7 +128,7 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
     testOnlyUnverifiedRuntime: true,
   } as const
 
-  test('buildSpawn（system agent）：registry 有 ≥1.18 → --auto；无记录 → 旧拼写', async () => {
+  test('buildSpawn（system agent）：registry 有 ≥1.18 与无记录均使用 --auto', async () => {
     recordOpencodeBinaryVersion('/fork/oc118', '1.18.3')
     const modern = await opencodeDriver.buildSpawn({
       ...SYSTEM_BASE,
@@ -143,8 +141,8 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
       ...SYSTEM_BASE,
       runtimeBinary: '/fork/never-probed',
     })
-    expect(unknown.cmd).toContain(LEGACY)
-    expect(unknown.cmd).not.toContain('--auto')
+    expect(unknown.cmd).toContain('--auto')
+    expect(unknown.cmd).not.toContain(LEGACY)
   })
 
   test('buildSpawn 默认头（PATH 上的 opencode）以 "opencode" 为 key 查表 —— boot 探测种子生效的形状', async () => {
@@ -189,16 +187,16 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
       wantsInventory: false,
       nodeRunId: 'nr-flag',
       log: createLogger('oc-flag-test'),
-      testOnlyUnverifiedRuntime: true,
     }
     recordOpencodeBinaryVersion('/fork/oc118-biz', '1.18.3')
     const modern = await opencodeDriver.buildBusinessSpawn(ctx)
     expect(modern.cmd).toContain('--auto')
     expect(modern.cmd).not.toContain(LEGACY)
 
-    // 同 ctx、无记录 → 旧拼写（默认不漂移）。
+    // 同 ctx、无记录 → 当前拼写。
     resetOpencodeBinaryVersionsForTests()
     const unknown = await opencodeDriver.buildBusinessSpawn(ctx)
-    expect(unknown.cmd).toContain(LEGACY)
+    expect(unknown.cmd).toContain('--auto')
+    expect(unknown.cmd).not.toContain(LEGACY)
   })
 })

@@ -191,6 +191,44 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     })
   })
 
+  test('isSandbox round-trips and the pre-save probe receives the explicit Claude toggle', async () => {
+    let probed: SmokeOptions | null = null
+    const app = appWithSmoke(h, async (options) => {
+      probed = options
+      return CONFORMING_SMOKE
+    })
+    const res = await reqAs(app, DAEMON_TOKEN, '/api/runtimes', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'claude-compat',
+        protocol: 'claude-code',
+        binaryPath: canonicalBinaryPath('fixture-claude'),
+        isSandbox: true,
+        probe: true,
+      }),
+    })
+
+    expect(res.status).toBe(201)
+    expect(probed).toMatchObject({ protocol: 'claude-code', isSandbox: true })
+    const json = (await res.json()) as { runtime: { isSandbox: boolean } }
+    expect(json.runtime.isSandbox).toBe(true)
+    expect((await getRuntime(h.db, 'claude-compat'))?.isSandbox).toBe(true)
+
+    const invalid = await reqAs(app, DAEMON_TOKEN, '/api/runtimes', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'opencode-misleading',
+        protocol: 'opencode',
+        isSandbox: true,
+        probe: false,
+      }),
+    })
+    expect(invalid.status).toBe(422)
+    expect((await invalid.json()) as Record<string, unknown>).toMatchObject({
+      code: 'runtime-is-sandbox-unsupported',
+    })
+  })
+
   test('POST /api/runtimes is admin-only → 403 for a regular user', async () => {
     const res = await reqAs(h.app, h.userToken, '/api/runtimes', {
       method: 'POST',
@@ -241,7 +279,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
   })
 
   test.each([null, '   '])(
-    'PUT rejects clearing an OpenCode model with %p and preserves the valid profile',
+    'PUT accepts clearing an OpenCode model with %p and delegates selection to the CLI',
     async (model) => {
       await createRuntime(h.db, {
         name: 'policy-oc',
@@ -254,17 +292,12 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
         body: JSON.stringify({ model }),
       })
 
-      expect(res.status).toBe(422)
-      expect((await res.json()) as Record<string, unknown>).toMatchObject({
-        code: 'execution-identity-model-unresolved',
-      })
+      expect(res.status).toBe(200)
       const list = await reqAs(h.app, h.userToken, '/api/runtimes')
       const rows = (await list.json()) as {
         runtimes: Array<{ name: string; model: string | null }>
       }
-      expect(rows.runtimes.find((runtime) => runtime.name === 'policy-oc')?.model).toBe(
-        'openai/gpt-5.6',
-      )
+      expect(rows.runtimes.find((runtime) => runtime.name === 'policy-oc')?.model).toBeNull()
     },
   )
 

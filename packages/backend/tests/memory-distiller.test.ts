@@ -24,6 +24,7 @@ import {
   DISTILLER_SYSTEM_PROMPT,
   buildDistillerUserPrompt,
   finalizeDistillerSpawnAttempt,
+  IndeterminateRuntimeProcessError,
   loadScopeContexts,
   loadSourceEvents,
   parseDistillerOutput,
@@ -32,7 +33,6 @@ import {
   type DistillerSpawnFn,
 } from '../src/services/memoryDistiller'
 import { rowToDistillJob } from '../src/services/memoryDistiller'
-import { ExecutionIdentityFailure } from '../src/services/runtime/opencode/failure'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -590,7 +590,7 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     expect(inserted[0]!.status).toBe('candidate')
   })
 
-  test('forwards the resolved protocol/binary/model to spawnFn (RFC-117)', async () => {
+  test('forwards the resolved protocol/binary/model/IS_SANDBOX toggle to spawnFn', async () => {
     const { taskId } = seedTask(db)
     const jobRow = {
       id: ulid(),
@@ -625,10 +625,12 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
       protocol: 'claude-code',
       runtimeBinary: '/opt/cc',
       model: 'claude-x',
+      isSandbox: true,
     })
     expect(captured!.protocol).toBe('claude-code')
     expect(captured!.runtimeBinary).toBe('/opt/cc')
     expect(captured!.model).toBe('claude-x')
+    expect(captured!.isSandbox).toBe(true)
   })
 
   test('non-zero exit propagates as thrown error (scheduler retries / records last_error)', async () => {
@@ -659,7 +661,7 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     )
   })
 
-  test('cleanup lock failure preserves the outer cwd and throws the stable store-unsafe code', async () => {
+  test('cleanup failure preserves the outer cwd and reports an ordinary cleanup error', async () => {
     const { taskId } = seedTask(db)
     const job = rowToDistillJob({
       id: ulid(),
@@ -692,9 +694,9 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     }
 
     try {
-      await expect(runDistill({ db, job, siblings: [job], spawnFn })).rejects.toMatchObject({
-        code: 'execution-identity-store-unsafe',
-      })
+      await expect(runDistill({ db, job, siblings: [job], spawnFn })).rejects.toThrow(
+        'distiller scratch cleanup did not complete safely',
+      )
       expect(cleanupCalled).toBe(true)
       expect(cwd).not.toBe('')
       expect(existsSync(cwd)).toBe(true)
@@ -703,7 +705,7 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     }
   })
 
-  test('unreaped spawn failure preserves its outer cwd instead of erasing live run inputs', async () => {
+  test('an indeterminate spawn failure preserves its outer cwd instead of erasing live run inputs', async () => {
     const { taskId } = seedTask(db)
     const job = rowToDistillJob({
       id: ulid(),
@@ -723,13 +725,13 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     let cwd = ''
     const spawnFn: DistillerSpawnFn = async (input) => {
       cwd = input.cwd
-      throw new ExecutionIdentityFailure('execution-identity-store-unsafe')
+      throw new IndeterminateRuntimeProcessError()
     }
 
     try {
-      await expect(runDistill({ db, job, siblings: [job], spawnFn })).rejects.toMatchObject({
-        code: 'execution-identity-store-unsafe',
-      })
+      await expect(runDistill({ db, job, siblings: [job], spawnFn })).rejects.toThrow(
+        'runtime spawn state is indeterminate',
+      )
       expect(cwd).not.toBe('')
       expect(existsSync(cwd)).toBe(true)
     } finally {

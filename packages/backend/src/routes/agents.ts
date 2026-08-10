@@ -61,7 +61,6 @@ import { resolveOpencodeCmd } from '@/util/opencode'
 import { mountAclEndpoints } from './resourceAcl'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'
-import { loadConfig } from '@/config'
 import { getAgentResourceStatus } from '@/services/agentResourceIntegrity'
 
 /**
@@ -209,7 +208,6 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      const defaultRuntime = loadConfig(deps.configPath).defaultRuntime
       // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
       // enforced INSIDE createAgent, bound to the same single resolution that
       // produces the persisted ids (no check-then-resolve TOCTOU). On create every
@@ -217,7 +215,6 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       const created = await createAgent(deps.db, parsed.data, {
         ownerUserId: actor.user.id,
         actor,
-        executionPolicy: { defaultRuntime },
       })
       return c.json(created, 201)
     },
@@ -258,21 +255,10 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       // ID, not raw token) are checked — a grandfathered ref re-submitted by name is
       // not mis-flagged as new.
       const { expectedUpdatedAt, expectedAclRevision, ...patch } = parsed.data
-      const updated = await updateAgent(
-        deps.db,
-        id,
-        patch,
-        actor,
-        {
-          expectedUpdatedAt,
-          expectedAclRevision,
-        },
-        {
-          executionPolicy: {
-            defaultRuntime: loadConfig(deps.configPath).defaultRuntime,
-          },
-        },
-      )
+      const updated = await updateAgent(deps.db, id, patch, actor, {
+        expectedUpdatedAt,
+        expectedAclRevision,
+      })
       return c.json(updated)
     },
   )
@@ -387,14 +373,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
           payload: parsed.data,
           ...(uploads !== undefined ? { uploads } : {}),
         },
-        buildStartTaskDeps(
-          deps.db,
-          deps.configPath,
-          actor.user.id,
-          opencodeCmd,
-          deps.secretBox,
-          deps.containmentCoordinator,
-        ),
+        buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd, deps.secretBox),
       )
       return c.json(task, 201)
     },

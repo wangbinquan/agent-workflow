@@ -39,7 +39,6 @@ import {
   readScriptDependencies,
   readScriptEnv,
   readScriptLanguage,
-  resolveScriptNetwork,
   resolveScriptReadonly,
   scriptDependencyIssue,
   scriptEnvSuffix,
@@ -131,7 +130,6 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
       : ''
   const dependencies = readScriptDependencies(node)
   const env = readScriptEnv(node)
-  const network = resolveScriptNetwork(node)
   const isReadonly = resolveScriptReadonly(node)
   const outputs = declaredScriptOutputs(node)
   const mode = scriptOutputMode(node)
@@ -399,18 +397,6 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
           />
         </Field>
 
-        <Switch
-          checked={network === 'deny'}
-          label={t('scriptInspector.networkDeny')}
-          hint={t('scriptInspector.networkDenyHint')}
-          data-testid="script-network-deny"
-          onChange={(checked) =>
-            update(
-              { network: checked ? 'deny' : undefined },
-              atomicNodeInspectorChange(node.id, 'network', t('scriptInspector.networkDeny')),
-            )
-          }
-        />
         <Switch
           checked={isReadonly}
           label={t('scriptInspector.readonly')}

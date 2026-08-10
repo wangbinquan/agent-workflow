@@ -9,48 +9,20 @@ import { registerRoute } from '@/routes/registry'
 import {
   getRuntime,
   invalidateInheritedRuntimeProbeReceipts,
-  resolveAgentRuntime,
-  resolveInternalAgentRuntime,
   type RuntimeProtocol,
   withRuntimeProbeConfigFence,
 } from '@/services/runtimeRegistry'
 import { ValidationError } from '@/util/errors'
-import {
-  assertAgentExecutionPolicy,
-  assertResolvedExecutionPolicy,
-} from '@/services/executionPolicy'
-import { listAgents } from '@/services/agent'
-import { getRuntimeDriver } from '@/services/runtime'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { resizeAllNodePools } from '@/services/processNodeConcurrency'
 import { resizeAllTaskFanoutSems } from '@/services/taskFanoutPools'
 import { Paths } from '@/util/paths'
-
-/** RFC-237 — the intent builder admits only runtimes whose driver declares the
- *  'intent-read-v1' narrowed profile (capability gate, not a protocol-literal
- *  gate). `inherited` switches the message for the defaultRuntime-inheritance
- *  path (design-gate P2-3). */
-function assertIntentRuntimeCapability(
-  resolved: { name: string; protocol: Parameters<typeof getRuntimeDriver>[0] },
-  selection: string,
-  inherited: boolean,
-): void {
-  const driver = getRuntimeDriver(resolved.protocol)
-  if (driver.narrowedSystemPermissionProfiles.includes('intent-read-v1')) return
-  throw new ValidationError(
-    'intent-runtime-unsupported',
-    inherited
-      ? `the intent builder inherits defaultRuntime '${selection}' (protocol '${resolved.protocol}'), which cannot enforce the intent-read-v1 permission profile; pick a default whose driver declares it or set intentBuilderRuntime explicitly`
-      : `runtime '${selection}' (protocol '${resolved.protocol}') cannot enforce the intent-read-v1 permission profile; select a runtime whose driver declares it`,
-  )
-}
 
 export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
   const runtimeTests = getMcpRuntimeTestService({
     db: deps.db,
     configPath: deps.configPath,
     appHome: deps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
-    containmentCoordinator: deps.containmentCoordinator,
     runFn: deps.mcpRuntimeTestDependencies?.runFn,
     now: deps.mcpRuntimeTestDependencies?.now,
     capacity: deps.mcpRuntimeTestDependencies?.capacity,
@@ -111,81 +83,6 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
             `webhookDeliveryBodyRetentionDays (${nextConfig.webhookDeliveryBodyRetentionDays}) must not exceed webhookDeliveryRowRetentionDays (${nextConfig.webhookDeliveryRowRetentionDays})`,
           )
         }
-        // RFC-224 system-agent profiles must never fall back to OpenCode's implicit
-        // model. Validate the complete merged config, so an unrelated edit cannot
-        // preserve a legacy-invalid internal-agent selection.
-        for (const selection of [
-          {
-            runtimeName: nextConfig.memoryDistillRuntime,
-            deprecatedModel: nextConfig.memoryDistillModel,
-          },
-          {
-            // RFC-239 — change-narrative has no legacy model field.
-            runtimeName: nextConfig.changeNarrativeRuntime,
-            deprecatedModel: undefined,
-          },
-          {
-            runtimeName: nextConfig.commitPushRuntime,
-            deprecatedModel: nextConfig.commitPushModel,
-          },
-          {
-            runtimeName: nextConfig.mergeAgentRuntime,
-            deprecatedModel: nextConfig.mergeAgentModel,
-          },
-        ]) {
-          assertResolvedExecutionPolicy(
-            await resolveInternalAgentRuntime(deps.db, {
-              ...selection,
-              defaultRuntime: nextConfig.defaultRuntime,
-            }),
-          )
-        }
-        // RFC-234 §1.1 / RFC-237 — the intent builder is FAIL-CLOSED on runtime
-        // capability: only runtimes whose driver declares the 'intent-read-v1'
-        // narrowed profile are admissible. An explicit selection of anything
-        // else is rejected HERE, at save time — there is no "configured but
-        // degraded at run time" path.
-        if (nextConfig.intentBuilderRuntime !== undefined) {
-          const resolved = await resolveInternalAgentRuntime(deps.db, {
-            runtimeName: nextConfig.intentBuilderRuntime,
-            defaultRuntime: nextConfig.defaultRuntime,
-          })
-          assertResolvedExecutionPolicy(resolved)
-          assertIntentRuntimeCapability(resolved, nextConfig.intentBuilderRuntime, false)
-        } else if (
-          typeof body === 'object' &&
-          body !== null &&
-          ('intentBuilderRuntime' in body || 'defaultRuntime' in body)
-        ) {
-          // RFC-237 (design-gate P2-3 + impl-gate P2) — the intent builder
-          // inherits the default when unset; validate the EFFECTIVE inherited
-          // runtime on EVERY patch that can change that inheritance: switching
-          // defaultRuntime AND clearing the intentBuilderRuntime override (the
-          // clear path leaves defaultRuntime untouched, so a default-change-only
-          // check would persist an unlaunchable inherited config). Unrelated
-          // patches skip the resolve so a legacy-bad stored default cannot block
-          // orthogonal settings.
-          const inherited = await resolveInternalAgentRuntime(deps.db, {
-            runtimeName: null,
-            defaultRuntime: nextConfig.defaultRuntime,
-          })
-          assertIntentRuntimeCapability(
-            inherited,
-            nextConfig.defaultRuntime ?? inherited.name,
-            true,
-          )
-        }
-        // Switching the effective default is a fan-out policy change. Every agent
-        // that inherits it is checked before the config file is written.
-        if (nextConfig.defaultRuntime !== currentConfig.defaultRuntime) {
-          const defaultRuntime = await resolveAgentRuntime(deps.db, null, nextConfig.defaultRuntime)
-          assertResolvedExecutionPolicy(defaultRuntime)
-          for (const agent of await listAgents(deps.db)) {
-            if (agent.runtime === undefined) {
-              await assertAgentExecutionPolicy(deps.db, agent, nextConfig.defaultRuntime)
-            }
-          }
-        }
         const changedBinaryProtocols: RuntimeProtocol[] = []
         if (nextConfig.opencodePath !== currentConfig.opencodePath) {
           changedBinaryProtocols.push('opencode')
@@ -208,10 +105,6 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         // credential on the box.
         const updated = applyConfigPatch(deps.configPath, body)
         await runtimeTests.reconcileDurableIntents()
-        // RFC-233 linearization point: once this response can be observed, every
-        // future admission sees the saved mode generation. Existing immutable
-        // admissions are intentionally not rewritten.
-        deps.containmentCoordinator?.setMode(updated.sandboxMode)
         // RFC-266 linearization point for the concurrency pools. Semaphore
         // supports live resize (growing drains the FIFO so queued nodes start
         // at once, shrinking never preempts an in-flight holder), but until now

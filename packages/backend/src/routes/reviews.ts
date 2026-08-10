@@ -321,9 +321,6 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
         const resumeDeps: Parameters<typeof resumeTask>[2] = {
           db: deps.db,
           appHome: appHomeFor(deps),
-          ...(deps.containmentCoordinator === undefined
-            ? {}
-            : { containmentCoordinator: deps.containmentCoordinator }),
           ...(opencodeCmd ? { opencodeCmd } : {}),
           // RFC-108 T4 (Codex impl gate P2): a review decision resumes the task;
           // thread the per-node timeout floor (+commit&push/concurrency) so the

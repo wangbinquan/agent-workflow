@@ -35,7 +35,6 @@ async function harness(): Promise<{ app: Hono; root: string }> {
       pid: 6000 + runIndex,
       spawnedAt: Date.now(),
       spawnBinaryPath: '/mock/opencode',
-      spawnCommandDigest: 'f'.repeat(64),
     })
     await opts.eventSink?.setRootSessionId('native-http-session')
     await opts.eventSink?.append({

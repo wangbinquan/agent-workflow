@@ -412,7 +412,6 @@ describe('Codex impl-gate P1-2 — withheld kinds must be PRESERVED, not deleted
   test('the see-but-do-not-touch fields are named', () => {
     for (const field of [
       'language',
-      'network',
       'readonly',
       'outputs',
       'provider',
@@ -704,7 +703,7 @@ describe('the omit-these-fields list is scoped to the withheld kind', () => {
     expect(doc).toContain(codeHostFields)
     expect(doc).not.toContain(scriptFields)
     // and the see-but-do-not-touch list is scoped too
-    expect(doc).not.toContain('`language` / `network` / `readonly` / `outputs`')
+    expect(doc).not.toContain('`language` / `readonly` / `outputs`')
   })
 
   test('only scripts withheld: the CODE-HOST list must NOT be offered', () => {

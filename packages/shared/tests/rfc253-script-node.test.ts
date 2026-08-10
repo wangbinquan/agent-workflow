@@ -20,6 +20,7 @@ import {
   scriptOutputMode,
   scriptPortEnvCollisions,
   scriptReservedEnvKeyIssue,
+  ScriptNodeSchema,
   serializeScriptDepsEnvKeyV1,
   serializeScriptSensitiveProjectionV1,
   SCRIPT_ENV_INLINE_LIMIT,
@@ -167,8 +168,8 @@ describe('dependency specs', () => {
 })
 
 describe('reserved environment keys', () => {
-  test('refuses the keys that would undo the platform guarantees', () => {
-    for (const key of ['PATH', 'HOME', 'PYTHONPATH', 'NODE_OPTIONS', 'TMPDIR']) {
+  test('refuses product-owned and pre-execution loader keys', () => {
+    for (const key of ['PWD', 'PYTHONPATH', 'NODE_OPTIONS']) {
       expect(scriptReservedEnvKeyIssue(key)).not.toBeNull()
     }
     expect(scriptReservedEnvKeyIssue('AW_PORT_X')).not.toBeNull()
@@ -178,6 +179,9 @@ describe('reserved environment keys', () => {
   test('ordinary keys pass', () => {
     expect(scriptReservedEnvKeyIssue('API_TOKEN')).toBeNull()
     expect(scriptReservedEnvKeyIssue('MY_SETTING')).toBeNull()
+    expect(scriptReservedEnvKeyIssue('PATH')).toBeNull()
+    expect(scriptReservedEnvKeyIssue('HOME')).toBeNull()
+    expect(scriptReservedEnvKeyIssue('TMPDIR')).toBeNull()
   })
 })
 
@@ -202,7 +206,6 @@ describe('sensitive projection (the scripts:author gate oracle)', () => {
         defWith([scriptNode({ dependencies: ['requests==2.32.3'] }), base.nodes[1]!]),
       ],
       ['env', defWith([scriptNode({ env: { API_TOKEN: 'x' } }), base.nodes[1]!])],
-      ['network', defWith([scriptNode({ network: 'deny' }), base.nodes[1]!])],
       ['readonly', defWith([scriptNode({ readonly: true }), base.nodes[1]!])],
       ['outputs', defWith([scriptNode({ outputs: [{ name: 'x' }] }), base.nodes[1]!])],
       ['added node', defWith([...base.nodes, scriptNode({ id: 's2' })])],
@@ -213,6 +216,14 @@ describe('sensitive projection (the scripts:author gate oracle)', () => {
         serializeScriptSensitiveProjectionV1(def),
         `${label} must be inside the gated projection`,
       ).not.toBe(serializeScriptSensitiveProjectionV1(base))
+    }
+  })
+
+  test('removed network field is rejected instead of pretending to enforce it', () => {
+    const parsed = ScriptNodeSchema.safeParse(scriptNode({ network: 'deny' }))
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path[0] === 'network')).toBe(true)
     }
   })
 

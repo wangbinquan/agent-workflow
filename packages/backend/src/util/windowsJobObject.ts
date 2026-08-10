@@ -1,71 +1,18 @@
-// RFC-254 T4 (D9, design gate P0-D) — Windows process-tree ownership.
+// RFC-254 T4 — Windows process-tree ownership.
 //
-// WHY THIS IS REQUIRED FOR v1, not deferred with the containment provider
-// ----------------------------------------------------------------------
-// The verified launcher treats a POSIX process GROUP as the ownership unit for
-// a runtime store: `stopServer` only reports stopped once the child has settled
-// AND the group is no longer alive, and the caller then marks the run reaped,
-// cleans up, and RELEASES THE SQLITE STORE FOR REUSE
-// (`verifiedLauncher.ts:206,928,1237`).
+// Windows has no POSIX process groups. `taskkill /T` walks a point-in-time
+// process snapshot, so a descendant created during that walk can escape.
+// A Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` gives the daemon an
+// atomic ownership unit for a spawned tree and an authoritative active-process
+// count.
 //
-// Windows has no process groups. The first draft of this RFC proposed degrading
-// `isGroupAlive` to a single-PID check plus `taskkill /T`, and the design gate
-// showed why that is not a defence-in-depth trade-off but a data-corruption
-// one: a surviving grandchild still holds the store while the platform declares
-// it reaped and hands it to the next run. `taskkill` is also enumerative — it
-// walks a snapshot of the tree, so anything forked during the walk escapes.
+// This module is process-lifetime governance only. It grants no filesystem or
+// network isolation and must not be described as a sandbox.
 //
-// A Job Object is the actual Windows equivalent of the guarantee we need:
-//   * every descendant is in the job automatically (they inherit membership,
-//     and we forbid breakaway), so there is no snapshot to race;
-//   * `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` terminates the whole job the moment
-//     the last handle closes — including when the DAEMON ITSELF dies, which is
-//     strictly stronger than the POSIX status quo;
-//   * `QueryInformationJobObject` reports the live process count, which is the
-//     authoritative "is this tree still alive" answer the store-reclaim
-//     decision needs.
-//
-// SCOPE: this module is process-lifetime governance only. It is NOT a
-// containment provider — it grants no filesystem or network isolation, claims
-// no capability, and does not participate in admission (D1 stands).
-//
-// It uses Bun FFI against kernel32 rather than a native module because the
-// product ships as ONE self-contained executable; a `.node` addon cannot ride
-// along. OpenCode itself does the same thing for its console handling
-// (`packages/tui/src/terminal-win32.ts`).
-//
-// ⚠️ MEASURED LIMITATION (Windows 11 ARM64, Bun 1.3.14, 2026-08-04)
-// -----------------------------------------------------------------
-// `bun:ffi`'s `dlopen()` is NOT present in every Bun build. On the Windows
-// ARM64 build it throws
-//
-//     bun:ffi dlopen() is not available in this build (TinyCC is disabled)
-//
-// so this whole module degrades to unavailable there — verified by running the
-// FFI directly on a real VM, not inferred. The consequence is deliberate and
-// must stay visible: `adoptSpawnedProcessTree` returns false, the caller falls
-// back to `taskkill /T /F`, and — per design gate P0-D — a taskkill-only
-// cleanup MUST NOT be treated as proof that a runtime store may be reclaimed.
-// `isProcessTreeAlive` therefore answers `null` ("cannot tell"), never `false`.
-//
-// The x64 Bun build does ship dlopen, which is why the release target
-// (windows x86_64, RFC-254 D6) CAN keep the strong guarantee. Anyone extending
-// support to ARM64 has to close this first.
-//
-// ⚠️ NOT WIRED YET (2026-08-04, found by the implementation gate)
-// ---------------------------------------------------------------
-// Nothing in production calls `adoptSpawnedProcessTree` — `grep` it and the
-// only hit outside `util/process.ts` is its own test. So on a real Windows
-// daemon today `ownedTrees` is permanently empty, `killProcessTree` always
-// takes the enumerative `taskkill /T /F` branch, and `isProcessTreeAlive`
-// always answers `null`.
-//
-// That state is SAFE but DEGRADED, and it is safe for the reason P0-D asked
-// for: `null` means "cannot tell", and a caller deciding whether to reclaim a
-// runtime store must treat that as "not safe to reclaim". What is missing is
-// the strong guarantee, not the protection against the corruption. Do not read
-// the paragraphs above as saying the guarantee is in force — it is available,
-// and the spawn sites have to opt in. Tracked in `docs/audit-backlog.md`.
+// Bun's Windows x64 build exposes kernel32 through `bun:ffi`; some ARM64 builds
+// do not. When FFI is unavailable, adoption returns null and callers fall back
+// to best-effort `taskkill /T /F`. `isProcessTreeAlive` therefore preserves a
+// distinct unknown outcome for an unadopted tree.
 
 // `bun:ffi` itself is available on every platform Bun runs on — only the
 // `dlopen('kernel32.dll')` call is Windows-specific, and that is guarded — so a
@@ -130,10 +77,8 @@ const BASIC_LIMIT_FLAGS_OFFSET = 16
  * The first version of this computed the offset by SUBTRACTING trailing field
  * sizes from the struct size (`48 - 4 - 8 - 8 - 8`) and landed on 20 — inside
  * `ThisPeriodTotalUserTime`, which reads 0 for a process that has just started.
- * So `liveCount()` said "nothing alive" while the tree was running, and since
- * that answer decides whether a runtime store may be reclaimed
- * (`util/process.ts` → RFC-224), it is the exact release-while-in-use the
- * design gate's P0-D exists to prevent. It survived every macOS run (no FFI
+ * So `liveCount()` said "nothing alive" while the tree was running, allowing
+ * cleanup to race a live descendant. It survived every macOS run (no FFI
  * there) and the ARM64 real machine (no dlopen in that Bun build); the x64
  * Windows CI leg caught it on its first execution. Offsets are written out
  * field by field now, and `rfc254-process-tree-ownership.test.ts` asserts each

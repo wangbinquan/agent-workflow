@@ -267,7 +267,7 @@ describe('闭合性：重复 slug / 悬空 local 引用 / op 上限', () => {
 })
 
 describe('payload 逐字段对照正式 schema（AC-B3b）', () => {
-  test('agent payload 带 network —— intent 版没有这个字段，照抄会静默回落 deny', () => {
+  test('removed agent network field is rejected explicitly', () => {
     const withNetwork = {
       opId: 'op-1',
       kind: 'agent-create' as const,
@@ -275,10 +275,7 @@ describe('payload 逐字段对照正式 schema（AC-B3b）', () => {
       payload: { ...agentPayload, network: 'allow' as const },
     }
     const parsed = BundleOpSchema.safeParse(withNetwork)
-    expect(parsed.success).toBe(true)
-    if (parsed.success) {
-      expect((parsed.data.payload as { network?: string }).network).toBe('allow')
-    }
+    expect(parsed.success).toBe(false)
   })
 
   test('skills 槽接受 project: —— 其余引用槽拒绝它', () => {

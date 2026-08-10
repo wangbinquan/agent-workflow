@@ -86,13 +86,10 @@ describe('POST /api/mcps', () => {
     expect(body.code).toBe('mcp-invalid')
   })
 
-  // RFC-242 (adversarial review P1-4): the runtime fence can never forward a
-  // dynamic-loader variable to an MCP child — `bwrap`/`sandbox-exec` read this
-  // environment BEFORE the boundary exists. It used to surface as an opaque
-  // `execution-identity-mismatch` hours later, at spawn; refuse it at save time
-  // with the key named. Everything that is merely unusual (`token`, `apiKey`,
-  // `PYTHONPATH`, `NODE_OPTIONS`) must still save — the first cut rejected
-  // those too and broke working configurations.
+  // Dynamic-loader variables change the executable before the declared MCP
+  // command starts, so reject them at save time with the key named. Everything
+  // merely unusual (`token`, `apiKey`, `PYTHONPATH`, `NODE_OPTIONS`) must still
+  // save.
   test('env: a dynamic-loader key → 422 naming the key', async () => {
     const res = await req(app, '/api/mcps', {
       method: 'POST',

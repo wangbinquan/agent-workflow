@@ -6,10 +6,6 @@
 // now reads the registry-wide GET /api/runtimes/status in routes/runtimes.ts.
 
 import type { Hono } from 'hono'
-import {
-  isExecutionIdentityFailureCode,
-  type ExecutionIdentityFailureCode,
-} from '@agent-workflow/shared'
 import { loadConfig } from '@/config'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
@@ -17,33 +13,8 @@ import { parseBoolQuery } from '@/util/http'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
 import { resolveRuntimeByName } from '@/services/runtimeRegistry'
 import { redactSensitiveString } from '@/util/redact'
-import { ExecutionIdentityFailure } from '@/services/runtime/opencode/failure'
-
-function safeExecutionIdentityRouteFailure(error: unknown): {
-  code: ExecutionIdentityFailureCode
-  message: string
-} | null {
-  const code = executionIdentityCode(error)
-  if (code === null) return null
-  const pointer = error instanceof ExecutionIdentityFailure ? error.pointer : null
-  return {
-    code,
-    message: pointer === null || pointer === '' ? code : `${code} at ${pointer}`,
-  }
-}
-
-function executionIdentityCode(error: unknown): ExecutionIdentityFailureCode | null {
-  if (typeof error !== 'object' || error === null || !('code' in error)) return null
-  const code = (error as { code?: unknown }).code
-  return isExecutionIdentityFailureCode(code) ? code : null
-}
 
 export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
-  // Test-only stand-in for the byte-frozen seal; production leaves it unset so
-  // the driver uses its own real seal (RFC-143 closeout: the route no longer
-  // performs the hermetic enumeration, it only forwards this seam).
-  const testOnlySnapshot = deps.runtimeDiagnosticTestDependencies?.withRuntimeOpencodeSnapshot
-
   registerRoute(
     app,
     {
@@ -84,29 +55,9 @@ export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
       const binary = resolvedBinary ?? driver.defaultBinary(cfg)[0]!
       const refresh = parseBoolQuery(c, 'refresh', { default: false })
       try {
-        // RFC-143 closeout (2026-07-31): the hermetic enumeration moved INTO the
-        // opencode driver — the route no longer branches on runtime kind, it just
-        // asks the capability. Identity/redaction mapping below is unchanged.
-        const listed = await driver.listModels(binary, {
-          refresh,
-          ...(testOnlySnapshot === undefined ? {} : { testOnlySnapshot }),
-        })
+        const listed = await driver.listModels(binary, { refresh })
         return c.json({ ...listed, binary })
       } catch (err) {
-        const identityFailure = safeExecutionIdentityRouteFailure(err)
-        if (identityFailure !== null) {
-          // RFC-224: preserve the stable closed-vocabulary code while refusing to
-          // reflect an arbitrary Error.message. Only ExecutionIdentityFailure's
-          // constructor-validated JSON Pointer may accompany the code.
-          return c.json(
-            {
-              ok: false,
-              ...identityFailure,
-              runtime: rtParam ?? null,
-            },
-            502,
-          )
-        }
         // Codex P2-4: the message can carry the fork's raw stderr → redact before
         // it reaches the client.
         return c.json(

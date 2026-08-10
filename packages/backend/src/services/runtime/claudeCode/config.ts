@@ -18,6 +18,7 @@ import {
 import type { Stats } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import type { Logger } from '@/util/log'
+import { assertSameDirectoryIdentityForHost, assertSameFileIdentityForHost } from '@/util/fileTrust'
 import { assertWriteAncestorInside, safeJoin } from '@/util/safePath'
 import { stringify as stringifyYaml } from 'yaml'
 import { stageSkills, type StagedSkill } from '../stageSkills'
@@ -92,8 +93,7 @@ function sameDirectory(path: string, identity: DirectoryIdentity): boolean {
     metadata !== null &&
     metadata.isDirectory() &&
     !metadata.isSymbolicLink() &&
-    metadata.dev === identity.dev &&
-    metadata.ino === identity.ino
+    assertSameDirectoryIdentityForHost(identity, metadata).trusted
   )
 }
 
@@ -111,8 +111,7 @@ function sameFile(path: string, identity: DirectoryIdentity): boolean {
     metadata !== null &&
     metadata.isFile() &&
     !metadata.isSymbolicLink() &&
-    metadata.dev === identity.dev &&
-    metadata.ino === identity.ino
+    assertSameFileIdentityForHost(identity, metadata).trusted
   )
 }
 

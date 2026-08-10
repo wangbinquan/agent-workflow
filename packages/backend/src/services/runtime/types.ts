@@ -30,11 +30,6 @@ import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveC
 // so a VALUE import here would close a module-init cycle. RuntimeProfile is the
 // RFC-113 resolved param set threaded through BusinessNodeSpawnContext.
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
-import type {
-  ContainmentRequirementProfileId,
-  PreparedContainmentPlan,
-  SpawnSandboxTopology,
-} from '@/services/sandbox'
 
 export type RuntimeKind = 'opencode' | 'claude-code'
 
@@ -49,7 +44,7 @@ export interface ResolvedSkill {
   sourceKind: SkillSource
   /** Absolute path for managed. Unused for project (self-discovered). */
   sourcePath?: string
-  /** Frozen managed identity used by RFC-224's whole-tree seal. */
+  /** Managed resource identity and revision used for dispatch fencing. */
   skillId?: string
   contentVersion?: number
   /** Re-read the owning row at both sides of the filesystem snapshot. */
@@ -151,119 +146,11 @@ export interface SpawnPlan {
   cmd: string[]
   env: Record<string, string>
   stdin?: { mode: 'ignore' } | { mode: 'pipe'; data: string }
+  /** Last-moment product lifecycle fence, run immediately before process creation. */
+  beforeSpawn?: () => void | Promise<void>
   cleanup?: () => void | Promise<void>
-  /**
-   * RFC-237 (design-gate P1-3) — spawn-boundary re-verification. When set, the
-   * spawner MUST await it immediately before process start; a throw aborts the
-   * launch (execution-identity failure codes flow through unchanged). Used by
-   * the claude-code sealed-binary path to shrink the seal→exec TOCTOU window;
-   * opencode omits it (its re-verify already runs inside the launcher).
-   */
-  preSpawnVerify?: () => Promise<void>
-  /**
-   * RFC-242 T5 — MCP servers the PLATFORM fenced for this spawn (it replaced
-   * their command with its own no-network wrapper). A fenced server that does
-   * not come up is a node-level failure, never a silent capability loss: the
-   * model would otherwise run the whole turn without the tools the node
-   * declares and still report success.
-   */
-  fencedMcpServers?: readonly string[]
-  /**
-   * 2026-08-09 — EVERY MCP server the platform put into this spawn's config,
-   * fenced or not. `fencedMcpServers` (above) decides what FAILS the node;
-   * this decides what is at least VISIBLE.
-   *
-   * The gap it closes: `--allowedTools` admits all injected servers while only
-   * the fenced subset was ever checked, so a remote server that never connected
-   * left the model short of tools the node declares, finished the turn, and
-   * reported done with nothing in the log. Keeping the failure judgement narrow
-   * is deliberate (a remote outage is not a platform misconfiguration) — being
-   * silent about it was not.
-   */
+  /** MCP names supplied by the platform, used only for non-blocking diagnostics. */
   declaredMcpServers?: readonly string[]
-  /**
-   * 2026-08-09 — what the PLATFORM injected and the runtime must therefore
-   * report as loaded at startup. The runner intersects this with the runtime's
-   * own startup inventory and fails the node on any absence.
-   *
-   * Three failures in five days had the identical shape — closure resolved,
-   * injection emitted, runtime silently without it, zero diagnostics anywhere:
-   * `--disable-slash-commands` (2026-08-04) switched every staged skill off;
-   * `--setting-sources ""` (2026-08-09) meant the skill dir was never scanned;
-   * `--agents` shipped unconditionally while `Task` stayed unloaded, so the
-   * subagents were registered and uncallable. Patching each flag cannot stop
-   * the fourth one — proving the capability arrived can.
-   *
-   * Absence is the only verdict: extra entries are the runtime's own built-ins
-   * and none of the platform's business. A field left undefined means "nothing
-   * to prove here" (an unconstrained spawn has no load set to check).
-   */
-  declaredCapabilities?: DeclaredRuntimeCapabilities
-  /** Which process layer owns platform containment for this plan. */
-  sandboxTopology?: SpawnSandboxTopology
-  /**
-   * RFC-233 daemon-only immutable admission. Runner/smoke/distiller consume
-   * this exact object instead of re-reading provider or mode globals.
-   */
-  containment?: PreparedContainmentPlan
-  /** RFC-224 immutable runtime artifacts overlaid read-only by RFC-205. */
-  readOnlySubtrees?: readonly string[]
-  /**
-   * RFC-251 — subtrees under the denied appHome that must be READABLE (never
-   * writable) and have no read-write parent to nest under. The selected plugin
-   * cache is the motivating case: without this the linux appHome tmpfs hides
-   * it and every `file://<cachedPath>` import fails with ENOENT.
-   */
-  readOnlyAllowSubtrees?: readonly string[]
-  /** Explicit capture locator; consumers must not reopen the user's global DB. */
-  sessionStore?: {
-    root: string
-    dbPath: string
-    persistent: boolean
-  }
-  /** Strict launcher↔runner ownership barrier. */
-  control?:
-    | { kind: 'none' }
-    | {
-        kind: 'opencode-session'
-        mode: 'new' | 'resume'
-        nonce: string
-        leaseNonceDigest: string
-        ackPath: string
-        expectedSessionId?: string
-        identityDigest: string
-        runtimeBinaryDigest: string
-        protocolCodec: string
-        sessionContractDigest: string
-        sessionStoreKey: string
-        createdNodeRunId: string
-        /** Same-instance MCP closure expected before session/model side effects. */
-        mcpReadiness?: {
-          enabled: boolean
-          servers: readonly { name: string; type: 'local' | 'remote' }[]
-        }
-      }
-    | {
-        /**
-         * RFC-238: the playground has its own durable owner table. The wire
-         * marker remains the verified launcher's closed session-ready frame,
-         * but no task/node identity is manufactured for this branch.
-         */
-        kind: 'opencode-mcp-test'
-        mode: 'new' | 'resume'
-        nonce: string
-        leaseNonceDigest: string
-        ackPath: string
-        testSessionId: string
-        turnId: string
-        createdTurnId: string
-        expectedSessionId?: string
-        identityDigest: string
-        runtimeBinaryDigest: string
-        protocolCodec: string
-        sessionContractDigest: string
-        sessionStoreKey: string
-      }
   /**
    * RFC-143 §4.4 — spawn-assembly facts the runner's `spawning agent runtime`
    * diagnostic log flat-spreads (inlineModel / mcpKeys / pluginNames …). The
@@ -317,11 +204,6 @@ export interface ListModelsOpts {
   refresh?: boolean
   timeoutMs?: number
   /**
-   * Stable identity used for cache lookup when `binary` is an ephemeral
-   * verified snapshot. Execution still always uses `binary`.
-   */
-  cacheKey?: string
-  /**
    * RFC-255 test seam: supply the daemon config that names custom providers.
    * Production reads the real config file.
    * 2026-08-06 restore: this and `injectedProviderSection` were accidentally
@@ -337,27 +219,12 @@ export interface ListModelsOpts {
    * merge into a built-in catalog provider.
    */
   injectedProviderSection?: Record<string, unknown>
-  /**
-   * RFC-256 test seam: supply the daemon config carrying the machine-config
-   * inheritance switch. Production reads the real config file.
-   */
-  loadDaemonConfig?: () => Record<string, unknown>
-  /** RFC-224 diagnostic subprocess environment (OpenCode only). */
+  /** Optional subprocess environment (OpenCode only). */
   env?: Record<string, string>
-  /** RFC-224 private, source-guarded diagnostic working directory. */
+  /** Optional diagnostic working directory. */
   cwd?: string
   /** Final async fence that must pass before a fresh result enters the cache. */
   beforeCacheWrite?: () => void | Promise<void>
-  /**
-   * Explicit test-only DI seam for the byte-frozen snapshot wrapper (same
-   * shape as the other `testOnly*` seams). Routes thread their AppDeps
-   * override through here so the capability keeps owning the hermetic
-   * execution; production callers omit it and the driver uses the real seal.
-   */
-  testOnlySnapshot?: <T>(
-    command: readonly string[],
-    callback: (snapshotPath: string) => Promise<T>,
-  ) => Promise<T>
 }
 
 /** run-after subagent session capture inputs (union; each driver takes what it
@@ -372,7 +239,7 @@ export interface SessionCaptureContext {
   worktreePath: string
   /** Per-run config dir root (claude's CLAUDE_CONFIG_DIR = `<runRoot>/<configDirName>`). */
   runRoot: string
-  /** RFC-154: frozen config-dir LEAF name (claude transcript lives under it).
+  /** RFC-154: selected config-dir LEAF name (claude transcript lives under it).
    *  Omitted → the protocol default leaf. opencode ignores (SQLite capture). */
   configDirName?: string
   /** opencode: partId-level dedupe from the live poller (skip already-written rows). */
@@ -381,35 +248,13 @@ export interface SessionCaptureContext {
   opencodeDbPath?: string
 }
 
-/**
- * RFC-234 §1.1 — FROZEN system-agent permission profiles. NOT an arbitrary
- * permission map: the closed enum is the entire expressible surface, so a
- * bash/write/network allow simply has no spelling (Codex design-gate P0-1).
- *
- * Per-driver materialization facts (RFC-237 — recorded honestly, not implied):
- *
- * - 'all-deny'        — every tool denied, on BOTH runtimes. opencode: the
- *                       verified system plan's deny map (RFC-224). claude-code:
- *                       an empty built-in load set (`--tools ""`, RFC-242 §3).
- *                       This is also what an omitted profile means on the
- *                       system-agent path: distiller and smoke are pure
- *                       inference + stdout and never called a tool, so the
- *                       former bypass shape was exposure without capability.
- * - 'intent-read-v1'  — read-only file access confined to the session cwd.
- *                       opencode: verified plan allows read/grep/glob with
- *                       `external_directory: {'*': 'deny'}`. claude-code:
- *                       declared-control spawn — sealed binary + `--tools
- *                       Read,Grep,Glob` load-set pruning + dontAsk (outside-cwd
- *                       reads verified denied hands-on, RFC-237 design §2.1).
- *
- * Admission gates consult `RuntimeDriver.narrowedSystemPermissionProfiles`; a
- * driver that does not declare a narrowed profile MUST fail closed on it.
- */
-export const SYSTEM_PERMISSION_PROFILES = ['all-deny', 'intent-read-v1'] as const
-export type SystemPermissionProfile = (typeof SYSTEM_PERMISSION_PROFILES)[number]
-
-export function isSystemPermissionProfile(v: unknown): v is SystemPermissionProfile {
-  return typeof v === 'string' && (SYSTEM_PERMISSION_PROFILES as readonly string[]).includes(v)
+/** Optional post-run transcript capture for memory-distiller jobs. */
+export interface DistillSessionCaptureContext {
+  rootSessionId: string
+  distillJobId: string
+  attemptIndex: number
+  db: DbClient
+  log?: Logger
 }
 
 /**
@@ -432,46 +277,17 @@ export interface SystemAgentSpawnContext {
   /**
    * 2026-08-04 — per-runtime extra argv tokens (registry-validated, claude
    * fork flags). Consumed by the claude driver only; passed by the SMOKE so a
-   * probe reproduces the runtime's real shape. System features (distiller /
-   * commit-push …) deliberately do not pass it — their declared-control argv
-   * stays sealed.
+   * probe reproduces the runtime's real shape. System features may omit it when
+   * they intentionally use the runtime's default CLI surface.
    */
   extraArgs?: readonly string[]
-  /**
-   * 2026-08-06 — conformance-probe fidelity: build the BUSINESS dispatch shape
-   * (unconstrained `bypassPermissions` + full inherited env/settings) instead
-   * of the declared-control system shape. RFC-242 tightened the smoke to
-   * `--tools "" --setting-sources "" --disable-slash-commands` + controlled
-   * env; a claude fork whose gateway/model mapping lives in its own settings
-   * then fails EVERY probe while every business node runs green (the
-   * 2026-08-04..06 GLM-fork incident: execution fine, probe model-call-failed
-   * with the model explicitly set). A probe's job is to predict dispatch
-   * behavior, so it must test the shape dispatch actually uses.
-   * Capability impact (CLAUDE.md 规则 7): the probe child regains
-   * bypassPermissions and full env/settings — admin-only route, admin-selected
-   * binary, cwd is a throwaway temp dir. Set ONLY by runtimeSmoke; system
-   * features (distiller / intent / commit-push) keep declared-control.
-   */
-  probeDispatchShape?: true
+  /** RFC-276: opt-in Claude CLI compatibility marker; not a sandbox boundary. */
+  isSandbox?: boolean
   /** Subprocess cwd (distiller: a throwaway temp dir). */
   worktreePath: string
   /** Config dir (opencode: OPENCODE_CONFIG_DIR; claude: attempt dir holding .claude/). */
   runDir: string
-  /**
-   * RFC-224 instance-owned root. Verified OpenCode system stores live under
-   * this root so daemon boot can recover crash remnants without scanning
-   * shared /tmp; other runtime drivers ignore it.
-   */
-  appHome?: string
-  /** Override the default binary head (`[runtimeBinary]` vs `['opencode']`/`['claude']`) — RFC-112 custom fork. */
-  /**
-   * RFC-234: production command head branded at the config boundary via
-   * `markProductionOpencodeCommand` — the SAME seam the business path uses.
-   * A branded command takes the verified system plan; an unbranded one (only
-   * possible in unit tests and the e2e binary, where branding is compiled to
-   * a no-op) takes the legacy test spawn. There is deliberately no string /
-   * env / config switch that can force the legacy path in production.
-   */
+  /** Optional OpenCode command head; tests may provide a multi-token executable. */
   opencodeCmd?: readonly string[]
 
   runtimeBinary?: string
@@ -487,7 +303,7 @@ export interface SystemAgentSpawnContext {
   /**
    * RFC-237 (design-gate P1-2) — RFC-154 config-dir profile of the SELECTED
    * runtime row (env-var name + leaf), threaded so a custom claude fork that
-   * changed its discovery surface still lands in the private per-run dir.
+   * changed its discovery surface still uses its expected project config path.
    * Omitted → protocol defaults (every pre-RFC-237 caller unchanged; opencode
    * ignores both).
    */
@@ -495,25 +311,12 @@ export interface SystemAgentSpawnContext {
   configDirName?: string
   /** RFC-026 clarify-rerun: resume a prior session. */
   resumeSessionId?: string
-  /** RFC-111 D16: bridge subscription credential into the relocated claude config dir (real claude runs only; opencode ignores). */
-  bridgeCredentials?: boolean
   /** RFC-067 per-task git identity (both non-empty to inject). */
   gitUserName?: string | null
   gitUserEmail?: string | null
   /** Caller's logger for driver-internal warnings (claude config-dir prep);
    *  omitted → the driver's own default logger. RFC-143 PR-4 (smoke parity). */
   log?: Logger
-  /** Explicit dependency-injection seam; production callers never set it. */
-  testOnlyUnverifiedRuntime?: boolean
-  /** One pre-driver admission, frozen by the daemon coordinator. */
-  containment?: PreparedContainmentPlan
-  /**
-   * RFC-234 §1.1 — frozen permission profile. Omitted → 'all-deny' (the
-   * RFC-224 status quo; every pre-RFC-234 caller is byte-unchanged). Only the
-   * opencode verified system path implements 'intent-read-v1'; drivers that
-   * cannot prove the profile MUST fail closed instead of degrading.
-   */
-  systemPermissionProfile?: SystemPermissionProfile
 }
 
 /**
@@ -524,7 +327,7 @@ export interface SystemAgentSpawnContext {
  * resolves the per-agent runtime profiles (async DB) and the memory block, then
  * hands these raw materials over; the driver owns its runtime's ENTIRE assembly
  * (opencode: inline-config build + inventory plugin + memory append + serialize;
- * claude: system-prompt-file + mcp/agents flags + credential-bridge decision).
+ * claude: system-prompt-file + mcp/agents flags + worktree resource projection).
  */
 export interface BusinessNodeSpawnContext {
   /** The (node-selected) primary agent. */
@@ -544,43 +347,34 @@ export interface BusinessNodeSpawnContext {
   /** RFC-031 opencode plugin rows (claude ignores). */
   plugins: readonly Plugin[]
   /**
-   * RFC-113: resolved runtime profile per agent name (root INCLUDED — frozen
-   * params for the root, live-resolved for each dependent). Resolved in the
+   * RFC-113: resolved runtime profile per agent name (root INCLUDED). Resolved in the
    * runner (async DB reads stay out of drivers — RFC-143 §4.6C).
    */
   resolvedParamsByAgent: ReadonlyMap<string, RuntimeProfile>
-  /** Skills for this agent — each driver stages them into ITS config dir
-   *  (`<runRoot>/<configDir.name>/skills/`) inside buildBusinessSpawn (RFC-154;
-   *  was a runtime-blind runner preamble that staged `.opencode` even for claude). */
+  /** Skills for this agent — OpenCode stages into its run config dir; Claude
+   *  creates a runRoot attachment plus ephemeral project projections for
+   *  skills and one-file-per-dependent agents under `<worktree>/<configDir.name>`. */
   skills: readonly ResolvedSkill[]
   /** RFC-026 clarify-inline rerun: resume the prior session. */
   resumeSessionId?: string
   /** Subprocess cwd = task worktree. */
   worktreePath: string
   /**
-   * Runner-owned repository worktrees for this node (single repo = one entry).
-   * The verified OpenCode driver resolves their exact Git common directories
-   * before sealing model-child sandbox manifests. This is deliberately raw
-   * scheduler topology, never a model/config-authored writable allowlist.
-   */
-  repoWorktreePaths?: readonly string[]
-  /**
-   * Per-run root (`<appHome>/runs/<taskId>/<nodeRunId>`). The config dir is
-   * `<runRoot>/<configDir.name>`; inventory out + claude's `system.md` stay
-   * directly under runRoot (NOT inside the config dir — leaf renames must not
-   * move them, RFC-154 §8).
+   * Per-run root (`<appHome>/runs/<taskId>/<nodeRunId>`). OpenCode's config dir
+   * is `<runRoot>/<configDir.name>`; Claude keeps system/attachment artifacts
+   * here while native skill/agent projections live in the disposable worktree.
    */
   runRoot: string
   /**
-   * RFC-154: the frozen config-dir injection profile — the env var NAME the
-   * binary reads its config dir from + the leaf dir name under runRoot. The
-   * runner always supplies it (frozen value or protocol default).
+   * RFC-154 selected config-dir profile. OpenCode uses both env + runRoot leaf.
+   * Natural Claude does not rewrite the env (preserving operator auth/config)
+   * and uses `name` as its worktree project-config leaf.
    */
   configDir: RuntimeConfigDirProfile
   /** RFC-067 per-task git identity (both non-empty to inject). */
   gitUserName?: string | null
   gitUserEmail?: string | null
-  /** RFC-112: frozen custom-fork binary — overrides every default head. */
+  /** RFC-112: selected custom-fork binary — overrides every default head. */
   runtimeBinary?: string | null
   /**
    * opencode-ONLY head fallback: production `config.opencodePath`
@@ -603,29 +397,6 @@ export interface BusinessNodeSpawnContext {
   /** For driver-internal log lines (inventory materialize failure etc.). */
   nodeRunId: string
   log: Logger
-  /** Runner-owned fields required by the verified OpenCode path. */
-  appHome?: string
-  taskId?: string
-  nodeId?: string
-  opencodeControlNonce?: string
-  opencodeLeaseNonceDigest?: string
-  opencodeResumeOwner?: {
-    sessionId: string
-    taskId: string
-    nodeId: string
-    createdNodeRunId: string
-    identityDigest: string
-    runtimeBinaryDigest: string
-    sessionContractDigest: string
-    sessionStoreKey: string
-    projectId: string
-    protocolCodec: string
-    reportedVersion: string | null
-  }
-  /** Explicit dependency-injection seam; production callers never set it. */
-  testOnlyUnverifiedRuntime?: boolean
-  /** One pre-driver admission, frozen by the daemon coordinator. */
-  containment?: PreparedContainmentPlan
 }
 
 /**
@@ -640,7 +411,7 @@ export interface McpTestSpawnContext {
   agentName: string
   systemPrompt: string
   prompt: string
-  /** Frozen, exact-one-MCP material prepared by the product layer. */
+  /** Exact-one-MCP material prepared by the product layer for this turn. */
   executionMaterial: McpTestExecutionMaterial
   model?: string | null
   /** Runtime-profile generation controls; OpenCode materializes these exactly. */
@@ -648,43 +419,20 @@ export interface McpTestSpawnContext {
   temperature?: number | null
   steps?: number | null
   maxSteps?: number | null
+  /** RFC-276: frozen runtime-profile compatibility marker. */
+  isSandbox?: boolean
   worktreePath: string
   /** Logical-session root; stable across turns. */
   sessionRoot: string
-  /** Persistent native session store; stable across turns. */
-  sessionStoreRoot: string
-  /** Per-turn private root; manifests/seals/configs are removed after reap. */
+  /** Per-turn material/config root. */
   runDir: string
-  appHome: string
   configDir: RuntimeConfigDirProfile
   runtimeBinary?: string | null
   /** First-turn native id where the protocol supports preallocation (Claude). */
   nativeSessionId?: string
   /** Later turns resume this exact id. Mutually exclusive with nativeSessionId. */
   resumeSessionId?: string
-  bridgeCredentials?: boolean
   log: Logger
-  containment?: PreparedContainmentPlan
-  opencodeControl?:
-    | {
-        kind: 'new'
-        nonce: string
-        leaseNonceDigest: string
-        createdTurnId: string
-      }
-    | {
-        kind: 'resume'
-        nonce: string
-        leaseNonceDigest: string
-        createdTurnId: string
-        expectedSessionId: string
-        expectedProjectId: string
-        expectedIdentityDigest: string
-        expectedRuntimeBinaryDigest: string
-        expectedSessionContractDigest: string
-        expectedSessionStoreKey: string
-        expectedProtocolCodec: string
-      }
 }
 
 export interface McpTestExecutionMaterial {
@@ -692,43 +440,23 @@ export interface McpTestExecutionMaterial {
   readonly mcpId: string
   readonly runtimeKey: string
   readonly type: 'local' | 'remote'
-  /** Secret-bearing values are present only in this in-memory frozen projection. */
+  /** Secret-bearing values are present only in this in-memory projection. */
   readonly opencodeEntry: Readonly<Record<string, unknown>>
   readonly claudeEntry: Readonly<Record<string, unknown>>
-  /** Domain-separated digest excludes credential values and per-turn paths. */
-  readonly executionDigest: string
-  /** Exact local executable bytes, or the canonical remote transport descriptor. */
-  readonly rawCommandDigest: string
-  /** Private material root owned by this turn. */
+  /** Ordinary per-turn material root. */
   readonly root: string
-  /** Re-prove sealed local executable/wrapper bytes immediately before spawn. */
-  readonly preSpawnVerify: () => Promise<void>
 }
 
-export interface McpTestPlanIdentityReceipt {
-  readonly codec: 'mcp-test-plan-identity-v1'
-  readonly runtimeBinaryDigest: string
-  readonly mcpExecutionDigest: string
-  readonly sessionContractDigest: string
-  readonly rawCommandDigest: string
-}
-
-export interface McpTestSpawnPlan extends SpawnPlan {
-  readonly identity: McpTestPlanIdentityReceipt
-}
+export type McpTestSpawnPlan = SpawnPlan
 
 export interface RuntimeMcpTestCapabilityV1 {
   readonly codec: 'mcp-test-v1'
   readonly defaultConfigDir: RuntimeConfigDirProfile
-  readonly bridgeCredentials: boolean
-  readonly sessionOwnerReceipt: 'opencode-session-v1' | null
   createNativeSessionId(): string | null
   sessionReference(input: {
     turnSeq: number
     nativeSessionId: string | null
   }): Pick<McpTestSpawnContext, 'nativeSessionId' | 'resumeSessionId'>
-  sessionStoreDbPath(runDir: string): string | null
-  containmentProfile(input: { mcp: Mcp }): ContainmentRequirementProfileId
   buildSpawn(ctx: McpTestSpawnContext): Promise<McpTestSpawnPlan>
 }
 
@@ -740,32 +468,19 @@ export interface RuntimeMcpTestCapabilityV1 {
  */
 export interface RuntimeDriver {
   readonly kind: RuntimeKind
-  /** Conservative/default demand; the coordinator never infers from kind/OS. */
-  readonly containmentProfile: ContainmentRequirementProfileId
-  /**
-   * RFC-237 — narrowed system-permission profiles this driver can MATERIALIZE
-   * (turn into an enforced spawn shape) beyond the 'all-deny' default.
-   * Admission gates (config save / intent turn launch) consult this set
-   * instead of discriminating on protocol literals; an undeclared profile
-   * stays fail-closed. 'all-deny' is deliberately NOT part of this set — its
-   * per-driver semantics are documented on SYSTEM_PERMISSION_PROFILES.
-   */
-  readonly narrowedSystemPermissionProfiles: readonly Exclude<SystemPermissionProfile, 'all-deny'>[]
   /**
    * 2026-08-04 — whether this driver's spawn consumes per-runtime `extraArgs`
    * (fork-private CLI tokens appended to the argv). The registry's
    * validateExtraArgs consults THIS declaration instead of discriminating on
-   * protocol literals (RFC-143 bypass-zero); an undeclared driver stays
-   * fail-closed (opencode: the verified serve argv is sealed — no seam).
+   * protocol literals (RFC-143 bypass-zero); an undeclared driver rejects them.
    */
   readonly acceptsExtraArgs?: true
   /**
-   * Business descriptor refinement from the exact frozen child surfaces.
-   * System callers use the filesystem-only profile directly.
+   * Whether this driver's CLI understands the optional `IS_SANDBOX=1`
+   * compatibility marker. This is a runtime capability only: enabling it does
+   * not claim that the platform has created an operating-system sandbox.
    */
-  businessContainmentProfile?(
-    input: Pick<BusinessNodeSpawnContext, 'agent' | 'mcps' | 'runtimeCmd'>,
-  ): ContainmentRequirementProfileId
+  readonly acceptsSandboxCompatibilityMarker?: true
   /**
    * Optional protocol-specific minimum used only by runtimes that define a
    * semver gate. RFC-227 makes OpenCode behavior-qualified, so its value is
@@ -820,16 +535,18 @@ export interface RuntimeDriver {
    *  RFC-143 空转 bug). claude omits this → runner uses NOOP_HANDLE. */
   startLiveCapture?(ctx: LivePollOptions): LivePollerHandle
 
+  /** Runtime-specific post-run capture for a memory-distiller conversation. */
+  captureDistillSession?(ctx: DistillSessionCaptureContext): Promise<void>
+
   /**
-   * RFC-238 — explicit, fail-closed MCP playground support. Registry rows whose
-   * protocol driver omits this capability never appear in the playground
-   * picker and cannot be selected through the API.
+   * RFC-238 — explicit MCP playground support. Registry rows whose protocol
+   * driver omits this capability do not appear in the playground picker.
    */
   readonly mcpTest?: RuntimeMcpTestCapabilityV1
 
   /** RFC-237 — post-exit child-session sweep into a SYSTEM-AGENT event sink
    *  (was the `driver.kind === 'opencode'` branch in systemAgentRun.ts).
-   *  opencode: private-store SQLite sweep. claude omits this — a system-agent
+   *  opencode: native SQLite transcript sweep. claude omits this — a system-agent
    *  spawn has no subagents (`--agents` never passed) and the full main
    *  session already streams through `parseEvent` into the sink. */
   captureSessionsToSink?(
@@ -845,22 +562,21 @@ export interface RuntimeDriver {
    * RFC-242 T5 — names of MCP servers this startup line reports as UNUSABLE for
    * the turn (anything but a live connection). Returns null for lines that
    * carry no MCP inventory. The runner intersects the result with
-   * `SpawnPlan.fencedMcpServers`, so only servers the platform itself fenced
-   * can fail a node this way.
+   * `SpawnPlan.declaredMcpServers`, so unrelated inherited MCPs remain telemetry.
    */
   parseUnusableMcpServers?(line: string): readonly string[] | null
   /**
    * 2026-08-09 — skill names this startup line reports as LOADED for the turn
    * (the runtime's own bundled skills included). Returns null for lines that
-   * carry no such inventory. The runner checks `SpawnPlan.stagedSkills` against
-   * it, so only skills the platform itself staged can fail a node this way.
+   * carry no such inventory. Consumers compare only capabilities explicitly
+   * added for the current run.
    */
   /**
    * 2026-08-09 — the capabilities this startup line reports as LOADED for the
    * turn (the runtime's own built-ins included). Returns null for lines that
    * carry no such inventory, and a field is undefined when this runtime does
-   * not enumerate that kind. The runner checks `SpawnPlan.declaredCapabilities`
-   * against it, so only what the platform itself injected can fail a node.
+   * not enumerate that kind. Consumers compare only what the platform added
+   * for the current run.
    *
    * A runtime that never reports an inventory simply never triggers the check:
    * being unable to prove a capability arrived is not proof that it did not.
@@ -874,7 +590,7 @@ export interface DeclaredRuntimeCapabilities {
   tools?: readonly string[]
   /** dependsOn closure members injected as subagents. */
   agents?: readonly string[]
-  /** Managed skills staged into the private config dir. */
+  /** Managed skills staged into the current run config dir. */
   skills?: readonly string[]
 }
 
@@ -904,8 +620,6 @@ export interface SystemAgentSessionSweepContext {
     ): Promise<void>
   }
   log: Logger
-  /** Explicit private store DB path (plan.sessionStore.dbPath); omitted → protocol default. */
-  sessionStoreDbPath?: string
 }
 
 export interface SystemAgentSessionSweepOutcome {
@@ -919,7 +633,4 @@ export interface SystemAgentSessionSweepOutcome {
 export interface InventoryReadContext {
   runRoot: string
   nodeKind: string
-  /** RFC-224: the verified launcher writes inventory without a plugin even
-   * though its child intentionally runs with OPENCODE_PURE=1. */
-  verifiedIdentity?: boolean
 }

@@ -58,6 +58,9 @@ export const claudeCodeDriver: RuntimeDriver = {
   // 2026-08-04 — claude forks carry private flags (CodeAgent's
   // --skip-safe-check); the registry-validated extraArgs land at the argv tail.
   acceptsExtraArgs: true,
+  // Claude CLI compatibility only; this capability does not provide platform
+  // process isolation or any operating-system sandbox guarantee.
+  acceptsSandboxCompatibilityMarker: true,
   minVersion: MIN_CLAUDE_CODE_VERSION,
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
@@ -71,8 +74,8 @@ export const claudeCodeDriver: RuntimeDriver = {
     if (parsed === null || !parsed.isError) return null
     return parsed.message.length > 0 ? parsed.message : 'claude reported a terminal error result'
   },
-  // RFC-242 T5 — claude freezes MCP availability on its init event; a fenced
-  // server that is not `connected` there loses its tools for the whole turn.
+  // Claude freezes MCP availability on its init event; a server that is not
+  // `connected` there loses its tools for the whole turn.
   parseUnusableMcpServers(line: string): readonly string[] | null {
     return parseUnusableMcpServers(line)
   },
@@ -111,7 +114,7 @@ export const claudeCodeDriver: RuntimeDriver = {
       taskId: ctx.taskId,
       db: ctx.db,
       log: ctx.log,
-      // RFC-154: the transcript lives under the FROZEN leaf (runner threads it);
+      // RFC-154: the transcript lives under the selected leaf (runner threads it);
       // omitted (tests / non-runner callers) → protocol default.
       configDir: join(
         ctx.runRoot,
@@ -123,10 +126,6 @@ export const claudeCodeDriver: RuntimeDriver = {
   // RFC-117 — system-agent spawn. Persona → --append-system-prompt-file, model →
   // --model, prompt → stdin (buildClaudeSpawn already returns stdin:pipe). No
   // skills/mcp/subagents for a framework system agent.
-  //
-  // RFC-234 §1.1 / RFC-237 §1.3 — a narrowed profile is admissible ONLY when
-  // this driver declares it; 'intent-read-v1' takes the declared-control branch
-  // below, everything else undeclared fails closed instead of silently widening.
   async buildSpawn(ctx: SystemAgentSpawnContext): Promise<SpawnPlan> {
     return buildClaudeSpawn({
       ...(pickRuntimeHead(ctx.runtimeBinary, ctx.runtimeCmd) !== undefined
@@ -142,6 +141,7 @@ export const claudeCodeDriver: RuntimeDriver = {
         : {}),
       gitUserName: ctx.gitUserName ?? null,
       gitUserEmail: ctx.gitUserEmail ?? null,
+      isSandbox: ctx.isSandbox,
       ...(ctx.extraArgs !== undefined && ctx.extraArgs.length > 0
         ? { extraArgs: ctx.extraArgs }
         : {}),
@@ -178,7 +178,7 @@ export const claudeCodeDriver: RuntimeDriver = {
         parentTools,
       })
     // RFC-113 (Codex P1-3): claude's model is the RUNTIME's, not the agent's.
-    // The root entry of resolvedParamsByAgent carries the frozen root profile.
+    // The root entry of resolvedParamsByAgent carries the dispatch-resolved profile.
     const rootParams = ctx.resolvedParamsByAgent.get(ctx.agent.name)
     // RFC-242 §2 — derive the tool gate from the agent's declared permission.
     // An agent with NO declaration stays unconstrained (user decision
@@ -241,6 +241,7 @@ export const claudeCodeDriver: RuntimeDriver = {
       worktreePath: ctx.worktreePath,
       gitUserName: ctx.gitUserName,
       gitUserEmail: ctx.gitUserEmail,
+      isSandbox: rootParams?.isSandbox === true,
       ...(gate === null ? {} : { businessTools: claudeToolsValue(gate) }),
       ...(claudeMcp !== null
         ? {
@@ -251,7 +252,7 @@ export const claudeCodeDriver: RuntimeDriver = {
           }
         : {}),
       ...(claudeAgents !== null ? { agentsJson: JSON.stringify(claudeAgents.agents) } : {}),
-      // 2026-08-04 — frozen per-runtime extraArgs (fork-private flags). Root
+      // Per-runtime extraArgs (fork-private flags). Root
       // params only: claude subagents share this one process, so per-process
       // argv can only come from the root's runtime.
       ...(rootParams?.extraArgs != null && rootParams.extraArgs.length > 0

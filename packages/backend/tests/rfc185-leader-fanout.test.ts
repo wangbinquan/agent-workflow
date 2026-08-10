@@ -686,7 +686,7 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
     expect(requests[1]?.promptTemplate).toContain('NO <workflow-output> envelope')
   })
 
-  test('transient verified-stream failure restarts the LEADER turn with the full prompt', async () => {
+  test('a transient runtime stream interruption restarts the LEADER turn with the full prompt', async () => {
     const config = cfg()
     const { taskId } = await seedEngineTask(db, config)
     const { hooks, requests } = scriptedHooks({
@@ -694,8 +694,8 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
         {
           status: 'failed',
           outputs: {},
-          errorMessage: 'execution-identity-stream-failed',
-          failureCode: 'execution-identity-stream-failed',
+          errorMessage: 'runtime stream persistence failed',
+          failureCode: 'runtime-stream-interrupted',
         },
         doneLeader({ decision: { action: 'done', summary: 'transport recovered' } }),
       ],
@@ -707,7 +707,7 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
     expect(requests[1]?.promptTemplate).not.toContain('Protocol errors')
   })
 
-  test('transient verified-stream retry is independent of message-turn protocol budget', async () => {
+  test('runtime stream retry is independent of the message-turn attempt budget', async () => {
     const config = cfg()
     const { taskId } = await seedEngineTask(db, config)
     const agent = {
@@ -735,8 +735,8 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
           return {
             status: 'failed',
             outputs: {},
-            errorMessage: 'execution-identity-stream-failed',
-            failureCode: 'execution-identity-stream-failed',
+            errorMessage: 'runtime stream persistence failed',
+            failureCode: 'runtime-stream-interrupted',
           }
         }
         return { status: 'done', outputs: { wg_result: 'recovered' } }
@@ -779,7 +779,7 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
     ])
   })
 
-  test('transient verified-stream retries are bounded even for a single-shot message turn', async () => {
+  test('runtime stream retries are bounded even for a single-shot message turn', async () => {
     const config = cfg()
     const { taskId } = await seedEngineTask(db, config)
     const agent = {
@@ -806,8 +806,8 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
         return {
           status: 'failed',
           outputs: {},
-          errorMessage: 'execution-identity-stream-failed',
-          failureCode: 'execution-identity-stream-failed',
+          errorMessage: 'runtime stream persistence failed',
+          failureCode: 'runtime-stream-interrupted',
         }
       },
     }

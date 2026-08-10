@@ -57,36 +57,20 @@ export type InvariantRule = 'R1' | 'R2' | 'C1' | 'T1' | 'T2' | 'T3' | 'U1' | 'CR
  *  S5 added by RFC-098 WP-8 (running task, active runs, events stalled). */
 export type StuckRule = 'S1' | 'S2' | 'S3' | 'S4' | 'S5' | 'S6'
 
-/** Rules written by the EXECUTION path rather than by a detector.
- *
- * `sandbox-degraded` is raised by the runner / script dispatcher when a `warn`
- * mode run had to proceed with a reduced containment boundary. It is not owned
- * by the invariants or stuck reconcilers (they must not resolve rows they never
- * raised), which is exactly why it went missing from the canonical list for so
- * long — and why the diagnose panel then rendered a raw key and its repair
- * endpoint 500'd (2026-08-04 audit). */
-export type ExecutionRule = 'sandbox-degraded'
-
 /** Union of every rule kind that can appear in lifecycle_alerts.rule.
  *
  * RFC-057: canonical list lives in `@agent-workflow/shared/lifecycle-alerts`
  * so the diagnose-repair option taxonomy can `satisfies Record<...>` it.
- * `InvariantRule | StuckRule | ExecutionRule` here is structurally identical; a compile-time
+ * `InvariantRule | StuckRule` here is structurally identical; a compile-time
  * assignability check below catches drift if either list is edited in
  * isolation. */
 export type LifecycleAlertRule = SharedLifecycleAlertRule
 
 // Compile-time guard: backend's local union must equal shared's union.
-type _AssertBackendSubsetOfShared =
-  | InvariantRule
-  | StuckRule
-  | ExecutionRule extends SharedLifecycleAlertRule
+type _AssertBackendSubsetOfShared = InvariantRule | StuckRule extends SharedLifecycleAlertRule
   ? true
   : never
-type _AssertSharedSubsetOfBackend = SharedLifecycleAlertRule extends
-  | InvariantRule
-  | StuckRule
-  | ExecutionRule
+type _AssertSharedSubsetOfBackend = SharedLifecycleAlertRule extends InvariantRule | StuckRule
   ? true
   : never
 const _LIFECYCLE_RULE_UNION_GUARD: [_AssertBackendSubsetOfShared, _AssertSharedSubsetOfBackend] = [

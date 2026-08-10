@@ -1,41 +1,19 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import type { Mcp } from '@agent-workflow/shared'
-import { ContainmentCoordinator, type PreparedContainmentPlan } from '../src/services/sandbox'
 import { prepareMcpTestExecutionMaterial } from '../src/services/runtime/mcpTestExecutionMaterial'
 
 const tempDirs: string[] = []
 
-function root(prefix: string): string {
+function materialRoot(prefix: string): string {
   const value = mkdtempSync(join(tmpdir(), prefix))
   tempDirs.push(value)
   return value
 }
 
-async function containment(appHome: string): Promise<PreparedContainmentPlan> {
-  if (process.platform === 'linux') {
-    return new ContainmentCoordinator({
-      provider: {
-        mode: 'enforce',
-        status: { mechanism: 'bwrap', available: true, detail: null },
-        appHome,
-      },
-      qualifyBwrap: async () => '/usr/bin/bwrap',
-    }).admit('model-child-netless-v1')
-  }
-  return new ContainmentCoordinator({
-    provider: {
-      mode: 'enforce',
-      status: { mechanism: 'seatbelt', available: true, detail: null },
-      appHome,
-    },
-    qualifySeatbelt: async () => {},
-  }).admit('model-child-netless-v1')
-}
-
-function remoteMcp(secret: string, bearer: string): Extract<Mcp, { type: 'remote' }> {
+function remoteMcp(): Extract<Mcp, { type: 'remote' }> {
   return {
     id: 'mcp-remote',
     name: 'remote_fixture',
@@ -43,13 +21,27 @@ function remoteMcp(secret: string, bearer: string): Extract<Mcp, { type: 'remote
     type: 'remote',
     config: {
       url: 'https://example.test/mcp',
-      headers: { Authorization: `Bearer ${bearer}`, 'X-Tenant': 'tenant-1' },
-      oauth: {
-        clientId: 'client-1',
-        clientSecret: secret,
-        scope: 'mcp.read',
-      },
+      headers: { Authorization: 'Bearer secret', 'X-Tenant': 'tenant-1' },
+      oauth: { clientId: 'client-1', clientSecret: 'oauth-secret', scope: 'mcp.read' },
       timeoutMs: 5_000,
+    },
+    enabled: true,
+    schemaVersion: 1,
+    createdAt: 1,
+    updatedAt: 1,
+  }
+}
+
+function localMcp(command: string[] = ['fixture-mcp', '--stdio']): Extract<Mcp, { type: 'local' }> {
+  return {
+    id: 'mcp-local',
+    name: 'local_fixture',
+    description: '',
+    type: 'local',
+    config: {
+      command,
+      env: { FIXTURE_TOKEN: 'private-value', lowercase_key: 'forwarded' },
+      timeoutMs: 4_000,
     },
     enabled: true,
     schemaVersion: 1,
@@ -62,170 +54,66 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-describe('RFC-238 frozen MCP execution material', () => {
-  test('remote identity digests credential slots without secret values', async () => {
-    const base = root('rfc238-remote-material-')
-    const appHome = join(base, 'app-home')
-    const worktreePath = join(base, 'worktree')
-    mkdirSync(worktreePath, { recursive: true, mode: 0o700 })
-    const admitted = await containment(appHome)
-
-    const first = await prepareMcpTestExecutionMaterial({
-      mcp: remoteMcp('oauth-secret-one', 'header-secret-one'),
-      root: join(base, 'material-one'),
-      worktreePath,
-      appHome,
-      containment: admitted,
-    })
-    const second = await prepareMcpTestExecutionMaterial({
-      mcp: remoteMcp('oauth-secret-two', 'header-secret-two'),
-      root: join(base, 'material-two'),
-      worktreePath,
-      appHome,
-      containment: admitted,
+describe('RFC-238 natural MCP execution material', () => {
+  test('projects one remote MCP into ordinary OpenCode and Claude config', async () => {
+    const material = await prepareMcpTestExecutionMaterial({
+      mcp: remoteMcp(),
+      root: materialRoot('rfc238-remote-material-'),
     })
 
-    expect(first.executionDigest).toBe(second.executionDigest)
-    expect(first.rawCommandDigest).toBe(second.rawCommandDigest)
-    expect((first.opencodeEntry.headers as Record<string, string>).Authorization).toContain(
-      'header-secret-one',
-    )
-    expect((first.opencodeEntry.oauth as Record<string, string>).clientSecret).toBe(
-      'oauth-secret-one',
-    )
-    const durableIdentity = JSON.stringify({
-      executionDigest: first.executionDigest,
-      rawCommandDigest: first.rawCommandDigest,
+    expect(material.opencodeEntry).toEqual({
+      type: 'remote',
+      enabled: true,
+      url: 'https://example.test/mcp',
+      headers: { Authorization: 'Bearer secret', 'X-Tenant': 'tenant-1' },
+      oauth: { clientId: 'client-1', clientSecret: 'oauth-secret', scope: 'mcp.read' },
+      timeout: 5_000,
     })
-    expect(durableIdentity).not.toContain('oauth-secret-one')
-    expect(durableIdentity).not.toContain('header-secret-one')
+    expect(material.claudeEntry).toEqual({
+      type: 'http',
+      url: 'https://example.test/mcp',
+      headers: { Authorization: 'Bearer secret', 'X-Tenant': 'tenant-1' },
+    })
   })
 
-  // RFC-254 T31: POSIX-provider simulation — `containment()` forces a seatbelt
-  // (or bwrap) provider, and local material materializes a netless WRAPPER
-  // through it. Windows v1 has no containment provider (RFC-254 D1), so no
-  // wrapper is produced and `frozenFileDigest(wrapperPath)` hits ENOENT; the
-  // fixtures are POSIX too (`#!/bin/sh`, the `true` binary). Local-MCP test
-  // material therefore belongs to the future Windows provider, not T31. The
-  // remote-identity case above (no wrapper) still runs on win32. Registered in
-  // test-suite-policy.
-  test.skipIf(process.platform === 'win32')(
-    'local material seals the executable and detects snapshot or wrapper tampering',
-    async () => {
-      const base = root('rfc238-local-material-')
-      const appHome = join(base, 'app-home')
-      const worktreePath = join(base, 'worktree')
-      const executable = join(base, 'bin', 'fixture-mcp')
-      mkdirSync(worktreePath, { recursive: true, mode: 0o700 })
-      mkdirSync(dirname(executable), { recursive: true, mode: 0o700 })
-      writeFileSync(executable, '#!/bin/sh\nexit 0\n', { mode: 0o500 })
-      chmodSync(executable, 0o500)
-      const admitted = await containment(appHome)
+  test('forwards the authored local command and environment without wrappers', async () => {
+    const material = await prepareMcpTestExecutionMaterial({
+      mcp: localMcp(),
+      root: materialRoot('rfc238-local-material-'),
+    })
 
-      const materialRoot = join(base, 'material')
-      const material = await prepareMcpTestExecutionMaterial({
-        mcp: {
-          id: 'mcp-local',
-          name: 'local_fixture',
-          description: '',
-          type: 'local',
-          config: {
-            command: [executable, '--stdio'],
-            env: { FIXTURE_TOKEN: 'private-value' },
-          },
-          enabled: true,
-          schemaVersion: 1,
-          createdAt: 1,
-          updatedAt: 1,
-        },
-        root: materialRoot,
-        worktreePath,
-        appHome,
-        containment: admitted,
-      })
+    expect(material.opencodeEntry).toEqual({
+      type: 'local',
+      enabled: true,
+      command: ['fixture-mcp', '--stdio'],
+      environment: { FIXTURE_TOKEN: 'private-value', lowercase_key: 'forwarded' },
+      timeout: 4_000,
+    })
+    expect(material.claudeEntry).toEqual({
+      command: 'fixture-mcp',
+      args: ['--stdio'],
+      env: { FIXTURE_TOKEN: 'private-value', lowercase_key: 'forwarded' },
+    })
+  })
 
-      expect(material.opencodeEntry.command).toEqual([join(materialRoot, 'mcp-wrapper', 'run')])
-      expect(material.claudeEntry).toEqual({
-        command: join(materialRoot, 'mcp-wrapper', 'run'),
-        args: [],
-      })
-      expect(readFileSync(join(materialRoot, 'mcp-wrapper', 'netless.json'), 'utf8')).toContain(
-        join(materialRoot, 'mcp-bin', 'server'),
-      )
-      await expect(material.preSpawnVerify()).resolves.toBeUndefined()
-
-      const snapshot = join(materialRoot, 'mcp-bin', 'server')
-      chmodSync(snapshot, 0o700)
-      writeFileSync(snapshot, '#!/bin/sh\nexit 9\n')
-      chmodSync(snapshot, 0o500)
-      await expect(material.preSpawnVerify()).rejects.toMatchObject({
-        code: 'execution-identity-untrusted-binary',
-      })
-    },
-  )
-
-  // RFC-242 (adversarial review P1-4) reshaped the second half of this case
-  // WITHOUT weakening it. The invariant is unchanged — "an author-declared env
-  // key is never silently dropped" — but the right answer for an ordinary
-  // lowercase name is to FORWARD it, not to fail the run: `token`/`apiKey` are
-  // legitimate names, and the daemon-env allowlist that rejected them here (and
-  // silently dropped them on the opencode path) broke working servers. The
-  // fail-closed leg now covers the family that genuinely cannot be forwarded:
-  // dynamic-loader variables, which `bwrap`/`sandbox-exec` read before the
-  // boundary exists.
-  // RFC-254 T31: POSIX-provider simulation (same as above) + a POSIX `true`
-  // binary as the PATH token, which win32 has no equivalent of.
-  test.skipIf(process.platform === 'win32')(
-    'local material resolves a stable PATH token and never silently drops env keys',
-    async () => {
-      const base = root('rfc238-local-path-material-')
-      const appHome = join(base, 'app-home')
-      const worktreePath = join(base, 'worktree')
-      mkdirSync(worktreePath, { recursive: true, mode: 0o700 })
-      const admitted = await containment(appHome)
-      const local = (env: Record<string, string>): Extract<Mcp, { type: 'local' }> => ({
-        id: 'mcp-local-path',
-        name: 'local_path_fixture',
-        description: '',
-        type: 'local',
-        config: { command: ['true'], env },
-        enabled: true,
-        schemaVersion: 1,
-        createdAt: 1,
-        updatedAt: 1,
-      })
-
-      const material = await prepareMcpTestExecutionMaterial({
-        mcp: local({ FIXTURE_TOKEN: 'private-value' }),
-        root: join(base, 'material-ok'),
-        worktreePath,
-        appHome,
-        containment: admitted,
-      })
-      expect(material.rawCommandDigest).toMatch(/^[0-9a-f]{64}$/)
-      await expect(material.preSpawnVerify()).resolves.toBeUndefined()
-
-      const lowercaseRoot = join(base, 'material-lowercase')
-      await prepareMcpTestExecutionMaterial({
-        mcp: local({ lowercase_key: 'must-not-be-silently-dropped' }),
-        root: lowercaseRoot,
-        worktreePath,
-        appHome,
-        containment: admitted,
-      })
-      expect(readFileSync(join(lowercaseRoot, 'mcp-wrapper', 'netless.json'), 'utf8')).toContain(
-        'must-not-be-silently-dropped',
-      )
-
-      await expect(
-        prepareMcpTestExecutionMaterial({
-          mcp: local({ DYLD_INSERT_LIBRARIES: '/tmp/evil.dylib' }),
-          root: join(base, 'material-rejected'),
-          worktreePath,
-          appHome,
-          containment: admitted,
-        }),
-      ).rejects.toMatchObject({ code: 'execution-identity-mismatch' })
-    },
-  )
+  test('rejects invalid names, URLs, and empty command parts', async () => {
+    await expect(
+      prepareMcpTestExecutionMaterial({
+        mcp: { ...remoteMcp(), name: '../escape' },
+        root: materialRoot('rfc238-invalid-name-'),
+      }),
+    ).rejects.toThrow('mcp-test-invalid-resource')
+    await expect(
+      prepareMcpTestExecutionMaterial({
+        mcp: { ...remoteMcp(), config: { url: 'file:///tmp/server' } },
+        root: materialRoot('rfc238-invalid-url-'),
+      }),
+    ).rejects.toThrow('mcp-test-invalid-remote-url')
+    await expect(
+      prepareMcpTestExecutionMaterial({
+        mcp: localMcp(['fixture-mcp', '']),
+        root: materialRoot('rfc238-invalid-command-'),
+      }),
+    ).rejects.toThrow('mcp-test-invalid-local-command')
+  })
 })

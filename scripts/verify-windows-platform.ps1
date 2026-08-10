@@ -85,9 +85,8 @@ if ($LASTEXITCODE -ne 0) { throw 'RFC-254 platform suites failed' }
 
 Section 'Job Object end-to-end (design gate P0-D — the claim that needs a kernel)'
 # Spawns a tree, adopts it, kills the PARENT only, and checks the grandchild is
-# gone. That is the property the store-reclaim decision depends on: without it,
-# a surviving descendant still holds the runtime store while the platform has
-# already declared the run reaped and handed the store to the next one.
+# gone. Without it, a surviving descendant can outlive a run that was already
+# reported reaped.
 bun run scripts/verify-windows-job-object.ts
 if ($LASTEXITCODE -ne 0) { throw 'Job Object verification failed' }
 
@@ -99,8 +98,7 @@ $bin = (Get-ChildItem dist -Filter 'agent-workflow-windows-*' | Select-Object -F
 if (-not $bin) { throw 'no windows artifact produced' }
 Write-Host "artifact   : $bin"
 & $bin version
-# `doctor` also reports containment status, so on Windows it is the check that
-# the platform says "no provider" honestly instead of claiming a boundary.
+# `doctor` must start and report diagnostics on Windows.
 & $bin doctor
 
 Write-Host ''

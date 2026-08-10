@@ -103,11 +103,8 @@ jobs:
         # and runtime-diagnostic tests intentionally exercise a real PATH
         # binary, so CI follows the current npm channel without defining an
         # application version floor or ceiling.
-        # RFC-254 T31: declared, because the default shell on a windows runner
-        # is pwsh and every line here is POSIX sh. The command is unchanged —
-        # `opencodeInstallTargets` in rfc224-source-guard.test.ts counts exactly
-        # these two `bun install -g` lines and must keep seeing two, so a
-        # windows leg shares them rather than adding a third.
+        # Explicit bash keeps the install command portable if this matrix gains
+        # a Windows runner whose default shell is PowerShell.
         shell: bash
         run: |
           bun install -g opencode-ai@latest
@@ -160,10 +157,6 @@ jobs:
         run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4
         env:
           RUN_GIT_NETWORK: '1'
-          # RFC-205: macOS runners ship sandbox-exec — run the REAL-mechanism
-          # sandbox smoke here (ubuntu has no bwrap; the test double-gates on
-          # the probe anyway).
-          RUN_SANDBOX_ITEST: '1'
 
       - name: Upload backend coverage to Codecov (ubuntu shards)
         # Each ubuntu shard emits an lcov covering its quarter of the files;
@@ -445,11 +438,8 @@ jobs:
         # RFC-227 intentionally treats a truly missing executable as unhealthy
         # while accepting any reported version. Give the compiled `doctor`
         # smoke a real current binary on both supported CI hosts.
-        # RFC-254 T31: declared, because the default shell on a windows runner
-        # is pwsh and every line here is POSIX sh. The command is unchanged —
-        # `opencodeInstallTargets` in rfc224-source-guard.test.ts counts exactly
-        # these two `bun install -g` lines and must keep seeing two, so a
-        # windows leg shares them rather than adding a third.
+        # Explicit bash keeps the install command portable if this matrix gains
+        # a Windows runner whose default shell is PowerShell.
         shell: bash
         run: |
           bun install -g opencode-ai@latest
@@ -507,250 +497,6 @@ jobs:
           chmod +x "$bin"
           "$bin" version
           "$bin" doctor
-          help_output="$("$bin" --help)"
-          case "$help_output" in
-            *'__opencode-'*)
-              echo 'RFC-224 internal commands leaked into public help' >&2
-              exit 1
-              ;;
-          esac
-          for hidden in \
-            __opencode-verified-run \
-            __opencode-netless-subprocess \
-            __opencode-bwrap-capability-supervisor \
-            __opencode-fff-capability-supervisor
-          do
-            hidden_stderr="$(mktemp)"
-            if "$bin" "$hidden" 2>"$hidden_stderr"; then
-              echo "$hidden unexpectedly accepted invalid argv" >&2
-              exit 1
-            fi
-            test "$(cat "$hidden_stderr")" = \
-              'AW_OPENCODE_FAILURE execution-identity-store-unsafe'
-          done
-
-          # Drive the compiled supervisor over real pipes: no FIFO/open-order
-          # races, and every protocol read has its own bounded deadline.
-          # JS template literals must reach Bun verbatim.
-          # shellcheck disable=SC2016
-          RFC224_SMOKE_BIN="$bin" bun -e '
-            const { isAbsolute, parse } = require("node:path")
-            const binary = process.env.RFC224_SMOKE_BIN
-            // RFC-254 T30: `startsWith("/")` is not what "absolute" means on
-            // Windows, where it is `C:\\...`.
-            if (binary === undefined || !isAbsolute(binary)) {
-              throw new Error("compiled RFC-224 smoke requires an absolute binary path")
-            }
-            // A directory that exists on every platform and is NOT the repo:
-            // the filesystem root, spelled the way this platform spells it.
-            const outsideRepo = parse(process.cwd()).root
-
-            async function beforeDeadline(promise, label) {
-              let timer
-              try {
-                return await Promise.race([
-                  promise,
-                  new Promise((_, reject) => {
-                    timer = setTimeout(() => reject(new Error(label)), 5_000)
-                  }),
-                ])
-              } finally {
-                if (timer !== undefined) clearTimeout(timer)
-              }
-            }
-
-            function launch(nonce) {
-              const child = Bun.spawn({
-                cmd: [
-                  binary,
-                  "__opencode-bwrap-capability-supervisor",
-                  "--nonce",
-                  nonce,
-                  "--watchdog-ms",
-                  "10000",
-                  "--",
-                  // RFC-254 T30 tried a subcommand of the binary itself here
-                  // so the payload would exist off POSIX too. Reverted: this
-                  // matrix for this job is ubuntu + macOS (the supervisor under test is
-                  // the BWRAP one, a Linux concept), so the portability was
-                  // never exercised — while the cost was three extra cold
-                  // starts of a ~120 MiB compiled binary, each inside the 5 s
-                  // deadline that wraps the EXIT line. A windows entry, if one
-                  // is ever added, must bring its own payload.
-                  "/usr/bin/true",
-                ],
-                cwd: outsideRepo,
-                env: {},
-                stdin: "pipe",
-                stdout: "pipe",
-                stderr: "pipe",
-                detached: true,
-              })
-              return {
-                nonce,
-                child,
-                reader: child.stdout.getReader(),
-                decoder: new TextDecoder("utf-8", { fatal: true }),
-                buffered: "",
-                stderr: new Response(child.stderr).text(),
-                groupAbsent: false,
-              }
-            }
-
-            async function readLine(trial, label) {
-              for (;;) {
-                const newline = trial.buffered.indexOf("\n")
-                if (newline >= 0) {
-                  const line = trial.buffered.slice(0, newline)
-                  trial.buffered = trial.buffered.slice(newline + 1)
-                  return line
-                }
-                const next = await beforeDeadline(trial.reader.read(), label)
-                if (next.done) throw new Error(`${label}: stdout closed before line`)
-                trial.buffered += trial.decoder.decode(next.value, { stream: true })
-                if (Buffer.byteLength(trial.buffered, "utf8") > 512) {
-                  throw new Error(`${label}: stdout exceeded protocol bound`)
-                }
-              }
-            }
-
-            async function requireStdoutEof(trial, label) {
-              for (;;) {
-                const next = await beforeDeadline(trial.reader.read(), `${label} stdout EOF`)
-                if (next.done) break
-                trial.buffered += trial.decoder.decode(next.value, { stream: true })
-                if (Buffer.byteLength(trial.buffered, "utf8") > 512) {
-                  throw new Error(`${label}: trailing stdout exceeded protocol bound`)
-                }
-              }
-              trial.buffered += trial.decoder.decode()
-              if (trial.buffered !== "") {
-                throw new Error(`${label}: unexpected trailing stdout: ${trial.buffered}`)
-              }
-            }
-
-            async function requireRawCleanup(trial, label) {
-              const rawCode = await beforeDeadline(trial.child.exited, `${label} raw settlement`)
-              if (rawCode !== 137) {
-                throw new Error(`${label}: unexpected raw exit ${rawCode}`)
-              }
-              if ((await beforeDeadline(trial.stderr, `${label} stderr EOF`)) !== "") {
-                throw new Error(`${label}: supervisor emitted stderr`)
-              }
-              const groupDeadline = process.hrtime.bigint() + 2_000_000_000n
-              while (!trial.groupAbsent) {
-                try {
-                  process.kill(-trial.child.pid, 0)
-                } catch (error) {
-                  if (error?.code === "ESRCH") {
-                    trial.groupAbsent = true
-                    break
-                  }
-                  throw error
-                }
-                if (process.hrtime.bigint() >= groupDeadline) break
-                await Bun.sleep(20)
-              }
-              if (!trial.groupAbsent) {
-                throw new Error(`${label}: process group survived release`)
-              }
-            }
-
-            async function closeTrial(trial) {
-              try {
-                await trial.child.stdin.end()
-              } catch {}
-              try {
-                trial.reader.releaseLock()
-              } catch {}
-            }
-
-            const valid = launch("75d77132-1847-4e96-81ee-c277f749cd5a")
-            try {
-              const exitLine = await readLine(valid, "valid supervisor EXIT")
-              if (exitLine !== `RFC224_BWRAP_EXIT ${valid.nonce} 0`) {
-                throw new Error(`unexpected valid supervisor EXIT: ${exitLine}`)
-              }
-              if (valid.buffered !== "") {
-                throw new Error(`valid supervisor emitted output before ACK: ${valid.buffered}`)
-              }
-              await valid.child.stdin.write(`RFC224_BWRAP_ACK ${valid.nonce}\n`)
-              await valid.child.stdin.flush()
-              await valid.child.stdin.end()
-              const releaseLine = await readLine(valid, "valid supervisor RELEASE")
-              if (releaseLine !== `RFC224_BWRAP_RELEASE ${valid.nonce}`) {
-                throw new Error(`unexpected valid supervisor RELEASE: ${releaseLine}`)
-              }
-              await requireStdoutEof(valid, "valid supervisor")
-              await requireRawCleanup(valid, "valid supervisor")
-            } finally {
-              await closeTrial(valid)
-            }
-
-            const eofBound = launch("85d77132-1847-4e96-81ee-c277f749cd5a")
-            try {
-              const exitLine = await readLine(eofBound, "EOF-bound supervisor EXIT")
-              if (exitLine !== `RFC224_BWRAP_EXIT ${eofBound.nonce} 0`) {
-                throw new Error(`unexpected EOF-bound supervisor EXIT: ${exitLine}`)
-              }
-              if (eofBound.buffered !== "") {
-                throw new Error(
-                  `EOF-bound supervisor emitted output before ACK: ${eofBound.buffered}`,
-                )
-              }
-              await eofBound.child.stdin.write(`RFC224_BWRAP_ACK ${eofBound.nonce}\n`)
-              await eofBound.child.stdin.flush()
-              const releaseRead = eofBound.reader.read()
-              const earlyRelease = await Promise.race([
-                releaseRead.then((value) => ({ value })),
-                Bun.sleep(150).then(() => null),
-              ])
-              if (earlyRelease !== null) {
-                throw new Error("EOF-bound supervisor released before ACK EOF")
-              }
-              await eofBound.child.stdin.end()
-              const firstReleaseChunk = await beforeDeadline(
-                releaseRead,
-                "EOF-bound supervisor RELEASE",
-              )
-              if (firstReleaseChunk.done) {
-                throw new Error("EOF-bound supervisor closed before RELEASE")
-              }
-              eofBound.buffered += eofBound.decoder.decode(firstReleaseChunk.value, {
-                stream: true,
-              })
-              const releaseLine = await readLine(eofBound, "EOF-bound supervisor RELEASE")
-              if (releaseLine !== `RFC224_BWRAP_RELEASE ${eofBound.nonce}`) {
-                throw new Error(`unexpected EOF-bound supervisor RELEASE: ${releaseLine}`)
-              }
-              await requireStdoutEof(eofBound, "EOF-bound supervisor")
-              await requireRawCleanup(eofBound, "EOF-bound supervisor")
-            } finally {
-              await closeTrial(eofBound)
-            }
-
-            const wrongAck = launch("95d77132-1847-4e96-81ee-c277f749cd5a")
-            try {
-              const exitLine = await readLine(wrongAck, "wrong-ACK supervisor EXIT")
-              if (exitLine !== `RFC224_BWRAP_EXIT ${wrongAck.nonce} 0`) {
-                throw new Error(`unexpected wrong-ACK supervisor EXIT: ${exitLine}`)
-              }
-              if (wrongAck.buffered !== "") {
-                throw new Error(
-                  `wrong-ACK supervisor emitted output before ACK: ${wrongAck.buffered}`,
-                )
-              }
-              await wrongAck.child.stdin.write(
-                "RFC224_BWRAP_ACK 00000000-0000-4000-8000-000000000000\n",
-              )
-              await wrongAck.child.stdin.flush()
-              await wrongAck.child.stdin.end()
-              await requireStdoutEof(wrongAck, "wrong-ACK supervisor")
-              await requireRawCleanup(wrongAck, "wrong-ACK supervisor")
-            } finally {
-              await closeTrial(wrongAck)
-            }
-          '
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6

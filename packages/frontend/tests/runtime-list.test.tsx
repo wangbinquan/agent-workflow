@@ -17,7 +17,14 @@ import { setBaseUrl, setToken } from '../src/stores/auth'
 
 // RFC-113: rows carry the execution profile + an isDefault flag (the server sets
 // isDefault = name === config.defaultRuntime). opencode is the default here.
-const NULL_PROFILE = { model: null, variant: null, temperature: null, steps: null, maxSteps: null }
+const NULL_PROFILE = {
+  model: null,
+  variant: null,
+  temperature: null,
+  steps: null,
+  maxSteps: null,
+  isSandbox: false,
+}
 const RUNTIMES_BODY = {
   runtimes: [
     {
@@ -194,7 +201,7 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     expect(screen.getByText('/usr/local/bin/my-oc')).toBeTruthy()
   })
 
-  test('legacy OpenCode without a model is danger-marked and cannot Test or become default', async () => {
+  test('OpenCode without an explicit model can use the CLI default', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : (input as URL | Request).toString()
       if (url.includes('/api/runtime/models'))
@@ -213,21 +220,20 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     })
 
     wrap(<RuntimeList />)
-    const chip = await screen.findByTestId('runtime-model-missing-opencode')
-    expect(chip.textContent).toBe('model required')
-    expect(chip.closest('.status-chip')?.className).toContain('status-chip--danger')
-    const runtimeRow = chip.closest('.runtime-list__row')
+    const name = await screen.findByText('opencode', { selector: '.runtime-list__name' })
+    const runtimeRow = name.closest('.runtime-list__row')
     if (!(runtimeRow instanceof HTMLElement)) throw new Error('expected runtime row')
+    expect(within(runtimeRow).queryByText('model required')).toBeNull()
     expect(
       (within(runtimeRow).getByRole('button', { name: /^Test$/ }) as HTMLButtonElement).disabled,
-    ).toBe(true)
+    ).toBe(false)
     expect(
       (within(runtimeRow).getByRole('button', { name: /^Set default$/ }) as HTMLButtonElement)
         .disabled,
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  test('editing a model-less OpenCode row enables Save and Test only after selecting a model', async () => {
+  test('editing a model-less OpenCode row leaves Save and Test enabled', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : (input as URL | Request).toString()
       if (url.includes('/api/runtime/models'))
@@ -255,25 +261,13 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     })
 
     wrap(<RuntimeList />)
-    await screen.findByTestId('runtime-model-missing-opencode')
+    await screen.findByText('opencode', { selector: '.runtime-list__name' })
     fireEvent.click(screen.getAllByRole('button', { name: /^Edit$/ })[0]!)
     const dialog = await screen.findByRole('dialog', { name: 'Edit runtime' })
     const save = within(dialog).getByRole('button', { name: /^Save$/ }) as HTMLButtonElement
     const testBinary = within(dialog).getByRole('button', {
       name: /^Test binary$/,
     }) as HTMLButtonElement
-    expect(save.disabled).toBe(true)
-    expect(testBinary.disabled).toBe(true)
-    expect(
-      within(dialog).getByText(
-        'Select an explicit model before saving or testing this OpenCode runtime.',
-      ),
-    ).toBeTruthy()
-
-    const modelSelect = within(dialog).getAllByRole('combobox')[1] as HTMLButtonElement
-    await waitFor(() => expect(modelSelect.disabled).toBe(false))
-    fireEvent.click(modelSelect)
-    fireEvent.mouseDown(within(screen.getByRole('listbox')).getByText('Opus'))
     expect(save.disabled).toBe(false)
     expect(testBinary.disabled).toBe(false)
   })
@@ -282,12 +276,16 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
   // --skip-safe-check). claude-code rows expose a ChipsInput; the PUT body
   // carries the tokens; opencode rows never show the field (backend rejects it
   // for that protocol and the UI must not invite it).
-  test('claude-code edit dialog exposes extraArgs chips and PUTs them; opencode hides the field', async () => {
+  test('claude-code edit exposes the default-off IS_SANDBOX toggle and extraArgs; opencode hides both', async () => {
     wrap(<RuntimeList />)
     await screen.findByText('my-oc')
     // rows render opencode / claude-code / my-oc — Edit[1] = claude-code.
     fireEvent.click(screen.getAllByRole('button', { name: /^Edit$/ })[1]!)
     const dialog = await screen.findByRole('dialog', { name: 'Edit runtime' })
+    const sandboxToggle = within(dialog).getByTestId('runtime-is-sandbox') as HTMLInputElement
+    expect(sandboxToggle.checked).toBe(false)
+    expect(within(dialog).getByText(/does not enable an OS sandbox/i)).toBeTruthy()
+    fireEvent.click(sandboxToggle)
     const chipsInput = within(dialog).getByTestId('runtime-extra-args-input')
     fireEvent.change(chipsInput, { target: { value: '--skip-safe-check' } })
     fireEvent.keyDown(chipsInput, { key: 'Enter' })
@@ -300,14 +298,19 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
             String(input).includes('/api/runtimes/claude-code') && init?.method === 'PUT',
         )
       expect(putCall).toBeTruthy()
-      const body = JSON.parse(String(putCall![1]?.body)) as { extraArgs?: string[] | null }
+      const body = JSON.parse(String(putCall![1]?.body)) as {
+        extraArgs?: string[] | null
+        isSandbox?: boolean
+      }
       expect(body.extraArgs).toEqual(['--skip-safe-check'])
+      expect(body.isSandbox).toBe(true)
     })
 
     // opencode edit dialog: the field is absent.
     fireEvent.click(screen.getAllByRole('button', { name: /^Edit$/ })[0]!)
     const ocDialog = await screen.findByRole('dialog', { name: 'Edit runtime' })
     expect(within(ocDialog).queryByTestId('runtime-extra-args-input')).toBeNull()
+    expect(within(ocDialog).queryByTestId('runtime-is-sandbox')).toBeNull()
   })
 
   // RFC-116: a network-blocked smoke result renders the "endpoint unreachable"
@@ -349,102 +352,6 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     expect(chip).toBeTruthy()
     expect(screen.queryByText('auth missing')).toBeNull()
     expect(chip.closest('.status-chip')?.className).toContain('status-chip--warn')
-  })
-
-  test('persisted execution-identity failure renders actionable English copy without raw tokens', async () => {
-    await i18n.changeLanguage('en-US')
-    const raw = 'execution-identity-containment-required RAW_BACKEND_SECRET'
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      const url = typeof input === 'string' ? input : (input as URL | Request).toString()
-      if (url.includes('/api/runtime/models'))
-        return jsonResponse({ binary: 'opencode', cached: false, models: [] })
-      if (url.includes('/api/runtimes'))
-        return jsonResponse({
-          runtimes: [
-            {
-              name: 'opencode',
-              protocol: 'opencode',
-              binaryPath: null,
-              isDefault: true,
-              ...NULL_PROFILE,
-              model: 'openai/gpt-5.6',
-              enabled: true,
-              lastProbe: {
-                outcome: 'execution-identity-failed',
-                conforms: false,
-                detail: raw,
-                failureCode: 'execution-identity-containment-required',
-                sawNonce: false,
-                sawEnvelope: false,
-                exitCode: 1,
-              },
-              createdAt: 0,
-              updatedAt: 0,
-            },
-          ],
-        })
-      return jsonResponse({})
-    })
-
-    wrap(<RuntimeList />)
-    await waitFor(() => expect(document.querySelector('.runtime-list__name')).toBeTruthy())
-    const chip = screen.getByText('execution identity failed')
-    expect(chip.closest('.status-chip')?.className).toContain('status-chip--danger')
-    expect(screen.queryByText('runtimes.smoke.execution-identity-failed')).toBeNull()
-    expect(
-      screen.getByText(
-        'The effective policy requires platform containment, but this run did not pass exact capability qualification.',
-      ),
-    ).toBeTruthy()
-    expect(
-      screen.getByText(
-        'Open Settings → Runtime to inspect the effective mode and reason. Apply the saved Warn/Off mode there, or repair the provider and retry.',
-      ),
-    ).toBeTruthy()
-    expect(document.body.textContent).not.toContain(raw)
-    expect(document.body.textContent).not.toContain('execution-identity-containment-required')
-  })
-
-  test('Test binary result renders actionable Chinese copy without raw tokens', async () => {
-    await i18n.changeLanguage('zh-CN')
-    const raw = 'execution-identity-sandbox-required RAW_BACKEND_SECRET'
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const url = typeof input === 'string' ? input : (input as URL | Request).toString()
-      if ((init?.method ?? 'GET') === 'POST' && url.endsWith('/api/runtimes/probe')) {
-        return jsonResponse({
-          smoke: {
-            outcome: 'execution-identity-failed',
-            conforms: false,
-            detail: raw,
-            failureCode: 'execution-identity-sandbox-required',
-            sawNonce: false,
-            sawEnvelope: false,
-            exitCode: 1,
-          },
-        })
-      }
-      if (url.includes('/api/runtime/models'))
-        return jsonResponse({ binary: 'opencode', cached: false, models: [] })
-      if (url.includes('/api/runtimes')) return jsonResponse(RUNTIMES_BODY)
-      return jsonResponse({})
-    })
-
-    wrap(<RuntimeList />)
-    await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
-    fireEvent.click(screen.getAllByRole('button', { name: /^编辑$/ })[2]!)
-    const dialog = await screen.findByRole('dialog', { name: '编辑运行时' })
-    fireEvent.click(within(dialog).getByRole('button', { name: '测试二进制' }))
-
-    expect(
-      await within(dialog).findByText('本次 OpenCode 运行要求平台隔离，但所需能力当前不可用。'),
-    ).toBeTruthy()
-    expect(
-      within(dialog).getByText(
-        '请启用受支持的隔离 provider；也可显式选择「警告」或「关闭」接受降级运行。',
-      ),
-    ).toBeTruthy()
-    expect(dialog.textContent).not.toContain(raw)
-    expect(dialog.textContent).not.toContain('execution-identity-sandbox-required')
   })
 
   test('RFC-153: every row is editable AND deletable (Test / Edit / Delete on all three)', async () => {

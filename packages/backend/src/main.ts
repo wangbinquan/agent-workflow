@@ -16,22 +16,12 @@ import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
 import { doctorCommand, formatDoctor } from './cli/doctor'
 import { migrateCommand } from './cli/migrate'
-import { sandboxCommand } from './cli/sandbox'
 import { startCommand } from './cli/start'
 import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
 import { packageCommand } from './cli/package'
 import { userCommand } from './cli/user'
 import { authCommand } from './cli/auth'
-import {
-  runNetlessSubprocess,
-  runRootOwnedBwrapCapabilitySupervisor,
-} from './services/runtime/opencode/sealedSubprocess'
-import {
-  isValidFffCapabilitySupervisorInvocation,
-  runFffCapabilityProbeSupervisor,
-} from './services/runtime/opencode/fffCapability'
-import { runVerifiedOpencodeLauncher } from './services/runtime/opencode/verifiedLauncher'
 
 function readFlag(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(name)
@@ -59,86 +49,6 @@ async function main(): Promise<void> {
   const sub = Bun.argv[2] ?? 'help'
 
   switch (sub) {
-    case '__opencode-verified-run': {
-      const args = Bun.argv.slice(3)
-      if (args.length !== 2 || args[0] !== '--manifest' || args[1] === undefined) {
-        process.stderr.write('AW_OPENCODE_FAILURE execution-identity-store-unsafe\n')
-        process.exit(1)
-      }
-      process.exit(await runVerifiedOpencodeLauncher(args[1]))
-      break
-    }
-
-    case '__opencode-netless-subprocess': {
-      const args = Bun.argv.slice(3)
-      if (args.length < 2 || args[0] !== '--manifest' || args[1] === undefined) {
-        process.stderr.write('AW_OPENCODE_FAILURE execution-identity-store-unsafe\n')
-        process.exit(1)
-      }
-      process.exit(await runNetlessSubprocess(args[1], args.slice(2)))
-      break
-    }
-
-    case '__opencode-bwrap-capability-supervisor': {
-      const args = Bun.argv.slice(3)
-      const separator = args.indexOf('--')
-      const nonce = args[1]
-      const watchdog = args[3]
-      const command = separator < 0 ? [] : args.slice(separator + 1)
-      if (
-        separator !== 4 ||
-        args[0] !== '--nonce' ||
-        nonce === undefined ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(nonce) ||
-        args[2] !== '--watchdog-ms' ||
-        watchdog !== '10000' ||
-        command.length === 0 ||
-        command.length > 64 ||
-        command.some((value) => value.length === 0 || value.includes('\0'))
-      ) {
-        process.stderr.write('AW_OPENCODE_FAILURE execution-identity-store-unsafe\n')
-        process.exit(1)
-      }
-      try {
-        process.exit(await runRootOwnedBwrapCapabilitySupervisor(nonce, Number(watchdog), command))
-      } catch {
-        process.exit(125)
-      }
-      break
-    }
-
-    case '__opencode-fff-capability-supervisor': {
-      const args = Bun.argv.slice(3)
-      const separator = args.indexOf('--')
-      const nonce = args[1]
-      const watchdog = args[3]
-      const cwd = args[5]
-      const command = separator < 0 ? [] : args.slice(separator + 1)
-      const watchdogMilliseconds = watchdog === undefined ? Number.NaN : Number(watchdog)
-      if (
-        separator !== 6 ||
-        args[0] !== '--nonce' ||
-        nonce === undefined ||
-        args[2] !== '--watchdog-ms' ||
-        watchdog === undefined ||
-        String(watchdogMilliseconds) !== watchdog ||
-        args[4] !== '--cwd' ||
-        cwd === undefined ||
-        !isValidFffCapabilitySupervisorInvocation(nonce, watchdogMilliseconds, cwd, command)
-      ) {
-        process.stderr.write('AW_OPENCODE_FAILURE execution-identity-store-unsafe\n')
-        process.exit(1)
-      }
-      try {
-        process.exit(
-          await runFffCapabilityProbeSupervisor(nonce, watchdogMilliseconds, cwd, command),
-        )
-      } catch {
-        process.exit(125)
-      }
-      break
-    }
-
     case '__git-credential': {
       // RFC-254 T20 (D11): git credential-helper protocol. `get`/`store`/`erase`
       // in argv[3]; request fields on stdin. Answers a `get` for the lease host
@@ -252,15 +162,6 @@ async function main(): Promise<void> {
       break
     }
 
-    case 'sandbox': {
-      // RFC-216: read-only sandbox preflight. Returns its own exit code (0
-      // available/off · 1 unavailable · 2 argv error / unreadable config).
-      const result = await sandboxCommand(Bun.argv.slice(3))
-      process.stdout.write(result.output)
-      process.exit(result.exitCode)
-      break
-    }
-
     case 'help':
     case '--help':
     case '-h':
@@ -299,9 +200,6 @@ async function main(): Promise<void> {
       console.log('  user disable --username <name>    disable (soft-delete) a user')
       console.log('  auth password-login status       show login policy and bootstrap state')
       console.log('  auth password-login enable       restore local password login only')
-      console.log(
-        '  sandbox [--require-available]     read-only sandbox preflight (install/fix guidance)',
-      )
       if (sub !== 'help' && sub !== '--help' && sub !== '-h') {
         console.error(`unknown subcommand: ${sub}`)
         process.exit(2)

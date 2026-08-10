@@ -2,8 +2,8 @@
 //
 // Everything between "the scheduler decided this node runs now" and "a terminal
 // node_run row exists": resolve the interpreter, prepare the dependency
-// environment, assemble a minimal environment, materialise the body, run it
-// under containment, and turn stdout into port values.
+// environment, assemble the environment, materialise the body, run it, and
+// turn stdout into port values.
 //
 // It deliberately does NOT reuse the agent branch's loop body (design-gate F6):
 // that code is unreachable for a non-agent kind. It reuses the same PRIMITIVES
@@ -11,14 +11,13 @@
 // minting — which is where the real invariants live.
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, join, win32 } from 'node:path'
+import { join, win32 } from 'node:path'
 import {
   planScriptPortEnv,
   readScriptBody,
   readScriptDependencies,
   readScriptEnv,
   readScriptLanguage,
-  resolveScriptNetwork,
   resolveScriptReadonly,
   scriptEnvSuffix,
   scriptOutputMode,
@@ -30,9 +29,7 @@ import {
   type WorkflowNode,
 } from '@agent-workflow/shared'
 import type { Logger } from '@/util/log'
-import { buildScriptPath } from '@/util/platformExec'
-import type { SandboxCtx } from './sandbox'
-import { runContainedProcess, type ContainedSpawnResult } from './execution/containedSpawn'
+import { runManagedProcess, type ManagedProcessResult } from './execution/managedProcess'
 import type { ScriptDepsEnv } from './scriptDepsEnv'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
@@ -309,16 +306,11 @@ export interface ScriptEnvAssembly {
 }
 
 /**
- * Build the child's COMPLETE environment.
+ * Build the child's complete, natural environment.
  *
- * Two rules carry the security weight:
- *   - the daemon's own `process.env` is never inherited (AC-16), so a secret in
- *     the daemon environment cannot leak into a user's script;
- *   - the node's `env` overlay is applied FIRST and the platform keys last
- *     (design-gate P1). The reverse order would let `PYTHONPATH` or `HOME`
- *     from user data undo the read-only dependency boundary and the private
- *     run directory. The validator additionally refuses those keys at save
- *     time, so this ordering is defence in depth rather than the only line.
+ * RFC-276 fixes the order: inherit daemon env, apply the author's overlay, then
+ * write product-protocol keys last. This intentionally restores the operator's
+ * normal HOME, PATH, credentials, proxies, and toolchain discovery.
  */
 export function assembleScriptEnv(input: {
   node: WorkflowNode
@@ -343,48 +335,26 @@ export function assembleScriptEnv(input: {
   const language = readScriptLanguage(input.node) ?? 'python'
   const mode = scriptOutputMode(input.node)
 
-  const env: Record<string, string> = {}
-  // 1. user overlay, MINUS every reserved key.
-  //
-  // Ordering alone is not enough (caught by rfc253-script-execution): the
-  // platform only sets `PYTHONPATH` when a dependency environment exists, so a
-  // user-supplied `PYTHONPATH` would survive on every node WITHOUT dependencies
-  // and hijack module resolution before the script's first line. Dropping the
-  // reserved set here makes "the platform owns these keys" true unconditionally
-  // rather than true-where-the-platform-happens-to-write.
+  // 1. Natural daemon environment.
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => {
+      return typeof entry[1] === 'string'
+    }),
+  )
+
+  // 2. Author overlay, excluding product-owned and pre-execution injection keys.
   for (const [key, value] of Object.entries(readScriptEnv(input.node))) {
     if (scriptReservedEnvKeyIssue(key) !== null) continue
     env[key] = value
   }
 
-  // 2. platform keys, last-write-wins.
-  // RFC-254 T23: `dirname`, not string surgery on '/' — the old
-  // `lastIndexOf('/')` returns -1 for a `\`-separated Windows path and silently
-  // takes the whole string as the directory.
-  const interpreterDir = dirname(input.interpreterPath)
-  env.PATH = buildScriptPath(interpreterDir, process.platform, process.env.SystemRoot)
-  const privateHome = join(input.runDir, 'home')
-  const privateTmp = join(input.runDir, 'tmp')
-  env.HOME = privateHome
-  env.TMPDIR = privateTmp
+  // 3. Platform protocol/correctness keys, last-write-wins.
+  env.PWD = input.worktreePath
   if (process.platform === 'win32') {
-    // Windows resolves the user profile from USERPROFILE (and HOMEDRIVE +
-    // HOMEPATH for older tooling); leaving those pointed at the real profile
-    // while HOME points into the run directory means half the script's tooling
-    // writes outside the sandboxed run.
-    env.USERPROFILE = privateHome
-    env.TEMP = privateTmp
-    env.TMP = privateTmp
-    for (const key of ['SystemRoot', 'SystemDrive', 'COMSPEC', 'PATHEXT'] as const) {
-      const value = process.env[key]
-      if (typeof value === 'string' && value.length > 0) env[key] = value
-    }
     // Windows Python defaults to the legacy code page for stdout, which would
     // corrupt the "stdout IS the port value" contract for any non-ASCII output.
     env.PYTHONUTF8 = '1'
   }
-  env.LANG = 'C.UTF-8'
-  env.LC_ALL = 'C.UTF-8'
   env.AW_TASK_ID = input.taskId
   env.AW_NODE_ID = input.nodeId
   env.AW_NODE_RUN_ID = input.nodeRunId
@@ -457,7 +427,6 @@ export interface ScriptRunRequest {
   timeoutMs?: number
   killEscalationGraceMs?: number
   signal?: AbortSignal
-  sandbox?: SandboxCtx
   onStdoutLine?: (line: string) => Promise<void> | void
   onStderrLine?: (line: string) => Promise<void> | void
   onSpawned?: (info: { pid: number; spawnBinaryPath: string }) => Promise<void> | void
@@ -467,7 +436,7 @@ export interface ScriptRunRequest {
 }
 
 export interface ScriptRunOutcome {
-  result: ContainedSpawnResult
+  result: ManagedProcessResult
   /** Set when the run failed for a script-specific reason. */
   failureCode: ScriptFailureCode | null
 }
@@ -485,8 +454,6 @@ export async function runScriptProcess(req: ScriptRunRequest): Promise<ScriptRun
   // dropped into the worktree would show up in `git_diff` as a change the node
   // "made", which it did not.
   mkdirSync(inputDir, { recursive: true })
-  mkdirSync(join(req.runDir, 'home'), { recursive: true })
-  mkdirSync(join(req.runDir, 'tmp'), { recursive: true })
   const scriptPath = join(req.runDir, `script.${spec.ext}`)
   writeFileSync(scriptPath, readScriptBody(req.node), 'utf8')
 
@@ -511,7 +478,7 @@ export async function runScriptProcess(req: ScriptRunRequest): Promise<ScriptRun
   })
   for (const file of assembly.spillFiles) writeFileSync(file.path, file.content, 'utf8')
 
-  const result = await runContainedProcess({
+  const result = await runManagedProcess({
     argv: spec.argv(req.interpreter.path, scriptPath),
     cwd: req.worktreePath,
     env: assembly.env,
@@ -521,7 +488,6 @@ export async function runScriptProcess(req: ScriptRunRequest): Promise<ScriptRun
       ? {}
       : { killEscalationGraceMs: req.killEscalationGraceMs }),
     ...(req.signal === undefined ? {} : { signal: req.signal }),
-    ...(req.sandbox === undefined ? {} : { sandbox: req.sandbox }),
     ...(req.onSpawned === undefined ? {} : { onSpawned: req.onSpawned }),
     ...(req.onStdoutLine === undefined ? {} : { onStdoutLine: req.onStdoutLine }),
     ...(req.onStderrLine === undefined ? {} : { onStderrLine: req.onStderrLine }),
@@ -532,7 +498,7 @@ export async function runScriptProcess(req: ScriptRunRequest): Promise<ScriptRun
 }
 
 /** Map a spawn outcome onto the script failure vocabulary. */
-export function classifyScriptOutcome(result: ContainedSpawnResult): ScriptFailureCode | null {
+export function classifyScriptOutcome(result: ManagedProcessResult): ScriptFailureCode | null {
   switch (result.outcome) {
     case 'timeout':
       return 'script-timeout'
@@ -555,6 +521,5 @@ export {
   SCRIPT_DEFAULT_OUTPUT_PORT,
   SCRIPT_ENV_FILE_PREFIX,
   readScriptDependencies,
-  resolveScriptNetwork,
   resolveScriptReadonly,
 }

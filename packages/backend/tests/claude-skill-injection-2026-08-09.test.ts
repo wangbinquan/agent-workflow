@@ -62,7 +62,14 @@ function dependentAgent(name: string, bodyMd: string): Agent {
 }
 
 function profile(): RuntimeProfile {
-  return { model: null, variant: null, temperature: null, steps: null, maxSteps: null }
+  return {
+    model: null,
+    variant: null,
+    temperature: null,
+    steps: null,
+    maxSteps: null,
+    isSandbox: false,
+  }
 }
 
 function makeSkill(root: string): string {
@@ -119,7 +126,7 @@ describe('Claude natural managed-skill attachment', () => {
     }
     const plan = await claudeCodeDriver.buildBusinessSpawn(ctx)
     expect(plan.env.CLAUDE_CONFIG_DIR).toBeUndefined()
-    expect(plan.env.IS_SANDBOX).toBe('1')
+    expect(plan.env.IS_SANDBOX).toBeUndefined()
     expect(plan.cmd).not.toContain('--setting-sources')
     expect(plan.cmd).not.toContain('--disable-slash-commands')
     expect(plan.cmd).not.toContain('--strict-mcp-config')

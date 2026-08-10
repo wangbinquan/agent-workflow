@@ -253,20 +253,17 @@ export async function isGitWorkTree(path: string): Promise<boolean> {
  * Resolve a worktree's git COMMON dir (the `objects/` + `refs/` store every
  * linked worktree shares) by reading the on-disk pointers, with no subprocess.
  *
- * `services/runtime/netlessProjection.ts` does the same job with
- * `git rev-parse --git-common-dir` for the child boundary; the OUTER sandbox
- * decides its allow-back set inside a synchronous, per-spawn hot path where
- * forking git is not acceptable, so it reads the two files git itself reads:
+ * This synchronous helper is used in hot paths where spawning git solely to
+ * resolve the common directory would be wasteful, so it reads the two files
+ * git itself reads:
  *
  *   <worktree>/.git            dir  → that IS the common dir (a normal repo)
  *                              file → `gitdir: <admin dir>` (a linked worktree)
  *   <admin dir>/commondir      → path (usually relative) to the common dir
  *
- * Why the outer sandbox needs this at all: the allow-back list used to name
- * `scratch/{taskId}/.git` LITERALLY, which covered exactly one of the three
- * task shapes whose base repository lives inside the denied appHome. The other
- * two — a skill-fusion engine task (`fusions/{id}/iter{n}/work`) and a
- * call-workflow child of a scratch parent (whose common dir carries the PARENT
+ * The task shapes include a skill-fusion engine task
+ * (`fusions/{id}/iter{n}/work`) and a call-workflow child of a scratch parent
+ * (whose common dir carries the PARENT
  * task id) — resolved to a masked path, so every git command an agent ran in
  * its isolated worktree died with `fatal: not a git repository` (2026-08-04
  * audit; the literal form was itself the patch for the 2026-07-22 incident

@@ -4,7 +4,7 @@
 // is full context replay):
 //   mint turn row (envelope nonce persisted SAME tx — design-gate P2-1)
 //   → build dump (fresh manifest, fences captured = commit baseline)
-//   → INTENT.md + protocol block → runSystemAgent (intent-read-v1, Semaphore)
+//   → INTENT.md + protocol block → runSystemAgent (natural runtime, Semaphore)
 //   → parse envelope (summary + changeset XOR questions + optional requests)
 //   → settle under context-epoch CAS: a superseded/cancelled turn archives as
 //     error and NEVER installs a draft (design-gate P0-3); a valid changeset
@@ -34,7 +34,6 @@ import { createLogger, type Logger } from '@/util/log'
 import { Semaphore } from '@/util/semaphore'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
 import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
-import type { ContainmentCoordinator } from '@/services/sandbox'
 import {
   releaseSystemAgentScratch,
   runSystemAgent,
@@ -42,7 +41,6 @@ import {
   type SystemAgentRunResult,
 } from '@/services/systemAgentRun'
 import type { SystemAgentOutputEvidence } from '@/services/runtime/types'
-import { markProductionOpencodeCommand } from '@/util/opencode'
 import type { ResolvedRuntime } from '@/services/runtimeRegistry'
 import { IntentTurnSessionEventSink } from './turnSession'
 import { buildIntentDump } from './dumpBuilder'
@@ -87,7 +85,6 @@ export interface RunIntentTurnDeps {
   db: DbClient
   appHome: string
   config: IntentTurnConfig
-  containmentCoordinator?: ContainmentCoordinator
   /** Test seam — defaults to runSystemAgent. */
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
   /** WS seam (T7 wires the broadcaster); default noop. */
@@ -488,19 +485,14 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         // in the private per-run dir. opencode ignores both fields.
         configDirEnv: deps.config.runtime.configDir.env,
         configDirName: deps.config.runtime.configDir.name,
-        // Brand the configured head as a production command (no-op in the e2e
-        // binary → legacy stub path; real brand in production → verified plan).
-        // The brand seam is consumed only by the opencode driver; branding a
-        // claude head is a pure no-op, which keeps this call protocol-blind.
+        // Forward an explicit configured OpenCode head; Claude uses the
+        // runtimeBinary field through its own driver.
         ...(deps.config.runtime.binaryPath != null && deps.config.runtime.binaryPath !== ''
-          ? { opencodeCmd: markProductionOpencodeCommand([deps.config.runtime.binaryPath]) }
+          ? { opencodeCmd: [deps.config.runtime.binaryPath] }
           : {}),
         model: deps.config.runtime.model,
+        isSandbox: deps.config.runtime.isSandbox,
         seedFiles: [{ path: 'INTENT.md', content: intentDoc }, ...dump.seedFiles],
-        systemPermissionProfile: 'intent-read-v1',
-        ...(deps.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: deps.containmentCoordinator }),
         scratchParent: join(deps.appHome, INTENT_SCRATCH_DIRNAME),
         scratchName: turnId,
         timeoutMs: deps.config.timeoutMs,
@@ -528,7 +520,6 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       exitCode: result.exitCode,
       status: result.status,
       outputEvidence: result.outputEvidence,
-      ...(result.failureCode === undefined ? {} : { failureCode: result.failureCode }),
       ...(result.stderrTail === '' ? {} : { stderrTail: result.stderrTail }),
       // RFC-237 impl-gate P2 — the terminal claude is_error text (masked in
       // runSystemAgent) persists with the turn so "Not logged in"-class causes
@@ -559,7 +550,6 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         'error',
         {
           code: `intent-run-${result.status}`,
-          ...(result.failureCode === undefined ? {} : { failureCode: result.failureCode }),
         },
         { runMeta, scratchRetained: result.scratchRetained },
       )
@@ -719,11 +709,7 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
   }
 }
 
-/** Resolve the per-turn runtime + knobs from config.json (design §5).
- *  FAIL-CLOSED twice: the save-time gate in routes/config.ts rejects
- *  selections whose driver does not declare the 'intent-read-v1' narrowed
- *  profile (RFC-237 capability gate), and this launch-time re-check refuses to
- *  spawn if a legacy/hand-edited config slipped one through. */
+/** Resolve the per-turn runtime + knobs from config.json (design §5). */
 export async function resolveIntentTurnConfig(
   db: DbClient,
   cfg: {
@@ -739,21 +725,10 @@ export async function resolveIntentTurnConfig(
   },
 ): Promise<IntentTurnConfig> {
   const { resolveInternalAgentRuntime } = await import('@/services/runtimeRegistry')
-  const { getRuntimeDriver } = await import('@/services/runtime')
   const runtime = await resolveInternalAgentRuntime(db, {
     runtimeName: cfg.intentBuilderRuntime ?? null,
     defaultRuntime: cfg.defaultRuntime ?? null,
   })
-  // RFC-237: capability gate, not a protocol-literal gate — a driver that does
-  // not declare 'intent-read-v1' stays fail-closed exactly like before.
-  if (
-    !getRuntimeDriver(runtime.protocol).narrowedSystemPermissionProfiles.includes('intent-read-v1')
-  ) {
-    throw new ConflictError(
-      'intent-runtime-unsupported',
-      `runtime '${runtime.name}' (protocol '${runtime.protocol}') cannot enforce intent-read-v1`,
-    )
-  }
   return {
     runtime,
     lang: cfg.intentBuilderLang ?? null,

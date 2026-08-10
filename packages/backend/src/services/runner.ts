@@ -1,7 +1,7 @@
 // Runner: spawn ONE opencode subprocess for one node_run, stream its output
 // into the DB, persist the parsed envelope, and clean up.
 //
-// Process isolation (design/proposal.md §6.1):
+// Runtime assembly:
 //   * cwd = task worktree
 //   * OPENCODE_CONFIG_DIR -> per-run dir for framework-managed skills
 //   * OPENCODE_CONFIG_CONTENT -> inline JSON of the agent definition
@@ -48,19 +48,6 @@ import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { createLogger, type Logger } from '@/util/log'
 import {
-  buildRunSandboxCtx,
-  ContainmentAdmissionAborted,
-  sandboxActive,
-  sandboxEnforceBlocked,
-  wrapSpawnPlanSandbox,
-  type ContainmentCoordinator,
-  type PreparedContainmentPlan,
-  type SandboxCtx,
-} from '@/services/sandbox'
-import { lifecycleAlerts } from '@/db/schema'
-import { and, isNull } from 'drizzle-orm'
-import { ulid } from 'ulid'
-import {
   CLARIFY_FORBIDDEN_PREFIX,
   CLARIFY_REQUIRED_PREFIX,
   detectEnvelopeKind,
@@ -102,122 +89,25 @@ import {
 import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import { loadRunEnvelopeNonce } from '@/services/nodeRunMint'
-import {
-  claimNewOpencodeSession,
-  confirmOpencodeSessionResume,
-  getOpencodeSessionOwner,
-  preclaimOpencodeSessionResume,
-  releaseOpencodeSessionLease,
-  type OpencodeSessionLeaseToken,
-} from '@/services/opencodeSessionOwner'
-import {
-  ControlMarkerTracker,
-  writeControlAckExclusive,
-  type McpReadinessMarker,
-} from './runtime/opencode/controlProtocol'
-import { compareCodePoints } from './runtime/opencode/mcpReadiness'
-import {
-  ExecutionIdentityFailure,
-  parseExecutionIdentityFailureLine,
-} from './runtime/opencode/failure'
-import {
-  isExecutionIdentityFailureCode,
-  maskDiagnosticsText,
-  type ExecutionIdentityFailureCode,
-} from '@agent-workflow/shared'
-import { isProductionOpencodeCommand } from '@/util/opencode'
+import { maskDiagnosticsText } from '@agent-workflow/shared'
 import { killProcessTree } from '@/util/process'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import {
+  claimNewRuntimeSession,
+  confirmRuntimeSessionResume,
+  getRuntimeSessionLease,
+  preclaimRuntimeSessionResume,
+  releaseRuntimeSessionLease,
+  type RuntimeSessionLeaseToken,
+} from '@/services/runtimeSessionLease'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.
 export type { SkillSource, ResolvedSkill } from './runtime/types'
 
-/** RFC-205 — one OPEN `sandbox-degraded` lifecycle alert per task.
- *  Exported for the dedupe unit test. */
-export async function alertSandboxDegradedOnce(
-  db: DbClient,
-  taskId: string,
-  detail: string | null,
-  log: Logger,
-): Promise<void> {
-  try {
-    const open = await db
-      .select({ id: lifecycleAlerts.id })
-      .from(lifecycleAlerts)
-      .where(
-        and(
-          eq(lifecycleAlerts.taskId, taskId),
-          eq(lifecycleAlerts.rule, 'sandbox-degraded'),
-          isNull(lifecycleAlerts.resolvedAt),
-        ),
-      )
-      .limit(1)
-    if (open.length > 0) return
-    await db.insert(lifecycleAlerts).values({
-      id: ulid(),
-      taskId,
-      rule: 'sandbox-degraded',
-      // 'warning', not 'warn': `LifecycleAlertSeverity` has only 'warning' |
-      // 'error', so the old value fell through every severity lookup and the
-      // panel showed the bare key `tasks.diagnose.severity.warn`.
-      severity: 'warning',
-      detail: JSON.stringify({ reason: detail ?? 'sandbox mechanism unavailable' }),
-      detectedAt: Date.now(),
-    })
-  } catch (err) {
-    // Alerting must never take a run down.
-    log.warn('sandbox-degraded alert failed', {
-      taskId,
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-}
-
-/**
- * Close this task's open `sandbox-degraded` alert once a spawn is admitted with
- * the boundary intact.
- *
- * 2026-08-04 audit: nothing ever resolved this rule. The invariant/stuck
- * reconcilers only touch their own `ownedRules`, the runner only deduped, and
- * the repair endpoint 500'd — so a task that degraded ONCE kept a warning
- * banner forever, including after the operator installed bubblewrap and
- * including on tasks that had long since finished. An alert nobody can clear is
- * an alert everybody learns to ignore.
- */
-export async function resolveSandboxDegradedIfHealthy(
-  db: DbClient,
-  taskId: string,
-  log: Logger,
-): Promise<void> {
-  try {
-    await db
-      .update(lifecycleAlerts)
-      .set({ resolvedAt: Date.now() })
-      .where(
-        and(
-          eq(lifecycleAlerts.taskId, taskId),
-          eq(lifecycleAlerts.rule, 'sandbox-degraded'),
-          isNull(lifecycleAlerts.resolvedAt),
-        ),
-      )
-  } catch (err) {
-    log.warn('sandbox-degraded resolve failed', {
-      taskId,
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-}
-
 export interface RunNodeOptions {
   taskId: string
-  /** Daemon-scoped RFC-233 admission source. Production always supplies it. */
-  containmentCoordinator?: ContainmentCoordinator
-  /** RFC-205 — OS sandbox context. ABSENT (tests, sandboxMode=off, mechanism
-   *  unavailable) means the spawn argv passes through untouched; the daemon
-   *  (start.ts) assembles it for production runs. */
-  sandbox?: SandboxCtx
   /** ULID of a pre-existing node_runs row in 'pending' state. */
   nodeRunId: string
   /**
@@ -390,12 +280,6 @@ export interface RunNodeOptions {
    */
   opencodeCmd?: string[]
   /**
-   * RFC-224 explicit dependency-injection seam. Production callers never set
-   * it; tests that need the historical unverified OpenCode plan can opt out
-   * without relying on command-name/path conventions.
-   */
-  testOnlyUnverifiedRuntime?: boolean
-  /**
    * RFC-111: generic runtime-binary head override for TESTS only (mock-claude /
    * a future mock). Production never sets it → claude resolves to `['claude']`
    * (PATH) and the subscription credential bridge runs. Its presence is the
@@ -555,216 +439,6 @@ export interface RunResult {
   }
 }
 
-type OpencodeSessionControl = Extract<
-  NonNullable<SpawnPlan['control']>,
-  { kind: 'opencode-session' }
->
-type OpencodeResumeOwner = NonNullable<ReturnType<typeof getOpencodeSessionOwner>>
-
-/**
- * Mutable state for the launcher/runner ownership barrier. It deliberately
- * survives an acknowledgement-write failure: a new-session claim may already
- * have committed by then, and the runner must retain the exact lease token so
- * its post-reap finalization path can release it.
- */
-export interface RunnerOpencodeControlState {
-  tracker: ControlMarkerTracker
-  leaseToken?: OpencodeSessionLeaseToken
-  sessionId?: string
-  mcpReadiness?: McpReadinessMarker
-  ready: boolean
-}
-
-export function createRunnerOpencodeControlState(
-  leaseToken?: OpencodeSessionLeaseToken,
-): RunnerOpencodeControlState {
-  return {
-    tracker: new ControlMarkerTracker(),
-    ...(leaseToken === undefined ? {} : { leaseToken }),
-    ready: false,
-  }
-}
-
-/**
- * The verified path is the production default. An explicitly injected,
- * unbranded `opencodeCmd` and the named test seam retain the historical mock
- * runner so existing dependency-injected tests never acquire production
- * session leases or touch the persistent store.
- */
-export function requiresVerifiedOpencodeBarrier(input: {
-  runtime: RuntimeKind
-  opencodeCmd?: readonly string[]
-  testOnlyUnverifiedRuntime?: boolean
-}): boolean {
-  return (
-    input.runtime === 'opencode' &&
-    input.testOnlyUnverifiedRuntime !== true &&
-    !(input.opencodeCmd !== undefined && !isProductionOpencodeCommand(input.opencodeCmd))
-  )
-}
-
-/** Return only the closed, non-secret RFC-224 failure vocabulary. */
-export function executionIdentityFailureCodeOf(
-  error: unknown,
-): ExecutionIdentityFailureCode | undefined {
-  if (error instanceof ExecutionIdentityFailure) return error.code
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    isExecutionIdentityFailureCode(error.code)
-  ) {
-    return error.code
-  }
-  return undefined
-}
-
-/**
- * Consume one stderr line at the ownership barrier. Ordinary stderr is handed
- * back to the caller for persistence. Control frames are consumed here and
- * never become node_run_events.
- */
-export function processRunnerOpencodeControlLine(input: {
-  db: DbClient
-  taskId: string
-  nodeId: string
-  nodeRunId: string
-  control: OpencodeSessionControl
-  resumeOwner?: OpencodeResumeOwner
-  state: RunnerOpencodeControlState
-  line: string
-}):
-  | { kind: 'stderr'; line: string }
-  | { kind: 'session-ready'; sessionId: string }
-  | { kind: 'mcp-readiness'; marker: McpReadinessMarker } {
-  const nack = (): void => {
-    try {
-      writeControlAckExclusive(input.control.ackPath, {
-        decision: 'nack',
-        nonce: input.control.nonce,
-      })
-    } catch {
-      // The first writer wins. A duplicate marker arrives after the ok ack
-      // exists, while an attacker-created/symlink ack must remain untouched.
-    }
-  }
-
-  try {
-    const parsed = input.state.tracker.accept(input.line)
-    if (parsed.kind === 'stderr') return parsed
-    const expectedReadiness = input.control.mcpReadiness ?? { enabled: false, servers: [] }
-    if (parsed.kind === 'mcp-readiness') {
-      if (!expectedReadiness.enabled || input.state.mcpReadiness !== undefined) {
-        throw new ExecutionIdentityFailure('execution-identity-control-failed')
-      }
-      const expectedByName = new Map(
-        expectedReadiness.servers.map((server) => [server.name, server] as const),
-      )
-      const seen = new Set<string>()
-      for (const [expectedType, entries] of [
-        ['local', parsed.marker.unavailableLocal],
-        ['remote', parsed.marker.unavailableRemote],
-      ] as const) {
-        for (let index = 0; index < entries.length; index += 1) {
-          const entry = entries[index]!
-          const expected = expectedByName.get(entry.name)
-          if (
-            expected?.type !== expectedType ||
-            seen.has(entry.name) ||
-            (index > 0 && compareCodePoints(entries[index - 1]!.name, entry.name) >= 0)
-          ) {
-            throw new ExecutionIdentityFailure('execution-identity-control-failed')
-          }
-          seen.add(entry.name)
-        }
-      }
-      input.state.mcpReadiness = parsed.marker
-      return { kind: 'mcp-readiness', marker: parsed.marker }
-    }
-    const marker = parsed.marker
-    if (
-      expectedReadiness.enabled !== (input.state.mcpReadiness !== undefined) ||
-      marker.kind !== input.control.mode ||
-      marker.nodeRunId !== input.nodeRunId ||
-      marker.leaseNonceDigest !== input.control.leaseNonceDigest ||
-      marker.binaryDigest !== input.control.runtimeBinaryDigest ||
-      marker.protocolCodec !== input.control.protocolCodec
-    ) {
-      throw new ExecutionIdentityFailure('execution-identity-control-failed')
-    }
-
-    let token: OpencodeSessionLeaseToken
-    if (input.control.mode === 'new') {
-      if (
-        input.control.expectedSessionId !== undefined ||
-        input.control.createdNodeRunId !== input.nodeRunId ||
-        input.state.leaseToken !== undefined
-      ) {
-        throw new ExecutionIdentityFailure('execution-identity-control-failed')
-      }
-      claimNewOpencodeSession(input.db, {
-        sessionId: marker.sessionId,
-        taskId: input.taskId,
-        nodeId: input.nodeId,
-        currentNodeRunId: input.nodeRunId,
-        identityDigest: input.control.identityDigest,
-        runtimeBinaryDigest: input.control.runtimeBinaryDigest,
-        sessionContractDigest: input.control.sessionContractDigest,
-        sessionStoreKey: input.control.sessionStoreKey,
-        projectId: marker.projectId,
-        protocolCodec: marker.protocolCodec,
-        reportedVersion: marker.reportedVersion,
-        leaseNonceDigest: input.control.leaseNonceDigest,
-      })
-      token = {
-        sessionId: marker.sessionId,
-        nodeRunId: input.nodeRunId,
-        leaseNonceDigest: input.control.leaseNonceDigest,
-      }
-      // Stamp before the ack write. If O_EXCL fails, finally still owns the
-      // committed lease and can release it after the launcher is fully reaped.
-      input.state.leaseToken = token
-    } else {
-      const expectedSessionId = input.control.expectedSessionId
-      const owner = input.resumeOwner
-      token = input.state.leaseToken as OpencodeSessionLeaseToken
-      if (
-        expectedSessionId === undefined ||
-        owner === undefined ||
-        marker.sessionId !== expectedSessionId ||
-        marker.projectId !== owner.projectId ||
-        owner.sessionId !== expectedSessionId ||
-        owner.taskId !== input.taskId ||
-        owner.nodeId !== input.nodeId ||
-        input.control.createdNodeRunId !== owner.createdNodeRunId ||
-        input.control.identityDigest !== owner.identityDigest ||
-        input.control.runtimeBinaryDigest !== owner.runtimeBinaryDigest ||
-        input.control.protocolCodec !== owner.protocolCodec ||
-        input.control.sessionContractDigest !== owner.sessionContractDigest ||
-        input.control.sessionStoreKey !== owner.sessionStoreKey ||
-        token === undefined ||
-        token.sessionId !== expectedSessionId ||
-        token.nodeRunId !== input.nodeRunId ||
-        token.leaseNonceDigest !== input.control.leaseNonceDigest
-      ) {
-        throw new ExecutionIdentityFailure('execution-identity-control-failed')
-      }
-      confirmOpencodeSessionResume(input.db, token)
-    }
-
-    input.state.sessionId = marker.sessionId
-    writeControlAckExclusive(input.control.ackPath, {
-      decision: 'ok',
-      nonce: input.control.nonce,
-    })
-    input.state.ready = true
-    return { kind: 'session-ready', sessionId: marker.sessionId }
-  } catch {
-    nack()
-    throw new ExecutionIdentityFailure('execution-identity-control-failed')
-  }
-}
-
 // RFC-143 PR-4: pickRuntimeHead moved to ./runtime/head.ts (both drivers select
 // their argv head there); re-exported for the runtime-spawn-head contract lock.
 export { pickRuntimeHead } from './runtime/head'
@@ -808,6 +482,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       temperature: r.temperature,
       steps: r.steps,
       maxSteps: r.maxSteps,
+      isSandbox: r.isSandbox,
     })
   }
 
@@ -848,8 +523,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // inline prompt. Best-effort — a broken memory table degrades to "no
   // inject", never to a failed run. The envelope-followup path does not read
   // LIVE memories; it reconstructs the original block from the first
-  // attempt's snapshot. That block stays in the AGENT config (verified
-  // OpenCode binds it into the persistent session identity) while the USER
+  // attempt's snapshot. That block stays in the AGENT config while the USER
   // prompt remains the short RFC-042 nudge.
   // RFC-046: capture the post-clip snapshot from inject so the final
   // node_runs UPDATE can persist it to `injected_memories_json`. Stays
@@ -1104,173 +778,71 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     status: 'running',
   })
 
-  const effectiveResumeSessionId =
+  let effectiveResumeSessionId =
     opts.promptMode?.kind === 'followup' ? opts.promptMode.resumeSessionId : opts.resumeSessionId
-  const verifiedOpencode = requiresVerifiedOpencodeBarrier({
-    runtime,
-    ...(opts.opencodeCmd === undefined ? {} : { opencodeCmd: opts.opencodeCmd }),
-    ...(opts.testOnlyUnverifiedRuntime === undefined
-      ? {}
-      : { testOnlyUnverifiedRuntime: opts.testOnlyUnverifiedRuntime }),
-  })
-  const opencodeControlNonce = verifiedOpencode ? randomBytes(32).toString('base64url') : undefined
-  const opencodeLeaseNonceDigest =
-    opencodeControlNonce === undefined
-      ? undefined
-      : createHash('sha256').update(opencodeControlNonce).digest('hex')
-  let opencodeResumeOwner: ReturnType<typeof getOpencodeSessionOwner>
-  let controlState = createRunnerOpencodeControlState()
-  let preparedContainment: PreparedContainmentPlan | undefined
-
-  // RFC-233: qualify and decide exactly once, before the verified driver may
-  // touch its store/layout and before a resume lease is acquired. Every later
-  // layer receives this immutable result.
-  if (opts.containmentCoordinator !== undefined) {
-    try {
-      const containmentProfile =
-        driver.businessContainmentProfile?.({
-          agent: opts.agent,
-          mcps: opts.mcps ?? [],
-          // RFC-242 (impl-gate P2-7): the demand must see EXACTLY what the
-          // materialization sees. An injected mock head builds no fence, so it
-          // must not raise a demand that costs the runner's outer sandbox.
-          runtimeCmd: opts.runtimeCmd,
-        }) ?? driver.containmentProfile
-      preparedContainment = await opts.containmentCoordinator.admit(containmentProfile, {
-        ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+  const runtimeLeaseNonceDigest = createHash('sha256').update(randomBytes(32)).digest('hex')
+  let runtimeLeaseToken: RuntimeSessionLeaseToken | undefined
+  const releaseHeldRuntimeLease = (): void => {
+    if (runtimeLeaseToken === undefined) return
+    const released = releaseRuntimeSessionLease(opts.db, runtimeLeaseToken)
+    if (!released) {
+      log.warn('runtime-session-lease-release-cas-missed', {
+        nodeRunId: opts.nodeRunId,
+        sessionId: runtimeLeaseToken.sessionId,
       })
-    } catch (error) {
-      if (error instanceof ContainmentAdmissionAborted) {
-        const daemonShutdown = opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
-        const errorMessage = daemonShutdown
-          ? 'daemon-shutdown: node interrupted during containment admission'
-          : 'aborted by signal'
+    }
+    runtimeLeaseToken = undefined
+  }
+
+  if (effectiveResumeSessionId !== undefined && effectiveResumeSessionId !== '') {
+    const owner = getRuntimeSessionLease(opts.db, runtime, effectiveResumeSessionId)
+    if (owner === undefined) {
+      // Rows from before the natural-runtime cutover deliberately have no
+      // neutral owner. Start a fresh native session and leave a durable,
+      // human-readable reset event instead of pretending resume succeeded.
+      await opts.db.insert(nodeRunEvents).values({
+        nodeRunId: opts.nodeRunId,
+        ts: Date.now(),
+        kind: 'text',
+        payload: JSON.stringify({
+          code: 'runtime-session-reset',
+          previousSessionUnavailable: true,
+        }),
+      })
+      effectiveResumeSessionId = undefined
+    } else {
+      try {
+        runtimeLeaseToken = preclaimRuntimeSessionResume(opts.db, {
+          protocol: runtime,
+          sessionId: effectiveResumeSessionId,
+          taskId: opts.taskId,
+          nodeId: opts.nodeId,
+          currentNodeRunId: opts.nodeRunId,
+          leaseNonceDigest: runtimeLeaseNonceDigest,
+        })
+        if (!confirmRuntimeSessionResume(opts.db, runtimeLeaseToken)) {
+          throw new Error('runtime session could not be linked to the current run')
+        }
+      } catch (error) {
+        releaseHeldRuntimeLease()
+        const errorMessage =
+          error instanceof Error ? error.message : 'runtime session is already in use'
         await setNodeRunStatus({
           db: opts.db,
           nodeRunId: opts.nodeRunId,
-          to: daemonShutdown ? 'interrupted' : 'canceled',
-          allowedFrom: ['running', 'pending'],
-          reason: 'containment-admission-aborted',
+          to: 'failed',
+          allowedFrom: ['running'],
+          reason: 'runtime-session-conflict',
           extra: { finishedAt: Date.now(), errorMessage },
         })
         return {
-          status: 'canceled',
+          status: 'failed',
           exitCode: null,
           outputs: {},
           tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
           prompt,
           errorMessage,
         }
-      }
-      const failureCode =
-        executionIdentityFailureCodeOf(error) ?? 'execution-identity-containment-required'
-      log.warn('runtime-containment-blocked', {
-        nodeRunId: opts.nodeRunId,
-        runtime,
-        failureCode,
-      })
-      await setNodeRunStatus({
-        db: opts.db,
-        nodeRunId: opts.nodeRunId,
-        to: 'failed',
-        allowedFrom: ['running', 'pending'],
-        reason: failureCode,
-        extra: {
-          finishedAt: Date.now(),
-          errorMessage: failureCode,
-          failureCode,
-        },
-      })
-      return {
-        status: 'failed',
-        exitCode: null,
-        outputs: {},
-        tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
-        prompt,
-        errorMessage: failureCode,
-        failureCode,
-      }
-    }
-  }
-
-  const releaseHeldLease = (): void => {
-    const token = controlState.leaseToken
-    if (token === undefined) return
-    try {
-      const released = releaseOpencodeSessionLease(opts.db, token)
-      if (!released) {
-        log.warn('opencode-session-lease-release-cas-missed', {
-          nodeRunId: opts.nodeRunId,
-          sessionId: token.sessionId,
-        })
-      }
-      // Success OR a triple-CAS miss proves this exact token is no longer the
-      // holder. On a thrown DB error retain it so the awaited plan finalizer
-      // can make one last compare-and-clear attempt.
-      controlState.leaseToken = undefined
-    } catch {
-      // Never include the thrown DB error: the stable event and exact ids are
-      // enough to diagnose this path without risking credential/path leakage.
-      log.warn('opencode-session-lease-release-failed', {
-        nodeRunId: opts.nodeRunId,
-        sessionId: token.sessionId,
-      })
-    }
-  }
-
-  // RFC-224: a resume lease is acquired before the verified builder may touch
-  // the persistent store, auth artifacts, SQLite, or server process.
-  if (verifiedOpencode && effectiveResumeSessionId !== undefined) {
-    try {
-      const owner = getOpencodeSessionOwner(opts.db, effectiveResumeSessionId)
-      if (owner === undefined) {
-        throw new ExecutionIdentityFailure('execution-identity-session-mismatch')
-      }
-      preclaimOpencodeSessionResume(opts.db, {
-        sessionId: owner.sessionId,
-        taskId: owner.taskId,
-        nodeId: owner.nodeId,
-        createdNodeRunId: owner.createdNodeRunId,
-        identityDigest: owner.identityDigest,
-        runtimeBinaryDigest: owner.runtimeBinaryDigest,
-        sessionContractDigest: owner.sessionContractDigest,
-        sessionStoreKey: owner.sessionStoreKey,
-        projectId: owner.projectId,
-        protocolCodec: owner.protocolCodec,
-        reportedVersion: owner.reportedVersion,
-        currentNodeRunId: opts.nodeRunId,
-        leaseNonceDigest: opencodeLeaseNonceDigest!,
-      })
-      opencodeResumeOwner = owner
-      controlState = createRunnerOpencodeControlState({
-        sessionId: owner.sessionId,
-        nodeRunId: opts.nodeRunId,
-        leaseNonceDigest: opencodeLeaseNonceDigest!,
-      })
-    } catch (error) {
-      const failureCode =
-        executionIdentityFailureCodeOf(error) ?? 'execution-identity-session-mismatch'
-      releaseHeldLease()
-      await setNodeRunStatus({
-        db: opts.db,
-        nodeRunId: opts.nodeRunId,
-        to: 'failed',
-        allowedFrom: ['running'],
-        reason: failureCode,
-        extra: {
-          finishedAt: Date.now(),
-          errorMessage: failureCode,
-          failureCode,
-        },
-      })
-      return {
-        status: 'failed',
-        exitCode: null,
-        outputs: {},
-        tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
-        prompt,
-        errorMessage: failureCode,
-        failureCode,
       }
     }
   }
@@ -1297,9 +869,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // top-level field. Exactly one is set per dispatch by the scheduler.
       resumeSessionId: effectiveResumeSessionId,
       worktreePath: opts.worktreePath,
-      repoWorktreePaths: opts.templateMeta.repos?.map((repo) => repo.worktreePath) ?? [
-        opts.worktreePath,
-      ],
       runRoot,
       configDir,
       gitUserName: opts.gitUserName,
@@ -1310,49 +879,15 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       wantsInventory,
       nodeRunId: opts.nodeRunId,
       log,
-      appHome: opts.appHome,
-      taskId: opts.taskId,
-      nodeId: opts.nodeId,
-      ...(opencodeControlNonce === undefined
-        ? {}
-        : { opencodeControlNonce, opencodeLeaseNonceDigest: opencodeLeaseNonceDigest! }),
-      ...(opencodeResumeOwner === undefined ? {} : { opencodeResumeOwner }),
-      ...(opts.testOnlyUnverifiedRuntime === undefined
-        ? {}
-        : { testOnlyUnverifiedRuntime: opts.testOnlyUnverifiedRuntime }),
-      ...(preparedContainment === undefined ? {} : { containment: preparedContainment }),
     })
-    if (preparedContainment !== undefined) {
-      plan = {
-        ...plan,
-        containment: preparedContainment,
-        // The coordinator owns topology. A runtime driver may materialize the
-        // provider child plan, but it cannot override which process layer is
-        // admitted to carry the platform boundary.
-        sandboxTopology: preparedContainment.spawnTopology,
-      }
-    }
   } catch (err) {
     // RFC-143 §6: a driver that fails to ASSEMBLE the spawn (system-prompt-file
     // write EACCES, config-dir prep failure) lands on the same failure mode as
     // an unspawnable binary below — mark failed cleanly instead of throwing out
     // of runNode and stranding the row at 'running'.
-    const identityFailure =
-      executionIdentityFailureCodeOf(err) ??
-      (verifiedOpencode ? ('execution-identity-bootstrap-failed' as const) : undefined)
-    const errorMessage =
-      identityFailure ??
-      `spawn ${runtime} failed: ${err instanceof Error ? err.message : String(err)}`
-    if (identityFailure === undefined) {
-      log.warn('runtime-spawn-failed', { nodeRunId: opts.nodeRunId, runtime, errorMessage })
-    } else {
-      log.warn('runtime-identity-failed', {
-        nodeRunId: opts.nodeRunId,
-        runtime,
-        failureCode: identityFailure,
-      })
-    }
-    releaseHeldLease()
+    const errorMessage = `spawn ${runtime} failed: ${err instanceof Error ? err.message : String(err)}`
+    log.warn('runtime-spawn-failed', { nodeRunId: opts.nodeRunId, runtime, errorMessage })
+    releaseHeldRuntimeLease()
     await setNodeRunStatus({
       db: opts.db,
       nodeRunId: opts.nodeRunId,
@@ -1362,7 +897,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       extra: {
         finishedAt: Date.now(),
         errorMessage,
-        ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
       },
     })
     return {
@@ -1372,70 +906,23 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
       prompt,
       errorMessage,
-      ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
     }
   }
   const { cmd, env } = plan
   let planArtifactsCleaned = false
-  const finalizePlan = async (releaseLease: boolean): Promise<void> => {
+  const finalizePlan = async (): Promise<void> => {
     if (!planArtifactsCleaned) {
       planArtifactsCleaned = true
-      let cleanupSucceeded = true
       try {
         await plan.cleanup?.()
       } catch {
-        cleanupSucceeded = false
         log.warn('runtime-plan-cleanup-failed', { nodeRunId: opts.nodeRunId, runtime })
       }
-      // A verified plan refuses cleanup while its lifecycle lock remains.
-      // Preserve the whole run root (binary/wrapper/manifest evidence) in that
-      // case; boot recovery owns the exact stale lock/store transition.
-      if (cleanupSucceeded) {
-        try {
-          rmSync(runRoot, { recursive: true, force: true })
-        } catch {
-          // Best-effort cleanup preserves the historical runner contract.
-        }
+      try {
+        rmSync(runRoot, { recursive: true, force: true })
+      } catch {
+        // Best-effort cleanup preserves the historical runner contract.
       }
-    }
-    if (releaseLease) releaseHeldLease()
-  }
-  const opencodeControl = plan.control?.kind === 'opencode-session' ? plan.control : undefined
-  if (
-    verifiedOpencode &&
-    (opencodeControl === undefined ||
-      plan.sessionStore === undefined ||
-      opencodeControl.mode !== (effectiveResumeSessionId === undefined ? 'new' : 'resume') ||
-      opencodeControl.nonce !== opencodeControlNonce ||
-      opencodeControl.leaseNonceDigest !== opencodeLeaseNonceDigest ||
-      (effectiveResumeSessionId !== undefined &&
-        opencodeControl.expectedSessionId !== effectiveResumeSessionId) ||
-      (opencodeResumeOwner !== undefined &&
-        (opencodeControl.createdNodeRunId !== opencodeResumeOwner.createdNodeRunId ||
-          opencodeControl.identityDigest !== opencodeResumeOwner.identityDigest ||
-          opencodeControl.runtimeBinaryDigest !== opencodeResumeOwner.runtimeBinaryDigest ||
-          opencodeControl.protocolCodec !== opencodeResumeOwner.protocolCodec ||
-          opencodeControl.sessionContractDigest !== opencodeResumeOwner.sessionContractDigest ||
-          opencodeControl.sessionStoreKey !== opencodeResumeOwner.sessionStoreKey)))
-  ) {
-    const failureCode = 'execution-identity-control-failed' as const
-    await finalizePlan(true)
-    await setNodeRunStatus({
-      db: opts.db,
-      nodeRunId: opts.nodeRunId,
-      to: 'failed',
-      allowedFrom: ['running'],
-      reason: failureCode,
-      extra: { finishedAt: Date.now(), errorMessage: failureCode, failureCode },
-    })
-    return {
-      status: 'failed',
-      exitCode: null,
-      outputs: {},
-      tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
-      prompt,
-      errorMessage: failureCode,
-      failureCode,
     }
   }
   // Diagnostic: surface the model/variant/temperature/mcp/plugin facts that
@@ -1445,143 +932,19 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // "the runtime received it but ignored it" without dumping the full config.
   // Names/counts only — never config bodies (env / headers may contain user
   // tokens; docs/OPENCODE_CONFIG.md §6).
-  // RFC-205/RFC-233: wrap at the LAST moment — plan.cmd stays pristine for
-  // spawnBinaryPath / version-registry / logs; only the argv handed to the OS
-  // gets the admitted provider head. Tests may omit the coordinator; off and
-  // degraded plans deliberately project an inactive sandbox.
-  const baseSandboxCtx =
-    opts.sandbox ??
-    buildRunSandboxCtx(
-      plan.containment?.sandbox ?? null,
-      opts.taskId,
-      opts.worktreePath,
-      runRoot,
-      // 2026-08-04 audit: EVERY repo this run may touch, not just the primary.
-      // `templateMeta.repos[].worktreePath` is the same iso path the prompt
-      // hands the agent, so the boundary and the instructions cannot disagree;
-      // the old cwd-shape heuristic allowed only repos[0] for a multi-repo run.
-      opts.templateMeta?.repos?.map((repo) => repo.worktreePath) ?? [],
-    )
-  const sandboxCtx =
-    baseSandboxCtx === undefined
-      ? undefined
-      : {
-          ...baseSandboxCtx,
-          taskWorktrees: [
-            ...new Set([
-              ...baseSandboxCtx.taskWorktrees,
-              ...(plan.sessionStore === undefined ? [] : [plan.sessionStore.root]),
-            ]),
-          ],
-          readOnlySubtrees: [
-            ...new Set([
-              ...(baseSandboxCtx.readOnlySubtrees ?? []),
-              ...(plan.readOnlySubtrees ?? []),
-            ]),
-          ],
-          readOnlyAllowSubtrees: [
-            ...new Set([
-              ...(baseSandboxCtx.readOnlyAllowSubtrees ?? []),
-              ...(plan.readOnlyAllowSubtrees ?? []),
-            ]),
-          ],
-        }
-  const containmentDegradedReasons =
-    plan.containment?.receipt.reasonCodes ??
-    (Array.isArray(plan.diagnostics?.containmentDegradedReasons)
-      ? plan.diagnostics.containmentDegradedReasons.filter(
-          (value): value is string => typeof value === 'string',
-        )
-      : [])
-  if (
-    sandboxCtx !== undefined &&
-    sandboxCtx.mode === 'warn' &&
-    (!sandboxCtx.status.available || containmentDegradedReasons.length > 0)
-  ) {
-    // Degraded: mechanism/capability missing under warn — run with the
-    // explicitly selected reduced boundary but surface it loudly.
-    // One open alert per task (rule-deduped), so a 50-node task doesn't spam.
-    await alertSandboxDegradedOnce(
-      opts.db,
-      opts.taskId,
-      containmentDegradedReasons.join(', ') || sandboxCtx.status.detail,
-      log,
-    )
-  } else if (sandboxCtx !== undefined && sandboxCtx.status.available) {
-    // The boundary is back (host repaired, or the mode changed). Close the open
-    // alert — nothing else in the system ever did, so it used to outlive both
-    // the problem and the task.
-    await resolveSandboxDegradedIfHealthy(opts.db, opts.taskId, log)
-  }
-
   log.info('spawning agent runtime', {
     runtime,
     bin: cmd[0],
     agent: opts.agent.name,
     cwd: opts.worktreePath,
     nodeRunId: opts.nodeRunId,
-    // RFC-205 AC-7: per-spawn sandbox traceability (alerts carry degradations).
-    sandboxed:
-      sandboxActive(sandboxCtx) && (plan.sandboxTopology ?? 'runner-outer') === 'runner-outer',
-    sandboxTopology: plan.sandboxTopology ?? 'runner-outer',
-    ...(plan.containment === undefined
-      ? {}
-      : {
-          containmentDecision: plan.containment.receipt.decision,
-          containmentAdmissionGeneration: plan.containment.receipt.admissionGeneration,
-          containmentPolicyGeneration: plan.containment.receipt.policyGeneration,
-          containmentProfileId: plan.containment.receipt.profileId,
-          containmentReasonCodes: plan.containment.receipt.reasonCodes,
-        }),
     ...(plan.diagnostics ?? {}),
   })
 
   // env (PWD fix / OPENCODE_CONFIG_DIR+CONTENT / RFC-029 inventory path /
   // RFC-067 git identity) is assembled by the driver — see
   // ./runtime/opencode/spawn.ts for the byte-for-byte construction.
-  // RFC-205 impl-gate P0-1 (Codex 2026-07-22): enforce + unavailable must FAIL
-  // here — the single spawn decision point every launch/resume/retry/auto-resume
-  // funnels through. The launch-time 409 only covers NEW tasks, so without this an
-  // enforce host silently ran unsandboxed agents on resume / retry / boot
-  // auto-resume. Mark the node failed cleanly (same shape as an unspawnable binary).
-  if (sandboxEnforceBlocked(sandboxCtx)) {
-    const detail = sandboxCtx?.status.detail
-    const identityFailure =
-      opencodeControl === undefined
-        ? undefined
-        : ('execution-identity-containment-required' as const)
-    const errorMessage =
-      identityFailure ??
-      `sandbox mode is 'enforce' but the platform sandbox is unavailable` +
-        `${detail != null ? ` (${detail})` : ''}; refusing to run the agent unsandboxed`
-    log.warn('sandbox-enforce-unavailable', {
-      nodeRunId: opts.nodeRunId,
-      ...(identityFailure === undefined ? { errorMessage } : { failureCode: identityFailure }),
-    })
-    await finalizePlan(true)
-    await setNodeRunStatus({
-      db: opts.db,
-      nodeRunId: opts.nodeRunId,
-      to: 'failed',
-      allowedFrom: ['running', 'pending'],
-      reason: 'sandbox-unavailable',
-      extra: {
-        finishedAt: Date.now(),
-        errorMessage,
-        ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
-      },
-    })
-    return {
-      status: 'failed',
-      exitCode: null,
-      outputs: {},
-      tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
-      prompt,
-      errorMessage,
-      ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
-    }
-  }
-  const spawnCmd = wrapSpawnPlanSandbox(cmd, sandboxCtx, plan.sandboxTopology)
+  const spawnCmd = cmd
   const trySpawn = (): Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> =>
     Bun.spawn({
       ...platformSpawnOptionsForHost(),
@@ -1601,39 +964,23 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     })
   let child: ReturnType<typeof trySpawn>
   try {
-    // RFC-242 T5 — the driver's TOCTOU fence, at the last instant before the
-    // child exists: re-verify the byte-frozen claude binary (T2) and the frozen
-    // local-MCP wrapper + manifest (T5). systemAgentRun has awaited this since
-    // RFC-237; the business path had the hook on SpawnPlan but never called it,
-    // so both seals were verified once at build time and then trusted. A fence
-    // nobody checks is not a fence.
-    await plan.preSpawnVerify?.()
     child = trySpawn()
   } catch (err) {
     // RFC-111 (Codex impl-gate P1-2): a missing / unspawnable runtime binary
     // (an optional runtime not installed, a bad path) throws ENOENT here. Mark
     // the node failed cleanly instead of throwing out of runNode and stranding
     // the row at 'running'. The spawn driver's temp dir is cleaned up.
-    // A preSpawnVerify rejection carries the closed identity vocabulary — keep
-    // that code instead of flattening a seal mutation into "spawn failed".
-    const identityFailure =
-      executionIdentityFailureCodeOf(err) ??
-      (opencodeControl === undefined ? undefined : ('execution-identity-bootstrap-failed' as const))
-    // 2026-08-04: Bun's posix_spawn ENOENT names argv[0] (here: the sandbox
-    // wrapper) even when the missing path is the cwd — probe both and say
-    // which one is actually gone instead of letting bwrap take the blame.
-    const errorMessage =
-      identityFailure ??
-      `spawn ${runtime} failed: ${explainSpawnEnoent(
-        err instanceof Error ? err.message : String(err),
-        { argv0: spawnCmd[0], cwd: opts.worktreePath },
-      )}`
+    const errorMessage = `spawn ${runtime} failed: ${explainSpawnEnoent(
+      err instanceof Error ? err.message : String(err),
+      { argv0: spawnCmd[0], cwd: opts.worktreePath },
+    )}`
     log.warn('runtime-spawn-failed', {
       nodeRunId: opts.nodeRunId,
       runtime,
-      ...(identityFailure === undefined ? { errorMessage } : { failureCode: identityFailure }),
+      errorMessage,
     })
-    await finalizePlan(true)
+    await finalizePlan()
+    releaseHeldRuntimeLease()
     await setNodeRunStatus({
       db: opts.db,
       nodeRunId: opts.nodeRunId,
@@ -1643,7 +990,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       extra: {
         finishedAt: Date.now(),
         errorMessage,
-        ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
       },
     })
     return {
@@ -1653,7 +999,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
       prompt,
       errorMessage,
-      ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
     }
   }
 
@@ -1661,7 +1006,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   let preserveLiveRuntimeState = false
   let normalSpawnPathCompleted = false
   let postSpawnFailed = false
-  let postSpawnError: unknown
   const spawnedCleanupHooks: Array<() => void> = []
   const spawnedPumps: LinePump[] = []
   try {
@@ -1694,17 +1038,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     let aborted = false
     let timedOut = false
     const graceMs = opts.killEscalationGraceMs ?? KILL_ESCALATION_GRACE_MS
-    // True only when the pid we hold is a bwrap MONITOR supervising the real
-    // runtime (Linux outer wrapper). macOS `sandbox-exec` execs in place, so
-    // the group leader IS the runtime and must receive the graceful signal
-    // itself; an unwrapped spawn is the same. Getting this backwards would mean
-    // never TERMing the runtime at all, so it is derived from the topology that
-    // actually rendered the argv, not from the OS name.
-    const outerBwrapMonitor =
-      sandboxCtx !== undefined &&
-      sandboxActive(sandboxCtx) &&
-      sandboxCtx.status.mechanism === 'bwrap' &&
-      plan.sandboxTopology !== 'provider-child-only'
 
     let reapDeadlineTimer: ReturnType<typeof setTimeout> | null = null
     spawnedCleanupHooks.push(() => {
@@ -1726,7 +1059,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     spawnedCleanupHooks.push(() => escalation?.cancel())
     const startKill = (): void => {
       if (escalation === null) {
-        escalation = armKillEscalation(child, log, graceMs, outerBwrapMonitor)
+        escalation = armKillEscalation(child, log, graceMs)
       }
       armReapDeadline()
     }
@@ -1776,46 +1109,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       total: 0,
     }
     let sessionId: string | undefined
-    let launcherFailureCode: ExecutionIdentityFailureCode | undefined
-    let controlFailureCode: ExecutionIdentityFailureCode | undefined
-    // RFC-242 T5 — servers the PLATFORM fenced (their command was replaced by
-    // its no-network wrapper). If one of them is not usable in the runtime's
-    // startup inventory, the model would run the whole turn without the tools
-    // this node declares and still finish "successfully": fail the node loudly
-    // instead. Only fenced servers qualify — an unfenced/legacy MCP keeps its
-    // historical best-effort behavior.
-    const fencedMcpServers = new Set(plan.fencedMcpServers ?? [])
-    // 2026-08-09: everything injected, fenced or not — the visibility half.
+    // Runtime-reported MCP availability remains useful operator telemetry, but
+    // it is not an execution admission oracle.
     const declaredMcpServers = new Set(plan.declaredMcpServers ?? [])
-    let fencedMcpFailure: string | undefined
     /** claude's terminal `{type:'result', is_error:true}` message, if any. */
     let terminalResultError: string | undefined
     /** The inventory arrives once, in the runtime's first event. */
-    let fencedMcpInventorySeen = false
-    // 2026-08-09 — the same contract, generalized to every capability the
-    // platform injects. Three bugs in five days had one shape: the injection
-    // went out, the runtime silently lacked it, the node ran a whole turn
-    // without the capability it declared and reported done
-    // (`--disable-slash-commands` killed staged skills; `--setting-sources ""`
-    // meant the skill dir was never scanned; `--agents` shipped while `Task`
-    // stayed unloaded). Patching each flag cannot stop the fourth — proving the
-    // capability arrived can. The runtime enumerates what it loaded at startup;
-    // anything declared and absent fails the node loudly.
-    const declaredCapabilities = plan.declaredCapabilities ?? {}
-    const declaredKinds = (
-      [
-        ['tools', declaredCapabilities.tools],
-        ['agents', declaredCapabilities.agents],
-        ['skills', declaredCapabilities.skills],
-      ] as const
-    ).filter(([, names]) => names !== undefined && names.length > 0)
-    let declaredCapabilityFailure: string | undefined
-    let startupInventorySeen = false
-    const failControlBarrier = (): void => {
-      controlFailureCode ??= 'execution-identity-control-failed'
-      startKill()
-    }
-
+    let mcpInventorySeen = false
     // Throttled `node.status: running` re-ping so the SessionTab's `/session`
     // query refreshes live while the parent opencode child is streaming events.
     // Without this, the only mid-run broadcast came from RFC-048's subagent
@@ -1843,96 +1143,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
 
     const stdoutPump = pumpLines(child.stdout, async (line) => {
-      if (opencodeControl !== undefined && !controlState.ready) {
-        // The verified launcher blocks on the runner's ack before it may POST a
-        // prompt or emit model JSONL. Any stdout before readiness is therefore a
-        // bypass attempt, not user-visible output.
-        failControlBarrier()
-        return
-      }
-      if ((fencedMcpServers.size > 0 || declaredMcpServers.size > 0) && !fencedMcpInventorySeen) {
+      if (declaredMcpServers.size > 0 && !mcpInventorySeen) {
         // Null = this line is not the inventory; keep looking. A non-null answer
         // is the one-shot startup inventory, so stop re-parsing every line after
         // it (the runtime freezes MCP availability there — RFC-242 §4.4).
         const unusable = driver.parseUnusableMcpServers?.(line) ?? null
         if (unusable !== null) {
-          fencedMcpInventorySeen = true
-          // 2026-08-09 — the UNFENCED half of the same inventory. Its verdict
-          // stays best-effort on purpose (a remote outage is not a platform
-          // misconfiguration), but it can no longer be invisible: the node
-          // would otherwise finish `done` having silently lost tools it
-          // declares, which is precisely the shape this whole batch removes.
-          const declaredUnusable = unusable
-            .filter((name) => declaredMcpServers.has(name) && !fencedMcpServers.has(name))
-            .sort()
+          mcpInventorySeen = true
+          const declaredUnusable = unusable.filter((name) => declaredMcpServers.has(name)).sort()
           if (declaredUnusable.length > 0) {
             log.warn('runtime-declared-mcp-unusable', {
               nodeRunId: opts.nodeRunId,
               servers: declaredUnusable,
               detail: 'injected MCP server(s) did not come up; the node runs without their tools',
             })
-          }
-          const missing = unusable.filter((name) => fencedMcpServers.has(name)).sort()
-          if (missing.length > 0) {
-            fencedMcpFailure =
-              `mcp-unavailable: platform-fenced MCP server(s) ${missing.join(', ')} ` +
-              'did not come up; the node would have run without the tools it declares'
-            log.warn('claude-mcp-netless-unusable', {
-              nodeRunId: opts.nodeRunId,
-              servers: missing,
-            })
-            startKill()
-          }
-        }
-      }
-      if (declaredKinds.length > 0 && !startupInventorySeen) {
-        // Same one-shot shape as the MCP inventory above: null = keep looking.
-        const inventory = driver.parseStartupInventory?.(line) ?? null
-        if (inventory !== null) {
-          startupInventorySeen = true
-          const hardGaps: string[] = []
-          const skillGaps: string[] = []
-          for (const [kind, declared] of declaredKinds) {
-            const loaded = inventory[kind]
-            // A runtime that does not enumerate THIS kind proves nothing about
-            // it — absence of an answer is not a negative answer.
-            if (loaded === undefined) continue
-            const present = new Set(loaded)
-            const missing = (declared ?? []).filter((name) => !present.has(name)).sort()
-            if (missing.length === 0) continue
-            const description = `${kind}: ${missing.join(', ')}`
-            // Claude's skills inventory has changed naming/discovery semantics
-            // across supported releases. Treat it as useful telemetry, not an
-            // admission oracle: a false negative here used to kill a perfectly
-            // usable node on another machine. Tools/agents remain stable load
-            // sets and retain their hard failure behavior.
-            if (kind === 'skills') skillGaps.push(description)
-            else hardGaps.push(description)
-          }
-          if (skillGaps.length > 0) {
-            log.warn('runtime-declared-skill-inventory-mismatch', {
-              nodeRunId: opts.nodeRunId,
-              gaps: skillGaps,
-            })
-            await opts.db.insert(nodeRunEvents).values({
-              nodeRunId: opts.nodeRunId,
-              ts: Date.now(),
-              kind: 'stderr',
-              payload: `[runtime-capability-warning] ${JSON.stringify({
-                code: 'runtime-skill-inventory-mismatch',
-                gaps: skillGaps,
-              })}`,
-            })
-          }
-          if (hardGaps.length > 0) {
-            declaredCapabilityFailure =
-              `runtime-capability-missing: the runtime did not load ${hardGaps.join('; ')}; ` +
-              'the node would have run without capabilities it declares'
-            log.warn('runtime-declared-capability-missing', {
-              nodeRunId: opts.nodeRunId,
-              gaps: hardGaps,
-            })
-            startKill()
           }
         }
       }
@@ -1955,15 +1179,23 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       const ev = driver.parseEvent(line)
       if (ev) {
         if (ev.sessionId !== undefined) {
-          if (
-            opencodeControl !== undefined &&
-            sessionId !== undefined &&
-            ev.sessionId !== sessionId
-          ) {
-            failControlBarrier()
-            return
+          if (sessionId === undefined) {
+            sessionId = ev.sessionId
+            if (runtimeLeaseToken === undefined) {
+              runtimeLeaseToken = claimNewRuntimeSession(opts.db, {
+                protocol: runtime,
+                sessionId,
+                taskId: opts.taskId,
+                nodeId: opts.nodeId,
+                currentNodeRunId: opts.nodeRunId,
+                leaseNonceDigest: runtimeLeaseNonceDigest,
+              })
+            } else if (runtimeLeaseToken.sessionId !== sessionId) {
+              throw new Error('runtime returned a different native session id')
+            }
+          } else if (sessionId !== ev.sessionId) {
+            throw new Error('runtime changed native session id during one run')
           }
-          if (sessionId === undefined) sessionId = ev.sessionId
         }
         if (ev.tokens) {
           tokenUsage.input += ev.tokens.input
@@ -2028,7 +1260,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         pollMs: livePollMs,
         consecutiveFailureLimit: liveFailureLimit,
         signal: liveCtrl.signal,
-        ...(plan.sessionStore === undefined ? {} : { opencodeDbPath: plan.sessionStore.dbPath }),
         onInsert: (info) => {
           // Reuse the existing `node.status: running` broadcast lane so the
           // frontend `useTaskSync` invalidates `['tasks', taskId, 'node-runs']`
@@ -2076,76 +1307,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       }
     }
 
-    const stderrPump = pumpLines(child.stderr, async (line) => {
-      const launcherCode =
-        opencodeControl === undefined ? null : parseExecutionIdentityFailureLine(line)
-      if (launcherCode !== null) {
-        launcherFailureCode ??= launcherCode
-        // Persist only the closed stable code, never the launcher's surrounding
-        // diagnostics (which may contain host paths or credential-derived text).
-        await persistStderrLine(launcherCode)
-        startKill()
-        return
-      }
-      if (opencodeControl !== undefined && line.startsWith('AW_OPENCODE_FAILURE ')) {
-        failControlBarrier()
-        return
-      }
-      if (opencodeControl !== undefined) {
-        try {
-          const parsed = processRunnerOpencodeControlLine({
-            db: opts.db,
-            taskId: opts.taskId,
-            nodeId: opts.nodeId,
-            nodeRunId: opts.nodeRunId,
-            control: opencodeControl,
-            ...(opencodeResumeOwner === undefined ? {} : { resumeOwner: opencodeResumeOwner }),
-            state: controlState,
-            line,
-          })
-          if (parsed.kind === 'session-ready') {
-            sessionId = parsed.sessionId
-            return
-          }
-          if (parsed.kind === 'mcp-readiness') {
-            const remote = parsed.marker.unavailableRemote
-            if (remote.length > 0) {
-              const payload = `[mcp-readiness-warning] ${JSON.stringify({
-                code: 'mcp-unavailable',
-                scope: 'remote',
-                servers: remote,
-              })}`
-              log.warn('runtime-declared-mcp-unusable', {
-                nodeRunId: opts.nodeRunId,
-                servers: remote.map((item) => item.name),
-                statuses: remote.map((item) => item.status),
-              })
-              await persistStderrLine(payload)
-            }
-            const local = parsed.marker.unavailableLocal
-            if (local.length > 0) {
-              fencedMcpFailure =
-                `mcp-unavailable: local MCP server(s) ${local.map((item) => item.name).join(', ')} ` +
-                'did not become connected before the model run'
-              await persistStderrLine(
-                `[mcp-readiness-failed] ${JSON.stringify({
-                  code: 'mcp-unavailable',
-                  scope: 'local',
-                  servers: local,
-                })}`,
-              )
-              startKill()
-            }
-            return
-          }
-          await persistStderrLine(parsed.line)
-        } catch {
-          failControlBarrier()
-        }
-        return
-      }
-      await persistStderrLine(line)
-    })
+    const stderrPump = pumpLines(child.stderr, persistStderrLine)
     spawnedPumps.push(stderrPump)
     let streamPumpFailed = false
     const settlePump = async (done: Promise<void>): Promise<void> => {
@@ -2210,25 +1372,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       }
     }
     await pumpsSettled
-    if (streamPumpFailed && opencodeControl !== undefined) {
-      controlFailureCode ??= 'execution-identity-stream-failed'
-    }
-    if (
-      opencodeControl !== undefined &&
-      !controlState.ready &&
-      launcherFailureCode === undefined &&
-      fencedMcpFailure === undefined
-    ) {
-      controlFailureCode = 'execution-identity-control-failed'
-    }
     if (opts.signal) opts.signal.removeEventListener('abort', onAbort)
     if (timeoutHandle !== null) clearTimeout(timeoutHandle)
     if (reapDeadlineTimer !== null) clearTimeout(reapDeadlineTimer)
 
-    // RFC-224: the private OpenCode DB is read only while the exact owner lease
-    // is still held. Once the launcher and both pipes are fully reaped, perform
-    // the final capture and release before envelope/output persistence can throw;
-    // a later application-level DB error must never strand the store lease.
     if (!childUnkillable && sessionId !== undefined) {
       try {
         await driver.captureSessions({
@@ -2241,23 +1388,14 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           runRoot,
           configDirName: configDir.name,
           alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession,
-          ...(plan.sessionStore === undefined ? {} : { opencodeDbPath: plan.sessionStore.dbPath }),
         })
       } catch (err) {
-        if (opencodeControl === undefined) {
-          log.warn('subagent-capture-unhandled', {
-            nodeRunId: opts.nodeRunId,
-            err: err instanceof Error ? err.message : String(err),
-          })
-        } else {
-          log.warn('verified-opencode-session-capture-failed', {
-            nodeRunId: opts.nodeRunId,
-            failureCode: 'execution-identity-stream-failed',
-          })
-        }
+        log.warn('subagent-capture-unhandled', {
+          nodeRunId: opts.nodeRunId,
+          err: err instanceof Error ? err.message : String(err),
+        })
       }
     }
-    if (!childUnkillable) releaseHeldLease()
 
     // 8. Resolve final status.
     let status: RunFinalStatus
@@ -2279,23 +1417,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // RFC-098 WP-8: overrides aborted/timedOut — the operator needs the pid
       // to clean up by hand, and a 'canceled' status would read as a clean stop.
       status = 'failed'
-      if (opencodeControl === undefined) {
-        errorMessage = `child-unkillable: pid ${child.pid} survived SIGTERM→SIGKILL escalation past ${graceMs + FINAL_REAP_MARGIN_MS}ms; abandoned (detached process group left running)`
-      } else {
-        // The launcher/store may still be live, so retrying unchanged input is
-        // unsafe until boot recovery proves the group dead and repairs the
-        // exact lock/lease.
-        failureCode = 'execution-identity-store-unsafe'
-        errorMessage = failureCode
-      }
-    } else if (launcherFailureCode !== undefined) {
-      status = 'failed'
-      failureCode = launcherFailureCode
-      errorMessage = launcherFailureCode
-    } else if (controlFailureCode !== undefined) {
-      status = 'failed'
-      failureCode = controlFailureCode
-      errorMessage = controlFailureCode
+      errorMessage = `child-unkillable: pid ${child.pid} survived SIGTERM→SIGKILL escalation past ${graceMs + FINAL_REAP_MARGIN_MS}ms; abandoned (detached process group left running)`
     } else if (terminalResultError !== undefined) {
       // The runtime told us WHY it stopped. Report that instead of the generic
       // "no envelope", and treat it as permanent: auth / quota / gateway
@@ -2304,21 +1426,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       status = 'failed'
       failureCode = 'runtime-result-error'
       errorMessage = `runtime-result-error: ${maskDiagnosticsText(terminalResultError).slice(0, 2000)}`
-    } else if (fencedMcpFailure !== undefined) {
-      // No failureCode on purpose: this is retryable (claude freezes MCP
-      // availability at init, so a slow first start can resolve on the next
-      // attempt) and it is not an execution-identity violation.
-      status = 'failed'
-      errorMessage = fencedMcpFailure
-    } else if (declaredCapabilityFailure !== undefined) {
-      // Also no failureCode: a capability can go missing for transient reasons
-      // (a quarantined skill snapshot, a partially written tree), and the retry
-      // costs one node run against a capability loss that would otherwise ship
-      // as a confident wrong answer.
-      status = 'failed'
-      errorMessage = declaredCapabilityFailure
     } else if (streamPumpFailed) {
       status = 'failed'
+      failureCode = 'runtime-stream-interrupted'
       errorMessage = `${runtime} stream persistence failed`
     } else if (aborted) {
       // RFC-202 T4: a daemon-shutdown abort must NOT read as a user cancel.
@@ -2333,15 +1443,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           : 'aborted by signal'
     } else if (timedOut) {
       status = 'failed'
-      // This deadline belongs to the workflow/node policy, not to the pinned
-      // launcher protocol. It is attempt-scoped and may be retried under the
-      // scheduler's normal policy. Only a timeout emitted by the verified
-      // launcher itself is `execution-identity-timeout` (permanent).
       errorMessage = `node-timeout: exceeded ${opts.timeoutMs ?? 0}ms`
-    } else if (exitCode !== 0 && opencodeControl !== undefined) {
-      status = 'failed'
-      failureCode = 'execution-identity-stream-failed'
-      errorMessage = failureCode
     } else if (exitCode !== 0) {
       status = 'failed'
       errorMessage = `${runtime} exited with code ${exitCode}` // RFC-111 P3: name the actual runtime
@@ -2711,7 +1813,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         const snapshot = await driver.readInventory?.({
           runRoot,
           nodeKind: inventoryNodeKind,
-          verifiedIdentity: plan.diagnostics?.verifiedIdentity === true,
         })
         if (snapshot !== undefined && snapshot !== null) {
           inventoryJson = JSON.stringify(snapshot)
@@ -2780,12 +1881,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     normalSpawnPathCompleted = true
     return result
   } catch (error) {
-    // Defer the durable failure stamp until after `finally` has observably
-    // reaped the launcher and released its exact session lease. Keeping the
-    // raw error only in memory also prevents production identity failures from
-    // leaking host paths or credential-derived diagnostics into node_runs.
+    // Defer the durable failure stamp until after `finally` has reaped the
+    // runtime and completed all plan cleanup.
     postSpawnFailed = true
-    postSpawnError = error
+    void error
   } finally {
     for (const cleanup of spawnedCleanupHooks.reverse()) {
       try {
@@ -2808,12 +1907,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       await Promise.allSettled(spawnedPumps.map((pump) => pump.done))
     }
     if (childFullyReaped) {
-      await finalizePlan(true)
+      try {
+        releaseHeldRuntimeLease()
+      } catch (error) {
+        log.warn('runtime-session-lease-release-failed', {
+          nodeRunId: opts.nodeRunId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+      await finalizePlan()
     } else {
       child.unref()
-      log.warn('opencode-session-lease-retained-for-live-process', {
+      log.warn('runtime-process-left-live-after-reap-deadline', {
         nodeRunId: opts.nodeRunId,
-        sessionId: controlState.leaseToken?.sessionId,
+        pid: child.pid,
       })
     }
   }
@@ -2825,14 +1932,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   if (!postSpawnFailed) {
     throw new Error('unreachable runner post-spawn state')
   }
-  const postSpawnFailureCode =
-    opencodeControl === undefined
-      ? undefined
-      : (executionIdentityFailureCodeOf(postSpawnError) ??
-        (controlState.ready
-          ? 'execution-identity-stream-failed'
-          : 'execution-identity-control-failed'))
-  const postSpawnErrorMessage = postSpawnFailureCode ?? 'runtime-spawn-failed'
+  const postSpawnErrorMessage = 'runtime-spawn-failed'
   try {
     await setNodeRunStatus({
       db: opts.db,
@@ -2844,7 +1944,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         finishedAt: Date.now(),
         exitCode: null,
         errorMessage: postSpawnErrorMessage,
-        failureCode: postSpawnFailureCode ?? null,
+        failureCode: null,
       },
     })
   } catch {
@@ -2861,7 +1961,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
     prompt,
     errorMessage: postSpawnErrorMessage,
-    ...(postSpawnFailureCode === undefined ? {} : { failureCode: postSpawnFailureCode }),
   }
 }
 
@@ -2943,24 +2042,7 @@ function safeKill(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
 }
 
 /** RFC-098 WP-8: SIGTERM → SIGKILL escalation grace. */
-/**
- * SIGTERM → SIGKILL grace for a node's process group.
- *
- * 2026-08-04 audit — KNOWN GAP, deliberately not "fixed" blind: on Linux with
- * the bwrap outer wrapper this grace is largely nominal. The group kill reaches
- * the bwrap monitor at the same instant as everything else; the monitor exits on
- * SIGTERM, and `--die-with-parent` then SIGKILLs the namespace's init, which
- * takes the whole PID namespace with it. So the inner runtime gets milliseconds,
- * not 10 s, to abort its session, flush its session DB and finish its last
- * stdout — while macOS (exec-in-place, no intermediate process) honours the full
- * window. Two OSes, two cancellation semantics.
- *
- * Not changed here because every candidate fix (signal proxy in the wrapper, or
- * asking the launcher to exit via the control channel before falling back to the
- * group kill) has to be validated on a real Linux host: getting it wrong breaks
- * cancellation outright, which is strictly worse than a short grace window. See
- * `docs/audit-backlog.md` for the fix options.
- */
+/** SIGTERM → SIGKILL grace for a node's process group. */
 const KILL_ESCALATION_GRACE_MS = 10_000
 /** RFC-098 WP-8: margin on top of the grace for the final reap deadline. */
 const FINAL_REAP_MARGIN_MS = 5_000
@@ -2972,20 +2054,10 @@ const FINAL_REAP_MARGIN_MS = 5_000
  * kills a bash child's forked sleep). Falls back to the single-process
  * safeKill when the group signal fails (ESRCH after exit / EPERM).
  */
-function killTree(
-  child: Bun.Subprocess,
-  signal: 'SIGTERM' | 'SIGKILL',
-  groupLeaderIsSandboxMonitor = false,
-): void {
+function killTree(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
   const pid = child.pid
   if (typeof pid === 'number' && pid > 0) {
-    // 2026-08-04 (verified in a Debian container, bubblewrap 0.8.0): a plain
-    // group SIGTERM under the bwrap OUTER wrapper collapses the grace window to
-    // ~0 — the monitor dies on TERM and `--die-with-parent` SIGKILLs the PID
-    // namespace's init, cutting the runtime off mid-cleanup. Signalling every
-    // member EXCEPT the monitor gives the runtime its full window; the
-    // escalation still takes the whole group.
-    if (killProcessTree(pid, signal, { groupLeaderIsSandboxMonitor })) return
+    if (killProcessTree(pid, signal)) return
   }
   safeKill(child, signal)
 }
@@ -3009,8 +2081,7 @@ async function waitForChildExit(child: Bun.Subprocess, timeoutMs: number): Promi
 
 /**
  * Outer-finally safety net for exceptions after Bun.spawn but before the
- * ordinary reap path. It never clears a lease unless the direct launcher was
- * observably reaped.
+ * ordinary reap path.
  */
 async function terminateAndReapUnexpectedChild(
   child: Bun.Subprocess,
@@ -3037,9 +2108,8 @@ function armKillEscalation(
   child: Bun.Subprocess,
   log: Logger,
   graceMs: number,
-  groupLeaderIsSandboxMonitor = false,
 ): { cancel: () => void } {
-  killTree(child, 'SIGTERM', groupLeaderIsSandboxMonitor)
+  killTree(child, 'SIGTERM')
   const timer = setTimeout(() => {
     log.warn('child ignored SIGTERM past grace; escalating to SIGKILL', {
       pid: child.pid,
@@ -3176,8 +2246,4 @@ export { buildCommand } from './runtime/opencode/spawn'
 // RFC-143 PR-4: the OPENCODE_CONFIG_CONTENT assembly moved to
 // ./runtime/opencode/inlineConfig.ts so the opencode driver's buildBusinessSpawn
 // can import it cycle-free. Same re-export contract as above.
-export {
-  AW_GLOBAL_PERMISSION,
-  buildInlineAgentEntry,
-  buildInlineConfig,
-} from './runtime/opencode/inlineConfig'
+export { buildInlineAgentEntry, buildInlineConfig } from './runtime/opencode/inlineConfig'

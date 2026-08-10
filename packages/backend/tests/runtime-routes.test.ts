@@ -190,37 +190,6 @@ describe('GET /api/runtime/models', () => {
     })
   })
 
-  test('stable identity code never reflects an arbitrary backend error message', async () => {
-    const raw = 'RAW_BACKEND_SECRET /private/sealed/opencode'
-    const guardedApp = createApp({
-      token: TOKEN,
-      configPath: h.configPath,
-      opencodeVersion: null,
-      dbVersion: 1,
-      db: h.db,
-      runtimeDiagnosticTestDependencies: {
-        ...FIXTURE_RUNTIME_DIAGNOSTICS,
-        withRuntimeOpencodeSnapshot: async <T>(
-          _command: readonly string[],
-          _callback: (snapshotPath: string) => Promise<T>,
-        ): Promise<T> => {
-          throw Object.assign(new Error(raw), {
-            code: 'execution-identity-untrusted-binary' as const,
-          })
-        },
-      },
-    })
-
-    const res = await req(guardedApp, '/api/runtime/models')
-    expect(res.status).toBe(502)
-    const json = (await res.json()) as Record<string, unknown>
-    expect(json).toMatchObject({
-      code: 'execution-identity-untrusted-binary',
-      message: 'execution-identity-untrusted-binary',
-    })
-    expect(JSON.stringify(json)).not.toContain(raw)
-  })
-
   test('second call hits cache', async () => {
     await req(h.app, '/api/runtime/models')
     const res = await req(h.app, '/api/runtime/models')

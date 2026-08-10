@@ -49,7 +49,6 @@ import { workflows } from '@/db/schema'
 import { Paths } from '@/util/paths'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { acquireAgentLaunch, releaseAgentLaunch } from '@/services/agentLaunchReservation'
-import { assertAgentExecutionPolicy } from '@/services/executionPolicy'
 import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 
 export const AGENT_HOST_WORKFLOW_ID = '00000000000000AGENTHOST00'
@@ -356,10 +355,7 @@ export async function startAgentTask(
       )
     }
 
-    // RFC-224: launch uses the same effective-runtime policy as save and the
-    // final runner. This runs before workspace materialization or upload I/O.
     await assertAgentResourceIntegrity(db, [recheck.id])
-    await assertAgentExecutionPolicy(db, recheck, deps.defaultRuntime)
 
     await ensureAgentHostWorkflow(db)
 

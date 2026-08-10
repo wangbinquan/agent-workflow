@@ -1,7 +1,7 @@
 // RFC-269 — 代码平台调用的执行器。
 //
 // 一次节点 = 一次出站 HTTP 请求，由 daemon 自己发出。**不 spawn 任何子进程**
-// （所以不进 containment 准入面），token 只在本文件里短暂以明文存在：unseal →
+// （所以不进入 model runtime 子进程），token 只在本文件里短暂以明文存在：unseal →
 // 组 header → 发请求 → 丢弃。
 //
 // 三条纪律写在这里而不是散在调用方：

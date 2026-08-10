@@ -3,10 +3,8 @@
 // Bun's `Bun.spawn` reports posix_spawn ENOENT with argv[0] in the message even
 // when the missing path is actually the WORKING DIRECTORY (measured on Bun:
 // `Bun.spawn({cmd:['/bin/echo'], cwd:'/nonexistent'})` throws
-// `ENOENT: no such file or directory, posix_spawn '/bin/echo'`). On a sandboxed
-// runner spawn argv[0] is the sandbox wrapper, so a vanished task worktree
-// surfaced as `posix_spawn '/usr/bin/bwrap'` and sent the operator chasing a
-// perfectly healthy bubblewrap install. These helpers name the RIGHT object.
+// `ENOENT: no such file or directory, posix_spawn '/bin/echo'`). These helpers
+// distinguish a missing cwd from a missing command and name the right object.
 
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'

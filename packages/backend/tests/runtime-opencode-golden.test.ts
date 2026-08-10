@@ -24,7 +24,7 @@ describe('buildOpencodeSpawn — argv golden (RFC-111 A2)', () => {
   // NOT a bare positional after `run`. opencode's parser is `.strict()`, so a
   // prompt starting with `-` (e.g. the RFC-200 `---` injection boundary) would be
   // scanned as an unknown option → usage dump + exit 1. See spawn.ts buildCommand.
-  it('default argv: run/--agent/--format json/--thinking/--dangerously-skip-permissions/-- <prompt>', () => {
+  it('default argv: run/--agent/--format json/--thinking/--auto/-- <prompt>', () => {
     const { cmd } = buildOpencodeSpawn({ ...BASE })
     expect(cmd).toEqual([
       'opencode',
@@ -34,13 +34,13 @@ describe('buildOpencodeSpawn — argv golden (RFC-111 A2)', () => {
       '--format',
       'json',
       '--thinking',
-      '--dangerously-skip-permissions',
+      '--auto',
       '--',
       'THE PROMPT',
     ])
   })
 
-  it('honors opencodeCmd head + --session; --dangerously-skip-permissions is UNCONDITIONAL', () => {
+  it('honors opencodeCmd head + --session; --auto is unconditional for an unprobed current CLI', () => {
     // flag-audit W0（§3 假旋钮）：`dangerouslySkipPermissions?: boolean` 参数已删——
     // 生产端从未有人传值，且 CLI 模式没有 permission 应答通道，非跳过运行会在第一个
     // tool 提示上挂死（假旋钮）。flag 现在无条件出现。
@@ -61,7 +61,7 @@ describe('buildOpencodeSpawn — argv golden (RFC-111 A2)', () => {
       '--format',
       'json',
       '--thinking',
-      '--dangerously-skip-permissions',
+      '--auto',
       '--session',
       'opc_9',
       '--',
@@ -74,8 +74,9 @@ describe('buildOpencodeSpawn — argv golden (RFC-111 A2)', () => {
     // identical describe). On 1.18.3 the legacy spelling is an unknown argument:
     // the strict parser's .fail() swallows the error line and prints the bare
     // `run` usage before exit 1 — every spawn on the machine died that way.
-    // The two goldens above pass NO binaryVersion and must stay legacy-spelled
-    // byte-for-byte (that is what every TS/shell test stub receives).
+    // The two goldens above pass NO binaryVersion and therefore use the current
+    // spelling. A positively identified older binary still receives the legacy
+    // spelling for compatibility.
     const { cmd } = buildOpencodeSpawn({ ...BASE, binaryVersion: '1.18.3' })
     expect(cmd).toEqual([
       'opencode',

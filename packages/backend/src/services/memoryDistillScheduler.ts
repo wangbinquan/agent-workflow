@@ -20,13 +20,8 @@ import type {
   ResolvedDistillScope,
   SourceContextBudget,
 } from '@agent-workflow/shared'
-import {
-  isExecutionIdentityFailureCode,
-  QUARANTINED_SNAPSHOT_AGENT_ID,
-  WorkgroupRuntimeConfigSchema,
-} from '@agent-workflow/shared'
+import { QUARANTINED_SNAPSHOT_AGENT_ID, WorkgroupRuntimeConfigSchema } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import type { ContainmentCoordinator } from '@/services/sandbox'
 import { cachedRepos, memoryDistillJobs, tasks } from '@/db/schema'
 import { runDistill, type DistillerSpawnFn, rowToDistillJob } from '@/services/memoryDistiller'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
@@ -64,12 +59,6 @@ export const DISTILL_BATCH_LIMIT = 5
 export const DISTILL_MAX_ATTEMPTS = 3
 /** First retry waits 2s, then 4s, then 8s before the row gives up. */
 export const DISTILL_BACKOFF_BASE_MS = 30_000
-
-function executionIdentityFailureCodeOf(error: unknown): string | null {
-  if (error === null || typeof error !== 'object') return null
-  const code = (error as { code?: unknown }).code
-  return isExecutionIdentityFailureCode(code) ? code : null
-}
 
 // ---------------------------------------------------------------------------
 // Enqueue
@@ -241,7 +230,6 @@ export async function computeEligibleScopes(
 
 export interface DistillTickOptions {
   db: DbClient
-  containmentCoordinator?: ContainmentCoordinator
   /** Inject a fake spawn for tests; production uses defaultDistillerSpawn. */
   spawnFn?: DistillerSpawnFn
   /** RFC-117 — runtime profile NAME (config.memoryDistillRuntime); wins over `model`. */
@@ -347,8 +335,8 @@ export async function distillTick(options: DistillTickOptions): Promise<{
         protocol: rt.protocol,
         runtimeBinary: rt.binaryPath,
         model: rt.model,
+        isSandbox: rt.isSandbox,
         sourceContextBudget: options.sourceContextBudget,
-        containmentCoordinator: options.containmentCoordinator,
       })
       await options.db
         .update(memoryDistillJobs)
@@ -362,15 +350,10 @@ export async function distillTick(options: DistillTickOptions): Promise<{
       succeeded += 1
       candidatesCreated += result.candidatesCreated
     } catch (err) {
-      // RFC-224: identity failures are invariant for this unchanged runtime
-      // selection. Persist only the stable non-secret code and fail the bundle
-      // immediately; exponential retries cannot repair it and would repeatedly
-      // touch the same rejected binary/config/store boundary.
-      const identityFailureCode = executionIdentityFailureCodeOf(err)
-      const message = identityFailureCode ?? (err instanceof Error ? err.message : String(err))
+      const message = err instanceof Error ? err.message : String(err)
       log.warn('distill failed', { jobId: head.id, error: message })
       const attempts = head.attempts + 1
-      if (identityFailureCode !== null || attempts >= DISTILL_MAX_ATTEMPTS) {
+      if (attempts >= DISTILL_MAX_ATTEMPTS) {
         await options.db
           .update(memoryDistillJobs)
           .set({
@@ -406,7 +389,6 @@ export async function distillTick(options: DistillTickOptions): Promise<{
 
 export interface StartLoopOptions {
   db: DbClient
-  containmentCoordinator?: ContainmentCoordinator
   spawnFn?: DistillerSpawnFn
   /** Settings.memoryDistillerEnabled — when false, ticker is a no-op shell. */
   enabled?: boolean
@@ -465,7 +447,6 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
       defaultRuntime: options.defaultRuntime,
       model: options.model,
       sourceContextBudget: options.sourceContextBudget,
-      containmentCoordinator: options.containmentCoordinator,
     })
       .catch((err) => {
         log.warn('tick threw', { error: err instanceof Error ? err.message : String(err) })

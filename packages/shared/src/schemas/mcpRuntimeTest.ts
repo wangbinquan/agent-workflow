@@ -41,7 +41,7 @@ export const McpRuntimeTestEndReasonSchema = z.enum([
   'runtime-disabled',
   'runtime-deleted',
   'runtime-profile-changed',
-  'runtime-identity-changed',
+  'runtime-session-reset',
   'capture-truncated',
   'capture-incomplete',
   'session-unusable',
@@ -51,12 +51,8 @@ export type McpRuntimeTestEndReason = z.infer<typeof McpRuntimeTestEndReasonSche
 export const McpRuntimeTestContinuationBlockedReasonSchema = z.enum([
   'mcp-config-changed',
   'runtime-profile-changed',
-  'runtime-identity-changed',
-  'mcp-execution-changed',
   'capture-truncated',
   'capture-incomplete',
-  'session-root-mismatch',
-  'session-store-missing',
 ])
 export type McpRuntimeTestContinuationBlockedReason = z.infer<
   typeof McpRuntimeTestContinuationBlockedReasonSchema
@@ -93,7 +89,6 @@ export const McpRuntimeTestSessionDtoSchema = z
       })
       .strict(),
     mcpConfigHash: OperationConfigHashSchema,
-    runtimeFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     nativeSessionReady: z.boolean(),
     continuationBlockedReason: McpRuntimeTestContinuationBlockedReasonSchema.nullable(),
     inFlightTurnId: IdSchema.nullable(),

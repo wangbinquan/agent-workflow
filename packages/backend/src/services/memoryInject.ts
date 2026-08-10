@@ -297,9 +297,8 @@ export function formatMemoryBlockWithSnapshot(
 
 /**
  * Rebuild the exact persona fragment represented by a persisted injection
- * snapshot. RFC-042 same-session follow-ups send only a short USER prompt,
- * but verified OpenCode still has to reconstruct the original AGENT config
- * byte-for-byte so its session identity remains stable.
+ * snapshot. RFC-042 same-session follow-ups send only a short USER prompt, so
+ * the original AGENT memory fragment must be reconstructed deterministically.
  *
  * The snapshot is already post-budget and in canonical scope/order, so this
  * path must not query live memories or clip against today's budget.

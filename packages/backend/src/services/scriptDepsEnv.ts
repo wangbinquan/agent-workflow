@@ -1,23 +1,13 @@
 // RFC-253 §6 — prepared dependency environments.
 //
-// A script node declares exact package pins; the platform installs them ONCE
-// into a content-addressed directory under appHome and mounts that directory
-// read-only into every later run that asks for the same set.
+// A script node declares exact package pins; the platform installs them once
+// into a content-addressed directory under appHome and reuses that directory.
 //
 // Three properties are load-bearing:
 //
-//   1. **Cache hit costs nothing.** A hit does no network I/O and spawns no
-//      process, which is what makes `network: 'deny'` + third-party libraries a
-//      usable combination (D15).
-//   2. **The installer runs inside containment** and installs only prebuilt
-//      artifacts (`--only-binary=:all:` / `--ignore-scripts`), so no package's
-//      own build or lifecycle script ever executes (D14). Note the honest
-//      limit: the outer sandbox is not a jail — it masks appHome and the
-//      crown jewels, it does not confine writes to the build directory
-//      (design-gate F4). That is the same posture every agent runs under today.
-//   3. **The directory is read-only at run time.** Two nodes sharing an
-//      environment must not be able to poison each other's imports, which is a
-//      cross-node code-injection channel if left writable (AC-20).
+// A cache hit performs no install and spawns no process. Install commands keep
+// deterministic artifact settings (`--only-binary=:all:` / `--ignore-scripts`)
+// and run as ordinary managed child processes.
 
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -28,15 +18,14 @@ import {
   type ScriptLanguage,
 } from '@agent-workflow/shared'
 import type { Logger } from '@/util/log'
-import type { SandboxCtx } from './sandbox'
-import { runContainedProcess } from './execution/containedSpawn'
+import { runManagedProcess } from './execution/managedProcess'
 
 export interface ScriptDepsEnv {
   /** Content hash identifying this environment; recorded on the node_run. */
   hash: string
   /** Directory the interpreter should search (PYTHONPATH / NODE_PATH). */
   libDir: string
-  /** Root that gets the read-only mount. */
+  /** Root of the reusable dependency environment. */
   rootDir: string
 }
 
@@ -89,15 +78,6 @@ export interface EnsureDepsInput {
   interpreterVersion: string
   specs: readonly string[]
   timeoutMs: number
-  /**
-   * Builds the installer's containment context for a given build directory.
-   *
-   * A factory rather than a ready-made ctx (impl-gate M3): the ONLY writable
-   * root the installer may have is the build directory, and that path is
-   * chosen in here. Network stays ALLOWED even when the node itself denies it
-   * — the install happens before the author's code runs (D15).
-   */
-  sandboxFor?: (buildDir: string) => SandboxCtx | undefined
   signal?: AbortSignal
   onLine?: (stream: 'stdout' | 'stderr', line: string) => Promise<void> | void
   log?: Logger
@@ -160,8 +140,6 @@ export async function ensureScriptDepsEnv(input: EnsureDepsInput): Promise<Scrip
     const buildDir = `${rootDir}.build-${process.pid}-${Date.now()}`
     const buildLib = join(buildDir, 'lib')
     mkdirSync(buildLib, { recursive: true })
-    mkdirSync(join(buildDir, 'home'), { recursive: true })
-    mkdirSync(join(buildDir, 'tmp'), { recursive: true })
 
     const argv =
       input.language === 'python'
@@ -192,20 +170,18 @@ export async function ensureScriptDepsEnv(input: EnsureDepsInput): Promise<Scrip
             ...specs,
           ]
 
-    const result = await runContainedProcess({
+    const result = await runManagedProcess({
       argv,
       cwd: buildDir,
       env: {
-        PATH: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-        HOME: join(buildDir, 'home'),
-        TMPDIR: join(buildDir, 'tmp'),
-        LANG: 'C.UTF-8',
+        ...Object.fromEntries(
+          Object.entries(process.env).filter((entry): entry is [string, string] => {
+            return typeof entry[1] === 'string'
+          }),
+        ),
+        PWD: buildDir,
       },
       timeoutMs: input.timeoutMs,
-      ...(() => {
-        const ctx = input.sandboxFor?.(buildDir)
-        return ctx === undefined ? {} : { sandbox: ctx }
-      })(),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
       ...(input.log === undefined ? {} : { log: input.log }),
       onStdoutLine: (line) => input.onLine?.('stdout', line),

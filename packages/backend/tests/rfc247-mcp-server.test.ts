@@ -35,8 +35,7 @@ import { createApp } from '../src/server'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { createUser } from '../src/services/users'
 
-/** RFC-224 — agent creation resolves an execution identity, so a runtime with a
- *  model must exist or every create answers 422 execution-identity-model-unresolved. */
+/** Keep this test independent of the operator's locally configured runtimes. */
 const TEST_RUNTIME = 'rfc247-test-opencode'
 
 const AGENT_BODY = {

@@ -19,21 +19,11 @@ import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
 import type { SpawnPlan } from '@/services/runtime/types'
-import {
-  wrapSpawnPlanSandbox,
-  type ContainmentCoordinator,
-  type PreparedContainmentPlan,
-  type SandboxCtx,
-} from '@/services/sandbox'
 import { createLogger, type Logger } from '@/util/log'
-import {
-  isExecutionIdentityFailureCode,
-  maskDiagnosticsText,
-  type ExecutionIdentityFailureCode,
-} from '@agent-workflow/shared'
-import { parseExecutionIdentityFailureOutput } from '@/services/runtime/opencode/failure'
+import { maskDiagnosticsText } from '@agent-workflow/shared'
 import { explainSpawnEnoent, outputTail } from '@/util/spawnDiagnostics'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { killProcessTree } from '@/util/process'
 
 export type SmokeOutcome =
   | 'conforms'
@@ -44,7 +34,6 @@ export type SmokeOutcome =
   | 'network-blocked'
   | 'model-call-failed'
   | 'stream-nonconforming'
-  | 'execution-identity-failed'
 
 export interface SmokeResult {
   outcome: SmokeOutcome
@@ -54,7 +43,6 @@ export interface SmokeResult {
   sawNonce: boolean
   sawEnvelope: boolean
   exitCode: number | null
-  failureCode?: ExecutionIdentityFailureCode
 }
 
 export interface SmokeOptions {
@@ -69,19 +57,10 @@ export interface SmokeOptions {
   /** 2026-08-04 — the runtime row's extraArgs, so a probe reproduces the exact
    *  argv a dispatch would use (fork flags like `--skip-safe-check`). */
   extraArgs?: readonly string[]
+  /** RFC-276: reproduce the runtime profile's optional Claude CLI marker. */
+  isSandbox?: boolean
   timeoutMs?: number
-  /**
-   * Bridge the claude subscription credential into the temp config dir (real
-   * runs). Tests pass false (mock-claude) so CI never touches the keychain.
-   * Verified OpenCode plans independently import only the selected provider
-   * from OpenCode's native auth store when no explicit daemon credential exists.
-   */
-  bridgeCredentials?: boolean
   log?: Logger
-  /** Explicit dependency-injection seam for legacy mock-binary tests. */
-  testOnlyUnverifiedRuntime?: boolean
-  /** RFC-233 daemon-scoped admission authority. */
-  containmentCoordinator?: ContainmentCoordinator
 }
 
 const MAX_OUTPUT_BYTES = 256 * 1024
@@ -115,7 +94,7 @@ const NETWORK_SIGNATURES =
 /** kill the whole process group (the child is `detached`), best-effort. */
 function killGroup(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
   try {
-    if (typeof child.pid === 'number') process.kill(-child.pid, signal)
+    if (typeof child.pid === 'number') killProcessTree(child.pid, signal)
     else child.kill(signal === 'SIGKILL' ? 9 : 15)
   } catch {
     /* already gone */
@@ -183,8 +162,7 @@ export async function finalizeSmokeAttempt(input: {
       )
     } else {
       // The direct child may have exited while a same-group descendant still
-      // owns inherited pipes or the private store. Reap that group before
-      // crossing the cleanup barrier.
+      // owns inherited pipes. Reap that group before cleanup.
       input.killChild('SIGKILL')
     }
     if (!reaped) {
@@ -227,25 +205,18 @@ async function buildSmokePlan(
   prompt: string,
   model: string | undefined,
   extraArgs: readonly string[] | undefined,
-  bridgeCredentials: boolean,
+  isSandbox: boolean,
   log: Logger,
-  testOnlyUnverifiedRuntime: boolean,
-  containment: PreparedContainmentPlan | undefined,
 ): Promise<SpawnPlan> {
   return getRuntimeDriver(protocol).buildSpawn({
     agentName: 'aw-smoke',
     systemPrompt: 'You are a runtime smoke-test agent. Follow the user prompt exactly.',
-    // 2026-08-06 — probe fidelity: test the shape dispatch actually uses
-    // (business-unconstrained), not the declared-control system shape. A fork
-    // whose gateway/model mapping lives in its settings passes business runs
-    // but failed every probe under `--setting-sources ""` (GLM-fork incident).
-    probeDispatchShape: true,
     ...(model !== undefined ? { model } : {}),
     ...(extraArgs !== undefined && extraArgs.length > 0 ? { extraArgs } : {}),
+    isSandbox,
     prompt,
     worktreePath: worktreeDir,
     runDir,
-    ...(containment === undefined ? {} : { appHome: containment.sandbox.appHome, containment }),
     // RFC-254: an array binaryPath is a full command head — route it to the
     // driver's command-array seam (opencode reads opencodeCmd; claude reads
     // runtimeCmd), and DON'T set runtimeBinary (claude's pickRuntimeHead would
@@ -255,44 +226,8 @@ async function buildSmokePlan(
     ...(typeof binaryPath === 'string'
       ? { runtimeBinary: binaryPath }
       : { opencodeCmd: [...binaryPath], runtimeCmd: [...binaryPath] }),
-    bridgeCredentials,
     log,
-    ...(testOnlyUnverifiedRuntime ? { testOnlyUnverifiedRuntime: true } : {}),
   })
-}
-
-export function smokeSandboxCtx(
-  worktreeDir: string,
-  runDir: string,
-  plan: SpawnPlan,
-): SandboxCtx | undefined {
-  const provider = plan.containment?.sandbox
-  if (provider === undefined) return undefined
-  return {
-    mode: provider.mode,
-    status: provider.status,
-    appHome: provider.appHome,
-    taskWorktrees: [
-      worktreeDir,
-      ...(plan.sessionStore === undefined ? [] : [plan.sessionStore.root]),
-    ],
-    runDir,
-    ...(plan.readOnlySubtrees === undefined ? {} : { readOnlySubtrees: plan.readOnlySubtrees }),
-    // 2026-08-04 audit: this field was silently DROPPED by three of the four
-    // SandboxCtx assemblers (only `runner.ts` consumed it). It is latent today
-    // because no system plan ships plugins — the moment one does, RFC-251's
-    // Linux `file://<cachedPath>` ENOENT returns with no assertion to catch it.
-    ...(plan.readOnlyAllowSubtrees === undefined
-      ? {}
-      : { readOnlyAllowSubtrees: plan.readOnlyAllowSubtrees }),
-    ...(provider.wrapCommand === undefined ? {} : { wrapCommand: provider.wrapCommand }),
-  }
-}
-
-function identityFailureCode(error: unknown): ExecutionIdentityFailureCode | null {
-  if (error === null || typeof error !== 'object') return null
-  const code = (error as { code?: unknown }).code
-  return isExecutionIdentityFailureCode(code) ? code : null
 }
 
 /**
@@ -304,24 +239,6 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   const log = opts.log ?? createLogger('runtimeSmoke')
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const driver = getRuntimeDriver(opts.protocol)
-  let preparedContainment: PreparedContainmentPlan | undefined
-  if (opts.containmentCoordinator !== undefined) {
-    try {
-      // Smoke/system agents expose no model-controlled shell/MCP child.
-      preparedContainment = await opts.containmentCoordinator.admit('runner-filesystem-v1')
-    } catch (error) {
-      const failureCode = identityFailureCode(error) ?? 'execution-identity-containment-required'
-      return {
-        outcome: 'execution-identity-failed',
-        conforms: false,
-        detail: failureCode,
-        failureCode,
-        sawNonce: false,
-        sawEnvelope: false,
-        exitCode: null,
-      }
-    }
-  }
   const nonce = `awsmoke-${randomBytes(8).toString('hex')}`
   const prompt =
     `Output this exact token verbatim via your output protocol and nothing else: ${nonce}\n` +
@@ -354,31 +271,10 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
           prompt,
           opts.model,
           opts.extraArgs,
-          opts.bridgeCredentials === true,
+          opts.isSandbox === true,
           log,
-          opts.testOnlyUnverifiedRuntime === true,
-          preparedContainment,
         )
-        if (preparedContainment !== undefined) {
-          plan = {
-            ...plan,
-            containment: preparedContainment,
-            sandboxTopology: preparedContainment.spawnTopology,
-          }
-        }
       } catch (err) {
-        const failureCode = identityFailureCode(err)
-        if (failureCode !== null) {
-          return {
-            outcome: 'execution-identity-failed',
-            conforms: false,
-            detail: failureCode,
-            failureCode,
-            sawNonce: false,
-            sawEnvelope: false,
-            exitCode: null,
-          }
-        }
         return {
           outcome: 'spawn-failed',
           conforms: false,
@@ -391,11 +287,7 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
 
       let spawnCmd: string[] | undefined
       try {
-        spawnCmd = wrapSpawnPlanSandbox(
-          plan.cmd,
-          smokeSandboxCtx(worktreeDir, runDir, plan),
-          plan.sandboxTopology,
-        )
+        spawnCmd = plan.cmd
         child = Bun.spawn({
           ...platformSpawnOptionsForHost(),
           cmd: spawnCmd,
@@ -559,10 +451,9 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
       if (exitOutcome.kind === 'unreaped') {
         await settlesWithin(cancelDrains(), CHILD_REAP_DEADLINE_MS)
         return {
-          outcome: 'execution-identity-failed',
+          outcome: 'spawn-failed',
           conforms: false,
-          detail: 'execution-identity-store-unsafe',
-          failureCode: 'execution-identity-store-unsafe',
+          detail: 'runtime process could not be reaped after termination',
           sawNonce: false,
           sawEnvelope: false,
           exitCode: null,
@@ -607,22 +498,6 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
       // consumed the prompt) — sawEnvelope alone is too weak (a canned emitter).
       const conformed =
         !timedOut && exitCode === 0 && sawEvent && sessionId !== undefined && sawNonce
-      const launcherFailure =
-        plan.diagnostics?.verifiedIdentity === true
-          ? parseExecutionIdentityFailureOutput(stderrText)
-          : null
-      if (launcherFailure !== null) {
-        return {
-          outcome: 'execution-identity-failed',
-          conforms: false,
-          detail: launcherFailure,
-          failureCode: launcherFailure,
-          sawNonce: false,
-          sawEnvelope: false,
-          exitCode,
-        }
-      }
-
       // 2026-08-04: the classifications used to swallow the child's actual
       // error text — a fork/gateway error outside the EN signature table
       // (e.g. "usage limit reached", a GLM error string) landed as a bare
@@ -727,10 +602,9 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   }
   if (!finalizationSafe || result === undefined) {
     return {
-      outcome: 'execution-identity-failed',
+      outcome: 'spawn-failed',
       conforms: false,
-      detail: 'execution-identity-store-unsafe',
-      failureCode: 'execution-identity-store-unsafe',
+      detail: 'runtime process cleanup did not complete safely',
       sawNonce: false,
       sawEnvelope: false,
       exitCode: null,

@@ -52,12 +52,12 @@ if (env.MOCK_CLAUDE_CAPTURE_SYSTEM_PROMPT_TO) {
   if (file === undefined) fail('--append-system-prompt-file not in argv')
   writeFileSync(env.MOCK_CLAUDE_CAPTURE_SYSTEM_PROMPT_TO, readFileSync(file, 'utf-8'))
 }
-// RFC-111 PR-C: capture the skills the runner injected into CLAUDE_CONFIG_DIR at
-// RUN time (the runner cleans up the run dir afterwards, so the e2e can only see
-// injection through the live process).
+// RFC-276: capture the project-native skills visible from the child cwd at run
+// time. The runner removes only its projected entries after the process exits,
+// so the e2e must observe them through the live child.
 if (env.MOCK_CLAUDE_CAPTURE_SKILLS_TO) {
-  const skillsDir = env.CLAUDE_CONFIG_DIR ? join(env.CLAUDE_CONFIG_DIR, 'skills') : ''
-  const names = skillsDir && existsSync(skillsDir) ? readdirSync(skillsDir) : []
+  const skillsDir = join(process.cwd(), '.claude', 'skills')
+  const names = existsSync(skillsDir) ? readdirSync(skillsDir) : []
   writeFileSync(env.MOCK_CLAUDE_CAPTURE_SKILLS_TO, JSON.stringify(names))
 }
 

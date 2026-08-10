@@ -3755,7 +3755,7 @@ function toFlowNodes(
       // RFC-253 AC-31: ScriptNode owns the presentation, while this projection
       // remains the single place where definition fields become canvas data.
       // Omitting this bridge left the shared card shell with a literal "—"
-      // language chip and no dependency / safety state, so the new node read as
+      // language chip and no dependency / readonly state, so the new node read as
       // an empty legacy outlier even though its definition was fully populated.
       const rec = n as unknown as Record<string, unknown>
       const scriptData = data as ScriptNodeData
@@ -3763,7 +3763,6 @@ function toFlowNodes(
         scriptData.language = rec.language
       }
       scriptData.dependencyCount = Array.isArray(rec.dependencies) ? rec.dependencies.length : 0
-      scriptData.networkDenied = rec.network === 'deny'
       scriptData.scriptReadonly = rec.readonly === true
     }
     // RFC-269: surface provider / action / method / support state on the card so

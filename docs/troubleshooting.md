@@ -19,22 +19,9 @@ minimum, maximum, or exact supported OpenCode version. `--version` output is
 telemetry only, including non-semver output.
 
 - `not found`: the configured path/PATH token does not resolve.
-- `unlaunchable`: the selected file cannot be executed or frozen into the
-  private run snapshot.
-- `protocol incompatible`: the binary launched, but its direct API behavior
-  does not satisfy the current `opencode-direct-v1` codec.
-- `containment blocked`: `sandboxMode=enforce` was selected and the active
-  platform provider does not satisfy the required containment capabilities.
-- `degraded`: `sandboxMode=warn` permits execution without the missing
-  containment guarantees; the UI and lifecycle alert state exactly what is
-  missing.
-
-If the runtime probe is green but containment is blocked, trust the profile
-admission rather than the lightweight executable/discovery probe. Run
-`agent-workflow sandbox` for the exact reason code. If Settings already shows a
-saved Warn/Off value but the effective radio differs, use **Apply saved mode**;
-Settings writes take effect for subsequent admissions without restarting the
-daemon.
+- `unlaunchable`: the selected file exists but cannot be executed.
+- `protocol incompatible`: a Runtime Test observed output that the current
+  driver cannot parse safely.
 
 Select a specific binary when PATH is not the intended one:
 
@@ -42,9 +29,11 @@ Select a specific binary when PATH is not the intended one:
 agent-workflow config set opencodePath /absolute/path/to/opencode
 ```
 
-Then use Settings → Runtime → Test. Upgrading or downgrading OpenCode is one
-possible fix for a real protocol incompatibility, but version ordering itself
-is never the admission decision.
+Then use Settings → Runtime → Test. The runtime inherits the daemon account's
+ordinary HOME, XDG, provider and authentication configuration, so also verify
+that the same executable works from that account and worktree. Upgrading or
+downgrading OpenCode can fix a real CLI/protocol mismatch, but version ordering
+itself is never the admission decision.
 
 ## `task-cannot-start` / worktree errors
 

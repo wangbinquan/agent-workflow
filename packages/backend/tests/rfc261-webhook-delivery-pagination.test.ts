@@ -325,8 +325,7 @@ describe("RFC-261 · D9' 保留天数可配", () => {
 
   async function configHarness(initialConfig?: Record<string, unknown>) {
     const db = createInMemoryDb(MIGRATIONS)
-    // RFC-224 校验循环要求系统代理 runtime 可解析（rfc233 同款打底），否则任何
-    // config PUT 都 422 execution-identity-model-unresolved。
+    // 打底内置 runtime，避免配置接口测试依赖主机上的 runtime 安装状态。
     await seedBuiltinRuntimes(db)
     await updateRuntime(db, 'opencode', { model: 'openai/gpt-5' })
     const adminSession = 'a'.repeat(64) // daemon token（settings:write 全权）

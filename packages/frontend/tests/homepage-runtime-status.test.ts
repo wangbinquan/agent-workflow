@@ -19,7 +19,6 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { __test__ } from '../src/components/home/HomepageGreeting'
 import type { RuntimesStatusResponse } from '@agent-workflow/shared'
-import i18n from '../src/i18n'
 
 const { describeRuntimes, itemSeverity, AGGREGATE_THRESHOLD } = __test__
 
@@ -88,11 +87,9 @@ describe('RFC-135 describeRuntimes', () => {
     expect(nonDef!.severity).toBe('soft')
     expect(nonDef!.muted).toBe(true)
     expect(def!.text).toContain('home.runtime.item.missing')
-    expect(def!.failure).toBeUndefined()
-    expect(nonDef!.failure).toBeUndefined()
   })
 
-  test('RFC-227 state copy distinguishes missing, launch, protocol, containment and degraded', () => {
+  test('state copy distinguishes missing, launch and protocol failures', () => {
     const view = describeRuntimes(
       t,
       loaded([
@@ -111,56 +108,6 @@ describe('RFC-135 describeRuntimes', () => {
       expect.stringContaining('home.runtime.item.unlaunchable'),
       expect.stringContaining('home.runtime.item.protocolIncompatible'),
     ])
-
-    const containment = describeRuntimes(
-      t,
-      loaded([
-        row('blocked', { ok: false, state: 'containment-blocked' }),
-        row('degraded', { ok: true, state: 'degraded' }),
-      ]),
-    )
-    if (containment.kind !== 'items') throw new Error('expected items')
-    expect(containment.items[0]!.text).toContain('home.runtime.item.containmentBlocked')
-    expect(containment.items[1]!.text).toContain('home.runtime.item.degraded')
-    expect(containment.items[1]!.severity).toBe('soft')
-  })
-
-  test('available-unverified reports executable availability without claiming protocol readiness', () => {
-    const view = describeRuntimes(
-      t,
-      loaded([
-        row('opencode', {
-          ok: true,
-          state: 'available-unverified',
-          version: '1.18.4',
-        }),
-      ]),
-    )
-    if (view.kind !== 'items') throw new Error('expected items')
-    expect(view.items[0]!.severity).toBe('ok')
-    expect(view.items[0]!.text).toContain('home.runtime.item.availableUnverifiedVersion')
-    expect(view.items[0]!.text).not.toContain('home.runtime.item.missing')
-  })
-
-  test('three-or-fewer rows render localized English identity title + hint without the code', async () => {
-    await i18n.changeLanguage('en-US')
-    const view = describeRuntimes(
-      t,
-      loaded([
-        row('opencode', {
-          isDefault: true,
-          ok: false,
-          version: null,
-          failureCode: 'execution-identity-untrusted-binary',
-        }),
-      ]),
-    )
-    if (view.kind !== 'items') throw new Error('expected items')
-    expect(view.items[0]!.failure).toEqual({
-      title: 'The selected OpenCode executable could not be frozen and verified for this run.',
-      hint: 'Check the configured executable path and permissions, then run the runtime test again.',
-    })
-    expect(JSON.stringify(view)).not.toContain('execution-identity-untrusted-binary')
   })
 
   test('empty (all disabled) → noneEnabled soft view', () => {
@@ -183,16 +130,6 @@ describe('RFC-135 describeRuntimes', () => {
     expect(view.text).toContain('"ok":4,"total":4')
   })
 
-  test('above threshold keeps a permitted containment degradation visible', () => {
-    const rows = [row('a'), row('b'), row('c'), row('mac-runtime', { ok: true, state: 'degraded' })]
-    const view = describeRuntimes(t, loaded(rows))
-    if (view.kind !== 'single') throw new Error('expected aggregate')
-    expect(view.severity).toBe('soft')
-    expect(view.text).toContain('home.runtime.aggregateWorst')
-    expect(view.text).toContain('"ok":3,"total":4')
-    expect(view.text).toContain('"name":"mac-runtime"')
-  })
-
   test('above threshold names the WORST failure — soft first must not shadow the fault (F5)', () => {
     // soft failure sorted BEFORE the fault row: naming "the first abnormal"
     // would pick soft-fork and hide the red default failure.
@@ -209,33 +146,6 @@ describe('RFC-135 describeRuntimes', () => {
     expect(view.text).toContain('"name":"the-default"')
   })
 
-  test('above threshold renders the worst failure in localized Chinese without the code', async () => {
-    await i18n.changeLanguage('zh-CN')
-    const rows = [
-      row('soft-fork', {
-        ok: false,
-        version: null,
-        failureCode: 'execution-identity-untrusted-binary',
-      }),
-      row('b'),
-      row('c'),
-      row('the-default', {
-        isDefault: true,
-        ok: false,
-        version: null,
-        failureCode: 'execution-identity-source-changed',
-      }),
-    ]
-    const view = describeRuntimes(t, loaded(rows))
-    if (view.kind !== 'single') throw new Error('expected aggregate')
-    expect(view.failure).toEqual({
-      title: '启动期间工作区的执行身份来源发生了变化。',
-      hint: '请停止并发配置修改，再重新发起新运行。',
-    })
-    expect(JSON.stringify(view)).not.toContain('execution-identity-source-changed')
-    expect(JSON.stringify(view)).not.toContain('execution-identity-untrusted-binary')
-  })
-
   test('above threshold with only soft failures → soft aggregate naming the soft row', () => {
     const rows = [row('a'), row('b'), row('c'), row('soft-fork', { ok: false, version: null })]
     const view = describeRuntimes(t, loaded(rows))
@@ -249,7 +159,6 @@ describe('RFC-135 describeRuntimes', () => {
     expect(itemSeverity({ ok: true, isDefault: false })).toBe('ok')
     expect(itemSeverity({ ok: false, isDefault: true })).toBe('fault')
     expect(itemSeverity({ ok: false, isDefault: false })).toBe('soft')
-    expect(itemSeverity({ ok: true, isDefault: true, state: 'degraded' })).toBe('soft')
   })
 })
 

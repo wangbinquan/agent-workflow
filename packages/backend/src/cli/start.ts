@@ -1,11 +1,9 @@
 // `agent-workflow start` — daemon foreground entry.
 
 import { createSecretBox } from '@/auth/secretBox'
-import { createBuiltinContainmentCoordinator } from '@/services/containmentComposition'
 import { setPushCredentialResolver } from '@/services/gitCredential'
 import { tokenAuditRetentionDays } from '@/services/mcpSurface'
 import { pruneTokenAudit } from '@/services/tokenAudit'
-import { getSandboxStatus } from '@/services/sandbox/probe'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
@@ -23,7 +21,8 @@ import { startLimitsTicker } from '@/services/limits'
 import { convergeIntentApplyJournal } from '@/services/intent/applyChangeset'
 import { convergeResourceBundleApplies } from '@/services/bundle/apply'
 import { recoverIntentTurnsOnBoot, sweepIntentScratch } from '@/services/intent/maintenance'
-import { reapOrphanRunsForStoreRecovery } from '@/services/orphans'
+import { reapOrphanRuns } from '@/services/orphans'
+import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import { autoResumeInterruptedTasks } from '@/services/autoResume'
 import { startAutoRepairLoop } from '@/services/autoRepair'
 import { startHeartbeatKillLoop } from '@/services/autoKill'
@@ -57,7 +56,6 @@ import { acquireLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { getRuntimeDriver } from '@/services/runtime'
-import { markProductionOpencodeCommand } from '@/util/opencode'
 import { Paths } from '@/util/paths'
 import { startControlListener } from '@/services/controlListener'
 import { buildWebSocketAdapter } from '@/ws/server'
@@ -246,41 +244,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
   }
 
-  // 4.5 — RFC-205/RFC-233: bounded boot discovery is diagnostic only. Install
-  // one daemon-scoped coordinator whose fresh, exact per-profile admission is
-  // authoritative. Startup always remains soft so Settings can repair/lower
-  // policy even when enforce will reject affected task spawns.
-  const sandboxStatus =
-    config.sandboxMode === 'off'
-      ? {
-          mechanism:
-            process.platform === 'linux'
-              ? ('bwrap' as const)
-              : process.platform === 'darwin'
-                ? ('seatbelt' as const)
-                : null,
-          available: false,
-          detail: 'containment disabled by config',
-        }
-      : await getSandboxStatus()
-  const containmentCoordinator = createBuiltinContainmentCoordinator({
-    mode: config.sandboxMode,
-    appHome: Paths.root,
-    discoveryStatus: sandboxStatus,
-  })
-  if (config.sandboxMode === 'off') {
-    log.info('containment off (config)', {})
-  } else if (sandboxStatus.available) {
-    log.info('containment provider discovered; exact qualification deferred to admission', {
-      mechanism: sandboxStatus.mechanism,
-    })
-  } else {
-    log.warn('containment discovery trial unavailable; exact admission remains authoritative', {
-      mode: config.sandboxMode,
-      detail: sandboxStatus.detail,
-    })
-  }
-
   // 5. DB — open + apply migrations. dbVersion = number of SQL files in the
   // bundled migrations folder (== the highest version we've applied, since
   // openDb() applies all pending migrations on startup). The migrations folder
@@ -373,29 +336,18 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // process. Any task/node_run left in 'running' is flipped to 'interrupted'
   // with task.error_message = 'daemon-restart' so the UI surfaces what
   // happened.
-  const { reap, priorDaemonSandboxDead } = await reapOrphanRunsForStoreRecovery(db, lock)
+  const reap = await reapOrphanRuns(db)
   if (reap.tasks > 0 || reap.runs > 0) {
     log.warn('reaped orphan runs from previous daemon', {
       tasks: reap.tasks,
       runs: reap.runs,
     })
   }
-
-  // RFC-224: only after the prior daemon's outer bwrap groups have been
-  // reaped may we recover their private PID-namespace stores. This is a
-  // fail-closed boot barrier: it removes exact fsynced stale locks, scrubs
-  // account state, repairs session/run/nonce leases, and deletes ephemeral
-  // crash stores before auto-resume, schedulers, workers, or HTTP can run.
-  {
-    const { recoverOpencodeStoresOnBoot } = await import('@/services/opencodeStoreRecovery')
-    const report = await recoverOpencodeStoresOnBoot({
-      db,
-      appHome: Paths.root,
-      priorDaemonSandboxDead,
+  const repairedRuntimeLeases = repairRuntimeSessionLeasesAfterOrphanReap(db, true)
+  if (repairedRuntimeLeases > 0) {
+    log.info('released runtime session leases held by terminal orphan runs', {
+      leases: repairedRuntimeLeases,
     })
-    if (report.leasesRepaired > 0 || report.storesScrubbed > 0 || report.storesRemoved > 0) {
-      log.warn('recovered prior-daemon OpenCode stores', { ...report })
-    }
   }
 
   // 5b2/5b3（已退役）—— RFC-132 的两个 boot 垫片（legacy immediate rounds /
@@ -548,7 +500,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     configPath: Paths.config,
     appHome: Paths.root,
-    containmentCoordinator,
   })
   await mcpRuntimeTests.start()
 
@@ -563,7 +514,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     configPath: Paths.config,
     secretBox,
-    containmentCoordinator,
     getDefaultRuntime: async () => loadConfig(Paths.config).defaultRuntime,
   })
 
@@ -580,7 +530,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     secretBox,
     webhookDispatcher,
-    containmentCoordinator,
   })
 
   const bindHost = opts.host ?? config.bindHost
@@ -708,7 +657,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // (default true); when false the handle is a no-op shell.
   const memoryDistillTicker = startMemoryDistillLoop({
     db,
-    containmentCoordinator,
     enabled: batchImportCfg.memoryDistillerEnabled !== false,
     // RFC-117: distiller runtime profile (per-feature name → default → deprecated model).
     runtimeName: batchImportCfg.memoryDistillRuntime ?? null,
@@ -857,7 +805,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const scheduledTaskTicker = startScheduledTaskLoop({
     db,
     loadConfig: () => loadConfig(Paths.config),
-    buildLaunch: buildScheduleLaunch(db, Paths.config, containmentCoordinator),
+    buildLaunch: buildScheduleLaunch(db, Paths.config),
   })
 
   // RFC-108 T18 (AR-03) — boot auto-resume (DEFAULT OFF, decision D1). Closes
@@ -869,10 +817,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (config.autoResumeOnBoot) {
     const resumeDeps = {
       db,
-      containmentCoordinator,
-      ...(config.opencodePath
-        ? { opencodeCmd: markProductionOpencodeCommand([config.opencodePath]) }
-        : {}),
+      ...(config.opencodePath ? { opencodeCmd: [config.opencodePath] } : {}),
       ...(config.subagentLiveCapture !== undefined
         ? { subagentLiveCapture: config.subagentLiveCapture }
         : {}),

@@ -470,7 +470,6 @@ describe('contract: redacted ⇄ rehydrated ⇄ documented are the same field se
       script: 'print(1)',
       dependencies: ['requests==2.32.3'],
       env: { TOKEN: 'v' },
-      network: 'deny',
       readonly: true,
     })
     expect(masked.sort()).toEqual([...SCRIPT_REDACTED_FIELDS].sort())
@@ -510,10 +509,9 @@ describe('contract: redacted ⇄ rehydrated ⇄ documented are the same field se
       kind: 'script',
       language: 'python',
       script: 'print(1)',
-      network: 'deny',
       readonly: true,
     })
-    for (const kept of ['language', 'network', 'readonly', 'id', 'kind']) {
+    for (const kept of ['language', 'readonly', 'id', 'kind']) {
       expect(masked).not.toContain(kept)
     }
   })
@@ -592,7 +590,6 @@ describe('contract: the see-but-do-not-touch list matches the gate', () => {
     outputs: [{ name: 'a' }],
     dependencies: ['requests==2.32.3'],
     env: {},
-    network: 'deny',
     readonly: true,
   }
   const codeHostNode = {
@@ -616,7 +613,6 @@ describe('contract: the see-but-do-not-touch list matches the gate', () => {
 
   const scriptEdits: Array<[string, Record<string, unknown>]> = [
     ['language', { language: 'bash', dependencies: [] }],
-    ['network', { network: 'allow' }],
     ['readonly', { readonly: false }],
     ['outputs', { outputs: [{ name: 'b' }] }],
   ]

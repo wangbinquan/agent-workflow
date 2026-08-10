@@ -415,7 +415,6 @@ describe('RFC-253 T28 — script-node env masked in workflow dumps', () => {
             language: 'python',
             script: 'import os; print(os.environ["API_TOKEN"])',
             env: { API_TOKEN: SECRET, LOG_LEVEL: 'debug' },
-            network: 'deny',
           },
         ],
         edges: [],
@@ -445,7 +444,6 @@ describe('RFC-253 T28 — script-node env masked in workflow dumps', () => {
     expect(wfDump?.content).toContain('API_TOKEN')
     expect(wfDump?.content).toContain('LOG_LEVEL')
     expect(wfDump?.content).toContain('‹redacted›')
-    expect(wfDump?.content).toContain('network: deny')
     // RFC-270 显式改判（Codex 实现门 P1）。原断言是
     // `expect(wfDump?.content).toContain('import os')` —— 它把「脚本正文照进
     // dump」写成了期望行为，而这个 actor 恰恰是 `role: 'user'` + 空权限集。
@@ -472,7 +470,6 @@ describe('RFC-253 T28 — script-node env masked in workflow dumps', () => {
             language: 'python',
             script: 'import os; print(os.environ["API_TOKEN"])',
             env: { API_TOKEN: SECRET },
-            network: 'deny',
           },
         ],
         edges: [],

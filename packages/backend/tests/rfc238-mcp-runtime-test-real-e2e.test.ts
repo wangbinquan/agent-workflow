@@ -17,7 +17,6 @@ import {
 import { getMcpById } from '../src/services/mcp'
 import { McpRuntimeTestService } from '../src/services/mcpRuntimeTest'
 import { mcpOperationConfigHashOf } from '../src/services/mcpOperationRevision'
-import { ContainmentCoordinator } from '../src/services/sandbox'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_RUNTIME = resolve(import.meta.dir, 'fixtures', 'rfc238', 'mock-claude-runtime.js')
@@ -170,7 +169,12 @@ describe('RFC-238 real process multi-turn fixture', () => {
         },
       })
       const previousApiKey = process.env.ANTHROPIC_API_KEY
+      const previousClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR
       process.env.ANTHROPIC_API_KEY = 'rfc238-test-only'
+      // RFC-276: the product no longer manufactures a private Claude config
+      // directory. Model an operator-provided directory and prove that natural
+      // environment inheritance keeps the mock's native session across turns.
+      process.env.CLAUDE_CONFIG_DIR = join(root, 'operator-claude-config')
       try {
         const db = createInMemoryDb(MIGRATIONS)
         db.insert(runtimes)
@@ -204,13 +208,6 @@ describe('RFC-238 real process multi-turn fixture', () => {
           db,
           configPath: join(root, 'config.json'),
           appHome: root,
-          containmentCoordinator: new ContainmentCoordinator({
-            provider: {
-              mode: 'off',
-              status: { mechanism: null, available: false, detail: null },
-              appHome: root,
-            },
-          }),
         })
 
         const created = await service.create(actor, mcp, {
@@ -282,8 +279,6 @@ describe('RFC-238 real process multi-turn fixture', () => {
         expect(rendered).toContain('counter=2')
         const turnReceipts = db
           .select({
-            raw: mcpRuntimeTestTurns.rawCommandDigest,
-            wrapped: mcpRuntimeTestTurns.spawnCommandDigest,
             binary: mcpRuntimeTestTurns.spawnBinaryPath,
           })
           .from(mcpRuntimeTestTurns)
@@ -291,9 +286,7 @@ describe('RFC-238 real process multi-turn fixture', () => {
           .all()
         expect(turnReceipts).toHaveLength(2)
         for (const receipt of turnReceipts) {
-          expect(receipt.raw).toMatch(/^[0-9a-f]{64}$/)
-          expect(receipt.wrapped).toMatch(/^[0-9a-f]{64}$/)
-          expect(receipt.binary).toContain('/runtime-bin/claude')
+          expect(receipt.binary).toBe(runtimeBinary)
         }
         expect(db.select().from(tasks).all()).toHaveLength(0)
         expect(db.select().from(nodeRuns).all()).toHaveLength(0)
@@ -304,6 +297,8 @@ describe('RFC-238 real process multi-turn fixture', () => {
       } finally {
         if (previousApiKey === undefined) delete process.env.ANTHROPIC_API_KEY
         else process.env.ANTHROPIC_API_KEY = previousApiKey
+        if (previousClaudeConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR
+        else process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
         server.stop(true)
       }
     },

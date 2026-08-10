@@ -11,9 +11,8 @@
 //   - clarify-forbidden is a RETRYABLE nudge with its own notice; exhaustion
 //     is role-specific (leader drops-and-continues, members surface failed)
 //     so the skeleton reports it and the caller settles;
-//   - transient verified-runtime stream failures consume a separate fresh-run
-//     budget. They never consume a logical/protocol attempt, so even a
-//     single-shot message turn can survive a transport interruption;
+//   - a runtime stream interruption consumes a separate fresh-process budget,
+//     never a model protocol attempt;
 //   - an unstructured failure (no failureCode in FOLLOWUP_POLICY) is fatal for
 //     the leader and card-settling for members — again reported, not decided
 //     here;
@@ -241,11 +240,9 @@ export async function executeTurn<T>(args: TurnArgs, spec: TurnSpec<T>): Promise
     if (result.status === 'awaiting') return { kind: 'awaiting', runId }
     if (result.status === 'failed') {
       const msg = result.errorMessage ?? 'run failed'
-      // A direct stream closing is transport/runtime liveness, not a model
-      // protocol error and not a frozen-identity mismatch. Re-run the FULL
-      // logical turn in a fresh process without adding a protocol-error nudge.
-      // This budget is independent from maxAttempts, preserving message turns'
-      // deliberate maxAttempts=1 protocol policy.
+      // A stream-persistence interruption is runtime/process liveness, not a
+      // model protocol error. Re-run the full turn in a fresh process without
+      // appending a protocol-error nudge or consuming maxAttempts.
       if (isTransientRuntimeFailure(result.failureCode)) {
         if (transientRetriesUsed < DEFAULT_PROTOCOL_RETRY_BUDGET) {
           transientRetriesUsed += 1

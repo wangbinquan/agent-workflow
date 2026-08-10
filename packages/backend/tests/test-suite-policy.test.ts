@@ -42,257 +42,32 @@ const FORBIDDEN_ALIASES = new Set(['fit', 'fdescribe', 'ftest', 'xit', 'xdescrib
 // or opt-in visual/chaos environment. Any addition/removal changes this exact
 // inventory and therefore requires an intentional review of this policy.
 const ALLOWED_SKIP_COUNTS: Record<string, number> = {
-  // RFC-254 T31: one POSIX-simulation case — its `config()` builds a
-  // POSIX-absolute sealRoot (non-canonical on win32 after `resolve()`) plus a
-  // `shell` key win32 forbids (SEALED_SHELL_SUPPORTED=false). The win32 digest
-  // path is covered for real by rfc254-verified-plan-win32's full-plan build.
-  'packages/backend/tests/rfc224-execution-identity.test.ts#skipIf': 1,
-  // RFC-254 T31: two POSIX-simulation describes — netless CHILD cwd/executable
-  // resolution against hardcoded POSIX paths + `/bin/sh` shebangs. Windows v1
-  // runs no netless fencing (no provider) or sealed shell, so these mechanisms
-  // are inactive; win32-canonical fixtures come with a future Windows provider.
-  'packages/backend/tests/netless-workdir-2026-08-04.test.ts#skipIf': 2,
-  // RFC-254 T31: two local-material cases force a seatbelt/bwrap provider and
-  // materialize a netless wrapper through it (plus POSIX `#!/bin/sh` / `true`
-  // fixtures). Windows v1 has no provider, so local-MCP test material is a
-  // future-provider concern; the remote-identity case still runs on win32.
-  'packages/backend/tests/rfc238-mcp-test-execution-material.test.ts#skipIf': 2,
-  // RFC-254 T31: one real-process multi-turn E2E whose mock runtime is an
-  // extensionless JS file launched POSIX-style — not spawnable on win32 (turn 1
-  // never answers → turn 2 ConflictError). Production win32 spawn uses a real
-  // .exe (snapshotExecutableExtension); a win32-runnable mock is E2E-infra work.
   'packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts#skipIf': 1,
-  // RFC-254 T31: one win32-ONLY describe (skipIf non-win32) exercises the two
-  // verified-business-plan defects — resolveNetlessGitCommonDirs accepting git-
-  // for-Windows's forward-slash --git-common-dir, and snapshotManagedSkillTree
-  // sealing a tree via DACL — against REAL git + real fs on a Windows machine.
-  // The forced-darwin rfc224-verified-plan suite structurally cannot cover the
-  // real-win32 path; the same file's source anchors run on every POSIX CI leg.
-  'packages/backend/tests/rfc254-verified-plan-win32.test.ts#skipIf': 1,
-  // RFC-254 T4: two assertions describe the POSIX process-GROUP model, which
-  // Windows has no equivalent of — the group signal, and the fact that a
-  // non-leader pid leads no tree. The Windows behaviour they mirror is covered
-  // in the same file by the branch that runs ONLY on win32 (Job Object
-  // adoption, live count, atomic terminate), so no platform loses coverage.
+  // POSIX process-group semantics; the same file exercises Job Objects on Windows.
   'packages/backend/tests/rfc254-process-tree-ownership.test.ts#skipIf': 2,
-  // RFC-254 T32: two RFC-135 status-probe cases whose assertions ARE the POSIX
-  // process-group reap (fork-without-exec grandchild via `#!/bin/sh`, PGID
-  // signal, `pgrep -f`). The win32 descendant-lifetime boundary is the Job
-  // Object, covered by rfc254-process-tree-ownership's win32 branch — so no
-  // platform loses the "runaway child is reaped" guarantee. The rest of the
-  // file now runs on Windows (T39/T40a made the version-probe snapshot work).
   'packages/backend/tests/rfc135-runtimes-status.test.ts#skipIf': 2,
-  // RFC-254 T40b: the REAL icacls/whoami DACL round-trip proves the win32
-  // file-privacy primitive on a Windows machine (verified on ARM64). Its six
-  // cases depend on the actual Windows ACL subsystem, so they run ONLY on win32;
-  // the SDDL parsing + whitelist verdict they exercise are covered platform-
-  // agnostically by the pure suite rfc254-win32-acl.test.ts.
+  // The live icacls/whoami round-trip requires a Windows kernel.
   'packages/backend/tests/rfc254-win32-acl-integration.test.ts#skipIf': 1,
-  // RFC-254 T40b: one system-plan case builds the plan under bwrap-ENFORCE
-  // containment (a Linux mechanism); on win32 the core fails at bootstrap before
-  // the manifest (D1: no isolation provider on Windows v1). Its manifest-privacy
-  // proof is covered on win32 by the business launcher path. The sibling bwrap-
-  // rejection cases in the same file DO run on win32.
-  'packages/backend/tests/rfc224-verified-system-plan.test.ts#skipIf': 1,
-  // RFC-254: the process-GROUP kill proof uses a POSIX `sleep` grandchild + a
-  // `pgrep -f` survivor scan (ENOENT on Windows). The Windows descendant-lifetime
-  // guarantee is the Job Object (rfc254-process-tree-ownership win32 branch).
   'packages/backend/tests/rfc208-unbounded-git-and-permits.test.ts#skipIf': 1,
-  // RFC-254: one case creates a file literally named `:tricky.md` to prove
-  // leading-colon names are treated literally (not pathspec magic). `:` is an
-  // illegal filename char on Windows (drive/ADS separator), so the case's premise
-  // can't exist there; the guard it locks is platform-agnostic production code.
   'packages/backend/tests/rfc193-force-include.test.ts#skipIf': 1,
-  // RFC-254: two script-node describes render the Linux bwrap args / macOS SBPL
-  // profile (network fence + readonly boundary) — POSIX sandbox specs never
-  // produced on win32 (D1), whose renderers use host path helpers. Exercised on
-  // the POSIX CI legs. The env-assembly, traversal-defense, and contained-spawn
-  // mechanics in the same file DO run on win32 (portable `bun -e` commands).
-  'packages/backend/tests/rfc253-script-execution.test.ts#skipIf': 2,
-  // RFC-253 T43: the generated author snippets are proven by RUNNING them, so
-  // the file is gated twice. (1) One `describe.skipIf` for win32 — there is no
-  // `python3` there and `bash` resolves through Git for Windows
-  // (WINDOWS_INTERPRETER_CANDIDATES), while the snippets themselves are
-  // OS-independent, so the POSIX legs carry the proof. (2) Four `test.skipIf`
-  // for a machine that lacks python3 / node. That second gate could hide a
-  // total loss of coverage, so the same describe holds a case that NEVER skips
-  // and requires all three interpreters whenever `CI` is set — a runner that
-  // loses one goes red instead of silently proving nothing.
   'packages/backend/tests/rfc253-script-snippets.test.ts#skipIf': 5,
-  // RFC-254: one case needs a runtime whose DIRECT child exits while a detached
-  // grandchild keeps the inherited stdout pipe open (post-exit-flush-timeout →
-  // 'incomplete'). Windows closes the pipe on parent exit regardless of an unref'd
-  // grandchild, so the condition is unreproducible there ('complete'); the flush
-  // cap it exercises is a platform-agnostic timer on the stdout drain. The rest of
-  // the file now runs on win32 (command-array runtime head via opencodeCmd +
-  // platform-aware killProcessTree reap, which fixed the timeout/abort cases).
   'packages/backend/tests/rfc234-system-agent-run.test.ts#skipIf': 1,
-  // RFC-254: one registry test drives the REAL streaming deep-smoke end-to-end
-  // through the HTTP /probe route with a real binaryPath — the route takes a single
-  // path, so runtime-smoke's command-array streaming seam is unreachable and a
-  // `.sh`/`.cmd` can't stream (cmd.exe buffers). The streaming mechanism is covered
-  // on win32 by runtime-smoke.test.ts; a real streaming single-binary needs a
-  // compiled `.exe` (deferred). The other 20 registry tests run on win32.
   'packages/backend/tests/runtime-routes-registry.test.ts#skipIf': 1,
-  // RFC-254: one case forces "config unwritable" by chmod'ing .git to 0o555 — a
-  // read-only DIRECTORY blocks git's lock-file create on POSIX, but on Windows a
-  // dir's read-only attribute does not block writes to files inside, so the
-  // fail-closed premise can't be set up. The fail-closed logic is platform-
-  // agnostic (covered on the POSIX legs); the other case in the file runs on win32.
   'packages/backend/tests/rfc205-mirror-origin-sanitize.test.ts#skipIf': 1,
-  // RFC-254: one case builds the Linux bwrap outer+child topology and computes its
-  // sandbox policy (wrapSandbox → computeSandboxPolicy). bwrap has no Windows
-  // equivalent and the path is unreached on Windows v1 (D1: no isolation provider,
-  // fail-closed at bootstrap); it also trips validatePolicyPath on Windows (POSIX
-  // fixture paths vs path.normalize's '/' → '\'). The rest of the file runs on win32.
-  'packages/backend/tests/rfc233-containment-coordinator.test.ts#skipIf': 1,
-  // RFC-254: both describes drive the POSIX sandbox-policy layer (computeSandboxPolicy
-  // → renderBwrapArgs / renderSeatbeltProfile) with POSIX fixture paths. Windows v1 has
-  // no sandbox provider (D1); computeSandboxPolicy is never reached in production and
-  // validatePolicyPath rejects the POSIX fixtures (verified: "invalid sandbox path").
-  // Same class as rfc205-sandbox-policy's render describes; the RFC-251 Linux fix is
-  // verified on real Debian.
-  'packages/backend/tests/rfc251-linux-plugin-visibility.test.ts#skipIf': 2,
-  // RFC-254: both describes render POSIX sandbox specs (netless Seatbelt SBPL + Linux
-  // bwrap) — POSIX-mechanism never produced on win32 (D1); validatePolicyPath rejects the
-  // POSIX fixtures. Same class as rfc205-sandbox-policy. The second describe renders at
-  // body level, so it must skip at collection too.
-  'packages/backend/tests/rfc252-netless-write-deny.test.ts#skipIf': 2,
-  // RFC-254: readOnlySubtrees describe computes sandbox policy with POSIX fixtures →
-  // validatePolicyPath rejects on win32 (POSIX sandbox render, D1). Whole describe.
-  'packages/backend/tests/rfc224-sandbox-readonly.test.ts#skipIf': 1,
-  // RFC-254: one case renders the macOS Seatbelt SBPL profile (POSIX sandbox spec, D1);
-  // the sibling bwrap/taskWorktrees cases run on win32.
-  'packages/backend/tests/sandbox-multirepo-allowback-2026-08-04.test.ts#skipIf': 1,
-  // RFC-254: two REAL-process cases spawn /bin/sh + POSIX group-reap (no win32 equiv,
-  // same class as rfc208; Job Object win32 branch covers it). Rest of file runs on win32.
-  'packages/backend/tests/rfc216-sandbox-cli.test.ts#skipIf': 2,
-  // RFC-254: whole file exercises the FFF (filesystem-fence-fingerprint) — the Linux
-  // bwrap boundary proof. Shared fixture materializes with bwrapPath '/usr/bin/bwrap'
-  // (POSIX → store-unsafe on win32); execution-proof asserts POSIX PGID kill/release.
-  // FFF unreached on Windows v1 (D1: no bwrap). Both describes skip.
-  'packages/backend/tests/rfc224-fff-capability.test.ts#skipIf': 2,
-  // RFC-254: netless (no-network) MCP boundary — every failing case fails at
-  // lstat('/bin/sh') (POSIX shell the wrapper materializes); netless is a POSIX
-  // containment mechanism unused on win32 (D1). 8 all-fail describes + materialize-
-  // dependent mixed-describe cases skip; demand/config describes run on win32.
-  'packages/backend/tests/rfc242-claude-netless-mcp.test.ts#skipIf': 21,
-  // 2026-08-09 claude skill injection: four POSIX-only cases. Three build a
-  // gated business plan, which byte-freezes the runtime head — the fixture's
-  // stand-in binary is a chmod'd `#!/bin/sh` script (unsealable/unspawnable on
-  // win32, same reason as the rfc242 plan cases above). The fourth is the
-  // runner describe, whose fake runtime is the same POSIX script. The argv,
-  // staging and inventory-parsing mechanisms those cases guard are covered
-  // platform-agnostically by the other 13 cases in the file, which run on win32.
-  'packages/backend/tests/claude-skill-injection-2026-08-09.test.ts#skipIf': 4,
-  // 2026-08-09 dependsOn 注入：五条 POSIX-only。它们都要 `buildBusinessSpawn` 真的
-  // 建出受控计划，而那条路径会 byte-freeze 运行时头——fixture 的替身二进制是
-  // chmod 过的 `#!/bin/sh` 脚本，在 win32 上既封不了也起不来（与上面 rfc242 /
-  // skill-injection 的计划用例同一原因）。这些用例锁的 argv / `--agents` 形态由
-  // 同文件另外 13 条纯函数用例平台无关地覆盖，win32 上照跑。
+  'packages/backend/tests/claude-skill-injection-2026-08-09.test.ts#skipIf': 1,
   'packages/backend/tests/claude-dependency-injection-2026-08-09.test.ts#skipIf': 5,
-  // 2026-08-09 启动清单校验：三条 POSIX-only。两条要真的建出受控计划（byte-freeze
-  // 的替身二进制是 `#!/bin/sh` 脚本），一条是 runner describe，其假运行时同样是
-  // POSIX 脚本。parser 与判据本身由同文件的纯函数用例平台无关地覆盖。
-  'packages/backend/tests/runtime-startup-inventory-2026-08-09.test.ts#skipIf': 3,
-  // 2026-08-09 MCP 可见性：两条 runner 用例在上面那个 `describe.skipIf` 之内，
-  // 不额外计数（skipIf 记在 describe 上）。
-
-  // RFC-254: the three policy-render describes assert computeSandboxPolicy →
-  // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
-  // rendered with host path helpers. The fourth (runner source-text lock) is
-  // platform-agnostic and still runs on win32. Render describes → POSIX CI legs.
-  'packages/backend/tests/sandbox-allowback-audit-2026-08-04.test.ts#skipIf': 3,
   'e2e/clarify.spec.ts#skip': 1,
-  // RFC-206: the focus-ring geometry audit measures a forced :focus-visible
-  // state, which only Chrome DevTools Protocol (CSS.forcePseudoState) can
-  // produce — programmatic focus does not reliably match :focus-visible. The
-  // spec therefore skips on non-chromium projects (webkit is the opt-in
-  // nightly run; chromium is the PR-gating default, so no gating coverage is
-  // lost).
   'e2e/focus-ring-clip.spec.ts#skip': 1,
   'e2e/git-protocols.spec.ts#skip': 2,
-  // RFC-250: populated interaction-state screenshots are intentionally opt-in
-  // beside the canonical visual suite and are activated by `test:visual` in
-  // both local and hosted gates.
   'e2e/rfc250-visual-states.spec.ts#skip': 1,
   'e2e/visual-regression.spec.ts#skip': 1,
   'e2e/workflow-editor.spec.ts#skip': 1,
   'packages/backend/tests/git-repo-cache-submodule.test.ts#skipIf': 1,
   'packages/backend/tests/integration-chaos/chaos-scenarios.integration.test.ts#skipIf': 1,
-  // RFC-224: official-binary execution-identity preflight. It is opt-in only
-  // because the repository unit suite must not download/use an external
-  // OpenCode executable; integration-opencode.yml activates the gate on every
-  // relevant push/PR and performs no LLM/provider call.
-  'packages/backend/tests/integration-opencode/opencode-identity-preflight.integration.test.ts#skipIf': 1,
   'packages/backend/tests/integration-opencode/opencode-live.integration.test.ts#skipIf': 1,
-  // Two describes: the RUN_GIT_NETWORK fixture-server suite, plus the 2026-08-07
-  // error-classification suite, which additionally requires that no outbound
-  // HTTP proxy is configured — a proxy answers with its own 5xx instead of the
-  // OS refusing the connection, and Bun caches proxy env at process start so it
-  // cannot be unset from inside the test. Unit-level shape fixtures for the same
-  // classification live in `tests/services/mcpProbe.test.ts` and always run.
   'packages/backend/tests/mcp-probe-http-integration.test.ts#skipIf': 2,
   'packages/backend/tests/mcp-probe-stdio-integration.test.ts#skipIf': 1,
-  // RFC-254 T32: the three entries below all carry `NO_POSIX_CONTAINMENT`, and
-  // the full reasoning — including why this is scoping rather than a Windows
-  // bug to fix, and what asserts the absence positively — lives in
-  // `fixtures/platformScope.ts`, next to the predicate itself.
-  //
-  // Twenty assertions whose SUBJECT is a POSIX containment provider: the
-  // root-owned bwrap namespace trial, the supervisor's process-GROUP ownership
-  // and its PGID signal ladder, the bwrap bind/mask projection, and the macOS
-  // Seatbelt profile text. The other six tests in the file run everywhere,
-  // including the env rebuild, which asserts BOTH platforms' answers rather
-  // than skipping one.
-  'packages/backend/tests/rfc224-sealed-subprocess.test.ts#skipIf': 20,
-  // `requireRootOwnedBwrap` is the Linux bwrap qualifier, so each diagnostic
-  // names a POSIX condition (root ownership, parent-directory safety, setuid
-  // bits). On Windows the fixtures' POSIX paths fail the CANONICAL check first,
-  // so the suite reported `provider-path-not-canonical` where it expected
-  // `provider-parent-unsafe` — a diagnostic regression on its face, and really
-  // `/usr/bin/bwrap` resolving to `D:\usr\bin\bwrap`.
-  'packages/backend/tests/bwrap-qualification-diagnostics.test.ts#skipIf': 1,
-  // POSIX process-group REAPING: a wrapper exits, its detached descendant keeps
-  // running, and the group kill must still reach it. Windows has no process
-  // groups; the equivalent is a Job Object, which RFC-254 v1 deliberately did
-  // not wire — the primitive exists and is tested, but nothing spawns into a job
-  // yet, so there is no mechanism there for this to be about. The rest of the
-  // file runs on Windows now that its fake binaries are platform-appropriate.
   'packages/backend/tests/opencode-models.test.ts#skipIf': 1,
-  // The POSIX process GROUP and its TERM/KILL ladder: whether the group leader
-  // is spared during the grace period is a statement about `kill(-pgid)`, which
-  // Windows has no equivalent of. Guarded at the describe, so the count is 1.
-  'packages/backend/tests/kill-grace-sandbox-monitor-2026-08-04.test.ts#skipIf': 1,
-  // Three describes rendering provider input: the sandbox policy, the macOS
-  // Seatbelt profile text, and the Linux bwrap argv. Guarded whole rather than
-  // per-failing-assertion — a Seatbelt profile rendered from Windows paths is
-  // not evidence about anything, so a test of it passing there is incidental.
-  'packages/backend/tests/rfc205-sandbox-policy.test.ts#skipIf': 3,
-  // One describe only — the `sandbox-exec` / `bwrap` argv head. The other two
-  // describes in that file stay ungated deliberately, because one of them holds
-  // the win32-injected 'unsupported platform → null mechanism, unavailable'
-  // assertion that every entry above cites as its positive evidence. Guarding
-  // the file wholesale would have silently removed the proof while leaving the
-  // citations pointing at it.
-  'packages/backend/tests/rfc205-sandbox-probe-wrap.test.ts#skipIf': 1,
-  // RFC-227: the REAL macOS Seatbelt provider test shares the reviewed
-  // RUN_SANDBOX_ITEST gate and is activated on every macOS backend shard.
-  'packages/backend/tests/rfc227-seatbelt-integration.test.ts#skip': 1,
-  // RFC-205: the REAL-mechanism sandbox smoke is RUN_SANDBOX_ITEST-gated
-  // (activated on the macOS CI shards; the test re-probes and no-ops where
-  // the mechanism is unusable).
-  'packages/backend/tests/rfc205-sandbox-integration.test.ts#skip': 1,
-  // 2026-08-04 沙箱审计：脚本节点 `network:'deny'` 的真围栏证据（被围栏进程出网被拒
-  // **且** 工作树仍可写，外加一条不加围栏的对照组）。同一条已审阅的 RUN_SANDBOX_ITEST
-  // 门，macOS 每个后端分片都激活；此前该承诺只有 argv / 渲染层断言。
-  'packages/backend/tests/script-netless-real-fence-2026-08-04.test.ts#skip': 1,
-  // RFC-242 T5: the REAL no-network evidence for claude's local-MCP children
-  // (curl denied / worktree IO preserved) shares the same reviewed
-  // RUN_SANDBOX_ITEST gate and is activated on every macOS backend shard. The
-  // rest of that file — demand matrix, wrapper materialization, the runner
-  // pre-spawn fence and the stdio round-trip — runs ungated everywhere.
-  'packages/backend/tests/rfc242-claude-netless-mcp.test.ts#skip': 1,
   'packages/backend/tests/worktree-submodule-init.test.ts#skipIf': 1,
 }
 
@@ -322,9 +97,6 @@ const REQUIRED_GATE_ACTIVATIONS: Record<string, GateActivationCheck[]> = {
   RUN_GIT_PROTOCOLS: [
     { file: '.github/workflows/git-protocols-e2e.yml', marker: "RUN_GIT_PROTOCOLS: '1'" },
   ],
-  // RFC-205: real-mechanism sandbox smoke — macOS backend shards have
-  // sandbox-exec; the test itself re-probes and no-ops where unusable.
-  RUN_SANDBOX_ITEST: [{ file: '.github/workflows/ci.yml', marker: "RUN_SANDBOX_ITEST: '1'" }],
   RUN_OPENCODE_INTEGRATION: [
     {
       file: '.github/workflows/integration-opencode.yml',

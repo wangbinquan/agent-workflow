@@ -80,7 +80,7 @@ describe('RFC-269 凭据服务的磁盘懒解析（scheduler 的唯一接线点�
     expect(resolveCodeHostConnectionsFromKeyFile(dbWithGitlabRow(key), missing)).toBeNull()
     // 承重：这条路径每派发一个 code-host 节点就走一次。`ensureSecretKey` 会在
     // 缺文件时生成密钥——真用了它，一次节点派发就会在别人的 home 里落下一个
-    // 密钥文件（同 verifiedPlan 里 readConfig vs loadConfig 的既有纪律）。
+    // 密钥文件；读取路径必须保持无副作用。
     expect(existsSync(missing)).toBe(false)
   })
 

@@ -90,7 +90,7 @@ describe('RFC-275 database schema admission', () => {
     // but non-canonical table while __drizzle_migrations remains untouched.
     const raw = new Database(dbPath)
     raw.exec(
-      'ALTER TABLE mcp_runtime_test_turns RENAME COLUMN raw_command_digest TO raw_command_digest_missing;',
+      'ALTER TABLE mcp_runtime_test_turns RENAME COLUMN spawn_binary_path TO spawn_binary_path_missing;',
     )
     raw.close()
 
@@ -101,7 +101,7 @@ describe('RFC-275 database schema admission', () => {
         {
           kind: 'column-missing',
           table: 'mcp_runtime_test_turns',
-          column: 'raw_command_digest',
+          column: 'spawn_binary_path',
         },
       ]),
     )

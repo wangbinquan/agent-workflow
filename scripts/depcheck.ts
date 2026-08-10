@@ -177,13 +177,6 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
   },
   {
     rule: 'no-circular',
-    from: `${B}/services/agent.ts`,
-    to: `${B}/services/executionPolicy.ts`,
-    why: '执行策略校验需要 agent 定义，agent.ts 保存期又要跑策略校验。门禁复明后新暴露。',
-    removeWhen: '与 agentDeps 同批 DI 化（查找函数改注入）。属独立切片（未编号）。',
-  },
-  {
-    rule: 'no-circular',
     from: `${B}/services/workflow.ts`,
     to: `${B}/services/workflow.validator.ts`,
     why: 'workflow.ts 保存期调 validator，validator 又回取 workflow 的引用解析。门禁复明后新暴露。',

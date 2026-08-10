@@ -22,7 +22,7 @@
 //  - daemon 运行期间原地升级 legacy/test binary → 表项过期，直到下一次显式
 //    doctor/status probe 自愈；
 //  - legacy/test-only 自定义 binary 在首次显式探测前 spawn → 查不到并按旧拼写
-//    （见 resolveAutoApproveFlag 的未知默认）。production verified path 不受影响。
+//    （见 resolveAutoApproveFlag 的未知默认）。普通 production 路径不受影响。
 //
 // Leaf module: zero imports（util/opencode.ts 与 runtime/opencode/driver.ts
 // 两侧都要引它，不能带任何可能成环的依赖）。

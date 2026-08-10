@@ -299,7 +299,7 @@ const ROSTER_CARD_INPUT_DESCRIPTION_MAX = 240
 
 /**
  * RFC-166 — preload each AGENT member's capability card once per engine pass.
- * agentId is the frozen identity. A missing/id-less agent simply yields no card
+ * agentId is the selected resource identity. A missing/id-less agent simply yields no card
  * (the roster row still renders with displayName + roleDesc). human members are
  * skipped entirely so no user identity can leak into the prompt.
  */

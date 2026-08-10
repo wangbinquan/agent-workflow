@@ -28,7 +28,6 @@ import {
 } from '@/services/recoveryBreaker'
 import { listAllOpenLifecycleAlerts, type OpenLifecycleAlert } from '@/services/taskAlerts'
 import { createLogger } from '@/util/log'
-import { markProductionOpencodeCommand } from '@/util/opencode'
 
 const log = createLogger('auto-repair')
 const HOLDER = 'auto-repair'
@@ -156,9 +155,7 @@ export function startAutoRepairLoop(opts: {
       if (!Object.values(autoRepair).some((v) => v === true)) return // default: nothing enabled
       const deps = {
         db: opts.db,
-        ...(cfg.opencodePath
-          ? { opencodeCmd: markProductionOpencodeCommand([cfg.opencodePath]) }
-          : {}),
+        ...(cfg.opencodePath ? { opencodeCmd: [cfg.opencodePath] } : {}),
         ...(cfg.subagentLiveCapture !== undefined
           ? { subagentLiveCapture: cfg.subagentLiveCapture }
           : {}),

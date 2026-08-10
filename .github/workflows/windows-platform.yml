@@ -89,28 +89,15 @@ jobs:
       - name: RFC-254 platform suites
         run: bun test --isolate packages/backend/tests/rfc254-platform-exec.test.ts packages/backend/tests/rfc254-file-trust.test.ts packages/backend/tests/rfc254-env-case-folding.test.ts packages/backend/tests/rfc254-git-windows.test.ts packages/backend/tests/rfc254-script-node-windows.test.ts packages/backend/tests/rfc254-process-tree-ownership.test.ts packages/backend/tests/rfc254-platform-surface-guard.test.ts
 
-      # RFC-254 T40b — the verified-execution store's file PRIVACY proof on a REAL
-      # Windows kernel: the icacls DACL primitive (pure parse + live icacls/whoami
-      # round-trip) and the RFC-224 verified clusters it unblocks (store-hygiene
-      # lock, launcher, boot recovery, control-ACK, system plan) plus the RFC-135
-      # version probe that T39/T40a fixed. Verified green on a real ARM64 Windows 11
-      # machine AND on this x64 runner. The x64 runner runs as the built-in
+      # Sensitive-file privacy proof on a REAL Windows kernel: the icacls DACL
+      # primitive (pure parse + live icacls/whoami round-trip). Verified green
+      # on a real ARM64 Windows 11 machine AND on this x64 runner. The x64 runner
+      # runs as the built-in
       # Administrator (RID 500), whose owner ACE serializes as the SDDL alias `LA`
       # (not a full SID); the primitive treats `LA`/`DA` as TCB, which was the fix
       # that let this leg go green on x64 (see the evidence step below + audit-backlog).
-      - name: RFC-254 T40b — verified store privacy (win32 DACL)
-        run: bun test --isolate packages/backend/tests/rfc254-win32-acl.test.ts packages/backend/tests/rfc254-win32-acl-integration.test.ts packages/backend/tests/rfc224-store-hygiene.test.ts packages/backend/tests/rfc224-verified-launcher.test.ts packages/backend/tests/rfc224-opencode-store-recovery.test.ts packages/backend/tests/rfc224-direct-control-protocol.test.ts packages/backend/tests/rfc224-verified-system-plan.test.ts packages/backend/tests/rfc135-runtimes-status.test.ts
-
-      # RFC-254 T31 — the two verified-BUSINESS-plan defects that made the whole
-      # Code→Audit→Fix mainline fail on Windows: resolveNetlessGitCommonDirs
-      # rejecting git-for-Windows's forward-slash --git-common-dir, and
-      # snapshotManagedSkillTree asserting a POSIX 0o500 seal that win32 chmod
-      # cannot produce. The forced-darwin rfc224-verified-plan suite structurally
-      # cannot cover this; the win32-gated runtime cases here drive the REAL
-      # production functions against real git + real fs, and the file's source
-      # anchors also run on every POSIX leg. (d6fdb0a3, confirmed on ARM64.)
-      - name: RFC-254 T31 — verified business plan (win32 git + skill seal)
-        run: bun test --isolate packages/backend/tests/rfc254-verified-plan-win32.test.ts
+      - name: Sensitive-file privacy (win32 DACL)
+        run: bun test --isolate packages/backend/tests/rfc254-win32-acl.test.ts packages/backend/tests/rfc254-win32-acl-integration.test.ts
 
       # RFC-254 T31 — a `file://` plugin spec must convert via fileURLToPath, not
       # `URL.pathname` (which yields the unopenable `/C:/...` on win32, failing
@@ -170,11 +157,11 @@ jobs:
           where sqlite3 || echo "sqlite3 not on PATH (as expected)"
           echo "== SystemRoot =="; echo "$SystemRoot"
 
-      # RFC-254 T40b evidence: the live-icacls verified suites pass on real ARM64
+      # RFC-254 T40b evidence: the live icacls suites pass on real ARM64
       # Windows 11 but FAIL on this x64 runner (store-unsafe / not-private). This
       # dumps what the runner's icacls seal actually produces, so the divergence
       # can be diagnosed without SSH into the runner. Non-gating evidence only.
-      - name: RFC-254 T40b — icacls seal behaviour on this runner (evidence, non-gating)
+      - name: RFC-254 T40b — icacls privacy behaviour (evidence, non-gating)
         continue-on-error: true
         shell: pwsh
         run: |
@@ -213,9 +200,7 @@ jobs:
           set -euo pipefail
           binary=$(find dist -maxdepth 1 -type f -name 'agent-workflow-windows-*' | head -n 1)
           test -n "$binary"
-          # `doctor` reports containment status, so on Windows it is also the
-          # check that the platform reports "no provider" honestly rather than
-          # crashing or claiming a boundary it does not have.
+          # `doctor` must start and report diagnostics on Windows.
           "$binary" doctor || true
           "$binary" version
 

@@ -53,7 +53,6 @@ function definition(): WorkflowDefinition {
         script: SCRIPT_BODY,
         dependencies: ['requests==2.31.0'],
         env: { API_TOKEN: 'sk-live-scriptenv', LOG_LEVEL: 'debug' },
-        network: 'deny',
         readonly: true,
       },
       {
@@ -135,7 +134,6 @@ describe('RFC-270 AC-1 / AC-2 · 工作流读出口', () => {
     const script = nodeOf(def, 's1')
     const call = nodeOf(def, 'c1')
     expect(script.language).toBe('python')
-    expect(script.network).toBe('deny')
     expect(script.readonly).toBe(true)
     expect(call.provider).toBe('gitlab')
     expect(call.action).toBe('custom')

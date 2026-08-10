@@ -4,12 +4,8 @@
 // every viewer. The STATIC grouping must render fine without it — this layer
 // only adds the plain-language story.
 //
-// Production wiring follows the intent-builder precedent verbatim (design gate
-// P0-5): ResolvedRuntime (binary/model/config-dir), containmentCoordinator and
-// the branded opencode head are all forwarded — a verified opencode runtime
-// with no containment would fail identity admission, and a custom claude fork
-// without the config-dir profile would escape its private per-run dir. Tests
-// stub `runFn` only; `testOnlyUnverifiedRuntime` stays out of this path.
+// Production wiring forwards the selected runtime's binary, model and config
+// directory, including custom Claude forks. Focused tests replace only runFn.
 
 import { join } from 'node:path'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -31,13 +27,11 @@ import { tasks } from '@/db/schema'
 import { DomainError } from '@/util/errors'
 import { appHome } from '@/util/paths'
 import { gitChangedEntries, gitDiffNumstat } from '@/util/git'
-import { markProductionOpencodeCommand } from '@/util/opencode'
 import type { Logger } from '@/util/log'
 import type { Actor } from '@/auth/actor'
 import { canonicalRepoKeys } from '@/services/repoLabels'
 import { requireTaskMember } from '@/services/taskCollab'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
-import type { ContainmentCoordinator } from '@/services/sandbox'
 import { runSystemAgent, type SystemAgentRunResult } from '@/services/systemAgentRun'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
 import { ecosystemForManifest } from '@/services/structuralDiff/deps/manifests'
@@ -310,7 +304,6 @@ export interface ChangeNarrativeDeps {
    *  unset falls through defaultRuntime → opencode (RFC-117 chain). */
   runtimeName?: string | null
   defaultRuntime?: string | null
-  containmentCoordinator?: ContainmentCoordinator
   /** Test seam — production omits it and gets the real runSystemAgent. */
   runFn?: (opts: Parameters<typeof runSystemAgent>[0]) => Promise<SystemAgentRunResult>
   now?: () => number
@@ -412,16 +405,9 @@ async function runGeneration(
     configDirEnv: runtime.configDir.env,
     configDirName: runtime.configDir.name,
     model: runtime.model,
-    // Read-only narrowed profile (same one the intent builder runs under; a
-    // dedicated zero-tool 'narrative-v1' waits for RFC-237's capability
-    // declarations to land — see design §3.2). cwd is a scratch dir with no
-    // task worktree mounted, so read-only here means "read its own prompt".
-    systemPermissionProfile: 'intent-read-v1',
-    ...(deps.containmentCoordinator === undefined
-      ? {}
-      : { containmentCoordinator: deps.containmentCoordinator }),
+    isSandbox: runtime.isSandbox,
     ...(runtime.binaryPath !== null && runtime.binaryPath !== ''
-      ? { opencodeCmd: markProductionOpencodeCommand([runtime.binaryPath]) }
+      ? { opencodeCmd: [runtime.binaryPath] }
       : {}),
     scratchParent: join(appHome(), 'scratch'),
     timeoutMs: NARRATIVE_TIMEOUT_MS,

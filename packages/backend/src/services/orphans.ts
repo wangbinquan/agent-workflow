@@ -27,7 +27,6 @@ import {
   type StaleRunKillOutcome,
   type StaleRunKillOpts,
 } from '@/util/process'
-import { readPidFromLock, type Lock } from '@/util/lock'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('orphans')
@@ -42,46 +41,6 @@ export interface ReapOrphanRunsDependencies {
     run: { pid: number | null; startedAt: number | null; spawnBinaryPath?: string | null },
     opts?: StaleRunKillOpts,
   ) => Promise<StaleRunKillOutcome>
-}
-
-declare const PRIOR_DAEMON_SANDBOX_DEAD_CAPABILITY: unique symbol
-
-/** Opaque, one-shot proof minted only after the boot orphan reap succeeds. */
-export interface PriorDaemonSandboxDeadCapability {
-  readonly [PRIOR_DAEMON_SANDBOX_DEAD_CAPABILITY]: true
-}
-
-interface CapabilityBinding {
-  pid: number
-  lockPath: string
-}
-
-const issuedSandboxDeathCapabilities = new WeakMap<object, CapabilityBinding>()
-
-function issuePriorDaemonSandboxDeadCapability(lock: Lock): PriorDaemonSandboxDeadCapability {
-  if (lock.pid !== process.pid || readPidFromLock(lock.path) !== process.pid) {
-    throw new Error('cannot prove current daemon lock ownership')
-  }
-  const capability = Object.freeze({})
-  issuedSandboxDeathCapabilities.set(capability, {
-    pid: lock.pid,
-    lockPath: lock.path,
-  })
-  return capability as PriorDaemonSandboxDeadCapability
-}
-
-/**
- * Consume an issued proof exactly once and revalidate that the daemon lock
- * which excluded the prior daemon is still held by this process.
- */
-export function consumePriorDaemonSandboxDeadCapability(
-  capability: PriorDaemonSandboxDeadCapability,
-): boolean {
-  if (typeof capability !== 'object' || capability === null) return false
-  const binding = issuedSandboxDeathCapabilities.get(capability)
-  if (binding === undefined) return false
-  issuedSandboxDeathCapabilities.delete(capability)
-  return binding.pid === process.pid && readPidFromLock(binding.lockPath) === binding.pid
 }
 
 export async function reapOrphanRuns(
@@ -148,9 +107,6 @@ export async function reapOrphanRuns(
       now,
     })
     if (killOutcome === 'kill-failed') {
-      // RFC-224: a live known child invalidates the prior-daemon sandbox-death
-      // proof. Leave its row non-terminal and abort boot rather than minting a
-      // capability that could authorize store scrub/removal under a live writer.
       log.error('orphan run child SURVIVED SIGKILL — still alive after reap (resume will refuse)', {
         nodeRunId: r.id,
         pid: r.pid,
@@ -181,26 +137,4 @@ export async function reapOrphanRuns(
     }
   }
   return { tasks: runningTasks.length, runs: runsReaped }
-}
-
-/**
- * The sole production issuer for the RFC-224 recovery capability. A successful
- * reap proves all persisted known outer groups are non-live; bwrap's mandatory
- * `--die-with-parent --unshare-pid` contract covers system invocations which
- * intentionally have no node-run row. The live current-daemon lock proves the
- * prior daemon itself is gone and remains excluded through capability use.
- */
-export async function reapOrphanRunsForStoreRecovery(
-  db: DbClient,
-  currentDaemonLock: Lock,
-  dependencies: ReapOrphanRunsDependencies = {},
-): Promise<{
-  reap: ReapResult
-  priorDaemonSandboxDead: PriorDaemonSandboxDeadCapability
-}> {
-  const reap = await reapOrphanRuns(db, dependencies)
-  return {
-    reap,
-    priorDaemonSandboxDead: issuePriorDaemonSandboxDeadCapability(currentDaemonLock),
-  }
 }

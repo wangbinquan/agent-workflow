@@ -154,12 +154,6 @@ export const REPAIR_OPTION_IDS = {
   // admin/user-management action outside the repair engine; the option is an
   // acknowledge.
   S6: ['S6.acknowledge'],
-  // RFC-205 / 2026-08-04 audit: the fix for a degraded sandbox is on the HOST
-  // (install bubblewrap, enable unprivileged user namespaces, or change the
-  // mode in Settings), so like S5/S6 the in-product option is an acknowledge.
-  // It must exist at all because the panel renders a repair button for every
-  // open alert unconditionally — a rule with no entry crashed the endpoint.
-  'sandbox-degraded': ['sandbox-degraded.acknowledge'],
 } as const satisfies Record<LifecycleAlertRule, readonly string[]>
 
 export type RepairOptionId = (typeof REPAIR_OPTION_IDS)[keyof typeof REPAIR_OPTION_IDS][number]

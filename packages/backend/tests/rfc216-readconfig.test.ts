@@ -1,7 +1,6 @@
-// RFC-216 T1 — readConfig is the NO-WRITE variant of loadConfig. The whole
-// "sandbox preflight touches no files" contract rests on it: loadConfig writes
-// DEFAULT_CONFIG to disk on a missing file (config/index.ts), which on a fresh
-// box would create ~/.agent-workflow/config.json out of a pure diagnostic.
+// RFC-216 T1 — readConfig is the NO-WRITE variant of loadConfig. loadConfig
+// writes DEFAULT_CONFIG to disk on a missing file (config/index.ts), which on a
+// fresh box would create ~/.agent-workflow/config.json out of a pure diagnostic.
 //
 // Locks: readConfig must (a) return null on missing WITHOUT creating the dir,
 // (b) parse an existing (even partial) file WITHOUT rewriting a single byte,
@@ -37,7 +36,7 @@ describe('readConfig — missing file: null + ZERO write (P1-1)', () => {
 describe('readConfig — existing file: read-only, byte-identical, parity with loadConfig (P2#2)', () => {
   it('parses a partial config, backfills defaults, and leaves the file untouched', () => {
     const path = join(tmp(), 'config.json')
-    const original = JSON.stringify({ $schema_version: 1, sandboxMode: 'enforce' }, null, 2) + '\n'
+    const original = JSON.stringify({ $schema_version: 1, language: 'en-US' }, null, 2) + '\n'
     writeFileSync(path, original)
 
     const before = readFileSync(path)
@@ -45,7 +44,7 @@ describe('readConfig — existing file: read-only, byte-identical, parity with l
     const after = readFileSync(path)
 
     expect(cfg).not.toBeNull()
-    expect(cfg?.sandboxMode).toBe('enforce')
+    expect(cfg?.language).toBe('en-US')
     // Nested defaults are backfilled (config forward-compat) so the parse never fails:
     expect(cfg).toEqual(loadConfig(path)) // parity with the write-on-missing loader (existing file → no write)
     // Not one byte rewritten:
@@ -71,6 +70,6 @@ describe('loadConfig — write-on-missing behavior is preserved (regression lock
     const cfg = loadConfig(path)
     expect(existsSync(path)).toBe(true) // <- loadConfig DID write; readConfig would NOT have
     const onDisk = JSON.parse(readFileSync(path, 'utf-8'))
-    expect(onDisk.sandboxMode).toBe(cfg.sandboxMode)
+    expect(onDisk.language).toBe(cfg.language)
   })
 })

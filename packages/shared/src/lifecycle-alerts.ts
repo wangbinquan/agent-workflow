@@ -25,17 +25,6 @@ export const LIFECYCLE_ALERT_RULES = [
   // collaborators) is non-active — nobody can answer the review/clarify, so the
   // task is deadlocked. Detect-only (decision D4): the alert + S6.acknowledge.
   'S6',
-  // RFC-205 — `sandboxMode: 'warn'` ran this task with a reduced (or absent)
-  // containment boundary. Emitted by the runner and the script dispatcher, not
-  // by the invariant/stuck detectors.
-  //
-  // 2026-08-04 audit: this rule was WRITTEN by the runner since RFC-205 but
-  // never listed here, and the omission was not cosmetic — the diagnose panel
-  // rendered the raw i18n key path, and `listRepairOptionsForAlert` did an
-  // unchecked `REPAIR_OPTIONS[alert.rule]` and threw a TypeError (HTTP 500) the
-  // moment anyone pressed its "repair" button. Every rule the product can write
-  // belongs in this list.
-  'sandbox-degraded',
 ] as const
 
 export type LifecycleAlertRule = (typeof LIFECYCLE_ALERT_RULES)[number]

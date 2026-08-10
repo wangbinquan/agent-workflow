@@ -69,12 +69,7 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', ()
     // killTree delegates the group signal to `killProcessTree` (util/process),
     // keeping the single-process `safeKill` fallback.
     //
-    // 2026-08-04: the group kill moved out of this file. It is no longer a bare
-    // `process.kill(-pid, …)` because the graceful phase must be able to spare a
-    // bwrap MONITOR: verified in a Debian/bubblewrap container that a plain group
-    // SIGTERM kills the monitor, and `--die-with-parent` then SIGKILLs the PID
-    // namespace — collapsing the advertised 10 s grace to ~0.
-    expect(countNonCommentMatches(runnerSrc, /killProcessTree\(pid, signal, \{/g)).toBe(1)
+    expect(countNonCommentMatches(runnerSrc, /killProcessTree\(pid, signal\)/g)).toBe(1)
     expect(countNonCommentMatches(runnerSrc, /safeKill\(child, signal\)/g)).toBe(1)
   })
 
@@ -87,20 +82,12 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', ()
     expect(armStart).toBeGreaterThan(-1)
     expect(armEnd).toBeGreaterThan(armStart)
     const armSrc = runnerSrc.slice(armStart, armEnd)
-    // The TERM call now carries the monitor flag; the KILL call must NOT (the
-    // escalation always takes the whole group, monitor included).
-    expect(
-      countNonCommentMatches(armSrc, /killTree\(child, 'SIGTERM', groupLeaderIsSandboxMonitor\)/g),
-    ).toBe(1)
+    expect(countNonCommentMatches(armSrc, /killTree\(child, 'SIGTERM'\)/g)).toBe(1)
     expect(countNonCommentMatches(armSrc, /killTree\(child, 'SIGKILL'\)/g)).toBe(1)
 
     // Every ordinary kill initiator routes through the same idempotent
-    // escalation arm: abort, timeout, RFC-224 control-barrier failure,
-    // launcher stable-code failure, stream-pump failure, (RFC-242 T5) a
-    // platform-fenced MCP server that did not come up, a stable tools/agents
-    // startup-inventory gap, and a same-instance local-MCP readiness failure.
-    // Skill inventory drift is warning-only and does not add a kill arm.
-    expect(countNonCommentMatches(runnerSrc, /\bstartKill\(\)/g)).toBe(8)
+    // escalation arm: caller abort, timeout, and stream-pump failure.
+    expect(countNonCommentMatches(runnerSrc, /\bstartKill\(\)/g)).toBe(3)
     expect(countNonCommentMatches(runnerSrc, /armKillEscalation\(/g)).toBeGreaterThanOrEqual(1)
 
     // The grace timer must be unref'd (a wedged child can't pin bun test).

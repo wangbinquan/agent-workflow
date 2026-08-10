@@ -2,7 +2,7 @@
 // by agents via `frontmatter.mcp: [name1, name2, ...]`. See RFC-028.
 //
 // Two server kinds, mirroring opencode `McpLocalConfig` / `McpRemoteConfig`
-// (verified against opencode/packages/opencode/src/config/mcp.ts):
+// (aligned with opencode/packages/opencode/src/config/mcp.ts):
 //   - local : stdio command + env, no cwd (opencode uses process cwd = worktree)
 //   - remote: http/sse URL + optional headers + optional oauth
 //
@@ -33,12 +33,10 @@ export const McpNameSchema = z
 export const MCP_ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/
 
 /**
- * The one family the platform refuses on every path. A fenced local MCP is
- * launched THROUGH the containment binary (`bwrap` / `sandbox-exec`), which
- * receives this environment before it can apply the boundary — a dynamic-loader
- * variable would therefore become code running OUTSIDE the fence. Everything
- * else (including `NODE_OPTIONS` / `PYTHONPATH`) is the author's own business:
- * they configured the command it applies to.
+ * The one environment family the resource schema refuses on every path.
+ * Dynamic-loader variables can replace code before the declared MCP command's
+ * own startup logic runs. Everything else (including `NODE_OPTIONS` and
+ * `PYTHONPATH`) belongs to the command author.
  */
 export const MCP_ENV_DENY_RE = /^(?:LD_|DYLD_)/i
 
@@ -60,7 +58,7 @@ export function describeMcpEnvProblem(name: string, problem: McpEnvNameProblem):
   if (problem === 'value-nul') {
     return `env value for '${name}' contains a NUL byte`
   }
-  return `env key '${name}' is a dynamic-loader variable; it would be read by the sandbox launcher itself, so the platform never forwards it to an MCP child`
+  return `env key '${name}' is a dynamic-loader variable and is not accepted for an MCP child`
 }
 
 /** Every refused entry of an MCP env map, in declaration order. */

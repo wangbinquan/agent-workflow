@@ -52,7 +52,6 @@ describe('RFC-238 MCP runtime playground contracts', () => {
       endReason: null,
       runtime: { name: 'opencode', protocol: 'opencode' },
       mcpConfigHash: HASH,
-      runtimeFingerprint: 'b'.repeat(64),
       nativeSessionReady: true,
       continuationBlockedReason: null,
       inFlightTurnId: null,

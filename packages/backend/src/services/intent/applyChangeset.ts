@@ -229,7 +229,6 @@ export interface ApplyIntentDeps {
   db: DbClient
   appHome: string
   actor: Actor
-  executionPolicy?: { defaultRuntime?: string | null }
   /** Plugin installer seam (tests point specs at local fixtures). */
   pluginInstallOpts?: Parameters<typeof installPlugin>[2]
   faults?: ApplyIntentFaults
@@ -504,9 +503,6 @@ async function applyInner(
                 ownerUserId: actor.user.id,
                 actor,
                 id: op.resourceId,
-                ...(deps.executionPolicy === undefined
-                  ? {}
-                  : { executionPolicy: deps.executionPolicy }),
                 pendingBundleIds: pendingIds,
               })
               preparedOps.push({ op, kind: 'agent-create', prepared })
@@ -592,9 +588,6 @@ async function applyInner(
               actor,
               agentFenceOf(op.manifestEntry?.fence),
               {
-                ...(deps.executionPolicy === undefined
-                  ? {}
-                  : { executionPolicy: deps.executionPolicy }),
                 pendingBundleIds: pendingIds,
               },
             )

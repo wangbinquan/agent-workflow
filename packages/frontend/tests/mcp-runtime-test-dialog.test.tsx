@@ -41,7 +41,6 @@ function session(mode: 'idle' | 'running' | 'ended'): McpRuntimeTestSessionDto {
     endReason: active ? null : 'user',
     runtime: { name: 'opencode', protocol: 'opencode' },
     mcpConfigHash: HASH,
-    runtimeFingerprint: 'b'.repeat(64),
     nativeSessionReady: true,
     continuationBlockedReason: null,
     inFlightTurnId: mode === 'running' ? 'turn-1' : null,
@@ -330,11 +329,11 @@ describe('McpRuntimeTestDialog', () => {
     const failedSession = session('ended')
     failedSession.endReason = 'session-unusable'
     failedSession.nativeSessionReady = false
-    failedSession.continuationBlockedReason = 'session-store-missing'
+    failedSession.continuationBlockedReason = 'capture-incomplete'
     failedSession.turns = [
       {
         ...turn('failed'),
-        failureCode: 'execution-identity-auth-invalid',
+        failureCode: 'runtime-result-error',
       },
     ]
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (request) => {
@@ -352,7 +351,7 @@ describe('McpRuntimeTestDialog', () => {
     expect(
       within(issue).getByText(
         i18n.t('mcps.runtimeTest.turnOutcome.diagnostic', {
-          code: 'execution-identity-auth-invalid',
+          code: 'runtime-result-error',
         }),
       ),
     ).toBeTruthy()

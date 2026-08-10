@@ -12,7 +12,6 @@ import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
-import type { ContainmentCoordinator } from '@/services/sandbox'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
 import { mountMcpTransport } from '@/mcp/server'
 import { mountAgentRoutes } from '@/routes/agents'
@@ -70,10 +69,6 @@ import { createLogger } from '@/util/log'
  * these; there is no config, environment, or HTTP switch that can select them.
  */
 export interface RuntimeDiagnosticTestDependencies {
-  withRuntimeOpencodeSnapshot<T>(
-    command: readonly string[],
-    callback: (snapshotPath: string) => Promise<T>,
-  ): Promise<T>
   smokeRuntime(options: SmokeOptions): Promise<SmokeResult>
   /**
    * Deterministic finalization seam for the runtime-probe/config fence race.
@@ -103,8 +98,6 @@ export interface AppDeps {
   dbVersion: number
   /** Drizzle DB client. */
   db: DbClient
-  /** RFC-233 daemon-scoped admission authority; production always supplies it. */
-  containmentCoordinator?: ContainmentCoordinator
   /**
    * RFC-036 — AES-256-GCM seal/unseal helper. Required only for the OIDC
    * routes (admin CRUD + login callback). Tests that do not exercise OIDC
@@ -142,7 +135,7 @@ export interface AppDeps {
   }) => void | Promise<void>
   /**
    * Test-only route dependency injection. Production callers must omit this;
-   * the default path always uses RFC-227's byte-frozen runtime snapshot.
+   * the default path always invokes the registered runtime naturally.
    */
   runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticTestDependencies>
   /** RFC-234 test seam: stub the intent turn's system-agent run. */

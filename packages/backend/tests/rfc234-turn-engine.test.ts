@@ -791,18 +791,23 @@ describe('maintenance', () => {
   })
 })
 
-// RFC-237 — the engine admits a claude-code runtime (capability gate) and
-// threads protocol / configDir / the frozen 'intent-read-v1' profile into the
-// system-agent run unchanged; the changeset settle path is protocol-blind.
+// RFC-276 — the engine admits a claude-code runtime naturally and threads only
+// protocol/runtime/configDir into the system-agent run. No platform permission
+// profile is manufactured; the changeset settle path stays protocol-blind.
 describe('RFC-237 claude-code intent turn', () => {
-  test('claude runtime: turn settles a changeset; run opts carry profile + configDir', async () => {
+  test('claude runtime: turn settles a changeset; run opts carry configDir and IS_SANDBOX toggle without a permission profile', async () => {
     const claudeRuntime = {
       name: 'claude-code',
       protocol: 'claude-code',
       binaryPath: canonicalBinaryPath('claude'),
       model: 'anthropic/claude-sonnet-5',
+      variant: null,
+      temperature: null,
+      steps: null,
+      maxSteps: null,
+      isSandbox: true,
       configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
-    } as unknown as ResolvedRuntime
+    } satisfies ResolvedRuntime
     const { session } = await createIntentSession(db, actor, { message: '构建一个审计 agent' })
     let seen: SystemAgentRunOptions | undefined
     const outcome = await runIntentTurn(
@@ -822,9 +827,10 @@ describe('RFC-237 claude-code intent turn', () => {
     expect(outcome.kind).toBe('changeset')
     expect(seen?.protocol).toBe('claude-code')
     expect(seen?.runtimeBinary).toBe(canonicalBinaryPath('claude'))
-    expect(seen?.systemPermissionProfile).toBe('intent-read-v1')
+    expect(seen).not.toHaveProperty('systemPermissionProfile')
     expect(seen?.configDirEnv).toBe('CLAUDE_CONFIG_DIR')
     expect(seen?.configDirName).toBe('.claude')
+    expect(seen?.isSandbox).toBe(true)
     const drafts = await db.select().from(intentDrafts)
     expect(drafts.length).toBe(1)
   })

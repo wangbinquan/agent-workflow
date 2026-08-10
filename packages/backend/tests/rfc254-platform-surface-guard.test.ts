@@ -6,7 +6,7 @@
 // hand-written inventory of "every place that assumes POSIX". The RFC claimed 4
 // `startsWith(`${root}/`)` sites; review A found 6; this scan found 10. The RFC
 // claimed 4 PATH-joining sites; review A found 7; this scan found 10 (nobody
-// spotted the SECOND copy of `FIXED_NETLESS_PATH` in netlessProjection.ts).
+// Several of the original controlled-runtime allowances have since been removed.
 // Two of the sites everyone missed are live defects rather than tidiness:
 // pluginInstaller's GC would delete plugin generations that ARE referenced, and
 // systemAgentRun's seed-path check would reject every legitimate path.
@@ -195,93 +195,6 @@ const ALLOWANCES: readonly Allowance[] = [
     count: 1,
     why: 'NOT a verified-store fence — same case-folding role as skill.ts; needs the same non-fail-closed identity notion before it can migrate',
     closedBy: 'RFC-254-T0b',
-  },
-  //
-  // The verifiedPlan/verifiedSystemPlan entries below are deferred for a
-  // COLLABORATION reason, not a technical one: both files carry in-flight
-  // uncommitted work from concurrent RFC-255/256 sessions that references
-  // symbols which are not on main yet, so committing them here would break the
-  // build for everyone. The migration itself is a one-line change per site and
-  // lands as T1b once that work is pushed.
-  {
-    rule: 'posix-path-prefix',
-    file: 'services/runtime/opencode/verifiedPlan.ts',
-    match: '`${businessStoreParent}/`',
-    count: 1,
-    why: 'local absolute path comparison; deferred because a concurrent RFC-255 change is in flight in this file',
-    closedBy: 'RFC-254-T1b',
-  },
-  {
-    rule: 'posix-path-prefix',
-    file: 'services/runtime/opencode/verifiedSystemPlan.ts',
-    match: '`${ctx.worktreePath}/`',
-    count: 1,
-    why: 'local absolute path comparison (two-step spelling); deferred alongside the concurrent work in this file',
-    closedBy: 'RFC-254-T1b',
-  },
-  {
-    rule: 'posix-path-prefix',
-    file: 'services/runtime/opencode/verifiedSystemPlan.ts',
-    match: '`${ctx.runDir}/`',
-    count: 1,
-    why: 'local absolute path comparison (two-step spelling); deferred alongside the concurrent work in this file',
-    closedBy: 'RFC-254-T1b',
-  },
-  {
-    rule: 'posix-path-prefix',
-    file: 'services/runtime/opencode/verifiedSystemPlan.ts',
-    match: '`${systemStoreParent}/`',
-    count: 1,
-    why: 'local absolute path comparison; deferred alongside the concurrent work in this file',
-    closedBy: 'RFC-254-T1b',
-  },
-  {
-    rule: 'posix-path-prefix',
-    file: 'services/runtime/opencode/verifiedPlan.ts',
-    match: '`${root}/`',
-    count: 1,
-    why: 'local absolute path comparison; deferred because a concurrent RFC-255 change is in flight in this file',
-    closedBy: 'RFC-254-T1b',
-  },
-  {
-    rule: 'posix-path-list',
-    file: 'services/runtime/opencode/verifiedPlan.ts',
-    match: "'/usr/bin:/bin'",
-    count: 1,
-    why: 'FIXED_NETLESS_PATH — the win32 controlled-PATH table is RFC-254 T12, and the file has a concurrent change in flight',
-    closedBy: 'RFC-254-T12',
-  },
-  {
-    rule: 'posix-path-list',
-    file: 'services/runtime/opencode/verifiedPlan.ts',
-    match: ".join(':')",
-    count: 2,
-    why: 'assembles the netless/business PATH; migrates with the win32 controlled-PATH table',
-    closedBy: 'RFC-254-T12',
-  },
-  {
-    rule: 'posix-path-list',
-    file: 'services/runtime/netlessProjection.ts',
-    match: "'/usr/bin:/bin'",
-    count: 1,
-    why: 'the SECOND FIXED_NETLESS_PATH copy (no review found this one); migrates with the win32 controlled-PATH table',
-    closedBy: 'RFC-254-T12',
-  },
-  {
-    rule: 'posix-path-list',
-    file: 'services/runtime/claudeCode/netlessMcp.ts',
-    match: ".join(':')",
-    count: 1,
-    why: 'claude-code netless PATH assembly; migrates with the win32 controlled-PATH table',
-    closedBy: 'RFC-254-T12',
-  },
-  {
-    rule: 'posix-path-list',
-    file: 'services/scriptDepsEnv.ts',
-    match: "'/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'",
-    count: 1,
-    why: 'script-node dependency installer PATH; migrates with the script-node win32 env (RFC-254 T23/T24)',
-    closedBy: 'RFC-254-T24',
   },
 ]
 

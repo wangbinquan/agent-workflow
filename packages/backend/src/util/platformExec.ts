@@ -37,9 +37,8 @@ export function nullDevice(platform: NodeJS.Platform): string {
  * the Windows `NUL` device as a *config path* (`fatal: unable to access 'NUL':
  * Invalid argument`, observed on the RFC-254 ARM64 VM). Pointing
  * `GIT_CONFIG_GLOBAL` at `NUL` therefore makes EVERY git invocation fail — most
- * visibly, opencode's worktree detection falls back to the "global" project with
- * worktree `/`, so the verified session `path` no longer matches the worktree
- * and identity validation rejects a valid session. `/dev/null` is correct on
+ * visibly, OpenCode's worktree detection can fall back to the "global" project
+ * at `/`. `/dev/null` is correct on
  * POSIX too, so this is host-independent. (The `NUL` device is still right for
  * `git diff --no-index -- NUL`, which git special-cases — that stays
  * `nullDevice()`.)
@@ -95,9 +94,8 @@ function foldForCompare(value: string, platform: NodeJS.Platform): string {
  *
  * LEXICAL ONLY — it does not touch the filesystem and does not resolve `..`,
  * symlinks or reparse points. Callers that need those guarantees must have
- * already canonicalized both operands (the verified-plan call sites realpath
- * first); this replaces the `x === root || x.startsWith(`${root}/`)` idiom and
- * nothing more, so it must not be mistaken for a containment proof.
+ * already canonicalized both operands. This replaces the
+ * `x === root || x.startsWith(`${root}/`)` idiom and nothing more.
  *
  * An empty `root` is never "containing" anything — the old idiom would have
  * accepted every absolute path against `''` via the `/` prefix.
@@ -137,14 +135,12 @@ export function isLexicallyInsideForHost(root: string, candidate: string): boole
   return isLexicallyInside(root, candidate, process.platform)
 }
 
-// --- controlled PATH assembly (RFC-254 T12 / design gate P0-A) ---------------
+// --- explicit cross-platform PATH assembly utilities -------------------------
 
 /**
- * The system directories a sealed child needs on its PATH, and nothing else.
+ * Minimal system directories for callers that deliberately construct a PATH.
  *
- * This is a CAPABILITY WHITELIST, not an inheritance of the daemon's PATH — the
- * sealed process must not see the operator's tool installs. POSIX has needed
- * only `/usr/bin:/bin` because every base utility lives there; Windows spreads
+ * POSIX base utilities normally live in `/usr/bin:/bin`; Windows spreads
  * the equivalents across four directories under `%SystemRoot%`, and omitting
  * `System32` alone leaves the child unable to start at all.
  *
@@ -168,12 +164,10 @@ export function controlledSystemPathEntries(
 }
 
 /**
- * Assemble the full controlled PATH: seal-private tool directories first, then
- * the platform's system entries.
+ * Assemble an explicit PATH: caller-provided directories first, then platform
+ * system entries.
  *
- * `extraLeading` is where run-scoped seals go (the frozen Bun snapshot, and on
- * Windows the resolved git directory — see below). Order matters: a sealed copy
- * must win over anything the system directories happen to also provide.
+ * Order matters: caller-selected tools must win over system directories.
  *
  * WHY GIT HAS TO BE PASSED IN HERE (design gate P0-A):
  * on POSIX the agent's git is free — `/usr/bin` already contains it, so nobody
@@ -217,17 +211,15 @@ export function buildControlledPathForHost(extraLeading: readonly string[] = [])
 }
 
 /**
- * The directory holding the host's `git`, frozen for a run's controlled PATH.
+ * The directory holding the host's `git` for an explicitly assembled PATH.
  *
  * Returns null on POSIX: `/usr/bin` is already on the controlled PATH there, so
  * adding anything would widen the whitelist for no gain. On Windows it resolves
  * the real `git` executable and returns its directory.
  *
  * Trust note: git is a binary this platform ALREADY executes under the daemon's
- * own identity for every worktree operation (`util/git.ts`), so exposing it to
- * the sealed shell introduces no new trusted party. What it must NOT do is
- * leak the rest of the operator's PATH or home directory — hence a single
- * resolved directory rather than an inherited search list.
+ * own identity for every worktree operation (`util/git.ts`). Resolve only that
+ * directory instead of copying an unrelated search list.
  */
 export function resolveGitToolDirectory(
   platform: NodeJS.Platform,
@@ -243,9 +235,8 @@ export function resolveGitToolDirectory(
 /**
  * RFC-254 T23 — the PATH a script node's interpreter runs with.
  *
- * Same capability-whitelist principle as the agent's controlled PATH: the
- * interpreter's own directory first (so the resolved interpreter wins over any
- * same-named binary on the system path), then the platform's base directories.
+ * The interpreter's own directory comes first, followed by platform base
+ * directories. This keeps an explicitly resolved interpreter first.
  * POSIX keeps the historical five-entry list byte-for-byte.
  */
 export function buildScriptPath(
@@ -264,9 +255,9 @@ export function buildScriptPath(
 }
 
 /**
- * RFC-254 T11b — the executable suffix a sealed artifact must carry.
+ * RFC-254 T11b — executable suffix for a copied executable artifact.
  *
- * Windows decides "is this runnable" from the extension, so a sealed copy
+ * Windows decides "is this runnable" from the extension, so a copied executable
  * written without `.exe` cannot be executed at all — and the failure surfaces
  * as "file not found", not "not executable", which sends the diagnosis in
  * entirely the wrong direction.
@@ -307,8 +298,7 @@ export function disabledShellCommandForHost(): string {
  * The user's home directory, from whichever variable this platform uses.
  *
  * Windows populates `USERPROFILE`; `HOME` is only present when some POSIX-ish
- * tool put it there. Reading `HOME` alone makes every verified plan fail to
- * assemble on a stock Windows install.
+ * tool put it there. Reading `HOME` alone misses stock Windows installations.
  */
 export function platformHomeEnv(
   env: Readonly<Record<string, string | undefined>>,
@@ -319,12 +309,7 @@ export function platformHomeEnv(
 }
 
 /**
- * Host-frozen home lookup.
- *
- * Exists as a wrapper so the verified-plan modules never spell
- * `process.platform` themselves: RFC-233's source guard forbids it there
- * precisely so platform truth cannot be re-derived inside the plan core, and
- * the rule caught this file's first draft doing exactly that.
+ * Host-specific home lookup.
  */
 export function platformHomeEnvForHost(
   env: Readonly<Record<string, string | undefined>> = process.env,
@@ -333,13 +318,10 @@ export function platformHomeEnvForHost(
 }
 
 /**
- * Can this host materialize the sealed `sh` wrapper the verified plan uses as
- * the model's shell?
+ * Can this host execute a shebang-based `sh` wrapper directly?
  *
  * Windows cannot: there is no shebang, and the substitute (`.cmd`) re-tokenizes
- * arguments. The consequence is deliberate and visible — the controlled config
- * then declares no `shell` at all, and OpenCode falls back to its own probe
- * chain. See RFC-254 T13/T14b.
+ * arguments. Callers must use a native executable instead.
  */
 export const SEALED_SHELL_SUPPORTED = process.platform !== 'win32'
 

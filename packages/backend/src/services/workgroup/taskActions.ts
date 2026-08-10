@@ -11,7 +11,6 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 import { type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import type { ContainmentCoordinator } from '@/services/sandbox'
 import { WorkflowNameSchema } from '@agent-workflow/shared'
 import { nodeRuns, tasks, workgroupAssignments, workgroupMessages } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
@@ -101,7 +100,6 @@ export const ConfirmSchema = z
 export interface WorkgroupTaskActionDeps {
   db: DbClient
   configPath: string
-  containmentCoordinator?: ContainmentCoordinator
 }
 
 export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {
@@ -110,9 +108,6 @@ export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {
     return {
       db: deps.db,
       appHome: Paths.root,
-      ...(deps.containmentCoordinator === undefined
-        ? {}
-        : { containmentCoordinator: deps.containmentCoordinator }),
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...resolveLaunchRuntimeConfig(deps.configPath),
     }

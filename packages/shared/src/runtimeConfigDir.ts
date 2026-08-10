@@ -45,7 +45,7 @@ export const RESERVED_SPAWN_ENV: ReadonlySet<string> = new Set([
   'OPENCODE_CONFIG_CONTENT', // agent-definition channel (RFC-154 non-goal)
   'OPENCODE_PERMISSION', // post-inline permission override; scrubbed from managed children (RFC-223)
   'OPENCODE_AW_INVENTORY_OUT', // inventory plugin ↔ runner contract (RFC-029)
-  'IS_SANDBOX', // claude root guard
+  'IS_SANDBOX', // runtime-profile controlled Claude CLI compatibility marker
   'GIT_AUTHOR_NAME',
   'GIT_AUTHOR_EMAIL',
   'GIT_COMMITTER_NAME',

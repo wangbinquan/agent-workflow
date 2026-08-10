@@ -28,7 +28,7 @@ import {
   type ScriptLanguage,
 } from '@agent-workflow/shared'
 import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
-import { runContainedProcess } from '@/services/execution/containedSpawn'
+import { runManagedProcess } from '@/services/execution/managedProcess'
 import { INTERPRETER_SPEC } from '@/services/scriptRun'
 
 const LANGUAGES: ScriptLanguage[] = ['python', 'bash', 'node']
@@ -48,7 +48,7 @@ async function runSnippet(
   const dir = mkdtempSync(join(tmpdir(), 'rfc253-snippet-'))
   const scriptPath = join(dir, `script.${INTERPRETER_SPEC[language].ext}`)
   writeFileSync(scriptPath, body, 'utf8')
-  const result = await runContainedProcess({
+  const result = await runManagedProcess({
     argv: INTERPRETER_SPEC[language].argv(bin, scriptPath),
     cwd: dir,
     // The interpreter path is absolute, so a minimal PATH is enough; the point

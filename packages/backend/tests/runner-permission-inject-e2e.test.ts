@@ -143,40 +143,26 @@ async function captureSpawnedConfig(h: Harness, agent: Agent): Promise<string> {
   return readFileSync(capturePath, 'utf-8')
 }
 
-describe('RFC-073 global permission reaches the spawned opencode subprocess', () => {
+describe('RFC-276 explicit permission reaches the spawned OpenCode subprocess', () => {
   let h: Harness
   beforeEach(async () => {
     h = await buildHarness()
   })
   afterEach(() => h.cleanup())
 
-  test('top-level permission {"*":"allow","question":"deny"} is in the child OPENCODE_CONFIG_CONTENT', async () => {
+  test('no top-level platform permission is injected', async () => {
     const raw = await captureSpawnedConfig(h, makeAgent())
     const cfg = JSON.parse(raw) as { permission?: Record<string, string> }
-    expect(cfg.permission).toEqual({ '*': 'allow', question: 'deny' })
+    expect('permission' in cfg).toBe(false)
   })
 
-  test('LOAD-BEARING key order survives end-to-end: "question" after "*" in the raw child config', async () => {
-    // If a refactor reorders the object literal, opencode's Permission.disabled
-    // (findLast) would resolve `question` to {*,allow} and stop disabling it,
-    // silently re-opening the question.asked deadlock. Lock the order on the
-    // exact bytes the child receives, not just buildInlineConfig's return.
-    const raw = await captureSpawnedConfig(h, makeAgent())
-    expect(raw.indexOf('"question"')).toBeGreaterThan(raw.indexOf('"*"'))
-  })
-
-  test('anti-revival end-to-end: an agent\'s own question:"allow" is stripped before reaching the child', async () => {
-    const raw = await captureSpawnedConfig(h, makeAgent({ question: 'allow', bash: 'allow' }))
+  test("the agent's complete explicit map is preserved end-to-end", async () => {
+    const explicit = { question: 'allow', bash: 'deny', '*': 'ask' }
+    const raw = await captureSpawnedConfig(h, makeAgent(explicit))
     const cfg = JSON.parse(raw) as {
       agent: Record<string, { permission?: Record<string, unknown> }>
     }
     const entryPerm = cfg.agent['test-agent']!.permission ?? {}
-    expect('question' in entryPerm).toBe(false)
-    // sibling keys in the agent's own permission survive
-    expect(entryPerm.bash).toBe('allow')
-    // ...and the global question:deny is still present at the top level
-    expect((cfg as unknown as { permission: Record<string, string> }).permission.question).toBe(
-      'deny',
-    )
+    expect(entryPerm).toEqual(explicit)
   })
 })

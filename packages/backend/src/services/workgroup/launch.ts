@@ -43,7 +43,6 @@ import { canViewResource, initialBuiltinResourceAcl } from '@/services/resourceA
 import { getWorkgroupById } from '@/services/workgroups'
 import { startTask, type StartTaskDeps } from '@/services/task'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import { assertAgentIdsExecutionPolicy } from '@/services/executionPolicy'
 import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 
 // RFC-217 T1 — sentinel constants moved to ./constants (zero-dep leaf; cycle
@@ -260,11 +259,6 @@ export async function startWorkgroupTask(
   }
 
   // RFC-224: resolve every canonical roster member through the same
-  // effective-runtime policy used by single-agent/workflow launches. This is
-  // before host seeding, task/worktree materialization, or any model-visible
-  // side effect; scheduled fires reuse this exact path.
-  await assertAgentIdsExecutionPolicy(db, memberAgentIds, deps.defaultRuntime)
-
   // RFC-228: the roster gate above proves that every member Agent row exists;
   // this proves that each member's full resource closure is executable. Still
   // before host seeding, snapshot/state construction, worktree, task or messages.
@@ -404,7 +398,6 @@ export async function startWorkgroupTaskFromFrozen(
       missingAgentNames: [...new Set(missing.map((m) => m.displayName))],
     })
   }
-  await assertAgentIdsExecutionPolicy(db, memberAgentIds, deps.defaultRuntime)
   await assertAgentResourceIntegrity(db, memberAgentIds)
 
   // resolveWorkgroupCollaborators 的入参是资源行成员形态；冻结模板等价字段

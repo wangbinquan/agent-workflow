@@ -1,10 +1,6 @@
 // Task schemas. Mirrors design.md §3 (tasks table) + plan.md P-1-14.
 
 import { z } from 'zod'
-import {
-  EXECUTION_IDENTITY_FAILURE_CODES,
-  LEGACY_EXECUTION_IDENTITY_FAILURE_CODES,
-} from '../executionIdentity'
 import { hasQueryCredential } from '../git-url'
 import { InjectedMemorySnapshotSchema } from './memory'
 import { PlannedDirectoryNodeSchema } from './repoGroup'
@@ -209,9 +205,8 @@ export type TaskRepo = z.infer<typeof TaskRepoSchema>
  * declares the code at each stamp point. The historical envelope-protocol
  * producer domain remains the narrow `FOLLOWUP_FAILURE_CODES` 7-value union;
  * `FOLLOWUP_POLICY` (shared/prompt.ts) projects only that union onto the
- * 6-value render reason. RFC-224 widens the persisted/API `FAILURE_CODES`
- * domain with permanent execution-identity failures without making them
- * follow-up eligible.
+ * 6-value render reason. The persisted/API field accepts historical strings,
+ * while only the current producer list is emitted by new code.
  *
  * NULL = this row carries no machine-readable failure shape (the common case:
  * most failures are not follow-up-able). errorMessage remains human-readable
@@ -244,11 +239,8 @@ export type FollowupFailureCode = (typeof FOLLOWUP_FAILURE_CODES)[number]
 /**
  * Complete persisted/API failure domain.
  *
- * RFC-224 keeps execution-identity codes in the dependency-free
- * `executionIdentity.ts` leaf. This composition is intentionally the only
- * place where task DTOs widen the historical envelope-followup domain; callers
- * that decide whether to re-prompt must use `FOLLOWUP_FAILURE_CODES` (or
- * `followupPolicyForFailure`) rather than treating every persisted code as
+ * Callers that decide whether to re-prompt must use `FOLLOWUP_FAILURE_CODES`
+ * (or `followupPolicyForFailure`) rather than treating every persisted code as
  * retryable.
  */
 /**
@@ -270,14 +262,6 @@ export const SCRIPT_FAILURE_CODES = [
   'script-port-missing',
   'script-interpreter-missing',
   'script-deps-install-failed',
-  'script-network-fence-unavailable',
-  // 2026-08-04 audit: containment admission fails for THREE different reasons
-  // and all three used to be reported as "the network fence is unavailable" —
-  // so a `readonly` node (which never asked for a network fence) sent its
-  // operator hunting a mechanism the workflow does not even use. One code per
-  // demanded boundary; the message can then name the boundary honestly.
-  'script-readonly-fence-unavailable',
-  'script-containment-unavailable',
   'script-spawn-failed',
   // impl-gate M5: stdout exceeded the retained window in single-port mode, so
   // the port value would be missing its head. Distinct from a crash: the
@@ -290,9 +274,6 @@ export type ScriptFailureCode = (typeof SCRIPT_FAILURE_CODES)[number]
 export const SCRIPT_PERMANENT_FAILURE_CODES: ReadonlyArray<ScriptFailureCode> = [
   'script-interpreter-missing',
   'script-deps-install-failed',
-  'script-network-fence-unavailable',
-  'script-readonly-fence-unavailable',
-  'script-containment-unavailable',
   'script-spawn-failed',
   // Retrying cannot shrink the output; the author has to declare ports or emit
   // less.
@@ -350,8 +331,7 @@ export const CODE_HOST_PERMANENT_FAILURE_CODES: ReadonlyArray<CodeHostFailureCod
 ]
 
 /**
- * Failures the RUNTIME reported about ITSELF, outside the envelope protocol and
- * outside the execution-identity contract.
+ * Runtime failures outside the model envelope protocol.
  *
  * Kept as its own group rather than folded into `FOLLOWUP_FAILURE_CODES`: those
  * all carry a follow-up policy row (`FOLLOWUP_POLICY`) telling the agent how to
@@ -366,21 +346,32 @@ export const RUNTIME_FAILURE_CODES = [
    * agent produced no output envelope") AFTER burning the whole retry budget.
    */
   'runtime-result-error',
+  /** A stdout/stderr persistence pump failed while the child was active. The
+   *  logical turn can be retried in a fresh process without blaming the model. */
+  'runtime-stream-interrupted',
 ] as const
 export type RuntimeFailureCode = (typeof RUNTIME_FAILURE_CODES)[number]
+
+export function isTransientRuntimeFailure(
+  failureCode: unknown,
+): failureCode is 'runtime-stream-interrupted' {
+  return failureCode === 'runtime-stream-interrupted'
+}
 
 export const FAILURE_CODES = [
   ...FOLLOWUP_FAILURE_CODES,
   ...RUNTIME_FAILURE_CODES,
   ...SCRIPT_FAILURE_CODES,
   ...CODE_HOST_FAILURE_CODES,
-  ...EXECUTION_IDENTITY_FAILURE_CODES,
-  // RFC-251: retired codes stay in the READ domain. No path emits them, but
-  // rows written before the upgrade must not fail the strict page parse.
-  ...LEGACY_EXECUTION_IDENTITY_FAILURE_CODES,
 ] as const
-export const FailureCodeSchema = z.enum(FAILURE_CODES)
-export type FailureCode = z.infer<typeof FailureCodeSchema>
+/**
+ * Persisted rows from older releases may carry retired failure strings. Keep
+ * the read boundary tolerant so task history remains readable; current writers
+ * use the closed `FAILURE_CODES` list above, and the RFC-276 migration clears
+ * retired runtime-hardening codes from live node-run state.
+ */
+export const FailureCodeSchema = z.string()
+export type FailureCode = (typeof FAILURE_CODES)[number] | (string & {})
 
 export const TaskSchema = z.object({
   id: z.string(),

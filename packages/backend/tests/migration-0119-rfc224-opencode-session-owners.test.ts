@@ -13,7 +13,7 @@ import { join, resolve } from 'node:path'
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
 
-function freezeThrough0118(): string {
+function freezeThrough(maxIdx: number): string {
   const dir = mkdtempSync(join(tmpdir(), 'rfc224-0119-'))
   tempDirs.push(dir)
   cpSync(MIGRATIONS, dir, { recursive: true })
@@ -21,7 +21,7 @@ function freezeThrough0118(): string {
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
     entries: Array<{ idx: number }>
   }
-  journal.entries = journal.entries.filter((entry) => entry.idx <= 117)
+  journal.entries = journal.entries.filter((entry) => entry.idx <= maxIdx)
   writeFileSync(journalPath, `${JSON.stringify(journal, null, 2)}\n`)
   return dir
 }
@@ -58,11 +58,11 @@ function insertOwner(
     .query(
       `INSERT INTO opencode_session_owners (
          session_id, task_id, node_id, created_node_run_id,
-         identity_digest, runtime_binary_digest, session_contract_digest,
-         session_store_key, project_id, protocol_codec, reported_version,
+         identity_digest, official_build_digest, session_contract_digest,
+         session_store_key, project_id, opencode_version,
          lease_node_run_id, lease_nonce_digest, leased_at
        ) VALUES (?, ?, 'node-a', ?, 'identity', '${'a'.repeat(64)}', 'contract', ?,
-                 'project', 'opencode-direct-v1', '1.18.3',
+                 'project', '1.18.3',
                  ?, ?, ?)`,
     )
     .run(
@@ -84,7 +84,7 @@ describe('migration 0119 RFC-224 OpenCode session owners', () => {
   test('upgrades 0118 with immutable provenance, one task FK, and the required indexes', () => {
     const raw = new Database(':memory:')
     raw.exec('PRAGMA foreign_keys = ON')
-    migrate(drizzle(raw), { migrationsFolder: freezeThrough0118() })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough(117) })
     seedTask(raw, 'upgrade')
 
     expect(
@@ -95,7 +95,7 @@ describe('migration 0119 RFC-224 OpenCode session owners', () => {
         .get(),
     ).toBeNull()
 
-    migrate(drizzle(raw), { migrationsFolder: MIGRATIONS })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough(118) })
 
     const columns = raw.query("PRAGMA table_info('opencode_session_owners')").all() as Array<{
       name: string
@@ -108,12 +108,11 @@ describe('migration 0119 RFC-224 OpenCode session owners', () => {
       'node_id',
       'created_node_run_id',
       'identity_digest',
-      'runtime_binary_digest',
+      'official_build_digest',
       'session_contract_digest',
       'session_store_key',
       'project_id',
-      'protocol_codec',
-      'reported_version',
+      'opencode_version',
       'lease_node_run_id',
       'lease_nonce_digest',
       'leased_at',
@@ -124,11 +123,11 @@ describe('migration 0119 RFC-224 OpenCode session owners', () => {
       'node_id',
       'created_node_run_id',
       'identity_digest',
-      'runtime_binary_digest',
+      'official_build_digest',
       'session_contract_digest',
       'session_store_key',
       'project_id',
-      'protocol_codec',
+      'opencode_version',
     ]) {
       expect(columns.find((column) => column.name === name)?.notnull).toBe(1)
     }
@@ -165,7 +164,7 @@ describe('migration 0119 RFC-224 OpenCode session owners', () => {
   test('enforces owner/store uniqueness and all-null/all-nonnull lease shape', () => {
     const raw = new Database(':memory:')
     raw.exec('PRAGMA foreign_keys = ON')
-    migrate(drizzle(raw), { migrationsFolder: MIGRATIONS })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough(118) })
     seedTask(raw, 'constraints')
 
     insertOwner(raw, {

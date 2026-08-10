@@ -147,9 +147,6 @@ export function serializeClosure(
               : {}),
             syncOutputsOnIterate: row.syncOutputsOnIterate !== false,
             permission: parseJson(row.permission, {}),
-            // ⚠️ AC-B3b：`network` 必须带上。intent 版的 payload 没有这个字段，
-            // 照抄会让导入后静默回落成 'deny'。
-            ...(row.network === undefined || row.network === null ? {} : { network: row.network }),
             skills,
             dependsOn: (parseJson(row.dependsOn, []) as unknown[]).map((id) =>
               refWire(slugOfId, String(id), builtinOfId),

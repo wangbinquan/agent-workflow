@@ -1,98 +1,81 @@
 # Skill reference
 
-A **skill** is a directory of markdown the platform hands to an agent. Unlike
-agents, **the filesystem is the source of truth**: the DB only indexes
-`name → path`.
-
-> **How a skill actually reaches the agent (RFC-224 / RFC-251).** The
-> production path does **not** populate `OPENCODE_CONFIG_DIR/skills/<name>/`
-> and does not use OpenCode's on-disk skill registry at all. Per run the
-> platform snapshots the whole skill tree (no symlinks) into the run seal at
-> `<runRoot>/opencode-identity-seal/skills/<sha256(skillId)[:24]>`, and injects
-> **`SKILL.md`'s body only** into the agent's system prompt as a digest-tagged
-> `<aw-frozen-skill …>` block. See `services/runtime/opencode/verifiedPlan.ts`.
->
-> **Consequence — auxiliary files are effectively unreachable today.** The
-> sealed tree is bind-mounted read-only for the `bash` child, but nothing tells
-> the agent its path (no env var, no line in the frozen block), and the netless
-> profile masks `$HOME` and `~/.agent-workflow`, so the agent cannot find the
-> files by searching either. Measured 2026-08-10: an agent reliably quotes a
-> marker line from `SKILL.md` and reliably reports `MISSING` for the same kind
-> of marker in a sibling `reference.md`. **Put everything the agent must read
-> into `SKILL.md`**; treat other files as human-facing until this is closed
-> (tracked in `docs/audit-backlog.md`).
+A **skill** is a directory of Markdown and optional supporting files that a runtime
+can load for an Agent. Managed skill content lives on disk; the database indexes
+its identity, metadata, ACL and content revision.
 
 ## Source kinds
 
-Skills are **managed-only** since RFC-178: they live under
-`~/.agent-workflow/skills/<id>/files/` and the daemon writes / edits them via
-the API. The former `external` source kind (symlink a directory the user
-already has) has been removed — the verified execution path rejects external
-skills rather than inheriting them.
+Agent references have two forms:
+
+- `managed`: a platform resource with a DB row, ACL and managed files directory;
+- `project`: a name that the selected runtime discovers from the task worktree.
+
+The Skill CRUD API manages only the first kind. Project skills are not platform
+resources and have no DB row, owner or ACL.
 
 ## Layout
 
 ```
 ~/.agent-workflow/skills/<id>/
 └── files/
-    ├── SKILL.md            # frontmatter + body (required, and the ONLY part
-    │                       # the agent actually reads at runtime today)
+    ├── SKILL.md
+    ├── references/
+    │   └── api.md
     ├── examples/
-    │   ├── good.ts
-    │   └── bad.ts
-    └── README.md           # human-facing; not reachable from the agent yet
+    │   └── example.ts
+    └── README.md
 ```
 
-`SKILL.md` is the only required file. Everything else under `files/` is part
-of the snapshot and of the tree digest that fixes the run's execution identity
-— so editing an auxiliary file _does_ change the digest — but see the box
-above: nothing currently hands the agent a path into that snapshot, so
-auxiliary files do not participate in what the model sees.
+`SKILL.md` is required. Supporting files are copied with the selected managed
+skill so the runtime can read them. A directory named `.claude-plugin` is excluded
+from the staged copy because plugins are a separate resource type and can declare
+hooks, agents and MCP servers.
 
 ## SKILL.md frontmatter
 
 ```yaml
 ---
-name: lint # ^[a-z0-9][a-z0-9_-]*$, must match dir name
+name: lint
 description: TypeScript lint rules…
-# anything else round-trips through frontmatterExtra
 ---
-# Body markdown — what opencode reads as the skill.
+# Body markdown
 ```
 
-| Field         | Type   | Required | Notes                           |
-| ------------- | ------ | -------- | ------------------------------- |
-| `name`        | string | yes      | URL-safe slug                   |
-| `description` | string | yes      | Shown in pickers; not in prompt |
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `name` | string | yes | Must match `^[a-z0-9][a-z0-9_-]*$` |
+| `description` | string | yes | Shown in resource pickers |
+| other keys | any YAML | no | Round-trip through `frontmatterExtra` |
+
+## Runtime delivery
+
+For OpenCode, selected managed skills are copied to the current runtime config at
+`skills/<name>/`; OpenCode discovers project skills from the worktree normally.
+
+For Claude Code, the platform:
+
+- renders each managed skill into the system prompt with its attachment root and
+  supporting-file list;
+- temporarily projects the same sanitized directory into the disposable task
+  worktree for native skill discovery, then removes only the directories it created;
+- leaves machine and project skills available through Claude Code's normal discovery.
+
+The projection is a compatibility mechanism, not an immutable snapshot or sandbox.
+Changes to a managed skill after dispatch are still fenced by the platform's resource
+revision checks before assembly.
 
 ## CRUD
 
-Managed skills:
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/skills` | list visible managed skills |
+| GET | `/api/skills/:id` | read metadata |
+| POST | `/api/skills` | create a managed skill and `SKILL.md` |
+| PUT | `/api/skills/:id` | update metadata |
+| PUT | `/api/skills/:id/content` | update frontmatter/body with OCC token |
+| GET | `/api/skills/:id/files` | recursively list supporting files |
+| GET/PUT/DELETE | `/api/skills/:id/files/*` | read, write or delete a supporting file |
+| DELETE | `/api/skills/:id` | delete when no Agent still references it |
 
-| Method | Path                        | Body                                              |
-| ------ | --------------------------- | ------------------------------------------------- |
-| GET    | `/api/skills`               | —                                                 |
-| GET    | `/api/skills/:name`         | —                                                 |
-| POST   | `/api/skills`               | `CreateManagedSkill` — creates the dir + SKILL.md |
-| PUT    | `/api/skills/:name`         | `UpdateSkill` — DB-only metadata                  |
-| PUT    | `/api/skills/:name/body`    | `{ bodyMd }`                                      |
-| GET    | `/api/skills/:name/files`   | recursive listing                                 |
-| GET    | `/api/skills/:name/files/*` | read a file                                       |
-| PUT    | `/api/skills/:name/files/*` | write a file                                      |
-| DELETE | `/api/skills/:name/files/*` | delete a file                                     |
-| DELETE | `/api/skills/:name`         | unregister (409 if any agent references)          |
-
-There is no external-skill import API. `POST /api/skills/import-external` and
-the old symlink-backed source kind were removed by RFC-178.
-
-## Per-run projection
-
-Each selected managed skill is snapshotted into the node run's immutable
-identity seal. The runner does not copy it into `OPENCODE_CONFIG_DIR`, create a
-discoverable symlink, or expose the managed source tree. OpenCode's repo-local
-and user-global skill registries are disabled on this verified path; the
-digest-tagged prompt block is the only model-facing skill registry.
-
-The snapshot root and its current auxiliary-file reachability limitation are
-described at the top of this page. Do not rely on the pre-RFC-224 staging model
-when authoring or debugging a skill.
+External symlink-backed skills and the former import-external API remain removed.

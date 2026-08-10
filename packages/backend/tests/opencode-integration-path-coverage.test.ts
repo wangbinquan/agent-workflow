@@ -40,14 +40,8 @@ const CANONICAL = [
   'packages/backend/src/services/envelope.ts',
   'packages/backend/src/services/protocol.ts',
   'packages/backend/src/services/runtime/opencode/**',
-  // 2026-08-04 sandbox audit: this workflow is the ONLY CI job that installs
-  // bubblewrap, so it is the only place real Linux containment behaviour runs
-  // (`RUN_SANDBOX_ITEST` is set on the macOS shard alone). Without these three,
-  // a change to the bwrap renderer / contained-spawn primitive / netless
-  // projection was green on push and only went red in the nightly cron.
-  'packages/backend/src/services/sandbox/**',
+  // Process lifecycle changes can alter the live runtime path.
   'packages/backend/src/services/execution/**',
-  'packages/backend/src/services/runtime/netlessProjection.ts',
   'packages/backend/src/util/opencode*.ts',
   'packages/backend/src/opencode-plugin/**',
   'packages/backend/tests/integration-opencode/**',

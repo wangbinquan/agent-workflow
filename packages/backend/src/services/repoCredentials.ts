@@ -12,9 +12,9 @@
 // diagnostics read `url_redacted`, and refTaskCount now joins `cached_repo_id`.
 // The single reader is the reuse-by-cachedRepoId launch branch.
 //
-// NOT a boundary against task agents: they run at the daemon's uid and can read
-// both `secret.key` and `db.sqlite` directly. That isolation needs a runtime
-// sandbox and is deliberately out of scope — see RFC-205.
+// NOT a boundary against local runtime children: they run at the daemon's uid
+// and can read files available to that account. This module protects API,
+// backup and Git transport surfaces only.
 
 import {
   gitUrlCacheKeyWith,

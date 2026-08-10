@@ -37,10 +37,6 @@ import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { runGit } from '@/util/git'
 import { SCHEDULED_TASK_CHANNEL, scheduledTaskBroadcaster } from '@/ws/broadcaster'
-import {
-  assertAgentExecutionPolicy,
-  assertAgentIdsExecutionPolicy,
-} from '@/services/executionPolicy'
 import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 import { getWorkflow } from '@/services/workflow'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
@@ -259,7 +255,7 @@ export async function assertScheduledTargetUsable(
   actor: Actor,
   kind: ScheduledLaunchKind,
   body: Record<string, unknown>,
-  defaultRuntime?: string | null,
+  _defaultRuntime?: string | null,
 ): Promise<void> {
   if (kind === 'workflow') {
     // Preserve the RFC-159 schedule-specific incompatibility as the first
@@ -272,7 +268,7 @@ export async function assertScheduledTargetUsable(
     assertNotBuiltin('workflow', target)
     assertNoRequiredUploadInput(target)
 
-    await assertWorkflowLaunchable(db, actor, body['workflowId'] as string, defaultRuntime)
+    await assertWorkflowLaunchable(db, actor, body['workflowId'] as string)
     assertWorkflowLaunchInputs(
       target.definition.inputs,
       (body['inputs'] as Record<string, string> | undefined) ?? {},
@@ -288,7 +284,6 @@ export async function assertScheduledTargetUsable(
     }
     assertNotBuiltin('agent', agent)
     await assertAgentResourceIntegrity(db, [agent.id])
-    await assertAgentExecutionPolicy(db, agent, defaultRuntime)
     // RFC-223 PR-7: identity arrived as the required canonical id. Refresh the
     // optional name snapshot from that exact row; never resolve or trust a
     // client-provided display name.
@@ -318,7 +313,6 @@ export async function assertScheduledTargetUsable(
       : [],
   )
   await assertAgentResourceIntegrity(db, memberAgentIds)
-  await assertAgentIdsExecutionPolicy(db, memberAgentIds, defaultRuntime)
   body['workgroupName'] = group.name
 }
 

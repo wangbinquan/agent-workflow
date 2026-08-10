@@ -1,10 +1,9 @@
 // RFC-251 — single source of truth for turning a platform `plugins` selection
 // into opencode's `config.plugin` array.
 //
-// Why this module exists: RFC-031 built these rules inline for the legacy spawn
-// path (inlineConfig.ts). RFC-251 restores plugin support on the *verified*
-// path, whose controlled config is assembled independently (hermetic.ts). Two
-// copies would drift, and drift here fails SILENTLY — opencode would just load
+// Why this module exists: every OpenCode assembly path must encode a selected
+// plugin the same way. Two copies would drift, and drift here fails SILENTLY —
+// opencode would just load
 // a different plugin set than the operator selected, with no error anywhere.
 //
 // Leaf module: a shared type import only, so both assemblers can depend on it
@@ -62,7 +61,7 @@ export function selectShippedPlugins(plugins: readonly Plugin[]): Plugin[] {
   return shipped
 }
 
-/** The sealed `file://` specifier — never the user-supplied npm/git spec. */
+/** The resolved local `file://` specifier — never the raw npm/git input. */
 export function pluginFileSpec(plugin: Plugin): string {
   return plugin.cachedPath.startsWith('file://') ? plugin.cachedPath : `file://${plugin.cachedPath}`
 }

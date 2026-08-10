@@ -63,10 +63,8 @@ Scheduled launch 和 webhook 都可以启动这三种模型。
 三方合并回 Task 的 canonical worktree；失败尝试不会自动合入。因此，彼此独立的 DAG 分支
 可以并行写入而不共享工作目录。
 
-这属于保护任务状态与合并语义的 **Git 隔离**，并不是操作系统安全边界。OS containment
-是另一层经 capability probe 的机制：macOS 使用 Seatbelt，Linux 在可用时使用
-bubblewrap；Windows 当前没有 containment provider。详见
-[平台与安全](#平台与安全)。
+这属于保护任务状态与合并语义的 **Git 隔离**，并不是操作系统安全边界。Runtime 子进程
+以普通进程运行，拥有 daemon 账户可访问的文件与网络。详见[平台与安全](#平台与安全)。
 
 Daemon 把 Task 和节点状态持久化到 SQLite，记录事件与 runtime 对话，在重启后对账中断进程，
 并让 review 与 clarify 决策始终绑定到产生它们的那次执行。
@@ -220,27 +218,25 @@ migration 和 Bun runtime。
 
 ## 平台与安全
 
-| 平台                 | 发布二进制 | OS containment                                                                                                                                   |
-| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Apple Silicon macOS  | 有         | 内置 Seatbelt provider，仍需通过 capability admission。                                                                                          |
-| x86_64 / arm64 Linux | 有         | 安装 bubblewrap 且宿主允许时启用。                                                                                                               |
-| x86_64 Windows       | 有         | 当前没有 provider：普通 profile 在 <code>warn</code>/<code>off</code> 下无隔离运行；<code>enforce</code> 与显式 fail-closed profile 会拒绝执行。 |
+| 平台                 | 发布二进制 | Runtime 执行方式            |
+| -------------------- | ---------- | --------------------------- |
+| Apple Silicon macOS  | 有         | daemon 账户下的普通子进程。 |
+| x86_64 / arm64 Linux | 有         | daemon 账户下的普通子进程。 |
+| x86_64 Windows       | 有         | daemon 账户下的普通子进程。 |
 
 - **Git 2.38 或更高版本**是 daemon 启动要求，并通过
   <code>git merge-tree --write-tree</code> 提供隔离 merge-back。
-- 默认 containment policy 是 <code>warn</code>。普通 Agent profile 在 provider 不可用时可以
-  降级运行并记录告警；<code>enforce</code> fail closed。显式 fail-closed profile（包括
-  read-only 或 network-deny script profile）绝不降级。
-- 运行 <code>agent-workflow sandbox</code> 可做只读能力探测，并获得针对当前宿主的诊断与修复
-  指引；部分内核建议属于启发式判断。
-- Windows 必须安装 Git for Windows 才能启动 daemon。Verified OpenCode 还需要为 Agent
-  Workflow app home 配置 Windows Defender 排除目录，避免启动期出现间歇性 access denied；
-  部署前请先阅读 containment 文档。
+- Runtime 子进程不使用 OS sandbox；它们能访问 daemon 账户可访问的文件和网络，因此只应
+  运行可信的 Agent、Skill、Plugin 与 MCP 定义。
+- Claude runtime profile 可按需开启 <code>IS_SANDBOX=1</code> CLI 兼容标记；默认关闭，
+  且不会启用 OS sandbox 或增加平台防护。
+- 显式 Agent permission、ACL、秘密脱敏、路径校验、Git 凭据处理和有界进程树回收继续保留。
+- Script 节点的 read-only 语义是使用一次性 worktree 且不回合并，并非文件系统 sandbox；
+  Script network policy 不再是运行时控制。
+- Windows 必须安装 Git for Windows 才能启动 daemon。
 
-Containment 不是完整 jail：daemon 自身不在 sandbox 内，通用外层边界默认也不隔离网络。
-
-在把 Agent 执行视为可信之前，请先阅读[运行时 containment](./docs/sandbox.md)；部署长期实例
-前请阅读[灾难恢复](./docs/disaster-recovery.md)。
+当前执行合同见 [OpenCode 运行时配置](./docs/OPENCODE_CONFIG.md)；部署长期实例前请阅读
+[灾难恢复](./docs/disaster-recovery.md)。
 
 ## 从源码构建
 
@@ -268,7 +264,7 @@ bun run gate:local
 | ------------------- | ------------------------------------------------------------------------------------------- |
 | Workflow definition | [当前 Workflow schema](./docs/workflow-yaml.md)                                             |
 | 可移植资源          | [配置包](./docs/resource-packages.md) · [Resource Bundle](./docs/resource-bundles.md)       |
-| Runtime 安全        | [Containment](./docs/sandbox.md) · [灾难恢复](./docs/disaster-recovery.md)                  |
+| Runtime 行为        | [OpenCode 配置](./docs/OPENCODE_CONFIG.md) · [灾难恢复](./docs/disaster-recovery.md)        |
 | 集成                | [Webhook trigger](./docs/webhook-triggers.md) · [Code-host call](./docs/code-host-calls.md) |
 | 设计演进            | [RFC 索引与实施计划](./design/plan.md)                                                      |
 

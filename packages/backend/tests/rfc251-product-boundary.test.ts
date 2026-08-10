@@ -8,9 +8,8 @@
 // runtime-side assembly is covered by rfc251-controlled-config and the
 // end-to-end manifest cases in rfc224-verified-plan.
 //
-// `model-unresolved` is deliberately still exercised here: it is the ONE
-// execution-policy rule that survived, and these cases must not be read as
-// "the policy gate is gone".
+// A runtime model is optional: when absent, OpenCode chooses its own configured
+// default. Product save and launch surfaces do not add a separate policy gate.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -97,21 +96,23 @@ describe('RFC-251 — saving an OpenCode agent with plugins / collaborators', ()
       { name: 'formatter', spec: 'formatter@1' },
       { pluginsDir, npmBin: FAKE_NPM },
     )
-    const agent = await createAgent(
-      db,
-      { ...AGENT_FIELDS, name: 'worker', runtime: OPENCODE_RUNTIME, plugins: [plugin.id] },
-      { executionPolicy: { defaultRuntime: OPENCODE_RUNTIME } },
-    )
+    const agent = await createAgent(db, {
+      ...AGENT_FIELDS,
+      name: 'worker',
+      runtime: OPENCODE_RUNTIME,
+      plugins: [plugin.id],
+    })
     expect(agent.plugins).toEqual([plugin.id])
   })
 
   test('create accepts a dependsOn closure', async () => {
     const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
-    const agent = await createAgent(
-      db,
-      { ...AGENT_FIELDS, name: 'worker', runtime: OPENCODE_RUNTIME, dependsOn: [auditor.id] },
-      { executionPolicy: { defaultRuntime: OPENCODE_RUNTIME } },
-    )
+    const agent = await createAgent(db, {
+      ...AGENT_FIELDS,
+      name: 'worker',
+      runtime: OPENCODE_RUNTIME,
+      dependsOn: [auditor.id],
+    })
     expect(agent.dependsOn).toEqual([auditor.id])
   })
 
@@ -119,18 +120,17 @@ describe('RFC-251 — saving an OpenCode agent with plugins / collaborators', ()
     // The RFC-224 shape of this failure was especially hostile: an operator
     // could clear the field but never set it.
     const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
-    const agent = await createAgent(
-      db,
-      { ...AGENT_FIELDS, name: 'worker', runtime: OPENCODE_RUNTIME },
-      { executionPolicy: { defaultRuntime: OPENCODE_RUNTIME } },
-    )
+    const agent = await createAgent(db, {
+      ...AGENT_FIELDS,
+      name: 'worker',
+      runtime: OPENCODE_RUNTIME,
+    })
     const updated = await updateAgent(
       db,
       agent.id,
       { dependsOn: [auditor.id] },
       actor('owner'),
       undefined,
-      { executionPolicy: { defaultRuntime: OPENCODE_RUNTIME } },
     )
     expect(updated.dependsOn).toEqual([auditor.id])
   })
@@ -144,17 +144,13 @@ describe('RFC-251 — launch surfaces accept the same agent', () => {
       { name: 'formatter', spec: 'formatter@1' },
       { pluginsDir, npmBin: FAKE_NPM },
     )
-    return createAgent(
-      db,
-      {
-        ...AGENT_FIELDS,
-        name: 'worker',
-        runtime: OPENCODE_RUNTIME,
-        dependsOn: [auditor.id],
-        plugins: [plugin.id],
-      },
-      { executionPolicy: { defaultRuntime: OPENCODE_RUNTIME } },
-    )
+    return createAgent(db, {
+      ...AGENT_FIELDS,
+      name: 'worker',
+      runtime: OPENCODE_RUNTIME,
+      dependsOn: [auditor.id],
+      plugins: [plugin.id],
+    })
   }
 
   test('the workflow launch gate passes', async () => {
@@ -186,15 +182,15 @@ describe('RFC-251 — launch surfaces accept the same agent', () => {
     expect(schedule.id).toBeTruthy()
   })
 
-  test('a missing model is STILL rejected, selection notwithstanding', async () => {
+  test('a missing model is accepted and delegated to the runtime CLI default', async () => {
     await createRuntime(db, { name: 'oc-no-model', protocol: 'opencode', model: null })
     const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
-    await expect(
-      createAgent(
-        db,
-        { ...AGENT_FIELDS, name: 'broken', runtime: 'oc-no-model', dependsOn: [auditor.id] },
-        { executionPolicy: { defaultRuntime: OPENCODE_RUNTIME } },
-      ),
-    ).rejects.toMatchObject({ code: 'execution-identity-model-unresolved' })
+    const agent = await createAgent(db, {
+      ...AGENT_FIELDS,
+      name: 'worker-with-cli-default',
+      runtime: 'oc-no-model',
+      dependsOn: [auditor.id],
+    })
+    expect(agent.runtime).toBe('oc-no-model')
   })
 })

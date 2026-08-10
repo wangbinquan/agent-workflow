@@ -11,11 +11,7 @@ import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { finalizeSmokeAttempt, smokeRuntime, smokeSandboxCtx } from '../src/services/runtimeSmoke'
-import {
-  ContainmentCoordinator,
-  ContainmentProviderQualificationError,
-} from '../src/services/sandbox'
+import { finalizeSmokeAttempt, smokeRuntime } from '../src/services/runtimeSmoke'
 
 const MOCK_CLAUDE = resolve(import.meta.dir, 'fixtures', 'mock-claude.ts')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -59,33 +55,7 @@ afterEach(() => {
   for (const k of SET_ENV_KEYS) delete process.env[k]
 })
 
-describe('RFC-224 smoke store-destruction barrier', () => {
-  test('verified system store is an explicit RW sandbox subtree under shadowed appHome', async () => {
-    const coordinator = new ContainmentCoordinator({
-      provider: {
-        mode: 'enforce',
-        status: { mechanism: 'seatbelt', available: true, detail: null },
-        appHome: '/home/aw',
-      },
-      qualifySeatbelt: async () => {},
-    })
-    const containment = await coordinator.admit('runner-filesystem-v1')
-    const ctx = smokeSandboxCtx('/work/attempt', '/work/run', {
-      cmd: ['/bin/echo'],
-      env: {},
-      containment,
-      sessionStore: {
-        root: '/home/aw/opencode-stores/system-ephemeral/invocation',
-        dbPath: '/home/aw/opencode-stores/system-ephemeral/invocation/opencode.db',
-        persistent: false,
-      },
-    })
-    expect(ctx?.taskWorktrees).toEqual([
-      '/work/attempt',
-      '/home/aw/opencode-stores/system-ephemeral/invocation',
-    ])
-  })
-
+describe('smoke cleanup and process-reap barrier', () => {
   test('never-settling child is bounded and strands cleanup/attemptDir after TERM → KILL', async () => {
     const signals: string[] = []
     let cleanupCalled = false
@@ -159,33 +129,6 @@ describe('RFC-224 smoke store-destruction barrier', () => {
 })
 
 describe('smokeRuntime (RFC-112 PR-B)', () => {
-  test('production OpenCode smoke fails closed when the verified sandbox is unavailable', async () => {
-    const containmentCoordinator = new ContainmentCoordinator({
-      provider: {
-        mode: 'enforce',
-        status: { mechanism: 'bwrap', available: true, detail: null },
-        appHome: '/tmp/aw-smoke',
-      },
-      qualifyBwrap: async () => {
-        throw new ContainmentProviderQualificationError('provider-trial-rejected')
-      },
-    })
-    const r = await smokeRuntime({
-      protocol: 'opencode',
-      binaryPath: '/bin/echo',
-      model: 'openai/gpt-5',
-      timeoutMs: SMOKE_TIMEOUT,
-      containmentCoordinator,
-    })
-    expect(r).toMatchObject({
-      outcome: 'execution-identity-failed',
-      conforms: false,
-      detail: 'execution-identity-containment-required',
-      failureCode: 'execution-identity-containment-required',
-      exitCode: null,
-    })
-  })
-
   test(
     'claude binary that echoes the prompt + emits a session → conforms',
     async () => {
@@ -194,7 +137,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('conforms')
@@ -213,7 +155,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       process.env.MOCK_OPENCODE_EMIT_SESSION_ID = '1'
       const r = await smokeRuntime({
         protocol: 'opencode',
-        testOnlyUnverifiedRuntime: true,
         binaryPath: wrapperFor(MOCK_OPENCODE),
         timeoutMs: SMOKE_TIMEOUT,
       })
@@ -239,7 +180,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       process.env.MOCK_OPENCODE_REQUIRE_CONFIG_DIR_EXISTS = '1'
       const r = await smokeRuntime({
         protocol: 'opencode',
-        testOnlyUnverifiedRuntime: true,
         binaryPath: wrapperFor(MOCK_OPENCODE),
         timeoutMs: SMOKE_TIMEOUT,
       })
@@ -259,7 +199,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('stream-nonconforming')
@@ -280,7 +219,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.sawEnvelope).toBe(true)
@@ -309,7 +247,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('network-blocked')
@@ -331,7 +268,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('auth-missing')
@@ -356,7 +292,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('stream-nonconforming')
@@ -383,7 +318,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('stream-nonconforming')
@@ -407,7 +341,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
         extraArgs: ['--skip-safe-check'],
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('conforms')
@@ -444,7 +377,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('model-call-failed')
@@ -465,7 +397,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
         model: 'GLM-5.1-NN',
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('model-call-failed')
@@ -485,7 +416,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('model-call-failed')
@@ -505,7 +435,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
         binaryPath: wrapperFor(MOCK_CLAUDE),
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('network-blocked')
@@ -520,7 +449,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
         binaryPath: nonProtocolCmd(),
-        bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('stream-nonconforming')
@@ -534,7 +462,6 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
     async () => {
       const r = await smokeRuntime({
         protocol: 'opencode',
-        testOnlyUnverifiedRuntime: true,
         binaryPath: canonicalBinaryPath('aw-xyz'),
         timeoutMs: SMOKE_TIMEOUT,
       })

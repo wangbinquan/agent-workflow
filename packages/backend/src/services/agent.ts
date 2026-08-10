@@ -47,7 +47,6 @@ import { getRuntime } from './runtimeRegistry'
 import { isAgentLaunching } from './agentLaunchReservation'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 import { assertRefsUsableInTx } from './resourceRefs'
-import { assertAgentExecutionPolicy } from './executionPolicy'
 import { assertAgentResourceIntegrity } from './agentResourceIntegrity'
 
 type AgentRow = typeof agents.$inferSelect
@@ -112,8 +111,6 @@ export async function prepareAgentCreate(
     id?: string
     /** Deterministic race-test seam after preflight, before the final dbTxSync. */
     beforeWriteTransaction?: () => void | Promise<void>
-    /** RFC-224 production save gate; framework seeders/tests may omit it. */
-    executionPolicy?: { defaultRuntime?: string | null }
     /**
      * RFC-234 (T6): ids being CREATED in the same intent bundle. They have no
      * rows yet, so the async existence validators skip them (their type
@@ -188,13 +185,6 @@ export async function prepareAgentCreate(
   // or typo'd runtime (e.g. `claude_code`) that saves fine but silently falls back
   // to built-in opencode at dispatch — a hard-to-detect runtime/profile drift.
   await validateRuntimeReference(db, input.runtime)
-  if (opts?.executionPolicy !== undefined) {
-    await assertAgentExecutionPolicy(
-      db,
-      { ...(input.runtime !== undefined ? { runtime: input.runtime } : {}) },
-      opts.executionPolicy.defaultRuntime,
-    )
-  }
 
   // RFC-228: validate the complete candidate closure, not only the resource
   // fields with legacy per-kind guards. This is the missing managed-Skill gate
@@ -281,7 +271,6 @@ export function commitAgentCreateInTx(tx: DbTxSync, p: PreparedAgentCreate): voi
       inputs: serializeInputs(input.inputs),
       syncOutputsOnIterate: input.syncOutputsOnIterate,
       runtime: input.runtime ?? null, // RFC-111
-      network: input.network ?? null, // RFC-252 G4：缺省落 NULL（= deny），不回填不猜测
       permission: JSON.stringify(input.permission),
       // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
       skills: serializeSkillRefs(skillRefs),
@@ -313,8 +302,6 @@ export async function createAgent(
     id?: string
     /** Deterministic race-test seam after preflight, before the final dbTxSync. */
     beforeWriteTransaction?: () => void | Promise<void>
-    /** RFC-224 production save gate; framework seeders/tests may omit it. */
-    executionPolicy?: { defaultRuntime?: string | null }
   },
 ): Promise<Agent> {
   const prepared = await prepareAgentCreate(db, input, opts)
@@ -355,8 +342,6 @@ export async function prepareAgentUpdate(
   hooks?: {
     /** Deterministic race-test seam after preflight, before the final dbTxSync. */
     beforeWriteTransaction?: () => void | Promise<void>
-    /** RFC-224 production save gate; service-only maintenance callers may omit it. */
-    executionPolicy?: { defaultRuntime?: string | null }
     /** RFC-234 (T6): same-bundle pending ids — see prepareAgentCreate. */
     pendingBundleIds?: ReadonlySet<string>
   },
@@ -415,22 +400,12 @@ export async function prepareAgentUpdate(
   if (patch.runtime !== undefined) {
     await validateRuntimeReference(db, patch.runtime, existing.runtime)
   }
-  if (hooks?.executionPolicy !== undefined) {
-    const nextRuntime = patch.runtime !== undefined ? patch.runtime : existing.runtime
-    await assertAgentExecutionPolicy(
-      db,
-      { ...(nextRuntime !== undefined ? { runtime: nextRuntime } : {}) },
-      hooks.executionPolicy.defaultRuntime,
-    )
-  }
 
   // RFC-228: sparse PATCHes cannot leave a historically dangling closure
   // hidden behind "the resource field was not touched". Validate the merged
-  // final Agent; removing/replacing the bad ref makes this pass.
-  // RFC-252 G4: `network` 与 `runtime` 同形——PATCH 允许显式 null 清回默认档，而 DTO
-  // 上没有 null 这一档（缺省即 deny）。两者都必须先摘出去，再按 null/undefined 分别处置，
-  // 否则 null 会漏进 Agent DTO（typecheck 已实证拦下）。
-  const { runtime: _runtimePatch, network: _networkPatch, ...patchWithoutRuntime } = patch
+  // final Agent; removing/replacing the bad ref makes this pass. Runtime is
+  // removed from the spread because null means "clear the pin", not a DTO value.
+  const { runtime: _runtimePatch, ...patchWithoutRuntime } = patch
   const candidate: Agent = {
     ...existing,
     ...patchWithoutRuntime,
@@ -441,8 +416,6 @@ export async function prepareAgentUpdate(
   }
   if (patch.runtime === null) delete candidate.runtime
   else if (patch.runtime !== undefined) candidate.runtime = patch.runtime
-  if (patch.network === null) delete candidate.network
-  else if (patch.network !== undefined) candidate.network = patch.network
   if (pending.size === 0) {
     await assertAgentResourceIntegrity(db, [candidate.id], { overrides: [candidate] })
   }
@@ -459,8 +432,6 @@ export async function prepareAgentUpdate(
   // untouched (sparse-patch). Before this branch the set-builder skipped runtime
   // entirely, so the edit form could neither repoint nor un-pin an agent.
   if (patch.runtime !== undefined) set.runtime = patch.runtime
-  // RFC-252 G4：null 是显式清回默认档（deny），与 runtime 同形，直接落列。
-  if (patch.network !== undefined) set.network = patch.network
   // RFC-223 (PR-1): persist the resolved id refs / typed skill refs (deduped by
   // the resolver), never the raw name-or-id wire values.
   if (skillRefs !== undefined) set.skills = serializeSkillRefs(skillRefs)
@@ -587,8 +558,6 @@ export async function updateAgent(
   hooks?: {
     /** Deterministic race-test seam after preflight, before the final dbTxSync. */
     beforeWriteTransaction?: () => void | Promise<void>
-    /** RFC-224 production save gate; service-only maintenance callers may omit it. */
-    executionPolicy?: { defaultRuntime?: string | null }
   },
 ): Promise<Agent> {
   const prepared = await prepareAgentUpdate(db, id, patch, actor, fence, hooks)
@@ -1184,11 +1153,5 @@ function rowToAgent(row: AgentRow): Agent {
   // (built-ins 'opencode'/'claude-code' + custom). Empty/NULL stays absent (→
   // inherit config.defaultRuntime). An unknown name fail-safes at dispatch.
   if (typeof row.runtime === 'string' && row.runtime.length > 0) agent.runtime = row.runtime
-  // RFC-252 G4: only an EXACT 'allow' is a grant. A NULL column (every
-  // pre-RFC-252 row) and any other value stay ABSENT on the DTO rather than
-  // being surfaced as null — so no downstream `?? 'allow'`, truthiness check or
-  // optional-schema serialization can turn "no opinion" into egress. The
-  // storage default and the runtime default are therefore the same one value.
-  if (row.network === 'allow' || row.network === 'deny') agent.network = row.network
   return agent
 }

@@ -30,7 +30,6 @@ on:
     paths:
       - 'packages/frontend/**'
       - 'packages/backend/src/util/opencode.ts'
-      - 'packages/backend/tests/rfc224-e2e-compiled-seam.test.ts'
       - 'scripts/build-binary.ts'
       - 'e2e/ux-consistency.spec.ts'
       - 'e2e/command.ts'
@@ -52,7 +51,6 @@ on:
     paths:
       - 'packages/frontend/**'
       - 'packages/backend/src/util/opencode.ts'
-      - 'packages/backend/tests/rfc224-e2e-compiled-seam.test.ts'
       - 'scripts/build-binary.ts'
       - 'e2e/ux-consistency.spec.ts'
       - 'e2e/command.ts'

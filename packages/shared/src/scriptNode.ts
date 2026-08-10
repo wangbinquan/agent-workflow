@@ -12,7 +12,6 @@ import {
   SCRIPT_DEPENDENCY_MAX_LEN,
   SCRIPT_LANGUAGES,
   type ScriptLanguage,
-  type ScriptNetwork,
   type ScriptOutputPort,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -67,11 +66,6 @@ export function readScriptEnv(node: WorkflowNode): Record<string, string> {
     if (typeof value === 'string') out[key] = value
   }
   return out
-}
-
-/** D4 — absent resolves to 'allow'. */
-export function resolveScriptNetwork(node: WorkflowNode): ScriptNetwork {
-  return record(node).network === 'deny' ? 'deny' : 'allow'
 }
 
 /** D8 — absent resolves to false (writable + iso + merge-back). */
@@ -551,7 +545,6 @@ export function serializeScriptSensitiveProjectionV1(definition: WorkflowDefinit
       })),
       dependencies: readScriptDependencies(node),
       env: Object.fromEntries(Object.entries(readScriptEnv(node)).sort(([a], [b]) => cmp(a, b))),
-      network: resolveScriptNetwork(node),
       readonly: resolveScriptReadonly(node),
       // RFC-269 抽取：入边决定 `AW_PORT_*` 的名字与取值、wrapper 归属决定跑不跑
       // 与跑几次 —— 两段推理与代码平台调用节点逐字相同，故由
@@ -578,46 +571,22 @@ export function definitionHasScriptNode(definition: WorkflowDefinition): boolean
  *
  * `mcpEnvIssues` is reused for the generic rules (legal identifier, no NUL, no
  * dynamic-loader variables) but it deliberately ALLOWS `PYTHONPATH` and
- * `NODE_OPTIONS` — reasonable for an MCP child, fatal here: those two are
- * exactly how a script would escape the read-only dependency boundary or load
- * arbitrary code before its own first line runs. `HOME`/`TMPDIR` would undo the
- * private-run-directory guarantee (AC-16), and `PATH` would re-point the
- * interpreter itself.
+ * `NODE_OPTIONS` — reasonable for an MCP child, unsafe here: those two load
+ * arbitrary code before the authored body or override the deterministic
+ * dependency environment.
  *
  * The platform writes its own keys LAST regardless, so this table is the
  * save-time diagnostic that tells the author why their variable was refused
  * instead of letting it be silently overwritten at run time.
  */
 export const SCRIPT_RESERVED_ENV_KEYS: readonly string[] = [
-  'PATH',
-  'HOME',
-  'TMPDIR',
-  'TMP',
-  'TEMP',
+  'PWD',
   'PYTHONPATH',
   'PYTHONHOME',
   'PYTHONSTARTUP',
   'NODE_PATH',
   'NODE_OPTIONS',
-  'LANG',
-  'LC_ALL',
-  // RFC-254 T23 — the Windows half. These are set by the platform for every
-  // script run (private profile + temp, plus the system variables a child
-  // needs to start at all), so an author-supplied value would either be
-  // silently overwritten or, worse, survive and redirect the run outside its
-  // sandboxed directory. Listed unconditionally rather than per-platform: a
-  // workflow definition is portable data, and a node that is valid on Linux
-  // must not become an override on Windows.
-  'USERPROFILE',
-  'HOMEDRIVE',
-  'HOMEPATH',
-  'APPDATA',
-  'LOCALAPPDATA',
-  'SYSTEMROOT',
-  'SYSTEMDRIVE',
-  'WINDIR',
-  'COMSPEC',
-  'PATHEXT',
+  // Kept platform-owned because it protects stdout's byte contract on Windows.
   'PYTHONUTF8',
 ]
 

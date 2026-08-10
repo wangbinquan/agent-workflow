@@ -1,5 +1,7 @@
 # RFC-224 opencode 执行身份完整性（从 RFC-223 拆出）
 
+> **已由 RFC-276 废弃（2026-08-10）**：verified execution identity/launcher/store 不再属于当前生产合同，本文仅保留历史记录。
+
 - 状态：Done（2026-07-24；完整提交链
   `b4b3e082c0bf010f123c3e93c7b9abbd1f4f877e` →
   `a7f6814e028aa27c082508107d1217029e0e417e` →

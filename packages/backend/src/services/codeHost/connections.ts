@@ -108,8 +108,8 @@ function unconfigured(provider: CodeHostProvider): CodeHostConnectionWire {
  * 再漂一次，所以留**一个**懒解析点，注入仍然优先（测试照旧注 stub）。
  *
  * 只读、绝不创建：`ensureSecretKey` 在缺文件时会**生成**密钥，而这条路径每
- * 派发一个 code-host 节点就走一次，必须无副作用（同 verifiedPlan 里
- * `readConfig` 而非 `loadConfig` 的既有纪律）。密钥缺失/损坏 ⇒ 返回 null，
+ * 派发一个 code-host 节点就走一次，必须无副作用，因此使用 `readConfig`
+ * 而非 `loadConfig`。密钥缺失/损坏 ⇒ 返回 null，
  * 节点仍以 `code-host-not-configured` 收场，与自跳过语义一致。
  */
 export function resolveCodeHostConnectionsFromKeyFile(

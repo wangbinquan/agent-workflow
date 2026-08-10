@@ -75,9 +75,8 @@ a short lock; a failed attempt is not merged. Independent DAG branches can
 therefore write concurrently without sharing a working directory.
 
 This is **Git isolation**, which protects task state and merge semantics. It is
-not an operating-system security boundary. OS containment is a separate,
-capability-probed layer: macOS uses Seatbelt and Linux uses bubblewrap when
-available; Windows currently has no containment provider. See
+not an operating-system security boundary. Runtime children execute as ordinary
+processes with the daemon account's file and network access. See
 [Platform and safety](#platform-and-safety).
 
 The daemon persists task and node state in SQLite, records events and runtime
@@ -252,32 +251,30 @@ In the UI:
 
 ## Platform and safety
 
-| Platform              | Release | OS containment                                                                                                                                                        |
-| --------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS, Apple Silicon  | Yes     | Built-in Seatbelt provider, subject to capability admission.                                                                                                          |
-| Linux, x86_64 / arm64 | Yes     | bubblewrap provider when installed and allowed by the host.                                                                                                           |
-| Windows, x86_64       | Yes     | No provider today: ordinary profiles run without containment under <code>warn</code>/<code>off</code>; <code>enforce</code> and explicit fail-closed profiles refuse. |
+| Platform              | Release | Runtime execution                                  |
+| --------------------- | ------- | -------------------------------------------------- |
+| macOS, Apple Silicon  | Yes     | Ordinary child processes under the daemon account. |
+| Linux, x86_64 / arm64 | Yes     | Ordinary child processes under the daemon account. |
+| Windows, x86_64       | Yes     | Ordinary child processes under the daemon account. |
 
 - **Git 2.38 or newer** is a daemon startup requirement and provides isolated
   merge-back through <code>git merge-tree --write-tree</code>.
-- <code>warn</code> is the default containment policy. An ordinary agent profile
-  can run degraded with a warning when the provider is unavailable;
-  <code>enforce</code> fails closed. Explicit fail-closed profiles, including
-  read-only or network-deny script profiles, never degrade.
-- Run <code>agent-workflow sandbox</code> for a read-only capability probe and
-  host-specific diagnostics and remediation guidance; some kernel guidance is
-  necessarily heuristic.
-- Windows requires Git for Windows to start the daemon. Verified OpenCode also
-  requires a Windows Defender exclusion for the Agent Workflow app home to avoid
-  intermittent launch-time access denial; see the containment guide before
-  deployment.
+- Runtime children are not OS-sandboxed. They can access files and networks that
+  the daemon account can access, so only run trusted Agent, Skill, Plugin and MCP
+  definitions.
+- A Claude runtime profile can opt in to the <code>IS_SANDBOX=1</code> CLI
+  compatibility marker. It is off by default and does not enable an OS sandbox
+  or add platform protections.
+- Explicit Agent permissions, ACLs, secret redaction, path validation, Git
+  credential handling and bounded process-tree cleanup remain enforced.
+- A read-only Script node uses a disposable worktree and never merges its changes
+  back; it is not a filesystem sandbox. Script network policy is no longer a
+  runtime control.
+- Windows requires Git for Windows to start the daemon.
 
-Containment is not a complete jail: the daemon itself is outside the sandbox,
-and the general outer boundary does not isolate network access by default.
-
-Read [Runtime containment](./docs/sandbox.md) before treating agent execution as
-trusted, and [Disaster recovery](./docs/disaster-recovery.md) before deploying a
-long-lived installation.
+Read [OpenCode runtime configuration](./docs/OPENCODE_CONFIG.md) for the current
+execution contract, and [Disaster recovery](./docs/disaster-recovery.md) before
+deploying a long-lived installation.
 
 ## Build from source
 
@@ -306,7 +303,7 @@ repository's current working agreements.
 | ------------------- | ------------------------------------------------------------------------------------------------------ |
 | Workflow definition | [Live workflow schema](./docs/workflow-yaml.md)                                                        |
 | Portable resources  | [Configuration packages](./docs/resource-packages.md) · [Resource bundles](./docs/resource-bundles.md) |
-| Runtime safety      | [Containment](./docs/sandbox.md) · [Disaster recovery](./docs/disaster-recovery.md)                    |
+| Runtime behavior    | [OpenCode configuration](./docs/OPENCODE_CONFIG.md) · [Disaster recovery](./docs/disaster-recovery.md) |
 | Integrations        | [Webhook triggers](./docs/webhook-triggers.md) · [Code-host calls](./docs/code-host-calls.md)          |
 | Design evolution    | [RFC index and implementation plans](./design/plan.md)                                                 |
 

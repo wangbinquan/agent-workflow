@@ -5,11 +5,8 @@
 // renders the declared outlets (`outputs`, or the implicit single `stdout`)
 // that WorkflowCanvas.computePorts pre-computed from `declaredPorts`.
 //
-// The badge row exists because the three facts that change what this node DOES
-// to the host — which interpreter, whether it can reach the network, whether it
-// can write the worktree — are invisible in the body preview. An author
-// scanning a canvas should be able to see "this one is offline and read-only"
-// without opening the drawer.
+// The badge row surfaces the interpreter, dependency count and readonly mode,
+// which are otherwise invisible in the body preview.
 
 import type { NodeProps } from '@xyflow/react'
 import { useTranslation } from 'react-i18next'
@@ -21,7 +18,6 @@ import { CanvasNodeCard } from './CanvasNodeCard'
 export interface ScriptNodeData extends CanvasNodeData {
   language?: string
   dependencyCount?: number
-  networkDenied?: boolean
   scriptReadonly?: boolean
 }
 
@@ -53,14 +49,6 @@ export function ScriptNode({ data, selected }: Props) {
         {deps > 0 ? (
           <span className="canvas-node__script-badge" data-testid="script-node-deps">
             {t('scriptNode.dependencyCount', { count: deps })}
-          </span>
-        ) : null}
-        {data.networkDenied === true ? (
-          <span
-            className="canvas-node__script-badge canvas-node__script-badge--deny"
-            data-testid="script-node-network-deny"
-          >
-            {t('scriptNode.networkDeny')}
           </span>
         ) : null}
         {data.scriptReadonly === true ? (

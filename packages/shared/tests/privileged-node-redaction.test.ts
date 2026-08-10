@@ -57,7 +57,6 @@ function scriptNode(overrides: Record<string, unknown> = {}): Record<string, unk
       ['API_KEY', 'sk-live-abc'],
       ['__proto__', 'polluted'],
     ]),
-    network: 'deny',
     readonly: true,
     ...overrides,
   }
@@ -155,9 +154,8 @@ describe('RFC-270 · 脚本节点脱敏', () => {
     expect(nodeById(many, 'sc1').dependencies).toEqual([MARKER, MARKER, MARKER])
   })
 
-  it('枚举与结构字段不遮：language / network / readonly / outputs / title', () => {
+  it('枚举与结构字段不遮：language / readonly / outputs / title', () => {
     expect(node.language).toBe('python')
-    expect(node.network).toBe('deny')
     expect(node.readonly).toBe(true)
     expect(node.outputs).toEqual([{ name: 'score', kind: 'number' }])
     expect(node.title).toBe('打分')

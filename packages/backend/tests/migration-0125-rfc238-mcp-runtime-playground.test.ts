@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path'
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
 
-function freezeThrough0124(): string {
+function freezeThrough(maxIdx: number): string {
   const dir = mkdtempSync(join(tmpdir(), 'rfc238-0125-'))
   tempDirs.push(dir)
   cpSync(MIGRATIONS, dir, { recursive: true })
@@ -17,7 +17,7 @@ function freezeThrough0124(): string {
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
     entries: Array<{ idx: number }>
   }
-  journal.entries = journal.entries.filter((entry) => entry.idx <= 123)
+  journal.entries = journal.entries.filter((entry) => entry.idx <= maxIdx)
   writeFileSync(journalPath, `${JSON.stringify(journal, null, 2)}\n`)
   return dir
 }
@@ -30,7 +30,7 @@ describe('migration 0125 RFC-238 MCP runtime playground', () => {
   test('adds lifecycle, idempotency, event, and private owner constraints', () => {
     const raw = new Database(':memory:')
     raw.exec('PRAGMA foreign_keys = ON')
-    migrate(drizzle(raw), { migrationsFolder: freezeThrough0124() })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough(123) })
     raw.exec(`
       INSERT INTO users (
         id, username, display_name, role, status, force_password_change,
@@ -45,7 +45,7 @@ describe('migration 0125 RFC-238 MCP runtime playground', () => {
       );
     `)
 
-    migrate(drizzle(raw), { migrationsFolder: MIGRATIONS })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough(124) })
 
     const hash = 'a'.repeat(64)
     const nonHexHash = `${'a'.repeat(63)}z`

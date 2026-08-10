@@ -192,8 +192,7 @@ export const NODE_KIND_BEHAVIORS = {
   // injection and clarify), and always writes its own node_run row.
   //
   // Unlike `script` it spawns NO subprocess — the daemon issues the request
-  // itself — so it never enters the containment admission surface. That
-  // difference lives in the executor, not in this table: every dimension here
+  // itself. That difference lives in the executor, not in this table: every dimension here
   // is about scheduling/lifecycle, which the two kinds genuinely share.
   'code-host-call': {
     retryCascade: 'mint-placeholder',

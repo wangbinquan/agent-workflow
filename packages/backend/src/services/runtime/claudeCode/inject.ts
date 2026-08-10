@@ -13,18 +13,9 @@ import { claudeBusinessGate } from './permissionMap'
  * Disabled entries + closure duplicates are dropped. Local `command` is an
  * `[cmd, ...args]` array in our schema → split into claude's `command` + `args`.
  * Returns null when nothing enabled remains (caller omits the flag).
- *
- * RFC-242 T5 — `localWrapperByName` carries the no-network wrappers a CONTROLLED
- * business node materialized (`netlessMcp.ts`). A named local entry is rewritten
- * to fork that wrapper instead of the raw command, and its `env` is deliberately
- * NOT emitted: the real command and its environment live in the 0400 manifest,
- * so MCP secrets stop travelling through this inline JSON (i.e. through argv,
- * readable by every process listing on the host). Absent from the map ⇒ the
- * historical raw shape, which is what an unconstrained node keeps.
  */
 export function toClaudeMcpConfig(
   mcps: readonly Mcp[],
-  localWrapperByName?: ReadonlyMap<string, string>,
 ): { mcpServers: Record<string, Record<string, unknown>> } | null {
   const servers: Record<string, Record<string, unknown>> = {}
   for (const m of mcps) {
@@ -33,11 +24,6 @@ export function toClaudeMcpConfig(
     // Object prototype from masquerading as an already-injected registry key.
     if (Object.hasOwn(servers, m.name)) continue // closure dedupe
     if (m.type === 'local') {
-      const wrapperPath = localWrapperByName?.get(m.name)
-      if (wrapperPath !== undefined) {
-        servers[m.name] = { command: wrapperPath, args: [] }
-        continue
-      }
       const command = Array.isArray(m.config.command) ? m.config.command : []
       const entry: Record<string, unknown> = { command: command[0] ?? '', args: command.slice(1) }
       if (m.config.env !== undefined) entry.env = m.config.env
@@ -64,9 +50,8 @@ export interface ClaudeAgentsOpts {
   /**
    * 2026-08-09 — RFC-113 profile per agent NAME, i.e. exactly
    * `BusinessNodeSpawnContext.resolvedParamsByAgent`, whose contract already
-   * says "live-resolved for each dependent". opencode has consumed the
-   * per-dependent model since RFC-251 (`hermetic.ts` passes `dep.model` /
-   * variant / temperature / steps); claude dropped it on the floor, so every
+   * says "live-resolved for each dependent". OpenCode has consumed the
+   * per-dependent model since RFC-251; Claude previously dropped it, so every
    * dependent silently ran on whatever the parent conversation used.
    */
   profileByName?: ReadonlyMap<string, { model: string | null }>

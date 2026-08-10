@@ -197,8 +197,8 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
   test('AC-12：六类各自的**完整**形态，不是只给 expectedVersion', () => {
     // ⚠️ 这条曾经被我在验收清单里勾成「已覆盖」，实际只实现了 expectedVersion +
     // expectedSnapshotHash —— 即只覆盖 workflow / workgroup。AC-12 的警告写的正是
-    // 这个状态：「另一标签把 agent 的 network 从 deny 改成 allow 后，原标签点导出会
-    // 静默导出新版本而不是 409」。
+    // 这个状态：「另一标签修改 agent 正文后，原标签点导出会静默导出新版本而不是
+    // 409」。
     const routes = read('src/routes/resourcePackages.ts')
     for (const key of [
       'expectedVersion',

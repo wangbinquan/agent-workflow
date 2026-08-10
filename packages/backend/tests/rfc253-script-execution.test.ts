@@ -19,19 +19,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import { extractScriptPorts } from '@/services/scriptPorts'
-import { runContainedProcess } from '@/services/execution/containedSpawn'
+import { runManagedProcess } from '@/services/execution/managedProcess'
 import { assembleScriptEnv } from '@/services/scriptRun'
-import {
-  computeSandboxPolicy,
-  renderBwrapArgs,
-  renderSeatbeltProfile,
-} from '@/services/sandbox/policy'
-import {
-  CONTAINMENT_REASON_CODES,
-  CONTAINMENT_REQUIREMENT_PROFILES,
-  containmentRequirementDigest,
-} from '@/services/sandbox/containmentCoordinator'
-import { sandboxActive, wrapSandbox } from '@/services/sandbox'
 
 const NONCE = 'abc123'
 
@@ -123,19 +112,22 @@ describe('environment assembly', () => {
     depsEnv: null,
   }
 
-  test('platform keys win over a node env overlay that tries to claim them', () => {
+  test('platform protocol keys win while ordinary authored env stays natural', () => {
     const { env } = assembleScriptEnv({
       ...common,
       node: node({
         language: 'python',
-        env: { HOME: '/tmp/evil', PYTHONPATH: '/tmp/evil', API_TOKEN: 'keep-me' },
+        env: {
+          PWD: '/tmp/evil',
+          AW_TASK_ID: 'wrong-task',
+          HOME: '/tmp/authored-home',
+          API_TOKEN: 'keep-me',
+        },
       }),
     })
-    // HOME is `join(runDir, 'home')` — win32 renders it with backslashes, so pin
-    // the platform-joined value rather than a POSIX literal. The point of the case
-    // is that the platform key wins over the node overlay's `HOME`, not its spelling.
-    expect(env.HOME).toBe(join('/run/dir', 'home'))
-    expect(env.PYTHONPATH).toBeUndefined() // no deps env ⇒ platform leaves it unset
+    expect(env.PWD).toBe('/wt')
+    expect(env.AW_TASK_ID).toBe('T1')
+    expect(env.HOME).toBe('/tmp/authored-home')
     expect(env.API_TOKEN).toBe('keep-me')
   })
 
@@ -149,80 +141,25 @@ describe('environment assembly', () => {
     expect(env.AW_DEPS_DIR).toBe('/envs/h/lib')
   })
 
-  test('the daemon environment is not inherited', () => {
-    const { env } = assembleScriptEnv({ ...common, node: node({ language: 'python' }) })
-    // A variable that exists in this test process must not appear unless the
-    // platform put it there deliberately.
-    expect(Object.keys(env)).not.toContain('AGENT_WORKFLOW_HOME')
-    expect(env.AW_PORT_REPORT).toBe('hello')
-    expect(env.AW_OUTPUT_MODE).toBe('stdout')
+  test('inherits the daemon environment before applying product keys', () => {
+    const key = 'RFC276_NATURAL_SCRIPT_ENV'
+    const before = process.env[key]
+    process.env[key] = 'visible'
+    try {
+      const { env } = assembleScriptEnv({ ...common, node: node({ language: 'python' }) })
+      expect(env[key]).toBe('visible')
+      expect(env.AW_PORT_REPORT).toBe('hello')
+      expect(env.AW_OUTPUT_MODE).toBe('stdout')
+    } finally {
+      if (before === undefined) delete process.env[key]
+      else process.env[key] = before
+    }
   })
 })
 
-// RFC-254: these render the Linux bwrap args / macOS SBPL profile — POSIX sandbox
-// specs that are never produced on Windows (D1: no win32 containment provider),
-// and the renderers use host `path` helpers so their output is host-dependent.
-// Exercised on the POSIX CI legs; skipped on win32.
-describe.skipIf(process.platform === 'win32')('network fence rendering', () => {
-  const base = {
-    appHome: '/home/u/.agent-workflow',
-    taskWorktrees: ['/home/u/.agent-workflow/worktrees/r/t1'],
-    runDir: '/home/u/.agent-workflow/runs/t1/r1',
-  }
-
-  test('off by default — the outer sandbox has never restricted the network', () => {
-    const policy = computeSandboxPolicy(base)
-    expect(renderBwrapArgs(policy)).not.toContain('--unshare-net')
-    expect(renderSeatbeltProfile(policy)).not.toContain('(deny network*)')
-  })
-
-  test('Linux masks the pathname-socket directories alongside --unshare-net', () => {
-    const args = renderBwrapArgs(computeSandboxPolicy({ ...base, networkDeny: true }))
-    expect(args).toContain('--unshare-net')
-    // `--unshare-net` only isolates ABSTRACT unix sockets; /run/user/<uid>/bus
-    // and /var/run/docker.sock arrive through `--bind / /`.
-    const joined = args.join(' ')
-    expect(joined).toContain('--tmpfs /run')
-    expect(joined).toContain('--tmpfs /var/run')
-  })
-
-  test('SBPL puts the network deny last, after (allow default)', () => {
-    const profile = renderSeatbeltProfile(computeSandboxPolicy({ ...base, networkDeny: true }))
-    const lines = profile.split('\n')
-    expect(lines[1]).toBe('(allow default)')
-    // Last-match-wins: a deny before the allow-default would be overridden.
-    expect(lines[lines.length - 1]).toBe('(deny network*)')
-    expect(lines.indexOf('(deny network*)')).toBeGreaterThan(lines.indexOf('(allow default)'))
-  })
-})
-
-describe('fail-closed containment profile', () => {
-  test('the netless profile declares failClosed and requires the outer fence', () => {
-    const profile = CONTAINMENT_REQUIREMENT_PROFILES['outer-netless-v1']
-    expect(profile.required).toContain('outerNetworkDeny')
-    expect(profile.failClosed).toBe(true)
-    expect(profile.childBoundary).toBe('none')
-  })
-
-  test('the allow path reuses runner-filesystem-v1 rather than cloning it', () => {
-    // design-gate F3: a profile names WHAT is required, never WHO requires it.
-    const ids = Object.keys(CONTAINMENT_REQUIREMENT_PROFILES)
-    expect(ids).not.toContain('script-node-v1')
-    expect(ids).toContain('runner-filesystem-v1')
-  })
-
-  test('failClosed participates in the requirement digest', () => {
-    // The digest is what a receipt is fingerprinted by; a rule that changes what
-    // an admission MEANS has to be inside it.
-    expect(containmentRequirementDigest('outer-netless-v1')).not.toBe(
-      containmentRequirementDigest('runner-filesystem-v1'),
-    )
-  })
-})
-
-describe('contained spawn', () => {
+describe('managed process', () => {
   // RFC-254: these exercise the spawn/capture/timeout/pid mechanics of
-  // `runContainedProcess`, which is platform-agnostic (it just `Bun.spawn`s the
+  // `runManagedProcess`, which is platform-agnostic (it just `Bun.spawn`s the
   // argv). The original fixtures hardcoded `/bin/sh <script>`, which does not
   // exist on Windows; drive the same behaviours with a portable `bun -e` command
   // so the mechanics are tested on every platform (script-nodes spawn on win32).
@@ -237,7 +174,7 @@ describe('contained spawn', () => {
   test('captures raw stdout byte for byte while still emitting lines', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rfc253-'))
     const lines: string[] = []
-    const result = await runContainedProcess({
+    const result = await runManagedProcess({
       argv: bunInline("process.stdout.write('a\\n\\nb\\n')"),
       cwd: dir,
       env: spawnEnv(),
@@ -257,7 +194,7 @@ describe('contained spawn', () => {
 
   test('reports a non-zero exit without throwing', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rfc253-'))
-    const result = await runContainedProcess({
+    const result = await runManagedProcess({
       argv: bunInline("process.stderr.write('boom\\n'); process.exit(3)"),
       cwd: dir,
       env: spawnEnv(),
@@ -268,7 +205,7 @@ describe('contained spawn', () => {
   })
 
   test('a missing binary is an outcome, not an exception', async () => {
-    const result = await runContainedProcess({
+    const result = await runManagedProcess({
       argv: ['/nonexistent/interpreter'],
       cwd: tmpdir(),
       env: {},
@@ -280,7 +217,7 @@ describe('contained spawn', () => {
   test('the spawn receipt fires before output is read, so a pid is always recorded', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rfc253-'))
     const marker = join(dir, 'pid.txt')
-    await runContainedProcess({
+    await runManagedProcess({
       argv: bunInline("process.stdout.write('done\\n')"),
       cwd: dir,
       env: spawnEnv(),
@@ -293,7 +230,7 @@ describe('contained spawn', () => {
 
   test('a runaway child is killed at the timeout', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rfc253-'))
-    const result = await runContainedProcess({
+    const result = await runManagedProcess({
       argv: bunInline('setTimeout(() => {}, 30000)'),
       cwd: dir,
       env: spawnEnv(),
@@ -301,113 +238,6 @@ describe('contained spawn', () => {
       killEscalationGraceMs: 200,
     })
     expect(result.outcome).toBe('timeout')
-  })
-})
-
-// Implementation-gate finding (2026-08-04): `off` mode could deliver a
-// "contained" verdict for a fail-closed bundle.
-//
-// The chain: `failClosed` skipped both `off` early-returns so the admission
-// fell through to qualification; on a host whose provider qualifies, the
-// decision came back `contained` and `admit()` did not throw — but the plan it
-// returned carries `mode: 'off'`, `sandboxActive()` is false for `off`, and
-// `wrapSandbox` therefore returns the argv untouched. A node that declared
-// `network: 'deny'` would have run with NO fence at all while the receipt said
-// it was fenced. That is the same privilege escalation D23 exists to prevent,
-// reached from the opposite direction of the `warn` case.
-describe('fail-closed admission cannot be satisfied by a mode that applies nothing', () => {
-  test('off mode leaves sandboxActive false, so a "contained" verdict would be a lie', () => {
-    // The invariant that makes the coordinator fix necessary: no matter how
-    // capable the provider is, `off` means the wrapper is a no-op.
-    const ctx = {
-      mode: 'off' as const,
-      status: { mechanism: 'bwrap' as const, available: true, detail: null },
-      appHome: '/home/u/.agent-workflow',
-      taskWorktrees: ['/home/u/.agent-workflow/worktrees/r/t1'],
-      runDir: '/home/u/.agent-workflow/runs/t1/r1',
-      networkDeny: true,
-    }
-    expect(sandboxActive(ctx)).toBe(false)
-    expect(wrapSandbox(['/usr/bin/python3', 's.py'], ctx)).toEqual(['/usr/bin/python3', 's.py'])
-  })
-
-  test('the netless profile declares failClosed, and the reason vocabulary can name this case', () => {
-    expect(CONTAINMENT_REQUIREMENT_PROFILES['outer-netless-v1'].failClosed).toBe(true)
-    // A distinct code matters: the capability may be perfectly present, so
-    // reporting `required-capability-missing` would send an operator hunting
-    // for a missing bwrap that is right there.
-    expect(CONTAINMENT_REASON_CODES).toContain('containment-mode-off')
-    expect(CONTAINMENT_REASON_CODES).toContain('required-capability-missing')
-  })
-
-  test('the reason vocabulary has exactly one definition (no hand-copied list)', () => {
-    // The manifest codec used to re-list these by hand and silently omitted the
-    // first code added after it was written.
-    const manifestSource = readFileSync(
-      resolve(import.meta.dir, '..', 'src/services/runtime/opencode/verifiedManifest.ts'),
-      'utf8',
-    )
-    expect(manifestSource).toContain('z.enum(CONTAINMENT_REASON_CODES)')
-    expect(manifestSource).not.toContain("'provider-lifecycle-unproven'")
-  })
-})
-
-// Implementation-gate findings (2026-08-04), both real:
-//
-//   A. `readonly: true` skipped the isolated worktree but left the canonical
-//      worktree as a read-WRITE allow-back — so the flag made a node MORE
-//      dangerous than the default (writes canonical with no merge-back
-//      discipline) while AC-10 claimed the boundary refused them.
-//   B. the spill file was named after the raw port name, which an author
-//      controls through an edge's target port — `../../..` would place a
-//      daemon-owned write outside the run directory.
-// RFC-254: same as network-fence rendering — these assert the Linux bwrap
-// read-write binds / macOS SBPL of the readonly policy, POSIX sandbox specs never
-// produced on win32 (D1). Exercised on the POSIX CI legs; skipped on win32.
-describe.skipIf(process.platform === 'win32')('readonly is a boundary, not a convention', () => {
-  const base = {
-    appHome: '/home/u/.agent-workflow',
-    taskWorktrees: ['/home/u/.agent-workflow/worktrees/r/t1'],
-    runDir: '/home/u/.agent-workflow/runs/t1/r1',
-  }
-
-  test('default: the worktree and the git mirror are writable', () => {
-    const policy = computeSandboxPolicy(base)
-    expect(policy.allowSubtrees).toContain('/home/u/.agent-workflow/worktrees/r/t1')
-    expect(policy.allowSubtrees).toContain('/home/u/.agent-workflow/repos')
-    expect(policy.readOnlyAllowSubtrees).not.toContain('/home/u/.agent-workflow/worktrees/r/t1')
-  })
-
-  test('readonly: only the private run dir stays writable', () => {
-    const policy = computeSandboxPolicy({ ...base, readOnlyWorktrees: true })
-    expect(policy.allowSubtrees).toEqual(['/home/u/.agent-workflow/runs/t1/r1'])
-    expect(policy.readOnlyAllowSubtrees).toContain('/home/u/.agent-workflow/worktrees/r/t1')
-    // The git mirror travels with it: leaving `repos` writable would still
-    // allow `git update-ref` and repo-config writes.
-    expect(policy.readOnlyAllowSubtrees).toContain('/home/u/.agent-workflow/repos')
-  })
-
-  test('readonly renders no read-write bind for the worktree on Linux', () => {
-    const args = renderBwrapArgs(computeSandboxPolicy({ ...base, readOnlyWorktrees: true }))
-    const wt = '/home/u/.agent-workflow/worktrees/r/t1'
-    const mirror = '/home/u/.agent-workflow/repos'
-    for (const path of [wt, mirror]) {
-      // A later `--bind` of the same path would silently undo the ro-bind, so
-      // the read-write form must be absent entirely rather than merely earlier.
-      const rw = args.findIndex((a, i) => a === '--bind' && args[i + 1] === path)
-      const ro = args.findIndex((a, i) => a === '--ro-bind' && args[i + 1] === path)
-      expect(rw).toBe(-1)
-      expect(ro).toBeGreaterThan(-1)
-    }
-  })
-
-  test('readonly denies writes on macOS while keeping reads', () => {
-    const profile = renderSeatbeltProfile(
-      computeSandboxPolicy({ ...base, readOnlyWorktrees: true }),
-    )
-    const wt = '/home/u/.agent-workflow/worktrees/r/t1'
-    expect(profile).toContain(`(allow file-read* (subpath "${wt}"))`)
-    expect(profile).not.toContain(`(allow file-read* file-write* (subpath "${wt}"))`)
   })
 })
 

@@ -1,220 +1,95 @@
-# OpenCode 版本无关 verified execution contract
+# OpenCode 运行时配置
 
-> 当前合同：RFC-224 的执行身份保证，经 RFC-227 supersede 后改为
-> **runtime binary digest + direct API behavior codec + containment capability**。
-> OpenCode 版本字符串只作信息展示，不参与准入、恢复或错误分类。
+> RFC-276 起，Agent Workflow 以普通子进程方式运行 OpenCode。平台不再冻结或校验
+> OpenCode 二进制、建立私有 HOME/XDG/store、阻断网络，或施加 OS sandbox。
+> OpenCode 的版本字符串仅用于展示和 CLI 参数兼容，不是安全准入条件。
 
-## 1. 三条独立判断轴
+## 1. 运行时选择与启动
 
-OpenCode 是否可用不能再压成一个 “found / not found”：
+- `config.json.opencodePath` 可以指定一个 OpenCode 可执行文件；未配置时使用 `PATH`
+  中的 `opencode`。
+- Runtime profile 可以为 Agent 指定模型、variant、temperature、steps 与 maxSteps。
+- 业务运行使用 `opencode run --agent <name> --format json --thinking`。OpenCode 1.18+
+  使用 `--auto`；已探测到更早版本时使用旧参数
+  `--dangerously-skip-permissions`。
+- 提示词通过 `--` 后的尾随参数传入；超过 120 KiB 时会在启动前给出可读错误。
+- 子进程 cwd 与 `PWD` 都指向任务 worktree。
 
-1. **Executable availability**
-   - PATH token 或绝对路径能否解析；
-   - 是否为可执行普通文件；
-   - 能否复制到本次运行的 private seal。
-2. **Protocol behavior**
-   - 能否启动 loopback `serve`；
-   - direct API endpoint、request/response schema、session、SSE event 与 same-instance
-     inventory 是否符合 `opencode-direct-v1`；
-   - 判定必须发生在首个模型请求之前。
-3. **Containment**
-   - 当前 provider 是否满足 host-home isolation、immutable artifact view、
-     model-child network deny 等必要能力；
-   - `enforce / warn / off` 决定缺少能力时是拒绝还是显式降级。
+Runtime Test 和 `GET /api/runtimes/status` 只报告可执行文件能否启动及其版本。状态为
+`not-found`、`unlaunchable`、`protocol-incompatible` 或 `ready`。
 
-任何 `--version` 输出（旧、新、极大、非 semver、空）都不会改变上述三条判断。
+## 2. 环境与机器配置
 
-## 2. Runtime binary 是管理员选择的本机 TCB
+OpenCode 继承 daemon 的普通环境，包括用户现有的 HOME、XDG、认证和 provider 配置。
+平台只叠加本次运行所需的值：
 
-`runtimeBinary.ts` 对管理员选择的 executable 做以下处理：
+- runtime profile 的 config-dir 环境变量（默认 `OPENCODE_CONFIG_DIR`）；
+- `OPENCODE_CONFIG_CONTENT` 内联 Agent/MCP/plugin 配置；
+- 可选 inventory 输出路径；
+- 任务配置的 Git author/committer 身份。
 
-1. 只接受一个 PATH token 或一个绝对 executable path，不接受 wrapper argv；
-2. canonical resolve，拒绝不存在、不可执行或非普通文件；
-3. 读取 source metadata 与 SHA-256；
-4. 以 exclusive create 复制到 caller-owned private seal；
-5. 复制后重新计算 digest，并复核 source inode/size/time/digest 没有发生竞态变化；
-6. server exec 前再次检查 snapshot 类型、权限与 digest。
+为避免 daemon 级权限覆盖本次 Agent 定义，继承的 `OPENCODE_PERMISSION` 会被删除。
+自定义 config-dir 环境变量不能命名为 `OPENCODE_PERMISSION`。
 
-SHA-256 只证明“本次执行的是已冻结的这些 bytes”，不是 OpenCode 官方签名，也不会与
-任何 release/version allowlist 比较。管理员改变 binary bytes 后，新运行得到新的 digest；
-已有 session 只有 digest 与 protocol codec 都相同时才能恢复。
+机器、用户和仓库自身的 OpenCode 配置仍按 OpenCode 的正常规则参与加载。平台不会把
+这些来源描述成经过校验或冻结的输入。
 
-关键实现：
+## 3. 内联配置
 
-- `packages/backend/src/services/runtime/opencode/runtimeBinary.ts`
-- `packages/backend/src/services/runtime/opencode/verifiedPlanCore.ts`
-- `packages/backend/src/services/runtime/opencode/verifiedLauncher.ts`
+### 3.1 Agent 与权限
 
-## 3. 行为 codec
+主 Agent 和依赖闭包中的 Agent 都写入 `OPENCODE_CONFIG_CONTENT.agent`。每个条目包括
+正文、描述、runtime profile 参数和作者显式配置的 `permission`。平台不再增加全局
+allow/deny 层；未声明操作由 OpenCode 自己的 `--auto` 行为处理。
 
-当前 codec id 是 `opencode-direct-v1`，由
-`packages/backend/src/services/runtime/opencode/directApiSchemas.ts` 所有。
+### 3.2 Skill 与 plugin
 
-verified launcher 在同一个 byte-frozen server instance 上完成：
+选中的 managed skill 会整目录复制到本次 runtime config 的 `skills/<name>/`。
+project skill 由 OpenCode 从 worktree 自行发现。Skill 中的 `.claude-plugin` 目录不会
+作为 skill 投影，以免跨越 skill/plugin 资源边界。
 
-> **RFC-251（2026-08-03）起，启动后的配置比对（attestation）已移除**：launcher
-> 不再重读 `/config`、不再对 `/agent` 做双读一致性比对，因此**不再证明**最终生效
-> 配置未被篡改。下面保留的各项是单次直读的事实校验（能发现「选中的 provider /
-> skill 确实不存在」这类真实错误），以及与 attestation 无关的会话/协议校验。
+启用的 managed plugin 以平台已解析的本地 `file://` spec 写入内联配置；禁用项不写入。
 
-- selected provider/model 存在性检查（单次读 `/config/providers`）；
-- `/agent` 单次读用于 verified inventory（不再双读比对）；
-- selected managed skill、MCP 与 source fingerprint 校验；
-- fresh/resume session identity 校验；
-- SSE 在 prompt POST 之前订阅；
-- message/session/event schema 与 monotonic message id 校验；
-- control marker/ACK 后才允许业务 prompt。
+### 3.3 MCP
 
-不兼容时返回稳定的 `execution-identity-protocol-incompatible` 或更具体的 execution
-identity code；不得把任意 upstream body、host path 或 secret 放进 wire error。
+启用的 MCP 写入 `OPENCODE_CONFIG_CONTENT.mcp`：
 
-reported version 可以写入 status/owner 作为 nullable telemetry，但：
+- local MCP 保留 command/args，`env` 映射为 `environment`，子进程 cwd 继承
+  OpenCode 的 worktree；
+- remote MCP 保留 URL、headers、OAuth 与 timeout；
+- 禁用项不写入，因此不会遮盖同名的继承配置。
 
-- manifest/control 不要求某个版本 literal；
-- owner resume 不比较 reported version；
-- boot recovery 不查询当前版本或 release 哈希；
-- status badge 不按版本大小或是否等于某值改变。
+OpenCode 将 MCP 工具权限名表示为 `<mcp-name>_<tool-name>`。Agent 的 permission
+字段若要点名单个 MCP 工具，应使用这个名字。
 
-## 4. Hermetic config 与 source identity
+## 4. 会话与进程生命周期
 
-生产执行继续保留 RFC-224 的安全保证：
+平台仍负责普通的运行可靠性：记录 PID、解析有界 stdout/stderr、处理 timeout/abort、
+以 `SIGTERM → SIGKILL` 回收整棵子进程树，并在 daemon 重启后修复中断状态。
+这些是生命周期管理，不构成安全隔离或执行身份认证。
 
-- `HOME`、XDG roots、managed/test/explicit config 与 tmp 都在 private store；
-- `OPENCODE_CONFIG_CONTENT` 包含完整受控配置，但不把 inline merge 顺序当信任边界；
-- project config、external skills、default plugins、model fetch、file watcher 等隐式来源关闭；
-- `scanOpencodeProjectSurface` 拒绝 repo/ancestor 的 `opencode.json[c]`、`.opencode`、
-  `reference(s)`、`.agents/skills` 与 `.claude/skills`；
-- selected managed skill whole-tree snapshot，无 symlink，正文 digest-tagged 注入，
-  auxiliary files 只读；
-- selected MCP closure 是唯一进入配置的 MCP 集合；local MCP 与可选 shell 经过
-  provider-owned no-network child launcher；
-- selected agent/model/provider/skill/MCP 与 source fingerprint 都加入 canonical
-  execution identity。
+## 5. 模型发现
 
-**RFC-256（机器 opencode 配置继承）**在这条边界上恢复**一条**读取面：`XDG_CONFIG_HOME` 与
-`OPENCODE_TEST_HOME` 指回操作者自身的目录，使 `~/.config/opencode/`、`$HOME/.opencode/`
-重新可读（`inheritMachineOpencodeConfig`，默认开；置 false 逐字节回到本节其余部分描述的
-密封姿态）。**未** 因此开放：仓库 `.opencode`（源指纹守卫 + `OPENCODE_DISABLE_PROJECT_CONFIG`
-不变）、会话存储 / 状态 / 缓存（保持每链私有，resume 与会话归属依赖之）、外部 skills、
-机器配置里声明的插件（`OPENCODE_PURE` 保持置位；被忽略的数量进运行诊断）。
-代价明示：能修改那台机器该目录的人即可改变 agent 的执行行为；机器配置不进 identity digest，
-故其变更不体现为身份变更。
+模型列表通过选定的 OpenCode 可执行文件在操作者的自然 cwd 和环境中运行，因此能看到
+与普通 OpenCode 命令相同的 provider、认证和机器配置。刷新会绕过平台的短期缓存。
 
-完整配置不是“兼容任意 OpenCode 行为”的承诺；行为 codec 不匹配仍应 fail closed。
+## 6. 安全边界
 
-## 5. Containment provider
+OpenCode 与 daemon 使用同一操作系统账户运行，默认能够访问该账户可访问的文件和网络。
+请把 Agent、Skill、Plugin、MCP、仓库内容和模型输出视为可执行或可影响执行的输入。
 
-OpenCode core 不读取 `process.platform` 决定准入。它只消费一个开放的 provider plan：
+平台仍保留独立于运行时加固的边界：用户认证与 ACL、秘密值加密和日志脱敏、输入及路径
+校验、Git 凭据处理、显式 Agent 权限映射、进程生命周期治理，以及 Script 节点
+`readonly` 的一次性 worktree/不回合并语义。它们不应被描述为 OS sandbox。
 
-```text
-providerId: string
-capabilities:
-  platformHomeIsolation: strong | best-effort | absent
-  immutableArtifactView: strong | best-effort | absent
-  modelChildNetworkDeny: strong | best-effort | absent
-  descendantLifetimeBound: strong | best-effort | absent
-childProviderPlan: provider-owned JSON
-```
+## 7. 维护检查
 
-内置 provider：
+修改 OpenCode 接口时至少覆盖：
 
-| provider         | outer/server                        | shell/local MCP                     | descendant lifetime |
-| ---------------- | ----------------------------------- | ----------------------------------- | ------------------- |
-| `linux-bwrap`    | private PID/network/mount namespace | nested no-network bwrap             | `strong`            |
-| `macos-seatbelt` | Seatbelt appHome/seal allowback     | Seatbelt no-network exact allowback | `best-effort`       |
-| `none`           | 无 OS containment                   | sanitized env only                  | `absent`            |
+- runtime probe、status、models 与 Runtime Test；
+- argv/env、inline Agent/MCP/plugin 配置和 permission 映射；
+- skill staging、session capture、timeout/abort 和进程树回收；
+- backend/shared/frontend tests、typecheck、lint、format、depcheck 和 binary smoke。
 
-Linux 专属的 root-owned bwrap probe、FFF capability 与 namespace/orphan 证据仍保留，
-但只存在于 Linux provider 分支。macOS Seatbelt 的真实 gated test证明：
-
-- appHome secret 不可读；
-- 当前 worktree 可写；
-- seal artifact 不可写；
-- model-reachable child network 被拒。
-
-未来 Windows Job Object/AppContainer provider 注册自己的 capability、outer renderer 与
-child renderer；common manifest/schema 使用开放 string/JSON，不需要加入
-`platform === "win32"` 的 OpenCode 特判。本合同不表示当前已发布 Windows 产品二进制。
-
-## 6. `enforce / warn / off`
-
-| mode      | provider baseline 完整 | provider 缺失/partial                                    |
-| --------- | ---------------------- | -------------------------------------------------------- |
-| `enforce` | contained execution    | 拒绝，稳定码 `execution-identity-containment-required`   |
-| `warn`    | contained execution    | 使用 `none` child provider 执行，状态 `degraded`，写告警 |
-| `off`     | 使用 `none`            | 使用 `none`；这是管理员显式接受的无 containment 策略     |
-
-`warn/off` 仍保留 binary/config/session identity，但不再保证宿主 secret 与 child network
-隔离。UI、日志和 lifecycle alert 不得把这种执行称为安全沙箱。
-
-## 7. Session provenance 与迁移
-
-`opencode_session_owners` 当前不可变 provenance：
-
-- `runtime_binary_digest`
-- `protocol_codec`
-- `identity_digest`
-- `session_contract_digest`
-- `session_store_key`
-- `project_id`
-- nullable `reported_version`
-
-Migration `0121_rfc227_opencode_provenance.sql` 无损 rebuild RFC-224 owner：
-
-- `official_build_digest → runtime_binary_digest`
-- 新增 `protocol_codec = opencode-direct-v1`
-- `opencode_version → reported_version`
-- owner、lease、index、task FK 与 all-or-none lease check 均保留。
-
-Resume 比较 digest + codec + canonical identity，不比较 reported version。Store lock reader
-仍能读取 legacy codec 1 的 `officialBuildDigest`，只用于升级兼容；新写入使用
-`runtimeBinaryDigest`。
-
-## 8. Status 与用户诊断
-
-`GET /api/runtimes/status` 的 OpenCode 状态：
-
-- `not-found`
-- `unlaunchable`
-- `available-unverified`
-- `protocol-incompatible`
-- `containment-blocked`
-- `degraded`
-- `ready`
-
-轻量 status 的成功 `--version` probe 只能证明 executable 可启动，因此 OpenCode 通常先
-显示 `available-unverified`；Runtime Test / models / actual run 执行 byte snapshot 与更深
-行为检查。“未找到”只用于真实缺失，不得再承接版本、协议或隔离失败。
-
-## 9. 维护检查清单
-
-修改 OpenCode 接口或 sandbox 时至少运行：
-
-- version-neutral probe 与 runtime status tests；
-- runtime binary snapshot/mutation tests；
-- direct schemas、manifest、control、launcher tests；
-- owner migration/resume/recovery tests；
-- containment truth table 与 Windows provider contract test；
-- Linux bwrap/FFF gated evidence；
-- macOS Seatbelt gated evidence；
-- **RFC-254 的平台面套件**（`packages/backend/tests/rfc254-*.test.ts`）——受控 PATH、
-  env 键折叠、artifact layout、文件信任原语、脚本节点解释器解析都在里面，且**每一条
-  都以注入的 platform 断言 win32 分支**，所以在 POSIX 上改这些也照样能被验到；
-- **平台面负向扫描守卫**（`rfc254-platform-surface-guard.test.ts`）——新增的
-  `Bun.spawn` / 路径前缀 / PATH 拼接 / 空设备 / 文件身份写法若绕开原语会在这里红，
-  豁免须逐条写明理由；
-- backend/shared/frontend 全量 test、typecheck、lint、format、depcheck 与 binary smoke。
-
-禁止在当前 production graph 重新引入：
-
-- `MIN_OPENCODE_VERSION` / `PINNED_OPENCODE_VERSION`；
-- OpenCode admission 的 semver compare；
-- 单 release hash allowlist；
-- `platform !== "linux"` 的 core admission；
-- 把 digest 描述为 vendor authenticity proof；
-- 把 `warn/off` 描述为仍具备 host/network containment；
-- 直接读 `process.platform` 做平台判断（平台事实经注入，见 RFC-254 T11c）；
-- 在 win32 的受控 config 里写 `shell` 键——**缺席本身是身份的一部分**（RFC-254 T13）；
-- 经由 `.cmd` 垫片启动任何子进程——cmd.exe 会对 argv 重新分词（RFC-254 D17）。
-
-历史合同保存在 RFC-224；RFC-227 是上述版本与平台条款的当前 supersession。
+历史的 verified execution、containment 与 sandbox 合同保存在 RFC-205、RFC-216、
+RFC-224、RFC-227、RFC-233 和 RFC-272；它们已由 RFC-276 废弃，不是当前运行时合同。

@@ -22,12 +22,10 @@ import type {
   RuntimeStatusEntry,
   RuntimesStatusResponse,
 } from '@agent-workflow/shared'
-import { isExecutionIdentityFailureCode } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { hasSeenTour } from '@/components/tour/SpotlightTour'
 import { pickGreetingKey } from '@/lib/homepage'
-import { describeTaskFailure } from '@/lib/task-failure'
 import { PipelineHero } from './PipelineHero'
 import { useOverview } from './useOverview'
 
@@ -74,16 +72,10 @@ interface RuntimeItemView {
   severity: Severity
   muted: boolean
   text: string
-  failure?: RuntimeFailureView
-}
-
-interface RuntimeFailureView {
-  title: string
-  hint?: string
 }
 
 type RuntimesView =
-  | { kind: 'single'; severity: Severity; text: string; failure?: RuntimeFailureView }
+  | { kind: 'single'; severity: Severity; text: string }
   | { kind: 'items'; items: RuntimeItemView[] }
 
 /**
@@ -126,7 +118,6 @@ export function HomepageGreeting() {
             {view.kind === 'single' ? (
               <>
                 <Dot severity={view.severity} /> {view.text}
-                <RuntimeFailure failure={view.failure} />
               </>
             ) : (
               view.items.map((item, i) => (
@@ -138,7 +129,6 @@ export function HomepageGreeting() {
                   )}
                   <Dot severity={item.severity} />
                   <span className={item.muted ? 'muted' : undefined}>{item.text}</span>
-                  <RuntimeFailure failure={item.failure} />
                 </span>
               ))
             )}
@@ -215,31 +205,9 @@ function Dot({ severity }: { severity: Severity }) {
   )
 }
 
-function RuntimeFailure({ failure }: { failure?: RuntimeFailureView }) {
-  if (failure === undefined) return null
-  return (
-    <span className="homepage__runtime-failure">
-      {' — '}
-      {failure.title}
-      {failure.hint !== undefined && ` ${failure.hint}`}
-    </span>
-  )
-}
-
-/** RFC-227 degraded is visible even though policy permits execution. */
 function itemSeverity(row: Pick<RuntimeStatusEntry, 'ok' | 'isDefault' | 'state'>): Severity {
-  if (row.state === 'degraded') return 'soft'
   if (row.ok) return 'ok'
   return row.isDefault ? 'fault' : 'soft'
-}
-
-function runtimeFailure(row: RuntimeStatusEntry): RuntimeFailureView | undefined {
-  if (row.ok || !isExecutionIdentityFailureCode(row.failureCode)) return undefined
-  const copy = describeTaskFailure({ failureCode: row.failureCode })
-  return {
-    title: copy.title,
-    ...(copy.hint !== undefined ? { hint: copy.hint } : {}),
-  }
 }
 
 function runtimeItemText(
@@ -252,21 +220,10 @@ function runtimeItemText(
       return row.version !== null
         ? t('home.runtime.item.ready', { name: row.name, version: row.version })
         : t('home.runtime.item.readyNoVersion', { name: row.name })
-    case 'available-unverified':
-      return row.version !== null
-        ? t('home.runtime.item.availableUnverifiedVersion', {
-            name: row.name,
-            version: row.version,
-          })
-        : t('home.runtime.item.availableUnverified', { name: row.name })
     case 'unlaunchable':
       return t('home.runtime.item.unlaunchable', { name: row.name })
     case 'protocol-incompatible':
       return t('home.runtime.item.protocolIncompatible', { name: row.name })
-    case 'containment-blocked':
-      return t('home.runtime.item.containmentBlocked', { name: row.name })
-    case 'degraded':
-      return t('home.runtime.item.degraded', { name: row.name })
     case 'not-found':
       return t('home.runtime.item.missing', { name: row.name })
   }
@@ -288,10 +245,7 @@ function describeRuntimes(
     return { kind: 'single', severity: 'soft', text: t('home.runtime.noneEnabled') }
   }
   if (rows.length > AGGREGATE_THRESHOLD) {
-    // A policy-permitted degraded runtime remains executable, but it is not
-    // healthy. Counting it green in the collapsed view would hide the exact
-    // cross-platform containment warning that the expanded view exposes.
-    const ok = rows.filter((r) => r.ok && r.state !== 'degraded').length
+    const ok = rows.filter((r) => r.ok).length
     if (ok === rows.length) {
       return {
         kind: 'single',
@@ -302,8 +256,7 @@ function describeRuntimes(
     // Name the WORST failure, not the first one — a soft grey row must not
     // shadow a red default-runtime fault (design D1 / Codex gate F5).
     const fault = rows.find((r) => !r.ok && r.isDefault)
-    const worst = fault ?? rows.find((r) => !r.ok) ?? rows.find((r) => r.state === 'degraded')
-    const failure = worst === undefined ? undefined : runtimeFailure(worst)
+    const worst = fault ?? rows.find((r) => !r.ok)
     return {
       kind: 'single',
       severity: fault !== undefined ? 'fault' : 'soft',
@@ -312,18 +265,15 @@ function describeRuntimes(
         total: rows.length,
         name: worst?.name ?? '',
       }),
-      ...(failure !== undefined ? { failure } : {}),
     }
   }
   return {
     kind: 'items',
     items: rows.map((row) => {
-      const failure = runtimeFailure(row)
       return {
         key: row.name,
         severity: itemSeverity(row),
         muted: !row.ok && !row.isDefault,
-        ...(failure !== undefined ? { failure } : {}),
         text: runtimeItemText(t, row),
       }
     }),

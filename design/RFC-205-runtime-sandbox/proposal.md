@@ -1,5 +1,7 @@
 # RFC-205 — 运行时沙箱（把平台秘密挡在 agent 进程之外）
 
+> **已由 RFC-276 废弃（2026-08-10）**：本文仅保留历史设计与验收记录；当前生产路径不再启用 OS sandbox/containment。
+
 - 状态：Draft（2026-07-21 起草；编号自 RFC-204 §2 移出预留）
 - 触发：RFC-204「仓库 Git 凭据封存」二轮 Codex 设计门**证实静态加密对 P0-b 无效**——agent
   进程与 daemon 同 UID，可直读 `secret.key` + `db.sqlite` 自行解开 `url_enc`，「把凭据从

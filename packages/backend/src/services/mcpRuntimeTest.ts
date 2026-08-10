@@ -5,9 +5,9 @@
 // bearing on process or session lifetime.
 
 import { Buffer } from 'node:buffer'
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
-import { basename, dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
@@ -34,17 +34,11 @@ import {
   mcpRuntimeTestEvents,
   mcpRuntimeTestSessions,
   mcpRuntimeTestTurns,
-  opencodeMcpTestSessionOwners,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { getRuntimeDriver } from '@/services/runtime'
-import type {
-  McpTestSpawnPlan,
-  RuntimeMcpTestCapabilityV1,
-  SpawnPlan,
-} from '@/services/runtime/types'
+import type { RuntimeMcpTestCapabilityV1, SpawnPlan } from '@/services/runtime/types'
 import { getRuntime, type RuntimeRow } from '@/services/runtimeRegistry'
-import type { ContainmentCoordinator } from '@/services/sandbox'
 import {
   emptySystemAgentOutputEvidence,
   runSystemAgent,
@@ -63,24 +57,13 @@ import {
   type StaleRunKillOutcome,
 } from '@/util/process'
 import { prepareMcpTestExecutionMaterial } from '@/services/runtime/mcpTestExecutionMaterial'
-import { opencodeMcpTestSessionStore } from '@/services/runtime/opencode/verifiedMcpTestPlan'
 import {
-  ControlMarkerTracker,
-  writeControlAckExclusive,
-} from '@/services/runtime/opencode/controlProtocol'
-import { removeHermeticOpencodeLayout } from '@/services/runtime/opencode/hermetic'
-import {
-  inspectAbandonedOpencodeStoreLock,
-  removeAbandonedOpencodeStoreLock,
-} from '@/services/runtime/opencode/storeHygiene'
-import {
-  claimNewMcpRuntimeTestSession,
-  confirmMcpRuntimeTestResume,
-  getMcpRuntimeTestOwner,
-  preclaimMcpRuntimeTestResume,
-  releaseMcpRuntimeTestLease,
+  claimNewMcpRuntimeTestSessionLease,
+  preclaimMcpRuntimeTestSessionLease,
+  releaseMcpRuntimeTestSessionLease,
+  repairMcpRuntimeTestSessionLeaseAfterReap,
   type McpRuntimeTestLeaseToken,
-} from '@/services/mcpRuntimeTestOwner'
+} from '@/services/mcpRuntimeTestLease'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
 
 export const MCP_RUNTIME_TEST_IDLE_MS = 10 * 60_000
@@ -105,7 +88,6 @@ export interface McpRuntimeTestDependencies {
   db: DbClient
   configPath: string
   appHome: string
-  containmentCoordinator?: ContainmentCoordinator
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
   now?: () => number
   capacity?: number
@@ -131,17 +113,11 @@ interface ResolvedTestRuntime {
   capability: RuntimeMcpTestCapabilityV1
   binary: string
   snapshotJson: string
-  fingerprint: string
 }
 
 export function isRuntimeMcpTestEligible(row: Pick<RuntimeRow, 'protocol' | 'model'>): boolean {
   const capability = getRuntimeDriver(row.protocol).mcpTest
-  if (capability === undefined) return false
-  if (capability.sessionOwnerReceipt === null) return true
-  const model = row.model
-  if (typeof model !== 'string' || model.includes('\0')) return false
-  const slash = model.indexOf('/')
-  return slash > 0 && slash < model.length - 1
+  return capability !== undefined
 }
 
 interface QueueItem {
@@ -244,7 +220,6 @@ function resultFailureCode(
   ) {
     return durableFailureCode
   }
-  if (result.failureCode !== undefined) return result.failureCode
   if (result.status === 'ok') return null
   return `mcp-test-${result.status}`
 }
@@ -260,6 +235,7 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
     private readonly db: DbClient,
     private readonly owner: EventSinkOwner,
     private readonly notify?: () => void,
+    private readonly claimNativeSession?: (sessionId: string) => void,
   ) {}
 
   append(event: Parameters<SystemAgentEventSinkV1['append']>[0]): Promise<void> {
@@ -382,6 +358,15 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
 
   setRootSessionId(sessionId: string): Promise<void> {
     return this.enqueue(() => {
+      const before = this.db
+        .select()
+        .from(mcpRuntimeTestSessions)
+        .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
+        .get()
+      if (before === undefined) {
+        throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
+      }
+      if (before.runtimeSessionId === null) this.claimNativeSession?.(sessionId)
       dbTxSync(this.db, (tx) => {
         const row = tx
           .select()
@@ -395,12 +380,11 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
           tx.update(mcpRuntimeTestSessions)
             .set({
               nativeSessionState: 'unusable',
-              continuationBlockedReason: 'session-root-mismatch',
             })
             .where(eq(mcpRuntimeTestSessions.id, row.id))
             .run()
           throw new ConflictError(
-            'mcp-test-session-root-mismatch',
+            'mcp-test-runtime-session-changed',
             'runtime returned a different native session id',
           )
         }
@@ -587,8 +571,7 @@ export class McpRuntimeTestService {
                     ...(session.status === 'active'
                       ? {
                           nativeSessionState: 'unusable' as const,
-                          continuationBlockedReason:
-                            session.continuationBlockedReason ?? 'session-store-missing',
+                          continuationBlockedReason: session.continuationBlockedReason,
                         }
                       : {}),
                   },
@@ -736,13 +719,6 @@ export class McpRuntimeTestService {
     const turnId = ulid()
     const scratchRoot = join(this.deps.appHome, 'mcp-runtime-tests', sessionId)
     const runtimeSessionId = runtime.capability.createNativeSessionId()
-    const sessionStoreRoot =
-      runtime.capability.sessionOwnerReceipt !== null
-        ? opencodeMcpTestSessionStore({
-            appHome: this.deps.appHome,
-            sessionId,
-          }).root
-        : join(scratchRoot, 'session-store')
 
     const receipt = dbTxSync(this.deps.db, (tx) => {
       const racedReplay = tx
@@ -825,9 +801,6 @@ export class McpRuntimeTestService {
         )
         .all()
       for (const previous of replaceable) {
-        tx.delete(opencodeMcpTestSessionOwners)
-          .where(eq(opencodeMcpTestSessionOwners.testSessionId, previous.id))
-          .run()
         tx.delete(mcpRuntimeTestSessions).where(eq(mcpRuntimeTestSessions.id, previous.id)).run()
       }
 
@@ -845,7 +818,6 @@ export class McpRuntimeTestService {
           runtimeName: runtime.row.name,
           runtimeProtocol: runtime.row.protocol,
           runtimeSnapshotJson: runtime.snapshotJson,
-          runtimeFingerprint: runtime.fingerprint,
           runtimeBinaryPath: runtime.binary,
           runtimeSessionId,
           nativeSessionState: 'pending',
@@ -854,8 +826,6 @@ export class McpRuntimeTestService {
           sessionVersion: 1,
           idleDeadlineAt: null,
           scratchRoot,
-          sessionStoreRoot,
-          sessionStoreDbPath: runtime.capability.sessionStoreDbPath(sessionStoreRoot),
           cleanupState: 'not-started',
           createdAt: now,
           updatedAt: now,
@@ -940,7 +910,7 @@ export class McpRuntimeTestService {
     const runtime = await this.resolveRuntime(session.runtimeName)
     if (
       runtime.row.id !== session.runtimeRowId ||
-      runtime.fingerprint !== session.runtimeFingerprint
+      runtime.snapshotJson !== session.runtimeSnapshotJson
     ) {
       await this.invalidateSession(session.id, 'runtime-profile-changed')
       throw new ConflictError('mcp-test-session-stale', 'the runtime changed; start a new test')
@@ -1586,7 +1556,7 @@ export class McpRuntimeTestService {
   /**
    * Complete lifecycle work whose durable intent was committed atomically by
    * an MCP/ACL/runtime/user mutation. This post-commit phase may abort and reap
-   * a child, clean its store, and publish the owner-scoped locator frame.
+   * a child, clean its scratch directory, and publish the owner-scoped locator frame.
    */
   async reconcileDurableIntents(): Promise<void> {
     await this.start()
@@ -1704,9 +1674,6 @@ export class McpRuntimeTestService {
         { now: this.now() },
       )
       if (!['not-alive', 'killed'].includes(outcome)) continue
-      const owner = getMcpRuntimeTestOwner(this.deps.db, session.id)
-      if (!(await this.recoverOwnerStoreAfterReap(session, turn, owner))) continue
-
       const recovered = dbTxSync(this.deps.db, (tx) => {
         const currentSession = tx
           .select()
@@ -1741,6 +1708,7 @@ export class McpRuntimeTestService {
         return true
       })
       if (!recovered) continue
+      repairMcpRuntimeTestSessionLeaseAfterReap(this.deps.db, session.id, turn.id, true)
       this.broadcastSession(session.id)
       await this.finishEndingSession(session.id)
     }
@@ -1816,8 +1784,7 @@ export class McpRuntimeTestService {
                   status: 'ending',
                   endReason: 'session-unusable',
                   nativeSessionState: 'unusable',
-                  continuationBlockedReason:
-                    session.continuationBlockedReason ?? 'session-store-missing',
+                  continuationBlockedReason: session.continuationBlockedReason,
                   inFlightTurnId: null,
                   idleDeadlineAt: null,
                   sessionVersion: session.sessionVersion + 1,
@@ -1970,78 +1937,6 @@ export class McpRuntimeTestService {
     }
   }
 
-  private async recoverOwnerStoreAfterReap(
-    session: SessionRow,
-    turn: TurnRow,
-    owner: ReturnType<typeof getMcpRuntimeTestOwner>,
-  ): Promise<boolean> {
-    const capability = getRuntimeDriver(session.runtimeProtocol).mcpTest
-    if (capability === undefined) return false
-    if (capability.sessionOwnerReceipt === null) return true
-    if (session.sessionStoreDbPath === null) return false
-    try {
-      const abandoned = await inspectAbandonedOpencodeStoreLock(session.sessionStoreDbPath)
-      const leaseHeld =
-        owner !== undefined &&
-        owner.leaseTurnId !== null &&
-        owner.leaseAcquiredAt !== null &&
-        owner.leaseNonceDigest !== null
-      if (
-        owner !== undefined &&
-        !leaseHeld &&
-        (owner.leaseTurnId !== null ||
-          owner.leaseAcquiredAt !== null ||
-          owner.leaseNonceDigest !== null)
-      ) {
-        return false
-      }
-      if (
-        leaseHeld &&
-        (owner.leaseTurnId !== turn.id ||
-          (abandoned?.nonceDigest !== undefined &&
-            abandoned.nonceDigest !== owner.leaseNonceDigest))
-      ) {
-        return false
-      }
-      if (abandoned !== null) {
-        const server = abandoned.server
-        if (server === null && !leaseHeld) return false
-        if (server !== null) {
-          const expectedStoreKey = owner?.sessionStoreKey ?? basename(session.sessionStoreRoot)
-          if (
-            server.scope.kind !== 'mcp-test' ||
-            server.scope.testSessionId !== session.id ||
-            server.scope.turnId !== turn.id ||
-            server.scope.mode !== (turn.seq === 1 ? 'new' : 'resume') ||
-            server.sessionStoreKey !== expectedStoreKey ||
-            session.runtimeBinaryDigest === null ||
-            server.runtimeBinaryDigest !== session.runtimeBinaryDigest
-          ) {
-            return false
-          }
-        }
-        const removed = await removeAbandonedOpencodeStoreLock({
-          dbPath: session.sessionStoreDbPath,
-          expectedNonceDigest: abandoned.nonceDigest,
-          expectedServer: abandoned.server,
-          outerSandboxProcessGroupDead: true,
-        })
-        if (!removed) return false
-      }
-      if (leaseHeld && owner !== undefined && owner.leaseNonceDigest !== null) {
-        return releaseMcpRuntimeTestLease(this.deps.db, {
-          runtimeSessionId: owner.runtimeSessionId,
-          testSessionId: session.id,
-          turnId: turn.id,
-          leaseNonceDigest: owner.leaseNonceDigest,
-        })
-      }
-      return true
-    } catch {
-      return false
-    }
-  }
-
   private async bootRecover(): Promise<void> {
     const sessions = this.deps.db
       .select()
@@ -2050,7 +1945,6 @@ export class McpRuntimeTestService {
       .all()
     for (const session of sessions) {
       const capability = getRuntimeDriver(session.runtimeProtocol).mcpTest
-      const hasOwnerReceipt = capability?.sessionOwnerReceipt != null
       if (session.inFlightTurnId === null) {
         if (session.status === 'ending') await this.finishEndingSession(session.id)
         continue
@@ -2074,33 +1968,23 @@ export class McpRuntimeTestService {
         )
       }
       const childReapProven = ['not-alive', 'killed'].includes(reapOutcome)
-      const owner = getMcpRuntimeTestOwner(this.deps.db, session.id)
       const queuedWithoutChild = turn?.status === 'queued' && turn.pid === null
-      const storeRecovered =
-        turn !== undefined && childReapProven
-          ? await this.recoverOwnerStoreAfterReap(session, turn, owner)
-          : queuedWithoutChild
       const quarantine =
         reapOutcome === 'missing-turn' ||
         (reapOutcome === 'no-pid' && !queuedWithoutChild) ||
         reapOutcome === 'command-mismatch' ||
         reapOutcome === 'window-expired' ||
         reapOutcome === 'kill-failed' ||
-        !storeRecovered
+        (!queuedWithoutChild && !childReapProven)
       const captureComplete =
         queuedWithoutChild || (turn !== undefined && turn.captureState === 'complete')
-      const storePresent = hasOwnerReceipt
-        ? existsSync(session.sessionStoreRoot)
-        : existsSync(session.scratchRoot)
-      const ownerProven = !hasOwnerReceipt || this.deps.runFn !== undefined || owner !== undefined
       const resumable =
         capability !== undefined &&
         !quarantine &&
         session.status === 'active' &&
         canResumeNativeSession(session) &&
         captureComplete &&
-        storePresent &&
-        ownerProven
+        existsSync(session.scratchRoot)
       const now = this.now()
       dbTxSync(this.deps.db, (tx) => {
         const current = tx
@@ -2159,9 +2043,7 @@ export class McpRuntimeTestService {
               nativeSessionState: 'unusable',
               continuationBlockedReason:
                 current.continuationBlockedReason ??
-                (current.nativeSessionState === 'ready'
-                  ? 'capture-incomplete'
-                  : 'session-store-missing'),
+                (current.nativeSessionState === 'ready' ? 'capture-incomplete' : null),
               inFlightTurnId: null,
               idleDeadlineAt: null,
               sessionVersion: current.sessionVersion + 1,
@@ -2177,6 +2059,9 @@ export class McpRuntimeTestService {
             .run()
         }
       })
+      if (turn !== undefined && childReapProven) {
+        repairMcpRuntimeTestSessionLeaseAfterReap(this.deps.db, session.id, turn.id, true)
+      }
       this.broadcastSession(session.id)
       if (quarantine) {
         this.log.error('mcp-test-boot-reap-unproven', {
@@ -2232,13 +2117,14 @@ export class McpRuntimeTestService {
       temperature: row.temperature,
       steps: row.steps,
       maxSteps: row.maxSteps,
+      isSandbox: row.isSandbox,
       configDirEnv: row.configDirEnv,
       configDirName: row.configDirName,
       probeFence: row.probeFence,
       mcpTestProfileCodec: capability.codec,
     }
     const snapshotJson = stableJson(snapshot)
-    return { row, capability, binary, snapshotJson, fingerprint: sha256(snapshotJson) }
+    return { row, capability, binary, snapshotJson }
   }
 
   private requireSession(sessionId: string, mcpId: string): SessionRow {
@@ -2275,7 +2161,6 @@ export class McpRuntimeTestService {
       endReason: row.endReason,
       runtime: { name: row.runtimeName, protocol: row.runtimeProtocol },
       mcpConfigHash: row.mcpConfigHash,
-      runtimeFingerprint: row.runtimeFingerprint,
       nativeSessionReady: row.nativeSessionState === 'ready',
       continuationBlockedReason: row.continuationBlockedReason,
       inFlightTurnId: row.inFlightTurnId,
@@ -2491,85 +2376,63 @@ export class McpRuntimeTestService {
     }
     if (
       runtime.row.id !== session.runtimeRowId ||
-      runtime.fingerprint !== session.runtimeFingerprint
+      runtime.snapshotJson !== session.runtimeSnapshotJson
     ) {
       await this.failBeforeRun(item, 'mcp-test-runtime-profile-changed', 'runtime-profile-changed')
       return
     }
 
-    const sink = new McpRuntimeTestEventSink(this.deps.db, item, () =>
-      this.broadcastSession(item.sessionId),
+    const leaseNonceDigest = sha256(
+      stableJson({ sessionId: session.id, turnId: turn.id, nonce: ulid() }),
     )
-    const controlTracker = new ControlMarkerTracker()
-    const controlNonce = randomBytes(32).toString('base64url')
-    const leaseNonceDigest = sha256(controlNonce)
-    let leaseToken: McpRuntimeTestLeaseToken | undefined
-    let resumeOwner: ReturnType<typeof getMcpRuntimeTestOwner>
-    let opencodeControl:
-      | NonNullable<Parameters<RuntimeMcpTestCapabilityV1['buildSpawn']>[0]['opencodeControl']>
-      | undefined
-    if (runtime.capability.sessionOwnerReceipt !== null && this.deps.runFn === undefined) {
-      try {
-        resumeOwner = getMcpRuntimeTestOwner(this.deps.db, session.id)
-        if (turn.seq === 1) {
-          if (resumeOwner !== undefined || session.runtimeSessionId !== null) {
-            throw new Error('mcp-test-new-owner-already-exists')
-          }
-          opencodeControl = {
-            kind: 'new',
-            nonce: controlNonce,
-            leaseNonceDigest,
-            createdTurnId: turn.id,
-          }
-        } else {
-          if (
-            resumeOwner === undefined ||
-            session.runtimeSessionId === null ||
-            resumeOwner.runtimeSessionId !== session.runtimeSessionId
-          ) {
-            throw new Error('mcp-test-resume-owner-missing')
-          }
-          preclaimMcpRuntimeTestResume(this.deps.db, {
-            runtimeSessionId: resumeOwner.runtimeSessionId,
-            testSessionId: session.id,
-            turnId: turn.id,
-            createdTurnId: resumeOwner.createdTurnId,
-            identityDigest: resumeOwner.identityDigest,
-            runtimeBinaryDigest: resumeOwner.runtimeBinaryDigest,
-            sessionContractDigest: resumeOwner.sessionContractDigest,
-            sessionStoreKey: resumeOwner.sessionStoreKey,
-            protocolCodec: resumeOwner.protocolCodec,
-            leaseNonceDigest,
-            leasedAt: this.now(),
-          })
-          leaseToken = {
-            runtimeSessionId: resumeOwner.runtimeSessionId,
-            testSessionId: session.id,
-            turnId: turn.id,
-            leaseNonceDigest,
-          }
-          opencodeControl = {
-            kind: 'resume',
-            nonce: controlNonce,
-            leaseNonceDigest,
-            createdTurnId: resumeOwner.createdTurnId,
-            expectedSessionId: resumeOwner.runtimeSessionId,
-            expectedProjectId: resumeOwner.projectId,
-            expectedIdentityDigest: resumeOwner.identityDigest,
-            expectedRuntimeBinaryDigest: resumeOwner.runtimeBinaryDigest,
-            expectedSessionContractDigest: resumeOwner.sessionContractDigest,
-            expectedSessionStoreKey: resumeOwner.sessionStoreKey,
-            expectedProtocolCodec: resumeOwner.protocolCodec,
-          }
+    let nativeLease: McpRuntimeTestLeaseToken | undefined
+    const claimNativeSession = (runtimeSessionId: string): void => {
+      if (nativeLease !== undefined) {
+        if (nativeLease.runtimeSessionId !== runtimeSessionId) {
+          throw new Error('runtime changed native session id during one turn')
         }
-      } catch {
-        await this.failBeforeRun(item, 'execution-identity-control-failed', 'session-unusable')
         return
       }
+      nativeLease = claimNewMcpRuntimeTestSessionLease(this.deps.db, {
+        protocol: session.runtimeProtocol,
+        runtimeSessionId,
+        testSessionId: session.id,
+        turnId: turn.id,
+        leaseNonceDigest,
+      })
     }
+    try {
+      if (session.runtimeSessionId !== null) {
+        nativeLease =
+          turn.seq === 1
+            ? claimNewMcpRuntimeTestSessionLease(this.deps.db, {
+                protocol: session.runtimeProtocol,
+                runtimeSessionId: session.runtimeSessionId,
+                testSessionId: session.id,
+                turnId: turn.id,
+                leaseNonceDigest,
+              })
+            : preclaimMcpRuntimeTestSessionLease(this.deps.db, {
+                protocol: session.runtimeProtocol,
+                runtimeSessionId: session.runtimeSessionId,
+                testSessionId: session.id,
+                turnId: turn.id,
+                leaseNonceDigest,
+              })
+      }
+    } catch {
+      await this.failBeforeRun(item, 'mcp-test-session-conflict', 'session-unusable')
+      return
+    }
+
+    const sink = new McpRuntimeTestEventSink(
+      this.deps.db,
+      item,
+      () => this.broadcastSession(item.sessionId),
+      claimNativeSession,
+    )
     const timeoutMs = Math.max(1, turn.hardDeadlineAt - this.now())
     let result: SystemAgentRunResult
-    let runReturned = false
     try {
       result = await this.runFn({
         feature: 'mcp-runtime-test',
@@ -2586,175 +2449,83 @@ export class McpRuntimeTestService {
         maxRawFrameBytes: 2 * 1024 * 1024,
         abortSignal: controller.signal,
         eventSink: sink,
-        bridgeCredentials: runtime.capability.bridgeCredentials,
-        containmentCoordinator: this.deps.containmentCoordinator,
-        containmentProfile: runtime.capability.containmentProfile({ mcp }),
         retainScratchOnSuccess: true,
-        buildPlan: async ({ worktreePath, runDir, containment, log }): Promise<SpawnPlan> => {
+        buildPlan: async ({ worktreePath, runDir, log }): Promise<SpawnPlan> => {
           const turnRunRoot = join(runDir, 'turns', turn.id)
-          let plan: McpTestSpawnPlan
-          if (containment === undefined) {
-            if (this.deps.runFn === undefined) {
-              throw new Error('execution-identity-containment-required')
-            }
-            // Explicit dependency-injected tests exercise coordinator fences
-            // without touching a host binary/store. This branch is impossible
-            // in production because production never supplies runFn.
-            plan = {
+          const assertSpawnAllowed = (): void => {
+            const allowed = dbTxSync(this.deps.db, (tx) => {
+              const currentSession = tx
+                .select({
+                  status: mcpRuntimeTestSessions.status,
+                  inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
+                })
+                .from(mcpRuntimeTestSessions)
+                .where(eq(mcpRuntimeTestSessions.id, session.id))
+                .get()
+              const currentTurn = tx
+                .select({
+                  status: mcpRuntimeTestTurns.status,
+                  cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
+                  hardDeadlineAt: mcpRuntimeTestTurns.hardDeadlineAt,
+                })
+                .from(mcpRuntimeTestTurns)
+                .where(eq(mcpRuntimeTestTurns.id, turn.id))
+                .get()
+              return (
+                currentSession?.status === 'active' &&
+                currentSession.inFlightTurnId === turn.id &&
+                currentTurn?.status === 'running' &&
+                currentTurn.cancelRequestedAt === null &&
+                currentTurn.hardDeadlineAt > this.now()
+              )
+            })
+            if (!allowed) throw new Error('mcp-test-spawn-no-longer-admitted')
+          }
+          assertSpawnAllowed()
+          if (this.deps.runFn !== undefined) {
+            return {
               cmd: [runtime.binary],
               env: {},
               stdin: { mode: 'ignore' },
-              identity: {
-                codec: 'mcp-test-plan-identity-v1',
-                runtimeBinaryDigest: sha256(`test-runtime:${runtime.fingerprint}`),
-                mcpExecutionDigest: sha256(`test-mcp:${session.mcpConfigHash}`),
-                sessionContractDigest: sha256(
-                  stableJson({
-                    testOnly: true,
-                    sessionId: session.id,
-                    runtimeFingerprint: session.runtimeFingerprint,
-                  }),
-                ),
-                rawCommandDigest: sha256(`test-command:${runtime.binary}`),
-              },
+              beforeSpawn: assertSpawnAllowed,
             }
-          } else {
-            const executionMaterial = await prepareMcpTestExecutionMaterial({
-              mcp,
-              root: join(turnRunRoot, 'material'),
-              worktreePath,
-              appHome: this.deps.appHome,
-              containment,
-            })
-            plan = await runtime.capability.buildSpawn({
-              sessionId: session.id,
-              turnId: turn.id,
-              agentName: AGENT_NAME,
-              systemPrompt: SYSTEM_PROMPT,
-              prompt: turn.promptText,
-              executionMaterial,
-              model: runtime.row.model,
-              variant: runtime.row.variant,
-              temperature: runtime.row.temperature,
-              steps: runtime.row.steps,
-              maxSteps: runtime.row.maxSteps,
-              worktreePath,
-              sessionRoot: session.scratchRoot,
-              sessionStoreRoot: session.sessionStoreRoot,
-              runDir: turnRunRoot,
-              appHome: this.deps.appHome,
-              configDir: {
-                env: runtime.row.configDirEnv ?? runtime.capability.defaultConfigDir.env,
-                name: runtime.row.configDirName ?? runtime.capability.defaultConfigDir.name,
-              },
-              runtimeBinary: runtime.binary,
-              ...runtime.capability.sessionReference({
-                turnSeq: turn.seq,
-                nativeSessionId: session.runtimeSessionId,
-              }),
-              bridgeCredentials: runtime.capability.bridgeCredentials,
-              log,
-              containment,
-              ...(opencodeControl === undefined ? {} : { opencodeControl }),
-            })
           }
-          const identity = plan.identity
-          if (
-            identity.codec !== 'mcp-test-plan-identity-v1' ||
-            ![
-              identity.runtimeBinaryDigest,
-              identity.mcpExecutionDigest,
-              identity.sessionContractDigest,
-              identity.rawCommandDigest,
-            ].every((digest) => /^[0-9a-f]{64}$/.test(digest))
-          ) {
-            throw new Error('mcp-test-plan-identity-invalid')
-          }
-          dbTxSync(this.deps.db, (tx) => {
-            const currentSession = tx
-              .select()
-              .from(mcpRuntimeTestSessions)
-              .where(eq(mcpRuntimeTestSessions.id, session.id))
-              .get()
-            const currentTurn = tx
-              .select()
-              .from(mcpRuntimeTestTurns)
-              .where(eq(mcpRuntimeTestTurns.id, turn.id))
-              .get()
-            if (
-              currentSession?.status !== 'active' ||
-              currentSession.inFlightTurnId !== turn.id ||
-              currentTurn?.status !== 'running' ||
-              currentTurn.cancelRequestedAt !== null
-            ) {
-              throw new Error('mcp-test-plan-no-longer-admitted')
-            }
-            const anyIdentity =
-              currentSession.runtimeBinaryDigest !== null ||
-              currentSession.mcpExecutionDigest !== null ||
-              currentSession.sessionContractDigest !== null
-            if (
-              anyIdentity &&
-              (currentSession.runtimeBinaryDigest !== identity.runtimeBinaryDigest ||
-                currentSession.mcpExecutionDigest !== identity.mcpExecutionDigest ||
-                currentSession.sessionContractDigest !== identity.sessionContractDigest)
-            ) {
-              tx.update(mcpRuntimeTestSessions)
-                .set({
-                  continuationBlockedReason:
-                    currentSession.mcpExecutionDigest !== identity.mcpExecutionDigest
-                      ? 'mcp-execution-changed'
-                      : 'runtime-identity-changed',
-                })
-                .where(eq(mcpRuntimeTestSessions.id, session.id))
-                .run()
-              throw new Error('mcp-test-plan-identity-mismatch')
-            }
-            tx.update(mcpRuntimeTestSessions)
-              .set({
-                runtimeBinaryDigest: identity.runtimeBinaryDigest,
-                mcpExecutionDigest: identity.mcpExecutionDigest,
-                sessionContractDigest: identity.sessionContractDigest,
-              })
-              .where(eq(mcpRuntimeTestSessions.id, session.id))
-              .run()
-            tx.update(mcpRuntimeTestTurns)
-              .set({ rawCommandDigest: identity.rawCommandDigest })
-              .where(eq(mcpRuntimeTestTurns.id, turn.id))
-              .run()
+          const executionMaterial = await prepareMcpTestExecutionMaterial({
+            mcp,
+            root: join(turnRunRoot, 'material'),
           })
-          const capabilityVerify = plan.preSpawnVerify
+          const plan = await runtime.capability.buildSpawn({
+            sessionId: session.id,
+            turnId: turn.id,
+            agentName: AGENT_NAME,
+            systemPrompt: SYSTEM_PROMPT,
+            prompt: turn.promptText,
+            executionMaterial,
+            model: runtime.row.model,
+            variant: runtime.row.variant,
+            temperature: runtime.row.temperature,
+            steps: runtime.row.steps,
+            maxSteps: runtime.row.maxSteps,
+            isSandbox: runtime.row.isSandbox,
+            worktreePath,
+            sessionRoot: session.scratchRoot,
+            runDir: turnRunRoot,
+            configDir: {
+              env: runtime.row.configDirEnv ?? runtime.capability.defaultConfigDir.env,
+              name: runtime.row.configDirName ?? runtime.capability.defaultConfigDir.name,
+            },
+            runtimeBinary: runtime.binary,
+            ...runtime.capability.sessionReference({
+              turnSeq: turn.seq,
+              nativeSessionId: session.runtimeSessionId,
+            }),
+            log,
+          })
           return {
             ...plan,
-            preSpawnVerify: async () => {
-              await capabilityVerify?.()
-              const allowed = dbTxSync(this.deps.db, (tx) => {
-                const currentSession = tx
-                  .select({
-                    status: mcpRuntimeTestSessions.status,
-                    inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
-                  })
-                  .from(mcpRuntimeTestSessions)
-                  .where(eq(mcpRuntimeTestSessions.id, session.id))
-                  .get()
-                const currentTurn = tx
-                  .select({
-                    status: mcpRuntimeTestTurns.status,
-                    cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
-                    hardDeadlineAt: mcpRuntimeTestTurns.hardDeadlineAt,
-                  })
-                  .from(mcpRuntimeTestTurns)
-                  .where(eq(mcpRuntimeTestTurns.id, turn.id))
-                  .get()
-                return (
-                  currentSession?.status === 'active' &&
-                  currentSession.inFlightTurnId === turn.id &&
-                  currentTurn?.status === 'running' &&
-                  currentTurn.cancelRequestedAt === null &&
-                  currentTurn.hardDeadlineAt > this.now()
-                )
-              })
-              if (!allowed) throw new Error('mcp-test-spawn-no-longer-admitted')
+            beforeSpawn: async () => {
+              await plan.beforeSpawn?.()
+              assertSpawnAllowed()
             },
           }
         },
@@ -2779,8 +2550,6 @@ export class McpRuntimeTestService {
                 pid: receipt.pid,
                 spawnedAt: receipt.spawnedAt,
                 spawnBinaryPath: receipt.spawnBinaryPath,
-                rawCommandDigest: receipt.rawCommandDigest,
-                spawnCommandDigest: receipt.spawnCommandDigest,
               })
               .where(eq(mcpRuntimeTestTurns.id, turn.id))
               .run()
@@ -2804,78 +2573,7 @@ export class McpRuntimeTestService {
           })
           if (!admittedForPrompt) throw new Error('mcp-test-spawn-canceled-before-prompt')
         },
-        onControlLine: async ({ line, control }) => {
-          if (control.kind !== 'opencode-mcp-test') {
-            throw new Error('mcp-test-unexpected-control-kind')
-          }
-          const nack = (): void => {
-            try {
-              writeControlAckExclusive(control.ackPath, {
-                decision: 'nack',
-                nonce: control.nonce,
-              })
-            } catch {
-              // The first O_EXCL decision remains authoritative.
-            }
-          }
-          try {
-            const parsed = controlTracker.accept(line)
-            if (parsed.kind === 'stderr') return parsed
-            const marker = parsed.marker
-            if (
-              marker.kind !== control.mode ||
-              marker.nodeRunId !== turn.id ||
-              marker.leaseNonceDigest !== control.leaseNonceDigest ||
-              marker.binaryDigest !== control.runtimeBinaryDigest ||
-              marker.protocolCodec !== control.protocolCodec
-            ) {
-              throw new Error('mcp-test-control-marker-mismatch')
-            }
-            if (control.mode === 'new') {
-              leaseToken = claimNewMcpRuntimeTestSession(this.deps.db, {
-                runtimeSessionId: marker.sessionId,
-                testSessionId: session.id,
-                turnId: turn.id,
-                createdTurnId: control.createdTurnId,
-                identityDigest: control.identityDigest,
-                runtimeBinaryDigest: control.runtimeBinaryDigest,
-                sessionContractDigest: control.sessionContractDigest,
-                sessionStoreKey: control.sessionStoreKey,
-                projectId: marker.projectId,
-                protocolCodec: marker.protocolCodec,
-                reportedVersion: marker.reportedVersion,
-                leaseNonceDigest: control.leaseNonceDigest,
-                leasedAt: this.now(),
-              })
-            } else {
-              const token = leaseToken
-              if (
-                token === undefined ||
-                control.expectedSessionId === undefined ||
-                marker.sessionId !== control.expectedSessionId ||
-                resumeOwner === undefined ||
-                marker.projectId !== resumeOwner.projectId
-              ) {
-                throw new Error('mcp-test-resume-control-mismatch')
-              }
-              confirmMcpRuntimeTestResume(this.deps.db, {
-                ...token,
-                projectId: marker.projectId,
-                reportedVersion: marker.reportedVersion,
-              })
-            }
-            writeControlAckExclusive(control.ackPath, {
-              decision: 'ok',
-              nonce: control.nonce,
-            })
-            return { kind: 'session-ready' as const, sessionId: marker.sessionId }
-          } catch (error) {
-            nack()
-            throw error
-          }
-        },
       })
-      runReturned = true
     } catch {
       result = {
         status: controller.signal.aborted ? 'aborted' : 'spawn-failed',
@@ -2888,17 +2586,16 @@ export class McpRuntimeTestService {
         outputEvidence: emptySystemAgentOutputEvidence(),
       }
     }
-    if (runReturned && result.status !== 'unreaped' && leaseToken !== undefined) {
-      if (!releaseMcpRuntimeTestLease(this.deps.db, leaseToken)) {
-        result = {
-          ...result,
-          status: 'identity-failed',
-          failureCode: 'execution-identity-control-failed',
-        }
-      }
-      leaseToken = undefined
-    }
     await sink.markTerminal('complete')
+    if (nativeLease !== undefined && result.status !== 'unreaped') {
+      const released = releaseMcpRuntimeTestSessionLease(this.deps.db, nativeLease)
+      if (!released) {
+        this.log.warn('mcp runtime test session lease release missed', {
+          sessionId: session.id,
+          turnId: turn.id,
+        })
+      }
+    }
     await this.settleTurn(session, turn, result)
   }
 
@@ -2920,11 +2617,14 @@ export class McpRuntimeTestService {
         .where(eq(mcpRuntimeTestSessions.id, item.sessionId))
         .get()
       if (session === undefined) return
+      if (session.status === 'ended') return
+      const ending = session.status === 'ending'
       tx.update(mcpRuntimeTestTurns)
         .set({
-          status: 'failed',
+          status: ending ? 'interrupted' : 'failed',
           captureState: 'complete',
-          failureCode,
+          failureCode:
+            ending && session.endReason !== null ? `mcp-test-${session.endReason}` : failureCode,
           finishedAt: now,
         })
         .where(eq(mcpRuntimeTestTurns.id, item.turnId))
@@ -2932,7 +2632,7 @@ export class McpRuntimeTestService {
       tx.update(mcpRuntimeTestSessions)
         .set({
           status: 'ending',
-          endReason,
+          endReason: session.endReason ?? endReason,
           inFlightTurnId: null,
           idleDeadlineAt: null,
           sessionVersion: session.sessionVersion + 1,
@@ -2969,29 +2669,21 @@ export class McpRuntimeTestService {
       let nativeSessionId = session.runtimeSessionId
       let blocked = session.continuationBlockedReason
       const childUnreaped = result.status === 'unreaped'
-      const identityFailed = result.status === 'identity-failed'
       const captured = result.capturedSessionId
       if (captured !== undefined) {
         if (nativeSessionId !== null && nativeSessionId !== captured) {
           nativeState = 'unusable'
-          blocked = 'session-root-mismatch'
         } else {
           nativeSessionId = captured
           nativeState = 'ready'
         }
       } else if (originalTurn.seq === 1) {
         nativeState = 'unusable'
-        blocked = 'session-store-missing'
       }
       if (childUnreaped) {
         nativeState = 'unusable'
         blocked ??= 'capture-incomplete'
       }
-      if (identityFailed) {
-        nativeState = 'unusable'
-        blocked ??= 'runtime-identity-changed'
-      }
-
       const turnStatus = resultTurnStatus(
         result,
         turn.cancelRequestedAt !== null,
@@ -3023,9 +2715,7 @@ export class McpRuntimeTestService {
             ? 'mcp-config-changed'
             : blocked === 'runtime-profile-changed'
               ? 'runtime-profile-changed'
-              : blocked === 'runtime-identity-changed'
-                ? 'runtime-identity-changed'
-                : 'session-unusable'
+              : 'session-unusable'
         const reason =
           session.endReason ??
           (captureBlocked
@@ -3137,44 +2827,16 @@ export class McpRuntimeTestService {
     const base = resolve(join(this.deps.appHome, 'mcp-runtime-tests'))
     const target = resolve(row.scratchRoot)
     const safe = dirname(target) === base && target !== base
-    const owner = getMcpRuntimeTestOwner(this.deps.db, sessionId)
-    const storeBase = resolve(join(this.deps.appHome, 'opencode-stores', 'mcp-test'))
-    const storeTarget = resolve(row.sessionStoreRoot)
-    const capability = getRuntimeDriver(row.runtimeProtocol).mcpTest
-    const externalStore = capability?.sessionOwnerReceipt != null
-    const safeStore =
-      capability !== undefined &&
-      (!externalStore ||
-        (dirname(storeTarget) === storeBase &&
-          storeTarget !== storeBase &&
-          storeTarget ===
-            opencodeMcpTestSessionStore({
-              appHome: this.deps.appHome,
-              sessionId,
-            }).root))
     let cleanupState: SessionRow['cleanupState'] = alreadyQuarantined ? 'quarantined' : 'complete'
     let cleanupErrorCode: string | null = alreadyQuarantined ? row.cleanupErrorCode : null
     if (alreadyQuarantined) {
       // A known or possibly-live child may still own the directory. Retain it
       // and block replacement/deletion until explicit recovery proves reaping.
-    } else if (
-      !safe ||
-      !safeStore ||
-      (owner !== undefined &&
-        (owner.leaseTurnId !== null ||
-          owner.leaseAcquiredAt !== null ||
-          owner.leaseNonceDigest !== null))
-    ) {
+    } else if (!safe) {
       cleanupState = 'quarantined'
-      cleanupErrorCode =
-        owner !== undefined && owner.leaseTurnId !== null
-          ? 'mcp-test-store-lease-held'
-          : 'mcp-test-cleanup-path-unsafe'
+      cleanupErrorCode = 'mcp-test-cleanup-path-unsafe'
     } else {
       try {
-        if (externalStore && row.sessionStoreDbPath !== null) {
-          await removeHermeticOpencodeLayout(storeTarget)
-        }
         rmSync(target, { recursive: true, force: true })
       } catch {
         cleanupState = 'pending'

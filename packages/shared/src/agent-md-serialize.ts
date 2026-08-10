@@ -34,8 +34,6 @@ export interface AgentMarkdownDocument {
   role?: 'normal' | 'aggregator'
   outputWrapperPortNames?: Record<string, string>
   runtime?: string
-  /** RFC-252 G4 — 缺省 = 'deny'。 */
-  network?: 'deny' | 'allow'
   frontmatterExtra?: Record<string, unknown>
   bodyMd?: string
 }
@@ -57,8 +55,9 @@ const EMIT_ORDER = [
   'role',
   'outputWrapperPortNames',
   'runtime',
-  'network',
 ] as const
+
+const REMOVED_KEYS = new Set(['network'])
 
 function skillEntryToYaml(entry: AgentSkillSelector | string): unknown {
   if (typeof entry === 'string') return entry
@@ -93,7 +92,6 @@ export function serializeAgentMarkdown(doc: AgentMarkdownDocument): string {
     role: doc.role,
     outputWrapperPortNames: doc.outputWrapperPortNames,
     runtime: doc.runtime,
-    network: doc.network,
   }
   for (const key of EMIT_ORDER) {
     const v = source[key]
@@ -104,7 +102,13 @@ export function serializeAgentMarkdown(doc: AgentMarkdownDocument): string {
   // duplicate YAML keys are invalid and the first-class value is authoritative.
   if (doc.frontmatterExtra !== undefined) {
     for (const [k, v] of Object.entries(doc.frontmatterExtra)) {
-      if (k in fm || (EMIT_ORDER as readonly string[]).includes(k) || k === 'tools') continue
+      if (
+        k in fm ||
+        (EMIT_ORDER as readonly string[]).includes(k) ||
+        REMOVED_KEYS.has(k) ||
+        k === 'tools'
+      )
+        continue
       fm[k] = v
     }
   }

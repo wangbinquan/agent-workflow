@@ -1,5 +1,7 @@
 # RFC-233 平台隔离准入单一事实源与在线策略一致性 — proposal
 
+> **已由 RFC-276 废弃（2026-08-10）**：containment admission 已从当前生产路径删除，本文仅保留历史记录。
+
 状态：Done（2026-07-27；设计门与实现门均 APPROVED / 0 open P0-P2，待 exact-SHA 远端门禁）。
 
 ## 1. 问题

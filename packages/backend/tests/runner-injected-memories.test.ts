@@ -288,9 +288,7 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
     expect(parsed[0].version).toBe(7)
 
     // The short user follow-up must still rebuild the original agent persona
-    // byte-for-byte. Verified OpenCode binds that persona into the persistent
-    // session identity; dropping the inherited memory block here makes every
-    // memory-bearing RFC-042 resume fail with execution-identity-session-mismatch.
+    // byte-for-byte so the resumed runtime sees the same inherited memory.
     const capturedConfig = JSON.parse(readFileSync(configCapture, 'utf8')) as {
       agent: Record<string, { prompt?: string }>
     }

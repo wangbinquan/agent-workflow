@@ -257,19 +257,6 @@ export function AgentForm({
   // A disabled claude-protocol runtime is excluded by its own `enabled` flag —
   // the former blanket claude gate is gone.
   const selectableRuntimes = registeredRuntimes.filter((r) => r.enabled || r.name === value.runtime)
-  const effectiveRuntime =
-    (value.runtime !== undefined
-      ? registeredRuntimes.find((runtime) => runtime.name === value.runtime)
-      : registeredRuntimes.find((runtime) => runtime.isDefault)) ?? null
-  const effectiveOpencode = effectiveRuntime?.protocol === 'opencode'
-  // RFC-251: plugins and collaborating agents are supported on the OpenCode
-  // runtime again (both are assembled into the controlled config), so an
-  // explicit model is the only remaining execution-policy blocker.
-  const runtimePolicyBlockers =
-    effectiveOpencode &&
-    (typeof effectiveRuntime.model !== 'string' || effectiveRuntime.model.trim() === '')
-      ? [t('tasks.failure.execution-identity-model-unresolved')]
-      : []
   // RFC-250 P1 follow-up: inherit and an explicit pin are different persisted
   // states even when only one runtime is enabled. Keep the field stable instead
   // of making it disappear based on async inventory cardinality. Until the
@@ -409,15 +396,6 @@ export function AgentForm({
               void runtimesQuery.refetch()
             }}
             testid="agent-runtime-load-error"
-          />
-        </FeedbackStack>
-      )}
-      {runtimePolicyBlockers.length > 0 && (
-        <FeedbackStack>
-          <ErrorBanner
-            error={runtimePolicyBlockers.join(' ')}
-            message={runtimePolicyBlockers.join(' ')}
-            testid="agent-opencode-execution-policy"
           />
         </FeedbackStack>
       )}

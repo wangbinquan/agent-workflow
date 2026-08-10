@@ -1,5 +1,7 @@
 # RFC-216 沙箱环境自检 CLI（`agent-workflow sandbox`）
 
+> **已由 RFC-276 废弃（2026-08-10）**：CLI 与运行时探测已删除，本文仅保留历史记录。
+
 > 状态：Draft
 > 承接 [RFC-205 运行时沙箱](../RFC-205-runtime-sandbox/proposal.md)。把 RFC-205
 > `design.md:145`「bwrap 缺失的发行版需手工安装（**文档给出指引**）」里的"指引"

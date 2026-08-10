@@ -38,7 +38,7 @@ import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE, type Agent } from '@agent-workflow/shared'
 import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
 import { toClaudeAgents } from '../src/services/runtime/claudeCode/inject'
-import { claudeDeclaredControlArgv } from '../src/services/runtime/claudeCode/spawn'
+import { claudeExplicitPermissionArgv } from '../src/services/runtime/claudeCode/spawn'
 import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
 import type { RuntimeProfile } from '../src/services/runtimeRegistry'
 import { createLogger } from '../src/util/log'
@@ -78,7 +78,7 @@ function mkAgent(overrides: Partial<Agent> = {}): Agent {
 }
 
 function profile(model: string | null): RuntimeProfile {
-  return { model, variant: null, temperature: null, steps: null, maxSteps: null }
+  return { model, variant: null, temperature: null, steps: null, maxSteps: null, isSandbox: false }
 }
 
 interface Fixture {
@@ -117,15 +117,11 @@ function mkCtx(
     resolvedParamsByAgent: new Map<string, RuntimeProfile>(),
     skills: [],
     worktreePath: f.worktreePath,
-    repoWorktreePaths: [f.worktreePath],
     runRoot: f.runRoot,
     configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
     runtimeBinary: f.claudeBinary,
     wantsInventory: false,
     nodeRunId: 'nr-1',
-    appHome: f.appHome,
-    taskId: 'task-1',
-    nodeId: 'node-1',
     log,
     ...overrides,
   }
@@ -142,23 +138,23 @@ function toolsOf(argv: readonly string[]): string[] {
 
 describe('闭包非空 ⇒ 平台自己开 Task（与 opencode 语义对齐）', () => {
   test('subagentsGranted ⇒ Task 进装载集', () => {
-    const argv = claudeDeclaredControlArgv({ tools: 'Read', subagentsGranted: true })
+    const argv = claudeExplicitPermissionArgv({ tools: 'Read', subagentsGranted: true })
     expect(toolsOf(argv)).toContain('Task')
     expect(toolsOf(argv)).toContain('Read')
   })
 
   test('未声明 ⇒ 不加（历史形状字节不变）', () => {
-    const argv = claudeDeclaredControlArgv({ tools: 'Read' })
+    const argv = claudeExplicitPermissionArgv({ tools: 'Read' })
     expect(toolsOf(argv)).not.toContain('Task')
   })
 
   test('用户自己写了 task:allow ⇒ 不重复出现', () => {
-    const argv = claudeDeclaredControlArgv({ tools: 'Read,Task', subagentsGranted: true })
+    const argv = claudeExplicitPermissionArgv({ tools: 'Read,Task', subagentsGranted: true })
     expect(toolsOf(argv).filter((t) => t === 'Task')).toHaveLength(1)
   })
 
   test('装载集为空（all-deny 系统面）也不会因为本改动被撑开', () => {
-    const argv = claudeDeclaredControlArgv({ tools: '' })
+    const argv = claudeExplicitPermissionArgv({ tools: '' })
     expect(toolsOf(argv)).toEqual([])
   })
 

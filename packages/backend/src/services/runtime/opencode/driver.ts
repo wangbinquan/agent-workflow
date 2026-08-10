@@ -7,6 +7,7 @@
 
 import type {
   BusinessNodeSpawnContext,
+  DistillSessionCaptureContext,
   InventoryReadContext,
   NormalizedEvent,
   ProbeOpts,
@@ -29,41 +30,26 @@ import { buildOpencodeSpawn } from './spawn'
 import { buildInlineConfig } from './inlineConfig'
 import { pickRuntimeHead } from '../head'
 import { stageSkills } from '../stageSkills'
-import { isProductionOpencodeCommand, probeOpencode } from '@/util/opencode'
+import { probeOpencode } from '@/util/opencode'
 import { getOpencodeBinaryVersion } from '@/util/opencode-version-registry'
-import { listOpencodeModelsHermetic } from './models'
+import { listOpencodeModelsNatural } from './models'
 import { captureChildSessions, captureOpencodeSessionsToSink } from '@/services/sessionCapture'
 import { readSnapshotFromRunDir } from '@/services/inventory'
 import { startLiveSubagentCapture } from '@/services/subagentLiveCapture'
 import { materializeInventoryPlugin } from '@/opencode-plugin'
-import { buildVerifiedOpencodeBusinessPlan, usesLegacyTestOpencodePath } from './verifiedPlan'
-import { buildVerifiedOpencodeSystemPlan } from './verifiedSystemPlan'
 import { buildOpencodeMcpTestSpawn } from './mcpTest'
+import { captureDistillJobSession } from '@/services/distillSessionCapture'
 
 export const opencodeDriver: RuntimeDriver = {
   kind: 'opencode',
-  containmentProfile: 'model-child-netless-v1',
-  // RFC-237 — the verified system plan materializes the read-only intent
-  // profile (verifiedSystemPlan.ts: read/grep/glob + external-directory deny).
-  narrowedSystemPermissionProfiles: ['intent-read-v1'],
   mcpTest: {
     codec: 'mcp-test-v1',
     defaultConfigDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
-    bridgeCredentials: false,
-    sessionOwnerReceipt: 'opencode-session-v1',
     createNativeSessionId: () => null,
     sessionReference: ({ nativeSessionId }) =>
       nativeSessionId === null ? {} : { resumeSessionId: nativeSessionId },
-    sessionStoreDbPath: (runDir) => join(runDir, 'xdg-data', 'opencode', 'opencode.db'),
-    containmentProfile: ({ mcp }) =>
-      mcp.type === 'local' ? 'model-child-netless-v1' : 'runner-filesystem-v1',
     buildSpawn: buildOpencodeMcpTestSpawn,
   },
-  businessContainmentProfile: ({ agent, mcps }) =>
-    agent.permission.bash !== 'deny' ||
-    mcps.some((mcp) => mcp.enabled !== false && mcp.type === 'local')
-      ? 'model-child-netless-v1'
-      : 'runner-filesystem-v1',
   minVersion: null,
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
@@ -77,12 +63,11 @@ export const opencodeDriver: RuntimeDriver = {
   probe(binary: string, opts?: ProbeOpts): Promise<RuntimeProbe> {
     return probeOpencode(binary, opts)
   },
-  // RFC-143 closeout (2026-07-31): enumeration owns its OWN hermetic
-  // execution (byte-frozen snapshot + source-guarded private cwd + redirected
-  // config/auth roots + pre-cache fingerprint fence). The route used to do
-  // this behind a runtime-kind branch; capability code belongs here.
+  // RFC-276: model discovery uses the registered binary in the operator's
+  // natural cwd/environment and therefore sees the same providers and auth as
+  // an ordinary OpenCode invocation.
   async listModels(binary: string, opts?: ListModelsOpts): Promise<RuntimeModelList> {
-    return listOpencodeModelsHermetic(binary, opts)
+    return listOpencodeModelsNatural(binary, opts)
   },
   async captureSessions(ctx: SessionCaptureContext): Promise<void> {
     await captureChildSessions({
@@ -97,6 +82,9 @@ export const opencodeDriver: RuntimeDriver = {
       ...(ctx.opencodeDbPath !== undefined ? { opencodeDbPath: ctx.opencodeDbPath } : {}),
     })
   },
+  async captureDistillSession(ctx: DistillSessionCaptureContext): Promise<void> {
+    await captureDistillJobSession(ctx)
+  },
   // RFC-117 — system-agent spawn. Minimal inline config (prompt + model only; no
   // skills/mcp/plugins/inventory, no RFC-029/041 in-place mutation), then the
   // shared buildOpencodeSpawn. opencode takes the prompt positionally → no stdin.
@@ -110,16 +98,6 @@ export const opencodeDriver: RuntimeDriver = {
           : envBin != null && envBin !== ''
             ? [envBin]
             : ['opencode']
-    // Same gate shape as usesLegacyTestOpencodePath (business path): an
-    // explicitly-flagged test run OR an unbranded injected command (unit
-    // tests / the e2e binary, where production branding is compiled out)
-    // takes the legacy spawn; everything else is the verified system plan.
-    const legacyTestPath =
-      ctx.testOnlyUnverifiedRuntime === true ||
-      (ctx.opencodeCmd !== undefined && !isProductionOpencodeCommand(ctx.opencodeCmd))
-    if (!legacyTestPath) {
-      return buildVerifiedOpencodeSystemPlan(ctx, head)
-    }
     const inlineConfig = {
       agent: {
         [ctx.agentName]: {
@@ -135,9 +113,8 @@ export const opencodeDriver: RuntimeDriver = {
     // forks) are unaffected. claude has no analogous override.
     const { cmd, env } = buildOpencodeSpawn({
       opencodeCmd: head,
-      // 2026-07-21: legacy/test-only flag-spelling gate. RFC-226 removed boot
-      // prewarming; explicit doctor/status probes may seed this registry, while
-      // RFC-224 production uses the pinned direct API above.
+      // A known pre-1.18 binary receives the old spelling; an unprobed current
+      // binary defaults to `--auto` in buildOpencodeSpawn.
       binaryVersion: getOpencodeBinaryVersion(head[0] ?? 'opencode'),
       agentName: ctx.agentName,
       prompt: ctx.prompt,
@@ -159,9 +136,6 @@ export const opencodeDriver: RuntimeDriver = {
   // block append → serialize → spawn. async for materializeInventoryPlugin.
   async buildBusinessSpawn(ctx: BusinessNodeSpawnContext): Promise<SpawnPlan> {
     const businessHead = pickRuntimeHead(ctx.runtimeBinary, ctx.opencodeCmd)
-    if (!usesLegacyTestOpencodePath(ctx)) {
-      return buildVerifiedOpencodeBusinessPlan(ctx, businessHead ?? ['opencode'])
-    }
     // RFC-154: stage framework skills into THIS runtime's config dir (leaf name
     // from the frozen profile; was the runner's runtime-blind `.opencode`
     // preamble). Strict mode: a staging failure fails the spawn (runner §6 maps
@@ -229,7 +203,6 @@ export const opencodeDriver: RuntimeDriver = {
     // — byte-for-byte unchanged for built-ins.
     const { cmd, env } = buildOpencodeSpawn({
       opencodeCmd: businessHead,
-      // 2026-07-21: legacy/test-only flag-spelling gate (see buildSpawn above).
       // Key = head[0] exactly as spawned and as explicit probes record it.
       binaryVersion: getOpencodeBinaryVersion(businessHead?.[0] ?? 'opencode'),
       agentName: ctx.agent.name,
@@ -265,10 +238,7 @@ export const opencodeDriver: RuntimeDriver = {
     return readSnapshotFromRunDir({
       runDir: ctx.runRoot,
       nodeKind: ctx.nodeKind,
-      pureMode:
-        ctx.verifiedIdentity === true
-          ? false
-          : process.env.OPENCODE_PURE === '1' || process.env.OPENCODE_PURE === 'true',
+      pureMode: process.env.OPENCODE_PURE === '1' || process.env.OPENCODE_PURE === 'true',
     })
   },
   startLiveCapture(ctx: LivePollOptions): LivePollerHandle {
@@ -281,7 +251,6 @@ export const opencodeDriver: RuntimeDriver = {
       rootSessionId: ctx.rootSessionId,
       sink: ctx.sink,
       log: ctx.log,
-      ...(ctx.sessionStoreDbPath === undefined ? {} : { opencodeDbPath: ctx.sessionStoreDbPath }),
     })
   },
 }

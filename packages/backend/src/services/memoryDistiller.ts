@@ -1,11 +1,9 @@
 // RFC-041 — memory distiller (PR2 scope).
 //
-// The distiller is a *system* opencode agent — not stored in the `agents`
-// table, not user-editable. RFC-224 routes OpenCode through the verified system
-// plan/launcher with a complete controlled config and a private ephemeral
-// store; inline merge priority is not a trust boundary. The subprocess still
-// runs in a throwaway worktree (so distillation never creates a git diff in a
-// real worktree), and we parse the `candidates` port out of the last
+// The distiller is a *system* runtime agent — not stored in the `agents` table
+// and not user-editable. It runs naturally in a throwaway worktree (so
+// distillation never creates a git diff in a real worktree), and we parse the
+// `candidates` port out of the last
 // <workflow-output> envelope on stdout.
 //
 // Failures (timeout / non-zero exit / unparseable envelope / zod-invalid
@@ -40,13 +38,7 @@ import {
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { getRuntimeDriver } from '@/services/runtime'
-import type { RuntimeKind, SpawnPlan } from '@/services/runtime/types'
-import {
-  wrapSpawnPlanSandbox,
-  type ContainmentCoordinator,
-  type PreparedContainmentPlan,
-  type SandboxCtx,
-} from '@/services/sandbox'
+import type { RuntimeKind } from '@/services/runtime/types'
 import {
   clarifyRounds,
   docVersions,
@@ -59,17 +51,12 @@ import {
 } from '@/db/schema'
 import { extractLastEnvelope } from '@/services/envelope'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
-import { captureDistillJobSession } from '@/services/distillSessionCapture'
 import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/services/distillerSourceContext'
 import { appHome } from '@/util/paths'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
-import {
-  ExecutionIdentityFailure,
-  executionIdentityFailure,
-  parseExecutionIdentityFailureOutput,
-} from '@/services/runtime/opencode/failure'
+import { killProcessTree } from '@/util/process'
 
 const log = createLogger('memory-distiller')
 
@@ -233,6 +220,8 @@ export interface RunDistillOptions {
   runtimeBinary?: string | null
   /** Model from the resolved runtime profile; null → the runtime's own default. */
   model?: string | null
+  /** RFC-276: opt-in Claude CLI compatibility marker. */
+  isSandbox?: boolean
   /**
    * RFC-044: per-source byte budget for the new transcript / body context
    * blocks. Plumbed by the scheduler from `config.memoryDistillSourceContext`.
@@ -242,8 +231,6 @@ export interface RunDistillOptions {
   sourceContextBudget?: SourceContextBudget
   /** RFC-200 deterministic test seam; production generates a fresh value per attempt. */
   envelopeNonce?: string
-  /** RFC-233 daemon-scoped admission authority. */
-  containmentCoordinator?: ContainmentCoordinator
 }
 
 export interface DistillerSpawnInput {
@@ -253,6 +240,8 @@ export interface DistillerSpawnInput {
   runtimeBinary: string | null
   /** RFC-117: model from the resolved runtime profile; null → the runtime's own default. */
   model: string | null
+  /** RFC-276: opt-in Claude CLI compatibility marker. */
+  isSandbox?: boolean
   /** Hardcoded English user prompt assembled in buildDistillerUserPrompt. */
   userPrompt: string
   /** RFC-200 nonce already embedded in userPrompt; exposed for deterministic fakes. */
@@ -260,8 +249,6 @@ export interface DistillerSpawnInput {
   /** Tmp cwd allocated for this distill — no git side-effects. */
   cwd: string
   timeoutMs: number
-  /** One immutable admission; defaultDistillerSpawn never re-reads policy. */
-  containment?: PreparedContainmentPlan
 }
 
 export interface DistillerSpawnResult {
@@ -270,10 +257,17 @@ export interface DistillerSpawnResult {
   stdout: string
   /** Full stderr — caller may persist on failure for debugging. */
   stderr: string
-  /** RFC-224 explicit private capture locator; never reopen the user's global DB. */
-  opencodeDbPath?: string
-  /** Awaited after capture/parse; owns ephemeral runtime-store cleanup. */
+  /** Awaited after capture/parse; owns per-attempt runtime material cleanup. */
   cleanup?: () => Promise<void>
+}
+
+/** The child may still own files below the attempt directory. Callers must
+ * preserve that directory for recovery instead of recursively deleting it. */
+export class IndeterminateRuntimeProcessError extends Error {
+  constructor(message = 'runtime spawn state is indeterminate') {
+    super(message)
+    this.name = 'IndeterminateRuntimeProcessError'
+  }
 }
 
 export type DistillerSpawnFn = (input: DistillerSpawnInput) => Promise<DistillerSpawnResult>
@@ -954,47 +948,13 @@ export async function validateAndPersistCandidate(
 // Spawn helpers
 // -----------------------------------------------------------------------------
 
-/**
- * RFC-205 impl-gate P0-4 (Codex 2026-07-22): the distiller sandbox context. It
- * feeds UNTRUSTED content (source-agent transcripts + reviewed document bodies)
- * into the prompt, so a prompt injection could otherwise run a same-uid shell
- * that reads secret.key / db.sqlite / backups. Sandbox it like a task node —
- * tmpfs-shadow appHome, allow only the distiller's working dir plus its exact
- * private system store. No provider (tests / off) → undefined → wrapSandbox is
- * a no-op (byte-identical spawn).
- */
-export function distillerSandboxCtx(
-  cwd: string,
-  runDir = cwd,
-  plan?: Partial<
-    Pick<SpawnPlan, 'readOnlySubtrees' | 'readOnlyAllowSubtrees' | 'sessionStore' | 'containment'>
-  >,
-): SandboxCtx | undefined {
-  const p = plan?.containment?.sandbox
-  if (p === undefined) return undefined
-  return {
-    mode: p.mode,
-    status: p.status,
-    appHome: p.appHome,
-    taskWorktrees: [cwd, ...(plan?.sessionStore === undefined ? [] : [plan.sessionStore.root])],
-    runDir,
-    ...(plan?.readOnlySubtrees === undefined ? {} : { readOnlySubtrees: plan.readOnlySubtrees }),
-    // 2026-08-04 audit: see runtimeSmoke.ts — three of four assemblers dropped
-    // this, which is the exact shape of the RFC-251 Linux plugin ENOENT.
-    ...(plan?.readOnlyAllowSubtrees === undefined
-      ? {}
-      : { readOnlyAllowSubtrees: plan.readOnlyAllowSubtrees }),
-    ...(p.wrapCommand === undefined ? {} : { wrapCommand: p.wrapCommand }),
-  }
-}
-
 const DISTILLER_OUTPUT_CAP_BYTES = 256 * 1024
 const DISTILLER_DRAIN_GRACE_MS = 2_000
 const DISTILLER_REAP_DEADLINE_MS = 2_000
 
 function killDistillerGroup(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
   try {
-    if (typeof child.pid === 'number') process.kill(-child.pid, signal)
+    if (typeof child.pid === 'number') killProcessTree(child.pid, signal)
     else child.kill(signal)
   } catch {
     // Process group already exited.
@@ -1134,11 +1094,7 @@ export async function defaultDistillerSpawn(
   // buildSpawn yields the protocol-correct cmd/env/stdin; opencode keeps its
   // prior byte-for-byte form, claude gets system-prompt-file + stdin pipe.
   //
-  // RFC-143 PR-4: both former `input.protocol === 'xxx'` branches here are
-  // internalized into the drivers — the AGENT_WORKFLOW_OPENCODE_BIN override
-  // is opencode buildSpawn's own no-binary fallback, and bridgeCredentials is
-  // passed unconditionally (the distiller is a real non-mock run; opencode's
-  // driver ignores the field, claude's bridges the subscription credential).
+  // Runtime-specific argv and environment assembly stay inside the driver.
   const driver = getRuntimeDriver(input.protocol)
   const worktreeDir = join(input.cwd, 'worktree')
   const runDir = join(input.cwd, 'run')
@@ -1146,43 +1102,24 @@ export async function defaultDistillerSpawn(
     mkdir(worktreeDir, { recursive: true, mode: 0o700 }),
     mkdir(runDir, { recursive: true, mode: 0o700 }),
   ])
-  let plan = await driver.buildSpawn({
+  const plan = await driver.buildSpawn({
     agentName: DISTILLER_AGENT_NAME,
     systemPrompt: DISTILLER_SYSTEM_PROMPT,
     model: input.model,
+    isSandbox: input.isSandbox === true,
     prompt: input.userPrompt,
     worktreePath: worktreeDir,
     runDir,
-    ...(input.containment === undefined
-      ? {}
-      : {
-          appHome: input.containment.sandbox.appHome,
-          containment: input.containment,
-        }),
     ...(input.runtimeBinary != null && input.runtimeBinary !== ''
       ? { runtimeBinary: input.runtimeBinary }
       : {}),
-    bridgeCredentials: true,
   })
-  if (input.containment !== undefined) {
-    plan = {
-      ...plan,
-      containment: input.containment,
-      sandboxTopology: input.containment.spawnTopology,
-    }
-  }
   const wantStdin = plan.stdin?.mode === 'pipe'
   let child: Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'>
   try {
-    // P0-4: wrap the spawn in the platform sandbox (no-op when no provider is set).
-    const cmd = wrapSpawnPlanSandbox(
-      plan.cmd,
-      distillerSandboxCtx(worktreeDir, runDir, plan),
-      plan.sandboxTopology,
-    )
     child = Bun.spawn({
       ...platformSpawnOptionsForHost(),
-      cmd,
+      cmd: plan.cmd,
       cwd: worktreeDir,
       env: plan.env,
       stdout: 'pipe',
@@ -1191,12 +1128,12 @@ export async function defaultDistillerSpawn(
       detached: true,
     })
   } catch (error) {
-    // buildSpawn already transferred ownership of its private store to this
-    // caller. With no child created it is safe—and mandatory—to clean it now.
+    // Spawn assembly may have created temporary files. With no child created,
+    // clean them now.
     try {
       await plan.cleanup?.()
     } catch {
-      executionIdentityFailure('execution-identity-store-unsafe')
+      throw new Error('distiller runtime cleanup failed after spawn error')
     }
     throw error
   }
@@ -1212,6 +1149,11 @@ export async function defaultDistillerSpawn(
   let stdout = ''
   let stderr = ''
   let cleanupHandedOff = false
+  let spawnOutcome:
+    | { ok: true; value: DistillerSpawnResult }
+    | { ok: false; error: unknown }
+    | undefined
+  let cleanupSafe = false
   try {
     // RFC-254: every timer in this escalation chain must stay REF'D — the race
     // below can only settle through the end of the chain, and the SIGKILL in
@@ -1247,7 +1189,7 @@ export async function defaultDistillerSpawn(
       reapDeadline,
     ])
     if (exitOutcome.kind === 'unreaped') {
-      executionIdentityFailure('execution-identity-store-unsafe')
+      throw new IndeterminateRuntimeProcessError('distiller runtime process could not be reaped')
     }
     childReaped = true
     exitCode = exitOutcome.code
@@ -1264,23 +1206,20 @@ export async function defaultDistillerSpawn(
     if (timedOut) {
       throw new Error(`distiller timeout after ${input.timeoutMs}ms`)
     }
-    const launcherFailure =
-      plan.diagnostics?.verifiedIdentity === true
-        ? parseExecutionIdentityFailureOutput(stderr)
-        : null
-    if (launcherFailure !== null) {
-      throw new ExecutionIdentityFailure(launcherFailure)
-    }
     cleanupHandedOff = true
-    return {
-      exitCode,
-      stdout,
-      stderr,
-      ...(plan.sessionStore === undefined ? {} : { opencodeDbPath: plan.sessionStore.dbPath }),
-      cleanup: async () => {
-        await plan.cleanup?.()
+    spawnOutcome = {
+      ok: true,
+      value: {
+        exitCode,
+        stdout,
+        stderr,
+        cleanup: async () => {
+          await plan.cleanup?.()
+        },
       },
     }
+  } catch (error) {
+    spawnOutcome = { ok: false, error }
   } finally {
     if (timeoutHandle !== null) clearTimeout(timeoutHandle)
     if (sigkillHandle !== null) clearTimeout(sigkillHandle)
@@ -1298,17 +1237,20 @@ export async function defaultDistillerSpawn(
     if (pendingPumpCancels.length > 0) {
       await settlesDistillerWithin(Promise.allSettled(pendingPumpCancels), DISTILLER_DRAIN_GRACE_MS)
     }
-    const safe = await finalizeDistillerSpawnAttempt({
+    cleanupSafe = await finalizeDistillerSpawnAttempt({
       child,
       childReaped,
       killChild: (signal) => killDistillerGroup(child, signal),
       ...(!cleanupHandedOff && plan.cleanup !== undefined ? { cleanup: plan.cleanup } : {}),
       terminationAlreadyExhausted,
     })
-    if (!safe) {
-      executionIdentityFailure('execution-identity-store-unsafe')
-    }
   }
+  if (spawnOutcome === undefined) throw new Error('distiller runtime spawn produced no outcome')
+  if (!spawnOutcome.ok) throw spawnOutcome.error
+  if (!cleanupSafe) {
+    throw new IndeterminateRuntimeProcessError('distiller runtime cleanup did not complete safely')
+  }
+  return spawnOutcome.value
 }
 
 // -----------------------------------------------------------------------------
@@ -1367,32 +1309,21 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   // inside spawnFn (defaultDistillerSpawn → getRuntimeDriver(protocol).buildSpawn);
   // runDistill only forwards the resolved (protocol, binary, model).
   const protocol: RuntimeKind = options.protocol ?? 'opencode'
-  const containment =
-    options.containmentCoordinator === undefined
-      ? undefined
-      : await options.containmentCoordinator.admit('runner-filesystem-v1')
   const cwd = await mkdtemp(join(tmpdir(), 'aw-distiller-'))
   let cleanup: (() => Promise<void>) | undefined
   let preserveCwd = false
+  let distillOutcome: { ok: true; value: DistillResult } | { ok: false; error: unknown } | undefined
   try {
-    let result: DistillerSpawnResult
-    try {
-      result = await spawnFn({
-        protocol,
-        runtimeBinary: options.runtimeBinary ?? null,
-        model: options.model ?? null,
-        userPrompt,
-        envelopeNonce,
-        cwd,
-        timeoutMs,
-        ...(containment === undefined ? {} : { containment }),
-      })
-    } catch (error) {
-      preserveCwd =
-        error instanceof ExecutionIdentityFailure &&
-        error.code === 'execution-identity-store-unsafe'
-      throw error
-    }
+    const result = await spawnFn({
+      protocol,
+      runtimeBinary: options.runtimeBinary ?? null,
+      model: options.model ?? null,
+      ...(options.isSandbox === true ? { isSandbox: true } : {}),
+      userPrompt,
+      envelopeNonce,
+      cwd,
+      timeoutMs,
+    })
     cleanup = result.cleanup
 
     // RFC-043: stamp the post-spawn artefacts onto the job row before any
@@ -1416,17 +1347,13 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
       })
     }
 
-    // RFC-224: capture from the exact private store before ephemeral cleanup.
-    // A real OpenCode spawn must always supply this locator; no fallback to the
-    // user's global OpenCode database is allowed.
-    if (sessionId !== null && result.opencodeDbPath !== undefined) {
+    if (sessionId !== null) {
       try {
-        await captureDistillJobSession({
+        await getRuntimeDriver(protocol).captureDistillSession?.({
           db: options.db,
           distillJobId: options.job.id,
           attemptIndex: options.job.attempts,
           rootSessionId: sessionId,
-          opencodeDbPath: result.opencodeDbPath,
         })
       } catch (err) {
         log.warn('rfc043/distill-capture-failed', {
@@ -1451,15 +1378,20 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
       const ok = await validateAndPersistCandidate(options.db, raw, options.job)
       if (ok !== null) persisted.push(ok.memory.id)
     }
-    return { candidatesCreated: persisted.length, createdMemoryIds: persisted }
+    distillOutcome = {
+      ok: true,
+      value: { candidatesCreated: persisted.length, createdMemoryIds: persisted },
+    }
+  } catch (error) {
+    preserveCwd = error instanceof IndeterminateRuntimeProcessError
+    distillOutcome = { ok: false, error }
   } finally {
     if (!preserveCwd) {
       try {
         await cleanup?.()
       } catch {
-        // A live store lock is evidence that the launcher/server lifecycle has
-        // not safely ended. Keep the outer cwd too; deleting it could remove
-        // still-live config/run inputs.
+        // Cleanup failure can mean a child still owns an artifact. Keep the
+        // outer cwd so later recovery does not remove inputs under a live process.
         preserveCwd = true
       }
     }
@@ -1470,10 +1402,13 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
         preserveCwd = true
       }
     }
-    if (preserveCwd) {
-      executionIdentityFailure('execution-identity-store-unsafe')
-    }
   }
+  if (distillOutcome === undefined) throw new Error('distiller run produced no outcome')
+  if (!distillOutcome.ok) throw distillOutcome.error
+  if (preserveCwd) {
+    throw new IndeterminateRuntimeProcessError('distiller scratch cleanup did not complete safely')
+  }
+  return distillOutcome.value
 }
 
 // -----------------------------------------------------------------------------

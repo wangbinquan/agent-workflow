@@ -56,11 +56,25 @@ describe('RFC-022 buildInlineConfig (primary + dependents)', () => {
     const params = new Map<string, RuntimeProfile>([
       [
         'orchestrator',
-        { model: 'opus', variant: 'v1', temperature: 0.2, steps: null, maxSteps: 50 },
+        {
+          model: 'opus',
+          variant: 'v1',
+          temperature: 0.2,
+          steps: null,
+          maxSteps: 50,
+          isSandbox: false,
+        },
       ],
       [
         'code-auditor',
-        { model: 'haiku', variant: 'va', temperature: 0.7, steps: 100, maxSteps: null },
+        {
+          model: 'haiku',
+          variant: 'va',
+          temperature: 0.7,
+          steps: 100,
+          maxSteps: null,
+          isSandbox: false,
+        },
       ],
     ])
     const cfg = buildInlineConfig(primary, params, [dep])

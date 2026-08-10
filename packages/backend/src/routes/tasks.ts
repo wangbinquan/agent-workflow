@@ -356,24 +356,12 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       // and missing produce the identical 404; built-in → 403. Shared gate — the
       // multipart path and scheduled-task fires enforce the exact same policy.
       const startDeps = {
-        ...buildStartTaskDeps(
-          deps.db,
-          deps.configPath,
-          actor.user.id,
-          opencodeCmd,
-          deps.secretBox,
-          deps.containmentCoordinator,
-        ),
+        ...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd, deps.secretBox),
         // RFC-243 实现门 P0-1: closure freezing resolves call-node names inside
         // THIS actor's visibility.
         launchActor: actor,
       }
-      await assertWorkflowLaunchable(
-        deps.db,
-        actor,
-        parsed.data.workflowId,
-        startDeps.defaultRuntime,
-      )
+      await assertWorkflowLaunchable(deps.db, actor, parsed.data.workflowId)
       const task = await startExecution(
         deps.db,
         actor,
@@ -583,9 +571,6 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           db: deps.db,
           runtimeName: narrativeCfg.changeNarrativeRuntime ?? null,
           defaultRuntime: narrativeCfg.defaultRuntime ?? null,
-          ...(deps.containmentCoordinator === undefined
-            ? {}
-            : { containmentCoordinator: deps.containmentCoordinator }),
         },
         task,
         actorOf(c),
@@ -830,9 +815,6 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const task = await resumeTask(deps.db, c.req.param('id'), {
         db: deps.db,
-        ...(deps.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: deps.containmentCoordinator }),
         ...(opencodeCmd ? { opencodeCmd } : {}),
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         // RFC-103 T2: resume must thread commit&push + maxConcurrentNodes too.
@@ -950,9 +932,6 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         appHome: Paths.root,
         deps: {
           db: deps.db,
-          ...(deps.containmentCoordinator === undefined
-            ? {}
-            : { containmentCoordinator: deps.containmentCoordinator }),
           ...(opencodeCmd ? { opencodeCmd } : {}),
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-108 T4 (Codex design gate P2): a repair option may resumeAfterApply
@@ -996,9 +975,6 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         appHome: Paths.root,
         deps: {
           db: deps.db,
-          ...(deps.containmentCoordinator === undefined
-            ? {}
-            : { containmentCoordinator: deps.containmentCoordinator }),
           ...(opencodeCmd ? { opencodeCmd } : {}),
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-108 T4 (Codex design gate P2): repair → resumeAfterApply →
@@ -1041,9 +1017,6 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         cascade,
         deps: {
           db: deps.db,
-          ...(deps.containmentCoordinator === undefined
-            ? {}
-            : { containmentCoordinator: deps.containmentCoordinator }),
           ...(opencodeCmd ? { opencodeCmd } : {}),
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-103 T2: retry must thread commit&push + maxConcurrentNodes too.
@@ -1363,12 +1336,7 @@ async function handleMultipartTaskStart(
   // 2. Resolve workflow → extract upload input declarations. RFC-099 (D3):
   // the launcher must be able to use the workflow; invisible == missing.
   const launchRuntime = resolveLaunchRuntimeConfig(deps.configPath)
-  const workflow = await assertWorkflowLaunchable(
-    deps.db,
-    actor,
-    startInput.workflowId,
-    launchRuntime.defaultRuntime,
-  )
+  const workflow = await assertWorkflowLaunchable(deps.db, actor, startInput.workflowId)
   // RFC-199 G1: reject a stale launch guard against the SAME visible row we
   // just captured, before URL resolution can mint a cache row/worktree/branch.
   // startTask intentionally retains its own pre-materialize and final-tx
@@ -1469,9 +1437,6 @@ async function handleMultipartTaskStart(
       {
         db: deps.db,
         actorUserId: actor.user.id,
-        ...(deps.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: deps.containmentCoordinator }),
         ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
         ...(opencodeCmd ? { opencodeCmd } : {}),
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
@@ -1528,9 +1493,6 @@ async function handleMultipartTaskStart(
     {
       db: deps.db,
       actorUserId: actor.user.id,
-      ...(deps.containmentCoordinator === undefined
-        ? {}
-        : { containmentCoordinator: deps.containmentCoordinator }),
       ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),

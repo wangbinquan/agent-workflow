@@ -120,19 +120,18 @@ describe('RFC-254 T23 — script environment', () => {
     expect(path).toContain(win('C:/Windows/System32'))
   })
 
-  test('the Windows platform keys are reserved so an author cannot redirect the run', () => {
-    // USERPROFILE is the one that matters most: leaving it pointed at the real
-    // profile while HOME points into the run directory means half the script's
-    // tooling writes outside the sandbox.
-    for (const key of ['USERPROFILE', 'TEMP', 'TMP', 'APPDATA', 'PATHEXT', 'PYTHONUTF8']) {
-      expect(SCRIPT_RESERVED_ENV_KEYS).toContain(key)
-      expect(scriptReservedEnvKeyIssue(key)).not.toBeNull()
+  test('natural Windows profile/temp/tool keys stay authorable; product keys remain reserved', () => {
+    for (const key of ['USERPROFILE', 'TEMP', 'TMP', 'APPDATA', 'PATHEXT']) {
+      expect(SCRIPT_RESERVED_ENV_KEYS).not.toContain(key)
+      expect(scriptReservedEnvKeyIssue(key)).toBeNull()
     }
+    expect(SCRIPT_RESERVED_ENV_KEYS).toContain('PYTHONUTF8')
+    expect(scriptReservedEnvKeyIssue('PYTHONUTF8')).not.toBeNull()
   })
 
-  test('reservation is case-insensitive, so `UserProfile` is refused too', () => {
-    expect(scriptReservedEnvKeyIssue('UserProfile')).not.toBeNull()
-    expect(scriptReservedEnvKeyIssue('userprofile')).not.toBeNull()
+  test('reservation remains case-insensitive for a retained product key', () => {
+    expect(scriptReservedEnvKeyIssue('PythonUtf8')).not.toBeNull()
+    expect(scriptReservedEnvKeyIssue('pythonutf8')).not.toBeNull()
   })
 
   test('ordinary author keys stay allowed', () => {
