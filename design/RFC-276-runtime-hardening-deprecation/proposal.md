@@ -1,6 +1,6 @@
 # RFC-276 · 运行期安全加固废弃化与自然执行恢复
 
-状态：In Progress（2026-08-10 实现与本地门禁完成，等待发布 CI）
+状态：Done（2026-08-10；自然 runtime 与默认关闭的 `IS_SANDBOX` 兼容开关已发布，exact-SHA CI/visual 终态成功）
 
 ## 1. 背景
 

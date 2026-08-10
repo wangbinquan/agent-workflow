@@ -4,7 +4,7 @@
 
 🚧 **进行中 RFC（In Progress，2026-08-10 功能与定向验证已完成）：[RFC-277 GitLab 连接 TLS 证书校验开关](design/RFC-277-gitlab-tls-verification/proposal.md)** —— 默认与存量继续校验证书；仅允许 GitLab 显式设置 `rejectUnauthorized:false`，测试连接与真实代码平台调用消费同一持久化值，第三方重定向不继承。shared 52、backend 68+27、frontend 5 与精确 lint/format/diff 均绿；全仓 backend typecheck 只剩并行 RFC-276 正在删除的旧 `sandboxMode` / `executionPolicy` 测试引用，待其收口后补跑 full gate 并置 Done。
 
-🚧 **进行中 RFC（In Progress，2026-08-10 实现与本地门禁完成，等待发布 CI）：[RFC-276 运行期安全加固废弃化与自然执行恢复](design/RFC-276-runtime-hardening-deprecation/proposal.md)** —— sandbox/containment、verified identity、hermetic store、netless 与平台强制能力围栏已退出生产路径，业务 agent 与 Intent 均使用自然 runtime；保留 auth/ACL、secret redaction、输入路径防御、DB/进程恢复、用户显式 permission/readonly。Claude runtime 可显式开启 `IS_SANDBOX=1` CLI 兼容标记，默认关闭；该开关不启用 sandbox 或平台防护。
+✅ **已完成 RFC（Done，2026-08-10）：[RFC-276 运行期安全加固废弃化与自然执行恢复](design/RFC-276-runtime-hardening-deprecation/proposal.md)** —— `70deb522` 原子删除 sandbox/containment、verified identity、hermetic store、netless 与平台强制能力围栏，业务 agent 与 Intent 回到自然 runtime；auth/ACL、secret redaction、输入路径防御、DB/进程恢复、用户显式 permission/readonly 保留。Claude runtime 可显式开启 `IS_SANDBOX=1` CLI 兼容标记，默认关闭且不启用 sandbox 或平台防护。`778b1436` 更新 Linux 视觉基线，`079c20b9` 关闭重启迁移与 gitleaks 缺口；final SHA 主 CI 31372492430 与 visual 31372492427 终态成功，真实 OpenCode 集成 31369561214 与 Windows 平台门 31369561256 亦成功。
 
 ✅ **已完成 RFC（Done，2026-08-10）：[RFC-272 运行期能力就绪与 managed skill 多文件可达](design/RFC-272-runtime-capability-readiness/proposal.md)** —— 同一 OpenCode 实例在 prompt 前读取 MCP readiness：local 未连接明确失败、remote 未连接告警；frozen skill 公布只读根与文件清单并纳入 v3 identity，legacy owner 可恢复。Claude skill inventory 的跨版本不稳定缺项改为可见告警，不再误杀本可运行节点；tools/agents 缺项仍硬失败。
 

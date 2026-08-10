@@ -1,6 +1,6 @@
 # RFC-276 · 技术设计
 
-状态：In Progress（2026-08-10 实现与本地门禁完成，等待发布 CI）。先读 [`proposal.md`](./proposal.md) 的边界、C1–C12 与 AC-1–24。
+状态：Done（2026-08-10；自然 runtime 与默认关闭的 `IS_SANDBOX` 兼容开关已发布，exact-SHA CI/visual 终态成功）。先读 [`proposal.md`](./proposal.md) 的边界、C1–C12 与 AC-1–24。
 
 ## 1. 当前事实与源码锚点
 

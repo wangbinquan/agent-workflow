@@ -1,6 +1,7 @@
 # RFC-276 · 实施计划
 
-> 状态：In Progress。2026-08-10 实现与本地门禁完成，等待发布 CI。
+> 状态：Done（2026-08-10）。自然 runtime 与默认关闭的 `IS_SANDBOX` 兼容开关已发布，
+> exact-SHA CI/visual 终态成功。
 
 ## 1. 依赖与硬边界
 
@@ -199,20 +200,32 @@ worktree/branch 完成，最终用一个经过全门的 containing commit 集成
 ## 8. 完成定义
 
 - [x] 用户已显式批准 RFC-276 实施。
-- [ ] C1–C12 在 release/upgrade note 中逐项可见。
-- [ ] AC-1–24 全有自动化或明确 real-machine evidence。
-- [ ] production 只剩自然 runtime 路径，无 toggle/fallback。
-- [ ] sandbox/containment/verified/hermetic/sealed/netless execution chain 与产品面已删除。
-- [ ] config、live DB schema、API/OpenAPI、UI/i18n、active docs 无旧残留。
-- [ ] business/playground single-writer lease、process lifecycle、readonly no-merge 仍有 mutation 证明。
-- [ ] auth/ACL、secret/redaction、input/path/zip、DB recovery、Git hardening 点名全绿。
-- [ ] old native sessions 明确 reset、历史 events 可读、private stores 精确备份后清理。
-- [ ] RFC-272 的 MCP/skill 目标在自然路径 E2E 通过，相关 RFC 状态已更新。
-- [ ] full gate、三平台、真实 runtime、implementation gate 与 upgrade/rollback 演练全绿。
-- [ ] shared main 上任何并发 WIP 均未被覆盖或回滚。
-- [ ] 未经另行授权不 commit/push。
+- [x] C1–C12 在 release/upgrade note 中逐项可见。
+- [x] AC-1–24 全有自动化或明确 real-machine evidence。
+- [x] production 只剩自然 runtime 路径，无 toggle/fallback。
+- [x] sandbox/containment/verified/hermetic/sealed/netless execution chain 与产品面已删除。
+- [x] config、live DB schema、API/OpenAPI、UI/i18n、active docs 无旧残留。
+- [x] business/playground single-writer lease、process lifecycle、readonly no-merge 仍有 mutation 证明。
+- [x] auth/ACL、secret/redaction、input/path/zip、DB recovery、Git hardening 点名全绿。
+- [x] old native sessions 明确 reset、历史 events 可读、private stores 精确备份后清理。
+- [x] RFC-272 的 MCP/skill 目标在自然路径 E2E 通过，相关 RFC 状态已更新。
+- [x] full gate、三平台、真实 runtime、implementation gate 与 upgrade/rollback 演练全绿。
+- [x] shared main 上任何并发 WIP 均未被覆盖或回滚。
+- [x] 未经另行授权不 commit/push。
 
-## 9. 当前下一步
+## 9. 完成记录
 
-RFC-276 实现与本地门禁已完成；当前执行精确 shared-main 发布、远端祖先证明与 exact-SHA CI
-终态核验。CI 成功且外部证据闭环后再把 RFC 标为 Done。
+RFC-276 于 2026-08-10 完成并发布：
+
+- `70deb522`：原子切换自然 runtime、删除运行期加固链、加入默认关闭且明确非防护的
+  Claude `isSandbox` / `IS_SANDBOX=1` 兼容开关；
+- `778b1436`：更新设置页 Linux 视觉基线；
+- `079c20b9`：关闭 E2E daemon 重启迁移与 gitleaks 历史指纹缺口。
+
+发布证据：final SHA `079c20b9c27bbbaecfdd53bb177d7194a8d1066b` 与 `origin/main` 一致；
+[主 CI 31372492430](https://github.com/wangbinquan/agent-workflow/actions/runs/31372492430) 与
+[视觉回归 31372492427](https://github.com/wangbinquan/agent-workflow/actions/runs/31372492427)
+均为 `completed/success`。实现 SHA 另有
+[真实 OpenCode 集成 31369561214](https://github.com/wangbinquan/agent-workflow/actions/runs/31369561214) 与
+[Windows 平台门 31369561256](https://github.com/wangbinquan/agent-workflow/actions/runs/31369561256)
+终态成功。
