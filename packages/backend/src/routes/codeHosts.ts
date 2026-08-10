@@ -15,6 +15,7 @@ import {
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import {
+  normalizeCodeHostRejectUnauthorized,
   createCodeHostConnectionsService,
   probeCodeHostConnection,
 } from '@/services/codeHost/connections'
@@ -79,6 +80,9 @@ export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
         service.upsert(provider, {
           baseUrl: parsed.data.baseUrl,
           ...(parsed.data.token !== undefined ? { token: parsed.data.token } : {}),
+          ...(parsed.data.rejectUnauthorized !== undefined
+            ? { rejectUnauthorized: parsed.data.rejectUnauthorized }
+            : {}),
           actorUserId: actorOf(c).user.id,
         }),
       )
@@ -123,6 +127,10 @@ export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
       const stored = service.resolve(provider)
       const baseUrl = body.baseUrl ?? stored?.baseUrl
       const token = body.token ?? stored?.token
+      const rejectUnauthorized = normalizeCodeHostRejectUnauthorized(
+        provider,
+        body.rejectUnauthorized ?? stored?.rejectUnauthorized,
+      )
       if (baseUrl === undefined || token === undefined) {
         throw new ValidationError(
           'code-host-not-configured',
@@ -133,11 +141,17 @@ export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
         provider,
         baseUrl,
         token,
+        rejectUnauthorized,
         ...(deps.codeHostFetch !== undefined ? { fetchImpl: deps.codeHostFetch } : {}),
       })
       // 只有在「测的就是已保存的那套」时才回写结果 —— 否则一次对着草稿值的
       // 成功探活会给已保存的坏配置盖上绿勾。
-      if (stored !== null && baseUrl === stored.baseUrl && token === stored.token) {
+      if (
+        stored !== null &&
+        baseUrl === stored.baseUrl &&
+        token === stored.token &&
+        rejectUnauthorized === stored.rejectUnauthorized
+      ) {
         service.recordTest(provider, result)
       }
       return c.json(result)

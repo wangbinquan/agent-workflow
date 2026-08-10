@@ -4543,6 +4543,8 @@ export interface Resources {
     token: string
     tokenHint: string
     tokenStored: string
+    rejectUnauthorized: string
+    rejectUnauthorizedHint: string
     test: string
     testOk: string
     testFailed: string
@@ -10267,6 +10269,9 @@ export const zhCN: Resources = {
     token: '访问令牌',
     tokenHint: '建议用专用机器人账号的最小权限令牌',
     tokenStored: '已保存（尾号 {{hint}}）。留空保存则保留原令牌',
+    rejectUnauthorized: '验证 HTTPS 证书',
+    rejectUnauthorizedHint:
+      '建议保持开启。仅在内网 GitLab 证书链暂时不完整时关闭；关闭会设置 rejectUnauthorized: false，并降低中间人攻击防护。',
     test: '测试连接',
     testOk: '连接成功，当前身份：{{login}}',
     testFailed: '连接失败：{{reason}}',

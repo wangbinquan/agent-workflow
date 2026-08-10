@@ -19,7 +19,7 @@ import type {
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { Field, TextInput } from '@/components/Form'
+import { Field, Switch, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 
 const PROVIDERS: readonly CodeHostProvider[] = ['gitlab', 'github']
@@ -27,11 +27,16 @@ const PROVIDERS: readonly CodeHostProvider[] = ['gitlab', 'github']
 interface Draft {
   baseUrl: string
   token: string
+  rejectUnauthorized: boolean
 }
 
 function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved: () => void }) {
   const { t } = useTranslation()
-  const [draft, setDraft] = useState<Draft>({ baseUrl: row.baseUrl, token: '' })
+  const [draft, setDraft] = useState<Draft>({
+    baseUrl: row.baseUrl,
+    token: '',
+    rejectUnauthorized: row.rejectUnauthorized,
+  })
   const [error, setError] = useState<unknown>(null)
   const [testResult, setTestResult] = useState<CodeHostTestResult | null>(null)
 
@@ -40,6 +45,7 @@ function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved
       api.put<CodeHostConnectionWire>(`/api/code-hosts/${row.provider}`, {
         baseUrl: draft.baseUrl,
         ...(draft.token.length > 0 ? { token: draft.token } : {}),
+        ...(row.provider === 'gitlab' ? { rejectUnauthorized: draft.rejectUnauthorized } : {}),
       }),
     onSuccess: () => {
       setError(null)
@@ -57,6 +63,7 @@ function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved
       api.post<CodeHostTestResult>(`/api/code-hosts/${row.provider}/test`, {
         baseUrl: draft.baseUrl,
         ...(draft.token.length > 0 ? { token: draft.token } : {}),
+        ...(row.provider === 'gitlab' ? { rejectUnauthorized: draft.rejectUnauthorized } : {}),
       }),
     onSuccess: (result) => {
       setError(null)
@@ -72,7 +79,7 @@ function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved
     mutationFn: async () => api.delete<{ ok: true }>(`/api/code-hosts/${row.provider}`),
     onSuccess: () => {
       setError(null)
-      setDraft({ baseUrl: '', token: '' })
+      setDraft({ baseUrl: '', token: '', rejectUnauthorized: true })
       setTestResult(null)
       onSaved()
     },
@@ -122,6 +129,18 @@ function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved
           }}
         />
       </Field>
+      {row.provider === 'gitlab' ? (
+        <Switch
+          checked={draft.rejectUnauthorized}
+          disabled={busy}
+          label={t('codeHostSettings.rejectUnauthorized')}
+          hint={t('codeHostSettings.rejectUnauthorizedHint')}
+          data-testid="code-host-reject-unauthorized-gitlab"
+          onChange={(next) => {
+            setDraft((d) => ({ ...d, rejectUnauthorized: next }))
+          }}
+        />
+      ) : null}
       <div className="page__actions">
         <button
           type="button"
@@ -198,6 +217,7 @@ export function CodeHostsSection() {
           provider,
           configured: false,
           baseUrl: '',
+          rejectUnauthorized: true,
           tokenHint: '',
           updatedAt: null,
           updatedBy: null,

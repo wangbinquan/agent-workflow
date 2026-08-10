@@ -38,6 +38,8 @@ export const CodeHostConnectionWireSchema = z.object({
   provider: CodeHostProviderSchema,
   configured: z.boolean(),
   baseUrl: z.string(),
+  /** 是否拒绝无法通过证书链/主机身份校验的 HTTPS 对端；仅 GitLab 可关闭。 */
+  rejectUnauthorized: z.boolean(),
   /** token 尾 4 位；读路径唯一可见的部分。密封值损坏时为空串。 */
   tokenHint: z.string(),
   updatedAt: z.number().nullable(),
@@ -56,6 +58,8 @@ export const UpsertCodeHostConnectionSchema = z
   .object({
     baseUrl: z.string().min(1).max(2048),
     token: z.string().min(1).max(4096).optional(),
+    /** 省略 = 首次配置为 true，已配置时保留原值；false 只允许 GitLab。 */
+    rejectUnauthorized: z.boolean().optional(),
   })
   .strict()
 export type UpsertCodeHostConnection = z.infer<typeof UpsertCodeHostConnectionSchema>
@@ -68,6 +72,8 @@ export const TestCodeHostConnectionSchema = z
   .object({
     baseUrl: z.string().min(1).max(2048).optional(),
     token: z.string().min(1).max(4096).optional(),
+    /** 省略即使用已保存值；未保存时为 true。 */
+    rejectUnauthorized: z.boolean().optional(),
   })
   .strict()
 export type TestCodeHostConnection = z.infer<typeof TestCodeHostConnectionSchema>

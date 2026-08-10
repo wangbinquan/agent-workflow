@@ -22,12 +22,16 @@ export interface ResolvedCodeHostConnection {
   provider: CodeHostProvider
   baseUrl: string
   token: string
+  /** false is an explicit, GitLab-only TLS trust downgrade. */
+  rejectUnauthorized: boolean
 }
 
 export interface UpsertInput {
   baseUrl: string
   /** 省略 = 保留原 token（要求该 provider 已有行）。 */
   token?: string
+  /** 省略 = 首次为 true、已有行保留；false 只允许 GitLab。 */
+  rejectUnauthorized?: boolean
   actorUserId?: string | null
 }
 
@@ -44,6 +48,36 @@ export interface CodeHostConnectionsService {
 
 const PROVIDERS: readonly CodeHostProvider[] = ['gitlab', 'github']
 
+/**
+ * TLS 信任策略的唯一 provider 判据。GitHub 当前没有该能力；静默接受 false
+ * 会制造“保存成功但实际仍校验”的假配置，因此在服务边界明确拒绝。
+ */
+export function normalizeCodeHostRejectUnauthorized(
+  provider: CodeHostProvider,
+  value: boolean | undefined,
+): boolean {
+  if (provider !== 'gitlab' && value === false) {
+    throw new ValidationError(
+      'code-host-tls-option-unsupported',
+      'disabling TLS certificate verification is supported only for GitLab connections',
+      { provider },
+    )
+  }
+  return provider === 'gitlab' ? (value ?? true) : true
+}
+
+/** Bun fetch 的逐请求 TLS 片段；默认完全省略 override。 */
+export function codeHostTlsRequestInit(input: {
+  provider: CodeHostProvider
+  rejectUnauthorized?: boolean
+}): Pick<BunFetchRequestInit, 'tls'> {
+  const rejectUnauthorized = normalizeCodeHostRejectUnauthorized(
+    input.provider,
+    input.rejectUnauthorized,
+  )
+  return rejectUnauthorized ? {} : { tls: { rejectUnauthorized: false } }
+}
+
 function hintOf(token: string): string {
   return token.length >= 4 ? token.slice(-4) : ''
 }
@@ -53,6 +87,7 @@ function unconfigured(provider: CodeHostProvider): CodeHostConnectionWire {
     provider,
     configured: false,
     baseUrl: '',
+    rejectUnauthorized: true,
     tokenHint: '',
     updatedAt: null,
     updatedBy: null,
@@ -119,6 +154,7 @@ export function createCodeHostConnectionsService(deps: {
       provider: row.provider,
       configured: true,
       baseUrl: row.baseUrl,
+      rejectUnauthorized: normalizeCodeHostRejectUnauthorized(row.provider, row.rejectUnauthorized),
       tokenHint: row.tokenHint,
       updatedAt: row.updatedAt,
       updatedBy: row.updatedBy,
@@ -138,7 +174,12 @@ export function createCodeHostConnectionsService(deps: {
         // `code-host-not-configured` 并提示重录，而不是拿空 token 去打 401。
         return null
       }
-      return { provider, baseUrl: row.baseUrl, token }
+      return {
+        provider,
+        baseUrl: row.baseUrl,
+        token,
+        rejectUnauthorized: normalizeCodeHostRejectUnauthorized(provider, row.rejectUnauthorized),
+      }
     },
 
     list() {
@@ -178,14 +219,19 @@ export function createCodeHostConnectionsService(deps: {
           { provider },
         )
       }
+      const rejectUnauthorized = normalizeCodeHostRejectUnauthorized(
+        provider,
+        input.rejectUnauthorized ?? existing?.rejectUnauthorized,
+      )
       const now = Date.now()
       const values = {
         provider,
         baseUrl: normalized.value,
+        rejectUnauthorized,
         tokenEnc,
         tokenHint,
-        // base URL 或 token 变了就作废上次的探活结果 —— 留着旧的绿勾会让人以为
-        // 新配置已经验证过。
+        // base URL、token 或 TLS 策略变了就作废上次的探活结果 —— 留着旧的绿勾
+        // 会让人以为新配置已经验证过。
         lastTestJson: null,
         updatedAt: now,
         updatedBy: input.actorUserId ?? null,
@@ -241,7 +287,7 @@ const IDENTITY_PROBE: Readonly<
   },
 }
 
-export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
+export type FetchLike = (url: string, init?: BunFetchRequestInit) => Promise<Response>
 
 /**
  * 「测试连接」。四类结果必须**可区分** —— 否则这个按钮只是个安慰剂：管理员
@@ -251,6 +297,7 @@ export async function probeCodeHostConnection(input: {
   provider: CodeHostProvider
   baseUrl: string
   token: string
+  rejectUnauthorized?: boolean
   fetchImpl?: FetchLike
   timeoutMs?: number
 }): Promise<CodeHostTestResult> {
@@ -261,6 +308,7 @@ export async function probeCodeHostConnection(input: {
     return { ok: false, at, code: 'not-found', message: `base URL invalid (${normalized.issue})` }
   }
   const doFetch = input.fetchImpl ?? ((url, init) => fetch(url, init))
+  const tls = codeHostTlsRequestInit(input)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), input.timeoutMs ?? 15_000)
   let res: Response
@@ -270,6 +318,7 @@ export async function probeCodeHostConnection(input: {
       headers: probe.header(input.token),
       redirect: 'manual',
       signal: controller.signal,
+      ...tls,
     })
   } catch (err) {
     return {

@@ -5235,6 +5235,9 @@ export const enUS: Resources = {
     token: 'Access token',
     tokenHint: 'Use a dedicated bot account with least-privilege scopes',
     tokenStored: 'Stored (ends with {{hint}}). Leave empty to keep it',
+    rejectUnauthorized: 'Verify HTTPS certificates',
+    rejectUnauthorizedHint:
+      'Keep this enabled when possible. Disable it only for an internal GitLab with a temporarily incomplete certificate chain; this sets rejectUnauthorized: false and weakens protection against man-in-the-middle attacks.',
     test: 'Test connection',
     testOk: 'Connected as {{login}}',
     testFailed: 'Connection failed: {{reason}}',

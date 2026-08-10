@@ -1,4 +1,4 @@
-// RFC-269 — shared 契约层的锁。
+// RFC-269 / RFC-277 — shared 契约层与 GitLab TLS 开关的锁。
 //
 // 这个文件锁的是三类回归：
 //   1. **动作注册表自洽**：binding 的 path/query/body 只能引用该动作声明过的
@@ -13,6 +13,7 @@ import {
   CODE_HOST_ACTION_DEFS,
   CODE_HOST_ACTION_GROUPS,
   CODE_HOST_ACTIONS,
+  CodeHostConnectionWireSchema,
   CODE_HOST_FIELDS,
   CODE_HOST_MR_STATE_MAP,
   CODE_HOST_OUTPUT_PORTS,
@@ -29,12 +30,51 @@ import {
   renderCodeHostJsonBody,
   renderCodeHostTemplate,
   TRIGGER_CONTEXT_VARS,
+  TestCodeHostConnectionSchema,
+  UpsertCodeHostConnectionSchema,
   WEBHOOK_TEMPLATE_VARS,
-  type CodeHostAction,
   type CodeHostProvider,
 } from '../src/index'
 
 const PROVIDERS: readonly CodeHostProvider[] = ['gitlab', 'github']
+
+describe('RFC-277 连接 TLS wire 契约', () => {
+  test('读面必须明确返回 rejectUnauthorized，不能让客户端猜安全默认', () => {
+    const row = {
+      provider: 'gitlab',
+      configured: true,
+      baseUrl: 'https://gitlab.example/api/v4',
+      rejectUnauthorized: false,
+      tokenHint: '1234',
+      updatedAt: 1,
+      updatedBy: null,
+      lastTest: null,
+    }
+    expect(CodeHostConnectionWireSchema.parse(row).rejectUnauthorized).toBe(false)
+    const missing: Partial<typeof row> = { ...row }
+    delete missing.rejectUnauthorized
+    expect(CodeHostConnectionWireSchema.safeParse(missing).success).toBe(false)
+  })
+
+  test('PUT/test 接受可选 boolean，并继续拒绝未知字段', () => {
+    expect(
+      UpsertCodeHostConnectionSchema.parse({
+        baseUrl: 'https://gitlab.example/api/v4',
+        rejectUnauthorized: false,
+      }).rejectUnauthorized,
+    ).toBe(false)
+    expect(TestCodeHostConnectionSchema.parse({}).rejectUnauthorized).toBeUndefined()
+    expect(
+      TestCodeHostConnectionSchema.parse({ rejectUnauthorized: true }).rejectUnauthorized,
+    ).toBe(true)
+    expect(
+      UpsertCodeHostConnectionSchema.safeParse({
+        baseUrl: 'https://gitlab.example/api/v4',
+        rejectUnauthorized: 'false',
+      }).success,
+    ).toBe(false)
+  })
+})
 
 // ---------------------------------------------------------------------------
 // 1. 动作注册表自洽

@@ -20,6 +20,10 @@ commit status、触发流水线、拉 job 日志……**令牌只留在 daemon �
   GitHub 用 fine-grained PAT，按仓库限定 Pull requests / Commit statuses 权限。
 - 保存后点**测试连接**。失败原因是可区分的：令牌无效 / 地址不是 API 根 / 网络不通 /
   响应不是身份信息（通常是被反代拦到了登录页）。
+- GitLab 默认开启“验证 HTTPS 证书”。如果内网 GitLab 的证书链暂时不完整，可以显式关闭；
+  平台会仅对这套 GitLab 连接的测试与真实 API 请求设置 `rejectUnauthorized: false`。
+  **关闭会跳过对端证书身份校验并降低中间人攻击防护**，应优先修复证书链；GitHub 与第三方
+  重定向不继承该例外。
 - 令牌加密存储（`secretBox`，与 webhook 验签 secret 同一把 `~/.agent-workflow/secret.key`）。
   读取时只显示尾号。**丢失 `secret.key` 后需要重录令牌**。
 - 只改 API 根地址时令牌留空即可，不必重录。清除整套凭据用「删除」按钮。

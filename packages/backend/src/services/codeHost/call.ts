@@ -32,10 +32,12 @@ import {
   renderCodeHostTemplate,
 } from '@agent-workflow/shared'
 import type { CodeHostFailureCode } from '@agent-workflow/shared'
-import type { ResolvedCodeHostConnection } from '@/services/codeHost/connections'
+import {
+  codeHostTlsRequestInit,
+  type FetchLike,
+  type ResolvedCodeHostConnection,
+} from '@/services/codeHost/connections'
 import { buildCodeHostUrl, redirectTargetIssue } from '@/services/codeHost/url'
-
-export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
 
 /** 节点定义里与执行相关的那一份（scheduler 从 WorkflowNode 读出后传进来）。 */
 export interface CodeHostCallSpec {
@@ -462,11 +464,12 @@ export async function executeCodeHostCall(
   const maxBytes = deps.maxResponseBytes ?? DEFAULT_CODE_HOST_MAX_RESPONSE_BYTES
   const idempotent = IDEMPOTENT_METHODS.has(assembled.method)
   const headers = headersFor(spec.provider, token, assembled.accept)
-  const init: RequestInit = {
+  const init: BunFetchRequestInit = {
     method: assembled.method,
     headers:
       assembled.body === undefined ? headers : { ...headers, 'Content-Type': 'application/json' },
     redirect: 'manual',
+    ...codeHostTlsRequestInit(deps.connection),
     ...(assembled.body !== undefined ? { body: JSON.stringify(assembled.body) } : {}),
   }
 

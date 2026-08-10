@@ -1,4 +1,4 @@
-// RFC-269 — 执行器的锁。
+// RFC-269 / RFC-277 — 执行器与 GitLab TLS 例外的锁。
 //
 // 这个文件锁的是「平台到底往代码平台发了什么」以及「出错时会不会做傻事」：
 //
@@ -26,19 +26,21 @@ interface Seen {
   method: string
   headers: Record<string, string>
   body: string | null
+  tls: BunFetchRequestInit['tls']
 }
 
 function capturing(
   responses: Array<{ status: number; body?: string; headers?: Record<string, string> }>,
-): { fetchImpl: (url: string, init?: RequestInit) => Promise<Response>; seen: Seen[] } {
+): { fetchImpl: (url: string, init?: BunFetchRequestInit) => Promise<Response>; seen: Seen[] } {
   const seen: Seen[] = []
   let index = 0
-  const fetchImpl = async (url: string, init?: RequestInit): Promise<Response> => {
+  const fetchImpl = async (url: string, init?: BunFetchRequestInit): Promise<Response> => {
     seen.push({
       url,
       method: init?.method ?? 'GET',
       headers: Object.fromEntries(new Headers(init?.headers).entries()),
       body: typeof init?.body === 'string' ? init.body : null,
+      tls: init?.tls,
     })
     const spec = responses[Math.min(index, responses.length - 1)]!
     index += 1
@@ -54,7 +56,12 @@ function glDeps(
   overrides: Partial<Parameters<typeof executeCodeHostCall>[1]> = {},
 ): Parameters<typeof executeCodeHostCall>[1] {
   return {
-    connection: { provider: 'gitlab', baseUrl: GL_BASE, token: TOKEN },
+    connection: {
+      provider: 'gitlab',
+      baseUrl: GL_BASE,
+      token: TOKEN,
+      rejectUnauthorized: true,
+    },
     ctx: { ports: {}, trigger: null },
     projectFallback: { ok: true, value: 'grp%2Frepo' },
     sleep: async () => {},
@@ -67,7 +74,12 @@ function ghDeps(
 ): Parameters<typeof executeCodeHostCall>[1] {
   return {
     // gitleaks:allow
-    connection: { provider: 'github', baseUrl: GH_BASE, token: 'aw-fixture-gh-5678' },
+    connection: {
+      provider: 'github',
+      baseUrl: GH_BASE,
+      token: 'aw-fixture-gh-5678',
+      rejectUnauthorized: true,
+    },
     ctx: { ports: {}, trigger: null },
     projectFallback: { ok: true, value: 'octo/repo' },
     sleep: async () => {},
@@ -286,6 +298,34 @@ describe('RFC-269 触发上下文', () => {
 })
 
 describe('RFC-269 失败与重试（D18 幂等分档）', () => {
+  test('GitLab false 的 TLS override 贯穿首跳与重试，默认请求不携 override', async () => {
+    const insecure = capturing([{ status: 502 }, { status: 200 }])
+    const out = await executeCodeHostCall(
+      { provider: 'gitlab', action: 'mr.diff', params: { mr: '1' } },
+      glDeps({
+        connection: {
+          provider: 'gitlab',
+          baseUrl: GL_BASE,
+          token: TOKEN,
+          rejectUnauthorized: false,
+        },
+        fetchImpl: insecure.fetchImpl,
+      }),
+    )
+    expect(out.ok).toBe(true)
+    expect(insecure.seen.map((request) => request.tls)).toEqual([
+      { rejectUnauthorized: false },
+      { rejectUnauthorized: false },
+    ])
+
+    const secure = capturing([{ status: 200 }])
+    await executeCodeHostCall(
+      { provider: 'gitlab', action: 'mr.diff', params: { mr: '1' } },
+      glDeps({ fetchImpl: secure.fetchImpl }),
+    )
+    expect(secure.seen[0]!.tls).toBeUndefined()
+  })
+
   test('非 2xx ⇒ 节点失败，错误里带状态码与摘要', async () => {
     const { fetchImpl } = capturing([{ status: 403, body: '{"message":"forbidden"}' }])
     const out = await executeCodeHostCall(
@@ -392,6 +432,7 @@ describe('RFC-269 重定向与凭据', () => {
     expect(seen[0]!.headers.authorization).toBe('Bearer aw-fixture-gh-5678')
     // 关键：签名 URL 自带凭据，把我们的 token 送到第三方主机就是凭据外泄。
     expect(seen[1]!.headers.authorization).toBeUndefined()
+    expect(seen[1]!.tls).toBeUndefined()
     expect(seen[1]!.url).toContain('githubusercontent.com')
   })
 

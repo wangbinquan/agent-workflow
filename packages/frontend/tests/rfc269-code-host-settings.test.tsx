@@ -8,9 +8,10 @@
 // 这条锁断言的是**没有错误时不渲染错误横幅**，而不是某句文案，所以它对
 // ErrorBanner 未来的文案改动免疫。
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import { api } from '../src/api/client'
 import { CodeHostsSection } from '../src/components/settings/CodeHostsSection'
 
 const listResponse = [
@@ -18,6 +19,7 @@ const listResponse = [
     provider: 'gitlab',
     configured: true,
     baseUrl: 'https://gitlab.corp.example/api/v4',
+    rejectUnauthorized: true,
     tokenHint: '9999',
     updatedAt: 1,
     updatedBy: null,
@@ -27,6 +29,7 @@ const listResponse = [
     provider: 'github',
     configured: false,
     baseUrl: '',
+    rejectUnauthorized: true,
     tokenHint: '',
     updatedAt: null,
     updatedBy: null,
@@ -45,6 +48,7 @@ vi.mock('../src/api/client', () => ({
 
 afterEach(() => {
   cleanup()
+  vi.clearAllMocks()
 })
 
 function renderSection() {
@@ -89,5 +93,45 @@ describe('RFC-269 设置页 · 代码平台分区', () => {
     })
     expect(screen.getByTestId('code-host-remove-gitlab')).toBeTruthy()
     expect(screen.queryByTestId('code-host-remove-github')).toBeNull()
+  })
+
+  test('TLS 开关只属于 GitLab，默认开启并显示明确风险提示', async () => {
+    renderSection()
+    const tlsSwitch = (await screen.findByTestId(
+      'code-host-reject-unauthorized-gitlab',
+    )) as HTMLInputElement
+    expect(tlsSwitch.checked).toBe(true)
+    expect(screen.queryByTestId('code-host-reject-unauthorized-github')).toBeNull()
+    expect(document.body.textContent).toContain('rejectUnauthorized: false')
+  })
+
+  test('关闭开关后保存与测试请求都精确携带 rejectUnauthorized:false', async () => {
+    renderSection()
+    const tlsSwitch = (await screen.findByTestId(
+      'code-host-reject-unauthorized-gitlab',
+    )) as HTMLInputElement
+    fireEvent.click(tlsSwitch)
+    expect(tlsSwitch.checked).toBe(false)
+
+    fireEvent.click(screen.getByTestId('code-host-save-gitlab'))
+    await waitFor(() => {
+      expect(vi.mocked(api.put)).toHaveBeenCalledWith('/api/code-hosts/gitlab', {
+        baseUrl: 'https://gitlab.corp.example/api/v4',
+        rejectUnauthorized: false,
+      })
+    })
+
+    await waitFor(() => {
+      expect((screen.getByTestId('code-host-test-gitlab') as HTMLButtonElement).disabled).toBe(
+        false,
+      )
+    })
+    fireEvent.click(screen.getByTestId('code-host-test-gitlab'))
+    await waitFor(() => {
+      expect(vi.mocked(api.post)).toHaveBeenCalledWith('/api/code-hosts/gitlab/test', {
+        baseUrl: 'https://gitlab.corp.example/api/v4',
+        rejectUnauthorized: false,
+      })
+    })
   })
 })

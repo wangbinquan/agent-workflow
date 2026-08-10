@@ -1,4 +1,4 @@
-// RFC-269 — 代码平台凭据面的锁。
+// RFC-269 / RFC-277 — 代码平台凭据面与 GitLab TLS 例外的锁。
 //
 // 这里锁三件事：
 //   1. **token 的三形态**：写入明文、存储密封、读取只回尾 4 位。任何一条 GET
@@ -9,6 +9,8 @@
 //      管理员看到红叉却不知道该改 token 还是改 base URL 还是找网络。
 
 import { describe, expect, test } from 'bun:test'
+import { Database } from 'bun:sqlite'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
@@ -88,12 +90,14 @@ describe('RFC-269 凭据面 — token 三形态', () => {
     expect(row!.tokenEnc).not.toContain(SECRET_TOKEN)
     expect(box.unseal(row!.tokenEnc)).toBe(SECRET_TOKEN)
     expect(row!.tokenHint).toBe('9999')
+    expect(row!.rejectUnauthorized).toBe(true)
 
     const list = await (await call('GET', '/api/code-hosts')).json()
     const gitlab = (list as Array<{ provider: string }>).find((r) => r.provider === 'gitlab')
     expect(gitlab).toMatchObject({
       configured: true,
       baseUrl: 'https://gitlab.corp.example/api/v4',
+      rejectUnauthorized: true,
       tokenHint: '9999',
     })
   })
@@ -123,9 +127,58 @@ describe('RFC-269 凭据面 — token 三形态', () => {
     const list = (await (await call('GET', '/api/code-hosts')).json()) as Array<{
       provider: string
       configured: boolean
+      rejectUnauthorized: boolean
     }>
     expect(list.map((r) => r.provider).sort()).toEqual(['github', 'gitlab'])
     expect(list.every((r) => !r.configured)).toBe(true)
+    expect(list.every((r) => r.rejectUnauthorized)).toBe(true)
+  })
+})
+
+describe('RFC-277 migration — 存量连接安全默认', () => {
+  test('0143 给旧行回填 true，并以 CHECK 锁住布尔域与 GitLab-only 边界', () => {
+    const db = new Database(':memory:')
+    db.exec(`
+      CREATE TABLE code_host_connections (
+        provider text PRIMARY KEY NOT NULL,
+        base_url text NOT NULL,
+        token_enc text NOT NULL,
+        token_hint text NOT NULL,
+        last_test_json text,
+        updated_at integer NOT NULL,
+        updated_by text
+      );
+      INSERT INTO code_host_connections
+        (provider, base_url, token_enc, token_hint, updated_at)
+      VALUES ('gitlab', 'https://gitlab.example/api/v4', 'sealed', '1234', 1);
+    `)
+    db.exec(readFileSync(resolve(MIGRATIONS, '0143_rfc277_gitlab_tls_verification.sql'), 'utf8'))
+    expect(
+      db.query('SELECT reject_unauthorized AS rejectUnauthorized FROM code_host_connections').get(),
+    ).toEqual({ rejectUnauthorized: 1 })
+    expect(() =>
+      db
+        .query(
+          `
+        INSERT INTO code_host_connections
+          (provider, base_url, reject_unauthorized, token_enc, token_hint, updated_at)
+        VALUES ('github', 'https://api.github.com', 2, 'sealed', '5678', 1);
+      `,
+        )
+        .run(),
+    ).toThrow()
+    expect(() =>
+      db
+        .query(
+          `
+        INSERT INTO code_host_connections
+          (provider, base_url, reject_unauthorized, token_enc, token_hint, updated_at)
+        VALUES ('github', 'https://api.github.com', 0, 'sealed', '5678', 1);
+      `,
+        )
+        .run(),
+    ).toThrow()
+    db.close()
   })
 })
 
@@ -156,6 +209,38 @@ describe('RFC-269 凭据面 — PUT 保留 / 清除语义', () => {
     })
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('code-host-token-required')
+  })
+
+  test('GitLab 可保存 false，省略字段更新其它值时保留；resolve 与 wire 同源', async () => {
+    const { db, call } = await harness()
+    const saved = await call('PUT', '/api/code-hosts/gitlab', {
+      baseUrl: 'https://gitlab.corp.example/api/v4',
+      token: SECRET_TOKEN,
+      rejectUnauthorized: false,
+    })
+    expect(saved.status).toBe(200)
+    expect(await saved.json()).toMatchObject({ rejectUnauthorized: false })
+
+    const updated = await call('PUT', '/api/code-hosts/gitlab', {
+      baseUrl: 'https://gitlab.corp.example/gitlab/api/v4',
+    })
+    expect(updated.status).toBe(200)
+    expect(await updated.json()).toMatchObject({ rejectUnauthorized: false })
+
+    const service = createCodeHostConnectionsService({ db, secretBox: box })
+    expect(service.resolve('gitlab')).toMatchObject({ rejectUnauthorized: false })
+    expect(service.get('gitlab').rejectUnauthorized).toBe(false)
+  })
+
+  test('GitHub 不能关闭证书校验，不接受一个保存后不生效的假开关', async () => {
+    const { call } = await harness()
+    const res = await call('PUT', '/api/code-hosts/github', {
+      baseUrl: 'https://api.github.com',
+      token: 'aw-fixture-gh-1234', // gitleaks:allow
+      rejectUnauthorized: false,
+    })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('code-host-tls-option-unsupported')
   })
 
   test('清除凭据走 DELETE 而不是"传空串"', async () => {
@@ -279,6 +364,47 @@ describe('RFC-269 探活 — 四类可区分', () => {
     expect(res).toMatchObject({ ok: true, login: 'aw-bot' })
   })
 
+  test('GitLab 仅在显式 false 时传 Bun TLS override，默认保持运行时安全值', async () => {
+    const seen: BunFetchRequestInit[] = []
+    const capture: FetchStub = async (_url, init) => {
+      seen.push(init as BunFetchRequestInit)
+      return jsonResponse(200, { username: 'aw-bot' })
+    }
+    await probeCodeHostConnection({
+      provider: 'gitlab',
+      baseUrl: base,
+      token: SECRET_TOKEN,
+      rejectUnauthorized: false,
+      fetchImpl: capture,
+    })
+    await probeCodeHostConnection({
+      provider: 'gitlab',
+      baseUrl: base,
+      token: SECRET_TOKEN,
+      fetchImpl: capture,
+    })
+    expect(seen[0]!.tls).toEqual({ rejectUnauthorized: false })
+    expect(seen[1]!.tls).toBeUndefined()
+  })
+
+  test('已保存的 false 会进入测试连接请求，而不是只停留在设置页', async () => {
+    const seen: BunFetchRequestInit[] = []
+    const { call } = await harness({
+      fetchImpl: async (_url, init) => {
+        seen.push(init as BunFetchRequestInit)
+        return jsonResponse(200, { username: 'aw-bot' })
+      },
+    })
+    await call('PUT', '/api/code-hosts/gitlab', {
+      baseUrl: base,
+      token: SECRET_TOKEN,
+      rejectUnauthorized: false,
+    })
+    const res = await call('POST', '/api/code-hosts/gitlab/test')
+    expect(res.status).toBe(200)
+    expect(seen[0]!.tls).toEqual({ rejectUnauthorized: false })
+  })
+
   test('401/403 → unauthorized', async () => {
     for (const status of [401, 403]) {
       const res = await probeCodeHostConnection({
@@ -357,10 +483,9 @@ describe('RFC-269 探活 — 四类可区分', () => {
       token: SECRET_TOKEN,
     })
     const svc = createCodeHostConnectionsService({ db, secretBox: box })
-    // 对着一套**草稿**凭据探活成功
+    // 只改 TLS 开关的**草稿**也不是已保存配置，成功不能盖绿勾。
     const draft = await call('POST', '/api/code-hosts/gitlab/test', {
-      baseUrl: 'https://other.example/api/v4',
-      token: 'draft-token',
+      rejectUnauthorized: false,
     })
     expect(((await draft.json()) as { ok: boolean }).ok).toBe(true)
     expect(svc.get('gitlab').lastTest).toBeNull()
