@@ -12,12 +12,14 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import type {
-  CodeHostConnectionWire,
-  CodeHostProvider,
-  CodeHostTestResult,
+import {
+  normalizeGitLabRepositoryUrlPrefix,
+  type CodeHostConnectionWire,
+  type CodeHostProvider,
+  type CodeHostTestResult,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { ChipsInput } from '@/components/ChipsInput'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, Switch, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
@@ -26,6 +28,7 @@ const PROVIDERS: readonly CodeHostProvider[] = ['gitlab', 'github']
 
 interface Draft {
   baseUrl: string
+  repositoryUrlPrefixes: string[]
   token: string
   rejectUnauthorized: boolean
 }
@@ -34,6 +37,7 @@ function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved
   const { t } = useTranslation()
   const [draft, setDraft] = useState<Draft>({
     baseUrl: row.baseUrl,
+    repositoryUrlPrefixes: row.repositoryUrlPrefixes,
     token: '',
     rejectUnauthorized: row.rejectUnauthorized,
   })
@@ -44,6 +48,9 @@ function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved
     mutationFn: async () =>
       api.put<CodeHostConnectionWire>(`/api/code-hosts/${row.provider}`, {
         baseUrl: draft.baseUrl,
+        ...(row.provider === 'gitlab'
+          ? { repositoryUrlPrefixes: draft.repositoryUrlPrefixes }
+          : {}),
         ...(draft.token.length > 0 ? { token: draft.token } : {}),
         ...(row.provider === 'gitlab' ? { rejectUnauthorized: draft.rejectUnauthorized } : {}),
       }),
@@ -79,7 +86,12 @@ function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved
     mutationFn: async () => api.delete<{ ok: true }>(`/api/code-hosts/${row.provider}`),
     onSuccess: () => {
       setError(null)
-      setDraft({ baseUrl: '', token: '', rejectUnauthorized: true })
+      setDraft({
+        baseUrl: '',
+        repositoryUrlPrefixes: [],
+        token: '',
+        rejectUnauthorized: true,
+      })
       setTestResult(null)
       onSaved()
     },
@@ -110,6 +122,34 @@ function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved
           }}
         />
       </Field>
+      {row.provider === 'gitlab' ? (
+        <Field
+          label={t('codeHostSettings.repositoryUrlPrefixes')}
+          hint={t('codeHostSettings.repositoryUrlPrefixesHint')}
+        >
+          <ChipsInput
+            value={draft.repositoryUrlPrefixes}
+            disabled={busy}
+            placeholder={t('codeHostSettings.repositoryUrlPrefixesPlaceholder')}
+            testidPrefix="code-host-repository-url-prefixes-gitlab"
+            validate={(value) =>
+              normalizeGitLabRepositoryUrlPrefix(value).ok
+                ? null
+                : t('codeHostSettings.repositoryUrlPrefixInvalid')
+            }
+            onChange={(next) => {
+              const normalized = next.flatMap((value) => {
+                const result = normalizeGitLabRepositoryUrlPrefix(value)
+                return result.ok ? [result.value] : []
+              })
+              setDraft((d) => ({
+                ...d,
+                repositoryUrlPrefixes: [...new Set(normalized)],
+              }))
+            }}
+          />
+        </Field>
+      ) : null}
       <Field
         label={t('codeHostSettings.token')}
         hint={
@@ -217,6 +257,7 @@ export function CodeHostsSection() {
           provider,
           configured: false,
           baseUrl: '',
+          repositoryUrlPrefixes: [],
           rejectUnauthorized: true,
           tokenHint: '',
           updatedAt: null,

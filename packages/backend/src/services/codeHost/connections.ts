@@ -11,7 +11,10 @@ import type {
   CodeHostTestCode,
   CodeHostTestResult,
 } from '@agent-workflow/shared'
-import { normalizeCodeHostBaseUrl } from '@agent-workflow/shared'
+import {
+  normalizeCodeHostBaseUrl,
+  normalizeGitLabRepositoryUrlPrefix,
+} from '@agent-workflow/shared'
 import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { codeHostConnections } from '@/db/schema'
@@ -21,6 +24,7 @@ import { ValidationError } from '@/util/errors'
 export interface ResolvedCodeHostConnection {
   provider: CodeHostProvider
   baseUrl: string
+  repositoryUrlPrefixes: string[]
   token: string
   /** false is an explicit, GitLab-only TLS trust downgrade. */
   rejectUnauthorized: boolean
@@ -28,6 +32,8 @@ export interface ResolvedCodeHostConnection {
 
 export interface UpsertInput {
   baseUrl: string
+  /** GitLab-only; omission preserves the stored collection. */
+  repositoryUrlPrefixes?: readonly string[]
   /** 省略 = 保留原 token（要求该 provider 已有行）。 */
   token?: string
   /** 省略 = 首次为 true、已有行保留；false 只允许 GitLab。 */
@@ -82,11 +88,59 @@ function hintOf(token: string): string {
   return token.length >= 4 ? token.slice(-4) : ''
 }
 
+function repositoryUrlPrefixesOf(row: typeof codeHostConnections.$inferSelect): string[] {
+  if (row.provider !== 'gitlab') return []
+  let raw: unknown
+  try {
+    raw = JSON.parse(row.repositoryUrlPrefixesJson)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(raw)) return []
+  const normalized: string[] = []
+  for (const value of raw) {
+    if (typeof value !== 'string') return []
+    const result = normalizeGitLabRepositoryUrlPrefix(value)
+    // 坏行 fail closed：不能因为一项损坏就把其余项当作执行准入依据。
+    if (!result.ok) return []
+    if (!normalized.includes(result.value)) normalized.push(result.value)
+  }
+  return normalized
+}
+
+function normalizeRepositoryUrlPrefixes(
+  provider: CodeHostProvider,
+  raw: readonly string[],
+): string[] {
+  if (provider !== 'gitlab') {
+    if (raw.length === 0) return []
+    throw new ValidationError(
+      'code-host-repository-url-prefixes-unsupported',
+      'repository URL prefixes are supported only for GitLab connections',
+      { provider },
+    )
+  }
+  const normalized: string[] = []
+  for (const [index, value] of raw.entries()) {
+    const result = normalizeGitLabRepositoryUrlPrefix(value)
+    if (!result.ok) {
+      throw new ValidationError(
+        'code-host-repository-url-prefix-invalid',
+        `repository URL prefix at index ${index} is invalid (${result.issue})`,
+        { index, issue: result.issue },
+      )
+    }
+    if (!normalized.includes(result.value)) normalized.push(result.value)
+  }
+  return normalized
+}
+
 function unconfigured(provider: CodeHostProvider): CodeHostConnectionWire {
   return {
     provider,
     configured: false,
     baseUrl: '',
+    repositoryUrlPrefixes: [],
     rejectUnauthorized: true,
     tokenHint: '',
     updatedAt: null,
@@ -154,6 +208,7 @@ export function createCodeHostConnectionsService(deps: {
       provider: row.provider,
       configured: true,
       baseUrl: row.baseUrl,
+      repositoryUrlPrefixes: repositoryUrlPrefixesOf(row),
       rejectUnauthorized: normalizeCodeHostRejectUnauthorized(row.provider, row.rejectUnauthorized),
       tokenHint: row.tokenHint,
       updatedAt: row.updatedAt,
@@ -177,6 +232,7 @@ export function createCodeHostConnectionsService(deps: {
       return {
         provider,
         baseUrl: row.baseUrl,
+        repositoryUrlPrefixes: repositoryUrlPrefixesOf(row),
         token,
         rejectUnauthorized: normalizeCodeHostRejectUnauthorized(provider, row.rejectUnauthorized),
       }
@@ -204,6 +260,12 @@ export function createCodeHostConnectionsService(deps: {
         )
       }
       const existing = rowOf(provider)
+      const repositoryUrlPrefixes =
+        input.repositoryUrlPrefixes === undefined
+          ? existing === undefined
+            ? []
+            : repositoryUrlPrefixesOf(existing)
+          : normalizeRepositoryUrlPrefixes(provider, input.repositoryUrlPrefixes)
       let tokenEnc: string
       let tokenHint: string
       if (input.token !== undefined) {
@@ -227,6 +289,7 @@ export function createCodeHostConnectionsService(deps: {
       const values = {
         provider,
         baseUrl: normalized.value,
+        repositoryUrlPrefixesJson: JSON.stringify(repositoryUrlPrefixes),
         rejectUnauthorized,
         tokenEnc,
         tokenHint,

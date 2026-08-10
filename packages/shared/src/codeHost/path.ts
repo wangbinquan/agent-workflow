@@ -93,6 +93,36 @@ export type CodeHostBaseUrlIssue =
 // scheme://authority[/path]，不接受 query / fragment / 空白。
 const BASE_URL_RE = /^(https?):\/\/([^/?#\s]+)(\/[^?#\s]*)?$/i
 
+export type GitLabRepositoryUrlPrefixIssue = Exclude<CodeHostBaseUrlIssue, 'wrong-suffix'>
+
+/**
+ * GitLab 仓库 URL 前缀不是请求目标，只用于把 webhook 任务里的 clone URL
+ * 归属到管理员配置的同一实例。仍然只接受无凭据的 HTTP(S) 形态：这样它既能
+ * 与 HTTPS clone URL 对照，也能通过 host + path 与 SSH clone URL 对照，
+ * 且不会把用户名、密码、query token 带进设置读面。
+ */
+export function normalizeGitLabRepositoryUrlPrefix(
+  raw: string,
+): { ok: true; value: string } | { ok: false; issue: GitLabRepositoryUrlPrefixIssue } {
+  const trimmed = raw.trim()
+  if (trimmed.length === 0) return { ok: false, issue: 'empty' }
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) && !/^https?:/i.test(trimmed)) {
+    return { ok: false, issue: 'not-http' }
+  }
+  if (trimmed.includes('?') || trimmed.includes('#')) {
+    return { ok: false, issue: 'has-query' }
+  }
+  const m = BASE_URL_RE.exec(trimmed)
+  if (m === null) return { ok: false, issue: 'unparsable' }
+  const authority = m[2]!
+  if (authority.includes('@')) return { ok: false, issue: 'has-credentials' }
+  const path = (m[3] ?? '').replace(/\/+$/, '')
+  return {
+    ok: true,
+    value: `${m[1]!.toLowerCase()}://${authority.toLowerCase()}${path}`,
+  }
+}
+
 export function normalizeCodeHostBaseUrl(
   raw: string,
   provider: 'gitlab' | 'github',

@@ -1334,6 +1334,8 @@ export const codeHostConnections = sqliteTable('code_host_connections', {
   provider: text('provider', { enum: ['gitlab', 'github'] }).primaryKey(),
   /** Normalized API root, no trailing slash (`https://host/api/v4`). */
   baseUrl: text('base_url').notNull(),
+  /** GitLab-only normalized repository URL prefixes; JSON string array. */
+  repositoryUrlPrefixesJson: text('repository_url_prefixes_json').notNull().default('[]'),
   /** RFC-277: true by default; only a GitLab connection may opt out. */
   rejectUnauthorized: integer('reject_unauthorized', { mode: 'boolean' }).notNull().default(true),
   tokenEnc: text('token_enc').notNull(), // secretBox.seal(token)

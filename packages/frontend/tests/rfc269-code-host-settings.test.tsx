@@ -19,6 +19,7 @@ const listResponse = [
     provider: 'gitlab',
     configured: true,
     baseUrl: 'https://gitlab.corp.example/api/v4',
+    repositoryUrlPrefixes: ['https://mirror.example/platform'],
     rejectUnauthorized: true,
     tokenHint: '9999',
     updatedAt: 1,
@@ -29,6 +30,7 @@ const listResponse = [
     provider: 'github',
     configured: false,
     baseUrl: '',
+    repositoryUrlPrefixes: [],
     rejectUnauthorized: true,
     tokenHint: '',
     updatedAt: null,
@@ -105,6 +107,26 @@ describe('RFC-269 设置页 · 代码平台分区', () => {
     expect(document.body.textContent).toContain('rejectUnauthorized: false')
   })
 
+  test('仓库 URL 前缀集合只属于 GitLab，新增后随保存请求提交', async () => {
+    renderSection()
+    const input = (await screen.findByTestId(
+      'code-host-repository-url-prefixes-gitlab-input',
+    )) as HTMLInputElement
+    expect(screen.queryByTestId('code-host-repository-url-prefixes-github-input')).toBeNull()
+    expect(document.body.textContent).toContain('https://mirror.example/platform')
+
+    fireEvent.change(input, { target: { value: 'HTTPS://Second.Example/team/' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.click(screen.getByTestId('code-host-save-gitlab'))
+    await waitFor(() => {
+      expect(vi.mocked(api.put)).toHaveBeenCalledWith('/api/code-hosts/gitlab', {
+        baseUrl: 'https://gitlab.corp.example/api/v4',
+        repositoryUrlPrefixes: ['https://mirror.example/platform', 'https://second.example/team'],
+        rejectUnauthorized: true,
+      })
+    })
+  })
+
   test('关闭开关后保存与测试请求都精确携带 rejectUnauthorized:false', async () => {
     renderSection()
     const tlsSwitch = (await screen.findByTestId(
@@ -117,6 +139,7 @@ describe('RFC-269 设置页 · 代码平台分区', () => {
     await waitFor(() => {
       expect(vi.mocked(api.put)).toHaveBeenCalledWith('/api/code-hosts/gitlab', {
         baseUrl: 'https://gitlab.corp.example/api/v4',
+        repositoryUrlPrefixes: ['https://mirror.example/platform'],
         rejectUnauthorized: false,
       })
     })

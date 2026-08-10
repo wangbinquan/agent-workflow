@@ -3282,7 +3282,7 @@ export const enUS: Resources = {
       'code-host-not-configured':
         'This code host has no base URL / token configured yet (Settings › Code hosts).',
       'code-host-project-foreign':
-        'The task repository does not belong to the configured code-host instance; the call was refused rather than acting on a same-named project elsewhere.',
+        'The task repository matches neither the configured code-host instance nor an allowed repository URL prefix; the call was refused rather than acting on a same-named project elsewhere.',
       'code-host-project-unresolved':
         'Could not derive the target project from the task — fill in the project field explicitly.',
       'code-host-param-missing': 'A required parameter rendered empty.',
@@ -5118,6 +5118,11 @@ export const enUS: Resources = {
       'Looks like https://gitlab.example.com/api/v4 (sub-path deployments also end in /api/v4)',
     baseUrlHint_github:
       'Use https://api.github.com for github.com, or https://host/api/v3 for GHES',
+    repositoryUrlPrefixes: 'Allowed repository URL prefixes',
+    repositoryUrlPrefixesHint:
+      'GitLab only. Add alternate clone URL hosts or path prefixes that map to this API connection; press Enter or comma after each entry. A match against any entry is accepted.',
+    repositoryUrlPrefixesPlaceholder: 'https://gitlab-mirror.example.com/team',
+    repositoryUrlPrefixInvalid: 'Enter an HTTP(S) URL without credentials, query or fragment.',
     token: 'Access token',
     tokenHint: 'Use a dedicated bot account with least-privilege scopes',
     tokenStored: 'Stored (ends with {{hint}}). Leave empty to keep it',

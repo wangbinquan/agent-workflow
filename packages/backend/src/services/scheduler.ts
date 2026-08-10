@@ -4224,6 +4224,7 @@ async function runCodeHostCallNode(
         projectFallback: resolveProjectFallback({
           provider,
           baseUrl: connection.baseUrl,
+          repositoryUrlPrefixes: connection.repositoryUrlPrefixes,
           repoUrl: task.repoUrl,
           repoCount: task.repoCount,
         }),

@@ -35,6 +35,8 @@ export interface ProjectFallbackInput {
   provider: CodeHostProvider
   /** 归一化后的 API 根。 */
   baseUrl: string
+  /** GitLab-only repository URL prefixes that map to the configured API instance. */
+  repositoryUrlPrefixes: readonly string[]
   /** 任务的仓库 URL（已 redact，凭据不在其中）。null = 任务不是从 URL 起的。 */
   repoUrl: string | null
   /** 任务的仓库数量。>1 时「当前任务的仓库」没有定义。 */
@@ -77,15 +79,31 @@ export function resolveProjectFallback(input: ProjectFallbackInput): ProjectFall
   // 恒假。GHES 没有这个分裂（同一主机下的 /api/v3），GitLab 也没有。
   const expectedRepoHost =
     input.provider === 'github' && baseHost === 'api.github.com' ? 'github.com' : baseHost
-  if (
-    repoHost !== expectedRepoHost &&
-    !(input.provider === 'github' && repoHost === `www.${expectedRepoHost}`)
-  ) {
+  const matchesPrimaryHost =
+    repoHost === expectedRepoHost ||
+    (input.provider === 'github' && repoHost === `www.${expectedRepoHost}`)
+  const matchesGitLabPrefix =
+    input.provider === 'gitlab' &&
+    input.repositoryUrlPrefixes.some((prefix) => {
+      let parsed: URL
+      try {
+        parsed = new URL(prefix)
+      } catch {
+        return false
+      }
+      if (parsed.hostname.toLowerCase() !== repoHost) return false
+      const prefixPath = parsed.pathname.replace(/^\/+|\/+$/g, '')
+      return prefixPath.length === 0 || path === prefixPath || path.startsWith(`${prefixPath}/`)
+    })
+  if (!matchesPrimaryHost && !matchesGitLabPrefix) {
     // 关键的一条：**不**因为「看起来像个 project path」就发出去。仓库属于另一台
     // 主机时，把它当成本实例的 project 会去改一个同名的、完全不相干的项目。
     return unresolved(
       'code-host-project-foreign',
-      `the task repository is hosted on '${repoHost}', which is not the configured ${input.provider} instance '${expectedRepoHost}'`,
+      `the task repository is hosted on '${repoHost}', which is not the configured ${input.provider} instance '${expectedRepoHost}'` +
+        (input.provider === 'gitlab' && input.repositoryUrlPrefixes.length > 0
+          ? ' or any configured repository URL prefix'
+          : ''),
     )
   }
   if (input.provider === 'gitlab') {

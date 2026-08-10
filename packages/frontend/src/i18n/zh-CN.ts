@@ -4523,6 +4523,10 @@ export interface Resources {
     baseUrl: string
     baseUrlHint_gitlab: string
     baseUrlHint_github: string
+    repositoryUrlPrefixes: string
+    repositoryUrlPrefixesHint: string
+    repositoryUrlPrefixesPlaceholder: string
+    repositoryUrlPrefixInvalid: string
     token: string
     tokenHint: string
     tokenStored: string
@@ -8435,7 +8439,7 @@ export const zhCN: Resources = {
         '脚本的 stdout 超出保留窗口，单端口模式无法保证端口值完整，已判失败。',
       'code-host-not-configured': '该代码平台还没有配置 base URL 与 token（设置页 → 代码平台）。',
       'code-host-project-foreign':
-        '任务的仓库不属于所配置的代码平台实例，已拒绝调用而不是去改一个同名项目。',
+        '任务仓库既不属于所配置的代码平台主地址，也未命中允许的仓库 URL 前缀；已拒绝调用而不是去改一个同名项目。',
       'code-host-project-unresolved': '无法从任务推导出目标项目，请在节点上显式填写。',
       'code-host-param-missing': '必填参数为空。',
       'code-host-param-invalid': '参数取值不合法。',
@@ -10148,6 +10152,11 @@ export const zhCN: Resources = {
     baseUrl: 'API 根地址',
     baseUrlHint_gitlab: '形如 https://gitlab.example.com/api/v4（子路径部署也以 /api/v4 结尾）',
     baseUrlHint_github: '公有 GitHub 填 https://api.github.com；GHES 填 https://host/api/v3',
+    repositoryUrlPrefixes: '允许的仓库 URL 前缀',
+    repositoryUrlPrefixesHint:
+      '仅 GitLab。配置与当前 API 连接属于同一实例的其他克隆地址域名或路径前缀；每项输入后按 Enter 或逗号确认，任务仓库命中任一项即可执行。',
+    repositoryUrlPrefixesPlaceholder: 'https://gitlab-mirror.example.com/team',
+    repositoryUrlPrefixInvalid: '请输入不含凭据、查询参数或片段的 HTTP(S) 地址。',
     token: '访问令牌',
     tokenHint: '建议用专用机器人账号的最小权限令牌',
     tokenStored: '已保存（尾号 {{hint}}）。留空保存则保留原令牌',

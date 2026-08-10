@@ -79,6 +79,9 @@ export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
       return c.json(
         service.upsert(provider, {
           baseUrl: parsed.data.baseUrl,
+          ...(parsed.data.repositoryUrlPrefixes !== undefined
+            ? { repositoryUrlPrefixes: parsed.data.repositoryUrlPrefixes }
+            : {}),
           ...(parsed.data.token !== undefined ? { token: parsed.data.token } : {}),
           ...(parsed.data.rejectUnauthorized !== undefined
             ? { rejectUnauthorized: parsed.data.rejectUnauthorized }

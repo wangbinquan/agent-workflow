@@ -59,6 +59,7 @@ function glDeps(
     connection: {
       provider: 'gitlab',
       baseUrl: GL_BASE,
+      repositoryUrlPrefixes: [],
       token: TOKEN,
       rejectUnauthorized: true,
     },
@@ -76,6 +77,7 @@ function ghDeps(
     connection: {
       provider: 'github',
       baseUrl: GH_BASE,
+      repositoryUrlPrefixes: [],
       token: 'aw-fixture-gh-5678', // gitleaks:allow
       rejectUnauthorized: true,
     },
@@ -305,6 +307,7 @@ describe('RFC-269 失败与重试（D18 幂等分档）', () => {
         connection: {
           provider: 'gitlab',
           baseUrl: GL_BASE,
+          repositoryUrlPrefixes: [],
           token: TOKEN,
           rejectUnauthorized: false,
         },
@@ -548,6 +551,7 @@ describe('RFC-269 project 推导', () => {
       resolveProjectFallback({
         provider: 'gitlab',
         baseUrl: GL_BASE,
+        repositoryUrlPrefixes: [],
         repoUrl: 'https://gitlab.corp.example/grp/sub/repo.git',
         repoCount: 1,
       }),
@@ -556,6 +560,7 @@ describe('RFC-269 project 推导', () => {
       resolveProjectFallback({
         provider: 'github',
         baseUrl: GH_BASE,
+        repositoryUrlPrefixes: [],
         repoUrl: 'git@github.com:octo/repo.git',
         repoCount: 1,
       }),
@@ -566,6 +571,7 @@ describe('RFC-269 project 推导', () => {
     const out = resolveProjectFallback({
       provider: 'gitlab',
       baseUrl: GL_BASE,
+      repositoryUrlPrefixes: [],
       repoUrl: 'https://other.example/grp/repo.git',
       repoCount: 1,
     })
@@ -576,10 +582,52 @@ describe('RFC-269 project 推导', () => {
     expect(out.message).toContain('gitlab.corp.example')
   })
 
+  test('GitLab 仓库 URL 命中任一已配置前缀 ⇒ 允许用主连接执行', () => {
+    expect(
+      resolveProjectFallback({
+        provider: 'gitlab',
+        baseUrl: GL_BASE,
+        repositoryUrlPrefixes: [
+          'https://unused.example/team',
+          'https://gitlab-mirror.example/platform',
+        ],
+        repoUrl: 'git@gitlab-mirror.example:platform/backend/api.git',
+        repoCount: 1,
+      }),
+    ).toEqual({ ok: true, value: 'platform%2Fbackend%2Fapi' })
+  })
+
+  test('GitLab 仓库 URL 前缀按路径段边界匹配，近似字符串仍拒绝', () => {
+    const out = resolveProjectFallback({
+      provider: 'gitlab',
+      baseUrl: GL_BASE,
+      repositoryUrlPrefixes: ['https://gitlab-mirror.example/platform'],
+      repoUrl: 'https://gitlab-mirror.example/platform-other/backend.git',
+      repoCount: 1,
+    })
+    expect(out.ok).toBe(false)
+    if (out.ok) return
+    expect(out.code).toBe('code-host-project-foreign')
+  })
+
+  test('仓库 URL 前缀是 GitLab 专属，GitHub 不消费同名字段', () => {
+    const out = resolveProjectFallback({
+      provider: 'github',
+      baseUrl: GH_BASE,
+      repositoryUrlPrefixes: ['https://github-mirror.example/octo'],
+      repoUrl: 'https://github-mirror.example/octo/repo.git',
+      repoCount: 1,
+    })
+    expect(out.ok).toBe(false)
+    if (out.ok) return
+    expect(out.code).toBe('code-host-project-foreign')
+  })
+
   test('多仓任务 ⇒ 要求显式填写（运行期判定，因为仓数是启动参数不是定义属性）', () => {
     const out = resolveProjectFallback({
       provider: 'gitlab',
       baseUrl: GL_BASE,
+      repositoryUrlPrefixes: [],
       repoUrl: 'https://gitlab.corp.example/grp/repo.git',
       repoCount: 2,
     })

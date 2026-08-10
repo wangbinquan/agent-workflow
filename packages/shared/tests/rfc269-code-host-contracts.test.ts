@@ -27,6 +27,7 @@ import {
   extractCodeHostVars,
   isUnsupportedBinding,
   normalizeCodeHostBaseUrl,
+  normalizeGitLabRepositoryUrlPrefix,
   renderCodeHostJsonBody,
   renderCodeHostTemplate,
   TRIGGER_CONTEXT_VARS,
@@ -44,6 +45,7 @@ describe('RFC-277 连接 TLS wire 契约', () => {
       provider: 'gitlab',
       configured: true,
       baseUrl: 'https://gitlab.example/api/v4',
+      repositoryUrlPrefixes: [],
       rejectUnauthorized: false,
       tokenHint: '1234',
       updatedAt: 1,
@@ -73,6 +75,38 @@ describe('RFC-277 连接 TLS wire 契约', () => {
         rejectUnauthorized: 'false',
       }).success,
     ).toBe(false)
+  })
+
+  test('GitLab 仓库 URL 前缀集合有界，单项归一化拒绝凭据与 query', () => {
+    expect(
+      UpsertCodeHostConnectionSchema.parse({
+        baseUrl: 'https://gitlab.example/api/v4',
+        repositoryUrlPrefixes: ['https://mirror.example/team'],
+      }).repositoryUrlPrefixes,
+    ).toEqual(['https://mirror.example/team'])
+    expect(
+      UpsertCodeHostConnectionSchema.safeParse({
+        baseUrl: 'https://gitlab.example/api/v4',
+        repositoryUrlPrefixes: Array.from({ length: 33 }, (_, i) => `https://h${i}.example`),
+      }).success,
+    ).toBe(false)
+
+    expect(normalizeGitLabRepositoryUrlPrefix(' HTTPS://Mirror.Example/team/ ')).toEqual({
+      ok: true,
+      value: 'https://mirror.example/team',
+    })
+    expect(normalizeGitLabRepositoryUrlPrefix('ssh://git@mirror.example/team')).toEqual({
+      ok: false,
+      issue: 'not-http',
+    })
+    expect(normalizeGitLabRepositoryUrlPrefix('https://user:secret@mirror.example/team')).toEqual({
+      ok: false,
+      issue: 'has-credentials',
+    })
+    expect(normalizeGitLabRepositoryUrlPrefix('https://mirror.example/team?token=x')).toEqual({
+      ok: false,
+      issue: 'has-query',
+    })
   })
 })
 

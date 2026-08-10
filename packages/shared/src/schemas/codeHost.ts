@@ -38,6 +38,8 @@ export const CodeHostConnectionWireSchema = z.object({
   provider: CodeHostProviderSchema,
   configured: z.boolean(),
   baseUrl: z.string(),
+  /** GitLab-only clone URL prefixes that belong to the configured API instance. */
+  repositoryUrlPrefixes: z.array(z.string().min(1).max(2048)).max(32),
   /** 是否拒绝无法通过证书链/主机身份校验的 HTTPS 对端；仅 GitLab 可关闭。 */
   rejectUnauthorized: z.boolean(),
   /** token 尾 4 位；读路径唯一可见的部分。密封值损坏时为空串。 */
@@ -58,6 +60,8 @@ export const UpsertCodeHostConnectionSchema = z
   .object({
     baseUrl: z.string().min(1).max(2048),
     token: z.string().min(1).max(4096).optional(),
+    /** GitLab-only; omission preserves the stored collection. */
+    repositoryUrlPrefixes: z.array(z.string().min(1).max(2048)).max(32).optional(),
     /** 省略 = 首次配置为 true，已配置时保留原值；false 只允许 GitLab。 */
     rejectUnauthorized: z.boolean().optional(),
   })

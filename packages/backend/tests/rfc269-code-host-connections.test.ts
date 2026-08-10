@@ -91,12 +91,14 @@ describe('RFC-269 凭据面 — token 三形态', () => {
     expect(box.unseal(row!.tokenEnc)).toBe(SECRET_TOKEN)
     expect(row!.tokenHint).toBe('9999')
     expect(row!.rejectUnauthorized).toBe(true)
+    expect(row!.repositoryUrlPrefixesJson).toBe('[]')
 
     const list = await (await call('GET', '/api/code-hosts')).json()
     const gitlab = (list as Array<{ provider: string }>).find((r) => r.provider === 'gitlab')
     expect(gitlab).toMatchObject({
       configured: true,
       baseUrl: 'https://gitlab.corp.example/api/v4',
+      repositoryUrlPrefixes: [],
       rejectUnauthorized: true,
       tokenHint: '9999',
     })
@@ -127,10 +129,12 @@ describe('RFC-269 凭据面 — token 三形态', () => {
     const list = (await (await call('GET', '/api/code-hosts')).json()) as Array<{
       provider: string
       configured: boolean
+      repositoryUrlPrefixes: string[]
       rejectUnauthorized: boolean
     }>
     expect(list.map((r) => r.provider).sort()).toEqual(['github', 'gitlab'])
     expect(list.every((r) => !r.configured)).toBe(true)
+    expect(list.every((r) => r.repositoryUrlPrefixes.length === 0)).toBe(true)
     expect(list.every((r) => r.rejectUnauthorized)).toBe(true)
   })
 })
@@ -174,6 +178,47 @@ describe('RFC-277 migration — 存量连接安全默认', () => {
         INSERT INTO code_host_connections
           (provider, base_url, reject_unauthorized, token_enc, token_hint, updated_at)
         VALUES ('github', 'https://api.github.com', 0, 'sealed', '5678', 1);
+      `,
+        )
+        .run(),
+    ).toThrow()
+    db.close()
+  })
+})
+
+describe('GitLab 仓库 URL 前缀 migration — 存量连接兼容', () => {
+  test('0146 给旧行回填空集合，并禁止 GitHub 持有前缀', () => {
+    const db = new Database(':memory:')
+    db.exec(`
+      CREATE TABLE code_host_connections (
+        provider text PRIMARY KEY NOT NULL,
+        base_url text NOT NULL,
+        reject_unauthorized integer NOT NULL DEFAULT 1,
+        token_enc text NOT NULL,
+        token_hint text NOT NULL,
+        last_test_json text,
+        updated_at integer NOT NULL,
+        updated_by text
+      );
+      INSERT INTO code_host_connections
+        (provider, base_url, token_enc, token_hint, updated_at)
+      VALUES ('gitlab', 'https://gitlab.example/api/v4', 'sealed', '1234', 1);
+    `)
+    db.exec(readFileSync(resolve(MIGRATIONS, '0146_gitlab_repository_url_prefixes.sql'), 'utf8'))
+    expect(
+      db
+        .query(
+          'SELECT repository_url_prefixes_json AS repositoryUrlPrefixesJson FROM code_host_connections',
+        )
+        .get(),
+    ).toEqual({ repositoryUrlPrefixesJson: '[]' })
+    expect(() =>
+      db
+        .query(
+          `
+        INSERT INTO code_host_connections
+          (provider, base_url, repository_url_prefixes_json, token_enc, token_hint, updated_at)
+        VALUES ('github', 'https://api.github.com', '["https://mirror.example"]', 'sealed', '5678', 1);
       `,
         )
         .run(),
@@ -230,6 +275,67 @@ describe('RFC-269 凭据面 — PUT 保留 / 清除语义', () => {
     const service = createCodeHostConnectionsService({ db, secretBox: box })
     expect(service.resolve('gitlab')).toMatchObject({ rejectUnauthorized: false })
     expect(service.get('gitlab').rejectUnauthorized).toBe(false)
+  })
+
+  test('GitLab 仓库 URL 前缀会归一化、去重并在省略时保留', async () => {
+    const { db, call } = await harness()
+    const saved = await call('PUT', '/api/code-hosts/gitlab', {
+      baseUrl: 'https://gitlab.corp.example/api/v4',
+      token: SECRET_TOKEN,
+      repositoryUrlPrefixes: [
+        ' HTTPS://Mirror.Example/platform/ ',
+        'https://mirror.example/platform',
+        'https://second.example',
+      ],
+    })
+    expect(saved.status).toBe(200)
+    expect(await saved.json()).toMatchObject({
+      repositoryUrlPrefixes: ['https://mirror.example/platform', 'https://second.example'],
+    })
+
+    const updated = await call('PUT', '/api/code-hosts/gitlab', {
+      baseUrl: 'https://gitlab.corp.example/gitlab/api/v4',
+    })
+    expect(updated.status).toBe(200)
+    expect(await updated.json()).toMatchObject({
+      repositoryUrlPrefixes: ['https://mirror.example/platform', 'https://second.example'],
+    })
+    expect(
+      db
+        .select()
+        .from(codeHostConnections)
+        .where(eq(codeHostConnections.provider, 'gitlab'))
+        .all()[0]!.repositoryUrlPrefixesJson,
+    ).toBe('["https://mirror.example/platform","https://second.example"]')
+    expect(
+      createCodeHostConnectionsService({ db, secretBox: box }).resolve('gitlab'),
+    ).toMatchObject({
+      repositoryUrlPrefixes: ['https://mirror.example/platform', 'https://second.example'],
+    })
+  })
+
+  test('无效仓库 URL 前缀与 GitHub 非空前缀都明确拒绝', async () => {
+    const { call } = await harness()
+    const invalid = await call('PUT', '/api/code-hosts/gitlab', {
+      baseUrl: 'https://gitlab.corp.example/api/v4',
+      token: SECRET_TOKEN,
+      repositoryUrlPrefixes: ['ssh://git@mirror.example/team'],
+    })
+    expect(invalid.status).toBe(422)
+    expect(await invalid.json()).toMatchObject({
+      code: 'code-host-repository-url-prefix-invalid',
+      details: { index: 0, issue: 'not-http' },
+    })
+
+    const github = await call('PUT', '/api/code-hosts/github', {
+      baseUrl: 'https://api.github.com',
+      token: 'aw-fixture-gh-1234', // gitleaks:allow
+      repositoryUrlPrefixes: ['https://mirror.example'],
+    })
+    expect(github.status).toBe(422)
+    expect(await github.json()).toMatchObject({
+      code: 'code-host-repository-url-prefixes-unsupported',
+    })
   })
 
   test('GitHub 不能关闭证书校验，不接受一个保存后不生效的假开关', async () => {
