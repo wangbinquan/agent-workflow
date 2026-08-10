@@ -696,13 +696,24 @@ export function summarizeOpenAlerts(
  * Fresh warning-severity findings intentionally do NOT raise the tier: the 24h
  * grace is by design, and the per-alert `onAlert` WS broadcast already surfaces
  * them in the UI immediately.
+ *
+ * **Suppression**: when `stateChanged` is false (no new, promoted, or resolved
+ * alerts in this scan), the aggregate log is skipped entirely. The INFO 'scan
+ * complete' line already carries `findings` / `newAlerts` / `promotedAlerts` /
+ * `resolvedAlerts` — anyone tailing the log can see the scan ran and the current
+ * finding count. This prevents the same ERROR line from repeating every scan
+ * interval for a steady-state backlog (observed: 21k+ identical ERROR lines
+ * over 3 months for 7 unchanged stuck-task alerts). Defaults to `true` so
+ * one-off direct callers (diagnose route, repair flows) always log.
  */
 export function logAlertSummary(
   logger: Logger,
   messages: { actionable: string; benign: string },
   summary: OpenAlertSummary,
   promotedThisScan: number,
+  stateChanged: boolean = true,
 ): void {
+  if (!stateChanged) return
   if (summary.liveErrorCount > 0) {
     logger.error(messages.actionable, {
       open: summary.open,
@@ -779,6 +790,8 @@ export async function runLifecycleInvariants(
     resolvedAlerts: reconciled.resolvedAlerts,
   })
   const statusByTask = new Map(taskRows.map((t) => [t.id, t.status]))
+  const stateChanged =
+    reconciled.newAlerts > 0 || reconciled.promotedAlerts > 0 || reconciled.resolvedAlerts > 0
   logAlertSummary(
     log,
     {
@@ -787,6 +800,7 @@ export async function runLifecycleInvariants(
     },
     summarizeOpenAlerts(reconciled.openAlerts, statusByTask),
     reconciled.promotedAlerts,
+    stateChanged,
   )
   return { scanned: taskIds.length, ...reconciled }
 }

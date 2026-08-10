@@ -576,6 +576,8 @@ export async function runStuckTaskDetector(
     resolvedAlerts: reconciled.resolvedAlerts,
   })
   const statusByTask = new Map(candidates.map((c) => [c.taskId, c.status]))
+  const stateChanged =
+    reconciled.newAlerts > 0 || reconciled.promotedAlerts > 0 || reconciled.resolvedAlerts > 0
   logAlertSummary(
     log,
     {
@@ -584,6 +586,7 @@ export async function runStuckTaskDetector(
     },
     summarizeOpenAlerts(reconciled.openAlerts, statusByTask),
     reconciled.promotedAlerts,
+    stateChanged,
   )
   return { scanned: candidates.length, ...reconciled }
 }

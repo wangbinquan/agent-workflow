@@ -8,6 +8,13 @@
 //
 // If a refactor turns any of these red, it means the terminal-vs-live tiering
 // (or the reused canonical `TERMINAL_TASK_STATUSES` predicate) regressed.
+//
+// **Suppression lock**: a scan that produces no new/promoted/resolved alerts
+// must NOT re-emit the aggregate ERROR/WARN line — the INFO 'scan complete'
+// line already carries the finding count. This prevents 21k+ identical ERROR
+// lines from accumulating over months for a steady-state backlog (observed on
+// a real daemon: `lifecycle.stuck` scanned every 5 min, same 7 alerts, zero
+// state changes, ERROR every tick since May).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -19,11 +26,14 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
+  logAlertSummary,
   runLifecycleInvariants,
   summarizeOpenAlerts,
   type LifecycleAlertRow,
+  type OpenAlertSummary,
 } from '../src/services/lifecycleInvariants'
 import { configureLogger, resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
+import { createLogger } from '../src/util/log'
 
 const GRACE_MS = 24 * 3_600_000
 
@@ -108,6 +118,96 @@ describe('summarizeOpenAlerts — terminal-vs-live classification', () => {
     const s = summarizeOpenAlerts([row({ taskId: 'ghost', rule: 'R2' })], new Map())
     expect(s.errorCount).toBe(1)
     expect(s.liveErrorCount).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Part A2 — logAlertSummary stateChanged suppression (pure function)
+// ---------------------------------------------------------------------------
+
+function makeSummary(overrides: Partial<OpenAlertSummary> = {}): OpenAlertSummary {
+  return {
+    open: 1,
+    errorCount: 1,
+    liveErrorCount: 1,
+    byRule: { R2: 1 },
+    ...overrides,
+  }
+}
+
+describe('logAlertSummary — stateChanged suppression', () => {
+  let captured: string
+
+  beforeEach(() => {
+    resetLoggerForTest()
+    captured = ''
+    configureLogger({ level: 'debug', jsonMode: true })
+    setLoggerStdoutWriterForTest((line) => {
+      captured += line
+    })
+  })
+  afterEach(() => resetLoggerForTest())
+
+  function parseLines(): Array<{ level: string; message: string }> {
+    return captured
+      .split('\n')
+      .filter((l) => l.trim().length > 0)
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+      .map((o) => ({ level: o.level as string, message: o.message as string }))
+  }
+
+  test('stateChanged=true with live errors → ERROR', () => {
+    const logger = createLogger('test')
+    logAlertSummary(
+      logger,
+      { actionable: 'stuck tasks detected', benign: 'benign backlog' },
+      makeSummary({ liveErrorCount: 1 }),
+      0,
+      true,
+    )
+    const lines = parseLines()
+    expect(lines.some((l) => l.level === 'error' && l.message === 'stuck tasks detected')).toBe(
+      true,
+    )
+  })
+
+  test('stateChanged=false with live errors → no aggregate log (suppressed)', () => {
+    const logger = createLogger('test')
+    logAlertSummary(
+      logger,
+      { actionable: 'stuck tasks detected', benign: 'benign backlog' },
+      makeSummary({ liveErrorCount: 1 }),
+      0,
+      false,
+    )
+    const lines = parseLines()
+    expect(lines.some((l) => l.level === 'error')).toBe(false)
+    expect(lines.some((l) => l.level === 'warn')).toBe(false)
+  })
+
+  test('stateChanged=false with benign terminal backlog → no aggregate log (suppressed)', () => {
+    const logger = createLogger('test')
+    logAlertSummary(
+      logger,
+      { actionable: 'stuck tasks detected', benign: 'benign backlog' },
+      makeSummary({ liveErrorCount: 0, errorCount: 5 }),
+      0,
+      false,
+    )
+    const lines = parseLines()
+    expect(lines.some((l) => l.level === 'warn')).toBe(false)
+  })
+
+  test('stateChanged defaults to true (backward compat for direct callers)', () => {
+    const logger = createLogger('test')
+    logAlertSummary(
+      logger,
+      { actionable: 'stuck tasks detected', benign: 'benign backlog' },
+      makeSummary({ liveErrorCount: 1 }),
+      0,
+    )
+    const lines = parseLines()
+    expect(lines.some((l) => l.level === 'error')).toBe(true)
   })
 })
 
@@ -224,5 +324,24 @@ describe('lifecycle invariants boot log — tiering by task terminality', () => 
     expect(err!.message).toBe('lifecycle invariants violated')
     expect(err!.fields.liveErrorCount).toBe(1)
     expect(err!.fields.errorCount).toBe(1)
+  })
+
+  test('third scan with no state change → no aggregate ERROR/WARN (suppressed)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedOffendingTask(db, 'awaiting_human')
+    // Scan 1: detect (newAlerts=1 → stateChanged=true → logs)
+    await runLifecycleInvariants({ db, scope: { taskId }, now: () => 0 })
+    // Scan 2: promote (promotedAlerts=1 → stateChanged=true → logs ERROR)
+    await runLifecycleInvariants({ db, scope: { taskId }, now: () => GRACE_MS + 1 })
+    captured = ''
+    // Scan 3: nothing changed (newAlerts=0, promotedAlerts=0, resolvedAlerts=0)
+    await runLifecycleInvariants({ db, scope: { taskId }, now: () => GRACE_MS + 2 })
+
+    const lines = parse(captured).filter((l) => l.service === 'lifecycle.invariants')
+    // INFO 'scan complete' must still be present
+    expect(lines.some((l) => l.level === 'info' && l.message === 'scan complete')).toBe(true)
+    // No ERROR or WARN aggregate should be emitted for an unchanged scan
+    expect(lines.some((l) => l.level === 'error')).toBe(false)
+    expect(lines.some((l) => l.level === 'warn')).toBe(false)
   })
 })
