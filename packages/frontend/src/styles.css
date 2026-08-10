@@ -21184,6 +21184,29 @@ button.status-chip {
   margin: 0;
 }
 
+.intent-turn-error {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.intent-turn-error__heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.intent-turn-error__evidence {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.intent-turn-error > .btn {
+  justify-self: start;
+}
+
 .intent-session__questions,
 .intent-session__mounts,
 .intent-session__composer {

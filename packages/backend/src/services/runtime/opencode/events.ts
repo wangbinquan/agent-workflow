@@ -13,7 +13,29 @@ import type {
   NormalizedEventKind,
   NormalizedTokenDelta,
   RuntimeTokenUsage,
+  SystemEventObservation,
 } from '../types'
+
+const SAFE_RUNTIME_EVENT_TYPE = /^[A-Za-z0-9._-]{1,64}$/
+
+export function observeSystemEvent(line: string): SystemEventObservation {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(line)
+  } catch {
+    return { runtimeEventType: null, terminalResult: null }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { runtimeEventType: null, terminalResult: null }
+  }
+  const rawType = (parsed as Record<string, unknown>).type
+  const runtimeEventType =
+    typeof rawType === 'string' && SAFE_RUNTIME_EVENT_TYPE.test(rawType) ? rawType : null
+  return {
+    runtimeEventType,
+    terminalResult: runtimeEventType === 'step_finish' ? 'success' : null,
+  }
+}
 
 /**
  * Parse one opencode `--format json` stdout line into a normalized event.

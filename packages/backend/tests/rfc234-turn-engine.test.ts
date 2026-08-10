@@ -7,7 +7,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -17,9 +17,14 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, intentTurns, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import type { ResolvedRuntime } from '../src/services/runtimeRegistry'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
+import {
+  emptySystemAgentOutputEvidence,
+  type SystemAgentRunOptions,
+  type SystemAgentRunResult,
+} from '../src/services/systemAgentRun'
 import {
   abortIntentTurn,
+  classifyMissingEnvelope,
   runIntentTurn,
   type IntentTurnConfig,
 } from '../src/services/intent/turnEngine'
@@ -68,6 +73,7 @@ function okResult(eventText: string): SystemAgentRunResult {
     durationMs: 5,
     scratchDir: '/tmp/x',
     scratchRetained: false,
+    outputEvidence: emptySystemAgentOutputEvidence(),
   }
 }
 
@@ -77,6 +83,49 @@ function envelope(nonce: string, ports: Record<string, string>): string {
     .join('')
   return `noise before\n<workflow-output nonce="${nonce}">${body}</workflow-output>`
 }
+
+describe('RFC-273 missing-envelope evidence classification', () => {
+  const evidence = (over: Partial<ReturnType<typeof emptySystemAgentOutputEvidence>> = {}) => ({
+    ...emptySystemAgentOutputEvidence(),
+    ...over,
+  })
+
+  test('classifies cap, no-text, terminal and stopped shapes in fixed priority order', () => {
+    expect(
+      classifyMissingEnvelope(
+        evidence({
+          assistantTextSeen: true,
+          observedAssistantTextBytes: 10,
+          retainedAssistantTextBytes: 5,
+          terminalResult: 'success',
+        }),
+      ),
+    ).toBe('output-cap-hit')
+    expect(classifyMissingEnvelope(evidence({ terminalResult: 'success' }))).toBe(
+      'no-assistant-text',
+    )
+    expect(
+      classifyMissingEnvelope(
+        evidence({
+          assistantTextSeen: true,
+          observedAssistantTextBytes: 5,
+          retainedAssistantTextBytes: 5,
+          terminalResult: 'success',
+        }),
+      ),
+    ).toBe('terminal-without-envelope')
+    expect(
+      classifyMissingEnvelope(
+        evidence({
+          assistantTextSeen: true,
+          observedAssistantTextBytes: 5,
+          retainedAssistantTextBytes: 5,
+        }),
+      ),
+    ).toBe('assistant-stopped-without-envelope')
+    expect(classifyMissingEnvelope(undefined)).toBe('runtime-shape-unknown')
+  })
+})
 
 const MINIMAL_CHANGESET = JSON.stringify({
   $schema_version: 1,
@@ -316,6 +365,79 @@ describe('runIntentTurn', () => {
       'hint: verify every JSON object/array delimiter; if the response was truncated, emit fewer or smaller ops this turn',
     )
     expect(malformedJsonContent.errors?.join('\n')).not.toContain('usually means')
+  })
+
+  test('protocol failure retains scratch and evidence; a valid changeset releases the same owned shape', async () => {
+    const { session } = await createIntentSession(db, actor, { message: 'x' })
+    let failedScratch = ''
+    const failed = await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config({ scratchRetentionHours: 12 }),
+        runFn: scriptedRun((opts) => {
+          expect(opts.retainScratchOnSuccess).toBe(true)
+          failedScratch = join(opts.scratchParent, opts.scratchName ?? 'missing')
+          mkdirSync(failedScratch, { recursive: true })
+          return {
+            ...okResult('read inventory, then stopped'),
+            scratchDir: failedScratch,
+            scratchRetained: true,
+            outputEvidence: {
+              ...emptySystemAgentOutputEvidence(),
+              assistantTextSeen: true,
+              observedAssistantTextBytes: 28,
+              retainedAssistantTextBytes: 28,
+              lastNormalizedEventKind: 'text',
+              lastRuntimeEventType: 'assistant',
+            },
+          }
+        }),
+      },
+      { sessionId: session.id, actor },
+    )
+    const failedTurn = (
+      await db.select().from(intentTurns).where(eq(intentTurns.id, failed.turnId))
+    )[0]
+    expect(JSON.parse(failedTurn?.contentJson ?? '{}')).toEqual({
+      code: 'intent-envelope-missing',
+      reason: 'assistant-stopped-without-envelope',
+    })
+    expect(JSON.parse(failedTurn?.runMetaJson ?? '{}')).toMatchObject({
+      scratchRetentionHours: 12,
+      outputEvidence: {
+        assistantTextSeen: true,
+        lastRuntimeEventType: 'assistant',
+      },
+    })
+    expect(failedTurn?.scratchRetained).toBe(true)
+    expect(existsSync(failedScratch)).toBe(true)
+
+    const second = await createIntentSession(db, actor, { message: 'valid' })
+    let validScratch = ''
+    const valid = await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config(),
+        runFn: scriptedRun((opts, nonce) => {
+          validScratch = join(opts.scratchParent, opts.scratchName ?? 'missing')
+          mkdirSync(validScratch, { recursive: true })
+          return {
+            ...okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET })),
+            scratchDir: validScratch,
+            scratchRetained: true,
+          }
+        }),
+      },
+      { sessionId: second.session.id, actor },
+    )
+    const validTurn = (
+      await db.select().from(intentTurns).where(eq(intentTurns.id, valid.turnId))
+    )[0]
+    expect(valid.kind).toBe('changeset')
+    expect(validTurn?.scratchRetained).toBe(false)
+    expect(existsSync(validScratch)).toBe(false)
   })
 
   test('unknown handle mints the draft WITH blocking errors (agent-fixable loop)', async () => {

@@ -123,6 +123,24 @@ export interface NormalizedEvent {
   rawLine: string
 }
 
+export type TerminalResultObservation = 'success' | 'error' | 'not-observed'
+
+export interface SystemAgentOutputEvidence {
+  assistantTextSeen: boolean
+  observedAssistantTextBytes: number
+  retainedAssistantTextBytes: number
+  eventTextCapHit: boolean
+  unparsedStdoutSeen: boolean
+  lastNormalizedEventKind: NormalizedEventKind | null
+  lastRuntimeEventType: string | null
+  terminalResult: TerminalResultObservation
+}
+
+export interface SystemEventObservation {
+  runtimeEventType: string | null
+  terminalResult: Exclude<TerminalResultObservation, 'not-observed'> | null
+}
+
 /**
  * A driver's argv + env + stdin plan for one node_run spawn. `stdin: pipe`
  * delivers the prompt over stdin (claude, D12); omitted / `ignore` = no stdin
@@ -219,6 +237,11 @@ export interface SpawnPlan {
         sessionContractDigest: string
         sessionStoreKey: string
         createdNodeRunId: string
+        /** Same-instance MCP closure expected before session/model side effects. */
+        mcpReadiness?: {
+          enabled: boolean
+          servers: readonly { name: string; type: 'local' | 'remote' }[]
+        }
       }
     | {
         /**
@@ -755,6 +778,8 @@ export interface RuntimeDriver {
    * to the pump's raw-text path.
    */
   parseEvent(line: string): NormalizedEvent | null
+  /** Safe metadata-only observation for system-agent failure forensics. */
+  observeSystemEvent?(line: string): SystemEventObservation
   /**
    * RFC-117 — assemble the spawn plan for a framework system agent (distiller /
    * commit / fusion / the runtimeSmoke conformance probe). Minimal surface: one

@@ -21,6 +21,7 @@ import {
   type WorkgroupRoomMessage,
   type WorkgroupRoomResponse,
 } from '@/lib/workgroup-room'
+import { resolveWorkgroupMessageBody } from '@/lib/workgroup-system-message'
 
 export interface RoomTimelineProps {
   timeline: readonly RoomTimelineEntry[]
@@ -350,6 +351,9 @@ function RoomMessage({
     referencedMessage === null
       ? null
       : messageAuthorLabel(referencedMessage, members, resolveUser, systemLabel)
+  const body = resolveWorkgroupMessageBody(message, t)
+  const referencedBody =
+    referencedMessage === null ? null : resolveWorkgroupMessageBody(referencedMessage, t)
 
   // Speaker-role chat bubble — every non-system message renders as a bubble
   // whose color identifies who is talking: leader (accent) / agent member
@@ -401,10 +405,10 @@ function RoomMessage({
         )}
         <span className="workgroup-room__time">{formatRoomTimestamp(message.createdAt, now)}</span>
       </div>
-      {referencedMessage !== null && referencedAuthorLabel !== null && (
+      {referencedMessage !== null && referencedAuthorLabel !== null && referencedBody !== null && (
         <MessageReference
           author={t('workgroups.room.replyingTo', { author: referencedAuthorLabel })}
-          body={referencedMessage.bodyMd}
+          body={referencedBody}
           ariaLabel={t('workgroups.room.openReferencedMessage', {
             author: referencedAuthorLabel,
           })}
@@ -419,7 +423,7 @@ function RoomMessage({
           testId={`wg-msg-reference-${message.id}`}
         />
       )}
-      <div className="workgroup-room__body">{message.bodyMd}</div>
+      <div className="workgroup-room__body">{body}</div>
       {cards.length > 0 && (
         <div className="workgroup-room__cards">
           {cards.map((a) => (

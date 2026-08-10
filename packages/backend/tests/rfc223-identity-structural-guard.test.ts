@@ -49,6 +49,8 @@ const ALLOWANCE_REASONS = {
     'The external runtime registry is name-keyed after canonical-id hydration and duplicate-name rejection.',
   'schema-column':
     'The names are SQLite schema column labels used for restore compatibility checks.',
+  'schema-metadata':
+    'Names are SQLite schema object, table, column, or index labels used only for drift comparison.',
 } as const
 
 type AllowanceReasonCode = keyof typeof ALLOWANCE_REASONS
@@ -84,6 +86,16 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/intent/applyChangeset.ts\u001foccupiedNamesFor\u001fNewExpression:104c67a27a8bad8b6d97\u001f1\u001fowner-uniqueness\u001fnew Set(rows.map((r) => r.name.toLowerCase()))',
   'collection-name-identity\u001fpackages/backend/src/services/restore.ts\u001fhasFusionProvenanceSchema\u001fNewExpression:33997c70d15e0d15c945\u001f1\u001fschema-column\u001fnew Set( ( raw.query("SELECT name FROM pragma_table_info(\'memories\')").all() as Array<{ name: string }> ).map((column) => column.name), )',
   'collection-name-identity\u001fpackages/backend/src/services/restore.ts\u001fhasFusionProvenanceSchema\u001fNewExpression:590ef4bb2acf4b8f66f6\u001f1\u001fschema-column\u001fnew Set( ( raw.query("SELECT name FROM pragma_table_info(\'fusions\')").all() as Array<{ name: string }> ).map((column) => column.name), )',
+  // RFC-275: these keys are physical SQLite metadata read from sqlite_schema
+  // and PRAGMA output, not application-resource selectors. The collector uses
+  // a null-prototype dictionary; the diff uses Maps and compares both sides of
+  // a fresh full migration replay, so "__proto__" and other legal identifiers
+  // remain ordinary data and cannot affect object identity.
+  'frontend-name-key\u001fpackages/backend/src/db/schemaAdmission.ts\u001fcollectPhysicalSchemaManifest\u001fBinaryExpression:5dae64b7537f91eb57a4\u001f1\u001fschema-metadata\u001ftables[object.name] = { columns, foreignKeys, indexes }',
+  'collection-name-identity\u001fpackages/backend/src/db/schemaAdmission.ts\u001fdiffTable\u001fNewExpression:d224ca9738dc29f4556d\u001f1\u001fschema-metadata\u001fnew Map(expected.columns.map((column) => [column.name, column]))',
+  'collection-name-identity\u001fpackages/backend/src/db/schemaAdmission.ts\u001fdiffTable\u001fNewExpression:b291bd0c8b907f7e7dda\u001f1\u001fschema-metadata\u001fnew Map(actual.columns.map((column) => [column.name, column]))',
+  'collection-name-identity\u001fpackages/backend/src/db/schemaAdmission.ts\u001fdiffTable\u001fNewExpression:152125ee81758647d418\u001f1\u001fschema-metadata\u001fnew Map(expected.indexes.map((index) => [index.name, index]))',
+  'collection-name-identity\u001fpackages/backend/src/db/schemaAdmission.ts\u001fdiffTable\u001fNewExpression:3d50c3b538b554408be8\u001f1\u001fschema-metadata\u001fnew Map(actual.indexes.map((index) => [index.name, index]))',
   'collection-name-identity\u001fpackages/backend/src/services/runner.ts\u001frunNode\u001fCallExpression:a542d65f2cd58c9d735b\u001f1\u001fruntime-protocol\u001fresolvedParamsByAgent.set(opts.agent.name, opts.runtimeParams ?? EMPTY_RUNTIME_PROFILE)',
   'collection-name-identity\u001fpackages/backend/src/services/runner.ts\u001frunNode\u001fCallExpression:c4fcc147e09c28523846\u001f1\u001fruntime-protocol\u001fresolvedParamsByAgent.has(dep.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runner.ts\u001frunNode\u001fCallExpression:ed70f7ab8579a8b397af\u001f1\u001fruntime-protocol\u001fresolvedParamsByAgent.set(dep.name, { model: r.model, variant: r.variant, temperature: r.temperature, steps: r.steps, maxSteps: r.maxSteps, })',
@@ -106,6 +118,24 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fCallExpression:2298356755d45d318dac\u001f1\u001fruntime-protocol\u001fparamsByAgent.get(dep.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fCallExpression:d17bc30fe13a7ef152fc\u001f1\u001fruntime-protocol\u001fparamsByAgent.get(agent.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedInventory.ts\u001fbuildVerifiedInventorySnapshot\u001fCallExpression:3ce3c61b32b67a48fc00\u001f1\u001fopencode-protocol\u001fagentNames.has(agent.name)',
+  // RFC-272: MCP names below are the closed OpenCode registry protocol keys
+  // after the stable-id resource closure has been planned. The readiness plan
+  // rejects duplicates and requires code-point order; the one-shot marker is
+  // matched back to that plan with duplicate and type checks before any model
+  // turn. The status decoder's dictionary has a null prototype.
+  'collection-name-identity\u001fpackages/backend/src/services/runner.ts\u001fprocessRunnerOpencodeControlLine\u001fNewExpression:70d9613906be923cfda3\u001f1\u001fopencode-protocol\u001fnew Map( expectedReadiness.servers.map((server) => [server.name, server] as const), )',
+  'collection-name-identity\u001fpackages/backend/src/services/runner.ts\u001fprocessRunnerOpencodeControlLine\u001fCallExpression:4d569fc4ccdbb0bbb8ea\u001f1\u001fopencode-protocol\u001fexpectedByName.get(entry.name)',
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedInventory.ts\u001fbuildVerifiedInventorySnapshot\u001fCallExpression:e06553251deb9f026d02\u001f2\u001fopencode-protocol\u001fobservedByName.has(item.name)',
+  "collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedInventory.ts\u001fbuildVerifiedInventorySnapshot\u001fCallExpression:1e89287b3284c6cd48f2\u001f1\u001fopencode-protocol\u001fobservedByName.set(item.name, { type: item.type, status: item.status, bucket: 'connected' })",
+  "collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedInventory.ts\u001fbuildVerifiedInventorySnapshot\u001fCallExpression:44198825759b19d1f5d7\u001f1\u001fopencode-protocol\u001fobservedByName.set(item.name, { type: item.type, status: item.status, bucket: 'unavailable' })",
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedInventory.ts\u001fbuildVerifiedInventorySnapshot\u001fCallExpression:927a8ecce5d841b15db4\u001f1\u001fopencode-protocol\u001finput.mcpReadiness.servers.some((expected) => { const observed = observedByName.get(expected.name) return observed === undefined || observed.type !== expected.type })',
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedInventory.ts\u001fbuildVerifiedInventorySnapshot\u001fCallExpression:30c86dc31fed8959367e\u001f1\u001fopencode-protocol\u001fobservedByName.get(expected.name)',
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedInventory.ts\u001fbuildVerifiedInventorySnapshot\u001fCallExpression:37c618b3cd782900c282\u001f1\u001fopencode-protocol\u001fobservedByName.get(mcp.name)',
+  // Frozen skill names are likewise OpenCode-facing protocol names. Stable
+  // skill ids remain authoritative for seal paths and digests; this Set only
+  // rejects a duplicate runtime name before the manifest is admitted.
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedManifest.ts\u001f<root>\u001fCallExpression:bf833165ec6f2a098cd5\u001f1\u001fopencode-protocol\u001fseenNames.has(seal.name)',
+  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/mcpReadiness.ts\u001f<root>\u001fBinaryExpression:a0993ef48e0a2412aa6c\u001f1\u001fopencode-protocol\u001fstatuses[name] = status.status',
   // RFC-251: each closure member resolves its OWN frozen runtime profile from
   // the same name-keyed map the root uses (built by runner.ts, allowed above).
   // A missing entry fails the plan loudly rather than inheriting the root model.
@@ -477,7 +507,14 @@ describe('RFC-223 T15 structural identity guard', () => {
     // 改为分块 + 直接 `present.add(...)`（不再新建集合表达式），于是又并回一处。
     // 两次增减**都不代表判据放宽**：始终是「同名 **且** builtin=true」，与导入期
     // `resolveIdentityRef` 逐字一致。
-    expect(findings.length).toBe(141)
+    // RFC-272/275 显式改判：141 → 157。RFC-272 新增 11 个实际 occurrence：
+    // MCP readiness 的名字是 OpenCode 协议 registry key；稳定资源闭包已先按 id
+    // 冻结，readiness plan/receipt 又做了去重、类型和一一对应校验。另有 frozen
+    // skill seal 的同名拒绝，它只防止运行时 registry 冲突，seal 身份仍由 skillId
+    // 和 digest 决定。RFC-275 新增 5 个 occurrence，全部是 SQLite 的表/列/索引
+    // 元数据标签，只用于 fresh replay 与 live schema 的结构比较；字典已用 null
+    // prototype，合法的 "__proto__" 标识符也只是普通数据。
+    expect(findings.length).toBe(157)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three

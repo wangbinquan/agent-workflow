@@ -45,7 +45,7 @@ skills rather than inheriting them.
 
 `SKILL.md` is the only required file. Everything else under `files/` is part
 of the snapshot and of the tree digest that fixes the run's execution identity
-— so editing an auxiliary file *does* change the digest — but see the box
+— so editing an auxiliary file _does_ change the digest — but see the box
 above: nothing currently hands the agent a path into that snapshot, so
 auxiliary files do not participate in what the model sees.
 
@@ -53,52 +53,46 @@ auxiliary files do not participate in what the model sees.
 
 ```yaml
 ---
-name: lint                      # ^[a-z0-9][a-z0-9_-]*$, must match dir name
+name: lint # ^[a-z0-9][a-z0-9_-]*$, must match dir name
 description: TypeScript lint rules…
 # anything else round-trips through frontmatterExtra
 ---
-
 # Body markdown — what opencode reads as the skill.
 ```
 
-| Field         | Type     | Required | Notes                          |
-| ------------- | -------- | -------- | ------------------------------ |
-| `name`        | string   | yes      | URL-safe slug                   |
-| `description` | string   | yes      | Shown in pickers; not in prompt |
+| Field         | Type   | Required | Notes                           |
+| ------------- | ------ | -------- | ------------------------------- |
+| `name`        | string | yes      | URL-safe slug                   |
+| `description` | string | yes      | Shown in pickers; not in prompt |
 
 ## CRUD
 
 Managed skills:
 
-| Method | Path                                  | Body                                                    |
-| ------ | ------------------------------------- | ------------------------------------------------------- |
-| GET    | `/api/skills`                         | —                                                       |
-| GET    | `/api/skills/:name`                   | —                                                       |
-| POST   | `/api/skills`                         | `CreateManagedSkill` — creates the dir + SKILL.md       |
-| PUT    | `/api/skills/:name`                   | `UpdateSkill` — DB-only metadata                        |
-| PUT    | `/api/skills/:name/body`              | `{ bodyMd }`                                            |
-| GET    | `/api/skills/:name/files`             | recursive listing                                       |
-| GET    | `/api/skills/:name/files/*`           | read a file                                             |
-| PUT    | `/api/skills/:name/files/*`           | write a file                                            |
-| DELETE | `/api/skills/:name/files/*`           | delete a file                                           |
-| DELETE | `/api/skills/:name`                   | unregister (409 if any agent references)                |
+| Method | Path                        | Body                                              |
+| ------ | --------------------------- | ------------------------------------------------- |
+| GET    | `/api/skills`               | —                                                 |
+| GET    | `/api/skills/:name`         | —                                                 |
+| POST   | `/api/skills`               | `CreateManagedSkill` — creates the dir + SKILL.md |
+| PUT    | `/api/skills/:name`         | `UpdateSkill` — DB-only metadata                  |
+| PUT    | `/api/skills/:name/body`    | `{ bodyMd }`                                      |
+| GET    | `/api/skills/:name/files`   | recursive listing                                 |
+| GET    | `/api/skills/:name/files/*` | read a file                                       |
+| PUT    | `/api/skills/:name/files/*` | write a file                                      |
+| DELETE | `/api/skills/:name/files/*` | delete a file                                     |
+| DELETE | `/api/skills/:name`         | unregister (409 if any agent references)          |
 
-External skills:
+There is no external-skill import API. `POST /api/skills/import-external` and
+the old symlink-backed source kind were removed by RFC-178.
 
-| Method | Path                                  | Body                                                    |
-| ------ | ------------------------------------- | ------------------------------------------------------- |
-| POST   | `/api/skills/import-external`         | `{ name, externalPath, description? }`                  |
-| DELETE | `/api/skills/:name`                   | unregister; the underlying directory is never touched   |
+## Per-run projection
 
-## Per-run staging
+Each selected managed skill is snapshotted into the node run's immutable
+identity seal. The runner does not copy it into `OPENCODE_CONFIG_DIR`, create a
+discoverable symlink, or expose the managed source tree. OpenCode's repo-local
+and user-global skill registries are disabled on this verified path; the
+digest-tagged prompt block is the only model-facing skill registry.
 
-Each node run gets its own `OPENCODE_CONFIG_DIR` under
-`~/.agent-workflow/runs/<task-id>/<node-run-id>/`. For every skill the
-agent declares, the runner either:
-
-- **copies** the managed `files/` tree into that dir, or
-- **symlinks** the external skill path into that dir.
-
-The repo-local `.opencode/skills/` and `~/.opencode/skills/` are **not**
-disabled — opencode loads them too, so business-specific or
-auth-baseline skills keep working alongside platform skills.
+The snapshot root and its current auxiliary-file reachability limitation are
+described at the top of this page. Do not rely on the pre-RFC-224 staging model
+when authoring or debugging a skill.

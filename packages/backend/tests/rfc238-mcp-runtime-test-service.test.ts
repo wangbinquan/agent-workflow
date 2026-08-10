@@ -26,7 +26,11 @@ import {
 import { getRuntimeDriver } from '../src/services/runtime'
 import { deriveHermeticOpencodeLayout } from '../src/services/runtime/opencode/hermetic'
 import { opencodeMcpTestSessionStore } from '../src/services/runtime/opencode/verifiedMcpTestPlan'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
+import {
+  emptySystemAgentOutputEvidence,
+  type SystemAgentRunOptions,
+  type SystemAgentRunResult,
+} from '../src/services/systemAgentRun'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
@@ -56,6 +60,7 @@ function successResult(
     capturedSessionId: sessionId,
     scratchDir: join(opts.scratchParent, opts.scratchName ?? 'unknown'),
     scratchRetained: true,
+    outputEvidence: emptySystemAgentOutputEvidence(),
   }
 }
 
@@ -311,6 +316,7 @@ describe('RFC-238 MCP runtime test service', () => {
               durationMs: 1,
               scratchDir: join(opts.scratchParent, opts.scratchName ?? 'unknown'),
               scratchRetained: true,
+              outputEvidence: emptySystemAgentOutputEvidence(),
             })
           if (opts.abortSignal?.aborted === true) finish()
           else opts.abortSignal?.addEventListener('abort', finish, { once: true })

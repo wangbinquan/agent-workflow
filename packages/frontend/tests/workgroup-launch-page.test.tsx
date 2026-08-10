@@ -54,6 +54,7 @@ function wg(name: string, overrides: Partial<Workgroup> = {}): Workgroup {
     createdAt: 1,
     updatedAt: 1,
     ...overrides,
+    outputContract: overrides.outputContract ?? 'files',
   }
 }
 

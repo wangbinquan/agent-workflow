@@ -32,7 +32,10 @@ import {
   triggerChangeNarrative,
   type ChangeNarrativeDeps,
 } from '../src/services/changeNarrative'
-import type { SystemAgentRunResult } from '../src/services/systemAgentRun'
+import {
+  emptySystemAgentOutputEvidence,
+  type SystemAgentRunResult,
+} from '../src/services/systemAgentRun'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -143,6 +146,7 @@ function okRun(json: unknown): SystemAgentRunResult {
     durationMs: 5,
     scratchDir: '/tmp/x',
     scratchRetained: false,
+    outputEvidence: emptySystemAgentOutputEvidence(),
   }
 }
 

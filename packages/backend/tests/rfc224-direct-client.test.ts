@@ -41,6 +41,39 @@ function client(fetchImpl: ConstructorParameters<typeof OpencodeDirectClient>[0]
 }
 
 describe('RFC-224 direct HTTP client request boundary', () => {
+  test('decodes GET /mcp as a closed status map and drops upstream error text', async () => {
+    let captured = ''
+    const instance = client(async (url) => {
+      captured = url
+      return Response.json({
+        healthy: { status: 'connected' },
+        broken: { status: 'failed', error: 'secret /private/path token=abc' },
+        oauth: { status: 'needs_auth' },
+      })
+    })
+    expect(await instance.getMcpStatuses()).toEqual({
+      healthy: 'connected',
+      broken: 'failed',
+      oauth: 'needs_auth',
+    })
+    expect(new URL(captured).pathname).toBe('/mcp')
+    expect(JSON.stringify(await instance.getMcpStatuses())).not.toContain('secret')
+  })
+
+  test('rejects unknown MCP status shapes without echoing their body', async () => {
+    const secret = 'credential-that-must-not-egress'
+    const instance = client(async () =>
+      Response.json({ broken: { status: 'future_status', error: secret } }),
+    )
+    let caught: unknown
+    try {
+      await instance.getMcpStatuses()
+    } catch (error) {
+      caught = error
+    }
+    expect(String(caught)).not.toContain(secret)
+  })
+
   test('adds Basic auth + canonical directory and disables redirects', async () => {
     let capturedUrl = ''
     let capturedInit: RequestInit | undefined

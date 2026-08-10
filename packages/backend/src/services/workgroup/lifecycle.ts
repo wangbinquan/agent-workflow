@@ -519,7 +519,13 @@ async function consumeTasksAddInner(
     await postMessage(db, taskId, roundMode(state.config), {
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `wg_tasks_add from @${memberDisplayName(state.config, authorMemberId)} rejected: ${parsed.errors.join('; ')}`,
+      systemTemplate: {
+        key: 'tasksAddRejected',
+        params: {
+          member: memberDisplayName(state.config, authorMemberId),
+          detail: parsed.errors.join('; '),
+        },
+      },
     })
     return 0
   }
@@ -576,7 +582,10 @@ async function consumeTasksAddInner(
     await postMessage(db, taskId, roundMode(state.config), {
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `${dropped} duplicate task(s) from @${memberDisplayName(state.config, authorMemberId)} dropped (title dedup)`,
+      systemTemplate: {
+        key: 'duplicateTasksDropped',
+        params: { count: dropped, member: memberDisplayName(state.config, authorMemberId) },
+      },
     })
   }
   return added

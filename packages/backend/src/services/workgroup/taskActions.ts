@@ -468,7 +468,10 @@ export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {
         round: row.round,
         authorKind: 'system',
         kind: 'system',
-        bodyMd: `assignment '${row.title}' canceled by a task member`,
+        systemTemplate: {
+          key: 'assignmentCanceledByMember',
+          params: { title: row.title },
+        },
         assignmentId,
         triggerMessageId: null,
         createdAt: Date.now(),

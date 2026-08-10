@@ -157,6 +157,35 @@ export function identityDigest(value: unknown): string {
   return createHash('sha256').update(canonicalizeIdentity(value), 'utf8').digest('hex')
 }
 
+/**
+ * RFC-238's MCP playground owner identity crosses the plan -> manifest ->
+ * verified-launcher boundary. Keep the material in one constructor so the two
+ * processes cannot silently disagree when a generation control is added.
+ */
+export function mcpTestOpencodeIdentityDigest(input: {
+  testSessionId: string
+  sessionStoreKey: string
+  agent: string
+  model: unknown
+  temperature: number | null
+  steps: number | null
+  binaryDigest: string
+  mcpExecutionDigest: string
+}): string {
+  return identityDigest({
+    codec: 1,
+    storeKind: 'mcp-test',
+    testSessionId: input.testSessionId,
+    sessionStoreKey: input.sessionStoreKey,
+    agent: input.agent,
+    model: input.model,
+    temperature: input.temperature,
+    steps: input.steps,
+    binaryDigest: input.binaryDigest,
+    mcpExecutionDigest: input.mcpExecutionDigest,
+  })
+}
+
 const LOGICAL_ATTEMPT_SEAL = 'agent-workflow://opencode-attempt-seal'
 const LOCAL_MCP_WRAPPER_RELATIVE_RE = /^mcp\/[0-9a-f]{64}\/run$/
 
@@ -179,6 +208,23 @@ export function businessOpencodeIdentityDigest(input: {
   binaryDigest: string
   sealRoot: string
 }): string {
+  const config = normalizeBusinessConfig(input)
+  return identityDigest({
+    codec: 2,
+    config,
+    agent: input.agent,
+    model: input.model,
+    binaryDigest: input.binaryDigest,
+  })
+}
+
+function normalizeBusinessConfig(input: {
+  config: unknown
+  agent: string
+  model: unknown
+  binaryDigest: string
+  sealRoot: string
+}): Record<string, IdentityJson> {
   if (
     !isAbsolute(input.sealRoot) ||
     resolve(input.sealRoot) !== input.sealRoot ||
@@ -225,9 +271,96 @@ export function businessOpencodeIdentityDigest(input: {
     }
     value.command = [`${LOGICAL_ATTEMPT_SEAL}/${relativeWrapper}`]
   }
+  return config
+}
+
+export interface FrozenSkillIdentityInput {
+  name: string
+  skillId: string
+  sealName: string
+  treeDigest: string
+  target: string
+}
+
+/**
+ * RFC-272: normalize attempt-local frozen skill roots while retaining the
+ * rendered file list, tree digest, body, and agent-to-skill declaration in the
+ * owner identity. The runtime config also carries each root in the exact
+ * external-directory permission map, so those keys are normalized together.
+ */
+export function businessOpencodeIdentityDigestV3(input: {
+  config: unknown
+  agent: string
+  model: unknown
+  binaryDigest: string
+  sealRoot: string
+  frozenSkills: readonly FrozenSkillIdentityInput[]
+}): string {
+  const config = normalizeBusinessConfig(input)
+  const agents = config.agent
+  if (agents === null || Array.isArray(agents) || typeof agents !== 'object') fail('/config/agent')
+
+  const seenIds = new Set<string>()
+  const seenTargets = new Set<string>()
+  for (const [index, skill] of input.frozenSkills.entries()) {
+    const expectedSealName = createHash('sha256')
+      .update(skill.skillId, 'utf8')
+      .digest('hex')
+      .slice(0, 24)
+    const expectedTarget = join(input.sealRoot, 'skills', expectedSealName)
+    if (
+      skill.name.length === 0 ||
+      skill.skillId.length === 0 ||
+      skill.sealName !== expectedSealName ||
+      skill.target !== expectedTarget ||
+      !/^[0-9a-f]{64}$/.test(skill.treeDigest) ||
+      seenIds.has(skill.skillId) ||
+      seenTargets.has(skill.target)
+    ) {
+      fail(`/frozenSkills/${index}`)
+    }
+    seenIds.add(skill.skillId)
+    seenTargets.add(skill.target)
+
+    const physicalRootLiteral = ` root=${JSON.stringify(skill.target)}`
+    const logicalRoot = `agent-workflow://frozen-skill/${skill.sealName}/${skill.treeDigest}`
+    const logicalRootLiteral = ` root=${JSON.stringify(logicalRoot)}`
+    let promptOccurrences = 0
+    let permissionOccurrences = 0
+    for (const [agentName, rawAgent] of Object.entries(agents)) {
+      if (rawAgent === null || Array.isArray(rawAgent) || typeof rawAgent !== 'object') {
+        fail(`/config/agent/${pointerSegment(agentName)}`)
+      }
+      if (typeof rawAgent.prompt === 'string') {
+        const parts = rawAgent.prompt.split(physicalRootLiteral)
+        if (parts.length > 1) {
+          promptOccurrences += parts.length - 1
+          rawAgent.prompt = parts.join(logicalRootLiteral)
+        }
+      }
+      const permission = rawAgent.permission
+      if (permission === null || Array.isArray(permission) || typeof permission !== 'object') {
+        fail(`/config/agent/${pointerSegment(agentName)}/permission`)
+      }
+      const external = permission.external_directory
+      if (external === null || Array.isArray(external) || typeof external !== 'object') {
+        fail(`/config/agent/${pointerSegment(agentName)}/permission/external_directory`)
+      }
+      const physicalPattern = `${skill.target}/*`
+      if (Object.hasOwn(external, physicalPattern)) {
+        const verdict = external[physicalPattern]
+        delete external[physicalPattern]
+        external[`${logicalRoot}/*`] = verdict as IdentityJson
+        permissionOccurrences += 1
+      }
+    }
+    if (promptOccurrences === 0 || permissionOccurrences === 0) {
+      fail(`/frozenSkills/${index}`)
+    }
+  }
 
   return identityDigest({
-    codec: 2,
+    codec: 3,
     config,
     agent: input.agent,
     model: input.model,

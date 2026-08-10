@@ -66,6 +66,18 @@ describe('buildWorkgroupConfigPatch — only-changed-fields matrix', () => {
     expect(buildWorkgroupConfigPatch(config, workgroupTaskConfigDraftFrom(config))).toBeNull()
   })
 
+  test('RFC-274 output contract defaults legacy snapshots to files and patches only a real flip', () => {
+    const draft = workgroupTaskConfigDraftFrom(config)
+    expect(draft.outputContract).toBe('files')
+    draft.outputContract = 'discussion'
+    expect(buildWorkgroupConfigPatch(config, draft)).toEqual({ outputContract: 'discussion' })
+
+    const storedDiscussion = makeConfig({ outputContract: 'discussion' })
+    expect(
+      buildWorkgroupConfigPatch(storedDiscussion, workgroupTaskConfigDraftFrom(storedDiscussion)),
+    ).toBeNull()
+  })
+
   test('one switch flip carries the FULL switches triple and nothing else', () => {
     const draft = workgroupTaskConfigDraftFrom(config)
     draft.switches.blackboard = true
@@ -291,6 +303,23 @@ describe('WorkgroupTaskConfigDialog', () => {
       )
       expect(put).toBeTruthy()
       expect(put?.body).toEqual({ fanOut: true })
+    })
+  })
+
+  test('output contract dialog flip PUTs only {outputContract:"discussion"}', async () => {
+    const calls = installFetch()
+    renderDialog(makeConfig())
+    await screen.findByTestId('wg-config-submit')
+    fireEvent.click(screen.getByRole('radio', { name: 'Discussion outcome' }))
+    await waitFor(() => {
+      expect((screen.getByTestId('wg-config-submit') as HTMLButtonElement).disabled).toBe(false)
+    })
+    fireEvent.click(screen.getByTestId('wg-config-submit'))
+    await waitFor(() => {
+      const put = calls.find(
+        (c) => c.method === 'PUT' && c.url.endsWith('/api/workgroup-tasks/t1/config'),
+      )
+      expect(put?.body).toEqual({ outputContract: 'discussion' })
     })
   })
 

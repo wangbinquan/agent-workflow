@@ -9,7 +9,11 @@ import { createInMemoryDb } from '../src/db/client'
 import { runtimes } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
+import {
+  emptySystemAgentOutputEvidence,
+  type SystemAgentRunOptions,
+  type SystemAgentRunResult,
+} from '../src/services/systemAgentRun'
 import { createApp } from '../src/server'
 
 const TOKEN = 'rfc238-http-token'
@@ -58,6 +62,7 @@ async function harness(): Promise<{ app: Hono; root: string }> {
       capturedSessionId: 'native-http-session',
       scratchDir: join(opts.scratchParent, opts.scratchName ?? 'unknown'),
       scratchRetained: true,
+      outputEvidence: emptySystemAgentOutputEvidence(),
     }
   }
   return {

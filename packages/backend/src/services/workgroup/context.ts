@@ -21,6 +21,7 @@ import {
   clarifyFormatExample,
   envelopeOpenTag,
   fenceUntrusted,
+  resolveWorkgroupOutputContract,
   resolveWorkgroupSwitches,
   sanitizeInlineField,
   WG_MAX_ASSIGNMENTS_PER_TURN,
@@ -223,6 +224,12 @@ export function renderCharterBlock(config: WorkgroupRuntimeConfig, envelopeNonce
   const groupName =
     envelopeNonce.length > 0 ? sanitizeInlineField(config.workgroupName) : config.workgroupName
   const lines = ['## Workgroup', '', `Group: ${groupName}`]
+  lines.push(
+    '',
+    resolveWorkgroupOutputContract(config.outputContract) === 'files'
+      ? 'Delivery contract: FILES. Put the primary deliverable in your own working copy using relative paths so it can be merged back.'
+      : 'Delivery contract: DISCUSSION. Put the primary deliverable in the room/result summary as an actionable conclusion; files are optional supporting evidence.',
+  )
   if (config.instructions.trim().length > 0) {
     lines.push(
       '',

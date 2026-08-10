@@ -46,6 +46,51 @@ export const enUS: Resources = {
     },
     opCount: '{{count}} changes',
     retryTurn: 'Retry turn',
+    failureDiagnostic: {
+      genericSuggestion:
+        "Open this turn's execution events, then retry. Use the evidence below if it repeats.",
+      reason: {
+        'output-cap-hit': {
+          title: "Output exceeded this turn's retained window",
+          suggestion:
+            'The result envelope may be in the truncated portion. Retry with a smaller, batched changeset.',
+        },
+        'no-assistant-text': {
+          title: 'The runtime produced no assistant text',
+          suggestion:
+            'The model may have stopped after reading inventory, before writing a result. Retry once, then inspect runtime events if it persists.',
+        },
+        'terminal-without-envelope': {
+          title: 'The runtime ended without a result envelope',
+          suggestion:
+            'The model completed or errored without following the output protocol. Inspect the terminal event, then retry.',
+        },
+        'assistant-stopped-without-envelope': {
+          title: 'Assistant output stopped before the result envelope',
+          suggestion:
+            'Retry with a smaller turn and require each batch to submit a complete envelope first.',
+        },
+        'runtime-shape-unknown': {
+          title: 'No recognizable result envelope was found',
+          suggestion:
+            'The runtime event shape was not sufficient to classify this further. Open execution events and retry.',
+        },
+      },
+      observedRetained: 'Assistant text: {{observed}} observed, {{retained}} retained',
+      lastEvent: 'Last event: normalized {{kind}}; runtime {{type}}',
+      terminalResult: 'Runtime terminal result: {{result}}',
+      terminal: {
+        success: 'success',
+        error: 'error',
+        'not-observed': 'not observed',
+      },
+      notObserved: 'not observed',
+      unparsedStdout: 'Unparsed stdout lines were also observed.',
+      scratchRetained:
+        "This turn's diagnostic scratch is retained for up to about {{hours}} hours.",
+      scratchRetainedUnknown:
+        "This turn's diagnostic scratch is retained temporarily and will be cleaned automatically.",
+    },
     generating: 'Generating…',
     answerQuestions: 'Answer clarifying questions',
     submitAnswers: 'Submit answers and continue',
@@ -2546,6 +2591,14 @@ export const enUS: Resources = {
     fieldFanOut: 'Dynamic fan-out (multi-instance dispatch)',
     fieldFanOutHint:
       'Let the leader dispatch multiple concurrent instances of the same agent member in one turn (each runs independently, verified together). Off keeps the fixed one-at-a-time mode.',
+    sectionOutputContract: 'Delivery contract',
+    fieldOutputContract: 'Primary deliverable',
+    outputContractFiles: 'File delivery',
+    outputContractFilesHint:
+      'Work should be written into working copies and merged into the task worktree; completion checks for zero file changes.',
+    outputContractDiscussion: 'Discussion outcome',
+    outputContractDiscussionHint:
+      'The primary deliverable is an actionable room conclusion; files are optional and zero-delta is not warned.',
     launchButton: 'Launch task',
     launch: {
       title: 'Launch workgroup task: {{name}}',
@@ -2597,6 +2650,36 @@ export const enUS: Resources = {
         'Workflow generation failed (retries exhausted). Check the error, then resume the task to retry.',
       previewEmpty: 'Nothing generated to preview yet.',
       canvasPending: 'The real DAG appears here once the orchestration is approved.',
+    },
+    systemMessages: {
+      assignmentAgentUnresolvable:
+        "assignment '{{title}}' failed: agent for @{{member}} unresolvable",
+      assignmentFailed: "assignment '{{title}}' failed: {{detail}}",
+      assignmentProtocolViolation: "assignment '{{title}}' failed: protocol violation ({{detail}})",
+      assignmentReportedFailed: "assignment '{{title}}' reported failed by @{{member}}: {{detail}}",
+      assignmentCanceledByMember: "assignment '{{title}}' canceled by a task member",
+      messageTurnFailed: 'message turn for {{member}} failed: {{detail}}',
+      freeCollabConverged: 'free-collab converged — {{count}} task(s) done:\n{{details}}',
+      freeCollabConvergedEmpty: 'free-collab converged with no completed tasks',
+      leaderNudge:
+        'Autonomous mode: you ended a round without dispatching work or declaring done. If the goal is complete, emit wg_decision done; otherwise dispatch the next assignment(s) or say what is blocking.',
+      maxRoundsFailed: 'workgroup hit max_rounds ({{maxRounds}})',
+      freeCollabDeadlock: 'free_collab deadlock: open tasks but no claimable agent member',
+      internalDriveError: 'internal error driving {{item}}: {{detail}}',
+      completionGateWaiting: 'completion gate: waiting for human confirmation. {{summary}}',
+      zeroDeltaDone:
+        '⚠️ {{count}} assignment(s) completed but the canonical worktree has no changes — outputs may not have merged. Check that each worker wrote inside its own working copy using relative paths.',
+      leaderAgentUnresolvable: 'leader agent unresolvable ({{member}}) — failing task',
+      roundCapDispatchIgnored:
+        'Round cap reached — new assignments in this final wrap-up round were ignored. Aggregating the completed work.',
+      tasksAddRejected: 'wg_tasks_add from @{{member}} rejected: {{detail}}',
+      duplicateTasksDropped: '{{count}} duplicate task(s) from @{{member}} dropped (title dedup)',
+      visibilityMessagesDropped:
+        '{{count}} message(s) from @{{member}} dropped (visibility switches)',
+      batchAgentUnresolvable: 'batch for @{{member}} skipped: agent unresolvable',
+      batchFailed: 'batch of {{count}} task(s) for @{{member}} failed: {{detail}}',
+      batchProtocolViolation:
+        'batch for @{{member}}: protocol violation after retries ({{detail}})',
     },
     room: {
       empty: 'No messages yet. Say something to kick off — "@member" dispatches a task directly.',

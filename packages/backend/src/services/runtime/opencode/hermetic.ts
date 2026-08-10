@@ -746,6 +746,8 @@ export interface BuildControlledAgentConfigInput {
    * tail keeps its qualified shape.
    */
   allowedReadOnlyTools?: readonly SystemReadOnlyTool[]
+  /** Frozen managed-skill roots exposed through read/grep/glob. */
+  readOnlyExternalDirectories?: readonly string[]
   /**
    * RFC-251 — the agent's selected plugin closure (union over the `dependsOn`
    * closure, already resolved by the runner). Encoded by the shared
@@ -791,6 +793,8 @@ export interface ControlledSubagentInput {
   userPermission?: Record<string, IdentityJson>
   allowShell: boolean
   allowedReadOnlyTools?: readonly SystemReadOnlyTool[]
+  /** Frozen managed-skill roots this member may inspect. */
+  readOnlyExternalDirectories?: readonly string[]
 }
 
 /**
@@ -813,11 +817,23 @@ export function buildControlledOpencodeConfig(
   const buildPermission = (
     member: Pick<
       BuildControlledAgentConfigInput,
-      'userPermission' | 'allowShell' | 'allowedReadOnlyTools'
+      'userPermission' | 'allowShell' | 'allowedReadOnlyTools' | 'readOnlyExternalDirectories'
     >,
     allowTask: boolean,
   ): Record<string, IdentityJson> => {
+    const externalDirectories = [...new Set(member.readOnlyExternalDirectories ?? [])]
+    if (
+      externalDirectories.some(
+        (directory) =>
+          !isAbsolute(directory) || resolve(directory) !== directory || directory.includes('\0'),
+      )
+    ) {
+      return executionIdentityFailure('execution-identity-mismatch')
+    }
     const allowedReadOnly = new Set<string>(member.allowedReadOnlyTools ?? [])
+    if (externalDirectories.length > 0) {
+      for (const tool of SYSTEM_READ_ONLY_TOOLS) allowedReadOnly.add(tool)
+    }
     for (const tool of allowedReadOnly) {
       if (!(SYSTEM_READ_ONLY_TOOLS as readonly string[]).includes(tool)) {
         return executionIdentityFailure('execution-identity-mismatch')
@@ -854,10 +870,19 @@ export function buildControlledOpencodeConfig(
       for (const dep of allowedTaskTargets) byName[dep] = 'allow'
       permission.task = byName
     }
-    permission.external_directory = {
-      [input.toolOutputPattern]: 'deny',
-      '*': 'deny',
+    // Preserve the byte- and rule-order-stable RFC-224 all-deny tail when
+    // there are no explicit frozen roots. When roots exist, wildcard deny
+    // must precede their narrower allows, while the tool-output deny remains
+    // last and therefore cannot be shadowed by an overlapping allowed root.
+    const externalDirectory: Record<string, IdentityJson> =
+      externalDirectories.length === 0
+        ? { [input.toolOutputPattern]: 'deny', '*': 'deny' }
+        : { '*': 'deny' }
+    for (const directory of externalDirectories) {
+      externalDirectory[`${directory}/*`] = 'allow'
     }
+    if (externalDirectories.length > 0) externalDirectory[input.toolOutputPattern] = 'deny'
+    permission.external_directory = externalDirectory
     return permission
   }
 

@@ -275,6 +275,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
         content: parseJsonRecord(t.contentJson),
         contextRevision: t.contextRevision,
         runMeta: t.runMetaJson === null ? null : parseJsonRecord(t.runMetaJson),
+        scratchRetained: t.scratchRetained,
         execution: projectIntentTurnExecution(t),
         createdAt: t.createdAt,
       }))

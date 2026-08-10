@@ -24,18 +24,20 @@ import { join } from 'node:path'
 import {
   CODE_HOST_METHODS,
   CODE_HOST_REDACTED_FIELDS,
+  INTENT_LIMITS,
   INTENT_REDACTED,
   SCRIPT_ENV_VALUE_PREFIX,
   SCRIPT_REDACTED_FIELDS,
   TRIGGER_CONTEXT_VARS,
   codeHostJsonBodyIssue,
   codeHostPathIssue,
+  parseIntentChangeset,
   redactPrivilegedNodes,
   scriptDependencyIssue,
   scriptEnvSuffix,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { buildIntentDoc } from '../src/services/intent/intentDoc'
+import { buildIntentDoc, INTENT_TURN_GUIDANCE } from '../src/services/intent/intentDoc'
 import { validateWorkflowDef, type ValidatorContext } from '../src/services/workflow.validator'
 import { assertScriptAuthorAllowed } from '../src/services/scriptAuthorGate'
 import { assertCodeHostAuthorAllowed } from '../src/services/codeHostAuthorGate'
@@ -84,6 +86,38 @@ function codeHostDef(node: Record<string, unknown>): unknown {
     edges: [],
   }
 }
+
+describe('RFC-273 single-turn guidance is not a parser limit', () => {
+  test('INTENT.md teaches 8 ops / 6 workflow nodes / 256 KiB and a 9-op bundle remains valid', () => {
+    expect(INTENT_TURN_GUIDANCE).toEqual({
+      maxOps: 8,
+      maxWorkflowNodesCreatedOrReplaced: 6,
+      targetChangesetBytes: 256 * 1024,
+    })
+    expect(doc).toContain('Emit at most 8 changeset ops in one turn')
+    expect(doc).toContain('at most 6 workflow nodes')
+    expect(doc).toContain('Target at most 256 KiB')
+    expect(doc).toContain('complete nonce-bound envelope')
+    expect(INTENT_LIMITS.maxOps).toBeGreaterThan(INTENT_TURN_GUIDANCE.maxOps)
+
+    const nineOps = {
+      $schema_version: 1,
+      ops: Array.from({ length: 9 }, (_, index) => ({
+        opId: `op-${index + 1}`,
+        action: 'create',
+        resourceType: 'agent',
+        tempRef: `$new:agent-${index + 1}`,
+        payload: {
+          name: `agent-${index + 1}`,
+          description: '',
+          outputs: ['result'],
+          bodyMd: 'Do one thing.',
+        },
+      })),
+    }
+    expect(parseIntentChangeset(JSON.stringify(nineOps)).ok).toBe(true)
+  })
+})
 
 // ---------------------------------------------------------------------------
 // Custom request: `path`

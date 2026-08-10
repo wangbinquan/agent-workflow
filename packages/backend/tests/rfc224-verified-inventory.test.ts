@@ -32,11 +32,6 @@ describe('RFC-224 verified inventory provenance', () => {
           treeDigest: 'a'.repeat(64),
         },
       ],
-      mcps: [
-        { name: 'docs', type: 'remote', enabled: true },
-        { name: 'local-tools', type: 'local', enabled: true },
-        { name: 'disabled', type: 'local', enabled: false },
-      ],
     })
     if (!plan.enabled) throw new Error('fixture must enable inventory')
 
@@ -56,6 +51,18 @@ describe('RFC-224 verified inventory provenance', () => {
         },
       ],
       plan,
+      mcpReadiness: {
+        enabled: true,
+        servers: [
+          { name: 'docs', type: 'remote' },
+          { name: 'local-tools', type: 'local' },
+        ],
+      },
+      readinessReceipt: {
+        connected: [{ name: 'local-tools', type: 'local', status: 'connected' }],
+        unavailableLocal: [],
+        unavailableRemote: [{ name: 'docs', type: 'remote', status: 'failed' }],
+      },
       capturedAt: 123,
     })
 
@@ -91,8 +98,13 @@ describe('RFC-224 verified inventory provenance', () => {
       ]),
     )
     expect(snapshot.mcps).toEqual([
-      { name: 'docs', type: 'remote', status: 'configured', hint: null },
-      { name: 'local-tools', type: 'local', status: 'configured', hint: null },
+      {
+        name: 'docs',
+        type: 'remote',
+        status: 'failed',
+        hint: 'remote unavailable at startup',
+      },
+      { name: 'local-tools', type: 'local', status: 'connected', hint: null },
     ])
     expect(snapshot.plugins).toEqual([])
   })
@@ -103,12 +115,13 @@ describe('RFC-224 verified inventory provenance', () => {
     const plan = buildVerifiedInventoryPlan({
       enabled: true,
       frozenSkills: [],
-      mcps: [],
     })
     if (!plan.enabled) throw new Error('fixture must enable inventory')
     const snapshot = buildVerifiedInventorySnapshot({
       agents: [{ name: 'worker', mode: 'primary', native: false, model: null }],
       plan,
+      mcpReadiness: { enabled: false, servers: [] },
+      readinessReceipt: { connected: [], unavailableLocal: [], unavailableRemote: [] },
       capturedAt: 456,
     })
 
@@ -127,12 +140,13 @@ describe('RFC-224 verified inventory provenance', () => {
     const plan = buildVerifiedInventoryPlan({
       enabled: true,
       frozenSkills: [],
-      mcps: [],
     })
     if (!plan.enabled) throw new Error('fixture must enable inventory')
     const snapshot = buildVerifiedInventorySnapshot({
       agents: [{ name: 'worker', mode: 'primary', native: false, model: null }],
       plan,
+      mcpReadiness: { enabled: false, servers: [] },
+      readinessReceipt: { connected: [], unavailableLocal: [], unavailableRemote: [] },
       capturedAt: 789,
     })
     await writeVerifiedInventorySnapshot(runRoot, snapshot)

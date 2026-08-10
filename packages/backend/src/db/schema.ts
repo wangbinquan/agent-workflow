@@ -545,6 +545,9 @@ export const workgroups = sqliteTable(
     mode: text('mode', { enum: ['leader_worker', 'free_collab', 'dynamic_workflow'] })
       .notNull()
       .default('leader_worker'),
+    outputContract: text('output_contract', { enum: ['files', 'discussion'] })
+      .notNull()
+      .default('files'),
     /** FK workgroup_members.id (soft — full-replace regenerates member rows).
      *  Required (app-enforced) when mode='leader_worker'; must be an agent member. */
     leaderMemberId: text('leader_member_id'),
@@ -709,6 +712,9 @@ export const workgroupMessages = sqliteTable(
       enum: ['chat', 'dispatch', 'result', 'delivery', 'decision', 'system', 'nudge'],
     }).notNull(),
     bodyMd: text('body_md').notNull(),
+    /** RFC-274 viewer-localized platform message; bodyMd remains the English fallback. */
+    templateKey: text('template_key'),
+    templateParamsJson: text('template_params_json'),
     /** JSON string[] of mentioned member ids. */
     mentionsJson: text('mentions_json').notNull().default('[]'),
     assignmentId: text('assignment_id'),

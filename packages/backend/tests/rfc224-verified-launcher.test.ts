@@ -22,6 +22,7 @@ import {
 import {
   businessOpencodeIdentityDigest,
   identityDigest,
+  mcpTestOpencodeIdentityDigest,
 } from '@/services/runtime/opencode/executionIdentity'
 import {
   launchVerifiedOpencodeManifest,
@@ -43,6 +44,7 @@ import { parseControlLine } from '@/services/runtime/opencode/controlProtocol'
 import type { OpencodeStoreLifecycleLock } from '@/services/runtime/opencode/storeHygiene'
 import { containmentRequirementDigest } from '@/services/sandbox'
 import type { InventorySnapshotCaptured } from '@agent-workflow/shared'
+import type { McpRuntimeStatus } from '@/services/runtime/opencode/mcpReadiness'
 
 const roots: string[] = []
 
@@ -257,7 +259,39 @@ function businessManifest(): VerifiedLaunchManifest {
     controlAckPath: join(RUN_ROOT, 'control.ack'),
     leaseNonce,
     leaseNonceDigest: createHash('sha256').update(leaseNonce).digest('hex'),
+    mcpReadiness: { enabled: false, servers: [] },
+    frozenSkillSeals: [],
+    identityCodec: 'business-v2-legacy',
     inventory: { enabled: false },
+  })
+}
+
+function businessMcpManifest(type: 'local' | 'remote'): VerifiedLaunchManifest {
+  const base = businessManifest()
+  if (base.storeKind !== 'business') throw new Error('fixture narrowing failed')
+  const name = type === 'local' ? 'sdk-server' : 'docs'
+  const expectedConfig = structuredClone(base.expectedConfig) as Record<string, unknown>
+  expectedConfig.mcp =
+    type === 'local'
+      ? {
+          [name]: {
+            type: 'local',
+            enabled: true,
+            command: [join(SEAL_ROOT, 'mcp', 'c'.repeat(64), 'run')],
+          },
+        }
+      : { [name]: { type: 'remote', enabled: true, url: 'https://example.test/mcp' } }
+  return VerifiedLaunchManifestSchema.parse({
+    ...base,
+    expectedConfig,
+    identityDigest: businessOpencodeIdentityDigest({
+      config: expectedConfig,
+      agent: base.selectedAgent,
+      model: base.selectedModel,
+      binaryDigest: base.binaryDigest,
+      sealRoot: SEAL_ROOT,
+    }),
+    mcpReadiness: { enabled: true, servers: [{ name, type }] },
   })
 }
 
@@ -284,6 +318,9 @@ function resumeManifest(): VerifiedLaunchManifest {
     controlAckPath: join(RUN_ROOT, 'control.ack'),
     leaseNonce,
     leaseNonceDigest: createHash('sha256').update(leaseNonce).digest('hex'),
+    mcpReadiness: { enabled: false, servers: [] },
+    frozenSkillSeals: [],
+    identityCodec: 'business-v2-legacy',
     inventory: { enabled: false },
   })
 }
@@ -293,21 +330,25 @@ function mcpTestManifest(mode: 'new' | 'resume' = 'new'): VerifiedLaunchManifest
   const testSessionId = 'mcp-test-session-1'
   const turnId = mode === 'new' ? 'mcp-test-turn-1' : 'mcp-test-turn-2'
   const mcpExecutionDigest = 'f'.repeat(64)
+  const selectedTemperature = 0.25
+  const selectedSteps = 12
   const common = commonManifest(`agent-workflow:rfc238:mcp-test:${testSessionId}`)
   return VerifiedLaunchManifestSchema.parse({
     ...common,
-    identityDigest: identityDigest({
-      codec: 1,
-      storeKind: 'mcp-test',
+    identityDigest: mcpTestOpencodeIdentityDigest({
       testSessionId,
       sessionStoreKey: common.sessionStoreKey,
       agent: common.selectedAgent,
       model: common.selectedModel,
+      temperature: selectedTemperature,
+      steps: selectedSteps,
       binaryDigest: common.binaryDigest,
       mcpExecutionDigest,
     }),
     storeKind: 'mcp-test',
     mode,
+    selectedTemperature,
+    selectedSteps,
     testSessionId,
     createdTurnId: 'mcp-test-turn-1',
     turnId,
@@ -375,6 +416,11 @@ class FakeClient implements VerifiedLauncherClient {
   async getSkills(): Promise<unknown> {
     this.calls.push('skills')
     return []
+  }
+
+  async getMcpStatuses(): Promise<Readonly<Record<string, McpRuntimeStatus>>> {
+    this.calls.push('mcp')
+    return {}
   }
 
   async createSession(): Promise<SessionInfo> {
@@ -497,6 +543,20 @@ class FakeClient implements VerifiedLauncherClient {
   }
 }
 
+class ReadinessClient extends FakeClient {
+  readonly statuses: Readonly<Record<string, McpRuntimeStatus>>
+
+  constructor(title: string, statuses: Readonly<Record<string, McpRuntimeStatus>>) {
+    super(title)
+    this.statuses = statuses
+  }
+
+  override async getMcpStatuses(): Promise<Readonly<Record<string, McpRuntimeStatus>>> {
+    this.calls.push('mcp')
+    return this.statuses
+  }
+}
+
 class HangingPromptClient extends FakeClient {
   override async postMessageAsync(
     _sessionID: string,
@@ -598,6 +658,11 @@ class InventoryClient extends FakeClient {
         model: { providerID: 'openai', modelID: 'gpt-5.6' },
       },
     ]
+  }
+
+  override async getMcpStatuses(): Promise<Readonly<Record<string, McpRuntimeStatus>>> {
+    this.calls.push('mcp')
+    return { docs: 'connected' }
   }
 }
 
@@ -878,6 +943,49 @@ describe('RFC-224 same-instance provider and skill gates', () => {
 })
 
 describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
+  test('local MCP unavailability stops before session creation or model access', async () => {
+    const manifest = businessMcpManifest('local')
+    const client = new ReadinessClient(manifest.sessionTitle, { 'sdk-server': 'failed' })
+    const harness = dependencies(manifest, client)
+    const stderr: string[] = []
+    harness.deps.writeStderr = (value) => stderr.push(value)
+
+    await expect(launchVerifiedOpencodeManifest(manifest, harness.deps)).rejects.toThrow(
+      'mcp-unavailable',
+    )
+    expect(client.calls).toEqual(['providers', 'agents', 'skills', 'mcp'])
+    expect(stderr).toHaveLength(1)
+    expect(parseControlLine(stderr[0]!.trimEnd())).toMatchObject({
+      kind: 'mcp-readiness',
+      marker: {
+        unavailableLocal: [{ name: 'sdk-server', status: 'failed' }],
+        unavailableRemote: [],
+      },
+    })
+  })
+
+  test('remote MCP unavailability emits a warning frame but continues', async () => {
+    const manifest = businessMcpManifest('remote')
+    const client = new ReadinessClient(manifest.sessionTitle, { docs: 'needs_auth' })
+    const harness = dependencies(manifest, client, {
+      readAck: async (_path, nonce) => ({ decision: 'ok', nonce }),
+    })
+    const stderr: string[] = []
+    harness.deps.writeStdout = () => undefined
+    harness.deps.writeStderr = (value) => stderr.push(value)
+
+    await launchVerifiedOpencodeManifest(manifest, harness.deps)
+    expect(client.calls.slice(0, 5)).toEqual(['providers', 'agents', 'skills', 'mcp', 'create'])
+    expect(parseControlLine(stderr[0]!.trimEnd())).toMatchObject({
+      kind: 'mcp-readiness',
+      marker: {
+        unavailableLocal: [],
+        unavailableRemote: [{ name: 'docs', status: 'needs_auth' }],
+      },
+    })
+    expect(parseControlLine(stderr[1]!.trimEnd()).kind).toBe('session-ready')
+  })
+
   test('FFF proof runs before store acquisition and server spawn', async () => {
     const manifest = systemManifest()
     const client = new FakeClient(manifest.sessionTitle)
@@ -1027,7 +1135,7 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
 
   test('business inventory is written after the complete same-instance gate and before session creation', async () => {
     const manifest = VerifiedLaunchManifestSchema.parse({
-      ...businessManifest(),
+      ...businessMcpManifest('remote'),
       inventory: {
         enabled: true,
         frozenSkills: [
@@ -1037,7 +1145,6 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
             treeDigest: 'a'.repeat(64),
           },
         ],
-        mcps: [{ name: 'docs', type: 'remote' }],
         plugins: [{ specifier: 'file:///tmp/aw-plugins/dd', source: 'npm' }],
       },
     })
@@ -1063,14 +1170,14 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
     expect(writes[0]!.root).toBe(manifest.runRoot)
     // RFC-251: inventory is derived from the single /agent read, and is still
     // written before session creation (asserted below).
-    expect(writes[0]!.callsAtWrite).toEqual(['providers', 'agents', 'skills'])
+    expect(writes[0]!.callsAtWrite).toEqual(['providers', 'agents', 'skills', 'mcp'])
     expect(writes[0]!.snapshot).toMatchObject({
       captured: true,
       // RFC-251 (Codex impl-gate P1): plugins are reported from the frozen
       // selection instead of the old structural `[]`, so a selected plugin no
       // longer renders as "Plugins·0" in run details.
       plugins: [{ specifier: 'file:///tmp/aw-plugins/dd', source: 'npm' }],
-      mcps: [{ name: 'docs', type: 'remote', status: 'configured', hint: null }],
+      mcps: [{ name: 'docs', type: 'remote', status: 'connected', hint: null }],
     })
     expect(client.calls.indexOf('create')).toBeGreaterThan(client.calls.lastIndexOf('agents'))
   })
@@ -1078,7 +1185,7 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
   test('a failed same-instance skill gate never writes inventory', async () => {
     const manifest = VerifiedLaunchManifestSchema.parse({
       ...businessManifest(),
-      inventory: { enabled: true, frozenSkills: [], mcps: [], plugins: [] },
+      inventory: { enabled: true, frozenSkills: [], plugins: [] },
     })
     if (manifest.storeKind !== 'business') throw new Error('fixture narrowing failed')
     const client = new InventoryClient(manifest.sessionTitle)
@@ -1313,6 +1420,34 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
 })
 
 describe('RFC-224 hidden launcher failure channel', () => {
+  test('digest mismatches expose only the safe failing layer before the stable code', async () => {
+    for (const [mutate, stage] of [
+      [
+        (manifest: VerifiedLaunchManifest) => ({ ...manifest, identityDigest: '0'.repeat(64) }),
+        'config-identity-digest',
+      ],
+      [
+        (manifest: VerifiedLaunchManifest) => ({
+          ...manifest,
+          sessionContractDigest: '0'.repeat(64),
+        }),
+        'session-contract-digest',
+      ],
+    ] as const) {
+      const stderr: string[] = []
+      const changed = VerifiedLaunchManifestSchema.parse(mutate(businessManifest()))
+      const code = await runVerifiedOpencodeLauncher('injected', {
+        readManifest: async () => changed,
+        writeStderr: (value) => stderr.push(value),
+      })
+      expect(code).toBe(1)
+      expect(stderr).toEqual([
+        `AW_OPENCODE_DIAGNOSTIC ${stage}\n`,
+        'AW_OPENCODE_FAILURE execution-identity-mismatch\n',
+      ])
+    }
+  })
+
   test('unsafe one-shot manifest is unlinked and only a stable code reaches stderr', async () => {
     const root = await mkdtemp(join(tmpdir(), 'rfc224-launcher-'))
     roots.push(root)

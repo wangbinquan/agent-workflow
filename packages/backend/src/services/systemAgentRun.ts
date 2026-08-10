@@ -22,11 +22,16 @@
 //  - stderr tails pass through maskDiagnosticsText before leaving this module
 //    (design §8 — diagnostics are a secret egress surface too).
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { lstatSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { createHash, randomBytes } from 'node:crypto'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
-import type { RuntimeDriver, SpawnPlan, SystemPermissionProfile } from '@/services/runtime/types'
+import type {
+  RuntimeDriver,
+  SpawnPlan,
+  SystemAgentOutputEvidence,
+  SystemPermissionProfile,
+} from '@/services/runtime/types'
 import {
   wrapSpawnPlanSandbox,
   type ContainmentRequirementProfileId,
@@ -167,6 +172,56 @@ export interface SystemAgentRunResult {
   scratchDir: string
   /** True when the scratch dir was deliberately kept (failure diagnosis / GC). */
   scratchRetained: boolean
+  /** Metadata-only stdout evidence; never contains assistant text. */
+  outputEvidence: SystemAgentOutputEvidence
+}
+
+export function emptySystemAgentOutputEvidence(): SystemAgentOutputEvidence {
+  return {
+    assistantTextSeen: false,
+    observedAssistantTextBytes: 0,
+    retainedAssistantTextBytes: 0,
+    eventTextCapHit: false,
+    unparsedStdoutSeen: false,
+    lastNormalizedEventKind: null,
+    lastRuntimeEventType: null,
+    terminalResult: 'not-observed',
+  }
+}
+
+function saturatingAdd(left: number, right: number): number {
+  return Math.min(Number.MAX_SAFE_INTEGER, left + right)
+}
+
+export function releaseSystemAgentScratch(input: {
+  scratchDir: string
+  expectedParent: string
+  expectedName: string
+}): { removed: boolean; reason?: 'unsafe-path' | 'remove-failed' } {
+  if (
+    !isAbsolute(input.expectedParent) ||
+    resolve(input.expectedParent) !== input.expectedParent ||
+    input.expectedName.length === 0 ||
+    input.expectedName.includes('\0') ||
+    input.expectedName.includes('/') ||
+    input.expectedName.includes('\\') ||
+    !isAbsolute(input.scratchDir) ||
+    resolve(input.scratchDir) !== input.scratchDir ||
+    input.scratchDir !== join(input.expectedParent, input.expectedName)
+  ) {
+    return { removed: false, reason: 'unsafe-path' }
+  }
+  try {
+    const metadata = lstatSync(input.scratchDir)
+    if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+      return { removed: false, reason: 'unsafe-path' }
+    }
+    rmSync(input.scratchDir, { recursive: true, force: true })
+    return { removed: true }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { removed: true }
+    return { removed: false, reason: 'remove-failed' }
+  }
 }
 
 /**
@@ -321,6 +376,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
   const worktreeDir = join(scratchDir, 'worktree')
   const runDir = join(scratchDir, 'run')
 
+  const outputEvidence = emptySystemAgentOutputEvidence()
   const fail = (
     status: SystemAgentRunStatus,
     extra: Partial<SystemAgentRunResult> = {},
@@ -332,6 +388,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
     durationMs: Date.now() - startedAt,
     scratchDir,
     scratchRetained: false,
+    outputEvidence: { ...outputEvidence },
     ...extra,
   })
 
@@ -705,10 +762,25 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         readStream(
           child.stdout as ReadableStream<Uint8Array> | undefined,
           async (line) => {
+            const observation = driver.observeSystemEvent?.(line)
+            if (observation !== undefined) {
+              if (observation.runtimeEventType !== null) {
+                outputEvidence.lastRuntimeEventType = observation.runtimeEventType
+              }
+              if (observation.terminalResult === 'error') {
+                outputEvidence.terminalResult = 'error'
+              } else if (
+                observation.terminalResult === 'success' &&
+                outputEvidence.terminalResult !== 'error'
+              ) {
+                outputEvidence.terminalResult = 'success'
+              }
+            }
             const terminalError = driver.parseTerminalResultError?.(line)
             if (terminalError != null) resultError = terminalError
             const ev = driver.parseEvent(line)
             if (ev === null) {
+              outputEvidence.unparsedStdoutSeen = true
               await appendSink({
                 ts: Date.now(),
                 kind: 'text',
@@ -719,15 +791,27 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
               })
               return
             }
+            outputEvidence.lastNormalizedEventKind = ev.kind
             if (ev.sessionId !== undefined && sessionId === undefined) {
               sessionId = ev.sessionId
               await setSinkRoot(ev.sessionId)
             }
             if (typeof ev.text === 'string' && ev.text.length > 0) {
               const bytes = Buffer.byteLength(ev.text, 'utf8')
+              outputEvidence.assistantTextSeen = true
+              outputEvidence.observedAssistantTextBytes = saturatingAdd(
+                outputEvidence.observedAssistantTextBytes,
+                bytes,
+              )
               if (eventTextBytes + bytes <= maxEventTextBytes) {
                 eventText += ev.text
                 eventTextBytes += bytes
+                outputEvidence.retainedAssistantTextBytes = saturatingAdd(
+                  outputEvidence.retainedAssistantTextBytes,
+                  bytes,
+                )
+              } else {
+                outputEvidence.eventTextCapHit = true
               }
             }
             await appendSink({
@@ -869,6 +953,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         ...(sessionId === undefined ? {} : { capturedSessionId: sessionId }),
         scratchDir,
         scratchRetained: false,
+        outputEvidence: { ...outputEvidence },
       }
       if (aborted) return { status: 'aborted', ...base }
       if (timedOut) return { status: 'timeout', ...base }

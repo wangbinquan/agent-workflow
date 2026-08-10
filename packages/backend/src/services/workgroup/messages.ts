@@ -10,7 +10,7 @@
 // 纯函数、无副作用，所以同步事务（确认门 / 取消卡）里也能用——round 在事务**外**
 // 先 await 解析好再捕获进闭包即可。
 
-import type { WorkgroupMessage } from '@agent-workflow/shared'
+import type { WorkgroupMessage, WorkgroupSystemTemplate } from '@agent-workflow/shared'
 import { monotonicFactory } from 'ulid'
 import type { DbClient } from '@/db/client'
 import type { WorkgroupAssignment } from '@agent-workflow/shared'
@@ -23,6 +23,7 @@ import {
 import { memberDisplayName } from '@/services/workgroup/context'
 import type { WgMessageItem, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { workgroupMessages } from '@/db/schema'
+import { buildSystemMessage } from '@/services/workgroup/systemMessages'
 
 const nextMessageId = monotonicFactory()
 
@@ -39,7 +40,10 @@ export interface RoomMessageRowArgs {
   authorMemberId?: string | null
   authorUserId?: string | null
   kind: WorkgroupMessage['kind']
-  bodyMd: string
+  bodyMd?: string
+  systemTemplate?: WorkgroupSystemTemplate
+  /** Explicit classification for system-authored dynamic original text (for example the goal). */
+  localization?: 'original'
   mentionMemberIds?: readonly string[]
   assignmentId?: string | null
   /**
@@ -51,6 +55,17 @@ export interface RoomMessageRowArgs {
 }
 
 export function buildRoomMessageRow(a: RoomMessageRowArgs): typeof workgroupMessages.$inferInsert {
+  const template = a.systemTemplate === undefined ? null : buildSystemMessage(a.systemTemplate)
+  if (template !== null && a.authorKind !== 'system') {
+    throw new Error('workgroup-message-template-author-invalid')
+  }
+  if (template === null && a.authorKind === 'system' && a.localization !== 'original') {
+    throw new Error('workgroup-system-message-localization-unclassified')
+  }
+  const bodyMd = template?.bodyMd ?? a.bodyMd
+  if (bodyMd === undefined || bodyMd.length === 0) {
+    throw new Error('workgroup-message-body-empty')
+  }
   return {
     id: a.id,
     taskId: a.taskId,
@@ -59,7 +74,9 @@ export function buildRoomMessageRow(a: RoomMessageRowArgs): typeof workgroupMess
     authorMemberId: a.authorMemberId ?? null,
     authorUserId: a.authorUserId ?? null,
     kind: a.kind,
-    bodyMd: a.bodyMd,
+    bodyMd,
+    templateKey: template?.templateKey ?? null,
+    templateParamsJson: template?.templateParamsJson ?? null,
     mentionsJson: JSON.stringify(a.mentionMemberIds ?? []),
     assignmentId: a.assignmentId ?? null,
     triggerMessageId: a.triggerMessageId,
@@ -82,7 +99,9 @@ export interface PostMessageArgs {
   authorKind: 'member' | 'human' | 'system'
   authorMemberId?: string | null
   kind: WorkgroupMessage['kind']
-  bodyMd: string
+  bodyMd?: string
+  systemTemplate?: WorkgroupSystemTemplate
+  localization?: 'original'
   mentionMemberIds?: string[]
   assignmentId?: string | null
   /** Omitted for ordinary messages; message-turn chat outputs pass it explicitly. */
@@ -110,6 +129,8 @@ export async function postMessage(
       authorUserId: null,
       kind: m.kind,
       bodyMd: m.bodyMd,
+      systemTemplate: m.systemTemplate,
+      localization: m.localization,
       mentionMemberIds: m.mentionMemberIds,
       assignmentId: m.assignmentId ?? null,
       triggerMessageId: m.triggerMessageId ?? null,
@@ -207,7 +228,10 @@ export async function persistWgMessages(
       round,
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `${dropped} message(s) from @${memberDisplayName(config, authorMemberId)} dropped (visibility switches)`,
+      systemTemplate: {
+        key: 'visibilityMessagesDropped',
+        params: { count: dropped, member: memberDisplayName(config, authorMemberId) },
+      },
     })
   }
 }

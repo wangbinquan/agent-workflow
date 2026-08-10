@@ -3,7 +3,11 @@
 // mixing text/thinking/tool_use, result.usage cumulative tokens, is_error.
 
 import { describe, expect, it } from 'bun:test'
-import { parseEvent, parseResultError } from '@/services/runtime/claudeCode/events'
+import {
+  observeSystemEvent,
+  parseEvent,
+  parseResultError,
+} from '@/services/runtime/claudeCode/events'
 
 describe('claude parseEvent (RFC-111 PR-B)', () => {
   it('system/init → step_start + session id', () => {
@@ -147,5 +151,23 @@ describe('claude parseResultError (RFC-111 PR-B)', () => {
   it('returns null for non-result lines', () => {
     expect(parseResultError('{"type":"assistant"}')).toBeNull()
     expect(parseResultError('garbage')).toBeNull()
+  })
+})
+
+describe('RFC-273 claude system event observation', () => {
+  it('maps result is_error without retaining result text', () => {
+    expect(
+      observeSystemEvent(
+        JSON.stringify({ type: 'result', is_error: true, result: 'secret diagnostic' }),
+      ),
+    ).toEqual({ runtimeEventType: 'result', terminalResult: 'error' })
+    expect(observeSystemEvent(JSON.stringify({ type: 'result', is_error: false }))).toEqual({
+      runtimeEventType: 'result',
+      terminalResult: 'success',
+    })
+    expect(observeSystemEvent(JSON.stringify({ type: '<unsafe>' }))).toEqual({
+      runtimeEventType: null,
+      terminalResult: null,
+    })
   })
 })

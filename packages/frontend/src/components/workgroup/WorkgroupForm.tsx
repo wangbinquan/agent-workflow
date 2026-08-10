@@ -10,7 +10,7 @@
 // storage, so flipping back to leader_worker restores the user's choices.
 
 import { useTranslation } from 'react-i18next'
-import type { WorkgroupMode } from '@agent-workflow/shared'
+import type { WorkgroupMode, WorkgroupOutputContract } from '@agent-workflow/shared'
 import { WG_CLARIFY_BUDGET_DEFAULT, WORKGROUP_MAX_ROUNDS_LIMIT } from '@agent-workflow/shared'
 import { Field, NumberInput, Switch, TextArea } from '@/components/Form'
 import { FormSection } from '@/components/FormSection'
@@ -94,6 +94,29 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
               { value: 'leader_worker', label: t('workgroups.modeLeaderWorker') },
               { value: 'free_collab', label: t('workgroups.modeFreeCollab') },
               { value: 'dynamic_workflow', label: t('workgroups.modeDynamicWorkflow') },
+            ]}
+          />
+        </Field>
+      </FormSection>
+
+      <FormSection title={t('workgroups.sectionOutputContract')}>
+        <Field
+          label={t('workgroups.fieldOutputContract')}
+          group
+          hint={
+            value.outputContract === 'discussion'
+              ? t('workgroups.outputContractDiscussionHint')
+              : t('workgroups.outputContractFilesHint')
+          }
+        >
+          <Segmented<WorkgroupOutputContract>
+            value={value.outputContract}
+            onChange={(v) => set('outputContract', v, true)}
+            ariaLabel={t('workgroups.fieldOutputContract')}
+            testidPrefix="workgroup-output-contract"
+            options={[
+              { value: 'files', label: t('workgroups.outputContractFiles') },
+              { value: 'discussion', label: t('workgroups.outputContractDiscussion') },
             ]}
           />
         </Field>

@@ -13,12 +13,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
+import type { WorkgroupOutputContract, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { WG_CLARIFY_BUDGET_DEFAULT } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { Field, NumberInput, Switch } from '@/components/Form'
 import { StatusChip } from '@/components/StatusChip'
+import { Segmented } from '@/components/Segmented'
 import { AgentMemberDialog, HumanMemberDialog } from '@/components/workgroup/WorkgroupMemberCards'
 import { describeApiError } from '@/i18n'
 import type { WorkgroupMemberRowState } from '@/lib/workgroup-form'
@@ -144,6 +145,27 @@ export function WorkgroupTaskConfigDialog({
         </>
       }
     >
+      <Field
+        label={t('workgroups.fieldOutputContract')}
+        group
+        hint={
+          draft.outputContract === 'discussion'
+            ? t('workgroups.outputContractDiscussionHint')
+            : t('workgroups.outputContractFilesHint')
+        }
+      >
+        <Segmented<WorkgroupOutputContract>
+          value={draft.outputContract}
+          onChange={(v) => setDraft((d) => ({ ...d, outputContract: v }))}
+          ariaLabel={t('workgroups.fieldOutputContract')}
+          testidPrefix="wg-config-output-contract"
+          options={[
+            { value: 'files', label: t('workgroups.outputContractFiles') },
+            { value: 'discussion', label: t('workgroups.outputContractDiscussion') },
+          ]}
+        />
+      </Field>
+
       {fc && (
         <p className="form-field__hint" data-testid="wg-config-fc-notice">
           {t('workgroups.fcSwitchesNotice')}

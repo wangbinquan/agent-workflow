@@ -515,14 +515,13 @@ describe.skipIf(process.platform === 'win32')(
       }
     }
 
-    test('清单里没有该技能 ⇒ failed，且错因点名到技能', async () => {
+    test('清单里没有该技能 ⇒ 记录告警但不因跨版本枚举差异阻断', async () => {
       // 这正是那台机器上发生的事：技能 stage 了、Skill 工具也授予了，CLI 却因为
       // `--setting-sources ""` 一个都没加载，模型跑完一整轮才报「找不到 skill」。
       const f = fixture('claude-skills-runner-missing-')
       const result = await runWithInventory(f, 'nr-skill-missing', ['debug', 'code-review'])
-      expect(result.status).toBe('failed')
-      expect(result.errorMessage).toContain('runtime-capability-missing')
-      expect(result.errorMessage).toContain('pdf-tools')
+      expect(result.status).toBe('done')
+      expect(result.outputs.result).toBe('ok')
     }, 30_000)
 
     test('清单里有该技能 ⇒ 正常跑完', async () => {

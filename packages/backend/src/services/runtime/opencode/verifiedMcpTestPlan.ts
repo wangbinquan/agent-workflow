@@ -15,7 +15,11 @@ import {
 } from './hermetic'
 import { inspectRuntimeOpencodeBinary, type snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
-import { identityDigest, type IdentityJson } from './executionIdentity'
+import {
+  identityDigest,
+  mcpTestOpencodeIdentityDigest,
+  type IdentityJson,
+} from './executionIdentity'
 import { executionIdentityFailure } from './failure'
 import {
   OPENCODE_DIRECT_PROTOCOL_CODEC,
@@ -105,30 +109,6 @@ export function opencodeMcpTestSessionStore(input: { appHome: string; sessionId:
   }
 }
 
-function mcpTestIdentity(input: {
-  testSessionId: string
-  sessionStoreKey: string
-  agent: string
-  model: SelectedModel
-  temperature: number | null
-  steps: number | null
-  binaryDigest: string
-  mcpExecutionDigest: string
-}): string {
-  return identityDigest({
-    codec: 1,
-    storeKind: 'mcp-test',
-    testSessionId: input.testSessionId,
-    sessionStoreKey: input.sessionStoreKey,
-    agent: input.agent,
-    model: input.model,
-    temperature: input.temperature,
-    steps: input.steps,
-    binaryDigest: input.binaryDigest,
-    mcpExecutionDigest: input.mcpExecutionDigest,
-  })
-}
-
 export async function buildVerifiedOpencodeMcpTestPlan(
   ctx: McpTestSpawnContext,
   command: readonly string[],
@@ -201,7 +181,7 @@ export async function buildVerifiedOpencodeMcpTestPlan(
     revert: null,
     metadata: null,
   })
-  const ownerIdentityDigest = mcpTestIdentity({
+  const ownerIdentityDigest = mcpTestOpencodeIdentityDigest({
     testSessionId: ctx.sessionId,
     sessionStoreKey: store.key,
     agent: ctx.agentName,
@@ -318,6 +298,8 @@ export async function buildVerifiedOpencodeMcpTestPlan(
       expectedConfig: controlledConfig,
       selectedAgent: ctx.agentName,
       selectedModel,
+      selectedTemperature: ctx.temperature ?? null,
+      selectedSteps,
       prompt: ctx.prompt,
       sourceFingerprintDigest: sourceBefore.digest,
       mode,

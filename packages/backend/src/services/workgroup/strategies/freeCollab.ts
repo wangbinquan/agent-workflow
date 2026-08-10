@@ -62,7 +62,10 @@ export async function driveBatchTurn(
     await postMessage(db, taskId, roundMode(config), {
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `batch for @${memberDisplayName(config, memberId)} skipped: agent unresolvable`,
+      systemTemplate: {
+        key: 'batchAgentUnresolvable',
+        params: { member: memberDisplayName(config, memberId) },
+      },
     })
     for (const id of candidateIds) {
       const card = state.assignments.find((a) => a.id === id)
@@ -243,7 +246,14 @@ export async function driveBatchTurn(
     await postMessage(db, taskId, roundMode(config), {
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `batch of ${batch.length} task(s) for @${memberDisplayName(config, memberId)} failed: ${outcome.errorMessage}`,
+      systemTemplate: {
+        key: 'batchFailed',
+        params: {
+          count: batch.length,
+          member: memberDisplayName(config, memberId),
+          detail: outcome.errorMessage,
+        },
+      },
     })
     for (const card of batch) {
       await settleCardAfterFailure(db, state, card.id)
@@ -256,7 +266,13 @@ export async function driveBatchTurn(
     await postMessage(db, taskId, roundMode(config), {
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `batch for @${memberDisplayName(config, memberId)}: protocol violation after retries (${outcome.errors.join('; ')})`,
+      systemTemplate: {
+        key: 'batchProtocolViolation',
+        params: {
+          member: memberDisplayName(config, memberId),
+          detail: outcome.errors.join('; '),
+        },
+      },
     })
     for (const k of lastMissing) {
       const card = batch[k - 1]
@@ -309,7 +325,14 @@ export async function settleBatchResults(
       await postAssignmentMessage(db, taskId, roundMode(config), card, {
         authorKind: 'system',
         kind: 'system',
-        bodyMd: `assignment '${card.title}' reported failed by @${memberDisplayName(config, card.assigneeMemberId ?? '')}: ${item.summary}`,
+        systemTemplate: {
+          key: 'assignmentReportedFailed',
+          params: {
+            title: card.title,
+            member: memberDisplayName(config, card.assigneeMemberId ?? ''),
+            detail: item.summary,
+          },
+        },
       })
       await settleCardAfterFailure(db, state, card.id)
     }

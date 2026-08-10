@@ -9,6 +9,7 @@
 
 import {
   workgroupHasHumanMember,
+  WorkgroupOutputContractSchema,
   WORKGROUP_MAX_ROUNDS_LIMIT,
   WorkgroupRuntimeConfigSchema,
 } from '@agent-workflow/shared'
@@ -65,6 +66,7 @@ const ConfigPatchSchema = z.object({
   // compensation needed: turning OFF lets in-flight instances finish; the
   // leader simply stops being invited to fan out from its next turn.
   fanOut: z.boolean().optional(),
+  outputContract: WorkgroupOutputContractSchema.optional(),
   addMembers: z
     .array(
       z
@@ -273,6 +275,9 @@ export function buildConfigActions(
     if (patch.completionGate !== undefined) changes.push(`completionGate → ${patch.completionGate}`)
     if (patch.clarifyBudget !== undefined) changes.push(`clarifyBudget → ${patch.clarifyBudget}`)
     if (patch.fanOut !== undefined) changes.push(`fanOut → ${patch.fanOut}`)
+    if (patch.outputContract !== undefined) {
+      changes.push(`outputContract → ${patch.outputContract}`)
+    }
     if (changes.length === 0) {
       throw new ValidationError('workgroup-config-empty', 'nothing to change')
     }
@@ -321,6 +326,7 @@ export function buildConfigActions(
         ...(patch.completionGate !== undefined ? { completionGate: patch.completionGate } : {}),
         ...(patch.clarifyBudget !== undefined ? { clarifyBudget: patch.clarifyBudget } : {}),
         ...(patch.fanOut !== undefined ? { fanOut: patch.fanOut } : {}),
+        ...(patch.outputContract !== undefined ? { outputContract: patch.outputContract } : {}),
       }
       tx.update(tasks)
         .set({ workgroupConfigJson: JSON.stringify(nextConfig) })

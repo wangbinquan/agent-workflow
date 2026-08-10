@@ -37,15 +37,21 @@ describe('RFC-243 §7.2 — worktree registry mutex', () => {
       await initRepo(repoA)
       await initRepo(repoB)
       const order: string[] = []
-      const gate = { release: () => {} }
+      let markFirstEntered = () => {}
+      const firstEntered = new Promise<void>((resolve) => {
+        markFirstEntered = resolve
+      })
+      let releaseFirst = () => {}
+      const firstGate = new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
       const first = withWorktreeRegistryLock(repoA, async () => {
         order.push('a1-start')
-        await new Promise<void>((r) => {
-          gate.release = r
-        })
+        markFirstEntered()
+        await firstGate
         order.push('a1-end')
       })
-      await Bun.sleep(20)
+      await firstEntered
       const second = withWorktreeRegistryLock(repoA, async () => {
         order.push('a2')
       })
@@ -54,7 +60,7 @@ describe('RFC-243 §7.2 — worktree registry mutex', () => {
         order.push('b1')
       })
       expect(order).toEqual(['a1-start', 'b1'])
-      gate.release()
+      releaseFirst()
       await first
       await second
       expect(order).toEqual(['a1-start', 'b1', 'a1-end', 'a2'])

@@ -7,6 +7,11 @@ import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { chmodSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import * as schema from './schema'
+import {
+  assertMigrationHistory,
+  assertPhysicalSchema,
+  readExpectedMigrationChain,
+} from './schemaAdmission'
 
 export type DbClient = ReturnType<typeof drizzle<typeof schema>>
 
@@ -93,34 +98,63 @@ export function openDb(opts: OpenDbOptions): DbClient {
   }
 
   const db = drizzle(sqlite, { schema })
+  try {
+    if (!opts.skipMigrations) {
+      const migrationsFolder = resolve(opts.migrationsFolder)
+      const expected = readExpectedMigrationChain(migrationsFolder)
+      // RFC-275: Drizzle otherwise trusts only the latest timestamp. Verify the
+      // entire applied prefix before any migration is allowed to write.
+      assertMigrationHistory(sqlite, {
+        dbPath: opts.path,
+        expected,
+        stage: 'migration-history-preflight',
+        allowPrefix: true,
+      })
 
-  if (!opts.skipMigrations) {
-    // RFC-115 (Codex audit F1): run migrations with foreign_keys OFF. drizzle
-    // wraps ALL migrations in ONE transaction, and `PRAGMA foreign_keys` is a
-    // no-op INSIDE a transaction — so a 12-step rebuild's own
-    // `PRAGMA foreign_keys=OFF` never takes effect and its `DROP TABLE <x>`
-    // cascade-deletes child rows on upgrade (0058 DROP doc_versions →
-    // review_comments wiped via ON DELETE cascade; 0035/0041 are the same shape
-    // for node_runs). Toggle OUTSIDE drizzle's tx, then re-enable + verify.
-    sqlite.exec('PRAGMA foreign_keys = OFF;')
-    migrate(db, { migrationsFolder: resolve(opts.migrationsFolder) })
-    // F1-followup (Codex gate): WARN, don't throw. foreign_key_check runs AFTER
-    // drizzle's migration tx has COMMITTED, so throwing can't roll back — it would
-    // only brick startup on a pre-existing orphan (a half-upgraded DB that fails
-    // every boot). Normal INSERT..SELECT rebuilds introduce no violations; a real
-    // one is a migration bug for migration tests to catch, not a reason to fail
-    // every boot. Surface it (scoped to the offending rows) and continue.
-    const violations = sqlite.query('PRAGMA foreign_key_check;').all()
-    if (violations.length > 0) {
-      console.warn(
-        `[db] post-migration foreign_key_check found ${violations.length} violation(s); ` +
-          `continuing (a committed migration cannot be rolled back here): ${JSON.stringify(violations)}`,
-      )
+      // RFC-115 (Codex audit F1): run migrations with foreign_keys OFF. drizzle
+      // wraps ALL migrations in ONE transaction, and `PRAGMA foreign_keys` is a
+      // no-op INSIDE a transaction — so a 12-step rebuild's own
+      // `PRAGMA foreign_keys=OFF` never takes effect and its `DROP TABLE <x>`
+      // cascade-deletes child rows on upgrade (0058 DROP doc_versions →
+      // review_comments wiped via ON DELETE cascade; 0035/0041 are the same shape
+      // for node_runs). Toggle OUTSIDE drizzle's tx, then re-enable + verify.
+      sqlite.exec('PRAGMA foreign_keys = OFF;')
+      migrate(db, { migrationsFolder })
+      // F1-followup (Codex gate): WARN, don't throw. foreign_key_check runs AFTER
+      // drizzle's migration tx has COMMITTED, so throwing can't roll back — it would
+      // only brick startup on a pre-existing orphan (a half-upgraded DB that fails
+      // every boot). Normal INSERT..SELECT rebuilds introduce no violations; a real
+      // one is a migration bug for migration tests to catch, not a reason to fail
+      // every boot. Surface it (scoped to the offending rows) and continue.
+      const violations = sqlite.query('PRAGMA foreign_key_check;').all()
+      if (violations.length > 0) {
+        console.warn(
+          `[db] post-migration foreign_key_check found ${violations.length} violation(s); ` +
+            `continuing (a committed migration cannot be rolled back here): ${JSON.stringify(violations)}`,
+        )
+      }
+      assertMigrationHistory(sqlite, {
+        dbPath: opts.path,
+        expected,
+        stage: 'migration-history-postflight',
+        allowPrefix: false,
+      })
+      sqlite.exec('PRAGMA foreign_keys = ON;')
+      assertPhysicalSchema(sqlite, {
+        dbPath: opts.path,
+        migrationsFolder,
+        expectedMigrations: expected,
+      })
+    } else {
+      sqlite.exec('PRAGMA foreign_keys = ON;')
     }
+    return db
+  } catch (err) {
+    // Admission/migration failures happen before the caller owns the client.
+    // Close here so repair tools can immediately obtain an exclusive handle.
+    sqlite.close()
+    throw err
   }
-  sqlite.exec('PRAGMA foreign_keys = ON;')
-
-  return db
 }
 
 /**

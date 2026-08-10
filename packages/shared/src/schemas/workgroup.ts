@@ -82,6 +82,15 @@ export const WORKGROUP_MODES = ['leader_worker', 'free_collab', 'dynamic_workflo
 export const WorkgroupModeSchema = z.enum(WORKGROUP_MODES)
 export type WorkgroupMode = z.infer<typeof WorkgroupModeSchema>
 
+export const WORKGROUP_OUTPUT_CONTRACTS = ['files', 'discussion'] as const
+export const WorkgroupOutputContractSchema = z.enum(WORKGROUP_OUTPUT_CONTRACTS)
+export type WorkgroupOutputContract = z.infer<typeof WorkgroupOutputContractSchema>
+
+/** One fallback for legacy resources/task snapshots and omitted create payloads. */
+export function resolveWorkgroupOutputContract(value: unknown): WorkgroupOutputContract {
+  return value === 'discussion' ? 'discussion' : 'files'
+}
+
 export const WORKGROUP_MEMBER_TYPES = ['agent', 'human'] as const
 export const WorkgroupMemberTypeSchema = z.enum(WORKGROUP_MEMBER_TYPES)
 export type WorkgroupMemberType = z.infer<typeof WorkgroupMemberTypeSchema>
@@ -211,6 +220,8 @@ export const WorkgroupSchema = z.object({
   /** Group charter — injected for EVERY member each turn (决策 #18). */
   instructions: z.string(),
   mode: WorkgroupModeSchema,
+  /** Expected primary deliverable; discussion disables only the zero-delta advisory. */
+  outputContract: WorkgroupOutputContractSchema,
   /** Required (non-null) when mode='leader_worker'; must be an agent member. */
   leaderMemberId: z.string().nullable(),
   switches: WorkgroupSwitchesSchema,
@@ -261,6 +272,9 @@ const workgroupConfigFields = {
   description: z.string().max(4096).default(''),
   instructions: z.string().max(65536).default(''),
   mode: WorkgroupModeSchema.default('leader_worker'),
+  // Optional on both create/full-save wire: create resolves to files; a full
+  // save that omits it preserves the current value in the service layer.
+  outputContract: WorkgroupOutputContractSchema.optional(),
   /** displayName of the leader member (server resolves to leaderMemberId). */
   leaderDisplayName: WorkgroupMemberDisplayNameSchema.optional(),
   switches: WorkgroupSwitchesSchema.default({
@@ -350,6 +364,7 @@ export const WorkgroupDraftSnapshotSchema = z
     description: z.string().max(4096).default(''),
     instructions: z.string().max(65536).default(''),
     mode: WorkgroupModeSchema,
+    outputContract: WorkgroupOutputContractSchema.optional(),
     leaderDisplayName: WorkgroupMemberDisplayNameSchema.optional(),
     switches: WorkgroupSwitchesSchema,
     maxRounds: z.number().int().positive().max(WORKGROUP_MAX_ROUNDS_LIMIT),

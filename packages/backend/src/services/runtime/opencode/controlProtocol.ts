@@ -27,7 +27,7 @@ import { canonicalizeIdentity } from './executionIdentity'
 
 export const CONTROL_LINE_PREFIX = 'AW_OPENCODE_CONTROL ' as const
 export const CONTROL_ACK_PREFIX = 'AW_OPENCODE_ACK ' as const
-export const MAX_CONTROL_LINE_BYTES = 1024 as const
+export const MAX_CONTROL_LINE_BYTES = 16 * 1024
 export const MAX_CONTROL_ACK_BYTES = 256 as const
 
 const NonceSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/)
@@ -47,6 +47,34 @@ export const SessionReadyMarkerSchema = z
   .strict()
 
 export type SessionReadyMarker = z.infer<typeof SessionReadyMarkerSchema>
+
+const McpUnavailableStatusSchema = z.enum([
+  'missing',
+  'disabled',
+  'failed',
+  'needs_auth',
+  'needs_client_registration',
+])
+
+const McpUnavailableItemSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1)
+      .refine((value) => Buffer.byteLength(value, 'utf8') <= 256 && !value.includes('\0')),
+    status: McpUnavailableStatusSchema,
+  })
+  .strict()
+
+export const McpReadinessMarkerSchema = z
+  .object({
+    kind: z.literal('mcp-readiness'),
+    unavailableLocal: z.array(McpUnavailableItemSchema).max(256),
+    unavailableRemote: z.array(McpUnavailableItemSchema).max(256),
+  })
+  .strict()
+
+export type McpReadinessMarker = z.infer<typeof McpReadinessMarkerSchema>
 
 export const ControlAckSchema = z
   .object({
@@ -81,55 +109,91 @@ export function buildSessionReadyMarker(value: SessionReadyMarker): string {
   return line
 }
 
+export function buildMcpReadinessMarker(value: McpReadinessMarker): string {
+  const marker = parseDirectApiValue(McpReadinessMarkerSchema, value, 'mcp-readiness-marker')
+  const encoded = Buffer.from(canonicalizeIdentity(marker), 'utf8').toString('base64url')
+  const line = `${CONTROL_LINE_PREFIX}mcp-readiness ${encoded}`
+  if (byteLength(line) > MAX_CONTROL_LINE_BYTES) {
+    throw new ControlProtocolError('marker-budget-exceeded')
+  }
+  return line
+}
+
 export type ParsedControlLine =
   | { kind: 'stderr'; line: string }
   | { kind: 'session-ready'; marker: SessionReadyMarker }
+  | { kind: 'mcp-readiness'; marker: McpReadinessMarker }
+
+function decodeMarker<T>(payload: string, schema: z.ZodType<T>, context: string): T {
+  if (!/^[A-Za-z0-9_-]+$/.test(payload)) {
+    throw new ControlProtocolError('malformed-marker')
+  }
+  try {
+    const bytes = Buffer.from(payload, 'base64url')
+    if (bytes.toString('base64url') !== payload) throw new Error('noncanonical-base64url')
+    const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
+    return parseDirectApiValue(schema, value, context)
+  } catch {
+    throw new ControlProtocolError('malformed-marker')
+  }
+}
 
 export function parseControlLine(line: string): ParsedControlLine {
   if (!line.startsWith(CONTROL_LINE_PREFIX)) return { kind: 'stderr', line }
   if (line.includes('\n') || line.includes('\r') || byteLength(line) > MAX_CONTROL_LINE_BYTES) {
     throw new ControlProtocolError('malformed-marker')
   }
-  const framePrefix = `${CONTROL_LINE_PREFIX}session-ready `
-  if (!line.startsWith(framePrefix)) throw new ControlProtocolError('unknown-marker')
-  const payload = line.slice(framePrefix.length)
-  if (!/^[A-Za-z0-9_-]+$/.test(payload)) {
-    throw new ControlProtocolError('malformed-marker')
-  }
-  let value: unknown
-  try {
-    const bytes = Buffer.from(payload, 'base64url')
-    if (bytes.toString('base64url') !== payload) {
-      throw new Error('noncanonical-base64url')
+  const sessionPrefix = `${CONTROL_LINE_PREFIX}session-ready `
+  if (line.startsWith(sessionPrefix)) {
+    const marker = decodeMarker(
+      line.slice(sessionPrefix.length),
+      SessionReadyMarkerSchema,
+      'control-marker',
+    )
+    // Canonical bytes make duplicate JSON keys, whitespace, and alternative key
+    // order invalid instead of giving the runner two wire spellings to support.
+    if (buildSessionReadyMarker(marker) !== line) {
+      throw new ControlProtocolError('noncanonical-marker')
     }
-    value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
-  } catch {
-    throw new ControlProtocolError('malformed-marker')
+    return { kind: 'session-ready', marker }
   }
-  let marker: SessionReadyMarker
-  try {
-    marker = parseDirectApiValue(SessionReadyMarkerSchema, value, 'control-marker')
-  } catch {
-    throw new ControlProtocolError('malformed-marker')
+  const readinessPrefix = `${CONTROL_LINE_PREFIX}mcp-readiness `
+  if (line.startsWith(readinessPrefix)) {
+    const marker = decodeMarker(
+      line.slice(readinessPrefix.length),
+      McpReadinessMarkerSchema,
+      'mcp-readiness-marker',
+    )
+    if (buildMcpReadinessMarker(marker) !== line) {
+      throw new ControlProtocolError('noncanonical-marker')
+    }
+    return { kind: 'mcp-readiness', marker }
   }
-  // Canonical bytes make duplicate JSON keys, whitespace, and alternative key
-  // order invalid instead of giving the runner two wire spellings to support.
-  if (buildSessionReadyMarker(marker) !== line) {
-    throw new ControlProtocolError('noncanonical-marker')
-  }
-  return { kind: 'session-ready', marker }
+  throw new ControlProtocolError('unknown-marker')
 }
 
 export class ControlMarkerTracker {
   #marker: SessionReadyMarker | null = null
+  #mcpReadiness: McpReadinessMarker | null = null
 
   get marker(): SessionReadyMarker | null {
     return this.#marker
   }
 
+  get mcpReadiness(): McpReadinessMarker | null {
+    return this.#mcpReadiness
+  }
+
   accept(line: string): ParsedControlLine {
     const parsed = parseControlLine(line)
     if (parsed.kind === 'stderr') return parsed
+    if (parsed.kind === 'mcp-readiness') {
+      if (this.#mcpReadiness !== null || this.#marker !== null) {
+        throw new ControlProtocolError('duplicate-marker')
+      }
+      this.#mcpReadiness = parsed.marker
+      return parsed
+    }
     if (this.#marker !== null) throw new ControlProtocolError('duplicate-marker')
     this.#marker = parsed.marker
     return parsed

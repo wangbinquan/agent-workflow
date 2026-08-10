@@ -288,6 +288,7 @@ export function serializeClosure(
             description: String(row.description ?? ''),
             instructions: String(row.instructions ?? ''),
             mode: row.mode,
+            outputContract: row.outputContract,
             switches: {
               shareOutputs: row.shareOutputs !== false,
               directMessages: row.directMessages === true,

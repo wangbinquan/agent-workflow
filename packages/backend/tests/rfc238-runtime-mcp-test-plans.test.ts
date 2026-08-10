@@ -15,6 +15,7 @@ import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import { ContainmentCoordinator, type PreparedContainmentPlan } from '../src/services/sandbox'
 import { buildClaudeMcpTestSpawn } from '../src/services/runtime/claudeCode/mcpTest'
 import { removeHermeticOpencodeLayout } from '../src/services/runtime/opencode/hermetic'
+import { mcpTestOpencodeIdentityDigest } from '../src/services/runtime/opencode/executionIdentity'
 import { buildVerifiedOpencodeMcpTestPlan } from '../src/services/runtime/opencode/verifiedMcpTestPlan'
 import { opencodeMcpTestSessionStore } from '../src/services/runtime/opencode/verifiedMcpTestPlan'
 import { VerifiedLaunchManifestSchema } from '../src/services/runtime/opencode/verifiedManifest'
@@ -190,6 +191,9 @@ afterEach(async () => {
 })
 
 describe('RFC-238 runtime MCP-only spawn plans', () => {
+  // Regression intent: plan construction and verified launch must hash the same
+  // temperature/step identity inputs, or a valid one-shot test fails as
+  // execution-identity-mismatch before OpenCode can emit any session event.
   test('OpenCode uses a verified one-MCP manifest and resumes the exact owner identity', async () => {
     const base = root('rfc238-opencode-')
     const appHome = join(base, 'app-home')
@@ -216,6 +220,7 @@ describe('RFC-238 runtime MCP-only spawn plans', () => {
     const manifest = VerifiedLaunchManifestSchema.parse(
       JSON.parse(readFileSync(manifestPath!, 'utf8')),
     )
+    if (manifest.storeKind !== 'mcp-test') throw new Error('expected MCP-test manifest')
     expect(manifest).toMatchObject({
       storeKind: 'mcp-test',
       mode: 'new',
@@ -223,9 +228,23 @@ describe('RFC-238 runtime MCP-only spawn plans', () => {
       turnId: 'turn-1',
       selectedAgent: 'aw-mcp-runtime-test',
       selectedModel: { providerID: 'openai', modelID: 'gpt-5', variant: 'high' },
+      selectedTemperature: 0.25,
+      selectedSteps: 12,
       binaryDigest: OPEN_CODE_DIGEST,
       mcpExecutionDigest: firstContext.executionMaterial.executionDigest,
     })
+    expect(manifest.identityDigest).toBe(
+      mcpTestOpencodeIdentityDigest({
+        testSessionId: manifest.testSessionId,
+        sessionStoreKey: manifest.sessionStoreKey,
+        agent: manifest.selectedAgent,
+        model: manifest.selectedModel,
+        temperature: manifest.selectedTemperature,
+        steps: manifest.selectedSteps,
+        binaryDigest: manifest.binaryDigest,
+        mcpExecutionDigest: manifest.mcpExecutionDigest,
+      }),
+    )
     const config = manifest.expectedConfig as Record<string, unknown>
     expect(config.plugin).toEqual([])
     expect(Object.keys(config.mcp as Record<string, unknown>)).toEqual(['fixture'])

@@ -2,6 +2,7 @@
 // read without following links, unlinked before the server starts, and parsed
 // with a closed schema so it cannot become a second configuration surface.
 
+import { createHash } from 'node:crypto'
 import { constants } from 'node:fs'
 import { lstat, open, unlink } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
@@ -19,6 +20,7 @@ import { OPENCODE_FFF_CAPABILITY_CODEC } from './hermetic'
 import { FffCapabilityProbeSchema } from './fffCapability'
 import { VerifiedInventoryPlanSchema } from './verifiedInventory'
 import { RuntimeChildProviderPlanSchema, RuntimeContainmentReceiptSchema } from './containment'
+import { McpReadinessPlanSchema, compareCodePoints } from './mcpReadiness'
 import {
   CONTAINMENT_REASON_CODES,
   CONTAINMENT_REQUIREMENT_PROFILES,
@@ -41,6 +43,15 @@ const ContainmentCapabilityStrengthSchema = z.enum(['strong', 'best-effort', 'ab
 // literal this replaces silently omitted the first code added after it, which is
 // exactly the drift the neighbouring capability field already guards against.
 const ContainmentReasonCodeSchema = z.enum(CONTAINMENT_REASON_CODES)
+const FrozenSkillSealSchema = z
+  .object({
+    name: z.string().min(1).max(256),
+    skillId: z.string().min(1).max(256),
+    sealName: z.string().regex(/^[0-9a-f]{24}$/),
+    treeDigest: Sha256Schema,
+    entryCount: z.number().int().positive().max(100_000),
+  })
+  .strict()
 const ContainmentAdmissionReceiptSchema = z
   .object({
     coordinatorBootId: z.string().min(1).max(128),
@@ -123,6 +134,9 @@ const VerifiedBusinessLaunchManifestSchema = VerifiedLaunchManifestCommonSchema.
   controlAckPath: AbsolutePathSchema,
   leaseNonce: NonceSchema,
   leaseNonceDigest: Sha256Schema,
+  mcpReadiness: McpReadinessPlanSchema,
+  frozenSkillSeals: z.array(FrozenSkillSealSchema).max(256),
+  identityCodec: z.enum(['business-v2-legacy', 'business-v3-skill-roots']),
   inventory: VerifiedInventoryPlanSchema,
 }).strict()
 
@@ -135,6 +149,8 @@ const VerifiedSystemLaunchManifestSchema = VerifiedLaunchManifestCommonSchema.ex
 const VerifiedMcpTestLaunchManifestSchema = VerifiedLaunchManifestCommonSchema.extend({
   storeKind: z.literal('mcp-test'),
   mode: z.enum(['new', 'resume']),
+  selectedTemperature: z.number().min(0).max(2).nullable(),
+  selectedSteps: z.number().int().positive().nullable(),
   testSessionId: z.string().min(1).max(256),
   createdTurnId: z.string().min(1).max(256),
   turnId: z.string().min(1).max(256),
@@ -294,6 +310,36 @@ export const VerifiedLaunchManifestSchema = z
       }
     }
     if (value.storeKind === 'system-ephemeral') return
+    if (value.storeKind === 'business') {
+      const seenNames = new Set<string>()
+      const seenIds = new Set<string>()
+      for (let index = 0; index < value.frozenSkillSeals.length; index += 1) {
+        const seal = value.frozenSkillSeals[index]!
+        if (
+          seenNames.has(seal.name) ||
+          seenIds.has(seal.skillId) ||
+          seal.sealName !==
+            createHash('sha256').update(seal.skillId, 'utf8').digest('hex').slice(0, 24) ||
+          (index > 0 &&
+            compareCodePoints(value.frozenSkillSeals[index - 1]!.skillId, seal.skillId) >= 0)
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['frozenSkillSeals', index],
+            message: 'invalid or unsorted frozen skill seal identity',
+          })
+        }
+        seenNames.add(seal.name)
+        seenIds.add(seal.skillId)
+      }
+      if (value.identityCodec === 'business-v2-legacy' && value.frozenSkillSeals.length !== 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['frozenSkillSeals'],
+          message: 'legacy identity forbids frozen skill root metadata',
+        })
+      }
+    }
     if (value.mode === 'resume') {
       if (value.expectedSessionId === undefined) {
         ctx.addIssue({ code: 'custom', path: ['expectedSessionId'], message: 'required' })

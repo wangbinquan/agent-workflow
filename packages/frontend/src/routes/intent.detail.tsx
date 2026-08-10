@@ -31,6 +31,7 @@ import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
 import { UserPicker } from '@/components/UserPicker'
 import { INTENT_QUERY_KEYS, useIntentSessionsWs } from '@/hooks/useIntentSessionsWs'
+import { intentFailureDiagnostic } from '@/lib/intent-failure-diagnostic'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -209,17 +210,11 @@ function IntentSessionDetailPage() {
                 ) : null}
                 {turn.kind === 'questions' ? <p>{String(turn.content.summary ?? '')}</p> : null}
                 {turn.kind === 'error' ? (
-                  <div>
-                    <StatusChip kind="danger">{String(turn.content.code ?? 'error')}</StatusChip>{' '}
-                    <button
-                      type="button"
-                      className="btn btn--xs"
-                      onClick={() => retryTurn.mutate()}
-                      disabled={detail.session.inFlight}
-                    >
-                      {t('intent.retryTurn')}
-                    </button>
-                  </div>
+                  <IntentTurnError
+                    turn={turn}
+                    disabled={detail.session.inFlight}
+                    onRetry={() => retryTurn.mutate()}
+                  />
                 ) : null}
                 {turn.role === 'agent' ? (
                   <IntentTurnSession
@@ -487,6 +482,42 @@ function IntentSessionDetailPage() {
           }}
         />
       ) : null}
+    </div>
+  )
+}
+
+function IntentTurnError(props: {
+  turn: IntentSessionDetail['turns'][number]
+  disabled: boolean
+  onRetry: () => void
+}) {
+  const { t } = useTranslation()
+  const diagnostic = intentFailureDiagnostic(props.turn, t)
+  return (
+    <div className="intent-turn-error" data-testid="intent-turn-error-diagnostic">
+      <div className="intent-turn-error__heading">
+        <StatusChip kind="danger">{String(props.turn.content.code ?? 'error')}</StatusChip>
+        <strong>{diagnostic.title}</strong>
+      </div>
+      <p>{diagnostic.suggestion}</p>
+      {diagnostic.evidence.length > 0 ? (
+        <ul className="intent-turn-error__evidence mono">
+          {diagnostic.evidence.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      ) : null}
+      {diagnostic.scratchNotice === null ? null : (
+        <NoticeBanner tone="info">{diagnostic.scratchNotice}</NoticeBanner>
+      )}
+      <button
+        type="button"
+        className="btn btn--xs"
+        onClick={props.onRetry}
+        disabled={props.disabled}
+      >
+        {t('intent.retryTurn')}
+      </button>
     </div>
   )
 }

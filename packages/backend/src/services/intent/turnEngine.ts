@@ -36,10 +36,12 @@ import { generateEnvelopeNonce } from '@/services/nodeRunMint'
 import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
 import type { ContainmentCoordinator } from '@/services/sandbox'
 import {
+  releaseSystemAgentScratch,
   runSystemAgent,
   type SystemAgentRunOptions,
   type SystemAgentRunResult,
 } from '@/services/systemAgentRun'
+import type { SystemAgentOutputEvidence } from '@/services/runtime/types'
 import { markProductionOpencodeCommand } from '@/util/opencode'
 import type { ResolvedRuntime } from '@/services/runtimeRegistry'
 import { IntentTurnSessionEventSink } from './turnSession'
@@ -78,6 +80,7 @@ export interface IntentTurnConfig {
   maxGenerateRounds: number
   maxQuestionRounds: number
   extraInstructions: string | null
+  scratchRetentionHours?: number
 }
 
 export interface RunIntentTurnDeps {
@@ -106,6 +109,29 @@ export interface IntentTurnOutcome {
 
 const intentSem = new Semaphore(2)
 const liveTurnAborts = new Map<string, AbortController>()
+
+export type MissingEnvelopeReason =
+  | 'output-cap-hit'
+  | 'no-assistant-text'
+  | 'terminal-without-envelope'
+  | 'assistant-stopped-without-envelope'
+  | 'runtime-shape-unknown'
+
+export function classifyMissingEnvelope(
+  evidence: SystemAgentOutputEvidence | undefined,
+): MissingEnvelopeReason {
+  if (evidence === undefined) return 'runtime-shape-unknown'
+  if (
+    evidence.eventTextCapHit ||
+    evidence.observedAssistantTextBytes > evidence.retainedAssistantTextBytes
+  ) {
+    return 'output-cap-hit'
+  }
+  if (!evidence.assistantTextSeen) return 'no-assistant-text'
+  if (evidence.terminalResult !== 'not-observed') return 'terminal-without-envelope'
+  if (evidence.assistantTextSeen) return 'assistant-stopped-without-envelope'
+  return 'runtime-shape-unknown'
+}
 
 interface SessionBudget {
   generateRounds: number
@@ -481,6 +507,9 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         maxEventTextBytes: deps.config.stdoutCapBytes,
         abortSignal: controller.signal,
         eventSink: sessionEventSink,
+        // Intent owns the second phase: protocol failures keep the successful
+        // runtime scratch for bounded forensics; valid results release it.
+        retainScratchOnSuccess: true,
         log,
       })
     } finally {
@@ -491,18 +520,39 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       result.status === 'unreaped' ? 'post-exit-flush-timeout' : undefined,
     )
 
-    const runMeta = {
+    let scratchReleaseFailed = false
+    const buildRunMeta = (): Record<string, unknown> => ({
       runtime: deps.config.runtime.name,
       model: deps.config.runtime.model ?? null,
       durationMs: result.durationMs,
       exitCode: result.exitCode,
       status: result.status,
+      outputEvidence: result.outputEvidence,
       ...(result.failureCode === undefined ? {} : { failureCode: result.failureCode }),
       ...(result.stderrTail === '' ? {} : { stderrTail: result.stderrTail }),
       // RFC-237 impl-gate P2 — the terminal claude is_error text (masked in
       // runSystemAgent) persists with the turn so "Not logged in"-class causes
       // are actionable, not just `intent-run-result-error`.
       ...(result.resultError === undefined ? {} : { resultError: result.resultError }),
+      ...(result.scratchRetained
+        ? { scratchRetentionHours: deps.config.scratchRetentionHours ?? 24 }
+        : {}),
+      ...(scratchReleaseFailed ? { scratchReleaseFailed: true } : {}),
+    })
+    let runMeta = buildRunMeta()
+    const releaseScratch = (): void => {
+      if (!result.scratchRetained) return
+      const released = releaseSystemAgentScratch({
+        scratchDir: result.scratchDir,
+        expectedParent: join(deps.appHome, INTENT_SCRATCH_DIRNAME),
+        expectedName: turnId,
+      })
+      if (released.removed) result = { ...result, scratchRetained: false }
+      else {
+        scratchReleaseFailed = true
+        log.warn('intent-scratch-release-failed', { turnId, reason: released.reason })
+      }
+      runMeta = buildRunMeta()
     }
     if (result.status !== 'ok') {
       return settle(
@@ -520,7 +570,10 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
     if (envelope === null) {
       return settle(
         'error',
-        { code: 'intent-envelope-missing' },
+        {
+          code: 'intent-envelope-missing',
+          reason: classifyMissingEnvelope(result.outputEvidence),
+        },
         { runMeta, scratchRetained: result.scratchRetained },
       )
     }
@@ -564,14 +617,6 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
     }
 
     if (questionsText !== '') {
-      const budget = minted.budget
-      if (budget.questionRounds >= deps.config.maxQuestionRounds) {
-        return settle(
-          'error',
-          { code: 'intent-question-budget-exhausted' },
-          { runMeta, scratchRetained: result.scratchRetained },
-        )
-      }
       let questions: unknown
       try {
         questions = JSON.parse(questionsText)
@@ -590,6 +635,15 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
             code: 'intent-questions-invalid',
             detail: q.error.issues.map((i) => i.message).join('; '),
           },
+          { runMeta, scratchRetained: result.scratchRetained },
+        )
+      }
+      releaseScratch()
+      const budget = minted.budget
+      if (budget.questionRounds >= deps.config.maxQuestionRounds) {
+        return settle(
+          'error',
+          { code: 'intent-question-budget-exhausted' },
           { runMeta, scratchRetained: result.scratchRetained },
         )
       }
@@ -620,6 +674,7 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         { runMeta, scratchRetained: result.scratchRetained },
       )
     }
+    releaseScratch()
     if (cs.jsonRepair !== undefined) {
       log.warn('intent-changeset-json-repaired', {
         sessionId: input.sessionId,
@@ -679,6 +734,7 @@ export async function resolveIntentTurnConfig(
     intentBuilderMaxGenerateRounds?: number
     intentBuilderMaxQuestionRounds?: number
     intentBuilderExtraInstructions?: string
+    intentBuilderScratchRetentionHours?: number
     defaultRuntime?: string
   },
 ): Promise<IntentTurnConfig> {
@@ -706,5 +762,6 @@ export async function resolveIntentTurnConfig(
     maxGenerateRounds: cfg.intentBuilderMaxGenerateRounds ?? 50,
     maxQuestionRounds: cfg.intentBuilderMaxQuestionRounds ?? 5,
     extraInstructions: cfg.intentBuilderExtraInstructions ?? null,
+    scratchRetentionHours: cfg.intentBuilderScratchRetentionHours ?? 24,
   }
 }

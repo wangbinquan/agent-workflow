@@ -620,6 +620,9 @@ export function resolveIntentBundle(input: {
           ...(op.payload.leaderDisplayName === undefined
             ? {}
             : { leaderDisplayName: op.payload.leaderDisplayName }),
+          ...(op.payload.outputContract === undefined
+            ? {}
+            : { outputContract: op.payload.outputContract }),
           switches: op.payload.switches ?? {
             shareOutputs: true,
             directMessages: false,

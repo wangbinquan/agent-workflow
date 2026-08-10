@@ -2,6 +2,14 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+✅ **已完成 RFC（Done，2026-08-10）：[RFC-272 运行期能力就绪与 managed skill 多文件可达](design/RFC-272-runtime-capability-readiness/proposal.md)** —— 同一 OpenCode 实例在 prompt 前读取 MCP readiness：local 未连接明确失败、remote 未连接告警；frozen skill 公布只读根与文件清单并纳入 v3 identity，legacy owner 可恢复。Claude skill inventory 的跨版本不稳定缺项改为可见告警，不再误杀本可运行节点；tools/agents 缺项仍硬失败。
+
+✅ **已完成 RFC（Done，2026-08-10）：[RFC-273 Intent 失败轮取证](design/RFC-273-intent-turn-forensics/proposal.md)** —— `intent-envelope-missing` / timeout 现持久化 assistant 文本、最后消息类型、观测/保留字节与截断证据；协议失败 scratch 默认保留 24 小时并由 GC 回收，UI 给出本地化诊断，`INTENT.md` 从共享常量生成 8 ops / 6 nodes / 256 KiB 分批指引。
+
+✅ **已完成 RFC（Done，2026-08-10）：[RFC-274 工作组输出契约与房间系统消息 i18n](design/RFC-274-workgroup-output-and-system-messages/proposal.md)** —— workgroup resource、bundle、launch snapshot 与运行期配置统一携带 `files | discussion`；discussion 不再探测/告警 zero-delta，files 与存量默认保持原行为。平台房间消息改为 closed template + typed params + 英文 fallback，前端按查看者 locale 渲染。
+
+✅ **已完成 RFC（Done，2026-08-10）：[RFC-275 数据库 schema 漂移启动准入](design/RFC-275-database-schema-drift-admission/proposal.md)** —— boot 在业务服务前核对完整 migration receipt hash/order/prefix 与物理 schema，漂移点名 stage/对象/列并拒绝启动，不自动改库。期望 manifest 按精确迁移链有界缓存，真实 DB 每次仍重新采集比较；最终 `gate:local` 全绿（backend 9994 / shared 1971 / frontend 6285）。
+
 ✅ **已完成（2026-08-10）：RFC 索引全量状态复核 + 结构收口 + 补 RFC-253 T41 的 e2e 全链** —— 起于用户一问「所有 RFC 有不在终态的吗」。逐条核实 268 个 RFC 后结论分三类，**非终态从 10 条收敛到 2 条（仅剩 RFC-235 与 RFC-253）**。
 
 > **一、索引不再是单一事实源（已修）**：RFC-249…271 共 22 条曾以**表外散文段落**登记，导致「哪些 RFC 没收口」一次扫不出来，`rfc-index-status-drift.test.ts` 对它们也完全失明。已全部回填进表（脚本转换 + 四道自检：三列 / 加粗成对 / 正文逐字无损 / 链接可解析），并在索引小节写死登记格式（四选一打头、正文 `|` 转义成 `\|`、不得表外另起）。顺带修掉 HEAD 里**本就渲染错列**的两行：RFC-135 与 RFC-158 的行内代码含裸 `|`（`opencode|claude`、`'awaiting'|'decided'|null`），被表格当成列分隔符还塞了对齐空格，实际渲染成 4 列和 5 列。现在 269 行零结构错误、268 个目录全部登记。

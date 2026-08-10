@@ -18,6 +18,8 @@ import { z } from 'zod'
 import { statMetadataIsAuthoritative } from '@/util/fileTrust'
 import { executionIdentityFailure } from './failure'
 import { PINNED_BUILTIN_SKILL } from './hermetic'
+import type { McpReadinessPlan, McpReadinessReceipt } from './mcpReadiness'
+import { compareCodePoints } from './mcpReadiness'
 
 const MAX_VERIFIED_INVENTORY_BYTES = 1024 * 1024
 const InventoryNameSchema = z
@@ -32,13 +34,6 @@ const VerifiedFrozenSkillInventorySchema = z
     name: InventoryNameSchema,
     skillId: z.string().min(1).max(256),
     treeDigest: DigestSchema,
-  })
-  .strict()
-
-const VerifiedMcpInventorySchema = z
-  .object({
-    name: InventoryNameSchema,
-    type: z.enum(['local', 'remote']),
   })
   .strict()
 
@@ -59,7 +54,6 @@ const VerifiedInventoryEnabledPlanSchema = z
   .object({
     enabled: z.literal(true),
     frozenSkills: z.array(VerifiedFrozenSkillInventorySchema).max(256),
-    mcps: z.array(VerifiedMcpInventorySchema).max(256),
     plugins: z.array(VerifiedPluginInventorySchema).max(256),
   })
   .strict()
@@ -71,10 +65,7 @@ export const VerifiedInventoryPlanSchema = z
   ])
   .superRefine((value, ctx) => {
     if (!value.enabled) return
-    for (const [field, entries] of [
-      ['frozenSkills', value.frozenSkills],
-      ['mcps', value.mcps],
-    ] as const) {
+    for (const [field, entries] of [['frozenSkills', value.frozenSkills]] as const) {
       const seen = new Set<string>()
       for (let index = 0; index < entries.length; index += 1) {
         const name = entries[index]!.name
@@ -93,16 +84,6 @@ export const VerifiedInventoryPlanSchema = z
 export type VerifiedInventoryPlan = z.infer<typeof VerifiedInventoryPlanSchema>
 export type VerifiedInventoryEnabledPlan = Extract<VerifiedInventoryPlan, { enabled: true }>
 
-function compareCodePoints(left: string, right: string): number {
-  const a = Array.from(left, (character) => character.codePointAt(0) as number)
-  const b = Array.from(right, (character) => character.codePointAt(0) as number)
-  for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
-    const difference = a[index]! - b[index]!
-    if (difference !== 0) return difference
-  }
-  return a.length - b.length
-}
-
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
   const prototype = Object.getPrototypeOf(value)
@@ -117,7 +98,6 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 export function buildVerifiedInventoryPlan(input: {
   enabled: boolean
   frozenSkills: readonly { name: string; skillId: string; treeDigest: string }[]
-  mcps: readonly { name: string; type: 'local' | 'remote'; enabled: boolean }[]
   /** RFC-251 — the encoded plugin selection actually shipped to OpenCode. */
   plugins?: readonly { specifier: string; source: string }[]
 }): VerifiedInventoryPlan {
@@ -126,10 +106,6 @@ export function buildVerifiedInventoryPlan(input: {
     enabled: true,
     frozenSkills: input.frozenSkills
       .map((skill) => ({ ...skill }))
-      .sort((left, right) => compareCodePoints(left.name, right.name)),
-    mcps: input.mcps
-      .filter((mcp) => mcp.enabled)
-      .map((mcp) => ({ name: mcp.name, type: mcp.type }))
       .sort((left, right) => compareCodePoints(left.name, right.name)),
     plugins: (input.plugins ?? [])
       .map((plugin) => ({ ...plugin }))
@@ -189,6 +165,8 @@ function inventoryAgent(raw: unknown): InventoryAgent {
 export function buildVerifiedInventorySnapshot(input: {
   agents: unknown
   plan: VerifiedInventoryEnabledPlan
+  mcpReadiness: McpReadinessPlan
+  readinessReceipt: McpReadinessReceipt
   capturedAt: number
 }): InventorySnapshotCaptured {
   if (!Array.isArray(input.agents)) {
@@ -204,6 +182,35 @@ export function buildVerifiedInventorySnapshot(input: {
       return executionIdentityFailure('execution-identity-mismatch')
     }
     agentNames.add(agent.name)
+  }
+
+  const observedByName = new Map<
+    string,
+    { type: 'local' | 'remote'; status: string; bucket: 'connected' | 'unavailable' }
+  >()
+  for (const item of input.readinessReceipt.connected) {
+    if (item.status !== 'connected' || observedByName.has(item.name)) {
+      return executionIdentityFailure('execution-identity-mismatch')
+    }
+    observedByName.set(item.name, { type: item.type, status: item.status, bucket: 'connected' })
+  }
+  for (const item of [
+    ...input.readinessReceipt.unavailableLocal,
+    ...input.readinessReceipt.unavailableRemote,
+  ]) {
+    if (observedByName.has(item.name)) {
+      return executionIdentityFailure('execution-identity-mismatch')
+    }
+    observedByName.set(item.name, { type: item.type, status: item.status, bucket: 'unavailable' })
+  }
+  if (
+    observedByName.size !== input.mcpReadiness.servers.length ||
+    input.mcpReadiness.servers.some((expected) => {
+      const observed = observedByName.get(expected.name)
+      return observed === undefined || observed.type !== expected.type
+    })
+  ) {
+    return executionIdentityFailure('execution-identity-mismatch')
   }
 
   const snapshot = InventorySnapshotCapturedSchema.safeParse({
@@ -228,12 +235,20 @@ export function buildVerifiedInventorySnapshot(input: {
       const difference = compareCodePoints(left.name, right.name)
       return difference !== 0 ? difference : compareCodePoints(left.source, right.source)
     }),
-    mcps: input.plan.mcps.map((mcp) => ({
-      name: mcp.name,
-      type: mcp.type,
-      status: 'configured',
-      hint: null,
-    })),
+    mcps: input.mcpReadiness.servers.map((mcp) => {
+      const observed = observedByName.get(mcp.name)!
+      return {
+        name: mcp.name,
+        type: mcp.type,
+        status: observed.status,
+        hint:
+          observed.bucket === 'unavailable'
+            ? mcp.type === 'remote'
+              ? 'remote unavailable at startup'
+              : 'local unavailable at startup'
+            : null,
+      }
+    }),
     plugins: input.plan.plugins.map((plugin) => ({
       specifier: plugin.specifier,
       source: plugin.source,

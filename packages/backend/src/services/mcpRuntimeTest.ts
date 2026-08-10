@@ -46,6 +46,7 @@ import type {
 import { getRuntime, type RuntimeRow } from '@/services/runtimeRegistry'
 import type { ContainmentCoordinator } from '@/services/sandbox'
 import {
+  emptySystemAgentOutputEvidence,
   runSystemAgent,
   type SystemAgentRunOptions,
   type SystemAgentRunResult,
@@ -2884,6 +2885,7 @@ export class McpRuntimeTestService {
         durationMs: Math.max(0, this.now() - now),
         scratchDir: session.scratchRoot,
         scratchRetained: true,
+        outputEvidence: emptySystemAgentOutputEvidence(),
       }
     }
     if (runReturned && result.status !== 'unreaped' && leaseToken !== undefined) {

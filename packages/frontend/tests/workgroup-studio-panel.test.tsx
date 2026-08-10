@@ -66,6 +66,7 @@ function draftOf(group: Workgroup): WorkgroupDraftSnapshot {
     description: group.description,
     instructions: group.instructions,
     mode: group.mode,
+    outputContract: group.outputContract,
     ...(group.mode === 'leader_worker' && leader !== undefined
       ? { leaderDisplayName: leader.displayName }
       : {}),
@@ -148,6 +149,7 @@ function wg(name: string, overrides: Partial<Workgroup> = {}): WorkgroupDetail {
     createdAt: 1,
     updatedAt: 1_720_000_000_000,
     ...overrides,
+    outputContract: overrides.outputContract ?? 'files',
   }
   return { ...group, snapshotHash: snapshotHashOf(draftOf(group)) }
 }

@@ -5,7 +5,7 @@
 // we migrate them to t() — there is no migration script, but the key tree
 // matches en-US 1:1.
 
-import type { WebhookTemplateVar } from '@agent-workflow/shared'
+import type { WebhookTemplateVar, WorkgroupSystemTemplateKey } from '@agent-workflow/shared'
 
 export interface Resources {
   tabBar: {
@@ -48,6 +48,29 @@ export interface Resources {
     }
     opCount: string
     retryTurn: string
+    failureDiagnostic: {
+      genericSuggestion: string
+      reason: Record<
+        | 'output-cap-hit'
+        | 'no-assistant-text'
+        | 'terminal-without-envelope'
+        | 'assistant-stopped-without-envelope'
+        | 'runtime-shape-unknown',
+        { title: string; suggestion: string }
+      >
+      observedRetained: string
+      lastEvent: string
+      terminalResult: string
+      terminal: {
+        success: string
+        error: string
+        'not-observed': string
+      }
+      notObserved: string
+      unparsedStdout: string
+      scratchRetained: string
+      scratchRetainedUnknown: string
+    }
     generating: string
     answerQuestions: string
     submitAnswers: string
@@ -2273,6 +2296,12 @@ export interface Resources {
     fieldClarifyBudgetNoHumanHint: string
     fieldFanOut: string
     fieldFanOutHint: string
+    sectionOutputContract: string
+    fieldOutputContract: string
+    outputContractFiles: string
+    outputContractFilesHint: string
+    outputContractDiscussion: string
+    outputContractDiscussionHint: string
     // RFC-164 PR-4 — detail-page launch entry + /workgroups/launch page.
     launchButton: string
     launch: {
@@ -2319,6 +2348,7 @@ export interface Resources {
       previewEmpty: string
       canvasPending: string
     }
+    systemMessages: Record<WorkgroupSystemTemplateKey, string>
     // RFC-164 PR-4 — workgroup task chat room (tasks.detail default tab).
     room: {
       empty: string
@@ -5397,6 +5427,44 @@ export const zhCN: Resources = {
     },
     opCount: '{{count}} 项变更',
     retryTurn: '重试本轮',
+    failureDiagnostic: {
+      genericSuggestion: '展开本轮执行事件查看详情后重试；重复失败时可依据下方证据定位运行时。',
+      reason: {
+        'output-cap-hit': {
+          title: '输出超过本轮保留窗口',
+          suggestion: '结果信封可能落在被截断部分。请缩小本轮变更，分批提交后重试。',
+        },
+        'no-assistant-text': {
+          title: '运行时没有产生 assistant 文本',
+          suggestion:
+            '模型可能在读取清单后停止，尚未开始输出结果。请先重试；若持续出现，请检查运行时事件。',
+        },
+        'terminal-without-envelope': {
+          title: '运行时已结束，但没有提交结果信封',
+          suggestion: '模型完成或报错时没有遵循输出协议。查看终态事件后重试本轮。',
+        },
+        'assistant-stopped-without-envelope': {
+          title: 'assistant 已输出文本，但在结果信封前停止',
+          suggestion: '请缩小本轮目标并重试，确保每批都先提交完整结果信封。',
+        },
+        'runtime-shape-unknown': {
+          title: '没有检测到可识别的结果信封',
+          suggestion: '当前运行时事件形态不足以进一步分类。请展开执行事件并重试。',
+        },
+      },
+      observedRetained: 'assistant 文本：观察到 {{observed}}，保留 {{retained}}',
+      lastEvent: '最后事件：规范类型 {{kind}}；运行时类型 {{type}}',
+      terminalResult: '运行时终态：{{result}}',
+      terminal: {
+        success: '成功',
+        error: '错误',
+        'not-observed': '未观察到',
+      },
+      notObserved: '未观察到',
+      unparsedStdout: 'stdout 中还出现了无法解析的行。',
+      scratchRetained: '本轮诊断现场已保留，最长约 {{hours}} 小时后自动清理。',
+      scratchRetainedUnknown: '本轮诊断现场已暂存，并会由后台自动清理。',
+    },
     generating: '正在生成……',
     answerQuestions: '回答澄清问题',
     submitAnswers: '提交回答并继续生成',
@@ -7753,6 +7821,12 @@ export const zhCN: Resources = {
     fieldFanOut: '动态多实例派单（fan-out）',
     fieldFanOutHint:
       '允许 leader 对同一 agent 成员在一轮内并发派发多个任务实例（各自独立执行后统一验收）。关闭时保持「每个成员一次一单」的固定模式。',
+    sectionOutputContract: '交付约定',
+    fieldOutputContract: '主要交付形式',
+    outputContractFiles: '文件交付',
+    outputContractFilesHint: '成果应写入工作副本并合并回任务工作树；完成时会检查零文件变更。',
+    outputContractDiscussion: '讨论结论',
+    outputContractDiscussionHint: '主要成果是房间里的可执行结论；文件只作辅助，不做零变更告警。',
     launchButton: '启动任务',
     launch: {
       title: '启动工作组任务：{{name}}',
@@ -7797,6 +7871,32 @@ export const zhCN: Resources = {
       exhausted: 'workflow 生成失败（重试已耗尽）。可在详情页查看错误后重试任务。',
       previewEmpty: '暂无可预览的生成结果。',
       canvasPending: '等待编排确认后展示真实 DAG。',
+    },
+    systemMessages: {
+      assignmentAgentUnresolvable: '派单「{{title}}」失败：无法解析 @{{member}} 的 agent。',
+      assignmentFailed: '派单「{{title}}」失败：{{detail}}',
+      assignmentProtocolViolation: '派单「{{title}}」失败：输出协议错误（{{detail}}）',
+      assignmentReportedFailed: '@{{member}} 报告派单「{{title}}」失败：{{detail}}',
+      assignmentCanceledByMember: '任务成员取消了派单「{{title}}」。',
+      messageTurnFailed: '{{member}} 的消息轮失败：{{detail}}',
+      freeCollabConverged: '自由协作已收敛，共完成 {{count}} 项任务：\n{{details}}',
+      freeCollabConvergedEmpty: '自由协作已收敛，但没有已完成的任务。',
+      leaderNudge:
+        '自动模式：本轮既没有派发任务，也没有宣布完成。若目标已完成，请提交 wg_decision done；否则派发下一项任务，或说明阻塞原因。',
+      maxRoundsFailed: '工作组已达到最大轮数（{{maxRounds}}）。',
+      freeCollabDeadlock: '自由协作陷入死锁：仍有开放任务，但没有可认领的 agent 成员。',
+      internalDriveError: '驱动 {{item}} 时发生内部错误：{{detail}}',
+      completionGateWaiting: '完成门：等待人工确认。{{summary}}',
+      zeroDeltaDone:
+        '⚠️ 已完成 {{count}} 个派单，但规范工作树没有文件变更。成果可能没有合并回来；请确认 worker 使用自己的工作副本和相对路径。',
+      leaderAgentUnresolvable: '无法解析 leader agent（{{member}}），任务将失败。',
+      roundCapDispatchIgnored: '已达到轮数上限；最终收尾轮里的新派单已忽略，正在汇总已有成果。',
+      tasksAddRejected: '拒绝 @{{member}} 提交的 wg_tasks_add：{{detail}}',
+      duplicateTasksDropped: '已丢弃 @{{member}} 的 {{count}} 个重复任务（标题去重）。',
+      visibilityMessagesDropped: '因可见性开关，已丢弃 @{{member}} 的 {{count}} 条消息。',
+      batchAgentUnresolvable: '跳过 @{{member}} 的任务批次：无法解析 agent。',
+      batchFailed: '@{{member}} 的 {{count}} 项任务批次失败：{{detail}}',
+      batchProtocolViolation: '@{{member}} 的任务批次在重试后仍违反输出协议（{{detail}}）',
     },
     room: {
       empty: '还没有消息。发一条话启动讨论；@成员名 即直接派单。',

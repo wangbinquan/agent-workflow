@@ -33,6 +33,7 @@ export interface WorkgroupDumpDocument {
   description: string
   instructions: string
   mode: string
+  outputContract?: 'files' | 'discussion'
   leaderDisplayName?: string
   switches: { shareOutputs: boolean; directMessages: boolean; blackboard: boolean }
   maxRounds: number
@@ -50,6 +51,7 @@ export function serializeWorkgroupDump(doc: WorkgroupDumpDocument): string {
       description: doc.description,
       instructions: doc.instructions,
       mode: doc.mode,
+      outputContract: doc.outputContract,
       leaderDisplayName: doc.leaderDisplayName,
       switches: doc.switches,
       maxRounds: doc.maxRounds,

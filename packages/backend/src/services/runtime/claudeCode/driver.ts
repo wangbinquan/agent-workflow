@@ -24,6 +24,7 @@ import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import {
   parseEvent,
+  observeSystemEvent,
   parseResultError,
   parseStartupInventory,
   parseUnusableMcpServers,
@@ -84,6 +85,7 @@ export const claudeCodeDriver: RuntimeDriver = {
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
   },
+  observeSystemEvent,
   // RFC-237 (design-gate P2-4) — surface a clean-exit terminal `is_error`
   // result (auth/API failure) so systemAgentRun can fail the run instead of
   // letting it masquerade as a missing envelope.

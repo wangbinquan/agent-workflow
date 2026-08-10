@@ -8,6 +8,7 @@ import {
   parseWgAssignmentsPort,
   parseWgDecisionPort,
   parseWgMessagesPort,
+  resolveWorkgroupOutputContract,
   WG_PORT_ASSIGNMENTS,
   WG_PORT_DECISION,
   WG_PORT_MESSAGES,
@@ -77,7 +78,10 @@ export async function openCompletionGate(
     round: gateRound,
     authorKind: 'system',
     kind: 'system',
-    bodyMd: `completion gate: waiting for human confirmation${state.gate.summary ? ` — ${state.gate.summary}` : ''}`,
+    systemTemplate: {
+      key: 'completionGateWaiting',
+      params: { summary: state.gate.summary ?? '' },
+    },
   })
   if (!(await casGateStatus(db, taskId, { from: ['declared'], to: 'awaiting_confirmation' }))) {
     // lost to a concurrent transition (e.g. resumed engine raced a stale pass)
@@ -150,6 +154,7 @@ export async function warnIfZeroDeltaDone(
   args: WorkgroupEngineArgs,
   state: EngineDbState,
 ): Promise<void> {
+  if (resolveWorkgroupOutputContract(state.config.outputContract) !== 'files') return
   const getFiles = args.hooks.getCanonicalFilesChanged
   if (getFiles === undefined) return
   const doneAssignmentCount = state.assignments.filter((a) => a.status === 'done').length
@@ -164,10 +169,7 @@ export async function warnIfZeroDeltaDone(
   await postMessage(args.db, args.taskId, roundMode(state.config), {
     authorKind: 'system',
     kind: 'decision',
-    bodyMd:
-      `⚠️ ${doneAssignmentCount} assignment(s) completed but the canonical worktree has no changes — ` +
-      'outputs may not have merged. Check that each worker wrote inside its own working copy ' +
-      '(relative paths), not an absolute path outside it.',
+    systemTemplate: { key: 'zeroDeltaDone', params: { count: doneAssignmentCount } },
   })
   args.log.warn('workgroup done with zero canonical delta despite completed work', {
     taskId: args.taskId,
@@ -193,7 +195,10 @@ export async function driveLeaderTurn(
     await postMessage(db, taskId, roundMode(state.config), {
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `leader agent unresolvable (${memberDisplayName(config, leaderId)}) — failing task`,
+      systemTemplate: {
+        key: 'leaderAgentUnresolvable',
+        params: { member: memberDisplayName(config, leaderId) },
+      },
     })
     throw new Error('workgroup leader agent unresolvable')
   }
@@ -379,9 +384,7 @@ export async function driveLeaderTurn(
       round,
       authorKind: 'system',
       kind: 'system',
-      bodyMd:
-        'Round cap reached — new assignments in this final wrap-up round were ignored. ' +
-        'Aggregating the completed work.',
+      systemTemplate: { key: 'roundCapDispatchIgnored', params: {} },
     })
   }
   // 3. deliveries the leader just consumed flip delivered→done (design

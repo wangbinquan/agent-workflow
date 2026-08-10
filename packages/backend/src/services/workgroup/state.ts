@@ -39,6 +39,7 @@ import {
 } from '@/db/schema'
 import { getAgentById } from '@/services/agent'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
+import { parseStoredTemplateMetadata } from '@/services/workgroup/systemMessages'
 
 export type WorkgroupGateStatus =
   | 'idle'
@@ -367,6 +368,7 @@ export function rowToMessage(r: typeof workgroupMessages.$inferSelect): Workgrou
   } catch {
     mentions = []
   }
+  const template = parseStoredTemplateMetadata(r.templateKey, r.templateParamsJson)
   return {
     id: r.id,
     taskId: r.taskId,
@@ -376,6 +378,8 @@ export function rowToMessage(r: typeof workgroupMessages.$inferSelect): Workgrou
     authorUserId: r.authorUserId,
     kind: r.kind,
     bodyMd: r.bodyMd,
+    templateKey: template?.key ?? null,
+    templateParams: template?.params ?? null,
     mentionMemberIds: mentions,
     assignmentId: r.assignmentId,
     triggerMessageId: r.triggerMessageId,

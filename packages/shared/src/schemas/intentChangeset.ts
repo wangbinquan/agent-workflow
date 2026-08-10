@@ -380,6 +380,7 @@ export const IntentWorkgroupPayloadSchema = z
     description: DescriptionSchema,
     instructions: z.string().max(65536).default(''),
     mode: z.enum(['leader_worker', 'free_collab', 'dynamic_workflow']),
+    outputContract: z.enum(['files', 'discussion']).optional(),
     leaderDisplayName: z.string().min(1).max(64).optional(),
     switches: z
       .object({

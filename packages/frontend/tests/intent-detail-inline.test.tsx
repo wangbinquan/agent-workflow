@@ -57,6 +57,7 @@ function detailFixture(overrides: Partial<IntentSessionDetail> = {}): IntentSess
         content: { message: 'build it' },
         contextRevision: 0,
         runMeta: null,
+        scratchRetained: false,
         execution: null,
         createdAt: 1,
       },
@@ -155,6 +156,48 @@ async function renderPage(opts: { staleTime?: number } = {}) {
 }
 
 describe('RFC-234 /intent/$sessionId', () => {
+  test('RFC-273 error card explains missing-envelope evidence and retained scratch', async () => {
+    const detail = detailFixture({
+      turns: [
+        detailFixture().turns[0]!,
+        {
+          id: 'T2',
+          seq: 2,
+          role: 'agent',
+          kind: 'error',
+          content: { code: 'intent-envelope-missing', reason: 'no-assistant-text' },
+          contextRevision: 0,
+          runMeta: {
+            scratchRetentionHours: 24,
+            outputEvidence: {
+              assistantTextSeen: false,
+              observedAssistantTextBytes: 0,
+              retainedAssistantTextBytes: 0,
+              eventTextCapHit: false,
+              unparsedStdoutSeen: false,
+              lastNormalizedEventKind: 'step_start',
+              lastRuntimeEventType: 'system',
+              terminalResult: 'not-observed',
+            },
+          },
+          scratchRetained: true,
+          execution: null,
+          createdAt: 2,
+        },
+      ],
+    })
+    installFetch(detail)
+    await renderPage()
+
+    const diagnostic = await screen.findByTestId('intent-turn-error-diagnostic')
+    expect(diagnostic.textContent).toContain(
+      enUS.intent.failureDiagnostic.reason['no-assistant-text'].title,
+    )
+    expect(diagnostic.textContent).toContain('0 B')
+    expect(diagnostic.textContent).toContain('24')
+    expect(within(diagnostic).getByRole('button', { name: enUS.intent.retryTurn })).toBeTruthy()
+  })
+
   test('latest running turn stays open when capture truncates and loads the shared renderer', async () => {
     const detail = detailFixture({
       session: {
@@ -171,6 +214,7 @@ describe('RFC-234 /intent/$sessionId', () => {
           content: { message: 'build it' },
           contextRevision: 0,
           runMeta: null,
+          scratchRetained: false,
           execution: null,
           createdAt: 1,
         },
@@ -182,6 +226,7 @@ describe('RFC-234 /intent/$sessionId', () => {
           content: {},
           contextRevision: 0,
           runMeta: null,
+          scratchRetained: false,
           execution: {
             captureState: 'truncated',
             lastEventSeq: 1,
@@ -237,6 +282,7 @@ describe('RFC-234 /intent/$sessionId', () => {
       content: {},
       contextRevision: 0,
       runMeta: null,
+      scratchRetained: false,
       execution: {
         captureState: 'live',
         lastEventSeq: 1,
@@ -332,6 +378,7 @@ describe('RFC-234 /intent/$sessionId', () => {
       content: {},
       contextRevision: 0,
       runMeta: null,
+      scratchRetained: false,
       execution: {
         captureState: 'live',
         lastEventSeq: 1,
@@ -486,6 +533,7 @@ describe('RFC-234 /intent/$sessionId', () => {
             content: { message: 'build it' },
             contextRevision: 0,
             runMeta: null,
+            scratchRetained: false,
             execution: null,
             createdAt: 1,
           },
@@ -507,6 +555,7 @@ describe('RFC-234 /intent/$sessionId', () => {
             },
             contextRevision: 0,
             runMeta: null,
+            scratchRetained: false,
             execution: null,
             createdAt: 2,
           },

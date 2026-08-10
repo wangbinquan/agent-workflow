@@ -25,6 +25,7 @@ import {
   releaseOpencodeSessionLease,
 } from '../src/services/opencodeSessionOwner'
 import {
+  buildMcpReadinessMarker,
   buildSessionReadyMarker,
   readControlAck,
 } from '../src/services/runtime/opencode/controlProtocol'
@@ -156,6 +157,59 @@ describe('RFC-224 runner production boundary selection', () => {
 })
 
 describe('RFC-224 runner control ownership transaction', () => {
+  test('accepts only readiness names and local/remote polarity from the frozen closure', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const root = mkdtempSync(join(tmpdir(), 'rfc272-runner-readiness-'))
+    roots.push(root)
+    const state = createRunnerOpencodeControlState()
+    const readinessControl = {
+      ...control(join(root, 'control.ack')),
+      mcpReadiness: {
+        enabled: true,
+        servers: [
+          { name: 'local-tools', type: 'local' as const },
+          { name: 'remote-docs', type: 'remote' as const },
+        ],
+      },
+    }
+    const frame = buildMcpReadinessMarker({
+      kind: 'mcp-readiness',
+      unavailableLocal: [{ name: 'local-tools', status: 'failed' }],
+      unavailableRemote: [{ name: 'remote-docs', status: 'missing' }],
+    })
+    expect(
+      processRunnerOpencodeControlLine({
+        db,
+        taskId: 'task-a',
+        nodeId: 'node-a',
+        nodeRunId: 'run-created',
+        control: readinessControl,
+        state,
+        line: frame,
+      }),
+    ).toMatchObject({ kind: 'mcp-readiness' })
+    expect(state.mcpReadiness).toMatchObject({
+      unavailableLocal: [{ name: 'local-tools', status: 'failed' }],
+    })
+
+    const forgedState = createRunnerOpencodeControlState()
+    expect(() =>
+      processRunnerOpencodeControlLine({
+        db,
+        taskId: 'task-a',
+        nodeId: 'node-a',
+        nodeRunId: 'run-created',
+        control: readinessControl,
+        state: forgedState,
+        line: buildMcpReadinessMarker({
+          kind: 'mcp-readiness',
+          unavailableLocal: [{ name: 'remote-docs', status: 'failed' }],
+          unavailableRemote: [],
+        }),
+      }),
+    ).toThrow('execution-identity-control-failed')
+  })
+
   test('post-spawn exception reaps the launcher, awaits cleanup, and releases a preclaimed lease', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedTask(db)

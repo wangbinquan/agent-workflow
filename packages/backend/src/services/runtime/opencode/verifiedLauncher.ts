@@ -32,6 +32,8 @@ import {
   type WithParts,
 } from './directApiSchemas'
 import { OpencodeDirectClient, type DirectClientBudgets } from './directClient'
+import type { McpRuntimeStatus, McpReadinessReceipt } from './mcpReadiness'
+import { compareMcpReadiness } from './mcpReadiness'
 import {
   DirectSessionCodec,
   serializeDirectJsonlRecord,
@@ -40,8 +42,10 @@ import {
 } from './directCodec'
 import {
   businessOpencodeIdentityDigest,
+  businessOpencodeIdentityDigestV3,
   ExecutionIdentityError,
   identityDigest,
+  mcpTestOpencodeIdentityDigest,
 } from './executionIdentity'
 import { ExecutionIdentityFailure, executionIdentityFailure } from './failure'
 import { PINNED_BUILTIN_SKILL, assertBundledProviderImplementation } from './hermetic'
@@ -58,7 +62,12 @@ import {
   type OpencodeStoreLifecycleLock,
   type OpencodeStoreServerBinding,
 } from './storeHygiene'
-import { buildSessionReadyMarker, readControlAck, type ControlAck } from './controlProtocol'
+import {
+  buildMcpReadinessMarker,
+  buildSessionReadyMarker,
+  readControlAck,
+  type ControlAck,
+} from './controlProtocol'
 import {
   readAndUnlinkVerifiedLaunchManifest,
   type VerifiedLaunchManifest,
@@ -101,6 +110,7 @@ export interface VerifiedLauncherClient {
   getConfigProviders(signal?: AbortSignal): Promise<unknown>
   getAgents(signal?: AbortSignal): Promise<unknown>
   getSkills(signal?: AbortSignal): Promise<unknown>
+  getMcpStatuses(signal?: AbortSignal): Promise<Readonly<Record<string, McpRuntimeStatus>>>
   createSession(body: CreateSessionRequest, signal?: AbortSignal): Promise<SessionInfo>
   listRootSessions(input: {
     title: string
@@ -167,6 +177,14 @@ class LauncherPhaseError extends Error {
     super(code)
     this.name = 'LauncherPhaseError'
     this.code = code
+  }
+}
+
+/** Private sentinel: runner already received a bounded readiness frame. */
+class McpReadinessUnavailableError extends Error {
+  constructor() {
+    super('mcp-unavailable')
+    this.name = 'McpReadinessUnavailableError'
   }
 }
 
@@ -438,21 +456,33 @@ function expectedSessionContract(manifest: VerifiedLaunchManifest): unknown {
 function verifyManifestDigests(manifest: VerifiedLaunchManifest): void {
   const expectedIdentity =
     manifest.storeKind === 'business'
-      ? businessOpencodeIdentityDigest({
-          config: manifest.expectedConfig,
-          agent: manifest.selectedAgent,
-          model: manifest.selectedModel,
-          binaryDigest: manifest.binaryDigest,
-          sealRoot: join(manifest.runRoot, 'opencode-identity-seal'),
-        })
+      ? manifest.identityCodec === 'business-v2-legacy'
+        ? businessOpencodeIdentityDigest({
+            config: manifest.expectedConfig,
+            agent: manifest.selectedAgent,
+            model: manifest.selectedModel,
+            binaryDigest: manifest.binaryDigest,
+            sealRoot: join(manifest.runRoot, 'opencode-identity-seal'),
+          })
+        : businessOpencodeIdentityDigestV3({
+            config: manifest.expectedConfig,
+            agent: manifest.selectedAgent,
+            model: manifest.selectedModel,
+            binaryDigest: manifest.binaryDigest,
+            sealRoot: join(manifest.runRoot, 'opencode-identity-seal'),
+            frozenSkills: manifest.frozenSkillSeals.map((seal) => ({
+              ...seal,
+              target: join(manifest.runRoot, 'opencode-identity-seal', 'skills', seal.sealName),
+            })),
+          })
       : manifest.storeKind === 'mcp-test'
-        ? identityDigest({
-            codec: 1,
-            storeKind: 'mcp-test',
+        ? mcpTestOpencodeIdentityDigest({
             testSessionId: manifest.testSessionId,
             sessionStoreKey: manifest.sessionStoreKey,
             agent: manifest.selectedAgent,
             model: manifest.selectedModel,
+            temperature: manifest.selectedTemperature,
+            steps: manifest.selectedSteps,
             binaryDigest: manifest.binaryDigest,
             mcpExecutionDigest: manifest.mcpExecutionDigest,
           })
@@ -463,17 +493,50 @@ function verifyManifestDigests(manifest: VerifiedLaunchManifest): void {
             model: manifest.selectedModel,
             binaryDigest: manifest.binaryDigest,
           })
-  if (
-    expectedIdentity !== manifest.identityDigest ||
-    identityDigest(expectedSessionContract(manifest)) !== manifest.sessionContractDigest
-  ) {
-    return executionIdentityFailure('execution-identity-mismatch')
+  if (expectedIdentity !== manifest.identityDigest) {
+    return executionIdentityFailure(
+      'execution-identity-mismatch',
+      '/diagnostic/config-identity-digest',
+    )
+  }
+  if (identityDigest(expectedSessionContract(manifest)) !== manifest.sessionContractDigest) {
+    return executionIdentityFailure(
+      'execution-identity-mismatch',
+      '/diagnostic/session-contract-digest',
+    )
   }
   if (
     manifest.storeKind !== 'system-ephemeral' &&
     sha256(manifest.leaseNonce) !== manifest.leaseNonceDigest
   ) {
     return executionIdentityFailure('execution-identity-control-failed')
+  }
+}
+
+function rethrowInventoryMismatch(error: unknown, pointer: string): never {
+  if (
+    error instanceof ExecutionIdentityFailure &&
+    error.code === 'execution-identity-mismatch' &&
+    error.pointer === null
+  ) {
+    throw new ExecutionIdentityFailure(error.code, pointer)
+  }
+  throw error
+}
+
+function safeDiagnosticStage(error: unknown): string | null {
+  if (!(error instanceof ExecutionIdentityFailure)) return null
+  switch (error.pointer) {
+    case '/diagnostic/config-identity-digest':
+      return 'config-identity-digest'
+    case '/diagnostic/session-contract-digest':
+      return 'session-contract-digest'
+    case '/diagnostic/provider-inventory':
+      return 'provider-inventory'
+    case '/diagnostic/skill-inventory':
+      return 'skill-inventory'
+    default:
+      return null
   }
 }
 
@@ -1079,6 +1142,11 @@ export async function launchVerifiedOpencodeManifest(
   let client: VerifiedLauncherClient | undefined
   let sessionID: string | undefined
   let rootSession: SessionInfo | GlobalSessionInfo | undefined
+  let mcpReadinessReceipt: McpReadinessReceipt = {
+    connected: [],
+    unavailableLocal: [],
+    unavailableRemote: [],
+  }
   let succeeded = false
   let launchFailed = false
   let launchFailure: unknown
@@ -1187,8 +1255,34 @@ export async function launchVerifiedOpencodeManifest(
             const providers = await directClient.getConfigProviders(bootstrapSignal)
             const agents = await directClient.getAgents(bootstrapSignal)
             const skills = await directClient.getSkills(bootstrapSignal)
-            verifyProviderInventory(providers, manifest.selectedModel)
-            verifySkillInventory(skills)
+            try {
+              verifyProviderInventory(providers, manifest.selectedModel)
+            } catch (error) {
+              rethrowInventoryMismatch(error, '/diagnostic/provider-inventory')
+            }
+            try {
+              verifySkillInventory(skills)
+            } catch (error) {
+              rethrowInventoryMismatch(error, '/diagnostic/skill-inventory')
+            }
+            if (manifest.storeKind === 'business' && manifest.mcpReadiness.enabled) {
+              const statuses = await directClient.getMcpStatuses(bootstrapSignal)
+              mcpReadinessReceipt = compareMcpReadiness(manifest.mcpReadiness.servers, statuses)
+              writeStderr(
+                `${buildMcpReadinessMarker({
+                  kind: 'mcp-readiness',
+                  unavailableLocal: mcpReadinessReceipt.unavailableLocal.map(
+                    ({ name, status }) => ({ name, status }),
+                  ),
+                  unavailableRemote: mcpReadinessReceipt.unavailableRemote.map(
+                    ({ name, status }) => ({ name, status }),
+                  ),
+                })}\n`,
+              )
+              if (mcpReadinessReceipt.unavailableLocal.length > 0) {
+                throw new McpReadinessUnavailableError()
+              }
+            }
             const sourceAfter = await scanSource(manifest.worktreePath)
             assertSourceFingerprintUnchanged(sourceBefore, sourceAfter)
             if (manifest.storeKind === 'business' && manifest.inventory.enabled) {
@@ -1198,6 +1292,8 @@ export async function launchVerifiedOpencodeManifest(
                 // was proven identical across two reads of the same instance.
                 agents,
                 plan: manifest.inventory,
+                mcpReadiness: manifest.mcpReadiness,
+                readinessReceipt: mcpReadinessReceipt,
                 capturedAt: now(),
               })
               await writeInventory(manifest.runRoot, snapshot)
@@ -1373,7 +1469,13 @@ export async function runVerifiedOpencodeLauncher(
     if (error instanceof LauncherCancelledError || signal.aborted) {
       return signalExitCode === 0 ? 143 : signalExitCode
     }
-    writeStderr(`AW_OPENCODE_FAILURE ${stableFailureCode(error)}\n`)
+    if (!(error instanceof McpReadinessUnavailableError)) {
+      const diagnosticStage = safeDiagnosticStage(error)
+      if (diagnosticStage !== null) {
+        writeStderr(`AW_OPENCODE_DIAGNOSTIC ${diagnosticStage}\n`)
+      }
+      writeStderr(`AW_OPENCODE_FAILURE ${stableFailureCode(error)}\n`)
+    }
     return 1
   } finally {
     if (dependencies.signal === undefined) {

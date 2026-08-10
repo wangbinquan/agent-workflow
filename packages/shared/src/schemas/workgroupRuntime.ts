@@ -18,6 +18,7 @@ import {
   WorkgroupMemberDisplayNameSchema,
   WorkgroupMemberTypeSchema,
   WorkgroupModeSchema,
+  WorkgroupOutputContractSchema,
   WorkgroupSwitchesSchema,
 } from './workgroup'
 export { buildBatchShardKey, buildMsgShardKey, parseBatchShardKey, parseMsgShardKey }
@@ -55,6 +56,8 @@ export const WorkgroupRuntimeConfigSchema = z.object({
   workgroupId: z.string().min(1),
   workgroupName: z.string().min(1),
   mode: WorkgroupModeSchema,
+  /** Optional only so pre-RFC-274 frozen task snapshots remain readable. */
+  outputContract: WorkgroupOutputContractSchema.optional(),
   /** Member id (of `members[]`) — non-null iff mode='leader_worker'. */
   leaderMemberId: z.string().nullable(),
   switches: WorkgroupSwitchesSchema,
@@ -136,23 +139,162 @@ export const WORKGROUP_MESSAGE_KINDS = [
 export const WorkgroupMessageKindSchema = z.enum(WORKGROUP_MESSAGE_KINDS)
 export type WorkgroupMessageKind = z.infer<typeof WorkgroupMessageKindSchema>
 
-export const WorkgroupMessageSchema = z.object({
-  id: z.string(),
-  taskId: z.string(),
-  round: z.number().int().nonnegative(),
-  authorKind: WorkgroupMessageAuthorKindSchema,
-  authorMemberId: z.string().nullable(),
-  /** Audit/UI only; the room shows the user, prompts see nothing (design §11). */
-  authorUserId: z.string().nullable(),
-  kind: WorkgroupMessageKindSchema,
-  bodyMd: z.string(),
-  /** Parsed @-mention member ids. */
-  mentionMemberIds: z.array(z.string()),
-  assignmentId: z.string().nullable(),
-  /** RFC-229 — direct parent message for message-triggered member output. */
-  triggerMessageId: z.string().nullable().default(null),
-  createdAt: z.number().int(),
-})
+export const WORKGROUP_SYSTEM_TEMPLATE_KEYS = [
+  'assignmentAgentUnresolvable',
+  'assignmentFailed',
+  'assignmentProtocolViolation',
+  'assignmentReportedFailed',
+  'assignmentCanceledByMember',
+  'messageTurnFailed',
+  'freeCollabConverged',
+  'freeCollabConvergedEmpty',
+  'leaderNudge',
+  'maxRoundsFailed',
+  'freeCollabDeadlock',
+  'internalDriveError',
+  'completionGateWaiting',
+  'zeroDeltaDone',
+  'leaderAgentUnresolvable',
+  'roundCapDispatchIgnored',
+  'tasksAddRejected',
+  'duplicateTasksDropped',
+  'visibilityMessagesDropped',
+  'batchAgentUnresolvable',
+  'batchFailed',
+  'batchProtocolViolation',
+] as const
+export const WorkgroupSystemTemplateKeySchema = z.enum(WORKGROUP_SYSTEM_TEMPLATE_KEYS)
+export type WorkgroupSystemTemplateKey = z.infer<typeof WorkgroupSystemTemplateKeySchema>
+
+const TemplateTitleSchema = z.string().max(200)
+const TemplateMemberSchema = z.string().max(64)
+const TemplateDetailSchema = z.string().max(65536)
+
+export const WorkgroupSystemTemplateSchema = z.discriminatedUnion('key', [
+  z.object({
+    key: z.literal('assignmentAgentUnresolvable'),
+    params: z.object({ title: TemplateTitleSchema, member: TemplateMemberSchema }).strict(),
+  }),
+  z.object({
+    key: z.literal('assignmentFailed'),
+    params: z.object({ title: TemplateTitleSchema, detail: TemplateDetailSchema }).strict(),
+  }),
+  z.object({
+    key: z.literal('assignmentProtocolViolation'),
+    params: z.object({ title: TemplateTitleSchema, detail: TemplateDetailSchema }).strict(),
+  }),
+  z.object({
+    key: z.literal('assignmentReportedFailed'),
+    params: z
+      .object({
+        title: TemplateTitleSchema,
+        member: TemplateMemberSchema,
+        detail: TemplateDetailSchema,
+      })
+      .strict(),
+  }),
+  z.object({
+    key: z.literal('assignmentCanceledByMember'),
+    params: z.object({ title: TemplateTitleSchema }).strict(),
+  }),
+  z.object({
+    key: z.literal('messageTurnFailed'),
+    params: z.object({ member: TemplateMemberSchema, detail: TemplateDetailSchema }).strict(),
+  }),
+  z.object({
+    key: z.literal('freeCollabConverged'),
+    params: z
+      .object({ count: z.number().int().positive(), details: TemplateDetailSchema })
+      .strict(),
+  }),
+  z.object({ key: z.literal('freeCollabConvergedEmpty'), params: z.object({}).strict() }),
+  z.object({ key: z.literal('leaderNudge'), params: z.object({}).strict() }),
+  z.object({
+    key: z.literal('maxRoundsFailed'),
+    params: z.object({ maxRounds: z.number().int().positive() }).strict(),
+  }),
+  z.object({ key: z.literal('freeCollabDeadlock'), params: z.object({}).strict() }),
+  z.object({
+    key: z.literal('internalDriveError'),
+    params: z.object({ item: TemplateTitleSchema, detail: TemplateDetailSchema }).strict(),
+  }),
+  z.object({
+    key: z.literal('completionGateWaiting'),
+    params: z.object({ summary: TemplateDetailSchema }).strict(),
+  }),
+  z.object({
+    key: z.literal('zeroDeltaDone'),
+    params: z.object({ count: z.number().int().positive() }).strict(),
+  }),
+  z.object({
+    key: z.literal('leaderAgentUnresolvable'),
+    params: z.object({ member: TemplateMemberSchema }).strict(),
+  }),
+  z.object({ key: z.literal('roundCapDispatchIgnored'), params: z.object({}).strict() }),
+  z.object({
+    key: z.literal('tasksAddRejected'),
+    params: z.object({ member: TemplateMemberSchema, detail: TemplateDetailSchema }).strict(),
+  }),
+  z.object({
+    key: z.literal('duplicateTasksDropped'),
+    params: z.object({ count: z.number().int().positive(), member: TemplateMemberSchema }).strict(),
+  }),
+  z.object({
+    key: z.literal('visibilityMessagesDropped'),
+    params: z.object({ count: z.number().int().positive(), member: TemplateMemberSchema }).strict(),
+  }),
+  z.object({
+    key: z.literal('batchAgentUnresolvable'),
+    params: z.object({ member: TemplateMemberSchema }).strict(),
+  }),
+  z.object({
+    key: z.literal('batchFailed'),
+    params: z
+      .object({
+        count: z.number().int().positive(),
+        member: TemplateMemberSchema,
+        detail: TemplateDetailSchema,
+      })
+      .strict(),
+  }),
+  z.object({
+    key: z.literal('batchProtocolViolation'),
+    params: z.object({ member: TemplateMemberSchema, detail: TemplateDetailSchema }).strict(),
+  }),
+])
+export type WorkgroupSystemTemplate = z.infer<typeof WorkgroupSystemTemplateSchema>
+
+export const WorkgroupMessageSchema = z
+  .object({
+    id: z.string(),
+    taskId: z.string(),
+    round: z.number().int().nonnegative(),
+    authorKind: WorkgroupMessageAuthorKindSchema,
+    authorMemberId: z.string().nullable(),
+    /** Audit/UI only; the room shows the user, prompts see nothing (design §11). */
+    authorUserId: z.string().nullable(),
+    kind: WorkgroupMessageKindSchema,
+    bodyMd: z.string(),
+    /** Rolling-deploy wire: unknown future keys remain renderable via bodyMd fallback. */
+    templateKey: z.string().min(1).max(64).nullable().optional(),
+    templateParams: z.record(z.string(), z.unknown()).nullable().optional(),
+    /** Parsed @-mention member ids. */
+    mentionMemberIds: z.array(z.string()),
+    assignmentId: z.string().nullable(),
+    /** RFC-229 — direct parent message for message-triggered member output. */
+    triggerMessageId: z.string().nullable().default(null),
+    createdAt: z.number().int(),
+  })
+  .superRefine((message, ctx) => {
+    const key = message.templateKey ?? null
+    const params = message.templateParams ?? null
+    if ((key === null) !== (params === null)) {
+      ctx.addIssue({ code: 'custom', message: 'templateKey and templateParams must pair' })
+    }
+    if (key !== null && message.authorKind !== 'system') {
+      ctx.addIssue({ code: 'custom', message: 'only system messages may carry a template' })
+    }
+  })
 export type WorkgroupMessage = z.infer<typeof WorkgroupMessageSchema>
 
 // ---------------------------------------------------------------------------

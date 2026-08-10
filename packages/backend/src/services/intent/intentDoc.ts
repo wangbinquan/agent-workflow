@@ -38,6 +38,11 @@ import {
 
 export const RECENT_TURNS_VERBATIM = 8
 const HISTORY_VERBATIM_TURN_CAP_BYTES = 16 * 1024
+export const INTENT_TURN_GUIDANCE = Object.freeze({
+  maxOps: 8,
+  maxWorkflowNodesCreatedOrReplaced: 6,
+  targetChangesetBytes: 256 * 1024,
+})
 
 export interface IntentDocTurn {
   seq: number
@@ -335,6 +340,16 @@ changeset down with it — including the unrelated edit the user actually asked
 for.`
   }`)
 
+  sections.push(`## Single-turn delivery budget (hard guidance, not parser limits)
+
+- Emit at most ${INTENT_TURN_GUIDANCE.maxOps} changeset ops in one turn.
+- Across workflow create/update payloads, create or fully replace at most ${INTENT_TURN_GUIDANCE.maxWorkflowNodesCreatedOrReplaced} workflow nodes in one turn.
+- Target at most ${INTENT_TURN_GUIDANCE.targetChangesetBytes / 1024} KiB of changeset JSON.
+- If the user's final goal is larger, deliver one complete, verifiable slice now (dependencies first or one workflow slice), then list the remaining work in \`summary\` for the next turn.
+- Every slice MUST end with a complete nonce-bound envelope. Never omit the current turn's result merely to keep thinking.
+
+The server still accepts the larger formal limits printed below; these numbers guide reliable batching and do not shrink that accepted domain.`)
+
   // Live-run lesson (deepseek 2026-07-28): without an explicit per-type field
   // spec the model invents payload keys (systemPrompt/outputPorts/handle/…),
   // display-style names and nested ops. Payloads are STRICT objects — spell
@@ -377,7 +392,7 @@ Per-type payload fields:
     privilegedNodeForms.length === 0 ? '' : `\n${privilegedNodeForms.join('\n')}`
   }
   Ordinary edges: \`{id,source:{nodeId,portName},target:{nodeId,portName}}\`. A fanout boundary edge additionally has \`boundary:'wrapper-input'|'wrapper-output'\`: wrapper-input runs from wrapper declared input → inner agent input; wrapper-output runs from inner aggregator output → wrapper outlet. An input node's out-port = its inputKey; an agent's out-ports = its \`outputs\`; prompt templates read inbound ports as \`{{port_name}}\`.
-- **workgroup**: \`{name, description, instructions, mode:'leader_worker'|'free_collab'|'dynamic_workflow', leaderDisplayName?, members:[{memberType:'agent', agentRef: ref, displayName, roleDesc} | {memberType:'human', displayName, roleDesc}], switches?:{shareOutputs:boolean,directMessages:boolean,blackboard:boolean}, maxRounds?:integer(1..1000), completionGate?:boolean, clarifyBudget?:integer(0..50), fanOut?:boolean}\`. Human members are placeholders — never real usernames. Visibility choices must be encoded structurally: for “private direct messages + public blackboard”, set \`switches:{shareOutputs:true,directMessages:true,blackboard:true}\`; prose in \`instructions\` does not change runtime switches.
+- **workgroup**: \`{name, description, instructions, mode:'leader_worker'|'free_collab'|'dynamic_workflow', outputContract?:'files'|'discussion', leaderDisplayName?, members:[{memberType:'agent', agentRef: ref, displayName, roleDesc} | {memberType:'human', displayName, roleDesc}], switches?:{shareOutputs:boolean,directMessages:boolean,blackboard:boolean}, maxRounds?:integer(1..1000), completionGate?:boolean, clarifyBudget?:integer(0..50), fanOut?:boolean}\`. Use \`discussion\` when the primary result is a room conclusion and files are optional; omitted means \`files\`. Human members are placeholders — never real usernames. Visibility choices must be encoded structurally: for “private direct messages + public blackboard”, set \`switches:{shareOutputs:true,directMessages:true,blackboard:true}\`; prose in \`instructions\` does not change runtime switches.
 
 Worked example (one agent):
 \`{"$schema_version":1,"ops":[{"opId":"op-1","action":"create","resourceType":"agent","tempRef":"$new:code-auditor","payload":{"name":"code-auditor","description":"代码审计代理：逐文件审查 git diff","outputs":["findings"],"bodyMd":"# 角色\\n你审查 git diff…"}}]}\`

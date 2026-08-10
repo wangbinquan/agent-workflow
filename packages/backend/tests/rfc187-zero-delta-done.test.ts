@@ -8,7 +8,10 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { detectZeroDeltaDone } from '../src/services/workgroup/strategies/leaderWorker'
+import {
+  detectZeroDeltaDone,
+  warnIfZeroDeltaDone,
+} from '../src/services/workgroup/strategies/leaderWorker'
 
 describe('RFC-187 §4 — detectZeroDeltaDone', () => {
   test('zero files + completed work = suspect (probe A shape)', () => {
@@ -27,6 +30,28 @@ describe('RFC-187 §4 — detectZeroDeltaDone', () => {
 })
 
 describe('RFC-187 §4 — source locks', () => {
+  test('RFC-274 discussion output skips the hook before any git work; files preserves it', async () => {
+    let calls = 0
+    const args = {
+      hooks: {
+        getCanonicalFilesChanged: async () => {
+          calls += 1
+          return 1
+        },
+      },
+    }
+    const state = {
+      config: { mode: 'leader_worker', outputContract: 'discussion' },
+      assignments: [{ status: 'done' }],
+    }
+    await warnIfZeroDeltaDone(args as never, state as never)
+    expect(calls).toBe(0)
+
+    state.config.outputContract = 'files'
+    await warnIfZeroDeltaDone(args as never, state as never)
+    expect(calls).toBe(1)
+  })
+
   test('the leader protocol tells briefs to use relative, not absolute, paths', () => {
     const ctx = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'context.ts'),

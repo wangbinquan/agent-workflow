@@ -7,10 +7,22 @@
 // precedent).
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { assertSafeSeedPath, runSystemAgent } from '../src/services/systemAgentRun'
+import {
+  assertSafeSeedPath,
+  releaseSystemAgentScratch,
+  runSystemAgent,
+} from '../src/services/systemAgentRun'
 import type { SystemAgentEventSinkV1 } from '../src/services/sessionEventSink'
 import type { Logger } from '../src/util/log'
 
@@ -52,7 +64,12 @@ const SET_ENV_KEYS = [
   'MOCK_OPENCODE_EXIT_CODE',
   'MOCK_OPENCODE_DELAY_MS',
   'MOCK_OPENCODE_STDERR',
+  'MOCK_OPENCODE_EVENTS',
+  'MOCK_OPENCODE_RAW_AGENT_TEXT',
+  'MOCK_OPENCODE_SKIP_ENVELOPE',
 ]
+const testUnlessWindows = test.skipIf(process.platform === 'win32')
+
 afterEach(() => {
   for (const k of SET_ENV_KEYS) delete process.env[k]
 })
@@ -93,7 +110,45 @@ describe('runSystemAgent', () => {
     expect(r.eventText).toContain('sysrun-nonce-42')
     expect(r.capturedSessionId).toBe('sysrun-sess-1')
     expect(r.scratchRetained).toBe(false)
+    expect(r.outputEvidence).toMatchObject({
+      assistantTextSeen: true,
+      eventTextCapHit: false,
+      lastNormalizedEventKind: 'text',
+      lastRuntimeEventType: 'text',
+      terminalResult: 'not-observed',
+    })
+    expect(r.outputEvidence.observedAssistantTextBytes).toBe(
+      r.outputEvidence.retainedAssistantTextBytes,
+    )
     expect(existsSync(join(scratchParent, 'turn-ok'))).toBe(false)
+  })
+
+  test('output evidence distinguishes cap truncation and a terminal event without text', async () => {
+    process.env.MOCK_OPENCODE_RAW_AGENT_TEXT = 'ééé'
+    const capped = await runSystemAgent({
+      ...baseOpts(scratchParentDir(), wrapperFor(MOCK_OPENCODE)),
+      maxEventTextBytes: 5,
+    })
+    expect(capped.eventText).toBe('')
+    expect(capped.outputEvidence).toMatchObject({
+      assistantTextSeen: true,
+      observedAssistantTextBytes: 6,
+      retainedAssistantTextBytes: 0,
+      eventTextCapHit: true,
+    })
+
+    delete process.env.MOCK_OPENCODE_RAW_AGENT_TEXT
+    process.env.MOCK_OPENCODE_SKIP_ENVELOPE = '1'
+    process.env.MOCK_OPENCODE_EVENTS = JSON.stringify([{ type: 'step_finish' }])
+    const terminal = await runSystemAgent({
+      ...baseOpts(scratchParentDir(), wrapperFor(MOCK_OPENCODE)),
+    })
+    expect(terminal.outputEvidence).toMatchObject({
+      assistantTextSeen: false,
+      lastRuntimeEventType: 'step_finish',
+      lastNormalizedEventKind: 'step_finish',
+      terminalResult: 'success',
+    })
   })
 
   test('seed files land in worktree before spawn; failure retains scratch', async () => {
@@ -171,6 +226,55 @@ describe('runSystemAgent', () => {
     })
     expect(r.status).toBe('spawn-failed')
     expect(r.exitCode).toBeNull()
+    expect(r.outputEvidence).toEqual({
+      assistantTextSeen: false,
+      observedAssistantTextBytes: 0,
+      retainedAssistantTextBytes: 0,
+      eventTextCapHit: false,
+      unparsedStdoutSeen: false,
+      lastNormalizedEventKind: null,
+      lastRuntimeEventType: null,
+      terminalResult: 'not-observed',
+    })
+  })
+
+  test('scratch release requires the exact canonical owned child', () => {
+    const parent = scratchParentDir()
+    const owned = join(parent, 'turn-owned')
+    mkdirSync(owned)
+    expect(
+      releaseSystemAgentScratch({
+        scratchDir: owned,
+        expectedParent: parent,
+        expectedName: 'turn-owned',
+      }),
+    ).toEqual({ removed: true })
+    expect(existsSync(owned)).toBe(false)
+
+    const outside = scratchParentDir()
+    expect(
+      releaseSystemAgentScratch({
+        scratchDir: outside,
+        expectedParent: parent,
+        expectedName: '../outside',
+      }),
+    ).toEqual({ removed: false, reason: 'unsafe-path' })
+    expect(existsSync(outside)).toBe(true)
+  })
+
+  testUnlessWindows('scratch release refuses a symlink leaf', () => {
+    const parent = scratchParentDir()
+    const target = scratchParentDir()
+    const link = join(parent, 'turn-link')
+    symlinkSync(target, link, 'dir')
+    expect(
+      releaseSystemAgentScratch({
+        scratchDir: link,
+        expectedParent: parent,
+        expectedName: 'turn-link',
+      }),
+    ).toEqual({ removed: false, reason: 'unsafe-path' })
+    expect(existsSync(target)).toBe(true)
   })
 
   test('plan cleanup failure is an identity failure even when scratch is intentionally retained', async () => {
@@ -250,7 +354,7 @@ describe('runSystemAgent', () => {
   // POSIX-style handle inheritance across the detached boundary), so the condition
   // is not reproducible here ('complete'). The production flush cap it exercises is
   // platform-agnostic (a plain timer on the stdout drain); only the repro diverges.
-  test.skipIf(process.platform === 'win32')(
+  testUnlessWindows(
     'inherited pipe timeout settles capture incomplete without changing business result',
     async () => {
       const terminals: Array<{ state: string; reason?: string }> = []

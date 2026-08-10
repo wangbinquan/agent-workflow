@@ -47,6 +47,7 @@ import {
 } from './containment'
 import {
   businessOpencodeIdentityDigest,
+  businessOpencodeIdentityDigestV3,
   identityDigest,
   type IdentityJson,
 } from './executionIdentity'
@@ -71,6 +72,7 @@ import { isProductionOpencodeCommand } from '@/util/opencode'
 import { sealDirectoryOwnerOnly } from '@/util/win32Acl'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
 import { buildVerifiedInventoryPlan } from './verifiedInventory'
+import { buildMcpReadinessPlan, compareCodePoints } from './mcpReadiness'
 import {
   platformHomeEnvForHost,
   EXECUTABLE_SUFFIX_FOR_HOST,
@@ -157,6 +159,44 @@ function appendFrozenBlock(
     `${base}\n\n<aw-frozen-${kind} name=${JSON.stringify(name)} ` +
     `sha256=${JSON.stringify(digest)}>\n${body}\n</aw-frozen-${kind}>`
   )
+}
+
+const MAX_FROZEN_SKILL_FILE_LIST_BYTES = 64 * 1024
+
+export function renderFrozenSkillBlock(input: {
+  name: string
+  digest: string
+  root: string
+  entries: readonly { path: string; type: 'directory' | 'file' }[]
+  markdown: string
+}): string {
+  const paths = input.entries
+    .map((entry) => `${entry.path}${entry.type === 'directory' ? '/' : ''}`)
+    .sort(compareCodePoints)
+  const lines: string[] = []
+  let bytes = 0
+  for (const path of paths) {
+    const line = JSON.stringify(path)
+    const nextBytes = Buffer.byteLength(`${line}\n`, 'utf8')
+    if (bytes + nextBytes > MAX_FROZEN_SKILL_FILE_LIST_BYTES) break
+    lines.push(line)
+    bytes += nextBytes
+  }
+  const filesTruncated = lines.length !== paths.length
+  return (
+    `<aw-frozen-skill name=${JSON.stringify(input.name)} ` +
+    `sha256=${JSON.stringify(input.digest)} root=${JSON.stringify(input.root)} ` +
+    `fileCount=${paths.length} filesTruncated=${filesTruncated}>\n` +
+    `<aw-frozen-skill-files encoding="json-lines">\n${lines.join('\n')}\n` +
+    `</aw-frozen-skill-files>\n${input.markdown}\n</aw-frozen-skill>`
+  )
+}
+
+function appendFrozenSkillBlock(
+  base: string,
+  input: Parameters<typeof renderFrozenSkillBlock>[0],
+): string {
+  return `${base}\n\n${renderFrozenSkillBlock(input)}`
 }
 
 async function ensurePrivateRunRoot(path: string): Promise<void> {
@@ -569,6 +609,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
       instruction.text,
     )
   }
+  let legacyPersona = persona
 
   const skillTargets = new Set<string>()
   // RFC-251 §10.3: `ctx.skills` is the dependsOn closure UNION (scheduler
@@ -577,7 +618,16 @@ export async function buildVerifiedOpencodeBusinessPlan(
   // `skill` tool is denied, so the agent that actually does the audit could not
   // see the audit skill it declared. Index the frozen blocks by skill id so
   // each member can be given back exactly the ones IT declared.
-  const frozenSkillBlockById = new Map<string, { name: string; digest: string; markdown: string }>()
+  const frozenSkillBlockById = new Map<
+    string,
+    {
+      name: string
+      digest: string
+      markdown: string
+      target: string
+      entries: ManagedSkillTreeInspection['entries']
+    }
+  >()
   for (const skill of ctx.skills) {
     if (
       skill.sourcePath === undefined ||
@@ -607,17 +657,26 @@ export async function buildVerifiedOpencodeBusinessPlan(
       readContentVersion: skill.readContentVersion,
       inspection,
     })
-    persona = appendFrozenBlock(
-      persona,
+    legacyPersona = appendFrozenBlock(
+      legacyPersona,
       'skill',
       skill.name,
       inspection.treeDigest,
       inspection.skillMarkdown,
     )
+    persona = appendFrozenSkillBlock(persona, {
+      name: skill.name,
+      digest: inspection.treeDigest,
+      root: target,
+      entries: inspection.entries,
+      markdown: inspection.skillMarkdown,
+    })
     frozenSkillBlockById.set(skill.skillId, {
       name: skill.name,
       digest: inspection.treeDigest,
       markdown: inspection.skillMarkdown,
+      target,
+      entries: inspection.entries,
     })
   }
 
@@ -636,6 +695,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
     ...(ctx.gitUserEmail == null ? {} : { GIT_COMMITTER_EMAIL: ctx.gitUserEmail }),
   }
   const plannedMcp = await planMcpConfig(ctx, { sealRoot, sourceEnv, canonicalWorktree })
+  const mcpReadiness = buildMcpReadinessPlan(ctx.mcps)
   // RFC-251: the exact plugin records that reach OpenCode (enabled-filtered,
   // id-deduped). Inventory and diagnostics describe THIS set, so they cannot
   // drift from what the controlled config actually ships.
@@ -659,13 +719,15 @@ export async function buildVerifiedOpencodeBusinessPlan(
   // root's. Members keep their raw `bodyMd`: the output-envelope protocol block
   // belongs to the node's selected agent, not to agents it delegates to (same
   // split the legacy inline path uses in `buildInlineAgentEntry`).
-  const controlledDependents = ctx.dependents.map((dep) => {
+  const controlledDependentPairs = ctx.dependents.map((dep) => {
     const depProfile = ctx.resolvedParamsByAgent.get(dep.name)
     const depModel = parseSelectedModel(depProfile?.model, depProfile?.variant ?? null)
     // RFC-251 §10.3: give the member back the frozen SKILL.md blocks for the
     // skills IT declared. The root keeps receiving the whole union (unchanged —
     // narrowing that is a separate product decision), so this is additive.
     let depPrompt = dep.bodyMd
+    let legacyDepPrompt = dep.bodyMd
+    const depSkillRoots: string[] = []
     for (const ref of dep.skills) {
       // Only `managed` reaches the verified path at all (repo/global skills are
       // rejected upstream), so a non-managed ref here means the member declared
@@ -680,11 +742,24 @@ export async function buildVerifiedOpencodeBusinessPlan(
       if (block === undefined) {
         return executionIdentityFailure('execution-identity-skill-mismatch')
       }
-      depPrompt = appendFrozenBlock(depPrompt, 'skill', block.name, block.digest, block.markdown)
+      legacyDepPrompt = appendFrozenBlock(
+        legacyDepPrompt,
+        'skill',
+        block.name,
+        block.digest,
+        block.markdown,
+      )
+      depPrompt = appendFrozenSkillBlock(depPrompt, {
+        name: block.name,
+        digest: block.digest,
+        root: block.target,
+        entries: block.entries,
+        markdown: block.markdown,
+      })
+      depSkillRoots.push(block.target)
     }
-    return {
+    const common = {
       name: dep.name,
-      prompt: depPrompt,
       description: dep.description,
       model: `${depModel.providerID}/${depModel.modelID}`,
       variant: depModel.variant,
@@ -693,6 +768,14 @@ export async function buildVerifiedOpencodeBusinessPlan(
       options: { outputs: dep.outputs as unknown as IdentityJson },
       userPermission: dep.permission as Record<string, IdentityJson>,
       allowShell: dep.permission.bash !== 'deny',
+    }
+    return {
+      current: {
+        ...common,
+        prompt: depPrompt,
+        readOnlyExternalDirectories: depSkillRoots,
+      },
+      legacy: { ...common, prompt: legacyDepPrompt },
     }
   })
   const inheritMachineConfig = inheritsMachineOpencodeConfig(dependencies.machineConfig)
@@ -704,9 +787,8 @@ export async function buildVerifiedOpencodeBusinessPlan(
     sourceEnv,
     dependencies.machineConfig,
   )
-  const controlledConfig = buildControlledOpencodeConfig({
+  const commonControlledConfig = {
     name: ctx.agent.name,
-    prompt: persona,
     description: ctx.agent.description,
     model: `${selectedModel.providerID}/${selectedModel.modelID}`,
     variant: selectedModel.variant,
@@ -722,22 +804,18 @@ export async function buildVerifiedOpencodeBusinessPlan(
     // controlled config again. buildHermeticServerEnv derives OPENCODE_PURE
     // from the result, so a non-empty selection also turns that flag off.
     plugins: ctx.plugins,
-    dependents: controlledDependents,
+  } as const
+  const currentControlledConfig = buildControlledOpencodeConfig({
+    ...commonControlledConfig,
+    prompt: persona,
+    readOnlyExternalDirectories: plannedSkills.map((skill) => skill.target),
+    dependents: controlledDependentPairs.map((pair) => pair.current),
   })
-  const auth = credential.auth
-  const username = `aw-${randomBytes(12).toString('base64url')}`
-  const password = randomBytes(32).toString('base64url')
-  const serverEnv = buildHermeticServerEnv({
-    layout: plannedLayout,
-    providerID: selectedModel.providerID,
-    auth,
-    config: controlledConfig,
-    username,
-    password,
-    sourceEnv,
-    inheritMachineConfig,
+  const legacyControlledConfig = buildControlledOpencodeConfig({
+    ...commonControlledConfig,
+    prompt: legacyPersona,
+    dependents: controlledDependentPairs.map((pair) => pair.legacy),
   })
-  serverEnv.PWD = canonicalWorktree
   const buildDigest = (await (dependencies.inspectBinary ?? inspectRuntimeOpencodeBinary)(command))
     .digest
   const createdNodeRunId = owner?.createdNodeRunId ?? ctx.nodeRunId
@@ -755,13 +833,37 @@ export async function buildVerifiedOpencodeBusinessPlan(
     revert: null,
     metadata: null,
   })
-  const currentIdentityDigest = businessOpencodeIdentityDigest({
-    config: controlledConfig,
+  const frozenSkillIdentities = plannedSkills
+    .map((skill) => ({
+      name: skill.name,
+      skillId: skill.skillId,
+      sealName: shaName(skill.skillId),
+      treeDigest: skill.inspection.treeDigest,
+      target: skill.target,
+    }))
+    .sort((left, right) => compareCodePoints(left.skillId, right.skillId))
+  const v3IdentityDigest = businessOpencodeIdentityDigestV3({
+    config: currentControlledConfig,
+    agent: ctx.agent.name,
+    model: selectedModel,
+    binaryDigest: buildDigest,
+    sealRoot,
+    frozenSkills: frozenSkillIdentities,
+  })
+  const legacyIdentityDigest = businessOpencodeIdentityDigest({
+    config: legacyControlledConfig,
     agent: ctx.agent.name,
     model: selectedModel,
     binaryDigest: buildDigest,
     sealRoot,
   })
+
+  const useLegacyIdentity = owner !== undefined && owner.identityDigest === legacyIdentityDigest
+  const controlledConfig = useLegacyIdentity ? legacyControlledConfig : currentControlledConfig
+  const currentIdentityDigest = useLegacyIdentity ? legacyIdentityDigest : v3IdentityDigest
+  const identityCodec = useLegacyIdentity
+    ? ('business-v2-legacy' as const)
+    : ('business-v3-skill-roots' as const)
 
   // Resume owner rows are preclaimed by the runner. Compare every immutable
   // field that can be locally reconstructed before mkdir/chmod/store/layout or
@@ -774,7 +876,8 @@ export async function buildVerifiedOpencodeBusinessPlan(
       owner.nodeId !== nodeId ||
       owner.createdNodeRunId !== createdNodeRunId ||
       owner.createdNodeRunId.length === 0 ||
-      owner.identityDigest !== currentIdentityDigest ||
+      (owner.identityDigest !== v3IdentityDigest &&
+        owner.identityDigest !== legacyIdentityDigest) ||
       owner.runtimeBinaryDigest !== buildDigest ||
       owner.protocolCodec !== OPENCODE_DIRECT_PROTOCOL_CODEC ||
       owner.sessionContractDigest !== sessionContractDigest ||
@@ -783,6 +886,21 @@ export async function buildVerifiedOpencodeBusinessPlan(
   ) {
     return executionIdentityFailure('execution-identity-session-mismatch')
   }
+
+  const auth = credential.auth
+  const username = `aw-${randomBytes(12).toString('base64url')}`
+  const password = randomBytes(32).toString('base64url')
+  const serverEnv = buildHermeticServerEnv({
+    layout: plannedLayout,
+    providerID: selectedModel.providerID,
+    auth,
+    config: controlledConfig,
+    username,
+    password,
+    sourceEnv,
+    inheritMachineConfig,
+  })
+  serverEnv.PWD = canonicalWorktree
 
   // A resume identity mismatch must be a read-only failure: only after every
   // immutable owner field is reconstructed and matched may the builder chmod
@@ -921,6 +1039,16 @@ export async function buildVerifiedOpencodeBusinessPlan(
       controlAckPath: ackPath,
       leaseNonce: nonce,
       leaseNonceDigest: nonceDigest,
+      mcpReadiness,
+      frozenSkillSeals:
+        identityCodec === 'business-v2-legacy'
+          ? []
+          : frozenSkillIdentities.map(({ target: _target, ...seal }) => ({
+              ...seal,
+              entryCount: plannedSkills.find((skill) => skill.skillId === seal.skillId)!.inspection
+                .entries.length,
+            })),
+      identityCodec,
       inventory: buildVerifiedInventoryPlan({
         enabled: ctx.wantsInventory,
         frozenSkills: plannedSkills.map((skill) => ({
@@ -928,7 +1056,6 @@ export async function buildVerifiedOpencodeBusinessPlan(
           skillId: skill.skillId,
           treeDigest: skill.inspection.treeDigest,
         })),
-        mcps: ctx.mcps,
         // RFC-251: the sealed file:// specifiers actually shipped, paired with
         // the record's sourceKind — never the user-supplied npm/git spec.
         plugins: shippedPlugins.map((plugin) => ({
@@ -969,6 +1096,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
         sessionContractDigest,
         sessionStoreKey: storeKey,
         createdNodeRunId,
+        mcpReadiness,
       },
       diagnostics: {
         verifiedIdentity: true,

@@ -16,12 +16,13 @@ import type {
   WorkgroupAssignmentStatus,
   WorkgroupMemberCurrentRun,
   WorkgroupMessage,
+  WorkgroupOutputContract,
   WorkgroupRunEntry,
   WorkgroupRuntimeConfig,
   WorkgroupRuntimeMember,
   WorkgroupSwitches,
 } from '@agent-workflow/shared'
-import { resolveClarifyBudget } from '@agent-workflow/shared'
+import { resolveClarifyBudget, resolveWorkgroupOutputContract } from '@agent-workflow/shared'
 import { WORKGROUP_MAX_ROUNDS_LIMIT } from '@agent-workflow/shared'
 import type { StatusChipKind } from '@/components/StatusChip'
 
@@ -683,6 +684,7 @@ export interface WorkgroupConfigMemberAdd {
 }
 
 export interface WorkgroupTaskConfigDraft {
+  outputContract: WorkgroupOutputContract
   switches: WorkgroupSwitches
   /** undefined = field cleared → treated as "unchanged". */
   maxRounds: number | undefined
@@ -699,10 +701,11 @@ export interface WorkgroupTaskConfigDraft {
 export function workgroupTaskConfigDraftFrom(
   config: Pick<
     WorkgroupRuntimeConfig,
-    'switches' | 'maxRounds' | 'completionGate' | 'clarifyBudget' | 'fanOut'
+    'outputContract' | 'switches' | 'maxRounds' | 'completionGate' | 'clarifyBudget' | 'fanOut'
   >,
 ): WorkgroupTaskConfigDraft {
   return {
+    outputContract: resolveWorkgroupOutputContract(config.outputContract),
     switches: { ...config.switches },
     maxRounds: config.maxRounds,
     completionGate: config.completionGate,
@@ -723,11 +726,14 @@ export function workgroupTaskConfigDraftFrom(
 export function buildWorkgroupConfigPatch(
   config: Pick<
     WorkgroupRuntimeConfig,
-    'switches' | 'maxRounds' | 'completionGate' | 'clarifyBudget' | 'fanOut'
+    'outputContract' | 'switches' | 'maxRounds' | 'completionGate' | 'clarifyBudget' | 'fanOut'
   >,
   draft: WorkgroupTaskConfigDraft,
 ): Record<string, unknown> | null {
   const out: Record<string, unknown> = {}
+  if (draft.outputContract !== resolveWorkgroupOutputContract(config.outputContract)) {
+    out.outputContract = draft.outputContract
+  }
   const s = draft.switches
   if (
     s.shareOutputs !== config.switches.shareOutputs ||

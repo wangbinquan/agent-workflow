@@ -111,7 +111,10 @@ export async function driveAssignmentTurn(
     await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `assignment '${assignment.title}' failed: agent for @${memberDisplayName(config, memberId)} unresolvable`,
+      systemTemplate: {
+        key: 'assignmentAgentUnresolvable',
+        params: { title: assignment.title, member: memberDisplayName(config, memberId) },
+      },
     })
     return
   }
@@ -223,7 +226,10 @@ export async function driveAssignmentTurn(
     await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `assignment '${assignment.title}' failed: ${outcome.errorMessage}`,
+      systemTemplate: {
+        key: 'assignmentFailed',
+        params: { title: assignment.title, detail: outcome.errorMessage },
+      },
     })
     return
   }
@@ -232,7 +238,10 @@ export async function driveAssignmentTurn(
     await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `assignment '${assignment.title}' failed: protocol violation (${outcome.errors.join('; ')})`,
+      systemTemplate: {
+        key: 'assignmentProtocolViolation',
+        params: { title: assignment.title, detail: outcome.errors.join('; ') },
+      },
     })
     return
   }
@@ -366,7 +375,10 @@ export async function driveMessageTurn(
     await postMessage(db, taskId, roundMode(config), {
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `message turn for ${memberDisplayName(config, memberId)} failed: ${outcome.errorMessage}`,
+      systemTemplate: {
+        key: 'messageTurnFailed',
+        params: { member: memberDisplayName(config, memberId), detail: outcome.errorMessage },
+      },
     })
     return
   }

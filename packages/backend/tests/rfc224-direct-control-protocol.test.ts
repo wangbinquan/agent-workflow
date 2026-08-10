@@ -6,6 +6,7 @@ import {
   ControlMarkerTracker,
   ControlProtocolError,
   buildControlAck,
+  buildMcpReadinessMarker,
   buildSessionReadyMarker,
   parseControlAck,
   parseControlLine,
@@ -28,6 +29,19 @@ afterEach(() => {
 })
 
 describe('RFC-224 session-ready stderr control marker', () => {
+  test('round-trips one canonical bounded MCP readiness frame before session-ready', () => {
+    const marker = {
+      kind: 'mcp-readiness' as const,
+      unavailableLocal: [{ name: 'sdk-server', status: 'failed' as const }],
+      unavailableRemote: [{ name: 'docs', status: 'missing' as const }],
+    }
+    const line = buildMcpReadinessMarker(marker)
+    expect(parseControlLine(line)).toEqual({ kind: 'mcp-readiness', marker })
+    const tracker = new ControlMarkerTracker()
+    expect(tracker.accept(line)).toEqual({ kind: 'mcp-readiness', marker })
+    expect(() => tracker.accept(line)).toThrow('duplicate-marker')
+  })
+
   test('has one canonical byte representation and passes ordinary stderr through', () => {
     const marker = {
       kind: 'new' as const,

@@ -23,6 +23,7 @@ import {
   CopyWorkgroupRequestSchema,
   DeleteWorkgroupSchema,
   QUARANTINED_SNAPSHOT_AGENT_ID,
+  resolveWorkgroupOutputContract,
   serializeWorkgroupEditableSnapshotV1,
   UpdateWorkgroupSchema,
   WG_CLARIFY_BUDGET_DEFAULT,
@@ -339,11 +340,12 @@ export async function prepareWorkgroupSave(
       issues: parsed.error.issues,
     })
   }
-  const snapshot = normalizeWorkgroupSnapshot(parsed.data.snapshot)
-  const submittedBytes = serializeWorkgroupEditableSnapshotV1(snapshot)
-
   const preflight = await loadRawWorkgroup(db, id)
   if (preflight === null) throwWorkgroupNotFound(id)
+  // A full-document client from before RFC-274 has no outputContract. Preserve
+  // the persisted contract instead of letting a schema default rewrite it.
+  const snapshot = normalizeWorkgroupSnapshot(parsed.data.snapshot, preflight.outputContract)
+  const submittedBytes = serializeWorkgroupEditableSnapshotV1(snapshot)
   await assertPrincipalCanWritePreflight(db, principal, preflight)
   const currentMembers = await db
     .select()
@@ -449,6 +451,7 @@ export function commitWorkgroupSaveInTx(
       description: snapshot.description,
       instructions: snapshot.instructions,
       mode: snapshot.mode,
+      outputContract: resolveWorkgroupOutputContract(snapshot.outputContract),
       leaderMemberId,
       shareOutputs: snapshot.switches.shareOutputs,
       directMessages: snapshot.switches.directMessages,
@@ -634,6 +637,7 @@ export function workgroupDraftSnapshotOf(group: Workgroup): WorkgroupDraftSnapsh
     description: group.description,
     instructions: group.instructions,
     mode: group.mode,
+    outputContract: resolveWorkgroupOutputContract(group.outputContract),
     ...(group.mode === 'leader_worker' && leader !== undefined
       ? { leaderDisplayName: leader.displayName }
       : {}),
@@ -706,6 +710,7 @@ type WorkgroupInsertDocument = Pick<
   | 'description'
   | 'instructions'
   | 'mode'
+  | 'outputContract'
   | 'switches'
   | 'maxRounds'
   | 'completionGate'
@@ -731,6 +736,7 @@ function insertWorkgroupInTx(
       description: input.document.description,
       instructions: input.document.instructions,
       mode: input.document.mode,
+      outputContract: resolveWorkgroupOutputContract(input.document.outputContract),
       leaderMemberId: input.leaderMemberId,
       shareOutputs: input.document.switches.shareOutputs,
       directMessages: input.document.switches.directMessages,
@@ -767,12 +773,18 @@ export function broadcastWorkgroupCreated(created: WorkgroupDetail): void {
   })
 }
 
-function normalizeWorkgroupSnapshot(snapshot: WorkgroupDraftSnapshot): WorkgroupDraftSnapshot {
+function normalizeWorkgroupSnapshot(
+  snapshot: WorkgroupDraftSnapshot,
+  fallbackOutputContract: unknown = 'files',
+): WorkgroupDraftSnapshot {
   return WorkgroupDraftSnapshotSchema.parse({
     name: snapshot.name,
     description: snapshot.description,
     instructions: snapshot.instructions,
     mode: snapshot.mode,
+    outputContract: resolveWorkgroupOutputContract(
+      snapshot.outputContract ?? fallbackOutputContract,
+    ),
     ...(snapshot.mode === 'leader_worker' && snapshot.leaderDisplayName
       ? { leaderDisplayName: snapshot.leaderDisplayName }
       : {}),
@@ -1149,6 +1161,7 @@ function rowToWorkgroup(row: WorkgroupRow, memberRows: MemberRow[]): Workgroup {
     description: row.description,
     instructions: row.instructions,
     mode: row.mode,
+    outputContract: resolveWorkgroupOutputContract(row.outputContract),
     leaderMemberId: row.leaderMemberId,
     switches: {
       shareOutputs: row.shareOutputs,

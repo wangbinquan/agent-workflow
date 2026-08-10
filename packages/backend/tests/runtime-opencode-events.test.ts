@@ -6,7 +6,11 @@
 // drifts, the opencode runtime's behavior changed under the abstraction.
 
 import { describe, expect, it } from 'bun:test'
-import { accumulateTokens, parseEvent } from '@/services/runtime/opencode/events'
+import {
+  accumulateTokens,
+  observeSystemEvent,
+  parseEvent,
+} from '@/services/runtime/opencode/events'
 import type { RuntimeTokenUsage } from '@/services/runtime/types'
 
 describe('parseEvent — kind / text / session / timestamp (RFC-111 PR-A)', () => {
@@ -65,6 +69,27 @@ describe('parseEvent — null-vs-event branch fidelity (RFC-111 PR-A)', () => {
     expect(ev?.text).toBeNull()
     expect(ev?.tokens).toBeUndefined()
     expect(ev?.rawLine).toBe('123')
+  })
+})
+
+describe('RFC-273 system event observation', () => {
+  it('records only a safe type and maps step_finish to success', () => {
+    expect(observeSystemEvent('{"type":"step_finish"}')).toEqual({
+      runtimeEventType: 'step_finish',
+      terminalResult: 'success',
+    })
+    expect(observeSystemEvent(JSON.stringify({ type: 'x\nsecret' }))).toEqual({
+      runtimeEventType: null,
+      terminalResult: null,
+    })
+    expect(observeSystemEvent(JSON.stringify({ type: 'x'.repeat(65) }))).toEqual({
+      runtimeEventType: null,
+      terminalResult: null,
+    })
+    expect(observeSystemEvent('not-json')).toEqual({
+      runtimeEventType: null,
+      terminalResult: null,
+    })
   })
 })
 

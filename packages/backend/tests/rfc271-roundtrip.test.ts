@@ -147,6 +147,7 @@ async function seedSource(db: DbClient, appHome: string): Promise<{ skillId: str
     description: '',
     instructions: 'charter text',
     mode: 'leader_worker',
+    outputContract: 'discussion',
     leaderMemberId,
     shareOutputs: false,
     directMessages: true,
@@ -312,6 +313,7 @@ describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () =
         expect(landed!.blackboard).toBe(true)
         expect(landed!.maxRounds).toBe(7)
         expect(landed!.completionGate).toBe(true)
+        expect(landed!.outputContract).toBe('discussion')
         expect(landed!.instructions).toBe('charter text')
 
         const members = dst.db

@@ -341,12 +341,11 @@ describe.skipIf(process.platform === 'win32')('runner 对启动清单做 fail-cl
     expect(r.errorMessage).toContain('Task')
   }, 30_000)
 
-  test('技能缺失仍然点名（上一批的能力不因收编而丢）', async () => {
+  test('技能清单跨版本不稳定时只告警，不阻断正常节点', async () => {
     const fx = f('startup-inv-skill-missing-')
     const r = await run(fx, 'nr-skill-missing', { skills: ['pdf-tools'] }, { skills: ['debug'] })
-    expect(r.status).toBe('failed')
-    expect(r.errorMessage).toContain('runtime-capability-missing')
-    expect(r.errorMessage).toContain('pdf-tools')
+    expect(r.status).toBe('done')
+    expect(r.outputs.result).toBe('ok')
   }, 30_000)
 
   test('三类都齐 ⇒ 正常跑完；清单里多出来的东西不关平台的事', async () => {

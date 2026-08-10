@@ -20,6 +20,7 @@ import {
   type WithParts,
 } from './directApiSchemas'
 import { parseSseStream, type SseBudgets } from './sse'
+import { McpStatusesResponseSchema, type McpRuntimeStatus } from './mcpReadiness'
 
 export type DirectFetch = (url: string, init: RequestInit) => Promise<Response>
 
@@ -246,6 +247,21 @@ export class OpencodeDirectClient {
       { method: 'GET', path: '/skill', signal, accept: 'application/json' },
       'skills-response',
     )
+  }
+
+  /**
+   * Read the same OpenCode instance's settled MCP startup state. The decoder
+   * intentionally drops upstream error strings before returning to callers.
+   */
+  async getMcpStatuses(signal?: AbortSignal): Promise<Readonly<Record<string, McpRuntimeStatus>>> {
+    const value = await this.#jsonRequest(
+      JsonValueSchema,
+      { method: 'GET', path: '/mcp', signal, accept: 'application/json' },
+      'mcp-status-response',
+    )
+    const parsed = McpStatusesResponseSchema.safeParse(value)
+    if (!parsed.success) throw new DirectHttpError('invalid-mcp-status-response')
+    return parsed.data
   }
 
   async listRootSessions(input: {

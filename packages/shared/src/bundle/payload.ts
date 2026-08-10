@@ -26,7 +26,11 @@ import {
 import { McpLocalConfigSchema, McpRemoteConfigSchema } from '../schemas/mcp'
 import { PluginOptionsSchema, PluginSourceKindSchema } from '../schemas/plugin'
 import type { AclResourceType } from '../schemas/resourceAcl'
-import { WorkgroupModeSchema, WorkgroupSwitchesSchema } from '../schemas/workgroup'
+import {
+  WorkgroupModeSchema,
+  WorkgroupOutputContractSchema,
+  WorkgroupSwitchesSchema,
+} from '../schemas/workgroup'
 import {
   decodeBundleAgentSkillRef,
   decodeBundleCallRef,
@@ -326,6 +330,8 @@ export const BundleWorkgroupPayloadSchema = z
     description: z.string().max(4096).default(''),
     instructions: z.string().max(65536).default(''),
     mode: WorkgroupModeSchema,
+    /** Optional only for packages exported before RFC-274. */
+    outputContract: WorkgroupOutputContractSchema.optional(),
     switches: WorkgroupSwitchesSchema,
     maxRounds: z.number().int().positive(),
     completionGate: z.boolean(),

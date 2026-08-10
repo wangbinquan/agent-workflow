@@ -110,7 +110,12 @@ import {
   releaseOpencodeSessionLease,
   type OpencodeSessionLeaseToken,
 } from '@/services/opencodeSessionOwner'
-import { ControlMarkerTracker, writeControlAckExclusive } from './runtime/opencode/controlProtocol'
+import {
+  ControlMarkerTracker,
+  writeControlAckExclusive,
+  type McpReadinessMarker,
+} from './runtime/opencode/controlProtocol'
+import { compareCodePoints } from './runtime/opencode/mcpReadiness'
 import {
   ExecutionIdentityFailure,
   parseExecutionIdentityFailureLine,
@@ -566,6 +571,7 @@ export interface RunnerOpencodeControlState {
   tracker: ControlMarkerTracker
   leaseToken?: OpencodeSessionLeaseToken
   sessionId?: string
+  mcpReadiness?: McpReadinessMarker
   ready: boolean
 }
 
@@ -627,7 +633,10 @@ export function processRunnerOpencodeControlLine(input: {
   resumeOwner?: OpencodeResumeOwner
   state: RunnerOpencodeControlState
   line: string
-}): { kind: 'stderr'; line: string } | { kind: 'session-ready'; sessionId: string } {
+}):
+  | { kind: 'stderr'; line: string }
+  | { kind: 'session-ready'; sessionId: string }
+  | { kind: 'mcp-readiness'; marker: McpReadinessMarker } {
   const nack = (): void => {
     try {
       writeControlAckExclusive(input.control.ackPath, {
@@ -643,8 +652,38 @@ export function processRunnerOpencodeControlLine(input: {
   try {
     const parsed = input.state.tracker.accept(input.line)
     if (parsed.kind === 'stderr') return parsed
+    const expectedReadiness = input.control.mcpReadiness ?? { enabled: false, servers: [] }
+    if (parsed.kind === 'mcp-readiness') {
+      if (!expectedReadiness.enabled || input.state.mcpReadiness !== undefined) {
+        throw new ExecutionIdentityFailure('execution-identity-control-failed')
+      }
+      const expectedByName = new Map(
+        expectedReadiness.servers.map((server) => [server.name, server] as const),
+      )
+      const seen = new Set<string>()
+      for (const [expectedType, entries] of [
+        ['local', parsed.marker.unavailableLocal],
+        ['remote', parsed.marker.unavailableRemote],
+      ] as const) {
+        for (let index = 0; index < entries.length; index += 1) {
+          const entry = entries[index]!
+          const expected = expectedByName.get(entry.name)
+          if (
+            expected?.type !== expectedType ||
+            seen.has(entry.name) ||
+            (index > 0 && compareCodePoints(entries[index - 1]!.name, entry.name) >= 0)
+          ) {
+            throw new ExecutionIdentityFailure('execution-identity-control-failed')
+          }
+          seen.add(entry.name)
+        }
+      }
+      input.state.mcpReadiness = parsed.marker
+      return { kind: 'mcp-readiness', marker: parsed.marker }
+    }
     const marker = parsed.marker
     if (
+      expectedReadiness.enabled !== (input.state.mcpReadiness !== undefined) ||
       marker.kind !== input.control.mode ||
       marker.nodeRunId !== input.nodeRunId ||
       marker.leaseNonceDigest !== input.control.leaseNonceDigest ||
@@ -1851,7 +1890,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         const inventory = driver.parseStartupInventory?.(line) ?? null
         if (inventory !== null) {
           startupInventorySeen = true
-          const gaps: string[] = []
+          const hardGaps: string[] = []
+          const skillGaps: string[] = []
           for (const [kind, declared] of declaredKinds) {
             const loaded = inventory[kind]
             // A runtime that does not enumerate THIS kind proves nothing about
@@ -1859,15 +1899,38 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             if (loaded === undefined) continue
             const present = new Set(loaded)
             const missing = (declared ?? []).filter((name) => !present.has(name)).sort()
-            if (missing.length > 0) gaps.push(`${kind}: ${missing.join(', ')}`)
+            if (missing.length === 0) continue
+            const description = `${kind}: ${missing.join(', ')}`
+            // Claude's skills inventory has changed naming/discovery semantics
+            // across supported releases. Treat it as useful telemetry, not an
+            // admission oracle: a false negative here used to kill a perfectly
+            // usable node on another machine. Tools/agents remain stable load
+            // sets and retain their hard failure behavior.
+            if (kind === 'skills') skillGaps.push(description)
+            else hardGaps.push(description)
           }
-          if (gaps.length > 0) {
+          if (skillGaps.length > 0) {
+            log.warn('runtime-declared-skill-inventory-mismatch', {
+              nodeRunId: opts.nodeRunId,
+              gaps: skillGaps,
+            })
+            await opts.db.insert(nodeRunEvents).values({
+              nodeRunId: opts.nodeRunId,
+              ts: Date.now(),
+              kind: 'stderr',
+              payload: `[runtime-capability-warning] ${JSON.stringify({
+                code: 'runtime-skill-inventory-mismatch',
+                gaps: skillGaps,
+              })}`,
+            })
+          }
+          if (hardGaps.length > 0) {
             declaredCapabilityFailure =
-              `runtime-capability-missing: the runtime did not load ${gaps.join('; ')}; ` +
+              `runtime-capability-missing: the runtime did not load ${hardGaps.join('; ')}; ` +
               'the node would have run without capabilities it declares'
             log.warn('runtime-declared-capability-missing', {
               nodeRunId: opts.nodeRunId,
-              gaps,
+              gaps: hardGaps,
             })
             startKill()
           }
@@ -2044,6 +2107,37 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             sessionId = parsed.sessionId
             return
           }
+          if (parsed.kind === 'mcp-readiness') {
+            const remote = parsed.marker.unavailableRemote
+            if (remote.length > 0) {
+              const payload = `[mcp-readiness-warning] ${JSON.stringify({
+                code: 'mcp-unavailable',
+                scope: 'remote',
+                servers: remote,
+              })}`
+              log.warn('runtime-declared-mcp-unusable', {
+                nodeRunId: opts.nodeRunId,
+                servers: remote.map((item) => item.name),
+                statuses: remote.map((item) => item.status),
+              })
+              await persistStderrLine(payload)
+            }
+            const local = parsed.marker.unavailableLocal
+            if (local.length > 0) {
+              fencedMcpFailure =
+                `mcp-unavailable: local MCP server(s) ${local.map((item) => item.name).join(', ')} ` +
+                'did not become connected before the model run'
+              await persistStderrLine(
+                `[mcp-readiness-failed] ${JSON.stringify({
+                  code: 'mcp-unavailable',
+                  scope: 'local',
+                  servers: local,
+                })}`,
+              )
+              startKill()
+            }
+            return
+          }
           await persistStderrLine(parsed.line)
         } catch {
           failControlBarrier()
@@ -2119,7 +2213,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     if (streamPumpFailed && opencodeControl !== undefined) {
       controlFailureCode ??= 'execution-identity-stream-failed'
     }
-    if (opencodeControl !== undefined && !controlState.ready && launcherFailureCode === undefined) {
+    if (
+      opencodeControl !== undefined &&
+      !controlState.ready &&
+      launcherFailureCode === undefined &&
+      fencedMcpFailure === undefined
+    ) {
       controlFailureCode = 'execution-identity-control-failed'
     }
     if (opts.signal) opts.signal.removeEventListener('abort', onAbort)

@@ -23,6 +23,7 @@ import {
   WorkgroupDraftSnapshotSchema,
   WorkgroupRevisionSchema,
   WG_CLARIFY_BUDGET_DEFAULT,
+  resolveWorkgroupOutputContract,
   serializeWorkgroupEditableSnapshotV1,
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
@@ -391,6 +392,7 @@ export function projectWorkgroupDetailSnapshot(detail: WorkgroupDetail): Workgro
     description: detail.description,
     instructions: detail.instructions,
     mode: detail.mode,
+    outputContract: resolveWorkgroupOutputContract(detail.outputContract),
     ...(detail.mode === 'leader_worker' && leader !== undefined
       ? { leaderDisplayName: leader.displayName }
       : {}),

@@ -13,6 +13,7 @@ import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import { startWebhookDeliveryGc } from '@/services/webhook/webhookGc'
 import { openDb, DbCorruptionError } from '@/db/client'
+import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
 import { cachedRepos, tasks } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
@@ -98,6 +99,34 @@ function formatDbCorruptionGuidance(err: DbCorruptionError): string {
   }
   lines.push('  (Last resort, unsafe: AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK=1 agent-workflow start)')
   lines.push('')
+  return lines.join('\n')
+}
+
+/** RFC-275 — actionable boot refusal before any route or scheduler starts. */
+function formatDbSchemaDriftGuidance(err: DbSchemaDriftError): string {
+  const lines = [
+    '',
+    '✖ agent-workflow: database schema drift detected — refusing to start.',
+    `  db:    ${err.dbPath}`,
+    `  stage: ${err.stage}`,
+    '  differences:',
+  ]
+  for (const difference of err.differences.slice(0, 10)) {
+    lines.push(`    - ${formatSchemaDifference(difference)}`)
+  }
+  if (err.totalDifferences > 10) {
+    lines.push(`    - … and ${err.totalDifferences - 10} more`)
+  }
+  lines.push(
+    '',
+    '  Safe recovery options:',
+    '    1. Restore a verified backup.',
+    '    2. If this is a disposable development database, recreate it.',
+    '    3. If the schema change is intentional, add a new forward migration.',
+    '',
+    '  Do not edit __drizzle_migrations or rewrite an already-applied migration.',
+    '',
+  )
   return lines.join('\n')
 }
 
@@ -282,6 +311,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       // unwritable, so this does NOT record a recovery_event.
       lock.release()
       process.stderr.write(formatDbCorruptionGuidance(err))
+      process.exit(1)
+    }
+    if (err instanceof DbSchemaDriftError) {
+      lock.release()
+      process.stderr.write(formatDbSchemaDriftGuidance(err))
       process.exit(1)
     }
     throw err

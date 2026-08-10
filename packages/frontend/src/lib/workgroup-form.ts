@@ -19,12 +19,14 @@ import type {
   WorkgroupDraftSnapshot,
   WorkgroupMemberType,
   WorkgroupMode,
+  WorkgroupOutputContract,
   WorkgroupSwitches,
 } from '@agent-workflow/shared'
 import {
   CreateWorkgroupSchema,
   isValidResourceDisplayName,
   normalizeResourceDisplayName,
+  resolveWorkgroupOutputContract,
   WorkgroupDraftSnapshotSchema,
   WORKGROUP_MAX_ROUNDS_DEFAULT,
   WORKGROUP_MAX_ROUNDS_LIMIT,
@@ -82,6 +84,8 @@ export interface WorkgroupConfigDraft {
   description: string
   instructions: string
   mode: WorkgroupMode
+  /** Whether a clean worktree is expected when the group finishes. */
+  outputContract: WorkgroupOutputContract
   /** Stored switch values. free_collab renders them as forced-on but never
    *  mutates them, so flipping back to leader_worker restores the choices
    *  (mirrors shared resolveWorkgroupSwitches: fc reads all-on regardless of
@@ -102,6 +106,7 @@ export function workgroupToConfigDraft(w: Workgroup): WorkgroupConfigDraft {
     description: w.description,
     instructions: w.instructions,
     mode: w.mode,
+    outputContract: resolveWorkgroupOutputContract(w.outputContract),
     switches: { ...w.switches },
     maxRounds: w.maxRounds,
     completionGate: w.completionGate,
@@ -132,6 +137,7 @@ export function buildConfigUpdatePayload(
     description: draft.description,
     instructions: draft.instructions,
     mode: draft.mode,
+    outputContract: draft.outputContract,
     // Backend nulls the leader outside leader_worker regardless; only carry
     // it when it still means something (leaderless lw is save-valid).
     ...(draft.mode === 'leader_worker' && leader !== null ? { leaderDisplayName: leader } : {}),
@@ -289,6 +295,7 @@ export function buildCompositeUpdatePayload(
     description: config.description,
     instructions: config.instructions,
     mode: config.mode,
+    outputContract: config.outputContract,
     ...(config.mode === 'leader_worker' && leader !== undefined
       ? { leaderDisplayName: leader.displayName.trim() }
       : {}),
@@ -328,6 +335,8 @@ export function reconcileWorkgroupSaveResponse(
     response.description !== payload.description ||
     response.instructions !== payload.instructions ||
     response.mode !== payload.mode ||
+    resolveWorkgroupOutputContract(response.outputContract) !==
+      resolveWorkgroupOutputContract(payload.outputContract) ||
     response.switches.shareOutputs !== payload.switches.shareOutputs ||
     response.switches.directMessages !== payload.switches.directMessages ||
     response.switches.blackboard !== payload.switches.blackboard ||
@@ -517,6 +526,7 @@ export function buildMembersUpdatePayload(
     description: group.description,
     instructions: group.instructions,
     mode: group.mode,
+    outputContract: resolveWorkgroupOutputContract(group.outputContract),
     ...(group.mode === 'leader_worker' && leaderRow !== undefined
       ? { leaderDisplayName: leaderRow.displayName.trim() }
       : {}),

@@ -191,6 +191,7 @@ const PLAN_DEPENDENCIES: VerifiedBusinessPlanDependencies = {
   // MiB Bun binary. The dedicated toolchain case below asserts source-path
   // exclusion and the exact model-facing PATH.
   resolveToolchainBinary: (token) => (token === 'bun' ? '/runtime/bun' : null),
+  loadBusinessToolchainPaths: () => [],
   snapshotToolchainBinary: async ({ snapshotPath }) => {
     await mkdir(dirname(snapshotPath), { recursive: true, mode: 0o700 })
     await writeFile(snapshotPath, 'bun test seam', { flag: 'wx', mode: 0o500 })
@@ -858,10 +859,18 @@ describe('RFC-251 verified plan restores plugins and multi-agent', () => {
 // is additive: the root still receives the whole union (narrowing that is a
 // separate product decision), members additionally get their own.
 describe('RFC-251 closure members receive their own frozen skills', () => {
-  async function managedSkill(input: { id: string; name: string; body: string }) {
+  async function managedSkill(input: {
+    id: string
+    name: string
+    body: string
+    reference?: string
+  }) {
     const dir = mkdtempSync(join(tmpdir(), `rfc251-skill-${input.id}-`))
     roots.push(dir)
     await writeFile(join(dir, 'SKILL.md'), input.body, { mode: 0o600 })
+    if (input.reference !== undefined) {
+      await writeFile(join(dir, 'reference.md'), input.reference, { mode: 0o600 })
+    }
     return {
       name: input.name,
       sourceKind: 'managed' as const,
@@ -901,8 +910,17 @@ describe('RFC-251 closure members receive their own frozen skills', () => {
     )
     const manifest = JSON.parse(
       await readFile(join(runRoot, 'opencode-verified-manifest.json'), 'utf8'),
-    ) as { expectedConfig: { agent: Record<string, { prompt: string }> } }
-    return { plan, agents: manifest.expectedConfig.agent }
+    ) as {
+      identityCodec: string
+      frozenSkillSeals: Array<{ name: string; sealName: string; entryCount: number }>
+      expectedConfig: {
+        agent: Record<
+          string,
+          { prompt: string; permission: { external_directory: Record<string, string> } }
+        >
+      }
+    }
+    return { plan, manifest, agents: manifest.expectedConfig.agent }
   }
 
   test('a member gets its own skill, and only its own', async () => {
@@ -910,6 +928,7 @@ describe('RFC-251 closure members receive their own frozen skills', () => {
       id: 'skill-audit',
       name: 'audit',
       body: '# audit skill\nAUDIT-MARKER',
+      reference: 'REFERENCE-MARKER',
     })
     const rootSkill = await managedSkill({
       id: 'skill-root',
@@ -924,7 +943,7 @@ describe('RFC-251 closure members receive their own frozen skills', () => {
       skills: [{ kind: 'managed', skillId: 'skill-audit' }],
     }
 
-    const { plan, agents } = await planWithSkills('run-skill-split', {
+    const { plan, manifest, agents } = await planWithSkills('run-skill-split', {
       dependents: [auditor],
       // The scheduler's closure union: root's skill + the member's.
       skills: [rootSkill, auditSkill],
@@ -938,6 +957,16 @@ describe('RFC-251 closure members receive their own frozen skills', () => {
       // Root behaviour is unchanged: it still receives the whole union.
       expect(agents.worker!.prompt).toContain('ROOT-MARKER')
       expect(agents.worker!.prompt).toContain('AUDIT-MARKER')
+      expect(agents.auditor!.prompt).toContain('"reference.md"')
+      expect(agents.auditor!.prompt).toMatch(/root="[^"]+\/skills\/[0-9a-f]{24}"/)
+      expect(manifest.identityCodec).toBe('business-v3-skill-roots')
+      expect(manifest.frozenSkillSeals).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'audit', entryCount: 2 })]),
+      )
+      const auditRoot = /root=("[^"]+\/skills\/[0-9a-f]{24}")/.exec(agents.auditor!.prompt)?.[1]
+      expect(auditRoot).toBeDefined()
+      const physicalRoot = JSON.parse(auditRoot!) as string
+      expect(agents.auditor!.permission.external_directory[`${physicalRoot}/*`]).toBe('allow')
     } finally {
       await plan.cleanup?.()
       await removeHermeticOpencodeLayout(plan.sessionStore!.root)

@@ -24,7 +24,7 @@ import { DEFAULT_CONFIG_DIR_PROFILE, type InventorySnapshot } from '@agent-workf
 import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveCapture'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { parseEvent } from './events'
+import { observeSystemEvent, parseEvent } from './events'
 import { buildOpencodeSpawn } from './spawn'
 import { buildInlineConfig } from './inlineConfig'
 import { pickRuntimeHead } from '../head'
@@ -68,6 +68,7 @@ export const opencodeDriver: RuntimeDriver = {
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
   },
+  observeSystemEvent,
   // RFC-143 — capability methods. PR-1 delegates to the existing free functions
   // (byte-for-byte behavior); later PRs move call sites onto these.
   defaultBinary(config: RuntimeBinaryConfig): string[] {

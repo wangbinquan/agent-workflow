@@ -49,6 +49,7 @@ const STORED: Workgroup = {
   description: 'audits PRs',
   instructions: 'be nice',
   mode: 'leader_worker',
+  outputContract: 'files',
   leaderMemberId: 'mem_1',
   switches: { shareOutputs: true, directMessages: true, blackboard: false },
   maxRounds: 33,
@@ -604,6 +605,7 @@ function baseDraft(): WorkgroupConfigDraft {
     description: 'audits PRs',
     instructions: '',
     mode: 'leader_worker',
+    outputContract: 'files',
     switches: { shareOutputs: true, directMessages: false, blackboard: false },
     maxRounds: 20,
     completionGate: false,
@@ -623,6 +625,19 @@ function switchInput(label: RegExp): HTMLInputElement {
 }
 
 describe('WorkgroupForm — free_collab switch gating', () => {
+  test('RFC-274 output contract is explicit and remains editable in every execution mode', () => {
+    render(<Harness />)
+    expect(screen.getByRole('radio', { name: 'File delivery' }).getAttribute('aria-checked')).toBe(
+      'true',
+    )
+    fireEvent.click(screen.getByRole('radio', { name: 'Discussion outcome' }))
+    expect(
+      screen.getByRole('radio', { name: 'Discussion outcome' }).getAttribute('aria-checked'),
+    ).toBe('true')
+    fireEvent.click(screen.getByRole('radio', { name: 'Dynamic workflow' }))
+    expect(screen.getByRole('radio', { name: 'Discussion outcome' })).toBeTruthy()
+  })
+
   test('fc disables the three switches, shows them on, and restores on switch-back', () => {
     render(<Harness />)
     expect(switchInput(/Share outputs/).checked).toBe(true)

@@ -21,6 +21,7 @@
 import {
   applySpaceFields,
   initialDwState,
+  resolveWorkgroupOutputContract,
   serializeWorkflowDefinitionStorageV1,
   StartTaskSchema,
   type StartTask,
@@ -104,6 +105,7 @@ export function buildWorkgroupRuntimeConfig(
     workgroupId: group.id,
     workgroupName: group.name,
     mode: group.mode,
+    outputContract: resolveWorkgroupOutputContract(group.outputContract),
     leaderMemberId: group.leaderMemberId,
     switches: group.switches,
     maxRounds: group.maxRounds,

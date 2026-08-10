@@ -384,6 +384,19 @@ describe('RFC-164 core — rendered blocks', () => {
     expect(ledger).not.toContain('u-pm')
   })
 
+  test('RFC-274 charter states the selected delivery contract without changing the tool surface', () => {
+    expect(renderCharterBlock(cfg({ outputContract: 'files' }))).toContain(
+      'Delivery contract: FILES',
+    )
+    expect(renderCharterBlock(cfg({ outputContract: 'discussion' }))).toContain(
+      'Delivery contract: DISCUSSION',
+    )
+    // Historical frozen task snapshots omitted the field and retain file semantics.
+    expect(renderCharterBlock(cfg({ outputContract: undefined }))).toContain(
+      'Delivery contract: FILES',
+    )
+  })
+
   // Regression: task 01KXBATKFJ73MDYNM6YN2DMA29 (2026-07-12) failed at round 0
   // with `clarify-questions-malformed: JSON.parse failed ... "The"`. Root cause:
   // the protocol INVITED a <workflow-clarify> envelope but a workgroup host node

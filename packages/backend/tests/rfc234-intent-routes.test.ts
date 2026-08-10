@@ -16,7 +16,11 @@ import { agents, intentSessions } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import { seedBuiltinRuntimes, updateRuntime } from '../src/services/runtimeRegistry'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
+import {
+  emptySystemAgentOutputEvidence,
+  type SystemAgentRunOptions,
+  type SystemAgentRunResult,
+} from '../src/services/systemAgentRun'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -68,6 +72,7 @@ function stubRun(
       durationMs: 3,
       scratchDir: '/tmp/x',
       scratchRetained: false,
+      outputEvidence: emptySystemAgentOutputEvidence(),
     }
   }
 }

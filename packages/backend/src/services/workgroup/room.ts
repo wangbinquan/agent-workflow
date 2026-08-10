@@ -48,6 +48,7 @@ import { gateViewOf, type WorkgroupTaskState } from '@/services/workgroup/state'
 import { resolveRoomPauseReason, safeMentions } from '@/services/workgroup/taskActions'
 import { deriveBudgetUsed, roundedModeOf } from '@/services/workgroup/rounds'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from './constants'
+import { parseStoredTemplateMetadata } from './systemMessages'
 
 /** Minimal node_run shape the derivation reads (subset of the DB row). The
  *  RFC-182 columns are optional so RFC-179-era callers/fixtures stay valid —
@@ -545,19 +546,24 @@ export function buildRoomReads(
       // RFC-217 T5（design §3）—— fc 无波次语义：round 对外显式 null（DB 仍存
       // 0；lw 原值直出）。前端据 null 跳过分隔线/回合徽记，而不是靠「恒 0 不
       // 触发水位线」的隐式巧合。
-      messages: messages.map((m) => ({
-        id: m.id,
-        round: roundedMode === 'free_collab' ? null : m.round,
-        authorKind: m.authorKind,
-        authorMemberId: m.authorMemberId,
-        authorUserId: m.authorUserId,
-        kind: m.kind,
-        bodyMd: m.bodyMd,
-        mentionMemberIds: safeMentions(m.mentionsJson),
-        assignmentId: m.assignmentId,
-        triggerMessageId: m.triggerMessageId,
-        createdAt: m.createdAt,
-      })),
+      messages: messages.map((m) => {
+        const template = parseStoredTemplateMetadata(m.templateKey, m.templateParamsJson)
+        return {
+          id: m.id,
+          round: roundedMode === 'free_collab' ? null : m.round,
+          authorKind: m.authorKind,
+          authorMemberId: m.authorMemberId,
+          authorUserId: m.authorUserId,
+          kind: m.kind,
+          bodyMd: m.bodyMd,
+          templateKey: template?.key ?? null,
+          templateParams: template?.params ?? null,
+          mentionMemberIds: safeMentions(m.mentionsJson),
+          assignmentId: m.assignmentId,
+          triggerMessageId: m.triggerMessageId,
+          createdAt: m.createdAt,
+        }
+      }),
       assignments: assignments.map((a) => ({
         id: a.id,
         round: roundedMode === 'free_collab' ? null : a.round,

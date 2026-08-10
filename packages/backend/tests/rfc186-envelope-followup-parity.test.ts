@@ -145,6 +145,6 @@ describe('RFC-186 — source locks (workgroup engine, RFC-217 T3 split layout)',
   })
 
   test('failed message turn is surfaced to the room, not silently swallowed', () => {
-    expect(src).toContain('message turn for')
+    expect(src).toContain("key: 'messageTurnFailed'")
   })
 })

@@ -34,7 +34,31 @@ import type {
   NormalizedEventKind,
   NormalizedTokenDelta,
   StartupInventory,
+  SystemEventObservation,
 } from '../types'
+
+const SAFE_RUNTIME_EVENT_TYPE = /^[A-Za-z0-9._-]{1,64}$/
+
+export function observeSystemEvent(line: string): SystemEventObservation {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(line)
+  } catch {
+    return { runtimeEventType: null, terminalResult: null }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { runtimeEventType: null, terminalResult: null }
+  }
+  const event = parsed as Record<string, unknown>
+  const rawType = event.type
+  const runtimeEventType =
+    typeof rawType === 'string' && SAFE_RUNTIME_EVENT_TYPE.test(rawType) ? rawType : null
+  return {
+    runtimeEventType,
+    terminalResult:
+      runtimeEventType === 'result' ? (event.is_error === true ? 'error' : 'success') : null,
+  }
+}
 
 export function parseEvent(line: string): NormalizedEvent | null {
   let parsed: unknown

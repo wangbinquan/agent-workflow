@@ -46,7 +46,6 @@ import {
   decideWorkgroupOutcome,
   deriveWakeSet,
   isReadonlyAgentPermission,
-  WG_NUDGE_BODY,
   type WakeInput,
   type WakeItem,
 } from '@/services/workgroup/wake'
@@ -344,6 +343,7 @@ export async function runWorkgroupEngine(
         authorKind: 'system',
         kind: 'chat',
         bodyMd: seed.config.goal.trim(),
+        localization: 'original',
         mentionMemberIds: directed ? [leaderId] : [],
       })
     }
@@ -527,10 +527,13 @@ export async function runWorkgroupEngine(
             const summaryMessageId = await postMessage(db, taskId, roundMode(state.config), {
               authorKind: 'system',
               kind: 'decision',
-              bodyMd:
+              systemTemplate:
                 lines.length > 0
-                  ? `free-collab converged — ${doneCards.length} task(s) done:\n${lines.join('\n')}`
-                  : 'free-collab converged with no completed tasks',
+                  ? {
+                      key: 'freeCollabConverged',
+                      params: { count: doneCards.length, details: lines.join('\n') },
+                    }
+                  : { key: 'freeCollabConvergedEmpty', params: {} },
             })
             // RFC-243 §6.4 — anchor the convergence summary as the fc result
             // (same kind+author as the zero-delta warning, so author filtering
@@ -581,7 +584,7 @@ export async function runWorkgroupEngine(
           await postMessage(db, taskId, roundMode(state.config), {
             authorKind: 'system',
             kind: 'nudge',
-            bodyMd: WG_NUDGE_BODY,
+            systemTemplate: { key: 'leaderNudge', params: {} },
             mentionMemberIds: leaderId !== null ? [leaderId] : [],
           })
           continue
@@ -614,7 +617,10 @@ export async function runWorkgroupEngine(
           await postMessage(db, taskId, roundMode(state.config), {
             authorKind: 'system',
             kind: 'system',
-            bodyMd: summary,
+            systemTemplate:
+              outcome.reason === 'max-rounds'
+                ? { key: 'maxRoundsFailed', params: { maxRounds: state.config.maxRounds } }
+                : { key: 'freeCollabDeadlock', params: {} },
           })
           await cancelLeftovers(db, taskId, state)
           return { kind: 'failed', detail: { summary, message: outcome.reason } }
@@ -727,7 +733,10 @@ async function driveWakeItem(
     await postMessage(db, taskId, roundMode(state.config), {
       authorKind: 'system',
       kind: 'system',
-      bodyMd: `internal error driving ${wakeKey(item)}: ${message}`,
+      systemTemplate: {
+        key: 'internalDriveError',
+        params: { item: wakeKey(item), detail: message },
+      },
     })
     // Convergence on throw: a leader failure is unrecoverable by the loop
     // (the same wake condition would re-fire forever) → fail the task; an

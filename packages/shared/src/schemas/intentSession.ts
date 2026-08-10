@@ -144,6 +144,8 @@ export const IntentTurnDtoSchema = z
     content: z.record(z.string(), z.unknown()),
     contextRevision: z.number().int(),
     runMeta: z.record(z.string(), z.unknown()).nullable(),
+    /** Whether this failed turn's private scratch is still retained for bounded diagnosis. */
+    scratchRetained: z.boolean(),
     /** Null for user/legacy turns; populated from reservation for new agent turns. */
     execution: IntentTurnExecutionDtoSchema.nullable(),
     createdAt: z.number().int(),
