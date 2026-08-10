@@ -482,6 +482,7 @@ export interface Resources {
       runtimeLoadError: string
       runtimeUnavailable: string
       idleCountdown: string
+      conversationRegion: string
       firstMessage: string
       nextMessage: string
       messagePlaceholder: string
@@ -7504,6 +7505,7 @@ export const zhCN: Resources = {
       runtimeLoadError: '无法加载支持 MCP 测试的运行时。',
       runtimeUnavailable: '当前没有已启用且支持 MCP 测试的运行时。',
       idleCountdown: '空闲会话将在 {{time}} 后自动结束',
+      conversationRegion: '测试对话',
       firstMessage: '第一条测试消息',
       nextMessage: '继续对话',
       messagePlaceholder: '例如：列出你提供的工具，并调用一个只读工具验证返回结果。',

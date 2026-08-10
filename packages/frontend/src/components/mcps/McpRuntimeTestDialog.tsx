@@ -517,7 +517,12 @@ export function McpRuntimeTestDialog(props: McpRuntimeTestDialogProps): ReactEle
               )}
 
               {session !== null && (
-                <div className="mcp-runtime-test__conversation">
+                <div
+                  className="mcp-runtime-test__conversation"
+                  role="region"
+                  aria-label={t('mcps.runtimeTest.conversationRegion')}
+                  tabIndex={0}
+                >
                   <SessionConversationPanel
                     queryKey={[...MCP_RUNTIME_TEST_QUERY_KEYS.sessionView(props.mcpId, session.id)]}
                     load={(signal) =>

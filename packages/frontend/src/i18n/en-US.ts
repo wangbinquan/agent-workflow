@@ -2269,6 +2269,7 @@ export const enUS: Resources = {
       runtimeLoadError: 'Could not load a runtime that supports MCP testing.',
       runtimeUnavailable: 'No enabled runtime currently supports MCP testing.',
       idleCountdown: 'Idle session ends automatically in {{time}}',
+      conversationRegion: 'Test conversation',
       firstMessage: 'First test message',
       nextMessage: 'Continue the conversation',
       messagePlaceholder:
