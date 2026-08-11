@@ -231,7 +231,23 @@ export interface ClaudeBoundaryCtx {
  * 实测说明；写边界由 sandbox 默认承担，平台只把「本任务合法可写目录」加进
  * allowWrite。
  */
+export interface ClaudeBoundaryRender {
+  settings: ClaudeBoundarySettings
+  /**
+   * mounts whose PATH cannot be expressed as a gitignore-style rule (see
+   * `claudeEditRuleFor`). They still get sandbox `allowWrite` (a plain path
+   * list), so writes work in the unconstrained/bypass shape; under `dontAsk`
+   * the tool layer may still refuse them — the caller warns rather than
+   * emitting a rule that parses wrong.
+   */
+  unexpressibleDirs: string[]
+}
+
 export function composeClaudeBoundarySettings(ctx: ClaudeBoundaryCtx): ClaudeBoundarySettings {
+  return renderClaudeBoundary(ctx).settings
+}
+
+export function renderClaudeBoundary(ctx: ClaudeBoundaryCtx): ClaudeBoundaryRender {
   const allowWrite = dedupeNonEmpty([
     ...ctx.taskMounts,
     ...(ctx.gitMetaDirs ?? []),
@@ -240,6 +256,7 @@ export function composeClaudeBoundarySettings(ctx: ClaudeBoundaryCtx): ClaudeBou
   const settings: ClaudeBoundarySettings = {
     sandbox: { enabled: true, filesystem: { allowWrite } },
   }
+  const unexpressibleDirs: string[] = []
   // dontAsk 下 cwd 外的读写都要显式放行，否则多仓任务的其他 mount 够不着
   // （B4：这是能力恢复，不是加固）。未声明 permission 的节点走 bypassPermissions，
   // 本就不受限，不需要这条。
@@ -252,10 +269,34 @@ export function composeClaudeBoundarySettings(ctx: ClaudeBoundaryCtx): ClaudeBou
   if (ctx.explicitPermission) {
     const dirs = dedupeNonEmpty([...ctx.taskMounts, ...(ctx.authorAllowDirs ?? [])])
     if (dirs.length > 0) {
-      settings.permissions = { additionalDirectories: dirs, allow: dirs.map(claudeEditRuleFor) }
+      const expressible = dirs.filter(isClaudeRuleExpressible)
+      unexpressibleDirs.push(...dirs.filter((d) => !isClaudeRuleExpressible(d)))
+      settings.permissions = {
+        // additionalDirectories is a plain path list (no glob parsing), so every
+        // dir goes here regardless of its characters.
+        additionalDirectories: dirs,
+        ...(expressible.length > 0 ? { allow: expressible.map(claudeEditRuleFor) } : {}),
+      }
     }
   }
-  return settings
+  return { settings, unexpressibleDirs }
+}
+
+/**
+ * Can this directory be written as a gitignore-style rule body?
+ *
+ * Rules are `Tool(pattern)` and the pattern is gitignore syntax (official
+ * permissions doc). Two hazards, both confirmed by a local probe:
+ *  - `)` closes the rule early → the rule parses wrong (silently mis-scoped);
+ *  - `*` / `?` / `[` / `]` inside a REAL directory name are read as wildcards →
+ *    the rule matches MORE than the directory (a boundary widening).
+ * The doc states rules you write yourself are not escaped and documents no
+ * escape syntax for `)`, so the platform refuses to guess: such a dir keeps its
+ * sandbox `allowWrite` + `additionalDirectories` entry (both plain paths) and
+ * the caller warns. §0: never emit a rule whose meaning we cannot predict.
+ */
+export function isClaudeRuleExpressible(dir: string): boolean {
+  return !/[()*?[\]\\]/.test(dir)
 }
 
 /**

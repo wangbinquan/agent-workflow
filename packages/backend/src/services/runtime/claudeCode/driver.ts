@@ -335,6 +335,18 @@ export const claudeCodeDriver: RuntimeDriver = {
       // RFC-281 T2/T3: workspace WRITE boundary via Claude's own sandbox. The
       // author's literal external_directory allow-dirs are honored; non-literal
       // globs are disclosed as a warning below (never silently dropped).
+      onUnexpressibleBoundaryDirs: (dirs) => {
+        // The dir stays writable through sandbox allowWrite (a plain path list);
+        // only the dontAsk tool-layer rule cannot be expressed for it. Say so
+        // instead of emitting a rule whose parse we cannot predict.
+        ctx.log.warn('claude-boundary-dir-unexpressible', {
+          agent: ctx.agent.name,
+          nodeRunId: ctx.nodeRunId,
+          dirs,
+          detail:
+            'these mount paths contain gitignore-pattern characters ( ) * ? [ ] \\ — no Edit(...) rule was emitted for them',
+        })
+      },
       onExtraArgsDropped: (dropped) => {
         // RFC-281 P2-4: a pre-RFC runtime row could carry `--settings` (then a
         // legal operator flag). Dropping it protects the boundary; saying so

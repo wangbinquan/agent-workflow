@@ -22,6 +22,8 @@ import {
   opencodeDataDir,
   claudeWriteBoundaryAvailability,
   composeClaudeBoundarySettings,
+  isClaudeRuleExpressible,
+  renderClaudeBoundary,
   composeOpencodeBoundary,
   type BoundaryCtx,
 } from '../src/services/execution/workspaceBoundary'
@@ -411,5 +413,43 @@ describe('claudeExpressibleAuthorDirs — literal dirs only, lossy globs disclos
   test('missing / scalar external_directory yields nothing', () => {
     expect(claudeExpressibleAuthorDirs(undefined).dirs).toEqual([])
     expect(claudeExpressibleAuthorDirs({ external_directory: 'allow' }).dirs).toEqual([])
+  })
+})
+
+describe('claude rule expressibility — never emit a rule we cannot predict (self-probe S1/S2)', () => {
+  // Local probe on the pre-fix code produced `Edit(//data/repo (old)/src/**)`
+  // — the `)` closes the rule early — and `Edit(//data/re*po/**)`, where a REAL
+  // asterisk in the directory name becomes a wildcard that matches OTHER dirs.
+  // Rules are gitignore syntax and the official docs state self-written rules
+  // are not escaped (and document no escape for `)`), so such dirs get the
+  // plain-path treatment only.
+  test('paths with gitignore-pattern characters are excluded from `allow` but stay writable', () => {
+    const clean = '/home/aw/iso/T1/R1'
+    const parens = '/data/repo (old)/src'
+    const star = '/data/re*po'
+    const r = renderClaudeBoundary({
+      taskMounts: [clean, parens, star],
+      explicitPermission: true,
+    })
+    // sandbox + additionalDirectories are plain path lists → every dir is there
+    expect(r.settings.sandbox.filesystem.allowWrite).toEqual([clean, parens, star])
+    expect(r.settings.permissions?.additionalDirectories).toEqual([clean, parens, star])
+    // only the clean one becomes a rule
+    expect(r.settings.permissions?.allow).toEqual([`Edit(//home/aw/iso/T1/R1/**)`])
+    expect(r.unexpressibleDirs).toEqual([parens, star])
+  })
+
+  test('no `allow` key at all when every mount is unexpressible (never emit a broken rule)', () => {
+    const r = renderClaudeBoundary({ taskMounts: ['/a/b(c)'], explicitPermission: true })
+    expect(r.settings.permissions?.allow).toBeUndefined()
+    expect(r.settings.permissions?.additionalDirectories).toEqual(['/a/b(c)'])
+  })
+
+  test('spaces and non-ASCII are fine — they are not pattern characters', () => {
+    expect(isClaudeRuleExpressible('/Users/me/My Project/repo')).toBe(true)
+    expect(isClaudeRuleExpressible('/数据/仓库')).toBe(true)
+    for (const bad of ['/a/b(c)', '/a/b)c', '/a/re*po', '/a/b?c', '/a/[x]', '/a/b\\c']) {
+      expect({ bad, ok: isClaudeRuleExpressible(bad) }).toEqual({ bad, ok: false })
+    }
   })
 })

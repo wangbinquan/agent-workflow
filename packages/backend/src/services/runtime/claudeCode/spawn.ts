@@ -8,7 +8,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SpawnPlan } from '../types'
-import { composeClaudeBoundarySettings } from '@/services/execution/workspaceBoundary'
+import { renderClaudeBoundary } from '@/services/execution/workspaceBoundary'
 
 export interface ClaudeSpawnContext {
   /** Override `['claude']` (tests pass a mock command array). */
@@ -48,6 +48,8 @@ export interface ClaudeSpawnContext {
   extraArgs?: readonly string[]
   /** Called when stored extraArgs carried a platform-owned flag (see below). */
   onExtraArgsDropped?: (dropped: readonly string[]) => void
+  /** Called for mounts whose path cannot be expressed as a permission rule. */
+  onUnexpressibleBoundaryDirs?: (dirs: readonly string[]) => void
 }
 
 /** Headless transport base shared by every platform-spawned Claude child. */
@@ -139,7 +141,7 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   // legitimate run (§0: business must not be collateral damage).
   const boundaryMounts = (ctx.boundary?.taskMounts ?? []).filter((p) => p.length > 0)
   if (ctx.boundary !== undefined && boundaryMounts.length > 0) {
-    const settings = composeClaudeBoundarySettings({
+    const rendered = renderClaudeBoundary({
       taskMounts: boundaryMounts,
       ...(ctx.boundary.gitMetaDirs === undefined ? {} : { gitMetaDirs: ctx.boundary.gitMetaDirs }),
       ...(ctx.boundary.authorAllowDirs === undefined
@@ -147,8 +149,11 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
         : { authorAllowDirs: ctx.boundary.authorAllowDirs }),
       explicitPermission,
     })
+    if (rendered.unexpressibleDirs.length > 0) {
+      ctx.onUnexpressibleBoundaryDirs?.(rendered.unexpressibleDirs)
+    }
     settingsFile = join(ctx.attemptDir, 'settings.json')
-    writeFileSync(settingsFile, JSON.stringify(settings, null, 2))
+    writeFileSync(settingsFile, JSON.stringify(rendered.settings, null, 2))
   }
   const mcpAllowedTools = (ctx.mcpServerNames ?? []).map((name) => `mcp__${name}__*`).join(',')
   const cmd = [
