@@ -14,6 +14,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
   claudeExpressibleAuthorDirs,
+  machineSkillRoots,
   opencodeDataDir,
   claudeWriteBoundaryAvailability,
   composeClaudeBoundarySettings,
@@ -132,8 +133,11 @@ describe('composeClaudeBoundarySettings — write boundary only', () => {
       explicitPermission: false,
     })
     expect(s.sandbox.enabled).toBe(true)
-    expect(s.sandbox.allowUnsandboxedCommands).toBe(false)
     expect(s.sandbox.filesystem.allowWrite).toEqual(['/home/aw/iso/T1/R1'])
+    // 实现门 P1-3: `allowUnsandboxedCommands` 必须**不发**（claude schema: false
+    // 会让 dangerouslyDisableSandbox 被完全忽略 = 移除 headless 下唯一的自救路径，
+    // 典型 build 节点写 ~/.bun/cache 撞 EPERM 后就烂在那里）。防误入不需要它。
+    expect('allowUnsandboxedCommands' in s.sandbox).toBe(false)
     // bypassPermissions nodes read freely; no additionalDirectories needed.
     expect(s.permissions).toBeUndefined()
   })
@@ -163,6 +167,13 @@ describe('composeClaudeBoundarySettings — write boundary only', () => {
     })
     expect(s.permissions?.additionalDirectories).toEqual(['/mnt/a', '/mnt/b', '/ref'])
     expect(s.sandbox.filesystem.allowWrite).toEqual(['/mnt/a', '/mnt/b', '/ref'])
+    // 实现门 P1-1: additionalDirectories 只给**读**（T0 §5-5 实测 dontAsk 下写
+    // additionalDirectory 仍报 "Write tool access not available in current mode"），
+    // 写必须由 permissions.allow 的 Edit/Write 规则放行，否则多仓节点写不了另一个仓。
+    // `//` = 文件系统根（单斜杠是「相对 settings 源」，会被解成 <项目根>/mnt/a）；
+    // 且只发 Edit —— 它覆盖 Write/NotebookEdit，而单独的 Write(...) 规则 claude
+    // 接受却从不查询（官方 permissions 文档核实）。
+    expect(s.permissions?.allow).toEqual(['Edit(//mnt/a/**)', 'Edit(//mnt/b/**)', 'Edit(//ref/**)'])
   })
 
   test('dedupes and strips trailing slashes across mounts / git dirs / author dirs', () => {
@@ -173,6 +184,48 @@ describe('composeClaudeBoundarySettings — write boundary only', () => {
       explicitPermission: false,
     })
     expect(s.sandbox.filesystem.allowWrite).toEqual(['/mnt/a', '/ref'])
+  })
+})
+
+describe('machineSkillRoots — re-allow what opencode itself whitelists (impl-gate P1-2)', () => {
+  // opencode's default external_directory whitelist includes skill.dirs()
+  // (agent/agent.ts:108-113 @1.18.4), sourced from ~/.claude|.agents skills plus
+  // the config-dir {skill,skills} roots (skill/index.ts:185-195). Our deny
+  // baseline merges AFTER those defaults and would shadow them — the SKILL.md
+  // still reaches the prompt (config layer, not permission), so the model then
+  // reads a sibling script and gets denied: a half-working skill.
+  const ORIG = process.env['XDG_CONFIG_HOME']
+  afterEach(() => {
+    if (ORIG === undefined) delete process.env['XDG_CONFIG_HOME']
+    else process.env['XDG_CONFIG_HOME'] = ORIG
+  })
+
+  test('covers the claude/agents external roots and the opencode config roots', () => {
+    delete process.env['XDG_CONFIG_HOME']
+    expect(machineSkillRoots('/home/u')).toEqual([
+      '/home/u/.claude/skills',
+      '/home/u/.agents/skills',
+      '/home/u/.config/opencode/skill',
+      '/home/u/.config/opencode/skills',
+      '/home/u/.opencode/skill',
+      '/home/u/.opencode/skills',
+    ])
+  })
+
+  test('honors XDG_CONFIG_HOME for the opencode config roots', () => {
+    process.env['XDG_CONFIG_HOME'] = '/cfg'
+    const roots = machineSkillRoots('/home/u')
+    expect(roots).toContain('/cfg/opencode/skills')
+    expect(roots).not.toContain('/home/u/.config/opencode/skills')
+  })
+
+  test('the boundary re-allows each root as a subtree glob', () => {
+    const roots = machineSkillRoots('/home/u')
+    const ext = composeOpencodeBoundary(undefined, {
+      ...CTX,
+      stagedSkillDirs: ['/run/.opencode/skills', ...roots],
+    })['external_directory'] as Record<string, string>
+    for (const root of roots) expect(ext[`${root}/*`]).toBe('allow')
   })
 })
 

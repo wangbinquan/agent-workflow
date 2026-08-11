@@ -40,6 +40,34 @@ export function opencodeDataDir(home: string = homedir()): string {
   return join(base, 'opencode')
 }
 
+/**
+ * opencode 自己会发现的**机器级 skill 根**（实现门 P1-2）。
+ *
+ * opencode 的 `external_directory` 默认白名单含 `skill.dirs()`（`agent/agent.ts:108-113`
+ * @1.18.4），其来源是 home 下的 `.claude` / `.agents` 外部技能根
+ * （`skill/index.ts:185-195`，`CLAUDE_EXTERNAL_DIR='.claude'` / `AGENTS_EXTERNAL_DIR='.agents'`）
+ * 以及 `ConfigPaths.directories` 的 `{skill,skills}` 目录。平台的 deny 基线合并在
+ * defaults **之后**，会把这张白名单一起遮蔽——技能的 SKILL.md 仍会被装进 prompt
+ * （配置层读取不过权限），但模型按其指示去读同目录的脚本/参考文件就会被拒，
+ * 表现为「技能一半能用一半报错」。
+ *
+ * 因此按 opencode 的同一口径把这些根 re-allow 回来（只放行，不新增可达面：
+ * 这些目录在 RFC-281 之前本就是 allow 的）。
+ */
+export function machineSkillRoots(home: string = homedir()): string[] {
+  const xdgConfig = process.env['XDG_CONFIG_HOME']
+  const configBase =
+    xdgConfig !== undefined && xdgConfig.length > 0 ? xdgConfig : join(home, '.config')
+  return [
+    join(home, '.claude', 'skills'),
+    join(home, '.agents', 'skills'),
+    join(configBase, 'opencode', 'skill'),
+    join(configBase, 'opencode', 'skills'),
+    join(home, '.opencode', 'skill'),
+    join(home, '.opencode', 'skills'),
+  ]
+}
+
 /** 本次 run 的合法工作区数据源（全部取自 scheduler/runner 既有结构，不从路径形状猜）。 */
 export interface BoundaryCtx {
   /** 本任务全部 mount 的 cwd/iso 路径（单仓 = [cwd]，多仓 = 每个成员）。 */
@@ -147,10 +175,15 @@ export function composeOpencodeBoundary(
 export interface ClaudeBoundarySettings {
   sandbox: {
     enabled: true
-    allowUnsandboxedCommands: false
+    // 刻意**不发** `allowUnsandboxedCommands`（实现门 P1-3）：claude 的 schema 原文
+    // 是「false 时 `dangerouslyDisableSandbox` 参数被完全忽略、所有命令必须沙箱化」
+    // ——那是模型在 headless 下**唯一**的自救路径。典型 build 节点（`bun install` /
+    // `npm ci` / `cargo build` 写 `~/.bun/cache` 等 cwd 外缓存）一旦撞 EPERM，焊死它
+    // 就等于让节点烂在那里、无人可救。防误入不需要这一层（真正的写边界是
+    // filesystem 默认 cwd+tmp+allowWrite），故沿用上游默认 `true`（§0）。
     filesystem: { allowWrite: string[] }
   }
-  permissions?: { additionalDirectories: string[] }
+  permissions?: { additionalDirectories: string[]; allow?: string[] }
 }
 
 export interface ClaudeBoundaryCtx {
@@ -179,16 +212,36 @@ export function composeClaudeBoundarySettings(ctx: ClaudeBoundaryCtx): ClaudeBou
     ...(ctx.authorAllowDirs ?? []),
   ])
   const settings: ClaudeBoundarySettings = {
-    sandbox: { enabled: true, allowUnsandboxedCommands: false, filesystem: { allowWrite } },
+    sandbox: { enabled: true, filesystem: { allowWrite } },
   }
-  // dontAsk 下 cwd 外的读也要显式放行，否则多仓任务的其他 mount 读不到
+  // dontAsk 下 cwd 外的读写都要显式放行，否则多仓任务的其他 mount 够不着
   // （B4：这是能力恢复，不是加固）。未声明 permission 的节点走 bypassPermissions，
-  // 读本就不受限，不需要这条。
+  // 本就不受限，不需要这条。
+  //
+  // 实现门 P1-1 补齐：`additionalDirectories` 只解决**读**——T0 §5-5 实测
+  // `dontAsk` + `--tools …,Write` 下写 additionalDirectory 仍报「Write tool access
+  // not available in current mode」。写必须由 `permissions.allow` 的
+  // `Edit(//<dir>/**)` / `Write(//<dir>/**)` 规则放行（官方对 sandbox
+  // `allowWrite` 的描述也是「与 Edit(...) allow 规则合并」，两者本就配套）。
   if (ctx.explicitPermission) {
     const dirs = dedupeNonEmpty([...ctx.taskMounts, ...(ctx.authorAllowDirs ?? [])])
-    if (dirs.length > 0) settings.permissions = { additionalDirectories: dirs }
+    if (dirs.length > 0) {
+      settings.permissions = { additionalDirectories: dirs, allow: dirs.map(claudeEditRuleFor) }
+    }
   }
   return settings
+}
+
+/**
+ * 一个绝对目录 → claude 的 `Edit(...)` allow 规则（官方 permissions 文档核实）：
+ *  - **`//` 前缀才是文件系统根**；单个 `/` 是「相对 settings 文件所在处」，
+ *    写成 `Edit(/mnt/a/**)` 会被解成 `<项目根>/mnt/a`。故 `/mnt/a` → `//mnt/a/**`
+ *    （前缀 `//` + 去掉开头的那个斜杠），**不是** `///mnt/a/**`。
+ *  - **只发 `Edit(...)`**：它覆盖所有会改文件的内置工具（含 Write / NotebookEdit）；
+ *    单独写 `Write(...)` 规则 claude 会接受但**从不查询**，等于无效行。
+ */
+function claudeEditRuleFor(dir: string): string {
+  return `Edit(//${dir.replace(/^\/+/, '')}/**)`
 }
 
 /**

@@ -52,7 +52,10 @@ OpenCode 继承 daemon 的普通环境，包括用户现有的 HOME、XDG、认�
   到 `external_directory`；边界键排在其后才生效（实测：顺序调换即失效）。
 - **`--auto` 翻不动 `deny`**。deny 在询问之前短路，所以自动批准不会放行越界。
 - **默认放行本次运行需要的目录**：本任务的全部仓库工作树、本次运行的 config 目录
-  （含 staged skill）、OpenCode 的临时目录。
+  （含 staged skill）、OpenCode 的临时目录与 tool-output 目录，以及 OpenCode 自己会发现的
+  **机器级技能根**（`~/.claude/skills`、`~/.agents/skills`、配置目录下的 `{skill,skills}`）
+  ——这些本就在 OpenCode 的默认白名单里，平台只是把被 deny 基线遮蔽的部分放行回来，
+  否则会出现「技能说明进了 prompt，但按它读同目录脚本被拒」的半残状态。
 - **越界表现为工具报错、会话继续**，不会让节点失败。
 - **作者可显式放宽**：在 Agent frontmatter 里声明
   `permission.external_directory: { "/abs/dir/*": "allow" }`。OpenCode 侧原样生效；
@@ -137,7 +140,11 @@ RFC-281 让每个业务节点默认只在自己的任务工作目录内工作（
 - **Claude Code**：其自带 sandbox 设置经 per-run `--settings` 下发，只做**写**边界
   （写=cwd+临时目录+平台放行的本任务目录，连子进程一起管）。**平台不下发任何
   denyWrite/denyRead**：实测把 appHome 祖先目录列进 denyWrite 会连 Agent 自己的 cwd 一起
-  盖死，「更严」的写法恰恰会打挂所有任务。
+  盖死，「更严」的写法恰恰会打挂所有任务。**也不下发 `allowUnsandboxedCommands`**：
+  该键为 `false` 时会让 `dangerouslyDisableSandbox` 完全失效，而那是模型撞到 cwd 外写
+  （`bun install` / `npm ci` 等写 `~` 下缓存）时唯一的自救路径，无人值守下焊死它等于让
+  节点卡死；写边界本身由 sandbox 默认的 cwd+tmp+放行目录承担。声明了权限的节点另外
+  收到 `Edit(//<mount>/**)` 规则，否则多仓任务写不了另一个仓。
 
 **已知不覆盖的面（有意保留，不要当成被防住了）**：
 

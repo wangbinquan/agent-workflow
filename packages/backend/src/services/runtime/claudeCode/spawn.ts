@@ -135,9 +135,10 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   // allowWrite would leave the sandbox enabled with cwd-only writes derived from
   // nothing — fail OPEN (no settings file) rather than risk fencing off a
   // legitimate run (§0: business must not be collateral damage).
-  if (ctx.boundary !== undefined && (ctx.boundary.taskMounts?.length ?? 0) > 0) {
+  const boundaryMounts = (ctx.boundary?.taskMounts ?? []).filter((p) => p.length > 0)
+  if (ctx.boundary !== undefined && boundaryMounts.length > 0) {
     const settings = composeClaudeBoundarySettings({
-      taskMounts: ctx.boundary.taskMounts,
+      taskMounts: boundaryMounts,
       ...(ctx.boundary.gitMetaDirs === undefined ? {} : { gitMetaDirs: ctx.boundary.gitMetaDirs }),
       ...(ctx.boundary.authorAllowDirs === undefined
         ? {}

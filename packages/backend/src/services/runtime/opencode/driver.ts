@@ -38,7 +38,11 @@ import { tmpdir } from 'node:os'
 import { observeSystemEvent, parseEvent } from './events'
 import { buildOpencodeSpawn } from './spawn'
 import { buildInlineConfig } from './inlineConfig'
-import { opencodeDataDir, type BoundaryCtx } from '@/services/execution/workspaceBoundary'
+import {
+  machineSkillRoots,
+  opencodeDataDir,
+  type BoundaryCtx,
+} from '@/services/execution/workspaceBoundary'
 import { pickRuntimeHead } from '../head'
 import { stageSkills } from '../stageSkills'
 import { probeOpencode } from '@/util/opencode'
@@ -216,7 +220,10 @@ export const opencodeDriver: RuntimeDriver = {
     const boundaryCtx: BoundaryCtx = {
       taskMounts: ctx.taskMounts,
       runDir,
-      stagedSkillDirs: [join(runDir, 'skills')],
+      // 平台 stage 的技能 + opencode 自己会发现的机器级技能根（实现门 P1-2：
+      // deny 基线会遮蔽 opencode 默认白名单里的 skill.dirs()，不补回来就会
+      // 出现「SKILL.md 进了 prompt，但按它读同目录脚本被拒」的半残状态）。
+      stagedSkillDirs: [join(runDir, 'skills'), ...machineSkillRoots()],
       // opencode's own scratch areas, read from ITS source (packages/core/src/
       // global.ts:11,15 @1.18.16) rather than guessed:
       //   Path.tmp  = os.tmpdir()/opencode
