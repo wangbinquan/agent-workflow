@@ -86,4 +86,17 @@ Codex `codex exec` 连续 wedge（0 字节输出、零 CPU，与 memory 记录�
 
 `gate:local` 全绿（backend 9501 / frontend 6275）；真 opencode gated 集成 8 pass。
 
+## 业务误伤专项检视（2026-08-11，Done 之后的加固批）
+
+用户指示「看有没有影响正常业务的地方」。独立子代理专项检视 + 我本机真 opencode/claude 实测，4 条修复全部落地（`4dcf7f88` / `fc11acb6` / `50e1e124`）：
+
+- **P1 deny 规则无上限增长**：`scanSiblingTaskRoots` 枚举 iso/runs/worktrees，每目录 2 条规则；而 `runs/<taskId>` **没有任何 GC**（`services/gc.ts` 只回收 worktrees/iso），本机实测已 1406 个 ⇒ **3018 条规则 / 264 KB settings.json**，每个 claude 节点都要落盘 + 每次工具调用逐条匹配。修：只枚举真正的工作区容器（iso + worktrees），`runs/` 完全不 deny（它不是任何任务的工作区，且下发其祖先 deny 会盖住本次 run 自己的 system.md/settings.json）。**实测 206 条 / 20.7 KB，降 92%**。
+- **P1 `/tmp` 被拒**：deny 基线遮蔽 opencode 默认白名单后，通用 `$TMPDIR/*` 不在 re-allow 集 ⇒ `mkdir -p /tmp/build`、`cat /tmp/prev.json`、write `/tmp/plan.md` 全 DeniedError，写死 `/tmp` 的存量 agent 直接失效。修：放行系统临时目录。
+- **P2 多仓 git 写 EPERM**：`gitMetaDirs` 自 T1 预留却从未接线；claude 的 sandbox 只对**会话 cwd** 自动解析 linked worktree 的共享 gitdir，其它 mount 不解析 ⇒ `git -C ../repoB commit` 写 `<repoB源仓>/.git/worktrees/<name>/index.lock` 被拒，表现为「文件改得动、git 动不了」。修：新增 `gitMetaDirsFor()`（真 git 验证解析出 common + admin dir），两个 driver 按 mount 接线，加源码锁防再退化为死参数。
+- **P2 构建型 claude 节点无自救路径**（用户拍板放行）：声明 permission 的节点走 `dontAsk`，`bun install` / `cargo build` 写 `~/.bun/install/cache` 等 → EPERM，而 `dangerouslyDisableSandbox` 在 dontAsk 下需过权限门、headless 无人应答 ⇒ 节点烂在那里。修：`toolchainCacheDirs()` 放行 bun/npm/cargo/pnpm/yarn/pip/uv/go 的缓存与状态目录，**不含任何凭据**（有断言锁）。
+
+**查清但机制上不可修**：agent 读 `~/.gitconfig` 等机器配置被拒 —— opencode 的 `external_directory` 按 `dirname(文件)/*` 判定，放行单文件做不到，放行整个 `$HOME` 会带上 `.ssh`。尝试已完整撤回，机制事实钉进 `docs/dev-gotchas.md` 与残洞清单。**不影响提交代码**：git 进程自己读配置不经权限层，且平台注入 `GIT_AUTHOR_NAME`/`GIT_COMMITTER_NAME`（实测 linked worktree 里 `git add && commit` 全链正常）。
+
+**检视确认的 12 项「不会误伤」**（结案）：Linux 缺 bwrap 不阻断、网络不被掐、claude 内置敏感清单不触发（由未设置的 env 门控）、单仓 git 全链正常、fusion/call-workflow/fanout/aggregator/loop/workgroup 路径全对齐、staged skill 完整可读、opencode 侧构建命令不受影响、端口产物无需跨界读、script 与系统 persona 无边界。
+
 **未做（有意，已登记）**：DeclaredManifest 的 `workspaceBoundary` 声明字段与前端观测面——`startupVerification.ts` 在本轮全程被并行 RFC-280 session 占用（未提交改动），按多人协作原则不动他人在途文件；该项是观测增强、不影响边界功能本身，留作独立跟进。resume 边界重注入已由 T0 §5-7 实测确认（claude `--resume` 重新应用本次 `--settings`；opencode `--session` 同一注入路径），未单独加 CI 用例。

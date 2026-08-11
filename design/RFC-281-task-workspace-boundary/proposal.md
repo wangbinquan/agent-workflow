@@ -1,6 +1,6 @@
 # RFC-281 · 任务工作区边界（防误入）
 
-状态：**Done（2026-08-11）** —— T0-T5 全交付并上库（opencode 两级注入 + gated 真 runtime 红绿对、claude sandbox 写边界、作者白名单跨 runtime、文档）；exact-SHA 主 CI + integration-opencode 双绿。残留（有意）：DeclaredManifest 声明字段未做，见 `plan.md` 验收清单末条。
+状态：**Done（2026-08-11，含两轮实现门与业务误伤检视的后续批）** —— T0-T5 全交付并上库（opencode 两级注入 + gated 真 runtime 红绿对、claude sandbox 写边界、作者白名单跨 runtime、文档）；exact-SHA 主 CI + integration-opencode 双绿。残留（有意）：DeclaredManifest 声明字段未做，见 `plan.md` 验收清单末条。 **后续批**（同日）：第二轮实现门 20+ findings 全处置（核心：claude 的 sandbox 是命令级围栏、Edit/Write 走 permissions 层 ⇒ 默认节点上事故形态原样可复现，已用兄弟目录 deny 规则堵住并实测「越界被拒 + cwd 内照常」；另钉死 `autoAllowBashIfSandboxed:false` 消除一条反向能力扩张）；业务误伤专项检视 4 条修复（deny 规则 3018→206 条降 92%、放行 `/tmp`、接线 `gitMetaDirs` 修多仓 git EPERM、放行工具链缓存修构建节点无自救路径）。详见 `plan.md` 的两节实现门记录。
 
 ## 0. 首要实现原则（用户定调 2026-08-11，高于一切细节）
 
