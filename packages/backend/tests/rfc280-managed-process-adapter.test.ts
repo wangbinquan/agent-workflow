@@ -8,6 +8,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runManagedProcess } from '@/services/execution/managedProcess'
+import { runAgentProcess } from '@/services/execution/agentProcess'
 
 const BUN = process.execPath
 
@@ -94,5 +95,72 @@ describe('runManagedProcess beforeSpawn admission seam (RFC-280 T4)', () => {
     expect(called).toBe(1)
     expect(result.outcome).toBe('exited')
     expect(result.rawStdout).toContain('ran')
+  })
+})
+
+describe('runAgentProcess impl-gate regression locks', () => {
+  test('P2-C: onSpawned throw fences the child → aborted (playground admission seam)', async () => {
+    const dir = scratch()
+    const script = join(dir, 'sleep.ts')
+    writeFileSync(script, `await Bun.sleep(30_000)\nconsole.log('should-not-finish')`)
+    const result = await runAgentProcess({
+      cmd: [BUN, script],
+      cwd: dir,
+      env: { ...process.env } as Record<string, string>,
+      timeoutMs: 30_000,
+      termGraceMs: 500,
+      onSpawned: () => {
+        throw new Error('turn-no-longer-admitted')
+      },
+      capture: { rawStdout: true },
+    })
+    // The receipt fence aborts the healthy child; outcome is 'aborted', not ok.
+    expect(result.outcome).toBe('aborted')
+    expect(result.rawStdout).not.toContain('should-not-finish')
+  })
+
+  test('P2-B/P2-C: a caller that swallows its own onSpawned error keeps the child alive', async () => {
+    const dir = scratch()
+    const script = join(dir, 'ok.ts')
+    writeFileSync(script, `console.log('ran-fine')`)
+    let called = 0
+    const result = await runAgentProcess({
+      cmd: [BUN, script],
+      cwd: dir,
+      env: { ...process.env } as Record<string, string>,
+      timeoutMs: 20_000,
+      capture: { rawStdout: true },
+      onSpawned: () => {
+        called += 1
+        // best-effort persist "failed" but the caller chose NOT to rethrow.
+      },
+    })
+    expect(called).toBe(1)
+    expect(result.outcome).toBe('ok')
+    expect(result.rawStdout).toContain('ran-fine')
+  })
+
+  test('P2-B: a throwing onStdoutLine surfaces pumpError and escalates the child', async () => {
+    const dir = scratch()
+    const script = join(dir, 'spew.ts')
+    writeFileSync(
+      script,
+      `for (let i = 0; i < 5; i++) console.log('line' + i)\nawait Bun.sleep(30_000)`,
+    )
+    const result = await runAgentProcess({
+      cmd: [BUN, script],
+      cwd: dir,
+      env: { ...process.env } as Record<string, string>,
+      timeoutMs: 30_000,
+      termGraceMs: 500,
+      capture: {
+        onStdoutLine: () => {
+          throw new Error('persist-failed')
+        },
+      },
+    })
+    expect(result.pumpError).toContain('persist-failed')
+    // The child was escalated (killed), not left running to timeout.
+    expect(['aborted', 'nonzero-exit', 'ok']).toContain(result.outcome)
   })
 })

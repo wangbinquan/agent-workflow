@@ -1250,10 +1250,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // 7. Run the child through the unified executor (RFC-280 T7). It owns
     //    spawn / stdin / pid receipt / timeout+cancel / TERM→KILL→reap / bounded
     //    drain — the rfc098 process-governance invariants live in managedProcess
-    //    now. `keepExitedOnDrainTimeout` (agent domain default) means a
-    //    descendant holding our pipe past the drain deadline degrades to
-    //    evidence loss on a finished run, not a relabel; a child that survives
-    //    SIGKILL past the reap deadline comes back `unreaped`.
+    //    now. Two post-exit outcomes matter here: a descendant holding our pipe
+    //    past the DRAIN deadline degrades to evidence loss on a finished run
+    //    (real exitCode kept, `drainTimedOut`); a child that survives SIGKILL
+    //    past the REAP deadline comes back `unreaped` (→ childUnkillable below).
     let streamPumpFailed = false
     const runResult = await runAgentProcess({
       cmd,
@@ -1267,10 +1267,23 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside
         // pid so the stale-process reaper can match a live pid against THIS
         // specific binary, not a fuzzy regex.
-        await opts.db
-          .update(nodeRuns)
-          .set({ pid: receipt.pid, spawnBinaryPath: receipt.spawnBinaryPath })
-          .where(eq(nodeRuns.id, opts.nodeRunId))
+        //
+        // impl-gate P2-C: pid persistence is BEST-EFFORT (managedProcess's own
+        // onSpawned contract) — catch here so a transient DB error does not
+        // trip the executor's receipt fence and abort a HEALTHY child (which
+        // would mark the node `canceled`, not the historical `failed`). Only
+        // the playground's admission fence intentionally rethrows.
+        try {
+          await opts.db
+            .update(nodeRuns)
+            .set({ pid: receipt.pid, spawnBinaryPath: receipt.spawnBinaryPath })
+            .where(eq(nodeRuns.id, opts.nodeRunId))
+        } catch (err) {
+          log.warn('runtime-pid-persist-failed', {
+            nodeRunId: opts.nodeRunId,
+            err: err instanceof Error ? err.message : String(err),
+          })
+        }
       },
       capture: {
         onStdoutLine: async (line: string) => {
@@ -1283,6 +1296,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             throw err
           }
         },
+        // impl-gate P2-B: the OLD runner applied settlePump to BOTH streams —
+        // a stderr-persist failure was also a stream failure. persistStderrLine
+        // can throw (the synthetic plugin-load-failed row insert); the executor
+        // records it as `pumpError` (consulted below), restoring symmetry.
         onStderrLine: persistStderrLine,
       },
       log,
@@ -1294,6 +1311,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     timedOut = runResult.outcome === 'timeout'
     const exitCode = runResult.exitCode
     preserveLiveRuntimeState = childUnkillable
+    // impl-gate P2-B: a stderr-pump persist failure surfaces via pumpError (the
+    // stdout path sets streamPumpFailed inline); fold it in so either stream's
+    // persist failure yields the historical `runtime-stream-interrupted`.
+    if (runResult.pumpError !== undefined) streamPumpFailed = true
     // RFC-048: stop the live poller before the post-run BFS so no concurrent
     // SELECT races against the final captureChildSessions read.
     liveCtrl.abort()
@@ -1785,8 +1806,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // RFC-280 T3 — startup verification: declared manifest × runtime startup
     // report. Persisted for the node-detail warning face; NEVER changes the
     // run's own status (user ruling: business nodes warn, don't fail).
+    //
+    // impl-gate P2-E: opencode's observation source is the RFC-029 inventory,
+    // which is only produced for agent-kind non-followup runs (`wantsInventory`).
+    // On a followup the MCPs/skills ARE injected but no inventory is read — so
+    // an "unavailable" record would flag every followup as "cannot verify"
+    // (systematic noise). Skip recording when opencode has no observation
+    // opportunity by design; claude captures its init inline every time.
+    const opencodeHasNoObservation = driver.readInventory !== undefined && !wantsInventory
     let startupVerificationJson: string | null = null
-    if (injectionDeclared !== null && declaredHasContent(injectionDeclared)) {
+    if (
+      injectionDeclared !== null &&
+      declaredHasContent(injectionDeclared) &&
+      !opencodeHasNoObservation
+    ) {
       const observation =
         driver.readInventory !== undefined
           ? observationFromInventory(capturedInventorySnapshot)

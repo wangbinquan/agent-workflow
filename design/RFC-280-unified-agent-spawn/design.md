@@ -7,13 +7,13 @@ findings 原文见门禁记录，逐条落点在 §9）
 
 ### 1.1 五条 spawn 链路
 
-| 链路 | spawn 点 | plan 构建 | 运行目录 |
-|------|---------|-----------|---------|
-| 业务节点 | `runner.ts:958`（Bun.spawn, detached, cwd=任务 iso worktree） | `driver.buildBusinessSpawn`（`runner.ts:867`） | 任务 worktree + `runRoot=<appHome>/runs/<taskId>/<nodeRunId>` |
-| 系统 agent | `systemAgentRun.ts:460` | `driver.buildSpawn`（`:428`）或 `opts.buildPlan` 逃生舱（`:423`） | `<scratchParent>/<name>/{worktree,run}` |
-| MCP 测试台 | 经 systemAgentRun，plan 来自 `mcpRuntimeTest.ts:2497` `runtime.capability.buildSpawn`（`mcpTest` capability，`types.ts:449-461`） | `opencode/mcpTest.ts:8` / `claudeCode/mcpTest.ts:7` | `<appHome>/mcp-runtime-tests/<sessionId>/…/turns/<turnId>` |
-| 冒烟探针 | `runtimeSmoke.ts:291`（自建 timeout/kill 链） | `runtimeSmoke.ts:200 buildSmokePlan` → `driver.buildSpawn` | OS tmpdir `aw-runtime-smoke-*` |
-| 记忆蒸馏器 | `memoryDistiller.ts:1120`（自建骨架） | `memoryDistiller.ts:1105` → `driver.buildSpawn` | OS tmpdir `aw-distiller-*` |
+| 链路       | spawn 点                                                                                                                          | plan 构建                                                         | 运行目录                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| 业务节点   | `runner.ts:958`（Bun.spawn, detached, cwd=任务 iso worktree）                                                                     | `driver.buildBusinessSpawn`（`runner.ts:867`）                    | 任务 worktree + `runRoot=<appHome>/runs/<taskId>/<nodeRunId>` |
+| 系统 agent | `systemAgentRun.ts:460`                                                                                                           | `driver.buildSpawn`（`:428`）或 `opts.buildPlan` 逃生舱（`:423`） | `<scratchParent>/<name>/{worktree,run}`                       |
+| MCP 测试台 | 经 systemAgentRun，plan 来自 `mcpRuntimeTest.ts:2497` `runtime.capability.buildSpawn`（`mcpTest` capability，`types.ts:449-461`） | `opencode/mcpTest.ts:8` / `claudeCode/mcpTest.ts:7`               | `<appHome>/mcp-runtime-tests/<sessionId>/…/turns/<turnId>`    |
+| 冒烟探针   | `runtimeSmoke.ts:291`（自建 timeout/kill 链）                                                                                     | `runtimeSmoke.ts:200 buildSmokePlan` → `driver.buildSpawn`        | OS tmpdir `aw-runtime-smoke-*`                                |
+| 记忆蒸馏器 | `memoryDistiller.ts:1120`（自建骨架）                                                                                             | `memoryDistiller.ts:1105` → `driver.buildSpawn`                   | OS tmpdir `aw-distiller-*`                                    |
 
 业务节点的 6 个调用入口全在 scheduler：`scheduler.ts:1011`（workgroup host）/
 `:1938`（commit-push）/ `:2826`（merge agent）/ `:5866`（DAG）/ `:7721`（shard）/
@@ -102,38 +102,44 @@ timeout+cancel / TERM→KILL / reap+drain（`:1-8`、`:167-193`），并锁定�
 ```ts
 // runtime 无关的注入意图（全部字段可选，persona-only 系统 agent 也走同一形状）
 interface AgentInjectionSpec {
-  agent: { name: string; prompt: string; description?: string
-           permission?: AgentPermission; outputs?: string[] }
-  profile: RuntimeProfile                    // model/variant/temperature/steps/maxSteps/isSandbox/extraArgs
-  dependents?: readonly Agent[]              // dependsOn 闭包（BFS，根除外）
+  agent: {
+    name: string
+    prompt: string
+    description?: string
+    permission?: AgentPermission
+    outputs?: string[]
+  }
+  profile: RuntimeProfile // model/variant/temperature/steps/maxSteps/isSandbox/extraArgs
+  dependents?: readonly Agent[] // dependsOn 闭包（BFS，根除外）
   profileByAgent?: ReadonlyMap<string, RuntimeProfile>
-  mcps?: readonly Mcp[]                      // 含 disabled 行——装配层显式分拣；
-                                             // 不同 id 同名（enabled）→ 抛错（沿用 §1.1 fail-fast）
-  skills?: readonly ResolvedSkill[]          // 既有公共输入类型（types.ts:36-52），非新造
+  mcps?: readonly Mcp[] // 含 disabled 行——装配层显式分拣；
+  // 不同 id 同名（enabled）→ 抛错（沿用 §1.1 fail-fast）
+  skills?: readonly ResolvedSkill[] // 既有公共输入类型（types.ts:36-52），非新造
   plugins?: readonly Plugin[]
   memoryBlock?: string | null
-  inventoryPlugin?: boolean                  // RFC-029（opencode-only 能力；claude 渲染为 no-op）
+  inventoryPlugin?: boolean // RFC-029（opencode-only 能力；claude 渲染为 no-op）
 }
 
 interface DeclaredManifest {
-  mcpServers: string[]                       // 实际注入的 enabled 集（同名冲突已在装配前 fail）
-  skippedDisabledMcps: string[]              // 落差③：显式记录，不再静默
+  mcpServers: string[] // 实际注入的 enabled 集（同名冲突已在装配前 fail）
+  skippedDisabledMcps: string[] // 落差③：显式记录，不再静默
   skills: string[]
   subagents: string[]
-  plugins: string[]                          // P1-5：声明注入的 plugin（claude 恒 []）
-  tools: string[] | null                     // claude 显式 gate；opencode 为 null
-  droppedParams: string[]                    // 落差④：claude 丢弃的 variant/temperature/...
-  unsupported: string[]                      // 如 claude×plugin（renderer 声明"此面不存在"）
-  unobservable: string[]                     // P1-5：注入了但该 runtime 无观测手段的面
+  plugins: string[] // P1-5：声明注入的 plugin（claude 恒 []）
+  tools: string[] | null // claude 显式 gate；opencode 为 null
+  droppedParams: string[] // 落差④：claude 丢弃的 variant/temperature/...
+  unsupported: string[] // 如 claude×plugin（renderer 声明"此面不存在"）
+  unobservable: string[] // P1-5：注入了但该 runtime 无观测手段的面
 }
 
 interface RenderedInjection {
-  argv: string[]                             // 追加到 spawn cmd 的片段
-  env: Record<string, string>                // 合入 spawn env 的片段（precedence 见 §2.2）
-  files: Array<{                             // P1-7：executor-owned attemptRoot 下的相对路径
-    relativePath: string                     //   绝对路径 / `..` / symlink 逃逸 → B 层写前拒绝
+  argv: string[] // 追加到 spawn cmd 的片段
+  env: Record<string, string> // 合入 spawn env 的片段（precedence 见 §2.2）
+  files: Array<{
+    // P1-7：executor-owned attemptRoot 下的相对路径
+    relativePath: string //   绝对路径 / `..` / symlink 逃逸 → B 层写前拒绝
     content: string
-    secret: boolean                          //   true → 强制 0600 + O_EXCL 原子创建
+    secret: boolean //   true → 强制 0600 + O_EXCL 原子创建
   }>
   worktreeProjections?: WorktreeProjection[] // claude .claude/{skills,agents}，带 cleanup
   declared: DeclaredManifest
@@ -165,32 +171,40 @@ P1-2 修订：契约必须完整表达五条链路的既有行为，定义如下
 
 ```ts
 interface AgentProcessRequest {
-  cmd: string[]                              // 完整 argv（base command + 注入片段已合成）
+  cmd: string[] // 完整 argv（base command + 注入片段已合成）
   cwd: string
   env: Record<string, string>
-  stdin: { mode: 'pipe'; data: string } | { mode: 'ignore' }   // claude prompt 走 pipe
-  workdir:                                    // 目录策略
-    | { kind: 'external'; path: string }                        // 业务：任务 worktree
+  stdin: { mode: 'pipe'; data: string } | { mode: 'ignore' } // claude prompt 走 pipe
+  workdir: // 目录策略
+    | { kind: 'external'; path: string } // 业务：任务 worktree
     | { kind: 'scratch'; parent: string; name: string; retainOnSuccess: boolean }
-  files: RenderedInjection['files']          // B 层负责 containment 检查后落盘
-  beforeSpawn?: () => void | Promise<void>   // 测试台 turn 准入重验（mcpRuntimeTest.ts:2455）
-  onSpawned?: (receipt: { pid: number; spawnedAt: number; spawnBinaryPath: string | null })
-    => void | Promise<void>                  // PID 收据 fence（mcpRuntimeTest.ts:2532-2575）；
-                                             // 抛错 → 进入 TERM→KILL→reap，结果为 'aborted'
+  files: RenderedInjection['files'] // B 层负责 containment 检查后落盘
+  beforeSpawn?: () => void | Promise<void> // 测试台 turn 准入重验（mcpRuntimeTest.ts:2455）
+  onSpawned?: (receipt: {
+    pid: number
+    spawnedAt: number
+    spawnBinaryPath: string | null
+  }) => void | Promise<void> // PID 收据 fence（mcpRuntimeTest.ts:2532-2575）；
+  // 抛错 → 进入 TERM→KILL→reap，结果为 'aborted'
   abortSignal?: AbortSignal
   timeoutMs: number
   termGraceMs?: number
   capture: {
-    onLine?: (line: string) => void | Promise<void>   // 逐行回调（调用方自行落库/解析）
-    rawTailBytes?: number                    // >0 → 结果含 bounded stdout tail
-                                             //（distiller envelope 解析需完整输出：
-                                             //  memoryDistiller.ts:254-261/1366-1375）
+    onLine?: (line: string) => void | Promise<void> // 逐行回调（调用方自行落库/解析）
+    rawTailBytes?: number // >0 → 结果含 bounded stdout tail
+    //（distiller envelope 解析需完整输出：
+    //  memoryDistiller.ts:254-261/1366-1375）
     stderrTailBytes?: number
   }
 }
 
 type AgentProcessOutcome =
-  | 'ok' | 'nonzero-exit' | 'timeout' | 'aborted' | 'spawn-failed' | 'unreaped'
+  | 'ok'
+  | 'nonzero-exit'
+  | 'timeout'
+  | 'aborted'
+  | 'spawn-failed'
+  | 'unreaped'
 // 调用方在自己的域内映射：system agent 的 result-error（terminal is_error）由调用方
 // 从行回调判定后叠加；smoke 的 auth-missing/network-blocked/stream-nonconforming
 //（runtimeSmoke.ts:28-46）是 smoke 对 ok/nonzero-exit + 输出内容的再分类——
@@ -200,7 +214,7 @@ interface AgentProcessResult {
   outcome: AgentProcessOutcome
   exitCode: number | null
   pid: number | null
-  stdoutTail: string                         // capture.rawTailBytes>0 时有值
+  stdoutTail: string // capture.rawTailBytes>0 时有值
   stderrTail: string
   durationMs: number
   workdirPath: string
@@ -235,14 +249,20 @@ P1-4/P1-5 修订：观测建模为**三态**，MCP 条目保留 runtime 原因�
 
 ```ts
 type StartupObservation =
-  | { state: 'verified'; source: 'claude-init' | 'opencode-inventory'
+  | {
+      state: 'verified'
+      source: 'claude-init' | 'opencode-inventory'
       mcpServers: Array<{ name: string; status: string; hint?: string }>
-        // opencode 五态 connected/disabled/failed/needs_auth/needs_client_registration
-        //（opencode mcp/index.ts:83-107）+ transcoder 的 error→hint（transcoder.ts:64-78）
-        // 原样保留；claude init 为 connected/failed 二态。不压 boolean。
-      tools?: string[]; agents?: string[]; skills?: string[]; plugins?: string[] }
+      // opencode 五态 connected/disabled/failed/needs_auth/needs_client_registration
+      //（opencode mcp/index.ts:83-107）+ transcoder 的 error→hint（transcoder.ts:64-78）
+      // 原样保留；claude init 为 connected/failed 二态。不压 boolean。
+      tools?: string[]
+      agents?: string[]
+      skills?: string[]
+      plugins?: string[]
+    }
   | { state: 'unavailable'; reason: string } // 插件未注入 / 文件缺失 / init 事件未出现
-  | { state: 'malformed'; reason: string }   // 观测源存在但解析失败
+  | { state: 'malformed'; reason: string } // 观测源存在但解析失败
 
 interface StartupVerification {
   observation: StartupObservation['state']
@@ -251,7 +271,7 @@ interface StartupVerification {
   skillsMissing: string[]
   subagentsMissing: string[]
   toolsMissing: string[]
-  pluginsMissing: string[]                   // P1-5
+  pluginsMissing: string[] // P1-5
 }
 // 持久化结构 = { declared: DeclaredManifest, observation: StartupObservation,
 //                verification: StartupVerification }（P1-5：UI 要能重建
@@ -260,9 +280,9 @@ interface StartupVerification {
 ```
 
 - claude：`parseUnusableMcpServers`（既有）+ **接上 `parseStartupInventory`**
- （落差①）——init 事件一次产出 observation（行内即时可判）。
+  （落差①）——init 事件一次产出 observation（行内即时可判）。
 - opencode：RFC-029 inventory 插件已 dump `mcp.status()`+agents+skills+plugins
- （`aw-inventory-dump.mjs:122-155`、`shared/inventory.ts:56-82` 已含 status/hint 与
+  （`aw-inventory-dump.mjs:122-155`、`shared/inventory.ts:56-82` 已含 status/hint 与
   plugins 数组——观测数据现成，只差消费）；`readInventory` 后置判定。
   `declaredMcpServers` 不再是 driver 私有字段，统一来自
   `RenderedInjection.declared`（落差②）。
@@ -309,19 +329,19 @@ scheduler.prepareNodeRunInjection (不变，含 exact-identity fail-fast)
 
 ## 4. 失败模式
 
-| 失败 | 现状 | 统一后 |
-|------|------|--------|
-| 闭包内不同 id 同 enabled name | spawn 前 fail（`duplicate-name-in-closure`） | **保持 fail-fast 原样**（P1-1）；装配层重复断言防非 scheduler 调用方 |
-| MCP 进程起不来（业务） | claude 仅日志 warn；opencode 无感 | 两 runtime 均落 `startup_verification_json`（含 status/hint 原因）+ UI banner；不改成败 |
-| MCP 进程起不来（测试台） | turn“成功”，agent 口头找不到 | 进程 ok 时 → `mcp-test-mcp-unusable`；durable 失败码优先 |
-| 观测源缺失/损坏（测试台） | 不存在观测 | `mcp-test-verification-unavailable`（P1-4：不 fail-open） |
-| 观测源缺失/损坏（业务） | `captured:false` 存根 | observation=unavailable → 告警面注明「无法验证」 |
-| 引用 disabled MCP | 静默 continue | declared.skippedDisabledMcps → 告警面 |
-| claude 收到 variant/temperature | 静默丢弃 | declared.droppedParams → spawn 日志 warn + 告警面 |
-| skill/subagent/plugin 未被 runtime 加载 | 无验证 | verification.{skillsMissing,subagentsMissing,pluginsMissing} → 告警面 |
-| renderer files 越界 / 秘密文件无 0600 | 无契约 | B 层 containment + O_EXCL/0600 强制；违规 = spawn-failed（P1-7） |
-| onSpawned 收据失败 | 测试台自有处理 | B 层定义：进入 TERM→KILL→reap，outcome='aborted'（P1-2） |
-| cancel 与 timeout 竞态 | managedProcess 已锁「先 cancel 不得重标 timeout」 | 复用之（P2-1），agent 层不复制计时器 |
+| 失败                                    | 现状                                              | 统一后                                                                                  |
+| --------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 闭包内不同 id 同 enabled name           | spawn 前 fail（`duplicate-name-in-closure`）      | **保持 fail-fast 原样**（P1-1）；装配层重复断言防非 scheduler 调用方                    |
+| MCP 进程起不来（业务）                  | claude 仅日志 warn；opencode 无感                 | 两 runtime 均落 `startup_verification_json`（含 status/hint 原因）+ UI banner；不改成败 |
+| MCP 进程起不来（测试台）                | turn“成功”，agent 口头找不到                      | 进程 ok 时 → `mcp-test-mcp-unusable`；durable 失败码优先                                |
+| 观测源缺失/损坏（测试台）               | 不存在观测                                        | `mcp-test-verification-unavailable`（P1-4：不 fail-open）                               |
+| 观测源缺失/损坏（业务）                 | `captured:false` 存根                             | observation=unavailable → 告警面注明「无法验证」                                        |
+| 引用 disabled MCP                       | 静默 continue                                     | declared.skippedDisabledMcps → 告警面                                                   |
+| claude 收到 variant/temperature         | 静默丢弃                                          | declared.droppedParams → spawn 日志 warn + 告警面                                       |
+| skill/subagent/plugin 未被 runtime 加载 | 无验证                                            | verification.{skillsMissing,subagentsMissing,pluginsMissing} → 告警面                   |
+| renderer files 越界 / 秘密文件无 0600   | 无契约                                            | B 层 containment + O_EXCL/0600 强制；违规 = spawn-failed（P1-7）                        |
+| onSpawned 收据失败                      | 测试台自有处理                                    | B 层定义：进入 TERM→KILL→reap，outcome='aborted'（P1-2）                                |
+| cancel 与 timeout 竞态                  | managedProcess 已锁「先 cancel 不得重标 timeout」 | 复用之（P2-1），agent 层不复制计时器                                                    |
 
 ## 5. 兼容与迁移
 
@@ -347,8 +367,13 @@ scheduler.prepareNodeRunInjection (不变，含 exact-identity fail-fast)
    unobservable 透传）。
 3. **B 层**：以 managedProcess 既有测试为底（cancel/timeout 竞态、drain 语义不动），
    新增 adapter 面：stdin 投递、beforeSpawn 拒绝即不 spawn、onSpawned 抛错 →
-   aborted、files containment（`..`/绝对路径/secret 0600/O_EXCL）、reap 后才 cleanup、
-   workdir 两策略。
+   aborted、reap 后才 cleanup。
+   **实现门 P2-D 修订**：P1-7 的「执行器代管注入文件 + containment/O_EXCL」在实现中
+   演化为「各 driver 直接把凭据文件（claude mcp-config.json）写在 per-run/per-turn
+   目录（`0600`、driver 控制路径、目录 per-run 隔离，天然无越界面），清理走
+   plan.cleanup/finalizePlan」。执行器不再代管文件落盘，`agentProcess` 的
+   `files/attemptRoot/materializeInjectionFiles` 死机制已删除（避免「未用函数假装
+   有保障」）。安全结局（0600 + 秘密移出 argv）不变，见 §7.1。
 4. **行为变更回归锁**：测试台三个 fail 分支（unusable / verification-unavailable /
    durable 优先级不被覆盖）；业务告警列落库 + UI（frontend inline 测试）；disabled
    引用告警；claude droppedParams 告警；userinfo URL 在测试台放行（原拒绝分支删除的
@@ -382,14 +407,29 @@ agentProcess 面向一次 spawn；managedProcess 是两者共同的进程可靠�
 
 ## 9. 设计门 findings 落点索引
 
-| finding | 落点 |
-|---|---|
-| P1-1 同名 fail-fast | §1.1、§2.1、§4 行 1、§6.1 |
-| P1-2 spawn 契约不完整 | §2.2 全部、§4 行 11、§6.3 |
-| P1-3 任务依赖缺口 | §3 过渡期、§5、plan.md T1/T3/T7 修订 |
-| P1-4 测试台 fail-open + 失败码优先级 | §2.3 消费语义、§4 行 3-4 |
-| P1-5 观测丢原因/丢 plugin | §2.3 结构、DeclaredManifest.plugins/unobservable |
-| P1-6 URL userinfo | §2.1（用户拍板全放行）、§7.4、proposal §7 |
-| P1-7 files 归属契约 | §2.1 files、§2.2 硬性语义 4、§2.4 |
-| P2-1 managedProcess 复用 | §1.4、§2.2、§8 |
-| P2-2 golden 归属 | §7、plan.md 归属表 |
+### 9.1 设计门（批准前）
+
+| finding                              | 落点                                             |
+| ------------------------------------ | ------------------------------------------------ |
+| P1-1 同名 fail-fast                  | §1.1、§2.1、§4 行 1、§6.1                        |
+| P1-2 spawn 契约不完整                | §2.2 全部、§4 行 11、§6.3                        |
+| P1-3 任务依赖缺口                    | §3 过渡期、§5、plan.md T1/T3/T7 修订             |
+| P1-4 测试台 fail-open + 失败码优先级 | §2.3 消费语义、§4 行 3-4                         |
+| P1-5 观测丢原因/丢 plugin            | §2.3 结构、DeclaredManifest.plugins/unobservable |
+| P1-6 URL userinfo                    | §2.1（用户拍板全放行）、§7.4、proposal §7        |
+| P1-7 files 归属契约                  | §2.1（实现门 P2-D 改判：driver 直写，见 §6.3）   |
+| P2-1 managedProcess 复用             | §1.4、§2.2、§8                                   |
+| P2-2 golden 归属                     | §7、plan.md 归属表                               |
+
+### 9.2 实现门（合并后，独立子代理对抗评审）
+
+纯函数层（agentInjection / startupVerification / applyPlaygroundVerification）经评审
+确认正确且测试充分。缺陷集中在进程执行器收编,全部为纯实现修正（无产品方向变更）:
+
+| finding | 缺陷                                                                                                                                                                                                                               | 落点                                                                                                                                                                                                    |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1-A    | `keepExitedOnDrainTimeout:true` 无条件 ⇒ `child-unkillable`/`unreaped` 分支变死代码,且丢失旧 runner 对 `await child.exited` 的 reap-deadline liveness 兜底——真正 unkillable 的子进程会让调用方 finally（lease/finalizePlan）永不跑 | managedProcess 给 `await child.exited` 加 reap-deadline race（escalate 时arm,SIGKILL grace 后 FINAL_REAP_MARGIN_MS 触发→`child-unkillable`），恢复兜底并让 unreaped 复活;顺带修好脚本节点的同款潜在挂起 |
+| P2-B    | runner 只包 stdout 回调设 streamPumpFailed,stderr 裸传且不读 pumpError ⇒ stderr-persist 失败在 clean-exit 后被判 done（旧为 failed/runtime-stream-interrupted）                                                                    | runner 折入 `runResult.pumpError !== undefined ⇒ streamPumpFailed`                                                                                                                                      |
+| P2-C    | runner 的 pid 持久化 onSpawned 裸 await,DB 抖动抛错→执行器收据 fence→abort 健康子进程→节点 `canceled`（旧为 `failed`）                                                                                                             | runner onSpawned 自捕获 DB 错误（best-effort,不 rethrow）;仅测试台准入 fence 有意 rethrow                                                                                                               |
+| P2-D    | P1-7 files containment 是死代码（无调用方,假测试保障）;真凭据文件由 driver 直写                                                                                                                                                    | 删除 agentProcess 的 files 机制,§6.3 改判为 driver 直写（安全结局不变）                                                                                                                                 |
+| P2-E    | opencode followup 无 inventory ⇒ 每次 followup 都「无法验证」噪声                                                                                                                                                                  | runner 在 opencode && !wantsInventory 时跳过验证记录（claude init 行内捕获不受影响）                                                                                                                    |

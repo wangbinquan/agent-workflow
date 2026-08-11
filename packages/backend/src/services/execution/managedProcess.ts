@@ -16,6 +16,9 @@ import { platformSpawnOptionsForHost } from '@/util/platformExec'
 export const MANAGED_PROCESS_MAX_LINE_CHARS = 1024 * 1024
 /** Rolling-tail cap for the retained raw stream text. */
 export const MANAGED_PROCESS_MAX_STREAM_CHARS = 8 * 1024 * 1024
+/** RFC-280 impl-gate P1-A: margin after the SIGKILL grace before a still-alive
+ *  child is abandoned as `child-unkillable` (matches the pre-RFC-280 runner). */
+const FINAL_REAP_MARGIN_MS = 5_000
 
 const LINE_TRUNCATED_MARKER = '…[line truncated]'
 
@@ -333,6 +336,18 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   let outcome: ManagedProcessOutcome = 'exited'
   let killTimer: ReturnType<typeof setTimeout> | undefined
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined
+  let reapDeadlineTimer: ReturnType<typeof setTimeout> | undefined
+  // RFC-280 impl-gate P1-A: the final liveness bound. A child that ignores even
+  // SIGKILL (uninterruptible D-state, a stuck-I/O grandchild, a failed signal
+  // delivery) would otherwise make `await child.exited` hang FOREVER — and the
+  // caller's finally (lease release / plan cleanup / row settle) never runs.
+  // The pre-RFC-280 runner raced `child.exited` against exactly this deadline;
+  // moving agent runs into managedProcess must not drop it. Armed at the first
+  // kill signal (escalate), fires FINAL_REAP_MARGIN_MS after the SIGKILL grace.
+  let reapDeadlineFire: (() => void) | undefined
+  const reapDeadline = new Promise<'unreaped'>((resolve) => {
+    reapDeadlineFire = () => resolve('unreaped')
+  })
 
   const escalate = (): void => {
     // impl-gate 3.2: a second escalation (cancel, then the timeout firing during
@@ -343,6 +358,10 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     killTimer = setTimeout(() => {
       log.warn('child ignored SIGTERM past grace; escalating to SIGKILL', { pid, graceMs })
       killTree(child, 'SIGKILL')
+      // After SIGKILL, bound the reap: if the child still hasn't exited by the
+      // final margin, abandon it as child-unkillable instead of awaiting forever.
+      reapDeadlineTimer = setTimeout(() => reapDeadlineFire?.(), FINAL_REAP_MARGIN_MS)
+      reapDeadlineTimer.unref()
     }, graceMs)
     killTimer.unref()
   }
@@ -380,12 +399,46 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   }
 
   let exitCode: number | null = null
+  let childUnreaped = false
   try {
-    exitCode = await child.exited
+    // RFC-280 impl-gate P1-A: race the exit against the reap deadline (armed on
+    // escalation) so an unkillable child cannot wedge the caller forever.
+    const exitResult = await Promise.race([
+      child.exited.then((code) => ({ kind: 'exited' as const, code })),
+      reapDeadline.then(() => ({ kind: 'unreaped' as const })),
+    ])
+    if (exitResult.kind === 'unreaped') {
+      childUnreaped = true
+      outcome = 'child-unkillable'
+      log.error('child survived SIGKILL past reap deadline; abandoning', {
+        pid,
+        deadlineMs: graceMs + FINAL_REAP_MARGIN_MS,
+      })
+    } else {
+      exitCode = exitResult.code
+    }
   } finally {
     if (killTimer !== undefined) clearTimeout(killTimer)
     if (timeoutTimer !== undefined) clearTimeout(timeoutTimer)
+    if (reapDeadlineTimer !== undefined) clearTimeout(reapDeadlineTimer)
     req.signal?.removeEventListener('abort', onAbort)
+  }
+
+  // An unreaped child still holds its pipes — cancel the pumps, don't await
+  // EOF (it will never come), and don't relabel the already-terminal outcome.
+  if (childUnreaped) {
+    stdoutPump.cancel()
+    stderrPump.cancel()
+    return {
+      outcome,
+      exitCode,
+      rawStdout,
+      stderrTail,
+      truncated,
+      spawnBinaryPath,
+      pid,
+      ...(pumpError !== undefined ? { pumpError } : {}),
+    }
   }
 
   // Bound the wait on the pipes: a surviving grandchild can hold the write end
