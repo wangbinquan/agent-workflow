@@ -15,13 +15,13 @@
   依赖：T0。
 
 - **RFC-281-T2 · claude settings 载体与声明节点修复**
-  `buildClaudeSpawn` 落 per-run `settings.json` + `--settings`；**安全键全量钉死**（design §4.1：`excludedCommands: []`、`allowUnsandboxedCommands: false` 等，按 T0 §5-8 结论渲染）；`CLAUDE_PLATFORM_OWNED_FLAGS` 扩展；声明 permission 节点补 `additionalDirectories`（B4 多仓 mounts 修复）+ `permissions.deny` 敏感面。未声明节点 argv 其余部分逐字节不变（锁）。
-  测试：settings 生成器全分支（含 F2 自身路径挖洞 + 安全键钉死锁）；argv 锁；AC-7。
+  `buildClaudeSpawn` 落 per-run `settings.json` + `--settings`（最小形状，design §4.1：`sandbox.enabled` + `allowUnsandboxedCommands:false` + `filesystem.allowWrite`；**无 denyWrite、v1 无 permissions.deny 敏感面**）；`CLAUDE_PLATFORM_OWNED_FLAGS` 扩展；声明 permission 节点补 `additionalDirectories`（读）+ `permissions.allow` 的 `Edit/Write(//<mount>/**)`（写，B4 多仓 mounts 修复，§5-5——业务可用必需）。未声明节点 argv 其余部分逐字节不变（锁）。
+  测试：settings 生成器全分支（**无 denyWrite 锁** + allowWrite 只含 mounts/白名单/git 兜底 + 不含 appHome 根）；argv 锁；AC-7（多仓读写正向）。
   依赖：T0。
 
-- **RFC-281-T3 · claude sandbox 边界与降级阶梯**
-  settings 增 `sandbox` 段（按 T0 实测的优先级形状渲染；`gitMetaDirs` 按 §5-6 结论处理）；从事件流读取 sandbox 实际状态 → 降级告警（结构化日志，B3 阶梯三级各有出口）。
-  测试：macOS gated 集成 AC-5（Bash 写兄弟 EPERM / 写 cwd 成功 / `git add+commit` 在 iso worktree 全链成功）；AC-8 claude 敏感面遍历用例；resume（`--resume`）边界仍在；降级路径单测 + 告警断言；AC-6「不存在静默无边界」。
+- **RFC-281-T3 · claude sandbox 写边界与告警放行**
+  settings `sandbox` 段（写边界；`gitMetaDirs` 按 §5-6 结论——T0 已证 linked-worktree 自动放行，兜底 allowWrite 仅 fusion/缓存克隆布局需要）；机制可用性判断（macOS=Seatbelt 恒有 / Linux 探 bwrap+socat）→ 不可用则**告警放行不阻断**（结构化日志 + 落观测，两态非多级，§4.4）。
+  测试：macOS gated 集成 AC-5（Bash 写兄弟 EPERM / 写 cwd 成功 / `git add+commit` 在 iso worktree 全链成功）；AC-8 claude 敏感面**写**拒绝一条；resume（`--resume`）边界仍在；告警放行分支单测 + 告警断言（AC-6：不静默、不阻断）。
   依赖：T2。
 
 - **RFC-281-T4 · 作者白名单跨 runtime 兑现与保存面**
@@ -45,9 +45,10 @@
 - [ ] AC-3 skill/tmp/tool-output re-allow 回归
 - [ ] AC-4 作者白名单 opencode 放行 + claude 读写用例 + scalar 接管 + ask 告警
 - [ ] AC-5 claude Seatbelt 越界写拒绝 / cwd 写成功 / iso 内 git 全链成功 / argv 其余不变
-- [ ] AC-6 降级阶梯全部有告警与测试
-- [ ] AC-7 claude 多仓 mounts 可达
-- [ ] AC-8 平台敏感面双 runtime 拒绝（T1/T3 归属，paths.ts 单一事实源遍历）
+- [ ] AC-6 sandbox 不可用时告警放行、不阻断、不静默（有告警+测试）
+- [ ] AC-7 claude 多仓 mounts 可读写（读=additionalDirectories，写=permissions.allow）
+- [ ] AC-8 opencode 敏感面读写拒绝（paths.ts 遍历）+ claude 敏感面写拒绝一条（读 v1 不测）
+- [ ] §0 业务可用回归：多仓写 / git 全链 / 注入资源可读 / 作者白名单放行正向用例
 - [ ] AC-9 文档章节 + 措辞锁（回避守卫词族）
 - [ ] resume 双 runtime 边界重注入回归（T1/T3）
 - [ ] AC-10 `gate:local` 全绿；推后 exact-SHA CI 确认

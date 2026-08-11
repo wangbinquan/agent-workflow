@@ -1,6 +1,15 @@
 # RFC-281 · 任务工作区边界（防误入）
 
-状态：Draft（2026-08-11 落档；方向已与用户对齐：防误入为主 / 默认开 + 作者白名单 / 两个 runtime 都做）
+状态：In Progress（2026-08-11 落档 + 用户批准 + T0 实测完成；方向：防误入为主 / 默认开 + 作者白名单 / 两个 runtime；**首要实现原则见 §2**）
+
+## 0. 首要实现原则（用户定调 2026-08-11，高于一切细节）
+
+**业务正常执行不被误伤是硬约束，防护强度让路。** 本 RFC 要防的就一件事：**一个 agent 干活只在自己的工作区里，别跑到别的任务工作区去**。据此：
+
+- 只做**工作区隔离**这一个维度：把 agent 的写/执行收敛到本任务自己的工作区。不追加会增大误伤面又非此核心的加固（v1 明确**不做** claude 读面逐项 deny 敏感文件、不做 `excludedCommands` 等复杂键面钉死、不做多级降级机器；见 §3）。
+- 宁可漏防不可误伤：机制不可用（如 Linux 缺 bwrap）时**告警放行**，绝不阻断业务。
+- **脚本节点等先不碰**（本就不在范围，§3）。
+- 任何"为了更安全"的收窄，若可能让多仓 / git / 注入资源 / 合法外部读等正常业务跑不了，一律不做或退回作者白名单。T0 已避掉一个此类真坑（claude `denyWrite` 列 appHome 祖先根会连 agent 自己 cwd 一起盖死，design §5-2）。
 
 ## 1. 背景
 
@@ -19,14 +28,15 @@
 - **定位是防误入**：拦截模型走神 / 路径混淆这类事故（本次事故形态），不承诺对抗蓄意恶意 agent。
 - **只用两个 runtime 自家的普通配置面**（opencode `permission.external_directory`；claude `permissions` 路径规则 + claude 自带 sandbox 设置），不重造 RFC-276 删除的平台自有 OS 围栏，不复用其具名符号，不触其反向守卫。
 - **默认开 + 作者白名单**：所有业务节点默认受边界约束；agent 作者可在 frontmatter `permission.external_directory` 里显式声明额外可达目录（延续「用户显式声明是唯一权限输入」的产品不变量），平台负责在两个 runtime 上尽力兑现并披露粒度损失。
-- 顺带把 `~/.agent-workflow` 的平台敏感面（DB / 密钥 / 令牌 / 其他任务工作区）纳入拒绝范围。
+- 平台敏感面（`~/.agent-workflow` 下的 DB / 密钥 / 令牌 / 其他任务工作区）的**写**由工作区隔离**天然覆盖**（都在 cwd 之外）：opencode `external_directory` 读写都挡、claude sandbox 默认写边界挡写。**不为它们再做 claude 侧读面专项 deny**（§0 原则；claude 读面全盘默认保持，归 §5 B8 残留）——这是"聚焦工作区、不过度加固"的直接取舍。
 
 ## 3. 非目标
 
 - **不对抗蓄意恶意 agent**。以下残洞明确保留并文档化（见 §5 B6）：opencode Bash 的间接越界（`sed`/`python`/`git -C`/重定向等不在其参数扫描白名单内，opencode `tool/shell.ts:28-50`）、opencode 路径判定为纯词法不防 symlink（opencode core `fs-util.ts:270-273`）、claude sandbox 不可用平台上的子进程越界。
 - **不重建平台自有 OS sandbox**：不引入 Seatbelt/bwrap 自管代码、不建 provider/准入/降级机器。claude 自带 sandbox 是 claude 的产品功能，平台只通过 `--settings` 传配置。
 - **不改变 readonly 语义**：readonly 仍是「一次性工作区 + 不合回」（RFC-276 C6），不是文件系统写拒绝。
-- **脚本节点不在范围内**：script 节点是宿主直跑的 Bun 进程，不经 runtime 权限面；其收紧属独立议题。
+- **脚本节点不在范围内**：script 节点是宿主直跑的 Bun 进程，不经 runtime 权限面；其收紧属独立议题（§0 用户明确「先不碰脚本」）。
+- **v1 不做 claude 读面敏感文件专项 deny**（§0 原则）：claude sandbox 默认读全盘，平台不逐项 deny `db.sqlite`/`secret.key`/`token` 等——这些文件的**写**已被 sandbox 默认写边界挡住，其**读**在 claude 节点上归 B8 残留（零业务成本的极小 deny 可后续按需加，不在 v1）。opencode 节点因 `external_directory` 是相对判定，读写都已挡、无此残留。
 - **system agent 面（intent / distiller / smoke / 测试台）v1 不套边界**：它们已是一次性工作区 + 只消费结构化输出（RFC-276 C4）；待 RFC-280 T4 统一执行器收编后再评估统一接入。
 - 不改变工具面语义：不动 `--tools` 载入集映射（RFC-242 契约）、不把未声明 permission 的 claude 节点从 `bypassPermissions` 改走 `dontAsk`。
 
@@ -42,7 +52,7 @@
 
 - **B1 · opencode 业务节点：文件工具越界从「自动批准」变为「默认拒绝」**。read/write/edit/apply_patch/glob/grep/lsp 触碰边界外路径 → `DeniedError`。受影响：依赖静默读外部路径（参考仓、机器全局文件）的存量 agent，需要作者补一行 `external_directory` 白名单声明。`--auto` 保留（deny 在 ask 之前短路，不受其影响，opencode `permission/index.ts:75-79`；即 RFC-276 AC-5 语义的直接运用）。
 - **B2 · opencode：平台重新放行运行必需目录**。平台合成的 deny 基线会遮蔽 opencode 默认白名单，平台按本次 run 的**实际注入清单**逐项 re-allow：staged skill 目录、`$TMPDIR/opencode/*`、tool-output 目录、runDir——对用户是行为不变项。**例外（用户已确认，2026-08-11）**：opencode 项目配置 `references` 声明的外部参考目录**不**自动放行（平台不解析 opencode 配置），默认同样被拒，需要作者在 `external_directory` 白名单里声明——用了 references 的存量项目属 B1 影响面。
-- **B3 · claude 业务节点：默认启用 claude 自带 sandbox（可用时）**。写边界 = cwd + 本任务 mounts + tmp，平台敏感面 denyRead；**连 Bash 子进程一起约束**，且在 `bypassPermissions` 下仍强制（claude 官方文档语义）。未声明 permission 的节点保持 `bypassPermissions` 的工具面不变，仅新增文件系统边界。sandbox 不可用（Linux 未装 bubblewrap+socat、Windows）→ 降级为 `permissions.deny` 路径规则（其在 bypassPermissions 下的效力属实现期必测项，见 design §5）；再不可用则记告警放行——防误入定位下的尽力而为阶梯，每级降级均有日志与测试。**读写不对称（用户已确认，2026-08-11）**：claude 侧写面全拒（含子进程）、读面仅拒敏感清单（默认读全盘保持）；与 opencode（文件工具读写全拦）的差异在契约与文档中如实分述，不假装对称。
+- **B3 · claude 业务节点：默认启用 claude 自带 sandbox（可用时），只做写边界**。写边界 = cwd + tmp + 本任务 mounts + 作者白名单（sandbox 默认「写=cwd+tmp+allowWrite」承担，T0 §5-2 已证生产 appHome 在 home 下时兄弟默认拒写）；**连 Bash 子进程一起约束**，且 `bypassPermissions` 下仍强制。未声明 permission 的节点工具面不变，仅新增 `--settings` 文件系统边界。**不下发 denyWrite**（列 appHome 祖先根会连 agent 自己 cwd 一起盖死，T0 §5-2）。sandbox 不可用（Linux 未装 bubblewrap+socat、Windows）→ **告警放行，不阻断业务**（§0 原则；不做多级降级机器）。**读面 v1 不做**（§3、§0）：claude 默认读全盘保持，读兄弟/敏感文件归 B8 残留。与 opencode（相对判定、读写全拦）的读面差异如实分述，不假装对称（用户已确认接受，2026-08-11）。
 - **B4 · claude 声明 permission 的节点：多仓 mounts 通过 additional directories 变为可达**。今天 `dontAsk` 下 cwd 之外即拒，多仓任务的其他成员 mount 本就够不着——本 RFC 顺带修复该缺口（属能力恢复）。
 - **B5 · `external_directory` 升级为跨 runtime 的平台级词汇**。此前它在 claude 侧是 known-but-empty（`runtime/claudeCode/permissionMap.ts:58-59,74`，映射为空且无告警）。现在：opencode 原生兑现；claude 把字面目录形 pattern 兑现为 additional directory + sandbox 放行，无法表达的 glob / scalar `allow` 在保存时显式告警粒度损失（延续 RFC-242 permissionMap 的披露风格）。
 - **B6 · 明示的残洞（非目标）**：见 §3 第一条。文档（`docs/OPENCODE_CONFIG.md`）必须如实列出，不得把本边界描述为安全隔离或 sandbox 承诺。
@@ -62,8 +72,8 @@
 - **AC-3** 平台 re-allow 清单生效：managed skill 文件、`$TMPDIR/opencode/*`、tool-output 目录在边界开启后仍可读（回归锁：技能读取用例在边界开启前后行为一致）。
 - **AC-4** 作者 `external_directory` 白名单在 opencode 上放行所声明目录；**claude 上字面目录白名单有真 runtime 读+写用例**（additionalDirectories 读 edit、sandbox allowWrite 经 Bash 写各一条）；作者显式 scalar（`allow`/`deny`）接管整键；`ask` 在保存时收到「headless 无意义」告警。
 - **AC-5** claude 节点（macOS Seatbelt 可用环境）：Bash 写兄弟任务目录失败、写 cwd 成功；未声明 permission 节点的工具面与既有行为逐字节一致（argv 除新增 `--settings` 外不变）。gated 集成测试覆盖。
-- **AC-6** claude sandbox 不可用时按 B3 阶梯降级，每级降级有结构化告警日志与测试；不存在「静默无边界」状态。
+- **AC-6** claude sandbox 不可用时**告警放行、不阻断业务**（§0 原则；非多级降级机器）：有结构化告警日志与测试证明放行发生且被记录（不静默）。
 - **AC-7** claude 声明 permission 的多仓节点能读写本任务全部 mounts（B4 修复）。
-- **AC-8** 平台敏感面（`db.sqlite`、`secret.key`、`token`、其他任务 worktree/iso/runs）在两个 runtime 的边界拒绝范围内；**归属明确**：opencode 侧用例归 T1、claude 侧归 T3，清单从 `util/paths.ts` 单一事实源生成、测试遍历不手抄。
+- **AC-8** 平台敏感面（`db.sqlite`、`secret.key`、`token`、其他任务 worktree/iso/runs）：**opencode** 侧因 `external_directory` 相对判定，读写都在拒绝范围内（归 T1，清单从 `util/paths.ts` 单一事实源遍历生成、不手抄）；**claude** 侧敏感面的**写**被 sandbox 默认写边界拒绝（归 T3 一条写用例即可），**读**按 §0 原则 v1 不做、归 B8 残留、不设测试。不追求两 runtime 读面对称。
 - **AC-9** `docs/OPENCODE_CONFIG.md` 增补边界章节：机制、作者白名单写法、残洞清单；措辞不得声称安全隔离。
 - **AC-10** 全部新增拒绝分支与降级分支有测试；`gate:local` 全绿。
