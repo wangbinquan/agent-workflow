@@ -50,8 +50,15 @@ export interface AgentInjectionSpecV1 {
   dependents?: readonly Agent[]
   /** Root agent's resolved runtime profile (claude droppedParams derivation). */
   profile?: RuntimeProfile
-  /** Framework skills selected for this run (managed ones are the declaration). */
-  skills?: readonly { name: string; sourceKind: string }[]
+  /**
+   * Framework skills selected for this run.
+   * RFC-282 §7-8 (widened in B1a, ahead of B2 — 设计门 P1-2): the old
+   * `{name; sourceKind}[]` was declaration-only; actual staging consumes
+   * `ResolvedSkill` (sourcePath / skillId / contentVersion — the RFC-178/223
+   * content-fence payload). Backward-compatible widening: every field beyond
+   * the original two is optional, and declaration consumers read name/sourceKind.
+   */
+  skills?: readonly ResolvedSkill[]
   /** Selected plugins (opencode face; claude declares them unsupported). */
   plugins?: readonly Plugin[]
 }
@@ -383,6 +390,89 @@ export interface SystemAgentSpawnContext {
   log?: Logger
 }
 
+/** RFC-281 T3 test seam shape (named in RFC-282 B1a so the unified ctx can
+ *  reference it without an inline duplicate). */
+export interface BoundaryHostProbe {
+  platform: NodeJS.Platform
+  hasExecutable: (bin: string) => boolean
+}
+
+/**
+ * RFC-282 B1a (§2.1) — THE spawn-assembly input. One shape for business and
+ * system spawns: persona-only = `injection` is an empty set, not a separate
+ * branch (决策 5). During the B1 transition both legacy contexts remain; B1b
+ * migrates the five call chains here and deletes them.
+ */
+export interface AgentSpawnContext {
+  /** Runtime-neutral injection intent. System faces pass an empty spec. */
+  readonly injection: AgentInjectionSpecV1
+  // ── prompt & persona (设计门 P1-1: без any of the three, no face can speak) ──
+  /** User prompt. opencode: positional argv; claude: stdin. */
+  readonly prompt: string
+  /** Agent name — inline-entry map key / `--agents` identity. */
+  readonly agentName: string
+  /** Persona body: system face persona text; business face = agent body. */
+  readonly systemPrompt: string
+  /** RFC-041 memory block (null/omitted = no weave). */
+  readonly injectedMemoryBlock?: string | null
+  /**
+   * Per-agent resolved runtime profile (root INCLUDED — 设计门 P1-1: a
+   * singular `profile` silently drops every dependent's model). */
+  readonly resolvedParamsByAgent: ReadonlyMap<string, RuntimeProfile>
+  /** Child-process cwd (business: task worktree; system: scratch dir). */
+  readonly cwd: string
+  /** Per-run root (`<appHome>/runs/<taskId>/<nodeRunId>` or the scratch run dir). */
+  readonly runRoot: string
+  readonly configDir: RuntimeConfigDirProfile
+  /**
+   * RFC-281 mounts making up THIS task's legal workspace. 设计门 P1-10(b):
+   * this is the ONLY boundary field — `BoundaryCtx` construction stays inside
+   * each driver (its contents are runtime knowledge). Omitted = no boundary
+   * (system faces, v1).
+   */
+  readonly taskMounts?: readonly string[]
+  /** RFC-281 T3 sandbox-availability probe seam (degrade-loudly branch tests). */
+  readonly boundaryHostProbe?: BoundaryHostProbe
+  /** Whether the caller wants a startup-inventory observation produced. */
+  readonly wantsInventory: boolean
+  // ── sessions: the two fields stay SEPARATE (设计门 P1-1) ──
+  /** Pre-minted native session id (playground turn 1 / first dispatch). */
+  readonly nativeSessionId?: string | null
+  /** Resume a captured session (RFC-026/148). Mutually exclusive with
+   *  `nativeSessionId` — drivers keep their conflict throw. */
+  readonly resumeSessionId?: string | null
+  /**
+   * RFC-111 D15 + RFC-112 — binary FROZEN on the node_run, passed in by the
+   * caller. 设计门 P1-3: drivers must NOT re-resolve from the registry
+   * (resume/retry read the frozen snapshot, never the mutable registry).
+   */
+  readonly runtimeBinary?: string | null
+  /**
+   * TEST-ONLY command-head override (决策 17 narrowed scope): the runtime-
+   * neutral successor of `opencodeCmd`/`runtimeCmd`. Its PRESENCE also gates
+   * the claude credential bridge OFF (existing runtimeCmd semantics).
+   * Production always undefined.
+   */
+  readonly binaryOverride?: readonly string[]
+  readonly gitUserName?: string | null
+  readonly gitUserEmail?: string | null
+  /** Per-runtime extra argv tokens (registry-validated fork flags). */
+  readonly extraArgs?: readonly string[]
+  readonly nodeRunId: string
+  readonly log: Logger
+}
+
+/**
+ * RFC-282 B1a — SpawnPlan with the declared manifest as a REQUIRED return
+ * field: the declaration is a by-product of the same assembly call, so
+ * "declared says injected, actual spawn didn't" is structurally impossible
+ * (决策 2/9). Interim shape — B1b folds `declared` into SpawnPlan itself once
+ * the legacy assembly methods are gone.
+ */
+export interface AgentSpawnPlan extends SpawnPlan {
+  readonly declared: DeclaredManifestV1
+}
+
 /**
  * RFC-143 PR-4 — spawn inputs for a BUSINESS node run (the runner.ts path with
  * skills / mcp / plugins / inventory / memory weave — everything
@@ -430,7 +520,7 @@ export interface BusinessNodeSpawnContext {
    * `Bun.which`. Tests inject them to exercise the degrade-loudly branch, which
    * is otherwise unreachable on a developer machine.
    */
-  boundaryHostProbe?: { platform: NodeJS.Platform; hasExecutable: (bin: string) => boolean }
+  boundaryHostProbe?: BoundaryHostProbe
   /**
    * RFC-281 T1: absolute mount paths that make up THIS task's legal workspace,
    * for the opencode `external_directory` boundary re-allow set. Source = the
@@ -576,6 +666,14 @@ export interface RuntimeDriver {
    * owns the entire runtime-specific assembly; the runner stays kind-blind.
    */
   buildBusinessSpawn(ctx: BusinessNodeSpawnContext): Promise<SpawnPlan>
+  /**
+   * RFC-282 B1a (§2.1) — THE unified assembly method. Returns argv/env/stdin
+   * AND the declared manifest from ONE call, so declaration and injection are
+   * the same computation. Optional during the B1 transition (both legacy
+   * methods still live); B1b migrates the five call chains onto it, deletes
+   * `buildBusinessSpawn`/`renderInjection`, and makes this required.
+   */
+  buildAgentSpawn?(ctx: AgentSpawnContext): Promise<AgentSpawnPlan>
   /**
    * RFC-280 T1 — the unified injection-layer render hook. T1 covers the MCP
    * face (partition + per-runtime wire entries + declared manifest); later

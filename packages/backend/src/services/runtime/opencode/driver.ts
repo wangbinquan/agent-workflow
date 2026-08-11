@@ -7,6 +7,8 @@
 
 import type {
   AgentInjectionSpecV1,
+  AgentSpawnContext,
+  AgentSpawnPlan,
   BusinessNodeSpawnContext,
   DistillSessionCaptureContext,
   InventoryReadContext,
@@ -44,6 +46,7 @@ import {
   type BoundaryCtx,
 } from '@/services/execution/workspaceBoundary'
 import { pickRuntimeHead } from '../head'
+import { toBusinessCtx, toSystemCtx } from '../spawnCtx'
 import { stageSkills } from '../stageSkills'
 import { probeOpencode } from '@/util/opencode'
 import { gitMetaDirsFor } from '@/util/git'
@@ -217,6 +220,21 @@ export const opencodeDriver: RuntimeDriver = {
       gitUserEmail: ctx.gitUserEmail ?? null,
     })
     return { cmd, env, stdin: { mode: 'ignore' } }
+  },
+  // RFC-282 B1a — the unified assembly facade: ONE call returns plan +
+  // declared manifest (declaration is a by-product of assembly, 决策 2/9).
+  // Byte parity with the legacy paths is the contract; the parity suite
+  // (rfc282-b1a) is live while both paths exist.
+  async buildAgentSpawn(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
+    const rendered = this.renderInjection(ctx.injection)
+    const head =
+      ctx.binaryOverride !== undefined ? { opencodeCmd: [...ctx.binaryOverride] } : {}
+    if (ctx.taskMounts === undefined) {
+      const plan = await this.buildSpawn(toSystemCtx(ctx, rendered, head))
+      return { ...plan, declared: rendered.declared }
+    }
+    const plan = await this.buildBusinessSpawn(toBusinessCtx(ctx, head))
+    return { ...plan, declared: rendered.declared }
   },
   // RFC-143 PR-4 — business-node spawn: the ENTIRE opencode assembly the runner
   // used to do inline (runner.ts:491-905 pre-collapse), moved VERBATIM so the
