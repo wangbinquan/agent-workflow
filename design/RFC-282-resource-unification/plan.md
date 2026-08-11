@@ -159,6 +159,16 @@ agents-split-page）。
 0×P1 + 2×P2 + 5×P3，总判定「可收工」；P2-1（/api/runtimes 脏行 500）、
 P2-2（wrapPlan 类型收窄为 wrap-only）、P3-1/2/3/4/5 全部已在收尾提交处置。
 
-**残留 followup（接手清单）**：B1b 删除半场（见 1）；C1 第二段（见 2）；
-`declaredMcpServers` 改由 `declared.mcpServers` 承接（design §2.1 预留的独立
-收敛）；`runtime-buildspawn` 系统面统一产出（见 3）。
+**残留 followup —— 2026-08-12 二次收尾已全清**（用户拍板「把没做的全部收尾」，
+并发 session 撤场解锁）：
+- ✅ B1b 删除半场（17b9215b）：契约面只剩 buildSpawn(AgentSpawnContext)，旧三
+  方法体抽为 driver 内具名装配函数，11 个测试文件迁真身；
+- ✅ C1 第二段（17b9215b）：config.opencodePath 并入 mint 冻结（driver.defaultBinary
+  差分、零 kind 字面量；resume 读冻结快照——D15 对齐，为**有意行为微变**：
+  已铸 run 的 head 不再随 config 后改漂移）；15 入口收拢为 scheduler 单点；
+  opencodeCmd/runtimeCmd → binaryOverride 全链改名 + legacyHeads 删除 +
+  约 90 文件夹具迁移；
+- ✅ RFC-280 遗留两文件落库（d6760d24，banner 判据 + mock MCP 状态缝）。
+
+**仍开放（低优先，独立小项）**：`declaredMcpServers` 改由 `declared.mcpServers`
+承接（design §2.1 预留）；系统面统一产出（§7-1a，待 B4 式真身合一时触发）。
