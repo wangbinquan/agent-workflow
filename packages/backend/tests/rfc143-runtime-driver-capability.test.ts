@@ -347,9 +347,11 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 单份 + semver 单
     for (const f of ['tasks', 'clarify', 'taskQuestions', 'reviews', 'fusions']) {
       const src = SRC(`routes/${f}.ts`)
       expect(src).not.toContain('function resolveOpencodeCmd')
-      expect(src).toContain("resolveOpencodeCmd } from '@/services/runtime/opencode/util'")
+      // RFC-282 C3/C1：路由经受认可入口 @/services/runtime 取（深 import 被
+      // A1 围栏禁止）；唯一定义随模块搬进 runtime/opencode/util.ts。
+      expect(src).toContain("resolveOpencodeCmd } from '@/services/runtime'")
     }
-    expect(SRC('util/opencode.ts')).toContain('export function resolveOpencodeCmd')
+    expect(SRC('services/runtime/opencode/util.ts')).toContain('export function resolveOpencodeCmd')
   })
 
   it('resolveOpencodeCmd 行为：configPath 空/不可读 → undefined；opencodePath 设值 → [path]', async () => {
@@ -373,13 +375,15 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 单份 + semver 单
     expect(semverSrc).toContain('export function extractVersion')
     expect(semverSrc).toContain('export function compareSemver')
     // 两个 probe 模块不再各自定义（import 使用不受限）。
-    for (const f of ['util/opencode.ts', 'services/runtime/claudeCode/probe.ts']) {
+    for (const f of ['services/runtime/opencode/util.ts', 'services/runtime/claudeCode/probe.ts']) {
       const src = SRC(f)
       expect(src).not.toContain('export function extractVersion')
       expect(src).not.toContain('export function compareSemver(')
     }
-    // util/opencode 对既有 import 面保持 re-export（opencode-version.test.ts 锚定行为）。
-    expect(SRC('util/opencode.ts')).toContain("compareSemver, extractVersion } from './semver'")
+    // 搬迁后（RFC-282 C3）对既有 import 面保持 re-export（opencode-version.test.ts 锚定行为）。
+    expect(SRC('services/runtime/opencode/util.ts')).toContain(
+      "compareSemver, extractVersion } from '@/util/semver'",
+    )
   })
 
   it('resolveInternalAgentRuntime legacyModel 是显式 opencode-only 活转移段（PR-5 审计结论文档锁）', () => {

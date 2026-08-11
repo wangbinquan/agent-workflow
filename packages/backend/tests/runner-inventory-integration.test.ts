@@ -309,7 +309,16 @@ describe('runner.ts source: dump plugin wiring lock', () => {
 
   test('opencode-plugin/index exports both helpers and references PLUGIN_FILES embed table', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'plugin', 'index.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'services',
+        'runtime',
+        'opencode',
+        'plugin',
+        'index.ts',
+      ),
       'utf-8',
     )
     // Source-tree path resolver (used by docs / logs).
@@ -335,7 +344,16 @@ describe('runner.ts source: dump plugin wiring lock', () => {
   })
 
   test('plugin file exists in tree (dev mode source)', () => {
-    const p = resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'plugin', 'aw-inventory-dump.mjs')
+    const p = resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'services',
+      'runtime',
+      'opencode',
+      'plugin',
+      'aw-inventory-dump.mjs',
+    )
     expect(existsSync(p)).toBe(true)
   })
 })

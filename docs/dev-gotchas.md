@@ -556,3 +556,5 @@ CI 不设该变量所以那边是绿的。跑门禁时用 `env -u FORCE_COLOR bu
 一起没了——实测只留下 28 字节的输出（第一个测试文件名）就断了，看上去像「第一个文件把
 runner 打崩了」，而单独跑那个文件是绿的。要么**把 ssh 会话开着**（本地用后台任务持有），
 要么用真正脱离会话的机制；不要凭那半截输出去归因。
+
+- **`git mv` 会立刻把 rename 写进 index——之后任何「只想提交别的文件」的 `git commit` 都会把这些 staged renames 一起带走**（RFC-282 实测事故：搬迁中途插入一个 docs-only commit，结果把「文件已搬、import 未改」的破碎中间态推上 main，CI 四路全红一小时）。定式：搬迁类工作开始后到搬迁 commit 落地前，**不要插入任何其它 commit**；确需插入时先 `git status` 核对 staged 区只含目标文件，或 `git stash --staged` 暂存 renames。
