@@ -126,8 +126,12 @@ describe('spawn catches route through explainSpawnEnoent (source-level wiring lo
     expect(src('services/runner.ts')).toContain('explainSpawnEnoent(')
   })
 
-  test('runtimeSmoke.ts translates the probe-spawn ENOENT', () => {
-    expect(src('services/runtimeSmoke.ts')).toContain('explainSpawnEnoent(')
+  test('runtimeSmoke.ts surfaces the executor-translated probe-spawn ENOENT', () => {
+    // RFC-280 T4: the probe spawns through the unified executor, whose
+    // managedProcess core owns the ENOENT translation; the smoke result must
+    // still carry it (spawnError → detail), so lock both halves of the wiring.
+    expect(src('services/execution/managedProcess.ts')).toContain('explainSpawnEnoent(')
+    expect(src('services/runtimeSmoke.ts')).toContain('run.spawnError')
   })
 
   test('systemAgentRun.ts translates the system-spawn ENOENT', () => {

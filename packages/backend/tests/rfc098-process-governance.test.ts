@@ -38,7 +38,16 @@ import { STALE_RUN_PID_MAX_AGE_MS } from '../src/util/process'
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const STUBBORN = resolve(import.meta.dir, 'fixtures', 'stubborn-opencode.ts')
 
-const TIMEOUT_MS = 500
+// RFC-280 T4 (2026-08-11): TIMEOUT_MS 500 → 1500. The node timeout doubles as
+// the window in which the stubborn fixture must fork its grandchild AND write
+// the pid file BEFORE the TERM→KILL chain fires; on a fully-loaded 4-shard
+// gate (which now also spawns real bun children for the unified-executor
+// suites) the double process startup reproducibly overran 500ms, failing the
+// `waitForFile(pidFile)` step — the grandchild never existed to be
+// group-killed. 1.5s keeps the intent (bounded wall clock, group kill reaches
+// the grandchild) while giving startup room under load; the per-test 30s cap
+// still bounds the whole case.
+const TIMEOUT_MS = 1_500
 const GRACE_MS = 700
 const MARGIN_MS = 5_000
 

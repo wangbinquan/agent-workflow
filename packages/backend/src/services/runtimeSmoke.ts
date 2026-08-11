@@ -13,17 +13,16 @@
 // only after reap and plan cleanup are both confirmed; unsafe remnants are
 // deliberately retained for recovery instead of recursively deleted.
 
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
 import type { SpawnPlan } from '@/services/runtime/types'
 import { createLogger, type Logger } from '@/util/log'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
-import { explainSpawnEnoent, outputTail } from '@/util/spawnDiagnostics'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
-import { killProcessTree } from '@/util/process'
+import { outputTail } from '@/util/spawnDiagnostics'
+import { runAgentProcess } from '@/services/execution/agentProcess'
+import { Paths } from '@/util/paths'
 
 export type SmokeOutcome =
   | 'conforms'
@@ -66,7 +65,6 @@ export interface SmokeOptions {
 const MAX_OUTPUT_BYTES = 256 * 1024
 const DEFAULT_TIMEOUT_MS = 60_000
 const CHILD_TERM_GRACE_MS = 2_000
-const CHILD_REAP_DEADLINE_MS = 2_000
 const AUTH_SIGNATURES =
   /not logged in|unauthorized|authentication|invalid api key|please run .*login|no api key|anthropic_api_key|log ?in to/i
 // 2026-08-04 (GLM-gateway incident): private Anthropic/OpenAI-compatible
@@ -90,99 +88,6 @@ const MODEL_FAIL_SIGNATURES =
 // fetch-failed / tunnel), so it can safely win over authHit.
 const NETWORK_SIGNATURES =
   /403 request not allowed|not available in your (?:region|country|location)|fetch failed|network error|connection (?:error|refused|reset|timed ?out)|econnrefused|econnreset|econnaborted|enetunreach|ehostunreach|enetdown|enotfound|etimedout|eai_again|getaddrinfo|socket hang up|no route to host|network is unreachable|tunneling socket|unable to connect|could not connect|failed to connect/i
-
-/** kill the whole process group (the child is `detached`), best-effort. */
-function killGroup(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
-  try {
-    if (typeof child.pid === 'number') killProcessTree(child.pid, signal)
-    else child.kill(signal === 'SIGKILL' ? 9 : 15)
-  } catch {
-    /* already gone */
-  }
-}
-
-type SmokeReapTarget = {
-  exited: Promise<number>
-  unref?: () => void
-}
-
-async function settlesWithin(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
-  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
-  try {
-    return await Promise.race([
-      promise.then(
-        () => true,
-        () => false,
-      ),
-      new Promise<false>((resolve) => {
-        // RFC-254: deadline an await depends on — must stay ref'd (unref'd
-        // timers never fire on Windows Bun once the loop is otherwise idle;
-        // see rfc254-no-unref-deadline-guard.test.ts). Cleared in finally.
-        timeoutHandle = setTimeout(() => resolve(false), timeoutMs)
-      }),
-    ])
-  } finally {
-    if (timeoutHandle !== null) clearTimeout(timeoutHandle)
-  }
-}
-
-/**
- * RFC-224 system-store destruction barrier.
- *
- * A plan cleanup may remove a store whose launcher still owns its lock, while
- * removing attemptDir can also erase the launcher's run/config inputs. Neither
- * is safe until the direct launcher is observably reaped. Cleanup failure is a
- * second hard barrier: preserve the outer attempt directory for recovery and
- * diagnostics instead of continuing with a recursive delete.
- *
- * Exported so the never-settling-child and live-lock branches can be tested
- * without launching an actually unkillable process.
- */
-export async function finalizeSmokeAttempt(input: {
-  child: SmokeReapTarget | null
-  childReaped: boolean
-  killChild: (signal: 'SIGTERM' | 'SIGKILL') => void
-  cleanup?: () => void | Promise<void>
-  removeAttemptDir: () => void | Promise<void>
-  termGraceMs?: number
-  reapDeadlineMs?: number
-  terminationAlreadyExhausted?: boolean
-}): Promise<boolean> {
-  let reaped = input.child === null || input.childReaped
-  if (input.child !== null) {
-    if (!reaped && input.terminationAlreadyExhausted !== true) {
-      input.killChild('SIGTERM')
-      reaped = await settlesWithin(input.child.exited, input.termGraceMs ?? CHILD_TERM_GRACE_MS)
-    }
-    if (!reaped) {
-      input.killChild('SIGKILL')
-      reaped = await settlesWithin(
-        input.child.exited,
-        input.reapDeadlineMs ?? CHILD_REAP_DEADLINE_MS,
-      )
-    } else {
-      // The direct child may have exited while a same-group descendant still
-      // owns inherited pipes. Reap that group before cleanup.
-      input.killChild('SIGKILL')
-    }
-    if (!reaped) {
-      input.child.unref?.()
-      return false
-    }
-  }
-
-  try {
-    await input.cleanup?.()
-  } catch {
-    return false
-  }
-  try {
-    await input.removeAttemptDir()
-  } catch {
-    return false
-  }
-  return true
-}
 
 /**
  * Build the protocol's minimal smoke spawn plan (binary head = [binaryPath]).
@@ -243,364 +148,117 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   const prompt =
     `Output this exact token verbatim via your output protocol and nothing else: ${nonce}\n` +
     `Use the \`ok\` output port (or plain text if you have no ports).`
-  const attemptDir = mkdtempSync(join(tmpdir(), 'aw-runtime-smoke-'))
+  // RFC-280 T4/T5（落差⑤）：appHome scratch，不再 OS tmpdir —— GC 归属确定，
+  // 与 systemAgentRun 的 scratch 策略一致。
+  const attemptDir = join(Paths.root, 'scratch', `runtime-smoke-${randomBytes(8).toString('hex')}`)
   const worktreeDir = join(attemptDir, 'worktree')
   const runDir = join(attemptDir, 'run')
   mkdirSync(worktreeDir, { recursive: true, mode: 0o700 })
   mkdirSync(runDir, { recursive: true, mode: 0o700 })
 
-  let child: Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> | null = null
-  let plan: SpawnPlan | null = null
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let sigkillTimer: ReturnType<typeof setTimeout> | null = null
-  let reapDeadlineTimer: ReturnType<typeof setTimeout> | null = null
-  let timedOut = false
-  let childReaped = false
-  let terminationAlreadyExhausted = false
-  let cancelDrains: (() => Promise<void>) | null = null
-  let result: SmokeResult | undefined
-  let finalizationSafe = false
+  let plan: SpawnPlan
   try {
-    result = await (async (): Promise<SmokeResult> => {
-      try {
-        plan = await buildSmokePlan(
-          opts.protocol,
-          opts.binaryPath,
-          worktreeDir,
-          runDir,
-          prompt,
-          opts.model,
-          opts.extraArgs,
-          opts.isSandbox === true,
-          log,
-        )
-      } catch (err) {
-        return {
-          outcome: 'spawn-failed',
-          conforms: false,
-          detail: `failed to prepare spawn: ${err instanceof Error ? err.message : String(err)}`,
-          sawNonce: false,
-          sawEnvelope: false,
-          exitCode: null,
-        }
-      }
-
-      let spawnCmd: string[] | undefined
-      try {
-        spawnCmd = plan.cmd
-        child = Bun.spawn({
-          ...platformSpawnOptionsForHost(),
-          cmd: spawnCmd,
-          cwd: worktreeDir,
-          env: plan.env,
-          stdout: 'pipe',
-          stderr: 'pipe',
-          stdin: plan.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
-          detached: true,
-        })
-      } catch (err) {
-        // 2026-08-04: Bun's posix_spawn ENOENT names argv[0] even when the
-        // missing path is the cwd — probe both so the detail blames the right one.
-        return {
-          outcome: 'spawn-failed',
-          conforms: false,
-          detail: `binary failed to start: ${explainSpawnEnoent(
-            err instanceof Error ? err.message : String(err),
-            { argv0: spawnCmd?.[0] ?? plan.cmd[0], cwd: worktreeDir },
-          )}`,
-          sawNonce: false,
-          sawEnvelope: false,
-          exitCode: null,
-        }
-      }
-
-      // deliver the prompt over stdin (claude) and close it.
-      if (plan.stdin?.mode === 'pipe') {
-        const sink = child.stdin as { write: (s: string) => void; end: () => void } | undefined
-        if (sink !== undefined) {
-          sink.write(plan.stdin.data)
-          sink.end()
-        }
-      }
-
-      const liveChild = child
-      // RFC-254: every timer in this escalation chain must stay REF'D. The
-      // race below can only settle through `resolve({kind:'unreaped'})`, which
-      // sits at the END of the chain — and the SIGKILL in the middle is a side
-      // effect that must actually fire. On Windows Bun an unref'd timer never
-      // fires once nothing ref'd remains on the loop, so unref'ing these meant
-      // "if the child wedges quietly, neither the kill nor the bound happens"
-      // (see rfc254-no-unref-deadline-guard.test.ts). All three are cleared on
-      // the settle path, so they hold the loop only while a reap is in flight.
-      const reapDeadline = new Promise<{ kind: 'unreaped' }>((resolve) => {
-        timer = setTimeout(() => {
-          timedOut = true
-          killGroup(liveChild, 'SIGTERM')
-          // Track both escalation timers: the first sends SIGKILL, the second
-          // turns a never-settling `child.exited` into a bounded unsafe result.
-          sigkillTimer = setTimeout(() => {
-            killGroup(liveChild, 'SIGKILL')
-            reapDeadlineTimer = setTimeout(() => {
-              terminationAlreadyExhausted = true
-              resolve({ kind: 'unreaped' })
-            }, CHILD_REAP_DEADLINE_MS)
-          }, CHILD_TERM_GRACE_MS)
-        }, timeoutMs)
-      })
-
-      // drain stdout (parse events) + stderr (auth/model signatures), both capped.
-      let sessionId: string | undefined
-      let sawEvent = false
-      let sawNonce = false
-      let sawEnvelope = false
-      let outBytes = 0
-      let stderrText = ''
-      // claude reports auth / API / network errors on STDOUT (the stream-json `result`
-      // event carries `is_error` + e.g. "Failed to authenticate. API Error: 403 Request
-      // not allowed"), not stderr. Accumulate stdout too so the network/auth/model
-      // classifier sees those — else a reachable-but-unauthenticated, or (RFC-116)
-      // proxy/region-blocked, claude misclassifies as `stream-nonconforming` when it
-      // actually spoke the protocol fine and just couldn't reach/authenticate the API.
-      let stdoutText = ''
-      // 2026-08-04 second round: the terminal `result` event puts the error
-      // text NEAR THE HEAD of the line (`"is_error":true,"result":"…"`) and a
-      // fat usage blob at the end — a tail-capped excerpt shows only the blob
-      // (observed live: the GLM-fork probe surfaced `"modelUsage":{}` while
-      // the actual reason stayed hidden). Keep the LAST result-shaped line so
-      // the evidence can quote its head.
-      let lastResultLine = ''
-      const activeReaders = new Set<{ cancel: () => Promise<void> | void }>()
-
-      const readStream = async (
-        stream: ReadableStream<Uint8Array> | undefined,
-        onLine: (line: string) => void,
-      ): Promise<void> => {
-        if (stream === undefined) return
-        const reader = stream.getReader()
-        activeReaders.add(reader)
-        const decoder = new TextDecoder()
-        let buf = ''
-        try {
-          for (;;) {
-            const { done, value } = await reader.read()
-            if (done) break
-            if (outBytes >= MAX_OUTPUT_BYTES) continue // keep draining to EOF, stop accumulating
-            outBytes += value.byteLength
-            buf += decoder.decode(value, { stream: true })
-            let nl: number
-            while ((nl = buf.indexOf('\n')) >= 0) {
-              const line = buf.slice(0, nl)
-              buf = buf.slice(nl + 1)
-              if (line.length > 0) onLine(line)
-            }
-          }
-          if (buf.length > 0) onLine(buf)
-        } catch {
-          /* stream closed under us (kill) */
-        } finally {
-          activeReaders.delete(reader)
-          reader.releaseLock()
-        }
-      }
-      cancelDrains = async () => {
-        await Promise.allSettled(
-          [...activeReaders].map(async (reader) => {
-            try {
-              await reader.cancel()
-            } catch {
-              // The stream may already be closing under SIGKILL.
-            }
-          }),
-        )
-      }
-
-      // Codex P2: the nonce + envelope are detected ONLY in PARSED event text —
-      // proving the model produced them THROUGH the protocol stream, not on a raw
-      // stdout line a non-protocol binary could also print. drainAll runs
-      // concurrently; the timeout timer kills the child if it overruns.
-      const drainAll = Promise.all([
-        readStream(child.stdout as ReadableStream<Uint8Array> | undefined, (line) => {
-          // raw line (capped) feeds the auth/model classifier — claude's error is
-          // here, not on stderr (see stdoutText decl).
-          if (stdoutText.length < 8_192) stdoutText += line + '\n'
-          if (line.includes('"type":"result"') || line.includes('"is_error":true')) {
-            lastResultLine = line
-          }
-          const ev = driver.parseEvent(line)
-          if (ev !== null) {
-            sawEvent = true
-            if (ev.sessionId !== undefined && sessionId === undefined) sessionId = ev.sessionId
-            if (typeof ev.text === 'string') {
-              if (ev.text.includes(nonce)) sawNonce = true
-              if (ev.text.includes('<workflow-output')) sawEnvelope = true
-            }
-          }
-        }),
-        readStream(child.stderr as ReadableStream<Uint8Array> | undefined, (line) => {
-          if (stderrText.length < 8_192) stderrText += line + '\n'
-        }),
-      ])
-
-      const exitOutcome = await Promise.race([
-        child.exited.then(
-          (exitCode) => ({ kind: 'exited' as const, exitCode }),
-          () => ({ kind: 'unreaped' as const }),
-        ),
-        reapDeadline,
-      ])
-      if (exitOutcome.kind === 'unreaped') {
-        await settlesWithin(cancelDrains(), CHILD_REAP_DEADLINE_MS)
-        return {
-          outcome: 'spawn-failed',
-          conforms: false,
-          detail: 'runtime process could not be reaped after termination',
-          sawNonce: false,
-          sawEnvelope: false,
-          exitCode: null,
-        }
-      }
-      childReaped = true
-      const exitCode = exitOutcome.exitCode
-      if (timer !== null) {
-        clearTimeout(timer)
-        timer = null
-      }
-      if (sigkillTimer !== null) {
-        clearTimeout(sigkillTimer)
-        sigkillTimer = null
-      }
-      if (reapDeadlineTimer !== null) {
-        clearTimeout(reapDeadlineTimer)
-        reapDeadlineTimer = null
-      }
-      // Codex P2: bounded post-exit flush — a grandchild that inherited the stdout
-      // pipe must not wedge the probe; classify on whatever drained within 2s.
-      await Promise.race([
-        drainAll,
-        new Promise<void>((resolve) => {
-          const g = setTimeout(resolve, 2_000)
-          g.unref?.()
-        }),
-      ])
-
-      // Scan BOTH streams: claude's auth/API errors land on stdout, opencode's on
-      // stderr. Only consulted when the run didn't conform, so a healthy nonce echo
-      // never trips a false auth/model hit.
-      const haystack = `${stderrText}\n${stdoutText}`.toLowerCase()
-      // RFC-116: networkHit is evaluated BEFORE authHit (see the if-chain). claude's
-      // region/proxy block reads "Failed to authenticate. API Error: 403 Request not
-      // allowed" — it carries the auth word AND the 403/network signal, but the root
-      // cause is endpoint reachability (e.g. daemon lacks HTTP(S)_PROXY), not creds.
-      const networkHit = NETWORK_SIGNATURES.test(haystack)
-      const authHit = AUTH_SIGNATURES.test(haystack)
-      const modelHit = MODEL_FAIL_SIGNATURES.test(haystack)
-      // Codex P2: conformance REQUIRES the nonce round-trip (a real protocol turn
-      // consumed the prompt) — sawEnvelope alone is too weak (a canned emitter).
-      const conformed =
-        !timedOut && exitCode === 0 && sawEvent && sessionId !== undefined && sawNonce
-      // 2026-08-04: the classifications used to swallow the child's actual
-      // error text — a fork/gateway error outside the EN signature table
-      // (e.g. "usage limit reached", a GLM error string) landed as a bare
-      // "nonce missing" and the operator had to guess. Surface a masked,
-      // capped excerpt on EVERY failure branch (curated guidance stays, the
-      // verbatim vendor text rides along). The probe route is admin-only;
-      // maskDiagnosticsText scrubs credential shapes.
-      // The result line is quoted from its HEAD (error text precedes the usage
-      // blob), the raw streams from their TAILS (errors come last there).
-      const resultHead = lastResultLine.replace(/\s+/g, ' ').trim()
-      const evidence = [
-        resultHead.length > 0
-          ? `result: ${resultHead.length > 400 ? `${resultHead.slice(0, 400)}…` : resultHead}`
-          : null,
-        stderrText.trim().length > 0 ? `stderr tail: ${outputTail(stderrText)}` : null,
-        stdoutText.trim().length > 0 ? `stdout tail: ${outputTail(stdoutText)}` : null,
-      ]
-        .filter((part): part is string => part !== null)
-        .join(' | ')
-      const withEvidence = (base: string): string =>
-        evidence.length === 0 ? base : `${base} — ${maskDiagnosticsText(evidence)}`
-
-      let outcome: SmokeOutcome
-      let detail: string
-      if (conformed) {
-        outcome = 'conforms'
-        detail = `binary speaks the ${opts.protocol} protocol (session captured, nonce echoed)`
-      } else if (timedOut) {
-        outcome = 'model-call-failed'
-        detail = withEvidence(`timed out after ${timeoutMs}ms`)
-      } else if (networkHit) {
-        outcome = 'network-blocked'
-        detail = withEvidence(
-          'binary started but the model endpoint is unreachable (e.g. 403 Request not allowed / connection failed). Check the daemon network/proxy (HTTP(S)_PROXY) so it can reach the model API, then re-probe.',
-        )
-      } else if (authHit) {
-        outcome = 'auth-missing'
-        detail = withEvidence(
-          'binary started but authentication failed (may still conform once credentials exist)',
-        )
-      } else if (modelHit) {
-        outcome = 'model-call-failed'
-        detail = withEvidence(
-          'binary started + authed but the model call failed (rate limit / unavailable / model not licensed)',
-        )
-      } else if (!sawEvent) {
-        outcome = 'stream-nonconforming'
-        detail = withEvidence(`no parseable ${opts.protocol} events on stdout (exit ${exitCode})`)
-      } else {
-        outcome = 'stream-nonconforming'
-        detail = withEvidence(
-          `emitted events but did not complete the protocol turn (exit ${exitCode}, nonce ${
-            sawNonce ? 'seen' : 'missing'
-          })`,
-        )
-      }
-      // 2026-08-04 (GLM-gateway incident): with no --model the binary falls
-      // back to its OWN default model — for a fork wrapping a private gateway
-      // that default is often unlicensed. Say so at the failure site: the fix
-      // is the runtime's model field, not credentials or the binary.
-      if (
-        opts.model === undefined &&
-        (outcome === 'model-call-failed' || outcome === 'stream-nonconforming')
-      ) {
-        detail +=
-          ' [no --model was passed (runtime model field is empty) — the binary used its own default model; set the runtime model and re-probe]'
-      }
-
-      return {
-        outcome,
-        conforms: outcome === 'conforms',
-        detail,
-        ...(sessionId !== undefined ? { capturedSessionId: sessionId } : {}),
-        sawNonce,
-        sawEnvelope,
-        exitCode,
-      }
-    })()
-  } finally {
-    if (timer !== null) clearTimeout(timer)
-    if (sigkillTimer !== null) clearTimeout(sigkillTimer)
-    if (reapDeadlineTimer !== null) clearTimeout(reapDeadlineTimer)
-    const cancelPendingDrains = cancelDrains as (() => Promise<void>) | null
-    if (cancelPendingDrains !== null) {
-      await settlesWithin(cancelPendingDrains(), CHILD_REAP_DEADLINE_MS)
+    plan = await buildSmokePlan(
+      opts.protocol,
+      opts.binaryPath,
+      worktreeDir,
+      runDir,
+      prompt,
+      opts.model,
+      opts.extraArgs,
+      opts.isSandbox === true,
+      log,
+    )
+  } catch (err) {
+    rmSync(attemptDir, { recursive: true, force: true })
+    return {
+      outcome: 'spawn-failed',
+      conforms: false,
+      detail: `failed to prepare spawn: ${err instanceof Error ? err.message : String(err)}`,
+      sawNonce: false,
+      sawEnvelope: false,
+      exitCode: null,
     }
-    // Assignments happen inside the awaited attempt closure; keep the cleanup
-    // reads explicit because TypeScript does not propagate closure writes into
-    // outer control-flow narrowing.
-    const spawnedChild = child as Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> | null
-    const preparedPlan = plan as SpawnPlan | null
-    finalizationSafe = await finalizeSmokeAttempt({
-      child: spawnedChild,
-      childReaped,
-      killChild: (signal) => {
-        if (spawnedChild !== null) killGroup(spawnedChild, signal)
-      },
-      ...(preparedPlan?.cleanup === undefined ? {} : { cleanup: preparedPlan.cleanup }),
-      removeAttemptDir: () => rmSync(attemptDir, { recursive: true, force: true }),
-      terminationAlreadyExhausted,
-    })
   }
-  if (!finalizationSafe || result === undefined) {
+
+  // Classification accumulators — fed by the executor's line callbacks.
+  let sessionId: string | undefined
+  let sawEvent = false
+  let sawNonce = false
+  let sawEnvelope = false
+  let outBytes = 0
+  let stderrText = ''
+  // claude reports auth / API / network errors on STDOUT (the stream-json `result`
+  // event carries `is_error` + e.g. "Failed to authenticate. API Error: 403 Request
+  // not allowed"), not stderr. Accumulate stdout too so the network/auth/model
+  // classifier sees those.
+  let stdoutText = ''
+  // The terminal `result` event puts the error text NEAR THE HEAD of the line;
+  // keep the LAST result-shaped line so the evidence can quote its head.
+  let lastResultLine = ''
+
+  // RFC-280 T4 — process reliability is the unified executor's job
+  // (managedProcess adapter): spawn/stdin/timeout/TERM→KILL/reap/drain all live
+  // there; this probe only classifies what came back.
+  const run = await runAgentProcess({
+    cmd: plan.cmd,
+    cwd: worktreeDir,
+    env: plan.env,
+    timeoutMs,
+    termGraceMs: CHILD_TERM_GRACE_MS,
+    ...(plan.stdin?.mode === 'pipe' ? { stdin: plan.stdin } : {}),
+    ...(plan.beforeSpawn !== undefined ? { beforeSpawn: plan.beforeSpawn } : {}),
+    ...(plan.cleanup !== undefined ? { cleanup: plan.cleanup } : {}),
+    capture: {
+      onStdoutLine: (line) => {
+        if (outBytes >= MAX_OUTPUT_BYTES) return
+        outBytes += Buffer.byteLength(line, 'utf8') + 1
+        // raw line (capped) feeds the auth/model classifier — claude's error is
+        // here, not on stderr (see stdoutText decl).
+        if (stdoutText.length < 8_192) stdoutText += line + '\n'
+        if (line.includes('"type":"result"') || line.includes('"is_error":true')) {
+          lastResultLine = line
+        }
+        const ev = driver.parseEvent(line)
+        if (ev !== null) {
+          sawEvent = true
+          if (ev.sessionId !== undefined && sessionId === undefined) sessionId = ev.sessionId
+          if (typeof ev.text === 'string') {
+            if (ev.text.includes(nonce)) sawNonce = true
+            if (ev.text.includes('<workflow-output')) sawEnvelope = true
+          }
+        }
+      },
+      onStderrLine: (line) => {
+        if (stderrText.length < 8_192) stderrText += line + '\n'
+      },
+    },
+    log,
+  })
+
+  if (run.outcome === 'spawn-failed') {
+    rmSync(attemptDir, { recursive: true, force: true })
+    return {
+      outcome: 'spawn-failed',
+      conforms: false,
+      detail: `binary failed to start: ${run.spawnError ?? 'unknown spawn failure'}`,
+      sawNonce: false,
+      sawEnvelope: false,
+      exitCode: null,
+    }
+  }
+  if (run.outcome === 'unreaped') {
+    // Child may still own the attempt dir — retain it (reap-then-cleanup barrier).
+    return {
+      outcome: 'spawn-failed',
+      conforms: false,
+      detail: 'runtime process could not be reaped after termination',
+      sawNonce: false,
+      sawEnvelope: false,
+      exitCode: null,
+    }
+  }
+  if (run.cleanupFailed === true) {
     return {
       outcome: 'spawn-failed',
       conforms: false,
@@ -610,5 +268,106 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
       exitCode: null,
     }
   }
-  return result
+
+  const timedOut = run.outcome === 'timeout'
+  const exitCode = run.exitCode
+
+  // Scan BOTH streams: claude's auth/API errors land on stdout, opencode's on
+  // stderr. Only consulted when the run didn't conform, so a healthy nonce echo
+  // never trips a false auth/model hit.
+  const haystack = `${stderrText}\n${stdoutText}`.toLowerCase()
+  // RFC-116: networkHit is evaluated BEFORE authHit (see the if-chain). claude's
+  // region/proxy block reads "Failed to authenticate. API Error: 403 Request not
+  // allowed" — it carries the auth word AND the 403/network signal, but the root
+  // cause is endpoint reachability, not creds.
+  const networkHit = NETWORK_SIGNATURES.test(haystack)
+  const authHit = AUTH_SIGNATURES.test(haystack)
+  const modelHit = MODEL_FAIL_SIGNATURES.test(haystack)
+  // Codex P2: conformance REQUIRES the nonce round-trip (a real protocol turn
+  // consumed the prompt) — sawEnvelope alone is too weak (a canned emitter).
+  const conformed = !timedOut && exitCode === 0 && sawEvent && sessionId !== undefined && sawNonce
+  // Surface a masked, capped excerpt on EVERY failure branch (curated guidance
+  // stays, the verbatim vendor text rides along). The result line is quoted
+  // from its HEAD (error text precedes the usage blob), the raw streams from
+  // their TAILS (errors come last there).
+  const resultHead = lastResultLine.replace(/\s+/g, ' ').trim()
+  const evidence = [
+    resultHead.length > 0
+      ? `result: ${resultHead.length > 400 ? `${resultHead.slice(0, 400)}…` : resultHead}`
+      : null,
+    stderrText.trim().length > 0 ? `stderr tail: ${outputTail(stderrText)}` : null,
+    stdoutText.trim().length > 0 ? `stdout tail: ${outputTail(stdoutText)}` : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' | ')
+  const withEvidence = (base: string): string =>
+    evidence.length === 0 ? base : `${base} — ${maskDiagnosticsText(evidence)}`
+
+  let outcome: SmokeOutcome
+  let detail: string
+  if (conformed) {
+    outcome = 'conforms'
+    detail = `binary speaks the ${opts.protocol} protocol (session captured, nonce echoed)`
+  } else if (timedOut) {
+    outcome = 'model-call-failed'
+    detail = withEvidence(`timed out after ${timeoutMs}ms`)
+  } else if (networkHit) {
+    outcome = 'network-blocked'
+    detail = withEvidence(
+      'binary started but the model endpoint is unreachable (e.g. 403 Request not allowed / connection failed). Check the daemon network/proxy (HTTP(S)_PROXY) so it can reach the model API, then re-probe.',
+    )
+  } else if (authHit) {
+    outcome = 'auth-missing'
+    detail = withEvidence(
+      'binary started but authentication failed (may still conform once credentials exist)',
+    )
+  } else if (modelHit) {
+    outcome = 'model-call-failed'
+    detail = withEvidence(
+      'binary started + authed but the model call failed (rate limit / unavailable / model not licensed)',
+    )
+  } else if (!sawEvent) {
+    outcome = 'stream-nonconforming'
+    detail = withEvidence(`no parseable ${opts.protocol} events on stdout (exit ${exitCode})`)
+  } else {
+    outcome = 'stream-nonconforming'
+    detail = withEvidence(
+      `emitted events but did not complete the protocol turn (exit ${exitCode}, nonce ${
+        sawNonce ? 'seen' : 'missing'
+      })`,
+    )
+  }
+  // 2026-08-04 (GLM-gateway incident): with no --model the binary falls back to
+  // its OWN default model — for a fork wrapping a private gateway that default
+  // is often unlicensed. Say so at the failure site.
+  if (
+    opts.model === undefined &&
+    (outcome === 'model-call-failed' || outcome === 'stream-nonconforming')
+  ) {
+    detail +=
+      ' [no --model was passed (runtime model field is empty) — the binary used its own default model; set the runtime model and re-probe]'
+  }
+
+  try {
+    rmSync(attemptDir, { recursive: true, force: true })
+  } catch {
+    return {
+      outcome: 'spawn-failed',
+      conforms: false,
+      detail: 'runtime process cleanup did not complete safely',
+      sawNonce: false,
+      sawEnvelope: false,
+      exitCode: null,
+    }
+  }
+
+  return {
+    outcome,
+    conforms: outcome === 'conforms',
+    detail,
+    ...(sessionId !== undefined ? { capturedSessionId: sessionId } : {}),
+    sawNonce,
+    sawEnvelope,
+    exitCode,
+  }
 }

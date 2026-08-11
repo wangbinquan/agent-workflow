@@ -40,7 +40,10 @@ const ENV_PWD_SITES = [
 const SPAWN_CWD_SITES = [
   // (file, identifier the Bun.spawn cwd is read from, env expression)
   ['src/services/runner.ts', 'opts.worktreePath', 'env'],
-  ['src/services/memoryDistiller.ts', 'worktreeDir', 'plan.env'],
+  // RFC-280 T4: the distiller no longer Bun.spawns — it routes through the
+  // unified executor, whose managedProcess core is the one spawn site to keep
+  // cwd/env in lock-step for every adapter consumer (smoke/distiller/...).
+  ['src/services/execution/managedProcess.ts', 'req.cwd', 'req.env'],
 ] as const
 
 describe('opencode spawn sites set PWD = cwd in env', () => {
@@ -76,6 +79,12 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
     expect(src).toContain('buildSpawn(')
     expect(src).toContain("const worktreeDir = join(input.cwd, 'worktree')")
     expect(src).toContain('worktreePath: worktreeDir')
+    // RFC-280 T4: the executor call must keep the SAME worktreeDir as cwd and
+    // the plan's env — the PWD-pinning contract now travels through
+    // runAgentProcess → managedProcess (locked via SPAWN_CWD_SITES above).
+    expect(src).toContain('runAgentProcess({')
+    expect(src).toContain('cwd: worktreeDir,')
+    expect(src).toContain('env: plan.env,')
   })
 
   for (const [rel, cwdExpr, envExpr] of SPAWN_CWD_SITES) {

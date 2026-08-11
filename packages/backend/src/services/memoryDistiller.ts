@@ -15,8 +15,8 @@
 // Tests inject `spawnFn` to skip the real Bun.spawn — production passes
 // `defaultDistillerSpawn` which actually runs opencode.
 
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, rm } from 'node:fs/promises'
+import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -38,6 +38,8 @@ import {
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { getRuntimeDriver } from '@/services/runtime'
+import { runAgentProcess } from '@/services/execution/agentProcess'
+import { Paths } from '@/util/paths'
 import type { RuntimeKind } from '@/services/runtime/types'
 import {
   clarifyRounds,
@@ -55,8 +57,6 @@ import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/services/distill
 import { appHome } from '@/util/paths'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
-import { killProcessTree } from '@/util/process'
 
 const log = createLogger('memory-distiller')
 
@@ -950,137 +950,6 @@ export async function validateAndPersistCandidate(
 
 const DISTILLER_OUTPUT_CAP_BYTES = 256 * 1024
 const DISTILLER_DRAIN_GRACE_MS = 2_000
-const DISTILLER_REAP_DEADLINE_MS = 2_000
-
-function killDistillerGroup(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
-  try {
-    if (typeof child.pid === 'number') killProcessTree(child.pid, signal)
-    else child.kill(signal)
-  } catch {
-    // Process group already exited.
-  }
-}
-
-function startCappedDistillerStream(stream: ReadableStream<Uint8Array>): {
-  done: Promise<string>
-  cancel: () => Promise<void>
-} {
-  const reader = stream.getReader()
-  const done = (async () => {
-    const decoder = new TextDecoder()
-    let retained = ''
-    let retainedBytes = 0
-    try {
-      for (;;) {
-        const next = await reader.read()
-        if (next.done) break
-        if (next.value === undefined || retainedBytes >= DISTILLER_OUTPUT_CAP_BYTES) {
-          continue
-        }
-        const remaining = DISTILLER_OUTPUT_CAP_BYTES - retainedBytes
-        const accepted = next.value.subarray(0, remaining)
-        retained += decoder.decode(accepted, { stream: true })
-        retainedBytes += accepted.byteLength
-      }
-      retained += decoder.decode()
-      return retained
-    } catch {
-      // SIGKILL/cancel can close the pipe while a read is pending. Output is
-      // diagnostic only; keep the bounded prefix already captured.
-      return retained
-    } finally {
-      reader.releaseLock()
-    }
-  })()
-  return {
-    done,
-    cancel: async () => {
-      try {
-        await reader.cancel()
-      } catch {
-        // The stream may already be closing under SIGKILL.
-      }
-    },
-  }
-}
-
-type DistillerReapTarget = {
-  exited: Promise<number>
-  unref?: () => void
-}
-
-async function settlesDistillerWithin(
-  promise: Promise<unknown>,
-  timeoutMs: number,
-): Promise<boolean> {
-  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
-  try {
-    return await Promise.race([
-      promise.then(
-        () => true,
-        () => false,
-      ),
-      new Promise<false>((resolve) => {
-        // RFC-254: this deadline must stay REF'D. The await above cannot settle
-        // until either the child exits or this timer fires; unref'ing it told
-        // the event loop "don't stay alive for me", and on Windows Bun an
-        // unref'd timer never fires once nothing ref'd remains — the race
-        // wedged forever (bun test froze mid-suite; 15-line repro in
-        // rfc254-no-unref-deadline-guard.test.ts). The timer is cleared in the
-        // finally below, so it holds the loop for at most timeoutMs.
-        timeoutHandle = setTimeout(() => resolve(false), timeoutMs)
-      }),
-    ])
-  } finally {
-    if (timeoutHandle !== null) clearTimeout(timeoutHandle)
-  }
-}
-
-/**
- * RFC-224 distiller-store destruction barrier. A system plan and its run
- * directory are intentionally stranded when the launcher cannot be confirmed
- * reaped; plan cleanup is allowed only after reap, and outer cwd deletion is
- * owned by runDistill only after that cleanup succeeds.
- */
-export async function finalizeDistillerSpawnAttempt(input: {
-  child: DistillerReapTarget
-  childReaped: boolean
-  killChild: (signal: 'SIGTERM' | 'SIGKILL') => void
-  cleanup?: () => void | Promise<void>
-  termGraceMs?: number
-  reapDeadlineMs?: number
-  terminationAlreadyExhausted?: boolean
-}): Promise<boolean> {
-  let reaped = input.childReaped
-  if (!reaped && input.terminationAlreadyExhausted !== true) {
-    input.killChild('SIGTERM')
-    reaped = await settlesDistillerWithin(
-      input.child.exited,
-      input.termGraceMs ?? DISTILLER_DRAIN_GRACE_MS,
-    )
-  }
-  if (!reaped) {
-    input.killChild('SIGKILL')
-    reaped = await settlesDistillerWithin(
-      input.child.exited,
-      input.reapDeadlineMs ?? DISTILLER_REAP_DEADLINE_MS,
-    )
-  } else {
-    // The direct launcher may have exited while a same-group descendant kept
-    // inherited pipes or a store lock alive.
-    input.killChild('SIGKILL')
-  }
-  if (!reaped) {
-    input.child.unref?.()
-    return false
-  }
-  try {
-    await input.cleanup?.()
-    return true
-  } catch {
-    return false
-  }
-}
 
 /**
  * Real Bun.spawn-based distiller spawn. Held behind `spawnFn` so tests can
@@ -1090,11 +959,11 @@ export async function defaultDistillerSpawn(
   input: DistillerSpawnInput,
 ): Promise<DistillerSpawnResult> {
   // RFC-117: route through the runtime driver (was a hand-rolled opencode argv +
-  // env here, ~duplicating runtime/opencode/spawn + the event walker below).
-  // buildSpawn yields the protocol-correct cmd/env/stdin; opencode keeps its
-  // prior byte-for-byte form, claude gets system-prompt-file + stdin pipe.
-  //
-  // Runtime-specific argv and environment assembly stay inside the driver.
+  // env here). buildSpawn yields the protocol-correct cmd/env/stdin; opencode
+  // keeps its prior byte-for-byte form, claude gets system-prompt-file + stdin
+  // pipe. RFC-280 T4: process reliability (spawn/stdin/timeout/TERM→KILL/reap/
+  // drain) moved to the unified agent executor — this function only maps the
+  // typed outcome back onto the distiller's historical error contract.
   const driver = getRuntimeDriver(input.protocol)
   const worktreeDir = join(input.cwd, 'worktree')
   const runDir = join(input.cwd, 'run')
@@ -1114,20 +983,21 @@ export async function defaultDistillerSpawn(
       ? { runtimeBinary: input.runtimeBinary }
       : {}),
   })
-  const wantStdin = plan.stdin?.mode === 'pipe'
-  let child: Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'>
-  try {
-    child = Bun.spawn({
-      ...platformSpawnOptionsForHost(),
-      cmd: plan.cmd,
-      cwd: worktreeDir,
-      env: plan.env,
-      stdout: 'pipe',
-      stderr: 'pipe',
-      stdin: wantStdin ? 'pipe' : 'ignore',
-      detached: true,
-    })
-  } catch (error) {
+
+  const run = await runAgentProcess({
+    cmd: plan.cmd,
+    cwd: worktreeDir,
+    env: plan.env,
+    timeoutMs: input.timeoutMs,
+    termGraceMs: DISTILLER_DRAIN_GRACE_MS,
+    ...(plan.stdin?.mode === 'pipe' ? { stdin: plan.stdin } : {}),
+    ...(plan.beforeSpawn !== undefined ? { beforeSpawn: plan.beforeSpawn } : {}),
+    // Full stdout is the envelope source (extractLastEnvelope); rolling-tail
+    // capped far above DISTILLER_OUTPUT_CAP_BYTES, the last envelope survives.
+    capture: { rawStdout: true },
+  })
+
+  if (run.outcome === 'spawn-failed') {
     // Spawn assembly may have created temporary files. With no child created,
     // clean them now.
     try {
@@ -1135,122 +1005,33 @@ export async function defaultDistillerSpawn(
     } catch {
       throw new Error('distiller runtime cleanup failed after spawn error')
     }
-    throw error
+    throw new Error(run.spawnError ?? 'distiller runtime failed to spawn')
   }
-  let timedOut = false
-  let childReaped = false
-  let terminationAlreadyExhausted = false
-  let sigkillHandle: ReturnType<typeof setTimeout> | null = null
-  let reapDeadlineHandle: ReturnType<typeof setTimeout> | null = null
-  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
-  let stdoutPump: ReturnType<typeof startCappedDistillerStream> | null = null
-  let stderrPump: ReturnType<typeof startCappedDistillerStream> | null = null
-  let exitCode: number | null
-  let stdout = ''
-  let stderr = ''
-  let cleanupHandedOff = false
-  let spawnOutcome:
-    | { ok: true; value: DistillerSpawnResult }
-    | { ok: false; error: unknown }
-    | undefined
-  let cleanupSafe = false
-  try {
-    // RFC-254: every timer in this escalation chain must stay REF'D — the race
-    // below can only settle through the end of the chain, and the SIGKILL in
-    // the middle must actually fire. Unref'd timers never fire on Windows Bun
-    // once nothing ref'd remains on the loop (see
-    // rfc254-no-unref-deadline-guard.test.ts). All cleared in the finally.
-    const reapDeadline = new Promise<{ kind: 'unreaped' }>((resolve) => {
-      timeoutHandle = setTimeout(() => {
-        timedOut = true
-        killDistillerGroup(child, 'SIGTERM')
-        sigkillHandle = setTimeout(() => {
-          killDistillerGroup(child, 'SIGKILL')
-          reapDeadlineHandle = setTimeout(() => {
-            terminationAlreadyExhausted = true
-            resolve({ kind: 'unreaped' })
-          }, DISTILLER_REAP_DEADLINE_MS)
-        }, DISTILLER_DRAIN_GRACE_MS)
-      }, input.timeoutMs)
-    })
-    stdoutPump = startCappedDistillerStream(child.stdout as ReadableStream<Uint8Array>)
-    stderrPump = startCappedDistillerStream(child.stderr as ReadableStream<Uint8Array>)
-    if (plan.stdin?.mode === 'pipe') {
-      // stdin:'pipe' above (wantStdin) makes child.stdin a FileSink; ?. satisfies the
-      // FileSink|undefined static type from the dynamic stdin option.
-      child.stdin?.write(plan.stdin.data)
-      child.stdin?.end()
-    }
-    const exitOutcome = await Promise.race([
-      child.exited.then(
-        (code) => ({ kind: 'exited' as const, code }),
-        () => ({ kind: 'unreaped' as const }),
-      ),
-      reapDeadline,
-    ])
-    if (exitOutcome.kind === 'unreaped') {
-      throw new IndeterminateRuntimeProcessError('distiller runtime process could not be reaped')
-    }
-    childReaped = true
-    exitCode = exitOutcome.code
-    let drainTimer: ReturnType<typeof setTimeout> | null = null
-    ;[stdout, stderr] = await Promise.race([
-      Promise.all([stdoutPump.done, stderrPump.done]),
-      new Promise<[string, string]>((resolve) => {
-        // RFC-254: deadline an await depends on — must stay ref'd (see
-        // rfc254-no-unref-deadline-guard.test.ts). Cleared just below.
-        drainTimer = setTimeout(() => resolve(['', '']), DISTILLER_DRAIN_GRACE_MS)
-      }),
-    ])
-    if (drainTimer !== null) clearTimeout(drainTimer)
-    if (timedOut) {
-      throw new Error(`distiller timeout after ${input.timeoutMs}ms`)
-    }
-    cleanupHandedOff = true
-    spawnOutcome = {
-      ok: true,
-      value: {
-        exitCode,
-        stdout,
-        stderr,
-        cleanup: async () => {
-          await plan.cleanup?.()
-        },
-      },
-    }
-  } catch (error) {
-    spawnOutcome = { ok: false, error }
-  } finally {
-    if (timeoutHandle !== null) clearTimeout(timeoutHandle)
-    if (sigkillHandle !== null) clearTimeout(sigkillHandle)
-    if (reapDeadlineHandle !== null) clearTimeout(reapDeadlineHandle)
-    const pendingPumpCancels = [stdoutPump, stderrPump]
-      .filter(
-        (
-          pump,
-        ): pump is {
-          done: Promise<string>
-          cancel: () => Promise<void>
-        } => pump !== null,
+  if (run.outcome === 'unreaped') {
+    // The child may still own files below the attempt directory — preserve it
+    // (RFC-224 store-destruction barrier, now enforced by the executor's
+    // reap-then-cleanup ordering).
+    throw new IndeterminateRuntimeProcessError('distiller runtime process could not be reaped')
+  }
+  if (run.outcome === 'timeout' || run.outcome === 'aborted') {
+    try {
+      await plan.cleanup?.()
+    } catch {
+      throw new IndeterminateRuntimeProcessError(
+        'distiller runtime cleanup did not complete safely',
       )
-      .map((pump) => pump.cancel())
-    if (pendingPumpCancels.length > 0) {
-      await settlesDistillerWithin(Promise.allSettled(pendingPumpCancels), DISTILLER_DRAIN_GRACE_MS)
     }
-    cleanupSafe = await finalizeDistillerSpawnAttempt({
-      child,
-      childReaped,
-      killChild: (signal) => killDistillerGroup(child, signal),
-      ...(!cleanupHandedOff && plan.cleanup !== undefined ? { cleanup: plan.cleanup } : {}),
-      terminationAlreadyExhausted,
-    })
+    throw new Error(`distiller timeout after ${input.timeoutMs}ms`)
   }
-  if (spawnOutcome === undefined) throw new Error('distiller runtime spawn produced no outcome')
-  if (!spawnOutcome.ok) throw spawnOutcome.error
-  if (!cleanupSafe) {
-    throw new IndeterminateRuntimeProcessError('distiller runtime cleanup did not complete safely')
+
+  return {
+    exitCode: run.exitCode,
+    stdout: run.rawStdout.slice(-DISTILLER_OUTPUT_CAP_BYTES),
+    stderr: run.stderrTail.slice(-DISTILLER_OUTPUT_CAP_BYTES),
+    cleanup: async () => {
+      await plan.cleanup?.()
+    },
   }
-  return spawnOutcome.value
 }
 
 // -----------------------------------------------------------------------------
@@ -1309,7 +1090,9 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   // inside spawnFn (defaultDistillerSpawn → getRuntimeDriver(protocol).buildSpawn);
   // runDistill only forwards the resolved (protocol, binary, model).
   const protocol: RuntimeKind = options.protocol ?? 'opencode'
-  const cwd = await mkdtemp(join(tmpdir(), 'aw-distiller-'))
+  // RFC-280 T4/T5（落差⑤）：appHome scratch，不再 OS tmpdir —— GC 归属确定。
+  const cwd = join(Paths.root, 'scratch', `distiller-${randomBytes(8).toString('hex')}`)
+  await mkdir(cwd, { recursive: true, mode: 0o700 })
   let cleanup: (() => Promise<void>) | undefined
   let preserveCwd = false
   let distillOutcome: { ok: true; value: DistillResult } | { ok: false; error: unknown } | undefined

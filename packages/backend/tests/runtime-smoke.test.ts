@@ -11,7 +11,7 @@ import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { finalizeSmokeAttempt, smokeRuntime } from '../src/services/runtimeSmoke'
+import { smokeRuntime } from '../src/services/runtimeSmoke'
 
 const MOCK_CLAUDE = resolve(import.meta.dir, 'fixtures', 'mock-claude.ts')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -55,78 +55,18 @@ afterEach(() => {
   for (const k of SET_ENV_KEYS) delete process.env[k]
 })
 
-describe('smoke cleanup and process-reap barrier', () => {
-  test('never-settling child is bounded and strands cleanup/attemptDir after TERM → KILL', async () => {
-    const signals: string[] = []
-    let cleanupCalled = false
-    let removeCalled = false
-    let unrefCalled = false
-    const startedAt = Date.now()
-
-    const safe = await finalizeSmokeAttempt({
-      child: {
-        exited: new Promise<number>(() => {}),
-        unref: () => {
-          unrefCalled = true
-        },
-      },
-      childReaped: false,
-      killChild: (signal) => signals.push(signal),
-      cleanup: async () => {
-        cleanupCalled = true
-      },
-      removeAttemptDir: () => {
-        removeCalled = true
-      },
-      termGraceMs: 5,
-      reapDeadlineMs: 5,
-    })
-
-    expect(Date.now() - startedAt).toBeLessThan(500)
-    expect(safe).toBe(false)
-    expect(signals).toEqual(['SIGTERM', 'SIGKILL'])
-    expect(unrefCalled).toBe(true)
-    expect(cleanupCalled).toBe(false)
-    expect(removeCalled).toBe(false)
-  })
-
-  test('plan cleanup failure is a hard barrier before outer attemptDir removal', async () => {
-    const order: string[] = []
-    const safe = await finalizeSmokeAttempt({
-      child: { exited: Promise.resolve(0) },
-      childReaped: true,
-      killChild: (signal) => order.push(signal),
-      cleanup: async () => {
-        order.push('cleanup')
-        throw new Error('store lock still live')
-      },
-      removeAttemptDir: () => {
-        order.push('remove')
-      },
-    })
-
-    expect(safe).toBe(false)
-    expect(order).toEqual(['SIGKILL', 'cleanup'])
-  })
-
-  test('reaped child crosses cleanup then outer removal in that exact order', async () => {
-    const order: string[] = []
-    const safe = await finalizeSmokeAttempt({
-      child: { exited: Promise.resolve(0) },
-      childReaped: true,
-      killChild: (signal) => order.push(signal),
-      cleanup: async () => {
-        order.push('cleanup')
-      },
-      removeAttemptDir: () => {
-        order.push('remove')
-      },
-    })
-
-    expect(safe).toBe(true)
-    expect(order).toEqual(['SIGKILL', 'cleanup', 'remove'])
-  })
-})
+// RFC-280 T4 — the smoke-local reap/cleanup barrier (finalizeSmokeAttempt)
+// was retired with the self-built spawn plumbing: process reliability now
+// lives in the unified executor. The equivalent semantics are locked at their
+// new home instead:
+//   · never-settling child → bounded 'unreaped' outcome, cleanup skipped:
+//     managedProcess drain-deadline ('child-unkillable') + agentProcess
+//     mapOutcome (rfc280-managed-process-adapter.test.ts);
+//   · plan-cleanup failure is surfaced, artifacts retained:
+//     AgentProcessResult.cleanupFailed → smokeRuntime returns
+//     'runtime process cleanup did not complete safely';
+//   · reap strictly precedes cleanup: runManagedProcess resolves only after
+//     reap (or bounded unkillable), and runAgentProcess runs `cleanup` after.
 
 describe('smokeRuntime (RFC-112 PR-B)', () => {
   test(

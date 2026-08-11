@@ -23,7 +23,6 @@ import {
 import {
   DISTILLER_SYSTEM_PROMPT,
   buildDistillerUserPrompt,
-  finalizeDistillerSpawnAttempt,
   IndeterminateRuntimeProcessError,
   loadScopeContexts,
   loadSourceEvents,
@@ -557,7 +556,9 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
       .run()
     const jobRow = db.select().from(memoryDistillJobs).all()[0]!
     const spawnFn: DistillerSpawnFn = async (input) => {
-      expect(input.cwd).toContain('aw-distiller-')
+      // RFC-280 T4（落差⑤）：throwaway cwd 迁 appHome scratch，不再 OS tmpdir。
+      expect(input.cwd).toContain('distiller-')
+      expect(input.cwd).toContain('scratch')
       // RFC-117: inline config / argv assembly moved into the runtime driver
       // (covered by runtime-buildspawn.test.ts). runDistill now forwards the
       // resolved (protocol, binary, model); default = opencode + null model.
@@ -749,7 +750,8 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     expect(src).toContain('getRuntimeDriver')
     expect(src).toContain('buildSpawn')
     expect(src).toContain('parseEvent')
-    expect(src).toContain('mkdtemp')
+    // RFC-280 T4（落差⑤）：throwaway cwd 由 appHome scratch 分配（原 mkdtemp/tmpdir）。
+    expect(src).toContain("join(Paths.root, 'scratch'")
     expect(src).toContain('aw-memory-distiller')
     // the hand-rolled opencode event walker is gone (folded into driver.parseEvent)
     expect(src).not.toContain('function extractEventText')
@@ -808,52 +810,17 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
   })
 })
 
-describe('RFC-224 distiller store-destruction barrier', () => {
-  test('never-settling child is bounded, escalates TERM → KILL, and never cleans the plan', async () => {
-    const signals: string[] = []
-    let cleanupCalled = false
-    let unrefCalled = false
-    const startedAt = Date.now()
-
-    const safe = await finalizeDistillerSpawnAttempt({
-      child: {
-        exited: new Promise<number>(() => {}),
-        unref: () => {
-          unrefCalled = true
-        },
-      },
-      childReaped: false,
-      killChild: (signal) => signals.push(signal),
-      cleanup: async () => {
-        cleanupCalled = true
-      },
-      termGraceMs: 5,
-      reapDeadlineMs: 5,
-    })
-
-    expect(Date.now() - startedAt).toBeLessThan(500)
-    expect(safe).toBe(false)
-    expect(signals).toEqual(['SIGTERM', 'SIGKILL'])
-    expect(unrefCalled).toBe(true)
-    expect(cleanupCalled).toBe(false)
-  })
-
-  test('confirmed reap permits cleanup, but a live-lock cleanup failure remains unsafe', async () => {
-    const order: string[] = []
-    const safe = await finalizeDistillerSpawnAttempt({
-      child: { exited: Promise.resolve(0) },
-      childReaped: true,
-      killChild: (signal) => order.push(signal),
-      cleanup: async () => {
-        order.push('cleanup')
-        throw new Error('store lock')
-      },
-    })
-
-    expect(safe).toBe(false)
-    expect(order).toEqual(['SIGKILL', 'cleanup'])
-  })
-})
+// RFC-280 T4 — the distiller-local store-destruction barrier
+// (finalizeDistillerSpawnAttempt) was retired with the self-built spawn
+// plumbing: process reliability now lives in the unified executor. The
+// equivalent semantics are locked at their new home instead:
+//   · never-settling child → bounded 'unreaped', cleanup skipped, attempt dir
+//     preserved: managedProcess drain-deadline + agentProcess mapOutcome
+//     (rfc280-managed-process-adapter.test.ts) + defaultDistillerSpawn's
+//     IndeterminateRuntimeProcessError branch;
+//   · cleanup failure after reap stays unsafe: defaultDistillerSpawn maps a
+//     failed plan.cleanup to IndeterminateRuntimeProcessError
+//     ('cleanup did not complete safely').
 
 // RFC-044: grep guard — the two block headers MUST stay grep-able in the
 // builder so a future refactor cannot silently drop the source-context

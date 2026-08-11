@@ -35,6 +35,20 @@ export interface ManagedProcessRequest {
   killEscalationGraceMs?: number
   signal?: AbortSignal
   /**
+   * RFC-280 T4 — last-moment admission seam, awaited immediately before
+   * `Bun.spawn`. A throw means the run is no longer admitted (e.g. the MCP
+   * playground's turn was canceled between plan assembly and spawn): no child
+   * is created and the result comes back `spawn-failed` with the thrown
+   * message as `spawnError`.
+   */
+  beforeSpawn?: () => Promise<void> | void
+  /**
+   * RFC-280 T4 — stdin delivery. `pipe` writes `data` once and closes (the
+   * claude prompt transport); omitted/`ignore` keeps the historical closed
+   * stdin.
+   */
+  stdin?: { mode: 'pipe'; data: string } | { mode: 'ignore' }
+  /**
    * Called as soon as the child exists, BEFORE any output is read.
    *
    * This is the seam that keeps a daemon crash recoverable: `node_runs.pid` has
@@ -177,6 +191,25 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
 
   const spawnBinaryPath = req.argv[0] ?? ''
 
+  // RFC-280 T4 — admission seam: a throw here means "do not spawn", reported
+  // as spawn-failed so the caller writes one terminal row (never a live child).
+  if (req.beforeSpawn !== undefined) {
+    try {
+      await req.beforeSpawn()
+    } catch (err) {
+      return {
+        outcome: 'spawn-failed',
+        exitCode: null,
+        rawStdout: '',
+        stderrTail: '',
+        truncated: { stdout: false, stderr: false },
+        spawnBinaryPath,
+        pid: null,
+        spawnError: err instanceof Error ? err.message : String(err),
+      }
+    }
+  }
+
   let child: Bun.Subprocess
   try {
     child = Bun.spawn({
@@ -186,7 +219,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       env: req.env,
       stdout: 'pipe',
       stderr: 'pipe',
-      stdin: 'ignore',
+      stdin: req.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
       // Own process group so the whole descendant tree can be signalled.
       // Without it a fork()ed grandchild survives every kill we send.
       detached: true,
@@ -207,6 +240,24 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
         argv0: req.argv[0] ?? spawnBinaryPath,
         cwd: req.cwd,
       }),
+    }
+  }
+
+  // RFC-280 T4 — one-shot stdin delivery (the claude prompt transport):
+  // write before reading any output, then close so the child sees EOF.
+  if (req.stdin?.mode === 'pipe') {
+    const sink = child.stdin as { write: (s: string) => void; end: () => void } | undefined
+    if (sink !== undefined) {
+      try {
+        sink.write(req.stdin.data)
+        sink.end()
+      } catch (err) {
+        // A child that exited instantly closes its pipe; the exit path below
+        // reports the real outcome — a broken stdin write must not mask it.
+        log.warn('managed-process stdin write failed', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
   }
 
