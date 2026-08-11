@@ -134,7 +134,13 @@ describe('spawn catches route through explainSpawnEnoent (source-level wiring lo
     expect(src('services/runtimeSmoke.ts')).toContain('run.spawnError')
   })
 
-  test('systemAgentRun.ts translates the system-spawn ENOENT', () => {
-    expect(src('services/systemAgentRun.ts')).toContain('explainSpawnEnoent(')
+  test('systemAgentRun.ts surfaces the executor-translated system-spawn ENOENT', () => {
+    // RFC-280 T4: system agents spawn through the unified executor; the ENOENT
+    // translation lives in managedProcess and reaches the result via
+    // spawnError → 'binary failed to start: …' (locked behaviorally by
+    // rfc234-system-agent-run 'spawn failure (missing binary) reports masked
+    // diagnostics').
+    expect(src('services/execution/managedProcess.ts')).toContain('explainSpawnEnoent(')
+    expect(src('services/systemAgentRun.ts')).toContain('run.spawnError')
   })
 })

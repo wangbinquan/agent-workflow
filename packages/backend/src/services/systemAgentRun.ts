@@ -23,13 +23,11 @@ import { lstatSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
+import { runAgentProcess } from '@/services/execution/agentProcess'
 import type { RuntimeDriver, SpawnPlan, SystemAgentOutputEvidence } from '@/services/runtime/types'
 import { createLogger, type Logger } from '@/util/log'
-import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 import { isLexicallyInsideForHost } from '@/util/platformExec'
-import { killProcessTree } from '@/util/process'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import type {
   SessionCaptureIncompleteReason,
   SystemAgentEventSinkV1,
@@ -37,10 +35,8 @@ import type {
 
 const DEFAULT_TIMEOUT_MS = 600_000
 const DEFAULT_MAX_EVENT_TEXT_BYTES = 8 * 1024 * 1024
-const DEFAULT_MAX_RAW_FRAME_BYTES = 2 * 1024 * 1024
 const STDERR_TAIL_CAP = 8 * 1024
 const CHILD_TERM_GRACE_MS = 2_000
-const CHILD_REAP_DEADLINE_MS = 2_000
 
 export interface SystemAgentSeedFile {
   /** Relative path under the scratch worktree; `..` and absolute are rejected. */
@@ -75,6 +71,12 @@ export interface SystemAgentRunOptions {
   timeoutMs?: number
   maxEventTextBytes?: number
   /** Maximum UTF-8 bytes retained for one stdout/stderr frame. */
+  /**
+   * @deprecated RFC-280 T4 — line bounding now lives in the unified executor
+   * (managedProcess 1MiB line cap; a clipped line still marks the capture
+   * incomplete via onLineTruncated → 'stream-frame-limit-exceeded'). The value
+   * is accepted for caller compatibility but no longer read.
+   */
   maxRawFrameBytes?: number
   abortSignal?: AbortSignal
   /** RFC-235: auxiliary ordered Session event capture; never gates business output. */
@@ -184,46 +186,6 @@ export function releaseSystemAgentScratch(input: {
   }
 }
 
-/**
- * Kill the child's whole process tree, best-effort. RFC-254: this used a raw
- * `process.kill(-pid, signal)` (POSIX process-group kill via a negative PID),
- * which has no Windows equivalent — the child was never reaped and every
- * timeout/abort/cancel settled as `unreaped` (a system agent was effectively
- * unkillable there). Route through the shared platform-aware primitive instead:
- * POSIX still group-kills via `-pid` (byte-identical); Windows walks the tree
- * with `taskkill /T /F`. That is best-effort when no Job Object was adopted;
- * system agents use an ephemeral scratch directory and still apply a bounded
- * reap deadline.
- */
-function killGroup(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
-  try {
-    if (typeof child.pid === 'number') killProcessTree(child.pid, signal)
-    else child.kill(signal === 'SIGKILL' ? 9 : 15)
-  } catch {
-    /* already gone */
-  }
-}
-
-async function settlesWithin(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
-  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
-  try {
-    return await Promise.race([
-      promise.then(
-        () => true,
-        () => false,
-      ),
-      new Promise<false>((resolveRace) => {
-        // RFC-254: deadline an await depends on — must stay ref'd (unref'd
-        // timers never fire on Windows Bun once the loop is otherwise idle;
-        // see rfc254-no-unref-deadline-guard.test.ts). Cleared in finally.
-        timeoutHandle = setTimeout(() => resolveRace(false), timeoutMs)
-      }),
-    ])
-  } finally {
-    if (timeoutHandle !== null) clearTimeout(timeoutHandle)
-  }
-}
-
 /** Reject traversal/absolute seed paths BEFORE any filesystem write. */
 export function assertSafeSeedPath(worktreeDir: string, relPath: string): string {
   if (relPath.length === 0 || isAbsolute(relPath)) {
@@ -238,61 +200,10 @@ export function assertSafeSeedPath(worktreeDir: string, relPath: string): string
   return abs
 }
 
-/**
- * Reap-then-cleanup barrier (finalizeDistillerSpawnAttempt /
- * finalizeSmokeAttempt discipline): plan cleanup only after confirmed reap,
- * scratch removal only after cleanup succeeded. Returns false when anything
- * along the barrier failed — the scratch dir is then RETAINED.
- */
-async function finalizeSystemAgentAttempt(input: {
-  child: { exited: Promise<number>; unref?: () => void } | null
-  childReaped: boolean
-  killChild: (signal: 'SIGTERM' | 'SIGKILL') => void
-  cleanup?: () => void | Promise<void>
-  removeScratch: () => void
-  terminationAlreadyExhausted: boolean
-  wantScratchRemoved: boolean
-}): Promise<{ reaped: boolean; cleanupSucceeded: boolean; scratchRemoved: boolean }> {
-  let reaped = input.child === null || input.childReaped
-  if (input.child !== null) {
-    if (!reaped && !input.terminationAlreadyExhausted) {
-      input.killChild('SIGTERM')
-      reaped = await settlesWithin(input.child.exited, CHILD_TERM_GRACE_MS)
-    }
-    if (!reaped) {
-      input.killChild('SIGKILL')
-      reaped = await settlesWithin(input.child.exited, CHILD_REAP_DEADLINE_MS)
-    } else {
-      // A same-group descendant may still own inherited pipes / the private
-      // store; sweep the group before crossing the cleanup barrier.
-      input.killChild('SIGKILL')
-    }
-    if (!reaped) {
-      input.child.unref?.()
-      return { reaped: false, cleanupSucceeded: false, scratchRemoved: false }
-    }
-  }
-  try {
-    await input.cleanup?.()
-  } catch {
-    return { reaped: true, cleanupSucceeded: false, scratchRemoved: false }
-  }
-  if (!input.wantScratchRemoved) {
-    return { reaped: true, cleanupSucceeded: true, scratchRemoved: false }
-  }
-  try {
-    input.removeScratch()
-  } catch {
-    return { reaped: true, cleanupSucceeded: true, scratchRemoved: false }
-  }
-  return { reaped: true, cleanupSucceeded: true, scratchRemoved: true }
-}
-
 export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<SystemAgentRunResult> {
   const log = opts.log ?? createLogger('systemAgentRun')
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const maxEventTextBytes = opts.maxEventTextBytes ?? DEFAULT_MAX_EVENT_TEXT_BYTES
-  const maxRawFrameBytes = opts.maxRawFrameBytes ?? DEFAULT_MAX_RAW_FRAME_BYTES
   const startedAt = Date.now()
   const driver = getRuntimeDriver(opts.protocol)
 
@@ -336,17 +247,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
     })
   }
 
-  let child: Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> | null = null
   let plan: SpawnPlan | null = null
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let sigkillTimer: ReturnType<typeof setTimeout> | null = null
-  let reapDeadlineTimer: ReturnType<typeof setTimeout> | null = null
-  let timedOut = false
-  let aborted = false
-  let childReaped = false
-  let terminationAlreadyExhausted = false
-  let cancelDrains: (() => Promise<void>) | null = null
-  let onAbort: (() => void) | null = null
   let result: SystemAgentRunResult | undefined
   let sinkTerminal = false
   let sinkFailed = false
@@ -453,88 +354,10 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         })
       }
 
-      let spawnCmd: string[] | undefined
-      try {
-        await plan.beforeSpawn?.()
-        spawnCmd = plan.cmd
-        child = Bun.spawn({
-          ...platformSpawnOptionsForHost(),
-          cmd: spawnCmd,
-          cwd: worktreeDir,
-          env: plan.env,
-          stdout: 'pipe',
-          stderr: 'pipe',
-          stdin: plan.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
-          detached: true,
-        })
-        if (opts.onSpawned !== undefined) {
-          await opts.onSpawned({
-            pid: typeof child.pid === 'number' ? child.pid : null,
-            spawnedAt: Date.now(),
-            spawnBinaryPath: plan.cmd[0] ?? '',
-          })
-        }
-      } catch (err) {
-        // 2026-08-04: Bun's posix_spawn ENOENT names argv[0] even when the
-        // missing path is the cwd — probe both so the tail blames the right one.
-        return fail('spawn-failed', {
-          stderrTail: maskDiagnosticsText(
-            `binary failed to start: ${explainSpawnEnoent(
-              err instanceof Error ? err.message : String(err),
-              { argv0: spawnCmd?.[0] ?? plan.cmd[0], cwd: worktreeDir },
-            )}`,
-          ),
-        })
-      }
-
-      if (plan.stdin?.mode === 'pipe') {
-        const sink = child.stdin as { write: (s: string) => void; end: () => void } | undefined
-        if (sink !== undefined) {
-          sink.write(plan.stdin.data)
-          sink.end()
-        }
-      }
-
-      const liveChild = child
-      let terminating = false
-      // RFC-254: every timer in this escalation chain must stay REF'D — the
-      // race can only settle through the END of the chain, and the SIGKILL in
-      // the middle must actually fire. Unref'd timers never fire on Windows
-      // Bun once nothing ref'd remains on the loop (see
-      // rfc254-no-unref-deadline-guard.test.ts). All cleared on settle.
-      const escalate = (): void => {
-        if (terminating) return
-        terminating = true
-        killGroup(liveChild, 'SIGTERM')
-        sigkillTimer = setTimeout(() => {
-          killGroup(liveChild, 'SIGKILL')
-          reapDeadlineTimer = setTimeout(() => {
-            terminationAlreadyExhausted = true
-            resolveReapDeadline({ kind: 'unreaped' })
-          }, CHILD_REAP_DEADLINE_MS)
-        }, CHILD_TERM_GRACE_MS)
-      }
-      let resolveReapDeadline: (v: { kind: 'unreaped' }) => void = () => {}
-      const reapDeadline = new Promise<{ kind: 'unreaped' }>((resolveRace) => {
-        resolveReapDeadline = resolveRace
-        timer = setTimeout(() => {
-          timedOut = true
-          escalate()
-        }, timeoutMs)
-      })
-      if (opts.abortSignal !== undefined) {
-        if (opts.abortSignal.aborted) {
-          aborted = true
-          escalate()
-        } else {
-          onAbort = () => {
-            aborted = true
-            escalate()
-          }
-          opts.abortSignal.addEventListener('abort', onAbort, { once: true })
-        }
-      }
-
+      // RFC-280 T4 — the child's whole lifecycle (spawn / stdin / timers /
+      // TERM→KILL / reap / bounded drain) lives in the unified agent executor;
+      // this function keeps only what is system-agent-specific: the event
+      // sink, output evidence, and the result-domain mapping.
       let sessionId: string | undefined
       let eventText = ''
       let eventTextBytes = 0
@@ -542,97 +365,42 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       // RFC-237 (P2-4): terminal application error reported on a clean-exit
       // stdout line (claude `result` is_error). Last one wins.
       let resultError: string | undefined
-      const activeReaders = new Set<{
-        cancel: () => Promise<void> | void
-        releaseLock?: () => void
-      }>()
+      let receiptError: unknown
 
-      class LineHandlerError {
-        constructor(readonly cause: unknown) {}
-      }
-      const readStream = async (
-        stream: ReadableStream<Uint8Array> | undefined,
-        onLine: (line: string) => void | Promise<void>,
-        onOverflow: () => void | Promise<void>,
-      ): Promise<void> => {
-        if (stream === undefined) return
-        const reader = stream.getReader()
-        activeReaders.add(reader)
-        const decoder = new TextDecoder('utf-8', { fatal: true })
-        let buffered = Buffer.alloc(0)
-        let dropping = false
-        try {
-          for (;;) {
-            const { done, value } = await reader.read()
-            if (done) break
-            let chunk = Buffer.from(value)
-            while (chunk.byteLength > 0) {
-              const newline = chunk.indexOf(0x0a)
-              const segment = newline < 0 ? chunk : chunk.subarray(0, newline)
-              if (!dropping) {
-                if (buffered.byteLength + segment.byteLength > maxRawFrameBytes) {
-                  buffered = Buffer.alloc(0)
-                  dropping = true
-                  try {
-                    await onOverflow()
-                  } catch (error) {
-                    throw new LineHandlerError(error)
-                  }
-                } else if (segment.byteLength > 0) {
-                  buffered = Buffer.concat([buffered, segment])
-                }
-              }
-              if (newline < 0) break
-              if (!dropping && buffered.byteLength > 0) {
-                let line: string
+      const run = await runAgentProcess({
+        cmd: plan.cmd,
+        cwd: worktreeDir,
+        env: plan.env,
+        timeoutMs,
+        termGraceMs: CHILD_TERM_GRACE_MS,
+        ...(opts.abortSignal !== undefined ? { abortSignal: opts.abortSignal } : {}),
+        ...(plan.stdin?.mode === 'pipe' ? { stdin: plan.stdin } : {}),
+        ...(plan.beforeSpawn !== undefined ? { beforeSpawn: plan.beforeSpawn } : {}),
+        ...(opts.onSpawned !== undefined
+          ? {
+              onSpawned: async (receipt: {
+                pid: number
+                spawnedAt: number
+                spawnBinaryPath: string
+              }) => {
                 try {
-                  line = decoder.decode(buffered)
-                } catch (error) {
-                  throw new LineHandlerError(error)
+                  await opts.onSpawned?.({
+                    pid: receipt.pid,
+                    spawnedAt: receipt.spawnedAt,
+                    spawnBinaryPath: receipt.spawnBinaryPath,
+                  })
+                } catch (err) {
+                  // Historical contract: a failed spawn receipt is a SPAWN
+                  // failure (mcp playground admission fence) — remember the
+                  // cause and let the executor abort the child.
+                  receiptError = err
+                  throw err
                 }
-                try {
-                  await onLine(line.endsWith('\r') ? line.slice(0, -1) : line)
-                } catch (error) {
-                  throw new LineHandlerError(error)
-                }
-              }
-              buffered = Buffer.alloc(0)
-              dropping = false
-              chunk = chunk.subarray(newline + 1)
+              },
             }
-          }
-          if (!dropping && buffered.byteLength > 0) {
-            try {
-              await onLine(decoder.decode(buffered))
-            } catch (error) {
-              throw new LineHandlerError(error)
-            }
-          }
-        } catch (error) {
-          if (error instanceof LineHandlerError) throw error.cause
-          /* stream closed under us (kill) */
-        } finally {
-          buffered.fill(0)
-          activeReaders.delete(reader)
-          reader.releaseLock()
-        }
-      }
-      cancelDrains = async () => {
-        await Promise.allSettled(
-          [...activeReaders].map(async (reader) => {
-            try {
-              await reader.cancel()
-            } catch {
-              /* already closing under SIGKILL */
-            }
-          }),
-        )
-      }
-
-      const drainAll = Promise.all([
-        readStream(
-          child.stdout as ReadableStream<Uint8Array> | undefined,
-          async (line) => {
+          : {}),
+        capture: {
+          onStdoutLine: async (line) => {
             const observation = driver.observeSystemEvent?.(line)
             if (observation !== undefined) {
               if (observation.runtimeEventType !== null) {
@@ -694,15 +462,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
               source: 'stream',
             })
           },
-          () =>
-            failSink(
-              'stream-frame-limit-exceeded',
-              new Error('stdout frame exceeded the configured byte limit'),
-            ),
-        ),
-        readStream(
-          child.stderr as ReadableStream<Uint8Array> | undefined,
-          async (line) => {
+          onStderrLine: async (line) => {
             const remaining = STDERR_TAIL_CAP - Buffer.byteLength(stderrText, 'utf8')
             if (remaining > 0) {
               stderrText += Buffer.from(`${line}\n`, 'utf8').subarray(0, remaining).toString('utf8')
@@ -716,46 +476,35 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
               source: 'stream',
             })
           },
-          () =>
+          // A clipped frame stored as if whole would lie to the session view —
+          // mark the capture incomplete exactly like the historical
+          // frame-limit path did.
+          onLineTruncated: () =>
             failSink(
               'stream-frame-limit-exceeded',
-              new Error('stderr frame exceeded the configured byte limit'),
+              new Error('stream line exceeded the executor line cap'),
             ),
-        ),
-      ])
-      void drainAll.catch(() => escalate())
+        },
+        log,
+      })
 
-      const exitOutcome = await Promise.race([
-        child.exited.then(
-          (exitCode) => ({ kind: 'exited' as const, exitCode }),
-          () => ({ kind: 'unreaped' as const }),
-        ),
-        reapDeadline,
-      ])
-      if (exitOutcome.kind === 'unreaped') {
-        await settlesWithin(cancelDrains(), CHILD_REAP_DEADLINE_MS)
+      if (run.outcome === 'spawn-failed' || receiptError !== undefined) {
+        const message =
+          receiptError !== undefined
+            ? receiptError instanceof Error
+              ? receiptError.message
+              : String(receiptError)
+            : (run.spawnError ?? 'unknown spawn failure')
+        return fail('spawn-failed', {
+          stderrTail: maskDiagnosticsText(`binary failed to start: ${message}`),
+        })
+      }
+      if (run.outcome === 'unreaped') {
         return fail('unreaped')
       }
-      childReaped = true
-      const exitCode = exitOutcome.exitCode
-      if (timer !== null) {
-        clearTimeout(timer)
-        timer = null
-      }
-      if (sigkillTimer !== null) {
-        clearTimeout(sigkillTimer)
-        sigkillTimer = null
-      }
-      if (reapDeadlineTimer !== null) {
-        clearTimeout(reapDeadlineTimer)
-        reapDeadlineTimer = null
-      }
-      // Bounded post-exit flush — an inherited-pipe grandchild must not wedge.
-      // A timeout is evidence loss, not successful completion: stop the readers
-      // before settling the capture so no late append can race its terminal row.
-      const drainsFlushed = await settlesWithin(drainAll, CHILD_REAP_DEADLINE_MS)
-      if (!drainsFlushed) {
-        await settlesWithin(cancelDrains(), CHILD_REAP_DEADLINE_MS)
+      const exitCode = run.exitCode
+      if (run.drainTimedOut === true) {
+        // Bounded post-exit flush expired — evidence loss, not completion.
         await failSink(
           'post-exit-flush-timeout',
           new Error('stdout/stderr did not reach EOF after child exit'),
@@ -793,8 +542,8 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         scratchRetained: false,
         outputEvidence: { ...outputEvidence },
       }
-      if (aborted) return { status: 'aborted', ...base }
-      if (timedOut) return { status: 'timeout', ...base }
+      if (run.outcome === 'aborted') return { status: 'aborted', ...base }
+      if (run.outcome === 'timeout') return { status: 'timeout', ...base }
       if (exitCode !== 0) return { status: 'exit-nonzero', ...base }
       // RFC-237 (P2-4): clean exit but a terminal is_error result — fail the
       // run with the masked error text instead of letting the caller chase a
@@ -823,53 +572,51 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
             : undefined,
       )
     }
-    if (timer !== null) clearTimeout(timer)
-    if (sigkillTimer !== null) clearTimeout(sigkillTimer)
-    if (reapDeadlineTimer !== null) clearTimeout(reapDeadlineTimer)
-    if (onAbort !== null) opts.abortSignal?.removeEventListener('abort', onAbort)
-    const cancelPendingDrains = cancelDrains as (() => Promise<void>) | null
-    if (cancelPendingDrains !== null) {
-      await settlesWithin(cancelPendingDrains(), CHILD_REAP_DEADLINE_MS)
-    }
-    const spawnedChild = child as Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> | null
+    // RFC-280 T4: the child's kill/reap lifecycle lives in the unified
+    // executor; what remains here are the two ordered barriers that must run
+    // AFTER the post-exit capture sweep — plan cleanup, then scratch disposal.
     const preparedPlan = plan as SpawnPlan | null
-    const wantScratchRemoved =
-      result !== undefined && result.status === 'ok' && opts.retainScratchOnSuccess !== true
-    const finalized = await finalizeSystemAgentAttempt({
-      child: spawnedChild,
-      childReaped,
-      killChild: (signal) => {
-        if (spawnedChild !== null) killGroup(spawnedChild, signal)
-      },
-      ...(preparedPlan?.cleanup === undefined ? {} : { cleanup: preparedPlan.cleanup }),
-      removeScratch: () => rmSync(scratchDir, { recursive: true, force: true }),
-      terminationAlreadyExhausted,
-      wantScratchRemoved,
-    })
-    if (!finalized.reaped) {
-      result = fail('unreaped', {
-        scratchRetained: true,
-      })
-    } else if (!finalized.cleanupSucceeded) {
-      result = {
-        ...(result ?? fail('spawn-failed')),
-        status: 'spawn-failed',
-        stderrTail: 'runtime cleanup failed',
-        scratchRetained: true,
+    if (result?.status === 'unreaped') {
+      // The child (or a descendant) may still own files under scratch — no
+      // cleanup, retain everything for recovery.
+      result = { ...result, scratchRetained: true }
+    } else {
+      let cleanupOk = true
+      try {
+        await preparedPlan?.cleanup?.()
+      } catch {
+        cleanupOk = false
       }
-    } else if (result !== undefined) {
-      result = { ...result, scratchRetained: !finalized.scratchRemoved }
-      if (
-        result.status === 'ok' &&
-        !finalized.scratchRemoved &&
-        opts.retainScratchOnSuccess !== true
-      ) {
-        // Cleanup barrier failed on a success path: surface it — the store may
-        // still be locked; retaining scratch is deliberate (recovery + GC).
-        log.warn('system-agent-scratch-retained', {
-          feature: opts.feature,
-          scratchDir,
-        })
+      if (!cleanupOk) {
+        result = {
+          ...(result ?? fail('spawn-failed')),
+          status: 'spawn-failed',
+          stderrTail: 'runtime cleanup failed',
+          scratchRetained: true,
+        }
+      } else {
+        const wantScratchRemoved =
+          result !== undefined && result.status === 'ok' && opts.retainScratchOnSuccess !== true
+        let scratchRemoved = false
+        if (wantScratchRemoved) {
+          try {
+            rmSync(scratchDir, { recursive: true, force: true })
+            scratchRemoved = true
+          } catch {
+            // Retained deliberately — recovery + GC own it now.
+          }
+        }
+        if (result !== undefined) {
+          result = { ...result, scratchRetained: !scratchRemoved }
+          if (result.status === 'ok' && !scratchRemoved && opts.retainScratchOnSuccess !== true) {
+            // Cleanup barrier failed on a success path: surface it — the store
+            // may still be locked; retaining scratch is deliberate.
+            log.warn('system-agent-scratch-retained', {
+              feature: opts.feature,
+              scratchDir,
+            })
+          }
+        }
       }
     }
   }

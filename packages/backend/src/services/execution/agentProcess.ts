@@ -64,6 +64,8 @@ export interface AgentProcessRequest {
   capture?: {
     onStdoutLine?: (line: string) => void | Promise<void>
     onStderrLine?: (line: string) => void | Promise<void>
+    /** 行被截断投递时通知（capture-faithful 调用方标记取证不完整）。 */
+    onLineTruncated?: () => void | Promise<void>
     /** true → 结果含 byte-exact rolling-tail stdout（蒸馏器 envelope 解析）。 */
     rawStdout?: boolean
   }
@@ -88,6 +90,8 @@ export interface AgentProcessResult {
   durationMs: number
   spawnError?: string
   cleanupFailed?: boolean
+  /** exited 后管道未在期限内 EOF（孙进程持有）——exitCode 可信，尾流丢失。 */
+  drainTimedOut?: boolean
 }
 
 export class AgentProcessFileError extends Error {
@@ -214,6 +218,13 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
       : {}),
     ...(req.capture?.onStdoutLine !== undefined ? { onStdoutLine: req.capture.onStdoutLine } : {}),
     ...(req.capture?.onStderrLine !== undefined ? { onStderrLine: req.capture.onStderrLine } : {}),
+    ...(req.capture?.onLineTruncated !== undefined
+      ? { onLineTruncated: req.capture.onLineTruncated }
+      : {}),
+    // agent 域：exited 后 drain 超时 = 取证降级而非 unsafe child（smoke 的
+    // bounded flush / 蒸馏器 drain-grace / systemAgentRun 的 post-exit-flush
+    // 三处历史语义一致——exitCode 可信，尾流丢失单独上报）。
+    keepExitedOnDrainTimeout: true,
     ...(req.capture?.rawStdout === true ? { captureRawStdout: true } : {}),
     ...(req.log !== undefined ? { log: req.log } : {}),
   }
@@ -250,5 +261,6 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
     durationMs: Date.now() - startedAt,
     ...(mp.spawnError !== undefined ? { spawnError: mp.spawnError } : {}),
     ...(cleanupFailed ? { cleanupFailed: true } : {}),
+    ...(mp.drainTimedOut === true ? { drainTimedOut: true } : {}),
   }
 }

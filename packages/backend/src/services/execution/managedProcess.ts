@@ -59,6 +59,22 @@ export interface ManagedProcessRequest {
   onSpawned?: (info: { pid: number; spawnBinaryPath: string }) => Promise<void> | void
   onStdoutLine?: (line: string) => Promise<void> | void
   onStderrLine?: (line: string) => Promise<void> | void
+  /**
+   * RFC-280 T4 — notified when a line exceeded the cap and was TRUNCATED
+   * before delivery. Lets a capture-faithful caller (systemAgentRun's event
+   * sink) mark its capture incomplete instead of silently storing a clipped
+   * frame as if it were whole.
+   */
+  onLineTruncated?: () => Promise<void> | void
+  /**
+   * RFC-280 T4 — when true, a post-exit pipe-drain timeout keeps the `exited`
+   * outcome (exitCode is real; only trailing output was lost) and reports
+   * `drainTimedOut: true` instead of relabeling the run `child-unkillable`.
+   * The historical relabel remains the default for existing consumers
+   * (script nodes): their contract treats an undrainable pipe as an unsafe
+   * child. Agent runs treat it as evidence loss on a finished run.
+   */
+  keepExitedOnDrainTimeout?: boolean
   /** Retain raw stdout bytes (byte-exact, unlike the line stream). */
   captureRawStdout?: boolean
   log?: Logger
@@ -72,6 +88,9 @@ export interface ManagedProcessResult {
   /** Rolling tail of stderr, for error messages. */
   stderrTail: string
   truncated: { stdout: boolean; stderr: boolean }
+  /** RFC-280 T4 — set with `keepExitedOnDrainTimeout` when trailing output was
+   *  lost to the bounded post-exit drain (exitCode itself is trustworthy). */
+  drainTimedOut?: boolean
   /**
    * argv[0] exactly as spawned — the binary the reaper must match against a
    * live pid.
@@ -113,6 +132,7 @@ function pump(
   stream: ReadableStream<Uint8Array>,
   onLine: ((line: string) => Promise<void> | void) | undefined,
   onRaw: ((chunk: string) => void) | undefined,
+  onLineTruncated?: () => Promise<void> | void,
 ): Pump {
   const reader = stream.getReader()
   let canceled = false
@@ -133,6 +153,7 @@ function pump(
           if (idx < 0) {
             if (dropping) buffer = ''
             else if (buffer.length > MANAGED_PROCESS_MAX_LINE_CHARS) {
+              await onLineTruncated?.()
               await onLine(buffer.slice(0, MANAGED_PROCESS_MAX_LINE_CHARS) + LINE_TRUNCATED_MARKER)
               buffer = ''
               dropping = true
@@ -149,6 +170,7 @@ function pump(
         }
       }
       if (onLine !== undefined && buffer.length > 0 && !canceled && !dropping) {
+        if (buffer.length > MANAGED_PROCESS_MAX_LINE_CHARS) await onLineTruncated?.()
         await onLine(
           buffer.length > MANAGED_PROCESS_MAX_LINE_CHARS
             ? buffer.slice(0, MANAGED_PROCESS_MAX_LINE_CHARS) + LINE_TRUNCATED_MARKER
@@ -290,12 +312,18 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
           if (next.truncated) truncated.stdout = true
         }
       : undefined,
+    req.onLineTruncated,
   )
-  const stderrPump = pump(child.stderr as ReadableStream<Uint8Array>, req.onStderrLine, (chunk) => {
-    const next = appendBounded(stderrTail, chunk, MANAGED_PROCESS_MAX_STREAM_CHARS)
-    stderrTail = next.text
-    if (next.truncated) truncated.stderr = true
-  })
+  const stderrPump = pump(
+    child.stderr as ReadableStream<Uint8Array>,
+    req.onStderrLine,
+    (chunk) => {
+      const next = appendBounded(stderrTail, chunk, MANAGED_PROCESS_MAX_STREAM_CHARS)
+      stderrTail = next.text
+      if (next.truncated) truncated.stderr = true
+    },
+    req.onLineTruncated,
+  )
 
   let outcome: ManagedProcessOutcome = 'exited'
   let killTimer: ReturnType<typeof setTimeout> | undefined
@@ -356,11 +384,18 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     }),
   ])
   if (drainTimer !== undefined) clearTimeout(drainTimer)
+  let drainTimedOut = false
   if (!drained) {
     stdoutPump.cancel()
     stderrPump.cancel()
     killTree(child, 'SIGKILL')
-    if (outcome === 'exited') outcome = 'child-unkillable'
+    if (outcome === 'exited') {
+      // RFC-280 T4: an agent caller keeps the real exitCode (trailing output
+      // lost = evidence degradation, reported via drainTimedOut); the
+      // historical relabel stays the default for script-node consumers.
+      if (req.keepExitedOnDrainTimeout === true) drainTimedOut = true
+      else outcome = 'child-unkillable'
+    }
   }
 
   return {
@@ -371,5 +406,6 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     truncated,
     spawnBinaryPath,
     pid,
+    ...(drainTimedOut ? { drainTimedOut: true } : {}),
   }
 }
