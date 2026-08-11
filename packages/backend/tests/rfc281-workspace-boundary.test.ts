@@ -26,6 +26,7 @@ import {
   composeClaudeBoundarySettings,
   isClaudeRuleExpressible,
   scanSiblingTaskRoots,
+  toolchainCacheDirs,
   renderClaudeBoundary,
   composeOpencodeBoundary,
   type BoundaryCtx,
@@ -641,5 +642,39 @@ describe('gitMetaDirs 已接线（业务误伤检视 P2-1）', () => {
       explicitPermission: false,
     })
     expect(s.sandbox.filesystem.allowWrite).toEqual(['/mnt/a', '/src/repo/.git'])
+  })
+})
+
+describe('toolchainCacheDirs — 构建型节点不再撞死（检视 P2-2，用户拍板放行）', () => {
+  test('覆盖常见包管理器缓存，且**不含**任何凭据文件', () => {
+    const dirs = toolchainCacheDirs('/home/u')
+    expect(dirs).toContain('/home/u/.bun/install/cache')
+    expect(dirs).toContain('/home/u/.npm/_cacache')
+    expect(dirs).toContain('/home/u/.cargo/registry')
+    expect(dirs).toContain('/home/u/.cache/pip')
+    // 凭据一律不在内：.npmrc 带 token、cargo/credentials、docker/config.json 同理
+    const joined = dirs.join('|')
+    for (const secret of ['.npmrc', 'credentials', '.docker', '.ssh', '.aws', 'netrc']) {
+      expect({ secret, leaked: joined.includes(secret) }).toEqual({ secret, leaked: false })
+    }
+  })
+
+  test('XDG_CACHE_HOME 被尊重', () => {
+    const prev = process.env['XDG_CACHE_HOME']
+    process.env['XDG_CACHE_HOME'] = '/xdgcache'
+    try {
+      expect(toolchainCacheDirs('/home/u')).toContain('/xdgcache/pip')
+    } finally {
+      if (prev === undefined) delete process.env['XDG_CACHE_HOME']
+      else process.env['XDG_CACHE_HOME'] = prev
+    }
+  })
+
+  test('claude driver 把它们接进 allowWrite（否则 dontAsk 节点无自救路径）', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '../src/services/runtime/claudeCode/driver.ts'),
+      'utf-8',
+    )
+    expect(src).toContain('toolchainCacheDirs()')
   })
 })

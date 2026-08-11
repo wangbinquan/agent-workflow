@@ -98,8 +98,10 @@ describe('RFC-281 T2/T3 — claude per-run settings carry the write boundary', (
       sandbox?: { enabled?: boolean; filesystem?: { allowWrite?: string[] } }
     }
     expect(settings.sandbox?.enabled).toBe(true)
-    // the agent's own worktree is the writable workspace
-    expect(settings.sandbox?.filesystem?.allowWrite).toEqual([OWN])
+    // the agent's own worktree is the writable workspace. allowWrite ALSO carries
+    // git meta dirs and toolchain caches (业务误伤检视 P2-1/P2-2), so assert
+    // membership rather than an exact list.
+    expect(settings.sandbox?.filesystem?.allowWrite).toContain(OWN)
   })
 
   test('NEVER emits denyWrite/denyRead — that shape would shadow the agent’s own cwd', async () => {
@@ -121,7 +123,7 @@ describe('RFC-281 T2/T3 — claude per-run settings carry the write boundary', (
     const settings = readSettings(plan.cmd) as {
       sandbox?: { filesystem?: { allowWrite?: string[] } }
     }
-    expect(settings.sandbox?.filesystem?.allowWrite).toEqual(mounts)
+    for (const m of mounts) expect(settings.sandbox?.filesystem?.allowWrite).toContain(m)
   })
 
   test('a declared-permission node also gets additionalDirectories (B4: dontAsk reads)', async () => {
@@ -150,7 +152,8 @@ describe('RFC-281 T2/T3 — claude per-run settings carry the write boundary', (
     }
     // literal dir honored; the mid-pattern glob is disclosed via a warning
     // (claude-external-directory-glob-unsupported) rather than silently granted.
-    expect(settings.sandbox?.filesystem?.allowWrite).toEqual([OWN, '/home/me/refrepo'])
+    expect(settings.sandbox?.filesystem?.allowWrite).toContain('/home/me/refrepo')
+    expect(settings.sandbox?.filesystem?.allowWrite).toContain(OWN)
   })
 
   test('an undeclared node keeps its historical argv apart from --settings (RFC-242 intact)', async () => {

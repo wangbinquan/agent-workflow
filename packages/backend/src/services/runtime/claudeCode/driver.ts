@@ -8,6 +8,8 @@
 import type { StartupInventory } from '../types'
 import type {
   AgentInjectionSpecV1,
+  AgentSpawnContext,
+  AgentSpawnPlan,
   BusinessNodeSpawnContext,
   NormalizedEvent,
   ProbeOpts,
@@ -42,6 +44,7 @@ import {
 import { buildClaudeSpawn } from './spawn'
 import { toClaudeAgents } from './inject'
 import { pickRuntimeHead } from '../head'
+import { toBusinessCtx, toSystemCtx } from '../spawnCtx'
 import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from './probe'
 import { listClaudeModels } from './models'
 import { captureClaudeSessions } from './sessionCapture'
@@ -51,6 +54,7 @@ import {
   claudeExpressibleAuthorDirs,
   claudeWriteBoundaryAvailability,
   scanSiblingTaskRoots,
+  toolchainCacheDirs,
 } from '@/services/execution/workspaceBoundary'
 import {
   renderClaudeManagedSkillAttachments,
@@ -229,6 +233,18 @@ export const claudeCodeDriver: RuntimeDriver = {
   // presence of the test-only head override is the mock signal — production
   // never sets it, so real runs bridge; CI never touches the keychain). No
   // internal awaits — async only to match the interface (§4.6B).
+  // RFC-282 B1a — unified assembly facade (see the opencode twin for the
+  // contract; parity suite rfc282-b1a is live while both paths exist).
+  async buildAgentSpawn(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
+    const rendered = this.renderInjection(ctx.injection)
+    const head = ctx.binaryOverride !== undefined ? { runtimeCmd: [...ctx.binaryOverride] } : {}
+    if (ctx.taskMounts === undefined) {
+      const plan = await this.buildSpawn(toSystemCtx(ctx, rendered, head))
+      return { ...plan, declared: rendered.declared }
+    }
+    const plan = await this.buildBusinessSpawn(toBusinessCtx(ctx, head))
+    return { ...plan, declared: rendered.declared }
+  },
   async buildBusinessSpawn(ctx: BusinessNodeSpawnContext): Promise<SpawnPlan> {
     const baseSystemPrompt =
       ctx.injectedMemoryBlock !== null
@@ -408,7 +424,14 @@ export const claudeCodeDriver: RuntimeDriver = {
         // mount 不解析 ⇒ 多仓任务在非主 mount 上 `git add/commit` 会 EPERM，
         // 表现为「文件改得动、git 动不了」。把每个 mount 的 common/admin 目录
         // 显式放行（拿不到就少一条，不阻断）。
-        gitMetaDirs: gitMetaDirs,
+        gitMetaDirs: [
+          ...gitMetaDirs,
+          // 业务误伤检视 P2-2（用户拍板放行）：dontAsk 节点跑 bun install /
+          // npm ci / cargo build 要写这些缓存，不放行就 EPERM 且**无自救路径**
+          // （逃生阀在 dontAsk 下需过权限门、headless 无人应答）。它们是工具链
+          // 缓存、不是任何任务的工作区。
+          ...toolchainCacheDirs(),
+        ],
         // 2nd impl-gate P1-1: claude 的 sandbox 只拦 Bash；Edit/Write 走
         // permissions 层，而未声明 permission 的节点是 bypassPermissions ⇒ 默认
         // 形态下 Write 工具可直写兄弟任务目录（实测复现事故形态）。deny 规则在

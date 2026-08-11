@@ -128,6 +128,39 @@ export function scanSiblingTaskRoots(
 }
 
 /**
+ * 常见工具链的**缓存/状态目录**（业务误伤检视 P2-2，用户 2026-08-11 拍板放行）。
+ *
+ * 为什么必须放行：声明了 permission 的 claude 节点走 `dontAsk`，跑 `bun install`
+ * / `npm ci` / `cargo build` / `pip install` 时要写这些目录 → 不在 allowWrite 就
+ * EPERM；而 `dangerouslyDisableSandbox` 那条逃生阀在 `dontAsk` 下需要过权限门、
+ * headless 无人应答 ⇒ **节点直接烂在那里、无自救路径**。Code→Audit→Fix 主线里
+ * 的构建/测试节点是常见形态，这属于 §0 明令要避免的误伤。
+ *
+ * 放行它们不违背本 RFC 目标：它们是工具链缓存，不是**任何任务的工作区**——
+ * RFC-281 要防的是「串到别的任务去」，不是把 agent 关进无菌室。
+ *
+ * 只列缓存/状态，不列凭据：`~/.npmrc`（含 token）、`~/.cargo/credentials`、
+ * `~/.docker/config.json` 一律不在内。
+ */
+export function toolchainCacheDirs(home: string = homedir()): string[] {
+  const xdgCache = process.env['XDG_CACHE_HOME']
+  const cacheBase = xdgCache !== undefined && xdgCache.length > 0 ? xdgCache : join(home, '.cache')
+  return [
+    join(home, '.bun', 'install', 'cache'),
+    join(home, '.npm', '_cacache'),
+    join(home, '.npm', '_logs'),
+    join(home, '.cargo', 'registry'),
+    join(home, '.cargo', 'git'),
+    join(home, '.pnpm-store'),
+    join(home, '.yarn', 'berry', 'cache'),
+    join(cacheBase, 'pip'),
+    join(cacheBase, 'uv'),
+    join(cacheBase, 'go-build'),
+    join(home, 'go', 'pkg', 'mod'),
+  ]
+}
+
+/**
  * 本次 run 的边界 mounts（runner 用）。
  *
  * 数据源是 scheduler 已填的 per-repo worktree 路径；**无论元数据说什么，进程
