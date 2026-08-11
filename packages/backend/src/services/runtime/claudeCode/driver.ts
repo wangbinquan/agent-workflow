@@ -70,6 +70,25 @@ function writeBusinessMcpConfig(
 
 export const claudeCodeDriver: RuntimeDriver = {
   kind: 'claude-code',
+  // RFC-282 A3 — static declaration, values copied from today's behavior:
+  // init event fires on EVERY run (followups included); faces per
+  // renderInjection below (plugins have no claude face ⇒ unsupported;
+  // tools/droppedParams are real declared+observed faces here).
+  capabilities: {
+    startupObservation: 'init-event',
+    observationRequiresFreshRun: false,
+    declarationFaces: {
+      mcpServers: 'supported',
+      skills: 'supported',
+      subagents: 'supported',
+      plugins: 'unsupported',
+      tools: 'supported',
+      droppedParams: 'supported',
+      skippedDisabledMcps: 'supported',
+      unsupported: 'supported',
+      unobservable: 'supported',
+    },
+  },
   // 2026-08-04 — claude forks carry private flags (CodeAgent's
   // --skip-safe-check); the registry-validated extraArgs land at the argv tail.
   acceptsExtraArgs: true,
@@ -382,12 +401,19 @@ export const claudeCodeDriver: RuntimeDriver = {
         // 形态下 Write 工具可直写兄弟任务目录（实测复现事故形态）。deny 规则在
         // 所有 permission-mode 下都生效，是唯一的拦法。appHome 从 runRoot
         // (`<appHome>/runs/<taskId>/<nodeRunId>`) 反推，扫不到就少一条规则。
-        siblingTaskRoots: scanSiblingTaskRoots(
-          join(ctx.runRoot, '..', '..', '..'),
-          ctx.taskMounts,
-          // runRoot = <appHome>/runs/<taskId>/<nodeRunId> → 倒数第二段是 taskId
-          basename(join(ctx.runRoot, '..')),
-        ),
+        // `runs/` 不逐个枚举（检视 P1-1：无 GC、本机已 1406 个 → 单它就 2812 条
+        // 规则、264 KB settings，随部署寿命单调恶化）。也**不**下发它的祖先 deny：
+        // 本次 run 自己的 system.md / settings.json / mcp-config.json 就在
+        // `runs/<taskId>/<nodeRunId>` 下，deny 祖先会把它们一并盖住（§0：不给
+        // 自己挖坑）。别的任务的 runs 目录不含工作区数据，放弃 deny 它的收益极小。
+        siblingTaskRoots: [
+          ...scanSiblingTaskRoots(
+            join(ctx.runRoot, '..', '..', '..'),
+            ctx.taskMounts,
+            // runRoot = <appHome>/runs/<taskId>/<nodeRunId> → 倒数第二段是 taskId
+            basename(join(ctx.runRoot, '..')),
+          ),
+        ],
         ...(authorAllowDirs.dirs.length === 0 ? {} : { authorAllowDirs: authorAllowDirs.dirs }),
       },
       ...(gate === null ? {} : { businessTools: claudeToolsValue(gate) }),

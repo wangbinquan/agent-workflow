@@ -107,12 +107,14 @@ export function scanSiblingTaskRoots(
     return ownMounts.some((own) => isLexicallyInsideForHost(candidate, own))
   }
   const out: string[] = []
-  for (const container of ['iso', 'runs']) {
-    const root = join(appHome, container)
-    for (const name of readDir(root)) {
-      const dir = join(root, name)
-      if (!isOwn(dir)) out.push(dir)
-    }
+  // 只枚举**任务工作区**容器。`runs/` 刻意不枚举（业务误伤检视 P1-1）：它按
+  // taskId 无限累积且**没有 GC**（`services/gc.ts` 只回收 worktrees/iso），本机
+  // 实测已 1406 个 → 单它就产出 2812 条规则、settings.json 264 KB，每个 claude
+  // 节点都要落盘 + 逐条匹配，随部署寿命单调恶化。它由调用方用**一条祖先 deny**
+  // 覆盖（`runs/` 不含任何 mount，不会盖死 cwd —— 与 appHome 祖先根不同）。
+  for (const name of readDir(join(appHome, 'iso'))) {
+    const dir = join(appHome, 'iso', name)
+    if (!isOwn(dir)) out.push(dir)
   }
   // worktrees/<repo-slug>/<taskId>
   const wtRoot = join(appHome, 'worktrees')

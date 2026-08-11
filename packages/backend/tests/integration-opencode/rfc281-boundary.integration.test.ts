@@ -131,7 +131,11 @@ function configContentFor(own: string, runDir: string, boundary: boolean): strin
     taskMounts: [own],
     runDir,
     stagedSkillDirs: [join(runDir, 'skills'), ...machineSkillRoots()],
-    tmpGlobs: [`${join(tmpdir(), 'opencode')}/*`, `${opencodeDataDir()}/tool-output/*`],
+    tmpGlobs: [
+      `${tmpdir()}/*`,
+      `${join(tmpdir(), 'opencode')}/*`,
+      `${opencodeDataDir()}/tool-output/*`,
+    ],
   }
   const inline = buildInlineConfig(
     probeAgent(),

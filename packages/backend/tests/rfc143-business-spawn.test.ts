@@ -166,7 +166,11 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
           taskMounts: ctx.taskMounts,
           runDir,
           stagedSkillDirs: [join(runDir, 'skills'), ...machineSkillRoots()],
-          tmpGlobs: [`${join(tmpdir(), 'opencode')}/*`, `${opencodeDataDir()}/tool-output/*`],
+          tmpGlobs: [
+            `${tmpdir()}/*`,
+            `${join(tmpdir(), 'opencode')}/*`,
+            `${opencodeDataDir()}/tool-output/*`,
+          ],
         },
       )
       const primary = inline.agent[ctx.agent.name]

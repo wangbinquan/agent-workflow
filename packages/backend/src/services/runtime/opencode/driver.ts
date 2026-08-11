@@ -56,6 +56,26 @@ import { captureDistillJobSession } from '@/services/distillSessionCapture'
 
 export const opencodeDriver: RuntimeDriver = {
   kind: 'opencode',
+  // RFC-282 A3 — static declaration, values copied from today's behavior:
+  // inventory file written by the dump plugin per FRESH run (followups have
+  // nothing to read — RFC-280 实现门 P2-E), faces per renderInjection below
+  // (plugins injected but key-domain-mismatched ⇒ unobservable; tools/
+  // droppedParams never produced ⇒ unsupported).
+  capabilities: {
+    startupObservation: 'inventory-file',
+    observationRequiresFreshRun: true,
+    declarationFaces: {
+      mcpServers: 'supported',
+      skills: 'supported',
+      subagents: 'supported',
+      plugins: 'unobservable',
+      tools: 'unsupported',
+      droppedParams: 'unsupported',
+      skippedDisabledMcps: 'supported',
+      unsupported: 'supported',
+      unobservable: 'supported',
+    },
+  },
   minVersion: null,
   // RFC-280 T6 — playground session strategy (opencode: no pre-allocated id;
   // resume rides the captured session id).
@@ -232,7 +252,17 @@ export const opencodeDriver: RuntimeDriver = {
       // opencode re-adds the tool-output glob itself at the end of its permission
       // assembly, but relying on that leaves the boundary hostage to upstream
       // ordering — list both explicitly.
-      tmpGlobs: [`${join(tmpdir(), 'opencode')}/*`, `${opencodeDataDir()}/tool-output/*`],
+      // 业务误伤检视 P1-2：deny 基线遮蔽了 opencode 默认白名单后，**通用系统临时
+      // 目录**也一并被拒 —— agent 的 `mkdir -p /tmp/build`、`cp x /tmp/`、
+      // `cat /tmp/prev.json`、write 工具写 `/tmp/plan.md` 全部 DeniedError（这些
+      // 在 RFC-281 之前经 ask + --auto 放行）。临时目录不是「另一个任务的工作
+      // 区」，放行它不违背本 RFC 目标，而不放行会让写死 /tmp 的存量 agent 直接
+      // 失效（§0）。
+      tmpGlobs: [
+        `${tmpdir()}/*`,
+        `${join(tmpdir(), 'opencode')}/*`,
+        `${opencodeDataDir()}/tool-output/*`,
+      ],
     }
 
     // RFC-022/028/031: primary + closure dependents + mcp + plugin entries.

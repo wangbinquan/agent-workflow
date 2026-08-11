@@ -534,9 +534,13 @@ describe('scanSiblingTaskRoots — 只认目录，不碰 DB', () => {
   }
   const readDir = (dir: string): string[] => FS[dir] ?? []
 
-  test('own task dirs are excluded, siblings kept', () => {
+  test('own task dirs are excluded, siblings kept — and `runs` is NOT enumerated', () => {
     const out = scanSiblingTaskRoots('/aw', ['/aw/iso/taskA/run1'], 'taskA', readDir)
-    expect(out).toEqual(['/aw/iso/taskB', '/aw/runs/taskB', '/aw/worktrees/repo-x/taskB'])
+    // 业务误伤检视 P1-1：`runs/` 按 taskId 无限累积且**没有 GC**（本机实测 1406 个
+    // → 单它就 2812 条规则 / 264 KB settings，每个 claude 节点都要落盘 + 逐条匹配，
+    // 随部署寿命单调恶化）。它也不是任何任务的**工作区**，放弃 deny 它收益极小。
+    expect(out).toEqual(['/aw/iso/taskB', '/aw/worktrees/repo-x/taskB'])
+    expect(out.some((d) => d.includes('/runs/'))).toBe(false)
     // 自己的那条（及其祖先）绝不出现
     expect(out.join('|')).not.toContain('taskA')
   })
