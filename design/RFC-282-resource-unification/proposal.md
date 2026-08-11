@@ -1,18 +1,19 @@
 # RFC-282 · 资源归一：装配单点化、runtime 围栏化、抽象去重化
 
-- 状态：Draft（待用户批准）
+- 状态：Draft **v2**（已按 2026-08-11 双路独立设计门 20×P1 + 10×P2 修订；findings 逐条
+  落点见 design.md §10。三条方向题已由用户重新拍板，其中**决策 4/20 撤回**——见 §9）
 - 日期：2026-08-11
 - 发起：用户指令「开始做资源归一处理，并且加好充分的防护防止以后再多份实现分支」。
   起于一次全仓调研（四路并行核实，结论见 §1），问题是「资源注入、资源执行、资源抽象
   是不是已经全系统抽象成一套，并且没有特殊处理」。答案是：**执行层是**（RFC-280 已收
   敛到唯一执行器），**注入层是半套**（转换纯函数收敛了，装配没有），**抽象层是大半套**
   （ACL 统一了，引用收敛只完成一半），**「没有特殊处理」不成立**。
-- 决策记录（用户已逐条拍板，2026-08-11，共 18 条）：见 §9。
+- 决策记录（用户逐条拍板，2026-08-11，共 23 条，其中 2 条经设计门后由用户撤回）：见 §9。
 - 相关设计：RFC-280（统一 agent 进程执行与资源注入收拢 —— 本 RFC 是它的直接接续，
   完成它没走完的装配层收敛）、RFC-281（任务工作区边界 —— 其 `workspaceBoundary.ts`
   在本 RFC 中按 runtime 归属拆分）、RFC-271（统一资源表达 —— 其 ref codec 的三个域
   在本 RFC 中真正接上生产）、RFC-099/231（资源 ACL 模型 —— 其
-  `canViewResourceInTx` 的四份手写副本在本 RFC 中收敛）、RFC-243（任务调用层，正交）。
+  `canViewResourceInTx` 的重复判据在本 RFC 中收敛）、RFC-243（任务调用层，正交）。
 
 ## 0. 首要原则（高于本文档其余一切细节）
 
@@ -26,8 +27,11 @@
 2. **有意变更必须逐条登记**：唯一允许的行为差异是 design §7 的「有意变更清单」，每条
    指定 owning 任务、改哪条断言、在 commit message 里声明。清单外的任何 argv/env/
    落库形状变化都是 bug。
-3. **不借重构之名改产品语义**：本 RFC 只有一处产品行为变更（disabled 语义统一，§7），
-   它是用户单独拍板的，不搭在结构改动里夹带。
+3. **零产品行为变更**（v2 收紧）：初版曾夹带一处产品语义变更（disabled 资源统一为
+   告警不失败）。设计门查明它的真实射程是 **5 个产出点 + 4 道上游门 + 前端状态推导**，
+   远超用户拍板时得到的信息（当时我告知的是「scheduler 一行」）。**用户据此撤回该
+   改判**（§9 决策 4/20 → 撤回）。v2 起本 RFC **不含任何产品行为变更**，只有 design §7
+   逐条登记的语义等价变更。这让首要原则从「尽量」变成「结构上」成立。
 
 ## 1. 背景：调研结论（四路并行核实，全部 file:line 可复核）
 
@@ -62,10 +66,12 @@ RFC-280 把「DB 形状 → 注入意图」的核心纯函数收敛到了
    含资源解析 + exact-identity 围栏 + skill quarantine 门）留在 scheduler，且 skill /
    mcp / plugin 三段近似重复而语义各异（skill 有 quarantine 与 canonical-path 门且是
    throw 风格，其余是 typed result）。
-4. **disabled 语义分裂**：引用 disabled plugin → 节点硬失败（`scheduler.ts:9262`
-   `plugin-disabled`）；引用 disabled MCP → 静默跳过 + 声明告警
-   （`agentInjection.ts:84-86`，RFC-280 拍板的落差③）。两条规则活在两层，没有单点能
-   读出「disabled 资源怎么办」。
+4. **disabled 规则无单点可读**：引用 disabled plugin → 硬失败（`plugin-disabled`，
+   实际有 5 个产出点：`workflow.validator.ts:1758/1825`、`agent.ts:994`、
+   `agentResourceIntegrity.ts:284`、`scheduler.ts:9266`，且被 4 道上游 launch 门消费）；
+   引用 disabled MCP → 跳过 + 声明告警（`agentInjection.ts:84-86`，RFC-280 落差③）。
+   **v2 立场**：两种处置各有其理（plugin 影响 runtime 行为面、MCP 只是少个工具），
+   本 RFC **不统一取值**，只要求规则**集中在一处可读**、新增资源类型必须表态。
 5. **6 个调度入口有 2 个绕开统一注入**：commit-push（`scheduler.ts:1960-1965`）与
    merge agent（`:2850-2853`）手写 `skills:[] dependents:[] mcps:[] plugins:[]`。今天等价
    （两个合成 agent 定义处本就零资源），但**给内置 agent 加一条 MCP 引用就会被静默丢弃**。
@@ -97,7 +103,8 @@ RFC-280 把「DB 形状 → 注入意图」的核心纯函数收敛到了
 3. **未知 runtime 静默兜底成 opencode**：`runtime/index.ts:26` 的
    `DRIVERS[kind] ?? opencodeDriver` —— 损坏或未来的 runtime 值会被静默当 opencode 跑，
    与 `nodeRunMint.ts:486` 那条路径的 loud-log 策略不一致。
-4. **约 1300 行 opencode 专属实现在 driver 目录外**：`services/sessionCapture.ts`（431 行，
+4. **约 1700 行 opencode 专属实现在 driver 目录外**（v2 按设计门 P2-2 修正：初版
+   「1300 行」漏算了 `src/opencode-plugin/` 目录的 376 行）：`services/sessionCapture.ts`（431 行，
    含硬编码的 opencode 全局 SQLite 路径）、`subagentLiveCapture.ts`（297）、
    `inventory.ts`（255）、`distillSessionCapture.ts`（146）、`util/opencode.ts`（167）、
    `util/opencode-version-registry.ts`（45）、`src/opencode-plugin/` 整目录。claude 的
@@ -116,16 +123,18 @@ create 统一 owner + private + 零 grants；加第七类资源会在穷尽映�
 
 漂移：
 
-1. **`canViewResourceInTx` 四份手写副本**：`agent.ts:838`、`workflow.ts:1006`、
-   `workgroups.ts:856`、`scheduledTasks.ts:389`。其中 workflow / workgroups 两份**与同
-   文件已 import 的共享版并存**；scheduledTasks 那份**直接遮蔽同名导出**且只支持 3/6
-   类型。四份都写严格的 `row.visibility === 'public'`，共享版写宽松的
-   `(row.visibility ?? 'public')` —— 今天结果相同（列 NOT NULL），契约不同。
+1. **ACL 判据重复**（v2 按设计门 P2-1 修正射程 —— 初版说「四份手写副本」不准确）：
+   真正的副本只有 `scheduledTasks.ts:389` 一处 —— 私有函数**遮蔽同名导出**且只支持
+   3/6 类型。另三处（`agent.ts:838` / `workflow.ts:1006` / `workgroups.ts:856`）**不是
+   副本而是写路径断言**：内联算出的 `isAdmin`/`isOwner` 后面要复用来判 403，且 404 必须
+   用资源专属错误码、在 `assertNotBuiltin` 之前抛 ⇒ 只能抽取其中的 visible 子表达式，
+   naive 替换会改错误码顺序、丢 403 判据。四处都写严格的 `row.visibility === 'public'`，
+   共享版写宽松的 `(row.visibility ?? 'public')` —— 今天结果相同（列 NOT NULL），契约不同。
 2. **`services/importRefs.ts` 是引用校验的第二个入口**：自带 grant 查询（`:445-447`，
    与 `resourceAcl.ts:151-161` 同一条 SQL 两份代码）、自带可见性与歧义围栏。
 3. **RFC-271 的 ref codec 三域纸面化**：`call` / `importSelector` / `intent` 三个 codec
    **零生产采用** —— `freezeCallClosure` 全程裸字符串（`execution/closure.ts:240/247/
-   284-290/357/380/401-402`），`RefResolver` 接口零实现；`agentRefs.ts:22-24` 还残留被
+284-290/357/380/401-402`），`RefResolver` 接口零实现；`agentRefs.ts:22-24` 还残留被
    RFC-271 点名批判过的 `m:`/`p:` 前缀键第二份。尤其 `call` 域正是 RFC-271 自述的动机例。
 4. **`resolveRefsUsableByName` 缺 `grandfatheredIds` 参数**：name 域（call-workflow /
    call-workgroup）的「只校验新增引用」全靠调用方自觉先 diff，少写一次就静默丢失
@@ -166,9 +175,11 @@ create 统一 owner + private + 零 grants；加第七类资源会在穷尽映�
 2. **平台开发者新增一类资源注入**：只改统一注入层的一个转换纯函数 + 每个 driver 的
    渲染表态，五条 spawn 链路同时生效，声明清单与启动验证自动覆盖。grep 锁会挡住
    「顺手在 driver 里再写一份」。
-3. **工作流作者临时禁用一个 plugin**：引用它的节点**照常运行**并在节点详情看到持久
-   告警「plugin X 已禁用，本次运行缺少它提供的能力」，而不是像今天这样整个节点直接
-   失败。（行为变更，§7）
+3. **平台开发者想知道「引用了 disabled 资源会怎样」**：`services/execution/resourcePolicy.ts`
+   一处读完 —— 每类可注入资源的处置（plugin 硬失败 / MCP 跳过并声明）连同**为什么**
+   写在一起，且新增资源类型时不表态就编译报错。今天这条规则散在 scheduler、
+   统一注入层、RFC-228 完整性检查三处，没有任何单点能回答它。
+   （v2 修订：初版此处曾承诺「照常运行 + 告警」的行为变更，已随决策 4 撤回，见 §9。）
 4. **运维者排查「agent 找不到工具」**：节点详情的声明清单与实际加载对照表来自**同一次
    装配**，不存在「声明说注入了、实际没注入」这种两次计算的不一致可能。
 5. **接手者读代码**：想知道「disabled 资源怎么处理」「哪些目录算本任务工作区」「某类
@@ -177,17 +188,19 @@ create 统一 owner + private + 零 grants；加第七类资源会在穷尽映�
 
 ## 5. 能力影响清单（CLAUDE.md §7 要求：呈用户逐项确认）
 
-本 RFC **不以安全/隔离为由关闭任何既有能力**，故不属「能力收缩型 RFC」。但为完整起见
-逐项列出所有可观察的能力变化：
+本 RFC **不关闭任何既有能力**，也**不新增任何产品行为变更**（v2 撤回了初版唯一的那处）。
+逐项列出所有可观察变化：
 
-| # | 变化 | 方向 | 影响面 |
-|---|------|------|--------|
-| 1 | 引用 disabled plugin 从「节点硬失败」变为「照常运行 + 持久告警」 | **能力扩张** | 引用了被禁用 plugin 的工作流节点：原本跑不了，现在能跑 |
-| 2 | `plugin-disabled` 错误码删除 | 内部 | 该码不再产生；对外 wire 无契约（节点失败原因是自由文本） |
-| 3 | 系统 agent（intent / narrative / smoke / distiller）的 inline 条目多出 description/permission/options 字段 | 等价 | runtime 语义不变（RFC-280 §7.2 已对 opencode 系统面做过同类变更） |
-| 4 | 调用方不再传 `opencodeCmd` | 内部 | 纯内部字段（shared / frontend 零命中）；二进制解析结果不变 |
+| #   | 变化                                                            | 方向         | 影响面                                                                                                                                                                                                                                                     |
+| --- | --------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | ~~引用 disabled plugin 改为告警不失败~~                         | **v2 撤回**  | 设计门查明真实射程 = 5 产出点 + 4 道上游 launch 门 + 前端 `state:'unavailable'` 推导 + 已落 `node_runs.error_message`；用户据此撤回。`plugin-disabled` 码与其全部消费方**原样保留**                                                                        |
+| 2   | opencode 系统 agent 的 inline 条目多出 description/options 字段 | 等价         | runtime 语义不变（RFC-280 §7.2 已对 opencode 系统面做过同类变更）                                                                                                                                                                                          |
+| 3   | **claude 系统 agent 条目不注入 permission**                     | 显式保持现状 | 设计门 P1-6：claude 无 permission 声明 = unconstrained（2026-07-31 用户裁定）；注入 permission 会让工具面从「全开」收缩成「只开声明的」，四个系统 agent 将静默失去工具面。**用户拍板：claude 系统面不注入**，作为显式的 per-runtime 语义差异写进 design §7 |
+| 4   | 调用方不再传 `opencodeCmd`（改 `binaryOverride`）               | 内部         | 生产侧纯内部字段；**测试侧影响 124 个夹具文件**（设计门 P1-5 修正，初版低估一个数量级）                                                                                                                                                                    |
+| 5   | `binaryOverride` 穿到 registry/smoke 路径                       | **能力扩张** | 用户拍板纳入：关闭 `docs/audit-backlog.md` 已登记的 Windows 红（runtime-smoke 等因该路径只收 `binaryPath: string`、无命令数组缝而在 Windows 长期失败，backlog 原文注明「真正的修法要走 RFC 门」——本 RFC 即其门）                                           |
 
-**无能力收缩项。** 若实现期发现任何一处会关闭既有能力，按 CLAUDE.md §7 停下来单独呈报。
+**无能力收缩项，无产品行为变更。** 若实现期发现任何一处会关闭既有能力或改变产品语义，
+按 CLAUDE.md §7 停下来单独呈报，不得在结构重构里夹带。
 
 ## 6. 与相邻 RFC 的边界
 
@@ -203,20 +216,20 @@ create 统一 owner + private + 零 grants；加第七类资源会在穷尽映�
 
 ## 7. 行为变更声明（呈用户确认）
 
-**一处产品行为变更**（用户已单独拍板）：
+**零产品行为变更**（v2）。初版的那一处（disabled 资源统一为告警不失败）已随决策 4/20
+撤回 —— 撤回理由与真实射程见 §5 表格第 1 行。
 
-1. **disabled 资源语义统一为「告警不失败」**。引用 disabled plugin 的节点从「spawn 前
-   硬失败（`plugin-disabled`）」变为「照常运行 + `startup_verification_json` 持久告警 +
-   节点详情 banner」，与 disabled MCP 今天的语义一致（RFC-280 落差③）。
-   **不提供逃生舱**（用户拍板）：不新增 `requireResources` 之类的「缺了就别跑」声明；
-   如果作者需要硬依赖语义，那是未来单独 RFC 的题目。
-   规则本身收进统一层的**单一 disabled 规则表**，新增资源类型必须在表里表态。
+**等价变更**（结构收敛的副产品，逐条进 design §7 有意变更清单并给 golden 归属表）：
 
-**三处等价变更**（结构收敛的副产品，逐条进 design §7 有意变更清单并给 golden 归属表）：
-
-2. 系统 agent inline 条目统一产出（多出 description/permission/options 字段）。
-3. `opencodeCmd` 从调用链剔除（二进制解析下沉给 driver，保留 test-only override 通道）。
-4. `workspaceBoundary` 的 runtime 专属合成下沉到各 driver（产出字节不变，位置变）。
+1. opencode 系统 agent inline 条目统一产出（多出 description/options 字段；
+   **claude 侧不注入 permission**，见 §5-3）。
+2. `opencodeCmd` → `binaryOverride`（二进制**覆写通道**归一；`runtimeBinary` 冻结值
+   保留在 ctx 上不变 —— 设计门 P1-3：`nodeRunMint.ts:452-470` 的 RFC-111 D15 +
+   RFC-112 裁决要求 resume/retry 读冻结快照而非重查 registry）。
+3. `workspaceBoundary` 的 runtime 专属合成下沉到各 driver（产出字节不变，位置变）。
+4. skill quarantine / canonical-path 门从 throw 改 typed failure（失败**归属**从任务级
+   变节点级 —— 设计门 P1-6 指出这是真行为变更且今天零测试锁定，故 B2 必须先补红测）。
+5. `buildPlan` 逃生舱契约收窄为「只可包裹、不可替换」（design §2.1b）。
 
 ## 8. 验收标准
 
@@ -244,7 +257,8 @@ create 统一 owner + private + 零 grants；加第七类资源会在穷尽映�
 
 9. `prepareNodeRunInjection` 在 `services/execution/` 下，6 个调度入口全部经它
    （含 commit-push 与 merge agent，资源从 agent 定义推导而非调用点写死）。
-10. `canViewResourceInTx` 全仓一个实现；`importRefs` 的 grant 查询与可见性判据复用
+10. ACL 判据的**真副本**清零（`scheduledTasks.ts:389`），另三处写路径断言复用共享
+    visible 子表达式且保留错误码顺序；`importRefs` 的 grant 查询与可见性判据复用
     `resourceAcl` 单点。
 11. RFC-271 的 call / importSelector / intent 三域 codec 有生产调用点（grep 锁兜底）。
 12. 约 1300 行 opencode 专属实现全部在 `services/runtime/opencode/` 内。
@@ -253,26 +267,28 @@ create 统一 owner + private + 零 grants；加第七类资源会在穷尽映�
 
 ## 9. 用户决策记录（2026-08-11，三轮共 18 条）
 
-| # | 决策 | 取值 |
-|---|------|------|
-| 1 | 归一范围 | 三类全做，一个 RFC 分批 PR |
-| 2 | 注入单点形态 | 彻底单点：声明与注入同源 |
-| 3 | 防护形态 | 四件套全上：grep 锁 / ESLint 边界 / 启动自检 / 类型收口 |
-| 4 | disabled 语义 | 统一为告警不失败 |
-| 5 | 单点覆盖面 | 五条链路全走同一钩子（persona-only 是空集特例，不是例外） |
-| 6 | 缺资源逃生舱 | 不给，纯告警 |
-| 7 | opencode 专属代码 | 全搬进 `runtime/opencode/` |
-| 8 | 解析层归位 | 搬进 execution 层 + 6 入口全走它 |
-| 9 | driver 契约 | 三合一，`declared` 进 `SpawnPlan` |
-| 10 | boundary 归属 | 拆：runtime 无关部分留统一层，合成下沉各 driver |
-| 11 | 批次顺序 | 防护先行，再逐批收敛（例外清单归零 = 完工） |
-| 12 | ref codec 三域 | 接上生产 |
-| 13 | DRIVERS 兜底 | 改显式报错 |
-| 14 | readInventory 判据 | 改显式能力声明 |
-| 15 | plugin 去重键 / subagent root | 统一 |
-| 16 | golden 锁 | 接受等价变化，逐条改断言 + 归属表 |
-| 17 | 二进制解析 | 从调用链剔除，下沉给 driver |
-| 18 | importRefs | 保留独立但共享底层 |
-| 19 | 对拍验证 | **每批都对拍** |
-| 20 | `plugin-disabled` 错误码 | 删除 + 写进行为变更声明 |
-| 21 | 完工判据 | ESLint 清单归零 + 转换唯一（grep 锁）+ driver 单一装配方法 + 启动自检声明面完整 + **功能不受影响** |
+| #      | 决策                                    | 取值                                                                                                                                                                                             |
+| ------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1      | 归一范围                                | 三类全做，一个 RFC 分批 PR                                                                                                                                                                       |
+| 2      | 注入单点形态                            | 彻底单点：声明与注入同源                                                                                                                                                                         |
+| 3      | 防护形态                                | 四件套全上：grep 锁 / ESLint 边界 / 启动自检 / 类型收口                                                                                                                                          |
+| ~~4~~  | ~~disabled 语义统一为告警不失败~~       | **v2 撤回**（设计门第二轮：真实射程 = 5 产出点 + 4 道上游门 + 前端状态推导，远超拍板时得到的信息）。改为：**plugin 保持硬失败**，归一目标收窄为「规则集中在一处可读 + 新增类型必须表态」         |
+| 5      | 单点覆盖面                              | 五条链路全走同一钩子（persona-only 是空集特例，不是例外）                                                                                                                                        |
+| ~~6~~  | ~~缺资源逃生舱：不给~~                  | **v2 失效**（决策 4 撤回后，「缺资源即拒跑」的 fail-closed 保证原样保留，逃生舱问题不再存在）                                                                                                    |
+| 7      | opencode 专属代码                       | 全搬进 `runtime/opencode/`                                                                                                                                                                       |
+| 8      | 解析层归位                              | 搬进 execution 层 + 6 入口全走它                                                                                                                                                                 |
+| 9      | driver 契约                             | 三合一，`declared` 进 `SpawnPlan`                                                                                                                                                                |
+| 10     | boundary 归属                           | 拆：**只有 `taskMounts` 这一条产品语义留统一层**，`BoundaryCtx` 构造与合成全部下沉各 driver（v2 按设计门 P1-10 收紧：初版让统一层构造 `BoundaryCtx` 会把 opencode 路径知识搬进统一层，方向相反） |
+| 11     | 批次顺序                                | 防护先行；**v2 追加：D 批优先启动**（与并发的 RFC-280 收尾零重叠）                                                                                                                               |
+| 12     | ref codec 三域                          | 接上生产                                                                                                                                                                                         |
+| 13     | DRIVERS 兜底                            | 改显式报错；**v2 限定：只在执行路径（spawn/probe）抛，读取/展示路径降级**（设计门 P2-1：否则一行脏 protocol 会让 `/api/runtimes` 整页 500）                                                      |
+| 14     | readInventory 判据                      | 改显式能力声明；**v2 追加：必须保留 `wantsInventory` 维度**（设计门 P1-7：丢了会复活 RFC-280 实现门 P2-E 修过的 followup 噪声）                                                                  |
+| 15     | plugin 去重键 / subagent root           | 统一                                                                                                                                                                                             |
+| 16     | golden 锁                               | 接受等价变化，逐条改断言 + 归属表                                                                                                                                                                |
+| 17     | 二进制解析                              | **v2 射程收窄**：只归一**覆写通道**（`opencodeCmd`+`runtimeCmd` → `binaryOverride`）；`runtimeBinary` 冻结值仍由调用方传入，driver 不查 registry（设计门 P1-3）                                  |
+| 18     | importRefs                              | 保留独立但共享底层                                                                                                                                                                               |
+| 19     | 对拍验证                                | 每批都对拍；**v2 追加：C3 纯搬迁的对拍面改为「`build:binary` + `PLUGIN_FILES` 非空 + 真读 inventory 跑通」**（设计门 P1-4：符号相等抓不到嵌入资产断裂）                                          |
+| ~~20~~ | ~~删除 `plugin-disabled` 错误码~~       | **v2 撤回**（随决策 4；该码有 5 个产出点、已落 DB 列、双语文案两套）                                                                                                                             |
+| 21     | 完工判据                                | ESLint 清单归零 + 转换唯一（grep 锁）+ driver 单一装配方法 + 启动自检声明面完整 + **功能不受影响**                                                                                               |
+| 22     | **C1 射程**（v2 新增）                  | 纳入 124 个测试夹具迁移，并**顺带关闭 `docs/audit-backlog.md` 的 Windows 命令数组缝 P2**（backlog 原文注明该修法要走 RFC 门，本 RFC 即其门）                                                     |
+| 23     | **claude 系统面 permission**（v2 新增） | **不注入** —— 保持 2026-07-31 裁定的 unconstrained 语义；统一只在 opencode 侧兑现，作为显式 per-runtime 差异登记                                                                                 |
