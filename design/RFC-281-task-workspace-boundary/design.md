@@ -51,8 +51,8 @@
 
 改动点在统一注入层 `services/execution/agentInjection.ts`（RFC-280 T1 建成），边界注入**两级**：
 
-- **顶层 `OPENCODE_CONFIG_CONTENT.permission.external_directory`**（新增）：deny 基线 + 平台 re-allow 清单。全局 permission 参与**每个** agent 的合并（`agent/agent.ts` defaults → config.permission → agent 条目），因此原生 `general`/`explore` 子代理、dependsOn 闭包成员一并被覆盖（设计门 F1 的修复：agent 条目级注入够不着原生子代理，见 §1.1）。附带收益：原生子代理越界从「external_directory ask 悬挂或被 auto 放行」变为立即 DeniedError。
-- **业务 agent 条目级**：仅当作者声明了 `external_directory` 时合成（作者条目殿后于顶层基线——agent 级在全局之后合并，作者显式白名单因此对自己的 agent 生效）。
+- **顶层 `OPENCODE_CONFIG_CONTENT.permission.external_directory`**（新增）：deny 基线 + re-allow。职责**收窄为覆盖无平台条目的原生子代理**（`general`/`explore`；设计门 F1 + M1）——它们吃 `agent.ts` defaults + 顶层 global，没有平台生成的 agent 条目。**不指望顶层约束业务 agent**：M1 实测证明业务 agent 条目里作者的 `'*':'allow'` 会溶解顶层 deny（跨层键序不可控，§5-9），故业务 agent 一律靠条目级（下条）。顶层对原生子代理的实效由 T1 gated 集成用真 task 子代理链确证。
+- **业务 agent 条目级（约束业务 agent 的主力，M1 修正）**：root + 每个 dependent 的条目**都**注入完整 external_directory 合成（deny 基线 + re-allow + 作者白名单），**整体追加在作者其他键尤其 `'*'` 之后**（同 map 键序可控，E4 已证 deny 胜）。**不是「仅作者声明 external_directory 时」**——即使作者只写 `'*':'allow'`、根本没碰 external_directory，条目也必须注入 deny 基线压制它（否则 M1 的溶解在条目自身复现）。
 
 新增纯函数：
 
@@ -157,6 +157,7 @@ settings 内容（两类节点共用骨架；T0 校准 + §0 收缩后的最小�
 6. **claude sandbox 对 git linked-worktree 共享 `.git` 自动放行** ✅。cwd = linked worktree，`sandbox.enabled:true` 无额外 allowWrite，`git add -A && git commit` → GIT: OK、commit 落地。⇒ §2 的 `gitMetaDirs` **大概率不需显式 allowWrite**（保留 T3 在真实 iso-of-iso / fusion 布局再确认；common dir 在 appHome `repos/` 缓存的情形仍需 allowWrite 兜底）。
 7. **resume 重新应用本次 `--settings` 边界** ✅。run A 建会话取 session_id；run B `--resume <id> --settings '{deny Read(X)}'` 读 X → 被拒。⇒ 续跑不残留旧边界、新注入生效（§5-7 风险点排除）。opencode `--session` 侧随 T1 集成补一条。
 8. **`--settings` 的 `excludedCommands` 数组跨层合并，CLI 层 `[]` 压不住项目层** ✅（坐实设计门 F3）。项目 `.claude/settings.json:{sandbox:{excludedCommands:["touch *"]}}` → CLI `--settings {excludedCommands:[]}` 后 `touch 越界文件`仍 **OK**（未被沙箱拦）。⇒ 数组键无法靠 per-run 覆盖，worktree 内 `.claude/settings.json` 构成仓库内容级放宽面 → 归 proposal B8 披露；标量/对象键仍以 per-run 钉死为准（§4.1）。
+9. **opencode 顶层↔agent 条目的 external_directory 跨层键序不可预测 → 必须条目级统一处理**（M1/M2，T1 前置实测，deepseek + `--agent probe`）：**M1** 顶层 `config.permission.external_directory:{"*":"deny"}` + agent 条目 `permission:{"*":"allow"}` → 越界读兄弟**放行**（条目 `'*':allow` 溶解顶层 deny）；**M2** 顶层同 deny + 条目 `external_directory:{"<task2>/*":"allow"}` → 越界**被拒**（条目白名单未能放行）。两者方向相反 ⇒ 跨层合并后 external_directory 的键序不可控。**结论（改写 §3.1）**：不能只在顶层注入 deny 来约束业务 agent——作者一个 `'*':'allow'` 就溶解它。**每个业务 agent 条目必须在自己的 permission map 内注入完整 external_directory 合成**（deny 基线 + re-allow + 作者白名单），整体**追加在作者其他键（尤其 `'*'`）之后**（同 map 键序可控，E4 已证）。顶层 `config.permission` 仍注入 deny 基线，但职责收窄为**只覆盖无平台条目的原生子代理**（general/explore；其顶层 deny 实效由 T1 gated 集成用真 task 子代理链确证）。
 
 ## 6. 耦合点与时序
 
