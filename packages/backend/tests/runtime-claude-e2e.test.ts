@@ -292,11 +292,11 @@ describe('runNode — claude injection parity (RFC-111 PR-C)', () => {
     expect(argv).toContain('--mcp-config')
     expect(argv).not.toContain('--strict-mcp-config')
     expect(argv).toContain('--agents')
-    // the mcp/agents JSON payloads are present + well-formed
-    const mcpJson = JSON.parse(argv[argv.indexOf('--mcp-config') + 1]!) as {
-      mcpServers: Record<string, unknown>
-    }
-    expect(mcpJson.mcpServers.fs).toBeDefined()
+    // RFC-280 §7.1: --mcp-config now carries a 0600 FILE PATH under the
+    // per-run dir (secrets off argv); the run has settled and the per-run dir
+    // is cleaned, so assert the path shape here — content+mode are locked at
+    // the spawn layer (rfc143-business-spawn).
+    expect(argv[argv.indexOf('--mcp-config') + 1]!.endsWith('mcp-config.json')).toBe(true)
     const agentsJson = JSON.parse(argv[argv.indexOf('--agents') + 1]!) as Record<string, unknown>
     expect(agentsJson.reviewer).toBeDefined()
     // Managed skill is projected into the project-native .claude/skills path at

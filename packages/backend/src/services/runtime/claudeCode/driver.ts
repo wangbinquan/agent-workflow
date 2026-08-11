@@ -52,6 +52,17 @@ import {
   stageClaudeWorktreeSkills,
 } from './config'
 
+/** RFC-280 §7.1 — business-path MCP config lands on disk (0600), never argv. */
+function writeBusinessMcpConfig(
+  runRoot: string,
+  claudeMcp: { mcpServers: Record<string, Record<string, unknown>> },
+): string {
+  mkdirSync(runRoot, { recursive: true })
+  const file = join(runRoot, 'mcp-config.json')
+  writeFileSync(file, JSON.stringify(claudeMcp), { mode: 0o600, flag: 'w' })
+  return file
+}
+
 export const claudeCodeDriver: RuntimeDriver = {
   kind: 'claude-code',
   // 2026-08-04 — claude forks carry private flags (CodeAgent's
@@ -288,7 +299,11 @@ export const claudeCodeDriver: RuntimeDriver = {
       ...(gate === null ? {} : { businessTools: claudeToolsValue(gate) }),
       ...(claudeMcp !== null
         ? {
-            mcpConfigJson: JSON.stringify(claudeMcp),
+            // RFC-280 §7.1: the MCP config (headers may carry user tokens) is
+            // written 0600 under the per-run dir and passed as a PATH — inline
+            // JSON on argv leaked secrets into /proc/<pid>/cmdline
+            // (audit-backlog item, now closed on the business path too).
+            mcpConfigJson: writeBusinessMcpConfig(ctx.runRoot, claudeMcp),
             // RFC-242 T5: a gated node must allowlist its own MCP namespaces or
             // dontAsk denies every MCP call (measured, see ClaudeSpawnContext).
             mcpServerNames: mcpInjection.declared.mcpServers,

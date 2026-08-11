@@ -9,7 +9,7 @@
 // 决策。红了 = 收口引入了行为漂移，先回滚该处重做（design §6）。
 
 import { describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -276,7 +276,13 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
       )
       const cmdStr = plan.cmd.join(' ')
       expect(plan.cmd).toContain('--mcp-config')
-      expect(plan.cmd[plan.cmd.indexOf('--mcp-config') + 1]).toBe(mcpJson)
+      // RFC-280 §7.1: the MCP config (headers may carry user tokens) is a
+      // 0600 FILE under runRoot passed by path — inline JSON on argv leaked
+      // secrets into /proc/<pid>/cmdline.
+      const mcpConfigPath = plan.cmd[plan.cmd.indexOf('--mcp-config') + 1]!
+      expect(mcpConfigPath.endsWith('mcp-config.json')).toBe(true)
+      expect(readFileSync(mcpConfigPath, 'utf8')).toBe(mcpJson)
+      expect(statSync(mcpConfigPath).mode & 0o777).toBe(0o600)
       expect(cmdStr).not.toContain('--strict-mcp-config')
       expect(plan.cmd[plan.cmd.indexOf('--agents') + 1]).toBe(agentsJson)
       // RFC-113：model 来自 root 的 FROZEN runtime profile。
