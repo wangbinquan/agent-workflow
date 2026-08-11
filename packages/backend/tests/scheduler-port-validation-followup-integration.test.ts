@@ -145,7 +145,7 @@ describe('RFC-049 scheduler port-validation follow-up integration', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget via runTask opts (was node.retries: 1).
           defaultNodeRetries: 1,
         }),

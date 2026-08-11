@@ -198,7 +198,7 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
       signal: controller.signal,
     })
     await waitFor(() => existsSync(join(h.ctrlDir, 'iter1-started')), 'iteration-1 inner spawn')
@@ -301,7 +301,7 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
       signal: controller.signal,
     })
     await waitFor(() => existsSync(join(h.ctrlDir, 'iter1-started')), 'iteration-1 inner spawn')

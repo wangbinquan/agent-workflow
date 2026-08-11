@@ -163,7 +163,7 @@ describe('runner parent-stdout live broadcast', () => {
             templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
             skills: [],
             appHome: h.appHome,
-            opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+            binaryOverride: ['bun', 'run', MOCK_OPENCODE],
             db: h.db,
             // Disable RFC-048 live poller so the only `node.status: running`
             // pings on the channel come from the parent stdoutPump under test.

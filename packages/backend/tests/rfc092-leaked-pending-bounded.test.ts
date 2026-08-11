@@ -259,7 +259,7 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
 
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
@@ -306,7 +306,7 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 

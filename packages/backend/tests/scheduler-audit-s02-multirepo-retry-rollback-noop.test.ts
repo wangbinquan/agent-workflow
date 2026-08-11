@@ -259,7 +259,7 @@ describe('S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', h.miniMockPath],
+          binaryOverride: ['bun', 'run', h.miniMockPath],
           // RFC-115: retry budget via runTask opts (was node.retries: 1).
           defaultNodeRetries: 1,
         }),

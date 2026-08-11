@@ -36,7 +36,6 @@ export function buildStartTaskDeps(
   db: DbClient,
   configPath: string,
   actorUserId: string,
-  opencodeCmd?: string[],
   /** RFC-204: needed to unseal a cached repo for a reuse-by-id launch. */
   secretBox?: SecretBox,
 ): StartTaskDeps {
@@ -45,7 +44,8 @@ export function buildStartTaskDeps(
     db,
     actorUserId,
     ...(secretBox !== undefined ? { secretBox } : {}),
-    ...(opencodeCmd ? { opencodeCmd } : {}),
+    // RFC-282 C1-2: the scheduler resolves config.opencodePath itself.
+    configPath,
     ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
     // RFC-103 T2: commit&push + maxConcurrentNodes + per-node timeout floor.
     ...resolveLaunchRuntimeConfig(configPath),

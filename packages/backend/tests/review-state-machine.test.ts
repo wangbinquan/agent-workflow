@@ -483,7 +483,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       taskId: h.taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: h.stubOpencode,
+      binaryOverride: h.stubOpencode,
     })
 
     const dvs = await h.db

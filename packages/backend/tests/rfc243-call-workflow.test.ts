@@ -259,7 +259,7 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
       db: h.db,
       taskId: parentTaskId,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
     })
 
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
@@ -321,7 +321,7 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
       db: h.db,
       taskId: parentTaskId,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
       // 子任务 agent 重试烧时间——压到 0 让失败立即冒泡。
       defaultNodeRetries: 0,
     })
@@ -358,7 +358,7 @@ describe('RFC-243 e2e — 生命周期', () => {
       db: h.db,
       taskId: parentTaskId,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
     })
     // 等到子任务出现且 running（budget→iso→launch 全链完成）。
     let childId: string | null = null
@@ -392,7 +392,7 @@ describe('RFC-243 e2e — 生命周期', () => {
       db: h.db,
       taskId: parentTaskId,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
       defaultNodeRetries: 0,
     })
     const failedCall = (
@@ -484,7 +484,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       db: h.db,
       taskId: seeded.parentTaskId,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
     })
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, seeded.parentTaskId)))[0]!
     expect(parent.status).toBe('done')
@@ -538,7 +538,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       db: h.db,
       taskId: seeded.parentTaskId,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
     })
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, seeded.parentTaskId)))[0]!
     expect(parent.status).toBe('done')
@@ -570,7 +570,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       db: h.db,
       taskId: parentTaskId,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
       signal: parentCtrl.signal,
     })
     let childId: string | null = null
@@ -679,7 +679,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       db: h.db,
       taskId: parentTaskId,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
     })
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
     expect(parent.status).toBe('done')
@@ -717,7 +717,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       db: h.db,
       taskId: parentTaskId,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
     })
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, callRun)))[0]!
     expect(row.status).toBe('failed')

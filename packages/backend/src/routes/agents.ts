@@ -57,7 +57,6 @@ import {
 } from '@/services/launchMultipart'
 import type { UploadLimits } from '@/services/upload'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { resolveOpencodeCmd } from '@/services/runtime'
 import { mountAclEndpoints } from './resourceAcl'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'
@@ -362,7 +361,6 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
       const task = await startExecution(
         deps.db,
         actor,
@@ -373,7 +371,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
           payload: parsed.data,
           ...(uploads !== undefined ? { uploads } : {}),
         },
-        buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd, deps.secretBox),
+        buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox),
       )
       return c.json(task, 201)
     },

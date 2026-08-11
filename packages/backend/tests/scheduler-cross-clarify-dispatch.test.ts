@@ -313,7 +313,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
         taskId: t2.taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -393,7 +393,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -458,7 +458,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     const sessionRows = await h.db
@@ -612,7 +612,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -720,7 +720,12 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
 
     // Designer reruns (fresh output) → the questioner rerun consumes it → prompt is built.
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'plan v2' }) }, () =>
-      runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', MOCK_OPENCODE] }),
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+      }),
     )
 
     const allRuns = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -852,7 +857,7 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     const sess = (
@@ -887,7 +892,7 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     return readCapturedArgvLines(argvPath).filter((l) => l.agent === 'questioner')

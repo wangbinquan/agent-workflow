@@ -1,5 +1,5 @@
 // RFC-282 B1a — AgentSpawnContext → legacy-context translation, shared by both
-// drivers' `buildAgentSpawn` facades during the B1 transition.
+// drivers' unified `buildSpawn` facade.
 //
 // The facade keeps byte-for-byte parity with the legacy paths (§0 首要原则):
 // business calls (taskMounts present) translate onto `buildBusinessSpawn`'s

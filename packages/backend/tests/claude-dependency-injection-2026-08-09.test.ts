@@ -36,12 +36,12 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE, type Agent } from '@agent-workflow/shared'
-import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
 import { toClaudeAgents } from '../src/services/runtime/claudeCode/inject'
 import { claudeExplicitPermissionArgv } from '../src/services/runtime/claudeCode/spawn'
 import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
 import type { RuntimeProfile } from '../src/services/runtimeRegistry'
 import { createLogger } from '../src/util/log'
+import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
 
 const tempDirs: string[] = []
 const log = createLogger('claude-dependency-injection-test')
@@ -163,7 +163,7 @@ describe('闭包非空 ⇒ 平台自己开 Task（与 opencode 语义对齐）',
     '受控业务节点 + 非空 dependsOn ⇒ argv 同时有 Task 和 --agents',
     async () => {
       const f = fixture('claude-deps-task-')
-      const plan = await claudeCodeDriver.buildBusinessSpawn(
+      const plan = await assembleClaudeBusinessSpawn(
         mkCtx(f, { dependents: [mkAgent({ name: 'auditor', id: 'agent-auditor' })] }),
       )
       // 修复前：--agents 有、Task 无 —— 子代理注册了却调不动。
@@ -174,7 +174,7 @@ describe('闭包非空 ⇒ 平台自己开 Task（与 opencode 语义对齐）',
 
   test.skipIf(process.platform === 'win32')('空闭包 ⇒ 既无 Task 也无 --agents', async () => {
     const f = fixture('claude-deps-empty-')
-    const plan = await claudeCodeDriver.buildBusinessSpawn(mkCtx(f))
+    const plan = await assembleClaudeBusinessSpawn(mkCtx(f))
     expect(toolsOf(plan.cmd)).not.toContain('Task')
     expect(plan.cmd).not.toContain('--agents')
   })
@@ -221,7 +221,7 @@ describe('传递依赖带自己的 model（平台早就解析好了）', () => {
     'driver 把 dep 的 model 真的写进 --agents',
     async () => {
       const f = fixture('claude-deps-model-')
-      const plan = await claudeCodeDriver.buildBusinessSpawn(
+      const plan = await assembleClaudeBusinessSpawn(
         mkCtx(f, {
           dependents: [mkAgent({ name: 'auditor', id: 'a1' })],
           resolvedParamsByAgent: new Map([
@@ -278,7 +278,7 @@ describe('传递依赖的能力面：dep 映射 ∩ 父装载集，且永不含 
     'driver：受控父 + 只读 dep ⇒ --agents 里 dep 的 tools 被收窄',
     async () => {
       const f = fixture('claude-deps-tools-')
-      const plan = await claudeCodeDriver.buildBusinessSpawn(
+      const plan = await assembleClaudeBusinessSpawn(
         mkCtx(f, {
           agent: mkAgent({ permission: { read: 'allow', edit: 'allow' } }),
           dependents: [mkAgent({ name: 'auditor', id: 'a1', permission: { read: 'allow' } })],
@@ -294,7 +294,7 @@ describe('传递依赖的能力面：dep 映射 ∩ 父装载集，且永不含 
     'driver：unconstrained 父 ⇒ --agents 保持历史形状（只有 description/prompt）',
     async () => {
       const f = fixture('claude-deps-unconstrained-')
-      const plan = await claudeCodeDriver.buildBusinessSpawn(
+      const plan = await assembleClaudeBusinessSpawn(
         mkCtx(f, {
           agent: mkAgent({ permission: {} }),
           dependents: [mkAgent({ name: 'auditor', id: 'a1', permission: { read: 'allow' } })],

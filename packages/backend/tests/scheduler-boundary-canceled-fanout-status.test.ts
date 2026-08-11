@@ -186,7 +186,7 @@ describe('regression: cancelling a running wrapper-fanout must mark the wrapper 
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           signal: controller.signal,
         }),
     )

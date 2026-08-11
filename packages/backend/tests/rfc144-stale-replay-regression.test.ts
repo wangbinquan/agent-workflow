@@ -582,7 +582,12 @@ describe('RFC-144 git wrapper merged 再入的 baseline（PR-4 复核 P2）', ()
     })
     // inner agent 什么都不写——新代 git_diff 应为空。
     const mockPath = writeMockAgent(h, `emit(envelope)`)
-    await runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', mockPath] })
+    await runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', mockPath],
+    })
 
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(t.status).toBe('done')
@@ -622,7 +627,12 @@ describe('RFC-144 merge-failed 行为补齐（RFC-130 缺口 + isolating→merge
 rmSync(join(process.cwd(), '.git'), { recursive: true, force: true })
 emit(envelope)`,
     )
-    await runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', mockPath] })
+    await runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', mockPath],
+    })
 
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(t.status).toBe('failed')

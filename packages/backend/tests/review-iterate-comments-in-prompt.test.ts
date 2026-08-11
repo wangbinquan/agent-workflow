@@ -257,7 +257,7 @@ describe('RFC-005 review iterate — comments reach the upstream re-run prompt',
       taskId: h.taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: h.stubOpencode,
+      binaryOverride: h.stubOpencode,
     })
 
     const designerRuns = await h.db

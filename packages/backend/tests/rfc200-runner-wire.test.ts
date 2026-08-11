@@ -142,7 +142,7 @@ describe('RFC-200 runner production wiring', () => {
           },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
         }),
     )

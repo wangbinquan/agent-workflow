@@ -22,6 +22,8 @@ import {
 } from '@/services/runtime'
 import { BUILTIN_RUNTIMES, RUNTIME_PROTOCOLS } from '@/services/runtimeRegistry'
 import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
+import { assembleOpencodePersonaSpawn } from '../src/services/runtime/opencode/driver'
+import type { AgentSpawnContext } from '../src/services/runtime/types'
 
 const SRC = (rel: string) => readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
 
@@ -123,18 +125,16 @@ describe('RFC-143 (B) 能力接口', () => {
       },
       minVersion: '0.0.0',
       parseEvent: () => null,
-      // RFC-280 T1: 统一注入渲染钩子是必选契约——第三 runtime 实现者在这里被
-      // 编译器强制接上（与本测试"编译期证明接口完备"的意图一致）。
-      renderInjection: () => ({
-        mcpEntries: null,
-        declared: emptyDeclaredManifest(),
-      }),
-      buildSpawn: async () => ({ cmd: ['mock'], env: {} }),
-      buildBusinessSpawn: async (ctx) => {
-        spawnCalls.push(ctx.agent.name)
+      // RFC-282 B1b：唯一装配方法（golden 归属表「接口面 → 锁单一装配方法」）。
+      // 第三 runtime 实现者只需实现 buildSpawn(AgentSpawnContext)，declared 是
+      // 返回值的必填字段——「声明=装配副产品」在契约上强制。
+      buildSpawn: async (ctx: AgentSpawnContext) => {
+        spawnCalls.push(ctx.agentName)
         return {
           cmd: ['mock', 'run', ctx.prompt],
           env: { MOCK_RUN_ROOT: ctx.runRoot },
+          stdin: { mode: 'ignore' as const },
+          declared: emptyDeclaredManifest(),
           diagnostics: { inlineModel: null },
         }
       },
@@ -145,16 +145,13 @@ describe('RFC-143 (B) 能力接口', () => {
     } satisfies RuntimeDriver
     // 经 RuntimeDriver 契约面消费（与 runner/routes 的调用形态同形）。
     const driver: RuntimeDriver = mockDriver
-    const plan = await driver.buildBusinessSpawn({
-      agent: { name: 'mock-agent' } as never,
+    const plan = await driver.buildSpawn({
+      injection: { mcps: [] },
+      agentName: 'mock-agent',
+      systemPrompt: '## mock persona',
       prompt: 'P',
-      injectedMemoryBlock: null,
-      dependents: [],
-      mcps: [],
-      plugins: [],
       resolvedParamsByAgent: new Map(),
-      skills: [],
-      worktreePath: '/wt',
+      cwd: '/wt',
       taskMounts: ['/wt'],
       runRoot: '/runs/t/n',
       configDir: { env: 'MOCK_CONFIG_DIR', name: '.mock' }, // RFC-154
@@ -164,6 +161,7 @@ describe('RFC-143 (B) 能力接口', () => {
     })
     expect(plan.cmd).toEqual(['mock', 'run', 'P'])
     expect(plan.env.MOCK_RUN_ROOT).toBe('/runs/t/n')
+    expect(plan.declared).toEqual(emptyDeclaredManifest()) // 声明=装配副产品
     expect(spawnCalls).toEqual(['mock-agent'])
     expect((await driver.probe('mock-bin')).compatible).toBe(true)
     expect((await driver.listModels('mock-bin')).cached).toBe(true)
@@ -274,9 +272,9 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     }
   })
 
-  it('runner 业务 spawn 走 driver.buildAgentSpawn（RFC-282 B1b 统一装配；不再直调两个 spawn 自由函数）', () => {
+  it('runner 业务 spawn 走 driver.buildSpawn（RFC-282 B1b 统一装配；不再直调两个 spawn 自由函数）', () => {
     const src = SRC('services/runner.ts')
-    expect(src).toContain('driver.buildAgentSpawn(')
+    expect(src).toContain('driver.buildSpawn(')
     expect(src).toContain('cwd: opts.worktreePath')
     expect(src).toContain('runRoot,')
     expect(src).not.toContain('buildOpencodeSpawn(')
@@ -288,9 +286,9 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     expect(src).not.toContain('materializeInventoryPlugin')
   })
 
-  it('smoke 复用 driver.buildAgentSpawn（RFC-282 B1b；buildSmokePlan 无 protocol 分支、无手搭 spawn）', () => {
+  it('smoke 复用 driver.buildSpawn（RFC-282 B1b；buildSmokePlan 无 protocol 分支、无手搭 spawn）', () => {
     const src = SRC('services/runtimeSmoke.ts')
-    expect(src).toContain('.buildAgentSpawn(')
+    expect(src).toContain('.buildSpawn(')
     expect(src).not.toContain('buildOpencodeSpawn')
     expect(src).not.toContain('buildClaudeSpawn')
   })
@@ -328,30 +326,32 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
 
     it('无显式 binary 时回退 env 覆盖；显式 runtimeBinary 优先', async () => {
       process.env.AGENT_WORKFLOW_OPENCODE_BIN = '/opt/env-oc'
-      const oc = getRuntimeDriver('opencode')
-      expect((await oc.buildSpawn({ ...CTX })).cmd[0]).toBe('/opt/env-oc')
-      expect((await oc.buildSpawn({ ...CTX, runtimeBinary: '/opt/fork-oc' })).cmd[0]).toBe(
-        '/opt/fork-oc',
-      )
+      expect((await assembleOpencodePersonaSpawn({ ...CTX })).cmd[0]).toBe('/opt/env-oc')
+      expect(
+        (await assembleOpencodePersonaSpawn({ ...CTX, runtimeBinary: '/opt/fork-oc' })).cmd[0],
+      ).toBe('/opt/fork-oc')
     })
 
     it('env 未设时保持内建名 opencode（历史行为）', async () => {
       delete process.env.AGENT_WORKFLOW_OPENCODE_BIN
-      expect((await getRuntimeDriver('opencode').buildSpawn({ ...CTX })).cmd[0]).toBe('opencode')
+      expect((await assembleOpencodePersonaSpawn({ ...CTX })).cmd[0]).toBe('opencode')
     })
   })
 })
 
 describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 单份 + semver 单份）', () => {
-  it('resolveOpencodeCmd 单份：5 个 route 文件不再各自定义（dedup-audit 逐字 5 拷贝）', () => {
+  it('resolveOpencodeCmd 单份 → C1-2 终态：路由零引用，config 头在 mint 冻结单点读', () => {
+    // RFC-282 C1-2：15 个入口的 per-entry 解析全部收拢——config.opencodePath 在
+    // resolveFrozenRuntime 处并入冻结值（scheduler.freezeBinaryConfig 是唯一
+    // 读取点），路由不再 resolve 也不再传 head。
     for (const f of ['tasks', 'clarify', 'taskQuestions', 'reviews', 'fusions']) {
       const src = SRC(`routes/${f}.ts`)
-      expect(src).not.toContain('function resolveOpencodeCmd')
-      // RFC-282 C3/C1：路由经受认可入口 @/services/runtime 取（深 import 被
-      // A1 围栏禁止）；唯一定义随模块搬进 runtime/opencode/util.ts。
-      expect(src).toContain("resolveOpencodeCmd } from '@/services/runtime'")
+      expect(src).not.toContain('resolveOpencodeCmd')
+      expect(src).toContain('configPath: deps.configPath')
     }
     expect(SRC('services/runtime/opencode/util.ts')).toContain('export function resolveOpencodeCmd')
+    expect(SRC('services/scheduler.ts')).toContain('function freezeBinaryConfig')
+    expect(SRC('services/nodeRunMint.ts')).toContain('configBackedBinary')
   })
 
   it('resolveOpencodeCmd 行为：configPath 空/不可读 → undefined；opencodePath 设值 → [path]', async () => {

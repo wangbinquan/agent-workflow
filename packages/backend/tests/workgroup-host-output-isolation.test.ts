@@ -272,7 +272,7 @@ function runLeader(
         workgroupProtocolBlock: 'WG PROTOCOL',
         skills: [],
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         db: h.db,
         ...(opts.log === undefined ? {} : { log: opts.log }),
         ...(opts.persistDeclaredOutputs !== undefined

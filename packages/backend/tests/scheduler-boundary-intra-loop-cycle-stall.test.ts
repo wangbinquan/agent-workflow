@@ -178,7 +178,7 @@ describe('scheduler: intra-loop same-iteration data cycle must not stall opaquel
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 

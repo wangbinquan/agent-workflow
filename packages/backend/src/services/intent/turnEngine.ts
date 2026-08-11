@@ -611,11 +611,6 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         // in the private per-run dir. opencode ignores both fields.
         configDirEnv: deps.config.runtime.configDir.env,
         configDirName: deps.config.runtime.configDir.name,
-        // Forward an explicit configured OpenCode head; Claude uses the
-        // runtimeBinary field through its own driver.
-        ...(deps.config.runtime.binaryPath != null && deps.config.runtime.binaryPath !== ''
-          ? { opencodeCmd: [deps.config.runtime.binaryPath] }
-          : {}),
         model: deps.config.runtime.model,
         isSandbox: deps.config.runtime.isSandbox,
         seedFiles: [{ path: 'INTENT.md', content: intentDoc }, ...dump.seedFiles],

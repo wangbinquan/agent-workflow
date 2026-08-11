@@ -146,7 +146,7 @@ describe('RFC-130 T11 — wrapper-private canonical (AC-10)', () => {
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', shim],
+      binaryOverride: ['bun', 'run', shim],
       maxConcurrentNodes: 4,
     })
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]

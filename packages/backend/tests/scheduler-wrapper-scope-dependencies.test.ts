@@ -227,7 +227,7 @@ describe('scheduler wrapper scope dependencies', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', SCENARIO_OPENCODE],
+          binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
         }),
       )
 
@@ -293,7 +293,7 @@ describe('scheduler wrapper scope dependencies', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', SCENARIO_OPENCODE],
+        binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
       }),
     )
 
@@ -359,7 +359,7 @@ describe('scheduler wrapper scope dependencies', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', SCENARIO_OPENCODE],
+        binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
         maxConcurrentNodes: 1,
       }),
     )
@@ -432,7 +432,7 @@ describe('scheduler wrapper scope dependencies', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', SCENARIO_OPENCODE],
+        binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
       }),
     )
 
@@ -529,7 +529,7 @@ describe('scheduler wrapper scope dependencies', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', SCENARIO_OPENCODE],
+        binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
       }),
     )
 
@@ -614,7 +614,7 @@ describe('scheduler wrapper scope dependencies', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', SCENARIO_OPENCODE],
+        binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
       }),
     )
 
@@ -722,7 +722,7 @@ describe('scheduler wrapper scope dependencies', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', SCENARIO_OPENCODE],
+        binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
         maxConcurrentNodes: 1,
       }),
     )
@@ -813,7 +813,7 @@ describe('scheduler wrapper scope dependencies', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', SCENARIO_OPENCODE],
+        binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
       }),
     )
 

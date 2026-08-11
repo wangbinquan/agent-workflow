@@ -170,7 +170,7 @@ describe('RFC-266 script nodes run in their own daemon pool', () => {
             taskId,
             db: h.db,
             appHome: h.appHome,
-            opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+            binaryOverride: ['bun', 'run', MOCK_OPENCODE],
             maxConcurrentNodes: 1,
             maxConcurrentScriptNodes: 1,
           }),

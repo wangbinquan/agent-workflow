@@ -300,7 +300,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
     })
 
     let revRunId = ''
@@ -424,7 +424,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
     })
     const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(finalTask.status).toBe('done')

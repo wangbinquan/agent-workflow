@@ -40,7 +40,6 @@ import { unsealRepoUrl } from '@/services/repoCredentials'
 import { ValidationError } from '@/util/errors'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 import { createLogger } from '@/util/log'
-import { resolveOpencodeCmd } from '@/services/runtime'
 import {
   CodeHostEventTypeSchema,
   WebhookRepoScopeSchema,
@@ -367,13 +366,7 @@ async function launchViaExecutor(
   invoker: ExecutionInvoker,
 ): Promise<string> {
   const launchDeps = {
-    ...buildStartTaskDeps(
-      deps.db,
-      deps.configPath,
-      actor.user.id,
-      resolveOpencodeCmd(deps.configPath),
-      deps.secretBox,
-    ),
+    ...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox),
     // 对齐 buildScheduleLaunch：闭包解析在重建的 owner actor 可见性内。
     launchActor: actor,
   }

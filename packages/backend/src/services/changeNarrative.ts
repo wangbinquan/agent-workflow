@@ -406,9 +406,6 @@ async function runGeneration(
     configDirName: runtime.configDir.name,
     model: runtime.model,
     isSandbox: runtime.isSandbox,
-    ...(runtime.binaryPath !== null && runtime.binaryPath !== ''
-      ? { opencodeCmd: [runtime.binaryPath] }
-      : {}),
     scratchParent: join(appHome(), 'scratch'),
     timeoutMs: NARRATIVE_TIMEOUT_MS,
     log: deps.log,

@@ -15,7 +15,6 @@ import type { DbClient } from '@/db/client'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { startExecution } from '@/services/execution/executor'
-import { resolveOpencodeCmd } from '@/services/runtime'
 import type {
   ScheduledAgentPayload,
   ScheduledWorkgroupPayload,
@@ -30,7 +29,7 @@ import type {
 export function buildScheduleLaunch(db: DbClient, configPath: string): BuildScheduleLaunch {
   return (ownerUserId, scheduledTaskId) => async (kind, payload, actor: Actor) => {
     const deps = {
-      ...buildStartTaskDeps(db, configPath, ownerUserId, resolveOpencodeCmd(configPath), undefined),
+      ...buildStartTaskDeps(db, configPath, ownerUserId, undefined),
       // RFC-243 实现门 P0-1: scheduled fires resolve call-node closures inside
       // the rebuilt owner actor's visibility (same fence as a manual launch).
       launchActor: actor,

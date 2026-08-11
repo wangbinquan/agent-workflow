@@ -144,7 +144,7 @@ describe('D.T7 — runNode signal-port-in-prompt guard', () => {
       inputPortKinds: { doc: 'string' },
       skills: [],
       appHome: h.appHome,
-      opencodeCmd: ['bash', '-c', 'exit 7'], // immediate non-zero exit
+      binaryOverride: ['bash', '-c', 'exit 7'], // immediate non-zero exit
       db: h.db,
     })
     expect(result.errorMessage ?? '').not.toContain('signal-port-in-prompt')
@@ -167,7 +167,7 @@ describe('D.T7 — runNode signal-port-in-prompt guard', () => {
       promptTemplate: 'go: {{stub}}',
       skills: [],
       appHome: h.appHome,
-      opencodeCmd: ['bash', '-c', 'exit 7'],
+      binaryOverride: ['bash', '-c', 'exit 7'],
       db: h.db,
     })
     expect(result.errorMessage ?? '').not.toContain('signal-port-in-prompt')
@@ -212,7 +212,7 @@ describe('D.T7 — runNode signal-port-in-prompt guard', () => {
       inputPortKinds: { other: 'signal' },
       skills: [],
       appHome: h.appHome,
-      opencodeCmd: ['bash', '-c', 'exit 7'],
+      binaryOverride: ['bash', '-c', 'exit 7'],
       db: h.db,
     })
     expect(result.errorMessage ?? '').not.toContain('signal-port-in-prompt')

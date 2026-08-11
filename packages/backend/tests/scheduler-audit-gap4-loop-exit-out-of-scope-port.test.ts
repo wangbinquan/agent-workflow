@@ -197,7 +197,7 @@ describe('gap4 — wrapper-loop exitCondition referencing an out-of-loop node', 
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', SCENARIO_OPENCODE],
+        binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
       }),
     )
 

@@ -21,8 +21,6 @@ import {
 import { desc, eq, inArray } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-// RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
-import { resolveOpencodeCmd } from '@/services/runtime'
 import { clarifyRounds, nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
@@ -429,11 +427,10 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         // Release the gate so the freshly-minted self/questioner reruns dispatch — mirroring the
         // manual dispatch route + the legacy quick path. Best-effort: a `running` deferred task'
         // live loop picks up the pending reruns (task-not-resumable logged at info, not surfaced).
-        const opencodeCmdAuto = resolveOpencodeCmd(deps.configPath)
         const resumeDepsAuto: Parameters<typeof resumeTask>[2] = {
           db: deps.db,
           appHome: Paths.root,
-          ...(opencodeCmdAuto ? { opencodeCmd: opencodeCmdAuto } : {}),
+          configPath: deps.configPath,
           ...resolveLaunchRuntimeConfig(deps.configPath),
         }
         // RFC-202 T8: real resume failures ride in the response (the answers

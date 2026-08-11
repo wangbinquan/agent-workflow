@@ -165,7 +165,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('done')
@@ -220,7 +220,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('failed')
@@ -270,7 +270,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
@@ -356,7 +356,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
@@ -440,7 +440,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -483,7 +483,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       fanoutMaxShardTotal: 3,
     })
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)

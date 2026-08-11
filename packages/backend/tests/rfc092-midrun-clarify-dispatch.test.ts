@@ -322,7 +322,7 @@ describe('RFC-092 S-1 端到端 — mid-run clarify 答题由活调度循环自�
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
     })
 
     let rerunNodeRunId = ''

@@ -214,7 +214,7 @@ describe('AUDIT S-6 current-behavior lock: loop-in-loop — inner scope silently
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', SCENARIO_OPENCODE],
+          binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
         }),
     )
 

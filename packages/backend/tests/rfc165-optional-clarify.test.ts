@@ -143,7 +143,7 @@ function runOptionalNode(h: Harness, nodeRunId: string, env: Record<string, stri
       templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
       skills: [],
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       db: h.db,
       clarifyChannel: { kind: 'self', directive: 'optional', injectStopNotice: false },
     }),

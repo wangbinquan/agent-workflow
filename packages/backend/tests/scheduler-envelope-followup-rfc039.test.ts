@@ -125,7 +125,7 @@ describe('RFC-042 follow-up + RFC-039 directive bias passthrough', () => {
         promptTemplate: 'go',
         skills: [],
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         db: h.db,
         promptMode: {
           kind: 'followup',
@@ -156,7 +156,7 @@ describe('RFC-042 follow-up + RFC-039 directive bias passthrough', () => {
         promptTemplate: 'go',
         skills: [],
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         db: h.db,
         promptMode: {
           kind: 'followup',

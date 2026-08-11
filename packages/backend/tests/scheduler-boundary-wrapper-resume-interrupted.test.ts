@@ -182,7 +182,7 @@ describe('wrapper resume from interrupted must not throw / wedge task on running
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     ).catch(() => {
       threw = true
@@ -213,7 +213,7 @@ describe('wrapper resume from interrupted must not throw / wedge task on running
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     ).catch(() => {
       threw = true
@@ -267,7 +267,7 @@ describe('wrapper resume from interrupted must not throw / wedge task on running
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     ).catch(() => {
       threw = true

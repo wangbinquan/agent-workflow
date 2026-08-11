@@ -133,7 +133,7 @@ async function runScenario(
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         ...(retries !== undefined ? { defaultNodeRetries: retries } : {}),
       }),
   )

@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Agent, Mcp, Plugin } from '@agent-workflow/shared'
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
-import { claudeCodeDriver } from '@/services/runtime/claudeCode/driver'
+import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
 
 const OWN = '/home/aw/iso/taskA/run1'
 const SIBLING_ROOT = '/home/aw/iso'
@@ -93,7 +93,7 @@ function readSettings(cmd: readonly string[]): Record<string, unknown> {
 describe('RFC-281 T2/T3 — claude per-run settings carry the write boundary', () => {
   test('the spawn writes a settings file and passes it via --settings', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
-    const plan = await claudeCodeDriver.buildBusinessSpawn(businessCtx({}, { runRoot }))
+    const plan = await assembleClaudeBusinessSpawn(businessCtx({}, { runRoot }))
     const settings = readSettings(plan.cmd) as {
       sandbox?: { enabled?: boolean; filesystem?: { allowWrite?: string[] } }
     }
@@ -106,7 +106,7 @@ describe('RFC-281 T2/T3 — claude per-run settings carry the write boundary', (
 
   test('NEVER emits denyWrite/denyRead — that shape would shadow the agent’s own cwd', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
-    const plan = await claudeCodeDriver.buildBusinessSpawn(businessCtx({}, { runRoot }))
+    const plan = await assembleClaudeBusinessSpawn(businessCtx({}, { runRoot }))
     const raw = JSON.stringify(readSettings(plan.cmd))
     expect(raw).not.toContain('denyWrite')
     expect(raw).not.toContain('denyRead')
@@ -117,9 +117,7 @@ describe('RFC-281 T2/T3 — claude per-run settings carry the write boundary', (
   test('multi-repo mounts are all writable (business must not be fenced off)', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
     const mounts = [OWN, '/home/aw/iso/taskA/run1-repoB']
-    const plan = await claudeCodeDriver.buildBusinessSpawn(
-      businessCtx({}, { runRoot, taskMounts: mounts }),
-    )
+    const plan = await assembleClaudeBusinessSpawn(businessCtx({}, { runRoot, taskMounts: mounts }))
     const settings = readSettings(plan.cmd) as {
       sandbox?: { filesystem?: { allowWrite?: string[] } }
     }
@@ -129,7 +127,7 @@ describe('RFC-281 T2/T3 — claude per-run settings carry the write boundary', (
   test('a declared-permission node also gets additionalDirectories (B4: dontAsk reads)', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
     const mounts = [OWN, '/home/aw/iso/taskA/run1-repoB']
-    const plan = await claudeCodeDriver.buildBusinessSpawn(
+    const plan = await assembleClaudeBusinessSpawn(
       businessCtx({ read: 'allow', edit: 'allow' }, { runRoot, taskMounts: mounts }),
     )
     const settings = readSettings(plan.cmd) as {
@@ -141,7 +139,7 @@ describe('RFC-281 T2/T3 — claude per-run settings carry the write boundary', (
 
   test('the author’s literal external_directory dirs become writable on claude (T4)', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
-    const plan = await claudeCodeDriver.buildBusinessSpawn(
+    const plan = await assembleClaudeBusinessSpawn(
       businessCtx(
         { read: 'allow', external_directory: { '/home/me/refrepo/*': 'allow', '/a/*/b': 'allow' } },
         { runRoot },
@@ -158,7 +156,7 @@ describe('RFC-281 T2/T3 — claude per-run settings carry the write boundary', (
 
   test('an undeclared node keeps its historical argv apart from --settings (RFC-242 intact)', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
-    const plan = await claudeCodeDriver.buildBusinessSpawn(businessCtx({}, { runRoot }))
+    const plan = await assembleClaudeBusinessSpawn(businessCtx({}, { runRoot }))
     expect(plan.cmd).toContain('bypassPermissions')
     expect(plan.cmd).not.toContain('--tools')
     const withoutSettings = plan.cmd.filter(
@@ -172,7 +170,7 @@ describe('RFC-281 AC-6 — degrade loudly, never block (impl-gate P2-7)', () => 
   test('a host without the sandbox mechanism still spawns, and says so', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
     const warns: Array<{ event: string; fields: Record<string, unknown> }> = []
-    const plan = await claudeCodeDriver.buildBusinessSpawn(
+    const plan = await assembleClaudeBusinessSpawn(
       businessCtx(
         {},
         {
@@ -193,7 +191,7 @@ describe('RFC-281 AC-6 — degrade loudly, never block (impl-gate P2-7)', () => 
   test('a capable host emits no unavailability warning', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
     const warns: Array<{ event: string; fields: Record<string, unknown> }> = []
-    await claudeCodeDriver.buildBusinessSpawn(
+    await assembleClaudeBusinessSpawn(
       businessCtx(
         {},
         { runRoot, warns, hostProbe: { platform: 'darwin', hasExecutable: () => true } },
@@ -205,7 +203,7 @@ describe('RFC-281 AC-6 — degrade loudly, never block (impl-gate P2-7)', () => 
   test('an author glob that claude cannot express is disclosed, not silently dropped', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
     const warns: Array<{ event: string; fields: Record<string, unknown> }> = []
-    await claudeCodeDriver.buildBusinessSpawn(
+    await assembleClaudeBusinessSpawn(
       businessCtx({ read: 'allow', external_directory: { '/a/*/b': 'allow' } }, { runRoot, warns }),
     )
     const warn = warns.find((w) => w.event === 'claude-external-directory-glob-unsupported')
@@ -218,7 +216,7 @@ describe('RFC-281 P2-4 — stored extraArgs cannot override the boundary', () =>
   test('a legacy `--settings` in extraArgs is dropped and reported', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
     const warns: Array<{ event: string; fields: Record<string, unknown> }> = []
-    const plan = await claudeCodeDriver.buildBusinessSpawn(
+    const plan = await assembleClaudeBusinessSpawn(
       businessCtx(
         {},
         { runRoot, warns, extraArgs: ['--settings', '/ops/mine.json', '--skip-safe-check'] },
@@ -241,7 +239,7 @@ describe('RFC-281 P2-4 — stored extraArgs cannot override the boundary', () =>
 
   test('the =-joined spelling is dropped too', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
-    const plan = await claudeCodeDriver.buildBusinessSpawn(
+    const plan = await assembleClaudeBusinessSpawn(
       businessCtx({}, { runRoot, extraArgs: ['--settings=/ops/mine.json'] }),
     )
     expect(plan.cmd).not.toContain('--settings=/ops/mine.json')
@@ -262,7 +260,7 @@ describe('RFC-281 — dependsOn subagents share the process, so their whitelists
       plugins: [],
     } as unknown as Agent
     const worktreePath = mkdtempSync(join(tmpdir(), 'aw-rfc281-wt-'))
-    const plan = await claudeCodeDriver.buildBusinessSpawn(
+    const plan = await assembleClaudeBusinessSpawn(
       businessCtx({ read: 'allow' }, { runRoot, worktreePath, dependents: [dependent] }),
     )
     const settings = readSettings(plan.cmd) as {

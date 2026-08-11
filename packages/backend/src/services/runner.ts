@@ -293,20 +293,13 @@ export interface RunNodeOptions {
   /** App home dir (parent of runs/, snapshots/, worktrees/, ...). */
   appHome: string
   /**
-   * Override the OPENCODE binary head. Production sets this from
-   * `config.opencodePath` (resolveOpencodeCmd); opencode tests pass
-   * `['bun','run',mock-opencode.ts]`. NOTE: opencode-specific — the claude
-   * branch must NOT reuse it (Codex impl-gate P1-1), or a custom opencodePath
-   * would spawn opencode with claude flags + skip the credential bridge.
+   * RFC-282 C1 — TEST-ONLY runtime-neutral command-head override (mock
+   * binaries). Each driver maps it onto its own seam; its PRESENCE keeps real
+   * credential bridges off (the old opencodeCmd/runtimeCmd pair collapsed —
+   * production never sets it; config.opencodePath now freezes at mint,
+   * RFC-111 D15).
    */
-  opencodeCmd?: string[]
-  /**
-   * RFC-111: generic runtime-binary head override for TESTS only (mock-claude /
-   * a future mock). Production never sets it → claude resolves to `['claude']`
-   * (PATH) and the subscription credential bridge runs. Its presence is the
-   * test signal that gates the bridge off so CI never touches the keychain.
-   */
-  runtimeCmd?: string[]
+  binaryOverride?: readonly string[]
   /**
    * RFC-111 D15: the FROZEN runtime for this node_run (resolved once at dispatch
    * from `agent.runtime ?? config.defaultRuntime`, persisted to
@@ -891,10 +884,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // RFC-282 B1b — the unified assembly call: ONE driver invocation returns
     // argv/env/stdin AND the declared manifest (declaration is a by-product of
     // assembly; the old shape computed them twice — runner.ts:946 pre-B1b).
-    if (driver.buildAgentSpawn === undefined) {
-      throw new Error(`runtime driver '${driver.kind}' lacks buildAgentSpawn`)
-    }
-    plan = await driver.buildAgentSpawn({
+    plan = await driver.buildSpawn({
       injection: {
         mcps: opts.mcps ?? [],
         agent: opts.agent,
@@ -918,7 +908,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // top-level field. Exactly one is set per dispatch by the scheduler.
       resumeSessionId: effectiveResumeSessionId,
       runtimeBinary: opts.runtimeBinary,
-      legacyHeads: { opencodeCmd: opts.opencodeCmd, runtimeCmd: opts.runtimeCmd },
+      ...(opts.binaryOverride !== undefined ? { binaryOverride: opts.binaryOverride } : {}),
       gitUserName: opts.gitUserName,
       gitUserEmail: opts.gitUserEmail,
       nodeRunId: opts.nodeRunId,

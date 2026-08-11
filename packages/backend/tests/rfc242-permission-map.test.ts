@@ -14,11 +14,11 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
 import {
   claudeToolsValue,
   mapAgentPermissionToClaudeTools,
 } from '../src/services/runtime/claudeCode/permissionMap'
+import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
 
 const gate = (permission: Record<string, unknown>) =>
   mapAgentPermissionToClaudeTools(permission as never)
@@ -152,7 +152,7 @@ describe('RFC-242 §2 — business spawn honors the gate; undeclared stays uncon
     }) as never
 
   test('a declared permission produces the mapped load set (no bypass)', async () => {
-    const plan = await claudeCodeDriver.buildBusinessSpawn(
+    const plan = await assembleClaudeBusinessSpawn(
       businessCtx({ read: 'allow', grep: 'allow', bash: 'deny' }),
     )
     expect(plan.cmd).not.toContain('bypassPermissions')
@@ -162,13 +162,13 @@ describe('RFC-242 §2 — business spawn honors the gate; undeclared stays uncon
   })
 
   test('an UNDECLARED permission keeps the historical unconstrained shape', async () => {
-    const plan = await claudeCodeDriver.buildBusinessSpawn(businessCtx({}))
+    const plan = await assembleClaudeBusinessSpawn(businessCtx({}))
     expect(plan.cmd).toContain('bypassPermissions')
     expect(plan.cmd).not.toContain('--tools')
   })
 
   test('a fully-denied agent loads no built-ins at all', async () => {
-    const plan = await claudeCodeDriver.buildBusinessSpawn(businessCtx({ '*': 'deny' }))
+    const plan = await assembleClaudeBusinessSpawn(businessCtx({ '*': 'deny' }))
     const toolsAt = plan.cmd.indexOf('--tools')
     expect(toolsAt).toBeGreaterThan(-1)
     expect(plan.cmd[toolsAt + 1]).toBe('')

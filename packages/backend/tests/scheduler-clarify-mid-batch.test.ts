@@ -199,7 +199,7 @@ describe('runScope — mid-batch rescan + no-fail-fast (RFC-023 bug 13)', () => 
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -280,7 +280,7 @@ describe('runScope — mid-batch rescan + no-fail-fast (RFC-023 bug 13)', () => 
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 

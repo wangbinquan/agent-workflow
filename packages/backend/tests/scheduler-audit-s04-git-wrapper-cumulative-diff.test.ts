@@ -256,7 +256,7 @@ describe('AUDIT S-4 regression lock: wrapper-git subtracts unchanged pre-existin
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', h.shimPath],
+          binaryOverride: ['bun', 'run', h.shimPath],
         }),
     )
 
@@ -357,7 +357,7 @@ describe('AUDIT S-4 regression lock: wrapper-git subtracts unchanged pre-existin
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', h.shimPath],
+          binaryOverride: ['bun', 'run', h.shimPath],
         }),
     )
 

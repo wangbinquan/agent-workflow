@@ -16,8 +16,6 @@ import { eq } from 'drizzle-orm'
 import type { Context, Hono } from 'hono'
 import { TaskQuestionPhaseSchema, type TaskActorRole } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
-// RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
-import { resolveOpencodeCmd } from '@/services/runtime'
 import { taskQuestions, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
@@ -240,11 +238,10 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
       // status pre-check ABOVE (nothing minted), so `task-not-resumable` here is ONLY
       // the benign live-scheduler race (a `running` deferred task — the live loop picks
       // up the freshly-minted rerun); it is logged at info, not surfaced as an error.
-      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
       const resumeDeps: Parameters<typeof resumeTask>[2] = {
         db: deps.db,
         appHome: Paths.root,
-        ...(opencodeCmd ? { opencodeCmd } : {}),
+        configPath: deps.configPath,
         ...resolveLaunchRuntimeConfig(deps.configPath),
       }
       // RFC-202 T8: surface real resume failures in the response (dispatch DID

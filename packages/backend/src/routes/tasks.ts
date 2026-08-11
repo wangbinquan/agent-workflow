@@ -24,8 +24,6 @@ import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
 import { actorOf } from '@/auth/actor'
 import { loadConfig } from '@/config'
-// RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
-import { resolveOpencodeCmd } from '@/services/runtime'
 import { tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
@@ -297,13 +295,11 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const ct = c.req.header('content-type') ?? ''
-      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-
       // RFC-020: multipart branch handles launcher uploads. payload field is
       // JSON-encoded StartTask; files[<inputKey>][] fields are the binary
       // contents bound to `kind: 'upload'` inputs.
       if (ct.toLowerCase().startsWith('multipart/form-data')) {
-        const task = await handleMultipartTaskStart(c.req.raw, deps, opencodeCmd, actorOf(c))
+        const task = await handleMultipartTaskStart(c.req.raw, deps, actorOf(c))
         return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))), 201)
       }
 
@@ -357,7 +353,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       // and missing produce the identical 404; built-in → 403. Shared gate — the
       // multipart path and scheduled-task fires enforce the exact same policy.
       const startDeps = {
-        ...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd, deps.secretBox),
+        ...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox),
         // RFC-243 实现门 P0-1: closure freezing resolves call-node names inside
         // THIS actor's visibility.
         launchActor: actor,
@@ -812,11 +808,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       await assertTaskWorkflowNotBuiltin(deps, c.req.param('id')) // RFC-104: no manual exec of built-ins
-      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const task = await resumeTask(deps.db, c.req.param('id'), {
         db: deps.db,
-        ...(opencodeCmd ? { opencodeCmd } : {}),
+        configPath: deps.configPath,
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         // RFC-103 T2: resume must thread commit&push + maxConcurrentNodes too.
         ...resolveLaunchRuntimeConfig(deps.configPath),
@@ -898,12 +893,11 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           issues: body.error.issues,
         })
       }
-      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const updated = await syncTaskWorkflow(deps.db, id, {
         db: deps.db,
         expectedVersion: body.data.expectedVersion,
-        ...(opencodeCmd ? { opencodeCmd } : {}),
+        configPath: deps.configPath,
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         ...resolveLaunchRuntimeConfig(deps.configPath),
       })
@@ -922,7 +916,6 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Repair options for an alert',
     },
     async (c) => {
-      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const actor = actorOf(c)
       const result = await listRepairOptionsForAlert({
@@ -933,7 +926,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         appHome: Paths.root,
         deps: {
           db: deps.db,
-          ...(opencodeCmd ? { opencodeCmd } : {}),
+          configPath: deps.configPath,
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-108 T4 (Codex design gate P2): a repair option may resumeAfterApply
           // → resumeTask(deps); thread the same runtime config (timeout floor +
@@ -964,7 +957,6 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           parsed.error.issues,
         )
       }
-      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const actor = actorOf(c)
       const result = await applyRepairOption({
@@ -976,7 +968,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         appHome: Paths.root,
         deps: {
           db: deps.db,
-          ...(opencodeCmd ? { opencodeCmd } : {}),
+          configPath: deps.configPath,
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-108 T4 (Codex design gate P2): repair → resumeAfterApply →
           // resumeTask(deps) must carry the runtime config (timeout floor +
@@ -1012,13 +1004,12 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       // flag-audit W0：统一布尔解析（此前 `!== 'false'` 双重否定——任何拼错值静默当
       // true）。产品语义保留默认级联。
       const cascade = parseBoolQuery(c, 'cascade', { default: true })
-      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const task = await retryNode(deps.db, c.req.param('id'), c.req.param('nodeRunId'), {
         cascade,
         deps: {
           db: deps.db,
-          ...(opencodeCmd ? { opencodeCmd } : {}),
+          configPath: deps.configPath,
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-103 T2: retry must thread commit&push + maxConcurrentNodes too.
           ...resolveLaunchRuntimeConfig(deps.configPath),
@@ -1307,7 +1298,6 @@ export { attachWorkspaceCleanupToMultipartError } from '@/services/launchMultipa
 async function handleMultipartTaskStart(
   req: Request,
   deps: AppDeps,
-  opencodeCmd: string[] | undefined,
   actor: ReturnType<typeof actorOf>,
 ) {
   // 1. Parse the form: JSON `payload` field + `files[<key>][]` parts (bytes
@@ -1459,7 +1449,7 @@ async function handleMultipartTaskStart(
         db: deps.db,
         actorUserId: actor.user.id,
         ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
-        ...(opencodeCmd ? { opencodeCmd } : {}),
+        configPath: deps.configPath,
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         // RFC-103 T2: multipart (upload) start must thread runtime config too.
         ...launchRuntime,
@@ -1515,7 +1505,7 @@ async function handleMultipartTaskStart(
       db: deps.db,
       actorUserId: actor.user.id,
       ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
-      ...(opencodeCmd ? { opencodeCmd } : {}),
+      configPath: deps.configPath,
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
       // RFC-103 T2: multipart (upload) start must thread runtime config too.
       ...launchRuntime,

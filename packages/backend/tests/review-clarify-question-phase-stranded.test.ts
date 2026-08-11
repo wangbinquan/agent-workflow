@@ -143,7 +143,7 @@ async function runTaskWithDeadline(taskId: string): Promise<void> {
       taskId,
       db,
       appHome,
-      opencodeCmd: opencodeCmd(),
+      binaryOverride: opencodeCmd(),
       defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
       defaultNodeRetries: 0,
       signal: controller.signal,

@@ -25,8 +25,6 @@ import {
   rejectFusion,
   type FusionDeps,
 } from '@/services/fusion'
-// RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
-import { resolveOpencodeCmd } from '@/services/runtime'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { isResourceAdminActor } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
@@ -34,7 +32,6 @@ import { Paths } from '@/util/paths'
 
 export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
   function fusionDeps(): FusionDeps {
-    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
     // RFC-108 T4 (Codex impl gate P2): thread the per-node timeout floor so a
     // hung fusion agent is bounded like any other node. RFC-115: also thread
     // the global retry budget + default runtime (Codex F3) into the fusion task.
@@ -43,7 +40,7 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
     return {
       db: deps.db,
       appHome: Paths.root,
-      ...(opencodeCmd ? { opencodeCmd } : {}),
+      configPath: deps.configPath,
       ...(defaultPerNodeTimeoutMs !== undefined ? { defaultPerNodeTimeoutMs } : {}),
       ...(defaultNodeRetries !== undefined ? { defaultNodeRetries } : {}),
       ...(defaultRuntime !== undefined ? { defaultRuntime } : {}),

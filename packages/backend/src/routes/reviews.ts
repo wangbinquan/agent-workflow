@@ -23,8 +23,6 @@ import type { TaskActorRole } from '@agent-workflow/shared'
 import { eq, inArray } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-// RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
-import { resolveOpencodeCmd } from '@/services/runtime'
 import { nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
@@ -317,11 +315,10 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       // optional `resume` field the UI surfaces as a warning.
       let resumeFailure: { ok: false; code: string; message: string } | undefined
       if (result.resumeRequired) {
-        const opencodeCmd = resolveOpencodeCmd(deps.configPath)
         const resumeDeps: Parameters<typeof resumeTask>[2] = {
           db: deps.db,
           appHome: appHomeFor(deps),
-          ...(opencodeCmd ? { opencodeCmd } : {}),
+          configPath: deps.configPath,
           // RFC-108 T4 (Codex impl gate P2): a review decision resumes the task;
           // thread the per-node timeout floor (+commit&push/concurrency) so the
           // continued nodes are not unbounded.

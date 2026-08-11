@@ -174,7 +174,7 @@ describe('scheduler retry rollback: writer fail-then-succeed must clear partial 
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget via runTask opts (was node.retries: 1).
           defaultNodeRetries: 1,
         }),

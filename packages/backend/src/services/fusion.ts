@@ -71,7 +71,10 @@ type FusionRow = typeof fusions.$inferSelect
 export interface FusionDeps {
   db: DbClient
   appHome: string
+  /** TEST-ONLY opencode command override; production passes configPath. */
   opencodeCmd?: string[]
+  /** Daemon config path — threaded to the scheduler's single resolution point. */
+  configPath?: string
   /** Run the scheduler inline (tests). Production leaves it to the daemon loop. */
   awaitScheduler?: boolean
   /**
@@ -607,6 +610,7 @@ export async function createFusion(
       // public repoPath wire field.
       internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
       ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
+      ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
       ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
       // RFC-108 T4 + RFC-115: thread per-node timeout / retry budget / default runtime.
       ...(deps.defaultPerNodeTimeoutMs !== undefined
@@ -1549,6 +1553,8 @@ export async function rejectFusion(
         // public repoPath wire field.
         internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
         ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
+        ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
+        ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
         ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
         // RFC-108 T4 + RFC-115: thread per-node timeout / retry budget / default runtime.
         ...(deps.defaultPerNodeTimeoutMs !== undefined

@@ -258,7 +258,7 @@ async function runWithMock(h: Harness, taskId: string, argvCapture: string): Pro
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
   )
 }

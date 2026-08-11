@@ -197,7 +197,12 @@ describe('RFC-193 e2e — wrapper 内 review 主回归（AC-1）', () => {
       }),
     )
     const taskId = await seedTask(h, loopReviewDef('path<md>', writerId))
-    await runTask({ db: h.db, taskId, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+    await runTask({
+      db: h.db,
+      taskId,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
 
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(taskRow.status).toBe('awaiting_review')
@@ -221,7 +226,12 @@ describe('RFC-193 e2e — wrapper 内 review 主回归（AC-1）', () => {
       }),
     )
     const taskId = await seedTask(h, loopReviewDef('list<path<md>>', writerId))
-    await runTask({ db: h.db, taskId, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+    await runTask({
+      db: h.db,
+      taskId,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
 
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(taskRow.status).toBe('awaiting_review')
@@ -292,7 +302,12 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
       ],
     }
     const taskId = await seedTask(h, def)
-    await runTask({ db: h.db, taskId, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+    await runTask({
+      db: h.db,
+      taskId,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
 
     const { nodeRunOutputs, nodeRuns } = await import('../src/db/schema')
     const { and } = await import('drizzle-orm')
@@ -370,7 +385,12 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
       ],
     }
     const taskId = await seedTask(h, def)
-    await runTask({ db: h.db, taskId, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+    await runTask({
+      db: h.db,
+      taskId,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
 
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(taskRow.status).toBe('awaiting_review')

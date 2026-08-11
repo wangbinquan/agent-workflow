@@ -169,7 +169,7 @@ describe('wrapper-fanout shardKey collision — duplicate shardSource items must
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 

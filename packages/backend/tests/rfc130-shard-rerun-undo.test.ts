@@ -318,7 +318,13 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
       .where(eq(tasks.id, taskId))
 
     const shim = valueFileShim(appHome)
-    await runTask({ taskId, db, appHome, opencodeCmd: ['bun', 'run', shim], maxConcurrentNodes: 4 })
+    await runTask({
+      taskId,
+      db,
+      appHome,
+      binaryOverride: ['bun', 'run', shim],
+      maxConcurrentNodes: 4,
+    })
 
     const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
@@ -342,7 +348,13 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
       .where(eq(tasks.id, taskId))
 
     const shim = valueFileShim(appHome)
-    await runTask({ taskId, db, appHome, opencodeCmd: ['bun', 'run', shim], maxConcurrentNodes: 4 })
+    await runTask({
+      taskId,
+      db,
+      appHome,
+      binaryOverride: ['bun', 'run', shim],
+      maxConcurrentNodes: 4,
+    })
 
     const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).not.toBe('done')
@@ -377,7 +389,13 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
       .where(eq(tasks.id, taskId))
 
     const shim = valueFileShim(appHome)
-    await runTask({ taskId, db, appHome, opencodeCmd: ['bun', 'run', shim], maxConcurrentNodes: 4 })
+    await runTask({
+      taskId,
+      db,
+      appHome,
+      binaryOverride: ['bun', 'run', shim],
+      maxConcurrentNodes: 4,
+    })
 
     const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
@@ -418,7 +436,13 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
       .where(eq(tasks.id, taskId))
 
     const shim = valueFileShim(appHome)
-    await runTask({ taskId, db, appHome, opencodeCmd: ['bun', 'run', shim], maxConcurrentNodes: 4 })
+    await runTask({
+      taskId,
+      db,
+      appHome,
+      binaryOverride: ['bun', 'run', shim],
+      maxConcurrentNodes: 4,
+    })
 
     const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')

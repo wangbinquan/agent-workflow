@@ -82,6 +82,7 @@ import {
   type ScriptLanguage,
 } from '@agent-workflow/shared'
 import { runRootFor } from './runtime'
+import { loadConfig } from '@/config'
 import { ensureScriptDepsEnv, ScriptDepsInstallError, type ScriptDepsEnv } from './scriptDepsEnv'
 import { extractScriptPorts } from './scriptPorts'
 import {
@@ -277,8 +278,12 @@ export interface RunTaskOptions {
   taskId: string
   db: DbClient
   appHome: string
-  /** Override opencode binary command (tests inject mock-opencode). */
-  opencodeCmd?: string[]
+  /** TEST-ONLY runtime-neutral command-head override (mock binaries; its
+   *  presence also keeps real credential bridges off — RFC-282 C1). */
+  binaryOverride?: readonly string[]
+  /** Daemon config path — config.opencodePath/claudeCodePath fold into the
+   *  FROZEN binary at mint time (RFC-282 C1-2; RFC-111 D15 alignment). */
+  configPath?: string
   log?: Logger
   /**
    * When aborted, any node currently running is SIGTERMed via runNode and the
@@ -464,6 +469,22 @@ interface SchedulerState {
  * Drive one task from "pending" to a terminal status. Caller decides whether
  * to await this (tests) or fire-and-forget (HTTP route).
  */
+
+/** RFC-282 C1-2 — config binary fallbacks for the mint-time freeze. Read at
+ *  freeze time (same read-current family as the old per-entry resolution),
+ *  then immutable on the node_run row. */
+function freezeBinaryConfig(
+  configPath: string | undefined,
+): { opencodePath?: string | null; claudeCodePath?: string | null } | undefined {
+  if (configPath === undefined || configPath === '') return undefined
+  try {
+    const cfg = loadConfig(configPath)
+    return { opencodePath: cfg.opencodePath ?? null, claudeCodePath: cfg.claudeCodePath ?? null }
+  } catch {
+    return undefined
+  }
+}
+
 export async function runTask(opts: RunTaskOptions): Promise<void> {
   // RFC-098 B1: the per-task write-lock registry entry is gc'd here and ONLY
   // here (taskWriteLocks.ts lifecycle — an HTTP-side gc would split-brain the
@@ -925,6 +946,8 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         req.nodeRunId,
         req.agent.runtime,
         opts.defaultRuntime,
+        null,
+        freezeBinaryConfig(opts.configPath),
       )
       // Round-trip a human's answered clarify back to the workgroup LEADER.
       // When the leader host run is a `clarify-answer` rerun — it asked a human
@@ -1062,7 +1085,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         mcps: injection.spec.mcps,
         plugins: injection.spec.plugins,
         appHome: opts.appHome,
-        ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
+        ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
         db,
         log,
         ...(opts.signal ? { signal: opts.signal } : {}),
@@ -1958,7 +1981,7 @@ async function maybeRunCommitPush(
           log: log.child('commit'),
           gitUserName: task.gitUserName,
           gitUserEmail: task.gitUserEmail,
-          ...(state.opts.opencodeCmd ? { opencodeCmd: state.opts.opencodeCmd } : {}),
+          ...(state.opts.binaryOverride ? { binaryOverride: state.opts.binaryOverride } : {}),
           ...(state.opts.signal ? { signal: state.opts.signal } : {}),
         })
         const msg = result.outputs[COMMIT_MESSAGE_PORT]
@@ -2856,7 +2879,7 @@ async function resolveMergeConflicts(
       log: log.child('merge'),
       gitUserName: task.gitUserName,
       gitUserEmail: task.gitUserEmail,
-      ...(state.opts.opencodeCmd ? { opencodeCmd: state.opts.opencodeCmd } : {}),
+      ...(state.opts.binaryOverride ? { binaryOverride: state.opts.binaryOverride } : {}),
       ...(state.opts.signal ? { signal: state.opts.signal } : {}),
       // RFC-208: this was the ONLY runNode call site without a timeout, and it
       // runs inside the per-task writeSem — so a merge agent that hangs blocks
@@ -3673,7 +3696,7 @@ function buildChildDeps(state: SchedulerState): StartTaskDeps {
     db,
     actorUserId:
       (state.task as unknown as { ownerUserId?: string | null }).ownerUserId ?? undefined,
-    ...(opts.opencodeCmd !== undefined ? { opencodeCmd: opts.opencodeCmd } : {}),
+    ...(opts.binaryOverride !== undefined ? { binaryOverride: opts.binaryOverride } : {}),
     appHome: opts.appHome,
     ...(opts.defaultPerNodeTimeoutMs !== undefined
       ? { defaultPerNodeTimeoutMs: opts.defaultPerNodeTimeoutMs }
@@ -5865,6 +5888,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           agent.runtime,
           state.opts.defaultRuntime,
           inheritedRuntime,
+          freezeBinaryConfig(state.opts.configPath),
         )
         lastResult = await runNode({
           taskId,
@@ -5967,7 +5991,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           mcps,
           plugins,
           appHome: opts.appHome,
-          ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
+          ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
           db,
           log: log.child('run'),
           ...(opts.signal ? { signal: opts.signal } : {}),
@@ -7720,6 +7744,8 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       shardRunId,
       innerAgent.runtime,
       opts.defaultRuntime,
+      null,
+      freezeBinaryConfig(opts.configPath),
     )
     const result = await runNode({
       taskId,
@@ -7764,7 +7790,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       mcps: injection.spec.mcps,
       plugins: injection.spec.plugins,
       appHome: opts.appHome,
-      ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
+      ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
       ...(Object.keys(inputPortKinds).length > 0 ? { inputPortKinds } : {}),
       db,
       log,
@@ -8148,6 +8174,8 @@ async function dispatchFanoutAggregatorAttempt(
       aggRunId,
       aggAgent.runtime,
       opts.defaultRuntime,
+      null,
+      freezeBinaryConfig(opts.configPath),
     )
     const result = await runNode({
       taskId,
@@ -8191,7 +8219,7 @@ async function dispatchFanoutAggregatorAttempt(
       mcps: injection.spec.mcps,
       plugins: injection.spec.plugins,
       appHome: opts.appHome,
-      ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
+      ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
       db,
       log,
       ...(opts.signal ? { signal: opts.signal } : {}),

@@ -428,7 +428,7 @@ describe('S-5 layer 3 — runtime: per-shard chain B runs green on empty input',
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 
@@ -501,7 +501,7 @@ describe('S-5 layer 3 — runtime: per-shard chain B runs green on empty input',
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)

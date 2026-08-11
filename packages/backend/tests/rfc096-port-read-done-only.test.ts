@@ -191,7 +191,7 @@ async function runSeededTask(h: Harness, taskId: string): Promise<void> {
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', SCENARIO_OPENCODE],
+      binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
     }),
   )
 }

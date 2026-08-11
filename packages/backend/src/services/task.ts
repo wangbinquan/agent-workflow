@@ -286,8 +286,11 @@ export interface StartTaskDeps {
   maxActiveChildTasks?: number
   /** RFC-243 §3.2: invocation-chain depth ceiling (config.maxInvocationDepth). */
   maxInvocationDepth?: number
-  /** Override opencode command (tests inject mock-opencode). */
+  /** TEST-ONLY opencode command override (tests inject mock-opencode). */
   opencodeCmd?: string[]
+  /** Daemon config path — threaded to the scheduler's single
+   *  config.opencodePath resolution point (RFC-282 C1-2). */
+  configPath?: string
   /** Await scheduler completion in this call (tests). HTTP route does NOT pass this. */
   awaitScheduler?: boolean
   /**
@@ -2436,6 +2439,7 @@ async function startTaskImpl(
     db: deps.db,
     appHome,
     ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
+    ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
     ...(deps.subagentLiveCapture !== undefined
       ? { subagentLiveCapture: deps.subagentLiveCapture }
       : {}),
@@ -3039,6 +3043,7 @@ async function resumeKick(
     db,
     appHome: deps.appHome ?? Paths.root,
     ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
+    ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
     ...(deps.subagentLiveCapture !== undefined
       ? { subagentLiveCapture: deps.subagentLiveCapture }
       : {}),
@@ -3718,6 +3723,7 @@ export async function retryNode(
     db,
     appHome: opts.deps.appHome ?? Paths.root,
     ...(opts.deps.opencodeCmd ? { opencodeCmd: opts.deps.opencodeCmd } : {}),
+    ...(opts.deps.configPath !== undefined ? { configPath: opts.deps.configPath } : {}),
     ...(opts.deps.subagentLiveCapture !== undefined
       ? { subagentLiveCapture: opts.deps.subagentLiveCapture }
       : {}),

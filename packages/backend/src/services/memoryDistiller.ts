@@ -971,12 +971,9 @@ export async function defaultDistillerSpawn(
     mkdir(worktreeDir, { recursive: true, mode: 0o700 }),
     mkdir(runDir, { recursive: true, mode: 0o700 }),
   ])
-  if (driver.buildAgentSpawn === undefined) {
-    throw new Error(`runtime driver '${driver.kind}' lacks buildAgentSpawn`)
-  }
   // RFC-282 B1b — unified persona-only assembly (configDir omitted keeps the
   // legacy system default: opencode config dir = runDir itself, no leaf).
-  const plan = await driver.buildAgentSpawn({
+  const plan = await driver.buildSpawn({
     injection: { mcps: [] },
     prompt: input.userPrompt,
     agentName: DISTILLER_AGENT_NAME,

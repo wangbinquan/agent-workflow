@@ -18,7 +18,6 @@ import {
   type Mcp,
   type Plugin,
 } from '@agent-workflow/shared'
-import { getRuntimeDriver } from '../src/services/runtime'
 import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
 import { buildOpencodeSpawn } from '../src/services/runtime/opencode/spawn'
 import { machineSkillRoots, opencodeDataDir } from '../src/services/runtime/opencode/boundary'
@@ -28,6 +27,8 @@ import { renderClaudeMcpInjection } from '../src/services/execution/agentInjecti
 import { claudeBusinessGate } from '../src/services/runtime/claudeCode/permissionMap'
 import { createLogger } from '../src/util/log'
 import type { RuntimeProfile } from '../src/services/runtimeRegistry'
+import { assembleOpencodeBusinessSpawn } from '../src/services/runtime/opencode/driver'
+import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
 
 function mkAgent(name: string, overrides: Partial<Agent> = {}): Agent {
   return {
@@ -149,7 +150,7 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc143-oc-'))
     try {
       const ctx = mkCtx(runRoot, { opencodeCmd: ['bun', 'run', '/mock-opencode.ts'] })
-      const plan = await getRuntimeDriver('opencode').buildBusinessSpawn(ctx)
+      const plan = await assembleOpencodeBusinessSpawn(ctx)
 
       // 收口前 runner 的公式，手拍出期望 plan：
       // RFC-281 T1: the driver injects the workspace boundary through
@@ -245,7 +246,7 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc143-inv-'))
     try {
       const ctx = mkCtx(runRoot, { wantsInventory: true, opencodeCmd: ['oc'] })
-      const plan = await getRuntimeDriver('opencode').buildBusinessSpawn(ctx)
+      const plan = await assembleOpencodeBusinessSpawn(ctx)
       expect(plan.env.OPENCODE_AW_INVENTORY_OUT).toBe(join(runRoot, 'inventory.json'))
       const cfg = JSON.parse(plan.env.OPENCODE_CONFIG_CONTENT ?? '{}') as { plugin?: unknown[] }
       const last = (cfg.plugin ?? []).at(-1)
@@ -265,7 +266,7 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
         opencodeCmd: ['bun', 'run', '/mock.ts'],
         runtimeBinary: '/opt/fork-oc',
       })
-      const plan = await getRuntimeDriver('opencode').buildBusinessSpawn(ctx)
+      const plan = await assembleOpencodeBusinessSpawn(ctx)
       expect(plan.cmd[0]).toBe('/opt/fork-oc')
     } finally {
       rmSync(runRoot, { recursive: true, force: true })
@@ -283,7 +284,7 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
         runtimeCmd: ['bun', 'run', '/mock-claude.ts'],
         configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
       })
-      const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(ctx)
+      const plan = await assembleClaudeBusinessSpawn(ctx)
 
       // head = test 头（claude 绝不吃 opencodeCmd —— Codex P1-1）。
       expect(plan.cmd.slice(0, 3)).toEqual(['bun', 'run', '/mock-claude.ts'])
@@ -368,7 +369,7 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
         resolvedParamsByAgent: new Map(),
       })
       delete (ctx as { resumeSessionId?: string }).resumeSessionId
-      const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(ctx)
+      const plan = await assembleClaudeBusinessSpawn(ctx)
       expect(plan.cmd).not.toContain('--mcp-config')
       expect(plan.cmd).not.toContain('--agents')
       expect(plan.cmd).not.toContain('--model')
@@ -407,7 +408,7 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
         configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
         runtimeBinary: '/opt/fork-claude',
       })
-      const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(ctx)
+      const plan = await assembleClaudeBusinessSpawn(ctx)
       expect(plan.cmd[0]).toBe('/opt/fork-claude')
     } finally {
       rmSync(runRoot, { recursive: true, force: true })

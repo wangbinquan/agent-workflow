@@ -125,7 +125,7 @@ function runClaude(o: RunOpts) {
     skills: [],
     appHome: o.h.appHome,
     runtime: 'claude-code',
-    runtimeCmd: ['bun', 'run', MOCK_CLAUDE],
+    binaryOverride: ['bun', 'run', MOCK_CLAUDE],
     ...(o.runtimeParams ? { runtimeParams: o.runtimeParams } : {}),
     db: o.h.db,
   })
@@ -283,7 +283,7 @@ describe('runNode — claude injection parity (RFC-111 PR-C)', () => {
           ],
           appHome: h.appHome,
           runtime: 'claude-code',
-          runtimeCmd: ['bun', 'run', MOCK_CLAUDE],
+          binaryOverride: ['bun', 'run', MOCK_CLAUDE],
           db: h.db,
         }),
     )
@@ -329,7 +329,7 @@ describe('runNode — runtime spawn failure (RFC-111 Codex P1-2)', () => {
       skills: [],
       appHome: h.appHome,
       runtime: 'claude-code',
-      runtimeCmd: ['/definitely/not/a/real/binary/claude-xyz'],
+      binaryOverride: ['/definitely/not/a/real/binary/claude-xyz'],
       db: h.db,
     })
     expect(result.status).toBe('failed')

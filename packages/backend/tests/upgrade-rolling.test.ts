@@ -432,7 +432,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
               taskId,
               db,
               appHome: h.home,
-              opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+              binaryOverride: ['bun', 'run', MOCK_OPENCODE],
             }),
         )
 

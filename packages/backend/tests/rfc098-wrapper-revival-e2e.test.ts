@@ -269,7 +269,12 @@ describe('RFC-098 B3 — approve-inside-wrapper 复活（S-3 端到端）', () =
 
     // 第一遍：designer 出稿 → review 在 loop 计数器 0 停泊 → wrapper 翻
     // awaiting_review → 任务 awaiting_review。
-    await runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+    await runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
     expect(await taskStatus(h.db, taskId)).toBe('awaiting_review')
     const loopBefore = await nodeRows(h.db, taskId, 'loop')
     expect(loopBefore).toHaveLength(1)
@@ -291,7 +296,12 @@ describe('RFC-098 B3 — approve-inside-wrapper 复活（S-3 端到端）', () =
     // 修复前这一遍恒弹回 awaiting_review（wrapperHasFreshInnerWork 只认
     // pending）；修复后 review done∧fresh 证据放行 wrapper → 续跑 → done。
     await reenterScheduler(h.db, taskId)
-    await runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+    await runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
     expect(await taskStatus(h.db, taskId)).toBe('done')
 
     // wrapper 行同行复用、终态 done，outputBinding 导出 approved_doc。
@@ -344,7 +354,12 @@ describe('RFC-098 B3 — approve-inside-wrapper 复活（S-3 端到端）', () =
     }
     const taskId = await seedWorkflowAndTask(h, def, { topic: 'x' })
 
-    await runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+    await runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
     expect(await taskStatus(h.db, taskId)).toBe('awaiting_review')
     const gwBefore = await nodeRows(h.db, taskId, 'gw')
     expect(gwBefore).toHaveLength(1)
@@ -362,7 +377,12 @@ describe('RFC-098 B3 — approve-inside-wrapper 复活（S-3 端到端）', () =
     })
 
     await reenterScheduler(h.db, taskId)
-    await runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+    await runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
     expect(await taskStatus(h.db, taskId)).toBe('done')
 
     // 同行复用 + git_diff 恰写一次（resume 不重抓 baseline 的既有闸由
@@ -465,7 +485,7 @@ describe('RFC-098 B3 — RFC-092 已知限制解除：wrapper 内 clarify mid-ru
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
     })
 
     try {

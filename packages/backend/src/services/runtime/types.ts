@@ -461,18 +461,6 @@ export interface AgentSpawnContext {
    * Production always undefined.
    */
   readonly binaryOverride?: readonly string[]
-  /**
-   * B1b→C1 TRANSITIONAL — verbatim carrier for the legacy per-runtime head
-   * knobs so kind-blind callers can migrate onto this ctx before C1 unifies
-   * the channel. Each driver reads ONLY its own knob (opencode: opencodeCmd —
-   * today's production config.opencodePath path; claude: runtimeCmd), which
-   * preserves the RFC-143 P1-1 invariant that a custom opencodePath never
-   * becomes another runtime's argv head. Deleted wholesale in C1.
-   */
-  readonly legacyHeads?: {
-    readonly opencodeCmd?: readonly string[]
-    readonly runtimeCmd?: readonly string[]
-  }
   readonly gitUserName?: string | null
   readonly gitUserEmail?: string | null
   /** Per-runtime extra argv tokens (registry-validated fork flags). */
@@ -673,35 +661,13 @@ export interface RuntimeDriver {
   /** Safe metadata-only observation for system-agent failure forensics. */
   observeSystemEvent?(line: string): SystemEventObservation
   /**
-   * RFC-117 — assemble the spawn plan for a framework system agent (distiller /
-   * commit / fusion / the runtimeSmoke conformance probe). Minimal surface: one
-   * persona + model, no skills/mcp/plugins/inventory.
+   * RFC-282 (§2.1, 决策 9) — THE single assembly method: argv/env/stdin AND
+   * the declared manifest from ONE call, so declaration and injection are the
+   * same computation. The legacy trio (system buildSpawn / buildBusinessSpawn
+   * / renderInjection) is gone from the contract; their bodies live on as
+   * driver-internal assembly functions until B4-style unification.
    */
-  buildSpawn(ctx: SystemAgentSpawnContext): Promise<SpawnPlan>
-  /**
-   * RFC-143 PR-4 — assemble the spawn plan for a BUSINESS node run (was the
-   * `runtime === 'claude-code'` if/else in runner.ts). async because opencode's
-   * inventory-plugin materialization reads embedded bytes (§4.6B). The driver
-   * owns the entire runtime-specific assembly; the runner stays kind-blind.
-   */
-  buildBusinessSpawn(ctx: BusinessNodeSpawnContext): Promise<SpawnPlan>
-  /**
-   * RFC-282 B1a (§2.1) — THE unified assembly method. Returns argv/env/stdin
-   * AND the declared manifest from ONE call, so declaration and injection are
-   * the same computation. Optional during the B1 transition (both legacy
-   * methods still live); B1b migrates the five call chains onto it, deletes
-   * `buildBusinessSpawn`/`renderInjection`, and makes this required.
-   */
-  buildAgentSpawn?(ctx: AgentSpawnContext): Promise<AgentSpawnPlan>
-  /**
-   * RFC-280 T1 — the unified injection-layer render hook. T1 covers the MCP
-   * face (partition + per-runtime wire entries + declared manifest); later
-   * RFC-280 tasks extend the spec to skills/plugins/subagents and route every
-   * spawn path through it. `buildBusinessSpawn` already consumes the same
-   * underlying functions — this hook exposes them per-driver so the unified
-   * executor (T4/T7) can render without knowing the runtime kind.
-   */
-  renderInjection(spec: AgentInjectionSpecV1): RenderedInjectionV1
+  buildSpawn(ctx: AgentSpawnContext): Promise<AgentSpawnPlan>
   /**
    * RFC-280 T6（落差⑥）— MCP playground 的 native-session 策略，原
    * `RuntimeMcpTestCapabilityV1` 平行 spawn 契约的仅存 runtime 特有面。

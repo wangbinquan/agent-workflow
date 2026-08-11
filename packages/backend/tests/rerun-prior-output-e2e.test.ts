@@ -280,7 +280,7 @@ describe('RFC-119 e2e — review-iterate rerun gets the prior output in its prom
       taskId: h.taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: h.stubOpencode,
+      binaryOverride: h.stubOpencode,
     })
 
     const fresh = (

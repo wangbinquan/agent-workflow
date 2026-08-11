@@ -175,7 +175,7 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
           templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
         }),
     )
@@ -210,7 +210,7 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
           templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
         }),
     )
@@ -271,7 +271,7 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
           templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
           promptMode: {
             kind: 'followup',
@@ -330,7 +330,7 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
           templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
           promptMode: {
             kind: 'followup',

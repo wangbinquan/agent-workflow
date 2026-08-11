@@ -200,7 +200,7 @@ describe('RFC-098 B3 (S-4) — pre-dirty 差集按 blob hash / deleted 哨兵判
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', h.shimPath],
+          binaryOverride: ['bun', 'run', h.shimPath],
         }),
     )
 

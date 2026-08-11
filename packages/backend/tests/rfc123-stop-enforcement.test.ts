@@ -170,7 +170,7 @@ function runStoppedNode(h: Harness, nodeRunId: string, opts: { stopped?: true })
       templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
       skills: [],
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       db: h.db,
       // RFC-148: both variants keep ask-back OFF (directive !== 'mandatory' —
       // the historical effectiveHasClarifyChannel=false). B = explicit stop

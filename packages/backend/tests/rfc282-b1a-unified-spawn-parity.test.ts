@@ -1,13 +1,11 @@
-// RFC-282 B1a — LIVE parity suite for the unified `buildAgentSpawn` facade.
-//
-// While both assembly paths exist (B1a..B1b), every plan field the process
-// launcher consumes (cmd/env/stdin) must be byte-identical between
-//   new: driver.buildAgentSpawn(AgentSpawnContext)         — ONE call
-//   old: driver.buildBusinessSpawn(ctx) + renderInjection  — TWO computations
-// and the returned `declared` must equal the legacy renderInjection output.
-// Red here = the facade drifted from the legacy assembly, which §0 (功能不受
-// 影响) forbids. The suite dies together with the legacy methods in B1b; its
-// coverage intent then lives in the golden spawn locks.
+// RFC-282 — LIVE parity suite for the unified `buildSpawn` facade vs the
+// driver-internal assembly bodies (the former contract trio, now named
+// functions). Every plan field the launcher consumes (cmd/env/stdin) must be
+// byte-identical between
+//   facade: driver.buildSpawn(AgentSpawnContext)              — ONE call
+//   bodies: assemble*BusinessSpawn/Persona + render*Injection — the internals
+// and `declared` must equal the standalone render. Red here = the facade
+// drifted from its own assembly, which §0 (功能不受影响) forbids.
 //
 // §7-1b positive lock included: a persona-only claude spawn stays
 // UNCONSTRAINED (declared.tools === null, no --tools argv) — injecting a
@@ -32,6 +30,16 @@ import type {
 } from '../src/services/runtime/types'
 import { createLogger } from '../src/util/log'
 import type { RuntimeProfile } from '../src/services/runtimeRegistry'
+import {
+  assembleOpencodeBusinessSpawn,
+  assembleOpencodePersonaSpawn,
+  renderOpencodeInjection,
+} from '../src/services/runtime/opencode/driver'
+import {
+  assembleClaudeBusinessSpawn,
+  assembleClaudePersonaSpawn,
+  renderClaudeInjection,
+} from '../src/services/runtime/claudeCode/driver'
 
 const log = createLogger('rfc282-b1a')
 
@@ -176,11 +184,14 @@ describe('RFC-282 B1a — business-path parity (facade vs legacy, live while bot
   for (const kind of ['opencode', 'claude-code'] as const) {
     test(`${kind}: cmd/env/stdin byte-identical; declared equals legacy renderInjection`, async () => {
       const driver = getRuntimeDriver(kind)
+      const assembleBusiness =
+        kind === 'opencode' ? assembleOpencodeBusinessSpawn : assembleClaudeBusinessSpawn
+      const renderInjection = kind === 'opencode' ? renderOpencodeInjection : renderClaudeInjection
       const root = mkdtempSync(join(tmpdir(), 'rfc282-b1a-'))
       try {
         const pair = mkBusinessPair(root, kind)
-        const legacyPlan = await driver.buildBusinessSpawn(pair.legacy)
-        const legacyDeclared = driver.renderInjection({
+        const legacyPlan = await assembleBusiness(pair.legacy)
+        const legacyDeclared = renderInjection({
           mcps: pair.legacy.mcps,
           agent: pair.legacy.agent,
           dependents: pair.legacy.dependents,
@@ -196,7 +207,7 @@ describe('RFC-282 B1a — business-path parity (facade vs legacy, live while bot
         // refuses to overwrite live projections — release the legacy run's
         // side effects before the facade assembles the same worktree.
         await legacyPlan.cleanup?.()
-        const unifiedPlan = await driver.buildAgentSpawn!({
+        const unifiedPlan = await driver.buildSpawn({
           ...pair.unified,
           injection: { ...pair.unified.injection, profile: PROFILES.get('root-agent')! },
         })
@@ -229,8 +240,8 @@ describe('RFC-282 B1a — persona-only (system) parity', () => {
         log,
       }
       mkdirSync(legacyCtx.worktreePath, { recursive: true })
-      const legacyPlan = await driver.buildSpawn(legacyCtx)
-      const unifiedPlan = await driver.buildAgentSpawn!({
+      const legacyPlan = await assembleOpencodePersonaSpawn(legacyCtx)
+      const unifiedPlan = await driver.buildSpawn({
         injection: { mcps: [] },
         prompt: 'SYSTEM PROMPT',
         agentName: 'sys-persona',
@@ -274,8 +285,8 @@ describe('RFC-282 B1a — persona-only (system) parity', () => {
         configDirEnv: DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env,
         log,
       }
-      const legacyPlan = await driver.buildSpawn(legacyCtx)
-      const unifiedPlan = await driver.buildAgentSpawn!({
+      const legacyPlan = await assembleClaudePersonaSpawn(legacyCtx)
+      const unifiedPlan = await driver.buildSpawn({
         injection: { mcps: [] },
         prompt: 'SYSTEM PROMPT',
         agentName: 'sys-persona',

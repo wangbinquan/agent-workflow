@@ -150,7 +150,7 @@ describe('runNode', () => {
           },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
         }),
     )
@@ -214,7 +214,7 @@ describe('runNode', () => {
           },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
         }),
     )
@@ -244,7 +244,7 @@ describe('runNode', () => {
         templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
         skills: [],
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         db: h.db,
       }),
     )
@@ -273,7 +273,7 @@ describe('runNode', () => {
           templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
         }),
     )
@@ -301,7 +301,7 @@ describe('runNode', () => {
           templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
         }),
     )
@@ -337,7 +337,7 @@ describe('runNode', () => {
           templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
           timeoutMs: 200,
         }),
@@ -368,7 +368,7 @@ describe('runNode', () => {
           templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
           signal: controller.signal,
         }),
@@ -405,7 +405,7 @@ describe('runNode', () => {
               { name: 'repo-skill', sourceKind: 'project' }, // skipped
             ],
             appHome: h.appHome,
-            opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+            binaryOverride: ['bun', 'run', MOCK_OPENCODE],
             db: h.db,
           }),
       )
@@ -443,7 +443,7 @@ describe('runNode', () => {
           promptTemplate: 'audit {{__base_branch__}} of {{__repo_path__}}: {{changes}}',
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
         }),
     )
@@ -470,7 +470,7 @@ describe('runNode', () => {
         templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
         skills: [],
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         db: h.db,
       }),
     )

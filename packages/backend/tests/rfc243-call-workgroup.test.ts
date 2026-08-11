@@ -228,7 +228,7 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
       db: h.db,
       taskId: parentTaskId,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', SCENARIO_STUB],
+      binaryOverride: ['bun', 'run', SCENARIO_STUB],
       defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
       defaultPerNodeTimeoutMs: 10_000,
     })

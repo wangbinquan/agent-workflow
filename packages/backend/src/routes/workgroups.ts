@@ -42,7 +42,6 @@ import {
 // route must not call startWorkgroupTask directly (source-text lock).
 import { startExecution } from '@/services/execution/executor'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { resolveOpencodeCmd } from '@/services/runtime'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 import {
@@ -301,7 +300,6 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
       const task = await startExecution(
         deps.db,
         actor,
@@ -311,7 +309,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
           invoker: { type: 'user' },
           payload: parsed.data,
         },
-        buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd, undefined),
+        buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, undefined),
       )
       return c.json(task, 201)
     },

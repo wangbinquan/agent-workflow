@@ -166,7 +166,7 @@ describe('runTask: linear DAG (M1)', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 
@@ -217,7 +217,7 @@ describe('runTask: linear DAG (M1)', () => {
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
 
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -243,7 +243,7 @@ describe('runTask: linear DAG (M1)', () => {
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
@@ -278,7 +278,7 @@ describe('runTask: linear DAG (M1)', () => {
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
@@ -301,7 +301,7 @@ describe('runTask: linear DAG (M1)', () => {
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('failed')
@@ -325,7 +325,7 @@ describe('runTask: linear DAG (M1)', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -362,7 +362,7 @@ describe('runTask: linear DAG (M1)', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -403,7 +403,7 @@ describe('runTask: linear DAG (M1)', () => {
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       signal: controller.signal,
     })
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -432,7 +432,7 @@ describe('runTask: linear DAG (M1)', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           signal: controller.signal,
         }),
     )
@@ -480,7 +480,7 @@ describe('runTask: linear DAG (M1)', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 
@@ -519,7 +519,7 @@ describe('runTask: linear DAG (M1)', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           maxConcurrentNodes: 2,
         }),
     )
@@ -572,7 +572,7 @@ describe('runTask: linear DAG (M1)', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget via runTask opts (was node.retries: 2).
           defaultNodeRetries: 2,
         }),
@@ -614,7 +614,7 @@ describe('runTask: linear DAG (M1)', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget via runTask opts (was node.retries: 1).
           defaultNodeRetries: 1,
         }),
@@ -686,7 +686,7 @@ process.exit(0)
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', shimPath],
+      binaryOverride: ['bun', 'run', shimPath],
     })
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
@@ -750,7 +750,7 @@ process.exit(0)
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           maxConcurrentNodes: 4,
         }),
     )
@@ -802,7 +802,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -854,7 +854,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -912,7 +912,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -971,7 +971,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
 
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -1006,7 +1006,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -1051,7 +1051,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -1093,7 +1093,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -1136,7 +1136,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]

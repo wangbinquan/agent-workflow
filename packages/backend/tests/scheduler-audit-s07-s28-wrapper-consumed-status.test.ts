@@ -254,7 +254,7 @@ describe('S-7 / S-28 集成层 — loop/git wrapper 行 consumed 恒写；DB 与
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     unsub()
@@ -308,7 +308,7 @@ describe('S-7 / S-28 集成层 — loop/git wrapper 行 consumed 恒写；DB 与
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     unsub()
@@ -365,7 +365,7 @@ describe('S-7 / S-28 集成层 — loop/git wrapper 行 consumed 恒写；DB 与
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
     unsub()
 

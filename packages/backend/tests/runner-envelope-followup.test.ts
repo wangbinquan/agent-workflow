@@ -161,7 +161,7 @@ describe('RFC-042 runner envelope followup (promptMode followup arm)', () => {
           promptTemplate: 'BUILD {{spec}}',
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
           promptMode: {
             kind: 'followup',
@@ -194,7 +194,7 @@ describe('RFC-042 runner envelope followup (promptMode followup arm)', () => {
         promptTemplate: 'TEMPLATE_BODY_THAT_MUST_NOT_LEAK_{{spec}}',
         skills: [],
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         db: h.db,
         promptMode: {
           kind: 'followup',
@@ -233,7 +233,7 @@ describe('RFC-042 runner envelope followup (promptMode followup arm)', () => {
         promptTemplate: 'go',
         skills: [],
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         db: h.db,
         promptMode: {
           kind: 'followup',
@@ -278,7 +278,7 @@ describe('RFC-042 runner envelope followup (promptMode followup arm)', () => {
           promptTemplate: 'go',
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
           promptMode: {
             kind: 'followup',

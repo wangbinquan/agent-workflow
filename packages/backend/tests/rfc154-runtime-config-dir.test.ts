@@ -42,10 +42,11 @@ import {
   validateConfigDirEnv,
   validateConfigDirName,
 } from '../src/services/runtimeRegistry'
-import { getRuntimeDriver } from '../src/services/runtime'
 import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
 import { stageSkills } from '../src/services/runtime/stageSkills'
 import { createLogger } from '../src/util/log'
+import { assembleOpencodeBusinessSpawn } from '../src/services/runtime/opencode/driver'
+import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('rfc154-test')
@@ -322,7 +323,7 @@ describe('RFC-154 spawn — frozen config-dir profile lands in the runtime-nativ
         opencodeCmd: ['oc'],
         configDir: { env: 'FOO_DIR', name: '.foo' },
       })
-      const plan = await getRuntimeDriver('opencode').buildBusinessSpawn(ctx)
+      const plan = await assembleOpencodeBusinessSpawn(ctx)
       expect(plan.env.FOO_DIR).toBe(join(runRoot, '.foo'))
       // The default key must NOT be set alongside the custom one (a fork reading
       // FOO_DIR would work, but a stale OPENCODE_CONFIG_DIR would mislead stock
@@ -341,7 +342,7 @@ describe('RFC-154 spawn — frozen config-dir profile lands in the runtime-nativ
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc154-oc2-'))
     try {
       const ctx = mkSpawnCtx(runRoot, { opencodeCmd: ['oc'] })
-      const plan = await getRuntimeDriver('opencode').buildBusinessSpawn(ctx)
+      const plan = await assembleOpencodeBusinessSpawn(ctx)
       expect(plan.env.OPENCODE_CONFIG_DIR).toBe(join(runRoot, '.opencode'))
       expect(existsSync(join(runRoot, '.opencode', 'skills'))).toBe(true)
     } finally {
@@ -367,7 +368,7 @@ describe('RFC-154 spawn — frozen config-dir profile lands in the runtime-nativ
         configDir: { env: 'BAR_DIR', name: '.bar' },
         skills: [{ name: 'managed', sourceKind: 'managed', sourcePath: skillSource }],
       })
-      const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(ctx)
+      const plan = await assembleClaudeBusinessSpawn(ctx)
       expect(plan.env.BAR_DIR).toBeUndefined()
       expect(plan.env.CLAUDE_CONFIG_DIR).toBe('/stale/daemon/value')
       const projected = join(ctx.worktreePath, '.bar', 'skills', 'managed', 'SKILL.md')
@@ -400,7 +401,7 @@ describe('RFC-154 spawn — frozen config-dir profile lands in the runtime-nativ
         configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
         skills: [{ name: 'managed', sourceKind: 'managed', sourcePath: skillSource }],
       })
-      const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(ctx)
+      const plan = await assembleClaudeBusinessSpawn(ctx)
       expect(plan.env.CLAUDE_CONFIG_DIR).toBeUndefined()
       const projected = join(ctx.worktreePath, '.claude', 'skills', 'managed', 'SKILL.md')
       expect(readFileSync(projected, 'utf8')).toBe('managed')

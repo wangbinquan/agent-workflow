@@ -218,7 +218,7 @@ describe('S-17 — queued writers no longer hold global slots; readonly runs par
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', h.mockPath],
+          binaryOverride: ['bun', 'run', h.mockPath],
           maxConcurrentNodes: 2,
         }),
     )

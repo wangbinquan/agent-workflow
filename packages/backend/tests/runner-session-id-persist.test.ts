@@ -138,7 +138,7 @@ describe('runner stdout → node_run_events session tagging', () => {
           templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
         }),
     )
@@ -176,7 +176,7 @@ describe('runner stdout → node_run_events session tagging', () => {
           templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
           skills: [],
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           db: h.db,
         }),
     )

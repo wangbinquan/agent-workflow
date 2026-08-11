@@ -182,7 +182,7 @@ describe('RFC-026 regression — isolated mode never resumes', () => {
             taskId,
             db: h.db,
             appHome: h.appHome,
-            opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+            binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           }),
       )
       const sessionRow = (
@@ -216,7 +216,7 @@ describe('RFC-026 regression — isolated mode never resumes', () => {
             taskId,
             db: h.db,
             appHome: h.appHome,
-            opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+            binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           }),
       )
       const lines = existsSync(h.argvPath)

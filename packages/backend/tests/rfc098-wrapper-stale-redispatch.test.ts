@@ -374,7 +374,7 @@ describe('RFC-098 B3 修订#6 — resume 不覆盖 wrapper 行的 consumed', () 
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -414,7 +414,7 @@ describe('RFC-098 B3 修订#6 — resume 不覆盖 wrapper 行的 consumed', () 
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 

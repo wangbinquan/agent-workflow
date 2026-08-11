@@ -263,7 +263,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -317,7 +317,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -354,7 +354,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -394,7 +394,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -460,7 +460,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -518,7 +518,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -602,7 +602,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -660,7 +660,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -744,7 +744,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -799,7 +799,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
 
     // Step 1: first run — agent asks, parks at awaiting_human.
     await withEnv({ MOCK_OPENCODE_CLARIFY_BODY: CLARIFY_BODY }, () =>
-      runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', MOCK_OPENCODE] }),
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+      }),
     )
 
     // Step 2: synthesize the answered session with directive='stop' (the user
@@ -863,7 +868,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     // → it sees the <workflow-output> format → emits output → done. The mock
     // emits OUTPUT (not clarify), proving the runtime guard did NOT reject it.
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'FINAL_V1' }) }, () =>
-      runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', MOCK_OPENCODE] }),
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+      }),
     )
 
     const allRuns = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -921,7 +931,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     const round1Sess = (
@@ -995,7 +1005,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     const allSess = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
@@ -1062,7 +1072,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 

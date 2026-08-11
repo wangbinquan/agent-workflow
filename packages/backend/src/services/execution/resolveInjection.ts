@@ -13,7 +13,7 @@
 //   continue. rfc282-b2-resolve-injection.test.ts red→green documents the flip.
 //
 // The result is the runtime-neutral `AgentInjectionSpecV1` — the same shape
-// `driver.buildAgentSpawn` consumes — so the scheduler hands one object to
+// `driver.buildSpawn` consumes — so the scheduler hands one object to
 // the runner instead of four parallel arrays.
 
 import { eq } from 'drizzle-orm'

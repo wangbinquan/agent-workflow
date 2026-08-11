@@ -147,12 +147,12 @@ describe('scheduler: an exhausted top-level wrapper-loop must NOT flip failed->d
 
     const taskId = await seedWorkflowAndTask(h, definition)
 
-    const opencodeCmd = ['bun', 'run', MOCK_OPENCODE]
+    const binaryOverride = ['bun', 'run', MOCK_OPENCODE]
     const env = { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ findings: 'still failing' }) }
 
     // Run #1 — the loop never satisfies port-empty (findings always non-empty),
     // so it exhausts maxIterations. This documents the correct starting state.
-    await withEnv(env, () => runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd }))
+    await withEnv(env, () => runTask({ taskId, db: h.db, appHome: h.appHome, binaryOverride }))
 
     const afterRun1 = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(afterRun1.status).toBe('failed')
@@ -168,7 +168,7 @@ describe('scheduler: an exhausted top-level wrapper-loop must NOT flip failed->d
     // no-ops and the headline assertion below would be hollow-green. The run
     // must NOT end in 'done'.
     await reenterScheduler(h.db, taskId)
-    await withEnv(env, () => runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd }))
+    await withEnv(env, () => runTask({ taskId, db: h.db, appHome: h.appHome, binaryOverride }))
 
     const afterRun2 = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
 

@@ -262,7 +262,7 @@ describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 

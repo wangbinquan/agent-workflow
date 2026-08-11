@@ -90,7 +90,7 @@ const baseOpts = (scratchParent: string, binary: string | readonly string[]) => 
   // buildSpawn branch as runtimeBinary (systemAgentRun.ts:463/479 both feed
   // driver.buildSpawn; opencode driver prefers opencodeCmd) — byte-identical
   // behavior, only the head becomes Windows-spawnable.
-  ...(typeof binary === 'string' ? { runtimeBinary: binary } : { opencodeCmd: binary }),
+  ...(typeof binary === 'string' ? { runtimeBinary: binary } : { binaryOverride: binary }),
   scratchParent,
   testOnlyUnverifiedRuntime: true,
   timeoutMs: 20_000,
@@ -426,7 +426,7 @@ describe('runSystemAgent', () => {
 
     const result = await runSystemAgent({
       ...baseOpts(scratchParent, binary),
-      opencodeCmd: binary,
+      binaryOverride: binary,
       scratchName: 'turn-explicit-head',
     })
     expect(result.status).toBe('ok')

@@ -12,10 +12,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE, type Agent } from '@agent-workflow/shared'
 import { renderClaudeManagedSkillAttachments } from '../src/services/runtime/claudeCode/config'
-import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
 import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
 import type { RuntimeProfile } from '../src/services/runtimeRegistry'
 import { createLogger } from '../src/util/log'
+import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
 
 const roots: string[] = []
 const log = createLogger('claude-skill-attachment-test')
@@ -125,7 +125,7 @@ describe('Claude natural managed-skill attachment', () => {
       nodeRunId: 'nr-1',
       log,
     }
-    const plan = await claudeCodeDriver.buildBusinessSpawn(ctx)
+    const plan = await assembleClaudeBusinessSpawn(ctx)
     expect(plan.env.CLAUDE_CONFIG_DIR).toBeUndefined()
     expect(plan.env.IS_SANDBOX).toBeUndefined()
     expect(plan.cmd).not.toContain('--setting-sources')
@@ -179,7 +179,7 @@ describe('Claude natural managed-skill attachment', () => {
       log,
     }
 
-    const plan = await claudeCodeDriver.buildBusinessSpawn(ctx)
+    const plan = await assembleClaudeBusinessSpawn(ctx)
     const agentsJson = JSON.parse(plan.cmd[plan.cmd.indexOf('--agents') + 1] ?? '{}') as Record<
       string,
       { prompt?: string }
@@ -236,9 +236,7 @@ describe('Claude natural managed-skill attachment', () => {
       log,
     }
 
-    await expect(claudeCodeDriver.buildBusinessSpawn(ctx)).rejects.toThrow(
-      'claude-worktree-agent-conflict',
-    )
+    await expect(assembleClaudeBusinessSpawn(ctx)).rejects.toThrow('claude-worktree-agent-conflict')
     expect(readFileSync(existingAgent, 'utf8')).toBe('project-owned agent')
   })
 
@@ -268,9 +266,7 @@ describe('Claude natural managed-skill attachment', () => {
       nodeRunId: 'nr-conflict',
       log,
     }
-    await expect(claudeCodeDriver.buildBusinessSpawn(ctx)).rejects.toThrow(
-      'claude-worktree-skill-conflict',
-    )
+    await expect(assembleClaudeBusinessSpawn(ctx)).rejects.toThrow('claude-worktree-skill-conflict')
     expect(readFileSync(join(existingSkill, 'SKILL.md'), 'utf8')).toBe('project-owned')
   })
 
@@ -303,7 +299,7 @@ describe('Claude natural managed-skill attachment', () => {
         nodeRunId: 'nr-symlink',
         log,
       }
-      await expect(claudeCodeDriver.buildBusinessSpawn(ctx)).rejects.toThrow()
+      await expect(assembleClaudeBusinessSpawn(ctx)).rejects.toThrow()
       expect(existsSync(join(outside, 'skills'))).toBe(false)
     },
   )

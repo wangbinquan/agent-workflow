@@ -334,7 +334,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
       actor: { userId: 'u-tester', role: 'owner' },
     })
     await reenterScheduler(c.db, task.id)
-    await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
+    await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
     const rerun = (await designerTop(c.db, task.id))[0]
     const prompt = rerun?.promptText ?? ''

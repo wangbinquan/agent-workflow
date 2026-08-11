@@ -226,7 +226,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -252,7 +252,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 
@@ -292,7 +292,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 
@@ -353,7 +353,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     const firstRound = (
@@ -387,7 +387,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     const secondRound = (
@@ -421,7 +421,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 
@@ -456,7 +456,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 
@@ -490,7 +490,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 
@@ -525,7 +525,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     const sessionRow = (
@@ -559,7 +559,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 

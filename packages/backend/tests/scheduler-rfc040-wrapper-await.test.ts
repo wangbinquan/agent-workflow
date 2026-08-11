@@ -210,7 +210,7 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -295,7 +295,7 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -338,7 +338,7 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -440,7 +440,7 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -517,7 +517,7 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
     const gwRunsBefore = await h.db
@@ -557,7 +557,7 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 
@@ -640,7 +640,7 @@ describe('RFC-040 nested wrapper-git ∋ wrapper-loop ∋ {agent, clarify}', () 
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
 

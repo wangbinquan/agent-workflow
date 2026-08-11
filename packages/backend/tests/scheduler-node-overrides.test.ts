@@ -194,7 +194,7 @@ describe("RFC-113: the agent's RUNTIME drives the model; node param overrides ar
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 
@@ -247,7 +247,7 @@ describe("RFC-113: the agent's RUNTIME drives the model; node param overrides ar
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 
@@ -300,7 +300,7 @@ describe("RFC-113: the agent's RUNTIME drives the model; node param overrides ar
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
 

@@ -516,7 +516,7 @@ async function runToEnd(h: Harness, taskId: string): Promise<void> {
     db: h.db,
     taskId,
     appHome: h.appHome,
-    opencodeCmd: ['bun', 'run', h.mockPath],
+    binaryOverride: ['bun', 'run', h.mockPath],
   })
 }
 

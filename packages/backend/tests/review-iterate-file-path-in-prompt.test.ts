@@ -333,7 +333,7 @@ describe('RFC-005 followup — markdown_file source path lands in iterate prompt
       taskId: h.taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: h.stubOpencode,
+      binaryOverride: h.stubOpencode,
     })
 
     const designerRuns = await h.db

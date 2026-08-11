@@ -189,7 +189,7 @@ describe('RFC-230 — wrapper finalize 撞上外部终态', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     await superseder
@@ -230,7 +230,7 @@ describe('RFC-230 — wrapper finalize 撞上外部终态', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
     await superseder

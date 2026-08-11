@@ -310,7 +310,12 @@ describe('RFC-193 e2e — K1 必达三跳传播', () => {
       ],
     }
     const taskId = await seedTask(h, def)
-    await runTask({ db: h.db, taskId, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+    await runTask({
+      db: h.db,
+      taskId,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
     const canonical = join(h.worktreePath, 'notes', 'hidden.md')
     expect(existsSync(canonical)).toBe(true)
     expect(readFileSync(canonical, 'utf8')).toBe('IGNORED BUT DELIVERED')
@@ -363,7 +368,12 @@ describe('RFC-193 e2e — K1 必达三跳传播', () => {
       ],
     }
     const taskId = await seedTask(h, def)
-    await runTask({ db: h.db, taskId, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+    await runTask({
+      db: h.db,
+      taskId,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
     const bRuns = await h.db
       .select()
       .from(nodeRuns)

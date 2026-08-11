@@ -150,7 +150,7 @@ function runClarifyingNode(
       templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
       skills: [],
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       db: h.db,
       clarifyChannel:
         channel.kind === 'none'

@@ -114,13 +114,10 @@ async function buildSmokePlan(
   log: Logger,
 ): Promise<SpawnPlan> {
   const driver = getRuntimeDriver(protocol)
-  if (driver.buildAgentSpawn === undefined) {
-    throw new Error(`runtime driver '${driver.kind}' lacks buildAgentSpawn`)
-  }
   // RFC-282 B1b — unified persona-only assembly. RFC-254: an array binaryPath
   // is a full command head → the runtime-neutral binaryOverride (each driver
   // maps it onto its own seam); a string stays the plain runtimeBinary.
-  return driver.buildAgentSpawn({
+  return driver.buildSpawn({
     injection: { mcps: [] },
     prompt,
     agentName: 'aw-smoke',

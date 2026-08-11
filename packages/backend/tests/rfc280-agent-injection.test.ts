@@ -36,9 +36,9 @@ function toClaudeMcpConfig(
   const { entries } = renderClaudeMcpInjection(mcps)
   return entries === null ? null : { mcpServers: entries }
 }
-import { claudeCodeDriver } from '@/services/runtime/claudeCode/driver'
-import { opencodeDriver } from '@/services/runtime/opencode/driver'
 import type { Agent } from '@agent-workflow/shared'
+import { renderOpencodeInjection } from '../src/services/runtime/opencode/driver'
+import { renderClaudeInjection } from '../src/services/runtime/claudeCode/driver'
 
 function localMcp(name: string, extra: Partial<Mcp> = {}): Mcp {
   return {
@@ -243,7 +243,7 @@ describe('driver renderInjection hook (RFC-280 T1)', () => {
   const mcps = [localMcp('a'), remoteMcp('b'), localMcp('off', { enabled: false })]
 
   test('opencode hook matches buildInlineConfig composition + manifest', () => {
-    const hook = opencodeDriver.renderInjection({ mcps })
+    const hook = renderOpencodeInjection({ mcps })
     const composed = buildInlineConfig(emptyAgent('root'), new Map(), [], mcps)
     expect(hook.mcpEntries).toEqual(composed.mcp ?? null)
     expect(hook.declared.mcpServers).toEqual(['a', 'b'])
@@ -251,14 +251,14 @@ describe('driver renderInjection hook (RFC-280 T1)', () => {
   })
 
   test('claude hook matches toClaudeMcpConfig composition + manifest', () => {
-    const hook = claudeCodeDriver.renderInjection({ mcps })
+    const hook = renderClaudeInjection({ mcps })
     const composed = toClaudeMcpConfig(mcps)
     expect(hook.mcpEntries).toEqual(composed?.mcpServers ?? null)
     expect(hook.declared.mcpServers).toEqual(['a', 'b'])
   })
 
   test('claude hook: nothing enabled → null entries (flag omitted upstream)', () => {
-    const hook = claudeCodeDriver.renderInjection({ mcps: [localMcp('x', { enabled: false })] })
+    const hook = renderClaudeInjection({ mcps: [localMcp('x', { enabled: false })] })
     expect(hook.mcpEntries).toBeNull()
     expect(toClaudeMcpConfig([localMcp('x', { enabled: false })])).toBeNull()
   })
@@ -313,7 +313,7 @@ describe('declaration helpers (RFC-280 T2)', () => {
   })
 
   test('opencode hook declares skills/subagents/plugins faces', () => {
-    const hook = opencodeDriver.renderInjection({
+    const hook = renderOpencodeInjection({
       mcps: [localMcp('m')],
       agent: emptyAgent('root'),
       dependents: [emptyAgent('helper')],
@@ -332,7 +332,7 @@ describe('declaration helpers (RFC-280 T2)', () => {
 
   test('claude hook declares tools gate, droppedParams and plugin unsupported', () => {
     const gated = { ...emptyAgent('root'), permission: { read: 'allow', bash: 'deny' } } as Agent
-    const hook = claudeCodeDriver.renderInjection({
+    const hook = renderClaudeInjection({
       mcps: [],
       agent: gated,
       dependents: [emptyAgent('helper')],
@@ -351,7 +351,7 @@ describe('declaration helpers (RFC-280 T2)', () => {
     expect(hook.declared.unsupported).toEqual(['plugin:plg'])
     expect(hook.declared.subagents).toEqual(['helper'])
     // Unconstrained agent → tools null (claude keeps its own defaults).
-    const open = claudeCodeDriver.renderInjection({ mcps: [], agent: emptyAgent('free') })
+    const open = renderClaudeInjection({ mcps: [], agent: emptyAgent('free') })
     expect(open.declared.tools).toBeNull()
   })
 })

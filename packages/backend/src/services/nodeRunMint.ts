@@ -30,7 +30,7 @@ import { nodeRuns } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { abandonSupersededMergeStates } from '@/services/lifecycle'
 import type { RuntimeKind } from '@/services/runtime'
-import { isKnownRuntimeKind } from '@/services/runtime'
+import { tryGetRuntimeDriver, isKnownRuntimeKind } from '@/services/runtime'
 import {
   defaultConfigDirProfile,
   resolveAgentRuntime,
@@ -457,6 +457,22 @@ function parseFrozenConfigDir(
  * to the wrong driver or binary (session id + runtime are a pair, D11). An
  * unrecognized stored protocol re-resolves (forward-compatible recovery, logged).
  */
+
+/** RFC-282 C1-2 — config-level binary fallback for the freeze, expressed via
+ *  the driver's own defaultBinary (no protocol literals here): the value is
+ *  frozen only when the config actually contributes a head. */
+function configBackedBinary(
+  protocol: string,
+  binaryConfig: { opencodePath?: string | null; claudeCodePath?: string | null } | undefined,
+): string | null {
+  if (binaryConfig === undefined) return null
+  const driver = tryGetRuntimeDriver(protocol)
+  if (driver === null) return null
+  const withConfig = driver.defaultBinary(binaryConfig)[0] ?? null
+  const bare = driver.defaultBinary({})[0] ?? null
+  return withConfig !== null && withConfig !== bare ? withConfig : null
+}
+
 export async function resolveFrozenRuntime(
   db: DbClient,
   nodeRunId: string,
@@ -471,6 +487,15 @@ export async function resolveFrozenRuntime(
    * isn't frozen yet (the first dispatch of a fresh retry / clarify-rerun row).
    */
   inheritFrom?: FrozenRuntime | null,
+  /**
+   * RFC-282 C1-2 — config-level binary fallbacks (config.opencodePath /
+   * claudeCodePath), folded into the FROZEN value at mint time. The old shape
+   * read config at SPAWN time via the per-entry opencodeCmd channel, so a
+   * config edit could flip the head of an already-minted run on resume —
+   * against the RFC-111 D15 "resume reads the frozen snapshot" ruling. Now
+   * the fallback freezes with everything else; registry binaryPath still wins.
+   */
+  binaryConfig?: { opencodePath?: string | null; claudeCodePath?: string | null },
 ): Promise<FrozenRuntime> {
   const row = (
     await db
@@ -510,7 +535,11 @@ export async function resolveFrozenRuntime(
       ? inheritFrom
       : await resolveAgentRuntime(db, agentRuntime, defaultRuntime).then((r) => ({
           protocol: r.protocol,
-          binary: r.binaryPath,
+          // Which config key backs which protocol is DRIVER knowledge
+          // (defaultBinary); freeze the config-backed head only when config
+          // actually contributes one (differs from the bare default), so a
+          // null stays null and custom-fork detection is untouched.
+          binary: r.binaryPath ?? configBackedBinary(r.protocol, binaryConfig),
           params: {
             model: r.model,
             variant: r.variant,

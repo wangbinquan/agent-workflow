@@ -151,7 +151,7 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget now comes from runTask opts (was node.retries: 1).
           defaultNodeRetries: 1,
         }),
@@ -199,7 +199,7 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget now comes from runTask opts (was node.retries: 1).
           defaultNodeRetries: 1,
         }),
@@ -236,7 +236,7 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: explicit no-retry path — global budget 0 (was node.retries: 0).
           defaultNodeRetries: 0,
         }),
@@ -269,7 +269,7 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget now comes from runTask opts (was node.retries: 3).
           defaultNodeRetries: 3,
         }),

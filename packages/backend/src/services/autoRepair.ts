@@ -155,7 +155,7 @@ export function startAutoRepairLoop(opts: {
       if (!Object.values(autoRepair).some((v) => v === true)) return // default: nothing enabled
       const deps = {
         db: opts.db,
-        ...(cfg.opencodePath ? { opencodeCmd: [cfg.opencodePath] } : {}),
+        configPath: opts.configPath,
         ...(cfg.subagentLiveCapture !== undefined
           ? { subagentLiveCapture: cfg.subagentLiveCapture }
           : {}),

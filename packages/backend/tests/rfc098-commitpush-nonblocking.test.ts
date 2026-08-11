@@ -316,7 +316,7 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', h.shimPath],
+          binaryOverride: ['bun', 'run', h.shimPath],
         }),
     )
 
@@ -381,7 +381,7 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', h.shimPath],
+          binaryOverride: ['bun', 'run', h.shimPath],
           signal: controller.signal,
         }),
     )
@@ -451,7 +451,7 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
           taskId,
           db: h.db,
           appHome: h.appHome,
-          opencodeCmd: ['bun', 'run', h.shimPath],
+          binaryOverride: ['bun', 'run', h.shimPath],
         }),
     )
     void runP.then(

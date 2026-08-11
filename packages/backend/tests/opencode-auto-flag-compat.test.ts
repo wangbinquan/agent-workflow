@@ -28,7 +28,6 @@ import {
   OPENCODE_AUTO_FLAG_RENAME_VERSION,
   resolveAutoApproveFlag,
 } from '@/services/runtime/opencode/spawn'
-import { opencodeDriver } from '@/services/runtime/opencode/driver'
 import type { BusinessNodeSpawnContext } from '@/services/runtime/types'
 import { probeOpencode } from '@/services/runtime/opencode/util'
 import {
@@ -37,6 +36,10 @@ import {
   resetOpencodeBinaryVersionsForTests,
 } from '@/services/runtime/opencode/versionRegistry'
 import { createLogger } from '@/util/log'
+import {
+  assembleOpencodeBusinessSpawn,
+  assembleOpencodePersonaSpawn,
+} from '../src/services/runtime/opencode/driver'
 
 const LEGACY = '--dangerously-skip-permissions'
 
@@ -130,14 +133,14 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
 
   test('buildSpawn（system agent）：registry 有 ≥1.18 与无记录均使用 --auto', async () => {
     recordOpencodeBinaryVersion('/fork/oc118', '1.18.3')
-    const modern = await opencodeDriver.buildSpawn({
+    const modern = await assembleOpencodePersonaSpawn({
       ...SYSTEM_BASE,
       runtimeBinary: '/fork/oc118',
     })
     expect(modern.cmd).toContain('--auto')
     expect(modern.cmd).not.toContain(LEGACY)
 
-    const unknown = await opencodeDriver.buildSpawn({
+    const unknown = await assembleOpencodePersonaSpawn({
       ...SYSTEM_BASE,
       runtimeBinary: '/fork/never-probed',
     })
@@ -147,7 +150,7 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
 
   test('buildSpawn 默认头（PATH 上的 opencode）以 "opencode" 为 key 查表 —— boot 探测种子生效的形状', async () => {
     recordOpencodeBinaryVersion('opencode', '1.18.3')
-    const plan = await opencodeDriver.buildSpawn({ ...SYSTEM_BASE })
+    const plan = await assembleOpencodePersonaSpawn({ ...SYSTEM_BASE })
     expect(plan.cmd[0]).toBe('opencode')
     expect(plan.cmd).toContain('--auto')
   })
@@ -190,13 +193,13 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
       log: createLogger('oc-flag-test'),
     }
     recordOpencodeBinaryVersion('/fork/oc118-biz', '1.18.3')
-    const modern = await opencodeDriver.buildBusinessSpawn(ctx)
+    const modern = await assembleOpencodeBusinessSpawn(ctx)
     expect(modern.cmd).toContain('--auto')
     expect(modern.cmd).not.toContain(LEGACY)
 
     // 同 ctx、无记录 → 当前拼写。
     resetOpencodeBinaryVersionsForTests()
-    const unknown = await opencodeDriver.buildBusinessSpawn(ctx)
+    const unknown = await assembleOpencodeBusinessSpawn(ctx)
     expect(unknown.cmd).toContain('--auto')
     expect(unknown.cmd).not.toContain(LEGACY)
   })

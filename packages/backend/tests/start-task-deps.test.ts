@@ -22,16 +22,16 @@ function configWith(cfgPath: string, subagentLiveCapture: unknown): void {
 }
 
 describe('buildStartTaskDeps (RFC-159 T2)', () => {
-  test('passes db + actorUserId through; spreads opencodeCmd only when provided', () => {
+  test('passes db + actorUserId through; threads configPath (RFC-282 C1-2: the scheduler resolves)', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const dir = mkdtempSync(join(tmpdir(), 'rfc159-deps-'))
     const cfgPath = join(dir, 'config.json')
     configWith(cfgPath, { pollMs: 999, consecutiveFailureLimit: 7 })
 
-    const withCmd = buildStartTaskDeps(db, cfgPath, 'alice', ['opencode', '--flag'])
+    const withCmd = buildStartTaskDeps(db, cfgPath, 'alice')
     expect(withCmd.db).toBe(db)
     expect(withCmd.actorUserId).toBe('alice')
-    expect(withCmd.opencodeCmd).toEqual(['opencode', '--flag'])
+    expect(withCmd.configPath).toBe(cfgPath)
 
     const noCmd = buildStartTaskDeps(db, cfgPath, 'bob')
     expect(noCmd.actorUserId).toBe('bob')

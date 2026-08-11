@@ -258,7 +258,7 @@ async function buildHarness(): Promise<Harness> {
     actor: { userId: 'u1', role: 'owner' },
   })
   await reenterScheduler(db, task.id)
-  await runTask({ taskId: task.id, db, appHome, opencodeCmd: stubOpencode })
+  await runTask({ taskId: task.id, db, appHome, binaryOverride: stubOpencode })
 
   const designerRows = await db
     .select()
@@ -356,7 +356,7 @@ describe('review-iterate rerun drops prior clarify Q&A from the prompt', () => {
       taskId: h.taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: h.stubOpencode,
+      binaryOverride: h.stubOpencode,
     })
 
     const designerRuns = await h.db

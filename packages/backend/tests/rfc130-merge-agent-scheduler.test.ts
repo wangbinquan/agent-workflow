@@ -191,7 +191,7 @@ describe('RFC-130 §6.2 — merge agent scheduler wiring (real conflict, real di
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', shim],
+        binaryOverride: ['bun', 'run', shim],
         maxConcurrentNodes: 4,
       }),
     )
@@ -221,7 +221,7 @@ describe('RFC-130 §6.2 — merge agent scheduler wiring (real conflict, real di
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', shim],
+        binaryOverride: ['bun', 'run', shim],
         maxConcurrentNodes: 4,
       }),
     )

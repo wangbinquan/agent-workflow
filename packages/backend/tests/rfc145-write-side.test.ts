@@ -99,7 +99,12 @@ describe('RFC-145 写侧 — runner 正向声明 failure_code', () => {
       inputs: '{}',
       startedAt: Date.now(),
     })
-    await runTask({ taskId, db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+    await runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
 
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(t.status).toBe('failed')

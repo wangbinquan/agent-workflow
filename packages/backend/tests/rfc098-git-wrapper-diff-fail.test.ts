@@ -177,7 +177,7 @@ describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed'
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', h.shimPath],
+        binaryOverride: ['bun', 'run', h.shimPath],
       }),
     )
 
@@ -235,7 +235,7 @@ describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed'
         taskId,
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', h.shimPath],
+        binaryOverride: ['bun', 'run', h.shimPath],
       }),
     )
 

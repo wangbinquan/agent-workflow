@@ -52,18 +52,6 @@ export interface SystemAgentSeedFile {
   content: string
 }
 
-/** RFC-282 B1b — transitional guard: buildAgentSpawn is optional on the driver
- *  interface until the legacy methods are deleted; production callers require it. */
-async function buildUnifiedSpawn(
-  driver: RuntimeDriver,
-  ctx: AgentSpawnContext,
-): Promise<AgentSpawnPlan> {
-  if (driver.buildAgentSpawn === undefined) {
-    throw new Error(`runtime driver '${driver.kind}' lacks buildAgentSpawn`)
-  }
-  return driver.buildAgentSpawn(ctx)
-}
-
 export interface SystemAgentRunOptions {
   /** Log/scratch prefix, e.g. 'intent-builder'. */
   feature: string
@@ -102,12 +90,12 @@ export interface SystemAgentRunOptions {
   /** RFC-235: auxiliary ordered Session event capture; never gates business output. */
   eventSink?: SystemAgentEventSinkV1
   log?: Logger
-  /** Optional OpenCode command head (primarily for tests/custom launchers). */
-  opencodeCmd?: readonly string[]
+  /** RFC-282 C1 — TEST-ONLY runtime-neutral command-head override. */
+  binaryOverride?: readonly string[]
   /**
    * RFC-282 B1b (§2.1b) — ctx-level seam replacing the old `buildPlan` escape
    * hatch: an adapter may customize the assembly INPUT, never the output. The
-   * assembly itself always runs through `driver.buildAgentSpawn`, so the
+   * assembly itself always runs through `driver.buildSpawn`, so the
    * declared manifest and the actual injection are the same computation —
    * `buildPlan` could return an arbitrary plan and dodge all four guards.
    */
@@ -381,8 +369,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
           opts.testPlanOverride !== undefined
             ? await opts.testPlanOverride(seamArgs)
             : await (async () => {
-                const base = await buildUnifiedSpawn(
-                  driver,
+                const base = await driver.buildSpawn(
                   opts.buildCtx !== undefined ? opts.buildCtx(seamArgs) : defaultUnifiedCtx(),
                 )
                 declaredForResult = base.declared
@@ -435,9 +422,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
             ...(opts.runtimeBinary != null && opts.runtimeBinary !== ''
               ? { runtimeBinary: opts.runtimeBinary }
               : {}),
-            ...(opts.opencodeCmd === undefined
-              ? {}
-              : { legacyHeads: { opencodeCmd: opts.opencodeCmd } }),
+            ...(opts.binaryOverride === undefined ? {} : { binaryOverride: opts.binaryOverride }),
             nodeRunId: `${opts.feature}-system`,
             log,
           }
