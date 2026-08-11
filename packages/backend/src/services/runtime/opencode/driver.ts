@@ -43,11 +43,8 @@ import { observeSystemEvent, parseEvent } from './events'
 import { buildOpencodeSpawn } from './spawn'
 import { buildInlineConfig } from './inlineConfig'
 import { selectShippedPlugins } from './pluginSpec'
-import {
-  machineSkillRoots,
-  opencodeDataDir,
-  type BoundaryCtx,
-} from '@/services/execution/workspaceBoundary'
+import type { BoundaryCtx } from '@/services/execution/workspaceBoundary'
+import { machineSkillRoots, opencodeDataDir } from './boundary'
 import { pickRuntimeHead } from '../head'
 import { toBusinessCtx, toSystemCtx } from '../spawnCtx'
 import { stageSkills } from '../stageSkills'

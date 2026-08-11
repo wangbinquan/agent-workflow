@@ -8,7 +8,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SpawnPlan } from '../types'
-import { renderClaudeBoundary } from '@/services/execution/workspaceBoundary'
+import { renderClaudeBoundary } from './boundary'
 
 export interface ClaudeSpawnContext {
   /** Override `['claude']` (tests pass a mock command array). */

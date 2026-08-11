@@ -21,7 +21,7 @@ import {
 import { getRuntimeDriver } from '../src/services/runtime'
 import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
 import { buildOpencodeSpawn } from '../src/services/runtime/opencode/spawn'
-import { machineSkillRoots, opencodeDataDir } from '../src/services/execution/workspaceBoundary'
+import { machineSkillRoots, opencodeDataDir } from '../src/services/runtime/opencode/boundary'
 import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
 import { toClaudeAgents } from '../src/services/runtime/claudeCode/inject'
 import { renderClaudeMcpInjection } from '../src/services/execution/agentInjection'

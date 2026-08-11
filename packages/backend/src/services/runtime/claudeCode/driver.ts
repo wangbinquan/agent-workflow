@@ -53,12 +53,8 @@ import { listClaudeModels } from './models'
 import { captureClaudeSessions } from './sessionCapture'
 import { claudeBusinessGate, claudeToolsValue } from './permissionMap'
 import { gitMetaDirsFor } from '@/util/git'
-import {
-  claudeExpressibleAuthorDirs,
-  claudeWriteBoundaryAvailability,
-  scanSiblingTaskRoots,
-  toolchainCacheDirs,
-} from '@/services/execution/workspaceBoundary'
+import { scanSiblingTaskRoots, toolchainCacheDirs } from '@/services/execution/workspaceBoundary'
+import { claudeExpressibleAuthorDirs, claudeWriteBoundaryAvailability } from './boundary'
 import {
   renderClaudeManagedSkillAttachments,
   stageClaudeWorktreeAgents,

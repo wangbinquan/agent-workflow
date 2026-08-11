@@ -105,13 +105,13 @@ const CONVERSION_LOCKS: readonly ConversionLock[] = [
   {
     face: 'boundary-opencode',
     fn: 'composeOpencodeBoundary',
-    definedIn: 'services/execution/workspaceBoundary.ts',
+    definedIn: 'services/runtime/opencode/boundary.ts',
     callers: ['services/runtime/opencode/inlineConfig.ts'],
   },
   {
     face: 'boundary-claude',
     fn: 'composeClaudeBoundarySettings',
-    definedIn: 'services/execution/workspaceBoundary.ts',
+    definedIn: 'services/runtime/claudeCode/boundary.ts',
     callers: [],
   },
 ]

@@ -27,7 +27,8 @@ import {
   renderOpencodeMcpInjection,
 } from '@/services/execution/agentInjection'
 import { buildPluginSpecArray } from './pluginSpec'
-import { composeOpencodeBoundary, type BoundaryCtx } from '@/services/execution/workspaceBoundary'
+import type { BoundaryCtx } from '@/services/execution/workspaceBoundary'
+import { composeOpencodeBoundary } from './boundary'
 
 export {
   renderOpencodeAgentEntry as buildInlineAgentEntry,

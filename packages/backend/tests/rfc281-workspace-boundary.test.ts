@@ -17,20 +17,26 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Paths } from '@/util/paths'
 import { resolve } from 'node:path'
+// RFC-282 C4 — import paths follow the per-runtime split; every assertion
+// below is byte-unchanged (golden table: 断言内容一字不改).
+import {
+  resolveBoundaryMounts,
+  scanSiblingTaskRoots,
+  toolchainCacheDirs,
+  type BoundaryCtx,
+} from '../src/services/execution/workspaceBoundary'
+import {
+  composeOpencodeBoundary,
+  machineSkillRoots,
+  opencodeDataDir,
+} from '../src/services/runtime/opencode/boundary'
 import {
   claudeExpressibleAuthorDirs,
-  machineSkillRoots,
-  resolveBoundaryMounts,
-  opencodeDataDir,
   claudeWriteBoundaryAvailability,
   composeClaudeBoundarySettings,
   isClaudeRuleExpressible,
-  scanSiblingTaskRoots,
-  toolchainCacheDirs,
   renderClaudeBoundary,
-  composeOpencodeBoundary,
-  type BoundaryCtx,
-} from '../src/services/execution/workspaceBoundary'
+} from '../src/services/runtime/claudeCode/boundary'
 
 const CTX: BoundaryCtx = {
   taskMounts: ['/home/aw/iso/T1/R1'],
