@@ -18,7 +18,7 @@ import { getAgent } from './helpers/resourceLookup'
 import { createMcp } from '../src/services/mcp'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'
 import { resolveDependsClosure } from '../src/services/agentDeps'
-import { buildInlineConfig } from '../src/services/runner'
+import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
 import { DISPATCH_CALL_POLICY } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

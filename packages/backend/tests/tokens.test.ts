@@ -4,7 +4,7 @@
 // behavior is covered indirectly by scheduler.test.ts.
 
 import { describe, expect, test } from 'bun:test'
-import { accumulateTokens } from '../src/services/runner'
+import { accumulateTokens } from '../src/services/runtime/opencode/events'
 
 interface Acc {
   input: number

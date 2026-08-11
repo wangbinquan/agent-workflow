@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
-import { buildInlineAgentEntry, buildInlineConfig } from '../src/services/runner'
+import { buildInlineAgentEntry, buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
 import type { RuntimeProfile } from '../src/services/runtimeRegistry'
 
 function mkAgent(overrides: Partial<Agent> = {}): Agent {

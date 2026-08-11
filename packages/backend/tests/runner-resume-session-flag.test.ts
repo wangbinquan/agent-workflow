@@ -19,7 +19,8 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
-import { buildCommand, type RunNodeOptions } from '../src/services/runner'
+import { buildCommand } from '../src/services/runtime/opencode/spawn'
+import type { RunNodeOptions } from '../src/services/runner'
 
 const AGENT: Agent = {
   id: 'a',

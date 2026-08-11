@@ -7,7 +7,7 @@
 // 7523），max_total_tokens 限额据此判断 → 形同虚设。本测试用 fixture 的真实
 // token 形状作预言，并保留旧扁平/camelCase 兼容用例。链接 RFC-103 design §T3。
 import { describe, expect, test } from 'bun:test'
-import { accumulateTokens } from '../src/services/runner'
+import { accumulateTokens } from '../src/services/runtime/opencode/events'
 
 type Acc = Parameters<typeof accumulateTokens>[1]
 function freshAcc(): Acc {

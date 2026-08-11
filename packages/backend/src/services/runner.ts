@@ -84,6 +84,7 @@ import {
   observationFromClaudeInit,
   observationFromInventory,
   verifyStartup,
+  type StartupObservation,
   type StartupVerificationRecord,
 } from './execution/startupVerification'
 import { runAgentProcess } from './execution/agentProcess'
@@ -1821,17 +1822,26 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // an "unavailable" record would flag every followup as "cannot verify"
     // (systematic noise). Skip recording when opencode has no observation
     // opportunity by design; claude captures its init inline every time.
-    const opencodeHasNoObservation = driver.readInventory !== undefined && !wantsInventory
+    // RFC-282 C2 — the driver's STATIC capabilities replace the
+    // readInventory-presence proxy (a third runtime silently fell into
+    // the claude branch). P1-7: the fresh-run guard stays FIRST — flipping the
+    // order re-creates the followup "cannot verify" noise (RFC-280 P2-E).
+    const caps = driver.capabilities
+    const observationSkippedByDesign = caps.observationRequiresFreshRun && !wantsInventory
     let startupVerificationJson: string | null = null
-    if (
-      injectionDeclared !== null &&
-      declaredHasContent(injectionDeclared) &&
-      !opencodeHasNoObservation
-    ) {
-      const observation =
-        driver.readInventory !== undefined
-          ? observationFromInventory(capturedInventorySnapshot)
-          : observationFromClaudeInit(capturedStartupInventory)
+    if (declaredHasContent(injectionDeclared) && !observationSkippedByDesign) {
+      let observation: StartupObservation
+      switch (caps.startupObservation) {
+        case 'inventory-file':
+          observation = observationFromInventory(capturedInventorySnapshot)
+          break
+        case 'init-event':
+          observation = observationFromClaudeInit(capturedStartupInventory)
+          break
+        case 'none':
+          observation = { state: 'unavailable', reason: 'runtime-has-no-observation' }
+          break
+      }
       const verification = verifyStartup(injectionDeclared, observation)
       const record: StartupVerificationRecord = {
         declared: injectionDeclared,
@@ -2186,12 +2196,6 @@ export function pumpLines(
 // modules, no runner.ts import → no module-init cycle). Re-export the public
 // surface so existing import sites (tests, memoryDistiller) keep resolving from
 // './runner'.
-// eslint-disable-next-line no-restricted-imports -- RFC282_IMPORT_EXCEPTIONS(C0): re-export 洗白通道，C0 拆除
-export { accumulateTokens, extractTextFromEvent, inferEventKind } from './runtime/opencode/events'
-// eslint-disable-next-line no-restricted-imports -- RFC282_IMPORT_EXCEPTIONS(C0): re-export 洗白通道，C0 拆除
-export { buildCommand } from './runtime/opencode/spawn'
 // RFC-143 PR-4: the OPENCODE_CONFIG_CONTENT assembly moved to
 // ./runtime/opencode/inlineConfig.ts so the opencode driver's buildBusinessSpawn
 // can import it cycle-free. Same re-export contract as above.
-// eslint-disable-next-line no-restricted-imports -- RFC282_IMPORT_EXCEPTIONS(C0): re-export 洗白通道，C0 拆除
-export { buildInlineAgentEntry, buildInlineConfig } from './runtime/opencode/inlineConfig'

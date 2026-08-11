@@ -186,7 +186,9 @@ describe('RFC-199 strict workflow validation targets', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'workflow.validator.ts'),
       'utf8',
     )
-    const emissions = [...source.matchAll(/^\s+code: '[^']+',/gm)]
+    // RFC-282 B3: two plugin-disabled emissions now spell their code via the
+    // policy-table constant — count identifier-shaped codes as emissions too.
+    const emissions = [...source.matchAll(/^\s+code: (?:'[^']+'|[A-Z][A-Z0-9_]*),/gm)]
     // Release hardening adds duplicate-node-id plus malformed loop-condition
     // emissions; RFC-199 B5 adds the fixed review-input port, conflict and
     // mirror-mismatch emissions; RFC-228 adds MCP closure failures; RFC-236

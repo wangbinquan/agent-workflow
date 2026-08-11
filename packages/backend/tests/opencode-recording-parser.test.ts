@@ -16,7 +16,11 @@
 import { describe, test, expect } from 'bun:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { accumulateTokens, extractTextFromEvent, inferEventKind } from '../src/services/runner'
+import {
+  accumulateTokens,
+  extractTextFromEvent,
+  inferEventKind,
+} from '../src/services/runtime/opencode/events'
 import { extractLastEnvelope, parseEnvelope } from '../src/services/envelope'
 
 const FIXTURE_DIR = resolve(import.meta.dir, 'fixtures', 'opencode-recordings')

@@ -21,9 +21,27 @@ const DRIVERS: Record<RuntimeKind, RuntimeDriver> = {
   'claude-code': claudeCodeDriver,
 }
 
-/** Look up the driver for a (frozen) runtime kind. Unregistered → opencode. */
+/**
+ * Look up the driver for a (frozen) runtime kind — EXECUTION paths
+ * (spawn / probe / capture). RFC-282 C2（决策 13）: an unknown kind throws
+ * loudly instead of silently running as opencode (a corrupt or future
+ * runtime value used to be executed by the wrong driver with zero signal).
+ * Read/display paths that must survive a dirty row use `tryGetRuntimeDriver`.
+ */
 export function getRuntimeDriver(kind: RuntimeKind): RuntimeDriver {
-  return DRIVERS[kind] ?? opencodeDriver
+  const driver = DRIVERS[kind]
+  if (driver === undefined) {
+    throw new Error(
+      `unknown runtime kind '${String(kind)}' — no registered driver (RFC-282 决策 13)`,
+    )
+  }
+  return driver
+}
+
+/** Read/display-path lookup: null for an unknown kind so one dirty DB row
+ *  degrades that row instead of 500-ing the whole page (设计门 P2-1). */
+export function tryGetRuntimeDriver(kind: string | null | undefined): RuntimeDriver | null {
+  return kind != null && isKnownRuntimeKind(kind) ? DRIVERS[kind] : null
 }
 
 /**

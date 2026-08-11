@@ -190,20 +190,6 @@ const REEXPORT_RE =
  *  empty = 完工判据 1. */
 const RFC282_IMPORT_EXCEPTIONS: readonly { file: string; importText: string }[] = [
   {
-    file: 'services/runner.ts',
-    importText:
-      "export { accumulateTokens, extractTextFromEvent, inferEventKind } from './runtime/opencode/events'",
-  },
-  {
-    file: 'services/runner.ts',
-    importText: "export { buildCommand } from './runtime/opencode/spawn'",
-  },
-  {
-    file: 'services/runner.ts',
-    importText:
-      "export { buildInlineAgentEntry, buildInlineConfig } from './runtime/opencode/inlineConfig'",
-  },
-  {
     file: 'services/runtimeRegistry.ts',
     importText: "import { CLAUDE_PLATFORM_OWNED_FLAGS } from '@/services/runtime/claudeCode/spawn'",
   },

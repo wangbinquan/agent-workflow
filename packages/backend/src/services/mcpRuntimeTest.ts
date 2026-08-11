@@ -64,6 +64,7 @@ import type { StartupVerificationResult } from '@agent-workflow/shared'
 import {
   observationFromClaudeInit,
   observationFromInventory,
+  type StartupObservation,
   verifyStartup,
 } from '@/services/execution/startupVerification'
 import {
@@ -2570,7 +2571,7 @@ export class McpRuntimeTestService {
                     name: runtime.row.configDirName ?? protocolDefaults.name,
                   },
                   runtimeBinary: runtime.binary,
-                  wantsInventory: runtime.driver.readInventory !== undefined,
+                  wantsInventory: runtime.driver.capabilities.startupObservation === 'inventory-file',
                   ...runtime.driver.mcpTestSessionReference?.({
                     turnSeq: turn.seq,
                     nativeSessionId: session.runtimeSessionId,
@@ -2662,14 +2663,24 @@ export class McpRuntimeTestService {
     if (result.status === 'ok' && this.deps.runFn === undefined) {
       const driver = getRuntimeDriver(session.runtimeProtocol)
       const turnRunRootForRead = join(session.scratchRoot, 'run', 'turns', turn.id)
-      const observation =
-        driver.readInventory !== undefined
-          ? observationFromInventory(
-              await driver
-                .readInventory({ runRoot: turnRunRootForRead, nodeKind: 'agent-single' })
-                .catch(() => null),
-            )
-          : observationFromClaudeInit(result.startupInventory ?? null)
+      // RFC-282 C2 — observation source from the driver's static declaration
+      // (the presence-proxy sent a third runtime down the claude branch).
+      let observation: StartupObservation
+      switch (driver.capabilities.startupObservation) {
+        case 'inventory-file':
+          observation = observationFromInventory(
+            await driver
+              .readInventory?.({ runRoot: turnRunRootForRead, nodeKind: 'agent-single' })
+              .catch(() => null),
+          )
+          break
+        case 'init-event':
+          observation = observationFromClaudeInit(result.startupInventory ?? null)
+          break
+        case 'none':
+          observation = { state: 'unavailable', reason: 'runtime-has-no-observation' }
+          break
+      }
       if (result.declared === undefined) {
         throw new Error('mcp-test declared manifest missing from run result (assembly seam broken)')
       }

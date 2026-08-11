@@ -26,7 +26,7 @@ import {
   withRuntimeProbeConfigFence,
 } from '@/services/runtimeRegistry'
 import type { RuntimeKind } from '@/services/runtime'
-import { getRuntimeDriver } from '@/services/runtime'
+import { tryGetRuntimeDriver } from '@/services/runtime'
 import { smokeRuntime as productionSmokeRuntime, type SmokeResult } from '@/services/runtimeSmoke'
 import { getMcpRuntimeTestService, isRuntimeMcpTestEligible } from '@/services/mcpRuntimeTest'
 import { Paths } from '@/util/paths'
@@ -104,7 +104,9 @@ function resolveRuntimeBinary(
 ): string {
   // RFC-143: custom binaryPath wins, else the driver's default (config path /
   // built-in name) — one source, no re-hardcoded per-protocol config-key pick.
-  return row.binaryPath ?? getRuntimeDriver(row.protocol).defaultBinary(cfg)[0]!
+  // RFC-282 C2（P2-1）— display path: a dirty protocol on one row degrades to
+  // its stored binaryPath / protocol label instead of 500-ing the whole list.
+  return row.binaryPath ?? tryGetRuntimeDriver(row.protocol)?.defaultBinary(cfg)[0] ?? row.protocol
 }
 
 /**
@@ -186,10 +188,22 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
           // here (opencode-only installs keep the claude-code builtin enabled)
           // and the homepage polls every 60s — the response already carries the
           // failure, so per-probe warns would just flood the log (D5/§6).
-          const probe = await getRuntimeDriver(row.protocol).probe(binary, {
-            timeoutMs,
-            quiet: true,
-          })
+          // RFC-282 C2（P2-1）— status list: an unknown-protocol row reports
+          // itself unavailable instead of rejecting the whole Promise.all.
+          const rowDriver = tryGetRuntimeDriver(row.protocol)
+          const probe =
+            rowDriver === null
+              ? {
+                  binary,
+                  version: null,
+                  compatible: false,
+                  ran: false,
+                  incompatibleReason: `unknown runtime protocol '${row.protocol}'`,
+                }
+              : await rowDriver.probe(binary, {
+                  timeoutMs,
+                  quiet: true,
+                })
           const availabilityState =
             probe.ran === true
               ? probe.compatible

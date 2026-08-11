@@ -36,7 +36,11 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { detectEnvelopeKind, extractLastEnvelope, parseEnvelope } from '@/services/envelope'
-import { accumulateTokens, extractTextFromEvent, inferEventKind } from '@/services/runner'
+import {
+  accumulateTokens,
+  extractTextFromEvent,
+  inferEventKind,
+} from '@/services/runtime/opencode/events'
 import { resolveAutoApproveFlag } from '@/services/runtime/opencode/spawn'
 import { probeOpencode } from '@/util/opencode'
 

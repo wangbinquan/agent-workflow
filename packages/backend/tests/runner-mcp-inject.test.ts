@@ -15,7 +15,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Agent, Mcp } from '@agent-workflow/shared'
-import { buildInlineConfig } from '../src/services/runner'
+import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
 
 function agent(name: string): Agent {
   return {
