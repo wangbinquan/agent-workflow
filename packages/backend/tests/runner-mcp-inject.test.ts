@@ -175,13 +175,16 @@ describe('RFC-028 buildInlineConfig MCP injection', () => {
     expect(serialized).not.toContain('"env":{')
   })
 
-  test('source-code lock: buildInlineConfig emits the opencode wire names', () => {
+  test('source-code lock: the unified injection layer emits the opencode wire names', () => {
     // Locks the WHY of the test above: a reader who refactors the inline-config
     // assembly can grep for these literal strings to confirm the translation is
     // in place (the test above only catches it in the output of one snapshot
-    // input). RFC-143 PR-4: definition moved to runtime/opencode/inlineConfig.ts.
+    // input). RFC-143 PR-4 moved the definition to runtime/opencode/
+    // inlineConfig.ts; RFC-280 T1 moved it to the unified injection layer
+    // (services/execution/agentInjection.ts) — the lock follows the single
+    // implementation.
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'inlineConfig.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'agentInjection.ts'),
       'utf-8',
     )
     expect(src).toContain('entry.environment = m.config.env')

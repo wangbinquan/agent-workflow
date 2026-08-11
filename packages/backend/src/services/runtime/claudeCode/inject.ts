@@ -5,36 +5,26 @@
 // Leaf module: imports only shared types → no module-init cycle.
 
 import type { Agent, Mcp } from '@agent-workflow/shared'
+import { renderClaudeMcpInjection } from '@/services/execution/agentInjection'
 import { claudeBusinessGate } from './permissionMap'
 
 /**
  * Translate the platform's MCP rows into Claude Code's `--mcp-config` shape:
  *   { mcpServers: { <name>: { command, args, env } | { type, url, headers } } }
- * Disabled entries + closure duplicates are dropped. Local `command` is an
- * `[cmd, ...args]` array in our schema → split into claude's `command` + `args`.
- * Returns null when nothing enabled remains (caller omits the flag).
+ * Disabled entries + same-id closure duplicates are dropped. Local `command` is
+ * an `[cmd, ...args]` array in our schema → split into claude's `command` +
+ * `args`. Returns null when nothing enabled remains (caller omits the flag).
+ *
+ * RFC-280 T1: partition + entry rendering live in the unified injection layer
+ * (`services/execution/agentInjection.ts`), shared with the opencode paths.
+ * Different-id-same-name now throws there (design-gate P1-1) instead of
+ * silently keeping the first entry.
  */
 export function toClaudeMcpConfig(
   mcps: readonly Mcp[],
 ): { mcpServers: Record<string, Record<string, unknown>> } | null {
-  const servers: Record<string, Record<string, unknown>> = {}
-  for (const m of mcps) {
-    if (m.enabled === false) continue
-    // `constructor` is a valid resource name. Own-property checks prevent the
-    // Object prototype from masquerading as an already-injected registry key.
-    if (Object.hasOwn(servers, m.name)) continue // closure dedupe
-    if (m.type === 'local') {
-      const command = Array.isArray(m.config.command) ? m.config.command : []
-      const entry: Record<string, unknown> = { command: command[0] ?? '', args: command.slice(1) }
-      if (m.config.env !== undefined) entry.env = m.config.env
-      servers[m.name] = entry
-    } else {
-      const entry: Record<string, unknown> = { type: 'http', url: m.config.url }
-      if (m.config.headers !== undefined) entry.headers = m.config.headers
-      servers[m.name] = entry
-    }
-  }
-  return Object.keys(servers).length > 0 ? { mcpServers: servers } : null
+  const { entries } = renderClaudeMcpInjection(mcps)
+  return entries === null ? null : { mcpServers: entries }
 }
 
 /** One `--agents` entry. `model`/`tools` are omitted rather than nulled — an

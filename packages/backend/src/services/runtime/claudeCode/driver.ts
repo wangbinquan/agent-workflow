@@ -7,9 +7,11 @@
 
 import type { StartupInventory } from '../types'
 import type {
+  AgentInjectionSpecV1,
   BusinessNodeSpawnContext,
   NormalizedEvent,
   ProbeOpts,
+  RenderedInjectionV1,
   RuntimeBinaryConfig,
   RuntimeDriver,
   RuntimeModelList,
@@ -19,6 +21,7 @@ import type {
   SystemAgentSpawnContext,
   ListModelsOpts,
 } from '../types'
+import { renderClaudeMcpInjection } from '@/services/execution/agentInjection'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
@@ -30,7 +33,7 @@ import {
   parseUnusableMcpServers,
 } from './events'
 import { buildClaudeSpawn } from './spawn'
-import { toClaudeAgents, toClaudeMcpConfig } from './inject'
+import { toClaudeAgents } from './inject'
 import { pickRuntimeHead } from '../head'
 import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from './probe'
 import { listClaudeModels } from './models'
@@ -62,6 +65,12 @@ export const claudeCodeDriver: RuntimeDriver = {
   // process isolation or any operating-system sandbox guarantee.
   acceptsSandboxCompatibilityMarker: true,
   minVersion: MIN_CLAUDE_CODE_VERSION,
+  // RFC-280 T1 — unified injection render (MCP face). Same partition/render
+  // toClaudeMcpConfig composes internally.
+  renderInjection(spec: AgentInjectionSpecV1): RenderedInjectionV1 {
+    const { entries, declared } = renderClaudeMcpInjection(spec.mcps)
+    return { mcpEntries: entries, declared }
+  },
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
   },
@@ -226,7 +235,10 @@ export const claudeCodeDriver: RuntimeDriver = {
     }
     const declaredAgentNames = claudeAgents === null ? [] : Object.keys(claudeAgents.agents)
     const businessHead = pickRuntimeHead(ctx.runtimeBinary, ctx.runtimeCmd)
-    const claudeMcp = toClaudeMcpConfig(ctx.mcps)
+    // RFC-280 T1: MCP wire entries + declared manifest come from the unified
+    // injection layer (same partition/render toClaudeMcpConfig wraps).
+    const mcpInjection = renderClaudeMcpInjection(ctx.mcps)
+    const claudeMcp = mcpInjection.entries === null ? null : { mcpServers: mcpInjection.entries }
     const plan = buildClaudeSpawn({
       // Codex impl-gate P1-1: claude uses runtimeCmd (test-only), NEVER the
       // opencode-specific opencodeCmd. RFC-112/113: a custom claude fork's binary
@@ -248,7 +260,7 @@ export const claudeCodeDriver: RuntimeDriver = {
             mcpConfigJson: JSON.stringify(claudeMcp),
             // RFC-242 T5: a gated node must allowlist its own MCP namespaces or
             // dontAsk denies every MCP call (measured, see ClaudeSpawnContext).
-            mcpServerNames: Object.keys(claudeMcp.mcpServers),
+            mcpServerNames: mcpInjection.declared.mcpServers,
           }
         : {}),
       ...(claudeAgents !== null ? { agentsJson: JSON.stringify(claudeAgents.agents) } : {}),
@@ -291,15 +303,15 @@ export const claudeCodeDriver: RuntimeDriver = {
           }
         }
       },
-      ...(claudeMcp === null ? {} : { declaredMcpServers: Object.keys(claudeMcp.mcpServers) }),
+      ...(claudeMcp === null ? {} : { declaredMcpServers: mcpInjection.declared.mcpServers }),
       // §4.4: same diagnostic fields the runner used to derive from the (built-
       // for-both-runtimes) inline config — byte-equal log line, claude included.
       diagnostics: {
         inlineModel: rootParams?.model ?? null,
         inlineVariant: rootParams?.variant ?? null,
         inlineTemperature: rootParams?.temperature ?? null,
-        mcpCount: claudeMcp !== null ? Object.keys(claudeMcp.mcpServers).length : 0,
-        mcpKeys: claudeMcp !== null ? Object.keys(claudeMcp.mcpServers) : [],
+        mcpCount: mcpInjection.declared.mcpServers.length,
+        mcpKeys: mcpInjection.declared.mcpServers,
         // 2026-08-09 — this line is the operator's only view of "what actually
         // went into this spawn", so it must not claim an injection that never
         // happens. `pluginCount`/`pluginNames` reported the SELECTED plugins on

@@ -105,6 +105,12 @@ describe('RFC-143 (B) 能力接口', () => {
       kind: 'opencode', // 借用已有 kind 满足 RuntimeKind union（真第三 kind 需 widen union）
       minVersion: '0.0.0',
       parseEvent: () => null,
+      // RFC-280 T1: 统一注入渲染钩子是必选契约——第三 runtime 实现者在这里被
+      // 编译器强制接上（与本测试"编译期证明接口完备"的意图一致）。
+      renderInjection: () => ({
+        mcpEntries: null,
+        declared: { mcpServers: [], skippedDisabledMcps: [] },
+      }),
       buildSpawn: async () => ({ cmd: ['mock'], env: {} }),
       buildBusinessSpawn: async (ctx) => {
         spawnCalls.push(ctx.agent.name)

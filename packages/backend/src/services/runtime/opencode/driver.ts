@@ -6,11 +6,13 @@
 // extracted logic stays byte-identical to the pre-RFC-111 runner.ts.
 
 import type {
+  AgentInjectionSpecV1,
   BusinessNodeSpawnContext,
   DistillSessionCaptureContext,
   InventoryReadContext,
   NormalizedEvent,
   ProbeOpts,
+  RenderedInjectionV1,
   RuntimeBinaryConfig,
   RuntimeDriver,
   RuntimeModelList,
@@ -21,6 +23,7 @@ import type {
   SystemAgentSpawnContext,
   ListModelsOpts,
 } from '../types'
+import { renderOpencodeMcpInjection } from '@/services/execution/agentInjection'
 import { DEFAULT_CONFIG_DIR_PROFILE, type InventorySnapshot } from '@agent-workflow/shared'
 import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveCapture'
 import { mkdirSync } from 'node:fs'
@@ -51,6 +54,13 @@ export const opencodeDriver: RuntimeDriver = {
     buildSpawn: buildOpencodeMcpTestSpawn,
   },
   minVersion: null,
+  // RFC-280 T1 — unified injection render (MCP face). Same functions
+  // buildInlineConfig composes internally; exposed so the unified executor
+  // (T4/T7) can render without runtime-kind branches.
+  renderInjection(spec: AgentInjectionSpecV1): RenderedInjectionV1 {
+    const { entries, declared } = renderOpencodeMcpInjection(spec.mcps)
+    return { mcpEntries: entries, declared }
+  },
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
   },

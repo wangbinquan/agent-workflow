@@ -30,8 +30,33 @@ import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveC
 // so a VALUE import here would close a module-init cycle. RuntimeProfile is the
 // RFC-113 resolved param set threaded through BusinessNodeSpawnContext.
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
+// RFC-280 T1 — unified injection layer shapes (type-only; agentInjection is a
+// leaf module, see its header).
+import type { DeclaredManifestV1 } from '@/services/execution/agentInjection'
 
 export type RuntimeKind = 'opencode' | 'claude-code'
+
+/**
+ * RFC-280 T1 — input to the unified injection render hook. T1 carries the MCP
+ * face only; later RFC-280 tasks add agent definitions, skills, plugins and
+ * subagents so the unified executor can render a full spawn without
+ * runtime-kind branches.
+ */
+export interface AgentInjectionSpecV1 {
+  mcps: readonly Mcp[]
+}
+
+/** RFC-280 T1 — output of the unified injection render hook. */
+export interface RenderedInjectionV1 {
+  /**
+   * Per-runtime MCP wire entries keyed by runtime name — opencode:
+   * `OPENCODE_CONFIG_CONTENT.mcp`; claude: `--mcp-config.mcpServers`.
+   * `null` when nothing enabled remains (claude callers omit the flag).
+   */
+  mcpEntries: Record<string, Record<string, unknown>> | null
+  /** Declared-injection manifest — input to startup verification (T3). */
+  declared: DeclaredManifestV1
+}
 
 /** Where an injected skill comes from (RFC-004; moved here from runner.ts so
  *  drivers can type their skill inputs without a runner import — RFC-143 PR-4;
@@ -508,6 +533,15 @@ export interface RuntimeDriver {
    * owns the entire runtime-specific assembly; the runner stays kind-blind.
    */
   buildBusinessSpawn(ctx: BusinessNodeSpawnContext): Promise<SpawnPlan>
+  /**
+   * RFC-280 T1 — the unified injection-layer render hook. T1 covers the MCP
+   * face (partition + per-runtime wire entries + declared manifest); later
+   * RFC-280 tasks extend the spec to skills/plugins/subagents and route every
+   * spawn path through it. `buildBusinessSpawn` already consumes the same
+   * underlying functions — this hook exposes them per-driver so the unified
+   * executor (T4/T7) can render without knowing the runtime kind.
+   */
+  renderInjection(spec: AgentInjectionSpecV1): RenderedInjectionV1
   /**
    * RFC-143 — the argv head this runtime spawns by default: its per-runtime
    * config path (config.opencodePath / claudeCodePath) else the built-in name.

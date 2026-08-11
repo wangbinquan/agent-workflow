@@ -6,57 +6,33 @@
 // inject / runner-plugin-inject / mcp-end-to-end) lock the move; runner.ts
 // re-exports this surface so existing import sites keep resolving.
 //
-// Leaf module: imports shared types + the RuntimeProfile TYPE only (type-only,
-// erased at runtime) → no runtime edge back into runner/runtimeRegistry.
+// RFC-280 T1: the per-entry transforms (`buildInlineAgentEntry` /
+// `buildInlineMcpEntry`) and the enabled/duplicate partition now live in the
+// unified injection layer (`services/execution/agentInjection.ts`) — single
+// implementation for every spawn path. This module keeps the opencode
+// inline-config COMPOSITION (agent map + mcp record + plugin array) and
+// re-exports the old names so existing import sites keep resolving.
+// NOTE: the returned object is `JSON.stringify`-ed straight into
+// OPENCODE_CONFIG_CONTENT — never add platform-side fields (e.g. the declared
+// manifest) to it; callers that need the manifest call
+// `renderOpencodeMcpInjection` directly.
+//
+// Leaf module: imports shared types + the unified injection layer (itself a
+// leaf) → no runtime edge back into runner/runtimeRegistry.
 
 import type { Agent, Mcp, Plugin } from '@agent-workflow/shared'
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
+import {
+  renderOpencodeAgentEntry,
+  renderOpencodeMcpInjection,
+} from '@/services/execution/agentInjection'
 import { buildPluginSpecArray } from './pluginSpec'
 
-/** RFC-113: a profile that omits all params (the binary uses its own defaults). */
-export const EMPTY_RUNTIME_PROFILE: RuntimeProfile = {
-  model: null,
-  variant: null,
-  temperature: null,
-  steps: null,
-  maxSteps: null,
-  isSandbox: false,
-}
-
-/**
- * RFC-022: build the inline-agent JSON for one agent. Pulled out so the
- * primary agent and every closure dependent share one definition formula;
- * the only difference is that dependents pass `overrides = {}` so per-node
- * model/variant/temperature tweaks only apply to the selected primary.
- */
-export function buildInlineAgentEntry(
-  agent: Agent,
-  // RFC-113: model/variant/temperature/steps/maxSteps now come from the agent's
-  // RUNTIME (resolved at dispatch), NOT from the agent or a node
-  // override. The caller passes the resolved profile for THIS agent.
-  params: RuntimeProfile = EMPTY_RUNTIME_PROFILE,
-): Record<string, unknown> {
-  const inlineAgent: Record<string, unknown> = {
-    prompt: agent.bodyMd,
-    description: agent.description,
-    // RFC-276: the author's explicit permission map is the only platform
-    // permission overlay. OpenCode's own `--auto` semantics handle all
-    // unspecified operations; the platform no longer adds a global allow/deny.
-    permission: agent.permission,
-    // Platform-only fields live under `options` so opencode passes them through
-    // without trying to parse. The runner doesn't read these back; they exist
-    // for observability when an operator dumps `opencode debug agent`.
-    options: { outputs: agent.outputs },
-  }
-  // RFC-113: emit only the params the runtime actually set (NULL = omit, so the
-  // binary uses its own default — a distinct, preserved profile).
-  if (params.model !== null) inlineAgent.model = params.model
-  if (params.variant !== null) inlineAgent.variant = params.variant
-  if (params.temperature !== null) inlineAgent.temperature = params.temperature
-  if (params.steps !== null) inlineAgent.steps = params.steps
-  if (params.maxSteps !== null) inlineAgent.maxSteps = params.maxSteps // Codex P2-3
-  return inlineAgent
-}
+export {
+  EMPTY_RUNTIME_PROFILE,
+  renderOpencodeAgentEntry as buildInlineAgentEntry,
+  renderOpencodeMcpEntry as buildInlineMcpEntry,
+} from '@/services/execution/agentInjection'
 
 export function buildInlineConfig(
   agent: Agent,
@@ -79,7 +55,7 @@ export function buildInlineConfig(
   plugin?: Array<string | [string, Record<string, unknown>]>
 } {
   const map: Record<string, Record<string, unknown>> = {
-    [agent.name]: buildInlineAgentEntry(agent, paramsByAgent.get(agent.name)),
+    [agent.name]: renderOpencodeAgentEntry(agent, paramsByAgent.get(agent.name)),
   }
   for (const dep of dependents) {
     if (dep.name === agent.name) continue // root would shadow itself; defensive
@@ -87,7 +63,7 @@ export function buildInlineConfig(
     // platform name, so prototype lookup on `{}` would mistake it for an
     // existing entry and silently drop the managed dependent.
     if (Object.hasOwn(map, dep.name)) continue // closure already deduped, but guard anyway
-    map[dep.name] = buildInlineAgentEntry(dep, paramsByAgent.get(dep.name))
+    map[dep.name] = renderOpencodeAgentEntry(dep, paramsByAgent.get(dep.name))
   }
   const out: {
     agent: Record<string, Record<string, unknown>>
@@ -95,47 +71,19 @@ export function buildInlineConfig(
     plugin?: Array<string | [string, Record<string, unknown>]>
   } = { agent: map }
   // RFC-028: emit the mcp record only when at least one ENABLED entry exists.
-  // Disabled entries are skipped entirely to keep the env-var compact AND to
-  // avoid masking a same-name inherited entry from repo .opencode/config.json
+  // Disabled entries are skipped to keep the env-var compact AND to avoid
+  // masking a same-name inherited entry from repo .opencode/config.json
   // — leaving inherited config alone is the v1 stance (docs/OPENCODE_CONFIG.md §6).
-  const mcpMap: Record<string, Record<string, unknown>> = {}
-  for (const m of mcps) {
-    if (m.enabled === false) continue
-    if (Object.hasOwn(mcpMap, m.name)) continue // closure dedupe; prototype names are valid keys
-    mcpMap[m.name] = buildInlineMcpEntry(m)
-  }
-  if (Object.keys(mcpMap).length > 0) out.mcp = mcpMap
+  // RFC-280 T1: the partition/render live in the unified injection layer;
+  // duplicate-name-with-different-id now throws there (design-gate P1-1)
+  // instead of silently keeping the first — the scheduler's exact-identity
+  // fence already blocks that upstream, this is the defensive assert.
+  const mcpRender = renderOpencodeMcpInjection(mcps)
+  if (mcpRender.entries !== null) out.mcp = mcpRender.entries
   // RFC-031: emit the plugin array only when at least one ENABLED entry
   // resolves. RFC-251 moved the encoding rules to `pluginSpec.ts` so all
   // OpenCode assembly paths share one implementation.
   const pluginArr = buildPluginSpecArray(plugins)
   if (pluginArr.length > 0) out.plugin = pluginArr
   return out
-}
-
-/**
- * Translate one DB-shape Mcp into the opencode-wire shape consumed by
- * `OPENCODE_CONFIG_CONTENT.mcp.<name>`:
- *   - Local : `command` array kept verbatim; `env` → `environment`;
- *             `timeoutMs` → `timeout`. **No `cwd` field** (opencode lacks it
- *             — stdio child cwd is taken from the opencode process directory
- *             = our worktree). See docs/OPENCODE_CONFIG.md §3.3.
- *   - Remote: `url` / `headers` / `oauth` kept verbatim; `timeoutMs` → `timeout`.
- *
- * Undefined fields are stripped so the resulting JSON does not include `null`
- * values that opencode's Effect Schema would reject.
- */
-export function buildInlineMcpEntry(m: Mcp): Record<string, unknown> {
-  const entry: Record<string, unknown> = { type: m.type, enabled: m.enabled }
-  if (m.type === 'local') {
-    entry.command = m.config.command
-    if (m.config.env !== undefined) entry.environment = m.config.env
-    if (m.config.timeoutMs !== undefined) entry.timeout = m.config.timeoutMs
-  } else {
-    entry.url = m.config.url
-    if (m.config.headers !== undefined) entry.headers = m.config.headers
-    if (m.config.oauth !== undefined) entry.oauth = m.config.oauth
-    if (m.config.timeoutMs !== undefined) entry.timeout = m.config.timeoutMs
-  }
-  return entry
 }
