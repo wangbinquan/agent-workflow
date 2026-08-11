@@ -122,7 +122,11 @@ describe('RFC-108 T9 — refuse-on-survivor wiring (source-text)', () => {
     expect(taskSrc).toContain("errorSummary: 'live-child-survived'")
   })
 
-  test('runner persists the spawn binary path at spawn', () => {
-    expect(runnerSrc).toContain('spawnBinaryPath: cmd[0]')
+  test('runner persists the spawn binary path at spawn (via the executor onSpawned receipt)', () => {
+    // RFC-280 T7: the pid + binary path are persisted in runAgentProcess's
+    // onSpawned receipt (fired before any output is read), replacing the old
+    // inline `spawnBinaryPath: cmd[0]` write after Bun.spawn.
+    expect(runnerSrc).toContain('spawnBinaryPath: receipt.spawnBinaryPath')
+    expect(runnerSrc).toContain('pid: receipt.pid')
   })
 })

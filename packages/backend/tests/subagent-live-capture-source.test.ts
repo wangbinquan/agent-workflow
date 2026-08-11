@@ -33,9 +33,11 @@ describe('RFC-048 source-layout guards', () => {
     const stmtPattern = /liveCtrl\.abort\(\)\n\s+livePoller\.stop\(\)/
     const stmtMatch = stmtPattern.exec(src)
     expect(stmtMatch).not.toBeNull()
-    // RFC-098 WP-8: the exit wait is the bounded race
-    // `const exitedOutcome = await Promise.race([child.exited..., reapDeadline...])`.
-    const exitedIdx = src.indexOf('const exitedOutcome = await Promise.race([')
+    // RFC-280 T7: the bounded exit wait moved into the unified executor; the
+    // runner's anchor is now the `await runAgentProcess({` call. The lifecycle
+    // contract is unchanged — poller stopped AFTER the run returns and BEFORE
+    // the post-run capture.
+    const exitedIdx = src.indexOf('await runAgentProcess({')
     const captureIdx = src.indexOf('await driver.captureSessions({')
     expect(exitedIdx).toBeGreaterThan(-1)
     expect(captureIdx).toBeGreaterThan(-1)

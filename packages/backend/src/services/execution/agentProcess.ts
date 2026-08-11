@@ -45,7 +45,8 @@ export interface AgentProcessRequest {
   cmd: readonly string[]
   cwd: string
   env: Record<string, string>
-  timeoutMs: number
+  /** Omit for no wall-clock timeout (managedProcess treats undefined as none). */
+  timeoutMs?: number
   termGraceMs?: number
   abortSignal?: AbortSignal
   stdin?: { mode: 'pipe'; data: string } | { mode: 'ignore' }
@@ -92,6 +93,8 @@ export interface AgentProcessResult {
   cleanupFailed?: boolean
   /** exited 后管道未在期限内 EOF（孙进程持有）——exitCode 可信，尾流丢失。 */
   drainTimedOut?: boolean
+  /** 行回调抛错（如落库失败）：子进程已被 escalate，此处携带首个原因。 */
+  pumpError?: string
 }
 
 export class AgentProcessFileError extends Error {
@@ -188,7 +191,7 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
     argv: [...req.cmd],
     cwd: req.cwd,
     env: req.env,
-    timeoutMs: req.timeoutMs,
+    ...(req.timeoutMs !== undefined ? { timeoutMs: req.timeoutMs } : {}),
     ...(req.termGraceMs !== undefined ? { killEscalationGraceMs: req.termGraceMs } : {}),
     signal: controller.signal,
     ...(req.beforeSpawn !== undefined ? { beforeSpawn: req.beforeSpawn } : {}),
@@ -262,5 +265,6 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
     ...(mp.spawnError !== undefined ? { spawnError: mp.spawnError } : {}),
     ...(cleanupFailed ? { cleanupFailed: true } : {}),
     ...(mp.drainTimedOut === true ? { drainTimedOut: true } : {}),
+    ...(mp.pumpError !== undefined ? { pumpError: mp.pumpError } : {}),
   }
 }

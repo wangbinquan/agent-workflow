@@ -39,10 +39,11 @@ const ENV_PWD_SITES = [
 ] as const
 const SPAWN_CWD_SITES = [
   // (file, identifier the Bun.spawn cwd is read from, env expression)
-  ['src/services/runner.ts', 'opts.worktreePath', 'env'],
-  // RFC-280 T4: the distiller no longer Bun.spawns — it routes through the
-  // unified executor, whose managedProcess core is the one spawn site to keep
-  // cwd/env in lock-step for every adapter consumer (smoke/distiller/...).
+  // RFC-280 T7: the runner no longer Bun.spawns — every agent child (business /
+  // system / smoke / distiller / playground) goes through the unified
+  // executor, whose managedProcess core is the ONE spawn site keeping cwd/env
+  // in lock-step. The runner's own PWD contract is verified below (it passes
+  // opts.worktreePath + the driver env straight into runAgentProcess).
   ['src/services/execution/managedProcess.ts', 'req.cwd', 'req.env'],
 ] as const
 
@@ -71,6 +72,16 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
   // RFC-117/RFC-224: the distiller routes through the runtime plan instead of an
   // inline env block. Its isolated worktreeDir is the single cwd handed to both
   // plan construction and Bun.spawn, so buildOpencodeEnv sets the same PWD.
+  test('runner.ts hands opts.worktreePath + the driver env straight to the executor', () => {
+    const src = readFileSync(resolve(import.meta.dir, '..', 'src/services/runner.ts'), 'utf-8')
+    // RFC-280 T7: no direct Bun.spawn; the child runs through runAgentProcess
+    // with cwd = the task worktree and env = the driver-assembled plan env.
+    expect(src).toContain('await runAgentProcess({')
+    expect(src).toContain('cwd: opts.worktreePath,')
+    expect(src).toContain('env,')
+    expect(src).not.toContain('Bun.spawn(')
+  })
+
   test('memoryDistiller.ts passes its isolated worktreeDir into buildSpawn', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src/services/memoryDistiller.ts'),
@@ -101,7 +112,7 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
         const block = m[1]!
         // Only enforce on the opencode spawn (skips git / tar / etc. blocks).
         if (!block.includes(`cwd: ${cwdExpr}`)) continue
-        expect(block).toContain(envExpr === 'env' ? 'env,' : `env: ${envExpr}`)
+        expect(block).toContain(`env: ${envExpr}`)
         asserted = true
       }
       expect(asserted).toBe(true)

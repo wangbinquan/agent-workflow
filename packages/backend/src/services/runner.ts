@@ -86,6 +86,7 @@ import {
   verifyStartup,
   type StartupVerificationRecord,
 } from './execution/startupVerification'
+import { runAgentProcess } from './execution/agentProcess'
 import { NOOP_HANDLE } from './subagentLiveCapture'
 import { setNodeRunStatus, transitionNodeRunStatus } from './lifecycle'
 import {
@@ -98,9 +99,6 @@ import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import { loadRunEnvelopeNonce } from '@/services/nodeRunMint'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
-import { killProcessTree } from '@/util/process'
-import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import {
   claimNewRuntimeSession,
   confirmRuntimeSessionResume,
@@ -1000,148 +998,24 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // env (PWD fix / OPENCODE_CONFIG_DIR+CONTENT / RFC-029 inventory path /
   // RFC-067 git identity) is assembled by the driver — see
   // ./runtime/opencode/spawn.ts for the byte-for-byte construction.
-  const spawnCmd = cmd
-  const trySpawn = (): Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> =>
-    Bun.spawn({
-      ...platformSpawnOptionsForHost(),
-      cmd: spawnCmd,
-      cwd: opts.worktreePath,
-      env,
-      stdout: 'pipe',
-      stderr: 'pipe',
-      // RFC-111 D12: claude receives the prompt over stdin (avoids argv E2BIG);
-      // opencode passes it positionally and ignores stdin.
-      stdin: plan.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
-      // RFC-098 WP-8 (audit S-15): POSIX setsid() — the child becomes its own
-      // process-group leader, so killTree's `process.kill(-pid, sig)` reaches
-      // grandchildren (docker MCP / shell-tool descendants) that a single-pid
-      // SIGTERM would orphan with the write end of our pipes still open.
-      detached: true,
-    })
-  let child: ReturnType<typeof trySpawn>
-  try {
-    child = trySpawn()
-  } catch (err) {
-    // RFC-111 (Codex impl-gate P1-2): a missing / unspawnable runtime binary
-    // (an optional runtime not installed, a bad path) throws ENOENT here. Mark
-    // the node failed cleanly instead of throwing out of runNode and stranding
-    // the row at 'running'. The spawn driver's temp dir is cleaned up.
-    const errorMessage = `spawn ${runtime} failed: ${explainSpawnEnoent(
-      err instanceof Error ? err.message : String(err),
-      { argv0: spawnCmd[0], cwd: opts.worktreePath },
-    )}`
-    log.warn('runtime-spawn-failed', {
-      nodeRunId: opts.nodeRunId,
-      runtime,
-      errorMessage,
-    })
-    await finalizePlan()
-    releaseHeldRuntimeLease()
-    await setNodeRunStatus({
-      db: opts.db,
-      nodeRunId: opts.nodeRunId,
-      to: 'failed',
-      allowedFrom: ['running', 'pending'],
-      reason: 'runtime-spawn-failed',
-      extra: {
-        finishedAt: Date.now(),
-        errorMessage,
-      },
-    })
-    return {
-      status: 'failed',
-      exitCode: null,
-      outputs: {},
-      tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
-      prompt,
-      errorMessage,
-    }
-  }
-
-  let childFullyReaped = false
+  //
+  // RFC-280 T7: the child's ENTIRE lifecycle (spawn / stdin / pid receipt /
+  // timeout+cancel / TERM→KILL→reap / bounded drain) is the unified agent
+  // executor's job now (services/execution/agentProcess.ts → managedProcess,
+  // the one process-reliability authority). This function keeps only the
+  // business layer: event persistence, runtime-lease claiming, envelope
+  // parsing, live subagent capture, and final status resolution.
   let preserveLiveRuntimeState = false
-  let normalSpawnPathCompleted = false
   let postSpawnFailed = false
+  // Process-orthogonal cleanup only (live poller / signal listener); the child
+  // kill/reap lifecycle is owned by runAgentProcess, not these hooks.
   const spawnedCleanupHooks: Array<() => void> = []
-  const spawnedPumps: LinePump[] = []
+  let aborted = false
+  let timedOut = false
+  const graceMs = opts.killEscalationGraceMs ?? KILL_ESCALATION_GRACE_MS
   try {
-    // RFC-111 D12: stream the prompt into the child's stdin then close it (claude).
-    if (plan.stdin?.mode === 'pipe') {
-      const sink = child.stdin as { write: (s: string) => void; end: () => void } | undefined
-      if (sink !== undefined) {
-        sink.write(plan.stdin.data)
-        sink.end()
-      }
-    }
-
-    if (typeof child.pid === 'number') {
-      // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside pid
-      // so the stale-process reaper can match a live pid against THIS specific
-      // binary, not a fuzzy regex — telling "our child still alive" from a recycled pid.
-      await opts.db
-        .update(nodeRuns)
-        .set({ pid: child.pid, spawnBinaryPath: cmd[0] })
-        .where(eq(nodeRuns.id, opts.nodeRunId))
-    }
-
-    // 5. Wire up cancellation + timeout.
-    //
-    // RFC-098 WP-8 (audit S-15): both paths now go through the SIGTERM →
-    // grace → SIGKILL escalation (group-kill first, see killTree) instead of
-    // a single fire-and-forget SIGTERM, and arm a final reap deadline
-    // (grace + margin) so a child that ignores even SIGKILL cannot wedge the
-    // runner forever (see §7 below).
-    let aborted = false
-    let timedOut = false
-    const graceMs = opts.killEscalationGraceMs ?? KILL_ESCALATION_GRACE_MS
-
-    let reapDeadlineTimer: ReturnType<typeof setTimeout> | null = null
-    spawnedCleanupHooks.push(() => {
-      if (reapDeadlineTimer !== null) clearTimeout(reapDeadlineTimer)
-    })
-    let reapDeadlineFire: (() => void) | undefined
-    const reapDeadline = new Promise<'deadline'>((res) => {
-      reapDeadlineFire = () => res('deadline')
-    })
-    const armReapDeadline = (): void => {
-      if (reapDeadlineTimer !== null) return
-      reapDeadlineTimer = setTimeout(() => reapDeadlineFire?.(), graceMs + FINAL_REAP_MARGIN_MS)
-      reapDeadlineTimer.unref()
-    }
-
-    // Initializer cast keeps TS from flow-narrowing to `null` at the §7 read —
-    // the assignment only ever happens inside the abort/timeout closures.
-    let escalation = null as { cancel: () => void } | null
-    spawnedCleanupHooks.push(() => escalation?.cancel())
-    const startKill = (): void => {
-      if (escalation === null) {
-        escalation = armKillEscalation(child, log, graceMs)
-      }
-      armReapDeadline()
-    }
-
-    const onAbort = (): void => {
-      aborted = true
-      startKill()
-    }
-    if (opts.signal) {
-      if (opts.signal.aborted) onAbort()
-      else opts.signal.addEventListener('abort', onAbort)
-      spawnedCleanupHooks.push(() => opts.signal?.removeEventListener('abort', onAbort))
-    }
-
-    const timeoutHandle =
-      opts.timeoutMs !== undefined
-        ? setTimeout(() => {
-            timedOut = true
-            startKill()
-          }, opts.timeoutMs)
-        : null
-    spawnedCleanupHooks.push(() => {
-      if (timeoutHandle !== null) clearTimeout(timeoutHandle)
-    })
-
     // 6. Stream stdout + stderr into node_run_events.
+
     //    `--format json` makes opencode emit one JSON event per line; the
     //    agent's text reply (which carries the <workflow-output> envelope)
     //    is inside the `part.text` field of `text` events. We accumulate
@@ -1200,7 +1074,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       })
     }
 
-    const stdoutPump = pumpLines(child.stdout, async (line) => {
+    const onStdoutLine = async (line: string): Promise<void> => {
       if (declaredMcpServers.size > 0 && !mcpInventorySeen) {
         // Null = this line is not the inventory; keep looking. A non-null answer
         // is the one-shot startup inventory, so stop re-parsing every line after
@@ -1298,8 +1172,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         appendAgentText(line)
         broadcastParentRunning()
       }
-    })
-    spawnedPumps.push(stdoutPump)
+    }
 
     // RFC-048: spin up the subagent live capture poller alongside the child.
     // It mirrors opencode's child-session SQLite into `node_run_events` on a
@@ -1344,6 +1217,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         },
       }) ?? NOOP_HANDLE
     spawnedCleanupHooks.push(() => livePoller.stop())
+    // A one-shot binding so onStderrLine can reference it before its decl below.
 
     const persistStderrLine = async (line: string): Promise<void> => {
       await opts.db.insert(nodeRunEvents).values({
@@ -1373,74 +1247,87 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       }
     }
 
-    const stderrPump = pumpLines(child.stderr, persistStderrLine)
-    spawnedPumps.push(stderrPump)
+    // 7. Run the child through the unified executor (RFC-280 T7). It owns
+    //    spawn / stdin / pid receipt / timeout+cancel / TERM→KILL→reap / bounded
+    //    drain — the rfc098 process-governance invariants live in managedProcess
+    //    now. `keepExitedOnDrainTimeout` (agent domain default) means a
+    //    descendant holding our pipe past the drain deadline degrades to
+    //    evidence loss on a finished run, not a relabel; a child that survives
+    //    SIGKILL past the reap deadline comes back `unreaped`.
     let streamPumpFailed = false
-    const settlePump = async (done: Promise<void>): Promise<void> => {
-      try {
-        await done
-      } catch {
-        streamPumpFailed = true
-        startKill()
-      }
-    }
-    const pumpsSettled = Promise.all([
-      settlePump(stdoutPump.done),
-      settlePump(stderrPump.done),
-    ]).then(() => {})
-
-    // 7. Wait for exit + drain streams — bounded (RFC-098 WP-8, audit S-15).
-    //    The reap deadline (grace + margin) is armed at the first kill signal:
-    //    a child that survives the SIGTERM→SIGKILL escalation past it is
-    //    abandoned — status='failed' / errorMessage='child-unkillable', stream
-    //    readers canceled, child unref'd — so neither the daemon nor bun test
-    //    can hang on an unkillable subprocess. The deadline is re-armed at
-    //    normal exit too, bounding the pump drain below: a detached descendant
-    //    that inherited our pipe FDs would otherwise keep the pumps from ever
-    //    seeing EOF (the second wedge point S-15 called out).
-    const exitedOutcome = await Promise.race([
-      child.exited.then((code) => ({ kind: 'exited' as const, code })),
-      reapDeadline.then(() => ({ kind: 'unkillable' as const })),
-    ])
-    const childUnkillable = exitedOutcome.kind === 'unkillable'
-    const exitCode = exitedOutcome.kind === 'exited' ? exitedOutcome.code : null
-    childFullyReaped = !childUnkillable
+    const runResult = await runAgentProcess({
+      cmd,
+      cwd: opts.worktreePath,
+      env,
+      ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
+      termGraceMs: graceMs,
+      ...(opts.signal !== undefined ? { abortSignal: opts.signal } : {}),
+      ...(plan.stdin?.mode === 'pipe' ? { stdin: plan.stdin } : {}),
+      onSpawned: async (receipt: { pid: number; spawnedAt: number; spawnBinaryPath: string }) => {
+        // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside
+        // pid so the stale-process reaper can match a live pid against THIS
+        // specific binary, not a fuzzy regex.
+        await opts.db
+          .update(nodeRuns)
+          .set({ pid: receipt.pid, spawnBinaryPath: receipt.spawnBinaryPath })
+          .where(eq(nodeRuns.id, opts.nodeRunId))
+      },
+      capture: {
+        onStdoutLine: async (line: string) => {
+          try {
+            await onStdoutLine(line)
+          } catch (err) {
+            // A persist failure makes the run's output unrecordable — the
+            // historical `settlePump` behavior killed the child; keep that.
+            streamPumpFailed = true
+            throw err
+          }
+        },
+        onStderrLine: persistStderrLine,
+      },
+      log,
+    })
+    const spawnedPid = runResult.pid
+    const childUnkillable = runResult.outcome === 'unreaped'
+    const spawnFailed = runResult.outcome === 'spawn-failed'
+    aborted = runResult.outcome === 'aborted'
+    timedOut = runResult.outcome === 'timeout'
+    const exitCode = runResult.exitCode
     preserveLiveRuntimeState = childUnkillable
-    escalation?.cancel()
     // RFC-048: stop the live poller before the post-run BFS so no concurrent
-    // SELECT races against the final captureChildSessions read. `abort()` is
-    // idempotent + signal-based; `livePoller.stop()` clears the interval and
-    // closes the readonly handle.
+    // SELECT races against the final captureChildSessions read.
     liveCtrl.abort()
     livePoller.stop()
+    if (spawnFailed) {
+      // RFC-111 (Codex impl-gate P1-2): a missing / unspawnable runtime binary.
+      // Mark the node failed cleanly; the executor already reaped nothing (no
+      // child) and the plan temp dir is cleaned by the finally.
+      const errorMessage = `spawn ${runtime} failed: ${runResult.spawnError ?? 'unknown spawn failure'}`
+      log.warn('runtime-spawn-failed', { nodeRunId: opts.nodeRunId, runtime, errorMessage })
+      await setNodeRunStatus({
+        db: opts.db,
+        nodeRunId: opts.nodeRunId,
+        to: 'failed',
+        allowedFrom: ['running', 'pending'],
+        reason: 'runtime-spawn-failed',
+        extra: { finishedAt: Date.now(), errorMessage },
+      })
+      return {
+        status: 'failed',
+        exitCode: null,
+        outputs: {},
+        tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+        prompt,
+        errorMessage,
+      }
+    }
     if (childUnkillable) {
       log.error('child survived SIGKILL escalation past reap deadline; abandoning', {
         nodeRunId: opts.nodeRunId,
-        pid: child.pid,
+        pid: spawnedPid,
         deadlineMs: graceMs + FINAL_REAP_MARGIN_MS,
       })
-      stdoutPump.cancel()
-      stderrPump.cancel()
-      child.unref()
-    } else {
-      armReapDeadline()
-      const drained = await Promise.race([
-        pumpsSettled.then(() => true),
-        reapDeadline.then(() => false),
-      ])
-      if (!drained) {
-        log.warn('stdout/stderr never hit EOF after exit (descendant holding pipe?); canceling', {
-          nodeRunId: opts.nodeRunId,
-          pid: child.pid,
-        })
-        stdoutPump.cancel()
-        stderrPump.cancel()
-      }
     }
-    await pumpsSettled
-    if (opts.signal) opts.signal.removeEventListener('abort', onAbort)
-    if (timeoutHandle !== null) clearTimeout(timeoutHandle)
-    if (reapDeadlineTimer !== null) clearTimeout(reapDeadlineTimer)
 
     if (!childUnkillable && sessionId !== undefined) {
       try {
@@ -1483,7 +1370,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // RFC-098 WP-8: overrides aborted/timedOut — the operator needs the pid
       // to clean up by hand, and a 'canceled' status would read as a clean stop.
       status = 'failed'
-      errorMessage = `child-unkillable: pid ${child.pid} survived SIGTERM→SIGKILL escalation past ${graceMs + FINAL_REAP_MARGIN_MS}ms; abandoned (detached process group left running)`
+      errorMessage = `child-unkillable: pid ${spawnedPid} survived SIGTERM→SIGKILL escalation past ${graceMs + FINAL_REAP_MARGIN_MS}ms; abandoned (detached process group left running)`
     } else if (terminalResultError !== undefined) {
       // The runtime told us WHY it stopped. Report that instead of the generic
       // "no envelope", and treat it as permanent: auth / quota / gateway
@@ -1987,7 +1874,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     if (failureCode !== undefined) result.failureCode = failureCode
     if (sessionId !== undefined) result.sessionId = sessionId
     if (clarifyResult !== undefined) result.clarify = clarifyResult
-    normalSpawnPathCompleted = true
     return result
   } catch (error) {
     // Defer the durable failure stamp until after `finally` has reaped the
@@ -1995,6 +1881,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     postSpawnFailed = true
     void error
   } finally {
+    // RFC-280 T7: process reaping is owned by the unified executor (it returns
+    // only after reap, or after determining the child is unkillable). These
+    // hooks are process-orthogonal (live poller stop / signal listener); the
+    // child object no longer exists at this layer.
     for (const cleanup of spawnedCleanupHooks.reverse()) {
       try {
         cleanup()
@@ -2002,20 +1892,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // Every hook is best-effort and idempotent.
       }
     }
-    if (!normalSpawnPathCompleted) {
-      for (const pump of spawnedPumps) pump.cancel()
-    }
-    if (!childFullyReaped && !preserveLiveRuntimeState) {
-      childFullyReaped = await terminateAndReapUnexpectedChild(
-        child,
-        log,
-        opts.killEscalationGraceMs ?? KILL_ESCALATION_GRACE_MS,
-      )
-    }
-    if (!normalSpawnPathCompleted) {
-      await Promise.allSettled(spawnedPumps.map((pump) => pump.done))
-    }
-    if (childFullyReaped) {
+    // `preserveLiveRuntimeState` (executor outcome 'unreaped') means the child
+    // may still hold its native session — keep the lease + scratch for
+    // recovery. Otherwise the child is reaped (or never spawned): release the
+    // lease and run plan cleanup.
+    if (!preserveLiveRuntimeState) {
       try {
         releaseHeldRuntimeLease()
       } catch (error) {
@@ -2026,10 +1907,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       }
       await finalizePlan()
     } else {
-      child.unref()
       log.warn('runtime-process-left-live-after-reap-deadline', {
         nodeRunId: opts.nodeRunId,
-        pid: child.pid,
       })
     }
   }
@@ -2142,95 +2021,11 @@ export function detectPluginLoadFailure(
 // RFC-111 PR-A: buildCommand moved to ./runtime/opencode/spawn.ts (re-exported
 // at the bottom of this file); buildOpencodeSpawn there assembles argv + env.
 
-function safeKill(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
-  try {
-    child.kill(signal)
-  } catch {
-    // already exited
-  }
-}
-
 /** RFC-098 WP-8: SIGTERM → SIGKILL escalation grace. */
 /** SIGTERM → SIGKILL grace for a node's process group. */
 const KILL_ESCALATION_GRACE_MS = 10_000
 /** RFC-098 WP-8: margin on top of the grace for the final reap deadline. */
 const FINAL_REAP_MARGIN_MS = 5_000
-
-/**
- * RFC-098 WP-8 (audit S-15): kill the child's WHOLE process group — spawn
- * uses `detached: true`, making the child its own group leader, so `-pid`
- * reaches grandchildren too (verified on bun 1.3.13 / darwin: group SIGTERM
- * kills a bash child's forked sleep). Falls back to the single-process
- * safeKill when the group signal fails (ESRCH after exit / EPERM).
- */
-function killTree(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
-  const pid = child.pid
-  if (typeof pid === 'number' && pid > 0) {
-    if (killProcessTree(pid, signal)) return
-  }
-  safeKill(child, signal)
-}
-
-async function waitForChildExit(child: Bun.Subprocess, timeoutMs: number): Promise<boolean> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      child.exited.then(
-        () => true,
-        () => true,
-      ),
-      new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), timeoutMs)
-      }),
-    ])
-  } finally {
-    if (timer !== undefined) clearTimeout(timer)
-  }
-}
-
-/**
- * Outer-finally safety net for exceptions after Bun.spawn but before the
- * ordinary reap path.
- */
-async function terminateAndReapUnexpectedChild(
-  child: Bun.Subprocess,
-  log: Logger,
-  graceMs: number,
-): Promise<boolean> {
-  killTree(child, 'SIGTERM')
-  if (await waitForChildExit(child, graceMs)) return true
-  log.warn('unexpected runner exception; launcher ignored SIGTERM', {
-    pid: child.pid,
-    graceMs,
-  })
-  killTree(child, 'SIGKILL')
-  return waitForChildExit(child, FINAL_REAP_MARGIN_MS)
-}
-
-/**
- * RFC-098 WP-8: fire SIGTERM at the child's process group now, then escalate
- * to SIGKILL after `graceMs` unless the child exits first. The timer is
- * unref'd so a wedged child can't keep the daemon (or bun test) alive, and
- * auto-cancels on `child.exited`.
- */
-function armKillEscalation(
-  child: Bun.Subprocess,
-  log: Logger,
-  graceMs: number,
-): { cancel: () => void } {
-  killTree(child, 'SIGTERM')
-  const timer = setTimeout(() => {
-    log.warn('child ignored SIGTERM past grace; escalating to SIGKILL', {
-      pid: child.pid,
-      graceMs,
-    })
-    killTree(child, 'SIGKILL')
-  }, graceMs)
-  timer.unref()
-  const cancel = (): void => clearTimeout(timer)
-  void child.exited.then(cancel, cancel)
-  return { cancel }
-}
 
 interface LinePump {
   /** Resolves once the stream EOFs (or is canceled) and every onLine settled. */

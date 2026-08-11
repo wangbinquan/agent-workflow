@@ -91,6 +91,11 @@ export interface ManagedProcessResult {
   /** RFC-280 T4 — set with `keepExitedOnDrainTimeout` when trailing output was
    *  lost to the bounded post-exit drain (exitCode itself is trustworthy). */
   drainTimedOut?: boolean
+  /** RFC-280 T7 — an onStdoutLine/onStderrLine callback threw (a persist error):
+   *  the child was escalated and this carries the first reason. Consumers that
+   *  tolerate line-callback failures (the runner) read it instead of catching a
+   *  thrown drain race. */
+  pumpError?: string
   /**
    * argv[0] exactly as spawned — the binary the reaper must match against a
    * live pid.
@@ -342,6 +347,18 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     killTimer.unref()
   }
 
+  // RFC-280 T7 — a line-callback failure (persist error) makes further output
+  // unrecordable; escalate the child (the historical runner `settlePump` did
+  // exactly this) and record the reason instead of letting the pump rejection
+  // escape the drain race as a thrown exception.
+  let pumpError: string | undefined
+  const onPumpError = (err: unknown): void => {
+    if (pumpError === undefined) pumpError = err instanceof Error ? err.message : String(err)
+    escalate()
+  }
+  void stdoutPump.done.catch(onPumpError)
+  void stderrPump.done.catch(onPumpError)
+
   const onAbort = (): void => {
     if (outcome === 'exited') outcome = 'aborted'
     escalate()
@@ -375,7 +392,9 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   // open forever, and `done` would never settle.
   let drainTimer: ReturnType<typeof setTimeout> | undefined
   const drained = await Promise.race([
-    Promise.all([stdoutPump.done, stderrPump.done]).then(() => true),
+    // allSettled: a rejected pump (callback threw) is already recorded via
+    // onPumpError — it must not THROW out of the race.
+    Promise.allSettled([stdoutPump.done, stderrPump.done]).then(() => true),
     new Promise<boolean>((resolve) => {
       // RFC-254: this deadline must stay ref'd — the await depends on it, and
       // unref'd timers never fire on Windows Bun once the loop is otherwise
@@ -407,5 +426,6 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     spawnBinaryPath,
     pid,
     ...(drainTimedOut ? { drainTimedOut: true } : {}),
+    ...(pumpError !== undefined ? { pumpError } : {}),
   }
 }

@@ -122,8 +122,12 @@ describe('spawn catches route through explainSpawnEnoent (source-level wiring lo
   const src = (rel: string): string =>
     readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
 
-  test('runner.ts translates the business-spawn ENOENT', () => {
-    expect(src('services/runner.ts')).toContain('explainSpawnEnoent(')
+  test('runner.ts surfaces the executor-translated business-spawn ENOENT', () => {
+    // RFC-280 T7: the business child spawns through the unified executor, whose
+    // managedProcess core owns the ENOENT translation; the runner turns the
+    // returned spawnError into its runtime-spawn-failed message.
+    expect(src('services/execution/managedProcess.ts')).toContain('explainSpawnEnoent(')
+    expect(src('services/runner.ts')).toContain('runResult.spawnError')
   })
 
   test('runtimeSmoke.ts surfaces the executor-translated probe-spawn ENOENT', () => {

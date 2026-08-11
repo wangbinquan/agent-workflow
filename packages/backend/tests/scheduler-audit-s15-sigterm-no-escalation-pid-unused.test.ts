@@ -34,6 +34,7 @@ import { resolve } from 'node:path'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const RUNNER = resolve(BACKEND_SRC, 'services', 'runner.ts')
+const MANAGED_PROCESS = resolve(BACKEND_SRC, 'services', 'execution', 'managedProcess.ts')
 const ORPHANS = resolve(BACKEND_SRC, 'services', 'orphans.ts')
 const STUCK = resolve(BACKEND_SRC, 'services', 'stuckTaskDetector.ts')
 const TASK = resolve(BACKEND_SRC, 'services', 'task.ts')
@@ -58,63 +59,57 @@ function countNonCommentMatches(content: string, re: RegExp): number {
   return n
 }
 
-describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', () => {
+describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.ts)', () => {
+  // RFC-280 T7: the kill-escalation + bounded-reap mechanism moved OUT of
+  // runner.ts into the unified process primitive (services/execution/
+  // managedProcess.ts). The runner now delegates the whole child lifecycle to
+  // runAgentProcess; these guards follow the mechanism to its new home. The
+  // behavioral oracles (stubborn child, group kill reaches the grandchild,
+  // bounded wall clock) still live in tests/rfc098-process-governance.test.ts.
+  const mpSrc = readFileSync(MANAGED_PROCESS, 'utf8')
   const runnerSrc = readFileSync(RUNNER, 'utf8')
 
-  test('spawn is detached and killTree group-kills with safeKill fallback', () => {
+  test('spawn is detached and killTree group-kills with a single-pid fallback', () => {
     // detached: true ⟹ the child is its own process-group leader, the
     // precondition for `-pid` group signals reaching grandchildren.
-    expect(countNonCommentMatches(runnerSrc, /detached: true/g)).toBe(1)
-
-    // killTree delegates the group signal to `killProcessTree` (util/process),
-    // keeping the single-process `safeKill` fallback.
-    //
-    expect(countNonCommentMatches(runnerSrc, /killProcessTree\(pid, signal\)/g)).toBe(1)
-    expect(countNonCommentMatches(runnerSrc, /safeKill\(child, signal\)/g)).toBe(1)
+    expect(countNonCommentMatches(mpSrc, /detached: true/g)).toBe(1)
+    // killTree delegates the group signal to killProcessTree (util/process),
+    // keeping the single-process `child.kill` fallback.
+    expect(countNonCommentMatches(mpSrc, /killProcessTree\(pid, signal\)/g)).toBe(1)
+    expect(mpSrc).toContain("child.kill(signal === 'SIGKILL' ? 9 : 15)")
+    // The runner no longer spawns or kills directly — it hands the child to the
+    // unified executor.
+    expect(runnerSrc).toContain('await runAgentProcess({')
+    expect(countNonCommentMatches(runnerSrc, /Bun\.spawn\(/g)).toBe(0)
   })
 
   test('escalation chain exists: SIGTERM now, SIGKILL after the grace timer', () => {
-    // Scope exact counts to armKillEscalation. RFC-224 adds a separate
-    // outer-finally reap helper with its own TERM→KILL pair; counting the whole
-    // file would make that additional safety net look like a regression.
-    const armStart = runnerSrc.indexOf('function armKillEscalation(')
-    const armEnd = runnerSrc.indexOf('\ninterface LinePump', armStart)
-    expect(armStart).toBeGreaterThan(-1)
-    expect(armEnd).toBeGreaterThan(armStart)
-    const armSrc = runnerSrc.slice(armStart, armEnd)
-    expect(countNonCommentMatches(armSrc, /killTree\(child, 'SIGTERM'\)/g)).toBe(1)
-    expect(countNonCommentMatches(armSrc, /killTree\(child, 'SIGKILL'\)/g)).toBe(1)
-
-    // Every ordinary kill initiator routes through the same idempotent
-    // escalation arm: caller abort, timeout, and stream-pump failure.
-    expect(countNonCommentMatches(runnerSrc, /\bstartKill\(\)/g)).toBe(3)
-    expect(countNonCommentMatches(runnerSrc, /armKillEscalation\(/g)).toBeGreaterThanOrEqual(1)
-
+    // managedProcess `escalate()` fires SIGTERM immediately, arms an unref'd
+    // grace timer, then SIGKILLs.
+    const escStart = mpSrc.indexOf('const escalate = (): void => {')
+    const escEnd = mpSrc.indexOf('\n  const onAbort', escStart)
+    expect(escStart).toBeGreaterThan(-1)
+    expect(escEnd).toBeGreaterThan(escStart)
+    const escSrc = mpSrc.slice(escStart, escEnd)
+    expect(countNonCommentMatches(escSrc, /killTree\(child, 'SIGTERM'\)/g)).toBe(1)
+    expect(countNonCommentMatches(escSrc, /killTree\(child, 'SIGKILL'\)/g)).toBe(1)
     // The grace timer must be unref'd (a wedged child can't pin bun test).
-    expect(armSrc).toContain('timer.unref()')
+    expect(escSrc).toContain('killTimer.unref()')
+    // Both the caller abort and the timeout route through the same escalate().
+    expect(countNonCommentMatches(mpSrc, /\bescalate\(\)/g)).toBeGreaterThanOrEqual(2)
   })
 
-  test('`child.exited` and the pumps are bounded by the reap deadline race', () => {
-    // Implementation mechanism is Promise.race against `reapDeadline`
-    // (修订条款: this regex is intentionally written for the REAL mechanism —
-    // if the bounded wait is reimplemented differently, rewrite this guard
-    // alongside it).
-    expect(countNonCommentMatches(runnerSrc, /Promise\.race/g)).toBeGreaterThanOrEqual(2)
-    expect(countNonCommentMatches(runnerSrc, /reapDeadline\b/g)).toBeGreaterThanOrEqual(3)
-
-    // Overrun ⟹ child-unkillable failure (with pid) + reader cancel + unref.
+  test('child.exited and the pumps are bounded by a drain deadline', () => {
+    // managedProcess races the pump drain against a bounded deadline; a child
+    // that survives SIGKILL past it is reported `child-unkillable`, which the
+    // agent adapter maps to `unreaped` and the runner turns into a
+    // child-unkillable failure (with pid).
+    expect(countNonCommentMatches(mpSrc, /Promise\.race/g)).toBeGreaterThanOrEqual(1)
+    expect(mpSrc).toContain("outcome = 'child-unkillable'")
+    expect(countNonCommentMatches(mpSrc, /\.cancel\(\)/g)).toBeGreaterThanOrEqual(2)
+    // The runner still surfaces the child-unkillable terminal state (with pid).
     expect(countNonCommentMatches(runnerSrc, /child-unkillable/g)).toBeGreaterThanOrEqual(1)
-    const unkillableStart = runnerSrc.indexOf('if (childUnkillable) {')
-    const unkillableEnd = runnerSrc.indexOf('} else {', unkillableStart)
-    expect(unkillableStart).toBeGreaterThan(-1)
-    expect(unkillableEnd).toBeGreaterThan(unkillableStart)
-    const unkillableBlock = runnerSrc.slice(unkillableStart, unkillableEnd)
-    expect(countNonCommentMatches(unkillableBlock, /child\.unref\(\)/g)).toBe(1)
-    expect(unkillableBlock).toContain('stdoutPump.cancel()')
-    expect(unkillableBlock).toContain('stderrPump.cancel()')
-    expect(countNonCommentMatches(runnerSrc, /reader\.cancel\(\)/g)).toBeGreaterThanOrEqual(1)
-    expect(countNonCommentMatches(runnerSrc, /stdoutPump\.cancel\(\)/g)).toBeGreaterThanOrEqual(1)
-    expect(countNonCommentMatches(runnerSrc, /stderrPump\.cancel\(\)/g)).toBeGreaterThanOrEqual(1)
+    expect(runnerSrc).toContain("runResult.outcome === 'unreaped'")
   })
 })
 
