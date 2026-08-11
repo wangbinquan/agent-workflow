@@ -44,6 +44,8 @@ export interface ClaudeSpawnContext {
     taskMounts: readonly string[]
     gitMetaDirs?: readonly string[]
     authorAllowDirs?: readonly string[]
+    /** Sibling tasks' workspace dirs → Edit/Read deny (see workspaceBoundary). */
+    siblingTaskRoots?: readonly string[]
   }
   extraArgs?: readonly string[]
   /** Called when stored extraArgs carried a platform-owned flag (see below). */
@@ -92,6 +94,38 @@ export const CLAUDE_PLATFORM_OWNED_FLAGS: ReadonlySet<string> = new Set([
   // RFC-281 T2/T3: the per-run settings file carries the workspace write
   // boundary; extraArgs must not replace it.
   '--settings',
+  // 2nd impl-gate P2-5 (both reviewers): `--add-dir` extends the working-directory
+  // set, i.e. it can hand back exactly what the boundary took away
+  // (`["--add-dir","/"]` in a stored runtime row = the whole filesystem).
+  '--add-dir',
+])
+
+/**
+ * Flags that take NO value, and flags that take a VARIADIC list. `claude --help`
+ * (2.1.227): `--add-dir <directories...>`, `--tools <tools...>`,
+ * `--mcp-config <configs...>`, `--allowedTools <tools...>`,
+ * `--disallowedTools <tools...>` are variadic; `-p`/`--verbose`/`--continue`/
+ * `--fork-session`/`--dangerously-skip-permissions` take none. The dropper below
+ * needs this to consume the right number of tokens: consuming too few leaves a
+ * stray positional (claude reads positionals as the PROMPT), too many silently
+ * deletes an unrelated operator flag.
+ */
+const CLAUDE_VALUELESS_FLAGS: ReadonlySet<string> = new Set([
+  '-p',
+  '--print',
+  '--verbose',
+  '--continue',
+  '--fork-session',
+  '--dangerously-skip-permissions',
+])
+const CLAUDE_VARIADIC_FLAGS: ReadonlySet<string> = new Set([
+  '--add-dir',
+  '--tools',
+  '--mcp-config',
+  '--allowedTools',
+  '--allowed-tools',
+  '--disallowedTools',
+  '--disallowed-tools',
 ])
 
 export interface ClaudeExplicitPermissionArgv {
@@ -147,6 +181,9 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
       ...(ctx.boundary.authorAllowDirs === undefined
         ? {}
         : { authorAllowDirs: ctx.boundary.authorAllowDirs }),
+      ...(ctx.boundary.siblingTaskRoots === undefined
+        ? {}
+        : { siblingTaskRoots: ctx.boundary.siblingTaskRoots }),
       explicitPermission,
     })
     if (rendered.unexpressibleDirs.length > 0) {
@@ -197,11 +234,19 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
       const bare = arg.startsWith('--') && arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg
       if (CLAUDE_PLATFORM_OWNED_FLAGS.has(bare)) {
         dropped.push(arg)
-        // a bare `--flag value` pair drops its value too
-        const next = ctx.extraArgs[i + 1]
-        if (!arg.includes('=') && next !== undefined && !next.startsWith('-')) {
-          dropped.push(next)
-          i += 1
+        if (!arg.includes('=') && !CLAUDE_VALUELESS_FLAGS.has(bare)) {
+          // variadic flags swallow every following non-flag token; single-value
+          // flags take exactly one. Leaving a value behind would turn it into a
+          // positional — claude reads positionals as the prompt.
+          const limit = CLAUDE_VARIADIC_FLAGS.has(bare) ? Infinity : 1
+          let taken = 0
+          while (taken < limit) {
+            const next = ctx.extraArgs[i + 1]
+            if (next === undefined || next.startsWith('-')) break
+            dropped.push(next)
+            i += 1
+            taken += 1
+          }
         }
         continue
       }

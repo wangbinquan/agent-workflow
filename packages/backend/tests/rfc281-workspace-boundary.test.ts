@@ -23,6 +23,7 @@ import {
   claudeWriteBoundaryAvailability,
   composeClaudeBoundarySettings,
   isClaudeRuleExpressible,
+  scanSiblingTaskRoots,
   renderClaudeBoundary,
   composeOpencodeBoundary,
   type BoundaryCtx,
@@ -451,5 +452,66 @@ describe('claude rule expressibility — never emit a rule we cannot predict (se
     for (const bad of ['/a/b(c)', '/a/b)c', '/a/re*po', '/a/b?c', '/a/[x]', '/a/b\\c']) {
       expect({ bad, ok: isClaudeRuleExpressible(bad) }).toEqual({ bad, ok: false })
     }
+  })
+})
+
+describe('2nd impl-gate P1-1/P1-2 — claude 默认形态也要挡住 Edit/Write 越界', () => {
+  // 实测（claude 2.1.227）：sandbox 只拦 Bash；Edit/Write 走 permissions 层，而
+  // 未声明 permission 的节点是 bypassPermissions ⇒ 默认形态下 Write 工具可直写
+  // 兄弟任务目录（RFC 起因的事故形态原样可复现）。deny 规则在所有 permission-mode
+  // 下都生效，且实测「越界 Write 被拒、cwd 内 Write 照常」。
+  const OWN = '/home/aw/iso/taskA/run1'
+  const SIB = '/home/aw/iso/taskB/run1'
+
+  test('sibling task dirs get Edit+Read deny rules', () => {
+    const r = renderClaudeBoundary({
+      taskMounts: [OWN],
+      siblingTaskRoots: [SIB],
+      explicitPermission: false,
+    })
+    expect(r.settings.permissions?.deny).toEqual([
+      'Edit(//home/aw/iso/taskB/run1/**)',
+      'Read(//home/aw/iso/taskB/run1/**)',
+    ])
+  })
+
+  test('a path that is (or contains) an own mount is NEVER denied — §0', () => {
+    const r = renderClaudeBoundary({
+      taskMounts: [OWN],
+      // 'iso/taskA' 是自己 cwd 的祖先：deny 它会连自己一起盖死（T0 §5-2）
+      siblingTaskRoots: [SIB, '/home/aw/iso/taskA', OWN],
+      explicitPermission: false,
+    })
+    const deny = r.settings.permissions?.deny ?? []
+    expect(deny.join('|')).not.toContain('taskA')
+    expect(deny).toHaveLength(2) // 只剩 taskB 的 Edit+Read
+  })
+
+  test('autoAllowBashIfSandboxed is pinned false (opening the sandbox must not widen reads)', () => {
+    const s = composeClaudeBoundarySettings({ taskMounts: [OWN], explicitPermission: true })
+    // claude 默认 true：sandbox 一开 Bash 自动放行、不再过 permission 判定 ⇒
+    // 实测「开 sandbox 反而读到了兄弟 secret」。钉 false 后实测被拒、cwd 内照常。
+    expect(s.sandbox.autoAllowBashIfSandboxed).toBe(false)
+  })
+})
+
+describe('scanSiblingTaskRoots — 只认目录，不碰 DB', () => {
+  const FS: Record<string, string[]> = {
+    '/aw/iso': ['taskA', 'taskB'],
+    '/aw/runs': ['taskA', 'taskB'],
+    '/aw/worktrees': ['repo-x'],
+    '/aw/worktrees/repo-x': ['taskA', 'taskB'],
+  }
+  const readDir = (dir: string): string[] => FS[dir] ?? []
+
+  test('own task dirs are excluded, siblings kept', () => {
+    const out = scanSiblingTaskRoots('/aw', ['/aw/iso/taskA/run1'], 'taskA', readDir)
+    expect(out).toEqual(['/aw/iso/taskB', '/aw/runs/taskB', '/aw/worktrees/repo-x/taskB'])
+    // 自己的那条（及其祖先）绝不出现
+    expect(out.join('|')).not.toContain('taskA')
+  })
+
+  test('an unreadable appHome yields nothing rather than throwing (§0)', () => {
+    expect(scanSiblingTaskRoots('/nope', ['/w'], 'taskA', () => [])).toEqual([])
   })
 })

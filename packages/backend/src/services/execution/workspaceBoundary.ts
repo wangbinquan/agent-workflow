@@ -23,7 +23,10 @@
 //    追加在作者所有其他键（尤其 '*'）之后。这就是本函数做的事。
 
 import type { AgentPermission } from '@agent-workflow/shared'
+import { readdirSync } from 'node:fs'
+import { isLexicallyInsideForHost } from '@/util/platformExec'
 import { homedir } from 'node:os'
+import { basename } from 'node:path'
 import { join } from 'node:path'
 
 /**
@@ -66,6 +69,60 @@ export function machineSkillRoots(home: string = homedir()): string[] {
     join(home, '.opencode', 'skill'),
     join(home, '.opencode', 'skills'),
   ]
+}
+
+/**
+ * 扫出「兄弟任务」的工作区目录：appHome 下 `iso` / `worktrees` / `runs` 的直接
+ * 子目录（worktrees 再下一层是 per-repo slug 下的 taskId），排除本任务自己的
+ * 任何 mount。
+ *
+ * 只读 `readdirSync`，不解析 DB —— 边界只需要「不是我的就别碰」，不需要知道对方
+ * 是谁。目录不存在/不可读时返回空（§0：拿不到就少一条规则，绝不阻断业务）。
+ */
+export function scanSiblingTaskRoots(
+  appHome: string,
+  ownMounts: readonly string[],
+  /**
+   * 本任务 id。同一个任务在 `iso/` / `runs/` / `worktrees/<slug>/` 下各有一份
+   * 目录，而 mounts 只含 iso（或 canonical）那一份——只按路径前缀排除会把自己
+   * 任务在**其他容器**下的目录当成兄弟 deny 掉，直接打挂业务（本测试抓到）。
+   */
+  ownTaskId?: string,
+  readDir: (dir: string) => string[] = (dir) => {
+    try {
+      return readdirSync(dir, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name)
+    } catch {
+      return []
+    }
+  },
+): string[] {
+  const isOwn = (candidate: string): boolean => {
+    if (ownTaskId !== undefined && ownTaskId.length > 0 && basename(candidate) === ownTaskId) {
+      return true
+    }
+    // candidate 是否是某个自有 mount 本身或其祖先（RFC-254：用平台感知比较，
+    // `${x}/` 前缀在 Windows 永不匹配且忽略 NTFS 大小写折叠）。
+    return ownMounts.some((own) => isLexicallyInsideForHost(candidate, own))
+  }
+  const out: string[] = []
+  for (const container of ['iso', 'runs']) {
+    const root = join(appHome, container)
+    for (const name of readDir(root)) {
+      const dir = join(root, name)
+      if (!isOwn(dir)) out.push(dir)
+    }
+  }
+  // worktrees/<repo-slug>/<taskId>
+  const wtRoot = join(appHome, 'worktrees')
+  for (const slug of readDir(wtRoot)) {
+    for (const task of readDir(join(wtRoot, slug))) {
+      const dir = join(wtRoot, slug, task)
+      if (!isOwn(dir)) out.push(dir)
+    }
+  }
+  return out
 }
 
 /**
@@ -201,6 +258,19 @@ export function composeOpencodeBoundary(
 export interface ClaudeBoundarySettings {
   sandbox: {
     enabled: true
+    /**
+     * 必须钉 false（第二轮实现门 P1-2，本机 claude 2.1.227 红绿实测）。
+     *
+     * claude 的 `autoAllowBashIfSandboxed` **默认 true**：sandbox 一开，Bash 调用
+     * 就被自动放行、不再过 permission 判定。实测同一 `dontAsk` 节点：带 sandbox
+     * ⇒ `cat <兄弟任务>/secret.txt` **读到了**；不带 sandbox（RFC-281 之前）
+     * ⇒ 被拒。即「开启边界」反而**放宽**了声明 permission 节点的越界读，方向与
+     * 本 RFC 相反，且是未披露的能力扩张。
+     *
+     * 钉 false 零误伤：bypassPermissions 节点本就不过 permission 层不受影响；
+     * dontAsk 节点回到 RFC-281 之前的行为。
+     */
+    autoAllowBashIfSandboxed: false
     // 刻意**不发** `allowUnsandboxedCommands`（实现门 P1-3）：claude 的 schema 原文
     // 是「false 时 `dangerouslyDisableSandbox` 参数被完全忽略、所有命令必须沙箱化」
     // ——那是模型在 headless 下**唯一**的自救路径。典型 build 节点（`bun install` /
@@ -209,7 +279,7 @@ export interface ClaudeBoundarySettings {
     // filesystem 默认 cwd+tmp+allowWrite），故沿用上游默认 `true`（§0）。
     filesystem: { allowWrite: string[] }
   }
-  permissions?: { additionalDirectories: string[]; allow?: string[] }
+  permissions?: { additionalDirectories?: string[]; allow?: string[]; deny?: string[] }
 }
 
 export interface ClaudeBoundaryCtx {
@@ -224,6 +294,21 @@ export interface ClaudeBoundaryCtx {
    * 即拒，多仓 mounts 需要 additionalDirectories 才可达（B4 修复）。
    */
   readonly explicitPermission: boolean
+  /**
+   * 兄弟任务的工作区根（`<appHome>/iso`、`<appHome>/worktrees`、`<appHome>/runs`
+   * 之下**不属于本任务**的具体目录）。用于 claude 侧的 Edit/Read deny 规则。
+   *
+   * 为什么需要（第二轮实现门 P1-1，本机 claude 2.1.227 实测复现）：claude 的
+   * sandbox 是**命令级**围栏，只管 Bash/子进程；Edit/Write/NotebookEdit 是进程内
+   * 工具，只由 `permissions` 层裁决。而未声明 permission 的节点走
+   * `bypassPermissions`，把那层整个跳过 ⇒ **默认形态下 Write 工具可以直接写兄弟
+   * 任务目录**（RFC 起因的事故形态原样可复现）。
+   *
+   * 修法实测（用户 2026-08-11 授权「自己决策，前提是绝不影响功能」）：deny 只列
+   * 兄弟任务的**具体**目录、绝不含本任务 cwd（T0 §5-2 证明祖先根 deny 会盖死
+   * 自己）。实测：越界 Write 被拒、cwd 内 Write 照常。
+   */
+  readonly siblingTaskRoots?: readonly string[]
 }
 
 /**
@@ -254,7 +339,7 @@ export function renderClaudeBoundary(ctx: ClaudeBoundaryCtx): ClaudeBoundaryRend
     ...(ctx.authorAllowDirs ?? []),
   ])
   const settings: ClaudeBoundarySettings = {
-    sandbox: { enabled: true, filesystem: { allowWrite } },
+    sandbox: { enabled: true, autoAllowBashIfSandboxed: false, filesystem: { allowWrite } },
   }
   const unexpressibleDirs: string[] = []
   // dontAsk 下 cwd 外的读写都要显式放行，否则多仓任务的其他 mount 够不着
@@ -279,7 +364,24 @@ export function renderClaudeBoundary(ctx: ClaudeBoundaryCtx): ClaudeBoundaryRend
       }
     }
   }
+  // 兄弟任务目录的 Edit/Read deny —— 覆盖 claude 的**所有** permission-mode
+  // （deny 在 bypassPermissions 下同样生效，T0 §5-1 已实测），因此这是默认形态
+  // 唯一能挡住 Edit/Write 工具越界的手段。只列具体兄弟目录，不含本任务任何路径。
+  const siblings = dedupeNonEmpty([...(ctx.siblingTaskRoots ?? [])]).filter(
+    (dir) => !allowWrite.some((own) => isLexicallyInsideForHost(dir, own)),
+  )
+  const denyable = siblings.filter(isClaudeRuleExpressible)
+  unexpressibleDirs.push(...siblings.filter((d) => !isClaudeRuleExpressible(d)))
+  if (denyable.length > 0) {
+    const deny = denyable.flatMap((dir) => [claudeEditRuleFor(dir), claudeReadRuleFor(dir)])
+    settings.permissions = { ...(settings.permissions ?? {}), deny }
+  }
   return { settings, unexpressibleDirs }
+}
+
+/** 目录 → `Read(//dir/**)`（同 `claudeEditRuleFor` 的路径编码规则）。 */
+function claudeReadRuleFor(dir: string): string {
+  return `Read(//${dir.replace(/^\/+/, '')}/**)`
 }
 
 /**

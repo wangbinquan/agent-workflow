@@ -30,7 +30,7 @@ import {
 } from '@/services/execution/agentInjection'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import {
   parseEvent,
@@ -49,6 +49,7 @@ import { claudeBusinessGate, claudeToolsValue } from './permissionMap'
 import {
   claudeExpressibleAuthorDirs,
   claudeWriteBoundaryAvailability,
+  scanSiblingTaskRoots,
 } from '@/services/execution/workspaceBoundary'
 import {
   renderClaudeManagedSkillAttachments,
@@ -361,6 +362,17 @@ export const claudeCodeDriver: RuntimeDriver = {
       },
       boundary: {
         taskMounts: ctx.taskMounts,
+        // 2nd impl-gate P1-1: claude 的 sandbox 只拦 Bash；Edit/Write 走
+        // permissions 层，而未声明 permission 的节点是 bypassPermissions ⇒ 默认
+        // 形态下 Write 工具可直写兄弟任务目录（实测复现事故形态）。deny 规则在
+        // 所有 permission-mode 下都生效，是唯一的拦法。appHome 从 runRoot
+        // (`<appHome>/runs/<taskId>/<nodeRunId>`) 反推，扫不到就少一条规则。
+        siblingTaskRoots: scanSiblingTaskRoots(
+          join(ctx.runRoot, '..', '..', '..'),
+          ctx.taskMounts,
+          // runRoot = <appHome>/runs/<taskId>/<nodeRunId> → 倒数第二段是 taskId
+          basename(join(ctx.runRoot, '..')),
+        ),
         ...(authorAllowDirs.dirs.length === 0 ? {} : { authorAllowDirs: authorAllowDirs.dirs }),
       },
       ...(gate === null ? {} : { businessTools: claudeToolsValue(gate) }),
