@@ -39,13 +39,18 @@ export interface DisabledPolicyEntry {
   readonly declaredField?: 'skippedDisabledMcps'
 }
 
-/** The five real `plugin-disabled` emitters (all preserved verbatim — v2 has
- *  zero product behavior change; four upstream launch gates consume them). */
+/** The one spelling of the fail-closed plugin error code. All five emitters
+ *  import THIS (B3): the wire bytes are unchanged, but "where does this code
+ *  come from" now has exactly one grep-able answer — this table. */
+export const PLUGIN_DISABLED_ERROR_CODE = 'plugin-disabled'
+
+/** The real `plugin-disabled` emitters (all preserved verbatim — v2 has zero
+ *  product behavior change; four upstream launch gates consume them). */
 export const PLUGIN_DISABLED_SITES: readonly string[] = [
   'services/workflow.validator.ts',
   'services/agent.ts',
   'services/agentResourceIntegrity.ts',
-  'services/scheduler.ts',
+  'services/execution/resolveInjection.ts',
 ]
 
 export const DISABLED_RESOURCE_POLICY: Readonly<

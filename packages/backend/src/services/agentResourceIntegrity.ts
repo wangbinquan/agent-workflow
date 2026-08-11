@@ -12,6 +12,7 @@ import { mcps as mcpsTable, plugins as pluginsTable, skills as skillsTable } fro
 import { filterVisibleRows } from '@/services/resourceAcl'
 import { isSkillAvailableThisBoot } from '@/services/skillBootVerify'
 import { ValidationError } from '@/util/errors'
+import { PLUGIN_DISABLED_ERROR_CODE } from '@/services/execution/resourcePolicy'
 
 export type AgentResourceRefKind = 'skill' | 'mcp' | 'plugin' | 'agent'
 
@@ -281,7 +282,7 @@ export function evaluateAgentResourceIntegrity(
           })
         } else if (!plugin.enabled) {
           add({
-            code: 'plugin-disabled',
+            code: PLUGIN_DISABLED_ERROR_CODE,
             rootAgentId,
             ownerAgentId: agent.id,
             refKind: 'plugin',
@@ -473,7 +474,7 @@ export async function getAgentResourceStatus(
         ? 'missing'
         : !refVisible
           ? 'hidden'
-          : issue.code === 'skill-unavailable' || issue.code === 'plugin-disabled'
+          : issue.code === 'skill-unavailable' || issue.code === PLUGIN_DISABLED_ERROR_CODE
             ? 'unavailable'
             : 'available'
     return {

@@ -102,6 +102,7 @@ import { listSkills } from '@/services/skill'
 import { getWorkflow } from '@/services/workflow'
 import { parseExitCondition } from '@/services/exitCondition'
 import { NotFoundError } from '@/util/errors'
+import { PLUGIN_DISABLED_ERROR_CODE } from '@/services/execution/resourcePolicy'
 
 // RFC-103 T5 (04-WFM-06/07): the built-in prompt-var set is now the single
 // source `BUILTIN_VARS` from shared/prompt.ts (was a local copy that lagged the
@@ -1755,7 +1756,7 @@ export function validateWorkflowDef(
             })
           } else if (!pluginsEnabled.has(p)) {
             issues.push({
-              code: 'plugin-disabled',
+              code: PLUGIN_DISABLED_ERROR_CODE,
               message: `agent '${agent.name}' (used by node '${node.id}') references disabled plugin '${p}'`,
               pointer: node.id,
               target: target.nodeField(node.id, 'agent'),
@@ -1822,7 +1823,7 @@ export function validateWorkflowDef(
               })
             } else if (!pluginsEnabled.has(p)) {
               issues.push({
-                code: 'plugin-disabled',
+                code: PLUGIN_DISABLED_ERROR_CODE,
                 message: `dependent agent '${dep.name}' (closure of '${agent.name}', used by node '${node.id}') references disabled plugin '${p}'`,
                 pointer: node.id,
                 target: target.nodeField(node.id, 'agent'),

@@ -330,6 +330,26 @@ describe('RFC-282 A2 — inline-duplicate ledger (counts pinned, both directions
 })
 
 // ---------------------------------------------------------------------------
+// 4b. B3 — the disabled-plugin error code has ONE spelling site
+// ---------------------------------------------------------------------------
+
+describe('RFC-282 B3 — plugin-disabled code is single-sourced', () => {
+  test("the 'plugin-disabled' literal exists only at the policy table (+ the issue-code type union)", () => {
+    const allowed = new Map([
+      ['services/execution/resourcePolicy.ts', 1], // PLUGIN_DISABLED_ERROR_CODE definition
+      ['services/agentResourceIntegrity.ts', 1], // the TS literal-type union member
+    ])
+    for (const f of FILES) {
+      const hits = stripComments(f.text).split("'plugin-disabled'").length - 1
+      expect(
+        hits,
+        `${f.rel}: 'plugin-disabled' literal ${hits}×, allowed ${allowed.get(f.rel) ?? 0}× — emitters must import PLUGIN_DISABLED_ERROR_CODE`,
+      ).toBe(allowed.get(f.rel) ?? 0)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
 // 5. the lock's own teeth (sanity — RFC-280 实现门 P2-D)
 // ---------------------------------------------------------------------------
 

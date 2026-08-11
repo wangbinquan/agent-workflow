@@ -34,6 +34,7 @@ import {
   type ManagedInjectionIdentity,
 } from '@/services/runtime/injectionIdentity'
 import { isSkillInjectableThisBoot } from '@/services/skillBootVerify'
+import { PLUGIN_DISABLED_ERROR_CODE } from '@/services/execution/resourcePolicy'
 import { skillFilesRel } from '@/services/skillIdentityPaths'
 import type { AgentInjectionSpecV1, ResolvedSkill } from '@/services/runtime/types'
 
@@ -206,7 +207,7 @@ export async function resolveInjection(
     return {
       kind: 'failed',
       summary: `agent '${agent.name}' references a disabled Plugin`,
-      message: 'plugin-disabled',
+      message: PLUGIN_DISABLED_ERROR_CODE,
     }
   }
   return {

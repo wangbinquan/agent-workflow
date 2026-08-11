@@ -41,6 +41,7 @@ import { isAgentLaunching } from './agentLaunchReservation'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 import { assertRefsUsableInTx } from './resourceRefs'
 import { assertAgentResourceIntegrity } from './agentResourceIntegrity'
+import { PLUGIN_DISABLED_ERROR_CODE } from './execution/resourcePolicy'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -974,7 +975,7 @@ async function validatePluginReferences(db: DbClient, ids: readonly string[]): P
   const disabled = unique.filter((n) => disabledSet.has(n))
   if (disabled.length > 0) {
     throw new ValidationError(
-      'plugin-disabled',
+      PLUGIN_DISABLED_ERROR_CODE,
       `agent references disabled plugin(s): ${disabled.join(', ')}`,
       { disabled },
     )
