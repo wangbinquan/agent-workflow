@@ -368,8 +368,10 @@ export const claudeCodeDriver: RuntimeDriver = {
         // in the run log instead of looking like a silent no-op".
         pluginsIgnoredUnsupported: enabledPlugins.length,
         pluginsIgnoredNames: enabledPlugins.map((p) => p.name),
-        // The three injected surfaces the runner then PROVES against claude's
-        // startup inventory — same values, one derivation.
+        // The three injected surfaces the startup-verification layer (RFC-280
+        // T3) checks against claude's init inventory — the proof exists now:
+        // parseStartupInventory feeds verifyStartup, whose skills/subagents/
+        // tools-missing findings land on the node-detail warning face.
         skillNames: attachedSkillNames,
         skillProjectConfigPath: worktreeSkillProjection.configPath,
         subagentNames: declaredAgentNames,

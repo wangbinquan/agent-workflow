@@ -62,11 +62,34 @@ project skill 由 OpenCode 从 worktree 自行发现。Skill 中的 `.claude-plu
 OpenCode 将 MCP 工具权限名表示为 `<mcp-name>_<tool-name>`。Agent 的 permission
 字段若要点名单个 MCP 工具，应使用这个名字。
 
+Claude Code 侧同一份 MCP 闭包渲染为 `--mcp-config` 指向的 JSON 文件（RFC-280
+§7.1 起写 `runRoot/mcp-config.json`、`0600`、路径传参而非内联 argv——remote MCP
+的 header 可能带 token，内联 JSON 会进 `/proc/<pid>/cmdline`）。两条链路的
+「DB 行 → wire 形状」转换是同一实现（`services/execution/agentInjection.ts`）。
+
+### 3.4 声明注入清单与启动验证（RFC-280）
+
+每次 spawn 产出一份 `DeclaredManifest`（注入了哪些 MCP / skill / subagent /
+tool，以及被跳过的 disabled MCP、被该 runtime 丢弃的 profile 参数、无法观测的
+面）。run 结束后与 runtime 的启动清单（claude 的 `system/init` 事件 / opencode
+的 RFC-029 inventory）做差集，落 `node_runs.startup_verification_json`：
+
+- **业务节点**：MCP 未连接 / skill·subagent·tool 未加载 = 节点详情持久告警
+  （带 runtime 报告的原因，如 `spawn ENOENT`），**不改变节点成败**；
+- **MCP 测试台**：被测 MCP 未连接 → turn 显式 fail（`mcp-test-mcp-unusable`）；
+  观测源缺失/损坏 → `mcp-test-verification-unavailable`（fail-closed，绝不
+  fail-open）。
+
+这终结了此前「MCP 连不上、节点照常成功、agent 只能口头说找不到工具」的静默降级。
+
 ## 4. 会话与进程生命周期
 
-平台仍负责普通的运行可靠性：记录 PID、解析有界 stdout/stderr、处理 timeout/abort、
-以 `SIGTERM → SIGKILL` 回收整棵子进程树，并在 daemon 重启后修复中断状态。
-这些是生命周期管理，不构成安全隔离或执行身份认证。
+平台仍负责普通的运行可靠性，且五条 spawn 链路（业务节点 / 系统 agent / MCP
+测试台 / 冒烟探针 / 记忆蒸馏器）的进程可靠性统一由**一个执行器**承担
+（`services/execution/managedProcess.ts`，经 `agentProcess.ts` 适配）：记录 PID、
+解析有界 stdout/stderr、处理 timeout/abort、以 `SIGTERM → SIGKILL` 回收整棵
+子进程树、有界 drain，并在 daemon 重启后修复中断状态。这些是生命周期管理，
+不构成安全隔离或执行身份认证。
 
 ## 5. 模型发现
 

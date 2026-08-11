@@ -1,13 +1,15 @@
 // RFC-234 §1 (T2) — runSystemAgent: the shared non-task system-agent run
-// primitive.
+// primitive (intent turn engine / change narrative / MCP playground consume it).
 //
-// memoryDistiller and runtimeSmoke each hand-roll the same lifecycle:
-//   scratch dir (worktree/ + run/, 0700) → driver.buildSpawn → Bun.spawn
-//   (detached) → capped drains → timeout TERM→KILL→reap-deadline escalation →
-//   reap-then-cleanup barrier → scratch removal (retain on failure).
-// This module is the third caller's extraction of that skeleton (design §1 —
-// "第三处出现时应抽公共原语"); the intent turn engine (T5) consumes it, and
-// distiller/smoke migrate onto it as thin adapters in the T2 follow-up.
+// RFC-280 T4 UPDATE: process reliability (spawn / stdin / timeout / TERM→KILL /
+// reap / bounded drain) is no longer hand-rolled here — it lives in the unified
+// agent executor (services/execution/agentProcess.ts → managedProcess, the one
+// process-reliability authority for ALL five spawn paths). This module keeps
+// only the system-agent-specific layer: scratch dir + seed files, the ordered
+// event sink, output evidence, startup-inventory capture, and the result-domain
+// mapping. runtimeSmoke and memoryDistiller call the same executor directly
+// rather than adapting this module — the RFC-234 "extract on the third caller"
+// skeleton became the RFC-280 "one executor" primitive.
 //
 // Differences from both precedents, by design:
 //  - `seedFiles` — the platform writes the working-directory dump BEFORE spawn
