@@ -14,7 +14,8 @@
   测试：合成键序（含下标断言）/scalar 接管/告警全分支；渲染源码锁；真 opencode 集成（gated）AC-1（含原生子代理）/2/3 红绿对 + AC-8 opencode 敏感面遍历用例 + resume（`--session`）边界仍在。
   依赖：T0。
   - ✅ **part1 完成（`842ed9ab`）**：纯函数 + 9 单测 + M1/M2 策略修正（回填 design §5-9/§3.1：跨层键序不可控 → 每条目自 map 内注入、追加作者 `'*'` 后；顶层只管原生子代理）。
-  - ⏳ **part2（接入运行链路，下一轮）接入地图**：业务落 `driver.ts:209 buildInlineConfig`（系统 persona `:125` 直调**不碰**，符合 §3）；顶层 = `out.permission` + 每条目 = `composeOpencodeBoundary(agent.permission, ctx)`。**多仓 mounts 数据流（已定位）**：数据源 = runner 已持有的 `opts.templateMeta.repos[].worktreePath`（`runner.ts:148-153`，绝对路径，单仓 length-1）——**无需改 scheduler**；part2 只需 runner 提取 `taskMounts` + 扩 `BusinessNodeSpawnContext` 一字段转发 driver。既有 `runner-permission-inject{,-e2e}`/`runner-build-inline-config-multi` 锁 permission 形状，注入后需同步更新。
+  - ✅ **part2 完成（`92ad0cb7`，主 CI + integration-opencode 双绿）**：`buildInlineConfig` 加可选 `boundaryCtx`（每条目重算 external_directory + 顶层覆盖原生子代理，不传字节不变）；runner 从 `templateMeta.repos[].worktreePath` 提取 `taskMounts`（单仓回退 cwd）→ 扩 `BusinessNodeSpawnContext` → driver 构造 `BoundaryCtx`。scheduler 未动，系统 persona 不碰。8 fixture + rfc143 对拍 + `runner-permission-inject-e2e` 断言更新（RFC-276→281 修订）；pin worktree 完整 gate:local 过。
+  - ⏳ **part3 = gated 真 opencode 集成（AC-1/2/3，T1 唯一剩项）**：`tests/integration-opencode/` 复用 gate+auth+`ensureGitRepo`，经生产 `buildInlineConfig(agent,…,boundaryCtx)` 起真 opencode 读兄弟 → DeniedError；mutation 去 boundaryCtx → 读到（红绿对）。provider/model 默认。T0 已 deepseek CLI 手动验证同款，此步固化为 CI。
 
 - **RFC-281-T2 · claude settings 载体与声明节点修复**
   `buildClaudeSpawn` 落 per-run `settings.json` + `--settings`（最小形状，design §4.1：`sandbox.enabled` + `allowUnsandboxedCommands:false` + `filesystem.allowWrite`；**无 denyWrite、v1 无 permissions.deny 敏感面**）；`CLAUDE_PLATFORM_OWNED_FLAGS` 扩展；声明 permission 节点补 `additionalDirectories`（读）+ `permissions.allow` 的 `Edit/Write(//<mount>/**)`（写，B4 多仓 mounts 修复，§5-5——业务可用必需）。未声明节点 argv 其余部分逐字节不变（锁）。
