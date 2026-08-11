@@ -4778,6 +4778,19 @@ async function runOneScriptAttempt(
   for (const [portName, content] of Object.entries(ports)) {
     await db.insert(nodeRunOutputs).values({ nodeRunId: a.nodeRunId, portName, content })
   }
+  // RFC-276 regression fix: a readonly script's iso is discarded without a
+  // merge-back, but its 'isolating' stamp must still SETTLE — deriveFrontier's
+  // D15 gate only completes done rows whose merge_state is settled, so a
+  // done+isolating row wedges the scope forever ("scheduler stalled / no ready
+  // nodes in scope"; pre-RFC-276 readonly scripts ran in place and stayed NULL).
+  // Settled BEFORE the done write so no done+unsettled state is ever observable.
+  if (a.isReadonly && a.isoHandle !== null && !a.isoHandle.passthrough) {
+    await transitionMergeState({
+      db,
+      nodeRunId: a.nodeRunId,
+      event: { kind: 'discard-readonly' },
+    })
+  }
   await setNodeRunStatus({
     db,
     nodeRunId: a.nodeRunId,

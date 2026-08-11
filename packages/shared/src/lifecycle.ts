@@ -429,6 +429,13 @@ export type MergeStateTransitionEvent =
   | { kind: 'complete-human-resolution' } // conflict-human → merged
   // same-row wrapper revival opens a NEW isolation generation (Codex impl-gate P2)
   | { kind: 'reenter-isolation' } // merged|conflict-human → isolating (createOrRebuildWrapperIso on a revived wrapper row)
+  // readonly script success (RFC-253 D8 / RFC-276 regression fix): the iso copy
+  // is discarded BY DESIGN — the generation settles with zero delta. Target is
+  // 'merged' (the per-generation settled point): observationally identical to a
+  // merge-back whose delta is empty, and deliberately NOT routed through
+  // pending-merge — that would open a crash window where the entry replay
+  // merges a readonly node's writes into canonical.
+  | { kind: 'discard-readonly' } // isolating → merged (no bytes reach canonical)
   // supersede (RFC-144): a fresher generation replaces this row
   | { kind: 'abandon'; reason: string } // isolating|pending-merge|conflict-human → abandoned
 
@@ -455,6 +462,7 @@ export function targetForMergeEvent(ev: MergeStateTransitionEvent): MergeState {
       return 'pending-merge'
     case 'mark-merged':
     case 'complete-human-resolution':
+    case 'discard-readonly':
       return 'merged'
     case 'park-conflict-human':
       return 'conflict-human'
@@ -511,6 +519,12 @@ export function nextMergeState(cur: MergeStateOrNull, ev: MergeStateTransitionEv
       return ok(['isolating', 'pending-merge'])
     case 'complete-human-resolution':
       return ok(['conflict-human'])
+    case 'discard-readonly':
+      // Readonly script success only: the run isolated (isolating), produced
+      // its ports, and its policy says the file delta never merges back. The
+      // generation settles directly — isolating → merged with no
+      // pending-merge stop (no replay may ever materialize this delta).
+      return ok(['isolating'])
     case 'reenter-isolation':
       // Same-row wrapper revival (Codex impl-gate P2): a wrapper row whose
       // prior generation already settled (crash inside mergeBackWrapperIso →

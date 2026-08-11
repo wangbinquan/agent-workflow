@@ -187,6 +187,26 @@
 
 - **第 9 处穷尽点不受编译器保护，而且它不在代码里：`services/intent/intentDoc.ts` 的 "Supported node forms"**（2026-08-08 实测）。INTENT.md 明说这份清单是穷举的，模型据此认定「不在清单里的 kind 不存在」——RFC-253 补 `script` 时把这条机制写进了 `rfc234-intent-doc.test.ts` 的注释，但 **RFC-243（`call-workflow` / `call-workgroup`）与 RFC-269（`code-host-call`）落 `NODE_KIND` 时都没回来补**，于是意图构建器**静默地**只会写 13 种节点里的 10 种：typecheck 绿、测试绿、功能不存在。定式：新增 NodeKind 必须同时补 intentDoc，并且**守卫要按 `NODE_KIND` 枚举**而不是手抄清单（`rfc234-intent-doc.test.ts` 的 `form(kind)` 锚点即为此，锚 `{id,kind:'x'` 而不是宽松的 `kind:'x'`——后者分不清「教了」和「明确禁止」）。
 
+## iso / merge_state 生命周期（RFC-276 回归实测，2026-08-11）
+
+- **凡是新开 iso 隔离（`persistIsoBase` 盖 `'isolating'`）的执行路径，成功收口时必须把
+  `merge_state` 推进到 settled（`{NULL, merged}`），否则整个 scope 永久卡死**。
+  `deriveFrontier` 的 D15 门规定：done 行只有 `merge_state ∈ {NULL, merged}` 才算完成——
+  一条 done+`isolating` 行既不算完成也不可再派发，任务最终以
+  「`scheduler stalled — blocked nodes: X(done: stale-done-in-invocation-dedup)` /
+  `no ready nodes in scope`」收场。RFC-276（`70deb522`）把 readonly script 从「原地跑、
+  merge_state 恒 NULL」改成「一律建 iso、成功后丢弃不合回」，丢弃路径漏掉 settle，
+  用户在 webhook→script 现场撞上（webhook 只是入口；任何真 git 工作区 + readonly script
+  都中，非 git 工作区因 passthrough 而幸免——这也是 rfc266 池测试没抓到的原因）。
+  修复：`discard-readonly` 事件（isolating → merged，不经 pending-merge——经过它会打开
+  「entry replay 把只读写入合回 canonical」的崩溃窗口），在 done 落库**之前**触发，
+  保证不存在可观测的 done+未 settle 状态。回归锁：
+  `rfc276-readonly-script-stall-regression.test.ts` + `rfc144-merge-state-transition-table.test.ts`。
+- 排障捷径：任务报「调度停滞 / no ready nodes in scope」时，先看 `error_summary` 里
+  blocked 节点的 `status: reason` 对，再查该 node_run 的 `merge_state` 列——
+  `stale-done-in-invocation-dedup` + done 行十有八九是 merge_state 未 settle，
+  而不是真正的新鲜度问题。
+
 ## 复用既有引擎 / 内核（RFC-271 三轮设计门实测）
 
 RFC-271（多资源批量落地）三轮外部设计门共 39 条 findings，**至少五条同一根因**：自造了仓里

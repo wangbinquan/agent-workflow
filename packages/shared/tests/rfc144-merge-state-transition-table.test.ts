@@ -41,6 +41,7 @@ const EVENTS: MergeStateTransitionEvent[] = [
   { kind: 'mark-merge-failed' },
   { kind: 'complete-human-resolution' },
   { kind: 'reenter-isolation' },
+  { kind: 'discard-readonly' },
   { kind: 'abandon', reason: 'test' },
 ]
 
@@ -62,6 +63,9 @@ const LEGAL: ReadonlyArray<[MergeStateOrNull, MergeStateTransitionEvent, string]
   // 同行 wrapper 复活开启新一代隔离（Codex 实现门 P2）：merged 是「代终点」非「行终点」。
   ['merged', { kind: 'reenter-isolation' }, 'isolating'],
   ['conflict-human', { kind: 'reenter-isolation' }, 'isolating'],
+  // readonly script 成功收口（RFC-276 回归修复）：iso 按设计废弃、零 delta 直接
+  // 落代终点 merged——不经 pending-merge，杜绝 entry replay 把只读写入合回 canonical。
+  ['isolating', { kind: 'discard-readonly' }, 'merged'],
   ['isolating', { kind: 'abandon', reason: 'retry-node' }, 'abandoned'],
   ['pending-merge', { kind: 'abandon', reason: 'retry-node' }, 'abandoned'],
   ['conflict-human', { kind: 'abandon', reason: 'review-reject' }, 'abandoned'],
@@ -140,6 +144,7 @@ describe('RFC-144 nextMergeState — 转移表 oracle', () => {
       'merged',
       'conflict-human',
     ])
+    expect(allowedFromForMergeEvent({ kind: 'discard-readonly' })).toEqual(['isolating'])
   })
 
   test('IllegalMergeStateTransition 携带 from/eventKind/code（NULL 渲染为 "NULL"）', () => {
