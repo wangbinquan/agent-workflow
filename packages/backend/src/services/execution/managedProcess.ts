@@ -360,8 +360,12 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       killTree(child, 'SIGKILL')
       // After SIGKILL, bound the reap: if the child still hasn't exited by the
       // final margin, abandon it as child-unkillable instead of awaiting forever.
+      // impl-gate P2-1: this deadline settles the exit race (via reapDeadlineFire)
+      // — it MUST stay ref'd (RFC-254: an unref'd timer never fires on Windows
+      // Bun once the loop is otherwise idle, which would resurrect the very hang
+      // this deadline exists to bound). Mirrors the drainTimer below; cleared in
+      // the finally.
       reapDeadlineTimer = setTimeout(() => reapDeadlineFire?.(), FINAL_REAP_MARGIN_MS)
-      reapDeadlineTimer.unref()
     }, graceMs)
     killTimer.unref()
   }
@@ -429,6 +433,12 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   if (childUnreaped) {
     stdoutPump.cancel()
     stderrPump.cancel()
+    // impl-gate P1-1: the child is STILL ALIVE here (its `.exited` never
+    // resolved), so its handle keeps the event loop ref'd. Without unref the
+    // abandoned unkillable child pins the daemon (and `bun test`) open forever
+    // — the exact liveness bound the pre-RFC-280 runner protected with
+    // `child.unref()` and the T7 collapse dropped.
+    child.unref()
     return {
       outcome,
       exitCode,

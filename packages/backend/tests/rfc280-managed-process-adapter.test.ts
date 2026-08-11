@@ -4,9 +4,9 @@
 // 的 process-reliability authority——agent 执行器只做 adapter，不复制计时器。
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { runManagedProcess } from '@/services/execution/managedProcess'
 import { runAgentProcess } from '@/services/execution/agentProcess'
 
@@ -162,5 +162,44 @@ describe('runAgentProcess impl-gate regression locks', () => {
     expect(result.pumpError).toContain('persist-failed')
     // The child was escalated (killed), not left running to timeout.
     expect(['aborted', 'nonzero-exit', 'ok']).toContain(result.outcome)
+  })
+})
+
+describe('P1-A reap-deadline path source-locks (impl-gate 2nd round)', () => {
+  // The pure reap-deadline trigger needs `child.exited` to never resolve — not
+  // reproducible with a real killable child (SIGKILL always reaps). The repo's
+  // convention for a real-but-hard-to-behaviorally-reproduce process invariant
+  // is a source-level lock (cf. scheduler-audit-s15 / rfc108 / rfc098-source).
+  const src = readFileSync(
+    resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'managedProcess.ts'),
+    'utf8',
+  )
+
+  test("P1-1: the abandoned unkillable child is unref'd before early-return", () => {
+    // Without child.unref() the still-alive child pins the event loop forever
+    // (the daemon / bun test cannot idle out). The pre-RFC-280 runner did this;
+    // the T7 collapse dropped it; the 2nd-round impl-gate restored it.
+    const childUnreapedIdx = src.indexOf('if (childUnreaped) {')
+    expect(childUnreapedIdx).toBeGreaterThan(-1)
+    const nextReturnIdx = src.indexOf('return {', childUnreapedIdx)
+    const block = src.slice(childUnreapedIdx, nextReturnIdx)
+    expect(block).toContain('child.unref()')
+    expect(block).toContain('stdoutPump.cancel()')
+    expect(block).toContain('stderrPump.cancel()')
+  })
+
+  test("P2-1: the reap deadline that settles the exit race is NOT unref'd (RFC-254)", () => {
+    // The reap-deadline timer resolves the exit race (via reapDeadlineFire); an
+    // unref\'d timer would never fire on Windows Bun once the loop is idle,
+    // resurrecting the very hang the deadline exists to bound. Mirrors the
+    // deliberately-ref\'d drainTimer.
+    const armIdx = src.indexOf('reapDeadlineTimer = setTimeout(')
+    expect(armIdx).toBeGreaterThan(-1)
+    // The two statements after arming must NOT unref this timer (contrast the
+    // killTimer/timeoutTimer whose callbacks do not settle the race).
+    const after = src.slice(armIdx, armIdx + 200)
+    expect(after).not.toContain('reapDeadlineTimer.unref()')
+    // And it must be cleared in the finally (no leak once the race settles).
+    expect(src).toContain('if (reapDeadlineTimer !== undefined) clearTimeout(reapDeadlineTimer)')
   })
 })
