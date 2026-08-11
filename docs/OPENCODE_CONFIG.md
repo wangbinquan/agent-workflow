@@ -166,6 +166,10 @@ headless 下无需任何人批准，平台也看不到日志（实测复现）�
 - OpenCode 的 bash 只扫少数命令的参数，`sed`/`python`/`git -C`/重定向等间接写不受该键约束；
 - OpenCode 的路径判定是词法比较，不解析符号链接；
 - Claude 侧**读**面保持默认（读全盘），只有写被约束；
+- **OpenCode 侧读不到机器级配置文件**（`~/.gitconfig`、`~/.npmrc` 等）：OpenCode 的
+  `external_directory` 按**目录**判定（用 `dirname(文件)/*` 去匹配），放行单个文件做不到，
+  而放行整个 `$HOME/*` 会连 `.ssh` 一起放行。因此 Agent 无法用 read/cat 查看这些配置
+  ——这不影响 git/npm 进程自己读取它们（那不经权限层），只影响 Agent 的诊断能力；
 - 机器/组织级 runtime 配置在平台注入之后合并，管理员可放宽（同 §6 的信任模型）；
 - Claude 的部分设置键（如数组型）跨配置层合并，仓库内 `.claude/settings.json` 可能影响最终形态；
 - 机制不可用时（如 Linux 缺少 Claude sandbox 依赖）**打告警放行、不阻断业务**；
