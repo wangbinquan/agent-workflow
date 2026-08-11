@@ -113,24 +113,39 @@ async function buildSmokePlan(
   isSandbox: boolean,
   log: Logger,
 ): Promise<SpawnPlan> {
-  return getRuntimeDriver(protocol).buildSpawn({
+  const driver = getRuntimeDriver(protocol)
+  if (driver.buildAgentSpawn === undefined) {
+    throw new Error(`runtime driver '${driver.kind}' lacks buildAgentSpawn`)
+  }
+  // RFC-282 B1b — unified persona-only assembly. RFC-254: an array binaryPath
+  // is a full command head → the runtime-neutral binaryOverride (each driver
+  // maps it onto its own seam); a string stays the plain runtimeBinary.
+  return driver.buildAgentSpawn({
+    injection: { mcps: [] },
+    prompt,
     agentName: 'aw-smoke',
     systemPrompt: 'You are a runtime smoke-test agent. Follow the user prompt exactly.',
-    ...(model !== undefined ? { model } : {}),
+    resolvedParamsByAgent: new Map([
+      [
+        'aw-smoke',
+        {
+          model: model ?? null,
+          variant: null,
+          temperature: null,
+          steps: null,
+          maxSteps: null,
+          isSandbox,
+        },
+      ],
+    ]),
+    cwd: worktreeDir,
+    runRoot: runDir,
+    wantsInventory: false,
     ...(extraArgs !== undefined && extraArgs.length > 0 ? { extraArgs } : {}),
-    isSandbox,
-    prompt,
-    worktreePath: worktreeDir,
-    runDir,
-    // RFC-254: an array binaryPath is a full command head — route it to the
-    // driver's command-array seam (opencode reads opencodeCmd; claude reads
-    // runtimeCmd), and DON'T set runtimeBinary (claude's pickRuntimeHead would
-    // otherwise prefer it). A string stays the plain runtimeBinary (production).
-    // NB: use `typeof === 'string'`, not Array.isArray — the latter's guard is
-    // `any[]` and does NOT narrow a `readonly string[]` in its false branch.
     ...(typeof binaryPath === 'string'
       ? { runtimeBinary: binaryPath }
-      : { opencodeCmd: [...binaryPath], runtimeCmd: [...binaryPath] }),
+      : { binaryOverride: binaryPath }),
+    nodeRunId: 'runtime-smoke',
     log,
   })
 }

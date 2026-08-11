@@ -38,6 +38,7 @@ import {
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { getRuntimeDriver } from '@/services/runtime'
+import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
 import type { RuntimeDriver } from '@/services/runtime/types'
 import type { SpawnPlan } from '@/services/runtime/types'
 import { getRuntime, type RuntimeRow } from '@/services/runtimeRegistry'
@@ -2466,6 +2467,35 @@ export class McpRuntimeTestService {
     const timeoutMs = Math.max(1, turn.hardDeadlineAt - this.now())
     let result: SystemAgentRunResult
     try {
+      const assertSpawnAllowed = (): void => {
+        const allowed = dbTxSync(this.deps.db, (tx) => {
+          const currentSession = tx
+            .select({
+              status: mcpRuntimeTestSessions.status,
+              inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
+            })
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, session.id))
+            .get()
+          const currentTurn = tx
+            .select({
+              status: mcpRuntimeTestTurns.status,
+              cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
+              hardDeadlineAt: mcpRuntimeTestTurns.hardDeadlineAt,
+            })
+            .from(mcpRuntimeTestTurns)
+            .where(eq(mcpRuntimeTestTurns.id, turn.id))
+            .get()
+          return (
+            currentSession?.status === 'active' &&
+            currentSession.inFlightTurnId === turn.id &&
+            currentTurn?.status === 'running' &&
+            currentTurn.cancelRequestedAt === null &&
+            currentTurn.hardDeadlineAt > this.now()
+          )
+        })
+        if (!allowed) throw new Error('mcp-test-spawn-no-longer-admitted')
+      }
       result = await this.runFn({
         feature: 'mcp-runtime-test',
         agentName: AGENT_NAME,
@@ -2482,93 +2512,88 @@ export class McpRuntimeTestService {
         abortSignal: controller.signal,
         eventSink: sink,
         retainScratchOnSuccess: true,
-        buildPlan: async ({ worktreePath, runDir, log }): Promise<SpawnPlan> => {
-          const turnRunRoot = join(runDir, 'turns', turn.id)
-          const assertSpawnAllowed = (): void => {
-            const allowed = dbTxSync(this.deps.db, (tx) => {
-              const currentSession = tx
-                .select({
-                  status: mcpRuntimeTestSessions.status,
-                  inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
-                })
-                .from(mcpRuntimeTestSessions)
-                .where(eq(mcpRuntimeTestSessions.id, session.id))
-                .get()
-              const currentTurn = tx
-                .select({
-                  status: mcpRuntimeTestTurns.status,
-                  cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
-                  hardDeadlineAt: mcpRuntimeTestTurns.hardDeadlineAt,
-                })
-                .from(mcpRuntimeTestTurns)
-                .where(eq(mcpRuntimeTestTurns.id, turn.id))
-                .get()
-              return (
-                currentSession?.status === 'active' &&
-                currentSession.inFlightTurnId === turn.id &&
-                currentTurn?.status === 'running' &&
-                currentTurn.cancelRequestedAt === null &&
-                currentTurn.hardDeadlineAt > this.now()
-              )
-            })
-            if (!allowed) throw new Error('mcp-test-spawn-no-longer-admitted')
-          }
-          assertSpawnAllowed()
-          if (this.deps.runFn !== undefined) {
-            return {
-              cmd: [runtime.binary],
-              env: {},
-              stdin: { mode: 'ignore' },
-              beforeSpawn: assertSpawnAllowed,
+        // RFC-282 B1b (§2.1b) — the old `buildPlan` escape hatch could return an
+        // arbitrary plan, making the declared manifest a SECOND computation at
+        // settle. Narrowed: buildCtx customizes the assembly INPUT (admission
+        // gate runs before assembling), wrapPlan only WRAPS cleanup/beforeSpawn,
+        // and the declared manifest rides the run result (§2.1b-2).
+        ...(this.deps.runFn !== undefined
+          ? {
+              // In-process fake runs (fixture runFn): no real assembly.
+              testPlanOverride: (): SpawnPlan => {
+                assertSpawnAllowed()
+                return {
+                  cmd: [runtime.binary],
+                  env: {},
+                  stdin: { mode: 'ignore' },
+                  beforeSpawn: assertSpawnAllowed,
+                }
+              },
             }
-          }
-          // RFC-280 T6 — the playground rides the unified injection layer +
-          // the ordinary system-agent spawn surface (落差⑥: the parallel
-          // mcpTest spawn contract is gone). The driver mounts the entries on
-          // its own wire; the RFC-029 inventory plugin is FORCED on runtimes
-          // that observe via file (P1-4 — a strict consumer must never run
-          // without an observation source).
-          const injection = runtime.driver.renderInjection({ mcps: [mcp] })
-          const protocolDefaults =
-            DEFAULT_CONFIG_DIR_PROFILE[session.runtimeProtocol as 'opencode' | 'claude-code']
-          const plan = await runtime.driver.buildSpawn({
-            agentName: AGENT_NAME,
-            systemPrompt: SYSTEM_PROMPT,
-            prompt: turn.promptText,
-            model: runtime.row.model,
-            variant: runtime.row.variant,
-            temperature: runtime.row.temperature,
-            steps: runtime.row.steps,
-            maxSteps: runtime.row.maxSteps,
-            isSandbox: runtime.row.isSandbox,
-            worktreePath,
-            runDir: turnRunRoot,
-            configDirEnv: runtime.row.configDirEnv ?? protocolDefaults.env,
-            configDirName: runtime.row.configDirName ?? protocolDefaults.name,
-            runtimeBinary: runtime.binary,
-            mcpInjection: injection,
-            wantsInventory: runtime.driver.readInventory !== undefined,
-            ...runtime.driver.mcpTestSessionReference?.({
-              turnSeq: turn.seq,
-              nativeSessionId: session.runtimeSessionId,
+          : {
+              buildCtx: ({
+                worktreePath,
+                runDir,
+              }: {
+                worktreePath: string
+                runDir: string
+              }): AgentSpawnContext => {
+                assertSpawnAllowed()
+                const turnRunRoot = join(runDir, 'turns', turn.id)
+                const protocolDefaults =
+                  DEFAULT_CONFIG_DIR_PROFILE[session.runtimeProtocol as 'opencode' | 'claude-code']
+                // RFC-280 T6 — the playground rides the unified injection layer;
+                // the RFC-029 inventory plugin is FORCED on runtimes that observe
+                // via file (P1-4 — a strict consumer must never run blind).
+                return {
+                  injection: { mcps: [mcp] },
+                  prompt: turn.promptText,
+                  agentName: AGENT_NAME,
+                  systemPrompt: SYSTEM_PROMPT,
+                  resolvedParamsByAgent: new Map([
+                    [
+                      AGENT_NAME,
+                      {
+                        model: runtime.row.model ?? null,
+                        variant: runtime.row.variant ?? null,
+                        temperature: runtime.row.temperature ?? null,
+                        steps: runtime.row.steps ?? null,
+                        maxSteps: runtime.row.maxSteps ?? null,
+                        isSandbox: runtime.row.isSandbox === true,
+                      },
+                    ],
+                  ]),
+                  cwd: worktreePath,
+                  runRoot: turnRunRoot,
+                  configDir: {
+                    env: runtime.row.configDirEnv ?? protocolDefaults.env,
+                    name: runtime.row.configDirName ?? protocolDefaults.name,
+                  },
+                  runtimeBinary: runtime.binary,
+                  wantsInventory: runtime.driver.readInventory !== undefined,
+                  ...runtime.driver.mcpTestSessionReference?.({
+                    turnSeq: turn.seq,
+                    nativeSessionId: session.runtimeSessionId,
+                  }),
+                  nodeRunId: turn.id,
+                  log: this.log,
+                }
+              },
+              wrapPlan: (basePlan: AgentSpawnPlan, { runDir }: { runDir: string }) => ({
+                ...basePlan,
+                // P1-7: secret material must not outlive the turn — the claude
+                // mcp-config.json goes here; inventory.json is kept for the
+                // post-run observation read (the session scratch owns the dir).
+                cleanup: async () => {
+                  await basePlan.cleanup?.()
+                  await rm(join(runDir, 'turns', turn.id, 'mcp-config.json'), { force: true })
+                },
+                beforeSpawn: async () => {
+                  await basePlan.beforeSpawn?.()
+                  assertSpawnAllowed()
+                },
+              }),
             }),
-            log,
-          })
-          return {
-            ...plan,
-            // P1-7: secret material must not outlive the turn — the claude
-            // mcp-config.json goes here; inventory.json is kept for the
-            // post-run observation read (the session scratch owns the dir).
-            cleanup: async () => {
-              await plan.cleanup?.()
-              await rm(join(turnRunRoot, 'mcp-config.json'), { force: true })
-            },
-            beforeSpawn: async () => {
-              await plan.beforeSpawn?.()
-              assertSpawnAllowed()
-            },
-          }
-        },
         onSpawned: async (receipt) => {
           const spawnedFenceAt = this.now()
           const admittedForPrompt = dbTxSync(this.deps.db, (tx) => {
@@ -2629,8 +2654,10 @@ export class McpRuntimeTestService {
     await sink.markTerminal('complete')
     // RFC-280 T6 — strict playground semantics (design-gate P1-4): only a run
     // whose PROCESS finished ok is judged by the verification layer; durable
-    // failures (timeout / shutdown / cancel) keep their codes. The declared
-    // manifest re-renders from the frozen-hash MCP row (pure function).
+    // failures (timeout / shutdown / cancel) keep their codes.
+    // RFC-282 B1b (§2.1b-2) — the declared manifest rides the run result from
+    // the SAME assembly that spawned the turn; the old re-render here was the
+    // last "two computations" seam the unification exists to close.
     let verification: StartupVerificationResult | undefined
     if (result.status === 'ok' && this.deps.runFn === undefined) {
       const driver = getRuntimeDriver(session.runtimeProtocol)
@@ -2643,7 +2670,10 @@ export class McpRuntimeTestService {
                 .catch(() => null),
             )
           : observationFromClaudeInit(result.startupInventory ?? null)
-      verification = verifyStartup(driver.renderInjection({ mcps: [mcp] }).declared, observation)
+      if (result.declared === undefined) {
+        throw new Error('mcp-test declared manifest missing from run result (assembly seam broken)')
+      }
+      verification = verifyStartup(result.declared, observation)
     }
     if (nativeLease !== undefined && result.status !== 'unreaped') {
       const released = releaseMcpRuntimeTestSessionLease(this.deps.db, nativeLease)

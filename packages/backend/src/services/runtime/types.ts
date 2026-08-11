@@ -423,7 +423,14 @@ export interface AgentSpawnContext {
   readonly cwd: string
   /** Per-run root (`<appHome>/runs/<taskId>/<nodeRunId>` or the scratch run dir). */
   readonly runRoot: string
-  readonly configDir: RuntimeConfigDirProfile
+  /**
+   * RFC-154 config-dir profile. REQUIRED on business spawns (the runner
+   * always threads the frozen/default profile). OPTIONAL on persona-only
+   * spawns — omitted keeps the legacy system default (opencode: config dir =
+   * runRoot itself, no leaf; distiller/smoke shape), which an explicit
+   * DEFAULT_CONFIG_DIR_PROFILE would silently change (§0 字节等价).
+   */
+  readonly configDir?: RuntimeConfigDirProfile
   /**
    * RFC-281 mounts making up THIS task's legal workspace. 设计门 P1-10(b):
    * this is the ONLY boundary field — `BoundaryCtx` construction stays inside
@@ -454,6 +461,18 @@ export interface AgentSpawnContext {
    * Production always undefined.
    */
   readonly binaryOverride?: readonly string[]
+  /**
+   * B1b→C1 TRANSITIONAL — verbatim carrier for the legacy per-runtime head
+   * knobs so kind-blind callers can migrate onto this ctx before C1 unifies
+   * the channel. Each driver reads ONLY its own knob (opencode: opencodeCmd —
+   * today's production config.opencodePath path; claude: runtimeCmd), which
+   * preserves the RFC-143 P1-1 invariant that a custom opencodePath never
+   * becomes another runtime's argv head. Deleted wholesale in C1.
+   */
+  readonly legacyHeads?: {
+    readonly opencodeCmd?: readonly string[]
+    readonly runtimeCmd?: readonly string[]
+  }
   readonly gitUserName?: string | null
   readonly gitUserEmail?: string | null
   /** Per-runtime extra argv tokens (registry-validated fork flags). */

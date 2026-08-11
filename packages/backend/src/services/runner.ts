@@ -77,7 +77,12 @@ import {
   type RuntimeProfile,
 } from '@/services/runtimeRegistry'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
-import type { ResolvedSkill, RuntimeDriver, SpawnPlan, StartupInventory } from './runtime/types'
+import type {
+  AgentSpawnPlan,
+  ResolvedSkill,
+  RuntimeDriver,
+  StartupInventory,
+} from './runtime/types'
 // eslint-disable-next-line no-restricted-imports -- RFC282_IMPORT_EXCEPTIONS(B4): EMPTY_RUNTIME_PROFILE 双定义，B4 收敛到 agentInjection 后此行消失
 import { EMPTY_RUNTIME_PROFILE } from './runtime/opencode/inlineConfig'
 import {
@@ -881,31 +886,42 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     opts.worktreePath,
     (opts.templateMeta.repos ?? []).map((r) => r.worktreePath),
   )
-  let plan: SpawnPlan
+  const rootProfile = resolvedParamsByAgent.get(opts.agent.name)
+  let plan: AgentSpawnPlan
   try {
-    plan = await driver.buildBusinessSpawn({
-      agent: opts.agent,
+    // RFC-282 B1b — the unified assembly call: ONE driver invocation returns
+    // argv/env/stdin AND the declared manifest (declaration is a by-product of
+    // assembly; the old shape computed them twice — runner.ts:946 pre-B1b).
+    if (driver.buildAgentSpawn === undefined) {
+      throw new Error(`runtime driver '${driver.kind}' lacks buildAgentSpawn`)
+    }
+    plan = await driver.buildAgentSpawn({
+      injection: {
+        mcps: opts.mcps ?? [],
+        agent: opts.agent,
+        dependents: opts.dependents ?? [],
+        plugins: opts.plugins ?? [],
+        skills: opts.skills,
+        ...(rootProfile !== undefined ? { profile: rootProfile } : {}),
+      },
       prompt,
+      agentName: opts.agent.name,
+      systemPrompt: opts.agent.bodyMd,
       injectedMemoryBlock,
-      dependents: opts.dependents ?? [],
-      mcps: opts.mcps ?? [],
-      plugins: opts.plugins ?? [],
       resolvedParamsByAgent,
-      skills: opts.skills,
+      cwd: opts.worktreePath,
+      runRoot,
+      configDir,
+      taskMounts: boundaryMounts,
+      wantsInventory,
       // RFC-148: a followup dispatch carries its session INSIDE the arm
       // (unrepresentable without one); inline clarify resume keeps the
       // top-level field. Exactly one is set per dispatch by the scheduler.
       resumeSessionId: effectiveResumeSessionId,
-      worktreePath: opts.worktreePath,
-      taskMounts: boundaryMounts,
-      runRoot,
-      configDir,
+      runtimeBinary: opts.runtimeBinary,
+      legacyHeads: { opencodeCmd: opts.opencodeCmd, runtimeCmd: opts.runtimeCmd },
       gitUserName: opts.gitUserName,
       gitUserEmail: opts.gitUserEmail,
-      runtimeBinary: opts.runtimeBinary,
-      opencodeCmd: opts.opencodeCmd,
-      runtimeCmd: opts.runtimeCmd,
-      wantsInventory,
       nodeRunId: opts.nodeRunId,
       log,
     })
@@ -938,43 +954,27 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
   }
   const { cmd, env } = plan
-  // RFC-280 T3 — the declared-injection manifest for startup verification.
-  // Same partition/render the driver's buildBusinessSpawn composed internally
-  // (pure; a duplicate-name assert would have thrown there first). Null only on
-  // the defensive path so verification degrades to "not recorded", never lies.
-  let injectionDeclared: ReturnType<RuntimeDriver['renderInjection']>['declared'] | null = null
-  try {
-    const rootProfile = resolvedParamsByAgent.get(opts.agent.name)
-    injectionDeclared = driver.renderInjection({
-      mcps: opts.mcps ?? [],
-      agent: opts.agent,
-      dependents: opts.dependents ?? [],
-      ...(rootProfile !== undefined ? { profile: rootProfile } : {}),
-      skills: opts.skills,
-      plugins: opts.plugins ?? [],
-    }).declared
-    // 落差③/④ — referencing a disabled MCP or passing params this runtime
-    // drops was fully silent before RFC-280; say it at spawn time too (the
-    // persisted record lands at settle).
-    if (injectionDeclared.skippedDisabledMcps.length > 0) {
-      log.warn('mcp-disabled-skipped', {
-        nodeRunId: opts.nodeRunId,
-        mcps: injectionDeclared.skippedDisabledMcps,
-        detail: 'agent references disabled MCP(s); they are not injected into this run',
-      })
-    }
-    if (injectionDeclared.droppedParams.length > 0) {
-      log.warn('runtime-params-dropped', {
-        nodeRunId: opts.nodeRunId,
-        runtime,
-        params: injectionDeclared.droppedParams,
-        detail: 'this runtime has no surface for these profile params; they are not applied',
-      })
-    }
-  } catch (err) {
-    log.warn('startup-declaration-failed', {
+  // RFC-282 B1b — the declared manifest is a FIELD of the assembly result now
+  // (same computation, not a second render). §7-9: a defensive render failure
+  // inside the driver degrades it to an empty manifest + warn, never fails
+  // the node — matching the old independent try/catch's semantics.
+  const injectionDeclared = plan.declared
+  // 落差③/④ — referencing a disabled MCP or passing params this runtime
+  // drops was fully silent before RFC-280; say it at spawn time too (the
+  // persisted record lands at settle).
+  if (injectionDeclared.skippedDisabledMcps.length > 0) {
+    log.warn('mcp-disabled-skipped', {
       nodeRunId: opts.nodeRunId,
-      err: err instanceof Error ? err.message : String(err),
+      mcps: injectionDeclared.skippedDisabledMcps,
+      detail: 'agent references disabled MCP(s); they are not injected into this run',
+    })
+  }
+  if (injectionDeclared.droppedParams.length > 0) {
+    log.warn('runtime-params-dropped', {
+      nodeRunId: opts.nodeRunId,
+      runtime,
+      params: injectionDeclared.droppedParams,
+      detail: 'this runtime has no surface for these profile params; they are not applied',
     })
   }
   let planArtifactsCleaned = false

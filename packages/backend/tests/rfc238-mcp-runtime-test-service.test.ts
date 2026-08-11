@@ -555,8 +555,8 @@ describe('RFC-238 MCP runtime test service', () => {
       configPath: join(root, 'config.json'),
       appHome: root,
       runFn: async (opts) => {
-        if (opts.buildPlan === undefined) throw new Error('missing test build plan')
-        const plan = await opts.buildPlan({
+        if (opts.testPlanOverride === undefined) throw new Error('missing test build plan')
+        const plan = await opts.testPlanOverride({
           driver: getRuntimeDriver(opts.protocol),
           worktreePath: join(root, 'worktree'),
           runDir: join(root, 'run'),
@@ -604,10 +604,10 @@ describe('RFC-238 MCP runtime test service', () => {
       appHome: root,
       now: () => now,
       runFn: async (opts) => {
-        if (opts.buildPlan === undefined || opts.onSpawned === undefined) {
+        if (opts.testPlanOverride === undefined || opts.onSpawned === undefined) {
           throw new Error('missing process-boundary hooks')
         }
-        await opts.buildPlan({
+        await opts.testPlanOverride({
           driver: getRuntimeDriver(opts.protocol),
           worktreePath: join(root, 'worktree'),
           runDir: join(root, 'run'),

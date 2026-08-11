@@ -29,6 +29,7 @@ import {
   declarePlugins,
   declareSkills,
   declareSubagents,
+  emptyDeclaredManifest,
   renderOpencodeAgentEntry,
   renderOpencodeMcpInjection,
 } from '@/services/execution/agentInjection'
@@ -226,9 +227,26 @@ export const opencodeDriver: RuntimeDriver = {
   // Byte parity with the legacy paths is the contract; the parity suite
   // (rfc282-b1a) is live while both paths exist.
   async buildAgentSpawn(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
-    const rendered = this.renderInjection(ctx.injection)
+    // §7-9 — the declared render keeps its own degrade path: a (defensive-
+    // only) render failure downgrades the manifest to empty + warn instead of
+    // failing the node; the assembly below re-renders internally and remains
+    // the spawn-failing path, exactly as before the unification.
+    let rendered: RenderedInjectionV1
+    try {
+      rendered = this.renderInjection(ctx.injection)
+    } catch (err) {
+      ctx.log.warn('startup-declaration-failed', {
+        nodeRunId: ctx.nodeRunId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      rendered = { mcpEntries: null, declared: emptyDeclaredManifest() }
+    }
     const head =
-      ctx.binaryOverride !== undefined ? { opencodeCmd: [...ctx.binaryOverride] } : {}
+      ctx.binaryOverride !== undefined
+        ? { opencodeCmd: [...ctx.binaryOverride] }
+        : ctx.legacyHeads?.opencodeCmd !== undefined
+          ? { opencodeCmd: [...ctx.legacyHeads.opencodeCmd] }
+          : {}
     if (ctx.taskMounts === undefined) {
       const plan = await this.buildSpawn(toSystemCtx(ctx, rendered, head))
       return { ...plan, declared: rendered.declared }

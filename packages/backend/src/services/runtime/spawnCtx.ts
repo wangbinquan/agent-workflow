@@ -41,6 +41,9 @@ export function toBusinessCtx(
   if (ctx.taskMounts === undefined) {
     throw new Error('toBusinessCtx requires taskMounts (persona-only spawns take the system path)')
   }
+  if (ctx.configDir === undefined) {
+    throw new Error('toBusinessCtx requires configDir (the runner always threads a profile)')
+  }
   return {
     agent: ctx.injection.agent ?? syntheticPersonaAgent(ctx),
     prompt: ctx.prompt,
@@ -95,8 +98,9 @@ export function toSystemCtx(
     ...(ctx.runtimeBinary != null ? { runtimeBinary: ctx.runtimeBinary } : {}),
     ...(ctx.gitUserName !== undefined ? { gitUserName: ctx.gitUserName } : {}),
     ...(ctx.gitUserEmail !== undefined ? { gitUserEmail: ctx.gitUserEmail } : {}),
-    ...(ctx.configDir.env !== undefined ? { configDirEnv: ctx.configDir.env } : {}),
-    configDirName: ctx.configDir.name,
+    ...(ctx.configDir !== undefined
+      ? { configDirEnv: ctx.configDir.env, configDirName: ctx.configDir.name }
+      : {}),
     log: ctx.log,
     ...head,
   }

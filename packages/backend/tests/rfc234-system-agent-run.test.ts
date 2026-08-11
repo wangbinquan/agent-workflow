@@ -283,7 +283,7 @@ describe('runSystemAgent', () => {
       ...baseOpts(scratchParent, '/bin/sh'),
       scratchName: 'turn-cleanup-failure',
       retainScratchOnSuccess: true,
-      buildPlan: async () => ({
+      testPlanOverride: async () => ({
         // RFC-254: cross-platform no-op child — /bin/sh does not exist on Windows.
         // buildPlan supplies the whole cmd (no driver flags appended), so bun -e
         // is safe here (unlike a driver head, where trailing --flags break -e).

@@ -25,6 +25,7 @@ import { lstatSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
+import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
 import { runAgentProcess } from '@/services/execution/agentProcess'
 import type {
   RuntimeDriver,
@@ -49,6 +50,18 @@ export interface SystemAgentSeedFile {
   /** Relative path under the scratch worktree; `..` and absolute are rejected. */
   path: string
   content: string
+}
+
+/** RFC-282 B1b — transitional guard: buildAgentSpawn is optional on the driver
+ *  interface until the legacy methods are deleted; production callers require it. */
+async function buildUnifiedSpawn(
+  driver: RuntimeDriver,
+  ctx: AgentSpawnContext,
+): Promise<AgentSpawnPlan> {
+  if (driver.buildAgentSpawn === undefined) {
+    throw new Error(`runtime driver '${driver.kind}' lacks buildAgentSpawn`)
+  }
+  return driver.buildAgentSpawn(ctx)
 }
 
 export interface SystemAgentRunOptions {
@@ -92,16 +105,37 @@ export interface SystemAgentRunOptions {
   /** Optional OpenCode command head (primarily for tests/custom launchers). */
   opencodeCmd?: readonly string[]
   /**
-   * RFC-238: closed product adapters may supply a driver-owned plan without
-   * widening SystemAgentSpawnContext. Existing system-agent callers omit this
-   * and remain byte-for-byte on driver.buildSpawn.
+   * RFC-282 B1b (§2.1b) — ctx-level seam replacing the old `buildPlan` escape
+   * hatch: an adapter may customize the assembly INPUT, never the output. The
+   * assembly itself always runs through `driver.buildAgentSpawn`, so the
+   * declared manifest and the actual injection are the same computation —
+   * `buildPlan` could return an arbitrary plan and dodge all four guards.
    */
-  buildPlan?: (ctx: {
+  buildCtx?: (args: {
     driver: RuntimeDriver
     worktreePath: string
     runDir: string
     log: Logger
-  }) => Promise<SpawnPlan>
+  }) => AgentSpawnContext
+  /**
+   * §2.1b — wrap-only hook: may WRAP cleanup/beforeSpawn around the driver's
+   * plan (admission re-checks, secret scrubbing); replacing cmd/env/declared
+   * is a contract violation (rfc282 lock pins the call sites).
+   */
+  wrapPlan?: (
+    basePlan: AgentSpawnPlan,
+    args: { driver: RuntimeDriver; worktreePath: string; runDir: string; log: Logger },
+  ) => AgentSpawnPlan | Promise<AgentSpawnPlan>
+  /**
+   * TEST-ONLY (§2.1b) — wholesale plan replacement for in-process fake runs
+   * (fixture runFn doubles). Production adapters use buildCtx/wrapPlan.
+   */
+  testPlanOverride?: (args: {
+    driver: RuntimeDriver
+    worktreePath: string
+    runDir: string
+    log: Logger
+  }) => SpawnPlan | Promise<SpawnPlan>
   /**
    * Called after spawn and before piped stdin is delivered. A failure triggers
    * the normal TERM→KILL→reap barrier and no successful result is returned.
@@ -150,6 +184,10 @@ export interface SystemAgentRunResult {
    * observation rides the RFC-029 inventory file instead).
    */
   startupInventory?: StartupInventory
+  /** RFC-282 B1b (§2.1b-2) — the declared manifest from THIS run's unified
+   *  assembly. Absent on testPlanOverride fixture runs. Settle-time
+   *  verification consumes this instead of re-rendering (same computation). */
+  declared?: AgentSpawnPlan['declared']
 }
 
 export function emptySystemAgentOutputEvidence(): SystemAgentOutputEvidence {
@@ -262,6 +300,10 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
   }
 
   let plan: SpawnPlan | null = null
+  // RFC-282 B1b — declared manifest from the unified assembly (absent on
+  // testPlanOverride fixtures); threaded onto the result for settle-time
+  // verification so no consumer re-renders it (§2.1b-2).
+  let declaredForResult: AgentSpawnPlan['declared'] | undefined
   let result: SystemAgentRunResult | undefined
   let sinkTerminal = false
   let sinkFailed = false
@@ -332,34 +374,62 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
   try {
     result = await (async (): Promise<SystemAgentRunResult> => {
       try {
+        const seamArgs = { driver, worktreePath: worktreeDir, runDir, log }
         plan =
-          opts.buildPlan !== undefined
-            ? await opts.buildPlan({
-                driver,
-                worktreePath: worktreeDir,
-                runDir,
-                log,
-              })
-            : await driver.buildSpawn({
-                agentName: opts.agentName,
-                systemPrompt: opts.systemPrompt,
-                ...(opts.model != null && opts.model !== '' ? { model: opts.model } : {}),
-                isSandbox: opts.isSandbox === true,
-                prompt: opts.prompt,
-                worktreePath: worktreeDir,
-                runDir,
-                ...(opts.runtimeBinary != null && opts.runtimeBinary !== ''
-                  ? { runtimeBinary: opts.runtimeBinary }
-                  : {}),
-                ...(opts.configDirEnv != null && opts.configDirEnv !== ''
-                  ? { configDirEnv: opts.configDirEnv }
-                  : {}),
-                ...(opts.configDirName != null && opts.configDirName !== ''
-                  ? { configDirName: opts.configDirName }
-                  : {}),
-                log,
-                ...(opts.opencodeCmd === undefined ? {} : { opencodeCmd: opts.opencodeCmd }),
-              })
+          opts.testPlanOverride !== undefined
+            ? await opts.testPlanOverride(seamArgs)
+            : await (async () => {
+                const base = await buildUnifiedSpawn(
+                  driver,
+                  opts.buildCtx !== undefined ? opts.buildCtx(seamArgs) : defaultUnifiedCtx(),
+                )
+                declaredForResult = base.declared
+                return opts.wrapPlan !== undefined ? await opts.wrapPlan(base, seamArgs) : base
+              })()
+        function defaultUnifiedCtx(): AgentSpawnContext {
+          return {
+            // RFC-282 B1b — persona-only unified assembly: empty injection
+            // set, no boundary (taskMounts omitted), declared manifest is
+            // the by-product (empty faces for a bare persona).
+            injection: { mcps: [] },
+            prompt: opts.prompt,
+            agentName: opts.agentName,
+            systemPrompt: opts.systemPrompt,
+            resolvedParamsByAgent: new Map([
+              [
+                opts.agentName,
+                {
+                  model: opts.model != null && opts.model !== '' ? opts.model : null,
+                  variant: null,
+                  temperature: null,
+                  steps: null,
+                  maxSteps: null,
+                  isSandbox: opts.isSandbox === true,
+                },
+              ],
+            ]),
+            cwd: worktreeDir,
+            runRoot: runDir,
+            // Callers pass the pair together (intent/narrative thread
+            // runtime.configDir) or not at all; a single half keeps the
+            // legacy omitted-default (unreached by any production caller).
+            ...(opts.configDirEnv != null &&
+            opts.configDirEnv !== '' &&
+            opts.configDirName != null &&
+            opts.configDirName !== ''
+              ? { configDir: { env: opts.configDirEnv, name: opts.configDirName } }
+              : {}),
+            wantsInventory: false,
+            ...(opts.runtimeBinary != null && opts.runtimeBinary !== ''
+              ? { runtimeBinary: opts.runtimeBinary }
+              : {}),
+            ...(opts.opencodeCmd === undefined
+              ? {}
+              : { legacyHeads: { opencodeCmd: opts.opencodeCmd } }),
+            nodeRunId: `${opts.feature}-system`,
+            log,
+          }
+        }
       } catch (err) {
         return fail('spawn-failed', {
           stderrTail: maskDiagnosticsText(
@@ -564,6 +634,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         ...(capturedStartupInventory === null
           ? {}
           : { startupInventory: capturedStartupInventory }),
+        ...(declaredForResult === undefined ? {} : { declared: declaredForResult }),
       }
       if (run.outcome === 'aborted') return { status: 'aborted', ...base }
       if (run.outcome === 'timeout') return { status: 'timeout', ...base }

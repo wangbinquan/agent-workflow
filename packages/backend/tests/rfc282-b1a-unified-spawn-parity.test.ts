@@ -99,7 +99,14 @@ const PROFILES = new Map<string, RuntimeProfile>([
   ],
   [
     'sys-persona',
-    { model: 'opus', variant: null, temperature: null, steps: null, maxSteps: null, isSandbox: false },
+    {
+      model: 'opus',
+      variant: null,
+      temperature: null,
+      steps: null,
+      maxSteps: null,
+      isSandbox: false,
+    },
   ],
 ])
 
@@ -116,7 +123,9 @@ function mkBusinessPair(runRoot: string, kind: 'opencode' | 'claude-code'): BizP
   const mcps = [localMcp('search'), localMcp('disabled-mcp', false)]
   const plugins = [mkPlugin('tracer'), mkPlugin('disabled-plugin', false)]
   const configDir =
-    kind === 'opencode' ? DEFAULT_CONFIG_DIR_PROFILE.opencode : DEFAULT_CONFIG_DIR_PROFILE['claude-code']
+    kind === 'opencode'
+      ? DEFAULT_CONFIG_DIR_PROFILE.opencode
+      : DEFAULT_CONFIG_DIR_PROFILE['claude-code']
   const shared = {
     prompt: 'THE BUSINESS PROMPT',
     injectedMemoryBlock: '## Injected memory\n- fact A',
@@ -139,7 +148,9 @@ function mkBusinessPair(runRoot: string, kind: 'opencode' | 'claude-code'): BizP
     resumeSessionId: 'ses_42',
     worktreePath,
     taskMounts: [worktreePath],
-    ...(kind === 'opencode' ? { opencodeCmd: ['/mock/opencode'] } : { runtimeCmd: ['/mock/claude'] }),
+    ...(kind === 'opencode'
+      ? { opencodeCmd: ['/mock/opencode'] }
+      : { runtimeCmd: ['/mock/claude'] }),
   }
   const unified: AgentSpawnContext = {
     ...shared,

@@ -971,17 +971,37 @@ export async function defaultDistillerSpawn(
     mkdir(worktreeDir, { recursive: true, mode: 0o700 }),
     mkdir(runDir, { recursive: true, mode: 0o700 }),
   ])
-  const plan = await driver.buildSpawn({
+  if (driver.buildAgentSpawn === undefined) {
+    throw new Error(`runtime driver '${driver.kind}' lacks buildAgentSpawn`)
+  }
+  // RFC-282 B1b — unified persona-only assembly (configDir omitted keeps the
+  // legacy system default: opencode config dir = runDir itself, no leaf).
+  const plan = await driver.buildAgentSpawn({
+    injection: { mcps: [] },
+    prompt: input.userPrompt,
     agentName: DISTILLER_AGENT_NAME,
     systemPrompt: DISTILLER_SYSTEM_PROMPT,
-    model: input.model,
-    isSandbox: input.isSandbox === true,
-    prompt: input.userPrompt,
-    worktreePath: worktreeDir,
-    runDir,
+    resolvedParamsByAgent: new Map([
+      [
+        DISTILLER_AGENT_NAME,
+        {
+          model: input.model ?? null,
+          variant: null,
+          temperature: null,
+          steps: null,
+          maxSteps: null,
+          isSandbox: input.isSandbox === true,
+        },
+      ],
+    ]),
+    cwd: worktreeDir,
+    runRoot: runDir,
+    wantsInventory: false,
     ...(input.runtimeBinary != null && input.runtimeBinary !== ''
       ? { runtimeBinary: input.runtimeBinary }
       : {}),
+    nodeRunId: 'memory-distiller',
+    log,
   })
 
   const run = await runAgentProcess({

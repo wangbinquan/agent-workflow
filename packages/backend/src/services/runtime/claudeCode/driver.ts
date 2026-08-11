@@ -28,6 +28,7 @@ import {
   declareSkills,
   declareSubagents,
   deriveClaudeDroppedParams,
+  emptyDeclaredManifest,
   renderClaudeMcpInjection,
 } from '@/services/execution/agentInjection'
 import { randomUUID } from 'node:crypto'
@@ -236,8 +237,23 @@ export const claudeCodeDriver: RuntimeDriver = {
   // RFC-282 B1a — unified assembly facade (see the opencode twin for the
   // contract; parity suite rfc282-b1a is live while both paths exist).
   async buildAgentSpawn(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
-    const rendered = this.renderInjection(ctx.injection)
-    const head = ctx.binaryOverride !== undefined ? { runtimeCmd: [...ctx.binaryOverride] } : {}
+    // §7-9 — see the opencode twin: declared render degrades, assembly fails.
+    let rendered: RenderedInjectionV1
+    try {
+      rendered = this.renderInjection(ctx.injection)
+    } catch (err) {
+      ctx.log.warn('startup-declaration-failed', {
+        nodeRunId: ctx.nodeRunId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      rendered = { mcpEntries: null, declared: emptyDeclaredManifest() }
+    }
+    const head =
+      ctx.binaryOverride !== undefined
+        ? { runtimeCmd: [...ctx.binaryOverride] }
+        : ctx.legacyHeads?.runtimeCmd !== undefined
+          ? { runtimeCmd: [...ctx.legacyHeads.runtimeCmd] }
+          : {}
     if (ctx.taskMounts === undefined) {
       const plan = await this.buildSpawn(toSystemCtx(ctx, rendered, head))
       return { ...plan, declared: rendered.declared }
