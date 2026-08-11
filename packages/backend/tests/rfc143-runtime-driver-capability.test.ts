@@ -104,6 +104,23 @@ describe('RFC-143 (B) 能力接口', () => {
     const spawnCalls: string[] = []
     const mockDriver = {
       kind: 'opencode', // 借用已有 kind 满足 RuntimeKind union（真第三 kind 需 widen union）
+      // RFC-282 A3 — capabilities 是必填契约：第三 runtime 必须显式表态每个
+      // 声明面（缺一个编译不过），启动自检（selfCheck.ts）再在运行时校验一遍。
+      capabilities: {
+        startupObservation: 'none',
+        observationRequiresFreshRun: false,
+        declarationFaces: {
+          mcpServers: 'unobservable',
+          skills: 'unobservable',
+          subagents: 'unobservable',
+          plugins: 'unobservable',
+          tools: 'unobservable',
+          droppedParams: 'unsupported',
+          skippedDisabledMcps: 'supported',
+          unsupported: 'supported',
+          unobservable: 'supported',
+        },
+      },
       minVersion: '0.0.0',
       parseEvent: () => null,
       // RFC-280 T1: 统一注入渲染钩子是必选契约——第三 runtime 实现者在这里被

@@ -1,0 +1,81 @@
+// RFC-282 A3 (§2.4) — the ONE readable answer to "what happens when a node
+// references a DISABLED resource".
+//
+// v2 stance (决策 4/20 撤回后): this table CHANGES NO VALUES. Today's rules
+// stay exactly as they are — plugin hard-fails, MCP is skipped-and-declared,
+// agent.enabled is not consulted at all. What the table adds is:
+//   1. one place to read the rule AND its why (it used to take reading
+//      scheduler + the unified injection layer + the RFC-228 integrity gate
+//      side by side to answer the question);
+//   2. a compile-time obligation: adding a disableable resource kind without
+//      stating its disposition breaks the Record's exhaustiveness (§4.4-3).
+//
+// The table is an INDEX, not an implementation: `fail-closed`'s sites point at
+// the five real emitters; their logic does not move here (moving it would be
+// an RFC-228 fence change, which is out of scope — 设计门第二轮).
+
+/**
+ * Resource kinds that actually carry an `enabled` column (设计门 P1-7/P1-10):
+ * mcps (schema.ts:199) / plugins (:241) / agents (:105). `skills` has NO such
+ * column — a skill's unavailability is RFC-170 quarantine (an integrity
+ * fence, not a user switch) and is handled by the injection resolver, not
+ * this table. Writing 'skill' here would create a dead entry the self-check
+ * "verifies" — the RFC-280 实现门 P2-D anti-pattern.
+ */
+export type DisableableResourceKind = 'mcp' | 'plugin' | 'agent'
+
+export type DisabledDisposition =
+  | 'fail-closed' // referencing a disabled row refuses launch/dispatch
+  | 'skip-and-declare' // skipped; recorded on the declared manifest, node runs on
+  | 'not-modeled' // the enabled column exists but nothing consumes it (today's truth)
+
+export interface DisabledPolicyEntry {
+  readonly disposition: DisabledDisposition
+  /** Why THIS disposition — the product reasoning, kept next to the rule. */
+  readonly why: string
+  /** For 'fail-closed': the real emitters (file anchors, verified by the A2 lock). */
+  readonly sites?: readonly string[]
+  /** For 'skip-and-declare': which DeclaredManifest face carries the skip. */
+  readonly declaredField?: 'skippedDisabledMcps'
+}
+
+/** The five real `plugin-disabled` emitters (all preserved verbatim — v2 has
+ *  zero product behavior change; four upstream launch gates consume them). */
+export const PLUGIN_DISABLED_SITES: readonly string[] = [
+  'services/workflow.validator.ts',
+  'services/agent.ts',
+  'services/agentResourceIntegrity.ts',
+  'services/scheduler.ts',
+]
+
+export const DISABLED_RESOURCE_POLICY: Readonly<
+  Record<DisableableResourceKind, DisabledPolicyEntry>
+> = {
+  plugin: {
+    disposition: 'fail-closed',
+    why:
+      'plugin 影响 runtime 的行为面（工具/钩子），缺失会让 agent 跑出「看似成功但能力不全」' +
+      '的结果 ⇒ 5 个产出点 + 4 道上游 launch 门共同保证它到不了执行（RFC-228）。',
+    sites: PLUGIN_DISABLED_SITES,
+  },
+  mcp: {
+    disposition: 'skip-and-declare',
+    why: 'MCP 缺失只是少一个工具；RFC-280 落差③已裁定为「声明 + 告警」，节点照常运行。',
+    declaredField: 'skippedDisabledMcps',
+  },
+  agent: {
+    disposition: 'not-modeled',
+    why:
+      'agents.enabled 存在，但 resolveDependsClosure（agentDeps.ts）今天全程不看它。' +
+      '写成 fail-closed 或 skip 都是未评审的新行为 ⇒ 显式记「本表不管」，由启动自检单独报告。',
+  },
+}
+
+/** All kinds whose disposition is real (not-modeled excluded) — the self-check
+ *  reports 'not-modeled' entries separately so the gap stays VISIBLE instead
+ *  of being buried inside a seemingly-exhaustive table. */
+export function notModeledDisabledKinds(): DisableableResourceKind[] {
+  return (Object.keys(DISABLED_RESOURCE_POLICY) as DisableableResourceKind[]).filter(
+    (kind) => DISABLED_RESOURCE_POLICY[kind].disposition === 'not-modeled',
+  )
+}

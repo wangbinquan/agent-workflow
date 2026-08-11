@@ -378,6 +378,19 @@ scheduler 入口（6 个，统一形态）
 >
 > A1 的「正向证明」因此必须**同时**覆盖新旧两组 pattern 的变异实证（旧 pattern 仍会
 > 报错），而不只是新 pattern —— 沿用 `docs/dev-gotchas.md` 的「结构守卫必做变异实证」。
+>
+> **实现修正（A1 落地时，2026-08-11）**：设计门漏算了 `packages/backend/tests/`
+> 里 **33 条**对 driver 内部的合法单元测试 deep import——「扩展既有 block」的字面
+> 做法会把它们全部打红（给 33 处测试挂 disable 注释是纯噪声）。落地形态改为：
+> 抽 `backendCrossPackagePatterns` **共享常量**，把既有 block 拆成
+> `packages/backend/**`（ignores src）与 `packages/backend/src/**` 两个 block，
+> **两个都 spread 同一份跨包禁令数组**、后者追加 runtime 围栏 patterns。P1-8 保护的
+> 不变量（旧禁令不静默失效）由共享常量结构性成立，且
+> `rfc282-a1-eslint-boundary.test.ts` 对**两个 block 各自**做旧 pattern 变异实证
+> （src 文件 + tests 文件 × react/frontend 禁令四个方向全红）。存量违规 5 处
+> （`runner.ts:81/2194/2195/2199`、`runtimeRegistry.ts:34`）挂
+> `RFC282_IMPORT_EXCEPTIONS` 行内注释，三元组清单与陈旧棘轮在
+> `rfc282-single-implementation-lock.test.ts`。
 
 规则内容（并入既有 block）：
 

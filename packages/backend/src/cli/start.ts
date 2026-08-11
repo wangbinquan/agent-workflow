@@ -372,6 +372,20 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     : 0
   log.info('db ready', { path: Paths.db, dbVersion })
 
+  // RFC-282 §4.3 — runtime declaration self-check, before any business
+  // service: every registered driver must state a stance on every declaration
+  // face (a declared-but-unimplemented face makes the verification layer
+  // believe it is verifying — RFC-247 rationale). 'not-modeled' policy rows
+  // are reported separately so the gap stays visible.
+  {
+    const { assertRuntimeDeclarations } = await import('@/services/runtime/selfCheck')
+    const { getRuntimeDriver, RUNTIME_KINDS } = await import('@/services/runtime')
+    const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))
+    if (notModeled.length > 0) {
+      log.info('runtime declaration self-check: not-modeled dispositions', { notModeled })
+    }
+  }
+
   // RFC-279: migration 0147 can leave a direct-upgrade legacy URL under a
   // closed escrow prefix. Create the daemon SecretBox and converge credentials
   // immediately after openDb, before any recovery, seeder, scheduler, or HTTP

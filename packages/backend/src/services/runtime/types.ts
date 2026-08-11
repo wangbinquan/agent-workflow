@@ -485,8 +485,57 @@ export interface BusinessNodeSpawnContext {
  * `buildBusinessSpawn` + optional `readInventory?`/`startLiveCapture?` land in
  * later RFC-143 PRs; this interface reflects PR-1's surface.
  */
+/**
+ * RFC-282 A3 — the faces of `DeclaredManifestV1` a driver must take a stance
+ * on. Derived with `keyof`, so ADDING a manifest face is a compile error in
+ * every driver's `declarationFaces` record until it states support (§4.4-2).
+ */
+export type DeclarationFace = keyof DeclaredManifestV1
+
+export type FaceSupport =
+  | 'supported' // the runtime has this face and it can be observed/verified
+  | 'unsupported' // the runtime does not have this face (e.g. claude × plugin)
+  | 'unobservable' // injected, but no observation channel (e.g. opencode × plugin)
+
+/**
+ * RFC-282 A3 — a driver's STATIC self-declaration, consumed by the boot
+ * self-check (every registered driver must cover every face) and later (C2)
+ * by the runner's observation switch.
+ *
+ * 命名注意（设计门 P2-4）：**不叫 `RuntimeCapabilities`** —— 本文件已有
+ * `DeclaredRuntimeCapabilities`，语义是「运行时启动清单里**观测到**的能力」，
+ * 与这里「driver **静态声明**的能力」完全不同却只差一个词。
+ *
+ * A3 deliberately carries ONLY the three new dimensions. The existing
+ * per-driver scalars (`minVersion` / `acceptsExtraArgs` /
+ * `acceptsSandboxCompatibilityMarker`) stay where they are — folding them in
+ * here while their consumers still read the driver fields would be a second
+ * copy of each value, which is exactly what this RFC exists to kill.
+ */
+export interface RuntimeDriverCapabilities {
+  /**
+   * Where this runtime's startup inventory comes from. The runner switches on
+   * this (C2) instead of the `readInventory !== undefined` proxy; a third
+   * runtime must state its source explicitly instead of falling into an
+   * if-opencode-else-claude branch.
+   */
+  readonly startupObservation: 'inventory-file' | 'init-event' | 'none'
+  /**
+   * 设计门 P1-7 — whether the observation exists only when THIS run produced
+   * a fresh inventory. opencode's dump plugin writes the file per fresh run;
+   * a followup (reused session, plugin not re-run) has nothing to read, and
+   * verifying anyway would hang an "unverifiable" banner on every followup
+   * (RFC-280 实现门 P2-E). claude's init event fires every run.
+   */
+  readonly observationRequiresFreshRun: boolean
+  /** Per-face stance; the boot self-check refuses to start on a missing face. */
+  readonly declarationFaces: Readonly<Record<DeclarationFace, FaceSupport>>
+}
+
 export interface RuntimeDriver {
   readonly kind: RuntimeKind
+  /** RFC-282 A3 — static self-declaration (see RuntimeDriverCapabilities). */
+  readonly capabilities: RuntimeDriverCapabilities
   /**
    * 2026-08-04 — whether this driver's spawn consumes per-runtime `extraArgs`
    * (fork-private CLI tokens appended to the argv). The registry's

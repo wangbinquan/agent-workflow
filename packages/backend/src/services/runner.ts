@@ -78,6 +78,7 @@ import {
 } from '@/services/runtimeRegistry'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import type { ResolvedSkill, RuntimeDriver, SpawnPlan, StartupInventory } from './runtime/types'
+// eslint-disable-next-line no-restricted-imports -- RFC282_IMPORT_EXCEPTIONS(B4): EMPTY_RUNTIME_PROFILE 双定义，B4 收敛到 agentInjection 后此行消失
 import { EMPTY_RUNTIME_PROFILE } from './runtime/opencode/inlineConfig'
 import {
   declaredHasContent,
@@ -2191,9 +2192,12 @@ export function pumpLines(
 // modules, no runner.ts import → no module-init cycle). Re-export the public
 // surface so existing import sites (tests, memoryDistiller) keep resolving from
 // './runner'.
+// eslint-disable-next-line no-restricted-imports -- RFC282_IMPORT_EXCEPTIONS(C0): re-export 洗白通道，C0 拆除
 export { accumulateTokens, extractTextFromEvent, inferEventKind } from './runtime/opencode/events'
+// eslint-disable-next-line no-restricted-imports -- RFC282_IMPORT_EXCEPTIONS(C0): re-export 洗白通道，C0 拆除
 export { buildCommand } from './runtime/opencode/spawn'
 // RFC-143 PR-4: the OPENCODE_CONFIG_CONTENT assembly moved to
 // ./runtime/opencode/inlineConfig.ts so the opencode driver's buildBusinessSpawn
 // can import it cycle-free. Same re-export contract as above.
+// eslint-disable-next-line no-restricted-imports -- RFC282_IMPORT_EXCEPTIONS(C0): re-export 洗白通道，C0 拆除
 export { buildInlineAgentEntry, buildInlineConfig } from './runtime/opencode/inlineConfig'
