@@ -11,9 +11,11 @@ import { eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { workflows } from '@/db/schema'
+import { canViewResource } from '@/services/resourceAcl'
 import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
+import { getWorkflowAclRow } from '@/services/workflow'
 import { renderWebhookLaunch } from '@/services/webhook/webhookDispatch'
-import { ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/util/errors'
 import type {
   CodeHostEvent,
   CodeHostEventType,
@@ -131,6 +133,18 @@ export async function assertTriggerSaveable(
   const payload = parsedPayload.data
   let workflowInputs: ReadonlyArray<DefInput> | null = null
   if (candidate.launchKind === 'workflow') {
+    // D1 顺序不变量：可见性门必须先于 definition 内容的任何读取与回显。
+    // 下面的静态校验层逐字回显 input key 与 kind（unknown-input /
+    // required-input-unmapped / input-kind-unmappable），若排在 ACL 之后，
+    // 一个不可见 workflow 的存在性与输入结构就会经 422 的 issue 泄漏出去
+    // ——彩排 gate 的 canViewResource 那时才跑，已经晚了。
+    // 用 ACL 专用行读：它不解析 definition，坏定义也能正确判 404（与
+    // getWorkflowAclRow 的既有用途一致）。完整 gate（builtin / upload /
+    // launch-shape）仍留在本函数末尾，这里只前置最小可见性门。
+    const aclRow = await getWorkflowAclRow(db, candidate.launchRefId)
+    if (aclRow === null || !(await canViewResource(db, actor, 'workflow', aclRow))) {
+      throw new NotFoundError('workflow-not-found', 'workflow not found')
+    }
     const wf = (
       await db
         .select({ definition: workflows.definition })
