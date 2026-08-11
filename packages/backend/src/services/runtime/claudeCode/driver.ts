@@ -335,6 +335,18 @@ export const claudeCodeDriver: RuntimeDriver = {
       // RFC-281 T2/T3: workspace WRITE boundary via Claude's own sandbox. The
       // author's literal external_directory allow-dirs are honored; non-literal
       // globs are disclosed as a warning below (never silently dropped).
+      onExtraArgsDropped: (dropped) => {
+        // RFC-281 P2-4: a pre-RFC runtime row could carry `--settings` (then a
+        // legal operator flag). Dropping it protects the boundary; saying so
+        // keeps it from being a silent behavior change for that operator.
+        ctx.log.warn('claude-extra-args-platform-owned-dropped', {
+          agent: ctx.agent.name,
+          nodeRunId: ctx.nodeRunId,
+          dropped,
+          detail:
+            'stored extraArgs contained platform-owned flags; they were removed from this spawn',
+        })
+      },
       boundary: {
         taskMounts: ctx.taskMounts,
         ...(authorAllowDirs.dirs.length === 0 ? {} : { authorAllowDirs: authorAllowDirs.dirs }),

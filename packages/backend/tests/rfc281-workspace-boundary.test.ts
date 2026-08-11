@@ -12,9 +12,13 @@
 // sibling task's worktree and executed there. See design/RFC-281 §1.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { Paths } from '@/util/paths'
+import { resolve } from 'node:path'
 import {
   claudeExpressibleAuthorDirs,
   machineSkillRoots,
+  resolveBoundaryMounts,
   opencodeDataDir,
   claudeWriteBoundaryAvailability,
   composeClaudeBoundarySettings,
@@ -259,19 +263,11 @@ describe('opencodeDataDir — matches opencode’s own XDG data resolution', () 
 })
 
 describe('§0 guard — the agent’s own cwd is always inside the boundary', () => {
-  // The runner derives taskMounts from templateMeta.repos and force-includes
-  // opts.worktreePath (runner.ts, RFC-281 comment). This locks the property the
-  // boundary must never violate: whatever the mount metadata says, the process
-  // cwd is re-allowed — otherwise the agent cannot work in its own worktree.
-  const mountsFor = (worktreePath: string, repos: string[]): string[] => {
-    const fromRepos = repos.filter((p) => p.length > 0)
-    const withCwd = fromRepos.includes(worktreePath) ? fromRepos : [worktreePath, ...fromRepos]
-    return withCwd.length > 0 ? withCwd : [worktreePath]
-  }
-
+  // Locks the REAL function the runner calls (impl-gate P3-7: this used to be a
+  // copy of runner.ts's expression, so deleting that code left the test green).
   test('cwd is prepended when the repo metadata lists other paths (canonical vs iso skew)', () => {
     const cwd = '/home/aw/iso/T1/R1'
-    const mounts = mountsFor(cwd, ['/home/aw/worktrees/repo/T1'])
+    const mounts = resolveBoundaryMounts(cwd, ['/home/aw/worktrees/repo/T1'])
     expect(mounts[0]).toBe(cwd)
     const ext = composeOpencodeBoundary(undefined, { ...CTX, taskMounts: mounts })[
       'external_directory'
@@ -279,13 +275,23 @@ describe('§0 guard — the agent’s own cwd is always inside the boundary', ()
     expect(ext[`${cwd}/*`]).toBe('allow')
   })
 
-  test('empty repo metadata still yields the cwd', () => {
-    expect(mountsFor('/w', [])).toEqual(['/w'])
-    expect(mountsFor('/w', [''])).toEqual(['/w'])
+  test('empty / blank repo metadata still yields the cwd', () => {
+    expect(resolveBoundaryMounts('/w', [])).toEqual(['/w'])
+    expect(resolveBoundaryMounts('/w', [''])).toEqual(['/w'])
   })
 
   test('no duplicate when the metadata already contains cwd', () => {
-    expect(mountsFor('/w', ['/w', '/w2'])).toEqual(['/w', '/w2'])
+    expect(resolveBoundaryMounts('/w', ['/w', '/w2'])).toEqual(['/w', '/w2'])
+  })
+
+  test('multi-repo metadata is preserved in order', () => {
+    expect(resolveBoundaryMounts('/w', ['/w', '/w2', '/w3'])).toEqual(['/w', '/w2', '/w3'])
+  })
+
+  test('the runner wires this function (source lock, not a re-implementation)', () => {
+    const src = readFileSync(resolve(import.meta.dir, '../src/services/runner.ts'), 'utf-8')
+    expect(src).toContain('resolveBoundaryMounts(')
+    expect(src).toContain('opts.worktreePath,')
   })
 })
 
@@ -315,42 +321,67 @@ describe('claudeWriteBoundaryAvailability — degrade loudly, never block (AC-6)
 })
 
 describe('AC-8 — platform-sensitive paths are outside the re-allow set', () => {
-  // The boundary's re-allow list must never accidentally include appHome itself
-  // or its secret-bearing files: opencode denies everything not listed, so this
-  // is the assertion that the "everything else" really is everything else.
+  // impl-gate P3-8: enumerate `Paths` instead of hand-copying a list — a new
+  // secret-bearing entry (e.g. `.daemon.control`, which carries the shutdown
+  // nonce) must be covered the day it is added, not the day someone remembers.
+  // Evaluation mirrors opencode's own semantics (findLast over Wildcard.match,
+  // `*` crossing `/`), so a too-broad allow like `/home/*` would fail this.
   const APP_HOME = '/home/aw'
-  const SENSITIVE = [
-    `${APP_HOME}/db.sqlite`,
-    `${APP_HOME}/secret.key`,
-    `${APP_HOME}/token`,
-    `${APP_HOME}/config.json`,
+  const OTHER_TASK = [
     `${APP_HOME}/iso/OTHER_TASK/run1`,
     `${APP_HOME}/runs/OTHER_TASK/run1`,
     `${APP_HOME}/worktrees/repo/OTHER_TASK`,
   ]
 
-  test('opencode: no sensitive path is allowed by the synthesized boundary', () => {
-    const out = composeOpencodeBoundary(undefined, CTX)
-    const ext = out['external_directory'] as Record<string, string>
-    expect(ext['*']).toBe('deny')
-    for (const path of SENSITIVE) {
-      // no allow rule may match the sensitive path — check both the literal and
-      // its `<dir>/*` form, which is the only shape the platform ever emits.
-      expect(ext[path]).toBeUndefined()
-      expect(ext[`${path}/*`]).toBeUndefined()
+  const platformPaths = (): string[] => {
+    const out: string[] = []
+    for (const key of Object.keys(Paths)) {
+      const value = (Paths as unknown as Record<string, unknown>)[key]
+      if (typeof value === 'string' && value.length > 0) out.push(value)
     }
-    // appHome root itself is never re-allowed (that would defeat the boundary).
-    expect(ext[`${APP_HOME}/*`]).toBeUndefined()
+    return out
+  }
+
+  /** opencode's裁决: last matching rule wins; `*` crosses `/`. */
+  const decide = (rules: Record<string, string>, target: string): string => {
+    const toRe = (pattern: string): RegExp =>
+      new RegExp(
+        '^' +
+          pattern
+            .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+            .replace(/\*/g, '.*')
+            .replace(/\?/g, '.') +
+          '$',
+        's',
+      )
+    let verdict = 'deny'
+    for (const [pattern, action] of Object.entries(rules)) {
+      if (toRe(pattern).test(target)) verdict = action
+    }
+    return verdict
+  }
+
+  test('opencode: every platform path and every other task path evaluates to deny', () => {
+    const ext = composeOpencodeBoundary(undefined, CTX)['external_directory'] as Record<
+      string,
+      string
+    >
+    const targets = [...platformPaths(), ...OTHER_TASK]
+    expect(targets.length).toBeGreaterThan(5) // the enumeration really produced paths
+    for (const target of targets) {
+      // the boundary's re-allow set covers this run's own dirs only; these are
+      // outside it, so the deny baseline must survive the findLast pass.
+      expect({ target, verdict: decide(ext, target) }).toEqual({ target, verdict: 'deny' })
+    }
   })
 
-  test('claude: sensitive paths never enter allowWrite (write stays cwd+tmp+mounts)', () => {
+  test('claude: no platform path enters allowWrite (write stays cwd+tmp+mounts)', () => {
     const s = composeClaudeBoundarySettings({
       taskMounts: ['/home/aw/iso/T1/R1'],
       explicitPermission: true,
     })
     const allow = s.sandbox.filesystem.allowWrite
-    for (const path of SENSITIVE) expect(allow).not.toContain(path)
-    expect(allow).not.toContain(APP_HOME)
+    for (const target of [...platformPaths(), ...OTHER_TASK]) expect(allow).not.toContain(target)
   })
 })
 

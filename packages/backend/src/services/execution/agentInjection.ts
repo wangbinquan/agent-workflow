@@ -198,9 +198,13 @@ export function renderOpencodeAgentEntry(
   const inlineAgent: Record<string, unknown> = {
     prompt: agent.bodyMd,
     description: agent.description,
-    // RFC-276: the author's explicit permission map is the only platform
-    // permission overlay. OpenCode's own `--auto` semantics handle all
-    // unspecified operations; the platform no longer adds a global allow/deny.
+    // The author's explicit permission map. RFC-281 revises RFC-276's "the
+    // author's map is the ONLY platform overlay": the workspace boundary adds
+    // exactly one platform rule (`external_directory`), composed by
+    // `composeOpencodeBoundary` in the OPENCODE assembly (inlineConfig.ts) —
+    // this renderer still emits the author's map verbatim, and the boundary is
+    // layered on top there. Everything else is unchanged: OpenCode's own
+    // `--auto` semantics handle operations nobody declared.
     permission: agent.permission,
     // Platform-only fields live under `options` so opencode passes them through
     // without trying to parse. The runner doesn't read these back; they exist

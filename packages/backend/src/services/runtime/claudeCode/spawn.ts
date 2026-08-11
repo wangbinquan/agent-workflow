@@ -46,6 +46,8 @@ export interface ClaudeSpawnContext {
     authorAllowDirs?: readonly string[]
   }
   extraArgs?: readonly string[]
+  /** Called when stored extraArgs carried a platform-owned flag (see below). */
+  onExtraArgsDropped?: (dropped: readonly string[]) => void
 }
 
 /** Headless transport base shared by every platform-spawned Claude child. */
@@ -176,7 +178,33 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   if (ctx.resumeSessionId !== undefined && ctx.resumeSessionId.length > 0) {
     cmd.push('--resume', ctx.resumeSessionId)
   }
-  if (ctx.extraArgs !== undefined && ctx.extraArgs.length > 0) cmd.push(...ctx.extraArgs)
+  // RFC-281 (impl-gate P2-4): `--settings` only became platform-owned in this
+  // RFC, so a runtime row saved BEFORE it could legitimately carry
+  // `--settings /ops/mine.json` in extra_args_json. The save-time validator
+  // never re-runs for stored rows, and extraArgs land at the argv TAIL — the
+  // operator's file would silently win over the workspace boundary. Drop any
+  // platform-owned token here (spawn is the last gate) and report it.
+  if (ctx.extraArgs !== undefined && ctx.extraArgs.length > 0) {
+    const kept: string[] = []
+    const dropped: string[] = []
+    for (let i = 0; i < ctx.extraArgs.length; i += 1) {
+      const arg = ctx.extraArgs[i] as string
+      const bare = arg.startsWith('--') && arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg
+      if (CLAUDE_PLATFORM_OWNED_FLAGS.has(bare)) {
+        dropped.push(arg)
+        // a bare `--flag value` pair drops its value too
+        const next = ctx.extraArgs[i + 1]
+        if (!arg.includes('=') && next !== undefined && !next.startsWith('-')) {
+          dropped.push(next)
+          i += 1
+        }
+        continue
+      }
+      kept.push(arg)
+    }
+    if (dropped.length > 0) ctx.onExtraArgsDropped?.(dropped)
+    cmd.push(...kept)
+  }
 
   return {
     cmd,

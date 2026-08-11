@@ -28,6 +28,7 @@ const SIBLING_ROOT = '/home/aw/iso'
 
 interface CtxOpts {
   runRoot: string
+  extraArgs?: readonly string[]
   taskMounts?: readonly string[]
   hostProbe?: { platform: NodeJS.Platform; hasExecutable: (bin: string) => boolean }
   warns?: Array<{ event: string; fields: Record<string, unknown> }>
@@ -50,7 +51,14 @@ function businessCtx(permission: Record<string, unknown>, opts: CtxOpts): never 
     dependents: [] as readonly Agent[],
     mcps: [] as readonly Mcp[],
     plugins: [] as readonly Plugin[],
-    resolvedParamsByAgent: new Map<string, RuntimeProfile>(),
+    resolvedParamsByAgent:
+      opts.extraArgs === undefined
+        ? new Map<string, RuntimeProfile>()
+        : // 生产里 extraArgs 来自 runtime profile（runtime 行的 extra_args_json），
+          // 不是 spawn ctx —— fixture 必须走同一条路，否则测的是不存在的形态。
+          new Map<string, RuntimeProfile>([
+            ['claude-agent', { extraArgs: opts.extraArgs } as unknown as RuntimeProfile],
+          ]),
     skills: [],
     worktreePath: OWN,
     taskMounts: opts.taskMounts ?? [OWN],
@@ -197,5 +205,39 @@ describe('RFC-281 AC-6 — degrade loudly, never block (impl-gate P2-7)', () => 
     const warn = warns.find((w) => w.event === 'claude-external-directory-glob-unsupported')
     expect(warn).toBeDefined()
     expect(warn?.fields.patterns).toEqual(['/a/*/b'])
+  })
+})
+
+describe('RFC-281 P2-4 — stored extraArgs cannot override the boundary', () => {
+  test('a legacy `--settings` in extraArgs is dropped and reported', async () => {
+    const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
+    const warns: Array<{ event: string; fields: Record<string, unknown> }> = []
+    const plan = await claudeCodeDriver.buildBusinessSpawn(
+      businessCtx(
+        {},
+        { runRoot, warns, extraArgs: ['--settings', '/ops/mine.json', '--skip-safe-check'] },
+      ),
+    )
+    // exactly ONE --settings survives, and it is the platform's per-run file
+    // (extraArgs land at the tail, so an un-dropped operator file would win).
+    const settingsIdx = plan.cmd.reduce<number[]>(
+      (acc, a, i) => (a === '--settings' ? [...acc, i] : acc),
+      [],
+    )
+    expect(settingsIdx).toHaveLength(1)
+    expect(plan.cmd[settingsIdx[0]! + 1]).toContain(runRoot)
+    expect(plan.cmd).not.toContain('/ops/mine.json')
+    // an unrelated fork flag is untouched
+    expect(plan.cmd).toContain('--skip-safe-check')
+    const warn = warns.find((w) => w.event === 'claude-extra-args-platform-owned-dropped')
+    expect(warn?.fields.dropped).toEqual(['--settings', '/ops/mine.json'])
+  })
+
+  test('the =-joined spelling is dropped too', async () => {
+    const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
+    const plan = await claudeCodeDriver.buildBusinessSpawn(
+      businessCtx({}, { runRoot, extraArgs: ['--settings=/ops/mine.json'] }),
+    )
+    expect(plan.cmd).not.toContain('--settings=/ops/mine.json')
   })
 })

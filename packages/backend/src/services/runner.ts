@@ -98,6 +98,7 @@ import {
 import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import { loadRunEnvelopeNonce } from '@/services/nodeRunMint'
+import { resolveBoundaryMounts } from '@/services/execution/workspaceBoundary'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
 import {
   claimNewRuntimeSession,
@@ -873,21 +874,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // forwards them for {{__repos__}}). Single-repo tasks carry a length-1 array
   // whose worktreePath mirrors opts.worktreePath. Empty → fall back to the cwd
   // so the boundary always re-allows at least the working tree.
-  const boundaryMounts = ((): readonly string[] => {
-    const fromRepos = (opts.templateMeta.repos ?? [])
-      .map((r) => r.worktreePath)
-      .filter((p) => p.length > 0)
-    // The subprocess cwd is ALWAYS a legal workspace, no matter what the
-    // per-repo metadata says. Today the scheduler fills `repos[].worktreePath`
-    // from the same iso handle that produced `worktreePath`, so this is a
-    // no-op; it stays as a guard because a future caller that fills `repos`
-    // with canonical paths while cwd is an iso worktree would otherwise fence
-    // the agent out of its own working tree (§0: never break business work).
-    const withCwd = fromRepos.includes(opts.worktreePath)
-      ? fromRepos
-      : [opts.worktreePath, ...fromRepos]
-    return withCwd.length > 0 ? withCwd : [opts.worktreePath]
-  })()
+  // RFC-281: mounts for the workspace boundary (see resolveBoundaryMounts —
+  // cwd is always included, whatever the per-repo metadata says).
+  const boundaryMounts = resolveBoundaryMounts(
+    opts.worktreePath,
+    (opts.templateMeta.repos ?? []).map((r) => r.worktreePath),
+  )
   let plan: SpawnPlan
   try {
     plan = await driver.buildBusinessSpawn({

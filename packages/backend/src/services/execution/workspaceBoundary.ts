@@ -68,6 +68,23 @@ export function machineSkillRoots(home: string = homedir()): string[] {
   ]
 }
 
+/**
+ * 本次 run 的边界 mounts（runner 用）。
+ *
+ * 数据源是 scheduler 已填的 per-repo worktree 路径；**无论元数据说什么，进程
+ * cwd 恒在其中**——否则 agent 会被挡在自己的工作树外（§0 最忌）。提成纯函数是
+ * 为了让这条不变量有真正锁得住的断言面（实现门 P3-7：原先测试手抄了 runner 里
+ * 的表达式，改 runner 测试照样绿）。
+ */
+export function resolveBoundaryMounts(
+  worktreePath: string,
+  repoWorktreePaths: readonly string[],
+): string[] {
+  const fromRepos = repoWorktreePaths.filter((p) => p.length > 0)
+  const withCwd = fromRepos.includes(worktreePath) ? fromRepos : [worktreePath, ...fromRepos]
+  return withCwd.length > 0 ? withCwd : [worktreePath]
+}
+
 /** 本次 run 的合法工作区数据源（全部取自 scheduler/runner 既有结构，不从路径形状猜）。 */
 export interface BoundaryCtx {
   /** 本任务全部 mount 的 cwd/iso 路径（单仓 = [cwd]，多仓 = 每个成员）。 */
@@ -78,7 +95,16 @@ export interface BoundaryCtx {
   readonly stagedSkillDirs: readonly string[]
   /** 已是 glob 形态的临时目录放行项（如 `<tmpdir>/opencode/*`）——原样使用，不追加 `/*`。 */
   readonly tmpGlobs: readonly string[]
-  /** linked-worktree 的 git common/admin 目录（在 worktree 外，git 操作需放行）。 */
+  /**
+   * linked-worktree 的 git common/admin 目录（在 worktree 外，git 操作需放行）。
+   *
+   * **当前两个 driver 都不填**（实现门 P3-10 登记）：T0 §5-6 实测 claude sandbox
+   * 对 linked worktree 的共享 `.git` 自动放行，opencode 侧 `git` 走 bash 而非
+   * 文件工具、不经 `external_directory`。保留该入口是为「common dir 落在 appHome
+   * 缓存克隆 / fusion iso-of-iso」这类尚未实测的布局留兜底——**接线前不要假定
+   * 兜底已生效**；真遇到 EPERM/DeniedError 时从 `git rev-parse --git-common-dir`
+   * 取值填入即可。
+   */
   readonly gitMetaDirs?: readonly string[]
 }
 
