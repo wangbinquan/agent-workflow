@@ -170,16 +170,19 @@ describe('RFC-276 explicit permission reaches the spawned OpenCode subprocess', 
       agent: Record<string, { permission?: Record<string, unknown> }>
     }
     const entryPerm = cfg.agent['test-agent']!.permission ?? {}
-    // RFC-281 T1 revises RFC-276: the author's keys survive verbatim, and the
-    // platform APPENDS external_directory (deny baseline) AFTER them. The
-    // key-order (external_directory index > author '*' index) is the invariant
-    // that stops the author `'*': 'ask'|'allow'` from dissolving the boundary
-    // (design §5-9, E4/M1).
+    // RFC-281 revises RFC-276: the author's CONCRETE keys survive verbatim and
+    // the platform appends its own `external_directory`. The author's top-level
+    // `'*'` is EXPANDED into concrete permission names (2nd impl-gate P2):
+    // opencode merges config with mergeDeep, which keeps an existing key's
+    // position, so a project config that pre-declares external_directory would
+    // otherwise lift the platform key above a surviving `'*'` and dissolve the
+    // boundary. With no wildcard left, nothing can outrank it.
     expect(entryPerm.question).toBe('allow')
     expect(entryPerm.bash).toBe('deny')
-    expect(entryPerm['*']).toBe('ask')
+    expect(entryPerm['*']).toBeUndefined()
+    // the wildcard's value is preserved on every concrete key it covered
+    expect(entryPerm.read).toBe('ask')
+    expect(entryPerm.skill).toBe('ask')
     expect((entryPerm.external_directory as Record<string, string> | undefined)?.['*']).toBe('deny')
-    const keys = Object.keys(entryPerm)
-    expect(keys.indexOf('external_directory')).toBeGreaterThan(keys.indexOf('*'))
   })
 })

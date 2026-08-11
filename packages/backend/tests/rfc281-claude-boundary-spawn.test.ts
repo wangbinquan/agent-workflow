@@ -28,6 +28,9 @@ const SIBLING_ROOT = '/home/aw/iso'
 
 interface CtxOpts {
   runRoot: string
+  /** 真实存在的 worktree（driver 在有 dependents 时会往里投影 agent 文件）。 */
+  worktreePath?: string
+  dependents?: readonly Agent[]
   extraArgs?: readonly string[]
   taskMounts?: readonly string[]
   hostProbe?: { platform: NodeJS.Platform; hasExecutable: (bin: string) => boolean }
@@ -48,7 +51,7 @@ function businessCtx(permission: Record<string, unknown>, opts: CtxOpts): never 
     } as unknown as Agent,
     prompt: 'P',
     injectedMemoryBlock: null,
-    dependents: [] as readonly Agent[],
+    dependents: opts.dependents ?? ([] as readonly Agent[]),
     mcps: [] as readonly Mcp[],
     plugins: [] as readonly Plugin[],
     resolvedParamsByAgent:
@@ -60,8 +63,8 @@ function businessCtx(permission: Record<string, unknown>, opts: CtxOpts): never 
             ['claude-agent', { extraArgs: opts.extraArgs } as unknown as RuntimeProfile],
           ]),
     skills: [],
-    worktreePath: OWN,
-    taskMounts: opts.taskMounts ?? [OWN],
+    worktreePath: opts.worktreePath ?? OWN,
+    taskMounts: opts.taskMounts ?? [opts.worktreePath ?? OWN],
     runRoot: opts.runRoot,
     configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
     wantsInventory: false,
@@ -239,5 +242,31 @@ describe('RFC-281 P2-4 — stored extraArgs cannot override the boundary', () =>
       businessCtx({}, { runRoot, extraArgs: ['--settings=/ops/mine.json'] }),
     )
     expect(plan.cmd).not.toContain('--settings=/ops/mine.json')
+  })
+})
+
+describe('RFC-281 — dependsOn subagents share the process, so their whitelists must land too', () => {
+  test("a dependent's own external_directory allow reaches the settings (2nd impl-gate P1)", async () => {
+    const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
+    const dependent = {
+      id: 'a2',
+      name: 'helper',
+      description: 'd',
+      bodyMd: 'B',
+      outputs: [],
+      permission: { read: 'allow', external_directory: { '/opt/shared-ref': 'allow' } },
+      skills: [],
+      plugins: [],
+    } as unknown as Agent
+    const worktreePath = mkdtempSync(join(tmpdir(), 'aw-rfc281-wt-'))
+    const plan = await claudeCodeDriver.buildBusinessSpawn(
+      businessCtx({ read: 'allow' }, { runRoot, worktreePath, dependents: [dependent] }),
+    )
+    const settings = readSettings(plan.cmd) as {
+      sandbox?: { filesystem?: { allowWrite?: string[] } }
+    }
+    // settings are PROCESS-wide and subagents run in the same process; taking
+    // only the root's whitelist made a dependent's declaration silently useless.
+    expect(settings.sandbox?.filesystem?.allowWrite).toContain('/opt/shared-ref')
   })
 })

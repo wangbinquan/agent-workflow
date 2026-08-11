@@ -276,7 +276,22 @@ export const claudeCodeDriver: RuntimeDriver = {
           'claude sandbox is not available on this host; the node runs WITHOUT a workspace write boundary',
       })
     }
-    const authorAllowDirs = claudeExpressibleAuthorDirs(ctx.agent.permission)
+    // 2nd impl-gate P1: settings 是**整个 claude 进程**的，dependsOn 子代理跑在
+    // 同一进程里、共享这一份边界。只取 root 的白名单会让「子代理自己声明了
+    // external_directory」静默失效——它拿不到那个目录，且没有任何提示。合并
+    // root + 每个 dependent 的可兑现目录（lossy 也合并，一起走告警面）。
+    const authorAllowDirs = [ctx.agent, ...ctx.dependents].reduce<{
+      dirs: string[]
+      lossy: string[]
+    }>(
+      (acc, a) => {
+        const r = claudeExpressibleAuthorDirs(a.permission)
+        for (const d of r.dirs) if (!acc.dirs.includes(d)) acc.dirs.push(d)
+        for (const l of r.lossy) if (!acc.lossy.includes(l)) acc.lossy.push(l)
+        return acc
+      },
+      { dirs: [], lossy: [] },
+    )
     if (authorAllowDirs.lossy.length > 0) {
       ctx.log.warn('claude-external-directory-glob-unsupported', {
         agent: ctx.agent.name,

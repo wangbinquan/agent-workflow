@@ -13,6 +13,8 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { Paths } from '@/util/paths'
 import { resolve } from 'node:path'
 import {
@@ -70,23 +72,34 @@ describe('composeOpencodeBoundary — deny baseline + re-allow', () => {
 })
 
 describe('composeOpencodeBoundary — key-order discipline (E4/M1)', () => {
-  test("author '*':'allow' cannot dissolve the boundary — external_directory is appended AFTER it", () => {
+  test("author '*' is EXPANDED to concrete keys so no wildcard can outrank the boundary", () => {
     const out = composeOpencodeBoundary({ '*': 'allow' }, CTX)
-    const keys = Object.keys(out)
-    // The whole point: external_directory index > author '*' index, so opencode's
-    // findLast picks the deny baseline over the author wildcard (E4 proven).
-    expect(keys.indexOf('external_directory')).toBeGreaterThan(keys.indexOf('*'))
+    // 2nd impl-gate P2: key order alone is not enough — opencode merges config
+    // with remeda mergeDeep, which keeps an EXISTING key's position, so a
+    // worktree-local `.opencode/opencode.json` that merely mentions
+    // `external_directory` lifts the platform key ABOVE the author's `'*'` and
+    // findLast then picks the wildcard. Expanding `'*'` removes the wildcard
+    // entirely: nothing can outrank the boundary wherever it lands.
+    expect(out['*']).toBeUndefined()
+    // semantics preserved: every concrete key carries the author's value
+    expect(out['bash']).toBe('allow')
+    expect(out['read']).toBe('allow')
+    expect(out['skill']).toBe('allow')
+    // and the platform keeps external_directory for itself
     const ext = out['external_directory'] as Record<string, string>
     expect(ext['*']).toBe('deny')
-    // author's top-level '*':'allow' is preserved in place (governs OTHER keys,
-    // not external_directory, thanks to the ordering).
-    expect(out['*']).toBe('allow')
+  })
+
+  test('an explicit concrete key wins over the expanded wildcard', () => {
+    const out = composeOpencodeBoundary({ '*': 'allow', bash: 'deny' }, CTX)
+    expect(out['bash']).toBe('deny')
+    expect(out['read']).toBe('allow')
   })
 
   test('author non-external keys keep their original order; external_directory is last', () => {
-    const out = composeOpencodeBoundary({ bash: 'allow', '*': 'allow', read: 'allow' }, CTX)
+    const out = composeOpencodeBoundary({ bash: 'allow', read: 'allow' }, CTX)
     const keys = Object.keys(out)
-    expect(keys).toEqual(['bash', '*', 'read', 'external_directory'])
+    expect(keys).toEqual(['bash', 'read', 'external_directory'])
   })
 })
 
@@ -513,5 +526,61 @@ describe('scanSiblingTaskRoots — 只认目录，不碰 DB', () => {
 
   test('an unreadable appHome yields nothing rather than throwing (§0)', () => {
     expect(scanSiblingTaskRoots('/nope', ['/w'], 'taskA', () => [])).toEqual([])
+  })
+})
+
+describe('project-config key lifting cannot dissolve the boundary (2nd impl-gate P2)', () => {
+  // opencode merges config with remeda mergeDeep, which keeps an EXISTING key's
+  // position. A worktree-local `.opencode/opencode.json` saying
+  // `{agent:{X:{permission:{external_directory:{}}}}}` therefore lifts the
+  // platform key ABOVE everything the platform appended after it. This test
+  // simulates that merge and proves the verdict is still deny.
+  const mergeDeepLike = (
+    target: Record<string, unknown>,
+    source: Record<string, unknown>,
+  ): Record<string, unknown> => {
+    const out: Record<string, unknown> = { ...target }
+    for (const [k, v] of Object.entries(source)) {
+      const prev = out[k]
+      out[k] =
+        typeof v === 'object' && v !== null && typeof prev === 'object' && prev !== null
+          ? { ...(prev as object), ...(v as object) }
+          : v
+    }
+    return out
+  }
+
+  test('a project config that pre-declares external_directory still ends up denying', () => {
+    const platform = composeOpencodeBoundary({ '*': 'allow' }, CTX)
+    // project side merged FIRST (it is loaded before the inline config)
+    const merged = mergeDeepLike({ external_directory: {} }, platform)
+    const keys = Object.keys(merged)
+    // the platform key really did get lifted to the front …
+    expect(keys[0]).toBe('external_directory')
+    // … and it no longer matters: there is no '*' key left to outrank it.
+    expect(keys).not.toContain('*')
+    const ext = merged['external_directory'] as Record<string, string>
+    expect(ext['*']).toBe('deny')
+    expect(ext[`${CTX.taskMounts[0]}/*`]).toBe('allow')
+  })
+})
+
+describe('author whitelist path forms (2nd impl-gate P3)', () => {
+  test('`~/dir` and `$HOME/dir` are expanded like opencode does', () => {
+    const home = homedir()
+    const r = claudeExpressibleAuthorDirs({
+      external_directory: { '~/refrepo/*': 'allow', '$HOME/other': 'allow' },
+    })
+    // opencode expands these (permission/index.ts:178-184); claude does NOT, so
+    // the platform must — otherwise allowWrite got the literal `~/refrepo` and
+    // the rule became `Edit(//~/refrepo/**)` → `/~/refrepo`, silently useless.
+    expect(r.dirs).toEqual([join(home, 'refrepo'), join(home, 'other')])
+    expect(r.lossy).toEqual([])
+  })
+
+  test('a relative pattern is disclosed as lossy rather than turned into garbage', () => {
+    const r = claudeExpressibleAuthorDirs({ external_directory: { '../shared/*': 'allow' } })
+    expect(r.dirs).toEqual([])
+    expect(r.lossy).toEqual(['../shared/*'])
   })
 })

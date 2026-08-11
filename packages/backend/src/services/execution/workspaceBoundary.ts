@@ -229,13 +229,56 @@ export function composeOpencodeBoundary(
   }
 
   // 保序重建：作者其余键原位，external_directory 作为新键追加到**末尾**。
+  //
+  // 2nd impl-gate P2：光靠键序不够。opencode 的配置层用 remeda `mergeDeep`
+  // （`config/config.ts:7,42`），而 mergeDeep 对**已存在的键保持 target 原位置**
+  // ⇒ worktree 内 `.opencode/opencode.json` 只要先声明一次
+  // `agent.<name>.permission.external_directory`（哪怕空对象），就能把平台合成的
+  // 整键**抬到作者 `'*'` 之前**，findLast 再取到 `'*': 'allow'` ⇒ 边界溶解
+  // （已用 mergeDeep 语义复算确认）。项目配置在 inline 之前合并，所以这是仓库
+  // 内容就能做到的。
+  //
+  // 因此不再依赖键序独占：把作者的顶层 `'*': X` **展开成具体 permission 名**
+  // （opencode 已知键集，`core/src/v1/config/permission.ts:17-36`），`'*'` 本身
+  // 不再出现 ⇒ 没有任何通配键能压过 external_directory，无论它被抬到哪里。
+  // 语义等价：展开后的每个具体键与原 `'*'` 同值。
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(src)) {
-    if (key !== 'external_directory') out[key] = value
+    if (key === 'external_directory') continue
+    if (key === '*') {
+      for (const known of OPENCODE_PERMISSION_KEYS) {
+        // 作者若同时写了具体键，具体键在后面原位覆盖（下一轮迭代会写上）
+        if (!(known in src)) out[known] = value
+      }
+      continue
+    }
+    out[key] = value
   }
   out['external_directory'] = composed
   return out
 }
+
+/**
+ * opencode 的已知 permission 键（`packages/core/src/v1/config/permission.ts:17-36`
+ * @1.18.4，读源非记忆）。`external_directory` 刻意不在这里——它由平台独占，
+ * 作者的 `'*'` 展开时绝不覆盖它。
+ */
+const OPENCODE_PERMISSION_KEYS = [
+  'read',
+  'edit',
+  'glob',
+  'grep',
+  'list',
+  'bash',
+  'task',
+  'todowrite',
+  'question',
+  'webfetch',
+  'websearch',
+  'lsp',
+  'doom_loop',
+  'skill',
+] as const
 
 // ---------------------------------------------------------------------------
 // RFC-281 T2/T3 — claude 侧：per-run settings 的**写**边界
@@ -454,6 +497,13 @@ function dedupeNonEmpty(paths: readonly string[]): string[] {
  * 只取 action=allow 且 pattern 是字面目录形（结尾 `/*` 可去掉）的条目；中段带
  * `*`/`?` 的 glob 无法表达 → 调用方负责告警披露粒度损失，不静默丢弃。
  */
+/** `~/x` 与 `$HOME/x` → 绝对路径（opencode 同口径；claude 自己不展开）。 */
+function expandHomePrefix(pattern: string, home: string = homedir()): string {
+  if (pattern === '~' || pattern.startsWith('~/')) return join(home, pattern.slice(1))
+  if (pattern === '$HOME' || pattern.startsWith('$HOME/')) return join(home, pattern.slice(5))
+  return pattern
+}
+
 export function claudeExpressibleAuthorDirs(author: AgentPermission | undefined): {
   dirs: string[]
   lossy: string[]
@@ -470,7 +520,17 @@ export function claudeExpressibleAuthorDirs(author: AgentPermission | undefined)
       lossy.push(pattern)
       continue
     }
-    dirs.push(trimmed)
+    // 2nd impl-gate P3: opencode 会展开 `~/` 与 `$HOME/`
+    // （`permission/index.ts:178-184`），claude 不会——原实现把 `~/refrepo` 原样
+    // 塞进 allowWrite 与 `Edit(//~/refrepo/**)`，claude 解成 `/~/refrepo`（一个
+    // 不存在的路径），而 `lossy` 为空 ⇒ 作者以为跨 runtime 兑现了，实际静默失效。
+    // 同口径展开；仍非绝对路径的（`../shared` 之类）进 lossy 走告警面。
+    const expanded = expandHomePrefix(trimmed)
+    if (!expanded.startsWith('/')) {
+      lossy.push(pattern)
+      continue
+    }
+    dirs.push(expanded)
   }
   return { dirs: dedupeNonEmpty(dirs), lossy }
 }

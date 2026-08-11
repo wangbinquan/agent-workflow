@@ -48,8 +48,12 @@ OpenCode 继承 daemon 的普通环境，包括用户现有的 HOME、XDG、认�
 任务的 Agent 只在自己的工作目录内干活，不会跑进另一个任务的工作目录——这正是该 RFC 的
 起因。要点：
 
-- **追加在作者键之后**。OpenCode 按键序 `findLast` 裁决，作者写的 `"*": "allow"` 会通配
-  到 `external_directory`；边界键排在其后才生效（实测：顺序调换即失效）。
+- **作者的 `"*"` 会被展开成具体权限名**。OpenCode 按键序 `findLast` 裁决，作者写的
+  `"*": "allow"` 会通配到 `external_directory`；而它的配置合并（remeda `mergeDeep`）
+  对已存在的键**保持原位置**，于是仓库里的 `.opencode/opencode.json` 只要提一句
+  `external_directory`，就能把平台的边界键抬到通配键之前、让边界失效。因此平台把
+  作者的 `"*"` 展开为逐个具体权限名（语义等价），`external_directory` 由平台独占
+  ——这样无论键被抬到哪里都没有通配键能压过它。
 - **`--auto` 翻不动 `deny`**。deny 在询问之前短路，所以自动批准不会放行越界。
 - **默认放行本次运行需要的目录**：本任务的全部仓库工作树、本次运行的 config 目录
   （含 staged skill）、OpenCode 的临时目录与 tool-output 目录，以及 OpenCode 自己会发现的
@@ -137,7 +141,11 @@ RFC-281 让每个业务节点默认只在自己的任务工作目录内工作（
 
 - **OpenCode**：`permission.external_directory`（相对判定，边界=进程 cwd 与其 git 工作树），
   读写都拦，自动区分自己与兄弟任务。
-- **Claude Code**：其自带 sandbox 设置经 per-run `--settings` 下发，只做**写**边界
+- **Claude Code**（2026-08-11 实测校正）：**它的 sandbox 是命令级围栏**——只管 Bash
+  与子进程，`Edit`/`Write`/`NotebookEdit` 这类进程内工具**不经过它**，只由
+  `permissions` 规则裁决。因此平台同时下发两样：兄弟任务目录的 `Edit`/`Read`
+  deny 规则（deny 在所有 permission-mode 下都生效，是默认形态唯一能挡住文件工具
+  越界的手段），以及 sandbox 的写边界
   （写=cwd+临时目录+平台放行的本任务目录，连子进程一起管）。**平台不下发任何
   denyWrite/denyRead**：实测把 appHome 祖先目录列进 denyWrite 会连 Agent 自己的 cwd 一起
   盖死，「更严」的写法恰恰会打挂所有任务。**也不下发 `allowUnsandboxedCommands`**：
@@ -146,6 +154,13 @@ RFC-281 让每个业务节点默认只在自己的任务工作目录内工作（
   节点卡死；写边界本身由 sandbox 默认的 cwd+tmp+放行目录承担。声明了权限的节点另外
   收到 `Edit(//<mount>/**)` 规则，否则多仓任务写不了另一个仓。
 
+**Claude 侧的边界是劝告性的，不是硬隔离**（用户 2026-08-11 决策，如实记录）：模型
+撞到 sandbox 的 EPERM 后可以自己用 `dangerouslyDisableSandbox` 重试一次并成功——
+headless 下无需任何人批准，平台也看不到日志（实测复现）。保留这个逃生阀是刻意的：
+关掉它会让 `bun install` / `npm ci` 这类要写 `~` 下缓存的 build 节点撞 EPERM 后
+无人可救。所以 Bash 那一半的写边界应理解为「挡住无意的越界」，不是「阻止蓄意的
+越界」；文件工具那一半由 deny 规则承担，不受该逃生阀影响。
+
 **已知不覆盖的面（有意保留，不要当成被防住了）**：
 
 - OpenCode 的 bash 只扫少数命令的参数，`sed`/`python`/`git -C`/重定向等间接写不受该键约束；
@@ -153,7 +168,9 @@ RFC-281 让每个业务节点默认只在自己的任务工作目录内工作（
 - Claude 侧**读**面保持默认（读全盘），只有写被约束；
 - 机器/组织级 runtime 配置在平台注入之后合并，管理员可放宽（同 §6 的信任模型）；
 - Claude 的部分设置键（如数组型）跨配置层合并，仓库内 `.claude/settings.json` 可能影响最终形态；
-- 机制不可用时（如 Linux 缺少 Claude sandbox 依赖）**打告警放行、不阻断业务**。
+- 机制不可用时（如 Linux 缺少 Claude sandbox 依赖）**打告警放行、不阻断业务**；
+- Claude 的 Bash 写边界可被模型一次重试自行解除（见上）；
+- local MCP 子进程由 runtime 自己 spawn，不在该边界内。
 
 Script 节点不在该边界范围内（它不经 runtime 权限面）。
 
