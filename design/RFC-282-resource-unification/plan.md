@@ -115,7 +115,6 @@
 - [ ] design §9 的 5 项复核项已有结论（v2 已填）
 - [ ] `design/plan.md` RFC 索引登记；`STATE.md` 顶部指向本目录；完工后置 Done
 
-
 ## 实施记录（2026-08-12，实现 session）
 
 **已落 main 的批次**：D（4532faad）→ A（be7c2342）→ B1a（ed713bcc）→ B1b 迁移半场
@@ -161,6 +160,7 @@ P2-2（wrapPlan 类型收窄为 wrap-only）、P3-1/2/3/4/5 全部已在收尾�
 
 **残留 followup —— 2026-08-12 二次收尾已全清**（用户拍板「把没做的全部收尾」，
 并发 session 撤场解锁）：
+
 - ✅ B1b 删除半场（17b9215b）：契约面只剩 buildSpawn(AgentSpawnContext)，旧三
   方法体抽为 driver 内具名装配函数，11 个测试文件迁真身；
 - ✅ C1 第二段（17b9215b）：config.opencodePath 并入 mint 冻结（driver.defaultBinary
@@ -169,6 +169,14 @@ P2-2（wrapPlan 类型收窄为 wrap-only）、P3-1/2/3/4/5 全部已在收尾�
   opencodeCmd/runtimeCmd → binaryOverride 全链改名 + legacyHeads 删除 +
   约 90 文件夹具迁移；
 - ✅ RFC-280 遗留两文件落库（d6760d24，banner 判据 + mock MCP 状态缝）。
+- ✅ 收尾修正（ce96e6a6 + 3f755757）：C1 改名初版漏掉 StartTaskDeps/FusionDeps/
+  daemon auto-resume deps 三个顶层载体——spread 透传把 opencodeCmd 键静默丢在
+  RunTaskOptions 门外（spread 不触发 excess property check），mock 失联、三个真
+  子进程 e2e 红。全链改名后 41 文件 107 处显形断链 tsc 错误驱动清零；rfc143/154
+  的 claude 语境 mock 头修回 runtimeCmd（内部装配 ctx 合法字段，P1-1 断言即验）；
+  RFC-257 secretBox 源码锁随 buildStartTaskDeps 新签名迁移。
+  教训（通用坑已沉 dev-gotchas）：**字段改名必须枚举全部承载类型**——spread
+  透传链上任何一环留旧名，tsc 全绿但键在边界处静默蒸发，只有真子进程 e2e 能抓。
 
 **仍开放（低优先，独立小项）**：`declaredMcpServers` 改由 `declared.mcpServers`
 承接（design §2.1 预留）；系统面统一产出（§7-1a，待 B4 式真身合一时触发）。
