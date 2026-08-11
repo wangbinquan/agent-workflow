@@ -65,6 +65,11 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/git-repo-cache-submodule.test.ts#skipIf': 1,
   'packages/backend/tests/integration-chaos/chaos-scenarios.integration.test.ts#skipIf': 1,
   'packages/backend/tests/integration-opencode/opencode-live.integration.test.ts#skipIf': 1,
+  // RFC-281 T1 part3: LIVE workspace-boundary cases against the real opencode
+  // binary. Same env gate as the sibling live suite (RUN_OPENCODE_INTEGRATION
+  // + an opencode auth context); the always-on gate/assembly assertions in that
+  // file are NOT skipped.
+  'packages/backend/tests/integration-opencode/rfc281-boundary.integration.test.ts#skipIf': 1,
   'packages/backend/tests/mcp-probe-http-integration.test.ts#skipIf': 2,
   'packages/backend/tests/mcp-probe-stdio-integration.test.ts#skipIf': 1,
   'packages/backend/tests/opencode-models.test.ts#skipIf': 1,
