@@ -14,9 +14,6 @@
 //      that buildInlineConfig / toClaudeMcpConfig compose internally.
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import type { Mcp } from '@agent-workflow/shared'
 import {
   AgentInjectionError,
@@ -32,7 +29,6 @@ import {
 } from '@/services/execution/agentInjection'
 import { buildInlineConfig } from '@/services/runtime/opencode/inlineConfig'
 import { toClaudeMcpConfig } from '@/services/runtime/claudeCode/inject'
-import { prepareMcpTestExecutionMaterial } from '@/services/runtime/mcpTestExecutionMaterial'
 import { claudeCodeDriver } from '@/services/runtime/claudeCode/driver'
 import { opencodeDriver } from '@/services/runtime/opencode/driver'
 import type { Agent } from '@agent-workflow/shared'
@@ -144,7 +140,7 @@ describe('partitionMcpsForInjection (RFC-280 T1)', () => {
   })
 })
 
-describe('wire-shape parity with the playground material (T6 cutover ground)', () => {
+describe('wire shapes (single implementation since RFC-280 T6)', () => {
   const cases: Mcp[] = [
     localMcp('plain'),
     localMcp('env-timeout', {
@@ -165,19 +161,62 @@ describe('wire-shape parity with the playground material (T6 cutover ground)', (
     } as Partial<Mcp>),
   ]
 
+  // RFC-280 T6 removed the playground's independent implementation
+  // (prepareMcpTestExecutionMaterial) — these snapshots are now the ONLY
+  // wire-shape lock for both runtimes.
   for (const mcp of cases) {
-    test(`opencode + claude entries match prepareMcpTestExecutionMaterial for '${mcp.name}'`, async () => {
-      const root = mkdtempSync(join(tmpdir(), 'rfc280-parity-'))
-      const material = await prepareMcpTestExecutionMaterial({ mcp, root })
-      expect(renderOpencodeMcpEntry(mcp)).toEqual({ ...material.opencodeEntry })
-      expect(renderClaudeMcpServerEntry(mcp)).toEqual({ ...material.claudeEntry })
+    test(`opencode + claude entries stay stable for '${mcp.name}'`, () => {
+      expect(renderOpencodeMcpEntry(mcp)).toMatchObject({ type: mcp.type, enabled: true })
+      expect(renderOpencodeMcpEntry(mcp)).toEqual({
+        type: mcp.type,
+        enabled: true,
+        ...(mcp.type === 'local'
+          ? {
+              command: (mcp.config as { command: string[] }).command,
+              ...((mcp.config as { env?: unknown }).env !== undefined
+                ? { environment: (mcp.config as { env?: unknown }).env }
+                : {}),
+            }
+          : {
+              url: (mcp.config as { url: string }).url,
+              ...((mcp.config as { headers?: unknown }).headers !== undefined
+                ? { headers: (mcp.config as { headers?: unknown }).headers }
+                : {}),
+              ...((mcp.config as { oauth?: unknown }).oauth !== undefined
+                ? { oauth: (mcp.config as { oauth?: unknown }).oauth }
+                : {}),
+            }),
+        ...((mcp.config as { timeoutMs?: number }).timeoutMs !== undefined
+          ? { timeout: (mcp.config as { timeoutMs?: number }).timeoutMs }
+          : {}),
+      })
+      const claudeEntry = renderClaudeMcpServerEntry(mcp)
+      if (mcp.type === 'local') {
+        const command = (mcp.config as { command: string[] }).command
+        expect(claudeEntry).toEqual({
+          command: command[0],
+          args: command.slice(1),
+          ...((mcp.config as { env?: unknown }).env !== undefined
+            ? { env: (mcp.config as { env?: unknown }).env }
+            : {}),
+        })
+      } else {
+        expect(claudeEntry).toEqual({
+          type: 'http',
+          url: (mcp.config as { url: string }).url,
+          ...((mcp.config as { headers?: unknown }).headers !== undefined
+            ? { headers: (mcp.config as { headers?: unknown }).headers }
+            : {}),
+        })
+      }
     })
   }
 
   test('credential-bearing URLs render verbatim (RFC-280 user ruling: allowed)', () => {
-    // The playground material still REJECTS userinfo URLs today; that branch is
-    // removed at T6 (design.md §7.4), after which this case joins the parity
-    // matrix above. The unified layer never rejects them.
+    // RFC-280 §7.4 landed: the playground's userinfo rejection branch was
+    // REMOVED with prepareMcpTestExecutionMaterial — credential-bearing URLs
+    // now flow through every path (user ruling: 配凭据是个人选择). This is the
+    // regression lock for that reversal.
     const mcp = remoteMcp('userinfo', {
       config: { url: 'https://svc-user:svc-pass@mcp.example.test/rpc' },
     } as Partial<Mcp>)

@@ -349,6 +349,35 @@ export interface SystemAgentSpawnContext {
   /** RFC-067 per-task git identity (both non-empty to inject). */
   gitUserName?: string | null
   gitUserEmail?: string | null
+  /**
+   * RFC-280 T6 — the unified injection render for a system agent that carries
+   * MCP servers (the MCP playground). The driver mounts `mcpEntries` on its
+   * own wire (opencode: inline-config `mcp` record; claude: an mcp-config.json
+   * written 0600 under `runDir` + `--mcp-config`). Ordinary system agents omit
+   * this — zero MCP, byte-identical spawn.
+   */
+  mcpInjection?: RenderedInjectionV1
+  /**
+   * RFC-280 T6 (design-gate P1-4) — opencode: materialize the RFC-029
+   * inventory dump plugin so the startup-verification layer has an observation
+   * source; the playground REQUIRES it (a strict consumer must fail closed on
+   * "cannot observe", never silently pass). claude ignores it (observation
+   * rides the init event).
+   */
+  wantsInventory?: boolean
+  /** claude — pre-allocated native session id (`--session-id`, playground turn 1). */
+  nativeSessionId?: string
+  /**
+   * RFC-280 §7.2 — the remaining resolved-profile params. The system-agent
+   * inline entry now renders through the same `renderOpencodeAgentEntry` the
+   * business path uses, so variant/temperature/steps/maxSteps land instead of
+   * being silently dropped (the playground previously hand-rolled them).
+   * claude consumes `model` only (落差④ droppedParams covers the rest).
+   */
+  variant?: string | null
+  temperature?: number | null
+  steps?: number | null
+  maxSteps?: number | null
   /** Caller's logger for driver-internal warnings (claude config-dir prep);
    *  omitted → the driver's own default logger. RFC-143 PR-4 (smoke parity). */
   log?: Logger
@@ -435,67 +464,6 @@ export interface BusinessNodeSpawnContext {
 }
 
 /**
- * RFC-238 — closed spawn context for the MCP runtime playground. It cannot
- * express skills, plugins, repositories, dependent agents, memory, inventory,
- * or arbitrary permission maps: a capable driver receives exactly one MCP and
- * must expose only that MCP's tool namespace.
- */
-export interface McpTestSpawnContext {
-  sessionId: string
-  turnId: string
-  agentName: string
-  systemPrompt: string
-  prompt: string
-  /** Exact-one-MCP material prepared by the product layer for this turn. */
-  executionMaterial: McpTestExecutionMaterial
-  model?: string | null
-  /** Runtime-profile generation controls; OpenCode materializes these exactly. */
-  variant?: string | null
-  temperature?: number | null
-  steps?: number | null
-  maxSteps?: number | null
-  /** RFC-276: frozen runtime-profile compatibility marker. */
-  isSandbox?: boolean
-  worktreePath: string
-  /** Logical-session root; stable across turns. */
-  sessionRoot: string
-  /** Per-turn material/config root. */
-  runDir: string
-  configDir: RuntimeConfigDirProfile
-  runtimeBinary?: string | null
-  /** First-turn native id where the protocol supports preallocation (Claude). */
-  nativeSessionId?: string
-  /** Later turns resume this exact id. Mutually exclusive with nativeSessionId. */
-  resumeSessionId?: string
-  log: Logger
-}
-
-export interface McpTestExecutionMaterial {
-  readonly codec: 'mcp-test-execution-material-v1'
-  readonly mcpId: string
-  readonly runtimeKey: string
-  readonly type: 'local' | 'remote'
-  /** Secret-bearing values are present only in this in-memory projection. */
-  readonly opencodeEntry: Readonly<Record<string, unknown>>
-  readonly claudeEntry: Readonly<Record<string, unknown>>
-  /** Ordinary per-turn material root. */
-  readonly root: string
-}
-
-export type McpTestSpawnPlan = SpawnPlan
-
-export interface RuntimeMcpTestCapabilityV1 {
-  readonly codec: 'mcp-test-v1'
-  readonly defaultConfigDir: RuntimeConfigDirProfile
-  createNativeSessionId(): string | null
-  sessionReference(input: {
-    turnSeq: number
-    nativeSessionId: string | null
-  }): Pick<McpTestSpawnContext, 'nativeSessionId' | 'resumeSessionId'>
-  buildSpawn(ctx: McpTestSpawnContext): Promise<McpTestSpawnPlan>
-}
-
-/**
  * A pluggable agent runtime. RFC-143: a complete capability object — new runtime
  * = register a driver in DRIVERS + implement this interface, zero call-site edits.
  * `buildBusinessSpawn` + optional `readInventory?`/`startLiveCapture?` land in
@@ -553,6 +521,17 @@ export interface RuntimeDriver {
    */
   renderInjection(spec: AgentInjectionSpecV1): RenderedInjectionV1
   /**
+   * RFC-280 T6（落差⑥）— MCP playground 的 native-session 策略，原
+   * `RuntimeMcpTestCapabilityV1` 平行 spawn 契约的仅存 runtime 特有面。
+   * 方法存在 = 该 runtime 支持测试台。spawn 本身走 `buildSpawn` 的
+   * `mcpInjection`/`wantsInventory`/`nativeSessionId` 面。
+   */
+  createMcpTestNativeSessionId?(): string | null
+  mcpTestSessionReference?(input: { turnSeq: number; nativeSessionId: string | null }): {
+    nativeSessionId?: string
+    resumeSessionId?: string
+  }
+  /**
    * RFC-143 — the argv head this runtime spawns by default: its per-runtime
    * config path (config.opencodePath / claudeCodePath) else the built-in name.
    * Custom-fork override (RFC-112 binaryPath) is applied by the caller, not here.
@@ -586,7 +565,6 @@ export interface RuntimeDriver {
    * RFC-238 — explicit MCP playground support. Registry rows whose protocol
    * driver omits this capability do not appear in the playground picker.
    */
-  readonly mcpTest?: RuntimeMcpTestCapabilityV1
 
   /** RFC-237 — post-exit child-session sweep into a SYSTEM-AGENT event sink
    *  (was the `driver.kind === 'opencode'` branch in systemAgentRun.ts).

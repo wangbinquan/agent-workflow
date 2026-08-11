@@ -101,6 +101,11 @@ const events = [
     type: 'system',
     subtype: 'init',
     session_id: sessionId,
+    // RFC-280 T6: the playground now VERIFIES the startup report (fail-closed
+    // on "cannot observe"), so the mock must report its mounted MCP connected
+    // exactly like a real claude init does.
+    tools: [`mcp__${runtimeKey}__stateful_increment`],
+    mcp_servers: [{ name: runtimeKey, status: 'connected' }],
   },
   {
     type: 'assistant',

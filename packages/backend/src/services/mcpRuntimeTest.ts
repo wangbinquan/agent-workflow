@@ -7,6 +7,7 @@
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -37,7 +38,8 @@ import {
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { getRuntimeDriver } from '@/services/runtime'
-import type { RuntimeMcpTestCapabilityV1, SpawnPlan } from '@/services/runtime/types'
+import type { RuntimeDriver } from '@/services/runtime/types'
+import type { SpawnPlan } from '@/services/runtime/types'
 import { getRuntime, type RuntimeRow } from '@/services/runtimeRegistry'
 import {
   emptySystemAgentOutputEvidence,
@@ -56,7 +58,13 @@ import {
   killStaleRunProcessTree as productionKillStaleRunProcessTree,
   type StaleRunKillOutcome,
 } from '@/util/process'
-import { prepareMcpTestExecutionMaterial } from '@/services/runtime/mcpTestExecutionMaterial'
+import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
+import type { StartupVerificationResult } from '@agent-workflow/shared'
+import {
+  observationFromClaudeInit,
+  observationFromInventory,
+  verifyStartup,
+} from '@/services/execution/startupVerification'
 import {
   claimNewMcpRuntimeTestSessionLease,
   preclaimMcpRuntimeTestSessionLease,
@@ -110,14 +118,15 @@ export function getMcpRuntimeTestService(deps: McpRuntimeTestDependencies): McpR
 
 interface ResolvedTestRuntime {
   row: RuntimeRow
-  capability: RuntimeMcpTestCapabilityV1
+  driver: RuntimeDriver
   binary: string
   snapshotJson: string
 }
 
 export function isRuntimeMcpTestEligible(row: Pick<RuntimeRow, 'protocol' | 'model'>): boolean {
-  const capability = getRuntimeDriver(row.protocol).mcpTest
-  return capability !== undefined
+  // RFC-280 T6: playground support = the driver implements the session
+  // strategy (the spawn itself is the ordinary system-agent surface now).
+  return getRuntimeDriver(row.protocol).mcpTestSessionReference !== undefined
 }
 
 interface QueueItem {
@@ -208,6 +217,30 @@ function resultTurnStatus(
   if (result.status === 'ok') return 'succeeded'
   if (result.status === 'aborted') return 'interrupted'
   return 'failed'
+}
+
+/**
+ * RFC-280 T6 — the playground's strict verdict (design-gate P1-4). Applied
+ * ONLY to an otherwise-succeeded turn: durable failures (timeout / daemon
+ * shutdown / cancel / spawn) keep their codes and are never overwritten.
+ * "Could not observe" fails closed — the playground's whole purpose is
+ * verifying the MCP, so running blind must never read as success.
+ */
+export function applyPlaygroundVerification(
+  turnStatus: TurnRow['status'],
+  failureCode: string | null,
+  verification: StartupVerificationResult | undefined,
+): { turnStatus: TurnRow['status']; failureCode: string | null } {
+  if (turnStatus !== 'succeeded' || verification === undefined) {
+    return { turnStatus, failureCode }
+  }
+  if (verification.observation !== 'verified') {
+    return { turnStatus: 'failed', failureCode: 'mcp-test-verification-unavailable' }
+  }
+  if (verification.mcpUnusable.length > 0) {
+    return { turnStatus: 'failed', failureCode: 'mcp-test-mcp-unusable' }
+  }
+  return { turnStatus, failureCode }
 }
 
 function resultFailureCode(
@@ -718,7 +751,7 @@ export class McpRuntimeTestService {
     const sessionId = ulid()
     const turnId = ulid()
     const scratchRoot = join(this.deps.appHome, 'mcp-runtime-tests', sessionId)
-    const runtimeSessionId = runtime.capability.createNativeSessionId()
+    const runtimeSessionId = runtime.driver.createMcpTestNativeSessionId?.() ?? null
 
     const receipt = dbTxSync(this.deps.db, (tx) => {
       const racedReplay = tx
@@ -1944,7 +1977,7 @@ export class McpRuntimeTestService {
       .where(inArray(mcpRuntimeTestSessions.status, ['active', 'ending']))
       .all()
     for (const session of sessions) {
-      const capability = getRuntimeDriver(session.runtimeProtocol).mcpTest
+      const capability = getRuntimeDriver(session.runtimeProtocol).mcpTestSessionReference
       if (session.inFlightTurnId === null) {
         if (session.status === 'ending') await this.finishEndingSession(session.id)
         continue
@@ -2093,8 +2126,7 @@ export class McpRuntimeTestService {
       throw new ValidationError('mcp-test-runtime-disabled', `runtime '${selected}' is disabled`)
     }
     const driver = getRuntimeDriver(row.protocol)
-    const capability = driver.mcpTest
-    if (capability === undefined || !isRuntimeMcpTestEligible(row)) {
+    if (driver.mcpTestSessionReference === undefined || !isRuntimeMcpTestEligible(row)) {
       throw new ValidationError(
         'mcp-test-runtime-unsupported',
         `runtime '${selected}' does not support mcp-test-v1`,
@@ -2121,10 +2153,10 @@ export class McpRuntimeTestService {
       configDirEnv: row.configDirEnv,
       configDirName: row.configDirName,
       probeFence: row.probeFence,
-      mcpTestProfileCodec: capability.codec,
+      mcpTestProfileCodec: 'mcp-test-v1',
     }
     const snapshotJson = stableJson(snapshot)
-    return { row, capability, binary, snapshotJson }
+    return { row, driver, binary, snapshotJson }
   }
 
   private requireSession(sessionId: string, mcpId: string): SessionRow {
@@ -2490,17 +2522,19 @@ export class McpRuntimeTestService {
               beforeSpawn: assertSpawnAllowed,
             }
           }
-          const executionMaterial = await prepareMcpTestExecutionMaterial({
-            mcp,
-            root: join(turnRunRoot, 'material'),
-          })
-          const plan = await runtime.capability.buildSpawn({
-            sessionId: session.id,
-            turnId: turn.id,
+          // RFC-280 T6 — the playground rides the unified injection layer +
+          // the ordinary system-agent spawn surface (落差⑥: the parallel
+          // mcpTest spawn contract is gone). The driver mounts the entries on
+          // its own wire; the RFC-029 inventory plugin is FORCED on runtimes
+          // that observe via file (P1-4 — a strict consumer must never run
+          // without an observation source).
+          const injection = runtime.driver.renderInjection({ mcps: [mcp] })
+          const protocolDefaults =
+            DEFAULT_CONFIG_DIR_PROFILE[session.runtimeProtocol as 'opencode' | 'claude-code']
+          const plan = await runtime.driver.buildSpawn({
             agentName: AGENT_NAME,
             systemPrompt: SYSTEM_PROMPT,
             prompt: turn.promptText,
-            executionMaterial,
             model: runtime.row.model,
             variant: runtime.row.variant,
             temperature: runtime.row.temperature,
@@ -2508,14 +2542,13 @@ export class McpRuntimeTestService {
             maxSteps: runtime.row.maxSteps,
             isSandbox: runtime.row.isSandbox,
             worktreePath,
-            sessionRoot: session.scratchRoot,
             runDir: turnRunRoot,
-            configDir: {
-              env: runtime.row.configDirEnv ?? runtime.capability.defaultConfigDir.env,
-              name: runtime.row.configDirName ?? runtime.capability.defaultConfigDir.name,
-            },
+            configDirEnv: runtime.row.configDirEnv ?? protocolDefaults.env,
+            configDirName: runtime.row.configDirName ?? protocolDefaults.name,
             runtimeBinary: runtime.binary,
-            ...runtime.capability.sessionReference({
+            mcpInjection: injection,
+            wantsInventory: runtime.driver.readInventory !== undefined,
+            ...runtime.driver.mcpTestSessionReference?.({
               turnSeq: turn.seq,
               nativeSessionId: session.runtimeSessionId,
             }),
@@ -2523,6 +2556,13 @@ export class McpRuntimeTestService {
           })
           return {
             ...plan,
+            // P1-7: secret material must not outlive the turn — the claude
+            // mcp-config.json goes here; inventory.json is kept for the
+            // post-run observation read (the session scratch owns the dir).
+            cleanup: async () => {
+              await plan.cleanup?.()
+              await rm(join(turnRunRoot, 'mcp-config.json'), { force: true })
+            },
             beforeSpawn: async () => {
               await plan.beforeSpawn?.()
               assertSpawnAllowed()
@@ -2587,6 +2627,24 @@ export class McpRuntimeTestService {
       }
     }
     await sink.markTerminal('complete')
+    // RFC-280 T6 — strict playground semantics (design-gate P1-4): only a run
+    // whose PROCESS finished ok is judged by the verification layer; durable
+    // failures (timeout / shutdown / cancel) keep their codes. The declared
+    // manifest re-renders from the frozen-hash MCP row (pure function).
+    let verification: StartupVerificationResult | undefined
+    if (result.status === 'ok' && this.deps.runFn === undefined) {
+      const driver = getRuntimeDriver(session.runtimeProtocol)
+      const turnRunRootForRead = join(session.scratchRoot, 'run', 'turns', turn.id)
+      const observation =
+        driver.readInventory !== undefined
+          ? observationFromInventory(
+              await driver
+                .readInventory({ runRoot: turnRunRootForRead, nodeKind: 'agent-single' })
+                .catch(() => null),
+            )
+          : observationFromClaudeInit(result.startupInventory ?? null)
+      verification = verifyStartup(driver.renderInjection({ mcps: [mcp] }).declared, observation)
+    }
     if (nativeLease !== undefined && result.status !== 'unreaped') {
       const released = releaseMcpRuntimeTestSessionLease(this.deps.db, nativeLease)
       if (!released) {
@@ -2596,7 +2654,7 @@ export class McpRuntimeTestService {
         })
       }
     }
-    await this.settleTurn(session, turn, result)
+    await this.settleTurn(session, turn, result, verification)
   }
 
   private async loadMcpForRun(mcpId: string): Promise<Mcp | null> {
@@ -2648,6 +2706,7 @@ export class McpRuntimeTestService {
     originalSession: SessionRow,
     originalTurn: TurnRow,
     result: SystemAgentRunResult,
+    verification?: StartupVerificationResult,
   ): Promise<void> {
     const now = this.now()
     const shouldCleanup = dbTxSync(this.deps.db, (tx) => {
@@ -2684,17 +2743,23 @@ export class McpRuntimeTestService {
         nativeState = 'unusable'
         blocked ??= 'capture-incomplete'
       }
-      const turnStatus = resultTurnStatus(
-        result,
-        turn.cancelRequestedAt !== null,
-        session.status === 'ending',
-        turn.failureCode,
+      const verdict = applyPlaygroundVerification(
+        resultTurnStatus(
+          result,
+          turn.cancelRequestedAt !== null,
+          session.status === 'ending',
+          turn.failureCode,
+        ),
+        resultFailureCode(result, turn.failureCode),
+        verification,
       )
+      const turnStatus = verdict.turnStatus
+      const turnFailureCode = verdict.failureCode
       tx.update(mcpRuntimeTestTurns)
         .set({
           status: turnStatus,
           exitCode: result.exitCode,
-          failureCode: resultFailureCode(result, turn.failureCode),
+          failureCode: turnFailureCode,
           stderrTail:
             result.stderrTail === ''
               ? null

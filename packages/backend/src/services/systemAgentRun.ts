@@ -24,7 +24,12 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
 import { runAgentProcess } from '@/services/execution/agentProcess'
-import type { RuntimeDriver, SpawnPlan, SystemAgentOutputEvidence } from '@/services/runtime/types'
+import type {
+  RuntimeDriver,
+  SpawnPlan,
+  StartupInventory,
+  SystemAgentOutputEvidence,
+} from '@/services/runtime/types'
 import { createLogger, type Logger } from '@/util/log'
 import { isLexicallyInsideForHost } from '@/util/platformExec'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
@@ -136,6 +141,13 @@ export interface SystemAgentRunResult {
   scratchRetained: boolean
   /** Metadata-only stdout evidence; never contains assistant text. */
   outputEvidence: SystemAgentOutputEvidence
+  /**
+   * RFC-280 T6 — the runtime's one-shot startup report (claude init:
+   * tools/agents/skills/mcp_servers with statuses), captured in-stream for the
+   * startup-verification layer. Absent on runtimes that report none (opencode
+   * observation rides the RFC-029 inventory file instead).
+   */
+  startupInventory?: StartupInventory
 }
 
 export function emptySystemAgentOutputEvidence(): SystemAgentOutputEvidence {
@@ -366,6 +378,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       // stdout line (claude `result` is_error). Last one wins.
       let resultError: string | undefined
       let receiptError: unknown
+      let capturedStartupInventory: StartupInventory | null = null
 
       const run = await runAgentProcess({
         cmd: plan.cmd,
@@ -417,6 +430,11 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
             }
             const terminalError = driver.parseTerminalResultError?.(line)
             if (terminalError != null) resultError = terminalError
+            // RFC-280 T6 — one-shot startup report for verification (落差①).
+            if (capturedStartupInventory === null) {
+              const observed = driver.parseStartupInventory?.(line) ?? null
+              if (observed !== null) capturedStartupInventory = observed
+            }
             const ev = driver.parseEvent(line)
             if (ev === null) {
               outputEvidence.unparsedStdoutSeen = true
@@ -541,6 +559,9 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         scratchDir,
         scratchRetained: false,
         outputEvidence: { ...outputEvidence },
+        ...(capturedStartupInventory === null
+          ? {}
+          : { startupInventory: capturedStartupInventory }),
       }
       if (run.outcome === 'aborted') return { status: 'aborted', ...base }
       if (run.outcome === 'timeout') return { status: 'timeout', ...base }

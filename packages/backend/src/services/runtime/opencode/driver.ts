@@ -27,9 +27,10 @@ import {
   declarePlugins,
   declareSkills,
   declareSubagents,
+  renderOpencodeAgentEntry,
   renderOpencodeMcpInjection,
 } from '@/services/execution/agentInjection'
-import { DEFAULT_CONFIG_DIR_PROFILE, type InventorySnapshot } from '@agent-workflow/shared'
+import type { InventorySnapshot } from '@agent-workflow/shared'
 import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveCapture'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -45,20 +46,16 @@ import { captureChildSessions, captureOpencodeSessionsToSink } from '@/services/
 import { readSnapshotFromRunDir } from '@/services/inventory'
 import { startLiveSubagentCapture } from '@/services/subagentLiveCapture'
 import { materializeInventoryPlugin } from '@/opencode-plugin'
-import { buildOpencodeMcpTestSpawn } from './mcpTest'
 import { captureDistillJobSession } from '@/services/distillSessionCapture'
 
 export const opencodeDriver: RuntimeDriver = {
   kind: 'opencode',
-  mcpTest: {
-    codec: 'mcp-test-v1',
-    defaultConfigDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
-    createNativeSessionId: () => null,
-    sessionReference: ({ nativeSessionId }) =>
-      nativeSessionId === null ? {} : { resumeSessionId: nativeSessionId },
-    buildSpawn: buildOpencodeMcpTestSpawn,
-  },
   minVersion: null,
+  // RFC-280 T6 — playground session strategy (opencode: no pre-allocated id;
+  // resume rides the captured session id).
+  createMcpTestNativeSessionId: () => null,
+  mcpTestSessionReference: ({ nativeSessionId }) =>
+    nativeSessionId === null ? {} : { resumeSessionId: nativeSessionId },
   // RFC-280 T1/T2 — unified injection render. Same functions the business
   // assembly composes internally; exposed so the unified executor (T4/T7) and
   // the startup-verification layer (T3) can render/declare without
@@ -108,9 +105,13 @@ export const opencodeDriver: RuntimeDriver = {
   async captureDistillSession(ctx: DistillSessionCaptureContext): Promise<void> {
     await captureDistillJobSession(ctx)
   },
-  // RFC-117 — system-agent spawn. Minimal inline config (prompt + model only; no
-  // skills/mcp/plugins/inventory, no RFC-029/041 in-place mutation), then the
-  // shared buildOpencodeSpawn. opencode takes the prompt positionally → no stdin.
+  // RFC-117 — system-agent spawn: one persona through the SAME
+  // `renderOpencodeAgentEntry` formula the business path uses (RFC-280 §7.2 —
+  // the hand-rolled `{prompt, model}` shape is gone, so variant/temperature/
+  // steps land instead of being silently dropped), plus the optional RFC-280
+  // T6 faces: an MCP injection mount (playground) and the RFC-029 inventory
+  // plugin as the startup-verification observation source. opencode takes the
+  // prompt positionally → no stdin.
   async buildSpawn(ctx: SystemAgentSpawnContext): Promise<SpawnPlan> {
     const envBin = process.env.AGENT_WORKFLOW_OPENCODE_BIN
     const head =
@@ -121,13 +122,47 @@ export const opencodeDriver: RuntimeDriver = {
           : envBin != null && envBin !== ''
             ? [envBin]
             : ['opencode']
-    const inlineConfig = {
-      agent: {
-        [ctx.agentName]: {
-          prompt: ctx.systemPrompt,
-          ...(ctx.model != null && ctx.model !== '' ? { model: ctx.model } : {}),
-        },
+    const personaEntry = renderOpencodeAgentEntry(
+      {
+        name: ctx.agentName,
+        description: '',
+        bodyMd: ctx.systemPrompt,
+        permission: {},
+        outputs: [],
+      } as unknown as Parameters<typeof renderOpencodeAgentEntry>[0],
+      {
+        model: ctx.model != null && ctx.model !== '' ? ctx.model : null,
+        variant: ctx.variant ?? null,
+        temperature: ctx.temperature ?? null,
+        steps: ctx.steps ?? null,
+        maxSteps: ctx.maxSteps ?? null,
+        isSandbox: ctx.isSandbox === true,
       },
+    )
+    const inlineConfig: {
+      agent: Record<string, Record<string, unknown>>
+      mcp?: Record<string, Record<string, unknown>>
+      plugin?: Array<string | [string, Record<string, unknown>]>
+    } = { agent: { [ctx.agentName]: personaEntry } }
+    if (ctx.mcpInjection !== undefined && ctx.mcpInjection.mcpEntries !== null) {
+      inlineConfig.mcp = ctx.mcpInjection.mcpEntries
+    }
+    // RFC-154 config-dir profile (playground threads the runtime row's frozen
+    // leaf/env; pre-RFC-280 system callers omit both → byte-identical spawn).
+    const runConfigDir =
+      ctx.configDirName != null && ctx.configDirName !== ''
+        ? join(ctx.runDir, ctx.configDirName)
+        : ctx.runDir
+    if (runConfigDir !== ctx.runDir) mkdirSync(runConfigDir, { recursive: true, mode: 0o700 })
+    // RFC-280 T6 (P1-4): the playground's observation source. Materialization
+    // failure is fatal HERE (unlike the business best-effort path) — a strict
+    // consumer would otherwise run blind and fail-open.
+    let inventoryOutPath: string | undefined
+    if (ctx.wantsInventory === true) {
+      mkdirSync(ctx.runDir, { recursive: true })
+      const pluginPath = await materializeInventoryPlugin(ctx.runDir)
+      inlineConfig.plugin = [`file://${pluginPath}`]
+      inventoryOutPath = join(ctx.runDir, 'inventory.json')
     }
     // RFC-143 PR-4: the AGENT_WORKFLOW_OPENCODE_BIN env override (previously a
     // `protocol === 'opencode'` branch in memoryDistiller) is internalized here:
@@ -142,8 +177,12 @@ export const opencodeDriver: RuntimeDriver = {
       agentName: ctx.agentName,
       prompt: ctx.prompt,
       worktreePath: ctx.worktreePath,
-      runDir: ctx.runDir,
+      runDir: runConfigDir,
+      ...(ctx.configDirEnv != null && ctx.configDirEnv !== ''
+        ? { configDirEnv: ctx.configDirEnv }
+        : {}),
       inlineConfigSerialized: JSON.stringify(inlineConfig),
+      ...(inventoryOutPath !== undefined ? { inventoryOutPath } : {}),
       ...(ctx.resumeSessionId != null && ctx.resumeSessionId !== ''
         ? { resumeSessionId: ctx.resumeSessionId }
         : {}),

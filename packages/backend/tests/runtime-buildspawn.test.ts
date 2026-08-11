@@ -16,8 +16,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { opencodeDriver } from '@/services/runtime/opencode/driver'
 import { claudeCodeDriver } from '@/services/runtime/claudeCode/driver'
-import { buildClaudeMcpTestSpawn } from '@/services/runtime/claudeCode/mcpTest'
-import type { McpTestSpawnContext, SystemAgentSpawnContext } from '@/services/runtime/types'
+import type { SystemAgentSpawnContext } from '@/services/runtime/types'
+import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import { createLogger } from '@/util/log'
 
 const BASE: SystemAgentSpawnContext = {
@@ -49,12 +49,22 @@ describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
     expect(plan.stdin).toEqual({ mode: 'ignore' })
   })
 
-  test('inline config carries persona prompt + model only (no skills/mcp/plugins)', async () => {
+  test('inline config renders the persona through the unified agent entry (RFC-280 §7.2)', async () => {
+    // The system-agent entry now comes from the SAME renderOpencodeAgentEntry
+    // formula the business path uses — the hand-rolled `{prompt, model}` shape
+    // is gone, so the entry carries the full definition fields (empty persona
+    // defaults) and profile params land instead of being silently dropped.
     const plan = await opencodeDriver.buildSpawn(BASE)
     const inline = JSON.parse(plan.env.OPENCODE_CONFIG_CONTENT!)
     expect(inline).toEqual({
       agent: {
-        'aw-memory-distiller': { prompt: 'PERSONA TEXT', model: 'anthropic/claude-haiku' },
+        'aw-memory-distiller': {
+          prompt: 'PERSONA TEXT',
+          description: '',
+          permission: {},
+          options: { outputs: [] },
+          model: 'anthropic/claude-haiku',
+        },
       },
     })
     expect(plan.env.OPENCODE_CONFIG_DIR).toBe('/tmp/run')
@@ -62,14 +72,20 @@ describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
   })
 
   test('model null/empty → inline config omits model (runtime default)', async () => {
+    const baseEntry = {
+      prompt: 'PERSONA TEXT',
+      description: '',
+      permission: {},
+      options: { outputs: [] },
+    }
     const inlineNull = JSON.parse(
       (await opencodeDriver.buildSpawn({ ...BASE, model: null })).env.OPENCODE_CONFIG_CONTENT!,
     )
-    expect(inlineNull.agent['aw-memory-distiller']).toEqual({ prompt: 'PERSONA TEXT' })
+    expect(inlineNull.agent['aw-memory-distiller']).toEqual(baseEntry)
     const inlineEmpty = JSON.parse(
       (await opencodeDriver.buildSpawn({ ...BASE, model: '' })).env.OPENCODE_CONFIG_CONTENT!,
     )
-    expect(inlineEmpty.agent['aw-memory-distiller']).toEqual({ prompt: 'PERSONA TEXT' })
+    expect(inlineEmpty.agent['aw-memory-distiller']).toEqual(baseEntry)
   })
 
   test('runtimeBinary overrides the opencode head (RFC-112 custom fork)', async () => {
@@ -199,41 +215,35 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
     expect(marker).toBeGreaterThan(toggle)
   })
 
-  test('MCP-test Claude spawn consumes the same default-off runtime toggle', async () => {
+  test('playground Claude spawn (mcpInjection) consumes the same default-off runtime toggle', async () => {
+    // RFC-280 T6: the playground rides the ordinary system-agent spawn now —
+    // the IS_SANDBOX contract must hold on that unified surface too.
     await withTmp(async (dir) => {
-      const base: McpTestSpawnContext = {
-        sessionId: 'session-1',
-        turnId: 'turn-1',
+      const base: SystemAgentSpawnContext = {
         agentName: 'mcp-test',
         systemPrompt: 'MCP TEST',
         prompt: 'PING',
-        executionMaterial: {
-          codec: 'mcp-test-execution-material-v1',
-          mcpId: 'mcp-1',
-          runtimeKey: 'fixture',
-          type: 'local',
-          opencodeEntry: {},
-          claudeEntry: { command: 'fixture' },
-          root: dir,
-        },
         model: null,
         worktreePath: '/tmp/wt',
-        sessionRoot: dir,
         runDir: join(dir, 'off'),
-        configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
+        mcpInjection: {
+          mcpEntries: { fixture: { command: 'fixture', args: [] } },
+          declared: emptyDeclaredManifest(),
+        },
+        nativeSessionId: 'session-1',
         log: createLogger('runtime-buildspawn-test'),
       }
-      const off = await buildClaudeMcpTestSpawn(base)
+      const off = await claudeCodeDriver.buildSpawn(base)
       expect(off.env.IS_SANDBOX).toBeUndefined()
-      await off.cleanup?.()
+      expect(off.cmd).toContain('--mcp-config')
+      expect(off.cmd).toContain('--session-id')
 
-      const on = await buildClaudeMcpTestSpawn({
+      const on = await claudeCodeDriver.buildSpawn({
         ...base,
         runDir: join(dir, 'on'),
         isSandbox: true,
       })
       expect(on.env.IS_SANDBOX).toBe('1')
-      await on.cleanup?.()
     })
   })
 })

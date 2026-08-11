@@ -29,6 +29,7 @@ import {
   renderClaudeMcpInjection,
 } from '@/services/execution/agentInjection'
 import { randomUUID } from 'node:crypto'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import {
@@ -45,7 +46,6 @@ import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from './probe'
 import { listClaudeModels } from './models'
 import { captureClaudeSessions } from './sessionCapture'
 import { claudeBusinessGate, claudeToolsValue } from './permissionMap'
-import { buildClaudeMcpTestSpawn } from './mcpTest'
 import {
   renderClaudeManagedSkillAttachments,
   stageClaudeWorktreeAgents,
@@ -54,16 +54,6 @@ import {
 
 export const claudeCodeDriver: RuntimeDriver = {
   kind: 'claude-code',
-  mcpTest: {
-    codec: 'mcp-test-v1',
-    defaultConfigDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
-    createNativeSessionId: randomUUID,
-    sessionReference: ({ turnSeq, nativeSessionId }) => {
-      if (nativeSessionId === null) throw new Error('mcp-test-native-session-missing')
-      return turnSeq === 1 ? { nativeSessionId } : { resumeSessionId: nativeSessionId }
-    },
-    buildSpawn: buildClaudeMcpTestSpawn,
-  },
   // 2026-08-04 — claude forks carry private flags (CodeAgent's
   // --skip-safe-check); the registry-validated extraArgs land at the argv tail.
   acceptsExtraArgs: true,
@@ -71,6 +61,13 @@ export const claudeCodeDriver: RuntimeDriver = {
   // process isolation or any operating-system sandbox guarantee.
   acceptsSandboxCompatibilityMarker: true,
   minVersion: MIN_CLAUDE_CODE_VERSION,
+  // RFC-280 T6 — playground session strategy (claude: pre-allocated UUID on
+  // turn 1 via --session-id, resume thereafter).
+  createMcpTestNativeSessionId: randomUUID,
+  mcpTestSessionReference: ({ turnSeq, nativeSessionId }) => {
+    if (nativeSessionId === null) throw new Error('mcp-test-native-session-missing')
+    return turnSeq === 1 ? { nativeSessionId } : { resumeSessionId: nativeSessionId }
+  },
   // RFC-280 T1/T2 — unified injection render. Declares every claude-visible
   // face plus what this runtime structurally lacks: selected plugins go to
   // `unsupported` (no plugin surface), and non-model profile params to
@@ -148,10 +145,24 @@ export const claudeCodeDriver: RuntimeDriver = {
     })
   },
   // RFC-117 — system-agent spawn. Persona → --append-system-prompt-file, model →
-  // --model, prompt → stdin (buildClaudeSpawn already returns stdin:pipe). No
-  // skills/mcp/subagents for a framework system agent.
+  // --model, prompt → stdin (buildClaudeSpawn already returns stdin:pipe).
+  // RFC-280 T6: an optional MCP injection mounts as an mcp-config.json written
+  // 0600 under runDir (secrets stay off argv) + `--mcp-config`; the playground's
+  // pre-allocated native session id lands as `--session-id`.
   async buildSpawn(ctx: SystemAgentSpawnContext): Promise<SpawnPlan> {
-    return buildClaudeSpawn({
+    if (ctx.nativeSessionId !== undefined && ctx.resumeSessionId !== undefined) {
+      throw new Error('system-agent-native-session-conflict')
+    }
+    let mcpConfigFile: string | undefined
+    if (ctx.mcpInjection !== undefined && ctx.mcpInjection.mcpEntries !== null) {
+      mkdirSync(ctx.runDir, { recursive: true, mode: 0o700 })
+      mcpConfigFile = join(ctx.runDir, 'mcp-config.json')
+      writeFileSync(mcpConfigFile, JSON.stringify({ mcpServers: ctx.mcpInjection.mcpEntries }), {
+        mode: 0o600,
+        flag: 'w',
+      })
+    }
+    const plan = buildClaudeSpawn({
       ...(pickRuntimeHead(ctx.runtimeBinary, ctx.runtimeCmd) !== undefined
         ? { claudeCmd: pickRuntimeHead(ctx.runtimeBinary, ctx.runtimeCmd) }
         : {}),
@@ -166,10 +177,15 @@ export const claudeCodeDriver: RuntimeDriver = {
       gitUserName: ctx.gitUserName ?? null,
       gitUserEmail: ctx.gitUserEmail ?? null,
       isSandbox: ctx.isSandbox,
+      ...(mcpConfigFile !== undefined ? { mcpConfigJson: mcpConfigFile } : {}),
       ...(ctx.extraArgs !== undefined && ctx.extraArgs.length > 0
         ? { extraArgs: ctx.extraArgs }
         : {}),
     })
+    if (ctx.nativeSessionId !== undefined && ctx.nativeSessionId !== '') {
+      plan.cmd.push('--session-id', ctx.nativeSessionId)
+    }
+    return plan
   },
   // RFC-143 PR-4 — business-node spawn (was the claude branch of runner.ts:828).
   // system-prompt-file (persona + RFC-041 memory weave) + RFC-111 PR-C MCP /
