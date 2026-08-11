@@ -21,6 +21,7 @@ import {
   type RuntimeDriver,
 } from '@/services/runtime'
 import { BUILTIN_RUNTIMES, RUNTIME_PROTOCOLS } from '@/services/runtimeRegistry'
+import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 
 const SRC = (rel: string) => readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
 
@@ -109,7 +110,7 @@ describe('RFC-143 (B) 能力接口', () => {
       // 编译器强制接上（与本测试"编译期证明接口完备"的意图一致）。
       renderInjection: () => ({
         mcpEntries: null,
-        declared: { mcpServers: [], skippedDisabledMcps: [] },
+        declared: emptyDeclaredManifest(),
       }),
       buildSpawn: async () => ({ cmd: ['mock'], env: {} }),
       buildBusinessSpawn: async (ctx) => {

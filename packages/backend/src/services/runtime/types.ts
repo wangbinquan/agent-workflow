@@ -37,13 +37,23 @@ import type { DeclaredManifestV1 } from '@/services/execution/agentInjection'
 export type RuntimeKind = 'opencode' | 'claude-code'
 
 /**
- * RFC-280 T1 — input to the unified injection render hook. T1 carries the MCP
- * face only; later RFC-280 tasks add agent definitions, skills, plugins and
- * subagents so the unified executor can render a full spawn without
- * runtime-kind branches.
+ * RFC-280 T1/T2 — input to the unified injection render hook. T1 carries the
+ * MCP face; T2 adds the declaration faces (agent/dependents/skills/plugins/
+ * profile) so the manifest covers every injected surface. Omitted faces
+ * declare as empty.
  */
 export interface AgentInjectionSpecV1 {
   mcps: readonly Mcp[]
+  /** Primary agent (name for subagent dedupe; permission for the claude gate). */
+  agent?: Agent
+  /** dependsOn closure, BFS order, root excluded. */
+  dependents?: readonly Agent[]
+  /** Root agent's resolved runtime profile (claude droppedParams derivation). */
+  profile?: RuntimeProfile
+  /** Framework skills selected for this run (managed ones are the declaration). */
+  skills?: readonly { name: string; sourceKind: string }[]
+  /** Selected plugins (opencode face; claude declares them unsupported). */
+  plugins?: readonly Plugin[]
 }
 
 /** RFC-280 T1 — output of the unified injection render hook. */

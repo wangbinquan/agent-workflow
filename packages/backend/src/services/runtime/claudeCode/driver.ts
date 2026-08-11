@@ -21,7 +21,13 @@ import type {
   SystemAgentSpawnContext,
   ListModelsOpts,
 } from '../types'
-import { renderClaudeMcpInjection } from '@/services/execution/agentInjection'
+import {
+  declarePlugins,
+  declareSkills,
+  declareSubagents,
+  deriveClaudeDroppedParams,
+  renderClaudeMcpInjection,
+} from '@/services/execution/agentInjection'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
@@ -65,10 +71,19 @@ export const claudeCodeDriver: RuntimeDriver = {
   // process isolation or any operating-system sandbox guarantee.
   acceptsSandboxCompatibilityMarker: true,
   minVersion: MIN_CLAUDE_CODE_VERSION,
-  // RFC-280 T1 — unified injection render (MCP face). Same partition/render
-  // toClaudeMcpConfig composes internally.
+  // RFC-280 T1/T2 — unified injection render. Declares every claude-visible
+  // face plus what this runtime structurally lacks: selected plugins go to
+  // `unsupported` (no plugin surface), and non-model profile params to
+  // `droppedParams` (落差④ — the T3 warning face consumes both).
   renderInjection(spec: AgentInjectionSpecV1): RenderedInjectionV1 {
     const { entries, declared } = renderClaudeMcpInjection(spec.mcps)
+    declared.skills = declareSkills(spec.skills ?? [])
+    declared.subagents = declareSubagents(spec.agent?.name ?? '', spec.dependents ?? [])
+    const gate = claudeBusinessGate(spec.agent?.permission)
+    declared.tools = gate === null ? null : [...gate.tools]
+    declared.droppedParams =
+      spec.profile === undefined ? [] : deriveClaudeDroppedParams(spec.profile)
+    declared.unsupported = declarePlugins(spec.plugins ?? []).map((name) => `plugin:${name}`)
     return { mcpEntries: entries, declared }
   },
   parseEvent(line: string): NormalizedEvent | null {

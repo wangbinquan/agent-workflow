@@ -20,6 +20,10 @@ import { join } from 'node:path'
 import type { Mcp } from '@agent-workflow/shared'
 import {
   AgentInjectionError,
+  declarePlugins,
+  declareSkills,
+  declareSubagents,
+  deriveClaudeDroppedParams,
   partitionMcpsForInjection,
   renderClaudeMcpInjection,
   renderClaudeMcpServerEntry,
@@ -211,5 +215,97 @@ describe('driver renderInjection hook (RFC-280 T1)', () => {
     const hook = claudeCodeDriver.renderInjection({ mcps: [localMcp('x', { enabled: false })] })
     expect(hook.mcpEntries).toBeNull()
     expect(toClaudeMcpConfig([localMcp('x', { enabled: false })])).toBeNull()
+  })
+})
+
+describe('declaration helpers (RFC-280 T2)', () => {
+  test('declareSkills lists managed only — project skills are CLI-discovered', () => {
+    expect(
+      declareSkills([
+        { name: 'm1', sourceKind: 'managed' },
+        { name: 'p1', sourceKind: 'project' },
+        { name: 'm2', sourceKind: 'managed' },
+      ]),
+    ).toEqual(['m1', 'm2'])
+  })
+
+  test('declareSubagents excludes the root and dedupes first-seen', () => {
+    const deps = [emptyAgent('root'), emptyAgent('a'), emptyAgent('b'), emptyAgent('a')]
+    expect(declareSubagents('root', deps)).toEqual(['a', 'b'])
+  })
+
+  test('declarePlugins drops disabled and dedupes', () => {
+    const plugins = [
+      { name: 'p1', enabled: true },
+      { name: 'off', enabled: false },
+      { name: 'p1', enabled: true },
+    ] as never[]
+    expect(declarePlugins(plugins)).toEqual(['p1'])
+  })
+
+  test('deriveClaudeDroppedParams names exactly the non-null non-model params', () => {
+    expect(
+      deriveClaudeDroppedParams({
+        model: 'anthropic/claude-sonnet-5',
+        variant: 'high',
+        temperature: 0.2,
+        steps: null,
+        maxSteps: 50,
+        isSandbox: false,
+      }),
+    ).toEqual(['variant', 'temperature', 'maxSteps'])
+    expect(
+      deriveClaudeDroppedParams({
+        model: null,
+        variant: null,
+        temperature: null,
+        steps: null,
+        maxSteps: null,
+        isSandbox: false,
+      }),
+    ).toEqual([])
+  })
+
+  test('opencode hook declares skills/subagents/plugins faces', () => {
+    const hook = opencodeDriver.renderInjection({
+      mcps: [localMcp('m')],
+      agent: emptyAgent('root'),
+      dependents: [emptyAgent('helper')],
+      skills: [
+        { name: 'sk', sourceKind: 'managed' },
+        { name: 'proj', sourceKind: 'project' },
+      ],
+      plugins: [{ name: 'plg', enabled: true }] as never[],
+    })
+    expect(hook.declared.skills).toEqual(['sk'])
+    expect(hook.declared.subagents).toEqual(['helper'])
+    expect(hook.declared.plugins).toEqual(['plg'])
+    expect(hook.declared.tools).toBeNull()
+    expect(hook.declared.unsupported).toEqual([])
+  })
+
+  test('claude hook declares tools gate, droppedParams and plugin unsupported', () => {
+    const gated = { ...emptyAgent('root'), permission: { read: 'allow', bash: 'deny' } } as Agent
+    const hook = claudeCodeDriver.renderInjection({
+      mcps: [],
+      agent: gated,
+      dependents: [emptyAgent('helper')],
+      profile: {
+        model: 'anthropic/claude-sonnet-5',
+        variant: 'high',
+        temperature: null,
+        steps: null,
+        maxSteps: null,
+        isSandbox: false,
+      },
+      plugins: [{ name: 'plg', enabled: true }] as never[],
+    })
+    expect(hook.declared.tools).toEqual(['Read'])
+    expect(hook.declared.droppedParams).toEqual(['variant'])
+    expect(hook.declared.unsupported).toEqual(['plugin:plg'])
+    expect(hook.declared.subagents).toEqual(['helper'])
+    // Unconstrained agent → tools null (claude keeps its own defaults).
+    const open = claudeCodeDriver.renderInjection({ mcps: [], agent: emptyAgent('free') })
+    expect(open.declared.tools).toBeNull()
   })
 })

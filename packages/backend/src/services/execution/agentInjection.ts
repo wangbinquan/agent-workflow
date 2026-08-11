@@ -16,7 +16,7 @@
 // Leaf module：只 type-import shared 与 RuntimeProfile —— 不得引入对
 // driver / runner / scheduler 的运行时依赖（会成环）。
 
-import type { Agent, Mcp } from '@agent-workflow/shared'
+import type { Agent, Mcp, Plugin } from '@agent-workflow/shared'
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
 
 export class AgentInjectionError extends Error {
@@ -39,12 +39,41 @@ export const EMPTY_RUNTIME_PROFILE: RuntimeProfile = {
   isSandbox: false,
 }
 
-/** T1 字段集；后续任务按 design.md §2.1 扩展。 */
+/** design.md §2.1 的声明清单。T1 落 MCP 面；T2 扩其余资源面。 */
 export interface DeclaredManifestV1 {
   /** 实际注入的 enabled MCP 名单，first-seen 顺序（= wire 键序）。 */
   mcpServers: string[]
   /** 被引用但 disabled 的 MCP 名单（忠实记录，含重复引用）。 */
   skippedDisabledMcps: string[]
+  /** 平台注入（staged）的 managed skill 名单；project skill 由 CLI 自发现，不算声明。 */
+  skills: string[]
+  /** dependsOn 闭包注入的 subagent 名单（root 除外、去重后）。 */
+  subagents: string[]
+  /** 注入的 enabled plugin 名单（opencode 面；claude 恒 [] 并进 unsupported）。 */
+  plugins: string[]
+  /** claude 显式 tool 载入集（claudeBusinessGate 产物）；无声明 / opencode 为 null。 */
+  tools: string[] | null
+  /** 落差④：该 runtime 静默丢弃的 profile 参数名（如 claude × variant）。 */
+  droppedParams: string[]
+  /** renderer 声明「此资源面在该 runtime 不存在」（如 claude × plugin）。 */
+  unsupported: string[]
+  /** 注入了但该 runtime 无启动观测手段的面（T3 观测层消费，绝不伪装为已验证）。 */
+  unobservable: string[]
+}
+
+/** 全空 manifest —— 各渲染路径在此之上按面填充。 */
+export function emptyDeclaredManifest(): DeclaredManifestV1 {
+  return {
+    mcpServers: [],
+    skippedDisabledMcps: [],
+    skills: [],
+    subagents: [],
+    plugins: [],
+    tools: null,
+    droppedParams: [],
+    unsupported: [],
+    unobservable: [],
+  }
 }
 
 export interface McpInjectionPartition {
@@ -87,6 +116,7 @@ export function partitionMcpsForInjection(mcps: readonly Mcp[]): McpInjectionPar
   return {
     injected,
     declared: {
+      ...emptyDeclaredManifest(),
       mcpServers: injected.map((m) => m.name),
       skippedDisabledMcps,
     },
@@ -200,4 +230,153 @@ export function renderOpencodeAgentEntry(
   if (params.steps !== null) inlineAgent.steps = params.steps
   if (params.maxSteps !== null) inlineAgent.maxSteps = params.maxSteps // Codex P2-3
   return inlineAgent
+}
+
+// ---------------------------------------------------------------------------
+// RFC-280 T2 — declaration helpers（纯函数；物理 staging / 文件物化留在 driver 渲染侧）
+// ---------------------------------------------------------------------------
+
+/** 平台实际 stage 的 skill 名单（managed only —— project 由 CLI 自发现）。 */
+export function declareSkills(skills: readonly { name: string; sourceKind: string }[]): string[] {
+  return skills.filter((s) => s.sourceKind === 'managed').map((s) => s.name)
+}
+
+/** dependsOn 闭包注入的 subagent 名单（root 除外、first-seen 去重）——两个 runtime 同一声明。 */
+export function declareSubagents(rootName: string, dependents: readonly Agent[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const dep of dependents) {
+    if (dep.name === rootName) continue
+    if (seen.has(dep.name)) continue
+    seen.add(dep.name)
+    out.push(dep.name)
+  }
+  return out
+}
+
+/** enabled plugin 名单（first-seen 去重）——opencode 注入面；claude 调用方转 unsupported。 */
+export function declarePlugins(plugins: readonly Plugin[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const p of plugins) {
+    if (p.enabled === false) continue
+    if (seen.has(p.name)) continue
+    seen.add(p.name)
+    out.push(p.name)
+  }
+  return out
+}
+
+/**
+ * 落差④：claude 渲染只消费 profile.model —— variant/temperature/steps/maxSteps
+ * 一律静默丢弃（claudeCode/driver.ts 历史行为）。这里把「丢了什么」显式化，
+ * T3 起进 spawn 日志 warn + 节点告警面。
+ */
+export function deriveClaudeDroppedParams(profile: RuntimeProfile): string[] {
+  const dropped: string[] = []
+  if (profile.variant !== null) dropped.push('variant')
+  if (profile.temperature !== null) dropped.push('temperature')
+  if (profile.steps !== null) dropped.push('steps')
+  if (profile.maxSteps !== null) dropped.push('maxSteps')
+  return dropped
+}
+
+// ---------------------------------------------------------------------------
+// claude subagent（--agents）条目渲染 —— RFC-280 T2 自 claudeCode/inject.ts 移入
+//（原名 toClaudeAgents；inject.ts re-export 兼容既有 import 面）。
+// ---------------------------------------------------------------------------
+
+/** One `--agents` entry. `model`/`tools` are omitted rather than nulled — an
+ *  absent key means "claude's own default", which is not the same as a value. */
+export interface ClaudeAgentEntry {
+  description: string
+  prompt: string
+  model?: string
+  tools?: string[]
+}
+
+export interface ClaudeAgentsOpts {
+  /**
+   * 2026-08-09 — RFC-113 profile per agent NAME, i.e. exactly
+   * `BusinessNodeSpawnContext.resolvedParamsByAgent`, whose contract already
+   * says "live-resolved for each dependent". OpenCode has consumed the
+   * per-dependent model since RFC-251; Claude previously dropped it, so every
+   * dependent silently ran on whatever the parent conversation used.
+   */
+  profileByName?: ReadonlyMap<string, { model: string | null }>
+  /**
+   * The parent's LOADED built-in set (`--tools`), or null when the parent is
+   * unconstrained (`bypassPermissions` has no load set to intersect with).
+   *
+   * MEASURED on claude 2.1.226: a subagent's tool pool is the parent's loaded
+   * set — the built-in `general-purpose` agent declares `tools:["*"]` yet
+   * reported exactly `Agent, Read` under a `--tools Read,Task` parent. So the
+   * parent set is a hard ceiling, and a dependent's own `permission` was simply
+   * not participating: a dependent declared read-only under a writing parent
+   * inherited the write tools. We intersect instead — strictly narrowing,
+   * never widening.
+   */
+  parentTools?: readonly string[] | null
+  /**
+   * RFC-280 T2 依赖注入：dependent 自身 permission → tool 载入集的映射
+   * （生产恒为 claudeCode/permissionMap 的 `claudeBusinessGate` —— 保持单点；
+   * 以参数传入避免 A 层对 claude 专属模块的硬依赖）。
+   */
+  gateOf: (permission: Agent['permission'] | undefined) => { tools: readonly string[] } | null
+}
+
+/** `Task` is deliberately never handed to a closure member: v1 does no nested
+ *  delegation, matching opencode's `buildPermission(dep, false)`. */
+const NESTED_DELEGATION_TOOL = 'Task'
+
+/**
+ * Translate the dependsOn closure (RFC-022, BFS order, root excluded) into
+ * Claude Code's `--agents` inline-JSON shape so the primary claude agent can
+ * invoke them as subagents (the claude analog of opencode's inline
+ * `agent.<dep>` entries). Returns null when the closure is empty.
+ *
+ * Per-NODE overrides still never apply to dependents (parity with opencode) —
+ * what travels here is each dependent's OWN resolved profile and permission.
+ *
+ * `warnings` carries capability losses the caller must surface: claude caps a
+ * subagent at the parent's loaded set, so a dependent asking for a tool the
+ * parent does not load cannot get it. That is a structural limit of the
+ * runtime, and swallowing it silently is the exact failure mode this whole
+ * batch of fixes exists to end.
+ */
+export function renderClaudeSubagentEntries(
+  dependents: readonly Agent[],
+  opts: ClaudeAgentsOpts,
+): { agents: Record<string, ClaudeAgentEntry>; warnings: readonly string[] } | null {
+  const agents: Record<string, ClaudeAgentEntry> = {}
+  const warnings: string[] = []
+  const parentTools = opts.parentTools
+  for (const dep of dependents) {
+    if (Object.hasOwn(agents, dep.name)) continue
+    const entry: ClaudeAgentEntry = { description: dep.description, prompt: dep.bodyMd }
+    const model = opts.profileByName?.get(dep.name)?.model
+    if (typeof model === 'string' && model.length > 0) entry.model = model
+    // Only a parent WITH a load set can express a member load set; an
+    // unconstrained parent keeps the byte-exact historical entry shape.
+    if (parentTools != null) {
+      const ceiling = parentTools.filter((tool) => tool !== NESTED_DELEGATION_TOOL)
+      const gate = opts.gateOf(dep.permission)
+      if (gate === null) {
+        // No declaration of its own: inherit the parent's set, minus nesting.
+        entry.tools = [...ceiling]
+      } else {
+        const wanted = gate.tools.filter((tool) => tool !== NESTED_DELEGATION_TOOL)
+        entry.tools = wanted.filter((tool) => ceiling.includes(tool))
+        const unreachable = wanted.filter((tool) => !ceiling.includes(tool))
+        if (unreachable.length > 0) {
+          warnings.push(
+            `dependent '${dep.name}' declares ${unreachable.join(', ')}, which the parent agent ` +
+              'does not load; claude caps a subagent at the parent tool set, so it runs without them',
+          )
+        }
+      }
+    }
+    agents[dep.name] = entry
+  }
+  return Object.keys(agents).length > 0 ? { agents, warnings } : null
 }

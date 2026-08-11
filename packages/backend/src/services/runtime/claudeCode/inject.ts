@@ -5,7 +5,12 @@
 // Leaf module: imports only shared types → no module-init cycle.
 
 import type { Agent, Mcp } from '@agent-workflow/shared'
-import { renderClaudeMcpInjection } from '@/services/execution/agentInjection'
+import {
+  renderClaudeMcpInjection,
+  renderClaudeSubagentEntries,
+  type ClaudeAgentEntry,
+  type ClaudeAgentsOpts,
+} from '@/services/execution/agentInjection'
 import { claudeBusinessGate } from './permissionMap'
 
 /**
@@ -27,91 +32,19 @@ export function toClaudeMcpConfig(
   return entries === null ? null : { mcpServers: entries }
 }
 
-/** One `--agents` entry. `model`/`tools` are omitted rather than nulled — an
- *  absent key means "claude's own default", which is not the same as a value. */
-export interface ClaudeAgentEntry {
-  description: string
-  prompt: string
-  model?: string
-  tools?: string[]
-}
+// RFC-280 T2 — the subagent entry renderer moved to the unified injection
+// layer (services/execution/agentInjection.ts, `renderClaudeSubagentEntries`).
+// This adapter binds the production permission gate (claudeBusinessGate stays
+// the single definition) and keeps the historical signature for import sites.
 
-export interface ClaudeAgentsOpts {
-  /**
-   * 2026-08-09 — RFC-113 profile per agent NAME, i.e. exactly
-   * `BusinessNodeSpawnContext.resolvedParamsByAgent`, whose contract already
-   * says "live-resolved for each dependent". OpenCode has consumed the
-   * per-dependent model since RFC-251; Claude previously dropped it, so every
-   * dependent silently ran on whatever the parent conversation used.
-   */
-  profileByName?: ReadonlyMap<string, { model: string | null }>
-  /**
-   * The parent's LOADED built-in set (`--tools`), or null when the parent is
-   * unconstrained (`bypassPermissions` has no load set to intersect with).
-   *
-   * MEASURED on claude 2.1.226: a subagent's tool pool is the parent's loaded
-   * set — the built-in `general-purpose` agent declares `tools:["*"]` yet
-   * reported exactly `Agent, Read` under a `--tools Read,Task` parent. So the
-   * parent set is a hard ceiling, and a dependent's own `permission` was simply
-   * not participating: a dependent declared read-only under a writing parent
-   * inherited the write tools. We intersect instead — strictly narrowing,
-   * never widening.
-   */
-  parentTools?: readonly string[] | null
-}
+export type {
+  ClaudeAgentEntry,
+  ClaudeAgentsOpts as ClaudeAgentsRenderOpts,
+} from '@/services/execution/agentInjection'
 
-/** `Task` is deliberately never handed to a closure member: v1 does no nested
- *  delegation, matching opencode's `buildPermission(dep, false)`. */
-const NESTED_DELEGATION_TOOL = 'Task'
-
-/**
- * Translate the dependsOn closure (RFC-022, BFS order, root excluded) into
- * Claude Code's `--agents` inline-JSON shape so the primary claude agent can
- * invoke them as subagents (the claude analog of opencode's inline
- * `agent.<dep>` entries). Returns null when the closure is empty.
- *
- * Per-NODE overrides still never apply to dependents (parity with opencode) —
- * what travels here is each dependent's OWN resolved profile and permission.
- *
- * `warnings` carries capability losses the caller must surface: claude caps a
- * subagent at the parent's loaded set, so a dependent asking for a tool the
- * parent does not load cannot get it. That is a structural limit of the
- * runtime, and swallowing it silently is the exact failure mode this whole
- * batch of fixes exists to end.
- */
 export function toClaudeAgents(
   dependents: readonly Agent[],
-  opts?: ClaudeAgentsOpts,
+  opts?: Omit<ClaudeAgentsOpts, 'gateOf'>,
 ): { agents: Record<string, ClaudeAgentEntry>; warnings: readonly string[] } | null {
-  const agents: Record<string, ClaudeAgentEntry> = {}
-  const warnings: string[] = []
-  const parentTools = opts?.parentTools
-  for (const dep of dependents) {
-    if (Object.hasOwn(agents, dep.name)) continue
-    const entry: ClaudeAgentEntry = { description: dep.description, prompt: dep.bodyMd }
-    const model = opts?.profileByName?.get(dep.name)?.model
-    if (typeof model === 'string' && model.length > 0) entry.model = model
-    // Only a parent WITH a load set can express a member load set; an
-    // unconstrained parent keeps the byte-exact historical entry shape.
-    if (parentTools != null) {
-      const ceiling = parentTools.filter((tool) => tool !== NESTED_DELEGATION_TOOL)
-      const gate = claudeBusinessGate(dep.permission)
-      if (gate === null) {
-        // No declaration of its own: inherit the parent's set, minus nesting.
-        entry.tools = [...ceiling]
-      } else {
-        const wanted = gate.tools.filter((tool) => tool !== NESTED_DELEGATION_TOOL)
-        entry.tools = wanted.filter((tool) => ceiling.includes(tool))
-        const unreachable = wanted.filter((tool) => !ceiling.includes(tool))
-        if (unreachable.length > 0) {
-          warnings.push(
-            `dependent '${dep.name}' declares ${unreachable.join(', ')}, which the parent agent ` +
-              'does not load; claude caps a subagent at the parent tool set, so it runs without them',
-          )
-        }
-      }
-    }
-    agents[dep.name] = entry
-  }
-  return Object.keys(agents).length > 0 ? { agents, warnings } : null
+  return renderClaudeSubagentEntries(dependents, { ...(opts ?? {}), gateOf: claudeBusinessGate })
 }
