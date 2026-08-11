@@ -330,7 +330,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
 
       await retryNode(h.db, taskId, agentRunId, {
         cascade: true,
-        deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+        deps: { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
       })
 
       const placeholders = (
@@ -350,7 +350,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
 
       await retryNode(h.db, taskId, agentRunId, {
         cascade: true,
-        deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+        deps: { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
       })
 
       const placeholders = (
@@ -375,7 +375,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
 
     await retryNode(h.db, taskId, callRow.id, {
       cascade: false,
-      deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+      deps: { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
     })
 
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
@@ -404,7 +404,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
 
     await retryNode(h.db, taskId, agentRunId, {
       cascade: true,
-      deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+      deps: { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
     })
 
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
@@ -452,7 +452,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
     await expect(
       retryNode(flakyDb, taskId, callRow.id, {
         cascade: false,
-        deps: { db: flakyDb, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+        deps: { db: flakyDb, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
       }),
     ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
 
@@ -488,7 +488,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
     await expect(
       retryNode(starvingDb, taskId, callRow.id, {
         cascade: false,
-        deps: { db: starvingDb, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+        deps: { db: starvingDb, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
       }),
     ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
 
@@ -518,7 +518,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
 
     await retryNode(h.db, taskId, reviewRow.id, {
       cascade: false,
-      deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+      deps: { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
     })
 
     const all = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -541,7 +541,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
 
       await retryNode(h.db, taskId, wrapRow.id, {
         cascade: true,
-        deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+        deps: { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
       })
 
       const all = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -566,7 +566,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
 
       await retryNode(h.db, taskId, wrapRow.id, {
         cascade: false,
-        deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+        deps: { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
       })
 
       const wrapRows = (

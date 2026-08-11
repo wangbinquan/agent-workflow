@@ -158,7 +158,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
       {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: [process.execPath, 'run', h.stub],
+        binaryOverride: [process.execPath, 'run', h.stub],
         awaitScheduler: true,
       },
     )
@@ -205,7 +205,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
       {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: [process.execPath, 'run', h.stub],
+        binaryOverride: [process.execPath, 'run', h.stub],
         awaitScheduler: true,
       },
     )

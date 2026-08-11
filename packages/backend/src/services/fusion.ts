@@ -71,8 +71,8 @@ type FusionRow = typeof fusions.$inferSelect
 export interface FusionDeps {
   db: DbClient
   appHome: string
-  /** TEST-ONLY opencode command override; production passes configPath. */
-  opencodeCmd?: string[]
+  /** TEST-ONLY runtime-neutral command-head override; production passes configPath. */
+  binaryOverride?: readonly string[]
   /** Daemon config path — threaded to the scheduler's single resolution point. */
   configPath?: string
   /** Run the scheduler inline (tests). Production leaves it to the daemon loop. */
@@ -609,7 +609,7 @@ export async function createFusion(
       // excluded so the approval flow keeps its dirs), not via the retired
       // public repoPath wire field.
       internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
-      ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
+      ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
       ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
       ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
       // RFC-108 T4 + RFC-115: thread per-node timeout / retry budget / default runtime.
@@ -1552,7 +1552,7 @@ export async function rejectFusion(
         // excluded so the approval flow keeps its dirs), not via the retired
         // public repoPath wire field.
         internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
-        ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
+        ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
         ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
         ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
         ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),

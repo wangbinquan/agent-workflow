@@ -210,7 +210,7 @@ emit(envelope)`,
     )
     await retryNode(h.db, taskId, staleId, {
       cascade: true,
-      deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', mockPath] },
+      deps: { db: h.db, appHome: h.appHome, binaryOverride: ['bun', 'run', mockPath] },
     })
     const final = await waitForTerminalTask(h.db, taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')

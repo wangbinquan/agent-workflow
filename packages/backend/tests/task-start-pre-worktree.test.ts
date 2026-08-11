@@ -195,7 +195,7 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
       {
         db,
         appHome,
-        opencodeCmd: [stubOpencode],
+        binaryOverride: [stubOpencode],
         awaitScheduler: true,
         internalSource: { kind: 'local-path', repoPath, baseBranch: 'main' },
         preCreatedWorktree: {
@@ -229,7 +229,7 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
         repoUrl: pathToFileURL(repoPath).href,
         inputs: { topic: 'orders' },
       } as unknown as StartTask,
-      { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+      { db, appHome, binaryOverride: [stubOpencode], awaitScheduler: true },
     )
     expect(task.worktreePath).not.toBe('')
     expect(existsSync(task.worktreePath)).toBe(true)

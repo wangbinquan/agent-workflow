@@ -265,7 +265,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
       async () => {
         const next = await retryNode(db, taskId, runA, {
           cascade: true,
-          deps: { db, appHome: APP_HOME, opencodeCmd: ['bun', 'run', MOCK_OPENCODE] },
+          deps: { db, appHome: APP_HOME, binaryOverride: ['bun', 'run', MOCK_OPENCODE] },
         })
         // 状态门只拒 pending/running——canceled 放行（设计内 UI 流，断言保留）。
         expect(next.status).toBe('pending')
@@ -302,7 +302,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
     await expect(
       retryNode(db, taskId, runA, {
         cascade: true,
-        deps: { db, appHome: APP_HOME, opencodeCmd: ['/usr/bin/env', 'true'] },
+        deps: { db, appHome: APP_HOME, binaryOverride: ['/usr/bin/env', 'true'] },
       }),
     ).rejects.toThrow(/task-still-running|is running/)
   })

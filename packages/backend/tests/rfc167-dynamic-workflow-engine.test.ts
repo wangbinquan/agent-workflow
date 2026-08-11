@@ -650,7 +650,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
         actor,
         workgroup.id,
         { name: 't', goal: '目标', scratch: true },
-        { db, appHome, opencodeCmd: OPENCODE_CMD, awaitScheduler: true },
+        { db, appHome, binaryOverride: OPENCODE_CMD, awaitScheduler: true },
       )
 
       const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]

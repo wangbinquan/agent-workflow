@@ -906,7 +906,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (config.autoResumeOnBoot) {
     const resumeDeps = {
       db,
-      ...(config.opencodePath ? { opencodeCmd: [config.opencodePath] } : {}),
+      // RFC-282 C1-2: the scheduler resolves config heads at the mint freeze.
+      configPath: Paths.config,
       ...(config.subagentLiveCapture !== undefined
         ? { subagentLiveCapture: config.subagentLiveCapture }
         : {}),

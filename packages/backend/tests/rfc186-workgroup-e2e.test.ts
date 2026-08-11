@@ -185,7 +185,7 @@ async function launch(h: Harness, workgroupId: string) {
       {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: opencodeCmd(),
+        binaryOverride: opencodeCmd(),
         awaitScheduler: true,
         defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
         defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -346,7 +346,7 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
             resumeTask(h.db, id, {
               db: h.db,
               appHome: h.appHome,
-              opencodeCmd: opencodeCmd(),
+              binaryOverride: opencodeCmd(),
               awaitScheduler: true,
               defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
               defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,

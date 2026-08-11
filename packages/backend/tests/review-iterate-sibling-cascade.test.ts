@@ -213,7 +213,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
+    { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
   )
 
   const idFor = async (nodeId: string): Promise<string> => {

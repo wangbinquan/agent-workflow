@@ -267,7 +267,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        binaryOverride: [process.execPath, 'run', h.stubOpencode],
         awaitScheduler: true,
       },
     )
@@ -302,7 +302,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        binaryOverride: [process.execPath, 'run', h.stubOpencode],
         awaitScheduler: true,
       },
     )
@@ -336,7 +336,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        binaryOverride: [process.execPath, 'run', h.stubOpencode],
         awaitScheduler: true,
       },
     )
@@ -367,7 +367,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        binaryOverride: [process.execPath, 'run', h.stubOpencode],
         awaitScheduler: true,
       },
     )
@@ -398,7 +398,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        binaryOverride: [process.execPath, 'run', h.stubOpencode],
         awaitScheduler: true,
       },
     )
@@ -433,7 +433,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         {
           db: hA.db,
           appHome: hA.appHome,
-          opencodeCmd: [process.execPath, 'run', hA.stubOpencode],
+          binaryOverride: [process.execPath, 'run', hA.stubOpencode],
           awaitScheduler: true,
         },
       ),
@@ -450,7 +450,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         {
           db: hA.db,
           appHome: hA.appHome,
-          opencodeCmd: [process.execPath, 'run', hA.stubOpencode],
+          binaryOverride: [process.execPath, 'run', hA.stubOpencode],
           awaitScheduler: true,
         },
       ),
@@ -508,7 +508,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        binaryOverride: [process.execPath, 'run', h.stubOpencode],
         awaitScheduler: true,
       },
     )
@@ -540,7 +540,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        binaryOverride: [process.execPath, 'run', h.stubOpencode],
         awaitScheduler: true,
       },
     )

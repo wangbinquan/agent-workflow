@@ -131,7 +131,7 @@ async function bumpWorkflow(
 }
 
 function syncDeps(h: Harness, expectedVersion: number) {
-  return { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'], expectedVersion }
+  return { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'], expectedVersion }
 }
 async function codeOf(fn: () => Promise<unknown>): Promise<string | undefined> {
   try {

@@ -162,7 +162,7 @@ async function build(): Promise<H> {
   const deps: FusionDeps = {
     db,
     appHome,
-    opencodeCmd: makeClarifyStub(tmp),
+    binaryOverride: makeClarifyStub(tmp),
     awaitScheduler: true,
     defaultRuntime: VALID_OPENCODE_RUNTIME,
   }

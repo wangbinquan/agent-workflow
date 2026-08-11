@@ -185,7 +185,7 @@ describe('resumeTask freshest-row selection locks isFresherNodeRun id-order (NOT
     await resumeTask(h.db, taskId, {
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['/usr/bin/env', 'true'],
+      binaryOverride: ['/usr/bin/env', 'true'],
     })
 
     // HEADLINE: the freshest row by id (B) should drive the rollback → 'Y'.

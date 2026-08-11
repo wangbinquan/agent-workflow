@@ -146,7 +146,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
               {
                 db,
                 appHome,
-                opencodeCmd: OPENCODE_CMD,
+                binaryOverride: OPENCODE_CMD,
                 awaitScheduler: true,
                 defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
                 defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -192,7 +192,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
             {
               db,
               appHome,
-              opencodeCmd: OPENCODE_CMD,
+              binaryOverride: OPENCODE_CMD,
               awaitScheduler: true,
               defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
               defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -330,7 +330,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
               resumeTask(db, id, {
                 db,
                 appHome,
-                opencodeCmd: OPENCODE_CMD,
+                binaryOverride: OPENCODE_CMD,
                 awaitScheduler: true,
                 defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
                 defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,

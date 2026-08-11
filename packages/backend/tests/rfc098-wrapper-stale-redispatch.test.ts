@@ -218,7 +218,7 @@ describe('RFC-098 B3 (S-7) — 上游 rerun 后 loop/git wrapper 判 stale 重�
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     }
 
     // ---- run 1：consumed 绑到 up 的第一代 done 行。----
@@ -277,7 +277,7 @@ describe('RFC-098 B3 (S-7) — 上游 rerun 后 loop/git wrapper 判 stale 重�
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     }
 
     // ---- run 1。----

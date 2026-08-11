@@ -183,7 +183,7 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
     const resumed = await resumeTask(h.db, taskId, {
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.doneMock],
+      binaryOverride: ['bun', 'run', h.doneMock],
       // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
       defaultNodeRetries: 0,
     })
@@ -210,7 +210,7 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
       {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', h.doneMock],
+        binaryOverride: ['bun', 'run', h.doneMock],
         awaitScheduler: true,
         // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
         defaultNodeRetries: 0,

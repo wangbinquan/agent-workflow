@@ -147,7 +147,7 @@ describe('RFC-242 §2 — business spawn honors the gate; undeclared stays uncon
       configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
       wantsInventory: false,
       nodeRunId: 'nr1',
-      runtimeCmd: ['bun', 'run', 'mock'],
+      binaryOverride: ['bun', 'run', 'mock'],
       log: { warn: () => {}, info: () => {}, error: () => {}, debug: () => {} },
     }) as never
 

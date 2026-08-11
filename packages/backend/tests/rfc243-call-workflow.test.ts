@@ -412,7 +412,7 @@ describe('RFC-243 e2e — 生命周期', () => {
       deps: {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', h.mockPath],
+        binaryOverride: ['bun', 'run', h.mockPath],
       } as unknown as StartTaskDeps,
     })
     // retryNode 的 kick 是 fire-and-forget —— 轮询到终态再断言。
@@ -599,7 +599,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     await resumeTask(h.db, parentTaskId, {
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.mockPath],
+      binaryOverride: ['bun', 'run', h.mockPath],
       awaitScheduler: true,
     } as unknown as StartTaskDeps)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!

@@ -162,7 +162,7 @@ async function launch(h: Harness, workgroupId: string) {
     actor,
     workgroupId,
     { name: 'e2e', goal: '产出 alpha', scratch: true },
-    { db: h.db, appHome: h.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: true },
+    { db: h.db, appHome: h.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
   )
 }
 
@@ -229,7 +229,7 @@ describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to m
       await resumeTask(h.db, task.id, {
         db: h.db,
         appHome: h.appHome,
-        opencodeCmd: opencodeCmd(),
+        binaryOverride: opencodeCmd(),
         awaitScheduler: true,
       })
 

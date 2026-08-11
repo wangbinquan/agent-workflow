@@ -175,7 +175,7 @@ describe('RFC-075 — startTask working branch', () => {
         inputs: { topic: 't' },
         ...extra,
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: h.stubOpencode, awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, binaryOverride: h.stubOpencode, awaitScheduler: true },
     )
   }
 

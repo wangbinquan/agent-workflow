@@ -268,7 +268,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
       {
         db,
         appHome,
-        opencodeCmd: opencodeCmd(),
+        binaryOverride: opencodeCmd(),
         awaitScheduler: true,
         defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
         defaultNodeRetries: 0,

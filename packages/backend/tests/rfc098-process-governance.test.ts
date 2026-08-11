@@ -399,7 +399,7 @@ describe('RFC-098 WP-8 — resumeTask kills the target row’s live child before
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['/usr/bin/env', 'true'],
+      binaryOverride: ['/usr/bin/env', 'true'],
     })
     expect(after.status).toBe('pending')
 

@@ -68,7 +68,7 @@ describe('retryNode validates nodeRunId before mutating task state (RFC-099 audi
     try {
       await retryNode(db, taskId, 'no_such_node_run', {
         cascade: true,
-        deps: { db, appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+        deps: { db, appHome, binaryOverride: ['/usr/bin/env', 'true'] },
       })
     } catch (e) {
       code = (e as { code?: string }).code
@@ -150,7 +150,7 @@ describe('retryNode validates nodeRunId before mutating task state (RFC-099 audi
     await expect(
       retryNode(db, targetTaskId, foreignCallRunId, {
         cascade: true,
-        deps: { db, appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+        deps: { db, appHome, binaryOverride: ['/usr/bin/env', 'true'] },
       }),
     ).rejects.toMatchObject({ code: 'node-run-not-found' })
 

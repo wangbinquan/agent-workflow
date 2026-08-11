@@ -243,7 +243,7 @@ describe('RFC-223 PR-7 — workgroup member writes and launch target use canonic
         actor('u1'),
         group.name,
         { name: 'e2e', goal: 'g', scratch: true },
-        { db, appHome, opencodeCmd: ['bun', '-e', 'process.exit(0)'], awaitScheduler: true },
+        { db, appHome, binaryOverride: ['bun', '-e', 'process.exit(0)'], awaitScheduler: true },
       ),
     ).rejects.toMatchObject({ code: 'workgroup-not-found' })
   })
@@ -260,7 +260,7 @@ describe('RFC-223 PR-7 — workgroup member writes and launch target use canonic
         actor('u1'),
         group.id,
         { name: 'e2e', goal: 'g', scratch: true },
-        { db, appHome, opencodeCmd: ['bun', '-e', 'process.exit(0)'], awaitScheduler: true },
+        { db, appHome, binaryOverride: ['bun', '-e', 'process.exit(0)'], awaitScheduler: true },
       ),
     ).rejects.toMatchObject({ code: 'workgroup-not-ready' })
   })

@@ -69,7 +69,7 @@ function businessCtx(permission: Record<string, unknown>, opts: CtxOpts): never 
     configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
     wantsInventory: false,
     nodeRunId: 'nr-1',
-    runtimeCmd: ['bun', 'run', 'mock'],
+    binaryOverride: ['bun', 'run', 'mock'],
     ...(opts.hostProbe === undefined ? {} : { boundaryHostProbe: opts.hostProbe }),
     log: {
       warn: (event: string, fields: Record<string, unknown>) => {

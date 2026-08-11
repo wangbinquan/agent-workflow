@@ -296,7 +296,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: true },
+      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     const first = (await designerTop(c.db, task.id))[0]
@@ -319,7 +319,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: true },
+      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
 
@@ -374,7 +374,7 @@ describe('RFC-122 H1 — process retry reads the LATEST directive per attempt', 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: false },
+      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: false },
     )
 
     // Wait until attempt 0 (retry_index 0) has rendered its prompt under the
@@ -441,7 +441,7 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: false },
+      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: false },
     )
 
     const attempt0 = await poll(async () => {
@@ -491,7 +491,7 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: true },
+      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
     )
 
     const attempt1 = (await designerTop(c.db, task.id)).find((x) => x.retryIndex === 1)

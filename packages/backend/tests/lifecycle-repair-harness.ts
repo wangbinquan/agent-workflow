@@ -93,7 +93,7 @@ export async function buildHarness(opts: {
     deps: {
       db,
       appHome: tmp,
-      opencodeCmd: ['/nonexistent-opencode-binary-rfc057-test'],
+      binaryOverride: ['/nonexistent-opencode-binary-rfc057-test'],
     },
   }
 }

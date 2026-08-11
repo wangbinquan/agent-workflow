@@ -604,7 +604,7 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
             {
               db,
               appHome,
-              opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+              binaryOverride: ['bun', 'run', MOCK_OPENCODE],
               awaitScheduler: true,
               defaultPerNodeTimeoutMs: 10_000,
               defaultNodeRetries: 0,

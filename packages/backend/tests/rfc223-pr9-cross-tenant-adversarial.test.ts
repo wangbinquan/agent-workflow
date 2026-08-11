@@ -279,7 +279,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       await resumeTask(db, taskId, {
         db,
         appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         defaultNodeRetries: 0,
         defaultPerNodeTimeoutMs: 5_000,
       })
@@ -311,7 +311,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
     const deps: FusionDeps = {
       db,
       appHome,
-      opencodeCmd: makeClarifyStub(root),
+      binaryOverride: makeClarifyStub(root),
       awaitScheduler: true,
     }
     const fsOpts: SkillFsOptions = { appHome }

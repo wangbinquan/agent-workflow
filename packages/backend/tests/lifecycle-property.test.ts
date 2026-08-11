@@ -320,7 +320,7 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
       if (target === undefined) return false
       await retryNode(h.db, h.taskId, target.id, {
         cascade: true,
-        deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+        deps: { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
       })
       return true
     }

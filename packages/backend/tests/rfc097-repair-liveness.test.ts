@@ -201,7 +201,7 @@ describe('RFC-097 S-23 — repair preflight refuses while a live scheduler owns 
 
     test('list → all S3 options schedulerActive; apply → 409 repair-preflight-stale; gate release frees the task', async () => {
       const taskId = await seedInterruptedTask(h)
-      const deps = { db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] }
+      const deps = { db: h.db, appHome: h.appHome, binaryOverride: ['bun', 'run', h.mockPath] }
 
       // Real ownership path: resumeTask registers the AbortController, then
       // its kicked runTask CASes pending→running and parks on the gate.

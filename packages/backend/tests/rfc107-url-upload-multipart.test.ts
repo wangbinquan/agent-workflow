@@ -855,7 +855,7 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
       {
         db,
         appHome,
-        opencodeCmd: [stubOpencode],
+        binaryOverride: [stubOpencode],
         awaitScheduler: true,
         preResolvedSource: {
           repoPath: realRepo,

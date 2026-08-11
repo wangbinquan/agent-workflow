@@ -184,7 +184,7 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
     await resumeTask(h.db, h.taskId, {
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', h.slowMock],
+      binaryOverride: ['bun', 'run', h.slowMock],
       // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
       defaultNodeRetries: 0,
     })

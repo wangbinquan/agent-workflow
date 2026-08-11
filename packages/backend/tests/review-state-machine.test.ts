@@ -204,7 +204,7 @@ async function buildHarness(): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
+    { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
   )
 
   // Locate the review node_run row.

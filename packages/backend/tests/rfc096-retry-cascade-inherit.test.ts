@@ -150,7 +150,7 @@ async function waitForTerminalTask(db: DbClient, taskId: string): Promise<void> 
 const DEPS = (h: Harness) => ({
   db: h.db,
   appHome: h.appHome,
-  opencodeCmd: ['/usr/bin/env', 'true'],
+  binaryOverride: ['/usr/bin/env', 'true'],
 })
 
 describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-LEVEL row)', () => {

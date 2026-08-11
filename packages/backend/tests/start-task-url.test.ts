@@ -154,7 +154,7 @@ describe('startTask URL mode (RFC-024)', () => {
     const { appHome, db, stubOpencode, wf, remoteUrl } = await setup()
     const task = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'orders' } },
-      { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
+      { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
     )
     expect(task.repoUrl).toBe(remoteUrl)
     expect(task.repoPath.startsWith(join(appHome, 'repos'))).toBe(true)
@@ -190,11 +190,11 @@ describe('startTask URL mode (RFC-024)', () => {
     const { appHome, db, stubOpencode, wf, remoteUrl } = await setup()
     const t1 = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'a' } },
-      { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
+      { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
     )
     const t2 = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'b' } },
-      { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
+      { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
     )
     expect(t1.repoPath).toBe(t2.repoPath)
     expect(db.select().from(cachedRepos).all().length).toBe(1)
@@ -212,7 +212,7 @@ describe('startTask URL mode (RFC-024)', () => {
           ref: 'this-ref-does-not-exist',
           inputs: { topic: 'orders' },
         },
-        { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
+        { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
       )
     } catch (e) {
       err = e

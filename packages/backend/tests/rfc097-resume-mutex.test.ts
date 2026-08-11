@@ -196,7 +196,7 @@ function deps(h: Harness, mockPath: string) {
   return {
     db: h.db,
     appHome: h.appHome,
-    opencodeCmd: ['bun', 'run', mockPath],
+    binaryOverride: ['bun', 'run', mockPath],
     defaultNodeRetries: 0,
   }
 }

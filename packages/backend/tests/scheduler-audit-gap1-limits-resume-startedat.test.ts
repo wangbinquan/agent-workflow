@@ -148,7 +148,7 @@ describe('gap1 — pause time counts toward maxDurationMs wall clock (current-be
     const returned = await resumeTask(h.db, taskId, {
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['/usr/bin/env', 'true'], // never spawned: empty workflow
+      binaryOverride: ['/usr/bin/env', 'true'], // never spawned: empty workflow
     })
     expect(returned.status).toBe('pending')
 

@@ -146,7 +146,7 @@ describe('retryNode cascade skips non-process kinds (RFC-052)', () => {
 
     await retryNode(db, taskId, agentRunId, {
       cascade: true,
-      deps: { db, appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+      deps: { db, appHome, binaryOverride: ['/usr/bin/env', 'true'] },
     })
 
     // The fresh placeholder must exist for agent_1 (retryIndex=1, failed),
@@ -217,7 +217,7 @@ describe('retryNode cascade skips non-process kinds (RFC-052)', () => {
 
     await retryNode(db, taskId, aRunId, {
       cascade: false,
-      deps: { db, appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+      deps: { db, appHome, binaryOverride: ['/usr/bin/env', 'true'] },
     })
 
     const placeholders = (

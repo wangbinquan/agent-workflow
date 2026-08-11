@@ -515,7 +515,7 @@ describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (regres
       taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       maxConcurrentNodes: 1,
       multiProcessSubprocessConcurrency: 1,
       defaultNodeRetries: 0,
