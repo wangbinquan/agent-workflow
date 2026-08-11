@@ -600,6 +600,36 @@ next question` 于 2026-08-08（run 31208702050，ubuntu shard 3/3）红，耗�
   `util/opencode-models.ts`）、local MCP probe（`services/mcpProbe.ts`）、插件安装
   （`services/pluginInstaller.ts`）都在 coordinator 之外以 daemon 身份裸执行。它们需要人经 API
   触发，agent 无法直接驱动，故不属于 RFC-252 的目标；但确实是 daemon 身份的执行面。
+- ⏳ **RFC-280 射程外的子进程缺少统一生命周期治理**（2026-08-11 RFC-282 调研发现；
+  与上一条「daemon 侧无沙箱执行面」**是同一批代码的不同关注点** —— 那条看的是安全身份，
+  这条看的是**进程回收**）。RFC-280 把五条 **agent** spawn 链路全部收敛到
+  `services/execution/managedProcess.ts:245`（全仓唯一 agent `Bun.spawn`，带 TERM→KILL
+  升级 / group kill / reap deadline / bounded drain），但**工具类子进程不在其射程内**，
+  各自手抄了一份骨架，且几乎每份都比 managedProcess 弱：
+  - `services/mcpProbe.ts:516` —— local MCP stdio server 由 `@modelcontextprotocol/sdk`
+    的 `StdioClientTransport` 内部 `node:child_process` 拉起，daemon 侧只有
+    `transport.close()` 与一个 handshake timeout race：**无 TERM→KILL 升级、无 group
+    kill、无 reap deadline** ⇒ 一个 fork 出孙进程的 MCP server 在探测超时后没有任何
+    兜底回收。这是本批里最值得先处理的一条（探测由用户在设置页反复触发）。
+  - `services/structuralDiff/deep/runner.ts:36-54` —— SCIP indexer 真执行：自建
+    `SpawnFn` + `setTimeout` + `proc.kill()`，**非 detached、只杀直接子进程**，而
+    indexer 是长跑的重型构建工具，孙进程必漏。与 managedProcess 语义差距最大的一处。
+  - `services/pluginInstaller.ts:791-797` —— npm 安装：`node:child_process.spawn` +
+    手写 chunk 累积 + `setTimeout` → `child.kill('SIGKILL')`，非 detached、无 group kill。
+  - `services/scriptRun.ts:270-287` —— 解释器 `--version` 探针：自建 deadline +
+    `proc.kill(9)`，非 detached；注释自述它跑在 scheduler 并发许可之前。
+  - **三份几乎逐字相同的 `--version` 探针骨架**：`util/opencode.ts:77`、
+    `services/runtime/claudeCode/probe.ts:53`、`util/opencode-models.ts:137`
+    （detached + timer + group SIGKILL + 解耦 exit/drain，注释互相写着 "same shape as"）。
+    这正是 RFC-280 在 agent 侧消灭的那类手抄骨架，只是不在它的射程内。
+  - **git 两处**：`util/git.ts:180-186` 与 `services/gitRepoCache.ts:126-133` 两份独立的
+    timer→`process.kill(-pid,'SIGKILL')`，`gitRepoCache.ts:95-96` 的注释自己声明「这两处
+    不得漂移」—— 靠注释维持而非靠代码。
+    **不是 RFC-282 的目标**（该 RFC proposal §3 已显式列为非目标并指向本条）：它们不是
+    agent 链路，收编需要各自评估语义（探针要的是「快速失败」而非「完整取证」，与 agent
+    域不同）。建议的切法：先只把 `mcpProbe` 与 SCIP indexer 这两条**会产生孙进程**的收编
+    到 `runManagedProcess`，三份 `--version` 探针合并为一个共享 helper，git 两处维持现状
+    但把「不得漂移」从注释升级为源码锁。
 - ❗ **`docs/audit-backlog.md` 上文关于 `--ignore-scripts` 的记载与源码不符**（2026-08-03 实测）：
   `services/pluginInstaller.ts:222` 的实际 argv 是
   `npm install --prefix <dir> --no-audit --no-fund --silent <spec>`，**全仓 grep `ignore-scripts` 零命中**，

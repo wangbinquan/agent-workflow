@@ -6,6 +6,13 @@
 
 - **`git ls-files` 型源码守卫对**未追踪的新文件**是盲的 —— 新增文件的 RFC「本地全绿」不等于 CI 绿**（RFC-269 实例）：`route-error-code-coverage.test.ts`（还有别的同类守卫）用 `git ls-files` 枚举 `src/routes/*.ts` 再扫错误码。新写的 `routes/codeHosts.ts` 在 commit 前是 untracked，`git ls-files` 根本不列它 ⇒ **连跑六次 `gate:local` 全绿**，push 之后 CI 第一次扫到它，两个未被测试点名的错误码当场红。gitleaks 同理（本地门禁压根不跑密钥扫描）。定式：**新增文件的改动，先 `git add -N <新文件>`（intent-to-add，只登记路径不暂存内容）再跑门禁**，让这类守卫看得见；或者提交后立刻补跑一次。判据：本地绿而 CI 红、且红在一个**本次新增**的文件上 ⇒ 先怀疑守卫的枚举源是 git 而不是文件系统。
 - **测试夹具别长得像真凭据**（同一实例）：`glpat-` / `ghp_` 前缀的假 token 会命中 gitleaks 的 `gitlab-pat` / `generic-api-key` 规则，让 CI 的 Static scans 红。假凭据用中性前缀（`aw-fixture-…`），需要断言尾号时把有意义的尾巴留在后面即可。
+- **后台跑门禁时别接 `| tail`（或任何管道）—— 管道的退出码会把门禁的红吞成绿**
+  （2026-08-11 实测踩坑）：`bun run gate:local 2>&1 | tail -40` 放后台，收到的完成
+  通知是 `exit code 0`，因为 shell 取的是**管道最后一个命令**（`tail`）的退出码，而
+  `gate:local` 实际 `exited with code 1`。当时据此以为门禁绿了，差点带着红提交。
+  定式：**要么不接管道**（`bun run gate:local > <log> 2>&1`，再单独 `echo "EXIT=$?"`
+  写进日志尾），**要么显式 `set -o pipefail`**。判据：后台门禁报绿但你没亲眼看到
+  「全绿」摘要行时，一律回日志里 grep `exited with code` / `lane(s) failed` 复核。
 - **`bun test` 把模块加载期 ENOENT 计「error」不计「fail」**：本地全量出现「N errors」必须**逐个查**——常见根因是源码锁（source-lock 测试）读了已删/搬走的文件。别当噪音略过，CI 会红。
 - **`vi.mock('@/components/...')` 路径跟组件搬家**：移动/重命名组件后必 grep 全仓 `vi.mock('@/components/<旧路径>`，否则测试静默失配。
 - **cwd 敏感测试**：用相对路径 `readFileSync` 的 source-lock 在 `cwd=packages/backend` 跑会恒红、在仓根 cwd 恒绿（CI 在仓根）。写 source-lock 用 `import.meta`/绝对根，别用相对 cwd。
