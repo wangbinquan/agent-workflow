@@ -170,7 +170,11 @@ headless 下无需任何人批准，平台也看不到日志（实测复现）�
 - Claude 的部分设置键（如数组型）跨配置层合并，仓库内 `.claude/settings.json` 可能影响最终形态；
 - 机制不可用时（如 Linux 缺少 Claude sandbox 依赖）**打告警放行、不阻断业务**；
 - Claude 的 Bash 写边界可被模型一次重试自行解除（见上）；
-- local MCP 子进程由 runtime 自己 spawn，不在该边界内。
+- **local MCP 子进程不在该边界内**：它由 runtime 自己 spawn，是独立进程，不经过
+  两个 runtime 的权限层（OpenCode 的 stdio 子进程 cwd 取 opencode 进程目录，即任务
+  worktree，但它之后访问什么路径不受 `external_directory` 约束）。要约束它需要 OS
+  级沙箱——那正是 RFC-276 废弃的东西，本 RFC 不重建（§3 非目标）。选用 local MCP
+  等于信任那个可执行文件，与信任 Agent、Skill、Plugin 同级。
 
 Script 节点不在该边界范围内（它不经 runtime 权限面）。
 

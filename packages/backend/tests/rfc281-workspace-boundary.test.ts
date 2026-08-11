@@ -13,7 +13,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Paths } from '@/util/paths'
 import { resolve } from 'node:path'
@@ -342,11 +342,11 @@ describe('AC-8 — platform-sensitive paths are outside the re-allow set', () =>
   // nonce) must be covered the day it is added, not the day someone remembers.
   // Evaluation mirrors opencode's own semantics (findLast over Wildcard.match,
   // `*` crossing `/`), so a too-broad allow like `/home/*` would fail this.
-  const APP_HOME = '/home/aw'
+  const APP_HOME = Paths.root
   const OTHER_TASK = [
-    `${APP_HOME}/iso/OTHER_TASK/run1`,
-    `${APP_HOME}/runs/OTHER_TASK/run1`,
-    `${APP_HOME}/worktrees/repo/OTHER_TASK`,
+    join(APP_HOME, 'iso', 'OTHER_TASK', 'run1'),
+    join(APP_HOME, 'runs', 'OTHER_TASK', 'run1'),
+    join(APP_HOME, 'worktrees', 'repo', 'OTHER_TASK'),
   ]
 
   const platformPaths = (): string[] => {
@@ -358,7 +358,11 @@ describe('AC-8 — platform-sensitive paths are outside the re-allow set', () =>
     return out
   }
 
-  /** opencode's裁决: last matching rule wins; `*` crosses `/`. */
+  /**
+   * opencode 的裁决：findLast 匹配者胜；`*` 跨 `/`；**无规则命中时默认 `ask`**
+   * （`permission/index.ts:28-38` 的 `?? {action:"ask"}`）——原实现默认写成
+   * 'deny'，属对真实语义的失真（2nd impl-gate P3）。
+   */
   const decide = (rules: Record<string, string>, target: string): string => {
     const toRe = (pattern: string): RegExp =>
       new RegExp(
@@ -370,7 +374,7 @@ describe('AC-8 — platform-sensitive paths are outside the re-allow set', () =>
           '$',
         's',
       )
-    let verdict = 'deny'
+    let verdict = 'ask'
     for (const [pattern, action] of Object.entries(rules)) {
       if (toRe(pattern).test(target)) verdict = action
     }
@@ -378,7 +382,20 @@ describe('AC-8 — platform-sensitive paths are outside the re-allow set', () =>
   }
 
   test('opencode: every platform path and every other task path evaluates to deny', () => {
-    const ext = composeOpencodeBoundary(undefined, CTX)['external_directory'] as Record<
+    // 用**生产同源**的 ctx：re-allow 集含 machineSkillRoots / opencodeDataDir /
+    // tmpdir 这些真实的宽 glob，且 mounts 用真实 appHome 形状 —— 否则规则集与
+    // 被裁决的路径根本不重叠，「一条过宽的 allow 会被抓出来」只是一句空话
+    // （2nd impl-gate P3）。
+    const prodCtx: BoundaryCtx = {
+      taskMounts: [join(Paths.root, 'iso', 'MY_TASK', 'run1')],
+      runDir: join(Paths.root, 'runs', 'MY_TASK', 'run1', '.opencode'),
+      stagedSkillDirs: [
+        join(Paths.root, 'runs', 'MY_TASK', 'run1', '.opencode', 'skills'),
+        ...machineSkillRoots(),
+      ],
+      tmpGlobs: [`${join(tmpdir(), 'opencode')}/*`, `${opencodeDataDir()}/tool-output/*`],
+    }
+    const ext = composeOpencodeBoundary(undefined, prodCtx)['external_directory'] as Record<
       string,
       string
     >

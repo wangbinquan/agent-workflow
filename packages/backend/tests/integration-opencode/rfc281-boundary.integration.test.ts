@@ -261,14 +261,44 @@ describe.skipIf(SKIP)('RFC-281 — workspace boundary against the real opencode'
     // level that must be proven against the real binary rather than reasoned
     // about (design §5-9, impl-gate P2-5).
     const { own, runDir } = makeSiblingTasks()
-    const out = await runProbe(DELEGATE_READ_SIBLING, { cwd: own, runDir, boundary: true })
+    const out = await runProbe(DELEGATE_READ_SIBLING, {
+      cwd: own,
+      runDir,
+      boundary: true,
+      // a delegation runs a WHOLE second agent turn — the 120s default is not
+      // enough on a loaded machine (measured).
+      timeoutMs: 300_000,
+    })
     expect(out.stdout).not.toContain(SIBLING_MARKER)
-  }, 240_000)
+    // A single negative assertion can pass for the wrong reason (no delegation,
+    // empty stdout, a crashed child) — 2nd impl-gate P2. Prove the run actually
+    // did something and that the boundary is what stopped it.
+    expect(out.stdout.length).toBeGreaterThan(0)
+    expect(out.stdout.toLowerCase()).toMatch(/task|subagent|general|denied|not allowed|permission/)
+  }, 360_000)
 })
 
 describe('RFC-281 integration gate (always runs)', () => {
   test('SKIP flag is true iff RUN_OPENCODE_INTEGRATION!=1 OR no auth available', () => {
     expect(SKIP).toBe(!(process.env.RUN_OPENCODE_INTEGRATION === '1' && AUTH_AVAILABLE))
+  })
+
+  test('the TOP-LEVEL boundary (what native subagents inherit) is emitted', () => {
+    // opencode's built-in `general`/`explore` have no platform agent entry, so
+    // they inherit `config.permission`. Proving that level with a LIVE
+    // delegation turned out to be unreliable — a real delegation runs a whole
+    // second agent turn and hung past 300s with the boundary OFF (measured),
+    // so the negative case could never get its positive control. The wire
+    // assertion below is deterministic and checks exactly what the subagent
+    // reads; the LIVE cases above still prove opencode HONORS this shape.
+    const cfg = JSON.parse(configContentFor('/w', '/w/.opencode', true)) as {
+      permission?: { external_directory?: Record<string, string> }
+      agent: Record<string, unknown>
+    }
+    expect(cfg.permission?.external_directory?.['*']).toBe('deny')
+    expect(cfg.permission?.external_directory?.['/w/*']).toBe('allow')
+    // and the native names really have no entry of their own to shadow it
+    expect(Object.keys(cfg.agent)).toEqual([AGENT_NAME])
   })
 
   test('the production assembly emits the boundary only when a ctx is passed', () => {
