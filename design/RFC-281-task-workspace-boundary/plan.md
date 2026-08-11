@@ -55,4 +55,16 @@
 - [x] **AC-9** 文档 §3.1 + §6.1（机制、白名单写法、残洞清单、措辞不称隔离）；rfc276 守卫 4 pass 确认无禁词
 - [x] **AC-10** pin worktree `gate:local` 跑过（抓到并修 `runner-permission-inject-e2e` × 2 与 `runtime-extra-args` × 1）；exact-SHA 主 CI + integration-opencode 双绿
 
+## 实现门（2026-08-11）
+
+Codex `codex exec` 连续 wedge（0 字节输出、零 CPU，与 memory 记录的已知问题同形），按止损姿势改用**独立子代理**（全新上下文 + 同强度对抗 prompt + 「构造不出具体失败输入的丢弃」）执行等效评审，如实记录该替代关系。报 13 条，**全部处置**（`8fb0167e` / `d9190c0a` / `b981f75c`）：
+
+- **P1-1 dontAsk 多仓写不可用**（AC-7 名不副实）：补 `permissions.allow` 的 `Edit(//<dir>/**)`。核官方文档纠正两处：`//` 前缀才是文件系统根（`/mnt/a` → `Edit(//mnt/a/**)`，非三斜杠）；只发 `Edit(...)`（覆盖 Write/NotebookEdit，单独 `Write(...)` claude 接受却从不查询 = 无效行）。
+- **P1-2 机器级 skill 根被静默切断**：deny 基线遮蔽了 opencode 默认白名单里的 `skill.dirs()`（`~/.claude/skills` 等）→ SKILL.md 进 prompt 但读同目录脚本被拒。新增 `machineSkillRoots()` 按同口径放行回来（proposal B9）。
+- **P1-3 `allowUnsandboxedCommands:false` 焊死逃生阀**：claude schema 原文为 false 时 `dangerouslyDisableSandbox` 被完全忽略——典型 build 节点（写 `~/.bun/cache` 等）撞 EPERM 后无人可救。改为不下发该键（proposal B10）。
+- **P2-4 存量 extraArgs 可顶掉边界**：spawn 期过滤平台独占 token + 告警。
+- **P2-5 原生子代理 LIVE 用例缺失**（顶层注入是唯一依赖跨层合并、且唯一没真跑验证的一级）：补 task→`general` 委派读兄弟的 LIVE 用例，**本机真 opencode 7 pass**。
+- **P2-6/P2-7 claude 拒绝分支与 AC-6 告警零断言**：新增 `boundaryHostProbe` 注入 seam（生产省略=行为不变）+ 三条断言（缺机制仍 spawn 且告警 / 可用主机不告警 / 作者 glob 披露）。
+- **P3-7/P3-8/P3-9/P3-10/P3-11/P3-12**：§0 guard 提纯函数 `resolveBoundaryMounts` 并加源码锁（原测试是复制品）、AC-8 改为遍历 `Paths` 并按 findLast+Wildcard 真实语义裁决、fail-open 判据先过滤空串、`gitMetaDirs` 未接线状态写进类型注释、`agentInjection` 过期注释改写、集成测试 ctx 与生产对齐 + 补 AC-3 staged-skill 回归。
+
 **未做（有意，已登记）**：DeclaredManifest 的 `workspaceBoundary` 声明字段与前端观测面——`startupVerification.ts` 在本轮全程被并行 RFC-280 session 占用（未提交改动），按多人协作原则不动他人在途文件；该项是观测增强、不影响边界功能本身，留作独立跟进。resume 边界重注入已由 T0 §5-7 实测确认（claude `--resume` 重新应用本次 `--settings`；opencode `--session` 同一注入路径），未单独加 CI 用例。
