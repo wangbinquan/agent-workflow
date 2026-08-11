@@ -104,8 +104,12 @@ const events = [
     // RFC-280 T6: the playground now VERIFIES the startup report (fail-closed
     // on "cannot observe"), so the mock must report its mounted MCP connected
     // exactly like a real claude init does.
+    // Third-round P2-1: AW_MOCK_MCP_STATUS lets a test report the mounted MCP as
+    // NOT connected, exercising the real verification → settleTurn →
+    // mcp-test-mcp-unusable integration path (previously only the pure verdict
+    // function was covered).
     tools: [`mcp__${runtimeKey}__stateful_increment`],
-    mcp_servers: [{ name: runtimeKey, status: 'connected' }],
+    mcp_servers: [{ name: runtimeKey, status: process.env.AW_MOCK_MCP_STATUS ?? 'connected' }],
   },
   {
     type: 'assistant',

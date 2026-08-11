@@ -70,13 +70,17 @@ export type StartupVerificationResponse = z.infer<typeof StartupVerificationResp
 /** verification 是否携带任何值得用户注意的内容（前端 banner 显隐判据）。 */
 export function startupVerificationHasFindings(record: StartupVerificationRecord): boolean {
   const v = record.verification
+  // 三轮实现门 P2-B：不计 `pluginsMissing`。verifyStartup 恒返回
+  // `pluginsMissing: []`（plugin 键域对不上,改由 `declared.unobservable` 呈现）,
+  // 而 banner 也没有 pluginsMissing 渲染行——把它计入 hasFindings 会让「预言 true
+  // 但 banner 无行可渲染」成为一处休眠的不一致。保持 hasFindings 的判据与 banner
+  // 实际渲染集严格一致（⊇ 关系,不多不少）。
   return (
     v.observation !== 'verified' ||
     v.mcpUnusable.length > 0 ||
     v.skillsMissing.length > 0 ||
     v.subagentsMissing.length > 0 ||
     v.toolsMissing.length > 0 ||
-    v.pluginsMissing.length > 0 ||
     record.declared.skippedDisabledMcps.length > 0 ||
     record.declared.droppedParams.length > 0 ||
     record.declared.unsupported.length > 0 ||
