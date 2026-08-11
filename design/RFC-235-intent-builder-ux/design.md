@@ -1,8 +1,173 @@
 # RFC-235 意图构建完整创建体验 UX 重构 — design
 
-> 读序：先读 [proposal.md](./proposal.md)。二十轮 Codex gate 证明，当前 API 无法让新 UX
-> 在并发、启动失败、迁移与响应丢失时诚实投影状态。本 RFC 因而同时交付前端信息架构与最小
-> supporting contracts；RFC-234 的权限、安全、OCC、secret 与 all-or-nothing 语义继续是权威。
+> 读序：先读 [proposal.md](./proposal.md)。v22 是当前规范；下文 v21 的 artifact/recovery
+> 设计只保留历史审计价值，与 v22 或 RFC-276 冲突处均已被取代。RFC-234 的权限、安全、OCC、
+> secret 与 all-or-nothing 语义继续是权威。
+
+## 0A. v22 当前主干设计
+
+### 0A.1 读模型与四步状态
+
+shared 新增 strict `IntentJourneySnapshotSchema`：
+
+```ts
+type IntentJourneySnapshot = {
+  kind:
+    | 'goal'
+    | 'generating'
+    | 'clarifying'
+    | 'review-ready'
+    | 'review-blocked'
+    | 'applying'
+    | 'applied'
+    | 'error'
+    | 'archived'
+  step: 1 | 2 | 3 | 4
+  completedThrough: 0 | 1 | 2 | 3 | 4
+  reason:
+    | 'describe-goal'
+    | 'generation-running'
+    | 'answer-questions'
+    | 'review-draft'
+    | 'draft-stale'
+    | 'draft-invalid'
+    | 'apply-running'
+    | 'generation-failed'
+    | 'apply-failed'
+    | 'applied'
+    | 'archived'
+}
+```
+
+`IntentSessionSummary.journey` 是列表与详情 header/rail 的唯一业务状态输入。backend 按同一纯函数
+投影：latest unsettled journal → Apply running；in-flight → Generate running；latest agent
+questions → Clarify；current draft stale/invalid/clean → Review blocked/ready；latest failed journal
+且仍针对 current draft → Apply error；latest agent error → Generate error；commit 后无 current
+draft → Applied；否则 Goal。archive 只覆盖 `kind/reason`，保留计算出的 step/completion，让历史
+位置仍可读。浏览器只负责翻译和布局，不从计数器猜状态。
+
+`GET /api/intent-sessions?page=1` additive 返回 strict `{items,nextCursor}`，`limit` 默认 12、最大
+50；不带 `page=1` 的既有调用继续返回 legacy array，避免打断外部脚本。cursor 绑定
+`updatedAt + id`，查询按两者倒序，下一页使用严格 `<`，保证静态结果集在同毫秒更新值下也不重
+不漏；活跃任务在翻页期间更新会改变排序，因此 Intent WS invalidation 必须清空 cursor pages、
+从第一页重取，frontend 仍按 session id 防御性去重，不能宣称跨并发更新的 snapshot isolation。
+`status/all` 继续生效；坏 cursor/limit 返回 `intent-invalid`。frontend 使用“加载更多”，刷新第一页
+时保留已渲染内容直到新响应落定。
+
+### 0A.1a generation reservation
+
+当前 route 在 user turn 落库后才异步 resolve runtime，再由 `runIntentTurn` mint running turn；配置
+失败或两个标签页并发时会留下“消息已收下、没有 in-flight/error”的不可解释状态。v22 不新建表，
+但把既有 row 写法收成一个 transaction：
+
+- create：session + initial user turn + agent `running` turn + `inFlightTurnId` 同时落库；
+- message/answers：fresh owner/active/no-apply gate + user turn + agent `running` turn 同时落库；
+- retry：fresh gate + agent `running` turn同一 transaction；
+- `runIntentTurn` 只消费 exact reserved turn id/envelope nonce/context revision，不再自行抢 slot；
+- runtime resolution、dump、spawn 任一步失败都 settle 该 exact running row 为 typed error，并清 exact
+  in-flight slot；cancel/supersede 仍走既有 context CAS。
+
+这样 create response 与 mutation 202 一旦成功，summary 必然已经是 Generate step；同 session 两个
+并发 mutation 只有一个能拿到 reservation，另一个在写用户 turn 前 409，不产生 orphan 对话历史。
+budget gate也在 reservation transaction 内判定，失败不写 user turn。无需 migration：使用现有
+`intent_turns` / `in_flight_turn_id` / `envelope_nonce` 列。
+
+### 0A.2 actor-safe mount 与审批
+
+detail 的 mounted root 投影为 `{handle,resourceType,resourceId,displayName,detail}`；`displayName` 由
+当前 actor 可见 catalog 投影。不可见/已删除资源返回中性 fallback，不向非审计 actor泄露历史
+名称。`resourceId` 只为已有 picker/route mutation 兼容保留，不作为 UI 主文案。
+
+detail 另返回 latest unresolved `mountSuggestions[]`：原始 `{resourceType,name,reason}` 来自最近
+agent turn；backend 只在 actor 当前可见 catalog 中做 exact-name 匹配，返回 0..N 个
+`candidates{id,name,description}`。0 表示当前不可解析；N>1 由用户明确选一个，不按名称猜。
+在 source agent turn 后已有 `mount-approval` turn 时，该批不再 pending。
+
+`POST /mount-approvals` 升级为 source-bound strict body：
+
+```ts
+{
+  sourceTurnId: string
+  expectedTurnSeq: number
+  expectedContextRevision: number
+  decisions: Array<
+    | {resourceType:string; name:string; action:'approve'; resourceId:string}
+    | {resourceType:string; name:string; action:'reject'}
+  >
+}
+```
+
+backend 先做 owner 404 gate，随后在一个 transaction 内验证 source 是本 session 的 agent
+questions/changeset turn、expected seq/context 仍匹配、每个 decision 精确对应 source 中首次出现的
+request、decision key 不重复、所有 request 都有且只有一个 outcome，并以
+`canViewResourceInTx` 重验 approve candidate 仍是当前 actor 可见且 exact-name 匹配；然后才去重
+concrete refs、更新 manifest、context revision 只增一次、写一个语义完整的 approval turn、turn
+seq 只增一次。任一候选失效则整批失败；admin audit 仍是 404-shape read-only。HTTP receipt 返回
+source identity、ordered approved handles/rejected names、resulting context/turn revision，detail 历史
+复用同一 strict content。questions 与 requests 同轮时，UI 必须先关闭整批 request，再允许提交
+answers，避免 answers 启动下一轮后旧建议从 pending surface 消失。
+
+### 0A.3 信息架构
+
+```text
+/intent
+├─ Goal composer
+│  ├─ Auto mode（独立整行默认选择）
+│  └─ Choose type（六类 3×2 / mobile 2×3）
+└─ Recent tasks（12 items + Load more）
+
+/intent/$sessionId
+├─ PageHeader（标题 + secondary actions；不重复阶段 chip）
+├─ Four-step rail（唯一阶段摘要 + 当前原因）
+├─ Mobile TabBar: Build | Review（desktop 隐藏但两栏同时显示）
+└─ Workspace
+   ├─ Build
+   │  ├─ semantic timeline
+   │  ├─ pending questions / mount approvals
+   │  ├─ mounted context
+   │  └─ continue composer
+   └─ Review
+      ├─ state-specific empty/blocking state
+      ├─ op outline + one selected rich preview
+      ├─ sticky current action
+      └─ commit history
+```
+
+移动端默认页签由 `journey.reason` 决定：review-draft/draft-stale/draft-invalid/apply-* /applied 打开
+Review，其余打开 Build。仅首次进入或 session id 变化时选择默认；用户手动切换后，后台刷新不得
+夺回页签。两个 panel 始终 mounted，以 `hidden`/CSS 切可见性，保留 Session 折叠、问题选择和预览
+相机状态。desktop ≥1080px 忽略 active tab并显示双栏。
+
+### 0A.4 semantic timeline 与 review scaling
+
+timeline 先建立 `(question turn seq,id) → question label/options` 索引：answers turn 以 question
+文本 + 已选值呈现；找不到 source 时显示中性“已提交 N 个回答”，不得 fallback 为 JSON。
+mount-approval 以“已挂载/已拒绝”分组呈现；changeset 显示 summary/op count；error 继续使用 RFC-273
+诊断；agent turn 下继续复用 `IntentTurnSession → SessionConversationPanel`，不复制 renderer。
+
+Review 将 64-op 上限视为真实规模：左侧 outline 渲染轻量 action/type/name/error count，右侧只
+mount selected op 的 `IntentOpPreview`。默认选择第一个 blocking op，否则第一个 op；draft identity
+变化时重选，普通 refetch 保持用户选择。工作流预览继续使用只读 `WorkflowCanvas`，不新增 canvas。
+空状态按 generating/clarifying/error/applied/goal 分文案；CTA 只有一个，sticky 在 review panel
+底部，disabled 原因就地可读。
+
+### 0A.5 Commit Stepper 与 mutation identity
+
+三步固定为 Strategy → Details → Review。无 update 时 Strategy 显示“全部新建”；无 slots 时
+Details 显示“无需补充”，仍保持稳定的三步心智模型。Next 只校验当前步；Review 展示每个 update
+的 modify/copy、各 slot 的完成状态与资源数，不回显 secret value。
+
+dialog open 时 mint 一次 ULID；网络错误重试与 response-loss reconciliation 复用它。只有成功或
+用户关闭 dialog 后才销毁 id。commit pending 时 `Dialog.dismissDisabled=true`，关闭按钮、Esc、
+overlay、Back/submit 均不能开启第二次 mutation。server 现有 `(sessionId,clientMutationId)` journal
+幂等合同继续权威。
+
+### 0A.6 明确不做
+
+- 不迁移 Intent 到 `BundleApply`，不新建通用 mutation ledger。
+- 不恢复 sandbox/containment、verified identity、artifact V3、backup/restore 或 worktree recovery。
+- 不改变六类 changeset wire、secret carrier、ACL 权限点或 apply 的 copy-only/final authority。
+- 不让 UI 直接解析 DB JSON 来决定权限或副作用；新 wire 必须 shared strict parse。
 
 ## 0. 总览
 

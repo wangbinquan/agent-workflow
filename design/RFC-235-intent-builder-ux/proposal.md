@@ -1,11 +1,63 @@
 # RFC-235 意图构建完整创建体验 UX 重构 — proposal
 
-状态：Draft v21 / 首版切片 In Progress（用户于 2026-07-29 明确授权“基于现在的设计先做出来一版”；首版只实施目标优先/双栏 UX 与 Intent turn Session 复用，完整 supporting contracts 仍待第二十一轮设计门与后续分批批准）
+状态：In Progress v22（2026-08-11 用户已批准按当前主干完成实现并上库；v22 是当前规范，v21 仅作历史审计记录）
 
 触发：2026-07-28 用户反馈「意图创建的界面太丑了」；真实浏览器核对现状后，用户选择
 **方案 A：重做完整意图构建体验**，而不是只美化创建弹窗。
 
 依赖：[RFC-234 意图驱动的资源构建](../RFC-234-intent-driven-builder/proposal.md)。
+
+## 0. v22 当前主干重审与规范优先级
+
+2026-08-11 按用户要求重新从 `main` 的真实代码与已完成 RFC 反向审视后，v21 不能继续原样
+实施。v21 的二十轮设计门把 Intent UX 与当时尚未定型的运行期加固、artifact broker、备份恢复
+和 worktree reconstruction 绑成了一个巨大交付；其后 [RFC-276](../RFC-276-runtime-hardening-deprecation/proposal.md)
+已明确删除 sandbox/containment、verified execution identity、hermetic store、netless 与对应
+API/UI/DB surface。继续实现 v21 会把主干刚删除的架构重新引入。
+
+本节与 [design.md 的 v22 设计](./design.md#0a-v22-当前主干设计) 具有最高规范优先级；下文 v21
+历史中与本节冲突的 mutation ledger、artifact V3、broker control、backup/restore、platform
+containment 与 worktree reconstruction 条款全部 `Superseded`，保留文字只为解释历史 gate，不再是
+验收项。
+
+v22 固定以下边界：
+
+1. **保留 RFC-234 的现行安全与落地内核。** ACL、owner-only mutation、OCC、secret slot、
+   immutable draft、apply journal 与 all-or-nothing 继续权威；不新建第二套 ledger。
+2. **Intent 暂不迁移到 RFC-271 `BundleApply`。** RFC-271 已明确只为未来迁移预留 provider，
+   本次继续使用已上线且覆盖 Intent provenance/copy/secret 语义的 `applyIntentChangeset`，避免把
+   引擎迁移风险与 UX 收口压在同一变更里。
+3. **不恢复 RFC-276 已删除的运行期加固。** Intent turn 继续使用当前 natural runtime；现有
+   durable Session event capture 与共享 `SessionConversationPanel` 保持不变。
+4. **服务端成为业务阶段的唯一投影者。** 列表与详情都消费 strict `journey` DTO，不再用
+   `turnSeq/commitSeq/currentDraftRevision` 在浏览器猜“第几步”。
+5. **完成整个创建旅程，而非只换皮肤。** Auto 与六类资源选择分层；最近任务可分页；详情在
+   小屏以“构建/复核”页签切换；问答与挂载审批使用语义化时间线；挂载只显示 actor-safe 名称；
+   64-op changeset 采用资源目录 + 单项预览；唯一当前行动固定在复核区；提交使用
+   Strategy → Details → Review Stepper，并在网络重试中复用同一 `clientMutationId`。
+6. **四步语义不变。** `Goal / Generate / Review / Apply` 是任务状态的业务骨架；“运行中”只能是
+   Generate 或 Apply 内的原因，不再作为与四步并列的泛化标签。
+
+### 0.1 v22 验收增量
+
+- 列表与详情对 generating、awaiting answers、review ready/blocked、applying、apply failed、
+  applied、archived 给出同源的四步投影与下一行动原因；分页后顺序稳定且无重复。
+- create/message/answers/retry 在成功响应可见前已经持久化对应 `running` reservation；runtime 配置或
+  启动失败成为 durable agent error turn，不能落成“用户消息已收下但任务看起来还在第 1 步”的
+  静默窗口。
+- agent `mountRequests` 能被 owner 明确批准或拒绝；服务端只返回 actor 当前可见的候选，整批决定
+  绑定 source turn + expected seq/context 后原子落库，不能审批旧建议或部分挂载；管理员审计只读，
+  不能借审批扩大写权限。
+- mounted context 显示资源类型 + 可读名称，不把内部 handle/id 当主要信息；历史回答与审批不再
+  渲染裸 JSON。
+- 390px 宽下默认打开当前最需要处理的“构建”或“复核”页签；切换页签不卸载状态；桌面继续
+  双栏。长 Session 执行树、64 个 ops、长名称与空/错误/stale 状态都保持单一滚动边界。
+- changeset 同时只挂载一个富预览（工作流继续复用只读 `WorkflowCanvas`），目录可键盘选择；
+  Review CTA sticky 且只在当前草稿可提交时进入 Commit Stepper。
+- Commit Stepper 锁 pending dismissal、分步校验必需 slot、最终页展示策略与输入完成度；同一次
+  dialog 的失败重试复用同一 mutation id，关闭后才换新 id，密钥不进入 timeline、缓存或日志。
+- shared/backend/frontend 定向测试、三包 typecheck/lint/format/depcheck、真实浏览器 desktop/
+  390px light/dark、axe 与完整 `bun run gate:local` 通过；实现门无未闭合 P0/P1/P2 后方可 Done。
 
 ## 1. 背景
 
