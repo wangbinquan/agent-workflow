@@ -46,6 +46,7 @@ import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from './probe'
 import { listClaudeModels } from './models'
 import { captureClaudeSessions } from './sessionCapture'
 import { claudeBusinessGate, claudeToolsValue } from './permissionMap'
+import { gitMetaDirsFor } from '@/util/git'
 import {
   claudeExpressibleAuthorDirs,
   claudeWriteBoundaryAvailability,
@@ -299,6 +300,12 @@ export const claudeCodeDriver: RuntimeDriver = {
     // 同一进程里、共享这一份边界。只取 root 的白名单会让「子代理自己声明了
     // external_directory」静默失效——它拿不到那个目录，且没有任何提示。合并
     // root + 每个 dependent 的可兑现目录（lossy 也合并，一起走告警面）。
+    // 每个 mount 的 git 元数据目录（linked worktree 的 common + admin dir）。
+    // `?? []`：taskMounts 生产必填，但缺它绝不能让整个 spawn 崩掉（§0）——
+    // 少一条放行只是少一层边界，抛异常却是节点直接起不来。
+    const gitMetaDirs = (
+      await Promise.all((ctx.taskMounts ?? []).map((m) => gitMetaDirsFor(m)))
+    ).flat()
     const authorAllowDirs = [ctx.agent, ...ctx.dependents].reduce<{
       dirs: string[]
       lossy: string[]
@@ -396,6 +403,12 @@ export const claudeCodeDriver: RuntimeDriver = {
       },
       boundary: {
         taskMounts: ctx.taskMounts,
+        // 业务误伤检视 P2-1：claude 的 sandbox 只对**会话 cwd** 自动解析 linked
+        // worktree 的共享 gitdir，对 allowWrite/additionalDirectories 里的其它
+        // mount 不解析 ⇒ 多仓任务在非主 mount 上 `git add/commit` 会 EPERM，
+        // 表现为「文件改得动、git 动不了」。把每个 mount 的 common/admin 目录
+        // 显式放行（拿不到就少一条，不阻断）。
+        gitMetaDirs: gitMetaDirs,
         // 2nd impl-gate P1-1: claude 的 sandbox 只拦 Bash；Edit/Write 走
         // permissions 层，而未声明 permission 的节点是 bypassPermissions ⇒ 默认
         // 形态下 Write 工具可直写兄弟任务目录（实测复现事故形态）。deny 规则在

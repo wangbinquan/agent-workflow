@@ -605,3 +605,41 @@ describe('author whitelist path forms (2nd impl-gate P3)', () => {
     expect(r.lossy).toEqual(['../shared/*'])
   })
 })
+
+describe('gitMetaDirs 已接线（业务误伤检视 P2-1）', () => {
+  // 这个字段从 T1 起就预留着、注释还写明「接线前不要假定兜底已生效」，而两个
+  // driver 一直不填 —— 检视实测 claude 多仓的非主 mount `git add/commit` 会
+  // EPERM（sandbox 只对会话 cwd 自动解析共享 gitdir）。源码锁防它再退化成死参数。
+  test('both drivers derive gitMetaDirs from every mount', () => {
+    for (const rel of [
+      '../src/services/runtime/claudeCode/driver.ts',
+      '../src/services/runtime/opencode/driver.ts',
+    ]) {
+      const src = readFileSync(resolve(import.meta.dir, rel), 'utf-8')
+      expect({ rel, wired: src.includes('gitMetaDirsFor') }).toEqual({ rel, wired: true })
+      expect({
+        rel,
+        // 逐 mount 求值；`?? []` 是 §0 防御（缺 taskMounts 少一条放行、但不崩）
+        perMount: src.includes('(ctx.taskMounts ?? []).map((m) => gitMetaDirsFor(m))'),
+      }).toEqual({ rel, perMount: true })
+    }
+  })
+
+  test('the boundary re-allows each git meta dir as a subtree', () => {
+    const ext = composeOpencodeBoundary(undefined, {
+      ...CTX,
+      gitMetaDirs: ['/src/repo/.git', '/src/repo/.git/worktrees/iso1'],
+    })['external_directory'] as Record<string, string>
+    expect(ext['/src/repo/.git/*']).toBe('allow')
+    expect(ext['/src/repo/.git/worktrees/iso1/*']).toBe('allow')
+  })
+
+  test('claude puts them in allowWrite (git needs to WRITE index.lock / objects)', () => {
+    const s = composeClaudeBoundarySettings({
+      taskMounts: ['/mnt/a'],
+      gitMetaDirs: ['/src/repo/.git'],
+      explicitPermission: false,
+    })
+    expect(s.sandbox.filesystem.allowWrite).toEqual(['/mnt/a', '/src/repo/.git'])
+  })
+})

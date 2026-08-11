@@ -46,6 +46,7 @@ import {
 import { pickRuntimeHead } from '../head'
 import { stageSkills } from '../stageSkills'
 import { probeOpencode } from '@/util/opencode'
+import { gitMetaDirsFor } from '@/util/git'
 import { getOpencodeBinaryVersion } from '@/util/opencode-version-registry'
 import { listOpencodeModelsNatural } from './models'
 import { captureChildSessions, captureOpencodeSessionsToSink } from '@/services/sessionCapture'
@@ -237,8 +238,18 @@ export const opencodeDriver: RuntimeDriver = {
     // everything else outside cwd, and `--auto` cannot flip a deny (design §5
     // E2/E4). System persona spawns (renderOpencodeAgentEntry above) get NO
     // boundary — RFC-281 §3 keeps the system surface unfenced in v1.
+    // 每个 mount 的 git 元数据目录。opencode 的 `git` 走 bash、不经
+    // external_directory（实测 commit 全链通过），但**文件工具**读
+    // `.git/config`、`.git/HEAD` 这类会被判定为越界 —— agent 排查分支/远端配置
+    // 时会撞上。放行它们与放行 worktree 本身同级（都是本任务的 git 数据）。
+    // `?? []`：taskMounts 生产必填，但缺它绝不能让整个 spawn 崩掉（§0）——
+    // 少一条放行只是少一层边界，抛异常却是节点直接起不来。
+    const gitMetaDirs = (
+      await Promise.all((ctx.taskMounts ?? []).map((m) => gitMetaDirsFor(m)))
+    ).flat()
     const boundaryCtx: BoundaryCtx = {
       taskMounts: ctx.taskMounts,
+      gitMetaDirs,
       runDir,
       // 平台 stage 的技能 + opencode 自己会发现的机器级技能根（实现门 P1-2：
       // deny 基线会遮蔽 opencode 默认白名单里的 skill.dirs()，不补回来就会
