@@ -109,3 +109,107 @@ export function composeOpencodeBoundary(
   out['external_directory'] = composed
   return out
 }
+
+// ---------------------------------------------------------------------------
+// RFC-281 T2/T3 — claude 侧：per-run settings 的**写**边界
+// ---------------------------------------------------------------------------
+//
+// 与 opencode 的差异（design §2，用户 2026-08-11 拍板接受不对称）：claude 只做
+// **写**边界，读面保持默认。载体是 `--settings <file>`（逐键合并层）。
+//
+// T0 实测定型（design §5-2，两条都是「过度加固会打挂业务」的实证）：
+//  - sandbox 默认「写 = cwd + tmp + allowWrite」。生产 appHome 在 home 下（非
+//    tmp），所以兄弟任务 worktree 与 appHome 敏感文件的写**默认即被拒**，平台
+//    什么都不用加。
+//  - `denyWrite` 一旦列 appHome 祖先根，会连 agent **自己的 cwd** 一起盖死
+//    （实测：cwd 内 `echo > ./mine.txt` 也 operation not permitted）⇒ 平台
+//    **绝不下发 denyWrite**。
+//  - 读面若用宽 glob deny（如 `appHome/**`）会误伤自己 cwd，且 allow 挖不回
+//    ⇒ v1 不做读面（§0 首要原则：业务不误伤 > 防护强度）。
+
+/** claude per-run settings 的最小形状（只含平台需要钉的键）。 */
+export interface ClaudeBoundarySettings {
+  sandbox: {
+    enabled: true
+    allowUnsandboxedCommands: false
+    filesystem: { allowWrite: string[] }
+  }
+  permissions?: { additionalDirectories: string[] }
+}
+
+export interface ClaudeBoundaryCtx {
+  /** 本任务全部 mount 的绝对路径（cwd 恒在内；单仓 = [cwd]）。 */
+  readonly taskMounts: readonly string[]
+  /** linked-worktree 的 git 元数据目录兜底（T0 §5-6：claude 通常自动放行）。 */
+  readonly gitMetaDirs?: readonly string[]
+  /** 作者 external_directory 白名单里可字面表达的目录（§4.3）。 */
+  readonly authorAllowDirs?: readonly string[]
+  /**
+   * 该节点是否声明了 permission（= claude 走 `dontAsk`）。dontAsk 下 cwd 之外
+   * 即拒，多仓 mounts 需要 additionalDirectories 才可达（B4 修复）。
+   */
+  readonly explicitPermission: boolean
+}
+
+/**
+ * 生成 claude per-run settings。**不含 denyWrite / 不含读面 deny**——见上方
+ * 实测说明；写边界由 sandbox 默认承担，平台只把「本任务合法可写目录」加进
+ * allowWrite。
+ */
+export function composeClaudeBoundarySettings(ctx: ClaudeBoundaryCtx): ClaudeBoundarySettings {
+  const allowWrite = dedupeNonEmpty([
+    ...ctx.taskMounts,
+    ...(ctx.gitMetaDirs ?? []),
+    ...(ctx.authorAllowDirs ?? []),
+  ])
+  const settings: ClaudeBoundarySettings = {
+    sandbox: { enabled: true, allowUnsandboxedCommands: false, filesystem: { allowWrite } },
+  }
+  // dontAsk 下 cwd 外的读也要显式放行，否则多仓任务的其他 mount 读不到
+  // （B4：这是能力恢复，不是加固）。未声明 permission 的节点走 bypassPermissions，
+  // 读本就不受限，不需要这条。
+  if (ctx.explicitPermission) {
+    const dirs = dedupeNonEmpty([...ctx.taskMounts, ...(ctx.authorAllowDirs ?? [])])
+    if (dirs.length > 0) settings.permissions = { additionalDirectories: dirs }
+  }
+  return settings
+}
+
+function dedupeNonEmpty(paths: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const p of paths) {
+    if (p.length === 0) continue
+    const normalized = p.length > 1 ? p.replace(/\/+$/, '') : p
+    if (seen.has(normalized)) continue
+    seen.add(normalized)
+    out.push(normalized)
+  }
+  return out
+}
+
+/**
+ * 作者 `external_directory` 白名单里能在 claude 上**字面兑现**的目录（§4.3）。
+ * 只取 action=allow 且 pattern 是字面目录形（结尾 `/*` 可去掉）的条目；中段带
+ * `*`/`?` 的 glob 无法表达 → 调用方负责告警披露粒度损失，不静默丢弃。
+ */
+export function claudeExpressibleAuthorDirs(author: AgentPermission | undefined): {
+  dirs: string[]
+  lossy: string[]
+} {
+  const ext = (author ?? {})['external_directory']
+  if (ext === null || typeof ext !== 'object' || Array.isArray(ext)) return { dirs: [], lossy: [] }
+  const dirs: string[] = []
+  const lossy: string[] = []
+  for (const [pattern, action] of Object.entries(ext as Record<string, unknown>)) {
+    if (action !== 'allow') continue
+    if (pattern === '*') continue // 通配全盘：不是一个可加进 allowWrite 的目录
+    const trimmed = pattern.endsWith('/*') ? pattern.slice(0, -2) : pattern
+    if (trimmed.includes('*') || trimmed.includes('?')) {
+      lossy.push(pattern)
+      continue
+    }
+    dirs.push(trimmed)
+  }
+  return { dirs: dedupeNonEmpty(dirs), lossy }
+}

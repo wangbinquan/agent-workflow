@@ -46,6 +46,7 @@ import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from './probe'
 import { listClaudeModels } from './models'
 import { captureClaudeSessions } from './sessionCapture'
 import { claudeBusinessGate, claudeToolsValue } from './permissionMap'
+import { claudeExpressibleAuthorDirs } from '@/services/execution/workspaceBoundary'
 import {
   renderClaudeManagedSkillAttachments,
   stageClaudeWorktreeAgents,
@@ -249,6 +250,21 @@ export const claudeCodeDriver: RuntimeDriver = {
         warnings: gate.warnings,
       })
     }
+    // RFC-281 T4: the author's `external_directory` allow-list crosses to claude
+    // only for LITERAL directories (they become sandbox allowWrite +
+    // additionalDirectories). A mid-pattern glob has no claude equivalent —
+    // disclose the granularity loss instead of dropping it silently (same
+    // discipline as the permission mapping above).
+    const authorAllowDirs = claudeExpressibleAuthorDirs(ctx.agent.permission)
+    if (authorAllowDirs.lossy.length > 0) {
+      ctx.log.warn('claude-external-directory-glob-unsupported', {
+        agent: ctx.agent.name,
+        nodeRunId: ctx.nodeRunId,
+        patterns: authorAllowDirs.lossy,
+        detail:
+          'claude can only express literal directories; these glob patterns are not granted on this runtime',
+      })
+    }
     const attachedSkillNames = ctx.skills
       .filter((skill) => skill.sourceKind === 'managed')
       .map((skill) => skill.name)
@@ -296,6 +312,13 @@ export const claudeCodeDriver: RuntimeDriver = {
       gitUserName: ctx.gitUserName,
       gitUserEmail: ctx.gitUserEmail,
       isSandbox: rootParams?.isSandbox === true,
+      // RFC-281 T2/T3: workspace WRITE boundary via Claude's own sandbox. The
+      // author's literal external_directory allow-dirs are honored; non-literal
+      // globs are disclosed as a warning below (never silently dropped).
+      boundary: {
+        taskMounts: ctx.taskMounts,
+        ...(authorAllowDirs.dirs.length === 0 ? {} : { authorAllowDirs: authorAllowDirs.dirs }),
+      },
       ...(gate === null ? {} : { businessTools: claudeToolsValue(gate) }),
       ...(claudeMcp !== null
         ? {

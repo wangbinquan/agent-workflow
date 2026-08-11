@@ -13,6 +13,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
+  claudeExpressibleAuthorDirs,
+  composeClaudeBoundarySettings,
   composeOpencodeBoundary,
   type BoundaryCtx,
 } from '../src/services/execution/workspaceBoundary'
@@ -114,5 +116,89 @@ describe('composeOpencodeBoundary — author external_directory handling', () =>
     expect(ext['/x/*']).toBe('deny')
     expect(ext['/y/*']).toBe('ask')
     expect(ext['*']).toBe('deny')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// claude side (T2/T3) — write-only boundary, no deny lists
+// ---------------------------------------------------------------------------
+
+describe('composeClaudeBoundarySettings — write boundary only', () => {
+  test('emits sandbox with allowWrite for this task’s mounts and nothing else', () => {
+    const s = composeClaudeBoundarySettings({
+      taskMounts: ['/home/aw/iso/T1/R1'],
+      explicitPermission: false,
+    })
+    expect(s.sandbox.enabled).toBe(true)
+    expect(s.sandbox.allowUnsandboxedCommands).toBe(false)
+    expect(s.sandbox.filesystem.allowWrite).toEqual(['/home/aw/iso/T1/R1'])
+    // bypassPermissions nodes read freely; no additionalDirectories needed.
+    expect(s.permissions).toBeUndefined()
+  })
+
+  test('NEVER emits denyWrite or a deny list (T0 §5-2: it would kill the agent’s own cwd)', () => {
+    const s = composeClaudeBoundarySettings({
+      taskMounts: ['/home/aw/iso/T1/R1', '/home/aw/iso/T1/R2'],
+      gitMetaDirs: ['/home/user/repo/.git/worktrees/iso'],
+      authorAllowDirs: ['/home/user/refrepo'],
+      explicitPermission: true,
+    })
+    const json = JSON.stringify(s)
+    // The §0 lock: any denyWrite/denyRead/permissions.deny would risk breaking
+    // legitimate business writes (an appHome-ancestor denyWrite shadows cwd).
+    expect(json).not.toContain('denyWrite')
+    expect(json).not.toContain('denyRead')
+    expect(json).not.toContain('"deny"')
+    // appHome root itself must never appear as a governed path.
+    expect(s.sandbox.filesystem.allowWrite).not.toContain('/home/aw')
+  })
+
+  test('explicit-permission nodes get additionalDirectories so multi-repo mounts stay readable (B4)', () => {
+    const s = composeClaudeBoundarySettings({
+      taskMounts: ['/mnt/a', '/mnt/b'],
+      authorAllowDirs: ['/ref'],
+      explicitPermission: true,
+    })
+    expect(s.permissions?.additionalDirectories).toEqual(['/mnt/a', '/mnt/b', '/ref'])
+    expect(s.sandbox.filesystem.allowWrite).toEqual(['/mnt/a', '/mnt/b', '/ref'])
+  })
+
+  test('dedupes and strips trailing slashes across mounts / git dirs / author dirs', () => {
+    const s = composeClaudeBoundarySettings({
+      taskMounts: ['/mnt/a/', '/mnt/a'],
+      gitMetaDirs: ['/mnt/a'],
+      authorAllowDirs: ['/ref/', ''],
+      explicitPermission: false,
+    })
+    expect(s.sandbox.filesystem.allowWrite).toEqual(['/mnt/a', '/ref'])
+  })
+})
+
+describe('claudeExpressibleAuthorDirs — literal dirs only, lossy globs disclosed', () => {
+  test('literal dirs (with or without /*) become claude-expressible paths', () => {
+    const r = claudeExpressibleAuthorDirs({
+      external_directory: { '/home/me/refrepo/*': 'allow', '/opt/data': 'allow' },
+    })
+    expect(r.dirs).toEqual(['/home/me/refrepo', '/opt/data'])
+    expect(r.lossy).toEqual([])
+  })
+
+  test('mid-pattern globs are reported as lossy, never silently dropped', () => {
+    const r = claudeExpressibleAuthorDirs({ external_directory: { '/a/*/b': 'allow' } })
+    expect(r.dirs).toEqual([])
+    expect(r.lossy).toEqual(['/a/*/b'])
+  })
+
+  test('non-allow entries and the bare wildcard are ignored', () => {
+    const r = claudeExpressibleAuthorDirs({
+      external_directory: { '*': 'allow', '/x': 'deny', '/y': 'ask' },
+    })
+    expect(r.dirs).toEqual([])
+    expect(r.lossy).toEqual([])
+  })
+
+  test('missing / scalar external_directory yields nothing', () => {
+    expect(claudeExpressibleAuthorDirs(undefined).dirs).toEqual([])
+    expect(claudeExpressibleAuthorDirs({ external_directory: 'allow' }).dirs).toEqual([])
   })
 })

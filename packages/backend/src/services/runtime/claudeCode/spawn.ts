@@ -8,6 +8,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SpawnPlan } from '../types'
+import { composeClaudeBoundarySettings } from '@/services/execution/workspaceBoundary'
 
 export interface ClaudeSpawnContext {
   /** Override `['claude']` (tests pass a mock command array). */
@@ -33,6 +34,17 @@ export interface ClaudeSpawnContext {
   mcpServerNames?: readonly string[]
   /** RFC-276: opt-in CLI compatibility marker; does not enable an OS sandbox. */
   isSandbox?: boolean
+  /**
+   * RFC-281 T2/T3: task workspace boundary. When present, a per-run
+   * `settings.json` is written next to the system prompt and passed via
+   * `--settings`, enabling Claude's own sandbox WRITE boundary (write = cwd +
+   * tmp + these mounts). Omitted → argv/behavior byte-identical to pre-RFC-281.
+   */
+  boundary?: {
+    taskMounts: readonly string[]
+    gitMetaDirs?: readonly string[]
+    authorAllowDirs?: readonly string[]
+  }
   extraArgs?: readonly string[]
 }
 
@@ -73,6 +85,9 @@ export const CLAUDE_PLATFORM_OWNED_FLAGS: ReadonlySet<string> = new Set([
   '--allowed-tools',
   '--disallowedTools',
   '--disallowed-tools',
+  // RFC-281 T2/T3: the per-run settings file carries the workspace write
+  // boundary; extraArgs must not replace it.
+  '--settings',
 ])
 
 export interface ClaudeExplicitPermissionArgv {
@@ -111,6 +126,27 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   writeFileSync(systemPromptFile, ctx.systemPromptText)
 
   const explicitPermission = ctx.businessTools !== undefined
+  // RFC-281 T2/T3: per-run settings carrying the WRITE boundary (Claude's own
+  // sandbox). No denyWrite/denyRead is emitted — an appHome-ancestor denyWrite
+  // would shadow the agent's own cwd (T0 §5-2), and the sandbox default
+  // (write = cwd + tmp + allowWrite) already refuses sibling task worktrees.
+  let settingsFile: string | undefined
+  // A boundary with no mounts cannot express a workspace, and emitting an empty
+  // allowWrite would leave the sandbox enabled with cwd-only writes derived from
+  // nothing — fail OPEN (no settings file) rather than risk fencing off a
+  // legitimate run (§0: business must not be collateral damage).
+  if (ctx.boundary !== undefined && (ctx.boundary.taskMounts?.length ?? 0) > 0) {
+    const settings = composeClaudeBoundarySettings({
+      taskMounts: ctx.boundary.taskMounts,
+      ...(ctx.boundary.gitMetaDirs === undefined ? {} : { gitMetaDirs: ctx.boundary.gitMetaDirs }),
+      ...(ctx.boundary.authorAllowDirs === undefined
+        ? {}
+        : { authorAllowDirs: ctx.boundary.authorAllowDirs }),
+      explicitPermission,
+    })
+    settingsFile = join(ctx.attemptDir, 'settings.json')
+    writeFileSync(settingsFile, JSON.stringify(settings, null, 2))
+  }
   const mcpAllowedTools = (ctx.mcpServerNames ?? []).map((name) => `mcp__${name}__*`).join(',')
   const cmd = [
     ...(ctx.claudeCmd ?? ['claude']),
@@ -126,6 +162,9 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
       : ['--permission-mode', 'bypassPermissions']),
   ]
   if (ctx.model !== undefined && ctx.model.length > 0) cmd.push('--model', ctx.model)
+  // RFC-281: settings layer is merged per key by the CLI; we only pin the
+  // sandbox write boundary (see composeClaudeBoundarySettings).
+  if (settingsFile !== undefined) cmd.push('--settings', settingsFile)
   cmd.push('--append-system-prompt-file', systemPromptFile)
   if (ctx.mcpConfigJson !== undefined && ctx.mcpConfigJson.length > 0) {
     cmd.push('--mcp-config', ctx.mcpConfigJson)
