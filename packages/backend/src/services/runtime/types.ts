@@ -424,6 +424,14 @@ export interface BusinessNodeSpawnContext {
   /** Subprocess cwd = task worktree. */
   worktreePath: string
   /**
+   * RFC-281 T3 test seam: how the driver decides whether Claude's sandbox
+   * mechanism exists on THIS host (macOS = always; Linux = bwrap+socat on PATH).
+   * Production omits both — the driver falls back to `process.platform` and
+   * `Bun.which`. Tests inject them to exercise the degrade-loudly branch, which
+   * is otherwise unreachable on a developer machine.
+   */
+  boundaryHostProbe?: { platform: NodeJS.Platform; hasExecutable: (bin: string) => boolean }
+  /**
    * RFC-281 T1: absolute mount paths that make up THIS task's legal workspace,
    * for the opencode `external_directory` boundary re-allow set. Source = the
    * scheduler's per-repo iso worktrees, forwarded by the runner as

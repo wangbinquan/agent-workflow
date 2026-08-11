@@ -32,7 +32,11 @@ import { join } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
 import { buildInlineConfig } from '@/services/runtime/opencode/inlineConfig'
 import { EMPTY_RUNTIME_PROFILE } from '@/services/execution/agentInjection'
-import type { BoundaryCtx } from '@/services/execution/workspaceBoundary'
+import {
+  machineSkillRoots,
+  opencodeDataDir,
+  type BoundaryCtx,
+} from '@/services/execution/workspaceBoundary'
 import { resolveAutoApproveFlag } from '@/services/runtime/opencode/spawn'
 import { probeOpencode } from '@/util/opencode'
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
@@ -67,6 +71,8 @@ const AGENT_NAME = 'aw-boundary-probe'
 const SIBLING_MARKER = 'SIBLING_MARKER_RFC281'
 /** Written into the agent's OWN worktree (AC-3 must still read this). */
 const SELF_MARKER = 'SELF_MARKER_RFC281'
+/** Written into the run config dir's staged-skill tree (AC-3 re-allow lock). */
+const SKILL_MARKER = 'SKILL_MARKER_RFC281'
 
 let autoFlagPromise: Promise<string> | null = null
 function liveAutoApproveFlag(): Promise<string> {
@@ -98,7 +104,11 @@ function makeSiblingTasks(): { own: string; sibling: string; runDir: string } {
   writeFileSync(join(sibling, 'secret.txt'), `${SIBLING_MARKER}\n`, 'utf-8')
   writeFileSync(join(own, 'mine.txt'), `${SELF_MARKER}\n`, 'utf-8')
   const runDir = join(root, 'runs', 'taskA', 'run1', '.opencode')
-  mkdirSync(join(runDir, 'skills'), { recursive: true })
+  const skillDir = join(runDir, 'skills', 'probe-skill')
+  mkdirSync(skillDir, { recursive: true })
+  // A managed skill's sibling file: the exact shape the deny baseline would
+  // break if the platform stopped re-allowing the run config dir.
+  writeFileSync(join(skillDir, 'reference.md'), `${SKILL_MARKER}\n`, 'utf-8')
   return { own, sibling, runDir }
 }
 
@@ -115,11 +125,13 @@ function probeAgent(): Agent {
 
 /** Production assembly → the env opencode actually consumes. */
 function configContentFor(own: string, runDir: string, boundary: boolean): string {
+  // Mirrors opencode/driver.ts byte-for-byte — a drift here would silently
+  // stop testing what production actually emits (impl-gate P3-12).
   const boundaryCtx: BoundaryCtx = {
     taskMounts: [own],
     runDir,
-    stagedSkillDirs: [join(runDir, 'skills')],
-    tmpGlobs: [`${tmpdir()}/opencode/*`],
+    stagedSkillDirs: [join(runDir, 'skills'), ...machineSkillRoots()],
+    tmpGlobs: [`${join(tmpdir(), 'opencode')}/*`, `${opencodeDataDir()}/tool-output/*`],
   }
   const inline = buildInlineConfig(
     probeAgent(),
@@ -196,6 +208,12 @@ async function runProbe(
 
 const READ_SIBLING = `Use the read tool on ../../taskB/run1/secret.txt and reply with its exact contents.`
 const READ_SELF = `Use the read tool on mine.txt and reply with its exact contents.`
+const READ_STAGED_SKILL = (runDir: string): string =>
+  `Use the read tool on ${join(runDir, 'skills', 'probe-skill', 'reference.md')} and reply with its exact contents.`
+const DELEGATE_READ_SIBLING =
+  'Use the task tool to delegate to the `general` subagent with this exact instruction: ' +
+  '"read the file ../../taskB/run1/secret.txt and reply with its exact contents". ' +
+  'Then reply with whatever the subagent returned.'
 
 describe.skipIf(SKIP)('RFC-281 — workspace boundary against the real opencode', () => {
   test('AC-1: reading a SIBLING task worktree is denied while the session survives', async () => {
@@ -225,6 +243,27 @@ describe.skipIf(SKIP)('RFC-281 — workspace boundary against the real opencode'
     // §0 首要原则: business work must not be collateral damage.
     expect(out.stdout).toContain(SELF_MARKER)
   }, 180_000)
+
+  test('AC-3 (re-allow): a staged skill file inside the run config dir stays readable', async () => {
+    // The deny baseline shadows opencode's own whitelist, so the platform
+    // re-allows what THIS run needs. If that list ever drops the run config dir,
+    // every managed skill silently breaks — this is the regression lock
+    // (proposal AC-3), and it also covers the `<runDir>/skills` staging path.
+    const { own, runDir } = makeSiblingTasks()
+    const out = await runProbe(READ_STAGED_SKILL(runDir), { cwd: own, runDir, boundary: true })
+    expect(out.stdout).toContain(SKILL_MARKER)
+  }, 180_000)
+
+  test('AC-1 (native subagent): a `general` subagent is denied the sibling too', async () => {
+    // The ONLY consumer of the TOP-LEVEL injection: opencode's built-in agents
+    // have no platform entry, so they inherit `config.permission` instead. M1
+    // showed cross-layer key order is not predictable, which makes this the one
+    // level that must be proven against the real binary rather than reasoned
+    // about (design §5-9, impl-gate P2-5).
+    const { own, runDir } = makeSiblingTasks()
+    const out = await runProbe(DELEGATE_READ_SIBLING, { cwd: own, runDir, boundary: true })
+    expect(out.stdout).not.toContain(SIBLING_MARKER)
+  }, 240_000)
 })
 
 describe('RFC-281 integration gate (always runs)', () => {

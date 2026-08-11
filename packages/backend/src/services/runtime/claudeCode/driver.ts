@@ -263,8 +263,8 @@ export const claudeCodeDriver: RuntimeDriver = {
     // we still spawn — business must not be blocked by a missing fence (§0) —
     // but the degradation is logged so it is never silent.
     const boundaryAvailability = claudeWriteBoundaryAvailability(
-      process.platform,
-      (bin) => Bun.which(bin) !== null,
+      ctx.boundaryHostProbe?.platform ?? process.platform,
+      ctx.boundaryHostProbe?.hasExecutable ?? ((bin) => Bun.which(bin) !== null),
     )
     if (!boundaryAvailability.available) {
       ctx.log.warn('claude-workspace-boundary-unavailable', {

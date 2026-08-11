@@ -26,10 +26,14 @@ import { claudeCodeDriver } from '@/services/runtime/claudeCode/driver'
 const OWN = '/home/aw/iso/taskA/run1'
 const SIBLING_ROOT = '/home/aw/iso'
 
-function businessCtx(
-  permission: Record<string, unknown>,
-  opts: { runRoot: string; taskMounts?: readonly string[] },
-): never {
+interface CtxOpts {
+  runRoot: string
+  taskMounts?: readonly string[]
+  hostProbe?: { platform: NodeJS.Platform; hasExecutable: (bin: string) => boolean }
+  warns?: Array<{ event: string; fields: Record<string, unknown> }>
+}
+
+function businessCtx(permission: Record<string, unknown>, opts: CtxOpts): never {
   return {
     agent: {
       id: 'a1',
@@ -55,7 +59,15 @@ function businessCtx(
     wantsInventory: false,
     nodeRunId: 'nr-1',
     runtimeCmd: ['bun', 'run', 'mock'],
-    log: { warn: () => {}, info: () => {}, error: () => {}, debug: () => {} },
+    ...(opts.hostProbe === undefined ? {} : { boundaryHostProbe: opts.hostProbe }),
+    log: {
+      warn: (event: string, fields: Record<string, unknown>) => {
+        opts.warns?.push({ event, fields })
+      },
+      info: () => {},
+      error: () => {},
+      debug: () => {},
+    },
   } as never
 }
 
@@ -139,5 +151,51 @@ describe('RFC-281 T2/T3 — claude per-run settings carry the write boundary', (
       (a, i) => a !== '--settings' && plan.cmd[i - 1] !== '--settings',
     )
     expect(withoutSettings).not.toContain('--settings')
+  })
+})
+
+describe('RFC-281 AC-6 — degrade loudly, never block (impl-gate P2-7)', () => {
+  test('a host without the sandbox mechanism still spawns, and says so', async () => {
+    const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
+    const warns: Array<{ event: string; fields: Record<string, unknown> }> = []
+    const plan = await claudeCodeDriver.buildBusinessSpawn(
+      businessCtx(
+        {},
+        {
+          runRoot,
+          warns,
+          // linux without bwrap/socat = the real degraded host
+          hostProbe: { platform: 'linux', hasExecutable: () => false },
+        },
+      ),
+    )
+    // §0: the node RUNS. A missing fence must never block business work.
+    expect(plan.cmd.length).toBeGreaterThan(0)
+    const warn = warns.find((w) => w.event === 'claude-workspace-boundary-unavailable')
+    expect(warn).toBeDefined()
+    expect(String(warn?.fields.reason)).toContain('missing-dependencies')
+  })
+
+  test('a capable host emits no unavailability warning', async () => {
+    const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
+    const warns: Array<{ event: string; fields: Record<string, unknown> }> = []
+    await claudeCodeDriver.buildBusinessSpawn(
+      businessCtx(
+        {},
+        { runRoot, warns, hostProbe: { platform: 'darwin', hasExecutable: () => true } },
+      ),
+    )
+    expect(warns.find((w) => w.event === 'claude-workspace-boundary-unavailable')).toBeUndefined()
+  })
+
+  test('an author glob that claude cannot express is disclosed, not silently dropped', async () => {
+    const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc281-claude-'))
+    const warns: Array<{ event: string; fields: Record<string, unknown> }> = []
+    await claudeCodeDriver.buildBusinessSpawn(
+      businessCtx({ read: 'allow', external_directory: { '/a/*/b': 'allow' } }, { runRoot, warns }),
+    )
+    const warn = warns.find((w) => w.event === 'claude-external-directory-glob-unsupported')
+    expect(warn).toBeDefined()
+    expect(warn?.fields.patterns).toEqual(['/a/*/b'])
   })
 })
