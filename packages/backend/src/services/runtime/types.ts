@@ -25,7 +25,10 @@ import type {
   Plugin,
   RuntimeConfigDirProfile,
 } from '@agent-workflow/shared'
-import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveCapture'
+import type {
+  LivePollOptions,
+  LivePollerHandle,
+} from './opencode/subagentLiveCapture'
 // Type-only (erased at runtime): runtimeRegistry value-imports runtime/index,
 // so a VALUE import here would close a module-init cycle. RuntimeProfile is the
 // RFC-113 resolved param set threaded through BusinessNodeSpawnContext.

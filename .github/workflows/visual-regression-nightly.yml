@@ -29,7 +29,7 @@ on:
     branches: [main]
     paths:
       - 'packages/frontend/**'
-      - 'packages/backend/src/util/opencode.ts'
+      - 'packages/backend/src/services/runtime/opencode/util.ts'
       - 'scripts/build-binary.ts'
       - 'e2e/ux-consistency.spec.ts'
       - 'e2e/command.ts'
@@ -50,7 +50,7 @@ on:
   pull_request:
     paths:
       - 'packages/frontend/**'
-      - 'packages/backend/src/util/opencode.ts'
+      - 'packages/backend/src/services/runtime/opencode/util.ts'
       - 'scripts/build-binary.ts'
       - 'e2e/ux-consistency.spec.ts'
       - 'e2e/command.ts'

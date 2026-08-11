@@ -59,3 +59,21 @@ export const RUNTIME_KINDS = Object.keys(DRIVERS) as RuntimeKind[]
 export function isKnownRuntimeKind(v: string | null | undefined): v is RuntimeKind {
   return v != null && (RUNTIME_KINDS as string[]).includes(v)
 }
+
+// ---------------------------------------------------------------------------
+// RFC-282 C3 — the named external surface of the relocated opencode modules.
+// Per design §4.2 this is deliberately NOT a barrel: each name is re-exported
+// individually with its cycle argument. External code imports from HERE; deep
+// imports are fenced by the A1 ESLint rule.
+// ---------------------------------------------------------------------------
+
+// config.opencodePath → command-head resolution (12 routes/services). Leaf-ish:
+// opencode/util value-imports @/config only, which imports no runtime module —
+// no init cycle through here.
+export { resolveOpencodeCmd, probeOpencode } from './opencode/util'
+// Startup-inventory snapshot read (routes/tasks detail face).
+export { getInventorySnapshot, runRootFor } from './opencode/inventory'
+// Live-capture null object (runner's no-capability fallback handle).
+export { NOOP_HANDLE } from './opencode/subagentLiveCapture'
+// Distiller session sweep failure marker (memory distill session view).
+export { DISTILL_CAPTURE_FAILED_KIND } from './opencode/distillSessionCapture'

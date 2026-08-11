@@ -81,7 +81,7 @@ import {
   SCRIPT_PERMANENT_FAILURE_CODES,
   type ScriptLanguage,
 } from '@agent-workflow/shared'
-import { runRootFor } from './inventory'
+import { runRootFor } from './runtime'
 import { ensureScriptDepsEnv, ScriptDepsInstallError, type ScriptDepsEnv } from './scriptDepsEnv'
 import { extractScriptPorts } from './scriptPorts'
 import {

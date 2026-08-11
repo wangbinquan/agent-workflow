@@ -68,7 +68,7 @@ function writeBinary(
 ): void {
   const {
     // 1.14.25 is a verified-working version at/above MIN_OPENCODE_VERSION —
-    // there is no upper bound, see `packages/backend/src/util/opencode.ts`.
+    // there is no upper bound, see `packages/backend/src/services/runtime/opencode/util.ts`.
     versionStdout = 'stub-opencode 1.14.25',
     versionExit = 0,
     modelsStdout = '',

@@ -27,9 +27,10 @@ describe('RFC-282 C0 — laundering channel closed', () => {
     expect(text).not.toMatch(/export\s+\{[^}]*\}\s+from\s+'\.\/runtime\/(?:opencode|claudeCode)\//)
   })
 
-  test('ProbeOpts has ONE definition (runtime/types); util/opencode re-exports it', () => {
+  test('ProbeOpts has ONE definition (runtime/types); the opencode util re-exports it', () => {
+    // C3 relocated util/opencode.ts → services/runtime/opencode/util.ts.
     expect(read('services/runtime/types.ts')).toContain('export interface ProbeOpts')
-    const util = read('util/opencode.ts')
+    const util = read('services/runtime/opencode/util.ts')
     expect(util).not.toContain('export interface ProbeOpts')
     expect(util).toContain("export type { ProbeOpts } from '@/services/runtime/types'")
   })

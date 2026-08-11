@@ -15,7 +15,7 @@ import type { DbClient } from '@/db/client'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { startExecution } from '@/services/execution/executor'
-import { resolveOpencodeCmd } from '@/util/opencode'
+import { resolveOpencodeCmd } from '@/services/runtime'
 import type {
   ScheduledAgentPayload,
   ScheduledWorkgroupPayload,

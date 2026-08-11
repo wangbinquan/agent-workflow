@@ -28,15 +28,11 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
 import { and, eq, inArray, ne } from 'drizzle-orm'
-import type { DbClient } from '../db/client'
-import { nodeRunEvents, nodeRuns } from '../db/schema'
+import type { DbClient } from '@/db/client'
+import { nodeRunEvents, nodeRuns } from '@/db/schema'
 import { createLogger, type Logger } from '@/util/log'
 import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
-import {
-  walkOpencodeSessions,
-  type OpencodeMessageRow,
-  type OpencodePartRow,
-} from './opencodeSessionWalk'
+import { walkOpencodeSessions, type OpencodeMessageRow, type OpencodePartRow } from './sessionWalk'
 
 export interface CaptureChildSessionsOptions {
   rootSessionId: string

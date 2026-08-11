@@ -30,12 +30,12 @@ import {
 } from '@/services/runtime/opencode/spawn'
 import { opencodeDriver } from '@/services/runtime/opencode/driver'
 import type { BusinessNodeSpawnContext } from '@/services/runtime/types'
-import { probeOpencode } from '@/util/opencode'
+import { probeOpencode } from '@/services/runtime/opencode/util'
 import {
   getOpencodeBinaryVersion,
   recordOpencodeBinaryVersion,
   resetOpencodeBinaryVersionsForTests,
-} from '@/util/opencode-version-registry'
+} from '@/services/runtime/opencode/versionRegistry'
 import { createLogger } from '@/util/log'
 
 const LEGACY = '--dangerously-skip-permissions'

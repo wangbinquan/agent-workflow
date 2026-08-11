@@ -2571,7 +2571,8 @@ export class McpRuntimeTestService {
                     name: runtime.row.configDirName ?? protocolDefaults.name,
                   },
                   runtimeBinary: runtime.binary,
-                  wantsInventory: runtime.driver.capabilities.startupObservation === 'inventory-file',
+                  wantsInventory:
+                    runtime.driver.capabilities.startupObservation === 'inventory-file',
                   ...runtime.driver.mcpTestSessionReference?.({
                     turnSeq: turn.seq,
                     nativeSessionId: session.runtimeSessionId,

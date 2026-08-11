@@ -15,7 +15,7 @@ import {
   captureChildSessions,
   captureOpencodeSessionsToSink,
   resolveOpencodeDbPath,
-} from '../src/services/sessionCapture'
+} from '../src/services/runtime/opencode/sessionCapture'
 import type { Logger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

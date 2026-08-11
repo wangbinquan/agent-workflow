@@ -3,10 +3,10 @@
 // Reported versions are telemetry only; runtime execution uses the configured
 // command directly and does not make semver an admission boundary.
 
-import { createLogger } from './log'
+import { createLogger } from '@/util/log'
 import { loadConfig } from '@/config'
-import { extractVersion } from './semver'
-import { recordOpencodeBinaryVersion } from './opencode-version-registry'
+import { extractVersion } from '@/util/semver'
+import { recordOpencodeBinaryVersion } from './versionRegistry'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 // RFC-282 C0 (设计门 P2-7) — the probe-options shape lives on the runtime
 // contract surface; this module re-exports it so existing `util/opencode`
@@ -17,7 +17,7 @@ export type { ProbeOpts } from '@/services/runtime/types'
 // RFC-143 PR-5: extractVersion/compareSemver live in ./semver (single copy,
 // shared with the claude probe); re-exported so existing import sites
 // (opencode-version.test.ts) keep resolving from this module.
-export { compareSemver, extractVersion } from './semver'
+export { compareSemver, extractVersion } from '@/util/semver'
 
 const log = createLogger('opencode')
 /**

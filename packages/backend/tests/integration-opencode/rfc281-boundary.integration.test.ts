@@ -38,7 +38,7 @@ import {
   type BoundaryCtx,
 } from '@/services/execution/workspaceBoundary'
 import { resolveAutoApproveFlag } from '@/services/runtime/opencode/spawn'
-import { probeOpencode } from '@/util/opencode'
+import { probeOpencode } from '@/services/runtime/opencode/util'
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
 
 const RUN_INTEGRATION = process.env.RUN_OPENCODE_INTEGRATION === '1'

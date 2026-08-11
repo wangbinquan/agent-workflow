@@ -4,7 +4,7 @@
 // nodes that actually select the runtime (RFC-226).
 
 import { createLogger } from '@/util/log'
-import type { ProbeOpts } from '@/util/opencode'
+import type { ProbeOpts } from '../types'
 // RFC-143 PR-5: single semver helper pair (was a byte-for-byte local copy).
 import { compareSemver, extractVersion } from '@/util/semver'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'

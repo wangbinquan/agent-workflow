@@ -15,7 +15,7 @@ import {
   walkOpencodeSessions,
   type OpencodeSessionRow,
   type WalkedSession,
-} from '../src/services/opencodeSessionWalk'
+} from '../src/services/runtime/opencode/sessionWalk'
 
 interface BuildOpts {
   sessions: Array<{ id: string; parent_id: string | null; agent: string | null }>

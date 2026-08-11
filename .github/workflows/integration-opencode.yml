@@ -51,8 +51,7 @@ on:
       - 'packages/backend/src/services/runtime/opencode/**'
       # Process lifecycle changes can alter the live CLI integration path.
       - 'packages/backend/src/services/execution/**'
-      - 'packages/backend/src/util/opencode*.ts'
-      - 'packages/backend/src/opencode-plugin/**'
+      - 'packages/backend/src/util/opencode-models.ts'
       - 'packages/backend/tests/integration-opencode/**'
       - 'e2e/fixtures/stub/**'
       - '.github/workflows/integration-opencode.yml'
@@ -68,8 +67,7 @@ on:
       - 'packages/backend/src/services/runtime/opencode/**'
       # Process lifecycle changes can alter the live CLI integration path.
       - 'packages/backend/src/services/execution/**'
-      - 'packages/backend/src/util/opencode*.ts'
-      - 'packages/backend/src/opencode-plugin/**'
+      - 'packages/backend/src/util/opencode-models.ts'
       - 'packages/backend/tests/integration-opencode/**'
       - 'e2e/fixtures/stub/**'
       - '.github/workflows/integration-opencode.yml'

@@ -40,7 +40,7 @@ import { unsealRepoUrl } from '@/services/repoCredentials'
 import { ValidationError } from '@/util/errors'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 import { createLogger } from '@/util/log'
-import { resolveOpencodeCmd } from '@/util/opencode'
+import { resolveOpencodeCmd } from '@/services/runtime'
 import {
   CodeHostEventTypeSchema,
   WebhookRepoScopeSchema,

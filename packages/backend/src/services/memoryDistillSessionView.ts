@@ -15,7 +15,7 @@ import {
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { memoryDistillEvents, memoryDistillJobs } from '@/db/schema'
-import { DISTILL_CAPTURE_FAILED_KIND } from '@/services/distillSessionCapture'
+import { DISTILL_CAPTURE_FAILED_KIND } from '@/services/runtime'
 import { NotFoundError } from '@/util/errors'
 
 export const DISTILLER_PRIMARY_AGENT_NAME = 'aw-memory-distiller'

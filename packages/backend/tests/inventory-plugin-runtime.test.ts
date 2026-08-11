@@ -27,7 +27,10 @@ const PLUGIN_PATH = resolve(
   import.meta.dir,
   '..',
   'src',
-  'opencode-plugin',
+  'services',
+  'runtime',
+  'opencode',
+  'plugin',
   'aw-inventory-dump.mjs',
 )
 

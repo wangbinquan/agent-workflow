@@ -55,7 +55,7 @@ describe('RFC-048 source-layout guards', () => {
   })
 
   test('subagentLiveCapture.ts emits each failure log tag exactly once', () => {
-    const src = read('packages/backend/src/services/subagentLiveCapture.ts')
+    const src = read('packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts')
     const errCount = (src.match(/'subagent-live-poll-error'/g) ?? []).length
     const disCount = (src.match(/'subagent-live-poll-disabled'/g) ?? []).length
     expect(errCount).toBe(1)
@@ -63,12 +63,12 @@ describe('RFC-048 source-layout guards', () => {
   })
 
   test('subagentLiveCapture.ts opens the opencode SQLite read-only', () => {
-    const src = read('packages/backend/src/services/subagentLiveCapture.ts')
+    const src = read('packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts')
     expect(src).toContain('new Database(dbPath, { readonly: true })')
   })
 
   test('sessionCapture.ts captureChildSessions exposes alreadyInsertedPartIds + still loads sibling sessionIds', () => {
-    const src = read('packages/backend/src/services/sessionCapture.ts')
+    const src = read('packages/backend/src/services/runtime/opencode/sessionCapture.ts')
     expect(src).toContain('alreadyInsertedPartIds?: Map<string, Set<string>>')
     expect(src).toContain('export async function loadSiblingsCapturedSessionIds(')
   })

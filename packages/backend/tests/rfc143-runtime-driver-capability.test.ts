@@ -347,13 +347,13 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 单份 + semver 单
     for (const f of ['tasks', 'clarify', 'taskQuestions', 'reviews', 'fusions']) {
       const src = SRC(`routes/${f}.ts`)
       expect(src).not.toContain('function resolveOpencodeCmd')
-      expect(src).toContain("resolveOpencodeCmd } from '@/util/opencode'")
+      expect(src).toContain("resolveOpencodeCmd } from '@/services/runtime/opencode/util'")
     }
     expect(SRC('util/opencode.ts')).toContain('export function resolveOpencodeCmd')
   })
 
   it('resolveOpencodeCmd 行为：configPath 空/不可读 → undefined；opencodePath 设值 → [path]', async () => {
-    const { resolveOpencodeCmd } = await import('../src/util/opencode')
+    const { resolveOpencodeCmd } = await import('../src/services/runtime/opencode/util')
     expect(resolveOpencodeCmd('')).toBeUndefined()
     expect(resolveOpencodeCmd('/definitely/not/a/config.json')).toBeUndefined()
     const dir = mkdtempSync(join(tmpdir(), 'aw-rfc143-cfg-'))

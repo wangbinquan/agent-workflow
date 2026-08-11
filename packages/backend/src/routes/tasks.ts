@@ -25,7 +25,7 @@ import type { Context } from 'hono'
 import { actorOf } from '@/auth/actor'
 import { loadConfig } from '@/config'
 // RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
-import { resolveOpencodeCmd } from '@/util/opencode'
+import { resolveOpencodeCmd } from '@/services/runtime'
 import { tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
@@ -91,7 +91,7 @@ import {
   resolveUploadLimits,
 } from '@/services/launchMultipart'
 import { getSessionTree } from '@/services/sessionView'
-import { getInventorySnapshot } from '@/services/inventory'
+import { getInventorySnapshot } from '@/services/runtime'
 import { getStartupVerification } from '@/services/execution/startupVerificationRead'
 import { listWorktreeDir, readWorktreeFile } from '@/services/worktreeFiles'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'

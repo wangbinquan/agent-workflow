@@ -42,7 +42,7 @@ import {
   inferEventKind,
 } from '@/services/runtime/opencode/events'
 import { resolveAutoApproveFlag } from '@/services/runtime/opencode/spawn'
-import { probeOpencode } from '@/util/opencode'
+import { probeOpencode } from '@/services/runtime/opencode/util'
 
 const RUN_INTEGRATION = process.env.RUN_OPENCODE_INTEGRATION === '1'
 

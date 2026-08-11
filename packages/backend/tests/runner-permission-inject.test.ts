@@ -2,7 +2,10 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
-import { buildInlineAgentEntry, buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
+import {
+  buildInlineAgentEntry,
+  buildInlineConfig,
+} from '../src/services/runtime/opencode/inlineConfig'
 
 function agent(name: string, permission: Record<string, unknown> = {}): Agent {
   return {

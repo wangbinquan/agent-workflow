@@ -57,7 +57,7 @@ import {
 } from '@/services/launchMultipart'
 import type { UploadLimits } from '@/services/upload'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { resolveOpencodeCmd } from '@/util/opencode'
+import { resolveOpencodeCmd } from '@/services/runtime'
 import { mountAclEndpoints } from './resourceAcl'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'

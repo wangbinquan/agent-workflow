@@ -16,7 +16,7 @@ import { memoryDistillEvents, memoryDistillJobs } from '../src/db/schema'
 import {
   captureDistillJobSession,
   DISTILL_CAPTURE_FAILED_KIND,
-} from '../src/services/distillSessionCapture'
+} from '../src/services/runtime/opencode/distillSessionCapture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

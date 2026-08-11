@@ -25,7 +25,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { runRootFor } from '../src/services/inventory'
+import { runRootFor } from '../src/services/runtime/opencode/inventory'
 import type { InventorySnapshot, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const TOKEN = 'a'.repeat(64)

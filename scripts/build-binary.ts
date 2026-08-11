@@ -31,7 +31,7 @@ const migrationsDir = join(repoRoot, 'packages', 'backend', 'db', 'migrations')
 const backendSrc = join(repoRoot, 'packages', 'backend', 'src')
 // RFC-029: opencode plugin .mjs files that need to ride along inside the
 // binary so the runner can copy them into per-run dirs at task time.
-const pluginsDir = join(backendSrc, 'opencode-plugin')
+const pluginsDir = join(backendSrc, 'services', 'runtime', 'opencode', 'plugin')
 const generatedPath = join(backendSrc, 'embed.generated.ts')
 const mainEntry = join(backendSrc, 'main.ts')
 // RFC-254 T28b — the e2e opencode stand-in, compiled alongside the test binary.

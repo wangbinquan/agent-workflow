@@ -15,7 +15,7 @@ import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import { memoryDistillEvents, memoryDistillJobs } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { DISTILL_CAPTURE_FAILED_KIND } from '../src/services/distillSessionCapture'
+import { DISTILL_CAPTURE_FAILED_KIND } from '../src/services/runtime/opencode/distillSessionCapture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

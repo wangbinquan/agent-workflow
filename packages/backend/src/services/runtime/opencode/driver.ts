@@ -35,7 +35,7 @@ import {
   weaveMemoryBlock,
 } from '@/services/execution/agentInjection'
 import type { InventorySnapshot } from '@agent-workflow/shared'
-import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveCapture'
+import type { LivePollOptions, LivePollerHandle } from './subagentLiveCapture'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -51,15 +51,15 @@ import {
 import { pickRuntimeHead } from '../head'
 import { toBusinessCtx, toSystemCtx } from '../spawnCtx'
 import { stageSkills } from '../stageSkills'
-import { probeOpencode } from '@/util/opencode'
+import { probeOpencode } from './util'
 import { gitMetaDirsFor } from '@/util/git'
-import { getOpencodeBinaryVersion } from '@/util/opencode-version-registry'
+import { getOpencodeBinaryVersion } from './versionRegistry'
 import { listOpencodeModelsNatural } from './models'
-import { captureChildSessions, captureOpencodeSessionsToSink } from '@/services/sessionCapture'
-import { readSnapshotFromRunDir } from '@/services/inventory'
-import { startLiveSubagentCapture } from '@/services/subagentLiveCapture'
-import { materializeInventoryPlugin } from '@/opencode-plugin'
-import { captureDistillJobSession } from '@/services/distillSessionCapture'
+import { captureChildSessions, captureOpencodeSessionsToSink } from './sessionCapture'
+import { readSnapshotFromRunDir } from './inventory'
+import { startLiveSubagentCapture } from './subagentLiveCapture'
+import { materializeInventoryPlugin } from './plugin'
+import { captureDistillJobSession } from './distillSessionCapture'
 
 export const opencodeDriver: RuntimeDriver = {
   kind: 'opencode',

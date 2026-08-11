@@ -19,7 +19,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { startLiveSubagentCapture } from '../src/services/subagentLiveCapture'
+import { startLiveSubagentCapture } from '../src/services/runtime/opencode/subagentLiveCapture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

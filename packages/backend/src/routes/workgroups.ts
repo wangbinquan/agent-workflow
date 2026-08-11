@@ -42,7 +42,7 @@ import {
 // route must not call startWorkgroupTask directly (source-text lock).
 import { startExecution } from '@/services/execution/executor'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { resolveOpencodeCmd } from '@/util/opencode'
+import { resolveOpencodeCmd } from '@/services/runtime'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 import {

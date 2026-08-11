@@ -23,15 +23,15 @@
 
 import { Database } from 'bun:sqlite'
 import { existsSync } from 'node:fs'
-import type { DbClient } from '../db/client'
-import { nodeRunEvents } from '../db/schema'
+import type { DbClient } from '@/db/client'
+import { nodeRunEvents } from '@/db/schema'
 import { createLogger, type Logger } from '@/util/log'
 import {
   loadSiblingsCapturedSessionIds,
   resolveOpencodeDbPath,
   transcodeOpencodeRowsToEvents,
 } from './sessionCapture'
-import { walkOpencodeSessions } from './opencodeSessionWalk'
+import { walkOpencodeSessions } from './sessionWalk'
 
 export interface LivePollOptions {
   nodeRunId: string

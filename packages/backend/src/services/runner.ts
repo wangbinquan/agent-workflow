@@ -88,7 +88,7 @@ import {
   type StartupVerificationRecord,
 } from './execution/startupVerification'
 import { runAgentProcess } from './execution/agentProcess'
-import { NOOP_HANDLE } from './subagentLiveCapture'
+import { NOOP_HANDLE } from './runtime'
 import { setNodeRunStatus, transitionNodeRunStatus } from './lifecycle'
 import {
   formatMemoryBlockFromSnapshot,

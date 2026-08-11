@@ -26,7 +26,7 @@ import {
   type FusionDeps,
 } from '@/services/fusion'
 // RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
-import { resolveOpencodeCmd } from '@/util/opencode'
+import { resolveOpencodeCmd } from '@/services/runtime'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { isResourceAdminActor } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
