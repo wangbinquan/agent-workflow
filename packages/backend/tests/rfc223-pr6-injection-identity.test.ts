@@ -20,7 +20,7 @@ import {
   formatManagedInjectionNameConflict,
 } from '../src/services/runtime/injectionIdentity'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
-import { prepareNodeRunInjection } from '../src/services/scheduler'
+import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { skillFilesRel } from '../src/services/skillIdentityPaths'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -100,7 +100,7 @@ async function seedMcp(
 async function prepareRoot(db: DbClient, rootId: string) {
   const root = await getAgentById(db, rootId)
   if (root === null) throw new Error(`missing root id ${rootId}`)
-  return prepareNodeRunInjection(db, '/tmp/aw-rfc223-pr6', root, NOOP_LOG)
+  return resolveInjection(db, root, { appHome: '/tmp/aw-rfc223-pr6', log: NOOP_LOG })
 }
 
 function expectDuplicateFailure(
@@ -266,7 +266,7 @@ describe('RFC-223 PR-6 scheduler wiring is shared by both runtimes', () => {
       const result = await prepareRoot(db, root.id)
       expect(result.kind).toBe('ok')
       if (result.kind !== 'ok') throw new Error('expected ok')
-      expect(result.resolvedSkills.map(({ name, sourceKind }) => ({ name, sourceKind }))).toEqual([
+      expect(result.spec.skills.map(({ name, sourceKind }) => ({ name, sourceKind }))).toEqual([
         { name: 'shared-label', sourceKind: 'managed' },
         { name: 'shared-label', sourceKind: 'project' },
       ])

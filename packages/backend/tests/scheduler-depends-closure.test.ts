@@ -16,7 +16,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
-import { prepareNodeRunInjection } from '../src/services/scheduler'
+import { resolveInjection } from '../src/services/execution/resolveInjection'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -77,11 +77,11 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const root = await getAgent(db, 'a')
     if (root === null) throw new Error('seed missing')
 
-    const out = await prepareNodeRunInjection(db, '/tmp/app-home', root, NOOP_LOG)
+    const out = await resolveInjection(db, root, { appHome: '/tmp/app-home', log: NOOP_LOG })
     expect(out.kind).toBe('ok')
     if (out.kind !== 'ok') throw new Error('unreachable')
-    expect(out.dependents.map((d) => d.name)).toEqual(['b', 'c'])
-    expect(out.resolvedSkills).toEqual([]) // none of A/B/C declared any skill
+    expect(out.spec.dependents.map((d) => d.name)).toEqual(['b', 'c'])
+    expect(out.spec.skills).toEqual([]) // none of A/B/C declared any skill
   })
 
   test('skills union: de-dupes by name across primary + closure dependents (preserves first-seen order)', async () => {
@@ -93,12 +93,12 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const root = await getAgent(db, 'top')
     if (root === null) throw new Error('seed missing')
 
-    const out = await prepareNodeRunInjection(db, '/tmp/app-home', root, NOOP_LOG)
+    const out = await resolveInjection(db, root, { appHome: '/tmp/app-home', log: NOOP_LOG })
     expect(out.kind).toBe('ok')
     if (out.kind !== 'ok') throw new Error('unreachable')
     // Order: top.skills first, then leaf.skills entries not already seen.
     // Same skill referenced from both agents only stages once.
-    expect(out.resolvedSkills.map((s) => s.name)).toEqual(['s1', 's2', 's3'])
+    expect(out.spec.skills.map((s) => s.name)).toEqual(['s1', 's2', 's3'])
   })
 
   test('missing dep maps to NodeStepResult.failed with agent-dependency-not-found in message', async () => {
@@ -111,7 +111,7 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const root = await getAgent(db, 'top')
     if (root === null) throw new Error('seed missing')
 
-    const out = await prepareNodeRunInjection(db, '/tmp/app-home', root, NOOP_LOG)
+    const out = await resolveInjection(db, root, { appHome: '/tmp/app-home', log: NOOP_LOG })
     expect(out.kind).toBe('failed')
     if (out.kind !== 'failed') throw new Error('unreachable')
     expect(out.message).toBe('agent-dependency-not-found')
@@ -131,7 +131,7 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const root = await getAgent(db, 'a')
     if (root === null) throw new Error('seed missing')
 
-    const out = await prepareNodeRunInjection(db, '/tmp/app-home', root, NOOP_LOG)
+    const out = await resolveInjection(db, root, { appHome: '/tmp/app-home', log: NOOP_LOG })
     expect(out.kind).toBe('failed')
     if (out.kind !== 'failed') throw new Error('unreachable')
     // RFC-223 (PR-1): the cycle path is expressed in agent IDS.

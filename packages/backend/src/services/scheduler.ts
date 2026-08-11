@@ -15,17 +15,14 @@
 
 import type {
   Agent,
-  AgentSkillRef,
   ClarifyCrossAgentNode,
   ClarifyNode,
   EnvelopeFollowupReason,
   FailureCode,
   Language,
-  Mcp,
   MergeState,
   MergeStateOrNull,
   NodeKind,
-  Plugin,
   WorkflowDefinition,
   WorkflowEdge,
   WorkflowNode,
@@ -98,22 +95,14 @@ import {
   nodeRunEvents,
   nodeRunOutputs,
   nodeRuns,
-  skills,
   taskCollaborators,
   taskRepos,
   tasks,
 } from '@/db/schema'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
-import {
-  agentSkillRef,
-  fanoutInnerAgentRefKey,
-  resolveNodeAgentRef,
-  runtimeRefKey,
-} from '@/services/ref/runtimeRef'
-import { resolveDependsClosure } from '@/services/agentDeps'
-import { collectMcpIdsFromClosure, loadMcpsByIds } from '@/services/mcpClosure'
-import { collectPluginIdsFromClosure, loadPluginsByIds } from '@/services/pluginClosure'
+import { fanoutInnerAgentRefKey, resolveNodeAgentRef } from '@/services/ref/runtimeRef'
+import { resolveInjection } from '@/services/execution/resolveInjection'
 import {
   createClarifyRound,
   dispatchCrossClarifyNode,
@@ -153,11 +142,7 @@ import {
   schedulerMintCause,
 } from '@/services/nodeRunMint'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
-import {
-  findManagedInjectionNameConflict,
-  formatManagedInjectionNameConflict,
-  type ManagedInjectionIdentity,
-} from '@/services/runtime/injectionIdentity'
+import {} from '@/services/runtime/injectionIdentity'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
@@ -182,7 +167,7 @@ import {
   wrapperExternalUpstreamSources,
   wrapperRevivalEvidence,
 } from '@/services/dispatchFrontier'
-import { runNode, type ResolvedSkill, type RunResult } from '@/services/runner'
+import { runNode, type RunResult } from '@/services/runner'
 import { forcedPortPathsForTask, toContainerRelative } from '@/services/portArtifacts'
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
 import {
@@ -210,15 +195,7 @@ import {
   type WrapperProgress,
 } from '@/services/wrapperProgress'
 import { emitTaskStatus, getTask } from '@/services/task'
-import {
-  ConflictError,
-  DomainError,
-  NotFoundError,
-  SkillQuarantinedError,
-  ValidationError,
-} from '@/util/errors'
-import { isSkillInjectableThisBoot } from '@/services/skillBootVerify'
-import { skillFilesRel } from '@/services/skillIdentityPaths'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
@@ -905,7 +882,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
 export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks {
   const { db, taskId, task, opts, log, definition } = state
   async function runHostNode(req: WorkgroupHostRunRequest): Promise<WorkgroupHostRunResult> {
-    const injection = await prepareNodeRunInjection(db, opts.appHome, req.agent, log)
+    const injection = await resolveInjection(db, req.agent, { appHome: opts.appHome, log })
     if (injection.kind === 'failed') {
       await setNodeRunStatus({
         db,
@@ -1000,7 +977,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
       // RFC-184: workgroup host runs project the member agent's outputs to the
       // role's wg_* protocol ports and clear outputKinds, so runNode parses/
       // returns the wg ports and never validates the member's own business
-      // output kinds (F42SE root cause). prepareNodeRunInjection above already
+      // output kinds (F42SE root cause). resolveInjection above already
       // ran on the ORIGINAL req.agent (skills/mcp/deps are unaffected by this
       // projection). Dynamic orchestrator runs leave hostOutputPorts unset →
       // no projection (design.md §2.2/§2.4).
@@ -1081,10 +1058,10 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         ...(clarifyQueue !== undefined
           ? { clarifyContext: { flatBlock: clarifyQueue.block } }
           : {}),
-        skills: injection.resolvedSkills,
-        dependents: injection.dependents,
-        mcps: injection.mcps,
-        plugins: injection.plugins,
+        skills: injection.spec.skills,
+        dependents: injection.spec.dependents,
+        mcps: injection.spec.mcps,
+        plugins: injection.spec.plugins,
         appHome: opts.appHome,
         ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
         db,
@@ -1935,11 +1912,22 @@ async function maybeRunCommitPush(
           configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
         })
         const envelopeNonce = await loadRunEnvelopeNonce(db, sessionRunId)
+        const commitAgent = buildCommitAgent()
+        // RFC-282 B2 — the 6th/5th entries also go through the ONE resolver.
+        // writeSem is held here: thread the scope signal (design §9-5).
+        const commitInjection = await resolveInjection(db, commitAgent, {
+          appHome: state.opts.appHome,
+          log: log.child('commit'),
+          ...(state.opts.signal ? { signal: state.opts.signal } : {}),
+        })
+        if (commitInjection.kind === 'failed') {
+          throw new Error(`commit-push injection resolve failed: ${commitInjection.message}`)
+        }
         const result = await runNode({
           taskId: task.id,
           nodeRunId: sessionRunId,
           nodeId,
-          agent: buildCommitAgent(),
+          agent: commitAgent,
           runtime: frozen.protocol,
           runtimeBinary: frozen.binary,
           runtimeParams: frozen.params,
@@ -1957,10 +1945,15 @@ async function maybeRunCommitPush(
             // RFC-248: `{{__repo_group__}}`；非组启动时不传 ⇒ 渲染空串。
             ...(state.repoGroupName !== null ? { repoGroupName: state.repoGroupName } : {}),
           },
-          skills: [],
-          dependents: [],
-          mcps: [],
-          plugins: [],
+          // RFC-282 B2 — resources derive from the synthetic agent's own
+          // definition via the ONE resolver (was four hand-written empty
+          // arrays: adding an MCP ref to the built-in agent silently did
+          // nothing). Zero-resource today ⇒ identical spec; the regression
+          // lock pins that resolveInjection stays ok for synthetic agents.
+          skills: commitInjection.spec.skills,
+          dependents: commitInjection.spec.dependents,
+          mcps: commitInjection.spec.mcps,
+          plugins: commitInjection.spec.plugins,
           appHome: state.opts.appHome,
           db,
           log: log.child('commit'),
@@ -2822,12 +2815,22 @@ async function resolveMergeConflicts(
       configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
     })
     const envelopeNonce = await loadRunEnvelopeNonce(db, sessionRunId)
+    const mergeAgent = buildMergeAgent()
+    // RFC-282 B2 — single-resolver derivation (writeSem held: signal threaded).
+    const mergeInjection = await resolveInjection(db, mergeAgent, {
+      appHome: state.opts.appHome,
+      log: log.child('merge'),
+      ...(state.opts.signal ? { signal: state.opts.signal } : {}),
+    })
+    if (mergeInjection.kind === 'failed') {
+      throw new Error(`merge injection resolve failed: ${mergeInjection.message}`)
+    }
     // DIRECT runNode — bypasses the node pool on purpose (§7 deadlock avoidance).
     await runNode({
       taskId: task.id,
       nodeRunId: sessionRunId,
       nodeId: mergeNodeId,
-      agent: buildMergeAgent(),
+      agent: mergeAgent,
       runtime: frozen.protocol,
       runtimeBinary: frozen.binary,
       runtimeParams: frozen.params,
@@ -2844,10 +2847,11 @@ async function resolveMergeConflicts(
         repos: state.repos,
         ...(state.repoGroupName !== null ? { repoGroupName: state.repoGroupName } : {}),
       },
-      skills: [],
-      dependents: [],
-      mcps: [],
-      plugins: [],
+      // RFC-282 B2 — same single-resolver derivation as commit-push above.
+      skills: mergeInjection.spec.skills,
+      dependents: mergeInjection.spec.dependents,
+      mcps: mergeInjection.spec.mcps,
+      plugins: mergeInjection.spec.plugins,
       appHome: state.opts.appHome,
       db,
       log: log.child('merge'),
@@ -5140,9 +5144,9 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // guard normally prevents it; hitting one at runtime implies an external
   // SQL edit or a race against another writer. Fail loudly instead of
   // silently spawning with a broken closure.
-  const injection = await prepareNodeRunInjection(db, opts.appHome, agent, log)
+  const injection = await resolveInjection(db, agent, { appHome: opts.appHome, log })
   if (injection.kind === 'failed') return injection
-  const { dependents, resolvedSkills, mcps, plugins } = injection
+  const { dependents, skills: resolvedSkills, mcps, plugins } = injection.spec
   const promptTemplate = pickString(node, 'promptTemplate') ?? undefined
   const nodeTimeoutMs = opts.defaultPerNodeTimeoutMs
   // RFC-042: retries default to 3 so recoverable failure modes (in particular
@@ -7633,7 +7637,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     }
   }
 
-  const injection = await prepareNodeRunInjection(db, opts.appHome, innerAgent, log)
+  const injection = await resolveInjection(db, innerAgent, { appHome: opts.appHome, log })
   if (injection.kind === 'failed') {
     await setNodeRunStatus({
       db,
@@ -7756,10 +7760,10 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
       // PR-D2: per-shard clarify stays off — RFC-148 ADT form.
       clarifyChannel: { kind: 'none' as const },
-      skills: injection.resolvedSkills,
-      dependents: injection.dependents,
-      mcps: injection.mcps,
-      plugins: injection.plugins,
+      skills: injection.spec.skills,
+      dependents: injection.spec.dependents,
+      mcps: injection.spec.mcps,
+      plugins: injection.spec.plugins,
       appHome: opts.appHome,
       ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
       ...(Object.keys(inputPortKinds).length > 0 ? { inputPortKinds } : {}),
@@ -8063,7 +8067,7 @@ async function dispatchFanoutAggregatorAttempt(
   }
   broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'pending')
 
-  const injection = await prepareNodeRunInjection(db, opts.appHome, aggAgent, log)
+  const injection = await resolveInjection(db, aggAgent, { appHome: opts.appHome, log })
   if (injection.kind === 'failed') {
     await setNodeRunStatus({
       db,
@@ -8183,10 +8187,10 @@ async function dispatchFanoutAggregatorAttempt(
       // RFC-119 multi-process: prior aggregated output on re-run (see above).
       ...(aggPriorOutputUpdate !== undefined ? { priorOutputUpdate: aggPriorOutputUpdate } : {}),
       clarifyChannel: { kind: 'none' as const }, // PR-D2
-      skills: injection.resolvedSkills,
-      dependents: injection.dependents,
-      mcps: injection.mcps,
-      plugins: injection.plugins,
+      skills: injection.spec.skills,
+      dependents: injection.spec.dependents,
+      mcps: injection.spec.mcps,
+      plugins: injection.spec.plugins,
       appHome: opts.appHome,
       ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
       db,
@@ -9118,217 +9122,6 @@ async function cancelTaskRowUnlocked(
     return
   }
   await emitStatus(db, taskId)
-}
-
-/**
- * RFC-022: expand the agent.dependsOn closure and resolve the skills union
- * for one node-run spawn. Used by both the single-agent path and the
- * fan-out child path so they stay in lockstep.
- *
- * Returns either `{ kind: 'ok', dependents, resolvedSkills }` for the
- * scheduler to feed straight into `runNode({ ..., dependents, skills })`, or
- * the same `NodeStepResult` 'failed' shape every other scheduler step uses
- * so the caller's normal failure path handles cycles / missing-dep names.
- *
- * Skills union de-dup is by ref identity (managed skillId / project name) —
- * the same skill referenced from multiple closure agents only stages once
- * under OPENCODE_CONFIG_DIR/skills/. (RFC-223 PR-1: was by name.)
- */
-export async function prepareNodeRunInjection(
-  db: DbClient,
-  appHome: string,
-  agent: Agent,
-  log: Logger,
-): Promise<
-  | {
-      kind: 'ok'
-      dependents: Agent[]
-      resolvedSkills: ResolvedSkill[]
-      /** RFC-028/RFC-228: exact MCP rows for the requested closure ids. */
-      mcps: Mcp[]
-      /** RFC-031/RFC-228: exact Plugin rows for the requested closure ids. */
-      plugins: Plugin[]
-    }
-  | { kind: 'failed'; summary: string; message: string }
-> {
-  const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY }).catch(
-    (err: Error & { code?: string; details?: unknown }) => {
-      // resolveDependsClosure throws DomainError for missing deps. Surface
-      // the code via NodeStepResult so the caller's normal failure path
-      // handles it — no separate exception path needed.
-      log.warn('dependsOn resolve failed', {
-        agent: agent.name,
-        code: err.code,
-        message: err.message,
-      })
-      return { ok: false as const, cyclePath: [] as string[], error: err }
-    },
-  )
-  if ('error' in closure) {
-    return {
-      kind: 'failed',
-      summary: `agent '${agent.name}' depends on missing agent`,
-      message: closure.error.code ?? 'agent-dependency-not-found',
-    }
-  }
-  if (closure.ok === false) {
-    log.warn('dependsOn cycle detected', {
-      agent: agent.name,
-      cyclePath: closure.cyclePath,
-    })
-    return {
-      kind: 'failed',
-      summary: `agent '${agent.name}' dependsOn forms a cycle`,
-      message: `agent-dependency-cycle: ${closure.cyclePath.join(' → ')}`,
-    }
-  }
-  const dependents = closure.agents.slice(1) // [0] is the root
-  // RFC-223 (PR-1): skills are typed refs (managed{skillId} / project{name}).
-  // Union across the closure de-duped by ref identity (first-seen order).
-  // RFC-271 T6f：去重键走 canonical `runtimeRefKey`（类型进 key 的 JSON 元组），
-  // 不再是手写的 `m:`/`p:` 前缀串——自造命名空间只要来第三类引用就会撞车。
-  const skillsUnion: AgentSkillRef[] = []
-  const seenSkills = new Set<string>()
-  for (const ref of [...agent.skills, ...dependents.flatMap((a) => a.skills)]) {
-    const key = runtimeRefKey(agentSkillRef(ref))
-    if (seenSkills.has(key)) continue
-    seenSkills.add(key)
-    skillsUnion.push(ref)
-  }
-  const { resolvedSkills, managedSkillIdentities } = await resolveSkills(db, appHome, skillsUnion)
-  // RFC-228: exact-set checks are the final race fence. A resource can become
-  // unavailable after launch validation; never run a reduced capability set.
-  const requestedManagedSkillIds = skillsUnion.flatMap((ref) =>
-    ref.kind === 'managed' ? [ref.skillId] : [],
-  )
-  const resolvedManagedSkillIds = new Set(managedSkillIdentities.map((skill) => skill.id))
-  const missingSkillIds = requestedManagedSkillIds.filter(
-    (skillId) => !resolvedManagedSkillIds.has(skillId),
-  )
-  if (missingSkillIds.length > 0) {
-    return {
-      kind: 'failed',
-      summary: `agent '${agent.name}' references a missing managed Skill`,
-      message: 'skill-not-found',
-    }
-  }
-
-  // RFC-028: union MCP ids across the full closure (root first, then BFS).
-  const mcpIds = collectMcpIdsFromClosure(closure.agents)
-  const mcps = await loadMcpsByIds(db, mcpIds)
-  const loadedMcpIds = new Set(mcps.map((mcp) => mcp.id))
-  if (mcpIds.some((mcpId) => !loadedMcpIds.has(mcpId))) {
-    return {
-      kind: 'failed',
-      summary: `agent '${agent.name}' references a missing MCP`,
-      message: 'mcp-not-found',
-    }
-  }
-  // RFC-223 PR-6: the external runtimes still key these three managed
-  // namespaces by display name. Detect two canonical ids sharing one key at
-  // the common hydration boundary, before either runtime stages a skill or
-  // assembles a spawn. Disabled MCPs are intentionally outside the injected
-  // set; repo-local project skills are self-discovered and outside this guard.
-  const nameConflict = findManagedInjectionNameConflict({
-    agents: closure.agents,
-    managedSkills: managedSkillIdentities,
-    mcps,
-  })
-  if (nameConflict !== null) {
-    const message = formatManagedInjectionNameConflict(nameConflict)
-    log.warn('managed injection name conflict', {
-      agent: agent.name,
-      kind: nameConflict.kind,
-      name: nameConflict.name,
-      ids: [nameConflict.firstId, nameConflict.secondId],
-    })
-    return {
-      kind: 'failed',
-      summary: `managed injection name '${nameConflict.name}' is ambiguous`,
-      message,
-    }
-  }
-  // RFC-031/RFC-228: same exact closure + hydrate fence for plugins.
-  const pluginIds = collectPluginIdsFromClosure(closure.agents)
-  const plugins = await loadPluginsByIds(db, pluginIds)
-  const loadedPluginIds = new Set(plugins.map((plugin) => plugin.id))
-  if (pluginIds.some((pluginId) => !loadedPluginIds.has(pluginId))) {
-    return {
-      kind: 'failed',
-      summary: `agent '${agent.name}' references a missing Plugin`,
-      message: 'plugin-not-found',
-    }
-  }
-  if (plugins.some((plugin) => !plugin.enabled)) {
-    return {
-      kind: 'failed',
-      summary: `agent '${agent.name}' references a disabled Plugin`,
-      message: 'plugin-disabled',
-    }
-  }
-  return { kind: 'ok', dependents, resolvedSkills, mcps, plugins }
-}
-
-// RFC-223 (PR-1): resolve typed skill refs to injectable skills. A `managed`
-// ref is looked up BY ID; the injection NAME (opencode's registry key — AC7)
-// and disk path come from the row. A `project` ref names a repo-local skill
-// (RFC-178, no DB row) that opencode self-discovers — passed through by name.
-// A managed ref whose id no longer resolves is omitted from this low-level
-// result; prepareNodeRunInjection performs RFC-228 exact-set comparison and
-// fails before any runtime spawn.
-async function resolveSkills(
-  db: DbClient,
-  appHome: string,
-  refs: AgentSkillRef[],
-): Promise<{
-  resolvedSkills: ResolvedSkill[]
-  managedSkillIdentities: ManagedInjectionIdentity[]
-}> {
-  const out: ResolvedSkill[] = []
-  const managedSkillIdentities: ManagedInjectionIdentity[] = []
-  for (const ref of refs) {
-    if (ref.kind === 'project') {
-      out.push({ name: ref.name, sourceKind: 'project' })
-      continue
-    }
-    const rows = await db.select().from(skills).where(eq(skills.id, ref.skillId)).limit(1)
-    const row = rows[0]
-    if (!row) continue // exact-set caller converts this into skill-not-found
-    // RFC-170 T9 (§invariant④): fail-closed if this managed skill did not verify
-    // this boot (snapshot unverified/quarantined) — never stage corrupt/missing
-    // content into a spawn. Inactive before the boot reverify (tests/pre-HTTP).
-    if (!isSkillInjectableThisBoot({ id: row.id, sourceKind: 'managed' })) {
-      throw new SkillQuarantinedError(row.name)
-    }
-    // RFC-223 PR-5: DB/FS identity is the immutable id; name survives only as
-    // the runtime-visible injection key. The boot barrier guarantees this exact
-    // path, and the scheduler refuses any bypassed/inconsistent row.
-    const expectedPath = skillFilesRel(row.id)
-    if (row.managedPath !== expectedPath) {
-      throw new ConflictError(
-        'skill-path-not-canonical',
-        `skill '${row.name}' has not completed its identity migration`,
-      )
-    }
-    const skillPath = pathJoin(appHome, expectedPath)
-    out.push({
-      name: row.name,
-      sourceKind: 'managed',
-      sourcePath: skillPath,
-      skillId: row.id,
-      contentVersion: row.contentVersion,
-      readContentVersion: async () => {
-        const current = await db
-          .select({ contentVersion: skills.contentVersion })
-          .from(skills)
-          .where(eq(skills.id, row.id))
-          .limit(1)
-        return current[0]?.contentVersion ?? -1
-      },
-    })
-    managedSkillIdentities.push({ id: row.id, name: row.name })
-  }
-  return { resolvedSkills: out, managedSkillIdentities }
 }
 
 /**

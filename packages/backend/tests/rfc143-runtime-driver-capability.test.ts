@@ -274,10 +274,10 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     }
   })
 
-  it('runner 业务 spawn 走 driver.buildBusinessSpawn（不再直调两个 spawn 自由函数）', () => {
+  it('runner 业务 spawn 走 driver.buildAgentSpawn（RFC-282 B1b 统一装配；不再直调两个 spawn 自由函数）', () => {
     const src = SRC('services/runner.ts')
-    expect(src).toContain('driver.buildBusinessSpawn(')
-    expect(src).toContain('worktreePath: opts.worktreePath')
+    expect(src).toContain('driver.buildAgentSpawn(')
+    expect(src).toContain('cwd: opts.worktreePath')
     expect(src).toContain('runRoot,')
     expect(src).not.toContain('buildOpencodeSpawn(')
     expect(src).not.toContain('buildClaudeSpawn(')
@@ -288,9 +288,9 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     expect(src).not.toContain('materializeInventoryPlugin')
   })
 
-  it('smoke 复用 driver.buildSpawn（buildSmokePlan 无 protocol 分支、无手搭 spawn）', () => {
+  it('smoke 复用 driver.buildAgentSpawn（RFC-282 B1b；buildSmokePlan 无 protocol 分支、无手搭 spawn）', () => {
     const src = SRC('services/runtimeSmoke.ts')
-    expect(src).toContain('.buildSpawn(')
+    expect(src).toContain('.buildAgentSpawn(')
     expect(src).not.toContain('buildOpencodeSpawn')
     expect(src).not.toContain('buildClaudeSpawn')
   })

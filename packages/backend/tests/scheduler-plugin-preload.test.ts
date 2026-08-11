@@ -12,7 +12,7 @@ import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { createPlugin } from '../src/services/plugin'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
-import { prepareNodeRunInjection } from '../src/services/scheduler'
+import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -67,17 +67,23 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
   test('agent without plugins[] → plugins array is empty', async () => {
     await seedAgent(db, 'solo')
     const agent = (await getAgent(db, 'solo'))!
-    const result = await prepareNodeRunInjection(db, '/tmp/aw', agent, createLogger('test'))
+    const result = await resolveInjection(db, agent, {
+      appHome: '/tmp/aw',
+      log: createLogger('test'),
+    })
     if (result.kind !== 'ok') throw new Error('expected ok')
-    expect(result.plugins).toEqual([])
+    expect(result.spec.plugins).toEqual([])
   })
 
   test('root agent declares plugin → loaded into plugins array', async () => {
     await seedAgent(db, 'root', { plugins: [pluginIdByName.get('p-root')!] })
     const agent = (await getAgent(db, 'root'))!
-    const result = await prepareNodeRunInjection(db, '/tmp/aw', agent, createLogger('test'))
+    const result = await resolveInjection(db, agent, {
+      appHome: '/tmp/aw',
+      log: createLogger('test'),
+    })
     if (result.kind !== 'ok') throw new Error('expected ok')
-    expect(result.plugins.map((p) => p.name)).toEqual(['p-root'])
+    expect(result.spec.plugins.map((p) => p.name)).toEqual(['p-root'])
   })
 
   test('dependsOn closure unions plugins[] across every member (root first)', async () => {
@@ -91,9 +97,12 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
       plugins: [pluginIdByName.get('p-extra')!],
     })
     const root = (await getAgent(db, 'root'))!
-    const result = await prepareNodeRunInjection(db, '/tmp/aw', root, createLogger('test'))
+    const result = await resolveInjection(db, root, {
+      appHome: '/tmp/aw',
+      log: createLogger('test'),
+    })
     if (result.kind !== 'ok') throw new Error('expected ok')
-    expect(result.plugins.map((p) => p.name)).toEqual(['p-extra', 'p-root', 'p-leaf'])
+    expect(result.spec.plugins.map((p) => p.name)).toEqual(['p-extra', 'p-root', 'p-leaf'])
   })
 
   test('closure with same plugin referenced twice → deduped (one row)', async () => {
@@ -103,9 +112,12 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
       plugins: [pluginIdByName.get('p-root')!],
     })
     const root = (await getAgent(db, 'root'))!
-    const result = await prepareNodeRunInjection(db, '/tmp/aw', root, createLogger('test'))
+    const result = await resolveInjection(db, root, {
+      appHome: '/tmp/aw',
+      log: createLogger('test'),
+    })
     if (result.kind !== 'ok') throw new Error('expected ok')
-    expect(result.plugins.map((p) => p.name)).toEqual(['p-root'])
+    expect(result.spec.plugins.map((p) => p.name)).toEqual(['p-root'])
   })
 
   test('plugin deleted out from under the running task → fails closed before spawn', async () => {
@@ -116,7 +128,10 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     await db.delete(pluginsTable).where(eq(pluginsTable.id, pluginIdByName.get('p-root')!))
 
     const agent = (await getAgent(db, 'a'))!
-    const result = await prepareNodeRunInjection(db, '/tmp/aw', agent, createLogger('test'))
+    const result = await resolveInjection(db, agent, {
+      appHome: '/tmp/aw',
+      log: createLogger('test'),
+    })
     expect(result).toMatchObject({ kind: 'failed', message: 'plugin-not-found' })
   })
 })

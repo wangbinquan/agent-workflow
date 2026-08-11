@@ -82,14 +82,14 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
     expect(src).not.toContain('Bun.spawn(')
   })
 
-  test('memoryDistiller.ts passes its isolated worktreeDir into buildSpawn', () => {
+  test('memoryDistiller.ts passes its isolated worktreeDir into buildAgentSpawn', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src/services/memoryDistiller.ts'),
       'utf-8',
     )
-    expect(src).toContain('buildSpawn(')
+    expect(src).toContain('buildAgentSpawn(')
     expect(src).toContain("const worktreeDir = join(input.cwd, 'worktree')")
-    expect(src).toContain('worktreePath: worktreeDir')
+    expect(src).toContain('cwd: worktreeDir')
     // RFC-280 T4: the executor call must keep the SAME worktreeDir as cwd and
     // the plan's env — the PWD-pinning contract now travels through
     // runAgentProcess → managedProcess (locked via SPAWN_CWD_SITES above).

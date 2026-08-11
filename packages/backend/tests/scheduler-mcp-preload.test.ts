@@ -9,7 +9,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { createMcp } from '../src/services/mcp'
-import { prepareNodeRunInjection } from '../src/services/scheduler'
+import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -71,17 +71,23 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
   test('agent without mcp[] → mcps array is empty', async () => {
     await seedAgent(db, 'solo')
     const agent = (await getAgent(db, 'solo'))!
-    const result = await prepareNodeRunInjection(db, '/tmp/aw', agent, createLogger('test'))
+    const result = await resolveInjection(db, agent, {
+      appHome: '/tmp/aw',
+      log: createLogger('test'),
+    })
     if (result.kind !== 'ok') throw new Error('expected ok')
-    expect(result.mcps).toEqual([])
+    expect(result.spec.mcps).toEqual([])
   })
 
   test('root agent declares mcp → loaded into mcps array', async () => {
     await seedAgent(db, 'root', { mcp: [mcpIdByName.get('m-root')!] })
     const agent = (await getAgent(db, 'root'))!
-    const result = await prepareNodeRunInjection(db, '/tmp/aw', agent, createLogger('test'))
+    const result = await resolveInjection(db, agent, {
+      appHome: '/tmp/aw',
+      log: createLogger('test'),
+    })
     if (result.kind !== 'ok') throw new Error('expected ok')
-    expect(result.mcps.map((m) => m.name)).toEqual(['m-root'])
+    expect(result.spec.mcps.map((m) => m.name)).toEqual(['m-root'])
   })
 
   test('dependsOn closure unions mcp[] across every member (root first)', async () => {
@@ -96,9 +102,12 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
       mcp: [mcpIdByName.get('m-extra')!],
     })
     const root = (await getAgent(db, 'root'))!
-    const result = await prepareNodeRunInjection(db, '/tmp/aw', root, createLogger('test'))
+    const result = await resolveInjection(db, root, {
+      appHome: '/tmp/aw',
+      log: createLogger('test'),
+    })
     if (result.kind !== 'ok') throw new Error('expected ok')
-    expect(result.mcps.map((m) => m.name)).toEqual(['m-extra', 'm-root', 'm-leaf'])
+    expect(result.spec.mcps.map((m) => m.name)).toEqual(['m-extra', 'm-root', 'm-leaf'])
   })
 
   test('closure with same mcp referenced twice → deduped (one row)', async () => {
@@ -108,9 +117,12 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
       mcp: [mcpIdByName.get('m-root')!],
     })
     const root = (await getAgent(db, 'root'))!
-    const result = await prepareNodeRunInjection(db, '/tmp/aw', root, createLogger('test'))
+    const result = await resolveInjection(db, root, {
+      appHome: '/tmp/aw',
+      log: createLogger('test'),
+    })
     if (result.kind !== 'ok') throw new Error('expected ok')
-    expect(result.mcps.map((m) => m.name)).toEqual(['m-root'])
+    expect(result.spec.mcps.map((m) => m.name)).toEqual(['m-root'])
   })
 
   test('mcp deleted out from under the running task → fails closed before spawn', async () => {
@@ -124,7 +136,10 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     await db.delete(mcpsTable).where(eq(mcpsTable.id, mcpIdByName.get('m-root')!))
 
     const agent = (await getAgent(db, 'a'))!
-    const result = await prepareNodeRunInjection(db, '/tmp/aw', agent, createLogger('test'))
+    const result = await resolveInjection(db, agent, {
+      appHome: '/tmp/aw',
+      log: createLogger('test'),
+    })
     expect(result).toMatchObject({ kind: 'failed', message: 'mcp-not-found' })
   })
 })
