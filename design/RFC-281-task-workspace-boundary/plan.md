@@ -13,6 +13,8 @@
   新增 `services/execution/workspaceBoundary.ts`：`composeOpencodeBoundary`（纯函数）+ `BoundaryCtx` 装配（mounts/runDir/stagedSkillDirs/tmpGlobs/**gitMetaDirs** 全部取自 scheduler/runner 既有结构，禁止路径形状推断）。注入两级：顶层 `OPENCODE_CONFIG_CONTENT.permission.external_directory`（覆盖原生子代理，design §3.1）+ 业务 agent 条目级作者白名单合成。改写 `renderOpencodeAgentEntry` 的 RFC-276 注释为「作者声明 + 平台工作区边界」。
   测试：合成键序（含下标断言）/scalar 接管/告警全分支；渲染源码锁；真 opencode 集成（gated）AC-1（含原生子代理）/2/3 红绿对 + AC-8 opencode 敏感面遍历用例 + resume（`--session`）边界仍在。
   依赖：T0。
+  - ✅ **part1 完成（`842ed9ab`）**：纯函数 + 9 单测 + M1/M2 策略修正（回填 design §5-9/§3.1：跨层键序不可控 → 每条目自 map 内注入、追加作者 `'*'` 后；顶层只管原生子代理）。
+  - ⏳ **part2（接入运行链路，下一轮）接入地图**：业务落 `driver.ts:209 buildInlineConfig`（系统 persona `:125` 直调**不碰**，符合 §3）；顶层 = `out.permission` + 每条目 = `composeOpencodeBoundary(agent.permission, ctx)`。**关键缺口**：`BusinessNodeSpawnContext`（`runtime/types.ts:396`）无多仓 mounts 数组，正确支持多仓须扩 ctx 加 `taskMounts` + runner 从 `iso.repos` 填充（跨 scheduler→runner→driver 契约）；单仓 = `[worktreePath]`。既有 `runner-permission-inject{,-e2e}`/`runner-build-inline-config-multi` 锁 permission 形状，需同步更新。
 
 - **RFC-281-T2 · claude settings 载体与声明节点修复**
   `buildClaudeSpawn` 落 per-run `settings.json` + `--settings`（最小形状，design §4.1：`sandbox.enabled` + `allowUnsandboxedCommands:false` + `filesystem.allowWrite`；**无 denyWrite、v1 无 permissions.deny 敏感面**）；`CLAUDE_PLATFORM_OWNED_FLAGS` 扩展；声明 permission 节点补 `additionalDirectories`（读）+ `permissions.allow` 的 `Edit/Write(//<mount>/**)`（写，B4 多仓 mounts 修复，§5-5——业务可用必需）。未声明节点 argv 其余部分逐字节不变（锁）。
