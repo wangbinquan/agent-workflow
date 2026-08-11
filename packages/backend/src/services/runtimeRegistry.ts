@@ -31,8 +31,7 @@ import {
   transitionInheritedRuntimeTestsInTx,
   transitionRuntimeTestsInTx,
 } from '@/services/mcpRuntimeTestTransitions'
-// eslint-disable-next-line no-restricted-imports -- RFC282_IMPORT_EXCEPTIONS(C0): 平台独占 flag 常量应从 runtime/index 具名 re-export，C0 一并处理
-import { CLAUDE_PLATFORM_OWNED_FLAGS } from '@/services/runtime/claudeCode/spawn'
+import { CLAUDE_PLATFORM_OWNED_FLAGS } from '@/services/runtime'
 
 const log = createLogger('runtimeRegistry')
 

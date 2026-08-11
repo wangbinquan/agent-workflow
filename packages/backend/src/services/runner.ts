@@ -88,6 +88,10 @@ import {
   type StartupVerificationRecord,
 } from './execution/startupVerification'
 import { runAgentProcess } from './execution/agentProcess'
+import { FINAL_REAP_MARGIN_MS } from './execution/managedProcess'
+
+/** SIGTERM → SIGKILL grace for a node's process group. */
+const KILL_ESCALATION_GRACE_MS = 10_000
 import { NOOP_HANDLE } from './runtime'
 import { setNodeRunStatus, transitionNodeRunStatus } from './lifecycle'
 import {
@@ -2073,26 +2077,7 @@ export function detectPluginLoadFailure(
 // at the bottom of this file); buildOpencodeSpawn there assembles argv + env.
 
 /** RFC-098 WP-8: SIGTERM → SIGKILL escalation grace. */
-/** SIGTERM → SIGKILL grace for a node's process group. */
-const KILL_ESCALATION_GRACE_MS = 10_000
-/** RFC-098 WP-8: margin on top of the grace for the final reap deadline. */
-const FINAL_REAP_MARGIN_MS = 5_000
 
-interface LinePump {
-  /** Resolves once the stream EOFs (or is canceled) and every onLine settled. */
-  done: Promise<void>
-  /**
-   * RFC-098 WP-8: abandon the stream — cancels the underlying reader so a
-   * pipe FD held open by a surviving (grand)child can't wedge `done`.
-   * The partial tail line is dropped on cancel.
-   */
-  cancel: () => void
-}
-
-/**
- * Drain a ReadableStream of UTF-8 bytes, calling `onLine` for each complete
- * line. Awaits each callback so the caller's DB writes serialize naturally.
- */
 /**
  * Per-line cap (code units) for a child's stdout/stderr. A runaway or hostile
  * child that emits data with NO newline would otherwise grow `buffer`
@@ -2103,7 +2088,6 @@ interface LinePump {
  * See design/test-guard-audit-2026-07-21 gap B4-runtime-6 / Top-14.
  */
 export const MAX_STREAM_LINE_CHARS = 1024 * 1024
-const LINE_TRUNCATED_MARKER = '…[line truncated: exceeded MAX_STREAM_LINE_CHARS]'
 
 /**
  * Rolling-tail cap (code units) for the accumulated agent text the envelope is
@@ -2126,70 +2110,6 @@ export function appendBoundedTail(current: string, addition: string, maxChars: n
     return joined.slice(joined.length - maxChars)
   }
   return joined
-}
-
-export function pumpLines(
-  stream: ReadableStream<Uint8Array>,
-  onLine: (line: string) => Promise<void> | void,
-): LinePump {
-  const reader = stream.getReader()
-  let canceled = false
-  const done = (async (): Promise<void> => {
-    const decoder = new TextDecoder()
-    let buffer = ''
-    // True while discarding the tail of an over-long line until its newline.
-    let dropping = false
-    try {
-      for (;;) {
-        const { value, done: eof } = await reader.read()
-        if (eof) break
-        buffer += decoder.decode(value, { stream: true })
-        for (;;) {
-          const idx = buffer.indexOf('\n')
-          if (idx < 0) {
-            // No complete line yet. Bound the in-memory buffer: if it has grown
-            // past the cap with no newline, flush a truncated marker once and
-            // discard the rest of this line.
-            if (dropping) {
-              buffer = ''
-            } else if (buffer.length > MAX_STREAM_LINE_CHARS) {
-              await onLine(buffer.slice(0, MAX_STREAM_LINE_CHARS) + LINE_TRUNCATED_MARKER)
-              buffer = ''
-              dropping = true
-            }
-            break
-          }
-          const line = buffer.slice(0, idx)
-          buffer = buffer.slice(idx + 1)
-          if (dropping) {
-            // This newline ends the monster line; its tail is discarded.
-            dropping = false
-            continue
-          }
-          if (line.length > 0) await onLine(line)
-        }
-      }
-      // Flush remaining tail (process emitted a line without trailing newline).
-      if (buffer.length > 0 && !canceled && !dropping) {
-        const tail =
-          buffer.length > MAX_STREAM_LINE_CHARS
-            ? buffer.slice(0, MAX_STREAM_LINE_CHARS) + LINE_TRUNCATED_MARKER
-            : buffer
-        await onLine(tail)
-      }
-    } finally {
-      reader.releaseLock()
-    }
-  })()
-  return {
-    done,
-    cancel: () => {
-      canceled = true
-      // Resolves any in-flight read() with done:true; the loop above then
-      // exits and releases the lock.
-      void reader.cancel().catch(() => {})
-    },
-  }
 }
 
 // RFC-111 PR-A: opencode runtime helpers moved to ./runtime/opencode/* (leaf

@@ -346,9 +346,10 @@ describe('RFC-062 runRootFor helper', () => {
 })
 
 describe('RFC-062 grep guard', () => {
-  test("services/inventory.ts contains the 'in-flight' literal", async () => {
+  test("runtime/opencode/inventory.ts contains the 'in-flight' literal", async () => {
+    // RFC-282 C3 relocated the module into the runtime fence.
     const src = await Bun.file(
-      resolve(import.meta.dir, '..', 'src', 'services', 'inventory.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'inventory.ts'),
     ).text()
     expect(src).toContain("'in-flight'")
     // Also lock the runRootFor call inside the in-flight branch — if someone

@@ -1334,6 +1334,9 @@ daemon 里**永不超时**，恰是这些超时存在的目的。POSIX 上循环
     测试走的就是这条真路径。**需要 win32 file-trust 原语（T0 的显式延期项），不是测试问题。**
   - `runtime-smoke`(14 条 mock-backed) + `rfc107` + `rfc135`：撞 **`smokeRuntime`/registry 只收
     `binaryPath: string`（单个可执行文件），没有 `opencodeCmd` 那样的命令数组注入缝**。
+    **RFC-282 C1 已补缝（2026-08-12）**：`SmokeOptions.binaryPath` 收 `string | readonly string[]`
+    （经 `binaryOverride` 落 driver 命令头）+ `driver.probe` head 同步拓宽为数组；
+    macOS/Linux 行为逐字节不变，Windows 腿转绿待下一次 `windows-platform` CI 自然确证。
     实测把 `wrapperFor` 的 `#!/bin/sh` 换成 `.cmd` 跑 `bun run <mock>` **更糟**——每条撞 30s
     smoke 超时（cmd→`bun run` 的管道 stdout 不回流）。真正的修法是给这条路径加命令数组缝，
     属 verified-path 生产改动、要走 RFC 门。runtime-smoke 里 3 条纯路径校验/非协议二进制的

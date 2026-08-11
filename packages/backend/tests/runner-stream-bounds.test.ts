@@ -15,8 +15,19 @@ import {
   appendBoundedTail,
   MAX_AGENT_TEXT_CHARS,
   MAX_STREAM_LINE_CHARS,
-  pumpLines,
 } from '../src/services/runner'
+// RFC-282 E1a — the runner's `pumpLines` twin was src-dead (every stream goes
+// through the unified executor since RFC-280) and had drifted on the
+// truncation marker; the bound lock now pins the ONE pump in managedProcess.
+// Behavior deltas taken over from the live implementation (registered §7):
+// the marker text is '…[line truncated]' and a truncated line ALSO fires
+// onLineTruncated. Everything else asserts unchanged.
+import { pump } from '../src/services/execution/managedProcess'
+
+const pumpLines = (
+  stream: ReadableStream<Uint8Array>,
+  onLine: (line: string) => Promise<void> | void,
+) => pump(stream, onLine, undefined)
 
 /** A ReadableStream that emits the given UTF-8 chunks then closes. */
 function streamOf(chunks: string[]): ReadableStream<Uint8Array> {
@@ -34,7 +45,7 @@ function streamOf(chunks: string[]): ReadableStream<Uint8Array> {
   })
 }
 
-describe('pumpLines per-line bound (B4-runtime-6)', () => {
+describe('managedProcess pump per-line bound (B4-runtime-6; E1a lock migration)', () => {
   test('normal newline-delimited lines pass through unchanged', async () => {
     const seen: string[] = []
     await pumpLines(streamOf(['a\nb\n', 'c\n']), (l) => {

@@ -114,3 +114,42 @@
 - [ ] 实现门（declare done 前）跑一次并修 findings
 - [ ] design §9 的 5 项复核项已有结论（v2 已填）
 - [ ] `design/plan.md` RFC 索引登记；`STATE.md` 顶部指向本目录；完工后置 Done
+
+
+## 实施记录（2026-08-12，实现 session）
+
+**已落 main 的批次**：D（4532faad）→ A（be7c2342）→ B1a（ed713bcc）→ B1b 迁移半场
+（92f3cf7c）→ B2（a6c462d0 + 22cb6b41 锁补账）→ B3（0196c60d）→ B4（8cb234f7）→
+C0+C2（c76305fe）→ C1 第一段（32dafa0d）→ C3（5ee77b23）→ C4（6c7151a7）→ E 批。
+每批 pin worktree `gate:local`（backend 全绿；三次 quality/backend 红均为宿主并发
+负载 flaky，无负载复跑绿：worktree-files/runScope/daemon-start、auth-form-tabs、
+agents-split-page）。
+
+**执行偏差（相对 plan v2，均已在 commit message 声明）**：
+
+1. **B1b「删旧三方法」推迟**：`rfc280-startup-verification.test.ts` 是并发 RFC-280
+   session 的未提交工作区文件，删除 `renderInjection` 会强制改它（多人纪律）。五条
+   链路已全部迁移到 `buildAgentSpawn`（facade），旧三方法成为 driver 内部真身；
+   RFC-280 收尾落库后做「删接口面 + buildAgentSpawn 必填化改名 buildSpawn +
+   AgentSpawnContext.legacyHeads 删除」的收尾提交。
+2. **C1 收窄为两段**：本 RFC 落了 probe/smoke 的命令数组缝（Windows P2 补缝）；
+   **124 个夹具的 opencodeCmd→binaryOverride 机械迁移**（128 文件 / 422 处）与
+   **resolveOpencodeCmd 12 入口收拢**推迟。后者的正解是把 config.opencodePath
+   兜底并进 resolveFrozenRuntime 冻结链（现状 spawn 时实时读 config ⇒ resume 后
+   head 可随 config 漂移；并入后更符合 RFC-111 D15）——属冻结语义可观察微变，
+   待用户拍板。
+3. **§7-1a 未触发**：facade 形态下系统面产出逐字节不变（description/options 字段
+   差异是「允许」而非「必须」的变更）；深层装配合一留待旧方法删除后。
+   `runtime-buildspawn.test.ts` 因此**零改动**（比 golden 表预告更保守）。
+4. **A1 落地形态修正**（已记 design §4.2 实现修正注记）：共享 patterns 常量 +
+   backend src/非-src 双 block（tests 33 条合法 driver 单测 deep import 不误伤），
+   新旧 pattern 双向变异实证。
+5. **D2 顺带**：`resourceRefs.assertRefsUsableInTx` 的第三份 grant SQL 一并收敛
+   （proposal 只点名 importRefs）。
+6. **E1a 事实修正**：`EMPTYRUNTIME_PROFILE` 实为「第二导出通道」非双定义；
+   `pumpLines` 截断 marker 文案随锁迁移改为 managedProcess 现行文案
+   `…[line truncated]`（§7 登记）。
+
+**残留 followup（接手清单）**：B1b 删除半场（见 1）；C1 第二段（见 2）；
+`declaredMcpServers` 改由 `declared.mcpServers` 承接（design §2.1 预留的独立
+收敛）；`runtime-buildspawn` 系统面统一产出（见 3）。

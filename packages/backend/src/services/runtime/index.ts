@@ -71,6 +71,8 @@ export function isKnownRuntimeKind(v: string | null | undefined): v is RuntimeKi
 // opencode/util value-imports @/config only, which imports no runtime module —
 // no init cycle through here.
 export { resolveOpencodeCmd, probeOpencode } from './opencode/util'
+// Platform-owned claude flags (registry extraArgs validation).
+export { CLAUDE_PLATFORM_OWNED_FLAGS } from './claudeCode/spawn'
 // Startup-inventory snapshot read (routes/tasks detail face).
 export { getInventorySnapshot, runRootFor } from './opencode/inventory'
 // Live-capture null object (runner's no-capability fallback handle).

@@ -18,7 +18,9 @@ export const MANAGED_PROCESS_MAX_LINE_CHARS = 1024 * 1024
 export const MANAGED_PROCESS_MAX_STREAM_CHARS = 8 * 1024 * 1024
 /** RFC-280 impl-gate P1-A: margin after the SIGKILL grace before a still-alive
  *  child is abandoned as `child-unkillable` (matches the pre-RFC-280 runner). */
-const FINAL_REAP_MARGIN_MS = 5_000
+/** RFC-282 E1a — exported: runner's kill-escalation messages reuse THIS value
+ *  (it carried an identical local copy; two spellings of one deadline). */
+export const FINAL_REAP_MARGIN_MS = 5_000
 
 const LINE_TRUNCATED_MARKER = '…[line truncated]'
 
@@ -136,7 +138,10 @@ interface Pump {
  * raw text. `onRaw` sees every decoded chunk verbatim — no line splitting, no
  * empty-line filtering — which is what makes byte-exact stdout capture possible.
  */
-function pump(
+/** RFC-282 E1a — exported as the ONE stream pump (runner's `pumpLines` twin
+ *  was src-dead and already diverged on the truncation marker; its bound lock
+ *  now pins THIS implementation). */
+export function pump(
   stream: ReadableStream<Uint8Array>,
   onLine: ((line: string) => Promise<void> | void) | undefined,
   onRaw: ((chunk: string) => void) | undefined,

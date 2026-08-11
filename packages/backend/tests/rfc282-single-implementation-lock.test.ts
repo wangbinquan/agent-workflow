@@ -188,12 +188,8 @@ const REEXPORT_RE =
 /** (file, next-line import text) tuples allowed to carry an eslint-disable for
  *  no-restricted-imports. Owning batch in the comment at the site. Ledger
  *  empty = 完工判据 1. */
-const RFC282_IMPORT_EXCEPTIONS: readonly { file: string; importText: string }[] = [
-  {
-    file: 'services/runtimeRegistry.ts',
-    importText: "import { CLAUDE_PLATFORM_OWNED_FLAGS } from '@/services/runtime/claudeCode/spawn'",
-  },
-]
+// E1b：清单已归零（完工判据 1）。棘轮保持——任何新 disable 都必须先登记在这。
+const RFC282_IMPORT_EXCEPTIONS: readonly { file: string; importText: string }[] = []
 
 describe('RFC-282 A2 — re-export laundering & the import-exception ledger', () => {
   test('no NEW export-from of driver internals outside the ledger', () => {
