@@ -264,6 +264,14 @@ test('a11y + mobile dark: /intent list and session detail', async ({ page }) => 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`${daemon.baseUrl}/intent/${rows[0]!.id}`)
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  // The reserved generation may settle before or after navigation. The
+  // canonical journey therefore legitimately opens Build while generating or
+  // Review once the draft is ready. This a11y/layout probe owns Build, so make
+  // that tab choice explicit instead of racing the agent turn.
+  const buildTab = page.getByRole('tab', { name: 'Build workspace' })
+  await expect(buildTab).toBeVisible()
+  await buildTab.click()
+  await expect(buildTab).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByTestId('intent-composer')).toBeVisible({ timeout: 15_000 })
   const mobileLayout = await page.evaluate(() => {
     const content = document.querySelector<HTMLElement>('.content')
