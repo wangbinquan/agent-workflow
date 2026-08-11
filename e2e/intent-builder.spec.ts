@@ -176,15 +176,19 @@ test('workflow draft makes the node graph a primary, expandable review surface',
     await dialog.getByRole('button', { name: 'Close' }).click()
 
     await page.setViewportSize({ width: 390, height: 844 })
-    // This session was entered while generation was still running, so Build
-    // remains the user-owned selection when the draft later arrives. A live
-    // refresh must not steal the tab (design §0A.3).
+    // The reserved generation may settle before or after navigation, so the
+    // first detail load legitimately initializes Build (while generating) or
+    // Review (once the draft is ready) — the same race the a11y/mobile probe
+    // handles (c3146c36). This probe owns the mobile Build workspace, so select
+    // Build explicitly instead of racing the agent turn. The "live refresh must
+    // not steal the tab" invariant (design §0A.3) is guaranteed by the product's
+    // initializedWorkspaceSessionRef guard (intent.detail.tsx), not re-raced here.
+    const buildTab = page.getByRole('tab', { name: 'Build workspace' })
+    await expect(buildTab).toBeVisible()
+    await buildTab.click()
+    await expect(buildTab).toHaveAttribute('aria-selected', 'true')
     await expect(build).toBeVisible()
     await expect(review).toBeHidden()
-    await expect(page.getByRole('tab', { name: 'Build workspace' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
     await expect(inlineCanvas).toBeHidden()
     await page.getByRole('tab', { name: 'Draft review workspace' }).click()
     await expect(review).toBeVisible()
