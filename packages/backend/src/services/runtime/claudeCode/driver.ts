@@ -29,7 +29,9 @@ import {
   declareSubagents,
   deriveClaudeDroppedParams,
   emptyDeclaredManifest,
+  managedSkillsOf,
   renderClaudeMcpInjection,
+  weaveMemoryBlock,
 } from '@/services/execution/agentInjection'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -63,13 +65,16 @@ import {
   stageClaudeWorktreeSkills,
 } from './config'
 
-/** RFC-280 §7.1 — business-path MCP config lands on disk (0600), never argv. */
-function writeBusinessMcpConfig(
-  runRoot: string,
+/** RFC-280 §7.1 / RFC-282 B4 — THE mcp-config write (was two inline copies:
+ *  business without a dir mode, system with 0o700). Unified on 0o700 — the
+ *  stricter of the two; mkdir mode only applies when the dir is newly created,
+ *  and the per-run dir holds credential-bearing config either way. */
+function writeClaudeMcpConfig(
+  dir: string,
   claudeMcp: { mcpServers: Record<string, Record<string, unknown>> },
 ): string {
-  mkdirSync(runRoot, { recursive: true })
-  const file = join(runRoot, 'mcp-config.json')
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  const file = join(dir, 'mcp-config.json')
   writeFileSync(file, JSON.stringify(claudeMcp), { mode: 0o600, flag: 'w' })
   return file
 }
@@ -196,11 +201,9 @@ export const claudeCodeDriver: RuntimeDriver = {
     }
     let mcpConfigFile: string | undefined
     if (ctx.mcpInjection !== undefined && ctx.mcpInjection.mcpEntries !== null) {
-      mkdirSync(ctx.runDir, { recursive: true, mode: 0o700 })
-      mcpConfigFile = join(ctx.runDir, 'mcp-config.json')
-      writeFileSync(mcpConfigFile, JSON.stringify({ mcpServers: ctx.mcpInjection.mcpEntries }), {
-        mode: 0o600,
-        flag: 'w',
+      // RFC-282 B4 — same single write as the business path.
+      mcpConfigFile = writeClaudeMcpConfig(ctx.runDir, {
+        mcpServers: ctx.mcpInjection.mcpEntries,
       })
     }
     const plan = buildClaudeSpawn({
@@ -264,7 +267,7 @@ export const claudeCodeDriver: RuntimeDriver = {
   async buildBusinessSpawn(ctx: BusinessNodeSpawnContext): Promise<SpawnPlan> {
     const baseSystemPrompt =
       ctx.injectedMemoryBlock !== null
-        ? `${ctx.agent.bodyMd}\n\n${ctx.injectedMemoryBlock}`
+        ? weaveMemoryBlock(ctx.agent.bodyMd, ctx.injectedMemoryBlock)
         : ctx.agent.bodyMd
     const managedSkillAttachments = renderClaudeManagedSkillAttachments(
       ctx.runRoot,
@@ -284,6 +287,10 @@ export const claudeCodeDriver: RuntimeDriver = {
       toClaudeAgents(ctx.dependents, {
         profileByName: ctx.resolvedParamsByAgent,
         parentTools,
+        // RFC-282 B4 — render-side root exclusion, symmetric with
+        // declareSubagents (closure already excludes the root; this makes an
+        // injected-but-undeclared root entry structurally impossible).
+        rootName: ctx.agent.name,
       })
     // RFC-113 (Codex P1-3): claude's model is the RUNTIME's, not the agent's.
     // The root entry of resolvedParamsByAgent carries the dispatch-resolved profile.
@@ -359,9 +366,7 @@ export const claudeCodeDriver: RuntimeDriver = {
           'claude can only express literal directories; these glob patterns are not granted on this runtime',
       })
     }
-    const attachedSkillNames = ctx.skills
-      .filter((skill) => skill.sourceKind === 'managed')
-      .map((skill) => skill.name)
+    const attachedSkillNames = managedSkillsOf(ctx.skills).map((skill) => skill.name)
     // A gated parent has a load set to cap members with; an unconstrained one
     // (bypassPermissions) has none, and keeps the historical entry shape.
     const claudeAgents = claudeAgentsOf(gate === null ? null : gate.tools)
@@ -376,12 +381,14 @@ export const claudeCodeDriver: RuntimeDriver = {
     // That is by design, but a node whose agent SELECTED plugins and then ran
     // on claude got exactly nothing, with the plugin names appearing only in a
     // diagnostics field nobody reads. Say it out loud instead.
-    const enabledPlugins = ctx.plugins.filter((plugin) => plugin.enabled !== false)
-    if (enabledPlugins.length > 0) {
+    // RFC-282 B4 — same source as the declared `unsupported` face
+    // (declarePlugins: enabled + id-deduped), not a third inline filter.
+    const unsupportedPluginNames = declarePlugins(ctx.plugins)
+    if (unsupportedPluginNames.length > 0) {
       ctx.log.warn('claude-plugins-unsupported', {
         agent: ctx.agent.name,
         nodeRunId: ctx.nodeRunId,
-        plugins: enabledPlugins.map((plugin) => plugin.name),
+        plugins: unsupportedPluginNames,
         detail: 'the claude-code runtime has no plugin surface; these are not loaded',
       })
     }
@@ -475,7 +482,7 @@ export const claudeCodeDriver: RuntimeDriver = {
             // written 0600 under the per-run dir and passed as a PATH — inline
             // JSON on argv leaked secrets into /proc/<pid>/cmdline
             // (audit-backlog item, now closed on the business path too).
-            mcpConfigJson: writeBusinessMcpConfig(ctx.runRoot, claudeMcp),
+            mcpConfigJson: writeClaudeMcpConfig(ctx.runRoot, claudeMcp),
             // RFC-242 T5: a gated node must allowlist its own MCP namespaces or
             // dontAsk denies every MCP call (measured, see ClaudeSpawnContext).
             mcpServerNames: mcpInjection.declared.mcpServers,
@@ -538,8 +545,8 @@ export const claudeCodeDriver: RuntimeDriver = {
         // opencode side's `machineConfigIgnoredPlugins` (RFC-256), which exists
         // for exactly this reason — "report the count so that limit is visible
         // in the run log instead of looking like a silent no-op".
-        pluginsIgnoredUnsupported: enabledPlugins.length,
-        pluginsIgnoredNames: enabledPlugins.map((p) => p.name),
+        pluginsIgnoredUnsupported: unsupportedPluginNames.length,
+        pluginsIgnoredNames: unsupportedPluginNames,
         // The three injected surfaces the startup-verification layer (RFC-280
         // T3) checks against claude's init inventory — the proof exists now:
         // parseStartupInventory feeds verifyStartup, whose skills/subagents/

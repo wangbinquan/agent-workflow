@@ -28,7 +28,14 @@ import {
   renderOpencodeMcpInjection,
 } from '@/services/execution/agentInjection'
 import { buildInlineConfig } from '@/services/runtime/opencode/inlineConfig'
-import { toClaudeMcpConfig } from '@/services/runtime/claudeCode/inject'
+// RFC-282 B4 — the src wrapper was deleted (dead outside tests); its exact
+// shape is re-expressed here so every assertion below is unchanged.
+function toClaudeMcpConfig(
+  mcps: Parameters<typeof renderClaudeMcpInjection>[0],
+): { mcpServers: Record<string, Record<string, unknown>> } | null {
+  const { entries } = renderClaudeMcpInjection(mcps)
+  return entries === null ? null : { mcpServers: entries }
+}
 import { claudeCodeDriver } from '@/services/runtime/claudeCode/driver'
 import { opencodeDriver } from '@/services/runtime/opencode/driver'
 import type { Agent } from '@agent-workflow/shared'

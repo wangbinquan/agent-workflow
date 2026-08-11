@@ -23,7 +23,8 @@ import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
 import { buildOpencodeSpawn } from '../src/services/runtime/opencode/spawn'
 import { machineSkillRoots, opencodeDataDir } from '../src/services/execution/workspaceBoundary'
 import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
-import { toClaudeAgents, toClaudeMcpConfig } from '../src/services/runtime/claudeCode/inject'
+import { toClaudeAgents } from '../src/services/runtime/claudeCode/inject'
+import { renderClaudeMcpInjection } from '../src/services/execution/agentInjection'
 import { claudeBusinessGate } from '../src/services/runtime/claudeCode/permissionMap'
 import { createLogger } from '../src/util/log'
 import type { RuntimeProfile } from '../src/services/runtimeRegistry'
@@ -287,7 +288,7 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
       // head = test 头（claude 绝不吃 opencodeCmd —— Codex P1-1）。
       expect(plan.cmd.slice(0, 3)).toEqual(['bun', 'run', '/mock-claude.ts'])
       // 收口前公式的 flag 面。
-      const mcpJson = JSON.stringify(toClaudeMcpConfig(ctx.mcps))
+      const mcpJson = JSON.stringify({ mcpServers: renderClaudeMcpInjection(ctx.mcps).entries })
       // 2026-08-09 显式改判：`--agents` 不再只是 {description,prompt}。每个
       // dependent 现在带自己解析出的 model，以及自己 permission 推出的 tools
       // （上限是父的装载集，且永不含 Task）。收口前的 runner 公式丢掉了这两样

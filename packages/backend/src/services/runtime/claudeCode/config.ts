@@ -23,6 +23,7 @@ import { assertWriteAncestorInside, safeJoin } from '@/util/safePath'
 import { stringify as stringifyYaml } from 'yaml'
 import { stageSkills, type StagedSkill } from '../stageSkills'
 import type { ClaudeAgentEntry } from './inject'
+import { managedSkillsOf } from '@/services/execution/agentInjection'
 
 export type ClaudeSkillInjection = StagedSkill
 
@@ -145,7 +146,7 @@ export function renderClaudeManagedSkillAttachments(
   skills: readonly ClaudeSkillInjection[],
   log: Logger,
 ): string {
-  const managed = skills.filter((skill) => skill.sourceKind === 'managed')
+  const managed = managedSkillsOf(skills)
   if (managed.length === 0) return ''
 
   for (const skill of managed) assertSafeLeaf(skill.name, 'managed skill attachment name')
@@ -204,7 +205,7 @@ export function stageClaudeWorktreeSkills(
 ): ClaudeWorktreeSkillProjection {
   assertSafeLeaf(configDirName, 'Claude project config directory name')
   const configPath = safeJoin(worktreePath, configDirName)
-  const managed = skills.filter((skill) => skill.sourceKind === 'managed')
+  const managed = managedSkillsOf(skills)
   const skillNames = managed.map((skill) => skill.name)
   for (const name of skillNames) assertSafeLeaf(name, 'managed skill projection name')
 

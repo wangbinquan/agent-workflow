@@ -4,7 +4,17 @@
 
 import type { Agent, Mcp } from '@agent-workflow/shared'
 import { describe, expect, it } from 'bun:test'
-import { toClaudeAgents, toClaudeMcpConfig } from '@/services/runtime/claudeCode/inject'
+import { toClaudeAgents } from '@/services/runtime/claudeCode/inject'
+import { renderClaudeMcpInjection } from '@/services/execution/agentInjection'
+
+// RFC-282 B4 — the src wrapper was deleted (dead outside tests); its exact
+// shape is re-expressed here so every assertion below is unchanged.
+function toClaudeMcpConfig(
+  mcps: Parameters<typeof renderClaudeMcpInjection>[0],
+): { mcpServers: Record<string, Record<string, unknown>> } | null {
+  const { entries } = renderClaudeMcpInjection(mcps)
+  return entries === null ? null : { mcpServers: entries }
+}
 
 function localMcp(name: string, command: string[], extra: Partial<Mcp> = {}): Mcp {
   return { name, type: 'local', enabled: true, config: { command }, ...extra } as Mcp

@@ -226,8 +226,13 @@ export function renderOpencodeAgentEntry(
 // ---------------------------------------------------------------------------
 
 /** 平台实际 stage 的 skill 名单（managed only —— project 由 CLI 自发现）。 */
+/** RFC-282 B4 — THE managed-skill predicate (was inlined 4× across drivers). */
+export function managedSkillsOf<T extends { sourceKind: string }>(skills: readonly T[]): T[] {
+  return skills.filter((s) => s.sourceKind === 'managed')
+}
+
 export function declareSkills(skills: readonly { name: string; sourceKind: string }[]): string[] {
-  return skills.filter((s) => s.sourceKind === 'managed').map((s) => s.name)
+  return managedSkillsOf(skills).map((s) => s.name)
 }
 
 /** dependsOn 闭包注入的 subagent 名单（root 除外、first-seen 去重）——两个 runtime 同一声明。 */
@@ -243,17 +248,26 @@ export function declareSubagents(rootName: string, dependents: readonly Agent[])
   return out
 }
 
-/** enabled plugin 名单（first-seen 去重）——opencode 注入面；claude 调用方转 unsupported。 */
+/** enabled plugin 名单——opencode 注入面；claude 调用方转 unsupported。
+ * RFC-282 B4（去重键统一）：按 **id** 去重，与 `selectShippedPlugins`（实际
+ * ship 集）同键。旧版按 name 去重 ⇒ 同名异 id 时注入 2 个、声明 1 个，启动
+ * 验证漏判——声明必须描述 exactly the shipped set（RFC-251 同理）。 */
 export function declarePlugins(plugins: readonly Plugin[]): string[] {
   const seen = new Set<string>()
   const out: string[] = []
   for (const p of plugins) {
     if (p.enabled === false) continue
-    if (seen.has(p.name)) continue
-    seen.add(p.name)
+    if (seen.has(p.id)) continue
+    seen.add(p.id)
     out.push(p.name)
   }
   return out
+}
+
+/** RFC-282 B4 — THE memory-block weave (was inlined in both drivers with the
+ *  same template; two spellings of one seam is how they drift). */
+export function weaveMemoryBlock(text: string, block: string): string {
+  return `${text}\n\n${block}`
 }
 
 /**
@@ -285,6 +299,8 @@ export interface ClaudeAgentEntry {
 }
 
 export interface ClaudeAgentsOpts {
+  /** RFC-282 B4 — excluded from rendering (symmetry with declareSubagents). */
+  rootName?: string
   /**
    * 2026-08-09 — RFC-113 profile per agent NAME, i.e. exactly
    * `BusinessNodeSpawnContext.resolvedParamsByAgent`, whose contract already
@@ -341,6 +357,11 @@ export function renderClaudeSubagentEntries(
   const warnings: string[] = []
   const parentTools = opts.parentTools
   for (const dep of dependents) {
+    // RFC-282 B4 — root-exclusion symmetry with declareSubagents: the closure
+    // already excludes the root, but the declaration side skipped it and this
+    // renderer did not — an injected-but-undeclared entry the moment any
+    // caller passes a root-bearing list.
+    if (opts.rootName !== undefined && dep.name === opts.rootName) continue
     if (Object.hasOwn(agents, dep.name)) continue
     const entry: ClaudeAgentEntry = { description: dep.description, prompt: dep.bodyMd }
     const model = opts.profileByName?.get(dep.name)?.model

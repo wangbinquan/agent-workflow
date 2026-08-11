@@ -30,7 +30,6 @@ import { buildPluginSpecArray } from './pluginSpec'
 import { composeOpencodeBoundary, type BoundaryCtx } from '@/services/execution/workspaceBoundary'
 
 export {
-  EMPTY_RUNTIME_PROFILE,
   renderOpencodeAgentEntry as buildInlineAgentEntry,
   renderOpencodeMcpEntry as buildInlineMcpEntry,
 } from '@/services/execution/agentInjection'

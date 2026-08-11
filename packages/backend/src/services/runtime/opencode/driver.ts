@@ -32,6 +32,7 @@ import {
   emptyDeclaredManifest,
   renderOpencodeAgentEntry,
   renderOpencodeMcpInjection,
+  weaveMemoryBlock,
 } from '@/services/execution/agentInjection'
 import type { InventorySnapshot } from '@agent-workflow/shared'
 import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveCapture'
@@ -41,6 +42,7 @@ import { tmpdir } from 'node:os'
 import { observeSystemEvent, parseEvent } from './events'
 import { buildOpencodeSpawn } from './spawn'
 import { buildInlineConfig } from './inlineConfig'
+import { selectShippedPlugins } from './pluginSpec'
 import {
   machineSkillRoots,
   opencodeDataDir,
@@ -353,7 +355,7 @@ export const opencodeDriver: RuntimeDriver = {
     if (ctx.injectedMemoryBlock !== null) {
       const primary = inlineConfig.agent[ctx.agent.name]
       if (primary !== undefined && typeof primary.prompt === 'string') {
-        primary.prompt = `${primary.prompt}\n\n${ctx.injectedMemoryBlock}`
+        primary.prompt = weaveMemoryBlock(primary.prompt, ctx.injectedMemoryBlock)
       }
     }
 
@@ -400,8 +402,10 @@ export const opencodeDriver: RuntimeDriver = {
         inlineTemperature: primaryInline?.temperature ?? null,
         mcpCount: inlineConfig.mcp ? Object.keys(inlineConfig.mcp).length : 0,
         mcpKeys: inlineConfig.mcp ? Object.keys(inlineConfig.mcp) : [],
-        pluginCount: ctx.plugins.filter((p) => p.enabled !== false).length,
-        pluginNames: ctx.plugins.filter((p) => p.enabled !== false).map((p) => p.name),
+        // RFC-251/RFC-282 B4: diagnostics describe exactly the SHIPPED set
+        // (enabled + id-deduped), not a parallel re-derivation that drifts.
+        pluginCount: selectShippedPlugins(ctx.plugins).length,
+        pluginNames: selectShippedPlugins(ctx.plugins).map((p) => p.name),
       },
     }
   },

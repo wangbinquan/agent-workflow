@@ -191,10 +191,6 @@ const REEXPORT_RE =
 const RFC282_IMPORT_EXCEPTIONS: readonly { file: string; importText: string }[] = [
   {
     file: 'services/runner.ts',
-    importText: "import { EMPTY_RUNTIME_PROFILE } from './runtime/opencode/inlineConfig'",
-  },
-  {
-    file: 'services/runner.ts',
     importText:
       "export { accumulateTokens, extractTextFromEvent, inferEventKind } from './runtime/opencode/events'",
   },
@@ -264,50 +260,39 @@ interface DuplicateEntry {
 }
 
 export const RFC282_DEFINITION_EXCEPTIONS: readonly DuplicateEntry[] = [
+  // B4 CONVERGED (2026-08-12): memory weave → agentInjection.weaveMemoryBlock;
+  // mcp-config write → ONE claude helper; plugin filter → declarePlugins /
+  // selectShippedPlugins; managed predicate → managedSkillsOf. The pinned
+  // counts below now lock the SINGLE remaining spelling of each.
   {
-    what: 'memory-block weave (×2 driver inlines)',
+    what: 'memory weave — drivers must use weaveMemoryBlock (no inline template)',
     owning: 'B4',
     signature: /\$\{ctx\.injectedMemoryBlock\}/,
-    sites: [
-      { file: 'services/runtime/opencode/driver.ts', count: 1 },
-      { file: 'services/runtime/claudeCode/driver.ts', count: 1 },
-    ],
+    sites: [],
   },
   {
-    what: 'claude mcp-config write (×2, one 0o700 one not)',
+    what: 'claude mcp-config write — the ONE helper',
     owning: 'B4',
     signature: /= join\([^)]+, 'mcp-config\.json'\)/,
-    sites: [{ file: 'services/runtime/claudeCode/driver.ts', count: 2 }],
+    sites: [{ file: 'services/runtime/claudeCode/driver.ts', count: 1 }],
   },
   {
-    what: 'plugin enabled filter (inlined predicates)',
+    what: 'plugin enabled filter — declarePlugins + selectShippedPlugins only',
     owning: 'B4',
     signature: /\((?:p|plugin)\) => (?:p|plugin)\.enabled !== false|if \(p\.enabled === false\)/,
     sites: [
-      // agentInjection.declarePlugins is the TRUE source; the driver inlines
-      // converge onto it in B4 and these rows shrink to the first one.
       { file: 'services/execution/agentInjection.ts', count: 1 },
-      { file: 'services/runtime/opencode/driver.ts', count: 2 },
-      { file: 'services/runtime/claudeCode/driver.ts', count: 1 },
       { file: 'services/runtime/opencode/pluginSpec.ts', count: 1 },
     ],
   },
   {
-    what: "managed-skill predicate (sourceKind === 'managed') inlined beside declareSkills",
+    what: "managed-skill predicate — managedSkillsOf (+ skillBootVerify's distinct boot gate)",
     owning: 'B4',
     signature: /sourceKind === 'managed'/,
     sites: [
       { file: 'services/execution/agentInjection.ts', count: 1 },
-      { file: 'services/runtime/claudeCode/config.ts', count: 2 },
-      { file: 'services/runtime/claudeCode/driver.ts', count: 1 },
       { file: 'services/skillBootVerify.ts', count: 1 },
     ],
-  },
-  {
-    what: 'EMPTY_RUNTIME_PROFILE second export channel (runner imports via inlineConfig)',
-    owning: 'B4',
-    signature: /^\s*EMPTY_RUNTIME_PROFILE,$/,
-    sites: [{ file: 'services/runtime/opencode/inlineConfig.ts', count: 1 }],
   },
 ]
 

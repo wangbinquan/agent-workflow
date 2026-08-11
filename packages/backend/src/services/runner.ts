@@ -78,8 +78,7 @@ import {
 } from '@/services/runtimeRegistry'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import type { AgentSpawnPlan, ResolvedSkill, StartupInventory } from './runtime/types'
-// eslint-disable-next-line no-restricted-imports -- RFC282_IMPORT_EXCEPTIONS(B4): EMPTY_RUNTIME_PROFILE 双定义，B4 收敛到 agentInjection 后此行消失
-import { EMPTY_RUNTIME_PROFILE } from './runtime/opencode/inlineConfig'
+import { EMPTY_RUNTIME_PROFILE } from './execution/agentInjection'
 import {
   declaredHasContent,
   observationFromClaudeInit,
