@@ -877,7 +877,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     const fromRepos = (opts.templateMeta.repos ?? [])
       .map((r) => r.worktreePath)
       .filter((p) => p.length > 0)
-    return fromRepos.length > 0 ? fromRepos : [opts.worktreePath]
+    // The subprocess cwd is ALWAYS a legal workspace, no matter what the
+    // per-repo metadata says. Today the scheduler fills `repos[].worktreePath`
+    // from the same iso handle that produced `worktreePath`, so this is a
+    // no-op; it stays as a guard because a future caller that fills `repos`
+    // with canonical paths while cwd is an iso worktree would otherwise fence
+    // the agent out of its own working tree (§0: never break business work).
+    const withCwd = fromRepos.includes(opts.worktreePath)
+      ? fromRepos
+      : [opts.worktreePath, ...fromRepos]
+    return withCwd.length > 0 ? withCwd : [opts.worktreePath]
   })()
   let plan: SpawnPlan
   try {

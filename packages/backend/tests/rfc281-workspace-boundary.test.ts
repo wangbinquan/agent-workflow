@@ -175,6 +175,37 @@ describe('composeClaudeBoundarySettings — write boundary only', () => {
   })
 })
 
+describe('§0 guard — the agent’s own cwd is always inside the boundary', () => {
+  // The runner derives taskMounts from templateMeta.repos and force-includes
+  // opts.worktreePath (runner.ts, RFC-281 comment). This locks the property the
+  // boundary must never violate: whatever the mount metadata says, the process
+  // cwd is re-allowed — otherwise the agent cannot work in its own worktree.
+  const mountsFor = (worktreePath: string, repos: string[]): string[] => {
+    const fromRepos = repos.filter((p) => p.length > 0)
+    const withCwd = fromRepos.includes(worktreePath) ? fromRepos : [worktreePath, ...fromRepos]
+    return withCwd.length > 0 ? withCwd : [worktreePath]
+  }
+
+  test('cwd is prepended when the repo metadata lists other paths (canonical vs iso skew)', () => {
+    const cwd = '/home/aw/iso/T1/R1'
+    const mounts = mountsFor(cwd, ['/home/aw/worktrees/repo/T1'])
+    expect(mounts[0]).toBe(cwd)
+    const ext = composeOpencodeBoundary(undefined, { ...CTX, taskMounts: mounts })[
+      'external_directory'
+    ] as Record<string, string>
+    expect(ext[`${cwd}/*`]).toBe('allow')
+  })
+
+  test('empty repo metadata still yields the cwd', () => {
+    expect(mountsFor('/w', [])).toEqual(['/w'])
+    expect(mountsFor('/w', [''])).toEqual(['/w'])
+  })
+
+  test('no duplicate when the metadata already contains cwd', () => {
+    expect(mountsFor('/w', ['/w', '/w2'])).toEqual(['/w', '/w2'])
+  })
+})
+
 describe('claudeWriteBoundaryAvailability — degrade loudly, never block (AC-6)', () => {
   const all = () => true
   const none = () => false
