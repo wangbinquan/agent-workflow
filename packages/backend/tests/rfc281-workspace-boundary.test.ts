@@ -14,6 +14,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   claudeExpressibleAuthorDirs,
+  claudeWriteBoundaryAvailability,
   composeClaudeBoundarySettings,
   composeOpencodeBoundary,
   type BoundaryCtx,
@@ -171,6 +172,71 @@ describe('composeClaudeBoundarySettings — write boundary only', () => {
       explicitPermission: false,
     })
     expect(s.sandbox.filesystem.allowWrite).toEqual(['/mnt/a', '/ref'])
+  })
+})
+
+describe('claudeWriteBoundaryAvailability — degrade loudly, never block (AC-6)', () => {
+  const all = () => true
+  const none = () => false
+
+  test('macOS always has the mechanism', () => {
+    expect(claudeWriteBoundaryAvailability('darwin', none)).toEqual({ available: true })
+  })
+
+  test('linux with bwrap+socat is available', () => {
+    expect(claudeWriteBoundaryAvailability('linux', all)).toEqual({ available: true })
+  })
+
+  test('linux missing a dependency reports WHICH one (diagnosable, not silent)', () => {
+    const r = claudeWriteBoundaryAvailability('linux', (bin) => bin !== 'socat')
+    expect(r.available).toBe(false)
+    expect(r.reason).toBe('missing-dependencies:socat')
+  })
+
+  test('an unsupported platform names itself in the reason', () => {
+    const r = claudeWriteBoundaryAvailability('win32', all)
+    expect(r.available).toBe(false)
+    expect(r.reason).toBe('unsupported-platform:win32')
+  })
+})
+
+describe('AC-8 — platform-sensitive paths are outside the re-allow set', () => {
+  // The boundary's re-allow list must never accidentally include appHome itself
+  // or its secret-bearing files: opencode denies everything not listed, so this
+  // is the assertion that the "everything else" really is everything else.
+  const APP_HOME = '/home/aw'
+  const SENSITIVE = [
+    `${APP_HOME}/db.sqlite`,
+    `${APP_HOME}/secret.key`,
+    `${APP_HOME}/token`,
+    `${APP_HOME}/config.json`,
+    `${APP_HOME}/iso/OTHER_TASK/run1`,
+    `${APP_HOME}/runs/OTHER_TASK/run1`,
+    `${APP_HOME}/worktrees/repo/OTHER_TASK`,
+  ]
+
+  test('opencode: no sensitive path is allowed by the synthesized boundary', () => {
+    const out = composeOpencodeBoundary(undefined, CTX)
+    const ext = out['external_directory'] as Record<string, string>
+    expect(ext['*']).toBe('deny')
+    for (const path of SENSITIVE) {
+      // no allow rule may match the sensitive path — check both the literal and
+      // its `<dir>/*` form, which is the only shape the platform ever emits.
+      expect(ext[path]).toBeUndefined()
+      expect(ext[`${path}/*`]).toBeUndefined()
+    }
+    // appHome root itself is never re-allowed (that would defeat the boundary).
+    expect(ext[`${APP_HOME}/*`]).toBeUndefined()
+  })
+
+  test('claude: sensitive paths never enter allowWrite (write stays cwd+tmp+mounts)', () => {
+    const s = composeClaudeBoundarySettings({
+      taskMounts: ['/home/aw/iso/T1/R1'],
+      explicitPermission: true,
+    })
+    const allow = s.sandbox.filesystem.allowWrite
+    for (const path of SENSITIVE) expect(allow).not.toContain(path)
+    expect(allow).not.toContain(APP_HOME)
   })
 })
 

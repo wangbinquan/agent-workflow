@@ -175,6 +175,29 @@ export function composeClaudeBoundarySettings(ctx: ClaudeBoundaryCtx): ClaudeBou
   return settings
 }
 
+/**
+ * claude 自带 sandbox 在**本机**是否可用（§4.4）。
+ *
+ * macOS 恒有内置 Seatbelt 支持；Linux 需要外部依赖（bwrap + socat），缺了就
+ * 只能降级。**判定只用于打告警 + 落观测，不改变 claude 行为、绝不阻断业务**
+ * （§0：宁可漏防不可误伤）。
+ *
+ * 这不是平台自建的隔离机制，也不复用任何已废弃的加固链——只是「上游功能在这
+ * 台机器上能不能用」的只读探测。
+ */
+export function claudeWriteBoundaryAvailability(
+  platform: NodeJS.Platform,
+  hasExecutable: (name: string) => boolean,
+): { available: boolean; reason?: string } {
+  if (platform === 'darwin') return { available: true }
+  if (platform === 'linux') {
+    const missing = ['bwrap', 'socat'].filter((bin) => !hasExecutable(bin))
+    if (missing.length === 0) return { available: true }
+    return { available: false, reason: `missing-dependencies:${missing.join(',')}` }
+  }
+  return { available: false, reason: `unsupported-platform:${platform}` }
+}
+
 function dedupeNonEmpty(paths: readonly string[]): string[] {
   const seen = new Set<string>()
   const out: string[] = []

@@ -1,6 +1,6 @@
 # RFC-281 · 任务工作区边界（防误入）
 
-状态：In Progress（2026-08-11 落档 + 用户批准 + T0 实测完成；方向：防误入为主 / 默认开 + 作者白名单 / 两个 runtime；**首要实现原则见 §2**）
+状态：**Done（2026-08-11）** —— T0-T5 全交付并上库（opencode 两级注入 + gated 真 runtime 红绿对、claude sandbox 写边界、作者白名单跨 runtime、文档）；exact-SHA 主 CI + integration-opencode 双绿。残留（有意）：DeclaredManifest 声明字段未做，见 `plan.md` 验收清单末条。
 
 ## 0. 首要实现原则（用户定调 2026-08-11，高于一切细节）
 

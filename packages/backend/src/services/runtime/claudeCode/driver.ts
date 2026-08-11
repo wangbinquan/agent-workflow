@@ -46,7 +46,10 @@ import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from './probe'
 import { listClaudeModels } from './models'
 import { captureClaudeSessions } from './sessionCapture'
 import { claudeBusinessGate, claudeToolsValue } from './permissionMap'
-import { claudeExpressibleAuthorDirs } from '@/services/execution/workspaceBoundary'
+import {
+  claudeExpressibleAuthorDirs,
+  claudeWriteBoundaryAvailability,
+} from '@/services/execution/workspaceBoundary'
 import {
   renderClaudeManagedSkillAttachments,
   stageClaudeWorktreeAgents,
@@ -255,6 +258,23 @@ export const claudeCodeDriver: RuntimeDriver = {
     // additionalDirectories). A mid-pattern glob has no claude equivalent —
     // disclose the granularity loss instead of dropping it silently (same
     // discipline as the permission mapping above).
+    // RFC-281 T3 (§4.4): the WRITE boundary is Claude's own sandbox. On a host
+    // where that mechanism is unavailable (Linux without bwrap+socat, Windows)
+    // we still spawn — business must not be blocked by a missing fence (§0) —
+    // but the degradation is logged so it is never silent.
+    const boundaryAvailability = claudeWriteBoundaryAvailability(
+      process.platform,
+      (bin) => Bun.which(bin) !== null,
+    )
+    if (!boundaryAvailability.available) {
+      ctx.log.warn('claude-workspace-boundary-unavailable', {
+        agent: ctx.agent.name,
+        nodeRunId: ctx.nodeRunId,
+        reason: boundaryAvailability.reason,
+        detail:
+          'claude sandbox is not available on this host; the node runs WITHOUT a workspace write boundary',
+      })
+    }
     const authorAllowDirs = claudeExpressibleAuthorDirs(ctx.agent.permission)
     if (authorAllowDirs.lossy.length > 0) {
       ctx.log.warn('claude-external-directory-glob-unsupported', {
