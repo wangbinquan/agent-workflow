@@ -1,82 +1,22 @@
-import type { IntentSessionDetail, IntentSessionSummary } from '@agent-workflow/shared'
+import type {
+  IntentJourneyKind,
+  IntentJourneySnapshot,
+  IntentSessionDetail,
+  IntentSessionSummary,
+} from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 import { StatusChip, type StatusChipKind, type StatusChipSize } from '@/components/StatusChip'
 
-export type IntentJourneyKind =
-  | 'generating'
-  | 'clarifying'
-  | 'review-ready'
-  | 'review-blocked'
-  | 'applying'
-  | 'applied'
-  | 'error'
-  | 'idle-active'
-  | 'archived'
-
-export interface IntentJourneyState {
-  kind: IntentJourneyKind
-  step: 0 | 1 | 2 | 3
-  completedThrough: -1 | 0 | 1 | 2 | 3
-}
+export type IntentJourneyState = IntentJourneySnapshot
 
 const JOURNEY_STEP_KEYS = ['goal', 'generate', 'review', 'apply'] as const
 
 export function deriveIntentJourneyState(detail: IntentSessionDetail): IntentJourneyState {
-  const latestAgentTurn = [...detail.turns]
-    .filter((turn) => turn.role === 'agent')
-    .sort((a, b) => b.seq - a.seq || b.id.localeCompare(a.id))[0]
-  const latestTurn = [...detail.turns].sort((a, b) => b.seq - a.seq || b.id.localeCompare(a.id))[0]
-  const latestCommit = [...detail.commits].sort(
-    (a, b) => b.createdAt - a.createdAt || b.journalId.localeCompare(a.journalId),
-  )[0]
-
-  const active = (): IntentJourneyState => {
-    if (latestCommit?.state === 'prepared' || latestCommit?.state === 'applying') {
-      return { kind: 'applying', step: 3, completedThrough: 2 }
-    }
-    if (detail.session.inFlight) {
-      return { kind: 'generating', step: 1, completedThrough: 0 }
-    }
-    if (latestAgentTurn?.kind === 'questions') {
-      return { kind: 'clarifying', step: 1, completedThrough: 0 }
-    }
-    if (detail.currentDraft !== null) {
-      if (detail.currentDraft.stale || detail.currentDraft.validation.errors.length > 0) {
-        return { kind: 'review-blocked', step: 2, completedThrough: 1 }
-      }
-      if (latestCommit?.state === 'failed' && latestCommit.draftId === detail.currentDraft.id) {
-        return { kind: 'error', step: 3, completedThrough: 2 }
-      }
-      return { kind: 'review-ready', step: 2, completedThrough: 1 }
-    }
-    if (latestTurn?.kind === 'error') {
-      return { kind: 'error', step: 1, completedThrough: 0 }
-    }
-    if (latestCommit?.state === 'committed') {
-      return { kind: 'applied', step: 3, completedThrough: 3 }
-    }
-    return { kind: 'idle-active', step: 0, completedThrough: -1 }
-  }
-
-  if (detail.session.status === 'archived') {
-    const base = active()
-    return { ...base, kind: 'archived' }
-  }
-  return active()
+  return detail.session.journey
 }
 
 export function deriveIntentSummaryJourneyState(session: IntentSessionSummary): IntentJourneyState {
-  const active = (): IntentJourneyState => {
-    if (session.inFlight) return { kind: 'generating', step: 1, completedThrough: 0 }
-    if (session.currentDraftRevision !== null) {
-      return { kind: 'review-ready', step: 2, completedThrough: 1 }
-    }
-    if (session.commitSeq > 0) return { kind: 'applied', step: 3, completedThrough: 3 }
-    if (session.turnSeq > 1) return { kind: 'generating', step: 1, completedThrough: 0 }
-    return { kind: 'idle-active', step: 0, completedThrough: -1 }
-  }
-  const base = active()
-  return session.status === 'archived' ? { ...base, kind: 'archived' } : base
+  return session.journey
 }
 
 function stageChipKind(kind: IntentJourneyKind): StatusChipKind {
@@ -92,7 +32,7 @@ function stageChipKind(kind: IntentJourneyKind): StatusChipKind {
       return 'danger'
     case 'applied':
       return 'success'
-    case 'idle-active':
+    case 'goal':
     case 'archived':
       return 'neutral'
   }
@@ -104,12 +44,16 @@ export function IntentStageStatus(props: {
   'data-testid'?: string
 }) {
   const { t } = useTranslation()
-  const stage = t(`intent.journey.${JOURNEY_STEP_KEYS[props.state.step]}`)
-  const label = t('intent.journey.stageStatus', {
-    current: props.state.step + 1,
+  const stage = t(`intent.journey.${JOURNEY_STEP_KEYS[props.state.step - 1]}`)
+  const stageStatus = t('intent.journey.stageStatus', {
+    current: props.state.step,
     total: JOURNEY_STEP_KEYS.length,
     stage,
   })
+  const label =
+    props.state.kind === 'archived'
+      ? t('intent.journey.archivedStageStatus', { stageStatus })
+      : stageStatus
   return (
     <StatusChip
       kind={stageChipKind(props.state.kind)}
@@ -133,14 +77,14 @@ export function IntentJourneyProgress({ detail }: { detail: IntentSessionDetail 
       className="intent-journey"
       aria-label={t('intent.journey.ariaLabel')}
       data-state={state.kind}
-      data-step={state.step + 1}
+      data-step={state.step}
     >
       <ol className="intent-journey__steps">
         {steps.map((label, index) => {
           const status =
-            index <= state.completedThrough
+            index + 1 <= state.completedThrough
               ? 'done'
-              : index === state.step && state.kind !== 'archived'
+              : index + 1 === state.step && state.kind !== 'archived'
                 ? state.kind === 'error' || state.kind === 'review-blocked'
                   ? 'blocked'
                   : 'current'
@@ -167,13 +111,13 @@ export function IntentJourneyProgress({ detail }: { detail: IntentSessionDetail 
       >
         <span className="intent-journey__summary-kicker">
           {t('intent.journey.currentStage', {
-            current: state.step + 1,
+            current: state.step,
             total: steps.length,
           })}
         </span>
-        <strong className="intent-journey__summary-stage">{steps[state.step]}</strong>
+        <strong className="intent-journey__summary-stage">{steps[state.step - 1]}</strong>
         <span className="intent-journey__summary-detail">
-          {t(`intent.journey.state.${state.kind}`)}
+          {t(`intent.journey.reason.${state.reason}`)}
         </span>
       </div>
     </section>

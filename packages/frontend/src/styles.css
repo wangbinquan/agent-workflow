@@ -20744,8 +20744,15 @@ button.status-chip {
 }
 
 .intent-create__types {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
+}
+
+.intent-create__types [data-choice-value='auto'] {
+  grid-column: 1 / -1;
+  min-height: 3.5rem;
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  background: color-mix(in srgb, var(--accent) 3%, var(--panel));
 }
 
 .intent-create__types .choice-card {
@@ -20834,6 +20841,12 @@ button.status-chip {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.intent-recent__more {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--space-4);
 }
 
 .intent-session-card {
@@ -21022,6 +21035,10 @@ button.status-chip {
   overflow-wrap: anywhere;
 }
 
+.intent-session__mobile-tabs {
+  display: none;
+}
+
 .intent-session__workspace {
   display: grid;
   grid-template-columns: minmax(320px, 0.9fr) minmax(480px, 1.1fr);
@@ -21184,6 +21201,46 @@ button.status-chip {
   margin: 0;
 }
 
+.intent-turn-semantic {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.intent-turn-semantic p,
+.intent-turn-semantic ul,
+.intent-turn-semantic dl {
+  margin: 0;
+}
+
+.intent-turn-semantic ul {
+  padding-inline-start: var(--space-5);
+}
+
+.intent-turn-answers > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.7fr) minmax(0, 1fr);
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.intent-turn-answers > div:last-child {
+  border-bottom: 0;
+}
+
+.intent-turn-answers dt {
+  font-weight: 600;
+}
+
+.intent-turn-answers dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+.intent-turn-mount-receipt {
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
 .intent-turn-error {
   display: grid;
   gap: var(--space-3);
@@ -21208,6 +21265,7 @@ button.status-chip {
 }
 
 .intent-session__questions,
+.intent-session__mount-suggestions,
 .intent-session__mounts,
 .intent-session__composer {
   padding: var(--space-4) clamp(var(--space-4), 2vw, var(--space-5));
@@ -21221,6 +21279,71 @@ button.status-chip {
 .intent-session__questions h3 {
   margin: 0 0 var(--space-3);
   font-size: var(--font-md);
+}
+
+.intent-session__question-gate {
+  margin: calc(-1 * var(--space-1)) 0 var(--space-3);
+  color: var(--warn-fg);
+  font-size: var(--font-sm);
+}
+
+.intent-session__mount-suggestions {
+  display: grid;
+  gap: var(--space-3);
+  background: color-mix(in srgb, var(--accent) 4%, var(--panel));
+}
+
+.intent-session__mount-suggestions h3,
+.intent-session__mount-suggestions p {
+  margin: 0;
+}
+
+.intent-session__mount-suggestions > div:first-child p,
+.intent-session__mount-suggestion > p,
+.intent-session__mount-suggestion-footer > span {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.45;
+}
+
+.intent-session__mount-suggestion-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.intent-session__mount-suggestion {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.intent-session__mount-suggestion-heading,
+.intent-session__mount-suggestion-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.intent-session__mount-suggestion-heading > div:first-child,
+.intent-session__mount-candidate {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.intent-session__mount-suggestion-heading span,
+.intent-session__mount-candidate span {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.intent-session__mount-suggestion-footer {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
 }
 
 .intent-session__subsection-header {
@@ -21254,6 +21377,17 @@ button.status-chip {
   border-radius: var(--radius-pill);
   background: var(--bg);
   overflow-wrap: anywhere;
+}
+
+.intent-session__mount-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.intent-session__mount-copy > span {
+  color: var(--muted);
+  font-size: var(--font-xs);
 }
 
 .intent-session__composer {
@@ -21374,6 +21508,89 @@ button.status-chip {
   border-bottom: 1px solid var(--border);
 }
 
+.intent-session__op-browser {
+  display: grid;
+  grid-template-columns: minmax(11rem, 0.34fr) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.intent-session__op-outline {
+  display: flex;
+  max-height: min(36rem, 62vh);
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow-y: auto;
+}
+
+.intent-session__op-outline-item {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.intent-session__op-outline-item:hover {
+  background: color-mix(in srgb, var(--border) 24%, transparent);
+}
+
+.intent-session__op-outline-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.intent-session__op-outline-item--active {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+}
+
+/* A workflow graph is the review surface, not a thumbnail squeezed beside
+ * the 64-op navigator. When the selected rich preview is a workflow, move
+ * the lightweight outline above it and leave the full review width to the
+ * canvas. The outline remains mounted and horizontally scrollable. */
+.intent-session__op-browser:has(.intent-workflow-preview) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.intent-session__op-browser:has(.intent-workflow-preview) .intent-session__op-outline {
+  max-height: none;
+  flex-direction: row;
+  padding-bottom: var(--space-1);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.intent-session__op-browser:has(.intent-workflow-preview) .intent-session__op-outline-item {
+  flex: 0 0 min(14rem, 72%);
+}
+
+.intent-session__op-outline-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.intent-session__op-outline-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intent-session__op-outline-meta {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
 .intent-session__op-card {
   gap: var(--space-2);
   padding: var(--space-3);
@@ -21458,13 +21675,28 @@ button.status-chip {
 }
 
 .intent-session__draft-actions {
+  position: sticky;
+  z-index: 2;
+  bottom: var(--space-3);
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   padding-top: var(--space-3);
   border-top: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: 0 -8px 12px -12px color-mix(in srgb, var(--text) 35%, transparent);
 }
 
 .intent-session__draft-actions .btn {
-  width: 100%;
+  min-width: 10rem;
+}
+
+.intent-session__draft-actions p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.45;
 }
 
 .intent-session__commits > .card {
@@ -21484,9 +21716,142 @@ button.status-chip {
   overflow-wrap: anywhere;
 }
 
+.intent-commit-stepper {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.intent-commit-stepper__step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.intent-commit-stepper__step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 0.8rem;
+  left: calc(50% + 1rem);
+  right: calc(-50% + 1rem);
+  height: 1px;
+  background: var(--border-strong);
+}
+
+.intent-commit-stepper__step > span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 1.6rem;
+  height: 1.6rem;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--panel);
+  font-size: var(--font-xs);
+}
+
+.intent-commit-stepper__step--current {
+  color: var(--text);
+}
+
+.intent-commit-stepper__step--current > span {
+  border-color: var(--accent);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+.intent-commit-stepper__step--done > span {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+
+.intent-commit-review {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.intent-commit-review h3 {
+  margin: 0 0 var(--space-2);
+}
+
+.intent-commit-review__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.intent-commit-review__summary > div {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--border) 12%, var(--panel));
+}
+
+.intent-commit-review__summary dt {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.intent-commit-review__summary dd {
+  margin: 0;
+  font-size: var(--font-xl);
+  font-weight: 650;
+}
+
+.intent-commit-review__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.intent-commit-review__list li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
 @media (max-width: 1080px) {
+  .intent-session-page > .tabs-viewport--segment:has(.intent-session__mobile-tabs),
+  .intent-session-page > .tabs-viewport--segment:has(.intent-session__mobile-tabs) > .tabs {
+    width: 100%;
+  }
+
+  .intent-session__mobile-tabs {
+    display: flex;
+  }
+
+  .intent-session__mobile-tabs .tabs__tab {
+    flex: 1;
+    justify-content: center;
+  }
+
   .intent-session__workspace {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .intent-session__conversation[data-mobile-active='false'],
+  .intent-session__review[data-mobile-active='false'] {
+    display: none;
   }
 }
 
@@ -21546,6 +21911,7 @@ button.status-chip {
   .intent-session__conversation > .intent-session__section-header,
   .intent-session__timeline,
   .intent-session__questions,
+  .intent-session__mount-suggestions,
   .intent-session__mounts,
   .intent-session__composer {
     padding-inline: var(--space-3);
@@ -21590,6 +21956,38 @@ button.status-chip {
 
   .intent-session__composer-footer .btn {
     width: 100%;
+  }
+
+  .intent-turn-answers > div,
+  .intent-session__op-browser {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .intent-session__op-outline {
+    max-height: 14rem;
+  }
+
+  .intent-session__draft-actions,
+  .intent-session__mount-suggestion-heading,
+  .intent-session__mount-suggestion-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .intent-session__draft-actions .btn,
+  .intent-session__mount-suggestion-footer .btn {
+    width: 100%;
+  }
+
+  .intent-commit-stepper__step {
+    flex-direction: column;
+    gap: var(--space-1);
+    font-size: var(--font-xs);
+    text-align: center;
+  }
+
+  .intent-commit-review__summary {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

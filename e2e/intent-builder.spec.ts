@@ -11,7 +11,8 @@
 //   Workflow draft → four-step journey → shared canvas preview → expanded
 //         dialog → responsive 390px layout without horizontal overflow.
 //   Plus the RFC standard sweeps: axe (wcag2a/aa, critical+serious) on
-//   /intent list + detail, and a 390×844 dark-mode render sanity.
+//   /intent list + detail, desktop/mobile screenshots, a 390×844 dark-mode
+//   render sanity, and a real hasTouch create/stepper path.
 
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
@@ -66,6 +67,8 @@ test('US-1: intent create → draft preview → commit → resource lands with p
 
   // Commit through the slot dialog (no secrets in this changeset).
   await page.getByTestId('intent-open-commit').click()
+  await page.getByTestId('intent-commit-next').click()
+  await page.getByTestId('intent-commit-next').click()
   await page.getByTestId('intent-commit-submit').click()
   await expect(page.getByText('Committed', { exact: false }).first()).toBeVisible({
     timeout: 30_000,
@@ -120,7 +123,7 @@ test('US-6: modify entry pre-mounts the target resource in a new session', async
 
 test('workflow draft makes the node graph a primary, expandable review surface', async ({
   page,
-}) => {
+}, testInfo) => {
   const workflowDaemon = await startDaemon({
     stubMode: 'intent',
     // The old `intent-workflow-opencode.sh` was this stub plus this variable.
@@ -134,8 +137,13 @@ test('workflow draft makes the node graph a primary, expandable review surface',
     const review = page.getByTestId('intent-review-workspace')
     const workflowPreview = page.getByTestId('intent-preview-workflow')
     const inlineCanvas = page.getByTestId('intent-preview-canvas')
-    await expect(page.getByTestId('intent-stage-status')).toContainText('Step 3/4 · Review')
+    await expect(page.getByTestId('intent-journey-state')).toContainText('Step 3 of 4')
+    await expect(page.getByTestId('intent-journey-state')).toContainText('Review')
     await expect(page.getByText('Active', { exact: true })).toHaveCount(0)
+    await page
+      .getByTestId('intent-op-outline-item')
+      .filter({ hasText: 'e2e-workflow-preview' })
+      .click()
     await expect(workflowPreview).toBeVisible()
     await expect(page.getByText('3 nodes')).toBeVisible()
     await expect(page.getByText('2 edges')).toBeVisible()
@@ -156,6 +164,10 @@ test('workflow draft makes the node graph a primary, expandable review surface',
     expect(desktopGeometry!.reviewWidth).toBeGreaterThan(desktopGeometry!.buildWidth)
     expect(desktopGeometry!.canvasWidth).toBeGreaterThan(440)
     expect(desktopGeometry!.canvasHeight).toBeGreaterThanOrEqual(350)
+    await testInfo.attach('intent-workflow-desktop', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    })
 
     await page.getByRole('button', { name: 'Open large preview' }).click()
     const dialog = page.getByTestId('intent-preview-canvas-dialog')
@@ -164,28 +176,56 @@ test('workflow draft makes the node graph a primary, expandable review surface',
     await dialog.getByRole('button', { name: 'Close' }).click()
 
     await page.setViewportSize({ width: 390, height: 844 })
+    // This session was entered while generation was still running, so Build
+    // remains the user-owned selection when the draft later arrives. A live
+    // refresh must not steal the tab (design §0A.3).
     await expect(build).toBeVisible()
+    await expect(review).toBeHidden()
+    await expect(page.getByRole('tab', { name: 'Build workspace' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    await expect(inlineCanvas).toBeHidden()
+    await page.getByRole('tab', { name: 'Draft review workspace' }).click()
     await expect(review).toBeVisible()
+    await expect(build).toBeHidden()
     await expect(inlineCanvas).toBeVisible()
     const mobileGeometry = await page.evaluate(() => {
       const content = document.querySelector<HTMLElement>('.content')
       const build = document.querySelector<HTMLElement>('[data-testid="intent-build-workspace"]')
       const review = document.querySelector<HTMLElement>('[data-testid="intent-review-workspace"]')
       const canvas = document.querySelector<HTMLElement>('[data-testid="intent-preview-canvas"]')
+      const tabs = document.querySelector<HTMLElement>('.intent-session__mobile-tabs')
+      const tabsViewport = tabs?.parentElement
       if (content === null || build === null || review === null || canvas === null) return null
-      const buildRect = build.getBoundingClientRect()
       const reviewRect = review.getBoundingClientRect()
       return {
         hasHorizontalOverflow: content.scrollWidth > content.clientWidth,
-        reviewFollowsBuild: reviewRect.top >= buildRect.bottom,
+        panelsRemainMounted: build.isConnected && review.isConnected,
         canvasFitsReview: canvas.getBoundingClientRect().width <= reviewRect.width,
+        tabsFillViewport:
+          tabs !== null &&
+          tabsViewport !== null &&
+          tabsViewport !== undefined &&
+          Math.abs(
+            tabs.getBoundingClientRect().width - tabsViewport.getBoundingClientRect().width,
+          ) <= 2,
       }
     })
     expect(mobileGeometry).toEqual({
       hasHorizontalOverflow: false,
-      reviewFollowsBuild: true,
+      panelsRemainMounted: true,
       canvasFitsReview: true,
+      tabsFillViewport: true,
     })
+    await testInfo.attach('intent-workflow-mobile', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    })
+
+    await page.getByRole('tab', { name: 'Build workspace' }).click()
+    await expect(build).toBeVisible()
+    await expect(review).toBeHidden()
   } finally {
     await workflowDaemon.stop()
   }
@@ -230,17 +270,46 @@ test('a11y + mobile dark: /intent list and session detail', async ({ page }) => 
     const build = document.querySelector<HTMLElement>('[data-testid="intent-build-workspace"]')
     const review = document.querySelector<HTMLElement>('[data-testid="intent-review-workspace"]')
     if (content === null || build === null || review === null) return null
-    const buildRect = build.getBoundingClientRect()
-    const reviewRect = review.getBoundingClientRect()
     return {
       hasHorizontalOverflow: content.scrollWidth > content.clientWidth,
-      reviewFollowsBuild: reviewRect.top >= buildRect.bottom,
+      panelsRemainMounted: build.isConnected && review.isConnected,
+      buildVisible: build.getBoundingClientRect().height > 0,
+      reviewHidden: review.getBoundingClientRect().height === 0,
     }
   })
   expect(mobileLayout).toEqual({
     hasHorizontalOverflow: false,
-    reviewFollowsBuild: true,
+    panelsRemainMounted: true,
+    buildVisible: true,
+    reviewHidden: true,
   })
   const detailScan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
   expect(describeBlocking(detailScan)).toEqual([])
+})
+
+test('390px touch flow creates a session and advances the commit stepper', async ({ browser }) => {
+  const context = await browser.newContext({
+    hasTouch: true,
+    viewport: { width: 390, height: 844 },
+  })
+  const page = await context.newPage()
+  try {
+    await authPage(page)
+    await page.goto(`${daemon.baseUrl}/intent`)
+    const composer = page.getByTestId('intent-create-inline')
+    await composer.getByTestId('intent-create-message').fill('build a touch-first auditor agent')
+    await composer.getByRole('button', { name: 'Start building' }).tap()
+    await page.waitForURL(/\/intent\/[0-9A-Z]+/i)
+    await expect(page.getByTestId('intent-draft')).toHaveCount(1, { timeout: 30_000 })
+    await page.getByRole('tab', { name: 'Draft review workspace' }).tap()
+    await expect(page.getByTestId('intent-draft')).toBeVisible()
+
+    await page.getByTestId('intent-open-commit').tap()
+    await page.getByTestId('intent-commit-next').tap()
+    await expect(page.locator('.intent-commit-stepper__step--current')).toContainText('Details')
+    await page.getByTestId('intent-commit-next').tap()
+    await expect(page.getByTestId('intent-commit-review')).toBeVisible()
+  } finally {
+    await context.close()
+  }
 })

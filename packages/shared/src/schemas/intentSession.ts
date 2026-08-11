@@ -57,16 +57,34 @@ export const IntentMountRefSchema = z
   .strict()
 export type IntentMountRefWire = z.infer<typeof IntentMountRefSchema>
 
-/** Approving agent mount SUGGESTIONS = explicit mounts of resolved rows the
- *  user picked (design-gate P1-4: nothing auto-mounts; rejected suggestions
- *  are recorded for the next INTENT.md so the agent stops asking). */
+/** RFC-235 v22 — every suggestion decision is bound to the exact agent turn
+ *  and context the user reviewed. The concrete resource id is server-checked
+ *  against that request's type/name inside the final transaction. */
+export const IntentMountSuggestionDecisionSchema = z.discriminatedUnion('action', [
+  z
+    .object({
+      resourceType: AclResourceTypeSchema,
+      name: z.string().min(1).max(200),
+      action: z.literal('approve'),
+      resourceId: z.string().min(1).max(128),
+    })
+    .strict(),
+  z
+    .object({
+      resourceType: AclResourceTypeSchema,
+      name: z.string().min(1).max(200),
+      action: z.literal('reject'),
+    })
+    .strict(),
+])
+export type IntentMountSuggestionDecision = z.infer<typeof IntentMountSuggestionDecisionSchema>
+
 export const PostIntentMountApprovalsSchema = z
   .object({
-    approve: z.array(IntentMountRefSchema).max(16).default([]),
-    rejectNames: z
-      .array(z.object({ resourceType: AclResourceTypeSchema, name: z.string().min(1).max(200) }))
-      .max(16)
-      .default([]),
+    sourceTurnId: z.string().min(1).max(128),
+    expectedTurnSeq: z.number().int().min(1),
+    expectedContextRevision: z.number().int().min(0),
+    decisions: z.array(IntentMountSuggestionDecisionSchema).min(1).max(16),
   })
   .strict()
 export type PostIntentMountApprovals = z.infer<typeof PostIntentMountApprovalsSchema>
@@ -93,21 +111,105 @@ export type CommitIntent = z.infer<typeof CommitIntentSchema>
 
 // ── response DTOs ──
 
-export const IntentSessionSummarySchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  status: z.enum(['active', 'archived']),
-  contextRevision: z.number().int(),
-  turnSeq: z.number().int(),
-  commitSeq: z.number().int(),
-  inFlight: z.boolean(),
-  currentDraftRevision: z.number().int().nullable(),
-  /** Present only on the admin audit list. */
-  ownerUserId: z.string().optional(),
-  createdAt: z.number().int(),
-  updatedAt: z.number().int(),
-})
+export const IntentJourneyKindSchema = z.enum([
+  'goal',
+  'generating',
+  'clarifying',
+  'review-ready',
+  'review-blocked',
+  'applying',
+  'applied',
+  'error',
+  'archived',
+])
+export type IntentJourneyKind = z.infer<typeof IntentJourneyKindSchema>
+
+export const IntentJourneyReasonSchema = z.enum([
+  'describe-goal',
+  'generation-running',
+  'answer-questions',
+  'review-draft',
+  'draft-stale',
+  'draft-invalid',
+  'apply-running',
+  'generation-failed',
+  'apply-failed',
+  'applied',
+  'archived',
+])
+export type IntentJourneyReason = z.infer<typeof IntentJourneyReasonSchema>
+
+const ACTIVE_INTENT_JOURNEY_TUPLES = new Set([
+  'goal:1:0:describe-goal',
+  'generating:2:1:generation-running',
+  'clarifying:2:1:answer-questions',
+  'review-ready:3:2:review-draft',
+  'review-blocked:3:2:draft-stale',
+  'review-blocked:3:2:draft-invalid',
+  'applying:4:3:apply-running',
+  'applied:4:4:applied',
+  'error:2:1:generation-failed',
+  'error:4:3:apply-failed',
+])
+const ARCHIVED_INTENT_JOURNEY_POSITIONS = new Set(['1:0', '2:1', '3:2', '4:3', '4:4'])
+
+export const IntentJourneySnapshotSchema = z
+  .object({
+    kind: IntentJourneyKindSchema,
+    step: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    completedThrough: z.union([
+      z.literal(0),
+      z.literal(1),
+      z.literal(2),
+      z.literal(3),
+      z.literal(4),
+    ]),
+    reason: IntentJourneyReasonSchema,
+  })
+  .strict()
+  .superRefine((journey, ctx) => {
+    const valid =
+      journey.kind === 'archived'
+        ? journey.reason === 'archived' &&
+          ARCHIVED_INTENT_JOURNEY_POSITIONS.has(`${journey.step}:${journey.completedThrough}`)
+        : ACTIVE_INTENT_JOURNEY_TUPLES.has(
+            `${journey.kind}:${journey.step}:${journey.completedThrough}:${journey.reason}`,
+          )
+    if (!valid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'intent journey fields do not describe one canonical state',
+      })
+    }
+  })
+export type IntentJourneySnapshot = z.infer<typeof IntentJourneySnapshotSchema>
+
+export const IntentSessionSummarySchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    status: z.enum(['active', 'archived']),
+    contextRevision: z.number().int(),
+    turnSeq: z.number().int(),
+    commitSeq: z.number().int(),
+    inFlight: z.boolean(),
+    currentDraftRevision: z.number().int().nullable(),
+    journey: IntentJourneySnapshotSchema,
+    /** Present only on the admin audit list. */
+    ownerUserId: z.string().optional(),
+    createdAt: z.number().int(),
+    updatedAt: z.number().int(),
+  })
+  .strict()
 export type IntentSessionSummary = z.infer<typeof IntentSessionSummarySchema>
+
+export const IntentSessionListPageSchema = z
+  .object({
+    items: z.array(IntentSessionSummarySchema),
+    nextCursor: z.string().nullable(),
+  })
+  .strict()
+export type IntentSessionListPage = z.infer<typeof IntentSessionListPageSchema>
 
 export const IntentTurnExecutionDtoSchema = z
   .object({
@@ -154,66 +256,82 @@ export const IntentTurnDtoSchema = z
 export type IntentTurnDto = z.infer<typeof IntentTurnDtoSchema>
 
 export const IntentSlotDtoSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('secret'),
-    slotId: z.string(),
-    opId: z.string(),
-    jsonPointer: z.string(),
-  }),
-  z.object({
-    kind: z.literal('secretWaiver'),
-    slotId: z.string(),
-    opId: z.string(),
-    jsonPointer: z.string(),
-  }),
-  z.object({
-    kind: z.literal('humanBinding'),
-    slotId: z.string(),
-    opId: z.string(),
-    displayName: z.string(),
-  }),
-  z.object({ kind: z.literal('finalName'), slotId: z.string(), opId: z.string() }),
+  z
+    .object({
+      kind: z.literal('secret'),
+      slotId: z.string(),
+      opId: z.string(),
+      jsonPointer: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('secretWaiver'),
+      slotId: z.string(),
+      opId: z.string(),
+      jsonPointer: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('humanBinding'),
+      slotId: z.string(),
+      opId: z.string(),
+      displayName: z.string(),
+    })
+    .strict(),
+  z.object({ kind: z.literal('finalName'), slotId: z.string(), opId: z.string() }).strict(),
 ])
 export type IntentSlotDto = z.infer<typeof IntentSlotDtoSchema>
 
-export const IntentDraftDtoSchema = z.object({
-  id: z.string(),
-  revision: z.number().int(),
-  changeset: z.unknown(),
-  validation: z.object({
-    errors: z.array(z.string()),
-    credentialFindings: z.array(
-      z.object({
-        opId: z.string(),
-        jsonPointer: z.string(),
-        kind: z.string(),
-        excerpt: z.string(),
-      }),
-    ),
-  }),
-  slots: z.array(IntentSlotDtoSchema),
-  draftHash: z.string(),
-  contextRevision: z.number().int(),
-  /** True when the session epoch moved past this draft (commit disabled). */
-  stale: z.boolean(),
-  createdAt: z.number().int(),
-})
+export const IntentDraftDtoSchema = z
+  .object({
+    id: z.string(),
+    revision: z.number().int(),
+    changeset: z.unknown(),
+    validation: z
+      .object({
+        errors: z.array(z.string()),
+        credentialFindings: z.array(
+          z
+            .object({
+              opId: z.string(),
+              jsonPointer: z.string(),
+              kind: z.string(),
+              excerpt: z.string(),
+            })
+            .strict(),
+        ),
+      })
+      .strict(),
+    slots: z.array(IntentSlotDtoSchema),
+    draftHash: z.string(),
+    contextRevision: z.number().int(),
+    /** True when the session epoch moved past this draft (commit disabled). */
+    stale: z.boolean(),
+    createdAt: z.number().int(),
+  })
+  .strict()
 export type IntentDraftDto = z.infer<typeof IntentDraftDtoSchema>
 
-export const IntentApplyReceiptSchema = z.object({
-  journalId: z.string(),
-  commitSeq: z.number().int(),
-  applied: z.array(
-    z.object({
-      opId: z.string(),
-      resourceType: AclResourceTypeSchema,
-      resourceId: z.string(),
-      action: z.enum(['create', 'update']),
-      fromCopy: z.boolean(),
-      name: z.string(),
-    }),
-  ),
-})
+export const IntentApplyReceiptSchema = z
+  .object({
+    journalId: z.string(),
+    commitSeq: z.number().int(),
+    applied: z.array(
+      z
+        .object({
+          opId: z.string(),
+          resourceType: AclResourceTypeSchema,
+          resourceId: z.string(),
+          action: z.enum(['create', 'update']),
+          fromCopy: z.boolean(),
+          name: z.string(),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
 export type IntentApplyReceiptWire = z.infer<typeof IntentApplyReceiptSchema>
 
 // AC-11: resource-side provenance annotation. Rows are filtered server-side to
@@ -227,28 +345,85 @@ export const IntentProvenanceEntrySchema = z.object({
 })
 export type IntentProvenanceEntry = z.infer<typeof IntentProvenanceEntrySchema>
 
-export const IntentSessionDetailSchema = z.object({
-  session: IntentSessionSummarySchema,
-  /** Explicitly mounted roots (session working-set; closure members omitted). */
-  mounts: z.array(
-    z.object({
-      handle: z.string(),
-      resourceType: AclResourceTypeSchema,
-      resourceId: z.string(),
-      detail: z.boolean(),
-    }),
-  ),
-  turns: z.array(IntentTurnDtoSchema),
-  currentDraft: IntentDraftDtoSchema.nullable(),
-  commits: z.array(
-    z.object({
-      journalId: z.string(),
-      draftId: z.string(),
-      state: z.enum(['prepared', 'applying', 'committed', 'failed']),
-      receipt: IntentApplyReceiptSchema.nullable(),
-      error: z.string().nullable(),
-      createdAt: z.number().int(),
-    }),
-  ),
-})
+export const IntentMountApprovalReceiptSchema = z
+  .object({
+    sourceTurnId: z.string(),
+    sourceTurnSeq: z.number().int().min(1),
+    approvalTurnId: z.string(),
+    approvalTurnSeq: z.number().int().min(1),
+    resultingContextRevision: z.number().int().min(0),
+    approved: z.array(
+      z
+        .object({
+          resourceType: AclResourceTypeSchema,
+          name: z.string(),
+          resourceId: z.string(),
+          handle: z.string(),
+        })
+        .strict(),
+    ),
+    rejected: z.array(z.object({ resourceType: AclResourceTypeSchema, name: z.string() }).strict()),
+  })
+  .strict()
+export type IntentMountApprovalReceipt = z.infer<typeof IntentMountApprovalReceiptSchema>
+
+export const IntentMountSuggestionBatchSchema = z
+  .object({
+    sourceTurnId: z.string(),
+    sourceTurnSeq: z.number().int().min(1),
+    contextRevision: z.number().int().min(0),
+    items: z.array(
+      z
+        .object({
+          resourceType: AclResourceTypeSchema,
+          name: z.string(),
+          reason: z.string().nullable(),
+          candidates: z.array(
+            z
+              .object({
+                resourceId: z.string(),
+                name: z.string(),
+                description: z.string().nullable(),
+              })
+              .strict(),
+          ),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
+export type IntentMountSuggestionBatch = z.infer<typeof IntentMountSuggestionBatchSchema>
+
+export const IntentSessionDetailSchema = z
+  .object({
+    session: IntentSessionSummarySchema,
+    /** Explicitly mounted roots (session working-set; closure members omitted). */
+    mounts: z.array(
+      z
+        .object({
+          handle: z.string(),
+          resourceType: AclResourceTypeSchema,
+          resourceId: z.string(),
+          displayName: z.string().nullable(),
+          detail: z.boolean(),
+        })
+        .strict(),
+    ),
+    mountSuggestions: IntentMountSuggestionBatchSchema.nullable(),
+    turns: z.array(IntentTurnDtoSchema),
+    currentDraft: IntentDraftDtoSchema.nullable(),
+    commits: z.array(
+      z
+        .object({
+          journalId: z.string(),
+          draftId: z.string(),
+          state: z.enum(['prepared', 'applying', 'committed', 'failed']),
+          receipt: IntentApplyReceiptSchema.nullable(),
+          error: z.string().nullable(),
+          createdAt: z.number().int(),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
 export type IntentSessionDetail = z.infer<typeof IntentSessionDetailSchema>

@@ -1,6 +1,10 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { INTENT_MESSAGE_MAX, type IntentSessionSummary } from '@agent-workflow/shared'
+import {
+  INTENT_MESSAGE_MAX,
+  IntentSessionSummarySchema,
+  type IntentSessionSummary,
+} from '@agent-workflow/shared'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type ApiError } from '@/api/client'
@@ -71,12 +75,14 @@ export function IntentCreateComposer(props: {
       })
   }
   const createSession = useMutation<IntentSessionSummary, ApiError, void>({
-    mutationFn: () =>
-      api.post<IntentSessionSummary>('/api/intent-sessions', {
-        message: message.trim(),
-        ...(hint === 'auto' || props.mount !== undefined ? {} : { hint }),
-        ...(props.mount === undefined ? {} : { mounts: [props.mount] }),
-      }),
+    mutationFn: async () =>
+      IntentSessionSummarySchema.parse(
+        await api.post<unknown>('/api/intent-sessions', {
+          message: message.trim(),
+          ...(hint === 'auto' || props.mount !== undefined ? {} : { hint }),
+          ...(props.mount === undefined ? {} : { mounts: [props.mount] }),
+        }),
+      ),
     onSuccess: (session) => {
       createdSessionRef.current = session
       navigateToCreatedSession(session)
@@ -137,6 +143,7 @@ export function IntentCreateComposer(props: {
     {
       value: 'auto' as const,
       label: t('intent.hintAuto'),
+      description: t('intent.hintAutoDescription'),
       icon: <span className="intent-create__sparkle">✦</span>,
     },
     { value: 'agent' as const, label: t('intent.resourceType.agent'), icon: AGENT_ICON },

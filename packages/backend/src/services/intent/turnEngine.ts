@@ -50,6 +50,7 @@ import { validateDraftChangeset } from './resolveChangeset'
 import {
   assertNoUnsettledApply,
   sessionManifest,
+  type ReservedIntentTurn,
   type IntentSessionRow,
   type IntentTurnRow,
 } from './session'
@@ -168,15 +169,119 @@ export function abortIntentTurn(sessionId: string): boolean {
   return true
 }
 
+/** Cancel either a live runtime or the durable reservation before fireTurn has
+ * installed its AbortController. Reservation-first generation deliberately
+ * creates that short window; leaving the old map-only cancel here would show
+ * an enabled Cancel action that returns false while the row remains running. */
+export function cancelIntentTurn(db: DbClient, actor: Actor, sessionId: string): boolean {
+  if (abortIntentTurn(sessionId)) return true
+  const now = Date.now()
+  return dbTxSync(db, (tx) => {
+    const session = tx.select().from(intentSessions).where(eq(intentSessions.id, sessionId)).get()
+    if (
+      session === undefined ||
+      session.ownerUserId !== actor.user.id ||
+      session.inFlightTurnId === null
+    ) {
+      return false
+    }
+    const turn = tx
+      .select()
+      .from(intentTurns)
+      .where(eq(intentTurns.id, session.inFlightTurnId))
+      .get()
+    if (
+      turn === undefined ||
+      turn.sessionId !== session.id ||
+      turn.role !== 'agent' ||
+      turn.kind !== 'running'
+    ) {
+      return false
+    }
+    tx.update(intentTurns)
+      .set({
+        kind: 'error',
+        contentJson: JSON.stringify({ code: 'intent-run-aborted' }),
+        captureState: 'complete',
+      })
+      .where(eq(intentTurns.id, turn.id))
+      .run()
+    tx.update(intentSessions)
+      .set({ inFlightTurnId: null, updatedAt: now })
+      .where(eq(intentSessions.id, session.id))
+      .run()
+    return true
+  })
+}
+
+/** Settle a reservation that could not even resolve its runtime configuration.
+ * The user-visible running row already exists, so leaving it live would create
+ * an unrecoverable phantom turn. Exact slot + nonce checks make a concurrent
+ * cancel/supersede a no-op instead of overwriting its newer state. */
+export function settleReservedIntentTurnStartFailure(
+  db: DbClient,
+  input: {
+    sessionId: string
+    actor: Actor
+    reservation: ReservedIntentTurn
+    detail: string
+  },
+): boolean {
+  const now = Date.now()
+  const detail = maskDiagnosticsText(input.detail).slice(0, 2048)
+  const settled = dbTxSync(db, (tx) => {
+    const session = tx
+      .select()
+      .from(intentSessions)
+      .where(eq(intentSessions.id, input.sessionId))
+      .get()
+    const turn = tx
+      .select()
+      .from(intentTurns)
+      .where(eq(intentTurns.id, input.reservation.turnId))
+      .get()
+    if (
+      session === undefined ||
+      session.ownerUserId !== input.actor.user.id ||
+      session.inFlightTurnId !== input.reservation.turnId ||
+      turn === undefined ||
+      turn.sessionId !== session.id ||
+      turn.role !== 'agent' ||
+      turn.kind !== 'running' ||
+      turn.envelopeNonce !== input.reservation.envelopeNonce
+    ) {
+      return false
+    }
+    tx.update(intentTurns)
+      .set({
+        kind: 'error',
+        contentJson: JSON.stringify({
+          code: 'intent-runtime-config-unavailable',
+          ...(detail === '' ? {} : { detail }),
+        }),
+        captureState: 'complete',
+      })
+      .where(eq(intentTurns.id, turn.id))
+      .run()
+    tx.update(intentSessions)
+      .set({ inFlightTurnId: null, updatedAt: now })
+      .where(eq(intentSessions.id, session.id))
+      .run()
+    return true
+  })
+  if (settled) liveTurnAborts.delete(input.sessionId)
+  return settled
+}
+
 export async function runIntentTurn(
   deps: RunIntentTurnDeps,
-  input: { sessionId: string; actor: Actor },
+  input: { sessionId: string; actor: Actor; reservation?: ReservedIntentTurn },
 ): Promise<IntentTurnOutcome> {
   const log = deps.log ?? createLogger('intentTurn')
   const runFn = deps.runFn ?? runSystemAgent
   const now = Date.now()
-  const turnId = ulid()
-  const envelopeNonce = generateEnvelopeNonce()
+  const turnId = input.reservation?.turnId ?? ulid()
+  const envelopeNonce = input.reservation?.envelopeNonce ?? generateEnvelopeNonce()
 
   // ── mint the running turn + take the in-flight slot (one tx; nonce persists
   // with the row — design-gate P2-1) ──
@@ -194,6 +299,27 @@ export async function runIntentTurn(
     }
     if (session.status !== 'active') {
       throw new ConflictError('intent-session-archived', 'session is archived')
+    }
+    if (input.reservation !== undefined) {
+      const reservedTurn = tx.select().from(intentTurns).where(eq(intentTurns.id, turnId)).get()
+      if (
+        session.inFlightTurnId !== turnId ||
+        reservedTurn === undefined ||
+        reservedTurn.sessionId !== session.id ||
+        reservedTurn.role !== 'agent' ||
+        reservedTurn.kind !== 'running' ||
+        reservedTurn.envelopeNonce !== envelopeNonce
+      ) {
+        throw new ConflictError(
+          'intent-reservation-invalid',
+          'the reserved generation turn is no longer current',
+        )
+      }
+      return {
+        session,
+        seq: reservedTurn.seq,
+        budget: input.reservation.budget,
+      }
     }
     if (session.inFlightTurnId !== null) {
       throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')

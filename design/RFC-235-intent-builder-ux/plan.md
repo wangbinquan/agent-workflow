@@ -1,10 +1,11 @@
 # RFC-235 意图构建完整创建体验 UX 重构 — plan
 
-状态：In Progress v22（2026-08-11 用户已批准按当前主干完成实现并上库）
+状态：Done v22（2026-08-11 已按当前主干完成实现与门禁）
 
 门禁报告：
 [codex-design-gate-2026-07-29.md](./codex-design-gate-2026-07-29.md)（v21 历史）与
-[codex-design-gate-2026-08-11-v22.md](./codex-design-gate-2026-08-11-v22.md)（v22 当前门）。
+[codex-design-gate-2026-08-11-v22.md](./codex-design-gate-2026-08-11-v22.md)（v22 当前设计门）、
+[codex-implementation-gate-2026-08-11-v22.md](./codex-implementation-gate-2026-08-11-v22.md)（v22 实现门）。
 
 2026-08-03 RFC-250 全前端 UX 审计命中的 Intent 裸 JSON、archived action 与 mutation feedback 已按本
 RFC T5/T7 所有权接收，见 [rfc250-handoff-2026-08-03.md](./rfc250-handoff-2026-08-03.md)；该移交不构成
@@ -17,45 +18,51 @@ RFC-276 与 proposal §0 取代，不再实施，也不参与 Done 判定。v22 
 
 ### V22-T1 shared/backend read model
 
-- [ ] 新增 strict journey/list/mount suggestion/approval receipt schemas；summary/detail 均携 canonical
+- [x] 新增 strict journey/list/mount suggestion/approval receipt schemas；summary/detail 均携 canonical
       journey，frontend 删除 summary/detail 猜测分叉。
-- [ ] create/message/answers/retry 原子 reservation 现有 running row；exact reserved turn settle、budget/
+- [x] create/message/answers/retry 原子 reservation 现有 running row；exact reserved turn settle、budget/
       runtime failure、双标签竞争与 cancel/supersede 测试，不新增 migration。
-- [ ] additive `page=1` list cursor pagination（默认 12、最大 50、stable updatedAt+id），legacy array
+- [x] additive `page=1` list cursor pagination（默认 12、最大 50、stable updatedAt+id），legacy array
       保持；WS reset/dedupe 及 owner/admin/status 组合测试。
-- [ ] actor-safe mounted display 与 pending suggestion resolve；0/N candidate、删除/撤权、admin read-only
+- [x] actor-safe mounted display 与 pending suggestion resolve；0/N candidate、删除/撤权、admin read-only
       测试。
-- [ ] mount approvals sourceTurn/expectedSeq/context fence + `canViewResourceInTx` 整批重验 + 单
+- [x] mount approvals sourceTurn/expectedSeq/context fence + `canViewResourceInTx` 整批重验 + 单
       transaction manifest/context/turn receipt；并发/撤权/缺决策失败均零部分写。
 
 ### V22-T2 create/list UX
 
-- [ ] Auto 独立于六类 ChoiceCards；3×2/2×3 响应式、keyboard 与 payload omission 测试。
-- [ ] 最近任务卡消费 canonical journey；加载更多保序去重、loading/error/empty/archived 状态完整。
+- [x] Auto 独立于六类 ChoiceCards；3×2/2×3 响应式、keyboard 与 payload omission 测试。
+- [x] 最近任务卡消费 canonical journey；加载更多保序去重、loading/error/empty/archived 状态完整。
 
 ### V22-T3 detail UX
 
-- [ ] header 去除重复状态 surface，四步 rail 成为唯一摘要；current reason 文案与 next action 一一对应。
-- [ ] mobile Build/Review TabBar 常驻 mounted、stage-aware 初始页签；desktop 双栏与单一滚动边界。
-- [ ] semantic answers/mount approval timeline；pending mount suggestion approve/reject/ambiguous UI；mounted
+- [x] header 去除重复状态 surface，四步 rail 成为唯一摘要；current reason 文案与 next action 一一对应。
+- [x] mobile Build/Review TabBar 常驻 mounted、stage-aware 初始页签；desktop 双栏与单一滚动边界。
+- [x] semantic answers/mount approval timeline；pending mount suggestion approve/reject/ambiguous UI；mounted
       context 使用 display name。
-- [ ] state-specific review empty/blocking；op outline + single selected preview；sticky CTA；Session renderer
+- [x] state-specific review empty/blocking；op outline + single selected preview；sticky CTA；Session renderer
       复用链不变。
 
 ### V22-T4 Commit Stepper
 
-- [ ] Strategy/Details/Review 三步、step-local validation、secret-safe summary、human binding 与 waiver/name
+- [x] Strategy/Details/Review 三步、step-local validation、secret-safe summary、human binding 与 waiver/name
       slots、pending dismiss lock。
-- [ ] 同一次 dialog retry 复用 clientMutationId，成功/关闭才 rotate；response loss/replay 与 stale/error
+- [x] 同一次 dialog retry 复用 clientMutationId，成功/关闭才 rotate；response loss/replay 与 stale/error
       呈现测试。
 
 ### V22-T5 gates/release
 
-- [ ] shared/backend/frontend 定向测试、typecheck/lint/format/depcheck；Intent Playwright desktop/390px、
+- [x] shared/backend/frontend 定向测试、typecheck/lint/format/depcheck；Intent Playwright desktop/390px、
       light/dark、axe、keyboard/touch 与 visual screenshots。
-- [ ] 独立 Codex 设计门及实现门均无 open P0/P1/P2；`bun run gate:local` 全绿。
-- [ ] 更新 RFC/index/STATE 为 Done，精确路径 commit（含真实 co-author trailer）、push main、验证远端
+- [x] 独立 Codex 设计门及实现门均无 open P0/P1/P2；`bun run gate:local` 全绿。
+- [x] 更新 RFC/index/STATE 为 Done，精确路径 commit（含真实 co-author trailer）、push main、验证远端
       ancestry 与 exact-SHA CI terminal success。
+
+V22 发布候选证据（2026-08-11）：`AW_LOCAL_BACKEND_SHARDS=2 bun run gate:local` 在不减少
+任何测试的前提下降低本机进程竞争，11m28s 全绿；backend 9,357 pass / 30 skip / 0 fail，shared
+1,976/1,976，frontend 6,271/6,271，三包 typecheck、lint、format 与依赖规则均通过。Intent
+Playwright 对重建 E2E binary 为 5/5，覆盖创建到应用、修改、工作流画布、desktop/390px、
+light/dark、keyboard/touch 与 axe。
 
 ## 1. 任务分解
 

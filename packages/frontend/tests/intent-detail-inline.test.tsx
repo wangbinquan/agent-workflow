@@ -8,7 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -34,20 +34,31 @@ afterEach(() => {
 })
 
 function detailFixture(overrides: Partial<IntentSessionDetail> = {}): IntentSessionDetail {
+  const currentDraft = overrides.currentDraft ?? null
+  const impliedJourney: IntentSessionDetail['session']['journey'] =
+    currentDraft === null
+      ? { kind: 'goal', reason: 'describe-goal', step: 1, completedThrough: 0 }
+      : currentDraft.stale
+        ? { kind: 'review-blocked', reason: 'draft-stale', step: 3, completedThrough: 2 }
+        : currentDraft.validation.errors.length > 0
+          ? { kind: 'review-blocked', reason: 'draft-invalid', step: 3, completedThrough: 2 }
+          : { kind: 'review-ready', reason: 'review-draft', step: 3, completedThrough: 2 }
+  const baseSession: IntentSessionDetail['session'] = {
+    id: 'S1',
+    title: 'audit pipeline',
+    status: 'active',
+    contextRevision: 0,
+    turnSeq: 2,
+    commitSeq: 0,
+    inFlight: false,
+    currentDraftRevision: currentDraft?.revision ?? null,
+    journey: impliedJourney,
+    createdAt: 1,
+    updatedAt: Date.now(),
+  }
   return {
-    session: {
-      id: 'S1',
-      title: 'audit pipeline',
-      status: 'active',
-      contextRevision: 0,
-      turnSeq: 2,
-      commitSeq: 0,
-      inFlight: false,
-      currentDraftRevision: null,
-      createdAt: 1,
-      updatedAt: Date.now(),
-    },
     mounts: [],
+    mountSuggestions: null,
     turns: [
       {
         id: 'T1',
@@ -62,9 +73,10 @@ function detailFixture(overrides: Partial<IntentSessionDetail> = {}): IntentSess
         createdAt: 1,
       },
     ],
-    currentDraft: null,
+    currentDraft,
     commits: [],
     ...overrides,
+    session: overrides.session ?? baseSession,
   }
 }
 
@@ -156,6 +168,89 @@ async function renderPage(opts: { staleTime?: number } = {}) {
 }
 
 describe('RFC-234 /intent/$sessionId', () => {
+  test('archives and reopens from the detail header without a hidden API-only state', async () => {
+    const archiveRec = installFetch(detailFixture())
+    await renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: enUS.intent.archiveAction }))
+    await waitFor(() =>
+      expect(
+        archiveRec.calls.some(
+          (call) => call.method === 'POST' && call.url.endsWith('/intent-sessions/S1/archive'),
+        ),
+      ).toBe(true),
+    )
+    cleanup()
+
+    const archived = detailFixture({
+      session: {
+        ...detailFixture().session,
+        status: 'archived',
+        journey: { kind: 'archived', reason: 'archived', step: 1, completedThrough: 0 },
+      },
+    })
+    const reopenRec = installFetch(archived)
+    await renderPage()
+    const reopen = await screen.findByRole('button', { name: enUS.intent.reopenAction })
+    expect(screen.queryByTestId('intent-add-mount')).toBeNull()
+    expect(screen.queryByTestId('intent-composer')).toBeNull()
+    fireEvent.click(reopen)
+    await waitFor(() =>
+      expect(
+        reopenRec.calls.some(
+          (call) => call.method === 'POST' && call.url.endsWith('/intent-sessions/S1/reopen'),
+        ),
+      ).toBe(true),
+    )
+  })
+
+  test('admin audit view keeps the full history but exposes no owner mutation controls', async () => {
+    const auditDetail = detailFixture({
+      session: {
+        ...detailFixture({ currentDraft: CLEAN_DRAFT }).session,
+        ownerUserId: 'OTHER-OWNER',
+        currentDraftRevision: CLEAN_DRAFT.revision,
+        journey: { kind: 'review-ready', reason: 'review-draft', step: 3, completedThrough: 2 },
+      },
+      mounts: [
+        {
+          handle: 'res#agent#1',
+          resourceType: 'agent',
+          resourceId: 'A1',
+          displayName: 'auditor',
+          detail: true,
+        },
+      ],
+      turns: [
+        detailFixture().turns[0]!,
+        {
+          id: 'T2',
+          seq: 2,
+          role: 'agent',
+          kind: 'error',
+          content: { code: 'intent-envelope-missing', reason: 'runtime-shape-unknown' },
+          contextRevision: 0,
+          runMeta: null,
+          scratchRetained: false,
+          execution: null,
+          createdAt: 2,
+        },
+      ],
+      currentDraft: CLEAN_DRAFT,
+    })
+    installFetch(auditDetail)
+    await renderPage()
+
+    expect(await screen.findByText(enUS.intent.auditReadOnly)).toBeTruthy()
+    expect(screen.getByText('build it')).toBeTruthy()
+    expect(screen.getByTestId('intent-draft')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: enUS.intent.archiveAction })).toBeNull()
+    expect(screen.queryByRole('button', { name: enUS.intent.retryTurn })).toBeNull()
+    expect(screen.queryByRole('button', { name: enUS.intent.unmount })).toBeNull()
+    expect(screen.queryByTestId('intent-add-mount')).toBeNull()
+    expect(screen.queryByTestId('intent-open-commit')).toBeNull()
+    expect(screen.queryByTestId('intent-composer')).toBeNull()
+  })
+
   test('RFC-273 error card explains missing-envelope evidence and retained scratch', async () => {
     const detail = detailFixture({
       turns: [
@@ -463,7 +558,7 @@ describe('RFC-234 /intent/$sessionId', () => {
     expect(sessionCalls).toBeGreaterThan(callsBeforeReopen)
   })
 
-  test('journey ignores a failed commit that belongs to an older draft', () => {
+  test('journey consumes the server-owned projection for old and current draft failures', () => {
     const currentDraft = { ...CLEAN_DRAFT, id: 'D2' }
     const oldFailure = {
       journalId: 'J1',
@@ -473,17 +568,240 @@ describe('RFC-234 /intent/$sessionId', () => {
       error: 'old failure',
       createdAt: 3,
     }
+    const oldDraftFailure = detailFixture({ currentDraft, commits: [oldFailure] })
+    expect(deriveIntentJourneyState(oldDraftFailure).kind).toBe('review-ready')
+    const currentDraftFailure = detailFixture({
+      currentDraft,
+      commits: [{ ...oldFailure, draftId: currentDraft.id }],
+      session: {
+        ...oldDraftFailure.session,
+        journey: { kind: 'error', reason: 'apply-failed', step: 4, completedThrough: 3 },
+      },
+    })
+    expect(deriveIntentJourneyState(currentDraftFailure).kind).toBe('error')
+  })
+
+  test('renders answers and mount decisions semantically instead of exposing stored JSON', async () => {
+    const base = detailFixture()
+    installFetch(
+      detailFixture({
+        session: { ...base.session, turnSeq: 4 },
+        turns: [
+          base.turns[0]!,
+          {
+            id: 'T2',
+            seq: 2,
+            role: 'agent',
+            kind: 'questions',
+            content: {
+              summary: 'Need one choice',
+              questions: [
+                {
+                  id: 'q1',
+                  question: 'How should files be audited?',
+                  options: ['per-file', 'all-at-once'],
+                  multiSelect: false,
+                },
+              ],
+            },
+            contextRevision: 0,
+            runMeta: null,
+            scratchRetained: false,
+            execution: null,
+            createdAt: 2,
+          },
+          {
+            id: 'T3',
+            seq: 3,
+            role: 'user',
+            kind: 'answers',
+            content: { answers: [{ id: 'q1', picked: ['per-file'] }] },
+            contextRevision: 0,
+            runMeta: null,
+            scratchRetained: false,
+            execution: null,
+            createdAt: 3,
+          },
+          {
+            id: 'T4',
+            seq: 4,
+            role: 'user',
+            kind: 'mount-approval',
+            content: {
+              sourceTurnId: 'T2',
+              sourceTurnSeq: 2,
+              approvalTurnId: 'T4',
+              approvalTurnSeq: 4,
+              resultingContextRevision: 1,
+              approved: [
+                {
+                  resourceType: 'agent',
+                  name: 'security-auditor',
+                  resourceId: 'A1',
+                  handle: 'res#agent#1',
+                },
+              ],
+              rejected: [{ resourceType: 'workflow', name: 'legacy-flow' }],
+            },
+            contextRevision: 1,
+            runMeta: null,
+            scratchRetained: false,
+            execution: null,
+            createdAt: 4,
+          },
+        ],
+      }),
+    )
+    await renderPage()
+
+    const answersTurn = await screen.findByTestId('intent-turn-answers')
+    expect(answersTurn.textContent).toContain('How should files be audited?')
+    expect(answersTurn.textContent).toContain('per-file')
+    expect(answersTurn.querySelector('pre')).toBeNull()
+    const approvalTurn = screen.getByTestId('intent-turn-mount-approval')
+    expect(approvalTurn.textContent).toContain(enUS.intent.mountApproved)
+    expect(approvalTurn.textContent).toContain('security-auditor')
+    expect(approvalTurn.textContent).toContain(enUS.intent.mountRejected)
+    expect(approvalTurn.textContent).toContain('legacy-flow')
+  })
+
+  test('applies every pending mount suggestion in one source-bound request', async () => {
+    const base = detailFixture()
+    const detail = detailFixture({
+      session: { ...base.session, turnSeq: 5, contextRevision: 2 },
+      mountSuggestions: {
+        sourceTurnId: 'T5',
+        sourceTurnSeq: 5,
+        contextRevision: 2,
+        items: [
+          {
+            resourceType: 'agent',
+            name: 'auditor',
+            reason: 'required reviewer',
+            candidates: [
+              { resourceId: 'A1', name: 'auditor', description: 'Audits one file at a time' },
+            ],
+          },
+          {
+            resourceType: 'workflow',
+            name: 'missing-flow',
+            reason: null,
+            candidates: [],
+          },
+        ],
+      },
+    })
+    const calls: Array<{ url: string; method: string; body: unknown }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (req: RequestInfo | URL, init?: RequestInit) => {
+        const url = req.toString()
+        const method = (init?.method ?? 'GET').toUpperCase()
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+        calls.push({ url, method, body })
+        const payload =
+          method === 'POST'
+            ? {
+                sourceTurnId: 'T5',
+                sourceTurnSeq: 5,
+                approvalTurnId: 'T6',
+                approvalTurnSeq: 6,
+                resultingContextRevision: 3,
+                approved: [
+                  {
+                    resourceType: 'agent',
+                    name: 'auditor',
+                    resourceId: 'A1',
+                    handle: 'res#agent#1',
+                  },
+                ],
+                rejected: [{ resourceType: 'workflow', name: 'missing-flow' }],
+              }
+            : detail
+        return new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      },
+    )
+    await renderPage()
+
+    const submit = await screen.findByRole('button', { name: enUS.intent.mountDecisionSubmit })
+    await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.change(screen.getByTestId('intent-composer'), {
+      target: { value: 'continue anyway' },
+    })
     expect(
-      deriveIntentJourneyState(detailFixture({ currentDraft, commits: [oldFailure] })).kind,
-    ).toBe('review-ready')
-    expect(
-      deriveIntentJourneyState(
-        detailFixture({
-          currentDraft,
-          commits: [{ ...oldFailure, draftId: currentDraft.id }],
-        }),
-      ).kind,
-    ).toBe('error')
+      (screen.getByRole('button', { name: enUS.intent.send }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    fireEvent.click(submit)
+    await waitFor(() => {
+      const post = calls.find(
+        (call) => call.method === 'POST' && call.url.includes('/mount-approvals'),
+      )
+      expect(post?.body).toEqual({
+        sourceTurnId: 'T5',
+        expectedTurnSeq: 5,
+        expectedContextRevision: 2,
+        decisions: [
+          {
+            resourceType: 'agent',
+            name: 'auditor',
+            action: 'approve',
+            resourceId: 'A1',
+          },
+          { resourceType: 'workflow', name: 'missing-flow', action: 'reject' },
+        ],
+      })
+    })
+  })
+
+  test('chooses Review once per session, then preserves the user mobile-tab choice on refresh', async () => {
+    installFetch(detailFixture({ currentDraft: CLEAN_DRAFT }))
+    const qc = await renderPage()
+    const build = await screen.findByTestId('intent-build-workspace')
+    const review = screen.getByTestId('intent-review-workspace')
+    await waitFor(() => expect(review.getAttribute('data-mobile-active')).toBe('true'))
+    expect(build.getAttribute('data-mobile-active')).toBe('false')
+
+    fireEvent.click(screen.getByRole('tab', { name: enUS.intent.buildWorkspace }))
+    expect(build.getAttribute('data-mobile-active')).toBe('true')
+    await qc.refetchQueries({ queryKey: ['intent-sessions', 'detail', 'S1'], exact: true })
+    expect(build.getAttribute('data-mobile-active')).toBe('true')
+    expect(review.getAttribute('data-mobile-active')).toBe('false')
+  })
+
+  test('keeps a large draft lightweight by mounting only the selected operation preview', async () => {
+    const changeset = CLEAN_DRAFT.changeset as { $schema_version: 1; ops: unknown[] }
+    const draft = {
+      ...CLEAN_DRAFT,
+      changeset: {
+        ...changeset,
+        ops: [
+          ...changeset.ops,
+          {
+            opId: 'op-2',
+            action: 'create',
+            resourceType: 'mcp',
+            tempRef: '$new:gitlab',
+            payload: {
+              type: 'local',
+              name: 'gitlab',
+              description: '',
+              config: { command: ['bunx'] },
+            },
+          },
+        ],
+      },
+    }
+    installFetch(detailFixture({ currentDraft: draft }))
+    await renderPage()
+
+    const outline = await screen.findAllByTestId('intent-op-outline-item')
+    expect(outline).toHaveLength(2)
+    expect(screen.getAllByTestId('intent-op-card')).toHaveLength(1)
+    fireEvent.click(within(outline[1]!).getByText('gitlab'))
+    expect(screen.getAllByTestId('intent-op-card')).toHaveLength(1)
+    expect(screen.getByTestId('intent-op-card').textContent).toContain('gitlab')
   })
 
   test('groups the build flow before the dedicated draft review workspace', async () => {
@@ -502,9 +820,9 @@ describe('RFC-234 /intent/$sessionId', () => {
     )
     expect(screen.getByTestId('intent-journey-state').textContent).toContain('Step 3 of 4')
     expect(screen.getByTestId('intent-journey-state').textContent).toContain(
-      enUS.intent.journey.state['review-ready'],
+      enUS.intent.journey.reason['review-draft'],
     )
-    expect(screen.getByTestId('intent-stage-status').textContent).toContain('Step 3/4 · Review')
+    expect(screen.queryByTestId('intent-stage-status')).toBeNull()
     expect(screen.queryByText('Active')).toBeNull()
     expect(buildWorkspace.tagName).toBe('SECTION')
     expect(buildWorkspace.getAttribute('aria-labelledby')).toBe('intent-conversation-heading')
@@ -638,11 +956,21 @@ describe('RFC-234 /intent/$sessionId', () => {
     const rec = installFetch(detailFixture({ currentDraft: CLEAN_DRAFT }))
     await renderPage()
     fireEvent.click(await screen.findByTestId('intent-open-commit'))
-    const submit = await screen.findByTestId('intent-commit-submit')
+    fireEvent.click(await screen.findByTestId('intent-commit-next'))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId('intent-commit-step-heading')),
+    )
+    expect(screen.getByTestId('intent-commit-step-heading').textContent).toBe(
+      enUS.intent.commitStep.details,
+    )
+    const next = await screen.findByTestId('intent-commit-next')
     // secret slot unfilled → gated
-    expect((submit as HTMLButtonElement).disabled).toBe(true)
+    expect((next as HTMLButtonElement).disabled).toBe(true)
     const secretInput = screen.getByPlaceholderText(enUS.intent.secretPlaceholder)
     fireEvent.change(secretInput, { target: { value: 'real-secret-value' } })
+    expect((next as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(next)
+    const submit = await screen.findByTestId('intent-commit-submit')
     expect((submit as HTMLButtonElement).disabled).toBe(false)
     fireEvent.click(submit)
     await waitFor(() => {
@@ -664,5 +992,127 @@ describe('RFC-234 /intent/$sessionId', () => {
         },
       ])
     })
+  })
+
+  test('closes commit review when a refetch replaces the draft identity', async () => {
+    installFetch(detailFixture({ currentDraft: CLEAN_DRAFT }))
+    const qc = await renderPage({ staleTime: Number.POSITIVE_INFINITY })
+    fireEvent.click(await screen.findByTestId('intent-open-commit'))
+    expect(await screen.findByText(enUS.intent.commitTitle)).toBeTruthy()
+
+    const replacementDraft: NonNullable<IntentSessionDetail['currentDraft']> = {
+      ...CLEAN_DRAFT,
+      id: 'D2',
+      revision: 4,
+      draftHash: `sha256:${'b'.repeat(64)}`,
+    }
+    act(() => {
+      qc.setQueryData(
+        ['intent-sessions', 'detail', 'S1'],
+        detailFixture({ currentDraft: replacementDraft }),
+      )
+    })
+    await waitFor(() => expect(screen.queryByText(enUS.intent.commitTitle)).toBeNull())
+  })
+
+  test('details step requires every explicit credential waiver before review', async () => {
+    const waiverDraft: NonNullable<IntentSessionDetail['currentDraft']> = {
+      ...CLEAN_DRAFT,
+      id: 'D-waiver',
+      validation: {
+        errors: [],
+        credentialFindings: [
+          {
+            opId: 'op-1',
+            jsonPointer: '/config/headers/Authorization',
+            kind: 'credential-like',
+            excerpt: 'Bearer [redacted]',
+          },
+        ],
+      },
+      slots: [
+        {
+          kind: 'secretWaiver',
+          slotId: 'waiver:op-1:/config/headers/Authorization',
+          opId: 'op-1',
+          jsonPointer: '/config/headers/Authorization',
+        },
+        { kind: 'finalName', slotId: 'name:op-1', opId: 'op-1' },
+      ],
+    }
+    const rec = installFetch(detailFixture({ currentDraft: waiverDraft }))
+    await renderPage()
+    fireEvent.click(await screen.findByTestId('intent-open-commit'))
+    fireEvent.click(await screen.findByTestId('intent-commit-next'))
+
+    const next = await screen.findByTestId('intent-commit-next')
+    expect((next as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('checkbox'))
+    expect((next as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(next)
+
+    const review = await screen.findByTestId('intent-commit-review')
+    expect(within(review).getByText(enUS.intent.commitDetailProvided)).toBeTruthy()
+    expect(within(review).getByText(enUS.intent.commitDetailDefault)).toBeTruthy()
+    expect(review.textContent).not.toContain('Bearer')
+    fireEvent.click(screen.getByTestId('intent-commit-submit'))
+    await waitFor(() => {
+      const post = rec.calls.find((call) => call.url.includes('/commit'))
+      expect(post?.body).toMatchObject({
+        decisions: [
+          {
+            opId: 'op-1',
+            slots: [
+              {
+                slotId: 'waiver:op-1:/config/headers/Authorization',
+                value: 'waived',
+              },
+            ],
+          },
+        ],
+      })
+    })
+  })
+
+  test('retries a lost commit response with the same client mutation id', async () => {
+    const detail = detailFixture({ currentDraft: CLEAN_DRAFT })
+    const commitBodies: Array<{ clientMutationId: string }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (req: RequestInfo | URL, init?: RequestInit) => {
+        const url = req.toString()
+        const method = (init?.method ?? 'GET').toUpperCase()
+        if (url.includes('/commit') && method === 'POST') {
+          commitBodies.push(JSON.parse(String(init?.body)) as { clientMutationId: string })
+          if (commitBodies.length === 1) {
+            return new Response(
+              JSON.stringify({ error: { code: 'temporary', message: 'response was lost' } }),
+              { status: 503, headers: { 'content-type': 'application/json' } },
+            )
+          }
+          return new Response(JSON.stringify({ journalId: 'J1', commitSeq: 1, applied: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify(detail), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      },
+    )
+    await renderPage()
+    fireEvent.click(await screen.findByTestId('intent-open-commit'))
+    fireEvent.click(await screen.findByTestId('intent-commit-next'))
+    fireEvent.change(screen.getByPlaceholderText(enUS.intent.secretPlaceholder), {
+      target: { value: 'real-secret-value' },
+    })
+    fireEvent.click(screen.getByTestId('intent-commit-next'))
+    const submit = await screen.findByTestId('intent-commit-submit')
+    fireEvent.click(submit)
+    await waitFor(() => expect(commitBodies).toHaveLength(1))
+    await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(submit)
+    await waitFor(() => expect(commitBodies).toHaveLength(2))
+    expect(commitBodies[0]?.clientMutationId).toBe(commitBodies[1]?.clientMutationId)
   })
 })

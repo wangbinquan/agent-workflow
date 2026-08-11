@@ -6,13 +6,15 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { RelativeTime } from '@/components/RelativeTime'
-import { StatusChip } from '@/components/StatusChip'
-import { deriveIntentSummaryJourneyState, IntentStageStatus } from './IntentJourneyProgress'
+import { IntentStageStatus } from './IntentJourneyProgress'
 
 export function IntentSessionList(props: {
   sessions: IntentSessionSummary[] | undefined
   loading: boolean
   error: unknown
+  hasMore?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
 }) {
   const { t } = useTranslation()
   return (
@@ -39,7 +41,6 @@ export function IntentSessionList(props: {
       {props.sessions !== undefined && props.sessions.length > 0 ? (
         <ul className="intent-recent__grid">
           {props.sessions.map((session) => {
-            const journeyState = deriveIntentSummaryJourneyState(session)
             return (
               <li key={session.id}>
                 <Card
@@ -50,14 +51,10 @@ export function IntentSessionList(props: {
                   className="intent-session-card"
                   title={<span title={session.title}>{session.title}</span>}
                   actions={
-                    session.status === 'archived' ? (
-                      <StatusChip kind="neutral">{t('intent.statusArchived')}</StatusChip>
-                    ) : (
-                      <IntentStageStatus
-                        state={journeyState}
-                        data-testid={`intent-stage-status-${session.id}`}
-                      />
-                    )
+                    <IntentStageStatus
+                      state={session.journey}
+                      data-testid={`intent-stage-status-${session.id}`}
+                    />
                   }
                 >
                   <div className="intent-session-card__meta">
@@ -70,6 +67,18 @@ export function IntentSessionList(props: {
             )
           })}
         </ul>
+      ) : null}
+      {props.sessions !== undefined && props.sessions.length > 0 && props.hasMore === true ? (
+        <div className="intent-recent__more">
+          <button
+            type="button"
+            className="btn"
+            onClick={props.onLoadMore}
+            disabled={props.loadingMore === true}
+          >
+            {props.loadingMore ? t('intent.loadingMore') : t('intent.loadMore')}
+          </button>
+        </div>
       ) : null}
     </section>
   )

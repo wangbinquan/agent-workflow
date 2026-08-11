@@ -1,8 +1,12 @@
 // RFC-235 — goal-first Intent landing page. The inline composer is the primary
 // action; resource shortcuts open the same business form in a URL-owned dialog.
 
-import type { IntentSessionSummary } from '@agent-workflow/shared'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  IntentSessionListPageSchema,
+  type IntentSessionListPage,
+  type IntentSessionSummary,
+} from '@agent-workflow/shared'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createRoute,
   useBlocker,
@@ -10,7 +14,7 @@ import {
   useRouter,
   type ShouldBlockFn,
 } from '@tanstack/react-router'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, type ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -171,10 +175,24 @@ function IntentSessionsPage() {
   }, [isCreatePending, router.history])
   useIntentSessionsWs()
 
-  const sessions = useQuery<IntentSessionSummary[], ApiError>({
+  const sessions = useInfiniteQuery<IntentSessionListPage, ApiError>({
     queryKey: INTENT_QUERY_KEYS.list,
-    queryFn: () => api.get<IntentSessionSummary[]>('/api/intent-sessions'),
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => {
+      const cursor = typeof pageParam === 'string' ? `&cursor=${encodeURIComponent(pageParam)}` : ''
+      return IntentSessionListPageSchema.parse(
+        await api.get<unknown>(`/api/intent-sessions?page=1&limit=12${cursor}`),
+      )
+    },
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   })
+  const sessionRows = useMemo(() => {
+    const byId = new Map<string, IntentSessionSummary>()
+    for (const page of sessions.data?.pages ?? []) {
+      for (const session of page.items) byId.set(session.id, session)
+    }
+    return [...byId.values()]
+  }, [sessions.data?.pages])
   const openSession = async (session: IntentSessionSummary): Promise<void> => {
     void qc.invalidateQueries({ queryKey: INTENT_QUERY_KEYS.list })
     try {
@@ -218,9 +236,12 @@ function IntentSessionsPage() {
       </section>
 
       <IntentSessionList
-        sessions={sessions.data}
+        sessions={sessions.data === undefined ? undefined : sessionRows}
         loading={sessions.isLoading}
         error={sessions.isError ? sessions.error : null}
+        hasMore={sessions.hasNextPage}
+        loadingMore={sessions.isFetchingNextPage}
+        onLoadMore={() => void sessions.fetchNextPage()}
       />
 
       <Dialog

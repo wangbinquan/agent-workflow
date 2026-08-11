@@ -31,6 +31,7 @@ let app: ReturnType<typeof createApp>
 let ownerToken: string
 let strangerToken: string
 let managerToken: string
+let strangerUserId: string
 
 const CHANGESET = JSON.stringify({
   $schema_version: 1,
@@ -68,6 +69,32 @@ function stubRun(
       status: 'ok',
       exitCode: 0,
       eventText: `<workflow-output nonce="${nonce}">${body}</workflow-output>`,
+      stderrTail: '',
+      durationMs: 3,
+      scratchDir: '/tmp/x',
+      scratchRetained: false,
+      outputEvidence: emptySystemAgentOutputEvidence(),
+    }
+  }
+}
+
+function stubQuestionsWithRequests(
+  requests: Array<{ resourceType: 'agent'; name: string; reason: string }>,
+): (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult> {
+  return async (opts) => {
+    const nonce = /nonce="([^"]+)"/.exec(opts.prompt)?.[1] ?? ''
+    const questions = [
+      { id: 'q1', question: 'Continue?', options: ['yes', 'no'], multiSelect: false },
+    ]
+    return {
+      status: 'ok',
+      exitCode: 0,
+      eventText:
+        `<workflow-output nonce="${nonce}">` +
+        '<port name="summary">need context</port>' +
+        `<port name="questions">${JSON.stringify(questions)}</port>` +
+        `<port name="requests">${JSON.stringify(requests)}</port>` +
+        '</workflow-output>',
       stderrTail: '',
       durationMs: 3,
       scratchDir: '/tmp/x',
@@ -122,6 +149,7 @@ beforeEach(async () => {
     role: 'user',
     password: 'longEnoughPassword',
   })
+  strangerUserId = stranger.id
   const manager = await createUser(db, {
     username: 'mgr',
     displayName: 'Manager',
@@ -291,6 +319,12 @@ describe('intent session routes', () => {
     expect(blocked.status).toBe(409)
     const blockedBody = (await blocked.json()) as { error?: { code?: string }; code?: string }
     expect(blockedBody.error?.code ?? blockedBody.code).toBe('intent-turn-in-flight')
+    const afterBlocked = (await (
+      await req(ownerToken, `/api/intent-sessions/${session.id}`)
+    ).json()) as { turns: Array<{ kind: string; content: Record<string, unknown> }> }
+    expect(
+      afterBlocked.turns.some((turn) => turn.kind === 'message' && turn.content.message === 'more'),
+    ).toBe(false)
 
     // Route-boundary error codes (route-error-code-coverage naming):
     const badJson = await req(ownerToken, '/api/intent-sessions', { method: 'POST', body: '{nope' })
@@ -338,14 +372,42 @@ describe('intent session routes', () => {
       session.id,
       (d) => (d as { session: { inFlight: boolean } }).session.inFlight === false,
     )) as {
-      mounts: Array<{ handle: string; resourceType: string; resourceId: string; detail: boolean }>
+      mounts: Array<{
+        handle: string
+        resourceType: string
+        resourceId: string
+        displayName: string | null
+        detail: boolean
+      }>
     }
     // detail:true — the first turn already ran WITH the mount (that is the
     // point of create-time mounting) and its dump promoted the root to a
     // full-detail entry.
     expect(detail.mounts).toEqual([
-      { handle: 'res#agent#1', resourceType: 'agent', resourceId: target.id, detail: true },
+      {
+        handle: 'res#agent#1',
+        resourceType: 'agent',
+        resourceId: target.id,
+        displayName: 'mount-target',
+        detail: true,
+      },
     ])
+
+    // Mounted labels are a current actor-safe projection, never a historical
+    // name leak. Revocation and deletion both keep the neutral mount shell.
+    await db
+      .update(agents)
+      .set({ ownerUserId: strangerUserId, visibility: 'private' })
+      .where(eq(agents.id, target.id))
+    const revoked = (await (
+      await req(ownerToken, `/api/intent-sessions/${session.id}`)
+    ).json()) as { mounts: Array<{ displayName: string | null }> }
+    expect(revoked.mounts[0]?.displayName).toBeNull()
+    await db.delete(agents).where(eq(agents.id, target.id))
+    const deleted = (await (
+      await req(ownerToken, `/api/intent-sessions/${session.id}`)
+    ).json()) as { mounts: Array<{ displayName: string | null }> }
+    expect(deleted.mounts[0]?.displayName).toBeNull()
 
     // A stranger-invisible (here: nonexistent) target fails the CREATE.
     const bad = await req(ownerToken, '/api/intent-sessions', {
@@ -358,6 +420,314 @@ describe('intent session routes', () => {
     expect(bad.status).toBe(404)
   })
 
+  test('v22 additive keyset page returns canonical journey and preserves legacy array', async () => {
+    for (const message of ['page-a', 'page-b', 'page-c']) {
+      const created = await req(ownerToken, '/api/intent-sessions', {
+        method: 'POST',
+        body: JSON.stringify({ message }),
+      })
+      expect(created.status).toBe(201)
+    }
+
+    const legacy = await req(ownerToken, '/api/intent-sessions')
+    expect(Array.isArray(await legacy.json())).toBe(true)
+    const legacyWithUnrelatedCursor = await req(
+      ownerToken,
+      '/api/intent-sessions?cursor=legacy-client-value',
+    )
+    expect(legacyWithUnrelatedCursor.status).toBe(200)
+    expect((await legacyWithUnrelatedCursor.json()) as unknown[]).toHaveLength(3)
+
+    const first = await req(ownerToken, '/api/intent-sessions?page=1&limit=2')
+    expect(first.status).toBe(200)
+    const firstPage = (await first.json()) as {
+      items: Array<{ id: string; journey: { step: number; reason: string } }>
+      nextCursor: string | null
+    }
+    expect(firstPage.items).toHaveLength(2)
+    expect(firstPage.items.every((item) => item.journey.step >= 2)).toBe(true)
+    expect(typeof firstPage.nextCursor).toBe('string')
+
+    const second = await req(
+      ownerToken,
+      `/api/intent-sessions?page=1&limit=2&cursor=${encodeURIComponent(firstPage.nextCursor ?? '')}`,
+    )
+    const secondPage = (await second.json()) as {
+      items: Array<{ id: string }>
+      nextCursor: string | null
+    }
+    expect(secondPage.items).toHaveLength(1)
+    expect(secondPage.nextCursor).toBeNull()
+    expect(
+      firstPage.items.some((firstItem) =>
+        secondPage.items.some((secondItem) => secondItem.id === firstItem.id),
+      ),
+    ).toBe(false)
+
+    expect((await req(ownerToken, '/api/intent-sessions?page=1&limit=0')).status).toBe(422)
+    expect((await req(ownerToken, '/api/intent-sessions?page=1&cursor=not-json')).status).toBe(422)
+  })
+
+  test('archive/reopen is owner-only and cannot race an in-flight reservation', async () => {
+    const created = await req(ownerToken, '/api/intent-sessions', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'archive lifecycle' }),
+    })
+    const session = (await created.json()) as { id: string }
+    await pollDetail(
+      ownerToken,
+      session.id,
+      (value) => (value as { session: { inFlight: boolean } }).session.inFlight === false,
+    )
+
+    db.update(intentSessions)
+      .set({ inFlightTurnId: ulid() })
+      .where(eq(intentSessions.id, session.id))
+      .run()
+    const blocked = await req(ownerToken, `/api/intent-sessions/${session.id}/archive`, {
+      method: 'POST',
+    })
+    expect(blocked.status).toBe(409)
+    expect(
+      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]?.status,
+    ).toBe('active')
+
+    db.update(intentSessions)
+      .set({ inFlightTurnId: null })
+      .where(eq(intentSessions.id, session.id))
+      .run()
+    expect(
+      (await req(DAEMON_TOKEN, `/api/intent-sessions/${session.id}/archive`, { method: 'POST' }))
+        .status,
+    ).toBe(404)
+    expect(
+      (await req(ownerToken, `/api/intent-sessions/${session.id}/archive`, { method: 'POST' }))
+        .status,
+    ).toBe(200)
+    const archived = (await (
+      await req(ownerToken, `/api/intent-sessions/${session.id}`)
+    ).json()) as { session: { status: string; journey: { kind: string; reason: string } } }
+    expect(archived.session.status).toBe('archived')
+    expect(archived.session.journey).toMatchObject({ kind: 'archived', reason: 'archived' })
+    expect(
+      (
+        await req(ownerToken, `/api/intent-sessions/${session.id}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({ message: 'must reopen first' }),
+        })
+      ).status,
+    ).toBe(409)
+    expect(
+      (await req(ownerToken, `/api/intent-sessions/${session.id}/reopen`, { method: 'POST' }))
+        .status,
+    ).toBe(200)
+  })
+
+  test('v22 mount suggestions resolve actor-safe candidates and decide atomically', async () => {
+    app = createApp({
+      token: DAEMON_TOKEN,
+      configPath: join(root, 'config.json'),
+      opencodeVersion: null,
+      dbVersion: 1,
+      db,
+      intentTestDependencies: {
+        runFn: stubQuestionsWithRequests([
+          { resourceType: 'agent', name: 'mount-one', reason: 'first dependency' },
+          { resourceType: 'agent', name: 'mount-two', reason: 'second dependency' },
+          { resourceType: 'agent', name: 'missing-agent', reason: 'optional dependency' },
+        ]),
+      },
+    })
+    const ids: Record<string, string> = {}
+    for (const name of ['mount-one', 'mount-two']) {
+      const created = await req(ownerToken, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          description: `${name} description`,
+          outputs: ['answer'],
+          bodyMd: 'x',
+        }),
+      })
+      expect(created.status).toBe(201)
+      ids[name] = ((await created.json()) as { id: string }).id
+    }
+    await db
+      .update(agents)
+      .set({ ownerUserId: strangerUserId, visibility: 'public' })
+      .where(eq(agents.id, ids['mount-two']!))
+    const duplicate = await req(strangerToken, '/api/agents', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'mount-one',
+        description: 'ambiguous duplicate',
+        outputs: ['answer'],
+        bodyMd: 'x',
+      }),
+    })
+    expect(duplicate.status).toBe(201)
+    const duplicateId = ((await duplicate.json()) as { id: string }).id
+    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, duplicateId))
+    const created = await req(ownerToken, '/api/intent-sessions', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'compose from existing agents' }),
+    })
+    const session = (await created.json()) as { id: string }
+    const detail = (await pollDetail(
+      ownerToken,
+      session.id,
+      (value) => (value as { mountSuggestions: unknown }).mountSuggestions !== null,
+    )) as {
+      session: { turnSeq: number; contextRevision: number }
+      mounts: unknown[]
+      turns: Array<{ kind: string }>
+      mountSuggestions: {
+        sourceTurnId: string
+        items: Array<{
+          resourceType: 'agent'
+          name: string
+          candidates: Array<{ resourceId: string; description: string | null }>
+        }>
+      }
+    }
+    expect(detail.mountSuggestions.items.map((item) => item.name)).toEqual([
+      'mount-one',
+      'mount-two',
+      'missing-agent',
+    ])
+    expect(detail.mountSuggestions.items[0]?.candidates).toHaveLength(2)
+    expect(
+      detail.mountSuggestions.items[0]?.candidates.some(
+        (candidate) => candidate.description === 'mount-one description',
+      ),
+    ).toBe(true)
+    expect(detail.mountSuggestions.items[2]?.candidates).toEqual([])
+
+    const partial = await req(ownerToken, `/api/intent-sessions/${session.id}/mount-approvals`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceTurnId: detail.mountSuggestions.sourceTurnId,
+        expectedTurnSeq: detail.session.turnSeq,
+        expectedContextRevision: detail.session.contextRevision,
+        decisions: [
+          {
+            resourceType: 'agent',
+            name: 'mount-one',
+            action: 'approve',
+            resourceId: ids['mount-one'],
+          },
+        ],
+      }),
+    })
+    expect(partial.status).toBe(422)
+
+    const completeDecisions = [
+      {
+        resourceType: 'agent' as const,
+        name: 'mount-one',
+        action: 'approve' as const,
+        resourceId: ids['mount-one'],
+      },
+      {
+        resourceType: 'agent' as const,
+        name: 'mount-two',
+        action: 'approve' as const,
+        resourceId: ids['mount-two'],
+      },
+      {
+        resourceType: 'agent' as const,
+        name: 'missing-agent',
+        action: 'reject' as const,
+      },
+    ]
+    const adminWrite = await req(
+      DAEMON_TOKEN,
+      `/api/intent-sessions/${session.id}/mount-approvals`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          sourceTurnId: detail.mountSuggestions.sourceTurnId,
+          expectedTurnSeq: detail.session.turnSeq,
+          expectedContextRevision: detail.session.contextRevision,
+          decisions: completeDecisions,
+        }),
+      },
+    )
+    expect(adminWrite.status).toBe(404)
+
+    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, ids['mount-two']!))
+
+    const failed = await req(ownerToken, `/api/intent-sessions/${session.id}/mount-approvals`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceTurnId: detail.mountSuggestions.sourceTurnId,
+        expectedTurnSeq: detail.session.turnSeq,
+        expectedContextRevision: detail.session.contextRevision,
+        decisions: completeDecisions,
+      }),
+    })
+    expect(failed.status).toBe(404)
+    const afterFailed = (await (
+      await req(ownerToken, `/api/intent-sessions/${session.id}`)
+    ).json()) as { mounts: unknown[]; turns: Array<{ kind: string }> }
+    expect(afterFailed.mounts).toEqual([])
+    expect(afterFailed.turns.some((turn) => turn.kind === 'mount-approval')).toBe(false)
+
+    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, ids['mount-two']!))
+
+    const applied = await req(ownerToken, `/api/intent-sessions/${session.id}/mount-approvals`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceTurnId: detail.mountSuggestions.sourceTurnId,
+        expectedTurnSeq: detail.session.turnSeq,
+        expectedContextRevision: detail.session.contextRevision,
+        decisions: completeDecisions,
+      }),
+    })
+    expect(applied.status).toBe(200)
+    const receipt = (await applied.json()) as {
+      approved: Array<{ name: string; handle: string }>
+      rejected: Array<{ name: string }>
+      approvalTurnSeq: number
+      resultingContextRevision: number
+    }
+    expect(receipt.approved.map((item) => item.name)).toEqual(['mount-one', 'mount-two'])
+    expect(receipt.rejected.map((item) => item.name)).toEqual(['missing-agent'])
+    expect(receipt.approvalTurnSeq).toBe(detail.session.turnSeq + 1)
+    expect(receipt.resultingContextRevision).toBe(detail.session.contextRevision + 1)
+
+    const staleReplay = await req(
+      ownerToken,
+      `/api/intent-sessions/${session.id}/mount-approvals`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          sourceTurnId: detail.mountSuggestions.sourceTurnId,
+          expectedTurnSeq: receipt.approvalTurnSeq,
+          expectedContextRevision: receipt.resultingContextRevision,
+          decisions: completeDecisions,
+        }),
+      },
+    )
+    expect(staleReplay.status).toBe(409)
+    const staleBody = (await staleReplay.json()) as { error?: { code?: string }; code?: string }
+    expect(staleBody.error?.code ?? staleBody.code).toBe('intent-approval-stale')
+
+    const settled = (await (
+      await req(ownerToken, `/api/intent-sessions/${session.id}`)
+    ).json()) as {
+      mounts: Array<{ displayName: string | null }>
+      mountSuggestions: unknown
+      turns: Array<{ kind: string }>
+    }
+    expect(settled.mounts.map((mount) => mount.displayName).sort()).toEqual([
+      'mount-one',
+      'mount-two',
+    ])
+    expect(settled.mountSuggestions).toBeNull()
+    expect(settled.turns.filter((turn) => turn.kind === 'mount-approval')).toHaveLength(1)
+  })
+
   // Design-gate P2-2 manager boundary: `?all=1` is an ADMIN audit affordance;
   // a manager gets their own sessions only — no bypass.
   test('manager ?all=1 lists own sessions only; admin sees all', async () => {
@@ -365,13 +735,46 @@ describe('intent session routes', () => {
       method: 'POST',
       body: JSON.stringify({ message: 'owner session' }),
     })
+    await req(managerToken, '/api/intent-sessions', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'manager session' }),
+    })
     const asManager = await req(managerToken, '/api/intent-sessions?all=1')
     expect(asManager.status).toBe(200)
-    expect(await asManager.json()).toEqual([])
+    const managerRows = (await asManager.json()) as Array<{
+      title: string
+      ownerUserId?: string
+    }>
+    expect(managerRows.map((row) => row.title)).toEqual(['manager session'])
+    expect(managerRows[0]?.ownerUserId).toBeUndefined()
     const asAdmin = await req(DAEMON_TOKEN, '/api/intent-sessions?all=1')
     const adminRows = (await asAdmin.json()) as Array<{ ownerUserId?: string }>
-    expect(adminRows.length).toBe(1)
-    expect(typeof adminRows[0]?.ownerUserId).toBe('string')
+    expect(adminRows.length).toBe(2)
+    expect(adminRows.every((row) => typeof row.ownerUserId === 'string')).toBe(true)
+
+    const managerPage = await req(
+      managerToken,
+      '/api/intent-sessions?page=1&limit=1&status=active&all=1',
+    )
+    expect(managerPage.status).toBe(200)
+    const managerPageBody = (await managerPage.json()) as {
+      items: Array<{ title: string; ownerUserId?: string }>
+      nextCursor: string | null
+    }
+    expect(managerPageBody.items.map((item) => item.title)).toEqual(['manager session'])
+    expect(managerPageBody.items[0]?.ownerUserId).toBeUndefined()
+    expect(managerPageBody.nextCursor).toBeNull()
+    const adminPage = await req(
+      DAEMON_TOKEN,
+      '/api/intent-sessions?page=1&limit=1&status=active&all=1',
+    )
+    const adminPageBody = (await adminPage.json()) as {
+      items: Array<{ ownerUserId?: string }>
+      nextCursor: string | null
+    }
+    expect(adminPageBody.items).toHaveLength(1)
+    expect(typeof adminPageBody.items[0]?.ownerUserId).toBe('string')
+    expect(typeof adminPageBody.nextCursor).toBe('string')
   })
 
   // Codex impl-gate P2-4 — owner-only mutations keep the 404 shape for EVERY

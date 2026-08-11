@@ -26,12 +26,14 @@ import {
   CreateIntentSessionSchema,
   IntentApplyReceiptSchema,
   IntentDraftDtoSchema,
+  IntentMountRequestsSchema,
   PostIntentAnswersSchema,
   PostIntentMessageSchema,
   PostIntentMountApprovalsSchema,
   IntentMountRefSchema,
   parseIntentChangeset,
   type IntentDraftDto,
+  type IntentJourneySnapshot,
   type IntentSessionDetail,
   type IntentSessionSummary,
   type IntentTurnDto,
@@ -49,24 +51,31 @@ import { Paths } from '@/util/paths'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
 import { applyIntentChangeset } from '@/services/intent/applyChangeset'
 import { deriveIntentSlots } from '@/services/intent/resolveChangeset'
+import { projectIntentJourney } from '@/services/intent/journey'
+import { listVisibleIntentResources } from '@/services/intent/resourceCatalog'
+import { canAuditIntentSessions } from '@/services/resourceAcl'
 import {
-  abortIntentTurn,
+  cancelIntentTurn,
   resolveIntentTurnConfig,
   runIntentTurn,
+  settleReservedIntentTurnStartFailure,
 } from '@/services/intent/turnEngine'
 import { getIntentTurnSession, projectIntentTurnExecution } from '@/services/intent/turnSession'
 import {
   addIntentMount,
-  createIntentSession,
+  createIntentSessionAndReserveTurn,
+  decideIntentMountSuggestions,
   getIntentSessionForActor,
-  insertUserTurn,
+  insertUserTurnAndReserve,
   listIntentProvenanceForActor,
   listIntentSessionsForActor,
   listIntentTurns,
   rebaseIntentSession,
   removeIntentMount,
+  reserveIntentRetryTurn,
   sessionManifest,
   setIntentSessionStatus,
+  type ReservedIntentTurn,
   type IntentSessionRow,
 } from '@/services/intent/session'
 
@@ -88,7 +97,11 @@ function parseJsonRecord(text: string): Record<string, unknown> {
 
 function sessionSummary(
   row: IntentSessionRow & { currentDraftRevision?: number | null },
-  opts: { includeOwner: boolean },
+  opts: {
+    includeOwner: boolean
+    journey: IntentJourneySnapshot
+    currentDraftRevision?: number | null
+  },
 ): IntentSessionSummary {
   return {
     id: row.id,
@@ -98,17 +111,46 @@ function sessionSummary(
     turnSeq: row.turnSeq,
     commitSeq: row.commitSeq,
     inFlight: row.inFlightTurnId !== null,
-    currentDraftRevision: row.currentDraftRevision ?? null,
+    currentDraftRevision: opts.currentDraftRevision ?? row.currentDraftRevision ?? null,
+    journey: opts.journey,
     ...(opts.includeOwner ? { ownerUserId: row.ownerUserId } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
 }
 
+const IntentListCursorSchema = z
+  .object({ updatedAt: z.number().int().min(0), id: z.string().min(1).max(128) })
+  .strict()
+
+function decodeIntentListCursor(raw: string): { updatedAt: number; id: string } {
+  if (raw.length > 512) {
+    throw new ValidationError('intent-invalid', 'invalid intent list cursor')
+  }
+  try {
+    const parsed = IntentListCursorSchema.safeParse(
+      JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')),
+    )
+    if (parsed.success) return parsed.data
+  } catch {
+    // Same public shape for malformed base64 and malformed JSON.
+  }
+  throw new ValidationError('intent-invalid', 'invalid intent list cursor')
+}
+
+function encodeIntentListCursor(row: { updatedAt: number; id: string }): string {
+  return Buffer.from(JSON.stringify(row), 'utf8').toString('base64url')
+}
+
 export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
   const appHome = Paths.root
 
-  async function fireTurn(sessionId: string, actor: Actor): Promise<void> {
+  async function fireTurn(
+    sessionId: string,
+    actor: Actor,
+    configSnapshot: ReturnType<typeof loadConfig>,
+    reservation: ReservedIntentTurn,
+  ): Promise<void> {
     const EXECUTION_BROADCAST_THROTTLE_MS = 500
     let lastExecutionBroadcastAt = 0
     let pendingExecution: { sessionId: string; turnId: string; eventSeq: number } | undefined
@@ -149,8 +191,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       executionTimer.unref?.()
     }
     try {
-      const cfg = loadConfig(deps.configPath)
-      const config = await resolveIntentTurnConfig(deps.db, cfg)
+      const config = await resolveIntentTurnConfig(deps.db, configSnapshot)
       await runIntentTurn(
         {
           db: deps.db,
@@ -183,19 +224,37 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
             ? {}
             : { runFn: deps.intentTestDependencies.runFn }),
         },
-        { sessionId, actor },
+        { sessionId, actor, reservation },
       )
     } catch (err) {
-      // Pre-spawn refusals (budget, runtime unsupported) have no turn row to
-      // settle into — surface via log; the UI sees state via polling/WS.
+      const detail = err instanceof Error ? err.message : String(err)
+      const settled = settleReservedIntentTurnStartFailure(deps.db, {
+        sessionId,
+        actor,
+        reservation,
+        detail,
+      })
       log.warn('intent-turn-fire-failed', {
         sessionId,
-        err: err instanceof Error ? err.message : String(err),
+        err: detail,
+        settled,
       })
+      if (settled) {
+        intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
+          type: 'intent.turn.finished',
+          sessionId,
+          turnId: reservation.turnId,
+          ownerUserId: actor.user.id,
+        })
+      }
     } finally {
       if (executionTimer !== undefined) clearTimeout(executionTimer)
       flushExecution()
     }
+  }
+
+  function loadIntentTurnConfigSnapshot(): ReturnType<typeof loadConfig> {
+    return loadConfig(deps.configPath)
   }
 
   function emitSessionUpdated(sessionId: string, ownerUserId: string): void {
@@ -223,9 +282,27 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      const { session } = await createIntentSession(deps.db, actor, parsed.data)
-      void fireTurn(session.id, actor)
-      return c.json(sessionSummary(session, { includeOwner: false }), 201)
+      const config = loadIntentTurnConfigSnapshot()
+      const { session, reservation } = await createIntentSessionAndReserveTurn(
+        deps.db,
+        actor,
+        parsed.data,
+      )
+      void fireTurn(session.id, actor, config, reservation)
+      return c.json(
+        sessionSummary(session, {
+          includeOwner: false,
+          journey: projectIntentJourney({
+            status: session.status,
+            contextRevision: session.contextRevision,
+            commitSeq: session.commitSeq,
+            inFlight: true,
+            latestAgentTurnKind: 'running',
+            currentDraft: null,
+          }),
+        }),
+        201,
+      )
     },
   )
 
@@ -243,11 +320,57 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       const statusRaw = c.req.query('status')
       const status = statusRaw === 'active' || statusRaw === 'archived' ? statusRaw : undefined
       const all = c.req.query('all') === '1'
+      const includeOwner = all && canAuditIntentSessions(actor)
+      const paged = c.req.query('page') === '1'
+      const limitRaw = c.req.query('limit')
+      const limit = limitRaw === undefined || limitRaw === '' ? 12 : Number.parseInt(limitRaw, 10)
+      if (paged && (!/^\d+$/.test(limitRaw ?? '12') || limit < 1 || limit > 50)) {
+        throw new ValidationError('intent-invalid', 'intent list limit must be between 1 and 50')
+      }
+      // Pagination is additive. Legacy array callers keep their old semantics
+      // even if an unrelated client already used a `cursor` query key.
+      const cursorRaw = paged ? c.req.query('cursor') : undefined
+      const before = cursorRaw === undefined ? undefined : decodeIntentListCursor(cursorRaw)
       const rows = await listIntentSessionsForActor(deps.db, actor, {
         ...(status === undefined ? {} : { status }),
         all,
+        ...(before === undefined ? {} : { before }),
+        ...(paged ? { limit: limit + 1 } : {}),
       })
-      return c.json(rows.map((row) => sessionSummary(row, { includeOwner: all })))
+      const hasMore = paged && rows.length > limit
+      const visibleRows = hasMore ? rows.slice(0, limit) : rows
+      const items = visibleRows.map((row) =>
+        sessionSummary(row, {
+          includeOwner,
+          journey: projectIntentJourney({
+            status: row.status,
+            contextRevision: row.contextRevision,
+            commitSeq: row.commitSeq,
+            inFlight: row.inFlightTurnId !== null,
+            ...(row.latestAgentTurnKind === null
+              ? {}
+              : { latestAgentTurnKind: row.latestAgentTurnKind }),
+            currentDraft:
+              row.currentDraftId === null || row.currentDraftContextRevision === null
+                ? null
+                : {
+                    id: row.currentDraftId,
+                    contextRevision: row.currentDraftContextRevision,
+                    validationErrors: row.currentDraftValidationErrors,
+                  },
+            ...(row.latestCommit === null ? {} : { latestCommit: row.latestCommit }),
+          }),
+        }),
+      )
+      if (!paged) return c.json(items)
+      const last = visibleRows.at(-1)
+      return c.json({
+        items,
+        nextCursor:
+          hasMore && last !== undefined
+            ? encodeIntentListCursor({ updatedAt: last.updatedAt, id: last.id })
+            : null,
+      })
     },
   )
 
@@ -310,31 +433,119 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
           .select()
           .from(intentApplyJournal)
           .where(eq(intentApplyJournal.sessionId, session.id))
-      ).map((row) => ({
-        journalId: row.id,
-        draftId: row.draftId,
-        state: row.state,
-        receipt:
-          row.receiptJson === null
-            ? null
-            : IntentApplyReceiptSchema.parse(JSON.parse(row.receiptJson)),
-        error: row.error,
-        createdAt: row.createdAt,
-      }))
+      )
+        .map((row) => ({
+          journalId: row.id,
+          draftId: row.draftId,
+          state: row.state,
+          receipt:
+            row.receiptJson === null
+              ? null
+              : IntentApplyReceiptSchema.parse(JSON.parse(row.receiptJson)),
+          error: row.error,
+          createdAt: row.createdAt,
+        }))
+        .sort((a, b) => b.createdAt - a.createdAt || b.journalId.localeCompare(a.journalId))
+      const visibleResources = await listVisibleIntentResources(deps.db, actor)
+      const visibleByKey = new Map(
+        visibleResources.map((resource) => [
+          `${resource.resourceType}:${resource.resourceId}`,
+          resource,
+        ]),
+      )
       const mounts = sessionManifest(session)
         .filter((entry) => entry.root)
         .map((entry) => ({
           handle: entry.handle,
           resourceType: entry.resourceType,
           resourceId: entry.resourceId,
+          displayName: visibleByKey.get(`${entry.resourceType}:${entry.resourceId}`)?.name ?? null,
           detail: entry.detail,
         }))
+      const latestAgentTurn = [...turnDtos].reverse().find((turn) => turn.role === 'agent')
+      const hasLaterApproval =
+        latestAgentTurn === undefined
+          ? false
+          : turnDtos.some(
+              (turn) => turn.kind === 'mount-approval' && turn.seq > latestAgentTurn.seq,
+            )
+      let mountSuggestions: IntentSessionDetail['mountSuggestions'] = null
+      if (
+        latestAgentTurn !== undefined &&
+        (latestAgentTurn.kind === 'questions' || latestAgentTurn.kind === 'changeset') &&
+        latestAgentTurn.contextRevision === session.contextRevision &&
+        !hasLaterApproval
+      ) {
+        const parsedRequests = IntentMountRequestsSchema.safeParse(
+          latestAgentTurn.content.mountRequests,
+        )
+        if (parsedRequests.success) {
+          const mountedKeys = new Set(
+            mounts.map((mount) => `${mount.resourceType}:${mount.resourceId}`),
+          )
+          const seen = new Set<string>()
+          const items = parsedRequests.data.flatMap((request) => {
+            const key = `${request.resourceType}\u0000${request.name}`
+            if (seen.has(key)) return []
+            seen.add(key)
+            return [
+              {
+                resourceType: request.resourceType,
+                name: request.name,
+                reason: request.reason ?? null,
+                candidates: visibleResources
+                  .filter(
+                    (resource) =>
+                      resource.resourceType === request.resourceType &&
+                      resource.name === request.name &&
+                      !mountedKeys.has(`${resource.resourceType}:${resource.resourceId}`),
+                  )
+                  .map((resource) => ({
+                    resourceId: resource.resourceId,
+                    name: resource.name,
+                    description: resource.description,
+                  })),
+              },
+            ]
+          })
+          if (items.length > 0) {
+            mountSuggestions = {
+              sourceTurnId: latestAgentTurn.id,
+              sourceTurnSeq: latestAgentTurn.seq,
+              contextRevision: session.contextRevision,
+              items,
+            }
+          }
+        }
+      }
+      const journey = projectIntentJourney({
+        status: session.status,
+        contextRevision: session.contextRevision,
+        commitSeq: session.commitSeq,
+        inFlight: session.inFlightTurnId !== null,
+        ...(latestAgentTurn === undefined ? {} : { latestAgentTurnKind: latestAgentTurn.kind }),
+        currentDraft:
+          currentDraft === null
+            ? null
+            : {
+                id: currentDraft.id,
+                contextRevision: currentDraft.contextRevision,
+                validationErrors: currentDraft.validation.errors,
+              },
+        ...(commits[0] === undefined
+          ? {}
+          : { latestCommit: { draftId: commits[0].draftId, state: commits[0].state } }),
+      })
       const detail: IntentSessionDetail = {
         session: {
-          ...sessionSummary(session, { includeOwner: session.ownerUserId !== actor.user.id }),
-          currentDraftRevision: currentDraft?.revision ?? null,
+          ...sessionSummary(session, {
+            includeOwner: session.ownerUserId !== actor.user.id,
+            journey,
+            currentDraftRevision: currentDraft?.revision ?? null,
+          }),
         },
         mounts,
+        mountSuggestions,
         turns: turnDtos,
         currentDraft,
         commits,
@@ -377,10 +588,16 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
-      const { turnId } = await insertUserTurn(deps.db, actor, sessionId, 'message', {
-        message: parsed.data.message,
-      })
-      void fireTurn(sessionId, actor)
+      const config = loadIntentTurnConfigSnapshot()
+      const { turnId, reservation } = await insertUserTurnAndReserve(
+        deps.db,
+        actor,
+        sessionId,
+        'message',
+        { message: parsed.data.message },
+        config.intentBuilderMaxGenerateRounds ?? 50,
+      )
+      void fireTurn(sessionId, actor, config, reservation)
       return c.json({ turnId }, 202)
     },
   )
@@ -403,10 +620,16 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
-      const { turnId } = await insertUserTurn(deps.db, actor, sessionId, 'answers', {
-        answers: parsed.data.answers,
-      })
-      void fireTurn(sessionId, actor)
+      const config = loadIntentTurnConfigSnapshot()
+      const { turnId, reservation } = await insertUserTurnAndReserve(
+        deps.db,
+        actor,
+        sessionId,
+        'answers',
+        { answers: parsed.data.answers },
+        config.intentBuilderMaxGenerateRounds ?? 50,
+      )
+      void fireTurn(sessionId, actor, config, reservation)
       return c.json({ turnId }, 202)
     },
   )
@@ -429,16 +652,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
-      const mounted: Array<{ handle: string }> = []
-      for (const ref of parsed.data.approve) {
-        mounted.push(await addIntentMount(deps.db, actor, sessionId, ref))
-      }
-      await insertUserTurn(deps.db, actor, sessionId, 'mount-approval', {
-        approved: mounted.map((m) => m.handle),
-        rejected: parsed.data.rejectNames,
-      })
+      const receipt = await decideIntentMountSuggestions(deps.db, actor, sessionId, parsed.data)
       emitSessionUpdated(sessionId, actor.user.id)
-      return c.json({ mounted: mounted.map((m) => m.handle) })
+      return c.json(receipt)
     },
   )
 
@@ -521,7 +737,14 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
         // admin read bypass must not leak a distinguishable 422 here.
         throw new NotFoundError('intent-session-not-found', 'intent session not found')
       }
-      void fireTurn(session.id, actor)
+      const config = loadIntentTurnConfigSnapshot()
+      const reservation = await reserveIntentRetryTurn(
+        deps.db,
+        actor,
+        session.id,
+        config.intentBuilderMaxGenerateRounds ?? 50,
+      )
+      void fireTurn(session.id, actor, config, reservation)
       return c.json({ ok: true }, 202)
     },
   )
@@ -542,7 +765,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
         // Admin READ bypass never cancels another user's turn — 404 shape (P2-4).
         throw new NotFoundError('intent-session-not-found', 'intent session not found')
       }
-      return c.json({ aborted: abortIntentTurn(session.id) })
+      const aborted = cancelIntentTurn(deps.db, actor, session.id)
+      if (aborted) emitSessionUpdated(session.id, actor.user.id)
+      return c.json({ aborted })
     },
   )
 

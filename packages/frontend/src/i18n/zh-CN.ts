@@ -18,12 +18,17 @@ export interface Resources {
     newSession: string
     emptyTitle: string
     emptyDescription: string
+    loadingMore: string
     columnTitle: string
     columnStatus: string
     columnRounds: string
     columnCommits: string
     columnUpdated: string
     statusArchived: string
+    archiveAction: string
+    reopenAction: string
+    auditReadOnly: string
+    archivedReadOnly: string
     startBuilding: string
     messageLabel: string
     messageHint: string
@@ -32,6 +37,7 @@ export interface Resources {
     hintHint: string
     hintPlaceholder: string
     hintAuto: string
+    hintAutoDescription: string
     modifyTargetNote: string
     buildWorkspace: string
     timeline: string
@@ -74,12 +80,35 @@ export interface Resources {
     generating: string
     answerQuestions: string
     submitAnswers: string
+    questionsAsked: string
+    answersSubmitted: string
+    answerSeparator: string
+    mountApprovalSubmitted: string
+    mountApproved: string
+    mountRejected: string
+    mountApprovalFirst: string
+    mountSuggestionsTitle: string
+    mountSuggestionsDescription: string
+    mountSuggestionsReadOnly: string
+    mountDecisionFor: string
+    mountApprove: string
+    mountReject: string
+    mountCandidateUnavailable: string
+    mountCandidateLabel: string
+    mountCandidateFor: string
+    mountCandidatePlaceholder: string
+    mountBatchAtomic: string
+    mountDecisionSubmit: string
     mounts: string
+    mountUnavailable: string
     unmount: string
     draftTitle: string
     draftStale: string
     draftStaleNotice: string
     blockingErrors: string
+    commitDisabledStale: string
+    commitDisabledValidation: string
+    commitDisabledGenerating: string
     opCreate: string
     opUpdate: string
     openCommit: string
@@ -98,6 +127,36 @@ export interface Resources {
     rebase: string
     commitTitle: string
     commitSubmit: string
+    commitPending: string
+    commitBack: string
+    commitNext: string
+    commitStepsAria: string
+    commitStep: {
+      strategy: string
+      details: string
+      review: string
+    }
+    commitStrategyCreateOnly: string
+    commitDetailsNone: string
+    commitReviewSafety: string
+    commitReviewResources: string
+    commitReviewUpdates: string
+    commitReviewDetails: string
+    commitReviewDetailStatus: string
+    commitSlotKind: {
+      secret: string
+      secretWaiver: string
+      humanBinding: string
+      finalName: string
+    }
+    commitDetailProvided: string
+    commitDetailRequired: string
+    commitDetailDefault: string
+    commitGuard: {
+      title: string
+      busyBody: string
+      stay: string
+    }
     applyModeTitle: string
     applyModeHint: string
     applyModify: string
@@ -145,15 +204,24 @@ export interface Resources {
     exampleAgent: string
     recentSessions: string
     recentSessionsHint: string
+    loadMore: string
     roundsCount: string
     commitsCount: string
     reviewWorkspace: string
+    workspaceTabs: string
     draftPendingTitle: string
     draftPendingDescription: string
+    opOutline: string
+    opErrorsCount: string
+    draftEmptyState: Record<
+      'goal' | 'generating' | 'clarifying' | 'error' | 'applied' | 'archived',
+      { title: string; description: string }
+    >
     journey: {
       ariaLabel: string
       currentStage: string
       stageStatus: string
+      archivedStageStatus: string
       goal: string
       generate: string
       review: string
@@ -169,6 +237,20 @@ export interface Resources {
         'idle-active': string
         archived: string
       }
+      reason: Record<
+        | 'describe-goal'
+        | 'generation-running'
+        | 'answer-questions'
+        | 'review-draft'
+        | 'draft-stale'
+        | 'draft-invalid'
+        | 'apply-running'
+        | 'generation-failed'
+        | 'apply-failed'
+        | 'applied'
+        | 'archived',
+        string
+      >
     }
     previewBefore: string
     previewAfter: string
@@ -5378,12 +5460,17 @@ export const zhCN: Resources = {
     newSession: '新建意图会话',
     emptyTitle: '还没有意图会话',
     emptyDescription: '描述你的工作目标，让 AI 为你编排所需的全部资源。',
+    loadingMore: '正在加载更多……',
     columnTitle: '标题',
     columnStatus: '状态',
     columnRounds: '轮次',
     columnCommits: '提交',
     columnUpdated: '更新时间',
     statusArchived: '已归档',
+    archiveAction: '归档',
+    reopenAction: '重新打开',
+    auditReadOnly: '你正在审计其他用户的意图任务；此处仅可查看历史与执行过程。',
+    archivedReadOnly: '此任务已归档。重新打开后才能继续修改。',
     startBuilding: '开始构建',
     messageLabel: '工作目标',
     messageHint: '描述目标与过程，越具体越好；AI 拿不准时会反问澄清。',
@@ -5392,6 +5479,7 @@ export const zhCN: Resources = {
     hintHint: '选择目标产物类型；「自动判断」由 AI 依据意图自行决定。',
     hintPlaceholder: '工作流 / 工作组 / 代理 / 技能',
     hintAuto: '自动判断',
+    hintAutoDescription: '由构建 Agent 根据目标判断最合适的资源组合。',
     modifyTargetNote: '修改目标：{{type}}（已挂载到本会话，AI 将直接基于它给出变更）',
     buildWorkspace: '构建工作区',
     timeline: '会话记录',
@@ -5449,12 +5537,35 @@ export const zhCN: Resources = {
     generating: '正在生成……',
     answerQuestions: '回答澄清问题',
     submitAnswers: '提交回答并继续生成',
+    questionsAsked: '{{count}} 个澄清问题',
+    answersSubmitted: '已提交 {{count}} 个回答',
+    answerSeparator: '、',
+    mountApprovalSubmitted: '已处理挂载建议。',
+    mountApproved: '已挂载',
+    mountRejected: '已跳过',
+    mountApprovalFirst: '请先处理全部挂载建议，再提交这些回答。',
+    mountSuggestionsTitle: '复核建议上下文',
+    mountSuggestionsDescription: '构建 Agent 希望引用这些已有资源。整批确认前不会挂载任何内容。',
+    mountSuggestionsReadOnly: '仍有 {{count}} 项上下文建议待处理；请由任务所有者重新打开后决定。',
+    mountDecisionFor: '{{name}} 的处理方式',
+    mountApprove: '挂载',
+    mountReject: '跳过',
+    mountCandidateUnavailable: '当前没有你可访问的匹配资源；此项将被跳过。',
+    mountCandidateLabel: '选择匹配资源',
+    mountCandidateFor: '{{name}} 的匹配资源',
+    mountCandidatePlaceholder: '请选择一个资源',
+    mountBatchAtomic: '所有决定会一起应用；任一选择已失效时，整批都不会变更。',
+    mountDecisionSubmit: '应用上下文决定',
     mounts: '已挂载元素',
+    mountUnavailable: '资源不可用',
     unmount: '取消挂载',
     draftTitle: '草稿变更集（第 {{revision}} 版）',
     draftStale: '已过期',
     draftStaleNotice: '会话上下文已变化，此草稿不可提交；发送新消息重新生成。',
     blockingErrors: '{{count}} 个阻断性校验错误，需 AI 修复后才能提交。',
+    commitDisabledStale: '先更新草稿基线，才能进入提交确认。',
+    commitDisabledValidation: '先解决上方校验问题，才能进入提交确认。',
+    commitDisabledGenerating: '本轮生成完成后即可进入提交确认。',
     opCreate: '新增',
     opUpdate: '修改',
     openCommit: '确认并提交…',
@@ -5473,6 +5584,36 @@ export const zhCN: Resources = {
     rebase: '拉取新基线',
     commitTitle: '确认提交变更集',
     commitSubmit: '提交入库',
+    commitPending: '正在提交……',
+    commitBack: '上一步',
+    commitNext: '下一步',
+    commitStepsAria: '提交步骤',
+    commitStep: {
+      strategy: '应用策略',
+      details: '补充信息',
+      review: '最终复核',
+    },
+    commitStrategyCreateOnly: '本次提议全部为新建资源，无需选择原件修改策略。',
+    commitDetailsNone: '本变更集无需补充名称、密钥、豁免或人类成员绑定。',
+    commitReviewSafety: '这是最终复核。密钥值会刻意隐藏，且不会进入构建 Agent 上下文。',
+    commitReviewResources: '资源数',
+    commitReviewUpdates: '修改数',
+    commitReviewDetails: '补充项',
+    commitReviewDetailStatus: '补充信息',
+    commitSlotKind: {
+      secret: '密钥',
+      secretWaiver: '凭据豁免',
+      humanBinding: '人类成员绑定',
+      finalName: '最终名称',
+    },
+    commitDetailProvided: '已提供',
+    commitDetailRequired: '必须完成',
+    commitDetailDefault: '使用默认',
+    commitGuard: {
+      title: '提交仍在处理中',
+      busyBody: '服务端可能正在应用这批变更。请留在当前页面，避免无法判断提交是否成功。',
+      stay: '留在这里',
+    },
     applyModeTitle: '修改方式',
     applyModeHint: '直接修改原件，或复制为新的私有元素。',
     applyModify: '直接修改',
@@ -5520,15 +5661,46 @@ export const zhCN: Resources = {
     exampleAgent: '创建一个专注安全审计、输出结构化发现的 Agent',
     recentSessions: '最近会话',
     recentSessionsHint: '继续上次构建，或查看已经生成和提交的版本。',
+    loadMore: '加载更多任务',
     roundsCount: '{{count}} 轮',
     commitsCount: '{{count}} 次提交',
     reviewWorkspace: '草稿复核区',
+    workspaceTabs: '意图构建工作区',
     draftPendingTitle: '草稿复核',
     draftPendingDescription: '生成完成后，变更预览与校验结果会出现在这里；确认提交前不会修改资源。',
+    opOutline: '拟议变更',
+    opErrorsCount: '{{count}} 个问题',
+    draftEmptyState: {
+      goal: {
+        title: '先描述最终结果',
+        description: '在「构建」中说明目标，生成的资源提议会出现在这里。',
+      },
+      generating: {
+        title: '正在构建草稿',
+        description: '可在「构建」中实时查看执行过程，完成后这里会出现可复核的变更集。',
+      },
+      clarifying: {
+        title: '需要你的决定',
+        description: '请在「构建」中回答澄清问题，随后会继续生成。',
+      },
+      error: {
+        title: '本轮生成需要处理',
+        description: '到「构建」展开失败轮次、查看证据并重试；当前没有资源被修改。',
+      },
+      applied: {
+        title: '本轮已应用',
+        description: '可查看下方提交记录，或回到「构建」继续调整结果。',
+      },
+      archived: {
+        title: '会话已归档',
+        description: '当前为只读状态，会话过程与提交记录仍可查看。',
+      },
+    },
     journey: {
       ariaLabel: '意图构建进度',
       currentStage: '第 {{current}}/{{total}} 步',
       stageStatus: '第 {{current}}/{{total}} 步 · {{stage}}',
+      archivedStageStatus: '已归档 · {{stageStatus}}',
       goal: '目标',
       generate: '生成',
       review: '复核',
@@ -5543,6 +5715,19 @@ export const zhCN: Resources = {
         error: '本轮遇到错误，请在会话中处理',
         'idle-active': '输入下一条目标开始新一轮',
         archived: '会话已归档，只读',
+      },
+      reason: {
+        'describe-goal': '描述你想构建的最终结果',
+        'generation-running': '构建 Agent 正在生成草稿',
+        'answer-questions': '回答构建 Agent 的问题后继续',
+        'review-draft': '应用前请复核拟创建或修改的资源',
+        'draft-stale': '上下文已变化，请重新生成此草稿',
+        'draft-invalid': '草稿仍有阻断性校验问题',
+        'apply-running': '正在应用已确认的变更',
+        'generation-failed': '生成失败，请查看本轮执行并重试',
+        'apply-failed': '应用失败，请先检查错误再重试',
+        applied: '本轮已应用，可继续提出调整',
+        archived: '任务已归档，只读',
       },
     },
     previewBefore: '修改前',

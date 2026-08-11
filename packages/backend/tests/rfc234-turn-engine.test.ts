@@ -24,12 +24,18 @@ import {
 } from '../src/services/systemAgentRun'
 import {
   abortIntentTurn,
+  cancelIntentTurn,
   classifyMissingEnvelope,
   runIntentTurn,
+  settleReservedIntentTurnStartFailure,
   type IntentTurnConfig,
 } from '../src/services/intent/turnEngine'
 import { recoverIntentTurnsOnBoot, sweepIntentScratch } from '../src/services/intent/maintenance'
-import { createIntentSession, insertUserTurn } from '../src/services/intent/session'
+import {
+  createIntentSession,
+  createIntentSessionAndReserveTurn,
+  insertUserTurn,
+} from '../src/services/intent/session'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_intent_000000000'
@@ -176,6 +182,61 @@ afterEach(() => {
 })
 
 describe('runIntentTurn', () => {
+  test('a runtime-config start failure settles the exact reserved row and clears in-flight', async () => {
+    const { session, reservation } = await createIntentSessionAndReserveTurn(db, actor, {
+      message: 'build with unavailable runtime',
+    })
+    expect(
+      settleReservedIntentTurnStartFailure(db, {
+        sessionId: session.id,
+        actor,
+        reservation,
+        detail: 'runtime profile could not be resolved',
+      }),
+    ).toBe(true)
+
+    const fresh = (
+      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+    )[0]
+    const turn = (
+      await db.select().from(intentTurns).where(eq(intentTurns.id, reservation.turnId))
+    )[0]
+    expect(fresh?.inFlightTurnId).toBeNull()
+    expect(turn?.kind).toBe('error')
+    expect(turn?.captureState).toBe('complete')
+    expect(JSON.parse(turn?.contentJson ?? '{}')).toEqual({
+      code: 'intent-runtime-config-unavailable',
+      detail: 'runtime profile could not be resolved',
+    })
+    expect(
+      settleReservedIntentTurnStartFailure(db, {
+        sessionId: session.id,
+        actor,
+        reservation,
+        detail: 'late duplicate',
+      }),
+    ).toBe(false)
+  })
+
+  test('cancel settles a reserved row before the runtime controller exists', async () => {
+    const { session, reservation } = await createIntentSessionAndReserveTurn(db, actor, {
+      message: 'cancel before runtime resolution',
+    })
+    expect(cancelIntentTurn(db, actor, session.id)).toBe(true)
+
+    const fresh = (
+      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+    )[0]
+    const turn = (
+      await db.select().from(intentTurns).where(eq(intentTurns.id, reservation.turnId))
+    )[0]
+    expect(fresh?.inFlightTurnId).toBeNull()
+    expect(turn?.kind).toBe('error')
+    expect(turn?.captureState).toBe('complete')
+    expect(JSON.parse(turn?.contentJson ?? '{}')).toEqual({ code: 'intent-run-aborted' })
+    expect(cancelIntentTurn(db, actor, session.id)).toBe(false)
+  })
+
   test('happy changeset: immutable draft + hash + budget + nonce persisted', async () => {
     const { session } = await createIntentSession(db, actor, { message: '给我一个审计流水线' })
     const outcome = await runIntentTurn(

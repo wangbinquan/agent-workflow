@@ -18,6 +18,7 @@ import {
 } from '@tanstack/react-router'
 import type { IntentSessionSummary } from '@agent-workflow/shared'
 import { IntentCreateComposer } from '../src/components/intent/IntentCreateComposer'
+import { INTENT_QUERY_KEYS, resetIntentListPages } from '../src/hooks/useIntentSessionsWs'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { enUS } from '../src/i18n/en-US'
 import '../src/i18n'
@@ -45,6 +46,12 @@ function session(id: string, overrides: Partial<IntentSessionSummary> = {}): Int
     createdAt: 1,
     updatedAt: Date.now(),
     ...overrides,
+    journey: overrides.journey ?? {
+      kind: 'goal',
+      reason: 'describe-goal',
+      step: 1,
+      completedThrough: 0,
+    },
   }
 }
 
@@ -68,7 +75,7 @@ function installFetch(rows: IntentSessionSummary[]): Recorded {
       if (url.includes('/api/intent-sessions') && method === 'POST') {
         return json(session('new-one'), 201)
       }
-      if (url.includes('/api/intent-sessions')) return json(rows)
+      if (url.includes('/api/intent-sessions')) return json({ items: rows, nextCursor: null })
       return json([])
     },
   )
@@ -116,11 +123,44 @@ async function renderPage(initialEntry: string | string[] = '/intent', initialIn
 describe('RFC-234 /intent list', () => {
   test('rows replace generic running/active chips with the four business stages', async () => {
     installFetch([
-      session('goal', { turnSeq: 0 }),
-      session('generate', { inFlight: true }),
-      session('clarifying'),
-      session('review', { currentDraftRevision: 2 }),
-      session('apply', { commitSeq: 1 }),
+      session('goal', {
+        turnSeq: 0,
+        journey: { kind: 'goal', reason: 'describe-goal', step: 1, completedThrough: 0 },
+      }),
+      session('generate', {
+        inFlight: true,
+        journey: {
+          kind: 'generating',
+          reason: 'generation-running',
+          step: 2,
+          completedThrough: 1,
+        },
+      }),
+      session('clarifying', {
+        journey: {
+          kind: 'clarifying',
+          reason: 'answer-questions',
+          step: 2,
+          completedThrough: 1,
+        },
+      }),
+      session('review', {
+        currentDraftRevision: 2,
+        journey: {
+          kind: 'review-ready',
+          reason: 'review-draft',
+          step: 3,
+          completedThrough: 2,
+        },
+      }),
+      session('apply', {
+        commitSeq: 1,
+        journey: { kind: 'applied', reason: 'applied', step: 4, completedThrough: 4 },
+      }),
+      session('archived', {
+        status: 'archived',
+        journey: { kind: 'archived', reason: 'archived', step: 3, completedThrough: 2 },
+      }),
     ])
     await renderPage()
     await screen.findByText('goal-goal')
@@ -138,8 +178,52 @@ describe('RFC-234 /intent list', () => {
     expect(screen.getByTestId('intent-stage-status-apply').textContent).toContain(
       'Step 4/4 · Apply',
     )
+    expect(screen.getByTestId('intent-stage-status-archived').textContent).toContain(
+      'Archived · Step 3/4 · Review',
+    )
     expect(screen.queryByText('Generating')).toBeNull()
     expect(screen.queryByText('Active')).toBeNull()
+  })
+
+  test('loads cursor pages on demand and deduplicates sessions refreshed across pages', async () => {
+    const calls: string[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (req: RequestInfo | URL) => {
+      const url = req.toString()
+      calls.push(url)
+      const payload = url.includes('cursor=page-two')
+        ? { items: [session('B'), session('C')], nextCursor: null }
+        : { items: [session('A'), session('B')], nextCursor: 'page-two' }
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    await renderPage()
+    await screen.findByText('goal-A')
+    expect(screen.getAllByText('goal-B')).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: enUS.intent.loadMore }))
+    await screen.findByText('goal-C')
+    expect(screen.getAllByText('goal-B')).toHaveLength(1)
+    expect(calls.some((url) => url.includes('page=1&limit=12&cursor=page-two'))).toBe(true)
+  })
+
+  test('a live refresh drops stale cursor pages but retains page one while it refetches', () => {
+    const qc = new QueryClient()
+    const first = session('A')
+    const second = session('B')
+    qc.setQueryData(INTENT_QUERY_KEYS.list, {
+      pages: [
+        { items: [first], nextCursor: 'page-two' },
+        { items: [second], nextCursor: null },
+      ],
+      pageParams: [null, 'page-two'],
+    })
+    resetIntentListPages(qc)
+    expect(qc.getQueryData(INTENT_QUERY_KEYS.list)).toEqual({
+      pages: [{ items: [first], nextCursor: 'page-two' }],
+      pageParams: [null],
+    })
   })
 
   test('create dialog gates on message, POSTs and navigates to the detail', async () => {
@@ -165,6 +249,31 @@ describe('RFC-234 /intent list', () => {
     expect(router.state.location.search).toEqual({})
   })
 
+  test('type cards are keyboard-selectable and only explicit choices enter the payload', async () => {
+    const rec = installFetch([])
+    await renderPage()
+    await screen.findByText(enUS.intent.emptyTitle)
+    const auto = screen.getByTestId('intent-create-hint-auto')
+    expect(auto.getAttribute('aria-checked')).toBe('true')
+    fireEvent.keyDown(auto, { key: 'ArrowRight' })
+    await waitFor(() =>
+      expect(screen.getByTestId('intent-create-hint-agent').getAttribute('aria-checked')).toBe(
+        'true',
+      ),
+    )
+    fireEvent.click(screen.getByTestId('intent-create-hint-workflow'))
+    fireEvent.change(screen.getByTestId('intent-create-message'), {
+      target: { value: 'build a review workflow' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: enUS.intent.startBuilding }))
+    await waitFor(() => {
+      const post = rec.calls.find(
+        (call) => call.method === 'POST' && call.url.endsWith('/api/intent-sessions'),
+      )
+      expect(post?.body).toEqual({ message: 'build a review workflow', hint: 'workflow' })
+    })
+  })
+
   test('dialog focuses the goal input and restores focus to the inline composer', async () => {
     installFetch([])
     await renderPage('/intent?create=true')
@@ -188,7 +297,9 @@ describe('RFC-234 /intent list', () => {
       async (req: RequestInfo | URL, init?: RequestInit) => {
         const method = (init?.method ?? 'GET').toUpperCase()
         if (method === 'POST') return postResponse
-        return new Response('[]', { headers: { 'content-type': 'application/json' } })
+        return new Response(JSON.stringify({ items: [], nextCursor: null }), {
+          headers: { 'content-type': 'application/json' },
+        })
       },
     )
 
@@ -242,7 +353,9 @@ describe('RFC-234 /intent list', () => {
         const method = (init?.method ?? 'GET').toUpperCase()
         rec.calls.push({ url, method, body: init?.body })
         if (method === 'POST') return postResponse
-        return new Response('[]', { headers: { 'content-type': 'application/json' } })
+        return new Response(JSON.stringify({ items: [], nextCursor: null }), {
+          headers: { 'content-type': 'application/json' },
+        })
       },
     )
 
