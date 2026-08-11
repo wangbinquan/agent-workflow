@@ -242,7 +242,7 @@ export function buildDwActions(
       )
     }
     await assertNewRefsUsable(deps.db, actor, [
-      { type: 'agent', names: [...extractWorkflowAgentRefs(generated.data)] },
+      { type: 'agent', names: [...extractWorkflowAgentRefs(generated.data)], domain: 'id' },
     ])
     const created = await createWorkflow(
       deps.db,

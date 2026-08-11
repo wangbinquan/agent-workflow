@@ -389,7 +389,7 @@ export function commitWorkgroupSaveInTx(
     .all()
   const current = rowToWorkgroup(currentRow, memberRows)
   assertRefsUsableInTx(tx, principal.kind === 'actor' ? principal.actor : null, [
-    { type: 'agent', names: diffNewAgentMemberIds(current, snapshot) },
+    { type: 'agent', names: diffNewAgentMemberIds(current, snapshot), domain: 'id' },
   ])
   const currentSnapshot = workgroupDraftSnapshotOf(current)
   const currentBytes = serializeWorkgroupEditableSnapshotV1(currentSnapshot)
@@ -857,22 +857,9 @@ function assertPrincipalCanWriteInTx(
   const actor = principal.actor
   const isAdmin = isResourceAdminActor(actor)
   const isOwner = row.ownerUserId !== null && row.ownerUserId === actor.user.id
-  let visible = isAdmin || isOwner || row.visibility === 'public'
-  if (!visible) {
-    visible =
-      tx
-        .select({ resourceId: resourceGrants.resourceId })
-        .from(resourceGrants)
-        .where(
-          and(
-            eq(resourceGrants.resourceType, 'workgroup'),
-            eq(resourceGrants.resourceId, row.id),
-            eq(resourceGrants.userId, actor.user.id),
-          ),
-        )
-        .get() !== undefined
-  }
-  if (!visible) throwWorkgroupNotFound(row.id)
+  // RFC-282 D1 — visibility is the shared predicate; isAdmin/isOwner stay
+  // local for the 403 below (404 before 403 is contract).
+  if (!canViewResourceInTx(tx, actor, 'workgroup', row)) throwWorkgroupNotFound(row.id)
   if (!isAdmin && !isOwner) {
     throw new ForbiddenError(
       'forbidden',
@@ -1005,7 +992,7 @@ function prepareAgentMembersInTx(
       ),
     ),
   ]
-  assertRefsUsableInTx(tx, actor, [{ type: 'agent', names: ids }])
+  assertRefsUsableInTx(tx, actor, [{ type: 'agent', names: ids, domain: 'id' }])
   const rows =
     ids.length === 0
       ? []

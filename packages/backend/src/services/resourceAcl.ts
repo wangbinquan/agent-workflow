@@ -147,6 +147,13 @@ export function isResourceAdminActor(actor: Actor): boolean {
   return isResourceAdminRole(actor.user.role)
 }
 
+/** The one WHERE shape for "all grants of `type` for this user" — both the
+ *  async and the in-tx variant below build from it (RFC-282 D2: the grant-set
+ *  query exists once; importRefs used to carry a literal copy). */
+function grantsOfUserWhere(type: AclResourceType, userId: string) {
+  return and(eq(resourceGrants.resourceType, type), eq(resourceGrants.userId, userId))
+}
+
 /** All resource ids of `type` granted to this user (one query; empty for admins — they don't need it). */
 export async function listGrantedResourceIds(
   db: DbClient,
@@ -156,7 +163,22 @@ export async function listGrantedResourceIds(
   const rows = await db
     .select({ resourceId: resourceGrants.resourceId })
     .from(resourceGrants)
-    .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.userId, actor.user.id)))
+    .where(grantsOfUserWhere(type, actor.user.id))
+  return new Set(rows.map((r) => r.resourceId))
+}
+
+/** Sync twin of `listGrantedResourceIds` for services already inside dbTxSync.
+ *  Same contract: callers short-circuit admins themselves. */
+export function listGrantedResourceIdsInTx(
+  tx: DbTxSync,
+  actor: Actor,
+  type: AclResourceType,
+): Set<string> {
+  const rows = tx
+    .select({ resourceId: resourceGrants.resourceId })
+    .from(resourceGrants)
+    .where(grantsOfUserWhere(type, actor.user.id))
+    .all()
   return new Set(rows.map((r) => r.resourceId))
 }
 

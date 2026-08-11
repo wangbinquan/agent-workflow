@@ -15,7 +15,7 @@
 //   workgroup{version}                         (RFC-225 content revision)
 
 import type { Agent, Mcp, Plugin, Workflow, Workgroup } from '@agent-workflow/shared'
-import { INTENT_HANDLE_RE, type AclResourceType } from '@agent-workflow/shared'
+import { decodeIntentRef, encodeIntentRef, type AclResourceType } from '@agent-workflow/shared'
 import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
 import { pluginOperationConfigHashOf } from '@/services/pluginOperationRevision'
 
@@ -60,11 +60,11 @@ export function createHandleAllocator(seed?: IntentContextManifest): HandleAlloc
   const alloc: HandleAllocator = { next: {}, byResource: new Map() }
   for (const entry of seed ?? []) {
     alloc.byResource.set(`${entry.resourceType}:${entry.resourceId}`, entry.handle)
-    const m = INTENT_HANDLE_RE.exec(entry.handle)
-    if (m !== null) {
-      const n = Number(m[2])
+    // RFC-282 D3 — parse via the intent-domain codec (RFC-271), not a bare exec.
+    const ast = decodeIntentRef(entry.handle)
+    if (ast?.k === 'handle') {
       const cur = alloc.next[entry.resourceType] ?? 0
-      if (n > cur) alloc.next[entry.resourceType] = n
+      if (ast.ordinal > cur) alloc.next[entry.resourceType] = ast.ordinal
     }
   }
   return alloc
@@ -80,7 +80,10 @@ export function allocateHandle(
   if (existing !== undefined) return existing
   const n = (alloc.next[resourceType] ?? 0) + 1
   alloc.next[resourceType] = n
-  const handle = `res#${resourceType}#${n}`
+  // RFC-282 D3 — mint via the intent-domain codec; the handle wire spelling
+  // has exactly one producer (encodeIntentRef round-trips with decode).
+  const handle = encodeIntentRef({ k: 'handle', type: resourceType, ordinal: n })
+  if (handle === null) throw new Error(`intent handle encode failed for ${resourceType}#${n}`)
   alloc.byResource.set(key, handle)
   return handle
 }

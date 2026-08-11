@@ -19,15 +19,7 @@ import {
 import { and, eq, inArray, like, notInArray, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import {
-  agents,
-  mcps,
-  plugins,
-  resourceGrants,
-  scheduledTasks,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import { agents, mcps, plugins, scheduledTasks, tasks, workflows } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
@@ -35,6 +27,7 @@ import { agentsDependingOnIn, validateDependsOn } from './agentDeps'
 import { agentRefFenceGroups, resolveAgentRefsUsable } from './agentRefs'
 import {
   assertInitialResourceOwner,
+  canViewResourceInTx,
   discloseRefsSync,
   discloseScheduleRefs,
   initialBuiltinResourceAcl,
@@ -837,22 +830,12 @@ function requireAgentMutationRevision(
 
   const isAdmin = isResourceAdminActor(actor)
   const isOwner = current.ownerUserId !== null && current.ownerUserId === actor.user.id
-  let visible = isAdmin || isOwner || current.visibility === 'public'
-  if (!visible) {
-    visible =
-      tx
-        .select({ resourceId: resourceGrants.resourceId })
-        .from(resourceGrants)
-        .where(
-          and(
-            eq(resourceGrants.resourceType, 'agent'),
-            eq(resourceGrants.resourceId, current.id),
-            eq(resourceGrants.userId, actor.user.id),
-          ),
-        )
-        .get() !== undefined
+  // RFC-282 D1 — visibility is the shared predicate; isAdmin/isOwner stay
+  // local because the 403 decision below reuses them, and the error order
+  // (404 before 403 before stale) is part of the route contract.
+  if (!canViewResourceInTx(tx, actor, 'agent', current)) {
+    throw new NotFoundError('agent-not-found', 'agent not found')
   }
-  if (!visible) throw new NotFoundError('agent-not-found', 'agent not found')
   if (!isAdmin && !isOwner) {
     throw new ForbiddenError('forbidden', 'only the agent owner or a resource admin can modify it')
   }

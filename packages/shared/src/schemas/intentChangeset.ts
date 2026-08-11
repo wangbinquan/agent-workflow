@@ -46,7 +46,7 @@ export const INTENT_CHANGESET_SCHEMA_VERSION = 1
  * 不变**，`res#<type>#<n>` / `$new:<slug>` 一个字符都没动。
  */
 export { INTENT_HANDLE_RE, INTENT_TEMP_REF_RE } from '../ref/codecs'
-import { INTENT_HANDLE_RE, INTENT_TEMP_REF_RE } from '../ref/codecs'
+import { decodeIntentRef, INTENT_HANDLE_RE, INTENT_TEMP_REF_RE } from '../ref/codecs'
 
 export const IntentHandleSchema = z
   .string()
@@ -60,12 +60,13 @@ export const IntentRefSchema = z.union([IntentHandleSchema, IntentTempRefSchema]
 export type IntentRef = z.infer<typeof IntentRefSchema>
 
 export function intentHandleType(handle: string): AclResourceType | null {
-  const m = INTENT_HANDLE_RE.exec(handle)
-  return m ? (m[1] as AclResourceType) : null
+  // RFC-282 D3 — parse via the intent-domain codec, not a second regex read.
+  const ast = decodeIntentRef(handle)
+  return ast?.k === 'handle' ? ast.type : null
 }
 
 export function isIntentTempRef(ref: string): boolean {
-  return INTENT_TEMP_REF_RE.test(ref)
+  return decodeIntentRef(ref)?.k === 'local'
 }
 
 // -----------------------------------------------------------------------------

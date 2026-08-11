@@ -792,6 +792,7 @@ function commitOne(
       assertRefsUsableInTx(tx, ctx.actor, [
         {
           type: 'agent',
+          domain: 'id',
           names: (item.definition.nodes ?? [])
             .filter((n) => n.kind === 'agent-single' && typeof n.agentId === 'string')
             .map((n) => n.agentId as string),

@@ -15,13 +15,18 @@ import {
   type ResolveAgentImportRefsRequest,
   type ResolveAgentImportRefsResult,
 } from '@agent-workflow/shared'
-import { and, eq, inArray } from 'drizzle-orm'
+import { inArray } from 'drizzle-orm'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
-import { resourceGrants, users } from '@/db/schema'
+import { users } from '@/db/schema'
 import { ConflictError, ValidationError } from '@/util/errors'
-import { ACL_TABLES, isResourceAdminActor, isVisibleRow } from './resourceAcl'
+import {
+  ACL_TABLES,
+  isResourceAdminActor,
+  isVisibleRow,
+  listGrantedResourceIdsInTx,
+} from './resourceAcl'
 
 interface ImportRefRow {
   id: string
@@ -439,14 +444,11 @@ function buildCandidateSnapshotsInTx(
   return candidatesBySelector
 }
 
+/** RFC-282 D2 — the grant-set SQL lives in resourceAcl only; this shell keeps
+ *  importRefs' admin short-circuit semantics. */
 function grantedIdsInTx(tx: DbTxSync, actor: Actor, type: ImportRefType): ReadonlySet<string> {
   if (isResourceAdminActor(actor)) return new Set()
-  const rows = tx
-    .select({ resourceId: resourceGrants.resourceId })
-    .from(resourceGrants)
-    .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.userId, actor.user.id)))
-    .all()
-  return new Set(rows.map((row) => row.resourceId))
+  return listGrantedResourceIdsInTx(tx, actor, type)
 }
 
 function candidateSnapshotsEqual(

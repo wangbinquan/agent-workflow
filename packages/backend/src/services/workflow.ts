@@ -198,7 +198,7 @@ export async function createWorkflow(
     // run before the sole production workflow INSERT.
     opts?.inTxGuard?.assert(tx)
     assertRefsUsableInTx(tx, actor, [
-      { type: 'agent', names: newAgentIds.filter((id) => fenceableAgentIds.has(id)) },
+      { type: 'agent', names: newAgentIds.filter((id) => fenceableAgentIds.has(id)), domain: 'id' },
       // Name domain is dangle-tolerant in-tx too: no fenceable filter needed.
       { type: 'workflow', names: newWorkflowNames, domain: 'name' },
       { type: 'workgroup', names: newWorkgroupNames, domain: 'name' },
@@ -276,7 +276,7 @@ export async function copyWorkflow(
 
     assertCanonicalWorkflowAgentIds(source.definition)
     assertRefsUsableInTx(tx, actor, [
-      { type: 'agent', names: [...extractWorkflowAgentRefs(source.definition)] },
+      { type: 'agent', names: [...extractWorkflowAgentRefs(source.definition)], domain: 'id' },
       // RFC-243 (§5.3): copy re-checks the FULL call-ref set — the copier must
       // be able to see every referenced workflow name it is about to adopt
       // (dangling names pass; name domain).
@@ -437,25 +437,22 @@ export async function prepareWorkflowSave(
     const resolved = await resolveRefsUsableById(db, principalActor, 'agent', newIds)
     // RFC-243 (§5.3): NEW call-workflow name selectors only (D15 grandfather —
     // references already stored keep working even if their target went private).
-    const newWorkflowNames = diffNewNames(
-      new Set(extractWorkflowWorkflowRefs(preflightWorkflow.definition)),
-      new Set(extractWorkflowWorkflowRefs(normalizedSnapshot.definition)),
-    )
+    // RFC-282 D4 — full next set + grandfatheredNames; the D15 diff lives in
+    // the resolver now (a hand-rolled diff was the fail-open the design gate
+    // flagged: forget it once and grandfathering silently vanishes).
     const resolvedWorkflows = await resolveRefsUsableByName(
       db,
       principalActor,
       'workflow',
-      newWorkflowNames,
-    )
-    const newWorkgroupNames2 = diffNewNames(
-      new Set(extractWorkflowWorkgroupRefs(preflightWorkflow.definition)),
-      new Set(extractWorkflowWorkgroupRefs(normalizedSnapshot.definition)),
+      extractWorkflowWorkflowRefs(normalizedSnapshot.definition),
+      { grandfatheredNames: new Set(extractWorkflowWorkflowRefs(preflightWorkflow.definition)) },
     )
     const resolvedWorkgroups = await resolveRefsUsableByName(
       db,
       principalActor,
       'workgroup',
-      newWorkgroupNames2,
+      extractWorkflowWorkgroupRefs(normalizedSnapshot.definition),
+      { grandfatheredNames: new Set(extractWorkflowWorkgroupRefs(preflightWorkflow.definition)) },
     )
     assertNoMissingRefs([
       ...resolved.missing,
@@ -524,7 +521,7 @@ export function commitWorkflowSaveInTx(
     new Set(extractWorkflowWorkgroupRefs(normalizedSnapshot.definition)),
   )
   assertRefsUsableInTx(tx, principal.kind === 'actor' ? principal.actor : null, [
-    { type: 'agent', names: newAgentIds },
+    { type: 'agent', names: newAgentIds, domain: 'id' },
     { type: 'workflow', names: newWorkflowNames, domain: 'name' },
     { type: 'workgroup', names: newWorkgroupNames, domain: 'name' },
   ])
@@ -1007,22 +1004,9 @@ function assertPrincipalCanWriteInTx(
   const actor = principal.actor
   const isAdmin = isResourceAdminActor(actor)
   const isOwner = row.ownerUserId !== null && row.ownerUserId === actor.user.id
-  let visible = isAdmin || isOwner || row.visibility === 'public'
-  if (!visible) {
-    const grant = tx
-      .select({ resourceId: resourceGrants.resourceId })
-      .from(resourceGrants)
-      .where(
-        and(
-          eq(resourceGrants.resourceType, 'workflow'),
-          eq(resourceGrants.resourceId, row.id),
-          eq(resourceGrants.userId, actor.user.id),
-        ),
-      )
-      .get()
-    visible = grant !== undefined
-  }
-  if (!visible) throwWorkflowNotFound(row.id)
+  // RFC-282 D1 — visibility is the shared predicate; isAdmin/isOwner stay
+  // local for the 403 below, and the 404 → builtin → 403 order is contract.
+  if (!canViewResourceInTx(tx, actor, 'workflow', row)) throwWorkflowNotFound(row.id)
   assertNotBuiltin('workflow', row)
   if (!isAdmin && !isOwner) {
     throw new ForbiddenError('forbidden', 'only the workflow owner or an admin can modify it')

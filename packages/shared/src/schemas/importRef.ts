@@ -7,6 +7,7 @@
 // the same name.
 
 import { z } from 'zod'
+import { decodeImportSelectorRef } from '../ref/codecs'
 import { ResourceVisibilitySchema } from './resourceAcl'
 
 // RFC-243 (§5.5): 'workflow' joins for call-workflow name selectors; the
@@ -32,9 +33,14 @@ export const ImportRefSelectorSchema = z
   .strict()
 export type ImportRefSelector = z.infer<typeof ImportRefSelectorSchema>
 
-/** Stable UI/service key; JSON tuple avoids delimiter collisions. */
+/** Stable UI/service key; JSON tuple avoids delimiter collisions.
+ *  RFC-282 D3 — built from the importSelector-domain AST (RFC-271 codec); the
+ *  key bytes are unchanged (same JSON tuple), only the field read goes
+ *  through the one decode. */
 export function importRefSelectorKey(selector: ImportRefSelector): string {
-  return JSON.stringify([selector.type, selector.name, selector.ownerUsername ?? null])
+  const ast = decodeImportSelectorRef(selector)
+  if (ast.k !== 'selector') throw new Error('import selector decode produced a non-selector ast')
+  return JSON.stringify([ast.type, ast.name, ast.ownerUsername ?? null])
 }
 
 export const ImportRefSelectionSchema = z

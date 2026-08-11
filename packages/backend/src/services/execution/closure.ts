@@ -20,10 +20,42 @@ import { ValidationError } from '@/util/errors'
 import {
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,
+  decodeCallRef,
   detectCallCycles,
   WorkflowDefinitionSchema,
+  type ResourceRefAst,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
+
+/** RFC-282 D3 — the call-domain AST (RFC-271 codec) freeze walks on. */
+type CallRefAstNode = Extract<ResourceRefAst, { k: 'call' }>
+
+/** Selector wire → call-domain AST, via the ONE call codec (RFC-271 决策 29;
+ *  RFC-282 D3 puts it on the production path — the walk below reads
+ *  `authoritativeName` / `idHint` instead of bare wire fields). */
+function workflowCallAst(ref: {
+  nodeId: string
+  workflowName: string
+  workflowId?: string
+}): CallRefAstNode {
+  return decodeCallRef('workflow', {
+    nodeId: ref.nodeId,
+    name: ref.workflowName,
+    ...(ref.workflowId === undefined ? {} : { idHint: ref.workflowId }),
+  }) as CallRefAstNode
+}
+
+function workgroupCallAst(ref: {
+  nodeId: string
+  workgroupName: string
+  workgroupId?: string
+}): CallRefAstNode {
+  return decodeCallRef('workgroup', {
+    nodeId: ref.nodeId,
+    name: ref.workgroupName,
+    ...(ref.workgroupId === undefined ? {} : { idHint: ref.workgroupId }),
+  }) as CallRefAstNode
+}
 
 export interface FrozenWorkflowRef {
   id: string
@@ -226,8 +258,12 @@ export async function freezeCallClosure(
   // RFC-271 T6e（决策 28）：BFS 按**边**走，不按 name。
   // ⚠️ 此前是 `idHintByName`（per-name、last-write-wins）——同一张图里两个同名
   // selector 分别指向 W1/W2 时，**至少一个用户选择会丢**。边键让它们各自独立。
-  type WorkflowEdge = { sourceId: string; ref: (typeof rootRefs)[number] }
-  const workflowEdges: WorkflowEdge[] = rootRefs.map((r) => ({ sourceId: root.id, ref: r }))
+  // RFC-282 D3：边上的 ref 是 call 域 AST（decodeCallRef），不再是裸 wire 字段。
+  type WorkflowEdge = { sourceId: string; ref: CallRefAstNode }
+  const workflowEdges: WorkflowEdge[] = rootRefs.map((r) => ({
+    sourceId: root.id,
+    ref: workflowCallAst(r),
+  }))
   const resolvedByEdge = new Map<string, FrozenWorkflowRef>()
   /** 同一行只解析一次（definition 解析开销）；键是行 id。 */
   const resolvedById = new Map<string, FrozenWorkflowRef>()
@@ -237,15 +273,13 @@ export async function freezeCallClosure(
     const pending = frontier.filter((e) => !seenEdge.has(callEdgeKey(e.sourceId, e.ref.nodeId)))
     if (pending.length === 0) break
     for (const e of pending) seenEdge.add(callEdgeKey(e.sourceId, e.ref.nodeId))
-    const missing = [...new Set(pending.map((e) => e.ref.workflowName))]
+    const missing = [...new Set(pending.map((e) => e.ref.authoritativeName))]
     // `workflows.name` is NOT unique (YAML import collisions live behind a
     // dialog). Freeze-time has no dialog — resolution is id-cache-first, then
     // DETERMINISTIC among the rows the launch actor CAN SEE: oldest visible
     // ULID wins (实现门 P0-1).
     const hintIds = [
-      ...new Set(
-        pending.flatMap((e) => (e.ref.workflowId !== undefined ? [e.ref.workflowId] : [])),
-      ),
+      ...new Set(pending.flatMap((e) => (e.ref.idHint !== undefined ? [e.ref.idHint] : []))),
     ]
     const hintRows =
       hintIds.length === 0
@@ -281,8 +315,8 @@ export async function freezeCallClosure(
     }
     const nextFrontier: WorkflowEdge[] = []
     for (const edge of pending) {
-      const name = edge.ref.workflowName
-      const hintId = edge.ref.workflowId
+      const name = edge.ref.authoritativeName
+      const hintId = edge.ref.idHint
       const hinted = hintId !== undefined ? hintById.get(hintId) : undefined
       const row =
         hinted !== undefined && hinted.name === name && isVisibleRow(actor, hinted, workflowGrants)
@@ -310,7 +344,7 @@ export async function freezeCallClosure(
       resolvedById.set(row.id, frozen)
       // 被解析出来的这个工作流自己的 call 边，继续入队（source 是它自己的 id）。
       for (const ref of collectWorkflowCallRefs(definition)) {
-        const next = { sourceId: row.id, ref }
+        const next = { sourceId: row.id, ref: workflowCallAst(ref) }
         workflowEdges.push(next)
         nextFrontier.push(next)
       }
@@ -347,14 +381,15 @@ export async function freezeCallClosure(
   // RFC-271 T6e（决策 28）：按**边**收集，每条边带自己的 idHint。
   // ⚠️ 此前这里只收 `workgroupName` 进一个 Set，`workgroupId` 从头到尾没被读过
   // ——用户在下拉里选的那个组被静默丢弃，启动照样取最老可见行。
-  const workgroupEdges: Array<{ sourceId: string; ref: (typeof rootWorkgroupRefs)[number] }> = []
-  for (const r of rootWorkgroupRefs) workgroupEdges.push({ sourceId: root.id, ref: r })
+  const workgroupEdges: Array<{ sourceId: string; ref: CallRefAstNode }> = []
+  for (const r of rootWorkgroupRefs)
+    workgroupEdges.push({ sourceId: root.id, ref: workgroupCallAst(r) })
   for (const wf of resolvedById.values()) {
     for (const g of collectWorkgroupCallRefs(wf.definition)) {
-      workgroupEdges.push({ sourceId: wf.id, ref: g })
+      workgroupEdges.push({ sourceId: wf.id, ref: workgroupCallAst(g) })
     }
   }
-  const workgroupNames = new Set(workgroupEdges.map((e) => e.ref.workgroupName))
+  const workgroupNames = new Set(workgroupEdges.map((e) => e.ref.authoritativeName))
   const frozenWorkgroups: Record<string, FrozenWorkgroupRef> = {}
   if (workgroupNames.size > 0) {
     const rows = await db
@@ -377,7 +412,7 @@ export async function freezeCallClosure(
     const hintIds = [
       ...new Set(
         workgroupEdges.flatMap((e) => {
-          const hint = e.ref.workgroupId
+          const hint = e.ref.idHint
           return typeof hint === 'string' ? [hint] : []
         }),
       ),
@@ -398,8 +433,8 @@ export async function freezeCallClosure(
     const hintById = new Map(hintRows.map((r) => [r.id, r]))
 
     for (const edge of workgroupEdges) {
-      const name = edge.ref.workgroupName
-      const hintId = edge.ref.workgroupId
+      const name = edge.ref.authoritativeName
+      const hintId = edge.ref.idHint
       const hinted = typeof hintId === 'string' ? hintById.get(hintId) : undefined
       const row =
         hinted !== undefined && hinted.name === name && isVisibleRow(actor, hinted, workgroupGrants)

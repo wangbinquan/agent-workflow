@@ -288,7 +288,7 @@ export function buildConfigActions(
     // handler's own keys ride on top of the fresh base.
     await deps.beforeWriteTransaction?.()
     dbTxSync(deps.db, (tx) => {
-      assertRefsUsableInTx(tx, actor, [{ type: 'agent', names: addedAgentIds }])
+      assertRefsUsableInTx(tx, actor, [{ type: 'agent', names: addedAgentIds, domain: 'id' }])
       const fresh = tx
         .select({ workgroupConfigJson: tasks.workgroupConfigJson })
         .from(tasks)

@@ -16,10 +16,9 @@
 
 import type { AclResourceType, WorkflowDefinition } from '@agent-workflow/shared'
 import { collectWorkflowCallRefs, collectWorkgroupCallRefs } from '@agent-workflow/shared'
-import { and, eq, inArray } from 'drizzle-orm'
+import { inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { resourceGrants } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
 import { ValidationError } from '@/util/errors'
 import {
@@ -27,6 +26,7 @@ import {
   isResourceAdminActor,
   isVisibleRow,
   listGrantedResourceIds,
+  listGrantedResourceIdsInTx,
   type AclRow,
 } from './resourceAcl'
 
@@ -101,16 +101,20 @@ export interface RefCheckGroup {
    */
   names: readonly string[]
   /**
-   * RFC-243 (§5.3) — token domain, default `'id'`. `'name'` groups carry
-   * dangle-tolerant NAME selectors (workflow names are deliberately
-   * non-unique): a name matching ZERO rows passes (dangling until launch,
-   * which fails closed with `workflow-call-ref-missing`), a name whose every
-   * matching row is invisible to the actor is rejected — that visibility
-   * fence is the ONLY thing standing between a name-guessing editor and the
-   * launch-time closure freeze, which reads referenced rows without ACL
-   * (D3/D11 implicit closure authorization).
+   * RFC-243 (§5.3) — token domain. `'name'` groups carry dangle-tolerant NAME
+   * selectors (workflow names are deliberately non-unique): a name matching
+   * ZERO rows passes (dangling until launch, which fails closed with
+   * `workflow-call-ref-missing`), a name whose every matching row is
+   * invisible to the actor is rejected — that visibility fence is the ONLY
+   * thing standing between a name-guessing editor and the launch-time closure
+   * freeze, which reads referenced rows without ACL (D3/D11 implicit closure
+   * authorization).
+   *
+   * RFC-282 D4 — REQUIRED (was `?: … = 'id'`): a caller that passed name
+   * tokens but forgot the tag used to silently take the id path and pass;
+   * now the omission is a compile error.
    */
-  domain?: 'id' | 'name'
+  domain: 'id' | 'name'
 }
 
 /**
@@ -125,8 +129,17 @@ export async function resolveRefsUsableByName(
   actor: Actor | null,
   type: AclResourceType,
   names: readonly string[],
+  /**
+   * RFC-282 D4 — D15 grandfathering lives IN the resolver, symmetric with
+   * `resolveRefsUsableById`'s `grandfatheredIds`: pass the FULL next name set
+   * plus the previously-stored names, and only genuinely-new names are
+   * ACL-checked. Callers no longer diff by hand (a forgotten diff silently
+   * dropped grandfathering with zero type-level signal).
+   */
+  opts: { grandfatheredNames?: ReadonlySet<string> } = {},
 ): Promise<{ missing: Array<{ type: AclResourceType; name: string }> }> {
-  const refs = [...new Set(names)].filter((n) => n.length > 0)
+  const grandfathered = opts.grandfatheredNames ?? new Set<string>()
+  const refs = [...new Set(names)].filter((n) => n.length > 0 && !grandfathered.has(n))
   const missing: Array<{ type: AclResourceType; name: string }> = []
   const enforce = actor !== null && !isResourceAdminActor(actor)
   if (refs.length === 0 || !enforce) return { missing }
@@ -210,7 +223,7 @@ export async function assertNewRefsUsable(
   if (isResourceAdminActor(actor)) return
   const missing: Array<{ type: AclResourceType; name: string }> = []
   for (const group of groups) {
-    if ((group.domain ?? 'id') === 'name') {
+    if (group.domain === 'name') {
       const resolved = await resolveRefsUsableByName(db, actor, group.type, group.names)
       missing.push(...resolved.missing)
       continue
@@ -276,7 +289,7 @@ export function assertRefsUsableInTx(
   for (const group of groups) {
     const refs = [...new Set(group.names)].filter((ref) => ref.length > 0)
     if (refs.length === 0) continue
-    const nameDomain = (group.domain ?? 'id') === 'name'
+    const nameDomain = group.domain === 'name'
     const table = ACL_TABLES[group.type]
     // Narrowed enforcement identity: null ⇒ framework caller or resource admin.
     const enforcingActor = actor !== null && !isResourceAdminActor(actor) ? actor : null
@@ -292,21 +305,10 @@ export function assertRefsUsableInTx(
       .where(nameDomain ? inArray(table.name, refs) : inArray(table.id, refs))
       .all() as Array<AclRow & { name: string }>
     const byId = new Map(rows.map((row) => [row.id, row]))
+    // RFC-282 D2 — the grant-set SQL lives in resourceAcl only.
     const granted =
       enforcingActor !== null
-        ? new Set(
-            tx
-              .select({ resourceId: resourceGrants.resourceId })
-              .from(resourceGrants)
-              .where(
-                and(
-                  eq(resourceGrants.resourceType, group.type),
-                  eq(resourceGrants.userId, enforcingActor.user.id),
-                ),
-              )
-              .all()
-              .map((row) => row.resourceId),
-          )
+        ? listGrantedResourceIdsInTx(tx, enforcingActor, group.type)
         : new Set<string>()
 
     if (nameDomain && enforcingActor !== null) {

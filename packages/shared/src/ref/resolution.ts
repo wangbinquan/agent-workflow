@@ -81,10 +81,8 @@ export type RefResult<T> =
   | { readonly ok: false; readonly reason: 'dangling'; readonly ref: ResourceRefAst }
   | { readonly ok: false; readonly reason: 'unreadable'; readonly ref: ResourceRefAst }
 
-export interface RefResolver<T, Ctx> {
-  readonly domain: RefDomainPolicy
-  resolve(ref: ResourceRefAst, call: RefCallPolicy, ctx: Ctx): Promise<RefResult<T>>
-}
+// （RFC-282 D3：原 `RefResolver<T,Ctx>` 接口对象零实现、零消费——生产采用的是
+//  「函数 + RefCallPolicy 实参」形态（services/ref/runtimeRef.ts），接口已删除。）
 
 // --- 各域的静态策略（单一事实源；resolver 实现从这里取，不各写各的） ---
 

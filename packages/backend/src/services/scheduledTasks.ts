@@ -22,16 +22,16 @@ import {
   wallClockAt,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { existsSync, realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 
 import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { agents, resourceGrants, scheduledTasks, users, workflows, workgroups } from '@/db/schema'
+import { agents, scheduledTasks, users, workflows, workgroups } from '@/db/schema'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
-import { canViewResource, isResourceAdminActor } from '@/services/resourceAcl'
+import { canViewResource, canViewResourceInTx } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
@@ -384,29 +384,6 @@ function assertScheduledTargetUsableInTx(
     throw new NotFoundError('workgroup-not-found', 'workgroup not found')
   }
   body['workgroupName'] = row.name
-}
-
-function canViewResourceInTx(
-  tx: DbTxSync,
-  actor: Actor,
-  type: 'agent' | 'workflow' | 'workgroup',
-  row: { id: string; ownerUserId: string | null; visibility: 'private' | 'public' },
-): boolean {
-  if (isResourceAdminActor(actor)) return true
-  if (row.visibility === 'public' || row.ownerUserId === actor.user.id) return true
-  return (
-    tx
-      .select({ resourceId: resourceGrants.resourceId })
-      .from(resourceGrants)
-      .where(
-        and(
-          eq(resourceGrants.resourceType, type),
-          eq(resourceGrants.resourceId, row.id),
-          eq(resourceGrants.userId, actor.user.id),
-        ),
-      )
-      .get() !== undefined
-  )
 }
 
 export async function createScheduledTask(

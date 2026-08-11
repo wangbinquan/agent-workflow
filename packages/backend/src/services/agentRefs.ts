@@ -14,13 +14,16 @@
 // execution semantics). It is kept as an UNRESOLVED managed ref instead.
 
 import type { AgentSkillRef } from '@agent-workflow/shared'
+import { decodeAgentSkillRef, resourceRefKey } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { resolveRefsUsableById, assertNoMissingRefs, type RefCheckGroup } from './resourceRefs'
 
-/** Ref-identity key for skill-ref de-dup. */
+/** Ref-identity key for skill-ref de-dup — the shared AST key (RFC-282 D3;
+ *  the old hand-rolled `m:`/`p:` prefix pair was the second spelling RFC-271
+ *  called out — self-minted namespaces collide the day a third kind lands). */
 function skillRefKey(ref: AgentSkillRef): string {
-  return ref.kind === 'managed' ? `m:${ref.skillId}` : `p:${ref.name}`
+  return resourceRefKey(decodeAgentSkillRef(ref))
 }
 
 /** The cross-resource references an agent create/update carries. Ordinary
@@ -67,11 +70,12 @@ export function diffNewAgentRefGroups(
     return [...new Set(values)].filter((id) => !old.has(id))
   }
   return [
-    { type: 'mcp', names: diff(next.mcp, existing?.mcp) },
-    { type: 'plugin', names: diff(next.plugins, existing?.plugins) },
-    { type: 'agent', names: diff(next.dependsOn, existing?.dependsOn) },
+    { type: 'mcp', names: diff(next.mcp, existing?.mcp), domain: 'id' },
+    { type: 'plugin', names: diff(next.plugins, existing?.plugins), domain: 'id' },
+    { type: 'agent', names: diff(next.dependsOn, existing?.dependsOn), domain: 'id' },
     {
       type: 'skill',
+      domain: 'id',
       names: diff([...managedSkillIdSet(next.skills)], [...managedSkillIdSet(existing?.skills)]),
     },
   ]

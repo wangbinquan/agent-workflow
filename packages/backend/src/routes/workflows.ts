@@ -331,7 +331,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
         new Set(extractWorkflowWorkgroupRefs(parsed.data.definition)),
       )
       await assertNewRefsUsable(deps.db, actor, [
-        { type: 'agent', names: addedAgentNames },
+        { type: 'agent', names: addedAgentNames, domain: 'id' },
         { type: 'workflow', names: addedWorkflowNames, domain: 'name' },
         { type: 'workgroup', names: addedWorkgroupNames, domain: 'name' },
       ])
