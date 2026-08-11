@@ -126,6 +126,7 @@ function mkCtx(runRoot: string, overrides: Partial<BusinessNodeSpawnContext> = {
     skills: [],
     resumeSessionId: 'ses_42',
     worktreePath,
+    taskMounts: [worktreePath],
     runRoot,
     // RFC-154: the runner always supplies the frozen/default profile.
     configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
@@ -149,12 +150,23 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
       const plan = await getRuntimeDriver('opencode').buildBusinessSpawn(ctx)
 
       // 收口前 runner 的公式，手拍出期望 plan：
+      // RFC-281 T1: the driver injects the workspace boundary through
+      // buildInlineConfig's boundaryCtx, so the hand-rolled formula must
+      // reproduce the SAME ctx (driver.ts derives it from runDir / taskMounts /
+      // tmp). Same process → tmpdir() and runDir match byte-for-byte.
+      const runDir = join(runRoot, ctx.configDir.name)
       const inline = buildInlineConfig(
         ctx.agent,
         ctx.resolvedParamsByAgent,
         ctx.dependents,
         ctx.mcps,
         ctx.plugins,
+        {
+          taskMounts: ctx.taskMounts,
+          runDir,
+          stagedSkillDirs: [join(runDir, 'skills')],
+          tmpGlobs: [`${tmpdir()}/opencode/*`],
+        },
       )
       const primary = inline.agent[ctx.agent.name]
       if (primary !== undefined && typeof primary.prompt === 'string') {
@@ -182,6 +194,7 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
         agent: Record<string, Record<string, unknown>>
         mcp?: Record<string, unknown>
         plugin?: unknown[]
+        permission?: { external_directory?: Record<string, unknown> }
       }
       // 织入结果：primary prompt 尾接 memory block；dependent 不织入。
       expect(cfg.agent['root-agent']?.prompt).toBe(
@@ -196,7 +209,14 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
       expect(cfg.plugin).toEqual([
         ['file:///tmp/aw-plugins/tracer/node_modules/tracer', { key: 'v-tracer' }],
       ] as never)
-      expect('permission' in cfg).toBe(false)
+      // RFC-281 T1: the top-level external_directory boundary is now emitted
+      // (covers opencode's native subagents), and every agent entry carries the
+      // boundary in its own permission map (deny baseline + re-allow).
+      expect(cfg.permission?.external_directory?.['*']).toBe('deny')
+      expect(
+        (cfg.agent['root-agent']?.permission as { external_directory?: Record<string, unknown> })
+          ?.external_directory?.['*'],
+      ).toBe('deny')
 
       // §4.4 诊断回传 = 收口前 runner 从 inline config 派生的同一组字段。
       expect(plan.diagnostics).toEqual({

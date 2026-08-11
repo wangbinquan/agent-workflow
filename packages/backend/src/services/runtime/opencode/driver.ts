@@ -34,9 +34,11 @@ import type { InventorySnapshot } from '@agent-workflow/shared'
 import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveCapture'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { observeSystemEvent, parseEvent } from './events'
 import { buildOpencodeSpawn } from './spawn'
 import { buildInlineConfig } from './inlineConfig'
+import type { BoundaryCtx } from '@/services/execution/workspaceBoundary'
 import { pickRuntimeHead } from '../head'
 import { stageSkills } from '../stageSkills'
 import { probeOpencode } from '@/util/opencode'
@@ -205,13 +207,29 @@ export const opencodeDriver: RuntimeDriver = {
     const runDir = join(ctx.runRoot, ctx.configDir.name)
     stageSkills(runDir, ctx.skills, ctx.log)
 
+    // RFC-281 T1: task workspace boundary. Re-allow set = this task's mounts +
+    // the run config dir (staged skills live under <runDir>/skills, already
+    // covered by runDir) + opencode's tmp. composeOpencodeBoundary denies
+    // everything else outside cwd, and `--auto` cannot flip a deny (design §5
+    // E2/E4). System persona spawns (renderOpencodeAgentEntry above) get NO
+    // boundary — RFC-281 §3 keeps the system surface unfenced in v1.
+    const boundaryCtx: BoundaryCtx = {
+      taskMounts: ctx.taskMounts,
+      runDir,
+      stagedSkillDirs: [join(runDir, 'skills')],
+      tmpGlobs: [`${tmpdir()}/opencode/*`],
+    }
+
     // RFC-022/028/031: primary + closure dependents + mcp + plugin entries.
+    // RFC-281 T1: boundaryCtx re-composes every entry's external_directory +
+    // emits the top-level boundary for opencode's native subagents.
     const inlineConfig = buildInlineConfig(
       ctx.agent,
       ctx.resolvedParamsByAgent,
       ctx.dependents,
       ctx.mcps,
       ctx.plugins,
+      boundaryCtx,
     )
 
     // RFC-029: wire the inventory dump plugin (business gate — agent kind +

@@ -27,6 +27,7 @@ import {
   renderOpencodeMcpInjection,
 } from '@/services/execution/agentInjection'
 import { buildPluginSpecArray } from './pluginSpec'
+import { composeOpencodeBoundary, type BoundaryCtx } from '@/services/execution/workspaceBoundary'
 
 export {
   EMPTY_RUNTIME_PROFILE,
@@ -42,6 +43,16 @@ export function buildInlineConfig(
   dependents: readonly Agent[],
   mcps: readonly Mcp[] = [],
   plugins: readonly Plugin[] = [],
+  // RFC-281 T1: task workspace boundary. When provided, EVERY agent entry's
+  // permission is re-composed through `composeOpencodeBoundary` (deny baseline
+  // + W(run) re-allow, author keys preserved, external_directory appended AFTER
+  // the author's `'*'` so it cannot be dissolved — see workspaceBoundary.ts and
+  // design §3.1/§5-9). A top-level `config.permission` is ALSO emitted to cover
+  // opencode's NATIVE subagents (general/explore), which have no platform entry
+  // and would otherwise inherit only opencode's `external_directory: ask`.
+  // Omitted → byte-identical to pre-RFC-281 (no boundary); every existing caller
+  // and inline-config test is unaffected.
+  boundaryCtx?: BoundaryCtx,
 ): {
   agent: Record<string, Record<string, unknown>>
   mcp?: Record<string, Record<string, unknown>>
@@ -53,22 +64,31 @@ export function buildInlineConfig(
    * defeating the eager-install + cache contract.
    */
   plugin?: Array<string | [string, Record<string, unknown>]>
+  /** RFC-281 T1: top-level external_directory boundary for native subagents. */
+  permission?: { external_directory: Record<string, unknown> }
 } {
-  const map: Record<string, Record<string, unknown>> = {
-    [agent.name]: renderOpencodeAgentEntry(agent, paramsByAgent.get(agent.name)),
+  // RFC-281 T1: render the entry, then (only under a boundary) overwrite its
+  // permission with the boundary-composed map. The author's permission is the
+  // input; the platform baseline lands AFTER the author's keys.
+  const entryFor = (a: Agent): Record<string, unknown> => {
+    const entry = renderOpencodeAgentEntry(a, paramsByAgent.get(a.name))
+    if (boundaryCtx === undefined) return entry
+    return { ...entry, permission: composeOpencodeBoundary(a.permission, boundaryCtx) }
   }
+  const map: Record<string, Record<string, unknown>> = { [agent.name]: entryFor(agent) }
   for (const dep of dependents) {
     if (dep.name === agent.name) continue // root would shadow itself; defensive
     // Resource names are external registry keys. `constructor` is a valid
     // platform name, so prototype lookup on `{}` would mistake it for an
     // existing entry and silently drop the managed dependent.
     if (Object.hasOwn(map, dep.name)) continue // closure already deduped, but guard anyway
-    map[dep.name] = renderOpencodeAgentEntry(dep, paramsByAgent.get(dep.name))
+    map[dep.name] = entryFor(dep)
   }
   const out: {
     agent: Record<string, Record<string, unknown>>
     mcp?: Record<string, Record<string, unknown>>
     plugin?: Array<string | [string, Record<string, unknown>]>
+    permission?: { external_directory: Record<string, unknown> }
   } = { agent: map }
   // RFC-028: emit the mcp record only when at least one ENABLED entry exists.
   // Disabled entries are skipped to keep the env-var compact AND to avoid
@@ -85,5 +105,12 @@ export function buildInlineConfig(
   // OpenCode assembly paths share one implementation.
   const pluginArr = buildPluginSpecArray(plugins)
   if (pluginArr.length > 0) out.plugin = pluginArr
+  // RFC-281 T1: top-level boundary — same external_directory synthesis with no
+  // author (undefined), so opencode's native subagents inherit the deny baseline
+  // + re-allow instead of the upstream `ask` (which `--auto` would auto-approve).
+  if (boundaryCtx !== undefined) {
+    const top = composeOpencodeBoundary(undefined, boundaryCtx)
+    out.permission = { external_directory: top['external_directory'] as Record<string, unknown> }
+  }
   return out
 }

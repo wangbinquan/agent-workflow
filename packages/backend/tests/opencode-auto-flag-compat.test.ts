@@ -181,6 +181,7 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
       resolvedParamsByAgent: new Map(),
       skills: [],
       worktreePath: '/wt',
+      taskMounts: ['/wt'],
       runRoot,
       configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
       runtimeBinary: '/fork/oc118-biz',

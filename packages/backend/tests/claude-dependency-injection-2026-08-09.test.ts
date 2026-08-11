@@ -117,6 +117,7 @@ function mkCtx(
     resolvedParamsByAgent: new Map<string, RuntimeProfile>(),
     skills: [],
     worktreePath: f.worktreePath,
+    taskMounts: [f.worktreePath],
     runRoot: f.runRoot,
     configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
     runtimeBinary: f.claudeBinary,

@@ -424,6 +424,14 @@ export interface BusinessNodeSpawnContext {
   /** Subprocess cwd = task worktree. */
   worktreePath: string
   /**
+   * RFC-281 T1: absolute mount paths that make up THIS task's legal workspace,
+   * for the opencode `external_directory` boundary re-allow set. Source = the
+   * scheduler's per-repo iso worktrees, forwarded by the runner as
+   * `templateMeta.repos[].worktreePath`; single-repo tasks pass `[worktreePath]`.
+   * The driver adds runDir / staged skills / tmp itself. Always non-empty.
+   */
+  taskMounts: readonly string[]
+  /**
    * Per-run root (`<appHome>/runs/<taskId>/<nodeRunId>`). OpenCode's config dir
    * is `<runRoot>/<configDir.name>`; Claude keeps system/attachment artifacts
    * here while native skill/agent projections live in the disposable worktree.

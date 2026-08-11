@@ -150,19 +150,36 @@ describe('RFC-276 explicit permission reaches the spawned OpenCode subprocess', 
   })
   afterEach(() => h.cleanup())
 
-  test('no top-level platform permission is injected', async () => {
+  test('the top-level workspace boundary is injected (RFC-281 revises RFC-276)', async () => {
     const raw = await captureSpawnedConfig(h, makeAgent())
-    const cfg = JSON.parse(raw) as { permission?: Record<string, string> }
-    expect('permission' in cfg).toBe(false)
+    const cfg = JSON.parse(raw) as {
+      permission?: { external_directory?: Record<string, string> }
+    }
+    // RFC-281 T1 revises RFC-276: the platform now emits a top-level
+    // external_directory boundary (deny baseline) so opencode's NATIVE subagents
+    // (general/explore, which have no platform entry) inherit the deny instead of
+    // the upstream `ask` that `--auto` would auto-approve. This is the only
+    // platform-added permission overlay.
+    expect(cfg.permission?.external_directory?.['*']).toBe('deny')
   })
 
-  test("the agent's complete explicit map is preserved end-to-end", async () => {
+  test("the author's explicit map is preserved, boundary appended after it", async () => {
     const explicit = { question: 'allow', bash: 'deny', '*': 'ask' }
     const raw = await captureSpawnedConfig(h, makeAgent(explicit))
     const cfg = JSON.parse(raw) as {
       agent: Record<string, { permission?: Record<string, unknown> }>
     }
     const entryPerm = cfg.agent['test-agent']!.permission ?? {}
-    expect(entryPerm).toEqual(explicit)
+    // RFC-281 T1 revises RFC-276: the author's keys survive verbatim, and the
+    // platform APPENDS external_directory (deny baseline) AFTER them. The
+    // key-order (external_directory index > author '*' index) is the invariant
+    // that stops the author `'*': 'ask'|'allow'` from dissolving the boundary
+    // (design §5-9, E4/M1).
+    expect(entryPerm.question).toBe('allow')
+    expect(entryPerm.bash).toBe('deny')
+    expect(entryPerm['*']).toBe('ask')
+    expect((entryPerm.external_directory as Record<string, string> | undefined)?.['*']).toBe('deny')
+    const keys = Object.keys(entryPerm)
+    expect(keys.indexOf('external_directory')).toBeGreaterThan(keys.indexOf('*'))
   })
 })

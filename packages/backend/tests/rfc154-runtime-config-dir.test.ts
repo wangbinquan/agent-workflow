@@ -298,6 +298,7 @@ function mkSpawnCtx(
     resolvedParamsByAgent: new Map(),
     skills: [],
     worktreePath,
+    taskMounts: [worktreePath],
     runRoot,
     configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
     wantsInventory: false,

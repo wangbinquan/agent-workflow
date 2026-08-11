@@ -868,6 +868,17 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // into OPENCODE_CONFIG_CONTENT; claude writes the system-prompt-file, converts
   // MCP/subagents to flags and decides the credential bridge. Everything below
   // (lifecycle / kill / pump / exit) is runtime-agnostic.
+  // RFC-281 T1: workspace-boundary mounts = this task's per-repo worktrees
+  // (scheduler is source of truth via templateMeta.repos; the runner already
+  // forwards them for {{__repos__}}). Single-repo tasks carry a length-1 array
+  // whose worktreePath mirrors opts.worktreePath. Empty → fall back to the cwd
+  // so the boundary always re-allows at least the working tree.
+  const boundaryMounts = ((): readonly string[] => {
+    const fromRepos = (opts.templateMeta.repos ?? [])
+      .map((r) => r.worktreePath)
+      .filter((p) => p.length > 0)
+    return fromRepos.length > 0 ? fromRepos : [opts.worktreePath]
+  })()
   let plan: SpawnPlan
   try {
     plan = await driver.buildBusinessSpawn({
@@ -884,6 +895,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // top-level field. Exactly one is set per dispatch by the scheduler.
       resumeSessionId: effectiveResumeSessionId,
       worktreePath: opts.worktreePath,
+      taskMounts: boundaryMounts,
       runRoot,
       configDir,
       gitUserName: opts.gitUserName,
