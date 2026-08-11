@@ -39,8 +39,29 @@ OpenCode 继承 daemon 的普通环境，包括用户现有的 HOME、XDG、认�
 ### 3.1 Agent 与权限
 
 主 Agent 和依赖闭包中的 Agent 都写入 `OPENCODE_CONFIG_CONTENT.agent`。每个条目包括
-正文、描述、runtime profile 参数和作者显式配置的 `permission`。平台不再增加全局
-allow/deny 层；未声明操作由 OpenCode 自己的 `--auto` 行为处理。
+正文、描述、runtime profile 参数和作者显式配置的 `permission`。除下面的工作区边界外，
+平台不增加全局 allow/deny 层；未声明操作由 OpenCode 自己的 `--auto` 行为处理。
+
+**工作区边界（RFC-281）**：平台会在每个业务 Agent 条目的 `permission` 里追加一条
+`external_directory` 规则（`{"*": "deny"}` 基线 + 本次运行合法目录的 allow），并在顶层
+`permission` 发同一条以覆盖 OpenCode 的原生子代理（`general`/`explore`）。目的是让一个
+任务的 Agent 只在自己的工作目录内干活，不会跑进另一个任务的工作目录——这正是该 RFC 的
+起因。要点：
+
+- **追加在作者键之后**。OpenCode 按键序 `findLast` 裁决，作者写的 `"*": "allow"` 会通配
+  到 `external_directory`；边界键排在其后才生效（实测：顺序调换即失效）。
+- **`--auto` 翻不动 `deny`**。deny 在询问之前短路，所以自动批准不会放行越界。
+- **默认放行本次运行需要的目录**：本任务的全部仓库工作树、本次运行的 config 目录
+  （含 staged skill）、OpenCode 的临时目录。
+- **越界表现为工具报错、会话继续**，不会让节点失败。
+- **作者可显式放宽**：在 Agent frontmatter 里声明
+  `permission.external_directory: { "/abs/dir/*": "allow" }`。OpenCode 侧原样生效；
+  Claude 侧只能兑现**字面目录**（中段带 `*` 的 glob 会打
+  `claude-external-directory-glob-unsupported` 告警，不静默丢弃）。若把
+  `external_directory` 写成标量 `"allow"`，视为作者接管整键、平台不再合成基线。
+- **项目配置不能反向放宽**（worktree 内的 `opencode.json` 在平台内联配置之前合并）；
+  但机器/组织级配置（active-org、managed 目录、MDM）在其之后合并，**可以**放宽——
+  这属于「管理员拥有本机」的既有信任模型，见 §6。
 
 ### 3.2 Skill 与 plugin
 
@@ -104,6 +125,30 @@ OpenCode 与 daemon 使用同一操作系统账户运行，默认能够访问该
 平台仍保留独立于运行时加固的边界：用户认证与 ACL、秘密值加密和日志脱敏、输入及路径
 校验、Git 凭据处理、显式 Agent 权限映射、进程生命周期治理，以及 Script 节点
 `readonly` 的一次性 worktree/不回合并语义。它们不应被描述为 OS sandbox。
+
+### 6.1 任务工作区边界（RFC-281）：防误入，不是隔离
+
+RFC-281 让每个业务节点默认只在自己的任务工作目录内工作（配置见 §3.1）。它的定位是
+**防止走神/路径混淆导致的跨任务串扰**，不是对抗蓄意越权的安全隔离，也不恢复 RFC-276
+删除的任何运行期加固链——用的完全是两个 runtime 自己的普通配置面：
+
+- **OpenCode**：`permission.external_directory`（相对判定，边界=进程 cwd 与其 git 工作树），
+  读写都拦，自动区分自己与兄弟任务。
+- **Claude Code**：其自带 sandbox 设置经 per-run `--settings` 下发，只做**写**边界
+  （写=cwd+临时目录+平台放行的本任务目录，连子进程一起管）。**平台不下发任何
+  denyWrite/denyRead**：实测把 appHome 祖先目录列进 denyWrite 会连 Agent 自己的 cwd 一起
+  盖死，「更严」的写法恰恰会打挂所有任务。
+
+**已知不覆盖的面（有意保留，不要当成被防住了）**：
+
+- OpenCode 的 bash 只扫少数命令的参数，`sed`/`python`/`git -C`/重定向等间接写不受该键约束；
+- OpenCode 的路径判定是词法比较，不解析符号链接；
+- Claude 侧**读**面保持默认（读全盘），只有写被约束；
+- 机器/组织级 runtime 配置在平台注入之后合并，管理员可放宽（同 §6 的信任模型）；
+- Claude 的部分设置键（如数组型）跨配置层合并，仓库内 `.claude/settings.json` 可能影响最终形态；
+- 机制不可用时（如 Linux 缺少 Claude sandbox 依赖）**打告警放行、不阻断业务**。
+
+Script 节点不在该边界范围内（它不经 runtime 权限面）。
 
 ## 7. 维护检查
 

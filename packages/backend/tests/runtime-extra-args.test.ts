@@ -104,12 +104,16 @@ describe('validateExtraArgs — fail-closed write gate', () => {
       ['--mcp-config', '/tmp/m.json'],
       ['--dangerously-skip-permissions'],
       ['-p'],
+      // RFC-281 T2/T3: the per-run settings file carries the workspace write
+      // boundary, so `--settings` became platform-owned. It used to be an
+      // operator-configurable flag (the =-joined form below proved the joined
+      // spelling is caught too); that role now falls to any other long flag.
+      ['--settings=/tmp/s.json'],
     ]) {
       expect(() => validateExtraArgs('claude-code', bad)).toThrow(/platform-owned/)
     }
-    expect(validateExtraArgs('claude-code', ['--settings=/tmp/s.json'])).toBe(
-      '["--settings=/tmp/s.json"]',
-    )
+    // A non-owned =-joined flag still passes through untouched.
+    expect(validateExtraArgs('claude-code', ['--profile=work'])).toBe('["--profile=work"]')
   })
 
   test('a bare leading token is rejected (would become the prompt positional)', () => {
