@@ -92,6 +92,7 @@ import {
 } from '@/services/launchMultipart'
 import { getSessionTree } from '@/services/sessionView'
 import { getInventorySnapshot } from '@/services/inventory'
+import { getStartupVerification } from '@/services/execution/startupVerificationRead'
 import { listWorktreeDir, readWorktreeFile } from '@/services/worktreeFiles'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
@@ -1132,6 +1133,26 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       return c.json(
         await getInventorySnapshot(deps.db, c.req.param('id'), c.req.param('nodeRunId')),
+      )
+    },
+  )
+
+  // RFC-280 T3: startup verification record — the platform's declared-injection
+  // manifest × the runtime's startup report × the diff, written by the runner
+  // at settle. Rendered as the node-detail warning banner ("MCP rag-search did
+  // not come up; the node ran without its tools").
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/node-runs/:nodeRunId/startup-verification',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Node run startup verification',
+    },
+    async (c) => {
+      return c.json(
+        await getStartupVerification(deps.db, c.req.param('id'), c.req.param('nodeRunId')),
       )
     },
   )

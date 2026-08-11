@@ -153,8 +153,11 @@ export function parseStartupInventory(line: string): StartupInventory | null {
     Array.isArray(value)
       ? value.filter((name): name is string => typeof name === 'string' && name.length > 0)
       : undefined
-  const inventory: { tools?: readonly string[]; agents?: readonly string[] } & {
+  const inventory: {
+    tools?: readonly string[]
+    agents?: readonly string[]
     skills?: readonly string[]
+    mcpServers?: readonly { name: string; status: string }[]
   } = {}
   const tools = names(evt.tools)
   const agents = names(evt.agents)
@@ -162,8 +165,27 @@ export function parseStartupInventory(line: string): StartupInventory | null {
   if (tools !== undefined) inventory.tools = tools
   if (agents !== undefined) inventory.agents = agents
   if (skills !== undefined) inventory.skills = skills
-  // An init event that enumerates none of the three tells us nothing.
-  return tools === undefined && agents === undefined && skills === undefined ? null : inventory
+  // RFC-280 T3 — the same event's `mcp_servers`, statuses preserved (P1-5:
+  // `parseUnusableMcpServers` above reduces to names; the verification layer
+  // needs the runtime's own reason, so this face carries `status` verbatim).
+  let mcpServers: Array<{ name: string; status: string }> | undefined
+  if (Array.isArray(evt.mcp_servers)) {
+    mcpServers = []
+    for (const entry of evt.mcp_servers) {
+      if (!entry || typeof entry !== 'object') continue
+      const row = entry as Record<string, unknown>
+      if (typeof row.name !== 'string' || row.name.length === 0) continue
+      mcpServers.push({ name: row.name, status: typeof row.status === 'string' ? row.status : '' })
+    }
+  }
+  if (mcpServers !== undefined) inventory.mcpServers = mcpServers
+  // An init event that enumerates none of the faces tells us nothing.
+  return tools === undefined &&
+    agents === undefined &&
+    skills === undefined &&
+    mcpServers === undefined
+    ? null
+    : inventory
 }
 
 /** ISO-8601 `timestamp` → ms epoch; undefined when absent/unparseable. */

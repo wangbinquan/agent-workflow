@@ -5000,6 +5000,21 @@ export const enUS: Resources = {
         'in-flight': 'Run in progress, inventory generating…',
       },
     },
+    startupVerification: {
+      title: 'Startup verification',
+      mcpUnusable: 'MCP not connected: {{items}} (the node ran without their tools)',
+      skillsMissing: 'Skills not loaded by the runtime: {{items}}',
+      subagentsMissing: 'Subagents not loaded by the runtime: {{items}}',
+      toolsMissing: 'Tools not loaded by the runtime: {{items}}',
+      skippedDisabled: 'Referenced but disabled MCP(s), not injected: {{items}}',
+      droppedParams: 'Params this runtime has no surface for were ignored: {{items}}',
+      unsupported: 'Faces this runtime does not support: {{items}}',
+      unobservable: 'Injected faces that cannot be verified: {{items}}',
+      unavailable:
+        'Startup observation source missing ({{reason}}); injection could not be verified',
+      malformed:
+        'Startup observation source malformed ({{reason}}); injection could not be verified',
+    },
     statSession: 'opencode session',
     unknownPlugin: '(unknown plugin)',
     sessionParentBadge: 'parent',

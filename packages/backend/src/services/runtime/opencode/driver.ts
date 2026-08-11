@@ -68,6 +68,10 @@ export const opencodeDriver: RuntimeDriver = {
     declared.skills = declareSkills(spec.skills ?? [])
     declared.subagents = declareSubagents(spec.agent?.name ?? '', spec.dependents ?? [])
     declared.plugins = declarePlugins(spec.plugins ?? [])
+    // RFC-280 T3: the inventory reports plugin SPECIFIERS (file:// paths), not
+    // platform names — the plugins face cannot be diffed and must read as
+    // "cannot verify", never as "verified" (design §2.3).
+    if (declared.plugins.length > 0) declared.unobservable = ['plugins']
     return { mcpEntries: entries, declared }
   },
   parseEvent(line: string): NormalizedEvent | null {

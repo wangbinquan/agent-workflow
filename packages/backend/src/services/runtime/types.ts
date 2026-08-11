@@ -639,7 +639,11 @@ export interface DeclaredRuntimeCapabilities {
 }
 
 /** The runtime's own answer to the same three questions, read off its startup line. */
-export type StartupInventory = DeclaredRuntimeCapabilities
+export type StartupInventory = DeclaredRuntimeCapabilities & {
+  /** RFC-280 T3 — claude init 的 `mcp_servers` 原样状态（P1-5：保留 status，
+   *  不压 boolean）；不枚举该面的 runtime 缺省。 */
+  mcpServers?: readonly { name: string; status: string }[]
+}
 
 /** RFC-237 — inputs for `captureSessionsToSink?`. The sink slice is structural
  *  (sessionEventSink.ts imports from this module, so the nominal

@@ -24,6 +24,7 @@ import type {
   ClarifyPromptContext,
   ClarifyQuestion,
   ClarifyTruncationWarning,
+  InventorySnapshot,
   Mcp,
   Plugin,
   PriorOutputUpdateContext,
@@ -76,8 +77,15 @@ import {
   type RuntimeProfile,
 } from '@/services/runtimeRegistry'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
-import type { ResolvedSkill, SpawnPlan } from './runtime/types'
+import type { ResolvedSkill, RuntimeDriver, SpawnPlan, StartupInventory } from './runtime/types'
 import { EMPTY_RUNTIME_PROFILE } from './runtime/opencode/inlineConfig'
+import {
+  declaredHasContent,
+  observationFromClaudeInit,
+  observationFromInventory,
+  verifyStartup,
+  type StartupVerificationRecord,
+} from './execution/startupVerification'
 import { NOOP_HANDLE } from './subagentLiveCapture'
 import { setNodeRunStatus, transitionNodeRunStatus } from './lifecycle'
 import {
@@ -918,6 +926,45 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
   }
   const { cmd, env } = plan
+  // RFC-280 T3 — the declared-injection manifest for startup verification.
+  // Same partition/render the driver's buildBusinessSpawn composed internally
+  // (pure; a duplicate-name assert would have thrown there first). Null only on
+  // the defensive path so verification degrades to "not recorded", never lies.
+  let injectionDeclared: ReturnType<RuntimeDriver['renderInjection']>['declared'] | null = null
+  try {
+    const rootProfile = resolvedParamsByAgent.get(opts.agent.name)
+    injectionDeclared = driver.renderInjection({
+      mcps: opts.mcps ?? [],
+      agent: opts.agent,
+      dependents: opts.dependents ?? [],
+      ...(rootProfile !== undefined ? { profile: rootProfile } : {}),
+      skills: opts.skills,
+      plugins: opts.plugins ?? [],
+    }).declared
+    // 落差③/④ — referencing a disabled MCP or passing params this runtime
+    // drops was fully silent before RFC-280; say it at spawn time too (the
+    // persisted record lands at settle).
+    if (injectionDeclared.skippedDisabledMcps.length > 0) {
+      log.warn('mcp-disabled-skipped', {
+        nodeRunId: opts.nodeRunId,
+        mcps: injectionDeclared.skippedDisabledMcps,
+        detail: 'agent references disabled MCP(s); they are not injected into this run',
+      })
+    }
+    if (injectionDeclared.droppedParams.length > 0) {
+      log.warn('runtime-params-dropped', {
+        nodeRunId: opts.nodeRunId,
+        runtime,
+        params: injectionDeclared.droppedParams,
+        detail: 'this runtime has no surface for these profile params; they are not applied',
+      })
+    }
+  } catch (err) {
+    log.warn('startup-declaration-failed', {
+      nodeRunId: opts.nodeRunId,
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
   let planArtifactsCleaned = false
   const finalizePlan = async (): Promise<void> => {
     if (!planArtifactsCleaned) {
@@ -1125,6 +1172,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     let terminalResultError: string | undefined
     /** The inventory arrives once, in the runtime's first event. */
     let mcpInventorySeen = false
+    /** RFC-280 T3 — the runtime's own startup report (claude init), one-shot. */
+    let capturedStartupInventory: StartupInventory | null = null
     // Throttled `node.status: running` re-ping so the SessionTab's `/session`
     // query refreshes live while the parent opencode child is streaming events.
     // Without this, the only mid-run broadcast came from RFC-048's subagent
@@ -1168,6 +1217,14 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             })
           }
         }
+      }
+      // RFC-280 T3 (落差①) — capture the one-shot startup inventory for the
+      // verification record. Present only on runtimes that report one on
+      // stdout (claude's system/init); opencode's `?.` short-circuits at zero
+      // cost and its observation comes from the RFC-029 inventory file instead.
+      if (capturedStartupInventory === null) {
+        const observed = driver.parseStartupInventory?.(line) ?? null
+        if (observed !== null) capturedStartupInventory = observed
       }
       // RFC-111 PR-A/B: normalize one stdout line through the frozen runtime's
       // driver. `parseEvent` returns null for non-JSON / falsy-JSON lines, which
@@ -1812,6 +1869,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // legitimate snapshot. Leave the column at its prior value by skipping the
     // read entirely.
     let inventoryJson: string | null = null
+    // RFC-280 T3 — the parsed snapshot doubles as the opencode observation
+    // source for the startup-verification record below.
+    let capturedInventorySnapshot: InventorySnapshot | null = null
     // RFC-143: inventory read is an opencode-only capability. The agent-kind +
     // non-followup gates are business conditions (`wantsInventory`, same value the
     // spawn-side injection used); the runtime gate is expressed by `readInventory`
@@ -1824,12 +1884,50 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           nodeKind: inventoryNodeKind,
         })
         if (snapshot !== undefined && snapshot !== null) {
+          capturedInventorySnapshot = snapshot
           inventoryJson = JSON.stringify(snapshot)
         }
       } catch (err) {
         log.warn('inventory-read-unhandled', {
           nodeRunId: opts.nodeRunId,
           err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    // RFC-280 T3 — startup verification: declared manifest × runtime startup
+    // report. Persisted for the node-detail warning face; NEVER changes the
+    // run's own status (user ruling: business nodes warn, don't fail).
+    let startupVerificationJson: string | null = null
+    if (injectionDeclared !== null && declaredHasContent(injectionDeclared)) {
+      const observation =
+        driver.readInventory !== undefined
+          ? observationFromInventory(capturedInventorySnapshot)
+          : observationFromClaudeInit(capturedStartupInventory)
+      const verification = verifyStartup(injectionDeclared, observation)
+      const record: StartupVerificationRecord = {
+        declared: injectionDeclared,
+        observation,
+        verification,
+      }
+      startupVerificationJson = JSON.stringify(record)
+      const gaps =
+        verification.mcpUnusable.length +
+        verification.skillsMissing.length +
+        verification.subagentsMissing.length +
+        verification.toolsMissing.length
+      if (gaps > 0 || verification.observation !== 'verified') {
+        log.warn('startup-verification-gaps', {
+          nodeRunId: opts.nodeRunId,
+          runtime,
+          observation: verification.observation,
+          ...(verification.observationReason !== undefined
+            ? { observationReason: verification.observationReason }
+            : {}),
+          mcpUnusable: verification.mcpUnusable.map((s) => `${s.name}:${s.status}`),
+          skillsMissing: verification.skillsMissing,
+          subagentsMissing: verification.subagentsMissing,
+          toolsMissing: verification.toolsMissing,
         })
       }
     }
@@ -1870,6 +1968,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       .update(nodeRuns)
       .set({
         inventorySnapshotJson: inventoryJson,
+        // RFC-280 T3: declared × observed × diff — the node-detail warning face.
+        startupVerificationJson,
         // RFC-046: persist the post-budget-clip snapshot captured at inject
         // time (or copied from attempt 0 on the envelope-followup path).
         injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),

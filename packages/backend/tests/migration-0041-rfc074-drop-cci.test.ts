@@ -166,7 +166,9 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       // agent_override_name (the borrow / workgroup-member override).
       expect(cols).toContain('agent_override_id')
       // RFC-243 (0126): + child_task_id on node_runs.
-      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2 + 1 + 1)
+      // RFC-280 (0148): + startup_verification_json on node_runs.
+      expect(cols).toContain('startup_verification_json')
+      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2 + 1 + 1 + 1)
 
       // 4b. row count unchanged.
       const n = (up.query('SELECT count(*) AS n FROM node_runs').get() as { n: number }).n

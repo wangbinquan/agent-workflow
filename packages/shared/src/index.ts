@@ -17,6 +17,7 @@ export * from './schemas/resourceAcl'
 export * from './schemas/resourceName' // RFC-264
 export * from './schemas/intentChangeset' // RFC-234
 export * from './schemas/intentSession' // RFC-234
+export * from './schemas/startupVerification' // RFC-280
 export * from './schemas/importRef'
 export * from './schemas/review'
 export * from './schemas/runtime'

@@ -1030,6 +1030,13 @@
       "when": 1788278400021,
       "tag": "0147_rfc279_database_redundancy_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "6",
+      "when": 1788278400022,
+      "tag": "0148_rfc280_startup_verification",
+      "breakpoints": true
     }
   ]
 }

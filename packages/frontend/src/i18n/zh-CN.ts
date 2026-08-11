@@ -4394,6 +4394,19 @@ export interface Resources {
         'in-flight': string
       }
     }
+    startupVerification: {
+      title: string
+      mcpUnusable: string
+      skillsMissing: string
+      subagentsMissing: string
+      toolsMissing: string
+      skippedDisabled: string
+      droppedParams: string
+      unsupported: string
+      unobservable: string
+      unavailable: string
+      malformed: string
+    }
     statSession: string
     unknownPlugin: string
     sessionParentBadge: string
@@ -10127,6 +10140,19 @@ export const zhCN: Resources = {
         // into the DB yet. Phrasing avoids blaming the plugin (which is fine).
         'in-flight': '正在运行，清单生成中…',
       },
+    },
+    startupVerification: {
+      title: '启动验证',
+      mcpUnusable: 'MCP 未连接：{{items}}（节点在缺少其工具的情况下运行）',
+      skillsMissing: '技能未被运行时加载：{{items}}',
+      subagentsMissing: '子代理未被运行时加载：{{items}}',
+      toolsMissing: '工具未被运行时加载：{{items}}',
+      skippedDisabled: '引用了已禁用的 MCP（未注入）：{{items}}',
+      droppedParams: '该运行时不支持的参数已被忽略：{{items}}',
+      unsupported: '该运行时没有对应能力面：{{items}}',
+      unobservable: '无法验证的注入面：{{items}}',
+      unavailable: '启动观测源缺失（{{reason}}），无法验证注入是否生效',
+      malformed: '启动观测源损坏（{{reason}}），无法验证注入是否生效',
     },
     statSession: 'opencode 会话',
     unknownPlugin: '(未知插件)',

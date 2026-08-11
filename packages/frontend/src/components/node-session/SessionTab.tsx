@@ -12,6 +12,7 @@ import { api } from '@/api/client'
 import { isFanoutParentRun, sortNodeRunsForPromptHistory } from '@/lib/node-prompt'
 import { InjectedMemoriesCard } from './InjectedMemoriesCard'
 import { RuntimeInventorySection } from '@/components/inventory/RuntimeInventorySection'
+import { StartupVerificationBanner } from '@/components/inventory/StartupVerificationBanner'
 import { Select, type SelectOption } from '@/components/Select'
 import { clarifyRoundForRun, displayRetryForRun, formatIterationLabel } from '@/lib/node-history'
 import { nodeRunStatusToKind } from '@/lib/noderun-status'
@@ -73,6 +74,14 @@ export function SessionTab({ taskId, runs, nodeId, selectedRunId, workflowNodeKi
             run={picked}
             attempts={attempts}
             workflowNodeKind={workflowNodeKind}
+          />
+          {/* RFC-280 T3: startup verification warnings (declared injection ×
+              runtime startup report) render ABOVE the inventory — a missing
+              MCP/skill/subagent is the first thing to see about a run. */}
+          <StartupVerificationBanner
+            taskId={taskId}
+            nodeRunId={picked.id}
+            enabled={isAgentNodeKind(workflowNodeKind)}
           />
           {/* RFC-029: runtime inventory section sits between the attempts
               switcher and the conversation flow so users can confirm "what

@@ -1586,6 +1586,15 @@ export const nodeRuns = sqliteTable(
      */
     inventorySnapshotJson: text('inventory_snapshot_json'),
     /**
+     * RFC-280 T3: serialized `StartupVerificationRecord` — the platform's
+     * declared-injection manifest × the runtime's startup report × the diff
+     * (`services/execution/startupVerification.ts`). Written by runner.ts at
+     * settle; consumed by the node-detail warning banner. NULL for legacy
+     * rows, non-agent runs, and runs with nothing declared. Never changes the
+     * run's own status (RFC-280 user ruling: warn, don't fail).
+     */
+    startupVerificationJson: text('startup_verification_json'),
+    /**
      * RFC-040: serialized `WrapperProgress` (services/wrapperProgress.ts)
      * used by wrapper-loop / wrapper-git to resume from the iteration /
      * baseline where they parked when an inner node entered awaiting_human

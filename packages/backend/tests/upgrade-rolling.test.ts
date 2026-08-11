@@ -233,7 +233,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   })
   afterEach(() => h?.cleanup())
 
-  test('HEAD journal has 147 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 148 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -357,7 +357,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // （历史 schema 漂移收敛；保留 recovery 审计行并删除退役表）。
     // RFC-279 database redundancy cleanup bumped to 147 after
     // 0146_gitlab_repository_url_prefixes.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(147)
+    // RFC-280 T3 bumped to 148 with 0148_rfc280_startup_verification
+    // （node_runs.startup_verification_json 纯增量列）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(148)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

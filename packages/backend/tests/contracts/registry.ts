@@ -513,6 +513,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/tasks/:id/node-runs' },
   { method: 'GET', path: '/api/tasks/:id/node-runs/:nodeRunId/events' },
   { method: 'GET', path: '/api/tasks/:id/node-runs/:nodeRunId/inventory' },
+  { method: 'GET', path: '/api/tasks/:id/node-runs/:nodeRunId/startup-verification' },
   { method: 'GET', path: '/api/tasks/:id/node-runs/:nodeRunId/session' },
   { method: 'GET', path: '/api/tasks/:id/nodes/:nodeRunId/stdout' },
   { method: 'POST', path: '/api/tasks/:id/nodes/:nodeRunId/retry' },

@@ -16,7 +16,7 @@
 // Leaf module：只 type-import shared 与 RuntimeProfile —— 不得引入对
 // driver / runner / scheduler 的运行时依赖（会成环）。
 
-import type { Agent, Mcp, Plugin } from '@agent-workflow/shared'
+import type { Agent, DeclaredInjectionManifest, Mcp, Plugin } from '@agent-workflow/shared'
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
 
 export class AgentInjectionError extends Error {
@@ -39,27 +39,12 @@ export const EMPTY_RUNTIME_PROFILE: RuntimeProfile = {
   isSandbox: false,
 }
 
-/** design.md §2.1 的声明清单。T1 落 MCP 面；T2 扩其余资源面。 */
-export interface DeclaredManifestV1 {
-  /** 实际注入的 enabled MCP 名单，first-seen 顺序（= wire 键序）。 */
-  mcpServers: string[]
-  /** 被引用但 disabled 的 MCP 名单（忠实记录，含重复引用）。 */
-  skippedDisabledMcps: string[]
-  /** 平台注入（staged）的 managed skill 名单；project skill 由 CLI 自发现，不算声明。 */
-  skills: string[]
-  /** dependsOn 闭包注入的 subagent 名单（root 除外、去重后）。 */
-  subagents: string[]
-  /** 注入的 enabled plugin 名单（opencode 面；claude 恒 [] 并进 unsupported）。 */
-  plugins: string[]
-  /** claude 显式 tool 载入集（claudeBusinessGate 产物）；无声明 / opencode 为 null。 */
-  tools: string[] | null
-  /** 落差④：该 runtime 静默丢弃的 profile 参数名（如 claude × variant）。 */
-  droppedParams: string[]
-  /** renderer 声明「此资源面在该 runtime 不存在」（如 claude × plugin）。 */
-  unsupported: string[]
-  /** 注入了但该 runtime 无启动观测手段的面（T3 观测层消费，绝不伪装为已验证）。 */
-  unobservable: string[]
-}
+/**
+ * design.md §2.1 的声明清单。T1 落 MCP 面；T2 扩其余资源面；T3 起持久化形状由
+ * shared `DeclaredInjectionManifestSchema` 锁定（前后端单一事实源），此处仅为
+ * 既有 import 面保留的别名。
+ */
+export type DeclaredManifestV1 = DeclaredInjectionManifest
 
 /** 全空 manifest —— 各渲染路径在此之上按面填充。 */
 export function emptyDeclaredManifest(): DeclaredManifestV1 {
