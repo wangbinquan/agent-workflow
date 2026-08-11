@@ -317,17 +317,21 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     expect(isSkillInjectableThisBoot({ id: 'p', sourceKind: 'project' })).toBe(true)
   })
 
-  test('scheduler resolveSkills fails closed on a non-injectable managed skill (source lock)', () => {
+  test('resolveInjection fails closed on a non-injectable managed skill (source lock)', () => {
+    // RFC-282 B2 — the resolver moved to services/execution/resolveInjection.ts
+    // and the gate flipped from a THROW (task-level attribution via runScope)
+    // to a typed failure (node-level, like every sibling fence) — registered
+    // §7-7 change; behavior lock in rfc282-b2-resolve-injection.test.ts.
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'resolveInjection.ts'),
       'utf8',
     )
-    // The pre-spawn resolver gates managed skills on the injection predicate and
-    // throws the non-swallowable SkillQuarantinedError (fail-closed).
+    // The pre-spawn resolver still gates managed skills on the injection
+    // predicate (fail-closed) …
     expect(src).toMatch(/isSkillInjectableThisBoot\(\{ id: row\.id, sourceKind: 'managed' \}\)/)
-    // RFC-223 (PR-1): resolveSkills looks the managed skill up BY ID, so the
-    // quarantine error carries the row's name.
-    expect(src).toMatch(/throw new SkillQuarantinedError\(row\.name\)/)
+    // … and refuses with the quarantine code carrying the row's name.
+    expect(src).toMatch(/kind: 'failed'/)
+    expect(src).toMatch(/SkillQuarantinedError\(row\.name\)/)
   })
 
   // RFC-170 T4a — a legacy managed skill (pre-version-tracking, no snapshot,
