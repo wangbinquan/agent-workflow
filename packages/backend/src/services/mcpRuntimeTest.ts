@@ -37,7 +37,7 @@ import {
   mcpRuntimeTestTurns,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
-import { getRuntimeDriver } from '@/services/runtime'
+import { getRuntimeDriver, tryGetRuntimeDriver } from '@/services/runtime'
 import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
 import type { RuntimeDriver } from '@/services/runtime/types'
 import type { SpawnPlan } from '@/services/runtime/types'
@@ -128,7 +128,9 @@ interface ResolvedTestRuntime {
 export function isRuntimeMcpTestEligible(row: Pick<RuntimeRow, 'protocol' | 'model'>): boolean {
   // RFC-280 T6: playground support = the driver implements the session
   // strategy (the spawn itself is the ordinary system-agent surface now).
-  return getRuntimeDriver(row.protocol).mcpTestSessionReference !== undefined
+  // RFC-282 实现门 P2-1 — this rides the /api/runtimes LIST (display path):
+  // a dirty protocol on one row must read as "not eligible", not 500 the page.
+  return tryGetRuntimeDriver(row.protocol)?.mcpTestSessionReference !== undefined
 }
 
 interface QueueItem {
@@ -2581,8 +2583,9 @@ export class McpRuntimeTestService {
                   log: this.log,
                 }
               },
+              // §2.1b（实现门 P2-2）— wrap-only: return just the two slots;
+              // the plan itself never passes through adapter hands.
               wrapPlan: (basePlan: AgentSpawnPlan, { runDir }: { runDir: string }) => ({
-                ...basePlan,
                 // P1-7: secret material must not outlive the turn — the claude
                 // mcp-config.json goes here; inventory.json is kept for the
                 // post-run observation read (the session scratch owns the dir).

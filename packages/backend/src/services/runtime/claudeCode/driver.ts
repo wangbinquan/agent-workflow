@@ -236,7 +236,8 @@ export const claudeCodeDriver: RuntimeDriver = {
   // RFC-282 B1a — unified assembly facade (see the opencode twin for the
   // contract; parity suite rfc282-b1a is live while both paths exist).
   async buildAgentSpawn(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
-    // §7-9 — see the opencode twin: declared render degrades, assembly fails.
+    // §7-9 — see the opencode twin: declared render degrades, assembly fails
+    // (incl. the P3-5 system-face caveat noted there).
     let rendered: RenderedInjectionV1
     try {
       rendered = this.renderInjection(ctx.injection)

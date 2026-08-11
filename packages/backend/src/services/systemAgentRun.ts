@@ -118,14 +118,16 @@ export interface SystemAgentRunOptions {
     log: Logger
   }) => AgentSpawnContext
   /**
-   * §2.1b — wrap-only hook: may WRAP cleanup/beforeSpawn around the driver's
-   * plan (admission re-checks, secret scrubbing); replacing cmd/env/declared
-   * is a contract violation (rfc282 lock pins the call sites).
+   * §2.1b — wrap-only hook (实现门 P2-2: replacement is now TYPE-inexpressible):
+   * the adapter returns ONLY the two wrappable slots; cmd/env/stdin/declared
+   * never leave the driver's plan. runSystemAgent composes the result.
    */
   wrapPlan?: (
     basePlan: AgentSpawnPlan,
     args: { driver: RuntimeDriver; worktreePath: string; runDir: string; log: Logger },
-  ) => AgentSpawnPlan | Promise<AgentSpawnPlan>
+  ) =>
+    | Pick<AgentSpawnPlan, 'beforeSpawn' | 'cleanup'>
+    | Promise<Pick<AgentSpawnPlan, 'beforeSpawn' | 'cleanup'>>
   /**
    * TEST-ONLY (§2.1b) — wholesale plan replacement for in-process fake runs
    * (fixture runFn doubles). Production adapters use buildCtx/wrapPlan.
@@ -384,7 +386,17 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
                   opts.buildCtx !== undefined ? opts.buildCtx(seamArgs) : defaultUnifiedCtx(),
                 )
                 declaredForResult = base.declared
-                return opts.wrapPlan !== undefined ? await opts.wrapPlan(base, seamArgs) : base
+                if (opts.wrapPlan === undefined) return base
+                // Compose wrap-only slots over the driver's plan — the plan
+                // itself is structurally out of the adapter's reach (§2.1b).
+                const wrapped = await opts.wrapPlan(base, seamArgs)
+                return {
+                  ...base,
+                  ...(wrapped.beforeSpawn !== undefined
+                    ? { beforeSpawn: wrapped.beforeSpawn }
+                    : {}),
+                  ...(wrapped.cleanup !== undefined ? { cleanup: wrapped.cleanup } : {}),
+                }
               })()
         function defaultUnifiedCtx(): AgentSpawnContext {
           return {

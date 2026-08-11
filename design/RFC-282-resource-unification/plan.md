@@ -150,6 +150,15 @@ agents-split-page）。
    `pumpLines` 截断 marker 文案随锁迁移改为 managedProcess 现行文案
    `…[line truncated]`（§7 登记）。
 
+**SHA 归属勘误（实现门 P3-4）**：C3 的 11 个 git mv rename 物理上落在
+`ddd04965`（docs(state) 事故登记——staged renames 被附带提交，见 dev-gotchas
+新条目），`5ee77b23` 承载全部 import 修复与清单同步；按 owning-commit 考古时
+两个 SHA 须一起看。
+
+**实现门记录（2026-08-12）**：独立子代理对抗评审（Codex wedge 先例延续），
+0×P1 + 2×P2 + 5×P3，总判定「可收工」；P2-1（/api/runtimes 脏行 500）、
+P2-2（wrapPlan 类型收窄为 wrap-only）、P3-1/2/3/4/5 全部已在收尾提交处置。
+
 **残留 followup（接手清单）**：B1b 删除半场（见 1）；C1 第二段（见 2）；
 `declaredMcpServers` 改由 `declared.mcpServers` 承接（design §2.1 预留的独立
 收敛）；`runtime-buildspawn` 系统面统一产出（见 3）。

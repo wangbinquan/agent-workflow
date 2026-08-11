@@ -130,6 +130,15 @@ describe('RFC-282 A2 — conversion definition points are unique', () => {
       const allowed = new Set(lock.callers)
       const strays = callFiles.filter((f) => !allowed.has(f))
       expect(strays).toEqual([])
+      // 实现门 P3-3 — alias dodge: `import { fn as r }` then `r(...)` beats the
+      // bare-call regex. Pin the IMPORT of the symbol too — any module naming
+      // this function in an import clause must be a whitelisted caller.
+      const importRe = new RegExp(`import[^;]*?[{,\\s]${lock.fn}[\\s,}]`, 's')
+      const importFiles = FILES.filter(
+        (f) => f.rel !== lock.definedIn && importRe.test(stripComments(f.text)),
+      ).map((f) => f.rel)
+      const importStrays = importFiles.filter((f) => !allowed.has(f))
+      expect(importStrays, `${lock.fn} imported outside the whitelist`).toEqual([])
       // Ratchet the other way too: a whitelist entry that no longer calls it
       // is stale and must be pruned.
       const staleWhitelist = lock.callers.filter((c) => !callFiles.includes(c))

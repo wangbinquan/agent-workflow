@@ -30,10 +30,9 @@ import { buildPluginSpecArray } from './pluginSpec'
 import type { BoundaryCtx } from '@/services/execution/workspaceBoundary'
 import { composeOpencodeBoundary } from './boundary'
 
-export {
-  renderOpencodeAgentEntry as buildInlineAgentEntry,
-  renderOpencodeMcpEntry as buildInlineMcpEntry,
-} from '@/services/execution/agentInjection'
+// (RFC-282 实现门 P3-3：`buildInlineMcpEntry` 别名 re-export 已删——零消费方，
+//  且正是 A2 新增 import-specifier 锁要抓的别名逃逸形态。)
+export { renderOpencodeAgentEntry as buildInlineAgentEntry } from '@/services/execution/agentInjection'
 
 export function buildInlineConfig(
   agent: Agent,

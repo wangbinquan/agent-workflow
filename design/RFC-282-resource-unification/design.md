@@ -523,6 +523,8 @@ daemon boot 在业务服务前校验（沿用 `ROUTE_BACKED_POINTS` 反向自检
 | 9     | **声明渲染失败的优雅降级消失**（设计门 P1-6-3）                                                           | 今天 `renderInjection` 在独立 try/catch 里（`runner.ts:943-968`），渲染失败只是「验证不记录」**不失败节点**；三合一后它并入 `buildSpawn`，失败即 `runtime-spawn-failed`。**需在 B1 显式决定**：要么保留 declared 渲染的独立降级（推荐：装配内 try/catch，declared 退化为空清单 + warn），要么登记为行为变更                                                                                  | B1      |
 | 10    | `buildPlan` 契约收窄为「只可包裹不可替换」（§2.1b）                                                       | `systemAgentRun` 逃生舱签名 + 测试台声明回传                                                                                                                                                                                                                                                                                                                                                 | B1/C 批 |
 
+| 11    | `pumpLines` 截断 marker 文案随锁迁移改为 managedProcess 现行文案 `…[line truncated]`（原 `…[line truncated: exceeded MAX_STREAM_LINE_CHARS]`——src 零消费方，产品字节不变，仅测试断言面） | `runner-stream-bounds.test.ts`（已迁 managedProcess.pump） | E1a |
+
 其余 argv / env / 落库形状**必须字节不变**，由每批的对拍测试证明。
 
 **§0 规矩 2 的自洽性**：本表是「唯一允许的行为差异」全集。设计门 P1-6 指出初版漏登

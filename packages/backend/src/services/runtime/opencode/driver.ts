@@ -230,6 +230,10 @@ export const opencodeDriver: RuntimeDriver = {
     // only) render failure downgrades the manifest to empty + warn instead of
     // failing the node; the assembly below re-renders internally and remains
     // the spawn-failing path, exactly as before the unification.
+    // ⚠️ 实现门 P3-5 — on the SYSTEM face `rendered` is also the actual MCP
+    // injection (toSystemCtx): if a future render gains a throwing validation,
+    // this degrade would turn the playground's fail-closed into a silent
+    // no-MCP run. Add a system-face carve-out here before adding such a throw.
     let rendered: RenderedInjectionV1
     try {
       rendered = this.renderInjection(ctx.injection)
