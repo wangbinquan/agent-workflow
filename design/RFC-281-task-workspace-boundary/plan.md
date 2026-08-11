@@ -67,4 +67,23 @@ Codex `codex exec` 连续 wedge（0 字节输出、零 CPU，与 memory 记录�
 - **P2-6/P2-7 claude 拒绝分支与 AC-6 告警零断言**：新增 `boundaryHostProbe` 注入 seam（生产省略=行为不变）+ 三条断言（缺机制仍 spawn 且告警 / 可用主机不告警 / 作者 glob 披露）。
 - **P3-7/P3-8/P3-9/P3-10/P3-11/P3-12**：§0 guard 提纯函数 `resolveBoundaryMounts` 并加源码锁（原测试是复制品）、AC-8 改为遍历 `Paths` 并按 findLast+Wildcard 真实语义裁决、fail-open 判据先过滤空串、`gitMetaDirs` 未接线状态写进类型注释、`agentInjection` 过期注释改写、集成测试 ctx 与生产对齐 + 补 AC-3 staged-skill 回归。
 
+## 第二轮实现门（2026-08-11，评审「上一轮修完的终态」）
+
+双路并跑（Codex 直驱 —— 清掉一个陈旧 broker 后恢复正常；+ 独立子代理交叉评审），两路共 20+ 条、多条独立命中同一问题。**独立子代理用真 claude 2.1.227 做了红绿实验**，推翻本 RFC 一个根本假设，我逐条亲手复现后修完（`1e64d691` / `5a50b42a` / `ba622f6b`，另 `ecb40719` 是评审期间的自查发现）：
+
+**根本性发现：claude 的 sandbox 是命令级围栏，不是文件写边界。** 它只管 Bash/子进程；`Edit`/`Write`/`NotebookEdit` 是进程内工具、只由 `permissions` 层裁决，而未声明 permission 的节点走 `bypassPermissions` 把那层整个跳过 ⇒ **RFC 起因的事故形态在 claude 默认节点上原样可复现**（实测：Write 工具把文件写进了兄弟任务目录）。T0 只测了 Bash 写（那条确实被拦），恰好只覆盖成立的那一半。
+
+- **P1-1 修**：下发兄弟任务目录的 `Edit`/`Read` deny（deny 在所有 permission-mode 下都生效）。只列兄弟的**具体**目录、绝不含本任务任何路径。实测：越界 Write 被拒、cwd 内 Write 照常。`scanSiblingTaskRoots()` 扫 appHome 的 iso/runs/worktrees，**按 taskId 排除自己在其他容器下的目录**——新测试当场抓到：只按 mount 前缀排除会把自己任务的 runs/worktrees 当兄弟 deny 掉。
+- **P1-2 修**：钉死 `autoAllowBashIfSandboxed: false`。它默认 true ⇒ sandbox 一开 Bash 自动放行、不再过 permission 判定；实测「开 sandbox 反而读到了兄弟 secret，不开反而被拒」——我引入的、方向相反的能力扩张。修后实测越界读被拒、cwd 内读照常。
+- **P1-3 用户决策保留 + 如实文档化**：模型撞 EPERM 后可自行 `dangerouslyDisableSandbox` 重试成功（实测复现，headless 下无需批准、平台无日志）。关掉它会让 build 节点（写 `~/.bun/cache` 等）无人可救 —— 保留，但文档写明「Bash 那半边界是**劝告性**的」。
+- **P2 键序抬升**（两路共同命中，已用 remeda mergeDeep 语义复算证实）：项目配置只要提一句 `external_directory` 就能把平台键抬到作者 `'*'` 之前、findLast 取 allow ⇒ 边界溶解。**不再依赖键序**：把作者顶层 `'*'` 展开成具体权限名，`external_directory` 由平台独占。
+- **P1（Codex）claude dependsOn 子代理白名单未进 settings**：settings 是整进程的、子代理共享，只取 root 会让子代理声明静默失效 ⇒ 合并 root + 每个 dependent。
+- **P2 `--add-dir` 漏出平台独占列表**（存量 runtime 行写 `["--add-dir","/"]` 即扩到根）+ extraArgs 丢弃循环按 valueless/variadic/单值精确消费（原实现对变参只吃一个值，留下的游离 token 会被 claude 当 prompt）。
+- **P3 作者白名单 `~`/`$HOME`/相对路径**：opencode 展开、claude 不展开 ⇒ 原实现生成 `/~/refrepo` 这种垃圾路径且 lossy 为空（作者以为兑现了）。现同口径展开，非绝对路径进 lossy 走告警。
+- **自查 S1/S2**（评审期间探针发现）：`claudeEditRuleFor` 对含 `)` 的目录名生成语法破损规则、对目录名里真实的 `*` 生成放宽规则。核实官方文档确认规则是 gitignore 语法且「自写规则不转义」、右括号无转义说明 ⇒ 按「不确定就别生成」处理：含 `( ) * ? [ ] \` 的目录不进 `permissions.allow`，仍进 sandbox `allowWrite` 与 `additionalDirectories`（纯路径列表），并打告警。
+- **测试有效性 P2/P3**：AC-8 用例改用**生产同源 ctx** + 真实默认裁决（`ask`），并做**变异实证**（注入一条 `${homedir}/*` allow → 当场变红，还原即绿；修之前抓不到）；原生子代理 LIVE 用例的阳性对照真跑发现**委派链无边界时挂到 300s 超时**（真 LLM 不可靠），改为确定性 wire 断言，LIVE 仍证明 opencode 遵守该形状。
+- **local MCP 子进程**：如实列入不覆盖面 —— 独立进程、不经权限层，要约束需 OS 沙箱（RFC-276 废弃、本 RFC §3 非目标）。
+
+`gate:local` 全绿（backend 9501 / frontend 6275）；真 opencode gated 集成 8 pass。
+
 **未做（有意，已登记）**：DeclaredManifest 的 `workspaceBoundary` 声明字段与前端观测面——`startupVerification.ts` 在本轮全程被并行 RFC-280 session 占用（未提交改动），按多人协作原则不动他人在途文件；该项是观测增强、不影响边界功能本身，留作独立跟进。resume 边界重注入已由 T0 §5-7 实测确认（claude `--resume` 重新应用本次 `--settings`；opencode `--session` 同一注入路径），未单独加 CI 用例。
