@@ -5,9 +5,9 @@
 
 ## 任务
 
-- **RFC-281-T0 · 实测清单落证**（不写生产代码）
-  design §5 的 **8 项**逐项实测并把结论 + 复现命令回填 design §5（claude deny×bypassPermissions、sandbox filesystem 优先级、`--settings`×stream-json 与降级可观测形状、opencode `'*'` 通配 flatten 顺序 + 顶层边界对原生子代理的实效、`--add-dir` 实效 + 白名单写实效、git linked-worktree 元数据自动放行、resume 边界重注入、`--settings` 安全键覆盖/拼接语义）。任何结论与 design 假设相反 → 先回 design 修订该节再进入后续任务；涉及方向的回到用户面前。
-  依赖：无。产出：design §5 每项一段「结论 + 证据」。
+- **RFC-281-T0 · 实测清单落证**（不写生产代码）✅ **完成（2026-08-11）**
+  design §5 的 8 项已逐项实测并回填「结论 + 复现」（claude 2.1.227 + Seatbelt / opencode 1.18.16 + deepseek）。**关键校准（改了设计）**：①claude 写面靠 sandbox 默认「写=cwd+tmp+allowWrite」，生产 appHome 在 home 下兄弟默认拒写 → **不下发 denyWrite**，且 denyWrite 祖先根会盖死 cwd（§5-2）；②读面 deny 只列固定敏感文件（宽 glob 误伤自己、allow 挖不回，§5-2 R2/R3）；③init 事件无 sandbox 字段 → 降级改平台自身判断机制可用性（§5-3）；④excludedCommands 数组跨层合并、CLI 压不住项目层 → 归 B8（§5-8）；⑤opencode E3 事故复现 / E2 deny 不翻转 / E4 键序坐实键位纪律。§2/§4.1/§4.4/§7 已按上述同步修订。**实验台教训**：claude sandbox 放行 /private/tmp，写边界必须在 home 下测。
+  依赖：无。产出：design §5 实测记录 + §2/§4/§7 校准。
 
 - **RFC-281-T1 · opencode 边界合成（两级）**
   新增 `services/execution/workspaceBoundary.ts`：`composeOpencodeBoundary`（纯函数）+ `BoundaryCtx` 装配（mounts/runDir/stagedSkillDirs/tmpGlobs/**gitMetaDirs** 全部取自 scheduler/runner 既有结构，禁止路径形状推断）。注入两级：顶层 `OPENCODE_CONFIG_CONTENT.permission.external_directory`（覆盖原生子代理，design §3.1）+ 业务 agent 条目级作者白名单合成。改写 `renderOpencodeAgentEntry` 的 RFC-276 注释为「作者声明 + 平台工作区边界」。

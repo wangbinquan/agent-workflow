@@ -1,6 +1,6 @@
 # RFC-281 · 技术设计
 
-> 阅读前提：`proposal.md`。opencode 行为断言均已按本机 checkout（1.18.4，`packages/core` + `packages/opencode`）读源核实并给出 file:line；claude 行为断言来自官方文档（code.claude.com/docs/en/{permissions,sandboxing,settings,permission-modes}.md），其中四项标注为「实现期必测」（§5）——按 `docs/dev-gotchas.md` 规则，接手复核时先重跑源引用再动代码。
+> 阅读前提：`proposal.md`。opencode 行为断言均已按本机 checkout（1.18.4，`packages/core` + `packages/opencode`）读源核实并给出 file:line，并由 **T0（2026-08-11，本机 opencode 1.18.16 CLI + deepseek provider）** 真跑佐证；claude 行为断言已由 **T0（本机 claude 2.1.227 + macOS Seatbelt）实测确证**，§5 逐项附「结论 + 复现」。**T0 已完成**——§5 不再是待测清单而是实测记录；接手实现时按 `docs/dev-gotchas.md` 规则先重跑关键探针再动代码。
 
 ## 1. 机制盘点（现状）
 
@@ -33,15 +33,15 @@
 | 本任务全部 mounts | scheduler 的 iso handle / task 多仓成员 | 多仓任务的其他成员目录；单仓任务为空集 |
 | 本次 run 注入资源 | runDir（`runs/{taskId}/{nodeRunId}`）、staged skill 目录（含 sibling 文件） | opencode 需 read 它们；claude 的 skills 走 config dir 由 CLI 自读。**opencode 项目配置的 `references` 外部目录不在此列**——被基线遮蔽，归作者白名单（用户拍板 2026-08-11，设计门 F5；平台不解析 opencode 配置、不自动放行） |
 | 临时目录 | `$TMPDIR/opencode/*`、tool-output 目录、claude 会话 tmp | opencode defaults 原样恢复；claude sandbox 默认含 |
-| **git 元数据目录**（设计门 F4 补） | 每个 mount 的 `git rev-parse --git-common-dir` / linked-worktree admin 目录（`.git/worktrees/<id>`），取自 daemon 既有 git 结构 | iso/task worktree 是 linked worktree，`git add/commit` 要写 cwd 之外的 admin 目录与共享 `objects`；claude 官方文档称 sandbox 对 git worktree 共享 `.git` 有自动放行（§5-6 必测证实），不足则显式入 `allowWrite`；`denyWrite <appHome>` 的挖洞集合同步纳入（common dir 多在 appHome 的 `repos/` 缓存克隆内） |
+| **git 元数据目录**（设计门 F4 补；T0 §5-6 已证 claude 自动放行） | 每个 mount 的 `git rev-parse --git-common-dir` / linked-worktree admin 目录（`.git/worktrees/<id>`），取自 daemon 既有 git 结构 | iso/task worktree 是 linked worktree，`git add/commit` 要写 cwd 之外的 admin 目录与共享 `objects`；**T0 实测 claude sandbox 对 linked-worktree 共享 `.git` 自动放行**（§5-6），故 claude 侧默认无需显式 allowWrite；仍保留 `gitMetaDirs` 作为兜底入 `allowWrite`（common dir 落在 appHome `repos/` 缓存克隆、或 fusion iso-of-iso 布局时，T3 真跑确认）。opencode 侧 common dir 在 worktree 外 → 归作者/平台 external_directory allow |
 | 作者白名单 | `agent.permission.external_directory` 中 action=allow 的 pattern | 跨 runtime 兑现（§3.3 / §4.3） |
 
 **拒绝面按 runtime 如实分述（设计门 F6，用户 2026-08-11 确认接受不对称）**：
 
 - **opencode**：文件工具对 W(run) 之外的**读与写**全部拒绝（`external_directory` 基线）。
-- **claude**：**写面**全拒（sandbox 默认写=cwd+tmp，含 Bash 子进程）+ **读面**仅拒敏感清单（denyRead；默认读全盘保持——claude 工具链需要读系统库/全局工具，全域读拦在防误入定位下性价比差）。
+- **claude**（T0 §5-2 实测校准）：**写面**由 sandbox 默认「写=cwd+tmp+allowWrite」承担——生产 appHome 在 home 下（非 tmp），兄弟任务 iso/worktree 与全部 appHome 敏感文件的**写**默认即被拒（含 Bash 子进程），平台**不再下发 denyWrite 敏感清单**（denyWrite 列祖先根会连 cwd 一起盖死，§5-2）。**读面**：sandbox 默认读全盘，靠 `permissions.deny(Read(...))` 挡；但 deny 优先于 cwd-allow 且宽 glob 会误伤自己 cwd、allow 挖不回（§5-2 R2/R3），故 claude 读面**只 deny 路径固定、不含 cwd 的敏感项**（appHome 根下 `db.sqlite*`/`secret.key`/`token`/`config.json`/`.daemon.control` 等），**其他任务 iso/worktree 的读**因无法用绝对路径规则排除动态自身 taskId，归入已接受的读面不对称残留（proposal B8；写已挡）。
 
-两侧共同的重点覆盖：兄弟任务 worktree/iso、`~/.agent-workflow` 敏感文件（`db.sqlite*`、`secret.key`、`token`、`config.json`、`backups/`、其他任务 `runs/`）。
+两侧的差异根源：opencode `external_directory` 是**相对判定**（边界 = cwd + 当前 worktree 根），自动区分自己/兄弟、无需枚举动态 taskId，读写皆挡；claude 的 `permissions.deny` 是**绝对路径**规则，无法表达「除自己这个 taskId 外的所有 iso」，故读面只能挡固定敏感项。共同重点覆盖：兄弟任务 worktree/iso（写：两侧默认拒；读：opencode 拒、claude 残留）、`~/.agent-workflow` 敏感文件（写：两侧默认拒；读：两侧 deny）。
 
 裁决行为：**工具级报错、run 继续**。opencode 给 DeniedError 文案（core `v1/permission.ts:24-26`）；claude sandbox 给 EPERM 类错误。不 fail 节点、不产生新任务状态。
 
@@ -99,27 +99,33 @@ composeOpencodeBoundary(author: AgentPermission | undefined, ctx: BoundaryCtx): 
 
 `buildClaudeSpawn`（`claudeCode/spawn.ts:108-151`）新增：在 `attemptDir` 落 `settings.json`（与 `system.md` 同模式），argv 追加 `--settings <file>`。`CLAUDE_PLATFORM_OWNED_FLAGS`（`:52-76`）补 `--settings`、`--add-dir`、`--allow-dir`（如上游有别名，实现期以 `claude --help` 为准）。
 
-settings 内容（两类节点共用骨架）：
+settings 内容（两类节点共用骨架；T0 校准后的正确形状）：
 
 ```jsonc
 {
   "sandbox": {
     "enabled": true,
     "allowUnsandboxedCommands": false,
+    "excludedCommands": [],                 // 钉死为空（但数组跨层合并，压不住项目层，见 §5-8 / B8）
     "filesystem": {
-      "allowWrite": ["<mountA>", "<mountB>", "<作者白名单目录>"],
-      "denyRead": ["<appHome 敏感清单>"],
-      "denyWrite": ["<appHome>"]
+      "allowWrite": ["<mountA>", "<mountB>", "<作者白名单目录>", "<gitMetaDirs 兜底>"]
+      // 无 denyWrite：兄弟/敏感文件的写由 sandbox 默认「写=cwd+tmp+allowWrite」挡；
+      // denyWrite 列 appHome 祖先根会连 cwd 一起盖死（§5-2 实测），故绝不下发。
     }
   },
   "permissions": {
-    "deny": ["Read(//<appHome>/worktrees/**)", "Edit(//<appHome>/**)", "Write(//<appHome>/**)", …],
+    // 只 deny 路径固定、不含 cwd 的敏感读项（宽 glob 会误伤自己 cwd，§5-2 R2/R3）
+    "deny": [
+      "Read(//<appHome>/db.sqlite)", "Read(//<appHome>/db.sqlite-wal)", "Read(//<appHome>/db.sqlite-shm)",
+      "Read(//<appHome>/secret.key)", "Read(//<appHome>/token)", "Read(//<appHome>/config.json)",
+      "Read(//<appHome>/.daemon.control)"
+    ],
     "additionalDirectories": ["<mountA>", "<作者白名单目录>"]
   }
 }
 ```
 
-> 写边界主体由 sandbox 默认「写=cwd+tmp」承担；`allowWrite` 只加本任务 mounts 与作者白名单。deny 列表**不含**本任务自己的 worktree/iso/runDir——生成器负责从敏感清单中挖去自身路径（见 §7 失败模式 F2）。`permissions.deny` 的路径规则同时挡 dontAsk 与（若实测有效）bypassPermissions 下的文件工具与可识别 bash 文件命令，作为 sandbox 之上/之外的第二层。
+> **写面**：sandbox 默认「写=cwd+tmp+allowWrite」即挡兄弟与敏感文件（§5-2；生产 appHome 在 home 下非 tmp），`allowWrite` 只加本任务 mounts、作者白名单、git 元数据兜底；**不下发任何 denyWrite**。**读面**：`permissions.deny` 只列上述固定敏感文件（deny 在 bypassPermissions 下有效，§5-1；且不含 cwd 故不误伤）；其他任务 iso/worktree 的读归 B8 残留。**声明 permission 节点的多仓写**：additionalDirectories 只给读，写需在 `permissions.allow` 补 `Edit(//<mount>/**)` / `Write(...)`（§5-5，T2 承接）。
 
 **键面钉死（设计门 F3）**：`--settings` 是**逐键合并**层，不是封闭替换层——project/user/managed settings 仍然加载，per-run 文件未声明的键保留低层值，数组键还可能跨层合并（官方 settings 文档）。因此 per-run settings 必须**显式钉死全部安全相关键**：`sandbox.enabled`、`allowUnsandboxedCommands: false`、`excludedCommands: []`、`filesystem` 全三表、`network` 默认、`permissions.additionalDirectories` 完整值。§5-8 必测「CLI 层对这些键（尤其数组键）是覆盖还是拼接」；若数组键实测为拼接且无法覆盖，worktree 内 `.claude/settings.json` 即构成一条**仓库内容级的放宽面**，与 opencode 的 org/managed 面同归 B8 披露，不静默。未来新增的未知安全键无法预钉——同样落入 B8 残留清单。
 
@@ -138,22 +144,24 @@ settings 内容（两类节点共用骨架）：
 
 ### 4.4 可用性与降级阶梯（B3）
 
-1. sandbox 可用（macOS；Linux 有 bubblewrap+socat）→ 全量边界。
-2. sandbox 不可用 → settings 仅保留 `permissions.deny` + `additionalDirectories`；若实测证明 deny 在 bypassPermissions 下**不**生效（§5-1），未声明节点降为第 3 级。
+1. sandbox 可用（macOS 恒有 Seatbelt；Linux 有 bubblewrap+socat）→ 全量边界（写=sandbox 默认 + 读=permissions.deny）。
+2. sandbox 不可用 → 写面失去 sandbox 主体保护，仅剩 `permissions.deny`（读）+ additionalDirectories；`permissions.deny` 在 bypassPermissions 下**已证有效**（§5-1），故未声明节点仍有读面敏感拒绝，但**写面兄弟拒绝丢失**（sandbox 才是写边界的主体）——这是真实降级，必须告警。
 3. 无可用机制 → 结构化告警日志（每 run 一条，含原因），行为与今天一致。
 
-探测方式：不自建探测器——`sandbox.enabled=true` + `failIfUnavailable: false` 时 claude 自行降级；平台从 stream-json init/事件面读取实际状态（实现期核实事件形状，§5-3），据此打告警。**不引入平台自己的 OS 能力探测代码**。
+**降级观测（T0 §5-3 校准）**：**stream-json init 事件无任何 sandbox 状态字段**（实测），故原「从事件流读 sandbox 状态」不可行。改为**平台自身判断机制可用性**：macOS 恒有 Seatbelt（判 `process.platform==='darwin'`）；Linux 检测 `bwrap` + `socat` 可执行性（`which`/`access`，只读探测，非 OS 能力围栏代码）。据此判定当前降级级别并落观测记录（§6）。`sandbox.enabled=true` + `failIfUnavailable:false` 仍让 claude 自行降级不 fail run；平台的可用性判断只用于**打告警 + 落观测**，不改变 claude 行为。
 
-## 5. 实现期必测清单（不测不合）
+## 5. 实测记录（T0，2026-08-11 完成）
 
-1. `permissions.deny` 路径规则在 `--permission-mode bypassPermissions` 下是否生效（官方文档未直陈；决定 §4.4 阶梯第 2 级对未声明节点的形态）。
-2. `sandbox.filesystem` allow/deny 同路径重叠时的优先级（决定敏感清单是「denyRead appHome 根 + allow 挖洞」还是「逐项列敏感子路径」）。
-3. `--settings` 与 `-p` stream-json 的组合、sandbox 降级状态在事件流里的可观测形状（claude 2.1.x 实测）。
-4. opencode 顶层 `'*'` 通配键与具体键 flatten 后的先后（§3.2）；顶层 `config.permission` 边界对**原生子代理**（`general`/`explore`）会话的实效（真 runtime：业务 agent 派生 task 子代理读兄弟目录 → DeniedError 而非悬挂/放行）。项目配置的 merge 先后已按源码核实为 inline 之前（§3.2），改为一条源码引用回归锁即可，无需行为实验。
-5. `--add-dir` / `additionalDirectories` 在 headless -p 下的实效（read+edit 是否等同 cwd 待遇）；以及作者白名单目录经 `sandbox.filesystem.allowWrite` 的**写**实效（Bash `echo > 白名单目录/文件` 成功，设计门 F9）。
-6. claude sandbox 对 git linked-worktree 共享 `.git`/admin 目录的自动放行是否覆盖本仓 iso 布局（`git add/commit` 在 iso worktree 内全链成功）；不足则 `gitMetaDirs` 显式入 `allowWrite`（§2）。
-7. resume 路径边界重注入：opencode `--session` / claude `--resume` 的续跑 attempt 是新进程、重新吃本次 env/config/settings——验证续跑会话不残留旧 session 级权限、边界在续跑中依然生效（设计门 F8）。
-8. `--settings` 对安全键的逐键覆盖语义（尤其数组键 `excludedCommands` 是覆盖还是拼接，§4.1 键面钉死的前提）。
+> 环境：claude 2.1.227（macOS Seatbelt 内置）、opencode 1.18.16 CLI（deepseek provider；zhipu/alibaba/kimi 当日 provider server-error 不可用）。**关键教训（已吃过）**：claude sandbox 默认放行系统临时目录，实验台若建在 `/private/tmp` 下会把「cwd 外默认可写」测成假阳性——必须在 **home 下**（生产 appHome 形态）复测。以下每项含结论 + 复现要点。
+
+1. **`permissions.deny` 在 `bypassPermissions` 下生效** ✅。`--permission-mode bypassPermissions --settings '{permissions:{deny:["Read(//X/**)"]}}'` 读 X 内文件 → "File is in a directory that is denied by your permission settings"；对照（无 deny）读到内容。⇒ §4.4 阶梯第 2 级对未声明节点**有效**。
+2. **`sandbox.filesystem`：deny 优先于 allow，且 denyWrite 祖先根会盖死 cwd 默认可写** ✅（头号发现，直接改写 §4.1）。`allowWrite:[out/aw] + denyWrite:[out]` → 连 `out/aw` 也 operation not permitted（deny 赢）。cwd 在 `appHome/iso/task1/run1`、`denyWrite:[appHome]` → **cwd 内 `echo>./mine.txt` 也被拒**（"Both writes blocked"）；改 `denyWrite:[具体兄弟, db.sqlite]`（不含祖先）→ cwd 内写 OK、兄弟被拒。⇒ **绝不能 denyWrite appHome 根；敏感面只列不含 cwd 的具体路径**。
+3. **stream-json init 事件无 sandbox 字段** ✅（否定原 §4.4 观测方案）。init keys 实测 = agents/capabilities/cwd/mcp_servers/model/permissionMode/plugins/skills/tools/… **无任何 sandbox 状态字段**。⇒ 降级不可从事件流观测，§4.4 改为平台自身判断机制可用性。
+4. **opencode 三连（真 CLI，deepseek + `--auto`）** ✅：**E3 事故复现**——空配置（默认 `external_directory:ask`）读兄弟 `../../task2/other.txt`，marker 命中（越界被 `--auto` 自动放行，正是生产根因）；**E2 deny 不翻转**——`external_directory:{"*":"deny"}` 读兄弟，marker 0 命中 + 被拒（deny 短路，`--auto` 翻不动，坐实 AC-2）；**E1b 基线不误伤**——同 deny 基线读 cwd 内文件，命中（AC-3）。**E4/E4b 键序坐实**（§3.1 键位纪律的承重前提）：`{'*':allow, external_directory:deny}`（deny 键序在后）读兄弟 → 被拒；`{external_directory:deny, '*':allow}`（`'*':allow` 键序在后）→ findLast 取 allow → 读到。⇒ 平台边界键**必须追加在作者 `'*'` 之后**，否则作者一个 `'*':'allow'` 溶解边界（RFC-251 同类坑）。原生子代理继承（task→general 链）以源码承接（§1.1 file:line），T1 gated 集成补真跑。项目配置 merge 先于 inline 已源码核实（§3.2）。
+5. **`additionalDirectories` 读可达；dontAsk 下 Write 需 `permissions.allow` 规则、非仅 `--tools`** ⚠️。`--permission-mode dontAsk --tools "...,Write" --settings '{permissions:{additionalDirectories:[out]}}'`：Read `out/secret.txt` **成功**；Write `out/...` → "Write tool access not available in current mode"。⇒ **B4 实现注意**：声明 permission 节点要让多仓 mounts 可写，additionalDirectories 只给读，写需在 `permissions.allow` 补 `Edit(//<mount>/**)`/`Write(...)` 规则（T2 承接）。白名单目录经 sandbox `allowWrite` 的 Bash 写实效随 T3 集成再证。
+6. **claude sandbox 对 git linked-worktree 共享 `.git` 自动放行** ✅。cwd = linked worktree，`sandbox.enabled:true` 无额外 allowWrite，`git add -A && git commit` → GIT: OK、commit 落地。⇒ §2 的 `gitMetaDirs` **大概率不需显式 allowWrite**（保留 T3 在真实 iso-of-iso / fusion 布局再确认；common dir 在 appHome `repos/` 缓存的情形仍需 allowWrite 兜底）。
+7. **resume 重新应用本次 `--settings` 边界** ✅。run A 建会话取 session_id；run B `--resume <id> --settings '{deny Read(X)}'` 读 X → 被拒。⇒ 续跑不残留旧边界、新注入生效（§5-7 风险点排除）。opencode `--session` 侧随 T1 集成补一条。
+8. **`--settings` 的 `excludedCommands` 数组跨层合并，CLI 层 `[]` 压不住项目层** ✅（坐实设计门 F3）。项目 `.claude/settings.json:{sandbox:{excludedCommands:["touch *"]}}` → CLI `--settings {excludedCommands:[]}` 后 `touch 越界文件`仍 **OK**（未被沙箱拦）。⇒ 数组键无法靠 per-run 覆盖，worktree 内 `.claude/settings.json` 构成仓库内容级放宽面 → 归 proposal B8 披露；标量/对象键仍以 per-run 钉死为准（§4.1）。
 
 ## 6. 耦合点与时序
 
@@ -166,7 +174,7 @@ settings 内容（两类节点共用骨架）：
 ## 7. 失败模式
 
 - **F1 · 白名单漏路径** → 表现为 agent 合法操作被拒（响亮、可诊断，DeniedError 文案含 pattern）。缓解：`W(run)` 的装配数据全部来自 scheduler/runner 已有结构（iso handle、stagedSkills、runDir），不从路径形状猜（吸取 audit-backlog「放行集靠猜」四条事故根因 1 的教训）。
-- **F2 · 敏感清单误伤自身** → claude denyWrite `<appHome>` 必须挖去本 run 的 cwd/iso/runDir/mounts；生成器单元测试锁「自身路径永不出现在 deny 集」。
+- **F2 · 敏感清单误伤自身**（T0 §5-2 已定型）→ 根因规避而非挖洞：claude **写面不下发 denyWrite**（sandbox 默认 cwd+tmp 已挡兄弟，denyWrite 祖先根反会盖死 cwd）；**读面 `permissions.deny` 只列固定的、不含 cwd 的具体敏感文件**（不用 `appHome/**` 宽 glob——deny 优先且 allow 挖不回，会误伤自己）。生成器单元测试锁两条：`deny` 集里**不出现** appHome 根 / cwd / 任何 mount；`deny` 集只含固定敏感文件白名单。
 - **F3 · 上游语义漂移**（opencode 改 findLast/默认白名单；claude 改 sandbox 键形）→ 集成测试用真 runtime 锁行为而非只锁渲染字节；opencode 版本记录在 design 头。
 - **F4 · 越界拒绝改变既有工作流产出**（B1 的行为收缩本身）→ 保存面告警 + `docs/OPENCODE_CONFIG.md` 迁移指引（作者白名单写法）；不提供全局关闭开关（能力收缩一次到位，避免 RFC-276 批判过的双路径）。
 - **F5 · resume 会话**：resume 沿用同一注入渲染（opencode `--session` / claude `--resume` 的续跑 attempt 是新进程、重新吃本次 env/config/settings），边界在续跑时不丢失；残留风险是**会话内持久化的 session 级权限**盖过新注入——§5-7 必测，plan T1/T3 各承接一条 resume 回归。
