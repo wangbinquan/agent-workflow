@@ -21,6 +21,7 @@ import {
 import { getRuntimeDriver } from '../src/services/runtime'
 import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
 import { buildOpencodeSpawn } from '../src/services/runtime/opencode/spawn'
+import { opencodeDataDir } from '../src/services/execution/workspaceBoundary'
 import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
 import { toClaudeAgents, toClaudeMcpConfig } from '../src/services/runtime/claudeCode/inject'
 import { claudeBusinessGate } from '../src/services/runtime/claudeCode/permissionMap'
@@ -165,7 +166,7 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
           taskMounts: ctx.taskMounts,
           runDir,
           stagedSkillDirs: [join(runDir, 'skills')],
-          tmpGlobs: [`${tmpdir()}/opencode/*`],
+          tmpGlobs: [`${join(tmpdir(), 'opencode')}/*`, `${opencodeDataDir()}/tool-output/*`],
         },
       )
       const primary = inline.agent[ctx.agent.name]

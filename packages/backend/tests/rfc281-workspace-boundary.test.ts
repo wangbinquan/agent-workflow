@@ -11,9 +11,10 @@
 // Anchor: production event that motivated the RFC — an agent wandered into a
 // sibling task's worktree and executed there. See design/RFC-281 §1.
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import {
   claudeExpressibleAuthorDirs,
+  opencodeDataDir,
   claudeWriteBoundaryAvailability,
   composeClaudeBoundarySettings,
   composeOpencodeBoundary,
@@ -172,6 +173,35 @@ describe('composeClaudeBoundarySettings — write boundary only', () => {
       explicitPermission: false,
     })
     expect(s.sandbox.filesystem.allowWrite).toEqual(['/mnt/a', '/ref'])
+  })
+})
+
+describe('opencodeDataDir — matches opencode’s own XDG data resolution', () => {
+  // Read from opencode source (packages/core/src/global.ts:11 @1.18.16):
+  //   data = path.join(xdgData, 'opencode')
+  // and xdg-basedir resolves xdgData as $XDG_DATA_HOME || ~/.local/share on
+  // every platform (no darwin special case). `<data>/tool-output` holds
+  // truncated tool payloads the agent reads back, so the boundary must
+  // re-allow it or a large-file read trips the fence (§0).
+  const ORIG = process.env['XDG_DATA_HOME']
+  afterEach(() => {
+    if (ORIG === undefined) delete process.env['XDG_DATA_HOME']
+    else process.env['XDG_DATA_HOME'] = ORIG
+  })
+
+  test('falls back to ~/.local/share/opencode', () => {
+    delete process.env['XDG_DATA_HOME']
+    expect(opencodeDataDir('/home/u')).toBe('/home/u/.local/share/opencode')
+  })
+
+  test('honors XDG_DATA_HOME when set', () => {
+    process.env['XDG_DATA_HOME'] = '/custom/xdg'
+    expect(opencodeDataDir('/home/u')).toBe('/custom/xdg/opencode')
+  })
+
+  test('an empty XDG_DATA_HOME is treated as unset', () => {
+    process.env['XDG_DATA_HOME'] = ''
+    expect(opencodeDataDir('/home/u')).toBe('/home/u/.local/share/opencode')
   })
 })
 

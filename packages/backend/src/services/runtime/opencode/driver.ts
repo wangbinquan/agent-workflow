@@ -38,7 +38,7 @@ import { tmpdir } from 'node:os'
 import { observeSystemEvent, parseEvent } from './events'
 import { buildOpencodeSpawn } from './spawn'
 import { buildInlineConfig } from './inlineConfig'
-import type { BoundaryCtx } from '@/services/execution/workspaceBoundary'
+import { opencodeDataDir, type BoundaryCtx } from '@/services/execution/workspaceBoundary'
 import { pickRuntimeHead } from '../head'
 import { stageSkills } from '../stageSkills'
 import { probeOpencode } from '@/util/opencode'
@@ -217,7 +217,15 @@ export const opencodeDriver: RuntimeDriver = {
       taskMounts: ctx.taskMounts,
       runDir,
       stagedSkillDirs: [join(runDir, 'skills')],
-      tmpGlobs: [`${tmpdir()}/opencode/*`],
+      // opencode's own scratch areas, read from ITS source (packages/core/src/
+      // global.ts:11,15 @1.18.16) rather than guessed:
+      //   Path.tmp  = os.tmpdir()/opencode
+      //   Path.data = xdgData/opencode   → tool-output/ holds truncated tool
+      //                                    payloads the agent then reads back
+      // opencode re-adds the tool-output glob itself at the end of its permission
+      // assembly, but relying on that leaves the boundary hostage to upstream
+      // ordering — list both explicitly.
+      tmpGlobs: [`${join(tmpdir(), 'opencode')}/*`, `${opencodeDataDir()}/tool-output/*`],
     }
 
     // RFC-022/028/031: primary + closure dependents + mcp + plugin entries.

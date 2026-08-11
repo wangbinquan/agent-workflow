@@ -23,6 +23,22 @@
 //    追加在作者所有其他键（尤其 '*'）之后。这就是本函数做的事。
 
 import type { AgentPermission } from '@agent-workflow/shared'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+/**
+ * opencode 的 XDG data 目录（`Global.Path.data`）。
+ *
+ * 读源不靠猜：opencode `packages/core/src/global.ts:11` = `path.join(xdgData, 'opencode')`，
+ * 而 `xdg-basedir` 的 `xdgData` = `$XDG_DATA_HOME` 或 `~/.local/share`（macOS 同样如此，
+ * 该包不按平台分叉）。它下面的 `tool-output/` 存放被截断的工具输出，agent 之后会读回来
+ * ——不放行就会在读大文件时踩边界（§0 误伤面）。
+ */
+export function opencodeDataDir(home: string = homedir()): string {
+  const xdgData = process.env['XDG_DATA_HOME']
+  const base = xdgData !== undefined && xdgData.length > 0 ? xdgData : join(home, '.local', 'share')
+  return join(base, 'opencode')
+}
 
 /** 本次 run 的合法工作区数据源（全部取自 scheduler/runner 既有结构，不从路径形状猜）。 */
 export interface BoundaryCtx {
