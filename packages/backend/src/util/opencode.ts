@@ -53,10 +53,13 @@ export interface OpencodeProbe {
  * binary remains available even when its version output is non-semver.
  */
 export async function probeOpencode(
-  opencodePath?: string,
+  opencodePath?: string | readonly string[],
   opts: ProbeOpts = {},
 ): Promise<OpencodeProbe> {
-  const binary = opencodePath ?? 'opencode'
+  // RFC-282 C1（Windows P2）: an array is a full command head ([bun, run, mock]).
+  const head: readonly string[] =
+    typeof opencodePath === 'string' ? [opencodePath] : (opencodePath ?? ['opencode'])
+  const binary = head[0]!
   const warn: typeof log.warn = opts.quiet === true ? () => {} : (msg, ctx) => log.warn(msg, ctx)
   let version: string | null = null
   let ran = false
@@ -67,7 +70,7 @@ export async function probeOpencode(
     // gate). Without a timeout the historical flat spawn is kept byte-for-byte.
     const proc = Bun.spawn({
       ...platformSpawnOptionsForHost(),
-      cmd: [binary, '--version'],
+      cmd: [...head, '--version'],
       stdout: 'pipe',
       stderr: 'pipe',
       ...(opts.timeoutMs !== undefined ? { detached: true } : {}),

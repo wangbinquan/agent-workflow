@@ -40,10 +40,13 @@ export interface ClaudeProbe {
 
 /** Spawn `<binary> --version`, parse the semver. Output form: `2.1.193 (Claude Code)`. */
 export async function probeClaudeCode(
-  claudePath?: string,
+  claudePath?: string | readonly string[],
   opts: ProbeOpts = {},
 ): Promise<ClaudeProbe> {
-  const binary = claudePath ?? 'claude'
+  // RFC-282 C1（Windows P2）: an array is a full command head ([bun, run, mock]).
+  const head: readonly string[] =
+    typeof claudePath === 'string' ? [claudePath] : (claudePath ?? ['claude'])
+  const binary = head[0]!
   const warn: typeof log.warn = opts.quiet === true ? () => {} : (msg, ctx) => log.warn(msg, ctx)
   let version: string | null = null
   let ran = false
@@ -52,7 +55,7 @@ export async function probeClaudeCode(
     // tree, not just a hung wrapper (see util/opencode.ts, same shape).
     const proc = Bun.spawn({
       ...platformSpawnOptionsForHost(),
-      cmd: [binary, '--version'],
+      cmd: [...head, '--version'],
       stdout: 'pipe',
       stderr: 'pipe',
       ...(opts.timeoutMs !== undefined ? { detached: true } : {}),

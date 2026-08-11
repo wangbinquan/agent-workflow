@@ -720,7 +720,10 @@ export interface RuntimeDriver {
    */
   defaultBinary(config: RuntimeBinaryConfig): string[]
   /** RFC-143 — version probe (was probeOpencode / probeClaudeCode free fns). */
-  probe(binary: string, opts?: ProbeOpts): Promise<RuntimeProbe>
+  /** RFC-282 C1（Windows P2）— a readonly[] head lets tests probe a
+   *  `[bun, run, mock]` command on hosts where a single-file wrapper cannot
+   *  stream the protocol (same seam smoke already has). */
+  probe(binary: string | readonly string[], opts?: ProbeOpts): Promise<RuntimeProbe>
   /** RFC-143 — model list (was listOpencodeModels / listClaudeModels free fns). */
   listModels(binary: string, opts?: ListModelsOpts): Promise<RuntimeModelList>
   /** RFC-143 — run-after subagent session capture (was captureChildSessions /
