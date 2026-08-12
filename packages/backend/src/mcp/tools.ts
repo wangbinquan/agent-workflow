@@ -25,6 +25,7 @@ import {
   type MatrixResource,
   type Permission,
   type Role,
+  type StartTaskSchema,
   type WorkflowInput,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
@@ -108,6 +109,79 @@ export class McpCallError extends Error {
 // Task domain (D11 — named tools)
 // -----------------------------------------------------------------------------
 
+// RFC-284 T28 —— launch_task 入参与 shared StartTaskSchema 的键集镜像断言：
+// satisfies 限定每个键必须是 StartTaskSchema 的合法键（发明 `repoId` 这类不存在
+// 的字段名 = 编译期红）。requiredness 与语义仍以下方 describe/zod 定义为准；
+// 键集是此前唯一靠注释维系、实际漂移过的轴（首版漏掉预算/协作者/多仓字段）。
+const LAUNCH_TASK_INPUT_SCHEMA = {
+  workflowId: z.string().min(1).describe('Workflow id to run'),
+  name: z.string().min(1).max(255).describe('Task name — required, shown in every list'),
+  cachedRepoId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Imported repo to run against (resource_read kind="repos" lists them)'),
+  repoUrl: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Remote git URL, as an alternative to cachedRepoId'),
+  ref: z.string().min(1).optional().describe('Branch, tag or commit to start from'),
+  scratch: z
+    .boolean()
+    .optional()
+    .describe('Run in a fresh empty git repo instead of a source repo; excludes every repo field'),
+  inputs: z
+    .record(z.string(), z.string())
+    .optional()
+    .describe(
+      'Workflow input values, keyed by the port KEY. Read them first with ' +
+        'resource_read(kind="workflows", method="get"): `definition.inputs[]` gives each ' +
+        'key, label, kind and whether it is required. `files` and `enum` values use a ' +
+        'packed multi-line encoding — copy the shape the workflow documents.',
+    ),
+  workingBranch: z.string().min(1).optional(),
+  autoCommitPush: z.boolean().optional().describe('Commit and push after each writer node'),
+  // MCP tool inputs are a CLOSED schema — a field not listed here can never
+  // reach the route, whatever the caller sends. The first version stopped
+  // after `autoCommitPush`, which silently made the per-task budgets,
+  // collaborators, git identity and multi-repo launches unreachable over
+  // MCP even though the route accepts them all.
+  maxDurationMs: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('Per-task wall-clock budget; falls back to the global setting'),
+  maxTotalTokens: z.number().int().nonnegative().optional(),
+  collaboratorUserIds: z
+    .array(z.string().min(1))
+    .optional()
+    .describe('Users added alongside the launcher (who becomes owner)'),
+  gitUserName: z
+    .string()
+    .min(1)
+    .max(255)
+    .optional()
+    .describe('Per-task commit identity; set together with gitUserEmail or not at all'),
+  gitUserEmail: z.string().min(1).max(255).optional(),
+  expectedWorkflowVersion: z
+    .number()
+    .int()
+    .optional()
+    .describe('Refuse (409) if the workflow changed since you read it'),
+  repoGroupId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Multi-repo launch: run in a repo group's materialized layout. " +
+        'Mutually exclusive with the top-level repo fields. RFC-248 retired the ' +
+        'old inline `repos[]` array — passing it now fails with 422. ' +
+        'See resource_read(kind="repo-groups") for available groups.',
+    ),
+} satisfies Partial<Record<keyof z.input<typeof StartTaskSchema>, z.ZodTypeAny>>
+
 const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
   {
     name: 'launch_task',
@@ -120,76 +194,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     // Field names and requiredness mirror StartTaskSchema exactly. Getting
     // `name` wrong (it is required, with no server fallback) or inventing a
     // `repoId` would 422 every call with a schema error the model cannot act on.
-    inputSchema: {
-      workflowId: z.string().min(1).describe('Workflow id to run'),
-      name: z.string().min(1).max(255).describe('Task name — required, shown in every list'),
-      cachedRepoId: z
-        .string()
-        .min(1)
-        .optional()
-        .describe('Imported repo to run against (resource_read kind="repos" lists them)'),
-      repoUrl: z
-        .string()
-        .min(1)
-        .optional()
-        .describe('Remote git URL, as an alternative to cachedRepoId'),
-      ref: z.string().min(1).optional().describe('Branch, tag or commit to start from'),
-      scratch: z
-        .boolean()
-        .optional()
-        .describe(
-          'Run in a fresh empty git repo instead of a source repo; excludes every repo field',
-        ),
-      inputs: z
-        .record(z.string(), z.string())
-        .optional()
-        .describe(
-          'Workflow input values, keyed by the port KEY. Read them first with ' +
-            'resource_read(kind="workflows", method="get"): `definition.inputs[]` gives each ' +
-            'key, label, kind and whether it is required. `files` and `enum` values use a ' +
-            'packed multi-line encoding — copy the shape the workflow documents.',
-        ),
-      workingBranch: z.string().min(1).optional(),
-      autoCommitPush: z.boolean().optional().describe('Commit and push after each writer node'),
-      // MCP tool inputs are a CLOSED schema — a field not listed here can never
-      // reach the route, whatever the caller sends. The first version stopped
-      // after `autoCommitPush`, which silently made the per-task budgets,
-      // collaborators, git identity and multi-repo launches unreachable over
-      // MCP even though the route accepts them all.
-      maxDurationMs: z
-        .number()
-        .int()
-        .nonnegative()
-        .optional()
-        .describe('Per-task wall-clock budget; falls back to the global setting'),
-      maxTotalTokens: z.number().int().nonnegative().optional(),
-      collaboratorUserIds: z
-        .array(z.string().min(1))
-        .optional()
-        .describe('Users added alongside the launcher (who becomes owner)'),
-      gitUserName: z
-        .string()
-        .min(1)
-        .max(255)
-        .optional()
-        .describe('Per-task commit identity; set together with gitUserEmail or not at all'),
-      gitUserEmail: z.string().min(1).max(255).optional(),
-      expectedWorkflowVersion: z
-        .number()
-        .int()
-        .optional()
-        .describe('Refuse (409) if the workflow changed since you read it'),
-      repoGroupId: z
-        .string()
-        .min(1)
-        .optional()
-        .describe(
-          "Multi-repo launch: run in a repo group's materialized layout. " +
-            'Mutually exclusive with the top-level repo fields. RFC-248 retired the ' +
-            'old inline `repos[]` array — passing it now fails with 422. ' +
-            'See resource_read(kind="repo-groups") for available groups.',
-        ),
-    },
+    inputSchema: LAUNCH_TASK_INPUT_SCHEMA,
     handler: async (args, ctx) => {
       await assertNoUploadInputs(String(args.workflowId), ctx)
       return unwrap(await ctx.dispatch({ method: 'POST', path: '/api/tasks', body: args }))

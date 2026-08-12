@@ -16,8 +16,9 @@ import { ValidationError } from '../src/util/errors'
 
 const SRC_ROOT = join(import.meta.dir, '../src')
 
-// T28 落地（webhook CRUD 抽 service）时本清单必须清空——棘轮只减不增。
-const LOCAL_DEF_ALLOWLIST = new Set(['routes/webhookEndpoints.ts', 'routes/webhookTriggers.ts'])
+// T28 已落地（webhook CRUD 抽 service，2026-08-12）：清单按约清空——safeJson
+// 全仓唯一定义在 util/http.ts，任何新的本地定义直接红。
+const LOCAL_DEF_ALLOWLIST = new Set<string>()
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const name of readdirSync(dir)) {

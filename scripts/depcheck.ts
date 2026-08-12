@@ -260,16 +260,11 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
       ['tasks', '存在性检查再委托的样板 ×4 + multipart 编排读。RFC-284 T25 编排归位时一并下沉。'],
       [
         'webhookDeliveries',
-        'webhook 域：deliveries 原生 sql 模板直查。RFC-284 T28 抽 service（RFC-283 后）。',
+        'webhook 域：deliveries 原生 sql 模板直查。CRUD 对已随 RFC-284 T28 薄壳化；本读面属 dispatch 链路，随 webhook 读模型下沉的独立切片处置（RFC-284 登记）。',
       ],
       [
-        'webhookEndpoints',
-        'webhook 域：endpoint CRUD 全部长在路由层（审计 N10 主证）。RFC-284 T28 抽 service（RFC-283 后）。',
-      ],
-      ['webhooks', 'webhook 域：入站分发行读取。RFC-284 T28 抽 service（RFC-283 后）。'],
-      [
-        'webhookTriggers',
-        'webhook 域：trigger CRUD 全部长在路由层（审计 N10 主证）。RFC-284 T28 抽 service（RFC-283 后）。',
+        'webhooks',
+        'webhook 域：入站分发行读取。CRUD 对已随 RFC-284 T28 薄壳化；ingress 读面随 webhook 读模型下沉的独立切片处置（RFC-284 登记）。',
       ],
       [
         'worktree-files',

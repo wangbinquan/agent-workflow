@@ -126,8 +126,9 @@ describe('RFC-257 · 端点面错误码', () => {
     // routes/webhookEndpoints.ts 的铸造重试穷尽后抛出；构造它需要连续三次
     // randomBytes(32) 碰撞既有 token，实际不可复现。此断言点名该码并锁定其
     // 存在于源码（消失即此测试失去意义，应一并删除）。
+    // RFC-284 T28 改锚：端点 CRUD 正体迁 services/webhookEndpoints.ts（路由为薄壳）。
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'webhookEndpoints.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'webhookEndpoints.ts'),
       'utf8',
     )
     expect(src.includes("'webhook-endpoint-token-mint-failed'")).toBe(true)
