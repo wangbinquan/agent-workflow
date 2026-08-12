@@ -37,7 +37,13 @@ import type { DbClient } from '@/db/client'
 import { scheduledRowsReferencing } from './scheduledTaskRefs'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
 import { agents, scheduledTasks, users, workgroupMembers, workgroups } from '@/db/schema'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/util/errors'
 import {
   WORKGROUPS_CHANNEL,
   workgroupsBroadcaster,
@@ -254,8 +260,8 @@ export async function copyWorkgroup(
         parsed.data.expectedVersion !== currentRevision.version ||
         parsed.data.expectedSnapshotHash !== currentRevision.snapshotHash
       ) {
-        throw new ConflictError(
-          'workgroup-copy-stale',
+        throw staleConflictError(
+          'workgroup',
           `workgroup '${sourceId}' changed; reload before copying`,
           { current: currentRevision },
         )
@@ -406,8 +412,8 @@ export function commitWorkgroupSaveInTx(
         committed: false,
       }
     }
-    throw new ConflictError(
-      'workgroup-version-conflict',
+    throw staleConflictError(
+      'workgroup',
       `workgroup '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
       { current: currentRevision },
     )
@@ -462,7 +468,7 @@ export function commitWorkgroupSaveInTx(
     .returning()
     .get()
   if (returned === undefined) {
-    throw new ConflictError('workgroup-version-conflict', `workgroup '${id}' changed; reload`, {
+    throw staleConflictError('workgroup', `workgroup '${id}' changed; reload`, {
       current: currentRevision,
     })
   }
@@ -545,8 +551,8 @@ export async function deleteWorkgroup(
         .from(workgroupMembers)
         .where(eq(workgroupMembers.workgroupId, id))
         .all()
-      throw new ConflictError(
-        'workgroup-version-conflict',
+      throw staleConflictError(
+        'workgroup',
         `workgroup '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
         { current: workgroupRevisionOf(rowToWorkgroup(currentRow, members)) },
       )
@@ -566,7 +572,7 @@ export async function deleteWorkgroup(
       .returning({ id: workgroups.id })
       .get()
     if (deleted === undefined) {
-      throw new ConflictError('workgroup-version-conflict', `workgroup '${id}' changed; reload`)
+      throw staleConflictError('workgroup', `workgroup '${id}' changed; reload`)
     }
     return { deletedVersion: currentRow.version, audience }
   })

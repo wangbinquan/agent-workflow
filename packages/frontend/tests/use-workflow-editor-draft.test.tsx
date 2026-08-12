@@ -591,7 +591,7 @@ describe('useWorkflowEditorDraft', () => {
   test('409 retains structured current revision and pauses autosave in conflict', async () => {
     const io = makeTransport()
     io.save.mockRejectedValueOnce(
-      new ApiError(409, 'workflow-version-conflict', 'changed', {
+      new ApiError(409, 'resource-operation-stale', 'changed', {
         current: {
           workflowId: 'wf-1',
           version: 3,

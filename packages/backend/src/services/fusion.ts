@@ -1445,8 +1445,9 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
     })
   } catch (err) {
     const code = (err as { code?: string }).code
+    // RFC-285 B5：skill 围栏码已归一 resource-operation-stale。
     const msg =
-      code === 'skill-version-conflict'
+      code === 'resource-operation-stale'
         ? 'the skill changed since this fusion started; re-run on the latest version'
         : err instanceof Error
           ? err.message

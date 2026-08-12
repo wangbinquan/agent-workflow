@@ -105,7 +105,7 @@ export type UpdateSkillContent = z.infer<typeof UpdateSkillContentSchema>
 /**
  * RFC-170 §2/T4 — POST /api/skills/:id/save. Combined description+body save
  * gated by the composite precondition token from the detail read (T3). A stale
- * token → 409 (skill-version-conflict); malformed → 400 (skill-token-invalid).
+ * token → 409 (resource-operation-stale — RFC-285 B5 归一，原 skill-version-conflict); malformed → 400 (skill-token-invalid).
  */
 export const CombinedSaveSkillSchema = UpdateSkillContentSchema.extend({
   expectedToken: z.string().min(1),
@@ -240,7 +240,7 @@ export const SkillZipCommitFailureCodeSchema = z.enum([
   // RFC-102: overwrite requested but the actor is not the owner/admin.
   'skill-overwrite-forbidden',
   // RFC-223 AC19: preview target or owner/ACL/content generation drifted.
-  'skill-overwrite-stale',
+  'resource-operation-stale', // RFC-285 B5：原 skill-overwrite-stale 入族归一
 ])
 export type SkillZipCommitFailureCode = z.infer<typeof SkillZipCommitFailureCodeSchema>
 

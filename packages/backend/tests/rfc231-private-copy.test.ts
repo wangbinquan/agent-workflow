@@ -494,7 +494,7 @@ describe('RFC-231 Workflow exact copy', () => {
         },
         bob,
       ),
-    ).rejects.toMatchObject({ code: 'workflow-copy-stale' })
+    ).rejects.toMatchObject({ code: 'resource-operation-stale' })
     const copied = await copyWorkflow(
       db,
       legacyId,
@@ -608,7 +608,7 @@ describe('RFC-231 Workgroup exact copy', () => {
 
     await expect(
       copyWorkgroup(db, source.id, { ...request, expectedSnapshotHash: '0'.repeat(64) }, bob),
-    ).rejects.toMatchObject({ code: 'workgroup-copy-stale' })
+    ).rejects.toMatchObject({ code: 'resource-operation-stale' })
 
     db.update(users).set({ status: 'disabled' }).where(eq(users.id, 'reviewer')).run()
     await expect(copyWorkgroup(db, source.id, request, bob)).rejects.toMatchObject({

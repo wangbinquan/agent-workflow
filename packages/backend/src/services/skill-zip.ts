@@ -527,7 +527,7 @@ export async function commitSkillZipBuffer(
       if (target === null) {
         outcome.failed.push({
           name: candidate.name,
-          code: 'skill-overwrite-stale',
+          code: 'resource-operation-stale',
           message: 'the previewed overwrite target is no longer available; review the ZIP again',
         })
         continue
@@ -539,7 +539,7 @@ export async function commitSkillZipBuffer(
       if (!(await canViewResource(db, aclOpts.actor, 'skill', target))) {
         outcome.failed.push({
           name: candidate.name,
-          code: 'skill-overwrite-stale',
+          code: 'resource-operation-stale',
           message: 'the previewed overwrite target is no longer available; review the ZIP again',
         })
         continue
@@ -555,7 +555,7 @@ export async function commitSkillZipBuffer(
       if (!targetIsAvailable(target)) {
         outcome.failed.push({
           name: candidate.name,
-          code: 'skill-overwrite-stale',
+          code: 'resource-operation-stale',
           message: 'the previewed overwrite target is no longer available; review the ZIP again',
         })
         continue
@@ -576,7 +576,7 @@ export async function commitSkillZipBuffer(
       ) {
         outcome.failed.push({
           name: candidate.name,
-          code: 'skill-overwrite-stale',
+          code: 'resource-operation-stale',
           message: 'the previewed overwrite target changed; review the ZIP again',
         })
         continue
@@ -675,14 +675,15 @@ export async function commitSkillZipBuffer(
       // (row + files + op), and the old best-effort rm of the target files dir
       // could delete a CONCURRENT winner's just-published live files.
       const isNameConflict = err instanceof ConflictError && err.code === 'skill-name-in-use'
+      // RFC-285 B5：技能版本围栏冲突已归一 resource-operation-stale（Q1/Q7）。
       const isStaleOverwrite =
-        isOverwrite && err instanceof ConflictError && err.code === 'skill-version-conflict'
+        isOverwrite && err instanceof ConflictError && err.code === 'resource-operation-stale'
       outcome.failed.push({
         name: candidate.name,
         code: isNameConflict
           ? 'skill-rename-conflict'
           : isStaleOverwrite
-            ? 'skill-overwrite-stale'
+            ? 'resource-operation-stale'
             : 'skill-write-failed',
         message: err instanceof Error ? err.message : String(err),
       })

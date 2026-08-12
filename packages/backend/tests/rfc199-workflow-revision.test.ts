@@ -169,7 +169,7 @@ describe('RFC-199 workflow revision fencing', () => {
     expect(winner.value.outcome).toBe('committed')
     expect(winner.value.revision.version).toBe(2)
     expect(['writer-a', 'writer-b']).toContain(winner.value.snapshot.description)
-    expect(codeOf(rejected[0]?.reason)).toBe('workflow-version-conflict')
+    expect(codeOf(rejected[0]?.reason)).toBe('resource-operation-stale')
     const current = await getWorkflow(db, workflow.id)
     expect(current?.version).toBe(2)
     expect(current?.description).toBe(winner.value.snapshot.description)
@@ -273,8 +273,12 @@ describe('RFC-199 workflow revision fencing', () => {
       })
       throw new Error('expected conflict')
     } catch (error) {
-      expect(codeOf(error)).toBe('workflow-version-conflict')
-      expect((error as DomainError).details).toEqual({ current: winner.revision })
+      expect(codeOf(error)).toBe('resource-operation-stale')
+      // RFC-285 B5：details 增 resource 字段（staleConflictError 统一形态）。
+      expect((error as DomainError).details).toEqual({
+        resource: 'workflow',
+        current: winner.revision,
+      })
     }
     expect((await getWorkflow(db, workflow.id))?.description).toBe('winner')
   })
@@ -451,7 +455,7 @@ describe('RFC-199 workflow revision fencing', () => {
 
     await expect(
       deleteWorkflow(db, workflow.id, { expectedVersion: 1, clientMutationId: ulid() }, alice),
-    ).rejects.toMatchObject({ code: 'workflow-version-conflict', status: 409 })
+    ).rejects.toMatchObject({ code: 'resource-operation-stale', status: 409 })
     expect(await getWorkflow(db, workflow.id)).not.toBeNull()
 
     await db.insert(tasks).values({

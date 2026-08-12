@@ -178,7 +178,7 @@ describe('RFC-225 workgroup revision fencing', () => {
       await save(db, group, { ...base, description: 'second' }, { expectedVersion: 1 })
       throw new Error('expected version conflict')
     } catch (error) {
-      expect(codeOf(error)).toBe('workgroup-version-conflict')
+      expect(codeOf(error)).toBe('resource-operation-stale')
     }
     const latest = await getWorkgroupById(db, group.id)
     expect(latest?.description).toBe('first')

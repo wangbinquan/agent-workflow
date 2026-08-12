@@ -14,7 +14,7 @@ import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { agents, plugins } from '@/db/schema'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import {
   cleanupInstallGeneration,
   garbageCollectPluginGenerations,
@@ -444,8 +444,9 @@ function changesOf(result: unknown): number {
 }
 
 function stalePluginError(id: string): ConflictError {
-  return new ConflictError(
-    'resource-operation-stale',
+  // RFC-285 B5：家族先行站点收编 staleConflictError（补 resource 字段）。
+  return staleConflictError(
+    'plugin',
     `plugin '${id}' changed while the operation was running; reload and retry`,
   )
 }

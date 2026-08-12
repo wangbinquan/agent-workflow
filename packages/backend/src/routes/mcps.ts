@@ -41,7 +41,13 @@ import { mountAclEndpoints } from './resourceAcl'
 import { probeMcp, type ProbeOptions } from '@/services/mcpProbe'
 import { getProbeByMcpId, listProbes, upsertProbe } from '@/services/mcpProbeStore'
 import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import {
@@ -529,11 +535,10 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
             const captured = await loadVisibleMcp(actor, resolved.id)
             const actualHash = mcpOperationConfigHashOf(captured)
             if (actualHash !== expectedHash) {
-              throw new ConflictError(
-                'resource-operation-stale',
-                'the MCP changed; reload before probing',
-                { expectedConfigHash: expectedHash, currentConfigHash: actualHash },
-              )
+              throw staleConflictError('mcp', 'the MCP changed; reload before probing', {
+                expectedConfigHash: expectedHash,
+                currentConfigHash: actualHash,
+              })
             }
             // Preserve the existing 422 disabled contract before assigning a
             // generation to an operation that cannot truly start.
@@ -570,15 +575,15 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
           return mcpOperationCoordinator.runExclusive(resolved.id, async () => {
             const current = await getMcpById(deps.db, resolved.id)
             if (current === null || mcpOperationConfigHashOf(current) !== expectedHash) {
-              throw new ConflictError(
-                'resource-operation-stale',
+              throw staleConflictError(
+                'mcp',
                 'the MCP changed while the probe was running; result was discarded',
                 { expectedConfigHash: expectedHash },
               )
             }
             if (!(await canViewResource(deps.db, actor, 'mcp', current))) {
-              throw new ConflictError(
-                'resource-operation-stale',
+              throw staleConflictError(
+                'mcp',
                 'MCP access changed while the probe was running; result was discarded',
               )
             }
@@ -627,10 +632,9 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
 
 function assertExpectedHash(mcp: Mcp, expected: string): void {
   if (mcpOperationConfigHashOf(mcp) !== expected) {
-    throw new ConflictError(
-      'resource-operation-stale',
-      'the MCP changed; reload before modifying it',
-      { expectedConfigHash: expected, currentConfigHash: mcpOperationConfigHashOf(mcp) },
-    )
+    throw staleConflictError('mcp', 'the MCP changed; reload before modifying it', {
+      expectedConfigHash: expected,
+      currentConfigHash: mcpOperationConfigHashOf(mcp),
+    })
   }
 }

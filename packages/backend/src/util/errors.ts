@@ -57,6 +57,22 @@ export class ConflictError extends DomainError {
   }
 }
 
+/**
+ * RFC-285 B5（D6，Q1/Q7 直接切换）—— OCC/围栏「资源被并发修改」类冲突的
+ * **唯一错误形态**：`resource-operation-stale` + `resource` 字段 + 站点原有
+ * details。收编六个历史方言码（skill/workflow/workgroup 的 version-conflict、
+ * workflow/workgroup 的 copy-stale、repo-group-version-conflict；zip 导入
+ * outcome 行的 skill-overwrite-stale 同码归一）。新的资源类冲突一律走这里，
+ * 不再铸新方言码。
+ */
+export function staleConflictError(
+  resource: 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup' | 'repo_group',
+  message: string,
+  details?: Record<string, unknown>,
+): ConflictError {
+  return new ConflictError('resource-operation-stale', message, { resource, ...(details ?? {}) })
+}
+
 export class UnauthorizedError extends DomainError {
   constructor(message = 'missing or invalid token', details?: unknown) {
     super('unauthorized', message, 401, details)

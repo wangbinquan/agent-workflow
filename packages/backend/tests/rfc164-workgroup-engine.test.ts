@@ -371,7 +371,7 @@ describe('RFC-164 engine — launch path', () => {
       details?: { expectedVersion: number; currentVersion: number }
     }
     expect(body).toMatchObject({
-      code: 'workgroup-version-conflict',
+      code: 'resource-operation-stale',
       details: { expectedVersion: 2, currentVersion: 1 },
     })
     expect(await db.select().from(tasks)).toHaveLength(0)

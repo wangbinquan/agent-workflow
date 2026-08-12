@@ -616,7 +616,7 @@ export function WorkgroupEditor(props: {
     },
     onError: (error) => {
       busyRef.current = false
-      if (error instanceof ApiError && error.code === 'workgroup-copy-stale') {
+      if (error instanceof ApiError && error.code === 'resource-operation-stale') {
         void props.refetch()
       }
     },

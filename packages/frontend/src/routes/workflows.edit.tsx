@@ -761,7 +761,7 @@ export function WorkflowEditorLoaded({
       ) {
         setCopyActionError(null)
       } else {
-        if (error instanceof ApiError && error.code === 'workflow-copy-stale') onRefetch()
+        if (error instanceof ApiError && error.code === 'resource-operation-stale') onRefetch()
         setCopyActionError(error)
       }
     } finally {

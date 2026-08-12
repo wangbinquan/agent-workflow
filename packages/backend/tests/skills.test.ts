@@ -461,7 +461,7 @@ describe('skill HTTP routes', () => {
       }),
     })
     expect(stale.status).toBe(409)
-    expect(((await stale.json()) as { code: string }).code).toBe('skill-version-conflict')
+    expect(((await stale.json()) as { code: string }).code).toBe('resource-operation-stale')
     expect((await req(h.app, `/api/skills/${skill.id}`)).status).toBe(200)
     expect(existsSync(join(h.appHome, 'skills', skill.id, 'files', 'SKILL.md'))).toBe(true)
   })

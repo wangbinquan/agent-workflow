@@ -43,7 +43,7 @@ import { agents, workflows } from '@/db/schema'
 import { canViewResource, initialBuiltinResourceAcl } from '@/services/resourceAcl'
 import { getWorkgroupById } from '@/services/workgroups'
 import { startTask, type StartTaskDeps } from '@/services/task'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 
 // RFC-217 T1 — sentinel constants moved to ./constants (zero-dep leaf; cycle
@@ -204,8 +204,8 @@ export async function startWorkgroupTask(
     input.expectedWorkgroupVersion !== undefined &&
     group.version !== input.expectedWorkgroupVersion
   ) {
-    throw new ConflictError(
-      'workgroup-version-conflict',
+    throw staleConflictError(
+      'workgroup',
       `workgroup '${group.name}' changed during launch (expected v${input.expectedWorkgroupVersion}, now v${group.version})`,
       { expectedVersion: input.expectedWorkgroupVersion, currentVersion: group.version },
     )

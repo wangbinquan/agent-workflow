@@ -25,7 +25,13 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { cachedRepos, memories, repoGroupNodes, repoGroups, scheduledTasks } from '@/db/schema'
 import { resolveCachedRepo, type GitRepoCacheDeps } from '@/services/gitRepoCache'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/util/errors'
 
 export interface RepoGroupDeps {
   db: DbClient
@@ -564,8 +570,8 @@ export async function updateRepoGroup(
       throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
     }
     if (expectedVersion !== undefined && fresh.version !== expectedVersion) {
-      throw new ConflictError(
-        'repo-group-version-conflict',
+      throw staleConflictError(
+        'repo_group',
         `repo group was modified concurrently (expected version ${expectedVersion}, found ${fresh.version})`,
         { expectedVersion, actualVersion: fresh.version },
       )

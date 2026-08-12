@@ -134,7 +134,7 @@ function createServer(
         if (failure === 'reject-409-foreign') {
           description = 'foreign description'
           advance()
-          return json({ code: 'skill-version-conflict', message: 'token stale' }, 409)
+          return json({ code: 'resource-operation-stale', message: 'token stale' }, 409)
         }
         description = payload.description
         bodyMd = payload.bodyMd
@@ -153,7 +153,7 @@ function createServer(
         if (failure === 'reject-409-foreign') {
           files.set(path, 'foreign')
           advance()
-          return json({ code: 'skill-version-conflict', message: 'token stale' }, 409)
+          return json({ code: 'resource-operation-stale', message: 'token stale' }, 409)
         }
         files.set(path, payload.content)
         advance()

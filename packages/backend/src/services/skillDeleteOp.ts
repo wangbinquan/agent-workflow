@@ -38,7 +38,7 @@ import {
   findAgentsUsingManagedSkillInTx,
   type SkillReferencingAgentRow,
 } from '@/services/skillReferenceGuard'
-import { ConflictError } from '@/util/errors'
+import { staleConflictError } from '@/util/errors'
 function trashPath(appHome: string, skillId: string, opId: string): string {
   if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(opId)) {
     throw new Error(`delete operation has invalid op_id: ${opId}`)
@@ -167,8 +167,8 @@ function assertDeleteFence(tx: DbTxSync, skillId: string, expected: SkillDeleteF
     live.ownerUserId !== expected.ownerUserId ||
     live.aclRevision !== expected.aclRevision
   ) {
-    throw new ConflictError(
-      'skill-version-conflict',
+    throw staleConflictError(
+      'skill',
       `skill '${skillId}' changed since this operation started; reload and retry`,
     )
   }

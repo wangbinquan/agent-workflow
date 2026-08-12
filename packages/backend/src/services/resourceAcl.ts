@@ -25,9 +25,9 @@
 //
 // | 资源      | 机制                                        | 为什么是这个                          | 拒因子码现状 |
 // | agent     | 行级 CAS：expectedUpdatedAt+expectedAclRevision | 无 version 列；ACL 与内容双轴各自演进   | resource-operation-stale；名字域 agent-name-in-use |
-// | workflow  | version 列 CAS（PUT 自增）                   | 画布编辑器多标签并发是主场景            | workflow-version-conflict |
-// | workgroup | version 列 CAS                              | 同 workflow                          | workgroup-version-conflict |
-// | skill     | contentVersion 内容围栏 + 覆写/重命名版本域   | 文件系统为真源，注入面须防换胎（RFC-178/223）| skill-version-conflict / skill-changed / skill-overwrite-stale；名字域 skill-name-in-use（skills_owner_name_unique） |
+// | workflow  | version 列 CAS（PUT 自增）                   | 画布编辑器多标签并发是主场景            | resource-operation-stale（原 workflow-version-conflict，RFC-285 B5） |
+// | workgroup | version 列 CAS                              | 同 workflow                          | resource-operation-stale（原 workgroup-version-conflict） |
+// | skill     | contentVersion 内容围栏 + 覆写/重命名版本域   | 文件系统为真源，注入面须防换胎（RFC-178/223）| resource-operation-stale（原 skill-version-conflict/-overwrite-stale）/ skill-changed；名字域 skill-name-in-use（skills_owner_name_unique） |
 // | mcp       | RFC-201 精确操作修订（mcpOperationRevision） | 操作对象是配置哈希而非整行             | resource-operation-stale 系 + 运行面 mcp-config-changed 族 |
 // | plugin    | RFC-201 精确操作修订（pluginOperationRevision）| 同 mcp（generation 不可变）           | resource-operation-stale 系 |
 //

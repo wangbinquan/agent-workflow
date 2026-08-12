@@ -867,7 +867,7 @@ describe('RFC-248 repo group service', () => {
         1, // 我拿到的是 v1，但库里已经是 v2
       ),
     )
-    expect(code).toBe('repo-group-version-conflict')
+    expect(code).toBe('resource-operation-stale')
     const after = getRepoGroup(db, g.id)
     expect(after.description).toBe('别人的改动') // 没被静默覆盖
     expect(after.version).toBe(2)

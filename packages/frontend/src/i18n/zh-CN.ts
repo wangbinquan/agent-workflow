@@ -10997,7 +10997,6 @@ export const zhCN: Resources = {
     'workflow-invalid': '工作流内容不合法。',
     'workflow-name-invalid':
       '工作流名称不能以 _ 开头，不能含换行 / 制表符等控制字符，长度 ≤ 128 字。',
-    'workflow-version-conflict': '工作流已被他人更新，请刷新后重试。',
     'workflow-version-mismatch': '发起期间工作流发生了变化，请刷新后重新发起。',
     'workflow-in-use': '仍有任务引用该工作流，无法删除。',
     'workflow-in-use__hint': '先删除引用它的任务。',
@@ -11076,7 +11075,7 @@ export const zhCN: Resources = {
     'mcp-still-referenced': '仍有代理引用该 MCP，无法删除。',
     'mcp-still-referenced__hint': '先在引用它的代理里解绑。',
     'probe-not-found': '该 MCP 还没有探测结果，请先探测。',
-    'resource-operation-stale': '资源已变化，请刷新后再探测。',
+    'resource-operation-stale': '资源在操作期间被他人修改，请刷新后重试。',
     'resource-operation-superseded': '已有更新的探测完成，本次结果被丢弃。',
     // --- plugin ---
     'plugin-not-found': '插件不存在。',
@@ -11123,7 +11122,7 @@ export const zhCN: Resources = {
     'skill-in-use': '仍有代理引用该技能，无法删除。',
     'skill-in-use__hint': '先在引用它的代理里解绑。',
     'skill-changed': '技能内容已被他人修改，请刷新后重试。',
-    'skill-version-conflict': '技能在操作期间被修改，请刷新后重试。',
+
     'skill-token-invalid': '页面状态已过期，请刷新后重试。',
     'skill-content-invalid': '保存内容不合法。',
     'skill-file-invalid': '文件写入内容不合法。',

@@ -23,7 +23,13 @@ import { agents, mcps, plugins, scheduledTasks, skills, tasks, workflows } from 
 import { scheduledRowsReferencing } from './scheduledTaskRefs'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/util/errors'
 import { agentsDependingOnIn, validateDependsOn } from './agentDeps'
 import { agentRefFenceGroups, resolveAgentRefsUsable } from './agentRefs'
 import {
@@ -841,7 +847,8 @@ function changesOf(result: unknown): number {
 }
 
 function staleAgentError(id: string): ConflictError {
-  return new ConflictError('resource-operation-stale', `agent '${id}' changed; reload and retry`)
+  // RFC-285 B5：家族先行站点收编 staleConflictError（补 resource 字段）。
+  return staleConflictError('agent', `agent '${id}' changed; reload and retry`)
 }
 
 /** Pure core of the workflow-reference check — RFC-165 (F17-r3): the

@@ -602,7 +602,7 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
 
   test('Copy failure stays visible inside the More actions dialog', async () => {
     vi.spyOn(api, 'post').mockRejectedValue(
-      new ApiError(409, 'workflow-copy-stale', 'workflow changed; reload before copying'),
+      new ApiError(409, 'resource-operation-stale', 'workflow changed; reload before copying'),
     )
     renderEditor(detail())
     await flushEffects()

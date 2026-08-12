@@ -52,7 +52,7 @@ import type {
   SessionCaptureTerminalState,
   SystemAgentEventSinkV1,
 } from '@/services/sessionEventSink'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import {
   killStaleRunProcessTree as productionKillStaleRunProcessTree,
@@ -740,14 +740,10 @@ export class McpRuntimeTestService {
     }
     const currentHash = await this.currentMcpHash(mcp)
     if (currentHash !== input.expectedMcpConfigHash) {
-      throw new ConflictError(
-        'resource-operation-stale',
-        'the MCP changed; reload before testing',
-        {
-          expectedConfigHash: input.expectedMcpConfigHash,
-          currentConfigHash: currentHash,
-        },
-      )
+      throw staleConflictError('mcp', 'the MCP changed; reload before testing', {
+        expectedConfigHash: input.expectedMcpConfigHash,
+        currentConfigHash: currentHash,
+      })
     }
     const runtime = await this.resolveRuntime(input.runtimeName)
     const now = this.now()

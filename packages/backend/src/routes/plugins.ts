@@ -35,7 +35,7 @@ import {
 import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 import { safeJsonOrEmpty } from '@/util/http'
 
@@ -342,8 +342,8 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
 
 function assertExpectedHash(plugin: Plugin, expected: string): void {
   if (pluginOperationConfigHashOf(plugin) !== expected) {
-    throw new ConflictError(
-      'resource-operation-stale',
+    throw staleConflictError(
+      'plugin',
       'plugin changed since this operation was prepared; reload and retry',
     )
   }

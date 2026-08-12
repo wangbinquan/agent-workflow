@@ -285,7 +285,7 @@ describe('RFC-282 D1 — write-path assertion triples (agent / workflow / workgr
     ).rejects.toMatchObject({ code: 'builtin-readonly' })
   })
 
-  test('workflow: owner with wrong version → workflow-version-conflict (order: ACL → builtin → version)', async () => {
+  test('workflow: owner with wrong version → resource-operation-stale (order: ACL → builtin → version；RFC-285 B5 归一)', async () => {
     await expect(
       deleteWorkflow(
         db,
@@ -293,7 +293,7 @@ describe('RFC-282 D1 — write-path assertion triples (agent / workflow / workgr
         { expectedVersion: 7, clientMutationId: ulid() },
         { kind: 'actor', actor: actorOf(ownerId) },
       ),
-    ).rejects.toMatchObject({ code: 'workflow-version-conflict' })
+    ).rejects.toMatchObject({ code: 'resource-operation-stale' })
   })
 
   test('workgroup: invisible → 404 workgroup-not-found', async () => {
@@ -318,7 +318,7 @@ describe('RFC-282 D1 — write-path assertion triples (agent / workflow / workgr
     ).rejects.toMatchObject({ code: 'forbidden' })
   })
 
-  test('workgroup: owner with wrong version → workgroup-version-conflict', async () => {
+  test('workgroup: owner with wrong version → resource-operation-stale（RFC-285 B5 归一）', async () => {
     await expect(
       deleteWorkgroup(
         db,
@@ -326,6 +326,6 @@ describe('RFC-282 D1 — write-path assertion triples (agent / workflow / workgr
         { expectedVersion: 7, clientMutationId: ulid() },
         { kind: 'actor', actor: actorOf(ownerId) },
       ),
-    ).rejects.toMatchObject({ code: 'workgroup-version-conflict' })
+    ).rejects.toMatchObject({ code: 'resource-operation-stale' })
   })
 })

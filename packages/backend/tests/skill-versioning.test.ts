@@ -266,7 +266,7 @@ describe('skill versioning funnel', () => {
     } catch (err) {
       code = (err as { code?: string }).code
     }
-    expect(code).toBe('skill-version-conflict')
+    expect(code).toBe('resource-operation-stale')
   })
 })
 

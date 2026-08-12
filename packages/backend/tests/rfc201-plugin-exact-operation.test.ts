@@ -236,6 +236,7 @@ describe('production coordinator callsite ratchet', () => {
     expect(route).toContain('runDeduplicatedOperation<PluginUpdateCheck>')
     expect(route).toContain('loadById: (db, resourceId) => getPluginById(db, resourceId)')
     expect(service).toContain('pluginOperationCoordinator.runExclusive(id')
-    expect(route).toContain("'resource-operation-stale'")
+    // RFC-285 B5：同上——helper 单源锁。
+    expect(route).toContain('staleConflictError(')
   })
 })

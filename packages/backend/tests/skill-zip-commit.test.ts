@@ -417,7 +417,7 @@ describe('RFC-102 overwrite permission', () => {
       code: missing.failed[0]!.code,
       message: missing.failed[0]!.message,
     })
-    expect(hidden.failed[0]!.code).toBe('skill-overwrite-stale')
+    expect(hidden.failed[0]!.code).toBe('resource-operation-stale')
     expect(
       readFileSync(join(h.fsOpts.appHome, 'skills', target.id, 'files', 'SKILL.md'), 'utf8'),
     ).toContain('alice owns')
@@ -598,7 +598,7 @@ describe('RFC-223 AC19 owner-scoped ZIP import', () => {
       },
     )
     expect(staleResult.updated).toEqual([])
-    expect(staleResult.failed.map((failure) => failure.code)).toEqual(['skill-overwrite-stale'])
+    expect(staleResult.failed.map((failure) => failure.code)).toEqual(['resource-operation-stale'])
     expect(await getSkillById(h.db, target.id)).toMatchObject({
       description: 'v2',
       contentVersion: 2,
@@ -627,7 +627,7 @@ describe('RFC-223 AC19 owner-scoped ZIP import', () => {
       },
     )
     expect(result.updated).toEqual([])
-    expect(result.failed.map((failure) => failure.code)).toEqual(['skill-overwrite-stale'])
+    expect(result.failed.map((failure) => failure.code)).toEqual(['resource-operation-stale'])
     expect(await getSkillById(h.db, target.id)).toMatchObject({
       description: 'original',
       ownerUserId: BOB.user.id,
@@ -658,7 +658,7 @@ describe('RFC-223 AC19 owner-scoped ZIP import', () => {
       },
     )
     expect(result.updated).toEqual([])
-    expect(result.failed.map((failure) => failure.code)).toEqual(['skill-overwrite-stale'])
+    expect(result.failed.map((failure) => failure.code)).toEqual(['resource-operation-stale'])
     expect(await getSkillById(h.db, target.id)).toMatchObject({
       description: 'original',
       visibility: 'private',

@@ -15,7 +15,8 @@ describe('RFC-201 MCP production callsite ratchet', () => {
     expect(route.match(/mcpOperationCoordinator\.runExclusive/g)?.length).toBeGreaterThanOrEqual(5)
     expect(route).toContain('runDeduplicatedOperation')
     expect(route).toContain('loadById: (db, resourceId) => getMcpById(db, resourceId)')
-    expect(route).toContain("'resource-operation-stale'")
+    // RFC-285 B5：路由的 stale 产出收编 staleConflictError helper——锁 helper 在场（比旧字面量锁更强：码+resource 字段单源）。
+    expect(route).toContain("staleConflictError('mcp'")
     expect(route).toContain("'resource-operation-superseded'")
   })
 

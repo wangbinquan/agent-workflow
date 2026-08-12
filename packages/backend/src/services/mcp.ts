@@ -30,7 +30,7 @@ import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { agents, mcps } from '@/db/schema'
 import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
 import { transitionMcpRuntimeTestsInTx } from '@/services/mcpRuntimeTestTransitions'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 import { monotonicNow } from '@/util/time'
 
@@ -203,15 +203,15 @@ export function commitMcpUpdateInTx(tx: DbTxSync, p: PreparedMcpUpdate): void {
   if (p.expectedOwnerUserId !== undefined && row.ownerUserId !== p.expectedOwnerUserId) {
     // 与「不存在」同形的错误码没有意义：调用方是持有 id 的写入方，这里要的是
     // 明确的拒绝而不是存在性隐藏（列表与详情面的隐藏在别处）。
-    throw new ConflictError(
-      'resource-operation-stale',
+    throw staleConflictError(
+      'mcp',
       'the MCP is no longer owned by the authorizing user; reload before saving',
     )
   }
   if (p.expectedConfigHash !== undefined) {
     const currentConfigHash = mcpOperationConfigHashOf(rowToMcp(row))
     if (currentConfigHash !== p.expectedConfigHash) {
-      throw new ConflictError('resource-operation-stale', 'the MCP changed; reload before saving', {
+      throw staleConflictError('mcp', 'the MCP changed; reload before saving', {
         expectedConfigHash: p.expectedConfigHash,
         currentConfigHash,
       })

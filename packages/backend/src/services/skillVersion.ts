@@ -47,7 +47,7 @@ import {
   finishOperation,
 } from '@/services/skillOperations'
 import { unfuseMemoriesTx } from '@/services/memory'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { tokenToVersionFence } from '@/services/skillToken'
 import { parseFrontmatter } from '@/util/frontmatter'
@@ -354,7 +354,7 @@ export interface SkillVersionCommitOpts {
   summary?: string | null
   fusionId?: string | null
   restoredFromVersion?: number | null
-  /** OCC: throw skill-version-conflict if current content_version != this. */
+  /** OCC: throw resource-operation-stale (RFC-285 B5) if current content_version != this. */
   expectedVersion?: number
   /**
    * RFC-170 (Codex F4) — composite-token OCC fenced INSIDE the db-committed tx
@@ -411,7 +411,7 @@ export interface SkillVersionCommitOpts {
 /**
  * RFC-170 (Codex F4 + re-review): the composite-token OCC. Re-reads the
  * requested row by immutable id INSIDE the given tx and throws
- * skill-version-conflict if any expected field drifted (delete→recreate ABA /
+ * resource-operation-stale (RFC-285 B5) if any expected field drifted (delete→recreate ABA /
  * metadata edit / version bump / owner or ACL change). No-op when the caller
  * passed no expected fields.
  * Called from BOTH the version-bump tx (atomic with the UPDATE) AND before the
@@ -460,8 +460,8 @@ function assertCompositePrecondition(
     (commit.expectedAclRevision !== undefined && live.aclRevision !== commit.expectedAclRevision) ||
     (commit.expectedVisibility !== undefined && live.visibility !== commit.expectedVisibility)
   ) {
-    throw new ConflictError(
-      'skill-version-conflict',
+    throw staleConflictError(
+      'skill',
       `skill '${skillId}' changed since this operation started; reload and retry`,
     )
   }
@@ -521,8 +521,8 @@ export function stageSkillVersion(
   const N = cur.contentVersion
 
   if (commit.expectedVersion !== undefined && commit.expectedVersion !== N) {
-    throw new ConflictError(
-      'skill-version-conflict',
+    throw staleConflictError(
+      'skill',
       `skill '${cur.name}' is at version ${N}, expected ${commit.expectedVersion}; reload and retry`,
     )
   }

@@ -44,7 +44,13 @@ import type { DbClient } from '@/db/client'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
 import { scheduledTasks, tasks, workflows } from '@/db/schema'
 import { scheduledRowsReferencing } from './scheduledTaskRefs'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/util/errors'
 import {
   WORKFLOWS_CHANNEL,
   workflowsBroadcaster,
@@ -269,8 +275,8 @@ export async function copyWorkflow(
       parsed.data.expectedVersion !== currentRevision.version ||
       parsed.data.expectedSnapshotHash !== currentRevision.snapshotHash
     ) {
-      throw new ConflictError(
-        'workflow-copy-stale',
+      throw staleConflictError(
+        'workflow',
         `workflow '${sourceId}' changed; reload before copying`,
         { current: currentRevision },
       )
@@ -548,8 +554,8 @@ export function commitWorkflowSaveInTx(
         committed: false,
       }
     }
-    throw new ConflictError(
-      'workflow-version-conflict',
+    throw staleConflictError(
+      'workflow',
       `workflow '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
       { current: currentRevision },
     )
@@ -585,7 +591,7 @@ export function commitWorkflowSaveInTx(
   if (returned === undefined) {
     // Defensive CAS-loss surface. In the synchronous SQLite transaction this
     // should be unreachable, but never manufacture a success receipt.
-    throw new ConflictError('workflow-version-conflict', `workflow '${id}' changed; reload`, {
+    throw staleConflictError('workflow', `workflow '${id}' changed; reload`, {
       current: currentRevision,
     })
   }
@@ -674,8 +680,8 @@ export async function deleteWorkflow(
     assertPrincipalCanWriteInTx(tx, principal, currentRow)
 
     if (currentRow.version !== parsed.data.expectedVersion) {
-      throw new ConflictError(
-        'workflow-version-conflict',
+      throw staleConflictError(
+        'workflow',
         `workflow '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
         { current: workflowRevisionOf(rowToWorkflow(currentRow)) },
       )
@@ -755,7 +761,7 @@ export async function deleteWorkflow(
       .returning({ id: workflows.id, version: workflows.version })
       .get()
     if (deletedRow === undefined) {
-      throw new ConflictError('workflow-version-conflict', `workflow '${id}' changed; reload`)
+      throw staleConflictError('workflow', `workflow '${id}' changed; reload`)
     }
     return { deletedVersion: deletedRow.version, audience }
   })

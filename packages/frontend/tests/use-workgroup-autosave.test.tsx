@@ -338,7 +338,7 @@ describe('useWorkgroupAutosave', () => {
   test('version conflict preserves local draft and exposes the mapped remote revision', async () => {
     const io = makeTransport()
     io.save.mockRejectedValue(
-      new ApiError(409, 'workgroup-version-conflict', 'changed remotely', {
+      new ApiError(409, 'resource-operation-stale', 'changed remotely', {
         current: {
           workgroupId: 'workgroup-1',
           version: 2,

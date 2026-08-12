@@ -100,7 +100,7 @@ describe('RFC-203 L1 词条完整性', () => {
 
   test('抽查：高频词条的中文形态（用户语言、句子、无术语）', () => {
     expect(zh['task-not-found']).toBe('任务不存在。')
-    expect(zh['workflow-version-conflict']).toBe('工作流已被他人更新，请刷新后重试。')
+    expect(zh['resource-operation-stale']).toBe('资源在操作期间被他人修改，请刷新后重试。')
     expect(zh['repo-clone-failed']).toBe('git clone 失败。')
     expect(zh['skill-quarantined__hint']).toContain('重启 daemon')
     expect(en['agent-name-in-use']).toBe('An agent with this name already exists.')

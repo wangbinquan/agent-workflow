@@ -5948,7 +5948,6 @@ export const enUS: Resources = {
     'workflow-invalid': 'Invalid workflow payload.',
     'workflow-name-invalid':
       'Workflow name must not start with _ or contain control characters, and is at most 128 characters.',
-    'workflow-version-conflict': 'The workflow was updated by someone else; refresh and retry.',
     'workflow-version-mismatch': 'The workflow changed during launch; refresh and launch again.',
     'workflow-in-use': 'Tasks still reference this workflow; it cannot be deleted.',
     'workflow-in-use__hint': 'Delete the referencing tasks first.',
@@ -6039,7 +6038,8 @@ export const enUS: Resources = {
     'mcp-still-referenced': 'Agents still reference this MCP; it cannot be deleted.',
     'mcp-still-referenced__hint': 'Unbind it from the referencing agents first.',
     'probe-not-found': 'This MCP has not been probed yet; probe it first.',
-    'resource-operation-stale': 'The resource changed; reload before probing.',
+    'resource-operation-stale':
+      'The resource changed since this operation started; refresh and retry.',
     'resource-operation-superseded': 'A newer probe completed; this result was discarded.',
     // --- plugin ---
     'plugin-not-found': 'Plugin not found.',
@@ -6093,7 +6093,7 @@ export const enUS: Resources = {
     'skill-in-use': 'Agents still reference this skill; it cannot be deleted.',
     'skill-in-use__hint': 'Unbind it from the referencing agents first.',
     'skill-changed': 'The skill changed; reload and retry.',
-    'skill-version-conflict': 'The skill changed since this operation started; reload and retry.',
+
     'skill-token-invalid': 'The page state is stale; reload and retry.',
     'skill-content-invalid': 'Invalid combined save.',
     'skill-file-invalid': 'Invalid file write payload.',

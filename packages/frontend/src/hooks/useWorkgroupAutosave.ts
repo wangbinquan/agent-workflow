@@ -496,7 +496,8 @@ function mapRevision(
 
 function normalizeSaveError(error: unknown): unknown {
   if (!(error instanceof ApiError) || error.status !== 409) return error
-  if (error.code !== 'workgroup-version-conflict') {
+  // RFC-285 B5：版本围栏码已归一 resource-operation-stale（携 resource 字段）。
+  if (error.code !== 'resource-operation-stale') {
     // A duplicate rename or a scheduled-reference refusal is definitive; it
     // is not a remote-document conflict with load/overwrite recovery.
     return new ApiError(422, error.code, error.message, error.details)

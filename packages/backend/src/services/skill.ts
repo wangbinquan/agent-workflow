@@ -47,7 +47,7 @@ import {
 } from '@/services/skillOperations'
 import { parseFrontmatter, stringifyFrontmatter } from '@/util/frontmatter'
 import { realpathInside, realpathWriteInside, safeJoin } from '@/util/safePath'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { assertInitialResourceOwner, discloseRefs, initialPrivateResourceAcl } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
 import {
@@ -439,8 +439,8 @@ export async function deleteSkill(
       current.ownerUserId !== expected.ownerUserId ||
       current.aclRevision !== expected.aclRevision
     ) {
-      throw new ConflictError(
-        'skill-version-conflict',
+      throw staleConflictError(
+        'skill',
         `skill '${skillId}' changed since this operation started; reload and retry`,
       )
     }
@@ -706,8 +706,8 @@ export async function saveSkillWithToken(
     )
   }
   if (!skillTokenMatches(decoded, current)) {
-    throw new ConflictError(
-      'skill-version-conflict',
+    throw staleConflictError(
+      'skill',
       `skill '${skill.name}' changed since you loaded it; reload and retry`,
     )
   }
