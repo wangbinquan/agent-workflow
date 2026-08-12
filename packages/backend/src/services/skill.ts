@@ -623,6 +623,9 @@ export async function writeSkillContent(
   }))
 
   const next: SkillContent = {
+    // 裁决 D4（2026-08-12，详见 shared/schemas/skill.ts UpdateSkillContentSchema
+    // 头注）：skill 不可改名是设计——名字即 FS 目录/registry key 身份，这里
+    // 强制回写 skill.name 是该裁决的服务层执行点，不是遗漏。
     name: skill.name,
     description: patch.description ?? current.description,
     bodyMd: patch.bodyMd ?? current.bodyMd,

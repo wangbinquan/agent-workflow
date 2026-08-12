@@ -146,12 +146,12 @@ export interface BoundaryCtx {
   /**
    * linked-worktree 的 git common/admin 目录（在 worktree 外，git 操作需放行）。
    *
-   * **当前两个 driver 都不填**（实现门 P3-10 登记）：T0 §5-6 实测 claude sandbox
-   * 对 linked worktree 的共享 `.git` 自动放行，opencode 侧 `git` 走 bash 而非
-   * 文件工具、不经 `external_directory`。保留该入口是为「common dir 落在 appHome
-   * 缓存克隆 / fusion iso-of-iso」这类尚未实测的布局留兜底——**接线前不要假定
-   * 兜底已生效**；真遇到 EPERM/DeniedError 时从 `git rev-parse --git-common-dir`
-   * 取值填入即可。
+   * **当前两个 driver 都已接线填充**（RFC-281 业务误伤检视批修多仓 git EPERM：
+   * opencode 经 boundary 合成、claude 经 sandbox settings，各自 driver 内取
+   * `git rev-parse --git-common-dir` 类来源填入——见 runtime/opencode/driver.ts
+   * 与 runtime/claudeCode/driver.ts 的 gitMetaDirs 消费点）。
+   * （2026-08-12 审计对账：此注释原先写「当前两个 driver 都不填」，是实现门
+   * P3-10 时代的旧状态，与现实相反，已修正。）
    */
   readonly gitMetaDirs?: readonly string[]
 }

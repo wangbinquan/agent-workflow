@@ -5,8 +5,13 @@
 //
 // RFC-165 §9b: the closure dispatches by launch kind — agent / workgroup rows
 // re-run the full ACL / builtin / readiness gates against the owner actor
-// rebuilt by fireSchedule; workflow rows keep the direct launch path (no
-// assertWorkflowLaunchable at fire time — pre-RFC-243 behavior, frozen).
+// rebuilt by fireSchedule. Workflow rows do NOT re-gate inside this closure,
+// but they are not ungated: fireSchedule runs assertScheduledTargetUsable on
+// every fire, whose workflow branch calls assertWorkflowLaunchable
+// (services/scheduledTasks.ts, RFC-224 shared preflight; RFC-257 F-19 made
+// webhook fires share the same check). Do not add a second gate here.
+// (2026-08-12 审计对账：此注释原先断言「fire 时无 assertWorkflowLaunchable」，
+// 与 fireSchedule 实际行为相反，已修正。)
 // RFC-243 T2: all three kinds now go through the unified executor facade; the
 // `scheduled` invoker stamps `tasks.scheduled_task_id` for run-history
 // attribution (previously a hand-spread deps field).

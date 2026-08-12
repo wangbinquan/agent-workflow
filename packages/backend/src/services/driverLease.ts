@@ -14,6 +14,13 @@
 // future multi-daemon build replaces the Map with a `recovery_leases` table +
 // TTL without changing callers. `touchesLiveState` marks the recovery operations
 // that MUST run under a lease.
+//
+// 互斥契约全貌（2026-08-12 审计对账补记，防第八个扫描器作者只学半套）：
+// 本 lease 只约束 auto-actor 之间、以及 auto-actor 对人工路径的抢跑——
+// **人工 resume/retry 不 acquire 本 lease**，它们的互斥靠 `isTaskActive`
+// 进程内 Map + tasks.status CAS（services/task.ts）。auto 侧在 gate→write
+// 之间仍有已登记的非原子窗口（orphanReconcile 写前二次 `hasDriver` 复检收窄，
+// 完整原子性需 task ownership epoch，residual 见其 design §5）。
 
 export type LiveStateOp = 'auto-resume' | 'auto-repair' | 'heartbeat-kill' | 'periodic-reconcile'
 

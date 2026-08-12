@@ -84,7 +84,17 @@ export const SkillContentSchema = z.object({
 })
 export type SkillContent = z.infer<typeof SkillContentSchema>
 
-/** PUT /api/skills/:id/content — overwrite SKILL.md frontmatter + body. */
+/**
+ * PUT /api/skills/:id/content — overwrite SKILL.md frontmatter + body.
+ *
+ * 裁决（2026-08-12，用户拍板 D4）：**skill 是六类资源中唯一没有改名通道的，
+ * 这是设计而非欠账**——skill 的名字同时是 FS 目录名（`~/.agent-workflow/skills/
+ * {name}/`）、opencode registry key 与 SKILL.md frontmatter 身份，改名等于一次
+ * 跨三面的身份迁移（含 content-revision token 与引用方），不是一次字段更新。
+ * 因此本 schema 刻意没有 `name` 字段，服务层 `writeSkillContent` 强制回写
+ * `name: skill.name`。将来若产品需要改名，按独立 RFC 走身份迁移设计，
+ * 不要在这里加 name 字段"顺手支持"。
+ */
 export const UpdateSkillContentSchema = z.object({
   description: z.string().optional(),
   bodyMd: z.string().optional(),

@@ -6,10 +6,13 @@
 //
 // Behavior freeze: each adapter is the pre-existing launch service called with
 // an unchanged argument shape — validation order, error codes and side effects
-// are byte-identical to the direct calls this facade replaced. Route-level
-// gates that were never part of the universal launch path (e.g.
-// assertWorkflowLaunchable on the JSON POST /api/tasks branch — deliberately
-// absent from scheduled workflow fires) STAY at their call sites.
+// are byte-identical to the direct calls this facade replaced. Caller-level
+// gates STAY at their call sites rather than moving into the facade: the JSON
+// POST /api/tasks branch runs assertWorkflowLaunchable in the route, and
+// scheduled/webhook fires run it via fireSchedule's assertScheduledTargetUsable
+// (services/scheduledTasks.ts — so it is NOT absent there, just owned by the
+// fire path; 2026-08-12 审计对账修正，此前这里写成 "deliberately absent from
+// scheduled workflow fires"，与实际相反).
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { Task } from '@agent-workflow/shared'

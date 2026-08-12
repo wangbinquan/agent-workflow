@@ -554,9 +554,13 @@ export interface BusinessNodeSpawnContext {
   /** RFC-112: selected custom-fork binary — overrides every default head. */
   runtimeBinary?: string | null
   /**
-   * opencode-ONLY head fallback: production `config.opencodePath`
-   * (resolveOpencodeCmd) or a test mock. Other drivers MUST ignore it (Codex
-   * P1-1: a custom opencodePath must never become another runtime's argv head).
+   * opencode-ONLY head fallback. LEGACY internal shape: production head
+   * resolution moved into the mint freeze chain (RFC-282 C1) and the public
+   * contract is `binaryOverride`; this field survives only inside the
+   * spawnCtx translation layer until the B4-style "true merge" removes the
+   * legacy ctx types (registered in RFC-282 plan §实施记录). Other drivers
+   * MUST ignore it (Codex P1-1: a custom opencodePath must never become
+   * another runtime's argv head).
    */
   opencodeCmd?: string[]
   /**

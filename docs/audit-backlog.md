@@ -16,10 +16,13 @@
 | `design/workgroup-e2e-audit.md`                                                        | 工作组 e2e               | 见报告                                                                                                          |
 | `design/codex-impl-gate-misc-2026-07-22.md`                                            | Codex 实现门杂项         | 见报告                                                                                                          |
 | `design/RFC-224-opencode-execution-identity/capability-regression-audit-2026-08-04.md` | RFC-224 能力回退全量裁决 | 6 实锤事故史 + 16 收尾修复；裁决 A/B/C 三栏；4 条 B 候选挂本文末节；RFC-255 进行中                              |
+| `design/system-commons-unification-audit-2026-08-12.md`                                | 系统公共功能全局归一审计 | 11 路并行审计；31 新发现 + 9 处登记面失真对账 + 22 条决策台账（D1-D22）；处置=包①随批落地 + RFC-284…289 路线    |
 
 ## 运行时 / 沙箱能力收口盘点（2026-07-31，RFC-237 root 事故后自查）
 
 > 问题背景：root 部署事故暴露「claude env 三处手拼、生存性注入漂移」。本节回答「opencode / claude-code 的运行时与沙箱能力是否已完全收口」——**核心执行链已单点化 + 防漂移锁；剩余豁口均为已知、已登记、有意分期，非静默漂移**。
+>
+> ⚠️ **2026-08-12 对账注记**：RFC-276（2026-08-10）已物理删除 sandbox/containment/netless/verified 机制体系（`services/sandbox/`、`runtime/opencode/verifiedPlan.ts`、`runtime/binarySnapshot.ts` 等均不复存在）。本节条目中依赖这些机制的部分（binarySnapshot 封印、ContainmentCoordinator、verified 执行身份、bwrap/Seatbelt）已失去载体；与机制无关的部分（claude env 装配、会话捕获、models 列举归位等）仍有效。引用前先对照 `docs/OPENCODE_CONFIG.md` 现行契约；逐条重定性已登记为独立欠账（见 `design/system-commons-unification-audit-2026-08-12.md` §7）。
 
 **已收口（单一权威点 + 锁）**：spawn 入口 = `RuntimeDriver.buildSpawn/buildBusinessSpawn`（RFC-143，runner/smoke/distiller/systemAgentRun 零手搭）；运行时判别 = `narrowedSystemPermissionProfiles` 能力声明 + rfc143 强化源码锁（`!==`/`kind`/`defaultRuntime` 形态全盖，allowlist 显式）；二进制封印 = `runtime/binarySnapshot.ts` 单模块（opencode 旧名 re-export、claude intent 分支、claude mcpTest、opencode mcpTest verified 链全部经它，rfc224 callSites 锁）；claude env = `assembleClaudeEnv` 单装配点（uid 依赖注入可测 root 行为、目录级 env-surface ratchet 禁第四份变体）；会话捕获 = driver 能力方法三件（captureSessions / captureSessionsToSink / startLiveCapture）；containment 准入 = `ContainmentCoordinator.admit()` 单一事实源（RFC-233，driver 只声明 profile，bwrap/Seatbelt 渲染 `sandbox/policy.ts` 单点）；opencode verified 执行身份全套（单 builder / serve 单 owner / hermetic env / store owner-lease，`rfc224-source-reachability` 整卷锁）；claude 凭据桥 = `prepareClaudeConfigDir` 单点（仅 credentials 文件）。
 
@@ -38,7 +41,7 @@
 - ✅ **受控 claude 节点的 MCP 工具全被拒** 已修（随 RFC-242 T5，实测发现）：`--permission-mode dontAsk` 下 MCP 工具必须命中 `--allowedTools` 才可调用（claude 2.1.220 实测：`Permission to use mcp__x__y has been denied because Claude Code is running in don't ask mode`）——`--tools` 只管内置装载集。PR-2 的受控业务形状没下发 allowlist，等于**声明了 permission 的 claude 节点一个 MCP 工具都调不动**（存量 `bypassPermissions` 形状放行一切，故只有受控节点中招）。现按节点自己的 MCP 名字下发 `mcp__<name>__*`（不用宽泛 `mcp__*`）；同一次实测确认内置工具的 cwd 自动放行不受影响。
 - ⏳ **macOS 上被围栏的 claude 节点失去 runner outer sandbox**（RFC-242 T5 复核 P1-2，**已澄清、未消除**）：`model-child-netless-v1` 在 Seatbelt provider 上是 `provider-child-only` 拓扑（嵌套 `sandbox-exec` 不可行），child 边界**只包 local MCP 子进程**，claude 主进程（Read/Edit/Write/WebFetch **进程内**执行）此时无任何平台文件系统边界，只剩 `--tools` + `dontAsk` cwd 判定这层运行时内约束。**这不是 claude 独有**：verified opencode 的 write/edit 同样在 server 进程内（`opencode/packages/opencode/src/tool/write.ts` 用 FileSystem 服务不 fork），RFC-227 早已对它做同一笔交易（`sandbox/index.ts:114-131` 注释即此）。Linux 无此问题（`runner-outer-and-child` 两层共存）。**本轮已做**：design §4.3 措辞更正（原文"outer 由 child Seatbelt 取代"不准确）+ 每节点打 `claude-mcp-netless-outer-dropped` 告警。**未采纳"暂不申请该 profile"**：driver 不得按 provider/OS 分叉（RFC-227），要按能力区分就得在 RFC-233 coordinator 新增一档 childBoundary，而它在 macOS 上只能收场为「receipt 报 contained 却不施加 child 边界」（RFC-227 明令禁止）或「`enforce` 下 blocked」（拦死今天能跑的任务）——都比现状差。**正解 = C-2（Bash 走同一 wrapper）**，届时 macOS 也能把全部模型可控子进程收进 child 边界，交换消失。
 - ⏳ **预览与准入的 MCP 集合不一致**（RFC-242 T5 复核 P2-8，**未修，仅登记**）：`services/task.ts:1394-1400` 的启动期 containment 预览按 `agent.mcp` 取 MCP，`services/runner.ts:1049-1053` 的实际准入按 **dependsOn 闭包并集**取 → 两边可能算出不同的 containment profile，`enforce` 下会「放过 launch 再在 dispatch 拦住」。opencode 同形（**既有**问题，非本切片引入），claude 因新申请 profile 而**新可达**。正解是两侧共用同一个闭包解析函数（`scheduler.ts` 的 MCP 预载已有闭包逻辑可复用），属独立切片：预览是 UX 早拦、准入是权威，二者输入必须同源。
-- ⏳ **remote MCP 的 header 仍在业务 argv 里**（RFC-242 T5 复核 P2-5 的另一半）：local MCP 的密钥已随本轮改动完全离开 argv（manifest + bwrap 进程 env），但 remote 条目的 `headers`（含 `Authorization`）仍随 `--mcp-config` 的 inline JSON 进 claude 的 argv，宿主上任何 `ps` 可见。remote 没有子进程可包，故不能复用 wrapper 那条路；正解是给 claude 走**配置文件**而非 inline JSON（需确认 claude 的 `--mcp-config` 是否接受文件路径——**须读 claude 实测**，不靠记忆）。
+- ✅ **已修（RFC-280 §7.1，2026-08-12 对账销账）：remote MCP 的 header 曾随 `--mcp-config` inline JSON 进 claude argv**——三条 claude 路径（业务/系统 agent/测试台）已统一改为写 `0600` 的 `mcp-config.json` 文件传路径（`runtime/claudeCode/driver.ts:64-73` "THE mcp-config write"），argv 不再携带 header；当年存疑的「`--mcp-config` 是否接受文件路径」已实测成立。at-rest 半边（`mcps.config.headers` 明文入库待 secretBox）仍未决，见下文凭据 at-rest 节。
 - ⏳ **隐藏子命令与 daemon 共用 `main.ts` 顶层 import graph**（RFC-242 T5 实测登记，未修）：`__opencode-netless-subprocess` 每次被 fork 都要付整个 daemon 的 import 成本——dev 模式（`bun run src/main.ts`）首答 ≈ **210ms**，裸 bun ≈ 10ms，生产单二进制热态 ≈ **140ms**、**冷态首次 ≈ 646ms**。而 claude **在 init 事件冻结 MCP 可用性**（裸 server 加 sleep 对照：`0s → connected` / `0.3s → pending` / `1.0s → pending`，pending 的工具整回合不出现），于是：dev 模式常态偶发丢 MCP 工具；生产热态稳定 connected，但**升级/首次部署后的第一个受控 MCP 节点**实测会 `pending`。正解：把 CLI 子命令改成惰性 `await import`，让隐藏子命令只加载自己需要的模块；同样惠及 opencode local MCP 与 RFC-238 playground。
 - ✅ **业务侧 `preSpawnVerify` 空转** 已修（随 RFC-242 T5）：`SpawnPlan.preSpawnVerify` 自 RFC-237 起只有 `systemAgentRun` 会 await，`runner.ts` 业务路径从未调用——T2 的封印二进制 TOCTOU 复检一直没生效。现在 `Bun.spawn` 前 await，identity code 经 `executionIdentityFailureCodeOf` 保真上报（runner 级红绿锁：`rfc242-claude-netless-mcp.test.ts`）。
 - ✅ **claude 业务节点世代差** 已收口（RFC-242 T1-T3 + T6，`design/RFC-242-claude-runtime-security-parity/`）：声明了 `permission` 的业务节点现在执行封印副本（`preSpawnVerify` 边界再验）、controlled env、以及由 `claudeCode/permissionMap.ts` 冻结映射表推导的 `--tools` 工具门；核心矛盾（`agent.permission` 是 opencode 词汇的 verbatim 透传、claude 无等价词汇，`shared/schemas/agent.ts:196`）由该映射表显式回答，`ask`→deny+告警、未知键 fail-closed、模式规则保守收敛并披露粒度损失。**未声明权限的存量节点按用户决策（2026-07-31）保持全权 + `claude-business-unconstrained` 告警**——这是有意保留的逃生阀，不是漏网：T6 的防复辟 ratchet（`rfc237-claude-env-assembly.test.ts`，含变异实证）锁死「已声明权限的节点绝不退回 bypassPermissions」，且「只有空声明 `{}` 才走非受控形状」，任何把逃生阀扩大的改动都会红。
@@ -55,13 +58,12 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 
 ### ⏳ 未决 P0（**安全，待用户拍板**）
 
-- **cached_repos 明文 URL 含 git 凭据跨用户泄漏**：`services/gitRepoCache.ts:182` `rowToCached` 同时上 `url`(明文)+`urlRedacted`；wire schema `shared/schemas/cachedRepo.ts:7-8` 自注 "may contain credentials"；`GET /api/cached-repos`（`repos:read`=全体登录用户）返回明文。私有仓 PAT 塞 URL 是既定接入方式 → **任意登录用户可拉全体凭据**。
-  修复触及 launch 复用契约（前端 `RepoSourceRow` 用明文 url 作 repoUrl 回填、后端按 `url_hash` 复用）——正解需**凭据移出 URL** 或 **launch 改按 `cachedRepoId` 复用**，非纯 bug 修复，故待决策。
+- ✅ **已修（RFC-204，2026-08-12 对账销账）：cached_repos 明文 URL 含 git 凭据跨用户泄漏**——wire schema 已删除明文 `url` 字段（`shared/schemas/cachedRepo.ts:5-15` 注明 "the plaintext `url` field is GONE from the wire"，仅上 `urlRedacted` + 脱敏 `localPath`），launch 改按 `cachedRepoId` 复用、daemon 侧解析真实 URL（即当年登记的正解第二案）。内部结构 `services/gitRepoCache.ts` 仍持原 url 供 daemon 侧 git 操作，不出 wire。
 
 ### ⏳ 未决 P2（一致性 / least-privilege / 审计）
 
 - ✅ **workgroup 六资源中唯一无 method 权限点** 已收口（RFC-247 T2）：`workgroups:read/create/update/delete/execute` 五点落地，等价照搬现状（全给 user 基线）。
-- ⏳ **插件安装在 containment 之外、继承完整 daemon env**（RFC-247 设计门 P0 的**残留**一半）：`services/pluginInstaller.ts:600-602` 用 `spawn(bin, args, { env: process.env })` 跑 npm，不经任何 RFC-205/227/233 provider。RFC-247 已加 `--ignore-scripts` 堵掉生命周期脚本这条最直接的 RCE，但「npm 自身 + 被安装包在宿主上以 daemon 身份运行且能读全部 env」仍在。正解是把 npm 安装纳入 provider 边界，属独立切片。
+- ⏳ **插件安装继承完整 daemon env，且生命周期脚本 RCE 面仍开**（RFC-247 设计门 P0 的**残留**；2026-08-12 对账修正记载）：`services/pluginInstaller.ts` 用 `spawn(bin, args, { env: process.env })` 跑 npm。**本条此前记载「RFC-247 已加 `--ignore-scripts`」与源码不符**——pluginInstaller 从未有该 flag（grep 零命中；有的是脚本节点依赖安装 `scriptDepsEnv.ts:165`），npm 生命周期脚本这条最直接的 RCE 仍在。另 2026-08-12 审计补充：其 `runCommand`（`pluginInstaller.ts:766-806`）超时仅单 pid SIGKILL、无树杀无 drain 界，npm 孙进程会泄漏——进程治理面已排入 RFC-284（收编 `runManagedProcess`）；`--ignore-scripts` 与 env 面收敛仍属独立切片待决。
 - ⏳ **RFC-253 有四条验收标准从未实现，而文档一度声称已交付**（2026-08-04 第二轮实现门抓出，proposal 已逐条订正为未交付）：**AC-27 env 值脱敏**——详情/列表直接返回定义、YAML 导出直接序列化、前端明文 `TextInput`，**在它落地前节点 env 不应存放真实密钥**；**AC-32 存量 JSON/YAML 输入框迁移**——`JsonField`/`McpFields`/`PluginFields`/YAML 导入框全部仍是 `TextArea`，只有脚本节点用了 `<CodeEditor>`；**AC-35 读投影**——解释器路径与 depsHash 写进了 `runtime_params_json` 但 `NodeRunSchema` 无字段、DTO 不读，设计门 P1 要求的恰是「光写库不算」；**AC-33 事件同形**——脚本事件 payload 是 `{"line":…}` 包装而 agent 写裸行，导致详情抽屉 pretty-print 成对象、`/stdout` 端点拼出 JSON。另有两处「说了没做」已在代码注释里订正为事实：`containedSpawnRegistry.ts`（Bun.spawn 站点棘轮，plan T11）从未存在、`collectScriptDepsEnvs`（依赖缓存 GC，plan T25）零调用方且接上前需先跳过在途 `.build-*` 目录。
 - ⏳ **RFC-253 的 `scripts:author` 只治理执行的「形状」，不治理流入的「内容」**：敏感投影已覆盖节点自身字段、入边形状与完整 wrapper 祖先链及其循环退出项，但**上游节点的输出内容**天然不在其中——改写上游 agent 的提示词即可改变流进 `AW_PORT_*` 的字节而投影不变。这是结构性的（把内容纳入投影等于让该权限点治理整张图）。因此一个把输入喂进 shell 的脚本，其信任边界等同于它的上游。已在 `scriptNode.ts` 的投影文档里显式声明该范围，不再宣称「覆盖一切改变宿主执行内容的输入」。
 - ⏳ **RFC-253 脚本节点是 `filter.*` / `diff.*.textconv` 侧入口的第二个消费者**：`util/gitHardening.ts:29-33` 自陈 `-c` 压不住这族通配名，留作 RFC-252 的独立切片。脚本节点因此存在一条**围栏外**路径——脚本往工作区写 `.gitattributes` + repo-local `filter.<n>.clean`，随后 daemon 侧快照 / merge-back 的 `git add -A` 会在沙箱外以 daemon 身份执行它，这会绕过节点声明的 `network: 'deny'`。**威胁模型差异**：脚本作者按 RFC-253 D19 是 admin/manager（本就具备宿主权限），所以这条链的现实价值是防**依赖供应链**（三方包做坏事），不是防作者。RFC-253 已在 AC-13 显式声明该边界而非宣称覆盖。修复归 RFC-252 的通配名切片。
@@ -109,6 +111,8 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 
 ## 沙箱 / containment 功能性审计（2026-08-04，8 路 fan-out + 主 session 逐条复核）
 
+> ⚠️ **2026-08-12 对账注记：本节整体已被 RFC-276（2026-08-10）取代**——sandbox/containment/netless/verified 体系已物理删除，业务 agent 回到自然 runtime 执行。本节全部条目（含「仍未修」尾表——其中业务 shell PATH / 本地 MCP PATH token / sourceGuard 收窄三项在本节 ✅ 清单里本就已落地、尾表当时未同步）仅存历史价值，**不要**据此排期修复；逐条重定性登记为独立欠账（见 `design/system-commons-unification-audit-2026-08-12.md` §7）。
+>
 > 触发：用户报「沙箱 RFC 之后引入了一堆功能问题」。按切片切 8 路（策略渲染器 / 准入协调器 / 进程治理 /
 > 工作区×git / opencode 受控链 / claude 驱动与系统 agent / 脚本节点 / 前端与测试覆盖）并行审计，
 > 主 session 对每条 P0/P1 独立复核（含真实 `git worktree` 复现、`claude --help` 实测、纯函数重建 bwrap argv）。
@@ -355,8 +359,7 @@ spawn（`bwrap: Can't find source path …: No such file or directory`）——�
   声明可暴露给业务 shell 的工具链路径」的配置面 + 封印投影，属**能力面**而非 bug，按
   `CLAUDE.md` 走独立 RFC。这是本轮影响面最大的未修项：Code→Audit→Fix 的「Code」段在生产上
   大面积 `command not found`。
-- ⏳ **`agent.network` 半落地**——归 RFC-252 G4（已排期）。G4 落地前建议在保存/导入路径对
-  非空 `network` 显式告警，避免它看起来像个已生效的开关。
+- ✅ **已随 RFC-276 收口废弃（2026-08-12 对账销账）：`agent.network` 半落地**——原归宿 RFC-252 G4 已被用户关闭不再排期；实际结局是字段整体移除：`shared/schemas/agent.ts:345` 现为 `network: z.never().optional()`（拒收任何取值），脚本节点侧 `shared/schemas/workflow.ts:897-903` 对 `network` 报 "removed and no longer enforced"。「看起来像已生效的开关」的风险已消除。
 - ⏳ **`sourceGuard` 祖先黑名单扫到文件系统根**——诊断半已修（错误里给出命中的绝对路径）；
   **收窄扫描范围是安全决策**，需 RFC-224 owner 拍板（收窄 = 放宽一条 opencode 配置继承面）。
 - ✅ **(已修 2026-08-04，Docker 实证) Linux bwrap 下取消的 SIGTERM 宽限塌缩为即时 SIGKILL**：
@@ -383,6 +386,10 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 `limits.ts` 不统计进程树（只算时长与 token），与沙箱拓扑无关；沙箱多一跳不造成 stdout 缓冲丢尾。
 
 ## 其他 backlog
+
+- ⏳ **sandbox-era backlog 条目全量重定性（2026-08-12 审计对账登记）**：RFC-276 删除 sandbox/containment/netless/verified 体系后，本文件「运行时/沙箱能力收口盘点」「沙箱/containment 功能性审计」「RFC-252 残留」「RFC-224 能力回退」「verified TOCTOU」「RFC-254 verified 簇」各节数十条条目需逐条判定 moot / 转世为新形态欠账 / 仍有效（例：hooksPath 豁免的 hook 执行风险不依赖沙箱、仍真实存在；bwrap 系全部 moot）。本轮只加了节级横幅，逐条重定性属独立对账轮。
+- ⏳ **2026-08-12 系统公共功能审计的「本轮不修」清单**：前端 UI 层（Card 迁移 ~151 条 bespoke 规则、CopyButton/MetaGrid/LocalizedDateTime/CollapsibleSection/MetaDots 等可抽取原语、intent 选项 UI 复用 QuestionForm、canvas inspector `form-input` 直落×5、Checkbox 迁移收尾 8 处、死 CSS ≥17 namespace、33 处裸 details、copy 状态机 8 文件）+ fanout hydration 语义分叉（scheduler.ts:6951-6954）+ DB 列 `opencode_session_id` 命名残留。完整清单与理由见 `design/system-commons-unification-audit-2026-08-12.md` §7；决策 D13-D17 拍板不做。
+- ⏳ **syncTaskWorkflow 未开 worktree 预检（2026-08-12 审计登记，代码注释 "for now" 此前无登记载体）**：`services/task.ts:2893-2897` `worktreePreflight` 仅 resumeTask 开启；sync 复活 worktree 已被 GC 的任务不会 410-fail-fast（RFC-165 复活门兜住墓碑行，缺口仅「墓碑未打但 dir 已丢」走 CAS 内 heal-forward）。待 sync harness 用真 worktree 时开启同一预检。
 
 - ✅ **已修（2026-08-08，RFC-270 push 撞红后就地根因修复）：`rfc224-fff-capability` 的「daemon EOF kills a
   descendant」用例给 marker 轮询的预算只有 1 秒**。CI（macos-latest shard 3/4，run 31205560040）红在
@@ -534,7 +541,7 @@ next question` 于 2026-08-08（run 31208702050，ubuntu shard 3/3）红，耗�
 结论：这条仍是**未修完**的时序敏感面，等的还是 `ref.focus()` 那一步跨 turn 的 commit；
 真正的正解是给它一个事件驱动锚点（等一次 focus 事件），而不是继续依赖轮询预算。
 
-- ⏳ **第十一条 flaky：`rfc131-review-reject-aging-prior-output.test.ts > RFC-131 验收#4 组合`**（2026-08-09 干净 worktree 门禁复现一次）。与前面几条**不同形态**，值得单列：它不是前端 `waitFor` 轮询越线，而是 **bun:test 的每用例 5000ms 硬上限**被撞穿——日志逐字为 `this test timed out after 5000ms`，实测 6252.89ms。**归属明确不是触发它的那次改动**：该轮 diff 只有一个前端测试 + 两份 md + 两个 RFC-271 后端测试文件，与 clarify / review / 老化链路零耦合；同 run 另外三个 backend 分片全绿，隔离下单跑该文件连续 3 次 3/3 全绿。**现场负载**：并发 session 同时在跑自己的门禁，两套四分片抢核。**紧邻线索**：同 shard 日志在该用例前一行打了 `killed 1 dangling process`，与第五条（RFC-224 取消预言机超时后 shard 挂死）出现过的字样相同，值得一并查是不是同一个回收路径。**同族第二例（2026-08-09 同日，干净 worktree 门禁）**：`scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts > S-2 multi-repo in-process retry rollback`，同样逐字 `this test timed out after 5000ms`，实测 5609.40ms；隔离下连跑 3 次 2/2 全绿；同 run 另外三个 backend 分片全绿；本轮 diff 只有 resourcePackage / routes / fusion / 两个前端详情页，与多仓 worktree 回滚链路零耦合。两例合看，**共同点不是某条用例，而是「一条串了多段异步真实 IO（git worktree / 子进程 / DB 事务）的用例 + 满载 runner」**——本机当时有两套四分片门禁在抢核。**同族第三例（2026-08-10，干净 worktree 门禁）**：`rfc098-process-governance.test.ts > RFC-098 WP-8 — runner escalation against a stubborn child`，逐字 `this test timed out after 5000ms`，实测 5515.22ms；隔离下连跑 3 次 5/5 全绿；同 run 另外三分片全绿；本轮 diff 只有 RFC-271 的导出/预检与两个前端文件，与进程治理链路零耦合。**`rfc098 WP-8` 已复现两次且耗时稳定**（5515.22ms / 5528.45ms，相差 13ms）——这条不是随机噪声，而是**稳定地略微超预算**：它要跑完「超时 + grace + margin」三段真实等待，本身的下界就贴着 5000ms，满载时必然越线。对处置很有用：这类用例该做的不是「加超时」而是**把预算算清楚**（三段等待的标称值加起来是多少、留多少余量），或者把 kill 时序做成可注入的假时钟。**三例已经足以定型**：`rfc131-review-reject-aging`（多段 clarify/review 异步链）、`scheduler-audit-s02`（多仓 git worktree 回滚）、`rfc098 WP-8`（子进程 + 孙进程组杀），共同点是**一条用例串了多段真实异步 IO**（子进程 / git / 文件系统 / DB 事务），在满载 runner 上撞穿 bun:test 的每用例 5000ms 硬上限。它们与前面几条前端 `waitFor` 越线是**不同机理、同一后果**，处置时可以合并考虑但修法不同：前端那批要换事件驱动锚点，这批要么把多段链拆成各自可断言的单元、要么给这类用例一个显式的更高预算（并写明为什么这条需要）。**修法方向与前几条一致**：不要再把 5000ms 往上调——该用例串了 deferred self-clarify → review REJECT → 重做三段异步链，正解是给它一个确定性的完成信号（等 review 状态落库的事件，而不是等墙钟），或把三段拆成各自可断言的单元。**同族第三例（2026-08-09 同日，本机 `gate:local` 满载）**：`scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts > gap4 — wrapper-loop exitCondition referencing an out-of-loop node > an old invalid snapshot keeps the latest outer value instead of false-exiting`，同样逐字 `this test timed out after 5000ms`，实测 6189.89ms；隔离下单跑该文件 2 pass / 0 fail / 2.44s（**比预算快一倍有余**，可见不是逻辑变慢而是被抢核）；紧邻线索同样命中——同 shard 日志在该用例前打了 `killed 1 dangling process`。**归属明确不是触发它的那次改动**：该轮我的 diff 只有 `design/plan.md`（纯文档）+ 新增一个 e2e spec，**零后端源码与零后端测试改动**，而本用例走 wrapper-loop 退出条件 + 跨 scope 端口快照，两者零耦合。三例合看进一步收窄了共同点：**都是 wrapper / worktree / 子进程这类串了多段真实异步 IO 的调度器用例**，且三例全部紧邻 `killed 1 dangling process`——与第十条（`bun test --isolate` 分片忙等空转不自行退出）大概率是同一个进程回收路径在放大。
+- ⏳ **第十一条 flaky：`rfc131-review-reject-aging-prior-output.test.ts > RFC-131 验收#4 组合`**（2026-08-09 干净 worktree 门禁复现一次）。与前面几条**不同形态**，值得单列：它不是前端 `waitFor` 轮询越线，而是 **bun:test 的每用例 5000ms 硬上限**被撞穿——日志逐字为 `this test timed out after 5000ms`，实测 6252.89ms。**归属明确不是触发它的那次改动**：该轮 diff 只有一个前端测试 + 两份 md + 两个 RFC-271 后端测试文件，与 clarify / review / 老化链路零耦合；同 run 另外三个 backend 分片全绿，隔离下单跑该文件连续 3 次 3/3 全绿。**现场负载**：并发 session 同时在跑自己的门禁，两套四分片抢核。**紧邻线索**：同 shard 日志在该用例前一行打了 `killed 1 dangling process`，与第五条（RFC-224 取消预言机超时后 shard 挂死）出现过的字样相同，值得一并查是不是同一个回收路径。**同族第二例（2026-08-09 同日，干净 worktree 门禁）**：`scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts > S-2 multi-repo in-process retry rollback`，同样逐字 `this test timed out after 5000ms`，实测 5609.40ms；隔离下连跑 3 次 2/2 全绿；同 run 另外三个 backend 分片全绿；本轮 diff 只有 resourcePackage / routes / fusion / 两个前端详情页，与多仓 worktree 回滚链路零耦合。两例合看，**共同点不是某条用例，而是「一条串了多段异步真实 IO（git worktree / 子进程 / DB 事务）的用例 + 满载 runner」**——本机当时有两套四分片门禁在抢核。**同族第三例（2026-08-10，干净 worktree 门禁）**：`rfc098-process-governance.test.ts > RFC-098 WP-8 — runner escalation against a stubborn child`，逐字 `this test timed out after 5000ms`，实测 5515.22ms；隔离下连跑 3 次 5/5 全绿；同 run 另外三分片全绿；本轮 diff 只有 RFC-271 的导出/预检与两个前端文件，与进程治理链路零耦合。**`rfc098 WP-8` 已复现两次且耗时稳定**（5515.22ms / 5528.45ms，相差 13ms）——这条不是随机噪声，而是**稳定地略微超预算**：它要跑完「超时 + grace + margin」三段真实等待，本身的下界就贴着 5000ms，满载时必然越线。对处置很有用：这类用例该做的不是「加超时」而是**把预算算清楚**（三段等待的标称值加起来是多少、留多少余量），或者把 kill 时序做成可注入的假时钟。**三例已经足以定型**：`rfc131-review-reject-aging`（多段 clarify/review 异步链）、`scheduler-audit-s02`（多仓 git worktree 回滚）、`rfc098 WP-8`（子进程 + 孙进程组杀），共同点是**一条用例串了多段真实异步 IO**（子进程 / git / 文件系统 / DB 事务），在满载 runner 上撞穿 bun:test 的每用例 5000ms 硬上限。它们与前面几条前端 `waitFor` 越线是**不同机理、同一后果**，处置时可以合并考虑但修法不同：前端那批要换事件驱动锚点，这批要么把多段链拆成各自可断言的单元、要么给这类用例一个显式的更高预算（并写明为什么这条需要）。**修法方向与前几条一致**：不要再把 5000ms 往上调——该用例串了 deferred self-clarify → review REJECT → 重做三段异步链，正解是给它一个确定性的完成信号（等 review 状态落库的事件，而不是等墙钟），或把三段拆成各自可断言的单元。**同族第三例（2026-08-09 同日，本机 `gate:local` 满载）**：`scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts > gap4 — wrapper-loop exitCondition referencing an out-of-loop node > an old invalid snapshot keeps the latest outer value instead of false-exiting`，同样逐字 `this test timed out after 5000ms`，实测 6189.89ms；隔离下单跑该文件 2 pass / 0 fail / 2.44s（**比预算快一倍有余**，可见不是逻辑变慢而是被抢核）；紧邻线索同样命中——同 shard 日志在该用例前打了 `killed 1 dangling process`。**归属明确不是触发它的那次改动**：该轮我的 diff 只有 `design/plan.md`（纯文档）+ 新增一个 e2e spec，**零后端源码与零后端测试改动**，而本用例走 wrapper-loop 退出条件 + 跨 scope 端口快照，两者零耦合。三例合看进一步收窄了共同点：**都是 wrapper / worktree / 子进程这类串了多段真实异步 IO 的调度器用例**，且三例全部紧邻 `killed 1 dangling process`——与第十条（`bun test --isolate` 分片忙等空转不自行退出）大概率是同一个进程回收路径在放大。**同族第四批（2026-08-12，`gate:local` 满载：本机同时在跑多路审计/设计门子代理）**：同 shard 三条齐超——`scheduler-rfc040-wrapper-await.test.ts`（wrapper-git resume 5571.60ms + wrapper-loop resume 5738.63ms）与 `rfc193-port-artifacts.test.ts`（archive-at-emit case 3b 5522.01ms），均逐字 `timed out after 5000ms`、紧邻 `killed 1 dangling process`；隔离复跑 5/5（8.41s）与 22/22（6.77s）全绿；该轮 diff 仅文档+注释（2026-08-12 审计包①），零后端行为改动。形态与前三批完全一致，不另立条目。
 
 - ⏳ **第五条 CI 缺陷，性质与上面四条不同：它不是「一条红」，而是会吞掉整个 shard 的挂死，且伪装成「并发 push 取消」**（2026-08-08，run 31236841932 attempt 1，push `f734a897`，ubuntu shard 2/4）。测试：`RFC-224 Linux cancellation oracle protocol > rejects a target that self-exits after ARMED but before the TERM freeze lease`（`packages/backend/tests/integration-opencode/opencode-identity-preflight.integration.test.ts`）。**症状两段**：①03:19:05 该用例 `30002.05ms` 撞满自己的 30s 上限判失败，同时日志打出 `killed 1 dangling process`；②**此后整个 shard 静默 12 分 56 秒**（03:19:05 → 03:32:01）直到 job 的 `timeout-minutes: 15` 触发，`##[error]The operation was canceled.` + `Terminate orphan process: pid (2370) (bun)`。**危害不在那条红，在第二段**：该 shard 只启动到第 90 个文件就再没往下走，其余文件**一次都没执行**，而 job 的 conclusion 是 `cancelled` 不是 `failure` —— 于是整个 run 的 conclusion 也是 `cancelled`，正好落进 `CLAUDE.md` 里「共享 main 上并发 push 会取消你的 run」那条已知情形，**极易被下一个人当成噪音略过**。判别方法要写死：`cancelled` 先查 `git log <yoursha>..origin/main` 是否真有 superseding commit，为空就说明不是并发取消，必须翻 job 日志。**归属**：与本轮改动零耦合 —— 本轮 diff 只有 `services/intent/{intentDoc,turnEngine,applyChangeset}.ts` + 三个 `rfc234-*` 测试 + `STATE.md`，不触及 opencode 执行身份链路的任何模块；同 run 另外 7 个 backend shard（含跑了本轮全部三个测试文件的 ubuntu/macOS shard 1 与 shard 4）全部 success，shard 2 里唯一的 intent 相关文件 `rfc235-intent-turn-session.test.ts` 在卡死点之前跑完且全 pass。**历史**：`b2f7144a fix(ci): 修依赖漏洞门禁 + 放宽取消预言机的单阶段预算` 已经为这条用例放宽过一次预算，所以这次是「放宽之后仍然超时」，与上面 centralized-answer-pane 那条是同一种「继续加超时只是把数字往后推」的形态。**留给 RFC-224/227 owner 的两件事**：①那条用例本身为什么会在 runner 上越过 30s（它等的是一个 self-exit 与 TERM freeze lease 的竞争窗口，本就是时序敏感面）；②**更要紧的**是超时之后为什么 bun 进程没被回收 —— 一条用例失败不该让同 shard 剩余文件全部不执行，这条挂死才是把单点 flaky 放大成整 run 不可用的原因。
 - ⏳ **存量任务的 canonical worktree 指向 `iso/` 的成因未定（2026-08-04 Linux 部署事故）**：真实
@@ -564,7 +571,7 @@ next question` 于 2026-08-08（run 31208702050，ubuntu shard 3/3）红，耗�
 - **CI 提速**：macOS `check`(870s) 是瓶颈且 gate 一切；backend 738 文件串行（`--parallel` 死锁全套，daemon flock）；安全赢 = 跨 runner 分片 + lint/typecheck 移出 macOS。
 - **前端 i18n**：~134 硬编码串已抽 bundle；deferred = 4 RFC-087 结构项 + 4 基建缺口。
 - **node_run id 单调性是全仓 freshest-run 前提（RFC-245 设计门 2026-08-01 发现）**：`services/freshness.ts:155-161` 的 `isFresherNodeRun` 是纯 ULID id 比较（RFC-074 PR-C 明定，`isfresher-noderun-baseline.test.ts` 锁等价性），调度器 `latestPerNode`、上游输入选取、`deriveReviewNodeNav` / `deriveClarifyNodeNav` 全部依赖它。但仓内用的是普通 `ulid()`——同毫秒内随机后缀不保证递增，时钟回拨 / daemon 重启也会破坏顺序，理论上可让「更旧的行」比出更大 id。上库前审计另确认任务画布通用状态投影仍按 `startedAt`；RFC-245 只把两个 call kind 改为与导航共用 id freshness（否则新 placeholder 的 `startedAt=null` 会让颜色停在旧代），其余 kind 的状态/抽屉投影也应纳入系统级收口。正解是持久严格递增的 node-run generation/sequence，scheduler 与所有前端消费方共用，不是逐处打补丁。
-- **retryNode cascade 不取消下游 call 行的存活子任务（RFC-243 后端缺口，RFC-245 设计门 2026-08-01 发现）**：`services/task.ts:2982-3000` 只读取并取消**被直接重试那一行**的 `childTaskId`；`:3050-3093` 的 cascade 给下游 process kind（含两个 call kind，`node-kind-behavior.ts:161-175` 的 `retryCascade: 'mint-placeholder'`）mint `retryIndex+1` 空行时，不枚举它们仍存活的子任务。可能留下孤儿子任务，甚至随后再起第二个 child 争同一份继承工作区。正解：cascade mint 前枚举受影响 call 行并级联取消，或在存在下游 live child 时拒绝 retry；需配 side-entry 测试。
+- ✅ **已修（RFC-243 D12，2026-08-12 对账销账）：retryNode cascade 不取消下游 call 行的存活子任务**——现行 `services/task.ts:3531-3541` 把 `affectedChildTaskIds` 定义为 target+全部 downstream 节点行的 `childTaskId`（注释明言 deliberately wider），`:3583-3622` CAS 胜出后逐个 `cancelTask(…, { cascadeFromParent: true })`、取消失败以 `retry-child-cancel-failed` 关回 failed 并中止 retry，即当年登记的正解。测试见 `tests/retry-cascade-kind-matrix.test.ts` / `tests/rfc243-call-workflow.test.ts`。（原登记行号 2982-3093 已漂移至 `resumeKick` 内部。）
 - **Demo 资产（非仓库代码）**：daemon DB 里有 2026-07-20 建的 11 个 agent + 5 个工作组（三模式全覆盖）；勿误删/重复建。
 - **结构化 diff 用字符串前缀承载 repo 身份（RFC-248 设计门 2026-08-02 发现，已定为 deferred）**：`services/structuralDiff/assemble.ts:147` 的 `prefixPath` 把 repo 身份拼进 filePath / symbol id / edge 端点 / impact refs / classEdge / card id / hunkAnchor 七类字段，前端 `lib/changeReview.ts:168-180` 反过来靠路径字符串相等 join 文本 diff 与结构化 diff。RFC-248 只做了最小修复（根成员前缀为空，让两侧逐字符相等），**没有**采纳「给结构化实体加独立 `repoKey` 字段、彻底不用字符串前缀」的正解——那是跨 RFC-089/239/240/241 的承重结构大重构。当前之所以安全，靠的是一条**构造性不变量**：容器仓不可能产出落在某个挂载点前缀下的路径（启动期 `git worktree add` 到已存在非空目录会 fatal ⇒ `repo-group-mount-occupied`，之后又被 `.gitignore` 预置 commit 排除）。若未来放宽挂载点占用校验、或引入允许路径重映射的挂载语义（如 RFC-248 否决过的 symlink 方案），这条不变量即失效，届时必须先做 `repoKey` 字段化。
 
@@ -667,11 +674,13 @@ next question` 于 2026-08-08（run 31208702050，ubuntu shard 3/3）红，耗�
 RFC-255（已撤销）曾把自定义 provider 的 apiKey 做成 secretBox 密封；该面随实现一并移除，
 但它顺带留下的 `config.json` 0600 收紧保留了下来。**剩下的明文面**：
 
-- ⏳ **(P2) `mcps.config.headers` 迁移 secretBox**：remote MCP 的 `Authorization` 仍明文入库，
-  且随 `--mcp-config` inline JSON 进 claude 的 argv（宿主 `ps` 可见，见上文 RFC-242 残留项）。
-  两件事要一起收：入库密封 + 出 argv。迁移需带存量行的读时兼容（明文 ⇒ 密封的一次性 backfill）。
+- ⏳ **(P2) `mcps.config.headers` 迁移 secretBox**：remote MCP 的 `Authorization` 仍明文入库。
+  （2026-08-12 对账：**出 argv 半边已由 RFC-280 §7.1 关闭**——claude 三条路径改写 0600 文件传路径，
+  见上文 RFC-242 残留项 ✅；本条只剩 at-rest 半边。）迁移需带存量行的读时兼容（明文 ⇒ 密封的一次性 backfill）。
 
 ## verified 存储的 TOCTOU 身份栅栏无行为覆盖（RFC-254 T0a/T0b 实测，2026-08-04）
+
+> ⚠️ **2026-08-12 对账注记：verified 存储体系已随 RFC-276 删除**（`util/fileTrust.ts` 消费方 storeHygiene/sourceGuard 均不复存在），本节登记的缺口已失去载体，仅存历史价值。
 
 把散在各处的 `dev`/`ino` 相等判断收拢进 `util/fileTrust.ts` 时，对**每一处**做了变异实证
 （把身份检查改成恒真），结果 **`storeHygiene` 与 `sourceGuard` 都没有任何测试变红**。
@@ -1287,7 +1296,7 @@ daemon 里**永不超时**，恰是这些超时存在的目的。POSIX 上循环
   **真缺陷候选**（attached-but-unstaged submodule 的拓扑捕获在 Windows 上没认出来，
   方向大概率是 `.git` 文件 gitdir 指针或路径拼写），不是测试卫生。
 
-  ### ⏳ **(P1，真缺陷候选) verified 二进制快照在 Windows 上丢扩展名 ⇒ 快照副本不可执行**
+  ### ~~(P1，真缺陷候选) verified 二进制快照在 Windows 上丢扩展名~~（✅ 2026-08-12 对账：已随 RFC-276 删除 verified 体系而 moot——`runtime/binarySnapshot.ts` 不复存在）
 
   查 `rfc135-runtimes-status` 那 8 条红时挖到的，**比测试更深**：`snapshotRuntimeOpencodeBinary`
   （`services/runtime/binarySnapshot.ts:182`）把 `command[0]` 用 `copyFile` 原样拷到
@@ -1685,6 +1694,8 @@ theme-css-ratchet 三 OS 红 owning=9269c5ee(结构变更 UI 三连修复:dock h
 
 ### C. 意图构建器单轮产能上限 ≈ 6–8 节点，且失败轮**没有「为什么」**
 
+> ✅ **2026-08-12 对账回填：候选修法①②③已由 RFC-273（Done 2026-08-10）逐条落地**——失败轮持久化 assistant 文本/最后消息类型/截断证据（`services/intent/turnEngine.ts`）、协议失败 scratch 默认保留 24h 由 GC 回收、INTENT.md 从共享常量生成分批指引。单轮产能上限本身是模型能力边界非缺陷。
+
 - **形态**：要求一次产出覆盖 13 种节点的主工作流，连续 3 轮 `intent-envelope-missing`
   （415 / 465 / 459 秒，`exitCode: 0`，会话树里连一条 assistant 文本都没有）；退到 9 种节点
   仍撞 600 秒 `intent-run-timeout`。拆成「6 节点工作流」+「资源分批建」后稳定成功。
@@ -1697,6 +1708,8 @@ theme-css-ratchet 三 OS 红 owning=9269c5ee(结构变更 UI 三连修复:dock h
 
 ### D. 工作组「零 delta」告警对**讨论型**工作组必然误报，且是硬编码英文
 
+> ✅ **2026-08-12 对账回填：两条候选修法均已由 RFC-274（Done 2026-08-10）落地**——workgroup 全链携带 `files | discussion` 产出契约（discussion 不再探测/告警 zero-delta），平台房间消息改为 closed template + typed params 按查看者 locale 渲染（`services/workgroup/systemMessages.ts`）。
+
 - `leaderWorker.ts:warnIfZeroDeltaDone` 只要有 assignment 完成且 canonical worktree 无变更
   就发告警。评审 / 讨论型工作组从不写文件 ⇒ 每次都报。
 - 该消息（连同 `freeCollab.ts` / `engine.ts` 里的同类系统消息）**全部硬编码英文**，在 zh-CN
@@ -1705,6 +1718,8 @@ theme-css-ratchet 三 OS 红 owning=9269c5ee(结构变更 UI 三连修复:dock h
   消息统一收进一张可翻译的消息表（跨 RFC 的基础设施改动）。
 
 ### E. 本机 DB 与迁移漂移，且启动期无漂移检测
+
+> ✅ **2026-08-12 对账回填：候选修法已由 RFC-275（Done 2026-08-10）落地**——boot 在业务服务前核对完整 migration receipt hash/order/prefix 与物理 schema，漂移点名并拒绝启动（`db/schemaAdmission.ts`）。下文 F 条自述「E 修好后新暴露」即其生效证据。
 
 - `mcp_runtime_test_turns` 缺 `raw_command_digest` 列（迁移 0125 里有；空库 `migrate` 后有），
   于是 RFC-238 的 MCP 运行时试跑在这台机器上 500（`SQLiteError: table … has no column named …`）。

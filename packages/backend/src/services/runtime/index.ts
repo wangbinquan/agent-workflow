@@ -67,9 +67,12 @@ export function isKnownRuntimeKind(v: string | null | undefined): v is RuntimeKi
 // imports are fenced by the A1 ESLint rule.
 // ---------------------------------------------------------------------------
 
-// config.opencodePath → command-head resolution (12 routes/services). Leaf-ish:
-// opencode/util value-imports @/config only, which imports no runtime module —
-// no init cycle through here.
+// probeOpencode: version probe used by registry/status faces.
+// resolveOpencodeCmd: LEGACY — production head resolution moved into the mint
+// freeze chain (RFC-282 C1, nodeRunMint freezes the binary head; the old
+// "config.opencodePath → command head at 12 routes/services" contract is gone).
+// Production consumers are zero; the export survives only for test surface and
+// is registered for deletion in RFC-284. Do not add new callers.
 export { resolveOpencodeCmd, probeOpencode } from './opencode/util'
 // Platform-owned claude flags (registry extraArgs validation).
 export { CLAUDE_PLATFORM_OWNED_FLAGS } from './claudeCode/spawn'

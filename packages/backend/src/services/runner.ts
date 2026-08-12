@@ -2102,10 +2102,9 @@ export function appendBoundedTail(current: string, addition: string, maxChars: n
   return joined
 }
 
-// RFC-111 PR-A: opencode runtime helpers moved to ./runtime/opencode/* (leaf
-// modules, no runner.ts import → no module-init cycle). Re-export the public
-// surface so existing import sites (tests, memoryDistiller) keep resolving from
-// './runner'.
-// RFC-143 PR-4: the OPENCODE_CONFIG_CONTENT assembly moved to
-// ./runtime/opencode/inlineConfig.ts so the opencode driver's buildBusinessSpawn
-// can import it cycle-free. Same re-export contract as above.
+// RFC-111 PR-A moved opencode runtime helpers to ./runtime/opencode/*; the
+// compatibility re-exports that used to live here were DELETED by RFC-282 C0
+// (import sites go through @/services/runtime now, and
+// rfc282-c0c2-runtime-fence.test.ts locks that this file re-exports nothing
+// from the runtime directory). (2026-08-12 审计对账：原注释仍描述已删除的
+// re-export 契约，已修正——不要按旧注释在这里恢复任何 runtime re-export。)

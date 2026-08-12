@@ -1,9 +1,11 @@
 // RFC-111 PR-B — the Claude Code RuntimeDriver.
 //
 // The shared seam exposes `parseEvent` (the generic stdout pump consumes it for
-// any runtime). Spawn assembly is runtime-branched in runNode (opencode inline
-// config vs claude system-prompt-file differ too much for one ctx), so it lives
-// in ./spawn.ts (buildClaudeSpawn) rather than on this object.
+// any runtime). Spawn assembly is NO LONGER runtime-branched in runNode: since
+// RFC-282 B1 the single contract entry is `buildSpawn(AgentSpawnContext)` on
+// this object; ./spawn.ts keeps the claude argv/env primitives it delegates to.
+// (2026-08-12 审计对账：原注释仍描述 RFC-282 之前「装配在 runNode 里按 runtime
+// 分支」的旧结构，已修正。)
 
 import type { StartupInventory } from '../types'
 import type {
