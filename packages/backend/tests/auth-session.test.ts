@@ -1,7 +1,8 @@
 // RFC-036 — three-track auth middleware integration.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { Hono } from 'hono'
 import { READ_POINTS, type Permission } from '@agent-workflow/shared'
 import { actorOf, SYSTEM_USER_ID } from '../src/auth/actor'
@@ -117,11 +118,18 @@ describe('multiAuth — session token track', () => {
     expect(body.source).toBe('session')
   })
 
-  test('valid session token via ?token=', async () => {
+  // RFC-285 B4（红→绿对）：REST 面不再接受 ?token=——即便凭据有效也 401。
+  // query 通道只保留在 WS 升级（extractUpgradeToken）；此前这里断言 200。
+  test('valid session token via ?token= → 401 (B4: REST query channel closed)', async () => {
     await seedUser(db, '01HQBOB')
     const { token } = await createSession({ db, userId: '01HQBOB' })
     const res = await buildApp(db).request(`/api/whoami?token=${token}`)
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(401)
+    // 同一凭据走 Authorization 头照常 200——关的是通道不是凭据。
+    const viaHeader = await buildApp(db).request('/api/whoami', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(viaHeader.status).toBe(200)
   })
 
   test('mistyped session prefix is not interpreted as daemon token', async () => {
@@ -215,5 +223,24 @@ describe('multiAuth — no token / malformed header', () => {
   test('empty token query → 401', async () => {
     const res = await buildApp(db).request('/api/whoami?token=')
     expect(res.status).toBe(401)
+  })
+
+  // RFC-285 B4 源码文本锁：REST 面（auth/session + 全部 routes/）不得 import
+  // WS 专用的 extractUpgradeToken；auth/token.ts 的 tokenAuth 死体不得复活。
+  test('B4 双入口边界文本锁：REST 不碰 upgrade 入口，tokenAuth 不复活', () => {
+    const src = (rel: string): string =>
+      readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
+    expect(src('auth/session.ts')).toContain('export function extractBearerToken')
+    expect(src('auth/session.ts')).toContain('export function extractUpgradeToken')
+    // REST 主链只认 Bearer：query 读取在 session.ts 里只允许出现于 upgrade 入口。
+    const sessionSrc = src('auth/session.ts')
+    const queryReads = sessionSrc.match(/searchParams\.get\('token'\)|req\.query\('token'\)/g) ?? []
+    expect(queryReads.length).toBe(1) // 仅 extractUpgradeToken 内一处
+    expect(src('auth/token.ts')).not.toContain('export function tokenAuth') // 死体不复活（注释可提及）
+    expect(src('ws/server.ts')).toContain('extractUpgradeToken(url)')
+    for (const route of readdirSync(resolve(import.meta.dir, '..', 'src', 'routes'))) {
+      if (!route.endsWith('.ts')) continue
+      expect(src(join('routes', route)).includes('extractUpgradeToken')).toBe(false)
+    }
   })
 })

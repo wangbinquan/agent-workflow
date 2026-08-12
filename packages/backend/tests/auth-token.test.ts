@@ -2,10 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ensureTokenFile, generateToken, rotateTokenFile, tokenAuth } from '../src/auth/token'
+import { ensureTokenFile, generateToken, rotateTokenFile } from '../src/auth/token'
 import { statMetadataIsAuthoritative } from '../src/util/fileTrust'
-import { Hono } from 'hono'
-import { errorHandler } from '../src/util/errors'
 
 describe('token file management', () => {
   let tmp: string
@@ -66,65 +64,7 @@ describe('token file management', () => {
   })
 })
 
-describe('tokenAuth middleware', () => {
-  const TOKEN = 'a'.repeat(64) // fixed for tests; real daemon uses generateToken()
-
-  function buildApp(): Hono {
-    const app = new Hono()
-    app.use('/api/*', tokenAuth(TOKEN))
-    app.get('/api/whoami', (c) => c.json({ ok: true }))
-    app.get('/health', (c) => c.json({ ok: true }))
-    app.onError(errorHandler)
-    return app
-  }
-
-  test('public route /health works without token', async () => {
-    const res = await buildApp().request('/health')
-    expect(res.status).toBe(200)
-  })
-
-  test('/api/* without token returns 401', async () => {
-    const res = await buildApp().request('/api/whoami')
-    expect(res.status).toBe(401)
-    const body = (await res.json()) as Record<string, unknown>
-    expect(body.code).toBe('unauthorized')
-  })
-
-  test('/api/* with Authorization: Bearer succeeds', async () => {
-    const res = await buildApp().request('/api/whoami', {
-      headers: { Authorization: `Bearer ${TOKEN}` },
-    })
-    expect(res.status).toBe(200)
-  })
-
-  test('/api/* with ?token= succeeds', async () => {
-    const res = await buildApp().request(`/api/whoami?token=${TOKEN}`)
-    expect(res.status).toBe(200)
-  })
-
-  test('wrong token is rejected', async () => {
-    const res = await buildApp().request('/api/whoami', {
-      headers: { Authorization: 'Bearer wrong-token' },
-    })
-    expect(res.status).toBe(401)
-  })
-
-  test('token of correct length but wrong content is rejected', async () => {
-    const res = await buildApp().request('/api/whoami', {
-      headers: { Authorization: `Bearer ${'b'.repeat(64)}` },
-    })
-    expect(res.status).toBe(401)
-  })
-
-  test('Authorization header without Bearer prefix is rejected', async () => {
-    const res = await buildApp().request('/api/whoami', {
-      headers: { Authorization: TOKEN },
-    })
-    expect(res.status).toBe(401)
-  })
-
-  test('empty query token is rejected', async () => {
-    const res = await buildApp().request('/api/whoami?token=')
-    expect(res.status).toBe(401)
-  })
-})
+// RFC-285 B4：曾在此的「tokenAuth middleware」describe 段随生产死体一并删除
+// —— 该中间件生产零消费（多用户 multiAuth 是唯一在网鉴权面），其 query 优先
+// 接受 ?token= 的行为正是 B4 关闭的泄露通道。REST 面 query-token → 401 的
+// 行为锁在 auth-session.test.ts（对在网中间件断言，而非对死体）。

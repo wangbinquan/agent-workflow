@@ -26,7 +26,12 @@
 
 import type { ServerWebSocket } from 'bun'
 import type { Actor } from '@/auth/actor'
-import { buildWsCredential, reresolveActor, resolveActor } from '@/auth/session'
+import {
+  buildWsCredential,
+  extractUpgradeToken,
+  reresolveActor,
+  resolveActor,
+} from '@/auth/session'
 import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
 import { createLogger } from '@/util/log'
 import { checkUpgradeGate, openWsChannel, parseWsChannel, type WsConnectionData } from './registry'
@@ -107,8 +112,10 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     if (channel === null) {
       return wsError('ws-unknown-channel', 'unknown ws channel', 404)
     }
-    const queryToken = url.searchParams.get('token')
-    if (queryToken === null || queryToken === '') {
+    // RFC-285 B4：WS 升级是 query token 的唯一保留面（浏览器 WebSocket 发不了
+    // 自定义头），入口收编为 auth/session 的 extractUpgradeToken 显式函数。
+    const queryToken = extractUpgradeToken(url)
+    if (queryToken === null) {
       return wsError('auth-required', 'invalid or missing token', 401)
     }
     // RFC-036 — accept session tokens (aws_s_…), PATs (aws_pat_…) and the

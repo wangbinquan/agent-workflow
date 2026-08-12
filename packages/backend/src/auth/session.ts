@@ -63,7 +63,7 @@ export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
       await next()
       return
     }
-    const raw = extractRawToken(c)
+    const raw = extractBearerToken(c)
     if (!raw) throw new UnauthorizedError()
     const now = deps.now ? deps.now() : Date.now()
     const actor = await resolveActor(deps.db, raw, daemonBuf, now)
@@ -254,14 +254,28 @@ export async function reresolveActor(
   })
 }
 
-function extractRawToken(c: Context): string | null {
-  const query = c.req.query('token')
-  if (query && query.length > 0) return query
+/**
+ * RFC-285 B4（D8）—— REST 面唯一 token 入口：只认 `Authorization: Bearer`。
+ * 旧 extractRawToken 还接受 `?token=` query（session/PAT 随 URL 进访问日志、
+ * 浏览器历史、Referer 的泄露面）；query 形态收窄到唯一必需处——WS 升级
+ * （下面的 extractUpgradeToken，浏览器 WebSocket API 发不了自定义头）。
+ */
+export function extractBearerToken(c: Context): string | null {
   const header = c.req.header('Authorization')
   if (!header) return null
   const match = header.match(/^Bearer\s+(\S+)\s*$/i)
   if (!match || !match[1]) return null
   return match[1]
+}
+
+/**
+ * RFC-285 B4 —— WS 升级面的 token 入口（query 是浏览器 WebSocket 唯一可用的
+ * 凭据通道）。**仅 ws/server.ts 消费**；REST 面禁止 import——rfc285-b4 测试
+ * 以源码文本锁钉死。
+ */
+export function extractUpgradeToken(url: URL): string | null {
+  const token = url.searchParams.get('token')
+  return token === null || token === '' ? null : token
 }
 
 function safeEqual(a: Buffer, b: Buffer): boolean {

@@ -3,7 +3,7 @@
 // + the `account:self` permission (granted to both roles).
 
 import { and, eq } from 'drizzle-orm'
-import type { Context, Hono } from 'hono'
+import type { Hono } from 'hono'
 import {
   CreatePatBodySchema,
   ChangePasswordBodySchema,
@@ -12,6 +12,9 @@ import {
   SESSION_TOKEN_PREFIX,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
+// RFC-285 B4：本文件原有一份同名 extractRawToken 私有副本（第二读点，含
+// ?token= query 支持）——收编进 auth/session 的共享 REST 入口，query 面退役。
+import { extractBearerToken } from '@/auth/session'
 import { hashPassword, verifyPassword, verifyPasswordDummy } from '@/auth/passwords'
 import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
 import {
@@ -175,7 +178,7 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Log out the current session',
     },
     async (c) => {
-      const token = extractRawToken(c)
+      const token = extractBearerToken(c)
       if (token && token.startsWith(SESSION_TOKEN_PREFIX)) {
         const hash = hashToken(token)
         const rows = await deps.db
@@ -257,7 +260,7 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       })
 
       // Revoke every other session for this user; keep the current one.
-      const currentToken = extractRawToken(c)
+      const currentToken = extractBearerToken(c)
       const currentHash = currentToken ? hashToken(currentToken) : null
       await revokeAllSessionsForUser(deps.db, actor.user.id)
       if (currentHash) {
@@ -464,13 +467,4 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       throw new ForbiddenError('identity-unlink-disabled', 'linked identities are read-only')
     },
   )
-}
-
-function extractRawToken(c: Context): string | null {
-  const query = c.req.query('token')
-  if (query && query.length > 0) return query
-  const header = c.req.header('Authorization')
-  if (!header) return null
-  const match = header.match(/^Bearer\s+(\S+)\s*$/i)
-  return match && match[1] ? match[1] : null
 }
