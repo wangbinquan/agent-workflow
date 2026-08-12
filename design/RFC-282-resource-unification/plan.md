@@ -199,5 +199,11 @@ companion×CLI 互挂已修复,pin worktree（dc2529b8）`--base 1ba863ee` 全�
   生效；铸时无 config 贡献的行保持旧的 config-现值跟随行为——兼容读法，
   rfc282-c1-binary-freeze 新增 4 条回归锁）。
 
+**Codex 实现门（第三轮复审，同日）**：修复落地后（28db5370）同 base 全量 diff
+再跑，判定「No actionable regressions identified」= **0 findings 收口**。非空洞
+证明：job log 451 条命令，修复面被针对性复查（buildChildDeps ×6、nodeRunMint
+×10、resolveFrozenRuntime ×12）；其自跑测试仅遇 Codex 沙箱 EPERM（非代码问题
+——同 SHA pin-worktree 门禁与 CI 36 checks 均绿）。实现门就此收口。
+
 **仍开放（低优先，独立小项）**：`declaredMcpServers` 改由 `declared.mcpServers`
 承接（design §2.1 预留）；系统面统一产出（§7-1a，待 B4 式真身合一时触发）。

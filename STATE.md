@@ -2,6 +2,8 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ▶ **进行中 RFC（2026-08-12）：[RFC-283 Webhook 触发规则下放 manager 与 owner 写权限](design/RFC-283-webhook-trigger-manager-ownership/proposal.md)** —— 用户已批准：manager 可新增、编辑、启停、删除、重置自己的触发规则；可查看他人规则但不能操作；admin 保留全局管理，user 保持只读，Webhook 端点仍 admin 独占。卡片新增 owner 归属标签（本人标记“我的规则”，他人显示公开名称并回退 owner id）。Codex 设计门 2×P1 + 3×P2 已写回：owner 围栏必须先于角色授权；DELETE 精确比名；MCP-only 补脱敏端点发现；trigger MCP schema 按 launch kind 显式；每次写前强制刷新 `/api/auth/me`。**状态：Approved，设计门修订后待复审。**
+
 > ⚠️ **事故登记（2026-08-12 凌晨，RFC-282 session 致 RFC-280 收尾 session）**：我在全量
 > `prettier --write` 波及工作树后，误用 `git checkout` 「恢复」了三个文件——
 > `packages/backend/src/services/execution/startupVerification.ts`、
@@ -26,7 +28,8 @@ secretBox 源码锁到 buildStartTaskDeps 新签名。
 再实锤）、commit/merge inherit-literal 未传 binaryConfig、pre-C1 存量 NULL 行 resume
 回退 bare。当轮全修（e75a05ff）：mint 的 inherit / already-frozen 两分支 NULL 兜底
 config 现值（列不回填），**D15 收窄为「非 NULL 冻结值不漂移」**；详见 plan.md
-§实施记录「Codex 实现门（第二轮）」。终态门禁绿 SHA = e75a05ff。
+§实施记录「Codex 实现门（第二轮）」。**第三轮复审（修复后同 base 再跑）0 findings
+收口**（非空洞证明：451 条命令、修复面被针对性复查）。终态门禁绿 SHA = e75a05ff。
 
 > **v2（同日）**：已过**双路独立子代理设计门**（未用 Codex——共享 main 上并发提交会让 `--base` 把他人 diff 卷进复审，见 `docs/dev-gotchas.md`），两路各自独立评审，共 **20×P1 + 10×P2**，两路都判「不能进入实现」。findings 逐条落点见 design.md §10。**最重的一条**：初版夹带的产品行为变更「disabled 资源统一为告警不失败」，我呈报用户时说的是「scheduler.ts:9262 一行」，实测真实射程是 **5 个产出点**（`workflow.validator.ts:1758/1825`、`agent.ts:994`、`agentResourceIntegrity.ts:284`、`scheduler.ts:9266`）**+ 4 道上游 launch 门**（`agentLaunch.ts:358`、`workgroup/launch.ts`、`scheduledTasks.ts:286/315`、task launch 的 validateWorkflowDef）**+ 前端 `state:"unavailable"` 推导 + 已落 `node_runs.error_message`**——即引用 disabled plugin 的任务**根本进不了 scheduler**，只改那一行等于零用户可见变化，而改上游四道门等于动 RFC-228 完整性围栏（未 scope）。**用户据此撤回决策 4/20**，plugin 保持硬失败，归一目标收窄为「规则单点可读 + 新增类型必须表态」。**v2 起本 RFC 零产品行为变更**，纯结构重构，与首要原则「功能不受影响」结构性一致。另两条方向题亦重新拍板：C1 纳入 124 个测试夹具迁移并顺带关闭 `docs/audit-backlog.md` 的 Windows 命令数组缝 P2；claude 系统面**不注入 permission**（保持 2026-07-31 裁定的 unconstrained，注入会让 intent/narrative/smoke/distiller 静默失去工具面）。其余关键修订：`AgentSpawnContext` 补齐 5 类缺失字段（prompt/persona/memory/每-dependent profile/resumeSessionId，缺任一则 B1 写不出来）、`runtimeBinary` 冻结值不得由 driver 重解析（RFC-111 D15 + RFC-112 已裁决的不变量）、ESLint 必须**扩展既有 block**（新增 config 对象会因 flat config 同名规则整体替换而静默关掉既有跨包禁令）、C3 对拍面改为 `build:binary` + `PLUGIN_FILES` 非空（符号相等抓不到嵌入资产断裂，而 `gate:local` 不跑 build:binary ⇒ 本地全绿 CI 才炸）、规则表键集收缩（`skills` 表无 `enabled` 列，写进去是死条目）、批次改 **D 优先** + B1 拆三提交（`scheduler.ts` 近 30 天 91 次提交，避免大爆炸提交）。**待用户批准 → 实现**。
 
