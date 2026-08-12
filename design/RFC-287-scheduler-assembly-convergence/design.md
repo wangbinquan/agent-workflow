@@ -28,7 +28,9 @@
 - **配额/并发面实测（2026-08-13，G4 依据）**：三个**全局独立**进程池——agent
   `maxConcurrentNodes`(4，含 agent 节点/工作组主机/fanout 分片与聚合)、script
   `maxConcurrentScriptNodes`(4)、code-host `maxConcurrentCodeHostCalls`(8，在途
-  HTTP)，互不排队故峰值子进程=三者之和（`processNodeConcurrency.ts`；其头注
+  HTTP)，互不排队；**峰值子进程 = agent + script 两池之和**（code-host 不产生
+  子进程，只是在途 HTTP 并发上限——`config.ts:561` 注释与 `processNodeConcurrency.ts:15`
+  的现有表述都是对的，G4 改头注时**不得**动那一句）（`processNodeConcurrency.ts`；其头注
   「two independent pools」是 RFC-269 加第三池后**未更新的过期表述**，G4 顺带修）。
   另有**每任务**二级池 `multiProcessSubprocessConcurrency`(4)：fanout 分片需
   **双许可**（全局 agent 池位 + 本任务二级池位，scheduler.ts:775/:7759）。call
@@ -240,3 +242,178 @@ commit + pin gate + 全家套件；任何一批红→绿对拍不过即整批回
   面表达（准备中/已重试 N 次），不新增状态机节点。
 - 重试语义：`retryTask` 按任务当前阶段分派——处于准备阶段则重跑准备；已有工作树
   的任务维持既有节点级重试语义。
+
+## 10. 第二轮设计门修订（2026-08-13，两半场并行评审）
+
+本节**取代** §2/§4/§8/§9 中与之冲突的表述；实现以本节为准。
+
+### 10.1 merge 处置改为「逐线实测矩阵」，唯一真默认只有 throw（骨架 P1-1）
+
+原 §2 把 L4 的处置当成四线共同默认，实测**不成立**：
+
+| 线              | ok                                                 | conflict-human                                                                                                                                 | throw                                    |
+| --------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| L4 agent-single | merge→done                                         | `keepIso` + `awaiting_human`（:6162-6175）                                                                                                     | keep + markMergeFailed（:6177-6194）     |
+| L5 shard        | merge→done                                         | **不 keep** + `failed`，finally 照常 discard（:7925-7932 / :7954；源注 :7899-7904 明说「FAILS the shard loudly」，per-shard 挂起是 follow-up） | keep + markMergeFailed                   |
+| L6 aggregator   | 同 L5（:8350-8357 / :8387）                        | 同 L5                                                                                                                                          | 同 L4                                    |
+| L7 script       | merge→done（成功后 iso 现状不 discard，C2 改即时） | `awaiting_human`，因 `succeeded && !isReadonly` 使 :4592 谓词为假而**碰巧** keep                                                               | 漂移 A：无 try/catch（C1 修为同 L4）     |
+| L1 wg host      | done                                               | **abandon + failed**（RFC-187 T8）                                                                                                             | `keepHookIso` + **重抛**（entry replay） |
+
+⇒ **唯一可作默认的是 `throw → keep + markMergeFailed`**。conflict-human 的三种
+形态全部走声明式登记 + 豁免锁。**C8 决策**：L5/L6 的「记 conflict-human 却
+discard iso」是孤儿承诺 bug，改为 `abandon`（不改 fail-all 语义、不引入 per-shard
+挂起）。⚠️ 现有测试**无一能拦**这类翻转（`merge-back-conflict` 只命中 rfc187
+两个文件；s18/s19 套件里 conflict/awaiting_human/keep 一字未出现）——AC-12 的
+红→绿对必须新建。
+
+### 10.2 spec 增「合并相位」与两个缺失钩子（骨架 P1-2 / P2-5 / P3-5）
+
+```ts
+interface AssemblySpec<TResult> {
+  pools: Semaphore[]
+  iso: { create(): Promise<IsoHandle> } | null // 删死字段 persistBase（五线全调）
+  resolveRunRow(ctx): Promise<RunRow>
+  buildSpawnArgs(ctx, row): SpawnArgs
+  beforeSpawn?(ctx): Promise<void> // 钉在 iso 物化的同一个 try 内
+  // （L5 T14 undo 现状：未兜住的抛出
+  // → releaseSub/releaseGlobal + warn +
+  // failed 'iso-setup-failed'，行留 pending
+  // 不 settle；保持同形，见 P2-6）
+  spawn(ctx): Promise<SpawnOutcome>
+  /** 合并相位判定——park / discardWrites / readonly 三种「跳合并」都要有名字 */
+  mergePhase(
+    ctx,
+    outcome,
+  ): 'merge' | { skip: 'park' | 'abandon' | 'readonly'; keep: boolean; onSkip?(ctx): Promise<void> }
+  mergeBack: { run(ctx): Promise<MergeOutcome>; disposition?: Disposition } | null
+  onIsoSetupFailure(err): TResult // 五线 message/summary 各不相同，
+  // 属产品可见面、不吃「日志措辞」豁免
+  retryPolicy?: {
+    // 模式 B 专用
+    shouldRetry(outcome, attempt): boolean
+    isoOnRetry: 'always-recreate' | { keepIf(ctx): boolean } // L7 无条件重建
+    // （:4502-4525「what makes retrying a
+    // file-writing script safe」）；
+    // L4 仅 !followup 时重建（:5472-5504）
+    onNextAttempt(ctx): Promise<void>
+    onIsoRecreateFailure(err): TResult
+  }
+  settle(ctx, outcome): Promise<TResult>
+}
+// ctx 必须显式携带：nodeRunId（模式 B 下逐 attempt 变）与 isoKeyRunId（恒定，:5372）
+// ——merge/keep/discard 各 key 在哪个上是 D17 与 crash-replay 的命门。
+```
+
+**新增契约条款**：`finally` 中**许可释放必须先于 iso 清理**（五线现状一致：
+L1 :1393-1395 带 RFC-208 事故注释、L4 :6197-6201、L5 :7952-7954、L6 :8385-8387、
+L7 :4591-4593）——这是 RFC-208 修过的真事故，入契约并加锁。
+
+**L1 第三处置补登**（决策 1 的「两处」实为三处）：`discardWrites`（:1311-1326，
+RFC-167）→ `abandon('discard-writes')` + **done** + finally discard，与 park 完全
+相反；`rfc167-dynamic-workflow-engine.test.ts` 有锁。
+
+### 10.3 取行前奏改为四线×五项矩阵（骨架 P2-4 / P2-3）
+
+`resolveSchedulerRunRow` 的 overrides 必须覆盖：`reviewIteration`（仅 L4/L8）、
+`agentOverrideName`（仅 L4/L8）、`consumedUpstreamRunsJson`、`追 retryIndex`
+（L9 false）、**`broadcastPending`（L9 false——L9 mint 完直接转 running :4249-4264，
+收编若统一广播会新增一条 WS 事件）**。
+**重试期铸行是第五、六份手抄**（L4 :5516-5522 带 reviewIteration/shardKey/
+parentNodeRunId/consumed(+nonce)；L7 :4533 只带 consumed，而其初次铸行 :4425-4426
+是带 shardKey/parentNodeRunId 的）——本 RFC **逐线保持原样**，`onNextAttempt`
+不得统一，否则静默改 script 行的 shard/parent 归属。
+
+### 10.4 灭绝锁与挖洞按「每条锁各一份」重写（骨架 P3-2 / P3-3）
+
+原 §5 的挖洞清单把「replay 段 :2756/:2780/:2854」列为 `createIsoUnderLock` /
+`persistIsoBase` 的豁免区，实测那三处分别是 `mergeBackAndSettle`(:2756) 与
+`discardNodeIso`(:2780/:2854)——两个原语在该段根本不出现。改为每条灭绝锁各写
+自己的豁免区。漂移 C 是**三种**拼法不是两种，第三种 `if (isoHandle !== null)`
+（:4496/:4536）是 TS narrowing 产物、删不掉，锁的措辞要容纳。
+
+### 10.5 文件落位（骨架 P3-7）
+
+`services/scheduler.ts` 是平铺文件，若新建 `services/scheduler/assembly.ts` 会
+形成同名目录与同名文件并存。**本 RFC 落 `services/schedulerAssembly.ts` 平铺**，
+目录化留给 RFC-288（D18：随下一个 RFC 顺带迁入 + 留 facade）。
+
+### 10.6 G4 后端修复清单（骨架 P1-3 / P2-7 → C9）
+
+1. `ensureChildTaskBudget` 单例（childBudget.ts:228）**首次闭包被永久保留** ⇒
+   capacity 改读 live config，或 PUT 后 rebind；
+2. PUT 保存后必须触发 `scan()`（今天 `routes/config.ts` 只调 `resizeAllNodePools`），
+   否则「调大配额立刻放行排队中的 call 节点」不成立；
+3. `maxInvocationDepth`（scheduler.ts:3204）读任务级快照且被子任务继承 ⇒ 改读
+   live config，或在设置页写明「下次**根任务**启动生效」；
+4. **既存 bug**：scheduler.ts:762-766 每次任务启动用该任务冻结的 `opts` 重新
+   resize 三池 ⇒ 继承旧快照的子任务一启动就把管理员刚调大的 daemon 级池改回旧值
+   （`launchRuntimeConfig.ts:122-124` 注释自陈该失败模式）；
+5. 前端 `settings-drafts.ts:62-72` 的 `limits` 最小写入白名单**必须登记新三项**
+   （注释自陈：漏登记 = 保存被静默丢弃）；`rangeHint` 只在 `max !== undefined`
+   时渲染，而三项 schema 只有 `.positive()` 无 max ⇒ 需先定 max 来源。
+
+### 10.7 启动路径半场修订（G5/G6/G7）
+
+- **G5 拒绝点收口**（P1-2）：公开面自 RFC-204 起不传 URL、传 `cachedRepoId`，
+  故 schema 层拦 `file://` 对存量**一个都拦不住**。拒绝点放
+  `resolveRepoSourceSingle`（task.ts:658）解析出 `sourceUrl` 之后、
+  `resolveCachedRepo` 之前——一处同时覆盖 URL 直填 / id 反查 / 仓库组成员 / 多仓
+  循环；schema 层拒绝只作「早报错」附加层。另需覆盖 MCP `launch_task`
+  （mcp/tools.ts:112-194）、multipart、agentLaunch、workgroups、webhook dispatch。
+- **G5 e2e 替代方案改序**（P1-3）：`git daemon` + `git://` **不可用**——
+  `parseGitUrl`（git-url.ts:41-143）不认 `git://`，会 `repo-url-invalid`。改用
+  本地 `git http-backend` 起 `http://127.0.0.1:<port>/repo.git`（公开面天然接受）。
+  e2e 依赖面不止 commit-push.spec.ts：还有 main.spec.ts 三处 + backend 10 个经
+  公开 HTTP 面用 `file://` 的测试文件（AC-8 的「118 文件」口径作废）。
+- **G5 存量定时任务**（P2-1）：不是「每次触发失败留记录」——连续失败达
+  `maxFailures` 会**自动熔断静默停发**（scheduledTaskScheduler.ts:141-142，webhook
+  同形）。改为复用 boot healer 模式（scheduledTasks.ts:806-885）做**一次性显式
+  禁用 + 可读 lastError**。
+- **G6 定性与前提**：见 proposal §2 与 C6。另需明确 `repoGroup.ts:397` /
+  `repoBatchImport.ts:464`（唯二容忍 fetch 失败的消费者）是否纳入；窗口在
+  `withUrlLock` **锁内还是锁外**必须写死（P2-6：`withTimeout` 只 reject caller
+  不取消底层，同 URL 排队会 N×window）；建议 per-urlHash 记「最近一次失败结论」
+  供窗口内后来者直接复用。`gitCloneTimeoutMs` 在启动路径**未接线**（task.ts:722/747
+  不传，落硬编码 30min）——顺带接线（P2-7）。冷克隆失败（:651-665）分类器也要覆盖。
+- **G7 三节补充**：
+  (a) **`''` 三态**：今天 `worktreePath === ''` 与「终态 + 已墓碑」绑死
+  （task.ts:2284 failed + :2342 prunedAt）。G7 造出「`''` + pending + prunedAt
+  NULL」第三态，而 `lifecycle.ts:407` 的存在性自愈对空串**直接跳过**、
+  `gc.ts:133/:257` 对 `''` 不补墓碑也不自愈 ⇒ 必须：改 :407 为
+  `row.worktreePath === '' || !existsSync(...)`；为准备阶段定义**显式重试入口**
+  （`retryTask` **不存在**——现有导出只有 `retryNode`/`resumeTask`/`syncTaskWorkflow`），
+  绕过 `assertWorktreePresentForResume`、走独立 allowedFrom 并在 §5 列出转移增改。
+  (b) **INSERT 时不可知字段**远不止 worktreePath：`repoPath`/`repoUrl`/
+  `cachedRepoId`/`baseBranch`/`branch`/`baseCommit`/`repoCount`/`spaceKind`/
+  `workspacePrunedAt` 与 **`task_repos` 全表**、`task_space_nodes` 都在同一
+  `dbTxSync`（:2255-2437）；ownership/cleanup 协议（`taskRowCommitted`、
+  `space.cleanup.state`、`materializingSpaces`、`workflowLaunchCommitHook`）全部
+  建立在「先物化后提交」上，需给出新形态与占位/回填时序。
+  (c) **boot reap / auto-resume 分流**：`orphans.ts:51-99` 把 pending 一律收割成
+  interrupted → `autoResume.ts:69` 调 resumeTask → `assertWorktreePresentForResume`
+  对 `''` 必 410「worktree was likely reclaimed by worktree GC」（误导）+ 消耗恢复
+  熔断计数 ⇒ 准备阶段 pending 必须单独分流为「重跑准备」。
+  (d) **安全护栏**（P1-7）：空 `worktreePath` 会让 `resolve('')`/`join('',x)`/
+  `git -C ""`/`spawn({cwd:''})` 落到 daemon 自身工作目录——worktree-files 路由
+  （:99，五个读路由里唯一缺 `=== ''` 守卫）、codeIntel snapshot（无前置守卫）、
+  upload（**写**原语）、commitPushRunner（会往 daemon 自己的仓提交推送）、
+  runner/managedProcess/scriptRun（spawn）、workspaceBoundary（空挂载混入
+  allowlist）。**AC-10 必须逐条列入**；并在 `util/git.ts` 的 `runGit` 与
+  `execution/managedProcess.ts:253` 对空 cwd **硬失败**（一行一处，把半个「静默
+  走错目录」类塌缩成响亮失败）。
+  (e) **适用边界**（P2-9）：`multipartTaskStart` 先物化再写上传物、
+  `deps.materializedSpace`/`preCreatedWorktree`/`callLaunch` 三条 handoff 天然绕过
+  `materializeSpace` ⇒ C7 的契约变更显式限定到 JSON-body 分支，两种启动语义并存
+  是有意为之。
+  (f) `stuckTaskDetector` 的 `pending > 5min` 告警（:68-70）在大仓克隆下必然误报，
+  准备阶段需豁免或调阈值。
+
+### 10.8 锚点勘误（两半场合计）
+
+函数区间普遍向后溢出到相邻注释块：L4 实际 4905-**6320**、L6 实际 8017-**8389**、
+L4 内联 retry 循环 **5423-6122**、L1 装配线实为 `runHostNode` **976-1400**
+（`buildWorkgroupHooks` 974-1526 的后段是 hooks 对象）；L5 :7539-7956 精确。
+`config.ts` 完整路径是 `packages/shared/src/schemas/config.ts`。
+「`worktreePath` 519 个引用文件」口径错——**src 内 49 个文件 / 519 处出现**
+（含测试 447 文件）。「118 个测试文件依赖 file://」口径错——全仓含 `file://`
+的 93 个文件且大量是插件用途；真正经公开面的是 e2e 4 处 + backend 10 个文件。

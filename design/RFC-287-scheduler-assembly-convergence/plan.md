@@ -13,6 +13,13 @@
   可续 / conflict→abandon+failed）；④广播序列快照（L4 逐 attempt vs L5/L6
   单点两形态）；⑤iso discard 失败 warn 路径；外加 L4 三台机器现状夹具
   （拆分前 oracle，锚用勘误后 :5432/:5440-5464/:5905-5935/:5956）。
+  **第二轮设计门补两件**：⑥ L5/L6 的 merge-throw keep 行为夹具（今天它们的 keep
+  语义**只**由 `rfc210-publish-failure-hard-fails.test.ts:194-198` 的源码文本锁兜着，
+  T1 原五件只替 L4/L7/L1，改锚后 L5/L6 彻底失去预言力）；⑦ 跨文件重锚同测试
+  :227-231 的安全棘轮（`discardNodeIso(...)` 单行调用 **≥8 处且每处带 writeSem**
+  ——它锁的是 RFC-210 round-6 的锚点交接不变量；骨架抽取后 scheduler.ts 内站点从
+  13 掉到约 6，而该测试**只 read scheduler.ts**，把阈值改小即静默失守。必须改成
+  同时扫 `schedulerAssembly.ts` 并按新分布重定基）。
 - T2 骨架落地（G1）：assembly.ts + 单元测试（pools/keep 域含 park 短路/
   merge 默认三态 + disposition 覆写/漂移 A 语义/beforeSpawn 抛出=装配失败）；
   双模式窗口（per-attempt / 跨 attempt+retryPolicy）都有直测；此批不迁移
@@ -32,7 +39,11 @@
   L8 preResolved 短路。
 - T9 G3 豁免显式化四锁 + 终局灭绝锁（骨架外散写归零）。
 - T10 配额面可配（G4，独立 commit，**不与收敛批混提**）：设置页补三项 + i18n +
-  过期头注修正 + 测试（含「设置页覆盖全部 6 项」的防漏锁）。
+  过期头注修正（**只改池数表述，不动「峰值子进程=agent+script」那句**）+ 测试
+  （含「设置页覆盖全部 6 项」的防漏锁）。**第二轮设计门追加（C9 后端修复）**：
+  childBudget 单例闭包改读 live config、PUT 后触发 `scan()`、`maxInvocationDepth`
+  读点、修「子任务启动把 daemon 级池 resize 回旧值」的既存 bug、
+  `settings-drafts.ts` 最小写入白名单登记新三项、定 `max` 来源使 `rangeHint` 可渲染。
 - T11 G5 `file://` 公开面下线（独立 commit）。**前置子任务**：e2e 改用
   `git daemon` 起真实远端（`e2e/commit-push.spec.ts` 现依赖 `file://` 经公开面），
   先绿再拒。然后三处入口拒绝（手动/定时/webhook）+ 内外通道源码锁 + 存量不
@@ -42,7 +53,14 @@
 - T13 G7 准备异步化（**最大一批，独立 commit**）：①`worktreePath` 519 文件全面
   清点分类；②顺序倒置（先落 pending 行）；③失败转 failed 且原因可读；④重试的
   状态机分派；⑤定时/webhook 同套；⑥不变量消费点逐处测试。
-- T14 实现门（双路独立子代理）+ plan/STATE 记账。
+- T14 实现门（双路独立子代理，按半场切）+ plan/STATE 记账。
+
+> **T11-T13 顺序更正（启动路径半场 P2-5/P2-12）**：原序 T11(G5)→T12(G6)→T13(G7)
+> 有两处隐患。①`resolveCachedRepo` 今天在 HTTP 请求内同步执行且每仓一次，先落
+> G6 的窗口 = 启动接口最长阻塞 N×60s ⇒ **改为 T11(G5) → T13(G7 异步化) →
+> T12(G6 窗口)**，或在 T12 声明窗口只在异步准备段生效。②T11 与 T12 都改
+> `gitRepoCache.ts:501-518` 同一区（G5 后该 file 分支只剩内部通道可达，G6 重写
+> 整块）——先后与冲突处置在实现时按此序解。三批仍各自独立 commit、可单独回退。
 
 ## 依赖
 
@@ -54,6 +72,7 @@
 
 ## 验收清单
 
-- [ ] AC-1…AC-6（proposal §5，设计门修订版口径）
+- [ ] AC-1…AC-13（proposal §5；含第二轮新增的 AC-7 改写、AC-12 fanout abandon
+      红→绿、AC-13 discard 失败不逃出 finally）
 - [ ] C 表（C1/C2/C3）之外零行为差异（对拍豁免声明适用）
 - [ ] 九线地图更新为终态（design §1 追记）
