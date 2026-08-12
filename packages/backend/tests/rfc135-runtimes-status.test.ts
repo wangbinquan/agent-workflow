@@ -34,7 +34,6 @@ import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const TIMEOUT_ENV = 'AW_RUNTIME_STATUS_PROBE_TIMEOUT_MS'
 
 interface Harness {
   app: Hono
@@ -69,7 +68,9 @@ function writeHangingBinary(path: string, marker: string): void {
   chmodSync(path, 0o755)
 }
 
-async function makeHarness(): Promise<Harness> {
+// RFC-284 T26: probe 超时的测试注入走 deps（probeTimeoutMsForTest），
+// AW_RUNTIME_STATUS_PROBE_TIMEOUT_MS env 通道已删除。
+async function makeHarness(opts: { probeTimeoutMs?: number } = {}): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc135-'))
   const configPath = join(tmp, 'config.json')
   loadConfig(configPath) // write defaults
@@ -86,7 +87,10 @@ async function makeHarness(): Promise<Harness> {
     opencodeVersion: null,
     dbVersion: 1,
     db,
-    runtimeDiagnosticTestDependencies: FIXTURE_RUNTIME_DIAGNOSTICS,
+    runtimeDiagnosticTestDependencies: {
+      ...FIXTURE_RUNTIME_DIAGNOSTICS,
+      ...(opts.probeTimeoutMs === undefined ? {} : { probeTimeoutMsForTest: opts.probeTimeoutMs }),
+    },
   })
   return { app, db, tmp, configPath, opencodeBin, claudeBin }
 }
@@ -116,12 +120,10 @@ describe('RFC-135 GET /api/runtimes/status', () => {
   let h: Harness
 
   beforeEach(async () => {
-    delete process.env[TIMEOUT_ENV]
     h = await makeHarness()
   })
 
   afterEach(() => {
-    delete process.env[TIMEOUT_ENV]
     rmSync(h.tmp, { recursive: true, force: true })
   })
 
@@ -258,35 +260,48 @@ describe('RFC-135 GET /api/runtimes/status', () => {
       // 2s: far below the 60s hang (the thing being tested) but generous enough
       // that the parallel healthy stubs never trip it on a loaded CI machine
       // (300ms proved flaky — spawn jitter SIGKILLed the healthy row too).
-      process.env[TIMEOUT_ENV] = '2000'
-      const hangBin = join(h.tmp, 'hangs')
-      // Include the test-process pid in the sleep operand so independently
-      // isolated copies of this file never mistake one another's intentional
-      // hang for a leaked descendant during pressure runs.
-      const hangMarker = `sleep 63047.${process.pid}`
-      writeHangingBinary(hangBin, hangMarker)
-      await createRuntime(h.db, { name: 'hangs', protocol: 'opencode', binaryPath: hangBin })
+      // RFC-284 T26: 注入走独立 harness 的 deps（env 通道已删）。
+      const slow = await makeHarness({ probeTimeoutMs: 2000 })
+      try {
+        const hangBin = join(slow.tmp, 'hangs')
+        // Include the test-process pid in the sleep operand so independently
+        // isolated copies of this file never mistake one another's intentional
+        // hang for a leaked descendant during pressure runs.
+        const hangMarker = `sleep 63047.${process.pid}`
+        writeHangingBinary(hangBin, hangMarker)
+        await createRuntime(slow.db, { name: 'hangs', protocol: 'opencode', binaryPath: hangBin })
 
-      const started = performance.now()
-      const res = await req(h.app)
-      const elapsed = performance.now() - started
-      expect(res.status).toBe(200)
-      // sleep 60 would hold the response for a minute; the 2s row timeout +
-      // SIGKILL must return well under that (generous CI margin).
-      expect(elapsed).toBeLessThan(10_000)
+        const started = performance.now()
+        const res = await req(slow.app)
+        const elapsed = performance.now() - started
+        expect(res.status).toBe(200)
+        // sleep 60 would hold the response for a minute; the 2s row timeout +
+        // SIGKILL must return well under that (generous CI margin).
+        expect(elapsed).toBeLessThan(10_000)
 
-      const json = await bodyOf(res)
-      expect(json.runtimes.find((r) => r.name === 'hangs')!.ok).toBe(false)
-      // The other rows in the same batch are unaffected.
-      expect(json.runtimes.find((r) => r.name === 'opencode')!.ok).toBe(true)
+        const json = await bodyOf(res)
+        expect(json.runtimes.find((r) => r.name === 'hangs')!.ok).toBe(false)
+        // The other rows in the same batch are unaffected.
+        expect(json.runtimes.find((r) => r.name === 'opencode')!.ok).toBe(true)
 
-      // Codex impl gate: the WHOLE process tree must be reaped, not just the
-      // sh wrapper — the forked grandchild is the thing actually hanging. The
-      // probe kills the detached process group, so no marker process survives.
-      const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', hangMarker] })
-      expect(survivors.stdout.toString().trim()).toBe('')
+        // Codex impl gate: the WHOLE process tree must be reaped, not just the
+        // sh wrapper — the forked grandchild is the thing actually hanging. The
+        // probe kills the detached process group, so no marker process survives.
+        const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', hangMarker] })
+        expect(survivors.stdout.toString().trim()).toBe('')
+      } finally {
+        rmSync(slow.tmp, { recursive: true, force: true })
+      }
     },
   )
+
+  test('RFC-284 T26 源码锁：status probe 的 env 通道已删（deps 注入是唯一缝）', async () => {
+    const src = await Bun.file(
+      resolve(import.meta.dir, '..', 'src', 'routes', 'runtimes.ts'),
+    ).text()
+    expect(src).not.toContain('AW_RUNTIME_STATUS_PROBE_TIMEOUT_MS')
+    expect(src).toContain('probeTimeoutMsForTest')
+  })
 
   test.skipIf(process.platform === 'win32')(
     'wrapper that forks then exits BEFORE the timeout still gets its descendants reaped',

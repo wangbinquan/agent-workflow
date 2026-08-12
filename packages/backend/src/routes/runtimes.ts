@@ -111,13 +111,11 @@ function resolveRuntimeBinary(
 
 /**
  * RFC-135 D5: per-row `--version` probe timeout for /api/runtimes/status.
- * Read per request so tests can inject a small value via env; production has
- * no reason to override the 5s default.
+ * RFC-284 T26 —— 测试注入改走 deps（runtimeDiagnosticTestDependencies.
+ * probeTimeoutMsForTest），env 通道已删；production has no reason to override
+ * the 5s default.
  */
-function statusProbeTimeoutMs(): number {
-  const raw = Number(process.env.AW_RUNTIME_STATUS_PROBE_TIMEOUT_MS ?? '')
-  return Number.isFinite(raw) && raw > 0 ? raw : 5000
-}
+const STATUS_PROBE_TIMEOUT_MS = 5000
 
 export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
   const runtimeTests = getMcpRuntimeTestService({
@@ -180,7 +178,8 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       // filter can't hide the configured default: RFC-118 blocks disabling it.)
       const configured = cfg.defaultRuntime ?? 'opencode'
       const defaultName = rows.some((r) => r.name === configured) ? configured : 'opencode'
-      const timeoutMs = statusProbeTimeoutMs()
+      const timeoutMs =
+        deps.runtimeDiagnosticTestDependencies?.probeTimeoutMsForTest ?? STATUS_PROBE_TIMEOUT_MS
       const runtimes = await Promise.all(
         rows.map(async (row) => {
           const binary = resolveRuntimeBinary(row, cfg)

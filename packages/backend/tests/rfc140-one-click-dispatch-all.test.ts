@@ -413,7 +413,8 @@ describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
     // dispatch share ONE lock-B holding (dispatchDeferredTaskQuestions), else a concurrent
     // unstage between the select and the dispatch would still dispatch the withdrawn entry.
     const auto = await Bun.file(
-      fileURLToPath(new URL('../src/services/clarifyAutoDispatch.ts', import.meta.url)),
+      // RFC-284 T27 改锚：正体迁 services/clarify/autoDispatch.ts（旧路径为 facade）。
+      fileURLToPath(new URL('../src/services/clarify/autoDispatch.ts', import.meta.url)),
     ).text()
     const fnBody = auto.slice(auto.indexOf('export async function autoDispatchDeferredQuestions'))
     expect(fnBody.split('dispatchDeferredTaskQuestions(').length - 1).toBe(1)

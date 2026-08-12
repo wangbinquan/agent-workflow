@@ -21,7 +21,7 @@
 //     produced by private wire adapters from the unified DTO.
 //
 // Dead surface deleted with the merge (zero production callers; reads live in
-// services/clarifyRounds.ts since T7, cleanup rides the tasks FK cascade, the
+// services/clarify/rounds.ts since T7, cleanup rides the tasks FK cascade, the
 // scheduler has its own inline cross-clarify dispatch branch):
 //   listClarifySummaries / getClarifyDetail / countPendingClarifications /
 //   cleanupSessionsForTask / listCrossClarifySummaries / getCrossClarifyDetail /

@@ -75,6 +75,12 @@ export interface RuntimeDiagnosticTestDependencies {
    * Production never supplies it.
    */
   beforeRuntimeProbeCache?(): void | Promise<void>
+  /**
+   * RFC-284 T26 — per-row `--version` probe timeout for /api/runtimes/status.
+   * Test-only injection（取代已删除的同名 env 通道，见 docs/env-flags.md
+   * §已删除）；production keeps the 5s default.
+   */
+  probeTimeoutMsForTest?: number
 }
 
 export interface AppDeps {

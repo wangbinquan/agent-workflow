@@ -120,7 +120,8 @@ describe('RFC-098 B1 — taskWriteLocks registry identity & gc', () => {
     // rollback critical section moved to clarifyAutoDispatch.ts (A OUTER ≻ B
     // INNER); it + review.ts still roll back under getTaskWriteSem and must
     // never gc.
-    for (const f of ['clarifyAutoDispatch.ts', 'review.ts']) {
+    // RFC-284 T27 改锚：clarify 正体迁 services/clarify/（旧路径为 facade）。
+    for (const f of ['clarify/autoDispatch.ts', 'review.ts']) {
       const src = readFileSync(SRC(f), 'utf-8')
       expect(src).toContain('getTaskWriteSem')
       expect(src.includes('gcTaskWriteSem')).toBe(false)

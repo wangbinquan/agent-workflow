@@ -110,7 +110,9 @@ describe('scheduler ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
     // no directive). Assert the wiring here AND the gate itself in the oracle.
     expect(src).toContain('contextDirective: nodeDirective')
     expect(src).not.toContain('clarifyContext?.directive')
-    const oracleSrc = readFileSync(join(BACKEND_SRC, 'clarifyRounds.ts'), 'utf8')
+    // RFC-284 T27 改锚：正体已迁 services/clarify/rounds.ts（旧路径是 facade，
+    // 读它只会看到 4 行转口）。锁的意图不变：oracle 的 stop 门必须在场。
+    const oracleSrc = readFileSync(join(BACKEND_SRC, 'clarify', 'rounds.ts'), 'utf8')
     expect(oracleSrc).toContain("args.contextDirective !== 'stop'")
     const occurrences = src.match(/effectiveHasClarifyChannel/g) ?? []
     expect(occurrences.length).toBeGreaterThanOrEqual(2)

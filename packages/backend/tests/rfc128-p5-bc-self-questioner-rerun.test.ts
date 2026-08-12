@@ -1065,7 +1065,8 @@ describe('RFC-128 §5.2.14 final-gate (2nd round) — seal/merge/deferred critic
   // getTaskQuestionWriteSem(...).run(runSealTx). (Behaviorally hard to force the unlocked race; the lock
   // closes it structurally.)
   test('②(b) — sealRoundQuestions runs its tx under getTaskQuestionWriteSem (lock B)', () => {
-    const src = readFileSync(resolve(import.meta.dir, '../src/services/clarifySeal.ts'), 'utf8')
+    // RFC-284 T27 改锚：正体迁 services/clarify/seal.ts（旧路径为 facade）。
+    const src = readFileSync(resolve(import.meta.dir, '../src/services/clarify/seal.ts'), 'utf8')
     const fn = fnBody(src, 'export async function sealRoundQuestions')
     expect(fn.includes('getTaskQuestionWriteSem(')).toBe(true)
     expect(fn.includes('.run(runSealTx)')).toBe(true)

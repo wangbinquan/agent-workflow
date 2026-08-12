@@ -363,7 +363,8 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     'utf8',
   )
   const sealSrc = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'clarifySeal.ts'),
+    // RFC-284 T27 改锚：正体迁 services/clarify/seal.ts（旧路径为 facade）。
+    resolve(import.meta.dir, '..', 'src', 'services', 'clarify', 'seal.ts'),
     'utf8',
   )
   // RFC-217 T9: crossClarify.ts merged into the unified clarify service.

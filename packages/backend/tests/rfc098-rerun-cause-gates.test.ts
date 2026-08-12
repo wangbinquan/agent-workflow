@@ -155,7 +155,8 @@ describe('RFC-098 WP-10 — producers mint the cause the gates consume', () => {
   // causeClassForEntry mapping (clarifyRerunLedger). Re-anchor the lock there.
   test("causeClassForEntry maps self→'clarify-answer', questioner→'cross-clarify-questioner-rerun', designer→'cross-clarify-answer'", () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'clarifyRerunLedger.ts'),
+      // RFC-284 T27 改锚：正体迁 services/clarify/rerunLedger.ts（旧路径为 facade）。
+      resolve(import.meta.dir, '..', 'src', 'services', 'clarify', 'rerunLedger.ts'),
       'utf8',
     )
     expect(src).toContain("if (e.roleKind === 'self') return 'clarify-answer'")
