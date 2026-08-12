@@ -16,6 +16,7 @@ import type { DbClient } from '@/db/client'
 import { workflows, workgroups as workgroupsTable } from '@/db/schema'
 import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import { getWorkgroupById } from '@/services/workgroups'
+import { pickCallTarget } from './callRefTarget'
 import { ValidationError } from '@/util/errors'
 import {
   collectWorkflowCallRefs,
@@ -305,7 +306,6 @@ export async function freezeCallClosure(
             })
             .from(workflows)
             .where(inArray(workflows.id, hintIds))
-    const hintById = new Map(hintRows.map((r) => [r.id, r]))
     const rows = await db
       .select({
         id: workflows.id,
@@ -318,20 +318,26 @@ export async function freezeCallClosure(
       .from(workflows)
       .where(inArray(workflows.name, missing))
       .orderBy(asc(workflows.id))
-    const byName = new Map<string, (typeof rows)[number]>()
-    for (const r of rows) {
+    // RFC-291 面 D — visibility is decided HERE (we own the ACL context);
+    // WHICH row wins is decided by `pickCallTarget`, the single implementation
+    // the intent dump also calls. Name-query rows and id-hint rows are merged
+    // into one candidate set: a hinted row that was renamed simply stops
+    // matching the selector name and falls through to the name rule, exactly as
+    // before.
+    const candidateById = new Map<string, (typeof rows)[number]>()
+    for (const r of [...rows, ...hintRows]) {
       if (!isVisibleRow(actor, r, workflowGrants)) continue
-      if (!byName.has(r.name)) byName.set(r.name, r)
+      if (!candidateById.has(r.id)) candidateById.set(r.id, r)
     }
+    const candidates = [...candidateById.values()]
     const nextFrontier: WorkflowEdge[] = []
     for (const edge of pending) {
       const name = edge.ref.authoritativeName
       const hintId = edge.ref.idHint
-      const hinted = hintId !== undefined ? hintById.get(hintId) : undefined
-      const row =
-        hinted !== undefined && hinted.name === name && isVisibleRow(actor, hinted, workflowGrants)
-          ? hinted
-          : byName.get(name)
+      const row = pickCallTarget(
+        { authoritativeName: name, ...(hintId === undefined ? {} : { idHint: hintId }) },
+        candidates,
+      )
       if (row === undefined) {
         throw new ValidationError(
           'workflow-call-ref-missing',
@@ -413,11 +419,6 @@ export async function freezeCallClosure(
       .from(workgroupsTable)
       .where(inArray(workgroupsTable.name, [...workgroupNames]))
       .orderBy(asc(workgroupsTable.id))
-    const rowByName = new Map<string, (typeof rows)[number]>()
-    for (const r of rows) {
-      if (!isVisibleRow(actor, r, workgroupGrants)) continue
-      if (!rowByName.has(r.name)) rowByName.set(r.name, r)
-    }
     // id-hint 行（与工作流分支同构：命中且**该行仍带该选择器名字**才用）。
     const hintIds = [
       ...new Set(
@@ -440,16 +441,25 @@ export async function freezeCallClosure(
             })
             .from(workgroupsTable)
             .where(inArray(workgroupsTable.id, hintIds))
-    const hintById = new Map(hintRows.map((r) => [r.id, r]))
+    // RFC-291 面 D — 与工作流分支同构：可见性在这里判（我们持有 ACL 上下文），
+    // 「选哪一行」交给 pickCallTarget 这个单点，intent dump 调的是同一个。
+    const candidateById = new Map<string, (typeof rows)[number]>()
+    for (const r of [...rows, ...hintRows]) {
+      if (!isVisibleRow(actor, r, workgroupGrants)) continue
+      if (!candidateById.has(r.id)) candidateById.set(r.id, r)
+    }
+    const candidates = [...candidateById.values()]
 
     for (const edge of workgroupEdges) {
       const name = edge.ref.authoritativeName
       const hintId = edge.ref.idHint
-      const hinted = typeof hintId === 'string' ? hintById.get(hintId) : undefined
-      const row =
-        hinted !== undefined && hinted.name === name && isVisibleRow(actor, hinted, workgroupGrants)
-          ? hinted
-          : rowByName.get(name)
+      const row = pickCallTarget(
+        {
+          authoritativeName: name,
+          ...(typeof hintId === 'string' ? { idHint: hintId } : {}),
+        },
+        candidates,
+      )
       if (row === undefined) {
         throw new ValidationError(
           'workflow-call-ref-missing',
