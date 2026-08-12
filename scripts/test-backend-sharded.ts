@@ -9,9 +9,9 @@ const MAX_SHARD_KILL_GRACE_MS = 60_000
 const POST_KILL_SETTLE_MS = 1_000
 
 // Real 10-core local-gate measurements (2026-08-13): four shards took 431.3s;
-// six kept every shard isolated/serial and completed in 321.1s; eight reached
-// 307.9s but crossed two existing 5s test ceilings under resource pressure.
-export const DEFAULT_LOCAL_BACKEND_SHARDS = 6
+// five completed in 281.5s inside the full gate. Six took 321.1s standalone but
+// crossed existing 5s test ceilings under cold full-gate resource contention.
+export const DEFAULT_LOCAL_BACKEND_SHARDS = 5
 export const DEFAULT_LOCAL_BACKEND_SHARD_TIMEOUT_MS = 15 * 60_000
 export const DEFAULT_LOCAL_BACKEND_SHARD_KILL_GRACE_MS = 2_000
 

@@ -11,7 +11,7 @@
     "lint:fix": "eslint src tests --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --sequence.shuffle",
-    "test:gate": "vitest run --sequence.shuffle --maxWorkers=3"
+    "test:gate": "vitest run --sequence.shuffle --maxWorkers=2"
   },
   "dependencies": {
     "@agent-workflow/shared": "workspace:*",

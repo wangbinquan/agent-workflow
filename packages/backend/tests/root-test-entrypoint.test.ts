@@ -114,7 +114,7 @@ const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedSharedCommand = `${hardenedBunCommand} --dots`
 const localShardedBackendCommand = 'bun run scripts/test-backend-sharded.ts'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
-const boundedGateFrontendCommand = `${hardenedFrontendCommand} --maxWorkers=3`
+const boundedGateFrontendCommand = `${hardenedFrontendCommand} --maxWorkers=2`
 
 function workflowJob(source: string, name: string): string {
   const lines = source.split(/\r?\n/)
