@@ -20,7 +20,7 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSectionLink, PageSectionNav, type PageSectionGroup } from '@/components/PageSectionNav'
 import { useMemoryPendingCounts } from '@/components/shell/MemoryPendingBadge'
-import { useActor, useIsAdmin } from '@/hooks/useActor'
+import { useActor, useIsResourceAdmin } from '@/hooks/useActor'
 import { useMemoryWs } from '@/hooks/useMemoryWs'
 import { useMemoryDistillJobWs } from '@/hooks/useMemoryDistillJobWs'
 
@@ -82,7 +82,8 @@ function MemoryPage() {
   // gate is per-row canManage), so the ADMIN surfaces here key off the
   // actor's role instead of the permission point.
   const actor = useActor()
-  const isAdmin = useIsAdmin()
+  // RFC-285 B7（E11）：对齐后端 admin+manager 管理面。
+  const isAdmin = useIsResourceAdmin()
   const actorReady =
     actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data !== undefined
   const actorError = actor.error !== null && actor.error !== undefined

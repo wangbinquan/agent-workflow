@@ -338,3 +338,76 @@ describe('routes-memories — happy paths via daemon token (admin)', () => {
     expect(res.status).toBe(404)
   })
 })
+
+// ---------------------------------------------------------------------------
+// RFC-285 B7（Q4 拍板，E12）—— candidate 读面收紧为仅资源管理员。
+// candidate 是未经人审的蒸馏产物（含 body），此前全员可读；现与 distill 详情
+// 门（E8）同一威胁模型：admin/manager 可见，普通用户 list 里被滤掉、detail
+// 与不存在同形 404；人审发布（approved）后回到全员读面。
+// ---------------------------------------------------------------------------
+
+describe('RFC-285 B7 — candidate 读面收紧（Q4/E12）', () => {
+  let h: Harness
+  beforeEach(async () => {
+    h = await buildHarness()
+  })
+
+  test('普通用户：list 滤掉 candidate（两读法）、detail 404 同形；admin 全见', async () => {
+    const created = await createCandidateViaAdmin(h)
+
+    // list（无 body）：普通用户看不到 candidate 行。
+    const userList = (await (
+      await h.app.fetch(authed(h, h.regularUserToken, { url: '/api/memories', method: 'GET' }))
+    ).json()) as { items: Array<{ id: string }> }
+    expect(userList.items.map((m) => m.id)).not.toContain(created.id)
+
+    // list（include=body）：同收。
+    const userBodyList = (await (
+      await h.app.fetch(
+        authed(h, h.regularUserToken, { url: '/api/memories?include=body', method: 'GET' }),
+      )
+    ).json()) as { items: Array<{ id: string }> }
+    expect(userBodyList.items.map((m) => m.id)).not.toContain(created.id)
+
+    // detail：与不存在同形 404（byte-oracle：归一 id 后与真缺失逐字节相等）。
+    const invisible = await h.app.fetch(
+      authed(h, h.regularUserToken, { url: `/api/memories/${created.id}`, method: 'GET' }),
+    )
+    const missing = await h.app.fetch(
+      authed(h, h.regularUserToken, { url: '/api/memories/mem_no_such', method: 'GET' }),
+    )
+    expect(invisible.status).toBe(404)
+    expect(missing.status).toBe(404)
+    const norm = (s: string, id: string): string => s.replaceAll(id, '<ID>')
+    expect(norm(await invisible.text(), created.id)).toBe(norm(await missing.text(), 'mem_no_such'))
+
+    // admin 全见（list + detail）。
+    const adminList = (await (
+      await h.app.fetch(authed(h, h.adminUserToken, { url: '/api/memories', method: 'GET' }))
+    ).json()) as { items: Array<{ id: string }> }
+    expect(adminList.items.map((m) => m.id)).toContain(created.id)
+    expect(
+      (
+        await h.app.fetch(
+          authed(h, h.adminUserToken, { url: `/api/memories/${created.id}`, method: 'GET' }),
+        )
+      ).status,
+    ).toBe(200)
+  })
+
+  test('人审发布后（approved）普通用户恢复可读', async () => {
+    const created = await createCandidateViaAdmin(h)
+    const approve = await h.app.fetch(
+      authed(h, h.daemonToken, {
+        url: `/api/memories/${created.id}/promote`,
+        method: 'POST',
+        body: JSON.stringify({ action: 'approve' }),
+      }),
+    )
+    expect(approve.status).toBe(200)
+    const detail = await h.app.fetch(
+      authed(h, h.regularUserToken, { url: `/api/memories/${created.id}`, method: 'GET' }),
+    )
+    expect(detail.status).toBe(200)
+  })
+})

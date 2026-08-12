@@ -139,3 +139,16 @@ export function useIsAdmin(): boolean {
     actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data?.user?.role === 'admin'
   )
 }
+
+/**
+ * RFC-285 B7（E11）—— 资源管理员身份门（admin+manager），对齐后端
+ * `isResourceAdminActor`。记忆管理面后端早已放行 manager
+ * （memory.ts canManageMemory 首行），前端此前用 useIsAdmin() 窄于后端，
+ * manager 在 UI 看不到自己本就有权的入口。
+ */
+export function useIsResourceAdmin(): boolean {
+  const actor = useActor()
+  if (actor.status !== 'success' || actor.fetchStatus !== 'idle') return false
+  const role = actor.data?.user?.role
+  return role === 'admin' || role === 'manager'
+}

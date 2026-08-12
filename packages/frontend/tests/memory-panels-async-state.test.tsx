@@ -38,6 +38,8 @@ vi.mock('../src/api/client', async () => {
 vi.mock('../src/hooks/useActor', () => ({
   useActor: () => ({ data: { user: { role: 'admin' } } }),
   useIsAdmin: () => true,
+  // RFC-285 B7（E11）：memory 管理面换 admin+manager 谓词——mock 同步补导出。
+  useIsResourceAdmin: () => true,
   isAdminAtRequest: () => true,
 }))
 

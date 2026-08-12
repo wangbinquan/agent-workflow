@@ -20,6 +20,7 @@ import {
 import type { Hono } from 'hono'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { isResourceAdminActor } from '@/services/resourceAcl'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { actorOf } from '@/auth/actor'
@@ -119,14 +120,24 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
       }
       // RFC-099 (D12): agent/workflow-scoped rows only for viewers of that resource.
       const actor = actorOf(c)
+      // RFC-285 B7（Q4 拍板，E12）：candidate 状态是**未经人审的蒸馏产物**（含
+      // body）——读面收紧为仅资源管理员（admin/manager），与 distill 详情门
+      // （E8）同一威胁模型。人审发布（approved）后才进入全员读面。两读法
+      // （含 body / 不含 body）同收。
+      const dropCandidates = <T extends { status: string }>(rows: T[]): T[] =>
+        isResourceAdminActor(actor) ? rows : rows.filter((r) => r.status !== 'candidate')
       if (includeRaw === 'body') {
         const items = await listMemories(deps.db, parsed.data, { includeBody: true })
         const visible = await filterMemoriesByScopeVisibility(deps.db, actor, items)
-        return c.json({ items: await annotateMemoryManageRights(deps.db, actor, visible) })
+        return c.json({
+          items: await annotateMemoryManageRights(deps.db, actor, dropCandidates(visible)),
+        })
       }
       const items = await listMemories(deps.db, parsed.data)
       const visible = await filterMemoriesByScopeVisibility(deps.db, actor, items)
-      return c.json({ items: await annotateMemoryManageRights(deps.db, actor, visible) })
+      return c.json({
+        items: await annotateMemoryManageRights(deps.db, actor, dropCandidates(visible)),
+      })
     },
   )
 
@@ -149,6 +160,10 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
         scopeId: found.memory.scopeId,
       })
       if (!visible) throw new NotFoundError('memory-not-found', `memory ${id} not found`)
+      // RFC-285 B7（Q4）：candidate 行对非资源管理员与不存在同形 404。
+      if (found.memory.status === 'candidate' && !isResourceAdminActor(actorOf(c))) {
+        throw new NotFoundError('memory-not-found', `memory ${id} not found`)
+      }
       const canManage = await canManageMemory(deps.db, actorOf(c), {
         scopeType: found.memory.scopeType,
         scopeId: found.memory.scopeId,

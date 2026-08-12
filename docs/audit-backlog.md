@@ -94,11 +94,11 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 - ⏳ **`/api/docs/api` 与 `/.well-known/mcp` 用请求 URL 推导 origin**（RFC-247 实现门 P2）：TLS 终止或反代重写 host/proto 时，`c.req.url` 拿到的是 daemon 内网 origin，生成的客户端片段与 discovery URL 不可用。应走 `publicBaseUrl` / forwarded 头，或前端用 `window.location.origin` 渲染。
 - ⏳ **生成文档未含请求体 schema 与错误码**（RFC-247 实现门 P2）：`buildApiDocs` 丢掉了每个工具的 `inputSchema`，路由侧也没有 body/query/错误码，读者无法只看 wiki 就构造请求。`describe_resource` 已在实现门修复中补上派生 JSON Schema，同一套派生可以接进 wiki。
 - ⏳ **`/.well-known/mcp` 不反映开关状态**（RFC-247 实现门 P2）：`mcpSurfaceEnabled=false` 时该文档内容不变，客户端照着接过来每次都被拒。应把实时开关状态发布进 discovery。
-- review 评论 PATCH/DELETE 不验作者不留痕 + delete 无 decided 冻结（对照 update 有）。
+- ✅ review 评论 PATCH/DELETE 不验作者——**RFC-285 T7 已修（2026-08-13）**：作者校验三层判定（owner/资源管理员旁路、协作者仅本人行、LOCAL_DECIDER 兜底行 owner/admin-only），矩阵锁 reviews-comment-patch.test.ts；「delete 无 decided 冻结」半句是 v1 过期记载（现状对称冻结，锁同文件「冻结优先于作者校验」用例）。
 - `updateTaskMembers` 缺 OCC + in-tx active（`resourceAcl` RFC-170 已修、成员面没跟）；`buildLaunchCollabRows` 不排除 `__system__`。
 - WS 连接 actor 升级期钉死：撤销/降权/移出成员不断开在连，clarify 帧含全量问答（→ RFC-212 方案 D 处理）。
-- ✅ 导入单向放宽 visibility——**已被 RFC-231 修复（2026-08-12 RFC-285 设计门对账销账）**：skill zip 导入走 `initialPrivateResourceAcl`（`skill-zip.ts:198,327`，:622 注释明写 owner+private）、workflow YAML 导入经 `createWorkflow` 同走单点（`workflow.ts:844`）；原登记两锚（workflow.ts:54 / skill-zip.ts:430）在 HEAD 均已不含 public 字面量。RFC-285 T8 补三路回归锁。
-- memory 前端门与后端不一致——**2026-08-12 RFC-285 设计门对账改写（原记载方向反了）**：原文的 `usePermission('memory:approve') 恒 true` 用法在 HEAD 已不存在（实调用为零）；现状是 `memory.tsx:85` / `memory.distill-jobs.$jobId.tsx:47` 用 `useIsAdmin()`（仅 admin），**窄于**后端 `canManageMemory` 的 admin+manager（`memory.ts:764-782` 首行 `isResourceAdminActor`）。修法=前端换 admin+manager 谓词（RFC-285 T9）。
+- ✅ 导入单向放宽 visibility——**已被 RFC-231 修复（2026-08-12 RFC-285 设计门对账销账）**：skill zip 导入走 `initialPrivateResourceAcl`（`skill-zip.ts:198,327`，:622 注释明写 owner+private）、workflow YAML 导入经 `createWorkflow` 同走单点（`workflow.ts:844`）；原登记两锚（workflow.ts:54 / skill-zip.ts:430）在 HEAD 均已不含 public 字面量。RFC-285 T8 补三路回归锁——**已落（2026-08-13）**：rfc285-b6-import-visibility-locks.test.ts（三路装配路径在场锁）。
+- memory 前端门与后端不一致——**2026-08-12 RFC-285 设计门对账改写（原记载方向反了）**：原文的 `usePermission('memory:approve') 恒 true` 用法在 HEAD 已不存在（实调用为零）；现状是 `memory.tsx:85` / `memory.distill-jobs.$jobId.tsx:47` 用 `useIsAdmin()`（仅 admin），**窄于**后端 `canManageMemory` 的 admin+manager（`memory.ts:764-782` 首行 `isResourceAdminActor`）。修法=前端换 admin+manager 谓词——**RFC-285 T9 已修（2026-08-13）**：新 useIsResourceAdmin 两点换用，锁 memory-admin-gate-role.test.ts。
 - 前端详情页(agents/skills/mcps/plugins/workgroups.detail)不按 owner 做写门 → 非 owner 可编辑、编辑器拖动即撞 403；`acl-*` 错误码全无 i18n（英文裸串）；`AclPanel` 409 后知情整表覆盖；builtin 前端零感知。
 - workgroup confirm/dw-confirm 门决策不落决策人归属（对照 review D7）。
 

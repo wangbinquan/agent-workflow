@@ -23,7 +23,12 @@ const PENDING_BADGE = readFileSync(
 describe('memory access authorities', () => {
   test('distill-job detail remains role-gated, never permission-point gated', () => {
     expect(DISTILL_ROUTE).not.toContain("usePermission('memory:approve')")
-    expect(DISTILL_ROUTE).toContain('useIsAdmin')
+    // RFC-285 B7（E11）：角色门从 admin-only 放宽为 admin+manager
+    // （useIsResourceAdmin），对齐后端 canManageMemory/isResourceAdminActor；
+    // 仍是角色门、绝不许退回权限点门（memory:approve 在 user baseline，
+    // 用它当门等于无门——本锁的原始意图不变）。
+    expect(DISTILL_ROUTE).toContain('useIsResourceAdmin')
+    expect(DISTILL_ROUTE).not.toContain('useIsAdmin()')
     expect(DISTILL_ROUTE).toMatch(/enabled: isAdmin/)
   })
 

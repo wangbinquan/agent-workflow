@@ -34,6 +34,35 @@
 - [ ] E 清单（v2：E1-E6/E8/E11）外零行为差异
 - [ ] v1 虚项三处的回归锁在位（E7/E9/E10 降级产物）
 
+## 实施记录（2026-08-13）
+
+- **T1+T2（commit 82cd8d72）**：三份前置清单落档（B4 抓到 design 漏列的死体第三
+  读点 tokenAuth）；B1 六触点 404 同形（同形基准修正为「探测面资源」的 missing
+  分支：reviews→node-run-not-found / clarify→clarify-session-not-found）；
+  byte-oracle 实测抓到两条真可区分性（feedback 中间件/路由分支文案不一、reviews
+  初版误用 task-not-found）并修复；测试改判 15 文件 + 三处 byte-oracle。
+- **T4（0a9badc3）**：REST 关 ?token=（双显式入口 + 死体 tokenAuth 删除 + 红→绿
+  改判 + 边界文本锁）。
+- **T3（a9d7eefe）**：buildInheritedActor 三臂单源（Q5 `__system__` 幽灵放行 /
+  Q6 resume 豁免注释锁；scheduled 收编）；call-owner-inactive 新码 + i18n。
+- **T6（afea367e）**：六方言码归一——实测发现 resource-operation-stale 本就是
+  agent/plugin/mcp 在网家族码（RFC-201/231 先行），本批实为并族：16 方言产出点
+  加 10 家族直写点全收 staleConflictError 单源（helper 附 resource 字段）；
+  灭绝锁 rfc285-b5；26 处断言改判。
+- **T7（93f02dd0）**：B6① 评论作者校验（矩阵 + 冻结优先序锁）+ B6②
+  /ws/repo-imports 升级门（发起者 ∨ 资源管理员、缺行同形拒绝；REST 同数据面
+  收紧属能力收缩未列 E 清单，登记 backlog 呈拍板）。附带 rfc222 外人删除断言
+  按 B1 分层改判（T2 排查漏网）+ T3 lint 遗留。
+- **T8+T9（本 commit）**：B6③ 三路 private 装配锁；B6④ 逐锚复核——**先行会话
+  已修**（五端点全带 identity:'resource-admin'，头注已正，v2 所记「真洞」在
+  HEAD 已不成立，降级为复核记录）；B7 现状矩阵回归锁（scope×角色×读/管理）+
+  Q4 candidate 读面收紧（list 两读法过滤 + detail 同形 404 + byte-oracle +
+  发布恢复用例）+ 前端 useIsResourceAdmin 两点换用（E11；role-gate 源锁改锚）。
+- **门禁与推送**：T1-T7 链经 pin gate（quality/前端绿；backend 四条 5000ms 家族
+  红全数隔离绿 + 基线对照〔87ed494d/afea367e/8d80be69/93f02dd0 静置全绿〕归属
+  环境）后推送 93f02dd0，exact-SHA CI 看护中。**剩余：T5（B2 schema 迁移）、
+  T10（实现门 + 收尾）。**
+
 ## T1 附录：三份前置排查清单（2026-08-13 实测 HEAD=87ed494d）
 
 ### ① B4 query-token 读点全量（rg `query('token')`/extractRawToken/extractToken）

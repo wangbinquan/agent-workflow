@@ -23,6 +23,8 @@ import '../src/i18n'
 // actor's ROLE (memory:approve moved into the user baseline).
 vi.mock('../src/hooks/useActor', () => ({
   useIsAdmin: () => mockIsAdmin,
+  // RFC-285 B7（E11）：memory 管理面换 admin+manager 谓词——mock 同步补导出。
+  useIsResourceAdmin: () => mockIsAdmin,
   usePermission: (perm: string) =>
     perm === 'memory:create' ? mockIsAdmin : perm === 'memory:update' ? mockIsAdmin : false,
   useActor: () => ({

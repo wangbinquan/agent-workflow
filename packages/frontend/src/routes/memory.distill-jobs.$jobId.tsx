@@ -24,7 +24,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
-import { useActor, useIsAdmin } from '@/hooks/useActor'
+import { useActor, useIsResourceAdmin } from '@/hooks/useActor'
 import { useMemoryDistillJobWs } from '@/hooks/useMemoryDistillJobWs'
 import { describeApiError } from '@/i18n'
 import { Route as RootRoute } from './__root'
@@ -44,7 +44,8 @@ export const Route = createRoute({
 function DistillJobDetailPage() {
   const { t } = useTranslation()
   const actor = useActor()
-  const isAdmin = useIsAdmin()
+  // RFC-285 B7（E11）：对齐后端 admin+manager 管理面。
+  const isAdmin = useIsResourceAdmin()
   const { jobId } = Route.useParams()
 
   // Keep WS subscription mounted so detail page invalidates when the
