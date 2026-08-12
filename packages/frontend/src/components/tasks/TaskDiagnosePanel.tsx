@@ -124,7 +124,11 @@ export function TaskDiagnosePanel(props: TaskDiagnosePanelProps): ReactElement {
             m.mutate()
             void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.alerts(props.taskId) })
             void qc.invalidateQueries({
-              queryKey: [...TASK_QUERY_KEYS.alerts(props.taskId), repairTarget.alertId, 'repair-options'],
+              queryKey: [
+                ...TASK_QUERY_KEYS.alerts(props.taskId),
+                repairTarget.alertId,
+                'repair-options',
+              ],
             })
             setRepairTarget(null)
           }}
