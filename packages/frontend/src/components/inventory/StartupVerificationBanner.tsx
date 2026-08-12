@@ -102,6 +102,12 @@ export function StartupVerificationBanner({ taskId, nodeRunId, enabled }: Props)
       }),
     })
   }
+  if (record.outputTailTruncated === true) {
+    lines.push({
+      key: 'output-tail',
+      text: t('nodeDrawer.startupVerification.outputTailTruncated'),
+    })
+  }
   if (v.observation !== 'verified') {
     lines.push({
       key: 'observation',

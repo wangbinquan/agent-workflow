@@ -131,3 +131,22 @@ describe('<StartupVerificationBanner />', () => {
     expect(second.container.querySelector('[data-testid="startup-verification-banner"]')).toBeNull()
   })
 })
+
+// RFC-284 T14（D9）——尾部输出丢失的观测行：仅此一项 finding 也要亮 banner
+// （hasFindings 判据与渲染集的 ⊇ 关系由 shared 侧同步扩展）。
+describe('<StartupVerificationBanner /> — outputTailTruncated (RFC-284 T14)', () => {
+  test('仅 outputTailTruncated 时 banner 以 warning 形态渲染专属行', async () => {
+    renderBanner({
+      available: true,
+      record: { ...cleanRecord, outputTailTruncated: true },
+    })
+    const banner = await screen.findByTestId('startup-verification-banner')
+    expect(banner.className).toContain('notice-banner--warning')
+    expect(banner.textContent).toContain('Trailing output')
+  })
+
+  test('旧记录（无该键）行为不变：干净 record 依旧不渲染', () => {
+    renderBanner({ available: true, record: cleanRecord })
+    expect(screen.queryByTestId('startup-verification-banner')).toBeNull()
+  })
+})

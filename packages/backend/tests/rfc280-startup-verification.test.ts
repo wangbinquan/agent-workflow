@@ -278,3 +278,65 @@ describe('applyPlaygroundVerification (RFC-280 T6 strict playground verdict)', (
     })
   })
 })
+
+// ── RFC-284 T14（D9）—— drainTimedOut 观测面 ────────────────────────────────
+import { readFileSync as readSrcFile } from 'node:fs'
+import { resolve as resolveSrcPath } from 'node:path'
+import {
+  startupVerificationHasFindings,
+  StartupVerificationRecordSchema,
+} from '@agent-workflow/shared'
+
+describe('RFC-284 T14 — outputTailTruncated 观测面', () => {
+  const cleanRecord = {
+    declared: {
+      mcpServers: [],
+      skippedDisabledMcps: [],
+      skills: [],
+      subagents: [],
+      plugins: [],
+      tools: null,
+      droppedParams: [],
+      unsupported: [],
+      unobservable: [],
+    },
+    observation: { state: 'verified', source: 'claude-init', mcpServers: [] },
+    verification: {
+      observation: 'verified',
+      mcpUnusable: [],
+      skillsMissing: [],
+      subagentsMissing: [],
+      toolsMissing: [],
+      pluginsMissing: [],
+    },
+  }
+
+  test('schema 向后兼容：旧 JSON（无该键）照常 parse；带键 round-trip', () => {
+    expect(StartupVerificationRecordSchema.safeParse(cleanRecord).success).toBe(true)
+    const withFlag = StartupVerificationRecordSchema.safeParse({
+      ...cleanRecord,
+      outputTailTruncated: true,
+    })
+    expect(withFlag.success).toBe(true)
+    expect(withFlag.success && withFlag.data.outputTailTruncated).toBe(true)
+  })
+
+  test('hasFindings：仅尾截断也是可见 finding（banner 有渲染行，⊇ 关系保持）', () => {
+    const parsed = StartupVerificationRecordSchema.parse(cleanRecord)
+    expect(startupVerificationHasFindings(parsed)).toBe(false)
+    expect(startupVerificationHasFindings({ ...parsed, outputTailTruncated: true })).toBe(true)
+  })
+
+  test('runner 接线源码锁：旗标取自 runResult、record 仅真值附加、envelope 文案带前缀、NULL 列 run 只 warn', () => {
+    const src = readSrcFile(
+      resolveSrcPath(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
+      'utf8',
+    )
+    expect(src).toContain('const outputTailTruncated = runResult.drainTimedOut === true')
+    expect(src).toContain("log.warn('runtime-output-tail-truncated'")
+    // 仅在真丢失时附加（不合成占位 record——设计门裁决）；两处 envelope-missing
+    // 文案都带条件前缀。
+    expect(src).toContain('...(outputTailTruncated ? { outputTailTruncated: true } : {})')
+    expect(src.split("${outputTailTruncated ? 'output tail truncated; ' : ''}").length - 1).toBe(2)
+  })
+})

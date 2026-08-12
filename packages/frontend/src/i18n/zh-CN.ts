@@ -4425,6 +4425,7 @@ export interface Resources {
       toolsMissing: string
       skippedDisabled: string
       droppedParams: string
+      outputTailTruncated: string
       unsupported: string
       unobservable: string
       unavailable: string
@@ -10204,6 +10205,8 @@ export const zhCN: Resources = {
       toolsMissing: '工具未被运行时加载：{{items}}',
       skippedDisabled: '引用了已禁用的 MCP（未注入）：{{items}}',
       droppedParams: '该运行时不支持的参数已被忽略：{{items}}',
+      outputTailTruncated:
+        '运行结束后有尾部输出未能收齐（子进程退出后管道未按时排空）——退出码可信，但日志/信封可能不完整',
       unsupported: '该运行时没有对应能力面：{{items}}',
       unobservable: '无法验证的注入面：{{items}}',
       unavailable: '启动观测源缺失（{{reason}}），无法验证注入是否生效',

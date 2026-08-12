@@ -5040,6 +5040,8 @@ export const enUS: Resources = {
       toolsMissing: 'Tools not loaded by the runtime: {{items}}',
       skippedDisabled: 'Referenced but disabled MCP(s), not injected: {{items}}',
       droppedParams: 'Params this runtime has no surface for were ignored: {{items}}',
+      outputTailTruncated:
+        'Trailing output was lost after the run finished (pipes did not drain in time after exit) — the exit code is trustworthy, but logs/envelope may be incomplete',
       unsupported: 'Faces this runtime does not support: {{items}}',
       unobservable: 'Injected faces that cannot be verified: {{items}}',
       unavailable:

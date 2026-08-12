@@ -57,6 +57,12 @@ export const StartupVerificationRecordSchema = z.object({
   declared: DeclaredInjectionManifestSchema,
   observation: StartupObservationSchema,
   verification: StartupVerificationResultSchema,
+  /**
+   * RFC-284 T14（D9）—— 子进程退出后有界 drain 超时（descendant 扣管道），
+   * 尾部输出丢失：exitCode 可信、证据不完整。可选=向后兼容（旧行无此键）；
+   * 仅在真丢失时写 true（无观测宿主的 run 不合成占位 record——设计门裁决）。
+   */
+  outputTailTruncated: z.boolean().optional(),
 })
 export type StartupVerificationRecord = z.infer<typeof StartupVerificationRecordSchema>
 
@@ -83,6 +89,9 @@ export function startupVerificationHasFindings(record: StartupVerificationRecord
     v.toolsMissing.length > 0 ||
     record.declared.skippedDisabledMcps.length > 0 ||
     record.declared.droppedParams.length > 0 ||
+    // RFC-284 T14：尾部输出丢失是独立可见 finding（banner 有对应渲染行——
+    // hasFindings 与渲染集的 ⊇ 关系继续成立）。
+    record.outputTailTruncated === true ||
     record.declared.unsupported.length > 0 ||
     record.declared.unobservable.length > 0
   )
