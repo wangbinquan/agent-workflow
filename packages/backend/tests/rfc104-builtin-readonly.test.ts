@@ -657,8 +657,12 @@ describe('RFC-104 — source-level guard anchors (regression: do not delete the 
     // guard; both launch paths call it. Guard NOT deleted, just deduped.
     const gateSrc = readFileSync(resolve(SRC, 'services', 'taskLaunchGate.ts'), 'utf-8')
     expect(gateSrc).toContain("assertNotBuiltin('workflow', wf)")
+    // RFC-284 T25 改锚：multipart 臂迁 services/multipartTaskStart.ts——两臂
+    // 各自文件内至少一处 launch 门调用，意图不变（守卫未删、只随体走）。
     const launchGateCalls = (tasksSrc.match(/assertWorkflowLaunchable\(/g) ?? []).length
-    expect(launchGateCalls).toBeGreaterThanOrEqual(2) // JSON + multipart launch
+    expect(launchGateCalls).toBeGreaterThanOrEqual(1) // JSON launch
+    const orchSrc = readFileSync(resolve(SRC, 'services', 'multipartTaskStart.ts'), 'utf-8')
+    expect((orchSrc.match(/assertWorkflowLaunchable\(/g) ?? []).length).toBeGreaterThanOrEqual(1)
     expect(tasksSrc).toContain('assertTaskWorkflowNotBuiltin') // resume + retry routes
     const yaml = readFileSync(resolve(SRC, 'services', 'workflow.yaml.ts'), 'utf-8')
     expect(yaml).toContain("assertNotBuiltin('workflow', existing)")

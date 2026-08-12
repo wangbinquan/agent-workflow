@@ -19,7 +19,7 @@ import {
 import { and, eq, inArray, like, notInArray, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import { agents, mcps, plugins, scheduledTasks, tasks, workflows } from '@/db/schema'
+import { agents, mcps, plugins, scheduledTasks, skills, tasks, workflows } from '@/db/schema'
 import { scheduledRowsReferencing } from './scheduledTaskRefs'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
@@ -27,6 +27,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@
 import { agentsDependingOnIn, validateDependsOn } from './agentDeps'
 import { agentRefFenceGroups, resolveAgentRefsUsable } from './agentRefs'
 import {
+  filterVisibleRows,
   assertInitialResourceOwner,
   canViewResourceInTx,
   discloseRefsSync,
@@ -1124,4 +1125,83 @@ function rowToAgent(row: AgentRow): Agent {
   // inherit config.defaultRuntime). An unknown name fail-safes at dispatch.
   if (typeof row.runtime === 'string' && row.runtime.length > 0) agent.runtime = row.runtime
   return agent
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RFC-284 T25（§4，审计 N10）——闭包引用名投影自 routes/agents.ts 下沉：
+// 纯读模型（ids → 可见行 display name 映射），路由只剩装配。原文迁入：
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ClosureRefNameMaps {
+  skill: Map<string, string>
+  mcp: Map<string, string>
+  plugin: Map<string, string>
+}
+
+/**
+ * RFC-223 (PR-1, Codex impl-gate P2-1): load display NAMES for the managed
+ * skill / mcp / plugin IDS referenced anywhere in the closure, so the wire
+ * projection shows names, not raw ULIDs. Unresolvable ids (deleted out-of-band)
+ * fall back to the id (best-effort, never silently dropped).
+ */
+export async function loadClosureRefNames(
+  db: DbClient,
+  actor: Actor,
+  closure: Agent[],
+  visibleAgentIds: ReadonlySet<string>,
+): Promise<ClosureRefNameMaps> {
+  const skillIds = new Set<string>()
+  const mcpIds = new Set<string>()
+  const pluginIds = new Set<string>()
+  for (const a of closure) {
+    if (!visibleAgentIds.has(a.id)) continue
+    for (const ref of a.skills) if (ref.kind === 'managed') skillIds.add(ref.skillId)
+    for (const id of a.mcp ?? []) mcpIds.add(id)
+    for (const id of a.plugins ?? []) pluginIds.add(id)
+  }
+  const [skillRows, mcpRows, pluginRows] = await Promise.all([
+    skillIds.size > 0
+      ? db
+          .select({
+            id: skills.id,
+            name: skills.name,
+            ownerUserId: skills.ownerUserId,
+            visibility: skills.visibility,
+          })
+          .from(skills)
+          .where(inArray(skills.id, [...skillIds]))
+      : Promise.resolve([]),
+    mcpIds.size > 0
+      ? db
+          .select({
+            id: mcps.id,
+            name: mcps.name,
+            ownerUserId: mcps.ownerUserId,
+            visibility: mcps.visibility,
+          })
+          .from(mcps)
+          .where(inArray(mcps.id, [...mcpIds]))
+      : Promise.resolve([]),
+    pluginIds.size > 0
+      ? db
+          .select({
+            id: plugins.id,
+            name: plugins.name,
+            ownerUserId: plugins.ownerUserId,
+            visibility: plugins.visibility,
+          })
+          .from(plugins)
+          .where(inArray(plugins.id, [...pluginIds]))
+      : Promise.resolve([]),
+  ])
+  const [visibleSkills, visibleMcps, visiblePlugins] = await Promise.all([
+    filterVisibleRows(db, actor, 'skill', skillRows),
+    filterVisibleRows(db, actor, 'mcp', mcpRows),
+    filterVisibleRows(db, actor, 'plugin', pluginRows),
+  ])
+  return {
+    skill: new Map(visibleSkills.map((r) => [r.id, r.name])),
+    mcp: new Map(visibleMcps.map((r) => [r.id, r.name])),
+    plugin: new Map(visiblePlugins.map((r) => [r.id, r.name])),
+  }
 }

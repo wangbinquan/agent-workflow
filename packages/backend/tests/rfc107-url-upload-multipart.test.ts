@@ -892,13 +892,24 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
 // ---------------------------------------------------------------------------
 describe('RFC-107 — source anchors', () => {
   test('route no longer hard-refuses url uploads, and hands the materialized space to both handoffs', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'routes', 'tasks.ts'), 'utf8')
+    // RFC-284 T25 改锚：multipart 编排主体迁 services/launchMultipart.ts——
+    // 全部原断言原样作用于新址；路由侧保持零自解析（负锁两文件同断）。
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'multipartTaskStart.ts'),
+      'utf8',
+    )
+    const routeSrc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'routes', 'tasks.ts'),
+      'utf8',
+    )
     expect(src).not.toContain('multipart uploads currently require launching with a local repoPath')
     expect(src).not.toContain('if (startInput.repoUrl) {')
     // success + earlyError handoffs both consume the one materialized space —
-    // and the route must NOT re-resolve on its own anymore.
+    // and the orchestration must NOT re-resolve on its own anymore.
     expect(src.split('materializedSpace: space').length - 1).toBe(2)
-    expect(src).not.toContain('preResolvedSource: resolvedSource')
-    expect(src).not.toContain('resolveRepoSourceSingle(')
+    for (const s of [src, routeSrc]) {
+      expect(s).not.toContain('preResolvedSource: resolvedSource')
+      expect(s).not.toContain('resolveRepoSourceSingle(')
+    }
   })
 })

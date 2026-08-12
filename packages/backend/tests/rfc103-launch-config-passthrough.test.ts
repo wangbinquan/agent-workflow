@@ -127,13 +127,20 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   test('routes/tasks.ts + startTaskDeps 的 8 个逻辑入口都线程 resolveLaunchRuntimeConfig', () => {
     const calls = routesSrc.match(/resolveLaunchRuntimeConfig\(deps\.configPath\)/g) ?? []
     // RFC-159 T2: JSON 启动改走 buildStartTaskDeps（工厂内 thread resolveLaunchRuntimeConfig），
-    // 第 8 个逻辑入口（JSON）经工厂覆盖。tasks.ts 剩 6 个解析点：multipart
-    // 在任何副作用前解析一次并由 fail/success 两个 startTask 分支复用同一
-    // launchRuntime，另有 resume / retry / repair-options / repair / sync-workflow。
-    // RFC-292 的 multipart preflight deps 与 fail/success 两个 launch 分支
-    // 共用同一份 launchRuntime，因此这里有三个 spread、仍只有一次解析。
-    expect(calls.length).toBe(6)
-    expect(routesSrc.match(/\.\.\.launchRuntime,/g)).toHaveLength(3)
+    // 第 8 个逻辑入口（JSON）经工厂覆盖。RFC-284 T25：multipart 臂整体迁
+    // services/multipartTaskStart.ts（在任何副作用前解析一次、fail/success 两
+    // 分支复用同一 launchRuntime——原三 spread 一解析的约束随体走，下方双断言）。
+    // tasks.ts 剩 5 个解析点：resume / retry / repair-options / repair /
+    // sync-workflow。
+    expect(calls.length).toBe(5)
+    const orch = readFileSync(
+      join(import.meta.dir, '../src/services/multipartTaskStart.ts'),
+      'utf8',
+    )
+    expect((orch.match(/resolveLaunchRuntimeConfig\(deps\.configPath\)/g) ?? []).length).toBe(1)
+    expect((orch.match(/\.\.\.launchRuntime/g) ?? []).length).toBe(3)
+    // T25 后路由侧不再持有 launchRuntime spread（三处全随编排体走）。
+    expect(routesSrc.includes('...launchRuntime')).toBe(false)
     // JSON 入口的运行时配置由 buildStartTaskDeps 携带（数据路径不变）。
     const depsSrc = readFileSync(join(import.meta.dir, '../src/services/startTaskDeps.ts'), 'utf8')
     expect(depsSrc).toContain('resolveLaunchRuntimeConfig(configPath)')

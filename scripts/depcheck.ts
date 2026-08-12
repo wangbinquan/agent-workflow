@@ -216,10 +216,6 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
   ...(
     [
       [
-        'agents',
-        '读模型装配（loadClosureRefNames 三表并查）+ 存在性检查。RFC-284 T25 下沉 services/agent.ts。',
-      ],
-      [
         'auth',
         '登录/会话行读写直查。随 auth 域收口下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
       ],
