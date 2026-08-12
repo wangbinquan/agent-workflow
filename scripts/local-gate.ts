@@ -23,7 +23,10 @@ export const LOCAL_GATE_LANES: LocalGateLane[] = [
       { label: 'format check', args: ['run', 'format:check'] },
       { label: 'dependency rules', args: ['run', 'depcheck'] },
       { label: 'shared tests', args: ['run', 'test:shared'] },
-      { label: 'frontend tests', args: ['run', 'test:frontend'] },
+      // Three workers matched the unrestricted 153s frontend wall time on the
+      // measured 10-core host, while bounding gate-wide contention with six
+      // backend shards. The ordinary test:frontend command stays unrestricted.
+      { label: 'frontend tests', args: ['run', 'test:frontend:gate'] },
     ],
   },
 ]

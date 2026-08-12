@@ -10,7 +10,8 @@
     "lint": "eslint src tests --max-warnings=0 --cache --cache-strategy content --cache-location ../../node_modules/.cache/eslint/frontend",
     "lint:fix": "eslint src tests --fix",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --sequence.shuffle"
+    "test": "vitest run --sequence.shuffle",
+    "test:gate": "vitest run --sequence.shuffle --maxWorkers=3"
   },
   "dependencies": {
     "@agent-workflow/shared": "workspace:*",

@@ -23,6 +23,7 @@
     "test:backend:serial": "bun test --isolate --randomize",
     "test:shared": "bun run --filter @agent-workflow/shared test",
     "test:frontend": "bun run --filter @agent-workflow/frontend test",
+    "test:frontend:gate": "bun run --filter @agent-workflow/frontend test:gate",
     "build:binary": "bun run scripts/build-binary.ts",
     "build:binary:e2e": "bun run scripts/build-binary.ts --include-e2e",
     "e2e": "playwright test",

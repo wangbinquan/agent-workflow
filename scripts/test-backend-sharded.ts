@@ -8,7 +8,10 @@ const MAX_SHARD_TIMEOUT_MS = 86_400_000
 const MAX_SHARD_KILL_GRACE_MS = 60_000
 const POST_KILL_SETTLE_MS = 1_000
 
-export const DEFAULT_LOCAL_BACKEND_SHARDS = 4
+// Real 10-core local-gate measurements (2026-08-13): four shards took 431.3s;
+// six kept every shard isolated/serial and completed in 321.1s; eight reached
+// 307.9s but crossed two existing 5s test ceilings under resource pressure.
+export const DEFAULT_LOCAL_BACKEND_SHARDS = 6
 export const DEFAULT_LOCAL_BACKEND_SHARD_TIMEOUT_MS = 15 * 60_000
 export const DEFAULT_LOCAL_BACKEND_SHARD_KILL_GRACE_MS = 2_000
 

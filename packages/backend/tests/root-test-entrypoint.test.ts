@@ -114,6 +114,7 @@ const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedSharedCommand = `${hardenedBunCommand} --dots`
 const localShardedBackendCommand = 'bun run scripts/test-backend-sharded.ts'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
+const boundedGateFrontendCommand = `${hardenedFrontendCommand} --maxWorkers=3`
 
 function workflowJob(source: string, name: string): string {
   const lines = source.split(/\r?\n/)
@@ -181,6 +182,10 @@ describe('repository test entrypoint', () => {
     expect(pkg.scripts?.['test:backend:serial']).toBe(hardenedBunCommand)
     expect(pkg.scripts?.['test:shared']).toBe('bun run --filter @agent-workflow/shared test')
     expect(pkg.scripts?.['test:frontend']).toBe('bun run --filter @agent-workflow/frontend test')
+    expect(pkg.scripts?.['test:frontend:gate']).toBe(
+      'bun run --filter @agent-workflow/frontend test:gate',
+    )
+    expect(frontendPkg.scripts?.['test:gate']).toBe(boundedGateFrontendCommand)
     expect(pkg.scripts?.['gate:local']).toBe('bun run scripts/local-gate.ts')
   })
 
