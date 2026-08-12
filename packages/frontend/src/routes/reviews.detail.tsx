@@ -18,6 +18,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { DocVersion } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { saveBlobAs } from '@/lib/download'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { TextArea } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
@@ -461,16 +462,8 @@ function ReviewDetailPage() {
   })()
   const handleDownloadMarkdown = (): void => {
     if (activeBody === undefined || activeBody.length === 0) return
-    const blob = new Blob([activeBody], { type: 'text/markdown;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = downloadFileName
-    a.rel = 'noopener'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    // RFC-286 F2：a[download] 触发收敛 lib/download 单点。
+    saveBlobAs(new Blob([activeBody], { type: 'text/markdown;charset=utf-8' }), downloadFileName)
   }
 
   const queryError = (error: unknown, refetch: () => unknown, testId: string) => (

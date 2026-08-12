@@ -609,13 +609,22 @@ describe('ImportZipPanel (RFC-196)', () => {
     expect(body.get('file')).toBeInstanceOf(File)
   })
 
-  test('commit HTTP errors preserve review decisions and malformed bodies use the fallback', async () => {
+  // RFC-286 F2 改判：commit 上传收敛 api.postMultipart 后，错误解码单点在
+  // api/client 的 extractErrorBody——规范错误体（code+message）**结构化透传**
+  // （F2 的核心收益：不再被面板私有 decoder 压平），畸形体退化为 http-<status>
+  // 通用形态（原面板局部 i18n fallback 随第二 decoder 删除而退役）。两种失败
+  // 均保留 review 决策行（重试不丢状态）。
+  test('commit HTTP errors preserve review decisions; canonical code passes through, malformed degrades to http-<status>', async () => {
     let attempts = 0
     const router: FetchRouter = {
       parse: { body: parseResponse([candidate('fresh')]) },
       commit: async () => {
         attempts++
-        if (attempts === 1) return jsonResponse({ message: 'disk unavailable' }, { status: 503 })
+        if (attempts === 1)
+          return jsonResponse(
+            { ok: false, code: 'skill-zip-io', message: 'disk unavailable' },
+            { status: 503 },
+          )
         if (attempts === 2) return jsonResponse(null, { status: 503 })
         return jsonResponse({ created: [makeSkill('fresh')], updated: [], skipped: [], failed: [] })
       },
@@ -626,14 +635,14 @@ describe('ImportZipPanel (RFC-196)', () => {
     await parseSelectedFile()
     fireEvent.click(screen.getByTestId('zip-commit-button'))
 
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('disk unavailable'))
+    await waitFor(() => {
+      const alert = screen.getByRole('alert').textContent ?? ''
+      expect(alert).toContain('disk unavailable')
+      expect(alert).toContain('skill-zip-io') // 后端 code 透传，非 http-503 压平
+    })
     expect(screen.getByTestId('zip-row-fresh')).toBeTruthy()
     fireEvent.click(screen.getByTestId('zip-commit-button'))
-    await waitFor(() =>
-      expect(screen.getByRole('alert').textContent).toContain(
-        i18n.t('skills.zipCommitFailedFallback', { status: 503 }),
-      ),
-    )
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('http-503'))
     expect(screen.getByTestId('zip-row-fresh')).toBeTruthy()
     fireEvent.click(screen.getByTestId('zip-commit-button'))
     await screen.findByTestId('zip-import-summary')

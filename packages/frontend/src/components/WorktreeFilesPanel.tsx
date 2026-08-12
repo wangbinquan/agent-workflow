@@ -15,12 +15,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import { ApiError } from '@/api/client'
+import { api } from '@/api/client'
+import { DOWNLOAD_DEADLINE_MS, saveBlobAs } from '@/lib/download'
 import { fetchWorktreeFile, fetchWorktreeTree } from '@/api/worktreeFiles'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { buildPreviewTarget, isMarkdownPath } from '@/lib/markdown-preview'
-import { getBaseUrl, getToken } from '@/stores/auth'
 import {
   WORKTREE_DIR_MAX_ENTRIES,
   WORKTREE_FILE_MAX_BYTES,
@@ -53,13 +53,16 @@ export function joinRel(parent: string, name: string): string {
  * '/', which round-trips correctly through the endpoint's single
  * decodeURIComponent — spaces / '#' / '?' / '%' in names are all safe.
  */
-export function worktreeFileDownloadUrl(baseUrl: string, taskId: string, relPath: string): string {
+export function worktreeFilePath(taskId: string, relPath: string): string {
   const segments = relPath
     .split('/')
     .filter((s) => s.length > 0)
     .map(encodeURIComponent)
-  const path = `/api/worktree-files/${encodeURIComponent(taskId)}/${segments.join('/')}`
-  return new URL(path, baseUrl).toString()
+  return `/api/worktree-files/${encodeURIComponent(taskId)}/${segments.join('/')}`
+}
+
+export function worktreeFileDownloadUrl(baseUrl: string, taskId: string, relPath: string): string {
+  return new URL(worktreeFilePath(taskId, relPath), baseUrl).toString()
 }
 
 /** The basename a download should be saved as; '/'-only or empty → 'download'. */
@@ -277,31 +280,11 @@ function indentFor(depth: number): string {
 // the Authorization header (not a `?token=` query) so it never leaks into the
 // URL, and a blob works cross-origin too — a plain <a download> pointing at a
 // remote-daemon base URL would have its `download` attribute ignored.
+// RFC-286 F2：bare fetch 收敛 api.getBlob（结构化错误解码 + 显式大预算）。
 async function fetchWorktreeFileBlob(taskId: string, relPath: string): Promise<Blob> {
-  const token = getToken()
-  const headers: Record<string, string> = {}
-  if (token !== null) headers.Authorization = `Bearer ${token}`
-  const res = await fetch(worktreeFileDownloadUrl(getBaseUrl(), taskId, relPath), { headers })
-  if (!res.ok) {
-    throw new ApiError(res.status, `http-${res.status}`, res.statusText || 'download failed')
-  }
-  return res.blob()
-}
-
-/** Save a Blob to disk via a transient object-URL anchor. */
-function saveBlob(blob: Blob, fileName: string): void {
-  const objectUrl = URL.createObjectURL(blob)
-  try {
-    const a = document.createElement('a')
-    a.href = objectUrl
-    a.download = fileName
-    a.rel = 'noopener'
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-  } finally {
-    URL.revokeObjectURL(objectUrl)
-  }
+  return api.getBlob(worktreeFilePath(taskId, relPath), undefined, {
+    deadlineMs: DOWNLOAD_DEADLINE_MS,
+  })
 }
 
 // Top-right download button shown for the opened file in both the normal and
@@ -318,7 +301,7 @@ function DownloadFileButton({ taskId, path }: { taskId: string; path: string }):
     setFailed(false)
     try {
       const blob = await fetchWorktreeFileBlob(taskId, path)
-      saveBlob(blob, downloadBaseName(path))
+      saveBlobAs(blob, downloadBaseName(path))
     } catch {
       setFailed(true)
     } finally {

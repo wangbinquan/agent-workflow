@@ -24,7 +24,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { Select } from '@/components/Select'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
 import { useActor } from '@/hooks/useActor'
-import { getBaseUrl, getToken } from '@/stores/auth'
+import { api, ApiError } from '@/api/client'
 import {
   availableActionsFor,
   buildDecisionMap,
@@ -103,11 +103,8 @@ export const ImportZipPanel = forwardRef<ImportZipPanelHandle, ImportZipPanelPro
 
     const skillsList = useQuery<Skill[]>({
       queryKey: ['skills'],
-      queryFn: async () => {
-        const res = await authedFetch('/api/skills', { method: 'GET' })
-        if (!res.ok) throw new Error(`failed to list skills: ${res.status}`)
-        return (await res.json()) as Skill[]
-      },
+      // RFC-286 F2：bare fetch 收敛 api 客户端（auth + 结构化错误解码单点）。
+      queryFn: async ({ signal }) => api.get<Skill[]>('/api/skills', undefined, signal),
     })
     const existingNames = useMemo(
       () => skillNamesForOwnerBucket(skillsList.data ?? [], actor.data?.user.id),
@@ -185,22 +182,14 @@ export const ImportZipPanel = forwardRef<ImportZipPanelHandle, ImportZipPanelPro
       try {
         const fd = new FormData()
         fd.append('file', file)
-        const res = await authedFetch('/api/skills/import-zip/parse', {
-          method: 'POST',
-          body: fd,
-          signal: controller.signal,
-        })
+        // RFC-286 F2：multipart 上传收敛 api.postMultipart（按体积定预算 +
+        // 结构化错误解码——后端 code 经 ApiError 透传，不再 http-<status> 压平）。
+        const parse = await api.postMultipart<ParseSkillZipResponse>(
+          '/api/skills/import-zip/parse',
+          fd,
+          { signal: controller.signal },
+        )
         if (parseAttemptRef.current !== attempt) return
-        if (!res.ok) {
-          setPhase({
-            kind: 'select',
-            file,
-            selectionError: null,
-            parseError: await readResponseError(res, t('skills.zipParseFailedFallback')),
-          })
-          return
-        }
-        const parse = (await res.json()) as ParseSkillZipResponse
         setPhase({
           kind: 'review',
           file,
@@ -234,21 +223,11 @@ export const ImportZipPanel = forwardRef<ImportZipPanelHandle, ImportZipPanelPro
         const fd = new FormData()
         fd.append('file', review.file)
         fd.append('decisions', JSON.stringify(buildDecisionMap(review.rows)))
-        const res = await authedFetch('/api/skills/import-zip/commit', {
-          method: 'POST',
-          body: fd,
-        })
-        if (!res.ok) {
-          setPhase({
-            ...review,
-            commitError: await readResponseError(
-              res,
-              t('skills.zipCommitFailedFallback', { status: res.status }),
-            ),
-          })
-          return
-        }
-        const summary = (await res.json()) as CommitSkillZipResponse
+        // RFC-286 F2：同 parse——api.postMultipart 单点。
+        const summary = await api.postMultipart<CommitSkillZipResponse>(
+          '/api/skills/import-zip/commit',
+          fd,
+        )
         await qc.invalidateQueries({ queryKey: ['skills'] }).catch(() => undefined)
         setPhase({ kind: 'result', fileName: review.file.name, summary })
         onDirtyChange?.(false)
@@ -960,24 +939,12 @@ function formatUiError(error: ZipUiError): string {
   return error.code === undefined ? error.message : `${error.code}: ${error.message}`
 }
 
-async function readResponseError(response: Response, fallback: string): Promise<ZipUiError> {
-  const parsed: unknown = await response.json().catch(() => ({}))
-  const body =
-    typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {}
-  return {
-    ...(typeof body.code === 'string' ? { code: body.code } : {}),
-    message: typeof body.message === 'string' ? body.message : fallback,
-  }
-}
-
+// RFC-286 F2：readResponseError（第二 decoder）与 authedFetch 已随 bare fetch
+// 收敛删除——错误解码单点在 api/client 的 extractErrorBody，此处只做 ApiError →
+// ZipUiError 的展示映射（code 原样透传，含服务端结构化错误码）。
 function errorFromUnknown(error: unknown, fallback: string): ZipUiError {
+  if (error instanceof ApiError) {
+    return { code: error.code, message: error.message !== '' ? error.message : fallback }
+  }
   return { message: error instanceof Error && error.message !== '' ? error.message : fallback }
-}
-
-async function authedFetch(path: string, init: RequestInit): Promise<Response> {
-  const token = getToken()
-  const headers = new Headers(init.headers)
-  if (token !== null) headers.set('Authorization', `Bearer ${token}`)
-  const url = new URL(path.startsWith('/') ? path : `/${path}`, getBaseUrl()).toString()
-  return fetch(url, { ...init, headers })
 }
