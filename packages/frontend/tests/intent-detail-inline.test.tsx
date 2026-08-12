@@ -994,6 +994,79 @@ describe('RFC-234 /intent/$sessionId', () => {
     })
   })
 
+  test('labels commit decisions with resource names instead of raw operation ids', async () => {
+    const changeset = CLEAN_DRAFT.changeset as { $schema_version: 1; ops: unknown[] }
+    const readableDraft: NonNullable<IntentSessionDetail['currentDraft']> = {
+      ...CLEAN_DRAFT,
+      id: 'D-readable-operation-labels',
+      changeset: {
+        ...changeset,
+        ops: [
+          ...changeset.ops,
+          {
+            opId: 'op-2',
+            action: 'update',
+            resourceType: 'mcp',
+            target: 'res#mcp#1',
+            payload: {
+              type: 'local',
+              name: 'gitlab',
+              description: '',
+              config: { command: ['bunx'] },
+            },
+          },
+        ],
+      },
+      slots: [
+        ...CLEAN_DRAFT.slots,
+        {
+          kind: 'secretWaiver',
+          slotId: 'waiver:op-2:/op-2/payload/name',
+          opId: 'op-2',
+          jsonPointer: '/op-2/payload/name',
+        },
+        { kind: 'finalName', slotId: 'name:op-2', opId: 'op-2' },
+      ],
+    }
+    installFetch(detailFixture({ currentDraft: readableDraft }))
+    await renderPage()
+    fireEvent.click(await screen.findByTestId('intent-open-commit'))
+
+    const dialog = await screen.findByRole('dialog')
+    const strategyLabels = [...dialog.querySelectorAll('.form-field__label')].map(
+      (label) => label.textContent,
+    )
+    expect(strategyLabels).toContain('gitlab · MCP')
+    expect(
+      within(dialog).getByRole('radiogroup', {
+        name: `gitlab · MCP · ${enUS.intent.applyModeTitle}`,
+      }),
+    ).toBeTruthy()
+    expect(dialog.textContent).not.toContain('op-2')
+
+    fireEvent.click(within(dialog).getByTestId('intent-commit-next'))
+    const detailLabels = [...dialog.querySelectorAll('.form-field__label')].map(
+      (label) => label.textContent,
+    )
+    expect(detailLabels).toContain('gh · MCP · /config/env/TOKEN *')
+    expect(detailLabels).toContain('gh · MCP')
+    expect(detailLabels).toContain('gitlab · MCP')
+    expect(dialog.textContent).not.toContain('op-1')
+    expect(dialog.textContent).not.toContain('op-2')
+    expect(dialog.textContent).toContain('/name')
+
+    fireEvent.change(within(dialog).getByPlaceholderText(enUS.intent.secretPlaceholder), {
+      target: { value: 'real-secret-value' },
+    })
+    fireEvent.click(within(dialog).getByRole('checkbox'))
+    fireEvent.click(within(dialog).getByTestId('intent-commit-next'))
+    const review = await within(dialog).findByTestId('intent-commit-review')
+    expect(review.textContent).toContain('gitlab · MCP')
+    expect(review.textContent).toContain('gh · MCP')
+    expect(review.textContent).toContain('op-1')
+    expect(review.textContent).toContain('op-2')
+  })
+
   test('closes commit review when a refetch replaces the draft identity', async () => {
     installFetch(detailFixture({ currentDraft: CLEAN_DRAFT }))
     const qc = await renderPage({ staleTime: Number.POSITIVE_INFINITY })

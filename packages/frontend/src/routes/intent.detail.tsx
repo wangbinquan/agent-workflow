@@ -10,6 +10,7 @@ import {
   IntentQuestionsSchema,
   IntentSessionDetailSchema,
   PostIntentAnswersSchema,
+  type IntentChangeset,
   type IntentMountSuggestionBatch,
   type IntentSessionDetail,
   type IntentSlotDto,
@@ -24,7 +25,7 @@ import { ulid } from 'ulid'
 import { api, type ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { Field, TextArea, TextInput } from '@/components/Form'
+import { Checkbox, Field, TextArea, TextInput } from '@/components/Form'
 import { IntentMountDialog } from '@/components/IntentMountDialog'
 import { IntentJourneyProgress } from '@/components/intent/IntentJourneyProgress'
 import { IntentOpPreview } from '@/components/intent/IntentOpPreview'
@@ -703,8 +704,7 @@ function IntentSessionDetailPage() {
           onClose={() => setCommitOpen(false)}
           sessionId={sessionId}
           draft={{ revision: draft.revision, draftHash: draft.draftHash, slots: draft.slots }}
-          updateOps={draftOps.filter((op) => op.action === 'update').map((op) => op.opId)}
-          resourceCount={draftOps.length}
+          ops={draftOps}
           onCommitted={async () => {
             setCommitOpen(false)
             await invalidate()
@@ -1044,8 +1044,7 @@ function CommitDialog(props: {
   onClose: () => void
   sessionId: string
   draft: { revision: number; draftHash: string; slots: IntentSlotDto[] }
-  updateOps: string[]
-  resourceCount: number
+  ops: IntentChangeset['ops']
   onCommitted: () => Promise<void>
 }) {
   const { t } = useTranslation()
@@ -1055,6 +1054,24 @@ function CommitDialog(props: {
   const [applyModes, setApplyModes] = useState<Record<string, 'modify' | 'copy'>>({})
   const [humanPicks, setHumanPicks] = useState<Record<string, UserPublic[]>>({})
   const clientMutationIdRef = useRef<string | null>(null)
+  const opsById = useMemo(() => new Map(props.ops.map((op) => [op.opId, op])), [props.ops])
+  const updateOps = useMemo(
+    () => props.ops.filter((op) => op.action === 'update').map((op) => op.opId),
+    [props.ops],
+  )
+  const operationLabel = (opId: string): string => {
+    const op = opsById.get(opId)
+    if (op === undefined) return opId
+    const proposedName = op.payload.name.trim() || opId
+    return `${proposedName} · ${t(`intent.resourceType.${op.resourceType}`)}`
+  }
+  const operationRelativePointer = (opId: string, jsonPointer: string): string => {
+    const payloadPrefix = `/${opId}/payload`
+    if (jsonPointer === payloadPrefix) return '/'
+    return jsonPointer.startsWith(`${payloadPrefix}/`)
+      ? jsonPointer.slice(payloadPrefix.length)
+      : jsonPointer
+  }
   useEffect(() => {
     if (props.open && clientMutationIdRef.current === null) clientMutationIdRef.current = ulid()
     if (props.open) return
@@ -1091,10 +1108,10 @@ function CommitDialog(props: {
         list.push({ slotId: slot.slotId, value })
         byOp.set(slot.opId, list)
       }
-      const opIds = new Set([...byOp.keys(), ...props.updateOps])
+      const opIds = new Set([...byOp.keys(), ...updateOps])
       const decisions = [...opIds].map((opId) => ({
         opId,
-        ...(props.updateOps.includes(opId) ? { applyMode: applyModes[opId] ?? 'modify' } : {}),
+        ...(updateOps.includes(opId) ? { applyMode: applyModes[opId] ?? 'modify' } : {}),
         ...(byOp.has(opId) ? { slots: byOp.get(opId) } : {}),
       }))
       return api.post(`/api/intent-sessions/${props.sessionId}/commit`, {
@@ -1212,13 +1229,13 @@ function CommitDialog(props: {
           {t(`intent.commitStep.${(['strategy', 'details', 'review'] as const)[step]}`)}
         </h3>
         {commit.isError ? <ErrorBanner error={commit.error} /> : null}
-        {step === 0 && props.updateOps.length > 0 ? (
+        {step === 0 && updateOps.length > 0 ? (
           <div className="page__section">
             <h3>{t('intent.applyModeTitle')}</h3>
-            {props.updateOps.map((opId) => (
-              <Field key={opId} label={opId} hint={t('intent.applyModeHint')}>
+            {updateOps.map((opId) => (
+              <Field key={opId} label={operationLabel(opId)} hint={t('intent.applyModeHint')} group>
                 <Segmented
-                  ariaLabel={t('intent.applyModeTitle')}
+                  ariaLabel={`${operationLabel(opId)} · ${t('intent.applyModeTitle')}`}
                   value={applyModes[opId] ?? 'modify'}
                   onChange={(mode) =>
                     setApplyModes((prev) => ({
@@ -1235,7 +1252,7 @@ function CommitDialog(props: {
             ))}
           </div>
         ) : null}
-        {step === 0 && props.updateOps.length === 0 ? (
+        {step === 0 && updateOps.length === 0 ? (
           <NoticeBanner tone="info">{t('intent.commitStrategyCreateOnly')}</NoticeBanner>
         ) : null}
         {step === 1 && detailsCount === 0 ? (
@@ -1245,7 +1262,11 @@ function CommitDialog(props: {
           <div className="page__section">
             <h3>{t('intent.secretsTitle')}</h3>
             {secretSlots.map((slot) => (
-              <Field key={slot.slotId} label={`${slot.opId} · ${slot.jsonPointer}`} required>
+              <Field
+                key={slot.slotId}
+                label={`${operationLabel(slot.opId)} · ${slot.jsonPointer}`}
+                required
+              >
                 <TextInput
                   value={slotValues[slot.slotId] ?? ''}
                   onChange={(value) => setSlotValues((prev) => ({ ...prev, [slot.slotId]: value }))}
@@ -1259,23 +1280,22 @@ function CommitDialog(props: {
         {step === 1 && waiverSlots.length > 0 ? (
           <div className="page__section">
             <h3>{t('intent.waiversTitle')}</h3>
-            {waiverSlots.map((slot) => (
-              <label key={slot.slotId} className="checkbox-row">
-                <input
-                  type="checkbox"
+            <div className="form-grid">
+              {waiverSlots.map((slot) => (
+                <Checkbox
+                  key={slot.slotId}
                   checked={slotValues[slot.slotId] === 'waived'}
-                  onChange={(event) =>
+                  onChange={(checked) =>
                     setSlotValues((prev) => ({
                       ...prev,
-                      [slot.slotId]: event.target.checked ? 'waived' : '',
+                      [slot.slotId]: checked ? 'waived' : '',
                     }))
                   }
+                  label={`${operationLabel(slot.opId)} · ${t('intent.waiverLabel')}`}
+                  hint={operationRelativePointer(slot.opId, slot.jsonPointer)}
                 />
-                <span>
-                  {t('intent.waiverLabel')} <code>{slot.jsonPointer}</code>
-                </span>
-              </label>
-            ))}
+              ))}
+            </div>
           </div>
         ) : null}
         {step === 1 && humanSlots.length > 0 ? (
@@ -1285,7 +1305,7 @@ function CommitDialog(props: {
               <Field
                 key={slot.slotId}
                 label={t('intent.humanLabel', { name: slot.displayName })}
-                hint={t('intent.humanHint')}
+                hint={`${operationLabel(slot.opId)} · ${t('intent.humanHint')}`}
               >
                 <UserPicker
                   value={humanPicks[slot.slotId] ?? []}
@@ -1302,7 +1322,11 @@ function CommitDialog(props: {
           <div className="page__section">
             <h3>{t('intent.namesTitle')}</h3>
             {nameSlots.map((slot) => (
-              <Field key={slot.slotId} label={slot.opId} hint={t('intent.nameHint')}>
+              <Field
+                key={slot.slotId}
+                label={operationLabel(slot.opId)}
+                hint={t('intent.nameHint')}
+              >
                 <TextInput
                   value={slotValues[slot.slotId] ?? ''}
                   onChange={(value) => setSlotValues((prev) => ({ ...prev, [slot.slotId]: value }))}
@@ -1318,24 +1342,26 @@ function CommitDialog(props: {
             <dl className="intent-commit-review__summary">
               <div>
                 <dt>{t('intent.commitReviewResources')}</dt>
-                <dd>{props.resourceCount}</dd>
+                <dd>{props.ops.length}</dd>
               </div>
               <div>
                 <dt>{t('intent.commitReviewUpdates')}</dt>
-                <dd>{props.updateOps.length}</dd>
+                <dd>{updateOps.length}</dd>
               </div>
               <div>
                 <dt>{t('intent.commitReviewDetails')}</dt>
                 <dd>{detailsCount}</dd>
               </div>
             </dl>
-            {props.updateOps.length > 0 ? (
+            {updateOps.length > 0 ? (
               <section>
                 <h3>{t('intent.applyModeTitle')}</h3>
                 <ul className="intent-commit-review__list">
-                  {props.updateOps.map((opId) => (
+                  {updateOps.map((opId) => (
                     <li key={opId}>
-                      <code>{opId}</code>
+                      <span>
+                        {operationLabel(opId)} <code>{opId}</code>
+                      </span>
                       <span>
                         {applyModes[opId] === 'copy'
                           ? t('intent.applyCopy')
@@ -1363,7 +1389,8 @@ function CommitDialog(props: {
                     return (
                       <li key={slot.slotId}>
                         <span>
-                          {t(`intent.commitSlotKind.${slot.kind}`)} · <code>{slot.opId}</code>
+                          {t(`intent.commitSlotKind.${slot.kind}`)} · {operationLabel(slot.opId)}{' '}
+                          <code>{slot.opId}</code>
                         </span>
                         <StatusChip
                           kind={complete ? 'success' : required ? 'danger' : 'neutral'}
