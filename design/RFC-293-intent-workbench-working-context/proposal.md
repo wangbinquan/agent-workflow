@@ -1,6 +1,6 @@
 # RFC-293：Intent 持续迭代工作台
 
-- 状态：Implementation Complete（本地完整门禁已通过，远端发布中）
+- 状态：Done（实现 `53c57080`；exact-SHA CI / visual / Windows / integration 全绿）
 - 日期：2026-08-12
 - 用户最终裁决：2026-08-13
 - 关联：RFC-234、RFC-235、RFC-291

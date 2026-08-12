@@ -57,7 +57,8 @@
 - [x] E3 1800px wide desktop、1080px tabs、390×844 touch/mobile geometry 浏览器验收与源码回归锁。
 - [x] E4 更新 RFC/STATE/index，确认没有新增 runtime capability rejection。
 - [x] E5 `bun run gate:local` 全绿。
-- [ ] E6 精确 commit、push `main`、核验 co-author trailer、remote ancestry 与 exact-SHA/superseding CI。
+- [x] E6 精确 commit `53c57080` 并 push `main`；co-author trailer、remote ancestry 与 exact-SHA CI
+      `31641274578` / visual `31641274690` / Windows `31641274650` / integration `31641274736` 全绿。
 
 ## 6. 完成判据
 
