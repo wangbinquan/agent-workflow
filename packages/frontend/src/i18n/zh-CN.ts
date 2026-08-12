@@ -11076,6 +11076,7 @@ export const zhCN: Resources = {
     'mcp-still-referenced__hint': '先在引用它的代理里解绑。',
     'probe-not-found': '该 MCP 还没有探测结果，请先探测。',
     'resource-operation-stale': '资源在操作期间被他人修改，请刷新后重试。',
+    'review-comment-not-author': '只有评论作者（或任务 owner/资源管理员）可以修改这条评论。',
     'resource-operation-superseded': '已有更新的探测完成，本次结果被丢弃。',
     // --- plugin ---
     'plugin-not-found': '插件不存在。',

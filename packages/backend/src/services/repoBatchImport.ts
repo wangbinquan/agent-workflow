@@ -65,6 +65,8 @@ interface MutableRow {
 
 interface BatchRecord {
   batchId: string
+  /** RFC-285 B6②：批次发起者——WS 升级门（发起者 ∨ 资源管理员）的判定依据。 */
+  ownerUserId: string
   state: BatchImportState
   createdAt: number
   completedAt: number | null
@@ -84,6 +86,14 @@ const batches = new Map<string, BatchRecord>()
 let globalConcurrency = DEFAULT_CONCURRENCY
 let globalInFlight = 0
 const globalWaiters: Array<() => void> = []
+
+/**
+ * RFC-285 B6②：WS 升级门的判定读点。缺行返回 null——门以「与不存在同形」
+ * 拒绝（batch-not-found），不泄露批次存在性。
+ */
+export function batchOwnerUserId(batchId: string): string | null {
+  return batches.get(batchId)?.ownerUserId ?? null
+}
 
 /** Test-only: reset internal state between cases. */
 export function __resetBatchImportForTests(): void {
@@ -123,6 +133,9 @@ export interface StartBatchImportResult {
 export function startBatchImport(
   deps: RepoBatchImportDeps,
   input: StartBatchImportInput,
+  // RFC-285 B6②：ownership 随创建落地（此前批次无归属，/ws/repo-imports 完全
+  // 无门——RFC-152 D4 登记的缺口）。owner 来自路由 actor，绝不来自请求体。
+  owner: { userId: string },
 ): StartBatchImportResult {
   if (typeof deps.concurrency === 'number') {
     setGlobalConcurrency(deps.concurrency)
@@ -155,6 +168,7 @@ export function startBatchImport(
   const batchId = ulid()
   const record: BatchRecord = {
     batchId,
+    ownerUserId: owner.userId,
     state: 'running',
     createdAt: now(),
     completedAt: null,

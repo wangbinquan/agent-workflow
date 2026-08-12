@@ -6040,6 +6040,8 @@ export const enUS: Resources = {
     'probe-not-found': 'This MCP has not been probed yet; probe it first.',
     'resource-operation-stale':
       'The resource changed since this operation started; refresh and retry.',
+    'review-comment-not-author':
+      'Only the comment author (or the task owner / a resource admin) may modify this comment.',
     'resource-operation-superseded': 'A newer probe completed; this result was discarded.',
     // --- plugin ---
     'plugin-not-found': 'Plugin not found.',

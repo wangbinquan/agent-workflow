@@ -3,6 +3,8 @@
 // suite stays hermetic (no git, no filesystem) — the real clone path is
 // already covered by git-repo-cache.test.ts.
 
+// RFC-285 B6②：startBatchImport 增 owner 第三参（ownership 落 BatchRecord），
+// 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -106,9 +108,13 @@ describe('startBatchImport (RFC-033-T2)', () => {
 
   test('happy path: 3 URLs all done; order preserved', async () => {
     const h = makeHarness()
-    const r = startBatchImport(deps(h, stubResolver(h)), {
-      urls: ['https://h/a.git', 'https://h/b.git', 'https://h/c.git'],
-    })
+    const r = startBatchImport(
+      deps(h, stubResolver(h)),
+      {
+        urls: ['https://h/a.git', 'https://h/b.git', 'https://h/c.git'],
+      },
+      { userId: 'u_batch_owner' },
+    )
     expect(r.snapshot.state).toBe('running')
     expect(r.snapshot.rows.map((x) => x.inputUrlRedacted)).toEqual([
       'https://h/a.git',
@@ -123,9 +129,13 @@ describe('startBatchImport (RFC-033-T2)', () => {
 
   test('invalid URL stays terminal and does not occupy a worker', async () => {
     const h = makeHarness()
-    const r = startBatchImport(deps(h, stubResolver(h)), {
-      urls: ['not a url', 'https://h/b.git'],
-    })
+    const r = startBatchImport(
+      deps(h, stubResolver(h)),
+      {
+        urls: ['not a url', 'https://h/b.git'],
+      },
+      { userId: 'u_batch_owner' },
+    )
     expect(r.snapshot.rows[0]?.status).toBe('failed')
     expect(r.snapshot.rows[0]?.errorCode).toBe('repo-url-invalid')
     expect(r.snapshot.rows[1]?.status).toBe('queued')
@@ -143,9 +153,13 @@ describe('startBatchImport (RFC-033-T2)', () => {
       }
       return undefined
     })
-    const r = startBatchImport(deps(h, resolver), {
-      urls: ['https://h/a.git', 'https://h/b.git', 'https://h/c.git'],
-    })
+    const r = startBatchImport(
+      deps(h, resolver),
+      {
+        urls: ['https://h/a.git', 'https://h/b.git', 'https://h/c.git'],
+      },
+      { userId: 'u_batch_owner' },
+    )
     await waitForBatchCompleted(r.batchId)
     const snap = getBatchSnapshot(r.batchId)!
     expect(snap.state).toBe('completed')
@@ -157,15 +171,19 @@ describe('startBatchImport (RFC-033-T2)', () => {
 
   test('concurrency cap is honored', async () => {
     const h = makeHarness()
-    const r = startBatchImport(deps(h, stubResolver(h), 2), {
-      urls: [
-        'https://h/a.git',
-        'https://h/b.git',
-        'https://h/c.git',
-        'https://h/d.git',
-        'https://h/e.git',
-      ],
-    })
+    const r = startBatchImport(
+      deps(h, stubResolver(h), 2),
+      {
+        urls: [
+          'https://h/a.git',
+          'https://h/b.git',
+          'https://h/c.git',
+          'https://h/d.git',
+          'https://h/e.git',
+        ],
+      },
+      { userId: 'u_batch_owner' },
+    )
     await waitForBatchCompleted(r.batchId)
     expect(h.peakInFlight).toBeLessThanOrEqual(2)
     expect(h.resolverCalls.length).toBe(5)
@@ -173,9 +191,13 @@ describe('startBatchImport (RFC-033-T2)', () => {
 
   test('duplicate URLs in the same batch are de-duped', async () => {
     const h = makeHarness()
-    const r = startBatchImport(deps(h, stubResolver(h)), {
-      urls: ['https://h/a.git', 'https://h/a.git', '  https://h/a.git  '],
-    })
+    const r = startBatchImport(
+      deps(h, stubResolver(h)),
+      {
+        urls: ['https://h/a.git', 'https://h/a.git', '  https://h/a.git  '],
+      },
+      { userId: 'u_batch_owner' },
+    )
     expect(r.snapshot.rows.length).toBe(1)
     await waitForBatchCompleted(r.batchId)
     expect(h.resolverCalls).toEqual(['https://h/a.git'])
@@ -183,9 +205,13 @@ describe('startBatchImport (RFC-033-T2)', () => {
 
   test('all-invalid batch flips to completed without starting any worker', async () => {
     const h = makeHarness()
-    const r = startBatchImport(deps(h, stubResolver(h)), {
-      urls: ['not a url', 'also not'],
-    })
+    const r = startBatchImport(
+      deps(h, stubResolver(h)),
+      {
+        urls: ['not a url', 'also not'],
+      },
+      { userId: 'u_batch_owner' },
+    )
     // batch should be already completed synchronously
     const snap = getBatchSnapshot(r.batchId)!
     expect(snap.state).toBe('completed')
@@ -195,9 +221,15 @@ describe('startBatchImport (RFC-033-T2)', () => {
 
   test('empty URLs throws batch-empty', () => {
     const h = makeHarness()
-    expect(() => startBatchImport(deps(h, stubResolver(h)), { urls: [] })).toThrow(DomainError)
+    expect(() =>
+      startBatchImport(deps(h, stubResolver(h)), { urls: [] }, { userId: 'u_batch_owner' }),
+    ).toThrow(DomainError)
     try {
-      startBatchImport(deps(h, stubResolver(h)), { urls: ['', '  ', '\n'] })
+      startBatchImport(
+        deps(h, stubResolver(h)),
+        { urls: ['', '  ', '\n'] },
+        { userId: 'u_batch_owner' },
+      )
       throw new Error('expected throw')
     } catch (err) {
       expect(err).toBeInstanceOf(DomainError)
@@ -209,7 +241,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
     const h = makeHarness()
     const urls = Array.from({ length: 101 }, (_, i) => `https://h/${i}.git`)
     try {
-      startBatchImport(deps(h, stubResolver(h)), { urls })
+      startBatchImport(deps(h, stubResolver(h)), { urls }, { userId: 'u_batch_owner' })
       throw new Error('expected throw')
     } catch (err) {
       expect(err).toBeInstanceOf(DomainError)
@@ -219,9 +251,13 @@ describe('startBatchImport (RFC-033-T2)', () => {
 
   test('WS broadcast emits row.update + batch.completed', async () => {
     const h = makeHarness()
-    const r = startBatchImport(deps(h, stubResolver(h)), {
-      urls: ['https://h/a.git', 'not-a-url'],
-    })
+    const r = startBatchImport(
+      deps(h, stubResolver(h)),
+      {
+        urls: ['https://h/a.git', 'not-a-url'],
+      },
+      { userId: 'u_batch_owner' },
+    )
     await waitForBatchCompleted(r.batchId)
     // Valid row: queued→cloning→done = 2 row.update events.
     // Invalid row: born terminal, not emitted via emit on creation, but is in
@@ -235,7 +271,11 @@ describe('startBatchImport (RFC-033-T2)', () => {
   test('credential URL never leaks via row payload', async () => {
     const h = makeHarness()
     const cred = 'https://x-token-auth:s3cr3t@github.com/foo/bar.git'
-    const r = startBatchImport(deps(h, stubResolver(h)), { urls: [cred] })
+    const r = startBatchImport(
+      deps(h, stubResolver(h)),
+      { urls: [cred] },
+      { userId: 'u_batch_owner' },
+    )
     await waitForBatchCompleted(r.batchId)
     const snap = getBatchSnapshot(r.batchId)!
     expect(snap.rows[0]?.inputUrlRedacted).not.toContain('s3cr3t')

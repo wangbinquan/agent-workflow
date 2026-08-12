@@ -414,6 +414,10 @@ function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void
   }) as DbClient
 }
 
+// RFC-285 B6①：service 签名新增作者校验 authz——本文件既有用例全走 owner 旁路
+// 保持原语义；作者矩阵的专项覆盖在 reviews-comment-patch 的 B6① describe。
+const OWNER_AUTHZ = { actorUserId: 'u_owner_authz', role: 'owner' as const }
+
 describe('review mutation vs task cancellation linearization', () => {
   test.each(['approved', 'rejected', 'iterated'] as const)(
     'cancel first makes a queued %s decision lose with zero decision side effects',
@@ -875,9 +879,9 @@ describe('review mutation vs task cancellation linearization', () => {
           })
         }
         if (operation === 'update') {
-          return updateReviewCommentText(h.db, h.reviewRunId, h.commentId, 'too late')
+          return updateReviewCommentText(h.db, h.reviewRunId, h.commentId, 'too late', OWNER_AUTHZ)
         }
-        return deleteReviewComment(h.db, h.reviewRunId, h.commentId)
+        return deleteReviewComment(h.db, h.reviewRunId, h.commentId, OWNER_AUTHZ)
       }
       const [cancelResult, commentResult] = await settleInOrder(
         h.taskId,
@@ -901,7 +905,7 @@ describe('review mutation vs task cancellation linearization', () => {
     const h = (current = await seedHarness())
     const [commentResult, cancelResult] = await settleInOrder(
       h.taskId,
-      () => updateReviewCommentText(h.db, h.reviewRunId, h.commentId, 'landed first'),
+      () => updateReviewCommentText(h.db, h.reviewRunId, h.commentId, 'landed first', OWNER_AUTHZ),
       () => cancelTask(h.db, h.taskId),
     )
 
@@ -922,7 +926,13 @@ describe('review mutation vs task cancellation linearization', () => {
       const h = (current = await seedHarness())
       await h.db.update(tasks).set({ status: taskStatus }).where(eq(tasks.id, h.taskId))
 
-      await updateReviewCommentText(h.db, h.reviewRunId, h.commentId, `${taskStatus}-draft`)
+      await updateReviewCommentText(
+        h.db,
+        h.reviewRunId,
+        h.commentId,
+        `${taskStatus}-draft`,
+        OWNER_AUTHZ,
+      )
 
       expect(
         (await h.db.select().from(reviewComments).where(eq(reviewComments.id, h.commentId)))[0]

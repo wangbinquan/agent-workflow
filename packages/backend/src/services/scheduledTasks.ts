@@ -30,7 +30,7 @@ import { ulid } from 'ulid'
 
 import { buildInheritedActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { agents, scheduledTasks, users, workflows, workgroups } from '@/db/schema'
+import { agents, scheduledTasks, workflows, workgroups } from '@/db/schema'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
 import { canViewResource, canViewResourceInTx } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'

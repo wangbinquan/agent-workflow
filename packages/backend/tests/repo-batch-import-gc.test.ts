@@ -1,5 +1,7 @@
 // RFC-033-T2: TTL-based GC for completed batches.
 
+// RFC-285 B6②：startBatchImport 增 owner 第三参（ownership 落 BatchRecord），
+// 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'
@@ -52,7 +54,7 @@ describe('gcBatches (RFC-033-T2)', () => {
   test('evicts completed batch past TTL', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const myDeps: RepoBatchImportDeps = { db, resolveCachedRepo: happyResolver(), emit: () => {} }
-    const r = startBatchImport(myDeps, { urls: ['https://h/a.git'] })
+    const r = startBatchImport(myDeps, { urls: ['https://h/a.git'] }, { userId: 'u_batch_owner' })
     await waitForCompleted(r.batchId)
     expect(getBatchSnapshot(r.batchId)).not.toBeNull()
     // Move now() forward 2 hours.
@@ -70,7 +72,7 @@ describe('gcBatches (RFC-033-T2)', () => {
         /* never resolve */
       })) as Resolver
     const myDeps: RepoBatchImportDeps = { db, resolveCachedRepo: heldResolver, emit: () => {} }
-    const r = startBatchImport(myDeps, { urls: ['https://h/a.git'] })
+    const r = startBatchImport(myDeps, { urls: ['https://h/a.git'] }, { userId: 'u_batch_owner' })
     const future = Date.now() + 10 * 60 * 60 * 1000
     const result = gcBatches({ now: () => future })
     expect(result.evicted).toBe(0)

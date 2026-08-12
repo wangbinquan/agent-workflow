@@ -1,4 +1,6 @@
 // RFC-033-T2: retry semantics for batch import rows.
+// RFC-285 B6②：startBatchImport 增 owner 第三参（ownership 落 BatchRecord），
+// 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -90,7 +92,11 @@ describe('retryBatchRow (RFC-033-T2)', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const resolver = flakyOnceResolver('https://h/a.git')
     const sharedDeps = deps(db, resolver)
-    const r = startBatchImport(sharedDeps, { urls: ['https://h/a.git'] })
+    const r = startBatchImport(
+      sharedDeps,
+      { urls: ['https://h/a.git'] },
+      { userId: 'u_batch_owner' },
+    )
     await waitForBatchCompleted(r.batchId)
     let snap = getBatchSnapshot(r.batchId)!
     expect(snap.rows[0]?.status).toBe('failed')
@@ -104,7 +110,11 @@ describe('retryBatchRow (RFC-033-T2)', () => {
 
   test('done row can be retried (resets and re-runs)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const r = startBatchImport(deps(db, happyResolver()), { urls: ['https://h/a.git'] })
+    const r = startBatchImport(
+      deps(db, happyResolver()),
+      { urls: ['https://h/a.git'] },
+      { userId: 'u_batch_owner' },
+    )
     await waitForBatchCompleted(r.batchId)
     const rowId = getBatchSnapshot(r.batchId)!.rows[0]!.rowId
     retryBatchRow(deps(db, happyResolver()), r.batchId, rowId)
@@ -136,7 +146,11 @@ describe('retryBatchRow (RFC-033-T2)', () => {
         fetchError: null,
       }
     }) as Resolver
-    const r = startBatchImport(deps(db, heldResolver), { urls: ['https://h/a.git'] })
+    const r = startBatchImport(
+      deps(db, heldResolver),
+      { urls: ['https://h/a.git'] },
+      { userId: 'u_batch_owner' },
+    )
     // Wait until the row is in cloning state.
     for (let i = 0; i < 50; i++) {
       const snap = getBatchSnapshot(r.batchId)!
@@ -180,7 +194,11 @@ describe('retryBatchRow (RFC-033-T2)', () => {
         fetchError: null,
       }
     }) as Resolver
-    const r = startBatchImport(deps(db, tracking), { urls: ['https://h/bad.git'] })
+    const r = startBatchImport(
+      deps(db, tracking),
+      { urls: ['https://h/bad.git'] },
+      { userId: 'u_batch_owner' },
+    )
     await waitForBatchCompleted(r.batchId)
     const rowId = getBatchSnapshot(r.batchId)!.rows[0]!.rowId
     retryBatchRow(deps(db, tracking), r.batchId, rowId, { url: 'https://h/good.git' })
@@ -200,7 +218,7 @@ describe('retryBatchRow (RFC-033-T2)', () => {
         if (msg.type === 'batch.completed') events.push('completed')
       },
     }
-    const r = startBatchImport(myDeps, { urls: ['https://h/a.git'] })
+    const r = startBatchImport(myDeps, { urls: ['https://h/a.git'] }, { userId: 'u_batch_owner' })
     await waitForBatchCompleted(r.batchId)
     expect(getBatchSnapshot(r.batchId)!.state).toBe('completed')
     expect(events).toEqual(['completed'])
@@ -214,13 +232,21 @@ describe('retryBatchRow (RFC-033-T2)', () => {
   test('row-not-found / batch-not-found surface as NotFoundError', () => {
     const db = createInMemoryDb(MIGRATIONS)
     expect(() => retryBatchRow(deps(db, happyResolver()), 'nope', 'nope')).toThrow(NotFoundError)
-    const r = startBatchImport(deps(db, happyResolver()), { urls: ['https://h/a.git'] })
+    const r = startBatchImport(
+      deps(db, happyResolver()),
+      { urls: ['https://h/a.git'] },
+      { userId: 'u_batch_owner' },
+    )
     expect(() => retryBatchRow(deps(db, happyResolver()), r.batchId, 'nope')).toThrow(NotFoundError)
   })
 
   test('retry with invalid URL parks row as failed/repo-url-invalid without queuing', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const r = startBatchImport(deps(db, happyResolver()), { urls: ['https://h/a.git'] })
+    const r = startBatchImport(
+      deps(db, happyResolver()),
+      { urls: ['https://h/a.git'] },
+      { userId: 'u_batch_owner' },
+    )
     await waitForBatchCompleted(r.batchId)
     const rowId = getBatchSnapshot(r.batchId)!.rows[0]!.rowId
     retryBatchRow(deps(db, happyResolver()), r.batchId, rowId, { url: 'garbage' })

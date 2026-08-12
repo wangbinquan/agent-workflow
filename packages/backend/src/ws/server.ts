@@ -157,8 +157,8 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     //   · purpose: an `mcp_only` token is for `/api/mcp` and nothing else. Left
     //     unhandled, a token that cannot call `GET /api/tasks` could simply
     //     subscribe to `/ws/tasks/:id` for the same data.
-    //   · channel allowlist: DEFAULT DENY. `repo-import` has no gate of any kind
-    //     (its own spec says so — RFC-152 D4 leftover), and `intent-sessions`
+    //   · channel allowlist: DEFAULT DENY. `repo-import` is owner-gated since
+    //     RFC-285 B6② (the RFC-152 D4 leftover is closed), and `intent-sessions`
     //     carries a domain RFC-247 D7 puts permanently out of a token's reach.
     //     Denying by default means a channel added later is closed to tokens
     //     until someone decides otherwise, rather than open until someone

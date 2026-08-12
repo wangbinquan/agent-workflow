@@ -219,11 +219,28 @@ describe('RFC-222 D-3 — permission + confirm', () => {
     h = await harness()
   })
 
-  test('user and manager → 403 (no tasks:delete)', async () => {
+  // RFC-285 B1 改判：权限门与可见性门分层——
+  //   - 外人 user（无 tasks:read:all、非成员）：可见性中间件先拦 → 404 同形
+  //     （改前是 403 task-not-visible，本用例的旧 403 断言恰好双关命中）；
+  //   - manager（tasks:read:all 可见、按 RFC-222 无 tasks:delete）：过可见性门
+  //     → 权限门 403（这才是「no tasks:delete」的真探针）；
+  //   - 可见成员 user（collaborator、无 tasks:delete）：同 403（成员反例）。
+  test('外人 user → 404（B1 同形）；manager/成员 user → 403（权限门保留）', async () => {
     const id = await seedTask(h.db)
-    expect((await del(h, h.userToken, id, `task-${id}`)).status).toBe(403)
+    expect((await del(h, h.userToken, id, `task-${id}`)).status).toBe(404)
     expect((await del(h, h.managerToken, id, `task-${id}`)).status).toBe(403)
+    const memberTaskId = await seedTask(h.db)
+    const userRow = (await h.db.select().from(users).where(eq(users.username, 'bob')))[0]!
+    await h.db.insert(taskCollaborators).values({
+      taskId: memberTaskId,
+      userId: userRow.id,
+      role: 'collaborator',
+      addedAt: Date.now(),
+      addedBy: userRow.id,
+    })
+    expect((await del(h, h.userToken, memberTaskId, `task-${memberTaskId}`)).status).toBe(403)
     expect((await h.db.select().from(tasks).where(eq(tasks.id, id))).length).toBe(1) // survived
+    expect((await h.db.select().from(tasks).where(eq(tasks.id, memberTaskId))).length).toBe(1)
   })
 
   test('missing task → 404; replay after delete → 404', async () => {

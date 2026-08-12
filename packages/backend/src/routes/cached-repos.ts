@@ -144,6 +144,8 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
           retentionMs: cfg.repoBatchImportRetentionMs,
         },
         parsed.data,
+        // RFC-285 B6②：发起者归属（WS 升级门判定依据）。
+        { userId: actorOf(c).user.id },
       )
       return c.json(result.snapshot, 201)
     },

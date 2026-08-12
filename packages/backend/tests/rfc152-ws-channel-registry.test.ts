@@ -172,8 +172,9 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(WS_CHANNELS['scheduled-tasks'].frameGate).toBeDefined()
     expect(WS_CHANNELS['intent-sessions'].frameGate).toBeDefined()
     expect(WS_CHANNELS['mcp-runtime-tests'].frameGate).toBeDefined()
-    // (c) token-only.
-    expect(WS_CHANNELS['repo-import'].upgradeGate).toBeUndefined()
+    // (c) repo-import：RFC-285 B6② 关闭 RFC-152 D4 缺口——升级门（发起者 ∨
+    // 资源管理员）就位，仍无 frameGate（帧面全通，门在升级时一次判定）。
+    expect(WS_CHANNELS['repo-import'].upgradeGate).toBeDefined()
     expect(WS_CHANNELS['repo-import'].frameGate).toBeUndefined()
     // No cross-contamination.
     expect(WS_CHANNELS.task.frameGate).toBeUndefined()
@@ -275,7 +276,10 @@ describe('RFC-152 — upgrade gates (registry semantics == pre-registry branches
   test('channels without upgrade gates pass through upgrade checks', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const actor = makeActor('user')
-    expect(await checkUpgradeGate(db, actor, { kind: 'repo-import', batchId: 'b' })).toBe(true)
+    // RFC-285 B6②：repo-import 不再免门——缺行/非发起者同形拒绝（batch-not-found）。
+    expect(await checkUpgradeGate(db, actor, { kind: 'repo-import', batchId: 'b' })).toMatchObject({
+      code: 'batch-not-found',
+    })
     expect(await checkUpgradeGate(db, actor, { kind: 'tasks-list' })).toBe(true)
     expect(await checkUpgradeGate(db, actor, { kind: 'workflows' })).toBe(true)
     expect(await checkUpgradeGate(db, actor, { kind: 'workgroups' })).toBe(true)

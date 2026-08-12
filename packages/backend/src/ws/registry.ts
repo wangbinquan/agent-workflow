@@ -68,6 +68,8 @@ import {
   isVisibleToAudienceSnapshot,
 } from '@/services/resourceAcl'
 import { canViewTask } from '@/services/taskCollab'
+import { batchOwnerUserId } from '@/services/repoBatchImport'
+import { isResourceAdminActor } from '@/services/resourceAcl'
 import { createLogger } from '@/util/log'
 import {
   MEMORY_CHANNEL,
@@ -660,21 +662,25 @@ export const WS_CHANNELS: WsChannelRegistry = {
   },
   'repo-import': {
     kind: 'repo-import',
-    // RFC-212: no gate of any kind (RFC-152 D4 leftover). Revalidation can only
-    // enforce credential validity here; adding a gate is out of scope and is
-    // recorded as a known gap rather than papered over.
+    // RFC-285 B6②：RFC-152 D4 登记的「无门」缺口在此关闭——批次自创建携
+    // ownerUserId（repoBatchImport.ts），升级门=发起者 ∨ 资源管理员；缺行与
+    // 无权同形拒绝（batch-not-found），不泄露批次存在性。批次是内存 Map、
+    // daemon 重启即逝，门随之自然失效（无持久化需求）。
     revalidation: {
       refreshActor: true,
-      cache: { kind: 'none', why: 'ungated channel — nothing is filtered per frame' },
-      rerunUpgradeGate: { na: 'RFC-152 D4 leftover: this channel has no gate at all' },
+      cache: { kind: 'none', why: 'gate re-derives from the live batch map each rerun' },
+      rerunUpgradeGate: true,
     },
     helloName: (p) => `repo-imports/${p.batchId}`,
     pathRe: /^\/ws\/repo-imports\/([^/?#]+)$/,
     parse: (m) => ({ kind: 'repo-import', batchId: decodeURIComponent(m[1] ?? '') }),
     broadcaster: repoImportsBroadcaster,
     channelKeyOf: (p) => REPO_IMPORT_CHANNEL(p.batchId),
-    // Token-only channel. Batch-ownership validation is a registered
-    // leftover (RFC-152 D4), NOT silently added here.
+    upgradeGate: async (_db, actor, p) => {
+      const owner = batchOwnerUserId(p.batchId)
+      if (owner !== null && (owner === actor.user.id || isResourceAdminActor(actor))) return true
+      return { code: 'batch-not-found', message: `batch ${p.batchId} not found or expired` }
+    },
   },
   memories: {
     kind: 'memories',

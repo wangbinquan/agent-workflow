@@ -43,6 +43,7 @@ import type {
 import {
   type TaskActorRole,
   buildWorkflowScopeParentMap,
+  isResourceAdminRole,
   isMultiMarkdownUpstream,
   migrateWorkflowDefinitionToLatest,
   resolveWorkflowSourceRef,
@@ -99,7 +100,7 @@ import {
   withReviewNodeMutationLock,
   withTaskReviewMutationLock,
 } from '@/services/reviewMutationCoordinator'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -1912,14 +1913,39 @@ async function addReviewCommentUnlocked(args: AddReviewCommentArgs): Promise<Rev
 // nodeRunId AND the comment belongs to that pending doc_version). We do not
 // touch the anchor or createdAt — only commentText changes, and a 409 is the
 // outcome once the review has been approved/rejected/iterated.
+/**
+ * RFC-285 B6①（作者校验）—— 评论写权的三层判定：
+ * - task owner / 资源管理员（admin+manager，isResourceAdminRole）旁路；
+ * - 普通协作者只能改/删**自己**的评论（row.author === actorUserId）；
+ * - 历史行 author 为 LOCAL_DECIDER 兜底值（'local'）时永远不等于任何真实
+ *   user id ⇒ 自然落入 owner/admin-only（用户拍板：无法归属作者的行不给
+ *   「作者」通道）。
+ * 此前 PATCH/DELETE 均无 actor 入参——任何任务成员可改/删他人评论（冒名洞）。
+ */
+export interface ReviewCommentAuthz {
+  actorUserId: string
+  role: TaskActorRole
+}
+
+function assertCommentWriteAllowed(author: string, authz: ReviewCommentAuthz): void {
+  if (authz.role === 'owner' || isResourceAdminRole(authz.role)) return
+  if (author !== authz.actorUserId) {
+    throw new ForbiddenError(
+      'review-comment-not-author',
+      'only the comment author (or the task owner / a resource admin) may modify this comment',
+    )
+  }
+}
+
 export async function updateReviewCommentText(
   db: DbClient,
   nodeRunId: string,
   commentId: string,
   commentText: string,
+  authz: ReviewCommentAuthz,
 ): Promise<ReviewComment> {
   return withReviewNodeMutationLock(db, nodeRunId, () =>
-    updateReviewCommentTextUnlocked(db, nodeRunId, commentId, commentText),
+    updateReviewCommentTextUnlocked(db, nodeRunId, commentId, commentText, authz),
   )
 }
 
@@ -1928,6 +1954,7 @@ async function updateReviewCommentTextUnlocked(
   nodeRunId: string,
   commentId: string,
   commentText: string,
+  authz: ReviewCommentAuthz,
 ): Promise<ReviewComment> {
   await assertReviewRoundWritable(db, nodeRunId)
   const rows = await db
@@ -1964,6 +1991,7 @@ async function updateReviewCommentTextUnlocked(
       `review ${nodeRunId} is not awaiting a decision; comments are immutable`,
     )
   }
+  assertCommentWriteAllowed(row.author, authz)
   await db.update(reviewComments).set({ commentText }).where(eq(reviewComments.id, commentId))
 
   const updated: ReviewComment = {
@@ -1991,9 +2019,10 @@ export async function deleteReviewComment(
   db: DbClient,
   nodeRunId: string,
   commentId: string,
+  authz: ReviewCommentAuthz,
 ): Promise<void> {
   return withReviewNodeMutationLock(db, nodeRunId, () =>
-    deleteReviewCommentUnlocked(db, nodeRunId, commentId),
+    deleteReviewCommentUnlocked(db, nodeRunId, commentId, authz),
   )
 }
 
@@ -2001,6 +2030,7 @@ async function deleteReviewCommentUnlocked(
   db: DbClient,
   nodeRunId: string,
   commentId: string,
+  authz: ReviewCommentAuthz,
 ): Promise<void> {
   await assertReviewRoundWritable(db, nodeRunId)
   const rows = await db
@@ -2030,6 +2060,7 @@ async function deleteReviewCommentUnlocked(
       `review ${nodeRunId} is not awaiting a decision; comments are immutable`,
     )
   }
+  assertCommentWriteAllowed(row.author, authz)
   await db.delete(reviewComments).where(eq(reviewComments.id, commentId))
   emitReviewCommentDeletedEvent(dv.taskId, nodeRunId, row.docVersionId, commentId)
 }

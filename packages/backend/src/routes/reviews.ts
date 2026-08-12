@@ -435,12 +435,15 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      await ensureReviewMember(deps, nodeRunId, actorOf(c))
+      const actor = actorOf(c)
+      // RFC-285 B6①：写门返回的角色快照连同 actor id 一起下传作者校验。
+      const role = await ensureReviewMember(deps, nodeRunId, actor)
       const updated = await updateReviewCommentText(
         deps.db,
         nodeRunId,
         commentId,
         parsed.data.commentText,
+        { actorUserId: actor.user.id, role },
       )
       return c.json(updated)
     },
@@ -458,8 +461,12 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const nodeRunId = c.req.param('nodeRunId')
       const commentId = c.req.param('commentId')
-      await ensureReviewMember(deps, nodeRunId, actorOf(c))
-      await deleteReviewComment(deps.db, nodeRunId, commentId)
+      const actor = actorOf(c)
+      const role = await ensureReviewMember(deps, nodeRunId, actor)
+      await deleteReviewComment(deps.db, nodeRunId, commentId, {
+        actorUserId: actor.user.id,
+        role,
+      })
       return c.json({ ok: true })
     },
   )
