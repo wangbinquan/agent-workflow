@@ -14,6 +14,7 @@
 import type { QueryKey } from '@tanstack/react-query'
 import type { TaskWsMessage } from '@agent-workflow/shared'
 import { WS_PATHS } from '@agent-workflow/shared'
+import { CLARIFY_QUERY_KEYS, REVIEW_QUERY_KEYS, TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { workgroupRoomKey } from '@/lib/workgroup-room'
 import { taskChildrenQueryKey } from './useTaskChildren'
 import { useWsInvalidation, type WsInvalidationRules } from './useWsInvalidation'
@@ -31,9 +32,9 @@ export function buildTaskSyncRules(taskId: string | null): WsInvalidationRules<T
   // the panel can stay stuck on "pending…" after the task heading shows
   // "done". Caught by the macOS Playwright e2e at main.spec.ts:243.
   const taskTerminal = (): QueryKey[] => [
-    ['tasks', taskId],
-    ['tasks', taskId, 'diff'],
-    ['tasks', taskId, 'node-runs'],
+    TASK_QUERY_KEYS.detail(taskId),
+    TASK_QUERY_KEYS.diff(taskId),
+    TASK_QUERY_KEYS.nodeRuns(taskId),
     // RFC-167 PR-3: dynamic-workflow phase transitions (generating →
     // awaiting_confirm → executing) always ride a task-status flip, and the
     // dw slot lives in the room aggregate — refresh it alongside the task
@@ -51,10 +52,10 @@ export function buildTaskSyncRules(taskId: string | null): WsInvalidationRules<T
   // round also changes the round history (list expand + multi-doc
   // historical view both key off it).
   const reviewKeys = (nodeRunId: string): QueryKey[] => [
-    ['reviews', 'detail', nodeRunId],
-    ['reviews', 'list'],
-    ['reviews', 'pending-count'],
-    ['reviews', 'rounds', nodeRunId],
+    REVIEW_QUERY_KEYS.detail(nodeRunId),
+    REVIEW_QUERY_KEYS.list(),
+    REVIEW_QUERY_KEYS.pendingCount(),
+    REVIEW_QUERY_KEYS.rounds(nodeRunId),
   ]
   // RFC-023: clarify.* events — the task-detail page may have the
   // per-session detail open; the /clarify list + the sidebar badge both
@@ -62,10 +63,10 @@ export function buildTaskSyncRules(taskId: string | null): WsInvalidationRules<T
   // new/answered clarify round lazily collects new question entries and
   // moves their phase — refresh the board.
   const clarifyKeys = (nodeRunId: string): QueryKey[] => [
-    ['clarify', 'detail', nodeRunId],
-    ['clarify', 'list'],
-    ['clarify', 'pending-count'],
-    ['task-questions', taskId],
+    CLARIFY_QUERY_KEYS.detail(nodeRunId),
+    CLARIFY_QUERY_KEYS.list(),
+    CLARIFY_QUERY_KEYS.pendingCount(),
+    TASK_QUERY_KEYS.questions(taskId),
   ]
 
   const rules: WsInvalidationRules<TaskWsMessage> = {
@@ -93,14 +94,14 @@ export function buildTaskSyncRules(taskId: string | null): WsInvalidationRules<T
     // wired here — it would refetch the room on every token. Harmless for
     // non-workgroup tasks (no active query under the key).
     'node.status': () => [
-      ['tasks', taskId, 'node-runs'],
-      ['task-questions', taskId],
-      ['task-clarify-directives', taskId],
+      TASK_QUERY_KEYS.nodeRuns(taskId),
+      TASK_QUERY_KEYS.questions(taskId),
+      TASK_QUERY_KEYS.clarifyDirectives(taskId),
       workgroupRoomKey(taskId),
       // RFC-245 (design gate P0-2): a call node launching its child stamps
       // `child_task_id` on the call row and flips that row to running, so this
       // frame is exactly when the direct-children list goes stale. The key is
-      // ['tasks','children',id] — NOT a prefix of ['tasks', taskId], so none of
+      // ['tasks','children',id] — NOT a prefix of TASK_QUERY_KEYS.detail(taskId), so none of
       // the keys above cover it. Without this the children query (whose polling
       // switches off on an empty result) could stay empty forever, and every
       // consumer that treats "loaded and absent" as proof — the ChildTaskLink
@@ -111,14 +112,14 @@ export function buildTaskSyncRules(taskId: string | null): WsInvalidationRules<T
     // Future: render directly on a node-events feed instead of going
     // through react-query. For now we just keep the node-runs row's
     // token usage etc. up to date.
-    'node.event': () => [['tasks', taskId, 'node-runs']],
+    'node.event': () => [TASK_QUERY_KEYS.nodeRuns(taskId)],
     'review.created': (msg) => reviewKeys(msg.nodeRunId),
     // The decision flip also moves the host task between statuses
     // (awaiting_review ↔ running ↔ done), so refresh that too.
     'review.decision_made': (msg) => [
       ...reviewKeys(msg.nodeRunId),
-      ['tasks', taskId],
-      ['tasks', taskId, 'node-runs'],
+      TASK_QUERY_KEYS.detail(taskId),
+      TASK_QUERY_KEYS.nodeRuns(taskId),
     ],
     'review.comment_added': (msg) => reviewKeys(msg.nodeRunId),
     'review.comment_deleted': (msg) => reviewKeys(msg.nodeRunId),
@@ -133,9 +134,9 @@ export function buildTaskSyncRules(taskId: string | null): WsInvalidationRules<T
     // only after the follow-up node.status from the rerun.
     'clarify.answered': (msg) => [
       ...clarifyKeys(msg.nodeRunId),
-      ['tasks', taskId],
-      ['tasks', taskId, 'node-runs'],
-      ['task-clarify-directives', taskId],
+      TASK_QUERY_KEYS.detail(taskId),
+      TASK_QUERY_KEYS.nodeRuns(taskId),
+      TASK_QUERY_KEYS.clarifyDirectives(taskId),
     ],
     // RFC-161: cross-clarify events also invalidate node-runs so the task-detail
     // canvas's clarify-node click target (clarifyNavKind, stamped in
@@ -145,19 +146,19 @@ export function buildTaskSyncRules(taskId: string | null): WsInvalidationRules<T
     // 'stop'). All three carry the intermediary node_run id (ws.ts).
     'cross-clarify.created': (msg) => [
       ...clarifyKeys(msg.nodeRunId),
-      ['tasks', taskId, 'node-runs'],
+      TASK_QUERY_KEYS.nodeRuns(taskId),
     ],
     'cross-clarify.answered': (msg) => [
       ...clarifyKeys(msg.nodeRunId),
-      ['tasks', taskId],
-      ['tasks', taskId, 'node-runs'],
-      ['task-clarify-directives', taskId],
+      TASK_QUERY_KEYS.detail(taskId),
+      TASK_QUERY_KEYS.nodeRuns(taskId),
+      TASK_QUERY_KEYS.clarifyDirectives(taskId),
     ],
     'cross-clarify.rejected': (msg) => [
       ...clarifyKeys(msg.nodeRunId),
-      ['tasks', taskId],
-      ['tasks', taskId, 'node-runs'],
-      ['task-clarify-directives', taskId],
+      TASK_QUERY_KEYS.detail(taskId),
+      TASK_QUERY_KEYS.nodeRuns(taskId),
+      TASK_QUERY_KEYS.clarifyDirectives(taskId),
     ],
   }
   return rules
@@ -172,11 +173,11 @@ export function useTaskSync(taskId: string | null): void {
       // Prefix invalidation reconciles task detail + node runs + diff + alerts.
       // The remaining keys cover side surfaces that share this task stream.
       reconcileOnOpen: () => [
-        ['tasks', taskId],
-        ['reviews'],
-        ['clarify'],
-        ['task-questions', taskId],
-        ['task-clarify-directives', taskId],
+        TASK_QUERY_KEYS.detail(taskId),
+        REVIEW_QUERY_KEYS.prefix(),
+        CLARIFY_QUERY_KEYS.prefix(),
+        TASK_QUERY_KEYS.questions(taskId),
+        TASK_QUERY_KEYS.clarifyDirectives(taskId),
         workgroupRoomKey(taskId),
       ],
     },

@@ -18,6 +18,8 @@ import type {
 } from '@agent-workflow/shared'
 import { COMMIT_PUSH_NODE_PREFIX, redactGitUrl, taskExecutionKind } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+// RFC-286 F4（D16 定界）：仅 WS 失效关联 key 换工厂符号，与规则表单源。
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import type { ApiError } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
@@ -201,13 +203,13 @@ function TaskDetailPage() {
   )
 
   const task = useQuery<Task>({
-    queryKey: ['tasks', id],
+    queryKey: TASK_QUERY_KEYS.detail(id),
     queryFn: ({ signal }) => api.get(`/api/tasks/${encodeURIComponent(id)}`, undefined, signal),
     refetchInterval: (q) => (isTerminal(q.state.data?.status) ? false : 3000),
   })
 
   const nodeRuns = useQuery<TaskNodeRuns>({
-    queryKey: ['tasks', id, 'node-runs'],
+    queryKey: TASK_QUERY_KEYS.nodeRuns(id),
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(id)}/node-runs`, undefined, signal),
     refetchInterval: (q) =>
@@ -218,7 +220,7 @@ function TaskDetailPage() {
   // canvas badges (TaskStatusCanvas) so they share one cache entry + useTaskSync
   // invalidation. Non-member / no-questions → [] → 0 → no badge.
   const taskQuestionsForBadge = useQuery<TaskQuestionEntry[], ApiError>({
-    queryKey: ['task-questions', id],
+    queryKey: TASK_QUERY_KEYS.questions(id),
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(id)}/questions`, undefined, signal),
     retry: false,
@@ -245,7 +247,7 @@ function TaskDetailPage() {
     mutationFn: () => api.post<Task>(`/api/tasks/${encodeURIComponent(id)}/resume`),
     onSuccess: (tk) => {
       qc.setQueryData(['tasks', id], tk)
-      void qc.invalidateQueries({ queryKey: ['tasks', id, 'node-runs'] })
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.nodeRuns(id) })
       void qc.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
@@ -385,7 +387,7 @@ function TaskDetailPage() {
   )
 
   const diff = useQuery<TaskDiff>({
-    queryKey: ['tasks', id, 'diff'],
+    queryKey: TASK_QUERY_KEYS.diff(id),
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(id)}/diff`, undefined, signal),
     // One oracle owns both navigation and fetching. Multi-repo tasks often

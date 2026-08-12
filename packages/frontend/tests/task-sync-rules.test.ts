@@ -11,9 +11,12 @@
 // node.event (high-frequency streaming) must stay OFF the room key so a live
 // run doesn't refetch the aggregate on every token.
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import type { TaskWsMessage } from '@agent-workflow/shared'
 import { buildTaskSyncRules } from '@/hooks/useTaskSync'
+import { TASK_QUERY_KEYS } from '../src/lib/query-keys'
 import { taskChildrenQueryKey } from '@/hooks/useTaskChildren'
 import { workgroupRoomKey } from '@/lib/workgroup-room'
 
@@ -40,9 +43,9 @@ describe('buildTaskSyncRules — workgroup room liveness', () => {
     expect(keys).toContainEqual(workgroupRoomKey(TASK))
     // …without dropping the node-runs / question / clarify-directive keys it
     // has always refreshed.
-    expect(keys).toContainEqual(['tasks', TASK, 'node-runs'])
-    expect(keys).toContainEqual(['task-questions', TASK])
-    expect(keys).toContainEqual(['task-clarify-directives', TASK])
+    expect(keys).toContainEqual(TASK_QUERY_KEYS.nodeRuns(TASK))
+    expect(keys).toContainEqual(TASK_QUERY_KEYS.questions(TASK))
+    expect(keys).toContainEqual(TASK_QUERY_KEYS.clarifyDirectives(TASK))
   })
 
   test('node.event does NOT touch the room key (streaming stays cheap)', () => {
@@ -55,7 +58,7 @@ describe('buildTaskSyncRules — workgroup room liveness', () => {
       payload: '',
     })
     expect(keys).not.toContainEqual(workgroupRoomKey(TASK))
-    expect(keys).toEqual([['tasks', TASK, 'node-runs']])
+    expect(keys).toEqual([TASK_QUERY_KEYS.nodeRuns(TASK)])
   })
 
   test('each wg.* frame refetches the room aggregate', () => {
@@ -105,7 +108,7 @@ describe('buildTaskSyncRules — child-task list re-validation (RFC-245)', () =>
 
   test('the children key is not reachable through the other invalidated prefixes', () => {
     // Guards the reason this rule has to exist at all: if someone "simplifies"
-    // it away believing ['tasks', TASK] already covers it, this fails.
+    // it away believing TASK_QUERY_KEYS.detail(TASK) already covers it, this fails.
     const childrenKey = taskChildrenQueryKey(TASK) as readonly unknown[]
     expect(childrenKey[0]).toBe('tasks')
     expect(childrenKey[1]).not.toBe(TASK)
@@ -118,5 +121,25 @@ describe('buildTaskSyncRules — child-task list re-validation (RFC-245)', () =>
     ] as TaskWsMessage[]) {
       expect(keysFor(frame)).toContainEqual(taskChildrenQueryKey(TASK))
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-286 F4 —— 规则表零字面锁：useTaskSync 里不得再出现字符串字面 queryKey
+// （['tasks'… / ['reviews'… / ['clarify'… / ['task-…），一律走
+// lib/query-keys 工厂或既有单源（workgroupRoomKey / taskChildrenQueryKey）。
+// 字面 key 与 route 侧靠肉眼同步，改一边即静默失联（只剩 15s 轮询兜底）。
+// ---------------------------------------------------------------------------
+
+describe('RFC-286 F4 — WS 规则表零字符串字面 queryKey', () => {
+  test('useTaskSync.ts 源码零字面 key（注释行除外）', () => {
+    const src = readFileSync(resolve(import.meta.dirname, '../src/hooks/useTaskSync.ts'), 'utf8')
+    const offenders = src
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//') && !line.trim().startsWith('*'))
+      .filter((line) =>
+        /\['(tasks|reviews|clarify|task-questions|task-clarify-directives)'/.test(line),
+      )
+    expect(offenders).toEqual([])
   })
 })
