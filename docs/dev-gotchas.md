@@ -559,3 +559,7 @@ runner 打崩了」，而单独跑那个文件是绿的。要么**把 ssh 会话
 要么用真正脱离会话的机制；不要凭那半截输出去归因。
 
 - **`git mv` 会立刻把 rename 写进 index——之后任何「只想提交别的文件」的 `git commit` 都会把这些 staged renames 一起带走**（RFC-282 实测事故：搬迁中途插入一个 docs-only commit，结果把「文件已搬、import 未改」的破碎中间态推上 main，CI 四路全红一小时）。定式：搬迁类工作开始后到搬迁 commit 落地前，**不要插入任何其它 commit**；确需插入时先 `git status` 核对 staged 区只含目标文件，或 `git stash --staged` 暂存 renames。
+
+- **改 `scripts/depcheck.ts` 的 KNOWN_VIOLATIONS 必须连跑它的元测试（`packages/backend/tests/depcheck-gate.test.ts`），`bun run depcheck` 本体绿≠纪律绿**（RFC-284 批 A 实测事故：22 条新账目 depcheck 40/40 全绿上了 main，CI 双 OS shard-1 确定性红——元测试强制每条 removeWhen >10 字且含 `WP-\d|RFC-\d{3}|独立切片` 标记，11 条短尾「随 X 域下沉。」双双违反）。定式：账本与账本的纪律测试是一对，动其一必跑其二。
+
+- **满载噪音归类时必须把失败清单逐条隔离复跑，不能只隔离「眼熟的那几个」**（同一事故的另一半：钉住 worktree 门禁 4/4 分片超时家族大红里混着上面那条确定性真红，隔离清单按 grep 摘要挑了 5 个「叫得上名字」的文件全绿后整轮判了噪音——真红被淹没直到 CI 抓出。判据：分片日志里 `(fail)` 逐条数满、与隔离清单一一对账，缺一条都不许按噪音收工；两 OS 同分片齐红优先怀疑确定性真红）。
