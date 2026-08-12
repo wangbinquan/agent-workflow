@@ -28,7 +28,7 @@ import { existsSync, realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 
-import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { buildInheritedActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { agents, scheduledTasks, users, workflows, workgroups } from '@/db/schema'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
@@ -747,20 +747,12 @@ export async function fireSchedule(
     name: decorateTaskName((body as { name: string }).name, spec, now),
   }
 
-  const owner = (await db.select().from(users).where(eq(users.id, row.ownerUserId)).limit(1))[0]
-  if (!owner || owner.status !== 'active') {
+  // RFC-285 B3：owner 重建收编 buildInheritedActor 单源（active 检查在内），
+  // 错误形态保持本臂既有的 `owner-inactive` 码不变。
+  const actor = await buildInheritedActor(db, row.ownerUserId)
+  if (actor === null) {
     throw new ValidationError('owner-inactive', `owner '${row.ownerUserId}' is not an active user`)
   }
-  const actor: Actor = buildActor({
-    user: {
-      id: owner.id,
-      username: owner.username,
-      displayName: owner.displayName,
-      role: owner.role,
-      status: owner.status,
-    },
-    source: 'daemon',
-  })
   // RFC-224: save-time acceptance is not a launch capability. Re-evaluate the
   // canonical target and its effective runtime on every fire, using the daemon
   // default that is current for this tick/run-now request. The launch services

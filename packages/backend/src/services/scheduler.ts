@@ -85,6 +85,7 @@ import {
   type ScriptLanguage,
 } from '@agent-workflow/shared'
 import { getRuntimeDriver, runRootFor } from './runtime'
+import { buildInheritedActor } from '@/auth/actor'
 import { loadConfig } from '@/config'
 import { ensureScriptDepsEnv, ScriptDepsInstallError, type ScriptDepsEnv } from './scriptDepsEnv'
 import { extractScriptPorts } from './scriptPorts'
@@ -3444,6 +3445,8 @@ async function runCallWorkflowNode(
       resumeAttempted = true
       try {
         const { resumeTask } = await import('@/services/task')
+        // RFC-285 B3 Q6（用户拍板）：resume 是既有子任务行的执行延续，
+        // **豁免** owner-inactive 检查——D7 边界只拦「新任务创建」两臂。
         await resumeTask(db, childTaskId, buildChildDeps(state))
         continue
       } catch {
@@ -3898,10 +3901,17 @@ async function launchCallChild(
   } as StartTask
 
   const { startExecution } = await import('@/services/execution/executor')
-  const actor = {
-    user: { id: taskRow.ownerUserId ?? '__system__' },
-    permissions: new Set<string>(),
-  } as unknown as Parameters<typeof startExecution>[1]
+  // RFC-285 B3（D7/E4）：显式 buildInheritedActor 取代 `as unknown as` 伪造幽灵。
+  // owner 失活/缺行 → 子任务拒启（外层 catch 把 code 直通 failCallRow →
+  // 节点以 call-owner-inactive 失败）；NULL owner legacy 行按 Q5 放行
+  // （__system__ 幽灵，空权限，语义与历史伪造一致）。
+  const actor = await buildInheritedActor(db, taskRow.ownerUserId ?? null)
+  if (actor === null) {
+    throw new ValidationError(
+      'call-owner-inactive',
+      `task owner '${taskRow.ownerUserId}' is not an active user; refusing to start call child`,
+    )
+  }
   await startExecution(
     db,
     actor,
@@ -4090,6 +4100,14 @@ async function launchCallWorkgroupChild(
   }
 
   const { startWorkgroupTaskFromFrozen } = await import('@/services/workgroup/launch')
+  // RFC-285 B3（D7/E4）：本臂不构造 actor（冻结面内部装配），但同受 owner
+  // 失活拒启约束——preflight 判定，失败经外层 catch 落 call-owner-inactive。
+  if ((await buildInheritedActor(db, taskRow.ownerUserId ?? null)) === null) {
+    throw new ValidationError(
+      'call-owner-inactive',
+      `task owner '${taskRow.ownerUserId}' is not an active user; refusing to start call child`,
+    )
+  }
   await startWorkgroupTaskFromFrozen(
     db,
     {

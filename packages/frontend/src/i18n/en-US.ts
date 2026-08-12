@@ -3460,6 +3460,10 @@ export const enUS: Resources = {
       'clarify-required':
         'This node must clarify before producing output, but the agent answered directly.',
       'clarify-forbidden': 'Clarifying was stopped, but the agent kept asking.',
+      'call-owner-inactive':
+        "The task owner's account is deactivated; starting new call child tasks is refused.",
+      'call-owner-inactive__hint':
+        'Reactivate the owner account or transfer task ownership, then Resume.',
       'envelope-port-malformed': 'An output port tag was incomplete (possibly truncated).',
       'port-validation-failed': "The agent's port output failed validation.",
       'port-validation-failed__hint':

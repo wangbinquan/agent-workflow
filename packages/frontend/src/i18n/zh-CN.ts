@@ -8719,6 +8719,8 @@ export const zhCN: Resources = {
       'clarify-and-output-both': '代理同时提交了反问与结果，格式冲突。',
       'clarify-questions-malformed': '代理提出的反问格式无法解析。',
       'clarify-required': '该节点要求先反问再输出，但代理直接给出了结果。',
+      'call-owner-inactive': '任务 owner 账户已失活，拒绝新启 call 子任务。',
+      'call-owner-inactive__hint': '恢复 owner 账户或转移任务归属后 Resume。',
       'clarify-forbidden': '已停止反问，但代理仍在提出反问。',
       'envelope-port-malformed': '代理输出的端口标签不完整（可能被截断）。',
       'port-validation-failed': '代理输出的端口内容未通过校验。',

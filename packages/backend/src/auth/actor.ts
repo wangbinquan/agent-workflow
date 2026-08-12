@@ -10,6 +10,9 @@ import {
   type Permission,
   type Role,
 } from '@agent-workflow/shared'
+import { eq } from 'drizzle-orm'
+import type { DbClient } from '@/db/client'
+import { users } from '@/db/schema'
 import { UnauthorizedError } from '@/util/errors'
 
 export interface ActorUser {
@@ -86,6 +89,50 @@ export function actorOf(c: Context): Actor {
   const actor = c.get('actor') as Actor | undefined
   if (!actor) throw new UnauthorizedError('no actor on context')
   return actor
+}
+
+/**
+ * RFC-285 B3（D7）—— 后台代表 owner 行事时的**唯一** actor 重建入口：
+ * scheduled 定时触发与 call-workflow / call-workgroup 子任务新启三臂共用
+ * （三份手工 rebuild → 1；此前 call 臂用 `as unknown as` 伪造无权限幽灵）。
+ *
+ * 判定归此、错误形态归调用方：
+ * - owner 行存在且 active → 以真实用户行重建（source='daemon'，角色基线权限）。
+ * - owner 失活 / 行缺失 → **null**（scheduled 臂抛 `owner-inactive`、call 新启
+ *   臂抛 `call-owner-inactive`；resume 臂按 Q6 豁免不经此检查）。
+ * - ownerUserId 为 NULL（legacy 任务）→ **Q5 拍板放行**：返回 `__system__`
+ *   幽灵 actor（空权限集，与历史伪造形态语义一致——无 owner 可判失活，
+ *   也绝不扩权）。
+ */
+export async function buildInheritedActor(
+  db: DbClient,
+  ownerUserId: string | null,
+): Promise<Actor | null> {
+  if (ownerUserId === null) {
+    return {
+      user: {
+        id: SYSTEM_USER_ID,
+        username: SYSTEM_USER_ID,
+        displayName: SYSTEM_USER_ID,
+        role: 'user',
+        status: 'active',
+      },
+      source: 'daemon',
+      permissions: new Set(),
+    }
+  }
+  const owner = (await db.select().from(users).where(eq(users.id, ownerUserId)).limit(1))[0]
+  if (!owner || owner.status !== 'active') return null
+  return buildActor({
+    user: {
+      id: owner.id,
+      username: owner.username,
+      displayName: owner.displayName,
+      role: owner.role,
+      status: owner.status,
+    },
+    source: 'daemon',
+  })
 }
 
 /** Optional variant — handlers that may be called outside an auth scope (none yet, but exposed for tests). */
