@@ -178,5 +178,26 @@ P2-2（wrapPlan 类型收窄为 wrap-only）、P3-1/2/3/4/5 全部已在收尾�
   教训（通用坑已沉 dev-gotchas）：**字段改名必须枚举全部承载类型**——spread
   透传链上任何一环留旧名，tsc 全绿但键在边界处静默蒸发，只有真子进程 e2e 能抓。
 
+**Codex 实现门（第二轮，2026-08-12，真 Codex）**：CLI 升 0.147.0 后 7 月底的
+companion×CLI 互挂已修复,pin worktree（dc2529b8）`--base 1ba863ee` 全量 diff
+真跑成功。findings：**3×P1，全部指向 C1 config-freeze 链的「改造前行为丢失」**，
+逐条核实属实并当轮修复（e75a05ff）：
+
+- P1-1 `buildChildDeps` 漏转发 `configPath`——call-workflow/call-workgroup 子任
+  务 mint freeze 拿不到 binaryConfig（dev-gotchas 三段漏斗第三段再实锤，自己刚
+  写完第五形态条目又中第三段）。修：转发 + rfc103 锚点锁。
+- P1-2 commit/merge session 的 inherit-literal 冻结点未传 binaryConfig：
+  NULL-profile + config 场景旧靠 `opts.opencodeCmd` 供头,改造后回退 bare。修：
+  两站点补第 6 参；mint inherit 分支 NULL 兜底并把头冻进新行（与 fresh-resolve
+  同语义）。考古排除：turnEngine/changeNarrative/mcpRuntimeTest/memoryDistiller/
+  applyChangeset 旧代码只吃 profile.binaryPath 或零 config 参与，无回归；
+  autoRepair 已走任务链。
+- P1-3 pre-C1 存量行 `runtime_binary=NULL` 的语义是「头走 opencodeCmd 通道、
+  spawn 时现读」，already-frozen 早退直读 NULL 使升级后 resume 回退 bare。修：
+  NULL 行按当前 config 现算兜底、**不回填列**；**D15 收窄为「非 NULL 冻结值
+  不漂移」**（上文 C1 第二段的「有意行为微变」注记按此修正：冻结只对显式头
+  生效；铸时无 config 贡献的行保持旧的 config-现值跟随行为——兼容读法，
+  rfc282-c1-binary-freeze 新增 4 条回归锁）。
+
 **仍开放（低优先，独立小项）**：`declaredMcpServers` 改由 `declared.mcpServers`
 承接（design §2.1 预留）；系统面统一产出（§7-1a，待 B4 式真身合一时触发）。

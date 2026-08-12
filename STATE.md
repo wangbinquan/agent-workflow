@@ -20,7 +20,13 @@ binaryOverride 全链归一、legacyHeads 删除、90 文件夹具迁移）已�
 RFC-280 遗留两文件（banner 判据 + mock MCP 缝）落库（d6760d24）。两项登记 followup 全清。
 收尾修正两笔：ce96e6a6 修 StartTaskDeps/FusionDeps 改名断链（spread 透传静默丢键致 mock
 失联——三个真子进程 e2e 抓出，41 文件 107 处 tsc 错误驱动清零）；3f755757 迁 RFC-257
-secretBox 源码锁到 buildStartTaskDeps 新签名。终态门禁绿 SHA = 3f755757。
+secretBox 源码锁到 buildStartTaskDeps 新签名。
+**Codex 实现门第二轮（真 Codex，CLI 0.147.0 修复互挂后 pin worktree 全量 diff）**：
+3×P1 全指 C1 config-freeze 链丢改造前行为——buildChildDeps 漏 configPath（漏斗第三段
+再实锤）、commit/merge inherit-literal 未传 binaryConfig、pre-C1 存量 NULL 行 resume
+回退 bare。当轮全修（e75a05ff）：mint 的 inherit / already-frozen 两分支 NULL 兜底
+config 现值（列不回填），**D15 收窄为「非 NULL 冻结值不漂移」**；详见 plan.md
+§实施记录「Codex 实现门（第二轮）」。终态门禁绿 SHA = e75a05ff。
 
 > **v2（同日）**：已过**双路独立子代理设计门**（未用 Codex——共享 main 上并发提交会让 `--base` 把他人 diff 卷进复审，见 `docs/dev-gotchas.md`），两路各自独立评审，共 **20×P1 + 10×P2**，两路都判「不能进入实现」。findings 逐条落点见 design.md §10。**最重的一条**：初版夹带的产品行为变更「disabled 资源统一为告警不失败」，我呈报用户时说的是「scheduler.ts:9262 一行」，实测真实射程是 **5 个产出点**（`workflow.validator.ts:1758/1825`、`agent.ts:994`、`agentResourceIntegrity.ts:284`、`scheduler.ts:9266`）**+ 4 道上游 launch 门**（`agentLaunch.ts:358`、`workgroup/launch.ts`、`scheduledTasks.ts:286/315`、task launch 的 validateWorkflowDef）**+ 前端 `state:"unavailable"` 推导 + 已落 `node_runs.error_message`**——即引用 disabled plugin 的任务**根本进不了 scheduler**，只改那一行等于零用户可见变化，而改上游四道门等于动 RFC-228 完整性围栏（未 scope）。**用户据此撤回决策 4/20**，plugin 保持硬失败，归一目标收窄为「规则单点可读 + 新增类型必须表态」。**v2 起本 RFC 零产品行为变更**，纯结构重构，与首要原则「功能不受影响」结构性一致。另两条方向题亦重新拍板：C1 纳入 124 个测试夹具迁移并顺带关闭 `docs/audit-backlog.md` 的 Windows 命令数组缝 P2；claude 系统面**不注入 permission**（保持 2026-07-31 裁定的 unconstrained，注入会让 intent/narrative/smoke/distiller 静默失去工具面）。其余关键修订：`AgentSpawnContext` 补齐 5 类缺失字段（prompt/persona/memory/每-dependent profile/resumeSessionId，缺任一则 B1 写不出来）、`runtimeBinary` 冻结值不得由 driver 重解析（RFC-111 D15 + RFC-112 已裁决的不变量）、ESLint 必须**扩展既有 block**（新增 config 对象会因 flat config 同名规则整体替换而静默关掉既有跨包禁令）、C3 对拍面改为 `build:binary` + `PLUGIN_FILES` 非空（符号相等抓不到嵌入资产断裂，而 `gate:local` 不跑 build:binary ⇒ 本地全绿 CI 才炸）、规则表键集收缩（`skills` 表无 `enabled` 列，写进去是死条目）、批次改 **D 优先** + B1 拆三提交（`scheduler.ts` 近 30 天 91 次提交，避免大爆炸提交）。**待用户批准 → 实现**。
 
