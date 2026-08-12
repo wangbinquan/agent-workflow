@@ -4418,6 +4418,15 @@ button:disabled:hover {
   color: var(--muted);
 }
 
+/* RFC-290: purpose/error copy stays above the bounded-value constraint.
+ * NumberInput returns a Fragment, so this remains a direct flex item even
+ * through the canvas inspector's display:contents history boundary. */
+.form-field__range {
+  order: 1;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .form-field__error {
   font-size: 12px;
   color: var(--danger);

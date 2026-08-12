@@ -24,6 +24,10 @@ describe('RFC-261 · Pagination', () => {
     expect(screen.getByText('Page 2 of 5')).toBeTruthy()
     expect(screen.getByRole('spinbutton', { name: 'Page number' })).toBeTruthy()
     expect(btn('Go to page')).toBeTruthy()
+    // RFC-290: Pagination is the only bounded NumberInput that deliberately
+    // opts out — its dynamic max is already visible as "Page x of y", and a
+    // second row would break this compact inline control.
+    expect(document.querySelector('.pagination .form-field__range')).toBeNull()
   })
 
   test('禁用边界：首页禁上一页、末页禁下一页、单页双禁、disabled 全禁', () => {

@@ -1779,6 +1779,9 @@ export interface Resources {
       jumpAction: string
       jumpActionAria: string
     }
+    range: string
+    rangeMaxOnly: string
+    rangeConverted: string
     done: string
     searchEllipsis: string
     searchCards: string
@@ -1859,6 +1862,18 @@ export interface Resources {
     // Shared <ClampedText> fold toggle.
     expandText: string
     collapseText: string
+  }
+  unit: {
+    hour_one: string
+    hour_other: string
+    minute_one: string
+    minute_other: string
+    second_one: string
+    second_other: string
+    year_one: string
+    year_other: string
+    day_one: string
+    day_other: string
   }
   // RFC-173: shared <MultiSelect> tag combobox (resource pickers).
   multiSelect: {
@@ -7146,6 +7161,9 @@ export const zhCN: Resources = {
       jumpAction: '跳转',
       jumpActionAria: '跳转到该页',
     },
+    range: '范围 {{min}} – {{max}}',
+    rangeMaxOnly: '最大 {{max}}',
+    rangeConverted: '{{range}}（{{converted}}）',
     done: '完成',
     searchEllipsis: '搜索…',
     searchCards: '搜索名称、描述或配置…',
@@ -7222,6 +7240,18 @@ export const zhCN: Resources = {
     finishedAt: '完成时间',
     expandText: '展开全文',
     collapseText: '收起',
+  },
+  unit: {
+    hour_one: '{{count}} 小时',
+    hour_other: '{{count}} 小时',
+    minute_one: '{{count}} 分钟',
+    minute_other: '{{count}} 分钟',
+    second_one: '{{count}} 秒',
+    second_other: '{{count}} 秒',
+    year_one: '{{count}} 年',
+    year_other: '{{count}} 年',
+    day_one: '{{count}} 天',
+    day_other: '{{count}} 天',
   },
   // RFC-173：共享 <MultiSelect> 标签多选框（资源选择器）。
   multiSelect: {

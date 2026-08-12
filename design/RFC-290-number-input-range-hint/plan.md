@@ -27,10 +27,10 @@
 
 见 `proposal.md §5`。补充执行项：
 
-- [ ] T8 的边界探测与 `packages/shared/src/schemas/config.ts` 当前值一致（落档时核过 8/8 对齐）
-- [ ] 未触碰任何后端文件、未改任何边界值
-- [ ] 未与在途 RFC-283（`routes/webhookTriggers.ts`）/ RFC-284（services 迁移）冲突
-- [ ] 多人并发树：只按路径精确 `git add` 本 RFC 涉及文件，不用 `git add -A`
+- [x] T8 的边界探测与 `packages/shared/src/schemas/config.ts` 当前值一致（实现门复核 8/8 对齐）
+- [x] 未触碰任何后端文件、未改任何边界值
+- [x] 未与在途 RFC-283（`routes/webhookTriggers.ts`）/ RFC-284（services 迁移）冲突
+- [x] 多人并发树：只按路径精确提交本 RFC 涉及文件，不用 `git add -A`
 
 ## 风险
 

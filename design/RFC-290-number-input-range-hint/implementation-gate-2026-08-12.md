@@ -12,8 +12,10 @@
 
 ## 隔离与归属
 
-- 共享 `main` 在实现期间持续前进；实现门快照固定到
-  `b922c29e0dddfe1071e69f7e14d12088e30ef018`，只复制 RFC-290 的实现、测试与文档。
+- 共享 `main` 在实现期间持续前进；对抗式实现门最初固定到
+  `b922c29e0dddfe1071e69f7e14d12088e30ef018`。发布前又以最新远端
+  `fddacadd05c7b4bc82d4b38fe56b2442a6cd8c3d` 重建最终 detached worktree，只叠加
+  RFC-290 的 10 个实现/测试路径后执行标准完整门禁。
 - 新文件在隔离 worktree 中用 `git add -N` 登记，确保 `git ls-files` 型源码守卫可见。
 - 共享树全量前端测试曾只在并发 WIP `routes/intent.detail.tsx` /
   `tests/intent-detail-inline.test.tsx` 上失败；该 diff 是提交策略资源标签改造，不在 RFC-290
@@ -54,4 +56,17 @@
 
 ## 完整门禁
 
-隔离快照的 `bun run gate:local` 结果在交付前回填。
+最终隔离快照执行 `bun run gate:local`，退出码 0，总耗时 7 分 44 秒：
+
+- typecheck、ESLint、Prettier、依赖分层规则全部通过；依赖门核查 1368 个模块，40/40 条
+  已接受存量违规均有纪律标记。
+- shared：163 文件，1977/1977 通过。
+- frontend：738 文件，6306/6306 通过。
+- backend：4 个隔离分片合计 9588 pass、35 skip、0 fail；各分片分别为
+  2181/2586/2502/2319 pass。
+
+环境归因也已闭环：sandbox 内首次运行因本地 listener / 子进程权限出现 `EADDRINUSE` / `EPERM`；
+改用正常本机权限后，曾与两套其他完整门禁并行，若干既有默认 5 秒用例被系统负载拖慢。
+待其他后端分片全部退出后，用同一默认阈值复验唯一残留的
+`rfc131-review-reject-aging-prior-output.test.ts`，从过载时 6.25 秒降为 2.33 秒并 1/1 通过；
+随后上述最终完整门禁全绿。因此这些中间失败属于执行环境竞争，不是 RFC-290 产品回归。

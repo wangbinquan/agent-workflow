@@ -58,19 +58,19 @@
 
 ## 5. 验收标准
 
-- [ ] 设置页 8 个有界字段全部显示范围提示，数值与 `packages/shared/src/schemas/config.ts`
+- [x] 设置页 8 个有界字段全部显示范围提示，数值与 `packages/shared/src/schemas/config.ts`
       的 zod 边界逐一相等
-- [ ] `intentBuilderTurnTimeoutMs` 显示「范围 30000 – 3600000（30 秒 – 1 小时）」；
+- [x] `intentBuilderTurnTimeoutMs` 显示「范围 30000 – 3600000（30 秒 – 1 小时）」；
       `commitPushDiffMaxBytes` 显示「（0 – 256 KiB）」；两个 `*RetentionDays` 显示
       「（1 天 – 10 年）」；其余 4 个有界字段只显示纯数字、无括号
-- [ ] 全仓 17 处带 `max` 的调用点中 16 处显示提示，`Pagination.tsx` 的跳页框
+- [x] 全仓 17 处带 `max` 的调用点中 16 处显示提示，`Pagination.tsx` 的跳页框
       **不显示**（紧凑横向布局，见 design §3.3）
-- [ ] min-only 字段（17 处）不显示任何范围提示
-- [ ] 范围提示视觉上排在 Field 的 hint **之后**（hint 讲用途、范围讲约束）
-- [ ] 屏幕阅读器朗读输入框时能读到范围约束（`aria-describedby` 关联），且范围文本不被
+- [x] min-only 字段（17 处）不显示任何范围提示
+- [x] 范围提示视觉上排在 Field 的 hint **之后**（hint 讲用途、范围讲约束）
+- [x] 屏幕阅读器朗读输入框时能读到范围约束（`aria-describedby` 关联），且范围文本不被
       包裹式 `<label>` 同时并入 accessible name 后重复朗读
-- [ ] canvas inspector 的 6 处 `NumberInput`（隔着 `InspectorHistoryBoundary`）布局不破
-- [ ] en/zh 双语文案齐备；`bun run gate:local` 全绿
+- [x] canvas inspector 的 6 处 `NumberInput`（隔着 `InspectorHistoryBoundary`）布局不破
+- [x] en/zh 双语文案齐备；`bun run gate:local` 全绿
 
 ## 6. 登记不做（本轮）
 

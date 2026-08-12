@@ -1783,6 +1783,9 @@ export const enUS: Resources = {
       jumpAction: 'Go',
       jumpActionAria: 'Go to page',
     },
+    range: 'Range {{min}} – {{max}}',
+    rangeMaxOnly: 'Max {{max}}',
+    rangeConverted: '{{range}} ({{converted}})',
     done: 'Done',
     searchEllipsis: 'Search…',
     searchCards: 'Search names, descriptions, or details…',
@@ -1860,6 +1863,18 @@ export const enUS: Resources = {
     finishedAt: 'Finished',
     expandText: 'Show all',
     collapseText: 'Show less',
+  },
+  unit: {
+    hour_one: '{{count}} hour',
+    hour_other: '{{count}} hours',
+    minute_one: '{{count}} minute',
+    minute_other: '{{count}} minutes',
+    second_one: '{{count}} second',
+    second_other: '{{count}} seconds',
+    year_one: '{{count}} year',
+    year_other: '{{count}} years',
+    day_one: '{{count}} day',
+    day_other: '{{count}} days',
   },
   // RFC-173: shared <MultiSelect> tag combobox (resource pickers).
   multiSelect: {

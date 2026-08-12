@@ -887,6 +887,7 @@ export function GcTab({ config }: TabProps) {
             onChange={(v) => setState({ ...state, webhookDeliveryBodyRetentionDays: v ?? 30 })}
             min={1}
             max={3650}
+            unit="days"
             data-testid="settings-webhook-body-retention"
           />
         </Field>
@@ -900,6 +901,7 @@ export function GcTab({ config }: TabProps) {
             onChange={(v) => setState({ ...state, webhookDeliveryRowRetentionDays: v ?? 90 })}
             min={1}
             max={3650}
+            unit="days"
             data-testid="settings-webhook-row-retention"
           />
         </Field>
@@ -1417,6 +1419,7 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
                 onChange={(v) => setState({ ...state, commitPushDiffMaxBytes: v })}
                 min={0}
                 max={262144}
+                unit="bytes"
               />
             </Field>
           </div>
@@ -1548,6 +1551,7 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
                 onChange={(v) => setState({ ...state, intentBuilderTurnTimeoutMs: v })}
                 min={30000}
                 max={3600000}
+                unit="ms"
                 placeholder="600000"
               />
             </Field>

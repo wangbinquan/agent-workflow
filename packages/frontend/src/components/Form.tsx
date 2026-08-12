@@ -10,6 +10,10 @@ import type {
   ReactNode,
   Ref,
 } from 'react'
+import { useId } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { formatUnitValue, type NumberRangeUnit } from '@/lib/formatUnit'
 
 interface FieldProps {
   label: string
@@ -180,6 +184,12 @@ interface NumberInputProps {
   disabled?: boolean
   /** Optional compact/contextual classes appended after the standard `form-input`. */
   className?: string
+  /** RFC-290: bounded inputs show their range by default; compact inline callers may opt out. */
+  rangeHint?: boolean
+  /** RFC-290: optional human conversion for settings whose raw unit is otherwise hard to parse. */
+  unit?: NumberRangeUnit
+  /** Existing descriptions are preserved when RFC-290 appends the generated range id. */
+  'aria-describedby'?: AriaAttributes['aria-describedby']
   'data-testid'?: string
   onFocus?: FocusEventHandler<HTMLInputElement>
 }
@@ -193,10 +203,42 @@ export function NumberInput({
   step,
   disabled,
   className,
+  rangeHint = true,
+  unit,
+  'aria-describedby': ariaDescribedBy,
   'data-testid': testid,
   onFocus,
 }: NumberInputProps) {
-  return (
+  const { t } = useTranslation()
+  const rangeId = useId()
+  const showRange = rangeHint && max !== undefined
+  const descriptions = [ariaDescribedBy, showRange ? rangeId : undefined]
+    .filter((id): id is string => id !== undefined && id.trim() !== '')
+    .join(' ')
+
+  let rangeText: string | undefined
+  if (showRange) {
+    const rawRange =
+      min === undefined ? t('common.rangeMaxOnly', { max }) : t('common.range', { min, max })
+    let converted: string | undefined
+    if (unit !== undefined) {
+      const convertedMax = formatUnitValue(max, unit, t)
+      if (min === undefined) {
+        converted = convertedMax ?? undefined
+      } else {
+        const convertedMin = formatUnitValue(min, unit, t)
+        if (convertedMin !== null && convertedMax !== null) {
+          converted = `${convertedMin} – ${convertedMax}`
+        }
+      }
+    }
+    rangeText =
+      converted === undefined
+        ? rawRange
+        : t('common.rangeConverted', { range: rawRange, converted })
+  }
+
+  const input = (
     <input
       className={className === undefined ? 'form-input' : `form-input ${className}`}
       type="number"
@@ -215,9 +257,20 @@ export function NumberInput({
       max={max}
       step={step}
       disabled={disabled}
+      aria-describedby={descriptions === '' ? undefined : descriptions}
       data-testid={testid}
       onFocus={onFocus}
     />
+  )
+
+  if (rangeText === undefined) return input
+  return (
+    <>
+      {input}
+      <span id={rangeId} className="form-field__range" aria-hidden="true">
+        {rangeText}
+      </span>
+    </>
   )
 }
 

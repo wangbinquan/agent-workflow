@@ -70,11 +70,13 @@ export function Pagination(props: {
       >
         <label className="pagination__jump-field">
           <span>{t('common.pagination.jumpLabel')}</span>
+          {/* RFC-290: dynamic page bounds add no information in this compact inline control. */}
           <NumberInput
             value={targetPage}
             onChange={setTargetPage}
             min={1}
             max={safePageCount}
+            rangeHint={false}
             step={1}
             disabled={jumpDisabled}
             className="form-input--sm pagination__jump-input"
