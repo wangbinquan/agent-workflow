@@ -1920,19 +1920,28 @@ async function maybeRunCommitPush(
         // inheritFrom — its source is config.commitPushRuntime / deprecated model
         // (not an agent.runtime row), so we pre-resolved `rt` above and freeze it
         // here, getting the same node_runs snapshot the other 3 dispatch points do.
-        const frozen = await resolveFrozenRuntime(db, sessionRunId, null, null, {
-          protocol: rt.protocol,
-          binary: rt.binaryPath,
-          params: {
-            model: rt.model,
-            variant: rt.variant,
-            temperature: rt.temperature,
-            steps: rt.steps,
-            maxSteps: rt.maxSteps,
-            isSandbox: rt.isSandbox,
+        const frozen = await resolveFrozenRuntime(
+          db,
+          sessionRunId,
+          null,
+          null,
+          {
+            protocol: rt.protocol,
+            binary: rt.binaryPath,
+            params: {
+              model: rt.model,
+              variant: rt.variant,
+              temperature: rt.temperature,
+              steps: rt.steps,
+              maxSteps: rt.maxSteps,
+              isSandbox: rt.isSandbox,
+            },
+            configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
           },
-          configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
-        })
+          // Codex impl-gate P1-2: profile binaryPath NULL + config head set used
+          // to reach this spawn via opts.opencodeCmd; fold it into the freeze.
+          freezeBinaryConfig(state.opts.configPath),
+        )
         const envelopeNonce = await loadRunEnvelopeNonce(db, sessionRunId)
         const commitAgent = buildCommitAgent()
         // RFC-282 B2 — the 6th/5th entries also go through the ONE resolver.
@@ -2823,19 +2832,27 @@ async function resolveMergeConflicts(
       iteration: opts.iteration,
       overrides: { parentNodeRunId: opts.conflictNodeRunId },
     })
-    const frozen = await resolveFrozenRuntime(db, sessionRunId, null, null, {
-      protocol: rt.protocol,
-      binary: rt.binaryPath,
-      params: {
-        model: rt.model,
-        variant: rt.variant,
-        temperature: rt.temperature,
-        steps: rt.steps,
-        maxSteps: rt.maxSteps,
-        isSandbox: rt.isSandbox,
+    const frozen = await resolveFrozenRuntime(
+      db,
+      sessionRunId,
+      null,
+      null,
+      {
+        protocol: rt.protocol,
+        binary: rt.binaryPath,
+        params: {
+          model: rt.model,
+          variant: rt.variant,
+          temperature: rt.temperature,
+          steps: rt.steps,
+          maxSteps: rt.maxSteps,
+          isSandbox: rt.isSandbox,
+        },
+        configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
       },
-      configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
-    })
+      // Codex impl-gate P1-2: same config-head fold as the commit-session site.
+      freezeBinaryConfig(state.opts.configPath),
+    )
     const envelopeNonce = await loadRunEnvelopeNonce(db, sessionRunId)
     const mergeAgent = buildMergeAgent()
     // RFC-282 B2 — single-resolver derivation (writeSem held: signal threaded).
@@ -3697,6 +3714,10 @@ function buildChildDeps(state: SchedulerState): StartTaskDeps {
     actorUserId:
       (state.task as unknown as { ownerUserId?: string | null }).ownerUserId ?? undefined,
     ...(opts.binaryOverride !== undefined ? { binaryOverride: opts.binaryOverride } : {}),
+    // Codex impl-gate P1-1 (RFC-282 收尾门): without this forward a child
+    // scheduler freezes NULL-binary runtimes without the daemon's config head
+    // — the funnel's third segment (buildChildDeps) struck again.
+    ...(opts.configPath !== undefined ? { configPath: opts.configPath } : {}),
     appHome: opts.appHome,
     ...(opts.defaultPerNodeTimeoutMs !== undefined
       ? { defaultPerNodeTimeoutMs: opts.defaultPerNodeTimeoutMs }

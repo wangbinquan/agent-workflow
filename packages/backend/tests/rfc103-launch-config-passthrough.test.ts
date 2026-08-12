@@ -166,6 +166,19 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     }
   })
 
+  // Codex impl-gate P1-1（RFC-282 收尾门，漏斗第三段第 N 次实锤）：configPath 是
+  // C1 之后 config 头进入 mint 冻结的唯一通道。buildChildDeps 漏传它时,
+  // call-workflow / call-workgroup 子任务里 binaryPath=NULL 的 runtime 冻不进
+  // config.opencodePath / claudeCodePath —— 子调度器 spawn 裸协议命令。
+  test('RFC-282: buildChildDeps 透传 configPath（漏传 = 子任务丢 config 二进制头）', () => {
+    const schedulerSrc = readFileSync(join(import.meta.dir, '../src/services/scheduler.ts'), 'utf8')
+    const start = schedulerSrc.indexOf('function buildChildDeps(')
+    expect(start).toBeGreaterThan(-1)
+    const body = schedulerSrc.slice(start, schedulerSrc.indexOf('\n}\n', start))
+    expect(body).toContain('opts.configPath !== undefined')
+    expect(body).toContain('{ configPath: opts.configPath }')
+  })
+
   // RFC-266: 防第四次漏接线 —— 三个并发键都必须出现在 config→deps 的那一级里。
   test('RFC-266: 三个并发键都被 resolveLaunchRuntimeConfig 从 config 读出', () => {
     const launchSrc = readFileSync(

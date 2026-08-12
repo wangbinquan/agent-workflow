@@ -510,9 +510,15 @@ export async function resolveFrozenRuntime(
   )[0]
   if (row != null && isKnownRuntimeKind(row.runtime)) {
     // already frozen — return the self-contained snapshot, registry-independent.
+    // Codex impl-gate P1-3 (RFC-282 收尾门): a NULL frozen binary means "no
+    // explicit head was ever frozen" — pre-C1 rows never froze the config head
+    // (it rode the per-entry opencodeCmd channel, read at spawn time), so NULL
+    // must keep resolving against the CURRENT config or resuming such a row
+    // regresses to the bare protocol command. D15 stays intact for non-NULL
+    // frozen values; the stored column is not backfilled (compat read only).
     return {
       protocol: row.runtime,
-      binary: row.runtimeBinary ?? null,
+      binary: row.runtimeBinary ?? configBackedBinary(row.runtime, binaryConfig),
       params: parseFrozenParams(row.runtimeParamsJson),
       configDir: parseFrozenConfigDir(row.runtimeParamsJson, row.runtime),
     }
@@ -532,7 +538,16 @@ export async function resolveFrozenRuntime(
   // the resumed session's transcript/skills live under the frozen dir.
   const frozen: FrozenRuntime =
     inheritFrom != null
-      ? inheritFrom
+      ? {
+          ...inheritFrom,
+          // Codex impl-gate P1-2 (RFC-282 收尾门): inherit-literal callers
+          // (commit/merge sessions pass a pre-resolved profile) and resume
+          // inherits from pre-C1 rows carry NULL when the head used to arrive
+          // via the deleted opencodeCmd channel. Fold the config head here so
+          // this first freeze of the new row captures it — same semantics as
+          // the fresh-resolve branch below.
+          binary: inheritFrom.binary ?? configBackedBinary(inheritFrom.protocol, binaryConfig),
+        }
       : await resolveAgentRuntime(db, agentRuntime, defaultRuntime).then((r) => ({
           protocol: r.protocol,
           // Which config key backs which protocol is DRIVER knowledge
