@@ -8,10 +8,12 @@ const MAX_SHARD_TIMEOUT_MS = 86_400_000
 const MAX_SHARD_KILL_GRACE_MS = 60_000
 const POST_KILL_SETTLE_MS = 1_000
 
-// Real 10-core local-gate measurements (2026-08-13): four shards took 431.3s;
-// five completed in 281.5s inside the full gate. Six took 321.1s standalone but
-// crossed existing 5s test ceilings under cold full-gate resource contention.
-export const DEFAULT_LOCAL_BACKEND_SHARDS = 5
+// Real 10-core local-gate measurements (2026-08-13): four shards are the
+// highest cold-gate-safe default. Five once completed in 281.5s, but two later
+// cold full-gate runs crossed unrelated 5s integration-test ceilings (the
+// second regressed to 455.9s overall); six has the same failure mode. Keep the
+// explicit override for larger machines, but default to the stable budget.
+export const DEFAULT_LOCAL_BACKEND_SHARDS = 4
 export const DEFAULT_LOCAL_BACKEND_SHARD_TIMEOUT_MS = 15 * 60_000
 export const DEFAULT_LOCAL_BACKEND_SHARD_KILL_GRACE_MS = 2_000
 

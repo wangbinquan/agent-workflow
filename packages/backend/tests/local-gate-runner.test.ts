@@ -27,7 +27,7 @@ import {
 } from '../../../scripts/test-backend-sharded'
 
 describe('local backend shard plan', () => {
-  test('defaults to five complete serial-isolate shards', () => {
+  test('defaults to four complete serial-isolate shards', () => {
     const plans = buildBackendShardPlans({
       runRoot: '/tmp/aw-local-gate',
       shardCount: DEFAULT_LOCAL_BACKEND_SHARDS,
@@ -35,15 +35,9 @@ describe('local backend shard plan', () => {
       bunExecutable: '/opt/bun',
     })
 
-    expect(plans).toHaveLength(5)
-    expect(plans.map((plan) => `${plan.index}/${plan.count}`)).toEqual([
-      '1/5',
-      '2/5',
-      '3/5',
-      '4/5',
-      '5/5',
-    ])
-    expect(plans.map((plan) => plan.seed)).toEqual([100, 101, 102, 103, 104])
+    expect(plans).toHaveLength(4)
+    expect(plans.map((plan) => `${plan.index}/${plan.count}`)).toEqual(['1/4', '2/4', '3/4', '4/4'])
+    expect(plans.map((plan) => plan.seed)).toEqual([100, 101, 102, 103])
     for (const plan of plans) {
       expect(plan.command).toEqual([
         '/opt/bun',
@@ -51,7 +45,7 @@ describe('local backend shard plan', () => {
         '--isolate',
         '--randomize',
         `--seed=${plan.seed}`,
-        `--shard=${plan.index}/5`,
+        `--shard=${plan.index}/4`,
         '--dots',
       ])
     }
@@ -77,7 +71,7 @@ describe('local backend shard plan', () => {
   })
 
   test('rejects malformed shard and seed overrides', () => {
-    expect(resolveLocalBackendShardCount(undefined)).toBe(5)
+    expect(resolveLocalBackendShardCount(undefined)).toBe(4)
     expect(resolveLocalBackendShardCount('6')).toBe(6)
     expect(() => resolveLocalBackendShardCount('0')).toThrow('AW_LOCAL_BACKEND_SHARDS')
     expect(() => resolveLocalBackendShardCount('2.5')).toThrow('AW_LOCAL_BACKEND_SHARDS')

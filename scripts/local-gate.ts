@@ -23,8 +23,8 @@ export const LOCAL_GATE_LANES: LocalGateLane[] = [
       { label: 'format check', args: ['run', 'format:check'] },
       { label: 'dependency rules', args: ['run', 'depcheck'] },
       { label: 'shared tests', args: ['run', 'test:shared'] },
-      // Two workers completed 6,313 tests in 253.8s beside five isolated backend
-      // shards. The ordinary test:frontend command stays unrestricted.
+      // Two workers keep the 6,313-test suite bounded beside four isolated
+      // backend shards. The ordinary test:frontend command stays unrestricted.
       { label: 'frontend tests', args: ['run', 'test:frontend:gate'] },
     ],
   },
