@@ -206,6 +206,70 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     removeWhen:
       '把 routes/registry 的元数据下沉到 shared，或把 apiDocs 移到 routes 层（它本来就是 transport 的自描述）。与 mcp/dispatch → server 同一根因。属独立切片（未编号）。',
   },
+
+  // ── RFC-284 T2 新规则的存量记账（2026-08-12 审计 N10/A8；棘轮只减不增）──
+  // no-routes-to-db：路由层直查 db 的 18 条值级边（type-only 已被规则过滤）。
+  // webhook 三件是审计主证（整个 CRUD 长在路由层、无 service 对应物）——
+  // removeWhen 指 RFC-284 T28（blocked by RFC-283）；其余 15 条是读模型/存在性
+  // 检查直查 schema，removeWhen 指审计报告 N10 的下沉路线（随各域 RFC 顺带，
+  // 本账目冻结现状、禁止任何文件新增查询面）。
+  ...(
+    [
+      [
+        'agents',
+        '读模型装配（loadClosureRefNames 三表并查）+ 存在性检查。RFC-284 T25 下沉 services/agent.ts。',
+      ],
+      ['auth', '登录/会话行读写直查。随 auth 域收口下沉。'],
+      ['clarify', '存在性/可见性行读取。随 clarify 域（T27 迁目录后）下沉。'],
+      ['health', 'dbVersion/runningTasks 探针读。随观测面收口下沉。'],
+      ['intentSessions', 'intent 会话行读取。随 intent 域下沉。'],
+      ['oidc-auth', 'OIDC 回调行读写。随 auth 域下沉。'],
+      ['port-artifacts', 'node_run 行读取。随任务读模型下沉。'],
+      ['repos', '仓库行读取。随 repo 域下沉。'],
+      ['reviews', '评审行读取。随 review 域下沉（RFC-285 B6① 触碰同文件时顺带评估）。'],
+      ['taskClarifyDirective', '任务行读取。随任务读模型下沉。'],
+      ['taskFeedback', '任务行读取。随任务读模型下沉。'],
+      ['taskQuestions', '任务行读取。随任务读模型下沉。'],
+      ['tasks', '存在性检查再委托的样板 ×4 + multipart 编排读。RFC-284 T25 编排归位时一并下沉。'],
+      [
+        'webhookDeliveries',
+        'webhook 域：deliveries 原生 sql 模板直查。RFC-284 T28 抽 service（RFC-283 后）。',
+      ],
+      [
+        'webhookEndpoints',
+        'webhook 域：endpoint CRUD 全部长在路由层（审计 N10 主证）。RFC-284 T28 抽 service（RFC-283 后）。',
+      ],
+      ['webhooks', 'webhook 域：入站分发行读取。RFC-284 T28 抽 service（RFC-283 后）。'],
+      [
+        'webhookTriggers',
+        'webhook 域：trigger CRUD 全部长在路由层（审计 N10 主证）。RFC-284 T28 抽 service（RFC-283 后）。',
+      ],
+      ['worktree-files', '任务行读取。随任务读模型下沉。'],
+    ] as const
+  ).map(([route, note]) => ({
+    rule: 'no-routes-to-db' as const,
+    from: `${B}/routes/${route}.ts`,
+    to: `${B}/db/schema.ts`,
+    why: `路由层直查 db/schema（应经 service 层拿 ACL/OCC/审计语义）：${note.split('。')[0]}。`,
+    removeWhen: note.split('。').slice(1).join('。') || '随该域下一个 RFC 下沉。',
+  })),
+  // no-util-to-upper：util/git.ts 的三条反向值边（惰性 import 民俗）。与上面
+  // no-circular 的 git 环族同一批边、同一个 removeWhen——规则维度不同故各记一次。
+  ...(['gitRepoCache', 'gitSubmodule', 'repoGroupGitignore'] as const).map((svc) => ({
+    rule: 'no-util-to-upper' as const,
+    from: `${B}/util/git.ts`,
+    to: `${B}/services/${svc}.ts`,
+    why: `util 叶子层经 await import 反向依赖 services/${svc}（util/git.ts 内注释自认成环，还催生过「复制代码避 import」的二阶腐化）。`,
+    removeWhen:
+      '把 resolveSubmoduleParams/syncSubmodules/buildGitignoreBlock 以参数注入下沉（no-circular git 环族账目的同一方案）；RFC-284 后续批次或独立切片执行。',
+  })),
+  {
+    rule: 'no-auth-to-services',
+    from: `${B}/auth/session.ts`,
+    to: `${B}/services/authLoginPolicy.ts`,
+    why: 'auth 下沉为底层（决策 D22）后现存唯一反向值边：session.ts 消费登录策略，而策略本质是认证域逻辑。',
+    removeWhen: 'RFC-284 T24：authLoginPolicy 迁入 auth/loginPolicy.ts，此边随之消失。',
+  },
 ]
 
 // ---------------------------------------------------------------------------

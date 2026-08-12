@@ -15,19 +15,29 @@
 // an RFC-228 fence change, which is out of scope — 设计门第二轮).
 
 /**
- * Resource kinds that actually carry an `enabled` column (设计门 P1-7/P1-10):
- * mcps (schema.ts:199) / plugins (:241) / agents (:105). `skills` has NO such
- * column — a skill's unavailability is RFC-170 quarantine (an integrity
- * fence, not a user switch) and is handled by the injection resolver, not
- * this table. Writing 'skill' here would create a dead entry the self-check
- * "verifies" — the RFC-280 实现门 P2-D anti-pattern.
+ * Resource kinds that actually carry an `enabled` column: mcps / plugins ONLY
+ * (verify with the rfc284 schema guard test, which reflects over the drizzle
+ * tables instead of trusting comments). `skills` has NO such column — a
+ * skill's unavailability is RFC-170 quarantine (an integrity fence, not a
+ * user switch) and is handled by the injection resolver, not this table.
+ * `agents` has NO such column either — RFC-284 T3 (决策 D2, 2026-08-12
+ * 审计 N1): the original 'agent' entry here claimed `agents.enabled` existed
+ * (citing a schema line that actually belongs to the runtimes table) and the
+ * boot self-check reported that false claim to operators — exactly the
+ * RFC-280 实现门 P2-D anti-pattern this file warns about for 'skill'.
+ * If the product ever adds an agent enable/disable switch, add the column,
+ * the consuming semantics, and the entry together in one RFC.
  */
-export type DisableableResourceKind = 'mcp' | 'plugin' | 'agent'
+export type DisableableResourceKind = 'mcp' | 'plugin'
 
 export type DisabledDisposition =
   | 'fail-closed' // referencing a disabled row refuses launch/dispatch
   | 'skip-and-declare' // skipped; recorded on the declared manifest, node runs on
-  | 'not-modeled' // the enabled column exists but nothing consumes it (today's truth)
+  // 'not-modeled' (column exists but nothing consumes it) — zero entries since
+  // RFC-284 T3 removed the fabricated 'agent' row; the state stays in the union
+  // so a future kind in that situation can be recorded honestly, and the
+  // schema guard still forces its column to actually exist.
+  | 'not-modeled'
 
 export interface DisabledPolicyEntry {
   readonly disposition: DisabledDisposition
@@ -67,12 +77,6 @@ export const DISABLED_RESOURCE_POLICY: Readonly<
     disposition: 'skip-and-declare',
     why: 'MCP 缺失只是少一个工具；RFC-280 落差③已裁定为「声明 + 告警」，节点照常运行。',
     declaredField: 'skippedDisabledMcps',
-  },
-  agent: {
-    disposition: 'not-modeled',
-    why:
-      'agents.enabled 存在，但 resolveDependsClosure（agentDeps.ts）今天全程不看它。' +
-      '写成 fail-closed 或 skip 都是未评审的新行为 ⇒ 显式记「本表不管」，由启动自检单独报告。',
   },
 }
 

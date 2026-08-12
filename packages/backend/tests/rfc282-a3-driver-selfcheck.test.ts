@@ -32,9 +32,11 @@ const FULL_FACES = Object.fromEntries(
 describe('RFC-282 A3 — self-check accepts the real registry', () => {
   test('every registered driver passes; not-modeled rows are reported separately', () => {
     const { notModeled } = assertRuntimeDeclarations(REAL_DRIVERS)
-    // agent.enabled is not consumed anywhere today — the gap must stay visible.
-    expect(notModeled.length).toBe(1)
-    expect(notModeled[0]).toContain('agent')
+    // RFC-284 T3 改判：v1 断言 notModeled 含 'agent'——那个条目声称 agents.enabled
+    // 存在，实测 schema 里没有该列（审计 N1，决策 D2 删除）。现表内条目全部
+    // 有真实 disposition，not-modeled 报告为空；列存在性由
+    // rfc284-resource-policy-schema-guard.test.ts 反射 drizzle 表守住。
+    expect(notModeled).toEqual([])
   })
 
   test('face universe derives from the runtime manifest shape (9 faces today)', () => {
@@ -105,6 +107,49 @@ describe('RFC-282 A3 — self-check refuses broken declarations (positive proof)
     const report = verifyRuntimeDeclarations([mockDriverWith(undefined)])
     expect(report.problems).toEqual(["driver 'opencode': capabilities missing"])
   })
+
+  // RFC-284 T4（审计 N2）——观测声明 ⇒ 观测方法已实现 的蕴含守卫红→绿对。
+  // 红：声明 inventory-file 但没有 readInventory 的 driver 必须被点名拒绝
+  // （此前它能通过自检，运行期每次落 observationFromInventory(null) → unavailable，
+  // 业务面挂常驻「无法验证」告警——正是 selfCheck 头注要防的形态）。
+  test("declaring 'inventory-file' without readInventory() is refused (RFC-284 T4)", () => {
+    const caps = {
+      startupObservation: 'inventory-file',
+      observationRequiresFreshRun: true,
+      declarationFaces: FULL_FACES,
+    }
+    const red = verifyRuntimeDeclarations([mockDriverWith(caps)])
+    expect(red.problems.some((p) => p.includes('does not implement readInventory()'))).toBe(true)
+    // 绿：同一 capabilities + 真的实现了 readInventory → 零 problems。
+    const green = verifyRuntimeDeclarations([
+      {
+        kind: 'opencode',
+        capabilities: caps,
+        readInventory: async () => null,
+      } as unknown as RuntimeDriver,
+    ])
+    expect(green.problems).toEqual([])
+  })
+
+  test("declaring 'init-event' without parseStartupInventory() is refused (RFC-284 T4)", () => {
+    const caps = {
+      startupObservation: 'init-event',
+      observationRequiresFreshRun: false,
+      declarationFaces: FULL_FACES,
+    }
+    const red = verifyRuntimeDeclarations([mockDriverWith(caps)])
+    expect(red.problems.some((p) => p.includes('does not implement parseStartupInventory()'))).toBe(
+      true,
+    )
+    const green = verifyRuntimeDeclarations([
+      {
+        kind: 'claude-code',
+        capabilities: caps,
+        parseStartupInventory: () => null,
+      } as unknown as RuntimeDriver,
+    ])
+    expect(green.problems).toEqual([])
+  })
 })
 
 describe('RFC-282 A3 — driver stances are pinned (copied from today, change = review)', () => {
@@ -148,8 +193,10 @@ describe('RFC-282 A3 — DISABLED_RESOURCE_POLICY (values copied, one readable p
     expect(DISABLED_RESOURCE_POLICY.plugin.disposition).toBe('fail-closed')
     expect(DISABLED_RESOURCE_POLICY.mcp.disposition).toBe('skip-and-declare')
     expect(DISABLED_RESOURCE_POLICY.mcp.declaredField).toBe('skippedDisabledMcps')
-    expect(DISABLED_RESOURCE_POLICY.agent.disposition).toBe('not-modeled')
-    expect(notModeledDisabledKinds()).toEqual(['agent'])
+    // RFC-284 T3 改判：'agent' 条目已删（agents 表无 enabled 列，原条目是虚构
+    // 事实——审计 N1/决策 D2）；将来要给 agent 加启停须随功能 RFC 连列带语义一起来。
+    expect(Object.keys(DISABLED_RESOURCE_POLICY).sort()).toEqual(['mcp', 'plugin'])
+    expect(notModeledDisabledKinds()).toEqual([])
   })
 
   test('every entry carries its why (the table is the readable point, not a bare enum)', () => {

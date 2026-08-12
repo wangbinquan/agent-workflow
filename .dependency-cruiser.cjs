@@ -69,6 +69,52 @@ module.exports = {
       to: { path: '^packages/(backend|frontend)/' },
     },
     {
+      // RFC-284 T2（2026-08-12 审计 N10 / A8-1）— routes 层禁止直查 db。
+      // 「业务写路径必须过 service」此前在这条缝上是纯人肉约定，webhook 域
+      // 整个 CRUD 已经用脚投票漂进了路由层。存量违例逐条记在
+      // scripts/depcheck.ts → KNOWN_VIOLATIONS（棘轮只减不增）；type-only
+      // 边放行——类型引用在 emit 后消失，不构成绕过 service 的数据通路。
+      name: 'no-routes-to-db',
+      severity: 'error',
+      comment:
+        'Routes are HTTP transport adapters; persistence goes through services. ' +
+        'A route importing @/db/* directly bypasses the service layer (ACL, ' +
+        'OCC, audit). Existing debt is ledgered in scripts/depcheck.ts.',
+      from: { path: '^packages/backend/src/routes/' },
+      to: { path: '^packages/backend/src/db/', dependencyTypesNot: ['type-only'] },
+    },
+    {
+      // RFC-284 T2（审计 A8-4）— util 是叶子层，不得反向依赖上层。此前唯一
+      // 防线是 no-circular（只有恰好成环才被看见）；非环形态的单向 util→上层
+      // 依赖会静默通过。util/git.ts 族的存量反向边（惰性 import）逐条入账。
+      name: 'no-util-to-upper',
+      severity: 'error',
+      comment:
+        'util/ is the leaf layer. A util module importing services/routes/db/' +
+        'ws/mcp/auth/cli inverts the layering (util/git.ts grew 9 lazy imports ' +
+        'this way and started copying code to avoid more). Ledgered in ' +
+        'scripts/depcheck.ts.',
+      from: { path: '^packages/backend/src/util/' },
+      to: {
+        path: '^packages/backend/src/(services|routes|db|ws|mcp|auth|cli)/',
+        dependencyTypesNot: ['type-only'],
+      },
+    },
+    {
+      // RFC-284 T2（审计 A8-9 / 决策 D22）— auth 下沉为底层：不得依赖 services。
+      // 现存唯一反向值边 auth/session.ts → services/authLoginPolicy 已入账，
+      // removeWhen = T24（authLoginPolicy 迁入 auth/）。auth→ws 的
+      // revalidationHook 注册边不在本规则射程（规则只封 auth→services）。
+      name: 'no-auth-to-services',
+      severity: 'error',
+      comment:
+        'auth/ sits below services (60 service files import auth/actor). ' +
+        'auth importing services closes the loop one edge at a time; policy ' +
+        'logic that is authentication-domain belongs IN auth/.',
+      from: { path: '^packages/backend/src/auth/' },
+      to: { path: '^packages/backend/src/services/', dependencyTypesNot: ['type-only'] },
+    },
+    {
       // RFC-217 T1 (G1) — ban RUNTIME import cycles. The workgroup constants
       // cycle (`launch → task → scheduler → runner → rounds → launch`,
       // workgroupRounds pre-move header) was cut by extracting

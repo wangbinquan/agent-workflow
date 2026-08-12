@@ -21,7 +21,9 @@ import type { DeclarationFace, RuntimeDriver } from './types'
 
 const LEGAL_OBSERVATIONS = new Set(['inventory-file', 'init-event', 'none'])
 const LEGAL_FACE_SUPPORT = new Set(['supported', 'unsupported', 'unobservable'])
-const DISABLEABLE_KINDS: readonly DisableableResourceKind[] = ['mcp', 'plugin', 'agent']
+// RFC-284 T3: 'agent' removed — the policy table only lists kinds whose
+// `enabled` column really exists (schema-reflection guard test enforces it).
+const DISABLEABLE_KINDS: readonly DisableableResourceKind[] = ['mcp', 'plugin']
 
 /** The face universe, derived from the runtime shape of the manifest itself so
  *  a driver compiled against a stale type union cannot pass. */
@@ -49,6 +51,26 @@ export function verifyRuntimeDeclarations(
     if (!LEGAL_OBSERVATIONS.has(caps.startupObservation)) {
       problems.push(
         `driver '${driver.kind}': startupObservation '${String(caps.startupObservation)}' is not one of inventory-file|init-event|none`,
+      )
+    }
+    // RFC-284 T4 (审计 N2): a declared observation source whose reader is not
+    // implemented is the P2-D shape this file exists to refuse — the runner
+    // would silently fall through to `unavailable` on every run and the
+    // business face would wear a permanent "cannot verify" warning.
+    if (
+      caps.startupObservation === 'inventory-file' &&
+      typeof driver.readInventory !== 'function'
+    ) {
+      problems.push(
+        `driver '${driver.kind}': declares startupObservation 'inventory-file' but does not implement readInventory()`,
+      )
+    }
+    if (
+      caps.startupObservation === 'init-event' &&
+      typeof driver.parseStartupInventory !== 'function'
+    ) {
+      problems.push(
+        `driver '${driver.kind}': declares startupObservation 'init-event' but does not implement parseStartupInventory()`,
       )
     }
     if (typeof caps.observationRequiresFreshRun !== 'boolean') {
