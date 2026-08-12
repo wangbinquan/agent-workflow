@@ -71,17 +71,9 @@ const ALLOWLIST: Record<string, { count: number; why: string }> = {
     count: 2,
     why: 'npm 安装 spawn（import + runCommand）。removeWhen: RFC-284 T16 收编 runManagedProcess。',
   },
-  'services/scriptRun.ts': {
-    count: 1,
-    why: 'probeInterpreter 解释器探针。removeWhen: RFC-284 T17 收编 spawnVersionProbe。',
-  },
-  'services/structuralDiff/deep/indexers.ts': {
-    count: 1,
-    why: 'SCIP probeIndexer。removeWhen: RFC-284 T17 补 deadline 并收编探针公共面。',
-  },
   'services/structuralDiff/deep/runner.ts': {
     count: 2,
-    why: 'SCIP runIndexer 的 SpawnFn 注入缝（别名绑定 + 调用）。RFC-284 T17 换 killProcessTree 时复核。',
+    why: 'SCIP runIndexer 的 SpawnFn 注入缝（别名绑定 + 调用）；T17 已换树杀（stub 无 pid 走原 kill 缝）。',
   },
 }
 

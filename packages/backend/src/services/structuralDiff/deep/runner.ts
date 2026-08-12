@@ -7,6 +7,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { killProcessTree } from '@/util/process'
 import type { IndexerSpec } from './indexers'
 
 export type DeepDegradedReason = 'indexer-missing' | 'build-failed' | 'timeout' | 'scip-parse-error'
@@ -24,7 +25,7 @@ export type SpawnFn = (opts: {
   stdout?: 'ignore' | 'pipe'
   stderr?: 'ignore' | 'pipe'
   stdin?: 'ignore'
-}) => { exited: Promise<number>; kill: (signal?: number) => void }
+}) => { exited: Promise<number>; kill: (signal?: number) => void; pid?: number }
 
 export async function runIndexer(opts: {
   spec: IndexerSpec
@@ -47,11 +48,15 @@ export async function runIndexer(opts: {
     let timedOut = false
     const timer = setTimeout(() => {
       timedOut = true
-      try {
-        proc.kill()
-      } catch {
-        /* already exited */
-      }
+      // RFC-284 T17：单 pid kill 留活孙进程（stdout 虽 ignore 缓解管道悬挂，
+      // 泄漏仍真实）——真进程换树杀；测试注入的 stub 无 pid，保持原 kill 缝。
+      if (typeof proc.pid === 'number') killProcessTree(proc.pid, 'SIGKILL')
+      else
+        try {
+          proc.kill()
+        } catch {
+          /* already exited */
+        }
     }, opts.timeoutMs)
     const code = await proc.exited
     clearTimeout(timer)

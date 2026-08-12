@@ -1,9 +1,10 @@
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
 // RFC-083 PR-E — SCIP indexer registry + discovery. The deep engine shells out
 // to an external per-language indexer (scip-typescript / scip-python / …),
 // discovered on PATH (or a settings override), exactly like the daemon already
 // finds `opencode` / `git`. The table is the single source of truth for which
 // languages deep mode can attempt + how each indexer is invoked.
+
+import { spawnVersionProbe } from '@/util/process'
 
 export type IndexerId =
   | 'scip-typescript'
@@ -149,16 +150,13 @@ export async function probeIndexer(
     return { available: false, bin, version: null, reason: 'shim-not-executable' }
   }
   try {
-    const proc = Bun.spawn({
-      ...platformSpawnOptionsForHost(),
-      cmd: [bin, '--version'],
-      stdout: 'pipe',
-      stderr: 'ignore',
-      stdin: 'ignore',
-    })
-    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
-    if (code !== 0) return { available: false, bin, version: null, reason: 'version-probe-failed' }
-    return { available: true, bin, version: out.trim().split('\n')[0] ?? null }
+    // RFC-284 T17（审计 N21）：原实现无 deadline——HTTP 请求路径上一个等输入的
+    // wrapper 可挂死结构化 diff（scriptRun impl-gate 3.4 修过的同款坑）。收编
+    // spawnVersionProbe 探针形态（10s 上限 + 组杀 + exit 先行有界读）。
+    const r = await spawnVersionProbe([bin, '--version'], { timeoutMs: 10_000 })
+    if (r.timedOut || r.exitCode !== 0)
+      return { available: false, bin, version: null, reason: 'version-probe-failed' }
+    return { available: true, bin, version: r.stdout.trim().split('\n')[0] ?? null }
   } catch {
     return { available: false, bin, version: null, reason: 'not-found' }
   }

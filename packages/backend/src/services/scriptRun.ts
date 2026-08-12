@@ -31,7 +31,7 @@ import {
 import type { Logger } from '@/util/log'
 import { runManagedProcess, type ManagedProcessResult } from './execution/managedProcess'
 import type { ScriptDepsEnv } from './scriptDepsEnv'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { spawnVersionProbe } from '@/util/process'
 
 /**
  * File extension + argv shape per language.
@@ -267,32 +267,18 @@ async function probeInterpreter(path: string): Promise<ResolvedInterpreter | nul
   if (path.length === 0) return null
   if (!existsSync(path)) return null
   try {
-    const proc = Bun.spawn({
-      ...platformSpawnOptionsForHost(),
-      cmd: [path, '--version'],
-      stdout: 'pipe',
-      stderr: 'pipe',
+    // impl-gate 3.4 曾补 deadline（本探针跑在调度并发许可之前，等输入的
+    // wrapper 会把节点 dispatch 挂死在一切并发边界之外）；RFC-284 T17 进一步
+    // 收编 spawnVersionProbe 的 models 形态：双流 capped 并发读（python2 与
+    // 部分 bash 把版本打在 stderr）+ detached 组杀替代原单 pid kill(9)——
+    // fork 后持管道的孙进程曾能让无界 text() 再次挂死 + 泄漏。
+    // 不查 exitCode，与原语义一致。
+    const r = await spawnVersionProbe([path, '--version'], {
+      timeoutMs: INTERPRETER_PROBE_TIMEOUT_MS,
+      maxBytes: 64 * 1024,
     })
-    // impl-gate 3.4: this runs BEFORE the scheduler's concurrency permit and had
-    // no deadline, so an administrator override pointing at anything that waits
-    // for input (an interactive wrapper, a shim that prompts) wedged the node's
-    // dispatch forever and did so outside every concurrency bound.
-    const deadline = setTimeout(() => {
-      try {
-        proc.kill(9)
-      } catch {
-        // Already gone.
-      }
-    }, INTERPRETER_PROBE_TIMEOUT_MS)
-    deadline.unref()
-    const [out, err] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ])
-    await proc.exited
-    clearTimeout(deadline)
     // python2 and some bash builds print the version on stderr.
-    const version = (out.trim().length > 0 ? out : err).split('\n')[0]?.trim() ?? ''
+    const version = (r.stdout.trim().length > 0 ? r.stdout : r.stderr).split('\n')[0]?.trim() ?? ''
     return { path, version }
   } catch {
     return null
