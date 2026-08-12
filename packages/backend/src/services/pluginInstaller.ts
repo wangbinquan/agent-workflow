@@ -21,7 +21,6 @@
 //   `git+` / `github:` / `gitlab:` / `bitbucket:`         → git
 //   everything else                                       → npm
 
-import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
@@ -34,6 +33,7 @@ import { redactSensitiveString } from '@/util/redact'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { isLexicallyInsideForHost } from '@/util/platformExec'
+import { runManagedProcess } from './execution/managedProcess'
 
 const log = createLogger('plugin-installer')
 
@@ -763,44 +763,38 @@ export function resolveNpmCommand(
   return [deps.runtimePath, entry]
 }
 
-function runCommand(
+/**
+ * RFC-284 T16 —— 手写 node:child_process spawn 收编 runManagedProcess（唯一子进程
+ * 治理骨架：detached 组杀、TERM→KILL 宽限、有界 drain、reap 兜底）。有意变更已入
+ * proposal C7：双流捕获从「各 64KB 前缀」变 rolling-tail（8MB 轴）——失败文案取
+ * 头 2KB 切片（STDERR_CAPTURE_BYTES），<8MB 输出下逐字节不变（对拍测试锁定）；
+ * 超时从「即刻单 pid SIGKILL + 立即 reject」变「树 TERM→宽限→KILL、子进程真死
+ * 后报错」；信号死从 node 的 `code=null → -1` 变 Bun 的 `128+signal`（实测 137，
+ * 同入 C7——诊断数值轴，非 API 契约）。`?? -1` 只兜 child-unkillable 的 null。
+ */
+async function runCommand(
   bin: string,
   args: string[],
   opts: { timeoutMs: number },
 ): Promise<CommandResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
-    })
-    let stdout = ''
-    let stderr = ''
-    let stdoutBytes = 0
-    let stderrBytes = 0
-    const MAX_CAPTURE = 1024 * 64
-    child.stdout?.on('data', (chunk: Buffer) => {
-      if (stdoutBytes < MAX_CAPTURE) {
-        stdout += chunk.toString('utf-8')
-        stdoutBytes += chunk.length
-      }
-    })
-    child.stderr?.on('data', (chunk: Buffer) => {
-      if (stderrBytes < MAX_CAPTURE) {
-        stderr += chunk.toString('utf-8')
-        stderrBytes += chunk.length
-      }
-    })
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL')
-      reject(new PluginInstallTimeoutError(opts.timeoutMs))
-    }, opts.timeoutMs)
-    child.on('error', (err) => {
-      clearTimeout(timer)
-      reject(err)
-    })
-    child.on('exit', (code) => {
-      clearTimeout(timer)
-      resolve({ stdout, stderr, exitCode: code ?? -1 })
-    })
+  const r = await runManagedProcess({
+    argv: [bin, ...args],
+    cwd: process.cwd(),
+    env: Object.fromEntries(
+      Object.entries(process.env).filter((entry): entry is [string, string] => {
+        return typeof entry[1] === 'string'
+      }),
+    ),
+    timeoutMs: opts.timeoutMs,
+    captureRawStdout: true,
   })
+  if (r.outcome === 'timeout') throw new PluginInstallTimeoutError(opts.timeoutMs)
+  if (r.outcome === 'spawn-failed') {
+    // 原实现把 node spawn 的 'error' 事件原样 reject（典型 ENOENT）；
+    // managedProcess 已把 ENOENT 翻译为指名 argv0 的可读文案。
+    throw new Error(r.spawnError ?? `spawn failed: ${bin}`)
+  }
+  // 'exited'（信号死 exitCode null → -1）与 'child-unkillable'（原实现会永久
+  // 挂死的场景，现有界返回、按非零码走安装失败路径）共用同一判定。
+  return { stdout: r.rawStdout, stderr: r.stderrTail, exitCode: r.exitCode ?? -1 }
 }

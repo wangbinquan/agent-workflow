@@ -51,7 +51,7 @@ import { stageSkills } from '../stageSkills'
 import { probeOpencode } from './util'
 import { gitMetaDirsFor } from '@/util/git'
 import { getOpencodeBinaryVersion } from './versionRegistry'
-import { listOpencodeModelsNatural } from './models'
+import { evictOpencodeModelsCache, listOpencodeModelsNatural } from './models'
 import { captureChildSessions, captureOpencodeSessionsToSink } from './sessionCapture'
 import { readSnapshotFromRunDir } from './inventory'
 import { startLiveSubagentCapture } from './subagentLiveCapture'
@@ -273,8 +273,8 @@ export async function assembleOpencodeBusinessSpawn(
   }
 
   // RFC-112: a custom opencode fork's binary wins; else the RFC-111 head
-  // (production config.opencodePath via resolveOpencodeCmd, or a test mock)
-  // — byte-for-byte unchanged for built-ins.
+  // (production config.opencodePath 已在 mint 冻结链单点解析〔RFC-282 C1〕,
+  // or a test mock) — byte-for-byte unchanged for built-ins.
   const { cmd, env } = buildOpencodeSpawn({
     opencodeCmd: businessHead,
     // Key = head[0] exactly as spawned and as explicit probes record it.
@@ -355,6 +355,11 @@ export const opencodeDriver: RuntimeDriver = {
   // an ordinary OpenCode invocation.
   async listModels(binary: string, opts?: ListModelsOpts): Promise<RuntimeModelList> {
     return listOpencodeModelsNatural(binary, opts)
+  },
+  // RFC-284 T19 — registry 在 runtime 删除/换二进制时对全部 driver 盲调；
+  // opencode 的进程内缓存只有 models 列表这一份。
+  evictBinaryCaches(binaryPath: string): void {
+    evictOpencodeModelsCache(binaryPath)
   },
   async captureSessions(ctx: SessionCaptureContext): Promise<void> {
     await captureChildSessions({

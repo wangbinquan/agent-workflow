@@ -67,10 +67,6 @@ const ALLOWLIST: Record<string, { count: number; why: string }> = {
     count: 1,
     why: 'hardKill 的同步 kill/taskkill 兜底（杀进程原语，同 util/process 豁免理由）。',
   },
-  'services/pluginInstaller.ts': {
-    count: 2,
-    why: 'npm 安装 spawn（import + runCommand）。removeWhen: RFC-284 T16 收编 runManagedProcess。',
-  },
   'services/structuralDiff/deep/runner.ts': {
     count: 2,
     why: 'SCIP runIndexer 的 SpawnFn 注入缝（别名绑定 + 调用）；T17 已换树杀（stub 无 pid 走原 kill 缝）。',

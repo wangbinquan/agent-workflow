@@ -285,7 +285,8 @@ export function raceWithFallback<T>(p: Promise<T>, ms: number, fallback: T): Pro
 // RFC-284 T8（2026-08-12 审计 N20/N21）——版本/枚举探针的唯一 spawn 骨架。
 //
 // 此前三胞胎（runtime/opencode/util probeOpencode、runtime/claudeCode/probe、
-// util/opencode-models）各持同形骨架且杀链已现分叉。统一语义（设计门修订版）：
+// util/opencode-models〔T19 已迁 runtime/opencode/models〕）各持同形骨架且杀链
+// 已现分叉。统一语义（设计门修订版）：
 //   - detached 仅在给了 timeoutMs 时开（无-timeout 保持历史 flat spawn
 //     byte-for-byte——opencode probe 注释的既有承诺参数化保留）；
 //   - 超时杀 = killProcessTree（posix 与原「kill(-pid) 回退 proc.kill」字节

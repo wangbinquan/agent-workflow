@@ -8,7 +8,7 @@ import type { Hono } from 'hono'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { applyConfigPatch, loadConfig } from '../src/config'
-import { clearOpencodeModelsCache } from '../src/util/opencode-models'
+import { clearOpencodeModelsCache } from '../src/services/runtime/opencode/models'
 import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
 

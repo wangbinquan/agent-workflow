@@ -306,6 +306,10 @@ export interface DistillSessionCaptureContext {
  * into its own argv+env (opencode inline config vs claude system-prompt-file).
  * Distinct from the business-node spawn path in runner.ts, which keeps its
  * skills/mcp/inventory assembly + golden byte-lock and does NOT route here.
+ *
+ * @deprecated RFC-284 T19 —— legacy ctx：唯一装配入口已是 `buildSpawn(AgentSpawnContext)`
+ * （RFC-282 B1b），本型只存活于 spawnCtx 翻译层；真删随 RFC-282 plan §实施记录
+ * 的 B4「true merge」登记项。不要新增消费方。
  */
 export interface SystemAgentSpawnContext {
   /** The (virtual) agent name — opencode inline config key. */
@@ -489,6 +493,10 @@ export interface AgentSpawnPlan extends SpawnPlan {
  * hands these raw materials over; the driver owns its runtime's ENTIRE assembly
  * (opencode: inline-config build + inventory plugin + memory append + serialize;
  * claude: system-prompt-file + mcp/agents flags + worktree resource projection).
+ *
+ * @deprecated RFC-284 T19 —— legacy ctx：唯一装配入口已是 `buildSpawn(AgentSpawnContext)`
+ * （RFC-282 B1b），本型只存活于 spawnCtx 翻译层；真删随 RFC-282 plan §实施记录
+ * 的 B4「true merge」登记项。不要新增消费方。
  */
 export interface BusinessNodeSpawnContext {
   /** The (node-selected) primary agent. */
@@ -696,6 +704,12 @@ export interface RuntimeDriver {
   probe(binary: string | readonly string[], opts?: ProbeOpts): Promise<RuntimeProbe>
   /** RFC-143 — model list (was listOpencodeModels / listClaudeModels free fns). */
   listModels(binary: string, opts?: ListModelsOpts): Promise<RuntimeModelList>
+  /**
+   * RFC-284 T19 — drop any process-local caches keyed by this binary path
+   * (called on runtime delete / binary change). Registry 对全部 driver 盲调，
+   * 保持 kind-blind；没有缓存的 driver 缺省即可。
+   */
+  evictBinaryCaches?(binaryPath: string): void
   /** RFC-143 — run-after subagent session capture (was captureChildSessions /
    *  captureClaudeSessions free fns). */
   captureSessions(ctx: SessionCaptureContext): Promise<void>

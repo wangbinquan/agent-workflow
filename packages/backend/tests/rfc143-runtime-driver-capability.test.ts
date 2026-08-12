@@ -11,8 +11,7 @@
 //      在 PR-4 补齐后此骨架扩为完整的零调用点改动集成证明。
 
 import { afterEach, describe, expect, it } from 'bun:test'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import {
   getRuntimeDriver,
@@ -339,35 +338,27 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
   })
 })
 
-describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 单份 + semver 单份）', () => {
-  it('resolveOpencodeCmd 单份 → C1-2 终态：路由零引用，config 头在 mint 冻结单点读', () => {
-    // RFC-282 C1-2：15 个入口的 per-entry 解析全部收拢——config.opencodePath 在
-    // resolveFrozenRuntime 处并入冻结值（scheduler.freezeBinaryConfig 是唯一
-    // 读取点），路由不再 resolve 也不再传 head。
+describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单份）', () => {
+  it('resolveOpencodeCmd 零份 → RFC-284 T19 终态：全 src 零引用，config 头在 mint 冻结单点读', () => {
+    // RFC-282 C1-2 已把 15 个入口的 per-entry 解析收拢进 mint 冻结链
+    // （scheduler.freezeBinaryConfig 是唯一读取点）；生产消费方归零后
+    // RFC-284 T19 删除了 resolveOpencodeCmd 本体与 re-export——本锁从
+    // 「单份」改判「零份」，回潮（任何 src 文件再引用该名字）即红。
     for (const f of ['tasks', 'clarify', 'taskQuestions', 'reviews', 'fusions']) {
       const src = SRC(`routes/${f}.ts`)
       expect(src).not.toContain('resolveOpencodeCmd')
       expect(src).toContain('configPath: deps.configPath')
     }
-    expect(SRC('services/runtime/opencode/util.ts')).toContain('export function resolveOpencodeCmd')
+    expect(SRC('services/runtime/opencode/util.ts')).not.toContain(
+      'export function resolveOpencodeCmd',
+    )
+    expect(SRC('services/runtime/index.ts')).not.toContain('resolveOpencodeCmd,')
     expect(SRC('services/scheduler.ts')).toContain('function freezeBinaryConfig')
     expect(SRC('services/nodeRunMint.ts')).toContain('configBackedBinary')
-  })
-
-  it('resolveOpencodeCmd 行为：configPath 空/不可读 → undefined；opencodePath 设值 → [path]', async () => {
-    const { resolveOpencodeCmd } = await import('../src/services/runtime/opencode/util')
-    expect(resolveOpencodeCmd('')).toBeUndefined()
-    expect(resolveOpencodeCmd('/definitely/not/a/config.json')).toBeUndefined()
-    const dir = mkdtempSync(join(tmpdir(), 'aw-rfc143-cfg-'))
-    try {
-      const p = join(dir, 'config.json')
-      writeFileSync(p, JSON.stringify({ opencodePath: '/opt/custom-oc' }))
-      expect(resolveOpencodeCmd(p)).toEqual(['/opt/custom-oc'])
-      writeFileSync(p, JSON.stringify({}))
-      expect(resolveOpencodeCmd(p)).toBeUndefined()
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
+    // T19 同批：registry 对二进制缓存驱逐保持 kind-blind（走 driver 可选能力面，
+    // 不具名依赖 opencode 缓存实现）。
+    expect(SRC('services/runtimeRegistry.ts')).not.toContain('evictOpencodeModelsCache')
+    expect(SRC('services/runtimeRegistry.ts')).toContain('evictBinaryCaches?.(')
   })
 
   it('semver 单份：extractVersion/compareSemver 只定义在 util/semver.ts（claude probe 曾有逐字拷贝）', () => {

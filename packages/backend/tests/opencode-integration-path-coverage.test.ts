@@ -42,7 +42,6 @@ const CANONICAL = [
   'packages/backend/src/services/runtime/opencode/**',
   // Process lifecycle changes can alter the live runtime path.
   'packages/backend/src/services/execution/**',
-  'packages/backend/src/util/opencode-models.ts',
   'packages/backend/tests/integration-opencode/**',
   'e2e/fixtures/stub/**',
   '.github/workflows/integration-opencode.yml',

@@ -21,6 +21,9 @@
 //     timeout     → sleeps longer than any reasonable test timeout
 //     pause       → touch FAKE_NPM_PAUSE_STARTED, wait for FAKE_NPM_PAUSE_RELEASE
 //     leak-secret → stderr carrying a credential, exit 1 (redaction fixture)
+//     huge-stderr → >64KB stderr (HEAD marker first line, TAIL marker last), exit 1
+//                   (RFC-284 T16 / proposal C7 truncation-axis lock)
+//     self-kill   → SIGKILLs itself (signal-death exitCode fixture, RFC-284 T16)
 // Other commands → silently exit 0.
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -76,6 +79,28 @@ if (mode === 'pause') {
   }
   writeFileSync(started, '')
   while (!existsSync(release)) Bun.sleepSync(10)
+}
+
+if (mode === 'huge-stderr') {
+  // RFC-284 T16（proposal C7）：>64KB stderr——失败文案的头 2KB 切片在收编前
+  // （64KB 前缀捕获）与收编后（8MB rolling tail，此规模无截断）必须逐字节同轴。
+  process.stderr.write('ERR! HEAD-MARKER first line\n')
+  const filler = `ERR! ${'x'.repeat(120)}\n`
+  let written = 0
+  while (written < 96 * 1024) {
+    process.stderr.write(filler)
+    written += filler.length
+  }
+  process.stderr.write('ERR! TAIL-MARKER last line\n')
+  process.exit(1)
+}
+
+if (mode === 'self-kill') {
+  // RFC-284 T16（proposal C7）：信号死必须以 exitCode -1 呈现（原 `code ?? -1` 同轴）。
+  process.kill(process.pid, 'SIGKILL')
+  // 信号异步送达的兜底；正常情况下到不了这里。
+  Bun.sleepSync(5_000)
+  process.exit(0)
 }
 
 if (mode === 'leak-secret') {

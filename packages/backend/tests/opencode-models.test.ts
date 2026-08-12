@@ -9,7 +9,8 @@ import {
   evictOpencodeModelsCache,
   listOpencodeModels,
   parseModelsOutput,
-} from '../src/util/opencode-models'
+} from '../src/services/runtime/opencode/models'
+import { getRuntimeDriver } from '../src/services/runtime'
 import { fakeBinaryPath, writeFakeBinary } from './fixtures/fakeBinary'
 import { NO_POSIX_CONTAINMENT } from './fixtures/platformScope'
 
@@ -169,6 +170,21 @@ describe('listOpencodeModels cache', () => {
     await listOpencodeModels(stub)
     await listOpencodeModels(otherStub)
     evictOpencodeModelsCache(stub)
+    expect((await listOpencodeModels(stub)).cached).toBe(false) // re-run
+    expect((await listOpencodeModels(otherStub)).cached).toBe(true) // untouched
+  })
+
+  // RFC-284 T19: registry 走 driver 可选能力面驱逐（kind-blind），opencode driver
+  // 的 evictBinaryCaches 必须与具名 evictOpencodeModelsCache 等效。
+  test('driver.evictBinaryCaches 与具名驱逐等效（registry 盲调面）', async () => {
+    writeStub(stub, 'anthropic/a')
+    const otherStub = fakeBinaryPath(tmp, 'stub-other3')
+    writeStub(otherStub, 'openai/b')
+    await listOpencodeModels(stub)
+    await listOpencodeModels(otherStub)
+    const driver = getRuntimeDriver('opencode')
+    expect(typeof driver.evictBinaryCaches).toBe('function')
+    driver.evictBinaryCaches?.(stub)
     expect((await listOpencodeModels(stub)).cached).toBe(false) // re-run
     expect((await listOpencodeModels(otherStub)).cached).toBe(true) // untouched
   })

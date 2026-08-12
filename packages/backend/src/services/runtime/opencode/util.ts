@@ -4,7 +4,6 @@
 // command directly and does not make semver an admission boundary.
 
 import { createLogger } from '@/util/log'
-import { loadConfig } from '@/config'
 import { extractVersion } from '@/util/semver'
 import { recordOpencodeBinaryVersion } from './versionRegistry'
 import { spawnVersionProbe } from '@/util/process'
@@ -94,24 +93,6 @@ export async function probeOpencode(
   return { binary, version, compatible: ran, ran }
 }
 
-/**
- * RFC-143 PR-5 — resolve the opencode launch head from the daemon config file:
- * `[config.opencodePath]` when set, else `undefined` (spawn falls back to the
- * PATH-resolved built-in `opencode`). Was copy-pasted verbatim in FIVE route
- * files (tasks / clarify / taskQuestions / reviews / fusions — dedup-audit
- * entry); this is the single copy. opencode-only by design: the claude head
- * comes from the runtime row's binary_path (RFC-113), surfacing as
- * `runtimeBinary`, so there is no claude analog of this config-file thread.
- */
-export function resolveOpencodeCmd(configPath: string): string[] | undefined {
-  if (configPath === '') return undefined
-  try {
-    const cfg = loadConfig(configPath)
-    if (typeof cfg.opencodePath === 'string' && cfg.opencodePath.length > 0) {
-      return [cfg.opencodePath]
-    }
-  } catch {
-    // config unreadable — fall back to default PATH lookup
-  }
-  return undefined
-}
+// （RFC-143 PR-5 的 resolveOpencodeCmd 单份已于 RFC-284 T19 删除：RFC-282 C1 后
+// config.opencodePath 的头解析只活在 mint 冻结链 scheduler.freezeBinaryConfig，
+// 生产消费方为零。）

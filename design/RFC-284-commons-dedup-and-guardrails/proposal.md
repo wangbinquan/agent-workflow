@@ -72,7 +72,7 @@
 | C4  | 启动自检报告不再输出「agent 有 enabled 开关」的错误陈述（D2）                                                                                                   | 纠错，无能力变化                                                                                                        |
 | C5  | `wrapperProgress.phase` 字段停止写入（读旧行兼容；**不承诺回滚兼容**——旧版 daemon 读新行会走 init path 重跑 wrapper，不崩但重复工作）                           | debug-only 字段（自述无消费者），升级方向无用户可见变化                                                                 |
 | C6  | pluginInstaller npm 超时改为进程树击杀                                                                                                                          | 超时场景不再泄漏孙进程；正常安装不变                                                                                    |
-| C7  | pluginInstaller 失败错误文案的截断方向从「头 64KB 前缀」变「滚动尾部」；超时从即时 SIGKILL 变 TERM→KILL 宽限（设计门路 2 抓出，收编 managedProcess 的必然差异） | 安装失败的诊断文案内容换头为尾（可诊断信息通常在头部——实现时对拍 >64KB fixture 确认可读性不降级）；outcome/产物路径不变 |
+| C7  | pluginInstaller 失败错误文案的截断方向从「头 64KB 前缀」变「滚动尾部」；超时从即时 SIGKILL 变 TERM→KILL 宽限；信号死 exitCode 从 node 的 `code=null → -1` 变 Bun 的 `128+signal`（实测 137）（设计门路 2 抓出，收编 managedProcess 的必然差异；信号死数值轴为实现期实测补记） | 安装失败的诊断文案内容换头为尾（可诊断信息通常在头部——实现实测：错误详情取头 2KB 切片〔STDERR_CAPTURE_BYTES〕，<8MB 输出下与旧管线逐字节同轴，对拍锁 `rfc284-plugin-installer-managed.test.ts`）；信号死仍走安装失败路径（错误类型不变，仅诊断数值变）；outcome/产物路径不变 |
 
 ## 5. 依赖与排序
 

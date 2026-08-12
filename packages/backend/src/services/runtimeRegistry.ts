@@ -25,7 +25,6 @@ import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { RuntimeKind } from '@/services/runtime'
 import { getRuntimeDriver, RUNTIME_KINDS } from '@/services/runtime'
 import { createLogger } from '@/util/log'
-import { evictOpencodeModelsCache } from '@/util/opencode-models'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 import {
   transitionInheritedRuntimeTestsInTx,
@@ -34,6 +33,13 @@ import {
 import { CLAUDE_PLATFORM_OWNED_FLAGS } from '@/services/runtime'
 
 const log = createLogger('runtimeRegistry')
+
+// RFC-284 T19 —— registry 保持 kind-blind：二进制缓存驱逐走 driver 可选能力面
+// `evictBinaryCaches?`（对全部 driver 盲调，无缓存的 driver 缺省即跳过），不再
+// 具名依赖 opencode 的缓存实现。
+function evictDriverBinaryCaches(binaryPath: string): void {
+  for (const kind of RUNTIME_KINDS) getRuntimeDriver(kind).evictBinaryCaches?.(binaryPath)
+}
 
 // RFC-143: protocol IS the runtime kind — derived from the DRIVERS registry
 // (single source) rather than a re-hardcoded literal set. `RuntimeProtocol`
@@ -822,8 +828,8 @@ export async function updateRuntime(
   // RFC-114 P3-6: a changed binary makes any cached `<binary> models` stale —
   // evict the old + new path so the next list re-runs the right binary.
   if (input.binaryPath !== undefined) {
-    if (row.binaryPath !== null) evictOpencodeModelsCache(row.binaryPath)
-    if (updated.binaryPath !== null) evictOpencodeModelsCache(updated.binaryPath)
+    if (row.binaryPath !== null) evictDriverBinaryCaches(row.binaryPath)
+    if (updated.binaryPath !== null) evictDriverBinaryCaches(updated.binaryPath)
   }
   return updated
 }
@@ -1020,7 +1026,7 @@ export async function deleteRuntime(
   })
   // RFC-114 P3-6: drop this binary's cached model list (outside the tx — the cache
   // is process-local, not DB state).
-  if (binaryPath !== null) evictOpencodeModelsCache(binaryPath)
+  if (binaryPath !== null) evictDriverBinaryCaches(binaryPath)
 }
 
 // --- seed ------------------------------------------------------------------
