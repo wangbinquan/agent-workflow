@@ -29,7 +29,9 @@ describe('RFC-286 F1 — 死 class 灭绝', () => {
   test('error-text / checkbox-row 作为 className 在 src 归零；form-error 仅限 allowlist', () => {
     const offenders: string[] = []
     for (const file of walk(SRC)) {
-      const rel = relative(SRC, file)
+      // Windows 腿：relative() 产反斜杠，归一化成 POSIX 再比 allowlist
+      // （83088a83 CI windows shard 实锤的假阳性）。
+      const rel = relative(SRC, file).replaceAll('\\', '/')
       const text = readFileSync(file, 'utf8')
       for (const dead of ['error-text', 'checkbox-row']) {
         if (new RegExp(`className="[^"]*\\b${dead}\\b[^"]*"`).test(text)) {
