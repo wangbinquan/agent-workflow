@@ -95,7 +95,7 @@ describe('RFC-165 — public request schemas never emit the retired keys', () =>
 
 describe('RFC-165 — raw-key guard wiring (source lock)', () => {
   test('JSON 与 multipart 两条启动臂都过 raw-key 门（multipart 臂随 RFC-284 T25 迁 service）', () => {
-    // RFC-284 T25 改锚：multipart 编排主体迁 services/launchMultipart.ts，
+    // RFC-284 T25 改锚：multipart 编排主体迁 services/multipartTaskStart.ts，
     // 其 raw-key 门随体走——两臂各自文件内至少一处调用，意图不变。
     const routeSrc = read('packages/backend/src/routes/tasks.ts')
     expect(countOf(routeSrc, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)

@@ -342,8 +342,10 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
   it('resolveOpencodeCmd 零份 → RFC-284 T19 终态：全 src 零引用，config 头在 mint 冻结单点读', () => {
     // RFC-282 C1-2 已把 15 个入口的 per-entry 解析收拢进 mint 冻结链
     // （scheduler.freezeBinaryConfig 是唯一读取点）；生产消费方归零后
-    // RFC-284 T19 删除了 resolveOpencodeCmd 本体与 re-export——本锁从
-    // 「单份」改判「零份」，回潮（任何 src 文件再引用该名字）即红。
+    // RFC-284 T19 删除了 resolveOpencodeCmd 本体与 re-export。本锁射程如实
+    // （T29 路 1 校准）：五个历史路由文件 + util.ts 导出面 + index.ts 再导出
+    // ——新址重实现同名函数不在射程内，兜底只剩「对已删导出的 import 必炸
+    // typecheck」；真回潮场景（恢复导出/路由再引用）仍即红。
     for (const f of ['tasks', 'clarify', 'taskQuestions', 'reviews', 'fusions']) {
       const src = SRC(`routes/${f}.ts`)
       expect(src).not.toContain('resolveOpencodeCmd')

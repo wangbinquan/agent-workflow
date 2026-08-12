@@ -1754,3 +1754,10 @@ execution-identity-mismatch`），会话以 `endReason: session-unusable` +
 audit-backlog 里已登记的 bug#8（Windows VM + 1.18.13，业务节点侧）形态相似但不是同一处，
 排查时别把两者混为一谈。下一步同 bug#8：给 launcher child 的 stderr 插桩，定位到底是哪一层
 校验（inventory / config digest / session digest）不匹配。
+
+- ⏳ **RFC-284 T29 路 2 两条 latent 备忘（实证不可达，登记防前提漂移）**：①反查泛型的
+  LIKE `%"<id>"%` 预过滤在「id 含 JSON 转义/非 ULID 字符」时理论上可漏检（matcher
+  永不误报、只可能漏）——当前四域引用 id 恒为 `ulid()` 铸造（无用户可控非 ULID 入口），
+  不可达；若未来任何引用域改用自由字符串 id，须同步复核 `resourceRefs.ts` 预过滤。
+  ②`isOwnerNameUniqueViolation` 相对 skill.ts 旧正则少匹配 `skills.owner_user_id`
+  单列形态——该形态无对应唯一索引（0118 是 COALESCE 表达式索引），死分支差异。

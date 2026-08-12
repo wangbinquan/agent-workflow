@@ -892,7 +892,7 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
 // ---------------------------------------------------------------------------
 describe('RFC-107 — source anchors', () => {
   test('route no longer hard-refuses url uploads, and hands the materialized space to both handoffs', () => {
-    // RFC-284 T25 改锚：multipart 编排主体迁 services/launchMultipart.ts——
+    // RFC-284 T25 改锚：multipart 编排主体迁 services/multipartTaskStart.ts——
     // 全部原断言原样作用于新址；路由侧保持零自解析（负锁两文件同断）。
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'multipartTaskStart.ts'),

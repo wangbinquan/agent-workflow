@@ -73,6 +73,7 @@
 | C5  | `wrapperProgress.phase` 字段停止写入（读旧行兼容；**不承诺回滚兼容**——旧版 daemon 读新行会走 init path 重跑 wrapper，不崩但重复工作）                           | debug-only 字段（自述无消费者），升级方向无用户可见变化                                                                 |
 | C6  | pluginInstaller npm 超时改为进程树击杀                                                                                                                          | 超时场景不再泄漏孙进程；正常安装不变                                                                                    |
 | C7  | pluginInstaller 失败错误文案的截断方向从「头 64KB 前缀」变「滚动尾部」；超时从即时 SIGKILL 变 TERM→KILL 宽限；信号死 exitCode 从 node 的 `code=null → -1` 变 Bun 的 `128+signal`（实测 137）（设计门路 2 抓出，收编 managedProcess 的必然差异；信号死数值轴为实现期实测补记） | 安装失败的诊断文案内容换头为尾（可诊断信息通常在头部——实现实测：错误详情取头 2KB 切片〔STDERR_CAPTURE_BYTES〕，<8MB 输出下与旧管线逐字节同轴，对拍锁 `rfc284-plugin-installer-managed.test.ts`）；信号死仍走安装失败路径（错误类型不变，仅诊断数值变）；outcome/产物路径不变 |
+| C8  | §3.5 进程治理三项（T29 路 1 补账——正文明示但初版漏列 C 行）：probeIndexer 补 10s deadline（原无界，HTTP 路径可挂死）；deep/runner 超时杀升级 killProcessTree（原单 pid 留活孙进程）；probeInterpreter 对齐探针骨架（组杀替代单 pid kill(9)） | 探针挂死/超时场景的可观察行为变化：原「永久挂/留孤儿」变「有界失败/树杀净」——诊断与资源面纯改善，成功路径逐字节不变（对拍锁 rfc284-spawn-version-probe / deep 套件） |
 
 ## 5. 依赖与排序
 
@@ -97,5 +98,5 @@
   变异（加回 'agent'）即红。
 - AC-6 clarify 迁移后 import 路径全部经 facade 或新路径，`gate:local` 全绿。
 - AC-7 对拍：G1-G4 各批次改前后关键面行为零漂移（复用 RFC-282 对拍姿势，纯函数
-  输出字节等价；C1-C6 之外不得出现任何行为差异）。
+  输出字节等价；C1-C8 之外不得出现任何行为差异——C8 为 T29 路 1 补账）。
 - AC-8 每批 pin worktree `gate:local` 全绿 + exact-SHA CI 绿。

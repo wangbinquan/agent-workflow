@@ -153,6 +153,17 @@
   消费点改按 frozenRuntime.protocol 盲调，sessionModeFallback 回归纯 pre-spawn
   决策；跨 driver 措辞不串锁随批。
 
-**剩余**：T29 实现门（独立子代理对抗评审，一次覆盖全 RFC）+ T30 收尾
-（design/plan.md 索引状态刷新 + STATE.md 终账 + 「疑似漏配」四字段与坟场清理
-呈用户拍板）。
+- **T29 实现门（本 commit 处置）**：双路独立子代理对抗评审（路 1 契约核实 +
+  路 2 对抗破坏，均 pin HEAD=5032eb9f 只读），**双路一致判「可收工」，零 P1/P2**。
+  四条 P3 全数随批处置：spawn 棘轮补 exec/execFile/execSync/execFileSync/fork
+  裸调用形 + 裸 child_process 模块形（路 2 反例实证的盲区；首版 \bexec 误伤
+  sqlite/RegExp 的 .exec() 23 文件，收窄为负回顾裸形）；rfc107/rfc165 改锚注释
+  笔误（launchMultipart→multipartTaskStart）；rfc143 锁注释射程校准；proposal
+  C 清单补 C8（§3.5 治理三项——正文明示但初版漏列）。两条 latent 不可达备忘
+  （LIKE 转义 / isOwnerNameUniqueViolation 死分支）登记 audit-backlog。
+  路 1 顺手实证 AC-8：5032eb9f 的 39 条 CI check 全 success。
+
+**剩余**：T30 收尾——design/plan.md 索引状态刷新与 STATE.md 终账（**当前被
+RFC-293 session 在两文件上的未提交条目行卡住**：其 design/RFC-293-*/ 目录未
+追踪，现在提交索引会复刻 design 死链红；等其落齐三件套后一并置 Done）+
+「疑似漏配」四字段与坟场清理呈用户拍板。

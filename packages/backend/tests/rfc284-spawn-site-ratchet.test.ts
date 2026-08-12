@@ -26,8 +26,14 @@ const SPAWN_PATTERNS: readonly RegExp[] = [
   /Bun\s*(\.|\[)\s*['"]?spawn/, // Bun.spawn / Bun.spawnSync / Bun['spawn'] 别名与下标形态
   /\bspawnSync\b/, // node:child_process 的 spawnSync 具名使用
   /\bspawn\s*\(/, // 裸 spawn(…) 调用（含别名绑定后的使用）
-  /['"]node:child_process['"]/, // 引入该模块本身就是能力触点
+  /['"](node:)?child_process['"]/, // 引入该模块本身就是能力触点（含不带 node: 前缀的裸形）
   /Bun\s*\.\s*\$/, // Bun.$ 模板串起进程（当前零使用，防将来绕行）
+  // RFC-284 T29 路 2 实证补盲区：exec 族与 fork 同样起进程，原五条正则全放行
+  //（execFile('git',…) 样本零命中）。只锁**裸调用形**（负回顾排除 `.exec(` ——
+  // sqlite Database.exec / RegExp.exec 是全然无关的方法名）；`cp.exec(...)` 的
+  // 命名空间形无需在此覆盖：其 import/require('child_process') 行已被上面的
+  // 模块模式命中。当前 src 零在逃站点——纯硬化，非追捕。
+  /(?<![.\w'"])(exec|execFile|execFileSync|execSync|fork)\s*\(/,
 ]
 
 /**
