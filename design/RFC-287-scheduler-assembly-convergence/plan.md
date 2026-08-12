@@ -31,7 +31,9 @@
 - T8 取行前奏收编 resolveSchedulerRunRow（4 份 → 1 + overrides）+
   L8 preResolved 短路。
 - T9 G3 豁免显式化四锁 + 终局灭绝锁（骨架外散写归零）。
-- T10 实现门（双路独立子代理）+ plan/STATE 记账。
+- T10 配额面可配（G4，独立 commit，**不与收敛批混提**）：设置页补三项 + i18n +
+  过期头注修正 + 测试（含「设置页覆盖全部 6 项」的防漏锁）。
+- T11 实现门（双路独立子代理）+ plan/STATE 记账。
 
 ## 依赖
 

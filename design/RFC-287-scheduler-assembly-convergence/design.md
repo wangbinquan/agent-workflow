@@ -25,6 +25,18 @@
   :3684 / markMergeFailed :3657,:3715 / discard :3324,:3723 / 许可=可取消的
   childBudget hold :3240-3251，本 RFC **不迁**，见 §5 挖洞）；L9
   code-host :4167-4359（**无 retry**——D18，HTTP 层幂等重试）。
+- **配额/并发面实测（2026-08-13，G4 依据）**：三个**全局独立**进程池——agent
+  `maxConcurrentNodes`(4，含 agent 节点/工作组主机/fanout 分片与聚合)、script
+  `maxConcurrentScriptNodes`(4)、code-host `maxConcurrentCodeHostCalls`(8，在途
+  HTTP)，互不排队故峰值子进程=三者之和（`processNodeConcurrency.ts`；其头注
+  「two independent pools」是 RFC-269 加第三池后**未更新的过期表述**，G4 顺带修）。
+  另有**每任务**二级池 `multiProcessSubprocessConcurrency`(4)：fanout 分片需
+  **双许可**（全局 agent 池位 + 本任务二级池位，scheduler.ts:775/:7759）。call
+  节点与合并 agent 不占任何池位。子任务侧另有 `maxActiveChildTasks`(8) 与
+  `maxInvocationDepth`(3)。设置页现仅露前两池 + 二级池，缺后三项。
+  **等待人工/等待评审/中断三态两层都不占用**：子任务配额计数口径只含
+  pending/running（childBudget.ts `COUNTED_STATUSES`），池位在 finally 释放
+  （L4 `releaseGlobal` / L7 `releaseScript`）——现状即正确，本 RFC 不动。
 - 公共原语：runNode=runner.ts:466；mintNodeRun/nextRetryIndex/
   resolveFrozenRuntime=nodeRunMint.ts；createIsoUnderLock/persistIsoBase
   （:97 自带 passthrough 短路）/mergeBackAndSettle/markMergeFailed=
@@ -129,12 +141,12 @@ rfc122-clarify-directive-\* / rfc123 / rfc131 / rfc161 / rfc193 套件 + 新增
 
 ## 5. 豁免显式化（G3）
 
-| 线  | 刻意省略                     | 依据锚                                                                                | 锁形态                                           |
-| --- | ---------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| L3  | 绕过节点池                   | :2941 注释 + §7 死锁分析（writeSem 内运行）                                           | 源注升级 + 测试断言「merge agent 不取 agentSem」 |
-| L8  | **整线不迁**（不止不取池位） | 第六条 iso 线（§1）；childBudget 可取消 hold 与 pools 界面不同型；RFC-243-LOCK 领养区 | 灭绝锁显式挖洞（见下）+ 源注登记「未来批候选」   |
-| L9  | 无节点级 retry               | :4160-4165（HTTP 幂等重试，重跑重发评论）                                             | 测试断言单 attempt                               |
-| L2  | 无池无 iso + 降级回退        | canonical worktree 直跑 + {message:null} 容错                                         | 现有 commit-push 套件已锁，补源注                |
+| 线  | 刻意省略                                          | 依据锚                                                                                                                                                                                                                            | 锁形态                                                                                                       |
+| --- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| L3  | 绕过节点池                                        | :2941 注释 + §7 死锁分析（writeSem 内运行）                                                                                                                                                                                       | 源注升级 + 测试断言「merge agent 不取 agentSem」                                                             |
+| L8  | **整线不迁**（不止不取池位；2026-08-13 用户拍板） | 第六条 iso 线（§1）；其许可是**可取消的**子任务配额 hold（`budget.acquire(ancestors,{signal})`，排队中被取消→标 canceled，childBudget.ts:92-114）与信号量池位不同型；RFC-243-LOCK 领养区；且该配额机制本身待重估（proposal §6-7） | 灭绝锁显式挖洞（见下）+ 源注登记「未来批候选」+ **保住「排队中可被取消」的行为夹具**（统一最易做丢的正是它） |
+| L9  | 无节点级 retry                                    | :4160-4165（HTTP 幂等重试，重跑重发评论）                                                                                                                                                                                         | 测试断言单 attempt                                                                                           |
+| L2  | 无池无 iso + 降级回退                             | canonical worktree 直跑 + {message:null} 容错                                                                                                                                                                                     | 现有 commit-push 套件已锁，补源注                                                                            |
 
 **灭绝锁挖洞清单（P2-3）**：`createIsoUnderLock` 直调与 persistIsoBase 守卫
 拼法的「归零」断言均**限定五条迁移线（L1/L4/L5/L6/L7）的函数体区间**，显式
@@ -170,3 +182,14 @@ commit + pin gate + 全家套件；任何一批红→绿对拍不过即整批回
 - 终局灭绝锁（带 §5 挖洞）：五条迁移线内 `createIsoUnderLock(` 直调=0、
   keep 同义变量族归零、persistIsoBase 守卫拼法归零。
 - 实现门：双路独立子代理（契约核实 + 对抗破坏），pin HEAD 只读。
+
+## 8. G4 配额面可配（末批，独立 commit）
+
+- 后端零改动：三项 schema 已存在（`config.ts:96/:181/:184`，各带 default）。
+- 前端设置页补三个 `NumberInput`（复用 RFC-290 `rangeHint`）+ zh/en i18n；分组
+  沿用现有并发区块，不新起 chrome（前端统一风格强制原则）。
+- 生效语义（AC-7）：三池经 `getNodePoolSemaphore` 的 **resize-in-place**，
+  PUT /api/config 保存即对在跑任务与**已排队**节点生效；`maxActiveChildTasks`
+  经 capacity 闭包同样即时；`maxInvocationDepth` 于下次 call 节点启动生效。
+- 测试：前端三项渲染+改值+范围提示各一；后端 config round-trip；一条源码锁断言
+  设置页覆盖全部 6 项并发配额（防再漏）。

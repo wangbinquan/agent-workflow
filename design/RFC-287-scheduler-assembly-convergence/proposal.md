@@ -49,6 +49,12 @@ script / call-workflow / code-host）。每条重复「许可 → iso 物化 →
   含其 iso 五段与可取消 childBudget hold)/L9(code-host) 不硬塞骨架，改为
   spec 字段/源注 + 豁免测试锁 + 灭绝锁显式挖洞（L8/wrapper 便车/replay 段），
   防止后来者「顺手补齐」反而改变死锁性质。
+- **G4 配额面可配（2026-08-13 用户拍板纳入本 RFC）**：并发/配额共 6 项，设置页
+  只露了 3 项。补齐缺的三项——代码平台池 `maxConcurrentCodeHostCalls`(8)、同时
+  活跃子任务数 `maxActiveChildTasks`(8)、子任务嵌套深度 `maxInvocationDepth`(3)
+  ——到设置页（复用 RFC-290 的 `NumberInput` 范围提示）。**独立末批 + 独立
+  commit**，不与零行为变更的收敛批混提。顺带修 `processNodeConcurrency.ts` 头注
+  「两个池」的过期表述（RFC-269 起是三池）。
 
 ## 3. 非目标
 
@@ -65,6 +71,7 @@ script / call-workflow / code-host）。每条重复「许可 → iso 物化 →
 | C1  | 漂移 A 修复：script merge-back 抛出改为 keep-iso + markMergeFailed（与 L4/L5/L6 同语义）                                                                         | 原「楔死 scope」变「节点 merge-failed 可修复」——纯 bug 修复；成功路径逐字节不变 |
 | C2  | 第五漂移统一（设计门 P2-4 新发现）：L7 成功+可写 merge 后 iso 现状**不 discard**（:4592 条件为假跳过，滞留待 GC），L4/L5/L6 成功即时 discard——统一为即时 discard | 磁盘占用更早回收；对用户不可见（该 iso 此后无人读），但属清理时机变化，列此存照 |
 | C3  | iso discard 失败由静默吞（≥2 处：L1 :1394-1398、L6 :8236 全静默 vs L5 :7808 记 warn）统一为记 warn                                                               | 日志新增 warn 行；无功能变化                                                    |
+| C4  | 设置页新增三个已存在但此前只能手改 config.json 的配额项（代码平台池 / 同时活跃子任务数 / 子任务嵌套深度）                                                        | **能力扩张**：管理员不必登机器改文件即可调；默认值不变，不影响存量部署          |
 
 **对拍豁免声明**（P2-4）：「零行为差异」判定不含**日志措辞**与上表 C2/C3 的
 清理时机/日志级别；广播序列的两种既有形态（L4 逐 attempt failed→pending vs
@@ -85,4 +92,32 @@ L5/L6 单点）按线保持、不跨线统一。
   行为逐字节保持（P2-6 勘误后的真实套件：scheduler-envelope-followup-branch /
   scheduler-port-validation-followup-decide / rfc092-followup-chain-rollback /
   rfc122-clarify-directive-\* / rfc123 / rfc131 / rfc161 + 新增拆分对拍）。
+- AC-7（G4）三个配额项在设置页可读可改、保存后对**在跑任务与已排队节点**即时
+  生效（`getNodePoolSemaphore` 的 resize-in-place 语义，见 design §8）；三项各有
+  前后端测试；过期头注修正。
 - AC-6 每批 pin worktree gate 全绿 + exact-SHA CI 绿；实现门（独立子代理）。
+
+## 6. 决策记录（2026-08-13 用户逐问拍板）
+
+以 use-case 为准逐条反问后落定，实现期不得再自行改动：
+
+1. **工作组撞合并冲突 = 丢弃**（用户原话「工作组冲突了就丢弃就行了」）。不做
+   「保住工作树让人来解」的能力扩张；L1 的两处处置差异按声明式覆写登记并加豁免
+   锁，防后人「顺手统一」把 RFC-187 事故引回来。
+2. **脚本节点合并报错照 agent 节点抄**（保留 iso + markMergeFailed + 节点失败可
+   单独重试）。经核实两条线的合并是同一原语、同一合并 agent、撞冲突行为已一致，
+   唯一差异是脚本线少了 try/catch——纯漂移，无产品分歧。
+3. **脚本节点成功后立即删 iso**（C2）。产品界面本就看不到节点 iso（worktree-files
+   只服务任务主工作树），留存的唯一效果是磁盘与 `git worktree list` 残留。
+4. **完整做骨架收敛**（用户选甲，而非「只摘三处漂移的小刀」）。前提是先补行为
+   夹具再动刀（T1 扩容五件）。
+5. **五条线，call 节点不进骨架**（用户否掉「为一条今天没漂移的线泛化许可接口」）。
+   理由链：call 节点的许可是可取消的子任务配额、形状与信号量池位不同；强行统一
+   最易做丢的恰是「排队中可被取消」这一用户可感知行为。灭绝锁给它显式留缺口。
+6. **配额面可配纳入本 RFC**（G4，见 §2）。
+7. **登记不做**：子任务配额机制本身的重估——用户指出全局只需控制三类叶子节点
+   （agent/script/代码平台）的运行；而子任务配额既非算力保护（叶子池已兜）、亦非
+   硬上限（resume 回 running 直接计入，文档自认「突发超额是接受的取舍」）、也不
+   公平（深树插队致浅层饥饿，>60s 只记告警），且它自身曾制造队头阻塞死锁（P0-1）
+   才长出祖先豁免扫描。真正被约束的成本是**工作树棵数**。是否改成直接限工作树、
+   或取消只靠叶子池+GC，另立 RFC 评估，本轮维持现状。
