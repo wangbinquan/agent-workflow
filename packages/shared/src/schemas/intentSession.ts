@@ -89,6 +89,148 @@ export const PostIntentMountApprovalsSchema = z
   .strict()
 export type PostIntentMountApprovals = z.infer<typeof PostIntentMountApprovalsSchema>
 
+// RFC-293 — one staged working-context update. This is deliberately a plain
+// product delta: runtime capabilities and provider configuration do not belong
+// to this contract.
+export const IntentWorkingSetDeltaSchema = z
+  .object({
+    additions: z.array(IntentMountRefSchema).default([]),
+    removals: z.array(z.string().min(1).max(128)).default([]),
+  })
+  .strict()
+  .superRefine((delta, ctx) => {
+    const additions = new Set<string>()
+    for (const [index, addition] of delta.additions.entries()) {
+      const key = `${addition.resourceType}\u0000${addition.resourceId}`
+      if (additions.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['additions', index],
+          message: 'duplicate working-context addition',
+        })
+      }
+      additions.add(key)
+    }
+    const removals = new Set<string>()
+    for (const [index, handle] of delta.removals.entries()) {
+      if (removals.has(handle)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['removals', index],
+          message: 'duplicate working-context removal',
+        })
+      }
+      removals.add(handle)
+    }
+  })
+export type IntentWorkingSetDelta = z.infer<typeof IntentWorkingSetDeltaSchema>
+
+export const IntentWorkingSetChangeModeSchema = z.enum(['after-current', 'interrupt'])
+export const IntentWorkingSetChangeStateSchema = z.enum([
+  'queued',
+  'applying',
+  'applied',
+  'failed',
+  'canceled',
+])
+
+export const PostIntentWorkingSetChangeSchema = z
+  .object({
+    clientMutationId: z.string().min(10).max(64),
+    expectedTurnSeq: z.number().int().min(0),
+    expectedContextRevision: z.number().int().min(0),
+    mode: IntentWorkingSetChangeModeSchema,
+    replacesChangeId: z.string().min(1).max(128).optional(),
+    delta: IntentWorkingSetDeltaSchema,
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.delta.additions.length === 0 && value.delta.removals.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['delta'],
+        message: 'working-context delta must not be empty',
+      })
+    }
+  })
+export type PostIntentWorkingSetChange = z.infer<typeof PostIntentWorkingSetChangeSchema>
+
+export const IntentWorkingSetChangeDtoSchema = z
+  .object({
+    id: z.string(),
+    mode: IntentWorkingSetChangeModeSchema,
+    state: IntentWorkingSetChangeStateSchema,
+    delta: IntentWorkingSetDeltaSchema,
+    expectedTurnSeq: z.number().int().min(0),
+    expectedContextRevision: z.number().int().min(0),
+    resultingContextRevision: z.number().int().min(0).nullable(),
+    resultingTurnId: z.string().nullable(),
+    error: z.string().nullable(),
+    createdAt: z.number().int(),
+    updatedAt: z.number().int(),
+  })
+  .strict()
+export type IntentWorkingSetChangeDto = z.infer<typeof IntentWorkingSetChangeDtoSchema>
+
+const IntentIterationFenceSchema = z
+  .object({
+    clientMutationId: z.string().min(10).max(64),
+    expectedTurnSeq: z.number().int().min(0),
+    expectedContextRevision: z.number().int().min(0),
+  })
+  .strict()
+
+export const PostIntentIterationSchema = z.discriminatedUnion('mode', [
+  IntentIterationFenceSchema.extend({
+    mode: z.literal('refine-current'),
+    sourceDraftId: z.string().min(1).max(128),
+    sourceDraftHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+    feedback: z.string().trim().min(1).max(INTENT_MESSAGE_MAX),
+  }).strict(),
+  IntentIterationFenceSchema.extend({
+    mode: z.literal('continue-checkpoint'),
+    sourceCommitSeq: z.number().int().min(1),
+    feedback: z.string().trim().min(1).max(INTENT_MESSAGE_MAX),
+  }).strict(),
+  IntentIterationFenceSchema.extend({
+    mode: z.literal('regenerate'),
+    sourceDraftId: z.string().min(1).max(128),
+    sourceDraftHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+  }).strict(),
+])
+export type PostIntentIteration = z.infer<typeof PostIntentIterationSchema>
+
+export const IntentGenerationReceiptSchema = z
+  .object({
+    userTurnId: z.string(),
+    agentTurnId: z.string(),
+    replayed: z.boolean(),
+  })
+  .strict()
+export type IntentGenerationReceipt = z.infer<typeof IntentGenerationReceiptSchema>
+
+export const PostIntentCurrentActionSchema = z
+  .object({
+    clientMutationId: z.string().min(10).max(64),
+    sourceTurnId: z.string().min(1).max(128),
+    expectedTurnSeq: z.number().int().min(1),
+    expectedContextRevision: z.number().int().min(0),
+    answers: z.array(IntentAnswerSchema).default([]),
+    decisions: z.array(IntentMountSuggestionDecisionSchema).default([]),
+  })
+  .strict()
+export type PostIntentCurrentAction = z.infer<typeof PostIntentCurrentActionSchema>
+
+export const PostIntentRetrySchema = z
+  .object({
+    clientMutationId: z.string().min(10).max(64),
+    sourceTurnId: z.string().min(1).max(128),
+    expectedTurnSeq: z.number().int().min(1),
+    expectedContextRevision: z.number().int().min(0),
+  })
+  .strict()
+export type PostIntentRetry = z.infer<typeof PostIntentRetrySchema>
+
 export const IntentDecisionSlotSchema = z
   .object({ slotId: z.string().min(1).max(256), value: z.string().max(8192) })
   .strict()
@@ -127,6 +269,12 @@ export type IntentJourneyKind = z.infer<typeof IntentJourneyKindSchema>
 export const IntentJourneyReasonSchema = z.enum([
   'describe-goal',
   'generation-running',
+  'working-set-queued',
+  'working-set-applying',
+  'working-set-failed',
+  'draft-refining',
+  'draft-regenerating',
+  'generation-retrying',
   'answer-questions',
   'review-draft',
   'draft-stale',
@@ -135,6 +283,7 @@ export const IntentJourneyReasonSchema = z.enum([
   'generation-failed',
   'apply-failed',
   'applied',
+  'checkpoint-ready',
   'archived',
 ])
 export type IntentJourneyReason = z.infer<typeof IntentJourneyReasonSchema>
@@ -142,6 +291,11 @@ export type IntentJourneyReason = z.infer<typeof IntentJourneyReasonSchema>
 const ACTIVE_INTENT_JOURNEY_TUPLES = new Set([
   'goal:1:0:describe-goal',
   'generating:2:1:generation-running',
+  'generating:2:1:working-set-queued',
+  'generating:2:1:working-set-applying',
+  'generating:2:1:draft-refining',
+  'generating:2:1:draft-regenerating',
+  'generating:2:1:generation-retrying',
   'clarifying:2:1:answer-questions',
   'review-ready:3:2:review-draft',
   'review-blocked:3:2:draft-stale',
@@ -149,7 +303,9 @@ const ACTIVE_INTENT_JOURNEY_TUPLES = new Set([
   'applying:4:3:apply-running',
   'applied:4:4:applied',
   'error:2:1:generation-failed',
+  'error:2:1:working-set-failed',
   'error:4:3:apply-failed',
+  'applied:4:4:checkpoint-ready',
 ])
 const ARCHIVED_INTENT_JOURNEY_POSITIONS = new Set(['1:0', '2:1', '3:2', '4:3', '4:4'])
 
@@ -284,6 +440,14 @@ export const IntentSlotDtoSchema = z.discriminatedUnion('kind', [
 ])
 export type IntentSlotDto = z.infer<typeof IntentSlotDtoSchema>
 
+export const IntentDraftLifecycleSchema = z.enum([
+  'current',
+  'committed',
+  'superseded',
+  'discarded',
+])
+export const IntentDraftActivitySchema = z.enum(['idle', 'generating'])
+
 export const IntentDraftDtoSchema = z
   .object({
     id: z.string(),
@@ -309,10 +473,39 @@ export const IntentDraftDtoSchema = z
     contextRevision: z.number().int(),
     /** True when the session epoch moved past this draft (commit disabled). */
     stale: z.boolean(),
+    lifecycle: IntentDraftLifecycleSchema,
+    activity: IntentDraftActivitySchema,
+    commitSeq: z.number().int().min(1).nullable(),
     createdAt: z.number().int(),
   })
   .strict()
 export type IntentDraftDto = z.infer<typeof IntentDraftDtoSchema>
+
+export const IntentComposerSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('conversation') }).strict(),
+  z
+    .object({
+      kind: z.literal('current-draft'),
+      draftId: z.string(),
+      revision: z.number().int().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('latest-checkpoint'),
+      commitSeq: z.number().int().min(1),
+    })
+    .strict(),
+])
+export type IntentComposerSource = z.infer<typeof IntentComposerSourceSchema>
+
+export const IntentRetrySourceSchema = z
+  .object({
+    turnId: z.string(),
+    turnSeq: z.number().int().min(1),
+  })
+  .strict()
+export type IntentRetrySource = z.infer<typeof IntentRetrySourceSchema>
 
 export const IntentApplyReceiptSchema = z
   .object({
@@ -409,9 +602,13 @@ export const IntentSessionDetailSchema = z
         })
         .strict(),
     ),
+    workingSetChange: IntentWorkingSetChangeDtoSchema.nullable(),
     mountSuggestions: IntentMountSuggestionBatchSchema.nullable(),
     turns: z.array(IntentTurnDtoSchema),
     currentDraft: IntentDraftDtoSchema.nullable(),
+    drafts: z.array(IntentDraftDtoSchema),
+    composerSource: IntentComposerSourceSchema,
+    retrySource: IntentRetrySourceSchema.nullable(),
     commits: z.array(
       z
         .object({

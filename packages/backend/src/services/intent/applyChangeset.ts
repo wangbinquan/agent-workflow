@@ -49,6 +49,7 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import {
   intentApplyJournal,
+  intentDraftResolutions,
   intentDrafts,
   intentProvenance,
   intentSessions,
@@ -404,6 +405,17 @@ async function applyInner(
         'intent-draft-superseded',
         'a newer draft revision exists in this session; review and commit the latest draft',
         { confirmedRevision: draft.revision },
+      )
+    }
+    const resolution = tx
+      .select({ reason: intentDraftResolutions.reason })
+      .from(intentDraftResolutions)
+      .where(eq(intentDraftResolutions.draftId, draft.id))
+      .get()
+    if (resolution !== undefined) {
+      throw new ConflictError(
+        'intent-draft-superseded',
+        `this draft is ${resolution.reason} and can no longer be committed`,
       )
     }
     const now = Date.now()

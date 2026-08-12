@@ -21,6 +21,7 @@ import { startLimitsTicker } from '@/services/limits'
 import { convergeIntentApplyJournal } from '@/services/intent/applyChangeset'
 import { convergeResourceBundleApplies } from '@/services/bundle/apply'
 import { recoverIntentTurnsOnBoot, sweepIntentScratch } from '@/services/intent/maintenance'
+import { resumeQueuedIntentWorkingSets } from '@/services/intent/dispatcher'
 import { reapOrphanRuns } from '@/services/orphans'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import { autoResumeInterruptedTasks } from '@/services/autoResume'
@@ -763,8 +764,18 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   try {
     const orphaned = recoverIntentTurnsOnBoot(db)
     const converged = await convergeIntentApplyJournal(db, Paths.root)
-    if (orphaned > 0 || converged.failed > 0 || converged.rolledForward > 0) {
-      log.info('intent maintenance on boot', { orphaned, ...converged })
+    const resumedWorkingSets = await resumeQueuedIntentWorkingSets({
+      db,
+      appHome: Paths.root,
+      configSnapshot: loadConfig(Paths.config),
+    })
+    if (
+      orphaned > 0 ||
+      converged.failed > 0 ||
+      converged.rolledForward > 0 ||
+      resumedWorkingSets > 0
+    ) {
+      log.info('intent maintenance on boot', { orphaned, resumedWorkingSets, ...converged })
     }
   } catch (err) {
     log.warn('intent boot maintenance failed', {
@@ -793,6 +804,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       const retention = loadConfig(Paths.config).intentBuilderScratchRetentionHours ?? 24
       sweepIntentScratch(db, Paths.root, retention)
       void convergeIntentApplyJournal(db, Paths.root)
+      void resumeQueuedIntentWorkingSets({
+        db,
+        appHome: Paths.root,
+        configSnapshot: loadConfig(Paths.config),
+      })
       // 同上：两条 journal 各自收敛（RFC-271）。收敛器自带 active-set + 10 分钟
       // 下限，所以一个慢 npm 安装跨过 tick 不会被当成崩溃残留收割。
       void convergeResourceBundleApplies(db, Paths.root)

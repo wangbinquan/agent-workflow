@@ -233,7 +233,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   })
   afterEach(() => h?.cleanup())
 
-  test('HEAD journal has 150 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 152 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -365,7 +365,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // （webhook template v2 版本列 + 合法历史 task context 嵌套 backfill）。
     // RFC-285 T5 bumped to 151 with 0151_rfc285_workflow_soft_link
     // （tasks.workflow_id 硬 FK → durable soft link 的 12-step rebuild）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(151)
+    // RFC-293 bumped to 152 with 0152_rfc293_intent_workbench
+    // （持续迭代草稿、运行中工作集队列与可重试变更记录）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(152)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

@@ -20887,12 +20887,20 @@ button.status-chip {
   color: var(--border-strong);
 }
 
+.content:has(.intent-session-page) {
+  overflow: hidden;
+}
+
 .intent-session-page {
   display: flex;
-  max-width: 1400px;
-  margin-inline: auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-width: none;
+  margin-inline: 0;
   flex-direction: column;
   gap: var(--space-4);
+  overflow: hidden;
 }
 
 .intent-session-page > .page__header {
@@ -21048,22 +21056,85 @@ button.status-chip {
   display: none;
 }
 
+.intent-working-context-bar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) clamp(var(--space-3), 2vw, var(--space-5));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+
+.intent-working-context-bar__copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+}
+
+.intent-working-context-bar__title-row,
+.intent-working-context-bar__chips,
+.intent-working-context-bar__actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.intent-working-context-bar__title-row h2 {
+  margin: 0;
+  font-size: var(--font-md);
+}
+
+.intent-working-context-chip {
+  max-width: 15rem;
+  padding: 0.2rem 0.55rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  font-size: var(--font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intent-working-context-bar__empty {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.intent-working-context-bar__actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
 .intent-session__workspace {
   display: grid;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(480px, 1.1fr);
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: clamp(360px, 32%, 620px) minmax(0, 1fr);
   gap: clamp(var(--space-4), 2vw, var(--space-5));
-  align-items: start;
+  align-items: stretch;
+  overflow: hidden;
 }
 
 .intent-session__conversation,
 .intent-session__review {
+  height: 100%;
+  min-height: 0;
   min-width: 0;
+  overscroll-behavior: contain;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .intent-session__conversation {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--panel);
@@ -21074,6 +21145,7 @@ button.status-chip {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  padding-right: 2px;
 }
 
 .intent-session__section-header {
@@ -21275,6 +21347,7 @@ button.status-chip {
 
 .intent-session__questions,
 .intent-session__mount-suggestions,
+.intent-session__current-action,
 .intent-session__mounts,
 .intent-session__composer {
   padding: var(--space-4) clamp(var(--space-4), 2vw, var(--space-5));
@@ -21300,6 +21373,30 @@ button.status-chip {
   display: grid;
   gap: var(--space-3);
   background: color-mix(in srgb, var(--accent) 4%, var(--panel));
+}
+
+.intent-session__current-action {
+  display: grid;
+  gap: var(--space-4);
+  background: color-mix(in srgb, var(--warn-bg) 34%, var(--panel));
+}
+
+.intent-session__current-action h3,
+.intent-session__current-action p {
+  margin: 0;
+}
+
+.intent-session__current-action > div:first-child p,
+.intent-session__mount-suggestion > p,
+.intent-session__mount-suggestion-footer > span {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.45;
+}
+
+.intent-session__current-action-questions {
+  display: grid;
+  gap: var(--space-3);
 }
 
 .intent-session__mount-suggestions h3,
@@ -21401,6 +21498,20 @@ button.status-chip {
 
 .intent-session__composer {
   background: color-mix(in srgb, var(--accent) 2%, var(--panel));
+}
+
+.intent-session__composer-source {
+  display: flex;
+  margin-bottom: var(--space-2);
+}
+
+.intent-session__return-latest {
+  position: sticky;
+  z-index: 4;
+  bottom: var(--space-3);
+  align-self: center;
+  margin: calc(-1 * var(--space-2)) auto var(--space-3);
+  box-shadow: var(--shadow-md);
 }
 
 .intent-session__composer-footer {
@@ -21526,10 +21637,10 @@ button.status-chip {
 
 .intent-session__op-outline {
   display: flex;
-  max-height: min(36rem, 62vh);
+  max-height: none;
   flex-direction: column;
   gap: var(--space-1);
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .intent-session__op-outline-item {
@@ -21698,7 +21809,15 @@ button.status-chip {
 }
 
 .intent-session__draft-actions .btn {
-  min-width: 10rem;
+  min-width: 0;
+}
+
+.intent-session__draft-action-buttons {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .intent-session__draft-actions p {
@@ -21711,6 +21830,39 @@ button.status-chip {
 .intent-session__commits > .card {
   gap: var(--space-2);
   padding: var(--space-3);
+}
+
+.intent-session__draft-history ol {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.intent-session__draft-history li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.intent-session__draft-history li:last-child {
+  border-bottom: 0;
+}
+
+.intent-working-context-dialog__mounted {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.intent-working-context-dialog__summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
 }
 
 .intent-turn-session .session-block,
@@ -21921,6 +22073,7 @@ button.status-chip {
   .intent-session__timeline,
   .intent-session__questions,
   .intent-session__mount-suggestions,
+  .intent-session__current-action,
   .intent-session__mounts,
   .intent-session__composer {
     padding-inline: var(--space-3);
@@ -21983,9 +22136,35 @@ button.status-chip {
     flex-direction: column;
   }
 
+  .intent-session__draft-actions {
+    position: static;
+  }
+
   .intent-session__draft-actions .btn,
   .intent-session__mount-suggestion-footer .btn {
     width: 100%;
+  }
+
+  .intent-working-context-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .intent-working-context-bar__actions {
+    justify-content: flex-start;
+  }
+
+  .intent-working-context-bar__actions .btn {
+    flex: 1;
+  }
+
+  .intent-session__draft-action-buttons {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .intent-working-context-dialog__mounted {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .intent-commit-stepper__step {

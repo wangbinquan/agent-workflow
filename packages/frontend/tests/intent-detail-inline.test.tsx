@@ -56,26 +56,39 @@ function detailFixture(overrides: Partial<IntentSessionDetail> = {}): IntentSess
     createdAt: 1,
     updatedAt: Date.now(),
   }
+  const turns = overrides.turns ?? [
+    {
+      id: 'T1',
+      seq: 1,
+      role: 'user',
+      kind: 'message',
+      content: { message: 'build it' },
+      contextRevision: 0,
+      runMeta: null,
+      scratchRetained: false,
+      execution: null,
+      createdAt: 1,
+    },
+  ]
   return {
-    mounts: [],
-    mountSuggestions: null,
-    turns: [
-      {
-        id: 'T1',
-        seq: 1,
-        role: 'user',
-        kind: 'message',
-        content: { message: 'build it' },
-        contextRevision: 0,
-        runMeta: null,
-        scratchRetained: false,
-        execution: null,
-        createdAt: 1,
-      },
-    ],
-    currentDraft,
-    commits: [],
     ...overrides,
+    mounts: overrides.mounts ?? [],
+    workingSetChange: overrides.workingSetChange ?? null,
+    mountSuggestions: overrides.mountSuggestions ?? null,
+    turns,
+    currentDraft,
+    drafts: overrides.drafts ?? (currentDraft === null ? [] : [currentDraft]),
+    composerSource:
+      overrides.composerSource ??
+      (currentDraft === null
+        ? { kind: 'conversation' as const }
+        : {
+            kind: 'current-draft' as const,
+            draftId: currentDraft.id,
+            revision: currentDraft.revision,
+          }),
+    retrySource: overrides.retrySource ?? null,
+    commits: overrides.commits ?? [],
     session: overrides.session ?? baseSession,
   }
 }
@@ -108,6 +121,9 @@ const CLEAN_DRAFT: NonNullable<IntentSessionDetail['currentDraft']> = {
   draftHash: `sha256:${'a'.repeat(64)}`,
   contextRevision: 0,
   stale: false,
+  lifecycle: 'current',
+  activity: 'idle',
+  commitSeq: null,
   createdAt: 2,
 }
 
@@ -253,6 +269,7 @@ describe('RFC-234 /intent/$sessionId', () => {
 
   test('RFC-273 error card explains missing-envelope evidence and retained scratch', async () => {
     const detail = detailFixture({
+      retrySource: { turnId: 'T2', turnSeq: 2 },
       turns: [
         detailFixture().turns[0]!,
         {
@@ -690,6 +707,21 @@ describe('RFC-234 /intent/$sessionId', () => {
           },
         ],
       },
+      turns: [
+        base.turns[0]!,
+        {
+          id: 'T5',
+          seq: 5,
+          role: 'agent',
+          kind: 'changeset',
+          content: { summary: 'need context', mountRequests: [] },
+          contextRevision: 2,
+          runMeta: null,
+          scratchRetained: false,
+          execution: null,
+          createdAt: 5,
+        },
+      ],
     })
     const calls: Array<{ url: string; method: string; body: unknown }> = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(
@@ -725,7 +757,7 @@ describe('RFC-234 /intent/$sessionId', () => {
     )
     await renderPage()
 
-    const submit = await screen.findByRole('button', { name: enUS.intent.mountDecisionSubmit })
+    const submit = await screen.findByRole('button', { name: enUS.intent.currentActionSubmit })
     await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false))
     fireEvent.change(screen.getByTestId('intent-composer'), {
       target: { value: 'continue anyway' },
@@ -736,12 +768,13 @@ describe('RFC-234 /intent/$sessionId', () => {
     fireEvent.click(submit)
     await waitFor(() => {
       const post = calls.find(
-        (call) => call.method === 'POST' && call.url.includes('/mount-approvals'),
+        (call) => call.method === 'POST' && call.url.includes('/current-action'),
       )
-      expect(post?.body).toEqual({
+      expect(post?.body).toMatchObject({
         sourceTurnId: 'T5',
         expectedTurnSeq: 5,
         expectedContextRevision: 2,
+        answers: [],
         decisions: [
           {
             resourceType: 'agent',
@@ -881,15 +914,21 @@ describe('RFC-234 /intent/$sessionId', () => {
       }),
     )
     await renderPage()
-    await screen.findByTestId('intent-questions')
-    const submit = screen.getByRole('button', { name: enUS.intent.submitAnswers })
+    await screen.findByTestId('intent-current-action')
+    const submit = screen.getByRole('button', { name: enUS.intent.currentActionSubmit })
     expect((submit as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(screen.getAllByText('per-file')[0]!)
     expect((submit as HTMLButtonElement).disabled).toBe(false)
     fireEvent.click(submit)
     await waitFor(() => {
-      const post = rec.calls.find((call) => call.url.includes('/answers'))
-      expect(post?.body).toEqual({ answers: [{ id: 'q1', picked: ['per-file'] }] })
+      const post = rec.calls.find((call) => call.url.includes('/current-action'))
+      expect(post?.body).toMatchObject({
+        sourceTurnId: 'T2',
+        expectedTurnSeq: 2,
+        expectedContextRevision: 0,
+        answers: [{ id: 'q1', picked: ['per-file'] }],
+        decisions: [],
+      })
     })
   })
 
@@ -943,12 +982,19 @@ describe('RFC-234 /intent/$sessionId', () => {
     fireEvent.focus(input)
     // MultiSelect toggles options on mouseDown (not click) so the input keeps focus.
     fireEvent.mouseDown(await screen.findByText('auditor'))
-    const submit = screen.getByTestId('intent-mount-submit')
+    const submit = screen.getByTestId('intent-working-context-submit')
     expect((submit as HTMLButtonElement).disabled).toBe(false)
     fireEvent.click(submit)
     await waitFor(() => {
-      const post = rec.calls.find((call) => call.url.includes('/mounts') && call.method === 'POST')
-      expect(post?.body).toEqual({ resourceType: 'agent', resourceId: 'A1' })
+      const post = rec.calls.find(
+        (call) => call.url.includes('/working-set') && call.method === 'POST',
+      )
+      expect(post?.body).toMatchObject({
+        expectedTurnSeq: 2,
+        expectedContextRevision: 0,
+        mode: 'after-current',
+        delta: { additions: [{ resourceType: 'agent', resourceId: 'A1' }], removals: [] },
+      })
     })
   })
 

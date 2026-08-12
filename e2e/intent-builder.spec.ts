@@ -117,8 +117,155 @@ test('US-6: modify entry pre-mounts the target resource in a new session', async
   await dialogComposer.getByTestId('intent-create-message').fill('rename the auditor outputs')
   await dialog.getByRole('button', { name: 'Start building' }).click()
   await page.waitForURL(/\/intent\/[0-9A-Z]+/i)
-  // The prefilled mount landed: the mounts section lists the agent handle.
-  await expect(page.getByText('res#agent#1')).toBeVisible({ timeout: 30_000 })
+  // The prefilled mount landed in the top-level working-context bar.
+  await expect(page.getByText('e2e-modify-target', { exact: true })).toBeVisible({
+    timeout: 30_000,
+  })
+})
+
+test('RFC-293 workbench queues context, iterates around checkpoints, discards, and scrolls independently', async ({
+  page,
+}, testInfo) => {
+  const workbenchDaemon = await startDaemon({
+    stubMode: 'intent',
+    extraEnv: { STUB_INTENT_DELAY_MS: '900' },
+  })
+  try {
+    await authPage(page, workbenchDaemon)
+    await page.setViewportSize({ width: 1800, height: 1000 })
+    const targetResponse = await fetch(`${workbenchDaemon.baseUrl}/api/agents`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${workbenchDaemon.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'e2e-working-context',
+        description: 'late mounted context',
+        outputs: ['context'],
+        bodyMd: 'Provide context.',
+      }),
+    })
+    expect(targetResponse.ok).toBe(true)
+
+    await page.goto(`${workbenchDaemon.baseUrl}/intent`)
+    const create = page.getByTestId('intent-create-inline')
+    await create.getByTestId('intent-create-message').fill('build an iterative intent workbench')
+    await create.getByRole('button', { name: 'Start building' }).click()
+    await page.waitForURL(/\/intent\/[0-9A-Z]+/i)
+
+    // The first turn is deliberately slow. Stage a resource while it runs and
+    // queue the whole delta once; the successor appears without another message.
+    await page.getByRole('button', { name: 'Manage working context' }).click()
+    const workingDialog = page.getByRole('dialog')
+    const picker = workingDialog.getByTestId('intent-mount-picker')
+    await picker.focus()
+    await page.getByRole('option', { name: /e2e-working-context/ }).click()
+    await picker.press('Escape')
+    await workingDialog.getByRole('button', { name: 'Refresh after this turn' }).click()
+    await expect(page.getByText('e2e-working-context', { exact: true })).toBeVisible({
+      timeout: 30_000,
+    })
+    await expect(page.getByRole('heading', { name: /Draft changeset \(revision 2\)/ })).toBeVisible(
+      {
+        timeout: 30_000,
+      },
+    )
+
+    const composer = page.getByTestId('intent-composer')
+    await composer.fill('Make the candidate more focused.')
+    await page.getByTestId('intent-composer-submit').click()
+    await expect(page.getByRole('heading', { name: /Draft changeset \(revision 3\)/ })).toBeVisible(
+      {
+        timeout: 30_000,
+      },
+    )
+
+    await page.getByRole('button', { name: 'Discard and regenerate' }).click()
+    await expect(page.getByRole('heading', { name: /Draft changeset \(revision 4\)/ })).toBeVisible(
+      {
+        timeout: 30_000,
+      },
+    )
+    await expect(page.getByText('Discarded', { exact: true })).toBeVisible()
+
+    await page.getByTestId('intent-open-commit').click()
+    await page.getByTestId('intent-commit-next').click()
+    await page.getByTestId('intent-commit-next').click()
+    await page.getByTestId('intent-commit-submit').click()
+    await expect(page.getByText('Continuing from checkpoint #1', { exact: true })).toBeVisible({
+      timeout: 30_000,
+    })
+
+    await composer.fill('Continue beyond the committed checkpoint.')
+    await page.getByTestId('intent-composer-submit').click()
+    await expect(page.getByRole('heading', { name: /Draft changeset \(revision 5\)/ })).toBeVisible(
+      {
+        timeout: 30_000,
+      },
+    )
+
+    const geometry = await page.evaluate(() => {
+      const pageRoot = document.querySelector<HTMLElement>('.intent-session-page')
+      const content = document.querySelector<HTMLElement>('.content')
+      const build = document.querySelector<HTMLElement>('[data-testid="intent-build-workspace"]')
+      const review = document.querySelector<HTMLElement>('[data-testid="intent-review-workspace"]')
+      if (pageRoot === null || content === null || build === null || review === null) return null
+      const reviewTop = review.getBoundingClientRect().top
+      review.scrollTop = 0
+      build.scrollTop = build.scrollHeight
+      const buildBottom = build.scrollTop
+      const reviewAfterBuildScroll = review.scrollTop
+      review.scrollTop = Math.min(120, review.scrollHeight)
+      const contentStyle = getComputedStyle(content)
+      const usableContentWidth =
+        content.clientWidth -
+        Number.parseFloat(contentStyle.paddingLeft) -
+        Number.parseFloat(contentStyle.paddingRight)
+      return {
+        fillsContent: Math.abs(pageRoot.getBoundingClientRect().width - usableContentWidth) <= 4,
+        buildScrollable: build.scrollHeight > build.clientHeight,
+        reviewVisibleAfterBuildScroll:
+          review.getBoundingClientRect().top === reviewTop &&
+          review.getBoundingClientRect().bottom > 0,
+        reviewUnaffectedByBuildScroll: reviewAfterBuildScroll === 0,
+        buildUnaffectedByReviewScroll: build.scrollTop === buildBottom,
+        reviewWiderThanBuild: review.clientWidth > build.clientWidth,
+      }
+    })
+    expect(geometry).toEqual({
+      fillsContent: true,
+      buildScrollable: true,
+      reviewVisibleAfterBuildScroll: true,
+      reviewUnaffectedByBuildScroll: true,
+      buildUnaffectedByReviewScroll: true,
+      reviewWiderThanBuild: true,
+    })
+    await testInfo.attach('intent-rfc293-workbench-wide', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    })
+
+    await page.setViewportSize({ width: 1080, height: 800 })
+    const buildTab = page.getByRole('tab', { name: 'Build workspace' })
+    const reviewTab = page.getByRole('tab', { name: 'Draft review workspace' })
+    await expect(buildTab).toBeVisible()
+    await buildTab.click()
+    await expect(page.getByTestId('intent-build-workspace')).toBeVisible()
+    await expect(page.getByTestId('intent-review-workspace')).toBeHidden()
+    await reviewTab.click()
+    await expect(page.getByTestId('intent-review-workspace')).toBeVisible()
+    await expect(page.getByTestId('intent-build-workspace')).toBeHidden()
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+      .toBe(true)
+    await testInfo.attach('intent-rfc293-workbench-1080', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    })
+  } finally {
+    await workbenchDaemon.stop()
+  }
 })
 
 test('workflow draft makes the node graph a primary, expandable review surface', async ({
@@ -315,6 +462,19 @@ test('390px touch flow creates a session and advances the commit stepper', async
     await expect(page.getByTestId('intent-draft')).toHaveCount(1, { timeout: 30_000 })
     await page.getByRole('tab', { name: 'Draft review workspace' }).tap()
     await expect(page.getByTestId('intent-draft')).toBeVisible()
+    const mobileReview = await page.evaluate(() => {
+      const panel = document.querySelector<HTMLElement>('[data-testid="intent-review-workspace"]')
+      const heading = panel?.querySelector<HTMLElement>('.intent-session__draft h2')
+      const actions = panel?.querySelector<HTMLElement>('.intent-session__draft-actions')
+      if (panel === null || panel === undefined || heading === null || actions === null) return null
+      const panelRect = panel.getBoundingClientRect()
+      const headingRect = heading.getBoundingClientRect()
+      return {
+        actionPosition: getComputedStyle(actions).position,
+        headingVisible: headingRect.top >= panelRect.top && headingRect.bottom <= panelRect.bottom,
+      }
+    })
+    expect(mobileReview).toEqual({ actionPosition: 'static', headingVisible: true })
 
     await page.getByTestId('intent-open-commit').tap()
     await page.getByTestId('intent-commit-next').tap()

@@ -20,7 +20,7 @@ const AGENT_CHANGESET =
 const WORKFLOW_CHANGESET =
   '{"$schema_version":1,"ops":[{"opId":"op-1","action":"create","resourceType":"agent","tempRef":"$new:e2e-workflow-worker","payload":{"name":"e2e-workflow-worker","description":"handles and reviews workflow requests","outputs":["draft","answer"],"bodyMd":"Complete the requested work."}},{"opId":"op-2","action":"create","resourceType":"workflow","tempRef":"$new:e2e-workflow","payload":{"name":"e2e-workflow-preview","description":"workflow graph preview fixture","definition":{"$schema_version":5,"inputs":[],"nodes":[{"id":"worker","kind":"agent-single","agentRef":"$new:e2e-workflow-worker","promptTemplate":"Produce a draft.","position":{"x":20,"y":120}},{"id":"reviewer","kind":"agent-single","agentRef":"$new:e2e-workflow-worker","promptTemplate":"Review the draft: {{draft}}","position":{"x":320,"y":120}},{"id":"final_output","kind":"output","ports":[{"name":"answer","bind":{"nodeId":"reviewer","portName":"answer"}}],"position":{"x":640,"y":120}}],"edges":[{"id":"worker_to_reviewer","source":{"nodeId":"worker","portName":"draft"},"target":{"nodeId":"reviewer","portName":"draft"}},{"id":"reviewer_to_output","source":{"nodeId":"reviewer","portName":"answer"},"target":{"nodeId":"final_output","portName":"answer"}}]}}}]}'
 
-export function run(argv: readonly string[]): void {
+export async function run(argv: readonly string[]): Promise<void> {
   const call = parseInvocation(argv, NAME)
   if (call.kind === 'version') {
     process.stdout.write('stub-opencode intent-build\n')
@@ -33,6 +33,11 @@ export function run(argv: readonly string[]): void {
   const summary = workflowVariant
     ? 'stub intent build: workflow preview'
     : 'stub intent build: one auditor agent'
+
+  const delayMs = Number.parseInt(process.env.STUB_INTENT_DELAY_MS ?? '0', 10)
+  if (Number.isFinite(delayMs) && delayMs > 0) {
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs))
+  }
 
   emitTextEvent(
     `${open}\n  <port name="summary">${summary}</port>\n  <port name="changeset">${changeset}</port>\n</workflow-output>`,

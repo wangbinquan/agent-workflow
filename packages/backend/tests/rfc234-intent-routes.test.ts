@@ -123,6 +123,14 @@ async function pollDetail(token: string, id: string, until: (d: never) => boolea
   throw new Error('poll timed out')
 }
 
+async function waitForCondition(until: () => boolean): Promise<void> {
+  for (let i = 0; i < 200; i++) {
+    if (until()) return
+    await new Promise((resolveWait) => setTimeout(resolveWait, 10))
+  }
+  throw new Error('condition timed out')
+}
+
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
   await seedBuiltinRuntimes(db)
@@ -231,6 +239,212 @@ describe('intent session routes', () => {
       .get()
     expect(agentRow?.name).toBe('auditor')
     expect(agentRow?.ownerUserId).not.toBeNull()
+  })
+
+  test('RFC-293 continuously refines, discards, commits a checkpoint, then continues', async () => {
+    const created = await req(ownerToken, '/api/intent-sessions', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'build an iterative auditor' }),
+    })
+    const session = (await created.json()) as { id: string }
+    const first = (await pollDetail(
+      ownerToken,
+      session.id,
+      (value) => (value as { currentDraft: unknown }).currentDraft !== null,
+    )) as {
+      session: { turnSeq: number; contextRevision: number }
+      currentDraft: { id: string; revision: number; draftHash: string }
+    }
+    expect(
+      (
+        await req(ownerToken, `/api/intent-sessions/${session.id}/iterations`, {
+          method: 'POST',
+          body: JSON.stringify({
+            mode: 'refine-current',
+            clientMutationId: ulid(),
+            expectedTurnSeq: first.session.turnSeq,
+            expectedContextRevision: first.session.contextRevision,
+            sourceDraftId: first.currentDraft.id,
+            sourceDraftHash: first.currentDraft.draftHash,
+            feedback: 'make the result easier to reuse',
+          }),
+        })
+      ).status,
+    ).toBe(202)
+    const refined = (await pollDetail(
+      ownerToken,
+      session.id,
+      (value) =>
+        (value as { currentDraft: { revision: number } | null }).currentDraft?.revision === 2,
+    )) as {
+      session: { turnSeq: number; contextRevision: number }
+      currentDraft: { id: string; revision: number; draftHash: string }
+      drafts: Array<{ id: string; lifecycle: string }>
+      composerSource: { kind: string; revision?: number }
+    }
+    expect(refined.drafts.find((draft) => draft.id === first.currentDraft.id)?.lifecycle).toBe(
+      'superseded',
+    )
+    expect(refined.composerSource).toMatchObject({ kind: 'current-draft', revision: 2 })
+
+    expect(
+      (
+        await req(ownerToken, `/api/intent-sessions/${session.id}/iterations`, {
+          method: 'POST',
+          body: JSON.stringify({
+            mode: 'regenerate',
+            clientMutationId: ulid(),
+            expectedTurnSeq: refined.session.turnSeq,
+            expectedContextRevision: refined.session.contextRevision,
+            sourceDraftId: refined.currentDraft.id,
+            sourceDraftHash: refined.currentDraft.draftHash,
+          }),
+        })
+      ).status,
+    ).toBe(202)
+    const regenerated = (await pollDetail(
+      ownerToken,
+      session.id,
+      (value) =>
+        (value as { currentDraft: { revision: number } | null }).currentDraft?.revision === 3,
+    )) as {
+      session: { turnSeq: number; contextRevision: number }
+      currentDraft: { id: string; revision: number; draftHash: string }
+      drafts: Array<{ id: string; lifecycle: string }>
+    }
+    expect(refined.currentDraft.id).not.toBe(regenerated.currentDraft.id)
+    expect(
+      regenerated.drafts.find((draft) => draft.id === refined.currentDraft.id)?.lifecycle,
+    ).toBe('discarded')
+
+    const commit = await req(ownerToken, `/api/intent-sessions/${session.id}/commit`, {
+      method: 'POST',
+      body: JSON.stringify({
+        clientMutationId: ulid(),
+        draftRevision: regenerated.currentDraft.revision,
+        draftHash: regenerated.currentDraft.draftHash,
+        decisions: [],
+      }),
+    })
+    expect(commit.status).toBe(200)
+    const checkpoint = (await (
+      await req(ownerToken, `/api/intent-sessions/${session.id}`)
+    ).json()) as {
+      session: { turnSeq: number; contextRevision: number; commitSeq: number; status: string }
+      currentDraft: null
+      drafts: Array<{ id: string; lifecycle: string; commitSeq: number | null }>
+      composerSource: { kind: string; commitSeq?: number }
+    }
+    expect(checkpoint.currentDraft).toBeNull()
+    expect(checkpoint.session.status).toBe('active')
+    expect(checkpoint.composerSource).toEqual({ kind: 'latest-checkpoint', commitSeq: 1 })
+    expect(
+      checkpoint.drafts.find((draft) => draft.id === regenerated.currentDraft.id),
+    ).toMatchObject({ lifecycle: 'committed', commitSeq: 1 })
+
+    const continued = await req(ownerToken, `/api/intent-sessions/${session.id}/iterations`, {
+      method: 'POST',
+      body: JSON.stringify({
+        mode: 'continue-checkpoint',
+        clientMutationId: ulid(),
+        expectedTurnSeq: checkpoint.session.turnSeq,
+        expectedContextRevision: checkpoint.session.contextRevision,
+        sourceCommitSeq: checkpoint.session.commitSeq,
+        feedback: 'continue with a second useful revision',
+      }),
+    })
+    expect(continued.status).toBe(202)
+    const afterContinue = (await pollDetail(
+      ownerToken,
+      session.id,
+      (value) =>
+        ((value as { currentDraft: { revision: number } | null }).currentDraft?.revision ?? 0) > 3,
+    )) as { composerSource: { kind: string }; session: { status: string } }
+    expect(afterContinue.composerSource.kind).toBe('current-draft')
+    expect(afterContinue.session.status).toBe('active')
+  })
+
+  test('RFC-293 queues a running working-context batch and automatically runs one successor', async () => {
+    const targetResponse = await req(ownerToken, '/api/agents', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'context-auditor',
+        description: 'Reusable context',
+        outputs: ['findings'],
+        bodyMd: 'Audit.',
+      }),
+    })
+    const target = (await targetResponse.json()) as { id: string }
+    let releaseFirst!: () => void
+    const firstBlocked = new Promise<void>((resolveBlock) => {
+      releaseFirst = resolveBlock
+    })
+    let calls = 0
+    const changesetRun = stubRun('changeset')
+    app = createApp({
+      token: DAEMON_TOKEN,
+      configPath: join(root, 'config.json'),
+      opencodeVersion: null,
+      dbVersion: 1,
+      db,
+      intentTestDependencies: {
+        runFn: async (opts) => {
+          calls += 1
+          if (calls === 1) await firstBlocked
+          return changesetRun(opts)
+        },
+      },
+    })
+
+    const created = await req(ownerToken, '/api/intent-sessions', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'build with late context' }),
+    })
+    const session = (await created.json()) as {
+      id: string
+      turnSeq: number
+      contextRevision: number
+    }
+    await waitForCondition(() => calls === 1)
+    const queued = await req(ownerToken, `/api/intent-sessions/${session.id}/working-set`, {
+      method: 'POST',
+      body: JSON.stringify({
+        clientMutationId: ulid(),
+        expectedTurnSeq: session.turnSeq,
+        expectedContextRevision: session.contextRevision,
+        mode: 'after-current',
+        delta: {
+          additions: [{ resourceType: 'agent', resourceId: target.id }],
+          removals: [],
+        },
+      }),
+    })
+    expect(queued.status).toBe(202)
+    expect((await queued.json()) as { state: string }).toMatchObject({ state: 'queued' })
+    releaseFirst()
+    const settled = (await pollDetail(ownerToken, session.id, (value) => {
+      const detail = value as {
+        session: { inFlight: boolean }
+        mounts: Array<{ resourceId: string }>
+        currentDraft: { revision: number } | null
+      }
+      return (
+        !detail.session.inFlight &&
+        detail.mounts.some((mount) => mount.resourceId === target.id) &&
+        (detail.currentDraft?.revision ?? 0) >= 2
+      )
+    })) as {
+      workingSetChange: { state: string; resultingTurnId: string | null }
+      turns: Array<{ role: string; kind: string; content: Record<string, unknown> }>
+    }
+    expect(calls).toBe(2)
+    expect(settled.workingSetChange).toMatchObject({ state: 'applied' })
+    expect(settled.workingSetChange.resultingTurnId).not.toBeNull()
+    expect(
+      settled.turns.filter(
+        (turn) => turn.role === 'user' && typeof turn.content.workingSetChangeId === 'string',
+      ),
+    ).toHaveLength(1)
   })
 
   test('creator-only 404 shape: stranger AND manager get not-found; admin reads', async () => {

@@ -1058,6 +1058,13 @@
       "when": 1788278400025,
       "tag": "0151_rfc285_workflow_soft_link",
       "breakpoints": true
+    },
+    {
+      "idx": 151,
+      "version": "6",
+      "when": 1788278400026,
+      "tag": "0152_rfc293_intent_workbench",
+      "breakpoints": true
     }
   ]
 }

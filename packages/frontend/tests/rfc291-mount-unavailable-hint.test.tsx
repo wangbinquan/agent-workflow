@@ -33,6 +33,7 @@ afterEach(() => {
 function detailWithMounts(mounts: IntentSessionDetail['mounts']): IntentSessionDetail {
   return {
     mounts,
+    workingSetChange: null,
     mountSuggestions: null,
     turns: [
       {
@@ -49,6 +50,9 @@ function detailWithMounts(mounts: IntentSessionDetail['mounts']): IntentSessionD
       },
     ],
     currentDraft: null,
+    drafts: [],
+    composerSource: { kind: 'conversation' },
+    retrySource: null,
     commits: [],
     session: {
       id: 'S1',
@@ -114,11 +118,13 @@ describe('RFC-291 已挂载元素：失效项说明会被跳过', () => {
     installFetch(detailWithMounts([mount({})]))
     await renderPage()
 
-    const heading = await screen.findByRole('heading', { name: enUS.intent.mounts })
+    const heading = await screen.findByRole('heading', {
+      name: enUS.intent.workingContextTitle,
+    })
     const section = heading.closest('section')
     expect(section).not.toBeNull()
     const list = within(section as HTMLElement)
-    expect(await list.findByText(enUS.intent.mountUnavailable)).toBeTruthy()
+    expect(await list.findByText(new RegExp(enUS.intent.mountUnavailable))).toBeTruthy()
     expect(list.getByText(new RegExp(enUS.intent.mountUnavailableHint))).toBeTruthy()
   })
 
@@ -126,7 +132,9 @@ describe('RFC-291 已挂载元素：失效项说明会被跳过', () => {
     installFetch(detailWithMounts([mount({ displayName: 'auditor', detail: true })]))
     await renderPage()
 
-    const heading = await screen.findByRole('heading', { name: enUS.intent.mounts })
+    const heading = await screen.findByRole('heading', {
+      name: enUS.intent.workingContextTitle,
+    })
     const list = within(heading.closest('section') as HTMLElement)
     expect(await list.findByText('auditor')).toBeTruthy()
     expect(list.queryByText(new RegExp(enUS.intent.mountUnavailableHint))).toBeNull()

@@ -12,6 +12,7 @@ import {
   PostIntentAnswersSchema,
   type IntentChangeset,
   type IntentMountSuggestionBatch,
+  type IntentQuestion,
   type IntentSessionDetail,
   type IntentSlotDto,
   type UserPublic,
@@ -80,7 +81,6 @@ function IntentSessionDetailPage() {
   const detail = detailQuery.data
 
   const [message, setMessage] = useState('')
-  const [answers, setAnswers] = useState<QuestionDraft>({})
   const [commitOpen, setCommitOpen] = useState(false)
   const [mountOpen, setMountOpen] = useState(false)
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('build')
@@ -88,6 +88,10 @@ function IntentSessionDetailPage() {
   const [selectedOpId, setSelectedOpId] = useState<string | null>(null)
   const selectedDraftIdentityRef = useRef<string | null>(null)
   const openedCommitDraftIdentityRef = useRef<string | null>(null)
+  const conversationRef = useRef<HTMLElement | null>(null)
+  const composerRef = useRef<HTMLElement | null>(null)
+  const conversationPinnedRef = useRef(true)
+  const [showLatest, setShowLatest] = useState(false)
   const isAuditView = detail?.session.ownerUserId !== undefined
   const canManageLifecycle = detail !== undefined && !isAuditView
   const canEdit =
@@ -96,25 +100,78 @@ function IntentSessionDetailPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: INTENT_QUERY_KEYS.detail(sessionId) })
 
   const sendMessage = useMutation<unknown, ApiError, void>({
-    mutationFn: () =>
-      api.post(`/api/intent-sessions/${sessionId}/messages`, { message: message.trim() }),
+    mutationFn: () => {
+      if (detail === undefined) throw new Error('Intent detail is unavailable')
+      const feedback = message.trim()
+      if (detail.composerSource.kind === 'current-draft') {
+        const source = detail.currentDraft
+        if (source === null) throw new Error('Current draft is unavailable')
+        return api.post(`/api/intent-sessions/${sessionId}/iterations`, {
+          mode: 'refine-current',
+          clientMutationId: ulid(),
+          expectedTurnSeq: detail.session.turnSeq,
+          expectedContextRevision: detail.session.contextRevision,
+          sourceDraftId: source.id,
+          sourceDraftHash: source.draftHash,
+          feedback,
+        })
+      }
+      if (detail.composerSource.kind === 'latest-checkpoint') {
+        return api.post(`/api/intent-sessions/${sessionId}/iterations`, {
+          mode: 'continue-checkpoint',
+          clientMutationId: ulid(),
+          expectedTurnSeq: detail.session.turnSeq,
+          expectedContextRevision: detail.session.contextRevision,
+          sourceCommitSeq: detail.composerSource.commitSeq,
+          feedback,
+        })
+      }
+      return api.post(`/api/intent-sessions/${sessionId}/messages`, { message: feedback })
+    },
     onSuccess: async () => {
       setMessage('')
       await invalidate()
     },
   })
-  const sendAnswers = useMutation<unknown, ApiError, void>({
-    mutationFn: () =>
-      api.post(`/api/intent-sessions/${sessionId}/answers`, {
-        answers: Object.entries(answers).map(([id, picked]) => ({ id, picked })),
-      }),
-    onSuccess: async () => {
-      setAnswers({})
-      await invalidate()
-    },
-  })
   const retryTurn = useMutation<unknown, ApiError, void>({
-    mutationFn: () => api.post(`/api/intent-sessions/${sessionId}/retry`),
+    mutationFn: () => {
+      if (detail?.retrySource === null || detail?.retrySource === undefined) {
+        throw new Error('Retry source is unavailable')
+      }
+      return api.post(`/api/intent-sessions/${sessionId}/retry`, {
+        clientMutationId: ulid(),
+        sourceTurnId: detail.retrySource.turnId,
+        expectedTurnSeq: detail.retrySource.turnSeq,
+        expectedContextRevision: detail.session.contextRevision,
+      })
+    },
+    onSuccess: invalidate,
+  })
+  const regenerate = useMutation<unknown, ApiError, void>({
+    mutationFn: () => {
+      if (detail?.currentDraft === null || detail?.currentDraft === undefined) {
+        throw new Error('Current draft is unavailable')
+      }
+      return api.post(`/api/intent-sessions/${sessionId}/iterations`, {
+        mode: 'regenerate',
+        clientMutationId: ulid(),
+        expectedTurnSeq: detail.session.turnSeq,
+        expectedContextRevision: detail.session.contextRevision,
+        sourceDraftId: detail.currentDraft.id,
+        sourceDraftHash: detail.currentDraft.draftHash,
+      })
+    },
+    onSuccess: invalidate,
+  })
+  const retryWorkingSet = useMutation<unknown, ApiError, void>({
+    mutationFn: () => {
+      if (detail?.workingSetChange === null || detail?.workingSetChange === undefined) {
+        throw new Error('Working-context update is unavailable')
+      }
+      return api.post(
+        `/api/intent-sessions/${sessionId}/working-set/${encodeURIComponent(detail.workingSetChange.id)}/retry`,
+      )
+    },
     onSuccess: invalidate,
   })
   const cancelTurn = useMutation<unknown, ApiError, void>({
@@ -131,12 +188,6 @@ function IntentSessionDetailPage() {
     mutationFn: () => api.post(`/api/intent-sessions/${sessionId}/rebase`),
     onSuccess: invalidate,
   })
-  const unmount = useMutation<unknown, ApiError, string>({
-    mutationFn: (handle) =>
-      api.delete(`/api/intent-sessions/${sessionId}/mounts/${encodeURIComponent(handle)}`),
-    onSuccess: invalidate,
-  })
-
   useEffect(() => {
     if (detail === undefined || canEdit) return
     setMountOpen(false)
@@ -154,6 +205,20 @@ function IntentSessionDetailPage() {
   }, [lastAgentTurn])
   const latestRunningTurnId = lastAgentTurn?.kind === 'running' ? lastAgentTurn.id : null
 
+  useEffect(() => {
+    const element = conversationRef.current
+    if (element === null) return
+    const frame = requestAnimationFrame(() => {
+      if (conversationPinnedRef.current) {
+        element.scrollTo({ top: element.scrollHeight })
+        setShowLatest(false)
+      } else {
+        setShowLatest(true)
+      }
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [detail?.turns.length, detail?.session.inFlight])
+
   const draft = detail?.currentDraft ?? null
   const parsedChangeset = useMemo(() => {
     if (draft === null) return null
@@ -162,6 +227,13 @@ function IntentSessionDetailPage() {
   }, [draft])
   const draftOps = useMemo(() => parsedChangeset?.ops ?? [], [parsedChangeset])
   const draftIdentity = draft === null ? null : `${draft.id}:${draft.draftHash}`
+  const focusComposer = () => {
+    setWorkspaceTab('build')
+    requestAnimationFrame(() => {
+      composerRef.current?.scrollIntoView({ block: 'nearest' })
+      composerRef.current?.querySelector('textarea')?.focus()
+    })
+  }
 
   useEffect(() => {
     if (!commitOpen) {
@@ -220,9 +292,10 @@ function IntentSessionDetailPage() {
     updateStatus.error ??
     cancelTurn.error ??
     retryTurn.error ??
+    regenerate.error ??
+    retryWorkingSet.error ??
     rebase.error ??
-    unmount.error ??
-    sendAnswers.error
+    sendMessage.error
 
   return (
     <div className="page intent-session-page">
@@ -279,6 +352,72 @@ function IntentSessionDetailPage() {
         <NoticeBanner tone="info">{t('intent.archivedReadOnly')}</NoticeBanner>
       ) : null}
 
+      <section
+        className="intent-working-context-bar"
+        aria-labelledby="intent-working-context-title"
+      >
+        <div className="intent-working-context-bar__copy">
+          <span className="intent-session__eyebrow">{t('intent.workingContextEyebrow')}</span>
+          <div className="intent-working-context-bar__title-row">
+            <h2 id="intent-working-context-title">{t('intent.workingContextTitle')}</h2>
+            <StatusChip kind="neutral" size="sm">
+              {t('intent.workingContextCount', { count: detail.mounts.length })}
+            </StatusChip>
+          </div>
+          <div className="intent-working-context-bar__chips">
+            {detail.mounts.slice(0, 3).map((mount) => (
+              <span key={mount.handle} className="intent-working-context-chip">
+                {mount.displayName ?? t('intent.mountUnavailable')}
+                {mount.displayName === null ? ` · ${t('intent.mountUnavailableHint')}` : ''}
+              </span>
+            ))}
+            {detail.mounts.length > 3 ? (
+              <span className="intent-working-context-chip">
+                {t('intent.workingContextMore', { count: detail.mounts.length - 3 })}
+              </span>
+            ) : null}
+            {detail.mounts.length === 0 ? (
+              <span className="intent-working-context-bar__empty">
+                {t('intent.workingContextEmpty')}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className="intent-working-context-bar__actions">
+          {detail.workingSetChange !== null &&
+          (detail.workingSetChange.state === 'queued' ||
+            detail.workingSetChange.state === 'applying' ||
+            detail.workingSetChange.state === 'failed') ? (
+            <StatusChip
+              kind={detail.workingSetChange.state === 'failed' ? 'danger' : 'info'}
+              size="sm"
+            >
+              {t(`intent.workingContextState.${detail.workingSetChange.state}`)}
+            </StatusChip>
+          ) : null}
+          {canEdit && detail.workingSetChange?.state === 'failed' ? (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => retryWorkingSet.mutate()}
+              disabled={retryWorkingSet.isPending || detail.session.inFlight}
+            >
+              {t('intent.workingContextRetry')}
+            </button>
+          ) : null}
+          {canEdit ? (
+            <button
+              type="button"
+              className="btn btn--sm"
+              data-testid="intent-add-mount"
+              onClick={() => setMountOpen(true)}
+            >
+              {t('intent.workingContextManage')}
+            </button>
+          ) : null}
+        </div>
+      </section>
+
       <TabBar<WorkspaceTab>
         className="intent-session__mobile-tabs"
         tabs={[
@@ -304,12 +443,19 @@ function IntentSessionDetailPage() {
 
       <div className="intent-session__workspace">
         <section
+          ref={conversationRef}
           className="intent-session__conversation"
           aria-labelledby="intent-conversation-heading"
           id={buildPanelIds.panelId}
           role="tabpanel"
           data-mobile-active={workspaceTab === 'build'}
           data-testid="intent-build-workspace"
+          onScroll={(event) => {
+            const element = event.currentTarget
+            const pinned = element.scrollHeight - element.scrollTop - element.clientHeight < 96
+            conversationPinnedRef.current = pinned
+            if (pinned) setShowLatest(false)
+          }}
         >
           <header className="intent-session__section-header">
             <div>
@@ -352,7 +498,9 @@ function IntentSessionDetailPage() {
                 {turn.kind === 'error' ? (
                   <IntentTurnError
                     turn={turn}
-                    canRetry={canEdit && !detail.session.inFlight}
+                    canRetry={
+                      canEdit && !detail.session.inFlight && detail.retrySource?.turnId === turn.id
+                    }
                     pending={retryTurn.isPending}
                     onRetry={() => retryTurn.mutate()}
                   />
@@ -369,154 +517,78 @@ function IntentSessionDetailPage() {
             {detail.session.inFlight ? <LoadingState label={t('intent.generating')} /> : null}
           </div>
 
-          {detail.mountSuggestions !== null && canEdit ? (
-            <IntentMountSuggestions
+          {showLatest ? (
+            <button
+              type="button"
+              className="btn btn--sm intent-session__return-latest"
+              onClick={() => {
+                const element = conversationRef.current
+                if (element === null) return
+                conversationPinnedRef.current = true
+                element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' })
+                setShowLatest(false)
+              }}
+            >
+              {t('intent.returnToLatest')}
+            </button>
+          ) : null}
+
+          {(pendingQuestions.length > 0 || detail.mountSuggestions !== null) && canEdit ? (
+            <IntentCurrentAction
               sessionId={sessionId}
+              sourceTurn={lastAgentTurn ?? null}
+              questions={pendingQuestions}
               batch={detail.mountSuggestions}
-              turnSeq={detail.mountSuggestions.sourceTurnSeq}
-              contextRevision={detail.mountSuggestions.contextRevision}
+              contextRevision={detail.session.contextRevision}
               disabled={detail.session.inFlight}
               onApplied={invalidate}
             />
           ) : null}
-          {detail.mountSuggestions !== null && !canEdit ? (
-            <NoticeBanner tone="info">
-              {t('intent.mountSuggestionsReadOnly', {
-                count: detail.mountSuggestions.items.length,
-              })}
-            </NoticeBanner>
+          {(pendingQuestions.length > 0 || detail.mountSuggestions !== null) && !canEdit ? (
+            <NoticeBanner tone="info">{t('intent.currentActionReadOnly')}</NoticeBanner>
           ) : null}
-
-          {pendingQuestions.length > 0 && !detail.session.inFlight && canEdit ? (
-            <section className="intent-session__questions" data-testid="intent-questions">
-              <h3>{t('intent.answerQuestions')}</h3>
-              {detail.mountSuggestions !== null ? (
-                <p className="intent-session__question-gate">{t('intent.mountApprovalFirst')}</p>
-              ) : null}
-              {pendingQuestions.map((question) => (
-                <Field key={question.id} label={question.question} required group>
-                  <div
-                    className="intent-question-options"
-                    role="group"
-                    aria-label={question.question}
-                  >
-                    {question.options.map((option) => {
-                      const picked = answers[question.id] ?? []
-                      const checked = picked.includes(option)
-                      return (
-                        <label key={option} className="intent-question-option">
-                          <input
-                            type={question.multiSelect ? 'checkbox' : 'radio'}
-                            name={`intent-question-${question.id}`}
-                            value={option}
-                            checked={checked}
-                            onChange={() =>
-                              setAnswers((prev) => ({
-                                ...prev,
-                                [question.id]: question.multiSelect
-                                  ? question.options.filter((candidate) =>
-                                      candidate === option ? !checked : picked.includes(candidate),
-                                    )
-                                  : [option],
-                              }))
-                            }
-                          />
-                          <span>{option}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                </Field>
-              ))}
-              <button
-                type="button"
-                className="btn btn--primary"
-                disabled={
-                  sendAnswers.isPending ||
-                  detail.mountSuggestions !== null ||
-                  pendingQuestions.some((question) => (answers[question.id]?.length ?? 0) === 0)
-                }
-                onClick={() => sendAnswers.mutate()}
-              >
-                {t('intent.submitAnswers')}
-              </button>
-            </section>
-          ) : null}
-
-          <section className="intent-session__mounts" aria-labelledby="intent-mounts-heading">
-            <header className="intent-session__subsection-header">
-              <h3 id="intent-mounts-heading">{t('intent.mounts')}</h3>
-              {canEdit ? (
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  data-testid="intent-add-mount"
-                  onClick={() => setMountOpen(true)}
-                  disabled={detail.session.inFlight}
-                >
-                  {t('intent.addMount')}
-                </button>
-              ) : null}
-            </header>
-            {detail.mounts.length > 0 ? (
-              <ul>
-                {detail.mounts.map((mount) => (
-                  <li key={mount.handle}>
-                    <span className="intent-session__mount-copy">
-                      <strong>{mount.displayName ?? t('intent.mountUnavailable')}</strong>
-                      <span>
-                        {t(`intent.resourceType.${mount.resourceType}`)} ·{' '}
-                        <code>{mount.handle}</code>
-                        {/* RFC-291 面 C — 该资源已删除或不再可见：生成时跳过它而不是
-                            整轮报错，这里说明后果，免得用户以为它仍在被使用。 */}
-                        {mount.displayName === null ? (
-                          <> · {t('intent.mountUnavailableHint')}</>
-                        ) : null}
-                      </span>
-                    </span>
-                    {canEdit ? (
-                      <button
-                        type="button"
-                        className="btn btn--xs"
-                        onClick={() => unmount.mutate(mount.handle)}
-                        disabled={detail.session.inFlight || unmount.isPending}
-                      >
-                        {t('intent.unmount')}
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            {canEdit ? (
-              <IntentMountDialog
-                open={mountOpen}
-                onClose={() => setMountOpen(false)}
-                sessionId={sessionId}
-                mounted={detail.mounts}
-                onAdded={() => void invalidate()}
-              />
-            ) : null}
-          </section>
 
           {canEdit ? (
-            <section className="intent-session__composer">
-              <Field label={t('intent.composerLabel')}>
+            <section className="intent-session__composer" ref={composerRef}>
+              <div className="intent-session__composer-source">
+                <StatusChip kind="info" size="sm">
+                  {detail.composerSource.kind === 'current-draft'
+                    ? t('intent.composerSourceCurrent', {
+                        revision: detail.composerSource.revision,
+                      })
+                    : detail.composerSource.kind === 'latest-checkpoint'
+                      ? t('intent.composerSourceCheckpoint', {
+                          commitSeq: detail.composerSource.commitSeq,
+                        })
+                      : t('intent.composerSourceConversation')}
+                </StatusChip>
+              </div>
+              <Field
+                label={
+                  detail.composerSource.kind === 'current-draft'
+                    ? t('intent.composerRefineLabel')
+                    : detail.composerSource.kind === 'latest-checkpoint'
+                      ? t('intent.composerContinueLabel')
+                      : t('intent.composerLabel')
+                }
+              >
                 <TextArea
                   value={message}
                   onChange={setMessage}
                   rows={3}
-                  placeholder={t('intent.composerPlaceholder')}
+                  placeholder={
+                    detail.composerSource.kind === 'current-draft'
+                      ? t('intent.composerRefinePlaceholder')
+                      : detail.composerSource.kind === 'latest-checkpoint'
+                        ? t('intent.composerContinuePlaceholder')
+                        : t('intent.composerPlaceholder')
+                  }
                   data-testid="intent-composer"
                 />
               </Field>
               {sendMessage.isError ? <ErrorBanner error={sendMessage.error} /> : null}
               <div className="intent-session__composer-footer">
-                <span>
-                  {detail.mountSuggestions === null
-                    ? t('intent.draftSafety')
-                    : t('intent.mountApprovalFirst')}
-                </span>
+                <span>{t('intent.iterationKeepsHistory')}</span>
                 <button
                   type="button"
                   className="btn btn--primary"
@@ -524,11 +596,17 @@ function IntentSessionDetailPage() {
                     message.trim() === '' ||
                     sendMessage.isPending ||
                     detail.session.inFlight ||
+                    pendingQuestions.length > 0 ||
                     detail.mountSuggestions !== null
                   }
                   onClick={() => sendMessage.mutate()}
+                  data-testid="intent-composer-submit"
                 >
-                  {t('intent.send')}
+                  {detail.composerSource.kind === 'current-draft'
+                    ? t('intent.refineDraft')
+                    : detail.composerSource.kind === 'latest-checkpoint'
+                      ? t('intent.continueCheckpoint')
+                      : t('intent.send')}
                 </button>
               </div>
             </section>
@@ -544,6 +622,19 @@ function IntentSessionDetailPage() {
           data-testid="intent-review-workspace"
         >
           {draft === null ? <IntentReviewEmpty reason={detail.session.journey.reason} /> : null}
+          {draft === null && canEdit && detail.composerSource.kind === 'latest-checkpoint' ? (
+            <div className="page__section intent-session__checkpoint-continue">
+              <h2>
+                {t('intent.checkpointReadyTitle', {
+                  commitSeq: detail.composerSource.commitSeq,
+                })}
+              </h2>
+              <p>{t('intent.checkpointReadyDescription')}</p>
+              <button type="button" className="btn btn--primary" onClick={focusComposer}>
+                {t('intent.continueCheckpoint')}
+              </button>
+            </div>
+          ) : null}
           {draft !== null ? (
             <div className="page__section intent-session__draft" data-testid="intent-draft">
               <header className="intent-session__section-header">
@@ -645,17 +736,36 @@ function IntentSessionDetailPage() {
                           ? t('intent.commitDisabledGenerating')
                           : t('intent.draftSafety')}
                   </p>
-                  <button
-                    type="button"
-                    className="btn btn--primary"
-                    disabled={
-                      draft.stale || draft.validation.errors.length > 0 || detail.session.inFlight
-                    }
-                    onClick={() => setCommitOpen(true)}
-                    data-testid="intent-open-commit"
-                  >
-                    {t('intent.openCommit')}
-                  </button>
+                  <div className="intent-session__draft-action-buttons">
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={detail.session.inFlight}
+                      onClick={focusComposer}
+                    >
+                      {t('intent.refineDraft')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={detail.session.inFlight || regenerate.isPending}
+                      onClick={() => regenerate.mutate()}
+                      data-testid="intent-regenerate-draft"
+                    >
+                      {t('intent.discardAndRegenerate')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      disabled={
+                        draft.stale || draft.validation.errors.length > 0 || detail.session.inFlight
+                      }
+                      onClick={() => setCommitOpen(true)}
+                      data-testid="intent-open-commit"
+                    >
+                      {t('intent.openCommit')}
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -700,8 +810,54 @@ function IntentSessionDetailPage() {
               ))}
             </div>
           ) : null}
+
+          {detail.drafts.length > 0 ? (
+            <div className="page__section intent-session__draft-history">
+              <header className="intent-session__section-header">
+                <h2>{t('intent.draftHistory')}</h2>
+                <StatusChip kind="neutral" size="sm">
+                  {detail.drafts.length}
+                </StatusChip>
+              </header>
+              <ol>
+                {detail.drafts.map((item) => (
+                  <li key={item.id}>
+                    <span>{t('intent.draftTitle', { revision: item.revision })}</span>
+                    <StatusChip
+                      kind={
+                        item.lifecycle === 'current'
+                          ? 'info'
+                          : item.lifecycle === 'committed'
+                            ? 'success'
+                            : item.lifecycle === 'discarded'
+                              ? 'warn'
+                              : 'neutral'
+                      }
+                      size="sm"
+                    >
+                      {t(`intent.draftLifecycle.${item.lifecycle}`)}
+                    </StatusChip>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
         </aside>
       </div>
+
+      {canEdit ? (
+        <IntentMountDialog
+          open={mountOpen}
+          onClose={() => setMountOpen(false)}
+          sessionId={sessionId}
+          turnSeq={detail.session.turnSeq}
+          contextRevision={detail.session.contextRevision}
+          inFlight={detail.session.inFlight}
+          mounted={detail.mounts}
+          pendingChange={detail.workingSetChange}
+          onChanged={() => void invalidate()}
+        />
+      ) : null}
 
       {draft !== null && canEdit ? (
         <CommitDialog
@@ -811,24 +967,28 @@ function mountSuggestionKey(item: IntentMountSuggestionBatch['items'][number]): 
   return `${item.resourceType}\u0000${item.name}`
 }
 
-function IntentMountSuggestions(props: {
+function IntentCurrentAction(props: {
   sessionId: string
-  batch: IntentMountSuggestionBatch
-  turnSeq: number
+  sourceTurn: IntentTurn | null
+  questions: IntentQuestion[]
+  batch: IntentMountSuggestionBatch | null
   contextRevision: number
   disabled: boolean
   onApplied: () => Promise<unknown>
 }) {
   const { t } = useTranslation()
+  const [answers, setAnswers] = useState<QuestionDraft>({})
   const [decisions, setDecisions] = useState<Record<string, MountSuggestionDecisionDraft>>({})
   const initializedSourceRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (initializedSourceRef.current === props.batch.sourceTurnId) return
-    initializedSourceRef.current = props.batch.sourceTurnId
+    const sourceId = props.sourceTurn?.id ?? null
+    if (sourceId === null || initializedSourceRef.current === sourceId) return
+    initializedSourceRef.current = sourceId
+    setAnswers({})
     setDecisions(
       Object.fromEntries(
-        props.batch.items.map((item) => [
+        (props.batch?.items ?? []).map((item) => [
           mountSuggestionKey(item),
           item.candidates.length === 0
             ? { action: 'reject' as const, resourceId: '' }
@@ -839,135 +999,182 @@ function IntentMountSuggestions(props: {
         ]),
       ),
     )
-  }, [props.batch.items, props.batch.sourceTurnId])
+  }, [props.batch, props.sourceTurn?.id])
 
-  const incomplete = props.batch.items.some((item) => {
-    const decision = decisions[mountSuggestionKey(item)]
-    return decision === undefined || (decision.action === 'approve' && decision.resourceId === '')
-  })
+  const incomplete =
+    props.sourceTurn === null ||
+    props.questions.some((question) => (answers[question.id]?.length ?? 0) === 0) ||
+    (props.batch?.items ?? []).some((item) => {
+      const decision = decisions[mountSuggestionKey(item)]
+      return decision === undefined || (decision.action === 'approve' && decision.resourceId === '')
+    })
   const apply = useMutation({
-    mutationFn: async () =>
-      IntentMountApprovalReceiptSchema.parse(
-        await api.post<unknown>(`/api/intent-sessions/${props.sessionId}/mount-approvals`, {
-          sourceTurnId: props.batch.sourceTurnId,
-          expectedTurnSeq: props.turnSeq,
-          expectedContextRevision: props.contextRevision,
-          decisions: props.batch.items.map((item) => {
-            const decision = decisions[mountSuggestionKey(item)]!
-            return decision.action === 'approve'
-              ? {
-                  resourceType: item.resourceType,
-                  name: item.name,
-                  action: 'approve' as const,
-                  resourceId: decision.resourceId,
-                }
-              : {
-                  resourceType: item.resourceType,
-                  name: item.name,
-                  action: 'reject' as const,
-                }
-          }),
+    mutationFn: async () => {
+      if (props.sourceTurn === null) throw new Error('Current action source is unavailable')
+      return api.post<unknown>(`/api/intent-sessions/${props.sessionId}/current-action`, {
+        clientMutationId: ulid(),
+        sourceTurnId: props.sourceTurn.id,
+        expectedTurnSeq: props.sourceTurn.seq,
+        expectedContextRevision: props.contextRevision,
+        answers: props.questions.map((question) => ({
+          id: question.id,
+          picked: answers[question.id] ?? [],
+        })),
+        decisions: (props.batch?.items ?? []).map((item) => {
+          const decision = decisions[mountSuggestionKey(item)]!
+          return decision.action === 'approve'
+            ? {
+                resourceType: item.resourceType,
+                name: item.name,
+                action: 'approve' as const,
+                resourceId: decision.resourceId,
+              }
+            : {
+                resourceType: item.resourceType,
+                name: item.name,
+                action: 'reject' as const,
+              }
         }),
-      ),
+      })
+    },
     onSuccess: () => props.onApplied(),
   })
 
   return (
-    <section className="intent-session__mount-suggestions" data-testid="intent-mount-suggestions">
+    <section className="intent-session__current-action" data-testid="intent-current-action">
       <div>
-        <h3>{t('intent.mountSuggestionsTitle')}</h3>
-        <p>{t('intent.mountSuggestionsDescription')}</p>
+        <h3>{t('intent.currentActionTitle')}</h3>
+        <p>{t('intent.currentActionDescription')}</p>
       </div>
-      <div className="intent-session__mount-suggestion-list">
-        {props.batch.items.map((item) => {
-          const key = mountSuggestionKey(item)
-          const decision = decisions[key] ?? { action: 'reject', resourceId: '' }
-          return (
-            <article key={key} className="intent-session__mount-suggestion">
-              <div className="intent-session__mount-suggestion-heading">
-                <div>
-                  <strong>{item.name}</strong>
-                  <span>{t(`intent.resourceType.${item.resourceType}`)}</span>
-                </div>
-                <Segmented
-                  ariaLabel={t('intent.mountDecisionFor', { name: item.name })}
-                  value={decision.action}
-                  onChange={(action) =>
-                    setDecisions((current) => ({
-                      ...current,
-                      [key]: {
-                        action: action === 'approve' ? 'approve' : 'reject',
-                        resourceId:
-                          action === 'approve' && item.candidates.length === 1
-                            ? item.candidates[0]!.resourceId
-                            : (current[key]?.resourceId ?? ''),
-                      },
-                    }))
-                  }
-                  options={[
-                    {
-                      value: 'approve',
-                      label: t('intent.mountApprove'),
-                      disabled: item.candidates.length === 0,
-                    },
-                    { value: 'reject', label: t('intent.mountReject') },
-                  ]}
-                  disabled={props.disabled || apply.isPending}
-                />
+      {props.questions.length > 0 ? (
+        <div className="intent-session__current-action-questions">
+          {props.questions.map((question) => (
+            <Field key={question.id} label={question.question} required group>
+              <div className="intent-question-options" role="group" aria-label={question.question}>
+                {question.options.map((option) => {
+                  const picked = answers[question.id] ?? []
+                  const checked = picked.includes(option)
+                  return (
+                    <label key={option} className="intent-question-option">
+                      <input
+                        type={question.multiSelect ? 'checkbox' : 'radio'}
+                        name={`intent-question-${question.id}`}
+                        value={option}
+                        checked={checked}
+                        onChange={() =>
+                          setAnswers((current) => ({
+                            ...current,
+                            [question.id]: question.multiSelect
+                              ? question.options.filter((candidate) =>
+                                  candidate === option ? !checked : picked.includes(candidate),
+                                )
+                              : [option],
+                          }))
+                        }
+                      />
+                      <span>{option}</span>
+                    </label>
+                  )
+                })}
               </div>
-              {item.reason === null ? null : <p>{item.reason}</p>}
-              {item.candidates.length === 0 ? (
-                <NoticeBanner tone="warning">{t('intent.mountCandidateUnavailable')}</NoticeBanner>
-              ) : null}
-              {decision.action === 'approve' && item.candidates.length === 1 ? (
-                <div className="intent-session__mount-candidate">
-                  <strong>{item.candidates[0]!.name}</strong>
-                  {item.candidates[0]!.description === null ? null : (
-                    <span>{item.candidates[0]!.description}</span>
-                  )}
-                </div>
-              ) : null}
-              {decision.action === 'approve' && item.candidates.length > 1 ? (
-                <Field label={t('intent.mountCandidateLabel')} required>
-                  <Select
-                    value={decision.resourceId}
-                    onChange={(resourceId) =>
+            </Field>
+          ))}
+        </div>
+      ) : null}
+      {props.batch !== null ? (
+        <div className="intent-session__mount-suggestion-list">
+          {props.batch.items.map((item) => {
+            const key = mountSuggestionKey(item)
+            const decision = decisions[key] ?? { action: 'reject', resourceId: '' }
+            return (
+              <article key={key} className="intent-session__mount-suggestion">
+                <div className="intent-session__mount-suggestion-heading">
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>{t(`intent.resourceType.${item.resourceType}`)}</span>
+                  </div>
+                  <Segmented
+                    ariaLabel={t('intent.mountDecisionFor', { name: item.name })}
+                    value={decision.action}
+                    onChange={(action) =>
                       setDecisions((current) => ({
                         ...current,
-                        [key]: { action: 'approve', resourceId },
+                        [key]: {
+                          action: action === 'approve' ? 'approve' : 'reject',
+                          resourceId:
+                            action === 'approve' && item.candidates.length === 1
+                              ? item.candidates[0]!.resourceId
+                              : (current[key]?.resourceId ?? ''),
+                        },
                       }))
                     }
-                    ariaLabel={t('intent.mountCandidateFor', { name: item.name })}
                     options={[
                       {
-                        value: '',
-                        label: t('intent.mountCandidatePlaceholder'),
-                        disabled: true,
+                        value: 'approve',
+                        label: t('intent.mountApprove'),
+                        disabled: item.candidates.length === 0,
                       },
-                      ...item.candidates.map((candidate) => ({
-                        value: candidate.resourceId,
-                        label: candidate.name,
-                        description: candidate.description ?? undefined,
-                      })),
+                      { value: 'reject', label: t('intent.mountReject') },
                     ]}
                     disabled={props.disabled || apply.isPending}
                   />
-                </Field>
-              ) : null}
-            </article>
-          )
-        })}
-      </div>
+                </div>
+                {item.reason === null ? null : <p>{item.reason}</p>}
+                {item.candidates.length === 0 ? (
+                  <NoticeBanner tone="warning">
+                    {t('intent.mountCandidateUnavailable')}
+                  </NoticeBanner>
+                ) : null}
+                {decision.action === 'approve' && item.candidates.length === 1 ? (
+                  <div className="intent-session__mount-candidate">
+                    <strong>{item.candidates[0]!.name}</strong>
+                    {item.candidates[0]!.description === null ? null : (
+                      <span>{item.candidates[0]!.description}</span>
+                    )}
+                  </div>
+                ) : null}
+                {decision.action === 'approve' && item.candidates.length > 1 ? (
+                  <Field label={t('intent.mountCandidateLabel')} required>
+                    <Select
+                      value={decision.resourceId}
+                      onChange={(resourceId) =>
+                        setDecisions((current) => ({
+                          ...current,
+                          [key]: { action: 'approve', resourceId },
+                        }))
+                      }
+                      ariaLabel={t('intent.mountCandidateFor', { name: item.name })}
+                      options={[
+                        {
+                          value: '',
+                          label: t('intent.mountCandidatePlaceholder'),
+                          disabled: true,
+                        },
+                        ...item.candidates.map((candidate) => ({
+                          value: candidate.resourceId,
+                          label: candidate.name,
+                          description: candidate.description ?? undefined,
+                        })),
+                      ]}
+                      disabled={props.disabled || apply.isPending}
+                    />
+                  </Field>
+                ) : null}
+              </article>
+            )
+          })}
+        </div>
+      ) : null}
       {apply.isError ? <ErrorBanner error={apply.error} /> : null}
       <div className="intent-session__mount-suggestion-footer">
-        <span>{t('intent.mountBatchAtomic')}</span>
+        <span>{t('intent.currentActionAtomic')}</span>
         <button
           type="button"
           className="btn btn--primary"
           disabled={props.disabled || apply.isPending || incomplete}
           onClick={() => apply.mutate()}
         >
-          {t('intent.mountDecisionSubmit')}
+          {t('intent.currentActionSubmit')}
         </button>
       </div>
     </section>

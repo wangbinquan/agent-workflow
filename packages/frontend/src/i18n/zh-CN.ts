@@ -99,10 +99,38 @@ export interface Resources {
     mountCandidatePlaceholder: string
     mountBatchAtomic: string
     mountDecisionSubmit: string
+    currentActionTitle: string
+    currentActionDescription: string
+    currentActionReadOnly: string
+    currentActionAtomic: string
+    currentActionSubmit: string
     mounts: string
     mountUnavailable: string
     mountUnavailableHint: string
     unmount: string
+    workingContextEyebrow: string
+    workingContextTitle: string
+    workingContextCount: string
+    workingContextMore: string
+    workingContextEmpty: string
+    workingContextManage: string
+    workingContextDismiss: string
+    workingContextQueue: string
+    workingContextInterrupt: string
+    workingContextSaveAndRun: string
+    workingContextRunningHint: string
+    workingContextFailed: string
+    workingContextMounted: string
+    workingContextRemoveHint: string
+    workingContextDeltaSummary: string
+    workingContextRetry: string
+    workingContextState: {
+      queued: string
+      applying: string
+      applied: string
+      failed: string
+      canceled: string
+    }
     draftTitle: string
     draftStale: string
     draftStaleNotice: string
@@ -121,6 +149,27 @@ export interface Resources {
       failed: string
     }
     fromCopy: string
+    composerSourceCurrent: string
+    composerSourceCheckpoint: string
+    composerSourceConversation: string
+    composerRefineLabel: string
+    composerContinueLabel: string
+    composerRefinePlaceholder: string
+    composerContinuePlaceholder: string
+    iterationKeepsHistory: string
+    refineDraft: string
+    continueCheckpoint: string
+    discardAndRegenerate: string
+    returnToLatest: string
+    checkpointReadyTitle: string
+    checkpointReadyDescription: string
+    draftHistory: string
+    draftLifecycle: {
+      current: string
+      committed: string
+      superseded: string
+      discarded: string
+    }
     composerLabel: string
     composerPlaceholder: string
     send: string
@@ -241,6 +290,12 @@ export interface Resources {
       reason: Record<
         | 'describe-goal'
         | 'generation-running'
+        | 'working-set-queued'
+        | 'working-set-applying'
+        | 'working-set-failed'
+        | 'draft-refining'
+        | 'draft-regenerating'
+        | 'generation-retrying'
         | 'answer-questions'
         | 'review-draft'
         | 'draft-stale'
@@ -249,6 +304,7 @@ export interface Resources {
         | 'generation-failed'
         | 'apply-failed'
         | 'applied'
+        | 'checkpoint-ready'
         | 'archived',
         string
       >
@@ -5600,10 +5656,38 @@ export const zhCN: Resources = {
     mountCandidatePlaceholder: '请选择一个资源',
     mountBatchAtomic: '所有决定会一起应用；任一选择已失效时，整批都不会变更。',
     mountDecisionSubmit: '应用上下文决定',
+    currentActionTitle: '当前待办',
+    currentActionDescription: '一次完成问题回答和资源决定，构建 Agent 只会继续一轮。',
+    currentActionReadOnly: '当前待办只能由会话所有者处理。',
+    currentActionAtomic: '回答与资源决定会一次性提交。',
+    currentActionSubmit: '提交并继续',
     mounts: '已挂载元素',
     mountUnavailable: '资源不可用',
     mountUnavailableHint: '生成时将跳过',
     unmount: '取消挂载',
+    workingContextEyebrow: '工作上下文',
+    workingContextTitle: '下一轮可用资源',
+    workingContextCount: '已挂载 {{count}} 项',
+    workingContextMore: '另有 {{count}} 项',
+    workingContextEmpty: '尚未挂载资源',
+    workingContextManage: '管理工作上下文',
+    workingContextDismiss: '放弃待处理更新',
+    workingContextQueue: '本轮后刷新',
+    workingContextInterrupt: '停止本轮并立即刷新',
+    workingContextSaveAndRun: '保存并生成',
+    workingContextRunningHint: '可让新上下文在本轮结束后生效，也可停止本轮并立即刷新。',
+    workingContextFailed: '工作上下文更新失败。',
+    workingContextMounted: '移除已挂载资源',
+    workingContextRemoveHint: '勾选的资源会在保存时移除。',
+    workingContextDeltaSummary: '新增 {{additions}} 项 · 移除 {{removals}} 项',
+    workingContextRetry: '重试更新',
+    workingContextState: {
+      queued: '已排队刷新',
+      applying: '正在刷新上下文',
+      applied: '上下文已刷新',
+      failed: '刷新失败',
+      canceled: '已放弃刷新',
+    },
     draftTitle: '草稿变更集（第 {{revision}} 版）',
     draftStale: '已过期',
     draftStaleNotice: '会话上下文已变化，此草稿不可提交；发送新消息重新生成。',
@@ -5622,6 +5706,27 @@ export const zhCN: Resources = {
       failed: '失败',
     },
     fromCopy: '副本',
+    composerSourceCurrent: '正在完善候选 v{{revision}}',
+    composerSourceCheckpoint: '基于已提交检查点 #{{commitSeq}} 继续',
+    composerSourceConversation: '继续当前对话',
+    composerRefineLabel: '这个候选还要怎么改？',
+    composerContinueLabel: '下一轮还要新增或调整什么？',
+    composerRefinePlaceholder: '描述哪里不对、还要如何完善……',
+    composerContinuePlaceholder: '描述基于这个检查点想要的下一版结果……',
+    iterationKeepsHistory: '每次成功生成都会产生一个不可变的新候选版本。',
+    refineDraft: '继续完善',
+    continueCheckpoint: '基于检查点继续',
+    discardAndRegenerate: '废弃并重新生成',
+    returnToLatest: '回到最新',
+    checkpointReadyTitle: '检查点 #{{commitSeq}} 已提交',
+    checkpointReadyDescription: '会话仍然保持活跃，随时可从同一个输入框继续下一轮。',
+    draftHistory: '候选历史',
+    draftLifecycle: {
+      current: '当前候选',
+      committed: '已提交',
+      superseded: '已被替代',
+      discarded: '已废弃',
+    },
     composerLabel: '继续调整',
     composerPlaceholder: '继续描述想要的调整……',
     send: '发送',
@@ -5764,6 +5869,12 @@ export const zhCN: Resources = {
       reason: {
         'describe-goal': '描述你想构建的最终结果',
         'generation-running': '构建 Agent 正在生成草稿',
+        'working-set-queued': '新工作上下文会在本轮结束后自动生成',
+        'working-set-applying': '正在刷新工作上下文',
+        'working-set-failed': '工作上下文刷新失败，请调整或重试',
+        'draft-refining': '构建 Agent 正在完善当前候选',
+        'draft-regenerating': '旧候选已废弃，正在生成全新候选',
+        'generation-retrying': '正在重试上一轮失败的生成',
         'answer-questions': '回答构建 Agent 的问题后继续',
         'review-draft': '应用前请复核拟创建或修改的资源',
         'draft-stale': '上下文已变化，请重新生成此草稿',
@@ -5772,6 +5883,7 @@ export const zhCN: Resources = {
         'generation-failed': '生成失败，请查看本轮执行并重试',
         'apply-failed': '应用失败，请先检查错误再重试',
         applied: '本轮已应用，可继续提出调整',
+        'checkpoint-ready': '检查点已提交，可随时继续下一轮',
         archived: '任务已归档，只读',
       },
     },

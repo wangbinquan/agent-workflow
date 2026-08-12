@@ -28,6 +28,10 @@ import {
   IntentDraftDtoSchema,
   IntentMountRequestsSchema,
   PostIntentAnswersSchema,
+  PostIntentCurrentActionSchema,
+  PostIntentIterationSchema,
+  PostIntentRetrySchema,
+  PostIntentWorkingSetChangeSchema,
   PostIntentMessageSchema,
   PostIntentMountApprovalsSchema,
   IntentMountRefSchema,
@@ -44,9 +48,8 @@ import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { loadConfig } from '@/config'
-import { intentApplyJournal, intentDrafts } from '@/db/schema'
+import { intentApplyJournal, intentDraftResolutions, intentDrafts } from '@/db/schema'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
 import { applyIntentChangeset } from '@/services/intent/applyChangeset'
@@ -54,12 +57,8 @@ import { deriveIntentSlots } from '@/services/intent/resolveChangeset'
 import { projectIntentJourney } from '@/services/intent/journey'
 import { listVisibleIntentResources } from '@/services/intent/resourceCatalog'
 import { canAuditIntentSessions } from '@/services/resourceAcl'
-import {
-  cancelIntentTurn,
-  resolveIntentTurnConfig,
-  runIntentTurn,
-  settleReservedIntentTurnStartFailure,
-} from '@/services/intent/turnEngine'
+import { cancelIntentTurn } from '@/services/intent/turnEngine'
+import { dispatchIntentTurn } from '@/services/intent/dispatcher'
 import { getIntentTurnSession, projectIntentTurnExecution } from '@/services/intent/turnSession'
 import {
   addIntentMount,
@@ -72,15 +71,25 @@ import {
   listIntentTurns,
   rebaseIntentSession,
   removeIntentMount,
-  reserveIntentRetryTurn,
   sessionManifest,
   setIntentSessionStatus,
   type ReservedIntentTurn,
   type IntentSessionRow,
 } from '@/services/intent/session'
 import { safeJsonOrThrowInvalid } from '@/util/http'
-
-const log = createLogger('intentRoutes')
+import {
+  reserveExactIntentRetry,
+  reserveIntentCurrentAction,
+  reserveIntentIteration,
+} from '@/services/intent/iteration'
+import {
+  activateIntentWorkingSetChange,
+  cancelIntentWorkingSetChange,
+  getLatestIntentWorkingSetChange,
+  projectIntentWorkingSetChange,
+  retryIntentWorkingSetChange,
+  submitIntentWorkingSetChange,
+} from '@/services/intent/workingSet'
 
 /** Zod-validated JSON-record parse — routes never `as`-cast (RFC-054 W1-7). */
 const JsonRecordSchema = z.record(z.string(), z.unknown())
@@ -138,112 +147,25 @@ function encodeIntentListCursor(row: { updatedAt: number; id: string }): string 
 export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
   const appHome = Paths.root
 
-  async function fireTurn(
+  function fireTurn(
     sessionId: string,
     actor: Actor,
     configSnapshot: ReturnType<typeof loadConfig>,
     reservation: ReservedIntentTurn,
   ): Promise<void> {
-    const EXECUTION_BROADCAST_THROTTLE_MS = 500
-    let lastExecutionBroadcastAt = 0
-    let pendingExecution: { sessionId: string; turnId: string; eventSeq: number } | undefined
-    let executionTimer: ReturnType<typeof setTimeout> | undefined
-    const flushExecution = (): void => {
-      if (pendingExecution === undefined) return
-      const event = pendingExecution
-      pendingExecution = undefined
-      lastExecutionBroadcastAt = Date.now()
-      intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
-        type: 'intent.turn.execution.updated',
-        sessionId: event.sessionId,
-        turnId: event.turnId,
-        eventSeq: event.eventSeq,
-        ownerUserId: actor.user.id,
-      })
-    }
-    const queueExecution = (event: {
-      sessionId: string
-      turnId: string
-      eventSeq: number
-    }): void => {
-      if (pendingExecution === undefined || event.eventSeq >= pendingExecution.eventSeq) {
-        pendingExecution = event
-      }
-      const remaining = EXECUTION_BROADCAST_THROTTLE_MS - (Date.now() - lastExecutionBroadcastAt)
-      if (remaining <= 0) {
-        if (executionTimer !== undefined) clearTimeout(executionTimer)
-        executionTimer = undefined
-        flushExecution()
-        return
-      }
-      if (executionTimer !== undefined) return
-      executionTimer = setTimeout(() => {
-        executionTimer = undefined
-        flushExecution()
-      }, remaining)
-      executionTimer.unref?.()
-    }
-    try {
-      const config = await resolveIntentTurnConfig(deps.db, configSnapshot)
-      await runIntentTurn(
-        {
-          db: deps.db,
-          appHome,
-          config,
-          onSessionEvent: (event) => {
-            if (
-              event.type === 'intent.turn.execution.updated' &&
-              event.turnId !== undefined &&
-              event.eventSeq !== undefined
-            ) {
-              queueExecution({
-                sessionId: event.sessionId,
-                turnId: event.turnId,
-                eventSeq: event.eventSeq,
-              })
-              return
-            }
-            if (event.type === 'intent.turn.started' || event.type === 'intent.turn.finished') {
-              if (event.type === 'intent.turn.finished') flushExecution()
-              intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
-                type: event.type,
-                sessionId: event.sessionId,
-                turnId: event.turnId ?? '',
-                ownerUserId: actor.user.id,
-              })
-            }
-          },
-          ...(deps.intentTestDependencies?.runFn === undefined
-            ? {}
-            : { runFn: deps.intentTestDependencies.runFn }),
-        },
-        { sessionId, actor, reservation },
-      )
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
-      const settled = settleReservedIntentTurnStartFailure(deps.db, {
-        sessionId,
-        actor,
-        reservation,
-        detail,
-      })
-      log.warn('intent-turn-fire-failed', {
-        sessionId,
-        err: detail,
-        settled,
-      })
-      if (settled) {
-        intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
-          type: 'intent.turn.finished',
-          sessionId,
-          turnId: reservation.turnId,
-          ownerUserId: actor.user.id,
-        })
-      }
-    } finally {
-      if (executionTimer !== undefined) clearTimeout(executionTimer)
-      flushExecution()
-    }
+    return dispatchIntentTurn(
+      {
+        db: deps.db,
+        appHome,
+        configSnapshot,
+        ...(deps.intentTestDependencies?.runFn === undefined
+          ? {}
+          : { runFn: deps.intentTestDependencies.runFn }),
+      },
+      sessionId,
+      actor,
+      reservation,
+    )
   }
 
   function loadIntentTurnConfigSnapshot(): ReturnType<typeof loadConfig> {
@@ -394,35 +316,6 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
         execution: projectIntentTurnExecution(t),
         createdAt: t.createdAt,
       }))
-      let currentDraft: IntentDraftDto | null = null
-      if (session.currentDraftId !== null) {
-        const draft = (
-          await deps.db
-            .select()
-            .from(intentDrafts)
-            .where(eq(intentDrafts.id, session.currentDraftId))
-            .limit(1)
-        )[0]
-        if (draft !== undefined) {
-          const parsedChangeset = parseIntentChangeset(draft.changesetJson)
-          const slots = parsedChangeset.ok
-            ? deriveIntentSlots(sessionManifest(session), parsedChangeset.changeset).slots
-            : []
-          currentDraft = {
-            id: draft.id,
-            revision: draft.revision,
-            changeset: JSON.parse(draft.changesetJson),
-            validation: IntentDraftDtoSchema.shape.validation.parse(
-              JSON.parse(draft.validationJson),
-            ),
-            slots,
-            draftHash: draft.draftHash,
-            contextRevision: draft.contextRevision,
-            stale: draft.contextRevision !== session.contextRevision,
-            createdAt: draft.createdAt,
-          }
-        }
-      }
       const commits = (
         await deps.db
           .select()
@@ -441,6 +334,56 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
           createdAt: row.createdAt,
         }))
         .sort((a, b) => b.createdAt - a.createdAt || b.journalId.localeCompare(a.journalId))
+      const [draftRows, resolutionRows, workingSetRow] = await Promise.all([
+        deps.db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id)),
+        deps.db
+          .select()
+          .from(intentDraftResolutions)
+          .where(eq(intentDraftResolutions.sessionId, session.id)),
+        getLatestIntentWorkingSetChange(deps.db, session.id),
+      ])
+      const resolutionByDraft = new Map(
+        resolutionRows.map((resolution) => [resolution.draftId, resolution.reason]),
+      )
+      const committedSeqByDraft = new Map<string, number>()
+      for (const commit of commits) {
+        if (commit.state === 'committed' && commit.receipt !== null) {
+          committedSeqByDraft.set(commit.draftId, commit.receipt.commitSeq)
+        }
+      }
+      const drafts: IntentDraftDto[] = draftRows
+        .map((draft): IntentDraftDto => {
+          const parsedChangeset = parseIntentChangeset(draft.changesetJson)
+          const slots = parsedChangeset.ok
+            ? deriveIntentSlots(sessionManifest(session), parsedChangeset.changeset).slots
+            : []
+          const commitSeq = committedSeqByDraft.get(draft.id) ?? null
+          const lifecycle: IntentDraftDto['lifecycle'] =
+            session.currentDraftId === draft.id
+              ? 'current'
+              : commitSeq !== null
+                ? 'committed'
+                : (resolutionByDraft.get(draft.id) ?? 'superseded')
+          return {
+            id: draft.id,
+            revision: draft.revision,
+            changeset: JSON.parse(draft.changesetJson),
+            validation: IntentDraftDtoSchema.shape.validation.parse(
+              JSON.parse(draft.validationJson),
+            ),
+            slots,
+            draftHash: draft.draftHash,
+            contextRevision: draft.contextRevision,
+            stale: draft.contextRevision !== session.contextRevision,
+            lifecycle,
+            activity:
+              lifecycle === 'current' && session.inFlightTurnId !== null ? 'generating' : 'idle',
+            commitSeq,
+            createdAt: draft.createdAt,
+          }
+        })
+        .sort((a, b) => b.revision - a.revision || b.id.localeCompare(a.id))
+      const currentDraft = drafts.find((draft) => draft.lifecycle === 'current') ?? null
       const visibleResources = await listVisibleIntentResources(deps.db, actor)
       const visibleByKey = new Map(
         visibleResources.map((resource) => [
@@ -530,6 +473,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
         ...(commits[0] === undefined
           ? {}
           : { latestCommit: { draftId: commits[0].draftId, state: commits[0].state } }),
+        workingSetChange: workingSetRow === null ? null : { state: workingSetRow.state },
       })
       const detail: IntentSessionDetail = {
         session: {
@@ -540,9 +484,22 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
           }),
         },
         mounts,
+        workingSetChange:
+          workingSetRow === null ? null : projectIntentWorkingSetChange(workingSetRow),
         mountSuggestions,
         turns: turnDtos,
         currentDraft,
+        drafts,
+        composerSource:
+          currentDraft !== null
+            ? { kind: 'current-draft', draftId: currentDraft.id, revision: currentDraft.revision }
+            : session.commitSeq > 0
+              ? { kind: 'latest-checkpoint', commitSeq: session.commitSeq }
+              : { kind: 'conversation' },
+        retrySource:
+          latestAgentTurn?.kind === 'error' && session.inFlightTurnId === null
+            ? { turnId: latestAgentTurn.id, turnSeq: latestAgentTurn.seq }
+            : null,
         commits,
       }
       return c.json(detail)
@@ -637,6 +594,78 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
     app,
     {
       method: 'POST',
+      path: '/api/intent-sessions/:id/iterations',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Refine, continue, or regenerate an Intent candidate',
+    },
+    async (c) => {
+      const parsed = PostIntentIterationSchema.safeParse(
+        await safeJsonOrThrowInvalid(c.req.raw, 'request body must be JSON'),
+      )
+      if (!parsed.success) {
+        throw new ValidationError('intent-invalid', 'invalid iteration payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const sessionId = c.req.param('id')
+      const config = loadIntentTurnConfigSnapshot()
+      const generated = reserveIntentIteration(
+        deps.db,
+        actor,
+        sessionId,
+        parsed.data,
+        config.intentBuilderMaxGenerateRounds ?? 50,
+      )
+      if (generated.reservation !== null) {
+        void fireTurn(sessionId, actor, config, generated.reservation)
+        emitSessionUpdated(sessionId, actor.user.id)
+      }
+      return c.json(generated.receipt, generated.receipt.replayed ? 200 : 202)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/current-action',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Answer questions and decide resource suggestions in one action',
+    },
+    async (c) => {
+      const parsed = PostIntentCurrentActionSchema.safeParse(
+        await safeJsonOrThrowInvalid(c.req.raw, 'request body must be JSON'),
+      )
+      if (!parsed.success) {
+        throw new ValidationError('intent-invalid', 'invalid current-action payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const sessionId = c.req.param('id')
+      const config = loadIntentTurnConfigSnapshot()
+      const generated = reserveIntentCurrentAction(
+        deps.db,
+        actor,
+        sessionId,
+        parsed.data,
+        config.intentBuilderMaxGenerateRounds ?? 50,
+      )
+      if (generated.reservation !== null) {
+        void fireTurn(sessionId, actor, config, generated.reservation)
+        emitSessionUpdated(sessionId, actor.user.id)
+      }
+      return c.json(generated.receipt, generated.receipt.replayed ? 200 : 202)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
       path: '/api/intent-sessions/:id/mount-approvals',
       permissions: ['intent:write'],
       tokenAccess: 'allow',
@@ -710,6 +739,109 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
     app,
     {
       method: 'POST',
+      path: '/api/intent-sessions/:id/working-set',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Stage and refresh the Intent working context',
+    },
+    async (c) => {
+      const parsed = PostIntentWorkingSetChangeSchema.safeParse(
+        await safeJsonOrThrowInvalid(c.req.raw, 'request body must be JSON'),
+      )
+      if (!parsed.success) {
+        throw new ValidationError('intent-invalid', 'invalid working-context payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const sessionId = c.req.param('id')
+      const config = loadIntentTurnConfigSnapshot()
+      const submitted = submitIntentWorkingSetChange(
+        deps.db,
+        actor,
+        sessionId,
+        parsed.data,
+        config.intentBuilderMaxGenerateRounds ?? 50,
+      )
+      if (submitted.shouldInterrupt) {
+        cancelIntentTurn(deps.db, actor, sessionId)
+        const next = activateIntentWorkingSetChange(
+          deps.db,
+          actor,
+          sessionId,
+          config.intentBuilderMaxGenerateRounds ?? 50,
+          submitted.change.id,
+        )
+        if (next.reservation !== null) {
+          void fireTurn(sessionId, actor, config, next.reservation)
+        }
+      } else if (submitted.reservation !== null) {
+        void fireTurn(sessionId, actor, config, submitted.reservation)
+      }
+      emitSessionUpdated(sessionId, actor.user.id)
+      const latest = await getLatestIntentWorkingSetChange(deps.db, sessionId)
+      return c.json(
+        latest === null ? submitted.change : projectIntentWorkingSetChange(latest),
+        submitted.reservation === null && !submitted.shouldInterrupt ? 202 : 201,
+      )
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'DELETE',
+      path: '/api/intent-sessions/:id/working-set/:changeId',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Dismiss a queued or failed Intent working-context update',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const sessionId = c.req.param('id')
+      const result = cancelIntentWorkingSetChange(
+        deps.db,
+        actor,
+        sessionId,
+        c.req.param('changeId'),
+      )
+      emitSessionUpdated(sessionId, actor.user.id)
+      return c.json(result)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/working-set/:changeId/retry',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Retry a failed Intent working-context update',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const sessionId = c.req.param('id')
+      const config = loadIntentTurnConfigSnapshot()
+      const result = retryIntentWorkingSetChange(
+        deps.db,
+        actor,
+        sessionId,
+        c.req.param('changeId'),
+        config.intentBuilderMaxGenerateRounds ?? 50,
+      )
+      if (result.reservation !== null) {
+        void fireTurn(sessionId, actor, config, result.reservation)
+      }
+      emitSessionUpdated(sessionId, actor.user.id)
+      return c.json(result.change, result.reservation === null ? 200 : 202)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
       path: '/api/intent-sessions/:id/rebase',
       permissions: ['intent:write'],
       tokenAccess: 'allow',
@@ -740,15 +872,27 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
         // admin read bypass must not leak a distinguishable 422 here.
         throw new NotFoundError('intent-session-not-found', 'intent session not found')
       }
+      const parsed = PostIntentRetrySchema.safeParse(
+        await safeJsonOrThrowInvalid(c.req.raw, 'request body must be JSON'),
+      )
+      if (!parsed.success) {
+        throw new ValidationError('intent-invalid', 'invalid retry payload', {
+          issues: parsed.error.issues,
+        })
+      }
       const config = loadIntentTurnConfigSnapshot()
-      const reservation = await reserveIntentRetryTurn(
+      const generated = reserveExactIntentRetry(
         deps.db,
         actor,
         session.id,
+        parsed.data,
         config.intentBuilderMaxGenerateRounds ?? 50,
       )
-      void fireTurn(session.id, actor, config, reservation)
-      return c.json({ ok: true }, 202)
+      if (generated.reservation !== null) {
+        void fireTurn(session.id, actor, config, generated.reservation)
+        emitSessionUpdated(session.id, actor.user.id)
+      }
+      return c.json(generated.receipt, generated.receipt.replayed ? 200 : 202)
     },
   )
 
@@ -769,7 +913,19 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
         throw new NotFoundError('intent-session-not-found', 'intent session not found')
       }
       const aborted = cancelIntentTurn(deps.db, actor, session.id)
-      if (aborted) emitSessionUpdated(session.id, actor.user.id)
+      if (aborted) {
+        const config = loadIntentTurnConfigSnapshot()
+        const next = activateIntentWorkingSetChange(
+          deps.db,
+          actor,
+          session.id,
+          config.intentBuilderMaxGenerateRounds ?? 50,
+        )
+        if (next.reservation !== null) {
+          void fireTurn(session.id, actor, config, next.reservation)
+        }
+        emitSessionUpdated(session.id, actor.user.id)
+      }
       return c.json({ aborted })
     },
   )

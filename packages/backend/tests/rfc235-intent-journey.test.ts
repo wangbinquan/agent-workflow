@@ -61,7 +61,14 @@ describe('RFC-235 canonical intent journey', () => {
       kind: 'applied',
       step: 4,
       completedThrough: 4,
-      reason: 'applied',
+      reason: 'checkpoint-ready',
+    })
+    expect(
+      projectIntentJourney(base({ inFlight: true, workingSetChange: { state: 'queued' } })),
+    ).toMatchObject({ kind: 'generating', reason: 'working-set-queued' })
+    expect(projectIntentJourney(base({ workingSetChange: { state: 'failed' } }))).toMatchObject({
+      kind: 'error',
+      reason: 'working-set-failed',
     })
   })
 

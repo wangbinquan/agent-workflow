@@ -26,12 +26,21 @@ export interface IntentJourneyProjectionInput {
     draftId: string
     state: 'prepared' | 'applying' | 'committed' | 'failed'
   }
+  workingSetChange?: {
+    state: 'queued' | 'applying' | 'applied' | 'failed' | 'canceled'
+  } | null
 }
 
 export function projectIntentJourney(input: IntentJourneyProjectionInput): IntentJourneySnapshot {
   let active: IntentJourneySnapshot
   if (input.latestCommit?.state === 'prepared' || input.latestCommit?.state === 'applying') {
     active = { kind: 'applying', step: 4, completedThrough: 3, reason: 'apply-running' }
+  } else if (input.workingSetChange?.state === 'queued') {
+    active = { kind: 'generating', step: 2, completedThrough: 1, reason: 'working-set-queued' }
+  } else if (input.workingSetChange?.state === 'applying') {
+    active = { kind: 'generating', step: 2, completedThrough: 1, reason: 'working-set-applying' }
+  } else if (input.workingSetChange?.state === 'failed') {
+    active = { kind: 'error', step: 2, completedThrough: 1, reason: 'working-set-failed' }
   } else if (input.inFlight) {
     active = { kind: 'generating', step: 2, completedThrough: 1, reason: 'generation-running' }
   } else if (input.latestAgentTurnKind === 'questions') {
@@ -52,7 +61,7 @@ export function projectIntentJourney(input: IntentJourneyProjectionInput): Inten
   } else if (input.latestAgentTurnKind === 'error') {
     active = { kind: 'error', step: 2, completedThrough: 1, reason: 'generation-failed' }
   } else if (input.commitSeq > 0) {
-    active = { kind: 'applied', step: 4, completedThrough: 4, reason: 'applied' }
+    active = { kind: 'applied', step: 4, completedThrough: 4, reason: 'checkpoint-ready' }
   } else {
     active = { kind: 'goal', step: 1, completedThrough: 0, reason: 'describe-goal' }
   }

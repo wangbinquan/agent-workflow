@@ -3320,6 +3320,8 @@ export const intentTurns = sqliteTable(
     envelopeNonce: text('envelope_nonce'),
     /** Agent turns: {runtime, model, durationMs, exitCode, failureCode?, stderrTail?}. */
     runMetaJson: text('run_meta_json'),
+    /** RFC-293: idempotency identity for new iteration/current-action user turns. */
+    clientMutationId: text('client_mutation_id'),
     /**
      * RFC-235: independently-settled execution capture. NULL for user turns
      * and legacy agent turns; new agent turns start at `live`. Capture
@@ -3344,6 +3346,9 @@ export const intentTurns = sqliteTable(
   },
   (t) => ({
     sessionSeqUnique: uniqueIndex('uniq_intent_turns_session_seq').on(t.sessionId, t.seq),
+    sessionMutationUnique: uniqueIndex('uniq_intent_turns_session_mutation')
+      .on(t.sessionId, t.clientMutationId)
+      .where(sql`${t.clientMutationId} IS NOT NULL`),
     sessionIdx: index('idx_intent_turns_session').on(t.sessionId),
   }),
 )
@@ -3412,6 +3417,64 @@ export const intentDrafts = sqliteTable(
       t.revision,
     ),
     sessionIdx: index('idx_intent_drafts_session').on(t.sessionId),
+  }),
+)
+
+// RFC-293 — explicit terminal resolution for immutable drafts. Successful
+// commits remain sourced from intent_apply_journal; this table owns only
+// replacement/discard semantics.
+export const intentDraftResolutions = sqliteTable(
+  'intent_draft_resolutions',
+  {
+    draftId: text('draft_id')
+      .primaryKey()
+      .references(() => intentDrafts.id, { onDelete: 'cascade' }),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => intentSessions.id, { onDelete: 'cascade' }),
+    reason: text('reason', { enum: ['superseded', 'discarded'] }).notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    sessionIdx: index('idx_intent_draft_resolutions_session').on(t.sessionId, t.createdAt),
+  }),
+)
+
+// RFC-293 — one persistent staged working-context change per Intent session.
+// Applying the delta and reserving its successor turn happen in one tx; the row
+// lets a running turn, browser refresh, or daemon restart hand it off later.
+export const intentWorkingSetChanges = sqliteTable(
+  'intent_working_set_changes',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => intentSessions.id, { onDelete: 'cascade' }),
+    clientMutationId: text('client_mutation_id').notNull(),
+    requestHash: text('request_hash').notNull(),
+    expectedTurnSeq: integer('expected_turn_seq').notNull(),
+    expectedContextRevision: integer('expected_context_revision').notNull(),
+    mode: text('mode', { enum: ['after-current', 'interrupt'] }).notNull(),
+    deltaJson: text('delta_json').notNull(),
+    state: text('state', {
+      enum: ['queued', 'applying', 'applied', 'failed', 'canceled'],
+    }).notNull(),
+    error: text('error'),
+    resultingContextRevision: integer('resulting_context_revision'),
+    resultingTurnId: text('resulting_turn_id'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    mutationUnique: uniqueIndex('uniq_intent_working_set_mutation').on(
+      t.sessionId,
+      t.clientMutationId,
+    ),
+    unresolvedUnique: uniqueIndex('uniq_intent_working_set_unresolved')
+      .on(t.sessionId)
+      .where(sql`${t.state} IN ('queued', 'applying', 'failed')`),
+    sessionIdx: index('idx_intent_working_set_session').on(t.sessionId, t.createdAt),
+    stateIdx: index('idx_intent_working_set_state').on(t.state, t.updatedAt),
   }),
 )
 

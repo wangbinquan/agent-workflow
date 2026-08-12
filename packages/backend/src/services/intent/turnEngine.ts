@@ -27,7 +27,7 @@ import {
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { intentDrafts, intentSessions, intentTurns } from '@/db/schema'
+import { intentDraftResolutions, intentDrafts, intentSessions, intentTurns } from '@/db/schema'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import { Semaphore } from '@/util/semaphore'
@@ -64,8 +64,9 @@ export const INTENT_SCRATCH_DIRNAME = 'intent-scratch'
 export const INTENT_BUILDER_SYSTEM_PROMPT = `You are the agent-workflow intent builder — a resource architect.
 Read INTENT.md in your working directory FIRST; it defines the platform model,
 the session goal and history, and your exact output contract. Explore
-inventory/ and mounted/ as needed (read-only). You have NO shell, NO network
-and NO write access — your ONLY output is the final envelope on stdout.
+inventory/ and mounted/ as needed. Use the ordinary runtime tools available to
+you when they help produce a correct result; return the final result through
+the required envelope on stdout.
 Never invent identifiers: reference existing resources by their res#…
 handles and new ones by $new:… tempRefs. Secret values must be the ‹secret›
 sentinel. When the intent is ambiguous, ask structured questions instead of
@@ -425,6 +426,17 @@ export async function runIntentTurn(
           .all()
         draftRevision = (prev[prev.length - 1]?.revision ?? 0) + 1
         const draftId = ulid()
+        if (session.currentDraftId !== null && session.currentDraftId !== draftId) {
+          tx.insert(intentDraftResolutions)
+            .values({
+              draftId: session.currentDraftId,
+              sessionId: session.id,
+              reason: 'superseded',
+              createdAt: Date.now(),
+            })
+            .onConflictDoNothing()
+            .run()
+        }
         tx.insert(intentDrafts)
           .values({
             id: draftId,

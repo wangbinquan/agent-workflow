@@ -25,8 +25,9 @@ describe('Intent workflow preview layout', () => {
   test('desktop gives the review workspace the wider rail promised by the UX flow', () => {
     const body = ruleBody('.intent-session__workspace')
     expect(body).toMatch(
-      /grid-template-columns:\s*minmax\(320px,\s*0\.9fr\)\s+minmax\(480px,\s*1\.1fr\)/,
+      /grid-template-columns:\s*clamp\(360px,\s*32%,\s*620px\)\s+minmax\(0,\s*1fr\)/,
     )
+    expect(body).toMatch(/overflow:\s*hidden/)
   })
 
   test('inline and expanded workflow canvases own explicit bounded height', () => {
