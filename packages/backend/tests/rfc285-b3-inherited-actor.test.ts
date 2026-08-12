@@ -64,6 +64,17 @@ describe('RFC-285 B3 — buildInheritedActor 判定单源', () => {
     expect(actor!.user.id).toBe(SYSTEM_USER_ID)
     expect(actor!.permissions.size).toBe(0)
   })
+
+  test("字符串 '__system__' owner → 真身查行臂（有意的行为变化，实现门 P3-3 定界）", async () => {
+    const db = makeDb()
+    // createInMemoryDb 迁移链自带 __system__ 系统用户行（admin/active）。
+    const actor = await buildInheritedActor(db, SYSTEM_USER_ID)
+    expect(actor).not.toBeNull()
+    expect(actor!.user.id).toBe(SYSTEM_USER_ID)
+    // 与 NULL 臂的空幽灵不同：真身解析、角色基线权限（系统行为自洽；
+    // 普通 session/PAT 无法把任务 owner 写成 __system__，无越权面）。
+    expect(actor!.permissions.size).toBeGreaterThan(0)
+  })
 })
 
 describe('RFC-285 B3 — 三臂接线源码锁', () => {

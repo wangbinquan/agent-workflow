@@ -60,11 +60,15 @@ describe('RFC-285 B5 — stale 方言码灭绝', () => {
   })
 
   test('后端 src 内 resource-operation-stale 字符串的直接产出仅 helper 一处', () => {
+    // 实现门路 2 P3-2：原单行正则是漏勺——多行书写的 new ConflictError(\n
+    // 'resource-operation-stale' 抓不到（mcp.ts / intent/applyChangeset.ts 两处
+    // 漏网已收编 helper）。改跨行匹配（\s* 容换行缩进），锁「强制走 helper」
+    // 的原意才真正成立。
     const src = resolve(import.meta.dir, '..', 'src')
     let direct = 0
     for (const file of walk(src)) {
       const text = readFileSync(file, 'utf8')
-      direct += (text.match(/new ConflictError\('resource-operation-stale'/g) ?? []).length
+      direct += (text.match(/new ConflictError\(\s*'resource-operation-stale'/g) ?? []).length
     }
     expect(direct).toBe(1) // util/errors.ts staleConflictError 内部那一处
   })

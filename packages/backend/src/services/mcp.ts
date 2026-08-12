@@ -266,14 +266,10 @@ export async function deleteMcp(
     const expectedConfigHash = mcpOperationConfigHashOf(existing)
     const currentConfigHash = mcpOperationConfigHashOf(current)
     if (currentConfigHash !== expectedConfigHash) {
-      throw new ConflictError(
-        'resource-operation-stale',
-        'the MCP changed; reload before deleting',
-        {
-          expectedConfigHash,
-          currentConfigHash,
-        },
-      )
+      throw staleConflictError('mcp', 'the MCP changed; reload before deleting', {
+        expectedConfigHash,
+        currentConfigHash,
+      })
     }
     const refs = findAgentsReferencingMcpInTx(tx, existing.id)
     if (refs.length > 0) return refs

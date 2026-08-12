@@ -102,11 +102,14 @@ async function ensureClarifyVisible(
   )[0]
   if (!taskRow) return
   if (!(await canViewTask(deps.db, actor, taskRow))) {
-    // RFC-285 B1：不可见 ≡ 不存在。这里不能用 task-not-found——那等于确认
-    // 「这个 session 存在且绑着某个任务」；对无权调用方，看不见的 clarify
-    // session 就该长得像根本没有这个 session（与真缺失走的
-    // clarify-session-not-found 字节同形）。
-    throw new NotFoundError('clarify-session-not-found', 'clarify session not found')
+    // RFC-285 B1：不可见 ≡ 不存在。不能用 task-not-found——那等于确认「这个
+    // session 存在且绑着某个任务」。同形基准是**detail 端点对真缺失产出的
+    // 形态**（byte-oracle 实测）：clarify-round-not-found + 带 id 文案——本门
+    // 放行缺失行（return）后端点自己就抛这个；不可见分支逐字节镜像之。
+    throw new NotFoundError(
+      'clarify-round-not-found',
+      `no clarify_round for intermediary node_run ${intermediaryNodeRunId}`,
+    )
   }
 }
 

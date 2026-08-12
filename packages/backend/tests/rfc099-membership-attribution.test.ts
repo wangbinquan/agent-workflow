@@ -516,8 +516,19 @@ describe('RFC-099 — clarify membership, drafts, attribution freeze', () => {
         })
       ).status,
     ).toBe(403)
-    // RFC-285 B1：clarify 读门对外人改与「无此 session」同形 404
-    expect((await req(app, users.dave.token, `/api/clarify/${clarifyNodeRunId}`)).status).toBe(404)
+    // RFC-285 B1（实现门 P2-1 补锁）：clarify 读门对外人与「真缺失」**逐字节
+    // 同形**——基准是 detail 端点自己的 missing 形态（clarify-round-not-found
+    // + 带 id 文案；byte-oracle 曾实测抓出初版误用 session-not-found 的残余
+    // 可区分性）。归一 id 后整包比对。
+    const invisibleClarify = await req(app, users.dave.token, `/api/clarify/${clarifyNodeRunId}`)
+    const missingId = 'nr_no_such_b1'
+    const missingClarify = await req(app, users.dave.token, `/api/clarify/${missingId}`)
+    expect(invisibleClarify.status).toBe(404)
+    expect(missingClarify.status).toBe(404)
+    const norm = (s: string, id: string): string => s.replaceAll(id, '<ID>')
+    const invisibleClarifyBody = norm(await invisibleClarify.text(), clarifyNodeRunId)
+    expect(invisibleClarifyBody).toContain('clarify-round-not-found')
+    expect(invisibleClarifyBody).toBe(norm(await missingClarify.text(), missingId))
     const daveCount = (await (
       await req(app, users.dave.token, '/api/clarify/pending-count')
     ).json()) as { count: number }

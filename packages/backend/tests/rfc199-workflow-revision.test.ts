@@ -13,6 +13,7 @@ import {
 } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
+import { getTask } from '../src/services/task'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
@@ -507,6 +508,12 @@ describe('RFC-199 workflow revision fencing', () => {
     const dangling = await db.select().from(tasks).where(eq(tasks.workflowId, workflow.id))
     expect(dangling.length).toBe(1)
     expect(dangling[0]!.status).toBe('done')
+    // 实现门路 1 P3-1 补穿透：详情读面（getTask 即 GET /api/tasks/:id 的
+    // 服务源）对悬空引用不炸——leftJoin 让 workflowName 落 null，前端按
+    // nullable 分支渲染（并非「无活取」，plan 实施记录已更正表述）。
+    const detail = await getTask(db, dangling[0]!.id)
+    expect(detail).not.toBeNull()
+    expect(detail!.workflowName ?? null).toBeNull()
     expect(frames).toEqual([
       {
         type: 'workflow.deleted',

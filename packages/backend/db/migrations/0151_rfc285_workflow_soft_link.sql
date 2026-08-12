@@ -6,26 +6,25 @@
 -- link, no FK」先例：列保持 NOT NULL（软链仍必填，只是不再强制存在性），终态
 -- 任务详情容忍悬空 workflow 引用（与 agent 删除后同型）。
 --
--- 语序采 0117/0132 的 rename-first 模板；tasks 有 14 条入向 FK（node_runs /
--- doc_versions / task_collaborators / clarify_rounds …）+ parent_task_id 自引用。
--- 本仓迁移 runner 恒以 `PRAGMA foreign_keys=OFF` 执行（db/client.ts RFC-115 注：
--- drizzle 单事务内 pragma 不生效，故在事务外先关）。新版 SQLite 即使 FK 已关，
--- 默认仍会在 RENAME 时改写入向引用；因此重命名语句周围还必须临时启用
--- `legacy_alter_table`，让引用文本保持 `tasks`。先改名旧表、再建终名新表后，全部
--- 入向 FK 自然指向新表；FK ON 模式仍会改写引用（危险语序），本迁移不在该模式下跑。
---
--- DROP 旧表前做行数一致断言（0132 的「CHECK 临时表 + 条件 INSERT」原语）。
---
--- ⚠ 内联 pragma 三明治（0019/0035/0057 既有先例）：本仓存在 raw 重放语境；
--- foreign_keys 必须在事务外关闭，而 legacy_alter_table 可在事务内临时切换。二者
--- 缺一都会让 RENAME 把 14 个子表的引用文本改写成 `__old_tasks`。迁移结束前恢复
--- legacy_alter_table 默认值，避免连接级设置泄漏到后续 DDL。
+-- 语序与 pragma（RFC-285 实现门 P1-1 定稿，双保险）：tasks 有 14 条入向 FK
+-- （node_runs / doc_versions / task_collaborators / clarify_rounds …）+
+-- parent_task_id 自引用，而 ALTER TABLE RENAME 是否改写其他表引用文本随
+-- SQLite 版本/构建漂移——macOS bun:sqlite 在 foreign_keys=OFF 下不改写、
+-- **Linux bun:sqlite 同 pragma 下仍改写**（849cfd91 ubuntu CI 实锤）。因此：
+--   ① **官方 12-step 反序**（建新临时名 → 搬运 → drop 旧 → rename 新到终名，
+--     sqlite.org/lang_altertable 推荐序）：唯一的 RENAME 只作用于**零入向引用
+--     的临时名** `__new_tasks`，两种改写语义下子表引用文本都保持 `tasks`；
+--   ② 迁移期临时 `legacy_alter_table=ON`（该 pragma 可在事务内生效，与
+--     foreign_keys 不同）：即便未来语序被改回 rename-first，也不会改写引用；
+--     结束前恢复 OFF，避免连接级设置泄漏到后续 DDL（测试锁定不泄漏契约）。
+-- foreign_keys 三明治（0019/0035/0057 先例）保证事务外 raw 重放语境下 DROP
+-- 不触发级联；daemon runner 本就事务外先 OFF（db/client.ts RFC-115 注），
+-- 事务内该 pragma no-op 无害。DROP 旧表前做行数一致断言（0132 的「CHECK
+-- 临时表 + 条件 INSERT」原语）。
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
 PRAGMA legacy_alter_table=ON;--> statement-breakpoint
 CREATE TEMP TABLE `__rfc285_assert` (`ok` integer NOT NULL CHECK (`ok` = 1));--> statement-breakpoint
-ALTER TABLE `tasks` RENAME TO `__old_tasks`;--> statement-breakpoint
-PRAGMA legacy_alter_table=OFF;--> statement-breakpoint
-CREATE TABLE `tasks` (
+CREATE TABLE `__new_tasks` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workflow_id` text NOT NULL,
 	`workflow_snapshot` text NOT NULL,
@@ -118,6 +117,7 @@ SELECT CASE
 END;--> statement-breakpoint
 DROP TABLE `tasks`;--> statement-breakpoint
 ALTER TABLE `__new_tasks` RENAME TO `tasks`;--> statement-breakpoint
+PRAGMA legacy_alter_table=OFF;--> statement-breakpoint
 DROP TABLE `__rfc285_assert`;--> statement-breakpoint
 CREATE INDEX `idx_tasks_workflow` ON `tasks` (`workflow_id`,`started_at`);--> statement-breakpoint
 CREATE INDEX `idx_tasks_scheduled_task` ON `tasks` (`scheduled_task_id`);--> statement-breakpoint

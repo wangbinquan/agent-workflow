@@ -104,6 +104,8 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 
 ### ⏳ 未决 P3（选摘）
 
+- ⏳ **B1 边界内的写门存在性探测残留（RFC-285 实现门路 1 P3-4 登记）**：不可见陌生人打**写**端点（clarify answers / review decision 等 requireTaskMember/ensureClarifyMember 门）仍收 403 not-task-member——可借写路径探测 run/session 存在性。系 proposal「成员制写门 403 保留」拍板边界内的已知残留（读面 404 同形不受影响）；若未来要收，须按能力影响单独立项呈批。
+
 `sweepExpiredSessions` WHERE 重复谓词(`sessionStore.ts:139`)；`resource_grants` 无删除清理(孤儿累积，ULID 不复用故无越权)；`searchUsersPublic` disabled 过滤 `|| excluded.size===0` 语义耦合；403 回带 `actorPermissions`；token 可 `?token=` query；OIDC allowlist `endsWith` 后缀混淆(`provisioning.ts:62`)；邮箱大小写不归一；运行时子进程继承全 `process.env`；403 vs 404 存在性口径混杂；协作草稿 PUT catch-all 吞错；401 不自动跳登录。
 前端抽取机会：`AclPanel`↔`TaskMembersPanel` ~150 行复制且漂移(后者缺 onError refetch)、`useIsAdmin()` 身份门 hook、`RoleBadge`(admin 配色三处矛盾)、表单命名空间清剿(4 套平行 input)、`UserPicker` 键盘/ARIA 照抄 `MultiSelect`、`ConfirmButton` 铺到破坏性单击。
 

@@ -70,14 +70,30 @@
   非终态门（E3 收紧，rfc285-b2 矩阵：拒删披露仅聚合 count / 仅终态可删 /
   翻终态转绿）、agent 现状即中档（源注升级：agent-in-use 挡的是 workflow
   定义引用，与任务引用是两回事）。展示层核对：task detail 只渲染冻结
-  workflowId 文本、无活取——**现状天然容忍悬空**，无需改动。
+  workflowId 文本；服务源 getTask 经 leftJoin 活取 workflowName（落 null）、
+  前端按 nullable 分支渲染——容忍链成立（实现门路 1 P3-1 更正「无活取」
+  表述并补穿透断言于 rfc199 套件）。
 - **附带**：unsaved-guard ESC flaky 治本（93f02dd0 CI ubuntu 腿复发后定案——
   与数字键家族同根因：Dialog Escape 是 effect 挂的 window 原生监听；act 冲刷
   锚点修复，5×19 循环绿；backlog 销账）。
-- **门禁与推送**：T1-T7 链经 pin gate（quality/前端绿；backend 四条 5000ms 家族
-  红全数隔离绿 + 基线对照〔87ed494d/afea367e/8d80be69/93f02dd0 静置全绿〕归属
-  环境）后推送 93f02dd0，exact-SHA CI 看护中。**剩余：T5（B2 schema 迁移）、
-  T10（实现门 + 收尾）。**
+- **门禁与推送**：T1-T7 链推送 93f02dd0（exact-SHA CI 重跑 success）；
+  T5/T8/T9 + 迁移契约批推送 849cfd91。
+- **T10 实现门（双路独立子代理，pin 849cfd91 只读）**：路 2 判**可收工**——
+  0 P1/P2，3 条 P3 全处置：b5 单源锁改跨行正则并把 mcp/applyChangeset 两处
+  多行直写收编 helper；taskFeedback 头注更正；Q5 注释定界，'**system**'
+  字符串臂=真身查行系有意行为，普通凭据无法伪造 owner、无越权面，补字符串
+  臂测试。路 1 报 **P1-1**：849cfd91 ubuntu CI 实锤 Linux bun:sqlite 在
+  FK OFF 下 RENAME 仍改写入向引用——rename-first 平台不安全，macOS 侥幸绿。
+  修复与并行会话的 e2ab70be（legacy_alter_table 方案；该 commit 曾裹入本会话
+  盘上半程编辑成坏杂交，未推送）**融合定稿**：官方 12-step 反序，唯一 RENAME
+  只作用于零入向引用的临时名、平台无关；叠加迁移期 legacy_alter_table=ON
+  双保险；新增「唯一 RENAME 源」结构锁与 legacy 不泄漏断言。P2-1（clarify
+  触点零覆盖）补 byte-oracle 时又实测抓出第三条残余可区分性——detail 端点
+  missing 形态是 clarify-round-not-found 带 id 文案而非 session-not-found，
+  不可见分支改为逐字节镜像端点真实 missing 形态。路 1 其余 P3：详情穿透断言
+  已补（rfc199）、CLAUDE.md Q4 半句已正、写门探测残留登记 backlog、AC-3
+  行为臂维持文本锁兜底档（P3-6 记账）。**剩余：本批 gate+push+CI 绿后 AC-8
+  才闭环；design/plan.md 索引 + STATE.md 终账仍被 RFC-293 未落档卡住。**
 
 ## T1 附录：三份前置排查清单（2026-08-13 实测 HEAD=87ed494d）
 

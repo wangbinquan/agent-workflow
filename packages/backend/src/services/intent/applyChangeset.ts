@@ -55,7 +55,7 @@ import {
   plugins as pluginsTable,
 } from '@/db/schema'
 import { ACL_TABLES } from '@/services/resourceAcl'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import { ulid } from 'ulid'
 import { ZodError } from 'zod'
@@ -707,10 +707,7 @@ async function applyInner(
             }
             const currentHash = pluginOperationConfigHashOf(rowToPluginForIntent(captured))
             if (currentHash !== fence.configHash) {
-              throw new ConflictError(
-                'resource-operation-stale',
-                'the plugin changed; reload before saving',
-              )
+              throw staleConflictError('plugin', 'the plugin changed; reload before saving')
             }
             const p = op.payload as {
               spec: string

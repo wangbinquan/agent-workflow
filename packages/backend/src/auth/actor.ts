@@ -101,8 +101,12 @@ export function actorOf(c: Context): Actor {
  * - owner 失活 / 行缺失 → **null**（scheduled 臂抛 `owner-inactive`、call 新启
  *   臂抛 `call-owner-inactive`；resume 臂按 Q6 豁免不经此检查）。
  * - ownerUserId 为 NULL（legacy 任务）→ **Q5 拍板放行**：返回 `__system__`
- *   幽灵 actor（空权限集，与历史伪造形态语义一致——无 owner 可判失活，
- *   也绝不扩权）。
+ *   幽灵 actor（空权限集——无 owner 可判失活，也绝不扩权）。
+ * - ownerUserId 为字符串 `'__system__'`（daemon-token 启动的任务）→ 走**真身
+ *   查行**臂：解析出 `__system__` 用户行（role=admin）。这是有意的行为变化
+ *   （实现门路 2 P3-3 确认）：旧 `as unknown as` 伪造对该值给空权限幽灵，
+ *   现在系统自有任务的子调用以系统身份行事更自洽；普通 session/PAT 无法把
+ *   任务 owner 写成 `__system__`，无越权面。「空幽灵」语义只属 NULL 臂。
  */
 export async function buildInheritedActor(
   db: DbClient,
