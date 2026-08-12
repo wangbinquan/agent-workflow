@@ -13,7 +13,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { Agent, DwTokenMap, WorkflowDefinition } from '@agent-workflow/shared'
-import { DW_VALIDATION_CODES, dwGeneratedToWorkflowDef } from '@agent-workflow/shared'
+import {
+  DW_VALIDATION_CODES,
+  WORKFLOW_SCHEMA_VERSION,
+  dwGeneratedToWorkflowDef,
+} from '@agent-workflow/shared'
 import {
   buildDwPoolMembers,
   buildDynamicWorkflowGenerateSnapshot,
@@ -77,7 +81,7 @@ describe('buildOrchestratorAgent', () => {
 describe('buildDynamicWorkflowGenerateSnapshot + phases', () => {
   test('generation snapshot is a single orchestrator agent-single node', () => {
     const snap = buildDynamicWorkflowGenerateSnapshot()
-    expect(snap.$schema_version).toBe(4)
+    expect(snap.$schema_version).toBe(WORKFLOW_SCHEMA_VERSION)
     expect(snap.nodes).toEqual([
       {
         id: DW_ORCHESTRATOR_NODE_ID,

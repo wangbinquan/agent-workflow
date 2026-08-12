@@ -11,6 +11,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { CODE_HOST_PARAM_MAX, type TriggerContext } from '@agent-workflow/shared'
 
 import { executeCodeHostCall, type CodeHostCallSpec } from '../src/services/codeHost/call'
 import { resolveProjectFallback } from '../src/services/codeHost/project'
@@ -63,7 +64,7 @@ function glDeps(
       token: TOKEN,
       rejectUnauthorized: true,
     },
-    ctx: { ports: {}, trigger: null },
+    ctx: { ports: {}, triggerContext: null },
     projectFallback: { ok: true, value: 'grp%2Frepo' },
     sleep: async () => {},
     ...overrides,
@@ -81,7 +82,7 @@ function ghDeps(
       token: 'aw-fixture-gh-5678', // gitleaks:allow
       rejectUnauthorized: true,
     },
-    ctx: { ports: {}, trigger: null },
+    ctx: { ports: {}, triggerContext: null },
     projectFallback: { ok: true, value: 'octo/repo' },
     sleep: async () => {},
     ...overrides,
@@ -97,7 +98,7 @@ describe('RFC-269 请求组装 —— 两家的真实端点', () => {
         action: 'comment.reply-thread',
         params: { mr: '42', thread: 'disc-1', body: '{{verdict}}' },
       },
-      glDeps({ ctx: { ports: { verdict: '审计通过' }, trigger: null }, fetchImpl }),
+      glDeps({ ctx: { ports: { verdict: '审计通过' }, triggerContext: null }, fetchImpl }),
     )
     expect(out.ok).toBe(true)
     expect(seen[0]!.url).toBe(
@@ -275,24 +276,38 @@ describe('RFC-269 请求组装 —— 两家的真实端点', () => {
   })
 })
 
-describe('RFC-269 触发上下文', () => {
-  test('{{trigger.*}} 解析进定位参数', async () => {
+describe('RFC-269 / RFC-292 触发上下文', () => {
+  const context = (
+    eventType: TriggerContext['trigger']['webhook']['event_type'],
+    fields: Record<string, string> = {},
+  ): TriggerContext => ({ trigger: { webhook: { event_type: eventType, ...fields } } })
+
+  test('{{trigger.webhook.*}} 解析进定位参数', async () => {
     const { fetchImpl, seen } = capturing([{ status: 201 }])
     await executeCodeHostCall(
       {
         provider: 'gitlab',
         action: 'comment.reply-thread',
         params: {
-          project: '{{trigger.project_id}}',
-          mr: '{{trigger.mr_iid}}',
-          thread: '{{trigger.comment_thread_id}}',
+          project: '{{trigger.webhook.project_id}}',
+          mr: '{{trigger.webhook.mr_iid}}',
+          thread: '{{trigger.webhook.comment_thread_id}}',
           body: 'done',
         },
       },
       glDeps({
         ctx: {
           ports: {},
-          trigger: { project_id: '77', mr_iid: '42', comment_thread_id: 'd9' },
+          triggerContext: {
+            trigger: {
+              webhook: {
+                event_type: 'note',
+                project_id: '77',
+                mr_iid: '42',
+                comment_thread_id: 'd9',
+              },
+            },
+          },
         },
         fetchImpl,
       }),
@@ -308,13 +323,65 @@ describe('RFC-269 触发上下文', () => {
       {
         provider: 'gitlab',
         action: 'comment.reply-thread',
-        params: { mr: '{{trigger.mr_iid}}', thread: 'x', body: 'y' },
+        params: { mr: '{{trigger.webhook.mr_iid}}', thread: 'x', body: 'y' },
       },
-      glDeps({ ctx: { ports: {}, trigger: null }, fetchImpl }),
+      glDeps({ ctx: { ports: {}, triggerContext: null }, fetchImpl }),
     )
     expect(out.ok).toBe(false)
     if (out.ok) return
-    expect(out.code).toBe('code-host-trigger-context-missing')
+    expect(out.code).toBe('trigger-context-missing')
+    expect(seen).toHaveLength(0)
+  })
+
+  test('可选 preset 参数也在单次 preflight 内，缺 context 时 fetch=0', async () => {
+    const { fetchImpl, seen } = capturing([{ status: 201 }])
+    const out = await executeCodeHostCall(
+      {
+        provider: 'gitlab',
+        action: 'commit-status.set',
+        params: {
+          sha: 'abc',
+          state: 'success',
+          description: '{{trigger.webhook.mr_title}}',
+        },
+      },
+      glDeps({ fetchImpl }),
+    )
+    expect(out).toMatchObject({ ok: false, code: 'trigger-context-missing' })
+    expect(seen).toHaveLength(0)
+  })
+
+  test('当前 event type 不可用的字段在 fetch 前失败', async () => {
+    const { fetchImpl, seen } = capturing([{ status: 201 }])
+    const out = await executeCodeHostCall(
+      {
+        provider: 'gitlab',
+        action: 'comment.create',
+        params: { mr: '1', body: '{{trigger.webhook.mr_title}}' },
+      },
+      glDeps({
+        ctx: { ports: {}, triggerContext: context('push', { mr_title: 'must-not-be-used' }) },
+        fetchImpl,
+      }),
+    )
+    expect(out).toMatchObject({ ok: false, code: 'trigger-field-unavailable' })
+    expect(seen).toHaveLength(0)
+  })
+
+  test('旧两段 trigger 语法 fail-closed 且 fetch=0', async () => {
+    const { fetchImpl, seen } = capturing([{ status: 201 }])
+    const out = await executeCodeHostCall(
+      {
+        provider: 'gitlab',
+        action: 'comment.create',
+        params: { mr: '1', body: '{{trigger.mr_title}}' },
+      },
+      glDeps({
+        ctx: { ports: {}, triggerContext: context('note', { mr_title: 'legacy' }) },
+        fetchImpl,
+      }),
+    )
+    expect(out).toMatchObject({ ok: false, code: 'code-host-param-invalid' })
     expect(seen).toHaveLength(0)
   })
 })
@@ -641,6 +708,50 @@ describe('RFC-269 自定义请求逃生舱', () => {
     )
   })
 
+  test('custom path/query/body 全部在 fetch 前扫描 trigger 依赖', async () => {
+    for (const request of [
+      { method: 'GET' as const, path: '/projects/{{trigger.webhook.project_id}}' },
+      {
+        method: 'GET' as const,
+        path: '/projects/1',
+        query: { mr: '{{trigger.webhook.mr_iid}}' },
+      },
+      {
+        method: 'POST' as const,
+        path: '/projects/1',
+        body: '{"body":"{{trigger.webhook.comment_text}}"}',
+      },
+    ]) {
+      const { fetchImpl, seen } = capturing([{ status: 200 }])
+      const out = await executeCodeHostCall(custom(request), glDeps({ fetchImpl }))
+      expect(out).toMatchObject({ ok: false, code: 'trigger-context-missing' })
+      expect(seen).toHaveLength(0)
+    }
+  })
+
+  test('重复 event_json 造成渲染后 query 超限时 fetch=0', async () => {
+    const eventJson = 'x'.repeat(32 * 1024)
+    const template = Array.from(
+      { length: Math.ceil(CODE_HOST_PARAM_MAX / eventJson.length) + 1 },
+      () => '{{trigger.webhook.event_json}}',
+    ).join('')
+    const { fetchImpl, seen } = capturing([{ status: 200 }])
+    const out = await executeCodeHostCall(
+      custom({ method: 'GET', path: '/projects/1', query: { payload: template } }),
+      glDeps({
+        ctx: {
+          ports: {},
+          triggerContext: {
+            trigger: { webhook: { event_type: 'note', event_json: eventJson } },
+          },
+        },
+        fetchImpl,
+      }),
+    )
+    expect(out).toMatchObject({ ok: false, code: 'code-host-param-invalid' })
+    expect(seen).toHaveLength(0)
+  })
+
   test('DELETE 需要显式勾选破坏性方法', async () => {
     const { fetchImpl, seen } = capturing([{ status: 204 }])
     const denied = await executeCodeHostCall(
@@ -672,7 +783,7 @@ describe('RFC-269 自定义请求逃生舱', () => {
     const out = await executeCodeHostCall(
       custom({ method: 'POST', path: '/projects/1/notes', body: '{"body": "{{evil}}"}' }),
       glDeps({
-        ctx: { ports: { evil: '", "admin": true, "x": "' }, trigger: null },
+        ctx: { ports: { evil: '", "admin": true, "x": "' }, triggerContext: null },
         fetchImpl,
       }),
     )
@@ -803,28 +914,20 @@ describe('RFC-269 源码层锁', () => {
     }
   })
 
-  test('{{trigger.*}} 只在本节点解析 —— agent prompt 的变量语法结构上表达不了它', () => {
-    // 事件正文是任何人都能写的外部文本；本 RFC 不新开一条它直达模型上下文的
-    // 通道（proposal N4 / design D16）。这里锁的是**结构性**保证：prompt 的
-    // 模板正则用 `\w+`，而 `\w` 不含点，所以 `{{trigger.x}}` 根本匹配不上，
-    // 会原样留在提示词里。换成含点的语法就会让这条红。
+  test('RFC-292 统一 parser 同时服务 agent prompt 与 code-host，不再有私有 trigger grammar', () => {
     const promptSrc = readFileSync(
       resolve(import.meta.dir, '..', '..', 'shared', 'src', 'prompt.ts'),
       'utf8',
     )
-    expect(promptSrc).toContain('const TEMPLATE_RE = /\\{\\{\\s*(\\w+)\\s*\\}\\}/g')
+    expect(promptSrc).toContain('renderTemplateRefs')
+    expect(promptSrc).toContain('triggerContext.trigger.webhook')
 
-    // 另一半：解析 trigger 的渲染器只被代码平台节点的组装路径调用。
     const callSrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'codeHost', 'call.ts'),
       'utf8',
     )
     expect(callSrc).toContain('renderCodeHostTemplate')
-    const promptUsers = readFileSync(
-      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'prompt.ts'),
-      'utf8',
-    )
-    expect(promptUsers).not.toContain('renderCodeHostTemplate')
-    expect(promptUsers).not.toContain('trigger.')
+    expect(callSrc).toContain('triggerContext')
+    expect(callSrc).not.toContain("'code-host-trigger-context-missing'")
   })
 })

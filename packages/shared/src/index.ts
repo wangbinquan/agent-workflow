@@ -49,6 +49,12 @@ export * from './clarify'
 export * from './git-url'
 export * from './prompt'
 export * from './promptFencing' // RFC-200
+export * from './templateRef' // RFC-292
+export * from './callGoalTemplate' // RFC-292
+export * from './triggerContext' // RFC-292
+export * from './webhookTriggerContext' // RFC-292
+export * from './workflowTemplateSurfaces' // RFC-292
+export * from './workflowMigration' // RFC-292
 export * from './agent-md'
 export * from './agent-md-serialize' // RFC-234
 export * from './intentSecretSlots' // RFC-234
@@ -92,13 +98,12 @@ export * from './privilegedNodeRedaction' // RFC-270
 export * from './ref'
 // RFC-271 — ResourceBundle 表达层（payload / op / 闭合性 / 脱敏投影）。
 export * from './bundle'
-// RFC-269 — code-host call node: action registry, template encoding, path
-// judgements, trigger-context projection.
+// RFC-269 — code-host call node: action registry, template encoding and path
+// judgements. Trigger context is owned by the source-neutral exports above.
 export * from './codeHost/actions'
 export * from './codeHost/authorProjection'
 export * from './codeHost/path'
 export * from './codeHost/template'
-export * from './codeHost/triggerContext'
 export * from './workflowCalls'
 export * from './systemChannelPorts'
 export * from './scheduleTime' // RFC-159

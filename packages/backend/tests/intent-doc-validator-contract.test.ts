@@ -4,7 +4,7 @@
 // same shape (P2-3/4/5): the doc described a node form loosely enough that a
 // model could follow it exactly and still emit a definition which APPLIES
 // cleanly and then can never LAUNCH — a custom request with an object `body`,
-// a `{{trigger.pull_request_number}}` that is not in the closed variable set, a
+// a `{{trigger.webhook.pull_request_number}}` that is not in the closed variable set, a
 // call-workflow whose optional child input was left unwired.
 //
 // Tightening the prose fixed those three. Nothing, however, tied the prose to
@@ -28,7 +28,8 @@ import {
   INTENT_REDACTED,
   SCRIPT_ENV_VALUE_PREFIX,
   SCRIPT_REDACTED_FIELDS,
-  TRIGGER_CONTEXT_VARS,
+  TRIGGER_CONTEXT_FIELDS,
+  WORKFLOW_SCHEMA_VERSION,
   codeHostJsonBodyIssue,
   codeHostPathIssue,
   parseIntentChangeset,
@@ -38,6 +39,7 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { buildIntentDoc, INTENT_TURN_GUIDANCE } from '../src/services/intent/intentDoc'
+import { validateDraftChangeset } from '../src/services/intent/resolveChangeset'
 import { validateWorkflowDef, type ValidatorContext } from '../src/services/workflow.validator'
 import { assertScriptAuthorAllowed } from '../src/services/scriptAuthorGate'
 import { assertCodeHostAuthorAllowed } from '../src/services/codeHostAuthorGate'
@@ -238,15 +240,17 @@ describe('contract: custom-request body rules', () => {
 // ---------------------------------------------------------------------------
 describe('contract: trigger variables are a closed set', () => {
   test('doc enumerates exactly the variables the validator accepts', () => {
-    for (const name of TRIGGER_CONTEXT_VARS) expect(doc).toContain(name)
-    expect(doc).toContain(`ONLY these ${TRIGGER_CONTEXT_VARS.length} names`)
+    for (const name of TRIGGER_CONTEXT_FIELDS) {
+      expect(doc).toContain(`{{trigger.webhook.${name}}}`)
+    }
+    expect(doc).toContain(`complete ${TRIGGER_CONTEXT_FIELDS.length} canonical tokens`)
   })
 
   test('an enumerated variable validates, an invented one does not', () => {
     const good = codesOf(
       codeHostDef({
         action: 'comment.create',
-        params: { mr: '{{trigger.mr_iid}}', body: 'hi' },
+        params: { mr: '{{trigger.webhook.mr_iid}}', body: 'hi' },
       }),
     )
     expect(good).not.toContain('code-host-var-unknown')
@@ -255,21 +259,88 @@ describe('contract: trigger variables are a closed set', () => {
     const bad = codesOf(
       codeHostDef({
         action: 'comment.create',
-        params: { mr: '{{trigger.pull_request_number}}', body: 'hi' },
+        params: { mr: '{{trigger.webhook.pull_request_number}}', body: 'hi' },
       }),
     )
     expect(bad).toContain('code-host-var-unknown')
   })
 
   test('every documented name really is accepted (no stale entry in the list)', () => {
-    for (const name of TRIGGER_CONTEXT_VARS) {
+    for (const name of TRIGGER_CONTEXT_FIELDS) {
       const codes = codesOf(
         codeHostDef({
           action: 'comment.create',
-          params: { mr: '1', body: `x {{trigger.${name}}} y` },
+          params: { mr: '1', body: `x {{trigger.webhook.${name}}} y` },
         }),
       )
-      expect(codes, `trigger.${name} should be accepted`).not.toContain('code-host-var-unknown')
+      expect(codes, `trigger.webhook.${name} should be accepted`).not.toContain(
+        'code-host-var-unknown',
+      )
+    }
+  })
+
+  test('Intent accepts a trigger-dependent agent prompt without synthesizing root inputs', () => {
+    const changesetFor = (promptTemplate: string) =>
+      parseIntentChangeset(
+        JSON.stringify({
+          $schema_version: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              action: 'create',
+              resourceType: 'agent',
+              tempRef: '$new:agent-1',
+              payload: {
+                name: 'trigger-worker',
+                description: '',
+                outputs: ['result'],
+                bodyMd: 'Handle the event.',
+              },
+            },
+            {
+              opId: 'op-2',
+              action: 'create',
+              resourceType: 'workflow',
+              tempRef: '$new:workflow-1',
+              payload: {
+                name: 'trigger-workflow',
+                description: '',
+                definition: {
+                  $schema_version: WORKFLOW_SCHEMA_VERSION,
+                  inputs: [],
+                  nodes: [
+                    {
+                      id: 'agent',
+                      kind: 'agent-single',
+                      agentRef: '$new:agent-1',
+                      promptTemplate,
+                    },
+                  ],
+                  edges: [],
+                },
+              },
+            },
+          ],
+        }),
+      )
+
+    const canonical = changesetFor('Handle {{trigger.webhook.comment_text}}')
+    expect(canonical.ok).toBe(true)
+    if (!canonical.ok) throw new Error(canonical.errors.join('; '))
+    const workflowOp = canonical.changeset.ops.find((op) => op.resourceType === 'workflow')
+    expect(workflowOp?.payload.definition.inputs).toEqual([])
+    expect(validateDraftChangeset([], canonical.changeset).errors).toEqual([])
+
+    for (const invalid of [
+      'Handle {{trigger.comment_text}}',
+      'Handle {{trigger.webhook.pull_request_number}}',
+    ]) {
+      const parsed = changesetFor(invalid)
+      expect(parsed.ok).toBe(true)
+      if (!parsed.ok) throw new Error(parsed.errors.join('; '))
+      expect(validateDraftChangeset([], parsed.changeset).errors).toEqual([
+        expect.stringContaining('invalid template reference'),
+      ])
     }
   })
 })
@@ -559,7 +630,7 @@ describe('contract: the dump masks with the same constant the doc names', () => 
 // The one hand-written list left in the doc, bound to the gate that enforces it.
 //
 // Every other list INTENT.md renders is derived from a constant (actions from
-// CODE_HOST_ACTION_DEFS, trigger vars from TRIGGER_CONTEXT_VARS, omissions from
+// CODE_HOST_ACTION_DEFS, trigger fields from TRIGGER_CONTEXT_FIELDS, omissions from
 // the *_REDACTED_FIELDS pairs). The "you can see it but may not edit it" list
 // cannot be: it is the DIFFERENCE between the sensitive projection and the
 // rehydrated set, and the projection's field list lives inside

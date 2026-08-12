@@ -77,7 +77,11 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
 
   test('task commit exposes attribution + context before scheduler kickoff', async () => {
     h = buildHarness()
-    const context = { repo_path: 'platform/api', mr_iid: '42' }
+    const context = {
+      trigger: {
+        webhook: { event_type: 'note' as const, repo_path: 'platform/api', mr_iid: '42' },
+      },
+    }
     const row = await launchAndObserveCommit(
       h,
       {
@@ -94,7 +98,7 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
     expect(JSON.parse(row.triggerContextJson!)).toEqual(context)
   })
 
-  test('empty webhook context persists as {} while non-webhook launch stays NULL', async () => {
+  test('minimal webhook context persists its discriminator while non-webhook launch stays NULL', async () => {
     h = buildHarness()
     const webhook = await launchAndObserveCommit(
       h,
@@ -102,25 +106,25 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
         type: 'webhook',
         webhookTriggerId: 'trigger-empty',
         webhookFireId: 'fire-empty',
-        triggerContext: {},
+        triggerContext: { trigger: { webhook: { event_type: 'push' } } },
       },
       'empty-webhook-context',
     )
     const user = await launchAndObserveCommit(h, { type: 'user' }, 'manual-context')
 
-    expect(webhook.triggerContextJson).toBe('{}')
+    expect(JSON.parse(webhook.triggerContextJson!)).toEqual({
+      trigger: { webhook: { event_type: 'push' } },
+    })
     expect(user.triggerContextJson).toBeNull()
     expect(user.webhookTriggerId).toBeNull()
     expect(user.webhookFireId).toBeNull()
   })
 
-  test('context serialization failure rolls back the task and never reaches commit', async () => {
+  test('invalid source-shaped context is rejected before task or scratch publication', async () => {
     h = buildHarness()
     let committed = false
     const brokenContext = {
-      toJSON(): never {
-        throw new Error('trigger-context-serialize-failed')
-      },
+      trigger: { webhook: { event_type: 'not-an-event' } },
     } as unknown as TriggerContext
 
     await expect(
@@ -151,7 +155,7 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
           },
         },
       ),
-    ).rejects.toThrow('trigger-context-serialize-failed')
+    ).rejects.toThrow('the frozen task trigger context is invalid')
 
     expect(committed).toBe(false)
     expect(await h.db.select().from(tasks)).toHaveLength(0)

@@ -13,7 +13,9 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { eq } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createWorkflow } from '../src/services/workflow'
@@ -236,6 +238,84 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
     // 真的物化出了单仓工作树：仓内文件在，且不是空的多仓容器。
     expect(task.repoCount).toBe(1)
     expect(existsSync(join(task.worktreePath, '.git'))).toBe(true)
+  })
+
+  test('RFC-292: manual launch rejects trigger-dependent workflow before repo materialization and task INSERT', async () => {
+    const { appHome, db, stubOpencode, wf } = await setup()
+    const row = (await db.select().from(workflows).where(eq(workflows.id, wf.id)))[0]!
+    const definition = JSON.parse(row.definition) as {
+      $schema_version: number
+      nodes: Array<{ kind: string; promptTemplate?: string }>
+    }
+    definition.$schema_version = 5
+    const agent = definition.nodes.find((node) => node.kind === 'agent-single')!
+    agent.promptTemplate = 'Handle {{trigger.webhook.comment_text}}'
+    await db
+      .update(workflows)
+      .set({ definition: JSON.stringify(definition) })
+      .where(eq(workflows.id, wf.id))
+
+    await expect(
+      startTask(
+        {
+          workflowId: wf.id,
+          name: 'manual-trigger-mismatch',
+          repoUrl: 'file:///definitely/not/materialized/by-this-test',
+          inputs: { topic: 'orders' },
+        } as unknown as StartTask,
+        { db, appHome, binaryOverride: [stubOpencode] },
+      ),
+    ).rejects.toMatchObject({ code: 'trigger-context-missing' })
+
+    expect(await db.select().from(tasks)).toHaveLength(0)
+  })
+
+  test('RFC-292: nested trigger context reaches the first agent prompt without root-input flattening', async () => {
+    const { appHome, repoPath, db, stubOpencode, wf } = await setup()
+    const row = (await db.select().from(workflows).where(eq(workflows.id, wf.id)))[0]!
+    const definition = JSON.parse(row.definition) as {
+      $schema_version: number
+      nodes: Array<{ kind: string; promptTemplate?: string }>
+    }
+    definition.$schema_version = 5
+    const agent = definition.nodes.find((node) => node.kind === 'agent-single')!
+    agent.promptTemplate = 'Topic={{topic}} Event={{trigger.webhook.comment_text}}'
+    await db
+      .update(workflows)
+      .set({ definition: JSON.stringify(definition) })
+      .where(eq(workflows.id, wf.id))
+
+    const task = await startTask(
+      {
+        workflowId: wf.id,
+        name: 'webhook-agent-context',
+        repoUrl: pathToFileURL(repoPath).href,
+        inputs: { topic: 'orders' },
+      } as unknown as StartTask,
+      {
+        db,
+        appHome,
+        binaryOverride: [stubOpencode],
+        awaitScheduler: true,
+        triggerContext: {
+          trigger: {
+            webhook: {
+              event_type: 'note',
+              comment_text: 'please-fix-from-webhook',
+            },
+          },
+        },
+      },
+    )
+
+    expect(task.status).toBe('done')
+    expect(task.inputs).toEqual({ topic: 'orders' })
+    expect(task).not.toHaveProperty('triggerContextJson')
+    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
+      (candidate) => candidate.nodeId === 'echoer',
+    )!
+    expect(run.promptText).toContain('please-fix-from-webhook')
+    expect(run.promptText).not.toContain('{{trigger.webhook.comment_text}}')
   })
 
   test('materializeWorktree returns earlyError on bad repo', async () => {

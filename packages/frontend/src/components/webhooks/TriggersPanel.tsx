@@ -38,7 +38,7 @@ import { TableViewport } from '@/components/TableViewport'
 import {
   TemplateVarChips,
   applyTemplateVarInsertion,
-  webhookVarGroupsForDisplay,
+  webhookTriggerVarGroupsForDisplay,
 } from '@/components/TemplateVarChips'
 import { currentActorAtRequest, useActor, type MeResponse } from '@/hooks/useActor'
 import { useUserLookup } from '@/hooks/useUserLookup'
@@ -103,6 +103,7 @@ interface Draft {
   inputMappings: Record<string, WebhookInputMapping>
   description: string
   goal: string
+  workingBranch: string
   /**
    * 行里 launch payload 的原样副本。UI 只拥有它真正渲染的那几个键（见
    * `payloadOf`），其余合法字段必须原样带回——否则在界面上改个名字保存，就会
@@ -133,6 +134,7 @@ const EMPTY_DRAFT: Draft = {
   inputMappings: {},
   description: '',
   goal: '',
+  workingBranch: '',
   payloadBase: {},
   maxConsecutiveFires: 3,
   autoRegisterRepos: true,
@@ -168,6 +170,10 @@ function draftFromRow(row: WebhookTrigger): Draft {
         : {},
     description: row.launchKind === 'agent' ? (payload.description ?? '') : '',
     goal: row.launchKind === 'workgroup' ? (payload.goal ?? '') : '',
+    workingBranch:
+      typeof (row.launchPayload as Record<string, unknown> | null)?.workingBranch === 'string'
+        ? ((row.launchPayload as Record<string, unknown>).workingBranch as string)
+        : '',
     payloadBase: { ...((row.launchPayload ?? {}) as Record<string, unknown>) },
     maxConsecutiveFires: row.maxConsecutiveFires,
     autoRegisterRepos: row.autoRegisterRepos,
@@ -198,6 +204,8 @@ function payloadOf(draft: Draft): unknown {
     for (const key of SCRATCH_FORBIDDEN_KEYS) delete payload[key]
   } else {
     delete payload.scratch
+    if (draft.workingBranch.trim() === '') delete payload.workingBranch
+    else payload.workingBranch = draft.workingBranch
   }
   return payload
 }
@@ -715,7 +723,7 @@ function TriggerDialog(props: {
   // RFC-263：变量表 13→30 后按「事件上下文 / API 定位」两组呈现，每个 chip 带说明。
   const templateVarGroups = useMemo(
     () =>
-      webhookVarGroupsForDisplay(draft.eventTypes).map((group) => ({
+      webhookTriggerVarGroupsForDisplay(draft.eventTypes).map((group) => ({
         label: t(
           group.key === 'api'
             ? 'webhookTriggers.fields.varGroupApi'
@@ -727,11 +735,17 @@ function TriggerDialog(props: {
   )
   const templateVarsLabel = t('webhookTriggers.fields.templateVarsLabel')
   const templateVarTitle = useCallback(
-    (name: string) => t(`webhookTriggers.fields.vars.${name}`),
+    (name: string) => {
+      const field = name.startsWith('trigger.webhook.')
+        ? name.slice('trigger.webhook.'.length)
+        : name
+      return t(`webhookTriggers.fields.vars.${field}`)
+    },
     [t],
   )
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
   const goalRef = useRef<HTMLTextAreaElement | null>(null)
+  const workingBranchRef = useRef<HTMLInputElement | null>(null)
   const mappingInputRefs = useRef(new Map<string, HTMLInputElement>())
   const [focusedMappingKey, setFocusedMappingKey] = useState<string | null>(null)
   const textInputKeys = useMemo(
@@ -1060,6 +1074,34 @@ function TriggerDialog(props: {
                   ]}
                 />
               </Field>
+              {draft.space === 'event-repo' && (
+                <Field
+                  label={t('launch.workingBranch.label')}
+                  hint={t('webhookTriggers.fields.workingBranchTemplateHint')}
+                >
+                  <TextInput
+                    value={draft.workingBranch}
+                    onChange={(workingBranch) => set({ workingBranch })}
+                    placeholder={t('launch.workingBranch.placeholder')}
+                    inputRef={workingBranchRef}
+                    data-testid="wt-working-branch"
+                  />
+                  <TemplateVarChips
+                    groups={templateVarGroups}
+                    label={templateVarsLabel}
+                    onInsert={(token) =>
+                      applyTemplateVarInsertion(
+                        workingBranchRef.current,
+                        draft.workingBranch,
+                        token,
+                        (workingBranch) => set({ workingBranch }),
+                      )
+                    }
+                    testidPrefix="wt-working-branch-var"
+                    titleOf={templateVarTitle}
+                  />
+                </Field>
+              )}
 
               {draft.launchKind === 'workflow' && draft.launchRefId !== '' && (
                 <Field

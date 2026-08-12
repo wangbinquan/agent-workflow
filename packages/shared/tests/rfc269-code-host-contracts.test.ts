@@ -6,7 +6,7 @@
 //      没发出去」——那种 bug 在真实 GitLab 上才暴露，回归成本极高。
 //   2. **按位置编码**（design D12/D13）：上游 agent 的输出经常带引号/换行，
 //      拼接式模板会让它改掉请求结构。编码规则是这个 RFC 的安全承重。
-//   3. **派生关系**：`TRIGGER_CONTEXT_VARS` 派生自 RFC-263 的变量表，不是抄的。
+//   3. **派生关系**：`TRIGGER_CONTEXT_FIELDS` 派生自 webhook 变量表，不是抄的。
 
 import { describe, expect, test } from 'bun:test'
 import {
@@ -31,7 +31,7 @@ import {
   normalizeGitLabRepositoryUrlPrefix,
   renderCodeHostJsonBody,
   renderCodeHostTemplate,
-  TRIGGER_CONTEXT_VARS,
+  TRIGGER_CONTEXT_FIELDS,
   TestCodeHostConnectionSchema,
   UpsertCodeHostConnectionSchema,
   WEBHOOK_TEMPLATE_VARS,
@@ -303,25 +303,32 @@ const CTX = {
     path: 'src/a b.ts',
     cn: '中文与 emoji 🎯',
   },
-  trigger: { mr_iid: '42', comment_thread_id: 'abc123' },
+  triggerContext: {
+    trigger: {
+      webhook: { event_type: 'note' as const, mr_iid: '42', comment_thread_id: 'abc123' },
+    },
+  },
 }
 
 describe('RFC-269 模板渲染', () => {
-  test('端口与 trigger 两个命名空间都能解析', () => {
-    const r = renderCodeHostTemplate('{{verdict}}/{{trigger.mr_iid}}', CTX)
+  test('端口与 trigger.webhook 两个命名空间都能解析', () => {
+    const r = renderCodeHostTemplate('{{verdict}}/{{trigger.webhook.mr_iid}}', CTX)
     expect(r.value).toBe('failed/42')
     expect(r.triggerMissing).toBe(false)
   })
 
   test('提取变量区分两个命名空间', () => {
-    expect(extractCodeHostVars('{{a}} {{trigger.mr_iid}} {{a}}')).toEqual([
+    expect(extractCodeHostVars('{{a}} {{trigger.webhook.mr_iid}} {{a}}')).toEqual([
       { kind: 'port', name: 'a' },
       { kind: 'trigger', name: 'mr_iid' },
     ])
   })
 
   test('无触发上下文时 triggerMissing 为真且渲染空串', () => {
-    const r = renderCodeHostTemplate('{{trigger.mr_iid}}', { ports: {}, trigger: null })
+    const r = renderCodeHostTemplate('{{trigger.webhook.mr_iid}}', {
+      ports: {},
+      triggerContext: null,
+    })
     expect(r.value).toBe('')
     expect(r.triggerMissing).toBe(true)
   })
@@ -334,7 +341,7 @@ describe('RFC-269 模板渲染', () => {
   test('path 位置的变量值无法新开一个路径段', () => {
     const r = renderCodeHostTemplate(
       '/projects/{{p}}/notes',
-      { ports: { p: '../../admin' }, trigger: null },
+      { ports: { p: '../../admin' }, triggerContext: null },
       'path',
     )
     expect(r.value).toBe('/projects/..%2F..%2Fadmin/notes')
@@ -361,7 +368,7 @@ describe('RFC-269 模板渲染', () => {
   })
 
   test('空值与未知变量记进 emptyRefs', () => {
-    const r = renderCodeHostTemplate('{{nope}}', { ports: {}, trigger: {} })
+    const r = renderCodeHostTemplate('{{nope}}', { ports: {}, triggerContext: null })
     expect(r.value).toBe('')
     expect(r.emptyRefs).toEqual([{ kind: 'port', name: 'nope' }])
   })
@@ -408,7 +415,7 @@ describe('RFC-269 自定义 body 落点判定（D13）', () => {
   })
 
   test('上游值试图注入一个新字段也只会变成字符串内容', () => {
-    const ctx = { ports: { x: '", "admin": true, "z": "' }, trigger: null }
+    const ctx = { ports: { x: '", "admin": true, "z": "' }, triggerContext: null }
     const out = renderCodeHostJsonBody('{"body": "{{x}}"}', ctx)
     expect(out.ok).toBe(true)
     if (!out.ok) return
@@ -424,7 +431,7 @@ describe('RFC-269 自定义 body 落点判定（D13）', () => {
 describe('RFC-269 自定义 path 判据', () => {
   test('正常相对 path 放行', () => {
     expect(codeHostPathIssue('/projects/1/merge_requests/2/notes')).toBeNull()
-    expect(codeHostPathIssue('/projects/{{trigger.project_id}}/notes')).toBeNull()
+    expect(codeHostPathIssue('/projects/{{trigger.webhook.project_id}}/notes')).toBeNull()
   })
 
   test('绝对 URL 报 has-scheme', () => {
@@ -515,22 +522,18 @@ describe('RFC-269 base URL 归一化', () => {
 // 5. 派生关系锁
 // ---------------------------------------------------------------------------
 
-describe('RFC-269 触发上下文变量集', () => {
-  test('恰好是 RFC-263 变量表去掉 event_json —— 派生而非抄写', () => {
-    // RFC-263 将来加变量时这条自动跟随；如果有人把 TRIGGER_CONTEXT_VARS 改成
-    // 硬编码列表，这条会立刻红。
-    expect([...TRIGGER_CONTEXT_VARS].sort()).toEqual(
-      WEBHOOK_TEMPLATE_VARS.filter((v) => v !== 'event_json').sort(),
-    )
+describe('RFC-292 触发上下文变量集', () => {
+  test('恰好是 webhook 30 字段闭集 —— 派生而非抄写', () => {
+    expect([...TRIGGER_CONTEXT_FIELDS].sort()).toEqual([...WEBHOOK_TEMPLATE_VARS].sort())
   })
 
-  test('不含 event_json（D15：32 KiB 原文不进任务行）', () => {
-    expect(TRIGGER_CONTEXT_VARS as readonly string[]).not.toContain('event_json')
+  test('包含统一截断后的 event_json', () => {
+    expect(TRIGGER_CONTEXT_FIELDS as readonly string[]).toContain('event_json')
   })
 
   test('包含回帖流水线真正要用的那几个定位变量', () => {
     for (const v of ['project_id', 'mr_iid', 'comment_thread_id', 'api_base_url']) {
-      expect(TRIGGER_CONTEXT_VARS as readonly string[]).toContain(v)
+      expect(TRIGGER_CONTEXT_FIELDS as readonly string[]).toContain(v)
     }
   })
 })

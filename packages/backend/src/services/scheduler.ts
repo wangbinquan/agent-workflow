@@ -27,6 +27,7 @@ import type {
   WorkflowEdge,
   WorkflowNode,
   WrapperFanoutPort,
+  TriggerContext,
 } from '@agent-workflow/shared'
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
@@ -37,6 +38,8 @@ import {
   NODE_KIND,
   NODE_KIND_BEHAVIORS,
   WorkflowDefinitionSchema,
+  migrateWorkflowDefinitionToLatest,
+  parseTriggerContextJson,
   agentHasClarifyChannel,
   analyzeWorkflowScopeTree,
   buildWorkflowScopeParentMap,
@@ -56,6 +59,7 @@ import {
   projectWorkflowDependency,
   readContinueOnMaxIterations,
   resolveWorkflowSourceRef,
+  renderCallWorkgroupGoalTemplate,
   splitListItems,
   splitMarkdownDocs,
   stringifyKind,
@@ -103,6 +107,7 @@ import {
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
 import { fanoutInnerAgentRefKey, resolveNodeAgentRef } from '@/services/ref/runtimeRef'
 import { resolveInjection } from '@/services/execution/resolveInjection'
+import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
 import {
   createClarifyRound,
   dispatchCrossClarifyNode,
@@ -401,6 +406,8 @@ interface SchedulerState {
   opts: RunTaskOptions
   log: Logger
   inputsMap: Record<string, string>
+  /** RFC-292: parsed once from the frozen task row; inherited by every scope. */
+  triggerContext: TriggerContext | null
   /**
    * RFC-266: the two INDEPENDENT daemon-wide pools. `agentSem` covers agent
    * nodes, workgroup host nodes and fan-out shards/aggregators; `scriptSem`
@@ -553,11 +560,25 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   let definition: WorkflowDefinition
   try {
     const raw: unknown = JSON.parse(task.workflowSnapshot)
-    definition = WorkflowDefinitionSchema.parse(raw)
+    definition = migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(raw))
   } catch (err) {
     await failTask(db, taskId, 'snapshot-invalid', (err as Error).message)
     return
   }
+
+  // RFC-292: keep NULL, valid context and corrupt JSON distinct. Historical
+  // flat RFC-269 rows are wrapped in memory by the shared decoder.
+  const parsedTriggerContext = parseTriggerContextJson(task.triggerContextJson)
+  const triggerIssue = triggerPreflightIssue({
+    root: definition,
+    closureJson: task.refClosureJson,
+    source: parsedTriggerContext,
+  })
+  if (triggerIssue !== null) {
+    await failTask(db, taskId, triggerIssue.code, triggerIssue.code)
+    return
+  }
+  const triggerContext = parsedTriggerContext.kind === 'ok' ? parsedTriggerContext.value : null
 
   // 3. Mark running — CAS from 'pending' ONLY (RFC-097, audit S-8/S-14).
   // The unconditional write here used to revive canceled/done tasks and let a
@@ -683,6 +704,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     repoGroupName: task.repoGroupName ?? null,
     log,
     inputsMap,
+    triggerContext,
     // RFC-266: two independent daemon-wide pools (script nodes no longer queue
     // behind agent runs). Both come from the daemon-scoped registry, which
     // resizes the SAME instance when the setting changes — so a settings save
@@ -1012,6 +1034,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         nodeRunId: req.nodeRunId,
         nodeId: req.nodeId,
         agent: hostAgent,
+        triggerContext: null,
         // RFC-184 §2.4: host runs never persist their protocol ports into
         // node_run_outputs (they'd trip clarify-aging runIdsWithOutput).
         ...(req.hostOutputPorts !== undefined
@@ -1959,6 +1982,8 @@ async function maybeRunCommitPush(
           nodeRunId: sessionRunId,
           nodeId,
           agent: commitAgent,
+          triggerContext: null,
+          expandPromptTemplate: false,
           runtime: frozen.protocol,
           runtimeBinary: frozen.binary,
           runtimeParams: frozen.params,
@@ -2870,6 +2895,8 @@ async function resolveMergeConflicts(
       nodeRunId: sessionRunId,
       nodeId: mergeNodeId,
       agent: mergeAgent,
+      triggerContext: null,
+      expandPromptTemplate: false,
       runtime: frozen.protocol,
       runtimeBinary: frozen.binary,
       runtimeParams: frozen.params,
@@ -3711,6 +3738,9 @@ function buildChildDeps(state: SchedulerState): StartTaskDeps {
   const { opts, db } = state
   return {
     db,
+    // RFC-292: child/grandchild tasks inherit the root launch fact atomically
+    // with their parent linkage; they never re-read a webhook delivery.
+    ...(state.triggerContext === null ? {} : { triggerContext: state.triggerContext }),
     actorUserId:
       (state.task as unknown as { ownerUserId?: string | null }).ownerUserId ?? undefined,
     ...(opts.binaryOverride !== undefined ? { binaryOverride: opts.binaryOverride } : {}),
@@ -3914,6 +3944,7 @@ async function launchCallChild(
 function renderCallGoal(
   template: string,
   inputs: Record<string, string>,
+  triggerContext: TriggerContext | null,
   meta: {
     taskId: string
     nodeId: string
@@ -3936,10 +3967,25 @@ function renderCallGoal(
       .map((r) => `- ${r.worktreeDirName || '(root)'}: ${r.isoWorktreePath}`)
       .join('\n'),
   }
-  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, name: string) => {
-    if (Object.hasOwn(builtins, name)) return builtins[name] ?? ''
-    return inputs[name] ?? ''
+  const rendered = renderCallWorkgroupGoalTemplate({
+    template,
+    inputs,
+    builtins,
+    triggerContext,
   })
+  if (!rendered.ok && rendered.code === 'trigger-context-missing') {
+    throw new ValidationError(
+      'trigger-context-missing',
+      'workgroup goal requires webhook trigger context',
+    )
+  }
+  if (!rendered.ok) {
+    throw new ValidationError(
+      'workflow-invalid',
+      `workgroup goal contains an invalid template ref (${rendered.reason})`,
+    )
+  }
+  return rendered.value
 }
 
 /** L (workgroup arm) — frozen-group launch through the RFC-243 frozen face. */
@@ -3967,7 +4013,7 @@ async function launchCallWorkgroupChild(
   const { node, nodeRunId, childId, frozenGroup, inputs, iso, childDepth } = args
 
   const goalTemplate = pickString(node, 'goalTemplate') ?? ''
-  const goal = renderCallGoal(goalTemplate, inputs, {
+  const goal = renderCallGoal(goalTemplate, inputs, state.triggerContext, {
     taskId,
     nodeId: node.id,
     iteration: args.iteration,
@@ -4225,20 +4271,6 @@ async function runCodeHostCallNode(
     }
   }
 
-  // 触发上下文：NULL 与「有上下文但该键为空」是两回事，渲染器据此区分
-  // `code-host-trigger-context-missing` 与普通的空值。
-  let trigger: Record<string, string> | null = null
-  if (task.triggerContextJson !== null) {
-    try {
-      const parsed: unknown = JSON.parse(task.triggerContextJson)
-      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        trigger = parsed as Record<string, string>
-      }
-    } catch {
-      trigger = null
-    }
-  }
-
   const params: Record<string, string> = {}
   const rawParams = (node as unknown as { params?: unknown }).params
   if (rawParams !== null && typeof rawParams === 'object' && !Array.isArray(rawParams)) {
@@ -4267,7 +4299,7 @@ async function runCodeHostCallNode(
       },
       {
         connection,
-        ctx: { ports: upstreamInputs, trigger },
+        ctx: { ports: upstreamInputs, triggerContext: state.triggerContext },
         projectFallback: resolveProjectFallback({
           provider,
           baseUrl: connection.baseUrl,
@@ -5916,6 +5948,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           nodeRunId,
           nodeId: node.id,
           agent,
+          triggerContext: state.triggerContext,
           runtime: frozenRuntime.protocol,
           runtimeBinary: frozenRuntime.binary,
           runtimeParams: frozenRuntime.params,
@@ -7770,6 +7803,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       nodeRunId: shardRunId,
       nodeId: innerNode.id,
       agent: innerAgent,
+      triggerContext: state.triggerContext,
       runtime: shardRuntime.protocol,
       runtimeBinary: shardRuntime.binary,
       runtimeParams: shardRuntime.params,
@@ -8200,6 +8234,7 @@ async function dispatchFanoutAggregatorAttempt(
       nodeRunId: aggRunId,
       nodeId: aggNode.id,
       agent: aggAgent,
+      triggerContext: state.triggerContext,
       runtime: aggRuntime.protocol,
       runtimeBinary: aggRuntime.binary,
       runtimeParams: aggRuntime.params,

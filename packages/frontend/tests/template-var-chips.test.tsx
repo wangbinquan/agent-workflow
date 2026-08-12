@@ -12,7 +12,7 @@ import {
   TemplateVarChips,
   applyTemplateVarInsertion,
   insertAtCursor,
-  webhookVarGroupsForDisplay,
+  webhookTriggerVarGroupsForDisplay,
 } from '../src/components/TemplateVarChips'
 
 afterEach(cleanup)
@@ -38,51 +38,51 @@ describe('insertAtCursor', () => {
 // RFC-263 改判：返回值从扁平数组变成「事件上下文 / API 定位」两组（变量表 13→30，
 // 一行 chips 会挤成一坨）。原「event_json 置顶 + 长度 7」的断言按新 COMMON 集改写，
 // 「与保存期校验同源」这条原始需求继续锁住。
-describe('webhookVarGroupsForDisplay', () => {
-  const flatten = (groups: ReturnType<typeof webhookVarGroupsForDisplay>) =>
+describe('webhookTriggerVarGroupsForDisplay', () => {
+  const flatten = (groups: ReturnType<typeof webhookTriggerVarGroupsForDisplay>) =>
     groups.flatMap((g) => g.vars)
 
   test('empty event selection yields no groups', () => {
-    expect(webhookVarGroupsForDisplay([])).toEqual([])
+    expect(webhookTriggerVarGroupsForDisplay([])).toEqual([])
   })
 
   test('event_json leads its own group; both groups follow the selected events', () => {
-    const groups = webhookVarGroupsForDisplay(['push'])
+    const groups = webhookTriggerVarGroupsForDisplay(['push'])
     expect(groups.map((g) => g.key)).toEqual(['context', 'api'])
-    expect(groups[0]?.vars[0]).toBe('event_json')
+    expect(groups[0]?.vars[0]).toBe('trigger.webhook.event_json')
     const vars = flatten(groups)
     // push = COMMON(14) + commit_sha + commit_before
     expect(vars).toHaveLength(16)
-    expect(vars).toContain('commit_sha')
-    expect(vars).toContain('commit_before')
+    expect(vars).toContain('trigger.webhook.commit_sha')
+    expect(vars).toContain('trigger.webhook.commit_before')
     // 旧 hint 文案漏掉的两个 URL 变量仍在（原始需求 1）
-    expect(vars).toContain('repo_http_url')
-    expect(vars).toContain('repo_ssh_url')
+    expect(vars).toContain('trigger.webhook.repo_http_url')
+    expect(vars).toContain('trigger.webhook.repo_ssh_url')
     // RFC-263 的 API 定位组对每类事件都可用
-    expect(groups[1]?.vars).toContain('project_id')
-    expect(groups[1]?.vars).toContain('api_base_url')
-    expect(vars).not.toContain('mr_title')
+    expect(groups[1]?.vars).toContain('trigger.webhook.project_id')
+    expect(groups[1]?.vars).toContain('trigger.webhook.api_base_url')
+    expect(vars).not.toContain('trigger.webhook.mr_title')
   })
 
   test('multi-event selection intersects the per-event matrices', () => {
-    const vars = flatten(webhookVarGroupsForDisplay(['mr_opened', 'note']))
-    expect(vars).toContain('mr_title')
-    expect(vars).toContain('mr_url')
+    const vars = flatten(webhookTriggerVarGroupsForDisplay(['mr_opened', 'note']))
+    expect(vars).toContain('trigger.webhook.mr_title')
+    expect(vars).toContain('trigger.webhook.mr_url')
     // commit_sha 只在 mr_opened、comment_text 只在 note —— 交集都没有。
-    expect(vars).not.toContain('commit_sha')
-    expect(vars).not.toContain('comment_text')
-    expect(vars).not.toContain('comment_thread_id')
+    expect(vars).not.toContain('trigger.webhook.commit_sha')
+    expect(vars).not.toContain('trigger.webhook.comment_text')
+    expect(vars).not.toContain('trigger.webhook.comment_thread_id')
   })
 
   test('note keeps the reply-to-thread variables together in the API group', () => {
-    const groups = webhookVarGroupsForDisplay(['note'])
+    const groups = webhookTriggerVarGroupsForDisplay(['note'])
     const api = groups.find((g) => g.key === 'api')?.vars ?? []
-    expect(api).toContain('comment_thread_id')
-    expect(api).toContain('comment_id')
-    expect(api).toContain('comment_position_json')
-    expect(api).toContain('project_id')
+    expect(api).toContain('trigger.webhook.comment_thread_id')
+    expect(api).toContain('trigger.webhook.comment_id')
+    expect(api).toContain('trigger.webhook.comment_position_json')
+    expect(api).toContain('trigger.webhook.project_id')
     // 上下文类的仍在另一组，不混进来
-    expect(api).not.toContain('comment_text')
+    expect(api).not.toContain('trigger.webhook.comment_text')
   })
 })
 

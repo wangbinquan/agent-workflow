@@ -25,11 +25,11 @@ import {
   serializeWorkflowDefinitionStorageV1,
   serializeWorkflowEditableSnapshotV1,
   normalizeResourceDisplayName,
+  migrateWorkflowDefinitionToLatest,
   PRIVILEGED_LENS_TRANSPARENT,
   rehydratePrivilegedNodes,
   RESOURCE_DISPLAY_NAME_MSG,
   UpdateWorkflowSchema,
-  WORKFLOW_SCHEMA_VERSION,
   WorkflowDefinitionSchema,
   WorkflowDraftSnapshotSchema,
   WorkflowNameSchema,
@@ -1037,7 +1037,9 @@ function throwWorkflowNotFound(id: string): never {
  *   bump (no clarify nodes, no agent system ports `__clarify__` /
  *   `__clarify_response__`, no clarify edges ever appear in older docs).
  *
- * The migration steps cascade — v1 docs walk 1 → 2 → 3 in a single call.
+ * The migration steps cascade through v5 in a single call. RFC-292's v4 → v5
+ * step additionally rewrites only the inventoried author-template surfaces to
+ * the canonical trigger grammar while preserving old literal expressions.
  * Only changes the in-memory representation returned by GET; the next PUT
  * (auto-save in the editor, YAML re-import, programmatic update) flushes
  * the bumped version back to the DB. This mirrors the RFC-004 "heal-on-edit"
@@ -1046,23 +1048,5 @@ function throwWorkflowNotFound(id: string): never {
  * Exported pure helper so it can be tested without DB plumbing.
  */
 export function migrateDefinitionToLatest(def: WorkflowDefinition): WorkflowDefinition {
-  let current: WorkflowDefinition = def
-  if (current.$schema_version === 1) {
-    current = { ...current, $schema_version: 2 }
-  }
-  if (current.$schema_version === 2) {
-    current = { ...current, $schema_version: 3 }
-  }
-  // RFC-056: pure metadata bump for the new 'clarify-cross-agent' NodeKind.
-  // Old v3 docs never carry the new node, so the upgrade is structurally
-  // safe — same pattern as the v2 → v3 bump that introduced RFC-023 clarify.
-  if (current.$schema_version === 3) {
-    current = { ...current, $schema_version: 4 }
-  }
-  if (current.$schema_version !== WORKFLOW_SCHEMA_VERSION) {
-    // Forward-compat: an unknown future version (e.g. v4 stored by a newer
-    // daemon, read by an older one) round-trips unchanged. The validator
-    // and zod schema will surface incompatibility downstream if any.
-  }
-  return current
+  return migrateWorkflowDefinitionToLatest(def)
 }

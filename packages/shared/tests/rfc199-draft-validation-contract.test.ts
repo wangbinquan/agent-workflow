@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   WORKFLOW_DEFINITION_CANDIDATE_DOMAIN_V1,
+  WORKFLOW_SCHEMA_VERSION,
   WorkflowDraftValidationReceiptSchema,
   WorkflowDraftValidationRequestSchema,
   serializeWorkflowDefinitionCandidateV1,
@@ -15,7 +16,7 @@ describe('RFC-199 T11.2 — draft validation wire contract', () => {
       $schema_version: 4,
     })
     expect(serialized).toBe(
-      `${WORKFLOW_DEFINITION_CANDIDATE_DOMAIN_V1}{"$schema_version":4,"edges":[],"inputs":[],"nodes":[]}`,
+      `${WORKFLOW_DEFINITION_CANDIDATE_DOMAIN_V1}{"$schema_version":${WORKFLOW_SCHEMA_VERSION},"edges":[],"inputs":[],"nodes":[]}`,
     )
   })
 

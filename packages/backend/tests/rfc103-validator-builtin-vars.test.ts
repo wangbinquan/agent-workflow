@@ -54,7 +54,7 @@ describe('RFC-103 T5 — 源码层断言（校验器复用共享集，无本地�
   )
   test('校验器 import 共享 BUILTIN_VARS 并用它判定', () => {
     expect(validatorSrc).toContain('BUILTIN_VARS')
-    expect(validatorSrc).toContain('BUILTIN_VARS.has(ref)')
+    expect(validatorSrc).toContain('BUILTIN_VARS.has(name)')
   })
   test('校验器不再定义本地 BUILTIN_PROMPT_VARS 副本', () => {
     expect(validatorSrc).not.toContain('const BUILTIN_PROMPT_VARS')

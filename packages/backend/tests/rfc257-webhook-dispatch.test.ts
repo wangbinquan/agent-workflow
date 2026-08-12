@@ -24,6 +24,7 @@ import {
 } from '../src/db/schema'
 import {
   createWebhookDispatcher,
+  migrateTriggerRowTemplateToV2,
   parseTriggerRow,
   renderWebhookLaunch,
   resolveRepoForEvent,
@@ -223,7 +224,10 @@ describe('RFC-257 T6 · renderWebhookLaunch（纯装配）', () => {
     payloadTemplate: {
       inputs: {
         mr_ref: { kind: 'event-branch' as const },
-        title: { kind: 'template' as const, template: 'MR {{mr_iid}}: {{mr_title}}' },
+        title: {
+          kind: 'template' as const,
+          template: 'MR {{trigger.webhook.mr_iid}}: {{trigger.webhook.mr_title}}',
+        },
       },
     },
   }
@@ -247,7 +251,9 @@ describe('RFC-257 T6 · renderWebhookLaunch（纯装配）', () => {
       {
         launchKind: 'agent',
         launchRefId: 'ag-1',
-        payloadTemplate: { description: '修 {{repo_path}} 的 !{{mr_iid}}' },
+        payloadTemplate: {
+          description: '修 {{trigger.webhook.repo_path}} 的 !{{trigger.webhook.mr_iid}}',
+        },
       },
       '修复员',
       ev(),
@@ -272,12 +278,15 @@ describe('RFC-257 T6 · renderWebhookLaunch（纯装配）', () => {
       {
         launchKind: 'agent' as const,
         launchRefId: 'ag-1',
-        payloadTemplate: { description: '修 {{repo_path}}', scratch: true as const },
+        payloadTemplate: {
+          description: '修 {{trigger.webhook.repo_path}}',
+          scratch: true as const,
+        },
       },
       {
         launchKind: 'workgroup' as const,
         launchRefId: 'wg-1',
-        payloadTemplate: { goal: '修 {{repo_path}}', scratch: true as const },
+        payloadTemplate: { goal: '修 {{trigger.webhook.repo_path}}', scratch: true as const },
       },
     ]
     for (const trigger of cases) {
@@ -376,8 +385,12 @@ describe('RFC-257 T6 · dispatch 集成', () => {
     expect(h.launched.length).toBe(2)
     for (const launch of h.launched) {
       expect(launch.triggerContext).toMatchObject({
-        repo_path: 'platform/api',
-        mr_iid: '42',
+        trigger: {
+          webhook: {
+            repo_path: 'platform/api',
+            mr_iid: '42',
+          },
+        },
       })
       expect(launch.triggerContext).not.toHaveProperty('event_json')
     }
@@ -629,6 +642,55 @@ describe('RFC-257 T6 · dispatch 集成', () => {
     const fires = await firesOf(h)
     expect(fires.length).toBe(1)
     expect(fires[0]?.triggerId).toBe(good)
+  })
+
+  test('v1 模板读时 CAS 迁移为唯一 canonical v2 语法', async () => {
+    const h = await harness()
+    const id = await insertTrigger(h, {
+      launchPayload: JSON.stringify({
+        inputs: {
+          prompt: { kind: 'template', template: '{{repo_path}} {{trigger.mr_iid}}' },
+        },
+      }),
+      templateSyntaxVersion: 1,
+    })
+    const stored = (
+      await h.db.select().from(webhookTriggers).where(eq(webhookTriggers.id, id)).limit(1)
+    )[0]!
+    const migrated = await migrateTriggerRowTemplateToV2(h.db, stored)
+    expect(migrated.templateSyntaxVersion).toBe(2)
+    expect(JSON.parse(migrated.launchPayload)).toMatchObject({
+      inputs: {
+        prompt: {
+          kind: 'template',
+          template: '{{trigger.webhook.repo_path}} {{trigger.webhook.mr_iid}}',
+        },
+      },
+    })
+  })
+
+  test('matched invalid v1/v2 trigger refs produce launch-failed fires with zero launch', async () => {
+    const h = await harness()
+    const v1 = await insertTrigger(h, {
+      launchPayload: JSON.stringify({
+        inputs: { prompt: { kind: 'template', template: '{{trigger.nope}}' } },
+      }),
+      templateSyntaxVersion: 1,
+    })
+    const v2 = await insertTrigger(h, {
+      launchPayload: JSON.stringify({
+        inputs: { prompt: { kind: 'template', template: '{{trigger.mr_iid}}' } },
+      }),
+      templateSyntaxVersion: 2,
+    })
+    const deliveryId = await dispatchOnce(h, ev({ author: { username: 'dev-a' } }))
+    expect(await deliveryStatus(h, deliveryId)).toEqual(['matched', null])
+    expect(h.launched).toHaveLength(0)
+    for (const triggerId of [v1, v2]) {
+      const fire = (await firesOf(h, triggerId))[0]
+      expect(fire?.outcome).toBe('launch-failed')
+      expect(fire?.error).toContain('payload-invalid')
+    }
   })
 
   test('parseTriggerRow：四列逐列容错原因', async () => {

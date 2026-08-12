@@ -19,6 +19,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   DW_VALIDATION_CODES,
   DwGeneratedWorkflowSchema,
+  WORKFLOW_SCHEMA_VERSION,
   dwGeneratedToWorkflowDef,
   dwMemberToken,
   type DwTokenMap,
@@ -74,7 +75,7 @@ describe('dwGeneratedToWorkflowDef — single token→agentId conversion point',
       TOKENS,
     )
     expect(unknownTokens).toEqual([])
-    expect(def.$schema_version).toBe(4)
+    expect(def.$schema_version).toBe(WORKFLOW_SCHEMA_VERSION)
     expect(def.inputs).toEqual([])
     // the token was converted to the frozen agentId (+ display name); the token
     // itself is NOT written anywhere on the node.

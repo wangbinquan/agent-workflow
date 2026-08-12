@@ -81,7 +81,7 @@ export function githubApiBaseUrl(
  *     此时整组落到 `original_*`（schema 标注 original_line 非 null）。混用两组会
  *     产出一个自相矛盾的范围。
  * 不含 `diff_hunk`：那是上下文不是定位参数（可能几十行），agent 有 worktree 可直接
- * 读文件，需要时也仍能从 {{event_json}} 取。
+ * 读文件，需要时也仍能从 {{trigger.webhook.event_json}} 取。
  */
 function githubCommentPosition(
   comment: Record<string, unknown>,

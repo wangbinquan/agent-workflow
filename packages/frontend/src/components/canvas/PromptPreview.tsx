@@ -6,10 +6,14 @@
 // on every keystroke. Builtin meta uses placeholders since the editor
 // has no real task to bind to.
 
-import { renderUserPrompt, type AgentOutputKindsMap } from '@agent-workflow/shared'
+import {
+  renderUserPrompt,
+  sampleWebhookTriggerContext,
+  type AgentOutputKindsMap,
+} from '@agent-workflow/shared'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { TextArea } from '@/components/Form'
+import { Switch, TextArea } from '@/components/Form'
 
 interface Props {
   /** Prompt template currently bound to the node. */
@@ -32,6 +36,7 @@ const DEFAULT_PLACEHOLDER = '<sample content>'
 export function PromptPreview({ template, inputPorts, outputs, outputKinds }: Props) {
   const { t } = useTranslation()
   const [inputs, setInputs] = useState<Record<string, string>>(() => seedInputs(inputPorts))
+  const [withWebhookContext, setWithWebhookContext] = useState(true)
 
   // Re-seed whenever the port set changes — but preserve any values the
   // user already typed.
@@ -44,24 +49,30 @@ export function PromptPreview({ template, inputPorts, outputs, outputKinds }: Pr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputPorts.join('|')])
 
-  const rendered = useMemo(
-    () =>
-      renderUserPrompt({
-        promptTemplate: template,
-        inputs,
-        meta: {
-          repoPath: '<task.worktreePath>',
-          baseBranch: '<task.baseBranch>',
-          taskId: '<task.id>',
-        },
-        agentOutputs: outputs,
-        // RFC-200: previews show the production nonce/fence protocol with a
-        // deterministic marker instead of pretending new runs use legacy tags.
-        envelopeNonce: 'PREVIEW',
-        ...(outputKinds !== undefined ? { agentOutputKinds: outputKinds } : {}),
-      }),
-    [template, inputs, outputs, outputKinds],
-  )
+  const rendered = useMemo(() => {
+    try {
+      return {
+        ok: true as const,
+        value: renderUserPrompt({
+          promptTemplate: template,
+          inputs,
+          triggerContext: withWebhookContext ? sampleWebhookTriggerContext() : null,
+          meta: {
+            repoPath: '<task.worktreePath>',
+            baseBranch: '<task.baseBranch>',
+            taskId: '<task.id>',
+          },
+          agentOutputs: outputs,
+          // RFC-200: previews show the production nonce/fence protocol with a
+          // deterministic marker instead of pretending new runs use legacy tags.
+          envelopeNonce: 'PREVIEW',
+          ...(outputKinds !== undefined ? { agentOutputKinds: outputKinds } : {}),
+        }),
+      }
+    } catch (error) {
+      return { ok: false as const, value: error instanceof Error ? error.message : String(error) }
+    }
+  }, [template, inputs, outputs, outputKinds, withWebhookContext])
 
   return (
     <div className="prompt-preview">
@@ -85,7 +96,19 @@ export function PromptPreview({ template, inputPorts, outputs, outputKinds }: Pr
       </div>
       <div className="prompt-preview__output">
         <div className="prompt-preview__title">{t('promptPreview.assembledTitle')}</div>
-        <pre className="prompt-preview__pre">{rendered}</pre>
+        <Switch
+          checked={withWebhookContext}
+          onChange={setWithWebhookContext}
+          label={t('promptPreview.webhookSample')}
+          data-testid="prompt-preview-webhook-context"
+        />
+        <p className="muted">{t('promptPreview.webhookSampleHint')}</p>
+        <pre
+          className="prompt-preview__pre"
+          data-testid={rendered.ok ? 'prompt-preview-rendered' : 'prompt-preview-error'}
+        >
+          {rendered.value}
+        </pre>
       </div>
     </div>
   )

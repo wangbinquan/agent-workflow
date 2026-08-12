@@ -13,10 +13,14 @@
 
 import {
   collectIntentWorkflowAgentRefs,
+  collectWorkflowTemplateSurfaces,
+  extractTemplateRefs,
   findNonSentinelSecretCarriers,
   intentHandleType,
   isIntentTempRef,
   scanForCredentialPatterns,
+  WORKFLOW_SCHEMA_VERSION,
+  WorkflowDefinitionSchema,
   type AclResourceType,
   type CredentialFinding,
   type IntentChangeset,
@@ -145,6 +149,29 @@ export function validateDraftChangeset(
     // credential-shaped strings anywhere in the payload
     for (const finding of scanForCredentialPatterns(op.payload, `/${op.opId}/payload`)) {
       credentialFindings.push({ ...finding, opId: op.opId })
+    }
+
+    // RFC-292: Intent is a first-class workflow authoring boundary. Scan every
+    // inventoried template surface before confirm so legacy/malformed trigger
+    // refs become repair feedback instead of a late apply/runtime surprise.
+    if (op.resourceType === 'workflow') {
+      const rawDefinition = op.payload.definition
+      if (rawDefinition.$schema_version !== WORKFLOW_SCHEMA_VERSION) {
+        errors.push(
+          `${op.opId}: workflow $schema_version must be ${WORKFLOW_SCHEMA_VERSION} (intent-workflow-schema-version)`,
+        )
+      }
+      const parsedDefinition = WorkflowDefinitionSchema.safeParse(rawDefinition)
+      if (parsedDefinition.success) {
+        for (const surface of collectWorkflowTemplateSurfaces(parsedDefinition.data)) {
+          for (const ref of extractTemplateRefs(surface.text)) {
+            if (ref.kind !== 'invalid') continue
+            errors.push(
+              `${op.opId}: invalid template reference '{{${ref.raw}}}' at ${surface.pointer} (${ref.reason})`,
+            )
+          }
+        }
+      }
     }
   }
 

@@ -289,7 +289,9 @@ export function isTerminalTaskStatus(s: string): boolean {
  *  finishedAt). `status` itself cannot be smuggled through here. RFC-109 adds
  *  `workflowSnapshot` + `workflowVersion` so syncTaskWorkflow can swap the
  *  frozen snapshot ATOMICALLY inside the same status CAS (no torn state where
- *  the snapshot changed but the ownership flip lost the race). RFC-167 adds
+ *  the snapshot changed but the ownership flip lost the race). RFC-292 adds
+ *  `refClosureJson` to that same CAS: a candidate root and the closure frozen
+ *  for that exact root are one execution snapshot and may never tear. RFC-167 adds
  *  `workgroupConfigJson` for the same reason: the dynamic-workflow confirm
  *  swaps the generated DAG into the snapshot AND flips dw.phase='executing'
  *  in ONE CAS, so a lost race can never leave phase and snapshot torn. */
@@ -302,6 +304,7 @@ export type TaskStatusUpdateExtra = Partial<
     | 'failedNodeId'
     | 'workflowSnapshot'
     | 'workflowVersion'
+    | 'refClosureJson'
     | 'workgroupConfigJson'
   >
 >

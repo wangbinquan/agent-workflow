@@ -27,7 +27,11 @@ import type { Hono } from 'hono'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { StartAgentTaskSchema, WorkflowDefinitionSchema } from '@agent-workflow/shared'
+import {
+  StartAgentTaskSchema,
+  WORKFLOW_SCHEMA_VERSION,
+  WorkflowDefinitionSchema,
+} from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -170,7 +174,7 @@ describe('B1/B2 — host snapshot shapes', () => {
 
   test('B2 zero-port agents keep the RFC-165 legacy literal (plus RFC-223 agentId)', () => {
     expect(buildAgentHostSnapshot({ id: 'solo-id', name: 'solo' }, true)).toEqual({
-      $schema_version: 4,
+      $schema_version: WORKFLOW_SCHEMA_VERSION,
       inputs: [
         {
           kind: 'text',

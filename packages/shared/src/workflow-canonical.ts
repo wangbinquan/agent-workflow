@@ -15,6 +15,7 @@ import {
   type WorkflowDefinition,
   type WorkflowDraftSnapshot,
 } from './schemas/workflow'
+import { migrateWorkflowDefinitionToLatest } from './workflowMigration'
 
 export const WORKFLOW_EDITABLE_SNAPSHOT_DOMAIN_V1 = 'workflow-editable-snapshot/v1\n'
 export const WORKFLOW_DEFINITION_CANDIDATE_DOMAIN_V1 = 'workflow-definition-candidate/v1\n'
@@ -41,11 +42,12 @@ function emitCanonicalJson(value: JsonValue): string {
 
 /**
  * Exact latest physical representation for `workflows.definition`.
- * Callers that migrate older definitions do so before this boundary; parsing
- * here still applies schema defaults and removes unsupported root fields.
+ * This is a canonical write boundary: older readable definitions are migrated
+ * here as a final defense, then schema defaults are applied.
  */
 export function serializeWorkflowDefinitionStorageV1(definition: WorkflowDefinition): string {
-  return canonicalJson(WorkflowDefinitionSchema.parse(definition))
+  const parsed = WorkflowDefinitionSchema.parse(definition)
+  return canonicalJson(migrateWorkflowDefinitionToLatest(parsed))
 }
 
 /** Domain-separated canonical bytes for a client-only starter/draft candidate. */

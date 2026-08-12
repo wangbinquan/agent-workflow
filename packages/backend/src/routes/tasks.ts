@@ -65,6 +65,7 @@ import {
   listTaskItems,
   listTasks,
   materializeSpace,
+  prepareWorkflowTriggerLaunch,
   resumeTask,
   retryNode,
   syncTaskWorkflow,
@@ -855,7 +856,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       if (!(await canViewResource(deps.db, actorOf(c), 'workflow', workflow))) {
         return c.json(notSyncable('workflow-not-visible'))
       }
-      return c.json(await computeWorkflowSyncPreview(deps.db, task, workflow))
+      return c.json(await computeWorkflowSyncPreview(deps.db, task, workflow, actorOf(c)))
     },
   )
 
@@ -898,6 +899,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const updated = await syncTaskWorkflow(deps.db, id, {
         db: deps.db,
         expectedVersion: body.data.expectedVersion,
+        launchActor: actorOf(c),
         configPath: deps.configPath,
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         ...resolveLaunchRuntimeConfig(deps.configPath),
@@ -1364,6 +1366,23 @@ async function handleMultipartTaskStart(
   // bytes copied out of the form (impl-gate P2-4).
   const uploadFiles = await bufferUploadParts(uploadParts, uploadDefs)
 
+  const routeLaunchDeps = {
+    db: deps.db,
+    actorUserId: actor.user.id,
+    ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
+    configPath: deps.configPath,
+    ...launchRuntime,
+    launchActor: actor,
+  }
+  // RFC-292: freeze and scan root + call closure before repo resolution,
+  // cloning, worktree creation or upload writes. startTask repeats this check
+  // after the handoff to close the route/service race.
+  const frozenClosureJson = await prepareWorkflowTriggerLaunch({
+    deps: routeLaunchDeps,
+    workflowId: workflow.id,
+    definition: workflow.definition,
+  })
+
   // 4. Materialize the space first so we have a real path to write into.
   const appHome = Paths.root
   // RFC-248 D12: RFC-066 的「多仓 + 上传」禁令已解除——上传物落到任务根下的
@@ -1381,7 +1400,11 @@ async function handleMultipartTaskStart(
   {
     const validation = validateWorkflowDef(
       workflow.definition,
-      await buildWorkflowValidationContext(deps.db),
+      await buildWorkflowValidationContext(deps.db, {
+        definition: workflow.definition,
+        currentWorkflow: { id: workflow.id, name: workflow.name },
+        frozenClosureJson,
+      }),
     )
     if (!validation.ok) {
       const errors = validation.issues.filter((i) => (i.severity ?? 'error') === 'error')

@@ -11,7 +11,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { IntentOpPreview, isScriptPath } from '../src/components/intent/IntentOpPreview'
+import { WORKFLOW_SCHEMA_VERSION, type WorkflowDefinition } from '@agent-workflow/shared'
+import {
+  collectWorkflowTemplateDiffs,
+  IntentOpPreview,
+  isScriptPath,
+} from '../src/components/intent/IntentOpPreview'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { enUS } from '../src/i18n/en-US'
 import '../src/i18n'
@@ -126,7 +131,7 @@ describe('RFC-234 IntentOpPreview', () => {
       payload: {
         name: 'wf',
         definition: {
-          $schema_version: 2,
+          $schema_version: WORKFLOW_SCHEMA_VERSION,
           inputs: [],
           nodes: [{ id: 'n1', kind: 'agent-single', agentRef: '$new:auditor' }],
           edges: [],
@@ -159,5 +164,74 @@ describe('RFC-234 IntentOpPreview', () => {
     expect(screen.getByText(enUS.intent.previewRawJson)).toBeTruthy()
     expect(screen.queryByTestId('intent-preview-workflow')).toBeNull()
     cleanup()
+  })
+
+  test('workflow diff covers every inventoried template surface without depending on node order', () => {
+    const before = {
+      $schema_version: WORKFLOW_SCHEMA_VERSION,
+      inputs: [],
+      edges: [],
+      nodes: [
+        { id: 'agent', kind: 'agent-single', promptTemplate: 'before agent' },
+        {
+          id: 'group',
+          kind: 'call-workgroup',
+          workgroupName: 'reviewers',
+          goalTemplate: 'before goal',
+        },
+        {
+          id: 'review',
+          kind: 'review',
+          inputSource: { nodeId: 'agent', portName: 'result' },
+          commentInjectTemplate: 'before review',
+        },
+        {
+          id: 'host',
+          kind: 'code-host-call',
+          provider: 'gitlab',
+          action: 'custom',
+          params: { title: 'before param', removed: 'remove me' },
+          request: {
+            method: 'POST',
+            path: '/before/path',
+            query: { search: 'before query' },
+            body: '{"value":"before body"}',
+          },
+        },
+      ],
+    } as WorkflowDefinition
+    const after = {
+      ...before,
+      nodes: [
+        {
+          ...before.nodes[3],
+          params: { title: 'after param', added: 'add me' },
+          request: {
+            method: 'POST',
+            path: '/after/path',
+            query: { search: 'after query' },
+            body: '{"value":"after body"}',
+          },
+        },
+        { ...before.nodes[2], commentInjectTemplate: 'after review' },
+        { ...before.nodes[1], goalTemplate: 'after goal' },
+        { ...before.nodes[0], promptTemplate: 'after agent' },
+      ],
+    } as WorkflowDefinition
+
+    const diffs = collectWorkflowTemplateDiffs(before, after)
+    expect(
+      Object.fromEntries(diffs.map((diff) => [diff.label, [diff.before, diff.after]])),
+    ).toEqual({
+      'agent/promptTemplate': ['before agent', 'after agent'],
+      'group/goalTemplate': ['before goal', 'after goal'],
+      'review/commentInjectTemplate': ['before review', 'after review'],
+      'host/params/title': ['before param', 'after param'],
+      'host/params/removed': ['remove me', ''],
+      'host/request/path': ['/before/path', '/after/path'],
+      'host/request/query/search': ['before query', 'after query'],
+      'host/request/body': ['{"value":"before body"}', '{"value":"after body"}'],
+      'host/params/added': ['', 'add me'],
+    })
   })
 })

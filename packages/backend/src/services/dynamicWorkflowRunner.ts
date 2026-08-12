@@ -25,14 +25,17 @@ import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   DW_VALIDATION_CODES,
   DwGeneratedWorkflowSchema,
+  WEBHOOK_EVENT_VAR_MATRIX,
   dwGeneratedToWorkflowDef,
   fenceUntrusted,
+  parseTriggerContextJson,
   WorkgroupRuntimeConfigSchema,
   type Agent,
   type DwState,
   type DwTokenMap,
   type WorkflowDefinition,
   type WorkgroupRuntimeConfig,
+  type ParsedTriggerContext,
 } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
@@ -50,6 +53,7 @@ import {
   validateDynamicWorkflowDef,
 } from '@/services/orchestratorAgent'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
+import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
 import { loadWorkgroupTaskState, setDwState } from '@/services/workgroup/state'
 import type { WorkgroupEngineHooks, WorkgroupEngineResult } from '@/services/workgroup/engine'
 import type { Logger } from '@/util/log'
@@ -77,6 +81,7 @@ export interface DynamicWorkflowEngineArgs {
 interface DwDbState {
   config: WorkgroupRuntimeConfig
   dw: DwState
+  triggerSource: ParsedTriggerContext
 }
 
 async function loadDwDbState(db: DbClient, taskId: string): Promise<DwDbState | null> {
@@ -94,7 +99,7 @@ async function loadDwDbState(db: DbClient, taskId: string): Promise<DwDbState | 
   // DwState, zod-validated, single writer while the task runs).
   const dw = (await loadWorkgroupTaskState(db, taskId)).dwState
   if (dw === null) return null
-  return { config: config.data, dw }
+  return { config: config.data, dw, triggerSource: parseTriggerContextJson(row.triggerContextJson) }
 }
 
 /**
@@ -254,6 +259,16 @@ export async function runDynamicWorkflowGenerate(
   const { config } = state
   let dw = state.dw
 
+  if (state.triggerSource.kind === 'invalid') {
+    return {
+      kind: 'failed',
+      detail: {
+        summary: 'trigger-context-invalid',
+        message: 'the frozen task trigger context is invalid',
+      },
+    }
+  }
+
   // Defensive: the dispatch oracle never routes 'executing' here; if a future
   // caller does, refuse loudly rather than re-running generation over a task
   // whose snapshot is already the real DAG.
@@ -342,6 +357,14 @@ export async function runDynamicWorkflowGenerate(
         goal: config.goal,
         pool: members,
         ...(dw.rejectionComment !== undefined ? { rejectionComment: dw.rejectionComment } : {}),
+        webhookContext:
+          state.triggerSource.kind === 'ok'
+            ? {
+                eventType: state.triggerSource.value.trigger.webhook.event_type,
+                availableFields:
+                  WEBHOOK_EVENT_VAR_MATRIX[state.triggerSource.value.trigger.webhook.event_type],
+              }
+            : null,
         envelopeNonce,
       }) +
       (errorNotice !== null
@@ -374,9 +397,24 @@ export async function runDynamicWorkflowGenerate(
       result.status !== 'done'
         ? [(result.errorMessage ?? `orchestrator run ${result.status}`).slice(0, 4000)]
         : null
-    const evaluated = failure
+    let evaluated = failure
       ? null
       : evaluateGeneratedWorkflow(result.outputs[ORCHESTRATOR_WORKFLOW_PORT], tokenMap, layer1Ctx)
+
+    if (evaluated !== null && evaluated.ok) {
+      const triggerIssue = triggerPreflightIssue({
+        root: evaluated.def,
+        closureJson: null,
+        source: state.triggerSource,
+      })
+      if (triggerIssue !== null) {
+        const detail =
+          triggerIssue.code === 'trigger-context-invalid'
+            ? triggerIssue.code
+            : `${triggerIssue.code}: ${triggerIssue.dependency.pointer}`
+        evaluated = { ok: false, errors: [detail] }
+      }
+    }
 
     if (evaluated !== null && evaluated.ok) {
       const { rejectionComment: _consumed, ...rest } = dw

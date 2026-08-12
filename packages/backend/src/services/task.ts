@@ -33,6 +33,8 @@ import {
   diffWorkflowForSync,
   emptyWorkflowSyncDiff,
   isTerminalNodeRunStatus,
+  migrateWorkflowDefinitionToLatest,
+  parseTriggerContextJson,
 } from '@agent-workflow/shared'
 import type {
   CommitPushMeta,
@@ -120,6 +122,11 @@ import { clarifyNavKindForRoundStatus, type ClarifyRoundStatus } from '@agent-wo
 import { loadOwnerIdentities } from '@/services/ownerIdentity'
 import type { Actor } from '@/auth/actor'
 import { freezeCallClosure } from '@/services/execution/closure'
+import {
+  assertTriggerPreflight,
+  triggerPreflightIssue,
+  triggerSourceFromContext,
+} from '@/services/execution/triggerPreflight'
 import { collectExecutionRefs } from '@agent-workflow/shared'
 import {
   defaultTaskAuthorizationRef,
@@ -147,6 +154,27 @@ async function freezeClosureForLaunch(
     )
   }
   return freezeCallClosure(deps.db, { id: workflowId, definition }, deps.launchActor)
+}
+
+/**
+ * RFC-292 reusable no-materialization launch preparation for public multipart
+ * and ordinary startTask paths. Returns the closure frozen for this exact root
+ * so callers may reuse it for static validation; startTask still repeats the
+ * preparation to close route-to-service TOCTOU races.
+ */
+export async function prepareWorkflowTriggerLaunch(args: {
+  deps: StartTaskDeps
+  workflowId: string
+  definition: WorkflowDefinition
+}): Promise<string | null> {
+  const definition = migrateWorkflowDefinitionToLatest(args.definition)
+  const closureJson = await freezeClosureForLaunch(args.deps, args.workflowId, definition)
+  assertTriggerPreflight({
+    root: definition,
+    closureJson,
+    source: triggerSourceFromContext(args.deps.triggerContext),
+  })
+  return closureJson
 }
 
 const log = createLogger('task')
@@ -355,10 +383,10 @@ export interface StartTaskDeps {
   webhookTriggerId?: string
   webhookFireId?: string
   /**
-   * RFC-269 — projected webhook variables consumed by code-host-call nodes.
-   * This is execution input and therefore MUST be serialized into the initial
-   * task INSERT, before scheduler can read/cache the row. Undefined means a
-   * non-webhook launch; an empty object is still a webhook context.
+   * RFC-292 — complete nested launch-source context shared by every authored
+   * trigger-aware sink. It is internal execution input and MUST be serialized
+   * into the initial task INSERT before scheduler can read/cache the row.
+   * Undefined means a non-webhook launch; callers may not supply a flat map.
    */
   triggerContext?: TriggerContext
   /**
@@ -1878,7 +1906,7 @@ async function startTaskImpl(
         JSON.parse(deps.callLaunch.frozenSnapshotJson),
       )
       if (!parsed.success) throw new Error('schema')
-      effectiveDefinition = parsed.data
+      effectiveDefinition = migrateWorkflowDefinitionToLatest(parsed.data)
     } catch {
       throw new ValidationError(
         'workflow-call-ref-missing',
@@ -1946,7 +1974,21 @@ async function startTaskImpl(
   const frozenClosureJson =
     deps.callLaunch !== undefined
       ? deps.callLaunch.refClosureJson
-      : await freezeClosureForLaunch(deps, workflow.id, effectiveDefinition)
+      : await prepareWorkflowTriggerLaunch({
+          deps,
+          workflowId: workflow.id,
+          definition: effectiveDefinition,
+        })
+
+  // RFC-292: root + frozen call closure must agree with the launch source
+  // before repository/upload materialization and before the task INSERT.
+  if (deps.callLaunch !== undefined) {
+    assertTriggerPreflight({
+      root: effectiveDefinition,
+      closureJson: frozenClosureJson,
+      source: triggerSourceFromContext(deps.triggerContext),
+    })
+  }
 
   const validation = validateWorkflowDef(
     effectiveDefinition,
@@ -2865,6 +2907,50 @@ export async function resumeDynamicWorkflowExecution(
 }
 
 /**
+ * RFC-292 task-row authority for resume/retry/sync-style operations. The
+ * webhook context is always re-read from durable task state; an operation may
+ * supply a candidate root+closure, but never a replacement trigger source.
+ */
+async function assertFrozenTaskTriggerPreflight(
+  db: DbClient,
+  taskId: string,
+  candidate?: { workflowSnapshot: string; refClosureJson: string | null },
+): Promise<void> {
+  const frozen = (
+    await db
+      .select({
+        workflowSnapshot: tasks.workflowSnapshot,
+        refClosureJson: tasks.refClosureJson,
+        triggerContextJson: tasks.triggerContextJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+  )[0]
+  if (frozen === undefined) return
+
+  const source = parseTriggerContextJson(frozen.triggerContextJson)
+  if (source.kind === 'invalid') {
+    throw new ValidationError(
+      'trigger-context-invalid',
+      'the frozen task trigger context is invalid',
+    )
+  }
+  const selected = candidate ?? frozen
+  try {
+    const root = migrateWorkflowDefinitionToLatest(
+      WorkflowDefinitionSchema.parse(JSON.parse(selected.workflowSnapshot)),
+    )
+    assertTriggerPreflight({ root, closureJson: selected.refClosureJson, source })
+  } catch (error) {
+    // Historical corrupt workflow snapshots retain their existing recovery
+    // behavior. Trigger failures from a valid snapshot are authoritative and
+    // must occur before any lifecycle or scheduler side effect.
+    if (error instanceof ValidationError && error.code.startsWith('trigger-')) throw error
+  }
+}
+
+/**
  * RFC-109 — shared "reanimate a parked/terminal task and continue from the
  * breakpoint" core, extracted from resumeTask. Both resumeTask and
  * syncTaskWorkflow drive it; the ONLY differences are the transition event
@@ -2927,6 +3013,18 @@ async function resumeKick(
   // RFC-243 §4.2 — a child execution whose owning call row already settled
   // must not be re-driven: nobody will ever merge its further output.
   await assertChildTaskDrivable(db, task, opts.verb)
+
+  // RFC-292: re-check the exact execution snapshot before the ownership CAS.
+  await assertFrozenTaskTriggerPreflight(
+    db,
+    id,
+    opts.extra?.workflowSnapshot === undefined
+      ? undefined
+      : {
+          workflowSnapshot: opts.extra.workflowSnapshot,
+          refClosureJson: opts.extra.refClosureJson ?? null,
+        },
+  )
 
   // RFC-108 T6 (AR-15): 410 before the ownership CAS when the worktree is gone
   // (gc reclaimed a resumable task) — never flip to pending then 500 on a
@@ -3081,7 +3179,7 @@ async function resumeKick(
  * snapshot (an exceptional state for a task that launched successfully).
  */
 function parseSnapshotDefinition(snapshot: unknown): WorkflowDefinition {
-  return WorkflowDefinitionSchema.parse(snapshot)
+  return migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(snapshot))
 }
 
 /**
@@ -3206,10 +3304,30 @@ export async function syncTaskWorkflow(
       `workflow advanced to v${workflow.version} since the preview (v${deps.expectedVersion}); refresh and re-confirm`,
     )
   }
+  // RFC-292: candidate root + candidate closure are frozen and checked as one
+  // snapshot. Reusing the task's old closure would either miss new child
+  // trigger dependencies or execute a child definition from the wrong root.
+  const frozenClosureJson = await freezeClosureForLaunch(deps, workflow.id, workflow.definition)
+  const taskContextRow = (
+    await db
+      .select({ triggerContextJson: tasks.triggerContextJson })
+      .from(tasks)
+      .where(eq(tasks.id, id))
+      .limit(1)
+  )[0]
+  assertTriggerPreflight({
+    root: workflow.definition,
+    closureJson: frozenClosureJson,
+    source: parseTriggerContextJson(taskContextRow?.triggerContextJson),
+  })
   // Same static validation gate as launch — never sync an invalid definition in.
   const validation = validateWorkflowDef(
     workflow.definition,
-    await buildWorkflowValidationContext(db),
+    await buildWorkflowValidationContext(db, {
+      definition: workflow.definition,
+      currentWorkflow: { id: workflow.id, name: workflow.name },
+      frozenClosureJson,
+    }),
   )
   if (!validation.ok) {
     const errors = validation.issues.filter((i) => (i.severity ?? 'error') === 'error')
@@ -3285,6 +3403,7 @@ export async function syncTaskWorkflow(
     extra: {
       workflowSnapshot: JSON.stringify(newDef),
       workflowVersion: workflow.version,
+      refClosureJson: frozenClosureJson,
     },
     selectRollback: (rs) =>
       selectSyncRollbackTargets(rs, ['failed', 'interrupted', 'canceled'], (nodeId) =>
@@ -3307,6 +3426,7 @@ export async function computeWorkflowSyncPreview(
   db: DbClient,
   task: Task,
   workflow: Workflow,
+  actor?: Actor,
 ): Promise<WorkflowSyncPreview> {
   // RFC-104 built-in workflows are never manually executed (POST sync-workflow
   // would 403) — so the banner must not appear for them (Codex impl-gate F4).
@@ -3326,6 +3446,22 @@ export async function computeWorkflowSyncPreview(
   }
   const oldDef = parseSnapshotDefinition(task.workflowSnapshot)
   const newDef = workflow.definition
+  let candidateClosureJson: string | null = null
+  const closureIssues: Array<{ code: string; message: string }> = []
+  if (actor !== undefined) {
+    try {
+      candidateClosureJson = await freezeClosureForLaunch(
+        { db, launchActor: actor },
+        workflow.id,
+        newDef,
+      )
+    } catch (error) {
+      closureIssues.push({
+        code: error instanceof DomainError ? error.code : 'workflow-call-ref-missing',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
 
   // The freshest done top-level run per node + the output ports it produced —
@@ -3358,12 +3494,46 @@ export async function computeWorkflowSyncPreview(
   }
 
   const diff = diffWorkflowForSync(oldDef, newDef, buildSyncRunSummary(runs, producedPortsByNode))
-  const validation = validateWorkflowDef(newDef, await buildWorkflowValidationContext(db))
-  const invalidIssues = validation.ok
+  const validation = validateWorkflowDef(
+    newDef,
+    await buildWorkflowValidationContext(db, {
+      definition: newDef,
+      currentWorkflow: { id: workflow.id, name: workflow.name },
+      frozenClosureJson: candidateClosureJson,
+    }),
+  )
+  const validationIssues = validation.ok
     ? []
     : validation.issues
         .filter((i) => (i.severity ?? 'error') === 'error')
         .map((i) => ({ code: i.code, message: i.message }))
+  const contextRow = (
+    await db
+      .select({ triggerContextJson: tasks.triggerContextJson })
+      .from(tasks)
+      .where(eq(tasks.id, task.id))
+      .limit(1)
+  )[0]
+  const triggerIssue = triggerPreflightIssue({
+    root: newDef,
+    closureJson: candidateClosureJson,
+    source: parseTriggerContextJson(contextRow?.triggerContextJson),
+  })
+  const triggerIssues =
+    triggerIssue === null
+      ? []
+      : [
+          {
+            code: triggerIssue.code,
+            message:
+              triggerIssue.code === 'trigger-context-invalid'
+                ? 'the frozen task trigger context is invalid'
+                : triggerIssue.code === 'trigger-context-missing'
+                  ? `workflow requires webhook trigger context at ${triggerIssue.dependency.pointer}`
+                  : `workflow trigger field '${triggerIssue.dependency.field}' is unavailable at ${triggerIssue.dependency.pointer}`,
+          },
+        ]
+  const invalidIssues = [...closureIssues, ...validationIssues, ...triggerIssues]
 
   const syncableStatuses = allowedFromForTaskEvent({ kind: 'sync-workflow' })
   const worktreeMissing = task.worktreePath === ''
@@ -3383,7 +3553,7 @@ export async function computeWorkflowSyncPreview(
     currentVersion: task.workflowVersion,
     latestVersion: workflow.version,
     differs: diff.differs,
-    invalid: !validation.ok,
+    invalid: invalidIssues.length > 0,
     invalidIssues,
     diff,
   }
@@ -3468,6 +3638,12 @@ export async function retryNode(
       `node_run '${nodeRunId}' not found under task '${taskId}'`,
     )
   }
+
+  // RFC-292: a retry reuses the task's immutable webhook provenance. Keep the
+  // RFC-099 ownership guard above authoritative for bogus/cross-task run ids,
+  // then fail trigger preflight before the task ownership CAS, rollback, child
+  // cancellation, impact-set writes, or placeholder minting.
+  await assertFrozenTaskTriggerPreflight(db, taskId)
 
   // Freeze the retry impact set BEFORE taking the task ownership CAS. Besides
   // making the placeholder plan stable, this lets us collect every child task

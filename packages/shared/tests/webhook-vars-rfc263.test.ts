@@ -5,7 +5,7 @@
 // 「自动回复评论的流水线」因此做不成。补齐后要锁住三件事：
 //   ① eventVarsOf 的键集必须 === WEBHOOK_TEMPLATE_VARS —— 漏填一个新变量的症状是
 //      模板渲染成空串（保存期还照样放行），不锁就查不出来；
-//   ② {{comment_position_json}} 超限/序列化失败必须落**空串而非截断** —— 截断的
+//   ② {{trigger.webhook.comment_position_json}} 超限/序列化失败必须落**空串而非截断** —— 截断的
 //      JSON 是非法 JSON，agent 要么解析失败要么把评论打到错位置（design §5.2）；
 //   ③ WEBHOOK_VAR_GROUPS 必须完整覆盖全表 —— 漏登记的变量会在 UI 里直接消失。
 import { readFileSync } from 'node:fs'
@@ -91,15 +91,19 @@ describe('RFC-263 · 变量表与事件矩阵', () => {
   })
 
   test('保存期静态校验对新变量生效：push 触发器引用 comment_thread_id 被拒', () => {
-    const issues = templateVarIssues('agent', { description: '回复 {{comment_thread_id}}' }, [
-      'push',
-    ])
+    const issues = templateVarIssues(
+      'agent',
+      { description: '回复 {{trigger.webhook.comment_thread_id}}' },
+      ['push'],
+    )
     expect(issues).toContainEqual({
       code: 'template-var-unavailable',
       varName: 'comment_thread_id',
     })
     expect(
-      templateVarIssues('agent', { description: '回复 {{comment_thread_id}}' }, ['note']),
+      templateVarIssues('agent', { description: '回复 {{trigger.webhook.comment_thread_id}}' }, [
+        'note',
+      ]),
     ).toEqual([])
   })
 })

@@ -1,0 +1,13 @@
+{
+  "$schema_version": 5,
+  "inputs": [],
+  "nodes": [
+    {
+      "id": "agent_1",
+      "kind": "agent-single",
+      "agentName": "v5-agent",
+      "promptTemplate": "Handle {{trigger.webhook.comment_text}}"
+    }
+  ],
+  "edges": []
+}

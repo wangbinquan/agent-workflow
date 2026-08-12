@@ -35,6 +35,7 @@ import {
   CreateWorkgroupSchema,
   UpdateAgentSchema,
   WorkflowDefinitionSchema,
+  migrateWorkflowDefinitionToLatest,
   type CreateMcp,
   type CreateWorkgroup,
   type UpdateWorkgroup,
@@ -558,7 +559,9 @@ async function applyInner(
               preparedOps.push({ op, kind: 'skill-create' })
               break
             case 'workflow': {
-              const definition = WorkflowDefinitionSchema.parse(op.payload.definition)
+              const definition = migrateWorkflowDefinitionToLatest(
+                WorkflowDefinitionSchema.parse(op.payload.definition),
+              )
               preparedOps.push({ op, kind: 'workflow-create', definition })
               break
             }
@@ -659,7 +662,9 @@ async function applyInner(
                 snapshot: {
                   name: (op.payload as { name: string }).name,
                   description: (op.payload as { description: string }).description,
-                  definition: WorkflowDefinitionSchema.parse(op.payload.definition),
+                  definition: migrateWorkflowDefinitionToLatest(
+                    WorkflowDefinitionSchema.parse(op.payload.definition),
+                  ),
                 },
               },
               { kind: 'actor', actor },

@@ -128,15 +128,22 @@ describe('RFC-270 AC-11 / AC-12 · CodeHostCallEdit', () => {
   })
 })
 
-describe('RFC-270 · Preview 页签对这两类节点根本不存在', () => {
-  test('NodeInspector 只给 agent-single 开 Preview —— 所以没有第二条泄露路径', () => {
-    // 这条钉的是一个**前提**：AC-11 只覆盖了 Edit 面板。谁把 `hasPreview` 放宽
-    // 到别的 kind，必须先来这里改断言，从而被迫想起特权节点的遮蔽。
+describe('RFC-270 · Preview 页签对两类特权节点根本不存在', () => {
+  test('新增安全模板预览后，script/code-host 仍没有第二条泄露路径', () => {
+    // RFC-292 为 call-workgroup/review 增加确定性模板预览，但特权节点仍不在
+    // hasPreview 闭集内；新增 kind 时必须显式审查该边界。
     const text = readFileSync(
       join(__dirname, '..', 'src', 'components', 'canvas', 'NodeInspector.tsx'),
       'utf8',
     )
-    expect(text).toContain("const hasPreview = node.kind === 'agent-single'")
+    const start = text.indexOf('const hasPreview =')
+    const end = text.indexOf('const activeTab', start)
+    const hasPreview = start >= 0 && end > start ? text.slice(start, end) : ''
+    expect(hasPreview).toContain("node.kind === 'agent-single'")
+    expect(hasPreview).toContain("node.kind === 'call-workgroup'")
+    expect(hasPreview).toContain("node.kind === 'review'")
+    expect(hasPreview).not.toContain("node.kind === 'script'")
+    expect(hasPreview).not.toContain("node.kind === 'code-host-call'")
   })
 
   test('选中脚本节点时 Inspector 不出现 Preview 页签', () => {

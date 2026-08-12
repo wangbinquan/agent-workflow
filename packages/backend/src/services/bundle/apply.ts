@@ -31,6 +31,7 @@ import {
   CreateWorkgroupSchema,
   UpdateAgentSchema,
   WorkflowDefinitionSchema,
+  migrateWorkflowDefinitionToLatest,
   type CreateMcp,
   type CreateWorkgroup,
   type WorkflowDefinition,
@@ -655,8 +656,8 @@ async function prepareOne(
     case 'skill-update':
       return { op, kind: 'skill-update' }
     case 'workflow-create': {
-      const definition = WorkflowDefinitionSchema.parse(
-        (op.payload as { definition: unknown }).definition,
+      const definition = migrateWorkflowDefinitionToLatest(
+        WorkflowDefinitionSchema.parse((op.payload as { definition: unknown }).definition),
       )
       return { op, kind: 'workflow-create', definition }
     }
@@ -672,7 +673,9 @@ async function prepareOne(
           snapshot: {
             name: payload.name,
             description: payload.description,
-            definition: WorkflowDefinitionSchema.parse(payload.definition),
+            definition: migrateWorkflowDefinitionToLatest(
+              WorkflowDefinitionSchema.parse(payload.definition),
+            ),
           },
         },
         { kind: 'actor', actor },

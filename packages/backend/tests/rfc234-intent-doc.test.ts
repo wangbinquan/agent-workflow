@@ -11,7 +11,7 @@ import {
   INTENT_REDACTED,
   NODE_KIND,
   SCRIPT_REDACTED_FIELDS,
-  TRIGGER_CONTEXT_VARS,
+  TRIGGER_CONTEXT_FIELDS,
   codeHostActionDef,
   codeHostActionFields,
   codeHostActionSupported,
@@ -246,7 +246,7 @@ describe('RFC-269 — code-host-call form and derived action catalog', () => {
     // The four things a model cannot guess:
     expect(doc).toContain('`response`') // fixed output ports
     expect(doc).toContain('`status`')
-    expect(doc).toContain('{{trigger.') // event vars need no edge
+    expect(doc).toContain('{{trigger.webhook.') // event vars need no edge
     expect(doc).toContain('allowDestructive:true') // DELETE gate
     expect(doc).toMatch(/RELATIVE to the configured base URL/) // no host in a node
     expect(doc).toContain('code-host-calls:author')
@@ -472,16 +472,19 @@ describe('Codex impl-gate P2-3 — the custom-request wire format is exact', () 
 describe('Codex impl-gate P2-4 — trigger variables are enumerated, not hinted', () => {
   const doc = docWith()
 
-  // TRIGGER_CONTEXT_VARS is a closed 29-name set and no seed file lists it, so
-  // `{{trigger.<var>}}` alone left the model guessing; a plausible-but-wrong
+  // TRIGGER_CONTEXT_FIELDS is a closed 30-name set and no seed file lists it, so
+  // a placeholder-only hint leaves the model guessing; a plausible-but-wrong
   // name applies fine and then always fails launch with `code-host-var-unknown`.
   test('every allowed trigger variable is rendered from the shared constant', () => {
-    for (const name of TRIGGER_CONTEXT_VARS) expect(doc).toContain(name)
-    expect(doc).toContain('code-host-var-unknown')
+    for (const name of TRIGGER_CONTEXT_FIELDS) {
+      expect(doc).toContain(`{{trigger.webhook.${name}}}`)
+    }
+    expect(doc).toContain('Trigger values are execution context, NOT workflow inputs')
+    expect(doc).toContain('Never generate legacy root forms')
   })
 
   test('the list is derived, so a new variable cannot silently go untaught', () => {
-    expect(doc).toContain(`ONLY these ${TRIGGER_CONTEXT_VARS.length} names`)
+    expect(doc).toContain(`complete ${TRIGGER_CONTEXT_FIELDS.length} canonical tokens`)
   })
 })
 

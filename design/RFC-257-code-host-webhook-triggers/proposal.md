@@ -1,5 +1,9 @@
 # RFC-257 · 代码平台 Webhook 触发器（入站事件驱动任务）
 
+> **RFC-292 supersession（2026-08-12）**：本文记录的根级 webhook 模板语法只用于解释
+> 历史设计。当前唯一正式语法是 `{{trigger.webhook.<field>}}`，trigger context 以嵌套根冻结，
+> 不铺平到 workflow/root inputs。payload v1 由版本化迁移升级为 v2；新实现与文档以 RFC-292 为准。
+
 - 状态：Draft（设计门已闭环，待用户批准）
 - 日期：2026-08-04（设计门 findings 折入同日）
 - 作者：Claude（与用户四轮澄清拍板）

@@ -24,7 +24,8 @@ import {
   INTENT_LIMITS,
   INTENT_REDACTED,
   SCRIPT_REDACTED_FIELDS,
-  TRIGGER_CONTEXT_VARS,
+  WEBHOOK_TEMPLATE_VARS,
+  WORKFLOW_SCHEMA_VERSION,
   codeHostActionDef,
   codeHostActionFields,
   codeHostActionSupported,
@@ -32,6 +33,7 @@ import {
   codeHostRequiredFields,
   fenceUntrusted,
   isUnsupportedBinding,
+  webhookTriggerToken,
   type IntentQuestion,
   type PrivilegedNodeLens,
 } from '@agent-workflow/shared'
@@ -43,6 +45,8 @@ export const INTENT_TURN_GUIDANCE = Object.freeze({
   maxWorkflowNodesCreatedOrReplaced: 6,
   targetChangesetBytes: 256 * 1024,
 })
+
+const WEBHOOK_TRIGGER_TOKEN_CATALOG = WEBHOOK_TEMPLATE_VARS.map(webhookTriggerToken).join(', ')
 
 export interface IntentDocTurn {
   seq: number
@@ -193,7 +197,7 @@ export function buildIntentDoc(input: IntentDocInput): string {
       ? `  - \`{id,kind:'script',language:'python'|'bash'|'node',script,outputs?:[{name,kind?}],dependencies?:[string],env?:{KEY:'‹secret›'},readonly?:boolean}\`. Runs \`script\` inline in the task worktree — no agent, no model. Inbound port values arrive as env vars \`AW_PORT_<PORT>\` (port name uppercased, chars outside [A-Z0-9_] folded to \`_\`); they are NEVER substituted into the body, so read them from the environment. Absent/empty \`outputs\` ⇒ one implicit port \`stdout\` = raw stdout; non-empty ⇒ the script must print \`<workflow-output nonce="$AW_ENVELOPE_NONCE"><port name="…">…</port></workflow-output>\`; \`path<…>\` output kinds are unsupported. \`dependencies\` must pin exact versions (pip \`pkg==1.2.3\` / npm \`pkg@1.2.3\`); bash declares none. \`env\` VALUES must be \`'‹secret›'\` or \`''\` — the confirm UI collects real values, literals are rejected (same closed carrier as MCP env). Script nodes cannot sit inside wrapper-fanout, and authoring one requires \`scripts:author\` (admin/manager) — which this session holds.`
       : null,
     mayAuthorCodeHostCalls
-      ? `  - \`{id,kind:'code-host-call',provider:'gitlab'|'github',action:'<key from the list below>',params:{field:'template'},request?,allowDestructive?,timeoutMs?}\`. The PLATFORM itself issues ONE REST call to GitLab/GitHub with the base URL + token an administrator configured in settings — no agent, no model, no subprocess, and that token never enters a prompt, a port or your context. Fixed output ports \`response\` (raw body) and \`status\` (HTTP status code); the node declares NO input ports, so nothing has to be wired into it. Every \`params\` VALUE is a template: \`{{port_name}}\` reads an inbound edge's port, and \`{{trigger.<var>}}\` reads the webhook event that started the task (that one needs no edge at all). \`trigger\` accepts ONLY these ${TRIGGER_CONTEXT_VARS.length} names — anything else is refused at launch with \`code-host-var-unknown\`: ${TRIGGER_CONTEXT_VARS.join(', ')}. Leave \`project\` empty to act on the task's own repository. A non-2xx response FAILS the node. Authoring one requires \`code-host-calls:author\` (admin/manager) — which this session holds.
+      ? `  - \`{id,kind:'code-host-call',provider:'gitlab'|'github',action:'<key from the list below>',params:{field:'template'},request?,allowDestructive?,timeoutMs?}\`. The PLATFORM itself issues ONE REST call to GitLab/GitHub with the base URL + token an administrator configured in settings — no agent, no model, no subprocess, and that token never enters a prompt, a port or your context. Fixed output ports \`response\` (raw body) and \`status\` (HTTP status code); the node declares NO input ports, so nothing has to be wired into it. Every \`params\` VALUE is a template: \`{{port_name}}\` reads an inbound edge's port, and the canonical webhook trigger references documented in the public workflow section need no edge. Leave \`project\` empty to act on the task's own repository. A non-2xx response FAILS the node. Authoring one requires \`code-host-calls:author\` (admin/manager) — which this session holds.
     \`action:'custom'\` is the escape hatch and its \`request\` is stricter than it looks: \`method\` is one of ${CODE_HOST_METHODS.join(' | ')} (uppercase); \`path\` must start with a single \`/\`, is RELATIVE to the configured base URL (a node can never name a host, so no scheme, no \`//\` prefix), and may contain no \`?\`, no \`#\`, no \`..\` segment and no whitespace — put query parameters in \`query\`, whose values are strings; \`body\` is a STRING holding JSON, not an object, and every \`{{var}}\` in it must sit INSIDE a JSON string value (never as a key, never bare), because the platform escapes each rendered value as a JSON string before re-parsing the whole body. Any \`DELETE\` additionally needs \`allowDestructive:true\`. Actions (\`*\` = required on that provider, \`?\` = optional):
 ${renderCodeHostActionCatalog()}`
       : null,
@@ -373,12 +377,19 @@ Common rules:
 - ref = a \`res#<type>#<n>\` handle or a \`$new:<slug>\` tempRef declared in this same changeset.
 - Output budget: the WHOLE changeset must fit your model output limit. Keep \`bodyMd\`/\`instructions\` concise (aim ≤120 lines each). If the bundle risks truncation, emit fewer ops this turn and say in \`summary\` what you will add next turn.
 
+Webhook trigger templates are a PUBLIC workflow capability, independent of privileged node permissions:
+- The only valid webhook form is \`{{trigger.webhook.<field>}}\`. It works in agent \`promptTemplate\`, call-workgroup \`goalTemplate\`, review \`commentInjectTemplate\`, and every code-host-call template value (including custom path/query/body).
+- These are the complete ${WEBHOOK_TEMPLATE_VARS.length} canonical tokens: ${WEBHOOK_TRIGGER_TOKEN_CATALOG}.
+- Trigger values are execution context, NOT workflow inputs. Do not add synthetic workflow \`inputs[]\`, input nodes, root parameters, or edges for them. Only create an ordinary workflow input when the USER explicitly asks to expose an event value for manual entry so the same workflow can run without a webhook.
+- Never generate legacy root forms such as \`{{mr_iid}}\` for webhook data or \`{{trigger.mr_iid}}\`. A non-webhook launch of a trigger-dependent workflow is rejected before execution; do not fake a fallback by flattening trigger fields.
+- \`event_json\` is available like every other standard field and is capped at 32 KiB. An author who needs a literal token writes \`{{!trigger.webhook.mr_iid}}\`.
+
 Per-type payload fields:
 - **agent**: \`{name, description, outputs: string[], bodyMd}\` + optional \`{outputKinds:{port:kind}, outputWrapperPortNames:{agentPort:wrapperPort}, inputs:[{name,kind,required?,description?}], role:'normal'|'aggregator', runtime, skills:[ref|{kind:'project',name}], dependsOn:[ref], mcp:[ref], plugins:[ref], syncOutputsOnIterate, frontmatterExtra}\`. \`bodyMd\` is the agent's full markdown body (its system prompt). There is NO \`systemPrompt\`/\`ports\`/\`outputPorts\` field. Port kinds (\`outputKinds\` values / \`inputs[].kind\`): \`string\` (default) | \`markdown\` | \`signal\` | \`path<ext>\` | \`list<kind>\` — nothing else. \`outputWrapperPortNames\` is only for an aggregator inside wrapper-fanout; omit it when wrapper outlet names equal the agent output names.
 - **skill**: \`{name, description, bodyMd}\` + optional \`{files:[{path,content}], frontmatterExtra}\`. \`bodyMd\` becomes SKILL.md. Skills have NO inputs/outputs.
 - **mcp**: \`{type:'local', name, description, config:{command: string[], env?:{KEY:'‹secret›'}}}\` OR \`{type:'remote', name, description, config:{url, headers?:{KEY:'‹secret›'}}}\`.
 - **plugin**: \`{name, spec, description, optionsJson?, enabled?}\` (spec = npm package or git/file URL; the key is exactly \`optionsJson\`, never \`options\`).
-- **workflow**: \`{name, description, definition:{$schema_version:4, inputs:[…], nodes:[…], edges:[…], outputs?}}\`.
+- **workflow**: \`{name, description, definition:{$schema_version:${WORKFLOW_SCHEMA_VERSION}, inputs:[…], nodes:[…], edges:[…], outputs?}}\`.
   Input declarations all use \`{kind,key,label,required?,description?}\`. Supported kinds and extra fields:
   \`text{multiline?,maxLength?}\`; \`files{minCount?,maxCount?,accept?}\`;
   \`enum{choices,multiSelect?,allowOther?}\`; \`git{gitKind:'branch'|'commit-range'|'pr'}\`;
@@ -393,7 +404,7 @@ Per-type payload fields:
   - \`{id,kind:'wrapper-git',nodeIds:[nodeId]}\`. Its only output is \`git_diff:list<path<*>>\`; it accepts no inbound edge itself (outer inputs may target its inner agent nodes).
   - \`{id,kind:'wrapper-loop',nodeIds:[nodeId],maxIterations,exitCondition:{kind:'port-empty'|'port-not-empty'|'port-equals'|'port-count-lt',nodeId,portName,value?,n?,separator?},outputBindings:[{name,bind:{nodeId,portName}}]}\`.
   - \`{id,kind:'wrapper-fanout',nodeIds:[nodeId],inputs:[{name,kind,isShardSource?}],expectedShardCount?}\`. Exactly one input has \`isShardSource:true\` and a \`list<T>\` kind. v1 inner nodes are agent-single only; at most one inner agent may have payload \`role:'aggregator'\`. Worker→aggregator is an ordinary inner edge; the runtime groups every shard's worker output into that aggregator input. Never target the aggregator with a \`boundary:'wrapper-input'\` edge — runtime intentionally does not inject wrapper inputs into aggregators. Aggregator outputs are promoted through \`boundary:'wrapper-output'\` edges to wrapper outlets (same name unless the aggregator payload maps it with \`outputWrapperPortNames\`).
-  - \`{id,kind:'review',title?,inputSource:{nodeId,portName},rerunnableOnReject:[nodeId],rerunnableOnIterate:[nodeId],rollbackFilesOnReject?,rollbackFilesOnIterate?}\`. Also add the matching source→review edge targeting \`__review_input__\`; approved single-document output ports are \`approved_doc\` and \`approval_meta\`.
+  - \`{id,kind:'review',title?,inputSource:{nodeId,portName},rerunnableOnReject:[nodeId],rerunnableOnIterate:[nodeId],rollbackFilesOnReject?,rollbackFilesOnIterate?,commentInjectTemplate?}\`. Also add the matching source→review edge targeting \`__review_input__\`; approved single-document output ports are \`approved_doc\` and \`approval_meta\`. A comment template may use only \`{{__review_comments__}}\` plus canonical webhook trigger refs.
   - \`{id,kind:'clarify',title?,description?,sessionMode?:'isolated'|'inline',clarifyMode?:'optional'}\`.
   - \`{id,kind:'clarify-cross-agent',title?,description?,sessionModeForQuestioner?:'isolated'|'inline'}\`.
   - \`{id,kind:'call-workflow',workflowName:'<exact target name>',limits?:{maxDurationMs?,maxTotalTokens?}}\`. Runs ANOTHER workflow as an independent child task. Its ports MIRROR that child's declared inputs (in-ports) and outputs (out-ports), so you can only wire it correctly where you can actually read them: a workflow under \`mounted/\`, or one you create in this same changeset. For a workflow you only see summarized in inventory/, ask the user to mount it instead of guessing port names. Two launch-time rules the definition alone will not tell you: EVERY one of the child's declared inputs needs its own ordinary incoming edge targeting that exact input key — including inputs the child marks optional, else \`call-workflow-input-unwired\`; and a child that declares any \`upload\` input CANNOT be called at all (\`call-workflow-upload-input-unsupported\`), so pick a different composition rather than emitting a caller that can never launch.

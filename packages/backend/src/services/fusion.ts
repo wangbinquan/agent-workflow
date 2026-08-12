@@ -33,7 +33,11 @@ import type {
   LaunchFusion,
   WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { FusionResultManifestSchema, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
+import {
+  FusionResultManifestSchema,
+  TERMINAL_TASK_STATUSES,
+  WORKFLOW_SCHEMA_VERSION,
+} from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -220,7 +224,7 @@ const FUSION_WORKFLOW_DESCRIPTION = 'Built-in memory→skill fusion workflow (RF
 
 function canonicalFusionWorkflowDefinition(): WorkflowDefinition {
   return {
-    $schema_version: 4,
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
     inputs: [
       { kind: 'text', key: 'intent', label: 'Merge intent', required: false },
       { kind: 'text', key: 'memories', label: 'Memories', required: true },

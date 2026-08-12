@@ -26,7 +26,7 @@ import {
   webhookTriggers,
   webhookTriggerStreams,
 } from '@/db/schema'
-import { parseTriggerRow } from '@/services/webhook/webhookDispatch'
+import { migrateTriggerRowTemplateToV2, parseTriggerRow } from '@/services/webhook/webhookDispatch'
 import { assertTriggerSaveable } from '@/services/webhook/triggerValidation'
 import { loadConfig } from '@/config'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
@@ -154,7 +154,10 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
         .from(webhookTriggers)
         .orderBy(desc(webhookTriggers.createdAt))
       // RFC-260 D1：全量只读——不再按 owner 过滤。
-      return c.json(rows.map(toWire))
+      const canonicalRows = await Promise.all(
+        rows.map((row) => migrateTriggerRowTemplateToV2(deps.db, row)),
+      )
+      return c.json(canonicalRows.map(toWire))
     },
   )
 
@@ -212,6 +215,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
           launchKind: body.launchKind,
           launchRefId: body.launchRefId,
           launchPayload: JSON.stringify(body.launchPayload),
+          templateSyntaxVersion: 2,
           maxConsecutiveFires: body.maxConsecutiveFires,
           autoRegisterRepos: body.autoRegisterRepos,
         })
@@ -240,7 +244,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
       if (!row) {
         throw new NotFoundError('webhook-trigger-not-found', 'trigger not found')
       }
-      return c.json(toWire(row))
+      return c.json(toWire(await migrateTriggerRowTemplateToV2(deps.db, row)))
     },
   )
 
@@ -255,16 +259,17 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      const row = (
+      const storedRow = (
         await deps.db
           .select()
           .from(webhookTriggers)
           .where(eq(webhookTriggers.id, c.req.param('id')))
           .limit(1)
       )[0]
-      if (!row) {
+      if (!storedRow) {
         throw new NotFoundError('webhook-trigger-not-found', 'trigger not found')
       }
+      const row = await migrateTriggerRowTemplateToV2(deps.db, storedRow)
       requireWrite(actor, row)
       const parsed = UpdateWebhookTriggerSchema.safeParse(await safeJson(c.req.raw))
       if (!parsed.success) {
@@ -300,6 +305,10 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
       const rows = await deps.db
         .update(webhookTriggers)
         .set({
+          // A successful PUT is also the repair path for an invalid historical
+          // v1 payload. The validated candidate is canonical even when the
+          // read-time migration could not parse the stored bytes.
+          templateSyntaxVersion: 2,
           ...(patch.name !== undefined ? { name: patch.name } : {}),
           ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
           ...(patch.repoScope !== undefined ? { repoScope: JSON.stringify(patch.repoScope) } : {}),
@@ -327,6 +336,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
           launchConfigTouched
             ? and(
                 eq(webhookTriggers.id, row.id),
+                eq(webhookTriggers.templateSyntaxVersion, row.templateSyntaxVersion),
                 eq(webhookTriggers.launchRefId, row.launchRefId),
                 eq(webhookTriggers.launchPayload, row.launchPayload),
                 eq(webhookTriggers.eventTypes, row.eventTypes),

@@ -12,12 +12,19 @@
 // RFC-253 D5「不把上游输出拼进脚本正文」是同一条道理，只是这里的载体从代码
 // 换成了 HTTP 请求。
 
-/** `{{trigger.xxx}}` 的命名空间前缀。端口名语法不含 '.'，所以两个空间不重叠。 */
-export const CODE_HOST_TRIGGER_PREFIX = 'trigger.'
+import type { WebhookTemplateVar } from '../schemas/webhook'
+import type { TriggerContext } from '../triggerContext'
+import {
+  extractTemplateRefs,
+  parseTemplate,
+  renderTemplateRefs,
+  type TemplateRefIssue,
+} from '../templateRef'
 
 export type CodeHostVarRef =
   | { readonly kind: 'port'; readonly name: string }
-  | { readonly kind: 'trigger'; readonly name: string }
+  | { readonly kind: 'trigger'; readonly name: WebhookTemplateVar }
+  | { readonly kind: 'invalid'; readonly raw: string; readonly reason: TemplateRefIssue }
 
 export interface CodeHostTemplateContext {
   /** 上游端口值。缺失的端口渲染为空串。 */
@@ -26,32 +33,21 @@ export interface CodeHostTemplateContext {
    * 触发事件上下文投影。**null = 该任务不是 webhook 触发的** —— 与「有上下文但
    * 该变量恰好为空」是两回事，执行器要据此给出可读的失败原因（design D24）。
    */
-  readonly trigger: Readonly<Record<string, string>> | null
+  readonly triggerContext?: TriggerContext | null
 }
 
 /** 变量值落在请求的哪个位置，决定编码方式。 */
 export type CodeHostEncoding = 'raw' | 'path' | 'json-string'
 
-// 端口名沿用既有 prompt 模板的 \w+ 语法；trigger 变量多一个点。
-const VAR_RE = /\{\{\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*\}\}/g
-
-function refOf(raw: string): CodeHostVarRef {
-  return raw.startsWith(CODE_HOST_TRIGGER_PREFIX)
-    ? { kind: 'trigger', name: raw.slice(CODE_HOST_TRIGGER_PREFIX.length) }
-    : { kind: 'port', name: raw }
-}
-
 /** 提取模板引用的全部变量（保存期校验用；按出现顺序，已去重）。 */
 export function extractCodeHostVars(text: string): CodeHostVarRef[] {
-  const seen = new Set<string>()
-  const out: CodeHostVarRef[] = []
-  for (const m of text.matchAll(VAR_RE)) {
-    const raw = m[1]!
-    if (seen.has(raw)) continue
-    seen.add(raw)
-    out.push(refOf(raw))
-  }
-  return out
+  return extractTemplateRefs(text).map((ref) =>
+    ref.kind === 'local'
+      ? { kind: 'port', name: ref.name }
+      : ref.kind === 'trigger'
+        ? { kind: 'trigger', name: ref.field }
+        : { kind: 'invalid', raw: ref.raw, reason: ref.reason },
+  )
 }
 
 /** JSON 字符串字面量内部的转义（不含外层引号）。 */
@@ -75,8 +71,10 @@ export interface CodeHostRenderResult {
   readonly value: string
   /** 渲染成空串的引用 —— 调用方据此对**必填**字段报错（可选字段忽略）。 */
   readonly emptyRefs: readonly CodeHostVarRef[]
-  /** 引用了 `{{trigger.*}}` 但该任务根本没有触发上下文。 */
+  /** 引用了 `{{trigger.webhook.*}}` 但该任务根本没有触发上下文。 */
   readonly triggerMissing: boolean
+  /** Invalid/legacy refs. Runtime callers must fail before issuing HTTP. */
+  readonly invalidRefs: readonly { readonly raw: string; readonly reason: TemplateRefIssue }[]
 }
 
 /**
@@ -92,17 +90,20 @@ export function renderCodeHostTemplate(
   ctx: CodeHostTemplateContext,
   encoding: CodeHostEncoding = 'raw',
 ): CodeHostRenderResult {
-  const emptyRefs: CodeHostVarRef[] = []
+  const emptyRefs: Array<Exclude<CodeHostVarRef, { kind: 'invalid' }>> = []
   let triggerMissing = false
-  const value = text.replace(VAR_RE, (_match, raw: string) => {
-    const ref = refOf(raw)
+  const rendered = renderTemplateRefs(text, (templateRef) => {
+    const ref: Exclude<CodeHostVarRef, { kind: 'invalid' }> =
+      templateRef.kind === 'trigger'
+        ? { kind: 'trigger', name: templateRef.field }
+        : { kind: 'port', name: templateRef.name }
     let resolved: string
     if (ref.kind === 'trigger') {
-      if (ctx.trigger === null) {
+      if (ctx.triggerContext === null || ctx.triggerContext === undefined) {
         triggerMissing = true
         resolved = ''
       } else {
-        resolved = ctx.trigger[ref.name] ?? ''
+        resolved = ctx.triggerContext.trigger.webhook[ref.name] ?? ''
       }
     } else {
       resolved = ctx.ports[ref.name] ?? ''
@@ -110,7 +111,12 @@ export function renderCodeHostTemplate(
     if (resolved.length === 0) emptyRefs.push(ref)
     return encodeValue(resolved, encoding)
   })
-  return { value, emptyRefs, triggerMissing }
+  return {
+    value: rendered.value,
+    emptyRefs,
+    triggerMissing,
+    invalidRefs: rendered.invalid.map((ref) => ({ raw: ref.raw, reason: ref.reason })),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +127,11 @@ export type CodeHostJsonBodyIssue =
   | { readonly kind: 'invalid-json' }
   | { readonly kind: 'var-outside-string'; readonly ref: string }
   | { readonly kind: 'var-in-key'; readonly ref: string }
+  | {
+      readonly kind: 'invalid-template-ref'
+      readonly ref: string
+      readonly reason: TemplateRefIssue
+    }
 
 // 纯文本 sentinel：裸着放进 JSON 时**不是**合法 token，所以「替换后还能 parse」
 // 本身就证明了每个 sentinel 都落在某个字符串里。用户 body 里恰好含这个字面量
@@ -133,11 +144,20 @@ function replaceVars(
   wrap: (index: number) => string,
 ): { probe: string; raws: string[] } {
   const raws: string[] = []
-  const probe = body.replace(VAR_RE, (_m, raw: string) => {
+  let probe = ''
+  for (const segment of parseTemplate(body)) {
+    if (segment.kind === 'text' || segment.kind === 'literal-ref') {
+      probe += segment.value
+      continue
+    }
+    if (segment.kind === 'invalid') {
+      probe += body.slice(segment.span.start, segment.span.end)
+      continue
+    }
     const index = raws.length
-    raws.push(raw)
-    return wrap(index)
-  })
+    raws.push(segment.ref.raw)
+    probe += wrap(index)
+  }
   return { probe, raws }
 }
 
@@ -185,6 +205,10 @@ function sentinelInKey(node: unknown): number | null {
 export function codeHostJsonBodyIssue(body: string): CodeHostJsonBodyIssue | null {
   const trimmed = body.trim()
   if (trimmed.length === 0) return null // 空 body 合法（GET / 无 body 的 POST）
+  const invalidRef = extractTemplateRefs(trimmed).find((ref) => ref.kind === 'invalid')
+  if (invalidRef?.kind === 'invalid') {
+    return { kind: 'invalid-template-ref', ref: invalidRef.raw, reason: invalidRef.reason }
+  }
   const bare = replaceVars(trimmed, sentinel)
   if (parses(bare.probe)) {
     const keyHit = sentinelInKey(JSON.parse(bare.probe))
@@ -213,6 +237,7 @@ export function renderCodeHostJsonBody(
   | { ok: true; value: unknown; render: CodeHostRenderResult }
   | { ok: false; render: CodeHostRenderResult } {
   const render = renderCodeHostTemplate(body, ctx, 'json-string')
+  if (render.invalidRefs.length > 0) return { ok: false, render }
   try {
     return { ok: true, value: JSON.parse(render.value), render }
   } catch {

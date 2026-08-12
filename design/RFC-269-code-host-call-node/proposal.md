@@ -1,5 +1,9 @@
 # RFC-269 · 代码平台调用节点（Code Host Call Node）
 
+> **RFC-292 supersession（2026-08-12）**：本文的 code-host-only `{{trigger.<field>}}`
+> 语法与“不开放给 agent prompt”的限制已被取代。当前唯一正式语法是
+> `{{trigger.webhook.<field>}}`，并统一用于 agent/workgroup/review/code-host；trigger 字段不进入根 inputs。
+
 > 产品视角。技术设计见 [design.md](./design.md)，任务分解见 [plan.md](./plan.md)。
 > 状态：**Draft（2026-08-07）** —— 三件套已落档，按 CLAUDE.md 需用户批准后才进入实现。
 > 前置：[RFC-257](../RFC-257-code-host-webhook-triggers/proposal.md)（webhook 入站与归一化信封）、

@@ -19,6 +19,7 @@ import {
   rejectRetiredStartTaskKeys,
   scheduledPayloadSchemaFor,
   type ScheduledLaunchKind,
+  type TriggerDependencySource,
   wallClockAt,
   redactGitUrl,
 } from '@agent-workflow/shared'
@@ -41,6 +42,8 @@ import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 import { getWorkflow } from '@/services/workflow'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { loadOwnerIdentities } from '@/services/ownerIdentity'
+import { freezeCallClosure } from '@/services/execution/closure'
+import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 
 /** Injected launch — `(body) => startTask(body, deps)`, closed over owner + scheduledTaskId. */
 /**
@@ -256,6 +259,7 @@ export async function assertScheduledTargetUsable(
   kind: ScheduledLaunchKind,
   body: Record<string, unknown>,
   _defaultRuntime?: string | null,
+  triggerSource: TriggerDependencySource = { kind: 'none' },
 ): Promise<void> {
   if (kind === 'workflow') {
     // Preserve the RFC-159 schedule-specific incompatibility as the first
@@ -267,6 +271,17 @@ export async function assertScheduledTargetUsable(
     }
     assertNotBuiltin('workflow', target)
     assertNoRequiredUploadInput(target)
+
+    const closureJson = await freezeCallClosure(
+      db,
+      { id: target.id, definition: target.definition },
+      actor,
+    )
+    assertTriggerPreflight({
+      root: target.definition,
+      closureJson,
+      source: triggerSource,
+    })
 
     await assertWorkflowLaunchable(db, actor, body['workflowId'] as string)
     assertWorkflowLaunchInputs(

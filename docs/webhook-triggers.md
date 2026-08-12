@@ -177,6 +177,13 @@ GitHub 侧配置。
 `author_id` `mr_id` `mr_url` `comment_id` `comment_thread_id` `comment_url`
 `comment_position_json` `pipeline_id` `pipeline_url`
 
+模板中一律写完整路径 `trigger.webhook.<字段名>`（外层再加双花括号），例如
+`{{trigger.webhook.mr_iid}}`。这 30 个字段是冻结的 trigger 运行上下文，不是 workflow
+根参数：不要创建同名 workflow `inputs[]`、input 节点或边。规范路径可直接用于 webhook
+launch payload、agent `promptTemplate`、call-workgroup `goalTemplate`、review
+`commentInjectTemplate` 与 code-host-call 的 preset/custom path/query/body。普通手动启动或定时
+启动若引用这些字段，会在任何任务/仓库/HTTP/模型副作用前报 `trigger-context-missing`。
+
 **三个最容易用错的**：
 
 | 变量 | 说明 |
@@ -205,7 +212,7 @@ GitHub 侧配置。
 ```bash
 curl -sS -X POST -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
   --data-urlencode "body=审计结论：……" \
-  "{{api_base_url}}/projects/{{project_id}}/merge_requests/{{mr_iid}}/discussions/{{comment_thread_id}}/notes"
+  "{{trigger.webhook.api_base_url}}/projects/{{trigger.webhook.project_id}}/merge_requests/{{trigger.webhook.mr_iid}}/discussions/{{trigger.webhook.comment_thread_id}}/notes"
 ```
 
 在 MR 上新开一条评论 / 在 diff 某一行新建线程：
@@ -213,22 +220,22 @@ curl -sS -X POST -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
 ```bash
 curl -sS -X POST -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
   --data-urlencode "body=……" \
-  "{{api_base_url}}/projects/{{project_id}}/merge_requests/{{mr_iid}}/notes"
+  "{{trigger.webhook.api_base_url}}/projects/{{trigger.webhook.project_id}}/merge_requests/{{trigger.webhook.mr_iid}}/notes"
 
-# {{comment_position_json}} 的键与 position[...] 参数一一对应，原样回传即可
+# {{trigger.webhook.comment_position_json}} 的键与 position[...] 参数一一对应，原样回传即可
 curl -sS -X POST -H "PRIVATE-TOKEN: $GITLAB_TOKEN" -H 'Content-Type: application/json' \
-  -d "$(jq -n --arg b "……" --argjson p '{{comment_position_json}}' '{body:$b, position:$p}')" \
-  "{{api_base_url}}/projects/{{project_id}}/merge_requests/{{mr_iid}}/discussions"
+  -d "$(jq -n --arg b "……" --argjson p '{{trigger.webhook.comment_position_json}}' '{body:$b, position:$p}')" \
+  "{{trigger.webhook.api_base_url}}/projects/{{trigger.webhook.project_id}}/merge_requests/{{trigger.webhook.mr_iid}}/discussions"
 ```
 
 把结论挂成 commit status / 拉失败 job：
 
 ```bash
 curl -sS -X POST -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-  "{{api_base_url}}/projects/{{project_id}}/statuses/{{commit_sha}}?state=success&name=aw-audit"
+  "{{trigger.webhook.api_base_url}}/projects/{{trigger.webhook.project_id}}/statuses/{{trigger.webhook.commit_sha}}?state=success&name=aw-audit"
 
 curl -sS -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-  "{{api_base_url}}/projects/{{project_id}}/pipelines/{{pipeline_id}}/jobs?scope[]=failed"
+  "{{trigger.webhook.api_base_url}}/projects/{{trigger.webhook.project_id}}/pipelines/{{trigger.webhook.pipeline_id}}/jobs?scope[]=failed"
 ```
 
 ### 7.4 GitHub 样例
@@ -237,25 +244,25 @@ curl -sS -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
 # 行内评论：回复到同一线程
 curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json' \
   -d '{"body":"……"}' \
-  "{{api_base_url}}/repos/{{repo_owner}}/{{repo_name}}/pulls/{{mr_iid}}/comments/{{comment_thread_id}}/replies"
+  "{{trigger.webhook.api_base_url}}/repos/{{trigger.webhook.repo_owner}}/{{trigger.webhook.repo_name}}/pulls/{{trigger.webhook.mr_iid}}/comments/{{trigger.webhook.comment_thread_id}}/replies"
 
 # 普通 PR 评论没有线程，只能新开一条
 curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
   -d '{"body":"……"}' \
-  "{{api_base_url}}/repos/{{repo_owner}}/{{repo_name}}/issues/{{mr_iid}}/comments"
+  "{{trigger.webhook.api_base_url}}/repos/{{trigger.webhook.repo_owner}}/{{trigger.webhook.repo_name}}/issues/{{trigger.webhook.mr_iid}}/comments"
 
 # 新建行内评论：position 包补上 body 即为完整请求体
 curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
-  -d "$(jq -n --arg b "……" --argjson p '{{comment_position_json}}' '$p + {body:$b}')" \
-  "{{api_base_url}}/repos/{{repo_owner}}/{{repo_name}}/pulls/{{mr_iid}}/comments"
+  -d "$(jq -n --arg b "……" --argjson p '{{trigger.webhook.comment_position_json}}' '$p + {body:$b}')" \
+  "{{trigger.webhook.api_base_url}}/repos/{{trigger.webhook.repo_owner}}/{{trigger.webhook.repo_name}}/pulls/{{trigger.webhook.mr_iid}}/comments"
 
 # commit status / 重跑 workflow
 curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
   -d '{"state":"success","context":"aw-audit"}' \
-  "{{api_base_url}}/repos/{{repo_owner}}/{{repo_name}}/statuses/{{commit_sha}}"
+  "{{trigger.webhook.api_base_url}}/repos/{{trigger.webhook.repo_owner}}/{{trigger.webhook.repo_name}}/statuses/{{trigger.webhook.commit_sha}}"
 
 curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
-  "{{api_base_url}}/repos/{{repo_owner}}/{{repo_name}}/actions/runs/{{pipeline_id}}/rerun"
+  "{{trigger.webhook.api_base_url}}/repos/{{trigger.webhook.repo_owner}}/{{trigger.webhook.repo_name}}/actions/runs/{{trigger.webhook.pipeline_id}}/rerun"
 ```
 
 ### 7.5 凭据：token 怎么到 agent 手里（配置前先读）
@@ -271,8 +278,9 @@ curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
 
 **回帖 / 调接口的推荐做法是让平台代发，而不是把 token 交给 agent**：在设置页
 「代码平台」分区配好 GitLab / GitHub 的 base URL 与令牌，然后在工作流里放一个
-**代码平台调用节点**（RFC-269）。节点里可以直接引用 `{{trigger.mr_iid}}` /
-`{{trigger.comment_thread_id}}` 等本节列出的变量，无需为每个参数接一条 input 连线。
+**代码平台调用节点**（RFC-269）。节点里可以直接引用
+`{{trigger.webhook.mr_iid}}` / `{{trigger.webhook.comment_thread_id}}` 等本节列出的变量，
+无需为每个参数接一条 input 连线。
 令牌只留在 daemon 进程里，不进 agent 环境、不进提示词、不进模型上下文 —— 上面三条
 平台现状因此**一条都不需要松动**。
 

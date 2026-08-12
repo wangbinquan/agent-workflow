@@ -4,7 +4,7 @@
 // clarify round 3: 呈现全四项):
 //   workflow  → read-only canvas ('intent-preview' surface); update ops add a
 //               Before/After switch (before = live definition) plus word-level
-//               prompt-template diffs for nodes whose template changed.
+//               diffs for every inventoried workflow template surface.
 //   workgroup → structure preview (member chips, leader mark, mode/switches).
 //   skill     → file tree with byte sizes, script-suffix warning badges (D20:
 //               text-only files; scripts highlighted, never executed) and
@@ -23,8 +23,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Agent, WorkflowDefinition, WorkflowDetail } from '@agent-workflow/shared'
-import { WorkflowDefinitionSchema } from '@agent-workflow/shared'
+import type {
+  Agent,
+  WorkflowDefinition,
+  WorkflowDetail,
+  WorkflowTemplateSurface,
+} from '@agent-workflow/shared'
+import { collectWorkflowTemplateSurfaces, WorkflowDefinitionSchema } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { FeedbackStack } from '@/components/FeedbackStack'
@@ -145,6 +150,59 @@ export function IntentOpPreview(props: IntentOpPreviewProps): ReactElement {
 
 // ── workflow ────────────────────────────────────────────────────────────────
 
+export interface WorkflowTemplateDiff {
+  readonly key: string
+  readonly label: string
+  readonly before: string
+  readonly after: string
+}
+
+function relativeTemplatePointer(surface: WorkflowTemplateSurface): string {
+  return surface.pointer.replace(/^\/nodes\/\d+/, '')
+}
+
+function templateSurfaceKey(surface: WorkflowTemplateSurface): string {
+  return `${surface.nodeId}\u0000${relativeTemplatePointer(surface)}`
+}
+
+/**
+ * Compare the same authoritative template-surface inventory used by Intent
+ * validation and runtime preflight. Node reordering therefore does not create
+ * false diffs, while added and removed map entries remain visible.
+ */
+export function collectWorkflowTemplateDiffs(
+  before: WorkflowDefinition,
+  after: WorkflowDefinition,
+): WorkflowTemplateDiff[] {
+  const beforeSurfaces = new Map(
+    collectWorkflowTemplateSurfaces(before).map((surface) => [
+      templateSurfaceKey(surface),
+      surface,
+    ]),
+  )
+  const afterSurfaces = new Map(
+    collectWorkflowTemplateSurfaces(after).map((surface) => [templateSurfaceKey(surface), surface]),
+  )
+  const keys = new Set([...beforeSurfaces.keys(), ...afterSurfaces.keys()])
+
+  return [...keys].flatMap((key) => {
+    const previous = beforeSurfaces.get(key)
+    const next = afterSurfaces.get(key)
+    const beforeText = previous?.text ?? ''
+    const afterText = next?.text ?? ''
+    if (beforeText === afterText) return []
+    const surface = next ?? previous!
+    return [
+      {
+        key,
+        label: `${surface.nodeId}${relativeTemplatePointer(surface)}`,
+        before: beforeText,
+        after: afterText,
+      },
+    ]
+  })
+}
+
 function WorkflowOpPreview(props: {
   op: Record<string, unknown>
   payload: Record<string, unknown>
@@ -201,20 +259,9 @@ function WorkflowOpPreview(props: {
   const shown: WorkflowDefinition | null =
     side === 'before' && before !== undefined ? before : after
 
-  const promptDiffs = useMemo(() => {
+  const templateDiffs = useMemo(() => {
     if (before === undefined || after === null) return []
-    const beforeTemplates = new Map(
-      before.nodes.map((node) => [
-        node.id,
-        (node as { promptTemplate?: string }).promptTemplate ?? '',
-      ]),
-    )
-    return after.nodes.flatMap((node) => {
-      const prev = beforeTemplates.get(node.id)
-      const next = (node as { promptTemplate?: string }).promptTemplate ?? ''
-      if (prev === undefined || prev === next) return []
-      return [{ nodeId: node.id, before: prev, after: next }]
-    })
+    return collectWorkflowTemplateDiffs(before, after)
   }, [before, after])
 
   return (
@@ -289,16 +336,16 @@ function WorkflowOpPreview(props: {
       ) : (
         <p className="muted">{t('intent.previewCanvasUnavailable')}</p>
       )}
-      {promptDiffs.length > 0 ? (
+      {templateDiffs.length > 0 ? (
         <div>
           <h4>{t('intent.previewPromptDiff')}</h4>
-          {promptDiffs.map((diff) => (
+          {templateDiffs.map((diff) => (
             <DiffView
-              key={diff.nodeId}
+              key={diff.key}
               left={diff.before}
               right={diff.after}
               granularity="word"
-              leftLabel={diff.nodeId}
+              leftLabel={diff.label}
             />
           ))}
         </div>

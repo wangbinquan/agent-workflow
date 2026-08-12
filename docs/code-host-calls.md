@@ -4,7 +4,8 @@
 commit status、触发流水线、拉 job 日志……**令牌只留在 daemon 进程里**，不进 agent 进程，
 也不进模型上下文。
 
-配套阅读：[webhook-triggers.md](./webhook-triggers.md)（入站事件与 `{{trigger.*}}` 变量来源）。
+配套阅读：[webhook-triggers.md](./webhook-triggers.md)（入站事件与
+`{{trigger.webhook.*}}` 变量来源）。
 
 ## 1. 配置凭据（管理员）
 
@@ -74,10 +75,16 @@ commit status、触发流水线、拉 job 日志……**令牌只留在 daemon �
 节点的每个字段都是模板，两个命名空间：
 
 - `{{端口名}}` —— 上游节点的输出（连线后可用，与 agent 提示词模板同一套机制）。
-- `{{trigger.xxx}}` —— webhook 触发上下文，共 29 个变量（`{{trigger.mr_iid}}`、
-  `{{trigger.project_id}}`、`{{trigger.comment_thread_id}}`…完整清单见 Inspector 里的变量
-  区，语义见 [webhook-triggers.md](./webhook-triggers.md) §7.1）。**手动启动的任务没有触发
-  上下文**，这时引用它们会明确报错而不是发一个空参数出去。
+- `{{trigger.webhook.<field>}}` —— webhook 触发上下文，共 30 个字段（包括
+  `{{trigger.webhook.event_type}}`、`{{trigger.webhook.mr_iid}}`、
+  `{{trigger.webhook.project_id}}`、`{{trigger.webhook.comment_thread_id}}` 与有 32 KiB
+  上限的 `{{trigger.webhook.event_json}}`；完整清单见 Inspector，语义见
+  [webhook-triggers.md](./webhook-triggers.md) §7.1）。**手动启动的任务没有触发上下文**，
+  这时引用它们会在发 HTTP 请求前明确报 `trigger-context-missing`。
+
+这是 trigger 类型的运行上下文，不是 workflow input。不要为这些字段新建根级 `inputs[]`、
+input 节点或搬运边；agent prompt、call-workgroup goal、review comment template 与本节点使用
+同一套规范路径。
 
 **项目字段留空 = 用当前任务的仓库**。仓库不属于所配置的平台实例时会明确拒绝（不会拿去改一个
 同名的、不相干的项目）；多仓任务必须显式填写。
@@ -111,7 +118,7 @@ commit status、触发流水线、拉 job 日志……**令牌只留在 daemon �
 | -------------------------------------- | ------------------------------------------------------------------------------ |
 | 节点报 `code-host-not-configured`      | 设置页没配那家的 base URL / 令牌，或 `secret.key` 换过导致解封失败（重录令牌） |
 | 报 `code-host-project-foreign`         | 任务仓库不在所配置的实例上；显式填项目字段，或改配置                           |
-| 报 `code-host-trigger-context-missing` | 工作流引用了 `{{trigger.*}}`，但这个任务不是 webhook 起的                      |
+| 报 `trigger-context-missing`           | 工作流引用了 `{{trigger.webhook.*}}`，但这个任务不是 webhook 起的              |
 | 回帖 403                               | 令牌 scope 不够，或 bot 账号在那个项目上没有权限                               |
 | 回帖发了两条                           | 检查是否在 `wrapper-loop` 里（挪进循环会按迭代次数重复发送）                   |
 | 测试连接报「响应不是身份信息」         | base URL 指到了反代的登录页，而不是 API 根                                     |

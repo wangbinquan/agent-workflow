@@ -23,7 +23,11 @@ import {
 } from '../src/services/task'
 import type { nodeRuns as nodeRunsTable } from '../src/db/schema'
 import { runGit } from '../src/util/git'
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import {
+  migrateWorkflowDefinitionToLatest,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -155,7 +159,7 @@ describe('RFC-109 syncTaskWorkflow — swap + continue', () => {
     expect(after.status).toBe('pending')
     expect(after.workflowVersion).toBe(2)
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
-    expect(JSON.parse(row.workflowSnapshot)).toEqual(DEF_B as unknown as Record<string, unknown>)
+    expect(JSON.parse(row.workflowSnapshot)).toEqual(migrateWorkflowDefinitionToLatest(DEF_B))
     expect(row.workflowVersion).toBe(2)
   })
 
@@ -223,6 +227,51 @@ describe('RFC-109 syncTaskWorkflow — swap + continue', () => {
     )
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
     expect(row.status).toBe('done') // not churned
+  })
+
+  test('RFC-292: latest definition introducing trigger dependency rejects before atomic swap', async () => {
+    h = await buildHarness('failed')
+    const next: WorkflowDefinition = {
+      $schema_version: 5,
+      inputs: [],
+      nodes: [
+        {
+          id: 'agent',
+          kind: 'agent-single',
+          agentName: 'fixture',
+          promptTemplate: 'Handle {{trigger.webhook.comment_text}}',
+        } as WorkflowNode,
+      ],
+      edges: [],
+    }
+    const finishedAt = Date.now() - 10
+    await h.db
+      .update(tasks)
+      .set({
+        finishedAt,
+        errorSummary: 'original-summary',
+        errorMessage: 'original-detail',
+        failedNodeId: 'a',
+      })
+      .where(eq(tasks.id, h.taskId))
+    const before = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+    await bumpWorkflow(h.db, h.workflowId, next, 2)
+
+    expect(await codeOf(() => syncTaskWorkflow(h.db, h.taskId, syncDeps(h, 2)))).toBe(
+      'trigger-context-missing',
+    )
+
+    const after = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+    expect(after).toMatchObject({
+      status: 'failed',
+      workflowVersion: 1,
+      workflowSnapshot: before.workflowSnapshot,
+      refClosureJson: before.refClosureJson,
+      finishedAt,
+      errorSummary: 'original-summary',
+      errorMessage: 'original-detail',
+      failedNodeId: 'a',
+    })
   })
 
   test('AC-8: invalid latest definition → workflow-invalid', async () => {

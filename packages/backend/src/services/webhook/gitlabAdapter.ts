@@ -1,6 +1,6 @@
 // RFC-257 T3 — GitLab webhook adapter：验签 + payload 归一化。
 // 平台特有知识全部封在本文件（multica channel/doc.go 边界规则：核心只读
-// CodeHostEvent 信封，raw 只入库审计 + {{event_json}}）。字段路径依据 GitLab
+// CodeHostEvent 信封，raw 只入库审计 + {{trigger.webhook.event_json}}）。字段路径依据 GitLab
 // webhook 文档与 tests/fixtures/gitlab-webhooks/ 下的样例；与真实实例不符时
 // **以 fixture 为准回改本文件与 design §2.3**（T3 实测清单见 fixtures README）。
 //

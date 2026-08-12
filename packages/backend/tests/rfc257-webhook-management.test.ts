@@ -16,6 +16,7 @@ import {
   webhookDeliveries,
   webhookTriggerFires,
   webhookTriggerStreams,
+  webhookTriggers,
   workflows,
 } from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
@@ -101,7 +102,7 @@ async function call(
 
 const VALID_PAYLOAD = {
   inputs: {
-    prompt: { kind: 'template', template: '修 {{repo_path}}' },
+    prompt: { kind: 'template', template: '修 {{trigger.webhook.repo_path}}' },
     mr_ref: { kind: 'event-branch' },
   },
 }
@@ -250,7 +251,10 @@ describe('RFC-257 T8 · 触发器管理（owner 制）', () => {
       triggerBody(ep.id, h.workflowId, {
         launchPayload: {
           inputs: {
-            prompt: { kind: 'template', template: '{{pipeline_status}}' },
+            prompt: {
+              kind: 'template',
+              template: '{{trigger.webhook.pipeline_status}}',
+            },
             mr_ref: { kind: 'event-branch' },
           },
         },
@@ -334,6 +338,48 @@ describe('RFC-257 T8 · 触发器管理（owner 制）', () => {
     expect((await call(h.app, h.alice, 'DELETE', `/api/webhook-triggers/${tid}`)).status).toBe(200)
     expect((await h.db.select().from(webhookTriggerFires)).length).toBe(0)
     expect((await h.db.select().from(webhookTriggerStreams)).length).toBe(0)
+  })
+
+  test('PUT 修复不可迁移的 v1 payload 后立即写成 canonical v2', async () => {
+    const h = await harness()
+    const ep = await createEndpoint(h.app, h.admin)
+    const id = ulid()
+    await h.db.insert(webhookTriggers).values({
+      id,
+      name: '待修复旧触发器',
+      endpointId: ep.id,
+      ownerUserId: h.alice.id,
+      repoScope: JSON.stringify({ kind: 'prefix', prefix: 'platform/' }),
+      eventTypes: JSON.stringify(['mr_opened', 'mr_updated']),
+      ignoreUsernames: '[]',
+      launchKind: 'workflow',
+      launchRefId: h.workflowId,
+      launchPayload: JSON.stringify({
+        inputs: {
+          prompt: { kind: 'template', template: '{{nope}}' },
+          mr_ref: { kind: 'event-branch' },
+        },
+      }),
+      templateSyntaxVersion: 1,
+    })
+
+    const repaired = await call(h.app, h.alice, 'PUT', `/api/webhook-triggers/${id}`, {
+      launchPayload: VALID_PAYLOAD,
+    })
+    expect(repaired.status).toBe(200)
+
+    const stored = (
+      await h.db.select().from(webhookTriggers).where(eq(webhookTriggers.id, id)).limit(1)
+    )[0]!
+    expect(stored.templateSyntaxVersion).toBe(2)
+    expect(JSON.parse(stored.launchPayload)).toMatchObject({
+      inputs: {
+        prompt: {
+          kind: 'template',
+          template: '修 {{trigger.webhook.repo_path}}',
+        },
+      },
+    })
   })
 
   test('RFC-268：scratch 创建必须显式关闭 auto-register；partial update 校验完整候选', async () => {

@@ -14,8 +14,7 @@
 
 import { tryParseKind, type ParsedKind } from './kindParser'
 import { tryHandlerForParsedKind } from './outputKinds'
-
-const TEMPLATE_REF_RE = /\{\{(\w+)\}\}/g
+import { extractTemplateRefs } from './templateRef'
 
 export interface SignalPromptViolation {
   /** Port name referenced by the prompt template. */
@@ -33,9 +32,9 @@ export interface SignalPromptViolation {
  * `agent.outputKinds` map without re-parsing. Ports absent from the map
  * are treated as non-signal (the legacy default kind is `string`).
  *
- * The scan does NOT honor double-braces escape syntax or comment blocks
- * — it matches the same regex `renderUserPrompt` uses, so any reference
- * that would be substituted at render time is also flagged here.
+ * The scan uses the same shared parser as `renderUserPrompt`, including
+ * whitespace and `{{!ref}}` literal escapes. Only semantic local refs can be
+ * flagged; canonical trigger refs and escaped text are outside the port domain.
  */
 export function findPromptSignalRefs(
   template: string | undefined,
@@ -44,11 +43,9 @@ export function findPromptSignalRefs(
   if (template === undefined || template.length === 0) return []
   const seen = new Set<string>()
   const out: SignalPromptViolation[] = []
-  // Reset regex lastIndex defensively — TEMPLATE_REF_RE is module-level.
-  TEMPLATE_REF_RE.lastIndex = 0
-  let m: RegExpExecArray | null
-  while ((m = TEMPLATE_REF_RE.exec(template)) !== null) {
-    const port = m[1]!
+  for (const ref of extractTemplateRefs(template)) {
+    if (ref.kind !== 'local') continue
+    const port = ref.name
     if (seen.has(port)) continue
     seen.add(port)
     const rawKind = portKinds[port]

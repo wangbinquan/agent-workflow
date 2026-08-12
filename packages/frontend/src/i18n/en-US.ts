@@ -317,7 +317,7 @@ export const enUS: Resources = {
     previewCanvasHint: 'Drag the canvas to explore; use the lower-left controls to zoom or fit.',
     previewCanvasUnavailable:
       'Canvas preview unavailable (definition failed local validation); see raw JSON.',
-    previewPromptDiff: 'Node prompt-template changes',
+    previewPromptDiff: 'Workflow template changes',
     previewMembers: 'Members ({{count}})',
     previewLeader: 'Leader',
     previewHumanPlaceholder: 'Human placeholder',
@@ -3039,6 +3039,8 @@ export const enUS: Resources = {
       target: 'Target',
       targetPlaceholder: 'Select a target',
       executionSpace: 'Execution space',
+      workingBranchTemplateHint:
+        'Webhook trigger variables may be used below; the rendered result must still be a valid branch name.',
       scratchNotice:
         'Every fire creates a fresh empty Git repository. The event repository is not cloned, and its branch is not used as a checkout ref.',
       inputMappings: 'Input mappings',
@@ -3416,6 +3418,12 @@ export const enUS: Resources = {
         'Could not derive the target project from the task — fill in the project field explicitly.',
       'code-host-param-missing': 'A required parameter rendered empty.',
       'code-host-param-invalid': 'A parameter value is not acceptable.',
+      'trigger-context-missing':
+        'The workflow references webhook trigger data, but this task has no webhook trigger context.',
+      'trigger-context-invalid':
+        'The task’s frozen webhook trigger context is invalid and cannot be used safely.',
+      'trigger-field-unavailable':
+        'The workflow references a webhook field that is unavailable for this event type.',
       'code-host-trigger-context-missing':
         'The node references the webhook trigger context, but this task was not started by a webhook.',
       'code-host-body-invalid': 'The rendered request body is not valid JSON.',
@@ -4508,6 +4516,9 @@ export const enUS: Resources = {
     missingRefsLabel: 'Template refs without inbound edge:',
     missingRefsHint:
       'These names appear in the prompt template but have no inbound edge; task launch will fail static validation.',
+    invalidRefsLabel: 'Invalid template refs:',
+    invalidRefsHint:
+      'Use a valid local port or trigger.webhook.<field>; invalid refs block save or launch.',
     fieldClarifyDescription: 'Description',
     fieldClarifyDescriptionHint: 'Optional author-facing note; no runtime impact.',
     fieldClarifyLinkedAgent: 'Linked agent',
@@ -4554,6 +4565,9 @@ export const enUS: Resources = {
     mockTitle: 'Mock port values',
     noPorts: 'No inbound ports. Add edges to populate this form.',
     assembledTitle: 'Assembled prompt',
+    webhookSample: 'Use sample webhook context',
+    webhookSampleHint:
+      'Values are deterministic placeholders; turn this off to preview the missing-context failure.',
   },
   kindSelect: {
     baseLabel: 'Output kind',
@@ -5397,7 +5411,7 @@ export const enUS: Resources = {
     thread: 'GitLab: discussion ID. GitHub: the top-level PR review comment ID, never a reply ID.',
     comment:
       'GitLab: general MR note ID. GitHub: comment ID; then choose general or inline review below.',
-    position: 'Pass {{trigger.comment_position_json}} to replay the position verbatim.',
+    position: 'Use trigger.webhook.comment_position_json to replay the position verbatim.',
     labels: 'Comma separated.',
     assignees: 'Comma separated. GitLab needs numeric user IDs, GitHub needs logins.',
     workflow: 'GitHub workflow_dispatch workflow file name (for example ci.yml) or numeric ID.',
@@ -5466,6 +5480,12 @@ export const enUS: Resources = {
     path: 'Relative path',
     pathHint:
       'Appended to the configured base URL; must start with / and cannot be an absolute URL',
+    query: 'Query parameters',
+    queryHint: 'Keys are fixed text; values may use upstream ports or webhook trigger variables.',
+    queryKey: 'Query parameter name',
+    queryValue: 'Value of query parameter {{key}}',
+    addQuery: 'Add query parameter',
+    removeQuery: 'Remove query parameter {{key}}',
     body: 'Request body (JSON)',
     bodyHint:
       'Variables may only appear inside JSON strings, so upstream content cannot change the request structure',
@@ -5633,6 +5653,8 @@ export const enUS: Resources = {
       'node-id-duplicate': 'Node ids must be unique within a workflow.',
       'prompt-template-deprecated-token':
         'The prompt references a retired template token (it renders empty).',
+      'prompt-template-invalid-ref':
+        'The template contains a malformed, unknown, or legacy reference.',
       'prompt-template-unresolved': 'The prompt references a token with no matching inbound port.',
       'review-input-list-item-not-markdown': 'The review list input item kind must be markdown.',
       'review-input-edge-conflict': 'Review nodes can receive only one input edge.',

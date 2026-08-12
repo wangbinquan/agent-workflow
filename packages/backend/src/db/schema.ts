@@ -1065,15 +1065,14 @@ export const tasks = sqliteTable(
      */
     refClosureJson: text('ref_closure_json'),
     /**
-     * RFC-269: webhook 触发时快照的**事件变量投影**（RFC-263 的 29 项，剔除
-     * `event_json`），供 `code-host-call` 节点的 `{{trigger.*}}` 取值。
+     * RFC-292: webhook 触发时快照的完整 30 项事件投影，供 agent prompt、
+     * workgroup goal、review comment 与 code-host-call 统一通过
+     * `{{trigger.webhook.*}}` 取值。
      *
      * NULL = 该任务不是 webhook 触发的。这与「有上下文但某个变量恰好为空」是
      * 两回事：前者要给出「这个任务不是 webhook 起的」这句话，后者只是空串。
      *
-     * 不存 `event_json` 原文：那是 32 KiB 截断的完整 payload，进一次外部 API
-     * 调用没有用例，却会把外部原始数据的保留期从投递表的 90 天 GC 拉长到与任务
-     * 同寿（design D15）。
+     * `event_json` 也在该嵌套快照中，并遵循统一的 32 KiB 截断上限。
      */
     triggerContextJson: text('trigger_context_json'),
     // （RFC-120 的 deferred_question_dispatch 列已由 RFC-132 T8 + migration 0073 物理删除——
@@ -1198,6 +1197,8 @@ export const webhookTriggers = sqliteTable(
     launchKind: text('launch_kind', { enum: ['workflow', 'agent', 'workgroup'] }).notNull(),
     launchRefId: text('launch_ref_id').notNull(), // workflowId/agentId/workgroupId（单一事实源）
     launchPayload: text('launch_payload').notNull(), // JSON 模板封套（webhookPayloadTemplateSchemaFor）
+    // RFC-292: 1 = historical flat {{field}}, 2 = trigger.webhook.<field>.
+    templateSyntaxVersion: integer('template_syntax_version').notNull().default(1),
     maxConsecutiveFires: integer('max_consecutive_fires').notNull().default(3),
     autoRegisterRepos: integer('auto_register_repos', { mode: 'boolean' }).notNull().default(true),
     lastFiredAt: integer('last_fired_at'),

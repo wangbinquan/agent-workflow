@@ -14,12 +14,18 @@
 // owns the dirty/save bookkeeping.
 
 import type { Agent, NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { buildNodeAgentLookup } from '@agent-workflow/shared'
+import {
+  buildNodeAgentLookup,
+  renderCallWorkgroupGoalTemplate,
+  renderUserPrompt,
+  sampleWebhookTriggerContext,
+} from '@agent-workflow/shared'
 import { useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TabBar, tabDomIds, type TabDef } from '@/components/TabBar'
 import { NoticeBanner } from '@/components/NoticeBanner'
+import { Switch } from '@/components/Form'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { computePorts } from './WorkflowCanvas'
 import { nodeTitle } from './nodeTitle'
@@ -156,7 +162,8 @@ export function NodeInspector({
   // confusion. Force the active tab back to edit when previewing isn't
   // available so a stale `tab === 'preview'` from a prior agent selection
   // doesn't render an empty pane.
-  const hasPreview = node.kind === 'agent-single'
+  const hasPreview =
+    node.kind === 'agent-single' || node.kind === 'call-workgroup' || node.kind === 'review'
   const activeTab: Tab = !hasPreview ? 'edit' : tab
   const inspectorTabs: Array<TabDef<Tab>> = [
     { key: 'edit', label: t('inspector.tabEdit') },
@@ -350,10 +357,11 @@ interface PreviewProps {
 }
 
 function PreviewPane({ node, agents, definition }: PreviewProps) {
-  const { t } = useTranslation()
-  if (node.kind !== 'agent-single') {
-    return <div className="muted">{t('inspector.previewOnlyAgent')}</div>
+  if (node.kind === 'call-workgroup') {
+    return <CallWorkgroupGoalPreview node={node} definition={definition} />
   }
+  if (node.kind === 'review') return <ReviewCommentTemplatePreview node={node} />
+  if (node.kind !== 'agent-single') return null
   // RFC-223 (PR-3a impl-gate H3): resolve for preview id-first and FAIL CLOSED —
   // every persisted node resolves ONLY by its agentId (no mutable-name
   // fallback that an ABA rename+recreate could mis-bind).
@@ -374,5 +382,107 @@ function PreviewPane({ node, agents, definition }: PreviewProps) {
       outputs={agent?.outputs ?? []}
       outputKinds={agent?.outputKinds}
     />
+  )
+}
+
+function CallWorkgroupGoalPreview({
+  node,
+  definition,
+}: {
+  node: WorkflowNode
+  definition: WorkflowDefinition
+}) {
+  const { t } = useTranslation()
+  const [withWebhookContext, setWithWebhookContext] = useState(true)
+  const template = (node as Record<string, unknown>).goalTemplate
+  const inputPorts = [
+    ...new Set(
+      definition.edges
+        .filter((edge) => edge.target.nodeId === node.id)
+        .map((edge) => edge.target.portName),
+    ),
+  ]
+  const inputs = Object.fromEntries(inputPorts.map((port) => [port, `<sample ${port}>`]))
+  const result = renderCallWorkgroupGoalTemplate({
+    template: typeof template === 'string' ? template : '',
+    inputs,
+    builtins: {
+      __repo_path__: '<child.worktreePath>',
+      __base_branch__: '<child.baseBranch>',
+      __task_id__: '<parent.taskId>',
+      __node_id__: node.id,
+      __iteration__: '0',
+      __shard_key__: '',
+      __repo_count__: '1',
+      __repo_names__: '(root)',
+      __repos__: '- (root): <child.worktreePath>',
+    },
+    triggerContext: withWebhookContext ? sampleWebhookTriggerContext() : null,
+  })
+  return (
+    <div className="prompt-preview">
+      <Switch
+        checked={withWebhookContext}
+        onChange={setWithWebhookContext}
+        label={t('promptPreview.webhookSample')}
+        data-testid="goal-preview-webhook-context"
+      />
+      <p className="muted">{t('promptPreview.webhookSampleHint')}</p>
+      <pre
+        className="prompt-preview__pre"
+        data-testid={result.ok ? 'goal-preview-rendered' : 'goal-preview-error'}
+      >
+        {result.ok ? result.value : result.code}
+      </pre>
+    </div>
+  )
+}
+
+function ReviewCommentTemplatePreview({ node }: { node: WorkflowNode }) {
+  const { t } = useTranslation()
+  const [withWebhookContext, setWithWebhookContext] = useState(true)
+  const template = (node as Record<string, unknown>).commentInjectTemplate
+  let value: string
+  let ok = true
+  try {
+    value = renderUserPrompt({
+      promptTemplate: '{{__review_comments__}}',
+      inputs: {},
+      triggerContext: withWebhookContext ? sampleWebhookTriggerContext() : null,
+      meta: {
+        repoPath: '<task.worktreePath>',
+        baseBranch: '<task.baseBranch>',
+        taskId: '<task.id>',
+        nodeId: node.id,
+      },
+      reviewContext: {
+        comments: '<sample review comments>',
+        ...(typeof template === 'string' && template.trim().length > 0
+          ? { commentInjectTemplate: template }
+          : {}),
+      },
+      agentOutputs: [],
+      envelopeNonce: 'PREVIEW',
+    })
+  } catch (error) {
+    ok = false
+    value = error instanceof Error ? error.message : String(error)
+  }
+  return (
+    <div className="prompt-preview">
+      <Switch
+        checked={withWebhookContext}
+        onChange={setWithWebhookContext}
+        label={t('promptPreview.webhookSample')}
+        data-testid="review-preview-webhook-context"
+      />
+      <p className="muted">{t('promptPreview.webhookSampleHint')}</p>
+      <pre
+        className="prompt-preview__pre"
+        data-testid={ok ? 'review-preview-rendered' : 'review-preview-error'}
+      >
+        {value}
+      </pre>
+    </div>
   )
 }

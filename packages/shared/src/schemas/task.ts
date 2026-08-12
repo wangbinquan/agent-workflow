@@ -297,6 +297,11 @@ export const SCRIPT_PERMANENT_FAILURE_CODES: ReadonlyArray<ScriptFailureCode> = 
  * forever.
  */
 export const CODE_HOST_FAILURE_CODES = [
+  // RFC-292 generic trigger failures. The legacy code-host-specific missing
+  // code remains readable below but is no longer emitted by production.
+  'trigger-context-missing',
+  'trigger-context-invalid',
+  'trigger-field-unavailable',
   'code-host-not-configured',
   'code-host-project-foreign',
   'code-host-project-unresolved',
@@ -314,6 +319,9 @@ export type CodeHostFailureCode = (typeof CODE_HOST_FAILURE_CODES)[number]
 
 /** Code-host failures where another attempt cannot change the outcome. */
 export const CODE_HOST_PERMANENT_FAILURE_CODES: ReadonlyArray<CodeHostFailureCode> = [
+  'trigger-context-missing',
+  'trigger-context-invalid',
+  'trigger-field-unavailable',
   // The workflow definition renders the same values every time.
   'code-host-param-missing',
   'code-host-param-invalid',

@@ -33,7 +33,11 @@ import {
   Outlet,
 } from '@tanstack/react-router'
 import type { SaveWorkflowReceipt, Workflow, WorkflowDetail } from '@agent-workflow/shared'
-import { WORKFLOW_NAME_RE, WORKGROUP_NAME_RE } from '@agent-workflow/shared'
+import {
+  WORKFLOW_NAME_RE,
+  WORKFLOW_SCHEMA_VERSION,
+  WORKGROUP_NAME_RE,
+} from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import {
   EMPTY_WORKFLOW_DEFINITION,
@@ -475,7 +479,12 @@ describe('/workflows quick-create dialog', () => {
       expect(post?.body).toEqual({
         name: 'code-audit',
         description: 'demo flow',
-        definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+        definition: {
+          $schema_version: WORKFLOW_SCHEMA_VERSION,
+          inputs: [],
+          nodes: [],
+          edges: [],
+        },
       })
     })
     await waitFor(() => {

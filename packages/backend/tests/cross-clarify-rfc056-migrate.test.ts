@@ -1,4 +1,4 @@
-// RFC-056 — v3 → v4 transparent workflow $schema_version upgrade.
+// RFC-056 — historical v3 → v4 shape preservation through the latest migration.
 //
 // LOCKS: pure metadata bump. v3 docs (RFC-023 era) walk to v4 with shape
 // untouched. Stored definition stays at original version until next PUT —
@@ -10,8 +10,8 @@ import { describe, expect, test } from 'bun:test'
 
 import { migrateDefinitionToLatest } from '../src/services/workflow'
 
-describe('RFC-056 — v3 → v4 transparent upgrade (no cross-clarify node yet)', () => {
-  test('v3 doc with RFC-023 clarify node walks to v4 with shape preserved', () => {
+describe('RFC-056 — v3/v4 shapes survive migration to the current schema', () => {
+  test('v3 doc with RFC-023 clarify node walks to latest with shape preserved', () => {
     const v3: WorkflowDefinition = {
       $schema_version: 3,
       inputs: [{ kind: 'text', key: 'spec', label: 'spec' }],
@@ -40,7 +40,6 @@ describe('RFC-056 — v3 → v4 transparent upgrade (no cross-clarify node yet)'
     }
     const out = migrateDefinitionToLatest(v3)
     expect(out.$schema_version).toBe(WORKFLOW_SCHEMA_VERSION)
-    expect(out.$schema_version).toBe(4)
     expect(out.nodes).toEqual(v3.nodes)
     expect(out.edges).toEqual(v3.edges)
     expect(out.inputs).toEqual(v3.inputs)
@@ -48,7 +47,7 @@ describe('RFC-056 — v3 → v4 transparent upgrade (no cross-clarify node yet)'
     expect(v3.$schema_version).toBe(3)
   })
 
-  test('v4 doc with cross-clarify node is identity (already-latest, no mutation)', () => {
+  test('v4 doc with cross-clarify node walks to latest without changing its nodes', () => {
     const v4: WorkflowDefinition = {
       $schema_version: 4,
       inputs: [],
@@ -65,7 +64,8 @@ describe('RFC-056 — v3 → v4 transparent upgrade (no cross-clarify node yet)'
       edges: [],
     }
     const out = migrateDefinitionToLatest(v4)
-    expect(out.$schema_version).toBe(4)
+    expect(out.$schema_version).toBe(WORKFLOW_SCHEMA_VERSION)
     expect(out.nodes).toEqual(v4.nodes)
+    expect(v4.$schema_version).toBe(4)
   })
 })

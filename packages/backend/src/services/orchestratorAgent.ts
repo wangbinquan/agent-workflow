@@ -16,7 +16,9 @@
 import type {
   Agent,
   CapabilitySource,
+  CodeHostEventType,
   DwTokenBinding,
+  WebhookTemplateVar,
   WorkflowDefinition,
   WorkflowValidationIssue,
   WorkflowValidationResult,
@@ -28,6 +30,8 @@ import {
   fenceUntrusted,
   perCardInputDescriptionBudget,
   renderAgentCapabilityCard,
+  webhookTriggerToken,
+  WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 
 /** Name of the framework-internal orchestrator agent (never a user `agents` row). */
@@ -61,7 +65,7 @@ export function buildDynamicWorkflowGenerateSnapshot(): {
   edges: unknown[]
 } {
   return {
-    $schema_version: 4,
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
     inputs: [],
     nodes: [
       {
@@ -113,6 +117,9 @@ export function buildOrchestratorAgent(): Agent {
       '- For each node, write a `promptTemplate`: the instruction that node’s agent',
       '  receives. It may reference an upstream node’s output with `{{portName}}`',
       '  (the port must be an output the upstream agent declares).',
+      '- A webhook-triggered task may also use ONLY the canonical trigger tokens',
+      '  explicitly listed by the user prompt. Never invent a trigger source/field,',
+      '  and never turn trigger fields into workflow inputs or input nodes.',
       '- Declare each node’s inputs: which upstream node+port feeds each consumed',
       '  port. Source nodes (no upstream) bake the relevant goal detail into their',
       '  promptTemplate directly.',
@@ -188,6 +195,11 @@ export function buildOrchestratorPrompt(opts: {
   rejectionComment?: string | undefined
   /** Per-run envelope nonce; empty keeps legacy prompt bytes. */
   envelopeNonce?: string | undefined
+  /** Names only; actual webhook values must never enter the orchestrator prompt. */
+  webhookContext?: {
+    eventType: CodeHostEventType
+    availableFields: readonly WebhookTemplateVar[]
+  } | null
 }): string {
   const nonce = opts.envelopeNonce ?? ''
   const lines: string[] = ['## Goal', '']
@@ -203,6 +215,27 @@ export function buildOrchestratorPrompt(opts: {
     fenceUntrusted('dynamic-workflow-goal', opts.goal.trim(), nonce),
     '',
   )
+  if (opts.webhookContext === undefined || opts.webhookContext === null) {
+    lines.push(
+      '## Webhook trigger context',
+      '',
+      'This task has NO webhook trigger context. Do not generate any `trigger.*` reference.',
+      'Do not synthesize workflow inputs as a substitute for missing trigger context.',
+      '',
+    )
+  } else {
+    const tokens = opts.webhookContext.availableFields.map(webhookTriggerToken).join(', ')
+    lines.push(
+      '## Webhook trigger context',
+      '',
+      `This task has webhook event type \`${opts.webhookContext.eventType}\`.`,
+      `Only these canonical trigger tokens are available: ${tokens}.`,
+      'Their actual values are intentionally not shown. Use a token only when the workflow needs',
+      'that runtime event value; never create workflow inputs, input nodes, root parameters or',
+      'edges to carry it, and never use a legacy `{{trigger.field}}`/root-field spelling.',
+      '',
+    )
+  }
   const inputDescriptionBudget = perCardInputDescriptionBudget(
     ORCHESTRATOR_INPUT_DESCRIPTION_TOTAL_BUDGET,
     opts.pool.length,

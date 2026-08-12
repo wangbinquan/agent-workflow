@@ -233,7 +233,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   })
   afterEach(() => h?.cleanup())
 
-  test('HEAD journal has 148 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 150 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -361,7 +361,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // （node_runs.startup_verification_json 纯增量列）。
     // RFC-291 面 F bumped to 149 with 0149_rfc291_intent_handle_watermark
     // （intent_sessions.handle_watermark_json 纯增量列，DEFAULT '{}' 无 backfill）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(149)
+    // RFC-292 bumped to 150 with 0150_rfc292_trigger_namespace
+    // （webhook template v2 版本列 + 合法历史 task context 嵌套 backfill）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(150)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

@@ -42,11 +42,13 @@ import { createLogger } from '@/util/log'
 import {
   CodeHostEventTypeSchema,
   WebhookRepoScopeSchema,
-  eventVarsOf,
   isTerminalTaskStatus,
   gitUrlCacheKeyWith,
+  mapWebhookTemplateSurfaces,
   parseGitUrl,
   renderTemplate,
+  templateVarIssues,
+  migrateWebhookPayloadTemplateToV2,
   webhookPayloadTemplateSchemaFor,
   type CodeHostEvent,
   type StartAgentTask,
@@ -58,7 +60,7 @@ import {
   type WebhookLaunchPayloadTemplate,
   type WebhookWorkflowPayloadTemplate,
   type WebhookWorkgroupPayloadTemplate,
-  triggerContextOf,
+  webhookTriggerContextOf,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import { sha1Hex } from '@/util/hash'
@@ -91,11 +93,12 @@ export type ParsedTrigger = {
   launchKind: WebhookLaunchKind
   launchRefId: string
   payloadTemplate: WebhookLaunchPayloadTemplate
+  templateMigrated: boolean
 }
 
-export function parseTriggerRow(
+function parseTriggerRuleRow(
   row: typeof webhookTriggers.$inferSelect,
-): { ok: true; trigger: ParsedTrigger } | { ok: false; reason: string } {
+): { ok: true; rule: TriggerRule } | { ok: false; reason: string } {
   const scope = (() => {
     try {
       return WebhookRepoScopeSchema.safeParse(JSON.parse(row.repoScope))
@@ -111,8 +114,9 @@ export function parseTriggerRow(
       return null
     }
   })()
-  if (eventTypes === null || !eventTypes.success)
+  if (eventTypes === null || !eventTypes.success) {
     return { ok: false, reason: 'event-types-invalid' }
+  }
   const ignore = (() => {
     try {
       return z.array(z.string()).safeParse(JSON.parse(row.ignoreUsernames))
@@ -120,33 +124,86 @@ export function parseTriggerRow(
       return null
     }
   })()
-  if (ignore === null || !ignore.success) return { ok: false, reason: 'ignore-usernames-invalid' }
+  if (ignore === null || !ignore.success) {
+    return { ok: false, reason: 'ignore-usernames-invalid' }
+  }
+  return {
+    ok: true,
+    rule: {
+      repoScope: scope.data,
+      eventTypes: eventTypes.data,
+      branchFilter: row.branchFilter,
+      commandPrefix: row.commandPrefix,
+      ignoreUsernames: ignore.data,
+    },
+  }
+}
+
+export function parseTriggerRow(
+  row: typeof webhookTriggers.$inferSelect,
+): { ok: true; trigger: ParsedTrigger } | { ok: false; reason: string } {
+  const parsedRule = parseTriggerRuleRow(row)
+  if (!parsedRule.ok) return parsedRule
   const payload = (() => {
     try {
-      return webhookPayloadTemplateSchemaFor(row.launchKind).safeParse(
-        JSON.parse(row.launchPayload),
-      )
+      const raw = JSON.parse(row.launchPayload)
+      const legacyParsed = webhookPayloadTemplateSchemaFor(row.launchKind).safeParse(raw)
+      if (!legacyParsed.success) return legacyParsed
+      if (row.templateSyntaxVersion === 1) {
+        return webhookPayloadTemplateSchemaFor(row.launchKind).safeParse(
+          migrateWebhookPayloadTemplateToV2(row.launchKind, legacyParsed.data),
+        )
+      }
+      if (row.templateSyntaxVersion !== 2) return null
+      return legacyParsed
     } catch {
       return null
     }
   })()
   if (payload === null || !payload.success) return { ok: false, reason: 'launch-payload-invalid' }
+  if (templateVarIssues(row.launchKind, payload.data, parsedRule.rule.eventTypes).length > 0) {
+    return { ok: false, reason: 'launch-payload-invalid' }
+  }
   return {
     ok: true,
     trigger: {
       row,
-      rule: {
-        repoScope: scope.data,
-        eventTypes: eventTypes.data,
-        branchFilter: row.branchFilter,
-        commandPrefix: row.commandPrefix,
-        ignoreUsernames: ignore.data,
-      },
+      rule: parsedRule.rule,
       launchKind: row.launchKind,
       launchRefId: row.launchRefId,
       payloadTemplate: payload.data,
+      templateMigrated: row.templateSyntaxVersion === 1,
     },
   }
+}
+
+/** CAS-write a successfully parsed v1 payload before it is returned/fired. */
+export async function migrateTriggerRowTemplateToV2(
+  db: DbClient,
+  row: typeof webhookTriggers.$inferSelect,
+): Promise<typeof webhookTriggers.$inferSelect> {
+  const parsed = parseTriggerRow(row)
+  if (!parsed.ok || !parsed.trigger.templateMigrated) return row
+  const updated = await db
+    .update(webhookTriggers)
+    .set({
+      launchPayload: JSON.stringify(parsed.trigger.payloadTemplate),
+      templateSyntaxVersion: 2,
+      updatedAt: Date.now(),
+    })
+    .where(
+      and(
+        eq(webhookTriggers.id, row.id),
+        eq(webhookTriggers.templateSyntaxVersion, 1),
+        eq(webhookTriggers.launchPayload, row.launchPayload),
+      ),
+    )
+    .returning()
+  if (updated[0] !== undefined) return updated[0]
+  return (
+    (await db.select().from(webhookTriggers).where(eq(webhookTriggers.id, row.id)).limit(1))[0] ??
+    row
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -230,7 +287,12 @@ export function renderWebhookLaunch(
   event: CodeHostEvent,
   space: WebhookLaunchSpace,
 ): RenderedLaunch {
-  const vars = eventVarsOf(event)
+  const context = webhookTriggerContextOf(event)
+  const renderedTemplate = mapWebhookTemplateSurfaces(
+    trigger.launchKind,
+    trigger.payloadTemplate,
+    (surface) => renderTemplate(surface.text, context),
+  )
   const name = fireTaskName(triggerName, event)
   const spaceFields =
     space.kind === 'scratch'
@@ -242,12 +304,12 @@ export function renderWebhookLaunch(
   const refFields =
     space.kind !== 'scratch' && event.branch !== undefined ? { ref: event.branch } : {}
   if (trigger.launchKind === 'workflow') {
-    const t = trigger.payloadTemplate as WebhookWorkflowPayloadTemplate
+    const t = renderedTemplate as WebhookWorkflowPayloadTemplate
     const inputs: Record<string, string> = {}
     for (const [key, mapping] of Object.entries(t.inputs)) {
       inputs[key] =
         mapping.kind === 'template'
-          ? renderTemplate(mapping.template, vars)
+          ? mapping.template
           : // git-kind 输入的 packed 形（F-10）：平台代包，运行期由
             // workflowLaunchInputIssues 按既有规则校验。
             JSON.stringify({ kind: 'branch', ref: event.branch ?? '' })
@@ -273,20 +335,15 @@ export function renderWebhookLaunch(
     }
   }
   if (trigger.launchKind === 'agent') {
-    const t = trigger.payloadTemplate as WebhookAgentPayloadTemplate
-    const inputs =
-      t.inputs === undefined
-        ? undefined
-        : Object.fromEntries(Object.entries(t.inputs).map(([k, v]) => [k, renderTemplate(v, vars)]))
+    const t = renderedTemplate as WebhookAgentPayloadTemplate
+    const inputs = t.inputs === undefined ? undefined : { ...t.inputs }
     return {
       kind: 'agent',
       refId: trigger.launchRefId,
       payload: {
         agentId: trigger.launchRefId,
         name,
-        ...(t.description !== undefined
-          ? { description: renderTemplate(t.description, vars) }
-          : {}),
+        ...(t.description !== undefined ? { description: t.description } : {}),
         ...(inputs !== undefined ? { inputs } : {}),
         ...(t.allowClarify !== undefined ? { allowClarify: t.allowClarify } : {}),
         ...spaceFields,
@@ -302,14 +359,14 @@ export function renderWebhookLaunch(
       } as unknown as StartAgentTask & { agentId: string },
     }
   }
-  const t = trigger.payloadTemplate as WebhookWorkgroupPayloadTemplate
+  const t = renderedTemplate as WebhookWorkgroupPayloadTemplate
   return {
     kind: 'workgroup',
     refId: trigger.launchRefId,
     payload: {
       workgroupId: trigger.launchRefId,
       name,
-      goal: renderTemplate(t.goal, vars),
+      goal: t.goal,
       ...spaceFields,
       ...refFields,
       ...(space.kind !== 'scratch' && t.workingBranch !== undefined
@@ -580,6 +637,7 @@ async function fireTrigger(
         rendered.kind,
         rendered.payload as unknown as Record<string, unknown>,
         await deps.getDefaultRuntime(),
+        { kind: 'context', value: webhookTriggerContextOf(event) },
       )
     } catch (err) {
       // 这个 gate 同时做两件事：目标可用性（缺失 / 不可见 / built-in 不可调度）与
@@ -609,8 +667,8 @@ async function fireTrigger(
       webhookTriggerId: triggerId,
       webhookFireId: fireId,
       // RFC-269: compute before launch and publish with the initial task row.
-      // `triggerContextOf` excludes event_json by construction.
-      triggerContext: triggerContextOf(event),
+      // RFC-292: full nested source context, including bounded event_json.
+      triggerContext: webhookTriggerContextOf(event),
     }
     try {
       const taskId = await (deps.launch ?? ((a, r, i) => launchViaExecutor(deps, a, r, i)))(
@@ -637,6 +695,58 @@ async function fireTrigger(
   })
 }
 
+async function recordInvalidPayloadFire(
+  deps: WebhookDispatchDeps,
+  queue: KeyedSerialQueue<string>,
+  input: {
+    deliveryId: string
+    event: CodeHostEvent
+    row: typeof webhookTriggers.$inferSelect
+  },
+): Promise<void> {
+  const streamKey = streamKeyOf(input.event)
+  const triggerId = input.row.id
+  const fireId = ulid()
+  await queue.run(`${triggerId}|${streamKey}`, async () => {
+    const now = Date.now()
+    const fresh = (
+      await deps.db
+        .select({ enabled: webhookTriggers.enabled })
+        .from(webhookTriggers)
+        .where(eq(webhookTriggers.id, triggerId))
+        .limit(1)
+    )[0]
+    if (!fresh?.enabled) {
+      await recordFire(deps.db, {
+        fireId,
+        deliveryId: input.deliveryId,
+        triggerId,
+        streamKey,
+        outcome: 'skipped-trigger-disabled',
+      })
+      return
+    }
+    const message = 'payload-invalid: webhook launch template migration or validation failed'
+    await recordFire(deps.db, {
+      fireId,
+      deliveryId: input.deliveryId,
+      triggerId,
+      streamKey,
+      outcome: 'launch-failed',
+      error: message,
+    })
+    await deps.db
+      .update(webhookTriggers)
+      .set({
+        lastStatus: 'failed',
+        lastError: message,
+        consecutiveFailures: sql`${webhookTriggers.consecutiveFailures} + 1`,
+        updatedAt: now,
+      })
+      .where(eq(webhookTriggers.id, triggerId))
+  })
+}
+
 // ---------------------------------------------------------------------------
 // dispatcher
 // ---------------------------------------------------------------------------
@@ -656,9 +766,22 @@ export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispa
             and(eq(webhookTriggers.endpointId, endpoint.id), eq(webhookTriggers.enabled, true)),
           )
         const hits: ParsedTrigger[] = []
+        let invalidPayloadMatched = false
         for (const row of rows) {
-          const parsed = parseTriggerRow(row)
+          const canonicalRow = await migrateTriggerRowTemplateToV2(db, row)
+          const parsed = parseTriggerRow(canonicalRow)
           if (!parsed.ok) {
+            if (parsed.reason === 'launch-payload-invalid') {
+              const parsedRule = parseTriggerRuleRow(canonicalRow)
+              if (parsedRule.ok && matchTrigger(event, parsedRule.rule).hit) {
+                invalidPayloadMatched = true
+                await recordInvalidPayloadFire(deps, streamQueue, {
+                  deliveryId,
+                  event,
+                  row: canonicalRow,
+                })
+              }
+            }
             // 行级容错：单条坏触发器不拖垮端点分发（管理面负责让它修好）。
             log.warn('skipping unparsable trigger row', {
               triggerId: row.id,
@@ -668,7 +791,7 @@ export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispa
           }
           if (matchTrigger(event, parsed.trigger.rule).hit) hits.push(parsed.trigger)
         }
-        if (hits.length === 0) {
+        if (hits.length === 0 && !invalidPayloadMatched) {
           await markDelivery(db, deliveryId, 'ignored', 'no-trigger-matched')
           return
         }

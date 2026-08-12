@@ -1,5 +1,8 @@
 # RFC-257 · 技术设计
 
+> **RFC-292 supersession（2026-08-12）**：本文的根级 webhook 模板语法是历史契约。
+> 当前统一使用 `{{trigger.webhook.<field>}}` 与嵌套 `TriggerContext`；版本迁移和完整消费面见 RFC-292。
+
 状态：Draft（设计门 findings 已折入，见 [design-gate-2026-08-04.md](./design-gate-2026-08-04.md)）。读法：先 proposal.md（决策 D1–D24 与 AC），本篇是接口契约与数据流。所有「既有代码」断言均附 file:line；GitLab 侧行为断言以 T3 fixture 实测为准。
 
 ## 0. 总览：五步分流流水线（三段式应答）

@@ -52,7 +52,7 @@ export const AUTHOR_FILTERED_EVENT_TYPES: ReadonlyArray<CodeHostEventType> = [
 
 /**
  * 平台无关的事件信封。核心分流逻辑只读这个形状；GitLab 特有字段留在 `raw`
- * （只入库审计 + {{event_json}} 模板变量，multica channel/doc.go 边界规则——
+ * （只入库审计 + {{trigger.webhook.event_json}} 模板变量，multica channel/doc.go 边界规则——
  * 核心代码永不解构 raw）。
  */
 export const CodeHostEventSchema = z.object({

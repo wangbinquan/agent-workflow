@@ -9,7 +9,7 @@
 //  - topo order: skills→mcps→plugins→agents(dependsOn)→workflows/workgroups.
 
 import { describe, expect, test } from 'bun:test'
-import { parseIntentChangeset } from '@agent-workflow/shared'
+import { parseIntentChangeset, WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 import type { IntentContextManifest } from '../src/services/intent/manifest'
 import { deriveIntentSlots, resolveIntentBundle } from '../src/services/intent/resolveChangeset'
 
@@ -98,7 +98,7 @@ const FULL_BUNDLE = parse({
         name: 'audit-flow',
         description: '',
         definition: {
-          $schema_version: 4,
+          $schema_version: WORKFLOW_SCHEMA_VERSION,
           inputs: [],
           nodes: [
             { id: 'n1', kind: 'agent-single', agentRef: '$new:auditor' },
@@ -210,7 +210,7 @@ describe('resolveIntentBundle', () => {
             name: 'flow',
             description: '',
             definition: {
-              $schema_version: 4,
+              $schema_version: WORKFLOW_SCHEMA_VERSION,
               inputs: [],
               nodes: [{ id: 'n1', kind: 'agent-single', agentRef: 'res#agent#1' }],
               edges: [],
@@ -342,7 +342,7 @@ describe('RFC-253 T28 — script-node env slots', () => {
             name: 'etl',
             description: '',
             definition: {
-              $schema_version: 4,
+              $schema_version: WORKFLOW_SCHEMA_VERSION,
               inputs: [],
               nodes: [{ id: 's1', kind: 'script', language: 'python', script: 'print(1)', env }],
               edges: [],

@@ -313,6 +313,61 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
     expect(outPorts.find((o) => o.portName === 'report')?.content).toBe('CHILD SAYS HI')
   })
 
+  test('RFC-292: child task atomically inherits nested context and expands it in child agent prompt', async () => {
+    const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])
+    writeFileSync(
+      h.planFile,
+      JSON.stringify({ worker: { output: { out: 'CHILD', echo: 'context' } } }),
+    )
+    const { parentTaskId } = await seedParentTask(h, workerId)
+    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    const closure = JSON.parse(parent.refClosureJson!) as {
+      workflows: Record<
+        string,
+        { definition: { $schema_version: number; nodes: Array<Record<string, unknown>> } }
+      >
+    }
+    const child = closure.workflows['child-wf']!.definition
+    child.$schema_version = 5
+    const worker = child.nodes.find((node) => node.id === 'work')!
+    worker.promptTemplate = 'do {{req}} / {{trigger.webhook.comment_text}}'
+    const context = {
+      trigger: {
+        webhook: {
+          event_type: 'note',
+          comment_text: 'child-inherited-trigger',
+        },
+      },
+    }
+    await h.db
+      .update(tasks)
+      .set({
+        refClosureJson: JSON.stringify(closure),
+        triggerContextJson: JSON.stringify(context),
+      })
+      .where(eq(tasks.id, parentTaskId))
+
+    await runTask({
+      db: h.db,
+      taskId: parentTaskId,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', h.mockPath],
+    })
+
+    const childTask = (
+      await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
+    )[0]!
+    expect(JSON.parse(childTask.triggerContextJson!)).toEqual(context)
+    const childRun = (
+      await h.db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, childTask.id), eq(nodeRuns.nodeId, 'work')))
+    )[0]!
+    expect(childRun.promptText).toContain('child-inherited-trigger')
+    expect(childRun.promptText).not.toContain('{{trigger.webhook.comment_text}}')
+  })
+
   test('子任务失败 → 调用行 failed(child-task-failed) → 父任务 failed', async () => {
     const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])
     writeFileSync(h.planFile, JSON.stringify({ worker: { exitCode: 3 } }))

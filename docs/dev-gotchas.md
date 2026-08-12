@@ -386,7 +386,7 @@ RFC-271 批次 I 删了 `POST /api/workflows/import` 与 `GET /api/workflows/:id
 - **prompt 要过实现门，理由和代码一样硬**：2026-08-08 那轮 Codex 实现门报的 7 条里，两条 P1 **都在 doc 里**，不在代码里——INTENT.md 不是文档，是生成模型唯一读到的规格，一句措辞不当等价于一个 API 契约写错。
 - **「doc 里有没有这句话」类断言抓不到真正的失败模式**：它锁得住措辞，锁不住**两条各自正确的规则交互后不成立**。实测：修 Codex P1-2 时写下「把 dump 里的 `‹redacted›` 原样回传」，读起来天经地义，实际不可执行——`findNonSentinelSecretCarriers` 无条件拒绝任何含该标记的字符串（`intentSecretSlots.ts:388`），而 dump 正是用它遮蔽，于是照 doc 做的 changeset 在到达权限门**之前**就 `intent-draft-invalid`。正解是**省略整个字段**，走 rehydrate 的「next 缺失 + previous 存在 ⇒ 取库里的值」分支。**只有驱动真实 `applyIntentChangeset` 的行为测试能发现这一类**（`intent-privileged-node-capability.test.ts`）。
 - **写给模型的指示要按「可执行」验收，不是按「读着对」**：每加一条 doc 规则，问一遍「模型照这句做，端到端能不能过」。特别小心**嵌套字段**——`env` 是对象、标记在它的**值**上，「省略被遮的 key」有两种读法（丢 `env` 还是丢 `TOKEN`），必须写死是哪一种。
-- **doc 里的清单一律从常量派生，别手抄**：动作目录派生自 `CODE_HOST_ACTION_DEFS`（必填字段直接复用校验器读的 `codeHostRequiredFields`，模型照填就撞不上 `code-host-param-missing`），trigger 变量派生自 `TRIGGER_CONTEXT_VARS`，要省略的字段派生自 `SCRIPT_REDACTED_FIELDS` / `CODE_HOST_REDACTED_FIELDS`。手抄的那天注册表一改，doc 就静默过期。
+- **doc 里的清单一律从常量派生，别手抄**：动作目录派生自 `CODE_HOST_ACTION_DEFS`（必填字段直接复用校验器读的 `codeHostRequiredFields`，模型照填就撞不上 `code-host-param-missing`），trigger 字段派生自 `WEBHOOK_TEMPLATE_VARS` 并经 `webhookTriggerToken` 生成完整 token，要省略的字段派生自 `SCRIPT_REDACTED_FIELDS` / `CODE_HOST_REDACTED_FIELDS`。手抄的那天注册表一改，doc 就静默过期。
 - **doc 承诺的规则要和强制它的代码成对断言**（`intent-doc-validator-contract.test.ts`）：只测 doc 写了什么，validator 一改 doc 就悄悄变错；只测 validator，模型压根不知道规则。两半一起断言，任一边漂移即红。这类缺陷的症状是最难查的那种——**changeset 应用得进去，任务永远起不来**。
 - **prompt 只增不减且没有天然背压**，所以给它一条尺寸预算守卫（当前 INTENT.md 全权限约 18 KB，上限设 32 KB）：不是性能要求，是让下一次无节制膨胀出现在 review 里而不是上下文窗口里。
 

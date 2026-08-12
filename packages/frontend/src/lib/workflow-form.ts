@@ -7,15 +7,15 @@
 import type { CreateWorkflow, WorkflowDefinition } from '@agent-workflow/shared'
 import {
   CreateWorkflowSchema,
+  WORKFLOW_SCHEMA_VERSION,
   isValidResourceDisplayName,
   normalizeResourceDisplayName,
 } from '@agent-workflow/shared'
 
-/** Definition a quick-created workflow starts with. Written as v1-empty on
- *  purpose — the backend GET path transparently upgrades schema versions, so
- *  the editor always loads the canonical latest shape. */
+/** Definition a quick-created workflow starts with. New production writes
+ * always use the canonical latest workflow schema. */
 export const EMPTY_WORKFLOW_DEFINITION: WorkflowDefinition = {
-  $schema_version: 1,
+  $schema_version: WORKFLOW_SCHEMA_VERSION,
   inputs: [],
   nodes: [],
   edges: [],

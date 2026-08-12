@@ -6,10 +6,12 @@
 import {
   WEBHOOK_VAR_GROUPS,
   availableVarsFor,
+  webhookTriggerRef,
   type CodeHostEventType,
   type WebhookTemplateVar,
   type WebhookVarGroupKey,
 } from '@agent-workflow/shared'
+import { useTranslation } from 'react-i18next'
 
 /**
  * 光标处插入的纯函数面。start/end 为 null（拿不到 DOM 选区）时追加到末尾；
@@ -26,36 +28,24 @@ export function insertAtCursor(
   return { next: value.slice(0, s) + token + value.slice(e), caret: s + token.length }
 }
 
-export interface DisplayVarGroup {
+export interface DisplayTriggerVarGroup {
   key: WebhookVarGroupKey
-  vars: WebhookTemplateVar[]
+  vars: Array<`trigger.webhook.${WebhookTemplateVar}`>
 }
 
-/**
- * webhook 触发器展示：所选事件类型交集可用集（与保存期校验同源，避免提示出
- * 保存必拒的变量），按 shared 的 `WEBHOOK_VAR_GROUPS` 分两组，组内 `event_json`
- * 置顶、其余按声明序。空选择 / 空组 → 不出现（调用方藏行）。
- *
- * RFC-263 把返回值从扁平数组改成分组：变量表 13 → 30 之后一行 chips 会挤成一坨，
- * 而「事件上下文」与「回帖要用的 API 定位参数」本就是两类东西。分组定义放在
- * shared 而不是这里 —— 漏登记一个新变量会让它在 UI 里直接消失。
- */
-export function webhookVarGroupsForDisplay(
-  eventTypes: ReadonlyArray<CodeHostEventType>,
-): DisplayVarGroup[] {
-  const available = availableVarsFor(eventTypes)
-  const groups: DisplayVarGroup[] = []
-  for (const group of WEBHOOK_VAR_GROUPS) {
-    const vars = group.vars.filter((v) => available.has(v))
-    if (vars.length === 0) continue
-    groups.push({
-      key: group.key,
-      vars: vars.includes('event_json')
-        ? ['event_json', ...vars.filter((v) => v !== 'event_json')]
-        : [...vars],
-    })
-  }
-  return groups
+/** Canonical namespaced form used by every workflow/webhook authoring surface. */
+export function webhookTriggerVarGroupsForDisplay(
+  eventTypes?: ReadonlyArray<CodeHostEventType>,
+): DisplayTriggerVarGroup[] {
+  const available = eventTypes === undefined ? null : availableVarsFor(eventTypes)
+  return WEBHOOK_VAR_GROUPS.flatMap((group) => {
+    const fields = group.vars.filter((field) => available === null || available.has(field))
+    if (fields.length === 0) return []
+    const ordered: WebhookTemplateVar[] = fields.includes('event_json')
+      ? ['event_json', ...fields.filter((field) => field !== 'event_json')]
+      : [...fields]
+    return [{ key: group.key, vars: ordered.map(webhookTriggerRef) }]
+  })
 }
 
 /**
@@ -112,6 +102,48 @@ interface TemplateVarChipsProps {
   titleOf?: (name: string) => string | undefined
   /** Keep read-only / target-less consumers from presenting a false action. */
   disabled?: boolean
+}
+
+interface WebhookTriggerVarChipsProps {
+  onInsert: (token: string) => void
+  testidPrefix?: string
+  disabled?: boolean
+  eventTypes?: ReadonlyArray<CodeHostEventType>
+  label?: string
+}
+
+/** Shared authoring row for agent/workgroup/review/code-host surfaces. */
+export function WebhookTriggerVarChips({
+  onInsert,
+  testidPrefix,
+  disabled,
+  eventTypes,
+  label,
+}: WebhookTriggerVarChipsProps) {
+  const { t } = useTranslation()
+  const groups = webhookTriggerVarGroupsForDisplay(eventTypes).map((group) => ({
+    label: t(
+      group.key === 'api'
+        ? 'webhookTriggers.fields.varGroupApi'
+        : 'webhookTriggers.fields.varGroupContext',
+    ),
+    vars: group.vars,
+  }))
+  return (
+    <TemplateVarChips
+      groups={groups}
+      label={label ?? t('webhookTriggers.fields.templateVarsLabel')}
+      onInsert={onInsert}
+      testidPrefix={testidPrefix}
+      disabled={disabled}
+      titleOf={(name) => {
+        const field = name.startsWith('trigger.webhook.')
+          ? name.slice('trigger.webhook.'.length)
+          : name
+        return t(`webhookTriggers.fields.vars.${field}`, { defaultValue: field })
+      }}
+    />
+  )
 }
 
 export function TemplateVarChips({

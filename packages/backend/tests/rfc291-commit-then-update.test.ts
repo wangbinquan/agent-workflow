@@ -25,6 +25,7 @@ import { ulid } from 'ulid'
 import {
   canonicalIntentJson,
   parseIntentChangeset,
+  WORKFLOW_SCHEMA_VERSION,
   type AclResourceType,
 } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -192,7 +193,7 @@ function creationBundle(pluginSpec: string): unknown {
           name: 'audit-flow',
           description: '',
           definition: {
-            $schema_version: 4,
+            $schema_version: WORKFLOW_SCHEMA_VERSION,
             inputs: [],
             nodes: [{ id: 'n1', kind: 'agent-single', agentRef: '$new:ag', promptTemplate: 'go' }],
             edges: [],
@@ -272,7 +273,12 @@ function updateOpFor(
         payload: {
           name,
           description: 'edited',
-          definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
+          definition: {
+            $schema_version: WORKFLOW_SCHEMA_VERSION,
+            inputs: [],
+            nodes: [],
+            edges: [],
+          },
         },
       }
     case 'workgroup':

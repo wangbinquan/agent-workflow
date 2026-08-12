@@ -39,6 +39,7 @@ import {
   INTENT_REDACTED,
   ROLE_PERMISSIONS,
   SYSTEM_DOMAIN_POINTS,
+  WORKFLOW_SCHEMA_VERSION,
   grantableMatrixPoints,
   resolveTokenPermissions,
   canonicalIntentJson,
@@ -147,7 +148,7 @@ const CODE_HOST_NODE = {
 /** The definition a mounted workflow actually holds in storage. */
 function storedDefinition(extra: Record<string, unknown>[] = []): Record<string, unknown> {
   return {
-    $schema_version: 4,
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
     inputs: [],
     nodes: [{ id: 'in1', kind: 'input', inputKey: 'k' }, { ...SCRIPT_NODE }, ...extra],
     edges: [],
@@ -232,7 +233,7 @@ function updateBundle(nodes: unknown[], name = 'target-flow'): unknown {
         payload: {
           name,
           description: '',
-          definition: { $schema_version: 4, inputs: [], nodes, edges: [] },
+          definition: { $schema_version: WORKFLOW_SCHEMA_VERSION, inputs: [], nodes, edges: [] },
         },
       },
     ],
@@ -251,7 +252,7 @@ function createBundle(nodes: unknown[], name = 'new-flow'): unknown {
         payload: {
           name,
           description: '',
-          definition: { $schema_version: 4, inputs: [], nodes, edges: [] },
+          definition: { $schema_version: WORKFLOW_SCHEMA_VERSION, inputs: [], nodes, edges: [] },
         },
       },
     ],
@@ -386,7 +387,7 @@ describe('abnormal: a plain user cannot create privileged nodes via intent', () 
             name: 'flow-with-script',
             description: '',
             definition: {
-              $schema_version: 4,
+              $schema_version: WORKFLOW_SCHEMA_VERSION,
               inputs: [],
               nodes: [{ ...SCRIPT_NODE_NO_ENV }],
               edges: [],
@@ -578,7 +579,7 @@ describe('boundary: a plain user updating a workflow that already has a script n
             name: 'target-flow',
             description: '',
             definition: {
-              $schema_version: 4,
+              $schema_version: WORKFLOW_SCHEMA_VERSION,
               inputs: [],
               nodes: [{ id: 'in1', kind: 'input', inputKey: 'k' }, sentScriptNode()],
               edges: [
@@ -679,7 +680,7 @@ describe('boundary: a plain user updating a workflow that already has a script n
 describe('boundary: the same rules for a code-host-call node', () => {
   async function mountedCodeHost(): Promise<{ id: string; manifest: IntentContextManifest }> {
     const wf = await seedWorkflow('ch-flow', PLAIN, {
-      $schema_version: 4,
+      $schema_version: WORKFLOW_SCHEMA_VERSION,
       inputs: [],
       nodes: [{ id: 'in1', kind: 'input', inputKey: 'k' }, { ...CODE_HOST_NODE }],
       edges: [],
@@ -744,7 +745,7 @@ describe('boundary: the same rules for a code-host-call node', () => {
 
   test('a manager MAY change what a plain user may not', async () => {
     const wf = await seedWorkflow('ch-flow', BOSS, {
-      $schema_version: 4,
+      $schema_version: WORKFLOW_SCHEMA_VERSION,
       inputs: [],
       nodes: [{ id: 'in1', kind: 'input', inputKey: 'k' }, { ...CODE_HOST_NODE }],
       edges: [],
@@ -801,7 +802,7 @@ describe('normal: the author gates do not touch ordinary work', () => {
 
   test('a plain user updates a workflow that has no privileged node', async () => {
     const wf = await seedWorkflow('plain-flow', PLAIN, {
-      $schema_version: 4,
+      $schema_version: WORKFLOW_SCHEMA_VERSION,
       inputs: [],
       nodes: [{ id: 'in1', kind: 'input', inputKey: 'k' }],
       edges: [],

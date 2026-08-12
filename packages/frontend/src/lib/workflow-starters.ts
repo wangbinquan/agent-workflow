@@ -1,6 +1,7 @@
 import {
   tryHandlerForParsedKind,
   tryParseKind,
+  WORKFLOW_SCHEMA_VERSION,
   type Agent,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
@@ -135,7 +136,7 @@ export function planWorkflowStarter(
       ok: true,
       outputPorts: { auditor: auditOutput },
       definition: {
-        $schema_version: 4,
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
         inputs: [{ kind: 'text', key: 'artifact', label: copy.artifactLabel, required: true }],
         nodes: [
           {
@@ -200,7 +201,7 @@ export function planWorkflowStarter(
       fixer: fixerOutput,
     },
     definition: {
-      $schema_version: 4,
+      $schema_version: WORKFLOW_SCHEMA_VERSION,
       inputs: [{ kind: 'text', key: 'request', label: copy.requestLabel, required: true }],
       nodes: [
         {

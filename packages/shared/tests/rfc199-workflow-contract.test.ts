@@ -16,6 +16,7 @@ import {
   ImportWorkflowResultSchema,
   SaveWorkflowReceiptSchema,
   UpdateWorkflowSchema,
+  WORKFLOW_SCHEMA_VERSION,
   WorkflowDefinitionSchema,
   WorkflowDetailSchema,
   WorkflowDraftSnapshotSchema,
@@ -132,7 +133,7 @@ describe('RFC-199 canonical workflow serialization', () => {
   test('storage serialization has no domain prefix or trailing newline and applies schema defaults', () => {
     const definition = WorkflowDefinitionSchema.parse({ $schema_version: 4 })
     expect(serializeWorkflowDefinitionStorageV1(definition)).toBe(
-      '{"$schema_version":4,"edges":[],"inputs":[],"nodes":[]}',
+      `{"$schema_version":${WORKFLOW_SCHEMA_VERSION},"edges":[],"inputs":[],"nodes":[]}`,
     )
   })
 

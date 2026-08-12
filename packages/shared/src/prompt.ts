@@ -21,6 +21,8 @@ import {
   hasAwInputFence,
   sanitizeInlineField,
 } from './promptFencing'
+import { renderTemplateRefs, type InvalidTemplateRef } from './templateRef'
+import type { TriggerContext } from './triggerContext'
 
 /**
  * Review-driven re-run context (RFC-005 + RFC-014).
@@ -49,6 +51,12 @@ export interface ReviewPromptContext {
   rejection?: string
   /** Comments list, already rendered as a markdown string. */
   comments?: string
+  /**
+   * RFC-292 author template from the deciding review node. Present only for
+   * iterate reruns. Its local domain is {{__review_comments__}} plus canonical
+   * trigger refs; raw comments and each trigger value are fenced separately.
+   */
+  commentInjectTemplate?: string
   /**
    * On iterate path, the source port name being iterated on. Lets agents
    * branch their generation logic on "regen this port only, leave others".
@@ -264,6 +272,8 @@ export interface RenderPromptInput {
    * blocks as workflow variables silently deletes literal user content.
    */
   expandPromptTemplate?: boolean
+  /** Frozen launch-source context. null means this task has no trigger source. */
+  triggerContext?: TriggerContext | null
   /** Resolved input ports — { portName -> concatenated content }. */
   inputs: Record<string, string>
   /** Built-in template variables. */
@@ -377,12 +387,19 @@ export interface RenderPromptInput {
   hasExternalUntrustedInput?: boolean
 }
 
-// Whitespace-tolerant so `{{ port }}` (a very common authoring habit) resolves
-// the same as `{{port}}`. Kept in lockstep with the validator's ref regex
-// (workflow.validator.ts TEMPLATE_RE) and the frontend ref detector
-// (promptRefs.tsx): a spaced ref that the validator accepts MUST also substitute
-// here, or a launch-valid template renders a literal `{{ port }}` to the agent.
-const TEMPLATE_RE = /\{\{\s*(\w+)\s*\}\}/g
+export class PromptTemplateRefError extends Error {
+  constructor(public readonly invalidRefs: readonly InvalidTemplateRef[]) {
+    super(`invalid prompt template ref: ${invalidRefs[0]?.reason ?? 'unknown'}`)
+    this.name = 'PromptTemplateRefError'
+  }
+}
+
+export class TriggerContextMissingError extends Error {
+  constructor() {
+    super('prompt template references webhook trigger context, but this task has no trigger source')
+    this.name = 'TriggerContextMissingError'
+  }
+}
 
 /**
  * RFC-103 T5 (04-WFM-06/07): single source of truth for the set of built-in
@@ -517,70 +534,118 @@ export function renderUserPrompt(input: RenderPromptInput): string {
   // memory and genuinely needs the inputs re-included.
   const inlineMode = cc?.mode === 'inline'
 
-  const body =
-    input.expandPromptTemplate === false
-      ? tpl
-      : tpl.replace(TEMPLATE_RE, (_match, name: string) => {
-          referenced.add(name)
-          if (BUILTIN_VARS.has(name)) {
-            switch (name) {
-              case '__repo_path__':
-                return input.meta.repoPath
-              case '__base_branch__':
-                return input.meta.baseBranch
-              case '__task_id__':
-                return input.meta.taskId
-              case '__node_id__':
-                return input.meta.nodeId ?? ''
-              case '__iteration__':
-                return input.meta.iteration !== undefined ? String(input.meta.iteration) : ''
-              case '__shard_key__':
-                return fence('shard-key', input.meta.shardKey)
-              case '__review_rejection__':
-                return fence('review-rejection', rc?.rejection)
-              case '__review_comments__':
-                return fence('review-comments', rc?.comments)
-              case '__iterate_target_port__':
-                return inline(rc?.iterateTargetPort)
-              case '__sibling_outputs__':
-                return fence('review-sibling-outputs', rc?.siblingOutputs)
-              case '__clarify_iteration__':
-                return cc?.iteration ?? ''
-              case '__clarify_remaining__':
-                return cc?.remaining ?? ''
-              case '__repos__':
-                return fence(
-                  'repository-paths',
-                  (input.meta.repos ?? []).map((r) => r.worktreePath).join('\n'),
-                )
-              case '__repo_names__':
-                // RFC-248: 渲染**挂载路径**而不是 basename。挂根的成员渲染为
-                // 空行——它就在 cwd，没有相对路径可 cd。回落到
-                // `worktreeDirName` 只是为了兼容还没带 mountPath 的调用方
-                // （两者对存量平铺布局取值一致）。
-                return fence(
-                  'repository-names',
-                  (input.meta.repos ?? []).map((r) => r.mountPath ?? r.worktreeDirName).join('\n'),
-                )
-              case '__repo_count__':
-                return String((input.meta.repos ?? []).length)
-              case '__repo_group__':
-                return input.meta.repoGroupName ?? ''
-            }
-          }
-          // RFC-148: retired tokens render '' unconditionally — historically their
-          // substitution cases returned empty (zero producers), and they must NOT
-          // fall through to the input lookup: a saved workflow with an inbound
-          // port that happens to share the retired name (validator only warns)
-          // would otherwise render upstream content where years of prompts had
-          // an empty string (impl-gate re-review high).
-          if (DEPRECATED_PROMPT_TOKENS.has(name)) return ''
-          // RFC-026: drop input port values from inline-mode reruns (see comment
-          // above the inlineMode declaration).
-          if (inlineMode) return ''
-          const v = input.inputs[name]
-          return fence(name, v)
-        })
+  const reviewComments = (():
+    | { readonly value: string; readonly alreadyFenced: false }
+    | { readonly value: string; readonly alreadyFenced: true } => {
+    const template = rc?.commentInjectTemplate
+    if (template === undefined || template.trim().length === 0) {
+      return { value: rc?.comments ?? '', alreadyFenced: false }
+    }
+    const rendered = renderTemplateRefs(template, (ref) => {
+      if (ref.kind === 'trigger') {
+        // Inline clarification reuses the existing model session. The initial
+        // review prompt already placed trigger values in that transcript, so a
+        // custom review injection must follow the same no-duplicate rule as the
+        // outer prompt template.
+        if (inlineMode) return ''
+        if (input.triggerContext === null || input.triggerContext === undefined) {
+          throw new TriggerContextMissingError()
+        }
+        return fence(
+          `trigger-webhook-${ref.field}`,
+          input.triggerContext.trigger.webhook[ref.field],
+        )
+      }
+      if (ref.name === '__review_comments__') {
+        return fence('review-comments', rc?.comments)
+      }
+      return ''
+    })
+    if (rendered.invalid.length > 0) throw new PromptTemplateRefError(rendered.invalid)
+    return { value: rendered.value, alreadyFenced: true }
+  })()
+
+  const body = (() => {
+    if (input.expandPromptTemplate === false) return tpl
+    const rendered = renderTemplateRefs(tpl, (ref) => {
+      if (ref.kind === 'trigger') {
+        // An inline same-session clarification already has the initial trigger
+        // value in transcript history. Do not duplicate it in the follow-up.
+        if (inlineMode) return ''
+        if (input.triggerContext === null || input.triggerContext === undefined) {
+          throw new TriggerContextMissingError()
+        }
+        return fence(
+          `trigger-webhook-${ref.field}`,
+          input.triggerContext.trigger.webhook[ref.field],
+        )
+      }
+      const name = ref.name
+      referenced.add(name)
+      if (BUILTIN_VARS.has(name)) {
+        switch (name) {
+          case '__repo_path__':
+            return input.meta.repoPath
+          case '__base_branch__':
+            return input.meta.baseBranch
+          case '__task_id__':
+            return input.meta.taskId
+          case '__node_id__':
+            return input.meta.nodeId ?? ''
+          case '__iteration__':
+            return input.meta.iteration !== undefined ? String(input.meta.iteration) : ''
+          case '__shard_key__':
+            return fence('shard-key', input.meta.shardKey)
+          case '__review_rejection__':
+            return fence('review-rejection', rc?.rejection)
+          case '__review_comments__':
+            return reviewComments.alreadyFenced
+              ? reviewComments.value
+              : fence('review-comments', reviewComments.value)
+          case '__iterate_target_port__':
+            return inline(rc?.iterateTargetPort)
+          case '__sibling_outputs__':
+            return fence('review-sibling-outputs', rc?.siblingOutputs)
+          case '__clarify_iteration__':
+            return cc?.iteration ?? ''
+          case '__clarify_remaining__':
+            return cc?.remaining ?? ''
+          case '__repos__':
+            return fence(
+              'repository-paths',
+              (input.meta.repos ?? []).map((r) => r.worktreePath).join('\n'),
+            )
+          case '__repo_names__':
+            // RFC-248: 渲染**挂载路径**而不是 basename。挂根的成员渲染为
+            // 空行——它就在 cwd，没有相对路径可 cd。回落到
+            // `worktreeDirName` 只是为了兼容还没带 mountPath 的调用方
+            // （两者对存量平铺布局取值一致）。
+            return fence(
+              'repository-names',
+              (input.meta.repos ?? []).map((r) => r.mountPath ?? r.worktreeDirName).join('\n'),
+            )
+          case '__repo_count__':
+            return String((input.meta.repos ?? []).length)
+          case '__repo_group__':
+            return input.meta.repoGroupName ?? ''
+        }
+      }
+      // RFC-148: retired tokens render '' unconditionally — historically their
+      // substitution cases returned empty (zero producers), and they must NOT
+      // fall through to the input lookup: a saved workflow with an inbound
+      // port that happens to share the retired name (validator only warns)
+      // would otherwise render upstream content where years of prompts had
+      // an empty string (impl-gate re-review high).
+      if (DEPRECATED_PROMPT_TOKENS.has(name)) return ''
+      // RFC-026: drop input port values from inline-mode reruns (see comment
+      // above the inlineMode declaration).
+      if (inlineMode) return ''
+      const v = input.inputs[name]
+      return fence(name, v)
+    })
+    if (rendered.invalid.length > 0) throw new PromptTemplateRefError(rendered.invalid)
+    return rendered.value
+  })()
 
   let sections = ''
   for (const [name, content] of Object.entries(input.inputs)) {
@@ -614,7 +679,11 @@ export function renderUserPrompt(input: RenderPromptInput): string {
       rc.comments.trim().length > 0 &&
       !referenced.has('__review_comments__')
     ) {
-      sections += `\n\n## Review Comments\n${fence('review-comments', rc.comments)}`
+      sections += `\n\n## Review Comments\n${
+        reviewComments.alreadyFenced
+          ? reviewComments.value
+          : fence('review-comments', reviewComments.value)
+      }`
     }
     if (
       rc.iterateTargetPort !== undefined &&

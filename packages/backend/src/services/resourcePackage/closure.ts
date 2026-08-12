@@ -26,6 +26,7 @@ import type { AclResourceType, WorkflowDefinition } from '@agent-workflow/shared
 import {
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,
+  migrateWorkflowDefinitionToLatest,
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
 import { asc, inArray } from 'drizzle-orm'
@@ -172,7 +173,7 @@ function definitionOf(row: Record<string, unknown>): WorkflowDefinition | null {
     const parsed = WorkflowDefinitionSchema.safeParse(
       typeof raw === 'string' ? JSON.parse(raw) : raw,
     )
-    return parsed.success ? parsed.data : null
+    return parsed.success ? migrateWorkflowDefinitionToLatest(parsed.data) : null
   } catch {
     return null
   }

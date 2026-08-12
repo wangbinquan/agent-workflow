@@ -4,6 +4,7 @@
 
 import { useTranslation } from 'react-i18next'
 import { ChipsInput } from '@/components/ChipsInput'
+import { extractTemplateRefs } from '@agent-workflow/shared'
 
 /**
  * Lists `{{xxx}}` placeholders in the prompt template that don't have a
@@ -17,20 +18,19 @@ import { ChipsInput } from '@/components/ChipsInput'
  * Exported for unit tests.
  */
 export function extractMissingRefs(template: string, inputPorts: string[]): string[] {
-  // Whitespace-tolerant to match the runtime renderer (shared prompt.ts
-  // TEMPLATE_RE) and the backend validator: `{{ port }}` is the same ref as
-  // `{{port}}`, so the editor's missing-ref hint must not diverge from what
-  // actually substitutes at run time.
-  const re = /\{\{\s*(\w+)\s*\}\}/g
-  const refs = new Set<string>()
-  let m: RegExpExecArray | null
-  while ((m = re.exec(template)) !== null) {
-    const name = m[1]
-    if (name === undefined || name.startsWith('__')) continue
-    refs.add(name)
-  }
+  const refs = new Set(
+    extractTemplateRefs(template).flatMap((ref) =>
+      ref.kind === 'local' && !ref.name.startsWith('__') ? [ref.name] : [],
+    ),
+  )
   const have = new Set(inputPorts)
   return [...refs].filter((r) => !have.has(r))
+}
+
+export function extractInvalidRefs(template: string): string[] {
+  return extractTemplateRefs(template).flatMap((ref) =>
+    ref.kind === 'invalid' ? [`{{${ref.raw}}} (${ref.reason})`] : [],
+  )
 }
 
 export function MissingRefList({
@@ -42,13 +42,24 @@ export function MissingRefList({
 }) {
   const { t } = useTranslation()
   const missing = extractMissingRefs(template, inputPorts)
-  if (missing.length === 0) return null
+  const invalid = extractInvalidRefs(template)
+  if (missing.length === 0 && invalid.length === 0) return null
   return (
     <div className="inspector__port-refs inspector__port-refs--missing">
-      <span className="muted">{t('inspector.missingRefsLabel')}</span>{' '}
-      <ChipsInput value={missing} onChange={() => {}} placeholder="" />
+      {missing.length > 0 && (
+        <>
+          <span className="muted">{t('inspector.missingRefsLabel')}</span>{' '}
+          <ChipsInput value={missing} onChange={() => {}} placeholder="" />
+        </>
+      )}
+      {invalid.length > 0 && (
+        <>
+          <span className="muted">{t('inspector.invalidRefsLabel')}</span>{' '}
+          <ChipsInput value={invalid} onChange={() => {}} placeholder="" />
+        </>
+      )}
       <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-        {t('inspector.missingRefsHint')}
+        {invalid.length > 0 ? t('inspector.invalidRefsHint') : t('inspector.missingRefsHint')}
       </p>
     </div>
   )

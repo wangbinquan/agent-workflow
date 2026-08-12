@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { ROLE_PERMISSIONS } from '@agent-workflow/shared'
+import { ROLE_PERMISSIONS, WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, intentTurns, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
@@ -289,7 +289,7 @@ describe('runIntentTurn', () => {
             name: 'flow',
             description: '',
             definition: {
-              $schema_version: 4,
+              $schema_version: WORKFLOW_SCHEMA_VERSION,
               inputs: [{ kind: 'text', key: 'goal', label: 'Goal', required: true }],
               nodes: [
                 { id: 'input', kind: 'input', inputKey: 'goal' },
@@ -514,7 +514,12 @@ describe('runIntentTurn', () => {
           payload: {
             name: 'f',
             description: '',
-            definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
+            definition: {
+              $schema_version: WORKFLOW_SCHEMA_VERSION,
+              inputs: [],
+              nodes: [],
+              edges: [],
+            },
           },
         },
       ],

@@ -203,6 +203,51 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     expect(code).toBe('task-not-found')
   })
 
+  test('RFC-292: missing frozen webhook context rejects resume before CAS and metadata clearing', async () => {
+    h = await buildHarness('failed')
+    const triggerDefinition: WorkflowDefinition = {
+      $schema_version: 5,
+      inputs: [],
+      nodes: [
+        {
+          id: 'doc',
+          kind: 'agent-single',
+          agentName: 'doc',
+          promptTemplate: 'Handle {{trigger.webhook.comment_text}}',
+        } as WorkflowNode,
+      ],
+      edges: [],
+    }
+    const finishedAt = Date.now() - 10
+    await h.db
+      .update(tasks)
+      .set({
+        workflowSnapshot: JSON.stringify(triggerDefinition),
+        finishedAt,
+        errorSummary: 'original-summary',
+        errorMessage: 'original-detail',
+        failedNodeId: 'doc',
+      })
+      .where(eq(tasks.id, h.taskId))
+
+    await expect(
+      resumeTask(h.db, h.taskId, {
+        db: h.db,
+        appHome: h.appHome,
+        binaryOverride: ['/usr/bin/env', 'true'],
+      }),
+    ).rejects.toMatchObject({ code: 'trigger-context-missing' })
+
+    const row = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+    expect(row).toMatchObject({
+      status: 'failed',
+      finishedAt,
+      errorSummary: 'original-summary',
+      errorMessage: 'original-detail',
+      failedNodeId: 'doc',
+    })
+  })
+
   // RFC-098 B2 (design 修订#5): the old R8 used a FAKE sha ('sha-fake-failed')
   // on the failed row, which only stayed green because the pre-fix rollback was
   // warn-and-continue even when `git stash apply` blew up. The WP-9 fail-closed

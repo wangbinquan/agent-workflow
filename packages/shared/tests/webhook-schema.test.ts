@@ -20,11 +20,14 @@ import {
   WEBHOOK_FIRE_OUTCOMES,
   WebhookRepoScopeSchema,
   availableVarsFor,
+  collectWebhookTemplateSurfaces,
   collectTemplateStrings,
   eventVarsOf,
   extractTemplateVars,
+  mapWebhookTemplateSurfaces,
   renderTemplate,
   templateVarIssues,
+  webhookTriggerContextOf,
   webhookPayloadTemplateSchemaFor,
   type CodeHostEvent,
 } from '../src'
@@ -195,31 +198,76 @@ describe('RFC-257 T1 · 模板变量矩阵与静态校验', () => {
   })
 
   test('extractTemplateVars：known/unknown 分离，空白容忍', () => {
-    const r = extractTemplateVars('修 {{ mr_iid }} 于 {{branch}}，坏 {{nope}} 与 {{MR_IID}}')
+    const r = extractTemplateVars(
+      '修 {{ trigger.webhook.mr_iid }} 于 {{trigger.webhook.branch}}，坏 {{trigger.webhook.nope}} 与 {{trigger.other.mr_iid}}',
+    )
     expect(r.known.sort()).toEqual(['branch', 'mr_iid'])
-    expect(r.unknown).toEqual(['nope']) // 大写不匹配变量正则，原样保留非引用
+    expect(r.unknown).toEqual(['trigger.webhook.nope', 'trigger.other.mr_iid'])
   })
 
   test('templateVarIssues：unknown 拒绝、超出交集拒绝、合法通过', () => {
-    const okIssues = templateVarIssues('agent', { description: '修 {{repo_path}} !{{mr_iid}}' }, [
-      'pipeline_failed',
-    ])
+    const okIssues = templateVarIssues(
+      'agent',
+      {
+        description: '修 {{trigger.webhook.repo_path}} !{{trigger.webhook.mr_iid}}',
+      },
+      ['pipeline_failed'],
+    )
     expect(okIssues).toEqual([])
-    const bad = templateVarIssues('agent', { description: '{{comment_text}} {{whatever}}' }, [
-      'pipeline_failed',
-    ])
+    const bad = templateVarIssues(
+      'agent',
+      {
+        description: '{{trigger.webhook.comment_text}} {{trigger.webhook.whatever}}',
+      },
+      ['pipeline_failed'],
+    )
     expect(bad).toContainEqual({ code: 'template-var-unavailable', varName: 'comment_text' })
-    expect(bad).toContainEqual({ code: 'unknown-template-var', varName: 'whatever' })
+    expect(bad).toContainEqual({
+      code: 'unknown-template-var',
+      varName: 'trigger.webhook.whatever',
+    })
   })
 
   test('collectTemplateStrings：workflow 只收 template 映射（event-branch 无文本）', () => {
     const strings = collectTemplateStrings('workflow', {
       inputs: {
-        a: { kind: 'template', template: 'x {{branch}}' },
+        a: { kind: 'template', template: 'x {{trigger.webhook.branch}}' },
         b: { kind: 'event-branch' },
       },
     })
-    expect(strings).toEqual(['x {{branch}}'])
+    expect(strings).toEqual(['x {{trigger.webhook.branch}}'])
+  })
+
+  test('webhook template surface inventory drives all launch kinds and mapping', () => {
+    expect(
+      collectWebhookTemplateSurfaces('workflow', {
+        inputs: {
+          a: { kind: 'template', template: 'A' },
+          branch: { kind: 'event-branch' },
+        },
+        workingBranch: 'WB',
+      }).map(({ pointer, text }) => [pointer, text]),
+    ).toEqual([
+      ['/inputs/a/template', 'A'],
+      ['/workingBranch', 'WB'],
+    ])
+    expect(
+      collectWebhookTemplateSurfaces('agent', {
+        description: 'D',
+        inputs: { 'a/b~c': 'I' },
+        workingBranch: 'WB',
+      }).map(({ pointer, text }) => [pointer, text]),
+    ).toEqual([
+      ['/description', 'D'],
+      ['/inputs/a~1b~0c', 'I'],
+      ['/workingBranch', 'WB'],
+    ])
+    const mapped = mapWebhookTemplateSurfaces(
+      'workgroup',
+      { goal: 'G', workingBranch: 'WB' },
+      ({ pointer, text }) => `${pointer}:${text}`,
+    )
+    expect(mapped).toEqual({ goal: '/goal:G', workingBranch: '/workingBranch:WB' })
   })
 })
 
@@ -233,11 +281,12 @@ describe('RFC-257 T1 · 运行期渲染（宽松空串 + event_json 截断）', 
     expect(vars.comment_author).toBe('aw-bot')
   })
 
-  test('renderTemplate：已知变量替换、表外变量空串、非引用文本原样', () => {
-    const out = renderTemplate('a={{branch}} b={{ mr_iid }} c={{gone}} d={{no', {
-      branch: 'f/x',
-      mr_iid: '42',
-    })
+  test('renderTemplate：只读嵌套 context；适用但缺值为空串；普通未闭合文本原样', () => {
+    const context = webhookTriggerContextOf(sampleEvent({ branch: 'f/x' }))
+    const out = renderTemplate(
+      'a={{trigger.webhook.branch}} b={{ trigger.webhook.mr_iid }} c={{trigger.webhook.comment_text}} d={{no',
+      context,
+    )
     expect(out).toBe('a=f/x b=42 c= d={{no')
   })
 })

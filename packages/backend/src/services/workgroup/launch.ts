@@ -32,6 +32,7 @@ import {
   type Task,
   type Workgroup,
   type WorkgroupRuntimeConfig,
+  WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 import { buildClarifyEdges } from '@agent-workflow/shared'
 import { inArray } from 'drizzle-orm'
@@ -81,7 +82,7 @@ export function buildWorkgroupHostSnapshot(config: WorkgroupRuntimeConfig): {
   const leaderAgentName = leaderMember?.agentName ?? firstAgent?.agentName ?? 'workgroup-member'
   const memberAgentName = firstAgent?.agentName ?? 'workgroup-member'
   return {
-    $schema_version: 1,
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
     inputs: [],
     nodes: [
       { id: WG_LEADER_NODE_ID, kind: 'agent-single', agentName: leaderAgentName },
@@ -143,7 +144,7 @@ export async function ensureWorkgroupHostWorkflow(db: DbClient): Promise<void> {
       name: WORKGROUP_HOST_WORKFLOW_NAME,
       description: 'RFC-164 workgroup host anchor — do not launch directly',
       definition: serializeWorkflowDefinitionStorageV1({
-        $schema_version: 4,
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
         inputs: [],
         nodes: [],
         edges: [],

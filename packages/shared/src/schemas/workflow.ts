@@ -17,6 +17,9 @@
 // agent via human-gated submit/reject). v1 / v2 / v3 documents stay readable;
 // the transparent v3 → v4 upgrade lives in the workflow GET path. Old docs
 // never carry the new node kind, so the upgrade is a metadata bump.
+//
+// RFC-292: v5 introduces the canonical `trigger.webhook.<field>` template
+// namespace and a sink-aware v4 -> v5 migration.
 
 import { z } from 'zod'
 import { ImportRefSelectionSchema } from './importRef'
@@ -24,9 +27,9 @@ import { ResourceVisibilitySchema } from './resourceAcl'
 import { WORKGROUP_NAME_RE, WorkgroupNameSchema } from './workgroup'
 
 /** Currently-written schema version. New writes always set this value. */
-export const WORKFLOW_SCHEMA_VERSION = 4
-/** Set of versions GET can return; v1/v2/v3 are read-only and auto-upgraded on access. */
-export const WORKFLOW_SCHEMA_VERSIONS = [1, 2, 3, 4] as const
+export const WORKFLOW_SCHEMA_VERSION = 5
+/** Older versions are read-only and auto-upgraded at canonical boundaries. */
+export const WORKFLOW_SCHEMA_VERSIONS = [1, 2, 3, 4, 5] as const
 
 // --- enums shared across multiple shapes ---
 
@@ -241,7 +244,7 @@ export const WorkflowDefinitionSchema = z.object({
    * read. New writes always set the latest version — the GET path transparently
    * upgrades older docs (see backend services/workflow.ts).
    */
-  $schema_version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  $schema_version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
   inputs: z.array(WorkflowInputSchema).default([]),
   nodes: z.array(WorkflowNodeSchema).default([]),
   edges: z.array(WorkflowEdgeSchema).default([]),
@@ -910,12 +913,10 @@ export type ScriptNode = z.infer<typeof ScriptNodeSchema>
 // administrator-configured base URL + token. No model process, subprocess or
 // session is created, and the token never reaches an agent process or model context.
 //
-// `$schema_version` deliberately NOT bumped: RFC-243 (call-workflow /
-// call-workgroup) and RFC-253 (script) both added node kinds without one. The
-// bump is pure metadata — an older document can never contain the new kind —
-// and version 4's meaning (RFC-056) is unaffected. Old binaries reading a new
-// document fail closed on the closed NODE_KIND enum (`unknown-node-kind`),
-// which is the correct outcome for a node with real external side effects.
+// RFC-269 originally added this kind without a schema bump (like RFC-243/253).
+// RFC-292 later bumped the whole workflow grammar to v5 so this node's trigger
+// templates use the same `trigger.webhook.<field>` namespace as every other
+// authored sink; v4 definitions are migrated before validation/execution.
 
 /** Node-level cap on a single rendered parameter value. */
 export const CODE_HOST_PARAM_MAX = 64 * 1024

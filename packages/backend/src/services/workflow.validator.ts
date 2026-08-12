@@ -47,8 +47,8 @@ import {
   codeHostPathIssue,
   codeHostRequiredFields,
   extractCodeHostVars,
+  extractTemplateRefs,
   isCodeHostAction,
-  isTriggerContextVar,
   analyzeWorkflowScopeTree,
   buildNodeAgentLookup,
   callWorkflowSelector,
@@ -65,9 +65,11 @@ import {
   isReviewableBodyKind,
   isWrapperKind,
   mcpEnvIssues,
+  migrateWorkflowDefinitionToLatest,
   readContinueOnMaxIterations,
   readScriptBody,
   readScriptDependencies,
+  WORKFLOW_SCHEMA_VERSION,
   readScriptEnv,
   readScriptLanguage,
   readScriptOutputPorts,
@@ -334,7 +336,11 @@ async function loadCallWorkflowClosure(
     try {
       const parsed = WorkflowDefinitionSchema.safeParse(JSON.parse(row.definition))
       if (!parsed.success) return null // unreadable ⇒ treated as unresolvable
-      return { id: row.id, name: row.name, definition: parsed.data }
+      return {
+        id: row.id,
+        name: row.name,
+        definition: migrateWorkflowDefinitionToLatest(parsed.data),
+      }
     } catch {
       return null
     }
@@ -1629,7 +1635,9 @@ export function validateWorkflowDef(
                 ? 'the body is not valid JSON'
                 : bodyIssue.kind === 'var-in-key'
                   ? `{{${bodyIssue.ref}}} is used as an object key`
-                  : `{{${bodyIssue.ref}}} sits outside a JSON string — put it inside quotes so an upstream value cannot change the request structure`
+                  : bodyIssue.kind === 'invalid-template-ref'
+                    ? `{{${bodyIssue.ref}}} is not a valid template reference (${bodyIssue.reason})`
+                    : `{{${bodyIssue.ref}}} sits outside a JSON string — put it inside quotes so an upstream value cannot change the request structure`
             issues.push({
               code: 'code-host-body-invalid',
               message: `node '${node.id}': ${detail}`,
@@ -1647,15 +1655,16 @@ export function validateWorkflowDef(
     const inboundPorts = inbound.get(node.id) ?? new Set<string>()
     for (const template of templates) {
       for (const ref of extractCodeHostVars(template)) {
+        if (ref.kind === 'invalid') {
+          issues.push({
+            code: 'code-host-var-unknown',
+            message: `node '${node.id}': invalid template reference {{${ref.raw}}} (${ref.reason})`,
+            pointer: node.id,
+            target: target.node(node.id),
+          })
+          continue
+        }
         if (ref.kind === 'trigger') {
-          if (!isTriggerContextVar(ref.name)) {
-            issues.push({
-              code: 'code-host-var-unknown',
-              message: `node '${node.id}': {{trigger.${ref.name}}} is not a webhook event variable`,
-              pointer: node.id,
-              target: target.node(node.id),
-            })
-          }
           continue
         }
         if (!inboundPorts.has(ref.name)) {
@@ -2772,7 +2781,7 @@ export function validateWorkflowDef(
 
     // multiple-aggregators-in-fanout: v1 allows exactly 0 or 1.
     const aggCount = countFanoutAggregators(
-      { $schema_version: 4, inputs: [], nodes, edges },
+      { $schema_version: WORKFLOW_SCHEMA_VERSION, inputs: [], nodes, edges },
       node.id,
       agentByIdOrName,
     )
@@ -3093,36 +3102,69 @@ export function validateWorkflowDef(
     if (node.kind !== 'agent-single' && !isCallWorkgroup) continue
     const template = readString(node, isCallWorkgroup ? 'goalTemplate' : 'promptTemplate')
     if (template === undefined || template === '') continue
-    const refs = extractTemplateVars(template)
+    const refs = extractTemplateRefs(template)
     const inboundPorts = inbound.get(node.id) ?? new Set<string>()
     // RFC-060 PR-E: agent-multi removed; sourcePort handling deleted. Inside
     // wrapper-fanout, the inner agent-single picks up its shard value via a
     // boundary-input edge — that edge already lives in the graph, so the
     // standard inbound-port set captures the reference correctly.
     for (const ref of refs) {
-      if (BUILTIN_VARS.has(ref)) continue
+      if (ref.kind === 'invalid') {
+        issues.push({
+          code: 'prompt-template-invalid-ref',
+          message: `node '${node.id}' prompt contains invalid reference {{${ref.raw}}} (${ref.reason})`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'prompt'),
+        })
+        continue
+      }
+      if (ref.kind === 'trigger') continue
+      const name = ref.name
+      if (BUILTIN_VARS.has(name)) continue
       // RFC-148: retired clarify/cross-clarify tokens render '' (default
       // substitution branch) — a saved template referencing one keeps
       // launching, but the author gets a deprecation nudge instead of a
       // false "missing inbound port" error.
-      if (DEPRECATED_PROMPT_TOKENS.has(ref)) {
+      if (DEPRECATED_PROMPT_TOKENS.has(name)) {
         issues.push({
           code: 'prompt-template-deprecated-token',
-          message: `node '${node.id}' prompt references retired token {{${ref}}} — it renders an empty string (RFC-148 removed its injection path); remove it from the template`,
+          message: `node '${node.id}' prompt references retired token {{${name}}} — it renders an empty string (RFC-148 removed its injection path); remove it from the template`,
           pointer: node.id,
           target: target.nodeField(node.id, 'prompt'),
           severity: 'warning',
         })
         continue
       }
-      if (!inboundPorts.has(ref)) {
+      if (!inboundPorts.has(name)) {
         issues.push({
           code: 'prompt-template-unresolved',
-          message: `node '${node.id}' prompt references {{${ref}}} but has no matching inbound port`,
+          message: `node '${node.id}' prompt references {{${name}}} but has no matching inbound port`,
           pointer: node.id,
           target: target.nodeField(node.id, 'prompt'),
         })
       }
+    }
+  }
+
+  // RFC-292: review.commentInjectTemplate is an author template, but its local
+  // domain is intentionally only the review comments builtin. It does not gain
+  // the reviewed agent's inbound ports by accident.
+  for (const node of nodes) {
+    if (node.kind !== 'review') continue
+    const template = readString(node, 'commentInjectTemplate')
+    if (template === undefined || template === '') continue
+    for (const ref of extractTemplateRefs(template)) {
+      if (ref.kind === 'trigger') continue
+      if (ref.kind === 'local' && ref.name === '__review_comments__') continue
+      issues.push({
+        code: 'prompt-template-invalid-ref',
+        message:
+          ref.kind === 'invalid'
+            ? `node '${node.id}' review comment template contains invalid reference {{${ref.raw}}} (${ref.reason})`
+            : `node '${node.id}' review comment template may only use {{__review_comments__}} and trigger.webhook fields`,
+        pointer: node.id,
+        target: target.nodeField(node.id, 'prompt'),
+      })
     }
   }
 
@@ -3265,15 +3307,14 @@ function hasCycle(edges: Array<{ from: string; to: string }>, nodeIds: string[])
   return false
 }
 
-const TEMPLATE_RE = /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g
-
 export function extractTemplateVars(template: string): string[] {
-  const out = new Set<string>()
-  let m: RegExpExecArray | null
-  while ((m = TEMPLATE_RE.exec(template)) !== null) {
-    out.add(m[1] ?? '')
-  }
-  return [...out].filter((s) => s !== '')
+  return extractTemplateRefs(template).flatMap((ref) =>
+    ref.kind === 'local'
+      ? [ref.name]
+      : ref.kind === 'trigger'
+        ? [`trigger.webhook.${ref.field}`]
+        : [],
+  )
 }
 
 /**
@@ -3312,7 +3353,7 @@ export function validateAgentClarifyMultiplicity(args: {
 }): WorkflowValidationIssue[] {
   const issues: WorkflowValidationIssue[] = []
   const target = createWorkflowValidationTargets({
-    $schema_version: 4,
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
     inputs: [],
     nodes: args.nodes,
     edges: args.edges,

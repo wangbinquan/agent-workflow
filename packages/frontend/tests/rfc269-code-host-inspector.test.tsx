@@ -10,7 +10,11 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import {
+  WORKFLOW_SCHEMA_VERSION,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 import { CodeHostCallEdit } from '../src/components/canvas/inspector/CodeHostCallEdit'
 
 vi.mock('../src/hooks/useActor', () => ({
@@ -42,7 +46,7 @@ function node(extra: Record<string, unknown> = {}): WorkflowNode {
 }
 
 const DEFINITION: WorkflowDefinition = {
-  $schema_version: 4,
+  $schema_version: WORKFLOW_SCHEMA_VERSION,
   inputs: [],
   nodes: [node()],
   edges: [],
@@ -196,10 +200,9 @@ describe('RFC-269 Inspector', () => {
   test('触发上下文变量原样列出，作者不用去翻文档', () => {
     renderEdit()
     const chips = screen.getByTestId('code-host-trigger-vars')
-    expect(chips.textContent).toContain('{{trigger.mr_iid}}')
-    expect(chips.textContent).toContain('{{trigger.comment_thread_id}}')
-    // event_json 不在触发上下文里（design D15）。
-    expect(chips.textContent).not.toContain('event_json')
+    expect(chips.textContent).toContain('{{trigger.webhook.mr_iid}}')
+    expect(chips.textContent).toContain('{{trigger.webhook.comment_thread_id}}')
+    expect(chips.textContent).toContain('{{trigger.webhook.event_json}}')
   })
 
   test('凭据配置入口在新标签页打开，不会把作者从当前草稿带走', () => {
@@ -215,12 +218,34 @@ describe('RFC-269 Inspector', () => {
     fireEvent.focus(body)
     body.setSelectionRange(body.value.length, body.value.length)
 
-    fireEvent.click(screen.getByTestId('code-host-trigger-var-trigger.comment_thread_id'))
+    fireEvent.click(screen.getByTestId('code-host-trigger-var-trigger.webhook.comment_thread_id'))
 
     const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
     expect((latest.params as Record<string, string>).body).toBe(
-      'Review: {{trigger.comment_thread_id}}',
+      'Review: {{trigger.webhook.comment_thread_id}}',
     )
+  })
+
+  test('custom query value 是可编辑、可聚焦的 canonical trigger 插入目标', () => {
+    const { patched } = renderEdit(
+      node({
+        action: 'custom',
+        request: {
+          method: 'GET',
+          path: '/projects/1/merge_requests',
+          query: { iid: 'MR: ' },
+        },
+      }),
+    )
+    const value = screen.getByTestId('code-host-query-value-iid') as HTMLInputElement
+    fireEvent.focus(value)
+    value.setSelectionRange(value.value.length, value.value.length)
+    fireEvent.click(screen.getByTestId('code-host-trigger-var-trigger.webhook.mr_iid'))
+
+    const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
+    expect(latest.request).toMatchObject({
+      query: { iid: 'MR: {{trigger.webhook.mr_iid}}' },
+    })
   })
 
   test('关闭破坏性方法权限时同步把已选 DELETE 退回 GET', () => {

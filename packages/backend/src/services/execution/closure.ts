@@ -22,6 +22,7 @@ import {
   collectWorkgroupCallRefs,
   decodeCallRef,
   detectCallCycles,
+  migrateWorkflowDefinitionToLatest,
   WorkflowDefinitionSchema,
   type ResourceRefAst,
   type WorkflowDefinition,
@@ -117,7 +118,11 @@ export function parseCallClosure(json: string | null): FrozenCallClosure | null 
       if (typeof r.id !== 'string' || typeof r.version !== 'number') return null
       const def = WorkflowDefinitionSchema.safeParse(r.definition)
       if (!def.success) return null
-      out.workflows[name] = { id: r.id, version: r.version, definition: def.data }
+      out.workflows[name] = {
+        id: r.id,
+        version: r.version,
+        definition: migrateWorkflowDefinitionToLatest(def.data),
+      }
     }
     const rawWorkgroups = (parsed as { workgroups?: unknown }).workgroups
     if (rawWorkgroups !== undefined) {
@@ -180,6 +185,7 @@ export function childClosureSubset(
 ): string | null {
   const closure = parseCallClosure(closureJson)
   if (closure === null) return null
+  childDefinition = migrateWorkflowDefinitionToLatest(childDefinition)
   const v2 = closure.closureVersion === 2 && childWorkflowId !== undefined
   const kept: FrozenCallClosure = v2
     ? { closureVersion: 2, workflows: {}, workgroups: {} }
@@ -249,8 +255,12 @@ export async function freezeCallClosure(
    */
   actor: Actor,
 ): Promise<string | null> {
-  const rootRefs = collectWorkflowCallRefs(root.definition)
-  const rootWorkgroupRefs = collectWorkgroupCallRefs(root.definition)
+  const canonicalRoot = {
+    ...root,
+    definition: migrateWorkflowDefinitionToLatest(root.definition),
+  }
+  const rootRefs = collectWorkflowCallRefs(canonicalRoot.definition)
+  const rootWorkgroupRefs = collectWorkgroupCallRefs(canonicalRoot.definition)
   if (rootRefs.length === 0 && rootWorkgroupRefs.length === 0) return null
   const workflowGrants = await listGrantedResourceIds(db, actor, 'workflow')
   const workgroupGrants = await listGrantedResourceIds(db, actor, 'workgroup')
@@ -332,7 +342,7 @@ export async function freezeCallClosure(
       try {
         const parsed = WorkflowDefinitionSchema.safeParse(JSON.parse(row.definition))
         if (!parsed.success) throw new Error('schema')
-        definition = parsed.data
+        definition = migrateWorkflowDefinitionToLatest(parsed.data)
       } catch {
         throw new ValidationError(
           'workflow-call-ref-missing',
@@ -355,7 +365,7 @@ export async function freezeCallClosure(
   // Authoritative cycle gate over the exact frozen graph.
   // RFC-271 T6e：按**边**取，与冻结结果逐条同源——按名字取会让同名双 id 的其中
   // 一支被另一支替身，环检测就此瞎掉（design §1.1c''' 的可复现例）。
-  const report = detectCallCycles(root, (ref, sourceId) => {
+  const report = detectCallCycles(canonicalRoot, (ref, sourceId) => {
     const frozen = resolvedByEdge.get(callEdgeKey(sourceId, ref.nodeId))
     return frozen === undefined ? null : { id: frozen.id, definition: frozen.definition }
   })

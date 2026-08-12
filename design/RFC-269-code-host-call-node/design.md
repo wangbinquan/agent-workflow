@@ -1,5 +1,9 @@
 # RFC-269 · 技术设计
 
+> **RFC-292 supersession（2026-08-12）**：Q10/D16 的 code-host 私有 trigger grammar
+> 已被统一的 `{{trigger.webhook.<field>}}`、嵌套 `TriggerContext` 与全 workflow template-surface
+> inventory 取代。下文旧语法保留为历史决策记录，不是当前 authoring 契约。
+
 > 产品视角见 [proposal.md](./proposal.md)，任务分解见 [plan.md](./plan.md)。
 
 ## 1. 架构位置

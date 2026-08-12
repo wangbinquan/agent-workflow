@@ -14,6 +14,8 @@ import { workflows } from '@/db/schema'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
 import { getWorkflowAclRow } from '@/services/workflow'
+import { freezeCallClosure } from '@/services/execution/closure'
+import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import { renderWebhookLaunch } from '@/services/webhook/webhookDispatch'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import type {
@@ -27,6 +29,7 @@ import type {
 import {
   WebhookWorkflowPayloadTemplateSchema,
   WorkflowDefinitionSchema,
+  migrateWorkflowDefinitionToLatest,
   webhookPayloadTemplateSchemaFor,
   templateVarIssues,
 } from '@agent-workflow/shared'
@@ -132,6 +135,8 @@ export async function assertTriggerSaveable(
   }
   const payload = parsedPayload.data
   let workflowInputs: ReadonlyArray<DefInput> | null = null
+  let workflowDefinition: WorkflowDefinition | null = null
+  let workflowClosureJson: string | null = null
   if (candidate.launchKind === 'workflow') {
     // D1 顺序不变量：可见性门必须先于 definition 内容的任何读取与回显。
     // 下面的静态校验层逐字回显 input key 与 kind（unknown-input /
@@ -154,7 +159,17 @@ export async function assertTriggerSaveable(
     )[0]
     if (wf !== undefined) {
       const def = WorkflowDefinitionSchema.safeParse(JSON.parse(wf.definition))
-      workflowInputs = def.success ? def.data.inputs : []
+      if (def.success) {
+        workflowDefinition = migrateWorkflowDefinitionToLatest(def.data)
+        workflowInputs = workflowDefinition.inputs
+        workflowClosureJson = await freezeCallClosure(
+          db,
+          { id: candidate.launchRefId, definition: workflowDefinition },
+          actor,
+        )
+      } else {
+        workflowInputs = []
+      }
     }
   }
   const issues = staticTriggerIssues(
@@ -172,6 +187,13 @@ export async function assertTriggerSaveable(
   if (issues.length > 0) {
     throw new ValidationError('webhook-trigger-invalid', 'trigger static validation failed', {
       issues,
+    })
+  }
+  if (workflowDefinition !== null) {
+    assertTriggerPreflight({
+      root: workflowDefinition,
+      closureJson: workflowClosureJson,
+      source: { kind: 'event-types', eventTypes: candidate.eventTypes },
     })
   }
   const rendered = renderWebhookLaunch(
@@ -193,6 +215,7 @@ export async function assertTriggerSaveable(
     // 结构化 payload → gate 的宽记录形参（服务层内的唯一桥点）。
     rendered.payload as unknown as Record<string, unknown>,
     defaultRuntime,
+    { kind: 'event-types', eventTypes: candidate.eventTypes },
   )
 }
 

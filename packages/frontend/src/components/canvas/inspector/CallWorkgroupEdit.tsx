@@ -13,12 +13,14 @@
 
 import type { Workgroup, WorkflowNode } from '@agent-workflow/shared'
 import { useQuery } from '@tanstack/react-query'
+import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { Field, NumberInput, TextArea } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { buildResourceOptionLabeler } from '@/lib/resource-option-label'
+import { applyTemplateVarInsertion, WebhookTriggerVarChips } from '@/components/TemplateVarChips'
 import {
   atomicNodeInspectorChange,
   continuousNodeInspectorChange,
@@ -29,6 +31,7 @@ import { NodeTitleField } from './NodeTitleField'
 import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 import { InspectorSection } from './InspectorSection'
 import { ResourceReferenceControl } from './ResourceReferenceControl'
+import { MissingRefList, PortRefList } from './promptRefs'
 import type { EditProps } from './types'
 
 interface CallLimits {
@@ -44,7 +47,7 @@ function readLimits(rec: Record<string, unknown>): CallLimits {
   return out
 }
 
-export function CallWorkgroupEdit({ node, onPatch, onHistoryBoundary }: EditProps) {
+export function CallWorkgroupEdit({ node, definition, onPatch, onHistoryBoundary }: EditProps) {
   const { t } = useTranslation()
   // Shared ['workgroups'] cache key — same rows the /workgroups list page
   // (useResourceList) and the launch wizard (tasks.new) already fetch.
@@ -58,6 +61,14 @@ export function CallWorkgroupEdit({ node, onPatch, onHistoryBoundary }: EditProp
   const refName = typeof rec.workgroupName === 'string' ? rec.workgroupName : ''
   const refId = typeof rec.workgroupId === 'string' ? rec.workgroupId : ''
   const goalTemplate = typeof rec.goalTemplate === 'string' ? rec.goalTemplate : ''
+  const goalRef = useRef<HTMLTextAreaElement | null>(null)
+  const inputPorts = [
+    ...new Set(
+      definition.edges
+        .filter((edge) => edge.target.nodeId === node.id)
+        .map((edge) => edge.target.portName),
+    ),
+  ]
   const limits = readLimits(rec)
   const owners = useUserLookup(workgroups.map((w) => w.ownerUserId))
   // RFC-264: human-readable names make look-alike options realistic — the
@@ -169,9 +180,20 @@ export function CallWorkgroupEdit({ node, onPatch, onHistoryBoundary }: EditProp
                 onChange={(v) => update({ goalTemplate: v }, goalMeta)}
                 rows={6}
                 monospace
+                textareaRef={goalRef}
                 data-testid="call-workgroup-goal-template"
               />
             </InspectorHistoryBoundary>
+            <WebhookTriggerVarChips
+              onInsert={(token) =>
+                applyTemplateVarInsertion(goalRef.current, goalTemplate, token, (next) =>
+                  update({ goalTemplate: next }, goalMeta),
+                )
+              }
+              testidPrefix="call-workgroup-trigger-var"
+            />
+            <PortRefList ports={inputPorts} />
+            <MissingRefList template={goalTemplate} inputPorts={inputPorts} />
           </Field>
         </InspectorFieldAnchor>
         {/* Fixed output — no per-child preview to render (contrast

@@ -32,7 +32,12 @@
 //    agent inputs); top-level `edges` is the explicit form. Both are honored.
 
 import { z } from 'zod'
-import { PortRefSchema, type WorkflowDefinition, type WorkflowEdge } from './schemas/workflow'
+import {
+  PortRefSchema,
+  WORKFLOW_SCHEMA_VERSION,
+  type WorkflowDefinition,
+  type WorkflowEdge,
+} from './schemas/workflow'
 import { WorkgroupModeSchema, type WorkgroupMode } from './schemas/workgroup'
 
 /**
@@ -223,7 +228,7 @@ function edgeId(e: WorkflowEdge): string {
 /**
  * RFC-223 (PR-3b) — THE single token→agentId conversion point. Convert a
  * generated (token-form) DAG into a standard, id-canonical `WorkflowDefinition`
- * (schema v4): each node's opaque `agentToken` is resolved via `tokenMap` and
+ * (the current workflow schema): each node's opaque `agentToken` is resolved via `tokenMap` and
  * stamped as the canonical `agentId` (+ `agentName` for display). A token with
  * no binding yields an id-less node AND is collected in `unknownTokens` — the
  * caller surfaces that as a `dw-agent-outside-pool` error (referencing the
@@ -271,7 +276,7 @@ export function dwGeneratedToWorkflowDef(
   }
 
   return {
-    def: { $schema_version: 4, inputs: [], nodes, edges },
+    def: { $schema_version: WORKFLOW_SCHEMA_VERSION, inputs: [], nodes, edges },
     unknownTokens: [...unknown],
   }
 }

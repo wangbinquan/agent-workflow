@@ -20,6 +20,7 @@ import type {
 } from '@agent-workflow/shared'
 import {
   importRefSelectorKey,
+  migrateWorkflowDefinitionToLatest,
   stringifyWorkflowYamlDocument,
   stripCallWorkflowNodeIds,
   WorkflowDefinitionSelectorSchema,
@@ -415,53 +416,55 @@ async function resolveImportedWorkflowNodeRefs(
     [...selectors, ...callSelectors, ...callWorkgroupSelectors],
     selections,
   )
-  const definition = WorkflowDefinitionSchema.parse({
-    ...def,
-    nodes: (def.nodes ?? []).map((node) => {
-      const rec = node as Record<string, unknown>
-      if (node.kind === 'call-workflow') {
-        // A foreign install's `workflowId` cache is meaningless (and dangerous:
-        // it could collide with an unrelated local ULID) — always drop it, then
-        // backfill this install's id when the selector resolved (agentId
-        // backfill precedent below). A malformed selector-less node keeps only
-        // its stripped shape; the validator owns that error.
-        const { workflowId: _foreignId, ...portable } = rec
-        const callSelector = callWorkflowSelectorOf(rec)
-        const id =
-          callSelector === null
-            ? undefined
-            : resolved.bySelector.get(importRefSelectorKey(callSelector))
-        return id === undefined ? portable : { ...portable, workflowId: id }
-      }
-      if (node.kind === 'call-workgroup') {
-        const { workgroupId: _foreignId, ...portable } = rec
-        const callSelector = callWorkgroupSelectorOf(rec)
-        const id =
-          callSelector === null
-            ? undefined
-            : resolved.bySelector.get(importRefSelectorKey(callSelector))
-        return id === undefined ? portable : { ...portable, workgroupId: id }
-      }
-      if (node.kind !== 'agent-single') return node
-      const name = rec.agentName
-      if (typeof name !== 'string' || name.length === 0) return node
-      const ownerUsername = rec.agentOwnerUsername
-      const selector = {
-        type: 'agent' as const,
-        name,
-        ...(typeof ownerUsername === 'string' ? { ownerUsername } : {}),
-      }
-      const id = resolved.bySelector.get(importRefSelectorKey(selector))
-      if (id === undefined) {
-        throw new ValidationError(
-          'import-ref-unresolved',
-          'imported agent reference did not resolve',
-        )
-      }
-      const { agentId: _foreignId, agentOwnerUsername: _portableOwner, ...portable } = rec
-      return { ...portable, agentId: id }
+  const definition = migrateWorkflowDefinitionToLatest(
+    WorkflowDefinitionSchema.parse({
+      ...def,
+      nodes: (def.nodes ?? []).map((node) => {
+        const rec = node as Record<string, unknown>
+        if (node.kind === 'call-workflow') {
+          // A foreign install's `workflowId` cache is meaningless (and dangerous:
+          // it could collide with an unrelated local ULID) — always drop it, then
+          // backfill this install's id when the selector resolved (agentId
+          // backfill precedent below). A malformed selector-less node keeps only
+          // its stripped shape; the validator owns that error.
+          const { workflowId: _foreignId, ...portable } = rec
+          const callSelector = callWorkflowSelectorOf(rec)
+          const id =
+            callSelector === null
+              ? undefined
+              : resolved.bySelector.get(importRefSelectorKey(callSelector))
+          return id === undefined ? portable : { ...portable, workflowId: id }
+        }
+        if (node.kind === 'call-workgroup') {
+          const { workgroupId: _foreignId, ...portable } = rec
+          const callSelector = callWorkgroupSelectorOf(rec)
+          const id =
+            callSelector === null
+              ? undefined
+              : resolved.bySelector.get(importRefSelectorKey(callSelector))
+          return id === undefined ? portable : { ...portable, workgroupId: id }
+        }
+        if (node.kind !== 'agent-single') return node
+        const name = rec.agentName
+        if (typeof name !== 'string' || name.length === 0) return node
+        const ownerUsername = rec.agentOwnerUsername
+        const selector = {
+          type: 'agent' as const,
+          name,
+          ...(typeof ownerUsername === 'string' ? { ownerUsername } : {}),
+        }
+        const id = resolved.bySelector.get(importRefSelectorKey(selector))
+        if (id === undefined) {
+          throw new ValidationError(
+            'import-ref-unresolved',
+            'imported agent reference did not resolve',
+          )
+        }
+        const { agentId: _foreignId, agentOwnerUsername: _portableOwner, ...portable } = rec
+        return { ...portable, agentId: id }
+      }),
     }),
-  })
+  )
   return {
     definition,
     inTxGuard: {
@@ -481,7 +484,9 @@ function rejectPortableRefsForSystemImport(def: WorkflowDefinitionSelector): Wor
   // RFC-243 (§5.5): call-workflow nodes are acceptable for system import —
   // `workflowName` needs no candidate resolution and dangling is legal — but a
   // foreign install's `workflowId` cache must never be persisted verbatim.
-  return stripCallWorkflowNodeIds(WorkflowDefinitionSchema.parse(def))
+  return stripCallWorkflowNodeIds(
+    migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(def)),
+  )
 }
 
 function safeParse(yamlText: string): unknown {

@@ -245,7 +245,7 @@ export const CODE_HOST_ACTION_DEFS = {
       PROJECT,
       MR_REQUIRED,
       BODY_REQUIRED,
-      // RFC-263 的 {{trigger.comment_position_json}} 就是**按各自建评论 API 的
+      // RFC-263/292 的 {{trigger.webhook.comment_position_json}} 就是**按各自建评论 API 的
       // 参数名打包、原样可回传**的，所以这里一个字段喂两家。
       { name: 'position', control: 'textarea', requiredFor: BOTH },
     ],

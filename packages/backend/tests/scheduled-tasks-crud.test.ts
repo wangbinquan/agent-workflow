@@ -37,6 +37,20 @@ const REQUIRED_TEXT_DEF: CreateWorkflow['definition'] = {
   nodes: [],
   edges: [],
 }
+const TRIGGER_DEF: CreateWorkflow['definition'] = {
+  $schema_version: 5,
+  inputs: [],
+  nodes: [
+    {
+      id: 'trigger-agent',
+      kind: 'agent-single',
+      agentId: 'agent-never-reached',
+      agentName: 'not-needed-before-trigger-preflight',
+      promptTemplate: 'Handle {{trigger.webhook.comment_text}}',
+    },
+  ],
+  edges: [],
+}
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -195,6 +209,28 @@ describe('RFC-159 scheduled-task CRUD', () => {
     expect((err as ValidationError).code).toBe('workflow-inputs-invalid')
   })
 
+  test('RFC-292: create rejects a trigger-dependent workflow before persisting the schedule', async () => {
+    const triggerWorkflow = await createWorkflow(
+      db,
+      { name: 'trigger-only', description: '', definition: TRIGGER_DEF },
+      { ownerUserId: 'alice', actor: actor('alice') },
+    )
+    await expect(
+      createScheduledTask(
+        db,
+        {
+          name: 'cannot-run-without-webhook',
+          launchKind: 'workflow' as const,
+          launchPayload: launchBody(triggerWorkflow.id),
+          scheduleSpec: SPEC,
+          enabled: true,
+        },
+        { actor: actor('alice') },
+      ),
+    ).rejects.toMatchObject({ code: 'trigger-context-missing' })
+    expect(await listScheduledTasks(db)).toEqual([])
+  })
+
   test('update: re-enabling recomputes next_run_at and resets consecutive_failures', async () => {
     const created = await createScheduledTask(
       db,
@@ -242,6 +278,36 @@ describe('RFC-159 scheduled-task CRUD', () => {
       { actor: actor('alice') },
     )
     expect(updated.nextRunAt).toBeNull()
+  })
+
+  test('RFC-292: payload replacement cannot park a trigger-dependent schedule while disabled', async () => {
+    const created = await createScheduledTask(
+      db,
+      {
+        name: 'x',
+        launchKind: 'workflow' as const,
+        launchPayload: launchBody(),
+        scheduleSpec: SPEC,
+        enabled: false,
+      },
+      { actor: actor('alice') },
+    )
+    const triggerWorkflow = await createWorkflow(
+      db,
+      { name: 'trigger-update', description: '', definition: TRIGGER_DEF },
+      { ownerUserId: 'alice', actor: actor('alice') },
+    )
+    await expect(
+      updateScheduledTask(
+        db,
+        created.id,
+        { launchPayload: launchBody(triggerWorkflow.id) },
+        { actor: actor('alice') },
+      ),
+    ).rejects.toMatchObject({ code: 'trigger-context-missing' })
+    expect((await getScheduledTask(db, created.id))?.launchPayload).toMatchObject({
+      workflowId: wfId,
+    })
   })
 
   test('update: unknown id → NotFoundError', async () => {

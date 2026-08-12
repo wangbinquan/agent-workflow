@@ -10,7 +10,9 @@
 import type { WorkflowNode } from '@agent-workflow/shared'
 import { buildNodeAgentLookup, resolveNodeAgent } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
+import { useRef } from 'react'
 import { Field, TextArea } from '@/components/Form'
+import { applyTemplateVarInsertion, WebhookTriggerVarChips } from '@/components/TemplateVarChips'
 import { Select } from '@/components/Select'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { resourceOptionLabel } from '@/lib/resource-option-label'
@@ -43,6 +45,7 @@ export function AgentSingleEdit({
   const agentLookup = buildNodeAgentLookup(agents, (a) => a)
   const selectedAgent = resolveNodeAgent(node, agentLookup)
   const ports = computePorts(node, agentLookup, definition)
+  const promptRef = useRef<HTMLTextAreaElement | null>(null)
 
   function update(p: Record<string, unknown>, meta: InspectorChangeMeta) {
     onPatch({ ...(node as Record<string, unknown>), ...p } as unknown as WorkflowNode, meta)
@@ -108,8 +111,17 @@ export function AgentSingleEdit({
               onChange={(v) => update({ promptTemplate: v }, promptMeta)}
               rows={8}
               monospace
+              textareaRef={promptRef}
             />
           </InspectorHistoryBoundary>
+          <WebhookTriggerVarChips
+            onInsert={(token) =>
+              applyTemplateVarInsertion(promptRef.current, promptTemplate, token, (next) =>
+                update({ promptTemplate: next }, promptMeta),
+              )
+            }
+            testidPrefix="agent-trigger-var"
+          />
           <PortRefList ports={ports.inputs} />
           <MissingRefList template={promptTemplate} inputPorts={ports.inputs} />
         </Field>

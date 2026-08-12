@@ -140,7 +140,7 @@ describe('webhook trigger wizard · template var insertion', () => {
     fireEvent.click(screen.getByTestId('wt-target'))
     fireEvent.mouseDown(await screen.findByRole('option', { name: 'Fix WF' }))
     fireEvent.change(await screen.findByTestId('wt-map-instruction'), {
-      target: { value: 'repair {{repo_path}}' },
+      target: { value: 'repair {{trigger.webhook.repo_path}}' },
     })
 
     expect(screen.getByTestId('wt-space-event-repo').getAttribute('aria-checked')).toBe('true')
@@ -172,7 +172,10 @@ describe('webhook trigger wizard · template var insertion', () => {
     expect(triggerWrites[0]?.['autoRegisterRepos']).toBe(false)
     expect(triggerWrites[0]?.['launchPayload']).toEqual({
       inputs: {
-        instruction: { kind: 'template', template: 'repair {{repo_path}}' },
+        instruction: {
+          kind: 'template',
+          template: 'repair {{trigger.webhook.repo_path}}',
+        },
       },
       scratch: true,
     })
@@ -190,14 +193,14 @@ describe('webhook trigger wizard · template var insertion', () => {
     // 变量行渲染在映射网格里；event_json 置顶，默认事件（mr_opened+mr_updated）
     // 的交集含 mr_title、不含 comment_text / pipeline_status。
     const chips = await screen.findAllByTestId(/^wt-var-/)
-    expect(chips[0]!.getAttribute('data-testid')).toBe('wt-var-event_json')
-    expect(screen.getByTestId('wt-var-mr_title')).toBeTruthy()
-    expect(screen.queryByTestId('wt-var-comment_text')).toBeNull()
-    expect(screen.queryByTestId('wt-var-pipeline_status')).toBeNull()
+    expect(chips[0]!.getAttribute('data-testid')).toBe('wt-var-trigger.webhook.event_json')
+    expect(screen.getByTestId('wt-var-trigger.webhook.mr_title')).toBeTruthy()
+    expect(screen.queryByTestId('wt-var-trigger.webhook.comment_text')).toBeNull()
+    expect(screen.queryByTestId('wt-var-trigger.webhook.pipeline_status')).toBeNull()
 
     // 未聚焦过任何输入：落到第一个 text 输入（instruction）。
-    fireEvent.click(screen.getByTestId('wt-var-repo_path'))
-    await waitFor(() => expect(instruction.value).toBe('{{repo_path}}'))
+    fireEvent.click(screen.getByTestId('wt-var-trigger.webhook.repo_path'))
+    await waitFor(() => expect(instruction.value).toBe('{{trigger.webhook.repo_path}}'))
 
     // 聚焦第二个输入并把光标放在中间：插入发生在光标处、目标是聚焦的那个。
     // extra.focus() 更新 activeElement（焦点让位守卫的依据）；happy-dom 的
@@ -207,10 +210,12 @@ describe('webhook trigger wizard · template var insertion', () => {
     extra.focus()
     fireEvent.focus(extra)
     extra.setSelectionRange(3, 3)
-    fireEvent.click(screen.getByTestId('wt-var-event_json'))
-    await waitFor(() => expect(extra.value).toBe('fix{{event_json}} bug'))
-    expect(instruction.value).toBe('{{repo_path}}')
-    await waitFor(() => expect(extra.selectionStart).toBe('fix{{event_json}}'.length))
+    fireEvent.click(screen.getByTestId('wt-var-trigger.webhook.event_json'))
+    await waitFor(() => expect(extra.value).toBe('fix{{trigger.webhook.event_json}} bug'))
+    expect(instruction.value).toBe('{{trigger.webhook.repo_path}}')
+    await waitFor(() =>
+      expect(extra.selectionStart).toBe('fix{{trigger.webhook.event_json}}'.length),
+    )
   })
 
   test('agent description: chips render and insert at the textarea caret', async () => {
@@ -222,9 +227,11 @@ describe('webhook trigger wizard · template var insertion', () => {
     fireEvent.change(description, { target: { value: 'Hello world' } })
     description.focus()
     description.setSelectionRange(5, 5)
-    fireEvent.click(screen.getByTestId('wt-var-event_json'))
-    await waitFor(() => expect(description.value).toBe('Hello{{event_json}} world'))
-    await waitFor(() => expect(description.selectionStart).toBe('Hello{{event_json}}'.length))
+    fireEvent.click(screen.getByTestId('wt-var-trigger.webhook.event_json'))
+    await waitFor(() => expect(description.value).toBe('Hello{{trigger.webhook.event_json}} world'))
+    await waitFor(() =>
+      expect(description.selectionStart).toBe('Hello{{trigger.webhook.event_json}}'.length),
+    )
   })
 
   test('workgroup goal: a selection range is replaced by the token', async () => {
@@ -236,8 +243,8 @@ describe('webhook trigger wizard · template var insertion', () => {
     fireEvent.change(goal, { target: { value: 'Goal text' } })
     goal.focus()
     goal.setSelectionRange(0, 4)
-    fireEvent.click(screen.getByTestId('wt-var-branch'))
-    await waitFor(() => expect(goal.value).toBe('{{branch}} text'))
+    fireEvent.click(screen.getByTestId('wt-var-trigger.webhook.branch'))
+    await waitFor(() => expect(goal.value).toBe('{{trigger.webhook.branch}} text'))
   })
 
   test('chips follow the selected event types (push-only hides MR vars, keeps URL vars)', async () => {
@@ -259,18 +266,18 @@ describe('webhook trigger wizard · template var insertion', () => {
     // RFC-263 改判：push = COMMON(14) + commit_sha + commit_before（原为 COMMON(6)
     // + commit_sha = 7）—— 补齐的 8 个 API 定位变量对每类事件都可用。
     expect(chips).toHaveLength(16)
-    expect(chips[0]!.getAttribute('data-testid')).toBe('wt-var-event_json')
-    expect(screen.getByTestId('wt-var-repo_http_url')).toBeTruthy()
-    expect(screen.getByTestId('wt-var-repo_ssh_url')).toBeTruthy()
-    expect(screen.getByTestId('wt-var-commit_sha')).toBeTruthy()
+    expect(chips[0]!.getAttribute('data-testid')).toBe('wt-var-trigger.webhook.event_json')
+    expect(screen.getByTestId('wt-var-trigger.webhook.repo_http_url')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-trigger.webhook.repo_ssh_url')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-trigger.webhook.commit_sha')).toBeTruthy()
     // RFC-263：API 定位组在 push 事件下同样可用（设 commit status / 建 MR 要用）
-    expect(screen.getByTestId('wt-var-project_id')).toBeTruthy()
-    expect(screen.getByTestId('wt-var-api_base_url')).toBeTruthy()
-    expect(screen.getByTestId('wt-var-commit_before')).toBeTruthy()
-    expect(screen.queryByTestId('wt-var-mr_iid')).toBeNull()
-    expect(screen.queryByTestId('wt-var-mr_title')).toBeNull()
+    expect(screen.getByTestId('wt-var-trigger.webhook.project_id')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-trigger.webhook.api_base_url')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-trigger.webhook.commit_before')).toBeTruthy()
+    expect(screen.queryByTestId('wt-var-trigger.webhook.mr_iid')).toBeNull()
+    expect(screen.queryByTestId('wt-var-trigger.webhook.mr_title')).toBeNull()
     // 评论专属变量在 push 事件下不出现
-    expect(screen.queryByTestId('wt-var-comment_thread_id')).toBeNull()
+    expect(screen.queryByTestId('wt-var-trigger.webhook.comment_thread_id')).toBeNull()
   })
 
   // RFC-263：note 事件下「回复到同一线程」的三件套必须都能点进提示词。
@@ -289,11 +296,13 @@ describe('webhook trigger wizard · template var insertion', () => {
     fireEvent.click(screen.getByTestId('wt-launch-kind-workgroup'))
     await screen.findByTestId('wt-goal')
     await screen.findAllByTestId(/^wt-var-/)
-    expect(screen.getByTestId('wt-var-comment_thread_id')).toBeTruthy()
-    expect(screen.getByTestId('wt-var-comment_id')).toBeTruthy()
-    expect(screen.getByTestId('wt-var-comment_position_json')).toBeTruthy()
-    expect(screen.getByTestId('wt-var-project_id')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-trigger.webhook.comment_thread_id')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-trigger.webhook.comment_id')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-trigger.webhook.comment_position_json')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-trigger.webhook.project_id')).toBeTruthy()
     // 变量说明挂在 chip 的 title 上（30 个变量光看名字认不全）
-    expect(screen.getByTestId('wt-var-comment_thread_id').getAttribute('title')).toBeTruthy()
+    expect(
+      screen.getByTestId('wt-var-trigger.webhook.comment_thread_id').getAttribute('title'),
+    ).toBeTruthy()
   })
 })

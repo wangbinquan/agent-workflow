@@ -46,7 +46,7 @@ import {
 import { isTaskActive } from '@/services/task'
 import { isProcessAlive, pidCommandContainsBinary } from '@/util/process'
 import { createLogger } from '@/util/log'
-import { WorkflowDefinitionSchema } from '@agent-workflow/shared'
+import { WorkflowDefinitionSchema, migrateWorkflowDefinitionToLatest } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { DAEMON_CADENCE } from './daemonCadence'
 
@@ -280,7 +280,7 @@ async function loadTaskDefinition(
   if (typeof snapshot !== 'string' || snapshot.length === 0) return null
   try {
     const parsed = WorkflowDefinitionSchema.safeParse(JSON.parse(snapshot))
-    return parsed.success ? parsed.data : null
+    return parsed.success ? migrateWorkflowDefinitionToLatest(parsed.data) : null
   } catch {
     return null
   }

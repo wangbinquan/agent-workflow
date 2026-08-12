@@ -18,8 +18,13 @@ import type {
   CodeHostRequestBinding,
   CodeHostTemplateContext,
   CodeHostTransform,
+  TriggerContext,
+  WebhookTemplateVar,
 } from '@agent-workflow/shared'
 import {
+  CODE_HOST_BODY_MAX,
+  CODE_HOST_PARAM_MAX,
+  CODE_HOST_PATH_MAX,
   CODE_HOST_MR_STATE_MAP,
   CODE_HOST_STATUS_STATE_MAP,
   codeHostActionDef,
@@ -29,6 +34,9 @@ import {
   INTENT_REDACTED,
   isCodeHostAction,
   isUnsupportedBinding,
+  extractCodeHostVars,
+  evaluateTriggerDependencies,
+  TriggerContextSchema,
   renderCodeHostJsonBody,
   renderCodeHostTemplate,
 } from '@agent-workflow/shared'
@@ -92,7 +100,11 @@ function isTextualContentType(raw: string | null): boolean {
   )
 }
 
-function fail(code: CodeHostFailureCode, summary: string, message = summary): CodeHostCallOutcome {
+function fail(
+  code: CodeHostFailureCode,
+  summary: string,
+  message = summary,
+): Extract<CodeHostCallOutcome, { ok: false }> {
   return { ok: false, code, summary, message }
 }
 
@@ -226,6 +238,88 @@ interface AssembledRequest {
   followRedirectStripAuth: boolean
 }
 
+function templateTextsOf(spec: CodeHostCallSpec): string[] {
+  const out = Object.values(spec.params)
+  if (spec.action === 'custom' && spec.request !== undefined) {
+    out.push(spec.request.path, ...Object.values(spec.request.query ?? {}))
+    if (spec.request.body !== undefined) out.push(spec.request.body)
+  }
+  return out
+}
+
+/** Defense in depth for direct executor callers; launch preflight runs earlier. */
+function codeHostTriggerPreflight(
+  spec: CodeHostCallSpec,
+  context: TriggerContext | null,
+): Extract<CodeHostCallOutcome, { ok: false }> | null {
+  const fields = new Set<WebhookTemplateVar>()
+  for (const text of templateTextsOf(spec)) {
+    for (const ref of extractCodeHostVars(text)) {
+      if (ref.kind === 'invalid') {
+        return fail('code-host-param-invalid', 'code-host template contains an invalid reference')
+      }
+      if (ref.kind === 'trigger') fields.add(ref.name)
+    }
+  }
+  if (fields.size === 0) return null
+  if (context === null) {
+    return fail('trigger-context-missing', 'code-host call requires webhook trigger context')
+  }
+  const parsed = TriggerContextSchema.safeParse(context)
+  if (!parsed.success) {
+    return fail('trigger-context-invalid', 'the frozen task trigger context is invalid')
+  }
+  const dependencies = [...fields].map((field) => ({
+    field,
+    nodeId: 'code-host-call',
+    pointer: '/runtime/code-host-call',
+  }))
+  const issue = evaluateTriggerDependencies(dependencies, {
+    kind: 'context',
+    value: parsed.data,
+  })[0]
+  if (issue?.code === 'trigger-field-unavailable') {
+    return fail(issue.code, 'a code-host trigger field is unavailable for this event')
+  }
+  return null
+}
+
+function assembledLimitFailure(
+  assembled: AssembledRequest,
+): Extract<CodeHostCallOutcome, { ok: false }> | null {
+  let encodedPathLength = assembled.path.length
+  try {
+    encodedPathLength = new URL(`https://code-host-limit.invalid${assembled.path}`).pathname.length
+  } catch {
+    // URL construction below owns the structural error. Retain the raw length
+    // here so this guard never turns an invalid URL into a size-only verdict.
+  }
+  if (encodedPathLength > CODE_HOST_PATH_MAX) {
+    return fail('code-host-path-invalid', 'the rendered request path exceeds the allowed size')
+  }
+  for (const value of Object.values(assembled.query)) {
+    const encoded = new URLSearchParams([['v', value]]).toString().slice(2)
+    if (encoded.length > CODE_HOST_PARAM_MAX) {
+      return fail(
+        'code-host-param-invalid',
+        'a rendered request parameter exceeds the allowed size',
+      )
+    }
+  }
+  if (assembled.body !== undefined) {
+    let serialized: string
+    try {
+      serialized = JSON.stringify(assembled.body)
+    } catch {
+      return fail('code-host-body-invalid', 'the rendered request body cannot be serialized')
+    }
+    if (new TextEncoder().encode(serialized).byteLength > CODE_HOST_BODY_MAX) {
+      return fail('code-host-body-invalid', 'the rendered request body exceeds the allowed size')
+    }
+  }
+  return null
+}
+
 /**
  * 显式填写的 project 定位段的编码。
  *
@@ -247,6 +341,9 @@ function renderField(
 ): { value: string; triggerMissing: boolean } {
   const template = spec.params[field] ?? ''
   const rendered = renderCodeHostTemplate(template, deps.ctx, encoding)
+  if (rendered.invalidRefs.length > 0) {
+    throw new ParamError('code-host-param-invalid', `'${field}' contains an invalid template ref`)
+  }
   return { value: rendered.value, triggerMissing: rendered.triggerMissing }
 }
 
@@ -263,16 +360,16 @@ function assembleFromBinding(
     const { value, triggerMissing } = renderField(spec, deps, field, 'raw')
     if (value.length > 0) continue
     if (triggerMissing) {
-      throw new ParamError(
-        'code-host-trigger-context-missing',
-        `'${field}' resolves from {{trigger.*}}, but this task was not started by a webhook`,
-      )
+      throw new ParamError('trigger-context-missing', `'${field}' requires webhook trigger context`)
     }
     throw new ParamError('code-host-param-missing', `required field '${field}' is empty`)
   }
 
   // project：显式值优先；留空则用任务仓库推导出的定位段。
   const explicitProject = renderCodeHostTemplate(spec.params.project ?? '', deps.ctx, 'raw')
+  if (explicitProject.invalidRefs.length > 0) {
+    throw new ParamError('code-host-param-invalid', "'project' contains an invalid template ref")
+  }
   let project: string
   if (explicitProject.value.length > 0) {
     project = encodeProjectLocator(explicitProject.value, provider)
@@ -370,10 +467,21 @@ function assembleCustom(spec: CodeHostCallSpec, deps: CodeHostCallDeps): Assembl
   if (pathIssue !== null) {
     throw new ParamError('code-host-path-invalid', `request path rejected (${pathIssue})`)
   }
-  const path = renderCodeHostTemplate(request.path, deps.ctx, 'path').value
+  const pathRender = renderCodeHostTemplate(request.path, deps.ctx, 'path')
+  if (pathRender.invalidRefs.length > 0) {
+    throw new ParamError('code-host-param-invalid', 'request path contains an invalid template ref')
+  }
+  const path = pathRender.value
   const query: Record<string, string> = {}
   for (const [key, template] of Object.entries(request.query ?? {})) {
-    query[key] = renderCodeHostTemplate(template, deps.ctx, 'raw').value
+    const rendered = renderCodeHostTemplate(template, deps.ctx, 'raw')
+    if (rendered.invalidRefs.length > 0) {
+      throw new ParamError(
+        'code-host-param-invalid',
+        `query field '${key}' contains an invalid template ref`,
+      )
+    }
+    query[key] = rendered.value
   }
   let body: unknown
   if (request.body !== undefined && request.body.trim().length > 0) {
@@ -444,6 +552,8 @@ export async function executeCodeHostCall(
   spec: CodeHostCallSpec,
   deps: CodeHostCallDeps,
 ): Promise<CodeHostCallOutcome> {
+  const triggerPreflight = codeHostTriggerPreflight(spec, deps.ctx.triggerContext ?? null)
+  if (triggerPreflight !== null) return triggerPreflight
   if (!isCodeHostAction(spec.action)) {
     return fail('code-host-param-invalid', `unknown action '${spec.action}'`)
   }
@@ -519,6 +629,8 @@ async function executeAssembledRequest(
   deps: CodeHostCallDeps,
   assembled: AssembledRequest,
 ): Promise<ExecutedRequest> {
+  const limitFailure = assembledLimitFailure(assembled)
+  if (limitFailure !== null) return { outcome: limitFailure }
   const built = buildCodeHostUrl(deps.connection.baseUrl, assembled.path, assembled.query)
   if (!built.ok) {
     return {

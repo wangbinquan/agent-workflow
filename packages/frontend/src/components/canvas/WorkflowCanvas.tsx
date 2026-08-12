@@ -64,6 +64,7 @@ import {
   isWrapperKind,
   lensIsTransparent,
   privilegedProjectionChange,
+  WORKFLOW_SCHEMA_VERSION,
   type WorkflowByRef,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
@@ -4250,7 +4251,7 @@ export const __testToFlowNodes = (
   callNavs?: Record<string, CallNodeNavKind>,
 ): Node[] => {
   const def: WorkflowDefinition = {
-    $schema_version: 1,
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
     inputs: [],
     nodes: defNodes,
     edges,

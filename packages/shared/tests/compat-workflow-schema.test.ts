@@ -1,5 +1,5 @@
 // RFC-054 W3-3 — compatibility matrix for workflow $schema_version values
-// 1 / 2 / 3. Every historical version MUST still parse cleanly through the
+// 1 / 2 / 3 / 4 / 5. Every historical version MUST still parse cleanly through the
 // current `WorkflowDefinitionSchema` so a daemon upgrade never bricks a
 // user's existing workflows.
 //
@@ -8,6 +8,7 @@
 //   * v2 (RFC-005) — adds 'review' node kind.
 //   * v3 (RFC-023) — adds 'clarify' node kind.
 //   * v4 (RFC-056) — adds 'clarify-cross-agent' node kind.
+//   * v5 (RFC-292) — canonical `trigger.webhook.<field>` template namespace.
 //
 // Why fixture files vs. inline literals: the fixture format IS the
 // migration contract. Committing the artifacts means future engineers see
@@ -31,7 +32,7 @@ const FIXTURES_DIR = join(HERE, 'fixtures', 'workflow-schema-versions')
 
 interface Fixture {
   filename: string
-  schemaVersion: 1 | 2 | 3 | 4
+  schemaVersion: 1 | 2 | 3 | 4 | 5
   raw: unknown
 }
 
@@ -40,10 +41,10 @@ function loadFixtures(): Fixture[] {
   return files.map((filename) => {
     const raw = JSON.parse(readFileSync(join(FIXTURES_DIR, filename), 'utf-8'))
     const v = (raw as { $schema_version: number }).$schema_version
-    if (v !== 1 && v !== 2 && v !== 3 && v !== 4) {
+    if (v !== 1 && v !== 2 && v !== 3 && v !== 4 && v !== 5) {
       throw new Error(`fixture ${filename}: unexpected $schema_version ${v}`)
     }
-    return { filename, schemaVersion: v as 1 | 2 | 3 | 4, raw }
+    return { filename, schemaVersion: v as 1 | 2 | 3 | 4 | 5, raw }
   })
 }
 
@@ -97,6 +98,12 @@ describe('RFC-054 W3-3 — workflow schema version compatibility matrix', () => 
     const parsed = WorkflowDefinitionSchema.parse(v4.raw)
     const crossNodes = parsed.nodes.filter((n) => n.kind === 'clarify-cross-agent')
     expect(crossNodes.length).toBeGreaterThan(0)
+  })
+
+  test('v5 fixture surfaces the canonical webhook trigger namespace (RFC-292 invariant)', () => {
+    const v5 = fixtures.find((f) => f.schemaVersion === 5)!
+    const parsed = WorkflowDefinitionSchema.parse(v5.raw)
+    expect(JSON.stringify(parsed)).toContain('{{trigger.webhook.comment_text}}')
   })
 
   test('current schema version constant matches highest supported', () => {

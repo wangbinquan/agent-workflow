@@ -17,12 +17,14 @@ import type {
   WorkgroupRevision,
   WorkgroupSnapshotHash,
   WorkflowDetail,
+  WorkflowDefinition,
   WorkflowDraftSnapshot,
 } from '@agent-workflow/shared'
 import {
   WorkgroupDraftSnapshotSchema,
   WorkgroupRevisionSchema,
   WG_CLARIFY_BUDGET_DEFAULT,
+  WORKFLOW_SCHEMA_VERSION,
   resolveWorkgroupOutputContract,
   serializeWorkgroupEditableSnapshotV1,
 } from '@agent-workflow/shared'
@@ -312,8 +314,8 @@ const DEFAULT_TRANSPORT = {
   },
 }
 
-const EMPTY_WORKFLOW_DEFINITION = {
-  $schema_version: 4 as const,
+const EMPTY_WORKFLOW_DEFINITION: WorkflowDefinition = {
+  $schema_version: WORKFLOW_SCHEMA_VERSION,
   inputs: [],
   nodes: [],
   edges: [],

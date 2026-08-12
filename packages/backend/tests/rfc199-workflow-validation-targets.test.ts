@@ -215,8 +215,9 @@ describe('RFC-199 strict workflow validation targets', () => {
     // node-field target, same family as the duplicate/path-kind pair.
     // RFC-269 显式改判：代码平台调用节点新增 12 条 issue emission（provider /
     // action / 支持性 / 必填 / 枚举 / 自定义请求四条 / 变量域 / strict schema），
-    // 全部带 node 级 strict target ⇒ 130 → 142。
-    expect(emissions).toHaveLength(142)
+    // 全部带 node 级 strict target ⇒ 130 → 142。RFC-292 再为 agent/workgroup
+    // 与 review template 的 invalid-ref 分支增加 2 条 strict emission ⇒ 144。
+    expect(emissions).toHaveLength(144)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

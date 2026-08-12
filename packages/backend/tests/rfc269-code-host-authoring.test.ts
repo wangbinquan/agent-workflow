@@ -106,9 +106,9 @@ describe('RFC-269 校验规则', () => {
       'code-host-var-unknown',
     )
     // 合法的 trigger 变量不报
-    expect(codesFor([call({ params: { mr: '{{trigger.mr_iid}}', body: 'x' } })])).not.toContain(
-      'code-host-var-unknown',
-    )
+    expect(
+      codesFor([call({ params: { mr: '{{trigger.webhook.mr_iid}}', body: 'x' } })]),
+    ).not.toContain('code-host-var-unknown')
   })
 
   test('**不**校验多仓与「工作流是否真有触发器」（design D24 与仓数是启动参数）', () => {

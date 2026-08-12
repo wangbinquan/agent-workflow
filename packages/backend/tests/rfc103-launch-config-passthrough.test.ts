@@ -130,8 +130,10 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // 第 8 个逻辑入口（JSON）经工厂覆盖。tasks.ts 剩 6 个解析点：multipart
     // 在任何副作用前解析一次并由 fail/success 两个 startTask 分支复用同一
     // launchRuntime，另有 resume / retry / repair-options / repair / sync-workflow。
+    // RFC-292 的 multipart preflight deps 与 fail/success 两个 launch 分支
+    // 共用同一份 launchRuntime，因此这里有三个 spread、仍只有一次解析。
     expect(calls.length).toBe(6)
-    expect(routesSrc.match(/\.\.\.launchRuntime,/g)).toHaveLength(2)
+    expect(routesSrc.match(/\.\.\.launchRuntime,/g)).toHaveLength(3)
     // JSON 入口的运行时配置由 buildStartTaskDeps 携带（数据路径不变）。
     const depsSrc = readFileSync(join(import.meta.dir, '../src/services/startTaskDeps.ts'), 'utf8')
     expect(depsSrc).toContain('resolveLaunchRuntimeConfig(configPath)')

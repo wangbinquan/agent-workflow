@@ -2649,6 +2649,7 @@ export interface Resources {
       target: string
       targetPlaceholder: string
       executionSpace: string
+      workingBranchTemplateHint: string
       scratchNotice: string
       inputMappings: string
       inputMappingsHint: string
@@ -3919,6 +3920,8 @@ export interface Resources {
     sectionTechnical: string
     missingRefsLabel: string
     missingRefsHint: string
+    invalidRefsLabel: string
+    invalidRefsHint: string
     // RFC-023 clarify node inspector
     fieldClarifyDescription: string
     fieldClarifyDescriptionHint: string
@@ -3963,6 +3966,8 @@ export interface Resources {
     mockTitle: string
     noPorts: string
     assembledTitle: string
+    webhookSample: string
+    webhookSampleHint: string
   }
   kindSelect: {
     baseLabel: string
@@ -4811,6 +4816,12 @@ export interface Resources {
     method: string
     path: string
     pathHint: string
+    query: string
+    queryHint: string
+    queryKey: string
+    queryValue: string
+    addQuery: string
+    removeQuery: string
     body: string
     bodyHint: string
     allowDestructive: string
@@ -5771,7 +5782,7 @@ export const zhCN: Resources = {
     previewCanvasDialogTitle: '工作流节点图预览',
     previewCanvasHint: '拖动画布查看完整结构，使用左下角控件缩放或适应窗口。',
     previewCanvasUnavailable: '画布预览不可用（定义未通过本地校验），请查看原始 JSON。',
-    previewPromptDiff: '节点提示词变更',
+    previewPromptDiff: '工作流模板变更',
     previewMembers: '成员（{{count}}）',
     previewLeader: '组长',
     previewHumanPlaceholder: '人类占位',
@@ -8317,6 +8328,7 @@ export const zhCN: Resources = {
       target: '目标',
       targetPlaceholder: '选择目标',
       executionSpace: '执行空间',
+      workingBranchTemplateHint: '可使用下方 webhook trigger 变量；渲染结果仍须是合法分支名。',
       scratchNotice:
         '每次触发都会创建新的空白 Git 仓库；事件仓不会被拉取，事件分支也不会作为检出 ref。',
       inputMappings: '输入映射',
@@ -8677,6 +8689,9 @@ export const zhCN: Resources = {
       'code-host-project-unresolved': '无法从任务推导出目标项目，请在节点上显式填写。',
       'code-host-param-missing': '必填参数为空。',
       'code-host-param-invalid': '参数取值不合法。',
+      'trigger-context-missing': '工作流引用了 webhook 触发数据，但该任务没有 webhook 触发上下文。',
+      'trigger-context-invalid': '任务冻结的 webhook 触发上下文已损坏，无法安全使用。',
+      'trigger-field-unavailable': '工作流引用的 webhook 字段不适用于当前事件类型。',
       'code-host-trigger-context-missing':
         '节点引用了 webhook 触发上下文，但该任务不是由 webhook 启动的。',
       'code-host-body-invalid': '渲染后的请求体不是合法 JSON。',
@@ -9694,6 +9709,8 @@ export const zhCN: Resources = {
     sectionTechnical: '技术信息',
     missingRefsLabel: '模板引用但未连入：',
     missingRefsHint: '这些端口名出现在 prompt 模板里但还没有上游边；启动 task 时会被静态校验拦下。',
+    invalidRefsLabel: '无效模板引用：',
+    invalidRefsHint: '请改用合法本地端口或 trigger.webhook.<field>；无效引用会阻止保存或启动。',
     fieldClarifyDescription: '说明',
     fieldClarifyDescriptionHint: '可选；只对作者展示，不影响运行期。',
     fieldClarifyLinkedAgent: '已挂接到 agent',
@@ -9735,6 +9752,8 @@ export const zhCN: Resources = {
     mockTitle: '模拟端口值',
     noPorts: '没有入边端口。增加一条入边后此处会列出。',
     assembledTitle: '拼好的 prompt',
+    webhookSample: '使用示例 Webhook 上下文',
+    webhookSampleHint: '示例值是确定性的占位内容；关闭后可预览缺少 trigger context 的阻断结果。',
   },
   kindSelect: {
     baseLabel: '输出类型',
@@ -10522,7 +10541,7 @@ export const zhCN: Resources = {
       '留空则使用当前任务的仓库。GitLab 可填 namespace/path 或数字 ID；GitHub 填 owner/repo。',
     thread: 'GitLab 填 discussion ID；GitHub 填 PR 行内评审讨论的顶层评论 ID，不能填子回复 ID。',
     comment: 'GitLab 填普通 MR note ID；GitHub 填 comment ID，并下方选择普通或行内评论。',
-    position: '直接填 {{trigger.comment_position_json}} 即可原样回传。',
+    position: '使用 trigger.webhook.comment_position_json 即可原样回传。',
     labels: '逗号分隔。',
     assignees: '逗号分隔。GitLab 需要用户数字 ID，GitHub 需要登录名。',
     workflow: 'GitHub 的 workflow_dispatch 工作流文件名（如 ci.yml）或数字 ID。',
@@ -10585,6 +10604,12 @@ export const zhCN: Resources = {
     method: '方法',
     path: '相对路径',
     pathHint: '拼在所配 base URL 之后，必须以 / 开头，不能是绝对 URL',
+    query: '查询参数',
+    queryHint: '参数名是固定文本；参数值可使用上游端口或 webhook trigger 变量。',
+    queryKey: '查询参数名',
+    queryValue: '查询参数 {{key}} 的值',
+    addQuery: '添加查询参数',
+    removeQuery: '删除查询参数 {{key}}',
     body: '请求体（JSON）',
     bodyHint: '变量只能写在 JSON 字符串里，这样上游内容改不了请求结构',
     allowDestructive: '允许 DELETE 请求',
@@ -10727,6 +10752,7 @@ export const zhCN: Resources = {
       'multiple-aggregators-in-fanout': '一个扇出包装器最多只能有一个聚合代理。',
       'node-id-duplicate': '工作流内的节点 id 必须唯一。',
       'prompt-template-deprecated-token': '提示词引用了已废弃的模板变量（会渲染为空）。',
+      'prompt-template-invalid-ref': '模板包含格式错误、未知或旧版引用。',
       'prompt-template-unresolved': '提示词引用的模板变量没有对应的入边端口。',
       'review-input-list-item-not-markdown': '评审节点的列表输入元素类型必须是 markdown。',
       'review-input-edge-conflict': '评审节点只能接收一条输入边。',

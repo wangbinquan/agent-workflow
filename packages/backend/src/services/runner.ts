@@ -29,6 +29,7 @@ import type {
   Plugin,
   PriorOutputUpdateContext,
   ReviewPromptContext,
+  TriggerContext,
 } from '@agent-workflow/shared'
 import {
   DAEMON_SHUTDOWN_ABORT_REASON,
@@ -166,6 +167,8 @@ export interface RunNodeOptions {
    * reinterpreted as workflow-template variables.
    */
   expandPromptTemplate?: boolean
+  /** RFC-292 frozen launch context; null is an explicit non-webhook task. */
+  triggerContext?: TriggerContext | null
   /**
    * RFC-005 review-driven re-run context. When the scheduler is re-running an
    * upstream node after a downstream review's reject/iterate decision, this
@@ -738,6 +741,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         })
       : renderUserPrompt({
           promptTemplate: opts.promptTemplate,
+          triggerContext: opts.triggerContext ?? null,
           ...(opts.expandPromptTemplate !== undefined
             ? { expandPromptTemplate: opts.expandPromptTemplate }
             : {}),

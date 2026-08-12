@@ -12,7 +12,13 @@ import {
   type WorkflowNode,
 } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
+import { useRef } from 'react'
 import { Field, Switch, TextArea } from '@/components/Form'
+import {
+  applyTemplateVarInsertion,
+  TemplateVarChips,
+  WebhookTriggerVarChips,
+} from '@/components/TemplateVarChips'
 import { MultiSelect } from '@/components/MultiSelect'
 import { NoticeBanner, type NoticeBannerTone } from '@/components/NoticeBanner'
 import { Select } from '@/components/Select'
@@ -27,6 +33,7 @@ import {
 import { NodeTitleField } from './NodeTitleField'
 import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 import { InspectorSection } from './InspectorSection'
+import { MissingRefList } from './promptRefs'
 import type { EditProps } from './types'
 
 interface ReviewSourcePort {
@@ -97,6 +104,7 @@ export function ReviewEdit({
     typeof rec.rollbackFilesOnIterate === 'boolean' ? rec.rollbackFilesOnIterate : false
   const commentInjectTemplate =
     typeof rec.commentInjectTemplate === 'string' ? rec.commentInjectTemplate : ''
+  const commentTemplateRef = useRef<HTMLTextAreaElement | null>(null)
 
   // Review input is not an arbitrary edge: runtime snapshots exactly one
   // agent output declared as markdownish. Keep invalid nodes/ports visible
@@ -482,9 +490,35 @@ export function ReviewEdit({
               value={commentInjectTemplate}
               rows={3}
               onChange={(v) => patchReview({ commentInjectTemplate: v }, commentTemplateMeta)}
+              textareaRef={commentTemplateRef}
               placeholder=""
             />
           </InspectorHistoryBoundary>
+          <TemplateVarChips
+            vars={['__review_comments__']}
+            label={t('inspector.fieldReviewCommentTemplateHint')}
+            onInsert={(token) =>
+              applyTemplateVarInsertion(
+                commentTemplateRef.current,
+                commentInjectTemplate,
+                token,
+                (next) => patchReview({ commentInjectTemplate: next }, commentTemplateMeta),
+              )
+            }
+            testidPrefix="review-builtin-var"
+          />
+          <WebhookTriggerVarChips
+            onInsert={(token) =>
+              applyTemplateVarInsertion(
+                commentTemplateRef.current,
+                commentInjectTemplate,
+                token,
+                (next) => patchReview({ commentInjectTemplate: next }, commentTemplateMeta),
+              )
+            }
+            testidPrefix="review-trigger-var"
+          />
+          <MissingRefList template={commentInjectTemplate} inputPorts={['__review_comments__']} />
         </Field>
       </InspectorSection>
     </div>

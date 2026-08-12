@@ -355,7 +355,7 @@ unrelated parts of the same workflow.
   provider: gitlab # gitlab | github
   action: comment.create # key from the shared action registry
   params:
-    mr: '{{trigger.mr_iid}}'
+    mr: '{{trigger.webhook.mr_iid}}'
     body: |
       Audit found {{findings}}.
   timeoutMs: 30000
@@ -368,9 +368,12 @@ and token an administrator configured in settings — no agent, no model, no
 subprocess, and that token never enters a prompt or a port. Fixed output ports
 are `response` (raw body) and `status` (HTTP status code); the node declares no
 input ports. Every `params` value is a template: `{{port_name}}` reads an inbound
-edge's port and `{{trigger.<var>}}` reads the webhook event that started the task
-(no edge needed). Leaving `project` empty targets the task's own repository. A
-non-2xx response fails the node.
+edge's port and `{{trigger.webhook.<field>}}` reads the webhook event that started
+the task (no edge needed). The same canonical trigger namespace is available in
+agent prompts, call-workgroup goals and review comment templates; these values are
+execution context and must not be copied into workflow root `inputs[]`. Leaving
+`project` empty targets the task's own repository. A non-2xx response fails the
+node.
 
 `action: custom` is the escape hatch and its `request` is stricter than it looks:
 `path` must start with a single `/`, is relative to the configured base URL (no

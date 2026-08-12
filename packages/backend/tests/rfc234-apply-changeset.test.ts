@@ -12,7 +12,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { ROLE_PERMISSIONS, canonicalIntentJson, parseIntentChangeset } from '@agent-workflow/shared'
+import {
+  ROLE_PERMISSIONS,
+  WORKFLOW_SCHEMA_VERSION,
+  canonicalIntentJson,
+  parseIntentChangeset,
+} from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
@@ -194,7 +199,7 @@ function fullBundle(existingAgentId: string, pluginSpec: string): unknown {
           name: 'audit-flow',
           description: '',
           definition: {
-            $schema_version: 4,
+            $schema_version: WORKFLOW_SCHEMA_VERSION,
             inputs: [],
             nodes: [
               { id: 'n1', kind: 'agent-single', agentRef: '$new:auditor', promptTemplate: 'go' },
@@ -656,7 +661,7 @@ describe('applyIntentChangeset', () => {
               name: 'bad-edge-flow',
               description: '',
               definition: {
-                $schema_version: 4,
+                $schema_version: WORKFLOW_SCHEMA_VERSION,
                 inputs: [],
                 nodes: [{ id: 'n1', kind: 'output' }],
                 edges: [{ id: 'e1' }],
@@ -755,7 +760,12 @@ describe('intent create path enforces call-ref visibility (RFC-243 §5.3)', () =
       id,
       name,
       description: '',
-      definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
+      definition: JSON.stringify({
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
+        inputs: [],
+        nodes: [],
+        edges: [],
+      }),
       version: 1,
       ownerUserId,
       visibility,
@@ -799,7 +809,12 @@ describe('intent create path enforces call-ref visibility (RFC-243 §5.3)', () =
           payload: {
             name: 'caller-flow',
             description: '',
-            definition: { $schema_version: 4, inputs: [], nodes: [node], edges: [] },
+            definition: {
+              $schema_version: WORKFLOW_SCHEMA_VERSION,
+              inputs: [],
+              nodes: [node],
+              edges: [],
+            },
           },
         },
       ],
@@ -905,7 +920,12 @@ describe('call-ref fence is order-independent (RFC-243 §5.3)', () => {
       id: ulid(),
       name,
       description: '',
-      definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
+      definition: JSON.stringify({
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
+        inputs: [],
+        nodes: [],
+        edges: [],
+      }),
       version: 1,
       ownerUserId: OTHER2,
       visibility: 'private',
@@ -927,7 +947,7 @@ describe('call-ref fence is order-independent (RFC-243 §5.3)', () => {
         name: 'caller-flow',
         description: '',
         definition: {
-          $schema_version: 4,
+          $schema_version: WORKFLOW_SCHEMA_VERSION,
           inputs: [],
           nodes: [{ id: 'n1', kind: 'call-workflow', workflowName: 'child-flow' }],
           edges: [],
@@ -942,7 +962,7 @@ describe('call-ref fence is order-independent (RFC-243 §5.3)', () => {
       payload: {
         name: 'child-flow',
         description: '',
-        definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
+        definition: { $schema_version: WORKFLOW_SCHEMA_VERSION, inputs: [], nodes: [], edges: [] },
       },
     }
     return { $schema_version: 1, ops: callerFirst ? [caller, child] : [child, caller] }
@@ -1000,7 +1020,7 @@ describe('call-ref fence is order-independent (RFC-243 §5.3)', () => {
               name: 'caller-flow',
               description: '',
               definition: {
-                $schema_version: 4,
+                $schema_version: WORKFLOW_SCHEMA_VERSION,
                 inputs: [],
                 nodes: [{ id: 'n1', kind: 'call-workflow', workflowName: 'someone-elses-flow' }],
                 edges: [],
@@ -1040,7 +1060,7 @@ describe('call-ref fence is order-independent (RFC-243 §5.3)', () => {
               name: 'caller-flow',
               description: '',
               definition: {
-                $schema_version: 4,
+                $schema_version: WORKFLOW_SCHEMA_VERSION,
                 inputs: [],
                 nodes: [{ id: 'n1', kind: 'call-workflow', workflowName: 'secret-name' }],
                 edges: [],
@@ -1081,7 +1101,7 @@ describe('call-ref fence is order-independent (RFC-243 §5.3)', () => {
               name: 'caller-flow',
               description: '',
               definition: {
-                $schema_version: 4,
+                $schema_version: WORKFLOW_SCHEMA_VERSION,
                 inputs: [],
                 nodes: [
                   { id: 'n1', kind: 'call-workflow', workflowName: 'nested-target' },
@@ -1153,7 +1173,12 @@ describe('call-ref fence: workgroup half, grants and admin bypass', () => {
       id,
       name,
       description: '',
-      definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
+      definition: JSON.stringify({
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
+        inputs: [],
+        nodes: [],
+        edges: [],
+      }),
       version: 1,
       ownerUserId,
       visibility: 'private',
@@ -1176,7 +1201,12 @@ describe('call-ref fence: workgroup half, grants and admin bypass', () => {
           payload: {
             name: 'caller-flow',
             description: '',
-            definition: { $schema_version: 4, inputs: [], nodes: [node], edges: [] },
+            definition: {
+              $schema_version: WORKFLOW_SCHEMA_VERSION,
+              inputs: [],
+              nodes: [node],
+              edges: [],
+            },
           },
         },
       ],
@@ -1216,7 +1246,7 @@ describe('call-ref fence: workgroup half, grants and admin bypass', () => {
           name: 'caller-flow',
           description: '',
           definition: {
-            $schema_version: 4,
+            $schema_version: WORKFLOW_SCHEMA_VERSION,
             inputs: [],
             nodes: [wgNode('squad')],
             edges: [],

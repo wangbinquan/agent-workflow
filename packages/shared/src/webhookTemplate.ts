@@ -1,8 +1,9 @@
 // RFC-257 — 模板变量的纯函数面（保存期静态校验 + 运行期渲染，前后端共用）。
 // 语义（design §4.2）：保存期严格 —— 模板引用变量必须 ⊆ 所选事件类型的交集
-// 可用集；运行期宽松 —— 已声明变量缺值渲染为空串。{{event_json}} 按注入面
-// 上限截断（agent description / workgroup goal / inputs 值均为 65536 字符上限，
-// 256KiB 原文塞进任何注入面都必 422 —— 设计门 F-10）。
+// 可用集；运行期宽松 —— 已声明变量缺值渲染为空串。
+// {{trigger.webhook.event_json}} 在 source adapter 处固定截断为 32 KiB；每个
+// 最终 launch surface 仍由自己的 schema/branch gate 校验，不能用 source 上限
+// 代替 sink 上限。
 import type {
   CodeHostEvent,
   CodeHostEventType,
@@ -12,16 +13,17 @@ import type {
 } from './schemas/webhook'
 import {
   WEBHOOK_EVENT_VAR_MATRIX,
-  WEBHOOK_TEMPLATE_VARS,
   WebhookAgentPayloadTemplateSchema,
   WebhookWorkflowPayloadTemplateSchema,
   WebhookWorkgroupPayloadTemplateSchema,
 } from './schemas/webhook'
+import { extractTemplateRefs, renderTemplateRefs, webhookTriggerToken } from './templateRef'
+import { isWebhookTriggerField, type TriggerContext } from './triggerContext'
 
-/** {{event_json}} 的截断上限（字符）。< 65536 的注入面上限，留出模板其余文字余量。 */
+/** {{trigger.webhook.event_json}} 的截断上限（字符）。< 65536 的注入面上限，留出模板其余文字余量。 */
 export const EVENT_JSON_VAR_MAX_CHARS = 32 * 1024
 
-/** RFC-263：{{comment_position_json}} 的上限。position 对象只有十来个键，8 KiB 是宽裕的防御值。 */
+/** RFC-263/292：{{trigger.webhook.comment_position_json}} 的上限。position 对象只有十来个键，8 KiB 是宽裕的防御值。 */
 export const COMMENT_POSITION_JSON_MAX_CHARS = 8 * 1024
 
 /**
@@ -42,9 +44,6 @@ function positionJsonOf(position: unknown): string {
   return json.length > COMMENT_POSITION_JSON_MAX_CHARS ? '' : json
 }
 
-const VAR_RE = /\{\{\s*([a-z_]+)\s*\}\}/g
-const KNOWN_VARS: ReadonlySet<string> = new Set(WEBHOOK_TEMPLATE_VARS)
-
 /** 提取模板里引用的变量名，known/unknown 分开（unknown → 保存期拒绝）。 */
 export function extractTemplateVars(text: string): {
   known: WebhookTemplateVar[]
@@ -52,10 +51,10 @@ export function extractTemplateVars(text: string): {
 } {
   const known = new Set<WebhookTemplateVar>()
   const unknown = new Set<string>()
-  for (const m of text.matchAll(VAR_RE)) {
-    const name = m[1]!
-    if (KNOWN_VARS.has(name)) known.add(name as WebhookTemplateVar)
-    else unknown.add(name)
+  for (const ref of extractTemplateRefs(text)) {
+    if (ref.kind === 'trigger') known.add(ref.field)
+    else if (ref.kind === 'local') unknown.add(ref.name)
+    else unknown.add(ref.raw)
   }
   return { known: [...known], unknown: [...unknown] }
 }
@@ -119,14 +118,127 @@ export function eventVarsOf(event: CodeHostEvent): Record<WebhookTemplateVar, st
 }
 
 /**
- * 渲染一段模板。表里没有的变量名渲染为空串（防御——保存期已把 unknown 拒掉，
- * 这里兜运行期的枚举演进偏差）。字面 `{{` 不构成合法变量引用时原样保留。
+ * 渲染一段 v2 模板。只从完整嵌套 TriggerContext 读取 canonical trigger ref；
+ * 事件适用但值缺失时为空串，unknown/legacy/malformed ref fail-closed。普通未闭合
+ * 的非 trigger 文本仍按 scanner 的字面规则保留。
  */
-export function renderTemplate(text: string, vars: Readonly<Record<string, string>>): string {
-  return text.replace(VAR_RE, (whole, name: string) => {
-    void whole
-    return Object.prototype.hasOwnProperty.call(vars, name) ? vars[name]! : ''
+export function renderTemplate(text: string, context: TriggerContext): string {
+  const rendered = renderTemplateRefs(text, (ref) => {
+    if (ref.kind !== 'trigger') return ''
+    return context.trigger.webhook[ref.field] ?? ''
   })
+  if (rendered.invalid.length > 0) {
+    throw new Error(`invalid webhook template ref: ${rendered.invalid[0]!.reason}`)
+  }
+  return rendered.value
+}
+
+export interface WebhookTemplateSurface {
+  readonly launchKind: WebhookLaunchKind
+  readonly pointer: string
+  readonly text: string
+}
+
+function pointerPart(value: string): string {
+  return value.replaceAll('~', '~0').replaceAll('/', '~1')
+}
+
+/** Authoritative inventory of every webhook launch-payload template string. */
+export function collectWebhookTemplateSurfaces(
+  kind: WebhookLaunchKind,
+  payload: WebhookLaunchPayloadTemplate,
+): WebhookTemplateSurface[] {
+  const out: WebhookTemplateSurface[] = []
+  const add = (pointer: string, text: string | undefined): void => {
+    if (text !== undefined) out.push({ launchKind: kind, pointer, text })
+  }
+
+  if (kind === 'workflow') {
+    const parsed = WebhookWorkflowPayloadTemplateSchema.parse(payload)
+    for (const [key, mapping] of Object.entries(parsed.inputs)) {
+      if (mapping.kind === 'template') {
+        add(`/inputs/${pointerPart(key)}/template`, mapping.template)
+      }
+    }
+    add('/workingBranch', parsed.workingBranch)
+    return out
+  }
+  if (kind === 'agent') {
+    const parsed = WebhookAgentPayloadTemplateSchema.parse(payload)
+    add('/description', parsed.description)
+    for (const [key, text] of Object.entries(parsed.inputs ?? {})) {
+      add(`/inputs/${pointerPart(key)}`, text)
+    }
+    add('/workingBranch', parsed.workingBranch)
+    return out
+  }
+
+  const parsed = WebhookWorkgroupPayloadTemplateSchema.parse(payload)
+  add('/goal', parsed.goal)
+  add('/workingBranch', parsed.workingBranch)
+  return out
+}
+
+/** Clone and rewrite only the inventoried webhook launch template strings. */
+export function mapWebhookTemplateSurfaces(
+  kind: WebhookLaunchKind,
+  payload: WebhookLaunchPayloadTemplate,
+  mapper: (surface: WebhookTemplateSurface) => string,
+): WebhookLaunchPayloadTemplate {
+  const rewrite = (pointer: string, text: string): string =>
+    mapper({ launchKind: kind, pointer, text })
+
+  if (kind === 'workflow') {
+    const parsed = WebhookWorkflowPayloadTemplateSchema.parse(payload)
+    return {
+      ...parsed,
+      inputs: Object.fromEntries(
+        Object.entries(parsed.inputs).map(([key, mapping]) => [
+          key,
+          mapping.kind === 'template'
+            ? {
+                ...mapping,
+                template: rewrite(`/inputs/${pointerPart(key)}/template`, mapping.template),
+              }
+            : mapping,
+        ]),
+      ),
+      ...(parsed.workingBranch === undefined
+        ? {}
+        : { workingBranch: rewrite('/workingBranch', parsed.workingBranch) }),
+    }
+  }
+  if (kind === 'agent') {
+    const parsed = WebhookAgentPayloadTemplateSchema.parse(payload)
+    return {
+      ...parsed,
+      ...(parsed.description === undefined
+        ? {}
+        : { description: rewrite('/description', parsed.description) }),
+      ...(parsed.inputs === undefined
+        ? {}
+        : {
+            inputs: Object.fromEntries(
+              Object.entries(parsed.inputs).map(([key, text]) => [
+                key,
+                rewrite(`/inputs/${pointerPart(key)}`, text),
+              ]),
+            ),
+          }),
+      ...(parsed.workingBranch === undefined
+        ? {}
+        : { workingBranch: rewrite('/workingBranch', parsed.workingBranch) }),
+    }
+  }
+
+  const parsed = WebhookWorkgroupPayloadTemplateSchema.parse(payload)
+  return {
+    ...parsed,
+    goal: rewrite('/goal', parsed.goal),
+    ...(parsed.workingBranch === undefined
+      ? {}
+      : { workingBranch: rewrite('/workingBranch', parsed.workingBranch) }),
+  }
 }
 
 /**
@@ -138,23 +250,7 @@ export function collectTemplateStrings(
   kind: WebhookLaunchKind,
   payload: WebhookLaunchPayloadTemplate,
 ): string[] {
-  if (kind === 'workflow') {
-    const p = WebhookWorkflowPayloadTemplateSchema.parse(payload)
-    const out: string[] = []
-    for (const mapping of Object.values(p.inputs)) {
-      if (mapping.kind === 'template') out.push(mapping.template)
-    }
-    return out
-  }
-  if (kind === 'agent') {
-    const p = WebhookAgentPayloadTemplateSchema.parse(payload)
-    const out: string[] = []
-    if (p.description !== undefined) out.push(p.description)
-    for (const v of Object.values(p.inputs ?? {})) out.push(v)
-    return out
-  }
-  const p = WebhookWorkgroupPayloadTemplateSchema.parse(payload)
-  return [p.goal]
+  return collectWebhookTemplateSurfaces(kind, payload).map((surface) => surface.text)
 }
 
 /**
@@ -188,4 +284,72 @@ export function templateVarIssues(
     }
   }
   return issues
+}
+
+function escapeLegacyToken(rawBody: string): string | null {
+  const first = rawBody.search(/\S/)
+  if (first < 0) return null
+  return `{{${rawBody.slice(0, first)}!${rawBody.slice(first)}}}`
+}
+
+/** Upgrade one RFC-257 v1 (flat-root) webhook launch template to RFC-292 v2. */
+export function migrateWebhookTemplateToV2(text: string): string {
+  let out = ''
+  let cursor = 0
+  while (cursor < text.length) {
+    const open = text.indexOf('{{', cursor)
+    if (open < 0) {
+      out += text.slice(cursor)
+      break
+    }
+    out += text.slice(cursor, open)
+    const close = text.indexOf('}}', open + 2)
+    if (close < 0) {
+      const unclosedBody = text.slice(open + 2).trim()
+      if (unclosedBody === 'trigger' || unclosedBody.startsWith('trigger.')) {
+        throw new Error('invalid legacy webhook trigger template reference')
+      }
+      out += text.slice(open)
+      break
+    }
+    const token = text.slice(open, close + 2)
+    const rawBody = text.slice(open + 2, close)
+    const body = rawBody.trim()
+    const parts = body.split('.')
+    const field = isWebhookTriggerField(body)
+      ? body
+      : parts.length === 2 && parts[0] === 'trigger' && isWebhookTriggerField(parts[1]!)
+        ? parts[1]!
+        : parts.length === 3 &&
+            parts[0] === 'trigger' &&
+            parts[1] === 'webhook' &&
+            isWebhookTriggerField(parts[2]!)
+          ? parts[2]!
+          : null
+    if (field !== null) {
+      out += webhookTriggerToken(field)
+    } else if (body === 'trigger' || body.startsWith('trigger.')) {
+      throw new Error('invalid legacy webhook trigger template reference')
+    } else if (/^\w+$/.test(body)) {
+      // RFC-257 v1 treated every bare word token as a variable candidate and
+      // save-time validation rejected names outside WEBHOOK_TEMPLATE_VARS.
+      // A hand-written/corrupt historical row must stay invalid; escaping it
+      // into a literal would silently legalize data that v1 never admitted.
+      throw new Error('unknown legacy webhook template variable')
+    } else {
+      out += escapeLegacyToken(rawBody) ?? token
+    }
+    cursor = close + 2
+  }
+  return out
+}
+
+/** Pure payload migration used by CRUD read/write and webhook fire. */
+export function migrateWebhookPayloadTemplateToV2(
+  kind: WebhookLaunchKind,
+  payload: WebhookLaunchPayloadTemplate,
+): WebhookLaunchPayloadTemplate {
+  return mapWebhookTemplateSurfaces(kind, payload, (surface) =>
+    migrateWebhookTemplateToV2(surface.text),
+  )
 }

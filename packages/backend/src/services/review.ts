@@ -44,10 +44,12 @@ import {
   type TaskActorRole,
   buildWorkflowScopeParentMap,
   isMultiMarkdownUpstream,
+  migrateWorkflowDefinitionToLatest,
   resolveWorkflowSourceRef,
   selectCurrentReviewRound,
   SIBLING_OUTPUTS_INSTRUCTION,
   TERMINAL_TASK_STATUSES,
+  WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
 import {
   acceptedSubsetPaths,
@@ -3095,7 +3097,33 @@ export async function buildReviewPromptContext(
   void iteration
   const builder = REVIEW_PROMPT_CTX_BUILDERS[dv.decision as DocVersionDecision] ?? null
   if (builder === null) return undefined
-  return builder({ db, appHome, taskId, upstreamNodeId, dv })
+  const context = await builder({ db, appHome, taskId, upstreamNodeId, dv })
+  if (context === undefined || dv.decision !== 'iterated') return context
+
+  // RFC-292: the custom review-comment template belongs to the review node,
+  // while the prompt is rendered for its upstream agent. Resolve it from the
+  // frozen task snapshot so a mid-run workflow edit cannot change an already
+  // launched task. Reject/approve/pending paths intentionally never receive it.
+  const taskRow = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+  if (taskRow === undefined) return context
+  try {
+    const parsed = WorkflowDefinitionSchema.parse(JSON.parse(taskRow.workflowSnapshot))
+    const definition = migrateWorkflowDefinitionToLatest(parsed)
+    const reviewNode = definition.nodes.find((node) => node.id === dv.reviewNodeId)
+    if (reviewNode?.kind === 'review') {
+      const template = (reviewNode as Record<string, unknown>).commentInjectTemplate
+      if (typeof template === 'string' && template.trim().length > 0) {
+        context.commentInjectTemplate = template
+      }
+    }
+  } catch (error) {
+    log.warn('review prompt: frozen workflow snapshot is invalid; using default comments', {
+      taskId,
+      reviewNodeId: dv.reviewNodeId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  return context
 }
 
 // ---------------------------------------------------------------------------

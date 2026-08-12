@@ -7,6 +7,7 @@ import type {
   WorkflowDefinition,
   WorkflowDraftValidationReceipt,
 } from '@agent-workflow/shared'
+import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 import {
   WorkflowStarterDialog,
   workflowStarterCandidateHash,
@@ -50,7 +51,12 @@ const agents = [
   }),
   agent('fixer', { outputs: ['patch'], outputKinds: { patch: 'markdown' } }),
 ]
-const empty: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes: [], edges: [] }
+const empty: WorkflowDefinition = {
+  $schema_version: WORKFLOW_SCHEMA_VERSION,
+  inputs: [],
+  nodes: [],
+  edges: [],
+}
 
 function successfulValidator(): WorkflowStarterDraftValidator {
   return vi.fn(async ({ definition }) => ({
@@ -112,7 +118,9 @@ describe('WorkflowStarterDialog', () => {
     fireEvent.click(getByTestId('workflow-starter-apply'))
     await waitFor(() => expect(onApply).toHaveBeenCalledTimes(1))
     expect(validateDraft).toHaveBeenCalledTimes(2)
-    expect(onApply.mock.calls[0]?.[0]).toMatchObject({ $schema_version: 4 })
+    expect(onApply.mock.calls[0]?.[0]).toMatchObject({
+      $schema_version: WORKFLOW_SCHEMA_VERSION,
+    })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 

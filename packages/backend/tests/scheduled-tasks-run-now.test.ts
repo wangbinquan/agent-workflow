@@ -30,6 +30,20 @@ import { eq } from 'drizzle-orm'
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 const DEF: CreateWorkflow['definition'] = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
+const TRIGGER_DEF: CreateWorkflow['definition'] = {
+  $schema_version: 5,
+  inputs: [],
+  nodes: [
+    {
+      id: 'trigger-agent',
+      kind: 'agent-single',
+      agentId: 'agent-never-reached',
+      agentName: 'not-needed-before-trigger-preflight',
+      promptTemplate: 'Handle {{trigger.webhook.comment_text}}',
+    },
+  ],
+  edges: [],
+}
 const STUB_TASK_ID = 'task-run-now-stub'
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 
@@ -143,6 +157,19 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
     const after = await getScheduledTask(db, id)
     expect(after?.consecutiveFailures).toBe(before?.consecutiveFailures ?? 0)
     expect(after?.lastStatus).toBe(before?.lastStatus ?? null)
+  })
+
+  test('RFC-292: run-now rechecks the live workflow and never dispatches without webhook context', async () => {
+    const id = await makeSchedule(true)
+    await db
+      .update(workflows)
+      .set({ definition: JSON.stringify(TRIGGER_DEF) })
+      .where(eq(workflows.id, wfId))
+    const { build, captured } = stubLaunch()
+    await expect(runScheduleNow(db, id, build)).rejects.toMatchObject({
+      code: 'trigger-context-missing',
+    })
+    expect(captured.body).toBeUndefined()
   })
 
   test('unknown id → NotFoundError', async () => {

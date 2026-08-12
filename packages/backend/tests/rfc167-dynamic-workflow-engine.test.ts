@@ -796,6 +796,19 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     edges: [],
   }
 
+  const TRIGGER_DEF = {
+    ...POOL_DEF,
+    $schema_version: 5,
+    nodes: [
+      {
+        id: 'p1',
+        kind: 'agent-single',
+        agentName: 'wg-planner',
+        promptTemplate: 'Handle {{trigger.webhook.comment_text}}',
+      },
+    ],
+  }
+
   async function seedConfirmable(opts: {
     dwOverrides?: Partial<DwState>
     worktreePath?: string
@@ -870,8 +883,10 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       // RFC-223 (PR-3b): the swapped-in snapshot is the id-canonical generated
       // def — node p1 carries wg-planner's frozen agentId (stamped at seed time).
       const swapped = JSON.parse(row?.workflowSnapshot ?? '{}') as {
+        $schema_version: number
         nodes: Array<Record<string, unknown>>
       }
+      expect(swapped.$schema_version).toBe(5)
       expect(swapped.nodes.map((n) => n.id)).toEqual(['p1'])
       expect(swapped.nodes[0]?.agentId).toBe((await getAgent(db, 'wg-planner'))?.id)
       expect((await loadWorkgroupTaskState(db, taskId)).dwState?.phase).toBe('executing')
@@ -888,6 +903,55 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       expect(runs.some((r) => r.nodeId === 'p1')).toBe(true)
       expect(runs.some((r) => r.rerunCause === DW_GENERATE_CAUSE)).toBe(false)
+    } finally {
+      rmSync(wt, { recursive: true, force: true })
+    }
+  })
+
+  test('approve rejects a trigger-dependent proposal before holder/snapshot mutation when context is missing', async () => {
+    const { taskId } = await seedConfirmable({ generatedDef: TRIGGER_DEF })
+    const before = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const res = await req(`/api/workgroup-tasks/${taskId}/dw-confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: 'approve' }),
+    })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('trigger-context-missing')
+
+    const after = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(after?.status).toBe('awaiting_review')
+    expect(after?.workflowSnapshot).toBe(before?.workflowSnapshot)
+    expect((await readDw(db, taskId))?.phase).toBe('awaiting_confirm')
+    const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+      (row) => row.rerunCause === DW_GATE_CAUSE,
+    )
+    expect(holders[0]?.status).toBe('awaiting_review')
+  })
+
+  test('approve accepts the same proposal with a canonical frozen webhook context', async () => {
+    const wt = mkdtempSync(join(tmpdir(), 'aw-rfc292-dw-'))
+    try {
+      const { taskId } = await seedConfirmable({ worktreePath: wt, generatedDef: TRIGGER_DEF })
+      await db
+        .update(tasks)
+        .set({
+          triggerContextJson: JSON.stringify({
+            trigger: { webhook: { event_type: 'note', comment_text: 'please inspect this' } },
+          }),
+        })
+        .where(eq(tasks.id, taskId))
+
+      const res = await req(`/api/workgroup-tasks/${taskId}/dw-confirm`, {
+        method: 'POST',
+        body: JSON.stringify({ decision: 'approve' }),
+      })
+      expect(res.status).toBe(200)
+      const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      expect(JSON.parse(row?.workflowSnapshot ?? '{}')).toMatchObject({
+        $schema_version: 5,
+        nodes: [{ promptTemplate: 'Handle {{trigger.webhook.comment_text}}' }],
+      })
+      await settleTask(taskId)
     } finally {
       rmSync(wt, { recursive: true, force: true })
     }

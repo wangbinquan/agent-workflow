@@ -16,8 +16,10 @@ import {
   applySpaceFields,
   buildClarifyEdges,
   deriveAgentLaunchForm,
+  migrateWorkflowDefinitionToLatest,
   serializeWorkflowDefinitionStorageV1,
   StartTaskSchema,
+  WORKFLOW_SCHEMA_VERSION,
   WorkflowDefinitionSchema,
   type AgentInputPort,
   type AgentLaunchForm,
@@ -74,7 +76,7 @@ export async function ensureAgentHostWorkflow(db: DbClient): Promise<void> {
       name: AGENT_HOST_WORKFLOW_NAME,
       description: 'RFC-165 single-agent host anchor — do not launch directly',
       definition: serializeWorkflowDefinitionStorageV1({
-        $schema_version: 4,
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
         inputs: [],
         nodes: [],
         edges: [],
@@ -117,7 +119,7 @@ export function buildAgentHostSnapshot(
   const form = deriveAgentLaunchForm(agent.inputs)
   if (form === null) {
     return {
-      $schema_version: 4,
+      $schema_version: WORKFLOW_SCHEMA_VERSION,
       inputs: [
         {
           kind: 'text',
@@ -164,7 +166,7 @@ export function buildAgentHostSnapshot(
   // index form is also the relaunch discriminator (design P1-1: the legacy id
   // `__agent_input__` shares the prefix, so detection matches /_\d+__$/).
   return {
-    $schema_version: 4,
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
     inputs: form.inputs,
     nodes: [
       ...form.inputs.map((def, i) => ({
@@ -372,7 +374,7 @@ export async function startAgentTask(
     const snapshot = buildAgentHostSnapshot(recheck, input.allowClarify)
     let def: WorkflowDefinition
     try {
-      def = WorkflowDefinitionSchema.parse(snapshot)
+      def = migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(snapshot))
     } catch (err) {
       throw new ValidationError('workflow-invalid', 'synthesized agent host snapshot is invalid', {
         issues: err instanceof Error ? [{ message: err.message }] : [],

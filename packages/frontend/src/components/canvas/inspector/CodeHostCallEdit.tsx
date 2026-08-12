@@ -28,8 +28,6 @@ import {
   codeHostActionsByGroup,
   isCodeHostAction,
   isUnsupportedBinding,
-  TRIGGER_CONTEXT_VARS,
-  WEBHOOK_VAR_GROUPS,
   type CodeHostAction,
   type CodeHostField,
   type CodeHostMethod,
@@ -42,7 +40,11 @@ import { Field, Switch, TextArea, TextInput } from '@/components/Form'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { Segmented } from '@/components/Segmented'
 import { Select, type SelectOption } from '@/components/Select'
-import { applyTemplateVarInsertion, TemplateVarChips } from '@/components/TemplateVarChips'
+import {
+  applyTemplateVarInsertion,
+  TemplateVarChips,
+  WebhookTriggerVarChips,
+} from '@/components/TemplateVarChips'
 import { usePermission } from '@/hooks/useActor'
 import { nodeTitle } from '../nodeTitle'
 import {
@@ -74,6 +76,7 @@ function readParams(node: WorkflowNode): Record<string, string> {
 interface CustomRequestShape {
   method: CodeHostMethod
   path: string
+  query: Record<string, string>
   body?: string
 }
 
@@ -96,16 +99,23 @@ interface InboundBinding {
 function readRequest(node: WorkflowNode): CustomRequestShape {
   const raw = rec(node).request
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { method: 'GET', path: '' }
+    return { method: 'GET', path: '', query: {} }
   }
   const r = raw as Record<string, unknown>
   const method =
     typeof r.method === 'string' && (CODE_HOST_METHODS as readonly string[]).includes(r.method)
       ? (r.method as CodeHostMethod)
       : 'GET'
+  const query: Record<string, string> = {}
+  if (r.query !== null && typeof r.query === 'object' && !Array.isArray(r.query)) {
+    for (const [key, value] of Object.entries(r.query as Record<string, unknown>)) {
+      if (typeof value === 'string') query[key] = value
+    }
+  }
   return {
     method,
     path: typeof r.path === 'string' ? r.path : '',
+    query,
     ...(typeof r.body === 'string' ? { body: r.body } : {}),
   }
 }
@@ -223,6 +233,21 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                 ),
               ),
           },
+          ...Object.entries(request.query).map(([queryKey, value]) => ({
+            key: `request:query:${queryKey}`,
+            label: `${t('codeHostInspector.query')} · ${queryKey}`,
+            value,
+            allowDirectBinding: true,
+            commit: (next: string) =>
+              patch(
+                { request: { ...request, query: { ...request.query, [queryKey]: next } } },
+                continuousNodeInspectorChange(
+                  node.id,
+                  'code-host-request',
+                  t('codeHostInspector.query'),
+                ),
+              ),
+          })),
         ]
       : fields.map((field) => {
           const label = t(`codeHostField.${field.name}`, { defaultValue: field.name })
@@ -258,16 +283,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
   const removeInputFromTarget = (binding: InboundBinding, target: TemplateTarget): void => {
     target.commit(target.value.split(binding.token).join(''))
   }
-  const triggerVariableGroups = WEBHOOK_VAR_GROUPS.map((group) => ({
-    label: t(
-      group.key === 'api'
-        ? 'webhookTriggers.fields.varGroupApi'
-        : 'webhookTriggers.fields.varGroupContext',
-    ),
-    vars: group.vars
-      .filter((name) => (TRIGGER_CONTEXT_VARS as readonly string[]).includes(name))
-      .map((name) => `trigger.${name}`),
-  }))
   const unboundInputCount = inboundBindings.filter(
     (binding) => !templateTargets.some((target) => target.value.includes(binding.token)),
   ).length
@@ -522,6 +537,111 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
               />
             </Field>
           </InspectorFieldAnchor>
+          <Field label={t('codeHostInspector.query')} hint={t('codeHostInspector.queryHint')}>
+            <div className="form-grid" data-testid="code-host-query-list">
+              {Object.entries(request.query).map(([queryKey, queryValue]) => (
+                <div className="form-grid--cols-2" key={queryKey}>
+                  <TextInput
+                    value={queryKey}
+                    aria-label={t('codeHostInspector.queryKey')}
+                    data-testid={`code-host-query-key-${queryKey}`}
+                    onChange={(nextKey) => {
+                      if (
+                        nextKey === queryKey ||
+                        nextKey.trim().length === 0 ||
+                        Object.prototype.hasOwnProperty.call(request.query, nextKey)
+                      ) {
+                        return
+                      }
+                      const nextQuery: Record<string, string> = {}
+                      for (const [key, value] of Object.entries(request.query)) {
+                        nextQuery[key === queryKey ? nextKey : key] = value
+                      }
+                      patch(
+                        { request: { ...request, query: nextQuery } },
+                        continuousNodeInspectorChange(
+                          node.id,
+                          'code-host-request',
+                          t('codeHostInspector.query'),
+                        ),
+                      )
+                    }}
+                  />
+                  <div className="form-grid--cols-2">
+                    <TextInput
+                      value={queryValue}
+                      aria-label={t('codeHostInspector.queryValue', { key: queryKey })}
+                      data-testid={`code-host-query-value-${queryKey}`}
+                      inputRef={bindTemplateInput(`request:query:${queryKey}`)}
+                      onFocus={() => setFocusedTemplateTargetKey(`request:query:${queryKey}`)}
+                      onChange={(nextValue) => {
+                        patch(
+                          {
+                            request: {
+                              ...request,
+                              query: { ...request.query, [queryKey]: nextValue },
+                            },
+                          },
+                          continuousNodeInspectorChange(
+                            node.id,
+                            'code-host-request',
+                            t('codeHostInspector.query'),
+                          ),
+                        )
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn--xs btn--ghost"
+                      aria-label={t('codeHostInspector.removeQuery', { key: queryKey })}
+                      onClick={() => {
+                        const nextQuery = { ...request.query }
+                        delete nextQuery[queryKey]
+                        templateInputRefs.current.delete(`request:query:${queryKey}`)
+                        setFocusedTemplateTargetKey((current) =>
+                          current === `request:query:${queryKey}` ? null : current,
+                        )
+                        patch(
+                          { request: { ...request, query: nextQuery } },
+                          atomicNodeInspectorChange(
+                            node.id,
+                            'code-host-request',
+                            t('codeHostInspector.query'),
+                          ),
+                        )
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn btn--sm btn--ghost"
+                data-testid="code-host-query-add"
+                onClick={() => {
+                  let index = Object.keys(request.query).length + 1
+                  let key = `param${index}`
+                  while (Object.prototype.hasOwnProperty.call(request.query, key)) {
+                    index += 1
+                    key = `param${index}`
+                  }
+                  patch(
+                    { request: { ...request, query: { ...request.query, [key]: '' } } },
+                    atomicNodeInspectorChange(
+                      node.id,
+                      'code-host-request',
+                      t('codeHostInspector.query'),
+                    ),
+                  )
+                  setFocusedTemplateTargetKey(`request:query:${key}`)
+                }}
+              >
+                {t('codeHostInspector.addQuery')}
+              </button>
+            </div>
+          </Field>
           <Field label={t('codeHostInspector.body')} hint={t('codeHostInspector.bodyHint')}>
             <TextArea
               value={request.body ?? ''}
@@ -672,16 +792,11 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
           )}
         </div>
         <div className="template-var-chips" data-testid="code-host-trigger-vars">
-          <TemplateVarChips
-            groups={triggerVariableGroups}
+          <WebhookTriggerVarChips
             label={t('codeHostInspector.triggerVarsHint')}
             onInsert={insertTemplateToken}
             testidPrefix="code-host-trigger-var"
             disabled={activeTemplateTarget === undefined}
-            titleOf={(name) => {
-              const variable = name.startsWith('trigger.') ? name.slice('trigger.'.length) : name
-              return t(`webhookTriggers.fields.vars.${variable}`, { defaultValue: variable })
-            }}
           />
         </div>
       </InspectorSection>

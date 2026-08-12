@@ -8,14 +8,15 @@
 // lives here. G2 locks the room-table writes to this module.
 
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
-import {} from '@agent-workflow/shared'
+import { migrateWorkflowDefinitionToLatest, parseTriggerContextJson } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import { type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DwState } from '@agent-workflow/shared'
 import { WorkflowDefinitionSchema } from '@agent-workflow/shared'
-import { nodeRuns } from '@/db/schema'
+import { nodeRuns, tasks } from '@/db/schema'
 import { DW_GATE_CAUSE, DW_MAX_REJECT_ROUNDS } from '@/services/dynamicWorkflowRunner'
+import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import { validateDynamicWorkflowDef } from '@/services/orchestratorAgent'
 import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
@@ -105,13 +106,31 @@ export function buildDwActions(
       // after it so the validated pool is the composed pool.
       const layer1Ctx = await buildWorkflowValidationContext(deps.db)
       const fresh = await freshGateView()
-      const generated = WorkflowDefinitionSchema.safeParse(fresh.dw.generatedDef)
-      if (!generated.success) {
+      const parsedGenerated = WorkflowDefinitionSchema.safeParse(fresh.dw.generatedDef)
+      if (!parsedGenerated.success) {
         throw new ConflictError(
           'dw-generated-def-invalid',
           'the stored generated workflow is unreadable — reject with feedback to regenerate',
         )
       }
+      const generated = migrateWorkflowDefinitionToLatest(parsedGenerated.data)
+      const contextRow = (
+        await deps.db
+          .select({ triggerContextJson: tasks.triggerContextJson })
+          .from(tasks)
+          .where(eq(tasks.id, taskId))
+          .limit(1)
+      )[0]
+      // RFC-292: generation-time validation is advisory across the human gate.
+      // Re-check the exact frozen task context before closing the holder or
+      // claiming the resume CAS, so historical/corrupt rows and stale proposals
+      // fail without mutating the gate. Dynamic v1 only permits agent nodes, so
+      // there is no call-workflow closure to freeze here.
+      assertTriggerPreflight({
+        root: generated,
+        closureJson: null,
+        source: parseTriggerContextJson(contextRow?.triggerContextJson),
+      })
       // RFC-223 (PR-3b): the generated def is id-canonical (single conversion
       // point). Re-validate its nodes' `agentId`s against the FRESH pool's frozen
       // canonical ids — a member removed / renamed / recreated mid-run no longer
@@ -121,8 +140,8 @@ export function buildDwActions(
           ? [m.agentId]
           : [],
       )
-      const layer1 = validateWorkflowDef(generated.data, layer1Ctx)
-      const layer2 = validateDynamicWorkflowDef(generated.data, poolAgentIds)
+      const layer1 = validateWorkflowDef(generated, layer1Ctx)
+      const layer2 = validateDynamicWorkflowDef(generated, poolAgentIds)
       const staleIssues = [...layer1.issues, ...layer2.issues].filter(
         (i) => (i.severity ?? 'error') === 'error',
       )
@@ -145,7 +164,7 @@ export function buildDwActions(
       const { rejectionComment: _consumed, ...dwRest } = fresh.dw
       const nextDw: DwState = { ...dwRest, phase: 'executing' }
       await resumeDynamicWorkflowExecution(deps.db, taskId, buildResumeDeps(), {
-        workflowSnapshot: JSON.stringify(generated.data),
+        workflowSnapshot: JSON.stringify(generated),
         dw: nextDw,
       })
       return { decision: 'approve' }
