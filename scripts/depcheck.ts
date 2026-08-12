@@ -219,17 +219,44 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
         'agents',
         '读模型装配（loadClosureRefNames 三表并查）+ 存在性检查。RFC-284 T25 下沉 services/agent.ts。',
       ],
-      ['auth', '登录/会话行读写直查。随 auth 域收口下沉。'],
-      ['clarify', '存在性/可见性行读取。随 clarify 域（T27 迁目录后）下沉。'],
-      ['health', 'dbVersion/runningTasks 探针读。随观测面收口下沉。'],
-      ['intentSessions', 'intent 会话行读取。随 intent 域下沉。'],
-      ['oidc-auth', 'OIDC 回调行读写。随 auth 域下沉。'],
-      ['port-artifacts', 'node_run 行读取。随任务读模型下沉。'],
-      ['repos', '仓库行读取。随 repo 域下沉。'],
-      ['reviews', '评审行读取。随 review 域下沉（RFC-285 B6① 触碰同文件时顺带评估）。'],
-      ['taskClarifyDirective', '任务行读取。随任务读模型下沉。'],
-      ['taskFeedback', '任务行读取。随任务读模型下沉。'],
-      ['taskQuestions', '任务行读取。随任务读模型下沉。'],
+      [
+        'auth',
+        '登录/会话行读写直查。随 auth 域收口下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
+      ],
+      [
+        'clarify',
+        '存在性/可见性行读取。随 clarify 域下沉（RFC-284 T27 迁目录后顺带），属审计 N10 独立切片。',
+      ],
+      [
+        'health',
+        'dbVersion/runningTasks 探针读。随观测面收口下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
+      ],
+      [
+        'intentSessions',
+        'intent 会话行读取。随 intent 域下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
+      ],
+      [
+        'oidc-auth',
+        'OIDC 回调行读写。随 auth 域下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
+      ],
+      [
+        'port-artifacts',
+        'node_run 行读取。随任务读模型下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
+      ],
+      ['repos', '仓库行读取。随 repo 域下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。'],
+      ['reviews', '评审行读取。RFC-285 B6① 触碰同文件时顺带评估下沉，属审计 N10 独立切片。'],
+      [
+        'taskClarifyDirective',
+        '任务行读取。随任务读模型下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
+      ],
+      [
+        'taskFeedback',
+        '任务行读取。随任务读模型下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
+      ],
+      [
+        'taskQuestions',
+        '任务行读取。随任务读模型下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
+      ],
       ['tasks', '存在性检查再委托的样板 ×4 + multipart 编排读。RFC-284 T25 编排归位时一并下沉。'],
       [
         'webhookDeliveries',
@@ -244,14 +271,18 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
         'webhookTriggers',
         'webhook 域：trigger CRUD 全部长在路由层（审计 N10 主证）。RFC-284 T28 抽 service（RFC-283 后）。',
       ],
-      ['worktree-files', '任务行读取。随任务读模型下沉。'],
+      [
+        'worktree-files',
+        '任务行读取。随任务读模型下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
+      ],
     ] as const
   ).map(([route, note]) => ({
     rule: 'no-routes-to-db' as const,
     from: `${B}/routes/${route}.ts`,
     to: `${B}/db/schema.ts`,
     why: `路由层直查 db/schema（应经 service 层拿 ACL/OCC/审计语义）：${note.split('。')[0]}。`,
-    removeWhen: note.split('。').slice(1).join('。') || '随该域下一个 RFC 下沉。',
+    // 每条 note 的第二段即 removeWhen（元测试强制 >10 字且含 WP/RFC/独立切片标记）。
+    removeWhen: note.split('。').slice(1).join('。'),
   })),
   // no-util-to-upper：util/git.ts 的三条反向值边（惰性 import 民俗）。与上面
   // no-circular 的 git 环族同一批边、同一个 removeWhen——规则维度不同故各记一次。
