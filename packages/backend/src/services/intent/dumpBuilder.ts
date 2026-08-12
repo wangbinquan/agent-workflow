@@ -552,11 +552,48 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
         const transformed = {
           ...(wf.definition as Record<string, unknown>),
           nodes: (def.nodes ?? []).map((node) => {
-            if (node.kind !== 'agent-single') return node
-            const { agentId, agentName: _agentName, ...rest } = node
-            return typeof agentId === 'string' && catalog.agents.has(agentId)
-              ? { ...rest, agentRef: handleFor('agent', agentId) }
-              : { ...rest, agentRefHidden: true }
+            if (node.kind === 'agent-single') {
+              const { agentId, agentName: _agentName, ...rest } = node
+              return typeof agentId === 'string' && catalog.agents.has(agentId)
+                ? { ...rest, agentRef: handleFor('agent', agentId) }
+                : { ...rest, agentRefHidden: true }
+            }
+            // RFC-291 面 E — call edges: strip the canonical id cache (a ULID
+            // the model must never see, manifest.ts §handles) and replace it
+            // with the handle of the row this edge ACTUALLY binds to, resolved
+            // by the same single decision point the launch-time freeze uses.
+            //
+            // Without this the model saw only "a name + an opaque ULID" and
+            // could not tell which mounted/ document an edge pointed at — and
+            // with two same-named workflows that ambiguity is unresolvable.
+            // The NAME stays: it is the authoritative selector the author wrote.
+            if (node.kind === 'call-workflow') {
+              const { workflowId: _drop, ...rest } = node
+              const target = pickCallTarget(
+                {
+                  authoritativeName: String(node.workflowName ?? ''),
+                  ...(typeof node.workflowId === 'string' ? { idHint: node.workflowId } : {}),
+                },
+                [...catalog.workflows.values()],
+              )
+              return target === undefined
+                ? { ...rest, workflowRefHidden: true }
+                : { ...rest, workflowRef: handleFor('workflow', target.id) }
+            }
+            if (node.kind === 'call-workgroup') {
+              const { workgroupId: _drop, ...rest } = node
+              const target = pickCallTarget(
+                {
+                  authoritativeName: String(node.workgroupName ?? ''),
+                  ...(typeof node.workgroupId === 'string' ? { idHint: node.workgroupId } : {}),
+                },
+                [...catalog.workgroups.values()],
+              )
+              return target === undefined
+                ? { ...rest, workgroupRefHidden: true }
+                : { ...rest, workgroupRef: handleFor('workgroup', target.id) }
+            }
+            return node
           }),
         }
         const doc = stringifyYaml(

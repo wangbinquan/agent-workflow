@@ -211,6 +211,31 @@ quality 仅 prettier 报本批 5 个文件（已格式化），format/depcheck/t
 即时 SendMessage 通知对方并立刻补齐剩余部分，使 HEAD 重新自洽后再推（CI 跑 HEAD，不单独跑中间
 commit）。教训已补进 `docs/dev-gotchas.md`。
 
+### 提交 ③④（面 D + 面 E）— 2026-08-12
+
+**批③**：T6a `a454f86c`（`pickCallTarget` 单点裁决，`freezeCallClosure` 两分支改调、零行为，既有 169 例全绿）；
+T6b-T6d `4198a336`（闭包补 `call-workflow`/`call-workgroup` 两条边、agent 边收口到
+`extractWorkflowAgentRefs`、`queue.shift()` → 游标 + 跨 roots 共享邻接 memo）。
+
+**批④（面 E）**：dump 侧剥离 `workflowId`/`workgroupId` 换成 `workflowRef`/`workgroupRef`（handle），
+resolve 侧回写成 canonical id；shared 新增 `collectIntentWorkflowCallRefs`，call ref 进既有引用 ACL 门；
+INTENT.md 契约同步。
+
+**实施中踩到并修正的两条**（都由并发 session 的门禁或既有用例照出来）：
+
+1. **`*Ref` 一度被做成必填 ⇒ 19 条既有用例转红。** RFC-243 §5.3 的 call-ref fence 用例按
+   `workflowName` 构造节点并断言 `acl-missing-refs`，而必填 ref 让它们在 schema 层就被拒。
+   design §7.2 本就写着「模型仍可按 name 创建」——是实现没照设计走。
+   **定式：给既有的「按名字」路径加「按 handle」的精确形式时，新形式必须是可选叠加；做成必填
+   等于静默废掉旧路径，而旧路径正是 doc 一直教给模型的那条。**
+2. **改 INTENT.md 时删掉了一句既有契约测试锁定的指引**（名字歧义 → 「问用户别猜」）。新增的
+   handle 精确绑定与它不矛盾，两条应共存：有 handle 时精确绑定，无 handle 且同名歧义时问用户。
+
+**协作事故（第二次，方向与批②相反）**：批④ 的中间态（schema 已引用 `collectIntentWorkflowCallRefs`、
+函数尚未落）留在主树上，导致并发 session 的门禁红 13 条并误判归属，由对方隔离复跑后回报才澄清。
+教训与批② 同源（`docs/dev-gotchas.md` §反向携带）：**能编译的最小单元尽快落 commit**——批③ 因此
+拆成 T6a / T6b-d 两个自洽提交，批④ 亦独立成提交。
+
 ## 登记不做
 
 | #   | 项                                   | 理由                                                                                                                                                |

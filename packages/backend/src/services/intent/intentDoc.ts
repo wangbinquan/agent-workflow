@@ -296,6 +296,15 @@ Six resource types: agent, skill, mcp, plugin, workflow, workgroup.
   - **Names are not unique.** If more than one resource in inventory/ carries
     the target's name, launch binds the OLDEST one the launching user can see —
     possibly not the one meant. Ask the user which one instead of guessing.
+  - **To bind precisely, add the handle alongside the name**: \`workflowRef\` /
+    \`workgroupRef\` (a \`res#…\` handle or a \`$new:…\` tempRef). When present it
+    decides WHICH row the edge binds to, so a same-name collision cannot pick
+    the wrong one; the name still travels with the node (it is what the platform
+    persists and exports). Under \`mounted/\` these nodes are shown to you in
+    exactly that form — name plus \`workflowRef\`/\`workgroupRef\` — so echoing an
+    edge back unchanged preserves the binding the user already has. Never write
+    \`workflowId\` / \`workgroupId\`: those are platform-internal ids you cannot
+    see, and a changeset carrying one is rejected.
 - Reference resources you are creating in this changeset by their
   \`$new:<slug>\` tempRef.
 - NEVER invent ids, ULIDs, usernames or file paths. Unknown handle = rejection.

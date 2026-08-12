@@ -284,6 +284,14 @@ export const IntentWorkflowNodeSchema = z
     id: z.string().min(1).max(128),
     kind: z.string().min(1).max(64),
     agentRef: IntentRefSchema.optional(),
+    /**
+     * RFC-291 面 E — call node targets, in the SAME handle/tempRef domain as
+     * `agentRef`. The canonical `workflowId` / `workgroupId` caches never reach
+     * the model (they are ULIDs), so a call edge is expressed as a session
+     * handle and rehydrated at the resolve seam.
+     */
+    workflowRef: IntentRefSchema.optional(),
+    workgroupRef: IntentRefSchema.optional(),
   })
   .passthrough()
 
@@ -330,6 +338,56 @@ export function collectIntentWorkflowAgentRefs(definition: {
   return { refs, violations }
 }
 
+export interface IntentWorkflowCallViolation {
+  nodeId: string
+  reason: 'call-id-forbidden'
+}
+
+/**
+ * RFC-291 面 E — call-node targets, walked by the same single walker the schema
+ * refine and the resolve seam share.
+ *
+ * Rules (deliberately ASYMMETRIC to the agent-single ones):
+ *  - the canonical id cache (`workflowId` / `workgroupId`) is model-FORBIDDEN:
+ *    it is a ULID, and the whole handle system exists so the model never sees
+ *    or invents one.
+ *  - `*Ref` is OPTIONAL, unlike `agentRef`. A call selector is authoritative by
+ *    NAME (RFC-243 §5.3): creating an edge by name alone is legal and stays
+ *    dangle-tolerant — launch resolves it, and the ACL fence checks the name.
+ *    The handle is the PRECISE form: it says which of two same-named rows this
+ *    edge binds to, which a name cannot express. Requiring it would break every
+ *    by-name creation path the intent doc has always taught.
+ */
+export function collectIntentWorkflowCallRefs(definition: {
+  nodes: Array<Record<string, unknown>>
+}): {
+  workflowRefs: string[]
+  workgroupRefs: string[]
+  violations: IntentWorkflowCallViolation[]
+} {
+  const workflowRefs: string[] = []
+  const workgroupRefs: string[] = []
+  const violations: IntentWorkflowCallViolation[] = []
+  for (const node of definition.nodes) {
+    const nodeId = typeof node.id === 'string' ? node.id : '<unknown>'
+    const isWorkflowCall = node.kind === 'call-workflow'
+    const isWorkgroupCall = node.kind === 'call-workgroup'
+    if (!isWorkflowCall && !isWorkgroupCall) continue
+    const idField = isWorkflowCall ? node.workflowId : node.workgroupId
+    if (typeof idField === 'string' && idField.length > 0) {
+      violations.push({ nodeId, reason: 'call-id-forbidden' })
+      continue
+    }
+    const ref = isWorkflowCall ? node.workflowRef : node.workgroupRef
+    // Absent ref = by-name edge (legal, dangle-tolerant). Only a MALFORMED ref
+    // is a problem, and the field schema already rejects that shape.
+    if (typeof ref !== 'string' || !IntentRefSchema.safeParse(ref).success) continue
+    if (isWorkflowCall) workflowRefs.push(ref)
+    else workgroupRefs.push(ref)
+  }
+  return { workflowRefs, workgroupRefs, violations }
+}
+
 export const IntentWorkflowPayloadSchema = z
   .object({
     // RFC-264: same rule (and same normalizer) as every other workflow-name
@@ -344,6 +402,14 @@ export const IntentWorkflowPayloadSchema = z
         ctx.addIssue({
           code: 'custom',
           message: `node ${v.nodeId}: ${v.reason} (agent-single nodes must use agentRef = handle|tempRef)`,
+        })
+      }
+      // RFC-291 面 E — same rule for call nodes: handle in, canonical id out.
+      const call = collectIntentWorkflowCallRefs(def as { nodes: Array<Record<string, unknown>> })
+      for (const v of call.violations) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `node ${v.nodeId}: ${v.reason} (call nodes must use workflowRef/workgroupRef = handle|tempRef, never a canonical id)`,
         })
       }
     }),

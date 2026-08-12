@@ -82,6 +82,8 @@
 
 - **zsh 不对未加引号的变量做分词**：`P="a.ts b.ts"; git commit -- $P` 会把整串当**一个** pathspec，报 `did not match any files`（bash 下反而"能用"，于是这类脚本在两个 shell 间行为不一致）。本仓强制按路径精确提交，路径一多就用 `git add --pathspec-from-file=<file>` / `git commit --pathspec-from-file=<file>`，一行一条，彻底绕开分词。**另注意**：`git add --pathspec-from-file` 对**已删除**的路径会失败（磁盘上没有该文件）——删除由 `git rm` 暂存即可，`git commit --pathspec-from-file` 认得它。
 
+- **`git pull --rebase` 会重放别人「已 commit 但未 push」的本地提交，把它们的 sha 换掉**（2026-08-12 实测）：共享 checkout 上 `main` 是**所有人共用的一条本地分支**，别人 commit 完还没来得及 push 的那几分钟里，你一个 pull --rebase 就把它的 commit 重放到新 base 上——内容逐字节不变，但 **sha 变了**。后果有两层：①对方按旧 sha 挂的 exact-SHA CI 看护、pin worktree、`git show <sha>` 全部指向一个不再位于 main 上的对象；②你若紧接着 `git worktree add --detach <新HEAD>` 跑门禁，**pin 的 base 是一个远端还不存在的 sha**，门禁结论在别人看来无法复现（实测：一次批次的 pin base 有几分钟处于未发布态，直到原作者补推才闭合）。定式：pull --rebase 之后先 `git log --oneline @{u}..HEAD` 看清「本地领先的这些 commit 里有几条不是我的」，有别人的就**立刻知会对方 sha 已变**，并让对方决定由谁推；自己起 pin 门禁前确认 base 已在远端（`git branch -r --contains <sha>` 非空）。
+
 ## 迁移（Drizzle + bun:sqlite）
 
 - **`when` 接合成轴**（上条 +86400000），别用真实 `Date.now()`——否则 drizzle 对既有安装静默跳过，之后每查 `no such column`，从零建库看不见。

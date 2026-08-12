@@ -13,6 +13,7 @@
 
 import {
   collectIntentWorkflowAgentRefs,
+  collectIntentWorkflowCallRefs,
   collectWorkflowTemplateSurfaces,
   extractTemplateRefs,
   findNonSentinelSecretCarriers,
@@ -62,10 +63,15 @@ export function collectTypedRefs(cs: IntentChangeset): TypedRef[] {
         break
       }
       case 'workflow': {
-        const { refs } = collectIntentWorkflowAgentRefs(
-          op.payload.definition as { nodes: Array<Record<string, unknown>> },
-        )
+        const definition = op.payload.definition as { nodes: Array<Record<string, unknown>> }
+        const { refs } = collectIntentWorkflowAgentRefs(definition)
         refs.forEach((r, i) => push(r, 'agent', `definition.agentRef[${i}]`))
+        // RFC-291 面 E — call targets go through the SAME reference gate as
+        // agent refs, so a model cannot bind an edge to a resource it has no
+        // access to.
+        const call = collectIntentWorkflowCallRefs(definition)
+        call.workflowRefs.forEach((r, i) => push(r, 'workflow', `definition.workflowRef[${i}]`))
+        call.workgroupRefs.forEach((r, i) => push(r, 'workgroup', `definition.workgroupRef[${i}]`))
         break
       }
       case 'workgroup': {
@@ -604,10 +610,28 @@ export function resolveIntentBundle(input: {
           nodes: Array<Record<string, unknown>>
         }
         for (const node of def.nodes) {
-          if (node.kind !== 'agent-single') continue
-          const ref = node.agentRef as string
-          delete node.agentRef
-          node.agentId = resolveRef(ref)
+          if (node.kind === 'agent-single') {
+            const ref = node.agentRef as string
+            delete node.agentRef
+            node.agentId = resolveRef(ref)
+            continue
+          }
+          // RFC-291 面 E — rehydrate call edges the same way: the handle the
+          // model wrote becomes the canonical id cache the launcher reads.
+          //
+          // Keeping this cache is the whole point: the NAME alone cannot
+          // disambiguate two same-named rows, so dropping it here would make the
+          // next launch fall back to "oldest visible ULID" and silently run a
+          // different workflow than the one the dump showed (design-gate P1-a).
+          if (node.kind === 'call-workflow' && typeof node.workflowRef === 'string') {
+            const ref = node.workflowRef
+            delete node.workflowRef
+            node.workflowId = resolveRef(ref)
+          } else if (node.kind === 'call-workgroup' && typeof node.workgroupRef === 'string') {
+            const ref = node.workgroupRef
+            delete node.workgroupRef
+            node.workgroupId = resolveRef(ref)
+          }
         }
         // RFC-253 T28 — inject confirm-time secret values into script env; the
         // sentinel itself must never be persisted as a runtime value.
