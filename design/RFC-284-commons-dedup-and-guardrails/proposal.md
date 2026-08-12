@@ -64,24 +64,30 @@
 
 ## 4. 能力影响清单（逐项确认；本 RFC 无能力收缩，以下为观测/告警面变化）
 
-| #   | 变化                                                                                | 影响                                             |
-| --- | ----------------------------------------------------------------------------------- | ------------------------------------------------ |
-| C1  | S4 pending 告警对 `parent_task_id` 非空的行阈值 5min→30min（D11）                   | 子任务排队场景告警变少（原为噪音）；顶层任务不变 |
-| C2  | `drainTimedOut` 新增 runner warn + 观测记录（D9）                                   | 新增告警面，无行为变化                           |
-| C3  | claude 的 session-not-found fallback 告警从「静默缺失」变为正常产生（D10 的副产物） | 补齐既有 opencode 已有的告警对称性               |
-| C4  | 启动自检报告不再输出「agent 有 enabled 开关」的错误陈述（D2）                       | 纠错，无能力变化                                 |
-| C5  | `wrapperProgress.phase` 字段停止写入（读旧行兼容）                                  | debug-only 字段（自述无消费者），无用户可见变化  |
-| C6  | pluginInstaller npm 超时改为进程树击杀                                              | 超时场景不再泄漏孙进程；正常安装不变             |
+| #   | 变化                                                                                                                                                            | 影响                                                                                                                    |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| C1  | S4 pending 告警对 `parent_task_id` 非空的行阈值 5min→30min（D11）                                                                                               | 子任务排队场景告警变少（原为噪音）；顶层任务不变                                                                        |
+| C2  | `drainTimedOut` 新增 runner warn + 观测记录（D9）                                                                                                               | 新增告警面，无行为变化                                                                                                  |
+| C3  | claude 的 session-not-found fallback 告警从「静默缺失」变为正常产生（D10 的副产物）                                                                             | 补齐既有 opencode 已有的告警对称性                                                                                      |
+| C4  | 启动自检报告不再输出「agent 有 enabled 开关」的错误陈述（D2）                                                                                                   | 纠错，无能力变化                                                                                                        |
+| C5  | `wrapperProgress.phase` 字段停止写入（读旧行兼容；**不承诺回滚兼容**——旧版 daemon 读新行会走 init path 重跑 wrapper，不崩但重复工作）                           | debug-only 字段（自述无消费者），升级方向无用户可见变化                                                                 |
+| C6  | pluginInstaller npm 超时改为进程树击杀                                                                                                                          | 超时场景不再泄漏孙进程；正常安装不变                                                                                    |
+| C7  | pluginInstaller 失败错误文案的截断方向从「头 64KB 前缀」变「滚动尾部」；超时从即时 SIGKILL 变 TERM→KILL 宽限（设计门路 2 抓出，收编 managedProcess 的必然差异） | 安装失败的诊断文案内容换头为尾（可诊断信息通常在头部——实现时对拍 >64KB fixture 确认可读性不降级）；outcome/产物路径不变 |
 
 ## 5. 依赖与排序
 
-- **G4 的 webhook CRUD 抽 service 子项 blocked by RFC-283 完工**（该 RFC Approved
-  在途、正在改同一批路由文件）；其余子项无并发冲突。
+- **RFC-283 冲突面（设计门补全，共三处）全部挂 T28（RFC-283 完工后）**：
+  ① webhook CRUD 抽 service（routes/webhookTriggers.ts / webhookEndpoints.ts）；
+  ② T5 safeJson 对这两个路由文件的迁移子项；③ T26 的 mcp/tools.ts StartTaskSchema
+  锚（RFC-283 A4/A5 也改该文件）。其余子项无并发冲突；批 D（runner/claudeCode
+  driver/runtime types 高频面）开工前照 T27 姿势 `git status` 确认无他人在途改动。
 - 本 RFC 先于 RFC-285/286 实现（G1 的 containment util、G2 的 ACL helper 是 285 的地基）。
 
 ## 6. 验收标准
 
-- AC-1 各收口 helper 唯一定义点 + 全部旧副本删除（grep 计数断言进测试）。
+- AC-1 各收口 helper 唯一定义点 + 全部旧副本删除（grep 计数断言进测试；
+  safeJson 按语义族收口为 **2** 个 util——`safeJsonOrEmpty`/`safeJsonOrThrowInvalid`，
+  见 design §1.1 设计门修订）。
 - AC-2 spawn 棘轮：src 下 `Bun.spawn`/`child_process.spawn` 站点显式 allowlist
   测试，新增站点不进名单即红。
 - AC-3 selfCheck 蕴含守卫：构造「声明 inventory-file 但缺 readInventory」的假 driver

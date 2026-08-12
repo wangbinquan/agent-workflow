@@ -8,13 +8,13 @@
 ### 批 A（防护制度先行——让后续批次在新护栏下进行）
 
 - T1 spawn 棘轮 allowlist 测试（design §3.7）。
-- T2 dep-cruiser 三条新规则 + KNOWN_VIOLATIONS 记账（design §4；routes→db 18 文件逐一入账带 removeWhen）。
+- T2 dep-cruiser 三条新规则 + KNOWN_VIOLATIONS 记账（design §4；routes→db 18 文件逐一入账带 removeWhen；**三规则加 type-only 过滤**；**过渡账目**：`auth/session.ts→services/authLoginPolicy` 现存反向边入账 removeWhen=T24、`ws/revalidationHook` 豁免注明；webhook 两路由账目与 T28 先后耦合注明——后落地一方同步清账防 depcheck 过期棘轮红）。
 - T3 resourcePolicy 删 'agent' + schema 反射守卫 + 变异实证（design §2.5；含 selfCheck 输出复核）。
 - T4 selfCheck 蕴含守卫（design §3.1）。
 
 ### 批 B（微 helper 收口）
 
-- T5 safeJson（§1.1，含 20 份逐一 diff 对照表）。
+- T5 safeJson（§1.1，按语义族收口为两 util，含 20 份逐一 diff 对照表；**webhookEndpoints/webhookTriggers 两文件的迁移子项挪 T28**）。
 - T6 containment 双查（§1.2，四象限行为锁先行）。
 - T7 hash + drained race + monotonicNow（§1.3/1.4/1.6）。
 - T8 spawnVersionProbe 三胞胎收编（§1.5）。
@@ -26,7 +26,7 @@
 - T11 bundle initialAcl + skill 唯一性共享化（§2.5 尾两项）。
 - T12 fence 选型表文档（§2.6）。
 
-### 批 D（runtime/执行器）
+### 批 D（runtime/执行器；开工前 `git status` 确认 runner.ts/claudeCode driver/runtime types 等高频面无他人在途改动）
 
 - T13 mcpRuntimeTest cast + MAX_STREAM_LINE_CHARS（§3.2/3.5 尾）。
 - T14 drainTimedOut 观测面（§3.4，shared schema 可选字段 + 前端 banner i18n）。
@@ -47,9 +47,9 @@
 
 - T24 authLoginPolicy 迁 auth/（§4）。
 - T25 buildClosureRefNameMaps 下沉 + multipart 编排归位（§4，两臂对拍）。
-- T26 mcp/tools StartTaskSchema 锚 + env 开关文档化 + AW_RUNTIME_STATUS_PROBE_TIMEOUT_MS 改 opts（§4）。
+- T26 env 开关文档化 + AW_RUNTIME_STATUS_PROBE_TIMEOUT_MS 改 opts（§4）。**mcp/tools StartTaskSchema 锚挪 T28**（RFC-283 同文件冲突）。
 - T27 clarify 家族迁移（§4，D18 示范；迁移前确认工作树）。
-- T28 【blocked by RFC-283 完工】webhook CRUD 抽 service（§4）。
+- T28 【blocked by RFC-283 完工】webhook CRUD 抽 service + webhook 两路由的 safeJson 迁移（自 T5 挪入）+ mcp/tools StartTaskSchema 锚（自 T26 挪入）+ T2 账目同步清账（§4）。
 
 ### 收尾
 

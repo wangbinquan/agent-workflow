@@ -97,8 +97,8 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 - review 评论 PATCH/DELETE 不验作者不留痕 + delete 无 decided 冻结（对照 update 有）。
 - `updateTaskMembers` 缺 OCC + in-tx active（`resourceAcl` RFC-170 已修、成员面没跟）；`buildLaunchCollabRows` 不排除 `__system__`。
 - WS 连接 actor 升级期钉死：撤销/降权/移出成员不断开在连，clarify 帧含全量问答（→ RFC-212 方案 D 处理）。
-- 导入单向放宽 visibility：`workflow.ts:54` / `skill-zip.ts:430` 硬编码 public → 私有资源导出再导入静默转公开。
-- memory admin 门谓词漂移：前端 `usePermission('memory:approve')`（`memory.distill-jobs.$jobId.tsx:43` / `MemoryPendingBadge.tsx:35`）因 D12 并入 `USER_BASELINE` 恒 true → 普通用户 WS 无限重连 + badge 拉全体候选；对照 `memory.tsx:47` role 判定正确。
+- ✅ 导入单向放宽 visibility——**已被 RFC-231 修复（2026-08-12 RFC-285 设计门对账销账）**：skill zip 导入走 `initialPrivateResourceAcl`（`skill-zip.ts:198,327`，:622 注释明写 owner+private）、workflow YAML 导入经 `createWorkflow` 同走单点（`workflow.ts:844`）；原登记两锚（workflow.ts:54 / skill-zip.ts:430）在 HEAD 均已不含 public 字面量。RFC-285 T8 补三路回归锁。
+- memory 前端门与后端不一致——**2026-08-12 RFC-285 设计门对账改写（原记载方向反了）**：原文的 `usePermission('memory:approve') 恒 true` 用法在 HEAD 已不存在（实调用为零）；现状是 `memory.tsx:85` / `memory.distill-jobs.$jobId.tsx:47` 用 `useIsAdmin()`（仅 admin），**窄于**后端 `canManageMemory` 的 admin+manager（`memory.ts:764-782` 首行 `isResourceAdminActor`）。修法=前端换 admin+manager 谓词（RFC-285 T9）。
 - 前端详情页(agents/skills/mcps/plugins/workgroups.detail)不按 owner 做写门 → 非 owner 可编辑、编辑器拖动即撞 403；`acl-*` 错误码全无 i18n（英文裸串）；`AclPanel` 409 后知情整表覆盖；builtin 前端零感知。
 - workgroup confirm/dw-confirm 门决策不落决策人归属（对照 review D7）。
 

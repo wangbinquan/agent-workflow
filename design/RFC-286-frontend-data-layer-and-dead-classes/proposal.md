@@ -26,10 +26,18 @@ D13-D17（用户已拍板：**本轮不动 UI 层**——Card/新原语/intent �
   i18n key（en 用逗号）。
 - **F2 bare fetch 收敛**：`lib/worktree-download.ts:26,60`、
   `components/WorktreeFilesPanel.tsx:284`、`components/skills/ImportZipPanel.tsx:982`
-  三处 bare fetch 改走 `apiGetBlob`/`fetchOrNetworkError`（RFC-208 deadline 预算
-  - 统一错误分类自动获得）；删 `ImportZipPanel.tsx:963-971` 自写的第二个
-    error decoder（client.ts:255-257 明文警告的形态）；`saveBlob` 两份拷贝合一
-    （`lib/worktree-download.ts` 自认 mirrors WorktreeFilesPanel）。
+  三处 bare fetch 改走 `apiGetBlob`/`fetchOrNetworkError`（统一错误分类自动获得）；
+  删 `ImportZipPanel.tsx:963-971` 自写的第二个 error decoder（client.ts:255-257
+  明文警告的形态）；`saveBlob` **三份**拷贝合一（WorktreeFilesPanel 私有版、
+  worktree-download 镜像版、`routes/reviews.detail.tsx` markdown 导出版——
+  worktree-download.ts:8-9 注释自认三处，初稿漏计第三份）。
+  **设计门补强（路 2 P1/P2）两条硬约束**：①下载改调时**显式传大预算或不限时
+  并接 AbortSignal**——apiGetBlob 默认 300s 硬顶（client.ts:49）会让今天能下的
+  GB 级 worktree 产物明天下不了（client.ts 自注 "genuinely large download must
+  pass deadlineMs explicitly"）；②`downloadPortArtifact` 的 **404→worktree
+  回退链**（worktree-download.ts:60-64 靠 res.status 判断）必须改写为
+  `catch ApiError.status===404` 形态——apiGetBlob 对一切 !ok throw，不改写会把
+  legacy 行（无 emit-time archive 的存量 node_run）的成功回退变报错 toast。
 - **F3 resourcePackages wire 类型下沉 shared**：
   `frontend/api/resourcePackages.ts:13-60+` 的 preview/commit 请求响应形状
   （ImportAction/PackagePreviewCandidate/PackagePreviewEntry/PackageSecretRef 等）
@@ -50,18 +58,28 @@ polling 间隔常量层。
 
 ## 4. 能力影响清单
 
-无能力变化。用户可见变化仅两类（均为修复方向）：
-
-- V1 六处报错从「无样式纯文本」变为标准错误视觉（ErrorBanner/Field error）。
+- V1 六处报错从「无样式纯文本」变为标准错误视觉（ErrorBanner/Field error）——
+  若任一点位落在视觉回归快照场景内即产生基线 diff，按仓规刷新并注明（修正初稿
+  「零视觉变化」与 V1 自相矛盾的表述）。
 - V2 离线/超时时三个下载/上传流的报错从原生 "Failed to fetch" 变为本地化
   network-unreachable 文案（与全站一致）。
+- V3（设计门新增）：下载流获得显式超时治理——按 F2 硬约束①传大预算/不限时 +
+  AbortSignal；**明示不引入 300s 默认硬顶回归**（配大文件路径测试）。
 
 ## 5. 验收标准
 
 - AC-1 全前端 `error-text`/`checkbox-row` 引用归零（grep 锁）；`form-error`
   仅存合法嵌套定义消费点；六处报错场景视觉断言（role="alert" + 错误形态类）。
-- AC-2 `rg '\bfetch\('` 在前端 src 命中仅 `api/client.ts` 内部（豁免清单归零）；
-  第二 decoder 删除；saveBlob 单实现。
+  **设计门补强（路 2 P2）**：这些点位被 4 个测试文件 + 2 条**源码文本锁**钉着
+  （launch-working-branch.test.ts:61-63 / launch-git-identity.test.ts:63 要求
+  源文本 `role="alert"` 与 testid 相邻；tasks-new-wizard:964 与
+  rfc218-agent-port-launch:249,322 按 testid 取节点）——实现含：按仓规给
+  ErrorBanner/Field **最小扩展 `data-testid` 透传 prop**（现无），并附
+  5 testid × 4 测试文件 + 2 文本锁的逐条改判表。
+- AC-2 前端 src bare fetch 归零锁——grep 口径修正为排除属性调用
+  （`(^|[^.\w])fetch\(`，`\bfetch\(` 会把 12 处 `transport.fetch(` 记假阳）
+  或改 ESLint no-restricted-globals 规则；第二 decoder 删除；saveBlob 单实现
+  （三份合一）。
 - AC-3 resourcePackages 前端类型文件不再自定义 wire 形状（import shared）；
   shared schema 与后端产出 parse 对拍（后端现有 preview 输出喂 shared schema
   必须 parse 通过——防下沉时写错形状）。

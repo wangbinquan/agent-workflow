@@ -1,92 +1,103 @@
-# RFC-285 — 技术设计（design）
+# RFC-285 — 技术设计（design，v2）
 
-> 锚点基于审计报告（基线 ≈ `e7361b02`），实现前逐锚复核。
-> 依赖：RFC-284 批 C 先落（scheduled 扫描单点、快照式可见性、by-resource grant
-> helper 是本 RFC B2/B6② 的地基）；RFC-283 完工后才动 webhook 相关文件（本 RFC
-> 不直接碰，但 B4 的 token 收窄会过 webhook 路由的鉴权中间件——纯中间件层，无冲突）。
+> v2（2026-08-12 设计门大修后）。**每个 B 组实现的第一子任务=逐锚复核**（v1 教训：
+> B6①③/B7 带着过期锚落档）。依赖：RFC-284 批 C 先落（快照可见性/by-resource grant
+> helper）；全程不碰 RFC-283 的 webhook 路由文件。
 
 ## B1 404 同形统一
 
-- 触点：`routes/tasks.ts:1215-1227 visibilityCheck`（403 分支改 NotFoundError，
-  形态照 `taskCollab.ts:53-70` 的 H9 姿势——响应体与真不存在**字节同形**）；
-  `routes/reviews.ts:105-106`、`routes/clarify.ts:111-112` 同改；
-  `taskQuestions.ts:41-44` 注释修正（它已是 404，注释却说 mirror 403）。
-- 测试改判：`rfc142-review-rounds.test.ts:658`、`api-tasks-alerts-visibility.test.ts:134`
-  等锁 403 的断言改 404 并注明「RFC-285 B1 改判」；新增 oracle 消除测试：
-  同一路由对「不存在 id」与「存在但无权 id」的响应 status+body 逐字节相等。
-- 前端：错误处理路径把 task 域 403 特判合并进 404 分支；i18n 文案改
-  「任务不存在或你无权查看」。
+- 触点全集：`routes/tasks.ts` visibilityCheck（403 分支改 NotFoundError，形态照
+  `taskCollab.ts:53-70` 字节同形）；`routes/reviews.ts:105-106`；
+  `routes/clarify.ts:111-112`；`routes/worktree-files.ts:57-71`（自述不在
+  visibility middleware 下，missing→404 / not-visible→403 双轨点）；
+  `routes/port-artifacts.ts:61-72`（同构）；`routes/taskFeedback.ts:76`；
+  实现前 `rg "task-not-visible"` 全量补漏。
+- 保留面：成员制写门 403（member-gate 是另一层语义）；WS 面（ws/registry.ts:538
+  已同码 + rfc152 测试锁定）不动。
+- 连带改判：`rfc193-port-artifacts-api.test.ts:265` 源码文本锁（expect toContain
+  'task-not-visible'——按新形态改写断言意图）；前端 `lib/clarify/durability.ts:310`
+  `status===403` 停写分支改「403 或 404 且此前可见」判据（保持被撤权即停写）；
+  后端 ≥8 测试文件 + 前端 parent-task-link 等 2 文件逐一改判并注明 RFC-285 B1。
+- 新增测试：oracle 消除（不存在 id vs 无权 id 响应逐字节相等）× 触点全集；
+  成员门 403 反例。
 
-## B2 删除引用中档统一
+## B2 删除中档统一 + FK 软链化
 
-- 触点：`workflow.ts:682-695`（放宽：过滤条件加「仅非终态」）；
-  `workgroups.ts:528-592`（收紧：新增任务引用检查，走 RFC-284 的
-  `scheduledRowsReferencing` 同族 + tasks 表 workgroupId 非终态查询）；
-  agent 现状即中档（`agent.ts:661-689`），不动、其注释升级为「三档统一后的
-  单一档位」说明。终态集合以 `shared/lifecycle.ts` 的 terminal 集为单源
-  （`terminal-status-single-source.test.ts` 已锁）。
-- 横向文档：resourceAcl.ts 头注释的三档对照表（RFC-284 §2.6 写入）更新为
-  「统一中档 + 历史沿革」。
+- schema 迁移（新迁移号）：`tasks.workflow_id` 去 FK（12-step rebuild，对齐
+  `workgroupId` "durable soft link" 先例与其列注释姿势）；列 NOT NULL 保持
+  （软链仍必填，只是不再强制存在性）。迁移前后 quick/FK 检查照 RFC-278 姿势。
+- 应用层：`workflow.ts:682-695` 过滤条件加「仅非终态」（终态集合单源
+  shared/lifecycle.ts terminal 集）；`workgroups.ts` 删除守卫新增 tasks 非终态
+  引用检查（`tasks.workgroupId` 软链查询 + 既有 assertNoScheduledReferencesInTx
+  并列）；agent 不动、注释升级为统一档位说明。
+- 披露：任务引用错误保持**聚合 count**（workflow.ts:689-694 的 task-ACL 论证
+  推广到 workgroup 新检查）；scheduled 引用维持 discloseScheduleRefs。
+- 展示层：终态任务详情对悬空 workflow 引用的容忍（与 agent 删除后同型——
+  实现时核对前端 task detail 对 workflowId 解析失败的现有分支，缺则补）。
 
-## B3 InheritedActor 与失活拒启
+## B3 InheritedActor 三臂
 
-- 触点：`scheduler.ts:3867-3870` 删 `as unknown as`；新增
-  `auth/actor.ts` 导出 `buildInheritedActor(db, ownerUserId): Promise<Actor | null>`
-  ——从 users 表重建（照 `scheduledTasks.ts:735-748` 的 rebuild 姿势），失活/
-  不存在返 null。call 分支 null → 节点失败 `call-owner-inactive`（新错误码进
-  shared error codes + i18n）。
-- 类型：executor 的 actor 参数不再接受伪造形状；grep 锁「`as unknown as
-Parameters<typeof startExecution>` 在 src 零命中」。
+- `auth/actor.ts` 增 `buildInheritedActor(db, ownerUserId: string | null)`：
+  非 null → 照 scheduledTasks.ts:735-748 rebuild（active 检查）；失活/不存在 →
+  null；**null 入参 → 按 Q5 裁决**（放行 `__system__` 或同拒）。
+  scheduled 版是否收编到同一构造器：**收编**（三份 rebuild → 1），保持其
+  `ValidationError('owner-inactive')` 码不变（构造器返回判定、调用方各自定错误形态）。
+- 臂 1 新启 call-workflow（scheduler.ts:3867-3870）：伪造 actor 删除，null →
+  节点失败 `call-owner-inactive`（新码进 shared error codes + i18n）。
+- 臂 2 新启 call-workgroup（scheduler.ts:4043 `startWorkgroupTaskFromFrozen`）：
+  同判定接入（该臂现无 actor 构造，按其入参形状接）。
+- 臂 3 resume（scheduler.ts:3373）：**按 Q6 裁决**（同检 or 豁免+注释锁定）。
+- grep 锁：`as unknown as Parameters<typeof startExecution>` src 归零。
 
-## B4 query token 收窄
+## B4 query token 双入口
 
-- 触点：`auth/session.ts:257-259 extractRawToken` 增加路径谓词参数（或拆两个
-  入口：`extractBearerToken` 供 REST、`extractUpgradeToken` 供 ws/server.ts）。
-  设计取向：**拆两个显式入口**（比布尔参数可 grep、可锁）。
-- 前置排查：rg `\?token=`/`token=` 在 frontend/cli/tests 的 REST 用法清单，
-  逐一迁移（预计主要在测试与 curl 文档示例）。
-- 测试：REST 带 query token → 401；`/ws/*` 升级带 query token → 放行；
-  两入口的源码文本锁（REST 面不 import upgrade 入口）。
+- `auth/session.ts` 拆 `extractBearerToken`（REST，仅 Authorization 头）/
+  `extractUpgradeToken`（仅 ws/server.ts 消费）；**`routes/auth.ts:476-483` 本地
+  extractRawToken 删除、改调共享 REST 入口**（其消费点 :177/:259 随迁）。
+- 测试：REST 含 /api/auth/_ 带 ?token= → 401；/ws/_ 升级照常；
+  「REST 面不 import upgrade 入口」文本锁。
 
-## B5 stale 错误码归一
+## B5 stale 码归一
 
-- 触点：`workflow.ts`/`workgroups.ts`/`skill*.ts` 的 version-conflict、
-  `*-copy-stale` 产出点改 `resource-operation-stale`（响应体附
-  `resource: 'workflow'|'workgroup'|'skill'` 与既有 detail 字段，信息量不减）。
-  按 Q1 拍板决定是否附 `legacyCode`。
-- 前端：错误识别集中点改一处（`i18n/errors.ts` 域前缀表 + 各 detail 页的
-  conflict 分支），i18n 双语。
-- 测试：六类资源 stale 场景全部断言新码；grep 锁旧码字符串在 src 产出面归零
-  （tests 里允许出现在改判注释）。
+- 实现前先产全量对照表：`rg "version-conflict|copy-stale|overwrite-stale"`
+  产出点 × 消费点。已知消费面：前端 i18n/errors.ts 域表 + 各 detail 页 conflict
+  分支 + `useWorkgroupAutosave.ts:497` 状态机；后端 `skill-zip.ts:678-686`
+  （overwrite outcome 分派）+ `services/fusion.ts:1442-1447`。
+- 新码形态：`resource-operation-stale` + `resource` 字段 + 既有 detail；
+  Q1 裁决 legacyCode 兼容期；Q7 裁决 repo-group 码与 skill-overwrite-stale 归属。
+- 与 RFC-283 协调：其新增 webhook fence 码若在本 RFC 实现期出现，按同族命名
+  对齐（实现时与该 RFC owner 对一次表）。
 
-## B6 四洞
+## B6 存量洞（v2 定界）
 
-- ①review：`services/review.ts:1913-1940` `updateReviewCommentText`/delete 增
-  actor 参数与作者比对（owner/admin 旁路走 `isResourceAdminRole` + task owner）；
-  DELETE 前置 `assertReviewRoundWritable` 同款 decided 冻结。路由层传 actor。
-- ②ws/repo-imports：`ws/registry.ts:658-670` spec 增 upgradeGate：batch 发起者
-  （repo_import_batches.owner 列——实现前核实列名）或资源管理员；缺行为 404 同形。
-- ③导入 visibility：`workflow.ts:54`、`skill-zip.ts:430` 改 `'private'`；
-  bundle 路径已是 private（RFC-271），补回归锁三路（yaml 导入/zip 导入/bundle）。
-- ④distill 门：`routes/`（memory distill jobs 详情/会话端点）gate 从
-  `memory:read` 收紧为 `isResourceAdminRole`（RouteMeta 声明式改法）；列表页
-  行级不含敏感载荷的摘要是否同门 → 保持与详情同门（管理工具面整体收紧，
-  UI 本就 admin 入口）。
+- ①review 作者校验：`updateReviewCommentText`/delete（review.ts:1913-1921 /
+  :1988-2002）增 actor 参数；比对 `row.author === actor.user.id`，owner/admin
+  （isResourceAdminRole + task owner）旁路；**author 为 LOCAL_DECIDER 兜底值的
+  历史行走 owner/admin-only**。冻结现状（:1959-1964 / :2025-2030 对称）补回归锁。
+- ②repo-imports ownership：`BatchRecord` 增 `ownerUserId`（repoBatchImport.ts:66-81）；
+  `startBatchImport` 入参增 actor（routes/cached-repos.ts:140 传入）；
+  `ws/registry.ts:657-673` spec 增 upgradeGate（ownerUserId 匹配 ∨
+  isResourceAdminRole；batch 不存在/不匹配 → 404 同形拒升级）。内存 Map 语义
+  不变（daemon 重启批次即逝，gate 随之自然失效——无持久化需求）。
+- ③导入 visibility 回归锁三路（yaml 导入 / zip 导入 / bundle apply 各断言
+  visibility='private'）+ backlog 过期条销账（原 :98/:100 区段的导入条目）。
+- ④distill 门：`routes/memoryDistillJobs.ts` 全部读端点 RouteMeta 改
+  `identity:'resource-admin'`；文件头 :7-8 过期注释同批更正。
 
-## B7 memory 模型
+## B7 memory（v2 定界）
 
-- 读面：`services/memory.ts` 的 scope 判定——repo/global 分支从 admin 判定改为
-  「登录即可读」；资源 scope 分支不动。注入面（memoryInject）不动。
-- 管理面：新增/编辑/审批/删除入口统一加 `isResourceAdminRole` 旁路（现状为
-  admin 判定的点改谓词；scope 资源写权路径不动）。
-- 前端：`memory.tsx:47` 与 `MemoryPendingBadge.tsx:35`/`memory.distill-jobs.$jobId.tsx:43`
-  三点统一改 role 判定（admin+manager），删除恒 true 的 `usePermission('memory:approve')`
-  误用（backlog:99）。
-- 测试：AC-7 矩阵（见 proposal）；`rfc099-prompt-isolation` 双层锁复跑确认
-  模型变化未引入归属进 prompt 的新面。
+- 现状矩阵回归锁：scope（agent 等资源 scope / repo / repo_group〔按 Q3〕/ global）
+  × 角色（user/owner/manager/admin）× {读, 管理} 全矩阵断言现状（memory.ts:740-782
+  的语义拍死，防将来漂移）。
+- 前端：新 `useIsResourceAdmin()`（admin+manager）；`memory.tsx:85` 与
+  `memory.distill-jobs.$jobId.tsx:47` 两点从 `useIsAdmin()` 换用；
+  MemoryPendingBadge 无判定（现状正确）不动。
+- candidate 读面按 **Q4** 裁决（收紧则动 routes/memories.ts:113-129 的 list/detail
+  过滤器对 status='candidate' 行加管理员门——含 body 与不含 body 两读法都收）。
+- 文档：CLAUDE.md「（repo/global 仍 admin）」句更正为现状；`rfc099-prompt-isolation`
+  双层锁复跑。
 
-## 测试策略汇总
+## 测试策略
 
-- 每组 B1-B7 独立批次：红→绿对（行为变更处）+ 矩阵测试 + grep/文本锁。
-- E1-E10 之外零行为差异（对拍口径同 RFC-284）。
-- 实现门：独立子代理对抗评审；findings 分「纯实现自修 / 方向题反问」两堆处置。
+每 B 组：逐锚复核先行 → 红→绿对（真行为变更处）/回归锁（现状拍死处）→ 矩阵 →
+grep/文本锁。E 清单（v2）外零行为差异；实现门=独立子代理对抗评审。
