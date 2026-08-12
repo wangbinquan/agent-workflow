@@ -715,6 +715,12 @@ export interface RuntimeDriver {
    * 保持 kind-blind；没有缓存的 driver 缺省即可。
    */
   evictBinaryCaches?(binaryPath: string): void
+  /**
+   * RFC-284 T15（D10）—— 本 runtime 的「resume 目标会话不存在」stderr 判据。
+   * 措辞属各 CLI 私有且随版本漂移，判据随 driver 走；缺省 = 无法判定（调用方
+   * 按 false 处理——告警可能缺失但绝不误报，安全方向）。
+   */
+  detectSessionNotFound?(stderrTail: string): boolean
   /** RFC-143 — run-after subagent session capture (was captureChildSessions /
    *  captureClaudeSessions free fns). */
   captureSessions(ctx: SessionCaptureContext): Promise<void>

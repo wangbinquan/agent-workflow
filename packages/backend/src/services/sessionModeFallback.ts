@@ -90,30 +90,6 @@ export function decideResumeSessionId(
   return { inlineMode: true, resumeSessionId: input.sourceSessionId }
 }
 
-// -----------------------------------------------------------------------------
-// stderr pattern detection — post-spawn fallback.
-// -----------------------------------------------------------------------------
-
-const SESSION_NOT_FOUND_PATTERNS: RegExp[] = [
-  /\bsession not found\b/i,
-  /\bsession\b[^\n]*\bdoes not exist\b/i,
-  /\bunknown session\s*id?\b/i,
-  /\bno such session\b/i,
-]
-
-/**
- * Returns `true` when opencode's stderr (after the run exited) indicates the
- * `--session <id>` we passed is not recognised — likely because the session
- * was deleted, schema-migrated, or never existed. The scheduler treats this
- * as a hard fail of the inline path: the current node_run is marked failed
- * and a retry (which does NOT inherit `resumeSessionId`) starts isolated.
- *
- * Multi-pattern by design: opencode wording has shifted across minor
- * versions, and this regex set is the only place we touch it — extend it
- * when a real-world stderr surface escapes detection, don't sprinkle string
- * matches at the call sites.
- */
-export function detectSessionNotFoundFromStderr(stderr: string): boolean {
-  if (stderr.length === 0) return false
-  return SESSION_NOT_FOUND_PATTERNS.some((re) => re.test(stderr))
-}
+// RFC-284 T15（D10）：stderr 措辞判据已下沉 RuntimeDriver.detectSessionNotFound?
+// （opencode 四正则迁 runtime/opencode/util.ts；claude 按实测采样补齐）——措辞
+// 属各 CLI 私有，本模块回归纯 pre-spawn 决策。

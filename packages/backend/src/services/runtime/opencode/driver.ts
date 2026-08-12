@@ -48,7 +48,7 @@ import { machineSkillRoots, opencodeDataDir } from './boundary'
 import { pickRuntimeHead } from '../head'
 import { toBusinessCtx, toSystemCtx } from '../spawnCtx'
 import { stageSkills } from '../stageSkills'
-import { probeOpencode } from './util'
+import { detectOpencodeSessionNotFound, probeOpencode } from './util'
 import { gitMetaDirsFor } from '@/util/git'
 import { getOpencodeBinaryVersion } from './versionRegistry'
 import { evictOpencodeModelsCache, listOpencodeModelsNatural } from './models'
@@ -360,6 +360,9 @@ export const opencodeDriver: RuntimeDriver = {
   // opencode 的进程内缓存只有 models 列表这一份。
   evictBinaryCaches(binaryPath: string): void {
     evictOpencodeModelsCache(binaryPath)
+  },
+  detectSessionNotFound(stderrTail: string): boolean {
+    return detectOpencodeSessionNotFound(stderrTail)
   },
   async captureSessions(ctx: SessionCaptureContext): Promise<void> {
     await captureChildSessions({

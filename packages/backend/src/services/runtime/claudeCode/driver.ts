@@ -467,6 +467,21 @@ export const claudeCodeDriver: RuntimeDriver = {
     if (nativeSessionId === null) throw new Error('mcp-test-native-session-missing')
     return turnSeq === 1 ? { nativeSessionId } : { resumeSessionId: nativeSessionId }
   },
+  /**
+   * RFC-284 T15（D10）—— claude 的 resume-不存在措辞，**实测采样**（本机
+   * claude CLI，2026-08-12，两种失败形态各采一条，非猜测）：
+   *   1) 合法格式未知 id：`No conversation found with session ID: <id>`
+   *   2) 非法格式：`--resume requires a valid session ID … is not a UUID and
+   *      does not match any session title`
+   * 猜错方向安全：漏配只丢告警、不误报（调用方 ?? false）。措辞漂移时在此扩列。
+   */
+  detectSessionNotFound(stderrTail: string): boolean {
+    if (stderrTail.length === 0) return false
+    return (
+      /no conversation found with session id/i.test(stderrTail) ||
+      /is not a uuid and does not match any session title/i.test(stderrTail)
+    )
+  },
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
   },

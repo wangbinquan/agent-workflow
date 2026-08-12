@@ -38,9 +38,9 @@ import type { ClarifyCrossAgentNode } from '@agent-workflow/shared'
 import { resolveCrossClarifySessionMode } from '@agent-workflow/shared'
 import {
   decideResumeSessionId,
-  detectSessionNotFoundFromStderr,
   type ClarifyInlineFallbackReason,
 } from '../src/services/sessionModeFallback'
+import { getRuntimeDriver } from '../src/services/runtime'
 
 function ccNode(overrides: Partial<ClarifyCrossAgentNode> = {}): ClarifyCrossAgentNode {
   return {
@@ -99,16 +99,38 @@ describe('RFC-056 C7 — inline fallback enumeration', () => {
     expect(ret.fallbackReason).toBeUndefined()
   })
 
-  test('detectSessionNotFoundFromStderr recognises common opencode error wordings', () => {
-    expect(detectSessionNotFoundFromStderr('Error: session not found')).toBe(true)
-    expect(detectSessionNotFoundFromStderr('the session foo does not exist')).toBe(true)
-    expect(detectSessionNotFoundFromStderr('unknown session id: opc_abc')).toBe(true)
-    expect(detectSessionNotFoundFromStderr('no such session')).toBe(true)
+  // RFC-284 T15 改锚：措辞判据下沉 RuntimeDriver.detectSessionNotFound?（各 CLI
+  // 私有）；原四条 opencode 措辞逐条保留，另补 claude 实测采样双措辞与跨 driver
+  // 互不误报。
+  test('opencode driver 识别既有四类措辞；无关 stderr 不误报', () => {
+    const d = getRuntimeDriver('opencode')
+    expect(d.detectSessionNotFound?.('Error: session not found')).toBe(true)
+    expect(d.detectSessionNotFound?.('the session foo does not exist')).toBe(true)
+    expect(d.detectSessionNotFound?.('unknown session id: opc_abc')).toBe(true)
+    expect(d.detectSessionNotFound?.('no such session')).toBe(true)
+    expect(d.detectSessionNotFound?.('warning: low disk space')).toBe(false)
+    expect(d.detectSessionNotFound?.('')).toBe(false)
   })
 
-  test('detectSessionNotFoundFromStderr does NOT false-positive on unrelated stderr', () => {
-    expect(detectSessionNotFoundFromStderr('warning: low disk space')).toBe(false)
-    expect(detectSessionNotFoundFromStderr('')).toBe(false)
+  test('claude driver 识别实测采样双措辞（2026-08-12 本机 CLI 采样）；跨 driver 不串', () => {
+    const c = getRuntimeDriver('claude-code')
+    expect(
+      c.detectSessionNotFound?.(
+        'No conversation found with session ID: 00000000-dead-beef-0000-000000000000',
+      ),
+    ).toBe(true)
+    expect(
+      c.detectSessionNotFound?.(
+        'Error: --resume requires a valid session ID or session title when used with --print. Provided value "x" is not a UUID and does not match any session title.',
+      ),
+    ).toBe(true)
+    expect(c.detectSessionNotFound?.('Error: session not found')).toBe(false) // opencode 措辞不归 claude
+    expect(
+      getRuntimeDriver('opencode').detectSessionNotFound?.(
+        'No conversation found with session ID: x',
+      ),
+    ).toBe(false)
+    expect(c.detectSessionNotFound?.('')).toBe(false)
   })
 
   test('3-reason union ClarifyInlineFallbackReason covers all RFC-026 inline-fallback exits', () => {

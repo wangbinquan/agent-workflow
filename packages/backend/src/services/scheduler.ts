@@ -84,7 +84,7 @@ import {
   SCRIPT_PERMANENT_FAILURE_CODES,
   type ScriptLanguage,
 } from '@agent-workflow/shared'
-import { runRootFor } from './runtime'
+import { getRuntimeDriver, runRootFor } from './runtime'
 import { loadConfig } from '@/config'
 import { ensureScriptDepsEnv, ScriptDepsInstallError, type ScriptDepsEnv } from './scriptDepsEnv'
 import { extractScriptPorts } from './scriptPorts'
@@ -123,7 +123,6 @@ import { buildClarifyQueueContext } from '@/services/clarifyQueue'
 import { getNodeClarifyDirectiveRow } from '@/services/taskClarifyDirective'
 import {
   decideResumeSessionId,
-  detectSessionNotFoundFromStderr,
   type ClarifyInlineFallbackReason,
 } from '@/services/sessionModeFallback'
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
@@ -6070,7 +6069,11 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // on the first attempt of a clarify rerun).
         if (resumeDecision.inlineMode && lastResult.status !== 'done') {
           const stderrText = await readStderrText(db, nodeRunId)
-          if (detectSessionNotFoundFromStderr(stderrText)) {
+          // RFC-284 T15（D10）：判据下沉 driver 能力面——措辞属各 CLI 私有。
+          // 无该能力的 driver 视为「无法判定」（告警可能缺失但绝不误报）。
+          if (
+            getRuntimeDriver(frozenRuntime.protocol).detectSessionNotFound?.(stderrText) === true
+          ) {
             await recordClarifyInlineEvent(db, nodeRunId, {
               level: 'warning',
               reason: 'session-not-found',

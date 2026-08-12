@@ -133,6 +133,26 @@
   「疑似漏配待另立」；fanoutMaxShardTotal 事实等效；commitPush×5/mergeAgent×2
   刻意不继承）。
 
-**剩余**：T14（runner drainTimedOut 观测面）、T15（session-not-found 下沉，claude 措辞须
-实测采样）、T24/T25（authLoginPolicy 迁移 + multipart 归位）、T29 实现门、T30 收尾
-（design/plan.md 索引状态刷新 + 「疑似漏配」三项呈用户拍板）。
+- **T24**（e6217c05）：authLoginPolicy 迁 auth/loginPolicy（D22 归位，7 importer
+  改路径无 facade；账本过渡条按 removeWhen 销账——过期条目检查删条前如设计般红，
+  棘轮闭环实证）。
+- **T25**（f4ef23b1）：loadClosureRefNames 下沉 services/agent + multipart 编排体
+  独立成 services/multipartTaskStart.ts。**实施勘误/定形**：审计锚 :1298-1516 的
+  骨架半截已被 RFC-218 先行；编排体并入骨架文件会经 launchMultipart⇄agentLaunch
+  闭合运行时环（no-circular 实抓），中途的 startExecution 注入方案随「独立模块」
+  定形撤销。四条路径/计数锁改锚（rfc165/107/103/104）。
+- **T14**（fcead748；runner 半场被并发 commit 565c9b05 按仓规携带，本 commit 补齐
+  shared/前端使链自洽）：drainTimedOut → 结构化 warn + record 仅真值附加可选
+  outputTailTruncated（NULL 列 run 不合成占位——设计门裁决）+ envelope-missing
+  文案条件前缀 + banner 专属行与 hasFindings ⊇ 关系保持；smoke/distiller 半场
+  经查已由 RFC-280 T7 failSink 先行覆盖，登记不重复实现。
+- **T15**（本 commit）：detectSessionNotFound? 下沉 driver 能力面——opencode 四
+  正则迁 runtime/opencode/util；**claude 措辞实测采样兑现**（本机 CLI 双失败形态
+  各采一条：`No conversation found with session ID:` / `--resume requires a valid
+  session ID … not a UUID and does not match any session title`），scheduler 唯一
+  消费点改按 frozenRuntime.protocol 盲调，sessionModeFallback 回归纯 pre-spawn
+  决策；跨 driver 措辞不串锁随批。
+
+**剩余**：T29 实现门（独立子代理对抗评审，一次覆盖全 RFC）+ T30 收尾
+（design/plan.md 索引状态刷新 + STATE.md 终账 + 「疑似漏配」四字段与坟场清理
+呈用户拍板）。

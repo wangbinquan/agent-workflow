@@ -96,3 +96,18 @@ export async function probeOpencode(
 // （RFC-143 PR-5 的 resolveOpencodeCmd 单份已于 RFC-284 T19 删除：RFC-282 C1 后
 // config.opencodePath 的头解析只活在 mint 冻结链 scheduler.freezeBinaryConfig，
 // 生产消费方为零。）
+
+// RFC-284 T15（自 services/sessionModeFallback.ts 迁入）—— opencode 拒绝
+// `--session <id>` 的 stderr 措辞集。Multi-pattern by design: opencode wording
+// has shifted across minor versions; 逃逸检测时在此扩列，勿在调用点散落字符串。
+const SESSION_NOT_FOUND_PATTERNS: RegExp[] = [
+  /\bsession not found\b/i,
+  /\bsession\b[^\n]*\bdoes not exist\b/i,
+  /\bunknown session\s*id?\b/i,
+  /\bno such session\b/i,
+]
+
+export function detectOpencodeSessionNotFound(stderrTail: string): boolean {
+  if (stderrTail.length === 0) return false
+  return SESSION_NOT_FOUND_PATTERNS.some((re) => re.test(stderrTail))
+}
