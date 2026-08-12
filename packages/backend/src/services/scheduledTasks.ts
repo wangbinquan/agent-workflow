@@ -1050,3 +1050,7 @@ export async function runScheduleNow(
   })
   return result
 }
+
+// RFC-284 T9（§2.2）——引用扫描的实现在叶子模块（避免与 workflow.ts 成环）；
+// 本文件保留 design 命名的导出面。
+export { scheduledRowsReferencing } from './scheduledTaskRefs'

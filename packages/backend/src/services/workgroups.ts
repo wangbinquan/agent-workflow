@@ -34,15 +34,9 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import { scheduledRowsReferencing } from './scheduledTaskRefs'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
-import {
-  agents,
-  resourceGrants,
-  scheduledTasks,
-  users,
-  workgroupMembers,
-  workgroups,
-} from '@/db/schema'
+import { agents, scheduledTasks, users, workgroupMembers, workgroups } from '@/db/schema'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   WORKGROUPS_CHANNEL,
@@ -57,6 +51,7 @@ import {
   initialPrivateResourceAcl,
   isResourceAdminActor,
   isResourceOwner,
+  listResourceGrantUserIdsInTx,
 } from './resourceAcl'
 import { nextResourceCopyName } from './resourceCopyName'
 import { assertNoMissingRefs, assertRefsUsableInTx, resolveRefsUsableById } from './resourceRefs'
@@ -557,17 +552,13 @@ export async function deleteWorkgroup(
       )
     }
     assertNoScheduledReferencesInTx(tx, principal, currentRow)
-    const grants = tx
-      .select({ userId: resourceGrants.userId })
-      .from(resourceGrants)
-      .where(and(eq(resourceGrants.resourceType, 'workgroup'), eq(resourceGrants.resourceId, id)))
-      .all()
+    // RFC-284 T10（§2.3）：grant 全清单查询收编 resourceAcl 单点。
     const audience: WorkgroupDeletedAudienceContext = {
       kind: 'workgroup.deleted-audience',
       workgroupId: id,
       visibility: currentRow.visibility,
       ownerUserId: currentRow.ownerUserId,
-      grantedUserIds: new Set(grants.map((grant) => grant.userId)),
+      grantedUserIds: new Set(listResourceGrantUserIdsInTx(tx, 'workgroup', id)),
     }
     const deleted = tx
       .delete(workgroups)
@@ -906,16 +897,11 @@ function assertNoScheduledReferencesInTx(
     })
     .from(scheduledTasks)
     .all()
-  const refs = rows.filter((row) => {
-    if (row.launchKind !== 'workgroup') return false
-    try {
-      const payload = JSON.parse(row.launchPayload) as {
-        workgroupId?: unknown
-      }
-      return payload.workgroupId === target.id
-    } catch {
-      return false
-    }
+  // RFC-284 T9（§2.2）：内联副本收编 scheduledTasks.scheduledRowsReferencing。
+  const refs = scheduledRowsReferencing(rows, {
+    launchKind: 'workgroup',
+    payloadKey: 'workgroupId',
+    id: target.id,
   })
   if (refs.length === 0) return
   const details =

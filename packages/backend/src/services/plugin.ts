@@ -9,7 +9,7 @@ import {
   type UpdatePlugin,
 } from '@agent-workflow/shared'
 import type { z } from 'zod'
-import { and, eq, isNull, like } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
@@ -23,6 +23,11 @@ import {
 } from './pluginInstaller'
 import { pluginOperationCoordinator } from './resourceOperationCoordinator'
 import { assertInitialResourceOwner, discloseRefs, initialPrivateResourceAcl } from './resourceAcl'
+import {
+  findAgentsReferencingIdInJsonColumn,
+  findAgentsReferencingIdInJsonColumnInTx,
+  type ReferencingAgentRow,
+} from './resourceRefs'
 import type { Actor } from '@/auth/actor'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 import { monotonicNow } from '@/util/time'
@@ -309,72 +314,25 @@ export async function renamePlugin(db: DbClient, id: string, input: RenamePlugin
   return renamed
 }
 
-export interface ReferencingAgentRow {
-  id: string
-  name: string
-  ownerUserId: string | null
-  visibility: 'public' | 'private'
-}
-
+// RFC-284 T9：两段式扫描收编 resourceRefs 泛型——本域只留 matcher。
 // RFC-223 (PR-1): agents.plugins stores ids, so the lookup key is the plugin id.
+export type { ReferencingAgentRow } from './resourceRefs'
+
+const pluginRefArgs = (pluginId: string) => ({
+  column: agents.plugins,
+  id: pluginId,
+  matches: (parsed: unknown, id: string) => Array.isArray(parsed) && parsed.includes(id),
+})
+
 export async function findAgentsReferencingPlugin(
   db: DbClient,
   pluginId: string,
 ): Promise<ReferencingAgentRow[]> {
-  const rows = await db
-    .select({
-      id: agents.id,
-      name: agents.name,
-      plugins: agents.plugins,
-      ownerUserId: agents.ownerUserId,
-      visibility: agents.visibility,
-    })
-    .from(agents)
-    .where(like(agents.plugins, `%"${pluginId}"%`))
-  return agentsReferencingPluginIn(rows, pluginId)
+  return findAgentsReferencingIdInJsonColumn(db, pluginRefArgs(pluginId))
 }
 
 function findAgentsReferencingPluginInTx(tx: DbTxSync, pluginId: string): ReferencingAgentRow[] {
-  const rows = tx
-    .select({
-      id: agents.id,
-      name: agents.name,
-      plugins: agents.plugins,
-      ownerUserId: agents.ownerUserId,
-      visibility: agents.visibility,
-    })
-    .from(agents)
-    .where(like(agents.plugins, `%"${pluginId}"%`))
-    .all()
-  return agentsReferencingPluginIn(rows, pluginId)
-}
-
-function agentsReferencingPluginIn(
-  rows: ReadonlyArray<{
-    id: string
-    name: string
-    plugins: string
-    ownerUserId: string | null
-    visibility: 'public' | 'private'
-  }>,
-  pluginId: string,
-): ReferencingAgentRow[] {
-  const out: ReferencingAgentRow[] = []
-  for (const row of rows) {
-    try {
-      const parsed = JSON.parse(row.plugins) as unknown
-      if (Array.isArray(parsed) && parsed.includes(pluginId))
-        out.push({
-          id: row.id,
-          name: row.name,
-          ownerUserId: row.ownerUserId,
-          visibility: row.visibility,
-        })
-    } catch {
-      // Corrupt legacy row: same [] fallback as Agent mapper.
-    }
-  }
-  return out
+  return findAgentsReferencingIdInJsonColumnInTx(tx, pluginRefArgs(pluginId))
 }
 
 export async function collectPluginGenerationGarbage(

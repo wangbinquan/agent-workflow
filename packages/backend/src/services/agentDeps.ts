@@ -29,9 +29,9 @@
 
 import type { Agent, RefCallPolicy } from '@agent-workflow/shared'
 import { resourceRefKey, VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
-import { like } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { agents } from '@/db/schema'
+import { findAgentsReferencingIdInJsonColumn } from './resourceRefs'
 import { DomainError } from '@/util/errors'
 import { getAgentById } from './agent'
 
@@ -229,13 +229,14 @@ export async function findAgentsDependingOn(
   db: DbClient,
   agentId: string,
 ): Promise<Array<{ id: string; name: string }>> {
-  // The escaped form ensures `["<id>"]` matches LIKE `%"<id>"%` for the
-  // pre-filter only; the JSON.parse step below is the authoritative test.
-  const rows = await db
-    .select({ id: agents.id, name: agents.name, dependsOn: agents.dependsOn })
-    .from(agents)
-    .where(like(agents.dependsOn, `%"${agentId}"%`))
-  return agentsDependingOnIn(rows, agentId).map(({ id, name }) => ({ id, name }))
+  // RFC-284 T9：LIKE 预过滤 + parse 精确判定收编 resourceRefs 泛型；
+  // 本域 matcher = dependsOn 字符串数组 includes。
+  const rows = await findAgentsReferencingIdInJsonColumn(db, {
+    column: agents.dependsOn,
+    id: agentId,
+    matches: (parsed, id) => Array.isArray(parsed) && parsed.includes(id),
+  })
+  return rows.map(({ id, name }) => ({ id, name }))
 }
 
 /** Pure core of findAgentsDependingOn — RFC-165 (F17-r3): the agent

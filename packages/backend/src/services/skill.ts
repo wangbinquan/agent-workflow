@@ -18,7 +18,7 @@ import type {
   UpdateSkillContent,
 } from '@agent-workflow/shared'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import {
   existsSync,
   lstatSync,
@@ -57,6 +57,7 @@ import {
   skillRootAbs,
 } from '@/services/skillIdentityPaths'
 import { findAgentsUsingManagedSkill } from '@/services/skillReferenceGuard'
+import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from '@/services/ownerScopedName'
 
 type SkillRow = typeof skills.$inferSelect
 
@@ -125,15 +126,12 @@ export async function isSkillNameOccupiedForOwner(
   name: string,
   ownerUserId: string | null,
 ): Promise<boolean> {
+  // RFC-284 T11：NULL-safe owner+name 查询收编 ownerScopedNameWhere（0118
+  // 表达式唯一索引的配套谓词，与 agent/mcp/plugin/workgroup 四域同源）。
   const rows = await db
     .select({ id: skills.id })
     .from(skills)
-    .where(
-      and(
-        eq(skills.name, name),
-        ownerUserId === null ? isNull(skills.ownerUserId) : eq(skills.ownerUserId, ownerUserId),
-      ),
-    )
+    .where(ownerScopedNameWhere(skills.ownerUserId, skills.name, ownerUserId, name))
     .limit(1)
   return rows.length > 0
 }
@@ -230,11 +228,7 @@ export async function createManagedSkillWithFiles(
       })
     })
   } catch (err) {
-    if (
-      /skills_owner_name_unique|UNIQUE constraint failed:? *skills\.(?:owner_user_id|name)/i.test(
-        err instanceof Error ? err.message : '',
-      )
-    ) {
+    if (isOwnerNameUniqueViolation(err, 'skills', 'skills_owner_name_unique')) {
       throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
     }
     throw err
@@ -353,11 +347,7 @@ export async function stageManagedSkill(
       })
     })
   } catch (err) {
-    if (
-      /skills_owner_name_unique|UNIQUE constraint failed:? *skills\.(?:owner_user_id|name)/i.test(
-        err instanceof Error ? err.message : '',
-      )
-    ) {
+    if (isOwnerNameUniqueViolation(err, 'skills', 'skills_owner_name_unique')) {
       throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
     }
     throw err

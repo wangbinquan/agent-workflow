@@ -16,10 +16,12 @@
 
 import type { AclResourceType, WorkflowDefinition } from '@agent-workflow/shared'
 import { collectWorkflowCallRefs, collectWorkgroupCallRefs } from '@agent-workflow/shared'
-import { inArray } from 'drizzle-orm'
+import { inArray, like } from 'drizzle-orm'
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
+import { agents } from '@/db/schema'
 import { ValidationError } from '@/util/errors'
 import {
   ACL_TABLES,
@@ -422,4 +424,95 @@ export function assertNoMissingRefs(
   missing: ReadonlyArray<{ type: AclResourceType; name: string }>,
 ): void {
   if (missing.length > 0) throw missingRefsError([...missing])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RFC-284 T9（§2.1）——「哪些 agent 的 JSON 列引用了这个 id」的唯一实现。
+//
+// mcp / plugin / skill / dependsOn 四个守卫此前各持一份两段式扫描（SQL LIKE
+// 粗过滤 + JSON parse 精确匹配），matcher 形状互有出入，且 skillReferenceGuard
+// 一直缺 LIKE 预过滤（全表扫描）。收编后各域守卫只留自己的 matcher + 一行委托；
+// LIKE 只是缩扫描量的粗过滤（`"<id>"` 子串可能命中别的值），matcher 才是权威。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 引用扫描的统一返回行（四域同形；披露/过滤仍须按 id 绑定，name 跨 owner 不唯一）。 */
+export interface ReferencingAgentRow {
+  id: string
+  name: string
+  ownerUserId: string | null
+  visibility: 'public' | 'private'
+}
+
+export interface ReferencingScanArgs {
+  /** agents 表上的 JSON 文本列（agents.mcp / plugins / skills / dependsOn）。 */
+  column: AnySQLiteColumn
+  /** 被引用的资源 id。 */
+  id: string
+  /** 对 parse 后的列值做权威判定。 */
+  matches: (parsed: unknown, id: string) => boolean
+}
+
+interface RawReferencingRow {
+  id: string
+  name: string
+  raw: unknown
+  ownerUserId: string | null
+  visibility: 'public' | 'private'
+}
+
+function collectReferencing(
+  rows: ReadonlyArray<RawReferencingRow>,
+  args: Pick<ReferencingScanArgs, 'id' | 'matches'>,
+): ReferencingAgentRow[] {
+  const out: ReferencingAgentRow[] = []
+  for (const row of rows) {
+    try {
+      // 四列均为 TEXT NOT NULL；drizzle 动态列的静态型退化为 unknown，此处收窄。
+      const parsed = JSON.parse(String(row.raw)) as unknown
+      if (args.matches(parsed, args.id)) {
+        out.push({
+          id: row.id,
+          name: row.name,
+          ownerUserId: row.ownerUserId,
+          visibility: row.visibility,
+        })
+      }
+    } catch {
+      // 损坏行与各域 Agent mapper 一致：fail-closed 当空表处理。
+    }
+  }
+  return out
+}
+
+function referencingSelectShape(column: AnySQLiteColumn) {
+  return {
+    id: agents.id,
+    name: agents.name,
+    raw: column,
+    ownerUserId: agents.ownerUserId,
+    visibility: agents.visibility,
+  }
+}
+
+export async function findAgentsReferencingIdInJsonColumn(
+  db: DbClient,
+  args: ReferencingScanArgs,
+): Promise<ReferencingAgentRow[]> {
+  const rows = await db
+    .select(referencingSelectShape(args.column))
+    .from(agents)
+    .where(like(args.column, `%"${args.id}"%`))
+  return collectReferencing(rows, args)
+}
+
+export function findAgentsReferencingIdInJsonColumnInTx(
+  tx: DbTxSync,
+  args: ReferencingScanArgs,
+): ReferencingAgentRow[] {
+  const rows = tx
+    .select(referencingSelectShape(args.column))
+    .from(agents)
+    .where(like(args.column, `%"${args.id}"%`))
+    .all()
+  return collectReferencing(rows, args)
 }

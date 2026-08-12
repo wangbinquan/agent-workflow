@@ -20,11 +20,26 @@
 // Role snapshots (D7/D17): resolveTaskRole computes the task-relationship
 // role recorded on review comments / decisions / clarify submissions. Member
 // identity wins over the global admin role.
+//
+// ── RFC-284 T12（§2.6）——六类资源的 OCC fence 选型对照（现状登记，非规范）──
+//
+// | 资源      | 机制                                        | 为什么是这个                          | 拒因子码现状 |
+// | agent     | 行级 CAS：expectedUpdatedAt+expectedAclRevision | 无 version 列；ACL 与内容双轴各自演进   | resource-operation-stale；名字域 agent-name-in-use |
+// | workflow  | version 列 CAS（PUT 自增）                   | 画布编辑器多标签并发是主场景            | workflow-version-conflict |
+// | workgroup | version 列 CAS                              | 同 workflow                          | workgroup-version-conflict |
+// | skill     | contentVersion 内容围栏 + 覆写/重命名版本域   | 文件系统为真源，注入面须防换胎（RFC-178/223）| skill-version-conflict / skill-changed / skill-overwrite-stale；名字域 skill-name-in-use（skills_owner_name_unique） |
+// | mcp       | RFC-201 精确操作修订（mcpOperationRevision） | 操作对象是配置哈希而非整行             | resource-operation-stale 系 + 运行面 mcp-config-changed 族 |
+// | plugin    | RFC-201 精确操作修订（pluginOperationRevision）| 同 mcp（generation 不可变）           | resource-operation-stale 系 |
+//
+// 另有启动预检的 preflight-stale（任务面，不属资源行 OCC）。**错误码横向不一致
+// 是已知债**：stale 语义归一（直接切换 + 族外码入族）已拍板在 RFC-285（Q1+Q7），
+// 本表只登记现状、不新造码。
 
 import type {
   AclResourceType,
   ResourceAcl,
   ResourceVisibility,
+  Role,
   TaskActorRole,
   UpdateResourceAclBody,
   UserPublic,
@@ -182,6 +197,63 @@ export function listGrantedResourceIdsInTx(
   return new Set(rows.map((r) => r.resourceId))
 }
 
+/** RFC-284 T10（§2.3）——by-resource 半边：与 grantsOfUserWhere 对称的唯一
+ *  WHERE 形状。此前五处（本文件 ×2、workflow / workgroups 删除审计受众、
+ *  mcpRuntimeTestTransitions 的 grant 集）各写一份字面 and(eq,eq)。 */
+export function grantsOfResourceWhere(type: AclResourceType, resourceId: string) {
+  return and(eq(resourceGrants.resourceType, type), eq(resourceGrants.resourceId, resourceId))
+}
+
+/** All granted user ids of one resource（audience 快照 / 成员清单用）。 */
+export async function listResourceGrantUserIds(
+  db: DbClient,
+  type: AclResourceType,
+  resourceId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ userId: resourceGrants.userId })
+    .from(resourceGrants)
+    .where(grantsOfResourceWhere(type, resourceId))
+  return rows.map((r) => r.userId)
+}
+
+/** Sync twin of `listResourceGrantUserIds` for services already inside dbTxSync. */
+export function listResourceGrantUserIdsInTx(
+  tx: DbTxSync,
+  type: AclResourceType,
+  resourceId: string,
+): string[] {
+  return tx
+    .select({ userId: resourceGrants.userId })
+    .from(resourceGrants)
+    .where(grantsOfResourceWhere(type, resourceId))
+    .all()
+    .map((r) => r.userId)
+}
+
+/**
+ * RFC-284 T10（§2.4）——「快照式受众可见性」唯一判定：对一份 DELETE 前捕获的
+ * （或事务内自建的）{visibility, ownerUserId, grantedUserIds} 快照判某用户可见。
+ * 含 admin 分支（isResourceAdminRole）——ws/registry 的 deleted-audience 两处此前
+ * 不带 admin 分支、其正确性非局部依赖上游 adminShortCircuit（:942）；收编后上游
+ * 捷径退化为纯性能优化。mcpRuntimeTestTransitions 的 status==='active' 检查按
+ * 设计留在调用方（本函数只答"可见性"，不答"账号是否存活"）。
+ */
+export function isVisibleToAudienceSnapshot(
+  userId: string,
+  role: Role,
+  snapshot: {
+    visibility: 'public' | 'private'
+    ownerUserId: string | null
+    grantedUserIds: ReadonlySet<string>
+  },
+): boolean {
+  if (isResourceAdminRole(role)) return true
+  if (snapshot.visibility === 'public') return true
+  if (snapshot.ownerUserId !== null && snapshot.ownerUserId === userId) return true
+  return snapshot.grantedUserIds.has(userId)
+}
+
 /** Pure visibility predicate against a pre-fetched grant set. */
 export function isVisibleRow(actor: Actor, row: AclRow, grantedIds: ReadonlySet<string>): boolean {
   if (isResourceAdminActor(actor)) return true
@@ -273,13 +345,7 @@ export async function canViewResource(
   const rows = await db
     .select({ resourceId: resourceGrants.resourceId })
     .from(resourceGrants)
-    .where(
-      and(
-        eq(resourceGrants.resourceType, type),
-        eq(resourceGrants.resourceId, row.id),
-        eq(resourceGrants.userId, actor.user.id),
-      ),
-    )
+    .where(and(grantsOfResourceWhere(type, row.id), eq(resourceGrants.userId, actor.user.id)))
     .limit(1)
   return rows.length > 0
 }
@@ -298,13 +364,7 @@ export function canViewResourceInTx(
     tx
       .select({ resourceId: resourceGrants.resourceId })
       .from(resourceGrants)
-      .where(
-        and(
-          eq(resourceGrants.resourceType, type),
-          eq(resourceGrants.resourceId, row.id),
-          eq(resourceGrants.userId, actor.user.id),
-        ),
-      )
+      .where(and(grantsOfResourceWhere(type, row.id), eq(resourceGrants.userId, actor.user.id)))
       .get() !== undefined
   )
 }
@@ -398,11 +458,7 @@ export async function getResourceAcl(
     .where(eq(table.id, row.id))
     .limit(1)
   const aclRevision = revRows[0]?.aclRevision ?? 0
-  const grantRows = await db
-    .select()
-    .from(resourceGrants)
-    .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.resourceId, row.id)))
-  const grantIds = grantRows.map((g) => g.userId)
+  const grantIds = await listResourceGrantUserIds(db, type, row.id)
   const wantedIds = [...new Set([...(row.ownerUserId ? [row.ownerUserId] : []), ...grantIds])]
   const userRows =
     wantedIds.length === 0 ? [] : await db.select().from(users).where(inArray(users.id, wantedIds))
@@ -550,12 +606,7 @@ export async function updateResourceAcl(
     if (body.userIds !== undefined) {
       nextGrantIds = [...new Set(body.userIds)]
     } else {
-      const current = tx
-        .select({ userId: resourceGrants.userId })
-        .from(resourceGrants)
-        .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.resourceId, row.id)))
-        .all()
-      nextGrantIds = current.map((g) => g.userId)
+      nextGrantIds = listResourceGrantUserIdsInTx(tx, type, row.id)
     }
     // Owner transfer keeps the previous human owner visible (server-side rule).
     if (
@@ -594,9 +645,7 @@ export async function updateResourceAcl(
       }
       throw error
     }
-    tx.delete(resourceGrants)
-      .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.resourceId, row.id)))
-      .run()
+    tx.delete(resourceGrants).where(grantsOfResourceWhere(type, row.id)).run()
     if (nextGrantIds.length > 0) {
       tx.insert(resourceGrants)
         .values(

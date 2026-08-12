@@ -16,8 +16,13 @@ import {
   McpRemoteConfigSchema,
   McpSchema,
 } from '@agent-workflow/shared'
-import { eq, like } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { assertInitialResourceOwner, discloseRefs, initialPrivateResourceAcl } from './resourceAcl'
+import {
+  findAgentsReferencingIdInJsonColumn,
+  findAgentsReferencingIdInJsonColumnInTx,
+  type ReferencingAgentRow,
+} from './resourceRefs'
 import type { Actor } from '@/auth/actor'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
@@ -351,80 +356,28 @@ export async function renameMcp(
 }
 
 /**
- * Returns the agents (id + name) whose `mcp` JSON column references `mcpId`.
- * RFC-223 (PR-1): agents.mcp stores ids, so the lookup key is the mcp id.
- *
- * Two-stage matching: SQL `LIKE` pre-filter is coarse (substring match) so we
- * re-parse and exact-match with Array.includes to reject any coincidental JSON
- * substring hit.
+ * Returns the agents whose `mcp` JSON column references `mcpId`. RFC-223
+ * (PR-1): agents.mcp stores ids, so the lookup key is the mcp id.
+ * RFC-284 T9：两段式扫描（LIKE 粗过滤 + parse 精确判定）收编
+ * `resourceRefs.findAgentsReferencingIdInJsonColumn`——本域只留 matcher。
  */
-export interface ReferencingAgentRow {
-  id: string
-  name: string
-  ownerUserId: string | null
-  visibility: 'public' | 'private'
-}
+export type { ReferencingAgentRow } from './resourceRefs'
+
+const mcpRefArgs = (mcpId: string) => ({
+  column: agents.mcp,
+  id: mcpId,
+  matches: (parsed: unknown, id: string) => Array.isArray(parsed) && parsed.includes(id),
+})
 
 export async function findAgentsReferencingMcp(
   db: DbClient,
   mcpId: string,
 ): Promise<ReferencingAgentRow[]> {
-  const rows = await db
-    .select({
-      id: agents.id,
-      name: agents.name,
-      mcp: agents.mcp,
-      ownerUserId: agents.ownerUserId,
-      visibility: agents.visibility,
-    })
-    .from(agents)
-    .where(like(agents.mcp, `%"${mcpId}"%`))
-
-  return agentsReferencingMcpIn(rows, mcpId)
+  return findAgentsReferencingIdInJsonColumn(db, mcpRefArgs(mcpId))
 }
 
 function findAgentsReferencingMcpInTx(tx: DbTxSync, mcpId: string): ReferencingAgentRow[] {
-  const rows = tx
-    .select({
-      id: agents.id,
-      name: agents.name,
-      mcp: agents.mcp,
-      ownerUserId: agents.ownerUserId,
-      visibility: agents.visibility,
-    })
-    .from(agents)
-    .where(like(agents.mcp, `%"${mcpId}"%`))
-    .all()
-  return agentsReferencingMcpIn(rows, mcpId)
-}
-
-function agentsReferencingMcpIn(
-  rows: ReadonlyArray<{
-    id: string
-    name: string
-    mcp: string
-    ownerUserId: string | null
-    visibility: 'public' | 'private'
-  }>,
-  mcpId: string,
-): ReferencingAgentRow[] {
-  const out: ReferencingAgentRow[] = []
-  for (const row of rows) {
-    try {
-      const parsed = JSON.parse(row.mcp) as unknown
-      if (Array.isArray(parsed) && parsed.includes(mcpId)) {
-        out.push({
-          id: row.id,
-          name: row.name,
-          ownerUserId: row.ownerUserId,
-          visibility: row.visibility,
-        })
-      }
-    } catch {
-      // malformed column — agent.ts parser treats it as [] anyway
-    }
-  }
-  return out
+  return findAgentsReferencingIdInJsonColumnInTx(tx, mcpRefArgs(mcpId))
 }
 
 // --- internals ---

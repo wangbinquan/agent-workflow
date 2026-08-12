@@ -39,7 +39,7 @@ import {
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { plugins, resourceBundleApplies, skillOperations } from '@/db/schema'
-import { ACL_TABLES } from '@/services/resourceAcl'
+import { ACL_TABLES, initialPrivateResourceAcl } from '@/services/resourceAcl'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import {
@@ -744,7 +744,8 @@ function commitOne(
       commitPluginCreateInTx(tx, {
         id: item.op.resourceId,
         parsed: item.parsed as never,
-        initialAcl: { ownerUserId: ctx.actor.user.id, visibility: 'private', aclRevision: 0 },
+        // RFC-284 T11：字面 ACL 初值收编 initialPrivateResourceAcl（值逐字节同）。
+        initialAcl: initialPrivateResourceAcl(ctx.actor.user.id),
         install,
         now: Date.now(),
       })

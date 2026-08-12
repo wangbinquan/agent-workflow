@@ -5,13 +5,12 @@
 // performs abort/reap/cleanup after commit.
 
 import { and, eq, inArray, isNull } from 'drizzle-orm'
-import { isResourceAdminRole } from '@agent-workflow/shared'
+import { isVisibleToAudienceSnapshot, listResourceGrantUserIdsInTx } from '@/services/resourceAcl'
 import type { DbTxSync } from '@/db/txSync'
 import {
   mcpRuntimeTestCreateReceipts,
   mcpRuntimeTestSessions,
   mcpRuntimeTestSessionLeases,
-  resourceGrants,
   runtimes,
   users,
 } from '@/db/schema'
@@ -122,12 +121,10 @@ export function transitionMcpAclRuntimeTestsInTx(
       .from(users)
       .where(eq(users.id, session.ownerUserId))
       .get()
+    // RFC-284 T10（§2.4）：可见性四分支收编快照判定；status 检查按设计留调用方。
     const stillVisible =
       account?.status === 'active' &&
-      (isResourceAdminRole(account.role) ||
-        input.visibility === 'public' ||
-        input.ownerUserId === session.ownerUserId ||
-        input.grantedUserIds.has(session.ownerUserId))
+      isVisibleToAudienceSnapshot(session.ownerUserId, account.role, input)
     if (!stillVisible) {
       endNow(tx, session, 'access-revoked', input.now)
     } else {
@@ -248,12 +245,6 @@ export function deletePreparedMcpRuntimeTestsInTx(tx: DbTxSync, mcpId: string): 
 
 /** Test/helper query for the canonical ACL grant set already materialized in tx. */
 export function mcpGrantIdsInTx(tx: DbTxSync, mcpId: string): ReadonlySet<string> {
-  return new Set(
-    tx
-      .select({ userId: resourceGrants.userId })
-      .from(resourceGrants)
-      .where(and(eq(resourceGrants.resourceType, 'mcp'), eq(resourceGrants.resourceId, mcpId)))
-      .all()
-      .map((row) => row.userId),
-  )
+  // RFC-284 T10（§2.3）：收编 resourceAcl 单点。
+  return new Set(listResourceGrantUserIdsInTx(tx, 'mcp', mcpId))
 }

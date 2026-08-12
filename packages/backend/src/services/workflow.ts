@@ -42,7 +42,8 @@ import { privilegedNodeLensFor } from './privilegedNodeLens'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
-import { resourceGrants, scheduledTasks, tasks, workflows } from '@/db/schema'
+import { scheduledTasks, tasks, workflows } from '@/db/schema'
+import { scheduledRowsReferencing } from './scheduledTaskRefs'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   WORKFLOWS_CHANNEL,
@@ -67,6 +68,7 @@ import {
   initialPrivateResourceAcl,
   isResourceAdminActor,
   isResourceOwner,
+  listResourceGrantUserIdsInTx,
 } from './resourceAcl'
 import { nextResourceCopyName } from './resourceCopyName'
 import { assertNotBuiltin } from './systemResources'
@@ -738,17 +740,13 @@ export async function deleteWorkflow(
     // visibility audience in this same transaction, then carry it beside (not
     // inside) the WS frame after commit. This closes the cold-cache delivery
     // gap without exposing ACL data on the shared client wire.
-    const grantRows = tx
-      .select({ userId: resourceGrants.userId })
-      .from(resourceGrants)
-      .where(and(eq(resourceGrants.resourceType, 'workflow'), eq(resourceGrants.resourceId, id)))
-      .all()
+    // RFC-284 T10（§2.3）：grant 全清单查询收编 resourceAcl 单点。
     const audience: WorkflowDeletedAudienceContext = {
       kind: 'workflow.deleted-audience',
       workflowId: id,
       visibility: currentRow.visibility,
       ownerUserId: currentRow.ownerUserId,
-      grantedUserIds: new Set(grantRows.map((row) => row.userId)),
+      grantedUserIds: new Set(listResourceGrantUserIdsInTx(tx, 'workflow', id)),
     }
 
     const deletedRow = tx
@@ -784,17 +782,13 @@ export async function deleteWorkflow(
 export function scheduledRowsReferencingWorkflow<
   R extends { id: string; launchKind: string; launchPayload: string },
 >(rows: ReadonlyArray<R>, workflowId: string): R[] {
-  const out: R[] = []
-  for (const row of rows) {
-    if (row.launchKind !== 'workflow') continue
-    try {
-      const p = JSON.parse(row.launchPayload) as { workflowId?: unknown }
-      if (p.workflowId === workflowId) out.push(row)
-    } catch {
-      /* skip degraded rows */
-    }
-  }
-  return out
+  // RFC-284 T9（§2.2）：实现收编 scheduledTasks.scheduledRowsReferencing；
+  // 导出面保留（rfc202 生命周期测试等消费方零改动）。
+  return scheduledRowsReferencing(rows, {
+    launchKind: 'workflow',
+    payloadKey: 'workflowId',
+    id: workflowId,
+  })
 }
 
 /**

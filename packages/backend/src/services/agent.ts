@@ -20,6 +20,7 @@ import { and, eq, inArray, like, notInArray, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { agents, mcps, plugins, scheduledTasks, tasks, workflows } from '@/db/schema'
+import { scheduledRowsReferencing } from './scheduledTaskRefs'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
@@ -698,16 +699,17 @@ export async function deleteAgent(
       })
       .from(scheduledTasks)
       .all()
-    const schedRefs = scheduledRowsReferencingAgent(schedRows, { id: existing.id })
-    if (schedRefs.length > 0) {
-      const schedIds = new Set(schedRefs)
+    // RFC-284 T9（§2.2）：本地副本收编 scheduledTasks.scheduledRowsReferencing。
+    const schedRefRows = scheduledRowsReferencing(schedRows, {
+      launchKind: 'agent',
+      payloadKey: 'agentId',
+      id: existing.id,
+    })
+    if (schedRefRows.length > 0) {
       throw new ConflictError(
         'agent-scheduled-referenced',
-        `agent '${name}' is the target of ${schedRefs.length} scheduled task(s); delete or repoint them first`,
-        discloseScheduleRefs(
-          actor,
-          schedRows.filter((r) => schedIds.has(r.id)),
-        ),
+        `agent '${name}' is the target of ${schedRefRows.length} scheduled task(s); delete or repoint them first`,
+        discloseScheduleRefs(actor, schedRefRows),
       )
     }
     tx.delete(agents).where(eq(agents.id, id)).run()
@@ -802,23 +804,6 @@ export async function renameAgent(
  * RFC-223: scheduled agent targets are canonical ids. Delete refuses while an
  * id-targeted row remains; rename is safe because the id does not change.
  */
-function scheduledRowsReferencingAgent(
-  rows: ReadonlyArray<{ id: string; launchKind: string; launchPayload: string }>,
-  target: { id: string },
-): string[] {
-  const out: string[] = []
-  for (const row of rows) {
-    if (row.launchKind !== 'agent') continue
-    try {
-      const p = JSON.parse(row.launchPayload) as { agentId?: unknown }
-      if (p.agentId === target.id) out.push(row.id)
-    } catch {
-      /* degraded rows are repaired/deleted via their own flow */
-    }
-  }
-  return out
-}
-
 function requireAgentMutationRevision(
   tx: DbTxSync,
   id: string,

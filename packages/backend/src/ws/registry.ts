@@ -62,7 +62,11 @@ import {
   workgroups,
 } from '@/db/schema'
 import { canViewMemory } from '@/services/memory'
-import { canAuditIntentSessions, canViewResource } from '@/services/resourceAcl'
+import {
+  canAuditIntentSessions,
+  canViewResource,
+  isVisibleToAudienceSnapshot,
+} from '@/services/resourceAcl'
 import { canViewTask } from '@/services/taskCollab'
 import { createLogger } from '@/util/log'
 import {
@@ -392,9 +396,9 @@ function deletedWorkflowAudienceVisible(
   ) {
     return null
   }
-  if (context.visibility === 'public') return true
-  if (context.ownerUserId === actor.user.id) return true
-  return context.grantedUserIds.has(actor.user.id)
+  // RFC-284 T10（§2.4）：判定收编快照函数（自带 admin 分支——此前本函数不含
+  // admin、正确性非局部依赖上游 adminShortCircuit，收编后捷径纯属性能优化）。
+  return isVisibleToAudienceSnapshot(actor.user.id, actor.user.role, context)
 }
 
 function deletedWorkgroupAudienceVisible(
@@ -409,9 +413,8 @@ function deletedWorkgroupAudienceVisible(
   ) {
     return null
   }
-  if (context.visibility === 'public') return true
-  if (context.ownerUserId === actor.user.id) return true
-  return context.grantedUserIds.has(actor.user.id)
+  // RFC-284 T10（§2.4）：同 workflow 侧——判定收编快照函数。
+  return isVisibleToAudienceSnapshot(actor.user.id, actor.user.role, context)
 }
 
 /**
