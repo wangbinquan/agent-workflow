@@ -28,6 +28,7 @@ import {
 } from '@/services/recoveryBreaker'
 import { listAllOpenLifecycleAlerts, type OpenLifecycleAlert } from '@/services/taskAlerts'
 import { createLogger } from '@/util/log'
+import { DAEMON_CADENCE } from './daemonCadence'
 
 const log = createLogger('auto-repair')
 const HOLDER = 'auto-repair'
@@ -144,7 +145,7 @@ export function startAutoRepairLoop(opts: {
   onResolved?: (taskId: string) => void
   intervalMs?: number
 }): AutoRepairLoopHandle {
-  const intervalMs = opts.intervalMs ?? 5 * 60 * 1000
+  const intervalMs = opts.intervalMs ?? DAEMON_CADENCE.autoRepair
   let inFlight = false
   const tick = async (): Promise<void> => {
     if (inFlight) return

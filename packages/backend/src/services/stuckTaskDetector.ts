@@ -57,6 +57,7 @@ import {
   type StuckRule,
 } from './lifecycleInvariants'
 import { hasUndispatchedDesignerQuestions } from '@/services/taskQuestions'
+import { DAEMON_CADENCE } from './daemonCadence'
 
 const log = createLogger('lifecycle.stuck')
 
@@ -67,6 +68,10 @@ export const DEFAULT_STUCK_THRESHOLD_MS = 30 * MIN_MS
 /** Default S4 threshold — 5 minutes; pending tasks should be picked up
  *  by the scheduler in ms, not minutes. */
 export const DEFAULT_PENDING_THRESHOLD_MS = 5 * MIN_MS
+/** RFC-284 T22（决策 D11）：子任务（parent_task_id 非空）pending 常因 childBudget
+ *  预算排队属合法长等（>60s 已有日志），5min 阈值必然误报噪音 → 提高到 30min；
+ *  顶层任务维持 5min 不变。 */
+export const DEFAULT_CHILD_PENDING_THRESHOLD_MS = 30 * MIN_MS
 
 export interface RunStuckTaskDetectorArgs {
   db: DbClient
@@ -97,6 +102,8 @@ export interface RunStuckTaskDetectorResult {
 
 interface StuckCandidate {
   taskId: string
+  /** RFC-284 T22（D11）：非空 = call 子任务，S4 用更高阈值 + childBudget 提示。 */
+  parentTaskId: string | null
   status: string
   startedAt: number
   ownerUserId: string | null
@@ -119,6 +126,7 @@ async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise
       startedAt: tasks.startedAt,
       ownerUserId: tasks.ownerUserId,
       workgroupId: tasks.workgroupId,
+      parentTaskId: tasks.parentTaskId,
     })
     .from(tasks)
     .where(
@@ -130,6 +138,7 @@ async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise
     taskId: r.id,
     status: r.status,
     startedAt: r.startedAt,
+    parentTaskId: r.parentTaskId,
     ownerUserId: r.ownerUserId,
     workgroupId: r.workgroupId,
   }))
@@ -303,7 +312,13 @@ async function checkOne(
     // S4: pending too long. No freshness gate (pending tasks emit no
     // events; the gate would never trigger).
     const pendingForMs = now - c.startedAt
-    if (pendingForMs > pendingThresholdMs) {
+    // D11：子任务在 childBudget 预算下排队是合法长等 → 更高阈值 + 提示；
+    // 顶层任务维持调用方传入的阈值。
+    const effectiveThresholdMs =
+      c.parentTaskId === null
+        ? pendingThresholdMs
+        : Math.max(pendingThresholdMs, DEFAULT_CHILD_PENDING_THRESHOLD_MS)
+    if (pendingForMs > effectiveThresholdMs) {
       out.push({
         taskId: c.taskId,
         rule: 'S4',
@@ -311,7 +326,13 @@ async function checkOne(
           rule: 'S4',
           message: 'task pending too long without scheduler pickup',
           pendingForMs,
-          thresholdMs: pendingThresholdMs,
+          thresholdMs: effectiveThresholdMs,
+          ...(c.parentTaskId === null
+            ? {}
+            : {
+                childBudgetWaitHint:
+                  'child task of a call node — long pending may be legitimate childBudget queueing, not a stall',
+              }),
         },
       })
     }
@@ -604,7 +625,7 @@ export function startStuckTaskDetectorLoop(opts: {
   onResolved?: (taskId: string) => void
   intervalMs?: number
 }): { stop: () => void } {
-  const interval = opts.intervalMs ?? 5 * MIN_MS
+  const interval = opts.intervalMs ?? DAEMON_CADENCE.stuckTaskScan
   let running = false
   const safeRun = (): void => {
     if (running) return

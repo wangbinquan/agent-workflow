@@ -62,6 +62,7 @@ import { buildWebSocketAdapter } from '@/ws/server'
 import { isBootstrapRequired } from '@/services/authLoginPolicy'
 import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { DAEMON_CADENCE } from '@/services/daemonCadence'
 
 export interface StartOptions {
   port?: number
@@ -787,46 +788,40 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       err: err instanceof Error ? err.message : String(err),
     })
   }
-  const intentGcTimer = setInterval(
-    () => {
-      try {
-        const retention = loadConfig(Paths.config).intentBuilderScratchRetentionHours ?? 24
-        sweepIntentScratch(db, Paths.root, retention)
-        void convergeIntentApplyJournal(db, Paths.root)
-        // 同上：两条 journal 各自收敛（RFC-271）。收敛器自带 active-set + 10 分钟
-        // 下限，所以一个慢 npm 安装跨过 tick 不会被当成崩溃残留收割。
-        void convergeResourceBundleApplies(db, Paths.root)
-      } catch (err) {
-        log.warn('intent hourly maintenance failed', {
-          err: err instanceof Error ? err.message : String(err),
-        })
-      }
-    },
-    60 * 60 * 1000,
-  )
+  const intentGcTimer = setInterval(() => {
+    try {
+      const retention = loadConfig(Paths.config).intentBuilderScratchRetentionHours ?? 24
+      sweepIntentScratch(db, Paths.root, retention)
+      void convergeIntentApplyJournal(db, Paths.root)
+      // 同上：两条 journal 各自收敛（RFC-271）。收敛器自带 active-set + 10 分钟
+      // 下限，所以一个慢 npm 安装跨过 tick 不会被当成崩溃残留收割。
+      void convergeResourceBundleApplies(db, Paths.root)
+    } catch (err) {
+      log.warn('intent hourly maintenance failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }, DAEMON_CADENCE.intentScratchGc)
   intentGcTimer.unref?.()
 
   // RFC-247 D16 — token-audit retention. Rides the same hourly cadence as the
   // other sweeps rather than adding a scheduler: an audit row that lingers an
   // extra hour past its retention window is not a problem worth a new timer.
-  const tokenAuditGcTimer = setInterval(
-    () => {
-      void (async () => {
-        try {
-          const days = tokenAuditRetentionDays(Paths.config)
-          const pruned = await pruneTokenAudit(db, days)
-          if (pruned.audits > 0 || pruned.snapshots > 0) {
-            log.info('token audit pruned', { ...pruned, retentionDays: days })
-          }
-        } catch (err) {
-          log.warn('token audit prune failed', {
-            err: err instanceof Error ? err.message : String(err),
-          })
+  const tokenAuditGcTimer = setInterval(() => {
+    void (async () => {
+      try {
+        const days = tokenAuditRetentionDays(Paths.config)
+        const pruned = await pruneTokenAudit(db, days)
+        if (pruned.audits > 0 || pruned.snapshots > 0) {
+          log.info('token audit pruned', { ...pruned, retentionDays: days })
         }
-      })()
-    },
-    60 * 60 * 1000,
-  )
+      } catch (err) {
+        log.warn('token audit prune failed', {
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })()
+  }, DAEMON_CADENCE.tokenAuditGc)
   tokenAuditGcTimer.unref?.()
 
   // RFC-053 P-3 — lifecycle invariant scan. Boot-time scan (~5s after the

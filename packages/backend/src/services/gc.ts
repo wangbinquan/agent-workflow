@@ -34,6 +34,7 @@ import { nodeRuns, taskRepos, tasks } from '@/db/schema'
 import { deleteSnapshotRefs, removeWorktree, runGit } from '@/util/git'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { createLogger } from '@/util/log'
+import { DAEMON_CADENCE } from './daemonCadence'
 
 const log = createLogger('gc')
 
@@ -501,7 +502,7 @@ export async function runIsoWorktreeGc(
 export function startWorktreeGc(
   db: DbClient,
   loadConfig: () => Pick<Config, 'worktreeAutoGc'>,
-  intervalMs: number = HOUR_MS,
+  intervalMs: number = DAEMON_CADENCE.worktreeGc,
   appHome?: string,
 ): { stop: () => void } {
   let running = false

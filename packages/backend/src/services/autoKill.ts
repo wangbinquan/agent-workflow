@@ -27,6 +27,7 @@ import {
 } from '@/services/recoveryBreaker'
 import { killStaleRunProcessTree } from '@/util/process'
 import { createLogger } from '@/util/log'
+import { DAEMON_CADENCE } from './daemonCadence'
 
 const log = createLogger('auto-kill')
 const HOLDER = 'heartbeat-kill'
@@ -131,7 +132,7 @@ export function startHeartbeatKillLoop(opts: {
   configPath: string
   intervalMs?: number
 }): HeartbeatKillLoopHandle {
-  const intervalMs = opts.intervalMs ?? 5 * 60 * 1000
+  const intervalMs = opts.intervalMs ?? DAEMON_CADENCE.autoKill
   let inFlight = false
   const tick = async (): Promise<void> => {
     if (inFlight) return

@@ -27,6 +27,7 @@ import { runDistill, type DistillerSpawnFn, rowToDistillJob } from '@/services/m
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { MEMORY_DISTILL_JOB_CHANNEL, memoryDistillJobBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
+import { agentRefOfNode } from '@/services/ref/runtimeRef'
 
 const log = createLogger('memory-distill-scheduler')
 
@@ -149,8 +150,10 @@ export function extractAgentIdsFromSnapshot(workflowSnapshot: string): string[] 
     if (typeof node !== 'object' || node === null) continue
     if (node.kind !== 'agent-single') continue
     if (node.agentId === QUARANTINED_SNAPSHOT_AGENT_ID) continue
-    const id = typeof node.agentId === 'string' && node.agentId.length > 0 ? node.agentId : null
-    if (id !== null) ids.add(id)
+    // RFC-284 T22：判据改走唯一读取点（services/ref/runtimeRef.agentRefOfNode），
+    // QUARANTINED 过滤仍留本地（上一行）——它是 distill 语义不是 ref 语义。
+    const ref = agentRefOfNode(node)
+    if (ref !== null && ref.k === 'id') ids.add(ref.id)
   }
   return [...ids]
 }

@@ -45,6 +45,7 @@ import type { DbClient } from '@/db/client'
 import { clarifyRounds, docVersions, lifecycleAlerts, nodeRuns, tasks } from '@/db/schema'
 import { hasUndispatchedDesignerQuestions } from '@/services/taskQuestions'
 import { createLogger, type Logger } from '@/util/log'
+import { DAEMON_CADENCE } from './daemonCadence'
 
 const log = createLogger('lifecycle.invariants')
 
@@ -834,7 +835,7 @@ export function startLifecycleInvariantsLoop(opts: {
   incrementalWindowMs?: number
 }): { stop: () => void } {
   const bootDelay = opts.bootDelayMs ?? 5_000
-  const interval = opts.intervalMs ?? HOUR_MS
+  const interval = opts.intervalMs ?? DAEMON_CADENCE.lifecycleInvariants
   const window = opts.incrementalWindowMs ?? 2 * HOUR_MS
   let running = false
 

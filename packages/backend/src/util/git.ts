@@ -1477,8 +1477,10 @@ async function checkoutWorkingBranch(opts: {
  * Internally uses `git -c core.quotepath=false diff --binary <fromCommit> --`
  * plus `git ls-files --others --exclude-standard` for untracked files
  * (each rendered as a synthetic add diff via `git diff --no-index /dev/null
- * <path>`). The combined output is a self-contained unified diff that
- * `parseDiff()` in `util/diffSplit.ts` can shard.
+ * <path>`). The combined output is a self-contained unified diff.
+ * （RFC-284 T23/决策 D12：旧 `util/diffSplit.ts` 的 per-file/per-N/per-dir
+ * 分片器已随死代码删除——现行分片是 RFC-103 的 list 逐项机制，见 CLAUDE.md
+ * §Multi-process node；将来若做 git_diff_full 再按届时需求重写。）
  */
 export async function gitDiffSnapshot(worktreePath: string, fromCommit: string): Promise<string> {
   // RFC-239 — `--find-renames` is explicit (not left to the host's

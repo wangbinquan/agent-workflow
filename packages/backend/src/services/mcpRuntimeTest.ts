@@ -58,7 +58,6 @@ import {
   killStaleRunProcessTree as productionKillStaleRunProcessTree,
   type StaleRunKillOutcome,
 } from '@/util/process'
-import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { StartupVerificationResult } from '@agent-workflow/shared'
 import {
   observationFromClaudeInit,
@@ -75,6 +74,7 @@ import {
 } from '@/services/mcpRuntimeTestLease'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
 import { sha256Hex } from '@/util/hash'
+import { defaultConfigDirProfile } from '@/services/runtimeRegistry'
 
 export const MCP_RUNTIME_TEST_IDLE_MS = 10 * 60_000
 export const MCP_RUNTIME_TEST_TURN_TIMEOUT_MS = 10 * 60_000
@@ -2543,8 +2543,10 @@ export class McpRuntimeTestService {
               }): AgentSpawnContext => {
                 assertSpawnAllowed()
                 const turnRunRoot = join(runDir, 'turns', turn.id)
-                const protocolDefaults =
-                  DEFAULT_CONFIG_DIR_PROFILE[session.runtimeProtocol as 'opencode' | 'claude-code']
+                // RFC-284 T13（审计 N4）：手写二元 cast 会绕开 shared 的
+                // RuntimeKind 完备性设计（新增第三 kind 编译照过、运行时
+                // TypeError）——改走 runtimeRegistry 的穷尽访问器。
+                const protocolDefaults = defaultConfigDirProfile(session.runtimeProtocol)
                 // RFC-280 T6 — the playground rides the unified injection layer;
                 // the RFC-029 inventory plugin is FORCED on runtimes that observe
                 // via file (P1-4 — a strict consumer must never run blind).

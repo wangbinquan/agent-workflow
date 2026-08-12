@@ -26,7 +26,6 @@ import { createInMemoryDb } from '@/db/client'
 import { agents, nodeRuns, nodeRunEvents, tasks, workflows } from '@/db/schema'
 import { startTask } from '@/services/task'
 import { listTasks, getNodeRunEvents } from '@/services/task'
-import { splitDiffPerDirectory, splitDiffPerFile, splitDiffPerNFiles } from '@/util/diffSplit'
 import { createLogger } from '@/util/log'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -179,43 +178,6 @@ async function scenarioTasksList(): Promise<void> {
 // -------------------------------------------------------------------------
 // Scenario 3: 10 MiB diff split.
 // -------------------------------------------------------------------------
-function syntheticDiff(targetBytes: number): { diff: string; files: number } {
-  const chunks: string[] = []
-  let bytes = 0
-  let i = 0
-  const lineBody = '+ '.padEnd(160, 'x') + '\n'
-  while (bytes < targetBytes) {
-    const depth = i % 4
-    const path = ['pkg', `lvl${depth}`, `mod${i % 17}`, `file_${i}.ts`].join('/')
-    const header =
-      `diff --git a/${path} b/${path}\n` +
-      `index 0000000..${i.toString(16).padStart(7, '0')} 100644\n` +
-      `--- a/${path}\n+++ b/${path}\n@@ -0,0 +1,60 @@\n`
-    let body = ''
-    for (let j = 0; j < 60; j++) body += lineBody
-    const piece = header + body
-    chunks.push(piece)
-    bytes += piece.length
-    i++
-  }
-  return { diff: chunks.join(''), files: i }
-}
-
-async function scenarioDiff(): Promise<void> {
-  const target = 10 * 1024 * 1024
-  const t0 = nowMs()
-  const { diff, files } = syntheticDiff(target)
-  samples.push({
-    name: 'diff_generate_10mib',
-    ms: nowMs() - t0,
-    rssDeltaKb: 0,
-    notes: `${files} files, ${(diff.length / 1024 / 1024).toFixed(2)} MiB`,
-  })
-
-  await bench('diff_split_per_file', () => splitDiffPerFile(diff))
-  await bench('diff_split_per_10_files', () => splitDiffPerNFiles(diff, 10))
-  await bench('diff_split_per_directory_depth2', () => splitDiffPerDirectory(diff, 2))
-}
 
 // -------------------------------------------------------------------------
 // Scenario 4: 10 concurrent tasks against scheduler + stub-opencode.
@@ -376,7 +338,6 @@ async function main(): Promise<void> {
   log.info('starting perf sweep')
   await scenarioEvents()
   await scenarioTasksList()
-  await scenarioDiff()
   try {
     await scenarioConcurrentTasks()
   } catch (err) {

@@ -133,6 +133,51 @@ describe('RFC-053 PR-E — S4 (pending too long)', () => {
     const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
     expect(r.openAlerts.filter((a) => a.rule === 'S4')).toHaveLength(0)
   })
+
+  // RFC-284 T22（决策 D11）：call 子任务在 childBudget 预算下排队是合法长等，
+  // 5min 阈值对 parent_task_id 非空的行必然误报 → 提高到 30min 并在 detail
+  // 里带 childBudget 提示；顶层任务维持 5min（上面两条用例锁定不变）。
+  async function markAsChild(hh: Harness): Promise<void> {
+    const parentId = ulid()
+    const [childRow] = await hh.db
+      .select({ workflowId: tasks.workflowId, workflowSnapshot: tasks.workflowSnapshot })
+      .from(tasks)
+      .where(eq(tasks.id, hh.taskId))
+    await hh.db.insert(tasks).values({
+      id: parentId,
+      name: 'parent',
+      workflowId: childRow!.workflowId,
+      workflowSnapshot: childRow!.workflowSnapshot,
+      repoPath: '/tmp/x',
+      worktreePath: '/tmp/x',
+      baseBranch: 'main',
+      branch: `agent-workflow/${parentId}`,
+      status: 'running',
+      inputs: '{}',
+      startedAt: T0 - 60 * MIN_MS,
+    })
+    await hh.db.update(tasks).set({ parentTaskId: parentId }).where(eq(tasks.id, hh.taskId))
+  }
+
+  test('D11 child: pending 10 min (5<t<30) → NO S4 alert (childBudget legitimate wait)', async () => {
+    h = await buildHarness('pending', T0 - 10 * MIN_MS)
+    await markAsChild(h)
+    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    expect(r.openAlerts.filter((a) => a.rule === 'S4')).toHaveLength(0)
+  })
+
+  test('D11 child: pending 40 min → S4 alert with 30min threshold + childBudgetWaitHint', async () => {
+    h = await buildHarness('pending', T0 - 40 * MIN_MS)
+    await markAsChild(h)
+    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const s4 = r.openAlerts.filter((a) => a.rule === 'S4')
+    expect(s4).toHaveLength(1)
+    expect(s4[0]!.detail).toMatchObject({
+      thresholdMs: 30 * MIN_MS,
+      childBudgetWaitHint:
+        'child task of a call node — long pending may be legitimate childBudget queueing, not a stall',
+    })
+  })
 })
 
 describe('RFC-053 PR-E — S1 (awaiting_review without pending dv)', () => {

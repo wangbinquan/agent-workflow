@@ -61,6 +61,7 @@ import {
   SKILL_MERGER_AGENT_ID,
   SKILL_MERGER_AGENT_NAME,
 } from '@/services/systemResources'
+import { DAEMON_CADENCE } from './daemonCadence'
 /** Reserved scaffolding dir inside the fusion worktree; never written to the skill. */
 const SCAFFOLD = '__fusion__'
 const MANIFEST_REL = `${SCAFFOLD}/result.json`
@@ -1043,7 +1044,7 @@ export function startFusionReconcileLoop(
   deps: FusionDeps,
   opts: { intervalMs?: number } = {},
 ): { stop: () => void } {
-  const intervalMs = opts.intervalMs ?? 60_000
+  const intervalMs = opts.intervalMs ?? DAEMON_CADENCE.fusionReconcile
   let busy = false
   const timer = setInterval(() => {
     if (busy) return

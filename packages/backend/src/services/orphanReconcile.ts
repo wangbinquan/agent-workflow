@@ -48,6 +48,7 @@ import { isProcessAlive, pidCommandContainsBinary } from '@/util/process'
 import { createLogger } from '@/util/log'
 import { WorkflowDefinitionSchema } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
+import { DAEMON_CADENCE } from './daemonCadence'
 
 const log = createLogger('orphan-reconcile')
 
@@ -311,7 +312,7 @@ export function startOrphanReconcileLoop(opts: {
       inFlight = false
     }
   }
-  let intervalMs = 10 * 60 * 1000
+  let intervalMs = DAEMON_CADENCE.orphanReconcile
   try {
     const cfg = loadConfig(opts.configPath)
     intervalMs = cfg.periodicOrphanReconcileMs
