@@ -23,7 +23,6 @@ import type {
 } from '@agent-workflow/shared'
 import { structuredPatch } from 'diff'
 import { and, eq } from 'drizzle-orm'
-import { createHash } from 'node:crypto'
 import {
   cpSync,
   existsSync,
@@ -94,6 +93,7 @@ export function memoriesToUnfuseOnRestore(
 export { hashDir, collectFiles, NUL } from '@/services/skillHash'
 import { assertRegularFileTree, collectFiles, hashRegularFileTree } from '@/services/skillHash'
 import { markSkillBootVerified, unmarkSkillBootVerified } from '@/services/skillBootVerify'
+import { sha256Hex } from '@/util/hash'
 
 /** A file in a version snapshot: utf-8 text, or a binary file keyed by hash. */
 export type TreeEntry = { kind: 'text'; content: string } | { kind: 'binary'; hash: string }
@@ -109,7 +109,7 @@ function readTree(dir: string): Map<string, TreeEntry> {
     out.set(
       rel,
       buf.includes(0)
-        ? { kind: 'binary', hash: createHash('sha256').update(buf).digest('hex') }
+        ? { kind: 'binary', hash: sha256Hex(buf) }
         : { kind: 'text', content: buf.toString('utf-8') },
     )
   }

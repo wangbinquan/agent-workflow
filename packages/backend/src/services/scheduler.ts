@@ -68,7 +68,6 @@ import {
   findBoundaryEdgesToInner,
 } from '@/services/fanout'
 import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm'
-import { createHash } from 'node:crypto'
 // RFC-253 — script node execution.
 import { mkdirSync } from 'node:fs'
 import {
@@ -273,6 +272,7 @@ import {
 } from '@/services/codeHost/connections'
 import { resolveProjectFallback } from '@/services/codeHost/project'
 import { Paths } from '@/util/paths'
+import { sha256Hex } from '@/util/hash'
 
 export interface RunTaskOptions {
   taskId: string
@@ -7400,11 +7400,8 @@ interface ShardSpec {
  * RFC-098 B3 (audit S-20): sha256 hex of a fanout shard's value — the
  * cross-generation reuse identity stamped into `node_runs.shard_value_hash`
  * (migration 0043) and re-derived at dispatch time for the
- * pickReusableShardRun match. createHash precedent: util/git.ts.
+ * pickReusableShardRun match. sha256Hex（@/util/hash）precedent: util/git.ts 同款单步 hash 收口。
  */
-function sha256Hex(s: string): string {
-  return createHash('sha256').update(s).digest('hex')
-}
 
 interface DispatchShardArgs {
   state: SchedulerState

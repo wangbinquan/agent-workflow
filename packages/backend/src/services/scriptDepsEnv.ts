@@ -9,7 +9,6 @@
 // deterministic artifact settings (`--only-binary=:all:` / `--ignore-scripts`)
 // and run as ordinary managed child processes.
 
-import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -19,6 +18,7 @@ import {
 } from '@agent-workflow/shared'
 import type { Logger } from '@/util/log'
 import { runManagedProcess } from './execution/managedProcess'
+import { sha256Hex } from '@/util/hash'
 
 export interface ScriptDepsEnv {
   /** Content hash identifying this environment; recorded on the node_run. */
@@ -100,16 +100,14 @@ export async function ensureScriptDepsEnv(input: EnsureDepsInput): Promise<Scrip
   const specs = normalizeScriptDependencies(input.specs)
   if (specs.length === 0) return null
 
-  const hash = createHash('sha256')
-    .update(
-      serializeScriptDepsEnvKeyV1({
-        language: input.language,
-        interpreterPath: input.interpreterPath,
-        interpreterVersion: input.interpreterVersion,
-        specs,
-      }),
-    )
-    .digest('hex')
+  const hash = sha256Hex(
+    serializeScriptDepsEnvKeyV1({
+      language: input.language,
+      interpreterPath: input.interpreterPath,
+      interpreterVersion: input.interpreterVersion,
+      specs,
+    }),
+  )
 
   const rootDir = envDirFor(input.appHome, input.language, hash)
   // impl-gate 4.2: the search path is per package manager. `pip --target lib`

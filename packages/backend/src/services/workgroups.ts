@@ -31,7 +31,6 @@ import {
   WorkgroupNameSchema,
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
-import { createHash } from 'node:crypto'
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -62,6 +61,7 @@ import {
 import { nextResourceCopyName } from './resourceCopyName'
 import { assertNoMissingRefs, assertRefsUsableInTx, resolveRefsUsableById } from './resourceRefs'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
+import { sha256Hex } from '@/util/hash'
 
 type WorkgroupRow = typeof workgroups.$inferSelect
 type MemberRow = typeof workgroupMembers.$inferSelect
@@ -665,9 +665,9 @@ export function workgroupDraftSnapshotOf(group: Workgroup): WorkgroupDraftSnapsh
 }
 
 export function workgroupSnapshotHashOf(snapshot: WorkgroupDraftSnapshot): WorkgroupSnapshotHash {
-  return createHash('sha256')
-    .update(serializeWorkgroupEditableSnapshotV1(normalizeWorkgroupSnapshot(snapshot)), 'utf8')
-    .digest('hex') as WorkgroupSnapshotHash
+  return sha256Hex(
+    serializeWorkgroupEditableSnapshotV1(normalizeWorkgroupSnapshot(snapshot)),
+  ) as WorkgroupSnapshotHash
 }
 
 export function workgroupRevisionOf(group: Workgroup): WorkgroupRevision {

@@ -26,7 +26,6 @@ import {
   writeFileSync,
   realpathSync,
 } from 'node:fs'
-import { createHash } from 'node:crypto'
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { checkLexicalThenRealpath } from '@/util/safePath'
 import { and, eq, isNotNull } from 'drizzle-orm'
@@ -35,6 +34,7 @@ import type { DbClient } from '@/db/client'
 import { nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { createLogger } from '@/util/log'
 import { toPortableRelativePath } from '@/util/platformExec'
+import { sha256Hex } from '@/util/hash'
 
 const log = createLogger('port-artifacts')
 
@@ -52,7 +52,7 @@ const log = createLogger('port-artifacts')
  */
 export function encodePortSegment(portName: string): string {
   const sanitized = portName.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 48)
-  const digest = createHash('sha256').update(portName, 'utf8').digest('hex').slice(0, 16)
+  const digest = sha256Hex(portName).slice(0, 16)
   return `${sanitized}_${digest}`
 }
 

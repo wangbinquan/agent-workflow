@@ -25,6 +25,7 @@ import { pluginOperationCoordinator } from './resourceOperationCoordinator'
 import { assertInitialResourceOwner, discloseRefs, initialPrivateResourceAcl } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
+import { monotonicNow } from '@/util/time'
 
 type PluginRow = typeof plugins.$inferSelect
 type CreatePluginInput = z.input<typeof CreatePluginSchema>
@@ -489,10 +490,6 @@ function stalePluginError(id: string): ConflictError {
     'resource-operation-stale',
     `plugin '${id}' changed while the operation was running; reload and retry`,
   )
-}
-
-function monotonicNow(previous: number): number {
-  return Math.max(Date.now(), previous + 1)
 }
 
 export function rowToPlugin(row: PluginRow): Plugin {

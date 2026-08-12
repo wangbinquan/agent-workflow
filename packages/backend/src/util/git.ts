@@ -5,7 +5,6 @@
 // will not survive lsFiles, which we accept as a v1 limitation.
 
 import type { GitRef } from '@agent-workflow/shared'
-import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -15,6 +14,8 @@ import { hardenGitArgs } from '@/util/gitHardening'
 import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
 import type { Logger } from '@/util/log'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { sha1Hex } from '@/util/hash'
+import { raceWithFallback } from '@/util/process'
 
 export interface GitRunResult {
   stdout: string
@@ -191,10 +192,8 @@ export async function runGit(
     const outPromise = new Response(proc.stdout).text().catch(() => '')
     const errPromise = new Response(proc.stderr).text().catch(() => '')
     const exitCode = await proc.exited
-    const drained = <T>(p: Promise<T>, fallback: T): Promise<T> =>
-      Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), 250))])
-    const stdout = await drained(outPromise, '')
-    const stderr = await drained(errPromise, '')
+    const stdout = await raceWithFallback(outPromise, 250, '')
+    const stderr = await raceWithFallback(errPromise, 250, '')
     if (!timedOut) return { stdout, stderr, exitCode }
     return {
       stdout,
@@ -448,7 +447,7 @@ export async function classifyBaseRef(repoPath: string, ref: string): Promise<Ba
  * `sha1(absPath).slice(0,8) + '-' + basename(absPath)` — readable yet unique.
  */
 export function repoSlug(repoPath: string): string {
-  const hash = createHash('sha1').update(repoPath).digest('hex').slice(0, 8)
+  const hash = sha1Hex(repoPath).slice(0, 8)
   return `${hash}-${basename(repoPath)}`
 }
 

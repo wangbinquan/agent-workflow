@@ -24,7 +24,6 @@ import {
   redactGitUrl,
 } from '@agent-workflow/shared'
 import { and, eq, sql } from 'drizzle-orm'
-import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -55,12 +54,13 @@ import {
   rememberVolatileRepoUrl,
   unsealRepoUrl,
 } from '@/services/repoCredentials'
+import { sha1Hex } from '@/util/hash'
+import { raceWithFallback } from '@/util/process'
 
 const log = createLogger('git-repo-cache')
 
 const DEFAULT_CLONE_TIMEOUT_MS = 30 * 60 * 1000
 
-const sha1Hex = (s: string) => createHash('sha1').update(s).digest('hex')
 const UNAVAILABLE_REPO_URL = '<url unavailable>'
 
 /** Per-URL serialization. Same urlHash → second caller awaits the first. */
@@ -135,10 +135,8 @@ async function spawnGit(
     const outP = new Response(proc.stdout).text().catch(() => '')
     const errP = new Response(proc.stderr).text().catch(() => '')
     const exitCode = await proc.exited
-    const drained = <T>(p: Promise<T>, fallback: T): Promise<T> =>
-      Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), 250))])
-    const stdout = await drained(outP, '')
-    const stderr = await drained(errP, '')
+    const stdout = await raceWithFallback(outP, 250, '')
+    const stderr = await raceWithFallback(errP, 250, '')
     if (!timedOut) return { stdout, stderr, exitCode }
     return {
       stdout,

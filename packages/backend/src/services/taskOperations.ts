@@ -19,7 +19,6 @@ import {
   type TaskStatus,
 } from '@agent-workflow/shared'
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm'
-import { createHash } from 'node:crypto'
 import { z } from 'zod'
 
 import type { Actor } from '@/auth/actor'
@@ -33,6 +32,7 @@ import {
 } from '@/services/taskAuthorization'
 import { loadTaskFailureCodes } from '@/services/task'
 import { NotFoundError, ValidationError } from '@/util/errors'
+import { sha256Hex } from '@/util/hash'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
@@ -183,7 +183,7 @@ function fingerprint(actor: Actor, filters: TaskOperationsFilters, parentId?: st
     scope: filters.scope,
     origin: filters.origin,
   })
-  return createHash('sha256').update(canonical, 'utf8').digest('hex')
+  return sha256Hex(canonical)
 }
 
 export function parseTaskOperationsQuery(

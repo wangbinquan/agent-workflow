@@ -271,3 +271,12 @@ export async function killStaleRunProcessTree(
   }
   return 'kill-failed'
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// RFC-284 T7（2026-08-12 审计 N20）——「promise vs 定时 fallback」竞速的唯一
+// 拼写。此前 util/git.ts 与 gitRepoCache.ts 各持一份逐字相同的 250ms drained
+// race（管道排水兜底）。语义与原实现逐字节一致：定时器不 clear、不 unref
+// （竞速已决后空转触发无害——保持原语义，勿"顺手优化"）。
+export function raceWithFallback<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), ms))])
+}

@@ -35,7 +35,6 @@ import {
   WorkflowNameSchema,
 } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
-import { createHash } from 'node:crypto'
 import { ulid } from 'ulid'
 import { assertScriptAuthorAllowed, type ScriptAuthorPrincipal } from './scriptAuthorGate'
 import { assertCodeHostAuthorAllowed } from './codeHostAuthorGate'
@@ -72,6 +71,7 @@ import {
 import { nextResourceCopyName } from './resourceCopyName'
 import { assertNotBuiltin } from './systemResources'
 import { validateWorkflowById } from './workflow.validator'
+import { sha256Hex } from '@/util/hash'
 
 type WorkflowRow = typeof workflows.$inferSelect
 
@@ -934,9 +934,7 @@ export function workflowDraftSnapshotOf(workflow: Workflow): WorkflowDraftSnapsh
 /** Lowercase SHA-256 over the shared domain-separated canonical serialization. */
 export function workflowSnapshotHashOf(snapshot: WorkflowDraftSnapshot): WorkflowSnapshotHash {
   const normalized = normalizeWorkflowSnapshot(snapshot)
-  return createHash('sha256')
-    .update(serializeWorkflowEditableSnapshotV1(normalized), 'utf8')
-    .digest('hex')
+  return sha256Hex(serializeWorkflowEditableSnapshotV1(normalized))
 }
 
 /** Pure detail projection reused by GET/create/YAML collision responses. */

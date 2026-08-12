@@ -103,6 +103,7 @@ import {
   type BundleReceipt,
 } from './provider'
 import { lowerBundlePayloads, type LoweredOp } from './lower'
+import { monotonicNow } from '@/util/time'
 
 export interface BundleApplyDeps {
   db: DbClient
@@ -631,7 +632,7 @@ async function prepareOne(
         prepared: {
           id: op.resourceId,
           set: {
-            updatedAt: Math.max(Date.now(), existing.updatedAt + 1),
+            updatedAt: monotonicNow(existing.updatedAt),
             description: p.description,
             enabled: p.enabled,
             config: JSON.stringify(p.config),
@@ -765,7 +766,7 @@ function commitOne(
         cachedPath: install.cachedPath,
         resolvedVersion: install.resolvedVersion,
         installedAt: Date.now(),
-        updatedAt: Math.max(Date.now(), captured.updatedAt + 1),
+        updatedAt: monotonicNow(captured.updatedAt),
       })
       return
     }

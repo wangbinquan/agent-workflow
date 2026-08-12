@@ -7,12 +7,12 @@
 // worktree init, which only emit warnings).
 
 import { redactGitUrl } from '@agent-workflow/shared'
-import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { AW_INTERNAL_GIT_IDENTITY, runGit, snapshotFullState } from '@/util/git'
+import { sha1Hex } from '@/util/hash'
 
 export type SubmoduleMode = 'auto' | 'always' | 'never'
 
@@ -316,7 +316,7 @@ export function bottomUp(entries: SubmoduleEntry[]): SubmoduleEntry[] {
  * The path itself is persisted in `iso_submodules_json`; the ref is only an anchor.
  */
 export function subSlug(subPath: string): string {
-  return createHash('sha1').update(subPath).digest('hex').slice(0, 16)
+  return sha1Hex(subPath).slice(0, 16)
 }
 
 /** Node-scoped anchor: lives and dies with one node's iso worktree. */

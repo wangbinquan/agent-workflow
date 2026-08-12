@@ -14,7 +14,6 @@
 // + scratch GC live in ./maintenance.ts.
 
 import { join } from 'node:path'
-import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
@@ -55,6 +54,7 @@ import {
   type IntentSessionRow,
   type IntentTurnRow,
 } from './session'
+import { sha256Hex } from '@/util/hash'
 
 export const INTENT_BUILDER_AGENT_NAME = 'aw-intent-builder'
 export const INTENT_SCRATCH_DIRNAME = 'intent-scratch'
@@ -432,9 +432,7 @@ export async function runIntentTurn(
             revision: draftRevision,
             changesetJson: opts.draft.changesetJson,
             validationJson: opts.draft.validationJson,
-            draftHash: `sha256:${createHash('sha256')
-              .update(opts.draft.canonicalJson, 'utf8')
-              .digest('hex')}`,
+            draftHash: `sha256:${sha256Hex(opts.draft.canonicalJson)}`,
             producedByTurnId: turnId,
             contextRevision: session.contextRevision,
             createdAt: Date.now(),
@@ -580,6 +578,16 @@ export async function runIntentTurn(
           : `Some mounted resources depend on resources you cannot see (${dump.hiddenDependencies
               .map((h) => `${h.parentHandle}: ${h.count}`)
               .join(', ')}). Propose copies or ask the user instead of guessing their contents.`,
+      // RFC-291 面 C — id-only, never the name: these resources are ones the
+      // actor can no longer see, so echoing their names would leak them.
+      unavailableMountNote:
+        dump.unavailableMounts.length === 0
+          ? null
+          : `Mounted resources unavailable this epoch (deleted, or no longer visible to you): ${dump.unavailableMounts
+              .map((m) => `${m.handle} (${m.resourceType})`)
+              .join(
+                ', ',
+              )}. They are absent from mounted/; do not guess their contents, and do not target them with an update.`,
       envelopeNonce,
       langDirective:
         deps.config.lang === null

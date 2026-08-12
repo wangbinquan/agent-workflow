@@ -2,7 +2,7 @@
 // design as user_sessions but with optional scopes (PAT narrows the actor's
 // role permissions; never widens them — see auth/actor.ts).
 
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
@@ -16,6 +16,7 @@ import {
 import type { DbClient } from '@/db/client'
 import { userPats, users } from '@/db/schema'
 import { triggerRevalidation } from '@/ws/revalidationHook'
+import { sha256Hex } from '@/util/hash'
 
 export interface CreatePatInput {
   db: DbClient
@@ -69,7 +70,7 @@ export function generatePatToken(): string {
 }
 
 export function hashToken(raw: string): string {
-  return createHash('sha256').update(raw, 'utf8').digest('hex')
+  return sha256Hex(raw)
 }
 
 export async function createPat(input: CreatePatInput): Promise<CreatePatResult> {

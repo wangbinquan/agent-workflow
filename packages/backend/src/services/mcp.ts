@@ -27,6 +27,7 @@ import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
 import { transitionMcpRuntimeTestsInTx } from '@/services/mcpRuntimeTestTransitions'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
+import { monotonicNow } from '@/util/time'
 
 type McpRow = typeof mcps.$inferSelect
 
@@ -151,7 +152,7 @@ export async function updateMcp(
   if (!changed) return existing
 
   const set: Partial<typeof mcps.$inferInsert> = {
-    updatedAt: opts.updatedAt ?? Math.max(Date.now(), existing.updatedAt + 1),
+    updatedAt: opts.updatedAt ?? monotonicNow(existing.updatedAt),
   }
   if (nextDescription !== existing.description) set.description = nextDescription
   if (nextEnabled !== existing.enabled) set.enabled = nextEnabled
@@ -295,7 +296,7 @@ export async function renameMcp(
     throw new NotFoundError('mcp-not-found', 'mcp not found')
   }
   if (input.newName === existing.name) return existing
-  const updatedAt = opts.updatedAt ?? Math.max(Date.now(), existing.updatedAt + 1)
+  const updatedAt = opts.updatedAt ?? monotonicNow(existing.updatedAt)
 
   // RFC-223 (PR-1 / D7): agents.mcp stores the mcp ID, which is stable across a
   // rename — so there is NO cascade to perform. Just rename the row. (This

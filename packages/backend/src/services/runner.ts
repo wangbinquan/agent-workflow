@@ -42,7 +42,7 @@ import {
   assertNoPromptSignalRefs,
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
@@ -113,6 +113,7 @@ import {
   releaseRuntimeSessionLease,
   type RuntimeSessionLeaseToken,
 } from '@/services/runtimeSessionLease'
+import { sha256Hex } from '@/util/hash'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.
@@ -794,7 +795,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
 
   let effectiveResumeSessionId =
     opts.promptMode?.kind === 'followup' ? opts.promptMode.resumeSessionId : opts.resumeSessionId
-  const runtimeLeaseNonceDigest = createHash('sha256').update(randomBytes(32)).digest('hex')
+  const runtimeLeaseNonceDigest = sha256Hex(randomBytes(32))
   let runtimeLeaseToken: RuntimeSessionLeaseToken | undefined
   const releaseHeldRuntimeLease = (): void => {
     if (runtimeLeaseToken === undefined) return

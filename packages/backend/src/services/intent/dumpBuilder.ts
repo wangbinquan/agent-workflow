@@ -15,7 +15,6 @@
 // copies owner/user/grant fields at all. Locked by
 // tests/rfc234-dump-builder.test.ts poisoned fixtures.
 
-import { createHash } from 'node:crypto'
 import { stringify as stringifyYaml } from 'yaml'
 import type {
   AclResourceType,
@@ -39,6 +38,7 @@ import {
   fenceUntrusted,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
+import { NotFoundError } from '@/util/errors'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import type { DbClient } from '@/db/client'
 import { listAgents } from '@/services/agent'
@@ -64,6 +64,7 @@ import {
   type IntentContextManifest,
   type IntentHandleWatermark,
 } from './manifest'
+import { sha256Hex } from '@/util/hash'
 
 export const INTENT_INVENTORY_CAP = 500
 const SKILL_DUMP_FILE_CAP_BYTES = 128 * 1024
@@ -106,11 +107,42 @@ export interface IntentDumpResult {
   hiddenDependencies: Array<{ parentHandle: string; count: number }>
   /** type → dropped row count when the inventory cap truncated the summary. */
   inventoryTruncated: Partial<Record<AclResourceType, number>>
+  /**
+   * RFC-291 面 C — mounted roots skipped this epoch (deleted, or no longer
+   * visible to this actor). Handle + type only: the NAME of a resource the
+   * actor cannot see is not theirs to read back.
+   */
+  unavailableMounts: Array<{ handle: string; resourceType: AclResourceType }>
   /** RFC-291 面 F — high-water mark to persist back onto the session row. */
   handleWatermark: IntentHandleWatermark
 }
 
-const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex')
+const sha256 = sha256Hex // RFC-284 T7：alias 到共享单点
+
+/**
+ * RFC-291 面 C — "this resource is gone / not visible to me", the only class of
+ * materialisation failure a dump may skip over.
+ *
+ * Everything else propagates: a corrupt skill file or an unreadable store is a
+ * real outage, and degrading it to "资源不可用" would hide it behind a message
+ * that tells the user to re-mount something that is actually fine.
+ */
+const RESOURCE_GONE_CODES = new Set([
+  'skill-not-found',
+  'skill-changed',
+  'agent-not-found',
+  'mcp-not-found',
+  'plugin-not-found',
+  'workflow-not-found',
+  'workgroup-not-found',
+  'resource-not-found',
+])
+
+function isResourceGoneError(err: unknown): boolean {
+  if (err instanceof NotFoundError) return true
+  const code = (err as { code?: unknown } | null)?.code
+  return typeof code === 'string' && RESOURCE_GONE_CODES.has(code)
+}
 
 /** `res#agent#3` → `res.agent.3` (filesystem-safe dump basename). */
 export function handleBasename(handle: string): string {
@@ -233,9 +265,15 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
   const hiddenDependencies: Array<{ parentHandle: string; count: number }> = []
   const inventoryTruncated: Partial<Record<AclResourceType, number>> = {}
 
-  // ── resolve mounted roots (must be visible; caller pre-validates, we fail
-  // closed anyway) + closure ──
-  const detailRefs = new Map<string, { ref: IntentMountRef; root: boolean }>()
+  // ── resolve mounted roots + closure. A root that cannot be materialised
+  // this epoch is SKIPPED and reported, not thrown (RFC-291 面 C). ──
+  const detailRefs = new Map<
+    string,
+    { ref: IntentMountRef; root: boolean; parent?: IntentMountRef }
+  >()
+  const unavailableRoots: IntentMountRef[] = []
+  /** Closure members that vanished mid-dump, keyed by the root they came from. */
+  const hiddenMembers: IntentMountRef[] = []
   for (const mount of input.mounts) {
     const rootKey = `${mount.resourceType}:${mount.resourceId}`
     const rootVisible = expandClosure(mount, catalog)
@@ -252,13 +290,24 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
                 ? catalog.workflows.has(mount.resourceId)
                 : catalog.workgroups.has(mount.resourceId)
     if (!rootInCatalog) {
-      throw new Error(`mounted resource is not visible: ${mount.resourceType}`)
+      // RFC-291 面 C — a root whose resource was deleted (or is no longer
+      // visible) used to throw and take the WHOLE turn down with it. Skip it
+      // and report instead: the user can still see it in "已挂载元素" and
+      // unmount it, and the model is told it is unavailable this epoch.
+      //
+      // The entry is re-emitted below (never dropped): losing it would make the
+      // row vanish from the UI, break handle continuity for the conversation,
+      // and let the ordinal be reused later (面 F).
+      unavailableRoots.push(mount)
+      continue
     }
     const existing = detailRefs.get(rootKey)
     detailRefs.set(rootKey, { ref: mount, root: true, ...(existing?.root ? { root: true } : {}) })
     for (const member of rootVisible.members) {
       const key = `${member.resourceType}:${member.resourceId}`
-      if (!detailRefs.has(key)) detailRefs.set(key, { ref: member, root: false })
+      // `parent` lets a member that vanishes mid-dump be reported under the
+      // root it came from, same bucket as ACL-invisible dependencies.
+      if (!detailRefs.has(key)) detailRefs.set(key, { ref: member, root: false, parent: mount })
     }
     if (rootVisible.hiddenCount > 0) {
       const parentHandle = allocateHandle(alloc, mount.resourceType, mount.resourceId)
@@ -288,7 +337,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
   const handleFor = (type: AclResourceType, id: string): string => allocateHandle(alloc, type, id)
 
   // ── mounted/ dumps ──
-  for (const { ref, root } of detailRefs.values()) {
+  for (const { ref, root, parent } of detailRefs.values()) {
     const handle = handleFor(ref.resourceType, ref.resourceId)
     const base = `mounted/${handleBasename(handle)}`
     const entryBase = {
@@ -298,186 +347,200 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
       root,
       detail: true as const,
     }
-    if (ref.resourceType === 'agent') {
-      const agent = catalog.agents.get(ref.resourceId)
-      if (agent === undefined) continue
-      const skills: Array<AgentSkillSelector | string> = agent.skills.map((s) =>
-        s.kind === 'managed'
-          ? catalog.skills.has(s.skillId)
-            ? handleFor('skill', s.skillId)
-            : 'hidden-dependency'
-          : ({ kind: 'project', name: s.name } as AgentSkillSelector),
-      )
-      const doc = serializeAgentMarkdown({
-        name: agent.name,
-        description: agent.description,
-        ...(Object.keys(agent.permission).length > 0 ? { permission: agent.permission } : {}),
-        skills: skills as AgentSkillSelector[] | string[],
-        dependsOn: agent.dependsOn.map((id) =>
-          catalog.agents.has(id) ? handleFor('agent', id) : 'hidden-dependency',
-        ),
-        mcp: agent.mcp.map((id) =>
-          catalog.mcps.has(id) ? handleFor('mcp', id) : 'hidden-dependency',
-        ),
-        plugins: agent.plugins.map((id) =>
-          catalog.plugins.has(id) ? handleFor('plugin', id) : 'hidden-dependency',
-        ),
-        ...(agent.inputs !== undefined && agent.inputs.length > 0 ? { inputs: agent.inputs } : {}),
-        outputs: agent.outputs,
-        ...(agent.outputKinds !== undefined ? { outputKinds: agent.outputKinds } : {}),
-        ...(agent.role !== undefined ? { role: agent.role } : {}),
-        ...(agent.outputWrapperPortNames !== undefined
-          ? { outputWrapperPortNames: agent.outputWrapperPortNames }
-          : {}),
-        ...(agent.runtime !== undefined ? { runtime: agent.runtime } : {}),
-        ...(Object.keys(agent.frontmatterExtra).length > 0
-          ? { frontmatterExtra: maskFreeJsonSecrets(agent.frontmatterExtra) }
-          : {}),
-        bodyMd: agent.bodyMd,
-      })
-      seedFiles.push({ path: `${base}.md`, content: doc })
-      manifest.push({ ...entryBase, fence: buildAgentFence(agent), dumpHash: sha256(doc) })
-    } else if (ref.resourceType === 'skill') {
-      const content = await readSkillContent(db, { appHome: input.appHome }, ref.resourceId)
-      const fmExtra = maskFreeJsonSecrets(content.frontmatterExtra)
-      const skillMd = `---\n${stringifyYaml(
-        {
-          name: content.name,
-          description: content.description,
-          ...(Object.keys(fmExtra).length > 0 ? fmExtra : {}),
-        },
-        { lineWidth: 0 },
-      )}---\n\n${content.bodyMd}\n`
-      seedFiles.push({ path: `${base}/SKILL.md`, content: skillMd })
-      let treeHash = skillMd
-      const nodes = await listSkillFiles(db, { appHome: input.appHome }, ref.resourceId)
-      for (const node of nodes) {
-        if (node.type !== 'file') continue
-        if (node.path === 'SKILL.md') continue
-        if ((node.size ?? 0) > SKILL_DUMP_FILE_CAP_BYTES) {
-          seedFiles.push({
-            path: `${base}/files/${node.path}.omitted.md`,
-            content: `File omitted from dump: ${node.path} exceeds ${SKILL_DUMP_FILE_CAP_BYTES} bytes.\n`,
-          })
-          continue
-        }
-        const fileContent = await readSkillFile(
-          db,
-          { appHome: input.appHome },
-          ref.resourceId,
-          node.path,
+    // RFC-291 面 C — the catalog above is a snapshot; materialising a resource
+    // re-reads it (a skill re-queries the row and its files). A row deleted in
+    // that window used to abort the whole turn. Treat only "it is gone /
+    // invisible" as skippable; everything else (I/O corruption, serialization
+    // faults) still fails loud — swallowing those would turn a real outage into
+    // a silent "resource unavailable".
+    try {
+      if (ref.resourceType === 'agent') {
+        const agent = catalog.agents.get(ref.resourceId)
+        if (agent === undefined) continue
+        const skills: Array<AgentSkillSelector | string> = agent.skills.map((s) =>
+          s.kind === 'managed'
+            ? catalog.skills.has(s.skillId)
+              ? handleFor('skill', s.skillId)
+              : 'hidden-dependency'
+            : ({ kind: 'project', name: s.name } as AgentSkillSelector),
         )
-        seedFiles.push({ path: `${base}/files/${node.path}`, content: fileContent })
-        treeHash += `\n--- ${node.path} ---\n${fileContent}`
-      }
-      manifest.push({
-        ...entryBase,
-        fence: buildSkillFence({
-          id: ref.resourceId,
-          ...(content.token === undefined ? {} : { token: content.token }),
-        }),
-        dumpHash: sha256(treeHash),
-      })
-    } else if (ref.resourceType === 'mcp') {
-      const mcp = catalog.mcps.get(ref.resourceId)
-      if (mcp === undefined) continue
-      const doc = serializeMcpDump({
-        handle,
-        type: mcp.type,
-        name: mcp.name,
-        description: mcp.description,
-        enabled: mcp.enabled,
-        config: mcp.config as Record<string, unknown>,
-      })
-      seedFiles.push({ path: `${base}.yaml`, content: doc })
-      manifest.push({ ...entryBase, fence: buildMcpFence(mcp), dumpHash: sha256(doc) })
-    } else if (ref.resourceType === 'plugin') {
-      const plugin = catalog.plugins.get(ref.resourceId)
-      if (plugin === undefined) continue
-      const doc = serializePluginDump({
-        handle,
-        name: plugin.name,
-        spec: plugin.spec,
-        description: plugin.description,
-        enabled: plugin.enabled,
-        options: plugin.options,
-      })
-      seedFiles.push({ path: `${base}.yaml`, content: doc })
-      manifest.push({ ...entryBase, fence: buildPluginFence(plugin), dumpHash: sha256(doc) })
-    } else if (ref.resourceType === 'workflow') {
-      const wf = catalog.workflows.get(ref.resourceId)
-      if (wf === undefined) continue
-      const def = wf.definition as { nodes?: Array<Record<string, unknown>> }
-      const transformed = {
-        ...(wf.definition as Record<string, unknown>),
-        nodes: (def.nodes ?? []).map((node) => {
-          if (node.kind !== 'agent-single') return node
-          const { agentId, agentName: _agentName, ...rest } = node
-          return typeof agentId === 'string' && catalog.agents.has(agentId)
-            ? { ...rest, agentRef: handleFor('agent', agentId) }
-            : { ...rest, agentRefHidden: true }
-        }),
-      }
-      const doc = stringifyYaml(
-        {
-          handle,
-          name: wf.name,
-          description: wf.description,
-          // RFC-253 T28 — script-node env values are a closed secret carrier.
-          //
-          // RFC-270 (Codex impl-gate P1): "the definition otherwise rides
-          // verbatim" was the leak. `intent:read` / `intent:write` are both in
-          // USER_BASELINE, so ANY user could mount a visible workflow here and
-          // have the script body, dependencies and the code-host
-          // `params` / `request` written into the seed YAML — which is then fed
-          // to the configured MODEL. That is a wider outlet than the REST reads
-          // this RFC closed: it survives in whatever the conversation goes on to
-          // do. The actor's privileged lens applies here for the same reason it
-          // applies to `GET /api/workflows/:id`.
-          definition: redactPrivilegedNodes(
-            maskWorkflowScriptEnv(transformed),
-            privilegedNodeLensFor(actor),
-            // 用 intent 自己的标记而不是 REST 的 `***`：同一份 YAML 里出现两种
-            // 遮蔽记号，读它的模型会以为那是两种不同的东西。
-            INTENT_REDACTED,
+        const doc = serializeAgentMarkdown({
+          name: agent.name,
+          description: agent.description,
+          ...(Object.keys(agent.permission).length > 0 ? { permission: agent.permission } : {}),
+          skills: skills as AgentSkillSelector[] | string[],
+          dependsOn: agent.dependsOn.map((id) =>
+            catalog.agents.has(id) ? handleFor('agent', id) : 'hidden-dependency',
           ),
-        },
-        { lineWidth: 0 },
-      )
-      seedFiles.push({ path: `${base}.yaml`, content: doc })
-      manifest.push({ ...entryBase, fence: buildWorkflowFence(wf), dumpHash: sha256(doc) })
-    } else {
-      const wg = catalog.workgroups.get(ref.resourceId)
-      if (wg === undefined) continue
-      const leader = wg.members.find((m) => m.id === wg.leaderMemberId)
-      const doc = serializeWorkgroupDump({
-        handle,
-        name: wg.name,
-        description: wg.description,
-        instructions: wg.instructions,
-        mode: wg.mode,
-        outputContract: resolveWorkgroupOutputContract(wg.outputContract),
-        ...(leader === undefined ? {} : { leaderDisplayName: leader.displayName }),
-        switches: wg.switches,
-        maxRounds: wg.maxRounds,
-        completionGate: wg.completionGate,
-        ...(wg.clarifyBudget === undefined ? {} : { clarifyBudget: wg.clarifyBudget }),
-        ...(wg.fanOut === undefined ? {} : { fanOut: wg.fanOut }),
-        members: wg.members.map((m) =>
-          m.memberType === 'agent'
-            ? {
-                memberType: 'agent' as const,
-                ...(m.agentId != null && catalog.agents.has(m.agentId)
-                  ? { agentHandle: handleFor('agent', m.agentId) }
-                  : {}),
-                displayName: m.displayName,
-                roleDesc: m.roleDesc,
-              }
-            : { memberType: 'human' as const, displayName: m.displayName, roleDesc: m.roleDesc },
-        ),
-      })
-      seedFiles.push({ path: `${base}.yaml`, content: doc })
-      manifest.push({ ...entryBase, fence: buildWorkgroupFence(wg), dumpHash: sha256(doc) })
+          mcp: agent.mcp.map((id) =>
+            catalog.mcps.has(id) ? handleFor('mcp', id) : 'hidden-dependency',
+          ),
+          plugins: agent.plugins.map((id) =>
+            catalog.plugins.has(id) ? handleFor('plugin', id) : 'hidden-dependency',
+          ),
+          ...(agent.inputs !== undefined && agent.inputs.length > 0
+            ? { inputs: agent.inputs }
+            : {}),
+          outputs: agent.outputs,
+          ...(agent.outputKinds !== undefined ? { outputKinds: agent.outputKinds } : {}),
+          ...(agent.role !== undefined ? { role: agent.role } : {}),
+          ...(agent.outputWrapperPortNames !== undefined
+            ? { outputWrapperPortNames: agent.outputWrapperPortNames }
+            : {}),
+          ...(agent.runtime !== undefined ? { runtime: agent.runtime } : {}),
+          ...(Object.keys(agent.frontmatterExtra).length > 0
+            ? { frontmatterExtra: maskFreeJsonSecrets(agent.frontmatterExtra) }
+            : {}),
+          bodyMd: agent.bodyMd,
+        })
+        seedFiles.push({ path: `${base}.md`, content: doc })
+        manifest.push({ ...entryBase, fence: buildAgentFence(agent), dumpHash: sha256(doc) })
+      } else if (ref.resourceType === 'skill') {
+        const content = await readSkillContent(db, { appHome: input.appHome }, ref.resourceId)
+        const fmExtra = maskFreeJsonSecrets(content.frontmatterExtra)
+        const skillMd = `---\n${stringifyYaml(
+          {
+            name: content.name,
+            description: content.description,
+            ...(Object.keys(fmExtra).length > 0 ? fmExtra : {}),
+          },
+          { lineWidth: 0 },
+        )}---\n\n${content.bodyMd}\n`
+        seedFiles.push({ path: `${base}/SKILL.md`, content: skillMd })
+        let treeHash = skillMd
+        const nodes = await listSkillFiles(db, { appHome: input.appHome }, ref.resourceId)
+        for (const node of nodes) {
+          if (node.type !== 'file') continue
+          if (node.path === 'SKILL.md') continue
+          if ((node.size ?? 0) > SKILL_DUMP_FILE_CAP_BYTES) {
+            seedFiles.push({
+              path: `${base}/files/${node.path}.omitted.md`,
+              content: `File omitted from dump: ${node.path} exceeds ${SKILL_DUMP_FILE_CAP_BYTES} bytes.\n`,
+            })
+            continue
+          }
+          const fileContent = await readSkillFile(
+            db,
+            { appHome: input.appHome },
+            ref.resourceId,
+            node.path,
+          )
+          seedFiles.push({ path: `${base}/files/${node.path}`, content: fileContent })
+          treeHash += `\n--- ${node.path} ---\n${fileContent}`
+        }
+        manifest.push({
+          ...entryBase,
+          fence: buildSkillFence({
+            id: ref.resourceId,
+            ...(content.token === undefined ? {} : { token: content.token }),
+          }),
+          dumpHash: sha256(treeHash),
+        })
+      } else if (ref.resourceType === 'mcp') {
+        const mcp = catalog.mcps.get(ref.resourceId)
+        if (mcp === undefined) continue
+        const doc = serializeMcpDump({
+          handle,
+          type: mcp.type,
+          name: mcp.name,
+          description: mcp.description,
+          enabled: mcp.enabled,
+          config: mcp.config as Record<string, unknown>,
+        })
+        seedFiles.push({ path: `${base}.yaml`, content: doc })
+        manifest.push({ ...entryBase, fence: buildMcpFence(mcp), dumpHash: sha256(doc) })
+      } else if (ref.resourceType === 'plugin') {
+        const plugin = catalog.plugins.get(ref.resourceId)
+        if (plugin === undefined) continue
+        const doc = serializePluginDump({
+          handle,
+          name: plugin.name,
+          spec: plugin.spec,
+          description: plugin.description,
+          enabled: plugin.enabled,
+          options: plugin.options,
+        })
+        seedFiles.push({ path: `${base}.yaml`, content: doc })
+        manifest.push({ ...entryBase, fence: buildPluginFence(plugin), dumpHash: sha256(doc) })
+      } else if (ref.resourceType === 'workflow') {
+        const wf = catalog.workflows.get(ref.resourceId)
+        if (wf === undefined) continue
+        const def = wf.definition as { nodes?: Array<Record<string, unknown>> }
+        const transformed = {
+          ...(wf.definition as Record<string, unknown>),
+          nodes: (def.nodes ?? []).map((node) => {
+            if (node.kind !== 'agent-single') return node
+            const { agentId, agentName: _agentName, ...rest } = node
+            return typeof agentId === 'string' && catalog.agents.has(agentId)
+              ? { ...rest, agentRef: handleFor('agent', agentId) }
+              : { ...rest, agentRefHidden: true }
+          }),
+        }
+        const doc = stringifyYaml(
+          {
+            handle,
+            name: wf.name,
+            description: wf.description,
+            // RFC-253 T28 — script-node env values are a closed secret carrier.
+            //
+            // RFC-270 (Codex impl-gate P1): "the definition otherwise rides
+            // verbatim" was the leak. `intent:read` / `intent:write` are both in
+            // USER_BASELINE, so ANY user could mount a visible workflow here and
+            // have the script body, dependencies and the code-host
+            // `params` / `request` written into the seed YAML — which is then fed
+            // to the configured MODEL. That is a wider outlet than the REST reads
+            // this RFC closed: it survives in whatever the conversation goes on to
+            // do. The actor's privileged lens applies here for the same reason it
+            // applies to `GET /api/workflows/:id`.
+            definition: redactPrivilegedNodes(
+              maskWorkflowScriptEnv(transformed),
+              privilegedNodeLensFor(actor),
+              // 用 intent 自己的标记而不是 REST 的 `***`：同一份 YAML 里出现两种
+              // 遮蔽记号，读它的模型会以为那是两种不同的东西。
+              INTENT_REDACTED,
+            ),
+          },
+          { lineWidth: 0 },
+        )
+        seedFiles.push({ path: `${base}.yaml`, content: doc })
+        manifest.push({ ...entryBase, fence: buildWorkflowFence(wf), dumpHash: sha256(doc) })
+      } else {
+        const wg = catalog.workgroups.get(ref.resourceId)
+        if (wg === undefined) continue
+        const leader = wg.members.find((m) => m.id === wg.leaderMemberId)
+        const doc = serializeWorkgroupDump({
+          handle,
+          name: wg.name,
+          description: wg.description,
+          instructions: wg.instructions,
+          mode: wg.mode,
+          outputContract: resolveWorkgroupOutputContract(wg.outputContract),
+          ...(leader === undefined ? {} : { leaderDisplayName: leader.displayName }),
+          switches: wg.switches,
+          maxRounds: wg.maxRounds,
+          completionGate: wg.completionGate,
+          ...(wg.clarifyBudget === undefined ? {} : { clarifyBudget: wg.clarifyBudget }),
+          ...(wg.fanOut === undefined ? {} : { fanOut: wg.fanOut }),
+          members: wg.members.map((m) =>
+            m.memberType === 'agent'
+              ? {
+                  memberType: 'agent' as const,
+                  ...(m.agentId != null && catalog.agents.has(m.agentId)
+                    ? { agentHandle: handleFor('agent', m.agentId) }
+                    : {}),
+                  displayName: m.displayName,
+                  roleDesc: m.roleDesc,
+                }
+              : { memberType: 'human' as const, displayName: m.displayName, roleDesc: m.roleDesc },
+          ),
+        })
+        seedFiles.push({ path: `${base}.yaml`, content: doc })
+        manifest.push({ ...entryBase, fence: buildWorkgroupFence(wg), dumpHash: sha256(doc) })
+      }
+    } catch (err) {
+      if (!isResourceGoneError(err)) throw err
+      if (root) unavailableRoots.push(ref)
+      else if (parent !== undefined) hiddenMembers.push(parent)
     }
   }
 
@@ -521,6 +584,33 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
           path: file.path,
           content: fenceUntrusted(file.path, file.content, nonce),
         }))
+  // ── RFC-291 面 C — unavailable roots stay in the manifest ──
+  //
+  // They are NOT dumped and carry no fence, but the entry must survive: drop it
+  // and the row disappears from 「已挂载元素」（the user can no longer even
+  // unmount it）, the handle stops resolving for the conversation history, and
+  // the freed ordinal can later be minted for a different resource (面 F).
+  const unavailableMounts: Array<{ handle: string; resourceType: AclResourceType }> = []
+  for (const ref of unavailableRoots) {
+    const handle = handleFor(ref.resourceType, ref.resourceId)
+    unavailableMounts.push({ handle, resourceType: ref.resourceType })
+    manifest.push({
+      handle,
+      resourceType: ref.resourceType,
+      resourceId: ref.resourceId,
+      root: true,
+      detail: false,
+    })
+  }
+  // Members that vanished mid-dump join the ACL-invisible dependency count of
+  // the root they hang off — same bucket, same id-only discretion.
+  for (const parent of hiddenMembers) {
+    const parentHandle = handleFor(parent.resourceType, parent.resourceId)
+    const existing = hiddenDependencies.find((h) => h.parentHandle === parentHandle)
+    if (existing === undefined) hiddenDependencies.push({ parentHandle, count: 1 })
+    else existing.count += 1
+  }
+
   return {
     // RFC-291 面 B — ONE place carries copy lineage across the rebuild. The
     // manifest above is reconstructed through three independent paths (detail
@@ -531,6 +621,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
     seedFiles: fencedSeedFiles,
     hiddenDependencies,
     inventoryTruncated,
+    unavailableMounts,
     // RFC-291 面 F — monotonic: never hand back something lower than the
     // watermark we were seeded with, even if this epoch minted nothing.
     handleWatermark: mergeHandleWatermarks(input.handleWatermark, handleWatermarkOf(alloc)),

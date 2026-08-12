@@ -25,17 +25,16 @@ import {
 } from '@agent-workflow/shared'
 import { DomainError } from '@/util/errors'
 import { and, eq, sql } from 'drizzle-orm'
-import { createHash } from 'node:crypto'
 import { TextDecoder } from 'node:util'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { cachedRepos, scheduledTasks, taskRepos, tasks } from '@/db/schema'
 import { createLogger } from '@/util/log'
 import { redactSensitiveString } from '@/util/redact'
+import { sha1Hex } from '@/util/hash'
 
 const log = createLogger('repo-credentials')
 
-const sha1Hex = (s: string): string => createHash('sha1').update(s).digest('hex')
 const LEGACY_URL_ESCROW_PREFIX = 'aw-legacy-url-hex-v1:'
 const utf8Fatal = new TextDecoder('utf-8', { fatal: true })
 const volatileRepoUrls = new WeakMap<DbClient, Map<string, string>>()

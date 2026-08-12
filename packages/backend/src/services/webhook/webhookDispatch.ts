@@ -9,7 +9,6 @@
 // await 点（DB / clone / cancel 5s 轮询），无互斥则两并发同流事件会双取消旧
 // 任务后各自启动 —— 双任务存活且 fires 链出孤儿。
 import { and, desc, eq, sql } from 'drizzle-orm'
-import { createHash } from 'node:crypto'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
@@ -62,10 +61,9 @@ import {
   triggerContextOf,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
+import { sha1Hex } from '@/util/hash'
 
 const log = createLogger('webhook-dispatch')
-
-const sha1Hex = (s: string): string => createHash('sha1').update(s).digest('hex')
 
 export type WebhookDispatchDeps = {
   db: DbClient

@@ -42,6 +42,7 @@ import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedN
 import { assertRefsUsableInTx } from './resourceRefs'
 import { assertAgentResourceIntegrity } from './agentResourceIntegrity'
 import { PLUGIN_DISABLED_ERROR_CODE } from './execution/resourcePolicy'
+import { monotonicNow } from '@/util/time'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -531,7 +532,7 @@ export function commitAgentUpdateInTx(tx: DbTxSync, p: PreparedAgentUpdate): voi
     agentRefFenceGroups(nextRefs, current, resolvedRefs.matchedManagedSkillIds),
   )
 
-  set.updatedAt = Math.max(Date.now(), currentRow.updatedAt + 1)
+  set.updatedAt = monotonicNow(currentRow.updatedAt)
   const where = revisionFenced
     ? and(
         eq(agents.id, id),
@@ -768,7 +769,7 @@ export async function renameAgent(
 
       const result = tx
         .update(agents)
-        .set({ name: input.newName, updatedAt: Math.max(Date.now(), current.updatedAt + 1) })
+        .set({ name: input.newName, updatedAt: monotonicNow(current.updatedAt) })
         .where(
           opts === undefined
             ? eq(agents.id, id)

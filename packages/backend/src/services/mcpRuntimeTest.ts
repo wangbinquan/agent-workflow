@@ -5,7 +5,6 @@
 // bearing on process or session lifetime.
 
 import { Buffer } from 'node:buffer'
-import { createHash } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
@@ -75,6 +74,7 @@ import {
   type McpRuntimeTestLeaseToken,
 } from '@/services/mcpRuntimeTestLease'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
+import { sha256Hex } from '@/util/hash'
 
 export const MCP_RUNTIME_TEST_IDLE_MS = 10 * 60_000
 export const MCP_RUNTIME_TEST_TURN_TIMEOUT_MS = 10 * 60_000
@@ -153,7 +153,7 @@ function stableJson(value: unknown): string {
 }
 
 function sha256(value: string | Uint8Array): string {
-  return createHash('sha256').update(value).digest('hex')
+  return sha256Hex(value)
 }
 
 function requestDigest(input: {

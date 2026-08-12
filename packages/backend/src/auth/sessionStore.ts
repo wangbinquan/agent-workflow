@@ -2,7 +2,7 @@
 // sha256(raw) lands in DB. Caller is responsible for setting actor.user only
 // after status='active' is confirmed (handled here by lookupActiveSession).
 
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { and, eq, isNull, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { SESSION_TOKEN_PREFIX } from '@agent-workflow/shared'
@@ -10,6 +10,7 @@ import type { DbClient } from '@/db/client'
 import { userSessions, users } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { triggerRevalidation } from '@/ws/revalidationHook'
+import { sha256Hex } from '@/util/hash'
 
 /** 7 days by default — matches design.md §R4. */
 export const SESSION_DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000
@@ -30,7 +31,7 @@ export function generateSessionToken(): string {
 }
 
 export function hashToken(raw: string): string {
-  return createHash('sha256').update(raw, 'utf8').digest('hex')
+  return sha256Hex(raw)
 }
 
 export interface CreateSessionInput {

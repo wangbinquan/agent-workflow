@@ -88,7 +88,6 @@ import {
   type WorkflowRefSelector,
 } from '@agent-workflow/shared'
 import { callEdgeKey, parseCallClosure } from '@/services/execution/closure'
-import { createHash } from 'node:crypto'
 import { asc, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import {
@@ -103,6 +102,7 @@ import { getWorkflow } from '@/services/workflow'
 import { parseExitCondition } from '@/services/exitCondition'
 import { NotFoundError } from '@/util/errors'
 import { PLUGIN_DISABLED_ERROR_CODE } from '@/services/execution/resourcePolicy'
+import { sha256Hex } from '@/util/hash'
 
 // RFC-103 T5 (04-WFM-06/07): the built-in prompt-var set is now the single
 // source `BUILTIN_VARS` from shared/prompt.ts (was a local copy that lagged the
@@ -566,23 +566,18 @@ export function projectWorkflowValidationContext(ctx: ValidatorContext) {
 export function workflowValidationContextHashOf(
   ctx: ValidatorContext,
 ): WorkflowValidationContextHash {
-  return createHash('sha256')
-    .update(
-      `${WORKFLOW_VALIDATION_CONTEXT_DOMAIN_V1}${canonicalJson(
-        projectWorkflowValidationContext(ctx),
-      )}`,
-      'utf8',
-    )
-    .digest('hex') as WorkflowValidationContextHash
+  return sha256Hex(
+    `${WORKFLOW_VALIDATION_CONTEXT_DOMAIN_V1}${canonicalJson(
+      projectWorkflowValidationContext(ctx),
+    )}`,
+  ) as WorkflowValidationContextHash
 }
 
 /** Server-authoritative hash for an in-memory starter/draft candidate. */
 export function workflowDefinitionCandidateHashOf(
   definition: WorkflowDefinition,
 ): WorkflowCandidateHash {
-  return createHash('sha256')
-    .update(serializeWorkflowDefinitionCandidateV1(definition), 'utf8')
-    .digest('hex') as WorkflowCandidateHash
+  return sha256Hex(serializeWorkflowDefinitionCandidateV1(definition)) as WorkflowCandidateHash
 }
 
 function compareResourceIdentity(

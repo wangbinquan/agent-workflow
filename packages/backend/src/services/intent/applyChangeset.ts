@@ -137,6 +137,7 @@ import {
 } from './manifest'
 import { resolveIntentBundle, type IntentDecision, type ResolvedIntentOp } from './resolveChangeset'
 import { sessionManifest } from './session'
+import { monotonicNow } from '@/util/time'
 
 export interface IntentApplyReceipt {
   journalId: string
@@ -624,7 +625,7 @@ async function applyInner(
                 ? p.config
                 : { ...(p.config as Record<string, unknown>), oauth: existingOauth }
             const set: PreparedMcpUpdate['set'] = {
-              updatedAt: Math.max(Date.now(), existing.updatedAt + 1),
+              updatedAt: monotonicNow(existing.updatedAt),
               description: p.description,
               enabled: p.enabled,
               config: JSON.stringify(nextConfig),
@@ -973,7 +974,7 @@ async function applyInner(
               cachedPath: install?.cachedPath ?? item.captured.cachedPath,
               resolvedVersion: install?.resolvedVersion ?? item.captured.resolvedVersion,
               installedAt: install === undefined ? item.captured.installedAt : Date.now(),
-              updatedAt: Math.max(Date.now(), item.captured.updatedAt + 1),
+              updatedAt: monotonicNow(item.captured.updatedAt),
             })
             break
           }

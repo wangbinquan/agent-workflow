@@ -15,11 +15,11 @@
 //     (params/return) for overload identity; bodyHash = the full node text so a
 //     body-only edit reads as "modified".
 
-import { createHash } from 'node:crypto'
 import type Parser from 'web-tree-sitter'
 import type { LangId, SymbolKind, SymbolNode } from '@agent-workflow/shared'
 import { parseSource } from './parser'
 import { getLangExtraction, DEGRADED_LANGS, type ExtractionConfig } from './queries'
+import { sha1Hex } from '@/util/hash'
 
 type TsNode = Parser.SyntaxNode
 
@@ -35,7 +35,7 @@ const CLASS_LIKE: ReadonlySet<SymbolKind> = new Set<SymbolKind>([
 ])
 
 function hash(s: string): string {
-  return createHash('sha1').update(s).digest('hex').slice(0, 16)
+  return sha1Hex(s).slice(0, 16)
 }
 
 function norm(s: string): string {
