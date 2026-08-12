@@ -148,6 +148,42 @@
 - [ ] Codex 实现门跑过并处置 findings
 - [ ] `design/plan.md` RFC 索引状态改 Done、`STATE.md` 完成表加行
 
+## 实施记录
+
+### 提交 ①（面 A+B+F）— 2026-08-12
+
+落地：T1 + T2 + T2b + T3 + T4 + T9。
+
+- `manifest.ts`：`IntentManifestEntry.copiedFromResourceId`（**谱系根**）、`applyCommitMounts`
+  （三步、顺序不可交换）、`inheritCopyProvenance`、`lineageRootOf`、
+  `createHandleAllocator(seed, watermark?)` + `handleWatermarkOf` / `mergeHandleWatermarks` /
+  `parseHandleWatermark`；并把 `:51-52` 那句与实现相反的注释改写为「为什么单靠清单做不到」。
+- `resolveChangeset.ts`：`ResolvedIntentOp.copiedFromHandle`（`isCopy` 时置 `op.target`）。
+- `dumpBuilder.ts`：`handleWatermark` 入参 + `handleWatermark` 出参；返回前统一 `inheritCopyProvenance`。
+- `applyChangeset.ts`：大事务内由**提交前清单**推谱系根、收集 copy 源 handle，`applyCommitMounts`
+  结果与 `commitSeq`/`contextRevision`/`currentDraftId` **同一条 `set`** 落库。
+- `turnEngine.ts` / `session.ts`（初始挂载 / 挂载批准 / `addIntentMount`）：三处写回单调高水位。
+- migration `0149_rfc291_intent_handle_watermark.sql` + `meta/_journal.json` 登记（149 条）。
+
+测试：`rfc291-auto-mount-manifest`（20）/ `rfc291-commit-auto-mount`（7）/
+`rfc291-commit-then-update`（8，六类各一条 + 双守卫负向锁）/ `rfc291-handle-watermark`（3）
+= **38 用例全绿**；既有 intent 套件 170/170 绿。
+
+实施中发现并处置：
+
+- `upgrade-rolling.test.ts` 硬编码 migration 总数（148→149）——加迁移必然碰的锁，已更新并补注。
+- handle 高水位的**对照用例**最初写错了复现路径：删中间 ordinal 不会让计数器回退（更大的还在清单里
+  撑着），**必须删当前最大的那个**。修正后对照组确实复现了「新资源拿到历史 handle」，反向证明了
+  设计门 P1-d 属实。
+- 端到端锚的夹具坑两处：plugin 的临时目录路径被凭据扫描器判为 credential-shaped（改用可预测路径 +
+  waiver slot）、workgroup 的 leader 必须是 agent 成员。均为夹具问题，非实现问题。
+
+门禁：主工作树首跑有 3 个失败（`scheduler-clarify-dispatch` ×2、`rfc213-pending-restore` ×1），
+单独复跑 18/18 全绿，且 `main` 同期 CI 全绿——判定为**本地 4-shard 并发时序 flaky**，非本批引入
+（按 `CLAUDE.md` 不以「重跑就过了」作为通过依据，改用下述隔离复跑取证）。按 `docs/dev-gotchas.md`
+定式改在 **pin 到 `a4854d1d` 的 detached worktree**（只 cp 本批改动）复跑：backend 4/4 shard 全绿，
+quality 仅 prettier 报本批 5 个文件（已格式化），format/depcheck/typecheck/frontend 全绿。
+
 ## 登记不做
 
 | #   | 项                                   | 理由                                                                                                                                                |

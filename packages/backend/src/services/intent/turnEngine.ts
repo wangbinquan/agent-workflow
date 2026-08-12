@@ -44,6 +44,7 @@ import type { SystemAgentOutputEvidence } from '@/services/runtime/types'
 import type { ResolvedRuntime } from '@/services/runtimeRegistry'
 import { IntentTurnSessionEventSink } from './turnSession'
 import { buildIntentDump } from './dumpBuilder'
+import { mergeHandleWatermarks, parseHandleWatermark } from './manifest'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { buildIntentDoc, privilegesFromLens, type IntentDocTurn } from './intentDoc'
 import { validateDraftChangeset } from './resolveChangeset'
@@ -495,6 +496,10 @@ export async function runIntentTurn(
       appHome: deps.appHome,
       mounts: roots,
       priorManifest: manifestBefore,
+      // RFC-291 面 F — the rebuilt manifest drops evicted/deleted entries, so
+      // its ordinals alone can go backwards; the persisted watermark is what
+      // keeps a handle from being re-minted for a different resource.
+      handleWatermark: parseHandleWatermark(minted.session.handleWatermarkJson),
       envelopeNonce,
     })
     // Persist the fresh manifest (fences captured now = the commit baseline
@@ -511,7 +516,19 @@ export async function runIntentTurn(
         session.contextRevision === launchRevision
       ) {
         tx.update(intentSessions)
-          .set({ contextManifestJson: JSON.stringify(dump.manifest), updatedAt: Date.now() })
+          .set({
+            contextManifestJson: JSON.stringify(dump.manifest),
+            // Merge against the row we are about to overwrite, not against the
+            // snapshot this turn started from: a concurrent writer may have
+            // raised the mark while the dump was running.
+            handleWatermarkJson: JSON.stringify(
+              mergeHandleWatermarks(
+                parseHandleWatermark(session.handleWatermarkJson),
+                dump.handleWatermark,
+              ),
+            ),
+            updatedAt: Date.now(),
+          })
           .where(eq(intentSessions.id, session.id))
           .run()
       }

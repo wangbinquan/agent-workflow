@@ -44,19 +44,50 @@ export interface IntentManifestEntry {
   fence?: IntentFence
   /** sha-256 hex of the dump document (drift display; fence is authoritative). */
   dumpHash?: string
+  /**
+   * RFC-291 — this entry's copy LINEAGE ROOT (a resourceId), set when the
+   * resource was created by a `copy` decision.
+   *
+   * It is the root, NOT the immediate source: copying C1 (itself a copy of O)
+   * records O, not C1. Recording the immediate source would break "keep only
+   * the newest copy" — O→C1→C2 then O→C3 would retire only C1 and leave C2
+   * and C3 both mounted (design-gate P1-c).
+   */
+  copiedFromResourceId?: string
 }
 
 export type IntentContextManifest = IntentManifestEntry[]
 
-/** Session-scoped handle counter. Counters only ever grow — a rebase reuses
- *  the same handle for the same resource id so conversation history stays
- *  coherent across epochs. */
+/** Per-type high-water mark of allocated handle ordinals (RFC-291 面 F). */
+export type IntentHandleWatermark = Partial<Record<AclResourceType, number>>
+
+/**
+ * Session-scoped handle counter.
+ *
+ * Ordinals must NEVER be reused: a handle that once meant `res#agent#3` may sit
+ * in the conversation history forever, and re-minting it for a different row
+ * silently re-points that history at another resource.
+ *
+ * ⚠️ The manifest alone cannot guarantee that (RFC-291 / design-gate P1-d):
+ * `buildIntentDump` rebuilds the manifest from scratch every epoch and keeps
+ * only detail entries plus the capped inventory, so an entry that was retired
+ * (or whose resource was deleted) and then fell outside the cap simply vanishes
+ * — taking its ordinal with it. The seed-derived counter would then hand that
+ * ordinal to the next new resource.
+ *
+ * Hence the second input: a PERSISTED per-type watermark
+ * (`intent_sessions.handle_watermark_json`) that only ever grows. The counter
+ * is the max of both sources.
+ */
 export interface HandleAllocator {
   next: Record<string, number>
   byResource: Map<string, string> // `${type}:${id}` → handle
 }
 
-export function createHandleAllocator(seed?: IntentContextManifest): HandleAllocator {
+export function createHandleAllocator(
+  seed?: IntentContextManifest,
+  watermark?: IntentHandleWatermark,
+): HandleAllocator {
   const alloc: HandleAllocator = { next: {}, byResource: new Map() }
   for (const entry of seed ?? []) {
     alloc.byResource.set(`${entry.resourceType}:${entry.resourceId}`, entry.handle)
@@ -67,7 +98,192 @@ export function createHandleAllocator(seed?: IntentContextManifest): HandleAlloc
       if (ast.ordinal > cur) alloc.next[entry.resourceType] = ast.ordinal
     }
   }
+  // RFC-291 面 F — the persisted watermark outranks whatever survived in the
+  // manifest; a missing/empty column degrades to the pre-RFC-291 behaviour.
+  for (const [type, mark] of Object.entries(watermark ?? {})) {
+    if (typeof mark !== 'number' || !Number.isFinite(mark)) continue
+    const cur = alloc.next[type] ?? 0
+    if (mark > cur) alloc.next[type] = mark
+  }
   return alloc
+}
+
+/** Current high-water mark of an allocator — persist this after every mint. */
+export function handleWatermarkOf(alloc: HandleAllocator): IntentHandleWatermark {
+  const out: IntentHandleWatermark = {}
+  for (const [type, n] of Object.entries(alloc.next)) {
+    if (typeof n === 'number' && n > 0) out[type as AclResourceType] = n
+  }
+  return out
+}
+
+/** Merge two watermarks by max — monotonic, so a stale writer cannot lower it. */
+export function mergeHandleWatermarks(
+  a: IntentHandleWatermark | undefined,
+  b: IntentHandleWatermark | undefined,
+): IntentHandleWatermark {
+  const out: IntentHandleWatermark = { ...(a ?? {}) }
+  for (const [type, mark] of Object.entries(b ?? {})) {
+    if (typeof mark !== 'number' || !Number.isFinite(mark)) continue
+    const cur = out[type as AclResourceType] ?? 0
+    if (mark > cur) out[type as AclResourceType] = mark
+  }
+  return out
+}
+
+export function parseHandleWatermark(json: string | null | undefined): IntentHandleWatermark {
+  if (json === null || json === undefined || json === '') return {}
+  try {
+    const parsed: unknown = JSON.parse(json)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {}
+    const out: IntentHandleWatermark = {}
+    for (const [type, mark] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof mark === 'number' && Number.isFinite(mark) && mark > 0) {
+        out[type as AclResourceType] = mark
+      }
+    }
+    return out
+  } catch {
+    // A corrupt column must not brick the session: degrade to manifest-derived.
+    return {}
+  }
+}
+
+/** A resource this commit created, plus its copy lineage root when applicable. */
+export interface CommitCreatedResource {
+  resourceType: AclResourceType
+  resourceId: string
+  /** Lineage ROOT of the copy (see IntentManifestEntry.copiedFromResourceId). */
+  copiedFromResourceId?: string
+}
+
+export interface AutoMountInput {
+  created: readonly CommitCreatedResource[]
+  /** Handles of copy SOURCES — they stop being explicit roots. */
+  unmountHandles: readonly string[]
+}
+
+const entryKey = (type: AclResourceType, id: string): string => `${type}:${id}`
+
+/**
+ * RFC-291 面 A/B — the manifest migration a successful commit performs.
+ *
+ * Three steps, and THE ORDER IS LOAD-BEARING:
+ *   1. retire same-lineage copies   (older copies of the same origin)
+ *   2. retire the copy sources      (`unmountHandles`)
+ *   3. mount everything created
+ *
+ * Step 1 must precede step 3 because a freshly created copy carries the very
+ * `copiedFromResourceId` that step 1 matches on — mounting first would make the
+ * newest copy retire ITSELF, which is the exact opposite of what the user asked
+ * for ("挂载最新的修改副本"). `rfc291-auto-mount-manifest.test.ts` locks this.
+ *
+ * Retiring only ever flips `root` to false: the entry and its handle stay, so
+ * conversation history keeps resolving and the user can still unmount/remount
+ * it in the UI (same stance as `removeIntentMount`).
+ *
+ * Pure and idempotent — replaying the same input converges.
+ */
+export function applyCommitMounts(
+  manifest: IntentContextManifest,
+  input: AutoMountInput,
+): IntentContextManifest {
+  const next: IntentContextManifest = manifest.map((entry) => ({ ...entry }))
+
+  // ── 1. same-lineage copies retire ──
+  const retiringOrigins = new Set<string>()
+  for (const created of input.created) {
+    if (created.copiedFromResourceId === undefined) continue
+    retiringOrigins.add(entryKey(created.resourceType, created.copiedFromResourceId))
+  }
+  if (retiringOrigins.size > 0) {
+    for (const entry of next) {
+      if (!entry.root || entry.copiedFromResourceId === undefined) continue
+      if (retiringOrigins.has(entryKey(entry.resourceType, entry.copiedFromResourceId))) {
+        entry.root = false
+      }
+    }
+  }
+
+  // ── 2. copy sources retire ──
+  if (input.unmountHandles.length > 0) {
+    const retiring = new Set(input.unmountHandles)
+    for (const entry of next) {
+      if (retiring.has(entry.handle)) entry.root = false
+    }
+  }
+
+  // ── 3. created resources mount ──
+  const alloc = createHandleAllocator(next)
+  const byKey = new Map(
+    next.map((entry) => [entryKey(entry.resourceType, entry.resourceId), entry]),
+  )
+  for (const created of input.created) {
+    const key = entryKey(created.resourceType, created.resourceId)
+    const existing = byKey.get(key)
+    if (existing !== undefined) {
+      existing.root = true
+      if (
+        created.copiedFromResourceId !== undefined &&
+        existing.copiedFromResourceId === undefined
+      ) {
+        existing.copiedFromResourceId = created.copiedFromResourceId
+      }
+      continue
+    }
+    const entry: IntentManifestEntry = {
+      handle: allocateHandle(alloc, created.resourceType, created.resourceId),
+      resourceType: created.resourceType,
+      resourceId: created.resourceId,
+      root: true,
+      // Not dumped yet — the next turn's dump promotes it and attaches a fence.
+      // Until then `intent-target-not-mounted` still (correctly) rejects it:
+      // no fence means editing it would be a blind write.
+      detail: false,
+      ...(created.copiedFromResourceId === undefined
+        ? {}
+        : { copiedFromResourceId: created.copiedFromResourceId }),
+    }
+    next.push(entry)
+    byKey.set(key, entry)
+  }
+
+  return next
+}
+
+/**
+ * RFC-291 面 B — carry copy lineage across an epoch rebuild.
+ *
+ * `buildIntentDump` reconstructs the manifest from scratch through three
+ * separate paths (detail refs / inventory summaries / unavailable roots). None
+ * of them knows about lineage, so without this single pass the
+ * `copiedFromResourceId` written at commit time would silently disappear on the
+ * next turn and "keep only the newest copy" would hold only within one epoch.
+ */
+export function inheritCopyProvenance(
+  next: IntentContextManifest,
+  prior: IntentContextManifest | undefined,
+): IntentContextManifest {
+  if (prior === undefined || prior.length === 0) return next
+  const lineageByKey = new Map<string, string>()
+  for (const entry of prior) {
+    if (entry.copiedFromResourceId === undefined) continue
+    lineageByKey.set(entryKey(entry.resourceType, entry.resourceId), entry.copiedFromResourceId)
+  }
+  if (lineageByKey.size === 0) return next
+  for (const entry of next) {
+    if (entry.copiedFromResourceId !== undefined) continue
+    const lineage = lineageByKey.get(entryKey(entry.resourceType, entry.resourceId))
+    if (lineage !== undefined) entry.copiedFromResourceId = lineage
+  }
+  return next
+}
+
+/** Lineage root of a manifest entry: its own root when it is a copy, else itself. */
+export function lineageRootOf(
+  entry: Pick<IntentManifestEntry, 'resourceId' | 'copiedFromResourceId'>,
+): string {
+  return entry.copiedFromResourceId ?? entry.resourceId
 }
 
 export function allocateHandle(

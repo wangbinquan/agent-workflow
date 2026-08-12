@@ -359,7 +359,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 0146_gitlab_repository_url_prefixes.
     // RFC-280 T3 bumped to 148 with 0148_rfc280_startup_verification
     // （node_runs.startup_verification_json 纯增量列）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(148)
+    // RFC-291 面 F bumped to 149 with 0149_rfc291_intent_handle_watermark
+    // （intent_sessions.handle_watermark_json 纯增量列，DEFAULT '{}' 无 backfill）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(149)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

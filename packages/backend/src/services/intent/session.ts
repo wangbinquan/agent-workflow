@@ -45,7 +45,10 @@ import { generateEnvelopeNonce } from '@/services/nodeRunMint'
 import {
   allocateHandle,
   createHandleAllocator,
+  handleWatermarkOf,
   manifestEntryFor,
+  mergeHandleWatermarks,
+  parseHandleWatermark,
   type IntentContextManifest,
 } from './manifest'
 
@@ -287,6 +290,9 @@ async function createIntentSessionInternal(
         status: 'active',
         contextRevision: 0,
         contextManifestJson: JSON.stringify(manifest),
+        // RFC-291 面 F — seed the watermark from the initial mounts so the very
+        // first eviction cannot hand those ordinals to another resource.
+        handleWatermarkJson: JSON.stringify(handleWatermarkOf(createHandleAllocator(manifest))),
         inFlightTurnId: agentTurnId,
         turnSeq: reserve ? 2 : 1,
         commitSeq: 0,
@@ -620,7 +626,12 @@ export async function decideIntentMountSuggestions(
           manifestChanged = true
         }
       } else {
-        const alloc = createHandleAllocator(manifest)
+        // RFC-291 面 F — seed from the persisted watermark, not just the
+        // manifest: entries evicted by the inventory cap are gone from it.
+        const alloc = createHandleAllocator(
+          manifest,
+          parseHandleWatermark(fresh.handleWatermarkJson),
+        )
         handle = allocateHandle(alloc, request.resourceType, decision.resourceId)
         manifest.push({
           handle,
@@ -667,6 +678,12 @@ export async function decideIntentMountSuggestions(
         contextManifestJson: JSON.stringify(manifest),
         contextRevision: resultingContextRevision,
         turnSeq: approvalTurnSeq,
+        handleWatermarkJson: JSON.stringify(
+          mergeHandleWatermarks(
+            parseHandleWatermark(fresh.handleWatermarkJson),
+            handleWatermarkOf(createHandleAllocator(manifest)),
+          ),
+        ),
         updatedAt: now,
       })
       .where(eq(intentSessions.id, sessionId))
@@ -836,7 +853,9 @@ export async function addIntentMount(
       existing.root = true
       handle = existing.handle
     } else {
-      const alloc = createHandleAllocator(manifest)
+      // RFC-291 面 F — persisted watermark, so a manual mount cannot re-mint an
+      // ordinal that an evicted entry already used earlier in this session.
+      const alloc = createHandleAllocator(manifest, parseHandleWatermark(fresh.handleWatermarkJson))
       handle = allocateHandle(alloc, ref.resourceType, ref.resourceId)
       manifest.push({
         handle,
@@ -851,6 +870,12 @@ export async function addIntentMount(
       .set({
         contextManifestJson: JSON.stringify(manifest),
         contextRevision,
+        handleWatermarkJson: JSON.stringify(
+          mergeHandleWatermarks(
+            parseHandleWatermark(fresh.handleWatermarkJson),
+            handleWatermarkOf(createHandleAllocator(manifest)),
+          ),
+        ),
         updatedAt: now,
       })
       .where(eq(intentSessions.id, sessionId))

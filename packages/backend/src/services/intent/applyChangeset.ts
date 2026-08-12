@@ -124,7 +124,17 @@ import {
   extractWorkflowWorkflowRefs,
   extractWorkflowWorkgroupRefs,
 } from '@/services/resourceRefs'
-import { type IntentContextManifest, type IntentFence, type IntentManifestEntry } from './manifest'
+import {
+  applyCommitMounts,
+  createHandleAllocator,
+  handleWatermarkOf,
+  lineageRootOf,
+  mergeHandleWatermarks,
+  parseHandleWatermark,
+  type IntentContextManifest,
+  type IntentFence,
+  type IntentManifestEntry,
+} from './manifest'
 import { resolveIntentBundle, type IntentDecision, type ResolvedIntentOp } from './resolveChangeset'
 import { sessionManifest } from './session'
 
@@ -1063,15 +1073,77 @@ async function applyInner(
 
       deps.faults?.inTxAfterOps?.()
 
+      // RFC-291 面 B — copy bookkeeping, read off the PRE-COMMIT manifest.
+      //
+      // `sessionNow` is the row this transaction already CAS-verified above, so
+      // its manifest is the authoritative baseline for the migration below.
+      //
+      // The lineage recorded is the ROOT, not the immediate source: copying C1
+      // (itself a copy of O) records O. Recording C1 would break "keep only the
+      // newest copy" — O→C1→C2 then O→C3 would retire C1 but not C2, leaving
+      // two roots (design-gate P1-c).
+      const preCommitManifest = JSON.parse(sessionNow.contextManifestJson) as IntentContextManifest
+      const preCommitByHandle = new Map(preCommitManifest.map((entry) => [entry.handle, entry]))
+      const copySourceHandles: string[] = []
+      const lineageOriginByResourceId = new Map<string, string>()
+      for (const item of preparedOps) {
+        const sourceHandle = item.op.copiedFromHandle
+        if (sourceHandle === undefined) continue
+        copySourceHandles.push(sourceHandle)
+        const sourceEntry = preCommitByHandle.get(sourceHandle)
+        // Unresolvable handle degrades to "mount the copy, don't chase lineage"
+        // rather than failing the commit: the entry is only missing if the
+        // session moved under us, which the CAS above already ruled out.
+        if (sourceEntry !== undefined) {
+          lineageOriginByResourceId.set(item.op.resourceId, lineageRootOf(sourceEntry))
+        }
+      }
+
       const commitSeq = claim.session.commitSeq + 1
+      // RFC-291 面 A/B — mount what this commit created, IN THIS TRANSACTION.
+      //
+      // Doing it afterwards would leave a "resources landed, mounts missing"
+      // window, which is exactly the defect this RFC exists to remove: nothing
+      // repairs it later, because convergeIntentApplyJournal only rolls the
+      // filesystem side forward for `committed` rows (see the bottom of this
+      // file) — it never replays the big transaction.
+      //
+      // `action` here is the NORMALIZED action (resolveChangeset), so a copy
+      // already counts as a create; no second predicate needed.
+      const nextManifest = applyCommitMounts(preCommitManifest, {
+        // Read off preparedOps, not the receipt: the receipt's resourceType is
+        // the wire-level string, while these carry the canonical union type.
+        // The two are 1:1 — every prepared op pushes exactly one `applied` row.
+        created: preparedOps
+          .filter((item) => item.op.action === 'create')
+          .map((item) => {
+            const origin = lineageOriginByResourceId.get(item.op.resourceId)
+            return {
+              resourceType: item.op.resourceType,
+              resourceId: item.op.resourceId,
+              ...(origin === undefined ? {} : { copiedFromResourceId: origin }),
+            }
+          }),
+        unmountHandles: copySourceHandles,
+      })
       // Close the context epoch (design-gate P1-5): the applied draft archives,
       // the current pointer clears, and stale fences force a fresh dump before
-      // the next generation can target the new baselines.
+      // the next generation can target the new baselines. The mount migration
+      // rides the SAME epoch bump — it is part of this commit, not a new one.
       tx.update(intentSessions)
         .set({
           commitSeq,
           contextRevision: claim.session.contextRevision + 1,
           currentDraftId: null,
+          contextManifestJson: JSON.stringify(nextManifest),
+          // 面 F — creates mint handles here too, so the watermark must move
+          // with them or a later epoch could hand the ordinal to another row.
+          handleWatermarkJson: JSON.stringify(
+            mergeHandleWatermarks(
+              parseHandleWatermark(claim.session.handleWatermarkJson),
+              handleWatermarkOf(createHandleAllocator(nextManifest)),
+            ),
+          ),
           updatedAt: Date.now(),
         })
         .where(eq(intentSessions.id, input.sessionId))

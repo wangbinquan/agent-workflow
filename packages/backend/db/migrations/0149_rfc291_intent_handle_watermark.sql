@@ -1,0 +1,11 @@
+-- RFC-291 面 F — 会话级 handle ordinal 高水位。
+--
+-- `context_manifest_json` 每轮由 buildIntentDump 从空清单重建，只保留 detail
+-- 条目 + inventory cap 内的摘要。被 cap 淘汰、或资源已删除的非 detail 条目会
+-- 整个消失，连带丢掉它占用的 ordinal——下一个新建资源于是复用该 ordinal，
+-- 旧对话里的 `res#agent#3` 从此指向另一个资源（设计门 P1-d）。
+--
+-- 这一列是**只增不减**的 per-type 高水位 {agent:12, skill:3, ...}，
+-- createHandleAllocator 取「清单推导值」与它的 max。
+-- 默认 '{}' ⇒ 存量会话退化为 RFC-291 之前的行为，无 backfill。
+ALTER TABLE `intent_sessions` ADD COLUMN `handle_watermark_json` text DEFAULT '{}' NOT NULL;

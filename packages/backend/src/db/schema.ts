@@ -3264,6 +3264,13 @@ export const intentSessions = sqliteTable(
       .default('active'),
     contextRevision: integer('context_revision').notNull().default(0),
     contextManifestJson: text('context_manifest_json').notNull().default('[]'),
+    /**
+     * RFC-291 面 F — monotonic per-type handle ordinal high-water mark
+     * `{agent:12, skill:3, ...}`. The manifest is rebuilt每轮 and drops entries
+     * outside the inventory cap, so it cannot by itself keep ordinals from
+     * being reused for a DIFFERENT resource (design-gate P1-d). Only grows.
+     */
+    handleWatermarkJson: text('handle_watermark_json').notNull().default('{}'),
     /** Current draft pointer (intent_drafts.id); NULL until first changeset. */
     currentDraftId: text('current_draft_id'),
     /** Single-flight gate: the in-flight agent turn id, NULL when idle. */

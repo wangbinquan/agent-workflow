@@ -307,6 +307,16 @@ export type ResolvedIntentOp = {
   action: 'create' | 'update'
   /** True when this create was normalized from a copy decision. */
   fromCopy: boolean
+  /**
+   * RFC-291 — the copy SOURCE's handle, set only when `fromCopy`.
+   *
+   * Deliberately separate from `manifestEntry`: that field means "fence source
+   * for an in-place update" and is intentionally dropped for copies (a copy is
+   * not in-place, and carrying it would misfire the fence check). The commit
+   * needs the source identity for a different purpose — retiring it as a mount
+   * root — so it gets its own field rather than overloading that one.
+   */
+  copiedFromHandle?: string
   /** Canonicalized payload with slot values overlaid and every cross-resource
    *  reference replaced by a FINAL canonical id. Shape follows the op type. */
   payload: Record<string, unknown>
@@ -647,6 +657,10 @@ export function resolveIntentBundle(input: {
       ...(entry === undefined || isCopy ? {} : { manifestEntry: entry }),
       action,
       fromCopy: isCopy,
+      // RFC-291 — copies carry their source handle so the commit can retire it
+      // as a mount root (and derive the lineage root from the pre-commit
+      // manifest). `manifestEntry` stays absent for copies, on purpose.
+      ...(isCopy && op.action === 'update' ? { copiedFromHandle: op.target } : {}),
       payload,
     })
   }

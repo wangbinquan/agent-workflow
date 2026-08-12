@@ -58,7 +58,11 @@ import {
   buildWorkflowFence,
   buildWorkgroupFence,
   createHandleAllocator,
+  handleWatermarkOf,
+  inheritCopyProvenance,
+  mergeHandleWatermarks,
   type IntentContextManifest,
+  type IntentHandleWatermark,
 } from './manifest'
 
 export const INTENT_INVENTORY_CAP = 500
@@ -76,6 +80,14 @@ export interface IntentDumpInput {
   mounts: readonly IntentMountRef[]
   /** Prior epoch's manifest — reused so handles stay stable across rebases. */
   priorManifest?: IntentContextManifest
+  /**
+   * RFC-291 面 F — persisted per-type handle high-water mark. The prior
+   * manifest is NOT sufficient: entries evicted by the inventory cap (or whose
+   * resource was deleted) vanish from it, so its ordinals can go backwards and
+   * a later resource would reuse a handle the conversation already used for
+   * something else.
+   */
+  handleWatermark?: IntentHandleWatermark
   /** Test seam; production uses INTENT_INVENTORY_CAP. */
   inventoryCap?: number
   /**
@@ -94,6 +106,8 @@ export interface IntentDumpResult {
   hiddenDependencies: Array<{ parentHandle: string; count: number }>
   /** type → dropped row count when the inventory cap truncated the summary. */
   inventoryTruncated: Partial<Record<AclResourceType, number>>
+  /** RFC-291 面 F — high-water mark to persist back onto the session row. */
+  handleWatermark: IntentHandleWatermark
 }
 
 const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex')
@@ -211,7 +225,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
   const { db, actor } = input
   const cap = input.inventoryCap ?? INTENT_INVENTORY_CAP
   const catalog = await loadVisibleCatalog(db, actor)
-  const alloc = createHandleAllocator(input.priorManifest)
+  const alloc = createHandleAllocator(input.priorManifest, input.handleWatermark)
   const nonce = input.envelopeNonce
   const rawSeedFiles: SystemAgentSeedFile[] = []
   const seedFiles = rawSeedFiles
@@ -508,10 +522,18 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
           content: fenceUntrusted(file.path, file.content, nonce),
         }))
   return {
-    manifest,
+    // RFC-291 面 B — ONE place carries copy lineage across the rebuild. The
+    // manifest above is reconstructed through three independent paths (detail
+    // refs / inventory summaries / unavailable roots); without this pass the
+    // `copiedFromResourceId` written at commit time would vanish on the next
+    // turn and "keep only the newest copy" would hold for one epoch only.
+    manifest: inheritCopyProvenance(manifest, input.priorManifest),
     seedFiles: fencedSeedFiles,
     hiddenDependencies,
     inventoryTruncated,
+    // RFC-291 面 F — monotonic: never hand back something lower than the
+    // watermark we were seeded with, even if this epoch minted nothing.
+    handleWatermark: mergeHandleWatermarks(input.handleWatermark, handleWatermarkOf(alloc)),
   }
 }
 
