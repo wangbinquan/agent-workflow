@@ -14,8 +14,7 @@
 
 import type { OpencodeModel } from '@agent-workflow/shared'
 import { createLogger } from './log'
-import { killProcessTree } from './process'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { spawnVersionProbe } from './process'
 
 const log = createLogger('opencode-models')
 
@@ -51,64 +50,6 @@ const DEFAULT_MODELS_TIMEOUT_MS = 30_000
 const MAX_MODELS_OUTPUT_BYTES = 4 * 1024 * 1024 // 4 MiB per stream
 const MODELS_GROUP_REAP_WAIT_MS = 250
 
-function processGroupAlive(groupLeaderPid: number): boolean {
-  try {
-    process.kill(-groupLeaderPid, 0)
-    return true
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EPERM'
-  }
-}
-
-/**
- * A detached wrapper can fork a helper with closed stdio and then exit before
- * the timeout. The direct child and both drains are finished in that case, but
- * its process group can still contain the helper. Always kill the group and
- * give the kernel a short bounded window to reap it before returning.
- */
-async function reapModelsProcessGroup(groupLeaderPid: number | undefined): Promise<void> {
-  if (typeof groupLeaderPid !== 'number' || groupLeaderPid <= 0) return
-  try {
-    // The direct child has already been waited/reaped. Never use
-    // killProcessTree's positive-PID fallback here: if the now-free leader PID
-    // were reused, that fallback could kill an unrelated process. `detached`
-    // guarantees our surviving descendants (if any) remain addressable only
-    // through the original negative PGID.
-    process.kill(-groupLeaderPid, 'SIGKILL')
-  } catch {
-    return
-  }
-  const deadline = Date.now() + MODELS_GROUP_REAP_WAIT_MS
-  while (Date.now() < deadline && processGroupAlive(groupLeaderPid)) {
-    await Bun.sleep(10)
-  }
-}
-
-/** Drain a stream to EOF but stop ACCUMULATING past `cap` bytes (keep reading so
- *  the child's pipe never wedges). Returns the captured (possibly truncated) text. */
-async function readCapped(
-  stream: ReadableStream<Uint8Array> | undefined,
-  cap: number,
-): Promise<string> {
-  if (stream === undefined) return ''
-  const reader = stream.getReader()
-  const chunks: Uint8Array[] = []
-  let total = 0
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (value !== undefined && total < cap) {
-        chunks.push(value)
-        total += value.byteLength
-      }
-    }
-  } catch {
-    /* stream closed under us (kill) */
-  }
-  return Buffer.concat(chunks).toString('utf-8')
-}
-
 export async function listOpencodeModels(
   binary: string,
   opts?: {
@@ -129,59 +70,31 @@ export async function listOpencodeModels(
   const cmd = [binary, 'models', '--verbose']
   if (opts?.refresh) cmd.push('--refresh')
 
-  // detached → the child leads its own process group, so the timeout can group-
-  // kill it. A binary that forks a grandchild (a shell stub `sleep`s, real
-  // opencode can spawn helpers) would otherwise keep the inherited stdout pipe
-  // open and block the drain past the timeout (CI caught this — a plain
-  // `proc.kill` left the grandchild alive). Mirrors runtimeSmoke.
-  const proc = Bun.spawn({
-    ...platformSpawnOptionsForHost(),
-    cmd,
+  // RFC-284 T8：spawn/双流 capped 读/有界组死 reap 骨架收敛
+  // util/process.spawnVersionProbe（models 形态：maxBytes + awaitReapMs；
+  // detached 恒开——恒有 timeout）。本函数只留 models 策略（超时/非零抛错、
+  // 解析、缓存）；「plain proc.kill 留活孙进程」的 CI 教训与 detached 理由
+  // 见骨架头注。
+  const r = await spawnVersionProbe(cmd, {
+    timeoutMs: opts?.timeoutMs ?? DEFAULT_MODELS_TIMEOUT_MS,
     ...(opts?.env !== undefined ? { env: opts.env } : {}),
     ...(opts?.cwd !== undefined ? { cwd: opts.cwd } : {}),
-    stdout: 'pipe',
-    stderr: 'pipe',
-    stdin: 'ignore',
-    detached: true,
+    maxBytes: MAX_MODELS_OUTPUT_BYTES,
+    awaitReapMs: MODELS_GROUP_REAP_WAIT_MS,
   })
-  let timedOut = false
-  const timer = setTimeout(() => {
-    timedOut = true
-    try {
-      if (typeof proc.pid === 'number') killProcessTree(proc.pid, 'SIGKILL')
-      else proc.kill('SIGKILL')
-    } catch {
-      /* already gone */
-    }
-  }, opts?.timeoutMs ?? DEFAULT_MODELS_TIMEOUT_MS)
-  ;(timer as { unref?: () => void }).unref?.()
 
-  let stdout = ''
-  let stderr = ''
-  let exitCode: number | null = null
-  try {
-    ;[stdout, stderr, exitCode] = await Promise.all([
-      readCapped(proc.stdout as ReadableStream<Uint8Array> | undefined, MAX_MODELS_OUTPUT_BYTES),
-      readCapped(proc.stderr as ReadableStream<Uint8Array> | undefined, MAX_MODELS_OUTPUT_BYTES),
-      proc.exited,
-    ])
-  } finally {
-    clearTimeout(timer)
-    await reapModelsProcessGroup(proc.pid)
-  }
-
-  if (timedOut) {
+  if (r.timedOut) {
     log.warn('opencode models timed out', { binary })
     throw new Error(
       `opencode models timed out after ${opts?.timeoutMs ?? DEFAULT_MODELS_TIMEOUT_MS}ms`,
     )
   }
-  if (exitCode !== 0) {
-    log.warn('opencode models non-zero exit', { binary, exitCode })
-    throw new Error(`opencode models exited ${exitCode}: ${stderr.trim() || '(no stderr)'}`)
+  if (r.exitCode !== 0) {
+    log.warn('opencode models non-zero exit', { binary, exitCode: r.exitCode })
+    throw new Error(`opencode models exited ${r.exitCode}: ${r.stderr.trim() || '(no stderr)'}`)
   }
 
-  const models = parseModelsOutput(stdout)
+  const models = parseModelsOutput(r.stdout)
   await opts?.beforeCacheWrite?.()
   cache.set(cacheKey, models)
   return { binary, models, cached: false }

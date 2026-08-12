@@ -7,7 +7,7 @@ import { createLogger } from '@/util/log'
 import type { ProbeOpts } from '../types'
 // RFC-143 PR-5: single semver helper pair (was a byte-for-byte local copy).
 import { compareSemver, extractVersion } from '@/util/semver'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { spawnVersionProbe } from '@/util/process'
 
 const log = createLogger('claude-code')
 
@@ -51,60 +51,19 @@ export async function probeClaudeCode(
   let version: string | null = null
   let ran = false
   try {
-    // Detached process group on the timeout path so SIGKILL reaps the whole
-    // tree, not just a hung wrapper (see util/opencode.ts, same shape).
-    const proc = Bun.spawn({
-      ...platformSpawnOptionsForHost(),
-      cmd: [...head, '--version'],
-      stdout: 'pipe',
-      stderr: 'pipe',
-      ...(opts.timeoutMs !== undefined ? { detached: true } : {}),
+    // RFC-284 T8：spawn 骨架（detached-iff-timeout / exit 先行 / 有界读 /
+    // finally 组 reap）收敛到 util/process.spawnVersionProbe，本函数只留
+    // claude 侧策略（告警文案 + semver 门）。
+    const r = await spawnVersionProbe([...head, '--version'], {
+      ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
     })
-    let timedOut = false
-    const timer =
-      opts.timeoutMs !== undefined
-        ? setTimeout(() => {
-            timedOut = true
-            try {
-              process.kill(-proc.pid, 'SIGKILL')
-            } catch {
-              proc.kill('SIGKILL')
-            }
-          }, opts.timeoutMs)
-        : undefined
-    try {
-      // Exit wait decoupled from the stdout read, and the read itself bounded —
-      // a grandchild holding the pipe write end must not hang the probe after
-      // SIGKILL reaps the direct child (see util/opencode.ts, same shape).
-      const outPromise = new Response(proc.stdout).text().catch(() => '')
-      const exitCode = await proc.exited
-      if (timedOut) {
-        warn('claude --version timed out', { binary, timeoutMs: opts.timeoutMs })
-      } else if (exitCode === 0) {
-        ran = true
-        const out =
-          opts.timeoutMs !== undefined
-            ? await Promise.race([
-                outPromise,
-                new Promise<string>((res) => setTimeout(() => res(''), opts.timeoutMs)),
-              ])
-            : await outPromise
-        version = extractVersion(out)
-      } else {
-        warn('claude --version non-zero exit', { binary, exitCode })
-      }
-    } finally {
-      if (timer !== undefined) {
-        clearTimeout(timer)
-        // Unconditional group reap once the probe is over — a wrapper that
-        // forked then exited before the timer would otherwise leak its
-        // descendants (see util/opencode.ts, same shape).
-        try {
-          process.kill(-proc.pid, 'SIGKILL')
-        } catch {
-          /* group already gone */
-        }
-      }
+    if (r.timedOut) {
+      warn('claude --version timed out', { binary, timeoutMs: opts.timeoutMs })
+    } else if (r.exitCode === 0) {
+      ran = true
+      version = extractVersion(r.stdout)
+    } else {
+      warn('claude --version non-zero exit', { binary, exitCode: r.exitCode })
     }
   } catch (err) {
     warn('claude binary not executable', { binary, error: (err as Error).message })

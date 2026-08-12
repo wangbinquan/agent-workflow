@@ -52,8 +52,8 @@ const ALLOWLIST: Record<string, { count: number; why: string }> = {
     why: 'tar czf/xzf 单模块收敛点（文件头自述存在目的就是防散落的手搓 tar spawn）。',
   },
   'util/process.ts': {
-    count: 3,
-    why: '平台杀链自身的 ps/探测 spawnSync——杀链不能反过来依赖被它管理的执行层。',
+    count: 4,
+    why: '平台杀链自身的 ps/探测 spawnSync ×3 + RFC-284 T8 的 spawnVersionProbe 骨架（三胞胎探针唯一 spawn 点）。',
   },
   'util/win32Acl.ts': {
     count: 3,
@@ -74,18 +74,6 @@ const ALLOWLIST: Record<string, { count: number; why: string }> = {
   'services/scriptRun.ts': {
     count: 1,
     why: 'probeInterpreter 解释器探针。removeWhen: RFC-284 T17 收编 spawnVersionProbe。',
-  },
-  'services/runtime/opencode/util.ts': {
-    count: 1,
-    why: 'opencode --version 探针。removeWhen: RFC-284 T8 收编 spawnVersionProbe。',
-  },
-  'services/runtime/claudeCode/probe.ts': {
-    count: 1,
-    why: 'claude --version 探针。removeWhen: RFC-284 T8 收编 spawnVersionProbe。',
-  },
-  'util/opencode-models.ts': {
-    count: 1,
-    why: 'models 枚举探针。removeWhen: RFC-284 T8/T19 收编并迁 runtime/opencode/。',
   },
   'services/structuralDiff/deep/indexers.ts': {
     count: 1,

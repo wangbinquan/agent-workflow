@@ -280,3 +280,144 @@ export async function killStaleRunProcessTree(
 export function raceWithFallback<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), ms))])
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// RFC-284 T8（2026-08-12 审计 N20/N21）——版本/枚举探针的唯一 spawn 骨架。
+//
+// 此前三胞胎（runtime/opencode/util probeOpencode、runtime/claudeCode/probe、
+// util/opencode-models）各持同形骨架且杀链已现分叉。统一语义（设计门修订版）：
+//   - detached 仅在给了 timeoutMs 时开（无-timeout 保持历史 flat spawn
+//     byte-for-byte——opencode probe 注释的既有承诺参数化保留）；
+//   - 超时杀 = killProcessTree（posix 与原「kill(-pid) 回退 proc.kill」字节
+//     等价，win32 额外获得 taskkill 树杀）；
+//   - finally 收尾 reap = **仅负 PGID、无正 PID 回退**（direct child 已被
+//     await exited 收割，正 PID 可能已被复用——杀回退会误杀无关进程，
+//     opencode-models 注释里的既有安全裁决，升格为统一语义）；
+//   - 读策略两形态：缺省 = exit 先行、仅 exit-0 且有界读 stdout（探针形态，
+//     防孙进程持管道让 text() 永不 EOF）；给了 maxBytes = 双流并发 capped 读
+//     + 无条件 await（models 形态，失败路径需要 stderr 文本）+ stdin ignore。
+//   - Bun.spawn 本身抛错（binary 缺失/不可执行）**原样上抛**，由调用方按各自
+//     语义处置（twins warn-not-executable，models 冒泡给上层）。
+// 三胞胎的告警文案/registry 记录/semver 判定等策略全部留在各调用方。
+
+export interface VersionProbeOpts {
+  timeoutMs?: number
+  env?: Record<string, string | undefined>
+  cwd?: string
+  /** 设置即切换 models 形态（见头注）。 */
+  maxBytes?: number
+  /** finally 组 reap 后有界等待组死的窗口（models 形态用；缺省 0 = 即杀即返）。 */
+  awaitReapMs?: number
+}
+
+export interface VersionProbeResult {
+  timedOut: boolean
+  exitCode: number
+  stdout: string
+  /** 仅 maxBytes 形态填充；探针形态恒 ''。 */
+  stderr: string
+}
+
+// 语义照抄 opencode-models 原实现：**整 chunk 累计**（total<cap 才收、不裁
+// 边界 chunk——捕获可略超 cap），且读到 EOF 不提前停（保持排水、防子进程管道
+// 楔死）。勿"顺手"改成精确裁剪——那是行为变更。
+async function readStreamCapped(
+  stream: ReadableStream<Uint8Array> | undefined,
+  cap: number,
+): Promise<string> {
+  if (stream === undefined) return ''
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value !== undefined && total < cap) {
+        chunks.push(value)
+        total += value.byteLength
+      }
+    }
+  } catch {
+    /* stream closed under us (kill) */
+  }
+  return Buffer.concat(chunks).toString('utf-8')
+}
+
+/** 组是否仍有成员（kill 0 探测；EPERM=存在但无权，也算活）。 */
+function processGroupAlive(groupLeaderPid: number): boolean {
+  try {
+    process.kill(-groupLeaderPid, 0)
+    return true
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+/**
+ * finally 收尾 reap：仅负 PGID、无正 PID 回退（direct child 已被 exited 收割，
+ * 正 PID 可能已被复用——回退会误杀无关进程；opencode-models 的既有安全裁决）。
+ * `awaitMs` > 0 时在杀后给内核一个有界窗口确认组死（models 形态）。
+ */
+async function reapDetachedGroup(pid: number | undefined, awaitMs: number): Promise<void> {
+  if (typeof pid !== 'number' || pid <= 0) return
+  try {
+    process.kill(-pid, 'SIGKILL')
+  } catch {
+    return /* group already gone */
+  }
+  const deadline = Date.now() + awaitMs
+  while (Date.now() < deadline && processGroupAlive(pid)) {
+    await Bun.sleep(10)
+  }
+}
+
+export async function spawnVersionProbe(
+  argv: readonly string[],
+  opts: VersionProbeOpts = {},
+): Promise<VersionProbeResult> {
+  const detached = opts.timeoutMs !== undefined
+  const proc = Bun.spawn({
+    ...platformSpawnOptionsForHost(),
+    cmd: [...argv],
+    ...(opts.env !== undefined ? { env: opts.env } : {}),
+    ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}),
+    stdout: 'pipe',
+    stderr: 'pipe',
+    ...(opts.maxBytes !== undefined ? { stdin: 'ignore' } : {}),
+    ...(detached ? { detached: true } : {}),
+  })
+  let timedOut = false
+  const timer = detached
+    ? setTimeout(() => {
+        timedOut = true
+        killProcessTree(proc.pid, 'SIGKILL')
+      }, opts.timeoutMs)
+    : undefined
+  ;(timer as { unref?: () => void } | undefined)?.unref?.()
+  try {
+    if (opts.maxBytes !== undefined) {
+      const [stdout, stderr, exitCode] = await Promise.all([
+        readStreamCapped(proc.stdout as ReadableStream<Uint8Array> | undefined, opts.maxBytes),
+        readStreamCapped(proc.stderr as ReadableStream<Uint8Array> | undefined, opts.maxBytes),
+        proc.exited,
+      ])
+      return { timedOut, exitCode, stdout, stderr }
+    }
+    const outPromise = new Response(proc.stdout).text().catch(() => '')
+    const exitCode = await proc.exited
+    let stdout = ''
+    if (!timedOut && exitCode === 0) {
+      stdout = detached
+        ? await Promise.race([
+            outPromise,
+            new Promise<string>((res) => setTimeout(() => res(''), opts.timeoutMs)),
+          ])
+        : await outPromise
+    }
+    return { timedOut, exitCode, stdout, stderr: '' }
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+    if (detached) await reapDetachedGroup(proc.pid, opts.awaitReapMs ?? 0)
+  }
+}

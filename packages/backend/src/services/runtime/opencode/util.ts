@@ -7,7 +7,7 @@ import { createLogger } from '@/util/log'
 import { loadConfig } from '@/config'
 import { extractVersion } from '@/util/semver'
 import { recordOpencodeBinaryVersion } from './versionRegistry'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { spawnVersionProbe } from '@/util/process'
 // RFC-282 C0 (设计门 P2-7) — the probe-options shape lives on the runtime
 // contract surface; this module re-exports it so existing `util/opencode`
 // import sites keep resolving until C3 relocates the whole module.
@@ -64,72 +64,28 @@ export async function probeOpencode(
   let version: string | null = null
   let ran = false
   try {
-    // With a timeout the probe runs in its OWN process group (detached) so the
-    // timeout can SIGKILL the whole tree: killing only the direct child leaves
-    // a hung wrapper's grandchild alive and leaking once per poll (Codex impl
-    // gate). Without a timeout the historical flat spawn is kept byte-for-byte.
-    const proc = Bun.spawn({
-      ...platformSpawnOptionsForHost(),
-      cmd: [...head, '--version'],
-      stdout: 'pipe',
-      stderr: 'pipe',
-      ...(opts.timeoutMs !== undefined ? { detached: true } : {}),
+    // RFC-284 T8：spawn 骨架收敛 util/process.spawnVersionProbe（detached 仅在
+    // 有 timeout 时开——无-timeout 保持历史 flat spawn 的承诺由骨架参数化兑现；
+    // exit 先行防孙进程持管道；finally 组 reap 防提前退出的 wrapper 漏杀）。
+    // 本函数只留 opencode 侧策略：告警文案 + flag-spelling registry 记录。
+    const r = await spawnVersionProbe([...head, '--version'], {
+      ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
     })
-    let timedOut = false
-    const timer =
-      opts.timeoutMs !== undefined
-        ? setTimeout(() => {
-            timedOut = true
-            try {
-              process.kill(-proc.pid, 'SIGKILL')
-            } catch {
-              proc.kill('SIGKILL')
-            }
-          }, opts.timeoutMs)
-        : undefined
-    try {
-      // Do NOT tie the exit wait to the stdout read: a grandchild process can
-      // inherit the pipe's write end and keep text() from ever seeing EOF even
-      // after SIGKILL reaps the direct child (a hung `sh`-wrapper fork does
-      // exactly this). Await the exit first; then bound the stdout read too.
-      const outPromise = new Response(proc.stdout).text().catch(() => '')
-      const exitCode = await proc.exited
-      if (timedOut) {
-        warn('opencode --version timed out', { binary, timeoutMs: opts.timeoutMs })
-      } else if (exitCode === 0) {
-        ran = true
-        const out =
-          opts.timeoutMs !== undefined
-            ? await Promise.race([
-                outPromise,
-                new Promise<string>((res) => setTimeout(() => res(''), opts.timeoutMs)),
-              ])
-            : await outPromise
-        version = extractVersion(out)
-        // 2026-07-21: seed the spawn-time flag-spelling registry. Every probe
-        // path funnels through here (doctor / runtime validation / status
-        // poll), so a successful probe is exactly when we know which spelling
-        // of the auto-approve flag this binary takes — see
-        // opencode-version-registry.ts + spawn.ts resolveAutoApproveFlag.
-        // Only on ran=true: a transient probe failure must not clobber a good
-        // record with null.
-        recordOpencodeBinaryVersion(binary, version)
-      } else {
-        warn('opencode --version non-zero exit', { binary, exitCode })
-      }
-    } finally {
-      if (timer !== undefined) {
-        clearTimeout(timer)
-        // The probe is over — anything still alive in the detached group is a
-        // leaked descendant of a misbehaving wrapper (e.g. it forked then
-        // exited non-zero BEFORE the timer fired, so the timeout never reaped
-        // the group). Kill unconditionally; ESRCH on an empty group is fine.
-        try {
-          process.kill(-proc.pid, 'SIGKILL')
-        } catch {
-          /* group already gone */
-        }
-      }
+    if (r.timedOut) {
+      warn('opencode --version timed out', { binary, timeoutMs: opts.timeoutMs })
+    } else if (r.exitCode === 0) {
+      ran = true
+      version = extractVersion(r.stdout)
+      // 2026-07-21: seed the spawn-time flag-spelling registry. Every probe
+      // path funnels through here (doctor / runtime validation / status
+      // poll), so a successful probe is exactly when we know which spelling
+      // of the auto-approve flag this binary takes — see
+      // opencode-version-registry.ts + spawn.ts resolveAutoApproveFlag.
+      // Only on ran=true: a transient probe failure must not clobber a good
+      // record with null.
+      recordOpencodeBinaryVersion(binary, version)
+    } else {
+      warn('opencode --version non-zero exit', { binary, exitCode: r.exitCode })
     }
   } catch (err) {
     warn('opencode binary not executable', { binary, error: (err as Error).message })
