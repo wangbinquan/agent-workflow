@@ -4,7 +4,8 @@
 // 锁四件事：①重建后表定义无表级 FOREIGN KEY、owner/parent 两条**内联** REFERENCES
 // 保留；②全行全列数据原样搬运；③入向 FK（node_runs 等 14 表的代表）在
 // rename-first 语序 + foreign_keys=OFF（本仓迁移 runner 的固定模式，db/client.ts
-// RFC-115 注）下**不被改写**、迁移后仍指向新表且 FK 完整性干净；④软链生效：
+// RFC-115 注）+ migration 内临时 legacy_alter_table=ON 下**不被改写**、迁移后
+// 仍指向新表且 FK 完整性干净，且 legacy 开关不泄漏；④软链生效：
 // 删除仍被任务引用的 workflow 行不再撞 SQLITE_CONSTRAINT（应用层的非终态门在
 // rfc285-b2-delete-tier / rfc199 套件，此处只证 SQL 层）。
 
@@ -40,8 +41,10 @@ function fixtureDb(): Database {
   const dir = mkdtempSync(join(tmpdir(), 'rfc285-0151-'))
   tempDirs.push(dir)
   const raw = new Database(join(dir, 'db.sqlite'))
-  // 迁移 runner 的固定模式：foreign_keys=OFF 下执行（rename 不改写入向引用）。
+  // 模拟现代 SQLite 默认：仅 foreign_keys=OFF 仍会在 rename 时改写入向引用；
+  // migration 必须自行临时启用 legacy_alter_table，且执行后恢复 OFF。
   raw.exec('PRAGMA foreign_keys = OFF;')
+  raw.exec('PRAGMA legacy_alter_table = OFF;')
   raw.exec('CREATE TABLE `users` (`id` text PRIMARY KEY NOT NULL);')
   raw.exec('CREATE TABLE `workflows` (`id` text PRIMARY KEY NOT NULL);')
   raw.exec(preMigrationTasksDdl() + ';')
@@ -106,6 +109,10 @@ describe('migration 0151 · RFC-285 workflow_id soft link', () => {
       .get()!.sql
     expect(nrSql).toContain('REFERENCES `tasks`')
     expect(nrSql.includes('__old_tasks')).toBe(false)
+    expect(
+      raw.query<{ legacy_alter_table: number }, []>('PRAGMA legacy_alter_table').get()!
+        .legacy_alter_table,
+    ).toBe(0)
     raw.exec('PRAGMA foreign_keys = ON;')
     expect(raw.query('PRAGMA foreign_key_check').all().length).toBe(0)
     expect(raw.query<{ quick_check: string }, []>('PRAGMA quick_check').get()!.quick_check).toBe(

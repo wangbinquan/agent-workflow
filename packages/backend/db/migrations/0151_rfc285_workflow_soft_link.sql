@@ -7,21 +7,24 @@
 -- 任务详情容忍悬空 workflow 引用（与 agent 删除后同型）。
 --
 -- 语序采 0117/0132 的 rename-first 模板；tasks 有 14 条入向 FK（node_runs /
--- doc_versions / task_collaborators / clarify_rounds …）+ parent_task_id 自引用，
+-- doc_versions / task_collaborators / clarify_rounds …）+ parent_task_id 自引用。
 -- 本仓迁移 runner 恒以 `PRAGMA foreign_keys=OFF` 执行（db/client.ts RFC-115 注：
--- drizzle 单事务内 pragma 不生效，故在事务外先关）——实测该模式下 RENAME **不
--- 改写**其他表的引用文本（引用仍写 `tasks`），先改名旧表、再建终名新表后，全部
--- 入向 FK 自然指向新表；FK ON 模式会改写引用（危险语序），本迁移不在该模式下跑。
+-- drizzle 单事务内 pragma 不生效，故在事务外先关）。新版 SQLite 即使 FK 已关，
+-- 默认仍会在 RENAME 时改写入向引用；因此重命名语句周围还必须临时启用
+-- `legacy_alter_table`，让引用文本保持 `tasks`。先改名旧表、再建终名新表后，全部
+-- 入向 FK 自然指向新表；FK ON 模式仍会改写引用（危险语序），本迁移不在该模式下跑。
 --
 -- DROP 旧表前做行数一致断言（0132 的「CHECK 临时表 + 条件 INSERT」原语）。
 --
--- ⚠ 内联 pragma 三明治（0019/0035/0057 既有先例）：本仓存在**事务外 FK ON**
--- 的重放语境（snapshot 构建 / 迁移测试的 raw 重放）——该模式下 RENAME 会把
--- 14 个子表的引用文本改写成 `__old_tasks`（2a8fce6b 门禁 snapshot-parity 实锤）。
--- 显式 OFF 后 rename 不改写；daemon runner 本就事务内（pragma no-op、恒 OFF）。
+-- ⚠ 内联 pragma 三明治（0019/0035/0057 既有先例）：本仓存在 raw 重放语境；
+-- foreign_keys 必须在事务外关闭，而 legacy_alter_table 可在事务内临时切换。二者
+-- 缺一都会让 RENAME 把 14 个子表的引用文本改写成 `__old_tasks`。迁移结束前恢复
+-- legacy_alter_table 默认值，避免连接级设置泄漏到后续 DDL。
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
+PRAGMA legacy_alter_table=ON;--> statement-breakpoint
 CREATE TEMP TABLE `__rfc285_assert` (`ok` integer NOT NULL CHECK (`ok` = 1));--> statement-breakpoint
 ALTER TABLE `tasks` RENAME TO `__old_tasks`;--> statement-breakpoint
+PRAGMA legacy_alter_table=OFF;--> statement-breakpoint
 CREATE TABLE `tasks` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workflow_id` text NOT NULL,
@@ -76,7 +79,7 @@ CREATE TABLE `tasks` (
 	`webhook_fire_id` text,
 	`trigger_context_json` text
 );--> statement-breakpoint
-INSERT INTO `tasks` (
+INSERT INTO `__new_tasks` (
 	`id`, `workflow_id`, `workflow_snapshot`, `repo_path`, `worktree_path`,
 	`base_branch`, `branch`, `status`, `inputs`, `max_duration_ms`,
 	`max_total_tokens`, `started_at`, `finished_at`, `error_summary`,
@@ -107,13 +110,14 @@ SELECT
 	`parent_task_id`, `parent_node_run_id`, `invocation_depth`,
 	`ref_closure_json`, `repo_group_id`, `repo_group_name`,
 	`webhook_trigger_id`, `webhook_fire_id`, `trigger_context_json`
-FROM `__old_tasks`;--> statement-breakpoint
+FROM `tasks`;--> statement-breakpoint
 INSERT INTO `__rfc285_assert` (`ok`)
 SELECT CASE
-	WHEN (SELECT COUNT(*) FROM `tasks`) = (SELECT COUNT(*) FROM `__old_tasks`)
+	WHEN (SELECT COUNT(*) FROM `__new_tasks`) = (SELECT COUNT(*) FROM `tasks`)
 	THEN 1 ELSE 0
 END;--> statement-breakpoint
-DROP TABLE `__old_tasks`;--> statement-breakpoint
+DROP TABLE `tasks`;--> statement-breakpoint
+ALTER TABLE `__new_tasks` RENAME TO `tasks`;--> statement-breakpoint
 DROP TABLE `__rfc285_assert`;--> statement-breakpoint
 CREATE INDEX `idx_tasks_workflow` ON `tasks` (`workflow_id`,`started_at`);--> statement-breakpoint
 CREATE INDEX `idx_tasks_scheduled_task` ON `tasks` (`scheduled_task_id`);--> statement-breakpoint
