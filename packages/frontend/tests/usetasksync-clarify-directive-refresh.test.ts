@@ -25,7 +25,8 @@ function src(): string {
   return norm(readFileSync(HOOK, 'utf8'))
 }
 
-const DIRECTIVE_KEY = "['task-clarify-directives', taskId]"
+// RFC-286 F4 改锚：规则表零字面（工厂符号是新锁面，语义同旧字面）。
+const DIRECTIVE_KEY = 'TASK_QUERY_KEYS.clarifyDirectives(taskId)'
 
 describe('RFC-123 useTaskSync — answer-side clarify-directive refresh', () => {
   test('clarify.answered rule invalidates the directive toggles', () => {

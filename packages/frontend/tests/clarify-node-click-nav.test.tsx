@@ -291,12 +291,18 @@ describe('useTaskSync cross-clarify node-runs refresh (RFC-161)', () => {
       const idx = src.indexOf(`'${evt}':`)
       expect(idx).toBeGreaterThan(-1)
       // the rule body (up to the next event key) must invalidate node-runs.
+      // RFC-286 F4 改锚：规则表零字面（rfc286 grep 锁钉死），锁面从字面 key
+      // 换成工厂符号——语义同（TASK_QUERY_KEYS.nodeRuns(taskId) ≡ 旧字面）。
       const body = src.slice(idx, idx + 220)
-      expect(body).toMatch(/\['tasks', taskId, 'node-runs'\]/)
+      expect(body).toMatch(/TASK_QUERY_KEYS\.nodeRuns\(taskId\)/)
     }
     // answered/rejected keep the RFC-123 directive invalidation.
-    expect(src).toMatch(/'cross-clarify\.answered':[\s\S]*?\['task-clarify-directives', taskId\]/)
-    expect(src).toMatch(/'cross-clarify\.rejected':[\s\S]*?\['task-clarify-directives', taskId\]/)
+    expect(src).toMatch(
+      /'cross-clarify\.answered':[\s\S]*?TASK_QUERY_KEYS\.clarifyDirectives\(taskId\)/,
+    )
+    expect(src).toMatch(
+      /'cross-clarify\.rejected':[\s\S]*?TASK_QUERY_KEYS\.clarifyDirectives\(taskId\)/,
+    )
   })
 })
 
