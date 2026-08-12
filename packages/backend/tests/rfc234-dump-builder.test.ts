@@ -348,18 +348,30 @@ describe('buildIntentDump', () => {
     expect(manifestEntryFor(second.manifest, 'agent', agentId)?.handle).toBe(firstHandle)
   })
 
-  test('mounting an invisible resource fails closed without naming it', async () => {
+  // RFC-291 面 C 起，不可见的挂载根**不再抛错**：整轮生成继续，该根被跳过并
+  // 记入 unavailableMounts（用户手里那条挂载仍然存在、仍可取消）。原用例的核心
+  // 意图——「不泄漏它的名字」——原样保留在下面，只是断言从「抛错」改成「跳过且
+  // 不出现名字」。改这条行为的理由见 design.md §5：抛错等于让一个已删除/已回收
+  // 权限的资源把整个会话卡死。
+  test('mounting an invisible resource is skipped without naming it', async () => {
     await seedUser(OWNER)
     await seedUser(STRANGER)
     const otherId = await seedAgent({ name: 'their-private', ownerUserId: STRANGER })
-    await expect(
-      buildIntentDump({
-        db,
-        actor: actorFor(OWNER),
-        appHome,
-        mounts: [{ resourceType: 'agent', resourceId: otherId }],
-      }),
-    ).rejects.toThrow(/not visible: agent$/)
+    const dump = await buildIntentDump({
+      db,
+      actor: actorFor(OWNER),
+      appHome,
+      mounts: [{ resourceType: 'agent', resourceId: otherId }],
+    })
+    expect(dump.unavailableMounts).toHaveLength(1)
+    expect(dump.unavailableMounts[0]?.resourceType).toBe('agent')
+    // 没有 mounted/ 文档，也没有任何地方出现它的名字
+    expect(dump.seedFiles.some((f) => f.path.startsWith('mounted/'))).toBe(false)
+    expect(JSON.stringify(dump)).not.toContain('their-private')
+    // 条目保留为根（前端据此显示「资源不可用」并允许取消挂载）
+    const entry = dump.manifest.find((e) => e.resourceId === otherId)
+    expect(entry?.root).toBe(true)
+    expect(entry?.detail).toBe(false)
   })
   // Codex impl-gate P1-4 — resource bodies are UNTRUSTED: a poisoned
   // description / skill body must land inside the turn's nonce fence, never

@@ -101,6 +101,7 @@ export interface Resources {
     mountDecisionSubmit: string
     mounts: string
     mountUnavailable: string
+    mountUnavailableHint: string
     unmount: string
     draftTitle: string
     draftStale: string
@@ -5588,6 +5589,7 @@ export const zhCN: Resources = {
     mountDecisionSubmit: '应用上下文决定',
     mounts: '已挂载元素',
     mountUnavailable: '资源不可用',
+    mountUnavailableHint: '生成时将跳过',
     unmount: '取消挂载',
     draftTitle: '草稿变更集（第 {{revision}} 版）',
     draftStale: '已过期',

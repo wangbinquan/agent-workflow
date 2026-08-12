@@ -467,6 +467,11 @@ function IntentSessionDetailPage() {
                       <span>
                         {t(`intent.resourceType.${mount.resourceType}`)} ·{' '}
                         <code>{mount.handle}</code>
+                        {/* RFC-291 面 C — 该资源已删除或不再可见：生成时跳过它而不是
+                            整轮报错，这里说明后果，免得用户以为它仍在被使用。 */}
+                        {mount.displayName === null ? (
+                          <> · {t('intent.mountUnavailableHint')}</>
+                        ) : null}
                       </span>
                     </span>
                     {canEdit ? (

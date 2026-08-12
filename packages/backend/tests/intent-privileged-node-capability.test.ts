@@ -925,6 +925,7 @@ describe('boundary: how much of a redacted nested field may be sent', () => {
       validationErrors: [],
       pendingQuestions: [],
       hiddenDependencyNote: null,
+      unavailableMountNote: null,
       envelopeNonce: 'aabbccdd11223344',
       langDirective: 'x',
       privileges: { mayAuthorScripts: false, mayAuthorCodeHostCalls: false },

@@ -124,6 +124,7 @@ export const enUS: Resources = {
     mountDecisionSubmit: 'Apply context decisions',
     mounts: 'Mounted elements',
     mountUnavailable: 'Unavailable resource',
+    mountUnavailableHint: 'Skipped during generation',
     unmount: 'Unmount',
     draftTitle: 'Draft changeset (revision {{revision}})',
     draftStale: 'Stale',

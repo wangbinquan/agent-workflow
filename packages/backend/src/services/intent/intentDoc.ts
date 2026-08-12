@@ -88,6 +88,15 @@ export interface IntentDocInput {
   /** Pending unanswered questions from the latest questions turn, if any. */
   pendingQuestions: readonly IntentQuestion[]
   hiddenDependencyNote: string | null
+  /**
+   * RFC-291 面 C — mounted roots that could not be materialised this epoch.
+   *
+   * Kept SEPARATE from hiddenDependencyNote on purpose: one says "a dependency
+   * of something you can see is invisible to you", the other says "a resource
+   * you explicitly mounted is gone". Folding them into one parameter would make
+   * the rendered advice wrong for whichever case lost the coin toss.
+   */
+  unavailableMountNote: string | null
   envelopeNonce: string
   /** Output language directive (config intentBuilderLang or mirror-input). */
   langDirective: string
@@ -449,8 +458,11 @@ ${input.langDirective}`)
     )
   }
 
-  if (input.hiddenDependencyNote !== null) {
-    sections.push(`## Access notes\n\n${input.hiddenDependencyNote}`)
+  const accessNotes = [input.hiddenDependencyNote, input.unavailableMountNote].filter(
+    (note): note is string => note !== null,
+  )
+  if (accessNotes.length > 0) {
+    sections.push(`## Access notes\n\n${accessNotes.join('\n\n')}`)
   }
 
   return `${sections.join('\n\n')}\n`

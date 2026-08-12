@@ -118,6 +118,7 @@ describe('INTENT.md documents every ACL resource type', () => {
       validationErrors: [],
       pendingQuestions: [],
       hiddenDependencyNote: null,
+      unavailableMountNote: null,
       envelopeNonce: 'aabbccdd11223344',
       langDirective: 'x',
       privileges: { mayAuthorScripts: true, mayAuthorCodeHostCalls: true },

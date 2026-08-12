@@ -184,6 +184,33 @@
 定式改在 **pin 到 `a4854d1d` 的 detached worktree**（只 cp 本批改动）复跑：backend 4/4 shard 全绿，
 quality 仅 prettier 报本批 5 个文件（已格式化），format/depcheck/typecheck/frontend 全绿。
 
+### 提交 ②（面 C）— 2026-08-12
+
+落地：T5 + T7。
+
+- `dumpBuilder.ts`：跳过判据从「catalog 缺失」上移为「这一轮拿不到可 dump 的内容」——根检查与
+  **逐资源 materialize** 失败走同一条路径；`isResourceGoneError` 白名单只放行 not-found / 行消失，
+  其余（I/O 损坏等）照常抛。被跳过的根**仍写回清单**（`root:true` / `detail:false` / handle 不变），
+  否则前端「资源不可用」项会凭空消失、handle 断链、ordinal 还会被面 F 判为可回收。闭包成员失败则
+  归到它所属根的 `hiddenDependencies`（新增 `parent` 追踪）。
+- `intentDoc.ts`：新增 `unavailableMountNote`，与 `hiddenDependencyNote` 同渲染进 `## Access notes`
+  但**各占一段**（两者语义不同，合并会让文案二选一失真）。
+- `turnEngine.ts`：id-only 组装该 note（不回显名字）。
+- 前端：`intent.detail.tsx` 在 `displayName === null` 时追加「生成时将跳过」，i18n 双语各 1 条 key。
+
+测试：`rfc291-unavailable-mount`（8：删除 / 失去可见性 / **materialize 期竞态**（db 代理在 catalog
+载入后删行）/ **真错不吞** / Access notes 三形 / 上游接线）+ `rfc291-mount-unavailable-hint`（前端 2）。
+
+行为变更同步既有用例：`rfc234-dump-builder` 的「mounting an invisible resource fails closed」改写为
+「skipped without naming it」——原意图（不泄漏名字）原样保留，断言从「抛错」改为「跳过且名字不出现」，
+理由写在用例注释里。
+
+⚠️ **协作事故（已处置）**：本批写到一半时，并发 session 的 `2c9ef9a8`（RFC-284 批 B/T7）在
+`git add` 时**携带走了尚未完成的 `dumpBuilder.ts` / `turnEngine.ts` 改动**，而参数定义所在的
+`intentDoc.ts` 仍在工作树未提交 ⇒ 该 commit 单独 checkout 会 typecheck 失败。发现时它尚未推送，已
+即时 SendMessage 通知对方并立刻补齐剩余部分，使 HEAD 重新自洽后再推（CI 跑 HEAD，不单独跑中间
+commit）。教训已补进 `docs/dev-gotchas.md`。
+
 ## 登记不做
 
 | #   | 项                                   | 理由                                                                                                                                                |
