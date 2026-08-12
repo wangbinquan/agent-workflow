@@ -7,6 +7,7 @@
 // shared primitives only: Dialog (chrome/footer) + Field/TextInput/TextArea (form) +
 // Select (handler) — NO native modal/select/input chrome.
 
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -64,7 +65,7 @@ export function QuestionAuthorForm({
         targetNodeId,
       }),
     onSuccess: (res) => {
-      void qc.invalidateQueries({ queryKey: ['task-questions', taskId] })
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.questions(taskId) })
       onCreated?.(res.id)
       onClose()
     },

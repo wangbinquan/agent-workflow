@@ -8,6 +8,7 @@
 // of (rule × severity × detail JSON), enough for an operator to
 // understand the issue without going to the DB.
 
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -121,9 +122,9 @@ export function TaskDiagnosePanel(props: TaskDiagnosePanelProps): ReactElement {
             // so banners + future opens refetch instead of replaying stale
             // bytes from the previous request.
             m.mutate()
-            void qc.invalidateQueries({ queryKey: ['tasks', props.taskId, 'alerts'] })
+            void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.alerts(props.taskId) })
             void qc.invalidateQueries({
-              queryKey: ['tasks', props.taskId, 'alerts', repairTarget.alertId, 'repair-options'],
+              queryKey: [...TASK_QUERY_KEYS.alerts(props.taskId), repairTarget.alertId, 'repair-options'],
             })
             setRepairTarget(null)
           }}

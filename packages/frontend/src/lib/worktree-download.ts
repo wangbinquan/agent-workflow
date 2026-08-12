@@ -35,7 +35,9 @@ export function portArtifactItemPath(
   )}/${encodeURIComponent(port)}?item=${item}`
 }
 
-/** Full-URL variant (tasks.preview 的 <img src> 场景仍需要绝对地址)。 */
+/** Full-URL variant——tasks.preview 用带 Authorization 头的原生 fetch 读文本，
+ *  绕过 api 客户端故需绝对地址（不是 <img src>，img 带不了鉴权头——实现门路 2
+ *  P3-3 勘误）。 */
 export function portArtifactItemUrl(
   base: string,
   taskId: string,

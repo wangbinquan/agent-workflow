@@ -34,7 +34,19 @@ describe('RFC-286 F1 — 死 class 灭绝', () => {
       const rel = relative(SRC, file).replaceAll('\\', '/')
       const text = readFileSync(file, 'utf8')
       for (const dead of ['error-text', 'checkbox-row']) {
-        if (new RegExp(`className="[^"]*\\b${dead}\\b[^"]*"`).test(text)) {
+        // 双形态扫描（实现门路 1 P3-1 加固）：① 静态 className="…"；② 任意
+        // 引号字符串里携带该 class（模板字面量 / clsx / 三元拼接的逃逸面）。
+        // 注释行剥掉——MemoryDialogShell 有一处历史注释提及。
+        const stripped = text
+          .split('\n')
+          .map((l) => l.replace(/\/\/.*$/, ''))
+          .join('\n')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+        if (
+          new RegExp(`['"\`][^'"\`\\n]*(?<![\\w-])${dead}(?![\\w-])[^'"\`\\n]*['"\`]`).test(
+            stripped,
+          )
+        ) {
           offenders.push(`${rel}: ${dead}`)
         }
       }

@@ -25,6 +25,7 @@ import { Select } from '@/components/Select'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
 import { useActor } from '@/hooks/useActor'
 import { api, ApiError } from '@/api/client'
+import { resolveApiError } from '@/i18n/errors'
 import {
   availableActionsFor,
   buildDecisionMap,
@@ -42,6 +43,8 @@ import {
 interface ZipUiError {
   code?: string
   message: string
+  /** message 已是本地化文案（resolveApiError 命中）——展示时不再拼裸 code。 */
+  localized?: boolean
 }
 
 type ZipImportPhase =
@@ -936,14 +939,23 @@ function ZipIcon() {
 }
 
 function formatUiError(error: ZipUiError): string {
+  if (error.localized) return error.message // 已本地化（如离线文案），不再拼裸 code
   return error.code === undefined ? error.message : `${error.code}: ${error.message}`
 }
 
 // RFC-286 F2：readResponseError（第二 decoder）与 authedFetch 已随 bare fetch
 // 收敛删除——错误解码单点在 api/client 的 extractErrorBody，此处只做 ApiError →
-// ZipUiError 的展示映射（code 原样透传，含服务端结构化错误码）。
+// ZipUiError 的展示映射。有站点级译文的错误码（resolveApiError 命中，典型是
+// network-unreachable 离线文案——proposal V2 承诺）显示本地化标题；未命中的
+// 结构化 code 原样透传（`code: message`），不丢诊断信息。
 function errorFromUnknown(error: unknown, fallback: string): ZipUiError {
   if (error instanceof ApiError) {
+    const resolved = resolveApiError(error)
+    // 只认 exact/override 命中（network-unreachable 等有专属条目的码）。domain
+    // 级泛译会把服务端结构化 message 压平——正是 F2 删第二 decoder 要保的信息。
+    if (resolved.matched === 'exact' || resolved.matched === 'override') {
+      return { code: error.code, message: resolved.title, localized: true }
+    }
     return { code: error.code, message: error.message !== '' ? error.message : fallback }
   }
   return { message: error instanceof Error && error.message !== '' ? error.message : fallback }

@@ -5,25 +5,26 @@
 //
 // RFC-152 — thin wrapper over the useWsInvalidation rules table.
 
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import type { TasksListWsMessage } from '@agent-workflow/shared'
 import { WS_PATHS } from '@agent-workflow/shared'
 import { useWsInvalidation, type WsInvalidationRules } from './useWsInvalidation'
 
 const RULES: WsInvalidationRules<TasksListWsMessage> = {
-  'task.created': () => [['tasks']],
-  'task.status': () => [['tasks']],
-  'task.deleted': () => [['tasks']],
-  'task.members.changed': () => [['tasks']],
+  'task.created': () => [TASK_QUERY_KEYS.root()],
+  'task.status': () => [TASK_QUERY_KEYS.root()],
+  'task.deleted': () => [TASK_QUERY_KEYS.root()],
+  'task.members.changed': () => [TASK_QUERY_KEYS.root()],
   // RFC-053 P-6: the banner on the detail page subscribes to
   // ['tasks', taskId, 'alerts']; refresh that query so a stuck task lights
   // up without waiting for the 30s poll fallback. Deliberately does NOT
   // touch the broad ['tasks'] key (saves a list-page round-trip).
-  'lifecycle.alert': (msg) => [['tasks', msg.taskId, 'alerts']],
-  'lifecycle.alert.resolved': (msg) => [['tasks', msg.taskId, 'alerts']],
+  'lifecycle.alert': (msg) => [TASK_QUERY_KEYS.alerts(msg.taskId)],
+  'lifecycle.alert.resolved': (msg) => [TASK_QUERY_KEYS.alerts(msg.taskId)],
 }
 
 export function useTasksSync(enabled: boolean = true): void {
   useWsInvalidation<TasksListWsMessage>(enabled ? WS_PATHS.tasksList : null, RULES, undefined, {
-    reconcileOnOpen: () => [['tasks']],
+    reconcileOnOpen: () => [TASK_QUERY_KEYS.root()],
   })
 }

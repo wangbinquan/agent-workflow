@@ -18,6 +18,7 @@
 // gated to the 待指派 ('pending') phase — this replaces the earlier "unsealed ⟹ pending"
 // assumption the code never actually enforced (an unsealed-but-dispatched entry could leak).
 
+import { CLARIFY_QUERY_KEYS, TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -195,7 +196,7 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
   const qc = useQueryClient()
 
   const tqQuery = useQuery<TaskQuestionEntry[], ApiError>({
-    queryKey: ['task-questions', taskId],
+    queryKey: TASK_QUERY_KEYS.questions(taskId),
     queryFn: ({ signal }) => api.get(`/api/tasks/${taskId}/questions`, undefined, signal),
     enabled: open,
     retry: false,
@@ -417,11 +418,11 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
           // never be replayed merely because a sibling round later fails.
           const durability = durabilityHandlesRef.current.get(originNodeRunId)
           markRoundCompleted(originNodeRunId)
-          void qc.invalidateQueries({ queryKey: ['task-questions', taskId] })
-          void qc.invalidateQueries({ queryKey: ['clarify', 'list'] })
-          void qc.invalidateQueries({ queryKey: ['clarify', 'pending-count'] })
-          void qc.invalidateQueries({ queryKey: ['tasks', taskId, 'node-runs'] })
-          void qc.invalidateQueries({ queryKey: ['clarify', 'detail', originNodeRunId] })
+          void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.questions(taskId) })
+          void qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.list() })
+          void qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.pendingCount() })
+          void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.nodeRuns(taskId) })
+          void qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.detail(originNodeRunId) })
 
           try {
             // Stop the queued writer, wait for an already-running IDB transaction,
@@ -602,14 +603,14 @@ function RoundAnswerBlock({
 }: RoundAnswerBlockProps) {
   const { t } = useTranslation()
   const roundQuery = useQuery<ClarifyRound, ApiError>({
-    queryKey: ['clarify', 'detail', originNodeRunId],
+    queryKey: CLARIFY_QUERY_KEYS.detail(originNodeRunId),
     queryFn: ({ signal }) => api.get(`/api/clarify/${originNodeRunId}`, undefined, signal),
     retry: false,
   })
   // Frozen workflow snapshot — resolves the header's asking-node display name. Same
   // queryKey as ClarifyQuestionHandler (below), so the two share one cache entry.
   const task = useQuery<{ workflowSnapshot?: WorkflowDefinition }>({
-    queryKey: ['tasks', taskId, 'snapshot'],
+    queryKey: [...TASK_QUERY_KEYS.detail(taskId), 'snapshot'],
     queryFn: () => api.get<{ workflowSnapshot?: WorkflowDefinition }>(`/api/tasks/${taskId}`),
   })
   const round = roundQuery.data

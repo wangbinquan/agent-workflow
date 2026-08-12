@@ -5,6 +5,7 @@
 // 劫持、篡改、并发漂移与坏行 fail-closed。
 
 import { describe, expect, test } from 'bun:test'
+import { PackageImportReceiptSchema, PackagePreviewSchema } from '@agent-workflow/shared'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -118,6 +119,10 @@ describe('built-in 根：完整跨实例导入', () => {
         box,
         importId: ulid(),
       })
+      // RFC-286 F3 AC-3 运行时对拍：后端真实 preview 产出必须过 shared wire
+      // schema 的 zod parse（satisfies 只锚编译期；这里锚运行时形状——含
+      // requirements 七字段必填）。实现门路 1 P3-2 / 路 2 P3-1 补账。
+      expect(() => PackagePreviewSchema.parse(preview)).not.toThrow()
       expect(preview.entries).toEqual([])
 
       const input = { pkg, previewToken: preview.previewToken, decisions: [] }
@@ -126,6 +131,7 @@ describe('built-in 根：完整跨实例导入', () => {
         actorOf('u1'),
         input,
       )
+      expect(() => PackageImportReceiptSchema.parse(first)).not.toThrow() // commit 侧同锚
       expect(first.applied).toEqual([])
       expect(first.root).toEqual({
         resourceType: 'workflow',

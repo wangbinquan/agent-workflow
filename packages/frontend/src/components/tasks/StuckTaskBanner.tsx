@@ -8,6 +8,7 @@
 //
 // Banner returns null when no alerts are open — invisible by default.
 
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useQuery } from '@tanstack/react-query'
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -40,7 +41,7 @@ export function StuckTaskBanner(props: StuckTaskBannerProps): ReactElement | nul
   const [diagnoseOpen, setDiagnoseOpen] = useState(false)
   const [dismissedSignature, setDismissedSignature] = useState<string | null>(null)
   const q = useQuery<AlertsResponse>({
-    queryKey: ['tasks', props.taskId, 'alerts'],
+    queryKey: TASK_QUERY_KEYS.alerts(props.taskId),
     queryFn: ({ signal }) =>
       api.get<AlertsResponse>(
         `/api/tasks/${encodeURIComponent(props.taskId)}/alerts`,

@@ -14,6 +14,7 @@
 // (kind-aware, RFC-159 absorbed), and Step 4's single button PUTs the rebuilt
 // payload back.
 
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -370,7 +371,7 @@ function TaskWizardPage() {
   // on it — re-granting a since-removed collaborator (ACL regression). Force a
   // fresh fetch this mount and gate seeding on `isFetchedAfterMount`.
   const relaunchTaskQ = useQuery<Task>({
-    queryKey: ['tasks', search.relaunchFrom],
+    queryKey: TASK_QUERY_KEYS.detail(search.relaunchFrom ?? null),
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(search.relaunchFrom ?? '')}`, undefined, signal),
     enabled: isRelaunch,
@@ -378,7 +379,7 @@ function TaskWizardPage() {
     refetchOnMount: 'always',
   })
   const relaunchMembersQ = useQuery<TaskMembers>({
-    queryKey: ['tasks', search.relaunchFrom, 'members'],
+    queryKey: [...TASK_QUERY_KEYS.detail(search.relaunchFrom ?? null), 'members'],
     queryFn: ({ signal }) =>
       api.get(
         `/api/tasks/${encodeURIComponent(search.relaunchFrom ?? '')}/members`,
@@ -1454,7 +1455,7 @@ function TaskWizardPage() {
       activeReconciliationRef.current = reconciliation
       setOutcomeUnknown(reconciliation)
       writeActiveDraft(reconciliation)
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.root() })
     },
     onSettled: () => {
       submissionAbortRef.current = null

@@ -309,7 +309,9 @@ describe('useTaskSync cross-clarify node-runs refresh (RFC-161)', () => {
 describe('CentralizedAnswerDialog full-seal node-runs invalidation (RFC-161)', () => {
   test('success handler invalidates node-runs locally', async () => {
     const src = await read('src/components/clarify/CentralizedAnswerDialog.tsx')
-    expect(src).toMatch(/invalidateQueries\(\{ queryKey: \['tasks', taskId, 'node-runs'\] \}\)/)
+    // RFC-286 F4 改锚：该文件随实现门 P1-1 全量收编进工厂（此前的字面锁豁免
+    // 取消），锁面换成工厂符号——值语义同旧字面 ['tasks', taskId, 'node-runs']。
+    expect(src).toMatch(/invalidateQueries\(\{ queryKey: TASK_QUERY_KEYS\.nodeRuns\(taskId\) \}\)/)
   })
 })
 

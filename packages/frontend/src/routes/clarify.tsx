@@ -10,6 +10,7 @@
 // per-row "Open" button + status chip. The two inbox pages stay visually
 // uniform so users don't context-switch between them.
 
+import { CLARIFY_QUERY_KEYS } from '@/lib/query-keys'
 import { useQuery } from '@tanstack/react-query'
 import { Link, createRoute } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
@@ -162,7 +163,7 @@ export function ClarifyListPage() {
   }, [filter])
 
   const list = useQuery<ClarifyRoundSummary[]>({
-    queryKey: ['clarify', 'list', filter],
+    queryKey: [...CLARIFY_QUERY_KEYS.list(), filter], // WS 失效按 list() 前缀命中本子 key
     queryFn: ({ signal }) => {
       const q = new URLSearchParams()
       q.set('status', filterToStatus(filter))

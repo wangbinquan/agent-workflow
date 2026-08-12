@@ -10,10 +10,12 @@
 import type { QueryKey } from '@tanstack/react-query'
 
 export const TASK_QUERY_KEYS = {
-  /** GET /api/tasks/:id —— 详情行（tasks.detail 主查询同 key）。 */
+  /** 全家族根前缀（tasks 列表页 + 列表面 WS 规则的全量失效键）。 */
+  root: (): QueryKey => ['tasks'],
+  /** GET /api/tasks/:id —— 详情行（tasks.detail 主查询同 key；亦是 per-task 子 key 的 reconcile 前缀）。 */
   detail: (taskId: string | null): QueryKey => ['tasks', taskId],
-  /** 前缀 reconcile 用（detail/diff/node-runs/alerts 共享 ['tasks', id] 前缀）。 */
-  detailPrefix: (taskId: string | null): QueryKey => ['tasks', taskId],
+  /** lifecycle.alert 面（StuckTaskBanner 订阅、useTasksSync 规则表失效）。 */
+  alerts: (taskId: string): QueryKey => ['tasks', taskId, 'alerts'],
   diff: (taskId: string | null): QueryKey => ['tasks', taskId, 'diff'],
   nodeRuns: (taskId: string | null): QueryKey => ['tasks', taskId, 'node-runs'],
   questions: (taskId: string | null): QueryKey => ['task-questions', taskId],

@@ -17,6 +17,7 @@
 // keeps a single physical connection. The onDraftUpdated callback rides the
 // rule's side-effect slot.
 
+import { CLARIFY_QUERY_KEYS } from '@/lib/query-keys'
 import type { QueryKey } from '@tanstack/react-query'
 import type { TaskActorRole, TaskWsMessage } from '@agent-workflow/shared'
 import { WS_PATHS } from '@agent-workflow/shared'
@@ -40,9 +41,9 @@ export interface UseClarifyWsOpts {
 function clarifySurface(ctx: UseClarifyWsOpts): QueryKey[] {
   const keys: QueryKey[] = []
   if (ctx.intermediaryNodeRunId !== null) {
-    keys.push(['clarify', 'detail', ctx.intermediaryNodeRunId])
+    keys.push(CLARIFY_QUERY_KEYS.detail(ctx.intermediaryNodeRunId))
   }
-  keys.push(['clarify', 'list'], ['clarify', 'pending-count'])
+  keys.push(CLARIFY_QUERY_KEYS.list(), CLARIFY_QUERY_KEYS.pendingCount())
   return keys
 }
 
@@ -57,7 +58,7 @@ const RULES: WsInvalidationRules<TaskWsMessage, UseClarifyWsOpts> = {
       return
     }
     ctx.onDraftUpdated?.({ questionId: msg.questionId, editor: msg.editor })
-    return [['clarify', 'detail', ctx.intermediaryNodeRunId]]
+    return [CLARIFY_QUERY_KEYS.detail(ctx.intermediaryNodeRunId)]
   },
   'clarify.created': (_msg, ctx) => clarifySurface(ctx),
   'clarify.answered': (_msg, ctx) => clarifySurface(ctx),

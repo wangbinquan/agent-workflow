@@ -22,19 +22,6 @@ export function resourcePackageFilename(type: string, name: string): string {
   return `${type}-${safeDownloadBaseName(name, type)}.awpkg.zip`
 }
 
-/**
- * 触发一次浏览器下载。
- *
- * ⚠️ `revokeObjectURL` 必须在 click **之后**——提前撤销会让下载拿到一个已经失效的
- * URL，表现是「点了没反应」，而且只在部分浏览器/时序下复现。
- */
-export function triggerBlobDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
+// Blob 落盘走 lib/download 单点（RFC-286 F2 收编第四份拷贝；revoke 时序 /
+// rel=noopener 语义都在那边）。本文件只保留文件名逻辑。
+export { saveBlobAs as triggerBlobDownload } from './download'

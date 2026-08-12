@@ -12,6 +12,7 @@
 // regular detail page; historical versions' Open goes to
 // `/reviews/$nodeRunId?version=<vid>`, the read-only view.
 
+import { REVIEW_QUERY_KEYS } from '@/lib/query-keys'
 import { useQuery } from '@tanstack/react-query'
 import { Link, createRoute } from '@tanstack/react-router'
 import { Fragment, useEffect, useRef, useState } from 'react'
@@ -62,7 +63,7 @@ export function ReviewsListPage() {
     })
   }
   const list = useQuery<ReviewSummary[]>({
-    queryKey: ['reviews', 'list', filter],
+    queryKey: [...REVIEW_QUERY_KEYS.list(), filter], // WS 失效按 list() 前缀命中本子 key
     queryFn: ({ signal }) => api.get(`/api/reviews?status=${filter}`, undefined, signal),
     refetchInterval: 10000,
   })
@@ -351,7 +352,7 @@ export function HistoryRows({
 export function RoundRows({ nodeRunId }: { nodeRunId: string }) {
   const { t } = useTranslation()
   const q = useQuery<ReviewRoundSummary[]>({
-    queryKey: ['reviews', 'rounds', nodeRunId],
+    queryKey: REVIEW_QUERY_KEYS.rounds(nodeRunId),
     queryFn: ({ signal }) => api.get(`/api/reviews/${nodeRunId}/rounds`, undefined, signal),
   })
   if (q.isLoading) {

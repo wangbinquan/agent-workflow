@@ -125,21 +125,25 @@ describe('buildTaskSyncRules — child-task list re-validation (RFC-245)', () =>
 })
 
 // ---------------------------------------------------------------------------
-// RFC-286 F4 —— 规则表零字面锁：useTaskSync 里不得再出现字符串字面 queryKey
-// （['tasks'… / ['reviews'… / ['clarify'… / ['task-…），一律走
-// lib/query-keys 工厂或既有单源（workgroupRoomKey / taskChildrenQueryKey）。
-// 字面 key 与 route 侧靠肉眼同步，改一边即静默失联（只剩 15s 轮询兜底）。
+// RFC-286 F4 —— 规则表零字面锁：三张 WS 失效规则表（useTaskSync / useTasksSync /
+// useClarifyWs）里不得再出现字符串字面 queryKey（['tasks'… / ['reviews'… /
+// ['clarify'… / ['task-…），一律走 lib/query-keys 工厂或既有单源
+// （workgroupRoomKey / taskChildrenQueryKey）。字面 key 与 route 侧靠肉眼同步，
+// 改一边即静默失联（只剩轮询兜底）。实现门双路（路 1 P1-1 / 路 2 P2-1）把锁面
+// 从单文件扩成全规则表。
 // ---------------------------------------------------------------------------
 
 describe('RFC-286 F4 — WS 规则表零字符串字面 queryKey', () => {
-  test('useTaskSync.ts 源码零字面 key（注释行除外）', () => {
-    const src = readFileSync(resolve(import.meta.dirname, '../src/hooks/useTaskSync.ts'), 'utf8')
-    const offenders = src
-      .split('\n')
-      .filter((line) => !line.trim().startsWith('//') && !line.trim().startsWith('*'))
-      .filter((line) =>
-        /\['(tasks|reviews|clarify|task-questions|task-clarify-directives)'/.test(line),
-      )
-    expect(offenders).toEqual([])
-  })
+  for (const hook of ['useTaskSync.ts', 'useTasksSync.ts', 'useClarifyWs.ts']) {
+    test(`${hook} 源码零字面 key（注释行除外）`, () => {
+      const src = readFileSync(resolve(import.meta.dirname, `../src/hooks/${hook}`), 'utf8')
+      const offenders = src
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('//') && !line.trim().startsWith('*'))
+        .filter((line) =>
+          /\['(tasks|reviews|clarify|task-questions|task-clarify-directives)'/.test(line),
+        )
+      expect(offenders).toEqual([])
+    })
+  }
 })

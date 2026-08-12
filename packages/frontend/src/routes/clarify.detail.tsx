@@ -15,6 +15,7 @@
 // awaiting sessions for the shard switcher come from
 // `GET /api/clarify?status=awaiting_human&taskId=…`.
 
+import { CLARIFY_QUERY_KEYS, TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -98,7 +99,7 @@ export function ClarifyDetailPage() {
   const navigate = useNavigate()
 
   const session = useQuery<ClarifyDetailEntry>({
-    queryKey: ['clarify', 'detail', nodeRunId],
+    queryKey: CLARIFY_QUERY_KEYS.detail(nodeRunId),
     queryFn: ({ signal }) => api.get<ClarifyRound>(`/api/clarify/${nodeRunId}`, undefined, signal),
     refetchOnWindowFocus: false,
   })
@@ -115,7 +116,7 @@ export function ClarifyDetailPage() {
     status?: string
     workflowSnapshot?: WorkflowDefinition
   }>({
-    queryKey: ['tasks', session.data?.taskId, 'snapshot'],
+    queryKey: [...TASK_QUERY_KEYS.detail(session.data?.taskId ?? null), 'snapshot'],
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${session.data?.taskId}`, undefined, signal) as Promise<{
         name: string
@@ -137,7 +138,7 @@ export function ClarifyDetailPage() {
   // Defensive: retry:false + non-array guard ⇒ a non-member / unmocked response yields
   // an empty locked set ⇒ byte-for-byte the pre-RFC-128 page (golden lock).
   const taskQuestionsQuery = useQuery<TaskQuestionEntry[], ApiError>({
-    queryKey: ['task-questions', session.data?.taskId],
+    queryKey: TASK_QUERY_KEYS.questions(session.data?.taskId ?? null),
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${session.data?.taskId}/questions`, undefined, signal),
     enabled: typeof session.data?.taskId === 'string',
@@ -533,8 +534,8 @@ export function ClarifyDetailPage() {
       return resp
     },
     onSuccess: (resp) => {
-      void qc.invalidateQueries({ queryKey: ['clarify', 'list'] })
-      void qc.invalidateQueries({ queryKey: ['clarify', 'pending-count'] })
+      void qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.list() })
+      void qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.pendingCount() })
       // RFC-056: cross-clarify "designer-waiting" outcome — stay on the
       // page and surface the multi-source banner; don't navigate away.
       // The waiting banner tells the user another cross-clarify is still
@@ -547,7 +548,7 @@ export function ClarifyDetailPage() {
         setCrossWaiting({
           pending: respMaybeCross.outcome.pendingCrossClarifyNodeIds ?? [],
         })
-        void qc.invalidateQueries({ queryKey: ['clarify', 'detail', nodeRunId] })
+        void qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.detail(nodeRunId) })
         return
       }
       // RFC-202 T8: answers landed but the resume kick failed (e.g. worktree
@@ -555,7 +556,7 @@ export function ClarifyDetailPage() {
       const respMaybeResume = resp as unknown as { resume?: { ok: false; code: string } }
       if (respMaybeResume.resume !== undefined && respMaybeResume.resume.ok === false) {
         setResumeWarning({ code: respMaybeResume.resume.code })
-        void qc.invalidateQueries({ queryKey: ['clarify', 'detail', nodeRunId] })
+        void qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.detail(nodeRunId) })
         return
       }
       // RFC-023 bugfix #8 — after answering, take the user to the task

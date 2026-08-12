@@ -16,6 +16,7 @@
 // poll fallback. All pure logic lives in lib/workgroup-room so tests hit it
 // without rendering.
 
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -62,7 +63,7 @@ export function WorkgroupRoom({ taskId, taskStatus, room }: WorkgroupRoomProps) 
 
   // Shares the page query's cache entry — needed by the run drawer.
   const nodeRuns = useQuery<TaskNodeRuns>({
-    queryKey: ['tasks', taskId, 'node-runs'],
+    queryKey: TASK_QUERY_KEYS.nodeRuns(taskId),
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(taskId)}/node-runs`, undefined, signal),
   })
@@ -122,7 +123,7 @@ export function WorkgroupRoom({ taskId, taskStatus, room }: WorkgroupRoomProps) 
       setRejectComment('')
       void qc.invalidateQueries({ queryKey: workgroupRoomKey(taskId) })
       // The decision also moves the task status (awaiting_review → running/done).
-      void qc.invalidateQueries({ queryKey: ['tasks', taskId] })
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.detail(taskId) })
     },
   })
 

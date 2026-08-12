@@ -28,9 +28,11 @@ export type ResourcePackageType = z.infer<typeof ResourcePackageTypeSchema>
 export const ImportActionSchema = z.enum(['new', 'reuse', 'overwrite'])
 export type ImportAction = z.infer<typeof ImportActionSchema>
 
-// 类型单源是 bundle/secrets 的既有接口（后端 manifest.secrets 真源，
-// resourceType 为宽 string）；此处只补 wire 校验形状，不再导出同名类型
-// （避免 shared 根双导出歧义）。
+// 类型单源是 bundle/secrets 的既有**接口**（resourceType 为宽 string——这是
+// 类型层的形状）。wire 上实际值恒为六类 enum：后端 parse.ts 的同名私有 schema
+// 用 AclResourceTypeSchema 严格校验后才会产出（勘误：不是「后端真源就是宽
+// string」，宽的只是接口形状；此处沿用宽形状仅为复用该接口 + 避免 shared 根
+// 双导出歧义，不表示接受任意 resourceType）。
 export const PackageSecretRefSchema: z.ZodType<PackageSecretRef> = z.object({
   resourceType: z.string(),
   resourceName: z.string(),

@@ -15,6 +15,7 @@
 // Apply is intentionally a two-step UX (choose → confirm) to match
 // RFC-057 §4 destructive-action policy: no single click can mutate state.
 
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -50,7 +51,7 @@ export function RepairChoiceDialog(props: RepairChoiceDialogProps): ReactElement
   const { taskId, alertId, alertRule, open, onClose, onApplied } = props
 
   const query = useQuery<RepairOptionsResponse, ApiError>({
-    queryKey: ['tasks', taskId, 'alerts', alertId, 'repair-options'],
+    queryKey: [...TASK_QUERY_KEYS.alerts(taskId), alertId, 'repair-options'],
     enabled: open,
     queryFn: ({ signal }) =>
       api.get<RepairOptionsResponse>(

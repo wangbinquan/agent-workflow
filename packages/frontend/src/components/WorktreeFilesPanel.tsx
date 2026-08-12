@@ -281,9 +281,14 @@ function indentFor(depth: number): string {
 // URL, and a blob works cross-origin too — a plain <a download> pointing at a
 // remote-daemon base URL would have its `download` attribute ignored.
 // RFC-286 F2：bare fetch 收敛 api.getBlob（结构化错误解码 + 显式大预算）。
-async function fetchWorktreeFileBlob(taskId: string, relPath: string): Promise<Blob> {
+async function fetchWorktreeFileBlob(
+  taskId: string,
+  relPath: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
   return api.getBlob(worktreeFilePath(taskId, relPath), undefined, {
     deadlineMs: DOWNLOAD_DEADLINE_MS,
+    signal,
   })
 }
 

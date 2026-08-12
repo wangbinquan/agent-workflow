@@ -86,6 +86,13 @@ function withDeadline(
   signal: AbortSignal | undefined,
   deadlineMs: number,
 ): { signal: AbortSignal; deadline: AbortSignal } {
+  if (!Number.isFinite(deadlineMs)) {
+    // 不限时支线（RFC-286 F2：GB 级产物下载在慢链路下任何固定顶都可能中途掐流，
+    // 弱于旧裸 fetch 的无限时语义）。deadline 给一个永不触发的 signal，取消权
+    // 完全归调用方 signal。
+    const never = new AbortController().signal
+    return { signal: signal ?? never, deadline: never }
+  }
   const deadline = AbortSignal.timeout(deadlineMs)
   return {
     signal: signal === undefined ? deadline : AbortSignal.any([signal, deadline]),

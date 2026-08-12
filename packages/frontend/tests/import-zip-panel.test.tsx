@@ -264,7 +264,11 @@ describe('ImportZipPanel (RFC-196)', () => {
     chooseFile()
     fireEvent.click(screen.getByTestId('zip-parse-button'))
 
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('network offline'))
+    // RFC-286 V2 改判：fetch 层网络异常统一包成 ApiError('network-unreachable')，
+    // 面板经 resolveApiError exact 命中后显示站点级离线文案（不再露原始英文）。
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(i18n.t('errors.network-unreachable')),
+    )
     expect(screen.getByText('pack.zip')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: i18n.t('skills.zipRetry') }))
     await waitFor(() => expect(screen.queryByTestId('zip-row-fresh')).not.toBeNull())
@@ -642,7 +646,11 @@ describe('ImportZipPanel (RFC-196)', () => {
     })
     expect(screen.getByTestId('zip-row-fresh')).toBeTruthy()
     fireEvent.click(screen.getByTestId('zip-commit-button'))
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('http-503'))
+    // http-<status> 合成码在 wire 层有 exact 译文（RFC-203 家族）——V2 本地化
+    // 命中后显示译文而非裸码；合成码本身仍是映射键（见 client extractErrorBody）。
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(i18n.t('errors.http-503')),
+    )
     expect(screen.getByTestId('zip-row-fresh')).toBeTruthy()
     fireEvent.click(screen.getByTestId('zip-commit-button'))
     await screen.findByTestId('zip-import-summary')

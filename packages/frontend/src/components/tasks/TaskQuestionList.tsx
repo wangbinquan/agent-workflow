@@ -13,6 +13,7 @@
 //     designer handler row, RFC-162 semantics)
 // Data: GET /api/tasks/:id/questions; writes POST .../{confirm,reassign,stage}.
 
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -122,7 +123,7 @@ export function TaskQuestionList({
 }: TaskQuestionListProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const key = ['task-questions', taskId]
+  const key = TASK_QUERY_KEYS.questions(taskId)
   const query = useQuery<TaskQuestionEntry[], ApiError>({
     queryKey: key,
     queryFn: () => api.get<TaskQuestionEntry[]>(`/api/tasks/${taskId}/questions`),
@@ -190,8 +191,8 @@ export function TaskQuestionList({
       invalidate()
       // Dispatch flips entries into 处理中 and resumes the task → refresh the task +
       // node-runs queries so the rest of the detail page reflects the processing state.
-      void qc.invalidateQueries({ queryKey: ['tasks', taskId] })
-      void qc.invalidateQueries({ queryKey: ['tasks', taskId, 'node-runs'] })
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.detail(taskId) })
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.nodeRuns(taskId) })
     },
     onError: (err) => {
       // RETRYABLE: a concurrent reassign moved a target out from under us. Re-fetch

@@ -6,6 +6,7 @@
 // buttons (approve / reject / iterate) along with the optimistic-lock
 // review_iteration the backend will check.
 
+import { REVIEW_QUERY_KEYS } from '@/lib/query-keys'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate, useSearch, Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -69,7 +70,7 @@ function ReviewDetailRoute() {
   const { nodeRunId } = Route.useParams()
   const search = useSearch({ from: Route.id }) as ReviewDetailSearch
   const detail = useQuery<ReviewDetail>({
-    queryKey: ['reviews', 'detail', nodeRunId],
+    queryKey: REVIEW_QUERY_KEYS.detail(nodeRunId),
     queryFn: ({ signal }) => api.get(`/api/reviews/${nodeRunId}`, undefined, signal),
   })
   if (detail.data?.documents !== undefined && detail.data.documents.length > 0) {
@@ -86,7 +87,7 @@ function ReviewDetailPage() {
   const qc = useQueryClient()
 
   const detail = useQuery<ReviewDetail>({
-    queryKey: ['reviews', 'detail', nodeRunId],
+    queryKey: REVIEW_QUERY_KEYS.detail(nodeRunId),
     queryFn: ({ signal }) => api.get(`/api/reviews/${nodeRunId}`, undefined, signal),
     refetchInterval: 8000,
   })
@@ -238,7 +239,7 @@ function ReviewDetailPage() {
   // keyboard (popover open / inline-editing) — faithfully reproducing the old
   // single combined handler's `if (popover) / if (editingId) return` guards.
   const invalidateDetail = useCallback(async () => {
-    await qc.invalidateQueries({ queryKey: ['reviews', 'detail', nodeRunId] })
+    await qc.invalidateQueries({ queryKey: REVIEW_QUERY_KEYS.detail(nodeRunId) })
   }, [qc, nodeRunId])
   const [paneCapturing, setPaneCapturing] = useState(false)
 
@@ -259,9 +260,9 @@ function ReviewDetailPage() {
       )
     },
     onSuccess: async (res) => {
-      await qc.invalidateQueries({ queryKey: ['reviews', 'detail', nodeRunId] })
-      await qc.invalidateQueries({ queryKey: ['reviews', 'list'] })
-      await qc.invalidateQueries({ queryKey: ['reviews', 'pending-count'] })
+      await qc.invalidateQueries({ queryKey: REVIEW_QUERY_KEYS.detail(nodeRunId) })
+      await qc.invalidateQueries({ queryKey: REVIEW_QUERY_KEYS.list() })
+      await qc.invalidateQueries({ queryKey: REVIEW_QUERY_KEYS.pendingCount() })
       if (res.resume !== undefined && res.resume.ok === false) {
         setResumeWarning({ code: res.resume.code })
         return

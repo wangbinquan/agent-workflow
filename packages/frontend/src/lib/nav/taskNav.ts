@@ -20,13 +20,14 @@
 // `review.decision_made` event is delayed or dropped. navigate() does not
 // need to await them.
 
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import type { QueryClient } from '@tanstack/react-query'
 import type { useNavigate } from '@tanstack/react-router'
 
 type Navigate = ReturnType<typeof useNavigate>
 
 export function goToTaskDetail(qc: QueryClient, navigate: Navigate, taskId: string): void {
-  void qc.invalidateQueries({ queryKey: ['tasks', taskId] })
-  void qc.invalidateQueries({ queryKey: ['tasks', taskId, 'node-runs'] })
+  void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.detail(taskId) })
+  void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.nodeRuns(taskId) })
   void navigate({ to: '/tasks/$id', params: { id: taskId } })
 }

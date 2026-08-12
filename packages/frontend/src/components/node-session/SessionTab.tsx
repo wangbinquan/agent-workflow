@@ -4,6 +4,7 @@
 // switcher so retries / fan-out / clarify iteration history stays
 // reachable from the Session view.
 
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { NodeRun } from '@agent-workflow/shared'
@@ -274,7 +275,7 @@ export function groupStartTime(group: AttemptGroup): number {
 function SessionBody({ taskId, nodeRunId }: { taskId: string; nodeRunId: string }) {
   return (
     <SessionConversationPanel
-      queryKey={['tasks', taskId, 'node-runs', nodeRunId, 'session']}
+      queryKey={[...TASK_QUERY_KEYS.nodeRuns(taskId), nodeRunId, 'session']}
       load={(signal) =>
         api.get(
           `/api/tasks/${encodeURIComponent(taskId)}/node-runs/${encodeURIComponent(nodeRunId)}/session`,

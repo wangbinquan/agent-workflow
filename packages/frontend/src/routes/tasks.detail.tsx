@@ -238,17 +238,17 @@ function TaskDetailPage() {
   const cancel = useMutation({
     mutationFn: () => api.post<Task>(`/api/tasks/${encodeURIComponent(id)}/cancel`),
     onSuccess: (tk) => {
-      qc.setQueryData(['tasks', id], tk)
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.setQueryData(TASK_QUERY_KEYS.detail(id), tk)
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.root() })
     },
   })
 
   const resume = useMutation({
     mutationFn: () => api.post<Task>(`/api/tasks/${encodeURIComponent(id)}/resume`),
     onSuccess: (tk) => {
-      qc.setQueryData(['tasks', id], tk)
+      qc.setQueryData(TASK_QUERY_KEYS.detail(id), tk)
       void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.nodeRuns(id) })
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.root() })
     },
   })
 
@@ -269,7 +269,7 @@ function TaskDetailPage() {
       })
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.root() })
       void navigateTaskRoute({ to: '/tasks' })
     },
   })
@@ -404,7 +404,7 @@ function TaskDetailPage() {
   // RFC-083 — structural (semantic) diff for the task scope. It shares the
   // exact multi-repo capability gate with its navigation leaf and panel.
   const structuralDiff = useQuery<StructuralDiff>({
-    queryKey: ['tasks', id, 'structural-diff', effectiveStructScope, engineMode],
+    queryKey: [...TASK_QUERY_KEYS.detail(id), 'structural-diff', effectiveStructScope, engineMode],
     queryFn: ({ signal }) => {
       const params = new URLSearchParams()
       if (effectiveStructScope.startsWith('node:')) {
@@ -1302,7 +1302,7 @@ function TaskStatusCanvas({
   // useTaskSync invalidation). Non-member / no-questions tasks resolve to {} and
   // paint no badges (golden-lock — canvas unchanged).
   const questions = useQuery<TaskQuestionEntry[], ApiError>({
-    queryKey: ['task-questions', task.id],
+    queryKey: TASK_QUERY_KEYS.questions(task.id),
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(task.id)}/questions`, undefined, signal),
     retry: false,
@@ -1331,7 +1331,7 @@ function TaskStatusCanvas({
   // to {} for a fresh / non-member task ⇒ asking nodes default to 'continue'.
   const qc = useQueryClient()
   const directives = useQuery<Record<string, ClarifyDirective>, ApiError>({
-    queryKey: ['task-clarify-directives', task.id],
+    queryKey: TASK_QUERY_KEYS.clarifyDirectives(task.id),
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(task.id)}/clarify-directives`, undefined, signal),
     retry: false,
@@ -1348,7 +1348,7 @@ function TaskStatusCanvas({
       ),
     // Optimistic flip so the toggle responds instantly; reconciled on settle.
     onMutate: ({ nodeId, directive }) => {
-      const key = ['task-clarify-directives', task.id]
+      const key = TASK_QUERY_KEYS.clarifyDirectives(task.id)
       const prev = qc.getQueryData<Record<string, ClarifyDirective>>(key)
       qc.setQueryData<Record<string, ClarifyDirective>>(key, {
         ...(prev ?? {}),
@@ -1358,10 +1358,10 @@ function TaskStatusCanvas({
     },
     onError: (_e, _v, ctx) => {
       const c = ctx as { prev?: Record<string, ClarifyDirective> } | undefined
-      if (c?.prev !== undefined) qc.setQueryData(['task-clarify-directives', task.id], c.prev)
+      if (c?.prev !== undefined) qc.setQueryData(TASK_QUERY_KEYS.clarifyDirectives(task.id), c.prev)
     },
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: ['task-clarify-directives', task.id] })
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.clarifyDirectives(task.id) })
     },
   })
 

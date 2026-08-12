@@ -8,6 +8,7 @@
 //   - inline port    `?runId=&port=`          → value from the node-runs outputs
 // A "← 返回" link goes back to the owning task detail.
 
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useQuery } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -195,7 +196,7 @@ function FilePreviewBody({ taskId, path }: { taskId: string; path: string }) {
 
 function PortPreviewBody({ taskId, runId, port }: { taskId: string; runId: string; port: string }) {
   const q = useQuery<TaskNodeRuns>({
-    queryKey: ['tasks', taskId, 'node-runs'],
+    queryKey: TASK_QUERY_KEYS.nodeRuns(taskId),
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(taskId)}/node-runs`, undefined, signal),
   })
