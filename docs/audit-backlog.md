@@ -1768,8 +1768,8 @@ audit-backlog 里已登记的 bug#8（Windows VM + 1.18.13，业务节点侧）�
   ②`isOwnerNameUniqueViolation` 相对 skill.ts 旧正则少匹配 `skills.owner_user_id`
   单列形态——该形态无对应唯一索引（0118 是 COALESCE 表达式索引），死分支差异。
 
-- ⏳ **任务基线与仓库准备（2026-08-13 用户逐条拍板，待立 RFC，编号取 295+；从 RFC-287
-  的 call 节点讨论岔出来，与 287 无实现耦合）**：现状核实——路径模式已随 RFC-165 D3 全链路
+- ✅ **任务基线与仓库准备（2026-08-13 用户逐条拍板；用户裁定**并入 RFC-287 落地**，
+  见其 §2 G5/G6/G7 与 design §9。本条保留为背景与实测锚，处置面以 287 为准）**：现状核实——路径模式已随 RFC-165 D3 全链路
   退役，本地仓走 `file://`；URL 模式启动时 `fetch --all --prune --tags` + 把基线分支快进到
   `origin/<branch>`（`gitRepoCache.ts:250` `syncBranchToRemote`，用 `update-ref` 不 checkout），
   **所以真实远端源的任务基线确实恒为远端最新**。两处缺口 + 一处结构事实：①`file://` 源的
