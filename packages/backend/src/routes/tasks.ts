@@ -107,6 +107,7 @@ import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { listTaskOperationsPage } from '@/services/taskOperations'
+import { safeJsonOrEmpty } from '@/util/http'
 
 /** RFC-083: resolve deep-mode indexer path overrides + timeout from settings.
  *  Unreadable config → PATH lookup + default timeout. */
@@ -303,7 +304,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))), 201)
       }
 
-      const bodyJson = await safeJson(c.req.raw)
+      const bodyJson = await safeJsonOrEmpty(c.req.raw)
       // RFC-099 (D6): the per-node assignments field is gone. Reject payloads
       // still carrying it with a structured 422 instead of silently stripping,
       // so automation callers notice the breaking change.
@@ -406,7 +407,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const taskId = c.req.param('id')
-      const parsed = UpdateTaskMembersBodySchema.safeParse(await safeJson(c.req.raw))
+      const parsed = UpdateTaskMembersBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('members-invalid', 'invalid members payload', {
           issues: parsed.error.issues,
@@ -552,7 +553,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Generate the change narrative (model call)',
     },
     async (c) => {
-      const body = (await safeJson(c.req.raw)) as { scope?: string } | null
+      const body = (await safeJsonOrEmpty(c.req.raw)) as { scope?: string } | null
       const scope = body?.scope ?? 'task'
       if (scope !== 'task') {
         throw new ValidationError('narrative-scope-invalid', `only scope=task is supported`)
@@ -1202,14 +1203,6 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       return c.json({ path: rel, ...result })
     },
   )
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
-  }
 }
 
 async function visibilityCheck(c: Context, deps: AppDeps): Promise<void> {

@@ -24,6 +24,7 @@ import { isOidcManagedUser, listOidcManagedUserIds } from '@/services/accountAut
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { Paths } from '@/util/paths'
+import { safeJsonOrEmpty } from '@/util/http'
 
 export function mountUserRoutes(app: Hono, deps: AppDeps): void {
   const runtimeTests = getMcpRuntimeTestService({
@@ -169,7 +170,7 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Create a user',
     },
     async (c) => {
-      const parsed = CreateUserBodySchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CreateUserBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('user-invalid', 'invalid user payload', {
           issues: parsed.error.issues,
@@ -191,7 +192,7 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Update a user',
     },
     async (c) => {
-      const parsed = PatchUserBodySchema.safeParse(await safeJson(c.req.raw))
+      const parsed = PatchUserBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('user-invalid', 'invalid user patch', {
           issues: parsed.error.issues,
@@ -238,7 +239,7 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Reset a local password',
     },
     async (c) => {
-      const parsed = ResetPasswordBodySchema.safeParse(await safeJson(c.req.raw))
+      const parsed = ResetPasswordBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('reset-invalid', 'invalid reset-password body', {
           issues: parsed.error.issues,
@@ -279,13 +280,5 @@ function materializePublicAdminView(
     updatedAt: row.updatedAt,
     lastLoginAt: row.lastLoginAt,
     hasOidcIdentity,
-  }
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
   }
 }

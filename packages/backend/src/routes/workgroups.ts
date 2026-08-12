@@ -48,6 +48,7 @@ import {
   evaluateAgentResourceIntegrity,
   loadAgentResourceInventory,
 } from '@/services/agentResourceIntegrity'
+import { safeJsonOrEmpty } from '@/util/http'
 
 export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
   // RFC-099: missing and not-visible produce the identical 404 (D1).
@@ -131,7 +132,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Create a workgroup',
     },
     async (c) => {
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = CreateWorkgroupSchema.safeParse(body)
       if (!parsed.success) {
         throw new ValidationError('workgroup-invalid', 'invalid workgroup payload', {
@@ -160,7 +161,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Copy a workgroup into a private duplicate',
     },
     async (c) => {
-      const parsed = CopyWorkgroupRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CopyWorkgroupRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('workgroup-copy-invalid', 'invalid workgroup copy payload', {
           issues: parsed.error.issues,
@@ -181,7 +182,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = UpdateWorkgroupSchema.safeParse(body)
       if (!parsed.success) {
         throw new ValidationError('workgroup-invalid', 'invalid workgroup payload', {
@@ -211,7 +212,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       const actor = actorOf(c)
       const existing = await loadVisibleWorkgroup(actor, id)
       await requireResourceOwner(deps.db, actor, 'workgroup', existing)
-      const parsed = DeleteWorkgroupSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = DeleteWorkgroupSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('workgroup-invalid', 'invalid workgroup delete payload', {
           issues: parsed.error.issues,
@@ -236,7 +237,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = RenameWorkgroupSchema.safeParse(body)
       if (!parsed.success) {
         throw new ValidationError('workgroup-rename-invalid', 'invalid rename payload', {
@@ -272,7 +273,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const existing = await loadVisibleWorkgroup(actor, c.req.param('id'))
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       // RFC-165 实现门 P2 修复：即便本 schema 从未声明退役键，非 strict parse
       // 仍会把 {scratch:true, repoPath} 静默剥键降级成 scratch 启动（F1
       // silent-degrade 同型）——四个 launch 入口一致挂 raw-key 拒收。
@@ -322,12 +323,4 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     param: 'id',
     load: (db, id) => getWorkgroupById(db, id),
   })
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
-  }
 }

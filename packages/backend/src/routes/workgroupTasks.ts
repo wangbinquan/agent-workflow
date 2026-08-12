@@ -20,7 +20,8 @@ import { registerRoute } from '@/routes/registry'
 import { buildConfigActions } from '@/services/workgroup/configActions'
 import { buildDwActions } from '@/services/workgroup/dwActions'
 import { buildRoomReads } from '@/services/workgroup/room'
-import { buildWorkgroupTaskActions, safeJson } from '@/services/workgroup/taskActions'
+import { buildWorkgroupTaskActions } from '@/services/workgroup/taskActions'
+import { safeJsonOrEmpty } from '@/util/http'
 
 export { isWorkgroupKickResumable, resolveMentions } from '@/services/workgroup/taskActions'
 
@@ -84,7 +85,13 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Confirm a generated dynamic workflow',
     },
     async (c) =>
-      c.json(await actions.dwConfirm(actorOf(c), c.req.param('taskId'), await safeJson(c.req.raw))),
+      c.json(
+        await actions.dwConfirm(
+          actorOf(c),
+          c.req.param('taskId'),
+          await safeJsonOrEmpty(c.req.raw),
+        ),
+      ),
   )
 
   registerRoute(
@@ -101,7 +108,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         await actions.dwSaveAsWorkflow(
           actorOf(c),
           c.req.param('taskId'),
-          await safeJson(c.req.raw),
+          await safeJsonOrEmpty(c.req.raw),
         ),
         201,
       ),
@@ -118,7 +125,11 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) =>
       c.json(
-        await actions.postRoomMessage(actorOf(c), c.req.param('taskId'), await safeJson(c.req.raw)),
+        await actions.postRoomMessage(
+          actorOf(c),
+          c.req.param('taskId'),
+          await safeJsonOrEmpty(c.req.raw),
+        ),
         201,
       ),
   )
@@ -138,7 +149,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           actorOf(c),
           c.req.param('taskId'),
           c.req.param('id'),
-          await safeJson(c.req.raw),
+          await safeJsonOrEmpty(c.req.raw),
         ),
         201,
       ),
@@ -155,7 +166,11 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) =>
       c.json(
-        await actions.confirmGate(actorOf(c), c.req.param('taskId'), await safeJson(c.req.raw)),
+        await actions.confirmGate(
+          actorOf(c),
+          c.req.param('taskId'),
+          await safeJsonOrEmpty(c.req.raw),
+        ),
       ),
   )
 
@@ -173,7 +188,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         await actions.updateTaskConfig(
           actorOf(c),
           c.req.param('taskId'),
-          await safeJson(c.req.raw),
+          await safeJsonOrEmpty(c.req.raw),
         ),
       ),
   )

@@ -60,6 +60,7 @@ import {
 import {} from '@/services/workflow.yaml'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
+import { safeJsonOrEmpty } from '@/util/http'
 
 export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
   // RFC-099: missing and not-visible produce the identical 404 (D1).
@@ -127,7 +128,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Create a workflow',
     },
     async (c) => {
-      const parsed = CreateWorkflowSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CreateWorkflowSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('workflow-invalid', 'invalid workflow payload', {
           issues: parsed.error.issues,
@@ -153,7 +154,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Copy a workflow into a private duplicate',
     },
     async (c) => {
-      const parsed = CopyWorkflowRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CopyWorkflowRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('workflow-copy-invalid', 'invalid workflow copy payload', {
           issues: parsed.error.issues,
@@ -184,7 +185,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const parsed = UpdateWorkflowSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = UpdateWorkflowSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('workflow-invalid', 'invalid workflow save payload', {
           issues: parsed.error.issues,
@@ -225,7 +226,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       await requireResourceView(deps.db, actor, 'workflow', row)
       assertNotBuiltin('workflow', row) // RFC-104: built-ins are read-only
       await requireResourceOwner(deps.db, actor, 'workflow', row)
-      const parsed = DeleteWorkflowSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = DeleteWorkflowSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('workflow-invalid', 'invalid workflow delete payload', {
           issues: parsed.error.issues,
@@ -253,7 +254,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       // In particular, do not replace this with validateWorkflowById after the
       // guard: that would re-read latest and admit a check-vN/validate-vN+1 race.
       const workflow = await loadVisibleWorkflow(actorOf(c), c.req.param('id'))
-      const parsed = WorkflowValidationRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = WorkflowValidationRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError(
           'workflow-validation-invalid',
@@ -298,7 +299,9 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       // writes the captured workflow.
       const actor = actorOf(c)
       const workflow = await loadVisibleWorkflow(actor, c.req.param('id'))
-      const parsed = WorkflowDraftValidationRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = WorkflowDraftValidationRequestSchema.safeParse(
+        await safeJsonOrEmpty(c.req.raw),
+      )
       if (!parsed.success) {
         throw new ValidationError(
           'workflow-draft-validation-invalid',
@@ -366,14 +369,6 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     param: 'id',
     load: (db, id) => getWorkflow(db, id),
   })
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
-  }
 }
 
 function assertExactWorkflowRevision(

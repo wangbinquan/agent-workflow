@@ -22,6 +22,7 @@ import {
 import { registerRoute } from '@/routes/registry'
 import type { AppDeps } from '@/server'
 import { NotFoundError, ValidationError } from '@/util/errors'
+import { safeJsonOrThrowInvalid } from '@/util/http'
 
 function providerOf(raw: string): CodeHostProvider {
   // safeParse 而不是 `as`：RFC-054 W1-7 要求路由层的窄化走 Zod，而不是断言。
@@ -30,14 +31,6 @@ function providerOf(raw: string): CodeHostProvider {
     throw new NotFoundError('code-host-provider-unknown', `unknown code host provider '${raw}'`)
   }
   return parsed.data
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    throw new ValidationError('invalid-json', 'request body is not valid JSON')
-  }
 }
 
 export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
@@ -70,7 +63,9 @@ export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const provider = providerOf(c.req.param('provider'))
-      const parsed = UpsertCodeHostConnectionSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = UpsertCodeHostConnectionSchema.safeParse(
+        await safeJsonOrThrowInvalid(c.req.raw),
+      )
       if (!parsed.success) {
         throw new ValidationError('code-host-connection-invalid', 'invalid connection body', {
           issues: parsed.error.issues,
@@ -123,7 +118,7 @@ export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const provider = providerOf(c.req.param('provider'))
       const parsed = TestCodeHostConnectionSchema.safeParse(
-        await safeJson(c.req.raw).catch(() => ({})),
+        await safeJsonOrThrowInvalid(c.req.raw).catch(() => ({})),
       )
       const body = parsed.success ? parsed.data : {}
       // 未传的字段回落到已保存的值，所以「先保存再测」与「边填边测」都成立。

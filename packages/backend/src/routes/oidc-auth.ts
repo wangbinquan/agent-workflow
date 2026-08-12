@@ -35,6 +35,7 @@ import { eq } from 'drizzle-orm'
 import { users } from '@/db/schema'
 import { DomainError } from '@/util/errors'
 import { BadRequestErrorOrFriendlyHtml, friendly } from '@/util/oidcResponse'
+import { safeJsonOrEmpty } from '@/util/http'
 
 export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
   registerRoute(
@@ -72,7 +73,7 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
       if (!provider || !provider.enabled) {
         return c.json({ ok: false, code: 'provider-not-found' }, 404)
       }
-      const body = (await safeJson(c.req.raw)) as Record<string, unknown>
+      const body = (await safeJsonOrEmpty(c.req.raw)) as Record<string, unknown>
       const postLoginRedirect =
         typeof body.postLoginRedirect === 'string' ? body.postLoginRedirect : undefined
       const redirectUri = resolveRedirectUri(c, provider.slug, deps)
@@ -283,14 +284,6 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
       return c.redirect(`${flow.postLoginRedirect ?? '/'}#aw_session=${encodeURIComponent(token)}`)
     },
   )
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
-  }
 }
 
 function isDomainCode(err: unknown, code: string): boolean {

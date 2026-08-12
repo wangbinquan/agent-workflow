@@ -532,11 +532,3 @@ export function resolveMentions(
   }
   return [...out.values()]
 }
-
-export async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
-  }
-}

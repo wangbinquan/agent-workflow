@@ -59,6 +59,7 @@ import {
 } from '@/services/skillVersion'
 import { GoneError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
+import { safeJsonOrEmpty } from '@/util/http'
 
 export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
   const fsOpts: SkillFsOptions = { appHome: Paths.root }
@@ -95,7 +96,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Create a skill',
     },
     async (c) => {
-      const parsed = CreateManagedSkillSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CreateManagedSkillSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('skill-invalid', 'invalid skill payload', {
           issues: parsed.error.issues,
@@ -290,7 +291,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Save skill metadata + body',
     },
     async (c) => {
-      const parsed = CombinedSaveSkillSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CombinedSaveSkillSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('skill-content-invalid', 'invalid combined save', {
           issues: parsed.error.issues,
@@ -360,7 +361,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const path = requirePath(c.req.query('path'))
-      const parsed = WriteSkillFileSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = WriteSkillFileSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('skill-file-invalid', 'invalid file write payload', {
           issues: parsed.error.issues,
@@ -482,7 +483,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Restore a skill version',
     },
     async (c) => {
-      const parsed = RestoreSkillVersionSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = RestoreSkillVersionSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('skill-restore-invalid', 'invalid restore payload', {
           issues: parsed.error.issues,
@@ -534,14 +535,6 @@ function parseVersionParam(raw: string | undefined, field: string): number {
     throw new ValidationError('skill-version-invalid', `'${field}' must be a positive integer`)
   }
   return n
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
-  }
 }
 
 async function readZipFileFromMultipart(req: Request): Promise<Uint8Array> {

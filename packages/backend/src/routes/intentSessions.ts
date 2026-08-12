@@ -78,16 +78,9 @@ import {
   type ReservedIntentTurn,
   type IntentSessionRow,
 } from '@/services/intent/session'
+import { safeJsonOrThrowInvalid } from '@/util/http'
 
 const log = createLogger('intentRoutes')
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    throw new ValidationError('invalid-json', 'request body must be JSON')
-  }
-}
 
 /** Zod-validated JSON-record parse — routes never `as`-cast (RFC-054 W1-7). */
 const JsonRecordSchema = z.record(z.string(), z.unknown())
@@ -275,7 +268,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Create an intent session',
     },
     async (c) => {
-      const parsed = CreateIntentSessionSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CreateIntentSessionSchema.safeParse(
+        await safeJsonOrThrowInvalid(c.req.raw, 'request body must be JSON'),
+      )
       if (!parsed.success) {
         throw new ValidationError('intent-invalid', 'invalid intent session payload', {
           issues: parsed.error.issues,
@@ -580,7 +575,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Send an intent message',
     },
     async (c) => {
-      const parsed = PostIntentMessageSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = PostIntentMessageSchema.safeParse(
+        await safeJsonOrThrowInvalid(c.req.raw, 'request body must be JSON'),
+      )
       if (!parsed.success) {
         throw new ValidationError('intent-invalid', 'invalid message payload', {
           issues: parsed.error.issues,
@@ -612,7 +609,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Answer intent questions',
     },
     async (c) => {
-      const parsed = PostIntentAnswersSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = PostIntentAnswersSchema.safeParse(
+        await safeJsonOrThrowInvalid(c.req.raw, 'request body must be JSON'),
+      )
       if (!parsed.success) {
         throw new ValidationError('intent-invalid', 'invalid answers payload', {
           issues: parsed.error.issues,
@@ -644,7 +643,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Approve an intent mount',
     },
     async (c) => {
-      const parsed = PostIntentMountApprovalsSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = PostIntentMountApprovalsSchema.safeParse(
+        await safeJsonOrThrowInvalid(c.req.raw, 'request body must be JSON'),
+      )
       if (!parsed.success) {
         throw new ValidationError('intent-invalid', 'invalid mount approvals payload', {
           issues: parsed.error.issues,
@@ -668,7 +669,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Mount a resource into an intent session',
     },
     async (c) => {
-      const parsed = IntentMountRefSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = IntentMountRefSchema.safeParse(
+        await safeJsonOrThrowInvalid(c.req.raw, 'request body must be JSON'),
+      )
       if (!parsed.success) {
         throw new ValidationError('intent-invalid', 'invalid mount payload', {
           issues: parsed.error.issues,
@@ -781,7 +784,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Commit an intent changeset',
     },
     async (c) => {
-      const parsed = CommitIntentSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CommitIntentSchema.safeParse(
+        await safeJsonOrThrowInvalid(c.req.raw, 'request body must be JSON'),
+      )
       if (!parsed.success) {
         throw new ValidationError('intent-invalid', 'invalid commit payload', {
           issues: parsed.error.issues,

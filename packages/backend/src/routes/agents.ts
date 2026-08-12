@@ -61,6 +61,7 @@ import { mountAclEndpoints } from './resourceAcl'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'
 import { getAgentResourceStatus } from '@/services/agentResourceIntegrity'
+import { safeJsonOrEmpty } from '@/util/http'
 
 /**
  * RFC-117: true iff the raw PUT body sets ONLY `runtime` (no other key). Lets the
@@ -118,7 +119,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Resolve an agent import (pure, no side effect)',
     },
     async (c) => {
-      const parsed = ResolveAgentImportRefsRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = ResolveAgentImportRefsRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('agent-import-invalid', 'invalid agent import references', {
           issues: parsed.error.issues,
@@ -199,7 +200,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Create an agent',
     },
     async (c) => {
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = CreateAgentSchema.safeParse(body)
       if (!parsed.success) {
         throw new ValidationError('agent-invalid', 'invalid agent payload', {
@@ -230,7 +231,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = UpdateAgentRequestSchema.safeParse(body)
       if (!parsed.success) {
         throw new ValidationError('agent-invalid', 'invalid agent patch', {
@@ -388,7 +389,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = RenameAgentRequestSchema.safeParse(body)
       if (!parsed.success) {
         throw new ValidationError('agent-rename-invalid', 'invalid rename payload', {
@@ -475,7 +476,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = ClosurePreviewBodySchema.safeParse(body)
       if (!parsed.success) {
         return c.json({
@@ -717,12 +718,4 @@ function toAgentClosureSummaries(
     })
   }
   return out
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
-  }
 }

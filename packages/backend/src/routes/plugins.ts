@@ -37,6 +37,7 @@ import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
+import { safeJsonOrEmpty } from '@/util/http'
 
 export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
   async function loadVisiblePlugin(actor: Actor, id: string): Promise<Plugin> {
@@ -109,7 +110,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Install a plugin',
     },
     async (c) => {
-      const parsed = CreatePluginSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CreatePluginSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('plugin-invalid', 'invalid plugin payload', {
           issues: parsed.error.issues,
@@ -140,7 +141,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Replace a plugin',
     },
     async (c) => {
-      const parsed = UpdatePluginRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = UpdatePluginRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('plugin-invalid', 'invalid plugin patch', {
           issues: parsed.error.issues,
@@ -204,7 +205,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Rename a plugin',
     },
     async (c) => {
-      const parsed = RenamePluginRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = RenamePluginRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('plugin-rename-invalid', 'invalid rename payload', {
           issues: parsed.error.issues,
@@ -232,7 +233,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Check upstream for a newer version',
     },
     async (c) => {
-      const parsed = PluginOperationRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = PluginOperationRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('plugin-operation-invalid', 'expectedConfigHash is required', {
           issues: parsed.error.issues,
@@ -289,7 +290,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Upgrade a plugin to a newer version',
     },
     async (c) => {
-      const parsed = PluginOperationRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = PluginOperationRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('plugin-operation-invalid', 'expectedConfigHash is required', {
           issues: parsed.error.issues,
@@ -354,14 +355,6 @@ function assertOperationSupported(plugin: Plugin): void {
       'plugin-operation-unsupported',
       'file source is externally managed and does not support Check or Upgrade',
     )
-  }
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
   }
 }
 

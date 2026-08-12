@@ -34,20 +34,13 @@ import {
 } from '@/services/scheduledTasks'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { loadConfig } from '@/config'
+import { safeJsonOrThrowInvalid } from '@/util/http'
 
 /** Write authority: owner or a resource admin (admin OR manager — RFC-222 D2). */
 function requireWriteAccess(actor: Actor, row: ScheduledTask): void {
   if (row.ownerUserId === actor.user.id) return
   if (isResourceAdminRole(actor.user.role)) return
   throw new ForbiddenError('scheduled-task-forbidden', `not permitted to modify '${row.id}'`)
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    throw new ValidationError('invalid-json', 'request body is not valid JSON')
-  }
 }
 
 async function loadVisible(deps: AppDeps, actor: Actor, id: string): Promise<ScheduledTask> {
@@ -110,7 +103,7 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
       // RFC-165 (N1-r3): creating a schedule arms future launches — same
       // delegation as launching, so the same tasks:launch permission.
       requireLaunchPermission(actorOf(c))
-      const rawBody = await safeJson(c.req.raw)
+      const rawBody = await safeJsonOrThrowInvalid(c.req.raw)
       // RFC-165 (F1): reject retired path-mode keys inside the stored payload
       // BEFORE parsing (non-strict zod would silently strip them and persist a
       // silently-degraded schedule).
@@ -160,7 +153,7 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
       const actor = actorOf(c)
       const existing = await loadVisible(deps, actor, c.req.param('id'))
       requireWriteAccess(actor, existing)
-      const rawPatch = await safeJson(c.req.raw)
+      const rawPatch = await safeJsonOrThrowInvalid(c.req.raw)
       {
         const retired = rejectRetiredStartTaskKeys(
           (rawPatch as { launchPayload?: unknown } | null)?.launchPayload ?? null,

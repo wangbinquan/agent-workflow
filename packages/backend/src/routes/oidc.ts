@@ -12,6 +12,7 @@ import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
+import { safeJsonOrEmpty } from '@/util/http'
 
 export function mountOidcRoutes(app: Hono, deps: AppDeps): void {
   registerRoute(
@@ -38,7 +39,7 @@ export function mountOidcRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Update the login policy',
     },
     async (c) => {
-      const parsed = UpdateAuthLoginPolicyBodySchema.safeParse(await safeJson(c.req.raw))
+      const parsed = UpdateAuthLoginPolicyBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('login-policy-invalid', 'invalid login policy payload', {
           issues: parsed.error.issues,
@@ -96,7 +97,7 @@ export function mountOidcRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Create an OIDC provider',
     },
     async (c) => {
-      const parsed = CreateOidcProviderBodySchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CreateOidcProviderBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('oidc-provider-invalid', 'invalid OIDC provider payload', {
           issues: parsed.error.issues,
@@ -117,7 +118,7 @@ export function mountOidcRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Update an OIDC provider',
     },
     async (c) => {
-      const parsed = PatchOidcProviderBodySchema.safeParse(await safeJson(c.req.raw))
+      const parsed = PatchOidcProviderBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('oidc-provider-invalid', 'invalid OIDC provider patch', {
           issues: parsed.error.issues,
@@ -164,12 +165,4 @@ export function mountOidcRoutes(app: Hono, deps: AppDeps): void {
       return c.json(await svc.probe(p))
     },
   )
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
-  }
 }

@@ -49,6 +49,7 @@ import {
   transitionMcpAclRuntimeTestsInTx,
 } from '@/services/mcpRuntimeTestTransitions'
 import { Paths } from '@/util/paths'
+import { safeJsonOrEmpty } from '@/util/http'
 
 const log = createLogger('mcps-routes')
 
@@ -185,7 +186,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Start an MCP runtime-test session (spawns a model run)',
     },
     async (c) => {
-      const parsed = McpRuntimeTestCreateRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = McpRuntimeTestCreateRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test payload', {
           issues: parsed.error.issues,
@@ -232,7 +233,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Send a runtime-test turn (spawns a model run)',
     },
     async (c) => {
-      const parsed = McpRuntimeTestMessageRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = McpRuntimeTestMessageRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test message', {
           issues: parsed.error.issues,
@@ -258,7 +259,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Cancel the in-flight runtime-test turn',
     },
     async (c) => {
-      const parsed = McpRuntimeTestCancelRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = McpRuntimeTestCancelRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test cancel payload', {
           issues: parsed.error.issues,
@@ -285,7 +286,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       summary: 'End a runtime-test session',
     },
     async (c) => {
-      const parsed = McpRuntimeTestEndRequestSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = McpRuntimeTestEndRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test end payload', {
           issues: parsed.error.issues,
@@ -333,7 +334,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Create an MCP server',
     },
     async (c) => {
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = CreateMcpSchema.safeParse(body)
       if (!parsed.success) {
         throw new ValidationError('mcp-invalid', 'invalid mcp payload', {
@@ -360,7 +361,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = UpdateMcpRequestSchema.safeParse(body)
       if (!parsed.success) {
         throw new ValidationError('mcp-invalid', 'invalid mcp patch', {
@@ -434,7 +435,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = RenameMcpRequestSchema.safeParse(body)
       if (!parsed.success) {
         throw new ValidationError('mcp-rename-invalid', 'invalid rename payload', {
@@ -509,7 +510,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const body = await safeJson(c.req.raw)
+      const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = McpOperationRequestSchema.safeParse(body)
       if (!parsed.success) {
         throw new ValidationError('mcp-probe-invalid', 'expectedConfigHash is required', {
@@ -631,13 +632,5 @@ function assertExpectedHash(mcp: Mcp, expected: string): void {
       'the MCP changed; reload before modifying it',
       { expectedConfigHash: expected, currentConfigHash: mcpOperationConfigHashOf(mcp) },
     )
-  }
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
   }
 }

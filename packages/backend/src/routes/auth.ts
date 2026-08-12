@@ -41,6 +41,7 @@ import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { listTokenAuditForUser } from '@/services/tokenAudit'
 import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from '@/util/errors'
+import { safeJsonOrEmpty } from '@/util/http'
 
 export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
   // Public — uses username + password, no session required.
@@ -63,7 +64,7 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
           'username and password login is disabled',
         )
       }
-      const parsed = LoginBodySchema.safeParse(await safeJson(c.req.raw))
+      const parsed = LoginBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('login-invalid', 'invalid login payload')
       }
@@ -130,7 +131,7 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       if (actorOf(c).source !== 'daemon') {
         throw new ForbiddenError('bootstrap-daemon-required', 'daemon bootstrap token required')
       }
-      const parsed = CreateBootstrapAdminBodySchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CreateBootstrapAdminBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('bootstrap-admin-invalid', 'invalid bootstrap administrator', {
           issues: parsed.error.issues,
@@ -228,7 +229,7 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
           'password is managed by the linked identity provider',
         )
       }
-      const parsed = ChangePasswordBodySchema.safeParse(await safeJson(c.req.raw))
+      const parsed = ChangePasswordBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) throw new ValidationError('change-password-invalid', 'invalid payload')
 
       const rows = await deps.db.select().from(users).where(eq(users.id, actor.user.id)).limit(1)
@@ -356,7 +357,7 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
           'the administrator has disabled the API token surface',
         )
       }
-      const parsed = CreatePatBodySchema.safeParse(await safeJson(c.req.raw))
+      const parsed = CreatePatBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('pat-invalid', 'invalid token payload', {
           issues: parsed.error.issues,
@@ -463,14 +464,6 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       throw new ForbiddenError('identity-unlink-disabled', 'linked identities are read-only')
     },
   )
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
-  }
 }
 
 function extractRawToken(c: Context): string | null {

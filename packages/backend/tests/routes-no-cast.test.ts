@@ -51,7 +51,8 @@ const FILE_LINE_ALLOWLIST = new Set<string>([
   // RFC-054 W1-7: documented TODOs — refactor to Zod safeParse on the
   // body schema. Manual `typeof` narrowing keeps these safe at runtime;
   // they're listed so new code doesn't follow the same pattern.
-  'oidc-auth.ts:const body = (await safeJson(c.req.raw)) as Record<string, unknown>',
+  // RFC-284 T5 改名同步：safeJson → safeJsonOrEmpty（拷贝收口，cast 本身原样待偿）。
+  'oidc-auth.ts:const body = (await safeJsonOrEmpty(c.req.raw)) as Record<string, unknown>',
   // (RFC-099: the tasks.ts assignments PATCH handler that carried the same
   // cast was removed along with the node-assignment mechanism.)
   // (RFC-218: the multipart FormData-entries cast moved out of routes/tasks.ts
@@ -235,7 +236,7 @@ describe('RFC-054 W1-7 — routes/*.ts must not use `as T` to bypass Zod', () =>
       throw new Error(
         `RFC-054 W1-7 — banned \`as T\` casts in routes/*.ts (${violations.length}):\n${msg}\n\n` +
           `Refactor to validate the source with a shared Zod schema:\n` +
-          `  const parsed = MyBodySchema.safeParse(await safeJson(c.req.raw))\n` +
+          `  const parsed = MyBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))\n` +
           `  if (!parsed.success) throw new ValidationError(...)\n` +
           `  const body = parsed.data\n\n` +
           `If the cast target is a legitimate narrowing TypeScript can't infer\n` +

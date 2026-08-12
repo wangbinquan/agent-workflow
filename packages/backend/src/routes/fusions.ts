@@ -29,6 +29,7 @@ import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { isResourceAdminActor } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
+import { safeJsonOrEmpty } from '@/util/http'
 
 export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
   function fusionDeps(): FusionDeps {
@@ -57,7 +58,7 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Launch a memory→skill fusion (runs an agent)',
     },
     async (c) => {
-      const parsed = LaunchFusionSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = LaunchFusionSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('fusion-invalid', 'invalid fusion payload', {
           issues: parsed.error.issues,
@@ -169,7 +170,7 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Reject a fusion and re-run it',
     },
     async (c) => {
-      const parsed = RejectFusionSchema.safeParse(await safeJson(c.req.raw))
+      const parsed = RejectFusionSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('fusion-reject-invalid', 'invalid reject payload', {
           issues: parsed.error.issues,
@@ -194,12 +195,4 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
       return c.json(await cancelFusion(fusionDeps(), c.req.param('id'), actorOf(c)))
     },
   )
-}
-
-async function safeJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json()
-  } catch {
-    return {}
-  }
 }
