@@ -57,11 +57,11 @@ describe('tasks.new.tsx — RFC-075 working branch + auto commit&push wiring', (
     expect(LAUNCH_SRC).toMatch(/autoCommitPush\s*\?\s*\{ autoCommitPush: true \}/)
   })
 
-  test('invalid-branch node carries role="alert" + data-testid', () => {
-    expect(LAUNCH_SRC).toContain('data-testid="wizard-branch-error"')
-    expect(LAUNCH_SRC).toMatch(
-      /role="alert"[\s\S]*wizard-branch-error|wizard-branch-error[\s\S]*role="alert"/,
-    )
+  test('invalid-branch error rides the shared ErrorBanner (role=alert via component contract)', () => {
+    // RFC-286 F1 改锚：死 class error-text 手搓 div 换 <ErrorBanner>——role="alert"
+    // 由公共组件（NoticeBanner tone=error）契约保证，锚从裸 attr 变组件用法。
+    expect(LAUNCH_SRC).toMatch(/<ErrorBanner[\s\S]{0,200}testid="wizard-branch-error"/)
+    expect(LAUNCH_SRC.includes('className="error-text"')).toBe(false)
   })
 
   test('toggle persists to localStorage via saveAutoCommitPushPref', () => {

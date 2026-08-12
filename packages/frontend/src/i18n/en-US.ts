@@ -5773,6 +5773,8 @@ export const enUS: Resources = {
   },
   errorDetails: {
     hintPrefix: 'Next step',
+    // RFC-286 F1：名单分隔符进 i18n（原 join('、') 硬编码中文顿号）。
+    namesSeparator: ', ',
     moreIssues: '…{{count}} more issue(s) not shown',
     referencedByNames: 'Referenced by: {{names}}.',
     referencedByHidden: '{{count}} more reference(s) you cannot see.',

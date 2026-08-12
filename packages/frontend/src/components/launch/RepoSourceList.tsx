@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
 import { MULTI_REPO_MAX } from '@agent-workflow/shared'
 import { RepoSourceRow } from '@/components/launch/RepoSourceRow'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import {
   computePreviewDirNames,
   defaultRepoSource,
@@ -109,12 +110,12 @@ export function RepoSourceList({
         </div>
       )}
       {multiRepoBlockedReason !== null && multiRepoBlockedReason !== undefined && isMulti && (
-        <div
-          className="repo-source-list__banner error-text"
-          role="alert"
-          data-testid="repo-source-multi-banner"
-        >
-          {t(`launch.repoSource.multiRepoBlocked.${multiRepoBlockedReason}`)}
+        <div className="repo-source-list__banner">
+          <ErrorBanner
+            error={null}
+            message={t(`launch.repoSource.multiRepoBlocked.${multiRepoBlockedReason}`)}
+            testid="repo-source-multi-banner"
+          />
         </div>
       )}
     </div>

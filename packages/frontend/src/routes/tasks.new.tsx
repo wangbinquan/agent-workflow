@@ -2232,9 +2232,11 @@ function TaskWizardPage() {
                     <ErrorBanner error={agentsQ.error} onRetry={() => void agentsQ.refetch()} />
                   </div>
                 ) : agentsQ.isSuccess ? (
-                  <div className="error-text" role="alert" data-testid="wizard-agent-not-found">
-                    {t('taskWizard.agentNotFound', { name: agentName })}
-                  </div>
+                  <ErrorBanner
+                    error={null}
+                    message={t('taskWizard.agentNotFound', { name: agentName })}
+                    testid="wizard-agent-not-found"
+                  />
                 ) : (
                   <LoadingState />
                 ))}
@@ -2256,7 +2258,7 @@ function TaskWizardPage() {
                     </Field>
                   )}
                   {agentPorted && agentBlockers.length > 0 && (
-                    <div className="error-text" role="alert" data-testid="wizard-agent-blockers">
+                    <NoticeBanner tone="error" size="compact" testid="wizard-agent-blockers">
                       {t('taskWizard.agentPortsBlocked')}
                       <ul>
                         {agentBlockers.map((b) => (
@@ -2267,7 +2269,7 @@ function TaskWizardPage() {
                           </li>
                         ))}
                       </ul>
-                    </div>
+                    </NoticeBanner>
                   )}
                   {/* 用户 2026-07-11：反问开关是核心行为选择，不藏进高级折叠。 */}
                   <Switch
@@ -2382,9 +2384,11 @@ function TaskWizardPage() {
                         />
                       </Field>
                       {workingBranchError && (
-                        <div className="error-text" role="alert" data-testid="wizard-branch-error">
-                          {t('launch.workingBranch.invalid')}
-                        </div>
+                        <ErrorBanner
+                          error={null}
+                          message={t('launch.workingBranch.invalid')}
+                          testid="wizard-branch-error"
+                        />
                       )}
                       <Switch
                         checked={autoCommitPush}
@@ -2417,9 +2421,11 @@ function TaskWizardPage() {
                     />
                   </Field>
                   {gitPairingError && (
-                    <div className="error-text" role="alert" data-testid="wizard-git-pair-error">
-                      {t('launch.gitIdentity.pairingError')}
-                    </div>
+                    <ErrorBanner
+                      error={null}
+                      message={t('launch.gitIdentity.pairingError')}
+                      testid="wizard-git-pair-error"
+                    />
                   )}
                   <Field
                     label={t('taskWizard.maxDurationMin')}
@@ -2446,9 +2452,11 @@ function TaskWizardPage() {
                     />
                   </Field>
                   {(durationInvalid || tokensInvalid) && (
-                    <div className="error-text" role="alert" data-testid="wizard-limits-error">
-                      {t('taskWizard.limitInvalid')}
-                    </div>
+                    <ErrorBanner
+                      error={null}
+                      message={t('taskWizard.limitInvalid')}
+                      testid="wizard-limits-error"
+                    />
                   )}
                 </div>
               </details>

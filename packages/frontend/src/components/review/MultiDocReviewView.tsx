@@ -31,7 +31,7 @@ import type {
 import { api } from '@/api/client'
 import { goToTaskDetail } from '@/lib/nav/taskNav'
 import { Dialog } from '@/components/Dialog'
-import { TextArea } from '@/components/Form'
+import { Field, TextArea } from '@/components/Form'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
@@ -647,10 +647,12 @@ export function MultiDocReviewView({
         }
       >
         {dialog?.kind === 'reject' && (
-          <div className="form-field">
-            <label className="form-label" htmlFor="reject-reason">
-              {t('reviews.rejectReasonLabel')}
-            </label>
+          // RFC-286 F1：手搓 form-field/label + 死 class form-error（顶层无定义）
+          // 整块换公共 <Field>——error prop 即 RFC-154 的行内校验错误形态。
+          <Field
+            label={t('reviews.rejectReasonLabel')}
+            {...(dialog.reasonError ? { error: t('reviews.rejectReasonRequired') } : {})}
+          >
             <TextArea
               value={dialog.reason}
               onChange={(v) => setDialog({ ...dialog, reason: v, reasonError: false })}
@@ -658,10 +660,7 @@ export function MultiDocReviewView({
               disabled={submitDecision.isPending}
               data-testid="multidoc-reject-reason"
             />
-            {dialog.reasonError && (
-              <div className="form-error">{t('reviews.rejectReasonRequired')}</div>
-            )}
-          </div>
+          </Field>
         )}
         {submitDecision.error !== null && submitDecision.error !== undefined && (
           <ErrorBanner error={submitDecision.error} />

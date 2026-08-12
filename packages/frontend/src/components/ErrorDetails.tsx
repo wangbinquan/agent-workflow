@@ -107,7 +107,9 @@ export function ErrorDetails({ details, raw, hint }: ErrorDetailsProps): ReactEl
       rows.push(
         <p className="error-details__refs" key="visible-refs">
           {visible.length > 0 &&
-            t('errorDetails.referencedByNames', { names: visible.map((v) => v.name).join('、') })}
+            t('errorDetails.referencedByNames', {
+              names: visible.map((v) => v.name).join(t('errorDetails.namesSeparator')),
+            })}
           {hiddenCount > 0 && ` ${t('errorDetails.referencedByHidden', { count: hiddenCount })}`}
         </p>,
       )

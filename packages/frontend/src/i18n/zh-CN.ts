@@ -4895,6 +4895,7 @@ export interface Resources {
   }
   errorDetails: {
     hintPrefix: string
+    namesSeparator: string
     moreIssues: string
     referencedByNames: string
     referencedByHidden: string
@@ -10854,6 +10855,7 @@ export const zhCN: Resources = {
   // RFC-203: structured details renderer strings.
   errorDetails: {
     hintPrefix: '下一步',
+    namesSeparator: '、',
     moreIssues: '…另有 {{count}} 条问题未列出',
     referencedByNames: '引用方：{{names}}。',
     referencedByHidden: '另有 {{count}} 个你不可见的引用方。',

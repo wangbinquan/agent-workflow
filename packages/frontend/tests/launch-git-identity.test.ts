@@ -58,9 +58,9 @@ describe('tasks.new.tsx — RFC-067 git identity wiring', () => {
     )
   })
 
-  test('pairing-error node carries role="alert" + data-testid', () => {
-    expect(LAUNCH_SRC).toContain('role="alert"')
-    expect(LAUNCH_SRC).toContain('data-testid="wizard-git-pair-error"')
+  test('pairing-error rides the shared ErrorBanner (role=alert via component contract)', () => {
+    // RFC-286 F1 改锚：同 launch-working-branch——组件用法锚替代裸 attr 锚。
+    expect(LAUNCH_SRC).toMatch(/<ErrorBanner[\s\S]{0,200}testid="wizard-git-pair-error"/)
   })
 })
 
