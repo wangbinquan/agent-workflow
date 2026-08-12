@@ -23,6 +23,7 @@ import type {
   Mcp,
   Plugin,
   Workflow,
+  WorkflowDefinition,
   Workgroup,
 } from '@agent-workflow/shared'
 import {
@@ -36,10 +37,14 @@ import {
   serializePluginDump,
   serializeWorkgroupDump,
   fenceUntrusted,
+  collectWorkflowCallRefs,
+  collectWorkgroupCallRefs,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { NotFoundError } from '@/util/errors'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
+import { pickCallTarget } from '@/services/execution/callRefTarget'
+import { extractWorkflowAgentRefs } from '@/services/resourceRefs'
 import type { DbClient } from '@/db/client'
 import { listAgents } from '@/services/agent'
 import { listMcps } from '@/services/mcp'
@@ -187,11 +192,25 @@ async function loadVisibleCatalog(db: DbClient, actor: Actor): Promise<VisibleCa
 function expandClosure(
   root: IntentMountRef,
   catalog: VisibleCatalog,
+  /**
+   * RFC-291 面 D — adjacency memo SHARED across roots.
+   *
+   * `expandClosure` runs once per mounted root, and a commit may mount up to
+   * `INTENT_LIMITS.maxOps` (64) of them. Without this, a workflow referenced by
+   * every root gets its out-edges recomputed 64 times; with a wide fan-out
+   * definition that is enough to occupy the event loop before the model even
+   * starts (design-gate P2-c). `seen` stays per-root because each root's
+   * `hiddenCount` must reflect ITS OWN closure.
+   */
+  adjacency: Map<string, IntentMountRef[]>,
 ): { members: IntentMountRef[]; hiddenCount: number } {
   const members: IntentMountRef[] = []
   const seen = new Set<string>([`${root.resourceType}:${root.resourceId}`])
   let hiddenCount = 0
+  // Cursor instead of `queue.shift()`: shift() is O(n) per call, so a large
+  // frontier degrades to O(n²) copying for no reason.
   const queue: IntentMountRef[] = [root]
+  let cursor = 0
 
   const push = (resourceType: AclResourceType, resourceId: string): void => {
     const key = `${resourceType}:${resourceId}`
@@ -218,39 +237,101 @@ function expandClosure(
     queue.push(ref)
   }
 
-  while (queue.length > 0) {
-    const cur = queue.shift() as IntentMountRef
-    if (cur.resourceType === 'agent') {
-      const agent = catalog.agents.get(cur.resourceId)
-      if (agent === undefined) continue
-      for (const dep of agent.dependsOn) push('agent', dep)
-      for (const m of agent.mcp) push('mcp', m)
-      for (const p of agent.plugins) push('plugin', p)
+  while (cursor < queue.length) {
+    const cur = queue[cursor++] as IntentMountRef
+    for (const edge of outEdgesOf(cur, catalog, adjacency)) {
+      push(edge.resourceType, edge.resourceId)
+    }
+  }
+  return { members, hiddenCount }
+}
+
+/**
+ * The out-edges of one resource, memoised per `(type, id)`.
+ *
+ * Edges are computed against the WHOLE catalog (not filtered by visibility) so
+ * the memo is root-independent; `push` then applies the per-root visibility and
+ * hidden-count bookkeeping.
+ */
+function outEdgesOf(
+  cur: IntentMountRef,
+  catalog: VisibleCatalog,
+  adjacency: Map<string, IntentMountRef[]>,
+): IntentMountRef[] {
+  const memoKey = `${cur.resourceType}:${cur.resourceId}`
+  const cached = adjacency.get(memoKey)
+  if (cached !== undefined) return cached
+
+  const edges: IntentMountRef[] = []
+  const add = (resourceType: AclResourceType, resourceId: string): void => {
+    if (typeof resourceId === 'string' && resourceId.length > 0) {
+      edges.push({ resourceType, resourceId })
+    }
+  }
+
+  if (cur.resourceType === 'agent') {
+    const agent = catalog.agents.get(cur.resourceId)
+    if (agent !== undefined) {
+      for (const dep of agent.dependsOn) add('agent', dep)
+      for (const m of agent.mcp) add('mcp', m)
+      for (const p of agent.plugins) add('plugin', p)
       for (const s of agent.skills) {
-        if (s.kind === 'managed') push('skill', s.skillId)
+        if (s.kind === 'managed') add('skill', s.skillId)
       }
-    } else if (cur.resourceType === 'workflow') {
-      const wf = catalog.workflows.get(cur.resourceId)
-      if (wf === undefined) continue
-      for (const node of (wf.definition as { nodes?: Array<Record<string, unknown>> }).nodes ??
-        []) {
-        if (node.kind !== 'agent-single') continue
-        if (typeof node.agentId === 'string' && node.agentId.length > 0) {
-          push('agent', node.agentId)
-        }
+    }
+  } else if (cur.resourceType === 'workflow') {
+    const wf = catalog.workflows.get(cur.resourceId)
+    if (wf !== undefined) {
+      const definition = wf.definition as WorkflowDefinition
+      // RFC-291 面 D — agent refs come from the AUTHORITATIVE extractor rather
+      // than a fourth hand-written agent-node walker. (The dump RENDERER below
+      // still matches the node kind literally — it has to, in order to rewrite
+      // agentId into a handle — so the guard is "no hand-written walker in the
+      // closure", not "that literal never appears in this file".)
+      for (const agentId of extractWorkflowAgentRefs(definition)) add('agent', agentId)
+
+      // RFC-291 面 D — the two edges that were missing entirely: a workflow that
+      // CALLS another workflow / a workgroup pulled neither into the closure, so
+      // mounting a parent to edit it left the callee invisible. Selectors are
+      // names (+ an optional id cache), resolved by the SAME single decision
+      // point the launch-time freeze uses — otherwise the dump could show one
+      // row while the platform executes another.
+      for (const ref of collectWorkflowCallRefs(definition)) {
+        const target = pickCallTarget(
+          {
+            authoritativeName: ref.workflowName,
+            ...(ref.workflowId === undefined ? {} : { idHint: ref.workflowId }),
+          },
+          [...catalog.workflows.values()],
+        )
+        // Unresolvable (deleted, or invisible to this actor) → let `push` count
+        // it as a hidden dependency via the id it names, without leaking a name.
+        if (target !== undefined) add('workflow', target.id)
       }
-    } else if (cur.resourceType === 'workgroup') {
-      const wg = catalog.workgroups.get(cur.resourceId)
-      if (wg === undefined) continue
+      for (const ref of collectWorkgroupCallRefs(definition)) {
+        const target = pickCallTarget(
+          {
+            authoritativeName: ref.workgroupName,
+            ...(ref.workgroupId === undefined ? {} : { idHint: ref.workgroupId }),
+          },
+          [...catalog.workgroups.values()],
+        )
+        if (target !== undefined) add('workgroup', target.id)
+      }
+    }
+  } else if (cur.resourceType === 'workgroup') {
+    const wg = catalog.workgroups.get(cur.resourceId)
+    if (wg !== undefined) {
       for (const member of wg.members) {
         if (member.memberType === 'agent' && member.agentId != null && member.agentId !== '') {
-          push('agent', member.agentId)
+          add('agent', member.agentId)
         }
       }
     }
     // skill / mcp / plugin are closure leaves.
   }
-  return { members, hiddenCount }
+  adjacency.set(memoKey, edges)
+  return edges
 }
 
 export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDumpResult> {
@@ -271,12 +352,14 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
     string,
     { ref: IntentMountRef; root: boolean; parent?: IntentMountRef }
   >()
+  /** RFC-291 面 D — out-edge memo shared by every root's closure walk. */
+  const adjacency = new Map<string, IntentMountRef[]>()
   const unavailableRoots: IntentMountRef[] = []
   /** Closure members that vanished mid-dump, keyed by the root they came from. */
   const hiddenMembers: IntentMountRef[] = []
   for (const mount of input.mounts) {
     const rootKey = `${mount.resourceType}:${mount.resourceId}`
-    const rootVisible = expandClosure(mount, catalog)
+    const rootVisible = expandClosure(mount, catalog, adjacency)
     const rootInCatalog =
       mount.resourceType === 'agent'
         ? catalog.agents.has(mount.resourceId)
