@@ -53,6 +53,7 @@
 
 - **后台跑门禁：task「completed (exit code 0)」≠ 门禁绿**（2026-08-12 实撞）：`bun run gate:local > log 2>&1; echo "exit: $?"` 的尾随 echo 让后台命令**恒以 0 收尾**，完成通知因此永远是 exit 0——判绿唯一依据是日志里的 `[gate] all local gates passed` 行（或逐车道 summary + `(fail)` 计数为 0）。且 **push 必须是读完门禁结果之后的独立命令**：把 `git push` 预链在 `fetch && merge-base && push` 里与门禁 grep 并排发出，grep 打不出预期行时 push 照样执行（实测一个批次就这样在未完成核对时上了 main，幸系满载假红、CI 洁净房复核绿）。定式：后台门禁命令**不接尾随 echo**（让真实 exit 传导给 task 状态），push 单独一条、在人工读过日志 summary 之后。
 - **门禁窗口内，本 session 自己也不要在主树跑重测试**（2026-08-12 实撞）：pinned worktree 门禁跑到一半，本 session 在主树并发跑了 69 文件的家族扫——backend 两个分片 900s 撞墙 SIGKILL、14 文件 5000ms 家族假红。既有条目讲的是「别的 session 写文件污染门禁」，这条的教训是**满载饥饿不分敌我**：门禁在跑时本 session 只做轻 I/O（读码/写文档/起草），重测试排队等门禁收尾；多 session 各自跑门禁请用 SendMessage 约时间片串行（2026-08-12 起三 session 实践有效）。
+  **「轻 I/O」不包括只读子代理**（2026-08-13 复撞）：两个只读评审 agent（全仓 rg + 大量 Read，不跑任何测试）与门禁并行，就把 backend shard-3 的 `scheduler-default-retries` 顶穿 5000ms——报头是 `timed out after 5000ms`，紧随一条 `ENOENT: argv.log` 的**级联假红**（mock runtime 还没来得及写文件），看起来像真 bug。判据仍是隔离复跑（该文件单跑 6.3s 全绿）+ 失败形态是超时而非断言。定式：**门禁窗口内子代理数 = 0**，评审/测绘代理与门禁二选一排队。
 
 ## git / 多人协作（共享工作树）
 
