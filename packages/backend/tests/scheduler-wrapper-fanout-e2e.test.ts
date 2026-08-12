@@ -184,49 +184,70 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
     expect(innerRows.length).toBe(0)
   })
 
-  test('2. v1-unsupported inner-kind (wrapper-git inside) → wrapper failed with v1-unsupported-inner-kind', async () => {
+  test('2. every nested wrapper kind fails closed with its exact v1-unsupported-inner-kind', async () => {
     // RFC-060 PR-E: agent-multi was removed, so we exercise the v1-inner-kind
     // restriction using a nested wrapper-git instead — same rejection path
     // (wrapper-fanout-v1-unsupported-inner-kind) since v1 wrapper-fanout
     // inner subgraphs only accept agent-single.
     await seedAgent(h.db, 'worker', ['result'])
-    const def: WorkflowDefinition = {
-      $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
-      nodes: [
-        { id: 'inp', kind: 'input', inputKey: 'docs' },
-        {
-          id: 'fan',
-          kind: 'wrapper-fanout',
-          nodeIds: ['inner'],
-          inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
-        },
-        {
-          id: 'inner',
-          kind: 'wrapper-git',
-          nodeIds: [],
-        },
-      ] as unknown as WorkflowDefinition['nodes'],
-      edges: [
-        {
-          id: 'e1',
-          source: { nodeId: 'inp', portName: 'docs' },
-          target: { nodeId: 'fan', portName: 'docs' },
-        },
-      ],
+    for (const innerKind of ['wrapper-git', 'wrapper-loop', 'wrapper-fanout'] as const) {
+      const inner =
+        innerKind === 'wrapper-loop'
+          ? {
+              id: `inner-${innerKind}`,
+              kind: innerKind,
+              nodeIds: [],
+              maxIterations: 2,
+              exitCondition: { kind: 'port-empty', nodeId: 'never', portName: 'result' },
+              outputBindings: [],
+            }
+          : innerKind === 'wrapper-fanout'
+            ? {
+                id: `inner-${innerKind}`,
+                kind: innerKind,
+                nodeIds: [],
+                inputs: [{ name: 'nested', kind: 'list<string>', isShardSource: true }],
+              }
+            : { id: `inner-${innerKind}`, kind: innerKind, nodeIds: [] }
+      const def: WorkflowDefinition = {
+        $schema_version: 4,
+        inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+        nodes: [
+          { id: `inp-${innerKind}`, kind: 'input', inputKey: 'docs' },
+          {
+            id: `fan-${innerKind}`,
+            kind: 'wrapper-fanout',
+            nodeIds: [inner.id],
+            inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
+          },
+          inner,
+        ] as unknown as WorkflowDefinition['nodes'],
+        edges: [
+          {
+            id: `edge-${innerKind}`,
+            source: { nodeId: `inp-${innerKind}`, portName: 'docs' },
+            target: { nodeId: `fan-${innerKind}`, portName: 'docs' },
+          },
+        ],
+      }
+      const taskId = await seedWorkflowAndTask(h, def, { docs: 'a.md\nb.md' })
+      await runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+      })
+      const taskRows = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+      expect(taskRows[0]?.status, innerKind).toBe('failed')
+      const wrapperRows = await h.db
+        .select()
+        .from(nodeRuns)
+        .where(eq(nodeRuns.nodeId, `fan-${innerKind}`))
+      expect(wrapperRows[0]?.status, innerKind).toBe('failed')
+      expect(wrapperRows[0]?.errorMessage ?? '', innerKind).toContain(
+        `v1-unsupported-inner-kind:${innerKind}`,
+      )
     }
-    const taskId = await seedWorkflowAndTask(h, def, { docs: 'a.md\nb.md' })
-    await runTask({
-      taskId,
-      db: h.db,
-      appHome: h.appHome,
-      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
-    })
-    const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
-    expect(t[0]?.status).toBe('failed')
-    const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
-    expect(wrapperRow[0]?.status).toBe('failed')
-    expect(wrapperRow[0]?.errorMessage ?? '').toContain('v1-unsupported-inner-kind')
   })
 
   test('3. agent-single inner + 2 shards → wrapper done with __done__ signal, 2 shard children minted with shardKey', async () => {

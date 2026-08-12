@@ -41,6 +41,15 @@ export function runGit(args: string[], cwd?: string): string {
   })
 }
 
+/** Run a non-shell CLI probe with the same hard deadline as every fixture command. */
+export function runCommand(command: string, args: string[]): string {
+  return execFileSync(command, args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: COMMAND_TIMEOUT_MS,
+  })
+}
+
 export function initGitRepo(
   repoPath: string,
   options: { email?: string; message?: string; name?: string } = {},

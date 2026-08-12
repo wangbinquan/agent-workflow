@@ -26,6 +26,7 @@
     "build:binary": "bun run scripts/build-binary.ts",
     "build:binary:e2e": "bun run scripts/build-binary.ts --include-e2e",
     "e2e": "playwright test",
+    "e2e:release-runtimes": "RUN_LIVE_RUNTIME_E2E=1 PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/release-runtime-report.json playwright test e2e/release-runtime.spec.ts --project=chromium --workers=1 --reporter=list,json",
     "test:visual": "RUN_VISUAL_REGRESSION=1 playwright test e2e/visual-regression.spec.ts e2e/rfc250-visual-states.spec.ts --project=chromium",
     "e2e:install": "playwright install --with-deps chromium",
     "record:opencode": "bun run scripts/record-opencode.ts",

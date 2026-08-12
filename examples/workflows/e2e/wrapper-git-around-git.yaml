@@ -1,0 +1,33 @@
+name: e2e-wrapper-git-around-git
+description: Nested git wrappers both capture the same inner mutation without losing or duplicating files.
+definition:
+  $schema_version: 4
+  inputs: []
+  nodes:
+    - id: outer_git
+      kind: wrapper-git
+      title: Outer change capture
+      nodeIds: [inner_git]
+      position: { x: 100, y: 40 }
+      size: { width: 760, height: 400 }
+    - id: inner_git
+      kind: wrapper-git
+      title: Inner change capture
+      nodeIds: [mutator]
+      position: { x: 210, y: 110 }
+      size: { width: 430, height: 260 }
+    - id: mutator
+      kind: agent-single
+      agentName: matrix-mutator
+      promptTemplate: 'MATRIX_GIT_MUTATE nested=git-in-git'
+      position: { x: 310, y: 190 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: all_changed
+          bind: { nodeId: outer_git, portName: git_diff }
+      position: { x: 980, y: 190 }
+  edges:
+    - id: outer_to_output
+      source: { nodeId: outer_git, portName: git_diff }
+      target: { nodeId: final_output, portName: all_changed }

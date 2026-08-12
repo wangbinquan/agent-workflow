@@ -158,6 +158,12 @@ interface ModeSpec {
    * into every event. Scoped per mode so it cannot quietly loosen the others.
    */
   normalizeStdout?: (text: string) => string
+  /**
+   * This mode was born in the compiled dispatcher and has no deleted original.
+   * Its checked-in transcript is therefore an explicit native contract, while
+   * all migrated modes continue to record only from their historical source.
+   */
+  nativeContract?: boolean
 }
 
 interface SideResult {
@@ -313,18 +319,32 @@ function readGolden(mode: string): Golden {
  * that this comparison can be exact rather than "both produced something".
  */
 function differentialSuite(spec: ModeSpec, cases: readonly DiffCase[]): void {
-  describe(`RFC-254 T28b — \`${spec.mode}\` mode reproduces ${spec.script}`, () => {
+  const relationship = spec.nativeContract
+    ? 'pins its native contract'
+    : `reproduces ${spec.script}`
+  describe(`RFC-254 T28b — \`${spec.mode}\` mode ${relationship}`, () => {
     const recorded: Golden = {}
 
     for (const testCase of cases) {
       test(`byte-identical: ${testCase.name}`, async () => {
         if (RECORDING) {
-          // The three that were already TypeScript were run as `bun run <file>`.
-          const script = testCase.originalScript ?? spec.script
-          const original = script.endsWith('.ts')
-            ? [process.execPath, 'run', originalStub(script)]
-            : [originalStub(script)]
-          recorded[testCase.name] = await runSide(original, {}, spec, testCase)
+          // The three migrated TypeScript stubs were run as `bun run <file>`.
+          // A nativeContract has no historical program by definition, so its
+          // first-class checked-in transcript is recorded from the dispatcher.
+          const source = spec.nativeContract
+            ? [process.execPath, 'run', PORTED_STUB]
+            : (() => {
+                const script = testCase.originalScript ?? spec.script
+                return script.endsWith('.ts')
+                  ? [process.execPath, 'run', originalStub(script)]
+                  : [originalStub(script)]
+              })()
+          recorded[testCase.name] = await runSide(
+            source,
+            spec.nativeContract ? { AW_STUB_MODE: spec.mode } : {},
+            spec,
+            testCase,
+          )
           writeFileSync(goldenPath(spec.mode), `${JSON.stringify(recorded, null, 2)}\n`)
           return
         }
@@ -391,6 +411,65 @@ const runArgs = (prompt: string, agent = 'coder'): string[] => [
   '--',
   prompt,
 ]
+
+differentialSuite(
+  {
+    mode: 'runtime-scenario',
+    script: 'native data-driven runtime scenario contract',
+    stateDirEnv: ['SCENARIO_STATE_DIR'],
+    nativeContract: true,
+  },
+  [
+    { name: '--version', args: ['--version'] },
+    {
+      name: 'two ordered calls preserve output, session, trace, state and worktree effects',
+      preCreate: {
+        'plan.json': JSON.stringify({
+          version: 1,
+          agents: {
+            'contract-agent': [
+              {
+                requirePrompt: ['contract-input'],
+                output: { answer: 'first/{{protocol}}/{{callIndex}}' },
+                writeFiles: { 'proof/runtime.txt': 'proof/{{task}}/{{node}}' },
+                sessionId: 'contract-session',
+                tokens: { input: 17, output: 5, cacheRead: 3, cacheCreate: 2 },
+              },
+              {
+                output: { answer: 'second/{{protocol}}/{{callIndex}}' },
+                sessionId: 'contract-session',
+              },
+            ],
+          },
+        }),
+      },
+      steps: [
+        {
+          args: runArgs(
+            `AW_SCENARIO_TASK=contract-task AW_SCENARIO_NODE=contract-node contract-input nonce="${NONCE}"`,
+            'contract-agent',
+          ),
+          env: { SCENARIO_PLAN_FILE: 'plan.json', WANT_INVENTORY: '1' },
+        },
+        {
+          args: [
+            'run',
+            '--agent',
+            'contract-agent',
+            '--session',
+            'contract-session',
+            '--format',
+            'json',
+            '--',
+            `AW_SCENARIO_TASK=contract-task AW_SCENARIO_NODE=contract-node nonce="${NONCE}"`,
+          ],
+          env: { SCENARIO_PLAN_FILE: 'plan.json' },
+        },
+      ],
+      sideEffects: ['proof/runtime.txt'],
+    },
+  ],
+)
 
 differentialSuite({ mode: 'basic', script: 'stub-opencode.sh' }, [
   { name: '--version', args: ['--version'] },

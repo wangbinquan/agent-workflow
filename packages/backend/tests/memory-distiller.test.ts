@@ -10,7 +10,9 @@ import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import type { Agent } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   memories,
@@ -32,6 +34,8 @@ import {
   type DistillerSpawnFn,
 } from '../src/services/memoryDistiller'
 import { rowToDistillJob } from '../src/services/memoryDistiller'
+import { promoteCandidate } from '../src/services/memory'
+import { injectMemoryForRun } from '../src/services/memoryInject'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -589,6 +593,112 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     const inserted = db.select().from(memories).all()
     expect(inserted.length).toBe(1)
     expect(inserted[0]!.status).toBe('candidate')
+  })
+
+  test('closed loop: distilled candidate stays out until approval, then injects into a subsequent task', async () => {
+    const source = seedTask(db)
+    const jobId = ulid()
+    db.insert(memoryDistillJobs)
+      .values({
+        id: jobId,
+        debounceKey: `${source.taskId}:feedback`,
+        sourceKind: 'feedback',
+        sourceEventId: 'feedback-closed-loop',
+        taskId: source.taskId,
+        scopeResolvedJson: JSON.stringify({
+          agentIds: [],
+          workflowId: source.workflowId,
+          repoId: null,
+          includeGlobal: true,
+        }),
+        status: 'running',
+        attempts: 0,
+        nextRunAt: Date.now(),
+        createdAt: Date.now(),
+      })
+      .run()
+    const job = rowToDistillJob(
+      db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)).get()!,
+    )
+    const spawnFn: DistillerSpawnFn = async (input) => ({
+      exitCode: 0,
+      stderr: '',
+      stdout: distillerStdout(
+        input,
+        JSON.stringify({
+          candidates: [
+            {
+              scopeType: 'global',
+              scopeId: null,
+              title: 'Permanent closed-loop rule',
+              bodyMd: 'PERMANENT_MEMORY_PROOF must reach the next runtime prompt.',
+              knownTags: ['closed-loop'],
+              newTags: ['runtime-injection'],
+              action: 'new',
+              referenceMemoryId: null,
+              sourceRefs: [{ kind: 'feedback', id: 'feedback-closed-loop' }],
+            },
+          ],
+        }),
+      ),
+    })
+    expect(await runDistill({ db, job, siblings: [job], spawnFn })).toMatchObject({
+      candidatesCreated: 1,
+    })
+
+    const candidate = db.select().from(memories).where(eq(memories.distillJobId, jobId)).get()!
+    expect(candidate.status).toBe('candidate')
+
+    const nextTaskId = ulid()
+    db.insert(tasks)
+      .values({
+        id: nextTaskId,
+        name: 'fixture-next-task',
+        workflowId: source.workflowId,
+        workflowSnapshot: '{}',
+        repoPath: '/tmp/wt-next',
+        worktreePath: '/tmp/wt-next',
+        baseBranch: 'main',
+        branch: `agent-workflow/${nextTaskId}`,
+        baseCommit: null,
+        status: 'running',
+        inputs: '{}',
+        startedAt: Date.now(),
+      })
+      .run()
+    const primaryAgent = {
+      id: 'closed-loop-agent',
+      name: 'closed-loop-agent',
+      dependsOn: [],
+    } as unknown as Agent
+
+    const beforeApproval = await injectMemoryForRun({
+      db,
+      taskId: nextTaskId,
+      primaryAgent,
+      dependents: [],
+    })
+    expect(beforeApproval).toEqual({ block: null, snapshot: null })
+
+    await promoteCandidate(db, candidate.id, { action: 'approve' }, 'closed-loop-admin')
+    const afterApproval = await injectMemoryForRun({
+      db,
+      taskId: nextTaskId,
+      primaryAgent,
+      dependents: [],
+      envelopeNonce: 'closed-loop-nonce',
+    })
+    expect(afterApproval.block).toContain('--- BEGIN INJECTED MEMORY ---')
+    expect(afterApproval.block).toContain('Permanent closed-loop rule')
+    expect(afterApproval.block).toContain('PERMANENT_MEMORY_PROOF')
+    expect(afterApproval.snapshot).toMatchObject([
+      {
+        id: candidate.id,
+        scopeType: 'global',
+        title: 'Permanent closed-loop rule',
+        sourceKind: 'feedback',
+      },
+    ])
   })
 
   test('forwards the resolved protocol/binary/model/IS_SANDBOX toggle to spawnFn', async () => {

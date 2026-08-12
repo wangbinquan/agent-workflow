@@ -59,6 +59,9 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'e2e/clarify.spec.ts#skip': 1,
   'e2e/focus-ring-clip.spec.ts#skip': 1,
   'e2e/git-protocols.spec.ts#skip': 2,
+  // Explicitly billed/provider-backed and activated only by the local
+  // pre-release package script; ordinary CI must keep both drivers skipped.
+  'e2e/release-runtime.spec.ts#skip': 2,
   'e2e/rfc250-visual-states.spec.ts#skip': 1,
   'e2e/visual-regression.spec.ts#skip': 1,
   'e2e/workflow-editor.spec.ts#skip': 1,
@@ -101,6 +104,13 @@ const REQUIRED_GATE_ACTIVATIONS: Record<string, GateActivationCheck[]> = {
   RUN_GIT_NETWORK: [{ file: '.github/workflows/ci.yml', marker: "RUN_GIT_NETWORK: '1'" }],
   RUN_GIT_PROTOCOLS: [
     { file: '.github/workflows/git-protocols-e2e.yml', marker: "RUN_GIT_PROTOCOLS: '1'" },
+  ],
+  RUN_LIVE_RUNTIME_E2E: [
+    {
+      file: 'package.json',
+      marker:
+        '"e2e:release-runtimes": "RUN_LIVE_RUNTIME_E2E=1 PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/release-runtime-report.json playwright test e2e/release-runtime.spec.ts --project=chromium --workers=1 --reporter=list,json",',
+    },
   ],
   RUN_OPENCODE_INTEGRATION: [
     {

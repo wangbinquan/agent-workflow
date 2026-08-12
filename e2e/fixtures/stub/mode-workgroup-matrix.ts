@@ -1,19 +1,23 @@
 // RFC-254 T28b — `workgroup-matrix` mode: the port of `stub-opencode-workgroup-matrix.ts`.
 //
-// This one was ALREADY TypeScript, so the port is purely structural: the module
-// body becomes a `run(argv)` function and the argv it used to read from
-// `process.argv` arrives as a parameter. Nothing else is touched — the branch
-// logic, the exit codes and the emitted bytes are the original's, and
-// `rfc254-stub-differential.test.ts` compares the two to prove it.
+// This one was ALREADY TypeScript, so its OpenCode branch remains the structural
+// port: the module body becomes `run(argv)` and argv arrives as a parameter.
+// Its branch logic, exit codes and emitted bytes stay byte-identical under
+// `rfc254-stub-differential.test.ts`. The Claude branch projects those same
+// scenario decisions through the production stdin/stream-json contract.
 //
 // It joins the compiled dispatcher for the same reason the shell stubs did:
 // a `#!/usr/bin/env bun` shebang is not executable on Windows.
 
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 
-export function run(argv: readonly string[]): void {
+type Protocol = 'opencode' | 'claude-code'
+
+const AGENT_MARKER = /\[AW_SCENARIO_AGENT:([A-Za-z0-9._-]+)\]/
+
+export async function run(argv: readonly string[]): Promise<void> {
   function fail(message: string, code = 2): never {
     process.stderr.write(`stub-opencode-workgroup-matrix: ${message}\n`)
     process.exit(code)
@@ -23,20 +27,37 @@ export function run(argv: readonly string[]): void {
     process.stdout.write('stub-opencode workgroup-matrix\n')
     process.exit(0)
   }
-  if (argv[0] !== 'run') fail(`unsupported mode: ${argv.join(' ') || '<none>'}`)
+  let protocol: Protocol
+  let agent: string
+  let prompt: string
+  if (argv[0] === 'run') {
+    protocol = 'opencode'
+    const agentFlag = argv.indexOf('--agent')
+    agent = agentFlag >= 0 ? (argv[agentFlag + 1] ?? '') : ''
+    if (agent.length === 0) fail('missing --agent')
 
-  const agentFlag = argv.indexOf('--agent')
-  const agent = agentFlag >= 0 ? (argv[agentFlag + 1] ?? '') : ''
-  if (agent.length === 0) fail('missing --agent')
-
-  const separator = argv.indexOf('--')
-  // RFC-254 T28b — the prompt is the SINGLE positional after `--`, so it is
-  // indexed, not joined. `slice(separator + 1).join(' ')` happened to agree
-  // while the layout had exactly one trailing argument, but it is the same
-  // whole-argv fold that 191bc32c's regression turned into a mass e2e failure,
-  // and `e2e-stub-argv-contract.test.ts` now refuses it. The golden replay
-  // confirms this changed no observable behaviour.
-  const prompt = separator >= 0 ? (argv[separator + 1] ?? '') : (argv[1] ?? '')
+    const separator = argv.indexOf('--')
+    // RFC-254 T28b — the prompt is the SINGLE positional after `--`, so it is
+    // indexed, not joined. `slice(separator + 1).join(' ')` happened to agree
+    // while the layout had exactly one trailing argument, but it is the same
+    // whole-argv fold that 191bc32c's regression turned into a mass e2e failure,
+    // and `e2e-stub-argv-contract.test.ts` now refuses it. The golden replay
+    // confirms this changed no observable behaviour.
+    prompt = separator >= 0 ? (argv[separator + 1] ?? '') : (argv[1] ?? '')
+  } else if (argv.includes('-p') || argv.includes('--print')) {
+    protocol = 'claude-code'
+    prompt = await Bun.stdin.text()
+    const systemPromptFlag = argv.indexOf('--append-system-prompt-file')
+    const systemPromptFile = systemPromptFlag >= 0 ? (argv[systemPromptFlag + 1] ?? '') : ''
+    if (systemPromptFile.length === 0) fail('missing --append-system-prompt-file')
+    const systemPrompt = readFileSync(systemPromptFile, 'utf8')
+    agent =
+      AGENT_MARKER.exec(systemPrompt)?.[1] ??
+      (systemPrompt.includes('You are a workflow orchestrator.') ? 'aw-workflow-orchestrator' : '')
+    if (agent.length === 0) fail('Claude system prompt is missing an E2E agent marker')
+  } else {
+    fail(`unsupported mode: ${argv.join(' ') || '<none>'}`)
+  }
   const nonce = [...prompt.matchAll(/\bnonce="([^"]+)"/g)].at(-1)?.[1]
   if (nonce === undefined || nonce.length === 0) fail('prompt is missing the RFC-200 nonce', 3)
 
@@ -58,13 +79,48 @@ export function run(argv: readonly string[]): void {
   }
 
   function emitText(text: string): never {
-    process.stdout.write(
-      `${JSON.stringify({
-        type: 'text',
-        timestamp: Date.now(),
-        part: { type: 'text', text },
-      })}\n`,
-    )
+    if (protocol === 'opencode') {
+      process.stdout.write(
+        `${JSON.stringify({
+          type: 'text',
+          timestamp: Date.now(),
+          part: { type: 'text', text },
+        })}\n`,
+      )
+    } else {
+      // Independent member invocations may run concurrently. A Claude session
+      // belongs to exactly one runtime process, so keep the readable agent
+      // correlation while making the lease unique per subprocess.
+      const sessionId = `stub-workgroup-${agent}-${process.pid}`
+      const usage = { input_tokens: 13, output_tokens: 8 }
+      process.stdout.write(
+        `${JSON.stringify({
+          type: 'system',
+          subtype: 'init',
+          session_id: sessionId,
+          model: 'stub-workgroup-matrix',
+        })}\n`,
+      )
+      process.stdout.write(
+        `${JSON.stringify({
+          type: 'assistant',
+          session_id: sessionId,
+          message: { role: 'assistant', content: [{ type: 'text', text }], usage },
+        })}\n`,
+      )
+      process.stdout.write(
+        `${JSON.stringify({
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: text,
+          session_id: sessionId,
+          total_cost_usd: 0,
+          num_turns: 1,
+          usage,
+        })}\n`,
+      )
+    }
     process.exit(0)
   }
 

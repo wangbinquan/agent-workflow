@@ -119,6 +119,17 @@ export interface SpawnOptions {
    * the fresh daemon credential directly.
    */
   authMode?: 'admin-session' | 'bootstrap'
+  /**
+   * `stub` (default) points both built-in runtime rows at the compiled,
+   * deterministic stand-in. `live` points them at the supplied real CLIs and
+   * never requires/loads the stub artifact. The latter is opt-in release
+   * verification and may make real provider calls.
+   */
+  runtimeMode?: 'stub' | 'live'
+  /** Runtime binaries used only when runtimeMode='live'. PATH names are valid. */
+  runtimeBinaries?: { opencode?: string; claudeCode?: string }
+  /** Optional model values written to the isolated runtime rows after boot. */
+  runtimeModels?: { opencode?: string | null; claudeCode?: string | null }
 }
 
 // RFC-254 T26 — must stay in lockstep with scripts/build-binary.ts; the two are
@@ -138,6 +149,11 @@ function executableExtension(): string {
 export function defaultBinaryPath(): string {
   if (process.env.AGENT_WORKFLOW_E2E_BINARY) return process.env.AGENT_WORKFLOW_E2E_BINARY
   return resolve(repoRoot, 'dist', `agent-workflow-e2e-${platformSuffix()}${executableExtension()}`)
+}
+
+/** Production artifact used by the opt-in pre-release live-runtime sweep. */
+export function defaultProductionBinaryPath(): string {
+  return resolve(repoRoot, 'dist', `agent-workflow-${platformSuffix()}${executableExtension()}`)
 }
 
 /**
@@ -162,6 +178,7 @@ export type StubMode =
   | 'commit'
   | 'cross-clarify'
   | 'intent'
+  | 'runtime-scenario'
   | 'slow'
   | 'workflow-matrix'
   | 'business-workflows'
@@ -409,18 +426,23 @@ async function authenticatedAdminToken(ready: ReadyDaemon): Promise<string> {
   return body.sessionToken
 }
 
-async function seedE2eExecutionPolicy(ready: ReadyDaemon, token: string): Promise<void> {
-  const response = await fetch(`${ready.baseUrl}/api/runtimes/opencode`, {
+async function seedRuntimeModel(
+  ready: ReadyDaemon,
+  token: string,
+  runtime: 'opencode' | 'claude-code',
+  model: string | null,
+): Promise<void> {
+  const response = await fetch(`${ready.baseUrl}/api/runtimes/${runtime}`, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ model: E2E_OPENCODE_MODEL }),
+    body: JSON.stringify({ model }),
   })
   if (!response.ok) {
     throw new Error(
-      `e2e/harness: failed to seed RFC-224 execution policy (${response.status}): ${await response.text()}`,
+      `e2e/harness: failed to seed runtime '${runtime}' (${response.status}): ${await response.text()}`,
     )
   }
 }
@@ -467,8 +489,12 @@ async function startDaemonWithPortAllocator(
     )
   }
 
-  const stubOpencode = defaultStubPath()
-  if (!isExecutableFile(stubOpencode)) {
+  const runtimeMode = opts.runtimeMode ?? 'stub'
+  const stubOpencode =
+    runtimeMode === 'stub' ? defaultStubPath() : (opts.runtimeBinaries?.opencode ?? 'opencode')
+  const claudeCodeBinary =
+    runtimeMode === 'stub' ? stubOpencode : (opts.runtimeBinaries?.claudeCode ?? 'claude')
+  if (runtimeMode === 'stub' && !isExecutableFile(stubOpencode)) {
     throw new Error(
       `e2e/harness: compiled stub-opencode not found at ${stubOpencode}\n` +
         `  Run \`bun run build:binary:e2e\` to produce it, or set AGENT_WORKFLOW_E2E_STUB.`,
@@ -497,7 +523,6 @@ async function startDaemonWithPortAllocator(
         JSON.stringify(
           {
             $schema_version: 1,
-            opencodePath: stubOpencode,
             maxConcurrentNodes: 4,
             multiProcessSubprocessConcurrency: 4,
             defaultPerTaskMaxDurationMs: 60 * 60 * 1000,
@@ -507,6 +532,11 @@ async function startDaemonWithPortAllocator(
             eventsArchiveThresholds: { perNodeRunRows: 50_000, globalRows: 1_000_000 },
             largeOutputThresholdBytes: 1_048_576,
             ...(opts.configOverrides ?? {}),
+            // Explicit harness runtime selection is authoritative. A broad
+            // configOverrides fixture must not accidentally turn a declared
+            // stub run into a provider call (or vice versa).
+            opencodePath: stubOpencode,
+            claudeCodePath: claudeCodeBinary,
             bindHost: '127.0.0.1',
             bindPort,
             language: 'en-US',
@@ -533,7 +563,7 @@ async function startDaemonWithPortAllocator(
             // which is the one remaining way to run a different stub than the
             // one the spec declared — and unlike `dispatch.ts`'s unknown-mode
             // check, that failure is silent.
-            AW_STUB_MODE: stubMode,
+            ...(runtimeMode === 'stub' ? { AW_STUB_MODE: stubMode } : {}),
           },
           stdio: ['ignore', 'pipe', 'pipe'],
         },
@@ -551,7 +581,15 @@ async function startDaemonWithPortAllocator(
           throw new Error('e2e/harness: bootstrap auth requested for an already-initialized home')
         }
         if (opts.authMode !== 'bootstrap') {
-          await seedE2eExecutionPolicy(ready, token)
+          if (runtimeMode === 'stub') {
+            await seedRuntimeModel(ready, token, 'opencode', E2E_OPENCODE_MODEL)
+          }
+          if (opts.runtimeModels?.opencode !== undefined) {
+            await seedRuntimeModel(ready, token, 'opencode', opts.runtimeModels.opencode)
+          }
+          if (opts.runtimeModels?.claudeCode !== undefined) {
+            await seedRuntimeModel(ready, token, 'claude-code', opts.runtimeModels.claudeCode)
+          }
         }
 
         // Keep draining stdout so the child never blocks on a full pipe.

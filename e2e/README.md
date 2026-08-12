@@ -1,8 +1,9 @@
 # e2e/ — Playwright end-to-end suite
 
 Drives the separately compiled test binary
-(`dist/agent-workflow-e2e-<plat>-<arch>`) against a stub-opencode shim and
-walks the embedded frontend in a headless browser. The test artifact differs
+(`dist/agent-workflow-e2e-<plat>-<arch>`) against deterministic OpenCode and
+Claude Code protocol stand-ins and walks the embedded frontend in a headless
+browser. The test artifact differs
 from the shipped binary by one compile-time-only dependency-injection seam;
 there is no runtime env/config/HTTP switch that can enable it in production.
 Each spec spawns its own daemon via [`harness.ts`](./harness.ts) into a
@@ -19,6 +20,10 @@ bun run e2e                    # 4 workers, chromium only, ~22s on M2
 
 The harness throws "binary not found" if you forget the build step — set
 `AGENT_WORKFLOW_E2E_BINARY=/path/to/binary` to override.
+
+For the complete task-execution matrix, historical-task scenario format, and
+the opt-in pre-release gate against real OpenCode + Claude Code, see
+[`CAPABILITY_COVERAGE.md`](./CAPABILITY_COVERAGE.md).
 
 ## Parallelism model (RFC-054 W1-8)
 
@@ -49,17 +54,19 @@ CI wall-clock today (RFC-054 W1-8 baseline):
 
 ## Running a subset locally
 
-| Goal                         | Command                                                  |
-| ---------------------------- | -------------------------------------------------------- |
-| All chromium tests           | `bun run e2e`                                            |
-| One spec file                | `bun run e2e e2e/main.spec.ts`                           |
-| One test (substring match)   | `bun run e2e -g "happy path"`                            |
-| First shard of 4 (CI parity) | `bun run e2e -- --shard=1/4`                             |
-| All shards sequentially      | `for i in 1 2 3 4; do bun run e2e -- --shard=$i/4; done` |
-| Single worker (debug a race) | `bun run e2e -- --workers=1`                             |
-| Headed (visible browser)     | `bun run e2e -- --headed`                                |
-| With stdout/stderr forwarded | `E2E_VERBOSE=1 bun run e2e`                              |
-| UI trace viewer post-failure | `bunx playwright show-trace test-results/.../trace.zip`  |
+| Goal                         | Command                                                          |
+| ---------------------------- | ---------------------------------------------------------------- |
+| All chromium tests           | `bun run e2e`                                                    |
+| One spec file                | `bun run e2e e2e/main.spec.ts`                                   |
+| One test (substring match)   | `bun run e2e -g "happy path"`                                    |
+| First shard of 4 (CI parity) | `bun run e2e -- --shard=1/4`                                     |
+| All shards sequentially      | `for i in 1 2 3 4; do bun run e2e -- --shard=$i/4; done`         |
+| Single worker (debug a race) | `bun run e2e -- --workers=1`                                     |
+| Headed (visible browser)     | `bun run e2e -- --headed`                                        |
+| With stdout/stderr forwarded | `E2E_VERBOSE=1 bun run e2e`                                      |
+| UI trace viewer post-failure | `bunx playwright show-trace test-results/.../trace.zip`          |
+| Runtime parity only          | `bun run e2e -- e2e/runtime-scenario-matrix.spec.ts --workers=1` |
+| Real runtimes before release | `bun run e2e:release-runtimes`                                   |
 
 The `bun run e2e -- <flag>` double-dash is required so the flag reaches
 Playwright, not bun's script runner.

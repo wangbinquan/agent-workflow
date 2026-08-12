@@ -272,6 +272,8 @@ export const SHOWCASE_TASKS: Readonly<Record<ShowcaseWorkgroupKey, ShowcaseTaskS
 export async function seedShowcase(input: {
   baseUrl: string
   token: string
+  /** Optional E2E/runtime-parity pin; omitted by the normal showcase CLI. */
+  runtime?: 'opencode' | 'claude-code'
   launch?: boolean
   log?: (message: string) => void
 }): Promise<ShowcaseSeedResult> {
@@ -306,11 +308,15 @@ export async function seedShowcase(input: {
         body: JSON.stringify({
           name: spec.name,
           description: spec.description,
-          bodyMd: spec.bodyMd,
+          bodyMd:
+            input.runtime === undefined
+              ? spec.bodyMd
+              : `[AW_SCENARIO_AGENT:${spec.name}]\n${spec.bodyMd}`,
           inputs: spec.inputs ?? [],
           outputs: spec.outputs,
           outputKinds: Object.fromEntries(spec.outputs.map((port) => [port, 'string'])),
           permission: spec.permission ?? {},
+          ...(input.runtime === undefined ? {} : { runtime: input.runtime }),
         }),
       })
       log(`created Agent ${row.name} (${row.id})`)

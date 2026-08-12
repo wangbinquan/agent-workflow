@@ -17,6 +17,7 @@ import { run as runClarifyInline } from './mode-clarify-inline'
 import { run as runCommit } from './mode-commit'
 import { run as runCrossClarify } from './mode-cross-clarify'
 import { run as runIntent } from './mode-intent'
+import { run as runRuntimeScenario } from './mode-runtime-scenario'
 import { run as runSlow } from './mode-slow'
 import { run as runWorkflowMatrix } from './mode-workflow-matrix'
 import { run as runWorkgroupMatrix } from './mode-workgroup-matrix'
@@ -32,6 +33,7 @@ const MODES: Record<string, ModeRunner> = {
   commit: runCommit,
   'cross-clarify': runCrossClarify,
   intent: runIntent,
+  'runtime-scenario': runRuntimeScenario,
   slow: runSlow,
   'workflow-matrix': runWorkflowMatrix,
   'workgroup-matrix': runWorkgroupMatrix,

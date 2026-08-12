@@ -1,0 +1,48 @@
+{
+  "--version": {
+    "steps": [
+      {
+        "stdout": "stub-runtime-scenario 1.0.0\n",
+        "stderr": "",
+        "exitCode": 0,
+        "durationMs": 311.016084,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "two ordered calls preserve output, session, trace, state and worktree effects": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"session.created\",\"sessionID\":\"contract-session\"}\n{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n<port name=\\\"answer\\\">first/opencode/0</port>\\n</workflow-output>\"}}\n{\"type\":\"step_finish\",\"tokens\":{\"input\":17,\"output\":5,\"cache\":{\"read\":3,\"write\":2}}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "durationMs": 403.14404099999996,
+        "promptOut": "AW_SCENARIO_TASK=contract-task AW_SCENARIO_NODE=contract-node contract-input nonce=\"aw-nonce-differential-1234\"",
+        "inventory": "{\"schemaVersion\":1,\"capturedAt\":1700000000000,\"agents\":[],\"skills\":[],\"mcps\":[],\"plugins\":[]}\n"
+      },
+      {
+        "stdout": "{\"type\":\"session.created\",\"sessionID\":\"contract-session\"}\n{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n<port name=\\\"answer\\\">second/opencode/1</port>\\n</workflow-output>\"}}\n{\"type\":\"step_finish\",\"tokens\":{\"input\":11,\"output\":7,\"cache\":{\"read\":3,\"write\":2}}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "durationMs": 501.4871249999999,
+        "promptOut": "AW_SCENARIO_TASK=contract-task AW_SCENARIO_NODE=contract-node nonce=\"aw-nonce-differential-1234\"",
+        "inventory": null
+      }
+    ],
+    "state": {
+      "SCENARIO_STATE_DIR/call-b7d45e70a05e296b94dc23223c4db706e2cff0f71c27aac00e13e721b4ecb7b5-0": "",
+      "SCENARIO_STATE_DIR/call-b7d45e70a05e296b94dc23223c4db706e2cff0f71c27aac00e13e721b4ecb7b5-1": "",
+      "SCENARIO_STATE_DIR/session-a7e38430f6e857f7701c0444906e37c77d0ecd450c0b8dcaba979a6cfb4dd52e.json": "{\"key\":\"b7d45e70a05e296b94dc23223c4db706e2cff0f71c27aac00e13e721b4ecb7b5\",\"task\":\"contract-task\",\"node\":\"contract-node\"}",
+      "SCENARIO_STATE_DIR/trace.jsonl": "{\"protocol\":\"opencode\",\"agent\":\"contract-agent\",\"task\":\"contract-task\",\"node\":\"contract-node\",\"callIndex\":0,\"resumeSessionId\":null,\"prompt\":\"AW_SCENARIO_TASK=contract-task AW_SCENARIO_NODE=contract-node contract-input nonce=\\\"aw-nonce-differential-1234\\\"\"}\n{\"protocol\":\"opencode\",\"agent\":\"contract-agent\",\"task\":\"contract-task\",\"node\":\"contract-node\",\"callIndex\":1,\"resumeSessionId\":\"contract-session\",\"prompt\":\"AW_SCENARIO_TASK=contract-task AW_SCENARIO_NODE=contract-node nonce=\\\"aw-nonce-differential-1234\\\"\"}\n",
+      "SCENARIO_STATE_DIR/scope-b7d45e70a05e296b94dc23223c4db706e2cff0f71c27aac00e13e721b4ecb7b5.json": "{\"key\":\"b7d45e70a05e296b94dc23223c4db706e2cff0f71c27aac00e13e721b4ecb7b5\",\"task\":\"contract-task\",\"node\":\"contract-node\"}"
+    },
+    "logs": {},
+    "sideEffects": {
+      "proof/runtime.txt": "proof/contract-task/contract-node"
+    }
+  }
+}

@@ -35,7 +35,7 @@
 
 import { afterAll, describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { buildCommand } from '../src/services/runtime/opencode/spawn'
@@ -116,6 +116,18 @@ describe('the e2e stub parses the buildCommand argv layout (post-191bc32c `--` r
       env: () => {
         const d = tmp()
         return { CLARIFY_STUB_STATE: d, CLARIFY_INLINE_ARGV_LOG: resolve(d, 'argv.log') }
+      },
+    },
+    {
+      name: 'runtime-scenario',
+      env: () => {
+        const d = tmp()
+        const plan = resolve(d, 'plan.json')
+        writeFileSync(
+          plan,
+          JSON.stringify({ version: 1, agents: { x: [{ output: { answer: 'ok' } }] } }),
+        )
+        return { SCENARIO_PLAN_FILE: plan, SCENARIO_STATE_DIR: resolve(d, 'state') }
       },
     },
   ]

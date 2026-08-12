@@ -37,6 +37,7 @@ const CATALOG_FILES = [
   'wrapper-loop-around-fanout.yaml',
   'wrapper-loop-around-git.yaml',
   'wrapper-git-around-loop.yaml',
+  'wrapper-git-around-git.yaml',
   'mixed-wrapper-human-roundtrip.yaml',
   'wrapper-loop-review.yaml',
   'clarify-self-roundtrip.yaml',
@@ -940,6 +941,22 @@ test('nested wrappers: loop inside git produces one cumulative full-loop diff', 
   const allChanged = outputValue(data, git.id, 'git_diff')
   expect(allChanged).toContain('matrix-generated/nested/iter-0.txt')
   expect(allChanged).toContain('matrix-generated/nested/iter-1.txt')
+})
+
+test('nested wrappers: git inside git preserves the complete mutation at both boundaries', async () => {
+  const task = await launchOk('wrapper-git-around-git.yaml')
+  const final = await waitForTerminal(task.id)
+  expect(final.status).toBe('done')
+
+  const data = await nodeRuns(task.id)
+  const outer = onlyRun(data, 'outer_git')
+  const inner = onlyRun(data, 'inner_git')
+  const outerChanged = outputValue(data, outer.id, 'git_diff')
+  const innerChanged = outputValue(data, inner.id, 'git_diff')
+  for (const changed of [outerChanged, innerChanged]) {
+    expect(changed).toContain('matrix-generated/source.txt')
+    expect(changed).toContain('matrix-generated/docs/report.md')
+  }
 })
 
 test('mixed wrappers + humans: clarified decision survives review rejection before fanout and final approval', async () => {
