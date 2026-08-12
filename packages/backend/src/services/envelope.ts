@@ -25,8 +25,9 @@
 // node_run_outputs.
 
 import { toPortableRelativePath } from '@/util/platformExec'
-import { readFileSync, realpathSync } from 'node:fs'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { checkLexicalThenRealpath } from '@/util/safePath'
+import { readFileSync } from 'node:fs'
+import { isAbsolute, relative } from 'node:path'
 import {
   getHandlerForParsedKind,
   formatPortValidationErrCode,
@@ -124,48 +125,33 @@ export function parsePortValidationFailuresJson(
  * the handlers themselves stay pure JS and can be exercised in tests with a
  * stub IO that doesn't touch disk.
  */
-const NODE_VALIDATE_IO: ValidateIO = {
+// RFC-284 T6：导出供四象限行为锁直测（rfc284-containment-quadrants.test.ts）——
+// resolveWorktreePath 的分支语义（不存在回退词法 / RFC-193 绝对路径同位重写）
+// 是安全关键面，迁移到共享骨架前后必须逐字节同判。
+export const NODE_VALIDATE_IO: ValidateIO = {
   resolveWorktreePath(worktreeAbsPath, rawContent) {
-    const rootAbs = resolve(worktreeAbsPath)
-    let targetAbs = isAbsolute(rawContent) ? resolve(rawContent) : resolve(rootAbs, rawContent)
-    // RFC-103 T7 (05-PORT security): lexical containment FIRST, then realpath
-    // containment so a symlink INSIDE the worktree pointing OUTSIDE it cannot
-    // read through (`path` / `markdown_file` ports could otherwise exfiltrate
-    // arbitrary files). Aligns with worktreeFiles' realpath guard. A
-    // non-existent target falls back to the lexical verdict — existence is
-    // checked separately by the handler.
-    let insideWorktree = targetAbs === rootAbs || targetAbs.startsWith(rootAbs + sep)
+    // RFC-284 T6：双查骨架收敛到 util/safePath.checkLexicalThenRealpath，
+    // 本适配层只保留 envelope 的**判定策略**（与迁移前逐字节同判，由
+    // rfc284-containment-quadrants.test.ts 锁定）：
+    //   - RFC-103 T7：词法 containment 先行，词法内再 realpath 收紧（根内
+    //     symlink 指根外不得读穿）；目标不存在 → 回退词法判定（存在性由
+    //     handler 另报）。
+    //   - RFC-193：词法根外的**绝对**输入，双 realpath 同位证明可翻转放行，
+    //     并把 targetAbs/relativePath 重写为 real 形（macOS /var→/private/var
+    //     前缀差异；纯同位证明，读穿保护不受影响）。
+    const v = checkLexicalThenRealpath(worktreeAbsPath, rawContent)
+    let targetAbs = v.targetAbs
+    let insideWorktree = v.lexicalInside
     // Portable spelling: this value is persisted, interpolated into prompts and
     // read by downstream nodes, so it must not vary by host separator.
-    let relativePath = toPortableRelativePath(relative(rootAbs, targetAbs))
-    if (insideWorktree) {
-      try {
-        const realTarget = realpathSync(targetAbs)
-        const realRoot = realpathSync(rootAbs)
-        insideWorktree = realTarget === realRoot || realTarget.startsWith(realRoot + sep)
-      } catch {
-        // target (or root) not resolvable yet → keep the lexical verdict.
-      }
-    } else if (isAbsolute(rawContent)) {
-      // RFC-193: an ABSOLUTE path that fails lexically may still genuinely live
-      // inside the worktree when the two spellings differ by a symlinked
-      // prefix (macOS /var → /private/var tmpdirs: the agent's cwd is the
-      // realpath form while the runner's worktreePath is the lexical form).
-      // Accepting when BOTH realpaths agree is a pure same-location proof —
-      // the read-through protection above is untouched (a real target outside
-      // the real root is still rejected). relativePath is re-derived from the
-      // real forms so the persisted content stays worktree-relative.
-      try {
-        const realTarget = realpathSync(targetAbs)
-        const realRoot = realpathSync(rootAbs)
-        if (realTarget === realRoot || realTarget.startsWith(realRoot + sep)) {
-          insideWorktree = true
-          targetAbs = realTarget
-          relativePath = toPortableRelativePath(relative(realRoot, realTarget))
-        }
-      } catch {
-        // unresolvable → keep the lexical (outside) verdict.
-      }
+    let relativePath = toPortableRelativePath(relative(v.rootAbs, targetAbs))
+    if (v.lexicalInside) {
+      if (v.realpath.resolved) insideWorktree = v.realpath.realInside
+      // unresolved（目标或根尚不存在）→ keep the lexical verdict.
+    } else if (isAbsolute(rawContent) && v.realpath.resolved && v.realpath.realInside) {
+      insideWorktree = true
+      targetAbs = v.realpath.realTarget
+      relativePath = toPortableRelativePath(relative(v.realpath.realRoot, v.realpath.realTarget))
     }
     return { targetAbs, relativePath, insideWorktree }
   },

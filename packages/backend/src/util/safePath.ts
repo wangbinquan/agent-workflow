@@ -133,3 +133,50 @@ export function realpathWriteInside(root: string, target: string): string {
   }
   return target
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// RFC-284 T6（2026-08-12 审计 N20）——「lexical + realpath 双查」的唯一骨架。
+//
+// 此前三份手写副本（envelope.resolveWorktreePath / portArtifacts.readInsideRoot
+// / existsInsideRoot）共享同一套双查骨架却各持不同判定策略（不存在目标：
+// envelope 回退词法放行、portArtifacts 拒绝；RFC-193 绝对路径同位证明：
+// envelope 额外重写 targetAbs/relativePath）。设计门裁定**不统一语义、只共享
+// 骨架**：本函数只做「算词法判定 + 尝试 realpath 双径」并返回结构化 verdict，
+// 判定策略留在各调用方的薄适配里（rfc284-containment-quadrants.test.ts 把
+// 每个象限的策略差异逐条拍死——改这里之前先读那个锁）。
+// 安全语义备忘：realTarget/realRoot 任一不可解析即 resolved:false，调用方
+// 不得把未解析态当「在根内」消费。
+
+export interface LexicalRealpathVerdict {
+  /** resolve() 后的词法根。 */
+  rootAbs: string
+  /** 候选路径的词法绝对形（相对输入以 rootAbs 为基）。 */
+  targetAbs: string
+  /** 词法 containment（=== root 或 startsWith(root + sep)）。 */
+  lexicalInside: boolean
+  realpath:
+    | { resolved: true; realTarget: string; realRoot: string; realInside: boolean }
+    | { resolved: false }
+}
+
+export function checkLexicalThenRealpath(
+  rootInput: string,
+  candidate: string,
+): LexicalRealpathVerdict {
+  const rootAbs = resolve(rootInput)
+  const targetAbs = isAbsolute(candidate) ? resolve(candidate) : resolve(rootAbs, candidate)
+  const lexicalInside = targetAbs === rootAbs || targetAbs.startsWith(rootAbs + sep)
+  try {
+    const realTarget = realpathSync(targetAbs)
+    const realRoot = realpathSync(rootAbs)
+    const realInside = realTarget === realRoot || realTarget.startsWith(realRoot + sep)
+    return {
+      rootAbs,
+      targetAbs,
+      lexicalInside,
+      realpath: { resolved: true, realTarget, realRoot, realInside },
+    }
+  } catch {
+    return { rootAbs, targetAbs, lexicalInside, realpath: { resolved: false } }
+  }
+}

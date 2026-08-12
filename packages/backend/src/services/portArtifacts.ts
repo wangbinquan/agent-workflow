@@ -28,6 +28,7 @@ import {
 } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { checkLexicalThenRealpath } from '@/util/safePath'
 import { and, eq, isNotNull } from 'drizzle-orm'
 import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitListItems } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
@@ -274,17 +275,16 @@ export interface PortArtifactReadItem {
  * lexical 在根内 → realpath 收紧（防 symlink 读穿）；lexical 在根外 →
  * realpath 同位证明才放行（macOS /var→/private/var 前缀差异）。
  */
-function readInsideRoot(rootAbs: string, rel: string): Buffer | null {
-  const root = resolve(rootAbs)
-  const target = isAbsolute(rel) ? resolve(rel) : resolve(root, rel)
+// RFC-284 T6：导出供四象限行为锁直测（见 envelope.ts NODE_VALIDATE_IO 同注）。
+// 双查骨架收敛 util/safePath.checkLexicalThenRealpath；本适配保留 portArtifacts
+// 策略：resolve 失败（含目标不存在）一律拒；相对输入不许 lexical 逃逸；绝对
+// 输入走同位证明（存量行语义，与 envelope 一致——见函数上方原注释）。
+export function readInsideRoot(rootAbs: string, rel: string): Buffer | null {
+  const v = checkLexicalThenRealpath(rootAbs, rel)
+  if (!v.realpath.resolved || !v.realpath.realInside) return null
+  if (!v.lexicalInside && !isAbsolute(rel)) return null // 相对输入不许 lexical 逃逸
   try {
-    const lexicalInside = target === root || target.startsWith(root + sep)
-    const realTarget = realpathSync(target)
-    const realRoot = realpathSync(root)
-    const realInside = realTarget === realRoot || realTarget.startsWith(realRoot + sep)
-    if (!realInside) return null
-    if (!lexicalInside && !isAbsolute(rel)) return null // 相对输入不许 lexical 逃逸
-    return readFileSync(realTarget)
+    return readFileSync(v.realpath.realTarget)
   } catch {
     return null
   }
@@ -466,17 +466,13 @@ export function readPortArtifact(opts: {
 const EMPTY_BYTES: Uint8Array = Buffer.alloc(0)
 
 /** {@link readInsideRoot} 的存在性面（元数据模式——零字节读取）。 */
-function existsInsideRoot(rootAbs: string, rel: string): boolean {
-  const root = resolve(rootAbs)
-  const target = isAbsolute(rel) ? resolve(rel) : resolve(root, rel)
+// RFC-284 T6：导出供四象限行为锁直测。策略同 readInsideRoot（骨架单点见其注）。
+export function existsInsideRoot(rootAbs: string, rel: string): boolean {
+  const v = checkLexicalThenRealpath(rootAbs, rel)
+  if (!v.realpath.resolved || !v.realpath.realInside) return false
+  if (!v.lexicalInside && !isAbsolute(rel)) return false
   try {
-    const lexicalInside = target === root || target.startsWith(root + sep)
-    const realTarget = realpathSync(target)
-    const realRoot = realpathSync(root)
-    const realInside = realTarget === realRoot || realTarget.startsWith(realRoot + sep)
-    if (!realInside) return false
-    if (!lexicalInside && !isAbsolute(rel)) return false
-    return statSync(realTarget).isFile()
+    return statSync(v.realpath.realTarget).isFile()
   } catch {
     return false
   }

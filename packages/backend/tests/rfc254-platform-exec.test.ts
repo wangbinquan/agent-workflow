@@ -213,8 +213,13 @@ describe('RFC-254 — repo-relative paths in port data are portable, not host-fl
       resolve(import.meta.dir, '..', 'src', 'services', 'envelope.ts'),
       'utf8',
     )
-    expect(envelope).toContain('toPortableRelativePath(relative(rootAbs, targetAbs))')
-    expect(envelope).toContain('toPortableRelativePath(relative(realRoot, realTarget))')
+    // RFC-284 T6 改判：resolveWorktreePath 迁移到 checkLexicalThenRealpath 骨架后，
+    // 两处 relative() 的实参改经 verdict 取值——锁的意图不变（relative() 产物必须
+    // 包 toPortableRelativePath 再成为端口数据），锚随新拼写更新。
+    expect(envelope).toContain('toPortableRelativePath(relative(v.rootAbs, targetAbs))')
+    expect(envelope).toContain(
+      'toPortableRelativePath(relative(v.realpath.realRoot, v.realpath.realTarget))',
+    )
     const artifacts = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'portArtifacts.ts'),
       'utf8',

@@ -82,11 +82,14 @@ describe('RFC-049 envelope.ts source-level prefix swap guard', () => {
     expect(ENVELOPE_SRC).not.toContain('tryReadInWorktreeMarkdownPath')
     // statSync (a forgiveness existence-probe) stays gone.
     expect(ENVELOPE_SRC).not.toContain('statSync')
-    // RFC-103 T7: realpathSync IS now used — but ONLY for symlink-escape
-    // containment in resolveWorktreePath, never for an auto-read/promote path.
-    // Locked here so the realpath use stays containment-only.
-    expect(ENVELOPE_SRC).toContain('realpathSync')
-    expect(ENVELOPE_SRC).toMatch(/resolveWorktreePath[\s\S]*?realpathSync/)
+    // RFC-103 T7 → RFC-284 T6 改判：realpath containment 不再由本文件手写——
+    // 双查骨架收敛到 util/safePath.checkLexicalThenRealpath（containment-only
+    // by construction），envelope 内直接 realpathSync 归零。锁的意图不变：
+    // resolveWorktreePath 的 realpath 消费必须仍是 containment（经骨架），
+    // 且绝不许回潮为 auto-read/promote 路径（上面两条 not.toContain 继续守）。
+    // 象限级语义由 rfc284-containment-quadrants.test.ts 拍死。
+    expect(ENVELOPE_SRC).not.toContain('realpathSync')
+    expect(ENVELOPE_SRC).toMatch(/resolveWorktreePath[\s\S]*?checkLexicalThenRealpath/)
   })
 
   test('PortValidationError is exported with a structured failure payload field', () => {
