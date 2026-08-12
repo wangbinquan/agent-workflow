@@ -92,7 +92,7 @@ import { parseConsumedJson } from '@/services/freshness'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import { snapshotNodeAgentWhere } from '@/services/agent'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
-import { mintNodeRun } from '@/services/nodeRunMint'
+import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import {
@@ -2624,7 +2624,8 @@ async function submitReviewDecisionUnlocked(
         }
       }
     }
-    const nextRetryIndex = latest.retryIndex + 1
+    // RFC-284 T21：latest 单行口径 = 单元素集特例，收编 nextRetryIndex。
+    const nextRetry = nextRetryIndex([latest])
     // RFC-145: the marker string is HUMAN BREADCRUMBS only — the machine
     // facts land on superseded_by_review / rolled_back in the same write.
     // The prefix constant lives here (message builder) now that
@@ -2656,7 +2657,7 @@ async function submitReviewDecisionUnlocked(
         // (breadcrumbs; substring test locks stay green), but the MACHINE
         // facts land structured — isReviewSupersededRow / clarifyRerunLedger /
         // the frontend decode read these columns, never the prefix.
-        errorMessage: `${supersedeMarker}: Replaced by retry_index ${nextRetryIndex} due to review ${rerunPolicy.supersededByReview} of ${dv.reviewNodeId}`,
+        errorMessage: `${supersedeMarker}: Replaced by retry_index ${nextRetry} due to review ${rerunPolicy.supersededByReview} of ${dv.reviewNodeId}`,
         supersededByReview: rerunPolicy.supersededByReview,
         rolledBack,
       },
@@ -2666,7 +2667,7 @@ async function submitReviewDecisionUnlocked(
       nodeId,
       status: 'pending',
       cause: rerunPolicy.mintCause,
-      retryIndex: nextRetryIndex,
+      retryIndex: nextRetry,
       iteration: latest.iteration,
       // No inheritFrom: this mint historically carried ONLY preSnapshot from
       // the superseded row (reviewIteration / shardKey stay at their column

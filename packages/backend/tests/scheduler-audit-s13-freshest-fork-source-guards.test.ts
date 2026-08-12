@@ -154,9 +154,10 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // retryIndex on child/inherited rows; the all-rows max avoids a UNIQUE
     // collision at zero cost. See G8 — this reduce is the single whitelisted
     // in-memory retryIndex comparison in src/.
-    expect(
-      cascade.includes('existing.reduce((mx, r) => (r.retryIndex > mx ? r.retryIndex : mx), -1)'),
-    ).toBe(true)
+    // RFC-284 T21 改锚：max-scan 分配器收编 nodeRunMint.nextRetryIndex（默认口径
+    // = 全行集、刻意含 child rows——与原 reduce 语义逐值相同，见其头注）。意图
+    // 不变：cascade 仍是「分配下一个唯一 retryIndex」而非 freshness pick。
+    expect(cascade.includes('nextRetryIndex(existing)')).toBe(true)
   })
 
   // (former G4 — comparator-purity source-text probe — deleted during test
@@ -231,8 +232,12 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     //     it (ratchet tightened).
     // Counts are pinned exactly: a second occurrence inside a whitelisted
     // file also flips red.
+    // RFC-284 T21（2026-08-12）：七处手写分配器收编 nodeRunMint.nextRetryIndex，
+    // task.ts 的 reduce 随之归零；唯一的 in-memory `retryIndex > ` 比较现在
+    // 就是唯一实现内部的 max-scan（非 freshness pick——它分配下一个唯一
+    // retryIndex，口径见其头注与 node-run-mint.test.ts 的矩阵/结构锁）。
     expect(srcInventory('retryIndex > ')).toEqual({
-      'services/task.ts': 1,
+      'services/nodeRunMint.ts': 1,
     })
   })
 })

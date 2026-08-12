@@ -610,3 +610,29 @@ export async function frozenRuntimeOfSession(
   }
   return null
 }
+
+/**
+ * RFC-284 T21（§4）——「下一个 retry_index」五处手写口径的唯一实现。
+ *
+ * 纯函数吃调用方已读的行集（**不自带查询**——五个调用点各有自己的行集读法与
+ * 事务性，收编读法会改热路径的读行为；实施偏差已记 plan.md §实施记录）。
+ * 口径差异参数化：
+ *   - topLevelOnly：只数 parentNodeRunId === null 的行（taskQuestionDispatch 口径；
+ *     task.ts 的 retry-cascade 刻意含 child rows，不传）
+ *   - iteration：只数该迭代的行（taskQuestionDispatch 口径；scheduler 的
+ *     sameNodeIterRuns 已在查询里限定迭代，不传）
+ * 空集 → 0（与历史两种写法 reduce(…,-1)+1 / length===0?0:max()+1 同值）。
+ * review.ts 的「latest 单行 +1」= 单元素集特例，经此函数语义不变。
+ */
+export function nextRetryIndex(
+  rows: ReadonlyArray<{ retryIndex: number; parentNodeRunId?: string | null; iteration?: number }>,
+  opts: { topLevelOnly?: boolean; iteration?: number } = {},
+): number {
+  let max = -1
+  for (const row of rows) {
+    if (opts.topLevelOnly === true && (row.parentNodeRunId ?? null) !== null) continue
+    if (opts.iteration !== undefined && row.iteration !== opts.iteration) continue
+    if (row.retryIndex > max) max = row.retryIndex
+  }
+  return max + 1
+}

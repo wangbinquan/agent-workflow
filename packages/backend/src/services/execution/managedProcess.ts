@@ -12,7 +12,7 @@ import { killProcessTree } from '@/util/process'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
-/** Per-line cap (code units); mirrors runner.ts MAX_STREAM_LINE_CHARS. */
+/** Per-line cap (code units)——数值单点；runner.ts 的 MAX_STREAM_LINE_CHARS 是本值的 re-export（RFC-284 §3.5）。 */
 export const MANAGED_PROCESS_MAX_LINE_CHARS = 1024 * 1024
 /** Rolling-tail cap for the retained raw stream text. */
 export const MANAGED_PROCESS_MAX_STREAM_CHARS = 8 * 1024 * 1024

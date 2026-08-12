@@ -45,7 +45,7 @@ import {
 import { evaluateDesignerRerunReadiness } from '@/services/clarify/service'
 import { pickFreshestRun } from '@/services/freshness'
 import { abandonSupersededMergeStates } from '@/services/lifecycle'
-import { buildMintNodeRunValues } from '@/services/nodeRunMint'
+import { nextRetryIndex, buildMintNodeRunValues } from '@/services/nodeRunMint'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
 import {
@@ -1733,10 +1733,8 @@ export async function buildFrontierMintPlan(
       `cannot dispatch to frontier '${targetNodeId}'${shardKey !== undefined ? ` (shard '${shardKey}')` : ''}: no prior node_run to inherit`,
     )
   }
-  const topLevel = scoped.filter(
-    (r) => r.parentNodeRunId === null && r.iteration === last.iteration,
-  )
-  const retryIndex = topLevel.length === 0 ? 0 : Math.max(...topLevel.map((r) => r.retryIndex)) + 1
+  // RFC-284 T21：口径=顶层行 + last 同迭代，收编 nextRetryIndex（参数化）。
+  const retryIndex = nextRetryIndex(scoped, { topLevelOnly: true, iteration: last.iteration })
   const preId = ulid()
   // RFC-127 借壳: resolve the borrowed node's agentName from the frozen snapshot (the SAME
   // source canReassign validated against). null = no borrow → the home runs its own agent.

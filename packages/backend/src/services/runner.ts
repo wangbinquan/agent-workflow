@@ -89,7 +89,7 @@ import {
   type StartupVerificationRecord,
 } from './execution/startupVerification'
 import { runAgentProcess } from './execution/agentProcess'
-import { FINAL_REAP_MARGIN_MS } from './execution/managedProcess'
+import { FINAL_REAP_MARGIN_MS, MANAGED_PROCESS_MAX_LINE_CHARS } from './execution/managedProcess'
 
 /** SIGTERM → SIGKILL grace for a node's process group. */
 const KILL_ESCALATION_GRACE_MS = 10_000
@@ -2082,7 +2082,9 @@ export function detectPluginLoadFailure(
  * newline resumes normal parsing.
  * See design/test-guard-audit-2026-07-21 gap B4-runtime-6 / Top-14.
  */
-export const MAX_STREAM_LINE_CHARS = 1024 * 1024
+// RFC-284 §3.5 尾项：数值单点在 managedProcess（RFC-280 起真正的 pump 实现），
+// 本名保留 re-export——历史消费方（含测试锁）零改动，两处漂移不再可能。
+export const MAX_STREAM_LINE_CHARS = MANAGED_PROCESS_MAX_LINE_CHARS
 
 /**
  * Rolling-tail cap (code units) for the accumulated agent text the envelope is

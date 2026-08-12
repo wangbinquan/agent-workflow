@@ -86,7 +86,7 @@ import { killStaleRunProcessTree } from '@/util/process'
 import { recordRecoveryEvent } from '@/services/recovery'
 import { setTaskStatus, transitionTaskStatusByEvent, trySetTaskStatus } from '@/services/lifecycle'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
-import { mintNodeRun } from '@/services/nodeRunMint'
+import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
 import { listAvailableRefs, resolveCachedRepo } from '@/services/gitRepoCache'
 import {
@@ -3873,8 +3873,8 @@ export async function retryNode(
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
     const prev = pickFreshestRun(existing, { topLevelOnly: true })
-    const maxRetry = existing.reduce((mx, r) => (r.retryIndex > mx ? r.retryIndex : mx), -1)
-    const nextRetry = maxRetry + 1
+    // RFC-284 T21：口径=全行集（刻意含 child rows），收编 nextRetryIndex。
+    const nextRetry = nextRetryIndex(existing)
     const inherit = nodeId === runRow.nodeId ? runRow : prev
     await mintNodeRun(db, {
       taskId,

@@ -138,6 +138,7 @@ import {
   tryTransitionMergeState,
 } from '@/services/lifecycle'
 import {
+  nextRetryIndex,
   continuesClarifyLineage,
   frozenRuntimeOfSession,
   isClarifyRerunCause,
@@ -3127,10 +3128,8 @@ async function runCallWorkflowNode(
         .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
         .where(eq(nodeRuns.id, nodeRunId))
     } else {
-      retryIndex =
-        sameNodeIterRuns.length === 0
-          ? 0
-          : Math.max(...sameNodeIterRuns.map((r) => r.retryIndex)) + 1
+      // RFC-284 T21：sameNodeIterRuns 已限定节点+迭代，收编 nextRetryIndex。
+      retryIndex = nextRetryIndex(sameNodeIterRuns)
       nodeRunId = await mintNodeRun(db, {
         taskId,
         nodeId: node.id,
@@ -4216,10 +4215,8 @@ async function runCodeHostCallNode(
       nodeId: node.id,
       status: 'pending',
       cause: schedulerMintCause(latestExisting),
-      retryIndex:
-        sameNodeIterRuns.length === 0
-          ? 0
-          : Math.max(...sameNodeIterRuns.map((r) => r.retryIndex)) + 1,
+      // RFC-284 T21：同上，收编 nextRetryIndex。
+      retryIndex: nextRetryIndex(sameNodeIterRuns),
       iteration,
       overrides: {
         shardKey: latestExisting?.shardKey ?? null,
@@ -4392,8 +4389,8 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
       .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
       .where(eq(nodeRuns.id, nodeRunId))
   } else {
-    retryIndex =
-      sameNodeIterRuns.length === 0 ? 0 : Math.max(...sameNodeIterRuns.map((r) => r.retryIndex)) + 1
+    // RFC-284 T21：同上，收编 nextRetryIndex。
+    retryIndex = nextRetryIndex(sameNodeIterRuns)
     nodeRunId = await mintNodeRun(db, {
       taskId,
       nodeId: node.id,
@@ -5304,8 +5301,8 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
       .where(eq(nodeRuns.id, nodeRunId))
   } else {
-    retryIndex =
-      sameNodeIterRuns.length === 0 ? 0 : Math.max(...sameNodeIterRuns.map((r) => r.retryIndex)) + 1
+    // RFC-284 T21：同上，收编 nextRetryIndex。
+    retryIndex = nextRetryIndex(sameNodeIterRuns)
     // RFC-098 WP-10: the cause splits on what the freshest existing top-level
     // row is — undefined→'initial', done/awaiting_*→'stale-redispatch',
     // failed/interrupted/canceled/exhausted→'revival' (对抗检视修订 #11,

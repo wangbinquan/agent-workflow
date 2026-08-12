@@ -236,3 +236,61 @@ describe('schedulerMintCause — 对抗检视修订 #11 merge rule (pinned)', ()
     expect(schedulerMintCause({ status: 'awaiting_human' })).toBe('stale-redispatch')
   })
 })
+
+// ── RFC-284 T21 —— nextRetryIndex：七处手写「下一个 retry_index」口径的唯一实现 ──
+import { nextRetryIndex } from '../src/services/nodeRunMint'
+import { readFileSync } from 'node:fs'
+import { resolve as resolvePath } from 'node:path'
+
+describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
+  const rows = [
+    { retryIndex: 0, parentNodeRunId: null, iteration: 0 },
+    { retryIndex: 2, parentNodeRunId: null, iteration: 0 },
+    { retryIndex: 5, parentNodeRunId: 'child-parent', iteration: 0 }, // child 行
+    { retryIndex: 3, parentNodeRunId: null, iteration: 1 }, // 别的迭代
+  ]
+
+  test('空集 → 0（reduce(-1)+1 与 length-guard 两种历史写法的共同值）', () => {
+    expect(nextRetryIndex([])).toBe(0)
+    expect(nextRetryIndex([], { topLevelOnly: true, iteration: 7 })).toBe(0)
+  })
+
+  test('默认口径 = 全行集（task.ts retry-cascade：刻意含 child rows）', () => {
+    expect(nextRetryIndex(rows)).toBe(6) // child 的 5 参与
+  })
+
+  test('topLevelOnly + iteration（taskQuestionDispatch 口径）', () => {
+    expect(nextRetryIndex(rows, { topLevelOnly: true, iteration: 0 })).toBe(3) // child 5 被滤掉
+    expect(nextRetryIndex(rows, { topLevelOnly: true, iteration: 1 })).toBe(4)
+    expect(nextRetryIndex(rows, { topLevelOnly: true, iteration: 9 })).toBe(0)
+  })
+
+  test('单行集（review.ts latest+1 特例）', () => {
+    expect(nextRetryIndex([{ retryIndex: 7 }])).toBe(8)
+  })
+
+  test('parentNodeRunId 缺省字段的行按顶层计（scheduler 行集不带该列时不误滤）', () => {
+    expect(nextRetryIndex([{ retryIndex: 4 }], { topLevelOnly: true })).toBe(5)
+  })
+
+  test('结构锁：五文件全部经 nextRetryIndex，手写 max-over-retryIndex 归零', () => {
+    const files = [
+      'services/task.ts',
+      'services/review.ts',
+      'services/taskQuestionDispatch.ts',
+      'services/scheduler.ts',
+    ]
+    for (const f of files) {
+      const src = readFileSync(resolvePath(import.meta.dir, '..', 'src', f), 'utf8')
+      expect(src).toContain('nextRetryIndex(')
+      // 铸点惯用式归零：max-扫描 与 length-guard 三元。展示/遥测语义的
+      // `processRetryIndex: x.retryIndex + 1`（0 基转 1 基）不在锁面。
+      expect(/Math\.max\([^)]*retryIndex/.test(src)).toBe(false)
+      expect(/length === 0 \? 0 :.*retryIndex/.test(src)).toBe(false)
+      expect(/retryIndex: \w+\.retryIndex \+ 1/.test(src)).toBe(false)
+    }
+    expect(
+      readFileSync(resolvePath(import.meta.dir, '..', 'src', 'services/nodeRunMint.ts'), 'utf8'),
+    ).toContain('export function nextRetryIndex')
+  })
+})
