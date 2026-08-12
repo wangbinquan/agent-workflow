@@ -113,8 +113,26 @@
   吞噬/静默窗口/环境基线指纹 + CI 判定饿死）、audit-backlog centralized-answer-pane 复发
   数据点。
 
+- **T28**（4e6aec66）：webhook 两路由（456+324 行）薄壳化下沉新
+  services/webhook{Triggers,Endpoints}.ts；本地 safeJson 收编 util（T5 豁免清单
+  按契约清空）；mcp launch_task inputSchema satisfies StartTaskSchema 键集镜像；
+  depcheck 账本 -2 销账 +2 改口径；rfc257 错误码锁改锚 service 正体。保真判据
+  = webhook 全家 142/142（93009 提供清单）。
+- **T21 + §3.5 尾项**（a922f8af）：nextRetryIndex 七站点收编（scheduler 比 design
+  记载多一处 :5307；**实施偏差**：纯函数吃预读行集而非 design 草稿的自带查询
+  签名——五调用点行集读法/事务性各异，行为不变优先）；s13 freshest-fork 守卫
+  G3/G8 随批改锚（G8 白名单 task.ts→nodeRunMint.ts，正是其「新文件必审」设计
+  预期）；runner MAX_STREAM_LINE_CHARS 改 re-export managedProcess 单点。
+- **T20**（本 commit）：buildChildDeps 继承面收口。**实施偏差**：design 草稿的
+  「拆 inheritable 嵌套子对象」会连坐两型全部构造点且合并两侧字段注释；实装为
+  INHERITABLE_RUN_CONFIG_KEYS 注册表 + Pick 派生型 + pickInheritableRunConfig
+  整体透传（undefined 不落键与旧展开同构）。双向锁 rfc284-t20-child-inheritance
+  .test.ts：处置表 satisfies Record<keyof RunTaskOptions,…> 编译期穷尽（31 键
+  = 4 per-task + 15 inherit + 12 dropped-registered），dropped 12 键逐字段处置
+  已登记（scriptInterpreters/scriptDeps/codeHostConnections/codeHostFetch 标
+  「疑似漏配待另立」；fanoutMaxShardTotal 事实等效；commitPush×5/mergeAgent×2
+  刻意不继承）。
+
 **剩余**：T14（runner drainTimedOut 观测面）、T15（session-not-found 下沉，claude 措辞须
-实测采样）、T20/T21（buildChildDeps inheritable + nextRetryIndex——scheduler/task/review 面
-已随并发 RFC 收官解锁）、T24/T25（authLoginPolicy 迁移 + multipart 归位）、T28（webhook
-CRUD 抽 service——RFC-283 已完工解锁，注意与 RFC-292 落地后的 webhookTriggers.ts 现状对齐
-+ T2 账目同步清账）、T29 实现门、T30 收尾（design/plan.md 索引状态刷新）。
+实测采样）、T24/T25（authLoginPolicy 迁移 + multipart 归位）、T29 实现门、T30 收尾
+（design/plan.md 索引状态刷新 + 「疑似漏配」三项呈用户拍板）。

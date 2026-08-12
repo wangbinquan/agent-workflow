@@ -387,6 +387,51 @@ export interface RunTaskOptions {
   // migrated into it) and flows through the normal runtimeBinary freeze.
 }
 
+/**
+ * RFC-284 T20（§4）—— 子任务继承面的唯一登记：buildChildDeps 按本清单整体透传，
+ * 新增 RunTaskOptions 字段时**必须**在测试的处置表里表态（inherit / per-task /
+ * dropped-独立供给），编译期穷尽（satisfies Record<keyof RunTaskOptions,…>）
+ * 防「看起来像可继承」的字段被顺手漏配或顺手多配。
+ *
+ * 实施偏差（相对 design 草稿的「拆 inheritable 嵌套子对象」）：字面嵌套会让
+ * RunTaskOptions/StartTaskDeps 的全部构造点与测试夹具连坐改形，而两型 15 个
+ * 同名字段的注释各自承载调度语义/路由接线两套契约、不宜合并——注册表 + Pick
+ * 派生型给出同等单源与更强的双向锁，类型面零搬迁。
+ */
+export const INHERITABLE_RUN_CONFIG_KEYS = [
+  'binaryOverride',
+  'configPath',
+  'appHome',
+  'defaultPerNodeTimeoutMs',
+  'defaultNodeRetries',
+  'defaultRuntime',
+  'maxConcurrentNodes',
+  'maxConcurrentScriptNodes',
+  'maxConcurrentCodeHostCalls',
+  'codeHostRequestTimeoutMs',
+  'codeHostResponseMaxBytes',
+  'multiProcessSubprocessConcurrency',
+  'maxActiveChildTasks',
+  'maxInvocationDepth',
+  'subagentLiveCapture',
+] as const satisfies ReadonlyArray<keyof RunTaskOptions>
+
+export type InheritableRunConfig = Pick<
+  RunTaskOptions,
+  (typeof INHERITABLE_RUN_CONFIG_KEYS)[number]
+>
+
+/** 按注册表拾取继承面；undefined 值不落键（保持 exactOptionalPropertyTypes 语义
+ *  与旧逐字段 `!== undefined` 展开逐字节同构）。appHome 为必填恒在。 */
+export function pickInheritableRunConfig(opts: RunTaskOptions): InheritableRunConfig {
+  const out: Record<string, unknown> = {}
+  for (const key of INHERITABLE_RUN_CONFIG_KEYS) {
+    const value = opts[key]
+    if (value !== undefined) out[key] = value
+  }
+  return out as InheritableRunConfig
+}
+
 type NodeStatus =
   | 'pending'
   | 'running'
@@ -3742,54 +3787,11 @@ function buildChildDeps(state: SchedulerState): StartTaskDeps {
     ...(state.triggerContext === null ? {} : { triggerContext: state.triggerContext }),
     actorUserId:
       (state.task as unknown as { ownerUserId?: string | null }).ownerUserId ?? undefined,
-    ...(opts.binaryOverride !== undefined ? { binaryOverride: opts.binaryOverride } : {}),
-    // Codex impl-gate P1-1 (RFC-282 收尾门): without this forward a child
-    // scheduler freezes NULL-binary runtimes without the daemon's config head
-    // — the funnel's third segment (buildChildDeps) struck again.
-    ...(opts.configPath !== undefined ? { configPath: opts.configPath } : {}),
-    appHome: opts.appHome,
-    ...(opts.defaultPerNodeTimeoutMs !== undefined
-      ? { defaultPerNodeTimeoutMs: opts.defaultPerNodeTimeoutMs }
-      : {}),
-    ...(opts.defaultNodeRetries !== undefined
-      ? { defaultNodeRetries: opts.defaultNodeRetries }
-      : {}),
-    ...(opts.defaultRuntime !== undefined ? { defaultRuntime: opts.defaultRuntime } : {}),
-    ...(opts.maxConcurrentNodes !== undefined
-      ? { maxConcurrentNodes: opts.maxConcurrentNodes }
-      : {}),
-    // RFC-266: the child MUST carry both other concurrency knobs too. The
-    // script pool is a daemon-wide singleton with resize-on-read, so dropping
-    // it here would make every child-task launch silently reset the
-    // administrator's script cap back to the default 4 for the WHOLE daemon;
-    // dropping the fan-out cap would run the child's shards at 4 regardless of
-    // configuration — the very defect this RFC exists to fix, one level down.
-    ...(opts.maxConcurrentScriptNodes !== undefined
-      ? { maxConcurrentScriptNodes: opts.maxConcurrentScriptNodes }
-      : {}),
-    // RFC-269: same reasoning one pool over — the code-host pool is also a
-    // daemon-wide singleton with resize-on-read.
-    ...(opts.maxConcurrentCodeHostCalls !== undefined
-      ? { maxConcurrentCodeHostCalls: opts.maxConcurrentCodeHostCalls }
-      : {}),
-    ...(opts.codeHostRequestTimeoutMs !== undefined
-      ? { codeHostRequestTimeoutMs: opts.codeHostRequestTimeoutMs }
-      : {}),
-    ...(opts.codeHostResponseMaxBytes !== undefined
-      ? { codeHostResponseMaxBytes: opts.codeHostResponseMaxBytes }
-      : {}),
-    ...(opts.multiProcessSubprocessConcurrency !== undefined
-      ? { multiProcessSubprocessConcurrency: opts.multiProcessSubprocessConcurrency }
-      : {}),
-    ...(opts.maxActiveChildTasks !== undefined
-      ? { maxActiveChildTasks: opts.maxActiveChildTasks }
-      : {}),
-    ...(opts.maxInvocationDepth !== undefined
-      ? { maxInvocationDepth: opts.maxInvocationDepth }
-      : {}),
-    ...(opts.subagentLiveCapture !== undefined
-      ? { subagentLiveCapture: opts.subagentLiveCapture }
-      : {}),
+    // RFC-284 T20：继承面整体透传（唯一登记 INHERITABLE_RUN_CONFIG_KEYS）。
+    // 历史逐字段展开的三段关键注释（RFC-282 收尾门 configPath 漏斗第三段 /
+    // RFC-266 两个 daemon-wide 池 resize-on-read 连坐 / RFC-269 code-host 池同理）
+    // 已并入注册表与处置表测试——漏配从「人肉记得展开」变「编译期表态」。
+    ...pickInheritableRunConfig(opts),
   } as StartTaskDeps
 }
 

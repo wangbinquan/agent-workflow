@@ -158,13 +158,15 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     const start = schedulerSrc.indexOf('function buildChildDeps(')
     expect(start).toBeGreaterThan(-1)
     const body = schedulerSrc.slice(start, schedulerSrc.indexOf('\n}\n', start))
+    // RFC-284 T20 改锚：透传经 INHERITABLE_RUN_CONFIG_KEYS 注册表整体进行——
+    // 锁面从「三段手写展开在场」升级为「整体透传在场 + 三键在登记单源里」。
+    expect(body).toContain('...pickInheritableRunConfig(opts)')
     for (const key of [
       'maxConcurrentNodes',
       'maxConcurrentScriptNodes',
       'multiProcessSubprocessConcurrency',
     ]) {
-      expect(body).toContain(`opts.${key} !== undefined`)
-      expect(body).toContain(`{ ${key}: opts.${key} }`)
+      expect(schedulerSrc).toContain(`'${key}',`)
     }
   })
 
@@ -177,8 +179,9 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     const start = schedulerSrc.indexOf('function buildChildDeps(')
     expect(start).toBeGreaterThan(-1)
     const body = schedulerSrc.slice(start, schedulerSrc.indexOf('\n}\n', start))
-    expect(body).toContain('opts.configPath !== undefined')
-    expect(body).toContain('{ configPath: opts.configPath }')
+    // RFC-284 T20 改锚：同上——configPath 经注册表整体透传。
+    expect(body).toContain('...pickInheritableRunConfig(opts)')
+    expect(schedulerSrc).toContain("'configPath',")
   })
 
   // RFC-266: 防第四次漏接线 —— 三个并发键都必须出现在 config→deps 的那一级里。

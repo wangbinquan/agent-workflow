@@ -32,10 +32,12 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // dispatchFanoutAggregator); RFC-060 PR-E removed agent-multi's
     // runFanOutNode call site. RFC-164 added buildWorkgroupHooks.runHostNode.
     // Currently: agent-single + dispatchFanoutShard + dispatchFanoutAggregator
-    // + workgroup runHostNode = 4; RFC-243 buildChildDeps threads the SAME
-    // capture config into a call node's CHILD task (its runners inherit the
-    // operator cadence) = 5. Future call sites should keep this lock in step.
-    expect(matches.length).toBe(5)
+    // + workgroup runHostNode = 4. RFC-243 buildChildDeps 的第 5 处字面展开
+    // 随 RFC-284 T20 收进 INHERITABLE_RUN_CONFIG_KEYS 注册表整体透传——下一行
+    // 断言其登记在场（子任务继承语义不变），计数锁回到 4 个 runNode 直传点。
+    expect(matches.length).toBe(4)
+    expect(src).toContain("'subagentLiveCapture',")
+    expect(src).toContain('...pickInheritableRunConfig(opts)')
   })
 
   test('StartTaskDeps declares the field and runTask receives it from every kick-off path', () => {
