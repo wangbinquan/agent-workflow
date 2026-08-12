@@ -19,7 +19,7 @@
 //      body field being reintroduced here.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { ClarifyRound } from '@agent-workflow/shared'
 import { api } from '@/api/client'
@@ -180,6 +180,26 @@ function waitForDisabledState(button: HTMLButtonElement, disabled: boolean): Pro
     })
     observer.observe(button, { attributes: true, attributeFilter: ['disabled'] })
   })
+}
+
+/**
+ * Deterministically flush pending passive effects before dispatching hotkeys.
+ *
+ * QuestionForm 的数字/Enter 热键是 passive effect 里 `addEventListener` 挂的
+ * **原生监听**（QuestionForm.tsx hotkeys effect）。而 `waitFor(getByTestId)` 在
+ * 挂载 commit 的 MutationObserver **微任务**里就 resolve，passive effects 却排在
+ * 其后的 MessageChannel **宏任务**——紧接着的同步 `fireEvent.keyDown` 会打在还没
+ * 挂监听器的节点上：击键静默丢失，后续等待无界挂死。这是本文件超时史
+ * 3s→10s（7a1c119c）→20s 三级放宽仍复发的真根因（audit-backlog 第六/九条）：
+ * 旧轮询版 `waitFor(checked)` 等不到 → 恰好越过自身预算（10026ms 签名）；
+ * MutationObserver 版锚点本身没错，但击键已丢，Promise 永不 resolve → 撞 20s
+ * 用例级超时。满载/Windows runner 上数据 commit 落得晚、waitFor 更常走微任务
+ * 路径，所以越慢越红。act(async) 退出前强制冲刷 pending passive effects——
+ * 确定性锚点。真实用户不可能在 effects 冲刷前击键（聚焦本身也来自 effect），
+ * 组件无产品 bug，纯测试时序面，故只修测试侧。
+ */
+async function hotkeysAttached(): Promise<void> {
+  await act(async () => {})
 }
 
 /** The filled-answer count is rendered inside the same stable submit button. */
@@ -892,6 +912,7 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     fireEvent.click(within(q1).getAllByRole('radio')[0]!)
     await waitFor(() => expect(submit.disabled).toBe(false))
 
+    await hotkeysAttached()
     q1.focus()
     fireEvent.keyDown(q1, { key: 'Enter' })
     expect(document.activeElement).toBe(q2) // same-round advance (nr_a: q1 → q2)
@@ -919,6 +940,7 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     const q2 = screen.getByTestId('clarify-question-q2')
     const submit = screen.getByTestId('centralized-answer-submit') as HTMLButtonElement
 
+    await hotkeysAttached()
     q1.focus()
     // Digit '1' picks option 0 of the single-choice question AND advances (QuestionForm contract).
     expect(submit.disabled).toBe(true)
@@ -952,6 +974,7 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     await waitFor(() => expect(submit.disabled).toBe(false))
 
     // Digit-pick the LAST question → it gets checked, but focus stays on q2 (NO-OP), not submit.
+    await hotkeysAttached()
     q2.focus()
     const previousSubmitText = submit.textContent ?? ''
     const secondAnswerCommitted = waitForTextChange(submit, previousSubmitText)
@@ -978,6 +1001,7 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     const submit = screen.getByTestId('centralized-answer-submit') as HTMLButtonElement
     expect(submit.disabled).toBe(true) // nothing filled yet → disabled
 
+    await hotkeysAttached()
     q1.focus()
     const answerCommitted = waitForDisabledState(submit, false)
     fireEvent.keyDown(q1, { key: '1' }) // picks (first filled answer) + advances past the last question

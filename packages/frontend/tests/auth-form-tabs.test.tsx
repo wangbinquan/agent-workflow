@@ -111,22 +111,17 @@ describe('/auth method discovery', () => {
     expect(screen.queryByTestId('auth-password-form')).toBeNull()
     expect(screen.queryByTestId('auth-oidc-method')).toBeNull()
     expect(screen.queryByRole('tablist')).toBeNull()
-    // 事件驱动的焦点锚点，不要退回 `waitFor(() => document.activeElement === ...)`。
-    //
-    // 这条断言曾是 `docs/audit-backlog.md` 登记的「第七条同源 flaky」：轮询全局
-    // `document.activeElement` 直到超时，等的是 render → effect → `ref.focus()` 这条
-    // 跨 turn 的三段链。满载 runner 上越线即红——本机满载 gate 复现过一次，2026-08-09
-    // 又在 CI（ubuntu shard 1/3，5081ms 超时）红过一次，而同 run 的 macOS / windows
-    // 三条腿全绿：典型的时序敏感面，不是回归。
-    //
-    // 修法不是继续加超时——预算只要还是「猜一个够大的数」，负载一变就再越线。
-    //
-    // ⚠️ backlog 原文建议的 `expect(await findByLabelText(...)).toHaveFocus()` 在本仓
-    // **跑不了**：前端没装 jest-dom，`toHaveFocus` 会直接 `Invalid Chai property`。
-    // 可用的等价改法是把**查询提到轮询之外**：原写法每轮询一次就 `getByLabelText`
-    // 重扫一遍整棵树（这个页面的 DOM 很大——两段 SVG 插画 + 完整表单），满载 runner 上
-    // 光是这个重复扫描就能吃掉 5s 预算。元素在上面 `findByTestId` 时就已存在，真正
-    // 要等的只有 `ref.focus()` 那一步，所以只让轮询体读一个已经拿到的引用。
+    // audit-backlog「第七条同源 flaky」终章（放宽超时 → 提查询出轮询 → 仍复发
+    // 2026-08-10 本机 / 2026-08-12 windows）——最终根因是 **auth.tsx 组件真 bug**，
+    // 本断言一直在间歇性如实报告它：自动聚焦 effect 旧版只依赖 [discovery]，当
+    // `active` 初值（password）≠ 首选方法（bootstrap 的 token）时，表单要等
+    // setActive 的下一次 commit 才挂载，而 effect 的 queueMicrotask 抢在那次
+    // commit 之前跑 → ref 为 null，聚焦被静默丢弃且 effect 不再重跑。生产真实
+    // 时序（fetch 在自己的宏任务里 resolve，无 act）下**必现**；测试里 RTL/act
+    // 的同步队列冲刷通常把第二次 commit 排到微任务之前，掩盖了顺序——只有满载
+    // runner 上偶尔踩回真实时序才红。修复：effect 补 [active] 依赖 + 等 active
+    // 同步到首选方法再聚焦（auth.tsx）。本断言保留为回归锁：组件修复后它在两种
+    // 调度时序下都确定性收敛，若有人删掉 active 依赖/守卫，满载 CI 会再次照出。
     const token = await screen.findByLabelText(enUS.auth.token)
     await waitFor(() => expect(document.activeElement).toBe(token))
   })

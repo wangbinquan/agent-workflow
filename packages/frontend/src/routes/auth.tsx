@@ -117,11 +117,20 @@ function AuthPage() {
   useEffect(() => {
     if (discovery.status !== 'success' || interactedRef.current) return
     const next = deriveAuthMethods(discovery.value)[0]
+    // 只有 `active` 已经同步到首选方法、对应表单真的在本次 commit 里挂载了，
+    // 才能聚焦。旧版只依赖 [discovery]：当 `active` 初值（password）≠ 首选方法
+    // （bootstrap 的 token / oidc-first 安装）时，表单要等上面 setActive 的下一次
+    // commit 才挂载，而 queueMicrotask 抢在那次 commit 之前跑 → ref 为 null，
+    // 聚焦被静默丢弃且 effect 不再重跑（生产真实时序下必现；测试里 act 的同步
+    // 队列冲刷掩盖了顺序，只在满载 CI 上间歇性照出真相——audit-backlog「第七条
+    // 同源 flaky」的最终根因）。补上 [active] 依赖后，setActive 的 commit 会让
+    // effect 重跑，此时 ref 已挂上，聚焦确定性落地。
+    if (next !== active) return
     queueMicrotask(() => {
       if (next === 'password') usernameRef.current?.focus()
       if (next === 'token') tokenRef.current?.focus()
     })
-  }, [discovery])
+  }, [active, discovery])
 
   useEffect(() => {
     if (
