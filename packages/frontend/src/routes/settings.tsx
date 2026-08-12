@@ -19,7 +19,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { createRoute, Link, redirect, useRouterState } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AuthLoginPolicy, Config, ConfigPatch } from '@agent-workflow/shared'
+import type { AuthLoginPolicy, Config, ConfigPatch, OidcProvider } from '@agent-workflow/shared'
 import { api, apiPostMultipart, ApiError } from '@/api/client'
 import { Card } from '@/components/Card'
 import {
@@ -2019,29 +2019,8 @@ function AuthenticationTab() {
   )
 }
 
-interface OidcProviderRow {
-  id: string
-  slug: string
-  displayName: string
-  issuerUrl: string
-  clientId: string
-  scopes: string
-  provisioning: 'auto' | 'allowlist' | 'invite'
-  allowedEmailDomains: string[]
-  iconUrl: string | null
-  enabled: boolean
-  // RFC-220 — manual endpoint fallbacks + pure-OAuth2 identity knobs.
-  authorizationEndpoint: string | null
-  tokenEndpoint: string | null
-  userinfoEndpoint: string | null
-  userinfoRequestStyle: 'get_bearer' | 'post_json'
-  jwksUri: string | null
-  trustEmailVerified: boolean
-  usernameClaim: string | null
-  subjectClaim: string | null
-  createdAt: number
-  updatedAt: number
-}
+// RFC-286 F3：本地手写行类型换 shared 单源（字段逐一同形，设计门已核）。
+type OidcProviderRow = OidcProvider
 
 // RFC-220 — ProbeResult mirror (backend services/oidcProviders.ts): the /test
 // endpoint always answers 200 with this shape; `ok` is the login-readiness

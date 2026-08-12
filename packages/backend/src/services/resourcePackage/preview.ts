@@ -14,6 +14,7 @@
 // 其中 baseline 逐条目记下 { 候选 id、各候选的 expect、允许的动作 }。
 // **用户的「选择」是自由的，但可选项与它们的基线是签死的。**
 
+import type { PackagePreview as SharedPackagePreviewWire } from '@agent-workflow/shared'
 import { eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { users } from '@/db/schema'
@@ -460,7 +461,9 @@ export async function buildPackagePreview(
 
   const expiresAt = now + PREVIEW_TTL_MS
   const baseline = previewBaselineOf(entries)
-  return {
+  // RFC-286 F3 防漂移锚：preview 的 wire 单源在 shared/schemas/resourcePackage
+  // （requirements 必填等约束在彼）；本地组合形状一旦漂移此处编译期红。
+  const out = {
     importId: opts.importId,
     root: pkg.manifest.root,
     entries,
@@ -478,7 +481,8 @@ export async function buildPackagePreview(
     expiresAt,
     secrets: pkg.manifest.secrets,
     requirements: pkg.manifest.requirements,
-  }
+  } satisfies SharedPackagePreviewWire
+  return out
 }
 
 /**

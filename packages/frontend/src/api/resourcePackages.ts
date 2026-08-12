@@ -9,100 +9,37 @@
 //   · `previewToken` 把整套确认基线签死。前端不解读它、不重算它，只是搬运。
 
 import { api } from '@/api/client'
+// RFC-286 F3：wire 形状下沉 shared/schemas/resourcePackage（以后端实际产出为
+// 源；requirements 各字段必填——parse 层 .default([]) 保证）。本模块保留
+// re-export，下游消费方 import 路径不动。
+import type {
+  HumanMemberMapping,
+  HumanMemberSlot,
+  ImportAction,
+  ImportDecision,
+  PackageImportReceipt,
+  PackagePreview,
+  PackagePreviewCandidate,
+  PackagePreviewEntry,
+  PackageRequirements,
+  PackageSecretInput,
+  PackageSecretRef,
+  ResourcePackageType,
+} from '@agent-workflow/shared'
 
-export type ImportAction = 'new' | 'reuse' | 'overwrite'
-export type ResourcePackageType = 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup'
-
-export interface PackageSecretRef {
-  resourceType: ResourcePackageType
-  resourceName: string
-  field: string
-}
-
-export interface PackagePreviewCandidate {
-  id: string
-  name: string
-  expect: Record<string, unknown>
-  owned: boolean
-}
-
-export interface PackagePreviewEntry {
-  localSlug: string
-  type: ResourcePackageType
-  name: string
-  candidates: PackagePreviewCandidate[]
-  allowedActions: ImportAction[]
-  /** Server-selected safe default. Overwrite is never selected implicitly. */
-  defaultAction: ImportAction | null
-  /** Missing permission points when no write action is currently available. */
-  missingPermissions: string[]
-  /** Credential positions owned by this entry. */
-  secretFields: PackageSecretRef[]
-  suggestedName: string
-}
-
-export interface HumanMemberSlot {
-  workgroupSlug: string
-  username: string
-  displayName: string
-  suggestedUserId: string | null
-  required: boolean
-}
-
-export interface PackageRequirements {
-  runtimes?: string[]
-  codeHosts?: string[]
-  executables?: string[]
-  pluginSources?: Array<{ name: string; spec: string; sourceKind: string }>
-  projectSkills?: string[]
-  mcpKinds?: string[]
-  humanMembers?: string[]
-}
-
-export interface PackagePreview {
-  importId: string
-  root: { slug: string; type: ResourcePackageType; name: string }
-  entries: PackagePreviewEntry[]
-  humanMembers: HumanMemberSlot[]
-  previewToken: string
-  expiresAt: number
-  secrets: PackageSecretRef[]
-  requirements: PackageRequirements
-}
-
-export interface ImportDecision {
-  localSlug: string
-  action: ImportAction
-  targetId?: string
-  finalName?: string
-}
-
-export interface HumanMemberMapping {
-  workgroupSlug: string
-  username: string
-  userId: string | null
-}
-
-export interface PackageSecretInput extends PackageSecretRef {
-  value: string
-}
-
-export interface PackageImportReceipt {
-  journalId: string
-  applied: Array<{
-    opId: string
-    resourceType: string
-    resourceId: string
-    action: 'create' | 'update'
-    name: string
-  }>
-  root?: {
-    resourceType: ResourcePackageType
-    resourceId: string
-    name: string
-    action: 'create' | 'update' | 'reuse'
-  }
-  skippedSecrets?: PackageSecretRef[]
+export type {
+  HumanMemberMapping,
+  HumanMemberSlot,
+  ImportAction,
+  ImportDecision,
+  PackageImportReceipt,
+  PackagePreview,
+  PackagePreviewCandidate,
+  PackagePreviewEntry,
+  PackageRequirements,
+  PackageSecretInput,
+  PackageSecretRef,
+  ResourcePackageType,
 }
 
 /** 六类共用一条路径形状。 */

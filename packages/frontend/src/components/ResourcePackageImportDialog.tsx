@@ -43,6 +43,18 @@ import { StatusChip } from '@/components/StatusChip'
 import { UserPicker } from '@/components/UserPicker'
 import { stableStringify } from '@/lib/stable-stringify'
 
+// RFC-286 F3：requirements 在 wire 上必填（shared 单源）；本常量只服务
+// 「preview 尚未到达」的渲染空态。
+const EMPTY_REQUIREMENTS: PackageRequirements = {
+  runtimes: [],
+  codeHosts: [],
+  executables: [],
+  pluginSources: [],
+  projectSkills: [],
+  mcpKinds: [],
+  humanMembers: [],
+}
+
 const RESOURCE_PACKAGE_COLLECTION_KEYS = [
   ['agents'],
   ['skills'],
@@ -655,7 +667,7 @@ export const ResourcePackageImportPanel = forwardRef<
   }
 
   const humanSlots = normalizeHumanSlots(preview?.humanMembers ?? [])
-  const visibleRequirements = requirementGroups(preview?.requirements ?? {})
+  const visibleRequirements = requirementGroups(preview?.requirements ?? EMPTY_REQUIREMENTS)
   const entryBySlug = new Map(preview?.entries.map((entry) => [entry.localSlug, entry]) ?? [])
   const activeSecretKeys = new Set(
     preview?.entries.flatMap((entry) =>

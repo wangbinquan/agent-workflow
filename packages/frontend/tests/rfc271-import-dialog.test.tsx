@@ -59,7 +59,15 @@ const preview: pkgApi.PackagePreview = {
   root: { slug: 'mcp-tools', type: 'mcp', name: 'tools' },
   humanMembers: [],
   secrets: [{ resourceType: 'mcp', resourceName: 'tools', field: 'config.headers.Authorization' }],
-  requirements: {},
+  requirements: {
+    runtimes: [],
+    codeHosts: [],
+    executables: [],
+    pluginSources: [],
+    projectSkills: [],
+    mcpKinds: [],
+    humanMembers: [],
+  },
   entries: [
     {
       localSlug: 'mcp-tools',
@@ -355,6 +363,9 @@ describe('② 交互契约', () => {
         codeHosts: ['gitlab'],
         executables: ['acme-tool'],
         pluginSources: [{ name: 'lint', spec: '@acme/lint', sourceKind: 'npm' }],
+        projectSkills: [],
+        mcpKinds: [],
+        humanMembers: [],
       },
     })
     expect(await screen.findByText('Required on this instance')).toBeTruthy()

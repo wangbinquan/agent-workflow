@@ -18,7 +18,15 @@ export async function beginDeferredPackageCommit(
     root: { slug: 'busy-root', type: resourceType, name: 'busy-root' },
     humanMembers: [],
     secrets: [],
-    requirements: {},
+    requirements: {
+      runtimes: [],
+      codeHosts: [],
+      executables: [],
+      pluginSources: [],
+      projectSkills: [],
+      mcpKinds: [],
+      humanMembers: [],
+    },
     entries: [
       {
         localSlug: 'busy-root',
@@ -58,7 +66,15 @@ export async function beginUnknownPackageCommit(
     root: { slug: 'unknown-root', type: resourceType, name: 'unknown-root' },
     humanMembers: [],
     secrets: [],
-    requirements: {},
+    requirements: {
+      runtimes: [],
+      codeHosts: [],
+      executables: [],
+      pluginSources: [],
+      projectSkills: [],
+      mcpKinds: [],
+      humanMembers: [],
+    },
     entries: [
       {
         localSlug: 'unknown-root',
