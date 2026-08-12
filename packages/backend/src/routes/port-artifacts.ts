@@ -21,7 +21,7 @@ import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { readPortArtifact } from '@/services/portArtifacts'
 import { canViewTask } from '@/services/taskCollab'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 
 const MIME_BY_EXT: Record<string, string> = {
@@ -65,10 +65,8 @@ export function mountPortArtifactRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       if (!(await canViewTask(deps.db, actor, task))) {
-        throw new ForbiddenError(
-          'task-not-visible',
-          `task '${taskId}' is not visible to this actor`,
-        )
+        // RFC-285 B1：不可见与不存在同形（字节同上面的 missing 分支）。
+        throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       }
 
       // nodeRun 归属校验 — 跨任务 runId 与不存在同形 404（RFC-099 同形性原则）。

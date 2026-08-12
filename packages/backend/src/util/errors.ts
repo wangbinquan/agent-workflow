@@ -68,7 +68,9 @@ export class UnauthorizedError extends DomainError {
  * RFC-036 — raised by the route-metadata gate (routes/registry.ts
  * `routeMetaGate`) / canViewTask when the resolved actor lacks the required
  * permission point or identity. `code` differentiates the specific
- * failure (e.g. 'forbidden' / 'task-not-visible' / 'not-reviewer'); `details`
+ * failure (e.g. 'forbidden' / 'not-reviewer'; RFC-285 B1 retired the REST
+ * 'task-not-visible' 403 — invisible tasks now 404 like missing ones, the
+ * code survives only on the WS reject face); `details`
  * may carry `{ requiredPermission, actorPermissions[] }` for admin debugging.
  */
 export class ForbiddenError extends DomainError {

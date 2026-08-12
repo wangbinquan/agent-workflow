@@ -17,7 +17,7 @@ import { actorOf } from '@/auth/actor'
 import { tasks } from '@/db/schema'
 import { createTaskFeedback, listTaskFeedback } from '@/services/taskFeedback'
 import { canViewTask } from '@/services/taskCollab'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/util/errors'
 
 export function mountTaskFeedbackRoutes(app: Hono, deps: AppDeps): void {
   registerRoute(
@@ -71,7 +71,11 @@ async function assertVisible(c: Context, deps: AppDeps, taskId: string): Promise
     .from(tasks)
     .where(eq(tasks.id, taskId))
     .limit(1)
-  if (rows.length === 0) throw new NotFoundError('task-not-found', `task ${taskId} not found`)
+  // RFC-285 B1：两分支文案与 tasks.ts visibilityCheck 中间件逐字节同形（带引号
+  // 形）。byte-oracle 实测抓过残余可区分性：本路由挂在 /api/tasks/:id/* 中间件
+  // 之下，「不可见」被中间件先拦（带引号文案）、「缺失」才落到本函数——此处
+  // 若用无引号旧文案，两形态字节不同，探测面复活。
+  if (rows.length === 0) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   const visible = await canViewTask(deps.db, actorOf(c), rows[0]!)
-  if (!visible) throw new ForbiddenError('task-not-visible', `task ${taskId} not visible`)
+  if (!visible) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
 }

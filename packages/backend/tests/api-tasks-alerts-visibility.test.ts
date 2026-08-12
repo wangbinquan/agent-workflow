@@ -3,7 +3,7 @@
 // The two new routes mount under `app.use('/api/tasks/:id/*', ...)`
 // which delegates to RFC-036's `canViewTask` gate. An outsider (no
 // owner / no collaborator membership) should receive HTTP 403 with
-// code='task-not-visible', NOT 200 + empty data and NOT 500.
+// code='task-not-found'（RFC-285 B1 同形 404）, NOT 200 + empty data and NOT 500.
 //
 // Mirrors `tests/tasks-visibility.test.ts` but targets the two RFC-053
 // routes explicitly.
@@ -131,11 +131,12 @@ describe('RFC-053 — GET /api/tasks/:id/alerts visibility gate', () => {
     expect(r.status).toBe(200)
   })
 
-  test('outsider (dave) → 403 task-not-visible', async () => {
+  // RFC-285 B1：外人 404 与不存在同形（旧 403 task-not-visible 退役）。
+  test('outsider (dave) → 404 task-not-found（B1 同形）', async () => {
     const r = await get(h.app, h.daveToken, `/api/tasks/${h.bobTaskId}/alerts`)
-    expect(r.status).toBe(403)
+    expect(r.status).toBe(404)
     const body = (await r.json()) as { code: string }
-    expect(body.code).toBe('task-not-visible')
+    expect(body.code).toBe('task-not-found')
   })
 })
 
@@ -160,10 +161,11 @@ describe('RFC-053 — POST /api/tasks/:id/diagnose visibility gate', () => {
     expect(r.status).toBe(200)
   })
 
-  test('outsider (dave) → 403 task-not-visible', async () => {
+  // RFC-285 B1：同上——写型入口的外人同样 404 同形。
+  test('outsider (dave) → 404 task-not-found（B1 同形）', async () => {
     const r = await post(h.app, h.daveToken, `/api/tasks/${h.bobTaskId}/diagnose`)
-    expect(r.status).toBe(403)
+    expect(r.status).toBe(404)
     const body = (await r.json()) as { code: string }
-    expect(body.code).toBe('task-not-visible')
+    expect(body.code).toBe('task-not-found')
   })
 })

@@ -160,9 +160,11 @@ describe('RFC-109 GET /workflow-sync-preview', () => {
     expect(p.differs).toBe(false)
   })
 
-  test('outsider → 403 task-not-visible (membership gate)', async () => {
+  // RFC-285 B1：外人不再拿 403（那会确认任务存在）——与不存在同形 404。
+  test('outsider → 404 task-not-found（B1 同形；旧 403 task-not-visible 已退役）', async () => {
     const r = await get(h.app, h.daveToken, `/api/tasks/${h.taskId}/workflow-sync-preview`)
-    expect(r.status).toBe(403)
+    expect(r.status).toBe(404)
+    expect(((await r.json()) as { code: string }).code).toBe('task-not-found')
   })
 
   test('built-in workflow → syncable:false reason builtin-workflow (Codex F4: banner hidden)', async () => {
@@ -216,11 +218,14 @@ describe('RFC-109 POST /sync-workflow', () => {
     expect(r.status).toBe(403)
   })
 
-  test('outsider → 403 (membership gate)', async () => {
+  // RFC-285 B1：写入口的外人同样先撞可见性门 → 404 同形（成员制 403 只对
+  // 「看得见但非成员」的角色成立，外人连存在性都不该探到）。
+  test('outsider → 404 task-not-found（B1：可见性门先于成员门）', async () => {
     await bump(h.db, h.wfId, DEF_B, 2)
     const r = await postJson(h.app, h.daveToken, `/api/tasks/${h.taskId}/sync-workflow`, {
       expectedVersion: 2,
     })
-    expect(r.status).toBe(403)
+    expect(r.status).toBe(404)
+    expect(((await r.json()) as { code: string }).code).toBe('task-not-found')
   })
 })

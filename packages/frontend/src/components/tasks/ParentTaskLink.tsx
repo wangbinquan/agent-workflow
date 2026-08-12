@@ -12,11 +12,14 @@
 // collapse this onto it.
 //
 // Degrade contract (RFC-243 design §8): a workgroup human member can be a member
-// of the CHILD task only, so the parent may be invisible. An existing but
-// unauthorized task is a 403 (routes/tasks.ts assertTaskVisible) and a missing
-// one is a 404, so ANY probe error collapses to the same neutral, non-link
-// label — never a dead link, and never a leak of which of the two it was. The
-// parent's NAME is rendered only from a successful probe for the same reason.
+// of the CHILD task only, so the parent may be invisible. RFC-285 B1 made the
+// server itself collapse the two cases — an existing-but-unauthorized task now
+// 404s byte-identically to a missing one (pre-B1 it was a 403) — and this
+// component was already one step ahead: ANY probe error collapses to the same
+// neutral, non-link label — never a dead link, never a leak of which case it
+// was. The parent's NAME is rendered only from a successful probe for the same
+// reason. Keeping the error handling status-agnostic also stays correct against
+// older daemons that still emit the retired 403.
 
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'

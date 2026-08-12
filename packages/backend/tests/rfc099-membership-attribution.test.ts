@@ -189,10 +189,11 @@ describe('RFC-099 — review membership + attribution', () => {
   })
 
   test('stranger cannot read or decide; collaborator comment + decision record role snapshots', async () => {
-    // stranger read → 403 task-not-visible (mirror of task routes)
+    // stranger read → RFC-285 B1：404 与不存在同形（旧 403 task-not-visible 退役）
     const daveDetail = await req(app, users.dave.token, `/api/reviews/${reviewRunId}`)
-    expect(daveDetail.status).toBe(403)
-    // stranger decision → 403 not-task-member
+    expect(daveDetail.status).toBe(404)
+    // stranger decision → 403 not-task-member（B1 边界反例：成员制写门保留 403，
+    // 不随可见性判定改 404——AC-1 的成员门反例断言）
     const daveDecision = await req(app, users.dave.token, `/api/reviews/${reviewRunId}/decision`, {
       method: 'POST',
       body: JSON.stringify({ decision: 'approved', reviewIteration: 0 }),
@@ -515,7 +516,8 @@ describe('RFC-099 — clarify membership, drafts, attribution freeze', () => {
         })
       ).status,
     ).toBe(403)
-    expect((await req(app, users.dave.token, `/api/clarify/${clarifyNodeRunId}`)).status).toBe(403)
+    // RFC-285 B1：clarify 读门对外人改与「无此 session」同形 404
+    expect((await req(app, users.dave.token, `/api/clarify/${clarifyNodeRunId}`)).status).toBe(404)
     const daveCount = (await (
       await req(app, users.dave.token, '/api/clarify/pending-count')
     ).json()) as { count: number }

@@ -33,3 +33,55 @@
 - [ ] AC-1…AC-8（proposal §6 v2）
 - [ ] E 清单（v2：E1-E6/E8/E11）外零行为差异
 - [ ] v1 虚项三处的回归锁在位（E7/E9/E10 降级产物）
+
+## T1 附录：三份前置排查清单（2026-08-13 实测 HEAD=87ed494d）
+
+### ① B4 query-token 读点全量（rg `query('token')`/extractRawToken/extractToken）
+
+| 读点                                                         | 面                                                                                            | 处置                                                                                                                                                                   |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth/session.ts:257-265` extractRawToken（query‖header）    | REST 主链（:66 消费）                                                                         | 收窄为 `extractBearerToken`（仅 Authorization 头）                                                                                                                     |
+| `routes/auth.ts:469-474` 本地同名 extractRawToken            | REST（:178/:260 消费）                                                                        | 删除本地副本、改调共享 REST 入口（设计所记 :476-483/:177/:259 为 v2 落档时行号，现漂到 :469/:178/:260，语义同）                                                        |
+| `auth/token.ts:48-69` tokenAuth+extractToken（query 优先！） | **生产零消费的死导出**——`rg tokenAuth` 仅测试 `auth-token.test.ts` 引用；设计门漏列的第三读点 | **直接删除** tokenAuth/extractToken/safeEqual（删除优于 deprecate）；`ensureTokenFile`/`rotateTokenFile` 是活的 token 文件管理（cli/start.ts:568），保留；测试同批裁剪 |
+| `ws/server.ts:110` searchParams.get('token')                 | WS 升级（保留正确）                                                                           | 收编为 `extractUpgradeToken` 显式入口 + 「REST 面不 import」文本锁                                                                                                     |
+
+### ② B5 stale 码产出/消费全量对照表（rg version-conflict|copy-stale|overwrite-stale）
+
+| 旧码                                   | 产出点                                                            | 消费点                                                                                         |
+| -------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| skill-version-conflict                 | skillDeleteOp.ts:171 / skill.ts:443,710 / skillVersion.ts:464,525 | skill-zip.ts:679（overwrite outcome 分派）/ fusion.ts:1449 / i18n×2 / shared skill.ts:108 注释 |
+| skill-overwrite-stale（Q7 入族）       | skill-zip.ts:530,542,558,579,685                                  | shared/schemas/skill.ts:243 枚举                                                               |
+| workflow-version-conflict              | workflow.ts:552,588,678,758                                       | i18n×2                                                                                         |
+| workflow-copy-stale                    | workflow.ts:273                                                   | 前端 workflows.edit.tsx:764                                                                    |
+| workgroup-version-conflict             | workgroup/launch.ts:208 / workgroups.ts:410,465,549,569           | 前端 useWorkgroupAutosave.ts:499（RFC-225 状态机）                                             |
+| workgroup-copy-stale                   | workgroups.ts:258                                                 | 前端 workgroups.detail.tsx:619                                                                 |
+| repo-group-version-conflict（Q7 入族） | repoGroup.ts:568                                                  | （无专项消费；i18n 域表兜底）                                                                  |
+| —（文档面）                            | resourceAcl.ts:28-30 D6 fence 选型表内嵌旧码名                    | 同批更新表格                                                                                   |
+
+RFC-283 webhook fence 码对表：实现 T6 时 rg 一次 `webhook.*stale|webhook.*conflict` 再定。
+
+### ③ B1 task-not-visible 产出点全集 + 改判面
+
+- 产出点（route 面，全改 404 同形）：tasks.ts:1207 / reviews.ts:106（+:88 注释）/
+  clarify.ts:112 / taskFeedback.ts:76 / worktree-files.ts:69 / port-artifacts.ts:69。
+- **同形基准=各触点的「探测面资源」missing 分支**（T2 实施时修正的设计细则）：
+  task 域五点同 `task-not-found`；reviews 的探测面是 nodeRunId → 同
+  `node-run-not-found`（用 task-not-found 会泄露 run 存在）；clarify 的探测面是
+  session → 同 `clarify-session-not-found`。
+- 保留面：ws/registry.ts:541（WS 已同形，rfc152 锁定，不动）；util/errors.ts:71 doc 注释顺改；
+  写门 403（requireTaskMember / ensureClarifyMember / ensureReviewMember：clarify answers、
+  review decision、members PUT——rfc099-task-members 的 carol 用例是「可见成员打管理写门仍
+  403」的 AC-1 反例）；rfc167 的 turn-engine resume 403 是生命周期锁，非可见性。
+- 前端改判：lib/clarify/durability.ts:310——现行判据实为 `status===403 || status===409`
+  （设计所记「403 停写」不全），改为 404 并入 disable 集（被撤权/被删除均停写，草稿仍留本地，
+  clarify-draft-durability 新增 404 回归锁）；i18n 两键均不动（task-not-visible 仍是 WS 活码）。
+- 测试改判清单（T2 实测 **15 文件**，较 rg 初扫多出两个纯状态断言的漏网）：后端
+  rfc152-ws-channel-registry（锁 WS 保留面，不改）/ rfc109-sync-route ×2 /
+  rfc099-membership-attribution ×3 / rfc099-task-members ×2（+carol 反例注）/
+  tasks-visibility（+byte-oracle）/ worktree-files-acl（+byte-oracle）/
+  rfc193-port-artifacts-api（:265 文本锁改锚：404 在场 + 旧码归零）/
+  rfc212-revalidation-behavior（WS，不改）/ api-tasks-alerts-visibility ×2 /
+  rfc142-review-rounds / rfc152-ws-task-channel（WS，不改）/
+  routes-task-feedback（+byte-oracle；**rg 漏网**——只断状态无字面量）；
+  e2e/auth-isolation.spec.ts ×2；前端 parent-task-link.test.tsx（注释改锚）/
+  rfc203-l1-completeness（不改，键仍活）/ clarify-draft-durability（新增 404 例）。

@@ -19,9 +19,9 @@
 //
 // 8 cases, each rebuilds its own daemon for full isolation:
 //
-//   1. regular bob can NOT see admin alice's task             → 403 task-not-visible
+//   1. regular bob can NOT see admin alice's task             → 404 task-not-found（RFC-285 B1 同形）
 //   2. admin alice CAN see regular bob's task                 → 200 (tasks:read:all)
-//   3. regular bob can NOT see another regular carol's task   → 403 task-not-visible
+//   3. regular bob can NOT see another regular carol's task   → 404 task-not-found（RFC-285 B1 同形）
 //   4. regular bob CAN see own task (control / sanity)        → 200
 //   5. regular bob can NOT GET /api/config                    → 403 forbidden
 //   6. regular bob can NOT POST /api/users                    → 403 forbidden
@@ -256,7 +256,8 @@ async function getTaskAs(
 // ----------------------------------------------------------------------------
 
 // LOCKS: cross-user task visibility (the headline canViewTask gate).
-test("regular bob can NOT see admin alice's task → 403 task-not-visible", async () => {
+// RFC-285 B1：不可见与不存在同形——外人拿 404 task-not-found，错误码探不出存在性。
+test("regular bob can NOT see admin alice's task → 404 task-not-found", async () => {
   const repo = makeFixtureRepo()
   const daemon = await startDaemon({ stubMode: 'basic' })
   try {
@@ -280,10 +281,10 @@ test("regular bob can NOT see admin alice's task → 403 task-not-visible", asyn
     )
 
     const res = await getTaskAs(daemon, bob.sessionToken, aliceTask)
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(404)
     const body = (await res.json()) as { ok: false; code: string }
     expect(body.ok).toBe(false)
-    expect(body.code).toBe('task-not-visible')
+    expect(body.code).toBe('task-not-found')
   } finally {
     await daemon.stop()
     repo.cleanup()
@@ -326,7 +327,7 @@ test("admin alice CAN see regular bob's task → 200", async () => {
 })
 
 // LOCKS: cross-regular task visibility (no leakage between same-role users).
-test("regular bob can NOT see another regular carol's task → 403", async () => {
+test("regular bob can NOT see another regular carol's task → 404", async () => {
   const repo = makeFixtureRepo()
   const daemon = await startDaemon({ stubMode: 'basic' })
   try {
@@ -350,9 +351,9 @@ test("regular bob can NOT see another regular carol's task → 403", async () =>
     )
 
     const res = await getTaskAs(daemon, bob.sessionToken, carolTask)
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(404)
     const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('task-not-visible')
+    expect(body.code).toBe('task-not-found')
   } finally {
     await daemon.stop()
     repo.cleanup()

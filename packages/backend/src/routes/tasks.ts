@@ -44,7 +44,6 @@ import {
 } from '@/services/tokenRedaction'
 import { deleteTask } from '@/services/taskDelete'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { ForbiddenError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
 import {
   SyncWorkflowBodySchema,
@@ -1204,7 +1203,10 @@ async function visibilityCheck(c: Context, deps: AppDeps): Promise<void> {
     return
   }
   if (!(await canViewTask(deps.db, actorOf(c), row))) {
-    throw new ForbiddenError('task-not-visible', `task '${id}' is not visible to this actor`)
+    // RFC-285 B1（D1）：「存在但无权」与「不存在」同形 404——错误码探测不出
+    // 任务存在性。字节形态与本文件各路由的 missing 分支一致（task-not-found +
+    // `task '<id>' not found`）。成员制写门的 403 是另一层语义，保留不动。
+    throw new NotFoundError('task-not-found', `task '${id}' not found`)
   }
 }
 

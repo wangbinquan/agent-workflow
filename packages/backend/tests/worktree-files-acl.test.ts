@@ -3,8 +3,9 @@
 //   - P0: NO task visibility gate. The markdown image-proxy route only checked
 //     that the task EXISTS, so any logged-in actor (even a narrow-scope PAT)
 //     who knew a taskId could read another user's private task worktree,
-//     bypassing the D20 member-only task privacy. A stranger must now get 403
-//     (task-not-visible, mirroring the other task routes); owner / collaborator
+//     bypassing the D20 member-only task privacy. A stranger must now get 404
+//     (task-not-found — RFC-285 B1 made invisibility byte-identical to
+//     absence; pre-B1 this was 403 task-not-visible); owner / collaborator
 //     / admin / daemon keep 200.
 //   - P1: the route followed symlinks with only a lexical containment check
 //     (no realpath). A symlink INSIDE the worktree pointing outside (e.g. to
@@ -150,10 +151,26 @@ describe('worktree-files ACL + symlink (RFC-099 audit 2026-07-15)', () => {
   })
   afterEach(() => h.cleanup())
 
-  test('stranger (non-member) → 403, no content leak', async () => {
+  // RFC-285 B1：陌生人 404 与任务不存在同形，且响应体不泄内容。
+  test('stranger (non-member) → 404 task-not-found, no content leak', async () => {
     const res = await get(h.app, h.stranger.token, h.taskId, 'design/spec.md')
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(404)
+    expect(((await res.clone().json()) as { code: string }).code).toBe('task-not-found')
     expect(await res.text()).not.toContain('# Spec')
+  })
+
+  // RFC-285 B1 oracle 消除：同一陌生人打「存在但无权」与「真不存在」两个 taskId，
+  // 归一 id 文本后响应体逐字节相等——错误码/文案都探测不出任务存在性。
+  test('B1 oracle: invisible vs missing task are byte-identical (ids normalized)', async () => {
+    const missingId = 'no-such-task-b1'
+    const invisible = await get(h.app, h.stranger.token, h.taskId, 'design/spec.md')
+    const missing = await get(h.app, h.stranger.token, missingId, 'design/spec.md')
+    expect(invisible.status).toBe(404)
+    expect(missing.status).toBe(404)
+    const normalize = (s: string, id: string): string => s.replaceAll(id, '<ID>')
+    expect(normalize(await invisible.text(), h.taskId)).toBe(
+      normalize(await missing.text(), missingId),
+    )
   })
 
   test('owner → 200', async () => {

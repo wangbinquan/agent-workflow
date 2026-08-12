@@ -11,7 +11,7 @@
 //     getReviewDetail 的已决策轮必须只取最高代——旧实现只按 max reviewIteration
 //     过滤，superseded 旧代混进 documents（itemIndex 重复、条目翻倍）。
 //   - GET /api/reviews/:nodeRunId/rounds 的 ACL 与 /versions 同门：任务不可见
-//     403 task-not-visible；未知 nodeRunId 404。
+//     404 task-not-found（RFC-285 B1 与不存在同形）；未知 nodeRunId 404。
 // 如果本文件变红，先对照 design/RFC-142-review-history-echo/design.md D3-D5。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -655,11 +655,13 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
     return await app.request(path, { headers: { Authorization: `Bearer ${token}` } })
   }
 
-  test('陌生人 403 task-not-visible；owner 200 得轮；未知 nodeRunId 404', async () => {
+  // RFC-285 B1：陌生人对 review 轮的读从 403 改与「run 不存在」同形 404
+  //（node-run-not-found——探测面是 nodeRunId，用 task-not-found 会泄露 run 存在）。
+  test('陌生人 404 node-run-not-found（B1 同形）；owner 200 得轮；未知 nodeRunId 404', async () => {
     const forbidden = await req(stranger.token, `/api/reviews/${reviewRunId}/rounds`)
-    expect(forbidden.status).toBe(403)
+    expect(forbidden.status).toBe(404)
     const forbiddenBody = (await forbidden.json()) as { code?: string; error?: { code?: string } }
-    expect(JSON.stringify(forbiddenBody)).toContain('task-not-visible')
+    expect(JSON.stringify(forbiddenBody)).toContain('node-run-not-found')
 
     const ok = await req(owner.token, `/api/reviews/${reviewRunId}/rounds`)
     expect(ok.status).toBe(200)

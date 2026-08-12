@@ -97,7 +97,9 @@ describe('ParentTaskLink (RFC-245)', () => {
     })
   })
 
-  test('403 (exists but not visible) → neutral non-link label, no name', async () => {
+  // RFC-285 B1 后服务端对「存在但无权」已直接发 404；保留 403 用例作组件的
+  // 状态码泛化防御覆盖（旧 daemon / 成员门仍可能发 403，降级契约不区分）。
+  test('403 (legacy invisible shape) → neutral non-link label, no name', async () => {
     installFetch({ status: 403, body: { error: { code: 'task-not-visible' } } })
     await renderLink(true)
     await waitFor(() => {
@@ -107,7 +109,8 @@ describe('ParentTaskLink (RFC-245)', () => {
     })
   })
 
-  test('404 (deleted) → the SAME neutral label (existence not disclosed)', async () => {
+  // RFC-285 B1：这现在也是「存在但无权」的**在网形态**（服务端同形 404）。
+  test('404 (deleted OR invisible — B1 live shape) → the SAME neutral label', async () => {
     installFetch({ status: 404, body: { error: { code: 'task-not-found' } } })
     await renderLink(true)
     await waitFor(() => {

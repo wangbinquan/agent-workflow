@@ -291,6 +291,27 @@ describe('ClarifyDraftDurabilityController server queue', () => {
     expect(controller.getStatus()).toMatchObject({ kind: 'local-only', canRetryServer: false })
   })
 
+  // RFC-285 B1 回归锁：服务端把「存在但无权」改成与「不存在」同形的 404 后，
+  // 被撤权协作者的草稿同步收到的是 404 而不再是 403。404 必须同样判终局停写
+  //（草稿留本地、不无限重试）——B1 落地时若漏改这条判据，撤权场景会从「干净
+  // 停写」退化成永久重试风暴。
+  test('404 (B1: revoked ≡ missing) disables server sync like the old 403 did', async () => {
+    const controller = createClarifyDraftDurabilityController({
+      initialAnswers: [answer('A')],
+      serverAnswers: [answer('A')],
+      debounceMs: 0,
+      writeLocal: async () => {},
+      writeServer: async () => {
+        throw new ApiError(404, 'clarify-session-not-found', 'clarify session not found')
+      },
+    })
+
+    controller.recordChange([answer('B')], 'q1')
+    await controller.flushLocal()
+    await nextTimer()
+    expect(controller.getStatus()).toMatchObject({ kind: 'local-only', canRetryServer: false })
+  })
+
   test('a retryable question remains retryable when a sibling has a definitive failure', async () => {
     const q1 = answer('A')
     const q2 = { ...answer('A'), questionId: 'q2' }

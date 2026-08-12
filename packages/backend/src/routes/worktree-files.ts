@@ -22,7 +22,7 @@ import { tasks } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { canViewTask } from '@/services/taskCollab'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/util/errors'
 
 const MIME_BY_EXT: Record<string, string> = {
   '.png': 'image/png',
@@ -61,14 +61,11 @@ export function mountWorktreeFilesRoutes(app: Hono, deps: AppDeps): void {
       }
       // RFC-099 (D20): tasks are member-only private. This proxy is NOT under the
       // /api/tasks/:id/* visibility middleware, so it must run its own gate — an
-      // RFC-005-era single-user route that never got the multi-user check. Same
-      // 403 shape the other task routes use.
+      // RFC-005-era single-user route that never got the multi-user check.
+      // RFC-285 B1：不可见与不存在同形 404（字节同上面的 missing 分支）。
       const actor = actorOf(c)
       if (!(await canViewTask(deps.db, actor, task))) {
-        throw new ForbiddenError(
-          'task-not-visible',
-          `task '${taskId}' is not visible to this actor`,
-        )
+        throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       }
 
       // Hono's wildcard match — everything after the taskId segment.

@@ -1,6 +1,6 @@
 // RFC-041 — HTTP layer for task feedback (PR2).
 //
-// Covers: visibility gate (404/403), valid POST → 201 + distill job created,
+// Covers: visibility gate (RFC-285 B1: invisible ≡ missing, both 404), valid POST → 201 + distill job created,
 // invalid body → 422, permission gating.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -141,14 +141,26 @@ describe('routes-task-feedback', () => {
     expect(j.items.length).toBe(1)
   })
 
-  test('outsider POST → 403 (task not visible)', async () => {
+  // RFC-285 B1：外人 404 与不存在同形（旧 403 退役），并 oracle 消除——
+  // 归一 id 后与真不存在的响应体逐字节相等。
+  test('outsider POST → 404 task-not-found（B1 同形 + byte-oracle）', async () => {
     const res = await h.app.fetch(
       authed(h.outsiderToken, `/api/tasks/${h.taskId}/feedback`, {
         method: 'POST',
         body: JSON.stringify({ bodyMd: 'note' }),
       }),
     )
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(404)
+    const missingId = 't_does_not_exist'
+    const missing = await h.app.fetch(
+      authed(h.outsiderToken, `/api/tasks/${missingId}/feedback`, {
+        method: 'POST',
+        body: JSON.stringify({ bodyMd: 'note' }),
+      }),
+    )
+    expect(missing.status).toBe(404)
+    const normalize = (s: string, id: string): string => s.replaceAll(id, '<ID>')
+    expect(normalize(await res.text(), h.taskId)).toBe(normalize(await missing.text(), missingId))
   })
 
   test('admin sees all tasks even when not a collaborator', async () => {

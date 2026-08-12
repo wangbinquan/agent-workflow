@@ -176,9 +176,11 @@ describe('RFC-099 — task members endpoints + member operational rights', () =>
     expect(asCarol.ownerUserId).toBe(h.alice.id)
     expect(asCarol.users.map((u) => u.id)).toEqual([h.carol.id])
     expect(asCarol.canManage).toBe(false)
-    // stranger blocked by the task visibility middleware
-    expect((await req(h.app, h.dave.token, `/api/tasks/${taskId}/members`)).status).toBe(403)
-    // collaborator cannot PUT
+    // stranger blocked by the task visibility middleware —— RFC-285 B1：
+    // 与不存在同形 404（旧 403 退役）
+    expect((await req(h.app, h.dave.token, `/api/tasks/${taskId}/members`)).status).toBe(404)
+    // collaborator cannot PUT —— B1 边界反例（AC-1）：可见成员打管理写门仍 403，
+    // 不随可见性判定改 404
     expect(
       (
         await req(h.app, h.carol.token, `/api/tasks/${taskId}/members`, {
@@ -218,6 +220,7 @@ describe('RFC-099 — task members endpoints + member operational rights', () =>
     const stranger = await req(h.app, h.dave.token, `/api/tasks/${taskId}/cancel`, {
       method: 'POST',
     })
-    expect(stranger.status).toBe(403)
+    // RFC-285 B1：外人打 cancel 先撞可见性门 → 404 同形
+    expect(stranger.status).toBe(404)
   })
 })

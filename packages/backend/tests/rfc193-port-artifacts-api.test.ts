@@ -3,7 +3,8 @@
 // 锁定：元数据/内容双形态、MIME 按源扩展名、portName percent-encode 往返、
 // 跨任务 nodeRunId 404 同形、无归档时 worktree 回退、回退也 miss → 404、
 // 截断响应头。ACL 面与 worktree-files 同一 canViewTask 门（源码断言锁定，
-// 多用户 403 行为由 worktree-files-acl.test.ts 对同一原语覆盖）。
+// 多用户不可见→404 同形行为（RFC-285 B1，旧 403）由 worktree-files-acl.test.ts
+// 对同一原语覆盖，含 byte-oracle）。
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -262,6 +263,9 @@ describe('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', () => {
       'utf8',
     )
     expect(src).toContain('canViewTask')
-    expect(src).toContain('task-not-visible')
+    // RFC-285 B1：不可见分支必须与 missing 分支同形 404（旧 403 task-not-visible
+    // 已退役且不得回潮）。
+    expect(src).toContain("throw new NotFoundError('task-not-found'")
+    expect(src).not.toContain('task-not-visible')
   })
 })

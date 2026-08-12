@@ -42,13 +42,7 @@ import {
   submitReviewDecision,
   updateReviewCommentText,
 } from '@/services/review'
-import {
-  ConflictError,
-  DomainError,
-  ForbiddenError,
-  NotFoundError,
-  ValidationError,
-} from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 
@@ -84,8 +78,9 @@ async function ensureReviewMember(
 }
 
 /**
- * RFC-099 (D5) — read gate: reviews inherit task visibility. Non-viewers get
- * the same 403 shape the task routes use ('task-not-visible').
+ * RFC-099 (D5) — read gate: reviews inherit task visibility. RFC-285 B1:
+ * non-viewers get a 404 byte-identical to the missing-task branch (existence
+ * is not probeable via error codes).
  */
 async function ensureReviewVisible(deps: AppDeps, nodeRunId: string, actor: Actor): Promise<void> {
   const rows = await deps.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
@@ -103,7 +98,10 @@ async function ensureReviewVisible(deps: AppDeps, nodeRunId: string, actor: Acto
     throw new NotFoundError('task-not-found', `task '${run.taskId}' not found`)
   }
   if (!(await canViewTask(deps.db, actor, task))) {
-    throw new ForbiddenError('task-not-visible', `task '${task.id}' is not visible to this actor`)
+    // RFC-285 B1：不可见与不存在同形。这里的探测面是 nodeRunId——若发
+    // task-not-found，调用方就能区分「run 不存在」与「run 存在但任务被藏」，
+    // 等于确认 run 存在。必须与本函数顶部 missing-run 分支逐字节同形。
+    throw new NotFoundError('node-run-not-found', `node run '${nodeRunId}' not found`)
   }
 }
 

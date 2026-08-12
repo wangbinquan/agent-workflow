@@ -290,16 +290,24 @@ describe('GET /api/tasks/:id visibility gate', () => {
     expect((await reqAs(h.app, h.aliceToken, `/api/tasks/${h.systemTaskId}`)).status).toBe(200)
   })
 
-  test('owner / collaborator → 200; outsider → 403 task-not-visible', async () => {
+  // RFC-285 B1：外人得到与「任务不存在」逐字节同形的 404——错误码探测不出存在性。
+  test('owner / collaborator → 200; outsider → 404 与不存在逐字节同形（B1 oracle）', async () => {
     expect((await reqAs(h.app, h.bobToken, `/api/tasks/${h.bobTaskId}`)).status).toBe(200)
     expect((await reqAs(h.app, h.carolToken, `/api/tasks/${h.bobTaskId}`)).status).toBe(200)
-    const r = await reqAs(h.app, h.daveToken, `/api/tasks/${h.bobTaskId}`)
-    expect(r.status).toBe(403)
-    const body = (await r.json()) as { code: string }
-    expect(body.code).toBe('task-not-visible')
+    const invisible = await reqAs(h.app, h.daveToken, `/api/tasks/${h.bobTaskId}`)
+    expect(invisible.status).toBe(404)
+    // oracle 消除：同一调用方打「存在但无权」与「真不存在」两个 id，除 id 文本
+    // 外响应体逐字节相等（把 id 归一后直接比对整个 body 字符串）。
+    const missingId = 'no-such-task-id-b1'
+    const missing = await reqAs(h.app, h.daveToken, `/api/tasks/${missingId}`)
+    expect(missing.status).toBe(404)
+    const normalize = (s: string, id: string): string => s.replaceAll(id, '<ID>')
+    expect(normalize(await invisible.text(), h.bobTaskId)).toBe(
+      normalize(await missing.text(), missingId),
+    )
   })
 
-  test('outsider → 403 on system task as well', async () => {
-    expect((await reqAs(h.app, h.daveToken, `/api/tasks/${h.systemTaskId}`)).status).toBe(403)
+  test('outsider → 404 on system task as well（B1 同形）', async () => {
+    expect((await reqAs(h.app, h.daveToken, `/api/tasks/${h.systemTaskId}`)).status).toBe(404)
   })
 })

@@ -307,7 +307,12 @@ class PerQuestionSingleFlightServerQueue {
     } catch (error) {
       entry.error = error
       entry.uncertain = true
-      entry.disabled = error instanceof ApiError && (error.status === 403 || error.status === 409)
+      // 终局性错误 → 停写（草稿留在本地，不再重试）。RFC-285 B1 后「被撤权」
+      // 从 403 变成与「任务/会话不存在」同形的 404——两种情况对这条写链的正确
+      // 反应相同（服务端已不接受该草稿），404 并入停写集；409（提交冻结）不变。
+      entry.disabled =
+        error instanceof ApiError &&
+        (error.status === 403 || error.status === 404 || error.status === 409)
     } finally {
       entry.inFlight = null
       this.onStateChange()

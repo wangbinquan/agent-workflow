@@ -36,13 +36,7 @@ import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { resumeTask } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { Paths } from '@/util/paths'
-import {
-  ConflictError,
-  DomainError,
-  ForbiddenError,
-  NotFoundError,
-  ValidationError,
-} from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -90,7 +84,7 @@ async function ensureClarifyMember(
   return requireTaskMember(deps.db, actor, taskRow)
 }
 
-/** RFC-099 (D5) — read gate: clarify inherits task visibility (403 mirror of task routes). */
+/** RFC-099 (D5) — read gate: clarify inherits task visibility. RFC-285 B1: non-viewers get a 404 shaped like a missing session. */
 async function ensureClarifyVisible(
   deps: AppDeps,
   intermediaryNodeRunId: string,
@@ -108,10 +102,11 @@ async function ensureClarifyVisible(
   )[0]
   if (!taskRow) return
   if (!(await canViewTask(deps.db, actor, taskRow))) {
-    throw new ForbiddenError(
-      'task-not-visible',
-      `task '${taskRow.id}' is not visible to this actor`,
-    )
+    // RFC-285 B1：不可见 ≡ 不存在。这里不能用 task-not-found——那等于确认
+    // 「这个 session 存在且绑着某个任务」；对无权调用方，看不见的 clarify
+    // session 就该长得像根本没有这个 session（与真缺失走的
+    // clarify-session-not-found 字节同形）。
+    throw new NotFoundError('clarify-session-not-found', 'clarify session not found')
   }
 }
 
