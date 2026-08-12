@@ -20,6 +20,7 @@ import type {
   WorkflowValidationResult,
 } from '@agent-workflow/shared'
 import {
+  TERMINAL_TASK_STATUSES,
   CopyWorkflowRequestSchema,
   DeleteWorkflowSchema,
   serializeWorkflowDefinitionStorageV1,
@@ -34,7 +35,7 @@ import {
   WorkflowDraftSnapshotSchema,
   WorkflowNameSchema,
 } from '@agent-workflow/shared'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, notInArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { assertScriptAuthorAllowed, type ScriptAuthorPrincipal } from './scriptAuthorGate'
 import { assertCodeHostAuthorAllowed } from './codeHostAuthorGate'
@@ -687,14 +688,16 @@ export async function deleteWorkflow(
       )
     }
 
-    // Refuse on ANY task referencing this workflow — running, done, failed,
-    // canceled, interrupted. The check and DELETE share one transaction, so a
-    // task insert that wins first is always observed as workflow-in-use.
-    const referenceCount = countReferencingTasksInTx(tx, id)
+    // RFC-285 B2（D5/E2）：删除中档统一——只拒**非终态**引用（running /
+    // pending / awaiting_* / interrupted）；仅被历史（终态）任务引用的
+    // workflow 允许删除，终态任务详情容忍悬空引用（tasks.workflow_id 已随
+    // 0151 迁移软链化，与 workgroupId/agent 同型）。The check and DELETE
+    // share one transaction, so a task insert that wins first is observed.
+    const referenceCount = countNonTerminalReferencingTasksInTx(tx, id)
     if (referenceCount > 0) {
       throw new ConflictError(
         'workflow-in-use',
-        `workflow '${id}' has ${referenceCount} task(s) referencing it; delete those tasks first`,
+        `workflow '${id}' has ${referenceCount} non-terminal task(s) referencing it; finish or cancel them first`,
         // Task ids/statuses are task-ACL protected. A public workflow's owner
         // may not be a member of tasks launched by other users, so disclose
         // only the aggregate needed to explain why deletion is blocked.
@@ -872,9 +875,18 @@ export function broadcastWorkflowCreated(created: WorkflowDetail): void {
   })
 }
 
-function countReferencingTasksInTx(tx: DbTxSync, workflowId: string): number {
-  return tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.workflowId, workflowId)).all()
-    .length
+/**
+ * RFC-285 B2：删除门只数**非终态**引用（终态集合单源 shared/lifecycle.ts）。
+ * 终态引用不再阻删——展示层按悬空软链容忍（E2）。
+ */
+function countNonTerminalReferencingTasksInTx(tx: DbTxSync, workflowId: string): number {
+  return tx
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(eq(tasks.workflowId, workflowId), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])),
+    )
+    .all().length
 }
 
 function rowToWorkflow(row: WorkflowRow): Workflow {

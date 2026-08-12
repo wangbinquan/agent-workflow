@@ -345,6 +345,16 @@ describe('UnsavedChangesGuard', () => {
     await waitFor(() => screen.getByText('detail:a'))
     fireEvent.click(screen.getByTestId('split-card-b'))
     const firstDialog = await screen.findByTestId('unsaved-guard-dialog')
+    // audit-backlog「unsaved-guard 未决 flaky」终章（2026-08-13，与
+    // centralized-answer-pane 数字键同根因）：Dialog 的 Escape 处理是 passive
+    // effect 里 window.addEventListener 挂的**原生监听**（Dialog.tsx hotkey
+    // effect），而 findByTestId 在挂载 commit 的 MutationObserver **微任务**里
+    // 就 resolve、effects 排在其后宏任务——紧接的同步 ESC keydown 打在还没挂
+    // 监听的窗口上被静默吞掉，waitForElementToBeRemoved 永不 resolve、撞
+    // waitFor 超时（历史三次事故全是 ESC 变体，×/overlay 走合成事件从未红，
+    // 与该机制完全吻合）。act(async) 退出前强制冲刷 pending effects——确定性
+    // 锚点；对 ×/overlay 变体无害。
+    await act(async () => {})
     // Arm the observer before dismissing: resolver.reset() may remove this portal
     // in the same React turn. Waiting for the exact instance avoids polling a
     // global query and cannot accidentally accept a replacement dialog.

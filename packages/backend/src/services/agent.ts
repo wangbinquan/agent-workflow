@@ -630,6 +630,10 @@ export async function deleteAgent(
       })
       .from(workflows)
       .all()
+    // RFC-285 B2 档位说明：agent 对**任务**引用零检查即是统一中档——任务快照
+    // 冻结（workflowSnapshot/agent 定义随任务落盘），删除 agent 不影响在跑或
+    // 历史任务，展示层容忍悬空 agent 名。此处的 agent-in-use 挡的是 **workflow
+    // 定义**引用（活的编辑面），与任务引用中档是两回事。
     const refs = workflowsUsingAgentIn(wfRows, existing.id)
     if (refs.length > 0) {
       const refIds = new Set(refs.map((r) => r.id))

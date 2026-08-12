@@ -467,7 +467,8 @@ describe('RFC-199 workflow revision fencing', () => {
       worktreePath: '/tmp/worktree',
       baseBranch: 'main',
       branch: 'agent-workflow/delete-blocker',
-      status: 'done',
+      // RFC-285 B2：非终态引用才阻删（旧版 done 也阻——中档统一后 done 放行）。
+      status: 'running',
       inputs: '{}',
       startedAt: Date.now(),
       ownerUserId: 'carol',
@@ -490,7 +491,10 @@ describe('RFC-199 workflow revision fencing', () => {
     }
     expect(frames).toHaveLength(0)
 
-    await db.delete(tasks).where(eq(tasks.workflowId, workflow.id))
+    // RFC-285 B2 红→绿对：把引用翻成终态（不删行！）后删除成功——同时实证
+    // tasks.workflow_id 软链化（0151）：带终态引用直删不再撞 FK，引用悬空由
+    // 展示层容忍（E2）。
+    await db.update(tasks).set({ status: 'done' }).where(eq(tasks.workflowId, workflow.id))
     const mutationId = ulid()
     await deleteWorkflow(
       db,
@@ -499,6 +503,10 @@ describe('RFC-199 workflow revision fencing', () => {
       alice,
     )
     expect(await getWorkflow(db, workflow.id)).toBeNull()
+    // 软链实证：终态任务行存活、workflow_id 悬空指向已删 workflow。
+    const dangling = await db.select().from(tasks).where(eq(tasks.workflowId, workflow.id))
+    expect(dangling.length).toBe(1)
+    expect(dangling[0]!.status).toBe('done')
     expect(frames).toEqual([
       {
         type: 'workflow.deleted',

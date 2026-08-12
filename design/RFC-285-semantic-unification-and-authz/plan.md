@@ -58,6 +58,22 @@
   HEAD 已不成立，降级为复核记录）；B7 现状矩阵回归锁（scope×角色×读/管理）+
   Q4 candidate 读面收紧（list 两读法过滤 + detail 同形 404 + byte-oracle +
   发布恢复用例）+ 前端 useIsResourceAdmin 两点换用（E11；role-gate 源锁改锚）。
+- **T5（本 commit）**：**Q2 现网只读检查**（daemon db.sqlite，2026-08-13）——
+  按 shared/lifecycle.ts 终态定义（done/failed/canceled/**interrupted**），
+  被非终态任务引用的 workgroup 引用行 = **1**（awaiting_human ×1；另有
+  interrupted ×7 属终态不阻删、done ×37 / failed ×14 / canceled ×2）。收紧
+  影响面极小，照拍板落地。迁移 0151：tasks.workflow_id 硬 FK → soft link
+  （rename-first 12-step；实证 runner 固定 foreign_keys=OFF 下 RENAME 不改写
+  14 条入向 FK 的引用文本，语序安全；行数断言 + fk/quick check 全过；专属
+  migration-0151 测试四锁）。应用层三档统一：workflow 只拒非终态（rfc199
+  红→绿对：running 拒删 → 翻 done 删除成功 + 悬空软链实证）、workgroup 新增
+  非终态门（E3 收紧，rfc285-b2 矩阵：拒删披露仅聚合 count / 仅终态可删 /
+  翻终态转绿）、agent 现状即中档（源注升级：agent-in-use 挡的是 workflow
+  定义引用，与任务引用是两回事）。展示层核对：task detail 只渲染冻结
+  workflowId 文本、无活取——**现状天然容忍悬空**，无需改动。
+- **附带**：unsaved-guard ESC flaky 治本（93f02dd0 CI ubuntu 腿复发后定案——
+  与数字键家族同根因：Dialog Escape 是 effect 挂的 window 原生监听；act 冲刷
+  锚点修复，5×19 循环绿；backlog 销账）。
 - **门禁与推送**：T1-T7 链经 pin gate（quality/前端绿；backend 四条 5000ms 家族
   红全数隔离绿 + 基线对照〔87ed494d/afea367e/8d80be69/93f02dd0 静置全绿〕归属
   环境）后推送 93f02dd0，exact-SHA CI 看护中。**剩余：T5（B2 schema 迁移）、

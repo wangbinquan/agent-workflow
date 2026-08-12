@@ -889,9 +889,12 @@ export const tasks = sqliteTable(
     // (StartTaskSchema enforces 1..255 trim before INSERT). Migration 0021
     // backfilled historical rows from workflows.name or "task-{shortId}".
     name: text('name').notNull(),
-    workflowId: text('workflow_id')
-      .notNull()
-      .references(() => workflows.id),
+    /**
+     * RFC-285（B2/E2）：durable soft link, no FK —— 对齐 workgroupId 先例。
+     * 仍 NOT NULL（软链必填，只是不再强制存在性）：workflow 删除放宽为「只拒
+     * 非终态引用」后，终态任务详情容忍悬空引用（与 agent 删除后同型）。
+     */
+    workflowId: text('workflow_id').notNull(),
     workflowSnapshot: text('workflow_snapshot').notNull(), // JSON: workflow definition at start time
     // RFC-109: which workflows.version the frozen snapshot was taken from. NULL
     // for legacy rows (pre-0050; historical version unrecoverable). startTask

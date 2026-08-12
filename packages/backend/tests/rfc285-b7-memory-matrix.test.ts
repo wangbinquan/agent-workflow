@@ -30,13 +30,8 @@ async function seedAgent(db: DbClient, ownerUserId: string): Promise<string> {
   await db.insert(agents).values({
     id,
     name: 'matrix-agent',
-    description: '',
-    frontmatterJson: '{}',
-    bodyMd: '',
     ownerUserId,
     visibility: 'private',
-    createdAt: 1,
-    updatedAt: 1,
   })
   return id
 }

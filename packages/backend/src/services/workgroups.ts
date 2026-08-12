@@ -20,6 +20,7 @@ import type {
   WorkgroupSnapshotHash,
 } from '@agent-workflow/shared'
 import {
+  TERMINAL_TASK_STATUSES,
   CopyWorkgroupRequestSchema,
   DeleteWorkgroupSchema,
   QUARANTINED_SNAPSHOT_AGENT_ID,
@@ -30,13 +31,13 @@ import {
   WorkgroupDraftSnapshotSchema,
   WorkgroupNameSchema,
 } from '@agent-workflow/shared'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, notInArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { scheduledRowsReferencing } from './scheduledTaskRefs'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
-import { agents, scheduledTasks, users, workgroupMembers, workgroups } from '@/db/schema'
+import { agents, scheduledTasks, tasks, users, workgroupMembers, workgroups } from '@/db/schema'
 import {
   ConflictError,
   ForbiddenError,
@@ -558,6 +559,22 @@ export async function deleteWorkgroup(
       )
     }
     assertNoScheduledReferencesInTx(tx, principal, currentRow)
+    // RFC-285 B2（D5/E3，能力收缩——Q2 现网检查已记 T5 实施记录）：删除中档
+    // 统一——workgroup 从「可删留孤儿」收紧为拒**非终态**任务引用
+    // （tasks.workgroupId 软链查询；终态引用不阻删，与 workflow/agent 同档）。
+    // 披露沿 workflow.ts 的 task-ACL 论证：只给聚合 count。
+    const nonTerminalRefs = tx
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.workgroupId, id), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])))
+      .all().length
+    if (nonTerminalRefs > 0) {
+      throw new ConflictError(
+        'workgroup-in-use',
+        `workgroup '${id}' has ${nonTerminalRefs} non-terminal task(s) referencing it; finish or cancel them first`,
+        { referenceCount: nonTerminalRefs },
+      )
+    }
     // RFC-284 T10（§2.3）：grant 全清单查询收编 resourceAcl 单点。
     const audience: WorkgroupDeletedAudienceContext = {
       kind: 'workgroup.deleted-audience',
