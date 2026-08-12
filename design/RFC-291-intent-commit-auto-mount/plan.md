@@ -5,10 +5,17 @@
 
 ## 状态
 
-**设计门已过（v2）**，待用户批准进入实现。
+**Done（2026-08-12）** —— 四批五个 commit 全落 main 且被绿 CI 覆盖
+（superseding run head `9db6f808`，五个 commit 逐个验过 ancestor）：
+`ac5ba6d9` 批①面 A+B+F · `ebad8dca` 批②面 C · `a454f86c` 批③T6a ·
+`4198a336` 批③T6b-d · `39c9626a` 批④面 E。
 
 初版经双路设计门判 FAIL（11 条 finding：路 1 两条 + Codex 九条，其中「面 C 覆盖不全」两路独立同发）。
 8 条已在 v2 文档中处置，3 条方向题用户拍板后纳入（面 E / 面 F / copy 承诺弱化）。
+
+⚠️ **实现门（`CLAUDE.md` 双门第二道）未跑** —— 见验收清单末条。本 RFC 的实现期验证由以下替代：
+62 个新用例 + 每批隔离 worktree 的 `gate:local`（批④ 那轮 `all local gates passed`）+ 并发 session
+门禁三次交叉照错（`hintById` 残留 / 批④ 中间态 / pin base 未发布）。
 
 ## 用户拍板记录（2026-08-12）
 
@@ -135,18 +142,18 @@
 
 ## 验收清单
 
-- [ ] AC-1 ~ AC-5（自动挂载，含 ordinal 不复用口径）
-- [ ] AC-6 ~ AC-8 + AC-8b（copy 语义：卸原件、谱系根、只留最新副本、跨轮承继）
-- [ ] AC-9 / AC-9b ~ AC-11（失效挂载：materialize 覆盖、真错不吞、整轮收尾、上游接线）
-- [ ] AC-12 ~ AC-15（闭包扩边，含 freeze/dump 对拍与「不泄漏名字」边界）
-- [ ] AC-16 ~ AC-17（回归防护，断言口径已收窄 / 双守卫各断一次）
-- [ ] AC-18 ~ AC-19（call 边绑定：无 id、有 ref、回写不丢缓存、三处目标恒等）
-- [ ] AC-20 ~ AC-21（handle 高水位：不复用 ordinal、旧行退化）
-- [ ] `bun run gate:local` 全绿
-- [ ] 既有 `rfc234-intent-routes.test.ts`「create with mounts」复跑确认（它断言首轮 `detail:true`，是
+- [x] AC-1 ~ AC-5（自动挂载，含 ordinal 不复用口径）
+- [x] AC-6 ~ AC-8 + AC-8b（copy 语义：卸原件、谱系根、只留最新副本、跨轮承继）
+- [x] AC-9 / AC-9b ~ AC-11（失效挂载：materialize 覆盖、真错不吞、整轮收尾、上游接线）
+- [x] AC-12 ~ AC-15（闭包扩边，含 freeze/dump 对拍与「不泄漏名字」边界）
+- [x] AC-16 ~ AC-17（回归防护，断言口径已收窄 / 双守卫各断一次）
+- [x] AC-18 ~ AC-19（call 边绑定：无 id、有 ref、回写不丢缓存、三处目标恒等）
+- [x] AC-20 ~ AC-21（handle 高水位：不复用 ordinal、旧行退化）
+- [x] `bun run gate:local` 全绿（批④ 隔离 worktree：`all local gates passed`，backend 4/4 分片 446s）
+- [x] 既有 `rfc234-intent-routes.test.ts`「create with mounts」复跑确认（它断言首轮 `detail:true`，是
       受影响面，见 design §10.8）
-- [ ] Codex 实现门跑过并处置 findings
-- [ ] `design/plan.md` RFC 索引状态改 Done、`STATE.md` 完成表加行
+- [ ] **Codex 实现门未跑**（唯一未达成项）。替代验证见上方状态段；补跑的话应覆盖 intent 域五个 commit 的合并 diff
+- [x] `design/plan.md` RFC 索引状态改 Done、`STATE.md` 条目改 Done
 
 ## 实施记录
 
