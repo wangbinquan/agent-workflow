@@ -413,6 +413,10 @@ export const INHERITABLE_RUN_CONFIG_KEYS = [
   'maxActiveChildTasks',
   'maxInvocationDepth',
   'subagentLiveCapture',
+  // RFC-284 T30 修配（用户拍板转正）：RFC-253 两键此前根任务即断线（launch 臂
+  // runtime 携带、类型缺席、漏斗丢弃）——修通根侧的同时按拍板下传子任务。
+  'scriptInterpreters',
+  'scriptDepsInstallTimeoutMs',
 ] as const satisfies ReadonlyArray<keyof RunTaskOptions>
 
 export type InheritableRunConfig = Pick<

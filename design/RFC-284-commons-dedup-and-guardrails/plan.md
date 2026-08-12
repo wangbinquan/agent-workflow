@@ -163,7 +163,22 @@
   （LIKE 转义 / isOwnerNameUniqueViolation 死分支）登记 audit-backlog。
   路 1 顺手实证 AC-8：5032eb9f 的 39 条 CI check 全 success。
 
+- **T30 修配（用户拍板「你都做掉」）**：T20 登记表上呈的「疑似漏配」四字段
+  处置落地。追查升级诊断——codeHostConnections/codeHostFetch 属**刻意**：
+  scheduler 消费点自带 keyfile 自解析兜底（`opts.codeHostConnections ??
+  resolveCodeHostConnectionsFromKeyFile`），opts 注入是纯测试缝，根/子任务
+  同走自解析无断线 ⇒ 仅更正 t20 处置注释；scriptInterpreters/
+  scriptDepsInstallTimeoutMs 属**真死配**且比上呈更糟——不只子任务不继承，
+  **根任务同样断线**（launch 臂 `...launchRuntime` 运行时携带，但
+  StartTaskDeps 类型缺席 + runtimeConfigOpts 未拾取，spread 绕过 TS 溢出
+  属性检查静默丢弃；RFC-253 管理员解释器覆盖/依赖构建预算生产从未生效）。
+  修三点：StartTaskDeps 补两字段 + runtimeConfigOpts 漏斗拾取（task.ts）、
+  INHERITABLE_RUN_CONFIG_KEYS +2 下传子任务（scheduler.ts）；测试四点：
+  t20 处置表两键转 inherit + dropped 快照 12→10 + picker 17 键、rfc103
+  漏斗纯函数摊出锁 + config→deps→漏斗全链在场锁。proposal 补 C9。
+  同批完成用户拍板另两项：worktree 坟场清理（46→3，剩 3 为在用+他人）+
+  Parallels 双 VM 挂起确认（0.0% CPU）。
+
 **剩余**：T30 收尾——design/plan.md 索引状态刷新与 STATE.md 终账（**当前被
 RFC-293 session 在两文件上的未提交条目行卡住**：其 design/RFC-293-*/ 目录未
-追踪，现在提交索引会复刻 design 死链红；等其落齐三件套后一并置 Done）+
-「疑似漏配」四字段与坟场清理呈用户拍板。
+追踪，现在提交索引会复刻 design 死链红；等其落齐三件套后一并置 Done）。

@@ -2,6 +2,7 @@
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
 import type {
+  ScriptLanguage,
   PlannedDirectoryNode,
   PlannedRepo,
   FailureCode,
@@ -308,6 +309,14 @@ export interface StartTaskDeps {
    * agent.runtime=null node fell back to opencode). Omitted → scheduler default.
    */
   defaultRuntime?: string
+  /**
+   * RFC-253 — administrator interpreter overrides + dependency build budget.
+   * RFC-284 T30 修配（用户拍板）：launch 臂一直经 `...launchRuntime` 在运行时
+   * 携带这两键，但本类型缺席 + runtimeConfigOpts 未拾取 ⇒ 根任务与子任务
+   * **双双静默丢弃**（RFC-253 覆盖生产死配）。补类型 + 漏斗 + 继承登记三点。
+   */
+  scriptInterpreters?: Partial<Record<ScriptLanguage, string>>
+  scriptDepsInstallTimeoutMs?: number
   /** RFC-243 实现门 P0-1: the launch actor — closure name-resolution visibility fence. */
   launchActor?: Actor
   /** RFC-243 §3.2: daemon-wide active-child-task cap (config.maxActiveChildTasks). */
@@ -878,6 +887,8 @@ export function runtimeConfigOpts(
     | 'defaultRuntime'
     | 'maxActiveChildTasks'
     | 'maxInvocationDepth'
+    | 'scriptInterpreters'
+    | 'scriptDepsInstallTimeoutMs'
   >,
 ): Partial<RunTaskOptions> {
   return {
@@ -925,6 +936,14 @@ export function runtimeConfigOpts(
       : {}),
     ...(deps.codeHostResponseMaxBytes !== undefined
       ? { codeHostResponseMaxBytes: deps.codeHostResponseMaxBytes }
+      : {}),
+    // RFC-253（RFC-284 T30 修配）：管理员解释器覆盖 + 依赖构建预算——此前唯二
+    // 被漏斗丢弃的 launchRuntime 键（根任务即断线，见 StartTaskDeps 字段注释）。
+    ...(deps.scriptInterpreters !== undefined
+      ? { scriptInterpreters: deps.scriptInterpreters }
+      : {}),
+    ...(deps.scriptDepsInstallTimeoutMs !== undefined
+      ? { scriptDepsInstallTimeoutMs: deps.scriptDepsInstallTimeoutMs }
       : {}),
     // RFC-115: per-node timeout + retry budget + default runtime. Previously
     // timeout was hand-spread at each runTask call site and defaultRuntime was

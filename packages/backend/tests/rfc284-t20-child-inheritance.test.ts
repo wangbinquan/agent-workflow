@@ -6,13 +6,16 @@
 // 方向二（防顺手多配）：处置表以 `satisfies Record<keyof RunTaskOptions, …>`
 // 编译期穷尽——RunTaskOptions 新增任何字段，此文件不表态就不编译；把 dropped
 // 改标 inherit 还要同时动 registry 与本文件两处快照，评审必然可见。
-// dropped 侧 12 键的逐字段处置（design §4 路 2 P2 要求的登记表）：
-//   - scriptInterpreters / scriptDepsInstallTimeoutMs：**疑似漏配待另立**——
-//     管理员解释器覆盖不随子任务下传，子任务 script 节点回落 PATH/默认；
-//     是否应贯穿须产品拍板，本轮登记不改行为。
-//   - codeHostConnections / codeHostFetch：**疑似漏配待另立**——不下传则子任务
-//     code-host 节点按 `code-host-not-configured` 自跳过语义走；连接服务是
-//     daemon 单例，若应贯穿属新行为，另立处置。
+// dropped 侧 10 键的逐字段处置（design §4 路 2 P2 要求的登记表；T30 修配后
+// script 两键已离开本组，处置理由保留如下供追溯）：
+//   - scriptInterpreters / scriptDepsInstallTimeoutMs：已随 RFC-284 T30 修配
+//     **转 inherit**（用户拍板）——追查发现根任务同样断线（launch 臂 runtime
+//     携带、StartTaskDeps 缺席、runtimeConfigOpts 丢弃），根侧修通 + 子任务
+//     下传一并落地（proposal C9）。
+//   - codeHostConnections / codeHostFetch：**刻意不下传（T30 更正原「疑似漏配」
+//     判读）**——scheduler 在消费点自带 keyfile 自解析兜底
+//     （`opts.codeHostConnections ?? resolveCodeHostConnectionsFromKeyFile`，
+//     scheduler.ts）；opts 注入是纯测试缝，子任务与根任务同样走自解析，无断线。
 //   - fanoutMaxShardTotal：事实等效——默认常量同值（256），子任务回落默认与
 //     显式下传同判；显式贯穿留给配置线统一（RFC-287 装配线收敛的自然席位）。
 //   - commitPushModel / commitPushRuntime / commitPushMaxRepairRetries /
@@ -51,8 +54,8 @@ const DISPOSITION = {
   maxActiveChildTasks: 'inherit',
   maxInvocationDepth: 'inherit',
   subagentLiveCapture: 'inherit',
-  scriptInterpreters: 'dropped-registered',
-  scriptDepsInstallTimeoutMs: 'dropped-registered',
+  scriptInterpreters: 'inherit',
+  scriptDepsInstallTimeoutMs: 'inherit',
   fanoutMaxShardTotal: 'dropped-registered',
   codeHostConnections: 'dropped-registered',
   codeHostFetch: 'dropped-registered',
@@ -79,8 +82,6 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
   test('dropped 集合不变快照（改标签必须动这里，评审可见）', () => {
     expect(keysWith('dropped-registered')).toEqual(
       [
-        'scriptInterpreters',
-        'scriptDepsInstallTimeoutMs',
         'fanoutMaxShardTotal',
         'codeHostConnections',
         'codeHostFetch',
@@ -95,7 +96,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
     )
   })
 
-  test('picker 与旧逐字段展开同构：全值透传 15 键、undefined 不落键、appHome 恒在', () => {
+  test('picker 与登记面同构：全值透传 17 键（T30 修配 +2）、undefined 不落键、appHome 恒在', () => {
     const full: RunTaskOptions = {
       taskId: 't1',
       db: {} as RunTaskOptions['db'],
@@ -114,8 +115,10 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
       maxActiveChildTasks: 9,
       maxInvocationDepth: 10,
       subagentLiveCapture: { pollMs: 11, consecutiveFailureLimit: 12 },
-      // dropped 侧给值：绝不能出现在 picker 输出里
+      // T30 修配转正两键（RFC-253）：现在必须出现在 picker 输出里
       scriptInterpreters: { python: '/py' },
+      scriptDepsInstallTimeoutMs: 13,
+      // dropped 侧给值：绝不能出现在 picker 输出里
       fanoutMaxShardTotal: 99,
       commitPushModel: 'm',
     }
@@ -123,7 +126,9 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
     expect(Object.keys(picked).sort()).toEqual([...INHERITABLE_RUN_CONFIG_KEYS].sort())
     expect(picked.appHome).toBe('/home')
     expect(picked.subagentLiveCapture).toEqual({ pollMs: 11, consecutiveFailureLimit: 12 })
-    expect('scriptInterpreters' in picked).toBe(false)
+    expect(picked.scriptInterpreters).toEqual({ python: '/py' })
+    expect(picked.scriptDepsInstallTimeoutMs).toBe(13)
+    expect('fanoutMaxShardTotal' in picked).toBe(false)
     expect('commitPushModel' in picked).toBe(false)
 
     const sparse = pickInheritableRunConfig({

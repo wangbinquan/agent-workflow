@@ -62,7 +62,7 @@
 - 不恢复/不触碰 sandbox-era 已删除机制。
 - 不做 `opencode_session_id` 列改名、node_run 单调 id 等登记项（审计报告 §7）。
 
-## 4. 能力影响清单（逐项确认；本 RFC 无能力收缩，以下为观测/告警面变化）
+## 4. 能力影响清单（逐项确认；本 RFC 无能力收缩——C1-C8 为观测/告警面变化，C9 为死配修活）
 
 | #   | 变化                                                                                                                                                            | 影响                                                                                                                    |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -74,6 +74,7 @@
 | C6  | pluginInstaller npm 超时改为进程树击杀                                                                                                                          | 超时场景不再泄漏孙进程；正常安装不变                                                                                    |
 | C7  | pluginInstaller 失败错误文案的截断方向从「头 64KB 前缀」变「滚动尾部」；超时从即时 SIGKILL 变 TERM→KILL 宽限；信号死 exitCode 从 node 的 `code=null → -1` 变 Bun 的 `128+signal`（实测 137）（设计门路 2 抓出，收编 managedProcess 的必然差异；信号死数值轴为实现期实测补记） | 安装失败的诊断文案内容换头为尾（可诊断信息通常在头部——实现实测：错误详情取头 2KB 切片〔STDERR_CAPTURE_BYTES〕，<8MB 输出下与旧管线逐字节同轴，对拍锁 `rfc284-plugin-installer-managed.test.ts`）；信号死仍走安装失败路径（错误类型不变，仅诊断数值变）；outcome/产物路径不变 |
 | C8  | §3.5 进程治理三项（T29 路 1 补账——正文明示但初版漏列 C 行）：probeIndexer 补 10s deadline（原无界，HTTP 路径可挂死）；deep/runner 超时杀升级 killProcessTree（原单 pid 留活孙进程）；probeInterpreter 对齐探针骨架（组杀替代单 pid kill(9)） | 探针挂死/超时场景的可观察行为变化：原「永久挂/留孤儿」变「有界失败/树杀净」——诊断与资源面纯改善，成功路径逐字节不变（对拍锁 rfc284-spawn-version-probe / deep 套件） |
+| C9  | RFC-253 `scriptInterpreters` / `scriptDepsInstallTimeoutMs` 从「静默失效」变生效（T30 修配，用户拍板）：StartTaskDeps + runtimeConfigOpts 补线修通根任务，INHERITABLE_RUN_CONFIG_KEYS +2 下传子任务                                                     | 此前两键被漏斗静默丢弃（launch 臂运行时携带但类型缺席，spread 绕过 TS 检查）——管理员解释器覆盖与依赖构建预算生产从未到达 script 节点；修配后按配置生效，未配置部署零变化（undefined 不落键）                              |
 
 ## 5. 依赖与排序
 
@@ -98,5 +99,6 @@
   变异（加回 'agent'）即红。
 - AC-6 clarify 迁移后 import 路径全部经 facade 或新路径，`gate:local` 全绿。
 - AC-7 对拍：G1-G4 各批次改前后关键面行为零漂移（复用 RFC-282 对拍姿势，纯函数
-  输出字节等价；C1-C8 之外不得出现任何行为差异——C8 为 T29 路 1 补账）。
+  输出字节等价；C1-C9 之外不得出现任何行为差异——C8 为 T29 路 1 补账、
+  C9 为 T30 修配用户拍板）。
 - AC-8 每批 pin worktree `gate:local` 全绿 + exact-SHA CI 绿。

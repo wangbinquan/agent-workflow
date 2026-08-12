@@ -118,6 +118,24 @@ describe('RFC-103 T2 runtimeConfigOpts — 单一事实源摊配置', () => {
       'multiProcessSubprocessConcurrency',
     )
   })
+
+  // RFC-284 T30 修配（RFC-253 覆盖生产死配，漏斗第四次漏接线）：launch 臂一直经
+  // `...launchRuntime` 在运行时携带这两键，但 StartTaskDeps 类型缺席 + 本漏斗
+  // 未拾取 ⇒ 根任务与子任务双双静默丢弃（spread 绕过 TS 溢出属性检查——与
+  // RFC-266 同型事故）。锁死：两键经同一漏斗摊出，缺省不合成键。
+  test('RFC-284 T30: scriptInterpreters / scriptDepsInstallTimeoutMs 经同一漏斗摊出；缺省不合成键', () => {
+    expect(
+      runtimeConfigOpts({
+        scriptInterpreters: { python: '/opt/py' },
+        scriptDepsInstallTimeoutMs: 120_000,
+      }),
+    ).toEqual({
+      scriptInterpreters: { python: '/opt/py' },
+      scriptDepsInstallTimeoutMs: 120_000,
+    })
+    expect(runtimeConfigOpts({})).not.toHaveProperty('scriptInterpreters')
+    expect(runtimeConfigOpts({})).not.toHaveProperty('scriptDepsInstallTimeoutMs')
+  })
 })
 
 describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
@@ -204,6 +222,21 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     ]) {
       expect(launchSrc).toContain(`cfg.${key} !== undefined`)
       expect(launchSrc).toContain(`out.${key} = cfg.${key}`)
+    }
+  })
+
+  // RFC-284 T30: RFC-253 两键的全链在场锁 —— config 读出（launchRuntimeConfig）
+  // → StartTaskDeps 携带（task.ts）→ 漏斗摊出（上面的纯函数用例）→ 子任务继承
+  //（rfc284-t20 登记表）。任何一环回退即红。
+  test('RFC-284 T30: scriptInterpreters / scriptDepsInstallTimeoutMs 从 config 读出且 deps 类型在场', () => {
+    const launchSrc = readFileSync(
+      join(import.meta.dir, '../src/services/launchRuntimeConfig.ts'),
+      'utf8',
+    )
+    for (const key of ['scriptInterpreters', 'scriptDepsInstallTimeoutMs']) {
+      expect(launchSrc).toContain(`out.${key} = cfg.${key}`)
+      expect(taskSrc).toContain(`${key}?:`) // StartTaskDeps 字段声明在场
+      expect(taskSrc).toContain(`deps.${key} !== undefined`) // 漏斗拾取在场
     }
   })
 
