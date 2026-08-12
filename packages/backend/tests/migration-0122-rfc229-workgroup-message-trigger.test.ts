@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path'
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
 
-function freezeThrough0121(): string {
+function freezeThrough(maxIdx: number): string {
   const dir = mkdtempSync(join(tmpdir(), 'rfc229-0122-'))
   tempDirs.push(dir)
   cpSync(MIGRATIONS, dir, { recursive: true })
@@ -19,10 +19,12 @@ function freezeThrough0121(): string {
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
     entries: Array<{ idx: number }>
   }
-  journal.entries = journal.entries.filter((entry) => entry.idx <= 120)
+  journal.entries = journal.entries.filter((entry) => entry.idx <= maxIdx)
   writeFileSync(journalPath, `${JSON.stringify(journal, null, 2)}\n`)
   return dir
 }
+
+const freezeThrough0121 = (): string => freezeThrough(120)
 
 function seedTaskAndLegacyMessage(raw: Database): void {
   raw.exec(`
@@ -55,7 +57,12 @@ describe('migration 0122 RFC-229 workgroup message trigger', () => {
     migrate(drizzle(raw), { migrationsFolder: freezeThrough0121() })
     seedTaskAndLegacyMessage(raw)
 
-    migrate(drizzle(raw), { migrationsFolder: MIGRATIONS })
+    // RFC-285 T5 改锚：第二段重放封顶在 0122 自己（idx 121），不再 replay 到
+    // HEAD——0151 是链上首个「父表重建」（tasks 12-step），按 RFC-115 F1 契约
+    // 只支持 FK-OFF 重放（drizzle 单事务内 pragma 无效），本测试 FK-ON 连接
+    // 继续全链会让 seeded tasks 的 DROP 级联清掉子表行。意图（0122 自身升级
+    // 语义 + SET NULL/cascade 行为）不受封顶影响。
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough(121) })
 
     const columns = raw.query("PRAGMA table_info('workgroup_messages')").all() as Array<{
       name: string

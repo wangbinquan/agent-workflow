@@ -14,6 +14,12 @@
 -- 入向 FK 自然指向新表；FK ON 模式会改写引用（危险语序），本迁移不在该模式下跑。
 --
 -- DROP 旧表前做行数一致断言（0132 的「CHECK 临时表 + 条件 INSERT」原语）。
+--
+-- ⚠ 内联 pragma 三明治（0019/0035/0057 既有先例）：本仓存在**事务外 FK ON**
+-- 的重放语境（snapshot 构建 / 迁移测试的 raw 重放）——该模式下 RENAME 会把
+-- 14 个子表的引用文本改写成 `__old_tasks`（2a8fce6b 门禁 snapshot-parity 实锤）。
+-- 显式 OFF 后 rename 不改写；daemon runner 本就事务内（pragma no-op、恒 OFF）。
+PRAGMA foreign_keys=OFF;--> statement-breakpoint
 CREATE TEMP TABLE `__rfc285_assert` (`ok` integer NOT NULL CHECK (`ok` = 1));--> statement-breakpoint
 ALTER TABLE `tasks` RENAME TO `__old_tasks`;--> statement-breakpoint
 CREATE TABLE `tasks` (
@@ -116,4 +122,5 @@ CREATE INDEX `idx_tasks_list_started_id` ON `tasks` (`started_at`,`id`);--> stat
 CREATE INDEX `idx_tasks_list_status_started_id` ON `tasks` (`status`,`started_at`,`id`);--> statement-breakpoint
 CREATE INDEX `idx_tasks_list_parent_started_id` ON `tasks` (`parent_task_id`,`started_at`,`id`);--> statement-breakpoint
 CREATE INDEX `idx_tasks_list_owner_started_id` ON `tasks` (`owner_user_id`,`started_at`,`id`);--> statement-breakpoint
-CREATE INDEX `idx_tasks_webhook_trigger` ON `tasks` (`webhook_trigger_id`);
+CREATE INDEX `idx_tasks_webhook_trigger` ON `tasks` (`webhook_trigger_id`);--> statement-breakpoint
+PRAGMA foreign_keys=ON;

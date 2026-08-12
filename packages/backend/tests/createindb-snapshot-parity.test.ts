@@ -29,11 +29,19 @@ import { createInMemoryDb } from '../src/db/client'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-/** Control DB: built the OLD way — raw :memory: + replay every migration. */
+/** Control DB: built the OLD way — raw :memory: + replay every migration.
+ *
+ * RFC-285 T5 改锚：重放期 FK **OFF**、结束后 ON——对齐本仓受支持的迁移重放
+ * 契约（RFC-115 F1：drizzle 单事务内 pragma 无效，openDb / migratedSnapshot
+ * 均事务外先 OFF 再迁移）。原来 FK ON 重放只在「链上没有父表重建」时侥幸
+ * 等价；0151（tasks 12-step rebuild）落地后，FK ON 下 RENAME 会把 14 个子表
+ * 的引用文本改写成 `__old_tasks`——那不是快照优化的缺陷，而是不受支持的
+ * 重放模式本身的产物。本测试的意图是「hydration ≡ 受支持方式的 replay」。 */
 function freshlyMigratedControl(): Database {
   const sqlite = new Database(':memory:')
-  sqlite.exec('PRAGMA foreign_keys = ON;')
+  sqlite.exec('PRAGMA foreign_keys = OFF;')
   migrate(drizzle(sqlite), { migrationsFolder: MIGRATIONS })
+  sqlite.exec('PRAGMA foreign_keys = ON;')
   return sqlite
 }
 

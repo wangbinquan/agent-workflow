@@ -12,7 +12,7 @@ const MERGER_ID = '00000000000000000000000001'
 const FUSION_WORKFLOW_ID = '00000000000000000000000002'
 const homes: string[] = []
 
-function freezeThrough0116(): string {
+function freezeThrough(maxIdx: number): string {
   const dir = mkdtempSync(join(tmpdir(), 'rfc223-0117-'))
   homes.push(dir)
   cpSync(MIGRATIONS, dir, { recursive: true })
@@ -20,10 +20,19 @@ function freezeThrough0116(): string {
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
     entries: Array<{ idx: number }>
   }
-  journal.entries = journal.entries.filter((entry) => entry.idx <= 115)
+  journal.entries = journal.entries.filter((entry) => entry.idx <= maxIdx)
   writeFileSync(journalPath, `${JSON.stringify(journal, null, 2)}\n`)
   return dir
 }
+
+const freezeThrough0116 = (): string => freezeThrough(115)
+// RFC-285 T5 改锚：seeded 重放的第二段**封顶在 0117 自己**（idx 116），不再
+// replay 到 HEAD。原写法成立的前提是链后缀没有「父表重建」迁移；0151（tasks
+// 12-step rebuild，本仓首个带 14 条入向 FK 的父表重建）按 RFC-115 F1 契约只
+// 支持 FK-OFF 重放（drizzle 单事务内 pragma 无效；受支持路径 openDb /
+// migratedSnapshot 均事务外先 OFF）。本测试的意图是「0117 自身正确且 FK 两
+// 模式无关」——封顶后意图不变，也不再把后缀链拽进不受支持的 FK-ON 重放。
+const freezeThrough0117 = (): string => freezeThrough(116)
 
 afterEach(() => {
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
@@ -92,7 +101,7 @@ describe('migration 0117 RFC-223 fusion provenance', () => {
          'memory-parent', 4, 1);
     `)
 
-    migrate(drizzle(raw), { migrationsFolder: MIGRATIONS })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough0117() })
 
     expect(raw.query('SELECT id, skill_id FROM fusions ORDER BY id').all()).toEqual([
       { id: 'fusion-conflict', skill_id: QUARANTINED },
@@ -232,7 +241,7 @@ describe('migration 0117 RFC-223 fusion provenance', () => {
         raw.query("SELECT id FROM users WHERE id IN ('owner','grantee') ORDER BY id").all(),
       ).toEqual([{ id: 'grantee' }, { id: 'owner' }])
       expect(raw.query('SELECT COUNT(*) AS n FROM resource_grants').get()).toEqual({ n: 4 })
-      migrate(drizzle(raw), { migrationsFolder: MIGRATIONS })
+      migrate(drizzle(raw), { migrationsFolder: freezeThrough0117() })
 
       expect(
         raw
@@ -347,7 +356,7 @@ describe('migration 0117 RFC-223 fusion provenance', () => {
       .query('INSERT INTO agents (id, name, builtin) VALUES (?, ?, 0)')
       .run(MERGER_ID, 'ordinary-agent')
 
-    expect(() => migrate(drizzle(raw), { migrationsFolder: MIGRATIONS })).toThrow()
+    expect(() => migrate(drizzle(raw), { migrationsFolder: freezeThrough0117() })).toThrow()
     expect(raw.query('SELECT id, name, builtin FROM agents WHERE id = ?').get(MERGER_ID)).toEqual({
       id: MERGER_ID,
       name: 'ordinary-agent',

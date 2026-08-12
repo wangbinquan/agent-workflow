@@ -62,6 +62,24 @@ function partialMigrationsDir(): string {
   return dir
 }
 
+/** 含 0095 本尊、不含其后任何迁移的部分目录（RFC-285 T5 差量封顶用）。 */
+function partialMigrationsThrough0095(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'aw-rfc189-mig-thru-'))
+  cpSync(MIGRATIONS, dir, { recursive: true })
+  const journalPath = join(dir, 'meta', '_journal.json')
+  const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
+    entries: Array<{ tag: string }>
+  }
+  const cut = journal.entries.findIndex((e) => e.tag === '0095_rfc189_wg_round')
+  expect(cut).toBeGreaterThan(0)
+  for (const dropped of journal.entries.slice(cut + 1)) {
+    rmSync(join(dir, `${dropped.tag}.sql`))
+  }
+  journal.entries = journal.entries.slice(0, cut + 1)
+  writeFileSync(journalPath, JSON.stringify(journal, null, 2))
+  return dir
+}
+
 interface SynthRow {
   nodeId: string
   status: string
@@ -189,7 +207,11 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
     })
 
     // 应用 0095（drizzle 按 __drizzle_migrations 差量补跑）。
-    migrate(db, { migrationsFolder: MIGRATIONS })
+    // RFC-285 T5 改锚：差量段封顶在 0095 自己，不再补跑到 HEAD——0151（tasks
+    // 父表重建）按 RFC-115 F1 契约只支持 FK-OFF 重放；本连接是 createInMemoryDb
+    // 的 FK-ON 面，继续全链会级联清掉 seeded node_runs。0095 回填 oracle 的
+    // 意图不受封顶影响。
+    migrate(db, { migrationsFolder: partialMigrationsThrough0095() })
 
     const expected = oracleRounds(lwLeaderRows)
     const leaderRows = await db

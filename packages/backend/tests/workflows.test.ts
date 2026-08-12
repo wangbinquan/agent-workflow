@@ -191,9 +191,10 @@ describe('workflow service', () => {
     ).rejects.toBeInstanceOf(ConflictError)
   })
 
-  test('delete refuses when ANY task references the workflow (done)', async () => {
-    // Per design Q&A round 18: any reference (regardless of status) blocks
-    // deletion. Future relaxation tracked in STATE.md tech debt.
+  test('delete SUCCEEDS with only terminal (done) references — RFC-285 B2 中档统一', async () => {
+    // 原「any reference blocks deletion」（design Q&A round 18 的旧约）已被
+    // RFC-285 B2（D5/E2）取代：只拒**非终态**引用；终态引用随 0151 软链化
+    // 允许悬空。running 半边仍由上一条用例锁死。
     const wf = await createWorkflow(db, {
       name: 'wf',
       description: '',
@@ -213,9 +214,8 @@ describe('workflow service', () => {
       inputs: '{}',
       startedAt: Date.now(),
     })
-    await expect(
-      deleteWorkflow(db, wf.id, deleteInput(wf), SYSTEM_PRINCIPAL),
-    ).rejects.toBeInstanceOf(ConflictError)
+    await deleteWorkflow(db, wf.id, deleteInput(wf), SYSTEM_PRINCIPAL)
+    expect(await getWorkflow(db, wf.id)).toBeNull()
   })
 
   test('validate on empty workflow definition returns ok', async () => {

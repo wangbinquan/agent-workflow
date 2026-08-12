@@ -363,7 +363,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // （intent_sessions.handle_watermark_json 纯增量列，DEFAULT '{}' 无 backfill）。
     // RFC-292 bumped to 150 with 0150_rfc292_trigger_namespace
     // （webhook template v2 版本列 + 合法历史 task context 嵌套 backfill）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(150)
+    // RFC-285 T5 bumped to 151 with 0151_rfc285_workflow_soft_link
+    // （tasks.workflow_id 硬 FK → durable soft link 的 12-step rebuild）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(151)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {
@@ -506,11 +508,15 @@ describe('RFC-120 §18 — migration 0063 dispatched_at backfill', () => {
       sqlite.close()
     }
 
-    // 3. Apply the full migrations folder → drizzle applies ONLY 0063 (ALTER + backfill).
+    // 3. Apply the full migrations folder → drizzle applies 0063..HEAD.
+    //    RFC-285 T5 改锚：重放期 FK OFF、结束后 ON——受支持的迁移重放契约
+    //    （RFC-115 F1，openDb 同姿势）。原 FK ON 重放在 0151（tasks 父表
+    //    12-step rebuild）落地后会把 seeded 行经 DROP 级联清掉。
     {
       const sqlite = new Database(dbPath)
-      sqlite.exec('PRAGMA foreign_keys = ON;')
+      sqlite.exec('PRAGMA foreign_keys = OFF;')
       migrate(drizzle(sqlite, {}), { migrationsFolder: MIGRATIONS })
+      sqlite.exec('PRAGMA foreign_keys = ON;')
       sqlite.close()
     }
 
