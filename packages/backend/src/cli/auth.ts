@@ -5,7 +5,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { openDb } from '@/db/client'
 import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
-import { getAuthLoginPolicy, setPasswordLoginEnabled } from '@/services/authLoginPolicy'
+import { getAuthLoginPolicy, setPasswordLoginEnabled } from '@/auth/loginPolicy'
 import { Paths } from '@/util/paths'
 
 async function openPolicyDb() {

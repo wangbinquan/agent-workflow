@@ -14,7 +14,7 @@ import {
   assertBootstrapComplete,
   getAuthLoginPolicy,
   getAuthMethodDiscovery,
-} from '@/services/authLoginPolicy'
+} from '@/auth/loginPolicy'
 import { createOidcProvidersService } from '@/services/oidcProviders'
 import {
   bindInvitedUserWithIdentity,

@@ -7,7 +7,7 @@ import { openDb } from '@/db/client'
 import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
 import { Paths } from '@/util/paths'
 import { hashPassword } from '@/auth/passwords'
-import { completeBootstrapWithAdmin, isBootstrapRequired } from '@/services/authLoginPolicy'
+import { completeBootstrapWithAdmin, isBootstrapRequired } from '@/auth/loginPolicy'
 import {
   createUser,
   disableUser,

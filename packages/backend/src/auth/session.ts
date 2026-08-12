@@ -16,7 +16,7 @@ import {
 } from '@agent-workflow/shared'
 import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
 import { users } from '@/db/schema'
-import { getAuthLoginPolicy, isBootstrapRequired } from '@/services/authLoginPolicy'
+import { getAuthLoginPolicy, isBootstrapRequired } from '@/auth/loginPolicy'
 import { ForbiddenError } from '@/util/errors'
 import { UnauthorizedError } from '@/util/errors'
 import { buildActor, SYSTEM_USER_ID, type Actor } from './actor'

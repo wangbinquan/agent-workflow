@@ -36,7 +36,7 @@ import {
   completeBootstrapWithAdmin,
   createPasswordLoginSession,
   getAuthLoginPolicy,
-} from '@/services/authLoginPolicy'
+} from '@/auth/loginPolicy'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { listTokenAuditForUser } from '@/services/tokenAudit'

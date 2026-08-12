@@ -18,7 +18,7 @@ import {
   getAuthMethodDiscovery,
   getAuthLoginPolicy,
   setPasswordLoginEnabled,
-} from '../src/services/authLoginPolicy'
+} from '../src/auth/loginPolicy'
 import { createUser } from '../src/services/users'
 import { DomainError } from '../src/util/errors'
 import { freezeAt } from './migration-freeze'

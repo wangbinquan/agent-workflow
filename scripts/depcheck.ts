@@ -289,13 +289,6 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     removeWhen:
       '把 resolveSubmoduleParams/syncSubmodules/buildGitignoreBlock 以参数注入下沉（no-circular git 环族账目的同一方案）；RFC-284 后续批次或独立切片执行。',
   })),
-  {
-    rule: 'no-auth-to-services',
-    from: `${B}/auth/session.ts`,
-    to: `${B}/services/authLoginPolicy.ts`,
-    why: 'auth 下沉为底层（决策 D22）后现存唯一反向值边：session.ts 消费登录策略，而策略本质是认证域逻辑。',
-    removeWhen: 'RFC-284 T24：authLoginPolicy 迁入 auth/loginPolicy.ts，此边随之消失。',
-  },
 ]
 
 // ---------------------------------------------------------------------------

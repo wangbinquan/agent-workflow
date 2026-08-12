@@ -6,7 +6,7 @@ import {
   PatchOidcProviderBodySchema,
   UpdateAuthLoginPolicyBodySchema,
 } from '@agent-workflow/shared'
-import { getAuthLoginPolicy, setPasswordLoginEnabled } from '@/services/authLoginPolicy'
+import { getAuthLoginPolicy, setPasswordLoginEnabled } from '@/auth/loginPolicy'
 import { createOidcProvidersService, redactedProvider } from '@/services/oidcProviders'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
