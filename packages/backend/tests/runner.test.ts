@@ -15,6 +15,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from '../src/services/runner'
+import type { Logger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -114,6 +115,51 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
       else process.env[k] = p
     }
   })
+}
+
+function proxyDbInsert(db: DbClient, intercept: (table: unknown) => void): DbClient {
+  return new Proxy(db, {
+    get(target, property) {
+      if (property === 'insert') {
+        return (table: unknown) => {
+          intercept(table)
+          return (target.insert as unknown as (value: unknown) => unknown)(table)
+        }
+      }
+      const value = Reflect.get(target, property, target) as unknown
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  }) as DbClient
+}
+
+function proxyDbTransaction(db: DbClient, intercept: () => void): DbClient {
+  return new Proxy(db, {
+    get(target, property) {
+      if (property === 'transaction') {
+        return (...args: unknown[]) => {
+          intercept()
+          return (target.transaction as unknown as (...values: unknown[]) => unknown).apply(
+            target,
+            args,
+          )
+        }
+      }
+      const value = Reflect.get(target, property, target) as unknown
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  }) as DbClient
+}
+
+function captureWarnings(): { log: Logger; warnings: Array<Record<string, unknown>> } {
+  const warnings: Array<Record<string, unknown>> = []
+  const log: Logger = {
+    debug: () => undefined,
+    info: () => undefined,
+    warn: (message, fields) => warnings.push({ message, ...(fields ?? {}) }),
+    error: () => undefined,
+    child: () => log,
+  }
+  return { log, warnings }
 }
 
 describe('runNode', () => {
@@ -363,6 +409,203 @@ describe('runNode', () => {
     const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
     expect(row?.status).toBe('failed')
     expect(row?.failureCode).toBe('runtime-stream-interrupted')
+    expect(row?.errorMessage).toBe(result.errorMessage)
+  })
+
+  test('a transient SQLITE_BUSY event insert is retried without stopping the agent', async () => {
+    const agent = makeAgent()
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const { log, warnings } = captureWarnings()
+    let failNextEventInsert = true
+    const transientDb = proxyDbInsert(h.db, (table) => {
+      if (table !== nodeRunEvents || !failNextEventInsert) return
+      failNextEventInsert = false
+      const error = new Error('database is locked') as Error & { code: string }
+      error.name = 'SQLiteError'
+      error.code = 'SQLITE_BUSY'
+      throw error
+    })
+
+    const result = await withEnv(
+      {
+        MOCK_OPENCODE_EVENTS: JSON.stringify([{ type: 'step_start' }]),
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'survived contention' }),
+      },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'node1',
+          agent,
+          inputs: {},
+          worktreePath: h.worktreePath,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          skills: [],
+          appHome: h.appHome,
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          db: transientDb,
+          log,
+        }),
+    )
+
+    expect(result.status).toBe('done')
+    expect(result.outputs.summary).toBe('survived contention')
+    expect(
+      warnings.some(
+        (entry) =>
+          entry.message === 'sqlite-write-retry' &&
+          entry.operation === 'node-run-event/stdout' &&
+          entry.sqliteCode === 'SQLITE_BUSY',
+      ),
+    ).toBe(true)
+    const events = h.db
+      .select()
+      .from(nodeRunEvents)
+      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      .all()
+    expect(events.some((event) => event.kind === 'step_start')).toBe(true)
+  })
+
+  test('a transient SQLITE_BUSY session-lease claim retries the whole transaction', async () => {
+    const agent = makeAgent()
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const { log, warnings } = captureWarnings()
+    let failNextTransaction = true
+    const transientDb = proxyDbTransaction(h.db, () => {
+      if (!failNextTransaction) return
+      failNextTransaction = false
+      const error = new Error('database is locked') as Error & { code: string }
+      error.name = 'SQLiteError'
+      error.code = 'SQLITE_BUSY_SNAPSHOT'
+      throw error
+    })
+
+    const result = await withEnv(
+      {
+        MOCK_OPENCODE_EMIT_SESSION_ID: 'session-busy-retry',
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'lease survived contention' }),
+      },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'node1',
+          agent,
+          inputs: {},
+          worktreePath: h.worktreePath,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          skills: [],
+          appHome: h.appHome,
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          db: transientDb,
+          log,
+        }),
+    )
+
+    expect(result.status).toBe('done')
+    expect(result.sessionId).toBe('session-busy-retry')
+    expect(
+      warnings.some(
+        (entry) =>
+          entry.message === 'sqlite-write-retry' &&
+          entry.operation === 'runtime-session-lease/claim' &&
+          entry.sqliteCode === 'SQLITE_BUSY_SNAPSHOT',
+      ),
+    ).toBe(true)
+    const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    expect(row?.opencodeSessionId).toBe('session-busy-retry')
+  })
+
+  test('pre-spawn session-reset insert failure returns failed instead of stranding running', async () => {
+    const agent = makeAgent()
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const spawnMarker = join(h.appHome, 'must-not-spawn.jsonl')
+    await h.db.run(sql`
+      CREATE TRIGGER fail_session_reset_event
+      BEFORE INSERT ON node_run_events
+      BEGIN
+        SELECT RAISE(ABORT, 'forced session reset persistence failure');
+      END
+    `)
+
+    const result = await withEnv(
+      {
+        MOCK_OPENCODE_CAPTURE_ARGV_TO: spawnMarker,
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'must not run' }),
+      },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'node1',
+          agent,
+          inputs: {},
+          worktreePath: h.worktreePath,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          skills: [],
+          appHome: h.appHome,
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          db: h.db,
+          resumeSessionId: 'session-without-an-owner',
+        }),
+    )
+
+    expect(result.status).toBe('failed')
+    expect(result.errorMessage).toContain('runtime-session-reset-persistence-failed')
+    expect(result.errorMessage).toContain('forced session reset persistence failure')
+    expect(existsSync(spawnMarker)).toBe(false)
+    const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    expect(row?.status).toBe('failed')
+    expect(row?.errorMessage).toBe(result.errorMessage)
+  })
+
+  test('declared outputs persist atomically and retain the failing insert reason', async () => {
+    const agent = makeAgent({ outputs: ['summary', 'findings'] })
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    await h.db.run(sql`
+      CREATE TRIGGER fail_findings_output
+      BEFORE INSERT ON node_run_outputs
+      WHEN NEW.port_name = 'findings'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced findings output persistence failure');
+      END
+    `)
+
+    const result = await withEnv(
+      {
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({
+          summary: 'would otherwise commit first',
+          findings: 'must roll the batch back',
+        }),
+      },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'node1',
+          agent,
+          inputs: {},
+          worktreePath: h.worktreePath,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          skills: [],
+          appHome: h.appHome,
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          db: h.db,
+        }),
+    )
+
+    expect(result.status).toBe('failed')
+    expect(result.outputs).toEqual({})
+    expect(result.errorMessage).toContain('runtime-output-persistence-failed')
+    expect(result.errorMessage).toContain('forced findings output persistence failure')
+    const outputRows = h.db
+      .select()
+      .from(nodeRunOutputs)
+      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+      .all()
+    expect(outputRows).toEqual([])
+    const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    expect(row?.status).toBe('failed')
     expect(row?.errorMessage).toBe(result.errorMessage)
   })
 

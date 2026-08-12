@@ -48,6 +48,8 @@ import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
+import { dbTxSync } from '@/db/txSync'
+import { retrySqliteWrite, sqliteWriteDiagnostic } from '@/db/sqliteWriteRetry'
 import { createLogger, type Logger } from '@/util/log'
 import {
   CLARIFY_FORBIDDEN_PREFIX,
@@ -475,6 +477,28 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // The stdout pump is runtime-agnostic (driver.parseEvent normalizes events).
   const runtime: RuntimeKind = opts.runtime ?? 'opencode'
   const driver = getRuntimeDriver(runtime)
+  const persistRunnerWrite = async <T>(
+    operation: string,
+    write: () => T | Promise<T>,
+  ): Promise<T> => {
+    try {
+      return await retrySqliteWrite(write, {
+        onRetry: (retry) => {
+          log.warn('sqlite-write-retry', {
+            nodeRunId: opts.nodeRunId,
+            runtime,
+            operation,
+            ...retry,
+          })
+        },
+      })
+    } catch (error) {
+      // managedProcess retains Error.message only. Put the operation and SQLite
+      // code into that bounded hand-off; runner masks/caps it before logging or
+      // persisting, and the original stays attached for direct callers.
+      throw new Error(`${operation}: ${sqliteWriteDiagnostic(error)}`, { cause: error })
+    }
+  }
 
   // 1. RFC-154: resolve the config-dir injection profile (frozen at dispatch;
   // omitted → protocol default). Skill staging moved INTO each driver's
@@ -814,32 +838,77 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   }
 
   if (effectiveResumeSessionId !== undefined && effectiveResumeSessionId !== '') {
-    const owner = getRuntimeSessionLease(opts.db, runtime, effectiveResumeSessionId)
+    const requestedResumeSessionId = effectiveResumeSessionId
+    const owner = getRuntimeSessionLease(opts.db, runtime, requestedResumeSessionId)
     if (owner === undefined) {
       // Rows from before the natural-runtime cutover deliberately have no
       // neutral owner. Start a fresh native session and leave a durable,
       // human-readable reset event instead of pretending resume succeeded.
-      await opts.db.insert(nodeRunEvents).values({
-        nodeRunId: opts.nodeRunId,
-        ts: Date.now(),
-        kind: 'text',
-        payload: JSON.stringify({
-          code: 'runtime-session-reset',
-          previousSessionUnavailable: true,
-        }),
-      })
+      try {
+        await persistRunnerWrite('node-run-event/session-reset', () =>
+          opts.db.insert(nodeRunEvents).values({
+            nodeRunId: opts.nodeRunId,
+            ts: Date.now(),
+            kind: 'text',
+            payload: JSON.stringify({
+              code: 'runtime-session-reset',
+              previousSessionUnavailable: true,
+            }),
+          }),
+        )
+      } catch (error) {
+        const detail = maskDiagnosticsText(
+          error instanceof Error ? error.message : sqliteWriteDiagnostic(error),
+        ).slice(0, 2000)
+        const errorMessage = `runtime-session-reset-persistence-failed: ${detail}`
+        log.warn('runtime-session-reset-persistence-failed', {
+          nodeRunId: opts.nodeRunId,
+          runtime,
+          err: detail,
+        })
+        try {
+          await setNodeRunStatus({
+            db: opts.db,
+            nodeRunId: opts.nodeRunId,
+            to: 'failed',
+            allowedFrom: ['running'],
+            reason: 'runtime-session-reset-persistence-failed',
+            extra: { finishedAt: Date.now(), errorMessage },
+          })
+        } catch (statusError) {
+          log.warn('runtime-session-reset-failure-status-persist-failed', {
+            nodeRunId: opts.nodeRunId,
+            err: maskDiagnosticsText(sqliteWriteDiagnostic(statusError)).slice(0, 2000),
+          })
+        }
+        return {
+          status: 'failed',
+          exitCode: null,
+          outputs: {},
+          tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+          prompt,
+          errorMessage,
+        }
+      }
       effectiveResumeSessionId = undefined
     } else {
       try {
-        runtimeLeaseToken = preclaimRuntimeSessionResume(opts.db, {
-          protocol: runtime,
-          sessionId: effectiveResumeSessionId,
-          taskId: opts.taskId,
-          nodeId: opts.nodeId,
-          currentNodeRunId: opts.nodeRunId,
-          leaseNonceDigest: runtimeLeaseNonceDigest,
-        })
-        if (!confirmRuntimeSessionResume(opts.db, runtimeLeaseToken)) {
+        const claimedToken = await persistRunnerWrite('runtime-session-lease/preclaim', () =>
+          preclaimRuntimeSessionResume(opts.db, {
+            protocol: runtime,
+            sessionId: requestedResumeSessionId,
+            taskId: opts.taskId,
+            nodeId: opts.nodeId,
+            currentNodeRunId: opts.nodeRunId,
+            leaseNonceDigest: runtimeLeaseNonceDigest,
+          }),
+        )
+        runtimeLeaseToken = claimedToken
+        if (
+          !(await persistRunnerWrite('runtime-session-lease/confirm', () =>
+            confirmRuntimeSessionResume(opts.db, claimedToken),
+          ))
+        ) {
           throw new Error('runtime session could not be linked to the current run')
         }
       } catch (error) {
@@ -1128,16 +1197,19 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       if (ev) {
         if (ev.sessionId !== undefined) {
           if (sessionId === undefined) {
-            sessionId = ev.sessionId
+            const nativeSessionId = ev.sessionId
+            sessionId = nativeSessionId
             if (runtimeLeaseToken === undefined) {
-              runtimeLeaseToken = claimNewRuntimeSession(opts.db, {
-                protocol: runtime,
-                sessionId,
-                taskId: opts.taskId,
-                nodeId: opts.nodeId,
-                currentNodeRunId: opts.nodeRunId,
-                leaseNonceDigest: runtimeLeaseNonceDigest,
-              })
+              runtimeLeaseToken = await persistRunnerWrite('runtime-session-lease/claim', () =>
+                claimNewRuntimeSession(opts.db, {
+                  protocol: runtime,
+                  sessionId: nativeSessionId,
+                  taskId: opts.taskId,
+                  nodeId: opts.nodeId,
+                  currentNodeRunId: opts.nodeRunId,
+                  leaseNonceDigest: runtimeLeaseNonceDigest,
+                }),
+              )
             } else if (runtimeLeaseToken.sessionId !== sessionId) {
               throw new Error('runtime returned a different native session id')
             }
@@ -1159,24 +1231,28 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // parent_session_id=null so the SessionTab parser can bucket parent
         // events against post-run captured child events without ambiguity.
         const evtSessionId = ev.sessionId ?? sessionId ?? null
-        await opts.db.insert(nodeRunEvents).values({
-          nodeRunId: opts.nodeRunId,
-          ts,
-          kind: ev.kind,
-          payload: ev.rawLine,
-          sessionId: evtSessionId,
-          parentSessionId: null,
-        })
+        await persistRunnerWrite('node-run-event/stdout', () =>
+          opts.db.insert(nodeRunEvents).values({
+            nodeRunId: opts.nodeRunId,
+            ts,
+            kind: ev.kind,
+            payload: ev.rawLine,
+            sessionId: evtSessionId,
+            parentSessionId: null,
+          }),
+        )
         broadcastParentRunning()
       } else {
         // Non-JSON stdout lines shouldn't happen with --format json, but record
         // them as kind=text for debugging.
-        await opts.db.insert(nodeRunEvents).values({
-          nodeRunId: opts.nodeRunId,
-          ts: Date.now(),
-          kind: 'text',
-          payload: line,
-        })
+        await persistRunnerWrite('node-run-event/stdout', () =>
+          opts.db.insert(nodeRunEvents).values({
+            nodeRunId: opts.nodeRunId,
+            ts: Date.now(),
+            kind: 'text',
+            payload: line,
+          }),
+        )
         appendAgentText(line)
         broadcastParentRunning()
       }
@@ -1228,12 +1304,14 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // A one-shot binding so onStderrLine can reference it before its decl below.
 
     const persistStderrLine = async (line: string): Promise<void> => {
-      await opts.db.insert(nodeRunEvents).values({
-        nodeRunId: opts.nodeRunId,
-        ts: Date.now(),
-        kind: 'stderr',
-        payload: line,
-      })
+      await persistRunnerWrite('node-run-event/stderr', () =>
+        opts.db.insert(nodeRunEvents).values({
+          nodeRunId: opts.nodeRunId,
+          ts: Date.now(),
+          kind: 'stderr',
+          payload: line,
+        }),
+      )
       // RFC-031: detect opencode's plugin-load error log lines and surface a
       // synthetic `text` event tagged `[rfc031/plugin-load-failed]`. opencode
       // only logs + publishes these (does NOT kill the parent process — see
@@ -1241,17 +1319,19 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // this tap the operator never sees that an injected plugin failed.
       const decoded = detectPluginLoadFailure(line, opts.plugins ?? [])
       if (decoded !== null) {
-        await opts.db.insert(nodeRunEvents).values({
-          nodeRunId: opts.nodeRunId,
-          ts: Date.now(),
-          kind: 'text',
-          payload: `[rfc031/plugin-load-failed] ${JSON.stringify({
-            rfc: 'RFC-031',
-            code: 'plugin-load-failed',
-            pluginName: decoded.pluginName,
-            message: decoded.message,
-          })}`,
-        })
+        await persistRunnerWrite('node-run-event/plugin-load-failed', () =>
+          opts.db.insert(nodeRunEvents).values({
+            nodeRunId: opts.nodeRunId,
+            ts: Date.now(),
+            kind: 'text',
+            payload: `[rfc031/plugin-load-failed] ${JSON.stringify({
+              rfc: 'RFC-031',
+              code: 'plugin-load-failed',
+              pluginName: decoded.pluginName,
+              message: decoded.message,
+            })}`,
+          }),
+        )
       }
     }
 
@@ -1310,6 +1390,17 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     aborted = runResult.outcome === 'aborted'
     timedOut = runResult.outcome === 'timeout'
     const exitCode = runResult.exitCode
+    // RFC-284 T14（D9）：有界 post-exit drain 超时 = 完成 run 上的证据丢失
+    // （exitCode 本身可信）。结构化告警 + 随 startup_verification_json 附加
+    // 观测字段（下方 record 组装处），envelope 解析失败文案加前缀提示根因。
+    const outputTailTruncated = runResult.drainTimedOut === true
+    if (outputTailTruncated) {
+      log.warn('runtime-output-tail-truncated', {
+        nodeRunId: opts.nodeRunId,
+        taskId: opts.taskId,
+        exitCode,
+      })
+    }
     preserveLiveRuntimeState = childUnkillable
     // A line callback can fail while parsing runtime output, claiming a native
     // session, or persisting stdout/stderr. managedProcess deliberately catches
@@ -1563,7 +1654,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       } else if (kind === 'none') {
         status = 'failed'
         failureCode = 'envelope-missing'
-        errorMessage = 'no <workflow-output> envelope found in stdout'
+        errorMessage = `${outputTailTruncated ? 'output tail truncated; ' : ''}no <workflow-output> envelope found in stdout`
       } else {
         // kind === 'output' — legacy happy path.
         const envelope = extractLastEnvelope(accumulatedText, envelopeNonce)
@@ -1572,7 +1663,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         if (envelope === null) {
           status = 'failed'
           failureCode = 'envelope-missing'
-          errorMessage = 'no <workflow-output> envelope found in stdout'
+          errorMessage = `${outputTailTruncated ? 'output tail truncated; ' : ''}no <workflow-output> envelope found in stdout`
         } else {
           const parsed = parseEnvelope(envelope, opts.agent.outputs, envelopeNonce)
           outputs = Object.fromEntries(parsed.ports)
@@ -1749,29 +1840,47 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           // 的 agent 没有 path 形声明端口（wg_* 协议端口皆文本）；防御性地，此处
           // persist=false 时归档引用同样不落库。
           if (status === 'done' && opts.persistDeclaredOutputs !== false) {
-            for (const [name, content] of parsed.ports) {
-              // RFC-072: persist the resolved output kind so the Outputs tab can
-              // tell file-path ports from text. NULL when the agent declared no
-              // kind for this port. flag-audit §8 决策：入库前 canonical 化——
-              // agent frontmatter 仍可声明 legacy 别名 'markdown_file'，但持久列
-              // 统一存 'path<md>'（migration 0075 清洗了存量，别再倒灌）。
-              const rawKind = outputKinds?.[name]
-              const kind = rawKind !== undefined ? normalizeKindString(rawKind) : null
-              const persisted = normalizedContent.get(name) ?? content
-              const archiveJson = archiveJsonByPort.get(name) ?? null
-              await opts.db
-                .insert(nodeRunOutputs)
-                .values({
-                  nodeRunId: opts.nodeRunId,
-                  portName: name,
-                  content: persisted,
-                  kind,
-                  archiveJson,
-                })
-                .onConflictDoUpdate({
-                  target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-                  set: { content: persisted, kind, archiveJson },
-                })
+            try {
+              await persistRunnerWrite('node-run-output/batch', () =>
+                dbTxSync(opts.db, (tx) => {
+                  for (const [name, content] of parsed.ports) {
+                    // RFC-072: persist the resolved output kind so the Outputs
+                    // tab can tell file-path ports from text. Keep every port in
+                    // one synchronous transaction: a later failure must roll
+                    // earlier upserts back instead of exposing partial outputs.
+                    const rawKind = outputKinds?.[name]
+                    const kind = rawKind !== undefined ? normalizeKindString(rawKind) : null
+                    const persisted = normalizedContent.get(name) ?? content
+                    const archiveJson = archiveJsonByPort.get(name) ?? null
+                    tx.insert(nodeRunOutputs)
+                      .values({
+                        nodeRunId: opts.nodeRunId,
+                        portName: name,
+                        content: persisted,
+                        kind,
+                        archiveJson,
+                      })
+                      .onConflictDoUpdate({
+                        target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+                        set: { content: persisted, kind, archiveJson },
+                      })
+                      .run()
+                  }
+                }),
+              )
+            } catch (error) {
+              const detail = maskDiagnosticsText(
+                error instanceof Error ? error.message : sqliteWriteDiagnostic(error),
+              ).slice(0, 2000)
+              log.warn('runtime-output-persistence-failed', {
+                nodeRunId: opts.nodeRunId,
+                runtime,
+                err: detail,
+              })
+              status = 'failed'
+              errorMessage = `runtime-output-persistence-failed: ${detail}`
+              outputs = {}
+              portFilePaths.length = 0
             }
           }
         }
@@ -1851,6 +1960,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         declared: injectionDeclared,
         observation,
         verification,
+        // T14：证据丢失仅在既有 record 上附加（NULL 列 run 只打 warn，不合成
+        // 三段必填的占位结构——设计门 P2/P3 裁决）。
+        ...(outputTailTruncated ? { outputTailTruncated: true } : {}),
       }
       startupVerificationJson = JSON.stringify(record)
       const gaps =

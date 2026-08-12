@@ -284,7 +284,7 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     expect(result.status).toBe('failed')
     expect(result.failureCode).toBe('runtime-stream-interrupted')
     expect(result.errorMessage).toContain(
-      'claude-code stream persistence failed: forced Claude stderr persistence failure',
+      'node-run-event/stderr: [SQLITE_CONSTRAINT_TRIGGER] forced Claude stderr persistence failure',
     )
     expect(result.errorMessage).not.toContain('claude-pump-secret')
 

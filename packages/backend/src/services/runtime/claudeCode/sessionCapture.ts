@@ -3,6 +3,7 @@
 // stdout stream-json pump). Mirrors opencode's RFC-027 SQLite walk, but claude
 // persists transcripts as JSONL files (verified hands-on, design §0.3/§6.1):
 //   <configRoot>/projects/<cwd-slug>/<sessionId>/subagents/agent-<id>.jsonl
+//   <configRoot>/projects/<cwd-slug>/<sessionId>/subagents/workflows/<wf>/agent-<id>.jsonl
 // Non-fatal: any failure writes a `subagent_capture_failed` marker so SessionTab
 // falls back gracefully (same contract as the opencode path).
 //
@@ -24,10 +25,15 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { DEFAULT_CONFIG_DIR_PROFILE, type RuntimeConfigDirProfile } from '@agent-workflow/shared'
+import { basename, join } from 'node:path'
+import {
+  DEFAULT_CONFIG_DIR_PROFILE,
+  maskDiagnosticsText,
+  type RuntimeConfigDirProfile,
+} from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents } from '@/db/schema'
+import { retrySqliteWrite, sqliteWriteDiagnostic } from '@/db/sqliteWriteRetry'
 import type { Logger } from '@/util/log'
 import { parseEvent } from './events'
 
@@ -148,15 +154,101 @@ function findSessionDirs(projectsRoot: string, rootSessionId: string): string[] 
     .filter((dir) => existsSync(join(dir, rootSessionId, 'subagents')))
 }
 
+const AGENT_TRANSCRIPT_RE = /^agent-.+\.jsonl$/
+const CAPTURE_INSERT_BATCH_SIZE = 200
+
+interface ClaudeAgentTranscript {
+  sessionId: string
+  lines: string[]
+  toolUseId?: string
+  spawnDepth?: number
+}
+
+/** Claude 2026.8 introduced `subagents/workflows/<wf>/agent-*.jsonl`. */
+function findAgentTranscriptFiles(dir: string): string[] {
+  const files: string[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...findAgentTranscriptFiles(path))
+    } else if (entry.isFile() && AGENT_TRANSCRIPT_RE.test(entry.name)) {
+      files.push(path)
+    }
+  }
+  return files.sort()
+}
+
+function readAgentTranscript(path: string): ClaudeAgentTranscript {
+  const transcript: ClaudeAgentTranscript = {
+    sessionId: basename(path).replace(/\.jsonl$/, ''),
+    lines: readFileSync(path, 'utf-8').split('\n'),
+  }
+  const metaPath = path.replace(/\.jsonl$/, '.meta.json')
+  if (!existsSync(metaPath)) return transcript
+  try {
+    const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as Record<string, unknown>
+    if (typeof meta.toolUseId === 'string' && meta.toolUseId.length > 0) {
+      transcript.toolUseId = meta.toolUseId
+    }
+    if (typeof meta.spawnDepth === 'number' && Number.isFinite(meta.spawnDepth)) {
+      transcript.spawnDepth = meta.spawnDepth
+    }
+  } catch {
+    // Transcript content is still useful. Missing/corrupt optional metadata
+    // only degrades its parent link to root; it must not drop the whole agent.
+  }
+  return transcript
+}
+
+/** Tool-use IDs emitted by one agent; child `.meta.json.toolUseId` points here. */
+function agentToolUseIds(lines: readonly string[]): string[] {
+  const ids: string[] = []
+  for (const line of lines) {
+    if (line.trim().length === 0) continue
+    try {
+      const row = JSON.parse(line) as { message?: { content?: unknown } }
+      if (!Array.isArray(row.message?.content)) continue
+      for (const block of row.message.content) {
+        if (block === null || typeof block !== 'object') continue
+        const candidate = block as { type?: unknown; id?: unknown }
+        if (candidate.type === 'tool_use' && typeof candidate.id === 'string') {
+          ids.push(candidate.id)
+        }
+      }
+    } catch {
+      // parseEvent below has the same best-effort line contract.
+    }
+  }
+  return ids
+}
+
 export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Promise<void> {
   const slug = cwdSlug(opts.worktreePath)
   const projectRoots = opts.configRoots.map((root) => join(root, 'projects'))
   const candidates = [
-    // Fast path: if the guess happens to be right, no directory scan at all.
-    ...projectRoots.map((root) => join(root, slug)),
-    // Authoritative: find the directory that actually contains this session.
-    ...projectRoots.flatMap((root) => findSessionDirs(root, opts.rootSessionId)),
+    ...new Set([
+      // Fast path: if the guess happens to be right, no directory scan at all.
+      ...projectRoots.map((root) => join(root, slug)),
+      // Authoritative: find the directory that actually contains this session.
+      ...projectRoots.flatMap((root) => findSessionDirs(root, opts.rootSessionId)),
+    ]),
   ]
+  const persistRows = async (
+    rows: Array<typeof nodeRunEvents.$inferInsert>,
+    operation: string,
+  ): Promise<void> => {
+    if (rows.length === 0) return
+    await retrySqliteWrite(() => opts.db.insert(nodeRunEvents).values(rows), {
+      onRetry: (retry) => {
+        opts.log.warn('sqlite-write-retry', {
+          nodeRunId: opts.nodeRunId,
+          runtime: 'claude-code',
+          operation,
+          ...retry,
+        })
+      },
+    })
+  }
   try {
     let captured = 0
     let located = false
@@ -164,24 +256,53 @@ export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Pr
       const subDir = join(projDir, opts.rootSessionId, 'subagents')
       if (!existsSync(subDir)) continue
       located = true
-      for (const file of readdirSync(subDir)) {
-        if (!file.endsWith('.jsonl')) continue
-        const subSessionId = file.replace(/\.jsonl$/, '') // agent-<id>
-        const content = readFileSync(join(subDir, file), 'utf-8')
-        for (const line of content.split('\n')) {
+      const transcripts = findAgentTranscriptFiles(subDir).map(readAgentTranscript)
+      const ownerByToolUseId = new Map<string, string>()
+      for (const transcript of transcripts) {
+        for (const toolUseId of agentToolUseIds(transcript.lines)) {
+          ownerByToolUseId.set(toolUseId, transcript.sessionId)
+        }
+      }
+
+      const rows: Array<typeof nodeRunEvents.$inferInsert> = []
+      for (const transcript of transcripts) {
+        const inferredParent =
+          transcript.toolUseId === undefined
+            ? undefined
+            : ownerByToolUseId.get(transcript.toolUseId)
+        const parentSessionId =
+          inferredParent !== undefined && inferredParent !== transcript.sessionId
+            ? inferredParent
+            : opts.rootSessionId
+        if (
+          transcript.spawnDepth !== undefined &&
+          transcript.spawnDepth > 1 &&
+          inferredParent === undefined
+        ) {
+          opts.log.warn('claude-subagent-parent-unresolved', {
+            nodeRunId: opts.nodeRunId,
+            sessionId: transcript.sessionId,
+            spawnDepth: transcript.spawnDepth,
+          })
+        }
+        for (const line of transcript.lines) {
           if (line.trim().length === 0) continue
           const ev = parseEvent(line)
           if (ev === null) continue
-          await opts.db.insert(nodeRunEvents).values({
+          rows.push({
             nodeRunId: opts.nodeRunId,
             ts: ev.timestamp ?? Date.now(),
             kind: ev.kind,
             payload: ev.rawLine,
-            sessionId: subSessionId,
-            parentSessionId: opts.rootSessionId,
+            sessionId: transcript.sessionId,
+            parentSessionId,
           })
-          captured++
         }
+      }
+      for (let offset = 0; offset < rows.length; offset += CAPTURE_INSERT_BATCH_SIZE) {
+        const batch = rows.slice(offset, offset + CAPTURE_INSERT_BATCH_SIZE)
+        await persistRows(batch, 'claude-subagent-event-batch')
+        captured += batch.length
       }
       if (captured > 0) break // first candidate dir with data wins
     }
@@ -199,24 +320,30 @@ export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Pr
       })
     }
   } catch (err) {
+    const detail = maskDiagnosticsText(sqliteWriteDiagnostic(err)).slice(0, 2000)
     opts.log.warn('claude-subagent-capture-failed', {
       nodeRunId: opts.nodeRunId,
-      err: err instanceof Error ? err.message : String(err),
+      err: detail,
     })
     // marker row so SessionTab renders the AC-10 fallback (same kind opencode uses).
     try {
-      await opts.db.insert(nodeRunEvents).values({
-        nodeRunId: opts.nodeRunId,
-        ts: Date.now(),
-        kind: 'subagent_capture_failed',
-        payload: JSON.stringify({
-          rfc: 'RFC-111',
-          reason: err instanceof Error ? err.message : String(err),
-          rootSessionId: opts.rootSessionId,
-        }),
-        sessionId: opts.rootSessionId,
-        parentSessionId: null,
-      })
+      await persistRows(
+        [
+          {
+            nodeRunId: opts.nodeRunId,
+            ts: Date.now(),
+            kind: 'subagent_capture_failed',
+            payload: JSON.stringify({
+              rfc: 'RFC-111',
+              reason: detail,
+              rootSessionId: opts.rootSessionId,
+            }),
+            sessionId: opts.rootSessionId,
+            parentSessionId: null,
+          },
+        ],
+        'claude-subagent-capture-failure-marker',
+      )
     } catch {
       // give up — the run itself already succeeded; capture is auxiliary.
     }

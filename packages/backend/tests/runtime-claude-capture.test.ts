@@ -18,7 +18,7 @@ import {
   cwdSlug,
 } from '../src/services/runtime/claudeCode/sessionCapture'
 import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
-import { createLogger } from '../src/util/log'
+import { createLogger, type Logger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -159,6 +159,198 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       Date.parse('2026-07-07T04:50:52.174Z'),
       Date.parse('2026-07-07T04:50:53.500Z'),
     ])
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  test('recurses modern workflow directories and restores depth-1/2/3 parent links', async () => {
+    const { db, nodeRunId } = await seed()
+    const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-nested-'))
+    const worktree = join(root, 'wt')
+    mkdirSync(worktree, { recursive: true })
+    const configDir = join(root, '.claude')
+    const rootSession = 'sess-root-nested'
+    const subDir = join(configDir, 'projects', cwdSlug(worktree), rootSession, 'subagents')
+    mkdirSync(subDir, { recursive: true })
+
+    const assistantLine = (
+      agentId: string,
+      timestamp: string,
+      content: Array<Record<string, unknown>>,
+    ): string =>
+      JSON.stringify({
+        type: 'assistant',
+        agentId,
+        sessionId: rootSession,
+        timestamp,
+        message: { content },
+      })
+
+    writeFileSync(
+      join(subDir, 'agent-parent.jsonl'),
+      [
+        assistantLine('parent', '2026-08-12T12:00:00.000Z', [
+          { type: 'text', text: 'parent turn' },
+        ]),
+        assistantLine('parent', '2026-08-12T12:00:01.000Z', [
+          { type: 'tool_use', name: 'Agent', id: 'toolu-spawn-child' },
+        ]),
+      ].join('\n'),
+    )
+    writeFileSync(
+      join(subDir, 'agent-parent.meta.json'),
+      JSON.stringify({
+        agentType: 'general-purpose',
+        toolUseId: 'toolu-spawn-parent',
+        spawnDepth: 1,
+      }),
+    )
+
+    writeFileSync(
+      join(subDir, 'agent-child.jsonl'),
+      [
+        assistantLine('child', '2026-08-12T12:00:02.000Z', [{ type: 'text', text: 'child turn' }]),
+        assistantLine('child', '2026-08-12T12:00:03.000Z', [
+          { type: 'tool_use', name: 'Agent', id: 'toolu-spawn-grandchild' },
+        ]),
+      ].join('\n'),
+    )
+    writeFileSync(
+      join(subDir, 'agent-child.meta.json'),
+      JSON.stringify({ agentType: 'Explore', toolUseId: 'toolu-spawn-child', spawnDepth: 2 }),
+    )
+
+    writeFileSync(
+      join(subDir, 'agent-grandchild.jsonl'),
+      assistantLine('grandchild', '2026-08-12T12:00:04.000Z', [
+        { type: 'text', text: 'grandchild turn' },
+      ]),
+    )
+    writeFileSync(
+      join(subDir, 'agent-grandchild.meta.json'),
+      JSON.stringify({
+        agentType: 'Explore',
+        toolUseId: 'toolu-spawn-grandchild',
+        spawnDepth: 3,
+      }),
+    )
+
+    // Claude Code 2026.8 also stores workflow-owned agents one level deeper.
+    // Their metadata has spawnDepth=1 but no toolUseId, so they belong to root.
+    const workflowDir = join(subDir, 'workflows', 'wf_modern-layout')
+    mkdirSync(workflowDir, { recursive: true })
+    writeFileSync(
+      join(workflowDir, 'agent-workflow.jsonl'),
+      assistantLine('workflow', '2026-08-12T12:00:05.000Z', [
+        { type: 'text', text: 'workflow turn' },
+      ]),
+    )
+    writeFileSync(
+      join(workflowDir, 'agent-workflow.meta.json'),
+      JSON.stringify({ agentType: 'workflow-subagent', spawnDepth: 1 }),
+    )
+    writeFileSync(
+      join(workflowDir, 'journal.jsonl'),
+      assistantLine('journal', '2026-08-12T12:00:06.000Z', [
+        { type: 'text', text: 'workflow journal is not an agent transcript' },
+      ]),
+    )
+
+    await captureClaudeSessions({
+      rootSessionId: rootSession,
+      nodeRunId,
+      taskId: 'ignored',
+      db,
+      log: createLogger('test'),
+      configRoots: [configDir],
+      worktreePath: worktree,
+    })
+
+    const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+    const parents = new Map(rows.map((row) => [row.sessionId, row.parentSessionId]))
+    expect(rows).toHaveLength(6)
+    expect(parents.get('agent-parent')).toBe(rootSession)
+    expect(parents.get('agent-child')).toBe('agent-parent')
+    expect(parents.get('agent-grandchild')).toBe('agent-child')
+    expect(parents.get('agent-workflow')).toBe(rootSession)
+    expect(rows.some((row) => row.sessionId === 'journal')).toBe(false)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  test('batches transcript events and retries one transient SQLITE_BUSY insert', async () => {
+    const { db, nodeRunId } = await seed()
+    const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-batch-'))
+    const worktree = join(root, 'wt')
+    mkdirSync(worktree, { recursive: true })
+    const configDir = join(root, '.claude')
+    const rootSession = 'sess-root-batch'
+    const subDir = join(configDir, 'projects', cwdSlug(worktree), rootSession, 'subagents')
+    mkdirSync(subDir, { recursive: true })
+    writeFileSync(
+      join(subDir, 'agent-many.jsonl'),
+      Array.from({ length: 205 }, (_, index) =>
+        JSON.stringify({
+          type: 'assistant',
+          sessionId: rootSession,
+          timestamp: new Date(Date.UTC(2026, 7, 12, 12, 1, 0, index)).toISOString(),
+          message: { content: [{ type: 'text', text: `turn-${index}` }] },
+        }),
+      ).join('\n'),
+    )
+
+    let eventInsertCalls = 0
+    let failFirstInsert = true
+    const transientDb = new Proxy(db, {
+      get(target, property) {
+        if (property === 'insert') {
+          return (table: unknown) => {
+            if (table === nodeRunEvents) {
+              eventInsertCalls++
+              if (failFirstInsert) {
+                failFirstInsert = false
+                const error = new Error('database is locked') as Error & { code: string }
+                error.name = 'SQLiteError'
+                error.code = 'SQLITE_BUSY'
+                throw error
+              }
+            }
+            return (target.insert as unknown as (value: unknown) => unknown)(table)
+          }
+        }
+        const value = Reflect.get(target, property, target) as unknown
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    }) as DbClient
+    const warnings: Array<{ message: string; fields?: Record<string, unknown> }> = []
+    const log: Logger = {
+      debug: () => undefined,
+      info: () => undefined,
+      warn: (message, fields) => warnings.push({ message, fields }),
+      error: () => undefined,
+      child: () => log,
+    }
+
+    await captureClaudeSessions({
+      rootSessionId: rootSession,
+      nodeRunId,
+      taskId: 'ignored',
+      db: transientDb,
+      log,
+      configRoots: [configDir],
+      worktreePath: worktree,
+    })
+
+    const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
+    expect(rows).toHaveLength(205)
+    // One failed attempt + two batches (200 and 5), not 205 autocommit writes.
+    expect(eventInsertCalls).toBe(3)
+    expect(
+      warnings.some(
+        (entry) =>
+          entry.message === 'sqlite-write-retry' &&
+          entry.fields?.operation === 'claude-subagent-event-batch' &&
+          entry.fields.sqliteCode === 'SQLITE_BUSY',
+      ),
+    ).toBe(true)
     rmSync(root, { recursive: true, force: true })
   })
 
