@@ -21,6 +21,7 @@ import {
   codeHostActionFields,
   codeHostActionSupported,
   codeHostActionsByGroup,
+  codeHostBindingCandidates,
   codeHostJsonBodyIssue,
   codeHostPathIssue,
   codeHostRequiredFields,
@@ -122,7 +123,9 @@ describe('RFC-269 动作注册表', () => {
         if (isUnsupportedBinding(binding)) {
           expect(binding.reasonKey.length).toBeGreaterThan(0)
         } else {
-          expect(binding.path.startsWith('/')).toBe(true)
+          for (const candidate of codeHostBindingCandidates(binding)) {
+            expect(candidate.path.startsWith('/')).toBe(true)
+          }
         }
       }
     }
@@ -135,11 +138,13 @@ describe('RFC-269 动作注册表', () => {
       for (const provider of PROVIDERS) {
         const binding = CODE_HOST_ACTION_DEFS[action].bindings[provider]
         if (isUnsupportedBinding(binding)) continue
-        for (const m of binding.path.matchAll(/\{([^}]+)\}/g)) {
-          expect({ action, provider, placeholder: m[1] }).toMatchObject({
-            placeholder: expect.any(String),
-          })
-          expect(declared.has(m[1]!)).toBe(true)
+        for (const candidate of codeHostBindingCandidates(binding)) {
+          for (const m of candidate.path.matchAll(/\{([^}]+)\}/g)) {
+            expect({ action, provider, placeholder: m[1] }).toMatchObject({
+              placeholder: expect.any(String),
+            })
+            expect(declared.has(m[1]!)).toBe(true)
+          }
         }
       }
     }
@@ -151,9 +156,11 @@ describe('RFC-269 动作注册表', () => {
       for (const provider of PROVIDERS) {
         const binding = CODE_HOST_ACTION_DEFS[action].bindings[provider]
         if (isUnsupportedBinding(binding)) continue
-        for (const map of [...(binding.query ?? []), ...(binding.body ?? [])]) {
-          if ('field' in map.from) {
-            expect(declared.has(map.from.field)).toBe(true)
+        for (const candidate of codeHostBindingCandidates(binding)) {
+          for (const map of [...(candidate.query ?? []), ...(candidate.body ?? [])]) {
+            if ('field' in map.from) {
+              expect(declared.has(map.from.field)).toBe(true)
+            }
           }
         }
       }
@@ -201,12 +208,31 @@ describe('RFC-269 动作注册表', () => {
     expect(codeHostActionSupported('thread.resolve', 'gitlab')).toBe(true)
   })
 
-  test('GitLab 读 MR diff 用 /diffs，不是 15.7 起弃用的 /changes', () => {
+  test('GitLab 读 MR diff 优先 /diffs，并兼容仍只提供 /changes 的旧实例', () => {
     const binding = CODE_HOST_ACTION_DEFS['mr.diff'].bindings.gitlab
     expect(isUnsupportedBinding(binding)).toBe(false)
     if (isUnsupportedBinding(binding)) return
     expect(binding.path).toContain('/diffs')
-    expect(binding.path).not.toContain('/changes')
+    expect(binding.compatibilityFallbacks?.map((candidate) => candidate.path)).toEqual([
+      '/projects/{__project__}/merge_requests/{mr}/changes',
+    ])
+  })
+
+  test('GitHub 回复 review comment 兼容 replies 与 in_reply_to 两种官方写法', () => {
+    const binding = CODE_HOST_ACTION_DEFS['comment.reply-thread'].bindings.github
+    expect(isUnsupportedBinding(binding)).toBe(false)
+    if (isUnsupportedBinding(binding)) return
+    expect(binding.path).toContain('/comments/{thread}/replies')
+    expect(binding.compatibilityFallbacks).toEqual([
+      {
+        method: 'POST',
+        path: '/repos/{__project__}/pulls/{mr}/comments',
+        body: [
+          { api: 'body', from: { field: 'body' } },
+          { api: 'in_reply_to', from: { field: 'thread' }, transform: 'integer' },
+        ],
+      },
+    ])
   })
 
   test('job.log 是全表唯一带 followRedirectStripAuth 的 binding', () => {
@@ -217,8 +243,10 @@ describe('RFC-269 动作注册表', () => {
       for (const provider of PROVIDERS) {
         const binding = CODE_HOST_ACTION_DEFS[action].bindings[provider]
         if (isUnsupportedBinding(binding)) continue
-        if (binding.quirks?.includes('followRedirectStripAuth') === true) {
-          withQuirk.push(`${action}/${provider}`)
+        for (const candidate of codeHostBindingCandidates(binding)) {
+          if (candidate.quirks?.includes('followRedirectStripAuth') === true) {
+            withQuirk.push(`${action}/${provider}`)
+          }
         }
       }
     }

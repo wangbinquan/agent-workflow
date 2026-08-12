@@ -19,7 +19,7 @@
 //   - 指派：GitLab 吃数字 user id、GitHub 吃 login ⇒ 同一个字段，不同 hint
 //     与不同 transform（强行归一只会让人填错）
 //
-// 外部依据 2026-08-07 查证，逐条见 design §4.2；未实证项列在 proposal §8。
+// 外部依据 2026-08-12 复核，逐条见 design §4.2；未实证项列在 proposal §8。
 
 import type { CodeHostProvider } from '../schemas/webhook'
 
@@ -112,6 +112,7 @@ export const CODE_HOST_DESTRUCTIVE_METHODS: readonly CodeHostMethod[] = ['DELETE
 export type CodeHostTransform =
   | 'csv-array' // "a,b" -> ["a","b"]
   | 'csv-number-array' // "1,2" -> [1,2]（GitLab 的 assignee_ids）
+  | 'integer' // "42" -> 42（GitHub 的 in_reply_to）
   | 'json-object' // 字符串 JSON -> 对象（position 原样回传）
   | 'status-state' // 统一三档 -> 各家 commit status 取值
   | 'mr-state' // 统一三档 -> 各家 MR 列表过滤取值
@@ -129,7 +130,8 @@ export interface CodeHostParamMap {
 /** binding 的特殊语义开关。 */
 export type CodeHostQuirk = 'followRedirectStripAuth'
 
-export interface CodeHostBinding {
+/** 一条可以完整组装为 HTTP 请求的 provider binding。 */
+export interface CodeHostRequestBinding {
   readonly method: CodeHostMethod
   /** path 模板；`{field}` 取字段值，`{__project__}` 取解析后的 project 定位段。 */
   readonly path: string
@@ -138,6 +140,16 @@ export interface CodeHostBinding {
   readonly quirks?: readonly CodeHostQuirk[]
   /** 覆盖默认 Accept（如 GitHub 读文件要 raw）。 */
   readonly accept?: string
+}
+
+export interface CodeHostBinding extends CodeHostRequestBinding {
+  /**
+   * 同一动作在不同部署版本上的等价 API 写法，按新到旧排列。
+   *
+   * 执行器只会在当前候选明确返回 404 / 405 时尝试下一条；权限、参数、限流、
+   * 服务端错误都不回退，避免用另一条请求掩盖真实失败。
+   */
+  readonly compatibilityFallbacks?: readonly CodeHostRequestBinding[]
 }
 
 export interface CodeHostUnsupported {
@@ -195,6 +207,18 @@ export const CODE_HOST_ACTION_DEFS = {
         method: 'POST',
         path: '/repos/{__project__}/pulls/{mr}/comments/{thread}/replies',
         body: [{ api: 'body', from: { field: 'body' } }],
+        // GitHub 同时保留 create-review-comment + in_reply_to 的写法；一些旧版
+        // Enterprise 部署没有上面的专用 replies 路由。
+        compatibilityFallbacks: [
+          {
+            method: 'POST',
+            path: '/repos/{__project__}/pulls/{mr}/comments',
+            body: [
+              { api: 'body', from: { field: 'body' } },
+              { api: 'in_reply_to', from: { field: 'thread' }, transform: 'integer' },
+            ],
+          },
+        ],
       },
     },
   },
@@ -566,8 +590,15 @@ export const CODE_HOST_ACTION_DEFS = {
     group: 'read',
     fields: [PROJECT, MR_REQUIRED],
     bindings: {
-      // /changes 自 GitLab 15.7 弃用（v5 移除），一开始就用 /diffs。
-      gitlab: { method: 'GET', path: '/projects/{__project__}/merge_requests/{mr}/diffs' },
+      // 新版用 /diffs；/changes 自 GitLab 15.7 弃用，但旧部署/兼容实现可能只暴露
+      // 后者。两者都不存在时仍以首选路径的错误为主诊断。
+      gitlab: {
+        method: 'GET',
+        path: '/projects/{__project__}/merge_requests/{mr}/diffs',
+        compatibilityFallbacks: [
+          { method: 'GET', path: '/projects/{__project__}/merge_requests/{mr}/changes' },
+        ],
+      },
       github: { method: 'GET', path: '/repos/{__project__}/pulls/{mr}/files' },
     },
   },
@@ -650,6 +681,13 @@ export function isUnsupportedBinding(
   binding: CodeHostBinding | CodeHostUnsupported,
 ): binding is CodeHostUnsupported {
   return 'unsupported' in binding
+}
+
+/** 首选 binding + 按顺序尝试的部署版本兼容写法。 */
+export function codeHostBindingCandidates(
+  binding: CodeHostBinding,
+): readonly CodeHostRequestBinding[] {
+  return [binding, ...(binding.compatibilityFallbacks ?? [])]
 }
 
 /** 该 provider 是否支持该动作。 */

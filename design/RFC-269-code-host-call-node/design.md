@@ -175,7 +175,7 @@ GitHub：`{owner}/{repo}`，见 §5.4）。所有 `{...}` 值都经 §5.2 的编
 
 | 动作 | GitLab | GitHub |
 |---|---|---|
-| `comment.reply-thread` 回复到同一线程 | `POST /projects/{P}/merge_requests/{mr}/discussions/{thread}/notes` body `{body}` | `POST /repos/{P}/pulls/{mr}/comments/{thread}/replies` body `{body}` |
+| `comment.reply-thread` 回复到同一线程 | `POST /projects/{P}/merge_requests/{mr}/discussions/{thread}/notes` body `{body}` | 首选 `POST /repos/{P}/pulls/{mr}/comments/{thread}/replies` body `{body}`；404/405 时兼容 `POST /repos/{P}/pulls/{mr}/comments` body `{body, in_reply_to: thread}` |
 | `comment.create` 在 MR/PR 上新开一条 | `POST /projects/{P}/merge_requests/{mr}/notes` body `{body}` | `POST /repos/{P}/issues/{mr}/comments` body `{body}` |
 | `comment.create-inline` 在 diff 行新建线程 | `POST /projects/{P}/merge_requests/{mr}/discussions` body `{body, position}` | `POST /repos/{P}/pulls/{mr}/comments` body `{body, ...position}` |
 | `comment.update` 编辑自己发的评论 | `PUT /projects/{P}/merge_requests/{mr}/notes/{comment}` body `{body}` | `PATCH /repos/{P}/pulls/comments/{comment}`（行内）/ `PATCH /repos/{P}/issues/comments/{comment}`（普通）—— 由 `comment_scope` 字段选择，缺省 `inline` |
@@ -218,17 +218,25 @@ GitHub 侧转成数组。两家语义差异（GitLab 要数字 user id、GitHub 
 
 | 动作 | GitLab | GitHub |
 |---|---|---|
-| `mr.diff` 拉 MR diff | `GET /projects/{P}/merge_requests/{mr}/diffs`（**不是** `/changes` —— 后者自 15.7 弃用、v5 移除） | `GET /repos/{P}/pulls/{mr}/files` |
+| `mr.diff` 拉 MR diff | 首选 `GET /projects/{P}/merge_requests/{mr}/diffs`；404/405 时兼容旧部署的 `/changes`（后者自 15.7 弃用、v5 移除） | `GET /repos/{P}/pulls/{mr}/files` |
 | `mr.list` 列 MR | `GET /projects/{P}/merge_requests` query `{state, per_page}` | `GET /repos/{P}/pulls` query `{state, per_page}` |
 | `file.read` 读仓库文件 | `GET /projects/{P}/repository/files/{path}/raw` query `{ref}` | `GET /repos/{P}/contents/{path}` query `{ref}`，header `Accept: application/vnd.github.raw` |
 
 **自定义（`custom`）** —— `request` 字段生效，§5.3 的安全规则全部适用。
 
+**部署版本兼容补充（2026-08-12）**：binding 可以声明完整的候选请求（method/path/query/body），
+执行器按新到旧尝试。只有 404/405 代表“当前路由不存在”并进入下一候选；403、422、429、5xx、网络
+错误与重定向失败保持原失败，不得借回退掩盖。每个候选独立复用 D18 重试、D19 重定向剥凭据及
+RFC-277 TLS 约束。若所有候选都不存在，主错误保留首选路径，并列出实际尝试的候选。输出仍遵守
+AC-8：返回实际命中接口的响应体原文，不做跨版本外形改写。
+
 ### 4.2 外部依据
 
-2026-08-07 查证：GitHub 官方无 REST 的 resolve review thread 端点（`resolveReviewThread` 为 GraphQL
+2026-08-12 复核：GitHub 官方无 REST 的 resolve review thread 端点（`resolveReviewThread` 为 GraphQL
 mutation，线程 `PRRT_` node id 亦仅 GraphQL 可得）；GitLab `GET /projects/:id/merge_requests/:iid/changes`
-自 15.7 弃用、指向 list merge request diffs；GitHub `GET /repos/{o}/{r}/actions/jobs/{job_id}/logs`
+自 15.7 弃用、指向 list merge request diffs，但旧部署/兼容实现可能只提供前者；GitHub review comment
+回复同时有专用 `/comments/{comment_id}/replies` 与 create-review-comment 的 `in_reply_to` 写法；GitHub
+`GET /repos/{o}/{r}/actions/jobs/{job_id}/logs`
 返回 302 + `Location` 指向有效期约 1 分钟的签名 URL（`pipelines.actions.githubusercontent.com`）。
 其余端点按官方文档形态实现，proposal §8 列了七项待实测项。
 

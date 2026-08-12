@@ -125,6 +125,27 @@ describe('RFC-269 请求组装 —— 两家的真实端点', () => {
     expect(seen[0]!.headers['x-github-api-version']).toBe('2022-11-28')
   })
 
+  test('GitHub Enterprise 缺少 replies 端点时回退到 in_reply_to 写法', async () => {
+    const { fetchImpl, seen } = capturing([
+      { status: 404, body: '{"message":"Not Found"}' },
+      { status: 201, body: '{"id":42}' },
+    ])
+    const out = await executeCodeHostCall(
+      {
+        provider: 'github',
+        action: 'comment.reply-thread',
+        params: { mr: '7', thread: '9911', body: 'ok' },
+      },
+      ghDeps({ fetchImpl }),
+    )
+    expect(out.ok).toBe(true)
+    expect(seen.map((request) => request.url)).toEqual([
+      'https://api.github.com/repos/octo/repo/pulls/7/comments/9911/replies',
+      'https://api.github.com/repos/octo/repo/pulls/7/comments',
+    ])
+    expect(JSON.parse(seen[1]!.body!)).toEqual({ body: 'ok', in_reply_to: 9911 })
+  })
+
   test('普通评论：GitLab 走 notes，GitHub 走 issues/comments', async () => {
     const gl = capturing([{ status: 201 }])
     await executeCodeHostCall(
@@ -299,6 +320,76 @@ describe('RFC-269 触发上下文', () => {
 })
 
 describe('RFC-269 失败与重试（D18 幂等分档）', () => {
+  test('GitLab 实例缺少 /diffs 时回退到旧版 /changes', async () => {
+    const { fetchImpl, seen } = capturing([
+      { status: 404, body: '{"message":"404 Not Found"}' },
+      { status: 200, body: '{"changes":[]}' },
+    ])
+    const out = await executeCodeHostCall(
+      { provider: 'gitlab', action: 'mr.diff', params: { mr: '17' } },
+      glDeps({
+        connection: {
+          provider: 'gitlab',
+          baseUrl: GL_BASE,
+          repositoryUrlPrefixes: [],
+          token: TOKEN,
+          rejectUnauthorized: false,
+        },
+        fetchImpl,
+      }),
+    )
+    expect(out.ok).toBe(true)
+    if (!out.ok) return
+    expect(out.pathname).toEndWith('/merge_requests/17/changes')
+    expect(out.body).toBe('{"changes":[]}')
+    expect(seen.map((request) => request.url)).toEqual([
+      'https://gitlab.corp.example/api/v4/projects/grp%2Frepo/merge_requests/17/diffs',
+      'https://gitlab.corp.example/api/v4/projects/grp%2Frepo/merge_requests/17/changes',
+    ])
+    expect(seen.map((request) => request.tls)).toEqual([
+      { rejectUnauthorized: false },
+      { rejectUnauthorized: false },
+    ])
+  })
+
+  test('兼容路径也接受 405，但权限错误不回退', async () => {
+    const missingRoute = capturing([{ status: 405 }, { status: 200 }])
+    const recovered = await executeCodeHostCall(
+      { provider: 'gitlab', action: 'mr.diff', params: { mr: '1' } },
+      glDeps({ fetchImpl: missingRoute.fetchImpl }),
+    )
+    expect(recovered.ok).toBe(true)
+    expect(missingRoute.seen[1]!.url).toContain('/changes')
+
+    for (const status of [403, 422]) {
+      const rejected = capturing([{ status }, { status: 200 }])
+      const denied = await executeCodeHostCall(
+        { provider: 'gitlab', action: 'mr.diff', params: { mr: '1' } },
+        glDeps({ fetchImpl: rejected.fetchImpl }),
+      )
+      expect(denied.ok).toBe(false)
+      expect(rejected.seen).toHaveLength(1)
+    }
+  })
+
+  test('所有兼容路径都不存在时保留首选错误，并列出已尝试路径', async () => {
+    const { fetchImpl, seen } = capturing([
+      { status: 404, body: '{"message":"diffs missing"}' },
+      { status: 404, body: `{"echo":"${TOKEN}"}` },
+    ])
+    const out = await executeCodeHostCall(
+      { provider: 'gitlab', action: 'mr.diff', params: { mr: '1' } },
+      glDeps({ fetchImpl }),
+    )
+    expect(out.ok).toBe(false)
+    if (out.ok) return
+    expect(out.summary).toContain('/diffs')
+    expect(out.message).toContain('/diffs')
+    expect(out.message).toContain('/changes')
+    expect(out.message).not.toContain(TOKEN)
+    expect(seen).toHaveLength(2)
+  })
+
   test('GitLab false 的 TLS override 贯穿首跳与重试，默认请求不携 override', async () => {
     const insecure = capturing([{ status: 502 }, { status: 200 }])
     const out = await executeCodeHostCall(
@@ -374,6 +465,53 @@ describe('RFC-269 失败与重试（D18 幂等分档）', () => {
     )
     expect(out.ok).toBe(true)
     expect(seen).toHaveLength(2)
+  })
+
+  test('幂等请求耗尽 5xx 重试也不换兼容路径', async () => {
+    const { fetchImpl, seen } = capturing([
+      { status: 502 },
+      { status: 502 },
+      { status: 502 },
+      { status: 200 },
+    ])
+    const out = await executeCodeHostCall(
+      { provider: 'gitlab', action: 'mr.diff', params: { mr: '1' } },
+      glDeps({ fetchImpl }),
+    )
+    expect(out.ok).toBe(false)
+    expect(seen).toHaveLength(3)
+    expect(seen.every((request) => request.url.endsWith('/diffs'))).toBe(true)
+  })
+
+  test('429 重试耗尽也不换兼容路径', async () => {
+    const { fetchImpl, seen } = capturing([
+      { status: 429, headers: { 'retry-after': '0' } },
+      { status: 429, headers: { 'retry-after': '0' } },
+      { status: 429, headers: { 'retry-after': '0' } },
+      { status: 200 },
+    ])
+    const out = await executeCodeHostCall(
+      { provider: 'gitlab', action: 'mr.diff', params: { mr: '1' } },
+      glDeps({ fetchImpl }),
+    )
+    expect(out.ok).toBe(false)
+    expect(seen).toHaveLength(3)
+    expect(seen.every((request) => request.url.endsWith('/diffs'))).toBe(true)
+  })
+
+  test('网络错误耗尽幂等重试也不换兼容路径', async () => {
+    const seen: string[] = []
+    const fetchImpl = async (url: string): Promise<Response> => {
+      seen.push(url)
+      throw new Error('ECONNRESET')
+    }
+    const out = await executeCodeHostCall(
+      { provider: 'gitlab', action: 'mr.diff', params: { mr: '1' } },
+      glDeps({ fetchImpl }),
+    )
+    expect(out.ok).toBe(false)
+    expect(seen).toHaveLength(3)
+    expect(seen.every((url) => url.endsWith('/diffs'))).toBe(true)
   })
 
   test('5xx 对 POST **不**重试 —— 重发一次就是第二条评论', async () => {

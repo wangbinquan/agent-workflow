@@ -12,10 +12,10 @@
 
 import type {
   CodeHostAction,
-  CodeHostBinding,
   CodeHostCustomRequest,
   CodeHostParamMap,
   CodeHostProvider,
+  CodeHostRequestBinding,
   CodeHostTemplateContext,
   CodeHostTransform,
 } from '@agent-workflow/shared'
@@ -23,6 +23,7 @@ import {
   CODE_HOST_MR_STATE_MAP,
   CODE_HOST_STATUS_STATE_MAP,
   codeHostActionDef,
+  codeHostBindingCandidates,
   codeHostPathIssue,
   codeHostRequiredFields,
   INTENT_REDACTED,
@@ -71,6 +72,9 @@ export type CodeHostCallOutcome =
 export const DEFAULT_CODE_HOST_TIMEOUT_MS = 30_000
 export const DEFAULT_CODE_HOST_MAX_RESPONSE_BYTES = 256 * 1024
 const MAX_ATTEMPTS = 3
+
+/** 只有“这条路由不存在”才允许换兼容写法；业务错误必须原样暴露。 */
+const COMPATIBILITY_FALLBACK_STATUSES: ReadonlySet<number> = new Set([404, 405])
 
 /** 幂等 method：网络抖动/5xx 可以安全重发。POST 不在其中（D18）。 */
 const IDEMPOTENT_METHODS: ReadonlySet<string> = new Set(['GET', 'PUT', 'PATCH', 'DELETE'])
@@ -159,6 +163,22 @@ function applyTransform(
       }
       return out
     }
+    case 'integer': {
+      if (!/^[1-9]\d*$/.test(value)) {
+        throw new ParamError(
+          'code-host-param-invalid',
+          `'${apiName}' expects a positive integer on ${provider}; got '${value}'`,
+        )
+      }
+      const out = Number(value)
+      if (!Number.isSafeInteger(out)) {
+        throw new ParamError(
+          'code-host-param-invalid',
+          `'${apiName}' is outside the safe integer range on ${provider}`,
+        )
+      }
+      return out
+    }
     case 'json-object':
       try {
         return JSON.parse(value)
@@ -233,7 +253,7 @@ function renderField(
 function assembleFromBinding(
   spec: CodeHostCallSpec,
   action: CodeHostAction,
-  binding: CodeHostBinding,
+  binding: CodeHostRequestBinding,
   deps: CodeHostCallDeps,
 ): AssembledRequest {
   const provider = spec.provider
@@ -431,30 +451,82 @@ export async function executeCodeHostCall(
   const def = codeHostActionDef(action)
   const binding = def.bindings[spec.provider]
 
-  let assembled: AssembledRequest
-  try {
-    assembled =
-      action === 'custom'
-        ? assembleCustom(spec, deps)
-        : isUnsupportedBinding(binding)
-          ? (() => {
-              throw new ParamError(
-                'code-host-param-invalid',
-                `action '${action}' is not supported on ${spec.provider} (${binding.reasonKey})`,
-              )
-            })()
-          : assembleFromBinding(spec, action, binding, deps)
-  } catch (err) {
-    if (err instanceof ParamError) return fail(err.code, err.message)
-    throw err
+  if (action === 'custom') {
+    try {
+      return (await executeAssembledRequest(spec, deps, assembleCustom(spec, deps))).outcome
+    } catch (err) {
+      if (err instanceof ParamError) return fail(err.code, err.message)
+      throw err
+    }
   }
 
+  if (isUnsupportedBinding(binding)) {
+    return fail(
+      'code-host-param-invalid',
+      `action '${action}' is not supported on ${spec.provider} (${binding.reasonKey})`,
+    )
+  }
+
+  const candidates = codeHostBindingCandidates(binding)
+  let firstMissingOutcome: Extract<CodeHostCallOutcome, { ok: false }> | undefined
+  const missingAttempts: string[] = []
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    let assembled: AssembledRequest
+    try {
+      assembled = assembleFromBinding(spec, action, candidates[index]!, deps)
+    } catch (err) {
+      if (err instanceof ParamError) return fail(err.code, err.message)
+      throw err
+    }
+
+    const executed = await executeAssembledRequest(spec, deps, assembled)
+    const routeMissing =
+      executed.responseStatus !== undefined &&
+      COMPATIBILITY_FALLBACK_STATUSES.has(executed.responseStatus)
+    if (!routeMissing) return executed.outcome
+
+    missingAttempts.push(
+      `${assembled.method} ${executed.pathname ?? assembled.path} → HTTP ${executed.responseStatus}`,
+    )
+    if (!executed.outcome.ok && firstMissingOutcome === undefined) {
+      firstMissingOutcome = executed.outcome
+    }
+    if (index + 1 < candidates.length) continue
+
+    if (firstMissingOutcome !== undefined) {
+      return {
+        ...firstMissingOutcome,
+        message: `${firstMissingOutcome.message}\nCompatibility candidates tried: ${missingAttempts.join(', ')}`,
+      }
+    }
+    return executed.outcome
+  }
+
+  return fail('code-host-param-invalid', `action '${action}' has no request binding`)
+}
+
+interface ExecutedRequest {
+  readonly outcome: CodeHostCallOutcome
+  /** 仅记录首跳的最终 HTTP 状态；重定向目标失败不能触发 API 路径回退。 */
+  readonly responseStatus?: number
+  readonly pathname?: string
+}
+
+/** 执行单个候选 binding；每条候选都完整遵守原有 TLS、重试与重定向纪律。 */
+async function executeAssembledRequest(
+  spec: CodeHostCallSpec,
+  deps: CodeHostCallDeps,
+  assembled: AssembledRequest,
+): Promise<ExecutedRequest> {
   const built = buildCodeHostUrl(deps.connection.baseUrl, assembled.path, assembled.query)
   if (!built.ok) {
-    return fail(
-      'code-host-path-invalid',
-      `the request URL escapes the configured API root (${built.issue})`,
-    )
+    return {
+      outcome: fail(
+        'code-host-path-invalid',
+        `the request URL escapes the configured API root (${built.issue})`,
+      ),
+    }
   }
 
   const token = deps.connection.token
@@ -488,10 +560,12 @@ export async function executeCodeHostCall(
         await sleep(200 * attempt)
         continue
       }
-      return fail(
-        'code-host-network-error',
-        `${assembled.method} ${built.value.pathname} failed: ${redactToken(lastError, token)}`,
-      )
+      return {
+        outcome: fail(
+          'code-host-network-error',
+          `${assembled.method} ${built.value.pathname} failed: ${redactToken(lastError, token)}`,
+        ),
+      }
     } finally {
       clearTimeout(timer)
     }
@@ -510,14 +584,18 @@ export async function executeCodeHostCall(
     if (res.status >= 300 && res.status < 400) {
       const location = res.headers.get('location')
       if (!assembled.followRedirectStripAuth || location === null) {
-        return fail(
-          'code-host-redirect-refused',
-          `${assembled.method} ${built.value.pathname} answered ${res.status}; the platform does not follow cross-host redirects`,
-        )
+        return {
+          outcome: fail(
+            'code-host-redirect-refused',
+            `${assembled.method} ${built.value.pathname} answered ${res.status}; the platform does not follow cross-host redirects`,
+          ),
+        }
       }
       const issue = redirectTargetIssue(location)
       if (issue !== null) {
-        return fail('code-host-redirect-refused', `redirect target rejected (${issue})`)
+        return {
+          outcome: fail('code-host-redirect-refused', `redirect target rejected (${issue})`),
+        }
       }
       // 唯一允许跟随的一跳，且**剥掉认证头** —— 目标是第三方签名主机
       // （GitHub 的 job 日志），把我们的 token 送过去就是凭据外泄。
@@ -525,21 +603,32 @@ export async function executeCodeHostCall(
       try {
         followed = await doFetch(location, { method: 'GET', redirect: 'manual' })
       } catch (err) {
-        return fail(
-          'code-host-network-error',
-          `redirect target unreachable: ${redactToken(err instanceof Error ? err.message : 'network error', token)}`,
-        )
+        return {
+          outcome: fail(
+            'code-host-network-error',
+            `redirect target unreachable: ${redactToken(err instanceof Error ? err.message : 'network error', token)}`,
+          ),
+        }
       }
-      return await finalize(followed, assembled, built.value.pathname, token, maxBytes)
+      return {
+        outcome: await finalize(followed, assembled, built.value.pathname, token, maxBytes),
+        pathname: built.value.pathname,
+      }
     }
 
-    return await finalize(res, assembled, built.value.pathname, token, maxBytes)
+    return {
+      outcome: await finalize(res, assembled, built.value.pathname, token, maxBytes),
+      responseStatus: res.status,
+      pathname: built.value.pathname,
+    }
   }
 
-  return fail(
-    'code-host-network-error',
-    `${assembled.method} ${built.value.pathname} exhausted ${MAX_ATTEMPTS} attempts: ${redactToken(lastError, token)}`,
-  )
+  return {
+    outcome: fail(
+      'code-host-network-error',
+      `${assembled.method} ${built.value.pathname} exhausted ${MAX_ATTEMPTS} attempts: ${redactToken(lastError, token)}`,
+    ),
+  }
 }
 
 async function finalize(

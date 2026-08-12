@@ -65,6 +65,9 @@ commit status、触发流水线、拉 job 日志……**令牌只留在 daemon �
 - **指派**：GitLab 要用户**数字 id**，GitHub 要 **login**。同一个字段、不同含义。
 - **commit status 的状态**只有三档 `进行中 / 通过 / 不通过`，平台各自映射（GitHub 用
   `failure` 而不是 `failed`）。
+- **部署版本兼容**：拉 GitLab MR diff 优先调用 `/diffs`，路由不存在时兼容旧版
+  `/changes`；回复 GitHub review comment 优先调用专用 `/replies` 路由，旧版 GHES 没有该
+  路由时改用 `in_reply_to` 写法。
 
 ## 4. 参数从哪来
 
@@ -82,6 +85,9 @@ commit status、触发流水线、拉 job 日志……**令牌只留在 daemon �
 ## 5. 输出与失败
 
 - 两个固定输出端口：`response`（响应体原文）与 `status`（HTTP 状态码）。都可以不连。
+- 内置动作若有经过核实的兼容写法，只在首选路由返回 **404 / 405** 时尝试下一条。403、422、
+  429、5xx 与网络错误不会换路径，避免掩盖权限、参数或服务故障；成功后的 `response` 仍是实际
+  命中接口的响应体原文。
 - 响应体超过 256 KiB 会截断，并在尾部留下显式标记 —— 不会静默截断。
 - **非 2xx 即节点失败**（与脚本节点非零退出码同档）。可以单节点重试。
 - 自动重试是**按幂等分档**的：429 一律重试；5xx 与网络错误只对 GET/PUT/PATCH/DELETE 重试，
