@@ -384,7 +384,8 @@ describe('RFC-128 P5-0 尾声 — 原始原语黄金锁 + 死旗标删除锁', (
   test('W0（flag-audit §3-2）：rejectSelfQuestionerFullSeal 死旗标已删除，不得复活', () => {
     // RFC-132 拆除守卫后该 arg 是纯 no-op（0 读取、2 调用点传 true、docstring 描述已不存在的行为）。
     // 本断言锁定源码层删除——若有人重新引入同名旗标，必须带真实读取逻辑并更新本测试。
-    const src = readFileSync(resolve(import.meta.dir, '../src/services/clarifySeal.ts'), 'utf8')
+    // RFC-284 T27 改锚：正体迁 services/clarify/seal.ts（旧路径为 facade）。
+    const src = readFileSync(resolve(import.meta.dir, '../src/services/clarify/seal.ts'), 'utf8')
     expect(src).not.toContain('rejectSelfQuestionerFullSeal')
   })
 })

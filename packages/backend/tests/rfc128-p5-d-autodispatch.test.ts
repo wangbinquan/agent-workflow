@@ -800,7 +800,8 @@ describe('RFC-128 P5-D lock-B non-reentry', () => {
 
   test('source — lock order A ≻ B + no B reentry: the self rollback holds A OUTER + B INNER around the preflight+rollback, then RELEASES B before dispatchTaskQuestions re-takes a fresh B (round-10 atomicity)', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '../src/services/clarifyAutoDispatch.ts'),
+      // RFC-284 T27 改锚：正体迁 services/clarify/autoDispatch.ts（旧路径为 facade）。
+      resolve(import.meta.dir, '../src/services/clarify/autoDispatch.ts'),
       'utf8',
     )
     const fn = src.slice(src.indexOf('export async function autoDispatchClarifyRound'))
