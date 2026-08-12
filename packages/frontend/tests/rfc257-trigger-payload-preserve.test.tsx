@@ -47,6 +47,7 @@ const ENDPOINT = {
 function triggerRow(overrides: Record<string, unknown>): Record<string, unknown> {
   return {
     id: 'tr1',
+    ownerUserId: 'u1',
     endpointId: 'ep1',
     name: '修到绿',
     enabled: true,

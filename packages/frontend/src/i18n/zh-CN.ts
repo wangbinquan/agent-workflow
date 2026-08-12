@@ -2551,6 +2551,8 @@ export interface Resources {
     empty: string
     emptyDescription: string
     emptyReadonlyDescription: string
+    ownerLabel: string
+    ownedByMe: string
     enabledChip: string
     disabledChip: string
     corruptBadge: string
@@ -8181,7 +8183,9 @@ export const zhCN: Resources = {
     new: '新建规则',
     empty: '还没有触发规则',
     emptyDescription: '先准备一个接收端点，再创建规则，决定事件命中后启动什么工作。',
-    emptyReadonlyDescription: '管理员还没有创建任何触发规则。',
+    emptyReadonlyDescription: '还没有创建任何触发规则。',
+    ownerLabel: '归属',
+    ownedByMe: '我的规则',
     enabledChip: '已启用',
     disabledChip: '已禁用',
     corruptBadge: '配置损坏',

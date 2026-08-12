@@ -2907,7 +2907,9 @@ export const enUS: Resources = {
     empty: 'No trigger rules yet',
     emptyDescription:
       'Prepare an ingress endpoint, then add a rule that decides what each matching event launches.',
-    emptyReadonlyDescription: 'No trigger rules have been created by an administrator yet.',
+    emptyReadonlyDescription: 'No trigger rules have been created yet.',
+    ownerLabel: 'Owner',
+    ownedByMe: 'My rule',
     enabledChip: 'Enabled',
     disabledChip: 'Disabled',
     corruptBadge: 'Corrupt config',

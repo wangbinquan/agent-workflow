@@ -1,8 +1,8 @@
 // RFC-257 T8/T9 — 触发器管理面（owner 制写面，D19：非 RFC-099 ACL —— fire 以
 // owner 身份执行，grants 写权 = 改绑目标后借 owner 身份的提权通道）。
 // RFC-260 D1/D5：**读面全量开放**（列表/详情/fires 对任何过了 read 方法门的
-// viewer 可见，原「不可见 = 404」读语义退役）；写面行级门保留
-// owner ∨ resource-admin（requireWrite，404 同形）。
+// viewer 可见，原「不可见 = 404」读语义退役）；RFC-283 写面行级门为
+// owner ∨ admin（manager 可写自己的规则，不可写别人的；404 同形）。
 // 保存期校验三层（services/webhook/triggerValidation.ts 注释）；创建/更新时
 // 以**保存者身份**跑「彩排渲染 + assertScheduledTargetUsable」——launch 目标
 // 对保存者不可见即拒绝（对齐 services/resourceRefs.ts 的新增引用校验惯例）。
@@ -15,7 +15,6 @@ import {
   CODE_HOST_EVENT_TYPES,
   CreateWebhookTriggerSchema,
   UpdateWebhookTriggerSchema,
-  isResourceAdminRole,
   type WebhookTrigger,
 } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
@@ -36,12 +35,12 @@ type Row = typeof webhookTriggers.$inferSelect
 
 /**
  * RFC-260 D1/D5：读路径不再做行级过滤（触发器全量只读，用户拍板——规则本身
- * 不敏感，全量可见最利排障）；写路径的行级门保留 owner ∨ resource-admin
- * （矩阵写点不在非 admin 基线 ⇒ 方法门先挡，这里是纵深）。原「非 owner 404
+ * 不敏感，全量可见最利排障）；RFC-283 写路径的行级门为 owner ∨ admin。
+ * manager 通过方法权限进入路由，但不继承这个资源的全局绕过权。原「非 owner 404
  * 同形」读语义随 D1 显式退役。
  */
 function requireWrite(actor: Actor, row: Row): void {
-  if (!(row.ownerUserId === actor.user.id || isResourceAdminRole(actor.user.role))) {
+  if (!(row.ownerUserId === actor.user.id || actor.user.role === 'admin')) {
     throw new NotFoundError('webhook-trigger-not-found', `trigger '${row.id}' not found`)
   }
 }

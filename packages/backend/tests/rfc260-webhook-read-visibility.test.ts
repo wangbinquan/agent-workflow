@@ -64,6 +64,7 @@ async function harness() {
     enabled: true,
   })
   const workflowId = ulid()
+  const managerWorkflowId = ulid()
   await db.insert(workflows).values({
     id: workflowId,
     name: 'wf',
@@ -71,6 +72,17 @@ async function harness() {
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     version: 1,
     ownerUserId: admin.id,
+    visibility: 'private',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
+  await db.insert(workflows).values({
+    id: managerWorkflowId,
+    name: 'manager-wf',
+    description: '',
+    definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
+    version: 1,
+    ownerUserId: manager.id,
     visibility: 'private',
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -88,6 +100,18 @@ async function harness() {
     launchRefId: workflowId,
     launchPayload: JSON.stringify({ inputs: {} }),
   })
+  await db.insert(webhookTriggers).values({
+    id: 'tr-owned-by-manager',
+    name: 'manager 的触发器',
+    endpointId: 'ep-1',
+    ownerUserId: manager.id,
+    repoScope: JSON.stringify({ kind: 'all' }),
+    eventTypes: JSON.stringify(['push']),
+    ignoreUsernames: '[]',
+    launchKind: 'workflow',
+    launchRefId: managerWorkflowId,
+    launchPayload: JSON.stringify({ inputs: {} }),
+  })
   await db.insert(webhookDeliveries).values({
     id: 'dl-1',
     endpointId: 'ep-1',
@@ -103,7 +127,18 @@ async function harness() {
     db,
     secretBox: box,
   })
-  return { db, app, adminSession, userSession, managerSession, adminPat, userPat }
+  return {
+    db,
+    app,
+    admin,
+    manager,
+    managerWorkflowId,
+    adminSession,
+    userSession,
+    managerSession,
+    adminPat,
+    userPat,
+  }
 }
 
 type H = Awaited<ReturnType<typeof harness>>
@@ -172,7 +207,7 @@ describe('RFC-260 · AC-1 端点读面与 URL 响应分层', () => {
   })
 })
 
-describe('RFC-260 · AC-2 写面仍 admin 独占', () => {
+describe('RFC-260/RFC-283 · 端点写面仍 admin 独占', () => {
   test('user/manager 对端点写与 replay 全 403；admin 全通', async () => {
     const h = await harness()
     for (const token of [h.userSession, h.managerSession]) {
@@ -189,37 +224,111 @@ describe('RFC-260 · AC-2 写面仍 admin 独占', () => {
       expect(
         (await send(h.app, 'POST', '/api/webhook-endpoints/ep-1/rotate-url-token', token)).status,
       ).toBe(403)
-      expect(
-        (
-          await send(
-            h.app,
-            'POST',
-            '/api/webhook-triggers/tr-owned-by-admin/streams/reset',
-            token,
-            {
-              streamKey: 'acme/api|branch:main',
-            },
-          )
-        ).status,
-      ).toBe(403)
       expect((await send(h.app, 'POST', '/api/webhook-deliveries/dl-1/replay', token)).status).toBe(
         403,
       )
-      expect(
-        (
-          await send(h.app, 'PUT', '/api/webhook-triggers/tr-owned-by-admin', token, {
-            name: 'hijack',
-          })
-        ).status,
-      ).toBe(403)
-      expect(
-        (await send(h.app, 'DELETE', '/api/webhook-triggers/tr-owned-by-admin', token)).status,
-      ).toBe(403)
     }
     const ok = await send(h.app, 'PUT', '/api/webhook-endpoints/ep-1', h.adminSession, {
       enabled: false,
     })
     expect(ok.status).toBe(200)
+  })
+})
+
+describe('RFC-283 · manager 触发规则 owner 写边界', () => {
+  test('user 无写权；manager 对他人规则 404；manager 可新建并管理自己的规则', async () => {
+    const h = await harness()
+
+    expect(
+      (
+        await send(h.app, 'PUT', '/api/webhook-triggers/tr-owned-by-admin', h.userSession, {
+          name: 'hijack',
+        })
+      ).status,
+    ).toBe(403)
+    expect(
+      (await send(h.app, 'DELETE', '/api/webhook-triggers/tr-owned-by-admin', h.userSession))
+        .status,
+    ).toBe(403)
+    expect(
+      (
+        await send(
+          h.app,
+          'POST',
+          '/api/webhook-triggers/tr-owned-by-admin/streams/reset',
+          h.userSession,
+          { streamKey: 'acme/api|branch:main' },
+        )
+      ).status,
+    ).toBe(403)
+
+    expect(
+      (
+        await send(h.app, 'PUT', '/api/webhook-triggers/tr-owned-by-admin', h.managerSession, {
+          name: 'hijack',
+        })
+      ).status,
+    ).toBe(404)
+    expect(
+      (await send(h.app, 'DELETE', '/api/webhook-triggers/tr-owned-by-admin', h.managerSession))
+        .status,
+    ).toBe(404)
+    expect(
+      (
+        await send(
+          h.app,
+          'POST',
+          '/api/webhook-triggers/tr-owned-by-admin/streams/reset',
+          h.managerSession,
+          { streamKey: 'acme/api|branch:main' },
+        )
+      ).status,
+    ).toBe(404)
+
+    const created = await send(h.app, 'POST', '/api/webhook-triggers', h.managerSession, {
+      name: 'manager-created',
+      endpointId: 'ep-1',
+      enabled: true,
+      repoScope: { kind: 'all' },
+      eventTypes: ['push'],
+      launchKind: 'workflow',
+      launchRefId: h.managerWorkflowId,
+      launchPayload: { inputs: {} },
+    })
+    expect(created.status).toBe(201)
+    expect(((await created.json()) as { ownerUserId: string }).ownerUserId).toBe(h.manager.id)
+
+    expect(
+      (
+        await send(h.app, 'PUT', '/api/webhook-triggers/tr-owned-by-manager', h.managerSession, {
+          name: 'manager-updated',
+        })
+      ).status,
+    ).toBe(200)
+    expect(
+      (
+        await send(
+          h.app,
+          'POST',
+          '/api/webhook-triggers/tr-owned-by-manager/streams/reset',
+          h.managerSession,
+          { streamKey: 'acme/api|branch:main' },
+        )
+      ).status,
+    ).toBe(200)
+
+    // admin 保留全局管理权。
+    expect(
+      (
+        await send(h.app, 'PUT', '/api/webhook-triggers/tr-owned-by-manager', h.adminSession, {
+          name: 'admin-updated-manager-rule',
+        })
+      ).status,
+    ).toBe(200)
+    expect(
+      (await send(h.app, 'DELETE', '/api/webhook-triggers/tr-owned-by-manager', h.managerSession))
+        .status,
+    ).toBe(200)
   })
 })
 

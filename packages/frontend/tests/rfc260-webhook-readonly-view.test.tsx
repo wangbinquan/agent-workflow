@@ -12,7 +12,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import i18n from '../src/i18n'
@@ -107,9 +107,17 @@ async function renderWebhooks(initialSearch = '') {
 }
 
 let empty = false
+let actorRole: 'user' | 'manager' = 'user'
+let actorUserId = 'u1'
+let actorPermissions: string[] = []
+let triggerRows: unknown[] = [TRIGGER_ROW]
 
 beforeEach(async () => {
   empty = false
+  actorRole = 'user'
+  actorUserId = 'u1'
+  actorPermissions = []
+  triggerRows = [TRIGGER_ROW]
   await i18n.changeLanguage('en-US')
   setBaseUrl(`http://webhooks-readonly-${crypto.randomUUID()}.test`)
   setToken('tok')
@@ -117,15 +125,39 @@ beforeEach(async () => {
     const url = typeof input === 'string' ? input : (input as URL | Request).toString()
     if (url.includes('/api/auth/me')) {
       return jsonResponse({
-        user: { id: 'u1', username: 'dev', displayName: 'dev', role: 'user', status: 'active' },
+        user: {
+          id: actorUserId,
+          username: actorRole === 'manager' ? 'mgr' : 'dev',
+          displayName: actorRole === 'manager' ? 'Manager' : 'dev',
+          role: actorRole,
+          status: 'active',
+        },
         source: 'session',
-        permissions: [],
+        permissions: actorPermissions,
         linkedIdentities: [],
         pats: [],
       })
     }
-    if (url.includes('/api/webhook-triggers')) return jsonResponse(empty ? [] : [TRIGGER_ROW])
+    if (url.includes('/api/webhook-triggers')) return jsonResponse(empty ? [] : triggerRows)
     if (url.includes('/api/webhook-endpoints')) return jsonResponse(empty ? [] : [MASKED_ENDPOINT])
+    if (url.includes('/api/users/lookup')) {
+      return jsonResponse([
+        {
+          id: 'someone-else',
+          username: 'root',
+          displayName: 'Root',
+          role: 'admin',
+          status: 'active',
+        },
+        {
+          id: 'manager-1',
+          username: 'mgr',
+          displayName: 'Manager',
+          role: 'manager',
+          status: 'active',
+        },
+      ])
+    }
     // RFC-261：列表响应封套化；/repos 与详情要先于列表前缀匹配。
     if (url.includes('/api/webhook-deliveries/repos'))
       return jsonResponse(empty ? [] : ['acme/api'])
@@ -168,6 +200,39 @@ describe('RFC-260 · 非 admin 只读视图（AC-5）', () => {
     expect(screen.queryByTestId('webhook-trigger-enable-tr1')).toBeNull() // Switch → chip
     expect(screen.queryByRole('button', { name: /delete/i })).toBeNull()
     expect(screen.getByTestId('webhook-trigger-fires-tr1')).toBeTruthy()
+    const owner = screen.getByTestId('webhook-trigger-owner-tr1')
+    expect(within(owner).getByText('Owner')).toBeTruthy()
+    expect(await within(owner).findByText('Root')).toBeTruthy()
+  })
+
+  test('manager 可新建且只显示自己规则的编辑/开关/删除，他人规则只读', async () => {
+    actorRole = 'manager'
+    actorUserId = 'manager-1'
+    actorPermissions = [
+      'webhook-triggers:create',
+      'webhook-triggers:update',
+      'webhook-triggers:delete',
+    ]
+    triggerRows = [
+      { ...TRIGGER_ROW, id: 'tr-mine', name: 'Mine', ownerUserId: 'manager-1' },
+      { ...TRIGGER_ROW, id: 'tr-other', name: 'Other', ownerUserId: 'someone-else' },
+    ]
+
+    await renderWebhooks('?tab=triggers')
+    const mine = await screen.findByTestId('webhook-trigger-tr-mine')
+    const other = await screen.findByTestId('webhook-trigger-tr-other')
+
+    expect(screen.getByTestId('webhook-trigger-new')).toBeTruthy()
+    expect(within(mine).getByText('My rule')).toBeTruthy()
+    expect(within(mine).getByTestId('webhook-trigger-enable-tr-mine')).toBeTruthy()
+    expect(within(mine).getByTestId('webhook-trigger-edit-tr-mine')).toBeTruthy()
+    expect(within(mine).getByRole('button', { name: /delete/i })).toBeTruthy()
+
+    expect(await within(other).findByText('Root')).toBeTruthy()
+    expect(within(other).queryByTestId('webhook-trigger-enable-tr-other')).toBeNull()
+    expect(within(other).queryByTestId('webhook-trigger-edit-tr-other')).toBeNull()
+    expect(within(other).queryByRole('button', { name: /delete/i })).toBeNull()
+    expect(within(other).getByTestId('webhook-trigger-fires-tr-other')).toBeTruthy()
   })
 
   test('空态文案分角色：非 admin 版无「新建」引导、无 action 按钮（评审门 F-5c）', async () => {
@@ -182,9 +247,7 @@ describe('RFC-260 · 非 admin 只读视图（AC-5）', () => {
     cleanup()
     await renderWebhooks('?tab=triggers')
     await waitFor(() =>
-      expect(
-        screen.getByText('No trigger rules have been created by an administrator yet.'),
-      ).toBeTruthy(),
+      expect(screen.getByText('No trigger rules have been created yet.')).toBeTruthy(),
     )
     expect(screen.queryByTestId('webhook-trigger-new')).toBeNull()
   })

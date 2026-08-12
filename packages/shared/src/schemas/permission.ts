@@ -7,9 +7,10 @@
 //
 // RFC-222 — third role `manager` (中文「资源管理员」): manager = admin minus
 // user management, system settings/ops, and task deletion. It gets every
-// resource-domain capability (row-level ACL bypass lives in the identity
-// predicate isResourceAdminRole below, NOT in a permission point) plus the
-// coarse route points repos:* / tasks:read:all.
+// resource-domain capability (the default row-level ACL bypass lives in the
+// identity predicate isResourceAdminRole below, NOT in a permission point) plus
+// the coarse route points repos:* / tasks:read:all. RFC-283 webhook trigger rules
+// are the deliberate exception: manager has method capability but only owner writes.
 //
 // RFC-247 — the `资源:write` point is GONE. It used to cover POST/PUT/PATCH/
 // DELETE alike (the `resourcePermissionGate` middleware, since deleted along
@@ -70,11 +71,12 @@ export const PERMISSIONS = [
   'workflows:read',
   'workgroups:read',
   'scheduled-tasks:read',
-  // RFC-260 — webhook 面「读全员、写 admin」：两个 read 点都在 USER_BASELINE
+  // RFC-260/RFC-283 — webhook 读面全员可见；触发规则由
+  // admin 全局管理、manager 仅管理自己的规则。两个 read 点都在 USER_BASELINE
   // （触发器全量只读 + 端点/投递元数据只读——hook URL 明文另由响应分层保护：
   // 只有 admin 的 session 请求拿明文，非 admin 与一切 PAT 拿掩码 hint，见
-  // routes/webhookEndpoints.ts toWire）。写动词（triggers 三动词与
-  // endpoints:manage）不在任何非 admin 基线——配置仍 admin 独占。
+  // routes/webhookEndpoints.ts toWire）。triggers 三个写动词进 manager
+  // 基线（owner 行级门另行约束）；endpoints:manage 仍只属于 admin。
   'webhook-triggers:read',
   // RFC-260 — 端点与投递审计共用的读点（投递是端点级审计，RFC-257 F-13；
   // replay/写面仍走 system 域的 webhook-endpoints:manage）。
@@ -385,8 +387,8 @@ const USER_BASELINE: ReadonlyArray<Permission> = [
   // RFC-234 (D22): intent building is open to all users.
   'intent:read',
   'intent:write',
-  // RFC-260 — webhook 读面全员开放（写面仍 admin 独占；URL 明文由响应分层
-  // 保护，PAT 恒拿掩码）。
+  // RFC-260/RFC-283 — webhook 读面全员开放；触发规则写面在
+  // manager 基线额外授权，端点写面仍 admin 独占。
   'webhook-triggers:read',
   'webhook-endpoints:read',
 ]
@@ -403,6 +405,11 @@ const MANAGER_EXTRA: ReadonlyArray<Permission> = [
   // RFC-269 (Q3) — same shape as script authoring: admin + manager. Being a
   // SYSTEM-domain point bounds the TOKEN surface, not the role surface.
   'code-host-calls:author',
+  // RFC-283 — manager 可创建触发规则，并仅修改/删除自己名下的规则。
+  // 这三个点只是方法粗门，owner 边界由 webhookTriggers 路由逐行判定。
+  'webhook-triggers:create',
+  'webhook-triggers:update',
+  'webhook-triggers:delete',
   'repos:create',
   'repos:update', // RFC-248 D5/G4 —— 仓库组走 repos:* 这一档
   'repos:delete',
@@ -421,13 +428,14 @@ export function hasPermission(role: Role, perm: Permission): boolean {
 }
 
 /**
- * RFC-222 — the resource-domain identity predicate. admin AND manager share
- * every row-level ACL bypass (view/modify/delete/ACL-manage any owner's
- * resource). This is the SINGLE SOURCE OF TRUTH the ACL service, the auth
+ * RFC-222 — the default resource-domain identity predicate. admin AND manager
+ * share the RFC-099 ACL bypass (view/modify/delete/ACL-manage any owner's
+ * ACL resource). This is the SINGLE SOURCE OF TRUTH the ACL service, the auth
  * middleware, and the WS registry all derive from — business code must not
  * hand-write `role === 'admin' || role === 'manager'` (a repo guard enforces
  * this). System-domain gates (users/settings/oidc/backup/runtimes/task
- * deletion) stay keyed on `role === 'admin'` only.
+ * deletion) stay keyed on `role === 'admin'` only. RFC-283 webhook triggers are
+ * not RFC-099 ACL resources: their route deliberately uses owner ∨ admin instead.
  */
 export function isResourceAdminRole(role: Role): boolean {
   return role === 'admin' || role === 'manager'

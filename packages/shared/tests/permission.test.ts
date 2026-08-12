@@ -380,7 +380,7 @@ describe('RFC-222 manager role', () => {
     expect(RoleSchema.safeParse('auditor').success).toBe(false)
   })
 
-  test('manager = user baseline + repos verbs + tasks:read:all', () => {
+  test('manager = user baseline + manager capabilities', () => {
     const expected: Permission[] = [
       ...ROLE_PERMISSIONS.user,
       'repos:create',
@@ -395,6 +395,10 @@ describe('RFC-222 manager role', () => {
       'scripts:author',
       // RFC-269 Q3 — 代码平台调用节点的编写同样下放到 manager，同样是系统域点。
       'code-host-calls:author',
+      // RFC-283 — 方法粗门对 manager 开放，路由内仍只允许自己的规则。
+      'webhook-triggers:create',
+      'webhook-triggers:update',
+      'webhook-triggers:delete',
     ]
     expect([...ROLE_PERMISSIONS.manager].sort()).toEqual([...new Set(expected)].sort())
   })
@@ -414,6 +418,9 @@ describe('RFC-222 manager role', () => {
       'tasks:read:all',
       'memory:create',
       'memory:delete',
+      'webhook-triggers:create',
+      'webhook-triggers:update',
+      'webhook-triggers:delete',
     ] as const) {
       expect(hasPermission('manager', p)).toBe(true)
     }

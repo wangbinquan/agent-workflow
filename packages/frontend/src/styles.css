@@ -23885,6 +23885,13 @@ button.status-chip {
   font-weight: 550;
 }
 
+.webhook-trigger-card .webhook-facts dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .webhook-endpoint__url {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

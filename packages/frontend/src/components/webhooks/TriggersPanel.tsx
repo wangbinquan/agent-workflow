@@ -28,6 +28,7 @@ import { Checkbox, Field, NumberInput, Switch, TextArea, TextInput } from '@/com
 import { ChipsInput } from '@/components/ChipsInput'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
+import { OwnerLabel } from '@/components/OwnerLabel'
 import { QueryState } from '@/components/QueryState'
 import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
@@ -39,14 +40,37 @@ import {
   applyTemplateVarInsertion,
   webhookVarGroupsForDisplay,
 } from '@/components/TemplateVarChips'
-import { isAdminAtRequest, useIsAdmin } from '@/hooks/useActor'
+import { currentActorAtRequest, useActor, type MeResponse } from '@/hooks/useActor'
+import { useUserLookup } from '@/hooks/useUserLookup'
 
 type RepoScopeKind = 'all' | 'prefix' | 'exact'
 type ExecutionSpace = 'event-repo' | 'scratch'
 
-interface AdminRequest<T> {
+interface TriggerRequest<T> {
   session: number
   input: T
+}
+
+type TriggerWritePermission =
+  | 'webhook-triggers:create'
+  | 'webhook-triggers:update'
+  | 'webhook-triggers:delete'
+
+function canCreateTrigger(actor: MeResponse | null | undefined): boolean {
+  return (
+    actor?.user.role === 'admin' || actor?.permissions.includes('webhook-triggers:create') === true
+  )
+}
+
+function canWriteTrigger(
+  actor: MeResponse | null | undefined,
+  ownerUserId: string,
+  permission: Exclude<TriggerWritePermission, 'webhook-triggers:create'>,
+): boolean {
+  return (
+    actor?.user.role === 'admin' ||
+    (actor?.user.id === ownerUserId && actor.permissions.includes(permission))
+  )
 }
 
 function isScratchPayload(payload: unknown): payload is { scratch: true } {
@@ -60,6 +84,8 @@ function isScratchPayload(payload: unknown): payload is { scratch: true } {
 
 interface Draft {
   id: string | null
+  /** null 只用于尚未创建的新规则；编辑时用于锁定 owner 写边界。 */
+  ownerUserId: string | null
   name: string
   endpointId: string
   enabled: boolean
@@ -90,6 +116,7 @@ interface Draft {
 
 const EMPTY_DRAFT: Draft = {
   id: null,
+  ownerUserId: null,
   name: '',
   endpointId: '',
   enabled: true,
@@ -121,6 +148,7 @@ function draftFromRow(row: WebhookTrigger): Draft {
   }
   return {
     id: row.id,
+    ownerUserId: row.ownerUserId,
     name: row.name,
     endpointId: row.endpointId,
     enabled: row.enabled,
@@ -204,17 +232,21 @@ type WorkflowDetail = {
 type AgentRow = { id: string; name: string }
 type WorkgroupRow = { id: string; name: string }
 
-/** RFC-260：isAdmin=false 渲染只读视图（无新建/编辑/删除/开关/重置；fires 查看保留）。 */
-export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
+/** RFC-283：admin 全局管理，manager 只管理自己的规则，其余规则只读。 */
+export function TriggersPanel() {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const liveIsAdmin = useIsAdmin()
-  const canAdmin = isAdmin && liveIsAdmin
+  const actorQuery = useActor()
+  const actor =
+    actorQuery.status === 'success' && actorQuery.fetchStatus === 'idle'
+      ? actorQuery.data
+      : undefined
+  const canCreate = canCreateTrigger(actor)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [firesFor, setFiresFor] = useState<WebhookTrigger | null>(null)
-  const adminSessionRef = useRef(0)
-  const previousCanAdminRef = useRef(canAdmin)
+  const writeSessionRef = useRef(0)
+  const previousCanCreateRef = useRef(canCreate)
   const resetMutationsRef = useRef<() => void>(() => {})
 
   const triggers = useQuery({
@@ -249,12 +281,23 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
     retry: false,
   })
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['webhook-triggers'] })
-  const requestIsCurrent = (session: number): boolean =>
-    session === adminSessionRef.current && isAdminAtRequest(qc)
+  const requestIsCurrent = (
+    session: number,
+    permission: TriggerWritePermission,
+    ownerUserId?: string,
+  ): boolean => {
+    if (session !== writeSessionRef.current) return false
+    const requestActor = currentActorAtRequest(qc)
+    if (permission === 'webhook-triggers:create') return canCreateTrigger(requestActor)
+    return ownerUserId !== undefined && canWriteTrigger(requestActor, ownerUserId, permission)
+  }
 
   const save = useMutation({
-    mutationFn: ({ input: d, session }: AdminRequest<Draft>) => {
-      if (!requestIsCurrent(session)) throw new Error('Webhook admin session ended')
+    mutationFn: ({ input: d, session }: TriggerRequest<Draft>) => {
+      const permission = d.id === null ? 'webhook-triggers:create' : 'webhook-triggers:update'
+      if (!requestIsCurrent(session, permission, d.ownerUserId ?? undefined)) {
+        throw new Error('Webhook trigger write access ended')
+      }
       return d.id === null
         ? api.post<WebhookTrigger>('/api/webhook-triggers', bodyOf(d))
         : api.put<WebhookTrigger>(`/api/webhook-triggers/${encodeURIComponent(d.id)}`, {
@@ -265,41 +308,66 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
           })
     },
     onSuccess: (_saved, request) => {
-      if (!requestIsCurrent(request.session)) return
+      const permission =
+        request.input.id === null ? 'webhook-triggers:create' : 'webhook-triggers:update'
+      if (!requestIsCurrent(request.session, permission, request.input.ownerUserId ?? undefined)) {
+        return
+      }
       setError(null)
       setDraft(null)
       invalidate()
     },
     onError: (nextError, request) => {
-      if (requestIsCurrent(request.session)) setError(nextError)
+      const permission =
+        request.input.id === null ? 'webhook-triggers:create' : 'webhook-triggers:update'
+      if (requestIsCurrent(request.session, permission, request.input.ownerUserId ?? undefined)) {
+        setError(nextError)
+      }
     },
   })
   const toggle = useMutation({
-    mutationFn: ({ input, session }: AdminRequest<{ id: string; enabled: boolean }>) => {
-      if (!requestIsCurrent(session)) throw new Error('Webhook admin session ended')
+    mutationFn: ({
+      input,
+      session,
+    }: TriggerRequest<{ id: string; ownerUserId: string; enabled: boolean }>) => {
+      if (!requestIsCurrent(session, 'webhook-triggers:update', input.ownerUserId)) {
+        throw new Error('Webhook trigger write access ended')
+      }
       return api.put<WebhookTrigger>(`/api/webhook-triggers/${encodeURIComponent(input.id)}`, {
         enabled: input.enabled,
       })
     },
     onSuccess: (_saved, request) => {
-      if (requestIsCurrent(request.session)) invalidate()
+      if (requestIsCurrent(request.session, 'webhook-triggers:update', request.input.ownerUserId)) {
+        invalidate()
+      }
     },
     onError: (nextError, request) => {
-      if (requestIsCurrent(request.session)) setError(nextError)
+      if (requestIsCurrent(request.session, 'webhook-triggers:update', request.input.ownerUserId)) {
+        setError(nextError)
+      }
     },
   })
   const remove = useMutation({
-    mutationFn: ({ input: id, session }: AdminRequest<string>) => {
-      if (!requestIsCurrent(session)) throw new Error('Webhook admin session ended')
-      return api.delete(`/api/webhook-triggers/${encodeURIComponent(id)}`)
+    mutationFn: ({ input, session }: TriggerRequest<{ id: string; ownerUserId: string }>) => {
+      if (!requestIsCurrent(session, 'webhook-triggers:delete', input.ownerUserId)) {
+        throw new Error('Webhook trigger write access ended')
+      }
+      return api.delete(`/api/webhook-triggers/${encodeURIComponent(input.id)}`)
     },
     onSuccess: (_deleted, request) => {
-      if (!requestIsCurrent(request.session)) return
+      if (
+        !requestIsCurrent(request.session, 'webhook-triggers:delete', request.input.ownerUserId)
+      ) {
+        return
+      }
       setError(null)
       invalidate()
     },
     onError: (nextError, request) => {
-      if (requestIsCurrent(request.session)) setError(nextError)
+      if (requestIsCurrent(request.session, 'webhook-triggers:delete', request.input.ownerUserId)) {
+        setError(nextError)
+      }
     },
   })
   resetMutationsRef.current = () => {
@@ -309,19 +377,20 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
   }
 
   useLayoutEffect(() => {
-    const lostAdmin = previousCanAdminRef.current && !canAdmin
-    previousCanAdminRef.current = canAdmin
-    if (!canAdmin) {
-      if (lostAdmin) adminSessionRef.current += 1
+    const lostWriteAccess = previousCanCreateRef.current && !canCreate
+    previousCanCreateRef.current = canCreate
+    if (!canCreate) {
+      if (lostWriteAccess) writeSessionRef.current += 1
       setDraft(null)
       setError(null)
       resetMutationsRef.current()
     }
-  }, [canAdmin])
+  }, [canCreate])
 
-  const adminSession = adminSessionRef.current
+  const writeSession = writeSessionRef.current
 
   const rows = triggers.data ?? []
+  const owners = useUserLookup(rows.map((row) => row.ownerUserId))
   const isInitialEmpty = !triggers.isLoading && triggers.data !== undefined && rows.length === 0
   const targetNames = useMemo(() => {
     const names = new Map<string, string>()
@@ -336,7 +405,7 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
       type="button"
       className="btn btn--primary"
       onClick={() => {
-        if (!requestIsCurrent(adminSession)) return
+        if (!requestIsCurrent(writeSession, 'webhook-triggers:create')) return
         setError(null)
         save.reset()
         setDraft({ ...EMPTY_DRAFT, endpointId: endpoints.data?.[0]?.id ?? '' })
@@ -356,7 +425,7 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
           <h2>{t('webhookTriggers.title')}</h2>
           <p>{t('webhookTriggers.subtitle')}</p>
         </div>
-        {canAdmin && !isInitialEmpty && newAction}
+        {canCreate && !isInitialEmpty && newAction}
       </div>
 
       <FeedbackStack variant="section">
@@ -368,11 +437,11 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
         <EmptyState
           title={t('webhookTriggers.empty')}
           description={
-            canAdmin
+            canCreate
               ? t('webhookTriggers.emptyDescription')
               : t('webhookTriggers.emptyReadonlyDescription')
           }
-          action={canAdmin ? newAction : undefined}
+          action={canCreate ? newAction : undefined}
           data-testid="webhook-triggers-empty"
         />
       )}
@@ -390,6 +459,9 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
             const target =
               targetNames.get(`${row.launchKind}:${row.launchRefId}`) ?? row.launchRefId
             const scratch = isScratchPayload(row.launchPayload)
+            const isOwn = actor?.user.id === row.ownerUserId
+            const canUpdate = canWriteTrigger(actor, row.ownerUserId, 'webhook-triggers:update')
+            const canDelete = canWriteTrigger(actor, row.ownerUserId, 'webhook-triggers:delete')
             return (
               <Card
                 key={row.id}
@@ -414,13 +486,13 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
                 }
                 footer={
                   <div className="webhook-card__footer">
-                    {canAdmin ? (
+                    {canUpdate ? (
                       <Switch
                         checked={row.enabled}
                         onChange={(enabled) =>
                           toggle.mutate({
-                            session: adminSession,
-                            input: { id: row.id, enabled },
+                            session: writeSession,
+                            input: { id: row.id, ownerUserId: row.ownerUserId, enabled },
                           })
                         }
                         disabled={toggle.isPending}
@@ -445,31 +517,46 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
                       >
                         {t('webhookTriggers.firesButton')}
                       </button>
-                      {canAdmin && (
+                      {(canUpdate || canDelete) && (
                         <>
-                          <button
-                            type="button"
-                            className="btn btn--sm"
-                            onClick={() => {
-                              if (!requestIsCurrent(adminSession)) return
-                              setError(null)
-                              save.reset()
-                              setDraft(draftFromRow(row))
-                            }}
-                            data-testid={`webhook-trigger-edit-${row.id}`}
-                          >
-                            {t('common.edit')}
-                          </button>
-                          <ConfirmButton
-                            label={t('common.delete')}
-                            confirmLabel={t('webhookTriggers.deleteConfirm')}
-                            variant="danger"
-                            size="sm"
-                            confirmationKey={row.id}
-                            onConfirm={() =>
-                              remove.mutateAsync({ session: adminSession, input: row.id })
-                            }
-                          />
+                          {canUpdate && (
+                            <button
+                              type="button"
+                              className="btn btn--sm"
+                              onClick={() => {
+                                if (
+                                  !requestIsCurrent(
+                                    writeSession,
+                                    'webhook-triggers:update',
+                                    row.ownerUserId,
+                                  )
+                                ) {
+                                  return
+                                }
+                                setError(null)
+                                save.reset()
+                                setDraft(draftFromRow(row))
+                              }}
+                              data-testid={`webhook-trigger-edit-${row.id}`}
+                            >
+                              {t('common.edit')}
+                            </button>
+                          )}
+                          {canDelete && (
+                            <ConfirmButton
+                              label={t('common.delete')}
+                              confirmLabel={t('webhookTriggers.deleteConfirm')}
+                              variant="danger"
+                              size="sm"
+                              confirmationKey={row.id}
+                              onConfirm={() =>
+                                remove.mutateAsync({
+                                  session: writeSession,
+                                  input: { id: row.id, ownerUserId: row.ownerUserId },
+                                })
+                              }
+                            />
+                          )}
                         </>
                       )}
                     </div>
@@ -477,6 +564,23 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
                 }
                 data-testid={`webhook-trigger-${row.id}`}
               >
+                <dl className="webhook-facts">
+                  <div data-testid={`webhook-trigger-owner-${row.id}`}>
+                    <dt>{t('webhookTriggers.ownerLabel')}</dt>
+                    <dd>
+                      <OwnerLabel
+                        ownerUserId={row.ownerUserId}
+                        owner={owners.get(row.ownerUserId) ?? null}
+                        wrap
+                      />
+                      {isOwn && (
+                        <StatusChip kind="info" size="sm">
+                          {t('webhookTriggers.ownedByMe')}
+                        </StatusChip>
+                      )}
+                    </dd>
+                  </div>
+                </dl>
                 <div className="webhook-trigger__flow" aria-label={t('webhookTriggers.flowAria')}>
                   <div>
                     <span>{t('webhookTriggers.flow.scope')}</span>
@@ -528,22 +632,30 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
         </div>
       )}
 
-      {canAdmin && draft !== null && (
-        <TriggerDialog
-          draft={draft}
-          endpoints={endpoints.data ?? []}
-          saving={save.isPending}
-          saveError={save.error}
-          onChange={(nextDraft) => {
-            save.reset()
-            setDraft(nextDraft)
-          }}
-          onClose={() => setDraft(null)}
-          onSave={() => save.mutate({ session: adminSession, input: draft })}
-        />
-      )}
+      {draft !== null &&
+        (draft.id === null
+          ? canCreate
+          : draft.ownerUserId !== null &&
+            canWriteTrigger(actor, draft.ownerUserId, 'webhook-triggers:update')) && (
+          <TriggerDialog
+            draft={draft}
+            endpoints={endpoints.data ?? []}
+            saving={save.isPending}
+            saveError={save.error}
+            onChange={(nextDraft) => {
+              save.reset()
+              setDraft(nextDraft)
+            }}
+            onClose={() => setDraft(null)}
+            onSave={() => save.mutate({ session: writeSession, input: draft })}
+          />
+        )}
       {firesFor !== null && (
-        <FiresDialog trigger={firesFor} isAdmin={canAdmin} onClose={() => setFiresFor(null)} />
+        <FiresDialog
+          trigger={firesFor}
+          canReset={canWriteTrigger(actor, firesFor.ownerUserId, 'webhook-triggers:update')}
+          onClose={() => setFiresFor(null)}
+        />
       )}
     </section>
   )
@@ -1185,11 +1297,11 @@ type FireRow = {
   firedAt: number
 }
 
-function FiresDialog(props: { trigger: WebhookTrigger; isAdmin: boolean; onClose: () => void }) {
+function FiresDialog(props: { trigger: WebhookTrigger; canReset: boolean; onClose: () => void }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const adminSessionRef = useRef(0)
-  const previousIsAdminRef = useRef(props.isAdmin)
+  const writeSessionRef = useRef(0)
+  const previousCanResetRef = useRef(props.canReset)
   const fires = useQuery({
     queryKey: ['webhook-trigger-fires', props.trigger.id],
     queryFn: ({ signal }) =>
@@ -1200,10 +1312,11 @@ function FiresDialog(props: { trigger: WebhookTrigger; isAdmin: boolean; onClose
       ),
   })
   const requestIsCurrent = (session: number): boolean =>
-    session === adminSessionRef.current && isAdminAtRequest(qc)
+    session === writeSessionRef.current &&
+    canWriteTrigger(currentActorAtRequest(qc), props.trigger.ownerUserId, 'webhook-triggers:update')
   const reset = useMutation({
-    mutationFn: ({ input: streamKey, session }: AdminRequest<string>) => {
-      if (!requestIsCurrent(session)) throw new Error('Webhook admin session ended')
+    mutationFn: ({ input: streamKey, session }: TriggerRequest<string>) => {
+      if (!requestIsCurrent(session)) throw new Error('Webhook trigger write access ended')
       return api.post(
         `/api/webhook-triggers/${encodeURIComponent(props.trigger.id)}/streams/reset`,
         {
@@ -1218,14 +1331,14 @@ function FiresDialog(props: { trigger: WebhookTrigger; isAdmin: boolean; onClose
     },
   })
   useLayoutEffect(() => {
-    const lostAdmin = previousIsAdminRef.current && !props.isAdmin
-    previousIsAdminRef.current = props.isAdmin
-    if (lostAdmin) {
-      adminSessionRef.current += 1
+    const lostResetAccess = previousCanResetRef.current && !props.canReset
+    previousCanResetRef.current = props.canReset
+    if (lostResetAccess) {
+      writeSessionRef.current += 1
       reset.reset()
     }
-  }, [props.isAdmin, reset])
-  const adminSession = adminSessionRef.current
+  }, [props.canReset, reset])
+  const writeSession = writeSessionRef.current
   const chipKind = (outcome: string) =>
     outcome === 'launched' ? 'success' : outcome === 'launch-failed' ? 'danger' : 'warn'
   return (
@@ -1262,12 +1375,12 @@ function FiresDialog(props: { trigger: WebhookTrigger; isAdmin: boolean; onClose
                     </td>
                     <td className="muted">{new Date(f.firedAt).toLocaleString()}</td>
                     <td className="data-table__actions">
-                      {props.isAdmin && f.outcome === 'skipped-circuit-open' && (
+                      {props.canReset && f.outcome === 'skipped-circuit-open' && (
                         <button
                           type="button"
                           className="btn btn--xs"
                           onClick={() =>
-                            reset.mutate({ session: adminSession, input: f.streamKey })
+                            reset.mutate({ session: writeSession, input: f.streamKey })
                           }
                           data-testid={`wt-reset-${f.id}`}
                         >

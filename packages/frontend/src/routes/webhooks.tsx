@@ -1,7 +1,7 @@
 // RFC-257 UI 修订 — webhook 配置单页：侧栏「运行与仓库」组（远端仓下方），
 // 三 tab（端点 / 触发器 / 投递审计），骨架与 tab 语义照抄 /repos（TabBar +
-// search param + 无效值归一化）。RFC-260：**读全员、写 admin**——页面对全部
-// 角色可见（只读视图），配置动作按 isAdmin 渲染；真正的边界在后端方法门与
+// search param + 无效值归一化）。RFC-260/RFC-283：页面对全部角色可见；
+// 端点与重放仍按 isAdmin 渲染，触发规则按 actor + owner 渲染。真正边界在后端方法门与
 // URL 明文的响应分层（非 admin 的响应里就没有 urlToken 明文）。
 import { createRoute } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -46,8 +46,8 @@ function WebhooksPage() {
   const isAdmin = useIsAdmin()
   const tab: WebhooksTab = search.tab ?? 'endpoints'
 
-  // RFC-260：页面全员可见。加载中给 Loading；isAdmin 决定配置动作是否渲染
-  //（后端方法门与 URL 响应分层才是真正边界，这里只是 UX）。
+  // RFC-260/RFC-283：页面全员可见。isAdmin 只控制端点/投递写动作；
+  // 触发规则面板自己按当前 actor 和 owner 判定。
   if (actor.isLoading) {
     return (
       <div className="page page--operations webhooks-page">
@@ -109,7 +109,7 @@ function WebhooksPage() {
             {
               key: 'triggers',
               testid: 'webhooks-panel-triggers',
-              content: <TriggersPanel isAdmin={isAdmin} />,
+              content: <TriggersPanel />,
             },
             {
               key: 'deliveries',
