@@ -7,7 +7,8 @@
 
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
+import type { Logger } from '../src/util/log'
 import type { RuntimeProfile } from '../src/services/runtimeRegistry'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -112,6 +113,7 @@ interface RunOpts {
   h: Harness
   /** RFC-113: claude's model now comes from the runtime profile, not agent.model. */
   runtimeParams?: RuntimeProfile
+  log?: Logger
 }
 function runClaude(o: RunOpts) {
   return runNode({
@@ -127,8 +129,25 @@ function runClaude(o: RunOpts) {
     runtime: 'claude-code',
     binaryOverride: ['bun', 'run', MOCK_CLAUDE],
     ...(o.runtimeParams ? { runtimeParams: o.runtimeParams } : {}),
+    ...(o.log ? { log: o.log } : {}),
     db: o.h.db,
   })
+}
+
+function captureWarnings(): {
+  log: Logger
+  warnings: Array<{ message: string; fields?: Record<string, unknown> }>
+} {
+  const warnings: Array<{ message: string; fields?: Record<string, unknown> }> = []
+  const log: Logger = {
+    debug: () => {},
+    info: () => {},
+    warn: (message, fields) =>
+      warnings.push(fields === undefined ? { message } : { message, fields }),
+    error: () => {},
+    child: () => log,
+  }
+  return { log, warnings }
 }
 
 describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
@@ -236,6 +255,47 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     )
     expect(result.status).toBe('failed')
     expect(result.exitCode).toBe(1)
+  })
+
+  test('stderr persistence exception is retained in Claude node diagnostics and logs', async () => {
+    const agent = makeAgent()
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const { log, warnings } = captureWarnings()
+    await h.db.run(sql`
+      CREATE TRIGGER fail_claude_stderr_event_insert
+      BEFORE INSERT ON node_run_events
+      WHEN NEW.kind = 'stderr'
+      BEGIN
+        SELECT RAISE(
+          ABORT,
+          'forced Claude stderr persistence failure --token=claude-pump-secret'
+        );
+      END
+    `)
+
+    const result = await withEnv(
+      {
+        MOCK_CLAUDE_STDERR: 'trigger the stderr persistence path',
+        MOCK_CLAUDE_OUTPUTS: JSON.stringify({ summary: 'unreachable' }),
+      },
+      () => runClaude({ agent, nodeRunId, h, log }),
+    )
+
+    expect(result.status).toBe('failed')
+    expect(result.failureCode).toBe('runtime-stream-interrupted')
+    expect(result.errorMessage).toContain(
+      'claude-code stream persistence failed: forced Claude stderr persistence failure',
+    )
+    expect(result.errorMessage).not.toContain('claude-pump-secret')
+
+    const warning = warnings.find((entry) => entry.message === 'runtime-stream-pump-failed')
+    expect(warning?.fields?.runtime).toBe('claude-code')
+    expect(warning?.fields?.err).toContain('forced Claude stderr persistence failure')
+    expect(warning?.fields?.err).not.toContain('claude-pump-secret')
+
+    const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    expect(row?.status).toBe('failed')
+    expect(row?.errorMessage).toBe(result.errorMessage)
   })
 })
 

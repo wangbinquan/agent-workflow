@@ -7,7 +7,7 @@
 
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -315,6 +315,55 @@ describe('runNode', () => {
       'error: failed thing',
       'warning: deprecated',
     ])
+  })
+
+  // Regression: the historical runner settlePump path killed the child after a
+  // line-persistence exception but discarded the exception itself. Keep the
+  // bounded kill/reap behavior while making the root cause diagnosable.
+  test('stream persistence failure preserves the masked root cause', async () => {
+    const agent = makeAgent()
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    await h.db.run(sql`
+      CREATE TRIGGER fail_node_run_event_insert
+      BEFORE INSERT ON node_run_events
+      BEGIN
+        SELECT RAISE(
+          ABORT,
+          'forced node-run-event persistence failure --token=settle-pump-secret'
+        );
+      END
+    `)
+
+    const result = await withEnv(
+      {
+        MOCK_OPENCODE_EVENTS: JSON.stringify([{ type: 'step_start' }]),
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'unreachable' }),
+      },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'node1',
+          agent,
+          inputs: {},
+          worktreePath: h.worktreePath,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          skills: [],
+          appHome: h.appHome,
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          db: h.db,
+        }),
+    )
+
+    expect(result.status).toBe('failed')
+    expect(result.failureCode).toBe('runtime-stream-interrupted')
+    expect(result.errorMessage).toContain('forced node-run-event persistence failure')
+    expect(result.errorMessage).not.toContain('settle-pump-secret')
+
+    const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    expect(row?.status).toBe('failed')
+    expect(row?.failureCode).toBe('runtime-stream-interrupted')
+    expect(row?.errorMessage).toBe(result.errorMessage)
   })
 
   test('timeout -> status=failed with node-timeout error', async () => {

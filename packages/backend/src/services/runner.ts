@@ -1262,7 +1262,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     //    past the DRAIN deadline degrades to evidence loss on a finished run
     //    (real exitCode kept, `drainTimedOut`); a child that survives SIGKILL
     //    past the REAP deadline comes back `unreaped` (→ childUnkillable below).
-    let streamPumpFailed = false
     const runResult = await runAgentProcess({
       cmd,
       cwd: opts.worktreePath,
@@ -1295,14 +1294,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       },
       capture: {
         onStdoutLine: async (line: string) => {
-          try {
-            await onStdoutLine(line)
-          } catch (err) {
-            // A persist failure makes the run's output unrecordable — the
-            // historical `settlePump` behavior killed the child; keep that.
-            streamPumpFailed = true
-            throw err
-          }
+          await onStdoutLine(line)
         },
         // impl-gate P2-B: the OLD runner applied settlePump to BOTH streams —
         // a stderr-persist failure was also a stream failure. persistStderrLine
@@ -1319,10 +1311,23 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     timedOut = runResult.outcome === 'timeout'
     const exitCode = runResult.exitCode
     preserveLiveRuntimeState = childUnkillable
-    // impl-gate P2-B: a stderr-pump persist failure surfaces via pumpError (the
-    // stdout path sets streamPumpFailed inline); fold it in so either stream's
-    // persist failure yields the historical `runtime-stream-interrupted`.
-    if (runResult.pumpError !== undefined) streamPumpFailed = true
+    // A line callback can fail while parsing runtime output, claiming a native
+    // session, or persisting stdout/stderr. managedProcess deliberately catches
+    // that rejection so it can TERM→KILL→reap the child instead of throwing out
+    // of the drain race. Preserve that lifecycle, but do not repeat the old
+    // settlePump bug of reducing the exception to a boolean: retain a masked,
+    // bounded reason in both daemon logs and the durable node error.
+    const streamPumpError =
+      runResult.pumpError === undefined
+        ? undefined
+        : maskDiagnosticsText(runResult.pumpError).slice(0, 2000)
+    if (streamPumpError !== undefined) {
+      log.warn('runtime-stream-pump-failed', {
+        nodeRunId: opts.nodeRunId,
+        runtime,
+        err: streamPumpError,
+      })
+    }
     // RFC-048: stop the live poller before the post-run BFS so no concurrent
     // SELECT races against the final captureChildSessions read.
     liveCtrl.abort()
@@ -1408,10 +1413,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       status = 'failed'
       failureCode = 'runtime-result-error'
       errorMessage = `runtime-result-error: ${maskDiagnosticsText(terminalResultError).slice(0, 2000)}`
-    } else if (streamPumpFailed) {
+    } else if (streamPumpError !== undefined) {
       status = 'failed'
       failureCode = 'runtime-stream-interrupted'
-      errorMessage = `${runtime} stream persistence failed`
+      errorMessage = `${runtime} stream persistence failed: ${streamPumpError}`
     } else if (aborted) {
       // RFC-202 T4: a daemon-shutdown abort must NOT read as a user cancel.
       // RunResult keeps status='canceled' (control flow: loop break / runScope
