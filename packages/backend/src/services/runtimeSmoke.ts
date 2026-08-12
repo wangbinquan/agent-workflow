@@ -100,7 +100,8 @@ const NETWORK_SIGNATURES =
  * writes a `.gitignore` into OPENCODE_CONFIG_DIR on startup and exits 1 when
  * it's missing — locked by runtime-smoke.test.ts). mkdtempSync created
  * attemptDir, so the contract holds without a protocol-specific mkdir; claude
- * treats it as the attempt dir and creates `.claude/` under it as before.
+ * only writes its generated system prompt there (since RFC-276 it gets no
+ * platform-owned config dir at all — it reads the operator's own).
  */
 async function buildSmokePlan(
   protocol: RuntimeKind,

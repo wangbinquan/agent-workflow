@@ -52,7 +52,7 @@ import { pickRuntimeHead } from '../head'
 import { toBusinessCtx, toSystemCtx } from '../spawnCtx'
 import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from './probe'
 import { listClaudeModels } from './models'
-import { captureClaudeSessions } from './sessionCapture'
+import { captureClaudeSessions, claudeUserConfigRoots } from './sessionCapture'
 import { claudeBusinessGate, claudeToolsValue } from './permissionMap'
 import { gitMetaDirsFor } from '@/util/git'
 import { scanSiblingTaskRoots, toolchainCacheDirs } from '@/services/execution/workspaceBoundary'
@@ -519,12 +519,14 @@ export const claudeCodeDriver: RuntimeDriver = {
       taskId: ctx.taskId,
       db: ctx.db,
       log: ctx.log,
-      // RFC-154: the transcript lives under the selected leaf (runner threads it);
-      // omitted (tests / non-runner callers) → protocol default.
-      configDir: join(
-        ctx.runRoot,
-        ctx.configDirName ?? DEFAULT_CONFIG_DIR_PROFILE['claude-code'].name,
-      ),
+      // Transcripts live under claude's USER-level config root, resolved from the
+      // RFC-154 profile the runner threads (omitted → protocol default). NOT
+      // `<runRoot>/<leaf>`: since RFC-276 the platform sets no config-dir env, so
+      // claude never writes there — see sessionCapture.ts for the full history.
+      configRoots: claudeUserConfigRoots({
+        env: ctx.configDirEnv ?? DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env,
+        name: ctx.configDirName ?? DEFAULT_CONFIG_DIR_PROFILE['claude-code'].name,
+      }),
       worktreePath: ctx.worktreePath,
     })
   },

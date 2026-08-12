@@ -1,7 +1,8 @@
 // RFC-111 PR-D — captureClaudeSessions reads claude's JSONL subagent transcripts
-// (under the per-run CLAUDE_CONFIG_DIR projects dir) into node_run_events so the
-// task-detail SessionTab gets subagent visibility (parity with opencode's RFC-027
-// SQLite walk). Failure writes a `subagent_capture_failed` marker (graceful).
+// (under the operator's claude config root — see the 2026-08-12 regression block
+// at the bottom) into node_run_events so the task-detail SessionTab gets subagent
+// visibility (parity with opencode's RFC-027 SQLite walk). Failure writes a
+// `subagent_capture_failed` marker (graceful).
 
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -11,7 +12,12 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { captureClaudeSessions, cwdSlug } from '../src/services/runtime/claudeCode/sessionCapture'
+import {
+  captureClaudeSessions,
+  claudeUserConfigRoots,
+  cwdSlug,
+} from '../src/services/runtime/claudeCode/sessionCapture'
+import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -91,7 +97,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       taskId: 'ignored',
       db,
       log: createLogger('test'),
-      configDir,
+      configRoots: [configDir],
       worktreePath: worktree,
     })
 
@@ -135,7 +141,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       taskId: 'ignored',
       db,
       log: createLogger('test'),
-      configDir,
+      configRoots: [configDir],
       worktreePath: worktree,
     })
 
@@ -164,10 +170,185 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       taskId: 't',
       db,
       log: createLogger('test'),
-      configDir: join(tmpdir(), 'does-not-exist-' + ulid()),
+      configRoots: [join(tmpdir(), 'does-not-exist-' + ulid())],
       worktreePath: '/w',
     })
     const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
     expect(rows.length).toBe(0)
+  })
+
+  test('scans every candidate root, not just the first (transcript in a later root)', async () => {
+    const { db, nodeRunId } = await seed()
+    const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-multi-'))
+    const worktree = join(root, 'wt')
+    mkdirSync(worktree, { recursive: true })
+    const rootSession = 'sess-root-multi'
+    // First candidate exists but holds a DIFFERENT session; the transcript is
+    // under the second — capture must keep walking instead of stopping at #1.
+    const decoy = join(root, 'decoy-config')
+    mkdirSync(join(decoy, 'projects', cwdSlug(worktree), 'other-session', 'subagents'), {
+      recursive: true,
+    })
+    const real = join(root, 'real-config')
+    const subDir = join(real, 'projects', cwdSlug(worktree), rootSession, 'subagents')
+    mkdirSync(subDir, { recursive: true })
+    writeFileSync(
+      join(subDir, 'agent-multi.jsonl'),
+      JSON.stringify({
+        type: 'assistant',
+        sessionId: 'sub-multi',
+        timestamp: '2026-08-12T10:00:00.000Z',
+        message: { content: [{ type: 'text', text: 'found in the second root' }] },
+      }),
+    )
+
+    await captureClaudeSessions({
+      rootSessionId: rootSession,
+      nodeRunId,
+      taskId: 'ignored',
+      db,
+      log: createLogger('test'),
+      configRoots: [decoy, real],
+      worktreePath: worktree,
+    })
+
+    const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+    expect(rows.length).toBe(1)
+    expect(rows[0]?.sessionId).toBe('agent-multi')
+    rmSync(root, { recursive: true, force: true })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 2026-08-12 regression: claude subagent transcripts were looked up under
+// `<runRoot>/<configDirName>` — the private CLAUDE_CONFIG_DIR the platform
+// sealed each run into BEFORE RFC-276 — plus a hardcoded `~/.claude` fallback.
+// RFC-276 stopped setting any config-dir env (claudeCode/spawn.ts), so claude
+// writes into the OPERATOR's root: `$CLAUDE_CONFIG_DIR` if exported, else
+// `~/.claude`. The per-run candidate therefore never existed and the hardcoded
+// fallback was the only working path, silently dropping every subagent
+// transcript on hosts that export CLAUDE_CONFIG_DIR or run a fork with a
+// renamed root (symptom: an empty SessionTab plus one
+// `claude-subagent-capture-session-dir-not-found` warn). These lock the
+// RFC-154-profile-driven resolution that replaced it.
+// ---------------------------------------------------------------------------
+
+const DEFAULT_PROFILE = { env: 'CLAUDE_CONFIG_DIR', name: '.claude' }
+
+describe('claudeUserConfigRoots (transcript root resolution)', () => {
+  test('default profile, nothing exported → the operator home root', () => {
+    expect(claudeUserConfigRoots(DEFAULT_PROFILE, {}, '/home/op')).toEqual(['/home/op/.claude'])
+  })
+
+  test('exported CLAUDE_CONFIG_DIR wins, home root stays as fallback', () => {
+    expect(
+      claudeUserConfigRoots(DEFAULT_PROFILE, { CLAUDE_CONFIG_DIR: '/opt/claude-home' }, '/home/op'),
+    ).toEqual(['/opt/claude-home', '/home/op/.claude'])
+  })
+
+  test('fork profile: its own env + leaf lead, protocol defaults trail', () => {
+    expect(
+      claudeUserConfigRoots(
+        { env: 'BAR_DIR', name: '.bar' },
+        { BAR_DIR: '/srv/bar', CLAUDE_CONFIG_DIR: '/opt/claude-home' },
+        '/home/op',
+      ),
+    ).toEqual(['/srv/bar', '/opt/claude-home', '/home/op/.bar', '/home/op/.claude'])
+  })
+
+  test('blank env values are ignored (an exported-but-empty var is not a root)', () => {
+    expect(
+      claudeUserConfigRoots(DEFAULT_PROFILE, { CLAUDE_CONFIG_DIR: '   ' }, '/home/op'),
+    ).toEqual(['/home/op/.claude'])
+  })
+
+  test('home follows $HOME / %USERPROFILE% — the rule the spawned Node CLI uses', () => {
+    expect(claudeUserConfigRoots(DEFAULT_PROFILE, { HOME: '/daemon/home' })).toEqual([
+      '/daemon/home/.claude',
+    ])
+    expect(claudeUserConfigRoots(DEFAULT_PROFILE, { USERPROFILE: 'C:\\Users\\op' })).toEqual([
+      join('C:\\Users\\op', '.claude'),
+    ])
+  })
+})
+
+/** Fixture: one subagent JSONL turn under `<configRoot>/projects/<slug>/<session>`. */
+function writeTranscript(configRoot: string, worktree: string, session: string, agent: string) {
+  const subDir = join(configRoot, 'projects', cwdSlug(worktree), session, 'subagents')
+  mkdirSync(subDir, { recursive: true })
+  writeFileSync(
+    join(subDir, `${agent}.jsonl`),
+    JSON.stringify({
+      type: 'assistant',
+      sessionId: 'sub',
+      timestamp: '2026-08-12T11:00:00.000Z',
+      message: { content: [{ type: 'text', text: 'captured' }] },
+    }),
+  )
+}
+
+describe('claudeCodeDriver.captureSessions (RFC-154 profile → operator root)', () => {
+  test('finds transcripts under an exported CLAUDE_CONFIG_DIR (pre-fix: dropped)', async () => {
+    const { db, nodeRunId } = await seed()
+    const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-env-'))
+    const worktree = join(root, 'wt')
+    mkdirSync(worktree, { recursive: true })
+    writeTranscript(join(root, 'operator-config'), worktree, 'sess-env', 'agent-env')
+
+    const prevEnv = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = join(root, 'operator-config')
+    try {
+      await claudeCodeDriver.captureSessions({
+        rootSessionId: 'sess-env',
+        nodeRunId,
+        taskId: 'ignored',
+        db,
+        log: createLogger('test'),
+        worktreePath: worktree,
+      })
+    } finally {
+      if (prevEnv === undefined) delete process.env.CLAUDE_CONFIG_DIR
+      else process.env.CLAUDE_CONFIG_DIR = prevEnv
+    }
+
+    const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+    expect(rows.length).toBe(1)
+    expect(rows[0]?.sessionId).toBe('agent-env')
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  test('fork row with a renamed leaf → `<home>/<leaf>`, not the protocol default', async () => {
+    const { db, nodeRunId } = await seed()
+    const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-fork-'))
+    const worktree = join(root, 'wt')
+    mkdirSync(worktree, { recursive: true })
+    const home = join(root, 'home')
+    writeTranscript(join(home, '.awfork'), worktree, 'sess-fork', 'agent-fork')
+
+    const prevHome = process.env.HOME
+    const prevEnv = process.env.CLAUDE_CONFIG_DIR
+    process.env.HOME = home
+    delete process.env.CLAUDE_CONFIG_DIR
+    try {
+      await claudeCodeDriver.captureSessions({
+        rootSessionId: 'sess-fork',
+        nodeRunId,
+        taskId: 'ignored',
+        db,
+        log: createLogger('test'),
+        worktreePath: worktree,
+        configDirEnv: 'AW_TEST_FORK_CONFIG_DIR',
+        configDirName: '.awfork',
+      })
+    } finally {
+      if (prevHome === undefined) delete process.env.HOME
+      else process.env.HOME = prevHome
+      if (prevEnv !== undefined) process.env.CLAUDE_CONFIG_DIR = prevEnv
+    }
+
+    const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+    expect(rows.length).toBe(1)
+    expect(rows[0]?.sessionId).toBe('agent-fork')
+    rmSync(root, { recursive: true, force: true })
   })
 })

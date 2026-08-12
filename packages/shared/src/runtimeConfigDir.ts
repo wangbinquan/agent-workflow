@@ -1,13 +1,20 @@
 // RFC-154 — per-runtime config-dir injection profile.
 //
-// The framework stages skills into a per-run config directory and tells the
-// spawned CLI where it is via an env var (opencode: OPENCODE_CONFIG_DIR →
-// <runRoot>/.opencode; claude: CLAUDE_CONFIG_DIR → <runRoot>/.claude). A custom
-// fork binary may have renamed the env var and/or its default leaf directory,
-// so both are per-runtime configurable (runtimes.config_dir_env /
-// config_dir_name, NULL = the protocol default below). This module is the
-// SINGLE SOURCE for the protocol defaults — spawn/driver code must import from
-// here, never re-hardcode the literals (source-guard locked).
+// A custom fork binary may have renamed the env var it reads its config dir
+// from and/or that directory's leaf name, so both are per-runtime configurable
+// (runtimes.config_dir_env / config_dir_name, NULL = the protocol default
+// below). This module is the SINGLE SOURCE for the protocol defaults —
+// spawn/driver code must import from here, never re-hardcode the literals
+// (source-guard locked).
+//
+// What each half means depends on the driver:
+//   * opencode — the framework stages skills into a per-run config dir and
+//     points the CLI at it: `<env> = <runRoot>/<name>`.
+//   * claude — since RFC-276 the platform sets NO config-dir env (the operator's
+//     natural config/auth root is preserved). `name` selects the PROJECT config
+//     leaf projected into the worktree (`<worktree>/<name>/skills|agents`), and
+//     both halves also locate the operator's real root when reading transcripts
+//     back (claudeCode/sessionCapture.ts claudeUserConfigRoots).
 //
 // Dependency-free leaf module (same discipline as listWire): safe for both the
 // backend registry/drivers and the frontend form placeholders.

@@ -270,7 +270,8 @@ export interface ListModelsOpts {
 }
 
 /** run-after subagent session capture inputs (union; each driver takes what it
- *  needs — opencode: SQLite BFS + partId dedupe; claude: JSONL under runRoot). */
+ *  needs — opencode: SQLite BFS + partId dedupe; claude: JSONL under claude's
+ *  user-level config root). */
 export interface SessionCaptureContext {
   rootSessionId: string
   nodeRunId: string
@@ -279,10 +280,12 @@ export interface SessionCaptureContext {
   log: Logger
   /** Subprocess cwd (worktree) — claude's `/`→`-` slug is the projects subdir. */
   worktreePath: string
-  /** Per-run config dir root (claude's CLAUDE_CONFIG_DIR = `<runRoot>/<configDirName>`). */
-  runRoot: string
-  /** RFC-154: selected config-dir LEAF name (claude transcript lives under it).
-   *  Omitted → the protocol default leaf. opencode ignores (SQLite capture). */
+  /** RFC-154: selected config-dir profile (env var NAME + leaf dir name) of the
+   *  runtime row. claude resolves its transcript roots from BOTH halves (see
+   *  claudeUserConfigRoots — the platform writes neither since RFC-276, so the
+   *  operator's daemon env / home decides). Omitted → protocol defaults.
+   *  opencode ignores both (SQLite capture). */
+  configDirEnv?: string
   configDirName?: string
   /** opencode: partId-level dedupe from the live poller (skip already-written rows). */
   alreadyInsertedPartIds?: Map<string, Set<string>>
@@ -331,7 +334,9 @@ export interface SystemAgentSpawnContext {
   isSandbox?: boolean
   /** Subprocess cwd (distiller: a throwaway temp dir). */
   worktreePath: string
-  /** Config dir (opencode: OPENCODE_CONFIG_DIR; claude: attempt dir holding .claude/). */
+  /** Per-run dir (opencode: its OPENCODE_CONFIG_DIR; claude: the attempt dir
+   *  holding system.md / settings.json / mcp-config.json — since RFC-276 claude
+   *  gets NO platform config dir, it uses the operator's own). */
   runDir: string
   /** Optional OpenCode command head; tests may provide a multi-token executable. */
   opencodeCmd?: readonly string[]

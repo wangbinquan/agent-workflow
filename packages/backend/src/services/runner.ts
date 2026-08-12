@@ -1367,7 +1367,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           db: opts.db,
           log,
           worktreePath: opts.worktreePath,
-          runRoot,
+          configDirEnv: configDir.env,
           configDirName: configDir.name,
           alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession,
         })
