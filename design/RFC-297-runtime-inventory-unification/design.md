@@ -4,32 +4,32 @@
 
 ## 1. 现状锚点（实现前请逐条复核）
 
-| 事实 | 锚点 |
-| --- | --- |
-| `RuntimeDriver` 能力对象 | `packages/backend/src/services/runtime/types.ts:649` |
-| 静态能力声明 `RuntimeDriverCapabilities` | `runtime/types.ts:629-647` |
-| `FaceSupport` 三态 | `runtime/types.ts:609-612` |
-| `DeclarationFace = keyof DeclaredManifestV1` + 漏表态即编译错的棘轮注释 | `runtime/types.ts:602-607` |
-| opencode 独有 `readInventory?()` | `runtime/types.ts:731-734` |
-| claude 独有 `parseStartupInventory?()` | `runtime/types.ts:776-786` |
-| claude 独有 `parseUnusableMcpServers?()` | `runtime/types.ts:763-769` |
-| 归一 switch 在调用方 | `services/runner.ts:1942-1957` |
-| 同一 init 行解析两遍 | `services/runner.ts:1155` + `:1176`；`claudeCode/events.ts:104` + `:142` |
-| `wantsInventory` 布尔穿透 | `runtime/types.ts:383 / 453 / 590`，计算点 `runner.ts:562` |
-| observation 写入受 `declaredHasContent` 门控 | `runner.ts:1945`；`execution/startupVerification.ts:32-42` |
-| opencode 富快照被降维成只剩 name | `execution/startupVerification.ts:106-116` |
-| claude init 观测组装 | `execution/startupVerification.ts:127-137` |
-| 落库列（快照 / 验证） | `db/schema.ts:1582` / `db/schema.ts:1600` |
-| opencode 读端 | `runtime/opencode/inventory.ts:144` |
-| verification 读端 | `execution/startupVerificationRead.ts` |
-| 路由 | `routes/tasks.ts:1115`（inventory）、`routes/tasks.ts:82`（verification 读端 import） |
-| 启动自检（声明 init-event 必须实现解析） | `runtime/selfCheck.ts:70-73` |
-| 前端清单区 | `frontend/src/components/inventory/RuntimeInventorySection.tsx` |
-| 四张表 + 来源标签 + 状态徽章 | 同目录 `AgentsTable/SkillsTable/McpsTable/PluginsTable/sourceLabel.ts/StatusBadge.tsx` |
-| 告警 banner | `frontend/src/components/inventory/StartupVerificationBanner.tsx` |
-| i18n 强类型（`Resources` interface / `enUS: Resources`） | `frontend/src/i18n/zh-CN.ts:10` / `en-US.ts:6` |
-| 现有 i18n 键树 | `zh-CN.ts:10276-10314`（inventory）、`:10315-10329`（startupVerification）|
-| 其余观测消费点（需同步迁移）| `services/systemAgentRun.ts:503`、`services/mcpRuntimeTest.ts:2689` |
+| 事实                                                                    | 锚点                                                                                   |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `RuntimeDriver` 能力对象                                                | `packages/backend/src/services/runtime/types.ts:649`                                   |
+| 静态能力声明 `RuntimeDriverCapabilities`                                | `runtime/types.ts:629-647`                                                             |
+| `FaceSupport` 三态                                                      | `runtime/types.ts:609-612`                                                             |
+| `DeclarationFace = keyof DeclaredManifestV1` + 漏表态即编译错的棘轮注释 | `runtime/types.ts:602-607`                                                             |
+| opencode 独有 `readInventory?()`                                        | `runtime/types.ts:731-734`                                                             |
+| claude 独有 `parseStartupInventory?()`                                  | `runtime/types.ts:776-786`                                                             |
+| claude 独有 `parseUnusableMcpServers?()`                                | `runtime/types.ts:763-769`                                                             |
+| 归一 switch 在调用方                                                    | `services/runner.ts:1942-1957`                                                         |
+| 同一 init 行解析两遍                                                    | `services/runner.ts:1155` + `:1176`；`claudeCode/events.ts:104` + `:142`               |
+| `wantsInventory` 布尔穿透                                               | `runtime/types.ts:383 / 453 / 590`，计算点 `runner.ts:562`                             |
+| observation 写入受 `declaredHasContent` 门控                            | `runner.ts:1945`；`execution/startupVerification.ts:32-42`                             |
+| opencode 富快照被降维成只剩 name                                        | `execution/startupVerification.ts:106-116`                                             |
+| claude init 观测组装                                                    | `execution/startupVerification.ts:127-137`                                             |
+| 落库列（快照 / 验证）                                                   | `db/schema.ts:1582` / `db/schema.ts:1600`                                              |
+| opencode 读端                                                           | `runtime/opencode/inventory.ts:144`                                                    |
+| verification 读端                                                       | `execution/startupVerificationRead.ts`                                                 |
+| 路由                                                                    | `routes/tasks.ts:1115`（inventory）、`routes/tasks.ts:82`（verification 读端 import）  |
+| 启动自检（声明 init-event 必须实现解析）                                | `runtime/selfCheck.ts:70-73`                                                           |
+| 前端清单区                                                              | `frontend/src/components/inventory/RuntimeInventorySection.tsx`                        |
+| 四张表 + 来源标签 + 状态徽章                                            | 同目录 `AgentsTable/SkillsTable/McpsTable/PluginsTable/sourceLabel.ts/StatusBadge.tsx` |
+| 告警 banner                                                             | `frontend/src/components/inventory/StartupVerificationBanner.tsx`                      |
+| i18n 强类型（`Resources` interface / `enUS: Resources`）                | `frontend/src/i18n/zh-CN.ts:10` / `en-US.ts:6`                                         |
+| 现有 i18n 键树                                                          | `zh-CN.ts:10276-10314`（inventory）、`:10315-10329`（startupVerification）             |
+| 其余观测消费点（需同步迁移）                                            | `services/systemAgentRun.ts:503`、`services/mcpRuntimeTest.ts:2689`                    |
 
 ## 2. 统一类型（shared）
 
@@ -69,9 +69,9 @@ export type InventoryDeclaration = {
 
 ```ts
 export const InventoryProvenanceSchema = z.enum([
-  'injected',          // 平台声明注入 ∩ 运行时报告已加载
-  'ambient',           // 运行时报告了，但平台没注入（内建 / 机器 / 项目配置继承）
-  'declared-missing',  // 平台声明注入了，运行时没报告 —— 与 banner 的 missing 行同源
+  'injected', // 平台声明注入 ∩ 运行时报告已加载
+  'ambient', // 运行时报告了，但平台没注入（内建 / 机器 / 项目配置继承）
+  'declared-missing', // 平台声明注入了，运行时没报告 —— 与 banner 的 missing 行同源
 ])
 
 export const InventoryEntrySchema = z.object({
@@ -131,10 +131,10 @@ collector 方案里，「把原始观测映射成统一清单」这件事**要�
 
 ### 3.2 两个来源如何统一进一条流
 
-| 运行时 | 原始形态 | 进流方式 |
-| --- | --- | --- |
-| claude-code | stdout 首条 `system/init` 行 | 在该行**既有**的 `NormalizedEvent` 上附加清单载荷（`data`），kind / sessionId / persist 全部不变 |
-| opencode | 子进程退出后的 `inventory.json` | driver 在**退出后补发**一个合成事件（`kind: 'startup_inventory'`, `persist: false`）|
+| 运行时      | 原始形态                        | 进流方式                                                                                         |
+| ----------- | ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| claude-code | stdout 首条 `system/init` 行    | 在该行**既有**的 `NormalizedEvent` 上附加清单载荷（`data`），kind / sessionId / persist 全部不变 |
+| opencode    | 子进程退出后的 `inventory.json` | driver 在**退出后补发**一个合成事件（`kind: 'startup_inventory'`, `persist: false`）             |
 
 **claude 侧为什么是「附加」而不是「产出新事件」**（实现期核实 `claudeCode/events.ts:63-100` 后修订）：那一行今天**已经**是结构化事件——`inferKind('system', …)`（`events.ts:234-243`）判为 `step_start` 并照常落 `node_run_events`，同时它还是 session 认领的入口之一。若把它改判成 `startup_inventory` 新事件，会同时改掉落库 kind 与 session 认领路径——两处都是高价值既有行为，且都不属于本 RFC 的标的。故 claude 只在原事件上多挂一个 `data` 字段，其余字节不动。
 
@@ -161,9 +161,14 @@ drainFinalEvents?(ctx: FinalEventContext): Promise<readonly NormalizedEvent[]>
 
 ```ts
 export type NormalizedEventKind =
-  | 'tool_use' | 'text' | 'reasoning' | 'permission_asked'
-  | 'error' | 'step_start' | 'step_finish'
-  | 'startup_inventory'   // 新增：仅用于 drainFinalEvents 补发的合成事件
+  | 'tool_use'
+  | 'text'
+  | 'reasoning'
+  | 'permission_asked'
+  | 'error'
+  | 'step_start'
+  | 'step_finish'
+  | 'startup_inventory' // 新增：仅用于 drainFinalEvents 补发的合成事件
 ```
 
 注意这个 kind **不用于 claude 的 init 行**（见 §3.2 的说明：那一行保持 `step_start`）。
@@ -220,13 +225,13 @@ runner 的 stdout pump 今天已经是一条**手写且散开**的 pipeline：`r
 
 ### 3.5 provenance 计算（运行时无关，pipeline stage 内）
 
-| 清单面 | 对应 `DeclaredManifestV1` 键 |
-| --- | --- |
-| `agents` | `subagents` |
-| `skills` | `skills` |
-| `mcps` | `mcpServers` |
-| `plugins` | `plugins` |
-| `tools` | `tools`（`null` = 未约束 → 该面全部 `ambient`）|
+| 清单面    | 对应 `DeclaredManifestV1` 键                    |
+| --------- | ----------------------------------------------- |
+| `agents`  | `subagents`                                     |
+| `skills`  | `skills`                                        |
+| `mcps`    | `mcpServers`                                    |
+| `plugins` | `plugins`                                       |
+| `tools`   | `tools`（`null` = 未约束 → 该面全部 `ambient`） |
 
 - `injected` = observed ∩ declared
 - `ambient` = observed − declared
@@ -304,12 +309,42 @@ runner pump 里还有两处同类的「对同一行二次解析」，**本 RFC �
 
 `declaration` 随响应返回，前端据此选列（§6）——不在前端硬编码 runtime kind。
 
-### 5.2 数据源分派
+### 5.2 数据源分派（实现期修订：按 capabilities 分派，且复用既有读端）
 
-1. `runtime_inventory_json` 非空 → 直接解析返回（新 run 的唯一路径）；
-2. 为空且 run 仍 `running` → `not-produced`（reason `'in-flight'`），沿用 RFC-062 对"运行中还没读到"的处理（`opencode/inventory.ts:193-208`），不误报插件失败；
-3. 为空且已终态 → 走 §5.3 存量转码；
-4. 转码也无果 → `unavailable`，reason 明确区分「该运行时不产出清单文件」与「应该有却没有」——**这条直接消灭 B1 的误导文案**。
+初稿写的是「先读新列，为空再回退转码」。实现时改为**按 driver 的静态表态分派**，
+因为新列尚未落地（接入批阻塞）而用户可见问题不该等——且这个形状本来就更对：
+读端不该知道运行时叫什么，只该知道它的观测源属于哪一类。
+
+`services/execution/inventoryRead.ts` 的实际分派：
+
+| `capabilities.startupObservation` | 取数                                                                 |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `'inventory-file'`                | **调用既有的 `getInventorySnapshot`**，再把快照转成统一形状          |
+| `'init-event'`                    | 读 `startup_verification_json` 的 `observation`（verified 态）转形状 |
+| `'none'`                          | `not-produced('runtime-has-no-inventory')`                           |
+
+**opencode 侧刻意复用而不是重写**（实现期教训）：初版把取数逻辑重写了一遍，当场
+丢掉 RFC-062 的「运行中从 runRoot 实时读」——既有测试立刻抓出。那个读端承载了
+RFC-029/062 多轮修复（in-flight 与 file-missing 的区分、reason 分类、非 agent kind
+的 410），重写一遍等于悄悄丢掉其中几条。
+
+失败 reason → 观测状态的映射（`observationFromSnapshotReason`）：
+
+- `in-flight` / `non-agent-kind` → `not-produced`（正常状态，不告警）
+- `parse-failed` → `malformed`
+- 其余（`file-missing` / `plugin-load-failed` / `dump-plugin-internal-error` /
+  `opencode-pure-mode`）→ `unavailable`，reason 原样呈现
+
+**刻意不**按 `observationRequiresFreshRun` 把 `file-missing` 降级成「按设计不产」：
+那个 capability 说的是「该运行时的观测依赖 fresh run」，而读端并不知道**本次** run
+是否复用了会话（DB 未存该事实）。据此降级会把一次真实的插件加载失败说成正常状态，
+正是 RFC-062 反过来治的那类误导。followup 的噪音归启动验证层处理。
+
+三个非 captured 态均带 `message` 透传——dump 插件报的 `agents() call threw` 这类
+诊断详情，不许因为「统一形状」被吃掉。
+
+新列落地后（接入批），`'inventory-file'` 与 `'init-event'` 两支会一并改读新列，
+本节的 reason 映射与 message 透传保持不变。
 
 ### 5.3 存量转码（D7：零 backfill）
 
@@ -347,15 +382,15 @@ runner pump 里还有两处同类的「对同一行二次解析」，**本 RFC �
 
 ## 7. 失败模式
 
-| 模式 | 处理 |
-| --- | --- |
-| 某个 stage 抛错 | **按 stage 声明的 `errorPolicy` 分流，不能一刀切隔离**——详见下方「§7.1 错误策略」。 |
-| `drainFinalEvents()` 抛错（opencode 读文件失败）| 视作无补发事件，清单落 `unavailable(reason)`，不改节点成败。沿用今天 `inventory-read-unhandled` warn（`runner.ts:1921`）。 |
-| init 事件缺失（claude 早期崩溃）| `unavailable('no-init-event')`；若同时有终态 `is_error`，节点本就按 `parseTerminalResultError` 失败，清单缺失是次要信息。 |
-| dump 文件缺失（opencode）| 沿用既有 reason 分类（`plugin-load-failed` / `dump-plugin-internal-error` / `opencode-pure-mode` 等），不与"该运行时不产清单"混淆。 |
-| 尾部输出截断（RFC-284 T14 `outputTailTruncated`）| 不影响清单：claude 的 init 在**流首**，opencode 的读在退出后。design 记此结论，测试锁定。 |
-| 观测与声明面名不匹配（实现写错映射）| §3.3 映射表单点定义 + 一条测试断言五个面的映射闭合。 |
-| 第三个 runtime 漏表态 | 类型层编译错误（`Record` 缺键）+ 启动自检兜底（§4.3）。 |
+| 模式                                              | 处理                                                                                                                                |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 某个 stage 抛错                                   | **按 stage 声明的 `errorPolicy` 分流，不能一刀切隔离**——详见下方「§7.1 错误策略」。                                                 |
+| `drainFinalEvents()` 抛错（opencode 读文件失败）  | 视作无补发事件，清单落 `unavailable(reason)`，不改节点成败。沿用今天 `inventory-read-unhandled` warn（`runner.ts:1921`）。          |
+| init 事件缺失（claude 早期崩溃）                  | `unavailable('no-init-event')`；若同时有终态 `is_error`，节点本就按 `parseTerminalResultError` 失败，清单缺失是次要信息。           |
+| dump 文件缺失（opencode）                         | 沿用既有 reason 分类（`plugin-load-failed` / `dump-plugin-internal-error` / `opencode-pure-mode` 等），不与"该运行时不产清单"混淆。 |
+| 尾部输出截断（RFC-284 T14 `outputTailTruncated`） | 不影响清单：claude 的 init 在**流首**，opencode 的读在退出后。design 记此结论，测试锁定。                                           |
+| 观测与声明面名不匹配（实现写错映射）              | §3.3 映射表单点定义 + 一条测试断言五个面的映射闭合。                                                                                |
+| 第三个 runtime 漏表态                             | 类型层编译错误（`Record` 缺键）+ 启动自检兜底（§4.3）。                                                                             |
 
 ### 7.1 错误策略：stage 隔离不能一刀切（实现期修订）
 
@@ -371,12 +406,12 @@ runner pump 里还有两处同类的「对同一行二次解析」，**本 RFC �
 
 故 stage 显式声明错误策略：
 
-| stage | errorPolicy | 理由 |
-| --- | --- | --- |
-| session id 认领（含租约 claim）| `propagate` | 身份错乱必须终止该 run，保持现状 |
-| 事件落库 | `propagate` | 沿用 `persistRunnerWrite` 的既有语义（写不进去 = 证据丢失，现状即冒泡）|
-| token 统计 / 文本累积 | `propagate` | 纯内存操作，抛错即代码 bug，不该被掩盖 |
-| **清单组装（新增）** | `isolate` | 清单是呈现面，挂了不该弄坏一次成功的 run——warn 一次，其余 stage 与后续行不受影响 |
+| stage                           | errorPolicy | 理由                                                                             |
+| ------------------------------- | ----------- | -------------------------------------------------------------------------------- |
+| session id 认领（含租约 claim） | `propagate` | 身份错乱必须终止该 run，保持现状                                                 |
+| 事件落库                        | `propagate` | 沿用 `persistRunnerWrite` 的既有语义（写不进去 = 证据丢失，现状即冒泡）          |
+| token 统计 / 文本累积           | `propagate` | 纯内存操作，抛错即代码 bug，不该被掩盖                                           |
+| **清单组装（新增）**            | `isolate`   | 清单是呈现面，挂了不该弄坏一次成功的 run——warn 一次，其余 stage 与后续行不受影响 |
 
 即：**新增的 stage 一律 isolate，搬迁的既有 stage 一律 propagate**，这样 PR-2 的骨架重构在错误路径上也是字节等价的。pump 本身仍不得中断（中断会让子进程在管道上阻塞，与 RFC-284 T14 的 drain 教训同源）——`propagate` 指的是错误沿现有路径抛给 `runAgentProcess` 的调用方，与今天完全一致。
 
