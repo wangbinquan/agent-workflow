@@ -23,7 +23,17 @@ const SRC = resolve(import.meta.dir, '..', 'src', 'services')
 const FILES = ['scheduler.ts', 'schedulerAssembly.ts'] as const
 
 /** 三个池的释放句柄名（与 rfc208 oracle #1 的 POOL_RELEASE_NAMES 同源）。 */
-const RELEASE_NAMES = ['releaseGlobal', 'releaseScript', 'releaseSub', 'releaseHost'] as const
+// RFC-287 T6 补缺：骨架把许可释放写成匿名的 `release()`、把清理写成 `spec.discardIso(`，
+// 两者都不在原名单里——也就是说这条「跨文件」锁此前**从未真正扫到骨架**，而骨架恰恰
+// 是迁移后该不变量唯一还成立的地方。它对「搬到哪个文件」免疫，却没对「换了个名字」
+// 免疫；这里把两种形状都纳入。
+const RELEASE_NAMES = [
+  'releaseGlobal',
+  'releaseScript',
+  'releaseSub',
+  'releaseHost',
+  'release',
+] as const
 
 /** 取出所有 `finally { … }` 的块体（大括号配平）。 */
 function finallyBlocks(src: string): string[] {
@@ -49,8 +59,10 @@ describe('RFC-287 T1⑧ — 许可释放先于 iso 清理（跨文件结构锁�
     for (const file of FILES) {
       const src = readFileSync(resolve(SRC, file), 'utf8')
       for (const block of finallyBlocks(src)) {
-        const discardAt = block.indexOf('discardNodeIso(')
-        if (discardAt === -1) continue
+        const discardAt = [block.indexOf('discardNodeIso('), block.indexOf('spec.discardIso(')]
+          .filter((i) => i !== -1)
+          .sort((a, b) => a - b)[0]
+        if (discardAt === undefined) continue
         const releaseAt = RELEASE_NAMES.map((n) => block.indexOf(`${n}(`))
           .filter((i) => i !== -1)
           .sort((a, b) => a - b)[0]
@@ -64,9 +76,16 @@ describe('RFC-287 T1⑧ — 许可释放先于 iso 清理（跨文件结构锁�
     // 防空扫下限：随迁移**递减**是预期的——每迁一条线，scheduler.ts 里就少一个
     // 这样的 finally，而骨架里那个统一的 finally 只算一处。它的作用不是"越多越好"，
     // 而是保证扫描面没有整个塌掉（比如正则失配导致 0 命中却"绿"）。
-    // 当前分布：骨架 1（服务已迁的聚合线/分片线/脚本线）+ scheduler.ts 剩余未迁的
-    // 工作组主机线与 agent 线。T6/T7 每迁一条，这个下限相应下调一次并写明分布。
+    // 当前分布：骨架 1（服务已迁的聚合线/分片线/脚本线/工作组主机线）+ scheduler.ts
+    // 里剩余未迁的 agent 线 1。T7 迁完 agent 线后降到 1 并**永远不再降**——骨架那个
+    // finally 是全部装配线唯一的取/放点，它一旦扫不到就说明锁塌了。
     expect(checked).toBeGreaterThanOrEqual(2)
+    // 骨架必须在被扫之列（上面的 checked 是总数，这里单独钉死骨架那一处）。
+    const asmBlocks = finallyBlocks(readFileSync(resolve(SRC, 'schedulerAssembly.ts'), 'utf8'))
+    expect(
+      asmBlocks.some((b) => b.includes('spec.discardIso(') && b.includes('release()')),
+      '骨架的 finally 必须同时做「释放许可」与「清理 iso」——扫不到即这条锁已失效',
+    ).toBe(true)
     expect(offenders).toEqual([])
   })
 })

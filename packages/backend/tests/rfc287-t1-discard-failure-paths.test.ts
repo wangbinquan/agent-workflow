@@ -53,7 +53,15 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     expect(body.slice(0, 20000)).toMatch(/discardIso: async \(h: IsoLike\)[\s\S]{0,200}\.catch\(/)
   })
 
-  test('工作组主机线用 try/catch 吞（best-effort）', () => {
-    expect(guardOfFinallyDiscard('function buildWorkgroupHooks(')).toBe('try-catch')
+  test('工作组主机线（已迁骨架）：清理由骨架统一「吞掉并记 warn」', () => {
+    // RFC-287 T6：该线的 finally 已迁入骨架。原来的 try/catch 吞法被骨架的
+    // `.catch(+warn)` 取代——**同性质、更强**（原来 catch 里是静默的，现在有 warn），
+    // 故 C3b 对它也已落地。注入实现本身不再自兜，兜底责任单点在骨架。
+    const start = SCHEDULER.indexOf('function buildWorkgroupHooks(')
+    expect(start).toBeGreaterThan(-1)
+    const body = SCHEDULER.slice(start, start + 40000)
+    expect(body).toMatch(/discardIso: async \(h: IsoLike\) => \{\s*\n\s*await discardNodeIso\(/)
+    // 反向：本线不得再自己起 try/catch 兜清理（会把骨架的 warn 吃掉）。
+    expect(body).not.toMatch(/try \{[^}]{0,120}await discardNodeIso\(/)
   })
 })

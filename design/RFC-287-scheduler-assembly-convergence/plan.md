@@ -144,6 +144,39 @@
 **三处覆写各自必须带豁免锁**（design §10.2「凡覆写必须带豁免锁」）；`rfc187-wg-merge-conflict-abandon`
 与 `rfc167-dynamic-workflow-engine` 是现成的行为锁，迁移后须仍绿。
 
-**注意**：本线不是顶层函数，而是 `buildWorkgroupHooks` 工厂内的 `runHostNode`；许可不是
-信号量而是外部传入的 `releaseGlobal`，故 `pools` 需以 `{ acquire: async () => releaseGlobal }`
-形态适配（已验证类型可行）。
+**注意**：本线不是顶层函数，而是 `buildWorkgroupHooks` 工厂内的 `runHostNode`。
+
+### T6 实施记录（2026-08-13，已完成）
+
+**切法**：spawn **把早退结局原样打包传出**（判别式 `HostSpawn = {kind:'early',out} | {kind:'ran',…}`），
+骨架只管相位与清理。这样 spawn 之后那段带多处早退的分支（clarify 停靠两种结局、canceled、
+非 done）**逐字保留**，不需要为迁移而重构——上面担心的「精细手术」由此降为可控改动。
+
+**顺手改掉的一处**：接手指引写的 `pools: [{ acquire: async () => releaseGlobal }]`（外面先抢
+许可、再把释放函数传进骨架）**没有采纳**——那样会留出「抢到许可 ~ 进 `runAssembly`」这段
+无人兜底的窗口，正是 RFC-208 那类漏 permit 的形状。改为 `pools: [state.agentSem]`，许可由
+骨架自取自放；脚本线的 `{ acquire: () => scriptSem.acquire() }` 包装同批改成 `[scriptSem]`，
+全五条线同一口径。
+
+**改锚 6 件**（全部做过变异实证，逐条确认变红）：
+
+| 文件                                    | 原形态                                           | 新形态                                             |
+| --------------------------------------- | ------------------------------------------------ | -------------------------------------------------- |
+| `rfc287-t1-merge-disposition-matrix`    | 分支体含 `keepHookIso = true` + `throw err`      | spec 上 `onThrow → keep:true/rethrow`、`onConflictHuman → keep:false` |
+| `rfc210-publish-failure-hard-fails`     | `if (!keepHookIso) await discardNodeIso(...)`   | spec 声明浅锁（逐格断言归矩阵夹具）                |
+| `rfc287-t1-discard-failure-paths`       | finally 里 try/catch 吞                          | 骨架统一 `.catch(+warn)`；**反向**禁本线自兜        |
+| `rfc287-t1-release-before-discard`      | 只认 `discardNodeIso(`/具名 release             | 补认骨架的 `spec.discardIso(`/匿名 `release()`     |
+| `rfc208-unbounded-git-and-permits`      | 扫 scheduler.ts 函数体（已结构性失效）           | 不变量重钉到骨架 + 防零覆盖改判「两种形态择一」     |
+| `process-node-concurrency`              | `toContain('scriptSem.acquire()')`               | 钉死整张池清单 `pools: [scriptSem]`（更强）         |
+
+**两处自查出的真缺口**（不是 T6 引入的，是被 T6 照出来的）：
+
+1. `rfc287-t1-release-before-discard` 自称「跨文件结构锁、对代码搬到哪个文件免疫」，但它
+   只对**文件**免疫、没对**名字**免疫——骨架把释放写成匿名 `release()`、清理写成
+   `spec.discardIso(`，两者都不在名单里，于是这条锁**从未真正扫到骨架**，而骨架恰是迁移后
+   该不变量唯一还成立的地方。已补两种形状并单独钉死「骨架那个 finally 必须在被扫之列」。
+2. T6 重构时把 `projectOutputs` 复制成了两份，IIFE 里那份成死代码——`--max-warnings 0`
+   当场抓出。已删死副本、注释归位。
+
+**剩余未迁**：只剩 agent 线（T7）。`rfc287-t1-discard-failure-paths` 的「完全没兜」现状条目
+与 `rfc208` 的直线取许可扫描，都只剩它一个消费者，T7 迁完即可一并收口。

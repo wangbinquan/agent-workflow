@@ -128,7 +128,13 @@ describe('process node concurrency', () => {
     expect(start).toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(start)
     const body = scheduler.slice(start, end)
-    expect(body).toContain('scriptSem.acquire()')
-    expect(body).not.toContain('agentSem.acquire()')
+    // RFC-287 T6：许可的取/放已收进装配骨架，各线改为在 spec 上**声明**用哪个池。
+    // 断言随之从「函数体里调了谁的 acquire」改成「声明的池列表是什么」——比原来
+    // 更强：原来只查了「含 A、不含 B」，现在把整张池清单钉死（多挂一个池也红）。
+    const pools = /pools: \[([^\]]*)\]/.exec(body)
+    expect(pools, '脚本线必须在 spec 上声明它用的池').not.toBeNull()
+    expect(pools![1]!.trim()).toBe('scriptSem')
+    // 反向：本线任何形态都不得碰 agent 池。
+    expect(body).not.toContain('agentSem')
   })
 })

@@ -161,11 +161,23 @@ describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup
   // flagging it here would be a false positive, not a finding.
   test('no rejectable await sits between a pool acquire() and its guarding try', () => {
     const acquires = [...schedulerSource.matchAll(POOL_ACQUIRE_RE)]
-    // RFC-266: 两个池都必须被扫到（agent 路径 + 脚本路径），否则改名/拆池会让这条
-    // 守卫退化成零覆盖。
-    expect(acquires.length).toBeGreaterThan(0)
-    expect(schedulerSource).toContain('scriptSem.acquire()')
-    expect(schedulerSource).toContain('agentSem.acquire()')
+    // RFC-266: 两个池都必须被本条守卫覆盖，否则改名/拆池会让它退化成零覆盖。
+    // RFC-287 起覆盖有两种合法形态，缺一即为漏网：
+    //   ① 直线取许可（`= await xxxSem.acquire()`）——由本扫描器守；
+    //   ② 交给装配骨架（`pools: [xxxSem]`）——由下面那条骨架断言守（骨架里取/放
+    //      同处、finally 无条件释放，比逐线扫描更强）。
+    // 迁移中的中间态（两条线一种形态、一条线另一种）因此仍是全覆盖；等 agent 线
+    // 也迁完，形态①会自然清零而覆盖不减。
+    for (const pool of ['agentSem', 'scriptSem']) {
+      const straightLine = new RegExp(`=\\s*await\\s+(?:state\\.)?${pool}\\.acquire\\(\\)`).test(
+        schedulerSource,
+      )
+      const viaSkeleton = new RegExp(`pools:\\s*\\[(?:state\\.)?${pool}[,\\]]`).test(schedulerSource)
+      expect(
+        straightLine || viaSkeleton,
+        `${pool} 既不走直线取许可也未声明为骨架 pool——本守卫已对它零覆盖`,
+      ).toBe(true)
+    }
 
     const offenders: string[] = []
     for (const m of acquires) {
@@ -212,5 +224,36 @@ describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup
     }
 
     expect(offenders).toEqual([])
+  })
+
+  // ---------------------------------------------------------------------------
+  // RFC-287 起：许可的取/放已收进装配骨架，上面那个扫描器在 scheduler.ts 里
+  // **结构性失效**（它从「抢到许可」处起扫、遇到函数边界即停，而各线现在只是
+  // 声明 spec、不再自己抢许可）。本条把同一个不变量钉在骨架上——那里是全部五条
+  // 装配线唯一的取/放点，比原来逐线扫描更强：
+  //   ① 取许可到 try 之间不得有任何 await（原不变量：可拒绝的 await 会漏 permit）；
+  //   ② finally 无条件释放全部已取许可，且释放先于 iso 清理（RFC-208 + rfc287 T1⑧）。
+  // ---------------------------------------------------------------------------
+  test('assembly skeleton: no await between pool acquire and the guarding try', () => {
+    const asm = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
+      'utf8',
+    )
+    const acquireAt = asm.indexOf('for (const pool of spec.pools)')
+    expect(acquireAt, '骨架应有唯一的取许可循环').toBeGreaterThan(-1)
+    const tryAt = asm.indexOf('try {', acquireAt)
+    expect(tryAt).toBeGreaterThan(acquireAt)
+    // 取许可循环与 try 之间只允许空白/注释——出现任何 await 即为 RFC-208 那类漏 permit。
+    const between = asm.slice(asm.indexOf('\n', acquireAt), tryAt)
+    expect(between).not.toMatch(/\bawait\b/)
+
+    // finally 里无条件释放（不带任何条件判断），且释放排在 iso 清理之前。
+    const finallyAt = asm.lastIndexOf('} finally {')
+    expect(finallyAt).toBeGreaterThan(tryAt)
+    const fin = asm.slice(finallyAt)
+    const releaseAt = fin.indexOf('release()')
+    const discardAt = fin.indexOf('spec.discardIso')
+    expect(releaseAt).toBeGreaterThan(-1)
+    expect(discardAt).toBeGreaterThan(releaseAt)
   })
 })

@@ -207,9 +207,13 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // 这里只保留「声明存在」的浅锁，避免同一不变量两处各锁一半。
     expect(src).toMatch(/onThrow: \(err\) => \(\{\s*keep: true/)
     expect(src).toContain('keepFromOutcome: (result) => result.processUnreaped === true')
-    // Workgroup hook: merge throw flags before rethrowing to the outer catch.
+    // Workgroup hook: RFC-287 T6 起同样迁入装配骨架。合并抛出的 keep 从「布尔标志 +
+    // finally 谓词」变成 spec 声明 `disposition.onThrow → keep: true, then: 'rethrow'`
+    // （重抛给外层，merge_state 留在 pending-merge 交 entry replay）；`keepHookIso`
+    // 仍在，但只承载**另一维**——processUnreaped（旧 child 可能还活着，树不能收）。
+    // 逐格断言同样由 rfc287-t1-merge-disposition-matrix 接管，这里只留浅锁。
     expect(src).toContain('keepHookIso = true')
-    expect(src).toContain('if (!keepHookIso) await discardNodeIso(iso, log, state.writeSem)')
+    expect(src).toMatch(/onThrow: \(\) => \(\{ keep: true, then: 'rethrow' as const \}\)/)
     // Round 5 (P2): successfully REPLAYED merges must close the iso lifecycle
     // too — without these, node pool refs leak forever and a new path's
     // worktree anchor is never handed over.

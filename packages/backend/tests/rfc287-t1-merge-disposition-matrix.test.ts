@@ -105,13 +105,21 @@ describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
     expect(branch).toMatch(/kind: 'awaiting_human' as const/)
   })
 
-  test('工作组主机线：throw 是 keepHookIso + 重抛；conflict 是 abandon + failed', () => {
+  test('工作组主机线（已迁骨架）：throw 是 keep + 重抛；conflict 是 abandon + failed', () => {
+    // RFC-287 T6：处置改为 spec 上的声明，语义逐字保留——
+    //   · onThrow：keep iso 并**重抛**（merge_state 留在 pending-merge 交 entry replay），
+    //     刻意与 DAG 各线的 markMergeFailed 相反；
+    //   · onConflictHuman：abandon 且 **不** keep（RFC-187 T8：留状态不留树会楔死任务）。
     const body = bodyOf('async function runHostNode(')
-    expect(body).toMatch(/keepHookIso = true\s*\n\s*throw err/)
-    const branch = branchAfter(body, "merge.kind === 'conflict-human'")
+    const onThrow = branchAfter(body, 'onThrow:')
+    expect(onThrow).toMatch(/keep: true/)
+    expect(onThrow).toMatch(/then: 'rethrow'/)
+    const branch = branchAfter(body, 'onConflictHuman:')
     expect(branch).toMatch(/kind: 'abandon'/)
     expect(branch).toMatch(/status: 'failed'/)
     expect(branch).not.toMatch(/awaiting_human/)
+    // 本线的 conflict 分支必须**不**保留 iso——与脚本线/agent 线正好相反。
+    expect(branch).toMatch(/keep: false/)
   })
 
   // ---------------------------------------------------------------------------

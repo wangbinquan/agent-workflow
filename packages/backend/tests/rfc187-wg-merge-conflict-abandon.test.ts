@@ -48,8 +48,11 @@ describe('RFC-187 T8 — source lock (the wg hook abandons instead of stranding)
     expect(SCHED).toContain("event: { kind: 'abandon', reason: 'wg-merge-conflict-unresolved' }")
     // it must sit in the wg hook's conflict-human branch, i.e. right before the
     // merge-back-conflict failure it returns.
+    // RFC-287 T6 改锚：该处置已从「函数体里的 conflict-human 分支」变成 spec 上的
+    // `disposition.onConflictHuman` 声明。语义逐字不变——abandon 紧接着 failed，
+    // 且错误信息仍是 merge-back-conflict。
     expect(SCHED).toMatch(
-      /merge\.kind === 'conflict-human'[\s\S]{0,1800}wg-merge-conflict-unresolved[\s\S]{0,600}merge-back-conflict/,
+      /onConflictHuman:[\s\S]{0,900}wg-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
     )
   })
 
@@ -67,19 +70,22 @@ describe('RFC-187 T8 — source lock (the wg hook abandons instead of stranding)
     //  - merge THROW: merge_state stays 'pending-merge' (replayable state) and
     //    the KEPT iso backs it; the replay's own success path closes the
     //    lifecycle (replayPendingMerges → discardNodeIso, RFC-210 round 5).
-    const wgFinally = /finally \{([\s\S]{0,900}?)discardNodeIso\(iso, log, state\.writeSem\)/.exec(
-      SCHED,
-    )
-    expect(wgFinally).not.toBeNull()
-    // The discard is gated on lifecycle paths that cannot safely release the
-    // isolation: an unreaped agent or a merge throw.
-    expect(wgFinally?.[1] ?? '').toContain('if (!keepHookIso)')
-    // The flag is set for an unreaped child and in the merge-throw rethrow,
-    // never on the conflict path (the abandon block must stay discarding).
-    const flagSets = SCHED.match(/keepHookIso = true/g) ?? []
-    expect(flagSets).toHaveLength(2)
-    expect(SCHED).toMatch(/result\.processUnreaped === true\) keepHookIso = true/)
-    expect(SCHED).toMatch(/keepHookIso = true\s*\n\s*throw err/)
-    expect(SCHED).not.toMatch(/wg-merge-conflict-unresolved[\s\S]{0,600}?keepHookIso = true/)
+    // RFC-287 T6 改锚：清理已由骨架统一执行（`if (!keep) discardIso`，且释放先于
+    // 清理——见 rfc287-t1-release-before-discard 的跨文件结构锁）。三条路径的
+    // **语义差别**逐条仍锁如下，与上面那段注释一一对应：
+    //
+    // ① 撞冲突：keep=false —— 本线许不起「留着给人解」的承诺，abandon 且照常清理。
+    expect(SCHED).toMatch(/onConflictHuman:[\s\S]{0,200}keep: false/)
+    // ② 合并抛出：keep=true + **重抛** —— merge_state 留 'pending-merge' 交 entry
+    //    replay，且被保留的 iso 撑着它（不打 markMergeFailed，与 DAG 各线相反）。
+    expect(SCHED).toMatch(/onThrow: \(\) => \(\{ keep: true, then: 'rethrow' as const \}\)/)
+    // ③ 未回收的 child：仍是保留 iso 的那一维（§10.11 第五维，与合并处置正交）。
+    expect(SCHED).toMatch(/keepFromOutcome: \(s\) =>[\s\S]{0,120}processUnreaped === true/)
+    // 反向：撞冲突那条路径上**绝不**出现保留声明（abandon 块必须保持清理）。
+    // 射程只取 onConflictHuman 声明自身（到它的 produce 收尾为止）——迁移后
+    // onThrow 的 `keep: true` 就紧挨在它后面，用宽窗口会把兄弟声明误判成违规。
+    const conflictDecl = /onConflictHuman: \(detail\) => \(\{[\s\S]*?\n            \}\),/.exec(SCHED)
+    expect(conflictDecl).not.toBeNull()
+    expect(conflictDecl?.[0] ?? '').not.toMatch(/keep: true/)
   })
 })
