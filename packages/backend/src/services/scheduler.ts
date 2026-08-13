@@ -28,7 +28,6 @@ import type {
   WorkflowNode,
   WrapperFanoutPort,
   TriggerContext,
-  CallWorkgroupBuiltinName,
 } from '@agent-workflow/shared'
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
@@ -4017,7 +4016,7 @@ function renderCallGoal(
   },
 ): string {
   const primary = meta.repos[0]
-  const builtins = {
+  const builtins: Record<string, string> = {
     __repo_path__: primary?.isoWorktreePath ?? '',
     __base_branch__: primary?.baseBranch ?? '',
     __task_id__: meta.taskId,
@@ -4029,7 +4028,7 @@ function renderCallGoal(
     __repos__: meta.repos
       .map((r) => `- ${r.worktreeDirName || '(root)'}: ${r.isoWorktreePath}`)
       .join('\n'),
-  } satisfies Record<CallWorkgroupBuiltinName, string>
+  }
   const rendered = renderCallWorkgroupGoalTemplate({
     template,
     inputs,
