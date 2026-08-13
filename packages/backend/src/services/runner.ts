@@ -1530,6 +1530,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     const spawnedPid = runResult.pid
     const childUnkillable = runResult.outcome === 'unreaped'
     const spawnFailed = runResult.outcome === 'spawn-failed'
+    const configurationError = runResult.outcome === 'configuration-error'
     aborted = runResult.outcome === 'aborted'
     timedOut = runResult.outcome === 'timeout'
     const exitCode = runResult.exitCode
@@ -1592,6 +1593,32 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
         prompt,
         errorMessage,
+      }
+    }
+    if (configurationError) {
+      const failureCode = runResult.configurationErrorCode ?? 'node-timeout-invalid'
+      const errorMessage = `node timeout configuration is invalid (${opts.timeoutMs ?? 'unset'}ms)`
+      log.warn('runtime-configuration-error', {
+        nodeRunId: opts.nodeRunId,
+        runtime,
+        failureCode,
+      })
+      await setNodeRunStatus({
+        db: opts.db,
+        nodeRunId: opts.nodeRunId,
+        to: 'failed',
+        allowedFrom: ['running', 'pending'],
+        reason: failureCode,
+        extra: { finishedAt: Date.now(), errorMessage, failureCode },
+      })
+      return {
+        status: 'failed',
+        exitCode: null,
+        outputs: {},
+        tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+        prompt,
+        errorMessage,
+        failureCode,
       }
     }
     if (childUnkillable) {
@@ -2072,17 +2099,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
 
     // 10. RFC-029: read the runtime inventory snapshot the dump plugin wrote
-    //      into runRoot. Total: any failure path resolves to a `captured:false`
-    //      stub with a precise reason code rather than leaving the column
-    //      NULL, so the UI's reason-pinpointed messaging works on the first
-    //      load. Skipped (column stays NULL) for non-agent kinds.
+    //      into runRoot.
+    //
+    // RFC-297 T22 —— 读**仍在**（它是本轮观测的来源之一，喂给统一清单与启动
+    // 验证），但**不再写 `inventory_snapshot_json`**：跨运行时统一后，观测的唯一
+    // 落库目标是 `runtime_inventory_json`，旧列继续写就是同一份数据的第三份拷贝
+    // （而且是只有 opencode 才有的那一份形状）。旧列保留只为读存量行。
     //
     // RFC-042: same-session envelope follow-up runs skipped plugin
     // materialization above; reading the (intentionally absent) snapshot file
-    // would just record a `file-missing` stub on top of the previous attempt's
-    // legitimate snapshot. Leave the column at its prior value by skipping the
-    // read entirely.
-    let inventoryJson: string | null = null
+    // would just record a `file-missing` stub, so the read is skipped entirely.
     // RFC-280 T3 — the parsed snapshot doubles as the opencode observation
     // source for the startup-verification record below.
     let capturedInventorySnapshot: InventorySnapshot | null = null
@@ -2099,7 +2125,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         })
         if (snapshot !== undefined && snapshot !== null) {
           capturedInventorySnapshot = snapshot
-          inventoryJson = JSON.stringify(snapshot)
         }
       } catch (err) {
         log.warn('inventory-read-unhandled', {
@@ -2239,7 +2264,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     await opts.db
       .update(nodeRuns)
       .set({
-        inventorySnapshotJson: inventoryJson,
         runtimeInventoryJson,
         // RFC-280 T3: declared × observed × diff — the node-detail warning face.
         startupVerificationJson,

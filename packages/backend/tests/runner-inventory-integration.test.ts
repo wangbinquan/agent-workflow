@@ -2,14 +2,18 @@
 //   1. copy aw-inventory-dump.mjs into the per-run dir before spawning,
 //   2. append a `file://` plugin spec into OPENCODE_CONFIG_CONTENT.plugin,
 //   3. set OPENCODE_AW_INVENTORY_OUT in the child env,
-//   4. after child exit, read the inventory file and persist the
-//      InventorySnapshot to node_runs.inventorySnapshotJson.
+//   4. after child exit, read the inventory file and persist the observation.
+//
+// RFC-297 T22 起落库目标换成 `node_runs.runtime_inventory_json`（跨运行时统一的
+// 观测），旧的 `inventory_snapshot_json` 对新 run **停写**——继续写就是同一份
+// 数据的第三份拷贝，且是只有 opencode 才有的那一份形状。旧列保留只为读存量行。
+// 这些用例因此断言新列：读取链路（dump 文件 → 观测）没变，变的是落到哪儿。
 //
 // The mock-opencode fixture's MOCK_OPENCODE_WRITE_INVENTORY_FROM env var
 // simulates the dump plugin's write side so this test never depends on a
 // real opencode binary.
 
-import type { Agent, InventorySnapshot } from '@agent-workflow/shared'
+import type { Agent, RuntimeInventoryObservation } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -163,12 +167,16 @@ describe('runNode RFC-029 inventory snapshot', () => {
     )
 
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
-    expect(row.inventorySnapshotJson).not.toBeNull()
-    const snap: InventorySnapshot = JSON.parse(row.inventorySnapshotJson!)
-    expect(snap.captured).toBe(true)
-    if (snap.captured) {
-      expect(snap.agents[0]?.name).toBe('inv-agent')
-      expect(snap.mcps[0]?.status).toBe('connected')
+    // 停写旧列（RFC-297 T22）；观测落在新列上，且富字段一个不少（AC-2）。
+    expect(row.inventorySnapshotJson).toBeNull()
+    expect(row.runtimeInventoryJson).not.toBeNull()
+    const observation: RuntimeInventoryObservation = JSON.parse(row.runtimeInventoryJson!)
+    expect(observation.state).toBe('captured')
+    if (observation.state === 'captured') {
+      expect(observation.faces.agents?.[0]?.name).toBe('inv-agent')
+      expect(observation.faces.agents?.[0]?.mode).toBe('primary')
+      expect(observation.faces.mcps?.[0]?.status).toBe('connected')
+      expect(observation.faces.plugins?.[0]?.key).toBe('file:///tmp/x.mjs')
     }
   })
 
@@ -199,10 +207,12 @@ describe('runNode RFC-029 inventory snapshot', () => {
     )
 
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
-    expect(row.inventorySnapshotJson).not.toBeNull()
-    const snap: InventorySnapshot = JSON.parse(row.inventorySnapshotJson!)
-    expect(snap.captured).toBe(false)
-    if (!snap.captured) expect(snap.reason).toBe('file-missing')
+    expect(row.inventorySnapshotJson).toBeNull()
+    // 插件没写出文件 → 观测缺失，reason 原样透传（不再是「假装有一份 captured:false
+    // 快照」的旧形状）。
+    const observation: RuntimeInventoryObservation = JSON.parse(row.runtimeInventoryJson!)
+    expect(observation.state).toBe('unavailable')
+    if (observation.state === 'unavailable') expect(observation.reason).toBe('file-missing')
   })
 
   test('inline OPENCODE_CONFIG_CONTENT.plugin entry includes the dump plugin file://', async () => {
@@ -237,10 +247,10 @@ describe('runNode RFC-029 inventory snapshot', () => {
     // file that should have been copied in. We can't peek at runRoot anymore
     // because cleanup ran; the inventory landing (previous test) is the
     // positive proof the plugin pathway was wired. This test asserts the
-    // node row got an inventory column write (not NULL) on the failure
-    // branch too, which means readSnapshotFromRunDir was called.
+    // node row got an observation write (not NULL) on the failure branch too,
+    // which means readSnapshotFromRunDir was called.
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
-    expect(row.inventorySnapshotJson).not.toBeNull()
+    expect(row.runtimeInventoryJson).not.toBeNull()
   })
 
   test('non-agent node kind: inventory column stays NULL (column not populated)', async () => {
