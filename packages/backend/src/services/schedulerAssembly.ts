@@ -18,6 +18,12 @@
 
 import type { Logger } from '@/util/log'
 
+/**
+ * 模式 B 重试循环的防御性硬上限。取值远高于任何真实重试预算（脚本线与 agent 线
+ * 的默认预算是个位数），够到它只可能是 spec 的 shouldRetry 写错了。
+ */
+const ASSEMBLY_MAX_ATTEMPTS = 100
+
 /** 池的最小切片：只需要「取一个位子、拿到释放函数」。 */
 export interface PoolLike {
   acquire(): Promise<() => void>
@@ -93,6 +99,25 @@ export interface AssemblySpec<TCtx, TOutcome, TResult> {
     ): Promise<{ kind: 'merged' | 'conflict-human'; detail?: string }>
     disposition?: Disposition<TCtx, TResult>
   } | null
+  /**
+   * **模式 B 专用**（跨 attempt 持有窗口）：一次许可 + 一棵 iso 的窗口内，由本策略
+   * 驱动 1..N 次 spawn。模式 A（每 attempt 一个窗口、外层 driver 重入）不声明它。
+   *
+   * 为什么必须按线声明而不能统一（design §4）：agent 线的 iso **跨 attempt 稳定**
+   * （同会话续跑必须在同一棵树上恢复，否则模型记忆与磁盘错配）；脚本线则**每次
+   * 重试都换新树**（否则上一次的文件写入会与这一次叠加）。把任一方统一到另一方
+   * 都是行为变更。
+   */
+  retryPolicy?: {
+    /** 还要不要再来一次（收 spawn 结果与本次 attempt 序号，从 0 起）。 */
+    shouldRetry(outcome: TOutcome, attempt: number): boolean
+    /** 重试前对 iso 的处置：'always-recreate' = 每次换新树；keepIf 为真则留用。 */
+    isoOnRetry: 'always-recreate' | { keepIf(outcome: TOutcome): boolean }
+    /** 换树失败的处置（与「初始物化失败」是两种结局，不可合并）。 */
+    onIsoRecreateFailure(err: unknown): TResult
+    /** 每次重试前的副作用（逐 attempt 铸行、落基线、广播……逐线不同）。 */
+    onNextAttempt(attempt: number): Promise<void>
+  }
   /** 线级 catch-all——逐线载荷不同，不得统一。'rethrow' = 保持抛出直穿。 */
   onUnhandledThrow?(err: unknown, ctx: TCtx): TResult | 'rethrow'
   /** 物化失败的产出（五线 message/summary 各不相同，属产品可见面）。 */
@@ -137,7 +162,37 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
       if (spec.iso.persistBase === 'in-window') await spec.iso.persist(handle)
     }
 
-    const outcome = await spec.spawn(ctx)
+    // 模式 B：窗口内由 retryPolicy 驱动多次 spawn；模式 A 只跑一次。
+    let outcome = await spec.spawn(ctx)
+    if (spec.retryPolicy !== undefined) {
+      const rp = spec.retryPolicy
+      for (let attempt = 1; rp.shouldRetry(outcome, attempt - 1); attempt++) {
+        // 防御性硬上限：真实的两条线各自有重试预算兜着（脚本线 maxRetries、agent 线
+        // 的 attempt 循环），但骨架**不该依赖调用方不犯错**——一个 shouldRetry 永远
+        // 返真的 bug 会让它在 daemon 里无限自旋，而且全程占着许可与隔离工作树。
+        // 这个上限只是保险丝：正常路径永远够不到它，够到了就是 spec 有 bug，响亮抛出。
+        if (attempt > ASSEMBLY_MAX_ATTEMPTS) {
+          throw new Error(
+            `assembly: retryPolicy exceeded ${ASSEMBLY_MAX_ATTEMPTS} attempts — shouldRetry never settled (spec bug)`,
+          )
+        }
+        if (spec.iso !== null && handle !== null) {
+          const keepTree = rp.isoOnRetry !== 'always-recreate' && rp.isoOnRetry.keepIf(outcome)
+          if (!keepTree) {
+            // 换新树：先丢弃旧的，再物化一棵——顺序不可颠倒（否则两棵树同时在盘上，
+            // 且旧树里的残留写入会被下一次合并带进主干）。
+            await spec.discardIso(handle)
+            try {
+              handle = await spec.iso.create()
+            } catch (err) {
+              return rp.onIsoRecreateFailure(err)
+            }
+          }
+        }
+        await rp.onNextAttempt(attempt)
+        outcome = await spec.spawn(ctx)
+      }
+    }
 
     // spawn 结果直接决定的 keep（正交于合并处置；置真后不被下调）。
     const stickyKeep = spec.keepFromOutcome?.(outcome) === true

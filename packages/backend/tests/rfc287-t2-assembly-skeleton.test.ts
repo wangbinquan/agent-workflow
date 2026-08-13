@@ -222,6 +222,117 @@ describe('RFC-287 T2 — 装配骨架', () => {
     expect(events).not.toContain('discard')
   })
 
+  // ---------------------------------------------------------------------------
+  // 模式 B（跨 attempt 窗口）——T5b 补。要害是两条线的 iso 处置**相反**，
+  // 统一任一方都是行为变更：agent 线跨 attempt 保住同一棵（同会话续跑要它），
+  // 脚本线每次换新树（否则上次的文件写入与这次叠加）。
+  // ---------------------------------------------------------------------------
+  test('模式 B：窗口内多次 spawn，许可与 iso 只取一次', async () => {
+    let spawns = 0
+    const { spec, events } = makeSpec({
+      spawn: async () => {
+        spawns++
+        events.push(`spawn#${spawns}`)
+        return spawns < 3 ? 'retryable' : 'done'
+      },
+      retryPolicy: {
+        shouldRetry: (o) => o === 'retryable',
+        isoOnRetry: { keepIf: () => true },
+        onIsoRecreateFailure: () => 'recreate-failed',
+        onNextAttempt: async (n) => {
+          events.push(`nextAttempt#${n}`)
+        },
+      },
+    })
+    expect(await runAssembly({ id: 't' }, spec)).toBe('settled')
+    expect(spawns).toBe(3)
+    // 许可只取一次、iso 只建一次（keepIf 恒真 ⇒ 不换树）——这正是 agent 线的形态。
+    expect(events.filter((e) => e === 'acquire:a')).toHaveLength(1)
+    expect(events.filter((e) => e === 'iso:create')).toHaveLength(1)
+    expect(events.filter((e) => e === 'discard')).toHaveLength(1) // 只有收尾那次
+  })
+
+  test("模式 B：isoOnRetry='always-recreate' 每次重试换新树（脚本线形态）", async () => {
+    let spawns = 0
+    const { spec, events } = makeSpec({
+      spawn: async () => {
+        spawns++
+        return spawns < 3 ? 'retryable' : 'done'
+      },
+      retryPolicy: {
+        shouldRetry: (o) => o === 'retryable',
+        isoOnRetry: 'always-recreate',
+        onIsoRecreateFailure: () => 'recreate-failed',
+        onNextAttempt: async () => {},
+      },
+    })
+    expect(await runAssembly({ id: 't' }, spec)).toBe('settled')
+    // 两次重试 ⇒ 两次「先丢弃再物化」，加初始物化共 3 次 create、收尾 1 次 discard。
+    expect(events.filter((e) => e === 'iso:create')).toHaveLength(3)
+    expect(events.filter((e) => e === 'discard')).toHaveLength(3)
+    // 顺序不可颠倒：每次都是 discard 在 create 之前。
+    const isoEvents = events.filter((e) => e === 'iso:create' || e === 'discard')
+    expect(isoEvents.slice(0, 4)).toEqual(['iso:create', 'discard', 'iso:create', 'discard'])
+  })
+
+  test('模式 B：换树失败走 onIsoRecreateFailure（与初始物化失败是两种结局）', async () => {
+    let creates = 0
+    const { spec } = makeSpec({
+      iso: {
+        create: async () => {
+          creates++
+          if (creates > 1) throw new Error('recreate boom')
+          return { passthrough: false }
+        },
+        persistBase: 'in-window',
+        persist: async () => {},
+      },
+      spawn: async () => 'retryable',
+      retryPolicy: {
+        shouldRetry: (o) => o === 'retryable',
+        isoOnRetry: 'always-recreate',
+        onIsoRecreateFailure: () => 'recreate-failed',
+        onNextAttempt: async () => {},
+      },
+    })
+    // 不是 'iso-setup-failed'——那是**初始**物化失败的结局。
+    expect(await runAssembly({ id: 't' }, spec)).toBe('recreate-failed')
+  })
+
+  test('模式 B：shouldRetry 永不收敛时撞硬上限并响亮抛出（防 daemon 自旋）', async () => {
+    // 这条是变异实证逼出来的：把 isoOnRetry 的判定写死成「一律留树」时，本文件的
+    // 「换树失败」用例会变成无限循环——它靠换树失败来终止。真实的两条线各有重试
+    // 预算兜着，但骨架不该依赖调用方不犯错：无限自旋会占着许可与隔离工作树把
+    // daemon 拖住。
+    let spawns = 0
+    const { spec } = makeSpec({
+      spawn: async () => {
+        spawns++
+        return 'never-settles'
+      },
+      retryPolicy: {
+        shouldRetry: () => true, // 永远返真 = spec bug
+        isoOnRetry: { keepIf: () => true },
+        onIsoRecreateFailure: () => 'recreate-failed',
+        onNextAttempt: async () => {},
+      },
+    })
+    await expect(runAssembly({ id: 't' }, spec)).rejects.toThrow(/exceeded .* attempts/)
+    expect(spawns).toBeLessThan(200) // 有界，而不是跑到天荒地老
+  })
+
+  test('模式 A（不声明 retryPolicy）仍只跑一次 spawn', async () => {
+    let spawns = 0
+    const { spec } = makeSpec({
+      spawn: async () => {
+        spawns++
+        return 'done'
+      },
+    })
+    await runAssembly({ id: 't' }, spec)
+    expect(spawns).toBe(1)
+  })
+
   test('② 许可在异常路径上也必然释放', async () => {
     const { spec, events } = makeSpec({
       spawn: async () => {
