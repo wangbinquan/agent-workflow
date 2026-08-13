@@ -288,10 +288,13 @@ async function openWebhookAgentParameterPicker(page: Page): Promise<void> {
   await page.getByTestId('wt-target').click()
   await page.getByRole('option', { name: 'visual-webhook-agent', exact: true }).click()
   await expect(page.getByTestId('wt-description')).toBeVisible()
+  await page
+    .getByTestId('wt-description')
+    .evaluate((element) => element.scrollIntoView({ block: 'center' }))
   await page.getByTestId('wt-description').fill('Handle ')
   await page.getByTestId('wt-description-parameter').click()
   const picker = page.locator('[data-runtime-parameter-popover]')
-  await picker.getByRole('searchbox').fill('repo_path')
+  await picker.getByRole('combobox').fill('repo_path')
   await expect(picker.getByText('{{trigger.webhook.repo_path}}', { exact: true })).toBeVisible()
 }
 
@@ -1104,7 +1107,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expectSelectedNodeCanvasMargin(page, 'visual_agent', beforeSelection)
     await page.getByTestId('agent-runtime-parameter-picker').click()
     const picker = page.locator('[data-runtime-parameter-popover]')
-    await picker.getByRole('searchbox').fill('comment_text')
+    await picker.getByRole('combobox').fill('comment_text')
     await expect(
       picker.getByText('{{trigger.webhook.comment_text}}', { exact: true }),
     ).toBeVisible()
