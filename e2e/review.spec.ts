@@ -23,10 +23,9 @@ import { test, expect } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 
 interface CreatedFixtures {
   workflowId: string
@@ -250,7 +249,7 @@ test('review cycle: awaiting → reject → awaiting → iterate → awaiting �
     body: JSON.stringify({
       workflowId: fixtures.workflowId,
       name: 'e2e-fixture-task',
-      repoUrl: pathToFileURL(fixtures.repoPath).href,
+      repoUrl: repoRemoteUrl(fixtures.repoPath),
       ref: 'main',
       inputs: { topic: 'order_status enum' },
     }),

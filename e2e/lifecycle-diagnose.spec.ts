@@ -24,10 +24,9 @@ import { test, expect, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
-import { initGitRepo, runSqlite } from './command'
+import { initGitRepo, runSqlite, repoRemoteUrl } from './command'
 
 interface Fixtures {
   workflowId: string
@@ -139,7 +138,7 @@ async function launchTaskAndWaitForDone(d: DaemonHandle, f: Fixtures): Promise<s
     body: JSON.stringify({
       name: 'lifecycle-e2e-task',
       workflowId: f.workflowId,
-      repoUrl: pathToFileURL(f.repoPath).href,
+      repoUrl: repoRemoteUrl(f.repoPath),
       ref: 'main',
       inputs: { topic: 'state machines' },
     }),

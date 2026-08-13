@@ -18,10 +18,10 @@ import { test, expect, type Page, type Route as PlaywrightRoute } from '@playwri
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 
 const here = dirname(fileURLToPath(import.meta.url))
 void here // (silence unused-when-fixture-paths-not-used lint)
@@ -161,12 +161,12 @@ async function seedRepoGroup(
       nodes: [
         {
           path: '',
-          attachment: { kind: 'repo', repoUrl: pathToFileURL(repos[0]!.repoDir).href },
+          attachment: { kind: 'repo', repoUrl: repoRemoteUrl(repos[0]!.repoDir) },
         },
         { path: 'vendor', attachment: null },
         {
           path: 'vendor/sdk',
-          attachment: { kind: 'repo', repoUrl: pathToFileURL(repos[1]!.repoDir).href },
+          attachment: { kind: 'repo', repoUrl: repoRemoteUrl(repos[1]!.repoDir) },
         },
       ],
     }),
@@ -183,7 +183,7 @@ async function importCachedRepos(daemon: DaemonHandle, fixtures: readonly RepoFi
   const started = await fetch(`${daemon.baseUrl}/api/cached-repos/batch-import`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ urls: fixtures.map((fixture) => pathToFileURL(fixture.repoDir).href) }),
+    body: JSON.stringify({ urls: fixtures.map((fixture) => repoRemoteUrl(fixture.repoDir)) }),
   })
   if (!started.ok) throw new Error(`batch import: ${started.status} ${await started.text()}`)
   let snapshot = (await started.json()) as {
@@ -327,7 +327,7 @@ test.describe('RFC-248 —— 仓库组多仓启动', () => {
     await page.getByRole('option', { name: 'Enter a new Git URL…', exact: true }).click()
     await expect(page.getByTestId('repo-source-url-0')).toBeVisible()
     await expect(page.getByTestId('repo-source-ref-0')).toHaveCount(0)
-    await page.getByTestId('repo-source-url-0').fill(pathToFileURL(repoA.repoDir).toString())
+    await page.getByTestId('repo-source-url-0').fill(repoRemoteUrl(repoA.repoDir))
     await expect(page.getByTestId('repo-source-ref-0')).toBeVisible()
   })
 

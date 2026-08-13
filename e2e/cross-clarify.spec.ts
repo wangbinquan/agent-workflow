@@ -31,10 +31,9 @@ import { test, expect } from '@playwright/test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 
 interface CrossClarifyInboxEntry {
   // RFC-058 T14/T16: REST /api/clarify now returns ClarifyRoundSummary
@@ -279,7 +278,7 @@ test.describe('RFC-056 cross-clarify e2e — A1 happy path', () => {
       body: JSON.stringify({
         workflowId: fixtures.workflowId,
         name: 'e2e-cross-clarify-task',
-        repoUrl: pathToFileURL(fixtures.repoPath).href,
+        repoUrl: repoRemoteUrl(fixtures.repoPath),
         ref: 'main',
         inputs: { topic: 'cache eviction strategy' },
       }),

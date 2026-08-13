@@ -17,9 +17,8 @@ import { randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 
 const READABLE_MIN_ZOOM = 1.1
@@ -886,7 +885,7 @@ test('task canvas mounted in a hidden 0x0 pane refits once after reveal', async 
     body: JSON.stringify({
       name: 'rfc250-hidden-camera-task',
       workflowId: runnable.id,
-      repoUrl: pathToFileURL(repoDir).href,
+      repoUrl: repoRemoteUrl(repoDir),
       ref: 'main',
       inputs: { topic: 'hidden canvas reveal' },
     }),

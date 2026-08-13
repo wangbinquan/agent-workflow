@@ -19,10 +19,9 @@ import { test, expect, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 
 // Each case rebuilds its own daemon + fixture repo + AGENT_WORKFLOW_HOME for
 // isolation. Serial mode is for port allocation hygiene only.
@@ -324,7 +323,7 @@ async function launchTask(
       workflowId,
       name,
       inputs: { topic: 'lifecycle-test' },
-      repoUrl: pathToFileURL(repoPath).href,
+      repoUrl: repoRemoteUrl(repoPath),
       ref: 'main',
     }),
   })

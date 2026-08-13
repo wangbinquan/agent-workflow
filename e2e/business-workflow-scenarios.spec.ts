@@ -9,9 +9,9 @@ import { expect, test } from '@playwright/test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
-import { initGitRepo, runGit } from './command'
+import { initGitRepo, runGit, repoRemoteUrl } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 import { loadWorkflowFixture } from './workflow-fixtures'
 
@@ -285,7 +285,7 @@ async function launch(file: WorkflowFile, inputs: Record<string, string>): Promi
       workflowId: row.id,
       expectedWorkflowVersion: row.version,
       name: `business-${taskSequence}-${row.name}`,
-      repoUrl: pathToFileURL(repoDir).href,
+      repoUrl: repoRemoteUrl(repoDir),
       ref: 'main',
       inputs,
     }),

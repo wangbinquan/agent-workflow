@@ -11,9 +11,8 @@ import { expect, test } from '@playwright/test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
-import { initGitRepo, runCommand, runGit } from './command'
+import { initGitRepo, runCommand, runGit, repoRemoteUrl } from './command'
 import { defaultProductionBinaryPath, startDaemon, type DaemonHandle } from './harness'
 
 type Protocol = 'opencode' | 'claude-code'
@@ -265,7 +264,7 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
           expectedWorkflowVersion: workflow.version,
           expectedWorkflowSnapshotHash: workflow.snapshotHash,
           name: `release-${protocol}-proof`,
-          repoUrl: pathToFileURL(repoDir).href,
+          repoUrl: repoRemoteUrl(repoDir),
           ref: 'main',
           inputs: { proof_token: token },
         }),

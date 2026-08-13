@@ -12,9 +12,9 @@ import type { StructuralDiff } from '@agent-workflow/shared'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
@@ -332,7 +332,7 @@ async function seedGitTask(): Promise<string> {
   const task = (await postJson('/api/tasks', {
     workflowId,
     name: 'RFC-250 interaction integrity review',
-    repoUrl: pathToFileURL(repoDir).href,
+    repoUrl: repoRemoteUrl(repoDir),
     ref: 'main',
     inputs: { topic: 'interaction integrity' },
   })) as { id: string }
@@ -472,7 +472,7 @@ async function seedClarifySession(): Promise<string> {
   const task = (await postJson('/api/tasks', {
     workflowId: workflow.id,
     name: 'RFC-250 checkout decision',
-    repoUrl: pathToFileURL(repoDir).href,
+    repoUrl: repoRemoteUrl(repoDir),
     ref: 'main',
     inputs: { topic: 'durable checkout state' },
   })) as { id: string }

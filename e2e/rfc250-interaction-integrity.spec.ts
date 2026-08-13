@@ -20,9 +20,8 @@ import type { StructuralDiff } from '@agent-workflow/shared'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 import { scheduledOperationsFixture } from './operations-surface-fixtures'
 
@@ -213,7 +212,7 @@ async function seedClarifySession(): Promise<string> {
   const task = await postJson<{ id: string }>('/api/tasks', {
     workflowId: workflow.id,
     name: 'RFC-250 latest Clarify generation',
-    repoUrl: pathToFileURL(repoDir).href,
+    repoUrl: repoRemoteUrl(repoDir),
     ref: 'main',
     inputs: { topic: 'durable interaction state' },
   })
@@ -341,7 +340,7 @@ async function seedChangesTask(): Promise<string> {
   const task = await postJson<{ id: string }>('/api/tasks', {
     workflowId: workflow.id,
     name: 'RFC-250 keyboard ownership review',
-    repoUrl: pathToFileURL(repoDir).href,
+    repoUrl: repoRemoteUrl(repoDir),
     ref: 'main',
     inputs: { topic: 'keyboard ownership' },
   })

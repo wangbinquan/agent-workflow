@@ -32,10 +32,9 @@ import { test, expect } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(120_000)
@@ -230,7 +229,7 @@ async function launchTaskAs(
       workflowId,
       name,
       inputs: { topic: 'auth-isolation' },
-      repoUrl: pathToFileURL(repoPath).href,
+      repoUrl: repoRemoteUrl(repoPath),
       ref: 'main',
     }),
   })

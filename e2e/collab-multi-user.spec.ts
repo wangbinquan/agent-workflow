@@ -21,10 +21,9 @@ import { test, expect, type BrowserContext } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 
 let daemon: DaemonHandle
 let repoDir: string
@@ -171,7 +170,7 @@ async function createTaskAsUser(
     body: JSON.stringify({
       name,
       workflowId,
-      repoUrl: pathToFileURL(repoDir).href,
+      repoUrl: repoRemoteUrl(repoDir),
       ref: 'main',
       inputs: { topic: 'collab-test' },
     }),

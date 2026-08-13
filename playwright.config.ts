@@ -44,6 +44,8 @@ if (process.env.PLAYWRIGHT_WEBKIT === '1') {
 }
 
 export default defineConfig({
+  // RFC-287 T11：起本机 git smart-HTTP 服务，夹具仓经真实远端而非 file:// 被克隆。
+  globalSetup: './e2e/global-setup.ts',
   testDir: './e2e',
   testMatch: /.*\.spec\.ts$/,
   // The happy-path spec walks through agent / workflow / launch / detail; the

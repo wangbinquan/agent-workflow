@@ -13,10 +13,9 @@ import { test, expect } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
-import { initBareGitRepo, initGitRepo, runGit } from './command'
+import { initBareGitRepo, initGitRepo, runGit, repoRemoteUrl } from './command'
 
 let daemon: DaemonHandle
 let repo: string
@@ -126,7 +125,7 @@ test.describe('RFC-075 — auto commit&push (real daemon + bare remote)', () => 
       body: JSON.stringify({
         name: 'cp-task',
         workflowId: wf.id,
-        repoUrl: pathToFileURL(remote).href,
+        repoUrl: repoRemoteUrl(remote),
         ref: 'main',
         autoCommitPush: true,
         inputs: { t: 'go' },

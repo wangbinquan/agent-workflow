@@ -10,10 +10,9 @@ import { test, expect, type Page } from '@playwright/test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
-import { cloneBareGitRepo, initGitRepo } from './command'
+import { cloneBareGitRepo, initGitRepo, repoRemoteUrl } from './command'
 
 interface CreatedFixtures {
   workflowId: string
@@ -199,7 +198,7 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   // explicitly choose the manual-URL entry, then feed it the fixture repo.
   await page.getByTestId('wizard-space-remote').click()
   await chooseManualRepoUrl(page)
-  await page.fill('[data-testid="repo-source-url-0"]', pathToFileURL(fixtures.repoPath).href)
+  await page.fill('[data-testid="repo-source-url-0"]', repoRemoteUrl(fixtures.repoPath))
   await page.fill('[data-testid="repo-source-ref-0"]', 'main')
   await page.getByTestId('stepper-next').click()
 
@@ -722,7 +721,7 @@ test('RFC-027: NodeDetailDrawer Session tab renders the agent conversation', asy
       workflowId: fixtures.workflowId,
       name: 'e2e-fixture-task',
       inputs: { topic: 'rfc-027' },
-      repoUrl: pathToFileURL(fixtures.repoPath).href,
+      repoUrl: repoRemoteUrl(fixtures.repoPath),
       ref: 'main',
     }),
   })
@@ -791,7 +790,7 @@ test('RFC-029: Runtime Inventory section renders on the Session tab', async ({ p
       workflowId: fixtures.workflowId,
       name: 'e2e-fixture-task',
       inputs: { topic: 'rfc-029' },
-      repoUrl: pathToFileURL(fixtures.repoPath).href,
+      repoUrl: repoRemoteUrl(fixtures.repoPath),
       ref: 'main',
     }),
   })

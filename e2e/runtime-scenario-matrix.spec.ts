@@ -9,9 +9,8 @@ import { expect, test } from '@playwright/test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 
 type Protocol = 'opencode' | 'claude-code'
@@ -197,7 +196,7 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
           expectedWorkflowVersion: workflow.version,
           expectedWorkflowSnapshotHash: workflow.snapshotHash,
           name: `${protocol}-${scenario}-${taskSequence}`,
-          repoUrl: pathToFileURL(repoDir).href,
+          repoUrl: repoRemoteUrl(repoDir),
           ref: 'main',
           inputs: { request: options.request ?? `${scenario}-request` },
         }),

@@ -30,10 +30,9 @@ import { test, expect, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 
 // Crash-recovery loop touches the database multiple times across daemon
 // restarts; default 90s timeout is enough but bump locally if the e2e box
@@ -149,7 +148,7 @@ async function launchTask(
       workflowId,
       name,
       inputs: { topic: 'crash-test' },
-      repoUrl: pathToFileURL(repoPath).href,
+      repoUrl: repoRemoteUrl(repoPath),
       ref: 'main',
     }),
   })

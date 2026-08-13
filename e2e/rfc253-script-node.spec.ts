@@ -30,9 +30,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
-import { initGitRepo } from './command'
+import { initGitRepo, repoRemoteUrl } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 
 let daemon: DaemonHandle
@@ -263,7 +262,7 @@ test('RFC-253 T41: 拖入两个脚本节点 → 写代码 → 连线 → 启动 
   await page.getByTestId('wizard-space-remote').click()
   await page.getByTestId('repo-source-recent-urls-0').click()
   await page.getByRole('option', { name: 'Enter a new Git URL…', exact: true }).click()
-  await page.fill('[data-testid="repo-source-url-0"]', pathToFileURL(repoDir).href)
+  await page.fill('[data-testid="repo-source-url-0"]', repoRemoteUrl(repoDir))
   await page.fill('[data-testid="repo-source-ref-0"]', 'main')
   await page.getByTestId('stepper-next').click()
   // 本工作流没有声明输入，第 3 步只剩任务名。
