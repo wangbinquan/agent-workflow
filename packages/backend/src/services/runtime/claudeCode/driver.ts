@@ -452,6 +452,30 @@ export const claudeCodeDriver: RuntimeDriver = {
       unsupported: 'supported',
       unobservable: 'supported',
     },
+    // RFC-297 T5 — the `system/init` event enumerates four faces by NAME only
+    // (measured on claude 2.1.226): tools / agents / skills / mcp_servers. It
+    // reports no mode, model, path, description, type or source, so those
+    // fields are `unsupported` here and the unified read end drops the columns
+    // instead of rendering a row of blanks. `plugins` is unsupported at the
+    // face level — claude has no plugin concept at all (matches
+    // `declarationFaces.plugins` above), so the whole block is omitted rather
+    // than shown as "0 plugins".
+    inventory: {
+      agents: {
+        support: 'supported',
+        fields: { mode: 'unsupported', model: 'unsupported', source: 'unsupported' },
+      },
+      skills: {
+        support: 'supported',
+        fields: { source: 'unsupported', path: 'unsupported', description: 'unsupported' },
+      },
+      mcps: {
+        support: 'supported',
+        fields: { status: 'supported', type: 'unsupported', hint: 'unsupported' },
+      },
+      plugins: { support: 'unsupported', fields: { source: 'unsupported' } },
+      tools: { support: 'supported', fields: {} },
+    },
   },
   // 2026-08-04 — claude forks carry private flags (CodeAgent's
   // --skip-safe-check); the registry-validated extraArgs land at the argv tail.

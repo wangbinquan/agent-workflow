@@ -331,6 +331,27 @@ export const opencodeDriver: RuntimeDriver = {
       unsupported: 'supported',
       unobservable: 'supported',
     },
+    // RFC-297 T5 — what the dump plugin's snapshot actually carries per face.
+    // Fields mirror `InventorySnapshotCaptured` (shared/inventory.ts) 1:1, so
+    // nothing opencode reports today is dropped by the unified read end.
+    // `tools` is the one face opencode has no observation for — the plugin
+    // does not enumerate the loaded tool set.
+    inventory: {
+      agents: {
+        support: 'supported',
+        fields: { mode: 'supported', model: 'supported', source: 'supported' },
+      },
+      skills: {
+        support: 'supported',
+        fields: { source: 'supported', path: 'supported', description: 'supported' },
+      },
+      mcps: {
+        support: 'supported',
+        fields: { status: 'supported', type: 'supported', hint: 'supported' },
+      },
+      plugins: { support: 'supported', fields: { source: 'supported' } },
+      tools: { support: 'unsupported', fields: {} },
+    },
   },
   minVersion: null,
   // RFC-280 T6 — playground session strategy (opencode: no pre-allocated id;

@@ -121,6 +121,25 @@ describe('RFC-143 (B) 能力接口', () => {
           unsupported: 'supported',
           unobservable: 'supported',
         },
+        // RFC-297 T5 — 同一条棘轮延伸到清单面：第三 runtime 必须逐面逐字段
+        // 表态才编译得过。这个 mock 声明「什么都观测不到」，正是一个不产清单
+        // 的 runtime 的合法姿态（startupObservation: 'none' 与之自洽）。
+        inventory: {
+          agents: {
+            support: 'unsupported',
+            fields: { mode: 'unsupported', model: 'unsupported', source: 'unsupported' },
+          },
+          skills: {
+            support: 'unsupported',
+            fields: { source: 'unsupported', path: 'unsupported', description: 'unsupported' },
+          },
+          mcps: {
+            support: 'unsupported',
+            fields: { status: 'unsupported', type: 'unsupported', hint: 'unsupported' },
+          },
+          plugins: { support: 'unsupported', fields: { source: 'unsupported' } },
+          tools: { support: 'unsupported', fields: {} },
+        },
       },
       minVersion: '0.0.0',
       parseEvent: () => null,

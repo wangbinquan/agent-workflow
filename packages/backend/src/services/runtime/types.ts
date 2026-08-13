@@ -21,10 +21,12 @@ import type { Logger } from '@/util/log'
 import type {
   Agent,
   FaceSupport,
+  InventoryDeclaration,
   InventorySnapshot,
   Mcp,
   Plugin,
   RuntimeConfigDirProfile,
+  RuntimeInventoryPayload,
 } from '@agent-workflow/shared'
 import type { LivePollOptions, LivePollerHandle } from './opencode/subagentLiveCapture'
 // Type-only (erased at runtime): runtimeRegistry value-imports runtime/index,
@@ -149,16 +151,53 @@ export interface NormalizedEvent {
    */
   text?: string | null
   /**
-   * Per-event session id. The pump captures the first non-empty one as the
-   * run's session id (later threaded into `--session`/`--resume`).
+   * Runtime-native session identity observed on this root-conversation event.
+   * The pump captures the first value for resume and rejects an unannounced
+   * change. Drivers must omit sidechain/subagent-local ids.
    */
   sessionId?: string
+  /**
+   * A runtime-declared conversation boundary. `outgoingSessionId` is the
+   * native id being replaced; `newConversationId` is correlation metadata and
+   * is NOT necessarily the next resumable native id. The pump learns that id
+   * from the first subsequent root event carrying `sessionId`.
+   */
+  conversationReset?: {
+    outgoingSessionId: string
+    newConversationId: string
+  }
   /** Event timestamp (ms epoch) if the runtime provided one. */
   timestamp?: number
   /** Token usage this event contributes, if any. */
   tokens?: NormalizedTokenDelta
   /** The original stdout line, persisted verbatim into node_run_events.payload. */
   rawLine: string
+  /**
+   * RFC-297 T5 — kind-specific structured payload. Every field above is a
+   * cross-cutting concern the generic pump reads; this is where a driver hands
+   * a *particular* observation to whichever stage cares, without every other
+   * stage having to know it exists.
+   */
+  data?: NormalizedEventData
+  /**
+   * RFC-297 T5 — whether this event lands in `node_run_events`. Defaults to
+   * true (every event historically persisted). Synthetic events whose payload
+   * has a proper home elsewhere set false: the inventory snapshot can run to
+   * tens of KB and already persists to its own column.
+   *
+   * PR-2 只立契约，消费点在 PR-3 接入 pump 时落地——那批同时会给合成事件引入
+   * 独立的 kind 并收紧落库侧的类型（本列 enum 不含它）。
+   */
+  persist?: boolean
+}
+
+/**
+ * RFC-297 T5 — the kind-specific payloads an event may carry. Optional by
+ * construction: a stage reads only its own key and ignores the rest.
+ */
+export interface NormalizedEventData {
+  /** The runtime's own startup inventory, already normalized by the driver. */
+  inventory?: RuntimeInventoryPayload
 }
 
 export type TerminalResultObservation = 'success' | 'error' | 'not-observed'
@@ -650,6 +689,19 @@ export interface RuntimeDriverCapabilities {
   readonly observationRequiresFreshRun: boolean
   /** Per-face stance; the boot self-check refuses to start on a missing face. */
   readonly declarationFaces: Readonly<Record<DeclarationFace, FaceSupport>>
+  /**
+   * RFC-297 T5 — what this runtime can report on each inventory face, and on
+   * each rich field within a face. Drives the unified inventory read end and
+   * the frontend's column selection, so "this runtime has no such concept"
+   * (`unsupported`, e.g. claude × plugin) stays distinguishable from "it has
+   * the concept and loaded zero of them".
+   *
+   * Same ratchet as `declarationFaces` above: the type is derived with mapped
+   * types over the closed face/field unions, so adding a face — or adding a
+   * rich field to an existing face — is a compile error in every driver until
+   * it states a stance.
+   */
+  readonly inventory: InventoryDeclaration
 }
 
 export interface RuntimeDriver {
@@ -681,6 +733,17 @@ export interface RuntimeDriver {
    * to the pump's raw-text path.
    */
   parseEvent(line: string): NormalizedEvent | null
+  /**
+   * RFC-297 T5 — synthetic events to append to the stream once the child has
+   * exited. This is how an observation that does NOT arrive on stdout still
+   * reaches the same pipeline: opencode reads the dump plugin's inventory file
+   * here and emits it as an ordinary event, so no downstream stage can tell
+   * whether an observation came from a stream line or from a file.
+   *
+   * Drivers with nothing to append omit the method (claude: its inventory
+   * rides the `system/init` line it already emits).
+   */
+  drainFinalEvents?(ctx: FinalEventContext): Promise<readonly NormalizedEvent[]>
   /** Safe metadata-only observation for system-agent failure forensics. */
   observeSystemEvent?(line: string): SystemEventObservation
   /**
@@ -825,7 +888,7 @@ export interface SystemAgentSessionSweepContext {
       source: 'stream' | 'live-child' | 'post-run-child'
       externalEventId?: string
     }): Promise<void>
-    setRootSessionId(sessionId: string): Promise<void>
+    setRootSessionId(sessionId: string, previousSessionId?: string): Promise<void>
     markTerminal(
       state: 'complete' | 'truncated' | 'incomplete',
       reason?: 'stream-persist-failed' | 'child-capture-failed' | 'post-exit-flush-timeout',
@@ -845,4 +908,23 @@ export interface SystemAgentSessionSweepOutcome {
 export interface InventoryReadContext {
   runRoot: string
   nodeKind: string
+}
+
+/**
+ * RFC-297 T5 — inputs for `drainFinalEvents`. Carries what a driver needs to
+ * materialize a post-exit observation, plus the two business gates that used to
+ * live at the CALL site as a `wantsInventory` boolean threaded through the whole
+ * spawn context. Moving them here is the point: whether a fresh observation is
+ * even possible is the driver's own business (opencode's dump plugin only ran
+ * on a fresh, agent-kind run; claude's init fires every time).
+ */
+export interface FinalEventContext {
+  runRoot: string
+  nodeKind: string
+  /**
+   * False when this run reused an existing native session (RFC-042 same-session
+   * envelope followup), i.e. the runtime never re-ran whatever produces its
+   * observation. Drivers whose observation requires a fresh run return [].
+   */
+  freshRun: boolean
 }

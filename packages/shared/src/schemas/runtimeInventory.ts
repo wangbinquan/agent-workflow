@@ -53,6 +53,20 @@ export interface InventoryFieldsByFace {
   tools: never
 }
 
+/**
+ * 每面字段集的**运行时**投影，与上面的类型同源（`satisfies` 保证二者不会分叉）。
+ * 存在的理由：`InventoryFieldsByFace` 是纯类型，编译期棘轮拦得住老实实现，却拦
+ * 不住 `as` 断言绕过；测试需要一个值来逐 driver 核对「表态覆盖了这一面的全部
+ * 字段」。
+ */
+export const INVENTORY_FIELDS_BY_FACE = {
+  agents: ['mode', 'model', 'source'],
+  skills: ['source', 'path', 'description'],
+  mcps: ['status', 'type', 'hint'],
+  plugins: ['source'],
+  tools: [],
+} as const satisfies { readonly [F in InventoryFace]: readonly InventoryFieldsByFace[F][] }
+
 /** driver 的静态声明：面级 + 字段级逐项表态。 */
 export type InventoryDeclaration = {
   readonly [F in InventoryFace]: {
