@@ -246,6 +246,15 @@ export interface StartTaskDeps {
   /** Default per-node timeout (ms). Defaults from settings; tests can pin. */
   defaultPerNodeTimeoutMs?: number
   /**
+   * RFC-287 G7：任务启动路径的克隆/抓取超时（`config.gitCloneTimeoutMs`）。
+   *
+   * 此前**只有仓库路由**（`routes/cached-repos.ts` / `routes/repoGroups.ts`）把这个
+   * 配置传给 `resolveCachedRepo`，任务启动这条路径压根没接——管理员把它调小，
+   * 手动导入仓库时生效，而真正会卡住启动接口的那次克隆仍按 30 分钟默认值跑。
+   * 与 RFC-284 T30 挖出的「字段因类型缺席被 spread 静默丢弃」是同一类问题。
+   */
+  cloneTimeoutMs?: number
+  /**
    * RFC-048: cadence + failure tolerance for the runner-side subagent live
    * capture poller. Threaded into `RunTaskOptions` → `runNode`. Omitted →
    * runner falls back to its compile-time defaults (1500ms / 5 failures);
@@ -727,7 +736,13 @@ export async function resolveRepoSourceSingle(
   const specRef = typeof specRefRaw === 'string' && specRefRaw.length > 0 ? specRefRaw : undefined
   const syncCandidates = [specRef].filter((s): s is string => typeof s === 'string')
   const resolved = await resolveCachedRepo(
-    { db: deps.db, appHome, syncBranches: syncCandidates, secretBox: deps.secretBox },
+    {
+      db: deps.db,
+      appHome,
+      syncBranches: syncCandidates,
+      secretBox: deps.secretBox,
+      ...(deps.cloneTimeoutMs !== undefined ? { cloneTimeoutMs: deps.cloneTimeoutMs } : {}),
+    },
     { url: sourceUrl },
   )
   if (!resolved.fetchOk) {

@@ -109,6 +109,13 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     maxConcurrentCodeHostCalls?: number // RFC-269
     codeHostRequestTimeoutMs?: number // RFC-269
     codeHostResponseMaxBytes?: number // RFC-269
+    /**
+     * RFC-287 G7：启动路径的克隆/抓取超时（`config.gitCloneTimeoutMs`）。
+     * 名字与配置键不同名是刻意的——`resolveCachedRepo` 的入参就叫 cloneTimeoutMs，
+     * 漏斗按**下游入参名**命名，避免调用点再做一次改名映射（改名映射正是
+     * RFC-284 T30 那批字段被静默丢弃的成因之一）。
+     */
+    cloneTimeoutMs?: number
   } = {}
   const commitPush = resolveCommitPushConfig(configPath)
   if (commitPush !== undefined) out.commitPush = commitPush
@@ -132,6 +139,11 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
       out.multiProcessSubprocessConcurrency = cfg.multiProcessSubprocessConcurrency
     if (cfg.defaultPerNodeTimeoutMs !== undefined && cfg.defaultPerNodeTimeoutMs > 0)
       out.defaultPerNodeTimeoutMs = cfg.defaultPerNodeTimeoutMs
+    // RFC-287 G7：任务启动路径的克隆/抓取超时。此前只有仓库路由把它传给
+    // `resolveCachedRepo`，启动路径没接——管理员调小它，手动导入仓库时生效，
+    // 而真正会卡住启动接口的那次克隆仍按 30 分钟默认值跑。
+    if (cfg.gitCloneTimeoutMs !== undefined && cfg.gitCloneTimeoutMs > 0)
+      out.cloneTimeoutMs = cfg.gitCloneTimeoutMs
     // RFC-111: global default runtime threaded to the scheduler dispatch site.
     if (cfg.defaultRuntime !== undefined) out.defaultRuntime = cfg.defaultRuntime
     // RFC-115: global per-node retry budget (no `> 0` guard — 0 disables retries).
