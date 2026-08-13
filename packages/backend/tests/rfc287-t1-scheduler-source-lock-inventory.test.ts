@@ -95,6 +95,8 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc282-b2-resolve-injection.test.ts',
   'rfc284-t20-child-inheritance.test.ts',
   'rfc285-b3-inherited-actor.test.ts',
+  'rfc287-t1-broadcast-sequence.test.ts',
+  'rfc287-t1-discard-failure-paths.test.ts',
   'rfc287-t1-line-throw-disposition.test.ts',
   'rfc287-t1-merge-disposition-matrix.test.ts',
   'rfc287-t1-release-before-discard.test.ts',
