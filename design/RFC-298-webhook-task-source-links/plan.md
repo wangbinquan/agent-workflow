@@ -137,8 +137,10 @@
   HTTP 详情/列表不扩面均已锁定；定向 backend 38 个用例全绿。
 - T8-T11：五种闭合中英文案、ID 后条件链接、无孤立分隔点、外链安全属性与
   nowrap 来源组均已落地；frontend 定向 13 个用例全绿。
-- T12-T14：真 daemon/API/browser 链路与 390px 对照 E2E 2/2 通过；desktop/mobile
-  视觉场景 2/2 通过，macOS mobile 基线已更新并人工审图；用户文档已更新。
+- T12-T14：真 daemon/API/browser 来源矩阵与 390px 对照 E2E 13/13 通过；矩阵逐条锁定
+  note 三层、MR 两层、pipeline 三层、GitHub push/GitLab tag 提交页、非法 SHA 项目回退与
+  全失效无入口；desktop/mobile 视觉场景 2/2 通过，macOS mobile 基线已更新并人工审图；
+  用户文档已更新。
 - T15：在只含 RFC-298 改动的固定快照、正常本机权限下完成 `bun run gate:local`：
   typecheck、lint、format、依赖分层全绿；shared 2055/2055、frontend 6404/6404，
   backend 四分片合计 10015 pass / 35 skip / 0 fail，完整门禁 5m41s 通过。
