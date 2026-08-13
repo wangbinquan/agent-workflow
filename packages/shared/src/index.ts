@@ -50,6 +50,8 @@ export * from './inventory'
 export * from './clarify'
 export * from './git-url'
 export * from './prompt'
+export * from './runtimeBuiltins' // RFC-295
+export * from './templateAuthority' // RFC-295
 export * from './promptFencing' // RFC-200
 export * from './templateRef' // RFC-292
 export * from './callGoalTemplate' // RFC-292
@@ -106,6 +108,7 @@ export * from './codeHost/actions'
 export * from './codeHost/authorProjection'
 export * from './codeHost/path'
 export * from './codeHost/template'
+export * from './codeHost/templateProjection' // RFC-295
 export * from './workflowCalls'
 export * from './systemChannelPorts'
 export * from './scheduleTime' // RFC-159
@@ -146,6 +149,3 @@ export * from './webhookTemplate'
 // RFC-262 — upload 文件名净化与落点判重的纯函数面。启动表单提交前与 daemon
 // 收到 multipart 后跑的是同一套规则，两边不可能给出不同判定。零依赖叶子。
 export * from './uploadNaming'
-export * from './runtimeBuiltins' // RFC-295
-export * from './templateAuthority' // RFC-295
-export * from './codeHost/templateProjection' // RFC-295
