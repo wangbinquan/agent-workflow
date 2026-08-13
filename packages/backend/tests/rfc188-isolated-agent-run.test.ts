@@ -296,8 +296,10 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
     // RFC-243 call 节点 M 步（live 与 adoption-rebuild 共用同一调用点）
     // + RFC-253 脚本节点成功后的合回。
     expect(count('mergeBackAndSettle(')).toBe(7)
-    // 5 = 主线 / shard / aggregator + RFC-243 call 的 adoption base 缺失与
-    // merge 异常两处（hook 有意不打——留 pending-merge 走重放；wrapper 不在此列）。
-    expect(count('markMergeFailed(')).toBe(5)
+    // 6 = 主线 / shard / aggregator + RFC-243 call 的 adoption base 缺失与
+    // merge 异常两处（hook 有意不打——留 pending-merge 走重放；wrapper 不在此列）
+    // + **RFC-287 T5a 新增的脚本线**：漂移 A 修复前脚本线的 merge 是裸调用、没有
+    // catch，所以压根没有这处标记；收敛到与其余四线同处置后才有（C1 的直接产物）。
+    expect(count('markMergeFailed(')).toBe(6)
   })
 })

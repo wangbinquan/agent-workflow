@@ -42,11 +42,12 @@ const SPAWN_PATTERNS: readonly RegExp[] = [
  */
 const ALLOWLIST: Record<string, { count: number; why: string }> = {
   'services/schedulerAssembly.ts': {
-    count: 2,
+    count: 3,
     why:
       'RFC-287 装配骨架的 `spawn` **相位钩子名**——本身不起进程，但五条装配线的真实' +
       '起进程调用（runNode / runScriptProcess）全部经它转发，是能力触点的收口处，' +
-      '故照实登记而非改名绕开棘轮。两处 = 接口方法声明 + 唯一调用点 `spec.spawn(ctx)`。',
+      '故照实登记而非改名绕开棘轮。三处 = 接口方法声明 + 模式 A 的首次调用 + ' +
+      'T5b 模式 B 重试循环里的再次调用（跨 attempt 窗口内由 retryPolicy 驱动）。',
   },
   'services/execution/managedProcess.ts': {
     count: 1,
