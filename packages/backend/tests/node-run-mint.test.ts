@@ -282,7 +282,11 @@ describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
     ]
     for (const f of files) {
       const src = readFileSync(resolvePath(import.meta.dir, '..', 'src', f), 'utf8')
-      expect(src).toContain('nextRetryIndex(')
+      // RFC-287 T8：scheduler.ts 的取行前奏收编进 resolveSchedulerRunRow（与
+      // nextRetryIndex 同住 nodeRunMint），因此它**不再直接调**——改为经收编函数
+      // 到达。锁的不变量（铸点一律经单一实现、手写 max-over-retryIndex 归零）没
+      // 变，反而更强：scheduler.ts 现在连 retryIndex 都不自己算。
+      expect(src).toMatch(/nextRetryIndex\(|resolveSchedulerRunRow\(/)
       // 铸点惯用式归零：max-扫描 与 length-guard 三元。展示/遥测语义的
       // `processRetryIndex: x.retryIndex + 1`（0 基转 1 基）不在锁面。
       expect(/Math\.max\([^)]*retryIndex/.test(src)).toBe(false)

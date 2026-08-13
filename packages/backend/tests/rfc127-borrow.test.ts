@@ -63,7 +63,16 @@ describe('RFC-132 ③ — scheduler 无 borrow 应用(source-level lock)', () =>
     )
     expect(src).not.toContain('buildBorrowedAgent')
     expect(src).not.toContain('isBorrowed')
-    expect(src).toContain('agentOverrideName: null')
+    // RFC-287 T8：取行前奏（含「retry/revival 行的 agentOverrideName 恒 null」这条）
+    // 收编进 nodeRunMint 的 resolveSchedulerRunRow，scheduler.ts 只保留**表态**。
+    // 不变量没变，事实源反而更硬：以前四条线各写一遍、漏一条无人知；现在漏表态
+    // 直接是编译错（必填布尔）。两处一起锁——scheduler 表态 + 收编函数落实。
+    expect(src).toMatch(/clearAgentOverride: true/)
+    const mint = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'nodeRunMint.ts'),
+      'utf8',
+    )
+    expect(mint).toContain('agentOverrideName: null')
     // 多账本冲突 reject 仍在(resolveBorrowForNode 的残余职责)。
     expect(src).toContain('await resolveBorrowForNode(')
   })
