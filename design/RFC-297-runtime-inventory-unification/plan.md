@@ -165,9 +165,9 @@ PR-2 原计划引入该 kind，实测它会牵动 `node_run_events.kind` 的落�
 | T14-T15     | systemAgentRun + mcpRuntimeTest 迁移、启动自检扩展                 | 同上                                                         |
 | T17/T18/T22 | 新列 + 写入 + 旧列停写                                             | 同上（且 `db/schema.ts` 与 migrations journal 亦有并发改动） |
 
-接手时先 `git status` 确认上述文件已落停，再按 design §3 实施。**T10 的清单组装 stage
-（`services/execution/inventoryStage.ts`）已随 PR-3 落库并有 11 例覆盖**，接入时直接挂进
-pipeline 即可，无需重写。
+接手时先 `git status` 确认上述文件已落停，再按 design §3 实施。
+
+> **更新（收尾）**：上述阻塞已解除并全部完成，见文末「接入批实况」。
 
 ### 期间修正的三处设计/实现问题
 
@@ -179,3 +179,44 @@ pipeline 即可，无需重写。
    既有行为。
 3. **读端不得重写 opencode 取数**：第一版重写后当场丢掉 RFC-062 的「运行中从 runRoot
    实时读」，被既有测试抓出，改为在既有读端之上做形状转换。
+
+---
+
+## 接入批实况与一处自我纠正（2026-08-13 收尾）
+
+阻塞解除后三批落地：driver 侧规范化（`b014ee93`）、消费收敛到事件载荷
+（`cacbcb03`，AC-10）、新列 + 观测无条件落库（`6eb23327`，AC-5）；随后 T12/T13
+（`1e293b7d`，AC-8）与 T22 旧列停写（`2cf2d397`）。**11 条验收标准全部达成。**
+
+### AC-8 的实质不是 pump 重构
+
+原计划把 pump 整体 pipeline 化才算达成，深挖后发现标的其实是**两处重复判据**：
+`switch (caps.startupObservation)` 在 runner 与 MCP 测试台各写一遍；`wantsInventory`
+的字段名又把「opencode 要物化 dump 插件」这条运行时知识写进了调用方，于是测试台
+里长出了 `startupObservation === 'inventory-file'` 的三元判断。前者收进
+`observationForVerification` 单点（取快照改惰性入参），后者改名 `freshAgentRun`
+只陈述业务事实。两个消费方对 `startupObservation` 的引用归零，AC-8 达成——**pump
+是否 pipeline 化与此无关**。
+
+### pipeline 骨架已删除（用户裁决）
+
+T6 的 `services/execution/eventPipeline.ts` 与 T10 的 `createInventoryStage` 曾经
+落库，但 pump 始终没有 pipeline 化，二者**零生产调用方**——22 例测试锁的是死代码，
+而 `createInventoryStage` 与在用的 `buildRuntimeInventoryObservation` 更是同一语义
+的两份实现。按仓规「删除优于 deprecate、别为快一点留过渡态」，用户裁决删除：
+
+- 删 `eventPipeline.ts` + `rfc297-event-pipeline.test.ts`（11 例）
+- 删 `createInventoryStage` + `rfc297-inventory-stage.test.ts`（11 例）
+- `inventoryStage.ts` 只剩结算形态，随之更名 `inventoryObservation.ts`
+- 顺带把两处重复的 `declaredNamesFor` 收进 shared 的 `declaredNamesForFace`
+
+**真做 pipeline 化时按当时的 pump 形态重写**——它已叠了协作者落地的
+conversation-reset 状态机与租约轮换，与本 RFC 当初的设计未必吻合。design §3.4 的
+管道设计因此是**纸面设计**，不是已落库的实现，接手前请以本节为准。
+
+### 自查补的三处防护缺口（`6ee8d9c2`）
+
+用户追问「用例防护充足吗」时自查发现，均已补：AC-10 单次解析**竟然没有锁**（补
+JSON.parse 计数 + 方法缺席 + 源码调用形式三条）；AC-5 零注入节点只有纯函数覆盖
+（补真跑 runner 的端到端，断言两列分工同时成立）；i18n 新键未进完整性锁（补双语
+齐全 + 一条「新归因文案不得再提插件」的产品意图锁）。

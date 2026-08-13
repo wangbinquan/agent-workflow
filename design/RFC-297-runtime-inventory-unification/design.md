@@ -188,6 +188,12 @@ export interface NormalizedEvent {
 
 **为什么不把 `NormalizedEvent` 整体改成 discriminated union**：现有全部消费点（落库、token 统计、session 认领、文本累积、`SystemAgentOutputEvidence`）都读的是横切字段，改 union 会波及每一处却换不来真实约束。载荷用可选字段 + 按 kind 的 zod 分派，收紧点放在测试（§8.1 T-1）。
 
+> ⚠️ **落地状态（2026-08-13 收尾）**：本节是**纸面设计**。pump 始终没有 pipeline
+> 化——AC-8 的实质被证明是两处重复判据而非 pump 结构（见 plan.md 文末），收掉判据后
+> 该 AC 已达成。曾落库的骨架 `eventPipeline.ts` 与 `createInventoryStage` 因零调用方
+> 被删除（用户裁决，仓规「删除优于 deprecate」）。真做 pipeline 化时请按**当时的**
+> pump 形态重写：它已叠了 conversation-reset 状态机与租约轮换，与下文设计未必吻合。
+
 ### 3.4 pipeline
 
 runner 的 stdout pump 今天已经是一条**手写且散开**的 pipeline：`runner.ts:1155`（unusable MCP）、`:1176`（startup inventory）、`:1192`（terminal result）、`:1196`（parseEvent 后落库 / token / session / 文本）各自对同一行做一次 `JSON.parse`。本 RFC 把它显式化：

@@ -12,7 +12,7 @@
 // 「每个 followup 都报无法验证」噪音。
 
 import { describe, expect, test } from 'bun:test'
-import { buildRuntimeInventoryObservation } from '@/services/execution/inventoryStage'
+import { buildRuntimeInventoryObservation } from '@/services/execution/inventoryObservation'
 import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import type { DeclaredManifestV1 } from '@/services/execution/agentInjection'
 import type { RuntimeDriverCapabilities } from '@/services/runtime/types'

@@ -224,6 +224,23 @@ export function missingDeclared(
 }
 
 /**
+ * 平台声明清单里某一面的名字集。
+ *
+ * `tools` 是唯一可能为 `null` 的面——null 表示「本轮没有约束工具集」，此时运行时
+ * 报告的工具全部算 ambient，且不产生任何 declared-missing（没声明过的东西谈不上
+ * 缺失）。面名与声明键名两处不同形（agents↔subagents、mcps↔mcpServers），故这里
+ * 统一经 `INVENTORY_FACE_TO_DECLARED_KEY` 取。
+ */
+export function declaredNamesForFace(
+  declared: Readonly<Record<string, readonly string[] | null | undefined>>,
+  face: InventoryFace,
+): readonly string[] | null {
+  const value = declared[INVENTORY_FACE_TO_DECLARED_KEY[face]]
+  if (value === null) return null
+  return Array.isArray(value) ? value : []
+}
+
+/**
  * 一个面的观测 × 声明 → 带来源对账的条目表。
  *
  * - observed 中出现在 declared 里的 → `injected`

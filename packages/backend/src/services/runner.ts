@@ -95,7 +95,7 @@ import {
   type StartupVerificationRecord,
 } from './execution/startupVerification'
 // RFC-297 T18 —— 结算时构造统一清单观测（与 verifyStartup 共用同一套对账语义）。
-import { buildRuntimeInventoryObservation } from './execution/inventoryStage'
+import { buildRuntimeInventoryObservation } from './execution/inventoryObservation'
 import { runAgentProcess } from './execution/agentProcess'
 import { FINAL_REAP_MARGIN_MS, MANAGED_PROCESS_MAX_LINE_CHARS } from './execution/managedProcess'
 

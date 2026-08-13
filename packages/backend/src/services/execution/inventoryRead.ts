@@ -19,7 +19,7 @@
 import { eq } from 'drizzle-orm'
 import {
   INVENTORY_FACES,
-  INVENTORY_FACE_TO_DECLARED_KEY,
+  declaredNamesForFace,
   RuntimeInventoryObservationSchema,
   StartupVerificationRecordSchema,
   assembleFace,
@@ -104,15 +104,6 @@ export function facesFromStartupObservation(
   return faces
 }
 
-function declaredNamesFor(
-  declared: DeclaredInjectionManifest,
-  face: InventoryFace,
-): readonly string[] | null {
-  const value = declared[INVENTORY_FACE_TO_DECLARED_KEY[face]]
-  if (value === null) return null
-  return Array.isArray(value) ? value : []
-}
-
 /** 观测 × 声明 → 带来源对账的面集合。declared 缺失（老行）时全部记 ambient。 */
 export function assembleFaces(
   observed: ObservedInventoryFaces,
@@ -122,7 +113,7 @@ export function assembleFaces(
   for (const face of INVENTORY_FACES) {
     const items = observed[face]
     if (items === undefined) continue
-    faces[face] = assembleFace(items, declared === null ? null : declaredNamesFor(declared, face))
+    faces[face] = assembleFace(items, declared === null ? null : declaredNamesForFace(declared, face))
   }
   return faces
 }
