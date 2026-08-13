@@ -55,35 +55,12 @@ markMergeFailed；conflict-human → abandon+failed，RFC-187 T8，
 `rfc187-wg-merge-conflict-abandon.test.ts` 锁定），且原语头注自declare per-site
 （isolatedAgentRun.ts:206-211）。契约改为**默认处置 + 逐线声明式覆写**：
 
-```ts
-interface AssemblySpec<TResult> {
-  pools: Semaphore[] // 顺序=获取序；释放恒逆序、finally 保证
-  iso: {
-    create: () => Promise<IsoHandle> // createIsoUnderLock 参数化闭包
-    persistBase: boolean // false = L2/L3 无 iso 线不进本骨架
-  } | null
-  resolveRunRow: (ctx) => Promise<RunRow> // §3 前奏；L8 领养/L1 外部行以 preResolved 短路
-  buildSpawnArgs: (ctx, row) => SpawnArgs // 各线私有拼参（prompt/ports/env）
-  beforeSpawn?: (ctx) => Promise<void> // L5 T14 undo 唯一消费方；hook 内自兜
-  // 异常（现状 fail-open 逐仓自吞 :7784-7802 保持）；**未兜住的抛出=装配失败**
-  // （响亮 settle failed，不静默）——P3-8 定音。
-  spawn: (ctx) => Promise<SpawnOutcome> // runNode / runScriptProcess 包装
-  mergeBack: {
-    run: (ctx) => Promise<MergeOutcome>
-    // 默认处置（L4/L5/L6/L7 收敛目标；漂移 A 根治=L7 收敛到默认）：
-    //   ok → settle；conflict-human → keep + awaiting_human；
-    //   throw → keep + markMergeFailed（吞掉后按失败 settle）
-    // 覆写（声明式，凡覆写必须带豁免锁）：
-    //   L1 onThrow: keepHookIso + rethrow（pending-merge 留给 entry replay）
-    //   L1 onConflictHuman: abandon + failed（RFC-187 T8）
-    disposition?: { onThrow?: ...; onConflictHuman?: ... }
-  } | null
-  settle: (ctx, outcome) => Promise<TResult>
-  // 第四处置（P1-2 附带）：clarify-park——spawn 结果自身决定 keep + 跳过
-  // merge（:6131-6132）。以 SpawnOutcome.park: boolean 表达，骨架据此短路
-  // mergeBack 并保 keep；不新增 keep 旁路变量。
-}
-```
+> **本节原有的 interface 块已作废**（第三轮设计门 P2-5：两个 interface 并存且过期
+> 版在前，T2 是照 spec 逐字落代码的批次，极易照错）。**唯一权威定义在 §10.2**，
+> 那里包含 `mergePhase` 四相位与判定序、`onUnhandledThrow` 逐线载荷、`Disposition`
+> 定义、settle 相位、`iso.persistBase: 'in-setup' | 'in-window'` 按线声明，以及
+> 「任何 skip / disposition / catch-all 产出的结果直接成为装配结果、settle 不再
+> 执行」这条总规则。
 
 - **keep 状态单一化**：骨架内部唯一 `keep` 域（漂移 B 根治；含 park 与
   disposition 覆写的写入都经它）；finally `if (!keep) discardNodeIso(...)`

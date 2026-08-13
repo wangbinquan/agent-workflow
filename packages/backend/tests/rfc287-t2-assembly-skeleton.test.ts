@@ -1,0 +1,219 @@
+// RFC-287 T2 —— 装配骨架的单元测试。
+//
+// 三轮设计门在同一批契约上反复翻车，所以这里逐条钉死最容易搞错的：
+//   ① settle 只在窗口正常走完时执行——任何 skip / disposition / catch-all 产出的
+//      结果直接成为装配结果；
+//   ② finally 里释放许可**先于**清理 iso，且释放按逆序（RFC-208 事故）；
+//   ③ persistBase 相位按线声明：'in-setup' 抛出→走 onIsoSetupFailure；
+//      'in-window' 抛出→经 finally 释放后继续传播；
+//   ④ 线级 catch-all 逐线不同，'rethrow' 保持抛出直穿；
+//   ⑤ merge 抛出的默认处置=保留 iso + 标记合并失败 + 按失败 settle。
+
+import { describe, expect, test } from 'bun:test'
+import {
+  runAssembly,
+  type AssemblySpec,
+  type IsoLike,
+  type PoolLike,
+} from '../src/services/schedulerAssembly'
+
+const silentLog = { warn: () => {}, info: () => {}, error: () => {}, debug: () => {} } as never
+
+/** 记录事件序的测试脚手架。 */
+function makeSpec(over: Partial<AssemblySpec<{ id: string }, string, string>> = {}) {
+  const events: string[] = []
+  const pool = (name: string): PoolLike => ({
+    acquire: async () => {
+      events.push(`acquire:${name}`)
+      return () => events.push(`release:${name}`)
+    },
+  })
+  const handle: IsoLike = { passthrough: false }
+  const spec: AssemblySpec<{ id: string }, string, string> = {
+    pools: [pool('a'), pool('b')],
+    iso: {
+      create: async () => {
+        events.push('iso:create')
+        return handle
+      },
+      persistBase: 'in-window',
+      persist: async () => {
+        events.push('iso:persist')
+      },
+    },
+    spawn: async () => {
+      events.push('spawn')
+      return 'done'
+    },
+    mergePhase: () => 'merge',
+    mergeBack: {
+      run: async () => {
+        events.push('merge')
+        return { kind: 'ok' as const }
+      },
+    },
+    onIsoSetupFailure: () => 'iso-setup-failed',
+    markMergeFailed: async () => {
+      events.push('markMergeFailed')
+    },
+    discardIso: async () => {
+      events.push('discard')
+    },
+    settle: async () => {
+      events.push('settle')
+      return 'settled'
+    },
+    log: silentLog,
+    ...over,
+  }
+  return { spec, events }
+}
+
+describe('RFC-287 T2 — 装配骨架', () => {
+  test('正常路径：许可→物化→spawn→合并→settle，finally 释放逆序后清理', async () => {
+    const { spec, events } = makeSpec()
+    expect(await runAssembly({ id: 't' }, spec)).toBe('settled')
+    expect(events).toEqual([
+      'acquire:a',
+      'acquire:b',
+      'iso:create',
+      'iso:persist',
+      'spawn',
+      'merge',
+      'settle',
+      'release:b', // ② 逆序
+      'release:a',
+      'discard', // ② 释放先于清理
+    ])
+  })
+
+  test('① 跳合并且短路产出：settle 不执行', async () => {
+    const { spec, events } = makeSpec({
+      mergePhase: () => ({ skip: 'park', keep: true, then: { produce: async () => 'parked' } }),
+    })
+    expect(await runAssembly({ id: 't' }, spec)).toBe('parked')
+    expect(events).not.toContain('settle')
+    expect(events).not.toContain('merge')
+    expect(events).not.toContain('discard') // keep=true ⇒ 不清理
+  })
+
+  test('① 跳合并但 then=settle：settle 仍执行，keep 生效', async () => {
+    const { spec, events } = makeSpec({
+      mergePhase: () => ({ skip: 'not-done', keep: false, then: 'settle' }),
+    })
+    expect(await runAssembly({ id: 't' }, spec)).toBe('settled')
+    expect(events).toContain('settle')
+    expect(events).not.toContain('merge')
+    expect(events).toContain('discard') // keep=false ⇒ 清理
+  })
+
+  test('⑤ merge 抛出的默认处置：保留 iso + 标记合并失败 + 按失败 settle', async () => {
+    const { spec, events } = makeSpec({
+      mergeBack: {
+        run: async () => {
+          throw new Error('merge boom')
+        },
+      },
+    })
+    expect(await runAssembly({ id: 't' }, spec)).toBe('settled')
+    expect(events).toContain('markMergeFailed')
+    expect(events).not.toContain('discard') // 默认 keep
+  })
+
+  test('⑤ 覆写 onThrow=rethrow：保持 L1 的重抛语义，且 keep 由覆写决定', async () => {
+    const { spec, events } = makeSpec({
+      mergeBack: {
+        run: async () => {
+          throw new Error('boom')
+        },
+        disposition: { onThrow: () => ({ keep: true, then: 'rethrow' }) },
+      },
+    })
+    await expect(runAssembly({ id: 't' }, spec)).rejects.toThrow('boom')
+    expect(events).not.toContain('discard')
+    expect(events).not.toContain('markMergeFailed') // 覆写后不走默认
+  })
+
+  test('conflict-human 默认：keep + settle；覆写可改为 abandon 形态', async () => {
+    const base = { run: async () => ({ kind: 'conflict-human' as const, detail: 'x' }) }
+    const d = makeSpec({ mergeBack: base })
+    expect(await runAssembly({ id: 't' }, d.spec)).toBe('settled')
+    expect(d.events).not.toContain('discard')
+
+    const o = makeSpec({
+      mergeBack: {
+        ...base,
+        disposition: { onConflictHuman: () => ({ keep: false, produce: async () => 'abandoned' }) },
+      },
+    })
+    expect(await runAssembly({ id: 't' }, o.spec)).toBe('abandoned')
+    expect(o.events).toContain('discard') // keep=false
+  })
+
+  test('③ persistBase=in-setup：落基线抛出走 onIsoSetupFailure', async () => {
+    const { spec, events } = makeSpec({
+      iso: {
+        create: async () => ({ passthrough: false }),
+        persistBase: 'in-setup',
+        persist: async () => {
+          throw new Error('persist boom')
+        },
+      },
+    })
+    expect(await runAssembly({ id: 't' }, spec)).toBe('iso-setup-failed')
+    expect(events).not.toContain('spawn')
+  })
+
+  test('③ persistBase=in-window：落基线抛出继续传播（不吞成 iso-setup-failed）', async () => {
+    const { spec } = makeSpec({
+      iso: {
+        create: async () => ({ passthrough: false }),
+        persistBase: 'in-window',
+        persist: async () => {
+          throw new Error('persist boom')
+        },
+      },
+    })
+    await expect(runAssembly({ id: 't' }, spec)).rejects.toThrow('persist boom')
+  })
+
+  test('④ 线级 catch-all 产出结果；未声明则抛出直穿', async () => {
+    const caught = makeSpec({
+      spawn: async () => {
+        throw new Error('spawn boom')
+      },
+      onUnhandledThrow: () => 'caught',
+    })
+    expect(await runAssembly({ id: 't' }, caught.spec)).toBe('caught')
+    expect(caught.events).not.toContain('settle')
+
+    const bare = makeSpec({
+      spawn: async () => {
+        throw new Error('spawn boom')
+      },
+    })
+    await expect(runAssembly({ id: 't' }, bare.spec)).rejects.toThrow('spawn boom')
+  })
+
+  test('② 许可在异常路径上也必然释放', async () => {
+    const { spec, events } = makeSpec({
+      spawn: async () => {
+        throw new Error('boom')
+      },
+    })
+    await expect(runAssembly({ id: 't' }, spec)).rejects.toThrow()
+    expect(events.filter((e) => e.startsWith('release:'))).toEqual(['release:b', 'release:a'])
+  })
+
+  test('② 清理失败被吞并记 warn，不改变装配结果', async () => {
+    const warns: string[] = []
+    const { spec } = makeSpec({
+      discardIso: async () => {
+        throw new Error('discard boom')
+      },
+      log: { warn: (m: string) => warns.push(m) } as never,
+    })
+    expect(await runAssembly({ id: 't' }, spec)).toBe('settled')
+    expect(warns).toEqual(['iso discard failed'])
+  })
+})
