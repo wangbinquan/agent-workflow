@@ -47,6 +47,10 @@ interface SeedOpts {
     | 'review'
     | 'clarify'
   inventoryJson?: string | null
+  /** RFC-297: 冻结在 node_run 上的运行时协议（NULL = 早于 RFC-111 的行 = opencode）。 */
+  runtime?: 'opencode' | 'claude-code' | null
+  startupVerificationJson?: string | null
+  runStatus?: 'done' | 'running' | 'failed'
 }
 
 async function seed(
@@ -99,13 +103,134 @@ async function seed(
     iteration: 0,
     retryIndex: 0,
     reviewIteration: 0,
-    status: 'done',
+    status: opts.runStatus ?? 'done',
     promptText: 'go',
     startedAt: 1000,
     inventorySnapshotJson: opts.inventoryJson ?? null,
+    runtime: opts.runtime ?? null,
+    startupVerificationJson: opts.startupVerificationJson ?? null,
   })
   return { taskId, nodeRunId }
 }
+
+// RFC-297 —— 用户实证 bug 的**端到端**回归锁：Claude Code 运行时下的清单。
+//
+// 纯函数层（facesFromStartupObservation）已在 rfc297-inventory-read 覆盖；这一组
+// 锁的是 DB 行 → 按 driver 表态分派 → HTTP 响应 这条完整链路，因为 bug 恰恰出在
+// 分派上：旧读端只认 opencode 的快照列，claude 行拿到 NULL 后被当成「插件失败」。
+describe('RFC-297 GET /inventory — claude-code 运行时', () => {
+  const claudeVerification = JSON.stringify({
+    declared: {
+      mcpServers: ['rag'],
+      skippedDisabledMcps: [],
+      skills: ['lint', 'never-loaded'],
+      subagents: ['auditor'],
+      plugins: [],
+      tools: null,
+      droppedParams: [],
+      unsupported: [],
+      unobservable: [],
+    },
+    observation: {
+      state: 'verified',
+      source: 'claude-init',
+      mcpServers: [{ name: 'rag', status: 'connected' }],
+      tools: ['Read', 'Write'],
+      agents: ['auditor', 'general-purpose'],
+      skills: ['lint'],
+    },
+    verification: {
+      observation: 'verified',
+      mcpUnusable: [],
+      skillsMissing: ['never-loaded'],
+      subagentsMissing: [],
+      toolsMissing: [],
+      pluginsMissing: [],
+    },
+  })
+
+  test('inventory 列恒 NULL 的 claude run 也能拿到清单（不再报「插件失败」）', async () => {
+    const { db, app } = buildApp()
+    const { taskId, nodeRunId } = await seed(db, {
+      runtime: 'claude-code',
+      inventoryJson: null, // claude 从不写这一列
+      startupVerificationJson: claudeVerification,
+    })
+    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as RuntimeInventoryResponse
+    expect(body.observation.state).toBe('captured')
+    if (body.observation.state !== 'captured') return
+    const { faces } = body.observation
+    expect(faces.agents?.map((a) => a.key)).toEqual(['auditor', 'general-purpose'])
+    expect(faces.skills?.map((s) => s.key)).toEqual(['lint', 'never-loaded'])
+    expect(faces.tools?.map((t) => t.key)).toEqual(['Read', 'Write'])
+    expect(faces.mcps?.map((m) => [m.key, m.status])).toEqual([['rag', 'connected']])
+  })
+
+  test('来源对账：注入的记 injected、运行时自带记 ambient、声明未加载记 declared-missing', async () => {
+    const { db, app } = buildApp()
+    const { taskId, nodeRunId } = await seed(db, {
+      runtime: 'claude-code',
+      startupVerificationJson: claudeVerification,
+    })
+    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+    const body = (await res.json()) as RuntimeInventoryResponse
+    if (body.observation.state !== 'captured') throw new Error('expected captured')
+    const { faces } = body.observation
+    expect(faces.agents?.find((a) => a.key === 'auditor')?.provenance).toBe('injected')
+    expect(faces.agents?.find((a) => a.key === 'general-purpose')?.provenance).toBe('ambient')
+    // 与告警 banner 报的 skillsMissing 是同一个名字（同源判定）。
+    expect(faces.skills?.find((s) => s.key === 'never-loaded')?.provenance).toBe('declared-missing')
+    // declared.tools === null（本轮未约束工具集）→ 工具全部算 ambient，不产生缺失。
+    expect(faces.tools?.every((t) => t.provenance === 'ambient')).toBe(true)
+  })
+
+  test('响应带回 claude 的表态：plugins 面 unsupported、tools 面 supported', async () => {
+    const { db, app } = buildApp()
+    const { taskId, nodeRunId } = await seed(db, {
+      runtime: 'claude-code',
+      startupVerificationJson: claudeVerification,
+    })
+    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+    const body = (await res.json()) as RuntimeInventoryResponse
+    expect(body.declaration.plugins.support).toBe('unsupported')
+    expect(body.declaration.tools.support).toBe('supported')
+    // claude 只按名字报告，富字段整列不该出现在界面上。
+    expect(body.declaration.agents.fields.mode).toBe('unsupported')
+    expect(body.declaration.mcps.fields.status).toBe('supported')
+  })
+
+  test('claude run 完全没有验证记录 → unavailable，且 reason 不再甩锅插件', async () => {
+    const { db, app } = buildApp()
+    const { taskId, nodeRunId } = await seed(db, {
+      runtime: 'claude-code',
+      inventoryJson: null,
+      startupVerificationJson: null,
+    })
+    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+    const body = (await res.json()) as RuntimeInventoryResponse
+    expect(body.observation.state).toBe('unavailable')
+    if (body.observation.state === 'unavailable') {
+      expect(body.observation.reason).toBe('no-observation-recorded')
+      // 旧行为会给出 'file-missing'（→「插件可能加载失败」）。
+      expect(body.observation.reason).not.toBe('file-missing')
+    }
+  })
+
+  test('NULL runtime（RFC-111 之前的存量行）仍按 opencode 处理', async () => {
+    const { db, app } = buildApp()
+    const { taskId, nodeRunId } = await seed(db, { runtime: null, inventoryJson: null })
+    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+    const body = (await res.json()) as RuntimeInventoryResponse
+    // opencode 的观测源是快照文件，缺失即 file-missing（保持既有诊断）。
+    expect(body.observation.state).toBe('unavailable')
+    if (body.observation.state === 'unavailable') {
+      expect(body.observation.reason).toBe('file-missing')
+    }
+    expect(body.declaration.tools.support).toBe('unsupported')
+  })
+})
 
 describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
   beforeEach(() => {
