@@ -223,5 +223,10 @@ RFC 初稿及修订稿经 contract、UX/a11y、tests/rollback 三路只读门审
   确认数据库零写入。
 - 本地定向结果：shared 79/79、frontend 136/136、Webhook 专项 24/24、Webhook→CodeHost 真机 2/2、RFC-295
   live-daemon E2E 2/2、Darwin 受影响视觉 7/7，三包 typecheck 与 owned-source ESLint/Prettier/diff-check 均通过。
-- 仍待：在仅含 RFC-295 的干净提交快照上完成 final `bun run gate:local`，并在已获授权的 commit/push 后取得
-  Linux hosted 权威像素与 exact-SHA CI。此前保持 Draft，不把 Darwin 结果冒充 Linux hosted。
+- 最终本地门禁已在干净后继快照 `3e85956e` 完整通过：backend 9990 pass / 35 skip / 0 fail、frontend
+  6366/6366、shared 2033/2033，三包 typecheck、全仓 lint/format 与 dependency rules 全绿。第一次受限沙箱重跑因
+  loopback listen/进程探针权限失败；正常权限下一轮的 5 个历史 5 秒硬超时均按原 seed 连续复跑 3 次通过，随后
+  唯一 final `bun run gate:local` 以 0 退出，不把环境红冒充产品红或把定向复跑冒充最终门禁。
+- RFC-295 实现与审核后的 Linux 基线已随 `c4a845c0` 推入 `origin/main`；该 exact SHA 的主 CI run
+  `31670110969` 36/36 job 全绿，Linux visual run `31670110869` 42/42 场景全绿。后继 `3e85956e` 继续满足
+  main CI run `31672205401` 36/36 与 OpenCode 双版本 integration run `31672205349` 全绿；未声称 live service 部署。

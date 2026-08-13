@@ -267,11 +267,11 @@ Webhook collector 不包含 git/enum/files/upload 的 workflow input mapping。�
       custom/unsupported/invalid 与全 action×provider 完整；无隐式 target 错写。
 - [x] 键盘、CJK IME Escape、nested Dialog、Field action label、ARIA/live region、target revision/stale fence、
       outside/unmount/pending transition、undo/redo 与手机 viewport 有专项测试。
-- [ ] 五张现有 Agent inspector 默认态视觉基线更新，并新增至少一张打开 picker 的桌面基线和一张
+- [x] 五张现有 Agent inspector 默认态视觉基线更新，并新增至少一张打开 picker 的桌面基线和一张
       Webhook 配置窄屏基线；不把 Agent 默认态冒充为全 surface 视觉覆盖。
 - [x] shared stable sink family / active projection 与被实际 target builder 消费的前端 adapter registry 有双向棘轮；
       新增 sink 而未接 adapter，或 adapter 不再被实际字段消费时测试失败。
-- [ ] 定向 shared/frontend/E2E/visual 全绿，最终 `bun run gate:local` 全绿；本 RFC 的 Draft/Done
+- [x] 定向 shared/frontend/E2E/visual 全绿，最终 `bun run gate:local` 全绿；本 RFC 的 Draft/Done
       状态与真实实施/验证边界一致。
 
 ## 8. 批准记录
