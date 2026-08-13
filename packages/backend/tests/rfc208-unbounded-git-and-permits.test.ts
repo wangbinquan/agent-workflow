@@ -172,7 +172,9 @@ describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup
       const straightLine = new RegExp(`=\\s*await\\s+(?:state\\.)?${pool}\\.acquire\\(\\)`).test(
         schedulerSource,
       )
-      const viaSkeleton = new RegExp(`pools:\\s*\\[(?:state\\.)?${pool}[,\\]]`).test(schedulerSource)
+      const viaSkeleton = new RegExp(`pools:\\s*\\[(?:state\\.)?${pool}[,\\]]`).test(
+        schedulerSource,
+      )
       expect(
         straightLine || viaSkeleton,
         `${pool} 既不走直线取许可也未声明为骨架 pool——本守卫已对它零覆盖`,

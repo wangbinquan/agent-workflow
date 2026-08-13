@@ -1347,15 +1347,15 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
             // 里既有的 keepHookIso 赋值决定（processUnreaped 那一维经 keepFromOutcome）。
             return { skip: 'park', keep: keepHookIso, then: { produce: async () => s.out } }
           }
-        if (!(iso as IsoHandle).passthrough && req.discardWrites === true) {
-          // RFC-167 (Codex impl-gate P1): the orchestrator GENERATION run must
-          // never mutate the canonical worktree — validation and the human
-          // confirm gate happen AFTER this run, so even a syntactically perfect
-          // (let alone malformed or later-rejected) attempt's worktree writes
-          // are dropped wholesale. The iso row closes as 'abandoned' (this
-          // generation's delta never reaches canonical — exactly the abandon
-          // semantics), so runTask-entry replays can never materialize it;
-          // discardNodeIso in the finally removes the worktree itself.
+          if (!(iso as IsoHandle).passthrough && req.discardWrites === true) {
+            // RFC-167 (Codex impl-gate P1): the orchestrator GENERATION run must
+            // never mutate the canonical worktree — validation and the human
+            // confirm gate happen AFTER this run, so even a syntactically perfect
+            // (let alone malformed or later-rejected) attempt's worktree writes
+            // are dropped wholesale. The iso row closes as 'abandoned' (this
+            // generation's delta never reaches canonical — exactly the abandon
+            // semantics), so runTask-entry replays can never materialize it;
+            // discardNodeIso in the finally removes the worktree itself.
             return {
               skip: 'abandon',
               keep: false,

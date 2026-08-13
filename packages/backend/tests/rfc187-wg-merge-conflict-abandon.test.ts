@@ -84,7 +84,7 @@ describe('RFC-187 T8 — source lock (the wg hook abandons instead of stranding)
     // 反向：撞冲突那条路径上**绝不**出现保留声明（abandon 块必须保持清理）。
     // 射程只取 onConflictHuman 声明自身（到它的 produce 收尾为止）——迁移后
     // onThrow 的 `keep: true` 就紧挨在它后面，用宽窗口会把兄弟声明误判成违规。
-    const conflictDecl = /onConflictHuman: \(detail\) => \(\{[\s\S]*?\n            \}\),/.exec(SCHED)
+    const conflictDecl = /onConflictHuman: \(detail\) => \(\{[\s\S]*?\n {12}\}\),/.exec(SCHED)
     expect(conflictDecl).not.toBeNull()
     expect(conflictDecl?.[0] ?? '').not.toMatch(/keep: true/)
   })
