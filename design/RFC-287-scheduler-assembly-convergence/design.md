@@ -620,9 +620,19 @@ L6 :8362 if (result.processUnreaped === true) keepAggIso = true
    被静默丢掉，后果正是注释警告的「同一棵工作树两个写者」。
    ⇒ spec 增 `keepFromOutcome?(outcome): boolean`，在 spawn 之后、mergePhase 之前
    求值；置真则 keep 恒真且不被后续相位下调。
-2. **脚本线 L7 没有这一条**（区间 4360-4904 内零命中）。大概率有意（脚本节点无
-   会话续接语义），但与「脚本线少抄一个 try/catch」是同一类风险 ⇒ T5（L7 迁移）
-   前须向该改动的作者确认是有意还是漏配，结论写进 §10.1 矩阵。
+2. **脚本线 L7 没有这一条——已查证为「结构性不适用」，不是漏配**（2026-08-13
+   T5 开工前核实，结论写入 §10.1 矩阵）。三条证据：
+   ① `processUnreaped` **只**存在于 `runner.ts` 产出的 `RunResult`（:434 声明、
+      :2255 子进程杀不掉、:2344 需保留运行时活状态两处赋值）；
+   ② 脚本线走的是**另一个执行原语** `runScriptProcess`（scriptRun.ts:434），其
+      返回类型 `ScriptRunOutcome` **零命中** `processUnreaped`；
+   ③ 引入该屏障的 commit（`8744abc2`）自述用途是「Propagate unreaped-process
+      barriers … so a failed transition cannot admit a second writer」——屏障为
+      **原生会话过渡失败**（conversation_reset 边界、resume id 失效）而设，前提
+      是该线有可续接的原生会话；脚本线无此前提（其区间内 session/resume/followup
+      仅 1 处命中）。
+   ⇒ T5 迁移时**不**给脚本线声明 `keepFromOutcome`，并在其 spec 处留一行注释写明
+   本结论，防止后人看到「四条有一条没有」而「顺手补齐」。
 3. `shouldRetryNodeFailure` 的第二参进 `retryPolicy.shouldRetry` 的入参面。
 
 **协作记录**：该 session 改完后**主动扩了本 RFC 的 T1 夹具**
