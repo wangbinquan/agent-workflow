@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import i18next from 'i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { InventorySnapshot } from '@agent-workflow/shared'
+import type { InventoryDeclaration, RuntimeInventoryResponse } from '@agent-workflow/shared'
 import { RuntimeInventorySection } from '../src/components/inventory/RuntimeInventorySection'
 import { zhCN } from '../src/i18n/zh-CN'
 import { enUS } from '../src/i18n/en-US'
@@ -28,7 +28,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function mockInventory(taskId: string, nodeRunId: string, body: InventorySnapshot): void {
+function mockInventory(taskId: string, nodeRunId: string, body: RuntimeInventoryResponse): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (req) => {
     const url = typeof req === 'string' ? req : req.toString()
     if (url.includes(`/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)) {
@@ -46,10 +46,28 @@ function withQc(node: React.ReactNode) {
   return <QueryClientProvider client={qc}>{node}</QueryClientProvider>
 }
 
-const IN_FLIGHT_SNAPSHOT: InventorySnapshot = {
-  captured: false,
-  reason: 'in-flight',
-  message: null,
+// RFC-297: 响应形状换成 {observation, declaration}；in-flight 从「未捕获」归入
+// `not-produced`——还在跑不是故障。文案意图不变：不许赖插件。
+const OPENCODE_DECLARATION: InventoryDeclaration = {
+  agents: {
+    support: 'supported',
+    fields: { mode: 'supported', model: 'supported', source: 'supported' },
+  },
+  skills: {
+    support: 'supported',
+    fields: { source: 'supported', path: 'supported', description: 'supported' },
+  },
+  mcps: {
+    support: 'supported',
+    fields: { status: 'supported', type: 'supported', hint: 'supported' },
+  },
+  plugins: { support: 'supported', fields: { source: 'supported' } },
+  tools: { support: 'unsupported', fields: {} },
+}
+
+const IN_FLIGHT_SNAPSHOT: RuntimeInventoryResponse = {
+  declaration: OPENCODE_DECLARATION,
+  observation: { state: 'not-produced', reason: 'in-flight', message: null },
 }
 
 describe('RFC-062 RuntimeInventorySection — in-flight reason', () => {

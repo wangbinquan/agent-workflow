@@ -38,29 +38,34 @@ describe('RFC-029 wiring lock', () => {
     expect(src).not.toContain('RuntimeInventorySection')
   })
 
-  test('section component pulls the four sub-tables', () => {
+  // RFC-297: 四张手写表（AgentsTable/SkillsTable/McpsTable/PluginsTable）已退役，
+  // 由一张按 driver 表态选列的 InventoryFaceTable 取代——加 `tools` 面时若照抄
+  // 第五张，运行时之间的字段差异就会永远散在五个组件里。
+  test('section component renders faces through the single generic table', () => {
     const src = readFileSync(
       resolve(ROOT, 'components/inventory/RuntimeInventorySection.tsx'),
       'utf-8',
     )
-    expect(src).toContain('AgentsTable')
-    expect(src).toContain('SkillsTable')
-    expect(src).toContain('McpsTable')
-    expect(src).toContain('PluginsTable')
+    expect(src).toContain('InventoryFaceTable')
+    // 面集合与列集都由后端带回的 declaration 驱动，前端不认识任何运行时名字。
+    expect(src).toContain('declaration')
+    expect(src).not.toMatch(/'opencode'|'claude-code'/)
     // RFC-146: the capability gate is the shared agent-kind predicate now
     // (isPromptCapableKind was a local copy of it and is gone).
     expect(src).toContain('isAgentNodeKind')
     expect(src).toContain("'inventory'")
   })
 
-  test('StatusBadge is the single source for MCP status chips (only McpsTable imports it)', () => {
-    const mcps = readFileSync(resolve(ROOT, 'components/inventory/McpsTable.tsx'), 'utf-8')
-    expect(mcps).toContain('StatusBadge')
-    const agents = readFileSync(resolve(ROOT, 'components/inventory/AgentsTable.tsx'), 'utf-8')
-    const skills = readFileSync(resolve(ROOT, 'components/inventory/SkillsTable.tsx'), 'utf-8')
-    const plugins = readFileSync(resolve(ROOT, 'components/inventory/PluginsTable.tsx'), 'utf-8')
-    expect(agents).not.toContain('StatusBadge')
-    expect(skills).not.toContain('StatusBadge')
-    expect(plugins).not.toContain('StatusBadge')
+  test('StatusBadge is the single source for MCP status chips (only the generic table imports it)', () => {
+    const table = readFileSync(
+      resolve(ROOT, 'components/inventory/InventoryFaceTable.tsx'),
+      'utf-8',
+    )
+    expect(table).toContain('StatusBadge')
+    const section = readFileSync(
+      resolve(ROOT, 'components/inventory/RuntimeInventorySection.tsx'),
+      'utf-8',
+    )
+    expect(section).not.toContain('StatusBadge')
   })
 })

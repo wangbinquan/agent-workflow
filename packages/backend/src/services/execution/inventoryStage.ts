@@ -1,0 +1,98 @@
+// RFC-297 T10 —— 清单组装 stage：**运行时无关**的那一份。
+//
+// 这是本 RFC 结构收益的落点。旧路上「把运行时报告的东西变成一份可展示的清单」
+// 要在每个 driver 里各写一遍（opencode 映射它的 dump 文件、claude 映射它的 init
+// 事件）；改走事件流后 driver 只负责把自己的原始形态规范化成事件载荷，
+// **对账与组装只有这一份代码**，它既不知道 opencode 有个插件，也不知道 claude
+// 有个 init 事件。第三个运行时接入时这里一行都不用改。
+//
+// 与告警 banner 的关系：本 stage 算出的 `declared-missing` 与 `verifyStartup`
+// 报的 missing 共用 shared 的同一个纯函数（RFC-297 T3），所以「清单里标已声明
+// 未加载」与「banner 报未加载」不可能给出不同的名字集。
+
+import {
+  INVENTORY_FACES,
+  INVENTORY_FACE_TO_DECLARED_KEY,
+  assembleFace,
+  type InventoryFaces,
+  type ObservedInventoryFaces,
+  type RuntimeInventoryObservation,
+} from '@agent-workflow/shared'
+import type { DeclaredManifestV1 } from '@/services/execution/agentInjection'
+import type { EventStage } from '@/services/execution/eventPipeline'
+import type { RuntimeDriverCapabilities } from '@/services/runtime/types'
+
+export interface InventoryStageOptions {
+  /** 平台本轮声明注入了什么——来源对账的另一半。 */
+  declared: DeclaredManifestV1
+  /** 冻结运行时的静态表态：决定「没观测到」该报 not-produced 还是 unavailable。 */
+  capabilities: RuntimeDriverCapabilities
+  /**
+   * 本轮是否可能产生新观测。false = 复用了既有原生会话（RFC-042 同会话信封
+   * 追问），对 `observationRequiresFreshRun` 的运行时来说这不是故障而是常态。
+   */
+  freshRun: boolean
+  /** 由调用方注入，便于测试固定时间戳。 */
+  now?: () => number
+}
+
+export interface InventoryStage extends EventStage {
+  /** 子进程退出后取本轮观测结论。 */
+  result(): RuntimeInventoryObservation
+}
+
+/**
+ * 平台声明清单里某一面的名字集。`tools` 是唯一可能为 null 的面——null 表示
+ * 「本轮没有约束工具集」，此时运行时报告的工具全部算 ambient，且不产生任何
+ * declared-missing（没声明过的东西谈不上缺失）。
+ */
+function declaredNamesFor(
+  declared: DeclaredManifestV1,
+  face: (typeof INVENTORY_FACES)[number],
+): readonly string[] | null {
+  const key = INVENTORY_FACE_TO_DECLARED_KEY[face]
+  const value = declared[key]
+  if (value === null) return null
+  return Array.isArray(value) ? value : []
+}
+
+export function createInventoryStage(opts: InventoryStageOptions): InventoryStage {
+  const now = opts.now ?? Date.now
+  // 一轮里只认第一份载荷。claude 的 init 是一次性的；opencode 的补发事件也
+  // 只有一个。多一份就说明运行时行为变了，此时保留最早那份（与既有
+  // 「one-shot startup inventory」语义一致）。
+  let payloadFaces: ObservedInventoryFaces | null = null
+  let capturedAt = 0
+
+  return {
+    name: 'runtime-inventory',
+    // 清单是呈现面：它挂了不该把一次本来成功的 run 判失败（design §7.1）。
+    errorPolicy: 'isolate',
+    onEvent(event) {
+      if (payloadFaces !== null) return
+      const inventory = event.data?.inventory
+      if (inventory === undefined) return
+      payloadFaces = inventory.faces
+      capturedAt = event.timestamp ?? now()
+    },
+    result(): RuntimeInventoryObservation {
+      if (payloadFaces === null) {
+        // 没观测到，分两种情况——混为一谈会复活 RFC-280 P2-E 的告警噪音。
+        if (opts.capabilities.startupObservation === 'none') {
+          return { state: 'not-produced', reason: 'runtime-has-no-inventory' }
+        }
+        if (opts.capabilities.observationRequiresFreshRun && !opts.freshRun) {
+          return { state: 'not-produced', reason: 'session-reused' }
+        }
+        return { state: 'unavailable', reason: 'no-observation' }
+      }
+      const faces: InventoryFaces = {}
+      for (const face of INVENTORY_FACES) {
+        const observed = payloadFaces[face]
+        if (observed === undefined) continue
+        faces[face] = assembleFace(observed, declaredNamesFor(opts.declared, face))
+      }
+      return { state: 'captured', capturedAt, faces }
+    },
+  }
+}

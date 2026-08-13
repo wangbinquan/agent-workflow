@@ -168,6 +168,12 @@ export type RuntimeInventoryPayload = z.infer<typeof RuntimeInventoryPayloadSche
 // 观测结果（落 node_runs.runtime_inventory_json）
 // ---------------------------------------------------------------------------
 
+/**
+ * 观测源自带的诊断详情（如 dump 插件报的 `agents() call threw`）。可选 + 可空：
+ * 统一形状不许因为「统一」就把既有诊断吃掉——那正是本 RFC 要修的病。
+ */
+const MessageSchema = z.string().nullable().optional()
+
 export const RuntimeInventoryObservationSchema = z.discriminatedUnion('state', [
   z.object({
     state: z.literal('captured'),
@@ -179,12 +185,12 @@ export const RuntimeInventoryObservationSchema = z.discriminatedUnion('state', [
      */
     provenanceUnavailable: z.boolean().optional(),
   }),
-  /** 本轮按设计就不产生观测（opencode followup 复用会话）——正常状态，不告警。 */
-  z.object({ state: z.literal('not-produced'), reason: z.string() }),
+  /** 本轮按设计就不产生观测（还在跑 / 该节点类型不产清单）——正常状态，不告警。 */
+  z.object({ state: z.literal('not-produced'), reason: z.string(), message: MessageSchema }),
   /** 观测源应该在却缺失。 */
-  z.object({ state: z.literal('unavailable'), reason: z.string() }),
+  z.object({ state: z.literal('unavailable'), reason: z.string(), message: MessageSchema }),
   /** 观测源在但坏了。 */
-  z.object({ state: z.literal('malformed'), reason: z.string() }),
+  z.object({ state: z.literal('malformed'), reason: z.string(), message: MessageSchema }),
 ])
 export type RuntimeInventoryObservation = z.infer<typeof RuntimeInventoryObservationSchema>
 

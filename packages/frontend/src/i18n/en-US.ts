@@ -5054,14 +5054,30 @@ export const enUS: Resources = {
       title: 'Runtime Inventory',
       pending: 'Capturing inventory…',
       empty: '(none)',
-      chip: { agents: 'A', skills: 'S', mcps: 'M', plugins: 'P' },
-      subtitle: { agents: 'Agents', skills: 'Skills', mcps: 'MCP servers', plugins: 'Plugins' },
+      loadFailed: 'Failed to load the inventory.',
+      faceUnobservable: 'This runtime does not report this kind; injection cannot be confirmed.',
+      fieldUnobservable: 'This runtime does not report this field.',
+      chip: { agents: 'A', skills: 'S', mcps: 'M', plugins: 'P', tools: 'T' },
+      subtitle: {
+        agents: 'Agents',
+        skills: 'Skills',
+        mcps: 'MCP servers',
+        plugins: 'Plugins',
+        tools: 'Tools',
+      },
+      provenance: {
+        injected: 'injected here',
+        ambient: 'runtime built-in',
+        declaredMissing: 'declared, not loaded',
+      },
       col: {
         name: 'Name',
+        provenance: 'Origin',
         mode: 'Mode',
         model: 'Model',
-        source: 'Source',
+        source: 'Config source',
         path: 'Path',
+        description: 'Description',
         desc: 'Description',
         status: 'Status',
         type: 'Type',
@@ -5093,6 +5109,14 @@ export const enUS: Resources = {
         // RFC-062: still-running agent run, runner hasn't read inventory.json
         // into the DB yet. Phrasing avoids blaming the plugin (which is fine).
         'in-flight': 'Run in progress, inventory generating…',
+        // RFC-297: added when the read end became runtime-agnostic. The first
+        // few are "there was never going to be one" — not failures, and above
+        // all no longer blaming a plugin Claude Code does not even have.
+        'runtime-has-no-inventory': 'This runtime does not provide a startup inventory.',
+        'no-observation-recorded': 'No startup inventory was recorded for this run.',
+        'no-init-event': 'The runtime reported no startup event, so no inventory is available.',
+        'inventory-not-read': 'No inventory was read for this run.',
+        'session-reused': 'This run reused an existing session, so no new inventory was produced.',
       },
     },
     startupVerification: {

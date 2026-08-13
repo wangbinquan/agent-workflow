@@ -115,10 +115,9 @@ const ALLOW_EMPTY = new Map<string, number>([
   ['routes/tasks.new.tsx', 1],
   // P3 (Codex re-review): combined-className escapees the exact-`"muted"` regex missed.
   ['components/agents/DependencyTreePreview.tsx', 3],
-  ['components/inventory/AgentsTable.tsx', 1],
-  ['components/inventory/McpsTable.tsx', 1],
-  ['components/inventory/PluginsTable.tsx', 1],
-  ['components/inventory/SkillsTable.tsx', 1],
+  // RFC-297: 四张手写表合并为一张按 declaration 选列的通用表，空态出现次数随之
+  // 收敛到一处。
+  ['components/inventory/InventoryFaceTable.tsx', 1],
   ['components/node-session/ConversationFlow.tsx', 1],
   ['components/structure/StructuralGraph.tsx', 1],
 ])

@@ -78,7 +78,7 @@ import type { ResolvedDeepConfig } from '@/services/structuralDiff/deep/service'
 import { structuralScopeSchema } from '@agent-workflow/shared'
 import { handleMultipartTaskStart } from '@/services/multipartTaskStart'
 import { getSessionTree } from '@/services/sessionView'
-import { getInventorySnapshot } from '@/services/runtime'
+import { getRuntimeInventory } from '@/services/execution/inventoryRead'
 import { getStartupVerification } from '@/services/execution/startupVerificationRead'
 import { listWorktreeDir, readWorktreeFile } from '@/services/worktreeFiles'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
@@ -1096,11 +1096,18 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
-  // RFC-029: Runtime inventory snapshot rendered at the top of the
-  // NodeDetailDrawer's Session tab. The snapshot was written into
-  // node_runs.inventory_snapshot_json by the runner after `child.exited`,
-  // sourced from a file the framework-injected `aw-inventory-dump.mjs`
-  // opencode plugin produced inside the per-run dir.
+  // Runtime inventory rendered at the top of the NodeDetailDrawer's Session tab:
+  // what the child process actually loaded this run.
+  //
+  // RFC-297 made this read end runtime-agnostic. It was RFC-029's opencode-only
+  // path — it read `node_runs.inventory_snapshot_json`, which only the injected
+  // `aw-inventory-dump.mjs` opencode plugin ever fills, so on Claude Code it
+  // found NULL and rendered "no inventory file (the plugin may have failed to
+  // load)" — blaming a plugin that runtime does not even have. The service now
+  // sources each runtime from its own observation (claude: the `system/init`
+  // report kept in the startup-verification record) and returns one shape plus
+  // the driver's static declaration, so the frontend picks columns off the
+  // declaration instead of knowing runtime names.
   registerRoute(
     app,
     {
@@ -1111,9 +1118,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Node run resolved inventory',
     },
     async (c) => {
-      return c.json(
-        await getInventorySnapshot(deps.db, c.req.param('id'), c.req.param('nodeRunId')),
-      )
+      return c.json(await getRuntimeInventory(deps.db, c.req.param('id'), c.req.param('nodeRunId')))
     },
   )
 

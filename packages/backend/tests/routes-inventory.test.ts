@@ -1,6 +1,7 @@
 // RFC-029 T6 — integration tests for
 // GET /api/tasks/:taskId/node-runs/:nodeRunId/inventory.
-// Locks: 200 captured / 200 uncaptured (NULL column) / 200 parse-failed
+// Locks: 200 captured / 200 unavailable (NULL column) / 200 malformed
+// RFC-297: 响应形状由 InventorySnapshot 换成 {observation, declaration}。
 // (corrupt JSON) / 404 task / 404 node-run / 410 non-agent kind.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -11,7 +12,11 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import type { InventorySnapshot, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import type {
+  RuntimeInventoryResponse,
+  WorkflowDefinition,
+  WorkflowNode,
+} from '@agent-workflow/shared'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -132,12 +137,15 @@ describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
     const { taskId, nodeRunId } = await seed(db, { inventoryJson: JSON.stringify(snapshot) })
     const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as InventorySnapshot
-    expect(body.captured).toBe(true)
-    if (body.captured) {
-      expect(body.agents[0]?.name).toBe('coder')
-      expect(body.mcps[0]?.status).toBe('connected')
+    const body = (await res.json()) as RuntimeInventoryResponse
+    expect(body.observation.state).toBe('captured')
+    if (body.observation.state === 'captured') {
+      expect(body.observation.faces.agents?.[0]?.name).toBe('coder')
+      expect(body.observation.faces.mcps?.[0]?.status).toBe('connected')
     }
+    // RFC-297：响应同时带上该 run 所用运行时的静态表态，前端据此选列。
+    expect(body.declaration.plugins.support).toBe('supported')
+    expect(body.declaration.tools.support).toBe('unsupported')
   })
 
   test('200 captured:false reason=file-missing when column is NULL (legacy row or pre-run-not-yet)', async () => {
@@ -145,9 +153,11 @@ describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
     const { taskId, nodeRunId } = await seed(db, { inventoryJson: null })
     const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as InventorySnapshot
-    expect(body.captured).toBe(false)
-    if (!body.captured) expect(body.reason).toBe('file-missing')
+    const body = (await res.json()) as RuntimeInventoryResponse
+    expect(body.observation.state).toBe('unavailable')
+    if (body.observation.state === 'unavailable') {
+      expect(body.observation.reason).toBe('file-missing')
+    }
   })
 
   test('200 captured:false reason=parse-failed when stored JSON is corrupt', async () => {
@@ -155,9 +165,11 @@ describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
     const { taskId, nodeRunId } = await seed(db, { inventoryJson: '{ broken json' })
     const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as InventorySnapshot
-    expect(body.captured).toBe(false)
-    if (!body.captured) expect(body.reason).toBe('parse-failed')
+    const body = (await res.json()) as RuntimeInventoryResponse
+    expect(body.observation.state).toBe('malformed')
+    if (body.observation.state === 'malformed') {
+      expect(body.observation.reason).toBe('parse-failed')
+    }
   })
 
   test('404 when the task does not exist', async () => {

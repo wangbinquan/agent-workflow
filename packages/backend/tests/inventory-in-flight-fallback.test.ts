@@ -26,7 +26,12 @@ import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { runRootFor } from '../src/services/runtime/opencode/inventory'
-import type { InventorySnapshot, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import type {
+  InventorySnapshot,
+  RuntimeInventoryResponse,
+  WorkflowDefinition,
+  WorkflowNode,
+} from '@agent-workflow/shared'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -170,13 +175,15 @@ describe('RFC-062 GET /inventory in-flight fallback', () => {
     writeFileSync(join(runRoot, 'inventory.json'), JSON.stringify(makeCapturedSnapshot()), 'utf-8')
     const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as InventorySnapshot
-    expect(body.captured).toBe(true)
-    if (body.captured) {
-      expect(body.agents[0]?.name).toBe('coder')
-      expect(body.skills[0]?.name).toBe('foo')
-      expect(body.mcps[0]?.status).toBe('connected')
-      expect(body.plugins[0]?.specifier).toBe('file:///a.mjs')
+    const body = (await res.json()) as RuntimeInventoryResponse
+    expect(body.observation.state).toBe('captured')
+    if (body.observation.state === 'captured') {
+      const { faces } = body.observation
+      expect(faces.agents?.[0]?.name).toBe('coder')
+      expect(faces.skills?.[0]?.name).toBe('foo')
+      expect(faces.mcps?.[0]?.status).toBe('connected')
+      // plugins 的面内键是 specifier（RFC-297 统一形状把它同时放进 key 与 name）。
+      expect(faces.plugins?.[0]?.key).toBe('file:///a.mjs')
     }
   })
 
@@ -189,11 +196,12 @@ describe('RFC-062 GET /inventory in-flight fallback', () => {
     mkdirSync(runRootFor(taskId, nodeRunId), { recursive: true })
     const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as InventorySnapshot
-    expect(body.captured).toBe(false)
-    if (!body.captured) {
-      expect(body.reason).toBe('in-flight')
-      expect(body.message).toBeNull()
+    const body = (await res.json()) as RuntimeInventoryResponse
+    // RFC-297: 「还在跑，清单尚未生成」是正常状态 → not-produced，不是故障。
+    expect(body.observation.state).toBe('not-produced')
+    if (body.observation.state === 'not-produced') {
+      expect(body.observation.reason).toBe('in-flight')
+      expect(body.observation.message).toBeNull()
     }
   })
 
@@ -207,9 +215,11 @@ describe('RFC-062 GET /inventory in-flight fallback', () => {
     // Intentionally do NOT create runRoot.
     const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as InventorySnapshot
-    expect(body.captured).toBe(false)
-    if (!body.captured) expect(body.reason).toBe('plugin-load-failed')
+    const body = (await res.json()) as RuntimeInventoryResponse
+    expect(body.observation.state).toBe('unavailable')
+    if (body.observation.state === 'unavailable') {
+      expect(body.observation.reason).toBe('plugin-load-failed')
+    }
   })
 
   test('AC-3: running + DB NULL + runRoot file corrupt → reason=parse-failed', async () => {
@@ -220,9 +230,12 @@ describe('RFC-062 GET /inventory in-flight fallback', () => {
     writeFileSync(join(runRoot, 'inventory.json'), '{ this is not json', 'utf-8')
     const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as InventorySnapshot
-    expect(body.captured).toBe(false)
-    if (!body.captured) expect(body.reason).toBe('parse-failed')
+    const body = (await res.json()) as RuntimeInventoryResponse
+    // 观测源在但坏了 → malformed（与「压根没有」区分开）。
+    expect(body.observation.state).toBe('malformed')
+    if (body.observation.state === 'malformed') {
+      expect(body.observation.reason).toBe('parse-failed')
+    }
   })
 
   test('AC-4: running + DB has valid JSON → DB path wins (file on disk is ignored)', async () => {
@@ -242,9 +255,11 @@ describe('RFC-062 GET /inventory in-flight fallback', () => {
     )
     const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as InventorySnapshot
-    expect(body.captured).toBe(true)
-    if (body.captured) expect(body.agents[0]?.name).toBe('from-db')
+    const body = (await res.json()) as RuntimeInventoryResponse
+    expect(body.observation.state).toBe('captured')
+    if (body.observation.state === 'captured') {
+      expect(body.observation.faces.agents?.[0]?.name).toBe('from-db')
+    }
   })
 
   // AC-5 terminal states (done/canceled/failed): DB NULL is authoritative even
@@ -267,9 +282,11 @@ describe('RFC-062 GET /inventory in-flight fallback', () => {
       )
       const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
       expect(res.status).toBe(200)
-      const body = (await res.json()) as InventorySnapshot
-      expect(body.captured).toBe(false)
-      if (!body.captured) expect(body.reason).toBe('file-missing')
+      const body = (await res.json()) as RuntimeInventoryResponse
+      expect(body.observation.state).toBe('unavailable')
+      if (body.observation.state === 'unavailable') {
+        expect(body.observation.reason).toBe('file-missing')
+      }
     })
   }
 
@@ -300,9 +317,11 @@ describe('RFC-062 GET /inventory in-flight fallback', () => {
     const { taskId, nodeRunId } = await seed(db, { runStatus: 'pending', inventoryJson: null })
     const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as InventorySnapshot
-    expect(body.captured).toBe(false)
-    if (!body.captured) expect(body.reason).toBe('file-missing')
+    const body = (await res.json()) as RuntimeInventoryResponse
+    expect(body.observation.state).toBe('unavailable')
+    if (body.observation.state === 'unavailable') {
+      expect(body.observation.reason).toBe('file-missing')
+    }
   })
 
   test('dump-plugin internal error stub is propagated verbatim — NOT promoted to in-flight', async () => {
@@ -321,11 +340,12 @@ describe('RFC-062 GET /inventory in-flight fallback', () => {
     )
     const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as InventorySnapshot
-    expect(body.captured).toBe(false)
-    if (!body.captured) {
-      expect(body.reason).toBe('dump-plugin-internal-error')
-      expect(body.message).toBe('agents() call threw')
+    const body = (await res.json()) as RuntimeInventoryResponse
+    expect(body.observation.state).toBe('unavailable')
+    if (body.observation.state === 'unavailable') {
+      expect(body.observation.reason).toBe('dump-plugin-internal-error')
+      // RFC-297：统一形状必须原样带上插件给的诊断详情，不许因为「统一」吃掉它。
+      expect(body.observation.message).toBe('agents() call threw')
     }
   })
 })

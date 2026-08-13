@@ -4440,14 +4440,20 @@ export interface Resources {
       title: string
       pending: string
       empty: string
-      chip: { agents: string; skills: string; mcps: string; plugins: string }
-      subtitle: { agents: string; skills: string; mcps: string; plugins: string }
+      loadFailed: string
+      faceUnobservable: string
+      fieldUnobservable: string
+      chip: { agents: string; skills: string; mcps: string; plugins: string; tools: string }
+      subtitle: { agents: string; skills: string; mcps: string; plugins: string; tools: string }
+      provenance: { injected: string; ambient: string; declaredMissing: string }
       col: {
         name: string
+        provenance: string
         mode: string
         model: string
         source: string
         path: string
+        description: string
         desc: string
         status: string
         type: string
@@ -4471,6 +4477,11 @@ export interface Resources {
         'dump-plugin-internal-error': string
         'non-agent-kind': string
         'in-flight': string
+        'runtime-has-no-inventory': string
+        'no-observation-recorded': string
+        'no-init-event': string
+        'inventory-not-read': string
+        'session-reused': string
       }
     }
     startupVerification: {
@@ -10277,14 +10288,30 @@ export const zhCN: Resources = {
       title: '运行时清单',
       pending: '正在捕获清单…',
       empty: '（无）',
-      chip: { agents: '智', skills: '技', mcps: 'M', plugins: '插' },
-      subtitle: { agents: '智能体', skills: '技能', mcps: 'MCP 服务', plugins: '插件' },
+      loadFailed: '清单加载失败。',
+      faceUnobservable: '该运行时不报告这一类，无法确认注入是否生效。',
+      fieldUnobservable: '该运行时不报告此字段。',
+      chip: { agents: '智', skills: '技', mcps: 'M', plugins: '插', tools: '工' },
+      subtitle: {
+        agents: '智能体',
+        skills: '技能',
+        mcps: 'MCP 服务',
+        plugins: '插件',
+        tools: '工具',
+      },
+      provenance: {
+        injected: '本平台注入',
+        ambient: '运行时自带',
+        declaredMissing: '已声明未加载',
+      },
       col: {
         name: '名称',
+        provenance: '来源',
         mode: '模式',
         model: '模型',
-        source: '来源',
+        source: '配置来源',
         path: '路径',
+        description: '描述',
         desc: '描述',
         status: '状态',
         type: '类型',
@@ -10302,6 +10329,13 @@ export const zhCN: Resources = {
       },
       reason: {
         'file-missing': '未生成清单文件（插件可能加载失败）。',
+        // RFC-297：这些是跨运行时统一后新增的归因。前几条属「本来就不会有」，
+        // 不是故障——尤其不能再对 Claude Code 甩「插件可能加载失败」那口锅。
+        'runtime-has-no-inventory': '该运行时不提供启动清单。',
+        'no-observation-recorded': '本轮未记录启动清单。',
+        'no-init-event': '运行时未报告启动事件，无法获取清单。',
+        'inventory-not-read': '本轮未读取到清单。',
+        'session-reused': '本轮复用了已有会话，未产生新的清单。',
         'parse-failed': '清单文件格式异常。',
         'opencode-pure-mode': 'opencode 处于 --pure 模式，未启用外部插件。',
         'plugin-load-failed': '插件写入或加载失败。',

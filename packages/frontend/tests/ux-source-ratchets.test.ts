@@ -124,10 +124,8 @@ function isNonTextInput(attribute: ts.JsxAttribute | undefined): boolean {
 // These are leaf table renderers embedded in RuntimeInventorySection's drawer;
 // the drawer is the scroll viewport and these are not standalone page tables.
 const EMBEDDED_TABLE_ALLOWLIST = new Map([
-  ['components/inventory/AgentsTable.tsx', 'runtime inventory drawer leaf'],
-  ['components/inventory/McpsTable.tsx', 'runtime inventory drawer leaf'],
-  ['components/inventory/PluginsTable.tsx', 'runtime inventory drawer leaf'],
-  ['components/inventory/SkillsTable.tsx', 'runtime inventory drawer leaf'],
+  // RFC-297: 四张同类叶子表合并为一张按 driver 表态选列的通用表。
+  ['components/inventory/InventoryFaceTable.tsx', 'runtime inventory drawer leaf'],
 ])
 
 describe('RFC-198 global UX source ratchets', () => {
