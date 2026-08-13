@@ -408,48 +408,79 @@ parentNodeRunId/consumed(+nonce)；L7 :4533 只带 consumed，而其初次铸行
   本地 `git http-backend` 起 `http://127.0.0.1:<port>/repo.git`（公开面天然接受）。
   e2e 依赖面不止 commit-push.spec.ts：还有 main.spec.ts 三处 + backend 10 个经
   公开 HTTP 面用 `file://` 的测试文件（AC-8 的「118 文件」口径作废）。
+- **旧 boot healer 必须同步退役**（P2-5）：`scheduledTasks.ts:807` 的
+  `healScheduledLaunchPayloads` 每次 boot 都用 `pathToFileURL` 把遗留 path payload
+  **生产成 `file://`**，G5 后等于「出厂即死」；且它对已是 v2-clean 的 payload 早退
+  （:875），而 `file://` 行正是 v2-clean ⇒ 新的一次性禁用 healer 不能沿用那段控制流。
 - **G5 存量定时任务**（P2-1）：不是「每次触发失败留记录」——连续失败达
   `maxFailures` 会**自动熔断静默停发**（scheduledTaskScheduler.ts:141-142，webhook
   同形）。改为复用 boot healer 模式（scheduledTasks.ts:806-885）做**一次性显式
   禁用 + 可读 lastError**。
+- **G6 落点改在启动调用点、并锁 locale**（第二轮门 P2-4/P2-9）：窗口若落在
+  `gitRepoCache.ts` 库层，会打红一批以「不可达 URL」为夹具的现有用例（bun 默认
+  5s/用例，而 `git-repo-cache.test.ts:230-262` 正是拿 `https://127.0.0.1:1/…` 当
+  网络失败夹具），且 `withTimeout` 包住 `withUrlLock` 会让同 URL 排队 N×window，
+  还会连带仓库组导入/批量导入 ⇒ **窗口落在启动调用点（task.ts:722 一带）**，经
+  deps 可注入（测试置 0）。另：`nonInteractiveGitEnv()`（util/git.ts:35-47）
+  **不设 `LC_ALL=C`**，非英文 locale 下 git stderr 会本地化 ⇒ 分类器全部落进
+  「无法归类=不重试」的保守分支、G6 静默空转 ⇒ 分类器必须强制 `LC_ALL=C` 或改用
+  退出码 + 结构化探测。
 - **G6 定性与前提**：见 proposal §2 与 C6。另需明确 `repoGroup.ts:397` /
   `repoBatchImport.ts:464`（唯二容忍 fetch 失败的消费者）是否纳入；窗口在
   `withUrlLock` **锁内还是锁外**必须写死（P2-6：`withTimeout` 只 reject caller
   不取消底层，同 URL 排队会 N×window）；建议 per-urlHash 记「最近一次失败结论」
   供窗口内后来者直接复用。`gitCloneTimeoutMs` 在启动路径**未接线**（task.ts:722/747
   不传，落硬编码 30min）——顺带接线（P2-7）。冷克隆失败（:651-665）分类器也要覆盖。
-- **G7 三节补充**：
-  (a) **`''` 三态**：今天 `worktreePath === ''` 与「终态 + 已墓碑」绑死
-  （task.ts:2284 failed + :2342 prunedAt）。G7 造出「`''` + pending + prunedAt
-  NULL」第三态，而 `lifecycle.ts:407` 的存在性自愈对空串**直接跳过**、
-  `gc.ts:133/:257` 对 `''` 不补墓碑也不自愈 ⇒ 必须：改 :407 为
-  `row.worktreePath === '' || !existsSync(...)`；为准备阶段定义**显式重试入口**
-  （`retryTask` **不存在**——现有导出只有 `retryNode`/`resumeTask`/`syncTaskWorkflow`），
-  绕过 `assertWorktreePresentForResume`、走独立 allowedFrom 并在 §5 列出转移增改。
-  (b) **INSERT 时不可知字段**远不止 worktreePath：`repoPath`/`repoUrl`/
-  `cachedRepoId`/`baseBranch`/`branch`/`baseCommit`/`repoCount`/`spaceKind`/
-  `workspacePrunedAt` 与 **`task_repos` 全表**、`task_space_nodes` 都在同一
-  `dbTxSync`（:2255-2437）；ownership/cleanup 协议（`taskRowCommitted`、
-  `space.cleanup.state`、`materializingSpaces`、`workflowLaunchCommitHook`）全部
-  建立在「先物化后提交」上，需给出新形态与占位/回填时序。
-  (c) **boot reap / auto-resume 分流**：`orphans.ts:51-99` 把 pending 一律收割成
-  interrupted → `autoResume.ts:69` 调 resumeTask → `assertWorktreePresentForResume`
-  对 `''` 必 410「worktree was likely reclaimed by worktree GC」（误导）+ 消耗恢复
-  熔断计数 ⇒ 准备阶段 pending 必须单独分流为「重跑准备」。
-  (d) **安全护栏**（P1-7）：空 `worktreePath` 会让 `resolve('')`/`join('',x)`/
-  `git -C ""`/`spawn({cwd:''})` 落到 daemon 自身工作目录——worktree-files 路由
-  （:99，五个读路由里唯一缺 `=== ''` 守卫）、codeIntel snapshot（无前置守卫）、
-  upload（**写**原语）、commitPushRunner（会往 daemon 自己的仓提交推送）、
-  runner/managedProcess/scriptRun（spawn）、workspaceBoundary（空挂载混入
-  allowlist）。**AC-10 必须逐条列入**；并在 `util/git.ts` 的 `runGit` 与
-  `execution/managedProcess.ts:253` 对空 cwd **硬失败**（一行一处，把半个「静默
-  走错目录」类塌缩成响亮失败）。
-  (e) **适用边界**（P2-9）：`multipartTaskStart` 先物化再写上传物、
-  `deps.materializedSpace`/`preCreatedWorktree`/`callLaunch` 三条 handoff 天然绕过
-  `materializeSpace` ⇒ C7 的契约变更显式限定到 JSON-body 分支，两种启动语义并存
-  是有意为之。
-  (f) `stuckTaskDetector` 的 `pending > 5min` 告警（:68-70）在大仓克隆下必然误报，
-  准备阶段需豁免或调阈值。
+- **G7 重写（2026-08-13 用户定音：「下载仓库本来就是任务的一部分」）**——第二轮门
+  的两条设计级矛盾（复活门互斥 P1-2、取消/停机失效 P1-3）**由这次重构消解**：
+
+  **概念**：仓库准备不是任务的**前置条件**，而是任务的**第一个执行步骤**。据此：
+  1. **任务落库即 `running`**（不经「存在但没开始」的 pending 限中态），
+     `AbortController` 在准备开始**之前**注册进 `activeTasks` ⇒ 取消 / 优雅停机
+     （`abortAllActiveTasks`）/ 删除的 `task-active` 闸**自然生效**；回写
+     `worktreePath` 与 kick scheduler 之前做一次状态 CAS 复检，杜绝「已取消的任务
+     被准备完成拉起来执行」（P1-3 关闭）。
+  2. **准备产生一条合成 node_run**，保留 nodeId `__repo_prep__`——与
+     `__commit_push__`（`shared/lifecycle.ts:217` `COMMIT_PUSH_NODE_PREFIX`、
+     `services/commitPush.ts:71` `commitPushNodeId`）**同族先例**。隔离机制已验证：
+     调度 frontier 由**工作流定义**驱动（`scopeNodeById` / `topLevelIds`），定义里
+     没有该 id 的行天然进不了图、也不污染 workflowSnapshot / 校验 / 导出；前端时间线
+     按行展示故**天然可见**（用户拍板：要能看到「正在准备仓库」、失败看得到 git
+     报错原文、能单独重试）。
+  3. **失败** ⇒ 该行 failed + 任务 failed，git stderr 原文进可读错误面。
+  4. **重试 = 现有节点重试机制**（`retryNode`），**不是任务复活** ⇒ 第二轮门 P1-2
+     的死结消失：不必改 `lifecycle.ts:407`、不必依赖「prunedAt 为 NULL」这个被自己
+     抹掉的判别式、不必新增状态或转移。AC-11 相应改写为「对 `__repo_prep__` 失败行
+     点重试 = 重跑准备」。
+  5. **不变量改写**：「有任务行就有工作树」→「**`__repo_prep__` 行 done 之后才有
+     工作树**」。判别式是该行状态，与墓碑/prunedAt 正交。
+  6. **仍需逐处处理**（判别式已明确，工作量不变）：worktreePath 空窗口内的消费点
+     ——后端四扇读洞（`routes/worktree-files.ts:99`、`services/worktreeFileContent.ts:181`、
+     `services/codeIntel/fileSymbols.ts:30-51`、`routes/port-artifacts.ts:121`；
+     `routes/tasks.ts:1159/:1186` 两条同族**已有** `=== ''` 守卫可抄）与**全部前端
+     消费点**（`tasks.detail.tsx:1919-1924` 的 `resumeStatus()` 把空路径**写死**成
+     `worktree-missing`、渲染「重新发起」提示且不出恢复按钮 ⇒ 不改则 AC-11 在 UI 上
+     点不到；连带 `lib/task-detail-tabs.ts:94/:119-121`、`tasks.detail.tsx:754/:1037`）。
+     AC-10 必须含前端项。
+  7. **boot reap / auto-resume**：准备中的任务是 `running` ⇒ 重启后落 `interrupted`
+     并进 auto-resume；`resumeTask` 需识别「`__repo_prep__` 未 done」并**重跑准备**，
+     而不是 `assertWorktreePresentForResume`（task.ts:2571）直接 410。
+  8. **仍未解、须在 T13 给出设计**：`task.ts:2255-2437` 单事务里随物化一起落库的
+     其余字段（`repoPath`/`repoUrl`/`cachedRepoId`/`baseBranch`/`branch`/`baseCommit`/
+     `repoCount`/`spaceKind` 与 **`task_repos` 全表**、`task_space_nodes`）的占位与
+     回填时序；以及所有权/清理协议（`taskRowCommitted` :2439、
+     `space.cleanup.state='committed'` :2440、`materializingSpaces`、
+     `workflowLaunchCommitHook` :2453）在倒置后的新形态。另：
+     `TaskStatusUpdateExtra` 白名单（lifecycle.ts:288-300）**不含 `worktreePath`**，
+     回填要么扩白名单、要么接受与状态写撕裂——T13 须定。
+  9. **适用边界**（P2-9）：`multipartTaskStart.ts:200` 与 `agentLaunch.ts:459`（有
+     上传时）都**先物化再写上传物**，天然保持同步；`deps.materializedSpace` /
+     `preCreatedWorktree` / `callLaunch` 三条 handoff 绕过 `materializeSpace`。
+     ⇒ C7 显式限定：**无上传的 JSON-body 分支走异步准备，有上传的分支保持同步**，
+     两种语义并存是有意为之。
+  10. `stuckTaskDetector` 的 pending 阈值（:68-70，子任务已放宽到 30min :73）与
+      `childBudget` 的 `COUNTED_STATUSES` 含 pending、`workgroup/room.ts:350`、
+      `worktreeBackup.ts:103-112` 均需按「准备中 = running」复核。
 
 ### 10.8 锚点勘误（两半场合计）
 

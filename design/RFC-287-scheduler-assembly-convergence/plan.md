@@ -53,9 +53,16 @@
   grandfather 的启动校验拒绝（proposal §7）。
 - T12 G6 窗口化重试与硬失败（独立 commit）：错误分类纯函数 + 窗口重试 + 红→绿对
   （网络类重试成功 / 窗口耗尽失败 / 鉴权类不重试）。
-- T13 G7 准备异步化（**最大一批，独立 commit**）：①`worktreePath` 519 文件全面
-  清点分类；②顺序倒置（先落 pending 行）；③失败转 failed 且原因可读；④重试的
-  状态机分派；⑤定时/webhook 同套；⑥不变量消费点逐处测试。
+- T13 G7 准备成为任务的第一个执行步骤（**最大一批，独立 commit**）：
+  ①`worktreePath` 消费点清点分类（src 49 文件 / 519 处）+ 前端消费面；
+  ②任务落库即 running + AbortController 前置注册 + 回写前状态 CAS；
+  ③合成 `__repo_prep__` 运行记录（同 `__commit_push__` 先例）与时间线展示；
+  ④失败落该行 + 任务 failed，git stderr 原文可读；⑤重试复用 `retryNode`；
+  ⑥boot reap / auto-resume 识别「准备未完成」改重跑准备；⑦其余随物化落库字段
+  （含 `task_repos` / `task_space_nodes`）的占位与回填时序 + 所有权/清理协议新形态
+  - `TaskStatusUpdateExtra` 白名单取舍；⑧C7 边界（有上传分支保持同步）；
+    ⑨`stuckTaskDetector` / `childBudget` / `workgroup room` / `worktreeBackup` 按
+    「准备中=running」复核。
 - T14 实现门（双路独立子代理，按半场切）+ plan/STATE 记账。
 
 > **T11-T13 顺序更正（启动路径半场 P2-5/P2-12）**：原序 T11(G5)→T12(G6)→T13(G7)
