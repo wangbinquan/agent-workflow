@@ -33,7 +33,13 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { cachedRepos, scheduledTasks, taskRepos } from '@/db/schema'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { classifyBaseRef, GIT_TIMEOUT_EXIT_CODE, nonInteractiveGitEnv, runGit } from '@/util/git'
+import {
+  classifyBaseRef,
+  GIT_ABORTED_EXIT_CODE,
+  GIT_TIMEOUT_EXIT_CODE,
+  nonInteractiveGitEnv,
+  runGit,
+} from '@/util/git'
 import { hardenGitArgs } from '@/util/gitHardening'
 import { createLogger } from '@/util/log'
 import { leaseGitCredential } from '@/services/gitCredential'
@@ -94,7 +100,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise
  */
 async function spawnGit(
   args: string[],
-  opts?: { timeoutMs?: number; env?: Record<string, string> },
+  opts?: { timeoutMs?: number; env?: Record<string, string>; signal?: AbortSignal },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn({
     ...platformSpawnOptionsForHost(),
@@ -112,24 +118,63 @@ async function spawnGit(
     // RFC-208: with a deadline, run in our own process group so the timer can
     // SIGKILL the whole tree. `git clone` delegates to ssh / credential helpers,
     // and killing only the direct child leaves those alive holding the pipes.
-    ...(opts?.timeoutMs !== undefined ? { detached: true } : {}),
+    ...(opts?.timeoutMs !== undefined || opts?.signal !== undefined ? { detached: true } : {}),
   })
-  if (opts?.timeoutMs === undefined) {
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ])
-    return { stdout, stderr, exitCode }
-  }
-  let timedOut = false
-  const timer = setTimeout(() => {
-    timedOut = true
+
+  // 进程组 SIGKILL——timeoutMs 与 signal 共用同一条杀法（见上面 RFC-208 的理由）。
+  const killTree = (): void => {
     try {
       process.kill(-proc.pid, 'SIGKILL')
     } catch {
       proc.kill('SIGKILL')
     }
+  }
+
+  let aborted = false
+  const onAbort = (): void => {
+    aborted = true
+    killTree()
+  }
+  if (opts?.signal !== undefined) {
+    if (opts.signal.aborted) onAbort()
+    else opts.signal.addEventListener('abort', onAbort, { once: true })
+  }
+  const detachAbort = (): void => {
+    opts?.signal?.removeEventListener('abort', onAbort)
+  }
+
+  if (opts?.timeoutMs === undefined) {
+    if (opts?.signal === undefined) {
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ])
+      return { stdout, stderr, exitCode }
+    }
+    // 带 signal：与 timeout 分支同构——先等退出，再给管道读取一个上限（存活的
+    // 孙进程可能继承写端，让 `.text()` 永远等不到 EOF）。
+    try {
+      const outP = new Response(proc.stdout).text().catch(() => '')
+      const errP = new Response(proc.stderr).text().catch(() => '')
+      const exitCode = await proc.exited
+      const stdout = await raceWithFallback(outP, 250, '')
+      const stderr = await raceWithFallback(errP, 250, '')
+      if (!aborted) return { stdout, stderr, exitCode }
+      // 取消必须可诊断，且绝不能被误判成成功——被 SIGKILL 的进程按平台可能报 0/null。
+      return {
+        stdout,
+        stderr: `${stderr}\ngit aborted (canceled; killed)`.trim(),
+        exitCode: exitCode === 0 ? GIT_ABORTED_EXIT_CODE : exitCode,
+      }
+    } finally {
+      detachAbort()
+    }
+  }
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    killTree()
   }, opts.timeoutMs)
   try {
     const outP = new Response(proc.stdout).text().catch(() => '')
@@ -145,6 +190,7 @@ async function spawnGit(
     }
   } finally {
     clearTimeout(timer)
+    detachAbort()
   }
 }
 

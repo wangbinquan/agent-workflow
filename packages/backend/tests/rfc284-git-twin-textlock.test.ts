@@ -54,8 +54,14 @@ describe('rfc284 T18: runGit ↔ spawnGit 镜像段落双向锁', () => {
 
   test('镜像语义要件在两侧同时在场（单侧删除/改写即红）', () => {
     const TWIN_FRAGMENTS = [
-      // detached-iff-timeout：仅带 deadline 的 spawn 进独立进程组（RFC-208）。
-      '...(opts?.timeoutMs !== undefined ? { detached: true } : {})',
+      // detached-iff-(timeout|signal)：带 deadline **或**可取消的 spawn 进独立进程组
+      // （RFC-208 组杀前提）。RFC-287 T13 给两侧同时加了 AbortSignal——取消要真杀
+      // 正在克隆的 git，而不是等它跑完；判据随之从「仅超时」扩到「超时或可取消」。
+      '...(opts?.timeoutMs !== undefined || opts?.signal !== undefined ? { detached: true } : {})',
+      // 组杀被抽成 killTree，超时与取消共用同一条（两侧必须同时抽，否则又漂移）。
+      'const killTree = (): void => {',
+      // 取消同样不能被误判成成功——与超时那条重映射对称。
+      'exitCode === 0 ? GIT_ABORTED_EXIT_CODE : exitCode',
       // 组杀负 PGID + 单进程回退。
       "process.kill(-proc.pid, 'SIGKILL')",
       // RFC-252 G1：每个生产 git spawn 都必须过 hardenGitArgs。
