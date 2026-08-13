@@ -253,6 +253,72 @@ describe('runNode RFC-029 inventory snapshot', () => {
     expect(row.runtimeInventoryJson).not.toBeNull()
   })
 
+  // RFC-297 AC-5 的端到端锁：**零注入节点**（没挂任何技能 / MCP / 子代理）。
+  //
+  // 这是本 RFC 唯一一个用户可感知的缺口：观测此前只在 `declaredHasContent(declared)`
+  // 为真时才随启动验证记录落库，declared 全空的节点于是永远查不到「这一轮到底
+  // 加载了什么」。此前只有纯函数覆盖（buildRuntimeInventoryObservation），这条补
+  // 真跑 runner 的端到端——两列的**分工**必须同时成立，少一半都算没修好。
+  test('AC-5 零注入节点：清单照落，验证记录不落（两者受不同的门）', async () => {
+    const agent = makeAgent() // 无 skills / mcps / dependsOn → declared 全空
+    const nodeRunId = await seedRun(h.db, h.taskId)
+    const fixturePath = join(h.appHome, 'zero-injection-inventory.json')
+    writeFileSync(
+      fixturePath,
+      JSON.stringify({
+        schemaVersion: 1,
+        capturedAt: 1700000000000,
+        // 平台什么都没注入，运行时报告的都是它自带的。
+        agents: [{ name: 'built-in', mode: 'primary', source: 'native' }],
+        skills: [],
+        mcps: [],
+        plugins: [],
+      }),
+      'utf-8',
+    )
+
+    await withEnv(
+      {
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'ok' }),
+        MOCK_OPENCODE_WRITE_INVENTORY_FROM: fixturePath,
+      },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'n1',
+          agent,
+          inputs: {},
+          worktreePath: h.worktreePath,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          skills: [],
+          appHome: h.appHome,
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          db: h.db,
+          nodeKind: 'agent-single',
+        }),
+    )
+
+    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
+    // 清单：无条件落库——「这一轮加载了什么」谁都想知道。
+    expect(row.runtimeInventoryJson).not.toBeNull()
+    const observation: RuntimeInventoryObservation = JSON.parse(row.runtimeInventoryJson!)
+    expect(observation.state).toBe('captured')
+    if (observation.state === 'captured') {
+      expect(observation.faces.agents?.[0]?.name).toBe('built-in')
+      // 平台没注入过任何东西 → 报告的一切都记 ambient，且不产生 declared-missing。
+      expect(observation.faces.agents?.[0]?.provenance).toBe('ambient')
+      expect(
+        Object.values(observation.faces)
+          .flat()
+          .some((e) => e.provenance === 'declared-missing'),
+      ).toBe(false)
+    }
+    // 验证：仍受 declaredHasContent 门控——没注入就不存在「注入是否生效」这个问题，
+    // 落一条 record 只会让 banner 报出无意义的「无法验证」（RFC-280 P2-E 噪音）。
+    expect(row.startupVerificationJson).toBeNull()
+  })
+
   test('non-agent node kind: inventory column stays NULL (column not populated)', async () => {
     // Important behavior: non-agent kinds never go through runner.runNode in
     // production, but if a test/scheduler ever did, we want the inventory

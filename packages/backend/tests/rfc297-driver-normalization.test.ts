@@ -11,9 +11,9 @@
 //     恒不出现——放松的条目类型靠这条测试收紧（design §2.2）。
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { getRuntimeDriver } from '@/services/runtime'
 import { parseEvent } from '@/services/runtime/claudeCode/events'
 import type { InventorySnapshotCaptured } from '@agent-workflow/shared'
@@ -186,5 +186,50 @@ describe('claude 不实现 drainFinalEvents（它的观测在流里）', () => {
   test('该能力缺席即表态', () => {
     expect(getRuntimeDriver('claude-code').drainFinalEvents).toBeUndefined()
     expect(getRuntimeDriver('opencode').drainFinalEvents).toBeDefined()
+  })
+})
+
+describe('AC-10 单次解析（本 RFC 的核心收益，必须有锁）', () => {
+  test('claude 的 init 行在 parseEvent 内只被 JSON.parse 一次', () => {
+    // 收口前这一行被解析三遍：parseEvent 一遍、parseUnusableMcpServers 一遍、
+    // parseStartupInventory 再一遍。清单载荷现在由 parseEvent 在**同一次**解析里
+    // 填好——若日后有人图省事在 parseEvent 内部再调一个「自己 JSON.parse 一遍」
+    // 的 helper 来取某个面，这条会立刻红。
+    const original = JSON.parse
+    let calls = 0
+    try {
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      JSON.parse = ((text: string, reviver?: never) => {
+        calls += 1
+        return original(text, reviver)
+      }) as typeof JSON.parse
+      const ev = parseEvent(INIT_LINE)
+      expect(ev?.data?.inventory?.faces.tools?.length).toBe(2)
+    } finally {
+      JSON.parse = original
+    }
+    expect(calls).toBe(1)
+  })
+
+  test('driver 上不再有「只为再解析一遍」而存在的方法', () => {
+    // T11 删掉的两个：parseUnusableMcpServers / parseStartupInventory。它们与
+    // parseEvent 对同一行各判一次 `type==='system' && subtype==='init'`。
+    const claude = getRuntimeDriver('claude-code') as unknown as Record<string, unknown>
+    expect(claude.parseStartupInventory).toBeUndefined()
+    expect(claude.parseUnusableMcpServers).toBeUndefined()
+  })
+
+  test('runner 的 pump 不再对同一行做清单相关的二次解析（源码锁）', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
+      'utf-8',
+    )
+    // 锁**调用形式**而不是词——文件里那两个名字仍出现在解释历史的注释里
+    // （反引号引用），锁词会把说明文字也判红，反而逼人删掉解释。
+    expect(src).not.toMatch(/\.parseStartupInventory\(/)
+    expect(src).not.toMatch(/\.parseUnusableMcpServers\(/)
+    // 清单只从事件载荷取，不再自己碰原始行。
+    expect(src).toContain('consumeInventoryPayload')
+    expect(src).not.toMatch(/JSON\.parse\(line\)/)
   })
 })
