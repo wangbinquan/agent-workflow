@@ -16,9 +16,13 @@ import { ulid } from 'ulid'
 
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
 import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
+import {
+  claimNewRuntimeSession,
+  markRuntimeSessionResetPending,
+} from '../src/services/runtimeSessionLease'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_000_000
@@ -82,6 +86,118 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     expect(
       (await listRecoveryEventsForTask(db, taskId)).some((e) => e.kind === 'periodic-reap'),
     ).toBe(true)
+  })
+
+  test('periodic reap deletes a reset-pending native lease instead of leaking it', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedRunningTask(db)
+    const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
+    const lease = claimNewRuntimeSession(db, {
+      protocol: 'claude-code',
+      sessionId: 'periodic-reset-old',
+      taskId,
+      nodeId: 'n1',
+      currentNodeRunId: runId,
+      leaseNonceDigest: 'periodic-reset-nonce',
+      leasedAt: NOW - 40_000,
+    })
+    expect(markRuntimeSessionResetPending(db, lease)).toBe(true)
+
+    const res = await reconcileDeadRunningRuns({
+      db,
+      graceMs: 1000,
+      now: NOW,
+      probeProcessAlive: () => false,
+      reapHeldNativeSessionProcess: async () => 'not-alive',
+    })
+
+    expect(res.reapedRuns).toEqual([runId])
+    expect(
+      db
+        .select()
+        .from(runtimeSessionLeases)
+        .where(eq(runtimeSessionLeases.sessionId, 'periodic-reset-old'))
+        .get(),
+    ).toBeUndefined()
+  })
+
+  test('periodic reap keeps a held native lease when a missing PID leaves child reap unproven', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedRunningTask(db)
+    const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
+    db.update(nodeRuns).set({ pid: null }).where(eq(nodeRuns.id, runId)).run()
+    claimNewRuntimeSession(db, {
+      protocol: 'claude-code',
+      sessionId: 'periodic-unproven-native',
+      taskId,
+      nodeId: 'n1',
+      currentNodeRunId: runId,
+      leaseNonceDigest: 'periodic-unproven-nonce',
+    })
+
+    const res = await reconcileDeadRunningRuns({
+      db,
+      graceMs: 1000,
+      now: NOW,
+      probeProcessAlive: () => false,
+      reapHeldNativeSessionProcess: async () => 'no-pid',
+    })
+
+    expect(res.reapedRuns).toEqual([])
+    expect(res.reapedTasks).toEqual([])
+    expect(
+      db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, runId)).get(),
+    ).toEqual({ status: 'running' })
+    expect(
+      db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).get(),
+    ).toEqual({ status: 'running' })
+    expect(
+      db
+        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+        .from(runtimeSessionLeases)
+        .where(eq(runtimeSessionLeases.sessionId, 'periodic-unproven-native'))
+        .get(),
+    ).toEqual({ holder: runId })
+  })
+
+  test('periodic reap keeps a held native lease when a live PID has a command mismatch', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedRunningTask(db)
+    const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
+    claimNewRuntimeSession(db, {
+      protocol: 'claude-code',
+      sessionId: 'periodic-command-mismatch-native',
+      taskId,
+      nodeId: 'n1',
+      currentNodeRunId: runId,
+      leaseNonceDigest: 'periodic-command-mismatch-nonce',
+    })
+
+    const res = await reconcileDeadRunningRuns({
+      db,
+      graceMs: 1000,
+      now: NOW,
+      // The coarse probe cannot tell a dead process from a recycled/live PID
+      // whose command no longer matches the recorded binary.
+      probeProcessAlive: () => false,
+      reapHeldNativeSessionProcess: async () => 'command-mismatch',
+    })
+
+    expect(res.reapedRuns).toEqual([])
+    expect(res.reapedTasks).toEqual([])
+    expect(
+      db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, runId)).get(),
+    ).toEqual({ status: 'running' })
+    expect(
+      db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).get(),
+    ).toEqual({ status: 'running' })
+    expect(
+      db
+        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+        .from(runtimeSessionLeases)
+        .where(eq(runtimeSessionLeases.sessionId, 'periodic-command-mismatch-native'))
+        .get(),
+    ).toEqual({ holder: runId })
   })
 
   test('run within grace is not even a candidate', async () => {

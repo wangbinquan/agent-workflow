@@ -4,10 +4,12 @@
 // / --disallowed-tools), prompt-over-stdin (D12), persona = agent.bodyMd in the
 // system-prompt file (D6), stream-json envelope → outputs, session capture,
 // token accumulation from the result event, and is_error/exit → failed.
+// Regression 2026-08-13: Claude can explicitly reset a conversation within one
+// process; the next root frame's native id becomes the resumable identity.
 
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import type { Logger } from '../src/util/log'
 import type { RuntimeProfile } from '../src/services/runtimeRegistry'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -15,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { nodeRunEvents, nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
 import { runNode } from '../src/services/runner'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -185,6 +187,207 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     // runNode's, so we only check the run status on the row here.
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.status).toBe('done')
+  })
+
+  test('an explicit root native id change without reset still fails closed', async () => {
+    const agent = makeAgent({ outputs: ['summary'] })
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const { log, warnings } = captureWarnings()
+    const result = await withEnv(
+      {
+        MOCK_CLAUDE_OUTPUTS: JSON.stringify({ summary: 'kept' }),
+        MOCK_CLAUDE_SESSION_ID: 'claude-root-session',
+        MOCK_CLAUDE_NON_INIT_SESSION_ID: 'claude-associated-session',
+      },
+      () => runClaude({ agent, nodeRunId, h, log }),
+    )
+
+    expect(result.status).toBe('failed')
+    expect(result.failureCode).toBe('runtime-session-identity-invalid')
+    expect(result.sessionId).toBeUndefined()
+    expect(result.errorMessage).toContain(
+      'runtime changed native session id without a conversation reset',
+    )
+    expect(
+      warnings.find((entry) => entry.message === 'runtime-stream-pump-failed')?.fields
+        ?.nativeSessionProtocolFailure,
+    ).toEqual({
+      reason: 'runtime changed native session id without a conversation reset',
+      eventType: 'assistant',
+      eventSubtype: null,
+      hasParentToolUseId: false,
+    })
+    expect(
+      h.db
+        .select({ sessionId: nodeRuns.opencodeSessionId })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, nodeRunId))
+        .get(),
+    ).toEqual({ sessionId: null })
+    expect(
+      h.db
+        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+        .from(runtimeSessionLeases)
+        .where(
+          and(
+            eq(runtimeSessionLeases.protocol, 'claude-code'),
+            eq(runtimeSessionLeases.sessionId, 'claude-root-session'),
+          ),
+        )
+        .get(),
+    ).toBeUndefined()
+  })
+
+  test('parallel subagent session ids stay event-local and do not interrupt the root run', async () => {
+    const agent = makeAgent({ outputs: ['summary'] })
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const childIds = ['claude-child-a', 'claude-child-b', 'claude-child-c']
+    const result = await withEnv(
+      {
+        MOCK_CLAUDE_OUTPUTS: JSON.stringify({ summary: 'root-complete' }),
+        MOCK_CLAUDE_SESSION_ID: 'claude-parallel-root',
+        MOCK_CLAUDE_PARALLEL_SUBAGENT_SESSION_IDS: JSON.stringify(childIds),
+      },
+      () => runClaude({ agent, nodeRunId, h }),
+    )
+
+    expect(result.status).toBe('done')
+    expect(result.sessionId).toBe('claude-parallel-root')
+    expect(result.outputs.summary).toBe('root-complete')
+    const rows = h.db
+      .select()
+      .from(nodeRunEvents)
+      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      .all()
+    for (const childId of childIds) {
+      expect(rows.some((row) => row.payload.includes(childId))).toBe(true)
+    }
+    const frames = rows.map((row) => JSON.parse(row.payload) as Record<string, unknown>)
+    const firstNotification = frames.findIndex(
+      (frame) => frame.type === 'system' && frame.subtype === 'task_notification',
+    )
+    const startIndexes = frames
+      .map((frame, index) => ({ frame, index }))
+      .filter(({ frame }) => frame.type === 'system' && frame.subtype === 'task_started')
+      .map(({ index }) => index)
+    expect(startIndexes).toHaveLength(childIds.length)
+    expect(startIndexes.every((index) => index < firstNotification)).toBe(true)
+    expect(
+      frames
+        .filter((frame) => frame.type === 'system' && frame.subtype === 'task_notification')
+        .map((frame) => frame.session_id),
+    ).toEqual([...childIds].reverse())
+    expect(
+      frames.some((frame) => frame.type === 'user' && typeof frame.parent_tool_use_id === 'string'),
+    ).toBe(true)
+    expect(rows.every((row) => row.sessionId === 'claude-parallel-root')).toBe(true)
+  })
+
+  test('conversation_reset rotates the durable lease to the next observed native id', async () => {
+    const agent = makeAgent({ outputs: ['summary'] })
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const result = await withEnv(
+      {
+        MOCK_CLAUDE_OUTPUTS: JSON.stringify({ summary: 'kept' }),
+        MOCK_CLAUDE_SESSION_ID: 'claude-before-reset',
+        MOCK_CLAUDE_RESET_SESSION_ID: 'claude-after-reset',
+        MOCK_CLAUDE_RESET_CONVERSATION_ID: 'ui-reset-correlation-only',
+      },
+      () => runClaude({ agent, nodeRunId, h }),
+    )
+
+    expect(result.status).toBe('done')
+    expect(result.sessionId).toBe('claude-after-reset')
+    expect(result.outputs.summary).toBe('kept')
+
+    const rows = h.db
+      .select()
+      .from(nodeRunEvents)
+      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      .all()
+    const reset = rows.find((row) => row.payload.includes('"type":"conversation_reset"'))
+    const assistant = rows.find((row) => row.payload.includes('"type":"assistant"'))
+    const terminal = rows.find((row) => row.payload.includes('"type":"result"'))
+    expect(reset?.sessionId).toBe('claude-after-reset')
+    expect(reset?.payload).toContain('ui-reset-correlation-only')
+    // The first explicit root turn after reset reveals the replacement id.
+    // Rotation retags earlier root rows in one transaction so SessionTree has
+    // one logical bucket, while raw payloads retain their original wire ids.
+    expect(reset?.payload).toContain('"session_id":"claude-before-reset"')
+    expect(assistant?.sessionId).toBe('claude-after-reset')
+    expect(terminal?.sessionId).toBe('claude-after-reset')
+    expect(rows.every((row) => row.sessionId === 'claude-after-reset')).toBe(true)
+
+    expect(
+      h.db
+        .select({ sessionId: nodeRuns.opencodeSessionId })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, nodeRunId))
+        .get(),
+    ).toEqual({ sessionId: 'claude-after-reset' })
+    expect(
+      h.db
+        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+        .from(runtimeSessionLeases)
+        .where(
+          and(
+            eq(runtimeSessionLeases.protocol, 'claude-code'),
+            eq(runtimeSessionLeases.sessionId, 'claude-before-reset'),
+          ),
+        )
+        .get(),
+    ).toBeUndefined()
+    expect(
+      h.db
+        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+        .from(runtimeSessionLeases)
+        .where(
+          and(
+            eq(runtimeSessionLeases.protocol, 'claude-code'),
+            eq(runtimeSessionLeases.sessionId, 'claude-after-reset'),
+          ),
+        )
+        .get(),
+    ).toEqual({ holder: null })
+  })
+
+  test('conversation_reset without a replacement never returns or persists the stale resume id', async () => {
+    const agent = makeAgent({ outputs: ['summary'] })
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const result = await withEnv(
+      {
+        MOCK_CLAUDE_SESSION_ID: 'claude-invalidated-by-reset',
+        MOCK_CLAUDE_RESET_SESSION_ID: 'unobserved-replacement',
+        MOCK_CLAUDE_STOP_AFTER_RESET: '1',
+      },
+      () => runClaude({ agent, nodeRunId, h }),
+    )
+
+    expect(result.status).toBe('failed')
+    expect(result.failureCode).toBe('runtime-stream-interrupted')
+    expect(result.errorMessage).toContain(
+      'runtime ended before reporting the replacement native session id',
+    )
+    expect(result.sessionId).toBeUndefined()
+    expect(
+      h.db
+        .select({ sessionId: nodeRuns.opencodeSessionId })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, nodeRunId))
+        .get(),
+    ).toEqual({ sessionId: null })
+    expect(
+      h.db
+        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+        .from(runtimeSessionLeases)
+        .where(
+          and(
+            eq(runtimeSessionLeases.protocol, 'claude-code'),
+            eq(runtimeSessionLeases.sessionId, 'claude-invalidated-by-reset'),
+          ),
+        )
+        .get(),
+    ).toBeUndefined()
   })
 
   test('argv contract: -p / stream-json / --append-system-prompt-file(=bodyMd) / --model', async () => {

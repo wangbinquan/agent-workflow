@@ -31,20 +31,27 @@ import { and, eq, inArray, lt } from 'drizzle-orm'
 
 import { loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
-import { nodeRuns, tasks } from '@/db/schema'
+import { nodeRuns, runtimeSessionLeases, tasks } from '@/db/schema'
 import {
   isTerminalTaskStatus,
   transitionNodeRunStatus,
   trySetTaskStatus,
 } from '@/services/lifecycle'
 import { recordRecoveryEvent } from '@/services/recovery'
+import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import {
   type LivenessReason,
   type LivenessRunRow,
   resolveRunLiveness,
 } from '@/services/runLiveness'
 import { isTaskActive } from '@/services/task'
-import { isProcessAlive, pidCommandContainsBinary } from '@/util/process'
+import {
+  isProcessAlive,
+  killStaleRunProcessTree,
+  pidCommandContainsBinary,
+  type StaleRunKillOutcome,
+  type StaleRunKillOpts,
+} from '@/util/process'
 import { createLogger } from '@/util/log'
 import { WorkflowDefinitionSchema, migrateWorkflowDefinitionToLatest } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
@@ -54,6 +61,7 @@ const log = createLogger('orphan-reconcile')
 
 export interface ReconcileRun extends LivenessRunRow {
   taskId: string
+  startedAt: number | null
 }
 
 /**
@@ -85,6 +93,15 @@ export interface ReconcileDeps {
   probeProcessAlive?: (pid: number, spawnBinaryPath: string | null) => boolean
   /** Injected driver gate — is an in-process scheduler attached? Defaults to isTaskActive. */
   taskHasDriver?: (taskId: string) => boolean
+  /**
+   * A boolean liveness miss cannot distinguish a dead PID from a live recycled
+   * or command-mismatched PID. A held native-session lease needs the stronger
+   * kill/not-alive proof before it can admit another writer.
+   */
+  reapHeldNativeSessionProcess?: (
+    run: { pid: number | null; startedAt: number | null; spawnBinaryPath?: string | null },
+    opts?: StaleRunKillOpts,
+  ) => Promise<StaleRunKillOutcome>
   now?: number
 }
 
@@ -116,6 +133,7 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
       spawnBinaryPath: nodeRuns.spawnBinaryPath,
       parentNodeRunId: nodeRuns.parentNodeRunId,
       childTaskId: nodeRuns.childTaskId,
+      startedAt: nodeRuns.startedAt,
     })
     .from(nodeRuns)
     .where(and(eq(nodeRuns.status, 'running'), lt(nodeRuns.startedAt, now - deps.graceMs)))
@@ -183,6 +201,31 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
         probeChildTask,
       })
       if (verdict.alive) continue
+      const heldNativeLease = db
+        .select({ sessionId: runtimeSessionLeases.sessionId })
+        .from(runtimeSessionLeases)
+        .where(eq(runtimeSessionLeases.leaseNodeRunId, run.id))
+        .get()
+      if (heldNativeLease !== undefined) {
+        const reapOutcome = await (deps.reapHeldNativeSessionProcess ?? killStaleRunProcessTree)(
+          run,
+          { now },
+        )
+        if (reapOutcome !== 'not-alive' && reapOutcome !== 'killed') {
+          // A held native-session lease is only keyed by the concrete native
+          // id. Marking this run interrupted would let the scheduler retry
+          // with a different id while the old child may still be writing the
+          // same worktree. Keep both run and task owned until a structured
+          // reap proves the child gone.
+          log.error('periodic reap could not prove held native-session child gone', {
+            nodeRunId: run.id,
+            sessionId: heldNativeLease.sessionId,
+            reason: verdict.reason,
+            reapOutcome,
+          })
+          continue
+        }
+      }
       // RFC-230 (Codex 设计门 P2-2): the gate above and this write are separated
       // by awaits, so a resume could have registered a driver in between and
       // re-taken ownership of this very row. Re-check immediately before the
@@ -200,6 +243,7 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
         .then(() => true)
         .catch(() => false)
       if (!ok) continue
+      repairRuntimeSessionLeasesAfterOrphanReap(db, true, run.id)
       out.reapedRuns.push(run.id)
       out.reasons[run.id] = verdict.reason
       affectedTasks.add(run.taskId)

@@ -42,7 +42,7 @@ import {
   SignalPortInPromptError,
   assertNoPromptSignalRefs,
 } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
+import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -111,9 +111,12 @@ import { maskDiagnosticsText } from '@agent-workflow/shared'
 import {
   claimNewRuntimeSession,
   confirmRuntimeSessionResume,
+  discardRuntimeSessionLease,
   getRuntimeSessionLease,
+  markRuntimeSessionResetPending,
   preclaimRuntimeSessionResume,
   releaseRuntimeSessionLease,
+  rotateRuntimeSessionLease,
   type RuntimeSessionLeaseToken,
 } from '@/services/runtimeSessionLease'
 import { sha256Hex } from '@/util/hash'
@@ -417,6 +420,12 @@ export type RunFinalStatus = 'done' | 'failed' | 'canceled'
 export interface RunResult {
   status: RunFinalStatus
   exitCode: number | null
+  /**
+   * The executor exhausted TERM/KILL/reap and the child may still be alive.
+   * Callers must not start another process for the same node/worktree until a
+   * recovery barrier proves this child gone.
+   */
+  processUnreaped?: true
   /** Resolved declared port values (missing ones present as ""). */
   outputs: Record<string, string>
   tokenUsage: {
@@ -825,9 +834,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     opts.promptMode?.kind === 'followup' ? opts.promptMode.resumeSessionId : opts.resumeSessionId
   const runtimeLeaseNonceDigest = sha256Hex(randomBytes(32))
   let runtimeLeaseToken: RuntimeSessionLeaseToken | undefined
+  let runtimeLeaseInvalidatedByReset = false
   const releaseHeldRuntimeLease = (): void => {
     if (runtimeLeaseToken === undefined) return
-    const released = releaseRuntimeSessionLease(opts.db, runtimeLeaseToken)
+    const released = runtimeLeaseInvalidatedByReset
+      ? discardRuntimeSessionLease(opts.db, runtimeLeaseToken)
+      : releaseRuntimeSessionLease(opts.db, runtimeLeaseToken)
     if (!released) {
       log.warn('runtime-session-lease-release-cas-missed', {
         nodeRunId: opts.nodeRunId,
@@ -835,6 +847,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       })
     }
     runtimeLeaseToken = undefined
+    runtimeLeaseInvalidatedByReset = false
   }
 
   if (effectiveResumeSessionId !== undefined && effectiveResumeSessionId !== '') {
@@ -1084,6 +1097,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // parsing, live subagent capture, and final status resolution.
   let preserveLiveRuntimeState = false
   let postSpawnFailed = false
+  // Survives the outer catch so even a second DB failure while stamping the
+  // terminal row cannot erase the durable breadcrumb boot repair uses to
+  // discard (rather than neutralize) a contradicted native resume id.
+  let nativeSessionIdentityInvalidObserved = false
   // Process-orthogonal cleanup only (live poller / signal listener); the child
   // kill/reap lifecycle is owned by runAgentProcess, not these hooks.
   const spawnedCleanupHooks: Array<() => void> = []
@@ -1116,6 +1133,21 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       total: 0,
     }
     let sessionId: string | undefined
+    // Native ids are lookup keys for Claude's per-epoch transcript folders.
+    // The logical SessionTree still has one final root, but capture must scan
+    // every epoch or a reset can hide subagents that finished before it.
+    const nativeSessionEpochIds: string[] = []
+    let pendingConversationReset:
+      | { outgoingSessionId: string; newConversationId: string }
+      | undefined
+    let nativeSessionProtocolFailure:
+      | {
+          reason: string
+          eventType: string | null
+          eventSubtype: string | null
+          hasParentToolUseId: boolean
+        }
+      | undefined
     // Runtime-reported MCP availability remains useful operator telemetry, but
     // it is not an execution admission oracle.
     const declaredMcpServers = new Set(plan.declaredMcpServers ?? [])
@@ -1195,27 +1227,111 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       }
       const ev = driver.parseEvent(line)
       if (ev) {
-        if (ev.sessionId !== undefined) {
-          if (sessionId === undefined) {
-            const nativeSessionId = ev.sessionId
-            sessionId = nativeSessionId
-            if (runtimeLeaseToken === undefined) {
-              runtimeLeaseToken = await persistRunnerWrite('runtime-session-lease/claim', () =>
-                claimNewRuntimeSession(opts.db, {
-                  protocol: runtime,
-                  sessionId: nativeSessionId,
-                  taskId: opts.taskId,
-                  nodeId: opts.nodeId,
-                  currentNodeRunId: opts.nodeRunId,
-                  leaseNonceDigest: runtimeLeaseNonceDigest,
-                }),
+        try {
+          if (ev.sessionId !== undefined) {
+            if (sessionId === undefined) {
+              const nativeSessionId = ev.sessionId
+              sessionId = nativeSessionId
+              if (runtimeLeaseToken === undefined) {
+                runtimeLeaseToken = await persistRunnerWrite('runtime-session-lease/claim', () =>
+                  claimNewRuntimeSession(opts.db, {
+                    protocol: runtime,
+                    sessionId: nativeSessionId,
+                    taskId: opts.taskId,
+                    nodeId: opts.nodeId,
+                    currentNodeRunId: opts.nodeRunId,
+                    leaseNonceDigest: runtimeLeaseNonceDigest,
+                  }),
+                )
+              } else if (runtimeLeaseToken.sessionId !== sessionId) {
+                throw new Error('runtime returned a different native session id')
+              }
+              nativeSessionEpochIds.push(nativeSessionId)
+            } else if (sessionId !== ev.sessionId) {
+              if (pendingConversationReset === undefined) {
+                throw new Error('runtime changed native session id without a conversation reset')
+              }
+              if (
+                pendingConversationReset.outgoingSessionId !== sessionId ||
+                runtimeLeaseToken === undefined ||
+                runtimeLeaseToken.sessionId !== sessionId
+              ) {
+                throw new Error('runtime conversation reset did not match the held native session')
+              }
+              const heldLease = runtimeLeaseToken
+              const nextSessionId = ev.sessionId
+              runtimeLeaseToken = await persistRunnerWrite('runtime-session-lease/rotate', () =>
+                rotateRuntimeSessionLease(opts.db, heldLease, nextSessionId),
               )
-            } else if (runtimeLeaseToken.sessionId !== sessionId) {
-              throw new Error('runtime returned a different native session id')
+              runtimeLeaseInvalidatedByReset = false
+              sessionId = nextSessionId
+              nativeSessionEpochIds.push(nextSessionId)
+              pendingConversationReset = undefined
             }
-          } else if (sessionId !== ev.sessionId) {
-            throw new Error('runtime changed native session id during one run')
           }
+          if (ev.conversationReset !== undefined) {
+            if (
+              sessionId === undefined ||
+              ev.conversationReset.outgoingSessionId !== sessionId ||
+              pendingConversationReset !== undefined
+            ) {
+              throw new Error('runtime reported an invalid conversation reset boundary')
+            }
+            pendingConversationReset = ev.conversationReset
+            const heldLease = runtimeLeaseToken
+            if (
+              heldLease === undefined ||
+              !(await persistRunnerWrite('runtime-session-lease/reset-pending', () =>
+                markRuntimeSessionResetPending(opts.db, heldLease),
+              ))
+            ) {
+              throw new Error('runtime conversation reset could not invalidate the old resume id')
+            }
+            runtimeLeaseInvalidatedByReset = true
+          }
+        } catch (error) {
+          let eventType: string | null = null
+          let eventSubtype: string | null = null
+          let hasParentToolUseId = false
+          try {
+            const frame = JSON.parse(ev.rawLine) as Record<string, unknown>
+            eventType = typeof frame.type === 'string' ? frame.type : null
+            eventSubtype = typeof frame.subtype === 'string' ? frame.subtype : null
+            hasParentToolUseId =
+              typeof frame.parent_tool_use_id === 'string' && frame.parent_tool_use_id.length > 0
+          } catch {
+            // parseEvent already recognized the frame; metadata is best effort.
+          }
+          nativeSessionProtocolFailure = {
+            reason: error instanceof Error ? error.message : String(error),
+            eventType,
+            eventSubtype,
+            hasParentToolUseId,
+          }
+          nativeSessionIdentityInvalidObserved = true
+          // Once a root identity contradiction is observed, the previously
+          // held native id is no longer safe to advertise for resume. Fence it
+          // durably before the pump aborts; normal reaping then discards it.
+          const heldLease = runtimeLeaseToken
+          if (heldLease !== undefined && !runtimeLeaseInvalidatedByReset) {
+            // The in-memory verdict must not depend on the first fencing write:
+            // after the child is reaped, discard performs a second transactional
+            // clear+delete even if this best-effort early fence failed.
+            runtimeLeaseInvalidatedByReset = true
+            try {
+              await persistRunnerWrite('runtime-session-lease/protocol-invalid', () =>
+                markRuntimeSessionResetPending(opts.db, heldLease),
+              )
+            } catch (fenceError) {
+              log.warn('runtime-session-protocol-fence-failed', {
+                nodeRunId: opts.nodeRunId,
+                err: maskDiagnosticsText(
+                  fenceError instanceof Error ? fenceError.message : String(fenceError),
+                ).slice(0, 2000),
+              })
+            }
+          }
+          throw error
         }
         if (ev.tokens) {
           tokenUsage.input += ev.tokens.input
@@ -1408,15 +1524,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // of the drain race. Preserve that lifecycle, but do not repeat the old
     // settlePump bug of reducing the exception to a boolean: retain a masked,
     // bounded reason in both daemon logs and the durable node error.
-    const streamPumpError =
+    let streamPumpError =
       runResult.pumpError === undefined
         ? undefined
         : maskDiagnosticsText(runResult.pumpError).slice(0, 2000)
+    if (streamPumpError === undefined && pendingConversationReset !== undefined) {
+      streamPumpError =
+        'runtime ended before reporting the replacement native session id after conversation reset'
+    }
     if (streamPumpError !== undefined) {
       log.warn('runtime-stream-pump-failed', {
         nodeRunId: opts.nodeRunId,
         runtime,
         err: streamPumpError,
+        ...(nativeSessionProtocolFailure === undefined ? {} : { nativeSessionProtocolFailure }),
       })
     }
     // RFC-048: stop the live poller before the post-run BFS so no concurrent
@@ -1455,23 +1576,53 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
 
     if (!childUnkillable && sessionId !== undefined) {
-      try {
-        await driver.captureSessions({
-          rootSessionId: sessionId,
-          nodeRunId: opts.nodeRunId,
-          taskId: opts.taskId,
-          db: opts.db,
-          log,
-          worktreePath: opts.worktreePath,
-          configDirEnv: configDir.env,
-          configDirName: configDir.name,
-          alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession,
-        })
-      } catch (err) {
-        log.warn('subagent-capture-unhandled', {
-          nodeRunId: opts.nodeRunId,
-          err: err instanceof Error ? err.message : String(err),
-        })
+      for (const epochSessionId of [...new Set(nativeSessionEpochIds)]) {
+        try {
+          await driver.captureSessions({
+            rootSessionId: epochSessionId,
+            logicalRootSessionId: sessionId,
+            nodeRunId: opts.nodeRunId,
+            taskId: opts.taskId,
+            db: opts.db,
+            log,
+            worktreePath: opts.worktreePath,
+            configDirEnv: configDir.env,
+            configDirName: configDir.name,
+            alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession,
+          })
+        } catch (err) {
+          log.warn('subagent-capture-unhandled', {
+            nodeRunId: opts.nodeRunId,
+            rootSessionId: epochSessionId,
+            err: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+      const supersededEpochIds = nativeSessionEpochIds.filter((id) => id !== sessionId)
+      if (supersededEpochIds.length > 0) {
+        await persistRunnerWrite('node-run-event/session-epoch-retag', () =>
+          dbTxSync(opts.db, (tx) => {
+            tx.update(nodeRunEvents)
+              .set({ sessionId })
+              .where(
+                and(
+                  eq(nodeRunEvents.nodeRunId, opts.nodeRunId),
+                  inArray(nodeRunEvents.sessionId, supersededEpochIds),
+                  isNull(nodeRunEvents.parentSessionId),
+                ),
+              )
+              .run()
+            tx.update(nodeRunEvents)
+              .set({ parentSessionId: sessionId })
+              .where(
+                and(
+                  eq(nodeRunEvents.nodeRunId, opts.nodeRunId),
+                  inArray(nodeRunEvents.parentSessionId, supersededEpochIds),
+                ),
+              )
+              .run()
+          }),
+        )
       }
     }
 
@@ -1495,6 +1646,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // RFC-098 WP-8: overrides aborted/timedOut — the operator needs the pid
       // to clean up by hand, and a 'canceled' status would read as a clean stop.
       status = 'failed'
+      if (nativeSessionProtocolFailure !== undefined) {
+        failureCode = 'runtime-session-identity-invalid'
+      }
       errorMessage = `child-unkillable: pid ${spawnedPid} survived SIGTERM→SIGKILL escalation past ${graceMs + FINAL_REAP_MARGIN_MS}ms; abandoned (detached process group left running)`
     } else if (terminalResultError !== undefined) {
       // The runtime told us WHY it stopped. Report that instead of the generic
@@ -1506,8 +1660,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       errorMessage = `runtime-result-error: ${maskDiagnosticsText(terminalResultError).slice(0, 2000)}`
     } else if (streamPumpError !== undefined) {
       status = 'failed'
-      failureCode = 'runtime-stream-interrupted'
-      errorMessage = `${runtime} stream persistence failed: ${streamPumpError}`
+      failureCode =
+        nativeSessionProtocolFailure === undefined
+          ? 'runtime-stream-interrupted'
+          : 'runtime-session-identity-invalid'
+      errorMessage = `${runtime} stream handling failed: ${streamPumpError}`
     } else if (aborted) {
       // RFC-202 T4: a daemon-shutdown abort must NOT read as a user cancel.
       // RunResult keeps status='canceled' (control flow: loop break / runScope
@@ -2036,10 +2193,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       .where(eq(nodeRuns.id, opts.nodeRunId))
 
     const result: RunResult = { status, exitCode, outputs, tokenUsage, prompt }
+    if (childUnkillable) result.processUnreaped = true
     if (portFilePaths.length > 0) result.portFilePaths = portFilePaths
     if (errorMessage !== undefined) result.errorMessage = errorMessage
     if (failureCode !== undefined) result.failureCode = failureCode
-    if (sessionId !== undefined) result.sessionId = sessionId
+    // A reset boundary invalidates the outgoing resume id immediately. Until
+    // a later bookend reveals and rotates to the replacement, never return the
+    // stale id to callers that persist RunResult.sessionId again.
+    if (
+      sessionId !== undefined &&
+      pendingConversationReset === undefined &&
+      nativeSessionProtocolFailure === undefined
+    ) {
+      result.sessionId = sessionId
+    }
     if (clarifyResult !== undefined) result.clarify = clarifyResult
     return result
   } catch (error) {
@@ -2087,7 +2254,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   if (!postSpawnFailed) {
     throw new Error('unreachable runner post-spawn state')
   }
-  const postSpawnErrorMessage = 'runtime-spawn-failed'
+  const postSpawnFailureCode: FailureCode | undefined = nativeSessionIdentityInvalidObserved
+    ? 'runtime-session-identity-invalid'
+    : undefined
+  const postSpawnErrorMessage = postSpawnFailureCode ?? 'runtime-spawn-failed'
   try {
     await setNodeRunStatus({
       db: opts.db,
@@ -2099,7 +2269,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         finishedAt: Date.now(),
         exitCode: null,
         errorMessage: postSpawnErrorMessage,
-        failureCode: null,
+        failureCode: postSpawnFailureCode ?? null,
       },
     })
   } catch {
@@ -2112,10 +2282,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   return {
     status: 'failed',
     exitCode: null,
+    ...(preserveLiveRuntimeState ? { processUnreaped: true as const } : {}),
     outputs: {},
     tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
     prompt,
     errorMessage: postSpawnErrorMessage,
+    ...(postSpawnFailureCode === undefined ? {} : { failureCode: postSpawnFailureCode }),
   }
 }
 

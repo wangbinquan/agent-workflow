@@ -1369,6 +1369,18 @@ export interface ResolveConflictOutcome {
 }
 
 /**
+ * The merge agent process survived its TERM/KILL escalation. This is a hard
+ * framework barrier: the resolve worktree must remain intact and no later
+ * conflict agent may start while the old writer can still mutate it.
+ */
+export class MergeAgentChildUnreapedError extends Error {
+  constructor() {
+    super('merge-agent-child-unreaped')
+    this.name = 'MergeAgentChildUnreapedError'
+  }
+}
+
+/**
  * RFC-130 §6.2: try to auto-resolve ONE conflicted repo with the built-in merge
  * agent. Seeds a detached resolve-iso from the conflicted auto-merge tree (so
  * content conflicts carry markers), runs the agent there, then judges resolution
@@ -1472,6 +1484,7 @@ export async function resolveConflictWithAgent(
       })
     }
   } catch (err) {
+    if (err instanceof MergeAgentChildUnreapedError) throw err
     log?.warn('merge agent run failed → treat as unresolved', {
       resolveIso,
       error: err instanceof Error ? err.message : String(err),

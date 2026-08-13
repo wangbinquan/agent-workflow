@@ -8838,6 +8838,10 @@ export const zhCN: Resources = {
       'runtime-stream-interrupted': '运行时输出流在结果安全持久化之前中断。',
       'runtime-stream-interrupted__hint':
         '自动重试次数耗尽后，可点「继续任务」启动新的运行时进程。',
+      'runtime-session-identity-invalid':
+        '运行时报告的原生会话身份发生矛盾；旧续跑 ID 已作废，避免并发写入或恢复过期会话。',
+      'runtime-session-identity-invalid__hint':
+        '系统会用全新的运行时进程自动重试；次数耗尽后可点「继续任务」。',
       'envelope-missing': '代理没有按约定格式输出结果（缺少输出信封）。',
       'envelope-missing__hint': '通常是模型没有遵循输出协议——可点「继续任务」重试该节点。',
       'clarify-and-output-both': '代理同时提交了反问与结果，格式冲突。',

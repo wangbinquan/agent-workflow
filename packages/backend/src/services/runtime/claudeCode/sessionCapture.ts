@@ -38,7 +38,10 @@ import type { Logger } from '@/util/log'
 import { parseEvent } from './events'
 
 export interface CaptureClaudeSessionsOpts {
+  /** Native transcript directory key. */
   rootSessionId: string
+  /** Logical SessionTree root; defaults to the native lookup key. */
+  logicalRootSessionId?: string
   nodeRunId: string
   taskId: string
   db: DbClient
@@ -223,6 +226,7 @@ function agentToolUseIds(lines: readonly string[]): string[] {
 }
 
 export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Promise<void> {
+  const logicalRootSessionId = opts.logicalRootSessionId ?? opts.rootSessionId
   const slug = cwdSlug(opts.worktreePath)
   const projectRoots = opts.configRoots.map((root) => join(root, 'projects'))
   const candidates = [
@@ -273,7 +277,7 @@ export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Pr
         const parentSessionId =
           inferredParent !== undefined && inferredParent !== transcript.sessionId
             ? inferredParent
-            : opts.rootSessionId
+            : logicalRootSessionId
         if (
           transcript.spawnDepth !== undefined &&
           transcript.spawnDepth > 1 &&
@@ -338,7 +342,7 @@ export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Pr
               reason: detail,
               rootSessionId: opts.rootSessionId,
             }),
-            sessionId: opts.rootSessionId,
+            sessionId: logicalRootSessionId,
             parentSessionId: null,
           },
         ],

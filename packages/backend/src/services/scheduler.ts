@@ -28,6 +28,7 @@ import type {
   WorkflowNode,
   WrapperFanoutPort,
   TriggerContext,
+  CallWorkgroupBuiltinName,
 } from '@agent-workflow/shared'
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
@@ -217,6 +218,7 @@ import {
   type MergeBackConflict,
   mergeBackNodeIso,
   rebuildIsoHandle,
+  MergeAgentChildUnreapedError,
   resolveConflictWithAgent,
   snapshotNodeIsoFinal,
   undoPriorShardDeltaInIso,
@@ -1166,6 +1168,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           ? { subagentLiveCapture: opts.subagentLiveCapture }
           : {}),
       })
+      if (result.processUnreaped === true) keepHookIso = true
       broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, result.status)
       // RFC-184 §2.3: a projected host run's declared-but-omitted wg_* ports come
       // back as '' (parseEnvelope materializes them). Drop those so the workgroup
@@ -1181,6 +1184,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           status: 'canceled',
           outputs: {},
           ...(result.errorMessage !== undefined ? { errorMessage: result.errorMessage } : {}),
+          ...(result.processUnreaped === true ? { processUnreaped: true as const } : {}),
         }
       }
       if (result.clarify !== undefined) {
@@ -1306,6 +1310,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           // engine can route envelope-missing into its protocol-retry channel
           // (RFC-145 ratchet: never route on errorMessage text).
           ...(result.failureCode !== undefined ? { failureCode: result.failureCode } : {}),
+          ...(result.processUnreaped === true ? { processUnreaped: true as const } : {}),
         }
       }
       if (!iso.passthrough && req.discardWrites === true) {
@@ -1429,6 +1434,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
 interface ScopeResult {
   kind: 'ok' | 'failed' | 'canceled' | 'awaiting_review' | 'awaiting_human'
   detail?: { summary: string; message: string; nodeId?: string }
+  processUnreaped?: true
 }
 
 interface ScopeArgs {
@@ -1540,7 +1546,14 @@ export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFoll
   }
 }
 
-export function shouldRetryNodeFailure(failureCode: FailureCode | null | undefined): boolean {
+export function shouldRetryNodeFailure(
+  failureCode: FailureCode | null | undefined,
+  processUnreaped = false,
+): boolean {
+  // A fresh native session id does not conflict with the old id's lease. If
+  // the old child may still be alive, retrying would therefore create two
+  // writers in the same worktree even though both individual ids are leased.
+  if (processUnreaped) return false
   // 2026-08-04 audit: a terminal error the RUNTIME reported about itself (auth
   // rejected, usage limit, gateway error) does not become true by replaying the
   // same inputs.
@@ -1720,6 +1733,23 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
     const { nodeId, result } = await Promise.race(inFlight.values())
     inFlight.delete(nodeId)
 
+    if (result.processUnreaped === true) {
+      // Do not derive another frontier while an old framework child can still
+      // write the canonical worktree. Existing siblings were already admitted;
+      // let them settle, but mint no replacement work in this invocation.
+      await Promise.allSettled(inFlight.values())
+      inFlight.clear()
+      return {
+        kind: 'failed',
+        processUnreaped: true,
+        detail: {
+          summary: result.summary,
+          message: result.message,
+          nodeId,
+        },
+      }
+    }
+
     if (result.kind === 'canceled') {
       // Hard short-circuit (user-tripped signal): no point draining the rest
       // of the NODE promises; commit&push synthetics are drained (revision #2).
@@ -1772,10 +1802,22 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
                 syntheticKey,
                 error: err instanceof Error ? err.message : String(err),
               })
+              return {} as { processUnreaped?: true }
             })
-            .then(() => ({
+            .then((commitResult) => ({
               nodeId: syntheticKey,
-              result: { kind: 'ok', summary: 'commit&push settled', message: '' } as OneNodeResult,
+              result: (commitResult.processUnreaped === true
+                ? {
+                    kind: 'failed',
+                    summary: 'commit agent child could not be reaped',
+                    message: 'commit-agent-child-unreaped',
+                    processUnreaped: true,
+                  }
+                : {
+                    kind: 'ok',
+                    summary: 'commit&push settled',
+                    message: '',
+                  }) as OneNodeResult,
             })),
         )
       }
@@ -1922,7 +1964,7 @@ async function maybeRunCommitPush(
   node: WorkflowNode,
   iteration: number,
   log: Logger,
-): Promise<void> {
+): Promise<{ processUnreaped?: true }> {
   const { db, task } = state
   // The triggering node's latest done run at this iteration → parent of the
   // commit row, so the detail page can group it under the agent.
@@ -1954,7 +1996,7 @@ async function maybeRunCommitPush(
   for (const repo of state.repos) {
     // RFC-098 B1: a cancel that lands mid-commit&push stops at the next repo
     // boundary (the in-repo opencode session already holds the shared signal).
-    if (state.opts.signal?.aborted === true) return
+    if (state.opts.signal?.aborted === true) return {}
     const status = await runGit(repo.worktreePath, ['status', '--porcelain'])
     // RFC-248 D11: 只读成员不参与自动提交推送。它被改动了不是「无事发生」——
     // 框架不在文件系统层面阻止写入，所以 agent 确实可能改了它。静默丢弃最难
@@ -2072,6 +2114,7 @@ async function maybeRunCommitPush(
         return {
           message: msg !== undefined && msg.trim() !== '' ? msg : null,
           sessionId: result.sessionId ?? null,
+          ...(result.processUnreaped === true ? { processUnreaped: true as const } : {}),
         }
       } catch (err) {
         log.warn('commit-agent opencode run failed; will fall back', {
@@ -2082,7 +2125,7 @@ async function maybeRunCommitPush(
       }
     }
 
-    await runCommitPush(
+    const commitResult = await runCommitPush(
       {
         taskId: task.id,
         agentNodeId: node.id,
@@ -2138,7 +2181,9 @@ async function maybeRunCommitPush(
       },
       { db, log: log.child('commit') },
     )
+    if (commitResult.processUnreaped === true) return { processUnreaped: true }
   }
+  return {}
 }
 
 // RFC-096: `buildFreshestDonePerNode` moved to freshness.ts alongside the
@@ -2567,6 +2612,7 @@ interface OneNodeResult {
   kind: 'ok' | 'failed' | 'canceled' | 'awaiting_review' | 'awaiting_human'
   summary: string
   message: string
+  processUnreaped?: true
 }
 
 interface OneNodeArgs {
@@ -2940,7 +2986,7 @@ async function resolveMergeConflicts(
       throw new Error(`merge injection resolve failed: ${mergeInjection.message}`)
     }
     // DIRECT runNode — bypasses the node pool on purpose (§7 deadlock avoidance).
-    await runNode({
+    const mergeAgentResult = await runNode({
       taskId: task.id,
       nodeRunId: sessionRunId,
       nodeId: mergeNodeId,
@@ -2984,6 +3030,9 @@ async function resolveMergeConflicts(
         ? { timeoutMs: state.opts.defaultPerNodeTimeoutMs }
         : {}),
     })
+    if (mergeAgentResult.processUnreaped === true) {
+      throw new MergeAgentChildUnreapedError()
+    }
   }
   let allResolved = true
   const parts: string[] = []
@@ -3968,7 +4017,7 @@ function renderCallGoal(
   },
 ): string {
   const primary = meta.repos[0]
-  const builtins: Record<string, string> = {
+  const builtins = {
     __repo_path__: primary?.isoWorktreePath ?? '',
     __base_branch__: primary?.baseBranch ?? '',
     __task_id__: meta.taskId,
@@ -3980,7 +4029,7 @@ function renderCallGoal(
     __repos__: meta.repos
       .map((r) => `- ${r.worktreeDirName || '(root)'}: ${r.isoWorktreePath}`)
       .join('\n'),
-  }
+  } satisfies Record<CallWorkgroupBuiltinName, string>
   const rendered = renderCallWorkgroupGoalTemplate({
     template,
     inputs,
@@ -6073,6 +6122,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
             ? { subagentLiveCapture: opts.subagentLiveCapture }
             : {}),
         })
+        if (lastResult.processUnreaped === true) keepIso = true
 
         // RFC-026: persist opencode session id captured from the JSON event
         // stream so the NEXT clarify-driven rerun on this lineage can pass
@@ -6118,7 +6168,8 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
 
       broadcastNodeStatus(taskId, nodeRunId, node.id, lastResult.status)
       if (lastResult.status === 'done' || lastResult.status === 'canceled') break
-      if (!shouldRetryNodeFailure(lastResult.failureCode)) break
+      if (!shouldRetryNodeFailure(lastResult.failureCode, lastResult.processUnreaped === true))
+        break
     }
 
     // RFC-130 §段③: on success, merge the iso delta back into the canonical
@@ -6220,6 +6271,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       kind: 'failed',
       summary: lastResult.errorMessage ?? `node ${node.id} ${lastResult.status}`,
       message: lastResult.errorMessage ?? lastResult.status,
+      ...(lastResult.processUnreaped === true ? { processUnreaped: true as const } : {}),
     }
   }
   // RFC-023: when the agent reply was a <workflow-clarify> envelope, runner
@@ -7495,6 +7547,7 @@ interface DispatchShardResult {
   retry?: {
     retryIndex: number
     failureCode: FailureCode | null
+    processUnreaped?: true
   }
 }
 
@@ -7524,7 +7577,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
       result.kind !== 'failed' ||
       result.retry === undefined ||
       retriesUsed >= maxRetries ||
-      !shouldRetryNodeFailure(result.retry.failureCode)
+      !shouldRetryNodeFailure(result.retry.failureCode, result.retry.processUnreaped === true)
     ) {
       return result
     }
@@ -7875,6 +7928,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
         ? { subagentLiveCapture: opts.subagentLiveCapture }
         : {}),
     })
+    if (result.processUnreaped === true) keepShardIso = true
     broadcastNodeStatus(taskId, shardRunId, innerNode.id, result.status)
     if (result.status === 'canceled') {
       return { kind: 'canceled', shardKey, outputs: {}, message: result.errorMessage ?? 'canceled' }
@@ -7888,6 +7942,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
         retry: {
           retryIndex: shardRetryIndex,
           failureCode: result.failureCode ?? null,
+          ...(result.processUnreaped === true ? { processUnreaped: true as const } : {}),
         },
       }
     }
@@ -7979,6 +8034,7 @@ type DispatchAggregatorResult = OneNodeResult & {
   retry?: {
     retryIndex: number
     failureCode: FailureCode | null
+    processUnreaped?: true
   }
 }
 
@@ -8002,7 +8058,7 @@ async function dispatchFanoutAggregator(
       result.kind !== 'failed' ||
       result.retry === undefined ||
       retriesUsed >= maxRetries ||
-      !shouldRetryNodeFailure(result.retry.failureCode)
+      !shouldRetryNodeFailure(result.retry.failureCode, result.retry.processUnreaped === true)
     ) {
       return result
     }
@@ -8304,6 +8360,7 @@ async function dispatchFanoutAggregatorAttempt(
         ? { subagentLiveCapture: opts.subagentLiveCapture }
         : {}),
     })
+    if (result.processUnreaped === true) keepAggIso = true
     broadcastNodeStatus(taskId, aggRunId, aggNode.id, result.status)
     if (result.status !== 'done') {
       return {
@@ -8317,6 +8374,7 @@ async function dispatchFanoutAggregatorAttempt(
               retry: {
                 retryIndex: aggRetryIndex,
                 failureCode: result.failureCode ?? null,
+                ...(result.processUnreaped === true ? { processUnreaped: true as const } : {}),
               },
             }),
       }

@@ -41,6 +41,12 @@ describe('RFC-287 T1⑨ — 抛出结局与 keep 分歧（拆分前现状）', (
     expect(shouldRetryNodeFailure(null)).toBe(true)
   })
 
+  test('未回收的旧 child 禁止 fresh-process 重试，已回收的 identity-invalid 仍可重试', () => {
+    expect(shouldRetryNodeFailure('runtime-session-identity-invalid')).toBe(true)
+    expect(shouldRetryNodeFailure('runtime-session-identity-invalid', true)).toBe(false)
+    expect(shouldRetryNodeFailure(null, true)).toBe(false)
+  })
+
   test('① fanout 分片的线级 catch-all 带 retry 载荷（failureCode 为 null）', () => {
     const body = bodyOf('async function dispatchFanoutShardAttempt(')
     // catch-all 里同时出现「广播 failed」与「retry 载荷」，且 failureCode 显式为 null。

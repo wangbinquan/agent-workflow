@@ -61,6 +61,15 @@ export interface GeneratedMessage {
   message: string | null
   /** opencode session id to stamp on the node_run, when the generator spawned one. */
   sessionId?: string | null
+  /** The generator child may still be alive; no git mutation or replacement is safe. */
+  processUnreaped?: true
+}
+
+class CommitAgentUnreapedError extends Error {
+  constructor() {
+    super('commit agent child could not be reaped; refusing framework git mutation')
+    this.name = 'CommitAgentUnreapedError'
+  }
 }
 
 export interface CommitPushParams {
@@ -120,7 +129,7 @@ export interface CommitPushDeps {
 export async function runCommitPush(
   params: CommitPushParams,
   deps: CommitPushDeps,
-): Promise<{ nodeRunId: string; meta: CommitPushMeta }> {
+): Promise<{ nodeRunId: string; meta: CommitPushMeta; processUnreaped?: true }> {
   const db = deps.db
   const runGit = deps.runGit ?? realRunGit
   const log = deps.log ?? createLogger('commit-push')
@@ -150,6 +159,7 @@ export async function runCommitPush(
 
   const pushTarget = `${remote}/${params.repoBranch}`
   let sessionId: string | null = null
+  let processUnreaped = false
   // RFC-210: filled by the submodule stage below and attached by EVERY finalize
   // path — threading it through each call site individually is how the happy
   // path silently lost it the first time.
@@ -166,7 +176,7 @@ export async function runCommitPush(
       repairAttempts?: number
       pushError?: string | null
     },
-  ): Promise<{ nodeRunId: string; meta: CommitPushMeta }> => {
+  ): Promise<{ nodeRunId: string; meta: CommitPushMeta; processUnreaped?: true }> => {
     const meta: CommitPushMeta = {
       repoPath: W,
       repoBranch: params.repoBranch,
@@ -201,7 +211,7 @@ export async function runCommitPush(
         commitPushJson: JSON.stringify(meta),
       })
       .where(eq(nodeRuns.id, nodeRunId))
-    return { nodeRunId, meta }
+    return { nodeRunId, meta, ...(processUnreaped ? { processUnreaped: true as const } : {}) }
   }
 
   // 0. RFC-210 — recurse into submodules FIRST.
@@ -299,12 +309,25 @@ export async function runCommitPush(
       stat,
       diffTruncated,
     })
+    if (gen.processUnreaped === true) {
+      processUnreaped = true
+      throw new CommitAgentUnreapedError()
+    }
     if (gen.sessionId != null) sessionId = gen.sessionId
     if (gen.message != null && gen.message.trim() !== '') {
       message = gen.message.trim()
       messageSource = 'llm'
     }
   } catch (err) {
+    if (err instanceof CommitAgentUnreapedError) {
+      return await finalize('commit-local-failed', {
+        filesChanged,
+        insertions,
+        deletions,
+        messageSource,
+        pushError: err.message,
+      })
+    }
     log.warn('commit message generation failed; using fallback', {
       nodeRunId,
       error: err instanceof Error ? err.message : String(err),
@@ -435,6 +458,10 @@ export async function runCommitPush(
         currentMessage: message,
         priorAttempts: attempts - 1,
       })
+      if (rep.processUnreaped === true) {
+        processUnreaped = true
+        throw new CommitAgentUnreapedError()
+      }
       if (rep.sessionId != null) sessionId = rep.sessionId
       if (rep.message != null && rep.message.trim() !== '') {
         message = rep.message.trim()
@@ -442,6 +469,17 @@ export async function runCommitPush(
         await gc(['commit', '--amend', '-m', message])
       }
     } catch (err) {
+      if (err instanceof CommitAgentUnreapedError) {
+        return finalize('commit-local-failed', {
+          commitSha,
+          filesChanged,
+          insertions,
+          deletions,
+          messageSource,
+          repairAttempts: attempts,
+          pushError: err.message,
+        })
+      }
       log.warn('push repair generation failed', {
         nodeRunId,
         error: err instanceof Error ? err.message : String(err),

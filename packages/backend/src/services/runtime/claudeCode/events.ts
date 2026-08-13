@@ -69,9 +69,46 @@ export function parseEvent(line: string): NormalizedEvent | null {
   }
   if (!parsed || typeof parsed !== 'object') return null
   const evt = parsed as Record<string, unknown>
-  // session_id appears on every event (init / assistant / user / result).
-  const sessionId = typeof evt.session_id === 'string' ? evt.session_id : undefined
   const type = typeof evt.type === 'string' ? evt.type : ''
+  // Claude repeats the root native session id on stream frames. Inline
+  // subagent frames are associated via parent_tool_use_id and must not take
+  // part in the root lease state machine; their raw ids remain available to
+  // SessionTree. A root id may legitimately change only after the explicit
+  // conversation_reset boundary handled below.
+  const isSidechainFrame =
+    (evt.parent_tool_use_id !== undefined && evt.parent_tool_use_id !== null) ||
+    evt.isSidechain === true ||
+    typeof evt.subagent_type === 'string'
+  // Identity comes from protocol bookends plus explicitly-root turn frames,
+  // not from a generic absence of child linkage: parallel task lifecycle
+  // frames often have no parent_tool_use_id at all. Claude's assistant/user
+  // wire types do carry that field, so an explicit null is positive root
+  // evidence while a string is child evidence. This also lets the first root
+  // message after conversation_reset reveal the replacement id before result.
+  const isExplicitRootTurn =
+    (type === 'assistant' ||
+      type === 'user' ||
+      type === 'stream_event' ||
+      type === 'tool_progress') &&
+    evt.parent_tool_use_id === null
+  const observesRootSession =
+    !isSidechainFrame &&
+    (isExplicitRootTurn ||
+      type === 'result' ||
+      type === 'conversation_reset' ||
+      (type === 'system' && evt.subtype === 'init'))
+  const sessionId =
+    observesRootSession && typeof evt.session_id === 'string' ? evt.session_id : undefined
+  const conversationReset =
+    !isSidechainFrame &&
+    type === 'conversation_reset' &&
+    typeof evt.session_id === 'string' &&
+    typeof evt.new_conversation_id === 'string'
+      ? {
+          outgoingSessionId: evt.session_id,
+          newConversationId: evt.new_conversation_id,
+        }
+      : undefined
 
   const contentParts = extractContentParts(evt)
   const text = concatText(contentParts)
@@ -80,6 +117,7 @@ export function parseEvent(line: string): NormalizedEvent | null {
     kind: inferKind(type, contentParts),
     text,
     sessionId,
+    conversationReset,
     // Transcript JSONL lines (and stream user rows) carry an ISO `timestamp`;
     // assistant stream events don't — the pump falls back to now for those.
     timestamp: extractTimestamp(evt),

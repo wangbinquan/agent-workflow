@@ -89,6 +89,8 @@ export interface SystemAgentRunOptions {
   abortSignal?: AbortSignal
   /** RFC-235: auxiliary ordered Session event capture; never gates business output. */
   eventSink?: SystemAgentEventSinkV1
+  /** MCP playground: sink root hooks also own the native single-writer lease. */
+  nativeIdentityAuthoritative?: boolean
   log?: Logger
   /** RFC-282 C1 — TEST-ONLY runtime-neutral command-head override. */
   binaryOverride?: readonly string[]
@@ -162,6 +164,8 @@ export interface SystemAgentRunResult {
   /** RFC-237 (P2-4): masked terminal error text for `status: 'result-error'`. */
   resultError?: string
   capturedSessionId?: string
+  /** Native resume identity was contradicted or reset without a replacement. */
+  nativeSessionIntegrityFailed?: boolean
   scratchDir: string
   /** True when the scratch dir was deliberately kept (failure diagnosis / GC). */
   scratchRetained: boolean
@@ -352,12 +356,32 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       await failSink('stream-persist-failed', error)
     }
   }
-  const setSinkRoot = async (sessionId: string): Promise<void> => {
-    if (opts.eventSink === undefined || sinkFailed) return
+  const setSinkRoot = async (sessionId: string, previousSessionId?: string): Promise<void> => {
+    if (opts.eventSink === undefined) return
+    if (sinkFailed && opts.nativeIdentityAuthoritative !== true) return
     try {
-      await opts.eventSink.setRootSessionId(sessionId)
+      await opts.eventSink.setRootSessionId(sessionId, previousSessionId)
     } catch (error) {
       await failSink('stream-persist-failed', error)
+      // This hook owns native-session claim/rotation for MCP. Continuing the
+      // child after a collision would violate the single-writer lease.
+      if (opts.nativeIdentityAuthoritative === true) throw error
+    }
+  }
+  const markSinkResetPending = async (sessionId: string): Promise<void> => {
+    if (opts.eventSink === undefined) return
+    if (sinkFailed && opts.nativeIdentityAuthoritative !== true) return
+    if (opts.eventSink.markRootSessionResetPending === undefined) {
+      if (opts.nativeIdentityAuthoritative === true) {
+        throw new Error('authoritative native-session sink cannot persist reset boundaries')
+      }
+      return
+    }
+    try {
+      await opts.eventSink.markRootSessionResetPending(sessionId)
+    } catch (error) {
+      await failSink('stream-persist-failed', error)
+      if (opts.nativeIdentityAuthoritative === true) throw error
     }
   }
 
@@ -440,6 +464,10 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       // this function keeps only what is system-agent-specific: the event
       // sink, output evidence, and the result-domain mapping.
       let sessionId: string | undefined
+      let pendingConversationReset:
+        | { outgoingSessionId: string; newConversationId: string }
+        | undefined
+      let nativeSessionIntegrityFailed = false
       let eventText = ''
       let eventTextBytes = 0
       let stderrText = ''
@@ -518,9 +546,50 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
               return
             }
             outputEvidence.lastNormalizedEventKind = ev.kind
-            if (ev.sessionId !== undefined && sessionId === undefined) {
-              sessionId = ev.sessionId
-              await setSinkRoot(ev.sessionId)
+            if (ev.sessionId !== undefined) {
+              if (sessionId === undefined) {
+                sessionId = ev.sessionId
+                try {
+                  await setSinkRoot(ev.sessionId)
+                } catch {
+                  nativeSessionIntegrityFailed = true
+                  throw new Error('runtime native session claim failed')
+                }
+              } else if (sessionId !== ev.sessionId) {
+                if (
+                  pendingConversationReset === undefined ||
+                  pendingConversationReset.outgoingSessionId !== sessionId
+                ) {
+                  nativeSessionIntegrityFailed = true
+                  throw new Error('runtime changed native session id without a conversation reset')
+                }
+                const previousSessionId = sessionId
+                sessionId = ev.sessionId
+                pendingConversationReset = undefined
+                try {
+                  await setSinkRoot(sessionId, previousSessionId)
+                } catch {
+                  nativeSessionIntegrityFailed = true
+                  throw new Error('runtime native session rotation failed')
+                }
+              }
+            }
+            if (ev.conversationReset !== undefined) {
+              if (
+                sessionId === undefined ||
+                ev.conversationReset.outgoingSessionId !== sessionId ||
+                pendingConversationReset !== undefined
+              ) {
+                nativeSessionIntegrityFailed = true
+                throw new Error('runtime reported an invalid conversation reset boundary')
+              }
+              pendingConversationReset = ev.conversationReset
+              try {
+                await markSinkResetPending(sessionId)
+              } catch {
+                nativeSessionIntegrityFailed = true
+                throw new Error('runtime native session reset fence failed')
+              }
             }
             if (typeof ev.text === 'string' && ev.text.length > 0) {
               const bytes = Buffer.byteLength(ev.text, 'utf8')
@@ -588,6 +657,28 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       }
       if (run.outcome === 'unreaped') {
         return fail('unreaped')
+      }
+      if (run.pumpError !== undefined) {
+        await failSink('stream-persist-failed', new Error(run.pumpError))
+        return fail('exit-nonzero', {
+          stderrTail: maskDiagnosticsText(run.pumpError).slice(0, STDERR_TAIL_CAP),
+          ...(nativeSessionIntegrityFailed || pendingConversationReset !== undefined
+            ? { nativeSessionIntegrityFailed: true }
+            : {}),
+        })
+      }
+      if (pendingConversationReset !== undefined) {
+        await failSink(
+          'stream-persist-failed',
+          new Error(
+            'runtime ended before reporting the replacement native session id after conversation reset',
+          ),
+        )
+        return fail('exit-nonzero', {
+          stderrTail:
+            'runtime ended before reporting the replacement native session id after conversation reset',
+          nativeSessionIntegrityFailed: true,
+        })
       }
       const exitCode = run.exitCode
       if (run.drainTimedOut === true) {

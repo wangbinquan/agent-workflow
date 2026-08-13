@@ -61,18 +61,20 @@ function successResult(
   }
 }
 
-async function seed(): Promise<{
+async function seed(protocol: 'opencode' | 'claude-code' = 'opencode'): Promise<{
   db: DbClient
   mcp: NonNullable<Awaited<ReturnType<typeof getMcpById>>>
   root: string
+  runtimeName: string
 }> {
   const db = createInMemoryDb(MIGRATIONS)
+  const runtimeName = protocol === 'claude-code' ? 'test-claude' : 'test-opencode'
   db.insert(runtimes)
     .values({
       id: 'runtime-1',
-      name: 'test-opencode',
-      protocol: 'opencode',
-      binaryPath: canonicalBinaryPath('opencode'),
+      name: runtimeName,
+      protocol,
+      binaryPath: canonicalBinaryPath(protocol === 'claude-code' ? 'claude' : 'opencode'),
       model: 'openai/test-model',
       enabled: true,
     })
@@ -93,7 +95,7 @@ async function seed(): Promise<{
   if (mcp === null) throw new Error('fixture MCP missing')
   const root = mkdtempSync(join(tmpdir(), 'rfc238-service-'))
   tempDirs.push(root)
-  return { db, mcp, root }
+  return { db, mcp, root, runtimeName }
 }
 
 async function waitFor(check: () => boolean | Promise<boolean>, timeoutMs = 2000): Promise<void> {
@@ -215,6 +217,260 @@ describe('RFC-238 MCP runtime test service', () => {
     session = await service.get(actor, mcp.id, session.id)
     expect(session.status).toBe('ended')
     expect(session.endReason).toBe('idle-timeout')
+  })
+
+  test('explicit conversation reset rotates the playground native lease and next-turn resume id', async () => {
+    const { db, mcp, root, runtimeName } = await seed('claude-code')
+    const observedBeforeRuns: Array<string | null> = []
+    let initialNativeId: string | null = null
+    let runs = 0
+    const service = new McpRuntimeTestService({
+      db,
+      configPath: join(root, 'config.json'),
+      appHome: root,
+      runFn: async (opts) => {
+        expect(opts.nativeIdentityAuthoritative).toBe(true)
+        runs += 1
+        const persistedNativeId =
+          db
+            .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+            .from(mcpRuntimeTestSessions)
+            .get()?.id ?? null
+        observedBeforeRuns.push(persistedNativeId)
+        await opts.onSpawned?.({
+          pid: 100 + runs,
+          spawnedAt: runs,
+          spawnBinaryPath: canonicalBinaryPath('claude'),
+        })
+        if (runs === 1) {
+          expect(persistedNativeId).not.toBeNull()
+          initialNativeId = persistedNativeId
+          await opts.eventSink?.setRootSessionId(persistedNativeId!)
+          await opts.eventSink?.append({
+            ts: 1,
+            kind: 'text',
+            payload: JSON.stringify({
+              type: 'assistant',
+              session_id: persistedNativeId,
+              message: { content: [{ type: 'text', text: 'before reset' }] },
+            }),
+            sessionId: persistedNativeId!,
+            parentSessionId: null,
+            source: 'stream',
+          })
+          await opts.eventSink?.markRootSessionResetPending?.(persistedNativeId!)
+          await opts.eventSink?.append({
+            ts: 2,
+            kind: 'text',
+            payload: JSON.stringify({
+              type: 'conversation_reset',
+              session_id: persistedNativeId,
+              new_conversation_id: 'ui-correlation-only',
+            }),
+            sessionId: persistedNativeId!,
+            parentSessionId: null,
+            source: 'stream',
+          })
+          await opts.eventSink?.setRootSessionId('native-reset-new', persistedNativeId!)
+        } else {
+          await opts.eventSink?.setRootSessionId('native-reset-new')
+        }
+        await opts.eventSink?.markTerminal('complete')
+        return successResult(opts, 'native-reset-new')
+      },
+    })
+    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
+      mcp,
+    )
+    const created = await service.create(actor, mcp, {
+      expectedMcpConfigHash: hash,
+      runtimeName,
+      message: 'first',
+      clientCreateId: 'create-reset',
+      clientMessageId: 'message-reset-1',
+    })
+    await waitFor(
+      async () => (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
+    )
+    let session = await service.get(actor, mcp.id, created.sessionId)
+    expect(session.nativeSessionReady).toBe(true)
+    expect(
+      db
+        .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+        .from(mcpRuntimeTestSessions)
+        .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
+        .get(),
+    ).toEqual({ id: 'native-reset-new' })
+
+    await service.message(actor, mcp, created.sessionId, {
+      message: 'second',
+      clientMessageId: 'message-reset-2',
+      expectedSessionVersion: session.sessionVersion,
+    })
+    await waitFor(
+      async () => (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
+    )
+    session = await service.get(actor, mcp.id, created.sessionId)
+    expect(session.nativeSessionReady).toBe(true)
+    expect(initialNativeId).not.toBeNull()
+    expect(observedBeforeRuns).toEqual([initialNativeId, 'native-reset-new'])
+    expect(
+      db
+        .select({ id: mcpRuntimeTestEvents.sessionId })
+        .from(mcpRuntimeTestEvents)
+        .where(eq(mcpRuntimeTestEvents.testSessionId, created.sessionId))
+        .all(),
+    ).toEqual([{ id: 'native-reset-new' }, { id: 'native-reset-new' }])
+  })
+
+  test('reset without replacement makes an established playground session unusable', async () => {
+    const { db, mcp, root, runtimeName } = await seed('claude-code')
+    let runs = 0
+    const service = new McpRuntimeTestService({
+      db,
+      configPath: join(root, 'config.json'),
+      appHome: root,
+      runFn: async (opts) => {
+        expect(opts.nativeIdentityAuthoritative).toBe(true)
+        runs += 1
+        const persistedNativeId = db
+          .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+          .from(mcpRuntimeTestSessions)
+          .get()?.id
+        expect(persistedNativeId).toBeString()
+        await opts.onSpawned?.({
+          pid: 200 + runs,
+          spawnedAt: runs,
+          spawnBinaryPath: canonicalBinaryPath('claude'),
+        })
+        await opts.eventSink?.setRootSessionId(persistedNativeId!)
+        if (runs === 1) {
+          await opts.eventSink?.markTerminal('complete')
+          return successResult(opts, persistedNativeId!)
+        }
+        await opts.eventSink?.markRootSessionResetPending?.(persistedNativeId!)
+        await opts.eventSink?.append({
+          ts: 2,
+          kind: 'text',
+          payload: JSON.stringify({
+            type: 'conversation_reset',
+            session_id: persistedNativeId,
+            new_conversation_id: 'ui-correlation-only',
+          }),
+          sessionId: persistedNativeId!,
+          parentSessionId: null,
+          source: 'stream',
+        })
+        await opts.eventSink?.markTerminal('incomplete', 'stream-persist-failed')
+        const failed = successResult(opts, persistedNativeId!, 'exit-nonzero')
+        delete failed.capturedSessionId
+        failed.nativeSessionIntegrityFailed = true
+        return failed
+      },
+    })
+    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
+      mcp,
+    )
+    const created = await service.create(actor, mcp, {
+      expectedMcpConfigHash: hash,
+      runtimeName,
+      message: 'first',
+      clientCreateId: 'create-reset-eof',
+      clientMessageId: 'message-reset-eof-1',
+    })
+    await waitFor(
+      async () => (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
+    )
+    const ready = await service.get(actor, mcp.id, created.sessionId)
+    await service.message(actor, mcp, created.sessionId, {
+      message: 'reset then eof',
+      clientMessageId: 'message-reset-eof-2',
+      expectedSessionVersion: ready.sessionVersion,
+    })
+    await waitFor(
+      async () => (await service.get(actor, mcp.id, created.sessionId)).status === 'ended',
+    )
+    const ended = await service.get(actor, mcp.id, created.sessionId)
+    expect(ended.nativeSessionReady).toBe(false)
+    expect(ended.endReason).toBe('session-unusable')
+    expect(ended.turns.at(-1)).toMatchObject({
+      captureState: 'incomplete',
+      failureCode: 'mcp-test-session-conflict',
+    })
+    expect(
+      db
+        .select({ reason: mcpRuntimeTestTurns.captureIncompleteReason })
+        .from(mcpRuntimeTestTurns)
+        .where(eq(mcpRuntimeTestTurns.id, ended.turns.at(-1)!.id))
+        .get(),
+    ).toEqual({ reason: 'stream-persist-failed' })
+    expect(runs).toBe(2)
+  })
+
+  test('native identity integrity failure cannot restore a prior ready resume id', async () => {
+    const { db, mcp, root, runtimeName } = await seed('claude-code')
+    let runs = 0
+    const service = new McpRuntimeTestService({
+      db,
+      configPath: join(root, 'config.json'),
+      appHome: root,
+      runFn: async (opts) => {
+        expect(opts.nativeIdentityAuthoritative).toBe(true)
+        runs += 1
+        const persistedNativeId = db
+          .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+          .from(mcpRuntimeTestSessions)
+          .get()?.id
+        expect(persistedNativeId).toBeString()
+        await opts.onSpawned?.({
+          pid: 300 + runs,
+          spawnedAt: runs,
+          spawnBinaryPath: canonicalBinaryPath('claude'),
+        })
+        await opts.eventSink?.setRootSessionId(persistedNativeId!)
+        if (runs === 1) {
+          await opts.eventSink?.markTerminal('complete')
+          return successResult(opts, persistedNativeId!)
+        }
+        await opts.eventSink?.markTerminal('incomplete', 'stream-persist-failed')
+        const failed = successResult(opts, persistedNativeId!, 'exit-nonzero')
+        delete failed.capturedSessionId
+        failed.nativeSessionIntegrityFailed = true
+        return failed
+      },
+    })
+    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
+      mcp,
+    )
+    const created = await service.create(actor, mcp, {
+      expectedMcpConfigHash: hash,
+      runtimeName,
+      message: 'establish native session',
+      clientCreateId: 'create-identity-invalid',
+      clientMessageId: 'message-identity-invalid-1',
+    })
+    await waitFor(
+      async () => (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
+    )
+    const ready = await service.get(actor, mcp.id, created.sessionId)
+    expect(ready.nativeSessionReady).toBe(true)
+
+    await service.message(actor, mcp, created.sessionId, {
+      message: 'contradict native identity',
+      clientMessageId: 'message-identity-invalid-2',
+      expectedSessionVersion: ready.sessionVersion,
+    })
+    await waitFor(
+      async () => (await service.get(actor, mcp.id, created.sessionId)).status === 'ended',
+    )
+    const ended = await service.get(actor, mcp.id, created.sessionId)
+    expect(ended.nativeSessionReady).toBe(false)
+    expect(ended.endReason).toBe('session-unusable')
+    expect(ended.turns.at(-1)).toMatchObject({
+      status: 'failed',
+      captureState: 'incomplete',
+      failureCode: 'mcp-test-session-conflict',
+    })
   })
 
   test('cancel current turn preserves the session; end now terminates the next turn', async () => {

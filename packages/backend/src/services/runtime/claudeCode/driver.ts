@@ -554,6 +554,7 @@ export const claudeCodeDriver: RuntimeDriver = {
   async captureSessions(ctx: SessionCaptureContext): Promise<void> {
     await captureClaudeSessions({
       rootSessionId: ctx.rootSessionId,
+      logicalRootSessionId: ctx.logicalRootSessionId,
       nodeRunId: ctx.nodeRunId,
       taskId: ctx.taskId,
       db: ctx.db,

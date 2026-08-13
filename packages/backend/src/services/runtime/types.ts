@@ -313,7 +313,10 @@ export interface ListModelsOpts {
  *  needs — opencode: SQLite BFS + partId dedupe; claude: JSONL under claude's
  *  user-level config root). */
 export interface SessionCaptureContext {
+  /** Native store/directory lookup key for this captured epoch. */
   rootSessionId: string
+  /** Optional final logical root bucket when lookup and resume epochs differ. */
+  logicalRootSessionId?: string
   nodeRunId: string
   taskId: string
   db: DbClient
@@ -888,6 +891,7 @@ export interface SystemAgentSessionSweepContext {
       source: 'stream' | 'live-child' | 'post-run-child'
       externalEventId?: string
     }): Promise<void>
+    markRootSessionResetPending?(sessionId: string): Promise<void>
     setRootSessionId(sessionId: string, previousSessionId?: string): Promise<void>
     markTerminal(
       state: 'complete' | 'truncated' | 'incomplete',

@@ -7,8 +7,12 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
+import {
+  claimNewRuntimeSession,
+  repairRuntimeSessionLeasesAfterOrphanReap,
+} from '../src/services/runtimeSessionLease'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -97,5 +101,85 @@ describe('reapOrphanRuns', () => {
     ).rejects.toThrow('boot recovery refused')
     const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
     expect(nr?.status).toBe('running')
+  })
+
+  test('terminal run with a held native lease is reaped before lease repair', async () => {
+    const { taskId, runId } = await seedRunning(h.db)
+    claimNewRuntimeSession(h.db, {
+      protocol: 'claude-code',
+      sessionId: 'terminal-held-native',
+      taskId,
+      nodeId: 'a',
+      currentNodeRunId: runId,
+      leaseNonceDigest: 'terminal-held-nonce',
+    })
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'failed', failureCode: 'runtime-session-identity-invalid', pid: 4242 })
+      .where(eq(nodeRuns.id, runId))
+    const calls: string[] = []
+
+    await reapOrphanRuns(h.db, {
+      killStaleRunProcessTree: async (row) => {
+        calls.push(`kill:${row.pid}`)
+        return 'killed'
+      },
+    })
+    expect(calls).toEqual(['kill:4242'])
+    expect(repairRuntimeSessionLeasesAfterOrphanReap(h.db, true)).toBe(1)
+    expect(
+      h.db
+        .select()
+        .from(runtimeSessionLeases)
+        .where(eq(runtimeSessionLeases.sessionId, 'terminal-held-native'))
+        .get(),
+    ).toBeUndefined()
+  })
+
+  test('terminal child that survives keeps its native lease held and aborts boot recovery', async () => {
+    const { taskId, runId } = await seedRunning(h.db)
+    claimNewRuntimeSession(h.db, {
+      protocol: 'claude-code',
+      sessionId: 'terminal-live-native',
+      taskId,
+      nodeId: 'a',
+      currentNodeRunId: runId,
+      leaseNonceDigest: 'terminal-live-nonce',
+    })
+    await h.db.update(nodeRuns).set({ status: 'failed', pid: 4343 }).where(eq(nodeRuns.id, runId))
+
+    await expect(
+      reapOrphanRuns(h.db, { killStaleRunProcessTree: async () => 'kill-failed' }),
+    ).rejects.toThrow('boot recovery refused')
+    expect(
+      h.db
+        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+        .from(runtimeSessionLeases)
+        .where(eq(runtimeSessionLeases.sessionId, 'terminal-live-native'))
+        .get(),
+    ).toEqual({ holder: runId })
+  })
+
+  test('a held native lease with no PID is not treated as proof that its child is gone', async () => {
+    const { taskId, runId } = await seedRunning(h.db)
+    claimNewRuntimeSession(h.db, {
+      protocol: 'claude-code',
+      sessionId: 'held-without-pid',
+      taskId,
+      nodeId: 'a',
+      currentNodeRunId: runId,
+      leaseNonceDigest: 'held-without-pid-nonce',
+    })
+
+    await expect(
+      reapOrphanRuns(h.db, { killStaleRunProcessTree: async () => 'no-pid' }),
+    ).rejects.toThrow('reap was unproven')
+    expect(
+      h.db
+        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+        .from(runtimeSessionLeases)
+        .where(eq(runtimeSessionLeases.sessionId, 'held-without-pid'))
+        .get(),
+    ).toEqual({ holder: runId })
   })
 })

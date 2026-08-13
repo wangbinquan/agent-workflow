@@ -48,7 +48,7 @@ import type {
   WorkflowDefinition,
   WorkflowSyncPreview,
 } from '@agent-workflow/shared'
-import { and, asc, count, desc, eq, gt, inArray, isNull, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, type SQL } from 'drizzle-orm'
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
@@ -64,6 +64,7 @@ import {
   nodeRunEvents,
   nodeRunOutputs,
   nodeRuns,
+  runtimeSessionLeases,
   taskCollaborators,
   taskRepos,
   taskSpaceNodes,
@@ -84,6 +85,8 @@ import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
 import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
+import type { StaleRunKillOutcome } from '@/util/process'
+import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import { recordRecoveryEvent } from '@/services/recovery'
 import { setTaskStatus, transitionTaskStatusByEvent, trySetTaskStatus } from '@/services/lifecycle'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
@@ -113,7 +116,7 @@ import {
 } from '@/ws/broadcaster'
 import { runTask, type RunTaskOptions } from './scheduler'
 import { Paths } from '@/util/paths'
-import { createLogger } from '@/util/log'
+import { createLogger, type Logger } from '@/util/log'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import { parseInjectedSnapshotJson } from './memoryInject'
 import { parsePortValidationFailuresJson } from './envelope'
@@ -234,6 +237,8 @@ export interface StartTaskDeps {
    */
   secretBox?: SecretBox
   db: DbClient
+  /** Test/recovery seam; production uses the structured process-tree reaper. */
+  killStaleRunProcessTree?: typeof killStaleRunProcessTree
   /** Override app home (tests). Defaults to `Paths.root`. */
   appHome?: string
   /** Default per-node timeout (ms). Defaults from settings; tests can pin. */
@@ -2658,6 +2663,7 @@ async function escalateLiveChildSurvived(
   taskId: string,
   run: { id: string; nodeId: string; pid: number | null },
   reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
+  killOutcome: StaleRunKillOutcome = 'kill-failed',
 ): Promise<never> {
   await setTaskStatus({
     db,
@@ -2667,7 +2673,7 @@ async function escalateLiveChildSurvived(
     extra: {
       finishedAt: Date.now(),
       errorSummary: 'live-child-survived',
-      errorMessage: `node_run ${run.id} (node ${run.nodeId}) opencode child pid ${run.pid ?? '?'} is still alive and survived SIGTERM→SIGKILL; refusing to reset the worktree under a live writer`,
+      errorMessage: `node_run ${run.id} (node ${run.nodeId}) child reap could not be proven (${killOutcome}, pid ${run.pid ?? '?'}); refusing to reset the worktree while a writer may still be alive`,
       failedNodeId: run.nodeId,
     },
     reason: `${reason}:live-child-survived`,
@@ -2676,7 +2682,7 @@ async function escalateLiveChildSurvived(
     taskId,
     nodeRunId: run.id,
     kind: 'live-child-survived',
-    reason: `pid ${run.pid ?? '?'} survived SIGKILL`,
+    reason: `child reap unproven: ${killOutcome}; pid ${run.pid ?? '?'}`,
     before: { status: 'pending' },
     after: { status: 'failed' },
   })
@@ -2684,8 +2690,87 @@ async function escalateLiveChildSurvived(
   if (failed !== null) emitTaskStatus(failed)
   throw new ConflictError(
     'live-child-survived',
-    `cannot ${reason === 'resumeTask' ? 'resume' : 'retry'}: node_run ${run.id} child pid ${run.pid ?? '?'} is still alive and unkillable; the worktree cannot be safely reset under it`,
+    `cannot ${reason === 'resumeTask' ? 'resume' : 'retry'}: node_run ${run.id} child reap is unproven (${killOutcome}, pid ${run.pid ?? '?'}); the worktree cannot be safely reset while it may still be writing`,
   )
+}
+
+async function reapRunBeforeWorktreeReset(
+  db: DbClient,
+  taskId: string,
+  run: {
+    id: string
+    nodeId: string
+    pid: number | null
+    startedAt: number | null
+    spawnBinaryPath: string | null
+  },
+  reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
+  deps: StartTaskDeps,
+  log: Logger,
+): Promise<void> {
+  const heldNativeLease = db
+    .select({ sessionId: runtimeSessionLeases.sessionId })
+    .from(runtimeSessionLeases)
+    .where(eq(runtimeSessionLeases.leaseNodeRunId, run.id))
+    .get()
+  const killOutcome = await (deps.killStaleRunProcessTree ?? killStaleRunProcessTree)(run)
+  if (killOutcome === 'killed') {
+    log.warn(`${reason}: stale runtime child group-killed before rollback`, {
+      nodeRunId: run.id,
+      pid: run.pid,
+    })
+  }
+  if (heldNativeLease !== undefined) {
+    if (killOutcome !== 'not-alive' && killOutcome !== 'killed') {
+      await escalateLiveChildSurvived(db, taskId, run, reason, killOutcome)
+    }
+    // A proven-dead terminal holder must be neutralized/discarded before the
+    // scheduler can admit a replacement. The helper validates terminal state
+    // and preserves reset/identity-invalid fail-closed semantics.
+    if (repairRuntimeSessionLeasesAfterOrphanReap(db, true, run.id) !== 1) {
+      await escalateLiveChildSurvived(db, taskId, run, reason, 'kill-failed')
+    }
+  } else if (killOutcome === 'kill-failed') {
+    await escalateLiveChildSurvived(db, taskId, run, reason, killOutcome)
+  }
+}
+
+async function reapHeldRuntimeSessionOwnersForTask(
+  db: DbClient,
+  taskId: string,
+  reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
+  deps: StartTaskDeps,
+  log: Logger,
+): Promise<void> {
+  const ownerIds = [
+    ...new Set(
+      db
+        .select({ nodeRunId: runtimeSessionLeases.leaseNodeRunId })
+        .from(runtimeSessionLeases)
+        .where(
+          and(
+            eq(runtimeSessionLeases.taskId, taskId),
+            isNotNull(runtimeSessionLeases.leaseNodeRunId),
+          ),
+        )
+        .all()
+        .flatMap((row) => (row.nodeRunId === null ? [] : [row.nodeRunId])),
+    ),
+  ]
+  for (const nodeRunId of ownerIds) {
+    const run = db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    if (run === undefined) {
+      await escalateLiveChildSurvived(
+        db,
+        taskId,
+        { id: nodeRunId, nodeId: '(missing)', pid: null },
+        reason,
+        'no-pid',
+      )
+      continue
+    }
+    await reapRunBeforeWorktreeReset(db, taskId, run, reason, deps, log)
+  }
 }
 
 // RFC-202 T3: aligned with the shared lifecycle table's `cancel` event —
@@ -3082,6 +3167,11 @@ async function resumeKick(
     throw err
   }
 
+  // Direct framework children (commit-message / merge-resolve agents) are
+  // nested node_runs and intentionally absent from `toRollback`. Fence every
+  // held native-session owner for the task before any rollback or fresh kick.
+  await reapHeldRuntimeSessionOwnersForTask(db, id, opts.reason, deps, log)
+
   // Collect the latest non-done run per nodeId — those need rollback + a fresh
   // attempt. Freshness is ULID id-order, matching the scheduler's authority
   // (isFresherNodeRun). retryIndex ordering was wrong: a clarify-driven rerun is
@@ -3115,15 +3205,7 @@ async function resumeKick(
   // (409) rather than git-reset under a live writer. Killing is idempotent and
   // safe; only the rollback is gated on every child being dead/recycled.
   for (const r of toRollback) {
-    const killOutcome = await killStaleRunProcessTree(r)
-    if (killOutcome === 'killed') {
-      log.warn(`${opts.verb}: stale opencode child group-killed before rollback`, {
-        nodeRunId: r.id,
-        pid: r.pid,
-      })
-    } else if (killOutcome === 'kill-failed') {
-      await escalateLiveChildSurvived(db, id, r, opts.reason) // throws 409
-    }
+    await reapRunBeforeWorktreeReset(db, id, r, opts.reason, deps, log)
   }
 
   for (const r of toRollback) {
@@ -3768,6 +3850,8 @@ export async function retryNode(
     throw err
   }
 
+  await reapHeldRuntimeSessionOwnersForTask(db, taskId, 'retryNode', opts.deps, log)
+
   // RFC-243 D12 — only the retry CAS winner may supersede child invocations.
   // Cancel every frozen target/downstream child before rollback or placeholder
   // minting, so no old child can keep writing the inherited workspace while a
@@ -3821,16 +3905,7 @@ export async function retryNode(
   // this specific historical attempt).
   // RFC-098 WP-8: same kill-then-proceed as resumeTask — group-kill the
   // target row's still-alive child (if any) before touching the worktree.
-  const retryKillOutcome = await killStaleRunProcessTree(runRow)
-  if (retryKillOutcome === 'killed') {
-    log.warn('retryNode: stale opencode child group-killed before rollback', {
-      nodeRunId: runRow.id,
-      pid: runRow.pid,
-    })
-  } else if (retryKillOutcome === 'kill-failed') {
-    // RFC-108 T9 (AR-14): our child survived SIGKILL — do NOT git-reset under it.
-    await escalateLiveChildSurvived(db, taskId, runRow, 'retryNode') // throws 409
-  }
+  await reapRunBeforeWorktreeReset(db, taskId, runRow, 'retryNode', opts.deps, log)
   // RFC-098 WP-9: snapshot-missing escalates to task failed + 409 (same
   // contract as resumeTask) — no placeholder rows are minted and no
   // scheduler is kicked when the promised baseline no longer exists.

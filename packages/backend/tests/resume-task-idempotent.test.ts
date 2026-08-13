@@ -21,8 +21,9 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
 import { resumeTask } from '../src/services/task'
+import { claimNewRuntimeSession } from '../src/services/runtimeSessionLease'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -358,5 +359,56 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     // Fail-closed: the worktree was never reset/cleaned.
     expect(readFileSync(join(h.repoPath, 'README.md'), 'utf-8')).toBe('# DIRTY\n')
     expect(existsSync(join(h.repoPath, 'stray.txt'))).toBe(true)
+  })
+
+  test('held native lease requires proven child reap before manual resume', async () => {
+    h = await buildHarness('failed')
+    writeFileSync(join(h.repoPath, 'README.md'), '# native-session-snapshot\n')
+    const realSha = await gitStashSnapshot(h.repoPath)
+    const failedId = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: failedId,
+      taskId: h.taskId,
+      nodeId: 'doc',
+      status: 'running',
+      retryIndex: 0,
+      iteration: 0,
+      preSnapshot: realSha,
+      opencodeSessionId: null,
+      pid: null,
+      startedAt: Date.now() - 200,
+    })
+    await claimNewRuntimeSession(h.db, {
+      protocol: 'claude-code',
+      sessionId: 'resume-held-native',
+      taskId: h.taskId,
+      nodeId: 'doc',
+      currentNodeRunId: failedId,
+      leaseNonceDigest: 'a'.repeat(64),
+    })
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'failed', finishedAt: Date.now() - 100 })
+      .where(eq(nodeRuns.id, failedId))
+
+    await expect(
+      resumeTask(h.db, h.taskId, {
+        db: h.db,
+        appHome: h.appHome,
+        binaryOverride: ['/usr/bin/env', 'true'],
+        killStaleRunProcessTree: async () => 'no-pid',
+      }),
+    ).rejects.toMatchObject({ code: 'live-child-survived' })
+
+    expect(
+      h.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, h.taskId)).get(),
+    ).toEqual({ status: 'failed' })
+    expect(
+      h.db
+        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+        .from(runtimeSessionLeases)
+        .where(eq(runtimeSessionLeases.sessionId, 'resume-held-native'))
+        .get(),
+    ).toEqual({ holder: failedId })
   })
 })

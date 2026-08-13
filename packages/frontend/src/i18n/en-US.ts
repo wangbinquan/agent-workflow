@@ -3509,6 +3509,10 @@ export const enUS: Resources = {
         'The runtime output stream was interrupted before its output could be persisted safely.',
       'runtime-stream-interrupted__hint':
         'Use Resume to start a fresh runtime process after the automatic retry budget is exhausted.',
+      'runtime-session-identity-invalid':
+        'The runtime contradicted its native session identity. The old resume ID was invalidated to prevent concurrent or stale continuation.',
+      'runtime-session-identity-invalid__hint':
+        'The automatic retry starts a fresh runtime process; use Resume if its retry budget is exhausted.',
       'envelope-missing':
         'The agent did not produce output in the agreed format (missing output envelope).',
       'envelope-missing__hint':

@@ -27,6 +27,7 @@ import type { SystemAgentEventSinkV1 } from '../src/services/sessionEventSink'
 import type { Logger } from '../src/util/log'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
+const MOCK_CLAUDE = resolve(import.meta.dir, 'fixtures', 'mock-claude.ts')
 
 // RFC-254: a full spawn command head `[bun, run, <mock>]` (baseOpts routes an
 // array through opencodeCmd, a string through runtimeBinary). This WAS a
@@ -67,6 +68,14 @@ const SET_ENV_KEYS = [
   'MOCK_OPENCODE_EVENTS',
   'MOCK_OPENCODE_RAW_AGENT_TEXT',
   'MOCK_OPENCODE_SKIP_ENVELOPE',
+  'MOCK_CLAUDE_SESSION_ID',
+  'MOCK_CLAUDE_NON_INIT_SESSION_ID',
+  'MOCK_CLAUDE_RESET_SESSION_ID',
+  'MOCK_CLAUDE_RESET_CONVERSATION_ID',
+  'MOCK_CLAUDE_STOP_AFTER_RESET',
+  'MOCK_CLAUDE_SKIP_ASSISTANT',
+  'MOCK_CLAUDE_PARALLEL_SUBAGENT_SESSION_IDS',
+  'MOCK_CLAUDE_ECHO_PROMPT',
 ]
 const testUnlessWindows = test.skipIf(process.platform === 'win32')
 
@@ -121,6 +130,276 @@ describe('runSystemAgent', () => {
       r.outputEvidence.retainedAssistantTextBytes,
     )
     expect(existsSync(join(scratchParent, 'turn-ok'))).toBe(false)
+  })
+
+  test('Claude parallel subagent ids stay event-local in the system-agent path', async () => {
+    process.env.MOCK_CLAUDE_SESSION_ID = 'system-parallel-root'
+    process.env.MOCK_CLAUDE_PARALLEL_SUBAGENT_SESSION_IDS = JSON.stringify([
+      'system-child-a',
+      'system-child-b',
+      'system-child-c',
+    ])
+    process.env.MOCK_CLAUDE_ECHO_PROMPT = '1'
+    const roots: Array<[string, string | undefined]> = []
+    const payloads: string[] = []
+    const terminals: string[] = []
+    const sink: SystemAgentEventSinkV1 = {
+      append: async (event) => {
+        payloads.push(event.payload)
+      },
+      setRootSessionId: async (id, previous) => {
+        roots.push([id, previous])
+      },
+      markTerminal: async (state) => {
+        terminals.push(state)
+      },
+    }
+
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParentDir(), wrapperFor(MOCK_CLAUDE)),
+      protocol: 'claude-code',
+      eventSink: sink,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.capturedSessionId).toBe('system-parallel-root')
+    expect(roots).toEqual([['system-parallel-root', undefined]])
+    expect(payloads.some((payload) => payload.includes('system-child-a'))).toBe(true)
+    expect(terminals).toEqual(['complete'])
+  })
+
+  test('Claude conversation_reset rotates the system-agent root and completes on B', async () => {
+    process.env.MOCK_CLAUDE_SESSION_ID = 'system-reset-a'
+    process.env.MOCK_CLAUDE_RESET_SESSION_ID = 'system-reset-b'
+    process.env.MOCK_CLAUDE_RESET_CONVERSATION_ID = 'system-ui-key'
+    process.env.MOCK_CLAUDE_ECHO_PROMPT = '1'
+    const calls: string[] = []
+    const sink: SystemAgentEventSinkV1 = {
+      append: async (event) => {
+        const frame = JSON.parse(event.payload) as { type?: string }
+        calls.push(`append:${frame.type ?? event.kind}`)
+      },
+      setRootSessionId: async (id, previous) => {
+        calls.push(`root:${previous ?? '-'}->${id}`)
+      },
+      markRootSessionResetPending: async (id) => {
+        calls.push(`pending:${id}`)
+      },
+      markTerminal: async (state) => {
+        calls.push(`terminal:${state}`)
+      },
+    }
+
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParentDir(), wrapperFor(MOCK_CLAUDE)),
+      protocol: 'claude-code',
+      eventSink: sink,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.capturedSessionId).toBe('system-reset-b')
+    expect(result.nativeSessionIntegrityFailed).toBeUndefined()
+    expect(calls).toEqual([
+      'root:-->system-reset-a',
+      'append:system',
+      'pending:system-reset-a',
+      'append:conversation_reset',
+      'root:system-reset-a->system-reset-b',
+      'append:assistant',
+      'append:result',
+      'terminal:complete',
+    ])
+  })
+
+  test('Claude reset can resolve directly from the replacement result without a second init', async () => {
+    process.env.MOCK_CLAUDE_SESSION_ID = 'system-result-only-a'
+    process.env.MOCK_CLAUDE_RESET_SESSION_ID = 'system-result-only-b'
+    process.env.MOCK_CLAUDE_RESET_CONVERSATION_ID = 'system-result-only-ui-key'
+    process.env.MOCK_CLAUDE_SKIP_ASSISTANT = '1'
+    const calls: string[] = []
+    const sink: SystemAgentEventSinkV1 = {
+      append: async (event) => {
+        const frame = JSON.parse(event.payload) as { type?: string }
+        calls.push(`append:${frame.type ?? event.kind}`)
+      },
+      setRootSessionId: async (id, previous) => {
+        calls.push(`root:${previous ?? '-'}->${id}`)
+      },
+      markRootSessionResetPending: async (id) => {
+        calls.push(`pending:${id}`)
+      },
+      markTerminal: async (state) => {
+        calls.push(`terminal:${state}`)
+      },
+    }
+
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParentDir(), wrapperFor(MOCK_CLAUDE)),
+      protocol: 'claude-code',
+      eventSink: sink,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.capturedSessionId).toBe('system-result-only-b')
+    expect(calls).toEqual([
+      'root:-->system-result-only-a',
+      'append:system',
+      'pending:system-result-only-a',
+      'append:conversation_reset',
+      'root:system-result-only-a->system-result-only-b',
+      'append:result',
+      'terminal:complete',
+    ])
+  })
+
+  test('Claude reset EOF returns no stale id and settles capture incomplete', async () => {
+    process.env.MOCK_CLAUDE_SESSION_ID = 'system-reset-stale'
+    process.env.MOCK_CLAUDE_RESET_SESSION_ID = 'system-reset-never-observed'
+    process.env.MOCK_CLAUDE_STOP_AFTER_RESET = '1'
+    const terminals: string[] = []
+    const sink: SystemAgentEventSinkV1 = {
+      append: async () => {},
+      setRootSessionId: async () => {},
+      markRootSessionResetPending: async () => {},
+      markTerminal: async (state) => {
+        terminals.push(state)
+      },
+    }
+
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParentDir(), wrapperFor(MOCK_CLAUDE)),
+      protocol: 'claude-code',
+      eventSink: sink,
+    })
+
+    expect(result.status).toBe('exit-nonzero')
+    expect(result.capturedSessionId).toBeUndefined()
+    expect(result.nativeSessionIntegrityFailed).toBe(true)
+    expect(terminals).toEqual(['incomplete'])
+  })
+
+  test('Claude root id change without reset fails integrity and returns no resumable id', async () => {
+    process.env.MOCK_CLAUDE_SESSION_ID = 'system-root-before-mismatch'
+    process.env.MOCK_CLAUDE_NON_INIT_SESSION_ID = 'system-root-after-mismatch'
+    const terminals: string[] = []
+    const sink: SystemAgentEventSinkV1 = {
+      append: async () => {},
+      setRootSessionId: async () => {},
+      markTerminal: async (state) => {
+        terminals.push(state)
+      },
+    }
+
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParentDir(), wrapperFor(MOCK_CLAUDE)),
+      protocol: 'claude-code',
+      eventSink: sink,
+    })
+
+    expect(result.status).toBe('exit-nonzero')
+    expect(result.capturedSessionId).toBeUndefined()
+    expect(result.nativeSessionIntegrityFailed).toBe(true)
+    expect(result.stderrTail).toContain('without a conversation reset')
+    expect(terminals).toEqual(['incomplete'])
+  })
+
+  test('auxiliary sink claim failure does not change the system-agent business result', async () => {
+    process.env.MOCK_CLAUDE_SESSION_ID = 'system-auxiliary-root'
+    process.env.MOCK_CLAUDE_ECHO_PROMPT = '1'
+    const terminals: string[] = []
+    const sink: SystemAgentEventSinkV1 = {
+      append: async () => {},
+      setRootSessionId: async () => {
+        throw new Error('auxiliary evidence database unavailable')
+      },
+      markTerminal: async (state) => {
+        terminals.push(state)
+      },
+    }
+
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParentDir(), wrapperFor(MOCK_CLAUDE)),
+      protocol: 'claude-code',
+      eventSink: sink,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.capturedSessionId).toBe('system-auxiliary-root')
+    expect(result.nativeSessionIntegrityFailed).toBeUndefined()
+    expect(terminals).toEqual(['incomplete'])
+  })
+
+  test('authoritative sink claim failure aborts the child and invalidates resume identity', async () => {
+    process.env.MOCK_CLAUDE_SESSION_ID = 'system-authoritative-root'
+    process.env.MOCK_CLAUDE_ECHO_PROMPT = '1'
+    const terminals: string[] = []
+    const sink: SystemAgentEventSinkV1 = {
+      append: async () => {},
+      setRootSessionId: async () => {
+        throw new Error('native session owner conflict')
+      },
+      markTerminal: async (state) => {
+        terminals.push(state)
+      },
+    }
+
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParentDir(), wrapperFor(MOCK_CLAUDE)),
+      protocol: 'claude-code',
+      eventSink: sink,
+      nativeIdentityAuthoritative: true,
+    })
+
+    expect(result.status).toBe('exit-nonzero')
+    expect(result.capturedSessionId).toBeUndefined()
+    expect(result.nativeSessionIntegrityFailed).toBe(true)
+    expect(result.stderrTail).toContain('runtime native session claim failed')
+    expect(terminals).toEqual(['incomplete'])
+  })
+
+  test('authoritative reset rotation still runs after reset evidence persistence fails', async () => {
+    process.env.MOCK_CLAUDE_SESSION_ID = 'system-authoritative-reset-a'
+    process.env.MOCK_CLAUDE_RESET_SESSION_ID = 'system-authoritative-reset-b'
+    process.env.MOCK_CLAUDE_RESET_CONVERSATION_ID = 'system-authoritative-reset-ui'
+    process.env.MOCK_CLAUDE_ECHO_PROMPT = '1'
+    const calls: string[] = []
+    const sink: SystemAgentEventSinkV1 = {
+      append: async (event) => {
+        const frame = JSON.parse(event.payload) as { type?: string }
+        calls.push(`append:${frame.type ?? event.kind}`)
+        if (frame.type === 'conversation_reset') {
+          throw new Error('reset evidence database unavailable')
+        }
+      },
+      setRootSessionId: async (id, previous) => {
+        calls.push(`root:${previous ?? '-'}->${id}`)
+      },
+      markRootSessionResetPending: async (id) => {
+        calls.push(`pending:${id}`)
+      },
+      markTerminal: async (state) => {
+        calls.push(`terminal:${state}`)
+      },
+    }
+
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParentDir(), wrapperFor(MOCK_CLAUDE)),
+      protocol: 'claude-code',
+      eventSink: sink,
+      nativeIdentityAuthoritative: true,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.capturedSessionId).toBe('system-authoritative-reset-b')
+    expect(result.nativeSessionIntegrityFailed).toBeUndefined()
+    expect(calls).toEqual([
+      'root:-->system-authoritative-reset-a',
+      'append:system',
+      'pending:system-authoritative-reset-a',
+      'append:conversation_reset',
+      'terminal:incomplete',
+      'root:system-authoritative-reset-a->system-authoritative-reset-b',
+    ])
   })
 
   test('output evidence distinguishes cap truncation and a terminal event without text', async () => {

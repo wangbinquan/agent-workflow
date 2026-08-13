@@ -23,7 +23,9 @@ export interface SystemAgentEventSinkV1 {
     source: SessionEventSource
     externalEventId?: string
   }): Promise<void>
-  setRootSessionId(sessionId: string): Promise<void>
+  /** Persist that the current native root was invalidated before a replacement is known. */
+  markRootSessionResetPending?(sessionId: string): Promise<void>
+  setRootSessionId(sessionId: string, previousSessionId?: string): Promise<void>
   markTerminal(
     state: SessionCaptureTerminalState,
     reason?: SessionCaptureIncompleteReason,

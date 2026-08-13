@@ -42,6 +42,10 @@ const SET_ENV_KEYS = [
   'MOCK_CLAUDE_CAPTURE_ARGV_TO',
   'MOCK_CLAUDE_ECHO_PROMPT',
   'MOCK_CLAUDE_SESSION_ID',
+  'MOCK_CLAUDE_NON_INIT_SESSION_ID',
+  'MOCK_CLAUDE_RESET_SESSION_ID',
+  'MOCK_CLAUDE_DUPLICATE_RESET',
+  'MOCK_CLAUDE_STOP_AFTER_RESET',
   'MOCK_CLAUDE_SKIP_ENVELOPE',
   'MOCK_CLAUDE_OUTPUTS',
   'MOCK_CLAUDE_IS_ERROR',
@@ -84,6 +88,62 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       expect(r.sawNonce).toBe(true)
       expect(r.capturedSessionId).toBe('smoke-sess-cc')
       expect(r.exitCode).toBe(0)
+    },
+    SMOKE_TIMEOUT,
+  )
+
+  test(
+    'claude root identity contradiction without reset → stream-nonconforming',
+    async () => {
+      process.env.MOCK_CLAUDE_ECHO_PROMPT = '1'
+      process.env.MOCK_CLAUDE_SESSION_ID = 'smoke-root-a'
+      process.env.MOCK_CLAUDE_NON_INIT_SESSION_ID = 'smoke-root-b'
+      const r = await smokeRuntime({
+        protocol: 'claude-code',
+        binaryPath: wrapperFor(MOCK_CLAUDE),
+        timeoutMs: SMOKE_TIMEOUT,
+      })
+      expect(r.outcome).toBe('stream-nonconforming')
+      expect(r.conforms).toBe(false)
+      expect(r.capturedSessionId).toBeUndefined()
+    },
+    SMOKE_TIMEOUT,
+  )
+
+  test(
+    'claude reset without a replacement never advertises the stale resume id',
+    async () => {
+      process.env.MOCK_CLAUDE_ECHO_PROMPT = '1'
+      process.env.MOCK_CLAUDE_SESSION_ID = 'smoke-reset-old'
+      process.env.MOCK_CLAUDE_RESET_SESSION_ID = 'smoke-reset-new'
+      process.env.MOCK_CLAUDE_STOP_AFTER_RESET = '1'
+      const r = await smokeRuntime({
+        protocol: 'claude-code',
+        binaryPath: wrapperFor(MOCK_CLAUDE),
+        timeoutMs: SMOKE_TIMEOUT,
+      })
+      expect(r.outcome).toBe('stream-nonconforming')
+      expect(r.conforms).toBe(false)
+      expect(r.capturedSessionId).toBeUndefined()
+    },
+    SMOKE_TIMEOUT,
+  )
+
+  test(
+    'claude duplicate reset boundaries fail protocol conformance',
+    async () => {
+      process.env.MOCK_CLAUDE_ECHO_PROMPT = '1'
+      process.env.MOCK_CLAUDE_SESSION_ID = 'smoke-reset-old'
+      process.env.MOCK_CLAUDE_RESET_SESSION_ID = 'smoke-reset-new'
+      process.env.MOCK_CLAUDE_DUPLICATE_RESET = '1'
+      const r = await smokeRuntime({
+        protocol: 'claude-code',
+        binaryPath: wrapperFor(MOCK_CLAUDE),
+        timeoutMs: SMOKE_TIMEOUT,
+      })
+      expect(r.outcome).toBe('stream-nonconforming')
+      expect(r.conforms).toBe(false)
+      expect(r.capturedSessionId).toBeUndefined()
     },
     SMOKE_TIMEOUT,
   )

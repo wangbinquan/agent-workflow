@@ -65,6 +65,8 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
   private tail: Promise<void> = Promise.resolve()
   /** Once capture settles/caps, later observations bypass SQLite entirely. */
   private stopped = false
+  /** A reset is provisional: replacement can restore a live capture in-process. */
+  private resetPendingFrom: string | undefined
   /**
    * Remember the strongest requested terminal state before touching SQLite.
    * If that write fails transiently, a later generic complete retry must not
@@ -162,7 +164,7 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
     })
   }
 
-  setRootSessionId(sessionId: string): Promise<void> {
+  setRootSessionId(sessionId: string, previousSessionId?: string): Promise<void> {
     return this.enqueue(() => {
       const eventSeq = dbTxSync(this.db, (tx) => {
         const turn = tx
@@ -178,7 +180,10 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
           throw new NotFoundError('intent-turn-not-found', 'intent turn capture target not found')
         }
         if (turn.rootSessionId === sessionId) return turn.lastEventSeq
-        if (turn.rootSessionId !== null) {
+        if (
+          turn.rootSessionId !== null &&
+          (previousSessionId === undefined || turn.rootSessionId !== previousSessionId)
+        ) {
           tx.update(intentTurns)
             .set({
               captureState: 'incomplete',
@@ -192,6 +197,65 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
           .set({ captureRootSessionId: sessionId })
           .where(eq(intentTurns.id, this.turnId))
           .run()
+        if (previousSessionId !== undefined) {
+          tx.update(intentTurnEvents)
+            .set({ sessionId })
+            .where(
+              and(
+                eq(intentTurnEvents.turnId, this.turnId),
+                eq(intentTurnEvents.sessionId, previousSessionId),
+              ),
+            )
+            .run()
+          tx.update(intentTurnEvents)
+            .set({ parentSessionId: sessionId })
+            .where(
+              and(
+                eq(intentTurnEvents.turnId, this.turnId),
+                eq(intentTurnEvents.parentSessionId, previousSessionId),
+              ),
+            )
+            .run()
+          if (this.resetPendingFrom === previousSessionId) {
+            this.resetPendingFrom = undefined
+            // Pending itself never changed the durable capture verdict. If a
+            // size cap or another terminal condition landed meanwhile, keep
+            // that verdict and the stopped latch monotonic.
+            this.stopped = turn.captureState !== 'live'
+          }
+        }
+        return turn.lastEventSeq
+      })
+      this.notify(eventSeq)
+    })
+  }
+
+  markRootSessionResetPending(sessionId: string): Promise<void> {
+    return this.enqueue(() => {
+      const eventSeq = dbTxSync(this.db, (tx) => {
+        const turn = tx
+          .select({
+            captureState: intentTurns.captureState,
+            rootSessionId: intentTurns.captureRootSessionId,
+            lastEventSeq: intentTurns.captureLastEventSeq,
+          })
+          .from(intentTurns)
+          .where(eq(intentTurns.id, this.turnId))
+          .get()
+        if (turn === undefined || turn.captureState === null) {
+          throw new NotFoundError('intent-turn-not-found', 'intent turn capture target not found')
+        }
+        if (turn.rootSessionId !== sessionId) {
+          throw new DomainError(
+            'intent-turn-runtime-session-changed',
+            'runtime conversation reset did not match the captured root session',
+            409,
+          )
+        }
+        // Pending is provisional, not a terminal capture verdict. Only a live
+        // capture enters this in-memory state; a prior cap/failure is monotonic
+        // and must never be restored by a later replacement id.
+        if (turn.captureState === 'live') this.resetPendingFrom = sessionId
         return turn.lastEventSeq
       })
       this.notify(eventSeq)
@@ -202,7 +266,10 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
     state: SessionCaptureTerminalState,
     reason?: SessionCaptureIncompleteReason,
   ): Promise<void> {
-    const terminal = this.rememberTerminalIntent(state, reason)
+    const terminal = this.rememberTerminalIntent(
+      this.resetPendingFrom === undefined ? state : 'incomplete',
+      this.resetPendingFrom === undefined ? reason : 'stream-persist-failed',
+    )
     return this.enqueue(() => {
       const eventSeq = dbTxSync(this.db, (tx) => {
         const turn = tx

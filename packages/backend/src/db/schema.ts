@@ -2834,6 +2834,12 @@ export const runtimeSessionLeases = sqliteTable(
     leaseNodeRunId: text('lease_node_run_id'),
     leaseNonceDigest: text('lease_nonce_digest'),
     leasedAt: integer('leased_at'),
+    /**
+     * A runtime-declared conversation_reset invalidates this native id before
+     * its replacement is known. Persist the fence so daemon restart cannot
+     * neutralize and resume the outgoing id after an in-flight crash.
+     */
+    resetPending: integer('reset_pending', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.protocol, t.sessionId] }),
@@ -2859,6 +2865,14 @@ export const runtimeSessionLeases = sqliteTable(
     protocolShape: check(
       'runtime_session_leases_protocol_shape',
       sql`${t.protocol} IN ('opencode', 'claude-code')`,
+    ),
+    resetPendingHeld: check(
+      'runtime_session_leases_reset_pending_held',
+      sql`${t.resetPending} = 0 OR ${t.leaseNodeRunId} IS NOT NULL`,
+    ),
+    resetPendingShape: check(
+      'runtime_session_leases_reset_pending_shape',
+      sql`${t.resetPending} IN (0, 1)`,
     ),
   }),
 )

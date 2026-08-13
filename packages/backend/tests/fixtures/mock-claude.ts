@@ -10,6 +10,13 @@
 //   MOCK_CLAUDE_SKIP_ENVELOPE   '1' → emit no envelope (broken-agent path)
 //   MOCK_CLAUDE_CLARIFY_BODY    JSON body → <workflow-clarify> envelope
 //   MOCK_CLAUDE_SESSION_ID      session_id echoed on every event (default fixed)
+//   MOCK_CLAUDE_NON_INIT_SESSION_ID  alternate session_id on assistant/result frames
+//   MOCK_CLAUDE_RESET_SESSION_ID     emit conversation_reset, then use this native id
+//   MOCK_CLAUDE_RESET_CONVERSATION_ID reset frame's UI transcript correlation id
+//   MOCK_CLAUDE_DUPLICATE_RESET      '1' → emit the same reset boundary twice
+//   MOCK_CLAUDE_STOP_AFTER_RESET     '1' → exit after reset, before replacement/result
+//   MOCK_CLAUDE_SKIP_ASSISTANT       '1' → emit replacement only on terminal result
+//   MOCK_CLAUDE_PARALLEL_SUBAGENT_SESSION_IDS JSON ids interleaved before root result
 //   MOCK_CLAUDE_MODEL           echoed in the system/init event
 //   MOCK_CLAUDE_EXIT_CODE       process exit code (default 0)
 //   MOCK_CLAUDE_IS_ERROR        '1' → result.is_error=true (+ result text)
@@ -62,6 +69,8 @@ if (env.MOCK_CLAUDE_CAPTURE_SKILLS_TO) {
 }
 
 const sessionId = env.MOCK_CLAUDE_SESSION_ID || 'mock-claude-session-0001'
+const resetSessionId = env.MOCK_CLAUDE_RESET_SESSION_ID
+const nonInitSessionId = env.MOCK_CLAUDE_NON_INIT_SESSION_ID || resetSessionId || sessionId
 const modelIdx = argv.indexOf('--model')
 const model = env.MOCK_CLAUDE_MODEL || (modelIdx >= 0 ? argv[modelIdx + 1] : 'claude-haiku-4-5')
 
@@ -75,6 +84,104 @@ if (env.MOCK_CLAUDE_STDERR) {
 
 // system/init — carries session_id + model + apiKeySource (subscription → 'none').
 emit({ type: 'system', subtype: 'init', session_id: sessionId, model, apiKeySource: 'none' })
+
+if (resetSessionId) {
+  const resetFrame = {
+    type: 'conversation_reset',
+    session_id: sessionId,
+    new_conversation_id: env.MOCK_CLAUDE_RESET_CONVERSATION_ID || 'mock-ui-conversation-reset',
+    uuid: 'mock-conversation-reset-event',
+  }
+  emit(resetFrame)
+  if (env.MOCK_CLAUDE_DUPLICATE_RESET === '1') emit(resetFrame)
+  if (env.MOCK_CLAUDE_STOP_AFTER_RESET === '1') process.exit(0)
+}
+
+let parallelSubagentSessionIds: string[] = []
+if (env.MOCK_CLAUDE_PARALLEL_SUBAGENT_SESSION_IDS) {
+  try {
+    const parsed = JSON.parse(env.MOCK_CLAUDE_PARALLEL_SUBAGENT_SESSION_IDS)
+    if (!Array.isArray(parsed) || !parsed.every((id) => typeof id === 'string')) {
+      fail('MOCK_CLAUDE_PARALLEL_SUBAGENT_SESSION_IDS must be a JSON string array')
+    }
+    parallelSubagentSessionIds = parsed
+  } catch (e) {
+    fail(`MOCK_CLAUDE_PARALLEL_SUBAGENT_SESSION_IDS is not valid JSON: ${(e as Error).message}`)
+  }
+}
+
+const parallelToolUseIds = parallelSubagentSessionIds.map(
+  (_, index) => `toolu_mock_parallel_${index}`,
+)
+if (parallelSubagentSessionIds.length > 0) {
+  emit({
+    type: 'system',
+    subtype: 'background_tasks_changed',
+    tasks: parallelSubagentSessionIds.map((_, index) => ({
+      task_id: `mock-agent-${index}`,
+      task_type: 'local_agent',
+    })),
+    session_id: parallelSubagentSessionIds[0],
+  })
+  // Launch every child before any one completes: the phases below deliberately
+  // interleave lifecycle and forwarded assistant/user frames from distinct ids.
+  for (const [index, childSessionId] of parallelSubagentSessionIds.entries()) {
+    emit({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: `mock-agent-${index}`,
+      tool_use_id: parallelToolUseIds[index],
+      session_id: childSessionId,
+    })
+  }
+  for (const [index, childSessionId] of parallelSubagentSessionIds.entries()) {
+    emit({
+      type: 'assistant',
+      parent_tool_use_id: parallelToolUseIds[index],
+      subagent_type: `mock-parallel-${index}`,
+      session_id: childSessionId,
+      message: { role: 'assistant', content: [{ type: 'text', text: `child-${index}` }] },
+    })
+    if (index + 1 < parallelSubagentSessionIds.length) {
+      emit({
+        type: 'user',
+        parent_tool_use_id: parallelToolUseIds[index + 1],
+        session_id: parallelSubagentSessionIds[index + 1],
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: `child-tool-${index}`, content: 'ok' }],
+        },
+      })
+    }
+  }
+  emit({
+    type: 'system',
+    subtype: 'task_progress',
+    task_id: 'mock-agent-0',
+    session_id: parallelSubagentSessionIds.at(-1),
+  })
+  emit({
+    type: 'system',
+    subtype: 'task_updated',
+    task_id: 'mock-agent-0',
+    patch: { status: 'completed' },
+    session_id: parallelSubagentSessionIds[0],
+  })
+  for (let index = parallelSubagentSessionIds.length - 1; index >= 0; index -= 1) {
+    emit({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: `mock-agent-${index}`,
+      tool_use_id: parallelToolUseIds[index],
+      status: 'completed',
+      session_id: parallelSubagentSessionIds[index],
+    })
+  }
+  // Real async Agent notifications can re-enter the same print process and
+  // repeat init before later root results; this must remain an idempotent
+  // observation, not a second native-session claim.
+  emit({ type: 'system', subtype: 'init', session_id: sessionId, model, apiKeySource: 'none' })
+}
 
 // Build the assistant turn text (envelope / raw / clarify / nothing).
 let text = ''
@@ -117,12 +224,17 @@ const usage = {
   cache_creation_input_tokens: Number(env.MOCK_CLAUDE_CACHE_CREATE ?? '0'),
 }
 
-// assistant turn — the text part carries the <workflow-output> envelope.
-emit({
-  type: 'assistant',
-  session_id: sessionId,
-  message: { role: 'assistant', content: text.length > 0 ? [{ type: 'text', text }] : [], usage },
-})
+// assistant turn — the text part carries the <workflow-output> envelope. The
+// skip knob models the official `/clear` E2E's minimal reset→result sequence:
+// no second init (or assistant turn) is required before the replacement id.
+if (env.MOCK_CLAUDE_SKIP_ASSISTANT !== '1') {
+  emit({
+    type: 'assistant',
+    session_id: nonInitSessionId,
+    parent_tool_use_id: null,
+    message: { role: 'assistant', content: text.length > 0 ? [{ type: 'text', text }] : [], usage },
+  })
+}
 
 const isError = env.MOCK_CLAUDE_IS_ERROR === '1'
 // result — terminal event; usage here is the cumulative total the driver reads.
@@ -134,7 +246,7 @@ emit({
   subtype: isError ? 'error' : 'success',
   is_error: isError,
   result: isError ? (env.MOCK_CLAUDE_RESULT_TEXT ?? 'mock error') : text,
-  session_id: sessionId,
+  session_id: nonInitSessionId,
   total_cost_usd: 0,
   num_turns: 1,
   usage,

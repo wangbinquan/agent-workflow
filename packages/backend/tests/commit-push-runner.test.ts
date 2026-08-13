@@ -224,6 +224,21 @@ describe('runCommitPush', () => {
     expect(meta.messageSource).toBe('fallback')
   })
 
+  test('unreaped commit-message child blocks framework commit and push', async () => {
+    f = await build()
+    writeFileSync(join(f.repo, 'b.txt'), 'must not be committed\n')
+    const { meta } = await runCommitPush(
+      baseParams(f, {
+        generateMessage: async () => ({ message: null, processUnreaped: true }),
+      }),
+      { db: f.db },
+    )
+    expect(meta.pushOutcome).toBe('commit-local-failed')
+    expect(meta.pushError).toContain('could not be reaped')
+    expect((await runGit(f.repo, ['log', '-1', '--format=%s'])).stdout.trim()).toBe('init')
+    expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
+  })
+
   test('auth failure → commit-local-auth (degraded, not retried), local commit lands', async () => {
     f = await build()
     writeFileSync(join(f.repo, 'b.txt'), 'x\n')

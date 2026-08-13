@@ -16,10 +16,10 @@
 // it. Rows with pid NULL (pre-RFC-098 / never-spawned) take the old
 // flip-only path.
 
-import { inArray } from 'drizzle-orm'
+import { inArray, isNotNull } from 'drizzle-orm'
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { nodeRuns, tasks } from '@/db/schema'
+import { nodeRuns, runtimeSessionLeases, tasks } from '@/db/schema'
 import { transitionNodeRunStatus, trySetTaskStatus } from '@/services/lifecycle'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
@@ -62,8 +62,25 @@ export async function reapOrphanRuns(
     .select()
     .from(nodeRuns)
     .where(inArray(nodeRuns.status, ['running', 'pending'] as const))
+  // A runner that exhausted TERM→KILL records a terminal row but deliberately
+  // leaves its native-session lease held. Boot must prove that child gone too
+  // before the subsequent lease repair can release/discard the holder.
+  const heldLeaseRunIds = [
+    ...new Set(
+      (
+        await db
+          .select({ nodeRunId: runtimeSessionLeases.leaseNodeRunId })
+          .from(runtimeSessionLeases)
+          .where(isNotNull(runtimeSessionLeases.leaseNodeRunId))
+      ).flatMap((row) => (row.nodeRunId === null ? [] : [row.nodeRunId])),
+    ),
+  ]
+  const heldLeaseRuns =
+    heldLeaseRunIds.length === 0
+      ? []
+      : await db.select().from(nodeRuns).where(inArray(nodeRuns.id, heldLeaseRunIds))
 
-  if (runningTasks.length === 0 && runningRuns.length === 0) {
+  if (runningTasks.length === 0 && runningRuns.length === 0 && heldLeaseRuns.length === 0) {
     return { tasks: 0, runs: 0 }
   }
 
@@ -98,7 +115,9 @@ export async function reapOrphanRuns(
     })
   }
   let runsReaped = 0
-  for (const r of runningRuns) {
+  const activeRunIds = new Set(runningRuns.map((run) => run.id))
+  const processRows = [...runningRuns, ...heldLeaseRuns.filter((run) => !activeRunIds.has(run.id))]
+  for (const r of processRows) {
     // RFC-098 WP-8: kill-then-flip. killStaleRunProcessTree applies both
     // PID-reuse noise gates (startedAt < 48h window + `ps -p pid -o command=`
     // must look like opencode/bun) before signaling. Ambiguous PID-reuse
@@ -106,18 +125,31 @@ export async function reapOrphanRuns(
     const killOutcome = await (dependencies.killStaleRunProcessTree ?? killStaleRunProcessTree)(r, {
       now,
     })
+    const ownsHeldNativeLease = heldLeaseRunIds.includes(r.id)
     if (killOutcome === 'kill-failed') {
       log.error('orphan run child SURVIVED SIGKILL — still alive after reap (resume will refuse)', {
         nodeRunId: r.id,
         pid: r.pid,
       })
       throw new Error('orphan run child survived SIGKILL; boot recovery refused')
+    } else if (ownsHeldNativeLease && killOutcome !== 'killed' && killOutcome !== 'not-alive') {
+      // A held native session has a known writer identity but no per-row reap
+      // proof for these outcomes. Releasing it would admit a second writer.
+      log.error('held runtime-session child could not be proven reaped; boot recovery refused', {
+        nodeRunId: r.id,
+        pid: r.pid,
+        killOutcome,
+      })
+      throw new Error('held runtime-session child reap was unproven; boot recovery refused')
     } else if (killOutcome === 'killed') {
       log.warn('orphan run had a live child process — group-killed (best-effort)', {
         nodeRunId: r.id,
         pid: r.pid,
       })
     }
+    // Terminal child-unkillable rows need only the process barrier above; the
+    // caller repairs their still-held native lease after every row is safe.
+    if (!activeRunIds.has(r.id)) continue
     try {
       await transitionNodeRunStatus({
         db,

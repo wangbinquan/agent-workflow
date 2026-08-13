@@ -49,6 +49,8 @@ export interface WorkgroupHostRunResult {
   /** Set when the agent voluntarily asked back (status='awaiting'). */
   clarifyQuestionCount?: number
   errorMessage?: string
+  /** The child may still be alive; the turn must not spawn a replacement. */
+  processUnreaped?: true
   /** RFC-185 e2e hardening — runNode's structured failure code (RFC-145: the
    *  ONLY machine routing key; errorMessage is human breadcrumbs). Lets the
    *  turn drivers treat envelope-missing as a retryable protocol slip. */

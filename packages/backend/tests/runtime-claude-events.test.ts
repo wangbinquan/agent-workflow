@@ -19,6 +19,95 @@ describe('claude parseEvent (RFC-111 PR-B)', () => {
     expect(ev?.tokens).toBeUndefined()
   })
 
+  it('protocol bookends and explicit root turns expose identity while child frames do not', () => {
+    const associated = parseEvent(
+      JSON.stringify({
+        type: 'assistant',
+        session_id: 'associated-session',
+        parent_tool_use_id: 'toolu_agent',
+        message: { content: [{ type: 'text', text: 'child output' }] },
+      }),
+    )
+    const terminal = parseEvent(
+      JSON.stringify({
+        type: 'result',
+        session_id: 'associated-session',
+        is_error: false,
+      }),
+    )
+    const childInit = parseEvent(
+      JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        session_id: 'child-session',
+        parent_tool_use_id: 'toolu_agent',
+      }),
+    )
+
+    expect(associated?.sessionId).toBeUndefined()
+    expect(terminal?.sessionId).toBe('associated-session')
+    expect(childInit?.sessionId).toBeUndefined()
+    const rootAssistant = parseEvent(
+      JSON.stringify({
+        type: 'assistant',
+        session_id: 'associated-session',
+        parent_tool_use_id: null,
+        message: { content: [{ type: 'text', text: 'root output' }] },
+      }),
+    )
+    expect(rootAssistant?.sessionId).toBe('associated-session')
+    const defensiveChildUser = parseEvent(
+      JSON.stringify({
+        type: 'user',
+        session_id: 'child-session',
+        parent_tool_use_id: null,
+        subagent_type: 'reviewer',
+        message: { content: [] },
+      }),
+    )
+    expect(defensiveChildUser?.sessionId).toBeUndefined()
+    expect(associated?.rawLine).toContain('associated-session')
+  })
+
+  it('conversation_reset declares the outgoing boundary but not the next native id', () => {
+    const ev = parseEvent(
+      JSON.stringify({
+        type: 'conversation_reset',
+        session_id: 'native-before-clear',
+        new_conversation_id: 'ui-transcript-key',
+        uuid: 'reset-event-id',
+      }),
+    )
+
+    expect(ev?.sessionId).toBe('native-before-clear')
+    expect(ev?.conversationReset).toEqual({
+      outgoingSessionId: 'native-before-clear',
+      newConversationId: 'ui-transcript-key',
+    })
+    expect(ev?.rawLine).toContain('ui-transcript-key')
+  })
+
+  it('parallel subagent control frames never become root session observations', () => {
+    for (const [subtype, childSessionId] of [
+      ['task_started', 'child-native-a'],
+      ['task_progress', 'child-native-b'],
+      ['task_updated', 'child-native-a'],
+      ['task_notification', 'child-native-b'],
+      ['background_tasks_changed', 'child-native-a'],
+    ] as const) {
+      const ev = parseEvent(
+        JSON.stringify({
+          type: 'system',
+          subtype,
+          task_id: `task-${childSessionId}`,
+          session_id: childSessionId,
+        }),
+      )
+      expect(ev?.sessionId).toBeUndefined()
+      expect(ev?.rawLine).toContain(childSessionId)
+    }
+  })
+
   it('assistant turn concatenates text parts → text, kind=text', () => {
     const ev = parseEvent(
       JSON.stringify({

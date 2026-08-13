@@ -71,12 +71,14 @@ describe('RFC-187 T8 — source lock (the wg hook abandons instead of stranding)
       SCHED,
     )
     expect(wgFinally).not.toBeNull()
-    // The discard is gated on the merge-throw flag and nothing else.
+    // The discard is gated on lifecycle paths that cannot safely release the
+    // isolation: an unreaped agent or a merge throw.
     expect(wgFinally?.[1] ?? '').toContain('if (!keepHookIso)')
-    // The flag is set ONLY in the merge-throw rethrow, never on the conflict
-    // path (the abandon block must stay a discarding path).
+    // The flag is set for an unreaped child and in the merge-throw rethrow,
+    // never on the conflict path (the abandon block must stay discarding).
     const flagSets = SCHED.match(/keepHookIso = true/g) ?? []
-    expect(flagSets).toHaveLength(1)
+    expect(flagSets).toHaveLength(2)
+    expect(SCHED).toMatch(/result\.processUnreaped === true\) keepHookIso = true/)
     expect(SCHED).toMatch(/keepHookIso = true\s*\n\s*throw err/)
     expect(SCHED).not.toMatch(/wg-merge-conflict-unresolved[\s\S]{0,600}?keepHookIso = true/)
   })

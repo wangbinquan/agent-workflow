@@ -387,6 +387,20 @@ export async function runDynamicWorkflowGenerate(
       // validation or the human confirm gate yet (Codex impl-gate P1).
       discardWrites: true,
     })
+    if (result.processUnreaped === true) {
+      // The old orchestrator may still be writing this task's worktree. This
+      // is a process-admission barrier, not a model validation failure: a new
+      // attempt could use another native id and bypass the old id's lease.
+      return {
+        kind: 'failed',
+        detail: {
+          summary: 'dw-runtime-child-unreaped',
+          message:
+            result.errorMessage ??
+            'dynamic workflow orchestrator child could not be reaped; refusing replacement',
+        },
+      }
+    }
     if (result.status === 'canceled') return { kind: 'canceled' }
 
     // 'awaiting' is unreachable by construction (the generation snapshot wires

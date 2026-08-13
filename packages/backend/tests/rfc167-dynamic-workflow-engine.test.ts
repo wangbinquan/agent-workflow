@@ -357,6 +357,27 @@ describe('RFC-167 engine — generation pass', () => {
     expect(dw?.generateAttempts).toBe(1) // the failed attempt stays counted
   })
 
+  test('unreaped orchestrator is a hard barrier and never spawns a replacement attempt', async () => {
+    const { taskId } = await seedDynamicTask(db, { dw: initialDwState() })
+    const { hooks, requests } = scriptedHooks([
+      {
+        status: 'failed',
+        outputs: {},
+        errorMessage: 'child-unkillable',
+        processUnreaped: true,
+      },
+      goodResult(),
+    ])
+
+    const result = await runDynamicWorkflowGenerate({ db, taskId, log, hooks })
+    expect(result).toMatchObject({
+      kind: 'failed',
+      detail: { summary: 'dw-runtime-child-unreaped' },
+    })
+    expect(requests).toHaveLength(1)
+    expect((await readDw(db, taskId))?.generateAttempts).toBe(0)
+  })
+
   test('fenced JSON payload is tolerated (extractJsonPayload)', async () => {
     expect(extractJsonPayload('```json\n{"a":1}\n```')).toBe('{"a":1}')
     expect(extractJsonPayload('  {"a":1} ')).toBe('{"a":1}')

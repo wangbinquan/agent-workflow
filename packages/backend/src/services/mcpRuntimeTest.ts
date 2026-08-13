@@ -70,6 +70,7 @@ import {
   preclaimMcpRuntimeTestSessionLease,
   releaseMcpRuntimeTestSessionLease,
   repairMcpRuntimeTestSessionLeaseAfterReap,
+  rotateMcpRuntimeTestSessionLease,
   type McpRuntimeTestLeaseToken,
 } from '@/services/mcpRuntimeTestLease'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
@@ -257,6 +258,7 @@ function resultFailureCode(
   ) {
     return durableFailureCode
   }
+  if (result.nativeSessionIntegrityFailed === true) return 'mcp-test-session-conflict'
   if (result.status === 'ok') return null
   return `mcp-test-${result.status}`
 }
@@ -264,6 +266,7 @@ function resultFailureCode(
 export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
   private tail: Promise<void> = Promise.resolve()
   private stopped = false
+  private resetPendingFrom: string | undefined
   private terminalIntent:
     | { state: SessionCaptureTerminalState; reason?: SessionCaptureIncompleteReason }
     | undefined
@@ -272,7 +275,7 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
     private readonly db: DbClient,
     private readonly owner: EventSinkOwner,
     private readonly notify?: () => void,
-    private readonly claimNativeSession?: (sessionId: string) => void,
+    private readonly claimNativeSession?: (sessionId: string, previousSessionId?: string) => void,
   ) {}
 
   append(event: Parameters<SystemAgentEventSinkV1['append']>[0]): Promise<void> {
@@ -351,7 +354,13 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
             .where(eq(mcpRuntimeTestTurns.id, this.owner.turnId))
             .run()
           tx.update(mcpRuntimeTestSessions)
-            .set({ continuationBlockedReason: 'capture-truncated' })
+            .set({
+              continuationBlockedReason: sql`CASE
+                WHEN ${mcpRuntimeTestSessions.continuationBlockedReason} IN ('mcp-config-changed', 'runtime-profile-changed')
+                  THEN ${mcpRuntimeTestSessions.continuationBlockedReason}
+                ELSE 'capture-truncated'
+              END`,
+            })
             .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
             .run()
           this.stopped = true
@@ -393,7 +402,7 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
     })
   }
 
-  setRootSessionId(sessionId: string): Promise<void> {
+  setRootSessionId(sessionId: string, previousSessionId?: string): Promise<void> {
     return this.enqueue(() => {
       const before = this.db
         .select()
@@ -403,7 +412,17 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
       if (before === undefined) {
         throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
       }
-      if (before.runtimeSessionId === null) this.claimNativeSession?.(sessionId)
+      if (previousSessionId !== undefined) {
+        if (before.runtimeSessionId !== previousSessionId) {
+          throw new ConflictError(
+            'mcp-test-runtime-session-changed',
+            'runtime conversation reset did not match the persisted native session',
+          )
+        }
+        this.claimNativeSession?.(sessionId, previousSessionId)
+      } else if (before.runtimeSessionId === null) {
+        this.claimNativeSession?.(sessionId)
+      }
       dbTxSync(this.db, (tx) => {
         const row = tx
           .select()
@@ -412,6 +431,14 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
           .get()
         if (row === undefined) {
           throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
+        }
+        const turn = tx
+          .select({ captureState: mcpRuntimeTestTurns.captureState })
+          .from(mcpRuntimeTestTurns)
+          .where(eq(mcpRuntimeTestTurns.id, this.owner.turnId))
+          .get()
+        if (turn === undefined) {
+          throw new NotFoundError('mcp-test-turn-not-found', 'MCP test turn not found')
         }
         if (row.runtimeSessionId !== null && row.runtimeSessionId !== sessionId) {
           tx.update(mcpRuntimeTestSessions)
@@ -431,6 +458,75 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
             .where(eq(mcpRuntimeTestSessions.id, row.id))
             .run()
         }
+        if (previousSessionId !== undefined) {
+          // The service-backed claim callback rotates lease, pointer and root
+          // evidence atomically. Keep a defensive retag for direct sink tests
+          // and custom callers that own no native lease.
+          tx.update(mcpRuntimeTestEvents)
+            .set({ sessionId })
+            .where(
+              and(
+                eq(mcpRuntimeTestEvents.testSessionId, this.owner.sessionId),
+                eq(mcpRuntimeTestEvents.sessionId, previousSessionId),
+                isNull(mcpRuntimeTestEvents.parentSessionId),
+              ),
+            )
+            .run()
+          tx.update(mcpRuntimeTestEvents)
+            .set({ parentSessionId: sessionId })
+            .where(
+              and(
+                eq(mcpRuntimeTestEvents.testSessionId, this.owner.sessionId),
+                eq(mcpRuntimeTestEvents.parentSessionId, previousSessionId),
+              ),
+            )
+            .run()
+          tx.update(mcpRuntimeTestSessions)
+            .set({ nativeSessionState: 'ready' })
+            .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
+            .run()
+          if (this.resetPendingFrom === previousSessionId) {
+            this.resetPendingFrom = undefined
+          }
+          // Native identity recovery does not erase an independently reached
+          // capture cap/failure or its continuation block.
+          this.stopped = turn.captureState !== 'live'
+        }
+      })
+      this.notify?.()
+    })
+  }
+
+  markRootSessionResetPending(sessionId: string): Promise<void> {
+    return this.enqueue(() => {
+      dbTxSync(this.db, (tx) => {
+        const row = tx
+          .select({ runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId })
+          .from(mcpRuntimeTestSessions)
+          .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
+          .get()
+        if (row?.runtimeSessionId !== sessionId) {
+          throw new ConflictError(
+            'mcp-test-runtime-session-changed',
+            'runtime conversation reset did not match the persisted native session',
+          )
+        }
+        const turn = tx
+          .select({ captureState: mcpRuntimeTestTurns.captureState })
+          .from(mcpRuntimeTestTurns)
+          .where(eq(mcpRuntimeTestTurns.id, this.owner.turnId))
+          .get()
+        if (turn === undefined) {
+          throw new NotFoundError('mcp-test-turn-not-found', 'MCP test turn not found')
+        }
+        // Capture remains live while waiting for the replacement so the reset
+        // frame and following epoch are not dropped. The native identity is
+        // fenced immediately; EOF/pump failure settles capture incomplete.
+        tx.update(mcpRuntimeTestSessions)
+          .set({ nativeSessionState: 'unusable' })
+          .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
+          .run()
+        if (turn.captureState === 'live') this.resetPendingFrom = sessionId
       })
       this.notify?.()
     })
@@ -440,7 +536,10 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
     state: SessionCaptureTerminalState,
     reason?: SessionCaptureIncompleteReason,
   ): Promise<void> {
-    const terminal = this.rememberTerminal(state, reason)
+    const terminal = this.rememberTerminal(
+      this.resetPendingFrom === undefined ? state : 'incomplete',
+      this.resetPendingFrom === undefined ? reason : 'stream-persist-failed',
+    )
     return this.enqueue(() => {
       const finalState =
         terminal.state === 'truncated'
@@ -467,8 +566,14 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
         if (finalState !== 'complete') {
           tx.update(mcpRuntimeTestSessions)
             .set({
-              continuationBlockedReason:
-                finalState === 'truncated' ? 'capture-truncated' : 'capture-incomplete',
+              continuationBlockedReason: sql`CASE
+                WHEN ${mcpRuntimeTestSessions.continuationBlockedReason} IN ('mcp-config-changed', 'runtime-profile-changed')
+                  THEN ${mcpRuntimeTestSessions.continuationBlockedReason}
+                WHEN ${finalState === 'incomplete'} THEN 'capture-incomplete'
+                WHEN ${mcpRuntimeTestSessions.continuationBlockedReason} IS NULL
+                  THEN 'capture-truncated'
+                ELSE ${mcpRuntimeTestSessions.continuationBlockedReason}
+              END`,
             })
             .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
             .run()
@@ -2418,7 +2523,20 @@ export class McpRuntimeTestService {
       stableJson({ sessionId: session.id, turnId: turn.id, nonce: ulid() }),
     )
     let nativeLease: McpRuntimeTestLeaseToken | undefined
-    const claimNativeSession = (runtimeSessionId: string): void => {
+    const claimNativeSession = (
+      runtimeSessionId: string,
+      previousRuntimeSessionId?: string,
+    ): void => {
+      if (previousRuntimeSessionId !== undefined) {
+        if (
+          nativeLease === undefined ||
+          nativeLease.runtimeSessionId !== previousRuntimeSessionId
+        ) {
+          throw new Error('runtime conversation reset did not match the held native session')
+        }
+        nativeLease = rotateMcpRuntimeTestSessionLease(this.deps.db, nativeLease, runtimeSessionId)
+        return
+      }
       if (nativeLease !== undefined) {
         if (nativeLease.runtimeSessionId !== runtimeSessionId) {
           throw new Error('runtime changed native session id during one turn')
@@ -2510,6 +2628,7 @@ export class McpRuntimeTestService {
         maxRawFrameBytes: 2 * 1024 * 1024,
         abortSignal: controller.signal,
         eventSink: sink,
+        nativeIdentityAuthoritative: true,
         retainScratchOnSuccess: true,
         // RFC-282 B1b (§2.1b) — the old `buildPlan` escape hatch could return an
         // arbitrary plan, making the declared manifest a SECOND computation at
@@ -2772,7 +2891,10 @@ export class McpRuntimeTestService {
       let blocked = session.continuationBlockedReason
       const childUnreaped = result.status === 'unreaped'
       const captured = result.capturedSessionId
-      if (captured !== undefined) {
+      if (result.nativeSessionIntegrityFailed === true) {
+        nativeState = 'unusable'
+        blocked ??= 'capture-incomplete'
+      } else if (captured !== undefined) {
         if (nativeSessionId !== null && nativeSessionId !== captured) {
           nativeState = 'unusable'
         } else {
@@ -2824,13 +2946,18 @@ export class McpRuntimeTestService {
             : blocked === 'runtime-profile-changed'
               ? 'runtime-profile-changed'
               : 'session-unusable'
+        // Identity integrity is an admission failure, while captureState
+        // describes evidence quality. Keep both facts, but do not present a
+        // native ownership contradiction as a generic capture interruption.
         const reason =
           session.endReason ??
-          (captureBlocked
-            ? turn.captureState === 'truncated'
-              ? 'capture-truncated'
-              : 'capture-incomplete'
-            : reasonFromBlock)
+          (result.nativeSessionIntegrityFailed === true
+            ? 'session-unusable'
+            : captureBlocked
+              ? turn.captureState === 'truncated'
+                ? 'capture-truncated'
+                : 'capture-incomplete'
+              : reasonFromBlock)
         tx.update(mcpRuntimeTestSessions)
           .set({
             status: 'ending',

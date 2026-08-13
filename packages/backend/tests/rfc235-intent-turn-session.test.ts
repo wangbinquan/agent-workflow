@@ -90,6 +90,96 @@ describe('RFC-235 Intent turn Session capture', () => {
     expect(observed.at(-1)).toBe(1)
   })
 
+  test('conversation reset replaces the captured root without marking evidence incomplete', async () => {
+    const db = seedAgentTurn('turn-reset')
+    const sink = new IntentTurnSessionEventSink(db, 'turn-reset')
+
+    await sink.setRootSessionId('runtime-before-reset')
+    await sink.append({
+      ts: 1,
+      kind: 'text',
+      payload: JSON.stringify({
+        type: 'assistant',
+        session_id: 'runtime-before-reset',
+        message: { content: [{ type: 'text', text: 'before reset' }] },
+      }),
+      sessionId: 'runtime-before-reset',
+      parentSessionId: null,
+      source: 'stream',
+    })
+    await sink.append({
+      ts: 1,
+      kind: 'text',
+      payload: JSON.stringify({ type: 'assistant', message: { content: [] } }),
+      sessionId: 'runtime-child-before-reset',
+      parentSessionId: 'runtime-before-reset',
+      source: 'post-run-child',
+    })
+    await sink.markRootSessionResetPending('runtime-before-reset')
+    await sink.setRootSessionId('runtime-after-reset', 'runtime-before-reset')
+    await sink.append({
+      ts: 2,
+      kind: 'text',
+      payload: JSON.stringify({
+        type: 'assistant',
+        session_id: 'runtime-after-reset',
+        message: { content: [{ type: 'text', text: 'after reset' }] },
+      }),
+      sessionId: 'runtime-after-reset',
+      parentSessionId: null,
+      source: 'stream',
+    })
+    await sink.markTerminal('complete')
+
+    const row = db
+      .select({
+        root: intentTurns.captureRootSessionId,
+        state: intentTurns.captureState,
+      })
+      .from(intentTurns)
+      .where(eq(intentTurns.id, 'turn-reset'))
+      .get()
+    expect(row).toEqual({ root: 'runtime-after-reset', state: 'complete' })
+    const response = await getIntentTurnSession(db, 'session-1', 'turn-reset')
+    expect(response.tree.sessionId).toBe('runtime-after-reset')
+    expect(response.tree.captureComplete).toBe(true)
+    expect(JSON.stringify(response.tree)).toContain('before reset')
+    expect(db.select({ id: intentTurnEvents.sessionId }).from(intentTurnEvents).all()).toEqual([
+      { id: 'runtime-after-reset' },
+      { id: 'runtime-child-before-reset' },
+      { id: 'runtime-after-reset' },
+    ])
+    expect(
+      db
+        .select({ parent: intentTurnEvents.parentSessionId })
+        .from(intentTurnEvents)
+        .where(eq(intentTurnEvents.sessionId, 'runtime-child-before-reset'))
+        .get(),
+    ).toEqual({ parent: 'runtime-after-reset' })
+  })
+
+  test('a reset cannot repaint a capture that was already truncated', async () => {
+    const db = seedAgentTurn('turn-reset-after-cap')
+    const sink = new IntentTurnSessionEventSink(db, 'turn-reset-after-cap')
+    await sink.setRootSessionId('runtime-cap-old')
+    db.update(intentTurns)
+      .set({ captureState: 'truncated' })
+      .where(eq(intentTurns.id, 'turn-reset-after-cap'))
+      .run()
+
+    await sink.markRootSessionResetPending('runtime-cap-old')
+    await sink.setRootSessionId('runtime-cap-new', 'runtime-cap-old')
+    await sink.markTerminal('complete')
+
+    expect(
+      db
+        .select({ root: intentTurns.captureRootSessionId, state: intentTurns.captureState })
+        .from(intentTurns)
+        .where(eq(intentTurns.id, 'turn-reset-after-cap'))
+        .get(),
+    ).toEqual({ root: 'runtime-cap-new', state: 'truncated' })
+  })
+
   test('byte cap marks capture truncated without changing the owning turn kind', async () => {
     const db = seedAgentTurn('turn-cap')
     db.update(intentTurns)

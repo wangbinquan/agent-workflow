@@ -236,10 +236,21 @@ export async function executeTurn<T>(args: TurnArgs, spec: TurnSpec<T>): Promise
       hostOutputPorts: wgHostRolePorts(spec.role, spec.protocolOpts ?? null),
       clarifyEnabled: clarifyAllowed,
     })
+    if (result.processUnreaped === true) {
+      return {
+        kind: 'failed',
+        runId,
+        errorMessage: result.errorMessage ?? 'child-unkillable',
+        retryable: false,
+      }
+    }
     if (result.status === 'canceled') return { kind: 'canceled', runId }
     if (result.status === 'awaiting') return { kind: 'awaiting', runId }
     if (result.status === 'failed') {
       const msg = result.errorMessage ?? 'run failed'
+      // The old child can still be writing the turn worktree. A fresh process
+      // would use a different native id and bypass the per-id lease, so this
+      // is a hard recovery barrier rather than a retryable runtime failure.
       // A stream-persistence interruption is runtime/process liveness, not a
       // model protocol error. Re-run the full turn in a fresh process without
       // appending a protocol-error nudge or consuming maxAttempts.

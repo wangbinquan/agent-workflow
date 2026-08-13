@@ -196,6 +196,8 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
 
   // Classification accumulators — fed by the executor's line callbacks.
   let sessionId: string | undefined
+  let pendingConversationReset: { outgoingSessionId: string; newConversationId: string } | undefined
+  let nativeSessionProtocolInvalid = false
   let sawEvent = false
   let sawNonce = false
   let sawEnvelope = false
@@ -235,7 +237,30 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
         const ev = driver.parseEvent(line)
         if (ev !== null) {
           sawEvent = true
-          if (ev.sessionId !== undefined && sessionId === undefined) sessionId = ev.sessionId
+          if (ev.sessionId !== undefined) {
+            if (sessionId === undefined) {
+              sessionId = ev.sessionId
+            } else if (
+              ev.sessionId !== sessionId &&
+              pendingConversationReset?.outgoingSessionId === sessionId
+            ) {
+              sessionId = ev.sessionId
+              pendingConversationReset = undefined
+            } else if (ev.sessionId !== sessionId) {
+              nativeSessionProtocolInvalid = true
+            }
+          }
+          if (ev.conversationReset !== undefined) {
+            if (
+              sessionId === undefined ||
+              ev.conversationReset.outgoingSessionId !== sessionId ||
+              pendingConversationReset !== undefined
+            ) {
+              nativeSessionProtocolInvalid = true
+            } else {
+              pendingConversationReset = ev.conversationReset
+            }
+          }
           if (typeof ev.text === 'string') {
             if (ev.text.includes(nonce)) sawNonce = true
             if (ev.text.includes('<workflow-output')) sawEnvelope = true
@@ -298,7 +323,14 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   const modelHit = MODEL_FAIL_SIGNATURES.test(haystack)
   // Codex P2: conformance REQUIRES the nonce round-trip (a real protocol turn
   // consumed the prompt) — sawEnvelope alone is too weak (a canned emitter).
-  const conformed = !timedOut && exitCode === 0 && sawEvent && sessionId !== undefined && sawNonce
+  const conformed =
+    !timedOut &&
+    exitCode === 0 &&
+    sawEvent &&
+    sessionId !== undefined &&
+    pendingConversationReset === undefined &&
+    !nativeSessionProtocolInvalid &&
+    sawNonce
   // Surface a masked, capped excerpt on EVERY failure branch (curated guidance
   // stays, the verbatim vendor text rides along). The result line is quoted
   // from its HEAD (error text precedes the usage blob), the raw streams from
@@ -378,7 +410,11 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
     outcome,
     conforms: outcome === 'conforms',
     detail,
-    ...(sessionId !== undefined ? { capturedSessionId: sessionId } : {}),
+    ...(sessionId !== undefined &&
+    pendingConversationReset === undefined &&
+    !nativeSessionProtocolInvalid
+      ? { capturedSessionId: sessionId }
+      : {}),
     sawNonce,
     sawEnvelope,
     exitCode,

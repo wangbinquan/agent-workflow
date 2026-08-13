@@ -357,13 +357,19 @@ export const RUNTIME_FAILURE_CODES = [
   /** A stdout/stderr persistence pump failed while the child was active. The
    *  logical turn can be retried in a fresh process without blaming the model. */
   'runtime-stream-interrupted',
+  /** The runtime contradicted its native root identity without an explicit
+   *  conversation-reset transition. Its outgoing resume id is unsafe. */
+  'runtime-session-identity-invalid',
 ] as const
 export type RuntimeFailureCode = (typeof RUNTIME_FAILURE_CODES)[number]
 
 export function isTransientRuntimeFailure(
   failureCode: unknown,
-): failureCode is 'runtime-stream-interrupted' {
-  return failureCode === 'runtime-stream-interrupted'
+): failureCode is 'runtime-stream-interrupted' | 'runtime-session-identity-invalid' {
+  return (
+    failureCode === 'runtime-stream-interrupted' ||
+    failureCode === 'runtime-session-identity-invalid'
+  )
 }
 
 export const FAILURE_CODES = [
