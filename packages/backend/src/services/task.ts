@@ -83,7 +83,7 @@ import { buildLaunchCollabRows } from '@/services/taskCollab'
 import { getWorkflow } from '@/services/workflow'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
-import { materializingSpaces } from '@/services/gc'
+import { finishClaimedWebhookWorkspacePrune, materializingSpaces } from '@/services/gc'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
 import type { RollbackOutcome } from '@/services/nodeRollback'
@@ -200,6 +200,19 @@ const log = createLogger('task')
  * for M1.
  */
 const activeTasks = new Map<string, AbortController>()
+
+/** RFC-300: release the in-process scheduler owner before touching its
+ * workspace, then complete any lifecycle-created durable prune claim. The
+ * identity check preserves RFC-097's successor-controller fence. */
+async function releaseTaskDriverAndFinalizeWorkspace(
+  db: DbClient,
+  taskId: string,
+  controller: AbortController,
+): Promise<void> {
+  if (activeTasks.get(taskId) !== controller) return
+  activeTasks.delete(taskId)
+  await finishClaimedWebhookWorkspacePrune(db, taskId)
+}
 
 /** RFC-097 (audit S-8/S-23): is an in-process scheduler loop attached to this
  *  task right now? Used by resume/retry entry rejection and lifecycleRepair's
@@ -2612,8 +2625,7 @@ async function startTaskImpl(
       })
     })
     .finally(() => {
-      // RFC-097: identity-compare before delete.
-      if (activeTasks.get(taskId) === controller) activeTasks.delete(taskId)
+      return releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
     })
 
   if (deps.awaitScheduler === true) {
@@ -3349,9 +3361,7 @@ async function resumeKick(
       })
     })
     .finally(() => {
-      // RFC-097: identity-compare before delete — never evict a successor's
-      // controller.
-      if (activeTasks.get(id) === controller) activeTasks.delete(id)
+      return releaseTaskDriverAndFinalizeWorkspace(db, id, controller)
     })
 
   // Mirror startTask: tests opt into awaiting the scheduler; production callers
@@ -4100,7 +4110,7 @@ export async function retryNode(
       })
     })
     .finally(() => {
-      if (activeTasks.get(taskId) === controller) activeTasks.delete(taskId)
+      return releaseTaskDriverAndFinalizeWorkspace(db, taskId, controller)
     })
   return next
 }
@@ -4901,6 +4911,12 @@ function rowToTask(
     repoUrl: row.repoUrl !== null && row.repoUrl !== undefined ? redactGitUrl(row.repoUrl) : null,
     cachedRepoId: row.cachedRepoId ?? null,
     worktreePath: row.worktreePath,
+    workspaceState:
+      row.workspacePrunedAt !== null
+        ? 'pruned'
+        : row.workspacePruningAt !== null
+          ? 'pruning'
+          : 'available',
     baseBranch: row.baseBranch,
     branch: row.branch,
     baseCommit: row.baseCommit,

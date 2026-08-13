@@ -1,9 +1,10 @@
-# Webhook 触发器运维指引（RFC-257 / RFC-259 / RFC-268 / RFC-298）
+# Webhook 触发器运维指引（RFC-257 / RFC-259 / RFC-268 / RFC-298 / RFC-300）
 
 面向**商用内网部署**（自建 GitLab + 几百个仓库）的接入手册；§6 为 GitHub
 （github.com / GHES，RFC-259）接入。产品/技术契约见
-`design/RFC-257-code-host-webhook-triggers/`、`design/RFC-259-github-webhook-adapter/`
-与 `design/RFC-268-webhook-scratch-space/`。
+`design/RFC-257-code-host-webhook-triggers/`、`design/RFC-259-github-webhook-adapter/`、
+`design/RFC-268-webhook-scratch-space/` 与
+`design/RFC-300-webhook-terminal-workspace-cleanup/`。
 
 ## 1. 一次性接入（管理员）
 
@@ -87,6 +88,15 @@
   高流量部署（10 万投递/天量级）建议按磁盘预算调小 body 保留。
 - 投递历史页支持按状态 / 事件类型 / 仓库过滤 + 页码分页（每页 50 条，总数
   实时显示）；仓库下拉列出保留窗内出现过的仓库。
+- **终态工作区即时清理（RFC-300，默认关闭）**：设置 → GC 的「Webhook 任务完成或
+  取消后清理工作区」只影响开关开启后新进入 `done` / `canceled` 的直接 Webhook
+  根任务。事件仓模式会删除该任务的 linked worktree 与 snapshot refs；临时工作区模式
+  会递归删除整座 scratch Git 仓库。`failed` / `interrupted`、普通任务、继承子任务与
+  开启前已经终态的历史任务仍保留工作区。开关关闭只阻止未来认领，已经落 durable
+  claim 的清理仍会完成；删除失败由 daemon 启动恢复与 GC ticker 续做。
+- 开启上述开关前确认能力影响：任务行、日志、会话、node run 与已持久化/归档结果仍在，
+  但被删任务的 live 文件、diff、节点 retry 与 workflow sync 不再可用；scratch 中未持久化
+  的临时文件以及 linked worktree 的未提交修改无法恢复。若需要继续处理，请新建任务。
 - **备份迁移**：webhook Secret 用 `secret.key` 密封，备份包不含该文件——
   restore 到新机后所有端点 Secret 失效，需在 UI 重新生成并重贴 GitLab。
 

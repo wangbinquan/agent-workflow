@@ -65,7 +65,10 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // heal-missing-dir / finalize / boot reconcile / iso transient claim +
   // CAS-scoped release). Status flips stay in setTaskStatus; its revive gate
   // READS these columns inside the status CAS.
-  'services/gc.ts': 6,
+  // RFC-300 +1 net: claimed Webhook recovery takes over an existing durable
+  // workspace_pruning_at lease by exact-stamp CAS; physical deletion and the
+  // status transition remain in their existing single writers.
+  'services/gc.ts': 7,
   // RFC-165 (R3-2-r4): the revive gate stamps workspace_pruned_at when the
   // dir vanished pre-tombstone (heal-forward) — companion-column write only.
   'services/lifecycle.ts': 1,

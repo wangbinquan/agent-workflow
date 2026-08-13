@@ -206,7 +206,7 @@ function TaskDetailPage() {
   const task = useQuery<Task>({
     queryKey: TASK_QUERY_KEYS.detail(id),
     queryFn: ({ signal }) => api.get(`/api/tasks/${encodeURIComponent(id)}`, undefined, signal),
-    refetchInterval: (q) => (isTerminal(q.state.data?.status) ? false : 3000),
+    refetchInterval: (q) => taskDetailRefetchInterval(q.state.data),
   })
 
   const nodeRuns = useQuery<TaskNodeRuns>({
@@ -649,7 +649,11 @@ function TaskDetailPage() {
             />
           )}
         <StuckTaskBanner key={`stuck:${id}`} taskId={id} />
-        <WorkflowSyncBanner key={`workflow-sync:${id}`} taskId={id} />
+        <WorkflowSyncBanner
+          key={`workflow-sync:${id}`}
+          taskId={id}
+          workspaceState={tk.workspaceState}
+        />
         {cancel.error !== null && cancel.error !== undefined && (
           <ErrorBanner error={cancel.error} onDismiss={() => cancel.reset()} />
         )}
@@ -760,6 +764,7 @@ function TaskDetailPage() {
 
         {(tk.status === 'canceled' || tk.status === 'interrupted') &&
           tk.worktreePath !== '' &&
+          (tk.workspaceState ?? 'available') === 'available' &&
           !dismissedBanners.has(worktreePreservedBannerKey) && (
             <NoticeBanner
               tone="info"
@@ -773,6 +778,14 @@ function TaskDetailPage() {
               {t('tasks.worktreePreserved', { path: tk.worktreePath })}
             </NoticeBanner>
           )}
+
+        {(tk.workspaceState === 'pruning' || tk.workspaceState === 'pruned') && (
+          <NoticeBanner tone="info" size="compact" className="info-box--muted">
+            {tk.workspaceState === 'pruning'
+              ? t('tasks.workspacePruning')
+              : t('tasks.workspacePruned')}
+          </NoticeBanner>
+        )}
 
         {/* RFC-108 T21/T23: system-recovery audit + auto-recovery quarantine clear,
             live-polled while the task is active (same idiom as the task/node-runs queries). */}
@@ -906,6 +919,7 @@ function TaskDetailPage() {
                     <NodeDetailDrawer
                       taskId={id}
                       taskStatus={tk.status}
+                      workspaceState={tk.workspaceState}
                       nodeRunId={selectedNodeRunId}
                       nodeId={resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId)}
                       workflowNodeKind={resolveNodeKindFromSnapshot(
@@ -1906,6 +1920,16 @@ export function taskCanvasLayoutClass(selectedNodeRunId: string | null): string 
   return selectedNodeRunId !== null
     ? 'task-canvas-layout task-canvas-layout--with-drawer'
     : 'task-canvas-layout'
+}
+
+/** RFC-300: terminal task polling normally stops, but a durable workspace
+ * claim finalizes after the terminal status broadcast. Keep polling while the
+ * capability is `pruning` so the UI converges to `pruned` without a reload. */
+export function taskDetailRefetchInterval(
+  task: Pick<Task, 'status' | 'workspaceState'> | undefined,
+): 3000 | false {
+  if (task?.workspaceState === 'pruning') return 3000
+  return isTerminal(task?.status) ? false : 3000
 }
 
 /**

@@ -86,6 +86,7 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'periodicOrphanReconcileMs',
   ],
   gc: [
+    'webhookTaskWorkspaceAutoCleanup',
     'worktreeAutoGc',
     'eventsArchiveThresholds',
     // RFC-261 (D9') — webhook 投递保留天数

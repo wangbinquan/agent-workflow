@@ -120,6 +120,7 @@ describe('RFC-165 T2b — two-phase workspace tombstone + revive gate', () => {
     expect(existsSync(dir)).toBe(false)
     const row = await taskRow(h, id)
     expect(row.workspacePruningAt).not.toBe(null)
+    expect(row.workspacePruneCause).toBeNull()
     expect(row.workspacePrunedAt).not.toBe(null)
   })
 
@@ -176,6 +177,21 @@ describe('RFC-165 T2b — two-phase workspace tombstone + revive gate', () => {
     const row = await taskRow(h, id)
     expect(row.workspacePruningAt).toBe(null)
     expect(row.workspacePrunedAt).toBe(null)
+  })
+
+  test('G4b an active terminal driver defers generic workspace GC', async () => {
+    const dir = mkDir(h, 'ws-active-terminal')
+    const id = await seedTask(h, {
+      status: 'done',
+      spaceKind: 'scratch',
+      worktreePath: dir,
+      repoPath: dir,
+    })
+
+    const r = await runWorktreeGc(h.db, GC_ON, Date.now(), (taskId) => taskId === id)
+    expect(r.removed).toEqual([])
+    expect(existsSync(dir)).toBe(true)
+    expect((await taskRow(h, id)).workspacePruningAt).toBeNull()
   })
 
   test('G5 delete failure keeps the claim; re-claim only past the lease', async () => {

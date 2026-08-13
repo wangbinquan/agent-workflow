@@ -60,6 +60,7 @@ describe('RFC-201 Settings draft registry', () => {
       'intentBuilderScratchRetentionHours',
       'intentBuilderExtraInstructions',
     ])
+    expect(SETTINGS_CONFIG_SCOPE_KEYS.gc).toContain('webhookTaskWorkspaceAutoCleanup')
   })
 
   test('Limits -> another section -> Limits keeps the route-owned draft', () => {

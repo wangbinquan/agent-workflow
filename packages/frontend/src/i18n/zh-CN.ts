@@ -3212,6 +3212,8 @@ export interface Resources {
     reviewButton: string
     clarifyButton: string
     worktreePreserved: string
+    workspacePruning: string
+    workspacePruned: string
     recovery: {
       title: string
       quarantineTitle: string
@@ -4696,6 +4698,8 @@ export interface Resources {
     largeOutputThreshold: string
     zeroUnlimited: string
     autoGcLabel: string
+    webhookTaskWorkspaceAutoCleanup: string
+    webhookTaskWorkspaceAutoCleanupHint: string
     gitRecurseSubmodules: string
     gitRecurseSubmodulesHint: string
     gitRecurseAuto: string
@@ -9302,6 +9306,9 @@ export const zhCN: Resources = {
     clarifyButton: '去回答',
     worktreePreserved:
       'Worktree 仍保留在 {{path}}。可手动检查；结束后执行 git worktree remove 清理。',
+    workspacePruning: '任务工作区正在清理；任务记录、日志和已持久化结果会保留。',
+    workspacePruned:
+      '任务工作区已清理；任务记录、日志和已持久化结果仍保留，但文件、diff、节点重试和工作流同步已不可用。',
     recovery: {
       title: '恢复',
       quarantineTitle: '自动恢复已暂停',
@@ -10811,6 +10818,9 @@ export const zhCN: Resources = {
     largeOutputThreshold: '大输出阈值 (bytes)',
     zeroUnlimited: '0 = 无限制。',
     autoGcLabel: '自动 GC 已合并的 worktree',
+    webhookTaskWorkspaceAutoCleanup: 'Webhook 任务完成或取消后清理工作区',
+    webhookTaskWorkspaceAutoCleanupHint:
+      '默认关闭。开启后，只对开启后进入 done/canceled 的直接 Webhook 根任务生效：事件仓 linked worktree 与 scratch 临时 Git 仓库都会删除；failed/interrupted、继承子任务与历史终态任务保留。任务记录、日志和已持久化结果仍在，但删除后不能再查看 live 文件/diff、重试节点或同步工作流。',
     gitRecurseSubmodules: 'submodule 递归模式',
     gitRecurseSubmodulesHint:
       'auto：检测到 .gitmodules 才递归（默认）；always：始终递归；never：完全关闭。',

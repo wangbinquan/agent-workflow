@@ -324,6 +324,45 @@ export class ConcurrentTaskTransition extends ConflictError {
   }
 }
 
+/** RFC-300: daemon-composed policy deciding whether this exact terminal CAS
+ * must also durably claim the task's owned workspace. Lifecycle receives only
+ * the minimum persisted attribution/ownership facts and never imports config
+ * or Webhook services. */
+export type TerminalWorkspacePrunePolicy = (
+  row: {
+    webhookTriggerId: string | null
+    spaceKind: (typeof tasks.$inferSelect)['spaceKind']
+    workspacePruningAt: number | null
+    workspacePruneCause: (typeof tasks.$inferSelect)['workspacePruneCause']
+    workspacePrunedAt: number | null
+  },
+  to: TaskStatus,
+) => boolean
+
+/** RFC-300: post-commit wake-up for an already-durable claim. It is a separate
+ * multicast concern from RFC-202's human-gate sweep; failures never undo the
+ * terminal transition and boot/ticker reconciliation remains the backstop. */
+export type TerminalWorkspacePruneEffect = (
+  db: DbClient,
+  taskId: string,
+  to: 'done' | 'canceled',
+) => void
+
+let terminalWorkspacePrunePolicy: TerminalWorkspacePrunePolicy | null = null
+let terminalWorkspacePruneEffect: TerminalWorkspacePruneEffect | null = null
+
+export function registerTerminalWorkspacePrunePolicy(
+  provider: TerminalWorkspacePrunePolicy | null,
+): void {
+  terminalWorkspacePrunePolicy = provider
+}
+
+export function registerTerminalWorkspacePruneEffect(
+  effect: TerminalWorkspacePruneEffect | null,
+): void {
+  terminalWorkspacePruneEffect = effect
+}
+
 /**
  * CAS-strict task status write. `allowedFrom` is the explicit legal-source
  * set for this transition (RFC-097 design §1 matrix); terminal sources are
@@ -355,7 +394,10 @@ export async function setTaskStatus(args: {
     .select({
       status: tasks.status,
       worktreePath: tasks.worktreePath,
+      webhookTriggerId: tasks.webhookTriggerId,
+      spaceKind: tasks.spaceKind,
       workspacePruningAt: tasks.workspacePruningAt,
+      workspacePruneCause: tasks.workspacePruneCause,
       workspacePrunedAt: tasks.workspacePrunedAt,
     })
     .from(tasks)
@@ -427,6 +469,27 @@ export async function setTaskStatus(args: {
   // `runningMs` delta are computed against the same instant (and are injectable
   // for deterministic tests).
   const now = args.now ?? Date.now()
+  let requestWorkspacePrune = false
+  if (terminalWorkspacePrunePolicy !== null && (args.to === 'done' || args.to === 'canceled')) {
+    try {
+      requestWorkspacePrune = terminalWorkspacePrunePolicy(
+        {
+          webhookTriggerId: row.webhookTriggerId,
+          spaceKind: row.spaceKind,
+          workspacePruningAt: row.workspacePruningAt,
+          workspacePruneCause: row.workspacePruneCause,
+          workspacePrunedAt: row.workspacePrunedAt,
+        },
+        args.to,
+      )
+    } catch (err) {
+      // Config is validated on normal daemon writes, but an out-of-band corrupt
+      // file must not turn a successfully executed task into a lifecycle error.
+      lifecycleLog.warn(
+        `terminal workspace prune policy failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
   const writeStatus = (writer: Pick<DbClient, 'update'>) =>
     // rfc097-allow-direct-task-status-write -- single allowlisted writer
     writer
@@ -447,12 +510,22 @@ export async function setTaskStatus(args: {
               }
             : {}),
         ...(args.extra ?? {}),
+        ...(requestWorkspacePrune
+          ? { workspacePruningAt: now, workspacePruneCause: 'webhook-terminal' as const }
+          : {}),
       })
       .where(
         and(
           eq(tasks.id, args.taskId),
           eq(tasks.status, from),
           ...(isRevival ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)] : []),
+          ...(requestWorkspacePrune
+            ? [
+                isNull(tasks.workspacePruningAt),
+                isNull(tasks.workspacePruneCause),
+                isNull(tasks.workspacePrunedAt),
+              ]
+            : []),
         ),
       )
       .returning({ id: tasks.id })
@@ -485,6 +558,15 @@ export async function setTaskStatus(args: {
       lifecycleLog.warn(
         `terminal task hook failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
       )
+    }
+    if (requestWorkspacePrune) {
+      try {
+        terminalWorkspacePruneEffect?.(args.db, args.taskId, args.to)
+      } catch (err) {
+        lifecycleLog.warn(
+          `terminal workspace prune effect failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
     }
   }
   // RFC-243 §1.4 — executionWatch multicast, for ALL FOUR terminal statuses

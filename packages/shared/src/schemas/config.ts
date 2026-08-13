@@ -225,6 +225,11 @@ export const ConfigSchema = z.object({
   walCheckpointIntervalMs: z.number().int().nonnegative().default(0),
 
   // --- GC ---
+  /** RFC-300: claim a direct Webhook root task's owned remote/scratch
+   * workspace when it enters done/canceled. Default OFF: enabling is an
+   * explicit capability trade-off because the old workspace can no longer be
+   * inspected, retried, or synced after the delete completes. */
+  webhookTaskWorkspaceAutoCleanup: z.boolean().default(false),
   worktreeAutoGc: WorktreeGcSchema,
   eventsArchiveThresholds: EventsArchiveThresholdsSchema,
 
@@ -601,6 +606,7 @@ export const DEFAULT_CONFIG: Config = {
   backupOnMigration: true,
   sqliteSynchronous: 'NORMAL',
   walCheckpointIntervalMs: 0,
+  webhookTaskWorkspaceAutoCleanup: false,
   worktreeAutoGc: { enabled: false },
   eventsArchiveThresholds: {
     perNodeRunRows: 50_000,
