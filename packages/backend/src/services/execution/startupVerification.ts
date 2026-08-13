@@ -25,6 +25,8 @@ import type {
 // 差集判定必须永远给出同一批名字，否则「清单里标已声明未加载」与「banner 报
 // 未加载」会各说各话。
 import { missingDeclared } from '@agent-workflow/shared'
+// Type-only：编译期擦除，不给这个叶子模块引入运行时边。
+import type { RuntimeDriverCapabilities } from '@/services/runtime/types'
 
 export type {
   ObservedMcpServer,
@@ -125,6 +127,39 @@ export function observationFromInventory(
     })),
     agents: snapshot.agents.map((a) => a.name),
     skills: snapshot.skills.map((s) => s.name),
+  }
+}
+
+/**
+ * RFC-297 T12 —— **按 driver 静态表态取观测**的单点。
+ *
+ * 收口前这段 switch 在 `runner.ts` 与 `mcpRuntimeTest.ts` 各写了一遍：RFC-282 C2
+ * 已经把判据从「`readInventory` 方法存在与否」这个代理换成了 capabilities，但
+ * 换完仍是**每个调用方各判一次**——第三个运行时接入时要记得同时改两处，漏一处
+ * 就悄悄落回二选一。判据本身是运行时无关的知识，属于这里而不是调用方。
+ *
+ * exhaustive switch 保留：新增一个观测源种类会让这里编译不过，正是该锁住的点。
+ */
+export async function observationForVerification(
+  capabilities: RuntimeDriverCapabilities,
+  sources: {
+    /** claude：流内 init 事件累积出的观测。 */
+    claudeInit: ClaudeInitObservation | null
+    /**
+     * opencode：退出后读 dump 快照。**惰性**——由本函数按表态决定要不要取，
+     * 调用方因此不必自己判「这个运行时需要读文件吗」。取数时机归调用方（它持有
+     * runRoot 与生命周期），判据归这里。
+     */
+    loadSnapshot: () => InventorySnapshot | null | Promise<InventorySnapshot | null>
+  },
+): Promise<StartupObservation> {
+  switch (capabilities.startupObservation) {
+    case 'inventory-file':
+      return observationFromInventory(await sources.loadSnapshot())
+    case 'init-event':
+      return observationFromClaudeInit(sources.claudeInit)
+    case 'none':
+      return { state: 'unavailable', reason: 'runtime-has-no-observation' }
   }
 }
 

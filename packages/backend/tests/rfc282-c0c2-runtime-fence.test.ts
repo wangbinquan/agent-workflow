@@ -59,22 +59,41 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
     }
   })
 
-  test('runner switches on startupObservation with the fresh-run guard FIRST (P1-7 / P2-E)', () => {
-    const text = read('services/runner.ts')
-    const guardIdx = text.indexOf('caps.observationRequiresFreshRun && !wantsInventory')
-    const switchIdx = text.indexOf('switch (caps.startupObservation)')
-    expect(guardIdx).toBeGreaterThan(0)
-    expect(switchIdx).toBeGreaterThan(guardIdx)
-    // exhaustive arms incl. the third-runtime case
+  // RFC-297 T12：判据本身收进 execution 层单点 `observationForVerification`
+  // ——它此前在 runner 与 MCP 测试台各写一遍，第三个运行时接入要记得改两处，
+  // 漏一处就悄悄落回二选一。锁随判据一起搬：穷尽分支断言移到单点所在文件，
+  // runner 侧只保留「fresh-run 守卫仍在取观测之前」这条顺序不变量（P1-7/P2-E：
+  // 顺序一反，每个 followup 都会被标成「无法验证」）。
+  test('the capability switch is single-point and exhaustive (incl. the third-runtime arm)', () => {
+    const text = read('services/execution/startupVerification.ts')
+    expect(text).toContain('switch (capabilities.startupObservation)')
     expect(text).toContain("case 'inventory-file':")
     expect(text).toContain("case 'init-event':")
     expect(text).toContain("case 'none':")
     expect(text).toContain("reason: 'runtime-has-no-observation'")
+    // 两个消费方都不得再自己判——包括「换个写法判同一件事」。
+    for (const rel of ['services/runner.ts', 'services/mcpRuntimeTest.ts']) {
+      const consumer = read(rel)
+      expect(consumer, `${rel} still switches on startupObservation`).not.toContain(
+        'switch (caps.startupObservation)',
+      )
+      expect(consumer, `${rel} still switches on startupObservation`).not.toContain(
+        'switch (driver.capabilities.startupObservation)',
+      )
+    }
+  })
+
+  test('runner keeps the fresh-run guard BEFORE taking the observation (P1-7 / P2-E)', () => {
+    const text = read('services/runner.ts')
+    const guardIdx = text.indexOf('caps.observationRequiresFreshRun && !freshAgentRun')
+    const takeIdx = text.indexOf('observationForVerification(caps')
+    expect(guardIdx).toBeGreaterThan(0)
+    expect(takeIdx).toBeGreaterThan(guardIdx)
   })
 
   test('C2 followup regression lock: fresh-run-only observation + no fresh run ⇒ skip recording', () => {
     // The guard is data-driven now: for opencode (observationRequiresFreshRun
-    // = true) a followup (wantsInventory=false) must skip verification —
+    // = true) a followup (freshAgentRun=false) must skip verification —
     // exactly RFC-280 实现门 P2-E's behavior, re-expressed over capabilities.
     const oc = getRuntimeDriver('opencode').capabilities
     expect(oc.observationRequiresFreshRun && !false).toBe(true) // followup shape skips

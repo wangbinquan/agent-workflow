@@ -188,7 +188,7 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
       runRoot,
       configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
       runtimeBinary: '/fork/oc118-biz',
-      wantsInventory: false,
+      freshAgentRun: false,
       nodeRunId: 'nr-flag',
       log: createLogger('oc-flag-test'),
     }

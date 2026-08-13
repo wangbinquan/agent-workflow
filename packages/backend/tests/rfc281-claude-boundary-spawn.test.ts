@@ -67,7 +67,7 @@ function businessCtx(permission: Record<string, unknown>, opts: CtxOpts): never 
     taskMounts: opts.taskMounts ?? [opts.worktreePath ?? OWN],
     runRoot: opts.runRoot,
     configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
-    wantsInventory: false,
+    freshAgentRun: false,
     nodeRunId: 'nr-1',
     binaryOverride: ['bun', 'run', 'mock'],
     ...(opts.hostProbe === undefined ? {} : { boundaryHostProbe: opts.hostProbe }),

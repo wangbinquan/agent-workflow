@@ -135,7 +135,7 @@ function mkCtx(runRoot: string, overrides: Partial<BusinessNodeSpawnContext> = {
     configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
     gitUserName: 'Ada',
     gitUserEmail: 'ada@x.io',
-    wantsInventory: false,
+    freshAgentRun: false,
     nodeRunId: 'nr-1',
     log,
     ...overrides,
@@ -242,10 +242,10 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
     }
   })
 
-  test('wantsInventory=true：materialize dump plugin + OPENCODE_AW_INVENTORY_OUT（RFC-029 原位搬迁）', async () => {
+  test('freshAgentRun=true：materialize dump plugin + OPENCODE_AW_INVENTORY_OUT（RFC-029 原位搬迁）', async () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-rfc143-inv-'))
     try {
-      const ctx = mkCtx(runRoot, { wantsInventory: true, opencodeCmd: ['oc'] })
+      const ctx = mkCtx(runRoot, { freshAgentRun: true, opencodeCmd: ['oc'] })
       const plan = await assembleOpencodeBusinessSpawn(ctx)
       expect(plan.env.OPENCODE_AW_INVENTORY_OUT).toBe(join(runRoot, 'inventory.json'))
       const cfg = JSON.parse(plan.env.OPENCODE_CONFIG_CONTENT ?? '{}') as { plugin?: unknown[] }

@@ -121,7 +121,7 @@ function mkCtx(
     runRoot: f.runRoot,
     configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
     runtimeBinary: f.claudeBinary,
-    wantsInventory: false,
+    freshAgentRun: false,
     nodeRunId: 'nr-1',
     log,
     ...overrides,

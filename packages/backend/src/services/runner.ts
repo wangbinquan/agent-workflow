@@ -90,10 +90,8 @@ import type {
 import { EMPTY_RUNTIME_PROFILE } from './execution/agentInjection'
 import {
   declaredHasContent,
-  observationFromClaudeInit,
-  observationFromInventory,
+  observationForVerification,
   verifyStartup,
-  type StartupObservation,
   type StartupVerificationRecord,
 } from './execution/startupVerification'
 // RFC-297 T18 —— 结算时构造统一清单观测（与 verifyStartup 共用同一套对账语义）。
@@ -576,7 +574,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // RFC-123 (stopped) + RFC-183 (suppressed re-production rounds): both
   // reject a disobedient <workflow-clarify>; only the message flavor differs.
   const clarifyRejectDirective = clarifyDisposition === 'reject'
-  const wantsInventory = isAgentNodeKind(inventoryNodeKind) && followupMode === undefined
+  // RFC-297 T13：这是一条业务事实（agent 类节点 + 未复用会话），不是「谁想要清单」。
+  const freshAgentRun = isAgentNodeKind(inventoryNodeKind) && followupMode === undefined
 
   // RFC-041 PR3: silent inject of approved memories into the primary agent's
   // inline prompt. Best-effort — a broken memory table degrades to "no
@@ -997,7 +996,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       runRoot,
       configDir,
       taskMounts: boundaryMounts,
-      wantsInventory,
+      freshAgentRun,
       // RFC-148: a followup dispatch carries its session INSIDE the arm
       // (unrepresentable without one); inline clarify resume keeps the
       // top-level field. Exactly one is set per dispatch by the scheduler.
@@ -2088,11 +2087,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // source for the startup-verification record below.
     let capturedInventorySnapshot: InventorySnapshot | null = null
     // RFC-143: inventory read is an opencode-only capability. The agent-kind +
-    // non-followup gates are business conditions (`wantsInventory`, same value the
+    // non-followup gates are business conditions (`freshAgentRun`, same value the
     // spawn-side injection used); the runtime gate is expressed by `readInventory`
     // being present — claude's driver omits it → `?.` short-circuits and the
     // column stays null.
-    if (wantsInventory) {
+    if (freshAgentRun) {
       try {
         const snapshot = await driver.readInventory?.({
           runRoot,
@@ -2119,7 +2118,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         (await driver.drainFinalEvents?.({
           runRoot,
           nodeKind: inventoryNodeKind,
-          freshRun: wantsInventory,
+          freshRun: freshAgentRun,
         })) ?? []
       for (const event of finalEvents) consumeInventoryPayload(event)
     } catch (err) {
@@ -2134,7 +2133,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // run's own status (user ruling: business nodes warn, don't fail).
     //
     // impl-gate P2-E: opencode's observation source is the RFC-029 inventory,
-    // which is only produced for agent-kind non-followup runs (`wantsInventory`).
+    // which is only produced for agent-kind non-followup runs (`freshAgentRun`).
     // On a followup the MCPs/skills ARE injected but no inventory is read — so
     // an "unavailable" record would flag every followup as "cannot verify"
     // (systematic noise). Skip recording when opencode has no observation
@@ -2144,7 +2143,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // the claude branch). P1-7: the fresh-run guard stays FIRST — flipping the
     // order re-creates the followup "cannot verify" noise (RFC-280 P2-E).
     const caps = driver.capabilities
-    const observationSkippedByDesign = caps.observationRequiresFreshRun && !wantsInventory
+    const observationSkippedByDesign = caps.observationRequiresFreshRun && !freshAgentRun
 
     // RFC-297 T18 —— 清单观测**无条件**落库，与下面的验证判定分开。
     //
@@ -2157,7 +2156,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     const runtimeInventoryJson = JSON.stringify(
       buildRuntimeInventoryObservation({
         capabilities: caps,
-        freshRun: wantsInventory,
+        freshRun: freshAgentRun,
         declared: injectionDeclared,
         claudeInit: capturedStartupInventory,
         snapshot: capturedInventorySnapshot,
@@ -2167,18 +2166,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
 
     let startupVerificationJson: string | null = null
     if (declaredHasContent(injectionDeclared) && !observationSkippedByDesign) {
-      let observation: StartupObservation
-      switch (caps.startupObservation) {
-        case 'inventory-file':
-          observation = observationFromInventory(capturedInventorySnapshot)
-          break
-        case 'init-event':
-          observation = observationFromClaudeInit(capturedStartupInventory)
-          break
-        case 'none':
-          observation = { state: 'unavailable', reason: 'runtime-has-no-observation' }
-          break
-      }
+      // RFC-297 T12：按 driver 表态取观测的判据收进 execution 层单点
+      // （`observationForVerification`），runner 不再自己 switch 运行时——
+      // 该判据此前在这里与 MCP 测试台各写一遍，第三个运行时接入要记得改两处。
+      const observation = await observationForVerification(caps, {
+        claudeInit: capturedStartupInventory,
+        loadSnapshot: () => capturedInventorySnapshot,
+      })
       const verification = verifyStartup(injectionDeclared, observation)
       const record: StartupVerificationRecord = {
         declared: injectionDeclared,

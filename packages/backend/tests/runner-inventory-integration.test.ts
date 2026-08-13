@@ -280,8 +280,11 @@ describe('runner.ts source: dump plugin wiring lock', () => {
   test('opencode driver materializes the dump plugin; runner keeps the business gate', () => {
     // RFC-143 PR-4: the plugin materialization + inventoryOutPath threading
     // moved into the opencode driver's buildBusinessSpawn (runtime capability);
-    // the runner keeps only the BUSINESS gate (agent kind + not-a-followup →
-    // wantsInventory). The grep lock follows the post-collapse wiring.
+    // the runner keeps only the BUSINESS gate (agent kind + not-a-followup).
+    // RFC-297 T13: 该门的字段名从 `wantsInventory` 改为 `freshAgentRun`——旧名把
+    // 「opencode 需要物化 dump 插件」这条运行时知识写进了调用方，于是 MCP 测试台
+    // 里长出了 `startupObservation === 'inventory-file'` 这种判据。新名只陈述业务
+    // 事实，据此做什么由各 driver 自己决定。grep 锁跟着改名走。
     const driverSrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'driver.ts'),
       'utf-8',
@@ -299,7 +302,7 @@ describe('runner.ts source: dump plugin wiring lock', () => {
     // RFC-146: the agent-kind gate is the shared isAgentNodeKind now
     // (inventory.isAgentRunKind was a local copy of it and is gone).
     expect(src).toContain('isAgentNodeKind')
-    expect(src).toContain('wantsInventory')
+    expect(src).toContain('freshAgentRun')
     const spawnSrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'spawn.ts'),
       'utf-8',

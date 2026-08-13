@@ -302,7 +302,7 @@ function mkSpawnCtx(
     taskMounts: [worktreePath],
     runRoot,
     configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
-    wantsInventory: false,
+    freshAgentRun: false,
     nodeRunId: 'nr-1',
     log,
     ...overrides,

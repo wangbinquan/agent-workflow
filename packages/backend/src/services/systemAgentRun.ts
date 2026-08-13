@@ -442,7 +442,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
             opts.configDirName !== ''
               ? { configDir: { env: opts.configDirEnv, name: opts.configDirName } }
               : {}),
-            wantsInventory: false,
+            freshAgentRun: false,
             ...(opts.runtimeBinary != null && opts.runtimeBinary !== ''
               ? { runtimeBinary: opts.runtimeBinary }
               : {}),

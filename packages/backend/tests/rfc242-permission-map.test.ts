@@ -145,7 +145,7 @@ describe('RFC-242 §2 — business spawn honors the gate; undeclared stays uncon
       worktreePath: '/wt',
       runRoot: mkdtempSync(join(tmpdir(), 'rfc242-biz-')),
       configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
-      wantsInventory: false,
+      freshAgentRun: false,
       nodeRunId: 'nr1',
       binaryOverride: ['bun', 'run', 'mock'],
       log: { warn: () => {}, info: () => {}, error: () => {}, debug: () => {} },

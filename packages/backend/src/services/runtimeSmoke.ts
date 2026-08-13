@@ -138,7 +138,7 @@ async function buildSmokePlan(
     ]),
     cwd: worktreeDir,
     runRoot: runDir,
-    wantsInventory: false,
+    freshAgentRun: false,
     ...(extraArgs !== undefined && extraArgs.length > 0 ? { extraArgs } : {}),
     ...(typeof binaryPath === 'string'
       ? { runtimeBinary: binaryPath }

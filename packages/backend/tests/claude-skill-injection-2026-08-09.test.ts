@@ -121,7 +121,7 @@ describe('Claude natural managed-skill attachment', () => {
       runRoot,
       configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
       opencodeCmd: ['claude-mock'],
-      wantsInventory: false,
+      freshAgentRun: false,
       nodeRunId: 'nr-1',
       log,
     }
@@ -174,7 +174,7 @@ describe('Claude natural managed-skill attachment', () => {
       runRoot,
       configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
       opencodeCmd: ['claude-mock'],
-      wantsInventory: false,
+      freshAgentRun: false,
       nodeRunId: 'nr-multi-agent',
       log,
     }
@@ -231,7 +231,7 @@ describe('Claude natural managed-skill attachment', () => {
       runRoot,
       configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
       opencodeCmd: ['claude-mock'],
-      wantsInventory: false,
+      freshAgentRun: false,
       nodeRunId: 'nr-agent-conflict',
       log,
     }
@@ -262,7 +262,7 @@ describe('Claude natural managed-skill attachment', () => {
       runRoot,
       configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
       opencodeCmd: ['claude-mock'],
-      wantsInventory: false,
+      freshAgentRun: false,
       nodeRunId: 'nr-conflict',
       log,
     }
@@ -295,7 +295,7 @@ describe('Claude natural managed-skill attachment', () => {
         runRoot,
         configDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
         opencodeCmd: ['claude-mock'],
-        wantsInventory: false,
+        freshAgentRun: false,
         nodeRunId: 'nr-symlink',
         log,
       }

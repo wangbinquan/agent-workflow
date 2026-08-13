@@ -437,13 +437,15 @@ export interface SystemAgentSpawnContext {
    */
   mcpInjection?: RenderedInjectionV1
   /**
-   * RFC-280 T6 (design-gate P1-4) — opencode: materialize the RFC-029
-   * inventory dump plugin so the startup-verification layer has an observation
-   * source; the playground REQUIRES it (a strict consumer must fail closed on
-   * "cannot observe", never silently pass). claude ignores it (observation
-   * rides the init event).
+   * RFC-297 T13 —— 这一轮是不是「fresh 的 agent 运行」：agent 类节点 + 没有复用
+   * 既有原生会话。这是一条**业务事实**，不是「谁想要清单」。
+   *
+   * 原名 `wantsInventory` 把运行时需求写进了调用方：调用方得先知道「opencode 要
+   * 物化 dump 插件、claude 不用」才能填对，于是 MCP 测试台里长出了
+   * `capabilities.startupObservation === 'inventory-file'` 这种判据。现在调用方
+   * 只陈述事实，「据此要不要物化插件」是各 driver 自己的知识。
    */
-  wantsInventory?: boolean
+  freshAgentRun?: boolean
   /** claude — pre-allocated native session id (`--session-id`, playground turn 1). */
   nativeSessionId?: string
   /**
@@ -512,8 +514,8 @@ export interface AgentSpawnContext {
   readonly taskMounts?: readonly string[]
   /** RFC-281 T3 sandbox-availability probe seam (degrade-loudly branch tests). */
   readonly boundaryHostProbe?: BoundaryHostProbe
-  /** Whether the caller wants a startup-inventory observation produced. */
-  readonly wantsInventory: boolean
+  /** RFC-297 T13 —— fresh 的 agent 运行（业务事实；driver 自行决定据此做什么）。 */
+  readonly freshAgentRun: boolean
   // ── sessions: the two fields stay SEPARATE (设计门 P1-1) ──
   /** Pre-minted native session id (playground turn 1 / first dispatch). */
   readonly nativeSessionId?: string | null
@@ -646,11 +648,11 @@ export interface BusinessNodeSpawnContext {
    */
   runtimeCmd?: string[]
   /**
-   * RFC-029/042 business gate the runner already computed:
-   * `isAgentRunKind(nodeKind) && !envelopeFollowup`. Whether the runtime CAN
-   * produce an inventory is the driver's own capability (claude ignores).
+   * RFC-029/042 的业务门，由调用方算好：`isAgentRunKind(nodeKind) &&
+   * !envelopeFollowup`。RFC-297 T13 起字段名只陈述这条事实——运行时**能不能**
+   * 产出清单是各 driver 自己的能力（claude 直接忽略本字段）。
    */
-  wantsInventory: boolean
+  freshAgentRun: boolean
   /** For driver-internal log lines (inventory materialize failure etc.). */
   nodeRunId: string
   log: Logger
@@ -781,7 +783,7 @@ export interface RuntimeDriver {
    * RFC-280 T6（落差⑥）— MCP playground 的 native-session 策略，原
    * `RuntimeMcpTestCapabilityV1` 平行 spawn 契约的仅存 runtime 特有面。
    * 方法存在 = 该 runtime 支持测试台。spawn 本身走 `buildSpawn` 的
-   * `mcpInjection`/`wantsInventory`/`nativeSessionId` 面。
+   * `mcpInjection`/`freshAgentRun`/`nativeSessionId` 面。
    */
   createMcpTestNativeSessionId?(): string | null
   mcpTestSessionReference?(input: { turnSeq: number; nativeSessionId: string | null }): {
@@ -931,6 +933,7 @@ export interface InventoryReadContext {
  * RFC-297 T5 — inputs for `drainFinalEvents`. Carries what a driver needs to
  * materialize a post-exit observation, plus the two business gates that used to
  * live at the CALL site as a `wantsInventory` boolean threaded through the whole
+ * spawn context (RFC-297 T13 起该字段改名 `freshAgentRun`，只陈述业务事实).
  * spawn context. Moving them here is the point: whether a fresh observation is
  * even possible is the driver's own business (opencode's dump plugin only ran
  * on a fresh, agent-kind run; claude's init fires every time).

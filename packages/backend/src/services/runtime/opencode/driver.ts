@@ -125,7 +125,7 @@ export async function assembleOpencodePersonaSpawn(
   // failure is fatal HERE (unlike the business best-effort path) — a strict
   // consumer would otherwise run blind and fail-open.
   let inventoryOutPath: string | undefined
-  if (ctx.wantsInventory === true) {
+  if (ctx.freshAgentRun === true) {
     mkdirSync(ctx.runDir, { recursive: true })
     const pluginPath = await materializeInventoryPlugin(ctx.runDir)
     inlineConfig.plugin = [`file://${pluginPath}`]
@@ -229,10 +229,10 @@ export async function assembleOpencodeBusinessSpawn(
   )
 
   // RFC-029: wire the inventory dump plugin (business gate — agent kind +
-  // not a followup — is precomputed by the runner as `wantsInventory`; that
+  // not a followup — is precomputed by the runner as `freshAgentRun`; that
   // opencode is the runtime that HAS this capability is embodied right here).
   let inventoryOutPath: string | undefined
-  if (ctx.wantsInventory) {
+  if (ctx.freshAgentRun) {
     try {
       mkdirSync(ctx.runRoot, { recursive: true })
       // materializeInventoryPlugin handles both dev (source tree) and
@@ -447,7 +447,7 @@ export const opencodeDriver: RuntimeDriver = {
    * 里。这里把它读出来**补发成一个普通事件**，于是下游 stage 无从分辨某份观测
    * 是来自流内一行还是来自一个文件——这正是「event 来源统一」的落点。
    *
-   * 两道业务门在此，不再由调用方传布尔值进来（`wantsInventory` 的老路）：
+   * 两道业务门在此，不再由调用方传布尔值进来（`freshAgentRun` 的老路）：
    *  · 复用了既有会话的 followup 里，dump 插件根本没重跑，读它只会得到上一轮的
    *    陈旧文件或一个 file-missing 桩；
    *  · 非 agent 节点压根不注入插件。

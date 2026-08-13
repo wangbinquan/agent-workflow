@@ -993,7 +993,7 @@ export async function defaultDistillerSpawn(
     ]),
     cwd: worktreeDir,
     runRoot: runDir,
-    wantsInventory: false,
+    freshAgentRun: false,
     ...(input.runtimeBinary != null && input.runtimeBinary !== ''
       ? { runtimeBinary: input.runtimeBinary }
       : {}),
