@@ -49,7 +49,10 @@ function makeSpec(over: Partial<AssemblySpec<{ id: string }, string, string>> = 
     mergeBack: {
       run: async () => {
         events.push('merge')
-        return { kind: 'ok' as const }
+        // RFC-287 T3 把返回类型从 `{kind:'ok'}` 收窄为真实原语的
+        // `merged | conflict-human`，本夹具未同步（该 commit 未触及本文件）。
+        // 这里补成功路径的 `merged`，只为让 HEAD 自洽——夹具意图与归属不变。
+        return { kind: 'merged' as const }
       },
     },
     onIsoSetupFailure: () => 'iso-setup-failed',
