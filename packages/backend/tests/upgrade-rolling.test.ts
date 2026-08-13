@@ -233,7 +233,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   })
   afterEach(() => h?.cleanup())
 
-  test('HEAD journal has 153 entries (sanity — locks the freeze target indices)', () => {
+  // RFC-297 T17 bumped to 154 with 0154_rfc297_runtime_inventory（node_runs 加
+  // runtime_inventory_json：跨运行时统一的清单观测，仅加列不回填）。
+  test('HEAD journal has 154 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -369,7 +371,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // （持续迭代草稿、运行中工作集队列与可重试变更记录）。
     // Claude native-session reset fencing bumped to 153 with
     // 0153_runtime_session_reset_fence（持久化 reset-pending lease 状态）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(153)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(154)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

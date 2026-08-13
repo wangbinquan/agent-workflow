@@ -1072,6 +1072,13 @@
       "when": 1788278400027,
       "tag": "0153_runtime_session_reset_fence",
       "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "6",
+      "when": 1788278400028,
+      "tag": "0154_rfc297_runtime_inventory",
+      "breakpoints": true
     }
   ]
 }

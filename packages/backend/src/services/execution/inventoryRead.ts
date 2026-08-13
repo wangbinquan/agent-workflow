@@ -20,6 +20,7 @@ import { eq } from 'drizzle-orm'
 import {
   INVENTORY_FACES,
   INVENTORY_FACE_TO_DECLARED_KEY,
+  RuntimeInventoryObservationSchema,
   StartupVerificationRecordSchema,
   assembleFace,
   type DeclaredInjectionManifest,
@@ -135,6 +136,7 @@ export async function getRuntimeInventory(
     .select({
       taskId: nodeRuns.taskId,
       runtime: nodeRuns.runtime,
+      runtimeInventoryJson: nodeRuns.runtimeInventoryJson,
       startupVerificationJson: nodeRuns.startupVerificationJson,
     })
     .from(nodeRuns)
@@ -164,6 +166,12 @@ export async function getRuntimeInventory(
 
   const verification = parseVerification(run.startupVerificationJson)
   const declared = verification?.declared ?? null
+
+  // RFC-297 T19 —— 新 run 的唯一观测落库就是这一列，直接返回；它由 runner 在结算
+  // 时**无条件**写入，所以零注入节点也有清单（AC-5）。存量行该列为 NULL，落到
+  // 下面按观测源分派的转码路径（D7 零 backfill）。
+  const stored = parseStoredObservation(run.runtimeInventoryJson)
+  if (stored !== null) return { observation: stored, declaration }
 
   // 观测源按 driver 的**静态表态**分派，不按运行时名字——第三个运行时接入时
   // 只要表明自己属于哪一类，这里一行都不用改。
@@ -259,6 +267,19 @@ function observationFromSnapshotReason(
   }
   if (reason === 'parse-failed') return { state: 'malformed', reason, message }
   return { state: 'unavailable', reason, message }
+}
+
+/** 新列的读法：坏了当没有（回退存量转码），绝不把损坏的行当成「清单为空」。 */
+function parseStoredObservation(raw: string | null): RuntimeInventoryObservation | null {
+  if (raw === null || raw === '') return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  const result = RuntimeInventoryObservationSchema.safeParse(parsed)
+  return result.success ? result.data : null
 }
 
 function parseVerification(raw: string | null) {

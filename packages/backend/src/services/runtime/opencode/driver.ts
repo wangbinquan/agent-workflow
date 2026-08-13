@@ -36,8 +36,7 @@ import {
   weaveMemoryBlock,
 } from '@/services/execution/agentInjection'
 import type { InventorySnapshot } from '@agent-workflow/shared'
-import { isAgentNodeKind } from '@agent-workflow/shared'
-import { inventoryFacesFromSnapshot } from './inventory'
+import { inventoryFacesFromSnapshot, isAgentNodeKind } from '@agent-workflow/shared'
 import type { LivePollOptions, LivePollerHandle } from './subagentLiveCapture'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'

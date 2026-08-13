@@ -17,6 +17,7 @@
 //    的处理，与 backend `verifyStartup` 的 missing 语义严格同源。
 
 import { z } from 'zod'
+import type { InventorySnapshotCaptured } from '../inventory'
 
 // ---------------------------------------------------------------------------
 // 表态三态
@@ -271,4 +272,42 @@ export function renderableFields<F extends InventoryFace>(
   return Object.keys(fields).filter(
     (key) => fields[key] !== 'unsupported',
   ) as InventoryFieldsByFace[F][]
+}
+
+/**
+ * RFC-297 T8 —— dump 快照 → 统一观测形状。字段 1:1 搬运，一个都不许丢（AC-2）：
+ * agent 的 mode/model/source、skill 的 source/path/description、MCP 的
+ * type/status/hint、plugin 的 source 全部随行。
+ *
+ * `tools` 面刻意缺席——dump 插件不枚举工具集。缺席 ≠ 空数组，后者会被读成
+ * 「运行时一个工具都没加载」。
+ */
+export function inventoryFacesFromSnapshot(
+  snap: InventorySnapshotCaptured,
+): ObservedInventoryFaces {
+  return {
+    agents: snap.agents.map((a) => ({
+      key: a.name,
+      name: a.name,
+      mode: a.mode,
+      modelProviderId: a.modelProviderId,
+      modelId: a.modelId,
+      source: a.source,
+    })),
+    skills: snap.skills.map((s) => ({
+      key: s.name,
+      name: s.name,
+      source: s.source,
+      path: s.path,
+      description: s.description,
+    })),
+    mcps: snap.mcps.map((m) => ({
+      key: m.name,
+      name: m.name,
+      type: m.type,
+      status: m.status,
+      hint: m.hint,
+    })),
+    plugins: snap.plugins.map((p) => ({ key: p.specifier, name: p.specifier, source: p.source })),
+  }
 }

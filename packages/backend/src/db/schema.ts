@@ -1590,6 +1590,17 @@ export const nodeRuns = sqliteTable(
      */
     inventorySnapshotJson: text('inventory_snapshot_json'),
     /**
+     * RFC-297 T17: serialized `RuntimeInventoryObservation` — 跨运行时**统一**的
+     * 清单观测（五个面的条目 + 来源对账，或「没观测到」的三种归因）。
+     *
+     * 与上面那列的分工：`inventory_snapshot_json` 是 RFC-029 opencode dump 插件
+     * 的原文形状，claude 从不写它（没有那个插件），前台读到 NULL 后照 opencode
+     * 的失败语义报「插件可能加载失败」——本 RFC 修的正是这个。本列由 runner 在
+     * 结算时**无条件**写入（只要观测到了），因此零注入节点也留得下清单；存量行
+     * 保持 NULL，由读端转码呈现（D7 零 backfill）。
+     */
+    runtimeInventoryJson: text('runtime_inventory_json'),
+    /**
      * RFC-280 T3: serialized `StartupVerificationRecord` — the platform's
      * declared-injection manifest × the runtime's startup report × the diff
      * (`services/execution/startupVerification.ts`). Written by runner.ts at

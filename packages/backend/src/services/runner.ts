@@ -96,6 +96,8 @@ import {
   type StartupObservation,
   type StartupVerificationRecord,
 } from './execution/startupVerification'
+// RFC-297 T18 —— 结算时构造统一清单观测（与 verifyStartup 共用同一套对账语义）。
+import { buildRuntimeInventoryObservation } from './execution/inventoryStage'
 import { runAgentProcess } from './execution/agentProcess'
 import { FINAL_REAP_MARGIN_MS, MANAGED_PROCESS_MAX_LINE_CHARS } from './execution/managedProcess'
 
@@ -2143,6 +2145,26 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // order re-creates the followup "cannot verify" noise (RFC-280 P2-E).
     const caps = driver.capabilities
     const observationSkippedByDesign = caps.observationRequiresFreshRun && !wantsInventory
+
+    // RFC-297 T18 —— 清单观测**无条件**落库，与下面的验证判定分开。
+    //
+    // 二者受不同的门：验证回答「我注入的东西生效了吗」，没注入就无从谈起，故仍受
+    // `declaredHasContent` 门控；清单回答「这一轮到底加载了什么」，零注入节点同样
+    // 想知道（AC-5）——此前 claude 侧这类节点的观测随作用域直接丢弃。
+    //
+    // 「没观测到」的三种归因不可混为一谈，否则会复活 RFC-280 P2-E 治过的噪音：
+    // 运行时压根不产清单 / 本轮按设计不产（followup 复用会话）/ 本该有却没有。
+    const runtimeInventoryJson = JSON.stringify(
+      buildRuntimeInventoryObservation({
+        capabilities: caps,
+        freshRun: wantsInventory,
+        declared: injectionDeclared,
+        claudeInit: capturedStartupInventory,
+        snapshot: capturedInventorySnapshot,
+        now: Date.now(),
+      }),
+    )
+
     let startupVerificationJson: string | null = null
     if (declaredHasContent(injectionDeclared) && !observationSkippedByDesign) {
       let observation: StartupObservation
@@ -2224,6 +2246,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       .update(nodeRuns)
       .set({
         inventorySnapshotJson: inventoryJson,
+        runtimeInventoryJson,
         // RFC-280 T3: declared × observed × diff — the node-detail warning face.
         startupVerificationJson,
         // RFC-046: persist the post-budget-clip snapshot captured at inject

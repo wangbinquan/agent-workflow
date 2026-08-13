@@ -14,8 +14,11 @@ import {
   INVENTORY_FACES,
   INVENTORY_FACE_TO_DECLARED_KEY,
   assembleFace,
+  inventoryFacesFromSnapshot,
   type InventoryFaces,
+  type InventorySnapshot,
   type ObservedInventoryFaces,
+  type ObservedInventoryItem,
   type RuntimeInventoryObservation,
 } from '@agent-workflow/shared'
 import type { DeclaredManifestV1 } from '@/services/execution/agentInjection'
@@ -95,4 +98,91 @@ export function createInventoryStage(opts: InventoryStageOptions): InventoryStag
       return { state: 'captured', capturedAt, faces }
     },
   }
+}
+
+/**
+ * RFC-297 T18 —— 结算时从「本轮观测到的东西」构造统一清单观测。
+ *
+ * 与 `createInventoryStage` 的关系：那个是 pipeline 形态（逐事件喂入），本函数是
+ * runner 现状的直接形态（结算时拿两个已捕获的观测源）。二者共用同一套语义与同一
+ * 个 `assembleFace`，所以「清单里标已声明未加载」与「banner 报未加载」不可能分叉。
+ * pump 完成 pipeline 化之后（T12），本函数由 stage 取代。
+ */
+export function buildRuntimeInventoryObservation(input: {
+  capabilities: RuntimeDriverCapabilities
+  /** 本轮是否可能产生新观测（false = 复用了既有原生会话）。 */
+  freshRun: boolean
+  declared: DeclaredManifestV1
+  /** claude：流内 init 事件累积出的观测。 */
+  claudeInit: ClaudeInitLike | null
+  /** opencode：退出后读到的 dump 快照（含失败桩）。 */
+  snapshot: SnapshotLike | null
+  now: number
+}): RuntimeInventoryObservation {
+  const { capabilities: caps } = input
+  const observed = observedFacesOf(input)
+  if (observed !== null) {
+    const faces: InventoryFaces = {}
+    for (const face of INVENTORY_FACES) {
+      const items = observed[face]
+      if (items === undefined) continue
+      faces[face] = assembleFace(items, declaredNamesFor(input.declared, face))
+    }
+    return { state: 'captured', capturedAt: input.now, faces }
+  }
+  if (caps.startupObservation === 'none') {
+    return { state: 'not-produced', reason: 'runtime-has-no-inventory', message: null }
+  }
+  if (caps.observationRequiresFreshRun && !input.freshRun) {
+    // followup 复用了会话，产出观测的东西根本没重跑——正常状态，不是故障。
+    return { state: 'not-produced', reason: 'session-reused', message: null }
+  }
+  // opencode 的失败桩带着自己的 reason（插件没加载 / 文件坏了 / pure 模式…），
+  // 原样呈现比笼统一句「没有观测」有用得多。
+  if (input.snapshot !== null && input.snapshot.captured === false) {
+    return input.snapshot.reason === 'parse-failed'
+      ? { state: 'malformed', reason: input.snapshot.reason, message: input.snapshot.message }
+      : { state: 'unavailable', reason: input.snapshot.reason, message: input.snapshot.message }
+  }
+  return { state: 'unavailable', reason: 'no-observation', message: null }
+}
+
+interface ClaudeInitLike {
+  tools?: readonly string[]
+  agents?: readonly string[]
+  skills?: readonly string[]
+  mcpServers?: readonly { name: string; status: string }[]
+}
+
+type SnapshotLike = InventorySnapshot
+
+/** 结构化取数：两个观测源转成同一形状；都没有则 null。 */
+function observedFacesOf(input: {
+  capabilities: RuntimeDriverCapabilities
+  claudeInit: ClaudeInitLike | null
+  snapshot: SnapshotLike | null
+}): ObservedInventoryFaces | null {
+  if (input.snapshot !== null && input.snapshot.captured) {
+    return inventoryFacesFromSnapshot(input.snapshot)
+  }
+  const init = input.claudeInit
+  if (init === null) return null
+  const named = (names: readonly string[] | undefined): ObservedInventoryItem[] | undefined =>
+    names === undefined ? undefined : names.map((name) => ({ key: name, name }))
+  const faces: ObservedInventoryFaces = {}
+  const tools = named(init.tools)
+  const agents = named(init.agents)
+  const skills = named(init.skills)
+  if (tools !== undefined) faces.tools = tools
+  if (agents !== undefined) faces.agents = agents
+  if (skills !== undefined) faces.skills = skills
+  if (init.mcpServers !== undefined) {
+    faces.mcps = init.mcpServers.map((m) => ({ key: m.name, name: m.name, status: m.status }))
+  }
+  return faces.tools === undefined &&
+    faces.agents === undefined &&
+    faces.skills === undefined &&
+    faces.mcps === undefined
+    ? null
+    : faces
 }
