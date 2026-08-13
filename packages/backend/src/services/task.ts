@@ -1578,8 +1578,18 @@ export async function materializeSpace(
   input: StartTask,
   deps: StartTaskDeps,
   appHome: string,
+  /**
+   * RFC-287 G7 第一刀：让调用方能**先定 id、后物化**。
+   *
+   * G7 要把仓库准备挪到任务行落库之后（启动接口不再同步阻塞到工作树就绪，失败
+   * 也能留下记录）。那就要求任务行先落——而落行需要 id，id 却一直是在这里、在
+   * 物化过程中才铸出来的。把它提成可选入参：不传 = 逐字维持旧行为（本函数自己
+   * 铸），传了 = 用调用方给的那个。本刀**零行为变更**，只是把「谁铸 id」这个
+   * 决定权交出去，为下一刀（占位落行 + runTask 第 0 步物化）让路。
+   */
+  presetTaskId?: string,
 ): Promise<MaterializedSpace> {
-  const taskId = ulid()
+  const taskId = presetTaskId ?? ulid()
 
   // RFC-165 (F4): the internal local-path face is mutually exclusive with
   // every public space field — a programming error, not user input, so the
