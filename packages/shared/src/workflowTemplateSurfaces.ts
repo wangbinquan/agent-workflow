@@ -5,6 +5,11 @@ import type { CodeHostEventType, WebhookTemplateVar } from './schemas/webhook'
 import type { ParsedTriggerContext, TriggerContext } from './triggerContext'
 import { WEBHOOK_EVENT_VAR_MATRIX } from './schemas/webhook'
 import { extractTemplateRefs } from './templateRef'
+import { projectCodeHostTemplates } from './codeHost/templateProjection'
+import {
+  workflowTemplateAuthorityKey,
+  type WorkflowTemplateAuthorityKey,
+} from './templateAuthority'
 
 export type WorkflowTemplateSink =
   | 'model-prompt'
@@ -22,6 +27,7 @@ export interface WorkflowTemplateSurface {
   readonly pointer: string
   readonly sink: WorkflowTemplateSink
   readonly refDomain: WorkflowTemplateRefDomain
+  readonly authorityKey: WorkflowTemplateAuthorityKey
   readonly text: string
 }
 
@@ -36,7 +42,9 @@ function surface(
   refDomain: WorkflowTemplateRefDomain,
   text: unknown,
 ): WorkflowTemplateSurface | null {
-  return typeof text === 'string' ? { nodeId, pointer, sink, refDomain, text } : null
+  return typeof text === 'string'
+    ? { nodeId, pointer, sink, refDomain, authorityKey: workflowTemplateAuthorityKey(sink), text }
+    : null
 }
 
 function surfacesOfNode(node: WorkflowNode, index: number): WorkflowTemplateSurface[] {
@@ -106,6 +114,29 @@ export function collectWorkflowTemplateSurfaces(
   definition: WorkflowDefinition,
 ): WorkflowTemplateSurface[] {
   return definition.nodes.flatMap((node, index) => surfacesOfNode(node, index))
+}
+
+/**
+ * Authoring/validation/runtime inventory. Persisted collection above remains
+ * deliberately exhaustive; CodeHostCall is projected to the selected
+ * action/provider here so inactive legacy values cannot block an unrelated
+ * action while still remaining available to migration/diff.
+ */
+export function collectActiveWorkflowTemplateSurfaces(
+  definition: WorkflowDefinition,
+): WorkflowTemplateSurface[] {
+  return definition.nodes.flatMap((node, index) => {
+    if (node.kind !== 'code-host-call') return surfacesOfNode(node, index)
+    const root = `/nodes/${index}`
+    return projectCodeHostTemplates(node).active.map((entry) => ({
+      nodeId: node.id,
+      pointer: `${root}${entry.pointer}`,
+      sink: entry.sink,
+      refDomain: 'code-host' as const,
+      authorityKey: workflowTemplateAuthorityKey(entry.sink),
+      text: entry.text,
+    }))
+  })
 }
 
 /** Clone and rewrite only inventoried template strings. */
@@ -226,7 +257,7 @@ export function collectTriggerDependencies(
   const out: TriggerDependency[] = []
   const seen = new Set<string>()
   for (const definition of definitions) {
-    for (const item of collectWorkflowTemplateSurfaces(definition)) {
+    for (const item of collectActiveWorkflowTemplateSurfaces(definition)) {
       for (const ref of extractTemplateRefs(item.text)) {
         if (ref.kind !== 'trigger') continue
         const key = `${item.nodeId}\u0000${item.pointer}\u0000${ref.field}`

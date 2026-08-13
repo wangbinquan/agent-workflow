@@ -3,7 +3,9 @@
 
 import type {
   AriaAttributes,
+  AriaRole,
   ChangeEvent,
+  CompositionEventHandler,
   FocusEventHandler,
   KeyboardEventHandler,
   ReactEventHandler,
@@ -34,6 +36,8 @@ interface FieldProps {
   group?: boolean
   /** Optional id for callers that need to label a grouped control explicitly. */
   labelId?: string
+  /** Field-adjacent action; callers with multiple controls must also use `group`. */
+  action?: ReactNode
   /** Optional id for associating the rendered validation error with a control. */
   errorId?: string
   /** Keep an already-announced parent error visual/associated without replaying it live. */
@@ -49,19 +53,23 @@ export function Field({
   children,
   group,
   labelId,
+  action,
   errorId,
   errorLive = true,
 }: FieldProps) {
   const inner = (
     <>
-      <span id={labelId} className="form-field__label">
-        {icon !== undefined && (
-          <span className="form-field__icon" aria-hidden="true">
-            {icon}
-          </span>
-        )}
-        {label}
-        {required === true && <span className="form-field__required"> *</span>}
+      <span className="form-field__heading">
+        <span id={labelId} className="form-field__label">
+          {icon !== undefined && (
+            <span className="form-field__icon" aria-hidden="true">
+              {icon}
+            </span>
+          )}
+          {label}
+          {required === true && <span className="form-field__required"> *</span>}
+        </span>
+        {action !== undefined && <span className="form-field__action">{action}</span>}
       </span>
       {children}
       {error !== undefined && error !== '' ? (
@@ -73,7 +81,7 @@ export function Field({
       )}
     </>
   )
-  if (group === true) {
+  if (group === true || action !== undefined) {
     return (
       <div
         className="form-field"
@@ -112,10 +120,17 @@ interface TextInputProps {
   'aria-describedby'?: AriaAttributes['aria-describedby']
   'aria-labelledby'?: AriaAttributes['aria-labelledby']
   'aria-errormessage'?: AriaAttributes['aria-errormessage']
+  'aria-controls'?: AriaAttributes['aria-controls']
+  'aria-expanded'?: AriaAttributes['aria-expanded']
+  'aria-activedescendant'?: AriaAttributes['aria-activedescendant']
+  'aria-autocomplete'?: AriaAttributes['aria-autocomplete']
+  role?: AriaRole
   'data-testid'?: string
   onFocus?: FocusEventHandler<HTMLInputElement>
   onBlur?: FocusEventHandler<HTMLInputElement>
   onKeyDown?: KeyboardEventHandler<HTMLInputElement>
+  onCompositionStart?: CompositionEventHandler<HTMLInputElement>
+  onCompositionEnd?: CompositionEventHandler<HTMLInputElement>
 }
 
 export function TextInput({
@@ -139,10 +154,17 @@ export function TextInput({
   'aria-describedby': ariaDescribedBy,
   'aria-labelledby': ariaLabelledBy,
   'aria-errormessage': ariaErrorMessage,
+  'aria-controls': ariaControls,
+  'aria-expanded': ariaExpanded,
+  'aria-activedescendant': ariaActiveDescendant,
+  'aria-autocomplete': ariaAutocomplete,
+  role,
   'data-testid': testid,
   onFocus,
   onBlur,
   onKeyDown,
+  onCompositionStart,
+  onCompositionEnd,
 }: TextInputProps) {
   return (
     <input
@@ -166,10 +188,17 @@ export function TextInput({
       aria-describedby={ariaDescribedBy}
       aria-labelledby={ariaLabelledBy}
       aria-errormessage={ariaErrorMessage}
+      aria-controls={ariaControls}
+      aria-expanded={ariaExpanded}
+      aria-activedescendant={ariaActiveDescendant}
+      aria-autocomplete={ariaAutocomplete}
+      role={role}
       data-testid={testid}
       onFocus={onFocus}
       onBlur={onBlur}
       onKeyDown={onKeyDown}
+      onCompositionStart={onCompositionStart}
+      onCompositionEnd={onCompositionEnd}
     />
   )
 }

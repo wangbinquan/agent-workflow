@@ -134,6 +134,12 @@ resolved from upstream edges). Retry and timeout are daemon-wide execution
 settings, not node fields: `config.defaultNodeRetries` and
 `config.defaultPerNodeTimeoutMs` apply uniformly to every agent run.
 
+In the visual editor, runtime templates use one field-adjacent **Insert parameter** picker instead
+of an always-expanded token list. It classifies current-node inputs, task runtime values, and
+Webhook trigger context separately; every option shows a readable label, canonical token, and
+description. Webhook values remain discoverable on demand because a workflow can be saved before a
+trigger rule is attached, but they are only populated for Webhook-launched tasks.
+
 ### `wrapper-fanout`
 
 ```yaml

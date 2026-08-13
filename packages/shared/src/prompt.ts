@@ -23,6 +23,7 @@ import {
 } from './promptFencing'
 import { renderTemplateRefs, type InvalidTemplateRef } from './templateRef'
 import type { TriggerContext } from './triggerContext'
+import { AGENT_PROMPT_BUILTIN_NAMES } from './runtimeBuiltins'
 
 /**
  * Review-driven re-run context (RFC-005 + RFC-014).
@@ -410,42 +411,7 @@ export class TriggerContextMissingError extends Error {
  * `{{__repos__}}` / `{{__external_feedback__}}` templates were falsely reported
  * `prompt-template-unresolved` and blocked at launch.
  */
-export const BUILTIN_VARS = new Set([
-  '__repo_path__',
-  '__base_branch__',
-  '__task_id__',
-  '__node_id__',
-  '__iteration__',
-  '__shard_key__',
-  // RFC-005 review context tokens. They are stable names — see
-  // packages/backend/tests/review-prompt-injection.test.ts for the
-  // source-code-text grep regression guard.
-  '__review_rejection__',
-  '__review_comments__',
-  '__iterate_target_port__',
-  // RFC-014 sibling-outputs token — stable name; same grep contract as the
-  // review tokens above. See packages/backend/tests/review-prompt-injection.test.ts.
-  '__sibling_outputs__',
-  // RFC-023 clarify context tokens. Stable names; renaming is a contract
-  // break — see packages/backend/tests/clarify-prompt-injection.test.ts
-  // for the source-code-text grep regression guard.
-  '__clarify_iteration__',
-  '__clarify_remaining__',
-  // RFC-056 cross-clarify context tokens. Stable names; renaming is a
-  // contract break — see packages/shared/tests/clarify-cross-rfc056.test.ts
-  // for the grep guard on `CROSS_CLARIFY_EXTERNAL_FEEDBACK_BLOCK_TITLE` +
-  // packages/backend/tests/cross-clarify-prompt-injection-rfc056.test.ts
-  // for the per-token presence guard.
-  // RFC-066 multi-repo placeholders. Single-repo runs render
-  // `__repo_names__` as the empty string (length-1 array, worktreeDirName='');
-  // `__repos__` becomes the single worktreePath; `__repo_count__` is '1'.
-  // Templates that never reference them stay byte-baseline against
-  // pre-RFC-066 outputs.
-  '__repos__',
-  '__repo_names__',
-  '__repo_count__',
-  '__repo_group__',
-])
+export const BUILTIN_VARS: ReadonlySet<string> = AGENT_PROMPT_BUILTIN_NAMES
 
 /**
  * RFC-148 — retired clarify/cross-clarify tokens. Their render paths were

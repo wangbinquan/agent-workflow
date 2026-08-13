@@ -4409,6 +4409,23 @@ button:disabled:hover {
   font-size: 13px;
 }
 
+.form-field__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.form-field__action {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.form-field__action .runtime-parameter-picker__trigger {
+  min-height: 30px;
+}
+
 .form-field__required {
   color: var(--danger);
 }
@@ -4520,6 +4537,35 @@ button:disabled:hover {
 .code-host-input-binding__unlink {
   min-height: 24px;
   padding-block: 2px;
+}
+
+.code-host-inactive-values {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.code-host-inactive-values__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.code-host-inactive-values__value {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.code-host-inactive-values__value code:last-child {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .form-input {
@@ -24031,39 +24077,14 @@ button.status-chip {
   gap: var(--space-1);
 }
 
-/* TemplateVarChips — 模板变量点击插入行（webhook 触发器三注入面共用）。 */
-.template-var-chips {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
-/* RFC-263：变量表 13→30 后按组分行呈现（每组一行，组内 chips 自行 wrap）。 */
-.template-var-chips--grouped {
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-2);
-}
-
-.template-var-chips__row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
-.template-var-chips__label {
-  font-size: var(--font-sm);
-  color: var(--muted);
-  margin-right: var(--space-1);
-}
-
-.template-var-chips__chip {
-  font-family: var(--font-mono);
-}
-
 /* RFC-295 — one field-adjacent action replaces always-visible token walls. */
+.webhook-trigger-history {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  margin-block: var(--space-1) var(--space-2);
+}
+
 .runtime-parameter-picker {
   display: flex;
   align-items: center;
@@ -24165,6 +24186,15 @@ button.status-chip {
 .runtime-parameter-popover__option:hover,
 .runtime-parameter-popover__option--active {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.runtime-parameter-popover__option:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.runtime-parameter-popover__option:disabled:hover {
+  background: transparent;
 }
 
 .runtime-parameter-popover__option:focus-visible {

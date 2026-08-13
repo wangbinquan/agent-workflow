@@ -14,7 +14,7 @@
 import {
   collectIntentWorkflowAgentRefs,
   collectIntentWorkflowCallRefs,
-  collectWorkflowTemplateSurfaces,
+  collectActiveWorkflowTemplateSurfaces,
   extractTemplateRefs,
   findNonSentinelSecretCarriers,
   intentHandleType,
@@ -169,7 +169,7 @@ export function validateDraftChangeset(
       }
       const parsedDefinition = WorkflowDefinitionSchema.safeParse(rawDefinition)
       if (parsedDefinition.success) {
-        for (const surface of collectWorkflowTemplateSurfaces(parsedDefinition.data)) {
+        for (const surface of collectActiveWorkflowTemplateSurfaces(parsedDefinition.data)) {
           for (const ref of extractTemplateRefs(surface.text)) {
             if (ref.kind !== 'invalid') continue
             errors.push(

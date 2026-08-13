@@ -10,9 +10,10 @@
 import type { WorkflowNode } from '@agent-workflow/shared'
 import { buildNodeAgentLookup, resolveNodeAgent } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
-import { useRef } from 'react'
+import { useId, useRef } from 'react'
 import { Field, TextArea } from '@/components/Form'
-import { applyTemplateVarInsertion, WebhookTriggerVarChips } from '@/components/TemplateVarChips'
+import { RuntimeParameterPicker } from '@/components/RuntimeParameterPicker'
+import { buildRuntimeParameterCatalog } from '@/components/runtime-parameters/catalog'
 import { Select } from '@/components/Select'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { resourceOptionLabel } from '@/lib/resource-option-label'
@@ -46,6 +47,7 @@ export function AgentSingleEdit({
   const selectedAgent = resolveNodeAgent(node, agentLookup)
   const ports = computePorts(node, agentLookup, definition)
   const promptRef = useRef<HTMLTextAreaElement | null>(null)
+  const promptLabelId = useId()
 
   function update(p: Record<string, unknown>, meta: InspectorChangeMeta) {
     onPatch({ ...(node as Record<string, unknown>), ...p } as unknown as WorkflowNode, meta)
@@ -55,6 +57,24 @@ export function AgentSingleEdit({
     node.id,
     'promptTemplate',
     t('inspector.fieldPromptTemplate'),
+  )
+  const promptLabel = t('inspector.fieldPromptTemplate')
+  const parameterCatalog = buildRuntimeParameterCatalog(
+    {
+      audience: 'workflow-inspector',
+      surface: 'agent-prompt',
+      t,
+    },
+    {
+      local: ports.inputs.map((port) => ({
+        id: `local:node:${node.id}:input:${port}`,
+        source: 'current-node',
+        field: port,
+        token: `{{${port}}}`,
+        label: t('runtimeParameters.localInputLabel', { port }),
+        description: t('runtimeParameters.localInputDescription'),
+      })),
+    },
   )
 
   return (
@@ -102,8 +122,30 @@ export function AgentSingleEdit({
 
       <InspectorFieldAnchor nodeId={node.id} field="prompt">
         <Field
-          label={t('inspector.fieldPromptTemplate')}
+          label={promptLabel}
           hint={t('inspector.fieldPromptTemplateHint')}
+          group
+          labelId={promptLabelId}
+          action={
+            <RuntimeParameterPicker
+              authority="workflow:model-prompt"
+              entries={parameterCatalog}
+              target={{
+                id: `${node.id}:promptTemplate`,
+                label: promptLabel,
+                mode: 'insert-at-caret',
+                value: promptTemplate,
+                revision: promptTemplate,
+                element: () => promptRef.current,
+                commit: (next) =>
+                  update(
+                    { promptTemplate: next },
+                    atomicNodeInspectorChange(node.id, 'promptTemplate', promptLabel),
+                  ),
+              }}
+              testId="agent-runtime-parameter-picker"
+            />
+          }
         >
           <InspectorHistoryBoundary meta={promptMeta} onBoundary={onHistoryBoundary}>
             <TextArea
@@ -112,16 +154,9 @@ export function AgentSingleEdit({
               rows={8}
               monospace
               textareaRef={promptRef}
+              aria-labelledby={promptLabelId}
             />
           </InspectorHistoryBoundary>
-          <WebhookTriggerVarChips
-            onInsert={(token) =>
-              applyTemplateVarInsertion(promptRef.current, promptTemplate, token, (next) =>
-                update({ promptTemplate: next }, promptMeta),
-              )
-            }
-            testidPrefix="agent-trigger-var"
-          />
           <PortRefList ports={ports.inputs} />
           <MissingRefList template={promptTemplate} inputPorts={ports.inputs} />
         </Field>

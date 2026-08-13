@@ -73,6 +73,7 @@ import {
   readScriptEnv,
   readScriptLanguage,
   readScriptOutputPorts,
+  projectCodeHostTemplates,
   REVIEW_INPUT_PORT_NAME,
   resolveNodeAgent,
   resolveWorkflowSourceRef,
@@ -1594,7 +1595,7 @@ export function validateWorkflowDef(
       }
     }
 
-    const templates: string[] = Object.values(params)
+    const templates = projectCodeHostTemplates(node).active.map((entry) => entry.text)
     if (action === 'custom') {
       const request = (node as unknown as { request?: unknown }).request
       const parsedRequest = CodeHostCustomRequestSchema.safeParse(request)
@@ -1646,7 +1647,6 @@ export function validateWorkflowDef(
             })
           }
         }
-        templates.push(req.path, ...Object.values(req.query ?? {}), req.body ?? '')
       }
     }
 

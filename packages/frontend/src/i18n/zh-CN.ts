@@ -5,7 +5,11 @@
 // we migrate them to t() — there is no migration script, but the key tree
 // matches en-US 1:1.
 
-import type { WebhookTemplateVar, WorkgroupSystemTemplateKey } from '@agent-workflow/shared'
+import type {
+  RuntimeBuiltinName,
+  WebhookTemplateVar,
+  WorkgroupSystemTemplateKey,
+} from '@agent-workflow/shared'
 
 export interface Resources {
   tabBar: {
@@ -2615,6 +2619,43 @@ export interface Resources {
     forbiddenDescription: string
     tabs: { endpoints: string; triggers: string; deliveries: string }
   }
+  runtimeParameters: {
+    insert: string
+    insertFor: string
+    back: string
+    categoryAria: string
+    categoryCount: string
+    openCategory: string
+    selectEventsFirst: string
+    invalidLocalParameter: string
+    search: string
+    noMatches: string
+    inserted: string
+    stale: string
+    unavailable: string
+    invalidJsonTarget: string
+    replaceWholeValue: string
+    optionalWebhook: string
+    scope: { global: string; local: string }
+    type: { trigger: string; runtime: string; node: string; context: string }
+    source: { webhook: string; task: string; currentNode: string; review: string }
+    group: {
+      webhookContext: string
+      webhookApi: string
+      repository: string
+      identity: string
+      iteration: string
+      review: string
+      clarify: string
+      input: string
+    }
+    webhookLabels: Record<WebhookTemplateVar, string>
+    builtins: Record<RuntimeBuiltinName, { label: string; agent: string; workgroup?: string }>
+    localInputLabel: string
+    localInputDescription: string
+    reviewCommentsLabel: string
+    reviewCommentsDescription: string
+  }
   webhookTriggers: {
     eyebrow: string
     title: string
@@ -2642,6 +2683,11 @@ export interface Resources {
     eventCount: string
     flowAria: string
     saveAction: string
+    commonOnlySaveAction: string
+    historyActions: string
+    undo: string
+    redo: string
+    historyCompositionBlocked: string
     discardTitle: string
     discardDescription: string
     discardAction: string
@@ -2716,6 +2762,30 @@ export interface Resources {
       unmappable: string
       description: string
       goal: string
+      agentDescriptionHint: string
+      agentInputHint: string
+      agentInputListHint: string
+      agentLoading: string
+      agentRefreshing: string
+      agentDefinitionChangedTitle: string
+      agentDefinitionChangedBody: string
+      agentApplyDefinition: string
+      agentUnavailableTitle: string
+      agentUnavailableBody: string
+      agentOpaqueSummary: string
+      agentCommonOnly: string
+      retryAgent: string
+      agentRepairsTitle: string
+      agentRepairsBody: string
+      agentRepairAction: string
+      agentBlockersTitle: string
+      agentBlockersBody: string
+      agentIssueDescriptionRequired: string
+      agentIssueDescriptionTooLong: string
+      agentIssueRequiredInputs: string
+      agentTargetSwitchTitle: string
+      agentTargetSwitchDescription: string
+      agentTargetSwitchAction: string
       templateVarsLabel: string
       /** RFC-263：变量表 13→30 后按两组呈现。 */
       varGroupContext: string
@@ -4861,26 +4931,22 @@ export interface Resources {
     sectionInputs: string
     inputGuideEmptyTitle: string
     inputGuideEmpty: string
-    inputGuideNoTargetTitle: string
-    inputGuideNoTarget: string
     inputGuideUnboundTitle: string
     inputGuideUnbound: string
     inputGuideBoundTitle: string
     inputGuideBound: string
-    bindTargetAria: string
-    bindTargetPlaceholder: string
-    bindTargetEmpty: string
-    bindTargetReplace: string
     boundTargets: string
     removeBindingAria: string
     inputBindingAdvancedHint: string
-    upstreamOptionGroup: string
-    upstreamOptionDescription: string
-    savedTemplateOptionGroup: string
-    savedTemplateOptionDescription: string
+    inactiveValuesTitle: string
+    inactiveValuesBody: string
+    clearInactive: string
+    confirmClearInactive: string
+    clearInactiveAria: string
+    confirmClearInactiveAria: string
+    clearInactiveHistory: string
     sectionParams: string
     sectionCustom: string
-    sectionVars: string
     method: string
     path: string
     pathHint: string
@@ -4894,11 +4960,6 @@ export interface Resources {
     bodyHint: string
     allowDestructive: string
     allowDestructiveHint: string
-    varsHint: string
-    triggerVarsHint: string
-    varsInsertHint: string
-    varsNoTarget: string
-    noInboundPorts: string
     noViewPermission: { title: string; body: string }
     actionUnsupported: string
     unsupportedGeneric: string
@@ -8344,6 +8405,153 @@ export const zhCN: Resources = {
     forbiddenDescription: 'Webhook 配置（验签密钥、触发规则、投递审计）只对 admin 开放。',
     tabs: { endpoints: '接收端点', triggers: '触发规则', deliveries: '投递记录' },
   },
+  runtimeParameters: {
+    insert: '插入参数',
+    insertFor: '为“{{field}}”插入参数',
+    back: '返回上一级参数分类',
+    categoryAria: '打开“{{category}}”分类，共 {{count}} 个参数',
+    categoryCount: '{{count}} 项',
+    openCategory: '打开分类查看其中的参数。',
+    selectEventsFirst: '请先选择至少一种 Webhook 事件类型，再插入事件参数。',
+    invalidLocalParameter: '端口“{{port}}”不能生成合法的运行期模板 token，请先重命名端口。',
+    search: '搜索参数名称、说明或 token',
+    noMatches: '没有匹配的参数',
+    inserted: '已插入“{{parameter}}”到“{{field}}”',
+    stale: '目标字段已发生变化，请重新打开参数选择器。',
+    unavailable: '当前字段暂时不能插入参数。',
+    invalidJsonTarget: '参数只能插入到有效 JSON 的字符串值内部。',
+    replaceWholeValue: '选择参数会替换“{{field}}”的当前值。',
+    optionalWebhook: '仅由 Webhook 启动时提供；其他启动方式会在预检时提示缺少上下文。',
+    scope: { global: '全局参数', local: '局部参数' },
+    type: { trigger: '触发参数', runtime: '运行环境', node: '当前节点', context: '上下文' },
+    source: {
+      webhook: 'Webhook',
+      task: '任务运行期',
+      currentNode: '当前节点输入',
+      review: 'Review 上下文',
+    },
+    group: {
+      webhookContext: '事件上下文',
+      webhookApi: 'API 定位',
+      repository: '仓库',
+      identity: '任务与节点',
+      iteration: '迭代与分片',
+      review: 'Review',
+      clarify: '反问',
+      input: '输入端口',
+    },
+    webhookLabels: {
+      event_type: '事件类型',
+      provider: '代码平台',
+      repo_path: '仓库路径',
+      repo_http_url: '仓库 HTTP 地址',
+      repo_ssh_url: '仓库 SSH 地址',
+      branch: '事件分支',
+      target_branch: '目标分支',
+      default_branch: '默认分支',
+      mr_iid: 'MR / PR 编号',
+      mr_id: 'MR / PR 全局 ID',
+      mr_title: 'MR / PR 标题',
+      mr_url: 'MR / PR 地址',
+      commit_sha: '提交 SHA',
+      commit_before: '推送前 SHA',
+      comment_text: '评论正文',
+      comment_author: '评论作者',
+      comment_id: '评论 ID',
+      comment_thread_id: '评论线程 ID',
+      comment_url: '评论地址',
+      comment_position_json: '行内评论位置 JSON',
+      pipeline_status: '流水线状态',
+      pipeline_id: '流水线 ID',
+      pipeline_url: '流水线地址',
+      api_base_url: 'API 根地址',
+      project_id: '项目 ID',
+      project_web_url: '项目网页地址',
+      repo_owner: '仓库所有者',
+      repo_name: '仓库名称',
+      author_id: '事件作者 ID',
+      event_json: '原始事件 JSON',
+    },
+    builtins: {
+      __repo_path__: {
+        label: '主仓库工作目录',
+        agent: '当前 Agent 运行的主仓库工作目录绝对路径。',
+        workgroup: '被调用工作组子任务的主仓库隔离工作目录绝对路径。',
+      },
+      __base_branch__: {
+        label: '基准分支',
+        agent: '当前任务主仓库的基准分支。',
+        workgroup: '被调用工作组子任务主仓库的基准分支。',
+      },
+      __task_id__: {
+        label: '任务 ID',
+        agent: '当前任务的稳定 ID。',
+        workgroup: '发起调用的父任务 ID。',
+      },
+      __node_id__: {
+        label: '节点 ID',
+        agent: '当前 Agent 节点 ID。',
+        workgroup: '父工作流中发起调用的节点 ID。',
+      },
+      __iteration__: {
+        label: '迭代轮次',
+        agent: '当前节点所在循环的迭代序号；不在循环中时为空。',
+        workgroup: '调用节点所在循环的迭代序号；不在循环中时为空。',
+      },
+      __shard_key__: {
+        label: '分片键',
+        agent: '当前 fan-out 分片键；不在分片中时为空。',
+        workgroup: '调用节点的 fan-out 分片键；不在分片中时为空。',
+      },
+      __review_rejection__: {
+        label: 'Review 驳回原因',
+        agent: 'Review 驳回后重跑时的驳回说明；其他运行上下文为空。',
+      },
+      __review_comments__: {
+        label: 'Review 评论',
+        agent: 'Review 迭代注入的评论正文；其他运行上下文为空。',
+      },
+      __iterate_target_port__: {
+        label: '迭代目标端口',
+        agent: 'Review 要求重做时指定的目标输出端口；其他运行上下文为空。',
+      },
+      __sibling_outputs__: {
+        label: '同级输出',
+        agent: 'Review 迭代时提供的其他同级节点输出；其他运行上下文为空。',
+      },
+      __clarify_iteration__: {
+        label: '反问轮次',
+        agent: '当前反问上下文的轮次；未进入反问时为空。',
+      },
+      __clarify_remaining__: {
+        label: '剩余反问次数',
+        agent: '当前节点还可使用的反问次数；未进入反问时为空。',
+      },
+      __repos__: {
+        label: '全部仓库',
+        agent: '当前任务所有仓库的绝对工作目录，每行一个路径。',
+        workgroup: '子任务仓库清单，每行形如“- 名称: 隔离工作目录”。',
+      },
+      __repo_names__: {
+        label: '仓库挂载名称',
+        agent: '当前任务所有仓库的相对挂载路径，每行一个；根仓库为空行。',
+        workgroup: '子任务仓库名称的逗号分隔清单；根仓库显示为“(root)”。',
+      },
+      __repo_count__: {
+        label: '仓库数量',
+        agent: '当前任务挂载的仓库数量。',
+        workgroup: '被调用工作组子任务挂载的仓库数量。',
+      },
+      __repo_group__: {
+        label: '仓库组名称',
+        agent: '当前任务的仓库组名称；没有仓库组时为空。',
+      },
+    },
+    localInputLabel: '输入端口：{{port}}',
+    localInputDescription: '来自已连接上游输出的运行期文本，使用当前节点的目标端口名引用。',
+    reviewCommentsLabel: 'Review 评论',
+    reviewCommentsDescription: '注入到 Review 提示词中的评论正文。',
+  },
   webhookTriggers: {
     eyebrow: '决定何时运行',
     title: '触发规则',
@@ -8371,6 +8579,11 @@ export const zhCN: Resources = {
     eventCount: '{{count}} 类事件',
     flowAria: '规则执行路径',
     saveAction: '保存规则',
+    commonOnlySaveAction: '仅保存通用设置',
+    historyActions: '规则草稿历史',
+    undo: '撤销',
+    redo: '重做',
+    historyCompositionBlocked: '请先完成当前文字输入，再撤销或重做规则草稿。',
     discardTitle: '放弃未保存的修改？',
     discardDescription: '当前规则还没有保存，关闭后这些修改会丢失。',
     discardAction: '放弃修改',
@@ -8466,6 +8679,35 @@ export const zhCN: Resources = {
       unmappable: 'Webhook 事件不能提供这种输入，请改用其他目标或调整工作流。',
       description: '任务提示词模板',
       goal: '工作组目标模板',
+      agentDescriptionHint: '该 Agent 没有声明输入端口；Webhook 启动时把这段模板作为任务提示词。',
+      agentInputHint: '{{kind}} 输入。Webhook 启动时把渲染后的文本传给端口；{{description}}',
+      agentInputListHint: '{{kind}} 输入。每行一项，运行时按换行分隔；{{description}}',
+      agentLoading: '正在读取 Agent 输入定义…',
+      agentRefreshing: 'Agent 输入定义正在刷新；当前内容会保留，刷新完成前暂停保存和参数插入。',
+      agentDefinitionChangedTitle: 'Agent 定义已变化',
+      agentDefinitionChangedBody:
+        '请先完成当前输入，再应用最新 Agent 定义。在应用前，保存和参数插入会保持暂停。',
+      agentApplyDefinition: '应用最新定义',
+      agentUnavailableTitle: '暂时无法读取 Agent 输入定义',
+      agentUnavailableBody:
+        '目标 {{name}}（{{id}}）的现有任务参数会原样保留。你可以重试，或仅修改名称、事件等通用设置后保存。',
+      agentOpaqueSummary: '当前保留：description={{description}}，inputs={{inputs}}。',
+      agentCommonOnly:
+        '仅保存通用设置不会取得或重写这些 Agent 专属参数。修改过 Agent 参数后此路径会关闭。',
+      retryAgent: '重试读取',
+      agentRepairsTitle: '需要确认旧的 Agent 参数',
+      agentRepairsBody:
+        '目标的输入结构已变化，旧的 description、孤儿端口或不兼容值不会被静默删除。确认修复后才可保存。',
+      agentRepairAction: '移除不兼容旧值',
+      agentBlockersTitle: '该 Agent 不能由 JSON Webhook 直接启动',
+      agentBlockersBody: '目标含文件上传、signal 或无效端口名；请调整 Agent 输入，或选择其他目标。',
+      agentIssueDescriptionRequired: '任务提示词不能为空。',
+      agentIssueDescriptionTooLong: '任务提示词超过 65536 个字符。',
+      agentIssueRequiredInputs: '请填写所有必填 Agent 输入。',
+      agentTargetSwitchTitle: '切换 Agent 目标？',
+      agentTargetSwitchDescription:
+        '当前 Agent 的参数会暂存；切回该 Agent 时会恢复。新目标会按自己的输入定义显示。',
+      agentTargetSwitchAction: '切换目标',
       templateVarsLabel: '事件变量——点击插入到光标处：',
       varGroupContext: '事件上下文',
       varGroupApi: 'API 定位（回帖 / 调接口用）',
@@ -10734,29 +10976,28 @@ export const zhCN: Resources = {
     actionHint: '按类别分组；某家不支持的操作会置灰并说明原因',
     sectionInputs: '输入绑定',
     inputGuideEmptyTitle: '尚未连接上游输入',
-    inputGuideEmpty: '从上游节点的输出端口拖线到本节点；连线后，这里会列出可绑定的变量和参数。',
-    inputGuideNoTargetTitle: '当前操作没有可直接绑定的参数',
-    inputGuideNoTarget: '请先选择受支持的操作；自定义 JSON 请求体可在下方高级模板变量中组合输入。',
+    inputGuideEmpty:
+      '从上游节点的输出端口拖线到本节点；连线后，它会出现在每个字段参数选择器的“当前节点输入”分类。',
     inputGuideUnboundTitle: '还有 {{count}} 个输入未绑定',
     inputGuideUnbound:
-      '连线只把上游值带到本节点，不会替你猜它属于哪个 API 参数。请为每个输入选择目标参数。',
+      '连线只把上游值带到本节点，不会替你猜它属于哪个 API 参数。请在目标字段旁点“插入参数”。',
     inputGuideBoundTitle: '输入已绑定',
-    inputGuideBound: '运行时会用上游真实值替换参数模板；可在每行继续添加或移除目标参数。',
-    bindTargetAria: '把输入 {{port}} 绑定到参数',
-    bindTargetPlaceholder: '选择目标参数…',
-    bindTargetEmpty: '将该参数设为这个输入',
-    bindTargetReplace: '该参数已有值，选择后会替换',
+    inputGuideBound:
+      '运行时会用上游真实值替换已保存 token。下面列出现有引用；新增引用请使用具体字段旁的参数选择器。',
     boundTargets: '已用于',
     removeBindingAria: '取消输入 {{port}} 与参数 {{field}} 的绑定',
     inputBindingAdvancedHint:
-      '需要把输入嵌入固定文字或 JSON 时，先点对应字段，再在下方“高级模板变量”中点击变量；自定义 JSON 请求体不会被一键整体替换。',
-    upstreamOptionGroup: '上游输入',
-    upstreamOptionDescription: '来自 {{source}}；运行时替换为实际值',
-    savedTemplateOptionGroup: '已保存模板',
-    savedTemplateOptionDescription: '当前值是模板；请确认它仍有对应入边或 Webhook 上下文',
+      '这里仅展示已有 token 引用。要新增引用，请在具体目标字段旁点“插入参数”，再选择“当前节点输入”。',
+    inactiveValuesTitle: '有 {{count}} 个存量值不用于当前操作',
+    inactiveValuesBody:
+      '这些值会保留供切回原操作时恢复，但当前不会编辑、校验或执行。可切换操作/代码平台后编辑，也可在这里明确清理。',
+    clearInactive: '清理',
+    confirmClearInactive: '确认清理',
+    clearInactiveAria: '清理当前不执行的存量值 {{path}}',
+    confirmClearInactiveAria: '确认清理当前不执行的存量值 {{path}}',
+    clearInactiveHistory: '清理存量值 {{path}}',
     sectionParams: '参数',
     sectionCustom: '自定义请求',
-    sectionVars: '高级模板变量',
     method: '方法',
     path: '相对路径',
     pathHint: '拼在所配 base URL 之后，必须以 / 开头，不能是绝对 URL',
@@ -10770,11 +11011,6 @@ export const zhCN: Resources = {
     bodyHint: '变量只能写在 JSON 字符串里，这样上游内容改不了请求结构',
     allowDestructive: '允许 DELETE 请求',
     allowDestructiveHint: '打开后才能选 DELETE；关闭时会自动改回 GET',
-    varsHint: '上游端口（连线后可用）：',
-    triggerVarsHint: 'Webhook 触发上下文（任务由 webhook 启动时有值）：',
-    varsInsertHint: '点击变量会插入当前字段：{{field}}',
-    varsNoTarget: '当前操作没有可插入变量的文本字段',
-    noInboundPorts: '还没有连入的端口',
     noViewPermission: {
       title: '无权查看节点详情',
       body: '查看代码平台调用节点需要 code-host-calls:author 权限。如确有需要，请找管理员开通。',

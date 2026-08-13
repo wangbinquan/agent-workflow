@@ -39,6 +39,7 @@ import {
   TriggerContextSchema,
   renderCodeHostJsonBody,
   renderCodeHostTemplate,
+  projectCodeHostTemplates,
 } from '@agent-workflow/shared'
 import type { CodeHostFailureCode } from '@agent-workflow/shared'
 import {
@@ -239,12 +240,7 @@ interface AssembledRequest {
 }
 
 function templateTextsOf(spec: CodeHostCallSpec): string[] {
-  const out = Object.values(spec.params)
-  if (spec.action === 'custom' && spec.request !== undefined) {
-    out.push(spec.request.path, ...Object.values(spec.request.query ?? {}))
-    if (spec.request.body !== undefined) out.push(spec.request.body)
-  }
-  return out
+  return projectCodeHostTemplates(spec).active.map((entry) => entry.text)
 }
 
 /** Defense in depth for direct executor callers; launch preflight runs earlier. */
@@ -552,14 +548,22 @@ export async function executeCodeHostCall(
   spec: CodeHostCallSpec,
   deps: CodeHostCallDeps,
 ): Promise<CodeHostCallOutcome> {
-  const triggerPreflight = codeHostTriggerPreflight(spec, deps.ctx.triggerContext ?? null)
-  if (triggerPreflight !== null) return triggerPreflight
   if (!isCodeHostAction(spec.action)) {
     return fail('code-host-param-invalid', `unknown action '${spec.action}'`)
   }
   const action = spec.action
   const def = codeHostActionDef(action)
   const binding = def.bindings[spec.provider]
+
+  if (isUnsupportedBinding(binding)) {
+    return fail(
+      'code-host-param-invalid',
+      `action '${action}' is not supported on ${spec.provider} (${binding.reasonKey})`,
+    )
+  }
+
+  const triggerPreflight = codeHostTriggerPreflight(spec, deps.ctx.triggerContext ?? null)
+  if (triggerPreflight !== null) return triggerPreflight
 
   if (action === 'custom') {
     try {
@@ -568,13 +572,6 @@ export async function executeCodeHostCall(
       if (err instanceof ParamError) return fail(err.code, err.message)
       throw err
     }
-  }
-
-  if (isUnsupportedBinding(binding)) {
-    return fail(
-      'code-host-param-invalid',
-      `action '${action}' is not supported on ${spec.provider} (${binding.reasonKey})`,
-    )
   }
 
   const candidates = codeHostBindingCandidates(binding)

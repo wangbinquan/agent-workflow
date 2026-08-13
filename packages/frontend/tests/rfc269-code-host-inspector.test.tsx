@@ -16,6 +16,7 @@ import {
   type WorkflowNode,
 } from '@agent-workflow/shared'
 import { CodeHostCallEdit } from '../src/components/canvas/inspector/CodeHostCallEdit'
+import type { InspectorChangeMeta } from '../src/components/canvas/inspector/historyMeta'
 
 vi.mock('../src/hooks/useActor', () => ({
   useActor: () => ({
@@ -57,20 +58,22 @@ function renderEdit(
   definition: WorkflowDefinition = { ...DEFINITION, nodes: [n] },
 ) {
   const patched: WorkflowNode[] = []
+  const metas: InspectorChangeMeta[] = []
   const view = render(
     <CodeHostCallEdit
       node={n}
       agents={[]}
       definition={definition}
-      onPatch={(next) => {
+      onPatch={(next, meta) => {
         patched.push(next)
+        metas.push(meta)
       }}
       onHistoryBoundary={() => {}}
       onCommitDef={() => {}}
       onTransition={() => {}}
     />,
   )
-  return { ...view, patched }
+  return { ...view, patched, metas }
 }
 
 function definitionWithInput(
@@ -96,8 +99,18 @@ function definitionWithInput(
   }
 }
 
+function chooseRuntimeParameter(pickerTestId: string, query: string, name: RegExp): void {
+  const picker = screen.getByTestId(pickerTestId)
+  fireEvent.pointerDown(picker, { button: 0 })
+  fireEvent.click(picker)
+  fireEvent.change(screen.getByRole('combobox', { name: /Search parameter|搜索参数/ }), {
+    target: { value: query },
+  })
+  fireEvent.click(screen.getByRole('option', { name }))
+}
+
 describe('RFC-269 Inspector', () => {
-  test('连入输出后显式显示 source → 本地变量，并可一键绑定到参数', () => {
+  test('连入输出后显式显示 source → 本地变量，并从目标字段的公共 picker 插入', () => {
     const n = node({ action: 'comment.create', params: { mr: '18', body: '' } })
     const { patched } = renderEdit(n, definitionWithInput(n, 'review_body'))
 
@@ -111,25 +124,99 @@ describe('RFC-269 Inspector', () => {
       '{{review_body}}',
     )
 
-    fireEvent.click(screen.getByTestId('code-host-input-target-review_body'))
-    fireEvent.mouseDown(screen.getByRole('option', { name: /Body.*complete parameter value/i }))
+    chooseRuntimeParameter(
+      'code-host-runtime-parameter-param-body',
+      'review_body',
+      /Input port: review_body/i,
+    )
 
     const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
     expect((latest.params as Record<string, string>).body).toBe('{{review_body}}')
   })
 
-  test('枚举参数也能直接选择上游输入，不再被静态下拉锁死', () => {
+  test('枚举参数通过同一 picker 整值替换上游输入 token', () => {
     const n = node({
       action: 'commit-status.set',
       params: { sha: 'abc123', state: 'pending' },
     })
     const { patched } = renderEdit(n, definitionWithInput(n, 'verdict'))
 
-    fireEvent.click(screen.getByTestId('code-host-field-state'))
-    fireEvent.mouseDown(screen.getByRole('option', { name: /\{\{verdict\}\}/ }))
+    chooseRuntimeParameter(
+      'code-host-runtime-parameter-param-state',
+      'verdict',
+      /Input port: verdict/i,
+    )
 
     const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
     expect((latest.params as Record<string, string>).state).toBe('{{verdict}}')
+  })
+
+  test('存量枚举模板可见但不是伪造的业务选项，选择字面量后正常替换', () => {
+    const saved = '{{trigger.webhook.comment_author}}'
+    const { patched } = renderEdit(
+      node({
+        action: 'commit-status.set',
+        params: { sha: 'abc123', state: saved },
+      }),
+    )
+
+    const trigger = screen.getByTestId('code-host-field-state')
+    expect(trigger.textContent).toContain(saved)
+    fireEvent.click(trigger)
+    expect(
+      screen.getAllByRole('option').some((option) => option.textContent?.includes(saved) === true),
+    ).toBe(false)
+
+    fireEvent.mouseDown(screen.getByRole('option', { name: /pending/i }))
+    const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
+    expect((latest.params as Record<string, string>).state).toBe('pending')
+  })
+
+  test('当前操作不执行的存量值保持可见，并经确认以单次历史操作清理', () => {
+    const { patched, metas } = renderEdit(
+      node({
+        action: 'comment.create',
+        params: { mr: '18', body: 'active', state: '{{trigger.webhook.pipeline_status}}' },
+        request: {
+          method: 'POST',
+          path: '/inactive/{{trigger.webhook.branch}}',
+          query: { q: '{{trigger.webhook.comment_text}}' },
+          body: '{{trigger.webhook.event_json}}',
+        },
+      }),
+    )
+
+    expect(screen.getByTestId('code-host-inactive-values').textContent).toContain(
+      '4 saved value(s) are not used by this action',
+    )
+    expect(screen.getByTestId('code-host-inactive-value-param-state').textContent).toContain(
+      '{{trigger.webhook.pipeline_status}}',
+    )
+    expect(screen.queryByTestId('code-host-inactive-value-param-body')).toBeNull()
+
+    const clear = screen.getByTestId('code-host-clear-inactive-param-state')
+    fireEvent.click(clear)
+    expect(patched).toEqual([])
+    expect(clear.textContent).toContain('Confirm clear')
+    fireEvent.click(clear)
+
+    const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
+    expect(latest.params).toEqual({ mr: '18', body: 'active' })
+    expect(metas.at(-1)).toMatchObject({ source: 'inspector', transaction: 'single' })
+  })
+
+  test('切回匹配动作后，保留的存量参数恢复为可编辑目标', () => {
+    renderEdit(
+      node({
+        action: 'commit-status.set',
+        params: { sha: 'abc123', state: '{{trigger.webhook.pipeline_status}}' },
+      }),
+    )
+
+    expect(screen.queryByTestId('code-host-inactive-value-param-state')).toBeNull()
+    expect(screen.getByTestId('code-host-field-state').textContent).toContain(
+      '{{trigger.webhook.pipeline_status}}',
+    )
   })
 
   test('未连输入时明确给出下一步，而不是显示空变量面板', () => {
@@ -197,12 +284,16 @@ describe('RFC-269 Inspector', () => {
     expect(screen.getByTestId('code-host-field-workflow')).toBeTruthy()
   })
 
-  test('触发上下文变量原样列出，作者不用去翻文档', () => {
+  test('触发上下文按需进入目标字段 picker，不在默认面平铺', () => {
     renderEdit()
-    const chips = screen.getByTestId('code-host-trigger-vars')
-    expect(chips.textContent).toContain('{{trigger.webhook.mr_iid}}')
-    expect(chips.textContent).toContain('{{trigger.webhook.comment_thread_id}}')
-    expect(chips.textContent).toContain('{{trigger.webhook.event_json}}')
+    expect(screen.queryByText('{{trigger.webhook.mr_iid}}')).toBeNull()
+    fireEvent.click(screen.getByTestId('code-host-runtime-parameter-param-mr'))
+    fireEvent.change(screen.getByRole('combobox', { name: /Search parameter|搜索参数/ }), {
+      target: { value: 'trigger.webhook.' },
+    })
+    expect(screen.getByText('{{trigger.webhook.mr_iid}}')).toBeTruthy()
+    expect(screen.getByText('{{trigger.webhook.comment_thread_id}}')).toBeTruthy()
+    expect(screen.getByText('{{trigger.webhook.event_json}}')).toBeTruthy()
   })
 
   test('凭据配置入口在新标签页打开，不会把作者从当前草稿带走', () => {
@@ -212,13 +303,15 @@ describe('RFC-269 Inspector', () => {
     expect(link.getAttribute('target')).toBe('_blank')
   })
 
-  test('变量 chip 点击后插入最近聚焦字段的光标处', () => {
+  test('字段旁 picker 插入该字段的光标处，不依赖最近聚焦猜测', () => {
     const { patched } = renderEdit(node({ params: { body: 'Review: ' } }))
     const body = screen.getByTestId('code-host-field-body') as HTMLTextAreaElement
-    fireEvent.focus(body)
     body.setSelectionRange(body.value.length, body.value.length)
-
-    fireEvent.click(screen.getByTestId('code-host-trigger-var-trigger.webhook.comment_thread_id'))
+    chooseRuntimeParameter(
+      'code-host-runtime-parameter-param-body',
+      'comment_thread_id',
+      /Comment thread ID/i,
+    )
 
     const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
     expect((latest.params as Record<string, string>).body).toBe(
@@ -238,9 +331,12 @@ describe('RFC-269 Inspector', () => {
       }),
     )
     const value = screen.getByTestId('code-host-query-value-iid') as HTMLInputElement
-    fireEvent.focus(value)
     value.setSelectionRange(value.value.length, value.value.length)
-    fireEvent.click(screen.getByTestId('code-host-trigger-var-trigger.webhook.mr_iid'))
+    chooseRuntimeParameter(
+      'code-host-runtime-parameter-request-query-iid',
+      'mr_iid',
+      /MR \/ PR number/i,
+    )
 
     const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
     expect(latest.request).toMatchObject({

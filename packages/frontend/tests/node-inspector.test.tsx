@@ -418,6 +418,30 @@ describe('NodeInspector', () => {
     expect(after.promptTemplate).toBe('fix {{req}}')
   })
 
+  test('agent-single: one field-adjacent picker inserts runtime/task or webhook parameters on demand', () => {
+    const { onChange } = setup({
+      id: 'a1',
+      kind: 'agent-single',
+      agentId: CODER.id,
+      agentName: CODER.name,
+      promptTemplate: 'Use ',
+    })
+    const picker = screen.getByTestId('agent-runtime-parameter-picker')
+    const prompt = picker.closest('.form-field')?.querySelector('textarea') as HTMLTextAreaElement
+    prompt.setSelectionRange(prompt.value.length, prompt.value.length)
+
+    expect(screen.queryByText('{{trigger.webhook.comment_text}}')).toBeNull()
+    fireEvent.pointerDown(picker, { button: 0 })
+    fireEvent.click(picker)
+    fireEvent.change(screen.getByRole('combobox', { name: /Search parameter|搜索参数/ }), {
+      target: { value: '__repo_path__' },
+    })
+    fireEvent.click(screen.getByRole('option', { name: /__repo_path__/ }))
+
+    const after = lastPatchedNode(onChange) as unknown as { promptTemplate: string }
+    expect(after.promptTemplate).toBe('Use {{__repo_path__}}')
+  })
+
   // RFC-060 PR-E: agent-multi removed; the RFC-015 SourcePortField dropdowns
   // were deleted alongside it. wrapper-fanout uses real boundary-input edges
   // on the canvas instead of an inspector picker. PR-F's frontend polish

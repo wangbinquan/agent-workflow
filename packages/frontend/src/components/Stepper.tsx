@@ -42,6 +42,8 @@ export interface StepperProps {
   nextEnabled?: boolean
   /** Terminal action buttons rendered instead of Next on the LAST step. */
   finalActions?: ReactNode
+  /** Freeze wizard navigation while the owning form has an in-flight save. */
+  navigationDisabled?: boolean
   /** Optional extra class names on the root. */
   className?: string
   rootTestid?: string
@@ -55,6 +57,7 @@ export function Stepper({
   onNavigate,
   nextEnabled = true,
   finalActions,
+  navigationDisabled = false,
   className,
   rootTestid,
 }: StepperProps) {
@@ -67,7 +70,7 @@ export function Stepper({
       <ol className="stepper__header" aria-label={t('stepper.progress')}>
         {steps.map((step, i) => {
           const state = i < current ? 'done' : i === current ? 'current' : 'todo'
-          const clickable = i !== current && i <= reachable
+          const clickable = !navigationDisabled && i !== current && i <= reachable
           return (
             <li key={step.key} className={`stepper__item stepper__item--${state}`}>
               <button
@@ -96,6 +99,7 @@ export function Stepper({
             type="button"
             className="btn"
             data-testid="stepper-back"
+            disabled={navigationDisabled}
             onClick={() => onNavigate(current - 1)}
           >
             {t('stepper.back')}
@@ -106,7 +110,7 @@ export function Stepper({
             type="button"
             className="btn btn--primary"
             data-testid="stepper-next"
-            disabled={!nextEnabled}
+            disabled={navigationDisabled || !nextEnabled}
             onClick={() => onNavigate(current + 1)}
           >
             {t('stepper.next')}

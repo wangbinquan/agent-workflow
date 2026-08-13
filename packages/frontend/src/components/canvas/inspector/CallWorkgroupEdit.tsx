@@ -13,14 +13,15 @@
 
 import type { Workgroup, WorkflowNode } from '@agent-workflow/shared'
 import { useQuery } from '@tanstack/react-query'
-import { useRef } from 'react'
+import { useId, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { Field, NumberInput, TextArea } from '@/components/Form'
+import { RuntimeParameterPicker } from '@/components/RuntimeParameterPicker'
 import { Select } from '@/components/Select'
+import { buildRuntimeParameterCatalog } from '@/components/runtime-parameters/catalog'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { buildResourceOptionLabeler } from '@/lib/resource-option-label'
-import { applyTemplateVarInsertion, WebhookTriggerVarChips } from '@/components/TemplateVarChips'
 import {
   atomicNodeInspectorChange,
   continuousNodeInspectorChange,
@@ -62,6 +63,7 @@ export function CallWorkgroupEdit({ node, definition, onPatch, onHistoryBoundary
   const refId = typeof rec.workgroupId === 'string' ? rec.workgroupId : ''
   const goalTemplate = typeof rec.goalTemplate === 'string' ? rec.goalTemplate : ''
   const goalRef = useRef<HTMLTextAreaElement | null>(null)
+  const goalLabelId = useId()
   const inputPorts = [
     ...new Set(
       definition.edges
@@ -71,6 +73,24 @@ export function CallWorkgroupEdit({ node, definition, onPatch, onHistoryBoundary
   ]
   const limits = readLimits(rec)
   const owners = useUserLookup(workgroups.map((w) => w.ownerUserId))
+  const goalLabel = t('inspector.fieldCallGoalTemplate')
+  const parameterCatalog = buildRuntimeParameterCatalog(
+    {
+      audience: 'workflow-inspector',
+      surface: 'call-workgroup-goal',
+      t,
+    },
+    {
+      local: inputPorts.map((port) => ({
+        id: `local:node:${node.id}:input:${port}`,
+        source: 'current-node',
+        field: port,
+        token: `{{${port}}}`,
+        label: t('runtimeParameters.localInputLabel', { port }),
+        description: t('runtimeParameters.localInputDescription'),
+      })),
+    },
+  )
   // RFC-264: human-readable names make look-alike options realistic — the
   // shared builder appends an id suffix to colliding ones only.
   const optionRow = (w: { id: string; name: string; ownerUserId?: string | null }) => ({
@@ -170,9 +190,31 @@ export function CallWorkgroupEdit({ node, definition, onPatch, onHistoryBoundary
         </InspectorFieldAnchor>
         <InspectorFieldAnchor nodeId={node.id} field="call-goal-template">
           <Field
-            label={t('inspector.fieldCallGoalTemplate')}
+            label={goalLabel}
             hint={t('inspector.fieldCallGoalTemplateHint')}
             required
+            group
+            labelId={goalLabelId}
+            action={
+              <RuntimeParameterPicker
+                authority="workflow:workgroup-goal"
+                entries={parameterCatalog}
+                target={{
+                  id: `${node.id}:goalTemplate`,
+                  label: goalLabel,
+                  mode: 'insert-at-caret',
+                  value: goalTemplate,
+                  revision: goalTemplate,
+                  element: () => goalRef.current,
+                  commit: (next) =>
+                    update(
+                      { goalTemplate: next },
+                      atomicNodeInspectorChange(node.id, 'goalTemplate', goalLabel),
+                    ),
+                }}
+                testId="call-workgroup-runtime-parameter-picker"
+              />
+            }
           >
             <InspectorHistoryBoundary meta={goalMeta} onBoundary={onHistoryBoundary}>
               <TextArea
@@ -182,16 +224,9 @@ export function CallWorkgroupEdit({ node, definition, onPatch, onHistoryBoundary
                 monospace
                 textareaRef={goalRef}
                 data-testid="call-workgroup-goal-template"
+                aria-labelledby={goalLabelId}
               />
             </InspectorHistoryBoundary>
-            <WebhookTriggerVarChips
-              onInsert={(token) =>
-                applyTemplateVarInsertion(goalRef.current, goalTemplate, token, (next) =>
-                  update({ goalTemplate: next }, goalMeta),
-                )
-              }
-              testidPrefix="call-workgroup-trigger-var"
-            />
             <PortRefList ports={inputPorts} />
             <MissingRefList template={goalTemplate} inputPorts={inputPorts} />
           </Field>

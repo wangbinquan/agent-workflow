@@ -191,7 +191,7 @@ describe('RFC-292 workflow template inventory and migration', () => {
     const dependencies = collectTriggerDependencies([migrated])
     expect(migrated.inputs).toEqual([])
     expect(new Set(dependencies.map((item) => item.field))).toEqual(
-      new Set(['comment_text', 'mr_iid', 'project_id']),
+      new Set(['comment_text', 'mr_iid']),
     )
     expect(evaluateTriggerDependencies(dependencies, { kind: 'none' })[0]?.code).toBe(
       'trigger-context-missing',

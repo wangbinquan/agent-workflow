@@ -15,16 +15,18 @@ function repoFile(path: string): string {
 }
 
 describe('RFC-198 visual infrastructure source gates', () => {
-  test('visual spec declares exactly 31 counted scenes', () => {
+  test('visual spec declares exactly 33 counted scenes', () => {
     const source = repoFile('e2e/visual-regression.spec.ts')
-    expect(source).toContain('const EXPECTED_VISUAL_SCENE_COUNT = 31')
+    expect(source).toContain('const EXPECTED_VISUAL_SCENE_COUNT = 33')
     expect(source).toContain('const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)')
-    expect(source.match(/^\s{2}test\(/gm)).toHaveLength(31)
+    expect(source.match(/^\s{2}test\(/gm)).toHaveLength(33)
     expect(source).toContain('declaredVisualSceneCount !== EXPECTED_VISUAL_SCENE_COUNT')
     expect(source).toContain('async function waitForStableAuthenticatedShell(page: Page)')
     expect(source).toContain("await expect(userMenu).toContainText('e2e_admin')")
     expect(source).toContain('await page.clock.setFixedTime(HOMEPAGE_VISUAL_TIME)')
     expect(source).toContain("'workflow-node-picker-1179-large-human-dark.png'")
+    expect(source).toContain("'workflow-runtime-parameter-picker-1280-light.png'")
+    expect(source).toContain("'webhook-runtime-parameter-picker-390-light.png'")
     // One declaration plus five locator screenshot callsites.
     expect(source.match(/COMPONENT_SNAPSHOT_OPTS/g)).toHaveLength(6)
     for (const snapshot of [
@@ -46,7 +48,7 @@ describe('RFC-198 visual infrastructure source gates', () => {
     expect(lockfile).toContain('@playwright/test@1.60.0')
     expect(readme).toContain('mcr.microsoft.com/playwright:v1.60.0-noble')
     expect(readme).toContain('bun run test:visual -- --update-snapshots')
-    expect(readme).toContain('45 pixel baselines')
+    expect(readme).toContain('47 pixel baselines')
     expect(readme).not.toContain('RUN_VISUAL_REGRESSION=1 bun run e2e')
     expect(workflow).toContain('runs-on: ubuntu-24.04')
     expect(workflow).toContain("bun-version: '1.3.13'")

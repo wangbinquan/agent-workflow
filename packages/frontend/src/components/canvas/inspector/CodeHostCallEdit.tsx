@@ -18,33 +18,35 @@
 //      （services/tokenRedaction.ts），面板渲染出来只会是一排 `***`。「不可改」
 //      那一半没变，而且现在是构造保证的 —— 没有控件可以输入。
 
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   CODE_HOST_ACTION_DEFS,
   CODE_HOST_METHODS,
+  codeHostJsonBodyIssue,
   codeHostActionFields,
   codeHostActionSupported,
   codeHostActionsByGroup,
   isCodeHostAction,
   isUnsupportedBinding,
+  projectCodeHostTemplates,
   type CodeHostAction,
   type CodeHostField,
   type CodeHostMethod,
   type CodeHostProvider,
+  type RuntimeTemplateAuthorityKey,
   type WorkflowNode,
 } from '@agent-workflow/shared'
 import { EmptyState } from '@/components/EmptyState'
+import { ConfirmButton } from '@/components/ConfirmButton'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, Switch, TextArea, TextInput } from '@/components/Form'
 import { NoticeBanner } from '@/components/NoticeBanner'
+import { RuntimeParameterPicker } from '@/components/RuntimeParameterPicker'
 import { Segmented } from '@/components/Segmented'
-import { Select, type SelectOption } from '@/components/Select'
-import {
-  applyTemplateVarInsertion,
-  TemplateVarChips,
-  WebhookTriggerVarChips,
-} from '@/components/TemplateVarChips'
+import { Select } from '@/components/Select'
+import { buildRuntimeParameterCatalog } from '@/components/runtime-parameters/catalog'
+import type { RuntimeParameterTargetMode } from '@/components/runtime-parameters/target'
 import { usePermission } from '@/hooks/useActor'
 import { nodeTitle } from '../nodeTitle'
 import {
@@ -86,7 +88,6 @@ interface TemplateTarget {
   key: string
   label: string
   value: string
-  allowDirectBinding: boolean
   commit: (next: string) => void
 }
 
@@ -94,6 +95,13 @@ interface InboundBinding {
   portName: string
   sources: string[]
   token: string
+}
+
+interface InactiveTemplateValue {
+  key: string
+  path: string
+  value: string
+  clear: () => void
 }
 
 function readRequest(node: WorkflowNode): CustomRequestShape {
@@ -125,7 +133,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
   const canAuthor = usePermission('code-host-calls:author')
   const canManageConnections = usePermission('settings:read')
   const templateInputRefs = useRef(new Map<string, TemplateInput>())
-  const [focusedTemplateTargetKey, setFocusedTemplateTargetKey] = useState<string | null>(null)
 
   const provider: CodeHostProvider = rec(node).provider === 'github' ? 'github' : 'gitlab'
   const rawAction = rec(node).action
@@ -142,6 +149,12 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
     patch(
       { params: { ...params, [name]: value } },
       continuousNodeInspectorChange(node.id, 'code-host-params', label),
+    )
+  }
+  const patchParamAtomic = (name: CodeHostField, value: string, label: string): void => {
+    patch(
+      { params: { ...params, [name]: value } },
+      atomicNodeInspectorChange(node.id, 'code-host-params', label),
     )
   }
 
@@ -167,7 +180,24 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
   const inboundBindings = [...inboundByPort.values()].sort((a, b) =>
     a.portName.localeCompare(b.portName),
   )
-  const uniqueInbound = inboundBindings.map((binding) => binding.portName)
+  const parameterCatalog = buildRuntimeParameterCatalog(
+    {
+      audience: 'workflow-inspector',
+      surface: 'code-host',
+      t,
+    },
+    {
+      local: inboundBindings.map((binding) => ({
+        id: `local:node:${node.id}:input:${binding.portName}`,
+        source: 'current-node',
+        field: binding.portName,
+        token: binding.token,
+        label: t('runtimeParameters.localInputLabel', { port: binding.portName }),
+        description: t('runtimeParameters.localInputDescription'),
+        aliases: binding.sources,
+      })),
+    },
+  )
 
   const actionOptions = codeHostActionsByGroup().flatMap(({ group, actions }) =>
     actions.map((value) => {
@@ -203,11 +233,10 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             key: 'request:path',
             label: t('codeHostInspector.path'),
             value: request.path,
-            allowDirectBinding: true,
             commit: (path) =>
               patch(
                 { request: { ...request, path } },
-                continuousNodeInspectorChange(
+                atomicNodeInspectorChange(
                   node.id,
                   'code-host-request',
                   t('codeHostInspector.path'),
@@ -218,15 +247,10 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             key: 'request:body',
             label: t('codeHostInspector.body'),
             value: request.body ?? '',
-            // A bare {{port}} is not a valid JSON body skeleton. Authors can
-            // still compose it at a deliberate cursor position in Advanced
-            // template variables, but the one-click whole-value binding must
-            // not manufacture a definition the validator immediately rejects.
-            allowDirectBinding: false,
             commit: (body) =>
               patch(
                 { request: { ...request, body } },
-                continuousNodeInspectorChange(
+                atomicNodeInspectorChange(
                   node.id,
                   'code-host-request',
                   t('codeHostInspector.body'),
@@ -237,11 +261,10 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             key: `request:query:${queryKey}`,
             label: `${t('codeHostInspector.query')} · ${queryKey}`,
             value,
-            allowDirectBinding: true,
             commit: (next: string) =>
               patch(
                 { request: { ...request, query: { ...request.query, [queryKey]: next } } },
-                continuousNodeInspectorChange(
+                atomicNodeInspectorChange(
                   node.id,
                   'code-host-request',
                   t('codeHostInspector.query'),
@@ -255,30 +278,12 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             key: `param:${field.name}`,
             label,
             value: params[field.name] ?? '',
-            allowDirectBinding: true,
-            commit: (next: string) => patchParam(field.name, next, label),
+            commit: (next: string) => patchParamAtomic(field.name, next, label),
           }
         })
-  const directTemplateTargets = templateTargets.filter((target) => target.allowDirectBinding)
-  const activeTemplateTarget = templateTargets.find(
-    (target) => target.key === focusedTemplateTargetKey,
-  )
   const bindTemplateInput = (key: string) => (el: TemplateInput | null) => {
     if (el === null) templateInputRefs.current.delete(key)
     else templateInputRefs.current.set(key, el)
-  }
-  const insertTemplateToken = (token: string): void => {
-    if (activeTemplateTarget === undefined) return
-    applyTemplateVarInsertion(
-      templateInputRefs.current.get(activeTemplateTarget.key) ?? null,
-      activeTemplateTarget.value,
-      token,
-      activeTemplateTarget.commit,
-    )
-  }
-  const bindInputToTarget = (binding: InboundBinding, targetKey: string): void => {
-    if (targetKey.length === 0) return
-    directTemplateTargets.find((target) => target.key === targetKey)?.commit(binding.token)
   }
   const removeInputFromTarget = (binding: InboundBinding, target: TemplateTarget): void => {
     target.commit(target.value.split(binding.token).join(''))
@@ -287,35 +292,118 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
     (binding) => !templateTargets.some((target) => target.value.includes(binding.token)),
   ).length
   const inputGuideState =
-    inboundBindings.length === 0
-      ? 'empty'
-      : directTemplateTargets.length === 0
-        ? 'no-target'
-        : unboundInputCount > 0
-          ? 'unbound'
-          : 'bound'
+    inboundBindings.length === 0 ? 'empty' : unboundInputCount > 0 ? 'unbound' : 'bound'
   const inputGuideTone =
-    inputGuideState === 'bound'
-      ? 'success'
-      : inputGuideState === 'unbound' || inputGuideState === 'no-target'
-        ? 'warning'
-        : 'info'
+    inputGuideState === 'bound' ? 'success' : inputGuideState === 'unbound' ? 'warning' : 'info'
   const inputGuideTitle =
     inputGuideState === 'empty'
       ? t('codeHostInspector.inputGuideEmptyTitle')
-      : inputGuideState === 'no-target'
-        ? t('codeHostInspector.inputGuideNoTargetTitle')
-        : inputGuideState === 'unbound'
-          ? t('codeHostInspector.inputGuideUnboundTitle', { count: unboundInputCount })
-          : t('codeHostInspector.inputGuideBoundTitle')
+      : inputGuideState === 'unbound'
+        ? t('codeHostInspector.inputGuideUnboundTitle', { count: unboundInputCount })
+        : t('codeHostInspector.inputGuideBoundTitle')
   const inputGuideBody =
     inputGuideState === 'empty'
       ? t('codeHostInspector.inputGuideEmpty')
-      : inputGuideState === 'no-target'
-        ? t('codeHostInspector.inputGuideNoTarget')
-        : inputGuideState === 'unbound'
-          ? t('codeHostInspector.inputGuideUnbound')
-          : t('codeHostInspector.inputGuideBound')
+      : inputGuideState === 'unbound'
+        ? t('codeHostInspector.inputGuideUnbound')
+        : t('codeHostInspector.inputGuideBound')
+
+  const activeTemplateKeys = new Set(
+    projectCodeHostTemplates(node).active.map((entry) => entry.key),
+  )
+  const inactiveTemplateValues: InactiveTemplateValue[] = [
+    ...Object.entries(params).map(([name, value]) => ({
+      key: `param:${name}`,
+      path: `params.${name}`,
+      value,
+      clear: () => {
+        const nextParams = { ...params }
+        delete nextParams[name]
+        patch(
+          { params: nextParams },
+          atomicNodeInspectorChange(
+            node.id,
+            'code-host-params',
+            t('codeHostInspector.clearInactiveHistory', { path: `params.${name}` }),
+          ),
+        )
+      },
+    })),
+    {
+      key: 'request:path',
+      path: 'request.path',
+      value: request.path,
+      clear: () =>
+        patch(
+          { request: { ...request, path: '' } },
+          atomicNodeInspectorChange(
+            node.id,
+            'code-host-request',
+            t('codeHostInspector.clearInactiveHistory', { path: 'request.path' }),
+          ),
+        ),
+    },
+    ...Object.entries(request.query).map(([queryKey, value]) => ({
+      key: `request:query:${queryKey}`,
+      path: `request.query.${queryKey}`,
+      value,
+      clear: () => {
+        const nextQuery = { ...request.query }
+        delete nextQuery[queryKey]
+        patch(
+          { request: { ...request, query: nextQuery } },
+          atomicNodeInspectorChange(
+            node.id,
+            'code-host-request',
+            t('codeHostInspector.clearInactiveHistory', { path: `request.query.${queryKey}` }),
+          ),
+        )
+      },
+    })),
+    {
+      key: 'request:body',
+      path: 'request.body',
+      value: request.body ?? '',
+      clear: () => {
+        const nextRequest = { ...request }
+        delete nextRequest.body
+        patch(
+          { request: nextRequest },
+          atomicNodeInspectorChange(
+            node.id,
+            'code-host-request',
+            t('codeHostInspector.clearInactiveHistory', { path: 'request.body' }),
+          ),
+        )
+      },
+    },
+  ].filter((entry) => entry.value.length > 0 && !activeTemplateKeys.has(entry.key))
+
+  const parameterPicker = (
+    authority: RuntimeTemplateAuthorityKey,
+    key: string,
+    label: string,
+    value: string,
+    mode: RuntimeParameterTargetMode,
+    commit: (next: string) => void,
+    validateNext?: (next: string) => string | null,
+  ) => (
+    <RuntimeParameterPicker
+      authority={authority}
+      entries={parameterCatalog}
+      target={{
+        id: `${node.id}:${key}`,
+        label,
+        mode,
+        value,
+        revision: value,
+        element: () => templateInputRefs.current.get(key) ?? null,
+        commit,
+        validateNext,
+      }}
+      testId={`code-host-runtime-parameter-${key.replaceAll(':', '-')}`}
+    />
+  )
 
   // RFC-270 — 无权限就不渲染面板：下面每个字段读的都是服务端已经遮蔽过的值。
   if (!canAuthor) {
@@ -399,6 +487,51 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             }}
           />
         </Field>
+        {inactiveTemplateValues.length > 0 ? (
+          <NoticeBanner
+            tone="warning"
+            size="compact"
+            title={t('codeHostInspector.inactiveValuesTitle', {
+              count: inactiveTemplateValues.length,
+            })}
+            testid="code-host-inactive-values"
+          >
+            <p>{t('codeHostInspector.inactiveValuesBody')}</p>
+            <ul className="code-host-inactive-values">
+              {inactiveTemplateValues.map((entry) => (
+                <li
+                  className="code-host-inactive-values__item"
+                  key={entry.key}
+                  data-testid={`code-host-inactive-value-${entry.key.replaceAll(':', '-')}`}
+                >
+                  <span className="code-host-inactive-values__value">
+                    <code>{entry.path}</code>
+                    <code title={entry.value}>{entry.value}</code>
+                  </span>
+                  <ConfirmButton
+                    size="sm"
+                    variant="danger"
+                    label={t('codeHostInspector.clearInactive')}
+                    confirmLabel={t('codeHostInspector.confirmClearInactive')}
+                    ariaLabel={t('codeHostInspector.clearInactiveAria', { path: entry.path })}
+                    confirmAriaLabel={t('codeHostInspector.confirmClearInactiveAria', {
+                      path: entry.path,
+                    })}
+                    confirmationKey={JSON.stringify([
+                      node.id,
+                      provider,
+                      action,
+                      entry.key,
+                      entry.value,
+                    ])}
+                    onConfirm={entry.clear}
+                    data-testid={`code-host-clear-inactive-${entry.key.replaceAll(':', '-')}`}
+                  />
+                </li>
+              ))}
+            </ul>
+          </NoticeBanner>
+        ) : null}
       </InspectorSection>
 
       <InspectorSection title={t('codeHostInspector.sectionInputs')}>
@@ -412,6 +545,7 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
         </NoticeBanner>
         {inboundBindings.length > 0 ? (
           <div className="code-host-input-bindings" data-testid="code-host-input-bindings">
+            <p className="inspector-hint">{t('codeHostInspector.inputBindingAdvancedHint')}</p>
             {inboundBindings.map((binding) => {
               const usedTargets = templateTargets.filter((target) =>
                 target.value.includes(binding.token),
@@ -439,31 +573,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                       {binding.token}
                     </code>
                   </div>
-                  <Select<string>
-                    value=""
-                    ariaLabel={t('codeHostInspector.bindTargetAria', {
-                      port: binding.portName,
-                    })}
-                    data-testid={'code-host-input-target-' + binding.portName}
-                    disabled={directTemplateTargets.length === 0}
-                    onChange={(targetKey) => bindInputToTarget(binding, targetKey)}
-                    options={[
-                      {
-                        value: '',
-                        label: t('codeHostInspector.bindTargetPlaceholder'),
-                        disabled: true,
-                      },
-                      ...directTemplateTargets.map((target) => ({
-                        value: target.key,
-                        label: target.label,
-                        disabled: target.value.includes(binding.token),
-                        description:
-                          target.value.trim().length === 0
-                            ? t('codeHostInspector.bindTargetEmpty')
-                            : t('codeHostInspector.bindTargetReplace'),
-                      })),
-                    ]}
-                  />
                   {usedTargets.length > 0 ? (
                     <div
                       className="code-host-input-binding__uses"
@@ -490,7 +599,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                 </div>
               )
             })}
-            <p className="inspector-hint">{t('codeHostInspector.inputBindingAdvancedHint')}</p>
           </div>
         ) : null}
       </InspectorSection>
@@ -518,12 +626,32 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             />
           </Field>
           <InspectorFieldAnchor nodeId={node.id} field="code-host-request">
-            <Field label={t('codeHostInspector.path')} hint={t('codeHostInspector.pathHint')}>
+            <Field
+              label={t('codeHostInspector.path')}
+              hint={t('codeHostInspector.pathHint')}
+              action={parameterPicker(
+                'workflow:http-path',
+                'request:path',
+                t('codeHostInspector.path'),
+                request.path,
+                'insert-at-caret',
+                (path) =>
+                  patch(
+                    { request: { ...request, path } },
+                    atomicNodeInspectorChange(
+                      node.id,
+                      'code-host-request',
+                      t('codeHostInspector.path'),
+                    ),
+                  ),
+              )}
+              group
+            >
               <TextInput
                 value={request.path}
                 data-testid="code-host-path"
+                aria-label={t('codeHostInspector.path')}
                 inputRef={bindTemplateInput('request:path')}
-                onFocus={() => setFocusedTemplateTargetKey('request:path')}
                 onChange={(next) => {
                   patch(
                     { request: { ...request, path: next } },
@@ -537,7 +665,7 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
               />
             </Field>
           </InspectorFieldAnchor>
-          <Field label={t('codeHostInspector.query')} hint={t('codeHostInspector.queryHint')}>
+          <Field label={t('codeHostInspector.query')} hint={t('codeHostInspector.queryHint')} group>
             <div className="form-grid" data-testid="code-host-query-list">
               {Object.entries(request.query).map(([queryKey, queryValue]) => (
                 <div className="form-grid--cols-2" key={queryKey}>
@@ -568,28 +696,53 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                     }}
                   />
                   <div className="form-grid--cols-2">
-                    <TextInput
-                      value={queryValue}
-                      aria-label={t('codeHostInspector.queryValue', { key: queryKey })}
-                      data-testid={`code-host-query-value-${queryKey}`}
-                      inputRef={bindTemplateInput(`request:query:${queryKey}`)}
-                      onFocus={() => setFocusedTemplateTargetKey(`request:query:${queryKey}`)}
-                      onChange={(nextValue) => {
-                        patch(
-                          {
-                            request: {
-                              ...request,
-                              query: { ...request.query, [queryKey]: nextValue },
+                    <Field
+                      label={t('codeHostInspector.queryValue', { key: queryKey })}
+                      action={parameterPicker(
+                        'workflow:http-query',
+                        `request:query:${queryKey}`,
+                        t('codeHostInspector.queryValue', { key: queryKey }),
+                        queryValue,
+                        'insert-at-caret',
+                        (nextValue) =>
+                          patch(
+                            {
+                              request: {
+                                ...request,
+                                query: { ...request.query, [queryKey]: nextValue },
+                              },
                             },
-                          },
-                          continuousNodeInspectorChange(
-                            node.id,
-                            'code-host-request',
-                            t('codeHostInspector.query'),
+                            atomicNodeInspectorChange(
+                              node.id,
+                              'code-host-request',
+                              t('codeHostInspector.query'),
+                            ),
                           ),
-                        )
-                      }}
-                    />
+                      )}
+                      group
+                    >
+                      <TextInput
+                        value={queryValue}
+                        aria-label={t('codeHostInspector.queryValue', { key: queryKey })}
+                        data-testid={`code-host-query-value-${queryKey}`}
+                        inputRef={bindTemplateInput(`request:query:${queryKey}`)}
+                        onChange={(nextValue) => {
+                          patch(
+                            {
+                              request: {
+                                ...request,
+                                query: { ...request.query, [queryKey]: nextValue },
+                              },
+                            },
+                            continuousNodeInspectorChange(
+                              node.id,
+                              'code-host-request',
+                              t('codeHostInspector.query'),
+                            ),
+                          )
+                        }}
+                      />
+                    </Field>
                     <button
                       type="button"
                       className="btn btn--xs btn--ghost"
@@ -598,9 +751,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                         const nextQuery = { ...request.query }
                         delete nextQuery[queryKey]
                         templateInputRefs.current.delete(`request:query:${queryKey}`)
-                        setFocusedTemplateTargetKey((current) =>
-                          current === `request:query:${queryKey}` ? null : current,
-                        )
                         patch(
                           { request: { ...request, query: nextQuery } },
                           atomicNodeInspectorChange(
@@ -635,21 +785,44 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                       t('codeHostInspector.query'),
                     ),
                   )
-                  setFocusedTemplateTargetKey(`request:query:${key}`)
                 }}
               >
                 {t('codeHostInspector.addQuery')}
               </button>
             </div>
           </Field>
-          <Field label={t('codeHostInspector.body')} hint={t('codeHostInspector.bodyHint')}>
+          <Field
+            label={t('codeHostInspector.body')}
+            hint={t('codeHostInspector.bodyHint')}
+            action={parameterPicker(
+              'workflow:http-json-body',
+              'request:body',
+              t('codeHostInspector.body'),
+              request.body ?? '',
+              'insert-at-caret',
+              (body) =>
+                patch(
+                  { request: { ...request, body } },
+                  atomicNodeInspectorChange(
+                    node.id,
+                    'code-host-request',
+                    t('codeHostInspector.body'),
+                  ),
+                ),
+              (next) =>
+                codeHostJsonBodyIssue(next) === null
+                  ? null
+                  : t('runtimeParameters.invalidJsonTarget'),
+            )}
+            group
+          >
             <TextArea
               value={request.body ?? ''}
               monospace
               rows={6}
               data-testid="code-host-body"
+              aria-label={t('codeHostInspector.body')}
               textareaRef={bindTemplateInput('request:body')}
-              onFocus={() => setFocusedTemplateTargetKey('request:body')}
               onChange={(next) => {
                 patch(
                   { request: { ...request, body: next } },
@@ -696,34 +869,10 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
           {fields.map((field) => {
             const required = field.requiredFor.includes(provider)
             const value = params[field.name] ?? ''
-            const selectOptions: SelectOption<string>[] = (
-              'options' in field ? (field.options ?? []) : []
-            ).map((opt) => ({
+            const selectOptions = ('options' in field ? (field.options ?? []) : []).map((opt) => ({
               value: opt,
               label: t('codeHostOption.' + opt, { defaultValue: opt }),
             }))
-            for (const binding of inboundBindings) {
-              selectOptions.push({
-                value: binding.token,
-                label: binding.token,
-                group: t('codeHostInspector.upstreamOptionGroup'),
-                description: t('codeHostInspector.upstreamOptionDescription', {
-                  source: binding.sources.join(' + '),
-                }),
-              })
-            }
-            if (
-              field.control === 'select' &&
-              value.includes('{{') &&
-              !selectOptions.some((option) => option.value === value)
-            ) {
-              selectOptions.push({
-                value,
-                label: value,
-                group: t('codeHostInspector.savedTemplateOptionGroup'),
-                description: t('codeHostInspector.savedTemplateOptionDescription'),
-              })
-            }
             const label = t(`codeHostField.${field.name}`, { defaultValue: field.name })
             const hint = t(`codeHostFieldHint.${field.name}`, { defaultValue: '' })
             const common = {
@@ -731,7 +880,20 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             }
             return (
               <InspectorFieldAnchor key={field.name} nodeId={node.id} field="code-host-params">
-                <Field label={label} hint={hint.length > 0 ? hint : undefined} required={required}>
+                <Field
+                  label={label}
+                  hint={hint.length > 0 ? hint : undefined}
+                  required={required}
+                  action={parameterPicker(
+                    'workflow:http-param',
+                    `param:${field.name}`,
+                    label,
+                    value,
+                    field.control === 'select' ? 'replace-whole-value' : 'insert-at-caret',
+                    (next) => patchParamAtomic(field.name, next, label),
+                  )}
+                  group
+                >
                   {field.control === 'select' ? (
                     <Select
                       value={value}
@@ -739,6 +901,9 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                       searchable={selectOptions.length > 8}
                       ariaLabel={label}
                       data-testid={`code-host-field-${field.name}`}
+                      renderUnknownValue={
+                        value.includes('{{') ? (savedValue) => <code>{savedValue}</code> : undefined
+                      }
                       onChange={(next) => {
                         patchParam(field.name, next, label)
                       }}
@@ -748,8 +913,8 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                       value={value}
                       rows={4}
                       {...common}
+                      aria-label={label}
                       textareaRef={bindTemplateInput(`param:${field.name}`)}
-                      onFocus={() => setFocusedTemplateTargetKey(`param:${field.name}`)}
                       onChange={(next) => {
                         patchParam(field.name, next, label)
                       }}
@@ -758,8 +923,8 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                     <TextInput
                       value={value}
                       {...common}
+                      aria-label={label}
                       inputRef={bindTemplateInput(`param:${field.name}`)}
-                      onFocus={() => setFocusedTemplateTargetKey(`param:${field.name}`)}
                       onChange={(next) => {
                         patchParam(field.name, next, label)
                       }}
@@ -771,35 +936,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
           })}
         </InspectorSection>
       )}
-
-      <InspectorSection title={t('codeHostInspector.sectionVars')} collapsed>
-        <p className="inspector-hint" data-testid="code-host-vars-target">
-          {activeTemplateTarget === undefined
-            ? t('codeHostInspector.varsNoTarget')
-            : t('codeHostInspector.varsInsertHint', { field: activeTemplateTarget.label })}
-        </p>
-        <div className="template-var-chips" data-testid="code-host-port-vars">
-          {uniqueInbound.length === 0 ? (
-            <span className="inspector-hint">{t('codeHostInspector.noInboundPorts')}</span>
-          ) : (
-            <TemplateVarChips
-              vars={uniqueInbound}
-              label={t('codeHostInspector.varsHint')}
-              onInsert={insertTemplateToken}
-              testidPrefix="code-host-port-var"
-              disabled={activeTemplateTarget === undefined}
-            />
-          )}
-        </div>
-        <div className="template-var-chips" data-testid="code-host-trigger-vars">
-          <WebhookTriggerVarChips
-            label={t('codeHostInspector.triggerVarsHint')}
-            onInsert={insertTemplateToken}
-            testidPrefix="code-host-trigger-var"
-            disabled={activeTemplateTarget === undefined}
-          />
-        </div>
-      </InspectorSection>
     </>
   )
 }

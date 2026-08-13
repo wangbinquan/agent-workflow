@@ -165,7 +165,13 @@ GitHub 侧配置。
 
 ## 7. 事件变量与「回帖 / 调接口」动作对照（RFC-263）
 
-触发器编辑弹窗里的变量 chips 分两组，点击即插入到光标处。
+所有会在运行期渲染模板的字段，统一在字段旁提供一个「插入参数」按钮。打开后按
+「全局参数 → Trigger → Webhook → 功能分组 → 字段」分类，可搜索字段名、规范 token 或文字解释；
+选择后插入当前字段的光标处。页面默认不展开 30 个变量，非 Webhook 作者不会被一整面事件上下文干扰。
+
+Webhook 规则编辑器知道当前选择的事件类型，因此只列这些事件**共同可用**的字段；工作流节点编辑器
+无法预知将来由哪条规则启动，所以仍可按需查到完整 Webhook 目录，并明确提示这些值只在 Webhook
+启动时提供。每一行都会同时显示可读名、规范 token 与用途说明。
 
 ### 7.1 变量速查
 
@@ -184,13 +190,17 @@ launch payload、agent `promptTemplate`、call-workgroup `goalTemplate`、review
 `commentInjectTemplate` 与 code-host-call 的 preset/custom path/query/body。普通手动启动或定时
 启动若引用这些字段，会在任何任务/仓库/HTTP/模型副作用前报 `trigger-context-missing`。
 
+Webhook 直接启动 Agent 时，零输入端口 Agent 编辑的是任务提示模板；声明了兼容文本输入端口的
+Agent 则逐端口填写模板，二者严格互斥。上传、路径、signal 或无效端口会在保存前给出阻断说明；
+存量孤儿值会保持可见，只有明确执行修复才会删除。
+
 **三个最容易用错的**：
 
-| 变量 | 说明 |
-| --- | --- |
-| `mr_iid` vs `mr_id` | **REST 路径一律用 `mr_iid`**（GitLab 的 MR iid / GitHub 的 PR number）。`mr_id` 是全局 id，只在 GraphQL 等少数接口用；拿它去填 `:merge_request_iid` 会 404 或改到别的 MR |
+| 变量                | 说明                                                                                                                                                                         |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mr_iid` vs `mr_id` | **REST 路径一律用 `mr_iid`**（GitLab 的 MR iid / GitHub 的 PR number）。`mr_id` 是全局 id，只在 GraphQL 等少数接口用；拿它去填 `:merge_request_iid` 会 404 或改到别的 MR     |
 | `comment_thread_id` | 回复到同一线程用它。GitLab 即 `discussion_id`；GitHub **行内评论**为线程根评论 id（自动处理了 `in_reply_to_id`）；GitHub **普通 PR 评论没有线程 ⇒ 此变量为空**，只能新开一条 |
-| `project_id` | 只用于 GitLab 的 `/projects/:id`。GitHub 侧调接口请用 `repo_owner` + `repo_name`（`project_id` 在 GitHub 是 repository 的数字 id，绝大多数端点用不上） |
+| `project_id`        | 只用于 GitLab 的 `/projects/:id`。GitHub 侧调接口请用 `repo_owner` + `repo_name`（`project_id` 在 GitHub 是 repository 的数字 id，绝大多数端点用不上）                       |
 
 所有变量在该事件没有对应值时渲染**空串**（例如分支流水线的 `mr_iid`、普通评论的
 `comment_position_json`）。触发器保存时会静态校验：引用了所选事件类型不提供的变量
@@ -198,12 +208,12 @@ launch payload、agent `promptTemplate`、call-workgroup `goalTemplate`、review
 
 ### 7.2 事件 → 之后能跟的动作
 
-| 事件 | 能跟的动作 | 主要用到 |
-| --- | --- | --- |
+| 事件                 | 能跟的动作                                                                     | 主要用到                                                                       |
+| -------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | `note`（MR/PR 评论） | 回复同线程 / 新开评论 / 在 diff 行新建线程 / 编辑删除自己的评论 / resolve 线程 | `comment_thread_id` `comment_id` `comment_position_json` `mr_iid` `project_id` |
-| `mr_*` | 评论 MR / 设 commit status / 打 label / 指派 / merge | `mr_iid` `commit_sha` `author_id` |
-| `push` `tag_push` | 设 commit status / 评论 commit / 自动建 MR / 建 release | `commit_sha` `commit_before` `branch` `default_branch` |
-| `pipeline_*` | 列 job 拉失败日志 / retry / 把结论回帖到 MR / 贴流水线链接 | `pipeline_id` `pipeline_url` `mr_iid` |
+| `mr_*`               | 评论 MR / 设 commit status / 打 label / 指派 / merge                           | `mr_iid` `commit_sha` `author_id`                                              |
+| `push` `tag_push`    | 设 commit status / 评论 commit / 自动建 MR / 建 release                        | `commit_sha` `commit_before` `branch` `default_branch`                         |
+| `pipeline_*`         | 列 job 拉失败日志 / retry / 把结论回帖到 MR / 贴流水线链接                     | `pipeline_id` `pipeline_url` `mr_iid`                                          |
 
 ### 7.3 GitLab 样例
 

@@ -86,6 +86,26 @@ commit status、触发流水线、拉 job 日志……**令牌只留在 daemon �
 input 节点或搬运边；agent prompt、call-workgroup goal、review comment template 与本节点使用
 同一套规范路径。
 
+每个实际会执行的参数、path、query value 与 body 旁都使用同一个「插入参数」选择器；它按
+局部/全局、参数类型、来源、功能组和字段分类，并在每一项常显可读名、规范 token 与解释。
+枚举字段选择参数时会整体替换当前字面值，关闭下拉后仍显示完整 token；业务枚举列表本身不会
+混入伪造的 token 选项。query **key** 是固定结构，不是模板目标，只有 value 有选择器。
+
+切换 action 或 provider 不会静默删除之前填写的 `params` / `request`。当前操作不会执行的存量值
+会集中显示为「当前不执行」，不参与当前保存校验或运行期预检；可以切回原操作继续编辑，也可经
+二次确认显式清理，清理是一条可撤销的画布历史操作。
+
+若要回退到 RFC-295 之前的版本，必须先在停止回退部署前运行只读兼容性门：
+
+```bash
+agent-workflow downgrade-audit rfc-295
+```
+
+它会扫描当前 workflow revision，以及仍在运行或可恢复任务的根快照和冻结调用闭包；报告
+workflow / revision / task / node / pointer / ref。结果为 `BLOCKED` 时必须在当前版本中显式
+清理这些 inactive 值、切回对应 action 修复，或放弃回退继续 roll-forward；命令没有忽略清单或
+强制放行参数，也不会修改数据库。
+
 **项目字段留空 = 用当前任务的仓库**。仓库不属于所配置的平台实例时会明确拒绝（不会拿去改一个
 同名的、不相干的项目）；多仓任务必须显式填写。
 
@@ -114,11 +134,11 @@ input 节点或搬运边；agent prompt、call-workgroup goal、review comment t
 
 ## 7. 常见问题
 
-| 现象                                   | 多半是                                                                         |
-| -------------------------------------- | ------------------------------------------------------------------------------ |
-| 节点报 `code-host-not-configured`      | 设置页没配那家的 base URL / 令牌，或 `secret.key` 换过导致解封失败（重录令牌） |
-| 报 `code-host-project-foreign`         | 任务仓库不在所配置的实例上；显式填项目字段，或改配置                           |
-| 报 `trigger-context-missing`           | 工作流引用了 `{{trigger.webhook.*}}`，但这个任务不是 webhook 起的              |
-| 回帖 403                               | 令牌 scope 不够，或 bot 账号在那个项目上没有权限                               |
-| 回帖发了两条                           | 检查是否在 `wrapper-loop` 里（挪进循环会按迭代次数重复发送）                   |
-| 测试连接报「响应不是身份信息」         | base URL 指到了反代的登录页，而不是 API 根                                     |
+| 现象                              | 多半是                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------ |
+| 节点报 `code-host-not-configured` | 设置页没配那家的 base URL / 令牌，或 `secret.key` 换过导致解封失败（重录令牌） |
+| 报 `code-host-project-foreign`    | 任务仓库不在所配置的实例上；显式填项目字段，或改配置                           |
+| 报 `trigger-context-missing`      | 工作流引用了 `{{trigger.webhook.*}}`，但这个任务不是 webhook 起的              |
+| 回帖 403                          | 令牌 scope 不够，或 bot 账号在那个项目上没有权限                               |
+| 回帖发了两条                      | 检查是否在 `wrapper-loop` 里（挪进循环会按迭代次数重复发送）                   |
+| 测试连接报「响应不是身份信息」    | base URL 指到了反代的登录页，而不是 API 根                                     |

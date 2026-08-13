@@ -39,7 +39,7 @@ import {
 import { routeTaskOperationsFixture } from './task-operations-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 31
+const EXPECTED_VISUAL_SCENE_COUNT = 33
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
 const VISUAL_RUNTIME_STATUS = {
   runtimes: [
@@ -260,6 +260,39 @@ async function seedEditorWorkflow(): Promise<string> {
     },
   })) as { id: string }
   return workflow.id
+}
+
+async function seedWebhookParameterPicker(): Promise<void> {
+  await postJson('/api/webhook-endpoints', { name: 'visual-webhook-endpoint' })
+  await postJson('/api/agents', {
+    name: 'visual-webhook-agent',
+    description: 'Zero-port Agent for the parameter-picker visual',
+    outputs: ['answer'],
+    outputKinds: { answer: 'markdown' },
+    readonly: true,
+    bodyMd: '',
+  })
+}
+
+async function openWebhookAgentParameterPicker(page: Page): Promise<void> {
+  await primeAuth(page)
+  await page.goto(`${requireDaemon().baseUrl}/webhooks?tab=triggers`)
+  const create = page.getByTestId('webhook-trigger-new')
+  await expect(create).toBeEnabled()
+  await create.click()
+  await page.getByTestId('wt-name').fill('Visual parameter trigger')
+  await page.getByTestId('wt-scope-prefix').fill('platform/')
+  await page.getByTestId('stepper-next').click()
+  await page.getByTestId('stepper-next').click()
+  await page.getByTestId('wt-launch-kind-agent').click()
+  await page.getByTestId('wt-target').click()
+  await page.getByRole('option', { name: 'visual-webhook-agent', exact: true }).click()
+  await expect(page.getByTestId('wt-description')).toBeVisible()
+  await page.getByTestId('wt-description').fill('Handle ')
+  await page.getByTestId('wt-description-parameter').click()
+  const picker = page.locator('[data-runtime-parameter-popover]')
+  await picker.getByRole('searchbox').fill('repo_path')
+  await expect(picker.getByText('{{trigger.webhook.repo_path}}', { exact: true })).toBeVisible()
 }
 
 async function openEditorScene(
@@ -1061,6 +1094,26 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     })
   })
 
+  test('RFC-295 editor 1280 runtime parameter picker open (light)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    const workflowId = await seedEditorWorkflow()
+    await openEditorScene(page, workflowId, 3)
+    const beforeSelection = await readVisualCanvasViewport(page)
+    await page.locator('.react-flow__node[data-id="visual_agent"]').click()
+    await expectSelectedNodeCanvasMargin(page, 'visual_agent', beforeSelection)
+    await page.getByTestId('agent-runtime-parameter-picker').click()
+    const picker = page.locator('[data-runtime-parameter-popover]')
+    await picker.getByRole('searchbox').fill('comment_text')
+    await expect(
+      picker.getByText('{{trigger.webhook.comment_text}}', { exact: true }),
+    ).toBeVisible()
+    await expect(page).toHaveScreenshot('workflow-runtime-parameter-picker-1280-light.png', {
+      ...SNAPSHOT_OPTS,
+      mask: [page.locator('.page--editor .page__meta code')],
+    })
+  })
+
   test('RFC-199 editor 1280 inspector rail (dark)', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await prepareScene(page, { theme: 'dark', fixture: 'clean' })
@@ -1156,6 +1209,19 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'phone')
     await expect(page.getByTestId('workflow-editor-inspector-surface')).toBeVisible()
     await expect(page).toHaveScreenshot('workflow-editor-390-inspector-light.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-295 Webhook 390 runtime parameter picker open (light)', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await seedWebhookParameterPicker()
+    await openWebhookAgentParameterPicker(page)
+    await expect(page.getByTestId('webhook-trigger-dialog')).toBeVisible()
+    await expect(page.locator('[data-runtime-parameter-popover]')).toBeVisible()
+    await expect(page).toHaveScreenshot(
+      'webhook-runtime-parameter-picker-390-light.png',
+      SNAPSHOT_OPTS,
+    )
   })
 
   test('RFC-199 deterministic dynamic-workflow preview (light)', async ({ page }) => {

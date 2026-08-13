@@ -144,6 +144,17 @@ beforeEach(async () => {
       })
     }
     if (url.includes('/api/workflows')) return jsonResponse([{ id: 'wf1', name: 'Fix WF' }])
+    if (url.includes('/api/agents/ag1')) {
+      return jsonResponse({
+        id: 'ag1',
+        name: 'Fixer',
+        inputs: [
+          { name: 'spec', kind: 'string', required: false },
+          { name: 'budget', kind: 'string', required: false },
+        ],
+        updatedAt: 1,
+      })
+    }
     if (url.includes('/api/agents')) return jsonResponse([{ id: 'ag1', name: 'Fixer' }])
     if (url.includes('/api/workgroups')) return jsonResponse([{ id: 'wg1', name: 'Crew' }])
     return jsonResponse([])
@@ -172,11 +183,13 @@ describe('RFC-257 · 编辑触发器不得丢弃 UI 不渲染的 payload 字段'
     ]
     await renderWebhooks()
     await editAndRename('修到绿 v2')
+    fireEvent.click(screen.getByTestId('stepper-step-target'))
+    await screen.findByTestId('wt-agent-repairs')
+    fireEvent.click(screen.getByTestId('wt-agent-repair'))
     await saveFromReview()
 
     expect(writes[0]?.['name']).toBe('修到绿 v2')
     expect(writes[0]?.['launchPayload']).toEqual({
-      description: '修一下 {{repo_path}}',
       inputs: { spec: '{{mr_title}}', budget: '3' },
       allowClarify: true,
       maxDurationMs: 60000,

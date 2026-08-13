@@ -309,6 +309,25 @@ describe('CallWorkgroupEdit inspector', () => {
     expect(patched.goalTemplate).toBe('Fix {{report}} now')
   })
 
+  test('goalTemplate uses the shared classified picker and inserts the CallWorkgroup producer subset', async () => {
+    const { onChange } = renderInspector(callNode({ goalTemplate: 'Use ' }))
+    const area = (await screen.findByTestId('call-workgroup-goal-template')) as HTMLTextAreaElement
+    area.setSelectionRange(area.value.length, area.value.length)
+
+    expect(screen.queryByText('{{trigger.webhook.comment_text}}')).toBeNull()
+    const picker = screen.getByTestId('call-workgroup-runtime-parameter-picker')
+    fireEvent.pointerDown(picker, { button: 0 })
+    fireEvent.click(picker)
+    fireEvent.change(screen.getByRole('combobox', { name: /Search parameter|搜索参数/ }), {
+      target: { value: '__repos__' },
+    })
+    fireEvent.click(screen.getByRole('option', { name: /__repos__/ }))
+
+    const next = onChange.mock.calls.at(-1)?.[0] as WorkflowDefinition
+    const patched = next.nodes[0] as unknown as Record<string, unknown>
+    expect(patched.goalTemplate).toBe('Use {{__repos__}}')
+  })
+
   test('limits NumberInputs write and clear the optional limits object', async () => {
     const { onChange } = renderInspector(callNode({ limits: { maxTotalTokens: 500 } }))
     const duration = await screen.findByTestId('call-workgroup-max-duration')

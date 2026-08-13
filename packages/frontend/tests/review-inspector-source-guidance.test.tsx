@@ -81,6 +81,40 @@ beforeEach(() => {
 })
 
 describe('review inspector source guidance', () => {
+  test('comment injection uses one picker with review context and no unrelated task-runtime values', () => {
+    const onChangeSpy = vi.fn()
+    render(
+      <Host
+        initial={definitionOf([
+          {
+            ...reviewNode(),
+            commentInjectTemplate: 'Review: ',
+          } as WorkflowNode,
+        ])}
+        agents={[]}
+        onChangeSpy={onChangeSpy}
+      />,
+    )
+    const picker = screen.getByTestId('review-runtime-parameter-picker')
+    const area = picker.closest('.form-field')?.querySelector('textarea') as HTMLTextAreaElement
+    area.setSelectionRange(area.value.length, area.value.length)
+    fireEvent.pointerDown(picker, { button: 0 })
+    fireEvent.click(picker)
+    const search = screen.getByRole('combobox', { name: /Search parameter|搜索参数/ })
+
+    fireEvent.change(search, { target: { value: '__repo_path__' } })
+    expect(screen.queryByRole('option', { name: /__repo_path__/ })).toBeNull()
+    fireEvent.change(search, { target: { value: '__review_comments__' } })
+    fireEvent.click(screen.getByRole('option', { name: /__review_comments__/ }))
+
+    const latest = onChangeSpy.mock.calls.at(-1)?.[0] as WorkflowDefinition
+    const review = latest.nodes.find((node) => node.id === 'review') as unknown as Record<
+      string,
+      unknown
+    >
+    expect(review.commentInjectTemplate).toBe('Review: {{__review_comments__}}')
+  })
+
   test('explains the one required input and why a plain string output is unavailable', () => {
     const writer = storedAgent('agent-writer', 'writer', ['result'], { result: 'string' })
     render(

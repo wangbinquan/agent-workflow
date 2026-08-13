@@ -22,6 +22,7 @@ import { stopCommand } from './cli/stop'
 import { packageCommand } from './cli/package'
 import { userCommand } from './cli/user'
 import { authCommand } from './cli/auth'
+import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
 
 function readFlag(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(name)
@@ -94,6 +95,17 @@ async function main(): Promise<void> {
       const result = await doctorCommand()
       process.stdout.write(formatDoctor(result))
       if (!result.ok) process.exit(1)
+      break
+    }
+
+    case 'downgrade-audit': {
+      if (Bun.argv[3] !== 'rfc-295') {
+        console.error('usage: agent-workflow downgrade-audit rfc-295')
+        process.exit(2)
+      }
+      const result = rfc295DowngradeAuditCommand()
+      process.stdout.write(result.output)
+      if (result.status !== 'ok') process.exit(1)
       break
     }
 
@@ -174,6 +186,9 @@ async function main(): Promise<void> {
       console.log('  status                            print daemon status (PID, /health)')
       console.log('  version                           print version')
       console.log('  doctor                            run health checks (does not start daemon)')
+      console.log(
+        '  downgrade-audit rfc-295            read-only compatibility gate before RFC-295 rollback',
+      )
       console.log('  config get [key]                  print full config or a single key')
       console.log(
         '  config set <key> <value>          update a config field; value is parsed as JSON if possible',

@@ -136,9 +136,10 @@ const OVERLAY_CALLSITES = {
   'components/skills/ImportZipPanel.tsx': { family: 'resource-management', count: 1 },
   'routes/repos.tsx': { family: 'resource-management', count: 3 },
   'routes/scheduled.tsx': { family: 'resource-management', count: 1 },
-  // RFC-257: trigger editor + per-trigger fires; delivery raw-body detail
-  // (panels of the /webhooks single page).
-  'components/webhooks/TriggersPanel.tsx': { family: 'resource-management', count: 3 },
+  // RFC-257: trigger editor + per-trigger fires; delivery raw-body detail.
+  // RFC-295: switching an Agent target with target-specific draft adds an
+  // explicit preservation confirmation inside the trigger editor.
+  'components/webhooks/TriggersPanel.tsx': { family: 'resource-management', count: 4 },
   'components/webhooks/DeliveriesPanel.tsx': { family: 'resource-management', count: 1 },
 
   // RFC-239: the changes pane's deep views (graph/impact/call-chain/deps) overlay.

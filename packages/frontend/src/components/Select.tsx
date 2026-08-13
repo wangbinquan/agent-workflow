@@ -134,6 +134,12 @@ interface Props<V extends string> {
    * and the same layout should appear on the closed trigger button.
    */
   renderValue?: (opt: SelectOption<V>) => React.ReactNode
+  /**
+   * Closed-trigger rendering for a persisted value that is not a selectable
+   * option. The value remains visible without manufacturing a selectable row
+   * for it (for example, a runtime-template value in a business enum field).
+   */
+  renderUnknownValue?: (value: V) => ReactNode
 }
 
 export function Select<V extends string>(props: Props<V>) {
@@ -393,6 +399,8 @@ export function Select<V extends string>(props: Props<V>) {
             ) : (
               <OptionTitle option={current} />
             )
+          ) : props.renderUnknownValue ? (
+            props.renderUnknownValue(props.value)
           ) : (
             (props.placeholder ?? '')
           )}

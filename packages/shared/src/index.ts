@@ -146,3 +146,6 @@ export * from './webhookTemplate'
 // RFC-262 — upload 文件名净化与落点判重的纯函数面。启动表单提交前与 daemon
 // 收到 multipart 后跑的是同一套规则，两边不可能给出不同判定。零依赖叶子。
 export * from './uploadNaming'
+export * from './runtimeBuiltins' // RFC-295
+export * from './templateAuthority' // RFC-295
+export * from './codeHost/templateProjection' // RFC-295

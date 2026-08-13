@@ -19,6 +19,7 @@ import {
 } from './schemas/webhook'
 import { extractTemplateRefs, renderTemplateRefs, webhookTriggerToken } from './templateRef'
 import { isWebhookTriggerField, type TriggerContext } from './triggerContext'
+import { webhookTemplateAuthorityKey, type WebhookTemplateAuthorityKey } from './templateAuthority'
 
 /** {{trigger.webhook.event_json}} 的截断上限（字符）。< 65536 的注入面上限，留出模板其余文字余量。 */
 export const EVENT_JSON_VAR_MAX_CHARS = 32 * 1024
@@ -135,9 +136,18 @@ export function renderTemplate(text: string, context: TriggerContext): string {
 
 export interface WebhookTemplateSurface {
   readonly launchKind: WebhookLaunchKind
+  readonly sink: WebhookTemplateSink
+  readonly authorityKey: WebhookTemplateAuthorityKey
   readonly pointer: string
   readonly text: string
 }
+
+export type WebhookTemplateSink =
+  | 'workflow-input-text'
+  | 'working-branch'
+  | 'agent-description'
+  | 'agent-input'
+  | 'workgroup-goal'
 
 function pointerPart(value: string): string {
   return value.replaceAll('~', '~0').replaceAll('/', '~1')
@@ -149,33 +159,41 @@ export function collectWebhookTemplateSurfaces(
   payload: WebhookLaunchPayloadTemplate,
 ): WebhookTemplateSurface[] {
   const out: WebhookTemplateSurface[] = []
-  const add = (pointer: string, text: string | undefined): void => {
-    if (text !== undefined) out.push({ launchKind: kind, pointer, text })
+  const add = (sink: WebhookTemplateSink, pointer: string, text: string | undefined): void => {
+    if (text !== undefined) {
+      out.push({
+        launchKind: kind,
+        sink,
+        authorityKey: webhookTemplateAuthorityKey(kind, sink),
+        pointer,
+        text,
+      })
+    }
   }
 
   if (kind === 'workflow') {
     const parsed = WebhookWorkflowPayloadTemplateSchema.parse(payload)
     for (const [key, mapping] of Object.entries(parsed.inputs)) {
       if (mapping.kind === 'template') {
-        add(`/inputs/${pointerPart(key)}/template`, mapping.template)
+        add('workflow-input-text', `/inputs/${pointerPart(key)}/template`, mapping.template)
       }
     }
-    add('/workingBranch', parsed.workingBranch)
+    add('working-branch', '/workingBranch', parsed.workingBranch)
     return out
   }
   if (kind === 'agent') {
     const parsed = WebhookAgentPayloadTemplateSchema.parse(payload)
-    add('/description', parsed.description)
+    add('agent-description', '/description', parsed.description)
     for (const [key, text] of Object.entries(parsed.inputs ?? {})) {
-      add(`/inputs/${pointerPart(key)}`, text)
+      add('agent-input', `/inputs/${pointerPart(key)}`, text)
     }
-    add('/workingBranch', parsed.workingBranch)
+    add('working-branch', '/workingBranch', parsed.workingBranch)
     return out
   }
 
   const parsed = WebhookWorkgroupPayloadTemplateSchema.parse(payload)
-  add('/goal', parsed.goal)
-  add('/workingBranch', parsed.workingBranch)
+  add('workgroup-goal', '/goal', parsed.goal)
+  add('working-branch', '/workingBranch', parsed.workingBranch)
   return out
 }
 
@@ -185,8 +203,14 @@ export function mapWebhookTemplateSurfaces(
   payload: WebhookLaunchPayloadTemplate,
   mapper: (surface: WebhookTemplateSurface) => string,
 ): WebhookLaunchPayloadTemplate {
-  const rewrite = (pointer: string, text: string): string =>
-    mapper({ launchKind: kind, pointer, text })
+  const rewrite = (sink: WebhookTemplateSink, pointer: string, text: string): string =>
+    mapper({
+      launchKind: kind,
+      sink,
+      authorityKey: webhookTemplateAuthorityKey(kind, sink),
+      pointer,
+      text,
+    })
 
   if (kind === 'workflow') {
     const parsed = WebhookWorkflowPayloadTemplateSchema.parse(payload)
@@ -198,14 +222,18 @@ export function mapWebhookTemplateSurfaces(
           mapping.kind === 'template'
             ? {
                 ...mapping,
-                template: rewrite(`/inputs/${pointerPart(key)}/template`, mapping.template),
+                template: rewrite(
+                  'workflow-input-text',
+                  `/inputs/${pointerPart(key)}/template`,
+                  mapping.template,
+                ),
               }
             : mapping,
         ]),
       ),
       ...(parsed.workingBranch === undefined
         ? {}
-        : { workingBranch: rewrite('/workingBranch', parsed.workingBranch) }),
+        : { workingBranch: rewrite('working-branch', '/workingBranch', parsed.workingBranch) }),
     }
   }
   if (kind === 'agent') {
@@ -214,30 +242,30 @@ export function mapWebhookTemplateSurfaces(
       ...parsed,
       ...(parsed.description === undefined
         ? {}
-        : { description: rewrite('/description', parsed.description) }),
+        : { description: rewrite('agent-description', '/description', parsed.description) }),
       ...(parsed.inputs === undefined
         ? {}
         : {
             inputs: Object.fromEntries(
               Object.entries(parsed.inputs).map(([key, text]) => [
                 key,
-                rewrite(`/inputs/${pointerPart(key)}`, text),
+                rewrite('agent-input', `/inputs/${pointerPart(key)}`, text),
               ]),
             ),
           }),
       ...(parsed.workingBranch === undefined
         ? {}
-        : { workingBranch: rewrite('/workingBranch', parsed.workingBranch) }),
+        : { workingBranch: rewrite('working-branch', '/workingBranch', parsed.workingBranch) }),
     }
   }
 
   const parsed = WebhookWorkgroupPayloadTemplateSchema.parse(payload)
   return {
     ...parsed,
-    goal: rewrite('/goal', parsed.goal),
+    goal: rewrite('workgroup-goal', '/goal', parsed.goal),
     ...(parsed.workingBranch === undefined
       ? {}
-      : { workingBranch: rewrite('/workingBranch', parsed.workingBranch) }),
+      : { workingBranch: rewrite('working-branch', '/workingBranch', parsed.workingBranch) }),
   }
 }
 
