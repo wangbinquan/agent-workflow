@@ -626,11 +626,18 @@ L6 :8362 if (result.processUnreaped === true) keepAggIso = true
       :2255 子进程杀不掉、:2344 需保留运行时活状态两处赋值）；
    ② 脚本线走的是**另一个执行原语** `runScriptProcess`（scriptRun.ts:434），其
       返回类型 `ScriptRunOutcome` **零命中** `processUnreaped`；
-   ③ 引入该屏障的 commit（`8744abc2`）自述用途是「Propagate unreaped-process
-      barriers … so a failed transition cannot admit a second writer」——屏障为
-      **原生会话过渡失败**（conversation_reset 边界、resume id 失效）而设，前提
-      是该线有可续接的原生会话；脚本线无此前提（其区间内 session/resume/followup
-      仅 1 处命中）。
+   ③ **最要害的一条（初版把理由写软了，此处更正）**：屏障防的是「旧子进程没死透
+      还在写 + 重试又落回**同一棵**工作树」＝两个写者。而两条线对重试的处置**相反**：
+      · **脚本线**每次重试都先 `discardNodeIso` 再 `createIsoUnderLock` **换新树**
+        （:4557/:4559，源注自陈「this is what makes retrying a file-writing script
+        safe」）⇒ 旧进程即便赖着，写的也是**已被丢弃的那棵**，碰不到新树，
+        **碰撞窗口根本不存在**；
+      · **agent 线**刻意**保住同一棵**（D17：同会话续跑必须在同一棵树上恢复，否则
+        模型记忆与磁盘错配）⇒ 窗口存在，故必须有屏障。
+      佐证：脚本线的重试循环**零调用** `shouldRetryNodeFailure`（区间内 0 命中），
+      那道「未回收即禁止重试」的闸对它本来就不生效。
+      ⚠️ 不要把理由写成「脚本线没有会话所以不需要」——那太软，会让后人以为只是惯例
+      问题；真正的判据是**重试是否换树**。
    ⇒ T5 迁移时**不**给脚本线声明 `keepFromOutcome`，并在其 spec 处留一行注释写明
    本结论，防止后人看到「四条有一条没有」而「顺手补齐」。
 3. `shouldRetryNodeFailure` 的第二参进 `retryPolicy.shouldRetry` 的入参面。
