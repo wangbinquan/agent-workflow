@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { hasQueryCredential } from '../git-url'
+import { WebhookTaskSourceLinkSchema } from '../webhookTaskSourceLink'
 import { InjectedMemorySnapshotSchema } from './memory'
 import { PlannedDirectoryNodeSchema } from './repoGroup'
 import { OwnerIdentitySchema } from './user'
@@ -541,6 +542,12 @@ export const TaskSchema = z.object({
    * and links use `sourceAgentId`; NULL for workflow / workgroup tasks.
    */
   sourceAgentName: z.string().nullable().optional(),
+  /**
+   * RFC-298: the single safe navigation target derived from frozen webhook
+   * context for the detail response. Optional keeps rolling compatibility
+   * with older daemons; list/summary schemas deliberately do not expose it.
+   */
+  webhookSourceLink: WebhookTaskSourceLinkSchema.nullable().optional(),
 })
 export type Task = z.infer<typeof TaskSchema>
 

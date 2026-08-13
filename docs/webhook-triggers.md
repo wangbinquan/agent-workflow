@@ -1,4 +1,4 @@
-# Webhook 触发器运维指引（RFC-257 / RFC-259 / RFC-268）
+# Webhook 触发器运维指引（RFC-257 / RFC-259 / RFC-268 / RFC-298）
 
 面向**商用内网部署**（自建 GitLab + 几百个仓库）的接入手册；§6 为 GitHub
 （github.com / GHES，RFC-259）接入。产品/技术契约见
@@ -302,3 +302,25 @@ curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
 
 （「在 daemon 上配一个环境变量、agent 的 curl 直接能用」曾排期为 RFC-265，已由
 RFC-269 的平台侧出站取代，不再计划实现。）
+
+## 8. 任务详情的原始事件入口（RFC-298）
+
+Webhook 启动的任务会在详情页标题下方、任务 ID 后显示一个文字链接，例如
+「查看原始评论」。界面不会直接铺出 URL；文案表示**最终实际打开的对象**，所以评论地址
+缺失并退到 MR/PR 时会写「查看原始 MR/PR」，不会继续误写成评论。
+
+| 事件类型        | 选择顺序                    |
+| --------------- | --------------------------- |
+| `note`          | 评论 → MR/PR → 项目         |
+| `mr_*`          | MR/PR → 项目                |
+| `pipeline_*`    | 流水线 → MR/PR → 项目       |
+| `push/tag_push` | GitHub/GitLab 提交页 → 项目 |
+
+链接只从任务已经冻结的 `trigger.webhook.*` 上下文派生，不回查 webhook trigger、delivery
+或代码平台 API。调用节点创建并继承该上下文的子任务也显示同一个入口，即使原 trigger/delivery
+之后被删除仍不受影响。
+
+安全边界：只接受有 host、无内嵌用户名/密码的 `http`/`https` 地址；坏候选会继续下一层，
+全部不可用时连分隔点和占位文字都不显示。push/tag 的提交 SHA 必须是 7–64 位十六进制且
+不能是全零删除 sentinel，否则退到项目页。链接在新窗口打开并带
+`rel="noopener noreferrer"`。

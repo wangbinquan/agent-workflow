@@ -40,6 +40,7 @@ import { WorkflowSyncBanner } from '@/components/tasks/WorkflowSyncBanner'
 import { TaskFeedbackList } from '@/components/tasks/TaskFeedbackList'
 import { TaskQuestionList, type TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
 import { TaskMembersDialogButton } from '@/components/tasks/TaskMembersPanel'
+import { TaskWebhookSourceLink } from '@/components/tasks/TaskWebhookSourceLink'
 import { WorkgroupRoom } from '@/components/workgroup/room/WorkgroupRoom'
 import { DynamicWorkflowPanel } from '@/components/workgroup/DynamicWorkflowPanel'
 import { NodeDetailDrawer } from '@/components/NodeDetailDrawer'
@@ -546,6 +547,13 @@ function TaskDetailPage() {
             <div className="task-detail__id">
               <span className="task-detail__id-label">{t('tasks.detailTitleIdLabel')}</span>{' '}
               <code>{tk.id}</code>
+              {tk.webhookSourceLink != null && (
+                <span className="task-detail__source" data-testid="task-webhook-source">
+                  {' '}
+                  <span aria-hidden="true">·</span>{' '}
+                  <TaskWebhookSourceLink source={tk.webhookSourceLink} />
+                </span>
+              )}
             </div>
             {/* The execution subject stays visible even when the non-default
                 details panel is closed. TaskSubjectLink resolves workgroup,

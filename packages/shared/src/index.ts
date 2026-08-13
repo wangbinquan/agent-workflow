@@ -58,6 +58,7 @@ export * from './templateRef' // RFC-292
 export * from './callGoalTemplate' // RFC-292
 export * from './triggerContext' // RFC-292
 export * from './webhookTriggerContext' // RFC-292
+export * from './webhookTaskSourceLink' // RFC-298
 export * from './workflowTemplateSurfaces' // RFC-292
 export * from './workflowMigration' // RFC-292
 export * from './agent-md'

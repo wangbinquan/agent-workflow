@@ -19,6 +19,7 @@ import type {
   TaskRepo,
   TaskSummary,
   TriggerContext,
+  WebhookTaskSourceLink,
 } from '@agent-workflow/shared'
 import type { DwState } from '@agent-workflow/shared'
 import {
@@ -36,6 +37,7 @@ import {
   isTerminalNodeRunStatus,
   migrateWorkflowDefinitionToLatest,
   parseTriggerContextJson,
+  webhookTaskSourceLinkOf,
 } from '@agent-workflow/shared'
 import type {
   CommitPushMeta,
@@ -4088,7 +4090,10 @@ export async function getTask(db: DbClient, id: string): Promise<Task | null> {
           .sort((a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b))
       : minimalNodePaths(repos.map((repo) => repo.mountPath))
   const spaceNodes: PlannedDirectoryNode[] = nodePaths.map((path) => ({ path, origins: [] }))
-  const task = rowToTask(row.task, row.workflowName, repos, spaceNodes)
+  const parsedTriggerContext = parseTriggerContextJson(row.task.triggerContextJson)
+  const webhookSourceLink =
+    parsedTriggerContext.kind === 'ok' ? webhookTaskSourceLinkOf(parsedTriggerContext.value) : null
+  const task = rowToTask(row.task, row.workflowName, repos, spaceNodes, webhookSourceLink)
   // RFC-203 T4: task-level failure-code projection (failed-run oracle).
   const codes = await loadTaskFailureCodes(db, [
     { id: row.task.id, status: row.task.status, failedNodeId: row.task.failedNodeId },
@@ -4775,6 +4780,7 @@ function rowToTask(
   workflowName: string | null,
   repos: TaskRepo[],
   spaceNodes: PlannedDirectoryNode[],
+  webhookSourceLink: WebhookTaskSourceLink | null,
 ): Task {
   let snapshot: unknown
   try {
@@ -4855,6 +4861,9 @@ function rowToTask(
     sourceAgentName: row.sourceAgentName ?? null,
     // RFC-175 (§2e): stable agent id (NULL for non-agent + pre-0091 tasks).
     sourceAgentId: row.sourceAgentId ?? null,
+    // RFC-298: getTask derives this from the frozen context before entering
+    // the generic row mapper. Never expose or parse the frozen source JSON here.
+    webhookSourceLink,
     repos,
     spaceNodes,
   }

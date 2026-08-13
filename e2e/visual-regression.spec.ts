@@ -29,8 +29,10 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { runSqlite } from './command'
 import { routePopulatedInbox } from './inbox-fixtures'
 import {
   OPERATIONS_VISUAL_TIME,
@@ -570,7 +572,24 @@ async function seedTerminalTask(): Promise<{ taskId: string; agentId: string }> 
     })
     if (response.ok) {
       const current = (await response.json()) as { status: string }
-      if (current.status === 'done') return { taskId: task.id, agentId: agent.id }
+      if (current.status === 'done') {
+        const context = JSON.stringify({
+          trigger: {
+            webhook: {
+              event_type: 'note',
+              provider: 'gitlab',
+              project_web_url: 'https://gitlab.example/platform/api',
+              mr_url: 'https://gitlab.example/platform/api/-/merge_requests/42',
+              comment_url: 'https://gitlab.example/platform/api/-/merge_requests/42#note_visual',
+            },
+          },
+        }).replaceAll("'", "''")
+        runSqlite(
+          join(d.home, 'db.sqlite'),
+          `UPDATE tasks SET trigger_context_json='${context}' WHERE id='${task.id}';`,
+        )
+        return { taskId: task.id, agentId: agent.id }
+      }
       if (['failed', 'canceled', 'interrupted'].includes(current.status)) {
         throw new Error(`visual-regression: task fixture reached ${current.status}`)
       }
@@ -1050,6 +1069,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/tasks/${taskId}`)
     await expect(page.getByRole('heading', { name: /Mobile visual task/ })).toBeVisible()
+    await expect(page.getByTestId('task-webhook-source-link')).toHaveText('Open original comment ↗')
     await expect(page.locator('.status-chip', { hasText: /^done$/i }).first()).toBeVisible()
     await expect(page.locator('.canvas-node--agent').first()).toBeVisible()
     // A visible node is not a settled canvas: async fonts/node measurements
@@ -1240,6 +1260,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(preview.locator('.react-flow__node')).toHaveCount(3)
     await waitForStableAuthenticatedShell(page)
     await expect(page.getByTestId('task-members-dialog-button')).toBeVisible()
+    await expect(page.getByTestId('task-webhook-source-link')).toHaveText('Open original comment ↗')
     // WorkflowCanvas deliberately keeps a 1200ms refit window while the
     // surrounding task-detail layout settles. Close that window, then perform
     // one explicit fit from the final measured geometry: CI has demonstrated

@@ -4177,6 +4177,15 @@ button:disabled:hover {
   color: var(--muted);
 }
 
+.task-detail__id code,
+.task-detail__source {
+  white-space: nowrap;
+}
+
+.task-detail__source-link {
+  font-size: inherit;
+}
+
 /* Workflow jump link under the task ID — same muted subtitle treatment as
    .task-detail__id (kept as its own rule so the .task-detail__id selector
    stays byte-identical for the RFC-037 H1 test). */

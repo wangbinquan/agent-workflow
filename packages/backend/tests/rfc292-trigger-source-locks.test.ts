@@ -1,7 +1,8 @@
 // RFC-292 architecture ratchets: the canonical trigger namespace must not
 // fork back into code-host-only helpers, runtime dispatch must keep authored
-// and framework prompts separated, and frozen context must stay off task/API
-// projections and process configuration.
+// and framework prompts separated, and frozen context must stay off raw
+// task/API projections and process configuration. RFC-298 permits exactly one
+// narrow, derived `{kind,url}` detail projection without exposing source JSON.
 
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
@@ -71,13 +72,24 @@ describe('RFC-292 trigger namespace source locks', () => {
     expect(orchestrator).toContain('availableFields.map(webhookTriggerToken)')
   })
 
-  test('task wire projection and runtime config do not expose frozen trigger JSON', () => {
+  test('task wire exposes only the RFC-298 derived link, never frozen trigger JSON', () => {
     const task = readFileSync(resolve(BACKEND_SRC, 'services/task.ts'), 'utf8')
+    const getTaskProjection = task.slice(
+      task.indexOf('export async function getTask('),
+      task.indexOf(
+        '\nexport interface ListTasksFilters',
+        task.indexOf('export async function getTask('),
+      ),
+    )
     const rowProjection = task.slice(
       task.indexOf('function rowToTask('),
       task.indexOf('\nfunction rowToSummary(', task.indexOf('function rowToTask(')),
     )
+    expect(getTaskProjection).toContain('webhookTaskSourceLinkOf(parsedTriggerContext.value)')
+    expect(getTaskProjection).toContain('row.task.triggerContextJson')
     expect(rowProjection).not.toContain('triggerContextJson')
+    expect(rowProjection).toContain('webhookSourceLink')
+    expect(rowProjection).not.toMatch(/comment_text|event_json|triggerContext:/)
 
     for (const rel of [
       'services/runtime',

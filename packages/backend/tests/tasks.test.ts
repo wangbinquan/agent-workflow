@@ -324,6 +324,49 @@ describe('task HTTP routes', () => {
     expect(detail.workflowName).toBe(wfName)
   })
 
+  test('GET /:id exposes only the derived webhook source link; list stays narrow', async () => {
+    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+    const taskId = ulid()
+    const commentUrl = 'https://gitlab.example/group/repo/-/merge_requests/8#note_99'
+    await h.db.insert(tasks).values({
+      name: 'webhook source fixture',
+      id: taskId,
+      workflowId: wfId,
+      workflowSnapshot: '{}',
+      repoPath: h.repoPath,
+      worktreePath: '/tmp/wt-webhook-source',
+      baseBranch: 'main',
+      branch: 'agent-workflow/webhook-source',
+      status: 'done',
+      inputs: '{}',
+      startedAt: Date.now(),
+      finishedAt: Date.now(),
+      triggerContextJson: JSON.stringify({
+        trigger: {
+          webhook: {
+            event_type: 'note',
+            provider: 'gitlab',
+            comment_url: commentUrl,
+            comment_text: 'never expose this text',
+            event_json: '{"private":true}',
+          },
+        },
+      }),
+    })
+
+    const response = await req(h.app, `/api/tasks/${taskId}`)
+    expect(response.status).toBe(200)
+    const detail = (await response.json()) as Record<string, unknown>
+    expect(detail.webhookSourceLink).toEqual({ kind: 'comment', url: commentUrl })
+    expect(detail).not.toHaveProperty('triggerContextJson')
+    expect(detail).not.toHaveProperty('triggerContext')
+    expect(JSON.stringify(detail)).not.toContain('never expose this text')
+    expect(JSON.stringify(detail)).not.toContain('private')
+
+    const list = (await (await req(h.app, '/api/tasks')).json()) as Array<Record<string, unknown>>
+    expect(list.find((row) => row.id === taskId)).not.toHaveProperty('webhookSourceLink')
+  })
+
   test('POST invalid body returns 422', async () => {
     const res = await req(h.app, '/api/tasks', {
       method: 'POST',
