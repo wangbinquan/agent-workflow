@@ -1530,7 +1530,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     const spawnedPid = runResult.pid
     const childUnkillable = runResult.outcome === 'unreaped'
     const spawnFailed = runResult.outcome === 'spawn-failed'
-    const configurationError = runResult.outcome === 'configuration-error'
     aborted = runResult.outcome === 'aborted'
     timedOut = runResult.outcome === 'timeout'
     const exitCode = runResult.exitCode
@@ -1593,32 +1592,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
         prompt,
         errorMessage,
-      }
-    }
-    if (configurationError) {
-      const failureCode = runResult.configurationErrorCode ?? 'node-timeout-invalid'
-      const errorMessage = `node timeout configuration is invalid (${opts.timeoutMs ?? 'unset'}ms)`
-      log.warn('runtime-configuration-error', {
-        nodeRunId: opts.nodeRunId,
-        runtime,
-        failureCode,
-      })
-      await setNodeRunStatus({
-        db: opts.db,
-        nodeRunId: opts.nodeRunId,
-        to: 'failed',
-        allowedFrom: ['running', 'pending'],
-        reason: failureCode,
-        extra: { finishedAt: Date.now(), errorMessage, failureCode },
-      })
-      return {
-        status: 'failed',
-        exitCode: null,
-        outputs: {},
-        tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
-        prompt,
-        errorMessage,
-        failureCode,
       }
     }
     if (childUnkillable) {
