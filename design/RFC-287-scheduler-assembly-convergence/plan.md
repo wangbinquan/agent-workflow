@@ -321,3 +321,34 @@ L8 整线 / wrapper 便车 / 恢复 replay 段三处显式允许直接物化，�
 三条变异实证：`seed-only` 退回 `set` / 白名单漏登记一项 / 设置页少一个输入框，各变红。
 顺带改锚 `process-node-concurrency` 那条接线锁——它钉的是三处池获取的确切写法，现在
 要求**必须带 `'seed-only'`**，否则回退到默认 `'set'` 无人察觉。
+
+---
+
+## T11 接手测绘（2026-08-13，已完成测绘、未动刀）
+
+**连带面重算结果**（设计门要求「第一件事是重算」，实测数字）：
+
+| 面 | 数量 |
+| -- | ---- |
+| e2e spec 含 `file://` / `pathToFileURL` | **21 个文件 / 50 处** |
+| backend 经 HTTP 面的测试 | **14 个文件**（含共享夹具 `helpers/repoGroupFixture.ts`） |
+| `repoGroupFixture` 的下游消费者 | **13 个文件** |
+| src 里的 file 分支 | `gitRepoCache.ts:428/511/548/742` + `codeHost/project.ts:13/19` |
+
+**落点结论（与初稿不同，实测改判）**：
+
+- ❌ **不落在 `startTask`**：它是内部服务函数，HTTP 路由与大量测试共用同一个入口；
+  在这里拒绝会把「内部通道」一起掐掉，与用户「不对用户开放、内部可用」的口径相悖。
+- ❌ **不落在 `resolveCachedRepo`**：它更低层，`repoGroup.ts` / 刷新 / 后台保鲜都过它，
+  但内部夹具也直接调它。
+- ❌ **不落在 `taskLaunchGate` / `assertTriggerPreflight`**：前者只管工作流可见性与
+  静态校验（生产里只有 `routes/tasks.ts:349` 一个调用方，注释所说的「三处共用」已
+  与现状不符——这条**顺带修文档**）；后者管的是 trigger 依赖，与仓库源无关。
+- ✅ **落在公共面的 zod schema**：JSON 路由、multipart 路由、定时任务 payload
+  （`scheduledPayloadSchemaFor`）都经它解析，而内部服务层直接构造 spec 天然绕开
+  ——这正好就是「内外通道」的天然分界，不需要新造一个旁路开关。
+
+**因此实施顺序**：①先把 e2e 21 个 spec 与 backend 14 个 HTTP 面测试改用真实远端
+（`git daemon` 起本地 HTTP/git 协议），**先全绿**；②再在 schema 上加拒绝 +
+`submoduleRefresh.ts:92` 的后台自动保鲜纳入拒绝面；③补内外通道源码锁与存量不
+grandfather 的启动校验拒绝。①是纯机械但量大的一批，不可与②混提。
