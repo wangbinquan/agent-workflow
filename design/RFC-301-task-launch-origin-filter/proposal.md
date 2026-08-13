@@ -1,6 +1,6 @@
 # RFC-301 任务启动来源归一与筛选补全
 
-状态：**Implementing（2026-08-14，用户已批准完整实现与提交上库）**
+状态：**Done（2026-08-14）**
 
 ## 1. 背景
 
@@ -93,20 +93,20 @@ workflow/workgroup call 节点创建的子任务不新增第五种「节点调�
 
 ## 6. 验收标准
 
-- [ ] shared 查询契约支持 `all | manual | scheduled | webhook | api`，未知值继续拒绝。
-- [ ] 筛选弹窗中英文都按 D1 显示五项，并继续复用共享 `Segmented`。
-- [ ] session 直接启动记为 manual，PAT/daemon-token 直接启动记为 API；客户端不能伪造来源。
-- [ ] scheduled/webhook invoker 分别覆盖 actor source，Fusion 的创建与驳回后重启也按 actor source
+- [x] shared 查询契约支持 `all | manual | scheduled | webhook | api`，未知值继续拒绝。
+- [x] 筛选弹窗中英文都按 D1 显示五项，并继续复用共享 `Segmented`。
+- [x] session 直接启动记为 manual，PAT/daemon-token 直接启动记为 API；客户端不能伪造来源。
+- [x] scheduled/webhook invoker 分别覆盖 actor source，Fusion 的创建与驳回后重启也按 actor source
       正确归类。
-- [ ] call-workflow/call-workgroup 的一层、多层子任务均在父任务创建事务内继承根来源。
-- [ ] 后端筛选只比较持久化 `launch_origin`，不再以 `scheduled_task_id IS NULL` 推断 manual。
-- [ ] 迁移正确回填 Scheduled/Webhook 根与后代；历史不可判定 API 保留 manual；循环/悬空异常行不会
+- [x] call-workflow/call-workgroup 的一层、多层子任务均在父任务创建事务内继承根来源。
+- [x] 后端筛选只比较持久化 `launch_origin`，不再以 `scheduled_task_id IS NULL` 推断 manual。
+- [x] 迁移正确回填 Scheduled/Webhook 根与后代；历史不可判定 API 保留 manual；循环/悬空异常行不会
       让迁移失控。
-- [ ] `launch_origin` 不进入任务 create/update wire，也不新增 Task/TaskSummary/TaskOperations 响应字段。
-- [ ] 390px 下五项不造成页面级横向溢出，触控、内部横向滚动与键盘选择均可达。
-- [ ] 正常、非法元数据、历史回填、多层继承、并发创建、筛选分页、回滚兼容与真实
+- [x] `launch_origin` 不进入任务 create/update wire，也不新增 Task/TaskSummary/TaskOperations 响应字段。
+- [x] 390px 下五项不造成页面级横向溢出，触控、内部横向滚动与键盘选择均可达。
+- [x] 正常、非法元数据、历史回填、多层继承、并发创建、筛选分页、回滚兼容与真实
       daemon/API/browser E2E 均有防护。
-- [ ] 定向测试、迁移/rolling upgrade 测试、前端、E2E 与 `bun run gate:local` 全绿；实现门 findings
+- [x] 定向测试、迁移/rolling upgrade 测试、前端、E2E 与 `bun run gate:local` 全绿；实现门 findings
       全部处置。
 
 ## 7. 能力影响清单

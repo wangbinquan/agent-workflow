@@ -1,6 +1,6 @@
 # RFC-301 任务启动来源归一与筛选补全 — 技术设计
 
-状态：**Implementing（2026-08-14，用户已批准完整实现与提交上库）**
+状态：**Done（2026-08-14）**
 
 ## 1. 当前事实与缺口
 
@@ -415,3 +415,14 @@ invariant 从第一天即有目标 owner。现有横向文件只作为迁移期�
 
 不在 route 以 endpoint/User-Agent 字符串判断，不让 DB/query 层依赖 HTTP actor，不让 integration 或
 knowledge-evolution 直接写 task 表，也不借本 RFC 搬迁 TaskEngine/WrapperRuntime/NodeExecutor/ExecutionKernel。
+
+## 11. 实施结果（2026-08-14）
+
+- `tasks.launch_origin`、确定性历史回填、混合版本 child-inherit trigger、领域归约与查询精确谓词均按本设计
+  落地；公开 Task/TaskSummary/TaskOperations wire 未增加来源字段。
+- session/PAT/daemon、Scheduled/Webhook、Fusion 与 workflow/workgroup 多层 child 已收敛到同一 closed
+  provenance 规则；非法半态、空白冲突字段、并发 sibling、悬空/cycle 历史行及 rollback 均有自动化防护。
+- 前端继续复用共享 `Segmented`，补齐 Webhook/API 双语项；390px 内部滚动、触控、键盘、focus return 与
+  a11y 由 unit 和真实浏览器共同覆盖。
+- 实现门处置 P2-E/P2-F/P2-G 与 call-workgroup 邻接遗漏后为 0 条未处置 P1/P2；完成门的固定 SHA、
+  全量 gate、真实 E2E 与托管 CI 证据见实施计划 §9。

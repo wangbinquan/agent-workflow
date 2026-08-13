@@ -1,6 +1,6 @@
 # RFC-301 任务启动来源归一与筛选补全 — 实施计划
 
-状态：**Implementing（2026-08-14，用户已批准完整实现与提交上库）**
+状态：**Done（2026-08-14）**
 
 ## 1. 前置门
 
@@ -198,5 +198,21 @@ migration/rollback trigger、TaskOperations query/projection、公开 wire 负�
    webhook，并断言 child 与 parent 的 `launchOrigin` 相等；workflow 多层、并发 sibling 与 DB trigger
    仍由 RFC-301 专属测试分别覆盖。
 
-处置后实现门结论为 **0 条未处置 P1/P2**。最终固定提交 SHA、完整 gate 与 exact-SHA CI 证据在完成发布后
-回填本节与状态索引；在此之前保持 Implementing，不提前标 Done。
+处置后实现门结论为 **0 条未处置 P1/P2**。
+
+## 9. 完成证据（2026-08-14）
+
+- RFC-301 实现提交为 `e4124f90`；与并发、内容等价的 RFC-299 Linux 视觉基线收敛后的发布提交为
+  `9f683902`，固定 tree 为 `d594530f0964d951bf7e677ba1ec9805fe2f5d19`，已进入 `origin/main`。
+- 只含 RFC-301 的固定快照完整 `bun run gate:local` 通过：shared 2057、frontend 6423、backend
+  10048 pass / 35 skip / 0 fail；`bun run build:binary:e2e` 通过；RFC-301 定向真实
+  daemon/API/browser Playwright 为 8/8。
+- `9f683902` 的 OpenCode integration `31722823216`、Windows platform `31722823140`、Git protocols
+  `31722823204` 与 visual regression `31722823243` 均成功。主 CI `31722823187` 的其余作业全绿，唯一失败是
+  RFC-287 禁止公开 `file://` 后 RFC-024 夹具遗漏迁移；trace 精确返回
+  `422 task-invalid / repo-url-file-scheme-unsupported`，与 RFC-301 来源逻辑无关。
+- 邻接修复 `125b20ca` 只把 RFC-024 切到仓库既有 smart-HTTP helper，未放宽产品校验；本地单例 1/1
+  通过，exact-SHA CI `31725138496` 的 36 个作业全部成功，Linux/macOS/Windows 三个 shard 1/4
+  分别在 2:27、3:04、4:12 通过。
+- 共享工作区 RFC-300 WIP 全程未 stash、未 rebase、未 broad-stage，也未进入以上提交。未声称 live service
+  已部署。
