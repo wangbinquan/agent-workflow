@@ -1,6 +1,6 @@
 # RFC-299 设置界面统一卡片化 — 实施计划
 
-状态：**In Progress（2026-08-13 用户已批准完整实现并提交上库）**
+状态：**Done（2026-08-14）**
 
 ## 1. 前置门
 
@@ -136,3 +136,21 @@
 - 任何批次不得把半数 tab 留在旧平铺形态后宣称完成；
 - 只有 T1-T21 全完成、定向测试与 `bun run gate:local` 全绿、视觉基线审过、实现门无未处置 finding，
   才可把 RFC/索引/STATE 标为 Done。
+
+## 7. 实施记录（2026-08-14）
+
+- T1-T21 全部完成。实现提交 `833a5c69` 覆盖共享 primitive、11 个设置分区、Runtime/OIDC
+  二级编辑器、双语文案以及 unit/E2E/a11y/visual 防退化锁。
+- 用户指出 Code Hosts 两卡之间没有留白后，外层统一改为 `.form-grid`；真实浏览器用例直接读取
+  两卡 bounding box，要求垂直间距至少 15px。
+- 只含 RFC-299 的干净固定快照完整 `bun run gate:local` 通过：shared 2055、frontend 6422、
+  backend 10021 pass / 35 skip / 0 fail；frontend 全量为 753 files / 6422 tests。
+- macOS 四个目标场景生成后复跑 20/20 零差异并人工审核；首个 Linux run
+  `31713914826` 仅报四张预期基线变化，下载 actual 后逐张人工审核，再由 `cea6fab2` 接受四张
+  Linux 基线。该提交的 Visual Regression run `31722271018` 为 44/44 全绿。
+- 包含实现提交 `833a5c69` 的远端 `9d2669cc` 在 CI run `31713914764` 全绿。后继
+  `9f683902` 的 run `31722823187` 首跑与 failed-only 重跑均只在 RFC-024 Git URL 启动用例
+  超时，且 Linux/macOS/Windows 同点复现；该链来自 RFC-299 之后的并发 RFC-287/301 改动，
+  不作为 RFC-299 的成功证据，也未越权改动。
+- `833a5c69` 与 `cea6fab2` 均已进入 `origin/main`；发布使用独立干净工作树，未夹带共享
+  工作区的并发 WIP。未声称 live service 部署。

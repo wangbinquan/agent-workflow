@@ -1,6 +1,6 @@
 # RFC-299 设置界面统一卡片化 — 技术设计
 
-状态：**In Progress（2026-08-13 用户已批准完整实现并提交上库）**
+状态：**Done（2026-08-14）**
 
 ## 1. 当前结构与改动边界
 
@@ -257,3 +257,14 @@ zh-CN 的 `Resources` interface 明确声明新键；en-US 与 zh-CN 对象保�
 
 本 RFC 无 wire、DB 或持久数据变化。前端提交可整体回滚，配置值与服务端状态无需修复。不得留下
 一半 shared SettingsCard、一半私有 chrome 的中间态进入 main；批次提交必须各自保持编译与测试绿。
+
+## 10. 实施结果（2026-08-14）
+
+- `SettingsCard` 已成为设置域唯一分组原语；共享 `Card` 仅增加 `fieldset`、`disabled` 与标题
+  关联所需的最小透传能力。
+- 11 个主分区、Runtime Dialog 两组与 OIDC Dialog 四组均按本设计落地；旧 `AgentCard`、
+  OIDC 私有卡片 chrome 及独立列表 header chrome 已删除。
+- Code Hosts 的 GitLab/GitHub 两卡使用公共 `.form-grid` 卡片栈节奏，浏览器 E2E 直接断言两卡
+  几何间距不小于 15px，锁住用户反馈的“两框中间没有留白”问题。
+- 请求体、保存次数、独立 mutation、revision fence、权限、确认、focus 与 disabled 语义均由既有
+  行为测试继续覆盖；本 RFC 未引入 backend、wire、DB 或持久数据变化。

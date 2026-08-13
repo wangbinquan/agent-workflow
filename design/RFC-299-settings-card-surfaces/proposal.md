@@ -1,6 +1,6 @@
 # RFC-299 设置界面统一卡片化
 
-状态：**In Progress（2026-08-13 用户已批准完整实现并提交上库）**
+状态：**Done（2026-08-14）**
 
 ## 1. 背景
 
@@ -122,18 +122,18 @@ token。抽出共享 `<SettingsCard>`，取代 `settings.tsx` 内只供系统 Ag
 
 ## 6. 验收标准
 
-- [ ] 11 个主分区在完成加载后都至少渲染一张共享 `SettingsCard`，不存在配置字段直接平铺在
+- [x] 11 个主分区在完成加载后都至少渲染一张共享 `SettingsCard`，不存在配置字段直接平铺在
       panel 根部的旧形态。
-- [ ] 系统 Agent 六张卡从本地 `AgentCard` 迁到共享 `SettingsCard`，标题层级与现有视觉基准不退化。
-- [ ] 运行时与 OIDC 新增/编辑 Dialog 全部分组卡片化；OIDC 四组仍保留 fieldset disabled 与可访问名称。
-- [ ] runtime 注册表、Code Hosts 两 provider、Authentication provider 列表的 header action 均进入
+- [x] 系统 Agent 六张卡从本地 `AgentCard` 迁到共享 `SettingsCard`，标题层级与现有视觉基准不退化。
+- [x] 运行时与 OIDC 新增/编辑 Dialog 全部分组卡片化；OIDC 四组仍保留 fieldset disabled 与可访问名称。
+- [x] runtime 注册表、Code Hosts 两 provider、Authentication provider 列表的 header action 均进入
       Card title/action 槽，不保留私有 header chrome。
-- [ ] `SectionForm` 的单 Save、独立 endpoint mutation、dirty/stale/outcome-unknown/restart、revision fence、
+- [x] `SectionForm` 的单 Save、独立 endpoint mutation、dirty/stale/outcome-unknown/restart、revision fence、
       权限与确认行为的既有测试不变或按纯 DOM 包装更新后全绿。
-- [ ] 删除 `AgentCard` 与 OIDC 私有卡片 chrome；生产设置代码不得出现第二套 border/background/radius/padding。
-- [ ] 中英文为所有新增功能分组补齐标题与说明，类型完整性 1:1。
-- [ ] 390×844 网络设置、桌面运行时、桌面系统 Agent、移动端 OIDC Dialog 的视觉与 overflow/a11y 验收通过。
-- [ ] 前端全量、E2E 定向、visual regression 与 `bun run gate:local` 全绿；实现门 findings 全部处置。
+- [x] 删除 `AgentCard` 与 OIDC 私有卡片 chrome；生产设置代码不得出现第二套 border/background/radius/padding。
+- [x] 中英文为所有新增功能分组补齐标题与说明，类型完整性 1:1。
+- [x] 390×844 网络设置、桌面运行时、桌面系统 Agent、移动端 OIDC Dialog 的视觉与 overflow/a11y 验收通过。
+- [x] 前端全量、E2E 定向、visual regression 与 `bun run gate:local` 全绿；实现门 findings 全部处置。
 
 ## 7. 能力影响
 
