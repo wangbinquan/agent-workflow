@@ -404,7 +404,7 @@ test('RFC-016: wrapper-git renders as a group container with inner node inside i
   expect(containment.inside).toBe(true)
 })
 
-// RFC-024 e2e: launch a task from a Git URL (cloned from a local `file://`
+// RFC-024 e2e: launch a task from a Git URL (cloned from a local smart-HTTP
 // bare repo). Asserts:
 //   - Launcher's Repo source tab can switch to Remote URL
 //   - POST /api/tasks with `repoUrl` succeeds; task lands in done
@@ -419,7 +419,7 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
   initGitRepo(remoteRoot, { message: 'init' })
   const bare = join(remoteRoot, 'remote.git')
   cloneBareGitRepo(remoteRoot, bare)
-  const remoteUrl = `file://${bare}`
+  const remoteUrl = repoRemoteUrl(bare)
 
   const headers = {
     Authorization: `Bearer ${daemon.token}`,
@@ -513,9 +513,9 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
   await page.locator('[data-task-detail-section-link="details"]').click()
   const urlCell = page.getByTestId('task-detail-repo-url')
   await expect(urlCell).toBeVisible({ timeout: 10_000 })
-  // For a `file://` URL there are no creds to redact; the redacted form is
-  // identical, so we just check the URL is present.
-  await expect(urlCell).toContainText('file://')
+  // The local smart-HTTP URL has no credentials; the redacted form is
+  // identical, so we just check the public protocol is present.
+  await expect(urlCell).toContainText('http://127.0.0.1:')
 
   // Cached repos list exposes a single entry for this URL.
   const cachedRes = await fetch(`${daemon.baseUrl}/api/cached-repos`, {
