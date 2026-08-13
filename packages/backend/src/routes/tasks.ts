@@ -353,7 +353,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         {
           kind: 'workflow',
           refId: parsed.data.workflowId,
-          invoker: { type: 'user' },
+          invoker: { type: 'user', launchKind: 'direct-json' },
           payload: parsed.data,
         },
         startDeps,

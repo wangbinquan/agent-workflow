@@ -31,7 +31,7 @@ export type ExecutionRef = { kind: ExecutionKind; id: string }
  * input; rejected until those PRs land).
  */
 export type ExecutionInvoker =
-  | { type: 'user' }
+  | { type: 'user'; launchKind: 'direct-json' | 'direct-multipart' }
   | { type: 'scheduled'; scheduledTaskId: string }
   | { type: 'node'; parentTaskId: string; parentNodeRunId: string; invocationDepth: number }
   // RFC-257 — a webhook trigger fire (stamps tasks.webhook_trigger_id /

@@ -139,6 +139,7 @@ describe('RFC-187 §4-2 — fan-out 同文件冲突：逐路径救回（真子�
           appHome: h.appHome,
           binaryOverride: ['bun', 'run', SCENARIO_STUB],
           awaitScheduler: true,
+          launchProvenance: { kind: 'direct-json', initiator: 'api' },
         },
       )
 

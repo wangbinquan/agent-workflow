@@ -3044,7 +3044,7 @@ export interface Resources {
       scopeLabel: string
       scope: { mine: string; shared: string; all: string }
       originLabel: string
-      origin: { all: string; manual: string; scheduled: string }
+      origin: { all: string; manual: string; scheduled: string; webhook: string; api: string }
       applyFilters: string
       resultCount: string
       addedCount: string
@@ -9046,7 +9046,13 @@ export const zhCN: Resources = {
       scopeLabel: '任务用户范围',
       scope: { mine: '我的任务', shared: '与我共享', all: '所有任务' },
       originLabel: '启动来源',
-      origin: { all: '全部来源', manual: '手动启动', scheduled: '定时启动' },
+      origin: {
+        all: '全部来源',
+        manual: '手动启动',
+        scheduled: '定时启动',
+        webhook: 'Webhook 触发',
+        api: 'API 启动',
+      },
       applyFilters: '应用筛选',
       resultCount: '共显示 {{count}} 个任务分支',
       addedCount: '已追加 {{count}} 个任务分支',

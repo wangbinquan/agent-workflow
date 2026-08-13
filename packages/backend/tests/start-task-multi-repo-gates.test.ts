@@ -112,7 +112,11 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
         repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
-      { db: h.db, appHome: h.appHome },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     expect(task.id).toBeTruthy()
     expect(task.repos).toHaveLength(2)
@@ -142,7 +146,11 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
         repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
-      { db: h.db, appHome: h.appHome },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     expect(task.id).toBeTruthy()
     expect(task.repos).toHaveLength(2)

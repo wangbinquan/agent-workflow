@@ -368,7 +368,10 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
         {
           kind: 'agent',
           refId: existing.id,
-          invoker: { type: 'user' },
+          invoker: {
+            type: 'user',
+            launchKind: uploads === undefined ? 'direct-json' : 'direct-multipart',
+          },
           payload: parsed.data,
           ...(uploads !== undefined ? { uploads } : {}),
         },

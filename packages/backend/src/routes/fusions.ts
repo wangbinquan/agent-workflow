@@ -13,6 +13,7 @@
 import { FusionStatusSchema, LaunchFusionSchema, RejectFusionSchema } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
+import { directTaskInitiatorFromActorSource } from '@/modules/task-execution/inbound/directTaskInitiator'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import {
@@ -64,7 +65,13 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      const fusion = await createFusion(parsed.data, fusionDeps(), actorOf(c))
+      const actor = actorOf(c)
+      const fusion = await createFusion(
+        parsed.data,
+        fusionDeps(),
+        actor,
+        directTaskInitiatorFromActorSource(actor.source),
+      )
       return c.json(fusion, 201)
     },
   )
@@ -176,8 +183,15 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
+      const actor = actorOf(c)
       return c.json(
-        await rejectFusion(fusionDeps(), c.req.param('id'), parsed.data.feedback, actorOf(c)),
+        await rejectFusion(
+          fusionDeps(),
+          c.req.param('id'),
+          parsed.data.feedback,
+          actor,
+          directTaskInitiatorFromActorSource(actor.source),
+        ),
       )
     },
   )

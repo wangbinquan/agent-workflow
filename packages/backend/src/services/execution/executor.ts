@@ -15,6 +15,7 @@
 // scheduled workflow fires"，与实际相反).
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import { directTaskInitiatorFromActorSource } from '@/modules/task-execution/inbound/directTaskInitiator'
 import type { Task } from '@agent-workflow/shared'
 import type { StartTaskDeps } from '@/services/task'
 import { cancelTask, startTask } from '@/services/task'
@@ -25,10 +26,24 @@ import type { ExecutionOutcome, StartExecutionRequest } from './types'
 import { getExecutionOutcome } from './outcome'
 import { watchTaskTerminal, type TerminalWatchResult } from './executionWatch'
 
-function depsForInvoker(deps: StartTaskDeps, req: StartExecutionRequest): StartTaskDeps {
+function depsForInvoker(
+  actor: Actor,
+  deps: StartTaskDeps,
+  req: StartExecutionRequest,
+): StartTaskDeps {
   const invoker = req.invoker
+  if (deps.launchProvenance !== undefined) {
+    throw new ValidationError(
+      'task-launch-provenance-conflict',
+      'startExecution owns root provenance; callers may not pre-populate launchProvenance',
+    )
+  }
   if (invoker.type === 'scheduled') {
-    return { ...deps, scheduledTaskId: invoker.scheduledTaskId }
+    return {
+      ...deps,
+      scheduledTaskId: invoker.scheduledTaskId,
+      launchProvenance: { kind: 'schedule' },
+    }
   }
   if (invoker.type === 'webhook') {
     // RFC-257/RFC-269: attribution and trigger inputs share one publication
@@ -39,6 +54,7 @@ function depsForInvoker(deps: StartTaskDeps, req: StartExecutionRequest): StartT
       webhookTriggerId: invoker.webhookTriggerId,
       webhookFireId: invoker.webhookFireId,
       triggerContext: invoker.triggerContext,
+      launchProvenance: { kind: 'webhook' },
     }
   }
   if (invoker.type === 'node') {
@@ -58,7 +74,13 @@ function depsForInvoker(deps: StartTaskDeps, req: StartExecutionRequest): StartT
     }
     return deps
   }
-  return deps
+  return {
+    ...deps,
+    launchProvenance: {
+      kind: invoker.launchKind,
+      initiator: directTaskInitiatorFromActorSource(actor.source),
+    },
+  }
 }
 
 /**
@@ -71,7 +93,14 @@ export async function startExecution(
   req: StartExecutionRequest,
   deps: StartTaskDeps,
 ): Promise<Task> {
-  const effectiveDeps = depsForInvoker(deps, req)
+  // Preserve the established mismatch diagnostic before consulting actor/deps.
+  if (req.kind === 'workflow' && req.payload.workflowId !== req.refId) {
+    throw new ValidationError(
+      'execution-ref-mismatch',
+      `ref targets workflow '${req.refId}' but payload.workflowId is '${req.payload.workflowId}'`,
+    )
+  }
+  const effectiveDeps = depsForInvoker(actor, deps, req)
   if (req.kind === 'agent') {
     return await startAgentTask(db, actor, req.refId, req.payload, effectiveDeps, req.uploads)
   }
@@ -81,12 +110,6 @@ export async function startExecution(
   // workflow — `refId` and the payload's own target must agree; a mismatch is
   // a programming error at the call site, surfaced loudly instead of silently
   // trusting one side.
-  if (req.payload.workflowId !== req.refId) {
-    throw new ValidationError(
-      'execution-ref-mismatch',
-      `ref targets workflow '${req.refId}' but payload.workflowId is '${req.payload.workflowId}'`,
-    )
-  }
   return await startTask(req.payload, effectiveDeps)
 }
 

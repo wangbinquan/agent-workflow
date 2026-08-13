@@ -20,7 +20,9 @@ import { startExecution } from '../src/services/execution/executor'
 import type { ExecutionInvoker } from '../src/services/execution/types'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const ACTOR = { user: { id: '__system__' } } as Actor
+const ACTOR = { user: { id: '__system__' }, source: 'daemon' } as Actor
+const SESSION_ACTOR = { user: { id: '__system__' }, source: 'session' } as Actor
+const PAT_ACTOR = { user: { id: '__system__' }, source: 'pat' } as Actor
 
 type Harness = { db: DbClient; appHome: string; workflowId: string }
 
@@ -42,11 +44,12 @@ async function launchAndObserveCommit(
   h: Harness,
   invoker: ExecutionInvoker,
   name: string,
+  actor: Actor = ACTOR,
 ): Promise<typeof tasks.$inferSelect> {
   let committedRow: typeof tasks.$inferSelect | undefined
   const task = await startExecution(
     h.db,
-    ACTOR,
+    actor,
     {
       kind: 'workflow',
       refId: h.workflowId,
@@ -66,6 +69,7 @@ async function launchAndObserveCommit(
     },
   )
   expect(committedRow?.id).toBe(task.id)
+  expect(task).not.toHaveProperty('launchOrigin')
   return committedRow!
 }
 
@@ -95,6 +99,7 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
 
     expect(row.webhookTriggerId).toBe('trigger-1')
     expect(row.webhookFireId).toBe('fire-1')
+    expect(row.launchOrigin).toBe('webhook')
     expect(JSON.parse(row.triggerContextJson!)).toEqual(context)
   })
 
@@ -110,7 +115,11 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
       },
       'empty-webhook-context',
     )
-    const user = await launchAndObserveCommit(h, { type: 'user' }, 'manual-context')
+    const user = await launchAndObserveCommit(
+      h,
+      { type: 'user', launchKind: 'direct-json' },
+      'daemon-api-context',
+    )
 
     expect(JSON.parse(webhook.triggerContextJson!)).toEqual({
       trigger: { webhook: { event_type: 'push' } },
@@ -118,6 +127,136 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
     expect(user.triggerContextJson).toBeNull()
     expect(user.webhookTriggerId).toBeNull()
     expect(user.webhookFireId).toBeNull()
+    expect(user.launchOrigin).toBe('api')
+  })
+
+  test('trusted actor source and business invoker produce the complete root-origin matrix', async () => {
+    h = buildHarness()
+    const cases: Array<{
+      name: string
+      actor: Actor
+      invoker: ExecutionInvoker
+      expected: (typeof tasks.$inferSelect)['launchOrigin']
+    }> = [
+      {
+        name: 'session-json',
+        actor: SESSION_ACTOR,
+        invoker: { type: 'user', launchKind: 'direct-json' },
+        expected: 'manual',
+      },
+      {
+        name: 'session-multipart',
+        actor: SESSION_ACTOR,
+        invoker: { type: 'user', launchKind: 'direct-multipart' },
+        expected: 'manual',
+      },
+      {
+        name: 'pat-json',
+        actor: PAT_ACTOR,
+        invoker: { type: 'user', launchKind: 'direct-json' },
+        expected: 'api',
+      },
+      {
+        name: 'daemon-json',
+        actor: ACTOR,
+        invoker: { type: 'user', launchKind: 'direct-json' },
+        expected: 'api',
+      },
+      {
+        name: 'scheduled-daemon',
+        actor: ACTOR,
+        invoker: { type: 'scheduled', scheduledTaskId: 'schedule-rfc301' },
+        expected: 'scheduled',
+      },
+      {
+        name: 'webhook-daemon',
+        actor: ACTOR,
+        invoker: {
+          type: 'webhook',
+          webhookTriggerId: 'trigger-rfc301',
+          webhookFireId: 'fire-rfc301',
+          triggerContext: { trigger: { webhook: { event_type: 'push' } } },
+        },
+        expected: 'webhook',
+      },
+    ]
+
+    for (const entry of cases) {
+      const row = await launchAndObserveCommit(h, entry.invoker, entry.name, entry.actor)
+      expect(row.launchOrigin).toBe(entry.expected)
+    }
+  })
+
+  test('caller spoofing and incomplete source metadata fail closed before publication', async () => {
+    h = buildHarness()
+    const baseRequest = {
+      kind: 'workflow' as const,
+      refId: h.workflowId,
+      payload: {
+        workflowId: h.workflowId,
+        name: 'spoofed-origin',
+        inputs: {},
+        scratch: true,
+        launchOrigin: 'webhook',
+        launch_origin: 'webhook',
+      },
+    }
+
+    const attempts = [
+      startExecution(
+        h.db,
+        SESSION_ACTOR,
+        { ...baseRequest, invoker: { type: 'user' as const, launchKind: 'direct-json' as const } },
+        { db: h.db, appHome: h.appHome, scheduledTaskId: 'spoofed-schedule' },
+      ),
+      startExecution(
+        h.db,
+        ACTOR,
+        { ...baseRequest, invoker: { type: 'scheduled' as const, scheduledTaskId: ' ' } },
+        { db: h.db, appHome: h.appHome },
+      ),
+      startExecution(
+        h.db,
+        ACTOR,
+        {
+          ...baseRequest,
+          invoker: {
+            type: 'webhook' as const,
+            webhookTriggerId: 'trigger-only',
+            webhookFireId: ' ',
+            triggerContext: { trigger: { webhook: { event_type: 'push' as const } } },
+          },
+        },
+        { db: h.db, appHome: h.appHome },
+      ),
+      startExecution(
+        h.db,
+        SESSION_ACTOR,
+        { ...baseRequest, invoker: { type: 'user' as const, launchKind: 'direct-json' as const } },
+        {
+          db: h.db,
+          appHome: h.appHome,
+          launchProvenance: { kind: 'direct-json', initiator: 'api' },
+        },
+      ),
+    ]
+
+    const results = await Promise.allSettled(attempts)
+    expect(
+      results.map((result) =>
+        result.status === 'rejected' && typeof result.reason === 'object' && result.reason !== null
+          ? (result.reason as { code?: string }).code
+          : null,
+      ),
+    ).toEqual([
+      'task-launch-direct-metadata-invalid',
+      'task-launch-schedule-metadata-invalid',
+      'task-launch-webhook-metadata-invalid',
+      'task-launch-provenance-conflict',
+    ])
+    expect(await h.db.select().from(tasks)).toHaveLength(0)
+    const scratchRoot = join(h.appHome, 'scratch')
+    expect(existsSync(scratchRoot) ? readdirSync(scratchRoot) : []).toEqual([])
   })
 
   test('invalid source-shaped context is rejected before task or scratch publication', async () => {

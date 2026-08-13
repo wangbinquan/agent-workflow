@@ -93,6 +93,7 @@ interface OperationsSqlRow {
   repo_count: number | null
   open_alert_count: number | null
   scheduled_task_id: string | null
+  launch_origin: string | null
   workgroup_id: string | null
   workgroup_name: string | null
   space_kind: string | null
@@ -265,8 +266,7 @@ function nonViewCondition(db: DbClient, actor: Actor, filters: TaskOperationsFil
     conditions.push(sql`(b.workgroup_id IS NULL OR b.workgroup_id = '')`)
     conditions.push(sql`(b.source_agent_name IS NULL OR b.source_agent_name = '')`)
   }
-  if (filters.origin === 'manual') conditions.push(sql`b.scheduled_task_id IS NULL`)
-  if (filters.origin === 'scheduled') conditions.push(sql`b.scheduled_task_id IS NOT NULL`)
+  if (filters.origin !== 'all') conditions.push(sql`b.launch_origin = ${filters.origin}`)
 
   if (filters.q !== undefined) {
     const pattern = `%${escapeLike(filters.q.toLocaleLowerCase('en-US'))}%`
@@ -328,6 +328,7 @@ function baseCtes(authorizedIds: SQL, nonView: SQL, view: SQL): SQL {
           WHERE la.task_id = t.id AND la.resolved_at IS NULL
         ) AS open_alert_count,
         t.scheduled_task_id,
+        t.launch_origin,
         t.workgroup_id,
         CASE WHEN json_valid(t.workgroup_config_json) THEN
           CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') = 'text'

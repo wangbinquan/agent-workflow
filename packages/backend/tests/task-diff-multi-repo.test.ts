@@ -87,7 +87,11 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
         baseBranch: 'main',
         inputs: {},
       },
-      { db: h.db, appHome: h.appHome },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     // Stage a change inside the worktree so the diff is non-empty.
     writeFileSync(join(task.worktreePath, 'README.md'), '# repo-0 (mutated)\n')
@@ -107,7 +111,11 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
         repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
-      { db: h.db, appHome: h.appHome },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     // Each sub-worktree gets a tracked-file mutation so the per-repo diff
     // is non-empty.
@@ -138,7 +146,11 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
         repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
-      { db: h.db, appHome: h.appHome },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     // Only repo A mutated; B stays clean.
     const wtA = join(task.worktreePath, task.repos[0]!.worktreeDirName)

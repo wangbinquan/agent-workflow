@@ -151,7 +151,7 @@ describe('RFC-243 T1 — startExecution guards', () => {
         {
           kind: 'workflow',
           refId: 'wf-a',
-          invoker: { type: 'user' },
+          invoker: { type: 'user', launchKind: 'direct-json' },
           payload: { workflowId: 'wf-b', name: 't', inputs: {} },
         },
         stubDeps,

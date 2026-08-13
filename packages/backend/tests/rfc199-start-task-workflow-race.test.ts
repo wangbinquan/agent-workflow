@@ -127,6 +127,7 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         {
           db: harness.db,
           appHome: harness.appHome,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           workflowLaunchCommitHook: async (event) => {
             if (event.stage !== 'materialized-before-task-commit') return
             captured = event
@@ -177,6 +178,7 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         {
           db: harness.db,
           appHome: harness.appHome,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           workflowLaunchCommitHook: async (event) => {
             if (event.stage !== 'materialized-before-task-commit') return
             captured = event
@@ -243,6 +245,7 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         {
           db: harness.db,
           appHome: harness.appHome,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           workflowLaunchCommitHook: async (event) => {
             if (event.stage !== 'materialized-before-task-commit') return
             captured = event
@@ -456,6 +459,7 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         {
           db: harness.db,
           appHome: harness.appHome,
+          launchProvenance: { kind: 'fusion', initiator: 'manual' },
           internalSource: { kind: 'local-path', repoPath: ownedRoot, baseBranch: 'fusion' },
           preCreatedWorktree: {
             taskId: ulid(),
@@ -481,6 +485,7 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         {
           db: harness.db,
           appHome: harness.appHome,
+          launchProvenance: { kind: 'fusion', initiator: 'manual' },
           internalSource: { kind: 'local-path', repoPath: ownedRoot, baseBranch: 'fusion' },
           preCreatedWorktree: {
             taskId: ulid(),
@@ -770,6 +775,7 @@ describe('RFC-199 startTask workflow delete/version race', () => {
       {
         db: harness.db,
         appHome: harness.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         awaitScheduler: true,
         workflowLaunchCommitHook: async (event) => {
           if (event.stage !== 'task-committed') return

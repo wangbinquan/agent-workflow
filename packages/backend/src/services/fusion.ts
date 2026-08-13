@@ -39,6 +39,7 @@ import {
   WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
+import type { DirectTaskInitiator } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
@@ -521,6 +522,7 @@ export async function createFusion(
   input: LaunchFusion,
   deps: FusionDeps,
   actor: Actor,
+  launchInitiator: DirectTaskInitiator,
 ): Promise<Fusion> {
   const { db, appHome } = deps
   await seedFusionResources(db)
@@ -602,6 +604,7 @@ export async function createFusion(
       db,
       appHome,
       actorUserId: actor.user.id,
+      launchProvenance: { kind: 'fusion', initiator: launchInitiator },
       preCreatedWorktree: {
         taskId,
         worktreePath: workDir,
@@ -1472,6 +1475,7 @@ export async function rejectFusion(
   id: string,
   feedback: string,
   actor: Actor,
+  launchInitiator: DirectTaskInitiator,
 ): Promise<Fusion> {
   const { db, appHome } = deps
   await reconcileFusion(deps, id)
@@ -1546,6 +1550,7 @@ export async function rejectFusion(
         db,
         appHome,
         actorUserId: actor.user.id,
+        launchProvenance: { kind: 'fusion', initiator: launchInitiator },
         preCreatedWorktree: {
           taskId,
           worktreePath: workDir,

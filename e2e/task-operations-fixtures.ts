@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import type { TaskLaunchOrigin } from '@agent-workflow/shared'
 
 const STATUSES = [
   'pending',
@@ -269,6 +270,19 @@ export async function routeTaskOperationsFixture(
     startedAt: now - 30_000,
   })
 
+  // Internal-only fixture truth. The intercepted TaskOperations JSON never
+  // carries launchOrigin, matching the production wire contract.
+  const originByTaskId = new Map<string, TaskLaunchOrigin>()
+  for (const row of [...firstRootPage, ...secondRootPage, ...manyChildren, treeMid, deepTarget]) {
+    originByTaskId.set(row.id, row.scheduledTaskId === null ? 'manual' : 'scheduled')
+  }
+  for (const id of ['dense-alert', 'branch-many', ...manyChildren.map((row) => row.id)]) {
+    originByTaskId.set(id, 'webhook')
+  }
+  for (const id of ['tree-root', 'tree-middle', 'deep-target', 'agent-subject']) {
+    originByTaskId.set(id, 'api')
+  }
+
   const facets = {
     all: firstRootPage.length + secondRootPage.length,
     active: [...firstRootPage, ...secondRootPage].filter((row) => viewMatches(row, 'active'))
@@ -307,6 +321,10 @@ export async function routeTaskOperationsFixture(
       } else if (parentId === 'tree-middle') {
         items = [deepTarget]
       }
+      const origin = requestUrl.searchParams.get('origin') ?? 'all'
+      if (origin !== 'all') {
+        items = items.filter((row) => originByTaskId.get(row.id) === origin)
+      }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -343,7 +361,7 @@ export async function routeTaskOperationsFixture(
         viewMatches(row, view) &&
         (statuses.length === 0 || statuses.includes(row.status)) &&
         subjectMatches(row, subject) &&
-        (origin === 'all' || (origin === 'scheduled') === (row.scheduledTaskId !== null)) &&
+        (origin === 'all' || originByTaskId.get(row.id) === origin) &&
         (q === '' ||
           [row.name, row.workflowName, row.repoPath, row.sourceAgentName, row.workgroupName]
             .filter((value): value is string => typeof value === 'string')

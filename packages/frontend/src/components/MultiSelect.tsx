@@ -45,6 +45,13 @@ export interface MultiSelectProps {
   placeholder?: string
   disabled?: boolean
   searchable?: boolean
+  /**
+   * Whether receiving focus opens the portaled listbox. Dialogs that place
+   * other controls below a tall MultiSelect can opt out so initial focus does
+   * not cover those controls; pointer activation and ArrowDown/Enter still
+   * open it. Defaults to true for existing callers.
+   */
+  openOnFocus?: boolean
   /** Allow committing a free-text token not in options (forward-ref / degraded). */
   allowCustom?: boolean
   emptyLabel?: string
@@ -279,7 +286,9 @@ export function MultiSelect(props: MultiSelectProps) {
           }
           disabled={props.disabled}
           data-testid={props['data-testid']}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            if (props.openOnFocus !== false) setOpen(true)
+          }}
           onChange={(e) => {
             chips.setPendingValue(e.target.value)
             setOpen(true)

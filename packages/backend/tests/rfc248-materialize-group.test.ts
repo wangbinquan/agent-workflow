@@ -404,7 +404,11 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
 
     const first = await startTask(
       { workflowId: workflow.id, name: 'first', inputs: {}, repoGroupId: gid },
-      { db, appHome: join(tmp, 'home') },
+      {
+        db,
+        appHome: join(tmp, 'home'),
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     expect(
       db
@@ -444,7 +448,11 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
 
     const replay = await startTask(
       { workflowId: workflow.id, name: 'replay', inputs: {}, sourceTaskId: first.id },
-      { db, appHome: join(tmp, 'home') },
+      {
+        db,
+        appHome: join(tmp, 'home'),
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     expect(replay.spaceNodes?.map((node) => node.path)).toEqual(['', 'docs', 'docs/decisions'])
     expect(existsSync(join(replay.worktreePath, 'docs', 'decisions'))).toBe(true)

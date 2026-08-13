@@ -606,7 +606,11 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
           actor,
           workgroup.id,
           { name: 't', goal: 'g', scratch: true, expectedWorkgroupId: 'stale-other-id' },
-          { db, appHome },
+          {
+            db,
+            appHome,
+            launchProvenance: { kind: 'direct-json', initiator: 'api' },
+          },
         ),
       ).rejects.toMatchObject({ code: 'workgroup-id-mismatch' })
     } finally {
@@ -671,7 +675,13 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
         actor,
         workgroup.id,
         { name: 't', goal: '目标', scratch: true },
-        { db, appHome, binaryOverride: OPENCODE_CMD, awaitScheduler: true },
+        {
+          db,
+          appHome,
+          binaryOverride: OPENCODE_CMD,
+          awaitScheduler: true,
+          launchProvenance: { kind: 'direct-json', initiator: 'api' },
+        },
       )
 
       const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]

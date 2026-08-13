@@ -321,7 +321,11 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
       inputs: { report: 'weekly {{report}} literal', style_guide: 'terse' },
       scratch: true,
     })
-    const task = await startAgentTask(db, daemonActor(), ported.id, body, { db, appHome })
+    const task = await startAgentTask(db, daemonActor(), ported.id, body, {
+      db,
+      appHome,
+      launchProvenance: { kind: 'direct-json', initiator: 'api' },
+    })
     expect(task.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
     expect(task.sourceAgentName).toBe('ported')
     // Values ride ports verbatim — a literal {{...}} is data, not a template.
@@ -342,7 +346,11 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
       daemonActor(),
       solo.id,
       StartAgentTaskSchema.parse({ name: 't', description: 'fix it', scratch: true }),
-      { db, appHome },
+      {
+        db,
+        appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'api' },
+      },
     )
     expect(task.inputs.description).toBe('fix it')
   })

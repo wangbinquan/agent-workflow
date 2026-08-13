@@ -347,6 +347,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
         { skillId: skillA.id, memoryIds: [memoryId], intent: 'apply only to A' },
         deps,
         ADMIN_ACTOR,
+        'api',
       )
       expect(fusion.skillId).toBe(skillA.id)
       const task = await getTask(db, fusion.currentTaskId!)

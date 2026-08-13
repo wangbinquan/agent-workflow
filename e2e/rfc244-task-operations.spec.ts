@@ -29,6 +29,41 @@ async function primeAuth(page: Page): Promise<void> {
   )
 }
 
+async function requestJson<T>(
+  path: string,
+  init: RequestInit = {},
+  token: string = requireDaemon().token,
+): Promise<T> {
+  const response = await fetch(`${requireDaemon().baseUrl}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(init.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...init.headers,
+    },
+  })
+  if (!response.ok) {
+    throw new Error(
+      `RFC-301 live fixture ${path} failed (${response.status}): ${await response.text()}`,
+    )
+  }
+  return response.json() as Promise<T>
+}
+
+async function postJson<T>(path: string, body: unknown, token?: string): Promise<T> {
+  return requestJson<T>(path, { method: 'POST', body: JSON.stringify(body) }, token)
+}
+
+async function waitFor<T>(read: () => Promise<T>, accept: (value: T) => boolean): Promise<T> {
+  const deadline = Date.now() + 20_000
+  for (;;) {
+    const value = await read()
+    if (accept(value)) return value
+    if (Date.now() >= deadline) throw new Error('RFC-301 live fixture timed out')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
 async function openOperations(page: Page): Promise<TaskOperationsFixtureController> {
   const controller = await routeTaskOperationsFixture(page)
   await primeAuth(page)
@@ -210,6 +245,139 @@ test('debounced deep search restores its visible ancestry and advanced status fi
   await expect(page.getByTestId('task-row-dense-failed')).toHaveCount(0)
 })
 
+test('Webhook and API origin filters keep complete trees and reset cursor identity', async ({
+  page,
+}) => {
+  const controller = await openOperations(page)
+  await page.getByRole('button', { name: 'Load more tasks' }).click()
+  expect(controller.requests.some((request) => request.includes('cursor=root-page-2'))).toBe(true)
+
+  await page.getByTestId('tasks-filter-button').click()
+  let dialog = page.getByTestId('tasks-filter-dialog').getByRole('dialog')
+  const originGroup = dialog.getByRole('radiogroup', { name: 'Launch origin' })
+  expect(await originGroup.getByRole('radio').allTextContents()).toEqual([
+    'All origins',
+    'Manual',
+    'Scheduled',
+    'Webhook',
+    'API',
+  ])
+  await originGroup.getByRole('radio', { name: 'Webhook', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Apply filters' }).click()
+
+  await expect(page).toHaveURL(/[?&]origin=webhook(?:&|$)/)
+  await expect(page.getByTestId('task-row-dense-alert')).toBeVisible()
+  await expect(page.getByTestId('task-row-branch-many')).toBeVisible()
+  await expect(page.getByTestId('task-row-dense-scheduled')).toHaveCount(0)
+  const webhookRootRequest = controller.requests.at(-1)!
+  expect(webhookRootRequest).toContain('origin=webhook')
+  expect(webhookRootRequest).not.toContain('cursor=')
+
+  await page.getByTestId('task-expand-branch-many').click()
+  await expect(page.getByTestId('task-row-branch-child-01')).toBeVisible()
+  expect(controller.requests.at(-1)).toContain('parent_id=branch-many')
+  expect(controller.requests.at(-1)).toContain('origin=webhook')
+
+  await page.getByTestId('tasks-filter-button').click()
+  dialog = page.getByTestId('tasks-filter-dialog').getByRole('dialog')
+  const selectedWebhook = dialog.getByRole('radio', { name: 'Webhook', exact: true })
+  await selectedWebhook.focus()
+  await selectedWebhook.press('End')
+  await expect(dialog.getByRole('radio', { name: 'API', exact: true })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  )
+  await dialog.getByRole('button', { name: 'Apply filters' }).click()
+
+  await expect(page).toHaveURL(/[?&]origin=api(?:&|$)/)
+  await expect(page.getByTestId('task-row-tree-root')).toBeVisible()
+  await expect(page.getByTestId('task-row-agent-subject')).toBeVisible()
+  await expect(page.getByTestId('task-row-dense-alert')).toHaveCount(0)
+  const apiRootRequest = controller.requests.findLast(
+    (request) => request.includes('origin=api') && !request.includes('parent_id='),
+  )!
+  expect(apiRootRequest).toContain('origin=api')
+  expect(apiRootRequest).not.toContain('cursor=')
+
+  await page.getByTestId('tasks-filter-button').click()
+  dialog = page.getByTestId('tasks-filter-dialog').getByRole('dialog')
+  await dialog.getByRole('button', { name: 'Clear filters' }).click()
+  await dialog.getByRole('button', { name: 'Apply filters' }).click()
+  await expect(page).not.toHaveURL(/[?&]origin=/)
+})
+
+test('390px origin picker is touchable, internally scrollable, keyboard-complete, and theme-readable', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 568 },
+    hasTouch: true,
+  })
+  const page = await context.newPage()
+  try {
+    await openOperations(page)
+    await page.getByTestId('tasks-filter-button').tap()
+    const dialog = page.getByTestId('tasks-filter-dialog').getByRole('dialog')
+    const originGroup = dialog.getByRole('radiogroup', { name: 'Launch origin' })
+    const api = originGroup.getByRole('radio', { name: 'API', exact: true })
+
+    const before = await originGroup.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }))
+    expect(before.scrollWidth).toBeGreaterThan(before.clientWidth)
+    await api.tap()
+    await expect(api).toHaveAttribute('aria-checked', 'true')
+    await originGroup.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth
+    })
+    await expect
+      .poll(() => originGroup.evaluate((element) => element.scrollLeft))
+      .toBeGreaterThan(0)
+    await expectNoHorizontalOverflow(page)
+
+    await api.focus()
+    await api.press('Home')
+    await expect(originGroup.getByRole('radio', { name: 'All origins' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    await originGroup.getByRole('radio', { name: 'All origins' }).press('End')
+    await expect(api).toHaveAttribute('aria-checked', 'true')
+
+    for (const theme of ['light', 'dark'] as const) {
+      const colors = await originGroup.evaluate((element, nextTheme) => {
+        document.documentElement.dataset.theme = nextTheme
+        const active = element.querySelector<HTMLElement>('[aria-checked="true"]')!
+        const inactive = element.querySelector<HTMLElement>('[aria-checked="false"]')!
+        return {
+          activeBackground: getComputedStyle(active).backgroundColor,
+          inactiveBackground: getComputedStyle(inactive).backgroundColor,
+          activeColor: getComputedStyle(active).color,
+          inactiveColor: getComputedStyle(inactive).color,
+        }
+      }, theme)
+      expect(colors.activeBackground).not.toBe(colors.inactiveBackground)
+      expect(colors.activeColor).not.toBe(colors.inactiveColor)
+    }
+
+    const results = await new AxeBuilder({ page })
+      .include('[data-testid="tasks-filter-dialog"]')
+      .analyze()
+    expect(
+      results.violations.filter(
+        (violation) => violation.impact === 'critical' || violation.impact === 'serious',
+      ),
+    ).toEqual([])
+
+    await api.press('Escape')
+    await expect(dialog).toBeHidden()
+    await expect(page.getByTestId('tasks-filter-button')).toBeFocused()
+  } finally {
+    await context.close()
+  }
+})
+
 test('root and branch failures are retryable and the populated view has no serious axe findings', async ({
   page,
 }) => {
@@ -266,4 +434,161 @@ test('390×844 and 390×568 reflow the same nested list without horizontal scrol
   expect(dialogBox).not.toBeNull()
   expect(dialogBox!.y).toBeGreaterThanOrEqual(0)
   expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual(568)
+})
+
+test('real session, PAT, schedule, and webhook launches filter exactly and scheduled children inherit', async () => {
+  type TaskWire = { id: string; [key: string]: unknown }
+  type OperationsPage = { items: TaskWire[] }
+  type WorkflowWire = { id: string; name: string }
+
+  const createWorkflow = (name: string, nodes: unknown[] = []) =>
+    postJson<WorkflowWire>('/api/workflows', {
+      name,
+      description: 'RFC-301 live launch-origin fixture',
+      definition: { $schema_version: 5, inputs: [], nodes, edges: [] },
+    })
+
+  const leaf = await createWorkflow('rfc301-live-leaf')
+  const middle = await createWorkflow('rfc301-live-middle', [
+    {
+      id: 'call-leaf',
+      kind: 'call-workflow',
+      workflowName: leaf.name,
+      workflowId: leaf.id,
+    },
+  ])
+  const root = await createWorkflow('rfc301-live-root', [
+    {
+      id: 'call-middle',
+      kind: 'call-workflow',
+      workflowName: middle.name,
+      workflowId: middle.id,
+    },
+  ])
+
+  const manual = await postJson<TaskWire>('/api/tasks', {
+    workflowId: leaf.id,
+    name: 'rfc301-live-manual',
+    scratch: true,
+    inputs: {},
+  })
+  expect(Object.hasOwn(manual, 'launchOrigin')).toBe(false)
+
+  const minted = await postJson<{ token: string; pat: { scopes: string[] } }>('/api/auth/pats', {
+    name: 'rfc301-live-api',
+    scopes: ['tasks:execute'],
+    purpose: 'general',
+  })
+  expect(minted.pat.scopes).toEqual(['tasks:execute'])
+  const api = await postJson<TaskWire>(
+    '/api/tasks',
+    {
+      workflowId: leaf.id,
+      name: 'rfc301-live-api',
+      scratch: true,
+      inputs: {},
+    },
+    minted.token,
+  )
+  expect(Object.hasOwn(api, 'launchOrigin')).toBe(false)
+
+  const schedule = await postJson<{ id: string }>('/api/scheduled-tasks', {
+    name: 'rfc301-live-schedule',
+    launchKind: 'workflow',
+    launchPayload: {
+      workflowId: root.id,
+      name: 'rfc301-live-scheduled-root',
+      scratch: true,
+      inputs: {},
+    },
+    scheduleSpec: { kind: 'daily', at: '09:00', timezone: 'UTC' },
+    enabled: false,
+  })
+  const scheduled = await postJson<{ taskId: string }>(
+    `/api/scheduled-tasks/${schedule.id}/run-now`,
+    {},
+  )
+
+  const endpoint = await postJson<{ id: string; urlToken: string; secret: string }>(
+    '/api/webhook-endpoints',
+    { name: 'rfc301-live-endpoint' },
+  )
+  const trigger = await postJson<{ id: string }>('/api/webhook-triggers', {
+    name: 'rfc301-live-webhook',
+    endpointId: endpoint.id,
+    repoScope: { kind: 'exact', paths: ['platform/api'] },
+    eventTypes: ['pipeline_failed'],
+    ignoreUsernames: [],
+    autoRegisterRepos: false,
+    launchKind: 'workflow',
+    launchRefId: leaf.id,
+    launchPayload: { inputs: {}, scratch: true },
+  })
+  const ingress = await fetch(`${requireDaemon().baseUrl}/webhooks/gitlab/${endpoint.urlToken}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-gitlab-token': endpoint.secret,
+      'x-gitlab-event': 'Pipeline Hook',
+      'x-gitlab-event-uuid': 'rfc301-live-delivery',
+    },
+    body: JSON.stringify({
+      object_kind: 'pipeline',
+      user: { username: 'developer' },
+      project: {
+        path_with_namespace: 'platform/api',
+        git_http_url: 'https://gitlab.invalid/platform/api.git',
+        git_ssh_url: 'git@gitlab.invalid:platform/api.git',
+      },
+      object_attributes: {
+        id: 301,
+        ref: 'feature/rfc301',
+        status: 'failed',
+        sha: '301301',
+      },
+    }),
+  })
+  expect(ingress.status).toBe(200)
+
+  const fires = await waitFor(
+    () =>
+      requestJson<Array<{ outcome: string; taskId: string | null }>>(
+        `/api/webhook-triggers/${trigger.id}/fires`,
+      ),
+    (rows) => rows.some((row) => row.outcome === 'launched' && row.taskId !== null),
+  )
+  const webhookTaskId = fires.find((row) => row.outcome === 'launched')!.taskId!
+
+  const pageFor = (origin: string, parentId?: string) =>
+    requestJson<OperationsPage>(
+      `/api/tasks/page?scope=mine&limit=50&origin=${origin}${
+        parentId === undefined ? '' : `&parent_id=${encodeURIComponent(parentId)}`
+      }`,
+    )
+
+  const manualPage = await pageFor('manual')
+  expect(manualPage.items.map((item) => item.id)).toContain(manual.id)
+  expect(manualPage.items.map((item) => item.id)).not.toContain(api.id)
+  const apiPage = await pageFor('api')
+  expect(apiPage.items.map((item) => item.id)).toContain(api.id)
+  expect(apiPage.items.map((item) => item.id)).not.toContain(manual.id)
+  const webhookPage = await pageFor('webhook')
+  expect(webhookPage.items.map((item) => item.id)).toContain(webhookTaskId)
+
+  const scheduledRootPage = await pageFor('scheduled')
+  expect(scheduledRootPage.items.map((item) => item.id)).toContain(scheduled.taskId)
+  const scheduledChildren = await waitFor(
+    () => pageFor('scheduled', scheduled.taskId),
+    (page) => page.items.length === 1,
+  )
+  const middleTaskId = scheduledChildren.items[0]!.id
+  const scheduledGrandchildren = await waitFor(
+    () => pageFor('scheduled', middleTaskId),
+    (page) => page.items.length === 1,
+  )
+  expect(scheduledGrandchildren.items).toHaveLength(1)
+
+  for (const page of [manualPage, apiPage, webhookPage, scheduledRootPage, scheduledChildren]) {
+    for (const item of page.items) expect(Object.hasOwn(item, 'launchOrigin')).toBe(false)
+  }
 })

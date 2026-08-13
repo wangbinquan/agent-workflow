@@ -218,7 +218,12 @@ describe('RFC-228 Agent resource integrity', () => {
         viewer,
         group.id,
         { name: 'blocked run', goal: 'work', scratch: true },
-        { db, appHome: '/unused-before-resource-gate', defaultRuntime: VALID_RUNTIME },
+        {
+          db,
+          appHome: '/unused-before-resource-gate',
+          defaultRuntime: VALID_RUNTIME,
+          launchProvenance: { kind: 'direct-json', initiator: 'api' },
+        },
       ),
     ).rejects.toMatchObject({
       code: 'agent-resources-invalid',

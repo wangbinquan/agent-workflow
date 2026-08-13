@@ -307,7 +307,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
         {
           kind: 'workgroup',
           refId: existing.id,
-          invoker: { type: 'user' },
+          invoker: { type: 'user', launchKind: 'direct-json' },
           payload: parsed.data,
         },
         buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, undefined),

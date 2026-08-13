@@ -193,6 +193,15 @@ describe('MultiSelect — tags + dropdown', () => {
       expect(document.activeElement).toBe(input()) // stayed focused, didn't reopen
     })
 
+    test('openOnFocus=false leaves the portal closed but keyboard activation still opens it', () => {
+      render(<Harness openOnFocus={false} />)
+      input().focus()
+      fireEvent.focus(input())
+      expect(screen.queryByRole('listbox')).toBeNull()
+      fireEvent.keyDown(input(), { key: 'ArrowDown' })
+      expect(screen.getByRole('listbox')).toBeTruthy()
+    })
+
     test('outside click closes the dropdown', () => {
       render(<Harness />)
       openList()

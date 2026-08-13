@@ -221,6 +221,7 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
       status: 'pending',
       inputs: JSON.stringify({ req: '产出 alpha' }),
       startedAt: Date.now(),
+      launchOrigin: 'webhook',
       refClosureJson: closure,
     })
 
@@ -242,6 +243,7 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
     expect(child.status).toBe('done')
     expect(child.spaceKind).toBe('inherited')
     expect(child.workgroupId).toBe(group.id)
+    expect(child.launchOrigin).toBe(parent.launchOrigin)
     // goalTemplate 渲染进冻结 config（{{req}} → 上游端口值）。
     expect(child.workgroupConfigJson ?? '').toContain('目标：产出 alpha')
 

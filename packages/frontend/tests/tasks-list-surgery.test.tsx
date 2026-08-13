@@ -222,22 +222,31 @@ describe('/tasks — dense operations list (RFC-244)', () => {
     fireEvent.click(screen.getByTestId('tasks-filter-button'))
     const dialog = await screen.findByTestId('tasks-filter-dialog')
     expect(within(dialog).getByRole('dialog')).toBeTruthy()
+    expect(screen.queryByRole('listbox', { name: /exact status/i })).toBeNull()
+    const originGroup = within(dialog).getByRole('radiogroup', { name: /launch origin/i })
+    expect(
+      within(originGroup)
+        .getAllByRole('radio')
+        .map((radio) => radio.textContent),
+    ).toEqual(['All origins', 'Manual', 'Scheduled', 'Webhook', 'API'])
 
     const statusInput = within(dialog).getByRole('combobox', { name: /exact status/i })
     fireEvent.focus(statusInput)
     fireEvent.keyDown(statusInput, { key: 'Enter' })
-    const pending = await screen.findByRole('option', { name: /pending/i })
-    fireEvent.click(pending)
+    await screen.findByRole('option', { name: /pending/i })
+    fireEvent.keyDown(statusInput, { key: 'Enter' })
     fireEvent.click(within(dialog).getByRole('radio', { name: /workgroup/i }))
+    fireEvent.click(within(originGroup).getByRole('radio', { name: /^API$/ }))
     fireEvent.click(within(dialog).getByRole('button', { name: /apply filters/i }))
 
     await waitFor(() =>
       expect(router.state.location.search).toMatchObject({
         statuses: 'pending',
         subject: 'workgroup',
+        origin: 'api',
       }),
     )
-    expect(screen.getByTestId('tasks-filter-button').textContent).toContain('2')
+    expect(screen.getByTestId('tasks-filter-button').textContent).toContain('3')
   })
 
   test('row body navigates while an inner scheduled link remains independent', async () => {

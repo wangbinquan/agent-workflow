@@ -89,7 +89,12 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
         baseBranch: 'main',
         inputs: {},
       },
-      { db: h.db, appHome: h.appHome, awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        awaitScheduler: true,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     // Snapshot-time body: a non-trivial mutation against HEAD so the stash
     // is non-empty and the apply step is meaningful.
@@ -128,7 +133,12 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
         repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
-      { db: h.db, appHome: h.appHome, awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        awaitScheduler: true,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     const r0 = task.repos[0]!
     const r1 = task.repos[1]!
@@ -170,7 +180,12 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
         repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
-      { db: h.db, appHome: h.appHome, awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        awaitScheduler: true,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     // Garbage in repos_json AND provide a legacy single-stash fallback. The
     // helper logs a warn and falls through to the single-stash branch,

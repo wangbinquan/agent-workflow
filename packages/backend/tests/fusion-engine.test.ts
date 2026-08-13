@@ -198,6 +198,11 @@ function skillIdOf(db: DbClient, name: string): string {
   return db.select({ id: skills.id }).from(skills).where(eq(skills.name, name)).get()!.id
 }
 
+function taskOriginOf(db: DbClient, taskId: string): string {
+  return db.select({ origin: tasks.launchOrigin }).from(tasks).where(eq(tasks.id, taskId)).get()!
+    .origin
+}
+
 function fusionWorkRoots(appHome: string): string[] {
   const root = pjoin(appHome, 'fusions')
   if (!existsSync(root)) return []
@@ -247,6 +252,7 @@ describe('createFusion preconditions', () => {
         { skillId: skillIdOf(h.db, 'lint'), memoryIds: [mem], intent: '' },
         h.deps,
         adminActor,
+        'api',
       )
     } catch (err) {
       code = (err as { code?: string }).code
@@ -271,6 +277,7 @@ describe('createFusion preconditions', () => {
         { skillId: skillIdOf(h.db, 'lint'), memoryIds: [mem], intent: '' },
         deps,
         adminActor,
+        'api',
       ),
     ).rejects.toThrow(/injected seed failure/)
 
@@ -303,9 +310,11 @@ describe('launch → reconcile → approve', () => {
       { skillId: createdSkill.id, memoryIds: [memA, memB], intent: 'tidy up' },
       h.deps,
       adminActor,
+      'manual',
     )
     expect(fusion.status).toBe('running')
     expect(fusion.currentTaskId).not.toBeNull()
+    expect(taskOriginOf(h.db, fusion.currentTaskId!)).toBe('manual')
 
     // Simulate the agent's final round: edit the skill files + write the result
     // manifest into the engine worktree, then force the task terminal.
@@ -368,8 +377,10 @@ describe('launch → reconcile → approve', () => {
       { skillId: createdSkill.id, memoryIds: [mem], intent: '' },
       h.deps,
       adminActor,
+      'api',
     )
     const task = await getTask(h.db, fusion.currentTaskId!)
+    expect(taskOriginOf(h.db, fusion.currentTaskId!)).toBe('api')
     const wt = task!.worktreePath
     writeFileSync(pjoin(wt, 'SKILL.md'), '---\nname: lint\ndescription: d\n---\nproposed')
     mkdirSync(pjoin(wt, '__fusion__'), { recursive: true })
@@ -421,6 +432,7 @@ describe('launch → reconcile → approve', () => {
       { skillId: skillIdOf(h.db, 'lint'), memoryIds: [memA, memB], intent: '' },
       h.deps,
       adminActor,
+      'api',
     )
     const task = await getTask(h.db, fusion.currentTaskId!)
     const wt = task!.worktreePath
@@ -459,6 +471,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
       { skillId: skillIdOf(h.db, skillName), memoryIds: [memId], intent: '' },
       h.deps,
       adminActor,
+      'api',
     )
     const task = await getTask(h.db, fusion.currentTaskId!)
     const wt = task!.worktreePath
@@ -498,6 +511,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
       { skillId: skillIdOf(h.db, 'lint'), memoryIds: [mem], intent: '' },
       h.deps,
       adminActor,
+      'api',
     )
     expect(tokenOf(fusion.id)).not.toBeNull()
   })
@@ -544,7 +558,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
       'someone',
     )
 
-    await expect(rejectFusion(h.deps, fusion.id, 'try again', adminActor)).rejects.toThrow(
+    await expect(rejectFusion(h.deps, fusion.id, 'try again', adminActor, 'api')).rejects.toThrow(
       /precondition|changed/i,
     )
     const after = await getFusion(h.deps, fusion.id)
@@ -571,7 +585,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
         if (phase === 'reject') throw new Error('injected reject pre-handoff failure')
       },
     }
-    await expect(rejectFusion(deps, fusion.id, 'retry', adminActor)).rejects.toThrow(
+    await expect(rejectFusion(deps, fusion.id, 'retry', adminActor, 'api')).rejects.toThrow(
       /injected reject pre-handoff failure/,
     )
 
@@ -626,9 +640,13 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     })
     const mem = approvedGlobalMemory(h.db, 'm')
     const fusion = await toAwaitingApproval('lint', mem)
-    await rejectFusion(h.deps, fusion.id, 'redo', adminActor) // claims → running (iter 2)
+    await rejectFusion(h.deps, fusion.id, 'redo', adminActor, 'api') // claims → running (iter 2)
+    const rerun = await getFusion(h.deps, fusion.id)
+    expect(taskOriginOf(h.db, rerun!.currentTaskId!)).toBe('api')
     // No longer awaiting_approval → a second reject can't create a duplicate task.
-    await expect(rejectFusion(h.deps, fusion.id, 'again', adminActor)).rejects.toThrow(/awaiting/i)
+    await expect(rejectFusion(h.deps, fusion.id, 'again', adminActor, 'api')).rejects.toThrow(
+      /awaiting/i,
+    )
     expect((await getFusion(h.deps, fusion.id))!.iteration).toBe(2) // only one re-run
   })
 
@@ -871,6 +889,7 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
       { skillId: createdSkill.id, memoryIds: [mem], intent: '' },
       h.deps,
       adminActor,
+      'api',
     )
     const task = await getTask(h.db, fusion.currentTaskId!)
     const seeded = readFileSync(pjoin(task!.worktreePath, 'SKILL.md'), 'utf8')
@@ -900,6 +919,7 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
         { skillId: createdSkill.id, memoryIds: [mem], intent: '' },
         h.deps,
         adminActor,
+        'api',
       )
     } catch (err) {
       code = (err as { code?: string }).code
@@ -945,6 +965,7 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
       { skillId: skillIdOf(h.db, 'lint'), memoryIds: [mem], intent: '' },
       h.deps,
       adminActor,
+      'api',
     )
     const taskId = fusion.currentTaskId! // parked in its mandatory clarify round
     const res = await cancelFusion(h.deps, fusion.id, adminActor)
@@ -967,6 +988,7 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
       { skillId: skillIdOf(h.db, 'review-lock'), memoryIds: [mem], intent: '' },
       h.deps,
       adminActor,
+      'api',
     )
     const taskId = fusion.currentTaskId!
     const reviewRunId = ulid()

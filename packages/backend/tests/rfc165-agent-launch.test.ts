@@ -224,7 +224,11 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
 
   test('A3 happy path (scratch): anchor row + sourceAgentName + frozen synthesized snapshot', async () => {
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    const task = await startAgentTask(db, daemonActor(), solo.id, BODY(), { db, appHome })
+    const task = await startAgentTask(db, daemonActor(), solo.id, BODY(), {
+      db,
+      appHome,
+      launchProvenance: { kind: 'direct-json', initiator: 'api' },
+    })
 
     expect(task.status).toBe('pending')
     expect(task.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
@@ -244,7 +248,11 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
   test('RFC-223 PR-7: service input is canonical id; an existing name is not resolved', async () => {
     await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await expect(
-      startAgentTask(db, daemonActor(), 'solo', BODY(), { db, appHome }),
+      startAgentTask(db, daemonActor(), 'solo', BODY(), {
+        db,
+        appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'api' },
+      }),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
     expect((await db.select().from(tasks)).length).toBe(0)
   })
@@ -280,10 +288,18 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     })
 
     await expect(
-      startAgentTask(db, strangerActor, 'no-such-id', BODY(), { db, appHome }),
+      startAgentTask(db, strangerActor, 'no-such-id', BODY(), {
+        db,
+        appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      }),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
     await expect(
-      startAgentTask(db, strangerActor, privateAgent.id, BODY(), { db, appHome }),
+      startAgentTask(db, strangerActor, privateAgent.id, BODY(), {
+        db,
+        appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      }),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
 
     const builtinId = ulid()
@@ -304,7 +320,11 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       updatedAt: Date.now(),
     })
     await expect(
-      startAgentTask(db, daemonActor(), builtinId, BODY(), { db, appHome }),
+      startAgentTask(db, daemonActor(), builtinId, BODY(), {
+        db,
+        appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'api' },
+      }),
     ).rejects.toMatchObject({ code: 'builtin-readonly' })
 
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
@@ -314,7 +334,11 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
         daemonActor(),
         solo.id,
         StartAgentTaskSchema.parse({ name: 't', description: 'd' }),
-        { db, appHome },
+        {
+          db,
+          appHome,
+          launchProvenance: { kind: 'direct-json', initiator: 'api' },
+        },
       ),
     ).rejects.toMatchObject({ code: 'agent-launch-invalid' })
   })
@@ -336,7 +360,12 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
           inputs: { description: 'x' },
           scratch: true,
         } as never,
-        { db, appHome, agentLaunch: { agentName: 'solo', agentId: 'solo-id', snapshotJson: '{}' } },
+        {
+          db,
+          appHome,
+          launchProvenance: { kind: 'direct-json', initiator: 'api' },
+          agentLaunch: { agentName: 'solo', agentId: 'solo-id', snapshotJson: '{}' },
+        },
       ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
     // Transaction rolled back — no ghost task row.
@@ -755,7 +784,11 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     const agentId = solo.id
 
     // Baseline launch stamps the stable id onto the task.
-    const t1 = await startAgentTask(db, daemonActor(), agentId, BODY(), { db, appHome })
+    const t1 = await startAgentTask(db, daemonActor(), agentId, BODY(), {
+      db,
+      appHome,
+      launchProvenance: { kind: 'direct-json', initiator: 'api' },
+    })
     expect(t1.sourceAgentId).toBe(agentId)
 
     // Relaunch carrying the CORRECT expected id succeeds.
@@ -767,6 +800,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
       {
         db,
         appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'api' },
       },
     )
     expect(t2.sourceAgentId).toBe(agentId)
@@ -777,6 +811,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
       startAgentTask(db, daemonActor(), agentId, BODY({ expectedAgentId: 'stale-other-id' }), {
         db,
         appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'api' },
       }),
     ).rejects.toMatchObject({ code: 'agent-id-mismatch' })
     expect((await db.select().from(tasks)).length).toBe(2)

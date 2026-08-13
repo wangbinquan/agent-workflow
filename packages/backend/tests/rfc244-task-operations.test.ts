@@ -1,4 +1,4 @@
-import { TaskOperationsRootPageSchema } from '@agent-workflow/shared'
+import { TaskOperationsRootPageSchema, type TaskLaunchOrigin } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
@@ -70,6 +70,7 @@ function task(
     sourceAgentName?: string
     sourceAgentId?: string
     scheduledTaskId?: string
+    launchOrigin?: TaskLaunchOrigin
     workflowSnapshot?: string
     inputs?: string
     refClosureJson?: string
@@ -98,6 +99,8 @@ function task(
     sourceAgentName: options.sourceAgentName,
     sourceAgentId: options.sourceAgentId,
     scheduledTaskId: options.scheduledTaskId,
+    launchOrigin:
+      options.launchOrigin ?? (options.scheduledTaskId === undefined ? 'manual' : 'scheduled'),
     refClosureJson: options.refClosureJson,
   }
 }
@@ -292,10 +295,23 @@ describe('RFC-244 task operations query', () => {
         startedAt: 400,
         scheduledTaskId: 'scheduled-soft-link',
       }),
+      task('workflow-webhook', 'alice', 'done', {
+        startedAt: 500,
+        launchOrigin: 'webhook',
+      }),
+      task('workflow-api', 'alice', 'done', {
+        startedAt: 600,
+        launchOrigin: 'api',
+      }),
     ])
 
     const workflow = await listTaskOperationsPage(db, actor('alice'), { subject: 'workflow' })
-    expect(workflow.items.map((row) => row.id)).toEqual(['workflow-scheduled', 'workflow-manual'])
+    expect(workflow.items.map((row) => row.id)).toEqual([
+      'workflow-api',
+      'workflow-webhook',
+      'workflow-scheduled',
+      'workflow-manual',
+    ])
     const agent = await listTaskOperationsPage(db, actor('alice'), { subject: 'agent' })
     expect(agent.items.map((row) => row.id)).toEqual(['agent-manual'])
     const workgroup = await listTaskOperationsPage(db, actor('alice'), {
@@ -315,6 +331,11 @@ describe('RFC-244 task operations query', () => {
       'agent-manual',
       'workflow-manual',
     ])
+    const webhook = await listTaskOperationsPage(db, actor('alice'), { origin: 'webhook' })
+    expect(webhook.items.map((row) => row.id)).toEqual(['workflow-webhook'])
+    const api = await listTaskOperationsPage(db, actor('alice'), { origin: 'api' })
+    expect(api.items.map((row) => row.id)).toEqual(['workflow-api'])
+    expect(JSON.stringify(api)).not.toContain('launchOrigin')
   })
 
   test('a corrupt parent cycle terminates defensively without inventing a root', async () => {

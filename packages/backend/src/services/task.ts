@@ -15,6 +15,7 @@ import type {
   Task,
   TaskDiff,
   TaskListItem,
+  TaskLaunchOrigin,
   TaskNodeRuns,
   TaskRepo,
   TaskSummary,
@@ -139,6 +140,11 @@ import {
   taskOwnershipScopeCondition,
 } from '@/services/taskAuthorization'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
+import {
+  deriveTaskLaunchOrigin,
+  taskLaunchAdmissionIssue,
+  type TaskLaunchProvenance,
+} from '@/modules/task-execution/domain/taskLaunchOrigin'
 
 /**
  * RFC-243 实现门 P0-1 — closure freezing needs the LAUNCH ACTOR (visibility
@@ -394,6 +400,12 @@ export interface StartTaskDeps {
    * token callers can leave it unset or pass '__system__' explicitly.
    */
   actorUserId?: string
+  /**
+   * RFC-301 — trusted, task-owned root launch provenance. Required for every
+   * root production launch; forbidden for call children, which read the exact
+   * parent row inside the initial INSERT transaction instead.
+   */
+  launchProvenance?: TaskLaunchProvenance
   /**
    * RFC-159 — when the scheduled-task background loop fires a task it passes the
    * originating `scheduled_tasks.id` here; `startTask` stamps it onto the task row
@@ -1876,7 +1888,55 @@ export async function startTaskWithLocalRepo(
   return startTask(rest as StartTask, {
     ...deps,
     internalSource: { kind: 'local-path', repoPath, baseBranch },
+    ...(deps.callLaunch === undefined && deps.launchProvenance === undefined
+      ? {
+          // This adapter is retained for backend fixtures only; every
+          // production root is forced through startExecution/Fusion and
+          // provides an explicit trusted provenance.
+          launchProvenance: {
+            kind: 'direct-json' as const,
+            initiator: 'manual' as const,
+          },
+        }
+      : {}),
   })
+}
+
+function rootLaunchOriginFromDeps(deps: StartTaskDeps): TaskLaunchOrigin | null {
+  if (deps.callLaunch !== undefined) {
+    if (deps.launchProvenance !== undefined) {
+      throw new ValidationError(
+        'task-launch-provenance-conflict',
+        'call child launch must inherit its parent origin and may not carry root provenance',
+      )
+    }
+    if (
+      deps.scheduledTaskId !== undefined ||
+      deps.webhookTriggerId !== undefined ||
+      deps.webhookFireId !== undefined
+    ) {
+      throw new ValidationError(
+        'task-launch-child-metadata-invalid',
+        'call child launch may inherit trigger context but may not carry root schedule/webhook attribution ids',
+      )
+    }
+    return null
+  }
+
+  if (deps.launchProvenance === undefined) {
+    throw new ValidationError(
+      'task-launch-provenance-missing',
+      'root task launch requires trusted launch provenance',
+    )
+  }
+  const issue = taskLaunchAdmissionIssue(deps.launchProvenance, {
+    scheduledTaskId: deps.scheduledTaskId,
+    webhookTriggerId: deps.webhookTriggerId,
+    webhookFireId: deps.webhookFireId,
+    hasTriggerContext: deps.triggerContext !== undefined,
+  })
+  if (issue !== null) throw new ValidationError(issue.code, issue.message)
+  return deriveTaskLaunchOrigin(deps.launchProvenance)
 }
 
 interface StartTaskOwnership {
@@ -1930,6 +1990,11 @@ async function startTaskImpl(
   deps: StartTaskDeps,
   ownership: StartTaskOwnership,
 ): Promise<Task> {
+  // RFC-301: validate closed root provenance before workflow reads, repository
+  // resolution, or filesystem materialization. Child origin stays unresolved
+  // until the parent is read inside the task-row transaction below.
+  const rootLaunchOrigin = rootLaunchOriginFromDeps(deps)
+
   // Resolve workflow.
   const workflow = await getWorkflow(deps.db, input.workflowId)
   if (workflow === null) {
@@ -2231,9 +2296,10 @@ async function startTaskImpl(
       // INSERT. Check the parent inside the SAME synchronous transaction as
       // the child row: child-first commits before cancel's child-set freeze;
       // cancel-first makes this launch fail with no post-terminal child.
+      let launchOrigin = rootLaunchOrigin
       if (deps.callLaunch !== undefined) {
         const parent = tx
-          .select({ status: tasks.status })
+          .select({ status: tasks.status, launchOrigin: tasks.launchOrigin })
           .from(tasks)
           .where(eq(tasks.id, deps.callLaunch.parentTaskId))
           .get()
@@ -2249,6 +2315,10 @@ async function startTaskImpl(
             `parent task '${deps.callLaunch.parentTaskId}' is '${parent.status}'; refusing to mint child '${taskId}'`,
           )
         }
+        launchOrigin = parent.launchOrigin
+      }
+      if (launchOrigin === null) {
+        throw new Error('task launch origin remained unresolved before initial INSERT')
       }
 
       // F17: a concurrent agent delete between the service-level 404 gate and
@@ -2325,6 +2395,9 @@ async function startTaskImpl(
           errorMessage: earlyError,
           // RFC-036: launcher identity (NULL = legacy / __system__ fallback).
           ownerUserId: deps.actorUserId ?? null,
+          // RFC-301: immutable launch-tree source. Roots derive from trusted
+          // provenance; children read the exact parent in this transaction.
+          launchOrigin,
           // RFC-159: the scheduled_tasks row that auto-launched this task (NULL =
           // manual). Stamped atomically with the row so the schedule's run history is
           // durable regardless of any later bookkeeping write.

@@ -162,7 +162,13 @@ async function launch(h: Harness, workgroupId: string) {
     actor,
     workgroupId,
     { name: 'e2e', goal: '产出 alpha', scratch: true },
-    { db: h.db, appHome: h.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+    {
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: opencodeCmd(),
+      awaitScheduler: true,
+      launchProvenance: { kind: 'direct-json', initiator: 'api' },
+    },
   )
 }
 

@@ -5,7 +5,12 @@ import { describe, expect, test } from 'bun:test'
 import {
   TASK_LIST_ACTIVE_STATUSES,
   TASK_LIST_FINISHED_STATUSES,
+  TASK_LIST_ORIGINS,
+  TASK_LAUNCH_ORIGINS,
   TASK_STATUS,
+  StartTaskSchema,
+  TaskLaunchOriginSchema,
+  TaskListOriginSchema,
   TaskOperationsChildPageSchema,
   TaskOperationsListItemSchema,
   TaskOperationsRootPageSchema,
@@ -70,6 +75,38 @@ describe('RFC-244 task list view single source', () => {
     expect(parseTaskStatusList('')).toBeNull()
     expect(parseTaskStatusList('running,')).toBeNull()
     expect(parseTaskStatusList('future')).toBeNull()
+  })
+})
+
+describe('RFC-301 task launch-origin contract', () => {
+  test('persisted and query literals are closed, ordered, and include webhook/api', () => {
+    expect(TASK_LAUNCH_ORIGINS).toEqual(['manual', 'scheduled', 'webhook', 'api'])
+    expect(TASK_LIST_ORIGINS).toEqual(['all', 'manual', 'scheduled', 'webhook', 'api'])
+    for (const origin of TASK_LAUNCH_ORIGINS) {
+      expect(TaskLaunchOriginSchema.parse(origin)).toBe(origin)
+      expect(TaskListOriginSchema.parse(origin)).toBe(origin)
+    }
+    expect(TaskListOriginSchema.parse('all')).toBe('all')
+    for (const invalid of ['', 'API', 'node', 'future']) {
+      expect(TaskLaunchOriginSchema.safeParse(invalid).success).toBe(false)
+      expect(TaskListOriginSchema.safeParse(invalid).success).toBe(false)
+    }
+  })
+
+  test('launch origin stays internal: create input strips it and list items reject it', () => {
+    const parsed = StartTaskSchema.parse({
+      workflowId: 'wf-1',
+      name: 'wire-negative-space',
+      inputs: {},
+      scratch: true,
+      launchOrigin: 'api',
+      launch_origin: 'webhook',
+    })
+    expect(parsed).not.toHaveProperty('launchOrigin')
+    expect(parsed).not.toHaveProperty('launch_origin')
+    expect(TaskOperationsListItemSchema.safeParse({ ...item(), launchOrigin: 'api' }).success).toBe(
+      false,
+    )
   })
 })
 

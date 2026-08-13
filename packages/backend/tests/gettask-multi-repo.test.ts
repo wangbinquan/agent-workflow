@@ -83,7 +83,11 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
         baseBranch: 'main',
         inputs: {},
       },
-      { db: h.db, appHome: h.appHome },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     const task = await getTask(h.db, launched.id)
     expect(task).not.toBeNull()
@@ -111,7 +115,11 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
         repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!, h.repos[2]!]),
         inputs: {},
       } as unknown as StartTask,
-      { db: h.db, appHome: h.appHome },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     const task = await getTask(h.db, launched.id)
     expect(task).not.toBeNull()

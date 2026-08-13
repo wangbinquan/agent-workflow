@@ -512,6 +512,7 @@ function TaskListFilterDialog(props: {
             options={statusOptions}
             ariaLabel={t('tasks.operations.statuses')}
             allowCustom={false}
+            openOnFocus={false}
             placeholder={t('tasks.operations.statusPlaceholder')}
             data-testid="tasks-status-filter"
           />

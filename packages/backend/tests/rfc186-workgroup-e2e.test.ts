@@ -189,6 +189,7 @@ async function launch(h: Harness, workgroupId: string) {
         awaitScheduler: true,
         defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
         defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+        launchProvenance: { kind: 'direct-json', initiator: 'api' },
       },
     ),
   )

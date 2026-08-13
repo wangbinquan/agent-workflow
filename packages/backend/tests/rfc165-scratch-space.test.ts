@@ -77,7 +77,14 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
 
   test('S1 scratch launch → fresh git repo as workspace, scratch row shape', async () => {
     h = buildHarness()
-    const task = await startTask({ ...BODY }, { db: h.db, appHome: h.appHome })
+    const task = await startTask(
+      { ...BODY },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
+    )
 
     const scratchDir = join(h.appHome, 'scratch', task.id)
     expect(task.status).toBe('pending')
@@ -108,7 +115,14 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
 
   test('S2 root-commit identity: platform default, overridden by per-task identity', async () => {
     h = buildHarness()
-    const plain = await startTask({ ...BODY }, { db: h.db, appHome: h.appHome })
+    const plain = await startTask(
+      { ...BODY },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
+    )
     const plainAuthor = await runGit(join(h.appHome, 'scratch', plain.id), [
       'log',
       '-1',
@@ -118,7 +132,11 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
 
     const withId = await startTask(
       { ...BODY, name: 'scratch-task-2', gitUserName: 'Alice', gitUserEmail: 'a@example.com' },
-      { db: h.db, appHome: h.appHome },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     const author = await runGit(join(h.appHome, 'scratch', withId.id), [
       'log',
@@ -130,7 +148,14 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
 
   test('S3 root commit is a working diff base (all-new-files)', async () => {
     h = buildHarness()
-    const task = await startTask({ ...BODY }, { db: h.db, appHome: h.appHome })
+    const task = await startTask(
+      { ...BODY },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
+    )
     const dir = join(h.appHome, 'scratch', task.id)
 
     writeFileSync(join(dir, 'report.md'), '# findings\n')
@@ -146,7 +171,14 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     // Force mkdir to fail: occupy {appHome}/scratch with a FILE.
     writeFileSync(join(h.appHome, 'scratch'), 'not a dir')
 
-    const task = await startTask({ ...BODY }, { db: h.db, appHome: h.appHome })
+    const task = await startTask(
+      { ...BODY },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
+    )
     expect(task.status).toBe('failed')
     expect(task.worktreePath).toBe('')
     expect(task.errorMessage ?? '').toContain('scratch-')
@@ -224,7 +256,14 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
   test('S5 lease released on success', async () => {
     // (recent_repos retired entirely by RFC-165 — nothing to pollute.)
     h = buildHarness()
-    const task = await startTask({ ...BODY }, { db: h.db, appHome: h.appHome })
+    const task = await startTask(
+      { ...BODY },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
+    )
     expect(materializingSpaces.size).toBe(0)
     expect(task.spaceKind).toBe('scratch')
   })
@@ -266,9 +305,16 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       },
     }) as DbClient
 
-    await expect(startTask({ ...BODY }, { db: poisoned, appHome: h.appHome })).rejects.toThrow(
-      'boom-task-repos-insert',
-    )
+    await expect(
+      startTask(
+        { ...BODY },
+        {
+          db: poisoned,
+          appHome: h.appHome,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        },
+      ),
+    ).rejects.toThrow('boom-task-repos-insert')
 
     // The transaction rolled back — no task row survives, the per-task
     // scratch dir is cleaned (the empty `scratch/` parent may remain),
@@ -296,6 +342,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       {
         db: h.db,
         appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         materializedSpace: space,
       },
     )
@@ -318,6 +365,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       {
         db: h.db,
         appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         materializedSpace: space,
       },
     )
@@ -337,6 +385,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
         {
           db: h.db,
           appHome: h.appHome,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           preCreatedWorktree: {
             taskId: 'T123',
             worktreePath: '/tmp/x',

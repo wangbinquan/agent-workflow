@@ -132,6 +132,7 @@ function startTask(
   deps: Parameters<typeof startTaskBase>[1],
 ) {
   return startTaskBase(input, {
+    launchProvenance: { kind: 'direct-json', initiator: 'manual' },
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,

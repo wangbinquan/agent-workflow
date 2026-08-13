@@ -104,7 +104,11 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
         repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
-      { db: h.db, appHome: h.appHome },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     const wtA = join(task.worktreePath, task.repos[0]!.worktreeDirName)
     const wtB = join(task.worktreePath, task.repos[1]!.worktreeDirName)
@@ -132,7 +136,11 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
         repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
-      { db: h.db, appHome: h.appHome },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      },
     )
     // Neither worktree is mutated: both repos are in `usable` (valid base +
     // existing worktree) so the 409 task-no-base-commit must NOT throw, yet

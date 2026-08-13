@@ -212,7 +212,7 @@ export async function handleMultipartTaskStart(
       {
         kind: 'workflow',
         refId: startInput.workflowId,
-        invoker: { type: 'user' },
+        invoker: { type: 'user', launchKind: 'direct-multipart' },
         payload: startInput,
       },
       {
@@ -268,7 +268,7 @@ export async function handleMultipartTaskStart(
     {
       kind: 'workflow',
       refId: startInput.workflowId,
-      invoker: { type: 'user' },
+      invoker: { type: 'user', launchKind: 'direct-multipart' },
       payload: { ...startInput, inputs: inputsOut },
     },
     {

@@ -82,6 +82,7 @@ function startTask(
   deps: Parameters<typeof startTaskBase>[1],
 ) {
   return startTaskBase(input, {
+    launchProvenance: { kind: 'direct-json', initiator: 'manual' },
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -297,6 +298,9 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
         appHome,
         binaryOverride: [stubOpencode],
         awaitScheduler: true,
+        launchProvenance: { kind: 'webhook' },
+        webhookTriggerId: 'trigger-rfc292',
+        webhookFireId: 'fire-rfc292',
         triggerContext: {
           trigger: {
             webhook: {
