@@ -330,6 +330,9 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     expect(sessions.length).toBe(0)
   })
 
+  // 墙钟预算（RFC-287 T1 期实测补）：本例跑一次真实 spawn + 协议拒绝后的默认重试，
+  // bun 默认 5s 在四分片满载的门禁机上是擦边值（实测 5335ms 超时）。显式预算=墙钟
+  // 允许量，不是对调度变慢的容忍。
   test('agent without clarify channel that erroneously emits clarify is rejected with clarify-no-channel', async () => {
     await seedAgent(h.db, 'designer', ['design'])
     const def: WorkflowDefinition = {
@@ -361,7 +364,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(taskRow?.status).toBe('failed')
     expect(taskRow?.errorMessage ?? '').toContain('clarify-no-channel')
-  })
+  }, 20_000)
 
   test('rerun row after a manually-seeded answered session: scheduler re-runs agent with clarifyIteration > 0 and prompt carries Q&A markdown', async () => {
     await seedAgent(h.db, 'designer', ['design'])

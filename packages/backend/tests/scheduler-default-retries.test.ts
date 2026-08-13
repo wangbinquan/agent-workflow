@@ -142,6 +142,14 @@ async function runScenario(
   return readFileSync(h.argvLog, 'utf8').trim().split('\n').filter(Boolean).length
 }
 
+// 墙钟预算（RFC-287 T1 期实测补）：每条 scenario 要**串行 spawn N 个真实子进程**
+// （N = 1 + retries），bun 默认 5s 在四分片满载的门禁机上对 N≥4 是擦边值——实测
+// 会先让 6-attempt 那条超时，而同 describe 共享 harness/argv 日志，超时后的残留
+// 写入会把后一条的断言带偏（收到 'done' 而非 'failed'），表现成两条无关的红。
+// 下面按 attempt 数给显式预算：这是**墙钟允许量**，不是对调度变慢的容忍——若哪天
+// 单次 attempt 真的变慢，该由 attempt 级的断言/计时去发现，而不是靠这里超时。
+const BUDGET_PER_ATTEMPT_MS = 4_000
+
 describe('RFC-042 default retries fallback = 3', () => {
   let h: ReturnType<typeof makeHarness>
   beforeEach(() => {
@@ -149,23 +157,39 @@ describe('RFC-042 default retries fallback = 3', () => {
   })
   afterEach(() => h.cleanup())
 
-  test('omitted retries → 4 attempts (1 + 3 retries)', async () => {
-    const n = await runScenario(undefined, h)
-    expect(n).toBe(4)
-  })
+  test(
+    'omitted retries → 4 attempts (1 + 3 retries)',
+    async () => {
+      const n = await runScenario(undefined, h)
+      expect(n).toBe(4)
+    },
+    4 * BUDGET_PER_ATTEMPT_MS,
+  )
 
-  test('defaultNodeRetries=0 honored verbatim → 1 attempt', async () => {
-    const n = await runScenario(0, h)
-    expect(n).toBe(1)
-  })
+  test(
+    'defaultNodeRetries=0 honored verbatim → 1 attempt',
+    async () => {
+      const n = await runScenario(0, h)
+      expect(n).toBe(1)
+    },
+    1 * BUDGET_PER_ATTEMPT_MS,
+  )
 
-  test('defaultNodeRetries=5 honored verbatim → 6 attempts', async () => {
-    const n = await runScenario(5, h)
-    expect(n).toBe(6)
-  })
+  test(
+    'defaultNodeRetries=5 honored verbatim → 6 attempts',
+    async () => {
+      const n = await runScenario(5, h)
+      expect(n).toBe(6)
+    },
+    6 * BUDGET_PER_ATTEMPT_MS,
+  )
 
-  test('defaultNodeRetries=1 honored verbatim → 2 attempts', async () => {
-    const n = await runScenario(1, h)
-    expect(n).toBe(2)
-  })
+  test(
+    'defaultNodeRetries=1 honored verbatim → 2 attempts',
+    async () => {
+      const n = await runScenario(1, h)
+      expect(n).toBe(2)
+    },
+    2 * BUDGET_PER_ATTEMPT_MS,
+  )
 })
