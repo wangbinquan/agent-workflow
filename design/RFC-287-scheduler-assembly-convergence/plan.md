@@ -51,15 +51,19 @@
   childBudget 单例闭包改读 live config、PUT 后触发 `scan()`、`maxInvocationDepth`
   读点、修「子任务启动把 daemon 级池 resize 回旧值」的既存 bug、
   `settings-drafts.ts` 最小写入白名单登记新三项、定 `max` 来源使 `rangeHint` 可渲染。
-- T11 G5 `file://` 公开面下线（独立 commit）。**前置子任务**：e2e 改用
+- T11 G5 `file://` 下线（独立 commit）。**第一件事是重算连带面**（第三轮门：e2e
+  19 spec ≈30 处含 `pathToFileURL` 写法、backend 经 HTTP 面 9 文件、共享夹具
+  `repoGroupFixture` 的 13 个下游），并把 `submoduleRefresh.ts:92` 的后台自动保鲜
+  纳入拒绝面。**前置子任务**：e2e 改用
   `git daemon` 起真实远端（`e2e/commit-push.spec.ts` 现依赖 `file://` 经公开面），
   先绿再拒。然后三处入口拒绝（手动/定时/webhook）+ 内外通道源码锁 + 存量不
   grandfather 的启动校验拒绝（proposal §7）。
 - T12 G6 窗口化重试与硬失败（独立 commit）：错误分类纯函数 + 窗口重试 + 红→绿对
   （网络类重试成功 / 窗口耗尽失败 / 鉴权类不重试）。
-- T13 G7 准备成为任务的第一个执行步骤（**最大一批，独立 commit**）：
+- T13 G7 准备成为 `runTask` 认领后的第 0 步（**最大一批，独立 commit**）：
   ①`worktreePath` 消费点清点分类（src 49 文件 / 519 处）+ 前端消费面；
-  ②任务落库即 running + AbortController 前置注册 + 回写前状态 CAS；
+  ②任务仍落 pending + AbortController 于 INSERT 后前置注册 + 准备作为第 0 步
+  （三个 runTask 调用点自动共享）+ 回写前状态 CAS；
   ③合成 `__repo_prep__` 运行记录（同 `__commit_push__` 先例）与时间线展示；
   ④失败落该行 + 任务 failed，git stderr 原文可读；⑤重试复用 `retryNode`；
   ⑥boot reap / auto-resume 识别「准备未完成」改重跑准备；⑦其余随物化落库字段
