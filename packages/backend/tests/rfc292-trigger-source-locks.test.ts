@@ -40,7 +40,9 @@ describe('RFC-292 trigger namespace source locks', () => {
   test('scheduler passes one frozen context to every authored runtime sink', () => {
     const source = readFileSync(resolve(BACKEND_SRC, 'services/scheduler.ts'), 'utf8')
     expect(source).toContain('agent,\n          triggerContext: state.triggerContext')
-    expect(source).toContain('agent: innerAgent,\n      triggerContext: state.triggerContext')
+    // RFC-287 T4 同 aggAgent 那条：迁入装配回调只改了缩进，锁「相邻性 + 身份」
+    // 而不绑死嵌套深度。
+    expect(source).toMatch(/agent: innerAgent,\n\s+triggerContext: state\.triggerContext/)
     // RFC-287 moved this call into an assembly callback and therefore changed
     // indentation only. Keep the adjacency/identity lock without coupling the
     // RFC-292 invariant to a particular nesting depth.

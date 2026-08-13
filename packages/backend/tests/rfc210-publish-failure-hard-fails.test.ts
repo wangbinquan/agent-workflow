@@ -190,9 +190,13 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     )
     expect(mainline).not.toBeNull()
     expect(mainline![0]).toContain('keepIso = true')
-    // Fanout shard: flag set in the merge catch, discard gated on it.
-    expect(src).toContain('keepShardIso = true')
-    expect(src).toContain('if (!keepShardIso) await discardNodeIso(shardIso, log, state.writeSem)')
+    // Fanout shard: RFC-287 T4 起同聚合线一起迁入装配骨架——keep 语义从「布尔标志
+    // + finally 谓词」变成 spec 上的声明（合并抛出走 disposition.onThrow → keep:true，
+    // 清理由骨架的 if (!keep) discardIso 统一执行）。本条锁的不变量（合并抛出必须
+    // 保住 iso——它可能是该节点产物的唯一副本）现由 rfc287-t1-merge-disposition-matrix
+    // 的行为夹具接管；此处只留「声明存在」的浅锁。
+    expect(src).toMatch(/onThrow: \(err\) => \(\{\s*keep: true/)
+    expect(src).toContain('keepFromOutcome: (result) => result.processUnreaped === true')
     // Fanout aggregator: RFC-287 T3 起该线已迁入装配骨架，keep 语义从「函数体里的
     // 布尔标志 + finally 谓词」变成 spec 上的**声明**：合并抛出走
     // `disposition.onThrow → keep: true`，清理由骨架的 `if (!keep) discardIso` 统一

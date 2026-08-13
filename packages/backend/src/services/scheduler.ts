@@ -7808,206 +7808,241 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
   // writeSem serialization — shards run truly in parallel up to global/subprocess
   // caps and merge their deltas back one at a time). Shards usually touch DIFFERENT
   // files (per-file / per-dir sharding), so merge-backs rarely conflict.
-  const releaseGlobal = await state.agentSem.acquire()
-  const releaseSub = await state.subprocessSem.acquire()
-  let shardIso: IsoHandle
-  // RFC-210 impl-gate A1-fix (review round 2): a merge/snapshot THROW keeps the
-  // shard iso — the publish path hard-fails BEFORE the node tree is persisted,
-  // so the iso can hold the sole copy of the shard's submodule work.
-  let keepShardIso = false
-  try {
-    shardIso = await createIsoUnderLock({
-      writeSem: state.writeSem,
-      appHome: opts.appHome,
-      taskId,
-      db,
-      isoKeyRunId: shardRunId,
-      canonRepos: state.repos,
-      log,
-    })
-    if (!shardIso.passthrough) await persistIsoBase(db, shardRunId, task.repoCount, shardIso)
-    // RFC-130 §8.3 D9 (T14): undo the prior merged delta INSIDE this fresh iso BEFORE
-    // the agent runs, so the rerun's output REPLACES (not superimposes on) the prior
-    // output — and a file the agent re-produces identically still survives (it lands
-    // as the agent's own write on the cleaned base). Fail-open: any glitch falls back
-    // to superimposition (never fails an otherwise-good shard). The iso is private, so
-    // this never touches canon (a failed rerun leaves the prior delta intact, AC-6).
-    if (priorShardUndo !== null && !shardIso.passthrough) {
-      for (const r of shardIso.repos) {
-        try {
-          await undoPriorShardDeltaInIso(
-            r.isoWorktreePath,
-            priorShardUndo.node[r.worktreeDirName],
-            priorShardUndo.base[r.worktreeDirName],
+  // RFC-287 T4：分片线改走骨架。与聚合线逐相位同构，多出的只有 T14 的
+  // 「在新隔离树里先撤销上一次已合并的增量」——正落在 beforeSpawn 钩子上：
+  // 它逐仓自兜（失败只记 warn 退回叠加，绝不让一个本来好好的分片失败），整体
+  // 又在 iso 物化的同一个 try 内，所以未兜住的抛出走 onIsoSetupFailure，形态
+  // 与现状一致（design §10.2 的 beforeSpawn 契约就是为它写的）。
+  let shardIso: IsoHandle | null = null
+  return await runAssembly<Record<string, never>, RunResult, DispatchShardResult>(
+    {},
+    {
+      pools: [state.agentSem, state.subprocessSem],
+      iso: {
+        create: async () => {
+          shardIso = await createIsoUnderLock({
+            writeSem: state.writeSem,
+            appHome: opts.appHome,
+            taskId,
+            db,
+            isoKeyRunId: shardRunId,
+            canonRepos: state.repos,
             log,
-            r.forcedRepoRelPaths,
-          )
-        } catch (err) {
-          log.warn('T14 iso-undo failed — superimposition fallback', {
-            shardKey,
-            worktreeDirName: r.worktreeDirName,
-            mountPath: r.worktreeDirName,
-            subdir: '',
-            readonly: false,
-            gitignoreCommit: null,
-            error: err instanceof Error ? err.message : String(err),
           })
-        }
-      }
-    }
-  } catch (err) {
-    releaseSub()
-    releaseGlobal()
-    log.warn('fanout shard iso setup failed', {
-      shardKey,
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return { kind: 'failed', shardKey, outputs: {}, message: 'iso-setup-failed' }
-  }
-  try {
-    // RFC-111 D15 (Codex impl-gate P2-1): freeze the runtime for the fanout shard
-    // so a claude-selected agent-multi dispatches its shards on claude, not opencode.
-    const shardRuntime = await resolveFrozenRuntime(
-      db,
-      shardRunId,
-      innerAgent.runtime,
-      opts.defaultRuntime,
-      null,
-      freezeBinaryConfig(opts.configPath),
-    )
-    const result = await runNode({
-      taskId,
-      nodeRunId: shardRunId,
-      nodeId: innerNode.id,
-      agent: innerAgent,
-      triggerContext: state.triggerContext,
-      runtime: shardRuntime.protocol,
-      runtimeBinary: shardRuntime.binary,
-      runtimeParams: shardRuntime.params,
-      runtimeConfigDir: shardRuntime.configDir, // RFC-154: frozen config-dir profile
-      inputs,
-      // RFC-130 D16: cwd + path tokens → the shard's isolated worktree.
-      worktreePath: shardIso.repos[0]?.isoWorktreePath ?? task.worktreePath,
-      // RFC-067: per-task Git identity threaded through fanout shard dispatch.
-      gitUserName: task.gitUserName,
-      gitUserEmail: task.gitUserEmail,
-      templateMeta: {
-        repoPath: shardIso.repos[0]?.isoWorktreePath ?? task.repoPath,
-        baseBranch: task.baseBranch,
-        taskId,
-        nodeId: innerNode.id,
-        iteration,
-        ...(shard !== null ? { shardKey } : {}),
-        // RFC-066: per-repo metadata for prompt placeholders.
-        repos: shardIso.repos.map((r) => ({
-          repoPath: r.repoPath,
-          worktreePath: r.isoWorktreePath,
-          worktreeDirName: r.worktreeDirName,
-          mountPath: r.worktreeDirName,
-          subdir: '',
-          readonly: false,
-          gitignoreCommit: null,
-          baseBranch: r.baseBranch,
-        })),
-      },
-      ...(promptTemplate !== undefined ? { promptTemplate } : {}),
-      ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
-      // PR-D2: per-shard clarify stays off — RFC-148 ADT form.
-      clarifyChannel: { kind: 'none' as const },
-      skills: injection.spec.skills,
-      dependents: injection.spec.dependents,
-      mcps: injection.spec.mcps,
-      plugins: injection.spec.plugins,
-      appHome: opts.appHome,
-      ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
-      ...(Object.keys(inputPortKinds).length > 0 ? { inputPortKinds } : {}),
-      db,
-      log,
-      ...(opts.signal ? { signal: opts.signal } : {}),
-      ...(opts.subagentLiveCapture !== undefined
-        ? { subagentLiveCapture: opts.subagentLiveCapture }
-        : {}),
-    })
-    if (result.processUnreaped === true) keepShardIso = true
-    broadcastNodeStatus(taskId, shardRunId, innerNode.id, result.status)
-    if (result.status === 'canceled') {
-      return { kind: 'canceled', shardKey, outputs: {}, message: result.errorMessage ?? 'canceled' }
-    }
-    if (result.status !== 'done') {
-      return {
-        kind: 'failed',
-        shardKey,
-        outputs: {},
-        message: result.errorMessage ?? `shard-${result.status}`,
-        retry: {
-          retryIndex: shardRetryIndex,
-          failureCode: result.failureCode ?? null,
-          ...(result.processUnreaped === true ? { processUnreaped: true as const } : {}),
+          return shardIso
         },
-      }
-    }
-    // RFC-130 §段③: merge the shard's iso delta back into the canonical worktree.
-    // The T14 prior-delta undo (if any) already ran INSIDE the iso before the agent,
-    // so the iso final is the clean replacement — merge-back is the normal path.
-    if (!shardIso.passthrough) {
-      try {
-        // RFC-188: the ONE merge-back assembly. §6.3 disposition here: an
-        // unresolved shard conflict parks conflict-human + FAILS the shard
-        // loudly (per-shard awaiting_human bubbling through the fanout
-        // aggregation is a follow-up, #4/PR-E); the shard's own iso is
-        // discarded in `finally` while a kept resolve-iso survives for GC/a
-        // human (RFC-187 T8 owns un-orphaning it).
-        const merge = await mergeBackAndSettle({
-          db,
-          writeSem: state.writeSem,
-          handle: shardIso,
-          nodeRunId: shardRunId,
-          repoCount: task.repoCount,
-          via: 'live',
-          extraForcedContainerPaths: (result.portFilePaths ?? []).map((p) =>
-            toContainerRelative(state.repos[0]?.worktreeDirName ?? '', p),
-          ),
-          conflictResolver: (conflicts, containerPath) =>
-            resolveMergeConflicts(state, {
-              conflicts,
-              containerPath,
-              conflictNodeRunId: shardRunId,
-              nodeId: innerNode.id,
-              iteration,
-            }),
-          log,
-        })
-        if (merge.kind === 'conflict-human') {
-          return {
-            kind: 'failed',
-            shardKey,
-            outputs: {},
-            message: `merge-back-conflict (merge agent could not resolve): ${merge.detail}`,
+        persistBase: 'in-setup',
+        persist: async (h: IsoLike) => {
+          if (!h.passthrough)
+            await persistIsoBase(db, shardRunId, task.repoCount, shardIso as IsoHandle)
+        },
+      },
+      beforeSpawn: async () => {
+        const iso = shardIso as IsoHandle
+        if (priorShardUndo !== null && !iso.passthrough) {
+          for (const r of iso.repos) {
+            try {
+              await undoPriorShardDeltaInIso(
+                r.isoWorktreePath,
+                priorShardUndo.node[r.worktreeDirName],
+                priorShardUndo.base[r.worktreeDirName],
+                log,
+                r.forcedRepoRelPaths,
+              )
+            } catch (err) {
+              log.warn('T14 iso-undo failed — superimposition fallback', {
+                shardKey,
+                worktreeDirName: r.worktreeDirName,
+                mountPath: r.worktreeDirName,
+                subdir: '',
+                readonly: false,
+                gitignoreCommit: null,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
           }
         }
-      } catch (err) {
+      },
+      onIsoSetupFailure: (err) => {
+        log.warn('fanout shard iso setup failed', {
+          shardKey,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        return { kind: 'failed', shardKey, outputs: {}, message: 'iso-setup-failed' }
+      },
+      spawn: async () => {
+        // RFC-111 D15 (Codex impl-gate P2-1): freeze the runtime for the fanout shard
+        // so a claude-selected agent-multi dispatches its shards on claude, not opencode.
+        const shardRuntime = await resolveFrozenRuntime(
+          db,
+          shardRunId,
+          innerAgent.runtime,
+          opts.defaultRuntime,
+          null,
+          freezeBinaryConfig(opts.configPath),
+        )
+        const iso = shardIso as IsoHandle
+        const result = await runNode({
+          taskId,
+          nodeRunId: shardRunId,
+          nodeId: innerNode.id,
+          agent: innerAgent,
+          triggerContext: state.triggerContext,
+          runtime: shardRuntime.protocol,
+          runtimeBinary: shardRuntime.binary,
+          runtimeParams: shardRuntime.params,
+          runtimeConfigDir: shardRuntime.configDir, // RFC-154: frozen config-dir profile
+          inputs,
+          // RFC-130 D16: cwd + path tokens → the shard's isolated worktree.
+          worktreePath: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
+          // RFC-067: per-task Git identity threaded through fanout shard dispatch.
+          gitUserName: task.gitUserName,
+          gitUserEmail: task.gitUserEmail,
+          templateMeta: {
+            repoPath: iso.repos[0]?.isoWorktreePath ?? task.repoPath,
+            baseBranch: task.baseBranch,
+            taskId,
+            nodeId: innerNode.id,
+            iteration,
+            ...(shard !== null ? { shardKey } : {}),
+            // RFC-066: per-repo metadata for prompt placeholders.
+            repos: iso.repos.map((r) => ({
+              repoPath: r.repoPath,
+              worktreePath: r.isoWorktreePath,
+              worktreeDirName: r.worktreeDirName,
+              mountPath: r.worktreeDirName,
+              subdir: '',
+              readonly: false,
+              gitignoreCommit: null,
+              baseBranch: r.baseBranch,
+            })),
+          },
+          ...(promptTemplate !== undefined ? { promptTemplate } : {}),
+          ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
+          // PR-D2: per-shard clarify stays off — RFC-148 ADT form.
+          clarifyChannel: { kind: 'none' as const },
+          skills: injection.spec.skills,
+          dependents: injection.spec.dependents,
+          mcps: injection.spec.mcps,
+          plugins: injection.spec.plugins,
+          appHome: opts.appHome,
+          ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
+          ...(Object.keys(inputPortKinds).length > 0 ? { inputPortKinds } : {}),
+          db,
+          log,
+          ...(opts.signal ? { signal: opts.signal } : {}),
+          ...(opts.subagentLiveCapture !== undefined
+            ? { subagentLiveCapture: opts.subagentLiveCapture }
+            : {}),
+        })
+        broadcastNodeStatus(taskId, shardRunId, innerNode.id, result.status)
+        return result
+      },
+      keepFromOutcome: (result) => result.processUnreaped === true,
+      mergePhase: (_c, result) => {
+        if (result.status !== 'done') {
+          return {
+            skip: 'not-done',
+            keep: false,
+            then: {
+              produce: async () => ({
+                kind: 'failed' as const,
+                shardKey,
+                outputs: {},
+                message: result.errorMessage ?? `shard-${result.status}`,
+                ...(result.status === 'canceled'
+                  ? {}
+                  : {
+                      retry: {
+                        retryIndex: shardRetryIndex,
+                        failureCode: result.failureCode ?? null,
+                        ...(result.processUnreaped === true
+                          ? { processUnreaped: true as const }
+                          : {}),
+                      },
+                    }),
+              }),
+            },
+          }
+        }
+        if ((shardIso as IsoHandle).passthrough) {
+          return { skip: 'passthrough', keep: false, then: 'settle' }
+        }
+        return 'merge'
+      },
+      mergeBack: {
+        run: async (_c, result) => {
+          const iso = shardIso as IsoHandle
+          const merge = await mergeBackAndSettle({
+            db,
+            writeSem: state.writeSem,
+            handle: iso,
+            nodeRunId: shardRunId,
+            repoCount: task.repoCount,
+            via: 'live',
+            extraForcedContainerPaths: (result.portFilePaths ?? []).map((p) =>
+              toContainerRelative(state.repos[0]?.worktreeDirName ?? '', p),
+            ),
+            conflictResolver: (conflicts, containerPath) =>
+              resolveMergeConflicts(state, {
+                conflicts,
+                containerPath,
+                conflictNodeRunId: shardRunId,
+                nodeId: innerNode.id,
+                iteration,
+              }),
+            log,
+          })
+          return merge
+        },
+        disposition: {
+          onConflictHuman: (detail) => ({
+            keep: false,
+            produce: async () => ({
+              kind: 'failed' as const,
+              shardKey,
+              outputs: {},
+              message: `merge-back-conflict (merge agent could not resolve): ${detail}`,
+            }),
+          }),
+          onThrow: (err) => ({
+            keep: true,
+            then: {
+              produce: async () => {
+                const msg = err instanceof Error ? err.message : String(err)
+                await markMergeFailed(db, shardRunId, msg, log)
+                return {
+                  kind: 'failed' as const,
+                  shardKey,
+                  outputs: {},
+                  message: `merge-back-failed: ${msg}`,
+                }
+              },
+            },
+          }),
+        },
+      },
+      onUnhandledThrow: (err) => {
         const msg = err instanceof Error ? err.message : String(err)
-        keepShardIso = true
-        await markMergeFailed(db, shardRunId, msg, log)
-        return { kind: 'failed', shardKey, outputs: {}, message: `merge-back-failed: ${msg}` }
-      }
-    }
-    return { kind: 'ok', shardKey, outputs: result.outputs, message: '' }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    broadcastNodeStatus(taskId, shardRunId, innerNode.id, 'failed')
-    return {
-      kind: 'failed',
-      shardKey,
-      outputs: {},
-      message: msg,
-      retry: { retryIndex: shardRetryIndex, failureCode: null },
-    }
-  } finally {
-    releaseSub()
-    releaseGlobal()
-    if (!keepShardIso) await discardNodeIso(shardIso, log, state.writeSem)
-  }
+        broadcastNodeStatus(taskId, shardRunId, innerNode.id, 'failed')
+        return {
+          kind: 'failed',
+          shardKey,
+          outputs: {},
+          message: msg,
+          retry: { retryIndex: shardRetryIndex, failureCode: null },
+        }
+      },
+      discardIso: async (h: IsoLike) => discardNodeIso(h as IsoHandle, log, state.writeSem),
+      settle: async (_c, result) => ({
+        kind: 'ok',
+        shardKey,
+        outputs: result.outputs,
+        message: '',
+      }),
+      log,
+    },
+  )
 }
 
 interface DispatchAggregatorArgs {

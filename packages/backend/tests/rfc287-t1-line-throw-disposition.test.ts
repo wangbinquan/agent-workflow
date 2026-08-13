@@ -47,13 +47,15 @@ describe('RFC-287 T1⑨ — 抛出结局与 keep 分歧（拆分前现状）', (
     expect(shouldRetryNodeFailure(null, true)).toBe(false)
   })
 
-  test('① fanout 分片的线级 catch-all 带 retry 载荷（failureCode 为 null）', () => {
+  test('① fanout 分片（已迁骨架）：兜底改由 onUnhandledThrow 声明，载荷不变', () => {
     const body = bodyOf('async function dispatchFanoutShardAttempt(')
     // catch-all 里同时出现「广播 failed」与「retry 载荷」，且 failureCode 显式为 null。
     expect(body).toMatch(
-      /catch \(err\)[\s\S]{0,400}retry: \{ retryIndex: shardRetryIndex, failureCode: null \}/,
+      /onUnhandledThrow: \(err\)[\s\S]{0,400}retry: \{ retryIndex: shardRetryIndex, failureCode: null \}/,
     )
-    expect(body).toMatch(/catch \(err\)[\s\S]{0,400}broadcastNodeStatus\(taskId, shardRunId/)
+    expect(body).toMatch(
+      /onUnhandledThrow: \(err\)[\s\S]{0,400}broadcastNodeStatus\(taskId, shardRunId/,
+    )
   })
 
   test('① 聚合节点（已迁骨架）：线级兜底改由 onUnhandledThrow 声明，载荷不变', () => {
