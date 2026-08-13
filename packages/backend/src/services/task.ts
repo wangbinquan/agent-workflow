@@ -252,6 +252,15 @@ export interface StartTaskDeps {
   /** Default per-node timeout (ms). Defaults from settings; tests can pin. */
   defaultPerNodeTimeoutMs?: number
   /**
+   * RFC-287 G7：把仓库准备推迟到任务行落库之后（仅 JSON-body 启动）。
+   *
+   * 开启后 `startTask` 只做「填错了立刻告诉你」的同步校验，任务先落 `pending`，
+   * 克隆/抓取/多仓物化/建工作树由 `runTask` 认领后作为第 0 步推进；失败转 `failed`
+   * 且 git 原文可见。multipart（要把上传物写进工作树）与 preCreated（调用方已建好
+   * 树）必须保持预物化语义，故这两条路径不受本开关影响。
+   */
+  deferRepoPreparation?: boolean
+  /**
    * RFC-287 G7：任务启动路径的克隆/抓取超时（`config.gitCloneTimeoutMs`）。
    *
    * 此前**只有仓库路由**（`routes/cached-repos.ts` / `routes/repoGroups.ts`）把这个
@@ -2146,6 +2155,8 @@ async function startTaskImpl(
   //       repo; migrates to internalSource with RFC-165 T5);
   //   (3) materialize here (JSON-body flow).
   let space: MaterializedSpace
+  /** RFC-287 G7：延后准备时先铸的 id，供 runTask 第 0 步物化时复用。 */
+  let deferredTaskId: string | null = null
   if (deps.materializedSpace !== undefined) {
     space = deps.materializedSpace
   } else if (deps.preCreatedWorktree !== undefined) {
@@ -2210,6 +2221,34 @@ async function startTaskImpl(
           hasSubmodules: false,
         },
       ],
+    }
+  } else if (deps.deferRepoPreparation === true) {
+    // RFC-287 G7：JSON-body 启动把仓库准备**推迟到任务行落库之后**。
+    //
+    // 今天物化在落行之前，于是「克隆超时 / 远端不可达」这类失败**不留任何记录**
+    // ——用户点了启动，转半天圈，最后得到一个 HTTP 错误，任务列表里什么都没有。
+    // 改为先落 `pending` 行（G7 明确**不新增状态**），准备在后台推进，失败转
+    // `failed` 且 git 原文可见。
+    //
+    // 只有 JSON-body 这一条走：multipart 要把上传物写进工作树、preCreated 是
+    // 调用方已经建好的树，两者都必须保持预物化语义（proposal §G7）。
+    deferredTaskId = ulid()
+    space = {
+      kind: 'single',
+      spaceKind: 'remote',
+      taskId: deferredTaskId,
+      // 「尚未物化」与「物化失败」共用空串，但由 earlyError 区分：失败态 earlyError
+      // 非空、本态为 null。落行时据此仍写 `pending`。
+      worktreePath: '',
+      branch: '',
+      baseCommit: null,
+      earlyError: null,
+      resolvedSources: [],
+      repos: [],
+      nodePaths: [],
+      // 尚未物化 ⇒ 没有已占用的目录，空租约（ownedRoot=null、零 worktree）。
+      // 真正的租约在 runTask 第 0 步物化成功后由 materializeSpace 产出。
+      cleanup: createMaterializedSpaceCleanup(deferredTaskId, null),
     }
   } else {
     space = await materializeSpace(input, deps, appHome)
@@ -2444,6 +2483,10 @@ async function startTaskImpl(
           // RFC-165 (R3-2-r4): a materialize-failure row has NO revivable workspace —
           // stamp the tombstone atomically with the row so retry / sync-workflow can
           // never CAS it back to pending against a missing directory.
+          // RFC-287 G7 / AC-15：**延后准备态不得打墓碑**。判据是 earlyError——它非空
+          // 才是「物化失败、没有可复活的工作区」；延后态 earlyError 为 null，工作树
+          // 只是「还没建」，打了墓碑会让 retryNode 再也 CAS 不回 pending，于是
+          // 「重试准备仓库」这条 G7 的核心语义直接失效。
           workspacePrunedAt: earlyError !== null && worktreePath === '' ? now : null,
         })
         .run()
@@ -2599,7 +2642,54 @@ async function startTaskImpl(
 
   // Kick the scheduler. HTTP route returns immediately; tests can await.
   const controller = new AbortController()
+  // RFC-287 G7：AbortController 必须在**行落库之后、准备开始之前**注册——准备是
+  // 后台推进的第一步，若此刻还没注册，用户在「正在准备仓库」阶段点取消就取消不到
+  // 任何东西（而那恰恰是最想取消的阶段：一个拉不动的大仓）。
   activeTasks.set(taskId, controller)
+  if (deferredTaskId !== null) {
+    // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
+    // `failed` 并把 git 原文留在行上——这正是 G7 要的「失败可见」。
+    // 准备失败有**两种形态**，都要落到行上：
+    //   · `earlyError` —— 物化自己吞下的失败（建工作树、多仓挂载…）；
+    //   · **抛出** —— `resolveCachedRepo` 的超时/锁/校验失败走 DomainError
+    //     （实测：克隆超时抛 `repo-cache-locked` 504，压根不经 earlyError）。
+    // 只接前者会让最常见的一类失败（拉不动远端）重新变回「什么都不留」。
+    let prepared: MaterializedSpace
+    try {
+      prepared = await materializeSpace(input, deps, appHome, deferredTaskId)
+    } catch (err) {
+      prepared = {
+        ...space,
+        earlyError: err instanceof Error ? err.message : String(err),
+      }
+    }
+    if (prepared.earlyError !== null) {
+      // 走 RFC-097 的 CAS 写点：allowedFrom 只放 pending——准备阶段任务必然还在
+      // pending（G7 不新增状态）；若此刻已被取消/已推进，CAS 失败即放弃，不覆写。
+      await setTaskStatus({
+        db: deps.db,
+        taskId,
+        to: 'failed',
+        allowedFrom: ['pending'],
+        reason: 'repo-prep-failed',
+        extra: {
+          finishedAt: Date.now(),
+          errorSummary: `repo preparation failed: ${prepared.earlyError}`,
+          errorMessage: prepared.earlyError,
+        },
+      })
+      activeTasks.delete(taskId)
+      return { ...task, status: 'failed' }
+    }
+    await deps.db
+      .update(tasks)
+      .set({
+        worktreePath: prepared.worktreePath,
+        branch: prepared.branch,
+        baseCommit: prepared.baseCommit,
+      })
+      .where(eq(tasks.id, taskId))
+  }
   const schedulerPromise = runTask({
     taskId,
     db: deps.db,
