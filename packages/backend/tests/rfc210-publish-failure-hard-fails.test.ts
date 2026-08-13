@@ -193,9 +193,16 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // Fanout shard: flag set in the merge catch, discard gated on it.
     expect(src).toContain('keepShardIso = true')
     expect(src).toContain('if (!keepShardIso) await discardNodeIso(shardIso, log, state.writeSem)')
-    // Fanout aggregator: same shape.
-    expect(src).toContain('keepAggIso = true')
-    expect(src).toContain('if (!keepAggIso) await discardNodeIso(aggIso, log, state.writeSem)')
+    // Fanout aggregator: RFC-287 T3 起该线已迁入装配骨架，keep 语义从「函数体里的
+    // 布尔标志 + finally 谓词」变成 spec 上的**声明**：合并抛出走
+    // `disposition.onThrow → keep: true`，清理由骨架的 `if (!keep) discardIso` 统一
+    // 执行（释放先于清理，见 rfc287-t1-release-before-discard 的跨文件结构锁）。
+    // ⚠️ 本条锁的不变量（合并抛出必须保住 iso——它可能是该节点产物的唯一副本）
+    // 现由 **rfc287-t1-merge-disposition-matrix** 的行为夹具接管，那里逐格断言
+    // 「聚合线：撞冲突 keep=false 判失败、抛出 keep=true + markMergeFailed」。
+    // 这里只保留「声明存在」的浅锁，避免同一不变量两处各锁一半。
+    expect(src).toMatch(/onThrow: \(err\) => \(\{\s*keep: true/)
+    expect(src).toContain('keepFromOutcome: (result) => result.processUnreaped === true')
     // Workgroup hook: merge throw flags before rethrowing to the outer catch.
     expect(src).toContain('keepHookIso = true')
     expect(src).toContain('if (!keepHookIso) await discardNodeIso(iso, log, state.writeSem)')
@@ -223,9 +230,26 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // Ratchet: every single-line discard passes the lock; the one multiline
     // call (wrapper stale cleanup) is asserted by its trailing args. A NEW
     // discard site must consciously join this accounting.
-    const singleLine = src.match(/discardNodeIso\([^\n)]*\)/g) ?? []
+    // RFC-287 T3 起改为**跨文件**扫描：装配线陆续迁入 schedulerAssembly.ts，只扫
+    // scheduler.ts 会让计数一路掉到阈值以下，而「把 8 改小」正是这条锁最容易被
+    // 糊弄过去的方式（T1① 已把本文件登记为「必须换成行为夹具、不许改锚了事」）。
+    // 扫两个文件的并集则对「代码搬到哪」免疫：新增 discard 站点仍必须自觉入账。
+    const assembly = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
+      'utf8',
+    )
+    const singleLine = [
+      ...(src.match(/discardNodeIso\([^\n)]*\)/g) ?? []),
+      // 骨架里的清理走注入的 discardIso（其实参在各线 spec 上写明带 writeSem）。
+      ...(assembly.match(/discardIso\([^\n)]*\)/g) ?? []),
+    ]
     expect(singleLine.length).toBeGreaterThanOrEqual(8)
-    for (const call of singleLine) expect(call).toContain('writeSem')
+    for (const call of singleLine) {
+      // 骨架内的调用是 `spec.discardIso(handle)`——写锁由各线 spec 的实参携带，
+      // 由 rfc287-t1-release-before-discard 的结构锁保证顺序，此处只查 scheduler
+      // 侧的直调仍带锁。
+      if (call.startsWith('discardNodeIso(')) expect(call).toContain('writeSem')
+    }
     expect(src).toContain('state.log,\n      state.writeSem,\n    )')
     // Round 6 (P2): replay rebuilds must address the PHYSICAL iso identity.
     expect(src).toContain('nodeRunId: isoKeyOf(r.isoWorktreePath, r.id)')

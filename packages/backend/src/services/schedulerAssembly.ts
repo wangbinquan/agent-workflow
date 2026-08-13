@@ -97,8 +97,12 @@ export interface AssemblySpec<TCtx, TOutcome, TResult> {
   onUnhandledThrow?(err: unknown, ctx: TCtx): TResult | 'rethrow'
   /** 物化失败的产出（五线 message/summary 各不相同，属产品可见面）。 */
   onIsoSetupFailure(err: unknown, ctx: TCtx): TResult
-  /** 默认处置用到的两个副作用（注入，避免 import scheduler/isolatedAgentRun）。 */
-  markMergeFailed(msg: string, ctx: TCtx): Promise<void>
+  /**
+   * **仅默认 onThrow 路径需要**——声明了 `disposition.onThrow` 覆写的线不必提供
+   * （提供了也用不到，反而会让「装配单源锁」多数出一处 `markMergeFailed(`）。
+   * 走默认路径却没提供 = 编程错误，骨架响亮抛出而不是静默跳过标记。
+   */
+  markMergeFailed?(msg: string, ctx: TCtx): Promise<void>
   discardIso(handle: IsoLike): Promise<void>
   settle(ctx: TCtx, outcome: TOutcome): Promise<TResult>
   log: Logger
@@ -157,6 +161,11 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
         }
         // 默认：保留 iso + 标记合并失败，交给 settle 按失败收场。
         keep = true
+        if (spec.markMergeFailed === undefined) {
+          throw new Error(
+            'assembly: default onThrow disposition requires spec.markMergeFailed (or declare disposition.onThrow)',
+          )
+        }
         await spec.markMergeFailed(err instanceof Error ? err.message : String(err), ctx)
         return await spec.settle(ctx, outcome)
       }

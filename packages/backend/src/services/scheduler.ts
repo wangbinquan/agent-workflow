@@ -8476,7 +8476,6 @@ async function dispatchFanoutAggregatorAttempt(
           retry: { retryIndex: aggRetryIndex, failureCode: null },
         }
       },
-      markMergeFailed: async (msg) => markMergeFailed(db, aggRunId, msg, log),
       discardIso: async (h: IsoLike) => discardNodeIso(h as IsoHandle, log, state.writeSem),
       // Aggregator's outputs are already persisted by runner.ts (nodeRunOutputs
       // upsert at runner.ts §port-persist). The wrapper-row outlet copy is
