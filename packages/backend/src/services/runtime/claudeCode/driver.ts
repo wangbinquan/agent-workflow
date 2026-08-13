@@ -7,7 +7,6 @@
 // (2026-08-12 审计对账：原注释仍描述 RFC-282 之前「装配在 runNode 里按 runtime
 // 分支」的旧结构，已修正。)
 
-import type { StartupInventory } from '../types'
 import type {
   AgentInjectionSpecV1,
   AgentSpawnContext,
