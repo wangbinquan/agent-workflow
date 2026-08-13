@@ -46,8 +46,11 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     }
   })
 
-  test('脚本线用 .catch 吞', () => {
-    expect(guardOfFinallyDiscard('async function runScriptNode(')).toBe('dot-catch')
+  test('脚本线（已迁骨架）：清理由骨架统一「吞掉并记 warn」', () => {
+    // RFC-287 T5c：该线的 finally 已迁入骨架；其 discardIso 注入实现保留了原来的
+    // `.catch(() => {})` 吞法，外层再由骨架统一记 warn（C3b 对它已落地）。
+    const body = SCHEDULER.slice(SCHEDULER.indexOf('async function runScriptNode('))
+    expect(body.slice(0, 20000)).toMatch(/discardIso: async \(h: IsoLike\)[\s\S]{0,200}\.catch\(/)
   })
 
   test('工作组主机线用 try/catch 吞（best-effort）', () => {

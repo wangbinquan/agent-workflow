@@ -97,16 +97,12 @@ describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
     expect(branch).toMatch(/kind: 'awaiting_human'/)
   })
 
-  test('conflict-human 列：脚本线 awaiting_human + **显式** keep（C2 前置，T5a 已改）', () => {
-    const body = bodyOf('async function runScriptNode(')
-    const branch = branchAfter(body, "merge.kind === 'conflict-human'")
-    expect(branch).toMatch(/kind: 'awaiting_human'/)
-    // T5a 之前这里**没有**任何 keep 声明——iso 得以保住只是因为 finally 的谓词
-    // `(!succeeded || isReadonly)` 恰好为假。C2 要把成功路径改成即时 discard，
-    // 那个「碰巧」就会消失、撞冲突的 resolve-iso 会被连带删掉，落成孤儿
-    // conflict-human（而恢复逻辑在每个任务入口都跑、会去找已回收的提交并
-    // failTask 整个任务）。故 T5a 一并改成显式声明。
-    expect(branch).toMatch(/keep\w*Iso = true|keep: true/)
+  test('conflict-human 列：脚本线（已迁骨架）awaiting_human + 显式 keep', () => {
+    // T5c 起该线的处置是 spec 上的 onConflictHuman 声明；语义与 T5a 落定的一致：
+    // 撞冲突显式保留 iso（不再依赖 finally 谓词碰巧为假）并停在等待人工。
+    const branch = branchAfter(bodyOf('async function runScriptNode('), 'onConflictHuman:')
+    expect(branch).toMatch(/keep: true/)
+    expect(branch).toMatch(/kind: 'awaiting_human' as const/)
   })
 
   test('工作组主机线：throw 是 keepHookIso + 重抛；conflict 是 abandon + failed', () => {

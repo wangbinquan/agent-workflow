@@ -64,9 +64,9 @@ describe('RFC-287 T1⑧ — 许可释放先于 iso 清理（跨文件结构锁�
     // 防空扫下限：随迁移**递减**是预期的——每迁一条线，scheduler.ts 里就少一个
     // 这样的 finally，而骨架里那个统一的 finally 只算一处。它的作用不是"越多越好"，
     // 而是保证扫描面没有整个塌掉（比如正则失配导致 0 命中却"绿"）。
-    // 当前分布：骨架 1（服务已迁的聚合线与分片线）+ scheduler.ts 剩余未迁线。
-    // T5-T7 每迁一条，这个下限相应下调一次，并在此写明剩余分布。
-    expect(checked).toBeGreaterThanOrEqual(3)
+    // 当前分布：骨架 1（服务已迁的聚合线/分片线/脚本线）+ scheduler.ts 剩余未迁的
+    // 工作组主机线与 agent 线。T6/T7 每迁一条，这个下限相应下调一次并写明分布。
+    expect(checked).toBeGreaterThanOrEqual(2)
     expect(offenders).toEqual([])
   })
 })

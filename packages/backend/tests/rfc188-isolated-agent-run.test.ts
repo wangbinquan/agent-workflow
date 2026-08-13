@@ -291,7 +291,10 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
     // 子任务 canonical 的诞生点——与 agent 站点同一把 writeSem 短窗纪律）
     // + RFC-253 脚本节点的首建与 fresh-retry 重建两处（脚本改文件与 agent
     // 改文件在隔离/合回上没有任何理由不同档，故复用同一批原语）。
-    expect(count('createIsoUnderLock(')).toBe(9)
+    // RFC-287 T5c：脚本线迁入骨架后，它的「首建 + fresh-retry 重建」两处收进了
+    // 一个 `createScriptIso` 闭包（骨架的 iso.create 与 retryPolicy 的换树各调它
+    // 一次），故计数 9→8。锁的不变量没变：每一处物化仍走同一把写锁短窗原语。
+    expect(count('createIsoUnderLock(')).toBe(8)
     // 7 = hook / 主线 §段③ / shard / aggregator / replayPendingMerges /
     // RFC-243 call 节点 M 步（live 与 adoption-rebuild 共用同一调用点）
     // + RFC-253 脚本节点成功后的合回。

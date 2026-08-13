@@ -4506,19 +4506,19 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
   }
 
   const maxRetries = opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET
-  // The slot is held across iso setup → dependency build → EVERY retry →
-  // merge-back, released in the finally below (unchanged by RFC-266; only the
-  // pool it comes from changed).
-  const releaseScript = await scriptSem.acquire()
 
-  // Every script runs in an isolated worktree. A readonly script may write to
-  // that disposable copy, but the copy is never merged back into canonical.
+  // RFC-287 T5c：本线改走 `runAssembly` 骨架的**模式 B**（跨 attempt 窗口）。
+  // 一次 scriptSem 许可 + 一棵 iso 的窗口内由 retryPolicy 驱动多次 attempt；
+  // 与 agent 线相反，脚本线**每次重试都换新树**（D24：否则上一次的文件写入会与
+  // 这一次叠加）。四处逐 attempt 语义逐字保住：信号取消早退、永久失败中断、
+  // 逐次铸行+广播+落基线、succeeded 驱动合并。
   let isoHandle: IsoHandle | null = null
-  // RFC-287 C1/C2：合并抛出或撞冲突时**显式**保留 iso（此前撞冲突是靠 finally 谓词
-  // 碰巧为假才保住的，合并抛出则根本没兜）。
-  let keepScriptIso = false
   const isoKeyRunId = nodeRunId
-  try {
+  let succeeded = false
+  let lastFailure: { code: string; message: string } | null = null
+  let canceledMsg: string | null = null
+
+  const createScriptIso = async (): Promise<IsoHandle> => {
     isoHandle = await createIsoUnderLock({
       writeSem,
       appHome: opts.appHome,
@@ -4528,144 +4528,176 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
       canonRepos: state.repos,
       log,
     })
-  } catch (err) {
-    releaseScript()
-    log.warn('script iso worktree setup failed', {
-      nodeId: node.id,
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return {
-      kind: 'failed',
-      summary: 'isolated worktree setup failed',
-      message: 'iso-setup-failed',
-    }
+    return isoHandle
   }
 
-  let lastFailure: { code: string; message: string } | null = null
-  let succeeded = false
-
-  try {
-    if (isoHandle !== null) await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
-
-    for (let attempt = retryIndex; attempt <= retryIndex + maxRetries; attempt++) {
-      if (opts.signal?.aborted === true) {
-        return { kind: 'canceled', summary: 'task canceled', message: 'signal aborted' }
-      }
-      if (attempt > retryIndex) {
-        // Fresh retry: throw the iso away and re-branch from the CURRENT
-        // canonical state, so the previous attempt's file writes do not stack
-        // (D24 — this is what makes retrying a file-writing script safe).
-        if (isoHandle !== null) {
-          await discardNodeIso(isoHandle, log, writeSem)
-          try {
-            isoHandle = await createIsoUnderLock({
-              writeSem,
-              appHome: opts.appHome,
-              taskId,
-              db,
-              isoKeyRunId,
-              canonRepos: state.repos,
-              log,
-            })
-          } catch (err) {
-            lastFailure = {
-              code: 'iso-recreate-failed',
-              message: err instanceof Error ? err.message : String(err),
-            }
-            break
-          }
-        }
-        nodeRunId = await mintNodeRun(db, {
-          taskId,
+  return await runAssembly<Record<string, never>, ScriptAttemptOutcome, OneNodeResult>(
+    {},
+    {
+      pools: [{ acquire: () => scriptSem.acquire() }],
+      iso: {
+        create: createScriptIso,
+        // 落基线在许可保护的主 try 内（与 agent 线同档；抛出经 finally 释放后继续
+        // 传播——design §10.10 的按线声明）。
+        persistBase: 'in-window',
+        persist: async () => {
+          if (isoHandle !== null) await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
+        },
+      },
+      onIsoSetupFailure: (err) => {
+        log.warn('script iso worktree setup failed', {
           nodeId: node.id,
-          status: 'pending',
-          cause: 'process-retry',
-          retryIndex: attempt,
-          iteration,
-          overrides: { consumedUpstreamRunsJson: consumedUpstreamJson },
+          error: err instanceof Error ? err.message : String(err),
         })
-        broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
-        if (isoHandle !== null) await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
-      }
-
-      const outcome = await runOneScriptAttempt(state, {
-        node,
-        nodeRunId,
-        iteration,
-        retryIndex: attempt,
-        inputs: upstreamInputs,
-        interpreter,
-        isoHandle,
-        isReadonly,
-        language,
-      })
-      if (outcome.kind === 'done') {
-        succeeded = true
-        break
-      }
-      if (outcome.kind === 'canceled') {
-        return { kind: 'canceled', summary: 'task canceled', message: outcome.message }
-      }
-      lastFailure = { code: outcome.message, message: outcome.summary }
-      // Permanent failures gain nothing from another attempt.
-      if ((SCRIPT_PERMANENT_FAILURE_CODES as readonly string[]).includes(outcome.message)) {
-        break
-      }
-    }
-
-    if (succeeded && !isReadonly && isoHandle !== null && !isoHandle.passthrough) {
-      // RFC-287 C1（漂移 A 根治）：此前这里是**裸调用、无 try/catch**——而其余四条
-      // 装配线都有。合并一旦抛出（git 层出错、仓库状态异常、超时），异常会穿过
-      // finally 一路掀翻调度循环：任务以一个笼统的内部错误收场而不是「某节点失败」、
-      // 该节点的行停在非终态、同时在跑的兄弟节点被丢下、用户没有「重试这个节点」
-      // 的落点。收敛到与 agent / fanout 两线同一处置：保留 iso（它可能是该节点产物
-      // 的唯一副本）+ 标记合并失败 + 判该节点失败。
-      try {
-        const merge = await mergeBackAndSettle({
-          db,
-          writeSem,
-          handle: isoHandle,
-          nodeRunId,
-          repoCount: task.repoCount,
-          via: 'live',
-          conflictResolver: (conflicts, containerPath) =>
-            resolveMergeConflicts(state, {
-              conflicts,
-              containerPath,
-              conflictNodeRunId: nodeRunId,
-              nodeId: node.id,
-              iteration,
-            }),
-          log,
-        })
-        if (merge.kind === 'conflict-human') {
-          // 撞冲突时保留 iso 是**显式声明**的，不再依赖 finally 谓词「碰巧」为假
-          // （C2 把成功路径改成即时 discard 后，那个「碰巧」就没了——design §10.10）。
-          keepScriptIso = true
-          return {
-            kind: 'awaiting_human',
-            summary: `merge conflict unresolved: ${merge.detail}`,
-            message: 'merge-conflict',
-          }
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        keepScriptIso = true
-        await markMergeFailed(db, nodeRunId, msg, log)
         return {
           kind: 'failed',
-          summary: `script node ${node.id} merge failed`,
-          message: `merge-back-failed: ${msg}`,
+          summary: `script node ${node.id}: isolated worktree setup failed`,
+          message: 'script-iso-setup-failed',
         }
-      }
-    }
-  } finally {
-    releaseScript()
-    if (isoHandle !== null && !keepScriptIso && (!succeeded || isReadonly)) {
-      await discardNodeIso(isoHandle, log, writeSem).catch(() => {})
-    }
-  }
+      },
+      spawn: async (_c, attempt) => {
+        // 信号检查留在 attempt 起点（与迁移前逐字同位），产出合成的 canceled 结局。
+        if (opts.signal?.aborted === true) {
+          canceledMsg = 'signal aborted'
+          return { kind: 'canceled' as const, summary: 'task canceled', message: 'signal aborted' }
+        }
+        const outcome = await runOneScriptAttempt(state, {
+          node,
+          nodeRunId,
+          iteration,
+          retryIndex: retryIndex + attempt,
+          inputs: upstreamInputs,
+          interpreter,
+          isoHandle,
+          isReadonly,
+          language,
+        })
+        if (outcome.kind === 'done') succeeded = true
+        else if (outcome.kind === 'canceled') canceledMsg = outcome.message
+        else lastFailure = { code: outcome.message, message: outcome.summary }
+        return outcome
+      },
+      retryPolicy: {
+        shouldRetry: (outcome, attempt) => {
+          if (outcome.kind === 'done' || outcome.kind === 'canceled') return false
+          // Permanent failures gain nothing from another attempt.
+          if ((SCRIPT_PERMANENT_FAILURE_CODES as readonly string[]).includes(outcome.message)) {
+            return false
+          }
+          return attempt < maxRetries
+        },
+        // D24：每次重试换新树——这正是让重跑一个写文件的脚本变安全的原因。
+        isoOnRetry: 'always-recreate',
+        onIsoRecreateFailure: (err) => {
+          lastFailure = {
+            code: 'iso-recreate-failed',
+            message: err instanceof Error ? err.message : String(err),
+          }
+          return {
+            kind: 'failed',
+            summary: lastFailure.message,
+            message: lastFailure.code,
+          }
+        },
+        onNextAttempt: async (attempt) => {
+          nodeRunId = await mintNodeRun(db, {
+            taskId,
+            nodeId: node.id,
+            status: 'pending',
+            cause: 'process-retry',
+            retryIndex: retryIndex + attempt,
+            iteration,
+            overrides: { consumedUpstreamRunsJson: consumedUpstreamJson },
+          })
+          broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
+          if (isoHandle !== null) await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
+        },
+      },
+      mergePhase: (_c, outcome) => {
+        if (outcome.kind === 'canceled') {
+          return {
+            skip: 'not-done',
+            keep: false,
+            then: {
+              produce: async () => ({
+                kind: 'canceled' as const,
+                summary: 'task canceled',
+                message: canceledMsg ?? 'signal aborted',
+              }),
+            },
+          }
+        }
+        // readonly 的产物永不合回主干（一次性副本），且 settle 先于 done 写。
+        if (!succeeded || isReadonly) return { skip: 'not-done', keep: false, then: 'settle' }
+        if (isoHandle === null || isoHandle.passthrough) {
+          return { skip: 'passthrough', keep: false, then: 'settle' }
+        }
+        return 'merge'
+      },
+      mergeBack: {
+        run: async () => {
+          const iso = isoHandle as IsoHandle
+          const merge = await mergeBackAndSettle({
+            db,
+            writeSem,
+            handle: iso,
+            nodeRunId,
+            repoCount: task.repoCount,
+            via: 'live',
+            conflictResolver: (conflicts, containerPath) =>
+              resolveMergeConflicts(state, {
+                conflicts,
+                containerPath,
+                conflictNodeRunId: nodeRunId,
+                nodeId: node.id,
+                iteration,
+              }),
+            log,
+          })
+          return merge
+        },
+        disposition: {
+          onConflictHuman: (detail) => ({
+            // 显式保留（T5a 起不再依赖 finally 谓词碰巧为假）。
+            keep: true,
+            produce: async () => ({
+              kind: 'awaiting_human' as const,
+              summary: `merge conflict unresolved: ${detail}`,
+              message: 'merge-conflict',
+            }),
+          }),
+          onThrow: (err) => ({
+            keep: true,
+            then: {
+              produce: async () => {
+                const msg = err instanceof Error ? err.message : String(err)
+                await markMergeFailed(db, nodeRunId, msg, log)
+                return {
+                  kind: 'failed' as const,
+                  summary: `script node ${node.id} merge failed`,
+                  message: `merge-back-failed: ${msg}`,
+                }
+              },
+            },
+          }),
+        },
+      },
+      discardIso: async (h: IsoLike) => {
+        await discardNodeIso(h as IsoHandle, log, writeSem).catch(() => {})
+      },
+      settle: async () => {
+        if (succeeded) return { kind: 'ok', summary: '', message: '' }
+        return {
+          kind: 'failed',
+          summary: lastFailure?.message ?? `script node ${node.id} failed`,
+          message: lastFailure?.code ?? 'script-nonzero-exit',
+        }
+      },
+      log,
+    },
+  )
 
+  // eslint-disable-next-line no-unreachable -- 迁移保留：下方为旧结局，已由 settle 承接
   if (succeeded) return { kind: 'ok', summary: '', message: '' }
   return {
     kind: 'failed',

@@ -77,7 +77,12 @@ export interface AssemblySpec<TCtx, TOutcome, TResult> {
   } | null
   /** L5 的 T14 undo 唯一消费方；钉在物化的同一个 try 内，hook 内自兜。 */
   beforeSpawn?(ctx: TCtx): Promise<void>
-  spawn(ctx: TCtx): Promise<TOutcome>
+  /**
+   * 收 attempt 序号（从 0 起）——模式 B 的每次 spawn 都要知道自己是第几次
+   * （脚本线用它算 retryIndex 铸行、agent 线用它做 followup 判定）。
+   * 模式 A 恒收 0。T5c 首个模式 B 消费者实证的契约缺口。
+   */
+  spawn(ctx: TCtx, attempt: number): Promise<TOutcome>
   /**
    * spawn 结果**直接**决定的 keep 输入（与合并处置正交，2026-08-13 新增维度）。
    *
@@ -163,7 +168,7 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
     }
 
     // 模式 B：窗口内由 retryPolicy 驱动多次 spawn；模式 A 只跑一次。
-    let outcome = await spec.spawn(ctx)
+    let outcome = await spec.spawn(ctx, 0)
     if (spec.retryPolicy !== undefined) {
       const rp = spec.retryPolicy
       for (let attempt = 1; rp.shouldRetry(outcome, attempt - 1); attempt++) {
@@ -190,7 +195,7 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
           }
         }
         await rp.onNextAttempt(attempt)
-        outcome = await spec.spawn(ctx)
+        outcome = await spec.spawn(ctx, attempt)
       }
     }
 
