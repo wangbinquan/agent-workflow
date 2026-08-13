@@ -131,21 +131,40 @@ describe('RFC-282 A3 — self-check refuses broken declarations (positive proof)
     expect(green.problems).toEqual([])
   })
 
-  test("declaring 'init-event' without parseStartupInventory() is refused (RFC-284 T4)", () => {
+  // RFC-297 T15: 判据从「实现了 parseStartupInventory 方法」换成「parseEvent 对
+  // 该运行时的真实 init 样本能挂出清单载荷」——方法已随 T11 删除（它与 parseEvent
+  // 对同一行各解析一遍），但**能力本身仍须可核**，否则声明 'init-event' 就成了
+  // 空头支票。样本由 driver 自陈，自检只问「解析得出载荷吗」。
+  test("declaring 'init-event' without a parseable inventory payload is refused (RFC-284 T4 / RFC-297 T15)", () => {
     const caps = {
       startupObservation: 'init-event',
       observationRequiresFreshRun: false,
       declarationFaces: FULL_FACES,
     }
     const red = verifyRuntimeDeclarations([mockDriverWith(caps)])
-    expect(red.problems.some((p) => p.includes('does not implement parseStartupInventory()'))).toBe(
+    expect(red.problems.some((p) => p.includes('does not produce an inventory payload'))).toBe(true)
+    // 给了样本、但 parseEvent 产不出载荷——空头支票的第二种形态，同样拒绝。
+    const stillRed = verifyRuntimeDeclarations([
+      {
+        kind: 'claude-code',
+        capabilities: caps,
+        initEventSample: () => '{"type":"system","subtype":"init"}',
+        parseEvent: () => null,
+      } as unknown as RuntimeDriver,
+    ])
+    expect(stillRed.problems.some((p) => p.includes('does not produce an inventory payload'))).toBe(
       true,
     )
     const green = verifyRuntimeDeclarations([
       {
         kind: 'claude-code',
         capabilities: caps,
-        parseStartupInventory: () => null,
+        initEventSample: () => 'sample',
+        parseEvent: () => ({
+          kind: 'step_start',
+          rawLine: 'sample',
+          data: { inventory: { faces: { skills: [] } } },
+        }),
       } as unknown as RuntimeDriver,
     ])
     expect(green.problems).toEqual([])

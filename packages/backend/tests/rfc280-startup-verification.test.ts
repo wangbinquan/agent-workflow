@@ -165,9 +165,13 @@ describe('observationFromInventory (opencode)', () => {
   })
 })
 
-describe('parseStartupInventory carries mcp_servers statuses (落差①/P1-5)', () => {
+// RFC-297 T11: `parseStartupInventory` 已删除——它与 `parseEvent` 对同一行 init
+// 各解析一遍。同一批语义现在由 `parseEvent` 挂在事件上的清单载荷承载，用例照搬
+// 到新的观测面，锁的东西一个不少：每服务器状态原样保留、只有 mcp_servers 的
+// init 也是真答案、非 init 行与坏 JSON 不产生载荷。
+describe('init 事件的清单载荷保留每服务器状态（落差①/P1-5）', () => {
   test('init event yields tools/agents/skills AND per-server status verbatim', async () => {
-    const { parseStartupInventory } = await import('@/services/runtime/claudeCode/events')
+    const { parseEvent } = await import('@/services/runtime/claudeCode/events')
     const line = JSON.stringify({
       type: 'system',
       subtype: 'init',
@@ -179,29 +183,32 @@ describe('parseStartupInventory carries mcp_servers statuses (落差①/P1-5)', 
         { name: 'rag-search', status: 'failed' },
       ],
     })
-    const inv = parseStartupInventory(line)
-    expect(inv).not.toBeNull()
-    expect(inv?.tools).toEqual(['Read', 'Bash'])
-    expect(inv?.mcpServers).toEqual([
-      { name: 'ok', status: 'connected' },
-      { name: 'rag-search', status: 'failed' },
+    const faces = parseEvent(line)?.data?.inventory?.faces
+    expect(faces).not.toBeUndefined()
+    expect(faces?.tools?.map((t) => t.key)).toEqual(['Read', 'Bash'])
+    expect(faces?.mcps?.map((m) => [m.key, m.status])).toEqual([
+      ['ok', 'connected'],
+      ['rag-search', 'failed'],
     ])
+    // 空数组是真答案：运行时报告了这一面且一个都没加载。
+    expect(faces?.skills).toEqual([])
   })
 
-  test('an init with only mcp_servers is still a real answer (not null)', async () => {
-    const { parseStartupInventory } = await import('@/services/runtime/claudeCode/events')
+  test('an init with only mcp_servers is still a real answer (not undefined)', async () => {
+    const { parseEvent } = await import('@/services/runtime/claudeCode/events')
     const line = JSON.stringify({
       type: 'system',
       subtype: 'init',
       mcp_servers: [{ name: 'x', status: 'pending' }],
     })
-    expect(parseStartupInventory(line)?.mcpServers).toEqual([{ name: 'x', status: 'pending' }])
+    const faces = parseEvent(line)?.data?.inventory?.faces
+    expect(faces?.mcps?.map((m) => [m.key, m.status])).toEqual([['x', 'pending']])
   })
 
-  test('non-init lines and malformed JSON stay null', async () => {
-    const { parseStartupInventory } = await import('@/services/runtime/claudeCode/events')
-    expect(parseStartupInventory('{"type":"assistant"}')).toBeNull()
-    expect(parseStartupInventory('not json')).toBeNull()
+  test('non-init lines and malformed JSON carry no inventory payload', async () => {
+    const { parseEvent } = await import('@/services/runtime/claudeCode/events')
+    expect(parseEvent('{"type":"assistant"}')?.data).toBeUndefined()
+    expect(parseEvent('not json')).toBeNull()
   })
 })
 

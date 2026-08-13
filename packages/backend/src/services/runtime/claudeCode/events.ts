@@ -34,7 +34,6 @@ import type {
   NormalizedEvent,
   NormalizedEventKind,
   NormalizedTokenDelta,
-  StartupInventory,
   SystemEventObservation,
 } from '../types'
 
@@ -133,42 +132,6 @@ export function parseEvent(line: string): NormalizedEvent | null {
 }
 
 /**
- * RFC-242 T5 — the `system/init` event's `mcp_servers` inventory, reduced to
- * the servers that will NOT be usable this turn.
- *
- * Measured against claude 2.1.220 (design §4.4): claude freezes MCP
- * availability at init. A server that failed to start reports
- * `status:'failed'`, and one whose `initialize` is still outstanding reports
- * `status:'pending'` — in BOTH cases its tools are absent from the model's tool
- * table for the entire turn, while the run itself completes `is_error:false`.
- * Anything that is not an established connection therefore counts as unusable;
- * the runner turns that into an explicit node failure for platform-fenced
- * servers instead of letting the node "succeed" without its declared tools.
- */
-export function parseUnusableMcpServers(line: string): readonly string[] | null {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(line)
-  } catch {
-    return null
-  }
-  if (!parsed || typeof parsed !== 'object') return null
-  const evt = parsed as Record<string, unknown>
-  if (evt.type !== 'system' || evt.subtype !== 'init') return null
-  const servers = evt.mcp_servers
-  if (!Array.isArray(servers)) return null
-  const unusable: string[] = []
-  for (const entry of servers) {
-    if (!entry || typeof entry !== 'object') continue
-    const row = entry as Record<string, unknown>
-    if (typeof row.name !== 'string' || row.name.length === 0) continue
-    if (row.status === 'connected') continue
-    unusable.push(row.name)
-  }
-  return unusable
-}
-
-/**
  * RFC-297 T9 —— 从**已解析**的 init 事件取出统一形状的清单载荷。
  *
  * 关键在「已解析」：同一行 stdout 今天被解析三遍（`parseEvent` 一遍、
@@ -221,70 +184,6 @@ export function inventoryFacesFromInitEvent(
     faces.mcps === undefined
     ? undefined
     : faces
-}
-
-/**
- * 2026-08-09 — the `system/init` event's CAPABILITY inventory: what the runtime
- * actually loaded for this turn (its own built-ins included).
- *
- * Measured on claude 2.1.226, the init event carries all three lists the
- * platform injects into:
- *   · `tools`  — the loaded built-in set, i.e. exactly what `--tools` pruned to;
- *   · `agents` — every addressable subagent type, `--agents` entries + built-ins;
- *   · `skills` — canonical skill names, which are the DIRECTORY names under the
- *                skills dir (frontmatter `name:` only becomes `displayName`),
- *                so they compare literally against what `stageSkills` wrote.
- *
- * Returns null for any line carrying none of them (keep looking). A present but
- * empty array is a real answer — the runtime loaded nothing of that kind.
- */
-export function parseStartupInventory(line: string): StartupInventory | null {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(line)
-  } catch {
-    return null
-  }
-  if (!parsed || typeof parsed !== 'object') return null
-  const evt = parsed as Record<string, unknown>
-  if (evt.type !== 'system' || evt.subtype !== 'init') return null
-  const names = (value: unknown): readonly string[] | undefined =>
-    Array.isArray(value)
-      ? value.filter((name): name is string => typeof name === 'string' && name.length > 0)
-      : undefined
-  const inventory: {
-    tools?: readonly string[]
-    agents?: readonly string[]
-    skills?: readonly string[]
-    mcpServers?: readonly { name: string; status: string }[]
-  } = {}
-  const tools = names(evt.tools)
-  const agents = names(evt.agents)
-  const skills = names(evt.skills)
-  if (tools !== undefined) inventory.tools = tools
-  if (agents !== undefined) inventory.agents = agents
-  if (skills !== undefined) inventory.skills = skills
-  // RFC-280 T3 — the same event's `mcp_servers`, statuses preserved (P1-5:
-  // `parseUnusableMcpServers` above reduces to names; the verification layer
-  // needs the runtime's own reason, so this face carries `status` verbatim).
-  let mcpServers: Array<{ name: string; status: string }> | undefined
-  if (Array.isArray(evt.mcp_servers)) {
-    mcpServers = []
-    for (const entry of evt.mcp_servers) {
-      if (!entry || typeof entry !== 'object') continue
-      const row = entry as Record<string, unknown>
-      if (typeof row.name !== 'string' || row.name.length === 0) continue
-      mcpServers.push({ name: row.name, status: typeof row.status === 'string' ? row.status : '' })
-    }
-  }
-  if (mcpServers !== undefined) inventory.mcpServers = mcpServers
-  // An init event that enumerates none of the faces tells us nothing.
-  return tools === undefined &&
-    agents === undefined &&
-    skills === undefined &&
-    mcpServers === undefined
-    ? null
-    : inventory
 }
 
 /** ISO-8601 `timestamp` → ms epoch; undefined when absent/unparseable. */

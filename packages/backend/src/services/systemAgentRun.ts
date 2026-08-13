@@ -527,12 +527,27 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
             }
             const terminalError = driver.parseTerminalResultError?.(line)
             if (terminalError != null) resultError = terminalError
-            // RFC-280 T6 — one-shot startup report for verification (落差①).
-            if (capturedStartupInventory === null) {
-              const observed = driver.parseStartupInventory?.(line) ?? null
-              if (observed !== null) capturedStartupInventory = observed
-            }
             const ev = driver.parseEvent(line)
+            // RFC-280 T6 / RFC-297 T14 —— 一次性启动报告。改为消费 driver 在
+            // **同一次解析**里挂上的事件载荷，不再对同一行二次 JSON.parse。
+            if (capturedStartupInventory === null && ev !== null) {
+              const faces = ev.data?.inventory?.faces
+              if (faces !== undefined) {
+                capturedStartupInventory = {
+                  ...(faces.tools === undefined ? {} : { tools: faces.tools.map((t) => t.key) }),
+                  ...(faces.agents === undefined ? {} : { agents: faces.agents.map((a) => a.key) }),
+                  ...(faces.skills === undefined ? {} : { skills: faces.skills.map((s) => s.key) }),
+                  ...(faces.mcps === undefined
+                    ? {}
+                    : {
+                        mcpServers: faces.mcps.map((m) => ({
+                          name: m.key,
+                          status: m.status ?? '',
+                        })),
+                      }),
+                }
+              }
+            }
             if (ev === null) {
               outputEvidence.unparsedStdoutSeen = true
               await appendSink({

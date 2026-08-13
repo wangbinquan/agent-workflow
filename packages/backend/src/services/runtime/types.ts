@@ -853,29 +853,22 @@ export interface RuntimeDriver {
    *  Runtimes without such a dialect omit the method. */
   parseTerminalResultError?(line: string): string | null
   /**
-   * RFC-242 T5 — names of MCP servers this startup line reports as UNUSABLE for
-   * the turn (anything but a live connection). Returns null for lines that
-   * carry no MCP inventory. The runner intersects the result with
-   * `SpawnPlan.declaredMcpServers`, so unrelated inherited MCPs remain telemetry.
-   */
-  parseUnusableMcpServers?(line: string): readonly string[] | null
-  /**
-   * 2026-08-09 — skill names this startup line reports as LOADED for the turn
-   * (the runtime's own bundled skills included). Returns null for lines that
-   * carry no such inventory. Consumers compare only capabilities explicitly
-   * added for the current run.
-   */
-  /**
-   * 2026-08-09 — the capabilities this startup line reports as LOADED for the
-   * turn (the runtime's own built-ins included). Returns null for lines that
-   * carry no such inventory, and a field is undefined when this runtime does
-   * not enumerate that kind. Consumers compare only what the platform added
-   * for the current run.
+   * RFC-297 T15 —— 一条本运行时真实的启动事件样本，供**启动自检**核对
+   * `startupObservation: 'init-event'` 这个声明不是空头支票：自检把它喂给
+   * `parseEvent`，产不出清单载荷就拒绝启动。
    *
-   * A runtime that never reports an inventory simply never triggers the check:
-   * being unable to prove a capability arrived is not proof that it did not.
+   * 只有声明 'init-event' 的 driver 需要提供。样本必须来自实测（claude 的取自
+   * 2.1.226 实跑），别手搓一个「刚好能过」的假对象——那样自检就退化成同义反复。
    */
-  parseStartupInventory?(line: string): StartupInventory | null
+  initEventSample?(): string
+
+  /**
+   * RFC-297 T11 —— `parseUnusableMcpServers?` 与 `parseStartupInventory?` 已删除。
+   * 二者与 `parseEvent` 对同一行各解析一遍同一个 `system/init`；现在 driver 在
+   * 那一次解析里就把清单挂进 `NormalizedEvent.data.inventory`，消费方（runner /
+   * systemAgentRun / MCP 测试台）统一读载荷。「哪些 MCP 本轮不可用」由消费方从
+   * 同一份观测里算，不再需要一个只为它存在的驱动方法。
+   */
 }
 
 /** What the platform injected into one spawn and expects to see loaded. */

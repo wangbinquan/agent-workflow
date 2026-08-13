@@ -82,6 +82,7 @@ import {
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import type {
   AgentSpawnPlan,
+  NormalizedEvent,
   PersistedEventKind,
   ResolvedSkill,
   StartupInventory,
@@ -1188,32 +1189,47 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       })
     }
 
-    const onStdoutLine = async (line: string): Promise<void> => {
-      if (declaredMcpServers.size > 0 && !mcpInventorySeen) {
-        // Null = this line is not the inventory; keep looking. A non-null answer
-        // is the one-shot startup inventory, so stop re-parsing every line after
-        // it (the runtime freezes MCP availability there — RFC-242 §4.4).
-        const unusable = driver.parseUnusableMcpServers?.(line) ?? null
-        if (unusable !== null) {
-          mcpInventorySeen = true
-          const declaredUnusable = unusable.filter((name) => declaredMcpServers.has(name)).sort()
-          if (declaredUnusable.length > 0) {
-            log.warn('runtime-declared-mcp-unusable', {
-              nodeRunId: opts.nodeRunId,
-              servers: declaredUnusable,
-              detail: 'injected MCP server(s) did not come up; the node runs without their tools',
-            })
-          }
+    /**
+     * RFC-297 T11/T12 —— 观测消费收敛到**事件载荷**这一个来源。
+     *
+     * 此前这里是两块各自再解析一遍原始行的 if：`parseUnusableMcpServers` 与
+     * `parseStartupInventory`，加上下面的 `parseEvent`，同一行 init 被
+     * `JSON.parse` 三次、被判 `type==='system' && subtype==='init'` 三次。现在
+     * driver 在那一次解析里就把四个面挂进 `data.inventory`，这里只消费。
+     *
+     * 一次性语义保持不变：清单只认第一份（运行时在 init 处冻结 MCP 可用性，
+     * RFC-242 §4.4）。
+     */
+    const consumeInventoryPayload = (event: NormalizedEvent): void => {
+      const faces = event.data?.inventory?.faces
+      if (faces === undefined) return
+      if (capturedStartupInventory === null) {
+        capturedStartupInventory = {
+          ...(faces.tools === undefined ? {} : { tools: faces.tools.map((t) => t.key) }),
+          ...(faces.agents === undefined ? {} : { agents: faces.agents.map((a) => a.key) }),
+          ...(faces.skills === undefined ? {} : { skills: faces.skills.map((s) => s.key) }),
+          ...(faces.mcps === undefined
+            ? {}
+            : { mcpServers: faces.mcps.map((m) => ({ name: m.key, status: m.status ?? '' })) }),
         }
       }
-      // RFC-280 T3 (落差①) — capture the one-shot startup inventory for the
-      // verification record. Present only on runtimes that report one on
-      // stdout (claude's system/init); opencode's `?.` short-circuits at zero
-      // cost and its observation comes from the RFC-029 inventory file instead.
-      if (capturedStartupInventory === null) {
-        const observed = driver.parseStartupInventory?.(line) ?? null
-        if (observed !== null) capturedStartupInventory = observed
+      if (declaredMcpServers.size === 0 || mcpInventorySeen || faces.mcps === undefined) return
+      mcpInventorySeen = true
+      // 运行时报告的 MCP 可用性仍是运维遥测，不是执行准入判据（RFC-242 原语义）。
+      const declaredUnusable = faces.mcps
+        .filter((m) => m.status !== 'connected' && declaredMcpServers.has(m.key))
+        .map((m) => m.key)
+        .sort()
+      if (declaredUnusable.length > 0) {
+        log.warn('runtime-declared-mcp-unusable', {
+          nodeRunId: opts.nodeRunId,
+          servers: declaredUnusable,
+          detail: 'injected MCP server(s) did not come up; the node runs without their tools',
+        })
       }
+    }
+
+    const onStdoutLine = async (line: string): Promise<void> => {
       // RFC-111 PR-A/B: normalize one stdout line through the frozen runtime's
       // driver. `parseEvent` returns null for non-JSON / falsy-JSON lines, which
       // routes them through the raw-text fallback exactly as the old inline
@@ -1232,6 +1248,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       }
       const ev = driver.parseEvent(line)
       if (ev) {
+        consumeInventoryPayload(ev)
         try {
           if (ev.sessionId !== undefined) {
             if (sessionId === undefined) {
@@ -2089,6 +2106,25 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           err: err instanceof Error ? err.message : String(err),
         })
       }
+    }
+
+    // RFC-297 T12 —— 退出后补发的合成事件走**同一条**消费路径。opencode 的清单
+    // 在 dump 文件里而不在流里，driver 把它读成一个普通事件；下游因此无从分辨
+    // 某份观测来自流内一行还是一个文件（design §3.2「event 来源统一」）。
+    // 补发失败只丢观测，绝不改节点成败——清单是呈现面。
+    try {
+      const finalEvents =
+        (await driver.drainFinalEvents?.({
+          runRoot,
+          nodeKind: inventoryNodeKind,
+          freshRun: wantsInventory,
+        })) ?? []
+      for (const event of finalEvents) consumeInventoryPayload(event)
+    } catch (err) {
+      log.warn('final-events-drain-failed', {
+        nodeRunId: opts.nodeRunId,
+        err: err instanceof Error ? err.message : String(err),
+      })
     }
 
     // RFC-280 T3 — startup verification: declared manifest × runtime startup

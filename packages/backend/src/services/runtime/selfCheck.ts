@@ -65,13 +65,21 @@ export function verifyRuntimeDeclarations(
         `driver '${driver.kind}': declares startupObservation 'inventory-file' but does not implement readInventory()`,
       )
     }
-    if (
-      caps.startupObservation === 'init-event' &&
-      typeof driver.parseStartupInventory !== 'function'
-    ) {
-      problems.push(
-        `driver '${driver.kind}': declares startupObservation 'init-event' but does not implement parseStartupInventory()`,
-      )
+    // RFC-297 T15 —— 声明 'init-event' 的运行时必须真的能从流内事件里产出清单
+    // 载荷。判据从「实现了 parseStartupInventory 方法」换成「parseEvent 对一条
+    // 该运行时的 init 样本能挂出 data.inventory」——方法已随 T11 删除，而能力
+    // 本身仍须可核。样本由 driver 自陈（见 `initEventSample`）。
+    if (caps.startupObservation === 'init-event') {
+      const sample = driver.initEventSample?.()
+      const faces =
+        sample === undefined
+          ? undefined
+          : (driver.parseEvent(sample)?.data?.inventory?.faces ?? undefined)
+      if (faces === undefined) {
+        problems.push(
+          `driver '${driver.kind}': declares startupObservation 'init-event' but its parseEvent does not produce an inventory payload`,
+        )
+      }
     }
     if (typeof caps.observationRequiresFreshRun !== 'boolean') {
       problems.push(`driver '${driver.kind}': observationRequiresFreshRun must be boolean`)

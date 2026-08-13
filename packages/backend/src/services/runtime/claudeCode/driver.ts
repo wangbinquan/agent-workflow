@@ -39,13 +39,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
-import {
-  parseEvent,
-  observeSystemEvent,
-  parseResultError,
-  parseStartupInventory,
-  parseUnusableMcpServers,
-} from './events'
+import { parseEvent, observeSystemEvent, parseResultError } from './events'
 import { buildClaudeSpawn } from './spawn'
 import { toClaudeAgents } from './inject'
 import { pickRuntimeHead } from '../head'
@@ -518,17 +512,27 @@ export const claudeCodeDriver: RuntimeDriver = {
     if (parsed === null || !parsed.isError) return null
     return parsed.message.length > 0 ? parsed.message : 'claude reported a terminal error result'
   },
-  // Claude freezes MCP availability on its init event; a server that is not
-  // `connected` there loses its tools for the whole turn.
-  parseUnusableMcpServers(line: string): readonly string[] | null {
-    return parseUnusableMcpServers(line)
+  /**
+   * RFC-297 T15 —— 启动自检拿它核对 `startupObservation: 'init-event'` 的声明。
+   * 形状取自实测（claude 2.1.226 的 `system/init`），四个面各留一项即可——
+   * 自检只问「解析得出载荷吗」，不问内容多少。
+   */
+  initEventSample(): string {
+    return JSON.stringify({
+      type: 'system',
+      subtype: 'init',
+      session_id: 'self-check',
+      tools: ['Read'],
+      agents: ['general-purpose'],
+      skills: [],
+      mcp_servers: [],
+    })
   },
-  // 2026-08-09 — the same init event enumerates the tools, subagents and skills
-  // claude actually loaded; anything the platform injected and does not find
-  // there means the node cannot use what it declared.
-  parseStartupInventory(line: string): StartupInventory | null {
-    return parseStartupInventory(line)
-  },
+  // RFC-297 T11 —— 原先这里有两个方法（parseUnusableMcpServers /
+  // parseStartupInventory）各自把同一行 init 再解析一遍。清单现在由 parseEvent
+  // 在那一次解析里挂进 data.inventory：MCP 可用性、工具集、子代理、技能四个面
+  // 同源，消费方只读载荷。Claude 在 init 处冻结 MCP 可用性的语义未变——
+  // 非 `connected` 的服务器整轮都拿不到工具，判定移到消费侧同一份观测上做。
   // RFC-143 — capability methods. PR-1 delegates to the existing free functions.
   defaultBinary(config: RuntimeBinaryConfig): string[] {
     return config.claudeCodePath ? [config.claudeCodePath] : ['claude']
