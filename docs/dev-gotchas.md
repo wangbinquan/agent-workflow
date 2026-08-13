@@ -576,3 +576,12 @@ runner 打崩了」，而单独跑那个文件是绿的。要么**把 ssh 会话
 - **改 `scripts/depcheck.ts` 的 KNOWN_VIOLATIONS 必须连跑它的元测试（`packages/backend/tests/depcheck-gate.test.ts`），`bun run depcheck` 本体绿≠纪律绿**（RFC-284 批 A 实测事故：22 条新账目 depcheck 40/40 全绿上了 main，CI 双 OS shard-1 确定性红——元测试强制每条 removeWhen >10 字且含 `WP-\d|RFC-\d{3}|独立切片` 标记，11 条短尾「随 X 域下沉。」双双违反）。定式：账本与账本的纪律测试是一对，动其一必跑其二。
 
 - **满载噪音归类时必须把失败清单逐条隔离复跑，不能只隔离「眼熟的那几个」**（同一事故的另一半：钉住 worktree 门禁 4/4 分片超时家族大红里混着上面那条确定性真红，隔离清单按 grep 摘要挑了 5 个「叫得上名字」的文件全绿后整轮判了噪音——真红被淹没直到 CI 抓出。判据：分片日志里 `(fail)` 逐条数满、与隔离清单一一对账，缺一条都不许按噪音收工；两 OS 同分片齐红优先怀疑确定性真红）。
+
+- **commit message 里的反引号会被 shell 命令替换吞掉**（2026-08-13 实撞，且**已静默
+  损坏过多条**）：本仓 commit message 惯例大量使用 `` `符号名` `` 标注标识符，而
+  `git commit -m "…`Foo`…"` 在双引号里会把反引号当**命令替换**执行——`Foo` 不是命令
+  → 报 `command not found` 并把该处替换成**空字符串**，message 里那个标识符就此消失。
+  报错混在 git 输出里极易被忽略（`79c39169` 是当场看见的一例，回查 `d64af290`
+  发现更早就已无声丢失两个字段名）。**定式**：带反引号的 message 一律写文件再
+  `git commit -F <file>`（或用单引号 heredoc 生成文件），**不要**用 `-m "…"`；
+  提交后 `git log -1 --format=%B | grep` 抽查一个标识符是否还在。
