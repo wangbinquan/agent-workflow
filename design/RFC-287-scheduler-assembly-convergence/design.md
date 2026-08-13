@@ -387,6 +387,16 @@ parentNodeRunId/consumed(+nonce)；L7 :4533 只带 consumed，而其初次铸行
 
 ### 10.7 启动路径半场修订（G5/G6/G7）
 
+- **G5 拒绝两面**（第二轮门 P1-1 定音）：① 启动面收口 `resolveRepoSourceSingle`；
+  ② `POST /api/cached-repos/:id/refresh`（routes/cached-repos.ts:62 →
+  gitRepoCache.ts:865 `refreshCachedRepo`）同拒。**注册面（批量导入
+  repoBatchImport.ts:460 / 仓库组 repoGroup.ts:397）不拒**——那两条直达镜像层、
+  绕过 `resolveRepoSourceSingle`，本轮有意不动（存量可见不可运行）。
+  全仓**无任何 schema 做协议白名单**（StartTask/StartAgentTask/StartWorkgroupTask/
+  RepoAttachmentInput 的 repoUrl 与 batch-import 的 urls[] 全部只 `.min(1)`），
+  故拒绝只能落在服务层这两点，不能指望 schema。
+  另：`task.ts:1700-1701` 的 `deps.preResolvedSource` 短路是一条旁路缝（当前无生产
+  调用方），落地时加源码锁钉死。
 - **G5 拒绝点收口**（P1-2）：公开面自 RFC-204 起不传 URL、传 `cachedRepoId`，
   故 schema 层拦 `file://` 对存量**一个都拦不住**。拒绝点放
   `resolveRepoSourceSingle`（task.ts:658）解析出 `sourceUrl` 之后、
