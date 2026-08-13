@@ -4,18 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository status
 
-This repo is **mid-implementation** (M1 in progress; ~9/18 of M1 done as of last commit).
+v1 **已发布**：M0–M5 的 81 个 issue 全部完工（`STATE.md` §路线图全局视图：M0 5/5、M1 18/18、M2 16/16、M3 14/14、M4 11/11、M5 12/12），发布产物由 `v*` tag 触发的 workflow 产出。**此后所有产品 / 技术工作一律以 RFC 形式落地**（`design/RFC-NNN-{slug}/`），见 §RFC workflow。
 
 **Read in this order at session start:**
 
 1. `STATE.md` — **session-to-session execution log**. Always read first; tells you what's done, what's next, current caveats.
-2. `design/plan.md` — 81-issue roadmap (M0–M5). Pick next issue from here once you know the state.
-3. `design/proposal.md` — product spec (authoritative).
-4. `design/design.md` — technical design (authoritative).
-5. `proposal/init.md` — original Chinese proposal, preserved for history. When it disagrees with `design/*.md`, `design/*.md` wins.
-6. `docs/dev-gotchas.md` — 跨 RFC 沉淀的**通用踩坑**（提交纪律 / 迁移 / CI / opencode / impl-gate 经验规律 / 前端 / dev-env）。动手前扫一遍，避免重复踩坑；踩到新的通用坑也补进去（RFC-专属细节仍进各 `design/RFC-XXX/`）。
+2. `design/plan.md` — **RFC 索引**（编号 / 标题 / 状态；新 RFC 在此登记）+ 已完工的 M0–M5 路线图存档。**这里已无待认领 issue**，新工作从 RFC 开始。
+3. `design/RFC-294-backend-layered-target-architecture/` — 后台**全局目标架构**总纲；新 RFC 的设计必须朝它演进（见 §RFC workflow 第 8 条）。
+4. `design/proposal.md` — product spec (authoritative).
+5. `design/design.md` — technical design (authoritative).
+6. `proposal/init.md` — original Chinese proposal, preserved for history. When it disagrees with `design/*.md`, `design/*.md` wins.
+7. `docs/dev-gotchas.md` — 跨 RFC 沉淀的**通用踩坑**（提交纪律 / 迁移 / CI / opencode / impl-gate 经验规律 / 前端 / dev-env）。动手前扫一遍，避免重复踩坑；踩到新的通用坑也补进去（RFC-专属细节仍进各 `design/RFC-XXX/`）。
 
-When a batch of issues completes, commit + push and update `STATE.md` so the next session can pick up seamlessly.
+When a batch of work (RFC tasks, fixes) completes, commit + push and update `STATE.md` so the next session can pick up seamlessly.
 
 `bun install` then `bun run gate:local` to run the complete local quality/test gate. For a
 tests-only pass, `bun run test` verifies backend, shared, and frontend.
@@ -37,6 +38,11 @@ tests-only pass, `bun run test` verifies backend, shared, and frontend.
    - `proposal.md` 必须含**「能力影响清单」**章节：逐项列出被关闭的既有能力与受影响的部署形态，作为 breaking change **呈用户逐项确认**——不得以「安全默认」名义静默移除（RFC-224 曾静默切断自定义 provider 网关部署，生产无预警全挂，事后只能以 RFC-251 / RFC-255 逐个受控恢复）；
    - 每条禁用 / 拒绝分支**必须有测试覆盖**（禁用分支与正向功能同等对待，见 `docs/dev-gotchas.md` 对应教训）；
    - 关闭判据必须是可复跑的外部源码引用（`file:line`），接手复核规则同 `docs/dev-gotchas.md` §「RFC / design 里对 opencode 行为的既有断言」。
+8. **目标架构对齐（RFC-294 总纲，强制）**：`design/RFC-294-backend-layered-target-architecture/` 定义了后台的**全局目标架构**——feature-first bounded context + 模块内 `domain / application / engine / ports / infrastructure` 分层，执行链固定为 TaskEngine → WrapperRuntime → NodeExecutor → ExecutionKernel，跨模块只依赖 exact `public/{commands,queries,participants,events,types}` 合同，bootstrap 唯一装配。**此后每个新 RFC 都必须考虑向该架构做出架构演进**：
+   - 写 `design.md` 前先读 RFC-294 的 `proposal.md §1 摘要裁决 / §3 目标` 与 `design.md`，在设计里写明本次改动落在哪个 bounded context、哪一层，新增代码**按目标架构落位**；
+   - 不要再往 `routes/` / `services/` 横向平铺层加新的跨域耦合、facade 或 cross-context 内部 import；顺手能把触及的存量结构朝目标架构挪一步就挪，并在 `design.md` 里写清「本 RFC 承担哪一步演进、留下哪些债」；
+   - 确有偏离（必须绕过 kernel、必须新增临时 facade 等）时在 `design.md` 里**逐条列出偏离项与理由并呈用户确认**，不得默默沿用旧形状；
+   - RFC-294 本身是总纲、零生产改动：各演进波次仍各自立 RFC 单独获批，新 RFC **不因「对齐 294」就自动取得实现许可**。
 
 新 session 接手 RFC 时也按 `proposal → design → plan` 顺序读，规则与 `design/*.md` 一致。
 
@@ -142,12 +148,14 @@ chrome / 自写一套 CSS。整个系统的视觉与交互风格要保持一致�
 
 ## Product vision (from `proposal/init.md`)
 
-The goal is an **orchestration platform that drives multiple `opencode` CLI processes as collaborating agents**, instead of using opencode's built-in subagents. The motivation: when many subagents (especially audit-style ones) run inside a single opencode session, the parent session's context grows uncontrollably and model accuracy degrades. By moving inter-agent message passing into a deterministic, framework-level pipeline, each agent process keeps a small, focused context.
+The goal is an **orchestration platform that drives multiple agent-CLI runtime processes as collaborating agents**, instead of using a runtime's built-in subagents. The motivation: when many subagents (especially audit-style ones) run inside a single runtime session, the parent session's context grows uncontrollably and model accuracy degrades. By moving inter-agent message passing into a deterministic, framework-level pipeline, each agent process keeps a small, focused context.
+
+（原始提案只写了 `opencode`；平台现已把 **OpenCode 与 Claude Code** 都作为一等 runtime 驱动，产品意图不变——本节所说的「runtime 进程」即所选 runtime 的子进程。）
 
 The canonical workflow it must support is **Code → Audit → Fix**:
 
-1. The framework snapshots the working repo's git commit ID, runs a worker agent (an opencode process) in that repo, then snapshots the commit ID again. The diff between the two snapshots — including uncommitted changes — is the worker's structured output.
-2. That diff is fed into one or more auditor agents. The framework may shard the diff (per-file, N-files-per-shard, etc.) and fan out to parallel auditor processes, each producing its own audit result.
+1. The framework snapshots the working repo's git commit ID, runs a worker agent (a runtime child process) in that repo, then snapshots the commit ID again. The diff between the two snapshots — including uncommitted changes — is the worker's structured output.
+2. That diff is fed into one or more auditor agents. The framework may shard the work and fan out to parallel auditor processes, each producing its own audit result.（分片的**现行**机制见下文 §Multi-process node——是 RFC-103 的 kind-aware list 分片，不是提案原文设想的 per-file / per-N-files diff 文本分片。）
 3. Audit results are aggregated (or sharded again) and fed into fixer agents using the same fan-out pattern.
 
 This pattern — record-state → run-agents → diff/aggregate → fan-out — is the core abstraction; specific workflows are user-defined compositions of it.
@@ -157,21 +165,21 @@ This pattern — record-state → run-agents → diff/aggregate → fan-out — 
 (Below is a summary; for full detail read `design/proposal.md` and `design/design.md`.)
 
 - **Agent management** — virtual agent names. **DB is source of truth** (frontmatter fields + body markdown stored in DB columns). Selected agents are added to the runtime's ordinary config surface; machine/project config still loads by the runtime's native rules. User-authored permission declarations remain explicit product input.
-- **Skill management** — file system is source of truth (whole skill dir under `~/.agent-workflow/skills/{name}/files/`). Selected managed skills are staged into the run config; project skills remain discoverable from the worktree. Skill/plugin resource-type boundaries and content-revision fencing remain enforced.
+- **Skill management** — file system is source of truth (whole skill dir under `~/.agent-workflow/skills/{id}/files/`，目录名是技能的 ULID **id** 而非 name；不可变版本快照在同级 `versions/v{contentVersion}/files/`). Selected managed skills are staged into the run config; project skills remain discoverable from the worktree. Skill/plugin resource-type boundaries and content-revision fencing remain enforced.
 - **MCP management** — the node's selected MCP closure is added to the runtime config. Local commands and remote endpoints run with their authored environment/network semantics; unrelated machine/project runtime config remains naturally discoverable. Selected plugins and `dependsOn` closure members are still injected through driver-specific native surfaces.
 - **Runtime management** — the administrator-selected OpenCode or Claude Code executable runs directly as an ordinary child process in the daemon environment. There is no binary digest/launcher identity gate, private HOME/XDG/store, network fence, or OS sandbox. OpenCode has no exact-version gate; compatibility failures surface as ordinary probe/CLI/protocol errors. A Claude runtime profile may opt in to the upstream `IS_SANDBOX=1` compatibility marker; it is off by default and does not enable an OS sandbox or platform protection.
 - **Workflow management** — DB-stored definition (with `$schema_version`, version auto-increment on PUT). YAML import/export with conflict resolution dialog.
 - **Workflow editor** — xyflow v12 Dify-style canvas with nodes / edges / wrappers (git, loop). Side bar lists agents (drag to create), wrappers, IO nodes. Right drawer with Edit/Preview tabs. Auto-save (debounce 1s). Multi-tab sync via `/ws/workflows`.
 - **Node model** — each node references one agent, plus per-node prompt template (supports `{{port_name}}` + `{{__repo_path__}}` etc.), per-node overrides (model/variant/temperature/retries/timeout). single ↔ multi-process togglable. `readonly` always inherited from agent (not overridable).
 - **Output XML envelope** — `<workflow-output><port name="...">...</port></workflow-output>`. Agent declares `outputs: [...]` in frontmatter; framework appends an English protocol block to user prompt to instruct format. Last envelope in stdout wins.
-- **Multi-process node** — declares `sourcePort` (typically a git wrapper's `git_diff`, which emits a `list<path<*>>` of changed paths). Sharding is RFC-103 **kind-aware list splitting**（`splitListItems` / `splitMarkdownDocs`，list 逐项一 shard；空源 = 全 outlet 置空 + 直接 done；shardKey 冲突以 `#idx` 后缀消歧）。（早期提案所述 per-file / per-N-files / per-directory 的 diff 文本分片已随 RFC-060 删除 agent-multi 而退役；残留死代码 `util/diffSplit.ts` 按 2026-08-12 审计决策 D12 随 RFC-284 移除——见 `design/system-commons-unification-audit-2026-08-12.md`。）Aggregation by shard_key dictionary order. **Failure semantics are fail-all-after-join** — any failed shard fails the whole wrapper, with no partial aggregation and **no auto `errors` port** (the `errors` port and partial tolerance described in `design/proposal.md` are DEFERRED, not implemented in v1; see `design/design.md` §6.3 and the lock in `packages/backend/tests/scheduler-audit-s18-s19-fanout-failure-semantics.test.ts`).
+- **Multi-process node** — declares `sourcePort` (typically a git wrapper's `git_diff`, which emits a `list<path<*>>` of changed paths). Sharding is RFC-103 **kind-aware list splitting**（`splitListItems` / `splitMarkdownDocs`，list 逐项一 shard；空源 = 全 outlet 置空 + 直接 done；shardKey 冲突以 `#idx` 后缀消歧）。（早期提案所述 per-file / per-N-files / per-directory 的 diff 文本分片已随 RFC-060 删除 agent-multi 而退役；其残留死代码 `util/diffSplit.ts` 已按 2026-08-12 审计决策 D12 于 RFC-284 中删除，勿复活——见 `design/system-commons-unification-audit-2026-08-12.md` 与 `design/RFC-210-recursive-submodule-isolation/proposal.md`。）Aggregation by shard_key dictionary order. **Failure semantics are fail-all-after-join** — any failed shard fails the whole wrapper, with no partial aggregation and **no auto `errors` port** (the `errors` port and partial tolerance described in `design/proposal.md` are DEFERRED, not implemented in v1; see `design/design.md` §6.3 and the lock in `packages/backend/tests/scheduler-audit-s18-s19-fanout-failure-semantics.test.ts`).
 - **Git wrapper** — no inputs, single output `git_diff` (snapshots commit + worktree before first inner node, after last; composes diff incl. untracked).
 - **Loop wrapper** — `max_iterations` + `exit_condition` (port-empty / port-equals / port-count-lt). v1 has **no cross-iteration feedback ports**; cross-iter state is via worktree files only. Wrappers nest arbitrarily; `git in loop` = per-iter diff (last-iter wins as output); `loop in git` = full-loop total diff.
 - **Process lifecycle** — runtime children are ordinary processes, not isolated tenants. The daemon still records PIDs, bounds output, enforces timeout/cancel, escalates TERM→KILL across the process tree, drains pipes, and repairs interrupted rows after restart. Script `readonly` means disposable worktree plus no merge-back, not filesystem write denial.
 - **Resource ACL（RFC-099 / RFC-231）** — 代理/技能/MCP/插件/工作流/工作组六类资源各带单一 `owner_user_id` + `visibility('public'|'private')` + 通用 `resource_grants` 授权表；未授权用户完全不可见（列表过滤、详情 404 与不存在同形）。所有用户可创建，受支持的新建路径统一为创建者 owner + `private` + 零 grants；存量行不回填，框架 built-in 显式保持 `public`，缺失 visibility/SQLite 的 `public` default 只作 legacy/raw-SQL 兼容。启动任务只校验工作流本身可用（引用闭包隐式授权），保存工作流/代理时只校验**新增**引用（`services/resourceRefs.ts`）。任务成员（owner+collaborator）即评审/反问的回答权边界（节点级指派机制已删除）；任务继续走独立的成员制**私有**模型、无 visibility 开关。归属记录（user id + 任务关系角色快照 {owner,user,admin}）只落审计列与 UI，**绝不进入 agent prompt**（rfc099-prompt-isolation 测试双层锁定，approval_meta 端口已剔除 decidedBy）。反问支持服务端逐题协作草稿（last-write-wins + 逐题归属 + 提交冻结）。记忆权限现状（2026-08-12 按源码对账更正，原「repo/global 仍 admin」记载过期）：读面——资源 scope 随绑定资源可见性，repo/repo_group/global 全员可读（`services/memory.ts` canViewMemory；RFC-285 Q4 例外：status='candidate' 的未审蒸馏行仅资源管理员可读，人审发布后回到全员面）；管理面——随 scope 资源写权 + 资源管理员（admin+manager，isResourceAdminRole）全量兜底（canManageMemory）。单一事实源：`services/resourceAcl.ts`。
 - **Task lifecycle** — worktree per task at `~/.agent-workflow/worktrees/{repo-slug}/{task-id}`. Base branch chosen at launch time (default repo HEAD). Task status states: `pending / running / done / failed / canceled / interrupted (daemon restart) / awaiting_review / awaiting_human`（RFC-097 勘误：任务级从无 `exhausted`——它只是 node_run 状态〔loop 触顶〕，loop 耗尽时任务以 `failed` 收场）. Writes go through `setTaskStatus`/`trySetTaskStatus` (services/lifecycle.ts, RFC-097 CAS + 转移表；直写被 s14 守卫禁止). Cancel keeps worktree; resume rolls each retried node back to its `pre_snapshot` (git stash hash); single-node retry cascades downstream by default. Retries produce independent `node_runs` keyed by `retry_index`.
 - **Daemon** — single Bun process, flock single-instance lock, graceful shutdown 30s, hourly background tasks (events archival, optional worktree GC, resource-limit check at 1Hz).
-- **Tech stack** — backend: Bun + Hono + Drizzle + bun:sqlite (WAL/NORMAL) + ULID. Frontend: Vite + React 19 + TanStack Router/Query + xyflow v12 + shadcn (Base UI) + i18next. Distribution: `bun build` single binary, GitHub Releases (macOS + Linux).
+- **Tech stack** — backend: Bun + Hono + Drizzle + bun:sqlite (WAL/NORMAL) + ULID. Frontend: Vite + React 19 + TanStack Router/Query + xyflow v12 + i18next + **仓内手写公共组件库**（`components/*.tsx` + 单一 `styles.css`；**没有** shadcn / Base UI / Tailwind——早期设想过、最终未引入，新组件按 §Frontend UI consistency 复用或最小扩展既有原语）. Distribution: `bun build` single binary, GitHub Releases（macOS arm64 + Linux x86_64/arm64 + Windows x86_64，见 `README.md` 下载表与 `.github/workflows/release.yml` matrix）.
 
 ## Resolved open questions
 
@@ -180,22 +188,11 @@ The original proposal flagged several open questions; the supplemented design do
 - **Runtime config coexistence** — the daemon adds the selected agent/MCP/plugin/skill overlay while preserving the runtime's ordinary machine and project discovery. Same-name merge behavior follows the selected runtime. No platform attestation claims that inherited surfaces are absent.
 - **Session ownership** — native conversation IDs use neutral DB single-writer leases so concurrent writers are rejected. Runtime binary/config/store provenance is not persisted as a trust identity. RFC-276 migration explicitly ends pre-cutover native sessions rather than pretending they can resume across the storage change.
 - **Same-task concurrent writers** — `agent.md` carries `readonly: true/false`; framework serializes writes within a task and parallelizes only readonly nodes.
-- **Same-repo cross-task collisions** — every task gets its own `git worktree add` under `~/.agent-workflow/worktrees/{repo-slug}/{task-id}` and runs all its opencode children with that as cwd.
+- **Same-repo cross-task collisions** — every task gets its own `git worktree add` under `~/.agent-workflow/worktrees/{repo-slug}/{task-id}` and runs all its runtime children with that as cwd.
 
 The full current contract and repository code anchors are in `docs/OPENCODE_CONFIG.md` and
 `design/RFC-276-runtime-hardening-deprecation/`. RFC-205/216/224/227/233 are historical records,
 not current execution guidance.
-
-## Reference repositories
-
-The proposal directs Claude to consult two external reference repos when designing or making technical decisions:
-
-- **`multica`** — an existing multi-agent orchestration framework that already implements **agent management, skill management, runtime management, and task management**; prefer borrowing patterns from it over reinventing.
-- **`opencode`** — the opencode source. Authoritative for runtime behavior: how an opencode process is launched, how it loads `.opencode/agents` / `.opencode/skills`, and the standardized agent output XML.
-
-When the proposal and these repos disagree, the repos are authoritative for runtime behavior; the proposal is authoritative for product intent.
-
-The local checkout paths for these repos on each contributor's machine are not in this file — Claude looks them up in its per-user memory.
 
 ## opencode 源码自取规则（强制）
 
