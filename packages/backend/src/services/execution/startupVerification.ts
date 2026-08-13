@@ -10,7 +10,8 @@
 // 函数，绝不改写进程结果；它的输出只进 node_runs.startup_verification_json
 // 与 UI 告警面。持久化形状的 zod 权威在 shared/schemas/startupVerification.ts。
 //
-// Leaf module：只依赖 shared 类型。
+// Leaf module：除 shared 的纯函数外无运行时依赖（RFC-297 T3 引入 missingDeclared
+// 的值导入——shared 不反向依赖 backend，故不成环）。
 
 import type {
   DeclaredInjectionManifest,
@@ -20,6 +21,10 @@ import type {
   StartupVerificationRecord,
   StartupVerificationResult,
 } from '@agent-workflow/shared'
+// RFC-297 T3：missing 判定单点化——清单面的来源对账（assembleFace）与这里的
+// 差集判定必须永远给出同一批名字，否则「清单里标已声明未加载」与「banner 报
+// 未加载」会各说各话。
+import { missingDeclared } from '@agent-workflow/shared'
 
 export type {
   ObservedMcpServer,
@@ -41,10 +46,17 @@ export function declaredHasContent(declared: DeclaredInjectionManifest): boolean
   )
 }
 
+/**
+ * RFC-297 T3：实现已上提 shared（`missingDeclared`），本地只留一层薄包装。
+ * 语义不变——「该面无观测 → 跳过判定（不算通过，也不误报）」。
+ *
+ * 刻意写成**函数声明**而非 `const missing = missingDeclared` 顶层别名：别名在
+ * 模块求值时就要读到导入绑定，一旦将来这条 import 链上出现环，别名会静默取到
+ * undefined 并在调用点炸成 "missing is not a function"；函数声明会 hoist 且到
+ * 调用时才解引用，同样的环只会退化成延迟解析而不是初始化期崩溃。
+ */
 function missing(declared: readonly string[], observed: readonly string[] | undefined): string[] {
-  if (observed === undefined) return [] // 该面无观测 → 跳过判定（不算通过，也不误报）
-  const seen = new Set(observed)
-  return declared.filter((name) => !seen.has(name))
+  return missingDeclared(declared, observed)
 }
 
 /**

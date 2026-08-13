@@ -20,6 +20,7 @@ import type { DbClient } from '@/db/client'
 import type { Logger } from '@/util/log'
 import type {
   Agent,
+  FaceSupport,
   InventorySnapshot,
   Mcp,
   Plugin,
@@ -606,10 +607,15 @@ export interface BusinessNodeSpawnContext {
  */
 export type DeclarationFace = keyof DeclaredManifestV1
 
-export type FaceSupport =
-  | 'supported' // the runtime has this face and it can be observed/verified
-  | 'unsupported' // the runtime does not have this face (e.g. claude × plugin)
-  | 'unobservable' // injected, but no observation channel (e.g. opencode × plugin)
+/**
+ * RFC-297 T1 — the authoritative definition moved to shared so the frontend can
+ * pick columns off a driver's declaration; re-exported here so every existing
+ * `from '@/services/runtime/types'` import site keeps resolving. Semantics are
+ * unchanged: supported = the runtime has this face and it can be observed;
+ * unsupported = the runtime has no such concept (e.g. claude × plugin);
+ * unobservable = injected, but no observation channel (e.g. opencode × plugin).
+ */
+export type { FaceSupport }
 
 /**
  * RFC-282 A3 — a driver's STATIC self-declaration, consumed by the boot
