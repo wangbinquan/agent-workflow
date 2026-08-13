@@ -103,6 +103,8 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc287-t5-script-merge-throw.test.ts',
   // T8 新增：取行前奏收编后的「单一实现 + 四线×五项差异矩阵」锁。
   'rfc287-t8-run-row-prelude-single-source.test.ts',
+  // T9 新增：G3 四条豁免的理由锁 + 装配散写的终局灭绝锁（三处显式挖洞）。
+  'rfc287-t9-exemptions-and-extinction.test.ts',
   'rfc292-trigger-source-locks.test.ts',
   'runner-injected-memories.test.ts',
   'runner-resume-session-flag.test.ts',
