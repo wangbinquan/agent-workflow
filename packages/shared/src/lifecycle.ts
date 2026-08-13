@@ -216,6 +216,20 @@ export function isTerminalTaskStatus(s: TaskStatus): boolean {
  *  写、frontend tasks.detail.tsx 过滤），现在双端共用一处。 */
 export const COMMIT_PUSH_NODE_PREFIX = '__commit_push__'
 
+/**
+ * RFC-287 G7 —— 标记「仓库准备」这一步的合成 node_run 的 node_id。
+ *
+ * 与 `__commit_push__` 同一先例：它不是工作流里的节点，而是框架自己的一步，但
+ * 用户必须能在时间线上看到它——G7 把仓库准备挪到任务行落库之后，如果这一步不
+ * 可见，用户看到的就是一个「pending 了很久然后 failed」的任务，不知道卡在克隆、
+ * 更不知道该重试什么。有了这一行，「重试准备仓库」就能复用既有的 retryNode，
+ * 不必为它造第二套重试语义。
+ *
+ * 与 commit&push 不同的是它**不带后缀**：仓库准备是任务级的一次性步骤，不像
+ * commit&push 那样按 agent 节点、按仓分裂。
+ */
+export const REPO_PREP_NODE_ID = '__repo_prep__'
+
 /** flag-audit W0（§4.3）— the `tasks.error_summary` marker orphan reaping stamps
  *  on daemon-restart interruptions. MACHINE-READ CONTRACT: autoResume's boot
  *  pass selects candidates by exact equality on this value, so a wording tweak

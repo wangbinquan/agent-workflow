@@ -17,9 +17,10 @@ import { describe, expect, test, beforeAll } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks, workflows, users } from '../src/db/schema'
+import { tasks, workflows, users, nodeRuns } from '../src/db/schema'
 import { startTask } from '@/services/task'
 import { ulid } from 'ulid'
+import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -88,6 +89,15 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
     // ③ AC-15：**不得**打墓碑——打了 retryNode 就再也 CAS 不回 pending，
     //    「重试准备仓库」这条 G7 核心语义直接失效。
     expect(row?.workspacePrunedAt ?? null).toBeNull()
+
+    // ④ 合成 `__repo_prep__` 行必须在，且失败原因落在它身上——没有这一行，
+    //    用户看到的就是一个「pending 很久然后 failed」的任务，不知道卡在哪、
+    //    也没有可点重试的对象（重试复用 retryNode，作用在这一行上）。
+    const prepRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+    const prep = prepRuns.find((r) => r.nodeId === REPO_PREP_NODE_ID)
+    expect(prep, '缺少 __repo_prep__ 合成行').toBeDefined()
+    expect(prep?.status).toBe('failed')
+    expect(String(prep?.errorMessage ?? '')).toMatch(/timed out|clone|fatal|unable/i)
   }, 60_000)
 
   test('默认（不开开关）逐字维持旧行为：预物化，失败不落行', async () => {

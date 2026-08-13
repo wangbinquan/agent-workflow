@@ -24,6 +24,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { DwState } from '@agent-workflow/shared'
 import {
+  REPO_PREP_NODE_ID,
   assignBranchNames,
   directChildren,
   exclusionPlanFor,
@@ -91,7 +92,12 @@ import { killStaleRunProcessTree } from '@/util/process'
 import type { StaleRunKillOutcome } from '@/util/process'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import { recordRecoveryEvent } from '@/services/recovery'
-import { setTaskStatus, transitionTaskStatusByEvent, trySetTaskStatus } from '@/services/lifecycle'
+import {
+  setNodeRunStatus,
+  setTaskStatus,
+  transitionTaskStatusByEvent,
+  trySetTaskStatus,
+} from '@/services/lifecycle'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
@@ -2649,6 +2655,29 @@ async function startTaskImpl(
   if (deferredTaskId !== null) {
     // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
     // `failed` 并把 git 原文留在行上——这正是 G7 要的「失败可见」。
+    //
+    // 合成一条 `__repo_prep__` node_run（同 `__commit_push__` 先例）：它不是工作流
+    // 里的节点，而是框架自己的一步，但用户必须能在时间线上看到它——否则看到的就是
+    // 一个「pending 了很久然后 failed」的任务，不知道卡在克隆、更不知道该重试什么。
+    // 有了这一行，「重试准备仓库」直接复用既有的 retryNode，不必造第二套重试语义。
+    // 先 pending 再转 running：RFC-098 修订 #10 的护栏禁止顶层行「born-running」
+    // ——那样的行对 frontier 不可见，恢复扫描也认不出来。合成行不能例外。
+    const prepRunId = await mintNodeRun(deps.db, {
+      taskId,
+      nodeId: REPO_PREP_NODE_ID,
+      status: 'pending',
+      cause: 'initial',
+      retryIndex: 0,
+      iteration: 0,
+    })
+    await setNodeRunStatus({
+      db: deps.db,
+      nodeRunId: prepRunId,
+      to: 'running',
+      allowedFrom: ['pending'],
+      reason: 'repo-prep-start',
+      extra: {},
+    })
     // 准备失败有**两种形态**，都要落到行上：
     //   · `earlyError` —— 物化自己吞下的失败（建工作树、多仓挂载…）；
     //   · **抛出** —— `resolveCachedRepo` 的超时/锁/校验失败走 DomainError
@@ -2664,6 +2693,16 @@ async function startTaskImpl(
       }
     }
     if (prepared.earlyError !== null) {
+      // 合成行先落 failed，且 errorMessage 是 git 的原话——时间线上点开这一步能
+      // 看到「fatal: unable to access …」，而不是一句无从下手的「启动失败」。
+      await setNodeRunStatus({
+        db: deps.db,
+        nodeRunId: prepRunId,
+        to: 'failed',
+        allowedFrom: ['running'],
+        reason: 'repo-prep-failed',
+        extra: { finishedAt: Date.now(), errorMessage: prepared.earlyError },
+      })
       // 走 RFC-097 的 CAS 写点：allowedFrom 只放 pending——准备阶段任务必然还在
       // pending（G7 不新增状态）；若此刻已被取消/已推进，CAS 失败即放弃，不覆写。
       await setTaskStatus({
@@ -2689,6 +2728,14 @@ async function startTaskImpl(
         baseCommit: prepared.baseCommit,
       })
       .where(eq(tasks.id, taskId))
+    await setNodeRunStatus({
+      db: deps.db,
+      nodeRunId: prepRunId,
+      to: 'done',
+      allowedFrom: ['running'],
+      reason: 'repo-prep-done',
+      extra: { finishedAt: Date.now() },
+    })
   }
   const schedulerPromise = runTask({
     taskId,
