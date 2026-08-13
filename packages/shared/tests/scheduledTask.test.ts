@@ -14,7 +14,7 @@ import {
 const VALID_LAUNCH = {
   workflowId: 'wf1',
   name: 'nightly audit',
-  repoUrl: 'file:///repo',
+  repoUrl: 'https://git.invalid/repo.git',
   ref: 'main',
 }
 

@@ -18,7 +18,6 @@ import type { DbClient } from '../../src/db/client'
 import { createRepoGroup } from '../../src/services/repoGroup'
 import { remoteUrlFor, startGitHttpRemote } from './gitHttpRemote'
 
-
 export type RepoGroupAttachmentSpec =
   | {
       kind: 'repo'

@@ -352,3 +352,36 @@ L8 整线 / wrapper 便车 / 恢复 replay 段三处显式允许直接物化，�
 （`git daemon` 起本地 HTTP/git 协议），**先全绿**；②再在 schema 上加拒绝 +
 `submoduleRefresh.ts:92` 的后台自动保鲜纳入拒绝面；③补内外通道源码锁与存量不
 grandfather 的启动校验拒绝。①是纯机械但量大的一批，不可与②混提。
+
+---
+
+## T13 子项①：`worktreePath` 消费点清点分类（2026-08-13，已完成清点）
+
+计划把这一项排在 T13 第一位是对的——**清点结果推翻了「520 处都要审」这个前提**：
+
+| 形态 | 处数 | 是否属风险面 |
+| ---- | ---- | ------------ |
+| read | 296 | 绝大多数是**形参传递**，不读任务态 |
+| write/assign | 105 | 集中在物化与回填路径 |
+| type-decl | 94 | 纯类型声明 |
+| comment | 25 | — |
+
+按文件看密度前八：`util/git.ts` 139、`scheduler.ts` 53、`task.ts` 49、
+`structuralDiff/service.ts` 26、`nodeIsolation.ts` 24、`gc.ts` 20、`gitSubmodule.ts` 18、
+`structuralDiff/gitBackend.ts` 12。其中 **`util/git.ts` 那 139 处全是形参**
+（`resolveGitCommonDirSync(worktreePath: string)` 这一类），与任务是否已准备好无关。
+
+**真正的风险面因此收敛到三处**——「任务已入库但工作树尚未物化」这个新中间态谁会读到：
+
+1. `gc.ts`（20 处）——**已有先例**：它本来就在用 `t.worktreePath !== '' && existsSync(...)`
+   做空值防御（:129/:144），说明「路径为空」这个形态在 GC 侧已经是可表达的；
+2. `worktreeBackup`（1 文件）——需按「准备中=running」复核（子项⑨）；
+3. 前端 22 处，集中在 `tasks.detail.tsx`(11) 与 `task-detail-tabs.ts`(7)——任务详情页要能
+   呈现「正在准备仓库」而不是显示一个空路径或崩掉。
+
+**因此 T13 的剩余工作量比原估小一档**，但仍是一次真正的启动路径重构：`startTask` 的
+准备段横跨 :754→:2345（1591 行，中间夹着校验/ACL/仓组解析/space 节点等大量非准备逻辑），
+真正的准备动作只有 4 处（`resolveCachedRepo`×2、`materializeWorktree`×2）。要把这 4 处
+移出 HTTP 请求，需要 INSERT 时用占位路径落行，并新增「未准备好」这一合法中间态。
+现状 `worktreePath: ''` **只出现在错误路径**（:611/:1665 的 earlyError），没有健康占位先例
+——这正是子项②「任务仍落 pending + 准备作为第 0 步」要新建的东西。
