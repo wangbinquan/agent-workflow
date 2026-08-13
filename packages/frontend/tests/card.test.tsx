@@ -9,6 +9,7 @@
 //   - body child DOM order is preserved (the board relies on title→answer→meta order)
 
 import { render } from '@testing-library/react'
+import { createRef } from 'react'
 import { afterEach, describe, expect, test } from 'vitest'
 import { Card } from '../src/components/Card'
 
@@ -85,5 +86,26 @@ describe('Card primitive', () => {
     const card = container.querySelector('section.card')
     expect(card?.getAttribute('aria-labelledby')).toBe('account-heading')
     expect(card?.querySelector('.card__header h2')?.textContent).toBe('Account')
+  })
+
+  test('renders a labelled disabled fieldset and exposes its title ref', () => {
+    const titleRef = createRef<HTMLHeadingElement>()
+    const { getByRole, getByText } = render(
+      <Card
+        as="fieldset"
+        disabled
+        title="Credentials"
+        titleId="credentials-heading"
+        titleRef={titleRef}
+        aria-labelledby="credentials-heading"
+      >
+        <input aria-label="Client ID" />
+      </Card>,
+    )
+
+    const group = getByRole('group', { name: 'Credentials' }) as HTMLFieldSetElement
+    expect(group.disabled).toBe(true)
+    expect(getByRole('textbox').closest('fieldset')).toBe(group)
+    expect(getByText('Credentials').closest('h3')).toBe(titleRef.current)
   })
 })

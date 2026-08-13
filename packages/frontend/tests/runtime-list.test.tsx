@@ -522,7 +522,7 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Runtimes' }))
   })
 
-  test('embedded list deletion falls back to its owning section heading when no next card exists', async () => {
+  test('cardized list deletion prefers its own visible heading over the route fallback', async () => {
     let deleted = false
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = new URL(typeof input === 'string' ? input : (input as URL | Request).toString())
@@ -550,7 +550,7 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
         >
           Runtime section
         </h2>
-        <RuntimeList showHeading={false} restoreFocusFallbackRef={fallbackRef} />
+        <RuntimeList restoreFocusFallbackRef={fallbackRef} />
       </QueryClientProvider>,
     )
     await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
@@ -561,7 +561,7 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
 
     await waitFor(() => expect(screen.queryByText('my-oc')).toBeNull())
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Runtime section' }))
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Runtimes' }))
   })
 
   // RFC-154: config-dir injection overrides — two optional fields whose

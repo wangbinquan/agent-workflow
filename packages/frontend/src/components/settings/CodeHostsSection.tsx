@@ -23,6 +23,7 @@ import { ChipsInput } from '@/components/ChipsInput'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, Switch, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
+import { SettingsCard } from '@/components/settings/SettingsCard'
 
 const PROVIDERS: readonly CodeHostProvider[] = ['gitlab', 'github']
 
@@ -103,16 +104,16 @@ function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved
   const busy = save.isPending || test.isPending || remove.isPending
 
   return (
-    <section className="page__section" data-testid={`code-host-card-${row.provider}`}>
-      <h3>{t(`codeHostProvider.${row.provider}`)}</h3>
+    <SettingsCard
+      title={t(`codeHostProvider.${row.provider}`)}
+      hint={t(`codeHostSettings.baseUrlHint_${row.provider}`)}
+      data-testid={`code-host-card-${row.provider}`}
+    >
       {/* 只在真有错误时渲染：ErrorBanner 在 `error == null` 且无 `message` 时会
           落到 `t('common.unknownError')`，无条件渲染等于页面一打开就挂一条
           「未知错误」（用户实报）。 */}
       {error !== null ? <ErrorBanner error={error} /> : null}
-      <Field
-        label={t('codeHostSettings.baseUrl')}
-        hint={t(`codeHostSettings.baseUrlHint_${row.provider}`)}
-      >
+      <Field label={t('codeHostSettings.baseUrl')}>
         <TextInput
           value={draft.baseUrl}
           disabled={busy}
@@ -231,7 +232,7 @@ function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved
           })()}
         </p>
       ) : null}
-    </section>
+    </SettingsCard>
   )
 }
 
@@ -250,7 +251,7 @@ export function CodeHostsSection() {
   const byProvider = new Map(rows.map((r) => [r.provider, r]))
 
   return (
-    <div data-testid="code-hosts-section">
+    <div className="form-grid" data-testid="code-hosts-section">
       <p className="inspector-hint">{t('codeHostSettings.intro')}</p>
       {PROVIDERS.map((provider) => {
         const row = byProvider.get(provider) ?? {

@@ -1458,6 +1458,36 @@ export interface Resources {
       rendering: string
       authentication: string
     }
+    cardGroups: {
+      limitsBudgetsTitle: string
+      limitsBudgetsHint: string
+      limitsConcurrencyTitle: string
+      limitsConcurrencyHint: string
+      limitsLoggingTitle: string
+      limitsLoggingHint: string
+      recoveryAutomationTitle: string
+      recoveryAutomationHint: string
+      recoverySafetyTitle: string
+      recoverySafetyHint: string
+      gitCheckoutTitle: string
+      gitCheckoutHint: string
+      gitRefreshTitle: string
+      gitRefreshHint: string
+      gcWorktreesTitle: string
+      gcWorktreesHint: string
+      gcEventsTitle: string
+      gcEventsHint: string
+      gcWebhooksTitle: string
+      gcWebhooksHint: string
+      networkListenerTitle: string
+      networkListenerHint: string
+      networkExternalTitle: string
+      networkExternalHint: string
+      appearanceDisplayTitle: string
+      appearanceDisplayHint: string
+      renderingServiceTitle: string
+      renderingServiceHint: string
+    }
     tabRuntime: string
     tabSystemAgents: string
     tabLimits: string
@@ -1984,6 +2014,10 @@ export interface Resources {
     deleteDescription: string
     addTitle: string
     editTitle: string
+    launchTitle: string
+    launchHint: string
+    profileTitle: string
+    profileHint: string
     testBinary: string
     testing: string
     fieldName: string
@@ -6926,6 +6960,36 @@ export const zhCN: Resources = {
       rendering: '配置外部图表渲染服务。',
       authentication: '管理 OIDC 登录提供商。',
     },
+    cardGroups: {
+      limitsBudgetsTitle: '任务预算',
+      limitsBudgetsHint: '统一限制单个任务可用的时长、token、步骤与讨论轮次。',
+      limitsConcurrencyTitle: '并发与吞吐',
+      limitsConcurrencyHint: '控制 daemon 与单个工作流可以并行执行的工作量。',
+      limitsLoggingTitle: '日志保留',
+      limitsLoggingHint: '限制每个任务保留的运行输出规模。',
+      recoveryAutomationTitle: '自动恢复',
+      recoveryAutomationHint: '选择中断任务在什么条件下无需人工操作即可继续。',
+      recoverySafetyTitle: '恢复安全边界',
+      recoverySafetyHint: '设置恢复尝试的重试次数与超时边界。',
+      gitCheckoutTitle: '检出与子模块',
+      gitCheckoutHint: '定义任务工作树如何拉取并初始化仓库内容。',
+      gitRefreshTitle: '后台刷新',
+      gitRefreshHint: 'daemon 运行期间持续保持仓库引用为最新状态。',
+      gcWorktreesTitle: '工作树清理',
+      gcWorktreesHint: '在清理前按期限保留已完成任务的工作树。',
+      gcEventsTitle: '事件清理',
+      gcEventsHint: '按固定周期移除已过期的工作流与投递事件。',
+      gcWebhooksTitle: 'Webhook 清理',
+      gcWebhooksHint: '独立于任务数据保留并清理 Webhook 投递历史。',
+      networkListenerTitle: 'Daemon 监听',
+      networkListenerHint: '选择 daemon 接受连接的本地地址与端口。',
+      networkExternalTitle: '外部访问',
+      networkExternalHint: '配置浏览器、回调与生成链接使用的公开基础地址。',
+      appearanceDisplayTitle: '显示与语言',
+      appearanceDisplayHint: '选择当前安装的界面主题与语言。',
+      renderingServiceTitle: 'PlantUML 服务',
+      renderingServiceHint: '连接可选的外部服务来渲染 PlantUML 图表。',
+    },
     tabRuntime: '运行时',
     tabSystemAgents: '系统 Agent',
     tabLimits: '限额',
@@ -7525,6 +7589,10 @@ export const zhCN: Resources = {
     deleteDescription: '删除后无法恢复。若仍有 Agent 或默认配置引用该运行时，系统会阻止删除。',
     addTitle: '添加运行时',
     editTitle: '编辑运行时',
+    launchTitle: '身份与启动',
+    launchHint: '设置运行时名称，以及启动时使用的二进制、协议与配置目录。',
+    profileTitle: '执行配置',
+    profileHint: '选择每次运行应用的模型行为与运行时专用参数。',
     testBinary: '测试二进制',
     testing: '测试中…',
     fieldName: '名称',

@@ -1563,33 +1563,6 @@ code {
   gap: 16px;
 }
 
-.auth-tab__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.auth-tab__title {
-  margin: 0 0 4px;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.auth-tab__hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.5;
-  max-width: 560px;
-}
-
-.auth-tab__hint-inline {
-  font-weight: 400;
-  color: var(--muted);
-  font-size: 11px;
-}
-
 .auth-login-policy__content {
   display: flex;
   flex-direction: column;
@@ -1643,39 +1616,11 @@ code {
   }
 }
 
-/* RFC-036 — OIDC provider create/edit dialog form. Three fieldsets
-   (Provider / Credentials / Behavior), each with a small section title
-   + descriptive hint. Shared Field controls span the full content width. */
+/* RFC-036 / RFC-299 — OIDC provider create/edit dialog. Its four semantic
+   fieldsets now use the shared SettingsCard shell; only the inner two-column
+   field layout remains feature-specific. */
 .oidc-provider-form {
   gap: 18px;
-}
-
-.oidc-form__group {
-  border: 0;
-  margin: 0;
-  padding: 14px 16px 16px;
-  background: color-mix(in srgb, var(--border) 16%, transparent);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.oidc-form__group-title {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--muted);
-  padding: 0;
-  margin: 0 0 -4px;
-}
-
-.oidc-form__group-hint {
-  margin: 0 0 4px;
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.5;
 }
 
 .oidc-form__row {
@@ -14855,6 +14800,21 @@ mark.prior-comment-anchor[data-active='true'] {
   margin-bottom: 0;
 }
 
+/* RFC-299 — settings reuse .card for all visual chrome. Only normalize root
+   geometry here; no settings-specific background/border/radius may diverge. */
+.settings-card {
+  min-width: 0;
+  margin: 0;
+}
+
+.settings-card .card__title-row {
+  flex-wrap: wrap;
+}
+
+fieldset.settings-card {
+  min-inline-size: 0;
+}
+
 /* RFC-038 — AgentForm "auto-detect dependencies" button + dialog. */
 .agent-form__autodetect-row {
   display: flex;
@@ -17138,16 +17098,6 @@ mark.prior-comment-anchor[data-active='true'] {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.runtime-list__title {
-  margin: 0;
-  font-size: var(--font-md);
-  line-height: 1.4;
-}
-
-.runtime-list__header--actions-only {
-  justify-content: flex-end;
 }
 
 .runtime-list__row {

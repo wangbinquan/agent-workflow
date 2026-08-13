@@ -10,7 +10,7 @@
 // resource cards stay on their bespoke CSS and migrate in a follow-up.
 
 import { Link, type LinkProps } from '@tanstack/react-router'
-import type { ReactElement, ReactNode } from 'react'
+import type { ReactElement, ReactNode, Ref } from 'react'
 
 export interface CardProps {
   /** RFC-217 T11 (minimal extension): card heading rendered as the canonical
@@ -20,6 +20,9 @@ export interface CardProps {
   /** RFC-217 T11: optional header-right action cluster, laid out opposite
    *  `title` in the same header row. */
   actions?: ReactNode
+  /** Stable identity/focus hooks for the canonical title heading. */
+  titleId?: string
+  titleRef?: Ref<HTMLHeadingElement>
   /** Optional header slot (e.g. selection checkbox / badges), above the body.
    *  Composes with `title`/`actions` (renders after the title row). */
   header?: ReactNode
@@ -42,7 +45,9 @@ export interface CardProps {
   /** Router search params for the link root (e.g. `/memory` deep-link tab). */
   search?: LinkProps['search']
   /** Semantic root for non-link cards. Link roots always take precedence. */
-  as?: 'div' | 'section'
+  as?: 'div' | 'section' | 'fieldset'
+  /** Native fieldset bulk-disable semantics. Ignored by other root kinds. */
+  disabled?: boolean
   /** Associates a semantic card section with its visible heading. */
   'aria-labelledby'?: string
   /** Extra classes appended after the standard `.card` chain. */
@@ -70,7 +75,14 @@ export function Card(props: CardProps): ReactElement {
           {hasTitleRow && (
             <div className="card__title-row">
               {props.title != null && props.title !== false && (
-                <h3 className="card__title">{props.title}</h3>
+                <h3
+                  id={props.titleId}
+                  ref={props.titleRef}
+                  className="card__title"
+                  tabIndex={props.titleRef === undefined ? undefined : -1}
+                >
+                  {props.title}
+                </h3>
               )}
               {props.actions != null && props.actions !== false && (
                 <div className="card__title-actions">{props.actions}</div>
@@ -95,6 +107,18 @@ export function Card(props: CardProps): ReactElement {
       >
         {inner}
       </Link>
+    )
+  }
+  if (props.as === 'fieldset') {
+    return (
+      <fieldset
+        className={classes.join(' ')}
+        aria-labelledby={props['aria-labelledby']}
+        data-testid={props['data-testid']}
+        disabled={props.disabled}
+      >
+        {inner}
+      </fieldset>
     )
   }
   const Root = props.as ?? 'div'

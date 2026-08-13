@@ -29,6 +29,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ChipsInput } from '@/components/ChipsInput'
 import { Field, Switch, TextInput } from '@/components/Form'
 import { SettingsNumberInput } from '@/components/settings/SettingsNumberInput'
+import { SettingsCard } from '@/components/settings/SettingsCard'
 import { Select } from '@/components/Select'
 import { ModelSelect } from '@/components/ModelSelect'
 import { StatusChip } from '@/components/StatusChip'
@@ -110,11 +111,9 @@ function RuntimeSmokeDetail({ smoke, testid }: { smoke: SmokeResult | null; test
 }
 
 export function RuntimeList({
-  showHeading = true,
   restoreFocusFallbackRef,
 }: {
-  showHeading?: boolean
-  /** Stable owning-section heading used when an embedded list has no local heading. */
+  /** Stable route heading used only if the card heading is unavailable. */
   restoreFocusFallbackRef?: RefObject<HTMLElement | null>
 } = {}) {
   const { t } = useTranslation()
@@ -183,18 +182,11 @@ export function RuntimeList({
   const runtimes = list.data?.runtimes ?? []
 
   return (
-    <div className="page__section" style={{ marginBottom: 16 }}>
-      <div
-        className={`page__header--row runtime-list__header${
-          showHeading ? '' : ' runtime-list__header--actions-only'
-        }`}
-        style={{ marginBottom: 8 }}
-      >
-        {showHeading && (
-          <h2 ref={listHeadingRef} className="runtime-list__title" tabIndex={-1}>
-            {t('runtimes.title')}
-          </h2>
-        )}
+    <SettingsCard
+      title={t('runtimes.title')}
+      hint={t('runtimes.subtitle')}
+      titleRef={listHeadingRef}
+      actions={
         <button
           ref={addRuntimeRef}
           type="button"
@@ -203,11 +195,8 @@ export function RuntimeList({
         >
           {t('runtimes.add')}
         </button>
-      </div>
-      <p className="muted" style={{ margin: '0 0 12px 0', fontSize: 13 }}>
-        {t('runtimes.subtitle')}
-      </p>
-
+      }
+    >
       {list.isLoading ? (
         <LoadingState />
       ) : list.error !== null && list.error !== undefined ? (
@@ -308,9 +297,9 @@ export function RuntimeList({
                     const row = event.currentTarget.closest('.runtime-list__row')
                     deleteFallbackRef.current =
                       row?.nextElementSibling?.querySelector<HTMLElement>('.runtime-list__name') ??
-                      (showHeading
-                        ? listHeadingRef.current
-                        : (restoreFocusFallbackRef?.current ?? addRuntimeRef.current))
+                      listHeadingRef.current ??
+                      restoreFocusFallbackRef?.current ??
+                      addRuntimeRef.current
                     setDeleteTarget(rt.name)
                   }}
                 >
@@ -346,7 +335,7 @@ export function RuntimeList({
           await del.mutateAsync(deleteTarget)
         }}
       />
-    </div>
+    </SettingsCard>
   )
 }
 
@@ -500,136 +489,140 @@ function RuntimeFormDialog(props: {
         </>
       }
     >
-      <Field label={t('runtimes.fieldName')} hint={t('runtimes.fieldNameHint')} required>
-        <TextInput value={name} onChange={setName} disabled={isEdit} data-testid="runtime-name" />
-      </Field>
-      <Field label={t('runtimes.fieldProtocol')} hint={t('runtimes.fieldProtocolHint')}>
-        <Select<RuntimeProtocol>
-          value={protocol}
-          ariaLabel={t('runtimes.fieldProtocol')}
-          onChange={setProtocol}
-          disabled={isEdit}
-          options={[
-            { value: 'opencode', label: t('runtimes.protocolOpencode') },
-            { value: 'claude-code', label: t('runtimes.protocolClaude') },
-          ]}
-        />
-      </Field>
-      <Field label={t('runtimes.fieldBinary')} hint={t('runtimes.fieldBinaryHint')}>
-        <TextInput
-          value={binaryPath}
-          onChange={setBinaryPath}
-          placeholder={t('runtimes.defaultBinary')}
-          data-testid="runtime-binary"
-        />
-      </Field>
-      {/* RFC-154: config-dir injection overrides — a custom fork may have renamed
+      <SettingsCard title={t('runtimes.launchTitle')} hint={t('runtimes.launchHint')}>
+        <Field label={t('runtimes.fieldName')} hint={t('runtimes.fieldNameHint')} required>
+          <TextInput value={name} onChange={setName} disabled={isEdit} data-testid="runtime-name" />
+        </Field>
+        <Field label={t('runtimes.fieldProtocol')} hint={t('runtimes.fieldProtocolHint')}>
+          <Select<RuntimeProtocol>
+            value={protocol}
+            ariaLabel={t('runtimes.fieldProtocol')}
+            onChange={setProtocol}
+            disabled={isEdit}
+            options={[
+              { value: 'opencode', label: t('runtimes.protocolOpencode') },
+              { value: 'claude-code', label: t('runtimes.protocolClaude') },
+            ]}
+          />
+        </Field>
+        <Field label={t('runtimes.fieldBinary')} hint={t('runtimes.fieldBinaryHint')}>
+          <TextInput
+            value={binaryPath}
+            onChange={setBinaryPath}
+            placeholder={t('runtimes.defaultBinary')}
+            data-testid="runtime-binary"
+          />
+        </Field>
+        {/* RFC-154: config-dir injection overrides — a custom fork may have renamed
           the env var / default leaf dir it discovers its config dir through.
           Placeholders show the selected protocol's defaults; empty = default. */}
-      <div className="form-grid form-grid--cols-2">
-        <Field
-          label={t('runtimes.fieldConfigDirEnv')}
-          hint={t('runtimes.fieldConfigDirEnvHint')}
-          error={configDirEnvError}
-        >
-          <TextInput
-            value={configDirEnv}
-            onChange={setConfigDirEnv}
-            placeholder={DEFAULT_CONFIG_DIR_PROFILE[protocol].env}
-            data-testid="runtime-config-dir-env"
-          />
-        </Field>
-        <Field
-          label={t('runtimes.fieldConfigDirName')}
-          hint={t('runtimes.fieldConfigDirNameHint')}
-          error={configDirNameError}
-        >
-          <TextInput
-            value={configDirName}
-            onChange={setConfigDirName}
-            placeholder={DEFAULT_CONFIG_DIR_PROFILE[protocol].name}
-            data-testid="runtime-config-dir-name"
-          />
-        </Field>
-      </div>
-      {/* RFC-113: the runtime's execution profile. variant/temperature/steps are
+        <div className="form-grid form-grid--cols-2">
+          <Field
+            label={t('runtimes.fieldConfigDirEnv')}
+            hint={t('runtimes.fieldConfigDirEnvHint')}
+            error={configDirEnvError}
+          >
+            <TextInput
+              value={configDirEnv}
+              onChange={setConfigDirEnv}
+              placeholder={DEFAULT_CONFIG_DIR_PROFILE[protocol].env}
+              data-testid="runtime-config-dir-env"
+            />
+          </Field>
+          <Field
+            label={t('runtimes.fieldConfigDirName')}
+            hint={t('runtimes.fieldConfigDirNameHint')}
+            error={configDirNameError}
+          >
+            <TextInput
+              value={configDirName}
+              onChange={setConfigDirName}
+              placeholder={DEFAULT_CONFIG_DIR_PROFILE[protocol].name}
+              data-testid="runtime-config-dir-name"
+            />
+          </Field>
+        </div>
+      </SettingsCard>
+      <SettingsCard title={t('runtimes.profileTitle')} hint={t('runtimes.profileHint')}>
+        {/* RFC-113: the runtime's execution profile. variant/temperature/steps are
           opencode-only (claude has none) — shown only for the opencode protocol. */}
-      {/* RFC-114: editing an existing runtime lists ITS binary's models
+        {/* RFC-114: editing an existing runtime lists ITS binary's models
           (?runtime=<name>); a NEW custom binary can't be listed before it's saved
           (O1(a)) so the model is free-text + a "save first" hint — showing the
           DEFAULT opencode list there would invite saving a model the fork doesn't
           have. claude (incl. forks) is a static list → a "not probed" note. */}
-      <Field label={t('runtimes.fieldModel')} hint={t('runtimes.fieldModelHint')}>
-        {isEdit ? (
-          <ModelSelect value={model} onChange={setModel} runtimeName={name} />
-        ) : (
-          <>
-            <TextInput
-              value={model ?? ''}
-              onChange={(v) => setModel(v === '' ? undefined : v)}
-              placeholder="anthropic/claude-sonnet-4-6"
-            />
+        <Field label={t('runtimes.fieldModel')} hint={t('runtimes.fieldModelHint')}>
+          {isEdit ? (
+            <ModelSelect value={model} onChange={setModel} runtimeName={name} />
+          ) : (
+            <>
+              <TextInput
+                value={model ?? ''}
+                onChange={(v) => setModel(v === '' ? undefined : v)}
+                placeholder="anthropic/claude-sonnet-4-6"
+              />
+              <p className="muted" style={{ margin: '4px 0 0 0', fontSize: 13 }}>
+                {t('runtimes.newRuntimeModelHint')}
+              </p>
+            </>
+          )}
+          {isEdit && !isOpencode && (
             <p className="muted" style={{ margin: '4px 0 0 0', fontSize: 13 }}>
-              {t('runtimes.newRuntimeModelHint')}
+              {t('runtimes.claudeStaticModelHint')}
             </p>
+          )}
+        </Field>
+        {/* 2026-08-04: fork-private extra argv tokens (claude-code only). The
+          backend rejects platform-owned flags; here we only collect tokens. */}
+        {!isOpencode && (
+          <>
+            <Switch
+              checked={isSandbox}
+              onChange={setIsSandbox}
+              label={t('runtimes.fieldIsSandbox')}
+              hint={t('runtimes.fieldIsSandboxHint')}
+              data-testid="runtime-is-sandbox"
+            />
+            <Field label={t('runtimes.fieldExtraArgs')} hint={t('runtimes.fieldExtraArgsHint')}>
+              <ChipsInput
+                value={extraArgs}
+                onChange={setExtraArgs}
+                placeholder="--skip-safe-check"
+                testidPrefix="runtime-extra-args"
+              />
+            </Field>
           </>
         )}
-        {isEdit && !isOpencode && (
+        {isOpencode && (
+          <div className="form-grid form-grid--cols-2">
+            <Field label={t('runtimes.fieldVariant')}>
+              <TextInput
+                value={variant}
+                onChange={setVariant}
+                placeholder={t('common.optionalPlaceholder')}
+              />
+            </Field>
+            <Field label={t('runtimes.fieldTemperature')}>
+              <SettingsNumberInput
+                setting="temperature"
+                value={temperature}
+                onChange={setTemperature}
+              />
+            </Field>
+            <Field label={t('runtimes.fieldSteps')}>
+              <SettingsNumberInput setting="steps" value={steps} onChange={setSteps} />
+            </Field>
+            <Field label={t('runtimes.fieldMaxSteps')}>
+              <SettingsNumberInput setting="maxSteps" value={maxSteps} onChange={setMaxSteps} />
+            </Field>
+          </div>
+        )}
+        {!isOpencode && (
           <p className="muted" style={{ margin: '4px 0 0 0', fontSize: 13 }}>
-            {t('runtimes.claudeStaticModelHint')}
+            {t('runtimes.claudeModelOnlyHint')}
           </p>
         )}
-      </Field>
-      {/* 2026-08-04: fork-private extra argv tokens (claude-code only). The
-          backend rejects platform-owned flags; here we only collect tokens. */}
-      {!isOpencode && (
-        <>
-          <Switch
-            checked={isSandbox}
-            onChange={setIsSandbox}
-            label={t('runtimes.fieldIsSandbox')}
-            hint={t('runtimes.fieldIsSandboxHint')}
-            data-testid="runtime-is-sandbox"
-          />
-          <Field label={t('runtimes.fieldExtraArgs')} hint={t('runtimes.fieldExtraArgsHint')}>
-            <ChipsInput
-              value={extraArgs}
-              onChange={setExtraArgs}
-              placeholder="--skip-safe-check"
-              testidPrefix="runtime-extra-args"
-            />
-          </Field>
-        </>
-      )}
-      {isOpencode && (
-        <div className="form-grid form-grid--cols-2">
-          <Field label={t('runtimes.fieldVariant')}>
-            <TextInput
-              value={variant}
-              onChange={setVariant}
-              placeholder={t('common.optionalPlaceholder')}
-            />
-          </Field>
-          <Field label={t('runtimes.fieldTemperature')}>
-            <SettingsNumberInput
-              setting="temperature"
-              value={temperature}
-              onChange={setTemperature}
-            />
-          </Field>
-          <Field label={t('runtimes.fieldSteps')}>
-            <SettingsNumberInput setting="steps" value={steps} onChange={setSteps} />
-          </Field>
-          <Field label={t('runtimes.fieldMaxSteps')}>
-            <SettingsNumberInput setting="maxSteps" value={maxSteps} onChange={setMaxSteps} />
-          </Field>
-        </div>
-      )}
-      {!isOpencode && (
-        <p className="muted" style={{ margin: '4px 0 0 0', fontSize: 13 }}>
-          {t('runtimes.claudeModelOnlyHint')}
-        </p>
-      )}
+      </SettingsCard>
       {smoke !== null && (
         <div style={{ marginTop: 8 }}>
           <StatusChip kind={smokeChipKind(smoke)} size="sm" withDot>

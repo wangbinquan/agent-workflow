@@ -21,7 +21,6 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'reac
 import { useTranslation } from 'react-i18next'
 import type { AuthLoginPolicy, Config, ConfigPatch, OidcProvider } from '@agent-workflow/shared'
 import { api, apiPostMultipart, ApiError } from '@/api/client'
-import { Card } from '@/components/Card'
 import {
   SettingsDraftProvider,
   useSettingsConfigDraft,
@@ -29,6 +28,7 @@ import {
   type SettingsConfigDraftController,
   type SettingsConfigDraftMutateOptions,
 } from '@/components/settings/SettingsDraftProvider'
+import { SettingsCard } from '@/components/settings/SettingsCard'
 import {
   useFusionAgentDraft,
   type FusionAgentDraftController,
@@ -508,7 +508,7 @@ export function RuntimeTab({
       className={`runtime-status-anchor${flashing ? ' runtime-status-anchor--flash' : ''}`}
       data-flash={flashing ? '1' : '0'}
     >
-      <RuntimeList showHeading={false} restoreFocusFallbackRef={focusFallbackRef} />
+      <RuntimeList restoreFocusFallbackRef={focusFallbackRef} />
     </div>
   )
 }
@@ -525,138 +525,153 @@ function LimitsTab({ config }: TabProps) {
       success={save.isSuccess && save.error === null ? 'saved' : null}
       editState={draft}
     >
-      <Field
-        label={t('settingsForm.perTaskDuration')}
-        required
-        hint={t('settingsForm.zeroUnlimited')}
+      <SettingsCard
+        title={t('settings.cardGroups.limitsBudgetsTitle')}
+        hint={t('settings.cardGroups.limitsBudgetsHint')}
       >
-        <SettingsNumberInput
-          setting="defaultPerTaskMaxDurationMs"
-          value={state.defaultPerTaskMaxDurationMs}
-          onChange={(v) => setState({ ...state, defaultPerTaskMaxDurationMs: v ?? 0 })}
-        />
-      </Field>
-      <Field
-        label={t('settingsForm.perTaskTokens')}
-        required
-        hint={t('settingsForm.zeroUnlimited')}
-      >
-        <SettingsNumberInput
-          setting="defaultPerTaskMaxTotalTokens"
-          value={state.defaultPerTaskMaxTotalTokens}
-          onChange={(v) => setState({ ...state, defaultPerTaskMaxTotalTokens: v ?? 0 })}
-        />
-      </Field>
-      <Field label={t('settingsForm.perNodeTimeout')} required>
-        <SettingsNumberInput
-          setting="defaultPerNodeTimeoutMs"
-          value={state.defaultPerNodeTimeoutMs}
-          onChange={(v) => setState({ ...state, defaultPerNodeTimeoutMs: v ?? 60_000 })}
-        />
-      </Field>
-      <Field
-        label={t('settingsForm.nodeRetries')}
-        required
-        hint={t('settingsForm.nodeRetriesHint')}
-      >
-        <SettingsNumberInput
-          setting="defaultNodeRetries"
-          value={state.defaultNodeRetries}
-          onChange={(v) => setState({ ...state, defaultNodeRetries: v ?? 0 })}
-        />
-      </Field>
-      <Field label={t('settingsForm.largeOutputThreshold')} required>
-        <SettingsNumberInput
-          setting="largeOutputThresholdBytes"
-          value={state.largeOutputThresholdBytes}
-          onChange={(v) => setState({ ...state, largeOutputThresholdBytes: v ?? 1_048_576 })}
-        />
-      </Field>
-      {/* RFC-113: global execution knobs relocated from the Runtime tab. */}
-      <div className="form-grid form-grid--cols-2">
         <Field
-          label={t('settingsForm.maxConcurrentNodes')}
-          hint={t('settingsForm.maxConcurrentNodesHint')}
+          label={t('settingsForm.perTaskDuration')}
           required
+          hint={t('settingsForm.zeroUnlimited')}
         >
           <SettingsNumberInput
-            setting="maxConcurrentNodes"
-            value={state.maxConcurrentNodes}
-            onChange={(v) => setState({ ...state, maxConcurrentNodes: v ?? 1 })}
-          />
-        </Field>
-        {/* RFC-266: script nodes run in their own daemon pool. */}
-        <Field
-          label={t('settingsForm.maxConcurrentScriptNodes')}
-          hint={t('settingsForm.maxConcurrentScriptNodesHint')}
-          required
-        >
-          <SettingsNumberInput
-            setting="maxConcurrentScriptNodes"
-            value={state.maxConcurrentScriptNodes}
-            onChange={(v) => setState({ ...state, maxConcurrentScriptNodes: v ?? 1 })}
+            setting="defaultPerTaskMaxDurationMs"
+            value={state.defaultPerTaskMaxDurationMs}
+            onChange={(v) => setState({ ...state, defaultPerTaskMaxDurationMs: v ?? 0 })}
           />
         </Field>
         <Field
-          label={t('settingsForm.multiProcessConc')}
-          hint={t('settingsForm.multiProcessConcHint')}
+          label={t('settingsForm.perTaskTokens')}
           required
+          hint={t('settingsForm.zeroUnlimited')}
         >
           <SettingsNumberInput
-            setting="multiProcessSubprocessConcurrency"
-            value={state.multiProcessSubprocessConcurrency}
-            onChange={(v) => setState({ ...state, multiProcessSubprocessConcurrency: v ?? 1 })}
+            setting="defaultPerTaskMaxTotalTokens"
+            value={state.defaultPerTaskMaxTotalTokens}
+            onChange={(v) => setState({ ...state, defaultPerTaskMaxTotalTokens: v ?? 0 })}
           />
         </Field>
-        {/* RFC-287 T10（G4）：并发/配额共 6 项，此前只露 3 项——另外三项只能改配置
+        <Field label={t('settingsForm.perNodeTimeout')} required>
+          <SettingsNumberInput
+            setting="defaultPerNodeTimeoutMs"
+            value={state.defaultPerNodeTimeoutMs}
+            onChange={(v) => setState({ ...state, defaultPerNodeTimeoutMs: v ?? 60_000 })}
+          />
+        </Field>
+        <Field
+          label={t('settingsForm.nodeRetries')}
+          required
+          hint={t('settingsForm.nodeRetriesHint')}
+        >
+          <SettingsNumberInput
+            setting="defaultNodeRetries"
+            value={state.defaultNodeRetries}
+            onChange={(v) => setState({ ...state, defaultNodeRetries: v ?? 0 })}
+          />
+        </Field>
+        <Field label={t('settingsForm.largeOutputThreshold')} required>
+          <SettingsNumberInput
+            setting="largeOutputThresholdBytes"
+            value={state.largeOutputThresholdBytes}
+            onChange={(v) => setState({ ...state, largeOutputThresholdBytes: v ?? 1_048_576 })}
+          />
+        </Field>
+      </SettingsCard>
+      <SettingsCard
+        title={t('settings.cardGroups.limitsConcurrencyTitle')}
+        hint={t('settings.cardGroups.limitsConcurrencyHint')}
+      >
+        {/* RFC-113: global execution knobs relocated from the Runtime tab. */}
+        <div className="form-grid form-grid--cols-2">
+          <Field
+            label={t('settingsForm.maxConcurrentNodes')}
+            hint={t('settingsForm.maxConcurrentNodesHint')}
+            required
+          >
+            <SettingsNumberInput
+              setting="maxConcurrentNodes"
+              value={state.maxConcurrentNodes}
+              onChange={(v) => setState({ ...state, maxConcurrentNodes: v ?? 1 })}
+            />
+          </Field>
+          {/* RFC-266: script nodes run in their own daemon pool. */}
+          <Field
+            label={t('settingsForm.maxConcurrentScriptNodes')}
+            hint={t('settingsForm.maxConcurrentScriptNodesHint')}
+            required
+          >
+            <SettingsNumberInput
+              setting="maxConcurrentScriptNodes"
+              value={state.maxConcurrentScriptNodes}
+              onChange={(v) => setState({ ...state, maxConcurrentScriptNodes: v ?? 1 })}
+            />
+          </Field>
+          <Field
+            label={t('settingsForm.multiProcessConc')}
+            hint={t('settingsForm.multiProcessConcHint')}
+            required
+          >
+            <SettingsNumberInput
+              setting="multiProcessSubprocessConcurrency"
+              value={state.multiProcessSubprocessConcurrency}
+              onChange={(v) => setState({ ...state, multiProcessSubprocessConcurrency: v ?? 1 })}
+            />
+          </Field>
+          {/* RFC-287 T10（G4）：并发/配额共 6 项，此前只露 3 项——另外三项只能改配置
             文件、且改完要等 daemon 重启才生效（后端同批已修成即时生效）。 */}
-        <Field
-          label={t('settingsForm.maxConcurrentCodeHostCalls')}
-          hint={t('settingsForm.maxConcurrentCodeHostCallsHint')}
-          required
-        >
-          <SettingsNumberInput
-            setting="maxConcurrentCodeHostCalls"
-            value={state.maxConcurrentCodeHostCalls}
-            onChange={(v) => setState({ ...state, maxConcurrentCodeHostCalls: v ?? 1 })}
+          <Field
+            label={t('settingsForm.maxConcurrentCodeHostCalls')}
+            hint={t('settingsForm.maxConcurrentCodeHostCallsHint')}
+            required
+          >
+            <SettingsNumberInput
+              setting="maxConcurrentCodeHostCalls"
+              value={state.maxConcurrentCodeHostCalls}
+              onChange={(v) => setState({ ...state, maxConcurrentCodeHostCalls: v ?? 1 })}
+            />
+          </Field>
+          <Field
+            label={t('settingsForm.maxActiveChildTasks')}
+            hint={t('settingsForm.maxActiveChildTasksHint')}
+            required
+          >
+            <SettingsNumberInput
+              setting="maxActiveChildTasks"
+              value={state.maxActiveChildTasks}
+              onChange={(v) => setState({ ...state, maxActiveChildTasks: v ?? 1 })}
+            />
+          </Field>
+          <Field
+            label={t('settingsForm.maxInvocationDepth')}
+            hint={t('settingsForm.maxInvocationDepthHint')}
+            required
+          >
+            <SettingsNumberInput
+              setting="maxInvocationDepth"
+              value={state.maxInvocationDepth}
+              onChange={(v) => setState({ ...state, maxInvocationDepth: v ?? 1 })}
+            />
+          </Field>
+        </div>
+      </SettingsCard>
+      <SettingsCard
+        title={t('settings.cardGroups.limitsLoggingTitle')}
+        hint={t('settings.cardGroups.limitsLoggingHint')}
+      >
+        <Field label={t('settingsForm.logLevel')} hint={t('settingsForm.logLevelHint')}>
+          <Select<NonNullable<Config['logLevel']>>
+            value={state.logLevel ?? config.logLevel}
+            ariaLabel={t('settingsForm.logLevel')}
+            onChange={(v) => setState({ ...state, logLevel: v })}
+            options={[
+              { value: 'debug', label: 'debug' },
+              { value: 'info', label: 'info' },
+              { value: 'warn', label: 'warn' },
+              { value: 'error', label: 'error' },
+            ]}
           />
         </Field>
-        <Field
-          label={t('settingsForm.maxActiveChildTasks')}
-          hint={t('settingsForm.maxActiveChildTasksHint')}
-          required
-        >
-          <SettingsNumberInput
-            setting="maxActiveChildTasks"
-            value={state.maxActiveChildTasks}
-            onChange={(v) => setState({ ...state, maxActiveChildTasks: v ?? 1 })}
-          />
-        </Field>
-        <Field
-          label={t('settingsForm.maxInvocationDepth')}
-          hint={t('settingsForm.maxInvocationDepthHint')}
-          required
-        >
-          <SettingsNumberInput
-            setting="maxInvocationDepth"
-            value={state.maxInvocationDepth}
-            onChange={(v) => setState({ ...state, maxInvocationDepth: v ?? 1 })}
-          />
-        </Field>
-      </div>
-      <Field label={t('settingsForm.logLevel')} hint={t('settingsForm.logLevelHint')}>
-        <Select<NonNullable<Config['logLevel']>>
-          value={state.logLevel ?? config.logLevel}
-          ariaLabel={t('settingsForm.logLevel')}
-          onChange={(v) => setState({ ...state, logLevel: v })}
-          options={[
-            { value: 'debug', label: 'debug' },
-            { value: 'info', label: 'info' },
-            { value: 'warn', label: 'warn' },
-            { value: 'error', label: 'error' },
-          ]}
-        />
-      </Field>
+      </SettingsCard>
     </SectionForm>
   )
 }
@@ -676,55 +691,67 @@ function RecoveryTab({ config }: TabProps) {
       success={save.isSuccess && save.error === null ? 'saved' : null}
       editState={draft}
     >
-      <Switch
-        checked={state.autoResumeOnBoot ?? false}
-        onChange={(v) => setState({ ...state, autoResumeOnBoot: v })}
-        label={t('settingsForm.autoResumeOnBoot')}
-        hint={t('settingsForm.autoResumeOnBootHint')}
-      />
-      <Switch
-        checked={(state.autoRepair ?? {}).S4 === true}
-        onChange={(v) => setState({ ...state, autoRepair: { ...(state.autoRepair ?? {}), S4: v } })}
-        label={t('settingsForm.autoRepairS4')}
-        hint={t('settingsForm.autoRepairS4Hint')}
-      />
-      <Switch
-        checked={state.autoKillStalledChild ?? false}
-        onChange={(v) => setState({ ...state, autoKillStalledChild: v })}
-        label={t('settingsForm.autoKillStalledChild')}
-        hint={t('settingsForm.autoKillStalledChildHint')}
-      />
-      <Field label={t('settingsForm.heartbeatStallMs')} required>
-        <SettingsNumberInput
-          setting="heartbeatStallMs"
-          value={state.heartbeatStallMs}
-          onChange={(v) => setState({ ...state, heartbeatStallMs: v ?? 1_800_000 })}
-        />
-      </Field>
-      <Field label={t('settingsForm.maxAutoRecoveriesPerWindow')} required>
-        <SettingsNumberInput
-          setting="maxAutoRecoveriesPerWindow"
-          value={state.maxAutoRecoveriesPerWindow}
-          onChange={(v) => setState({ ...state, maxAutoRecoveriesPerWindow: v ?? 3 })}
-        />
-      </Field>
-      <Field label={t('settingsForm.autoRecoveryWindowMs')} required>
-        <SettingsNumberInput
-          setting="autoRecoveryWindowMs"
-          value={state.autoRecoveryWindowMs}
-          onChange={(v) => setState({ ...state, autoRecoveryWindowMs: v ?? 3_600_000 })}
-        />
-      </Field>
-      <Field
-        label={t('settingsForm.periodicOrphanReconcileMs')}
-        hint={t('settingsForm.periodicOrphanReconcileHint')}
+      <SettingsCard
+        title={t('settings.cardGroups.recoveryAutomationTitle')}
+        hint={t('settings.cardGroups.recoveryAutomationHint')}
       >
-        <SettingsNumberInput
-          setting="periodicOrphanReconcileMs"
-          value={state.periodicOrphanReconcileMs}
-          onChange={(v) => setState({ ...state, periodicOrphanReconcileMs: v ?? 0 })}
+        <Switch
+          checked={state.autoResumeOnBoot ?? false}
+          onChange={(v) => setState({ ...state, autoResumeOnBoot: v })}
+          label={t('settingsForm.autoResumeOnBoot')}
+          hint={t('settingsForm.autoResumeOnBootHint')}
         />
-      </Field>
+        <Switch
+          checked={(state.autoRepair ?? {}).S4 === true}
+          onChange={(v) =>
+            setState({ ...state, autoRepair: { ...(state.autoRepair ?? {}), S4: v } })
+          }
+          label={t('settingsForm.autoRepairS4')}
+          hint={t('settingsForm.autoRepairS4Hint')}
+        />
+        <Switch
+          checked={state.autoKillStalledChild ?? false}
+          onChange={(v) => setState({ ...state, autoKillStalledChild: v })}
+          label={t('settingsForm.autoKillStalledChild')}
+          hint={t('settingsForm.autoKillStalledChildHint')}
+        />
+      </SettingsCard>
+      <SettingsCard
+        title={t('settings.cardGroups.recoverySafetyTitle')}
+        hint={t('settings.cardGroups.recoverySafetyHint')}
+      >
+        <Field label={t('settingsForm.heartbeatStallMs')} required>
+          <SettingsNumberInput
+            setting="heartbeatStallMs"
+            value={state.heartbeatStallMs}
+            onChange={(v) => setState({ ...state, heartbeatStallMs: v ?? 1_800_000 })}
+          />
+        </Field>
+        <Field label={t('settingsForm.maxAutoRecoveriesPerWindow')} required>
+          <SettingsNumberInput
+            setting="maxAutoRecoveriesPerWindow"
+            value={state.maxAutoRecoveriesPerWindow}
+            onChange={(v) => setState({ ...state, maxAutoRecoveriesPerWindow: v ?? 3 })}
+          />
+        </Field>
+        <Field label={t('settingsForm.autoRecoveryWindowMs')} required>
+          <SettingsNumberInput
+            setting="autoRecoveryWindowMs"
+            value={state.autoRecoveryWindowMs}
+            onChange={(v) => setState({ ...state, autoRecoveryWindowMs: v ?? 3_600_000 })}
+          />
+        </Field>
+        <Field
+          label={t('settingsForm.periodicOrphanReconcileMs')}
+          hint={t('settingsForm.periodicOrphanReconcileHint')}
+        >
+          <SettingsNumberInput
+            setting="periodicOrphanReconcileMs"
+            value={state.periodicOrphanReconcileMs}
+            onChange={(v) => setState({ ...state, periodicOrphanReconcileMs: v ?? 0 })}
+          />
+        </Field>
+      </SettingsCard>
     </SectionForm>
   )
 }
@@ -749,85 +776,95 @@ function GitTab({ config }: TabProps) {
       success={save.isSuccess && save.error === null ? 'saved' : null}
       editState={draft}
     >
-      <Field
-        label={t('settingsForm.gitRecurseSubmodules')}
-        hint={t('settingsForm.gitRecurseSubmodulesHint')}
+      <SettingsCard
+        title={t('settings.cardGroups.gitCheckoutTitle')}
+        hint={t('settings.cardGroups.gitCheckoutHint')}
       >
-        <Select
-          value={state.gitRecurseSubmodules ?? 'auto'}
-          onChange={(v) => setState({ ...state, gitRecurseSubmodules: v })}
-          options={[
-            { value: 'auto' as const, label: t('settingsForm.gitRecurseAuto') },
-            { value: 'always' as const, label: t('settingsForm.gitRecurseAlways') },
-            { value: 'never' as const, label: t('settingsForm.gitRecurseNever') },
-          ]}
-          ariaLabel={t('settingsForm.gitRecurseSubmodules')}
+        <Field
+          label={t('settingsForm.gitRecurseSubmodules')}
+          hint={t('settingsForm.gitRecurseSubmodulesHint')}
+        >
+          <Select
+            value={state.gitRecurseSubmodules ?? 'auto'}
+            onChange={(v) => setState({ ...state, gitRecurseSubmodules: v })}
+            options={[
+              { value: 'auto' as const, label: t('settingsForm.gitRecurseAuto') },
+              { value: 'always' as const, label: t('settingsForm.gitRecurseAlways') },
+              { value: 'never' as const, label: t('settingsForm.gitRecurseNever') },
+            ]}
+            ariaLabel={t('settingsForm.gitRecurseSubmodules')}
+          />
+        </Field>
+        <div className="form-grid form-grid--cols-2">
+          <Field
+            label={t('settingsForm.gitSubmoduleJobs')}
+            hint={t('settingsForm.gitSubmoduleJobsHint')}
+          >
+            <SettingsNumberInput
+              setting="gitSubmoduleJobs"
+              value={state.gitSubmoduleJobs ?? 4}
+              onChange={(v) => setState({ ...state, gitSubmoduleJobs: v ?? 4 })}
+            />
+          </Field>
+        </div>
+        <Switch
+          checked={state.gitSubmoduleRemote === true}
+          onChange={(v) => setState({ ...state, gitSubmoduleRemote: v })}
+          label={t('settingsForm.gitSubmoduleRemote')}
+          hint={t('settingsForm.gitSubmoduleRemoteHint')}
         />
-      </Field>
-      <div className="form-grid form-grid--cols-2">
-        <Field
-          label={t('settingsForm.gitSubmoduleJobs')}
-          hint={t('settingsForm.gitSubmoduleJobsHint')}
-        >
-          <SettingsNumberInput
-            setting="gitSubmoduleJobs"
-            value={state.gitSubmoduleJobs ?? 4}
-            onChange={(v) => setState({ ...state, gitSubmoduleJobs: v ?? 4 })}
-          />
-        </Field>
-      </div>
-      <Switch
-        checked={state.gitSubmoduleRemote === true}
-        onChange={(v) => setState({ ...state, gitSubmoduleRemote: v })}
-        label={t('settingsForm.gitSubmoduleRemote')}
-        hint={t('settingsForm.gitSubmoduleRemoteHint')}
-      />
-      <Switch
-        checked={refresh?.enabled !== false}
-        onChange={(v) =>
-          setState({ ...state, submoduleAutoRefresh: { ...(refresh ?? {}), enabled: v } })
-        }
-        label={t('settingsForm.submoduleAutoRefresh')}
-        hint={t('settingsForm.submoduleAutoRefreshHint')}
-      />
-      <div className="form-grid form-grid--cols-2">
-        <Field
-          label={t('settingsForm.submoduleRefreshIntervalMs')}
-          hint={t('settingsForm.submoduleRefreshIntervalHint')}
-        >
-          <SettingsNumberInput
-            setting="submoduleAutoRefresh.intervalMs"
-            value={refresh?.intervalMs ?? 6 * 60 * 60 * 1000}
-            onChange={(v) =>
-              setState({
-                ...state,
-                submoduleAutoRefresh: {
-                  ...(refresh ?? { enabled: true }),
-                  ...(v !== undefined ? { intervalMs: v } : {}),
-                },
-              })
-            }
-          />
-        </Field>
-        <Field
-          label={t('settingsForm.submoduleOnlyRecentDays')}
-          hint={t('settingsForm.submoduleOnlyRecentDaysHint')}
-        >
-          <SettingsNumberInput
-            setting="submoduleAutoRefresh.onlyRecentDays"
-            value={refresh?.onlyRecentDays ?? 30}
-            onChange={(v) =>
-              setState({
-                ...state,
-                submoduleAutoRefresh: {
-                  ...(refresh ?? { enabled: true }),
-                  ...(v !== undefined ? { onlyRecentDays: v } : {}),
-                },
-              })
-            }
-          />
-        </Field>
-      </div>
+      </SettingsCard>
+      <SettingsCard
+        title={t('settings.cardGroups.gitRefreshTitle')}
+        hint={t('settings.cardGroups.gitRefreshHint')}
+      >
+        <Switch
+          checked={refresh?.enabled !== false}
+          onChange={(v) =>
+            setState({ ...state, submoduleAutoRefresh: { ...(refresh ?? {}), enabled: v } })
+          }
+          label={t('settingsForm.submoduleAutoRefresh')}
+          hint={t('settingsForm.submoduleAutoRefreshHint')}
+        />
+        <div className="form-grid form-grid--cols-2">
+          <Field
+            label={t('settingsForm.submoduleRefreshIntervalMs')}
+            hint={t('settingsForm.submoduleRefreshIntervalHint')}
+          >
+            <SettingsNumberInput
+              setting="submoduleAutoRefresh.intervalMs"
+              value={refresh?.intervalMs ?? 6 * 60 * 60 * 1000}
+              onChange={(v) =>
+                setState({
+                  ...state,
+                  submoduleAutoRefresh: {
+                    ...(refresh ?? { enabled: true }),
+                    ...(v !== undefined ? { intervalMs: v } : {}),
+                  },
+                })
+              }
+            />
+          </Field>
+          <Field
+            label={t('settingsForm.submoduleOnlyRecentDays')}
+            hint={t('settingsForm.submoduleOnlyRecentDaysHint')}
+          >
+            <SettingsNumberInput
+              setting="submoduleAutoRefresh.onlyRecentDays"
+              value={refresh?.onlyRecentDays ?? 30}
+              onChange={(v) =>
+                setState({
+                  ...state,
+                  submoduleAutoRefresh: {
+                    ...(refresh ?? { enabled: true }),
+                    ...(v !== undefined ? { onlyRecentDays: v } : {}),
+                  },
+                })
+              }
+            />
+          </Field>
+        </div>
+      </SettingsCard>
     </SectionForm>
   )
 }
@@ -846,96 +883,111 @@ export function GcTab({ config }: TabProps) {
       success={save.isSuccess && save.error === null ? 'saved' : null}
       editState={draft}
     >
-      <Switch
-        checked={gc?.enabled === true}
-        onChange={(v) => setState({ ...state, worktreeAutoGc: { ...(gc ?? {}), enabled: v } })}
-        label={t('settingsForm.autoGcLabel')}
-        hint={t('settingsForm.autoGcHint')}
-      />
-      <div className="form-grid form-grid--cols-2">
-        <Field label={t('settingsForm.olderThanDays')}>
-          <SettingsNumberInput
-            setting="worktreeAutoGc.olderThanDays"
-            value={gc?.olderThanDays}
+      <SettingsCard
+        title={t('settings.cardGroups.gcWorktreesTitle')}
+        hint={t('settings.cardGroups.gcWorktreesHint')}
+      >
+        <Switch
+          checked={gc?.enabled === true}
+          onChange={(v) => setState({ ...state, worktreeAutoGc: { ...(gc ?? {}), enabled: v } })}
+          label={t('settingsForm.autoGcLabel')}
+          hint={t('settingsForm.autoGcHint')}
+        />
+        <div className="form-grid form-grid--cols-2">
+          <Field label={t('settingsForm.olderThanDays')}>
+            <SettingsNumberInput
+              setting="worktreeAutoGc.olderThanDays"
+              value={gc?.olderThanDays}
+              onChange={(v) =>
+                setState({
+                  ...state,
+                  worktreeAutoGc: { ...(gc ?? { enabled: false }), olderThanDays: v },
+                })
+              }
+            />
+          </Field>
+          <Switch
+            checked={gc?.onlyMerged === true}
             onChange={(v) =>
               setState({
                 ...state,
-                worktreeAutoGc: { ...(gc ?? { enabled: false }), olderThanDays: v },
+                worktreeAutoGc: { ...(gc ?? { enabled: false }), onlyMerged: v },
+              })
+            }
+            label={t('settingsForm.onlyMerged')}
+          />
+        </div>
+      </SettingsCard>
+      <SettingsCard
+        title={t('settings.cardGroups.gcEventsTitle')}
+        hint={t('settings.cardGroups.gcEventsHint')}
+      >
+        <Field
+          label={t('settingsForm.archivePerNodeRun')}
+          required
+          hint={t('settingsForm.archivePerNodeRunHint')}
+        >
+          <SettingsNumberInput
+            setting="eventsArchiveThresholds.perNodeRunRows"
+            value={thresholds?.perNodeRunRows}
+            onChange={(v) =>
+              setState({
+                ...state,
+                eventsArchiveThresholds: { ...thresholds!, perNodeRunRows: v ?? 50_000 },
               })
             }
           />
         </Field>
-        <Switch
-          checked={gc?.onlyMerged === true}
-          onChange={(v) =>
-            setState({
-              ...state,
-              worktreeAutoGc: { ...(gc ?? { enabled: false }), onlyMerged: v },
-            })
-          }
-          label={t('settingsForm.onlyMerged')}
-        />
-      </div>
-      <Field
-        label={t('settingsForm.archivePerNodeRun')}
-        required
-        hint={t('settingsForm.archivePerNodeRunHint')}
+        <Field
+          label={t('settingsForm.archiveGlobal')}
+          required
+          hint={t('settingsForm.archiveGlobalHint')}
+        >
+          <SettingsNumberInput
+            setting="eventsArchiveThresholds.globalRows"
+            value={thresholds?.globalRows}
+            onChange={(v) =>
+              setState({
+                ...state,
+                eventsArchiveThresholds: { ...thresholds!, globalRows: v ?? 1_000_000 },
+              })
+            }
+          />
+        </Field>
+      </SettingsCard>
+      <SettingsCard
+        title={t('settings.cardGroups.gcWebhooksTitle')}
+        hint={t('settings.cardGroups.gcWebhooksHint')}
       >
-        <SettingsNumberInput
-          setting="eventsArchiveThresholds.perNodeRunRows"
-          value={thresholds?.perNodeRunRows}
-          onChange={(v) =>
-            setState({
-              ...state,
-              eventsArchiveThresholds: { ...thresholds!, perNodeRunRows: v ?? 50_000 },
-            })
-          }
-        />
-      </Field>
-      <Field
-        label={t('settingsForm.archiveGlobal')}
-        required
-        hint={t('settingsForm.archiveGlobalHint')}
-      >
-        <SettingsNumberInput
-          setting="eventsArchiveThresholds.globalRows"
-          value={thresholds?.globalRows}
-          onChange={(v) =>
-            setState({
-              ...state,
-              eventsArchiveThresholds: { ...thresholds!, globalRows: v ?? 1_000_000 },
-            })
-          }
-        />
-      </Field>
-      {/* RFC-261 (D9') — webhook 投递保留天数（保存门校验 body ≤ row；GC 每小时
+        {/* RFC-261 (D9') — webhook 投递保留天数（保存门校验 body ≤ row；GC 每小时
           sweep 时热读生效值） */}
-      <div className="form-grid form-grid--cols-2">
-        <Field
-          label={t('settingsForm.webhookBodyRetention')}
-          required
-          hint={t('settingsForm.webhookBodyRetentionHint')}
-        >
-          <SettingsNumberInput
-            setting="webhookDeliveryBodyRetentionDays"
-            value={state.webhookDeliveryBodyRetentionDays}
-            onChange={(v) => setState({ ...state, webhookDeliveryBodyRetentionDays: v ?? 30 })}
-            data-testid="settings-webhook-body-retention"
-          />
-        </Field>
-        <Field
-          label={t('settingsForm.webhookRowRetention')}
-          required
-          hint={t('settingsForm.webhookRowRetentionHint')}
-        >
-          <SettingsNumberInput
-            setting="webhookDeliveryRowRetentionDays"
-            value={state.webhookDeliveryRowRetentionDays}
-            onChange={(v) => setState({ ...state, webhookDeliveryRowRetentionDays: v ?? 90 })}
-            data-testid="settings-webhook-row-retention"
-          />
-        </Field>
-      </div>
+        <div className="form-grid form-grid--cols-2">
+          <Field
+            label={t('settingsForm.webhookBodyRetention')}
+            required
+            hint={t('settingsForm.webhookBodyRetentionHint')}
+          >
+            <SettingsNumberInput
+              setting="webhookDeliveryBodyRetentionDays"
+              value={state.webhookDeliveryBodyRetentionDays}
+              onChange={(v) => setState({ ...state, webhookDeliveryBodyRetentionDays: v ?? 30 })}
+              data-testid="settings-webhook-body-retention"
+            />
+          </Field>
+          <Field
+            label={t('settingsForm.webhookRowRetention')}
+            required
+            hint={t('settingsForm.webhookRowRetentionHint')}
+          >
+            <SettingsNumberInput
+              setting="webhookDeliveryRowRetentionDays"
+              value={state.webhookDeliveryRowRetentionDays}
+              onChange={(v) => setState({ ...state, webhookDeliveryRowRetentionDays: v ?? 90 })}
+              data-testid="settings-webhook-row-retention"
+            />
+          </Field>
+        </div>
+      </SettingsCard>
       <BackupCard />
     </SectionForm>
   )
@@ -1024,12 +1076,7 @@ export function BackupCard() {
   const pending = restorePending.data?.pending ?? null
   const lastFailed = restorePending.data?.failed[0]
   return (
-    <Card
-      as="section"
-      className="stack-top--md"
-      header={<strong>{t('settings.backupTitle')}</strong>}
-    >
-      <p className="settings-hint">{t('settings.backupHint')}</p>
+    <SettingsCard title={t('settings.backupTitle')} hint={t('settings.backupHint')}>
       <button type="button" className="btn" onClick={runBackup} disabled={busy}>
         {busy ? t('settings.backupRunning') : t('settings.backupCreate')}
       </button>
@@ -1124,7 +1171,7 @@ export function BackupCard() {
         onClose={() => setRestoreCandidate(null)}
         triggerRef={restoreButtonRef}
       />
-    </Card>
+    </SettingsCard>
   )
 }
 
@@ -1161,64 +1208,74 @@ export function NetworkTab({ config }: TabProps) {
       restartRequired={restartRequired}
       editState={draft}
     >
-      <Field label={t('settingsForm.bindHost')} required hint={t('settingsForm.bindHostHint')}>
-        <TextInput
-          value={state.bindHost ?? '127.0.0.1'}
-          onChange={(v) => setState({ ...state, bindHost: v })}
-        />
-      </Field>
-      <div>
-        <Field label={t('settingsForm.bindPort')} hint={t('settingsForm.bindPortHint')}>
-          <SettingsNumberInput
-            setting="bindPort"
-            value={state.bindPort}
-            onChange={(v) => setState({ ...state, bindPort: v ?? 0 })}
-            placeholder={
-              state.bindPort == null && effective != null ? String(effective.port) : undefined
-            }
-            data-testid="settings-bind-port"
+      <SettingsCard
+        title={t('settings.cardGroups.networkListenerTitle')}
+        hint={t('settings.cardGroups.networkListenerHint')}
+      >
+        <Field label={t('settingsForm.bindHost')} required hint={t('settingsForm.bindHostHint')}>
+          <TextInput
+            value={state.bindHost ?? '127.0.0.1'}
+            onChange={(v) => setState({ ...state, bindHost: v })}
           />
         </Field>
-        {(state.bindPort == null || state.bindPort === 0) && effective != null && (
-          <div className="form-field__hint stack-top--xs">
-            <span>{t('settingsForm.bindPortCurrent', { port: effective.port })}</span>{' '}
-            <button
-              type="button"
-              className="btn btn--sm"
-              data-testid="settings-use-effective-port"
-              onClick={() => setState({ ...state, bindPort: effective.port })}
-            >
-              {t('settingsForm.bindPortUseCurrent')}
-            </button>
-          </div>
-        )}
-      </div>
+        <div>
+          <Field label={t('settingsForm.bindPort')} hint={t('settingsForm.bindPortHint')}>
+            <SettingsNumberInput
+              setting="bindPort"
+              value={state.bindPort}
+              onChange={(v) => setState({ ...state, bindPort: v ?? 0 })}
+              placeholder={
+                state.bindPort == null && effective != null ? String(effective.port) : undefined
+              }
+              data-testid="settings-bind-port"
+            />
+          </Field>
+          {(state.bindPort == null || state.bindPort === 0) && effective != null && (
+            <div className="form-field__hint stack-top--xs">
+              <span>{t('settingsForm.bindPortCurrent', { port: effective.port })}</span>{' '}
+              <button
+                type="button"
+                className="btn btn--sm"
+                data-testid="settings-use-effective-port"
+                onClick={() => setState({ ...state, bindPort: effective.port })}
+              >
+                {t('settingsForm.bindPortUseCurrent')}
+              </button>
+            </div>
+          )}
+        </div>
+      </SettingsCard>
 
-      {/* RFC-247 D10 — the external-access switch. It closes `POST /api/mcp` and
+      <SettingsCard
+        title={t('settings.cardGroups.networkExternalTitle')}
+        hint={t('settings.cardGroups.networkExternalHint')}
+      >
+        {/* RFC-247 D10 — the external-access switch. It closes `POST /api/mcp` and
           new token minting together: from an operator's point of view they are
           one surface ("can the outside world drive this platform"), and
           splitting them would create a state — MCP closed, tokens still
           issuable — that answers no real question. Existing tokens keep working
           on REST by design, so flipping this stops the bleeding without
           breaking automation that was never implicated. */}
-      <Field
-        label={t('settingsForm.mcpSurfaceLabel')}
-        hint={t('settingsForm.mcpSurfaceHint')}
-        group
-        labelId="settings-mcp-surface-label"
-      >
-        <Switch
-          checked={state.mcpSurfaceEnabled ?? true}
-          onChange={(v) => setState({ ...state, mcpSurfaceEnabled: v })}
-          aria-label={t('settingsForm.mcpSurfaceLabel')}
-          data-testid="settings-mcp-surface"
-        />
-      </Field>
-      <p className="form-field__hint">
-        <Link to="/docs/api" className="link" data-testid="settings-api-docs-link">
-          {t('settingsForm.mcpSurfaceDocsLink')}
-        </Link>
-      </p>
+        <Field
+          label={t('settingsForm.mcpSurfaceLabel')}
+          hint={t('settingsForm.mcpSurfaceHint')}
+          group
+          labelId="settings-mcp-surface-label"
+        >
+          <Switch
+            checked={state.mcpSurfaceEnabled ?? true}
+            onChange={(v) => setState({ ...state, mcpSurfaceEnabled: v })}
+            aria-label={t('settingsForm.mcpSurfaceLabel')}
+            data-testid="settings-mcp-surface"
+          />
+        </Field>
+        <p className="form-field__hint">
+          <Link to="/docs/api" className="link" data-testid="settings-api-docs-link">
+            {t('settingsForm.mcpSurfaceDocsLink')}
+          </Link>
+        </p>
+      </SettingsCard>
     </SectionForm>
   )
 }
@@ -1239,30 +1296,35 @@ export function AppearanceTab({ config }: TabProps) {
       success={save.isSuccess && save.error === null ? 'saved' : null}
       editState={draft}
     >
-      <Field label={t('settings.themeLabel')} hint={t('settings.themeHint')}>
-        <Select<NonNullable<Config['theme']>>
-          value={state.theme ?? 'system'}
-          ariaLabel={t('settings.themeLabel')}
-          onChange={(v) => setState({ ...state, theme: v })}
-          options={[
-            { value: 'system', label: t('settings.themeSystem') },
-            { value: 'light', label: t('settings.themeLight') },
-            { value: 'dark', label: t('settings.themeDark') },
-          ]}
-        />
-      </Field>
-      <Field label={t('settings.languageLabel')} hint={t('settings.languageHint')}>
-        <Select<SupportedLanguage>
-          value={state.language ?? 'zh-CN'}
-          ariaLabel={t('settings.languageLabel')}
-          data-testid="settings-language-select"
-          onChange={(v) => setState({ ...state, language: v })}
-          options={[
-            { value: 'zh-CN', label: t('settings.languageZhCN') },
-            { value: 'en-US', label: t('settings.languageEnUS') },
-          ]}
-        />
-      </Field>
+      <SettingsCard
+        title={t('settings.cardGroups.appearanceDisplayTitle')}
+        hint={t('settings.cardGroups.appearanceDisplayHint')}
+      >
+        <Field label={t('settings.themeLabel')} hint={t('settings.themeHint')}>
+          <Select<NonNullable<Config['theme']>>
+            value={state.theme ?? 'system'}
+            ariaLabel={t('settings.themeLabel')}
+            onChange={(v) => setState({ ...state, theme: v })}
+            options={[
+              { value: 'system', label: t('settings.themeSystem') },
+              { value: 'light', label: t('settings.themeLight') },
+              { value: 'dark', label: t('settings.themeDark') },
+            ]}
+          />
+        </Field>
+        <Field label={t('settings.languageLabel')} hint={t('settings.languageHint')}>
+          <Select<SupportedLanguage>
+            value={state.language ?? 'zh-CN'}
+            ariaLabel={t('settings.languageLabel')}
+            data-testid="settings-language-select"
+            onChange={(v) => setState({ ...state, language: v })}
+            options={[
+              { value: 'zh-CN', label: t('settings.languageZhCN') },
+              { value: 'en-US', label: t('settings.languageEnUS') },
+            ]}
+          />
+        </Field>
+      </SettingsCard>
     </SectionForm>
   )
 }
@@ -1270,30 +1332,6 @@ export function AppearanceTab({ config }: TabProps) {
 // RFC-156/234 — the config.json keys the four config-driven internal agents own. One
 // source for the useTabState slice AND the "did any config field change?" check
 // (so a fusion-only save can skip the config PUT — Codex impl-gate P2c).
-// RFC-156 — each internal agent renders as a bordered <Card> (shared RFC-124
-// primitive) so the blocks read as five DISTINCT panels instead of blending into
-// one scroll. Header = title + one-line role hint; `children` = that agent's
-// fields (kept in a `.form-section__body` for the 16px field rhythm).
-function AgentCard({
-  title,
-  hint,
-  children,
-}: {
-  title: string
-  hint: string
-  children: React.ReactNode
-}) {
-  return (
-    <Card
-      className="system-agent-card"
-      title={title}
-      header={<p className="settings-hint settings-hint--tight">{hint}</p>}
-    >
-      <div className="form-section__body">{children}</div>
-    </Card>
-  )
-}
-
 // RFC-156 — "System agents" tab. One card per internal framework agent, each a
 // "runtime selector + that agent's run-config":
 //   • commit-push / memory distiller / merge-conflict resolver / intent builder persist to
@@ -1413,7 +1451,7 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
                   : undefined
         }
       >
-        <AgentCard
+        <SettingsCard
           title={t('settings.systemAgents.commitPushTitle')}
           hint={t('settings.systemAgents.commitPushHint')}
         >
@@ -1466,9 +1504,9 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               ]}
             />
           </Field>
-        </AgentCard>
+        </SettingsCard>
 
-        <AgentCard
+        <SettingsCard
           title={t('settings.systemAgents.memoryTitle')}
           hint={t('settings.systemAgents.memoryHint')}
         >
@@ -1503,9 +1541,9 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               ]}
             />
           </Field>
-        </AgentCard>
+        </SettingsCard>
 
-        <AgentCard
+        <SettingsCard
           title={t('settings.systemAgents.narrativeTitle')}
           hint={t('settings.systemAgents.narrativeHint')}
         >
@@ -1519,9 +1557,9 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               onChange={(v) => setState({ ...state, changeNarrativeRuntime: v })}
             />
           </Field>
-        </AgentCard>
+        </SettingsCard>
 
-        <AgentCard
+        <SettingsCard
           title={t('settings.systemAgents.mergeTitle')}
           hint={t('settings.systemAgents.mergeHint')}
         >
@@ -1535,9 +1573,9 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               onChange={(v) => setState({ ...state, mergeAgentRuntime: v, mergeAgentModel: null })}
             />
           </Field>
-        </AgentCard>
+        </SettingsCard>
 
-        <AgentCard
+        <SettingsCard
           title={t('settings.systemAgents.intentTitle')}
           hint={t('settings.systemAgents.intentHint')}
         >
@@ -1604,9 +1642,9 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               monospace
             />
           </Field>
-        </AgentCard>
+        </SettingsCard>
 
-        <AgentCard
+        <SettingsCard
           title={t('settings.systemAgents.fusionTitle')}
           hint={t('settings.systemAgents.fusionHint')}
         >
@@ -1624,7 +1662,7 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               onChange={fusion.setValue}
             />
           </Field>
-        </AgentCard>
+        </SettingsCard>
       </SectionForm>
     </div>
   )
@@ -1680,48 +1718,53 @@ function RenderingTab({ config }: TabProps) {
       success={save.isSuccess && save.error === null ? 'saved' : null}
       editState={draft}
     >
-      <Field
-        label={t('settings.renderingPlantumlEndpointLabel')}
-        hint={t('settings.renderingPlantumlEndpointHint')}
+      <SettingsCard
+        title={t('settings.cardGroups.renderingServiceTitle')}
+        hint={t('settings.cardGroups.renderingServiceHint')}
       >
-        <TextInput
-          value={state.plantumlEndpoint ?? ''}
-          onChange={(v) => setState({ ...state, plantumlEndpoint: v })}
-          placeholder={t('settings.renderingPlantumlEndpointPlaceholder')}
-        />
-      </Field>
-      <Field
-        label={t('settings.renderingPlantumlAuthLabel')}
-        hint={t('settings.renderingPlantumlAuthHint')}
-      >
-        <TextInput
-          value={state.plantumlAuthHeader ?? ''}
-          onChange={(v) => setState({ ...state, plantumlAuthHeader: v })}
-          placeholder={t('settings.renderingPlantumlAuthPlaceholder')}
-        />
-      </Field>
-      <div>
-        <button
-          type="button"
-          className="btn btn--sm"
-          onClick={() => {
-            void runConnectivityTest()
-          }}
-          disabled={testState.kind === 'running'}
+        <Field
+          label={t('settings.renderingPlantumlEndpointLabel')}
+          hint={t('settings.renderingPlantumlEndpointHint')}
         >
-          {testState.kind === 'running'
-            ? t('settings.renderingTestRunning')
-            : t('settings.renderingTestButton')}
-        </button>
-        <FeedbackStack className="stack-top--sm">
-          {testState.kind === 'success' && (
-            <NoticeBanner tone="success" size="compact">
-              {testState.msg}
-            </NoticeBanner>
-          )}
-          {testState.kind === 'failure' && <ErrorBanner error={testState.msg} />}
-        </FeedbackStack>
-      </div>
+          <TextInput
+            value={state.plantumlEndpoint ?? ''}
+            onChange={(v) => setState({ ...state, plantumlEndpoint: v })}
+            placeholder={t('settings.renderingPlantumlEndpointPlaceholder')}
+          />
+        </Field>
+        <Field
+          label={t('settings.renderingPlantumlAuthLabel')}
+          hint={t('settings.renderingPlantumlAuthHint')}
+        >
+          <TextInput
+            value={state.plantumlAuthHeader ?? ''}
+            onChange={(v) => setState({ ...state, plantumlAuthHeader: v })}
+            placeholder={t('settings.renderingPlantumlAuthPlaceholder')}
+          />
+        </Field>
+        <div>
+          <button
+            type="button"
+            className="btn btn--sm"
+            onClick={() => {
+              void runConnectivityTest()
+            }}
+            disabled={testState.kind === 'running'}
+          >
+            {testState.kind === 'running'
+              ? t('settings.renderingTestRunning')
+              : t('settings.renderingTestButton')}
+          </button>
+          <FeedbackStack className="stack-top--sm">
+            {testState.kind === 'success' && (
+              <NoticeBanner tone="success" size="compact">
+                {testState.msg}
+              </NoticeBanner>
+            )}
+            {testState.kind === 'failure' && <ErrorBanner error={testState.msg} />}
+          </FeedbackStack>
+        </div>
+      </SettingsCard>
     </SectionForm>
   )
 }
@@ -1828,9 +1871,9 @@ function AuthenticationTab() {
   }
   return (
     <div className="auth-tab">
-      <Card
+      <SettingsCard
         title={t('settings.auth.loginMethodsTitle')}
-        header={<p className="auth-tab__hint">{t('settings.auth.loginMethodsHint')}</p>}
+        hint={t('settings.auth.loginMethodsHint')}
         className="auth-login-policy"
       >
         {loginPolicy.isLoading && loginPolicy.data === undefined && (
@@ -1880,108 +1923,106 @@ function AuthenticationTab() {
             </FeedbackStack>
           </div>
         )}
-      </Card>
+      </SettingsCard>
 
-      <header className="auth-tab__header">
-        <div>
-          <h2 className="auth-tab__title">
-            {t('settings.auth.providersTitle', { defaultValue: 'OIDC providers' })}
-          </h2>
-          <p className="auth-tab__hint">
-            {t('settings.auth.providersHint', {
-              defaultValue:
-                'Configure identity providers users can sign in with. Each provider stores its OAuth 2.0 / OIDC client_id + client_secret + scopes. The client_secret is AES-256-GCM-sealed at rest.',
+      <SettingsCard
+        title={t('settings.auth.providersTitle', { defaultValue: 'OIDC providers' })}
+        hint={t('settings.auth.providersHint', {
+          defaultValue:
+            'Configure identity providers users can sign in with. Each provider stores its OAuth 2.0 / OIDC client_id + client_secret + scopes. The client_secret is AES-256-GCM-sealed at rest.',
+        })}
+        actions={
+          <button
+            ref={addProviderRef}
+            className="btn btn--primary"
+            onClick={() => setShowCreate(true)}
+            data-testid="oidc-add-provider"
+          >
+            {t('settings.auth.add', { defaultValue: 'Add provider' })}
+          </button>
+        }
+      >
+        {list.isLoading && list.data === undefined && (
+          <LoadingState label={t('settings.loading')} />
+        )}
+        {list.error !== null && (
+          <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
+        )}
+
+        {list.data && list.data.length === 0 && (
+          <EmptyState
+            title={t('settings.auth.empty', {
+              defaultValue: 'No providers yet. Add one to enable single sign-on.',
             })}
-          </p>
-        </div>
-        <button
-          ref={addProviderRef}
-          className="btn btn--primary"
-          onClick={() => setShowCreate(true)}
-          data-testid="oidc-add-provider"
-        >
-          {t('settings.auth.add', { defaultValue: 'Add provider' })}
-        </button>
-      </header>
+            size="compact"
+          />
+        )}
 
-      {list.isLoading && list.data === undefined && <LoadingState label={t('settings.loading')} />}
-      {list.error !== null && (
-        <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
-      )}
-
-      {list.data && list.data.length === 0 && (
-        <EmptyState
-          title={t('settings.auth.empty', {
-            defaultValue: 'No providers yet. Add one to enable single sign-on.',
-          })}
-          size="compact"
-        />
-      )}
-
-      {list.data && list.data.length > 0 && (
-        <TableViewport
-          label={t('settings.auth.providersTitle', { defaultValue: 'OIDC providers' })}
-          minWidth="lg"
-        >
-          <table className="account-table">
-            <thead>
-              <tr>
-                <th>{t('settings.auth.colSlug', { defaultValue: 'Slug' })}</th>
-                <th>{t('settings.auth.colName', { defaultValue: 'Name' })}</th>
-                <th>{t('settings.auth.colIssuer', { defaultValue: 'Issuer' })}</th>
-                <th>{t('settings.auth.colProvisioning', { defaultValue: 'Provisioning' })}</th>
-                <th>{t('settings.auth.colEnabled', { defaultValue: 'Enabled' })}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.data.map((p, index) => (
-                <tr key={p.id}>
-                  <td>
-                    <code>{p.slug}</code>
-                  </td>
-                  <td>{p.displayName}</td>
-                  <td className="account-table__ua">{p.issuerUrl}</td>
-                  <td>{p.provisioning}</td>
-                  <td>
-                    <StatusChip kind={p.enabled ? 'success' : 'neutral'} withDot size="sm">
-                      {p.enabled
-                        ? t('settings.auth.enabled', { defaultValue: 'enabled' })
-                        : t('settings.auth.disabled', { defaultValue: 'disabled' })}
-                    </StatusChip>
-                  </td>
-                  <td>
-                    <button
-                      ref={(element) => {
-                        if (element === null) rowEditRefs.current.delete(p.id)
-                        else rowEditRefs.current.set(p.id, element)
-                      }}
-                      className="btn btn--ghost btn--xs"
-                      onClick={() => setEditing(p)}
-                      data-testid={`oidc-edit-${p.id}`}
-                    >
-                      {t('settings.auth.edit', { defaultValue: 'Edit' })}
-                    </button>
-                    <button
-                      className="btn btn--ghost btn--xs btn--danger"
-                      onClick={(event) => openDelete(p, index, event.currentTarget)}
-                      data-testid={`oidc-delete-${p.id}`}
-                      disabled={lastEnabledProviderIsRequired(p)}
-                      title={
-                        lastEnabledProviderIsRequired(p)
-                          ? t('settings.auth.lastProviderRequired')
-                          : undefined
-                      }
-                    >
-                      {t('settings.auth.delete', { defaultValue: 'Delete' })}
-                    </button>
-                  </td>
+        {list.data && list.data.length > 0 && (
+          <TableViewport
+            label={t('settings.auth.providersTitle', { defaultValue: 'OIDC providers' })}
+            minWidth="lg"
+          >
+            <table className="account-table">
+              <thead>
+                <tr>
+                  <th>{t('settings.auth.colSlug', { defaultValue: 'Slug' })}</th>
+                  <th>{t('settings.auth.colName', { defaultValue: 'Name' })}</th>
+                  <th>{t('settings.auth.colIssuer', { defaultValue: 'Issuer' })}</th>
+                  <th>{t('settings.auth.colProvisioning', { defaultValue: 'Provisioning' })}</th>
+                  <th>{t('settings.auth.colEnabled', { defaultValue: 'Enabled' })}</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableViewport>
-      )}
+              </thead>
+              <tbody>
+                {list.data.map((p, index) => (
+                  <tr key={p.id}>
+                    <td>
+                      <code>{p.slug}</code>
+                    </td>
+                    <td>{p.displayName}</td>
+                    <td className="account-table__ua">{p.issuerUrl}</td>
+                    <td>{p.provisioning}</td>
+                    <td>
+                      <StatusChip kind={p.enabled ? 'success' : 'neutral'} withDot size="sm">
+                        {p.enabled
+                          ? t('settings.auth.enabled', { defaultValue: 'enabled' })
+                          : t('settings.auth.disabled', { defaultValue: 'disabled' })}
+                      </StatusChip>
+                    </td>
+                    <td>
+                      <button
+                        ref={(element) => {
+                          if (element === null) rowEditRefs.current.delete(p.id)
+                          else rowEditRefs.current.set(p.id, element)
+                        }}
+                        className="btn btn--ghost btn--xs"
+                        onClick={() => setEditing(p)}
+                        data-testid={`oidc-edit-${p.id}`}
+                      >
+                        {t('settings.auth.edit', { defaultValue: 'Edit' })}
+                      </button>
+                      <button
+                        className="btn btn--ghost btn--xs btn--danger"
+                        onClick={(event) => openDelete(p, index, event.currentTarget)}
+                        data-testid={`oidc-delete-${p.id}`}
+                        disabled={lastEnabledProviderIsRequired(p)}
+                        title={
+                          lastEnabledProviderIsRequired(p)
+                            ? t('settings.auth.lastProviderRequired')
+                            : undefined
+                        }
+                      >
+                        {t('settings.auth.delete', { defaultValue: 'Delete' })}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableViewport>
+        )}
+      </SettingsCard>
 
       {showCreate && (
         <OidcProviderDialog
@@ -2303,16 +2344,15 @@ function OidcProviderDialog(props: {
             runSave()
           }}
         >
-          <fieldset className="oidc-form__group" disabled={busy}>
-            <legend className="oidc-form__group-title">
-              {t('settings.auth.groupProvider', { defaultValue: 'Provider' })}
-            </legend>
-            <p className="oidc-form__group-hint">
-              {t('settings.auth.groupProviderHint', {
-                defaultValue:
-                  'Identifies this IdP in the URL and on the login page button. The issuer URL is what the daemon points OIDC discovery at.',
-              })}
-            </p>
+          <SettingsCard
+            as="fieldset"
+            disabled={busy}
+            title={t('settings.auth.groupProvider', { defaultValue: 'Provider' })}
+            hint={t('settings.auth.groupProviderHint', {
+              defaultValue:
+                'Identifies this IdP in the URL and on the login page button. The issuer URL is what the daemon points OIDC discovery at.',
+            })}
+          >
             <div className="oidc-form__row oidc-form__row--cols-2">
               <Field
                 label={t('settings.auth.slug', { defaultValue: 'Slug' })}
@@ -2359,20 +2399,19 @@ function OidcProviderDialog(props: {
                 placeholder="https://github.corp.com"
               />
             </Field>
-          </fieldset>
+          </SettingsCard>
 
-          <fieldset className="oidc-form__group" disabled={busy}>
-            <legend className="oidc-form__group-title">
-              {t('settings.auth.groupManualEndpoints', {
-                defaultValue: 'Manual endpoints (optional)',
-              })}
-            </legend>
-            <p className="oidc-form__group-hint">
-              {t('settings.auth.groupManualEndpointsHint', {
-                defaultValue:
-                  'Used per field when discovery fails or omits it. A pure OAuth 2.0 IdP needs at least authorize + token + userinfo.',
-              })}
-            </p>
+          <SettingsCard
+            as="fieldset"
+            disabled={busy}
+            title={t('settings.auth.groupManualEndpoints', {
+              defaultValue: 'Manual endpoints (optional)',
+            })}
+            hint={t('settings.auth.groupManualEndpointsHint', {
+              defaultValue:
+                'Used per field when discovery fails or omits it. A pure OAuth 2.0 IdP needs at least authorize + token + userinfo.',
+            })}
+          >
             <div className="oidc-form__row oidc-form__row--cols-2">
               <Field
                 label={t('settings.auth.authorizationEndpoint', {
@@ -2448,18 +2487,17 @@ function OidcProviderDialog(props: {
                 ]}
               />
             </Field>
-          </fieldset>
+          </SettingsCard>
 
-          <fieldset className="oidc-form__group" disabled={busy}>
-            <legend className="oidc-form__group-title">
-              {t('settings.auth.groupCreds', { defaultValue: 'Credentials' })}
-            </legend>
-            <p className="oidc-form__group-hint">
-              {t('settings.auth.groupCredsHint', {
-                defaultValue:
-                  'OAuth 2.0 client your daemon impersonates against the IdP. Secret is AES-256-GCM-sealed at rest.',
-              })}
-            </p>
+          <SettingsCard
+            as="fieldset"
+            disabled={busy}
+            title={t('settings.auth.groupCreds', { defaultValue: 'Credentials' })}
+            hint={t('settings.auth.groupCredsHint', {
+              defaultValue:
+                'OAuth 2.0 client your daemon impersonates against the IdP. Secret is AES-256-GCM-sealed at rest.',
+            })}
+          >
             <div className="oidc-form__row oidc-form__row--cols-2">
               <Field label={t('settings.auth.clientId', { defaultValue: 'Client ID' })} required>
                 <TextInput value={clientId} onChange={setClientId} required />
@@ -2486,12 +2524,13 @@ function OidcProviderDialog(props: {
             >
               <TextInput value={scopes} onChange={setScopes} required />
             </Field>
-          </fieldset>
+          </SettingsCard>
 
-          <fieldset className="oidc-form__group" disabled={busy}>
-            <legend className="oidc-form__group-title">
-              {t('settings.auth.groupBehavior', { defaultValue: 'Behavior' })}
-            </legend>
+          <SettingsCard
+            as="fieldset"
+            disabled={busy}
+            title={t('settings.auth.groupBehavior', { defaultValue: 'Behavior' })}
+          >
             <Field label={t('settings.auth.provisioning', { defaultValue: 'Provisioning policy' })}>
               <Select<'auto' | 'allowlist' | 'invite'>
                 value={provisioning}
@@ -2598,7 +2637,7 @@ function OidcProviderDialog(props: {
                     })
               }
             />
-          </fieldset>
+          </SettingsCard>
 
           {testResult && testResult.kind === 'error' && (
             <div className="oidc-form__test-result oidc-form__test-result--err">

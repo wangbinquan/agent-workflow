@@ -325,6 +325,51 @@ test.describe('RFC-198 global UX browser matrix', () => {
     expect(page.viewportSize()).toEqual({ width: 1280, height: 800 })
   })
 
+  test('all settings sections expose their semantic cards without page overflow', async ({
+    page,
+  }) => {
+    await setDaemonTheme('light')
+    await primeAuth(page)
+
+    const sections = [
+      ['runtime', 1],
+      ['systemAgents', 6],
+      ['limits', 3],
+      ['recovery', 2],
+      ['gc', 4],
+      ['git', 2],
+      ['codeHosts', 2],
+      ['network', 2],
+      ['appearance', 1],
+      ['rendering', 1],
+      ['authentication', 2],
+    ] as const
+
+    for (const [tab, cardCount] of sections) {
+      await page.goto(`${daemon.baseUrl}/settings?tab=${tab}`)
+      await expect(page.locator('.settings-card')).toHaveCount(cardCount)
+      await expectNoPageOverflow(page)
+    }
+
+    const providerCard = page.getByRole('region', { name: 'OIDC providers' })
+    await expect(providerCard.locator('.card__title-actions')).toContainText('Add provider')
+
+    await page.goto(`${daemon.baseUrl}/settings?tab=codeHosts`)
+    const codeHostCards = page.locator('[data-testid^="code-host-card-"]')
+    await expect(codeHostCards).toHaveCount(2)
+    const [gitlabBox, githubBox] = await Promise.all([
+      codeHostCards.nth(0).boundingBox(),
+      codeHostCards.nth(1).boundingBox(),
+    ])
+    expect(gitlabBox).not.toBeNull()
+    expect(githubBox).not.toBeNull()
+    expect(githubBox!.y - (gitlabBox!.y + gitlabBox!.height)).toBeGreaterThanOrEqual(15)
+
+    await page.goto(`${daemon.baseUrl}/settings?tab=runtime`)
+    const runtimeCard = page.getByRole('region', { name: 'Runtimes' })
+    await expect(runtimeCard.locator('.card__title-actions')).toContainText('Add runtime')
+  })
+
   test('1280 light covers home, gallery, side-by-side split, table, and settings form', async ({
     page,
   }) => {
@@ -1026,6 +1071,38 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await confirmDialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(confirmDialog).toHaveCount(0)
     await expect(deleteTrigger).toBeFocused()
+
+    await page.getByTestId('oidc-add-provider').click()
+    const providerDialog = page.getByRole('dialog', { name: 'Add OIDC provider' })
+    await expectWithinViewport(providerDialog)
+    const cardFieldsets = providerDialog.locator('fieldset.settings-card')
+    await expect(cardFieldsets).toHaveCount(4)
+    for (const name of ['Provider', 'Manual endpoints (optional)', 'Credentials', 'Behavior']) {
+      await expect(providerDialog.getByRole('group', { name, exact: true })).toBeVisible()
+    }
+    expect(
+      await providerDialog.locator('.dialog__body').evaluate((body) => ({
+        contentFits: body.scrollWidth <= body.clientWidth,
+        cardsFit: Array.from(body.querySelectorAll('fieldset.settings-card')).every((card) => {
+          const cardBox = card.getBoundingClientRect()
+          const bodyBox = body.getBoundingClientRect()
+          return cardBox.left >= bodyBox.left - 1 && cardBox.right <= bodyBox.right + 1
+        }),
+      })),
+    ).toEqual({ contentFits: true, cardsFit: true })
+    await cardFieldsets.last().scrollIntoViewIfNeeded()
+    await expect(cardFieldsets.last()).toBeInViewport()
+    for (const button of await providerDialog
+      .locator('.dialog__footer')
+      .getByRole('button')
+      .all()) {
+      const box = await button.boundingBox()
+      expect(box).not.toBeNull()
+      expect(box!.height).toBeGreaterThanOrEqual(44)
+    }
+    await expectNoPageOverflow(page)
+    await providerDialog.getByRole('button', { name: 'Cancel' }).click()
+    await expect(providerDialog).toHaveCount(0)
   })
 
   test('explicit app themes win over the opposite OS color scheme on desktop', async ({ page }) => {

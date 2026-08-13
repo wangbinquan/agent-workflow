@@ -368,7 +368,12 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await expectNoCriticalOrSeriousAxeViolations(page, '/settings auth table (390 dark)')
 
     await page.getByTestId('oidc-add-provider').click()
-    await expect(page.getByRole('dialog', { name: 'Add OIDC provider' })).toBeVisible()
+    const providerDialog = page.getByRole('dialog', { name: 'Add OIDC provider' })
+    await expect(providerDialog).toBeVisible()
+    await expect(providerDialog.locator('fieldset.settings-card')).toHaveCount(4)
+    for (const name of ['Provider', 'Manual endpoints (optional)', 'Credentials', 'Behavior']) {
+      await expect(providerDialog.getByRole('group', { name, exact: true })).toBeVisible()
+    }
     await expectNoCriticalOrSeriousAxeViolations(page, '/settings OIDC dialog (390 dark)')
   })
 

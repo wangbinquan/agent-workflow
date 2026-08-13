@@ -41,7 +41,7 @@ import {
 import { routeTaskOperationsFixture } from './task-operations-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 33
+const EXPECTED_VISUAL_SCENE_COUNT = 35
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
 const VISUAL_RUNTIME_STATUS = {
   runtimes: [
@@ -896,6 +896,16 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page).toHaveScreenshot('settings.png', SNAPSHOT_OPTS)
   })
 
+  test('RFC-299 /settings system agents cards', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/settings?tab=systemAgents`)
+    await expect(page.getByRole('heading', { name: 'System agents', exact: true })).toBeVisible()
+    await expect(page.locator('.settings-card')).toHaveCount(6)
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('settings-system-agents.png', SNAPSHOT_OPTS)
+  })
+
   // RFC-190: keep both true first-run and seeded dashboard scenes. Each owns
   // an isolated daemon, so declaration order is no longer part of the fixture.
   test('/ first-run (onboarding)', async ({ page }) => {
@@ -1060,6 +1070,19 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page.getByTestId('settings-bind-port')).toBeVisible()
     await expect(page.getByTestId('settings-bind-port')).toHaveValue('43210')
     await expect(page).toHaveScreenshot('mobile-settings-network.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-299 390 mobile OIDC card dialog (clean, dark)', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await prepareScene(page, { theme: 'dark', fixture: 'clean' })
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/settings?tab=authentication`)
+    await expect(page.getByTestId('oidc-add-provider')).toBeVisible()
+    await page.getByTestId('oidc-add-provider').click()
+    const dialog = page.getByRole('dialog', { name: 'Add OIDC provider' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.locator('fieldset.settings-card')).toHaveCount(4)
+    await expect(page).toHaveScreenshot('mobile-settings-oidc-dialog.png', SNAPSHOT_OPTS)
   })
 
   test('390 mobile terminal task detail (seeded, light)', async ({ page }) => {

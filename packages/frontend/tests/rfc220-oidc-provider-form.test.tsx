@@ -419,6 +419,11 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(1))
+    const cardFieldsets = Array.from(
+      document.querySelectorAll<HTMLFieldSetElement>('fieldset.settings-card'),
+    )
+    expect(cardFieldsets).toHaveLength(4)
+    expect(cardFieldsets.every((fieldset) => fieldset.disabled)).toBe(true)
     expect(
       (screen.getByRole('button', { name: 'Test connection' }) as HTMLButtonElement).disabled,
     ).toBe(true)
