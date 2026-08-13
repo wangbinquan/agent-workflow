@@ -1,6 +1,6 @@
 # RFC-300 Webhook 终态工作区即时清理 — 技术设计
 
-状态：**Accepted / Implemented / Publishing（2026-08-14；完整本地门禁已通过；用户要求跳过外部 Codex review 并直接提交）**
+状态：**Done（2026-08-14；实现 `835e5bda` 已进入 `main`，exact-SHA 主 CI 36/36 全绿）**
 
 ## 1. 当前实现锚点
 

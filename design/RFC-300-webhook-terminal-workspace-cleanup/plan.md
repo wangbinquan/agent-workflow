@@ -1,6 +1,6 @@
 # RFC-300 Webhook 终态工作区即时清理 — 实施计划
 
-状态：**Implemented / Publishing（2026-08-14；完整本地门禁已通过；用户要求跳过外部 Codex review 并直接提交）**
+状态：**Done（2026-08-14；实现 `835e5bda` 已进入 `main`，exact-SHA 主 CI 36/36 全绿）**
 
 ## 1. 前置门
 
@@ -136,4 +136,4 @@
 - 相关定向测试与 `bun run gate:local` 全绿；
 - 本地实现核对无阻塞 finding；用户明确要求跳过会外发私有 diff 的 Codex review；
 - `STATE.md` 与 `design/plan.md` 更新为 Done；
-- 若用户另行授权上库，再分别报告本地 commit、push、exact-SHA CI 与 live service 状态。
+- 实现提交 `835e5bda` 已 push，exact-SHA 主 CI `31753952730` 36/36 全绿；未声称 live service 已部署。
