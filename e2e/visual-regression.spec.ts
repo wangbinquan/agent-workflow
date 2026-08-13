@@ -1264,10 +1264,13 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await openWebhookAgentParameterPicker(page)
     await expect(page.getByTestId('webhook-trigger-dialog')).toBeVisible()
     await expect(page.locator('[data-runtime-parameter-popover]')).toBeVisible()
-    await expect(page).toHaveScreenshot(
-      'webhook-runtime-parameter-picker-390-light.png',
-      SNAPSHOT_OPTS,
-    )
+    await expect(page).toHaveScreenshot('webhook-runtime-parameter-picker-390-light.png', {
+      ...SNAPSHOT_OPTS,
+      // Hosted Ubuntu runners alternate between two byte-stable font
+      // rasters while geometry/content stay identical: 1,616 of 329,160
+      // pixels (0.491%). Keep the exception local and only barely above it.
+      maxDiffPixelRatio: 0.005,
+    })
   })
 
   test('RFC-199 deterministic dynamic-workflow preview (light)', async ({ page }) => {
