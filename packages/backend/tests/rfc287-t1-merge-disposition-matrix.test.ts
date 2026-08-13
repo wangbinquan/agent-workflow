@@ -52,10 +52,11 @@ function bodyOf(signature: string): string {
 }
 
 /** merge 抛出的共同默认：保留 iso + 标记合并失败。 */
+// RFC-287 T3 改锚：聚合线已迁入骨架，其 throw 处置改由 spec 的 `onThrow` 声明式
+// 表达（keep: true + markMergeFailed），故从本表移出、由下面的「已迁移线」用例接管。
 const LINES_WITH_DEFAULT_THROW = [
   ['agent-single', 'async function runOneNode(', 'keepIso = true'],
   ['fanout shard', 'async function dispatchFanoutShardAttempt(', 'keepShardIso = true'],
-  ['fanout aggregator', 'async function dispatchFanoutAggregatorAttempt(', 'keepAggIso = true'],
 ] as const
 
 describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
@@ -73,10 +74,7 @@ describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
   })
 
   test('conflict-human 列逐线不同：分片/聚合是 failed 且**不**置 keep（fail-all）', () => {
-    for (const sig of [
-      'async function dispatchFanoutShardAttempt(',
-      'async function dispatchFanoutAggregatorAttempt(',
-    ]) {
+    for (const sig of ['async function dispatchFanoutShardAttempt(']) {
       const branch = branchAfter(bodyOf(sig), "merge.kind === 'conflict-human'")
       expect(branch).toMatch(/kind: 'failed'/)
       expect(branch).not.toMatch(/keep(Shard|Agg)Iso = true/)
@@ -112,5 +110,26 @@ describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
     expect(branch).toMatch(/kind: 'abandon'/)
     expect(branch).toMatch(/status: 'failed'/)
     expect(branch).not.toMatch(/awaiting_human/)
+  })
+
+  // ---------------------------------------------------------------------------
+  // 已迁入骨架的线：处置不再是「函数体里的分支」，而是 spec 上的**声明**。
+  // 断言形态随之从「分支体内含什么」改为「声明了什么」——语义等价，且更难写错。
+  // ---------------------------------------------------------------------------
+  test('聚合线（已迁骨架）：撞冲突 keep=false 判失败、抛出 keep=true + markMergeFailed', () => {
+    const body = bodyOf('async function dispatchFanoutAggregatorAttempt(')
+    const conflict = branchAfter(body, 'onConflictHuman:')
+    expect(conflict).toMatch(/keep: false/)
+    expect(conflict).toMatch(/kind: 'failed' as const/)
+    expect(conflict).not.toMatch(/awaiting_human/)
+
+    const thrown = branchAfter(body, 'onThrow:')
+    expect(thrown).toMatch(/keep: true/)
+    expect(thrown).toMatch(/markMergeFailed/)
+  })
+
+  test('聚合线（已迁骨架）：processUnreaped ⇒ keep 的第五维仍在（§10.11）', () => {
+    const body = bodyOf('async function dispatchFanoutAggregatorAttempt(')
+    expect(body).toMatch(/keepFromOutcome: \(result\) => result\.processUnreaped === true/)
   })
 })

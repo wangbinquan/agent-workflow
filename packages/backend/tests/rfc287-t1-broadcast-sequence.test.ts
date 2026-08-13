@@ -45,6 +45,8 @@ const BASELINE: ReadonlyArray<readonly [string, readonly string[]]> = [
     'async function dispatchFanoutShardAttempt(',
     ["'done'", "'pending'", "'failed'", 'result.status', "'failed'"],
   ],
+  // RFC-287 T3 改锚：聚合线已迁骨架，序列不变但分布到 spec 的 spawn / onUnhandledThrow
+  // 两个钩子里（源码出现序仍逐字相同——迁移**没有**改动任何一次广播）。
   [
     'async function dispatchFanoutAggregatorAttempt(',
     ["'done'", "'pending'", "'failed'", 'result.status', "'failed'"],

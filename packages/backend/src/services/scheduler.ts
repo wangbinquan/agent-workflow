@@ -280,6 +280,7 @@ import {
 import { resolveProjectFallback } from '@/services/codeHost/project'
 import { Paths } from '@/util/paths'
 import { sha256Hex } from '@/util/hash'
+import { runAssembly, type IsoLike } from '@/services/schedulerAssembly'
 
 export interface RunTaskOptions {
   taskId: string
@@ -8271,178 +8272,225 @@ async function dispatchFanoutAggregatorAttempt(
   // RFC-130: the aggregator runs in its OWN isolated worktree too (it can write —
   // e.g. concatenate shard outputs into a file). Merge-back into canonical on
   // success; no whole-run writeSem.
-  const releaseGlobal = await state.agentSem.acquire()
-  const releaseSub = await state.subprocessSem.acquire()
-  let aggIso: IsoHandle
-  // RFC-210 impl-gate A1-fix (review round 2): keep the iso on a merge/snapshot
-  // throw — it can hold the sole copy of the aggregator's submodule work.
-  let keepAggIso = false
-  try {
-    aggIso = await createIsoUnderLock({
-      writeSem: state.writeSem,
-      appHome: opts.appHome,
-      taskId,
-      db,
-      isoKeyRunId: aggRunId,
-      canonRepos: state.repos,
-      log,
-    })
-    if (!aggIso.passthrough) await persistIsoBase(db, aggRunId, task.repoCount, aggIso)
-  } catch {
-    releaseSub()
-    releaseGlobal()
-    return {
-      kind: 'failed',
-      summary: 'aggregator iso setup failed',
-      message: 'iso-setup-failed',
-      outputs: {},
-    }
-  }
-  try {
-    // RFC-111 D15 (Codex impl-gate P2-1): freeze the runtime for the aggregator.
-    const aggRuntime = await resolveFrozenRuntime(
-      db,
-      aggRunId,
-      aggAgent.runtime,
-      opts.defaultRuntime,
-      null,
-      freezeBinaryConfig(opts.configPath),
-    )
-    const result = await runNode({
-      taskId,
-      nodeRunId: aggRunId,
-      nodeId: aggNode.id,
-      agent: aggAgent,
-      triggerContext: state.triggerContext,
-      runtime: aggRuntime.protocol,
-      runtimeBinary: aggRuntime.binary,
-      runtimeParams: aggRuntime.params,
-      runtimeConfigDir: aggRuntime.configDir, // RFC-154: frozen config-dir profile
-      inputs: aggInputs,
-      worktreePath: aggIso.repos[0]?.isoWorktreePath ?? task.worktreePath,
-      // RFC-067: per-task Git identity threaded through fanout aggregator dispatch.
-      gitUserName: task.gitUserName,
-      gitUserEmail: task.gitUserEmail,
-      templateMeta: {
-        repoPath: aggIso.repos[0]?.isoWorktreePath ?? task.repoPath,
-        baseBranch: task.baseBranch,
-        taskId,
-        nodeId: aggNode.id,
-        iteration,
-        // RFC-066: per-repo metadata for prompt placeholders.
-        repos: aggIso.repos.map((r) => ({
-          repoPath: r.repoPath,
-          worktreePath: r.isoWorktreePath,
-          worktreeDirName: r.worktreeDirName,
-          mountPath: r.worktreeDirName,
-          subdir: '',
-          readonly: false,
-          gitignoreCommit: null,
-          baseBranch: r.baseBranch,
-        })),
+  // RFC-287 T3：本线改走 `runAssembly` 骨架。相位与逐线声明一一对应，行为逐字保持：
+  //   · 双许可（agent 池 + 本任务子进程池），释放逆序、finally 保证；
+  //   · iso 物化 + 落基线同处一个 try（persistBase: 'in-setup'）——抛出即释放许可
+  //     并返回结构化 iso-setup-failed（§10.10 按线声明，本线保持现状）；
+  //   · processUnreaped ⇒ 保留 iso（§10.11 第五维，与合并处置正交）；
+  //   · 非 done / passthrough 各自跳合并；撞冲突判失败且**不**保留（fail-all，
+  //     C8 落地时改 abandon）；合并抛出保留 iso + 标记合并失败；
+  //   · 线级 catch-all 带 retry 载荷（failureCode 为 null ⇒ 会重试到上限）。
+  let aggIso: IsoHandle | null = null
+  return await runAssembly<Record<string, never>, RunResult, DispatchAggregatorResult>(
+    {},
+    {
+      pools: [state.agentSem, state.subprocessSem],
+      iso: {
+        create: async () => {
+          aggIso = await createIsoUnderLock({
+            writeSem: state.writeSem,
+            appHome: opts.appHome,
+            taskId,
+            db,
+            isoKeyRunId: aggRunId,
+            canonRepos: state.repos,
+            log,
+          })
+          return aggIso
+        },
+        persistBase: 'in-setup',
+        persist: async (h: IsoLike) => {
+          if (!h.passthrough)
+            await persistIsoBase(db, aggRunId, task.repoCount, aggIso as IsoHandle)
+        },
       },
-      ...(promptTemplate !== undefined ? { promptTemplate } : {}),
-      ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
-      // RFC-119 multi-process: prior aggregated output on re-run (see above).
-      ...(aggPriorOutputUpdate !== undefined ? { priorOutputUpdate: aggPriorOutputUpdate } : {}),
-      clarifyChannel: { kind: 'none' as const }, // PR-D2
-      skills: injection.spec.skills,
-      dependents: injection.spec.dependents,
-      mcps: injection.spec.mcps,
-      plugins: injection.spec.plugins,
-      appHome: opts.appHome,
-      ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
-      db,
-      log,
-      ...(opts.signal ? { signal: opts.signal } : {}),
-      ...(opts.subagentLiveCapture !== undefined
-        ? { subagentLiveCapture: opts.subagentLiveCapture }
-        : {}),
-    })
-    if (result.processUnreaped === true) keepAggIso = true
-    broadcastNodeStatus(taskId, aggRunId, aggNode.id, result.status)
-    if (result.status !== 'done') {
-      return {
+      onIsoSetupFailure: () => ({
         kind: 'failed',
-        summary: `aggregator ${aggNode.id} ${result.status}`,
-        message: result.errorMessage ?? `aggregator-${result.status}`,
+        summary: 'aggregator iso setup failed',
+        message: 'iso-setup-failed',
         outputs: {},
-        ...(result.status === 'canceled'
-          ? {}
-          : {
-              retry: {
-                retryIndex: aggRetryIndex,
-                failureCode: result.failureCode ?? null,
-                ...(result.processUnreaped === true ? { processUnreaped: true as const } : {}),
-              },
-            }),
-      }
-    }
-    // RFC-130 §段③: merge the aggregator's iso delta back into canonical.
-    if (!aggIso.passthrough) {
-      try {
+      }),
+      spawn: async () => {
+        // RFC-111 D15 (Codex impl-gate P2-1): freeze the runtime for the aggregator.
+        const aggRuntime = await resolveFrozenRuntime(
+          db,
+          aggRunId,
+          aggAgent.runtime,
+          opts.defaultRuntime,
+          null,
+          freezeBinaryConfig(opts.configPath),
+        )
+        const iso = aggIso as IsoHandle
+        const result = await runNode({
+          taskId,
+          nodeRunId: aggRunId,
+          nodeId: aggNode.id,
+          agent: aggAgent,
+          triggerContext: state.triggerContext,
+          runtime: aggRuntime.protocol,
+          runtimeBinary: aggRuntime.binary,
+          runtimeParams: aggRuntime.params,
+          runtimeConfigDir: aggRuntime.configDir, // RFC-154: frozen config-dir profile
+          inputs: aggInputs,
+          worktreePath: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
+          // RFC-067: per-task Git identity threaded through fanout aggregator dispatch.
+          gitUserName: task.gitUserName,
+          gitUserEmail: task.gitUserEmail,
+          templateMeta: {
+            repoPath: iso.repos[0]?.isoWorktreePath ?? task.repoPath,
+            baseBranch: task.baseBranch,
+            taskId,
+            nodeId: aggNode.id,
+            iteration,
+            // RFC-066: per-repo metadata for prompt placeholders.
+            repos: iso.repos.map((r) => ({
+              repoPath: r.repoPath,
+              worktreePath: r.isoWorktreePath,
+              worktreeDirName: r.worktreeDirName,
+              mountPath: r.worktreeDirName,
+              subdir: '',
+              readonly: false,
+              gitignoreCommit: null,
+              baseBranch: r.baseBranch,
+            })),
+          },
+          ...(promptTemplate !== undefined ? { promptTemplate } : {}),
+          ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
+          // RFC-119 multi-process: prior aggregated output on re-run (see above).
+          ...(aggPriorOutputUpdate !== undefined
+            ? { priorOutputUpdate: aggPriorOutputUpdate }
+            : {}),
+          clarifyChannel: { kind: 'none' as const }, // PR-D2
+          skills: injection.spec.skills,
+          dependents: injection.spec.dependents,
+          mcps: injection.spec.mcps,
+          plugins: injection.spec.plugins,
+          appHome: opts.appHome,
+          ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
+          db,
+          log,
+          ...(opts.signal ? { signal: opts.signal } : {}),
+          ...(opts.subagentLiveCapture !== undefined
+            ? { subagentLiveCapture: opts.subagentLiveCapture }
+            : {}),
+        })
+        broadcastNodeStatus(taskId, aggRunId, aggNode.id, result.status)
+        return result
+      },
+      keepFromOutcome: (result) => result.processUnreaped === true,
+      mergePhase: (_c, result) => {
+        if (result.status !== 'done') {
+          return {
+            skip: 'not-done',
+            keep: false,
+            then: {
+              produce: async () => ({
+                kind: 'failed' as const,
+                summary: `aggregator ${aggNode.id} ${result.status}`,
+                message: result.errorMessage ?? `aggregator-${result.status}`,
+                outputs: {},
+                ...(result.status === 'canceled'
+                  ? {}
+                  : {
+                      retry: {
+                        retryIndex: aggRetryIndex,
+                        failureCode: result.failureCode ?? null,
+                        ...(result.processUnreaped === true
+                          ? { processUnreaped: true as const }
+                          : {}),
+                      },
+                    }),
+              }),
+            },
+          }
+        }
+        // RFC-130 §段③: merge the aggregator's iso delta back into canonical.
+        if ((aggIso as IsoHandle).passthrough) {
+          return { skip: 'passthrough', keep: false, then: 'settle' }
+        }
+        return 'merge'
+      },
+      mergeBack: {
         // RFC-188: the ONE merge-back assembly. §6.3 disposition: unresolved →
         // conflict-human + fail loudly (per-node awaiting_human bubbling for
         // fanout is a follow-up, #4/PR-E); conflict never lost.
-        const merge = await mergeBackAndSettle({
-          db,
-          writeSem: state.writeSem,
-          handle: aggIso,
-          nodeRunId: aggRunId,
-          repoCount: task.repoCount,
-          via: 'live',
-          extraForcedContainerPaths: (result.portFilePaths ?? []).map((p) =>
-            toContainerRelative(state.repos[0]?.worktreeDirName ?? '', p),
-          ),
-          conflictResolver: (conflicts, containerPath) =>
-            resolveMergeConflicts(state, {
-              conflicts,
-              containerPath,
-              conflictNodeRunId: aggRunId,
-              nodeId: aggNode.id,
-              iteration,
+        run: async (_c, result) => {
+          const iso = aggIso as IsoHandle
+          const merge = await mergeBackAndSettle({
+            db,
+            writeSem: state.writeSem,
+            handle: iso,
+            nodeRunId: aggRunId,
+            repoCount: task.repoCount,
+            via: 'live',
+            extraForcedContainerPaths: (result.portFilePaths ?? []).map((p) =>
+              toContainerRelative(state.repos[0]?.worktreeDirName ?? '', p),
+            ),
+            conflictResolver: (conflicts, containerPath) =>
+              resolveMergeConflicts(state, {
+                conflicts,
+                containerPath,
+                conflictNodeRunId: aggRunId,
+                nodeId: aggNode.id,
+                iteration,
+              }),
+            log,
+          })
+          return merge
+        },
+        disposition: {
+          onConflictHuman: (detail) => ({
+            keep: false,
+            produce: async () => ({
+              kind: 'failed' as const,
+              summary: 'aggregator merge conflict',
+              message: `merge-back-conflict (merge agent could not resolve): ${detail}`,
+              outputs: {},
             }),
-          log,
-        })
-        if (merge.kind === 'conflict-human') {
-          return {
-            kind: 'failed',
-            summary: 'aggregator merge conflict',
-            message: `merge-back-conflict (merge agent could not resolve): ${merge.detail}`,
-            outputs: {},
-          }
-        }
-      } catch (err) {
+          }),
+          onThrow: (err) => ({
+            keep: true,
+            then: {
+              produce: async () => {
+                const msg = err instanceof Error ? err.message : String(err)
+                await markMergeFailed(db, aggRunId, msg, log)
+                return {
+                  kind: 'failed' as const,
+                  summary: 'aggregator merge failed',
+                  message: `merge-back-failed: ${msg}`,
+                  outputs: {},
+                }
+              },
+            },
+          }),
+        },
+      },
+      onUnhandledThrow: (err) => {
         const msg = err instanceof Error ? err.message : String(err)
-        keepAggIso = true
-        await markMergeFailed(db, aggRunId, msg, log)
+        broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'failed')
         return {
           kind: 'failed',
-          summary: 'aggregator merge failed',
-          message: `merge-back-failed: ${msg}`,
+          summary: 'aggregator threw',
+          message: msg,
           outputs: {},
+          retry: { retryIndex: aggRetryIndex, failureCode: null },
         }
-      }
-    }
-    // Aggregator's outputs are already persisted by runner.ts (nodeRunOutputs
-    // upsert at runner.ts §port-persist). The wrapper-row outlet copy is
-    // handled by the caller (runFanoutWrapperNode after this returns).
-    return { kind: 'ok', summary: '', message: '', outputs: result.outputs, aggRunId }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'failed')
-    return {
-      kind: 'failed',
-      summary: 'aggregator threw',
-      message: msg,
-      outputs: {},
-      retry: { retryIndex: aggRetryIndex, failureCode: null },
-    }
-  } finally {
-    releaseSub()
-    releaseGlobal()
-    if (!keepAggIso) await discardNodeIso(aggIso, log, state.writeSem)
-  }
+      },
+      markMergeFailed: async (msg) => markMergeFailed(db, aggRunId, msg, log),
+      discardIso: async (h: IsoLike) => discardNodeIso(h as IsoHandle, log, state.writeSem),
+      // Aggregator's outputs are already persisted by runner.ts (nodeRunOutputs
+      // upsert at runner.ts §port-persist). The wrapper-row outlet copy is
+      // handled by the caller (runFanoutWrapperNode after this returns).
+      settle: async (_c, result) => ({
+        kind: 'ok',
+        summary: '',
+        message: '',
+        outputs: result.outputs,
+        aggRunId,
+      }),
+      log,
+    },
+  )
 }
 
 // -----------------------------------------------------------------------------

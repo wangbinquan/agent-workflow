@@ -56,10 +56,13 @@ describe('RFC-287 T1⑨ — 抛出结局与 keep 分歧（拆分前现状）', (
     expect(body).toMatch(/catch \(err\)[\s\S]{0,400}broadcastNodeStatus\(taskId, shardRunId/)
   })
 
-  test('① 聚合节点的线级 catch-all 同形（与分片逐字同构）', () => {
+  test('① 聚合节点（已迁骨架）：线级兜底改由 onUnhandledThrow 声明，载荷不变', () => {
+    // RFC-287 T3 改锚：该线的 catch-all 已迁入骨架，形态从「函数体里的 catch 块」
+    // 变成「spec 上的 onUnhandledThrow 声明」——**载荷必须逐字不变**，尤其
+    // failureCode 为 null 这一条（它决定了抛出会被重试到上限）。
     const body = bodyOf('async function dispatchFanoutAggregatorAttempt(')
     expect(body).toMatch(
-      /catch \(err\)[\s\S]{0,400}retry: \{ retryIndex:[\s\S]{0,80}failureCode: null \}/,
+      /onUnhandledThrow: \(err\)[\s\S]{0,400}retry: \{ retryIndex: aggRetryIndex, failureCode: null \}/,
     )
   })
 

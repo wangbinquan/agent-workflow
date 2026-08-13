@@ -18,7 +18,9 @@ import { resolve } from 'node:path'
 const SRC = resolve(import.meta.dir, '..', 'src', 'services')
 
 /** 迁移时把 `schedulerAssembly.ts` 加进来即可（design §10.5 定的落位）。 */
-const FILES = ['scheduler.ts'] as const
+// RFC-287 T3：聚合线迁入后，骨架文件同样纳入扫描（这条锁本就设计成对
+// 「代码搬到哪个文件」免疫）。
+const FILES = ['scheduler.ts', 'schedulerAssembly.ts'] as const
 
 /** 三个池的释放句柄名（与 rfc208 oracle #1 的 POOL_RELEASE_NAMES 同源）。 */
 const RELEASE_NAMES = ['releaseGlobal', 'releaseScript', 'releaseSub', 'releaseHost'] as const

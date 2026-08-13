@@ -39,10 +39,11 @@ function guardOfFinallyDiscard(fnSignature: string): Guard {
 
 describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', () => {
   test('三条线完全没兜：抛出会从 finally 逃出并吃掉 return 值', () => {
+    // RFC-287 T3 改锚：聚合线的 finally 已迁入骨架（骨架统一「吞掉并记 warn」，
+    // 即 C3b 对该线已落地）；剩余两条仍是「完全没兜」的现状。
     for (const sig of [
       'async function runOneNode(',
       'async function dispatchFanoutShardAttempt(',
-      'async function dispatchFanoutAggregatorAttempt(',
     ]) {
       expect(guardOfFinallyDiscard(sig), sig).toBe('none')
     }

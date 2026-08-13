@@ -83,7 +83,11 @@ export interface AssemblySpec<TCtx, TOutcome, TResult> {
   keepFromOutcome?(outcome: TOutcome): boolean
   mergePhase(ctx: TCtx, outcome: TOutcome): MergePhase<TCtx, TResult>
   mergeBack: {
-    run(ctx: TCtx): Promise<{ kind: 'ok' } | { kind: 'conflict-human'; detail: string }>
+    // outcome 是必需入参：L4/L6 的 extraForcedContainerPaths 取自 spawn 结果的
+    // portFilePaths（T3 首条迁移实证的契约缺口）。
+    // 形状对齐既有原语 `mergeBackAndSettle` 的返回（T3 首条迁移实证）：
+    // kind 为 'merged' | 'conflict-human'，detail 仅冲突时给。
+    run(ctx: TCtx, outcome: TOutcome): Promise<{ kind: 'merged' | 'conflict-human'; detail?: string }>
     disposition?: Disposition<TCtx, TResult>
   } | null
   /** 线级 catch-all——逐线载荷不同，不得统一。'rethrow' = 保持抛出直穿。 */
@@ -140,7 +144,7 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
       const d = spec.mergeBack.disposition
       let merge: Awaited<ReturnType<typeof spec.mergeBack.run>>
       try {
-        merge = await spec.mergeBack.run(ctx)
+        merge = await spec.mergeBack.run(ctx, outcome)
       } catch (err) {
         const over = d?.onThrow?.(err, ctx)
         if (over !== undefined) {
@@ -154,7 +158,7 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
         return await spec.settle(ctx, outcome)
       }
       if (merge.kind === 'conflict-human') {
-        const over = d?.onConflictHuman?.(merge.detail, ctx)
+        const over = d?.onConflictHuman?.(merge.detail ?? '', ctx)
         if (over !== undefined) {
           keep = stickyKeep || over.keep
           return await over.produce(ctx)
