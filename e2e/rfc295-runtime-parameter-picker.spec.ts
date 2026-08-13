@@ -53,8 +53,8 @@ async function chooseParameter(page: Page, pickerTestId: string, query: string):
   await page.getByTestId(pickerTestId).click()
   const popover = page.locator('[data-runtime-parameter-popover]')
   await expect(popover).toBeVisible()
-  await popover.getByRole('searchbox').fill(query)
-  await popover.getByRole('button', { name: new RegExp(query.replaceAll('_', '.*'), 'i') }).click()
+  await popover.getByRole('combobox').fill(query)
+  await popover.getByRole('option', { name: new RegExp(query.replaceAll('_', '.*'), 'i') }).click()
   await expect(popover).toBeHidden()
 }
 
