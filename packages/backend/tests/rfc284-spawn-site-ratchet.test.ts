@@ -41,6 +41,13 @@ const SPAWN_PATTERNS: readonly RegExp[] = [
  * 收编类条目标了 removeWhen——对应 RFC-284 批次落地时必须同步更新本表。
  */
 const ALLOWLIST: Record<string, { count: number; why: string }> = {
+  'services/schedulerAssembly.ts': {
+    count: 2,
+    why:
+      'RFC-287 装配骨架的 `spawn` **相位钩子名**——本身不起进程，但五条装配线的真实' +
+      '起进程调用（runNode / runScriptProcess）全部经它转发，是能力触点的收口处，' +
+      '故照实登记而非改名绕开棘轮。两处 = 接口方法声明 + 唯一调用点 `spec.spawn(ctx)`。',
+  },
   'services/execution/managedProcess.ts': {
     count: 1,
     why: 'THE agent spawn point（RFC-280）；全部 agent 类进程唯一入口。',
