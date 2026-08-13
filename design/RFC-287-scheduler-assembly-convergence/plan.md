@@ -63,7 +63,8 @@
 - T13 G7 准备成为 `runTask` 认领后的第 0 步（**最大一批，独立 commit**）：
   ①`worktreePath` 消费点清点分类（src 49 文件 / 519 处）+ 前端消费面；
   ②任务仍落 pending + AbortController 于 INSERT 后前置注册 + 准备作为第 0 步
-  （三个 runTask 调用点自动共享）+ 回写前状态 CAS；
+  （三个 runTask 调用点自动共享）+ 回写前状态 CAS + **AbortSignal 串进 `runGit`/
+  `spawnGit` 使取消真杀子进程** + `gitCloneTimeoutMs` 启动路径接线；
   ③合成 `__repo_prep__` 运行记录（同 `__commit_push__` 先例）与时间线展示；
   ④失败落该行 + 任务 failed，git stderr 原文可读；⑤重试复用 `retryNode`；
   ⑥boot reap / auto-resume 识别「准备未完成」改重跑准备；⑦其余随物化落库字段

@@ -151,7 +151,9 @@ L5/L6 单点）按线保持、不跨线统一。
   复活判据撞 410 `workspace-pruned`），并锁住 gc/lifecycle 三处「恰好不误伤」的现状。
 - AC-16（G7）服务端拒绝对 **done** 的准备行重试（今天路由不校验 nodeId 是否在定义里
   ⇒ 会对已有工作树的任务再物化一次）。
-- AC-14（G7）取消/优雅停机/删除在准备窗口内生效：`AbortController` 于准备开始前
+- AC-14（G7）取消/优雅停机/删除在准备窗口内生效，且**底层 git 子进程确实终止**
+  （AbortSignal 串进 `runGit`/`spawnGit` 或 kill 进程组；顺带把 `gitCloneTimeoutMs`
+  在启动路径接线——今天未接、落硬编码 30min）：`AbortController` 于准备开始前
   注册；回写与 kick 前的状态 CAS 复检，已取消任务**不得**被准备完成拉起执行。
 - AC-6 每批 pin worktree gate 全绿 + exact-SHA CI 绿；实现门（独立子代理）。
 

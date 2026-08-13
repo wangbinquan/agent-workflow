@@ -551,6 +551,16 @@ parentNodeRunId/consumed(+nonce)；L7 :4533 只带 consumed，而其初次铸行
   :114-116 existsSync 失败即 skip)、`childBudget`(execution/childBudget.ts:32 计数口径、
   :153-159 幂等 Set.add)、`workgroup/room.ts:350`（两状态同在非终态集）。
 
+  **取消要真杀子进程（2026-08-13 用户拍板；第三轮门 P1-5）**：两个生产 git 启动点
+  今天**只支持 `timeoutMs`、不支持 AbortSignal**（util/git.ts:136-148 `runGit`、
+  gitRepoCache.ts:95-118 `spawnGit`），而 `cancelTask` 是 `controller.abort()` → 轮询
+  5s 等驱动落终态 → fallback CAS（task.ts:2735-2803）⇒ 取消会成功返回，但 `git clone`
+  继续跑到自己的超时，且 `gitCloneTimeoutMs` 在启动路径**未接线**（只在
+  routes/repoGroups.ts:57 / routes/cached-repos.ts:65）、落硬编码 30min
+  （gitRepoCache.ts:62）。⇒ **把 AbortSignal 串进这两个启动点（或 kill 进程组），
+  并顺手把 `gitCloneTimeoutMs` 在 task.ts:722/:747 接线**；AC-14 相应扩为「取消后
+  底层 git 子进程确实终止」。
+
   **仍未解、须在 T13 给出设计**：随物化一起落库的其余字段与 `task_repos` /
   `task_space_nodes` 的占位与回填时序；所有权协议——ownership wrapper 按
   `taskRowCommitted === false` 决定清不清空间（task.ts:1862-1905/:2439-2440），倒置后
