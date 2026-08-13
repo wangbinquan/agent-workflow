@@ -174,7 +174,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     expect(fork!.isDefault).toBe(false)
   })
 
-  test('older reported version remains runnable', async () => {
+  test('older reported OpenCode version remains runnable', async () => {
     const oldBin = writeVersionBinary(h.tmp, 'old-opencode', 'stub-opencode 1.17.9')
     await createRuntime(h.db, { name: 'old-opencode', protocol: 'opencode', binaryPath: oldBin })
     const json = await bodyOf(await req(h.app))
@@ -192,6 +192,22 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     expect(weird!.ok).toBe(true)
     expect(weird!.version).toBeNull()
     expect(weird!.state).toBe('ready')
+  })
+
+  test('opaque CodeAgent version remains ready on the homepage status path', async () => {
+    const codeAgentBin = writeVersionBinary(h.tmp, 'codeagent', 'CodeAgentCLI build-20260813')
+    await createRuntime(h.db, {
+      name: 'codeagent',
+      protocol: 'claude-code',
+      binaryPath: codeAgentBin,
+    })
+    const json = await bodyOf(await req(h.app))
+    const codeAgent = json.runtimes.find((r) => r.name === 'codeagent')
+    expect(codeAgent).toBeDefined()
+    expect(codeAgent!.binary).toBe(codeAgentBin)
+    expect(codeAgent!.ok).toBe(true)
+    expect(codeAgent!.version).toBeNull()
+    expect(codeAgent!.state).toBe('ready')
   })
 
   test('missing binary → ok:false, version:null, endpoint still 200', async () => {

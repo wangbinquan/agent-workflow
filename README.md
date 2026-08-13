@@ -233,7 +233,9 @@ Install at least one supported runtime before launching agent work:
 
 - **OpenCode:** supported without a version-string gate; compatibility is
   qualified from direct API behavior.
-- **Claude Code:** version 2.0.0 or newer.
+- **Claude Code:** the official 2.0.0+ distribution, or a behavior-compatible
+  fork. Fork version strings may be opaque; use the runtime Test action to
+  qualify protocol behavior directly.
 
 The daemon can start without either runtime so that configuration and diagnosis
 remain available. Runtime profiles support custom executables, models, and

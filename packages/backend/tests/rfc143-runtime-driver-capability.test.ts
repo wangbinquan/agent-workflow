@@ -67,7 +67,7 @@ describe('RFC-143 (A) 派生单源', () => {
 })
 
 describe('RFC-143 (B) 能力接口', () => {
-  it('两内建 driver 都实现了 PR-1 必需能力方法；OpenCode 不设版本门槛', () => {
+  it('两内建 driver 都实现 PR-1 能力；minVersion 仅为可空 advisory 元数据', () => {
     for (const kind of RUNTIME_KINDS) {
       const d = getRuntimeDriver(kind)
       expect(d.minVersion === null || typeof d.minVersion === 'string').toBe(true)
@@ -77,6 +77,8 @@ describe('RFC-143 (B) 能力接口', () => {
       expect(typeof d.captureSessions).toBe('function')
     }
     expect(getRuntimeDriver('opencode').minVersion).toBeNull()
+    // Claude keeps the official-distribution recommendation for diagnostics;
+    // probe availability is version-neutral for compatible forks.
     expect(typeof getRuntimeDriver('claude-code').minVersion).toBe('string')
   })
 

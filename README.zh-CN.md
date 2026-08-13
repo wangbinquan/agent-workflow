@@ -202,7 +202,8 @@ migration 和 Bun runtime。
 启动 Agent 工作前，至少安装一种受支持的 runtime：
 
 - **OpenCode：** 不按版本字符串设 gate；兼容性由 direct API 行为判定。
-- **Claude Code：** 2.0.0 或更高版本。
+- **Claude Code：** 官方 2.0.0+ 版本，或行为兼容的 fork。fork 的版本字符串可以是
+  非标准格式；请使用运行时“测试”操作直接验证协议行为。
 
 即使两者都未安装，daemon 也可以启动，以便先完成配置和诊断。Runtime profile 支持自定义
 执行档、模型与 config 目录映射；额外 argv 取决于 driver，当前可用于 Claude Code profile。

@@ -476,6 +476,8 @@ export const claudeCodeDriver: RuntimeDriver = {
   // Claude CLI compatibility only; this capability does not provide platform
   // process isolation or any operating-system sandbox guarantee.
   acceptsSandboxCompatibilityMarker: true,
+  // Advisory official-distribution baseline only. probe() is version-neutral
+  // because compatible forks such as CodeAgent may use an opaque version scheme.
   minVersion: MIN_CLAUDE_CODE_VERSION,
   // RFC-280 T6 — playground session strategy (claude: pre-allocated UUID on
   // turn 1 via --session-id, resume thereafter).

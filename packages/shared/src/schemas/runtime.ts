@@ -23,9 +23,9 @@ export type RuntimeStatusState = z.infer<typeof RuntimeStatusStateSchema>
  * RFC-135: GET /api/runtimes/status — one entry per ENABLED registry runtime,
  * probed live (`--version`) against the binary a real dispatch would use.
  *
- * Deliberately carries NO `compatible` / `minVersion`: RFC-227 makes reported
- * version nullable telemetry and selects compatibility by observed protocol
- * behavior. Other protocols retain their established availability semantics.
+ * Deliberately carries NO `compatible` / `minVersion`: reported versions are
+ * nullable telemetry. A successful lightweight process probe establishes
+ * availability; the separate deep smoke test establishes protocol behavior.
  */
 export const RuntimeStatusEntrySchema = z.object({
   name: z.string(),

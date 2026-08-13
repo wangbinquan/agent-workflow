@@ -1,20 +1,21 @@
-// RFC-111 PR-B — Claude Code binary discovery + version probe + min-version gate.
+// RFC-111 PR-B — Claude Code binary discovery + observational version probe.
 // Mirrors util/opencode.ts. Agent runtimes are optional at daemon startup:
 // absence/incompatibility is surfaced by explicit diagnostics and only fails
 // nodes that actually select the runtime (RFC-226).
 
 import { createLogger } from '@/util/log'
 import type { ProbeOpts } from '../types'
-// RFC-143 PR-5: single semver helper pair (was a byte-for-byte local copy).
-import { compareSemver, extractVersion } from '@/util/semver'
+// RFC-143 PR-5: shared best-effort semver extraction (display telemetry only).
+import { extractVersion } from '@/util/semver'
 import { spawnVersionProbe } from '@/util/process'
 
 const log = createLogger('claude-code')
 
 /**
- * Minimum supported Claude Code version. Verified hands-on at 2.1.193 (all
- * headless flags present, design §6.1). Conservative floor; bump as the contract
- * is re-validated against newer releases.
+ * Advisory version for the official Claude Code distribution. Custom
+ * claude-code-compatible runtimes may report an opaque version, so availability
+ * is determined only by whether `--version` runs successfully; protocol support
+ * is established by the separate deep smoke test.
  */
 export const MIN_CLAUDE_CODE_VERSION = '2.0.0'
 
@@ -38,7 +39,7 @@ export interface ClaudeProbe {
   ran?: boolean
 }
 
-/** Spawn `<binary> --version`, parse the semver. Output form: `2.1.193 (Claude Code)`. */
+/** Spawn `<binary> --version`; parse optional semver telemetry when available. */
 export async function probeClaudeCode(
   claudePath?: string | readonly string[],
   opts: ProbeOpts = {},
@@ -53,7 +54,7 @@ export async function probeClaudeCode(
   try {
     // RFC-284 T8：spawn 骨架（detached-iff-timeout / exit 先行 / 有界读 /
     // finally 组 reap）收敛到 util/process.spawnVersionProbe，本函数只留
-    // claude 侧策略（告警文案 + semver 门）。
+    // claude 侧策略（告警文案 + best-effort version telemetry）。
     const r = await spawnVersionProbe([...head, '--version'], {
       ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
     })
@@ -69,17 +70,9 @@ export async function probeClaudeCode(
     warn('claude binary not executable', { binary, error: (err as Error).message })
   }
 
-  if (version === null) {
-    return { binary, version, compatible: false, ran }
-  }
-  if (compareSemver(version, MIN_CLAUDE_CODE_VERSION) < 0) {
-    return {
-      binary,
-      version,
-      compatible: false,
-      incompatibleReason: `Claude Code ${version} is older than required minimum ${MIN_CLAUDE_CODE_VERSION}`,
-      ran,
-    }
-  }
-  return { binary, version, compatible: true, ran }
+  // 2026-08-13 CodeAgent regression: fork version strings are not required to
+  // use X.Y.Z. An exit-0 binary is available even when telemetry is opaque (or
+  // reports an older, fork-specific version); the deep smoke path is the
+  // authoritative protocol-conformance check.
+  return { binary, version, compatible: ran, ran }
 }

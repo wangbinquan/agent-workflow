@@ -747,9 +747,9 @@ export interface RuntimeDriver {
    */
   readonly acceptsSandboxCompatibilityMarker?: true
   /**
-   * Optional protocol-specific minimum used only by runtimes that define a
-   * semver gate. RFC-227 makes OpenCode behavior-qualified, so its value is
-   * null; Claude Code retains its existing minimum.
+   * Optional protocol-specific advisory version for documentation/diagnostics.
+   * It is not an admission gate: compatible forks may use opaque version
+   * schemes, while the deep smoke test establishes protocol conformance.
    */
   readonly minVersion: string | null
   /**
