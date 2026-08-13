@@ -1790,3 +1790,12 @@ audit-backlog 里已登记的 bug#8（Windows VM + 1.18.13，业务节点侧）�
   不再降级放行、启动 API 不再同步保证工作树就绪），并逐处复核被打破的不变量「有任务行就有
   工作树」——`worktreePath` 在 backend 有 519 个引用文件，GC 已有 `worktreePath === ''` 分支
   可作先例；另需定存量已注册 `file://` 仓与其定时任务的处置（继续可用 vs 全禁 + 迁移提示）。
+
+- **runner stdout pump 里剩余两处「对同一行二次解析」未收进事件流**（RFC-297 D11 划出的边界，
+  2026-08-13 登记）：`parseTerminalResultError`（`runtime/types.ts` 的可选方法，runner 与
+  systemAgentRun 各调一次）与 `observeSystemEvent`（系统 agent 取证）。RFC-297 已把清单观测
+  收进「driver 只做规范化 → 运行时无关 stage 消费」的事件流（`services/execution/eventPipeline.ts`），
+  这两处按同一方向收编是自然的下一步：各自变成一个事件 kind + 一个 stage，pump 从此只解析一次。
+  **本 RFC 刻意不动它们**——它们牵动节点成败判定（claude 清 exit 0 但 `result.is_error` 要判
+  失败）与 RFC-237 的取证契约，混进来会让「清单看不见」这个用户可见问题的修复被无关风险拖住。
+  接手前先确认 runner.ts 的并发改动已落停（RFC-297 落地期间该文件是另一位协作者的活跃战场）。
