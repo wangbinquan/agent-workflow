@@ -19,7 +19,10 @@
   :227-231 的安全棘轮（`discardNodeIso(...)` 单行调用 **≥8 处且每处带 writeSem**
   ——它锁的是 RFC-210 round-6 的锚点交接不变量；骨架抽取后 scheduler.ts 内站点从
   13 掉到约 6，而该测试**只 read scheduler.ts**，把阈值改小即静默失守。必须改成
-  同时扫 `schedulerAssembly.ts` 并按新分布重定基）。
+  同时扫 `schedulerAssembly.ts` 并按新分布重定基）；⑧ **rfc208 两条 oracle 重锚**
+  （释放序 + try-depth 扫描器，后者在骨架抽走 acquire/release 后结构性失效）；
+  ⑨ 三个行为面的夹具：线级抛出载荷（L5/L6 抛出即重试）、persistIsoBase 抛出结局、
+  park 的 keep 分歧。
 - T2 骨架落地（G1）：assembly.ts + 单元测试（pools/keep 域含 park 短路/
   merge 默认三态 + disposition 覆写/漂移 A 语义/beforeSpawn 抛出=装配失败）；
   双模式窗口（per-attempt / 跨 attempt+retryPolicy）都有直测；此批不迁移

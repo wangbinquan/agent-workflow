@@ -280,11 +280,35 @@ interface AssemblySpec<TResult> {
   // failed 'iso-setup-failed'，行留 pending
   // 不 settle；保持同形，见 P2-6）
   spawn(ctx): Promise<SpawnOutcome>
-  /** 合并相位判定——park / discardWrites / readonly 三种「跳合并」都要有名字 */
+  /** 合并相位判定——**四种**「跳合并」都要有名字。**`SpawnOutcome.park` 字段
+   *  就此作废**（§2 那句以 park 布尔短路 mergeBack 的规定被本节取代）。
+   *  **判定序写死**：`passthrough` **先于**一切其它判定（五线全部以
+   *  `!handle.passthrough` 门控 merge :1327/:6133/:7897/:8325/:4564，且 L1 的
+   *  discardWrites 也被同一个 passthrough 包着 :1311——passthrough 时**不**
+   *  abandon，保 RFC-130 golden-lock：persistIsoBase:97 早退、merge_state 恒 NULL）。
+   *  keep 由各线自填：L4 clarify-park **keep**（:6131-6132，D19 同 session 续跑要
+   *  原 worktree）；L1 clarify-awaiting **不 keep**（:1294-1298 直接 return、
+   *  finally 无条件 discard）。 */
   mergePhase(
     ctx,
     outcome,
-  ): 'merge' | { skip: 'park' | 'abandon' | 'readonly'; keep: boolean; onSkip?(ctx): Promise<void> }
+  ):
+    | 'merge'
+    | {
+        skip: 'passthrough' | 'park' | 'abandon' | 'readonly'
+        keep: boolean
+        onSkip?(ctx): Promise<void>
+      }
+  /** 线级 catch-all——**逐线载荷不同，不得统一**（第三轮门 P1-1）：
+   *  L1 :1381-1384（log.error + failed）；L5 :7941-7950 / L6 :8374-8383
+   *  （broadcastNodeStatus(failed) + `retry:{retryIndex, failureCode:null}`，而
+   *  `shouldRetryNodeFailure(null)` 返回 **true** :1543-1549 ⇒ **今天「分片体内抛
+   *  异常」会重试 maxRetries 次**，外层 dispatchFanoutShard:7521-7535 再入）；
+   *  L4 :5415/:6196 与 L7 :4495/:4590 是 try/finally **无 catch**，抛出直穿到 scope
+   *  循环（返回 'rethrow' 保持该语义）。
+   *  ⚠️ §2 那句「未兜住的抛出=装配失败」**只对 beforeSpawn 成立**，不得当通用规则
+   *  ——否则 L5/L6 的抛出重试被静默取消、L4/L7 的传播语义被改。 */
+  onUnhandledThrow?(err): TResult | 'rethrow'
   mergeBack: { run(ctx): Promise<MergeOutcome>; disposition?: Disposition } | null
   onIsoSetupFailure(err): TResult // 五线 message/summary 各不相同，
   // 属产品可见面、不吃「日志措辞」豁免
@@ -300,6 +324,15 @@ interface AssemblySpec<TResult> {
   }
   settle(ctx, outcome): Promise<TResult>
 }
+// **settle 相位写死**（P2-3）：settle 在 finally **之后**，不得收进许可窗口
+// （L4 的 settle 段 :6204-6319 含 DB 写 createClarifyRound :6261-6312；L7 的
+// `if (succeeded) return ok` 亦在 finally 之后 :4597。收进窗口 = 跨 clarify-round
+// 的 DB 写持有 daemon 级 permit，与刚入契约的 RFC-208 关注面同源）。
+// **persistIsoBase 相位定音**（P1-2）：归**主 try（许可保护区）内、setup try 之外**，
+// 抛出经 finally 释放后继续向外传播——采用 L4/L7 现状（:5415-5422 / :4495-4496；
+// L4 :5416-5421 注释逐字写明它曾裸露在 acquire 与 try 之间、一抛就漏 permit）。
+// L1/L5/L6 今天在 setup try 内（抛出→释放许可+返回结构化 iso-setup-failed），
+// 迁移后结果形态改变 ⇒ **进 C 表（C10）配红→绿**，不得静默统一。
 // ctx 必须显式携带：nodeRunId（模式 B 下逐 attempt 变）与 isoKeyRunId（恒定，:5372）
 // ——merge/keep/discard 各 key 在哪个上是 D17 与 crash-replay 的命门。
 ```
@@ -417,3 +450,44 @@ L4 内联 retry 循环 **5423-6122**、L1 装配线实为 `runHostNode` **976-14
 「`worktreePath` 519 个引用文件」口径错——**src 内 49 个文件 / 519 处出现**
 （含测试 447 文件）。「118 个测试文件依赖 file://」口径错——全仓含 `file://`
 的 93 个文件且大量是插件用途；真正经公开面的是 e2e 4 处 + backend 10 个文件。
+
+### 10.9 第三轮门补录（骨架半场，全部为补文字不改方向）
+
+- **C10 新增**：`persistIsoBase` 相位统一到 L4/L7 形态后，L1/L5/L6 的抛出结果形态
+  由「释放许可 + 返回结构化 `iso-setup-failed`」变为「经 finally 释放后继续传播」
+  ——行为变更，配红→绿。
+- **rfc208 两条 oracle 进 T1 重锚清单**：`POOL_RELEASE_NAMES` 释放序 + 「持有 permit
+  期间 try-depth 0 上不得有可拒绝的 await」的**扫描器**（:177-199 按「离开持有 permit
+  的函数即停止扫描」）——骨架抽走 acquire/release 后该扫描器**结构性失效**，必须
+  重定基到 `schedulerAssembly.ts`。
+- **§10.5 理由订正**：「同名目录与文件并存」在本仓**已是既定形态**
+  （`services/lifecycleRepair.ts` 与 `services/lifecycleRepair/` 并存，子目录无
+  index.ts、import 走显式路径）。结论（落平铺 `schedulerAssembly.ts`）不变，真正的
+  硬约束是：①`SchedulerState`（scheduler.ts:451）**未 export** ⇒ 新模块须定义结构化
+  最小切片（同 `isolatedAgentRun.ts:47` 的 `WriteSemLike`）；②新模块**不得 import
+  scheduler.ts**（模块环禁令 + 二进制构建事故）⇒ `resolveMergeConflicts`(:2880) 与
+  `broadcastNodeStatus`(:9112) 必须注入；③depcheck 的 KNOWN_VIOLATIONS 按
+  (rule,from,to) 精确匹配、停止命中即 fail gate ⇒ 迁移不得让已登记环意外消失或改形。
+- **§10.6 补两条**：⑤`scan()` 是 private 且唯一外部入口是**惰性创建器**（从
+  routes/config.ts 调会提前建单例并 rebuildFromDb，推翻「无 call 节点零记账开销」）
+  ⇒ 需 peek-only 访问器 + 公开 `notifyCapacityChanged()`；capacity 改读盘则
+  `scan()` 的授权循环是 O(n²) 次调用（:167-181 每授权一个就 i=0 重扫）⇒ 必须缓存。
+  ⑥与 `rfc284-t20-child-inheritance.test.ts` 的**编译期穷尽处置表**冲突（三个池键与
+  两个子任务配额键全钉 `'inherit'`）⇒ registry 与快照表两处同步改。
+- **空 cwd 护栏形态写死**（P2-7）：`runGit` 走 `git -C cwd`（util/git.ts:136-148），
+  `git -C ""` 是 no-op 正是要堵的洞；但它有 **201 个调用点**且调用方普遍只看
+  `exitCode`，实现成 throw 会给 best-effort 清理路径（nodeIsolation.ts:1284-1312、
+  gc）造出新抛出面——而 C3b 刚把那些改成「吞+warn」⇒ \*\*返回合成 `exitCode !== 0`
+  - 可读 stderr**；managedProcess 侧复用既有 `outcome:'spawn-failed'`（:262-278）。
+    已核实**零存量误伤\*\*（全仓无一处向 runGit 传字面空 cwd）。
+- `resolveSchedulerRunRow` 返回类型**必须带 `retryIndex`**（L4 :5319 / L7 :4409 复用
+  pendingExisting 时回读它驱动后续循环，L9 不回读）。
+- `iso: {...} | null` 的 `null` 分支本 RFC 内无消费方，注明为预留或删。
+- §4「attempt 体进模式 B assembly」与 §10.2「窗口含循环」措辞打架（L4 窗口实为
+  :5365-6202）——以 §10.2 为准。
+- §10.6-3 的「或写明下次根任务生效」退路**作废**（AC-7/C9 已写死即时生效）。
+- **C8 落法指定**：由**调用方补第二次转移**（`conflict-human → abandon`，合法性见
+  shared/lifecycle.ts:536-540），不改 `mergeBackAndSettle` 签名。
+- 路径勘误：`childBudget.ts` 实为 `services/execution/childBudget.ts`；「五线
+  iso-setup message 各不相同」是夸大（L4/L7 逐字相同、L5/L6 同形，仅 L1 拼原始
+  message）——钩子保留、理由改。
