@@ -18,6 +18,8 @@
 //   MOCK_CLAUDE_SKIP_ASSISTANT       '1' → emit replacement only on terminal result
 //   MOCK_CLAUDE_PARALLEL_SUBAGENT_SESSION_IDS JSON ids interleaved before root result
 //   MOCK_CLAUDE_MODEL           echoed in the system/init event
+//   MOCK_CLAUDE_INIT_INVENTORY  JSON fields merged into system/init
+//   MOCK_CLAUDE_WAIT_AFTER_INIT_UNTIL  path whose creation releases the mock after init
 //   MOCK_CLAUDE_EXIT_CODE       process exit code (default 0)
 //   MOCK_CLAUDE_IS_ERROR        '1' → result.is_error=true (+ result text)
 //   MOCK_CLAUDE_RESULT_TEXT     override the is_error result text (default 'mock
@@ -82,8 +84,35 @@ if (env.MOCK_CLAUDE_STDERR) {
   for (const line of env.MOCK_CLAUDE_STDERR.split('\n')) process.stderr.write(line + '\n')
 }
 
+let initInventory: Record<string, unknown> = {}
+if (env.MOCK_CLAUDE_INIT_INVENTORY) {
+  try {
+    const parsed = JSON.parse(env.MOCK_CLAUDE_INIT_INVENTORY)
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      fail('MOCK_CLAUDE_INIT_INVENTORY must be a JSON object')
+    }
+    initInventory = parsed as Record<string, unknown>
+  } catch (e) {
+    fail(`MOCK_CLAUDE_INIT_INVENTORY is not valid JSON: ${(e as Error).message}`)
+  }
+}
+
 // system/init — carries session_id + model + apiKeySource (subscription → 'none').
-emit({ type: 'system', subtype: 'init', session_id: sessionId, model, apiKeySource: 'none' })
+emit({
+  type: 'system',
+  subtype: 'init',
+  session_id: sessionId,
+  model,
+  apiKeySource: 'none',
+  ...initInventory,
+})
+if (env.MOCK_CLAUDE_WAIT_AFTER_INIT_UNTIL) {
+  const deadline = Date.now() + 10_000
+  while (!existsSync(env.MOCK_CLAUDE_WAIT_AFTER_INIT_UNTIL)) {
+    if (Date.now() >= deadline) fail('timed out waiting after system/init')
+    await Bun.sleep(10)
+  }
+}
 
 if (resetSessionId) {
   const resetFrame = {
@@ -180,7 +209,14 @@ if (parallelSubagentSessionIds.length > 0) {
   // Real async Agent notifications can re-enter the same print process and
   // repeat init before later root results; this must remain an idempotent
   // observation, not a second native-session claim.
-  emit({ type: 'system', subtype: 'init', session_id: sessionId, model, apiKeySource: 'none' })
+  emit({
+    type: 'system',
+    subtype: 'init',
+    session_id: sessionId,
+    model,
+    apiKeySource: 'none',
+    ...initInventory,
+  })
 }
 
 // Build the assistant turn text (envelope / raw / clarify / nothing).

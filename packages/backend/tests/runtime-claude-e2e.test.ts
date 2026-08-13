@@ -7,7 +7,7 @@
 // Regression 2026-08-13: Claude can explicitly reset a conversation within one
 // process; the next root frame's native id becomes the resumable identity.
 
-import type { Agent } from '@agent-workflow/shared'
+import type { Agent, RuntimeInventoryObservation } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq, sql } from 'drizzle-orm'
 import type { Logger } from '../src/util/log'
@@ -136,6 +136,24 @@ function runClaude(o: RunOpts) {
   })
 }
 
+async function waitForFirstRuntimeEvent(
+  db: DbClient,
+  nodeRunId: string,
+  timeoutMs = 3_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const rows = await db
+      .select({ id: nodeRunEvents.id })
+      .from(nodeRunEvents)
+      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      .limit(1)
+    if (rows.length > 0) return
+    await Bun.sleep(10)
+  }
+  throw new Error('timed out waiting for Claude system/init persistence')
+}
+
 function captureWarnings(): {
   log: Logger
   warnings: Array<{ message: string; fields?: Record<string, unknown> }>
@@ -187,6 +205,55 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     // runNode's, so we only check the run status on the row here.
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.status).toBe('done')
+  })
+
+  test('system/init inventory is persisted while Claude is still running', async () => {
+    const agent = makeAgent({ outputs: ['summary'] })
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const releaseFile = join(h.appHome, 'release-claude-after-init')
+    const runPromise = withEnv(
+      {
+        MOCK_CLAUDE_OUTPUTS: JSON.stringify({ summary: 'inventory landed live' }),
+        MOCK_CLAUDE_SESSION_ID: 'claude-live-inventory',
+        MOCK_CLAUDE_INIT_INVENTORY: JSON.stringify({
+          tools: ['Read', 'Write'],
+          agents: ['general-purpose'],
+          skills: ['lint'],
+          mcp_servers: [{ name: 'rag', status: 'connected' }],
+        }),
+        MOCK_CLAUDE_WAIT_AFTER_INIT_UNTIL: releaseFile,
+      },
+      () => runClaude({ agent, nodeRunId, h }),
+    )
+
+    let inFlightRow: typeof nodeRuns.$inferSelect | undefined
+    let observationError: unknown
+    try {
+      await waitForFirstRuntimeEvent(h.db, nodeRunId)
+      inFlightRow = (
+        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
+      )[0]
+    } catch (err) {
+      observationError = err
+    } finally {
+      writeFileSync(releaseFile, 'continue', 'utf-8')
+    }
+
+    const result = await runPromise
+    if (observationError !== undefined) throw observationError
+    expect(inFlightRow?.status).toBe('running')
+    expect(inFlightRow?.runtimeInventoryJson).not.toBeNull()
+    const observation: RuntimeInventoryObservation = JSON.parse(inFlightRow!.runtimeInventoryJson!)
+    expect(observation.state).toBe('captured')
+    if (observation.state === 'captured') {
+      expect(observation.faces.tools?.map((item) => item.key)).toEqual(['Read', 'Write'])
+      expect(observation.faces.agents?.map((item) => item.key)).toEqual(['general-purpose'])
+      expect(observation.faces.skills?.map((item) => item.key)).toEqual(['lint'])
+      expect(observation.faces.mcps?.map((item) => [item.key, item.status])).toEqual([
+        ['rag', 'connected'],
+      ])
+    }
+    expect(result.status).toBe('done')
   })
 
   test('an explicit root native id change without reset still fails closed', async () => {

@@ -1164,6 +1164,15 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     let mcpInventorySeen = false
     /** RFC-280 T3 — the runtime's own startup report (claude init), one-shot. */
     let capturedStartupInventory: StartupInventory | null = null
+    /**
+     * RFC-297 live parity: init-event runtimes report their inventory while the
+     * child is still running. Persist the first report immediately so the
+     * runtime-agnostic GET /inventory read end can serve it before settle, just
+     * as opencode's RFC-062 live-file fallback already does. A failed eager
+     * write stays retryable on a repeated init frame and is non-fatal; step 11
+     * remains the authoritative final-write fallback.
+     */
+    let startupInventoryPersistedLive = false
     // Throttled `node.status: running` re-ping so the SessionTab's `/session`
     // query refreshes live while the parent opencode child is streaming events.
     // Without this, the only mid-run broadcast came from RFC-048's subagent
@@ -1201,7 +1210,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
      * 一次性语义保持不变：清单只认第一份（运行时在 init 处冻结 MCP 可用性，
      * RFC-242 §4.4）。
      */
-    const consumeInventoryPayload = (event: NormalizedEvent): void => {
+    const consumeInventoryPayload = async (event: NormalizedEvent): Promise<void> => {
       const faces = event.data?.inventory?.faces
       if (faces === undefined) return
       if (capturedStartupInventory === null) {
@@ -1212,6 +1221,42 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           ...(faces.mcps === undefined
             ? {}
             : { mcpServers: faces.mcps.map((m) => ({ name: m.key, status: m.status ?? '' })) }),
+        }
+      }
+      // The capability, not a runtime-name branch, identifies observations that
+      // arrive during stdout streaming. Persist only after the first complete
+      // capture; duplicate Claude init frames are common around async agents.
+      if (
+        !startupInventoryPersistedLive &&
+        driver.capabilities.startupObservation === 'init-event'
+      ) {
+        const runtimeInventoryJson = JSON.stringify(
+          buildRuntimeInventoryObservation({
+            capabilities: driver.capabilities,
+            freshRun: freshAgentRun,
+            declared: injectionDeclared,
+            claudeInit: capturedStartupInventory,
+            snapshot: null,
+            now: event.timestamp ?? Date.now(),
+          }),
+        )
+        try {
+          await persistRunnerWrite('runtime-inventory/eager', () =>
+            opts.db
+              .update(nodeRuns)
+              .set({ runtimeInventoryJson })
+              .where(eq(nodeRuns.id, opts.nodeRunId)),
+          )
+          startupInventoryPersistedLive = true
+        } catch (err) {
+          log.warn('runtime-inventory-eager-write-failed', {
+            nodeRunId: opts.nodeRunId,
+            runtime,
+            err: maskDiagnosticsText(err instanceof Error ? err.message : String(err)).slice(
+              0,
+              2000,
+            ),
+          })
         }
       }
       if (declaredMcpServers.size === 0 || mcpInventorySeen || faces.mcps === undefined) return
@@ -1249,7 +1294,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       }
       const ev = driver.parseEvent(line)
       if (ev) {
-        consumeInventoryPayload(ev)
+        await consumeInventoryPayload(ev)
         try {
           if (ev.sessionId !== undefined) {
             if (sessionId === undefined) {
@@ -2118,7 +2163,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           nodeKind: inventoryNodeKind,
           freshRun: freshAgentRun,
         })) ?? []
-      for (const event of finalEvents) consumeInventoryPayload(event)
+      for (const event of finalEvents) await consumeInventoryPayload(event)
     } catch (err) {
       log.warn('final-events-drain-failed', {
         nodeRunId: opts.nodeRunId,
