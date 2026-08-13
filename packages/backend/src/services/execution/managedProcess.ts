@@ -11,6 +11,7 @@ import type { Logger } from '@/util/log'
 import { killProcessTree } from '@/util/process'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
 
 /** Per-line cap (code units)——数值单点；runner.ts 的 MAX_STREAM_LINE_CHARS 是本值的 re-export（RFC-284 §3.5）。 */
 export const MANAGED_PROCESS_MAX_LINE_CHARS = 1024 * 1024
@@ -225,6 +226,22 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   const graceMs = req.killEscalationGraceMs ?? 10_000
 
   const spawnBinaryPath = req.argv[0] ?? ''
+
+  if (
+    req.timeoutMs !== undefined &&
+    (!Number.isSafeInteger(req.timeoutMs) || req.timeoutMs < 0 || req.timeoutMs > JS_TIMER_MAX_MS)
+  ) {
+    return {
+      outcome: 'spawn-failed',
+      exitCode: null,
+      rawStdout: '',
+      stderrTail: '',
+      truncated: { stdout: false, stderr: false },
+      spawnBinaryPath,
+      pid: null,
+      spawnError: `timeoutMs must be an integer from 0 to ${JS_TIMER_MAX_MS}`,
+    }
+  }
 
   // RFC-280 T4 — admission seam: a throw here means "do not spawn", reported
   // as spawn-failed so the caller writes one terminal row (never a live child).

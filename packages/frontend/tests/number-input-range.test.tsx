@@ -152,7 +152,7 @@ describe('RFC-290 NumberInput range hint', () => {
     )
   })
 
-  test('all 17 bounded callers inherit the hint except the compact Pagination control', () => {
+  test('all nine bounded NumberInput callers show the hint except compact Pagination', () => {
     const bounded = sourceTsxFiles().flatMap((path) => {
       const file = relative(SRC_ROOT, path).split(sep).join('/')
       const source = readFileSync(path, 'utf8')
@@ -162,8 +162,8 @@ describe('RFC-290 NumberInput range hint', () => {
     })
     const optedOut = bounded.filter(({ tag }) => tag.includes('rangeHint={false}'))
 
-    expect(bounded).toHaveLength(17)
-    expect(bounded.length - optedOut.length).toBe(16)
+    expect(bounded).toHaveLength(9)
+    expect(bounded.length - optedOut.length).toBe(8)
     expect(optedOut.map(({ file }) => file)).toEqual(['components/Pagination.tsx'])
   })
 })

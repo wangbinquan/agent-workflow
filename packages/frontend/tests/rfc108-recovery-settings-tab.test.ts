@@ -36,7 +36,7 @@ const I18N_KEYS = [
   'settingsForm.maxAutoRecoveriesPerWindow',
   'settingsForm.autoRecoveryWindowMs',
   'settingsForm.periodicOrphanReconcileMs',
-  'settingsForm.zeroDisabled',
+  'settingsForm.periodicOrphanReconcileHint',
 ]
 
 describe('RFC-108 T24/T25 — Recovery settings tab', () => {
@@ -53,7 +53,7 @@ describe('RFC-108 T24/T25 — Recovery settings tab', () => {
     const tabBody = settings.slice(start, end)
     expect(tabBody.includes('<Switch')).toBe(true)
     expect(tabBody.includes('<Field')).toBe(true)
-    expect(tabBody.includes('<NumberInput')).toBe(true)
+    expect(tabBody.includes('<SettingsNumberInput')).toBe(true)
     // must NOT bypass the form primitives with a raw styled input
     expect(/<input\s+className="form-input"/.test(tabBody)).toBe(false)
   })

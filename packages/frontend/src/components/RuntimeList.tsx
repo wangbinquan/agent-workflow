@@ -17,15 +17,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  RUNTIME_NUMERIC_BOUNDS,
   configDirEnvProblem,
   configDirNameProblem,
   DEFAULT_CONFIG_DIR_PROFILE,
+  isNumericSettingValueWithinBound,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ChipsInput } from '@/components/ChipsInput'
-import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
+import { Field, Switch, TextInput } from '@/components/Form'
+import { SettingsNumberInput } from '@/components/settings/SettingsNumberInput'
 import { Select } from '@/components/Select'
 import { ModelSelect } from '@/components/ModelSelect'
 import { StatusChip } from '@/components/StatusChip'
@@ -391,6 +394,19 @@ function RuntimeFormDialog(props: {
   const configDirNameError =
     nameProblem === 'invalid-leaf' ? t('runtimes.configDirNameInvalid') : undefined
   const isOpencode = protocol === 'opencode'
+  const profileNumericInvalid =
+    isOpencode &&
+    (
+      [
+        ['temperature', temperature],
+        ['steps', steps],
+        ['maxSteps', maxSteps],
+      ] as const
+    ).some(
+      ([key, value]) =>
+        value !== undefined &&
+        !isNumericSettingValueWithinBound(value, RUNTIME_NUMERIC_BOUNDS[key]),
+    )
   // Codex P3: the claude spawn path consumes ONLY `model` — variant / temperature
   // / steps / maxSteps are all opencode-only, so null them out for claude (else a
   // user could save a Claude runtime param that never affects execution).
@@ -474,7 +490,8 @@ function RuntimeFormDialog(props: {
               // RFC-154: invalid config-dir overrides block Save (inline errors
               // explain why); the backend validators are the second line.
               configDirEnvError !== undefined ||
-              configDirNameError !== undefined
+              configDirNameError !== undefined ||
+              profileNumericInvalid
             }
             onClick={() => save.mutate()}
           >
@@ -594,13 +611,17 @@ function RuntimeFormDialog(props: {
             />
           </Field>
           <Field label={t('runtimes.fieldTemperature')}>
-            <NumberInput value={temperature} onChange={setTemperature} min={0} max={2} step={0.1} />
+            <SettingsNumberInput
+              setting="temperature"
+              value={temperature}
+              onChange={setTemperature}
+            />
           </Field>
           <Field label={t('runtimes.fieldSteps')}>
-            <NumberInput value={steps} onChange={setSteps} min={1} />
+            <SettingsNumberInput setting="steps" value={steps} onChange={setSteps} />
           </Field>
           <Field label={t('runtimes.fieldMaxSteps')}>
-            <NumberInput value={maxSteps} onChange={setMaxSteps} min={1} />
+            <SettingsNumberInput setting="maxSteps" value={maxSteps} onChange={setMaxSteps} />
           </Field>
         </div>
       )}

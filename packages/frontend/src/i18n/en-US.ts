@@ -1379,6 +1379,9 @@ export const enUS: Resources = {
     save: 'Save',
     noChanges: 'There are no changes to save',
     invalidChanges: 'Fix the invalid values in this section before saving',
+    numericOutOfRange: 'Enter an integer from {{min}} to {{max}}',
+    numericDecimalOutOfRange: 'Enter a value from {{min}} to {{max}}',
+    numericRangeZeroOr: 'Enter 0, or an integer from {{min}} to {{max}}',
     outcomeUnknown: 'The previous save is still being reconciled with the server',
     outcomeUnknownBody:
       'The previous save may or may not have reached the server. Recheck reads the current value without blindly repeating the write.',
@@ -1844,6 +1847,7 @@ export const enUS: Resources = {
       jumpActionAria: 'Go to page',
     },
     range: 'Range {{min}} – {{max}}',
+    rangeZeroOr: 'Allowed: 0, or {{min}} – {{max}}',
     rangeMaxOnly: 'Max {{max}}',
     rangeConverted: '{{range}} ({{converted}})',
     done: 'Done',
@@ -5396,6 +5400,7 @@ export const enUS: Resources = {
     multiProcessConcHint:
       'Cap on shards running at once inside one task’s fan-out, applied within the agent pool — effective parallelism = min(free agent slots, this value). Script nodes cannot sit inside a fan-out and are unaffected. Applies on save, including running tasks. Default 4.',
     logLevel: 'Log level',
+    logLevelHint: 'Applies to the running daemon immediately after save.',
     perTaskDuration: 'Per-task max duration (ms)',
     perTaskTokens: 'Per-task max total tokens',
     perNodeTimeout: 'Per-node timeout (ms)',
@@ -5414,6 +5419,8 @@ export const enUS: Resources = {
     maxAutoRecoveriesPerWindow: 'Breaker: max auto-recoveries per window',
     autoRecoveryWindowMs: 'Breaker: rolling window (ms)',
     periodicOrphanReconcileMs: 'Periodic orphan-reconcile interval (ms)',
+    periodicOrphanReconcileHint:
+      '0 disables the loop. Saving stops it or rearms it with the new interval immediately.',
     zeroDisabled: '0 disables it',
     largeOutputThreshold: 'Large output threshold (bytes)',
     zeroUnlimited: '0 = unlimited.',
@@ -5434,7 +5441,10 @@ export const enUS: Resources = {
     submoduleAutoRefreshHint:
       'Periodically fetch recently-used cached repos and sync their submodules, without waiting for a task launch or a manual refresh.',
     submoduleRefreshIntervalMs: 'Refresh interval (ms)',
+    submoduleRefreshIntervalHint:
+      'Saving rearms the loop immediately. A refresh already in progress is not interrupted.',
     submoduleOnlyRecentDays: 'Only refresh repos used within (days)',
+    submoduleOnlyRecentDaysHint: 'The next scan uses the new recency window.',
     autoGcHint: 'Periodic background job; safe to leave off in v1.',
     olderThanDays: 'GC older-than (days)',
     onlyMerged: 'Only GC merged branches',

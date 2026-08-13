@@ -8,6 +8,7 @@ export * from './schemas/changeNarrative' // RFC-239
 export * from './schemas/cachedRepo'
 export * from './schemas/clarify'
 export * from './schemas/config'
+export * from './settingsNumericBounds'
 export * from './schemas/auth'
 export * from './schemas/oidcProvider'
 export * from './schemas/resourcePackage'

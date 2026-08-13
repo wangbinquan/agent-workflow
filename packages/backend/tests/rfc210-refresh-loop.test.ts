@@ -151,4 +151,29 @@ describe('RFC-210 background refresh — loop contract', () => {
     await new Promise((r) => setTimeout(r, 120))
     expect(ticks).toBe(after) // stop() really stops it
   })
+
+  test('reconfigure applies the current enabled state without restarting', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    let ticks = 0
+    let enabled = true
+    const loop = startSubmoduleRefreshLoop(
+      db,
+      () => {
+        ticks += 1
+        return {
+          submoduleAutoRefresh: { enabled, intervalMs: 20, onlyRecentDays: 30 },
+        }
+      },
+      20,
+    )
+    await new Promise((r) => setTimeout(r, 55))
+    expect(ticks).toBeGreaterThan(0)
+
+    enabled = false
+    expect(loop.reconfigure()).toBe(true)
+    const afterDisable = ticks
+    await new Promise((r) => setTimeout(r, 55))
+    expect(ticks).toBe(afterDisable)
+    loop.stop()
+  })
 })

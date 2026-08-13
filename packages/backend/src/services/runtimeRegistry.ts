@@ -13,6 +13,7 @@ import { isAbsolute, resolve as resolvePath } from 'node:path'
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
+  RUNTIME_NUMERIC_BOUNDS,
   configDirEnvProblem,
   configDirNameProblem,
   DEFAULT_CONFIG_DIR_PROFILE,
@@ -682,15 +683,28 @@ function profilePatch(
   if (input.model !== undefined) out.model = str(input.model)
   if (input.variant !== undefined) out.variant = str(input.variant)
   if (input.temperature !== undefined) {
-    if (input.temperature !== null && (input.temperature < 0 || input.temperature > 2))
-      throw new ValidationError('runtime-temperature-invalid', 'temperature must be 0–2')
+    const bound = RUNTIME_NUMERIC_BOUNDS.temperature
+    if (
+      input.temperature !== null &&
+      (!Number.isFinite(input.temperature) ||
+        input.temperature < bound.min ||
+        input.temperature > bound.max)
+    )
+      throw new ValidationError(
+        'runtime-temperature-invalid',
+        `temperature must be ${bound.min}–${bound.max}`,
+      )
     out.temperature = input.temperature
   }
   for (const k of ['steps', 'maxSteps'] as const) {
     const v = input[k]
+    const bound = RUNTIME_NUMERIC_BOUNDS[k]
     if (v !== undefined) {
-      if (v !== null && (!Number.isInteger(v) || v < 1))
-        throw new ValidationError(`runtime-${k}-invalid`, `${k} must be a positive integer`)
+      if (v !== null && (!Number.isSafeInteger(v) || v < bound.min || v > bound.max))
+        throw new ValidationError(
+          `runtime-${k}-invalid`,
+          `${k} must be an integer from ${bound.min} to ${bound.max}`,
+        )
       out[k] = v
     }
   }

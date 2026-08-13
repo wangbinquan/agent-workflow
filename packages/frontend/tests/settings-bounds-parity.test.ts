@@ -1,71 +1,75 @@
-// Locks RFC-290: settings.tsx literals and the shared zod schemas are still
-// duplicate truths by explicit scope decision. If either side changes alone,
-// this test must fail. Both ConfigSchema and the actual PATCH save gate are
-// probed because nullable intent fields are redeclared in ConfigPatchSchema.
-import { ConfigPatchSchema, ConfigSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
+// Locks the Settings numeric contract in both directions: every editable
+// numeric field must use the shared adapter, and every shared bound must be
+// enforced by the Config PATCH schema. Full Config remains legacy-compatible;
+// only new writes are constrained.
+import {
+  ConfigPatchSchema,
+  RUNTIME_NUMERIC_BOUNDS,
+  SETTINGS_NUMERIC_BOUNDS,
+  type SettingsNumericPath,
+} from '@agent-workflow/shared'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 
-const SETTINGS = readFileSync(
+const SETTINGS_SOURCE = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'routes', 'settings.tsx'),
   'utf8',
 )
-const NUMBER_INPUT_TAGS = SETTINGS.match(/<NumberInput\b[\s\S]*?\/>/g) ?? []
+const RUNTIME_SOURCE = readFileSync(
+  resolve(import.meta.dirname, '..', 'src', 'components', 'RuntimeList.tsx'),
+  'utf8',
+)
 
-const BOUNDED_SETTINGS = [
-  { key: 'gitSubmoduleJobs', min: 1, max: 32 },
-  { key: 'webhookDeliveryBodyRetentionDays', min: 1, max: 3650 },
-  { key: 'webhookDeliveryRowRetentionDays', min: 1, max: 3650 },
-  { key: 'bindPort', min: 0, max: 65_535 },
-  { key: 'commitPushMaxRepairRetries', min: 0, max: 10 },
-  { key: 'commitPushDiffMaxBytes', min: 0, max: 262_144 },
-  { key: 'intentBuilderTurnTimeoutMs', min: 30_000, max: 3_600_000 },
-  { key: 'intentBuilderMaxGenerateRounds', min: 1, max: 500 },
-] as const
-
-type BoundedKey = (typeof BOUNDED_SETTINGS)[number]['key']
-
-function fullConfigAccepts(key: BoundedKey, value: number): boolean {
-  return ConfigSchema.safeParse({ ...DEFAULT_CONFIG, [key]: value }).success
+function patchFor(path: SettingsNumericPath, value: number): unknown {
+  switch (path) {
+    case 'submoduleAutoRefresh.intervalMs':
+      return { submoduleAutoRefresh: { enabled: true, intervalMs: value } }
+    case 'submoduleAutoRefresh.onlyRecentDays':
+      return { submoduleAutoRefresh: { enabled: true, onlyRecentDays: value } }
+    case 'worktreeAutoGc.olderThanDays':
+      return { worktreeAutoGc: { enabled: false, olderThanDays: value } }
+    case 'eventsArchiveThresholds.perNodeRunRows':
+      return { eventsArchiveThresholds: { perNodeRunRows: value, globalRows: 1_000_000 } }
+    case 'eventsArchiveThresholds.globalRows':
+      return { eventsArchiveThresholds: { perNodeRunRows: 50_000, globalRows: value } }
+    default:
+      return { [path]: value }
+  }
 }
 
-function patchAccepts(key: BoundedKey, value: number): boolean {
-  return ConfigPatchSchema.safeParse({ [key]: value }).success
-}
-
-function inputTagFor(key: BoundedKey): string {
-  const matches = NUMBER_INPUT_TAGS.filter((tag) => tag.includes(`state.${key}`))
-  expect(matches, `${key} must own exactly one NumberInput`).toHaveLength(1)
-  return matches[0]!
-}
-
-function numericProp(tag: string, prop: 'min' | 'max'): number {
-  const match = tag.match(new RegExp(`\\b${prop}=\\{([\\d_]+)\\}`))
-  expect(match, `NumberInput must declare a literal ${prop}`).not.toBeNull()
-  return Number(match![1]!.replaceAll('_', ''))
-}
-
-describe('RFC-290 bounded settings parity', () => {
-  test.each(BOUNDED_SETTINGS)('$key matches full config and PATCH schema behavior', (bound) => {
-    for (const [name, accepts] of [
-      ['ConfigSchema', fullConfigAccepts],
-      ['ConfigPatchSchema', patchAccepts],
-    ] as const) {
-      expect(accepts(bound.key, bound.min), `${name} must accept ${bound.key} min`).toBe(true)
-      expect(accepts(bound.key, bound.max), `${name} must accept ${bound.key} max`).toBe(true)
-      expect(accepts(bound.key, bound.min - 1), `${name} must reject below ${bound.key} min`).toBe(
-        false,
+describe('Settings numeric bounds parity', () => {
+  test('all 25 Config-backed numeric controls use the shared adapter exactly once', () => {
+    expect(SETTINGS_SOURCE).not.toMatch(/<NumberInput\b/)
+    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(25)
+    for (const path of Object.keys(SETTINGS_NUMERIC_BOUNDS) as SettingsNumericPath[]) {
+      const matches = SETTINGS_SOURCE.match(
+        new RegExp(`setting="${path.replaceAll('.', '\\.')}"`, 'g'),
       )
-      expect(accepts(bound.key, bound.max + 1), `${name} must reject above ${bound.key} max`).toBe(
-        false,
-      )
+      expect(matches, `${path} must own exactly one SettingsNumberInput`).toHaveLength(1)
     }
   })
 
-  test.each(BOUNDED_SETTINGS)('$key renders the same literal min/max in settings.tsx', (bound) => {
-    const tag = inputTagFor(bound.key)
-    expect(numericProp(tag, 'min')).toBe(bound.min)
-    expect(numericProp(tag, 'max')).toBe(bound.max)
+  test('all three runtime numeric controls use the same adapter', () => {
+    expect(RUNTIME_SOURCE).not.toMatch(/<NumberInput\b/)
+    for (const path of Object.keys(RUNTIME_NUMERIC_BOUNDS)) {
+      expect(RUNTIME_SOURCE.match(new RegExp(`setting="${path}"`, 'g'))).toHaveLength(1)
+    }
+  })
+
+  test.each(
+    Object.entries(SETTINGS_NUMERIC_BOUNDS) as Array<
+      [SettingsNumericPath, (typeof SETTINGS_NUMERIC_BOUNDS)[SettingsNumericPath]]
+    >,
+  )('%s accepts its edges and rejects values outside them', (path, bound) => {
+    expect(ConfigPatchSchema.safeParse(patchFor(path, bound.min)).success).toBe(true)
+    expect(ConfigPatchSchema.safeParse(patchFor(path, bound.max)).success).toBe(true)
+    expect(ConfigPatchSchema.safeParse(patchFor(path, bound.max + 1)).success).toBe(false)
+    if ('positiveMin' in bound) {
+      expect(ConfigPatchSchema.safeParse(patchFor(path, bound.positiveMin)).success).toBe(true)
+      expect(ConfigPatchSchema.safeParse(patchFor(path, bound.positiveMin - 1)).success).toBe(false)
+    } else {
+      expect(ConfigPatchSchema.safeParse(patchFor(path, bound.min - 1)).success).toBe(false)
+    }
   })
 })

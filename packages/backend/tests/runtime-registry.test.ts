@@ -156,6 +156,27 @@ describe('createRuntime (RFC-112 PR-A)', () => {
       }),
     ).rejects.toMatchObject({ code: 'runtime-binary-invalid' })
   })
+
+  test('enforces the numeric profile bounds exposed in Settings', async () => {
+    const edge = await createRuntime(db, {
+      name: 'bounded-profile',
+      protocol: 'opencode',
+      temperature: 2,
+      steps: 1_000,
+      maxSteps: 1_000,
+    })
+    expect(edge).toMatchObject({ temperature: 2, steps: 1_000, maxSteps: 1_000 })
+
+    await expect(
+      createRuntime(db, { name: 'hot-profile', protocol: 'opencode', temperature: 2.1 }),
+    ).rejects.toMatchObject({ code: 'runtime-temperature-invalid' })
+    await expect(
+      createRuntime(db, { name: 'long-profile', protocol: 'opencode', steps: 1_001 }),
+    ).rejects.toMatchObject({ code: 'runtime-steps-invalid' })
+    await expect(
+      createRuntime(db, { name: 'fractional-profile', protocol: 'opencode', maxSteps: 1.5 }),
+    ).rejects.toMatchObject({ code: 'runtime-maxSteps-invalid' })
+  })
 })
 
 describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {

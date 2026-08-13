@@ -21,6 +21,9 @@ import { createApp } from '@/server'
 import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
 import { getTaskFanoutSem, gcTaskFanoutSem, taskFanoutPoolCount } from '@/services/taskFanoutPools'
 import { seedBuiltinRuntimes, updateRuntime } from '@/services/runtimeRegistry'
+import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
+import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
+import { createLogger, resetLoggerForTest, setLoggerStdoutWriterForTest } from '@/util/log'
 
 const TOKEN = 'd'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -28,6 +31,7 @@ const roots: string[] = []
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  resetLoggerForTest()
 })
 
 interface Harness {
@@ -149,10 +153,35 @@ describe('RFC-266 concurrency hot-apply', () => {
     const h = await harness('unrelated')
     const agent = getNodePoolSemaphore(h.db, 'agent', 4)
     const script = getNodePoolSemaphore(h.db, 'script', 4)
+    const lines: string[] = []
+    setLoggerStdoutWriterForTest((line) => lines.push(line))
     expect((await h.put({ logLevel: 'debug' })).status).toBe(200)
     // 未变的键由 mergeDefaults 保持既有值 → resize 到同一容量，实例不换。
     expect(agent.capacity).toBe(4)
     expect(script.capacity).toBe(4)
+    createLogger('settings-hot-apply-test').debug('debug level is live')
+    expect(lines.some((line) => line.includes('debug level is live'))).toBe(true)
+  })
+
+  test('bounded Settings writes notify live consumers only after persistence', async () => {
+    const h = await harness('bounded-notify')
+    const observed: number[] = []
+    const unregister = registerConfigAppliedListener(h.configPath, (config) => {
+      observed.push(config.periodicOrphanReconcileMs)
+    })
+    try {
+      const accepted = await h.put({ periodicOrphanReconcileMs: 120_000 })
+      expect(accepted.status).toBe(200)
+      expect(loadConfig(h.configPath).periodicOrphanReconcileMs).toBe(120_000)
+      expect(observed).toEqual([120_000])
+
+      const rejected = await h.put({ defaultPerNodeTimeoutMs: JS_TIMER_MAX_MS + 1 })
+      expect(rejected.status).toBe(422)
+      expect((await rejected.json()) as { code?: string }).toMatchObject({ code: 'config-invalid' })
+      expect(observed).toEqual([120_000])
+    } finally {
+      unregister()
+    }
   })
 
   test('the route reaches the SAME DbClient the scheduler keys its pools by', () => {

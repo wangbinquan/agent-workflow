@@ -215,10 +215,14 @@ interface NumberInputProps {
   className?: string
   /** RFC-290: bounded inputs show their range by default; compact inline callers may opt out. */
   rangeHint?: boolean
+  /** Override the generated range copy for discontinuous domains such as `0 or min..max`. */
+  rangeHintText?: string
   /** RFC-290: optional human conversion for settings whose raw unit is otherwise hard to parse. */
   unit?: NumberRangeUnit
   /** Existing descriptions are preserved when RFC-290 appends the generated range id. */
   'aria-describedby'?: AriaAttributes['aria-describedby']
+  'aria-invalid'?: AriaAttributes['aria-invalid']
+  'aria-errormessage'?: AriaAttributes['aria-errormessage']
   'data-testid'?: string
   onFocus?: FocusEventHandler<HTMLInputElement>
 }
@@ -233,38 +237,49 @@ export function NumberInput({
   disabled,
   className,
   rangeHint = true,
+  rangeHintText,
   unit,
   'aria-describedby': ariaDescribedBy,
+  'aria-invalid': ariaInvalid,
+  'aria-errormessage': ariaErrorMessage,
   'data-testid': testid,
   onFocus,
 }: NumberInputProps) {
   const { t } = useTranslation()
   const rangeId = useId()
-  const showRange = rangeHint && max !== undefined
+  const showRange = rangeHint && (max !== undefined || rangeHintText !== undefined)
   const descriptions = [ariaDescribedBy, showRange ? rangeId : undefined]
     .filter((id): id is string => id !== undefined && id.trim() !== '')
     .join(' ')
 
   let rangeText: string | undefined
   if (showRange) {
-    const rawRange =
-      min === undefined ? t('common.rangeMaxOnly', { max }) : t('common.range', { min, max })
-    let converted: string | undefined
-    if (unit !== undefined) {
-      const convertedMax = formatUnitValue(max, unit, t)
-      if (min === undefined) {
-        converted = convertedMax ?? undefined
-      } else {
-        const convertedMin = formatUnitValue(min, unit, t)
-        if (convertedMin !== null && convertedMax !== null) {
-          converted = `${convertedMin} – ${convertedMax}`
+    if (rangeHintText !== undefined) {
+      rangeText = rangeHintText
+    } else {
+      // `showRange` proves max exists when there is no caller override.
+      const rangeMax = max as number
+      const rawRange =
+        min === undefined
+          ? t('common.rangeMaxOnly', { max: rangeMax })
+          : t('common.range', { min, max: rangeMax })
+      let converted: string | undefined
+      if (unit !== undefined) {
+        const convertedMax = formatUnitValue(rangeMax, unit, t)
+        if (min === undefined) {
+          converted = convertedMax ?? undefined
+        } else {
+          const convertedMin = formatUnitValue(min, unit, t)
+          if (convertedMin !== null && convertedMax !== null) {
+            converted = `${convertedMin} – ${convertedMax}`
+          }
         }
       }
+      rangeText =
+        converted === undefined
+          ? rawRange
+          : t('common.rangeConverted', { range: rawRange, converted })
     }
-    rangeText =
-      converted === undefined
-        ? rawRange
-        : t('common.rangeConverted', { range: rawRange, converted })
   }
 
   const input = (
@@ -286,6 +301,8 @@ export function NumberInput({
       max={max}
       step={step}
       disabled={disabled}
+      aria-invalid={ariaInvalid}
+      aria-errormessage={ariaErrorMessage}
       aria-describedby={descriptions === '' ? undefined : descriptions}
       data-testid={testid}
       onFocus={onFocus}

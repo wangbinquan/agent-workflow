@@ -40,12 +40,13 @@ import { Segmented } from '@/components/Segmented'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
-import { TextArea, Field, NumberInput, Switch, TextInput } from '@/components/Form'
+import { TextArea, Field, Switch, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSectionLink, PageSectionNav, type PageSectionGroup } from '@/components/PageSectionNav'
 import { CodeHostsSection } from '@/components/settings/CodeHostsSection'
+import { SettingsNumberInput } from '@/components/settings/SettingsNumberInput'
 import { RuntimeSelect } from '@/components/RuntimeSelect'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
@@ -529,11 +530,10 @@ function LimitsTab({ config }: TabProps) {
         required
         hint={t('settingsForm.zeroUnlimited')}
       >
-        <NumberInput
+        <SettingsNumberInput
+          setting="defaultPerTaskMaxDurationMs"
           value={state.defaultPerTaskMaxDurationMs}
           onChange={(v) => setState({ ...state, defaultPerTaskMaxDurationMs: v ?? 0 })}
-          min={0}
-          step={60_000}
         />
       </Field>
       <Field
@@ -541,18 +541,17 @@ function LimitsTab({ config }: TabProps) {
         required
         hint={t('settingsForm.zeroUnlimited')}
       >
-        <NumberInput
+        <SettingsNumberInput
+          setting="defaultPerTaskMaxTotalTokens"
           value={state.defaultPerTaskMaxTotalTokens}
           onChange={(v) => setState({ ...state, defaultPerTaskMaxTotalTokens: v ?? 0 })}
-          min={0}
         />
       </Field>
       <Field label={t('settingsForm.perNodeTimeout')} required>
-        <NumberInput
+        <SettingsNumberInput
+          setting="defaultPerNodeTimeoutMs"
           value={state.defaultPerNodeTimeoutMs}
           onChange={(v) => setState({ ...state, defaultPerNodeTimeoutMs: v ?? 60_000 })}
-          min={1000}
-          step={60_000}
         />
       </Field>
       <Field
@@ -560,18 +559,17 @@ function LimitsTab({ config }: TabProps) {
         required
         hint={t('settingsForm.nodeRetriesHint')}
       >
-        <NumberInput
+        <SettingsNumberInput
+          setting="defaultNodeRetries"
           value={state.defaultNodeRetries}
           onChange={(v) => setState({ ...state, defaultNodeRetries: v ?? 0 })}
-          min={0}
         />
       </Field>
       <Field label={t('settingsForm.largeOutputThreshold')} required>
-        <NumberInput
+        <SettingsNumberInput
+          setting="largeOutputThresholdBytes"
           value={state.largeOutputThresholdBytes}
           onChange={(v) => setState({ ...state, largeOutputThresholdBytes: v ?? 1_048_576 })}
-          min={1024}
-          step={1024}
         />
       </Field>
       {/* RFC-113: global execution knobs relocated from the Runtime tab. */}
@@ -581,10 +579,10 @@ function LimitsTab({ config }: TabProps) {
           hint={t('settingsForm.maxConcurrentNodesHint')}
           required
         >
-          <NumberInput
+          <SettingsNumberInput
+            setting="maxConcurrentNodes"
             value={state.maxConcurrentNodes}
             onChange={(v) => setState({ ...state, maxConcurrentNodes: v ?? 1 })}
-            min={1}
           />
         </Field>
         {/* RFC-266: script nodes run in their own daemon pool. */}
@@ -593,10 +591,10 @@ function LimitsTab({ config }: TabProps) {
           hint={t('settingsForm.maxConcurrentScriptNodesHint')}
           required
         >
-          <NumberInput
+          <SettingsNumberInput
+            setting="maxConcurrentScriptNodes"
             value={state.maxConcurrentScriptNodes}
             onChange={(v) => setState({ ...state, maxConcurrentScriptNodes: v ?? 1 })}
-            min={1}
           />
         </Field>
         <Field
@@ -604,14 +602,14 @@ function LimitsTab({ config }: TabProps) {
           hint={t('settingsForm.multiProcessConcHint')}
           required
         >
-          <NumberInput
+          <SettingsNumberInput
+            setting="multiProcessSubprocessConcurrency"
             value={state.multiProcessSubprocessConcurrency}
             onChange={(v) => setState({ ...state, multiProcessSubprocessConcurrency: v ?? 1 })}
-            min={1}
           />
         </Field>
       </div>
-      <Field label={t('settingsForm.logLevel')}>
+      <Field label={t('settingsForm.logLevel')} hint={t('settingsForm.logLevelHint')}>
         <Select<NonNullable<Config['logLevel']>>
           value={state.logLevel ?? config.logLevel}
           ariaLabel={t('settingsForm.logLevel')}
@@ -662,37 +660,34 @@ function RecoveryTab({ config }: TabProps) {
         hint={t('settingsForm.autoKillStalledChildHint')}
       />
       <Field label={t('settingsForm.heartbeatStallMs')} required>
-        <NumberInput
+        <SettingsNumberInput
+          setting="heartbeatStallMs"
           value={state.heartbeatStallMs}
           onChange={(v) => setState({ ...state, heartbeatStallMs: v ?? 1_800_000 })}
-          min={1000}
-          step={60_000}
         />
       </Field>
       <Field label={t('settingsForm.maxAutoRecoveriesPerWindow')} required>
-        <NumberInput
+        <SettingsNumberInput
+          setting="maxAutoRecoveriesPerWindow"
           value={state.maxAutoRecoveriesPerWindow}
           onChange={(v) => setState({ ...state, maxAutoRecoveriesPerWindow: v ?? 3 })}
-          min={1}
         />
       </Field>
       <Field label={t('settingsForm.autoRecoveryWindowMs')} required>
-        <NumberInput
+        <SettingsNumberInput
+          setting="autoRecoveryWindowMs"
           value={state.autoRecoveryWindowMs}
           onChange={(v) => setState({ ...state, autoRecoveryWindowMs: v ?? 3_600_000 })}
-          min={1000}
-          step={60_000}
         />
       </Field>
       <Field
         label={t('settingsForm.periodicOrphanReconcileMs')}
-        hint={t('settingsForm.zeroDisabled')}
+        hint={t('settingsForm.periodicOrphanReconcileHint')}
       >
-        <NumberInput
+        <SettingsNumberInput
+          setting="periodicOrphanReconcileMs"
           value={state.periodicOrphanReconcileMs}
           onChange={(v) => setState({ ...state, periodicOrphanReconcileMs: v ?? 0 })}
-          min={0}
-          step={60_000}
         />
       </Field>
     </SectionForm>
@@ -739,11 +734,10 @@ function GitTab({ config }: TabProps) {
           label={t('settingsForm.gitSubmoduleJobs')}
           hint={t('settingsForm.gitSubmoduleJobsHint')}
         >
-          <NumberInput
+          <SettingsNumberInput
+            setting="gitSubmoduleJobs"
             value={state.gitSubmoduleJobs ?? 4}
             onChange={(v) => setState({ ...state, gitSubmoduleJobs: v ?? 4 })}
-            min={1}
-            max={32}
           />
         </Field>
       </div>
@@ -762,8 +756,12 @@ function GitTab({ config }: TabProps) {
         hint={t('settingsForm.submoduleAutoRefreshHint')}
       />
       <div className="form-grid form-grid--cols-2">
-        <Field label={t('settingsForm.submoduleRefreshIntervalMs')}>
-          <NumberInput
+        <Field
+          label={t('settingsForm.submoduleRefreshIntervalMs')}
+          hint={t('settingsForm.submoduleRefreshIntervalHint')}
+        >
+          <SettingsNumberInput
+            setting="submoduleAutoRefresh.intervalMs"
             value={refresh?.intervalMs ?? 6 * 60 * 60 * 1000}
             onChange={(v) =>
               setState({
@@ -774,12 +772,14 @@ function GitTab({ config }: TabProps) {
                 },
               })
             }
-            min={60_000}
-            step={60 * 60 * 1000}
           />
         </Field>
-        <Field label={t('settingsForm.submoduleOnlyRecentDays')}>
-          <NumberInput
+        <Field
+          label={t('settingsForm.submoduleOnlyRecentDays')}
+          hint={t('settingsForm.submoduleOnlyRecentDaysHint')}
+        >
+          <SettingsNumberInput
+            setting="submoduleAutoRefresh.onlyRecentDays"
             value={refresh?.onlyRecentDays ?? 30}
             onChange={(v) =>
               setState({
@@ -790,7 +790,6 @@ function GitTab({ config }: TabProps) {
                 },
               })
             }
-            min={1}
           />
         </Field>
       </div>
@@ -820,7 +819,8 @@ export function GcTab({ config }: TabProps) {
       />
       <div className="form-grid form-grid--cols-2">
         <Field label={t('settingsForm.olderThanDays')}>
-          <NumberInput
+          <SettingsNumberInput
+            setting="worktreeAutoGc.olderThanDays"
             value={gc?.olderThanDays}
             onChange={(v) =>
               setState({
@@ -828,7 +828,6 @@ export function GcTab({ config }: TabProps) {
                 worktreeAutoGc: { ...(gc ?? { enabled: false }), olderThanDays: v },
               })
             }
-            min={1}
           />
         </Field>
         <Switch
@@ -847,7 +846,8 @@ export function GcTab({ config }: TabProps) {
         required
         hint={t('settingsForm.archivePerNodeRunHint')}
       >
-        <NumberInput
+        <SettingsNumberInput
+          setting="eventsArchiveThresholds.perNodeRunRows"
           value={thresholds?.perNodeRunRows}
           onChange={(v) =>
             setState({
@@ -855,7 +855,6 @@ export function GcTab({ config }: TabProps) {
               eventsArchiveThresholds: { ...thresholds!, perNodeRunRows: v ?? 50_000 },
             })
           }
-          min={1000}
         />
       </Field>
       <Field
@@ -863,7 +862,8 @@ export function GcTab({ config }: TabProps) {
         required
         hint={t('settingsForm.archiveGlobalHint')}
       >
-        <NumberInput
+        <SettingsNumberInput
+          setting="eventsArchiveThresholds.globalRows"
           value={thresholds?.globalRows}
           onChange={(v) =>
             setState({
@@ -871,7 +871,6 @@ export function GcTab({ config }: TabProps) {
               eventsArchiveThresholds: { ...thresholds!, globalRows: v ?? 1_000_000 },
             })
           }
-          min={10_000}
         />
       </Field>
       {/* RFC-261 (D9') — webhook 投递保留天数（保存门校验 body ≤ row；GC 每小时
@@ -882,12 +881,10 @@ export function GcTab({ config }: TabProps) {
           required
           hint={t('settingsForm.webhookBodyRetentionHint')}
         >
-          <NumberInput
+          <SettingsNumberInput
+            setting="webhookDeliveryBodyRetentionDays"
             value={state.webhookDeliveryBodyRetentionDays}
             onChange={(v) => setState({ ...state, webhookDeliveryBodyRetentionDays: v ?? 30 })}
-            min={1}
-            max={3650}
-            unit="days"
             data-testid="settings-webhook-body-retention"
           />
         </Field>
@@ -896,12 +893,10 @@ export function GcTab({ config }: TabProps) {
           required
           hint={t('settingsForm.webhookRowRetentionHint')}
         >
-          <NumberInput
+          <SettingsNumberInput
+            setting="webhookDeliveryRowRetentionDays"
             value={state.webhookDeliveryRowRetentionDays}
             onChange={(v) => setState({ ...state, webhookDeliveryRowRetentionDays: v ?? 90 })}
-            min={1}
-            max={3650}
-            unit="days"
             data-testid="settings-webhook-row-retention"
           />
         </Field>
@@ -1139,15 +1134,14 @@ export function NetworkTab({ config }: TabProps) {
       </Field>
       <div>
         <Field label={t('settingsForm.bindPort')} hint={t('settingsForm.bindPortHint')}>
-          <NumberInput
+          <SettingsNumberInput
+            setting="bindPort"
             value={state.bindPort}
             onChange={(v) => setState({ ...state, bindPort: v ?? 0 })}
             placeholder={
               state.bindPort == null && effective != null ? String(effective.port) : undefined
             }
             data-testid="settings-bind-port"
-            min={0}
-            max={65535}
           />
         </Field>
         {(state.bindPort == null || state.bindPort === 0) && effective != null && (
@@ -1403,23 +1397,20 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               label={t('settingsForm.commitPushMaxRepairRetries')}
               hint={t('settingsForm.commitPushMaxRepairRetriesHint')}
             >
-              <NumberInput
+              <SettingsNumberInput
+                setting="commitPushMaxRepairRetries"
                 value={state.commitPushMaxRepairRetries}
                 onChange={(v) => setState({ ...state, commitPushMaxRepairRetries: v })}
-                min={0}
-                max={10}
               />
             </Field>
             <Field
               label={t('settingsForm.commitPushDiffMaxBytes')}
               hint={t('settingsForm.commitPushDiffMaxBytesHint')}
             >
-              <NumberInput
+              <SettingsNumberInput
+                setting="commitPushDiffMaxBytes"
                 value={state.commitPushDiffMaxBytes}
                 onChange={(v) => setState({ ...state, commitPushDiffMaxBytes: v })}
-                min={0}
-                max={262144}
-                unit="bytes"
               />
             </Field>
           </div>
@@ -1546,12 +1537,10 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               label={t('settings.systemAgents.intentTimeout')}
               hint={t('settings.systemAgents.intentTimeoutHint')}
             >
-              <NumberInput
+              <SettingsNumberInput
+                setting="intentBuilderTurnTimeoutMs"
                 value={state.intentBuilderTurnTimeoutMs ?? undefined}
                 onChange={(v) => setState({ ...state, intentBuilderTurnTimeoutMs: v })}
-                min={30000}
-                max={3600000}
-                unit="ms"
                 placeholder="600000"
               />
             </Field>
@@ -1559,11 +1548,10 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               label={t('settings.systemAgents.intentRounds')}
               hint={t('settings.systemAgents.intentRoundsHint')}
             >
-              <NumberInput
+              <SettingsNumberInput
+                setting="intentBuilderMaxGenerateRounds"
                 value={state.intentBuilderMaxGenerateRounds ?? undefined}
                 onChange={(v) => setState({ ...state, intentBuilderMaxGenerateRounds: v })}
-                min={1}
-                max={500}
                 placeholder="50"
               />
             </Field>

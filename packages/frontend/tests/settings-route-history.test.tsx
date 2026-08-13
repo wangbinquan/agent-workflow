@@ -151,6 +151,25 @@ afterEach(() => {
 })
 
 describe('/settings rendered URL-backed tabs', () => {
+  test('a directly typed value above the shared max is inline-invalid and cannot be saved', async () => {
+    const fetchSpy = installFetch(() => undefined)
+    renderSettingsRoute(['/settings?tab=limits'], { config: DEFAULT_CONFIG })
+
+    await waitFor(() => expectActivePanel('limits'))
+    const panel = within(activePanel('limits'))
+    const timeout = panel.getAllByRole('spinbutton')[2] as HTMLInputElement
+    fireEvent.change(timeout, { target: { value: '2147483648' } })
+
+    await waitFor(() => {
+      expect(timeout.getAttribute('aria-invalid')).toBe('true')
+      expect(panel.getByRole('alert').textContent).toContain('2147483647')
+      expect((panel.getByRole('button', { name: /保存|Save/ }) as HTMLButtonElement).disabled).toBe(
+        true,
+      )
+    })
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
   test('a Config draft survives active-panel unmount and browser tab history', async () => {
     installFetch(() => undefined)
     const { router } = renderSettingsRoute(['/settings?tab=limits&focus=keep'], {

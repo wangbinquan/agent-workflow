@@ -1476,6 +1476,9 @@ export interface Resources {
     save: string
     noChanges: string
     invalidChanges: string
+    numericOutOfRange: string
+    numericDecimalOutOfRange: string
+    numericRangeZeroOr: string
     outcomeUnknown: string
     outcomeUnknownBody: string
     outcomeUnknownReconcile: string
@@ -1841,6 +1844,7 @@ export interface Resources {
       jumpActionAria: string
     }
     range: string
+    rangeZeroOr: string
     rangeMaxOnly: string
     rangeConverted: string
     done: string
@@ -4624,6 +4628,7 @@ export interface Resources {
     multiProcessConc: string
     multiProcessConcHint: string
     logLevel: string
+    logLevelHint: string
     perTaskDuration: string
     perTaskTokens: string
     perNodeTimeout: string
@@ -4639,6 +4644,7 @@ export interface Resources {
     maxAutoRecoveriesPerWindow: string
     autoRecoveryWindowMs: string
     periodicOrphanReconcileMs: string
+    periodicOrphanReconcileHint: string
     zeroDisabled: string
     largeOutputThreshold: string
     zeroUnlimited: string
@@ -4655,7 +4661,9 @@ export interface Resources {
     submoduleAutoRefresh: string
     submoduleAutoRefreshHint: string
     submoduleRefreshIntervalMs: string
+    submoduleRefreshIntervalHint: string
     submoduleOnlyRecentDays: string
+    submoduleOnlyRecentDaysHint: string
     autoGcHint: string
     olderThanDays: string
     onlyMerged: string
@@ -6923,6 +6931,9 @@ export const zhCN: Resources = {
     save: '保存',
     noChanges: '没有需要保存的更改',
     invalidChanges: '请先修正当前分区中的无效值',
+    numericOutOfRange: '请输入 {{min}} 到 {{max}} 之间的整数',
+    numericDecimalOutOfRange: '请输入 {{min}} 到 {{max}} 之间的数值',
+    numericRangeZeroOr: '请输入 0，或 {{min}} 到 {{max}} 之间的整数',
     outcomeUnknown: '上次保存结果尚未确认，请等待服务器核对',
     outcomeUnknownBody:
       '无法确认上次保存是否已生效。重新核对只会读取当前服务器值，不会盲目重复写入。',
@@ -7361,6 +7372,7 @@ export const zhCN: Resources = {
       jumpActionAria: '跳转到该页',
     },
     range: '范围 {{min}} – {{max}}',
+    rangeZeroOr: '允许 0，或范围 {{min}} – {{max}}',
     rangeMaxOnly: '最大 {{max}}',
     rangeConverted: '{{range}}（{{converted}}）',
     done: '完成',
@@ -10672,6 +10684,7 @@ export const zhCN: Resources = {
     multiProcessConcHint:
       '单个任务内分片扇出同时运行的分片数上限，套在 agent 池之内再收一道 —— 实际并行度 = min(agent 池剩余名额, 本值)。脚本节点不能进分片扇出，不受本项影响。保存后立即生效，含正在运行的任务。默认 4。',
     logLevel: '日志级别',
+    logLevelHint: '保存后立即调整当前 daemon 的日志级别。',
     perTaskDuration: '单 task 最大时长 (ms)',
     perTaskTokens: '单 task 最大 token 数',
     perNodeTimeout: '单节点超时 (ms)',
@@ -10690,6 +10703,7 @@ export const zhCN: Resources = {
     maxAutoRecoveriesPerWindow: '熔断：每窗口最大自动恢复次数',
     autoRecoveryWindowMs: '熔断：滚动窗口 (ms)',
     periodicOrphanReconcileMs: '周期孤儿回收间隔 (ms)',
+    periodicOrphanReconcileHint: '0 表示关闭；保存后立即停止或按新周期重新计时。',
     zeroDisabled: '0 表示禁用',
     largeOutputThreshold: '大输出阈值 (bytes)',
     zeroUnlimited: '0 = 无限制。',
@@ -10709,7 +10723,9 @@ export const zhCN: Resources = {
     submoduleAutoRefreshHint:
       '定期对最近用过的缓存仓跑 fetch + submodule 同步，不必等到起任务或手动刷新。',
     submoduleRefreshIntervalMs: '刷新间隔（毫秒）',
+    submoduleRefreshIntervalHint: '保存后立即按新周期重新计时；正在执行的一轮不会被中断。',
     submoduleOnlyRecentDays: '只刷最近多少天用过的仓',
+    submoduleOnlyRecentDaysHint: '下一轮扫描开始使用新窗口。',
     autoGcHint: '后台周期性任务；v1 默认关闭也无碍。',
     olderThanDays: 'GC 时间窗（天）',
     onlyMerged: '仅 GC 已合并分支',

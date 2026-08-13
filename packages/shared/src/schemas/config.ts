@@ -3,6 +3,16 @@
 // backfilled by the backend on load.
 
 import { z } from 'zod'
+import { SETTINGS_NUMERIC_BOUNDS, type SettingsNumericPath } from '../settingsNumericBounds'
+
+function boundedSettingsInteger(path: SettingsNumericPath) {
+  const bound = SETTINGS_NUMERIC_BOUNDS[path]
+  const schema = z.number().int().min(bound.min).max(bound.max)
+  if (!('positiveMin' in bound)) return schema
+  return schema.refine((value) => value === 0 || value >= bound.positiveMin, {
+    message: `must be 0 or at least ${bound.positiveMin}`,
+  })
+}
 
 export const CONFIG_SCHEMA_VERSION = 1
 
@@ -33,14 +43,9 @@ export const EventsArchiveThresholdsSchema = z.object({
 export const SubmoduleAutoRefreshSchema = z.object({
   enabled: z.boolean(),
   /** Default 6h. Clamped to [1min, 7d]. */
-  intervalMs: z
-    .number()
-    .int()
-    .min(60_000)
-    .max(7 * 24 * 3600_000)
-    .optional(),
+  intervalMs: boundedSettingsInteger('submoduleAutoRefresh.intervalMs').optional(),
   /** Only refresh repos referenced by a task within this many days. Default 30. */
-  onlyRecentDays: z.number().int().min(1).max(3650).optional(),
+  onlyRecentDays: boundedSettingsInteger('submoduleAutoRefresh.onlyRecentDays').optional(),
 })
 
 /** RFC-020: caps applied to multipart launcher uploads. */
@@ -634,6 +639,50 @@ export const ConfigPatchSchema = ConfigSchema.partial()
   // and the pick could never revert zh-CN to Default. The base ConfigSchema keeps
   // them `LanguageSchema.optional()` (no null); null is patch-only = delete.
   .extend({
+    defaultPerTaskMaxDurationMs: boundedSettingsInteger('defaultPerTaskMaxDurationMs').optional(),
+    defaultPerTaskMaxTotalTokens: boundedSettingsInteger('defaultPerTaskMaxTotalTokens').optional(),
+    defaultPerNodeTimeoutMs: boundedSettingsInteger('defaultPerNodeTimeoutMs').optional(),
+    defaultNodeRetries: boundedSettingsInteger('defaultNodeRetries').optional(),
+    largeOutputThresholdBytes: boundedSettingsInteger('largeOutputThresholdBytes').optional(),
+    maxConcurrentNodes: boundedSettingsInteger('maxConcurrentNodes').optional(),
+    maxConcurrentScriptNodes: boundedSettingsInteger('maxConcurrentScriptNodes').optional(),
+    multiProcessSubprocessConcurrency: boundedSettingsInteger(
+      'multiProcessSubprocessConcurrency',
+    ).optional(),
+    heartbeatStallMs: boundedSettingsInteger('heartbeatStallMs').optional(),
+    maxAutoRecoveriesPerWindow: boundedSettingsInteger('maxAutoRecoveriesPerWindow').optional(),
+    autoRecoveryWindowMs: boundedSettingsInteger('autoRecoveryWindowMs').optional(),
+    periodicOrphanReconcileMs: boundedSettingsInteger('periodicOrphanReconcileMs').optional(),
+    gitSubmoduleJobs: boundedSettingsInteger('gitSubmoduleJobs').optional(),
+    submoduleAutoRefresh: z
+      .object({
+        enabled: z.boolean(),
+        intervalMs: boundedSettingsInteger('submoduleAutoRefresh.intervalMs').optional(),
+        onlyRecentDays: boundedSettingsInteger('submoduleAutoRefresh.onlyRecentDays').optional(),
+      })
+      .optional(),
+    worktreeAutoGc: z
+      .object({
+        enabled: z.boolean(),
+        olderThanDays: boundedSettingsInteger('worktreeAutoGc.olderThanDays').optional(),
+        onlyMerged: z.boolean().optional(),
+      })
+      .optional(),
+    eventsArchiveThresholds: z
+      .object({
+        perNodeRunRows: boundedSettingsInteger('eventsArchiveThresholds.perNodeRunRows'),
+        globalRows: boundedSettingsInteger('eventsArchiveThresholds.globalRows'),
+      })
+      .optional(),
+    webhookDeliveryBodyRetentionDays: boundedSettingsInteger(
+      'webhookDeliveryBodyRetentionDays',
+    ).optional(),
+    webhookDeliveryRowRetentionDays: boundedSettingsInteger(
+      'webhookDeliveryRowRetentionDays',
+    ).optional(),
+    bindPort: boundedSettingsInteger('bindPort').optional(),
+    commitPushMaxRepairRetries: boundedSettingsInteger('commitPushMaxRepairRetries').optional(),
+    commitPushDiffMaxBytes: boundedSettingsInteger('commitPushDiffMaxBytes').optional(),
     memoryDistillRuntime: z.string().min(1).nullable().optional(),
     changeNarrativeRuntime: z.string().min(1).nullable().optional(),
     commitPushRuntime: z.string().min(1).nullable().optional(),
@@ -648,7 +697,9 @@ export const ConfigPatchSchema = ConfigSchema.partial()
     // and optional knobs (base ConfigSchema stays non-null).
     intentBuilderRuntime: z.string().min(1).nullable().optional(),
     intentBuilderLang: LanguageSchema.nullable().optional(),
-    intentBuilderTurnTimeoutMs: z.number().int().min(30_000).max(3_600_000).nullable().optional(),
+    intentBuilderTurnTimeoutMs: boundedSettingsInteger('intentBuilderTurnTimeoutMs')
+      .nullable()
+      .optional(),
     intentBuilderStdoutCapBytes: z
       .number()
       .int()
@@ -656,7 +707,9 @@ export const ConfigPatchSchema = ConfigSchema.partial()
       .max(16 * 1024 * 1024)
       .nullable()
       .optional(),
-    intentBuilderMaxGenerateRounds: z.number().int().min(1).max(500).nullable().optional(),
+    intentBuilderMaxGenerateRounds: boundedSettingsInteger('intentBuilderMaxGenerateRounds')
+      .nullable()
+      .optional(),
     intentBuilderMaxQuestionRounds: z.number().int().min(0).max(50).nullable().optional(),
     intentBuilderScratchRetentionHours: z
       .number()

@@ -28,6 +28,7 @@ import { autoResumeInterruptedTasks } from '@/services/autoResume'
 import { startAutoRepairLoop } from '@/services/autoRepair'
 import { startHeartbeatKillLoop } from '@/services/autoKill'
 import { startOrphanReconcileLoop } from '@/services/orphanReconcile'
+import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import { resumeTask } from '@/services/task'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
@@ -717,6 +718,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     undefined,
     Paths.root,
   )
+  const unregisterSubmoduleRefreshConfig = registerConfigAppliedListener(Paths.config, () => {
+    submoduleRefreshTicker.reconfigure()
+  })
   const batchImportCfg = loadConfig(Paths.config)
   const batchImportGcTicker = startBatchImportGc(
     undefined,
@@ -973,6 +977,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     backupTicker.stop()
     walCheckpointTicker.stop()
     submoduleRefreshTicker.stop()
+    unregisterSubmoduleRefreshConfig()
     batchImportGcTicker.stop()
     pluginGenerationGcTicker.stop()
     memoryDistillTicker.stop()

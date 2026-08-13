@@ -17,6 +17,8 @@ import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { resizeAllNodePools } from '@/services/processNodeConcurrency'
 import { resizeAllTaskFanoutSems } from '@/services/taskFanoutPools'
 import { Paths } from '@/util/paths'
+import { notifyConfigApplied } from '@/services/configAppliedListeners'
+import { configureLogger } from '@/util/log'
 
 export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
   const runtimeTests = getMcpRuntimeTestService({
@@ -104,6 +106,10 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         // change (a log level, a theme) would silently corrupt every gateway
         // credential on the box.
         const updated = applyConfigPatch(deps.configPath, body)
+        notifyConfigApplied(deps.configPath, updated)
+        if (updated.logLevel !== currentConfig.logLevel) {
+          configureLogger({ level: updated.logLevel })
+        }
         await runtimeTests.reconcileDurableIntents()
         // RFC-266 linearization point for the concurrency pools. Semaphore
         // supports live resize (growing drains the FIFO so queued nodes start

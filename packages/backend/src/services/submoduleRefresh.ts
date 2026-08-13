@@ -16,6 +16,7 @@ import type { DbClient } from '@/db/client'
 import { cachedRepos } from '@/db/schema'
 import { refreshCachedRepo } from '@/services/gitRepoCache'
 import { createLogger } from '@/util/log'
+import { createManagedPeriodicJob } from '@/services/managedPeriodicJob'
 
 const log = createLogger('submodule-refresh')
 
@@ -148,21 +149,26 @@ export function startSubmoduleRefreshLoop(
   loadConfig: () => RefreshConfig,
   intervalMs: number = HOUR_MS,
   appHome?: string,
-): { stop: () => void } {
-  let running = false
-  const handle = setInterval(() => {
-    if (running) return
-    running = true
-    refreshDueRepos(db, loadConfig(), appHome !== undefined ? { appHome } : {})
-      .catch((err: unknown) => {
-        log.error('submodule auto-refresh tick failed', {
-          error: err instanceof Error ? err.message : String(err),
-        })
+): { stop: () => void; reconfigure: () => boolean } {
+  const job = createManagedPeriodicJob({
+    run: async () => {
+      await refreshDueRepos(db, loadConfig(), appHome !== undefined ? { appHome } : {})
+    },
+    minPositiveMs: intervalMs < 60_000 ? 1 : 60_000,
+    onInvalid: (value) => log.error('submodule refresh interval invalid; loop disabled', { value }),
+    onError: (err) => {
+      log.error('submodule auto-refresh tick failed', {
+        error: err instanceof Error ? err.message : String(err),
       })
-      .finally(() => {
-        running = false
-      })
-  }, intervalMs)
-  handle.unref?.()
-  return { stop: () => clearInterval(handle) }
+    },
+  })
+  const reconfigure = (): boolean => {
+    const refresh = loadConfig().submoduleAutoRefresh
+    if (refresh?.enabled === false) return job.reconfigure(0)
+    const configured = refresh?.intervalMs ?? DEFAULT_REFRESH_INTERVAL_MS
+    return job.reconfigure(Math.min(configured, HOUR_MS))
+  }
+  if (intervalMs === HOUR_MS) reconfigure()
+  else job.reconfigure(intervalMs)
+  return { stop: job.stop, reconfigure }
 }

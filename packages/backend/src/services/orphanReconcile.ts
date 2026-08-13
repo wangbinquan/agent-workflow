@@ -56,6 +56,8 @@ import { createLogger } from '@/util/log'
 import { WorkflowDefinitionSchema, migrateWorkflowDefinitionToLatest } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { DAEMON_CADENCE } from './daemonCadence'
+import { registerConfigAppliedListener } from './configAppliedListeners'
+import { createManagedPeriodicJob } from './managedPeriodicJob'
 
 const log = createLogger('orphan-reconcile')
 
@@ -332,6 +334,7 @@ async function loadTaskDefinition(
 
 export interface OrphanReconcileLoopHandle {
   stop: () => void
+  reconfigure: (intervalMs: unknown) => boolean
 }
 
 /** Periodic reconciler ticker. `periodicOrphanReconcileMs <= 0` disables it. */
@@ -341,19 +344,13 @@ export function startOrphanReconcileLoop(opts: {
   graceMs?: number
 }): OrphanReconcileLoopHandle {
   const graceMs = opts.graceMs ?? 60_000
-  let inFlight = false
-  let timer: ReturnType<typeof setInterval> | null = null
   const tick = async (): Promise<void> => {
-    if (inFlight) return
-    inFlight = true
     try {
       await reconcileDeadRunningRuns({ db: opts.db, graceMs })
     } catch (err) {
       log.warn('orphan reconcile tick failed', {
         error: err instanceof Error ? err.message : String(err),
       })
-    } finally {
-      inFlight = false
     }
   }
   let intervalMs = DAEMON_CADENCE.orphanReconcile
@@ -363,13 +360,24 @@ export function startOrphanReconcileLoop(opts: {
   } catch {
     // unreadable config → default cadence
   }
-  if (intervalMs > 0) {
-    timer = setInterval(() => void tick(), intervalMs)
-    ;(timer as { unref?: () => void }).unref?.()
-  }
+  const job = createManagedPeriodicJob({
+    run: tick,
+    minPositiveMs: 60_000,
+    onInvalid: (value) => log.error('orphan reconcile interval invalid; loop disabled', { value }),
+    onError: (error) =>
+      log.warn('orphan reconcile job failed', {
+        error: error instanceof Error ? error.message : String(error),
+      }),
+  })
+  job.reconfigure(intervalMs)
+  const unregister = registerConfigAppliedListener(opts.configPath, (config) => {
+    job.reconfigure(config.periodicOrphanReconcileMs)
+  })
   return {
+    reconfigure: job.reconfigure,
     stop: () => {
-      if (timer !== null) clearInterval(timer)
+      unregister()
+      job.stop()
     },
   }
 }
