@@ -14442,6 +14442,22 @@ mark.prior-comment-anchor[data-active='true'] {
 .inventory-table--plugins col.col-source {
   width: 25%;
 }
+/* RFC-297: 清单表改为按 driver 表态选列后，列集不再是固定四列——上面那些
+   per-face 百分比在 opencode 全列时继续生效（视觉与之前一致），这里补两处
+   动态化带来的空缺：
+   · 来源对账是新列，跨所有面同宽；
+   · plugins 面的首列现在与其它面一样叫 col-name（通用表的第一列固定是名字，
+     插件的 specifier 即其名字），沿用原 col-specifier 的 75%。
+   列被隐藏时百分比总和不足 100%，浏览器会按比例归一化，无需逐组合写死。 */
+.inventory-table col.col-provenance {
+  width: 16%;
+}
+.inventory-table--plugins col.col-name {
+  width: 75%;
+}
+.inventory-table--tools col.col-name {
+  width: 100%;
+}
 .status-badge {
   display: inline-block;
   padding: 1px 6px;
@@ -24045,6 +24061,167 @@ button.status-chip {
 
 .template-var-chips__chip {
   font-family: var(--font-mono);
+}
+
+/* RFC-295 — one field-adjacent action replaces always-visible token walls. */
+.runtime-parameter-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.runtime-parameter-picker__trigger {
+  min-height: 36px;
+}
+
+.runtime-parameter-picker__mode-hint,
+.runtime-parameter-picker__error {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.4;
+}
+
+.runtime-parameter-picker__error {
+  color: var(--danger);
+  flex-basis: 100%;
+}
+
+.runtime-parameter-popover {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  z-index: 1250;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.18));
+}
+
+.runtime-parameter-popover__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+  padding: var(--space-2);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.runtime-parameter-popover__search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.runtime-parameter-popover__back {
+  flex: 0 0 auto;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+.runtime-parameter-popover__breadcrumb,
+.runtime-parameter-popover__result-path {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.35;
+}
+
+.runtime-parameter-popover__breadcrumb {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.runtime-parameter-popover__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 4px 4px;
+}
+
+.runtime-parameter-popover__option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.runtime-parameter-popover__option:hover,
+.runtime-parameter-popover__option--active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.runtime-parameter-popover__option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.runtime-parameter-popover__option-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.runtime-parameter-popover__option-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.runtime-parameter-popover__token {
+  flex-shrink: 1;
+  overflow-wrap: anywhere;
+  color: var(--accent);
+  font-size: var(--font-xs);
+  text-align: right;
+}
+
+.runtime-parameter-popover__branch-count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.runtime-parameter-popover__description {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.4;
+}
+
+.runtime-parameter-popover__empty {
+  padding: var(--space-4);
+  color: var(--muted);
+  font-size: var(--font-sm);
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .runtime-parameter-popover__option-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .runtime-parameter-popover__token {
+    text-align: left;
+  }
 }
 
 .webhook-facts {
