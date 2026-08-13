@@ -54,8 +54,15 @@ describe('RFC-066 PR-B — source guards', () => {
     // every dispatch, now through the iso-creation seam. Anchor on both ends.
     const canonMatches = SCHEDULER_SRC.match(/canonRepos: state\.repos/g) ?? []
     expect(canonMatches.length).toBeGreaterThanOrEqual(3)
-    const isoRepoThreads = SCHEDULER_SRC.match(/(isoHandle|shardIso|aggIso)\.repos\.map\(/g) ?? []
+    // RFC-287 T3/T4：两条 fanout 线迁入装配骨架后，句柄在钩子内以局部 `iso` 承接
+    // （`const iso = shardIso as IsoHandle`），故变量名不再是 shardIso/aggIso。
+    // 本条锁的不变量没变——派发线的 templateMeta 仍**只**来自 iso 句柄派生的 repos，
+    // 绝不回退到直接摊 state.repos——所以把匹配面放宽到「任一 iso 句柄变量」，
+    // 同时补一条反向锁：templateMeta 里不得直接出现 state.repos.map。
+    const isoRepoThreads =
+      SCHEDULER_SRC.match(/(isoHandle|shardIso|aggIso|iso)\.repos\.map\(/g) ?? []
     expect(isoRepoThreads.length).toBeGreaterThanOrEqual(3)
+    expect(SCHEDULER_SRC).not.toMatch(/templateMeta:[\s\S]{0,400}state\.repos\.map\(/)
   })
 
   test('PB-G3 runner cwd is opts.worktreePath at the spawn site exactly', () => {
