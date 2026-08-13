@@ -24,7 +24,6 @@ import {
   StartupVerificationRecordSchema,
   assembleFace,
   type DeclaredInjectionManifest,
-  type InventoryFace,
   type InventoryFaces,
   type InventoryReasonCode,
   type InventorySnapshotCaptured,
@@ -113,7 +112,10 @@ export function assembleFaces(
   for (const face of INVENTORY_FACES) {
     const items = observed[face]
     if (items === undefined) continue
-    faces[face] = assembleFace(items, declared === null ? null : declaredNamesForFace(declared, face))
+    faces[face] = assembleFace(
+      items,
+      declared === null ? null : declaredNamesForFace(declared, face),
+    )
   }
   return faces
 }

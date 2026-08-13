@@ -198,7 +198,6 @@ describe('AC-10 单次解析（本 RFC 的核心收益，必须有锁）', () =>
     const original = JSON.parse
     let calls = 0
     try {
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       JSON.parse = ((text: string, reviver?: never) => {
         calls += 1
         return original(text, reviver)
