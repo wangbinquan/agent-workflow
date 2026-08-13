@@ -293,6 +293,10 @@ export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Pr
           if (line.trim().length === 0) continue
           const ev = parseEvent(line)
           if (ev === null) continue
+          // RFC-297 T5: `startup_inventory` 是只由 `drainFinalEvents()` 铸造的
+          // 合成 kind——transcript 行解析不出它，`node_run_events.kind` 也没有
+          // 这个 enum 值。这条守卫把「不可能」变成编译器可核的事实。
+          if (ev.kind === 'startup_inventory') continue
           rows.push({
             nodeRunId: opts.nodeRunId,
             ts: ev.timestamp ?? Date.now(),

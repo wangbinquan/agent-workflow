@@ -80,7 +80,12 @@ import {
   type RuntimeProfile,
 } from '@/services/runtimeRegistry'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
-import type { AgentSpawnPlan, ResolvedSkill, StartupInventory } from './runtime/types'
+import type {
+  AgentSpawnPlan,
+  PersistedEventKind,
+  ResolvedSkill,
+  StartupInventory,
+} from './runtime/types'
 import { EMPTY_RUNTIME_PROFILE } from './execution/agentInjection'
 import {
   declaredHasContent,
@@ -1347,11 +1352,15 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // parent_session_id=null so the SessionTab parser can bucket parent
         // events against post-run captured child events without ambiguity.
         const evtSessionId = ev.sessionId ?? sessionId ?? null
+        // RFC-297 T5: `startup_inventory` 只由 `drainFinalEvents()` 铸造，任何
+        // stdout 行都解析不出它，而 `node_run_events.kind` 的 enum 里也没有它。
+        // 读进局部常量是必要的：`kind` 是可变属性，窄化跨不进下面的延迟回调。
+        const persistedKind: PersistedEventKind = ev.kind === 'startup_inventory' ? 'text' : ev.kind
         await persistRunnerWrite('node-run-event/stdout', () =>
           opts.db.insert(nodeRunEvents).values({
             nodeRunId: opts.nodeRunId,
             ts,
-            kind: ev.kind,
+            kind: persistedKind,
             payload: ev.rawLine,
             sessionId: evtSessionId,
             parentSessionId: null,

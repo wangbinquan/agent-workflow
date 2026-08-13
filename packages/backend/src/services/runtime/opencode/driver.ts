@@ -11,6 +11,7 @@ import type {
   AgentSpawnPlan,
   BusinessNodeSpawnContext,
   DistillSessionCaptureContext,
+  FinalEventContext,
   InventoryReadContext,
   NormalizedEvent,
   ProbeOpts,
@@ -35,6 +36,8 @@ import {
   weaveMemoryBlock,
 } from '@/services/execution/agentInjection'
 import type { InventorySnapshot } from '@agent-workflow/shared'
+import { isAgentNodeKind } from '@agent-workflow/shared'
+import { inventoryFacesFromSnapshot } from './inventory'
 import type { LivePollOptions, LivePollerHandle } from './subagentLiveCapture'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -439,6 +442,38 @@ export const opencodeDriver: RuntimeDriver = {
       nodeKind: ctx.nodeKind,
       pureMode: process.env.OPENCODE_PURE === '1' || process.env.OPENCODE_PURE === 'true',
     })
+  },
+  /**
+   * RFC-297 T8 —— opencode 的清单不在 stdout 流里，而在子进程退出后的 dump 文件
+   * 里。这里把它读出来**补发成一个普通事件**，于是下游 stage 无从分辨某份观测
+   * 是来自流内一行还是来自一个文件——这正是「event 来源统一」的落点。
+   *
+   * 两道业务门在此，不再由调用方传布尔值进来（`wantsInventory` 的老路）：
+   *  · 复用了既有会话的 followup 里，dump 插件根本没重跑，读它只会得到上一轮的
+   *    陈旧文件或一个 file-missing 桩；
+   *  · 非 agent 节点压根不注入插件。
+   * 「本运行时的观测何时可能存在」本来就只有它自己知道。
+   */
+  async drainFinalEvents(ctx: FinalEventContext): Promise<readonly NormalizedEvent[]> {
+    if (!ctx.freshRun || !isAgentNodeKind(ctx.nodeKind)) return []
+    const snapshot = await readSnapshotFromRunDir({
+      runDir: ctx.runRoot,
+      nodeKind: ctx.nodeKind,
+      pureMode: process.env.OPENCODE_PURE === '1' || process.env.OPENCODE_PURE === 'true',
+    })
+    // 失败形态（插件没写文件 / 文件坏了 / pure 模式）不在这里合成事件：那些
+    // reason 的分类与呈现归读端，事件流只承载「真的观测到了什么」。
+    if (!snapshot.captured) return []
+    return [
+      {
+        kind: 'startup_inventory',
+        // 合成事件没有原文行；载荷有自己的归宿，不进 node_run_events。
+        rawLine: '',
+        persist: false,
+        timestamp: snapshot.capturedAt,
+        data: { inventory: { faces: inventoryFacesFromSnapshot(snapshot) } },
+      },
+    ]
   },
   startLiveCapture(ctx: LivePollOptions): LivePollerHandle {
     return startLiveSubagentCapture(ctx)

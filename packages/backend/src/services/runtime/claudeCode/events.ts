@@ -29,6 +29,7 @@
 //
 // Leaf module: imports ONLY runtime types → no module-init cycle.
 
+import type { ObservedInventoryFaces, ObservedInventoryItem } from '@agent-workflow/shared'
 import type {
   NormalizedEvent,
   NormalizedEventKind,
@@ -112,12 +113,17 @@ export function parseEvent(line: string): NormalizedEvent | null {
 
   const contentParts = extractContentParts(evt)
   const text = concatText(contentParts)
+  // RFC-297 T9 —— 清单载荷挂在**既有**事件上，不另起一个事件：这一行今天已经
+  // 是结构化事件（kind `step_start`）且是根会话身份的观测点，改判 kind 会同时
+  // 动落库与 session 认领两处高价值既有行为。
+  const inventory = inventoryFacesFromInitEvent(evt)
 
   return {
     kind: inferKind(type, contentParts),
     text,
     sessionId,
     conversationReset,
+    ...(inventory === undefined ? {} : { data: { inventory: { faces: inventory } } }),
     // Transcript JSONL lines (and stream user rows) carry an ISO `timestamp`;
     // assistant stream events don't — the pump falls back to now for those.
     timestamp: extractTimestamp(evt),
@@ -160,6 +166,61 @@ export function parseUnusableMcpServers(line: string): readonly string[] | null 
     unusable.push(row.name)
   }
   return unusable
+}
+
+/**
+ * RFC-297 T9 —— 从**已解析**的 init 事件取出统一形状的清单载荷。
+ *
+ * 关键在「已解析」：同一行 stdout 今天被解析三遍（`parseEvent` 一遍、
+ * `parseUnusableMcpServers` 一遍、`parseStartupInventory` 再一遍），三处各自
+ * `JSON.parse` 又各自判 `type==='system' && subtype==='init'`。本函数接收
+ * `parseEvent` 已经解析好的对象，于是三次并作一次。
+ *
+ * 只按名字报告——claude 的 init 不给 mode/model/path/description/type/hint，
+ * 这也正是其 driver declaration 把那些字段声明成 `unsupported` 的依据；MCP 额外
+ * 带 `status`（运行时原文，不在此收窄）。`plugins` 面缺席：claude 协议上没有
+ * 插件这个概念。
+ *
+ * 返回 undefined = 这个事件没有任何一个面（既不是 init，或 init 什么都没报），
+ * 与「报了一个空数组」严格区分：后者是真答案（运行时确实一个都没加载）。
+ */
+export function inventoryFacesFromInitEvent(
+  evt: Record<string, unknown>,
+): ObservedInventoryFaces | undefined {
+  if (evt.type !== 'system' || evt.subtype !== 'init') return undefined
+  const named = (value: unknown): ObservedInventoryItem[] | undefined =>
+    Array.isArray(value)
+      ? value
+          .filter((name): name is string => typeof name === 'string' && name.length > 0)
+          .map((name) => ({ key: name, name }))
+      : undefined
+  const faces: ObservedInventoryFaces = {}
+  const tools = named(evt.tools)
+  const agents = named(evt.agents)
+  const skills = named(evt.skills)
+  if (tools !== undefined) faces.tools = tools
+  if (agents !== undefined) faces.agents = agents
+  if (skills !== undefined) faces.skills = skills
+  if (Array.isArray(evt.mcp_servers)) {
+    const mcps: ObservedInventoryItem[] = []
+    for (const entry of evt.mcp_servers) {
+      if (!entry || typeof entry !== 'object') continue
+      const row = entry as Record<string, unknown>
+      if (typeof row.name !== 'string' || row.name.length === 0) continue
+      mcps.push({
+        key: row.name,
+        name: row.name,
+        status: typeof row.status === 'string' ? row.status : '',
+      })
+    }
+    faces.mcps = mcps
+  }
+  return faces.tools === undefined &&
+    faces.agents === undefined &&
+    faces.skills === undefined &&
+    faces.mcps === undefined
+    ? undefined
+    : faces
 }
 
 /**

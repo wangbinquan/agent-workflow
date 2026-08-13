@@ -135,6 +135,26 @@ export type NormalizedEventKind =
   | 'error'
   | 'step_start'
   | 'step_finish'
+  /**
+   * RFC-297 T5/T8 —— 一份运行时启动清单，由 `drainFinalEvents()` 在子进程退出后
+   * 以**合成事件**补发（opencode 在那里读它的 dump 文件）。它没有对应的 stdout
+   * 原文行，故自成一个 kind 且 `persist: false`。
+   *
+   * claude **不用**这个 kind：它的 `system/init` 本身已是结构化事件（kind
+   * `step_start`，且是根会话身份的观测点），清单只是挂在其 `data` 上——改判 kind
+   * 会同时动落库与 session 认领两处既有行为。
+   */
+  | 'startup_inventory'
+
+/**
+ * RFC-297 T5 —— 允许落 `node_run_events` 的 kind 子集。镜像该列的 enum
+ * （`db/schema.ts`），其中**刻意不含** `startup_inventory`：合成事件没有原文行，
+ * 其载荷的正式归宿是 `node_runs` 的清单列。
+ *
+ * 写成类型而不只是运行时的 `persist` 标志，是为了让「忘了过滤」在**编译期**报错，
+ * 而不是半夜被 DB 的约束拒绝。
+ */
+export type PersistedEventKind = Exclude<NormalizedEventKind, 'startup_inventory'>
 
 /**
  * One stdout line normalized into the runtime-agnostic shape the generic pump
