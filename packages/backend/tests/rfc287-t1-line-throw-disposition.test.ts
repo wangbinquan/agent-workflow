@@ -78,8 +78,12 @@ describe('RFC-287 T1⑨ — 抛出结局与 keep 分歧（拆分前现状）', (
   })
 
   test('③ keep 分歧：agent 线的 clarify-park 置 keepIso，工作组主机线不置', () => {
+    // RFC-287 T7：agent 线迁入骨架后，clarify 停靠是 mergePhase 上的 park 声明
+    // （跳合并 + keep），语义与迁移前的 `keepIso = true` 逐字一致。
     const agent = bodyOf('async function runOneNode(')
-    expect(agent).toMatch(/clarify !== undefined\) \{\s*\n\s*keepIso = true/)
+    expect(agent).toMatch(
+      /clarify !== undefined\) \{\s*\n\s*return \{ skip: 'park', keep: true, then: 'settle' \}/,
+    )
     // 工作组主机线的 clarify 分支直接 return，不置 keep（finally 无条件清理）。
     const host = bodyOf('async function runHostNode(')
     const clarifyIdx = host.indexOf('clarify')

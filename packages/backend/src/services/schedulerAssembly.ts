@@ -112,12 +112,27 @@ export interface AssemblySpec<TCtx, TOutcome, TResult> {
    * （同会话续跑必须在同一棵树上恢复，否则模型记忆与磁盘错配）；脚本线则**每次
    * 重试都换新树**（否则上一次的文件写入会与这一次叠加）。把任一方统一到另一方
    * 都是行为变更。
+   *
+   * **每次重试内的调用序是契约，不是实现细节**（由 rfc287-t2 骨架单测钉死）：
+   *
+   *     shouldRetry → keepIf →〔不留树时 discardIso + iso.create〕→ onNextAttempt → spawn
+   *
+   * agent 线依赖这个序：`keepIf` 里算出的 RFC-042 续跑决策被 memo 进闭包，
+   * `onNextAttempt`（铸行时决定要不要带 envelopeNonce、写哪种审计事件）与
+   * `spawn`（要不要发续跑短提示、带不带 resumeSessionId）随后各读一次。序一旦
+   * 变动，那三处会读到上一轮的决策——静默错，且只在重试路径上现形。
    */
   retryPolicy?: {
     /** 还要不要再来一次（收 spawn 结果与本次 attempt 序号，从 0 起）。 */
     shouldRetry(outcome: TOutcome, attempt: number): boolean
-    /** 重试前对 iso 的处置：'always-recreate' = 每次换新树；keepIf 为真则留用。 */
-    isoOnRetry: 'always-recreate' | { keepIf(outcome: TOutcome): boolean }
+    /**
+     * 重试前对 iso 的处置：'always-recreate' = 每次换新树；keepIf 为真则留用。
+     *
+     * `keepIf` **允许异步**（T7 迁移实证的契约缺口）：agent 线的留树判据就是
+     * RFC-042 的同会话续跑决策，而它要读上一次 attempt 的 text 事件计数与
+     * port 校验失败记录——同步签名根本接不住。返回布尔或布尔 Promise 均可。
+     */
+    isoOnRetry: 'always-recreate' | { keepIf(outcome: TOutcome): boolean | Promise<boolean> }
     /** 换树失败的处置（与「初始物化失败」是两种结局，不可合并）。 */
     onIsoRecreateFailure(err: unknown): TResult
     /** 每次重试前的副作用（逐 attempt 铸行、落基线、广播……逐线不同）。 */
@@ -182,7 +197,8 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
           )
         }
         if (spec.iso !== null && handle !== null) {
-          const keepTree = rp.isoOnRetry !== 'always-recreate' && rp.isoOnRetry.keepIf(outcome)
+          const keepTree =
+            rp.isoOnRetry !== 'always-recreate' && (await rp.isoOnRetry.keepIf(outcome))
           if (!keepTree) {
             // 换新树：先丢弃旧的，再物化一棵——顺序不可颠倒（否则两棵树同时在盘上，
             // 且旧树里的残留写入会被下一次合并带进主干）。

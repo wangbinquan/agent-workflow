@@ -180,3 +180,53 @@
 
 **剩余未迁**：只剩 agent 线（T7）。`rfc287-t1-discard-failure-paths` 的「完全没兜」现状条目
 与 `rfc208` 的直线取许可扫描，都只剩它一个消费者，T7 迁完即可一并收口。
+
+---
+
+## T7 实施记录（2026-08-13，已完成——五条线迁移到此收官）
+
+**形态**：模式 B。一次许可 + 一棵 iso 贯穿全部 attempt，窗口内由 `retryPolicy` 驱动 1..N 次
+spawn；D17 要求同会话续跑落在同一棵树上，正是 `isoOnRetry.keepIf` 的语义。
+
+**拆分手术切在哪**：窗口只到「合并相位收束」为止，**clarify 落库那段收尾留在窗口外**。
+现状顺序是「先释放许可 + 按 keep 清理 iso，再建 clarify 轮次」；把收尾挪进窗口会让
+daemon 级 agent 许可多握住一段 DB 写——那是行为变更不是重构。故 `TResult` 取判别式
+`{ kind: 'settled', out } | { kind: 'ran', result }`：窗口内已定局的直接回传，需要窗口外
+收尾的回 `'ran'`，窗口外那 120 行逐字未动。
+
+**又验出一处骨架契约缺口（第 4 处）**：`isoOnRetry.keepIf` 原为同步，而 agent 线的留树
+判据就是 RFC-042 续跑决策，它要读上一次 attempt 的 text 事件计数与 port 校验失败记录
+——**同步签名根本接不住**。改为允许返回 `boolean | Promise<boolean>`。
+
+同时把**每次重试内的调用序写成契约**并用骨架单测钉死：
+
+    shouldRetry → keepIf →〔不留树时 discardIso + iso.create〕→ onNextAttempt → spawn
+
+agent 线依赖它：`keepIf` 里算出的决策 memo 进闭包，`onNextAttempt`（铸行带不带
+envelopeNonce、写哪种审计事件）与 `spawn`（发不发续跑短提示、带不带 resumeSessionId）
+随后各读一次。序一变那三处就会读到上一轮的决策——静默错，且只在重试路径上现形。
+
+**TS 的一处真实限制**（值得记）：`lastResult` 是闭包上的 `let`，窗口内由 spawn / markMergeFailed
+改写，但 TS 的控制流分析**看不见闭包里的赋值**，于是窗口外把它收窄成 `never`。解法不是
+`as`：让 `settle` 把值随判别式带出来，窗口外 `lastResult = windowOut.result` 直线回填，
+控制流自然复位。
+
+**改锚 8 件**（全部变异实证过）：
+
+| 文件                                 | 变化                                                             |
+| ------------------------------------ | ---------------------------------------------------------------- |
+| `rfc287-t1-merge-disposition-matrix` | throw 列**翻面**：从「各线各写一份 keep+markMergeFailed」改为「谁都不许再自己写」；conflict 列改读 spec 声明 |
+| `rfc287-t1-line-throw-disposition`   | clarify 停靠改读 `skip:'park', keep:true`                        |
+| `rfc287-t1-discard-failure-paths`    | **翻面**：从「剩余未迁线仍是完全没兜」改为「scheduler.ts 里不得再有 finally-discard」 |
+| `rfc287-t1-release-before-discard`   | 下限降到 1（骨架那一处）并注明**永不再降**——再降就是关锁         |
+| `rfc208` oracle #1                   | 扫描面并入骨架（scheduler.ts 已无此形状的 finally）              |
+| `rfc210-publish-failure-hard-fails`  | agent 线改锁「走骨架默认处置」：声明 markMergeFailed 钩子且无 onThrow 覆写 |
+| `rfc122-clarify-directive-dispatch`  | 「循环体内」等价改写为「`runOneAttempt` 体内」+ 反向禁其落在窗口外前奏 |
+| `rfc188` 计数棘轮                    | `createIsoUnderLock` 8→7：首建与 fresh-session 重建收进同一个 `iso.create` 闭包（**站点合并，不是覆盖变少**） |
+
+**核实过、因而没有动骨架的一处**：模式 B 在「换树失败」路径上不走 `keepFromOutcome`，
+看似会丢掉 processUnreaped 那一维；但 `shouldRetryNodeFailure` 里 `processUnreaped ⇒ return false`
+（`scheduler.ts:1593`），该组合在 agent 线**不可达**。为不可达路径改骨架属于臆测，不做。
+
+**至此 G1 达成**：五条装配线（L1 工作组主机 / L4 agent / L5 分片 / L6 聚合 / L7 脚本）
+全部走 `runAssembly`，许可取放、iso 生命周期、合并处置、清理兜底各只剩一处实现。

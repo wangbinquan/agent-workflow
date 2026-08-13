@@ -172,6 +172,11 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     await expect(mergeBackNodeIso(handle, trees)).rejects.toThrow(/worktree anchor failed/)
   }, 120_000)
 
+  // 骨架默认 onThrow：keep=true 之后才调 markMergeFailed（顺序不可颠倒——先标记
+  // 后置 keep 的写法在标记抛出时会漏掉 keep，正是 RFC-210 要防的丢副本）。
+  const ASSEMBLY_KEEP_ON_THROW =
+    /keep = true\n\s*if \(spec\.markMergeFailed === undefined\)[\s\S]{0,320}await spec\.markMergeFailed\(/
+
   test('EVERY scheduler site keeps the iso when merge-back throws (source-level lock)', () => {
     // The full scheduler loop is too heavy to spin here; lock the disposition
     // at the source level instead (repo policy: minimum one source-text
@@ -184,12 +189,24 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
-    // Mainline DAG: the merge-failed catch flips keepIso.
-    const mainline = src.match(
-      /log\.warn\('merge-back failed'[\s\S]{0,1200}?markMergeFailed\(db, nodeRunId, msg, log\)/,
+    // Mainline DAG (agent 线): RFC-287 T7 起本线也迁入装配骨架。合并抛出的 keep
+    // 不再是 catch 里的 `keepIso = true`，而是**骨架默认处置**（`keep = true` +
+    // `spec.markMergeFailed`）——本线不覆写 onThrow，因此吃的就是那条默认。
+    // 不变量（合并抛出必须保住 iso，它可能是产物唯一副本）由骨架单点保证，逐格
+    // 断言在 rfc287-t1-merge-disposition-matrix；这里锁「本线确实走默认」：
+    // 它声明了 markMergeFailed 钩子，且**没有**自己的 onThrow 覆写。
+    // runScope 在文件里排在 runOneNode **之前**，不能拿它当右边界（会切出空串）；
+    // 取到函数自身的顶格 `}` 为止。
+    const agentStart = src.indexOf('async function runOneNode(')
+    expect(agentStart).toBeGreaterThan(-1)
+    const agentLine = src.slice(agentStart, src.indexOf('\n}\n', agentStart))
+    const assemblySrc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
+      'utf8',
     )
-    expect(mainline).not.toBeNull()
-    expect(mainline![0]).toContain('keepIso = true')
+    expect(agentLine).toContain('markMergeFailed: async (msg) => {')
+    expect(agentLine).not.toMatch(/onThrow:/)
+    expect(ASSEMBLY_KEEP_ON_THROW.test(assemblySrc)).toBe(true)
     // Fanout shard: RFC-287 T4 起同聚合线一起迁入装配骨架——keep 语义从「布尔标志
     // + finally 谓词」变成 spec 上的声明（合并抛出走 disposition.onThrow → keep:true，
     // 清理由骨架的 if (!keep) discardIso 统一执行）。本条锁的不变量（合并抛出必须

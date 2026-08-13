@@ -252,6 +252,54 @@ describe('RFC-287 T2 — 装配骨架', () => {
     expect(events.filter((e) => e === 'discard')).toHaveLength(1) // 只有收尾那次
   })
 
+  // T7 前置：agent 线的留树判据是 RFC-042 同会话续跑决策，需要**异步 DB 读**
+  // （上一次 attempt 的 text 事件计数 + port 校验失败记录），同步 keepIf 接不住。
+  // 而那条决策还要被 onNextAttempt（铸行带不带 envelopeNonce / 写哪种审计事件）与
+  // spawn（发不发续跑短提示、带不带 resumeSessionId）各读一次——agent 线把它 memo
+  // 进闭包，因此**每次重试内的调用序是契约**：keepIf →〔换树〕→ onNextAttempt → spawn。
+  // 序一旦变动，那三处会读到上一轮的决策：静默错，且只在重试路径上现形。
+  test('模式 B：keepIf 可异步，且每次重试的调用序是 keepIf → onNextAttempt → spawn', async () => {
+    let spawns = 0
+    const { spec, events } = makeSpec({
+      spawn: async () => {
+        spawns++
+        events.push(`spawn#${spawns}`)
+        return spawns < 3 ? 'retryable' : 'done'
+      },
+      retryPolicy: {
+        shouldRetry: (o: string) => o === 'retryable',
+        isoOnRetry: {
+          keepIf: async () => {
+            await Promise.resolve()
+            events.push('keepIf')
+            return true
+          },
+        },
+        onIsoRecreateFailure: () => 'recreate-failed',
+        onNextAttempt: async (n: number) => {
+          events.push(`nextAttempt#${n}`)
+        },
+      },
+    })
+    expect(await runAssembly({ id: 't' }, spec)).toBe('settled')
+    // 异步 keepIf 被 await：返回 true ⇒ 不换树（只有收尾那一次 discard）。
+    expect(events.filter((e) => e === 'iso:create')).toHaveLength(1)
+    expect(events.filter((e) => e === 'discard')).toHaveLength(1)
+    // 逐轮序：第 1 轮无重试前奏；第 2/3 轮必须严格 keepIf → nextAttempt → spawn。
+    const seq = events.filter(
+      (e) => e === 'keepIf' || e.startsWith('nextAttempt#') || e.startsWith('spawn#'),
+    )
+    expect(seq).toEqual([
+      'spawn#1',
+      'keepIf',
+      'nextAttempt#1',
+      'spawn#2',
+      'keepIf',
+      'nextAttempt#2',
+      'spawn#3',
+    ])
+  })
+
   test("模式 B：isoOnRetry='always-recreate' 每次重试换新树（脚本线形态）", async () => {
     let spawns = 0
     const { spec, events } = makeSpec({

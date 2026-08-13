@@ -22,6 +22,10 @@ const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
+const ASSEMBLY_SRC = readFileSync(
+  resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
+  'utf8',
+)
 
 /** 去掉行注释与块注释，免得长注释把断言窗口顶出去。 */
 function stripComments(s: string): string {
@@ -56,12 +60,14 @@ function bodyOf(signature: string): string {
 // 表达（keep: true + markMergeFailed），故从本表移出、由下面的「已迁移线」用例接管。
 // RFC-287 T4 改锚：分片线同聚合线一起迁入骨架，throw 处置改由 spec 的 onThrow
 // 声明式表达，故从本表移出、由下面「已迁移线」的用例接管。
-const LINES_WITH_DEFAULT_THROW = [
-  ['agent-single', 'async function runOneNode(', 'keepIso = true'],
-] as const
+// RFC-287 T7：agent 线是最后一条迁入骨架的。此前本表列的是「函数体里自己写
+// keep 标志 + markMergeFailed」的线，迁完后这个集合归零——**默认处置本身**改由
+// 骨架单点实现（keep=true + spec.markMergeFailed + settle）。下面那条断言随之
+// 翻面：验的不再是「各线各写一份」，而是「谁都不许再自己写一份」。
+const LINES_WITH_DEFAULT_THROW: ReadonlyArray<readonly [string, string, string]> = []
 
 describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
-  test('throw 列是唯一真默认：三线均 keep + markMergeFailed', () => {
+  test('throw 列的默认处置已单点化：没有任何线再自己写 keep + markMergeFailed', () => {
     for (const [label, sig, keepVar] of LINES_WITH_DEFAULT_THROW) {
       const body = bodyOf(sig)
       const idx = body.indexOf('markMergeFailed')
@@ -71,6 +77,17 @@ describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
         body.slice(Math.max(0, idx - 400), idx),
         `${label}: 抛出时应先置 ${keepVar}`,
       ).toContain(keepVar)
+    }
+    // 终局锁：默认处置只存在于骨架一处。agent 线现在把 markMergeFailed 声明成
+    // spec 钩子（骨架在默认路径上调它），而不是自己在 catch 里 keep + 标记。
+    expect(ASSEMBLY_SRC).toMatch(/keep = true\n\s*if \(spec\.markMergeFailed === undefined\)/)
+    expect(ASSEMBLY_SRC).toContain('await spec.markMergeFailed(')
+    // scheduler.ts 里不得再出现「先置 keep 标志、再 markMergeFailed」的手写默认。
+    for (const m of SCHEDULER.matchAll(/markMergeFailed\(db,/g)) {
+      const before = SCHEDULER.slice(Math.max(0, (m.index ?? 0) - 400), m.index ?? 0)
+      expect(before, '默认 throw 处置必须单点在骨架，不得回流到调用线').not.toMatch(
+        /keep\w* = true/,
+      )
     }
   })
 
@@ -88,12 +105,11 @@ describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
     }
   })
 
-  test('conflict-human 列：agent 线是 keep + awaiting_human', () => {
-    const branch = branchAfter(
-      bodyOf('async function runOneNode('),
-      "merge.kind === 'conflict-human'",
-    )
-    expect(branch).toMatch(/keepIso = true/)
+  test('conflict-human 列：agent 线（已迁骨架）是 keep + awaiting_human', () => {
+    // T7 起处置是 spec 上的 onConflictHuman 声明；语义逐字保持：撞冲突保留 iso
+    // （人要在那棵树上把冲突解完，resume 再合一次）并停在等待人工。
+    const branch = branchAfter(bodyOf('async function runOneNode('), 'onConflictHuman:')
+    expect(branch).toMatch(/keep: true/)
     expect(branch).toMatch(/kind: 'awaiting_human'/)
   })
 

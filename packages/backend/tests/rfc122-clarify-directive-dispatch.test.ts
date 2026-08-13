@@ -570,13 +570,21 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
-    // The getNodeClarifyDirective read must sit AFTER the retry-loop header so each
+    // The getNodeClarifyDirective read must happen ONCE PER ATTEMPT so each
     // attempt's freshly-minted process-retry row re-reads the latest toggle. A
-    // refactor that hoists it back above the loop (stale cache) → red.
-    const loopIdx = src.indexOf('for (let attempt = retryIndex;')
+    // refactor that hoists it above the per-attempt boundary (stale cache) → red.
+    //
+    // RFC-287 T7 改锚：重试循环从 `for (let attempt = retryIndex; …)` 变成骨架驱动
+    // ——每轮调一次 `runOneAttempt(k)`。「在循环体内」于是等价于「在该函数体内」。
+    // 不变量与射程都没变，只是边界的名字变了。
+    const attemptFnIdx = src.indexOf('const runOneAttempt = async')
     const readIdx = src.indexOf('getNodeClarifyDirectiveRow(db, taskId, node.id)')
-    expect(loopIdx).toBeGreaterThan(0)
-    expect(readIdx).toBeGreaterThan(loopIdx)
+    expect(attemptFnIdx, '每 attempt 机身函数应存在（重试边界）').toBeGreaterThan(0)
+    expect(readIdx).toBeGreaterThan(attemptFnIdx)
+    // 反向：读点不得落在窗口外的一次性前奏里（那正是「提到循环外缓存」的形状）。
+    const windowIdx = src.indexOf('const windowOut = await runAssembly<')
+    expect(windowIdx).toBeGreaterThan(0)
+    expect(readIdx).toBeLessThan(windowIdx)
   })
 
   test('same-session follow-up is bypassed when the STOP toggle flips the mode', () => {

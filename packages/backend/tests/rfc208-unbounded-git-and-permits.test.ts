@@ -35,6 +35,10 @@ const schedulerSource = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
+const assemblySource = readFileSync(
+  resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
+  'utf8',
+)
 
 /** A git invocation that hangs deterministically, locally, with no network:
  *  a `!`-prefixed alias runs through the shell, so the child spawns a
@@ -123,20 +127,27 @@ describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup
   // line number: the bug was one call site drifting out of line with three
   // correct siblings, so the guard has to cover every site, present and future.
   test('every finally releases the permit BEFORE awaiting iso cleanup', () => {
-    const finallyBlocks = [...schedulerSource.matchAll(/\bfinally\s*\{/g)].map((m) => {
+    // RFC-287 T7 起五条装配线全部迁入骨架，`scheduler.ts` 里已**没有**同时做两件事
+    // 的 finally；不变量本身没变，扫描面随代码搬到 `schedulerAssembly.ts`（那里是
+    // 全部装配线唯一的取/放点）。两个文件一起扫，对「代码搬到哪」免疫。
+    const scanned = schedulerSource + '\n' + assemblySource
+    const finallyBlocks = [...scanned.matchAll(/\bfinally\s*\{/g)].map((m) => {
       // Take a generous window; these blocks are short and we only compare the
       // relative order of two markers inside the same block.
       const start = m.index ?? 0
-      return schedulerSource.slice(start, start + 900)
+      return scanned.slice(start, start + 900)
     })
 
     const offenders: string[] = []
     let checkedBlocks = 0
     for (const block of finallyBlocks) {
-      for (const name of POOL_RELEASE_NAMES) {
+      for (const name of [...POOL_RELEASE_NAMES, 'release']) {
         const release = block.indexOf(`${name}()`)
-        const discard = block.indexOf('await discardNodeIso(')
-        if (release === -1 || discard === -1) continue
+        const discard = [block.indexOf('await discardNodeIso('), block.indexOf('spec.discardIso(')]
+          .filter((i) => i !== -1)
+          .sort((a, b) => a - b)[0]
+        if (discard === undefined) continue
+        if (release === -1) continue
         checkedBlocks++
         if (release > discard) offenders.push(block.slice(0, 240))
       }

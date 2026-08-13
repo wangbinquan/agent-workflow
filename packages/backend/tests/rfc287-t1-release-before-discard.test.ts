@@ -76,10 +76,11 @@ describe('RFC-287 T1⑧ — 许可释放先于 iso 清理（跨文件结构锁�
     // 防空扫下限：随迁移**递减**是预期的——每迁一条线，scheduler.ts 里就少一个
     // 这样的 finally，而骨架里那个统一的 finally 只算一处。它的作用不是"越多越好"，
     // 而是保证扫描面没有整个塌掉（比如正则失配导致 0 命中却"绿"）。
-    // 当前分布：骨架 1（服务已迁的聚合线/分片线/脚本线/工作组主机线）+ scheduler.ts
-    // 里剩余未迁的 agent 线 1。T7 迁完 agent 线后降到 1 并**永远不再降**——骨架那个
-    // finally 是全部装配线唯一的取/放点，它一旦扫不到就说明锁塌了。
-    expect(checked).toBeGreaterThanOrEqual(2)
+    // **终局分布（T7 后）**：骨架 1，scheduler.ts 0——五条装配线全部迁完，取/放许可
+    // 与清理 iso 只剩骨架那一个 finally。这个下限到此**永不再降**：它一旦扫不到，
+    // 说明要么骨架被绕过、要么正则失配，两种都是锁塌了。
+    // （改小这个数字不是「跟随迁移」，而是关掉这条锁——迁移已经结束了。）
+    expect(checked).toBeGreaterThanOrEqual(1)
     // 骨架必须在被扫之列（上面的 checked 是总数，这里单独钉死骨架那一处）。
     const asmBlocks = finallyBlocks(readFileSync(resolve(SRC, 'schedulerAssembly.ts'), 'utf8'))
     expect(
