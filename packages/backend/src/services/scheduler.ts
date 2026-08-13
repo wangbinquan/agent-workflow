@@ -4696,14 +4696,6 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
       log,
     },
   )
-
-  // eslint-disable-next-line no-unreachable -- 迁移保留：下方为旧结局，已由 settle 承接
-  if (succeeded) return { kind: 'ok', summary: '', message: '' }
-  return {
-    kind: 'failed',
-    summary: lastFailure?.message ?? `script node ${node.id} failed`,
-    message: lastFailure?.code ?? 'script-nonzero-exit',
-  }
 }
 
 interface ScriptAttemptArgs {
