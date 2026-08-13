@@ -30,7 +30,7 @@
 //   A9  F15 permission carve-out: tasks:launch WITHOUT agents:write may
 //       launch; agents:write WITHOUT tasks:launch may NOT.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test, beforeAll } from 'bun:test'
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -71,6 +71,7 @@ import {
   validateWorkflowDef,
 } from '../src/services/workflow.validator'
 import { runGit } from '../src/util/git'
+import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -100,6 +101,10 @@ function daemonActor() {
     source: 'daemon',
   })
 }
+
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
 
 describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
   let db: DbClient
@@ -537,7 +542,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
       role: 'user',
       password: 'longEnoughPassword',
     })
-    const repoUrl = `file://${await seedRepoUrl()}`
+    const repoUrl = remoteUrlFor(await seedRepoUrl())
     const launchBody = JSON.stringify({
       name: 'via pat',
       description: 'do it',

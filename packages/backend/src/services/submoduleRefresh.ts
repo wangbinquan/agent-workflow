@@ -59,7 +59,18 @@ export async function selectDueRepos(
         isNotNull(cachedRepos.localPath),
       ),
     )
-  return rows
+  // RFC-287 G5：`file://` 存量镜像**不再自动保鲜**。
+  //
+  // 启动面已按非法参数拒了它（schemas/task.ts 的 refineRepoSourceFields），但后台
+  // 保鲜是**另一条独立通道**：它按 last_fetched_at 自己选行、不经任何启动校验。
+  // 漏掉这里，一个再也不能被启动的 file:// 镜像仍会被 daemon 定时 fetch——既白烧
+  // 磁盘与句柄，又会在源目录被删后每小时刷一条无人能处理的失败告警。
+  // 判据用 `url_redacted`：明文 URL 只以密文列存在（`url_enc`），而脱敏只动
+  // userinfo、**scheme 原样保留**（git-url.ts 的 redactGitUrl 两趟都只吃 `user:pass@`），
+  // 所以它是这里唯一既够用又不必解密的信号。
+  return rows.filter(
+    (r) => !(typeof r.urlRedacted === 'string' && /^file:\/\//i.test(r.urlRedacted.trim())),
+  )
 }
 
 /**

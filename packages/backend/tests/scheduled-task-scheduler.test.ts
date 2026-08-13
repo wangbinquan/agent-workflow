@@ -23,7 +23,13 @@ import { createWorkflow } from '../src/services/workflow'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAILY = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
-const BODY = { workflowId: '', name: 'nightly', repoUrl: 'file:///r', ref: 'main', inputs: {} }
+const BODY = {
+  workflowId: '',
+  name: 'nightly',
+  repoUrl: 'https://git.invalid/r.git',
+  ref: 'main',
+  inputs: {},
+}
 
 interface LaunchCall {
   ownerUserId: string

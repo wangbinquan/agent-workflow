@@ -75,7 +75,13 @@ describe('RFC-159 scheduled-task CRUD', () => {
   })
 
   function launchBody(id = wfId) {
-    return { workflowId: id, name: 'nightly', repoUrl: 'file:///repo', ref: 'main', inputs: {} }
+    return {
+      workflowId: id,
+      name: 'nightly',
+      repoUrl: 'https://git.invalid/repo.git',
+      ref: 'main',
+      inputs: {},
+    }
   }
 
   test('create: validates body, gates workflow, computes next_run_at, owner=actor', async () => {

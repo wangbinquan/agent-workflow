@@ -6,13 +6,20 @@
 // Regression (2026-07-30): workflow input keys are Unicode strings; the
 // multipart field parser must not reintroduce an ASCII-only key restriction.
 
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+  beforeAll,
+} from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import type { Hono } from 'hono'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -22,6 +29,7 @@ import { createAgent } from '../src/services/agent'
 import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
 import { createWorkflow } from '../src/services/workflow'
 import { nonInteractiveGitEnv } from '../src/util/git'
+import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -201,6 +209,11 @@ async function postMultipart(app: Hono, url: string, fd: FormData): Promise<Resp
   })
 }
 
+// RFC-287 T11：夹具仓经真实 git smart-HTTP 远端（file:// 已是非法参数）。
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
+
 describe('POST /api/tasks multipart (RFC-020)', () => {
   test('happy path: upload 2 files → task created, files in worktree, paths packed', async () => {
     const h = await buildHarness()
@@ -208,7 +221,7 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
       {
         workflowId: h.workflowId,
         name: 'fixture-task',
-        repoUrl: pathToFileURL(h.repoPath).href,
+        repoUrl: remoteUrlFor(h.repoPath),
         ref: 'main',
         inputs: { topic: 'orders', refs: '' },
       },
@@ -239,7 +252,7 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
       {
         workflowId: h.workflowId,
         name: 'unicode-input-key',
-        repoUrl: pathToFileURL(h.repoPath).href,
+        repoUrl: remoteUrlFor(h.repoPath),
         ref: 'main',
         inputs: { topic: 'orders', [inputKey]: '' },
       },
@@ -273,7 +286,7 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
           JSON.stringify({
             workflowId: h.workflowId,
             name: 'fixture-task',
-            repoUrl: pathToFileURL(h.repoPath).href,
+            repoUrl: remoteUrlFor(h.repoPath),
             ref: 'main',
             inputs: { topic: 'orders', refs: '' },
           }),
@@ -307,7 +320,7 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
       {
         workflowId: h.workflowId,
         name: 'fixture-task',
-        repoUrl: pathToFileURL(h.repoPath).href,
+        repoUrl: remoteUrlFor(h.repoPath),
         ref: 'main',
         inputs: { topic: 'x', refs: '' },
       },
@@ -326,7 +339,7 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
       {
         workflowId: h.workflowId,
         name: 'fixture-task',
-        repoUrl: pathToFileURL(h.repoPath).href,
+        repoUrl: remoteUrlFor(h.repoPath),
         ref: 'main',
         inputs: { topic: 'x', refs: '' },
       },
@@ -345,7 +358,7 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
       {
         workflowId: h.workflowId,
         name: 'fixture-task',
-        repoUrl: pathToFileURL(h.repoPath).href,
+        repoUrl: remoteUrlFor(h.repoPath),
         ref: 'main',
         inputs: { topic: 'x', refs: '' },
       },
@@ -363,7 +376,7 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
       {
         workflowId: 'no-such-id',
         name: 'fixture-task',
-        repoUrl: pathToFileURL(h.repoPath).href,
+        repoUrl: remoteUrlFor(h.repoPath),
         ref: 'main',
         inputs: { topic: 'x', refs: '' },
       },
@@ -379,7 +392,7 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
       {
         workflowId: h.workflowId,
         name: 'fixture-task',
-        repoUrl: pathToFileURL(h.repoPath).href,
+        repoUrl: remoteUrlFor(h.repoPath),
         ref: 'main',
         inputs: { topic: 'x', refs: '' },
       },
@@ -402,7 +415,7 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
       {
         workflowId: h.workflowId,
         name: 'fixture-task',
-        repoUrl: pathToFileURL(h.repoPath).href,
+        repoUrl: remoteUrlFor(h.repoPath),
         ref: 'main',
         inputs: { topic: 'x', refs: '' },
       },

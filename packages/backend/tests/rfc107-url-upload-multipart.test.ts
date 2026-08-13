@@ -18,7 +18,15 @@
 // All git is offline via a `file://` bare repo (mirrors start-task-url.test.ts);
 // no `RUN_GIT_NETWORK` dependency.
 
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+  beforeAll,
+} from 'bun:test'
 import type { Hono } from 'hono'
 import { execFileSync } from 'node:child_process'
 import {
@@ -34,7 +42,6 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { eq as eqOp } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -61,6 +68,7 @@ import {
 } from '../src/services/task'
 import { ValidationError } from '../src/util/errors'
 import { nonInteractiveGitEnv } from '../src/util/git'
+import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -192,7 +200,7 @@ async function buildHarness(): Promise<Harness> {
   const tmp = makeTempDir('aw-rfc107-')
   process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
   const bare = makeBareRepo(tmp)
-  const bareUrl = `file://${bare}`
+  const bareUrl = remoteUrlFor(bare)
 
   // A local clone usable as a path-mode repo for the path+workingBranch regression.
   const localRepo = join(tmp, 'local')
@@ -328,6 +336,11 @@ async function postMultipart(app: Hono, fd: FormData): Promise<Response> {
     headers: { Authorization: `Bearer ${TOKEN}` },
   })
 }
+
+// RFC-287 T11：夹具仓经真实 git smart-HTTP 远端（file:// 已是非法参数）。
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
 
 describe('RFC-107 — URL launch + multipart upload', () => {
   test('CORE: url + upload → 201 (not 422), files land in worktree, paths packed, repoUrl preserved', async () => {
@@ -534,7 +547,7 @@ describe('RFC-107 — URL launch + multipart upload', () => {
       {
         workflowId: h.validWorkflowId,
         name: 'path-upload-wb',
-        repoUrl: pathToFileURL(h.localRepo).href,
+        repoUrl: remoteUrlFor(h.localRepo),
         ref: 'main',
         workingBranch: 'feature/path-wb',
         inputs: { topic: 'x', refs: '' },
@@ -717,7 +730,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
       {
         workflowId: wfId,
         name: 'evil-upload',
-        repoUrl: `file://${bare}`,
+        repoUrl: remoteUrlFor(bare),
         inputs: { topic: 'x', refs: '' },
       },
       [['refs', 'pwn.txt', 'pwned']],
@@ -747,7 +760,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
       {
         workflowId: wfId,
         name: 'leaf-evil',
-        repoUrl: `file://${bare}`,
+        repoUrl: remoteUrlFor(bare),
         inputs: { topic: 'x', refs: '' },
       },
       [['refs', 'pwn.txt', 'pwned']],

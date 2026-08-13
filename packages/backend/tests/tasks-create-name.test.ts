@@ -2,19 +2,19 @@
 // names with 422, persisting the trimmed value on accept, and behaving the
 // same way for JSON and multipart body paths.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test, beforeAll } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { runGit } from '../src/util/git'
+import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -97,6 +97,11 @@ async function postMultipart(app: Hono, payload: unknown): Promise<Response> {
   })
 }
 
+// RFC-287 T11：夹具仓经真实 git smart-HTTP 远端（file:// 已是非法参数）。
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
+
 describe('RFC-037 — POST /api/tasks name validation', () => {
   let h: Harness
   beforeEach(async () => {
@@ -107,7 +112,7 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
   test('JSON: missing name → 422', async () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
-      repoUrl: pathToFileURL(h.repoPath).href,
+      repoUrl: remoteUrlFor(h.repoPath),
       ref: 'main',
       inputs: {},
     })
@@ -118,7 +123,7 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
       name: '',
-      repoUrl: pathToFileURL(h.repoPath).href,
+      repoUrl: remoteUrlFor(h.repoPath),
       ref: 'main',
       inputs: {},
     })
@@ -129,7 +134,7 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
       name: '   ',
-      repoUrl: pathToFileURL(h.repoPath).href,
+      repoUrl: remoteUrlFor(h.repoPath),
       ref: 'main',
       inputs: {},
     })
@@ -140,7 +145,7 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
       name: 'x'.repeat(256),
-      repoUrl: pathToFileURL(h.repoPath).href,
+      repoUrl: remoteUrlFor(h.repoPath),
       ref: 'main',
       inputs: {},
     })
@@ -152,7 +157,7 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
       name,
-      repoUrl: pathToFileURL(h.repoPath).href,
+      repoUrl: remoteUrlFor(h.repoPath),
       ref: 'main',
       inputs: {},
     })
@@ -167,7 +172,7 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
       name: '  PR-1234 fix  ',
-      repoUrl: pathToFileURL(h.repoPath).href,
+      repoUrl: remoteUrlFor(h.repoPath),
       ref: 'main',
       inputs: {},
     })
@@ -181,7 +186,7 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
   test('multipart: missing name in payload → 422', async () => {
     const res = await postMultipart(h.app, {
       workflowId: h.wfId,
-      repoUrl: pathToFileURL(h.repoPath).href,
+      repoUrl: remoteUrlFor(h.repoPath),
       ref: 'main',
       inputs: {},
     })
@@ -192,7 +197,7 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postMultipart(h.app, {
       workflowId: h.wfId,
       name: '  multipart task  ',
-      repoUrl: pathToFileURL(h.repoPath).href,
+      repoUrl: remoteUrlFor(h.repoPath),
       ref: 'main',
       inputs: {},
     })

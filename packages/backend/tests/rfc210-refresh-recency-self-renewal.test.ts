@@ -30,7 +30,7 @@
 //     Mutation check: flip auto-refresh back to touchRecency:true (or drop the
 //     arg) and test #2 goes red — the mirror stays due forever.
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { describe, expect, test, beforeEach, afterEach, beforeAll } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -39,6 +39,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
 import { refreshCachedRepo, resolveCachedRepo } from '@/services/gitRepoCache'
 import { refreshDueRepos, selectDueRepos } from '@/services/submoduleRefresh'
+import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAY = 24 * 60 * 60 * 1000
@@ -65,8 +66,14 @@ async function buildFixtureRemote(): Promise<{ dir: string; url: string }> {
   await git(working, '-C', working, 'commit', '-m', 'init')
   const bare = join(root, 'remote.git')
   await git(root, 'clone', '--bare', working, bare)
-  return { dir: root, url: `file://${bare}` }
+  // RFC-287 T11：本用例测的是保鲜**时效语义**，与来源协议无关；而 file:// 存量
+  // 镜像自 G5 起被排除在自动保鲜之外，继续用它会让这条断言测不到东西。
+  return { dir: root, url: remoteUrlFor(bare) }
 }
+
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
 
 describe('RFC-210 G7 — auto-refresh does not renew its own recency window', () => {
   let db: DbClient

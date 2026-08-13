@@ -131,6 +131,24 @@ export function refineRepoSourceFields(
       path: ['repoUrl'],
     })
   }
+  // RFC-287 G5 —— `file://` **从此不是可运行的来源**，按非法参数处理。
+  //
+  // 为什么在这里拒而不是在 `startTask` / `resolveCachedRepo`：那两处是内部服务
+  // 入口，HTTP 路由与大量夹具共用同一个函数，在那里拒会把「内部通道」一起掐掉。
+  // 本函数是**公共面**的解析点（JSON 启动、multipart 启动、定时任务 payload
+  // 都经它），而内部服务层直接构造 spec 天然绕开——内外通道的天然分界就在这儿，
+  // 不需要新造一个旁路开关。
+  //
+  // 为什么必须拒：`file://` 指向的是 daemon 本机的一个目录，它没有「远端」这层
+  // 语义——上一个任务在本地提交但没推的内容，会成为下一个任务的基线，于是「所有
+  // 任务都基于远端」这条前提被悄悄破坏。存量行**不 grandfather**：启动时一律拒。
+  if (hasUrl && /^file:\/\//i.test((value.repoUrl as string).trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'repo-url-file-scheme-unsupported',
+      path: ['repoUrl'],
+    })
+  }
 }
 
 /**
@@ -388,6 +406,11 @@ export const FAILURE_CODES = [
 export const FailureCodeSchema = z.string()
 export type FailureCode = (typeof FAILURE_CODES)[number] | (string & {})
 
+/** RFC-300: user-facing capability state derived from the durable workspace
+ * prune tombstones. Timestamps remain backend-internal. */
+export const WorkspaceStateSchema = z.enum(['available', 'pruning', 'pruned'])
+export type WorkspaceState = z.infer<typeof WorkspaceStateSchema>
+
 export const TaskSchema = z.object({
   id: z.string(),
   /** RFC-037: user-supplied display name; non-empty after migration 0021 backfill. */
@@ -419,6 +442,9 @@ export const TaskSchema = z.object({
   /** RFC-204: cached mirror id backing this task (null for legacy/scratch rows). */
   cachedRepoId: z.string().nullable().default(null),
   worktreePath: z.string(),
+  /** RFC-300: optional for rolling compatibility with older daemon payloads.
+   * New backends always project it; an absent value means available. */
+  workspaceState: WorkspaceStateSchema.optional(),
   baseBranch: z.string(),
   branch: z.string(),
   /**

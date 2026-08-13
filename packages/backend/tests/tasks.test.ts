@@ -2,19 +2,19 @@
 // Uses a real `git init` fixture so startTask's worktree creation works.
 
 import type { TasksListWsMessage, WorkflowDefinition } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test, beforeAll } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { runGit } from '../src/util/git'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '../src/ws/broadcaster'
+import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -54,7 +54,7 @@ async function buildHarness(): Promise<Harness> {
     db,
     app,
     repoPath,
-    repoUrl: pathToFileURL(repoPath).href,
+    repoUrl: remoteUrlFor(repoPath),
     appHome,
     cleanup: () => {
       rmSync(appHome, { recursive: true, force: true })
@@ -90,6 +90,11 @@ const EMPTY_DEF: WorkflowDefinition = {
   nodes: [],
   edges: [],
 }
+
+// RFC-287 T11：夹具仓经真实 git smart-HTTP 远端（file:// 已是非法参数）。
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
 
 describe('task HTTP routes', () => {
   let h: Harness
@@ -215,7 +220,7 @@ describe('task HTTP routes', () => {
         body: JSON.stringify({
           workflowId: wfId,
           name: 'fixture-task',
-          repoUrl: pathToFileURL(notRepo).href,
+          repoUrl: remoteUrlFor(notRepo),
           inputs: {},
         }),
       })

@@ -9,7 +9,6 @@
 // `worktreeDirName` 形态最接近，保证这些测试锁的仍是它们原本锁的东西。
 // 需要嵌套布局的测试自己传 `mountPaths`。
 
-import { pathToFileURL } from 'node:url'
 import {
   normalizeRepoNodePath,
   parentNodePath,
@@ -17,6 +16,8 @@ import {
 } from '@agent-workflow/shared'
 import type { DbClient } from '../../src/db/client'
 import { createRepoGroup } from '../../src/services/repoGroup'
+import { remoteUrlFor, startGitHttpRemote } from './gitHttpRemote'
+
 
 export type RepoGroupAttachmentSpec =
   | {
@@ -132,6 +133,9 @@ export async function seedRepoGroup(
   sourcePaths: readonly string[],
   options: GroupFixtureOptions = {},
 ): Promise<string> {
+  // RFC-287 T11：夹具仓经真实 git smart-HTTP 远端（`file://` 已是非法来源）。
+  // 在这里 await 而不是要求每个调用方自己起——本夹具有 13 个下游，漏一个就红。
+  await startGitHttpRemote()
   const readonlySet = new Set(options.readonlyIndexes ?? [])
   const group = await createRepoGroup(
     { db, cache: { db, appHome } },
@@ -141,7 +145,7 @@ export async function seedRepoGroup(
       nodes: repoGroupNodesFromAttachments(
         sourcePaths.map((repoPath, i) => ({
           kind: 'repo' as const,
-          repoUrl: pathToFileURL(repoPath).href,
+          repoUrl: remoteUrlFor(repoPath),
           ref: '',
           subdir: '',
           mountPath: options.mountPaths?.[i] ?? `r${i}`,

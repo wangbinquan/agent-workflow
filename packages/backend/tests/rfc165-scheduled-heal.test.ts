@@ -15,12 +15,11 @@
 //   H7 degraded row repair: partial PUT keeping the broken field → 422
 //      'scheduled-task-needs-repair'; full-field PUT repairs and clears the
 //      rfc165 lastError breadcrumb.
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test, beforeAll } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { StartTaskSchema } from '@agent-workflow/shared'
@@ -33,6 +32,8 @@ import {
   updateScheduledTask,
 } from '../src/services/scheduledTasks'
 import { runGit } from '../src/util/git'
+import { pathToFileURL } from 'node:url'
+import { startGitHttpRemote } from './helpers/gitHttpRemote'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -85,6 +86,11 @@ async function rawPayload(id: string): Promise<Record<string, unknown>> {
 async function rawRow(id: string) {
   return (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)))[0]!
 }
+
+// RFC-287 T11：夹具仓经真实 git smart-HTTP 远端（file:// 已是非法参数）。
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
 
 describe('RFC-165 T4 — scheduled payload heal + tolerant repair', () => {
   beforeEach(() => {
@@ -179,7 +185,7 @@ describe('RFC-165 T4 — scheduled payload heal + tolerant repair', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
-  test('H5 v2-clean rows untouched; H6 healed payload is fire-ready', async () => {
+  test('H5 v2-clean rows untouched; H6 本机路径自愈后**不再可开火**（RFC-287 G5）', async () => {
     const cleanId = await seedRow({
       workflowId: 'wf1',
       name: 't',
@@ -198,9 +204,24 @@ describe('RFC-165 T4 — scheduled payload heal + tolerant repair', () => {
     await healScheduledLaunchPayloads(db)
     expect((await rawRow(cleanId)).updatedAt).toBe(before)
 
+    // RFC-287 G5：自愈把 legacy 的本地 `repoPath` 转成 `file://` URL——本地路径
+    // 除了 file:// 无从表达，所以自愈**照旧产出**；但 file:// 自此是非法来源，
+    // 于是这类老记录自愈后**不再可开火**，到点开火时被启动校验拒掉。
+    //
+    // 刻意不为它造「自愈时拒绝 / 自动停用 / 标记需修复」的机制：用户明确确认过
+    // 这类存量记录数量为零，为零人群造状态机是纯负债。行为如实锁在这里，将来
+    // 真出现了也一眼看得到发生了什么。
     const healed = await rawPayload(pathId)
     const parsed = StartTaskSchema.safeParse(healed)
-    expect(parsed.success).toBe(true)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      expect(parsed.error.issues.map((i) => i.message)).toContain(
+        'repo-url-file-scheme-unsupported',
+      )
+    }
+    // 反向：非本机来源的老记录自愈后照常可开火（别把整条自愈路径判死）。
+    const cleanParsed = StartTaskSchema.safeParse(await rawPayload(cleanId))
+    expect(cleanParsed.success).toBe(true)
     rmSync(tmp, { recursive: true, force: true })
   })
 
