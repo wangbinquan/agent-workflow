@@ -42,6 +42,19 @@ export function getNodePoolSemaphore(
   daemonScope: object,
   kind: NodePoolKind,
   capacity: number,
+  /**
+   * RFC-287 T10（G4-C9）——「取」还是「取并改」。
+   *
+   * 默认 'set' 保留原语义（PUT /api/config 的热应用路径要它）。**任务启动必须传
+   * 'seed-only'**：`runTask` 拿的是自己启动时捕获的 `opts`，而子任务会继承父任务
+   * 的 opts；于是「配置改成 9 → 父任务在跑 → 它派生一个子任务」这条日常路径上，
+   * 子任务的 runTask 会拿着旧值 4 把 daemon 级池**改回去**，用户在设置页做的调整
+   * 被一个后台派生动作静默撤销，且没有任何日志。
+   *
+   * 'seed-only' = 池不存在时按该值创建（冷启动的合理种子），已存在则原样返回。
+   * daemon 级配额的实时值只由配置写入点决定——这是本次修复的原则。
+   */
+  mode: 'set' | 'seed-only' = 'set',
 ): Semaphore {
   let byKind = limiters.get(daemonScope)
   if (byKind === undefined) {
@@ -50,7 +63,7 @@ export function getNodePoolSemaphore(
   }
   const existing = byKind[kind]
   if (existing !== undefined) {
-    if (existing.capacity !== capacity) existing.resize(capacity)
+    if (mode === 'set' && existing.capacity !== capacity) existing.resize(capacity)
     return existing
   }
   const created = new Semaphore(capacity)

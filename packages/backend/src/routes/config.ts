@@ -15,6 +15,7 @@ import {
 import { ValidationError } from '@/util/errors'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { resizeAllNodePools } from '@/services/processNodeConcurrency'
+import { setChildTaskBudgetCapacity } from '@/services/execution/childBudget'
 import { resizeAllTaskFanoutSems } from '@/services/taskFanoutPools'
 import { Paths } from '@/util/paths'
 import { notifyConfigApplied } from '@/services/configAppliedListeners'
@@ -131,6 +132,10 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
           'code-host': updated.maxConcurrentCodeHostCalls,
         })
         resizeAllTaskFanoutSems(updated.multiProcessSubprocessConcurrency)
+        // RFC-287 T10（G4-C9）：子任务配额与三个节点池同一个线性化点热应用。
+        // 少了这一行，「同时活跃子任务数」改完要等 daemon 重启才生效——而设置页
+        // 上它和旁边三项长得一模一样，用户没有任何线索知道这一项是「下次生效」。
+        setChildTaskBudgetCapacity(updated.maxActiveChildTasks)
         return c.json(updated)
       })
     },

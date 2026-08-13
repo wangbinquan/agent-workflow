@@ -3589,6 +3589,13 @@ export const enUS: Resources = {
       },
     },
     detailTitleIdLabel: 'Task ID',
+    webhookSource: {
+      comment: 'Open original comment',
+      mergeRequest: 'Open original merge request/PR',
+      pipeline: 'Open original pipeline',
+      commit: 'Open original commit',
+      project: 'Open source project',
+    },
     loadingTask: 'Loading task…',
     metaWorkflow: 'Workflow',
     metaRepo: 'Repo',
@@ -5399,6 +5406,15 @@ export const enUS: Resources = {
     multiProcessConc: 'Fan-out subprocess concurrency (per task)',
     multiProcessConcHint:
       'Cap on shards running at once inside one task’s fan-out, applied within the agent pool — effective parallelism = min(free agent slots, this value). Script nodes cannot sit inside a fan-out and are unaffected. Applies on save, including running tasks. Default 4.',
+    maxConcurrentCodeHostCalls: 'Max concurrent code-host calls (global)',
+    maxConcurrentCodeHostCallsHint:
+      'Daemon-wide cap on in-flight code-host API calls (open a PR, post a comment…). This is the third independent pool: one call is a single outbound HTTP request and holds no subprocess, so its budget is larger and it does NOT count toward "peak child processes = agent pool + script pool". Applies on save, including running tasks. Default 8.',
+    maxActiveChildTasks: 'Max active child tasks (global)',
+    maxActiveChildTasksHint:
+      'Daemon-wide cap on child tasks (spawned by sub-workflow / sub-workgroup nodes) running at once. While queued for quota a task sits in pending — and cancelling it there takes effect immediately: this is a cancellable quota hold, not a semaphore slot. Tasks awaiting a human do not hold quota. Applies on save. Default 8.',
+    maxInvocationDepth: 'Max invocation depth (global)',
+    maxInvocationDepthHint:
+      'Ceiling on invocation-chain depth: a parent spawning a child is depth 1, that child spawning another is depth 2, and so on. The spawn that would exceed it fails outright (invocation-depth-exceeded); chains already running are unaffected. Bounds cycles formed by workflows calling each other. Applies on save. Default 3.',
     logLevel: 'Log level',
     logLevelHint: 'Applies to the running daemon immediately after save.',
     perTaskDuration: 'Per-task max duration (ms)',

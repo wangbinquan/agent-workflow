@@ -761,11 +761,16 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // behind agent runs). Both come from the daemon-scoped registry, which
     // resizes the SAME instance when the setting changes — so a settings save
     // applies to this run, not just to the next launch.
-    agentSem: getNodePoolSemaphore(db, 'agent', opts.maxConcurrentNodes ?? 4),
-    scriptSem: getNodePoolSemaphore(db, 'script', opts.maxConcurrentScriptNodes ?? 4),
+    agentSem: getNodePoolSemaphore(db, 'agent', opts.maxConcurrentNodes ?? 4, 'seed-only'),
+    scriptSem: getNodePoolSemaphore(db, 'script', opts.maxConcurrentScriptNodes ?? 4, 'seed-only'),
     // RFC-269: the third pool — one outbound HTTP request is a second-scale
     // step and holds no subprocess, so it gets its own (larger) budget.
-    codeHostSem: getNodePoolSemaphore(db, 'code-host', opts.maxConcurrentCodeHostCalls ?? 8),
+    codeHostSem: getNodePoolSemaphore(
+      db,
+      'code-host',
+      opts.maxConcurrentCodeHostCalls ?? 8,
+      'seed-only',
+    ),
     // RFC-098 B1 (audit S-9): the writer lock comes from the per-task
     // registry so HTTP rollback paths (clarify/review/cross-clarify) hold THE
     // SAME instance. gc happens in this function's finally only (see

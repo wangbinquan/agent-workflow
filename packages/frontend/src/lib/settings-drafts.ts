@@ -68,6 +68,12 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'maxConcurrentNodes',
     'maxConcurrentScriptNodes',
     'multiProcessSubprocessConcurrency',
+    // RFC-287 T10（G4）：并发/配额共 6 项，此前设置页只露了 3 项。补齐的三项必须
+    // 同时登记到这张**最小写入白名单**里——漏登记的键在保存时会被静默丢掉，表单
+    // 看起来改了、点了保存、没有任何报错，值却没落盘。
+    'maxConcurrentCodeHostCalls',
+    'maxActiveChildTasks',
+    'maxInvocationDepth',
     'logLevel',
   ],
   recovery: [

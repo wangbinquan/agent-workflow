@@ -3031,6 +3031,13 @@ export interface Resources {
       duration: { queued: string; running: string; accumulated: string }
     }
     detailTitleIdLabel: string
+    webhookSource: {
+      comment: string
+      mergeRequest: string
+      pipeline: string
+      commit: string
+      project: string
+    }
     loadingTask: string
     metaWorkflow: string
     metaRepo: string
@@ -4627,6 +4634,12 @@ export interface Resources {
     maxConcurrentScriptNodesHint: string
     multiProcessConc: string
     multiProcessConcHint: string
+    maxConcurrentCodeHostCalls: string
+    maxConcurrentCodeHostCallsHint: string
+    maxActiveChildTasks: string
+    maxActiveChildTasksHint: string
+    maxInvocationDepth: string
+    maxInvocationDepthHint: string
     logLevel: string
     logLevelHint: string
     perTaskDuration: string
@@ -8990,6 +9003,13 @@ export const zhCN: Resources = {
       },
     },
     detailTitleIdLabel: '任务 ID',
+    webhookSource: {
+      comment: '查看原始评论',
+      mergeRequest: '查看原始 MR/PR',
+      pipeline: '查看原始流水线',
+      commit: '查看原始提交',
+      project: '查看源项目',
+    },
     loadingTask: '加载任务中…',
     metaWorkflow: '工作流',
     metaRepo: '仓库',
@@ -10683,6 +10703,15 @@ export const zhCN: Resources = {
     multiProcessConc: '分片扇出子进程并发（单任务）',
     multiProcessConcHint:
       '单个任务内分片扇出同时运行的分片数上限，套在 agent 池之内再收一道 —— 实际并行度 = min(agent 池剩余名额, 本值)。脚本节点不能进分片扇出，不受本项影响。保存后立即生效，含正在运行的任务。默认 4。',
+    maxConcurrentCodeHostCalls: '最大并发代码平台调用（全局）',
+    maxConcurrentCodeHostCallsHint:
+      '整个 daemon 同时在途的代码平台 API 调用上限（建 PR / 发评论等）。它是第三个独立池：一次调用只是一个外发 HTTP 请求、不起子进程，所以额度比前两项大，也**不计入**「峰值子进程 = agent 池 + 脚本池」那个和。保存后立即生效，含正在运行的任务。默认 8。',
+    maxActiveChildTasks: '同时活跃子任务数（全局）',
+    maxActiveChildTasksHint:
+      '整个 daemon 同时运行的子任务（由子工作流 / 子工作组节点派生）数量上限。排队等额度期间任务停在 pending，**且此时取消会立刻生效**——它不是信号量名额，而是一份可取消的配额占用。等待人工的任务不占额度。保存后立即生效。默认 8。',
+    maxInvocationDepth: '子任务嵌套深度上限（全局）',
+    maxInvocationDepthHint:
+      '调用链最大深度：父任务派生子任务算 1 层，子任务再派生算 2 层，依此类推。超限的那一次派生直接判失败（invocation-depth-exceeded），已在跑的调用链不受影响。用于兜住工作流互相调用形成的环。保存后立即生效。默认 3。',
     logLevel: '日志级别',
     logLevelHint: '保存后立即调整当前 daemon 的日志级别。',
     perTaskDuration: '单 task 最大时长 (ms)',

@@ -44,6 +44,15 @@ export const SETTINGS_NUMERIC_BOUNDS = {
   maxConcurrentNodes: { min: 1, max: 256 },
   maxConcurrentScriptNodes: { min: 1, max: 256 },
   multiProcessSubprocessConcurrency: { min: 1, max: 256 },
+  // RFC-287 T10（G4）：并发/配额六项里此前只有上面三项进过设置页。补齐的三项各有
+  // 自己的上界依据，不能照抄 256：
+  //   · 代码平台调用是外发 HTTP、不起子进程，可以比进程池宽松，但仍要挡住把远端
+  //     打成限流的手滑；
+  //   · 同时活跃子任务数每一个都会再撑开一整套节点池占用，256 会让机器直接躺平；
+  //   · 嵌套深度是防环护栏，本就该是个小数——它越大，一次环路烧掉的时间越长。
+  maxConcurrentCodeHostCalls: { min: 1, max: 256 },
+  maxActiveChildTasks: { min: 1, max: 64 },
+  maxInvocationDepth: { min: 1, max: 16 },
   heartbeatStallMs: {
     min: 1_000,
     max: JS_TIMER_MAX_MS,

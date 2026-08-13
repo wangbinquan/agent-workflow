@@ -106,9 +106,18 @@ describe('process node concurrency', () => {
 
   test('scheduler uses the pool registry and never constructs a per-task pool', () => {
     const scheduler = schedulerSrc()
-    expect(scheduler).toContain("getNodePoolSemaphore(db, 'agent', opts.maxConcurrentNodes ?? 4)")
+    // RFC-287 T10（G4-C9）：三处池获取都带上 'seed-only'——任务启动只播种、不改写
+    // daemon 级容量。少了它，一个带旧 opts 的子任务启动就会把用户刚在设置页改好的
+    // 并发数静默改回去（resize-on-read）。锁「必须带 seed-only」而不只是「调了这个
+    // 函数」，否则回退到默认 'set' 无人察觉。
     expect(scheduler).toContain(
-      "getNodePoolSemaphore(db, 'script', opts.maxConcurrentScriptNodes ?? 4)",
+      "getNodePoolSemaphore(db, 'agent', opts.maxConcurrentNodes ?? 4, 'seed-only')",
+    )
+    expect(scheduler).toContain(
+      "getNodePoolSemaphore(db, 'script', opts.maxConcurrentScriptNodes ?? 4, 'seed-only')",
+    )
+    expect(scheduler).toContain(
+      "getNodePoolSemaphore(db, 'code-host', opts.maxConcurrentCodeHostCalls ?? 8, 'seed-only')",
     )
     expect(scheduler).not.toContain('new Semaphore(opts.maxConcurrentNodes ?? 4)')
     expect(scheduler).not.toContain('new Semaphore(opts.maxConcurrentScriptNodes ?? 4)')

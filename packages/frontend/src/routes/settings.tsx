@@ -608,6 +608,41 @@ function LimitsTab({ config }: TabProps) {
             onChange={(v) => setState({ ...state, multiProcessSubprocessConcurrency: v ?? 1 })}
           />
         </Field>
+        {/* RFC-287 T10（G4）：并发/配额共 6 项，此前只露 3 项——另外三项只能改配置
+            文件、且改完要等 daemon 重启才生效（后端同批已修成即时生效）。 */}
+        <Field
+          label={t('settingsForm.maxConcurrentCodeHostCalls')}
+          hint={t('settingsForm.maxConcurrentCodeHostCallsHint')}
+          required
+        >
+          <SettingsNumberInput
+            setting="maxConcurrentCodeHostCalls"
+            value={state.maxConcurrentCodeHostCalls}
+            onChange={(v) => setState({ ...state, maxConcurrentCodeHostCalls: v ?? 1 })}
+          />
+        </Field>
+        <Field
+          label={t('settingsForm.maxActiveChildTasks')}
+          hint={t('settingsForm.maxActiveChildTasksHint')}
+          required
+        >
+          <SettingsNumberInput
+            setting="maxActiveChildTasks"
+            value={state.maxActiveChildTasks}
+            onChange={(v) => setState({ ...state, maxActiveChildTasks: v ?? 1 })}
+          />
+        </Field>
+        <Field
+          label={t('settingsForm.maxInvocationDepth')}
+          hint={t('settingsForm.maxInvocationDepthHint')}
+          required
+        >
+          <SettingsNumberInput
+            setting="maxInvocationDepth"
+            value={state.maxInvocationDepth}
+            onChange={(v) => setState({ ...state, maxInvocationDepth: v ?? 1 })}
+          />
+        </Field>
       </div>
       <Field label={t('settingsForm.logLevel')} hint={t('settingsForm.logLevelHint')}>
         <Select<NonNullable<Config['logLevel']>>

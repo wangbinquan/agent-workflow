@@ -296,3 +296,28 @@ L8 整线 / wrapper 便车 / 恢复 replay 段三处显式允许直接物化，�
 写在 spec 里，或宿主闭包被 spec 的 iso 块引用。后续又把「必须直接挂 `create: name`」
 放宽为「iso 块引用即可」——套一层 arrow 语义等价，锁死会让无害重构变红。
 用**真违规**（闭包不挂 spec、改在窗口外直线物化）复验仍红。
+
+---
+
+## T10 实施记录（2026-08-13，已完成）
+
+**先修后端、再补前端**——第二轮设计门核实过「不是补三个输入框就完事」，本轮实测确认
+六项里有两项根本不即时生效，且症状对用户完全不可见：
+
+| 问题 | 实测到的行为 | 修法 |
+| ---- | ------------ | ---- |
+| `getNodePoolSemaphore` 是 **resize-on-read** | 每个 `runTask` 都把 daemon 级池改成**自己 opts 的值**；子任务继承父任务 opts，于是「配置改成 9 → 父任务在跑 → 派生子任务」这条日常路径上，用户的调整被静默撤销、无任何日志 | 新增 `mode: 'set' \| 'seed-only'`；三处任务启动改传 `seed-only`（池不存在才按该值创建），配置写入点仍用默认 `set` |
+| `ensureChildTaskBudget` 的容量**凝固在第一个调用者的闭包**里 | 单例只在 `singleton === null` 时用调用方的 `capacity()`，之后永远读**首个**启动任务捕获的 opts；设置页改完要等 daemon 重启 | 容量改为模块级 live 值；`PUT /api/config` 用 `setChildTaskBudgetCapacity` 推入（与三个池热应用同一个线性化点） |
+
+**原则一句话**：daemon 级配额的实时值只由配置写入点决定，任务启动只「取」不「改」。
+
+前端补齐三项（`maxConcurrentCodeHostCalls` / `maxActiveChildTasks` / `maxInvocationDepth`）
+到设置页的并发区，含中英双语 label+hint，并**同时登记进 `SETTINGS_CONFIG_SCOPE_KEYS.limits`
+最小写入白名单**——漏登记的键在保存时被静默丢掉：表单能改、能点保存、不报错，值却不落盘。
+
+`SETTINGS_NUMERIC_BOUNDS` 三项上界按语义分档而非照抄 256：代码平台调用是外发 HTTP
+（256）、活跃子任务每个都会再撑开一整套池占用（64）、嵌套深度是防环护栏（16）。
+
+三条变异实证：`seed-only` 退回 `set` / 白名单漏登记一项 / 设置页少一个输入框，各变红。
+顺带改锚 `process-node-concurrency` 那条接线锁——它钉的是三处池获取的确切写法，现在
+要求**必须带 `'seed-only'`**，否则回退到默认 `'set'` 无人察觉。

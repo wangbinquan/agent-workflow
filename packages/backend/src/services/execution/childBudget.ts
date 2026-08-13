@@ -221,12 +221,31 @@ let singleton: ChildTaskBudget | null = null
 /** Cache: taskId → is a child task (avoids a DB read per status transition). */
 const childness = new Map<string, boolean>()
 
+/**
+ * daemon 级的实时容量。RFC-287 T10（G4-C9）修复：**不能让容量凝固在第一个调用者
+ * 的闭包里**。原实现只在 singleton 为 null 时用调用方传来的 `capacity()`，之后
+ * 无论配置怎么改、后续任务传什么，读到的永远是**首个**启动任务捕获的 opts；于是
+ * 「设置页把同时活跃子任务数从 8 调到 2」在 daemon 重启前根本不生效。
+ *
+ * 现在容量是一个模块级的 live 值：`setChildTaskBudgetCapacity` 由 PUT /api/config
+ * 推入（与三个节点池的热应用同一个线性化点），任务启动只在**尚未有值时**播种。
+ */
+let liveCapacity: number | null = null
+
+/** PUT /api/config 的热应用入口（与 resizeAllNodePools 同处调用）。 */
+export function setChildTaskBudgetCapacity(capacity: number): void {
+  liveCapacity = capacity
+}
+
 export async function ensureChildTaskBudget(
   db: DbClient,
   capacity: () => number,
 ): Promise<ChildTaskBudget> {
+  // 冷启动播种：daemon 起来后第一个走到这里的任务用自己的 opts 定初值；之后一律
+  // 以 live 值为准（配置改动经 setChildTaskBudgetCapacity 落进来）。
+  if (liveCapacity === null) liveCapacity = capacity()
   if (singleton === null) {
-    singleton = new ChildTaskBudget(db, capacity)
+    singleton = new ChildTaskBudget(db, () => liveCapacity ?? capacity())
     await singleton.rebuildFromDb()
   }
   return singleton
@@ -240,6 +259,7 @@ export function registerKnownChildTask(taskId: string): void {
 /** Test-only: drop the singleton + childness cache. */
 export function resetChildTaskBudgetForTests(): void {
   singleton = null
+  liveCapacity = null
   childness.clear()
 }
 
