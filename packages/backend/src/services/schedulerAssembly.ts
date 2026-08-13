@@ -72,6 +72,15 @@ export interface AssemblySpec<TCtx, TOutcome, TResult> {
   /** L5 的 T14 undo 唯一消费方；钉在物化的同一个 try 内，hook 内自兜。 */
   beforeSpawn?(ctx: TCtx): Promise<void>
   spawn(ctx: TCtx): Promise<TOutcome>
+  /**
+   * spawn 结果**直接**决定的 keep 输入（与合并处置正交，2026-08-13 新增维度）。
+   *
+   * 现状四条线都有 `processUnreaped === true ⇒ keep`：旧 child 可能还活着，此时
+   * 新会话重试会在同一棵工作树里造出两个写者，所以既禁止重试、也必须保住 iso。
+   * 它在 spawn 之后、mergePhase 之前求值；**置真则 keep 恒真、不被后续相位下调**
+   * ——迁移时若只搬 mergePhase 那套，这条会被静默丢掉。
+   */
+  keepFromOutcome?(outcome: TOutcome): boolean
   mergePhase(ctx: TCtx, outcome: TOutcome): MergePhase<TCtx, TResult>
   mergeBack: {
     run(ctx: TCtx): Promise<{ kind: 'ok' } | { kind: 'conflict-human'; detail: string }>
@@ -119,9 +128,13 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
 
     const outcome = await spec.spawn(ctx)
 
+    // spawn 结果直接决定的 keep（正交于合并处置；置真后不被下调）。
+    const stickyKeep = spec.keepFromOutcome?.(outcome) === true
+    if (stickyKeep) keep = true
+
     const phase = spec.mergePhase(ctx, outcome)
     if (phase !== 'merge') {
-      keep = phase.keep
+      keep = stickyKeep || phase.keep
       if (phase.then !== 'settle') return await phase.then.produce(ctx)
     } else if (spec.mergeBack !== null) {
       const d = spec.mergeBack.disposition
@@ -131,7 +144,7 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
       } catch (err) {
         const over = d?.onThrow?.(err, ctx)
         if (over !== undefined) {
-          keep = over.keep
+          keep = stickyKeep || over.keep
           if (over.then === 'rethrow') throw err
           return await over.then.produce(ctx)
         }
@@ -143,7 +156,7 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
       if (merge.kind === 'conflict-human') {
         const over = d?.onConflictHuman?.(merge.detail, ctx)
         if (over !== undefined) {
-          keep = over.keep
+          keep = stickyKeep || over.keep
           return await over.produce(ctx)
         }
         keep = true

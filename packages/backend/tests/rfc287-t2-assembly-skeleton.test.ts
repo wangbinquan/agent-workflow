@@ -195,6 +195,30 @@ describe('RFC-287 T2 — 装配骨架', () => {
     await expect(runAssembly({ id: 't' }, bare.spec)).rejects.toThrow('spawn boom')
   })
 
+  test('⑥ keepFromOutcome 置真则 keep 恒真，且**不被后续相位下调**', async () => {
+    // 现状四条线的 processUnreaped ⇒ keep：旧 child 可能还活着，此时清理 iso 会让
+    // 新会话重试在同一棵工作树里造出两个写者。迁移时只搬 mergePhase 会静默丢掉它。
+    const { spec, events } = makeSpec({
+      keepFromOutcome: () => true,
+      // 相位显式说 keep=false —— 仍不得下调。
+      mergePhase: () => ({ skip: 'not-done', keep: false, then: 'settle' }),
+    })
+    expect(await runAssembly({ id: 't' }, spec)).toBe('settled')
+    expect(events).not.toContain('discard')
+  })
+
+  test('⑥ keepFromOutcome 置真时，即便走覆写产出也不清理', async () => {
+    const { spec, events } = makeSpec({
+      keepFromOutcome: () => true,
+      mergeBack: {
+        run: async () => ({ kind: 'conflict-human' as const, detail: 'x' }),
+        disposition: { onConflictHuman: () => ({ keep: false, produce: async () => 'abandoned' }) },
+      },
+    })
+    expect(await runAssembly({ id: 't' }, spec)).toBe('abandoned')
+    expect(events).not.toContain('discard')
+  })
+
   test('② 许可在异常路径上也必然释放', async () => {
     const { spec, events } = makeSpec({
       spawn: async () => {

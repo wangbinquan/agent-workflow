@@ -595,6 +595,40 @@ L4 内联 retry 循环 **5423-6122**、L1 装配线实为 `runHostNode` **976-14
   iso-setup message 各不相同」是夸大（L4/L7 逐字相同、L5/L6 同形，仅 L1 拼原始
   message）——钩子保留、理由改。
 
+### 10.11 新基线漂移：第五种 keep 维度（2026-08-13 晚，T3 开工前复核发现）
+
+并发 session 的 `8744abc2`（Claude 原生会话过渡）给**四条**装配线加了同一个新的
+保留条件，是 §10.1 矩阵之外的**第五维**，且与合并处置**正交**——它发生在合并
+之前，与冲突/抛出无关：
+
+```
+
+L1 :1170 if (result.processUnreaped === true) keepHookIso = true
+L4 :6124 if (lastResult.processUnreaped === true) keepIso = true
+L5 :7930 if (result.processUnreaped === true) keepShardIso = true
+L6 :8362 if (result.processUnreaped === true) keepAggIso = true
+
+```
+
+语义（`shouldRetryNodeFailure` :1548-1556 的注释）：旧 child 可能还活着，此时
+**新会话重试会在同一棵工作树里造出两个写者**，所以既禁止重试、也必须保住 iso。
+同批 `shouldRetryNodeFailure` 增第二参 `processUnreaped`，为真即不重试。
+
+**对本 RFC 的影响（T3 起必须遵守）**：
+1. 骨架的 keep 域**必须能表达这一维**。它不属于 `mergePhase`（那是合并相位判定），
+   而是 **spawn 结果直接决定的 keep 输入**——迁移时若只搬 mergePhase 那套，这条会
+   被静默丢掉，后果正是注释警告的「同一棵工作树两个写者」。
+   ⇒ spec 增 `keepFromOutcome?(outcome): boolean`，在 spawn 之后、mergePhase 之前
+   求值；置真则 keep 恒真且不被后续相位下调。
+2. **脚本线 L7 没有这一条**（区间 4360-4904 内零命中）。大概率有意（脚本节点无
+   会话续接语义），但与「脚本线少抄一个 try/catch」是同一类风险 ⇒ T5（L7 迁移）
+   前须向该改动的作者确认是有意还是漏配，结论写进 §10.1 矩阵。
+3. `shouldRetryNodeFailure` 的第二参进 `retryPolicy.shouldRetry` 的入参面。
+
+**协作记录**：该 session 改完后**主动扩了本 RFC 的 T1 夹具**
+（`rfc287-t1-line-throw-disposition.test.ts` 新增一条覆盖两参形态）——改了被别人
+锁住的行为就同步更新那把锁，此处存照为正面样例。
+
 ### 10.10 第三轮门·骨架半场处置（T2 开工前必读）
 
 - **C10 撤销**：见上「persistIsoBase 相位按线声明」。T1-⑨ 的实测结果用于复核本条，
