@@ -87,7 +87,10 @@ export interface AssemblySpec<TCtx, TOutcome, TResult> {
     // portFilePaths（T3 首条迁移实证的契约缺口）。
     // 形状对齐既有原语 `mergeBackAndSettle` 的返回（T3 首条迁移实证）：
     // kind 为 'merged' | 'conflict-human'，detail 仅冲突时给。
-    run(ctx: TCtx, outcome: TOutcome): Promise<{ kind: 'merged' | 'conflict-human'; detail?: string }>
+    run(
+      ctx: TCtx,
+      outcome: TOutcome,
+    ): Promise<{ kind: 'merged' | 'conflict-human'; detail?: string }>
     disposition?: Disposition<TCtx, TResult>
   } | null
   /** 线级 catch-all——逐线载荷不同，不得统一。'rethrow' = 保持抛出直穿。 */
