@@ -2788,18 +2788,20 @@ export class McpRuntimeTestService {
       const turnRunRootForRead = join(session.scratchRoot, 'run', 'turns', turn.id)
       // RFC-282 C2 — observation source from the driver's static declaration
       // (the presence-proxy sent a third runtime down the claude branch).
-      let observation: StartupObservation
       // RFC-297 T12：判据收进 execution 层单点，测试台与 runner 共用同一份
-      // （此前两处各写一遍同样的 switch）。快照仍在这里读——观测源的取数时机
-      // 属于调用方，判据属于被调方。
-      observation = await observationForVerification(driver.capabilities, {
-        claudeInit: result.startupInventory ?? null,
-        // 惰性：只有以文件为观测源的运行时才会真的去读（判据在被调方）。
-        loadSnapshot: async () =>
-          (await driver
-            .readInventory?.({ runRoot: turnRunRootForRead, nodeKind: 'agent-single' })
-            .catch(() => null)) ?? null,
-      })
+      // （此前两处各写一遍同样的 switch）。取数时机仍归调用方（它持有 runRoot），
+      // 判据归被调方——收口后这里只剩一次赋值，故 const。
+      const observation: StartupObservation = await observationForVerification(
+        driver.capabilities,
+        {
+          claudeInit: result.startupInventory ?? null,
+          // 惰性：只有以文件为观测源的运行时才会真的去读（判据在被调方）。
+          loadSnapshot: async () =>
+            (await driver
+              .readInventory?.({ runRoot: turnRunRootForRead, nodeKind: 'agent-single' })
+              .catch(() => null)) ?? null,
+        },
+      )
       if (result.declared === undefined) {
         throw new Error('mcp-test declared manifest missing from run result (assembly seam broken)')
       }

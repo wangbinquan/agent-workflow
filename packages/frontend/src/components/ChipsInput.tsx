@@ -92,8 +92,6 @@ interface ChipsInputProps {
   value: string[]
   onChange: (next: string[]) => void
   placeholder?: string
-  /** Accessible name for uses that are not wrapped by a native label. */
-  ariaLabel?: string
   validate?: (token: string) => string | null
   disabled?: boolean
   /**
@@ -108,7 +106,6 @@ export function ChipsInput({
   value,
   onChange,
   placeholder,
-  ariaLabel,
   validate,
   disabled,
   testidPrefix,
@@ -152,7 +149,6 @@ export function ChipsInput({
           onKeyDown={chips.handleKeyDown}
           onBlur={chips.handleBlur}
           placeholder={value.length === 0 ? placeholder : ''}
-          aria-label={ariaLabel}
           disabled={disabled}
           data-testid={testidPrefix !== undefined ? `${testidPrefix}-input` : undefined}
         />

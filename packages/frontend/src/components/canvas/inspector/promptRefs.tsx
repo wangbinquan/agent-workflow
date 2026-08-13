@@ -49,23 +49,13 @@ export function MissingRefList({
       {missing.length > 0 && (
         <>
           <span className="muted">{t('inspector.missingRefsLabel')}</span>{' '}
-          <ChipsInput
-            value={missing}
-            onChange={() => {}}
-            placeholder=""
-            ariaLabel={t('inspector.missingRefsLabel')}
-          />
+          <ChipsInput value={missing} onChange={() => {}} placeholder="" />
         </>
       )}
       {invalid.length > 0 && (
         <>
           <span className="muted">{t('inspector.invalidRefsLabel')}</span>{' '}
-          <ChipsInput
-            value={invalid}
-            onChange={() => {}}
-            placeholder=""
-            ariaLabel={t('inspector.invalidRefsLabel')}
-          />
+          <ChipsInput value={invalid} onChange={() => {}} placeholder="" />
         </>
       )}
       <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
@@ -81,12 +71,7 @@ export function PortRefList({ ports }: { ports: string[] }) {
   return (
     <div className="inspector__port-refs">
       <span className="muted">{t('inspector.resolvedInbound')}</span>{' '}
-      <ChipsInput
-        value={ports}
-        onChange={() => {}}
-        placeholder=""
-        ariaLabel={t('inspector.resolvedInbound')}
-      />
+      <ChipsInput value={ports} onChange={() => {}} placeholder="" />
     </div>
   )
 }

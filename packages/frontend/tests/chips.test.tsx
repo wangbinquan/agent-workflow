@@ -21,12 +21,6 @@ afterEach(() => {
 })
 
 describe('ChipsInput', () => {
-  test('accepts an explicit accessible name outside a native label', () => {
-    render(<ChipsInput value={[]} onChange={() => {}} ariaLabel="Resolved inbound ports" />)
-
-    expect(screen.getByRole('textbox', { name: 'Resolved inbound ports' })).toBeTruthy()
-  })
-
   test('Enter commits and clears pending', () => {
     const { onChange } = setup()
     const input = screen.getByPlaceholderText('type then enter') as HTMLInputElement
