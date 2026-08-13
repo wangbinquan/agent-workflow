@@ -23,6 +23,10 @@
   （释放序 + try-depth 扫描器，后者在骨架抽走 acquire/release 后结构性失效）；
   ⑨ 三个行为面的夹具：线级抛出载荷（L5/L6 抛出即重试）、persistIsoBase 抛出结局、
   park 的 keep 分歧。
+
+  > **T1-⑨ 提前于 T2**（第三轮门）：线级抛出载荷 / persistIsoBase 抛出结局 / park 的
+  > keep 分歧这三条夹具的实测结果，是复核 §10.10 中 persistIsoBase 相位定案的判据来源。
+
 - T2 骨架落地（G1）：assembly.ts + 单元测试（pools/keep 域含 park 短路/
   merge 默认三态 + disposition 覆写/漂移 A 语义/beforeSpawn 抛出=装配失败）；
   双模式窗口（per-attempt / 跨 attempt+retryPolicy）都有直测；此批不迁移

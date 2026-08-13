@@ -282,7 +282,10 @@ interface AssemblySpec<TResult> {
   spawn(ctx): Promise<SpawnOutcome>
   /** 合并相位判定——**四种**「跳合并」都要有名字。**`SpawnOutcome.park` 字段
    *  就此作废**（§2 那句以 park 布尔短路 mergeBack 的规定被本节取代）。
-   *  **判定序写死**：`passthrough` **先于**一切其它判定（五线全部以
+   *  **判定序写死（第三轮门 P1-1 收窄）**：`park` **先于** `passthrough`
+   *  （L4 的 clarify-park 在 :6131、passthrough 在 :6133；L1 更早在 :1186 vs
+   *  :1311/:1327）——倒过来会让 passthrough 运行的工作组 clarify 再也不落库。
+   *  `passthrough` 只需先于 merge / abandon / readonly（五线全部以
    *  `!handle.passthrough` 门控 merge :1327/:6133/:7897/:8325/:4564，且 L1 的
    *  discardWrites 也被同一个 passthrough 包着 :1311——passthrough 时**不**
    *  abandon，保 RFC-130 golden-lock：persistIsoBase:97 早退、merge_state 恒 NULL）。
@@ -295,9 +298,18 @@ interface AssemblySpec<TResult> {
   ):
     | 'merge'
     | {
-        skip: 'passthrough' | 'park' | 'abandon' | 'readonly'
+        // 'not-done' = spawn 未成功（五线最常见的跳合并原因：L4 :6133 谓词 /
+        // L5 :7882 早退 / L7 succeeded :4564）；实测五线该路径 keep 恒 false。
+        skip: 'not-done' | 'park' | 'passthrough' | 'abandon' | 'readonly'
         keep: boolean
-        onSkip?(ctx): Promise<void>
+        // 第三维（第三轮门 P1-1）：跳合并之后是**短路产出**还是**继续走 settle**。
+        // L4 的 park 设 keep 后继续流向 settle（clarify round 在 settle 段建：
+        // :6131-6132 → 出 finally :6196 → :6252/:6299 createClarifyRound）；
+        // L1 的 park 在窗口内建完 round（:1261-1298）后直接产出结果。
+        // 两态表达不了这个三态。**L1 的 produce 必须留在窗口内**——其 clarify 落库
+        // 不是纯的（round + 广播），移出窗口会把落库与 iso discard 的先后静默调换；
+        // L5/L6 的 settle 体是纯对象字面量，移出安全。
+        then: 'settle' | { produce(ctx): Promise<TResult> }
       }
   /** 线级 catch-all——**逐线载荷不同，不得统一**（第三轮门 P1-1）：
    *  L1 :1381-1384（log.error + failed）；L5 :7941-7950 / L6 :8374-8383
@@ -324,18 +336,39 @@ interface AssemblySpec<TResult> {
   }
   settle(ctx, outcome): Promise<TResult>
 }
+// ### 唯一权威规则（第三轮门 P1-1；§2 的 interface 块就此**作废**，以本块为准）
+// **任何 skip / disposition / catch-all 产出的 TResult 直接成为装配结果，settle
+// 不再执行；settle 只在窗口正常走完时执行。** 依据：五线的 conflict-human 全是
+// return-from-window（:6171 / :4583 / :7926 / :8351 / :1373），catch-all 亦然
+// （L1 :1384 / L5 :7949 / L6 :8382）或直接传播（L4/L7 无 catch）——两条路径下
+// settle 段（:6204 / :4597）都到不了。
+//
+// **Disposition 定义**（P2-3，此前只是未定义的别名）：
+//   type Disposition = {
+//     onThrow?(err, ctx): { keep: boolean; then: 'rethrow' | { produce(ctx): Promise<TResult> } }
+//     onConflictHuman?(m, ctx): { keep: boolean; produce(ctx): Promise<TResult> }
+//   }
+// 五线的 conflict-human 全是「产出 TResult 并终止装配」；L1 的 throw 覆写是
+// 「keepHookIso + rethrow 到本线 catch-all」两段式，故 onThrow 需 'rethrow' 支路。
+//
+// **beforeSpawn 抛出并入 onIsoSetupFailure**（P2-1）：§2 那句「未兜住的抛出=装配
+// 失败」**删除**——beforeSpawn 恰是唯一**不** settle 的相位（L5 :7805-7813 实测：
+// releaseSub/releaseGlobal + warn + failed 'iso-setup-failed'，行留 pending 不 settle）。
+//
 // **settle 相位写死**（P2-3）：settle 在 finally **之后**，不得收进许可窗口
 // （L4 的 settle 段 :6204-6319 含 DB 写 createClarifyRound :6261-6312；L7 的
 // `if (succeeded) return ok` 亦在 finally 之后 :4597。收进窗口 = 跨 clarify-round
 // 的 DB 写持有 daemon 级 permit，与刚入契约的 RFC-208 关注面同源）。
-// **persistIsoBase 相位定音**（P1-2）：归**主 try（许可保护区）内、setup try 之外**，
-// 抛出经 finally 释放后继续向外传播——采用 L4/L7 现状（:5415-5422 / :4495-4496；
-// L4 :5416-5421 注释逐字写明它曾裸露在 acquire 与 try 之间、一抛就漏 permit）。
-// L1/L5/L6 今天在 setup try 内（抛出→释放许可+返回结构化 iso-setup-failed），
-// 迁移后结果形态改变 ⇒ **进 C 表（C10）配红→绿**，不得静默统一。
-// ctx 必须显式携带：nodeRunId（模式 B 下逐 attempt 变）与 isoKeyRunId（恒定，:5372）
-// ——merge/keep/discard 各 key 在哪个上是 D17 与 crash-replay 的命门。
-```
+// **persistIsoBase 相位按线声明**（第三轮门 P1-2 定案，取代上一版「统一到 L4/L7」）：
+// spec 加 `iso.persistBase: 'in-setup' | 'in-window'`——**L1/L5/L6 保持 in-setup、
+// L4/L7 保持 in-window，零行为差异，C10 从 C 表撤销**。上一版「统一并继续传播」
+// 不成立且后果被低估：三线各有 catch-all 会当场接住抛出——L1 落 :1381（warn→error、
+// 丢 `iso-setup-failed:` 前缀）；**L5/L6 落 :7941/:8374，载荷带
+// `retry:{retryIndex, failureCode:null}` 而 `shouldRetryNodeFailure(null)=true`
+// ⇒ 一次 transitionMergeState CAS 失败会被重试 maxRetries 次、每次重取双许可 +
+// 重建 iso（失败面基本确定性 ⇒ 确定性重试风暴）**。且要真「继续传播」只能把它挪到
+// acquire 与 try 之间——正是 RFC-208 修掉的漏 permit 形态（:5416-5421）。
+// RFC-208 的漏 permit 论据对 L1/L5/L6 本就不成立：其 setup catch 会释放许可。
 
 **新增契约条款**：`finally` 中**许可释放必须先于 iso 清理**（五线现状一致：
 L1 :1393-1395 带 RFC-208 事故注释、L4 :6197-6201、L5 :7952-7954、L6 :8385-8387、
@@ -532,3 +565,29 @@ L4 内联 retry 循环 **5423-6122**、L1 装配线实为 `runHostNode` **976-14
 - 路径勘误：`childBudget.ts` 实为 `services/execution/childBudget.ts`；「五线
   iso-setup message 各不相同」是夸大（L4/L7 逐字相同、L5/L6 同形，仅 L1 拼原始
   message）——钩子保留、理由改。
+
+### 10.10 第三轮门·骨架半场处置（T2 开工前必读）
+
+- **C10 撤销**：见上「persistIsoBase 相位按线声明」。T1-⑨ 的实测结果用于复核本条，
+  故 **T1-⑨ 提前于 T2 完成**。
+- **L7 的 conflict-human 改为显式声明 `keep=true`**（P1-3，阻 T5）。§10.1 记它今天
+  是「因 `succeeded && !isReadonly` 使 :4592 谓词为假而**碰巧** keep」；C2 把成功路径
+  改成即时 discard、骨架 finally 又统一成 `if (!keep) discard`（keep 默认 false）
+  ⇒ **L7 的 conflict-human 会连 resolve-iso 一起被删**，落成孤儿 `conflict-human`
+  ——而 `replayConflictHumanResolutions` 在 runTask 入口对**每个任务**跑，会去找已 GC
+  的 commit 并 **failTask 整个任务**（L1 :1359-1367 原样记载）。§10.1 表相应改格，
+  AC-12 的红→绿对从 fanout 扩到 L7。
+- **rfc208 两条 oracle 的重定基不止换文件**（P2-4）：`pools: Semaphore[]` 会抹掉
+  `agentSem`/`scriptSem`/`releaseGlobal`/`releaseScript` 这些**具名匹配面**
+  （oracle #2 :117 正则、:167-168 `toContain`、oracle #1 的 `POOL_RELEASE_NAMES`）。
+  两条自带防空扫断言会当场红。T1-⑧ 须给出新匹配面；oracle #1 收敛成单点后源码文本
+  锁失去表达力 ⇒ 需一条「**释放先于 discard**」的**行为**夹具接手。
+- **P3 批**：`settle(ctx, outcome)` 的 outcome 是**复合体**（spawn 结果 + merge 结果
+  + skip 决策），且 L4 的 merge-throw 会**改写** spawn 结果再交 settle（:6193
+  `lastResult = {...lastResult, status:'failed', errorMessage:'merge-back-failed: …'}`）；
+  `onIsoRecreateFailure` 与 §4「合成 failed + break」互斥——L4 :5488-5502 / L7
+  :4518-4524 都是记录失败后 break、**由 settle 产出结果**，钩子须逐字复刻其
+  summary/message 拼法（L7 把原始错误放 summary、码放 message）才等价。
+  锚勘误：L4 的 `createClarifyRound` 实为 :6252(cross) / :6299(self)；
+  `isolatedAgentRun.ts` 在 `services/`（**不在** `services/execution/`）。
+```
