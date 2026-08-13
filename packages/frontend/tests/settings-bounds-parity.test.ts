@@ -39,9 +39,11 @@ function patchFor(path: SettingsNumericPath, value: number): unknown {
 }
 
 describe('Settings numeric bounds parity', () => {
-  test('all 25 Config-backed numeric controls use the shared adapter exactly once', () => {
+  test('all 28 Config-backed numeric controls use the shared adapter exactly once', () => {
     expect(SETTINGS_SOURCE).not.toMatch(/<NumberInput\b/)
-    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(25)
+    // RFC-287 T10：25 → 28，补齐 maxConcurrentCodeHostCalls / maxActiveChildTasks /
+    // maxInvocationDepth 三项配额（此前只能改配置文件）。
+    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(28)
     for (const path of Object.keys(SETTINGS_NUMERIC_BOUNDS) as SettingsNumericPath[]) {
       const matches = SETTINGS_SOURCE.match(
         new RegExp(`setting="${path.replaceAll('.', '\\.')}"`, 'g'),

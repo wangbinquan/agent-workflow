@@ -53,8 +53,10 @@ describe('RFC-287 T10 ② — 六项配额全部可配且有范围', () => {
 
   test('每一项都有数值范围（缺了 rangeHint 就渲染不出来）', () => {
     for (const key of QUOTA_SETTINGS) {
-      const bound = (SETTINGS_NUMERIC_BOUNDS as Record<string, { min: number; max: number }>)[key]
-      expect(bound, `${key} 缺少 SETTINGS_NUMERIC_BOUNDS 条目`).toBeDefined()
+      const bound = (
+        SETTINGS_NUMERIC_BOUNDS as Record<string, { min: number; max: number } | undefined>
+      )[key]
+      if (bound === undefined) throw new Error(`${key} 缺少 SETTINGS_NUMERIC_BOUNDS 条目`)
       expect(bound.min).toBeGreaterThanOrEqual(1)
       expect(bound.max).toBeGreaterThan(bound.min)
     }

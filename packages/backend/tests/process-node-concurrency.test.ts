@@ -110,15 +110,21 @@ describe('process node concurrency', () => {
     // daemon 级容量。少了它，一个带旧 opts 的子任务启动就会把用户刚在设置页改好的
     // 并发数静默改回去（resize-on-read）。锁「必须带 seed-only」而不只是「调了这个
     // 函数」，否则回退到默认 'set' 无人察觉。
-    expect(scheduler).toContain(
-      "getNodePoolSemaphore(db, 'agent', opts.maxConcurrentNodes ?? 4, 'seed-only')",
-    )
-    expect(scheduler).toContain(
-      "getNodePoolSemaphore(db, 'script', opts.maxConcurrentScriptNodes ?? 4, 'seed-only')",
-    )
-    expect(scheduler).toContain(
-      "getNodePoolSemaphore(db, 'code-host', opts.maxConcurrentCodeHostCalls ?? 8, 'seed-only')",
-    )
+    // 用「相邻性 + 身份」而不是定长文本：prettier 会按行宽把长调用折成多行
+    // （code-host 那条就被折了），定长锚一改格式就失配——本文件里 RFC-292 那条锁
+    // 已经吃过同一刀。这里按池名定位，再要求它的参数里同时出现配置键与 'seed-only'。
+    for (const [kind, cfgKey] of [
+      ['agent', 'maxConcurrentNodes'],
+      ['script', 'maxConcurrentScriptNodes'],
+      ['code-host', 'maxConcurrentCodeHostCalls'],
+    ] as const) {
+      const call = new RegExp(
+        `getNodePoolSemaphore\\(\\s*db,\\s*'${kind}',\\s*opts\\.${cfgKey}[^)]*'seed-only'`,
+      )
+      expect(call.test(scheduler), `${kind} 池必须以 'seed-only' 取（否则子任务会撤销配置）`).toBe(
+        true,
+      )
+    }
     expect(scheduler).not.toContain('new Semaphore(opts.maxConcurrentNodes ?? 4)')
     expect(scheduler).not.toContain('new Semaphore(opts.maxConcurrentScriptNodes ?? 4)')
     // RFC-266: 扇出子池也不再 per-task new（否则设置改动到不了运行中的任务）。

@@ -98,7 +98,9 @@ export const ConfigSchema = z.object({
    * multi-minute agent runs. Default 8 (higher than the other two: these hold
    * no subprocess, only an in-flight HTTP request).
    */
-  maxConcurrentCodeHostCalls: z.number().int().positive().default(8),
+  // RFC-287 T10：上界与 SETTINGS_NUMERIC_BOUNDS 同源——UI 能填的与服务端能存的
+  // 必须一致，否则设置页放行的值被 PUT 打回，用户只看到一个没有出处的报错。
+  maxConcurrentCodeHostCalls: z.number().int().positive().max(256).default(8),
   /** RFC-269: wall clock for ONE outbound code-host request. Node may override. */
   codeHostRequestTimeoutMs: z
     .number()
@@ -183,10 +185,10 @@ export const ConfigSchema = z.object({
   /** RFC-243 §3.2: daemon-wide cap on concurrently active ({pending,running})
    *  node-invoked child tasks. Grants are scan-based with ancestor exemption
    *  (deadlock-free); awaiting/interrupted children do not hold quota. */
-  maxActiveChildTasks: z.number().int().positive().default(8),
+  maxActiveChildTasks: z.number().int().positive().max(64).default(8),
   /** RFC-243 §3.2: invocation-chain depth ceiling (root task = 0). A defensive
    *  gate behind the launch-time closure cycle detection. */
-  maxInvocationDepth: z.number().int().positive().default(3),
+  maxInvocationDepth: z.number().int().positive().max(16).default(3),
 
   // --- RFC-213 disaster recovery ---
   /** Auto-backup cadence (ms). 0 = disabled (default — existing installs don't
