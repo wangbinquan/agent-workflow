@@ -29,6 +29,7 @@ import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { abandonSupersededMergeStates } from '@/services/lifecycle'
+import { isFresherNodeRun } from '@/services/freshness'
 import type { RuntimeKind } from '@/services/runtime'
 import { tryGetRuntimeDriver, isKnownRuntimeKind } from '@/services/runtime'
 import {
@@ -635,4 +636,134 @@ export function nextRetryIndex(
     if (row.retryIndex > max) max = row.retryIndex
   }
   return max + 1
+}
+
+// -----------------------------------------------------------------------------
+// RFC-287 T8（G2）—— 取行前奏的单一实现。
+//
+// 迁移前四条线各手抄一份：L4 agent / L7 script / L8 call / L9 code-host。四份的
+// 骨干完全一致（查同节点同迭代的行 → 取最新一行 isFresherNodeRun → 有 pending 就
+// 复用并盖 provenance 戳，否则按 schedulerMintCause 铸新行），差异只落在**五个
+// 维度**上（用 difflib 逐行对差实证，不是照设计文档抄的）：
+//
+//   ① reviewIteration 继承        —— 仅 L4/L8
+//   ② agentOverrideName 显式置空  —— 仅 L4/L8（RFC-132 ③：重试/复活行不再带借用）
+//   ③ 复用 pending 行时追 retryIndex —— L9 不追（它压根不追这个维度）
+//   ④ 收尾广播 pending             —— L9 不广播（它铸完直接转 running，多播一条
+//                                     WS 事件会让前台看到不存在的 pending 态）
+//   ⑤ 领养短路                     —— 仅 L8：RFC-243-LOCK 的领养区**不进收编**
+//                                     （那里可能复用一条 running/interrupted/canceled
+//                                     的行并直接转 running，与「铸行」是两码事），
+//                                     以 preResolve 回调在拿到 latestExisting 后短路。
+//
+// 三条既有测试守着这四线的差异：rfc098-rerun-cause-gates（cause 分档）、
+// rfc243 系列（领养区）、rfc284-t21（nextRetryIndex 收编）。
+// -----------------------------------------------------------------------------
+
+/** 前奏读到的同节点同迭代行（只列被判据用到的列，便于四线共用）。 */
+export interface SchedulerRunRowCandidate {
+  id: string
+  status: NodeRunStatus
+  retryIndex: number
+  reviewIteration: number
+  shardKey: string | null
+  parentNodeRunId: string | null
+  startedAt: number | null
+  childTaskId?: string | null
+}
+
+export interface ResolveSchedulerRunRowArgs<R extends SchedulerRunRowCandidate> {
+  db: DbClient
+  taskId: string
+  nodeId: string
+  iteration: number
+  /** 复用 pending 行 / 铸新行都要盖上的 provenance 戳（RFC-074）。 */
+  consumedUpstreamJson: string
+  /** 已查好的同节点同迭代行（调用方自己查——各线的 select 列集不同）。 */
+  rows: readonly R[]
+  /** ① 仅 L4/L8。 */
+  inheritReviewIteration: boolean
+  /** ② 仅 L4/L8。 */
+  clearAgentOverride: boolean
+  /** ③ L9 false。 */
+  trackRetryIndex: boolean
+  /** ④ L9 false（它铸完直接转 running）。 */
+  broadcastPending: ((nodeRunId: string) => void) | null
+  /** ⑤ 仅 L8：领养区短路，返回非 null 即整段前奏不执行。 */
+  preResolve?: (latestExisting: R | undefined) => Promise<{ nodeRunId: string } | null>
+}
+
+export interface ResolvedSchedulerRunRow<R> {
+  nodeRunId: string
+  retryIndex: number
+  latestExisting: R | undefined
+  /** 领养短路命中（L8）——调用方据此跳过自己的铸行后续。 */
+  adopted: boolean
+}
+
+export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>(
+  args: ResolveSchedulerRunRowArgs<R>,
+): Promise<ResolvedSchedulerRunRow<R>> {
+  const { db, taskId, nodeId, iteration, consumedUpstreamJson, rows } = args
+
+  // RFC-023: latest existing row drives clarify/review/shard inheritance for
+  // every fresh row minted below. isFresherNodeRun matches the comparator
+  // latestPerNode uses upstream, so the inherited round is always the one the
+  // scheduler is about to treat as authoritative.
+  let latestExisting: R | undefined
+  for (const r of rows) {
+    if (r.parentNodeRunId !== null) continue // skip fan-out children
+    if (isFresherNodeRun(r, latestExisting)) latestExisting = r
+  }
+
+  if (args.preResolve !== undefined) {
+    const adopted = await args.preResolve(latestExisting)
+    if (adopted !== null) {
+      return { nodeRunId: adopted.nodeRunId, retryIndex: 0, latestExisting, adopted: true }
+    }
+  }
+
+  const pendingExisting = rows.find((r) => r.status === 'pending' && r.parentNodeRunId === null)
+  if (pendingExisting !== undefined) {
+    // RFC-074: a reused pending row (e.g. minted by clarify rerun) runs now with
+    // the inputs just resolved — stamp its provenance to match what it reads.
+    await db
+      .update(nodeRuns)
+      .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
+      .where(eq(nodeRuns.id, pendingExisting.id))
+    if (args.broadcastPending !== null) args.broadcastPending(pendingExisting.id)
+    return {
+      nodeRunId: pendingExisting.id,
+      retryIndex: args.trackRetryIndex ? pendingExisting.retryIndex : 0,
+      latestExisting,
+      adopted: false,
+    }
+  }
+
+  // RFC-284 T21：rows 已限定节点+迭代，直接收编 nextRetryIndex。
+  const retryIndex = nextRetryIndex(rows)
+  // RFC-098 WP-10: the cause splits on what the freshest existing top-level row
+  // is — undefined→'initial', done/awaiting_*→'stale-redispatch',
+  // failed/interrupted/canceled/exhausted→'revival'（rfc098-rerun-cause-gates 锁）。
+  const nodeRunId = await mintNodeRun(db, {
+    taskId,
+    nodeId,
+    status: 'pending',
+    cause: schedulerMintCause(latestExisting),
+    retryIndex,
+    iteration,
+    overrides: {
+      ...(args.inheritReviewIteration
+        ? { reviewIteration: latestExisting?.reviewIteration ?? 0 }
+        : {}),
+      shardKey: latestExisting?.shardKey ?? null,
+      parentNodeRunId: latestExisting?.parentNodeRunId ?? null,
+      consumedUpstreamRunsJson: consumedUpstreamJson,
+      // RFC-132 ③: the borrow ledger is gone — a retry/revival row never carries
+      // an agent override anymore (the column stays as audit on old rows).
+      ...(args.clearAgentOverride ? { agentOverrideName: null } : {}),
+    },
+  })
+  if (args.broadcastPending !== null) args.broadcastPending(nodeRunId)
+  return { nodeRunId, retryIndex, latestExisting, adopted: false }
 }

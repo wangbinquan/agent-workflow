@@ -230,3 +230,41 @@ envelopeNonce、写哪种审计事件）与 `spawn`（发不发续跑短提示�
 
 **至此 G1 达成**：五条装配线（L1 工作组主机 / L4 agent / L5 分片 / L6 聚合 / L7 脚本）
 全部走 `runAssembly`，许可取放、iso 生命周期、合并处置、清理兜底各只剩一处实现。
+
+---
+
+## T8 实施记录（2026-08-13，已完成）
+
+**落位**：`resolveSchedulerRunRow` 放进 `services/nodeRunMint.ts`——`mintNodeRun` /
+`schedulerMintCause` / `nextRetryIndex` 都在那里，同域；广播用回调注入，免得把 WS 层
+拖进铸行模块。
+
+**差异矩阵是实证出来的、不是照设计抄的**：用 difflib 把四份手抄逐行对差（以 L4 为基准），
+差异恰好收敛到五项，与 design §10.3 逐格吻合：
+
+| 维度                       | L4 agent | L7 script | L8 call | L9 code-host |
+| -------------------------- | -------- | --------- | ------- | ------------ |
+| 继承 reviewIteration       | ✔        | ✘         | ✔       | ✘            |
+| 显式清 agentOverrideName   | ✔        | ✘         | ✔       | ✘            |
+| 复用 pending 行时追 retryIndex | ✔    | ✔         | ✔       | **✘**        |
+| 收尾广播 pending           | ✔        | ✔         | ✔       | **✘**        |
+| 领养短路（preResolve）     | ✘        | ✘         | **✔**   | ✘            |
+
+后两项的「✘」都是真语义、不能统一：L9 没有节点级重试（只有 HTTP 幂等重试），且它铸完
+立刻转 running——多播一条 pending 会让前台看到一个不存在的中间态。
+
+**L8 领养区按设计不进收编**：它复用一条 running/interrupted/canceled 的行并就地转
+running，与「铸行」是两码事（在那里 mint 会把子任务的 canonical iso 判为 superseded）。
+以 `preResolve` 回调短路——领养逻辑仍留在 L8 自己的代码区，RFC-243-LOCK 标记原样保留，
+并新增一条「标记区间内不得出现 mintNodeRun」的反向锁。
+
+**收编到位的硬证据**：`nextRetryIndex(` 与 `schedulerMintCause(` 在 `scheduler.ts` 里
+**归零**（lint 的 unused-import 当场报出来），两者现在各只在收编函数里出现一次。
+
+**顺带修一条既存 flaky（不是本 RFC 引入的）**：`scheduler-clarify-mid-batch` 的
+「aggregation priority」用例真起两个 opencode 子进程（asker + crasher，后者还要走完协议
+重试预算），单跑 5.4-5.6s，正好骑在 bun 默认 5000ms 上——**无负载下 3 跑红 2**，且在
+迁移前的 `443ba01e` 上同样红。按仓规不靠重跑，给它与同文件另一条同档的 `20_000` 显式
+预算并写清依据。（同批门禁里另外两条超时——`worktree-files-service` 与 `rfc131-review-
+reject-aging` ——在隔离下各跑两次全绿，属我在门禁窗口内并发跑 tsc 造成的争用，
+**不给它们加预算掩盖**，正确的修法是我别再制造争用。）

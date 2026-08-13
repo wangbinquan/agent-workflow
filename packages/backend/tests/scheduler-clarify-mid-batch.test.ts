@@ -301,5 +301,9 @@ describe('runScope — mid-batch rescan + no-fail-fast (RFC-023 bug 13)', () => 
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'b')))
     expect(crasherRuns.length).toBeGreaterThan(0)
     expect(crasherRuns.find((r) => r.status === 'failed')).toBeDefined()
-  })
+    // 2026-08-13 实测：本用例真起两个 opencode 子进程（asker + crasher，后者还要
+    // 走完协议重试预算），单跑耗时 5.4-5.6s，正好骑在 bun 默认的 5000ms 上——
+    // 无负载下 3 跑红 2，且在 RFC-287 迁移**之前**（443ba01e）就是这样，与迁移无关。
+    // 按仓规「flaky 不能掩盖红 case」：不靠重跑，给它与同文件另一条同档的显式预算。
+  }, 20_000)
 })

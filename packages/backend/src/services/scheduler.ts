@@ -138,14 +138,13 @@ import {
   tryTransitionMergeState,
 } from '@/services/lifecycle'
 import {
-  nextRetryIndex,
   continuesClarifyLineage,
   frozenRuntimeOfSession,
   isClarifyRerunCause,
   loadRunEnvelopeNonce,
   mintNodeRun,
   resolveFrozenRuntime,
-  schedulerMintCause,
+  resolveSchedulerRunRow,
 } from '@/services/nodeRunMint'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
@@ -3205,83 +3204,68 @@ async function runCallWorkflowNode(
       ),
     )
     .orderBy(asc(nodeRuns.startedAt))
-  let latestExisting: (typeof sameNodeIterRuns)[number] | undefined
-  for (const r of sameNodeIterRuns) {
-    if (r.parentNodeRunId !== null) continue
-    if (isFresherNodeRun(r, latestExisting)) latestExisting = r
-  }
-
-  let nodeRunId: string
   let adoptedChildTaskId: string | null = null
   let launchedChildId: string | null = null
   let liveIso: IsoHandle | null = null
-  // RFC-243-LOCK:adoption-no-mint-begin — this block re-attaches; minting
-  // here would abandonSupersededMergeStates the child's canonical iso.
-  // 实现门 P1-5：领养判据按「这一代是否已收尾」而不是单看 running/interrupted。
-  // daemon shutdown 的收尾会把调用行落成 canceled（RFC-095 revival 语义下它
-  // 仍是可复活行），只认 running/interrupted 会漏掉领养 → 重新 mint → 同一
-  // 父任务下重复发起第二个子任务（rfc243-call-workflow 恢复矩阵实测）。
-  // done/failed/exhausted 是已收尾代：retry 会 mint 新行，那条行 childTaskId
-  // 为空，自然走下面的发起分支。
-  const ADOPTABLE_CALL_ROW_STATUSES = new Set(['pending', 'running', 'interrupted', 'canceled'])
-  if (
-    latestExisting !== undefined &&
-    latestExisting.childTaskId !== null &&
-    ADOPTABLE_CALL_ROW_STATUSES.has(latestExisting.status)
-  ) {
-    nodeRunId = latestExisting.id
-    adoptedChildTaskId = latestExisting.childTaskId
-    if (latestExisting.status !== 'running') {
-      // Wrapper-revive escape hatch (RFC-053/095 precedent): the parked /
-      // reaped / shutdown-canceled call row RESUMES in place — never a fresh
-      // mint (see header).
-      await setNodeRunStatus({
-        db,
-        nodeRunId,
-        to: 'running',
-        allowedFrom: ['pending', 'interrupted', 'canceled'],
-        allowTerminal: true,
-        reason: 'call-adoption',
-      })
-      broadcastNodeStatus(taskId, nodeRunId, node.id, 'running')
-    }
-    log.info('call node adopted its in-flight child task', {
-      nodeId: node.id,
-      childTaskId: adoptedChildTaskId,
-    })
-    // RFC-243-LOCK:adoption-no-mint-end
-  } else {
-    const pendingExisting = sameNodeIterRuns.find(
-      (r) => r.status === 'pending' && r.parentNodeRunId === null,
-    )
-    let retryIndex: number
-    if (pendingExisting !== undefined) {
-      nodeRunId = pendingExisting.id
-      retryIndex = pendingExisting.retryIndex
-      await db
-        .update(nodeRuns)
-        .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
-        .where(eq(nodeRuns.id, nodeRunId))
-    } else {
-      // RFC-284 T21：sameNodeIterRuns 已限定节点+迭代，收编 nextRetryIndex。
-      retryIndex = nextRetryIndex(sameNodeIterRuns)
-      nodeRunId = await mintNodeRun(db, {
-        taskId,
+  // RFC-287 T8：取行前奏收编，但**领养区不进收编**——它复用一条 running /
+  // interrupted / canceled 的行并就地转 running，与「铸行」是两码事（下面的
+  // RFC-243-LOCK 说明为什么这里绝不能 mint）。以 preResolve 回调短路：拿到
+  // latestExisting 后本线自己判领养，命中即整段前奏不执行。
+  const resolvedCallRow = await resolveSchedulerRunRow({
+    db,
+    taskId,
+    nodeId: node.id,
+    iteration,
+    consumedUpstreamJson,
+    rows: sameNodeIterRuns,
+    inheritReviewIteration: true,
+    clearAgentOverride: true,
+    trackRetryIndex: true,
+    broadcastPending: (id) => broadcastNodeStatus(taskId, id, node.id, 'pending'),
+    preResolve: async (latestExisting) => {
+      // RFC-243-LOCK:adoption-no-mint-begin — this block re-attaches; minting
+      // here would abandonSupersededMergeStates the child's canonical iso.
+      // 实现门 P1-5：领养判据按「这一代是否已收尾」而不是单看 running/interrupted。
+      // daemon shutdown 的收尾会把调用行落成 canceled（RFC-095 revival 语义下它
+      // 仍是可复活行），只认 running/interrupted 会漏掉领养 → 重新 mint → 同一
+      // 父任务下重复发起第二个子任务（rfc243-call-workflow 恢复矩阵实测）。
+      // done/failed/exhausted 是已收尾代：retry 会 mint 新行，那条行 childTaskId
+      // 为空，自然走下面的发起分支。
+      const ADOPTABLE_CALL_ROW_STATUSES = new Set(['pending', 'running', 'interrupted', 'canceled'])
+      if (
+        latestExisting === undefined ||
+        latestExisting.childTaskId === null ||
+        latestExisting.childTaskId === undefined ||
+        !ADOPTABLE_CALL_ROW_STATUSES.has(latestExisting.status)
+      ) {
+        return null
+      }
+      adoptedChildTaskId = latestExisting.childTaskId
+      if (latestExisting.status !== 'running') {
+        // Wrapper-revive escape hatch (RFC-053/095 precedent): the parked /
+        // reaped / shutdown-canceled call row RESUMES in place — never a fresh
+        // mint (see header).
+        await setNodeRunStatus({
+          db,
+          nodeRunId: latestExisting.id,
+          to: 'running',
+          allowedFrom: ['pending', 'interrupted', 'canceled'],
+          allowTerminal: true,
+          reason: 'call-adoption',
+        })
+        broadcastNodeStatus(taskId, latestExisting.id, node.id, 'running')
+      }
+      log.info('call node adopted its in-flight child task', {
         nodeId: node.id,
-        status: 'pending',
-        cause: schedulerMintCause(latestExisting),
-        retryIndex,
-        iteration,
-        overrides: {
-          reviewIteration: latestExisting?.reviewIteration ?? 0,
-          shardKey: latestExisting?.shardKey ?? null,
-          parentNodeRunId: latestExisting?.parentNodeRunId ?? null,
-          consumedUpstreamRunsJson: consumedUpstreamJson,
-          agentOverrideName: null,
-        },
+        childTaskId: adoptedChildTaskId,
       })
-    }
-    broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
+      return { nodeRunId: latestExisting.id }
+      // RFC-243-LOCK:adoption-no-mint-end
+    },
+  })
+  const nodeRunId = resolvedCallRow.nodeRunId
+  const latestExisting = resolvedCallRow.latestExisting
+  if (!resolvedCallRow.adopted) {
     await transitionNodeRunStatus({ db, nodeRunId, event: { kind: 'mark-running' } })
     broadcastNodeStatus(taskId, nodeRunId, node.id, 'running')
 
@@ -4303,37 +4287,22 @@ async function runCodeHostCallNode(
       ),
     )
     .orderBy(asc(nodeRuns.startedAt))
-  let latestExisting: (typeof sameNodeIterRuns)[number] | undefined
-  for (const r of sameNodeIterRuns) {
-    if (r.parentNodeRunId !== null) continue
-    if (isFresherNodeRun(r, latestExisting)) latestExisting = r
-  }
-  const pendingExisting = sameNodeIterRuns.find(
-    (r) => r.status === 'pending' && r.parentNodeRunId === null,
-  )
-  let nodeRunId: string
-  if (pendingExisting !== undefined) {
-    nodeRunId = pendingExisting.id
-    await db
-      .update(nodeRuns)
-      .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
-      .where(eq(nodeRuns.id, nodeRunId))
-  } else {
-    nodeRunId = await mintNodeRun(db, {
-      taskId,
-      nodeId: node.id,
-      status: 'pending',
-      cause: schedulerMintCause(latestExisting),
-      // RFC-284 T21：同上，收编 nextRetryIndex。
-      retryIndex: nextRetryIndex(sameNodeIterRuns),
-      iteration,
-      overrides: {
-        shardKey: latestExisting?.shardKey ?? null,
-        parentNodeRunId: latestExisting?.parentNodeRunId ?? null,
-        consumedUpstreamRunsJson: consumedUpstreamJson,
-      },
-    })
-  }
+  // RFC-287 T8：取行前奏收编。本线两处与其余三线不同，**都不能统一掉**：
+  //   · 不追 retryIndex —— 代码平台调用没有节点级重试（只有 HTTP 幂等重试）；
+  //   · 不广播 pending —— 它铸完立刻转 running（下方），多播一条 WS 事件会让
+  //     前台看到一个根本不存在的 pending 态。
+  const { nodeRunId } = await resolveSchedulerRunRow({
+    db,
+    taskId,
+    nodeId: node.id,
+    iteration,
+    consumedUpstreamJson,
+    rows: sameNodeIterRuns,
+    inheritReviewIteration: false,
+    clearAgentOverride: false,
+    trackRetryIndex: false,
+    broadcastPending: null,
+  })
   await setNodeRunStatus({
     db,
     nodeRunId,
@@ -4480,41 +4449,22 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
       ),
     )
     .orderBy(asc(nodeRuns.startedAt))
-  let latestExisting: (typeof sameNodeIterRuns)[number] | undefined
-  for (const r of sameNodeIterRuns) {
-    if (r.parentNodeRunId !== null) continue
-    if (isFresherNodeRun(r, latestExisting)) latestExisting = r
-  }
-  const pendingExisting = sameNodeIterRuns.find(
-    (r) => r.status === 'pending' && r.parentNodeRunId === null,
-  )
-  let retryIndex = 0
-  let nodeRunId: string
-  if (pendingExisting !== undefined) {
-    nodeRunId = pendingExisting.id
-    retryIndex = pendingExisting.retryIndex
-    await db
-      .update(nodeRuns)
-      .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
-      .where(eq(nodeRuns.id, nodeRunId))
-  } else {
-    // RFC-284 T21：同上，收编 nextRetryIndex。
-    retryIndex = nextRetryIndex(sameNodeIterRuns)
-    nodeRunId = await mintNodeRun(db, {
-      taskId,
-      nodeId: node.id,
-      status: 'pending',
-      cause: schedulerMintCause(latestExisting),
-      retryIndex,
-      iteration,
-      overrides: {
-        shardKey: latestExisting?.shardKey ?? null,
-        parentNodeRunId: latestExisting?.parentNodeRunId ?? null,
-        consumedUpstreamRunsJson: consumedUpstreamJson,
-      },
-    })
-  }
-  broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
+  // RFC-287 T8：取行前奏收编（脚本线不继承 reviewIteration、不写 agentOverrideName
+  // ——它没有评审轮次也没有代理借用；其余四维与 agent 线同）。
+  const resolvedRow = await resolveSchedulerRunRow({
+    db,
+    taskId,
+    nodeId: node.id,
+    iteration,
+    consumedUpstreamJson,
+    rows: sameNodeIterRuns,
+    inheritReviewIteration: false,
+    clearAgentOverride: false,
+    trackRetryIndex: true,
+    broadcastPending: (id) => broadcastNodeStatus(taskId, id, node.id, 'pending'),
+  })
+  let nodeRunId = resolvedRow.nodeRunId
+  const retryIndex = resolvedRow.retryIndex
 
   const interpreter = await resolveScriptInterpreter(language, opts.scriptInterpreters ?? {})
   if (interpreter === null) {
@@ -5423,65 +5373,30 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       ),
     )
     .orderBy(asc(nodeRuns.startedAt))
-  let retryIndex = 0
-  let nodeRunId: string
-  // RFC-023: latest existing row drives clarify/review/shard inheritance for
-  // every fresh row we mint below (single-node retry-from-interrupted, resume
-  // of an interrupted clarify rerun, and the process-retry inner loop). Using
-  // isFresherNodeRun matches the comparator that latestPerNode uses upstream,
-  // so the inherited round is always the one the scheduler is about to treat
-  // as authoritative.
-  let latestExisting: (typeof sameNodeIterRuns)[number] | undefined
-  for (const r of sameNodeIterRuns) {
-    if (r.parentNodeRunId !== null) continue // skip fan-out children
-    if (isFresherNodeRun(r, latestExisting)) latestExisting = r
-  }
+  // RFC-287 T8：取行前奏收编到 `resolveSchedulerRunRow`（四线单一实现）。
   // RFC-074 PR-C: no clarifyIteration inheritance — freshness is pure id-order
   // and the clarify generation is derived from prior-done id-order at dispatch
   // time. A process retry's External Feedback / Prior Output / questioner Q&A
   // context all key off id-order / the RFC-070 consumed-by stamps, so nothing
   // needs to be carried forward on the row.
+  const resolvedRow = await resolveSchedulerRunRow({
+    db,
+    taskId,
+    nodeId: node.id,
+    iteration,
+    consumedUpstreamJson,
+    rows: sameNodeIterRuns,
+    inheritReviewIteration: true,
+    clearAgentOverride: true,
+    trackRetryIndex: true,
+    broadcastPending: (id) => broadcastNodeStatus(taskId, id, node.id, 'pending'),
+  })
+  let nodeRunId = resolvedRow.nodeRunId
+  const retryIndex = resolvedRow.retryIndex
+  const latestExisting = resolvedRow.latestExisting
   const inheritedReviewIteration = latestExisting?.reviewIteration ?? 0
   const inheritedShardKey = latestExisting?.shardKey ?? null
   const inheritedParentNodeRunId = latestExisting?.parentNodeRunId ?? null
-  const pendingExisting = sameNodeIterRuns.find(
-    (r) => r.status === 'pending' && r.parentNodeRunId === null,
-  )
-  if (pendingExisting !== undefined) {
-    nodeRunId = pendingExisting.id
-    retryIndex = pendingExisting.retryIndex
-    // RFC-074: a reused pending row (e.g. minted by clarify rerun) runs now with
-    // the inputs we just resolved — stamp its provenance to match what it reads.
-    await db
-      .update(nodeRuns)
-      .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
-      .where(eq(nodeRuns.id, nodeRunId))
-  } else {
-    // RFC-284 T21：同上，收编 nextRetryIndex。
-    retryIndex = nextRetryIndex(sameNodeIterRuns)
-    // RFC-098 WP-10: the cause splits on what the freshest existing top-level
-    // row is — undefined→'initial', done/awaiting_*→'stale-redispatch',
-    // failed/interrupted/canceled/exhausted→'revival' (对抗检视修订 #11,
-    // pinned by rfc098-rerun-cause-gates.test.ts).
-    nodeRunId = await mintNodeRun(db, {
-      taskId,
-      nodeId: node.id,
-      status: 'pending',
-      cause: schedulerMintCause(latestExisting),
-      retryIndex,
-      iteration,
-      overrides: {
-        reviewIteration: inheritedReviewIteration,
-        shardKey: inheritedShardKey,
-        parentNodeRunId: inheritedParentNodeRunId,
-        consumedUpstreamRunsJson: consumedUpstreamJson,
-        // RFC-132 ③: the borrow ledger is gone — a retry/revival row never carries an
-        // agent override anymore (the column stays as historical audit on old rows).
-        agentOverrideName: null,
-      },
-    })
-  }
-  broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
   let envelopeNonce = await loadRunEnvelopeNonce(db, nodeRunId)
 
   // Lock order: writeSem ≺ (agentSem | scriptSem) ≺ subprocessSem (no cycles —
