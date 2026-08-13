@@ -100,6 +100,7 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc287-t1-line-throw-disposition.test.ts',
   'rfc287-t1-merge-disposition-matrix.test.ts',
   'rfc287-t1-release-before-discard.test.ts',
+  'rfc287-t5-script-merge-throw.test.ts',
   'rfc292-trigger-source-locks.test.ts',
   'runner-injected-memories.test.ts',
   'runner-resume-session-flag.test.ts',

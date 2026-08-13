@@ -97,16 +97,16 @@ describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
     expect(branch).toMatch(/kind: 'awaiting_human'/)
   })
 
-  test('conflict-human 列：脚本线 awaiting_human，但 keep 是「谓词碰巧」而非显式声明', () => {
-    const branch = branchAfter(
-      bodyOf('async function runScriptNode('),
-      "merge.kind === 'conflict-human'",
-    )
+  test('conflict-human 列：脚本线 awaiting_human + **显式** keep（C2 前置，T5a 已改）', () => {
+    const body = bodyOf('async function runScriptNode(')
+    const branch = branchAfter(body, "merge.kind === 'conflict-human'")
     expect(branch).toMatch(/kind: 'awaiting_human'/)
-    // 关键：该分支**没有**任何 keep 声明——iso 得以保住只是因为 finally 的谓词
-    // `(!succeeded || isReadonly)` 恰好为假。C2 改成功路径即时 discard 后，这个
-    // 「碰巧」就没了，必须改成显式声明（design §10.10）。
-    expect(branch).not.toMatch(/keep/i)
+    // T5a 之前这里**没有**任何 keep 声明——iso 得以保住只是因为 finally 的谓词
+    // `(!succeeded || isReadonly)` 恰好为假。C2 要把成功路径改成即时 discard，
+    // 那个「碰巧」就会消失、撞冲突的 resolve-iso 会被连带删掉，落成孤儿
+    // conflict-human（而恢复逻辑在每个任务入口都跑、会去找已回收的提交并
+    // failTask 整个任务）。故 T5a 一并改成显式声明。
+    expect(branch).toMatch(/keep\w*Iso = true|keep: true/)
   })
 
   test('工作组主机线：throw 是 keepHookIso + 重抛；conflict 是 abandon + failed', () => {

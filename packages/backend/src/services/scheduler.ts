@@ -4514,6 +4514,9 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
   // Every script runs in an isolated worktree. A readonly script may write to
   // that disposable copy, but the copy is never merged back into canonical.
   let isoHandle: IsoHandle | null = null
+  // RFC-287 C1/C2：合并抛出或撞冲突时**显式**保留 iso（此前撞冲突是靠 finally 谓词
+  // 碰巧为假才保住的，合并抛出则根本没兜）。
+  let keepScriptIso = false
   const isoKeyRunId = nodeRunId
   try {
     isoHandle = await createIsoUnderLock({
@@ -4611,34 +4614,54 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
     }
 
     if (succeeded && !isReadonly && isoHandle !== null && !isoHandle.passthrough) {
-      const merge = await mergeBackAndSettle({
-        db,
-        writeSem,
-        handle: isoHandle,
-        nodeRunId,
-        repoCount: task.repoCount,
-        via: 'live',
-        conflictResolver: (conflicts, containerPath) =>
-          resolveMergeConflicts(state, {
-            conflicts,
-            containerPath,
-            conflictNodeRunId: nodeRunId,
-            nodeId: node.id,
-            iteration,
-          }),
-        log,
-      })
-      if (merge.kind === 'conflict-human') {
+      // RFC-287 C1（漂移 A 根治）：此前这里是**裸调用、无 try/catch**——而其余四条
+      // 装配线都有。合并一旦抛出（git 层出错、仓库状态异常、超时），异常会穿过
+      // finally 一路掀翻调度循环：任务以一个笼统的内部错误收场而不是「某节点失败」、
+      // 该节点的行停在非终态、同时在跑的兄弟节点被丢下、用户没有「重试这个节点」
+      // 的落点。收敛到与 agent / fanout 两线同一处置：保留 iso（它可能是该节点产物
+      // 的唯一副本）+ 标记合并失败 + 判该节点失败。
+      try {
+        const merge = await mergeBackAndSettle({
+          db,
+          writeSem,
+          handle: isoHandle,
+          nodeRunId,
+          repoCount: task.repoCount,
+          via: 'live',
+          conflictResolver: (conflicts, containerPath) =>
+            resolveMergeConflicts(state, {
+              conflicts,
+              containerPath,
+              conflictNodeRunId: nodeRunId,
+              nodeId: node.id,
+              iteration,
+            }),
+          log,
+        })
+        if (merge.kind === 'conflict-human') {
+          // 撞冲突时保留 iso 是**显式声明**的，不再依赖 finally 谓词「碰巧」为假
+          // （C2 把成功路径改成即时 discard 后，那个「碰巧」就没了——design §10.10）。
+          keepScriptIso = true
+          return {
+            kind: 'awaiting_human',
+            summary: `merge conflict unresolved: ${merge.detail}`,
+            message: 'merge-conflict',
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        keepScriptIso = true
+        await markMergeFailed(db, nodeRunId, msg, log)
         return {
-          kind: 'awaiting_human',
-          summary: `merge conflict unresolved: ${merge.detail}`,
-          message: 'merge-conflict',
+          kind: 'failed',
+          summary: `script node ${node.id} merge failed`,
+          message: `merge-back-failed: ${msg}`,
         }
       }
     }
   } finally {
     releaseScript()
-    if (isoHandle !== null && (!succeeded || isReadonly)) {
+    if (isoHandle !== null && !keepScriptIso && (!succeeded || isReadonly)) {
       await discardNodeIso(isoHandle, log, writeSem).catch(() => {})
     }
   }
