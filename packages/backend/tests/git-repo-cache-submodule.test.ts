@@ -10,12 +10,13 @@
 //     update --init --recursive` and surface submoduleSyncOk/Error
 //   - never blanks when submoduleMode='never' (escape-hatch parity)
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { beforeAll, describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { refreshCachedRepo, resolveCachedRepo } from '../src/services/gitRepoCache'
+import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { cachedRepos } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -86,8 +87,15 @@ async function buildFixture(): Promise<{
   await gitCmd(parentWorking, '-C', parentWorking, 'commit', '-m', 'add submodule')
   const parentBare = join(root, 'parent.git')
   await gitCmd(root, 'clone', '--bare', parentWorking, parentBare)
-  return { root, parentUrl: `file://${parentBare}`, childBare }
+  // RFC-287 G5（二轮门落点纠正后）：`refreshCachedRepo` 也拒 `file://` 了，所以
+  // **父仓的对外 URL** 必须走真实远端。子模块那条 `file://` 引用保持不变——它是
+  // git 仓内部的 .gitmodules 记录，不经我们的启动/刷新判据。
+  return { root, parentUrl: remoteUrlFor(parentBare), childBare }
 }
+
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
 
 describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', () => {
   let db: DbClient
