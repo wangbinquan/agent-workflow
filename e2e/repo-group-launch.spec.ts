@@ -219,6 +219,43 @@ async function waitTaskTerminal(daemon: DaemonHandle, taskId: string): Promise<v
   throw new Error(`task ${taskId} did not reach a terminal state`)
 }
 
+interface TaskRepoProjection {
+  status: string
+  repoCount: number
+  worktreePath: string
+  repos: Array<{ repoIndex: number; mountPath: string }>
+}
+
+async function waitTaskRepoProjection(
+  daemon: DaemonHandle,
+  taskId: string,
+  expectedRepoCount: number,
+): Promise<TaskRepoProjection> {
+  const deadline = Date.now() + 25_000
+  let last: TaskRepoProjection | null = null
+  while (Date.now() < deadline) {
+    const response = await fetch(`${daemon.baseUrl}/api/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${daemon.token}` },
+    })
+    if (!response.ok) throw new Error(`task status: ${response.status}`)
+    last = (await response.json()) as TaskRepoProjection
+    if (
+      last.repoCount === expectedRepoCount &&
+      last.repos.length === expectedRepoCount &&
+      last.worktreePath !== ''
+    ) {
+      return last
+    }
+    if (['failed', 'canceled'].includes(last.status)) {
+      throw new Error(`task ${taskId} ended before repository preparation: ${JSON.stringify(last)}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  }
+  throw new Error(
+    `task ${taskId} repository projection did not reach ${expectedRepoCount}: ${JSON.stringify(last)}`,
+  )
+}
+
 test.describe('RFC-248 —— 仓库组多仓启动', () => {
   let daemon: DaemonHandle | undefined
   const repos: RepoFixture[] = []
@@ -278,15 +315,9 @@ test.describe('RFC-248 —— 仓库组多仓启动', () => {
     await page.waitForURL(/\/tasks\/[A-Z0-9]{26}/i, { timeout: 15_000 })
     const taskId = page.url().match(/\/tasks\/([A-Z0-9]{26})/i)![1]!
 
-    const taskRes = await fetch(`${d.baseUrl}/api/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${d.token}` },
-    })
-    expect(taskRes.ok).toBe(true)
-    const task = (await taskRes.json()) as {
-      repoCount: number
-      worktreePath: string
-      repos: Array<{ repoIndex: number; mountPath: string }>
-    }
+    // RFC-287 G7：任务行先以占位投影落库，仓库准备随后推进。按可观察条件等待
+    // `tasks` 与 `task_repos` 的原子回填，不用固定 sleep，也不把占位态误判成产品失败。
+    const task = await waitTaskRepoProjection(d, taskId, 2)
     expect(task.repoCount).toBe(2)
     expect(task.repos).toHaveLength(2)
     expect(task.repos.map((r) => r.repoIndex)).toEqual([0, 1])
