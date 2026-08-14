@@ -20,7 +20,7 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 | # | 任务 | 依赖 |
 | --- | --- | --- |
 | T1 | 新建 `modules/code-capability/` 骨架：七层目录 + public 合同占位；边界规则接入既有 import 守卫 | — |
-| T2 | `code_work_items` / `code_work_rounds` / `code_round_stages` 表与迁移 | T1 |
+| T2 | `code_work_items` / `code_work_rounds` / `code_round_stages` / **`code_ai_attempts`** 表与迁移；工作项身份键用 `(codeHostEndpointId, stableProjectId, …)` | T1 |
 | T3 | 工作项状态机（domain 纯函数）+ CAS 写入（照搬 `lifecycle.ts` 姿势）+ 转移表穷举测试 | T2 |
 | T4 | `StageContract` / `StageDef` 类型与注册；`kind: 'program'\|'ai'\|'script'` 强制标注 | T1 |
 | T5 | `StageEngine`：按序推进、落 `code_round_stages`、失败传播 | T3,T4 |
@@ -29,7 +29,9 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 | T8 | 阶段契约版本化：钩子声明版本，升版后旧钩子显式报迁移 | T7 |
 | T9a | **新增 execution kind `code-round`**（design D5）：`StartExecutionRequest` 增变体、task-execution 侧 participant、进程归属、取消与恢复语义。**须先与 task-execution owner 对齐**——这是本 RFC 唯一触及既有执行模块的改动 | T1 |
 | T9 | `TaskLauncherPort` + 适配：起一轮 = 起一个 `code-round` task；新增独立任务类型并接入列表筛选 | T3,T9a |
-| T10 | 抢占：新事件到达取消在跑轮次，幂等且不产生孤儿行 | T9 |
+| T10 | 抢占：`superseding` 中间态 + round `epoch`；旧 task 终态后才开新轮；幂等且不产生孤儿行 | T9 |
+| T10b | `epoch` 复检钩子：所有对外写动作（publish / push / resolve）动手前复检 epoch 与 MR lease，过期则放弃产出 | T10 |
+| T10c | MR 级 lease：`(codeHostEndpointId, stableProjectId, anchorKind, anchorId)` 为键，跨工作项串行 | T3 |
 | T11 | 源码层负扫描：`kind:'program'` 阶段不得出现 agent 派发；`SAFE_FORWARD_ENV` 未被修改 | T4,T6 |
 | T12 | 用一条最简内置流程（`prepare-worktree → 一个 program 阶段 → ledger`）端到端验证地基 | T5–T10 |
 
@@ -41,6 +43,7 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 | T14 | 部门层写权额外要求 `scripts:author`；小组层不得写入脚本与钩子字段（服务端遮蔽 + 拒绝） | T13 |
 | T15 | 参数继承：框架声明 `paramSchema` 与默认值，绑定覆盖；解析顺序与来源可追溯 | T13 |
 | T16 | `repo_capability_config`（仓库 × 能力矩阵）+ 仓库 ACL 判据接入 | T13 |
+| T16b | `readiness` 三态派生（`disabled`/`misconfigured`/`ready`）+ 「启用」编排动作（选默认 binding → 建/校验触发器 → 校验 code-host 与 agent 可见性）+ 逐条缺失项的一键修复入口 | T16,T18 |
 | T17a | **扩 RFC-271 的闭合集合**（设计门 P1：它今天不是通用包格式）：`ResourcePackageTypeSchema` 只接受六种（`packages/shared/src/schemas/resourcePackage.ts:18`）、`BundleOp` 是固定十二分支 union（`packages/shared/src/bundle/op.ts:87`）、`bundle.ts:42` 同样只识别六类。需逐项扩：type enum、bundle payload、BundleOp 变体、引用闭包解析、serialize/parse、preview/commit apply provider、importer | T13 |
 | T17b | 两类资源接入配置包：闭包、`requirements`、`secrets[]` 脱敏索引 + 往返测试 | T17a |
 | T18 | 内置两套：标准 GitLab/GitHub 框架（不接自建系统）+ 五套默认 agent 绑定，`built-in` + `public` | T15 |
@@ -59,11 +62,12 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 | # | 任务 | 依赖 |
 | --- | --- | --- |
 | T23 | `split-diff`：按目录层级聚合 + 体量上限，确定性 | T4 |
-| T24 | `review-shard`（并行 AI 段）+ `review-global`；aiSchema 定义 | T6,T23 |
+| T24 | `review-shard`（并行 AI 段，**每片一棵独立一次性工作树、禁 merge-back**）+ `review-global`；aiSchema 定义 | T6,T23 |
+| T24b | **fork MR/PR 支持**：归一化并冻结 source project clone URL + head SHA，按 source remote 精确 fetch；fork PR 的 CI 事件经 head SHA→开放 PR 映射唤醒（唯一命中才唤醒）| T23 |
 | T25 | `validate-findings`：结构 + 行号在**原始 diff** 内（不读当前工作树，锁 AC-4） | T6,T23 |
 | T26 | `gate`：确定性排序 → 阈值过滤 → 上限截断 + 未展开计数 | T25 |
-| T27 | `code_findings` 台账 + `fingerprint`（行号不入指纹）+ `dedupe` | T2 |
-| T28 | `cleanup-previous`：resolve 上轮 bot 线程，保留人类回复 | T22,T27 |
+| T27 | `code_findings` 台账（键与工作项解耦）+ `fingerprint`（行号不入、但含 `symbolOrHunkDigest`）+ `reconcile` 三集合对账 | T2 |
+| T28 | `settle-stale`：**发布成功后**才处理已消失的意见；**provider-specific**——GitLab resolve，GitHub 无 resolve 能力故追加"已不再出现"回复 | T22,T27,T29 |
 | T29 | `publish`：草稿攒齐一次性发布 + 锚不上的并入总览评论 | T21,T26 |
 | T30 | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账 | T27 |
 | T31 | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"） | T23–T30,T16 |
@@ -93,7 +97,7 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 | --- | --- | --- |
 | T41 | `decide-form`：单文件 + 连续行数在阈值内 ⇒ suggestion，否则 patch | T4 |
 | T42 | suggestion 渲染（两家语法）与发布 | T41,T19 |
-| T43 | patch 路径：贴 diff → `awaiting` → 关键词识别 → `verify-baseline` → push | T41,T3 |
+| T43 | patch 路径：生成改动 → **固化为 detached commit + digest（`pendingArtifact`）** → 贴 diff（带 digest 短标识）→ `awaiting` → 关键词识别（须匹配 generation）→ `verify-baseline`（校 head/artifact/digest 三者）→ **物化并推送该确切产物**，不重新生成 | T41,T3 |
 | T44 | 权限：suggestion 放宽到仓库写权限者；推送锁 MR 作者，bot MR 读 `initiatorUserId` | T43 |
 | T45 | 源分支变化作废 + 回帖说明 | T43 |
 
@@ -144,13 +148,13 @@ PR-1 地基 ──┬─► PR-2 配置 ──┬─► PR-4 检视 ──┬─
 
 | PR | 覆盖的 AC（proposal §9） | 门禁 |
 | --- | --- | --- |
-| PR-1 | **AC-8（主）**、AC-9、AC-10、AC-20、AC-23、AC-27、AC-28 | 状态机穷举 + 负扫描 + 两级重试三档用例 + 最简流程集成 |
-| PR-2 | AC-18、AC-19、AC-21、AC-22、AC-24（框架部分） | 权限拒绝用例 + 参数继承用例 + 配置包往返 |
+| PR-1 | **AC-8（主）**、AC-9、AC-10、AC-20、AC-23、AC-27、AC-28、AC-28b | 状态机穷举（含 superseding/handed_off）+ 负扫描**及其反向自检** + 两级重试三档 + epoch 复检 + 最简流程集成 |
+| PR-2 | AC-18、AC-19、AC-21、AC-22、AC-24（框架部分）、AC-32 | 权限拒绝 + 参数继承 + 配置包往返（含扩 enum/op 后的闭集）+ readiness 三态 |
 | PR-3 | —（为 AC-1/3/6 提供能力） | 两家发布载荷断言 + 部分失败清理 |
-| PR-4 | AC-1、AC-2、AC-3、AC-4、AC-5、AC-6、AC-6b、AC-7、AC-7b、AC-8（接线）、AC-24 | position 纯函数表驱动 + 完整一轮集成 + 第二轮三集合对账 + fork MR 端到端（两家）|
+| PR-4 | AC-1～AC-7b、AC-8（接线）、AC-24、AC-30、AC-31 | position 表驱动 + 完整一轮 + 三集合对账（含发布失败不清理）+ per-shard 树隔离 + fork 两家端到端 |
 | PR-5 | AC-25（前两层）、AC-27 | 组件测试 + e2e 冒烟 |
 | PR-6 | AC-11、AC-12、AC-15、AC-28 | 零轮询断言 + 多项工作包一次推送 + 抢占无孤儿 |
-| PR-7 | AC-16、AC-17 | 权限拒绝 + awaiting 全链 + 基线变化作废 |
+| PR-7 | AC-16、AC-17、AC-29 | 权限拒绝 + awaiting 全链（断言 AI 阶段未重跑、推送内容与 digest 一致）+ 基线变化作废 |
 | PR-8 | AC-8（本能力 AI 阶段的接线证明）、AC-14c、AC-22 | 三入口参数校验 + issue 事件面往返 + clarify 出站/入站两条路径 |
 | PR-9 | AC-13、AC-14 | anti-cheat 结构检查用例 + 三轮上限 |
 | PR-10 | AC-25（第三层）、AC-26 | e2e：配置 → 发起 → 状态图三层 → 切轮次 |
