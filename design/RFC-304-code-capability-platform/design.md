@@ -182,6 +182,17 @@ lease 还承担事件 revision 仲裁：每次对外 `publish` / `push` 之前**
 （反问的答案是新输入，理解必须重做，但取内容与建工作树不必）。契约里没声明 `resumeFrom` 的能力
 不允许进入 `awaiting`（保存期校验）。
 
+**光有 `resumeFrom` 还不够——被确认的那份改动必须先落成不可变产物。** 新一轮拿到的是**新 worktree**，
+而作者确认的是上一轮生成的那份确切 diff；若不持久化，`verify-baseline → push` 手里根本没有可推的
+东西，而重新生成又不再是作者点头的内容。故进入 `awaiting` 之前，`post-patch` 阶段必须：
+
+1. 把改动固化为不可变产物——**一个 detached commit**（推荐，天然带 tree 与 parent）或 patch blob；
+2. 记录 `pendingArtifact = { ref, digest, baselineSha }` 到 Round；
+3. 回帖里带上 digest 的短标识，确认关键词绑定它。
+
+唤醒后 `verify-baseline` 校三件事：远端 head 仍是 `baselineSha`、artifact 仍存在、digest 匹配；
+`push` 只**物化并推送这份确切产物**，不重新生成。artifact 的保留期与工作项同寿，`closed` 时清理。
+
 ### 2.3 轮次（Round）
 
 一轮 = 一次 `queued → running → 终态`，物化为**一个 task**。轮次记录：
@@ -191,6 +202,8 @@ roundSeq          从 1 递增，永不复用
 capability        本轮执行哪条能力
 templateRef       本轮用的框架版本 + 绑定版本（快照，非引用——中途改配置不影响在跑的轮）
 baselineSha       本轮基于哪个 commit（awaiting 作废判定、position 组装都要它）
+epoch             抢占代际；publish/push 前复检自己仍是当前 epoch（§2.2 不变量一）
+pendingArtifact   进入 awaiting 前**必须**持久化的不可变产物 + digest（见下）
 workPackage       仲裁脚本返回的本轮工作包（可含多项，E8）
 taskId            task-execution 侧的 id
 stageContractVer  本轮使用的阶段契约版本
@@ -258,13 +271,18 @@ CapabilityFramework（部门层）        CapabilityBinding（小组层）
 | --- | --- |
 | `code_work_items` | 身份键唯一索引；`status`；`currentRoundId`；`anchorMeta`（MR/issue 元信息快照）；`initiatorUserId`（C3 的"事实作者"）；`closedAt` |
 | `code_work_rounds` | `workItemId` + `roundSeq` 唯一；`taskId`；`baselineSha`；`workPackage`；`templateSnapshot`；`stageContractVer`；`outcome` |
-| `code_round_stages` | 每阶段一行：`stageName`、`status`、`startedAt/endedAt`、`attemptCount`、`envelopeValidation`（供状态图第三层） |
+| `code_round_stages` | 每阶段一行：`stageName`、`status`、`startedAt/endedAt`、聚合计数 |
+| `code_ai_attempts` | **每次 AI 调用一行**（设计门 P2）：`roundId`、`stageName`、`shardKey`、`sessionRef`、`rerunSeq`（换会话重跑第几次）、`attemptSeq`（同会话重试第几次）、`validationOutcome`、`status`、时间、关联 nodeRun/session id |
 | `code_findings` | 台账，见 §2.4；唯一键 **`(provider, projectRef, anchorRef, fingerprint)`**，**不含 workItemId** —— 见下方「台账为何与工作项解耦」 |
 | `capability_frameworks` | 部门层模板资源 |
 | `capability_bindings` | 小组层模板资源 |
 | `repo_capability_config` | 仓库 × 能力矩阵：`repoId` + `capability` 唯一，指向一个 binding，带启用开关与触发配置；另存 `readiness` 派生态（见 §3.1） |
 
 `initiatorUserId` 是 C3 的落点：bot 开的 MR 上，「作者确认推送」的判定读它而不是 MR 的 author。
+
+`code_ai_attempts` 是 G2 三层状态图第三层的**数据契约**：一个 stage 行无法表达"`review-shard` 有
+四个并行调用、其中第二个同会话重试过两次、又换会话重跑过一次"。没有这张表，AC-25 的「每次 AI
+调用」不可验收。
 
 ### 3.1 首次使用：从「装好了」到「能触发」（设计门 P2）
 
@@ -328,13 +346,28 @@ interface StageDef {
 ```
 run AI step
   → 提取 envelope（复用 services/envelope.ts 的 extractLastEnvelope + nonce）
-  → 按 aiSchema 校验结构
-  → 领域校验（行号在 diff 内、file 在改动集合内、severity 合法…）
-  → 通过 ⇒ 产出确定值，进入下一阶段
+  → ①结构校验：按 aiSchema 校验形状、必填、枚举、类型
+  → ②语义合法性：severity 在闭集内、file 非空、line 是正整数……
   → 不通过 ⇒ 带**具体错误**同会话重试（≤ N 次）
               ⇒ 仍不过 ⇒ 丢弃会话、换新会话重跑（≤ M 次）
               ⇒ 两级耗尽 ⇒ 阶段失败
+  → 通过 ⇒ 产出确定值，进入下一阶段
 ```
+
+**「行号锚不到 diff」不属于校验失败**（设计门 P1）。初稿把它写进领域校验，于是同一条 finding 同时
+落进两种互斥终态：AC-3 说它应该降级进总览、计入 `degraded`、节点仍算成功；而校验失败按 R4 会触发
+重试直至阶段失败。两者不能同时成立。
+
+拆开：
+
+| 情形 | 归属 | 处理 |
+| --- | --- | --- |
+| 结构不合 schema、字段缺失、severity 不在闭集 | **校验失败** | R4 两级重试，耗尽则阶段失败 |
+| 结构合法，但该行不在本次 diff 的 hunk 内 / 文件不在改动集合 | **锚定失败** | 不重试；标 `degraded` 并入总览评论，阶段**成功** |
+
+判据：**AI 把话说得不对**是校验问题（它能改），**AI 把话说在了别处**是锚定问题（重试也不会变好，
+而且那条意见本身可能是对的，值得以降级形态保留）。`validate-findings` 阶段只做前者，锚定判定属于
+`resolve-positions`。
 
 同会话重试与换会话重跑的区别是有意的：前者便宜且保留已读代码的上下文，后者跳出已经跑偏的上下文。
 nonce 沿用脚本/agent 同一套（`services/scriptPorts.ts` 的注释已明确 nonce 防的是上游内容伪造，
@@ -404,7 +437,13 @@ interface CollectResult {
 // classify —— 输入：collect 的 gate + 日志。输出：
 interface ClassifiedIssue { type: string; file?: string; line?: number; message: string; raw?: string }
 // arbitrate —— 输入：CollectResult + ClassifiedIssue[]。输出：
-interface WorkPackage { items: Array<{ kind: string; ref: string }>; note?: string }
+// 一包**必须同 capability**：Round.capability 与 StageContract.capability 都是单值，
+// 混合包（一个评论修复 + 一个 CI 修复）无法决定本轮走哪条序列，也无法定义统一的 push 边界。
+// 故用 discriminated union 在 schema 层强制同类，跨类只能分轮（设计门 P1）。
+type WorkPackage =
+  | { capability: 'mr-comment-fix'; items: Array<{ threadId: string }>; note?: string }
+  | { capability: 'ci-fix';         items: Array<{ issueRef: string }>; note?: string }
+  | { capability: 'mr-review';      items: []; note?: string }
 // select —— 输入：WorkPackage。输出：
 interface AgentPlan { bySlot: Record<string, { agent: string; promptSuffix?: string }> }
 ```
@@ -437,11 +476,28 @@ resolve-target(program) → prepare-worktree(program) → fetch-diff(program)
 | **新增**（本轮有、台账没有） | 指纹未命中 | 正常发布 |
 | **已消失**（台账有、本轮没有） | 本轮结果里找不到该指纹 | **resolve** 原线程，并标记 `disappearedRound` |
 
+**GitHub 上 resolve 做不到**（设计门 P1）：`thread.resolve` 在动作注册表里对 GitHub 显式标了
+`unsupported`（`packages/shared/src/codeHost/actions.ts:315`，reasonKey `graphqlOnly`）——REST 面
+没有该端点，GraphQL 的 `resolveReviewThread` 又需要 REST 拿不到的 `PRRT_` 线程 node id。批量化
+一个 unsupported 的 binding 不会让它变可用。故 `settle-stale` 是 **provider-specific** 的：
+
+- **GitLab**：按上表 resolve 已消失的线程。
+- **GitHub**：无法 resolve ⇒ 改为在该线程下**追加一条"此问题在最新一轮已不再出现"的回复**，
+  并在台账标 `disappearedRound`。线程仍是 open 的，但读者能看到状态；这是 REST 面能做到的上限。
+
+对应地 AC-6 必须写成 provider-specific 的两套判据，不能一句"上轮线程被 resolve"了事。
+（若将来接入 GitHub GraphQL 并持久化 thread node id，可把 GitHub 也升到真 resolve——列入 §11。）
+
 顺序也是判据的一部分：`settle-stale` 必须在 `publish` **成功之后**才执行——发布失败时保留上一轮的
 last-known-good 反馈，绝不能出现「新的没发出去、旧的已经被关掉」的空窗。
 
 - `split-diff`：按目录层级聚合，受行数上限约束（B7）。同目录改动尽量同块；超限再切。**确定性**：
   同一 diff 必然得到同一分块（供重跑复现）。
+- **每个 shard 一棵独立的一次性工作树**（设计门 P1）。B6 要求并行、B8 允许 agent 试改并跑测试——
+  两者组合下若共用一棵树，多个 shard 会互相看到甚至覆盖对方的临时改动，同一份输入重复执行会得到
+  不同的测试结果与 findings，**直接违反宪法 R5 的确定性**。故各 shard 基于同一 `baselineSha` 各建
+  一棵可写树，**全部禁止 merge-back**，跑完即弃。代价是磁盘与建树开销随分片数线性增长，因此分片
+  数受 `split-diff` 的上限约束。
 - `review-shard` 的 worktree 是可写一次性树（B8）；agent 可跑测试甚至试改。
   **行号锚定**：`fetch-diff` 产出的原始 diff 是唯一锚定基准，agent 自身改动不影响锚定（AC-4）——
   实现上 `validate-findings` 用 `fetch-diff` 的产物校验，不读当前工作树状态。
@@ -449,6 +505,26 @@ last-known-good 反馈，绝不能出现「新的没发出去、旧的已经被�
 - **@叫但 sha 未变时**：仍然正常跑一轮（不静默跳过——人 @ 了却毫无动静是最差的体验），
   台账去重会让绝大多数意见不重发，总览评论显式写明「本轮无新增意见，上轮的 N 条仍未解决」。
   这样"机器收到了"与"没有新问题"两件事都传达到了。
+
+#### fork MR / PR：两处会静默断掉（设计门 P1 ×2）
+
+初稿假定「事件里的 branch 就是能 checkout 的 ref」，这在同仓 MR 上成立，**跨 fork 时不成立**：
+
+1. **源分支不在目标仓里。** 两家 adapter 都从**顶层** `repository` / `project` 取仓库 URL
+   （`githubAdapter.ts:143`、`gitlabAdapter.ts:108`），而 branch 取自 `pull_request.head` /
+   `source_branch`；GitLab 官方也明确顶层 `project` 是 **target** project。dispatch 随后把该 branch
+   当 ref 用（`webhookDispatch.ts:372`）。fork 场景下 target clone 里根本没有那个分支，
+   `fetch --all` 也只抓 target remote——非 shallow 救不了「另一个仓库的 ref」。
+   **对策**：归一化并冻结 **source project 的 clone URL + head SHA**；`prepare-worktree` 按
+   source remote 精确 fetch head ref。两家的 fork MR/PR 必须各有一条端到端用例。
+2. **fork PR 的 CI 事件找不到 MR。** `githubAdapter.ts:447` 已记录：fork PR 的
+   `workflow_run.pull_requests[]` 为空，此时 `mrIid` 缺失，且该行为被
+   `tests/rfc259-github-adapter.test.ts:291` 锁定。而工作项身份要求 `anchorId`。
+   **对策**：以 head SHA 反查该仓当前开放的 PR 建立映射（带缓存）；命中唯一才唤醒对应工作项，
+   零命中或多命中时**不唤醒**并记事件——绝不按 branch 另起一条与既有台账无关的流。
+
+两条都属于"不处理就静默失效"的形态：用户看到的是"机器对 fork 的 MR 从来不响应"，而日志里只有
+一条 `repo-ref-not-found` 或什么都没有。
 
 ### 6.2 `mr-comment-fix`
 
@@ -560,7 +636,8 @@ bulk_publish 未发」这个窗口里，若只按"取消 task"处理，MR 上会
 | 场景 | 处理 |
 | --- | --- |
 | AI 输出不合 schema | R4 两级重试；耗尽则阶段失败（AC-8） |
-| 脚本非零退出 | 按该脚本/钩子声明的 blocking 决定阻断或记事件（F8） |
+| **钩子**非零退出 | 按该钩子声明的 `blocking` 决定阻断或记事件（F8） |
+| **核心适配脚本**（entry/collect/classify/arbitrate）非零退出 | **一律阻断本轮**，`blocking` 字段对它们不适用。理由：它们产出的是后续阶段的必需输入——`collect` 失败就没有 `CollectResult`，`classify` 在 R5 下无从继续。允许"非阻断"等于允许用空产物往下跑，与确定性宪法冲突（设计门 P2） |
 | `diff_refs` 拉不到 | 整轮失败；MR 静默、平台告警（B17） |
 | 全部意见都锚不上 | 仍发布一条总览评论，`published=0 / degraded=N`，轮次算成功 |
 | 草稿部分失败 | 清理已建草稿、整轮失败，MR 上不留半截（§7.2） |

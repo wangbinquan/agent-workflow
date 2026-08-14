@@ -173,7 +173,8 @@ CI 修复同理，八步里两步 AI；**错误分类由脚本做，不是让 AI
 - **N4 不重造代码平台界面。** 见 §2.1。
 - **N5 不扩 agent 的环境变量白名单。** RFC-269 立的凭据边界一个字节不动；需要凭据的一律走脚本。
 - **N6 不动 fanout。** 本 RFC 不依赖 wrapper-fanout。它内层只支持 `agent-single`
-  （`services/scheduler.ts:7353`）且内层无上游解析，扩展是 RFC-294 W8 的独立课题，另立新号。
+  （`dispatchFanoutShardAttempt` 里的 `inner.kind !== 'agent-single'` 守卫，
+  `services/scheduler.ts:7357`）且内层无上游解析，扩展是 RFC-294 W8 的独立课题，另立新号。
 - **N7 不做轮询。** 监视器由事件唤醒，唤醒后跑一次采集脚本。
 - **N8 不接 GitLab / GitHub 以外的代码平台。**
 - **N9 不做 AI 决策的调度。** 见宪法 R1/R2。

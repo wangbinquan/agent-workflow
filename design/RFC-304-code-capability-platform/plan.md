@@ -27,7 +27,8 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 | T6 | `DeterminismGuard`：envelope 提取 → schema 校验 → 领域校验 → 同会话重试 → 换会话重跑 → 失败 | T4 |
 | T7 | `HookRunner`：抽出不依赖 `WorkflowNode` 的脚本调用面（复用 `assembleScriptEnv` + 受管子进程）；pre/post 挂载；注入数据白名单合并；blocking 语义 | T5 |
 | T8 | 阶段契约版本化：钩子声明版本，升版后旧钩子显式报迁移 | T7 |
-| T9 | `TaskLauncherPort` + 适配：起一轮 = 起一个 task；新增独立任务类型并接入列表筛选 | T3 |
+| T9a | **新增 execution kind `code-round`**（design D5）：`StartExecutionRequest` 增变体、task-execution 侧 participant、进程归属、取消与恢复语义。**须先与 task-execution owner 对齐**——这是本 RFC 唯一触及既有执行模块的改动 | T1 |
+| T9 | `TaskLauncherPort` + 适配：起一轮 = 起一个 `code-round` task；新增独立任务类型并接入列表筛选 | T3,T9a |
 | T10 | 抢占：新事件到达取消在跑轮次，幂等且不产生孤儿行 | T9 |
 | T11 | 源码层负扫描：`kind:'program'` 阶段不得出现 agent 派发；`SAFE_FORWARD_ENV` 未被修改 | T4,T6 |
 | T12 | 用一条最简内置流程（`prepare-worktree → 一个 program 阶段 → ledger`）端到端验证地基 | T5–T10 |
@@ -40,7 +41,8 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 | T14 | 部门层写权额外要求 `scripts:author`；小组层不得写入脚本与钩子字段（服务端遮蔽 + 拒绝） | T13 |
 | T15 | 参数继承：框架声明 `paramSchema` 与默认值，绑定覆盖；解析顺序与来源可追溯 | T13 |
 | T16 | `repo_capability_config`（仓库 × 能力矩阵）+ 仓库 ACL 判据接入 | T13 |
-| T17 | 两类资源接入 RFC-271 配置包：闭包、`requirements`、`secrets[]` 脱敏索引 | T13 |
+| T17a | **扩 RFC-271 的闭合集合**（设计门 P1：它今天不是通用包格式）：`ResourcePackageTypeSchema` 只接受六种（`packages/shared/src/schemas/resourcePackage.ts:18`）、`BundleOp` 是固定十二分支 union（`packages/shared/src/bundle/op.ts:87`）、`bundle.ts:42` 同样只识别六类。需逐项扩：type enum、bundle payload、BundleOp 变体、引用闭包解析、serialize/parse、preview/commit apply provider、importer | T13 |
+| T17b | 两类资源接入配置包：闭包、`requirements`、`secrets[]` 脱敏索引 + 往返测试 | T17a |
 | T18 | 内置两套：标准 GitLab/GitHub 框架（不接自建系统）+ 五套默认 agent 绑定，`built-in` + `public` | T15 |
 
 ### 代码平台发布能力（PR-3）
@@ -142,14 +144,14 @@ PR-1 地基 ──┬─► PR-2 配置 ──┬─► PR-4 检视 ──┬─
 
 | PR | 覆盖的 AC（proposal §9） | 门禁 |
 | --- | --- | --- |
-| PR-1 | AC-9、AC-10、AC-20、AC-23、AC-27、AC-28 | 状态机穷举 + 负扫描 + 最简流程集成 |
+| PR-1 | **AC-8（主）**、AC-9、AC-10、AC-20、AC-23、AC-27、AC-28 | 状态机穷举 + 负扫描 + 两级重试三档用例 + 最简流程集成 |
 | PR-2 | AC-18、AC-19、AC-21、AC-22、AC-24（框架部分） | 权限拒绝用例 + 参数继承用例 + 配置包往返 |
 | PR-3 | —（为 AC-1/3/6 提供能力） | 两家发布载荷断言 + 部分失败清理 |
-| PR-4 | AC-1、AC-2、AC-3、AC-4、AC-5、AC-6、AC-7、AC-24 | position 纯函数表驱动 + 完整一轮集成 + 第二轮去重 |
+| PR-4 | AC-1、AC-2、AC-3、AC-4、AC-5、AC-6、AC-6b、AC-7、AC-7b、AC-8（接线）、AC-24 | position 纯函数表驱动 + 完整一轮集成 + 第二轮三集合对账 + fork MR 端到端（两家）|
 | PR-5 | AC-25（前两层）、AC-27 | 组件测试 + e2e 冒烟 |
 | PR-6 | AC-11、AC-12、AC-15、AC-28 | 零轮询断言 + 多项工作包一次推送 + 抢占无孤儿 |
 | PR-7 | AC-16、AC-17 | 权限拒绝 + awaiting 全链 + 基线变化作废 |
-| PR-8 | AC-8（需求侧）、AC-22 | 三入口参数校验 + clarify 分流两条路径 |
+| PR-8 | AC-8（本能力 AI 阶段的接线证明）、AC-14c、AC-22 | 三入口参数校验 + issue 事件面往返 + clarify 出站/入站两条路径 |
 | PR-9 | AC-13、AC-14 | anti-cheat 结构检查用例 + 三轮上限 |
 | PR-10 | AC-25（第三层）、AC-26 | e2e：配置 → 发起 → 状态图三层 → 切轮次 |
 
