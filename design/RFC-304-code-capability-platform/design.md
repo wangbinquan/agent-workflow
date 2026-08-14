@@ -684,7 +684,21 @@ resolve-input(program|script) → materialize-attachments(program) → prepare-w
 ```
 
 `resolve-input`：参数够用则直接进；只给了引用（如 issue 编码）则跑入口脚本取回
-`{title, body, attachments, writebackHandle}`（D5）。`clarify` 按 D2 分流：有 `writebackHandle`
+`{title, body, attachments, writebackHandle}`（D5）。
+
+**"一组"设计文档，不是一份**——用户的原话是「给定**一组**设计文档实现代码并提交形成 MR」，
+而本仓自己的 RFC 就是三件套（proposal / design / plan）。故输入契约是**文档集合**：
+
+```
+documents: Array<{ name, role?, content | attachmentRef }>   // role 如 'proposal' | 'design' | 'plan'
+```
+
+- 多份文档**按给定顺序**进入 agent 上下文，`role` 只作提示不作强制（各公司文档体系不同）；
+- 文档之间的交叉引用（"见 design §4"）由 agent 自行解析，平台不做链接推断；
+- 体量超限时**不静默截断**——`comprehend` 阶段显式报"文档集合超出上下文预算"，
+  并在回执里列出各文档大小，由人决定拆分或精简。这比截断后实现错东西好得多。
+
+一份设计仍**永远产出一个 MR**（D6），文档是多份不改变这一点。`clarify` 按 D2 分流：有 `writebackHandle`
 且框架实现了回写 ⇒ 回写 issue 评论；否则落平台 clarify。
 
 **闭环回链（否则这个工作项永远闭不了环）**：本能力的 `anchorRef` 是需求侧标识（如 `issue-88`），
