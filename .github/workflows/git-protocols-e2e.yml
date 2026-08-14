@@ -32,6 +32,13 @@ on:
     paths:
       - 'packages/backend/src/services/gitRepoCache.ts'
       - 'packages/backend/src/services/repoBatchImport.ts'
+      # 本套断言的**不止**仓库缓存：`task.repoUrl` 的脱敏持久化归 task.ts
+      # （spec 自己的注释就写着「services/task.ts now runs redactGitUrl」）。
+      # 漏了它的直接后果 RFC-287 T14 实测过一次：a20eb6e8 上本套因
+      # `task.repoUrl` 为空而红，修复落在 task.ts、不匹配这份清单，于是后续两轮
+      # 推送都没再触发——一条已知的红就这样静默躺了两轮，只能靠人工 dispatch 才
+      # 验得上。凡是本套 spec 直接断言的模块都必须在这里登记。
+      - 'packages/backend/src/services/task.ts'
       - 'packages/shared/src/git-url.ts'
       - 'scripts/git-protocols/**'
       - 'e2e/git-protocols.spec.ts'
@@ -40,6 +47,13 @@ on:
     paths:
       - 'packages/backend/src/services/gitRepoCache.ts'
       - 'packages/backend/src/services/repoBatchImport.ts'
+      # 本套断言的**不止**仓库缓存：`task.repoUrl` 的脱敏持久化归 task.ts
+      # （spec 自己的注释就写着「services/task.ts now runs redactGitUrl」）。
+      # 漏了它的直接后果 RFC-287 T14 实测过一次：a20eb6e8 上本套因
+      # `task.repoUrl` 为空而红，修复落在 task.ts、不匹配这份清单，于是后续两轮
+      # 推送都没再触发——一条已知的红就这样静默躺了两轮，只能靠人工 dispatch 才
+      # 验得上。凡是本套 spec 直接断言的模块都必须在这里登记。
+      - 'packages/backend/src/services/task.ts'
       - 'packages/shared/src/git-url.ts'
       - 'scripts/git-protocols/**'
       - 'e2e/git-protocols.spec.ts'
