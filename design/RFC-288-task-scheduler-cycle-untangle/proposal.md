@@ -1,7 +1,52 @@
 # RFC-288 — backend 值级环归零（taskDriver → 四件合同）（proposal）
 
-状态：Draft（2026-08-13 初稿 → 08-14 第二轮门后按 RFC-294 §5.2 重写 → **08-14 第三轮门
-（三路错开视角）后再次修订**）
+状态：**CLOSED（2026-08-14，用户决定关闭；未实现，零生产改动）**
+（历程：2026-08-13 初稿 → 08-14 第二轮门后按 RFC-294 §5.2 重写 → 08-14 第三轮门
+〔三路错开视角〕后再次修订 → 关闭）
+
+> ## 为什么关闭
+>
+> 三轮设计门之后，本 RFC 的范围收敛到「四件合同的 owner/consumer/import 拓扑 +
+> 断 task↔scheduler 环」——而这**正是 RFC-294 §16.2 已经逐条规定的内容**，接口形状
+> 也由其 §5.3 逐字定义，排期更早已写进它的 DAG（`W1 → RFC-288 final gate → W2`）。
+> 也就是说，收敛到正确形状之后，本文档**不再承载 RFC-294 之外的设计信息**。
+>
+> 同时实现有硬前置（P0-D + W1 exit），而本稿的源码锚**两天内烂了三轮**
+> （`da706b19` → `01d2160e` → `6e8c4f9f`，每轮都要全量重锚）。为一件还开不了工的事
+> 维护行级 inventory，到开工时必然重写——这是关闭而非继续修订的决定性理由。
+>
+> **后续**：解环工作归 RFC-294 §16.2 / W2；待 `W1 exit` 后按当时的真实锚另立一份
+> 轻量实现 RFC。**本文不删**——下面的正文与 §7 门记录是那次实现的输入。
+>
+> ## 关闭前必须带走的结论（不随锚烂掉，均经实测）
+>
+> 1. **四件合同必须携带 `OwnershipToken`/epoch**。taskId-only 的 `requestStop` 会
+>    **误杀继任者**（第三轮门 B 路实测复现：`tryAttach(old) → release → tryAttach(next)
+>    → requestStop(taskId)` abort 掉的是 next）。
+> 2. **`abortAll(reason)` 的 reason 不可选**。丢了它，daemon 优雅停机会从可恢复的
+>    `interrupted` 降级成用户 `canceled`（RFC-202 语义，`rfc202-source-locks` 锁）。
+>    ——此后 RFC-287 并发面审计在生产代码里抓到**同一形态的真回归**（只判 `aborted`
+>    不判 `reason`，任务永久楔死），可见这条不是纸面推演。
+> 3. **kick 是四点不是三点**：`startTask` / `resumeTask` / **`retryRepoPreparation`
+>    （RFC-287 AC-11 新增）** / `retryNode`。漏第三点则 A1 删不掉或直接编译红。
+> 4. **不能用全局 `registerSchedulerDriver` + 「未注册即响亮 throw」**：throw 会被
+>    scheduler 的两处裸 `catch` 吞掉（取消看似成功而 child 仍在写盘）；且 19 个直调
+>    `startTask(` 的测试里 **17 个不走 `createApp`**。正解是实例注入 + bootstrap
+>    fail-fast（早于 serve / ticker / auto-resume）。
+> 5. **先迁 registry 再切 consumer 会出现双 registry**（DB 写了 canceled 而真 driver
+>    在另一个 registry 里继续跑）。必须先把同一个 `TaskExecutionContext` 线程化进
+>    deps 链，再替换 backing instance。
+> 6. **同步准备失败路径有一处直接 release**（`awaitScheduler:true` + 准备失败）。漏迁
+>    会让 handle 永久泄漏 ⇒ `__repo_prep__` 重试永远 `task-still-running`，只能重启
+>    daemon，**AC-11 直接失效**。
+> 7. **解环的最小充分集** = 断 A1 + B1 + B2/B3/B4 + E3。C1/C2 **不必**转静态（断 A1
+>    后该方向已无环，转静态反而引入 ESM 初始化风险）；materialization 拆分与
+>    `task → gc` 边**都不必动**（C-7 的必要断点只有 E3）。
+> 8. **判据：不跨 context**。留在 `task-execution` 内 = 该刀可做；跨到
+>    source-control / resource-catalog / platform-events / integration = 属 W4/W5。
+> 9. **不要用仓库级指标当单个 RFC 的 AC**。「零值级 SCC」是范围吸引子：它三次把无关
+>    域的债吸进本 RFC（三族环 → git 5 节点含 `util/git` 分层倒置 → MCP 三环）。环是
+>    症状，边界才是目标。
 来源：`design/system-commons-unification-audit-2026-08-12.md` D3 大件二；原始工作包
 =`design/task-execution-architecture-audit-2026-08-03.md` §A3（:182-188）+ WP-5
 （:306-312）。⚠️ 命名注意：`design/scheduler-audit-2026-06-10.md:303` 另有一个

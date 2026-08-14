@@ -74,42 +74,42 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     to: `${B}/services/task.ts`,
     why: '`task.ts:114` import { runTask } from "./scheduler"，而 scheduler.ts:182 反向 import { emitTaskStatus, getTask }——两个 god module 互为值级依赖。scheduler.ts 内另有 5 处 `await import("@/services/…")` 是为绕这个环留下的民俗（其中 3 处取的模块顶部已经静态 import 过了）。',
     removeWhen:
-      'WP-5：抽出 services/taskDriver.ts 独占 activeTasks + emitTaskStatus + kickScheduler，scheduler 改 import 它而非 task.ts。',
+      'RFC-294（pin `be31dd62`；按仓规引用其小节号不引行号）**§16.2 + W2**：四件合同 `TaskRuntimeRegistry`/`TaskOwnershipPort`/`SchedulerDriverPort`/`TaskStatusPublisher` 的 owner/consumer/import 拓扑迁移，复用 P0-D authority。**owner 已从「WP-5 / RFC-288」转出**（2026-08-14，RFC-288 CLOSED 未实现）：§5.2 明令**废弃**旧处方里的单一 `taskDriver` god singleton（它把 active registry / status publisher / kick-cancel-resume locator 三种生命周期塞进一个 process-global 叶子）。断此环的最小充分集＝断 A1（task→scheduler 的四个 kick 点改走 SchedulerDriverPort）+ B1（emitTaskStatus/getTask 迁出 task.ts）+ B2/B3/B4（cancel/resume/isActive 改走端口）。**四个 kick 切端口与本条销账必须同一提交**，否则 depcheck stale 红与 lint unused-import 红二选一。详见 design/RFC-288-task-scheduler-cycle-untangle/（CLOSED，保留作实现输入）。',
   },
   {
     rule: 'no-circular',
     from: `${B}/services/scheduler.ts`,
     to: `${B}/services/workgroup/launch.ts`,
     why: '同上环经 workgroup/launch → task → scheduler 闭合的一支。',
-    removeWhen: 'WP-5：与上一条同批消失。',
+    removeWhen: 'RFC-294 §16.2 / W2：与上一条同批消失（A1 一断即塌）。owner 同上，已从 WP-5 / RFC-288 转出（2026-08-14）。',
   },
   {
     rule: 'no-circular',
     from: `${B}/services/execution/executor.ts`,
     to: `${B}/services/task.ts`,
     why: 'execution/ facade 调 task.ts 的启动动词，再经 task → scheduler → executor 闭合。RFC-242 的抽取是「任务级执行动词」的正交抽取，没有断开这条底层环。',
-    removeWhen: 'WP-5：taskDriver 解环后消失。',
+    removeWhen: 'RFC-294 §16.2 / W2：A1 断后消失。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。C1（scheduler→executor 动态 import）**不必**转静态——断 A1 后该方向已无环，转静态反而引入 ESM 初始化风险（见 rfc217-architecture-locks 的事故记录）。',
   },
   {
     rule: 'no-circular',
     from: `${B}/services/execution/executor.ts`,
     to: `${B}/services/workgroup/launch.ts`,
     why: '同上，经 workgroup/launch 闭合的一支。',
-    removeWhen: 'WP-5：taskDriver 解环 + task.ts 拆分后消失。',
+    removeWhen: 'RFC-294 §16.2 / W2：A1 断后消失（**不需要**拆 task.ts——materialization 拆分与解环无关，其终局 owner 是 source-control、波次 W5）。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。',
   },
   {
     rule: 'no-circular',
     from: `${B}/services/agentLaunch.ts`,
     to: `${B}/services/task.ts`,
     why: '单代理启动路径 → task.ts → scheduler → executor → agentLaunch 闭合，与上面同一个环族。',
-    removeWhen: 'WP-5：taskDriver 解环 + task.ts 拆分后消失。',
+    removeWhen: 'RFC-294 §16.2 / W2：A1 断后消失（同上，不需要拆 task.ts）。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。',
   },
   {
     rule: 'no-circular',
     from: `${B}/services/gc.ts`,
     to: `${B}/services/structuralDiff/callGraph/expandService.ts`,
     why: 'gc → expandService → task.ts → gc。gc 需要任务读模型判断工作区可否回收，task.ts 又需要 gc 的 workspace_pruning_at 复活门。',
-    removeWhen: 'WP-5 拆出 taskReadModel.ts 之后（gc 只依赖读模型，不依赖 task.ts 编排层）。',
+    removeWhen: 'RFC-294 §16.2 / W2：把**窄义 `getTask`** 迁进 task-execution/application/queries 并让 expandService 改锚即可（实测 expandService 只从 task.ts 取 `getTask` 一个符号）。**这是 C-7 唯一的必要断点**——`task → gc` 那条边不必动。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。',
   },
 
   // ── util/git ↔ services/git*（分层倒置：util 应是叶子，架构审视 RC-4）──

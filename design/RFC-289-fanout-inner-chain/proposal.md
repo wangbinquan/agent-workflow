@@ -1,6 +1,29 @@
 # RFC-289 — fanout 内链根治：同 shardKey 上游解析 + 拓扑序派发（proposal）
 
-状态：Draft（2026-08-13 落档）
+状态：**CLOSED（2026-08-14，用户决定关闭；未实现，零生产改动）**（原：Draft，2026-08-13 落档）
+
+> ## 为什么关闭
+>
+> **产品目标本身没有被否定**——fanout 内链是合理的能力扩张。被否定的是**当前这版
+> 设计**，且否定它的不是本轮讨论，而是 RFC-294 §5.3 的既有裁决：
+>
+> - 本稿把 child 上游限定为 `parentNodeRunId === 当前 wrapperRunId`，而既有的跨
+>   generation replay **明确保留 child 原 parent**——两者不能同时成立；
+> - child 行**不记录内链 consumed provenance**，`pickReusableShardRun` 只看
+>   shardKey / valueHash / status，所以本稿依赖的「已有 consumed gate 会让 B 随 A
+>   失效」**并不成立**；
+> - 因此 RFC-294 要求它**排在 NodeRun 身份轴（W7）之后重写**，理由是「避免用即将
+>   失效的源码锚形成循环前置」——这与 RFC-288 关闭的理由同源：**前置未到时维护
+>   实现级细节，等于给自己安排一次必然的重写**。
+>
+> **重写时必须满足的五条**（RFC-294 §5.3 逐条，本文正文不再自行裁决）：
+> ①通过 generation 的 selected-run map 找同 shard 上游，而不是改写历史 parent；
+> ②在 B 行持久记录它实际消费的 A child run；③reuse 同时比较 shard identity 与
+> consumed dependency fingerprint；④validator 规则从**可达的真实集合**推导，避免
+> 死规则或重复规则；⑤先完成 NodeRun 身份轴与兼容迁移，再解除能力挡板。
+>
+> **后续**：待 RFC-294 W7（NodeRun identity / provenance）落地后另立新号重写并重新
+> 过门。**本文不删**——正文的测绘与设计门结论是那次重写的输入。
 来源：`design/system-commons-unification-audit-2026-08-12.md` D3 大件三（:142
 「shardKey 解析+拓扑序派发，解除 validator 挡板（能力扩张）」）。
 

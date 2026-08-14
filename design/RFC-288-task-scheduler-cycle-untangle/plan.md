@@ -1,5 +1,11 @@
 # RFC-288 — 任务分解（plan，2026-08-14 第三轮门后修订）
 
+> **本 RFC 已于 2026-08-14 CLOSED（未实现，零生产改动）**——理由见 `proposal.md`
+> 顶部。下面的批次与 DAG **不再执行**；它们保留下来是因为其中两条排序结论仍然有效：
+> ①「四个 kick 切端口」与「删 A1 + 销前 5 条账」**必须同一提交**（否则 depcheck stale
+> 红与 lint unused-import 红二选一）；②迁 registry **之前**必须先线程化
+> `TaskExecutionContext`（否则出现双 registry）。
+
 > **实现前置（按 RFC-294 `be31dd62` 的已提交 DAG，不是未提交稿的「W0-R」命名）**：
 > `W0 + P0-A/B/C/D → W1 → RFC-288 final gate → W2`。即 **W0 与四个 P0 落地、W1 exit
 > 收敛之后**，本 RFC 才过 final gate 进入实现；`TaskOwnershipPort` 的实现由 **P0-D**
