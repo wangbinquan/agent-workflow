@@ -29,7 +29,7 @@ describe('RFC-302 workflow layout source ownership', () => {
     const relativeSources = (needle: string): string[] =>
       sources
         .filter((path) => readFileSync(path, 'utf8').includes(needle))
-        .map((path) => relative(REPO, path))
+        .map((path) => relative(REPO, path).replaceAll('\\', '/'))
         .sort()
 
     expect(relativeSources('export function planWorkflowLayout(')).toEqual([

@@ -115,7 +115,8 @@ export interface AssemblySpec<TCtx, TOutcome, TResult> {
    *
    * **每次重试内的调用序是契约，不是实现细节**（由 rfc287-t2 骨架单测钉死）：
    *
-   *     shouldRetry → keepIf →〔不留树时 discardIso + iso.create〕→ onNextAttempt → spawn
+   *     shouldRetry → preAttempt →〔抢占则收场〕→ keepIf →
+   *     〔不留树时 discardIso + iso.create〕→ onNextAttempt → spawn
    *
    * agent 线依赖这个序：`keepIf` 里算出的 RFC-042 续跑决策被 memo 进闭包，
    * `onNextAttempt`（铸行时决定要不要带 envelopeNonce、写哪种审计事件）与
@@ -125,6 +126,25 @@ export interface AssemblySpec<TCtx, TOutcome, TResult> {
   retryPolicy?: {
     /** 还要不要再来一次（收 spawn 结果与本次 attempt 序号，从 0 起）。 */
     shouldRetry(outcome: TOutcome, attempt: number): boolean
+    /**
+     * 重试**动手之前**的抢占检查——「动手」指换树、铸新 node_run 行、落 iso 基线
+     * 这三件有外部可见副作用的事。返回非 null 即以该结局立刻收场，本轮什么都不做。
+     *
+     * 为什么它必须存在（T14 实现门实证的回归）：脚本线迁移前，取消检查在**每轮
+     * 循环最顶上**，先于换树与铸行；迁进骨架后只剩 `spawn` 入口那一处，于是取消
+     * 若落在换树窗口里，会先丢旧树、建新树、铸一条 `pending` 行并把它标成
+     * `isolating`，然后 spawn 才看见 abort 直接返回合成 canceled——那条行永远不会
+     * 被运行也永远不会被终结，留成孤儿；后续 `retryNode` 对它做 `begin-isolation`
+     * 会抛非法 merge-state 转移，把一次正常取消升级成 scheduler error。
+     *
+     * 只有「循环顶存在抢占检查」的线需要声明它（脚本线）；agent 线迁移前本就没有
+     * 这一检查，不声明即保持原样。
+     *
+     * 返回类型写 `Awaited<TOutcome>` 而不是 `TOutcome`：它要直接顶替 `await spawn()`
+     * 的结果，而 spawn 是 `Promise<TOutcome>`，两者在 TOutcome 本身可能是 Promise 时
+     * 并不同型。
+     */
+    preAttempt?(attempt: number): Awaited<TOutcome> | null
     /**
      * 重试前对 iso 的处置：'always-recreate' = 每次换新树；keepIf 为真则留用。
      *
@@ -195,6 +215,13 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
           throw new Error(
             `assembly: retryPolicy exceeded ${ASSEMBLY_MAX_ATTEMPTS} attempts — shouldRetry never settled (spec bug)`,
           )
+        }
+        // 抢占检查先于一切副作用——换树 / 铸行 / 落基线都在它后面。取消落在这个
+        // 窗口里时，本轮必须一动不动地收场，否则会留下一条永不运行的孤儿行。
+        const preempted = rp.preAttempt?.(attempt)
+        if (preempted !== undefined && preempted !== null) {
+          outcome = preempted
+          break
         }
         if (spec.iso !== null && handle !== null) {
           const keepTree =
