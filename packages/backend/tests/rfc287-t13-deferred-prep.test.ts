@@ -689,6 +689,61 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
   // `existsSync('')` 得 410（且文案错误归因成「工作区已被 GC 回收」）、本重试撞 409、
   // 前端仍劝「另起任务」；开了 autoResumeOnBoot 还会每次 boot 吃一个 410 直到熔断。
   // 唯一出路变成删任务重开。（T14 第二轮门实测。）
+  // 二轮实现门 B-F3：以 `cachedRepoId` 启动是**公开支持**的路径（RFC-204 之后公开面
+  // 传的就是它而不是 URL）。占位时若不把它落进 tasks.cached_repo_id，准备失败后点
+  // 「重试准备」会撞 `repo-prep-source-unavailable`——AC-11 对这条路完全失效。
+  test('以 cachedRepoId 启动时，占位行同样带上来源（否则 AC-11 对这条路失效）', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s2 = await seed(db)
+    const cachedId = ulid()
+    const now = Date.now()
+    db.insert(cachedRepos)
+      .values({
+        id: cachedId,
+        urlHash: 'bf3hash',
+        urlRedacted: 'http://10.255.255.1:9/nope.git',
+        urlEnc: null,
+        localPath: '/tmp/aw-bf3-mirror',
+        lastFetchedAt: 0,
+        createdAt: now,
+      })
+      .run()
+    const task = await startTask(
+      { workflowId: s2.workflowId, name: 'bf3', cachedRepoId: cachedId, inputs: {} } as never,
+      {
+        db,
+        actorUserId: s2.userId,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        deferRepoPreparation: true,
+        cloneTimeoutMs: 1_000,
+        gitBaselineSyncWindowMs: 0,
+      } as never,
+    )
+    expect(task.cachedRepoId, '占位行必须带上 cachedRepoId').toBe(cachedId)
+    await settle(db, task.id)
+    // 重试不得因「无可重建来源」被拒。
+    const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
+      (r) => r.nodeId === REPO_PREP_NODE_ID,
+    )
+    const { retryNode } = await import('@/services/task')
+    let msg = ''
+    try {
+      await retryNode(db, task.id, prep!.id, {
+        cascade: false,
+        deps: {
+          db,
+          actorUserId: s2.userId,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+          cloneTimeoutMs: 1_000,
+          gitBaselineSyncWindowMs: 0,
+        } as never,
+      })
+    } catch (err) {
+      msg = err instanceof Error ? err.message : String(err)
+    }
+    expect(msg).not.toMatch(/repo-prep-source-unavailable/i)
+  }, 120_000)
+
   test('AC-16 反面：interrupted 的准备行必须可重试（否则 daemon 重启 = 任务报废）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s2 = await seed(db)

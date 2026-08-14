@@ -755,14 +755,32 @@ export async function resolveCachedRepo(
     // 判据取 `lastFetchedAt === 0`：真正克隆成功过的行一定带真实时间戳，0 是
     // `ensureCachedRepoIdentity` 专门留下的哨兵（它同时让该行不会被后台保鲜选中——
     // selectDueRepos 要求 lastFetchedAt >= freshAfter）。
-    const adoptIdentityRowId = row !== undefined && row.lastFetchedAt === 0 ? row.id : null
-    if (row && adoptIdentityRowId === null) {
-      // Cache row points at a missing / corrupt dir. Drop it and re-clone.
-      log.warn('cached repo dir invalid; treating as cold clone', {
+    // 二轮实现门 B-F4（用户拍板）：**目录失效的行一律原地领养、保住 id**，不再
+    // 删行重建。
+    //
+    // 原先只领养 `lastFetchedAt === 0` 的身份行，陈旧行（曾克隆成功、目录后来没了）
+    // 仍走删除重建。但 G7 之后 `tasks.cached_repo_id` 在**占位时**就写进任务行了，
+    // 换 id 会让它变成悬空引用，AC-11 的「重试准备」再也找不回来源。
+    //
+    // 于是 `cached_repo_id` 成为**稳定身份**：只要 URL 不变，id 永不变。代价是
+    // 「行存在」不再蕴含「镜像可用」——所有读者都得看 `lastFetchedAt` / `localPath`
+    // （现有代码本来就在 `isValidGitDir` 检查，warm path 判假即落到这条冷路径）。
+    // 领养时把行退回「身份态」：清掉上一次克隆留下的默认分支与子模块结论，并把
+    // lastFetchedAt 归 0，免得一个内容已不存在的行还宣称自己在某时刻同步过。
+    const adoptIdentityRowId = row?.id ?? null
+    if (row !== undefined) {
+      log.warn('cached repo dir invalid; re-cloning in place (identity preserved)', {
         url: redacted,
         localPath: row.localPath,
+        cachedRepoId: row.id,
       })
-      deps.db.delete(cachedRepos).where(eq(cachedRepos.id, row.id)).run()
+      if (row.lastFetchedAt !== 0) {
+        deps.db
+          .update(cachedRepos)
+          .set({ lastFetchedAt: 0, defaultBranch: null, hasSubmodules: null })
+          .where(eq(cachedRepos.id, row.id))
+          .run()
+      }
     }
 
     // Cold path: clone into a sibling temp dir, then atomic rename.

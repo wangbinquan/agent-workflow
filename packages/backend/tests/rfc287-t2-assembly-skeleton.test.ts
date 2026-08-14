@@ -332,6 +332,25 @@ describe('RFC-287 T2 — 装配骨架', () => {
     })
     // 抢占返回值成为最终 outcome，走 mergePhase/settle 收场。
     expect(await runAssembly({ id: 't' }, spec)).toBe('settled')
+    // **逐事件序**断言，而不是只数副作用次数（二轮实现门 A-3）：只数次数的话，把
+    // preAttempt 挪到 `discardIso` 之后仍然全绿——那时 iso:create 依旧一次、
+    // nextAttempt 依旧零次，但取消已经发生却还是丢了一棵树。丢树本身若抛出，抢占
+    // 检查根本轮不到执行，一次正常取消会被升级成异常。
+    // 契约要求 preAttempt 先于**全部**副作用，就得按序列锁。
+    // 射程从**首轮 spawn 之后**起算：在那之前的 `iso:create` 是初始物化，不是重试
+    // 换树，不该混进来。
+    const afterFirstSpawn = events.slice(events.indexOf('spawn#1') + 1)
+    const seq = afterFirstSpawn.filter(
+      (e) =>
+        e === 'preAttempt' ||
+        e === 'discard' ||
+        e === 'iso:create' ||
+        e === 'keepIf' ||
+        e.startsWith('nextAttempt#'),
+    )
+    expect(seq[0], 'preAttempt 必须先于 keepIf / discard / iso:create / onNextAttempt').toBe(
+      'preAttempt',
+    )
     // 只跑过一次 spawn，之后立刻被抢占。
     expect(spawns).toBe(1)
     // **副作用一个都不许有**：没有第二次建树、没有铸行。

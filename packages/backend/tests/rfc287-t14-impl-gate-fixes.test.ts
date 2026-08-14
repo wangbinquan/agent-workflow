@@ -39,6 +39,28 @@ describe('RFC-287 T14 — 脚本线取消不再铸孤儿行', () => {
     expect(body).toMatch(/retryPolicy:\s*\{[\s\S]{0,600}preAttempt:/)
   })
 
+  // 二轮实现门 A-1：光有 preAttempt **不够**。它只覆盖轮顶那一瞬，覆盖不了取消
+  // 发生在 `discardIso` / `iso.create` / `onNextAttempt` 的某个 await 里的情形——
+  // 那时新行已经铸出来并标成 isolating，而 spawn 入口若无条件短路就会跳过
+  // `runOneScriptAttempt`（迁移前是**无条件**进它、由它把新行终结为 canceled），
+  // 于是孤儿行照样留下。所以那道短路必须限定 `attempt === 0`：只有第 0 轮才没有
+  // 新铸的行需要终结。
+  test('spawn 入口的取消短路必须限定 attempt===0（否则重试轮仍留孤儿行）', () => {
+    const body = scriptLineBody()
+    // 锚到条件本身，而不是「spawn 起点到 runOneScriptAttempt 之间」——后者会被
+    // 中间的长注释与贪婪匹配一起搅乱（实测取到的片段不含条件行）。
+    const spawnAt = body.indexOf('spawn: async (_c, attempt) => {')
+    expect(spawnAt, '脚本线应有 spawn(ctx, attempt)').toBeGreaterThan(-1)
+    const runAt = body.indexOf('await runOneScriptAttempt(', spawnAt)
+    expect(runAt).toBeGreaterThan(spawnAt)
+    const prelude = body.slice(spawnAt, runAt)
+    expect(prelude).toContain('opts.signal?.aborted')
+    // 关键：短路条件里必须带 attempt 限定。不带的话，重试轮的取消会跳过行终结。
+    expect(prelude, 'spawn 的取消短路不得对 attempt>=1 生效').toMatch(
+      /attempt === 0\s*&&\s*opts\.signal\?\.aborted/,
+    )
+  })
+
   test('preAttempt 判的是取消信号，且产出 canceled 结局', () => {
     const body = scriptLineBody()
     const m = body.match(/preAttempt:\s*\(\)\s*=>\s*\{([\s\S]{0,400}?)\n {8}\}/)

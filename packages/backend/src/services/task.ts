@@ -2476,6 +2476,12 @@ async function startTaskImpl(
         { url: input.repoUrl },
       )
       deferredCachedRepoId = identity.cachedRepoId
+    } else if (typeof input.cachedRepoId === 'string' && input.cachedRepoId.length > 0) {
+      // 二轮实现门 B-F3：以 `cachedRepoId` 启动时**它本身就是身份**，直接落到占位行。
+      // 漏掉这一支的后果：用合法 cachedRepoId 启动、warm fetch 失败后点「重试准备」，
+      // `retryRepoPreparation` 发现既无 group 也无 cached id，直接
+      // `repo-prep-source-unavailable`——AC-11 对这条**公开支持**的启动路径完全失效。
+      deferredCachedRepoId = input.cachedRepoId
     }
     space = {
       kind: 'single',
@@ -2979,12 +2985,41 @@ async function startTaskImpl(
         if (!(await runRepoPreparation())) return // 失败已记账（行 + 任务 + 租约）
         await kickScheduler()
       } catch (err) {
-        // 后台续跑没有调用方接错——漏掉这层会变成 unhandled rejection 打挂
-        // daemon。任务侧的失败记账在 runRepoPreparation 内部已做。
-        log.error('deferred repo preparation continuation threw', {
-          taskId,
-          error: err instanceof Error ? err.message : String(err),
-        })
+        // 后台续跑没有调用方接错，所以这里必须**真做补偿**，不能只记日志。
+        //
+        // 二轮实现门 B-F1：`runDeferredRepoPreparation` 里只有 `materializeSpace`
+        // 在 try 内，其余步骤（铸合成行、回填事务、置 done、重读任务）任何一处抛出
+        // ——例如 SQLITE_FULL——都会冒到这里。原先只记一行日志，后果是：任务永远
+        // 停在 `pending`、驱动租约永久占用（此后每次重试撞 task-still-running）、
+        // 若物化已成功还留下一棵没有任务行锚定的工作树。我原注释写的「失败记账在
+        // 内部已做」只对 materializeSpace 那一段成立。
+        const msg = err instanceof Error ? err.message : String(err)
+        log.error('deferred repo preparation continuation threw', { taskId, error: msg })
+        try {
+          await setTaskStatus({
+            db: deps.db,
+            taskId,
+            to: 'failed',
+            allowedFrom: ['pending'],
+            reason: 'repo-prep-crashed',
+            extra: {
+              finishedAt: Date.now(),
+              errorSummary: `repository preparation crashed: ${msg}`,
+              errorMessage: msg,
+            },
+          })
+        } catch (inner) {
+          // 任务已被取消/已推进——保留既有终态，不覆写（与准备失败分支同口径）。
+          log.warn('could not record prep crash (task left the prep window)', {
+            taskId,
+            error: inner instanceof Error ? inner.message : String(inner),
+          })
+        }
+      } finally {
+        // 无论走哪条路，租约都必须还回去。`releaseTaskDriverAndFinalizeWorkspace`
+        // 是幂等的：正常路径上 `kickScheduler` 的 finally 已经还过一次，这里再调
+        // 不会重复释放（registry 按 controller 身份匹配）。
+        await releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
       }
     })()
     // 请求路径到此为止：返回**刚落库的 pending 行**（worktreePath 仍为空——这正是
@@ -4455,7 +4490,55 @@ async function runDeferredRepoPreparation(args: {
     } finally {
       taskDriverRegistry.release(taskId, controller)
     }
+    // B-F8 的回收**不能放在这里**——这一点是实测逼出来的。
+    //
+    // 准备失败只是任务进入 `failed`，它随时可能被 AC-11 的「重试准备」拉起来，
+    // 而重试要靠 `tasks.cached_repo_id` 重建来源。在失败点就把身份行删掉，等于
+    // 亲手拆掉刚为 AC-11 建起来的地基（实测：删完之后重试撞 cached-repo-not-found）。
+    //
+    // 正确的回收时机是**任务真正离场**（删除任务 / 工作区 GC 回收），那时才没人
+    // 会再重试它。已登记进 audit-backlog，随下一个 RFC 落到 gc.ts 的既有清扫里。
     return { ok: false, preparedTask: { ...task, status: finalStatus } }
+  }
+  // 二轮实现门 B-F2 / AC-14：**回写之前复检任务状态**。
+  //
+  // 取消与准备成功是一对竞速：`cancelTask` 先 abort、最多等 5 秒再写 canceled，而
+  // 物化可能恰好在这段里成功返回。没有这道复检的话，下面那个事务会**无条件按 id**
+  // 把路径与仓库字段写进一个已经 canceled 的任务，并把合成准备行置成 done——用户
+  // 明明取消了，界面上却出现一个「准备完成」的已取消任务，随后 `runTask` 认领时才
+  // 被拦下。AC-14 原文要求「回写与 kick 前的状态 CAS 复检，已取消任务不得被准备
+  // 完成拉起执行」。
+  //
+  // 复检发现任务已离开 pending 时：物化产物必须**当场清理**（它已经建出了工作树，
+  // 但再也不会有任务行锚定它——不清就是孤儿目录），然后按当前真实状态收场。
+  const stillPending = (
+    await deps.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
+  )[0]?.status
+  if (stillPending !== 'pending') {
+    log.warn('task left the prep window before backfill; discarding the materialized space', {
+      taskId,
+      status: stillPending ?? '(gone)',
+    })
+    // 走既有的清理定式（同 startTask 的 catch 分支）：cleanup 是**账本数据**而不是
+    // 函数，真正执行清理的是 `cleanupMaterializedSpaceLease`。
+    try {
+      const report = await cleanupMaterializedSpaceLease(
+        prepared.cleanup,
+        deps.workspaceCleanupHook,
+      )
+      if (!report.complete) {
+        log.warn('orphaned materialized space only partially cleaned', {
+          taskId,
+          failures: report.failures.length,
+        })
+      }
+    } catch (err) {
+      log.warn('failed to clean up the orphaned materialized space', {
+        taskId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+    return { ok: false, preparedTask: (await getTask(deps.db, taskId)) as Task }
   }
   // 所有权租约换成真的：占位态给的是空租约（ownedRoot=null、零 worktree），
   // 物化成功后必须换成 materializeSpace 产出的那份，否则清理/回滚协议管不到

@@ -4554,8 +4554,17 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
         }
       },
       spawn: async (_c, attempt) => {
-        // 信号检查留在 attempt 起点（与迁移前逐字同位），产出合成的 canceled 结局。
-        if (opts.signal?.aborted === true) {
+        // **只有 attempt 0** 在这里短路。理由是它与迁移前逐字同位：那时循环顶的
+        // 取消检查发生在铸行**之前**，所以直接返回不会遗留任何未终结的行。
+        //
+        // attempt ≥ 1 绝不能在这里短路（二轮实现门 A-1）：那时 `onNextAttempt` 已经
+        // 铸出一条 pending 行并把它标成 isolating。迁移前的代码在换树/铸行之后是
+        // **无条件**进入 `runOneScriptAttempt` 的，由它把新行终结为 canceled；在这里
+        // 提前返回会跳过那一步，于是留下永不运行也永不终结的孤儿行——正是 preAttempt
+        // 想消灭的形态，只是触发点从「取消发生在轮顶之前」挪到了「取消发生在
+        // discardIso / iso.create / onNextAttempt 的某个 await 里」。preAttempt 只能
+        // 覆盖轮顶那一瞬，覆盖不了这段异步窗口，所以两者缺一不可。
+        if (attempt === 0 && opts.signal?.aborted === true) {
           canceledMsg = 'signal aborted'
           return { kind: 'canceled' as const, summary: 'task canceled', message: 'signal aborted' }
         }
