@@ -19,7 +19,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks, workflows, users, nodeRuns, taskRepos } from '../src/db/schema'
+import { tasks, workflows, users, nodeRuns, taskRepos, cachedRepos } from '../src/db/schema'
 import { startTask } from '@/services/task'
 import { runGit } from '@/util/git'
 import { ulid } from 'ulid'
@@ -482,7 +482,12 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
 describe('RFC-287 G6 — 只有网络类占窗口（接线锁）', () => {
   test('重试判据是 isRetryableGitFailure，且在窗口检查之前', () => {
     const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
-    const fnStart = src.indexOf('async function startTaskImpl(')
+    // T14 改锚：准备段已从 startTaskImpl 的函数体提成模块级
+    // `runDeferredRepoPreparation`——AC-11 的「重试准备」要走**同一份**实现，抄第二套
+    // 的话这段里的窗口重试、两种失败形态、回填同事务、租约换真会各自走散。锁的语义
+    // 不变（判据先于窗口），只是射程跟着结构挪到新函数体内。
+    const fnStart = src.indexOf('async function runDeferredRepoPreparation(')
+    expect(fnStart, '准备段应已收敛为单一实现').toBeGreaterThan(-1)
     const body = src.slice(fnStart, src.indexOf('\n}\n', fnStart))
     const guard = body.indexOf('isRetryableGitFailure(prepared.earlyError)')
     const window = body.indexOf('windowDeadline - Date.now()')
@@ -533,4 +538,112 @@ describe('RFC-287 — scratch 启动排除在延后准备之外', () => {
     const runs = await db5.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
     expect(runs.find((r) => r.nodeId === REPO_PREP_NODE_ID)).toBeUndefined()
   }, 60_000)
+})
+
+// RFC-287 G7 / AC-11 + AC-16 —— 重试「准备仓库」。
+//
+// 修复前 `retryNode` 完全不认识合成的 `__repo_prep__` 行：它被当成普通工作流节点，
+// 铸个 placeholder 就交给 `runTask`，而 runTask 只驱动快照内的节点——空 scope 直接
+// 收尾，**把任务标成 done**。于是「重试准备」的实际效果是：一个没有工作树、没有
+// task_repos 的任务变成成功。那不是功能缺失，是会造出坏数据。（T14 实现门实测。）
+//
+// AC-11 要求重试作用于任务**当前所处阶段**，所以准备行走自己的路径：重建来源 →
+// CAS 回 pending → 重跑同一份准备实现。来源能重建的前提是 `cachedRepoId` 在占位
+// **之前**就已落定（tasks.repo_url 按设计脱敏、不可驱动 relaunch）。
+describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
+  async function launchFailingPrep(
+    db: DbClient,
+    s: { workflowId: string; userId: string },
+    name: string,
+  ): Promise<string> {
+    const task = await startTask(
+      {
+        workflowId: s.workflowId,
+        name,
+        repoUrl: 'http://10.255.255.1:9/nope.git',
+        inputs: {},
+      } as never,
+      {
+        db,
+        actorUserId: s.userId,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        deferRepoPreparation: true,
+        cloneTimeoutMs: 1_000,
+        gitBaselineSyncWindowMs: 0,
+      } as never,
+    )
+    await settle(db, task.id)
+    return task.id
+  }
+
+  test('占位行必须已带 cachedRepoId（否则重试无从重建来源）', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = await launchFailingPrep(db, s, 'ac11-identity')
+    const row = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
+    // 这一条是 AC-11 的地基：身份在**克隆之前**就落定了，所以哪怕克隆从未成功，
+    // 来源依然找得回来。
+    expect(row?.cachedRepoId ?? '').not.toBe('')
+    // 而且它指向一个真实存在的 cached_repos 行。
+    const cached = await db.select().from(cachedRepos).where(eq(cachedRepos.id, row!.cachedRepoId!))
+    expect(cached.length).toBe(1)
+    // 该行以 last_fetched_at=0 标记「尚未取回内容」——这个哨兵同时让它不被后台保鲜
+    // 选中、并让冷路径领养而不是删掉重建。
+    expect(cached[0]?.lastFetchedAt).toBe(0)
+  }, 90_000)
+
+  test('重试准备行 = 重跑准备，绝不把任务静默标成 done', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = await launchFailingPrep(db, s, 'ac11-retry')
+    const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).find(
+      (r) => r.nodeId === REPO_PREP_NODE_ID,
+    )
+    expect(prep?.status).toBe('failed')
+
+    const { retryNode } = await import('@/services/task')
+    await retryNode(db, id, prep!.id, {
+      cascade: false,
+      deps: {
+        db,
+        actorUserId: s.userId,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        cloneTimeoutMs: 1_000,
+        gitBaselineSyncWindowMs: 0,
+      } as never,
+    })
+    await settle(db, id)
+    const after = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
+    // 远端仍不可达 ⇒ 必然再失败一次。**关键是它不能是 done**：那正是修复前的坏行为。
+    expect(after?.status).not.toBe('done')
+    expect(after?.status).toBe('failed')
+    // 而且确实重跑过准备——工作树仍然没有（不是「假装成功」）。
+    expect(after?.worktreePath ?? '').toBe('')
+  }, 120_000)
+
+  test('AC-16：对 done 的准备行重试被拒（不得对已有工作树的任务再物化）', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = await launchFailingPrep(db, s, 'ac16-done')
+    const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).find(
+      (r) => r.nodeId === REPO_PREP_NODE_ID,
+    )
+    // 把准备行改成 done 模拟「已准备好的任务」。
+    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, prep!.id))
+    const { retryNode } = await import('@/services/task')
+    let msg = ''
+    try {
+      await retryNode(db, id, prep!.id, {
+        cascade: false,
+        deps: {
+          db,
+          actorUserId: s.userId,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        } as never,
+      })
+    } catch (err) {
+      msg = err instanceof Error ? err.message : String(err)
+    }
+    expect(msg).toMatch(/not 'failed'|repo-prep-not-retryable|only a failed preparation/i)
+  }, 90_000)
 })

@@ -124,7 +124,11 @@ import {
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
-import { listAvailableRefs, resolveCachedRepo } from '@/services/gitRepoCache'
+import {
+  ensureCachedRepoIdentity,
+  listAvailableRefs,
+  resolveCachedRepo,
+} from '@/services/gitRepoCache'
 import {
   commitGitignorePreset,
   findTrackedPathUnderMounts,
@@ -2349,6 +2353,8 @@ async function startTaskImpl(
   let space: MaterializedSpace
   /** RFC-287 G7：延后准备时先铸的 id，供 runTask 第 0 步物化时复用。 */
   let deferredTaskId: string | null = null
+  /** G7/AC-11：延后准备时**先行落定**的仓库身份，占位行据此持久化来源。 */
+  let deferredCachedRepoId: string | null = null
   if (deps.materializedSpace !== undefined) {
     space = deps.materializedSpace
   } else if (deps.preCreatedWorktree !== undefined) {
@@ -2432,6 +2438,24 @@ async function startTaskImpl(
     // 运气不是保证：任何将来按 spaceKind 分流的非终态读点都会踩中这段窗口。
     // 与其给一个零收益的路径留一段错值窗口，不如从判据上把它排除。
     deferredTaskId = ulid()
+    // AC-11 的前提：**先把仓库身份落定**，再异步取内容。
+    //
+    // 重试准备仓库要能找回原始来源，可任务行存不住它——`tasks.repo_url` 是脱敏存的
+    // （RFC-054 W3-4，源码注释原话：「so it can never drive a relaunch; this id is
+    // what does」），能驱动重跑的只有 `cached_repo_id`，而它按老流程要等克隆成功才
+    // 存在。于是延后准备的任务一旦准备失败，手里既没有可用 URL 也没有 id。
+    //
+    // 拆法：身份解析（canonical hash → 一行 cached_repos + URL 密封）是**纯 DB 写**、
+    // 几毫秒，留在这里；克隆 / fetch / 建工作树才异步。这样占位行就带着一个真实且
+    // 稳定的 cachedRepoId，不必新增列、也不必把明文凭据多存一份。
+    // 组启动本就带 repoGroupId（可重建），无需此步。
+    if (typeof input.repoUrl === 'string' && input.repoUrl.length > 0) {
+      const identity = await ensureCachedRepoIdentity(
+        { db: deps.db, ...(appHome !== undefined ? { appHome } : {}), secretBox: deps.secretBox },
+        { url: input.repoUrl },
+      )
+      deferredCachedRepoId = identity.cachedRepoId
+    }
     space = {
       kind: 'single',
       spaceKind: 'remote',
@@ -2483,7 +2507,10 @@ async function startTaskImpl(
   const headRepoUrl = head?.repoUrl ?? fallbackSource?.repoUrl ?? null
   // RFC-204: the deterministic mirror ref. repo_url is stored REDACTED (RFC-054
   // W3-4) so it can never drive a relaunch; this id is what does.
-  const headCachedRepoId = head?.cachedRepoId ?? fallbackSource?.cachedRepoId ?? null
+  // 延后准备时 head/fallbackSource 都还是空的，此刻唯一已知的来源就是先行落定的
+  // 身份 id——写进去，重试准备才有据可依（AC-11）。
+  const headCachedRepoId =
+    head?.cachedRepoId ?? fallbackSource?.cachedRepoId ?? deferredCachedRepoId ?? null
   // RFC-248: 组身份快照。与 D8「启动时快照」一致——`task_repos` 本就是布局
   // 快照，这里只再存一份 id+名字供溯源、记忆注入与详情页 chip 使用。
   const repoGroupSnapshot =
@@ -2858,221 +2885,19 @@ async function startTaskImpl(
    * 调用方不得再往下走调度。
    */
   const runRepoPreparation = async (): Promise<boolean> => {
-    // 闭包化之后外层的 `if (deferredTaskId !== null)` 守卫不再为它做流收窄，
-    // 这里显式取一次。null 分支不可达——本闭包只在延后准备时被调用。
-    const prepTaskId = deferredTaskId
-    if (prepTaskId === null) return true
-    // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
-    // `failed` 并把 git 原文留在行上——这正是 G7 要的「失败可见」。
-    //
-    // 合成一条 `__repo_prep__` node_run（同 `__commit_push__` 先例）：它不是工作流
-    // 里的节点，而是框架自己的一步，但用户必须能在时间线上看到它——否则看到的就是
-    // 一个「pending 了很久然后 failed」的任务，不知道卡在克隆、更不知道该重试什么。
-    // 有了这一行，「重试准备仓库」直接复用既有的 retryNode，不必造第二套重试语义。
-    // 先 pending 再转 running：RFC-098 修订 #10 的护栏禁止顶层行「born-running」
-    // ——那样的行对 frontier 不可见，恢复扫描也认不出来。合成行不能例外。
-    const prepRunId = await mintNodeRun(deps.db, {
+    const r = await runDeferredRepoPreparation({
+      deps,
+      input,
+      appHome,
+      controller,
       taskId,
-      nodeId: REPO_PREP_NODE_ID,
-      status: 'pending',
-      cause: 'initial',
-      retryIndex: 0,
-      iteration: 0,
+      prepTaskId: deferredTaskId as string,
+      task,
+      space,
+      ownership,
     })
-    await setNodeRunStatus({
-      db: deps.db,
-      nodeRunId: prepRunId,
-      to: 'running',
-      allowedFrom: ['pending'],
-      reason: 'repo-prep-start',
-      extra: {},
-    })
-    // 准备失败有**两种形态**，都要落到行上：
-    //   · `earlyError` —— 物化自己吞下的失败（建工作树、多仓挂载…）；
-    //   · **抛出** —— `resolveCachedRepo` 的超时/锁/校验失败走 DomainError
-    //     （实测：克隆超时抛 `repo-cache-locked` 504，压根不经 earlyError）。
-    // 只接前者会让最常见的一类失败（拉不动远端）重新变回「什么都不留」。
-    //
-    // RFC-287 G6：网络类失败在**总容忍窗口**内退避重试（默认 60s，可配，0=关闭）。
-    // 用总窗口而不是固定次数——用户关心「最多等多久」，不关心「重试几次」。
-    // 鉴权 / 仓库不存在 / 无权限**不占窗口**，立刻失败：让用户 1 秒内看到
-    // 「你写错地址了」，而不是等满 60 秒再告诉他同一件事。
-    //
-    // 窗口约束的是**重试等待**，不是单次克隆——proposal §2 G6 明写「一次正在推进
-    // 的克隆不打断」。所以一个 500MB 的仓在 60s 窗口下照样能克隆十分钟：管单次
-    // 时长的是另一个旋钮 `gitCloneTimeoutMs`。两者职责不同，别拿窗口去掐克隆。
-    // （T14 实现门按「窗口=墙钟总时长」读它并报为缺陷，这里把契约写死免得再议。）
-    const syncWindowMs = deps.gitBaselineSyncWindowMs ?? 60_000
-    const windowDeadline = Date.now() + syncWindowMs
-    let prepared: MaterializedSpace
-    let backoffMs = 1_000
-    for (;;) {
-      try {
-        prepared = await materializeSpace(
-          input,
-          { ...deps, sourceTerminationLaunchSignal: controller.signal },
-          appHome,
-          prepTaskId,
-        )
-      } catch (err) {
-        prepared = {
-          ...space,
-          earlyError: err instanceof Error ? err.message : String(err),
-        }
-      }
-      if (prepared.earlyError === null) break
-      // 先判可重试性、再看窗口——反过来会让永久失败也白白消耗一次退避。
-      if (!isRetryableGitFailure(prepared.earlyError)) break
-      const remaining = windowDeadline - Date.now()
-      if (remaining <= 0) break
-      // 退避本身就会把窗口睡穿时，不要「睡满再开一次新尝试」——那一次是在窗口
-      // 已经耗尽之后才起步的，既拖长用户等待，也让「最多等 W」这句话不成立。
-      // 窗口内还睡得下才继续（T14 实现门）。
-      if (backoffMs >= remaining) break
-      log.warn('repo preparation failed with a retryable network error; retrying within window', {
-        taskId,
-        remainingMs: remaining,
-        error: prepared.earlyError,
-      })
-      if (controller.signal.aborted) break
-      await new Promise<void>((resolve) => {
-        const settle = (): void => {
-          controller.signal.removeEventListener('abort', onAbort)
-          resolve()
-        }
-        const onAbort = (): void => {
-          clearTimeout(timer)
-          settle()
-        }
-        const timer = setTimeout(settle, Math.min(backoffMs, remaining))
-        controller.signal.addEventListener('abort', onAbort, { once: true })
-      })
-      backoffMs = Math.min(backoffMs * 2, 15_000)
-    }
-    if (prepared.earlyError !== null) {
-      // 租约释放必须在 finally 里——两个写点都是**会抛**的 CAS：任务在准备窗口内
-      // 被取消时，`setTaskStatus` 见到 terminal 的 'canceled' 会抛
-      // ConflictError('illegal-task-transition')（lifecycle.ts 的终态保护），
-      // 直着写就会跳过下面的 release，把驱动租约永久漏在注册表里——此后这个任务
-      // 的每次重试都撞 `task-still-running`，只有重启 daemon 能解。
-      //
-      // 我原先那句注释「CAS 失败即放弃，不覆写」把语义写反了：不覆写是对的，但它
-      // 是**靠抛出**实现的，不是靠静默返回。（T14 实现门）
-      try {
-        // 合成行先落 failed，且 errorMessage 是 git 的原话——时间线上点开这一步能
-        // 看到「fatal: unable to access …」，而不是一句无从下手的「启动失败」。
-        await setNodeRunStatus({
-          db: deps.db,
-          nodeRunId: prepRunId,
-          to: 'failed',
-          allowedFrom: ['running'],
-          reason: 'repo-prep-failed',
-          extra: { finishedAt: Date.now(), errorMessage: prepared.earlyError },
-        })
-      } catch (err) {
-        // 取消路径已经把这条合成行终结过了——不是错误，记一笔即可。
-        log.warn('repo-prep row already terminal when recording failure', {
-          taskId,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-      let finalStatus: TaskStatus = 'failed'
-      try {
-        // 走 RFC-097 的 CAS 写点：allowedFrom 只放 pending——准备阶段任务必然还在
-        // pending（G7 不新增状态）。已取消/已推进时抛出，此时**保留既有终态**。
-        await setTaskStatus({
-          db: deps.db,
-          taskId,
-          to: 'failed',
-          allowedFrom: ['pending'],
-          reason: 'repo-prep-failed',
-          extra: {
-            finishedAt: Date.now(),
-            errorSummary: `repo preparation failed: ${prepared.earlyError}`,
-            errorMessage: prepared.earlyError,
-          },
-        })
-      } catch (err) {
-        // 取消赢了这场竞速：任务已是 canceled，不得被准备失败改写成 failed。
-        // 回给调用方的状态也必须是库里的真值，不能一律报 failed。
-        const cur = (
-          await deps.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
-        )[0]
-        finalStatus = (cur?.status as TaskStatus | undefined) ?? 'failed'
-        log.warn('task left prep window before failure could be recorded; keeping current status', {
-          taskId,
-          status: finalStatus,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      } finally {
-        taskDriverRegistry.release(taskId, controller)
-      }
-      preparedTask = { ...task, status: finalStatus }
-      return false
-    }
-    // 所有权租约换成真的：占位态给的是空租约（ownedRoot=null、零 worktree），
-    // 物化成功后必须换成 materializeSpace 产出的那份，否则清理/回滚协议管不到
-    // 刚建出来的工作树——任务删除时会留下孤儿目录。
-    ownership.cleanup = prepared.cleanup
-    // 回填：占位落行时 `task_repos` / `task_space_nodes` 是空的（那时还没物化）。
-    // 与任务行的路径回写放进**同一个事务**——多仓任务的 repos 与 tasks.worktreePath
-    // 必须同时可见，否则一个恰好落在中间的读者（诊断接口、structural diff、前端
-    // 详情页）会看到「有工作树但没有成员仓」这种不存在的状态。
-    //
-    // RFC-066 还要求 tasks 上的 legacy 仓库列逐字镜像 task_repos[0]，repoCount
-    // 等于成员行数。延后准备的占位 INSERT 不可能提前知道这些值，所以这里必须把
-    // **整份兼容投影**一起回填；只回填路径会让成功任务永久显示成 1 仓，且详情页
-    // 丢失远端 URL / cache id / base branch。
-    const preparedHead = prepared.repos[0]
-    dbTxSync(deps.db, (tx) => {
-      tx.update(tasks)
-        .set({
-          worktreePath: prepared.worktreePath,
-          branch: prepared.branch,
-          baseCommit: prepared.baseCommit,
-          repoPath: preparedHead?.repoPath ?? '',
-          repoUrl:
-            preparedHead?.repoUrl !== null && preparedHead?.repoUrl !== undefined
-              ? redactGitUrl(preparedHead.repoUrl)
-              : null,
-          cachedRepoId: preparedHead?.cachedRepoId ?? null,
-          baseBranch: preparedHead?.baseBranch ?? '',
-          repoCount: Math.max(1, prepared.repos.length),
-          spaceKind: prepared.spaceKind,
-        })
-        .where(eq(tasks.id, taskId))
-        .run()
-      if (prepared.repos.length > 0) {
-        tx.insert(taskRepos)
-          .values(taskRepoRowsFor(taskId, prepared.repos, input.workingBranch ?? null))
-          .run()
-      }
-      if (prepared.nodePaths.length > 0) {
-        tx.insert(taskSpaceNodes)
-          .values(
-            prepared.nodePaths.map((nodePath) => ({
-              taskId,
-              nodePath,
-              schemaVersion: 1,
-            })),
-          )
-          .run()
-      }
-    })
-    await setNodeRunStatus({
-      db: deps.db,
-      nodeRunId: prepRunId,
-      to: 'done',
-      allowedFrom: ['running'],
-      reason: 'repo-prep-done',
-      extra: { finishedAt: Date.now() },
-    })
-    // 响应体重读一次：它是在准备之前、用占位值构造的，直接返回会让调用方拿到空
-    // worktreePath——前端据此显示空路径，脚本据此写文件会写到错地方（实测：HTTP
-    // 契约测试往空路径写文件，diff 自然为空）。回填已落库，重读即得真实值，比在
-    // 这里手抄一份投影更不容易走散。
-    preparedTask = (await getTask(deps.db, taskId)) as Task
-    return true
+    preparedTask = r.preparedTask
+    return r.ok
   }
 
   /**
@@ -4321,6 +4146,349 @@ async function assertChildTaskDrivable(
   }
 }
 
+/**
+ * RFC-287 G7 / AC-11 —— 重试「准备仓库」这一步。
+ *
+ * 「重试作用于任务当前所处阶段」：任务卡在准备阶段，重试就该重跑准备，而不是去重跑
+ * 一个还不存在的工作流节点。做法是把任务 CAS 回 `pending`、清掉上一轮的失败痕迹，
+ * 然后**照原样重走 startTask 的延后准备路径**——复用同一份实现，而不是抄第二套。
+ *
+ * 来源从任务行重建：
+ *   · `repoGroupId` —— 组布局本就按 id 现查（启动时也是这么做的）；
+ *   · `cachedRepoId` —— 由 `ensureCachedRepoIdentity` 在占位**之前**落定，正是为了
+ *     此刻能找回来（`tasks.repo_url` 是脱敏存的，按设计不能驱动重跑）。
+ * 两者都没有 = 这行任务的来源确实无从重建，响亮拒绝，让用户去重新启动。
+ */
+async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDeps): Promise<Task> {
+  const hasGroup = typeof task.repoGroupId === 'string' && task.repoGroupId.length > 0
+  const hasCached = typeof task.cachedRepoId === 'string' && task.cachedRepoId.length > 0
+  if (!hasGroup && !hasCached) {
+    throw new ConflictError(
+      'repo-prep-source-unavailable',
+      `task '${task.id}' has no re-resolvable repository source (repo_url is stored redacted by ` +
+        'design and cannot drive a relaunch); launch a new task instead',
+    )
+  }
+  // 复活闸门与其它重试路径共用 setTaskStatus 这一个写点（RFC-097 CAS + RFC-165
+  // 工作区复活判据）。准备失败的行**没有**墓碑（AC-15 刻意保证），所以这里 CAS 得回。
+  await setTaskStatus({
+    db,
+    taskId: task.id,
+    to: 'pending',
+    allowedFrom: ['failed', 'canceled', 'interrupted'],
+    // 与普通节点重试同款：`failed` 是终态，复活必须显式开闸。RFC-165 的工作区复活
+    // 判据仍在 setTaskStatus 内部生效——准备失败的行**没有**墓碑（AC-15 刻意保证的），
+    // 所以这里 CAS 得回；若哪天墓碑逻辑变了把它打上，这里会 410，而不是静默失效。
+    allowTerminal: true,
+    reason: 'repo-prep-retry',
+    extra: {
+      finishedAt: null,
+      errorSummary: null,
+      errorMessage: null,
+      failedNodeId: null,
+    },
+  })
+  // 重跑准备：走**同一份**实现（runDeferredRepoPreparation），不是抄第二套。
+  // 复用要点是它只认「一个已存在的任务行 + 一份可解析的来源」，其余（合成行、窗口
+  // 重试、回填同事务、租约换真）都在里面，重试与首次因此逐字同构。
+  const appHome = deps.appHome ?? Paths.root
+  const controller = new AbortController()
+  if ((await tryAttachTaskDriver(db, task.id, controller)) !== 'attached') {
+    throw new ConflictError(
+      'task-still-running',
+      `task '${task.id}' was picked up by another driver; retry once it settles`,
+    )
+  }
+  // 重跑用的启动输入：只带**来源**三件（组 / 缓存仓 / 工作分支）。其余启动参数
+  // （工作流、成员、冻结闭包…）在任务行上已经定死，重试不得改动它们。
+  const input = {
+    workflowId: task.workflowId,
+    name: task.name,
+    inputs: {},
+    ...(hasGroup ? { repoGroupId: task.repoGroupId } : {}),
+    ...(hasCached && !hasGroup ? { cachedRepoId: task.cachedRepoId } : {}),
+    ...(task.workingBranch !== null ? { workingBranch: task.workingBranch } : {}),
+  } as unknown as StartTask
+  const ownership: StartTaskOwnership = {
+    cleanup: createMaterializedSpaceCleanup(task.id, null),
+    // 行早就在库里了——重试不建行，所以这一位从一开始就是 true。
+    taskRowCommitted: true,
+  }
+  const r = await runDeferredRepoPreparation({
+    deps: { ...deps, db },
+    input,
+    appHome,
+    controller,
+    taskId: task.id,
+    prepTaskId: task.id,
+    task,
+    space: {
+      kind: 'single',
+      spaceKind: 'remote',
+      taskId: task.id,
+      worktreePath: '',
+      branch: '',
+      baseCommit: null,
+      earlyError: null,
+      resolvedSources: [],
+      repos: [],
+      nodePaths: [],
+      cleanup: ownership.cleanup as MaterializedSpaceCleanup,
+    } as MaterializedSpace,
+    ownership,
+  })
+  if (!r.ok) return r.preparedTask ?? task
+  void runTask({
+    taskId: task.id,
+    db,
+    appHome,
+    ...runtimeConfigOpts(deps),
+    log,
+    signal: controller.signal,
+  })
+    .catch((err) => {
+      log.error('runTask threw after repo-prep retry', {
+        taskId: task.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+    .finally(() => releaseTaskDriverAndFinalizeWorkspace(db, task.id, controller))
+  return r.preparedTask ?? ((await getTask(db, task.id)) as Task)
+}
+
+/**
+ * RFC-287 G7 —— 仓库准备（任务的「第 0 步」），**单一实现**。
+ *
+ * 两个调用方共用它：正常启动的后台续跑，以及 AC-11 的「重试准备仓库」。抄第二份是
+ * 不可接受的——这段里有窗口化重试、两种失败形态、回填与路径回写的同事务约束、租约
+ * 换真、以及取消竞速下的状态保留，任何一项走散都只在故障路径上现形。
+ *
+ * 返回 `ok:false` 表示准备失败且**已记账**（合成行 failed、任务 failed、租约已释放），
+ * 调用方不得再往下走调度。
+ */
+async function runDeferredRepoPreparation(args: {
+  deps: StartTaskDeps
+  input: StartTask
+  appHome: string
+  controller: AbortController
+  taskId: string
+  prepTaskId: string
+  task: Task
+  space: MaterializedSpace
+  ownership: StartTaskOwnership
+}): Promise<{ ok: boolean; preparedTask: Task | null }> {
+  const { deps, input, appHome, controller, taskId, prepTaskId, task, space, ownership } = args
+  // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
+  // `failed` 并把 git 原文留在行上——这正是 G7 要的「失败可见」。
+  //
+  // 合成一条 `__repo_prep__` node_run（同 `__commit_push__` 先例）：它不是工作流
+  // 里的节点，而是框架自己的一步，但用户必须能在时间线上看到它——否则看到的就是
+  // 一个「pending 了很久然后 failed」的任务，不知道卡在克隆、更不知道该重试什么。
+  // 有了这一行，「重试准备仓库」直接复用既有的 retryNode，不必造第二套重试语义。
+  // 先 pending 再转 running：RFC-098 修订 #10 的护栏禁止顶层行「born-running」
+  // ——那样的行对 frontier 不可见，恢复扫描也认不出来。合成行不能例外。
+  const prepRunId = await mintNodeRun(deps.db, {
+    taskId,
+    nodeId: REPO_PREP_NODE_ID,
+    status: 'pending',
+    cause: 'initial',
+    retryIndex: 0,
+    iteration: 0,
+  })
+  await setNodeRunStatus({
+    db: deps.db,
+    nodeRunId: prepRunId,
+    to: 'running',
+    allowedFrom: ['pending'],
+    reason: 'repo-prep-start',
+    extra: {},
+  })
+  // 准备失败有**两种形态**，都要落到行上：
+  //   · `earlyError` —— 物化自己吞下的失败（建工作树、多仓挂载…）；
+  //   · **抛出** —— `resolveCachedRepo` 的超时/锁/校验失败走 DomainError
+  //     （实测：克隆超时抛 `repo-cache-locked` 504，压根不经 earlyError）。
+  // 只接前者会让最常见的一类失败（拉不动远端）重新变回「什么都不留」。
+  //
+  // RFC-287 G6：网络类失败在**总容忍窗口**内退避重试（默认 60s，可配，0=关闭）。
+  // 用总窗口而不是固定次数——用户关心「最多等多久」，不关心「重试几次」。
+  // 鉴权 / 仓库不存在 / 无权限**不占窗口**，立刻失败：让用户 1 秒内看到
+  // 「你写错地址了」，而不是等满 60 秒再告诉他同一件事。
+  //
+  // 窗口约束的是**重试等待**，不是单次克隆——proposal §2 G6 明写「一次正在推进
+  // 的克隆不打断」。所以一个 500MB 的仓在 60s 窗口下照样能克隆十分钟：管单次
+  // 时长的是另一个旋钮 `gitCloneTimeoutMs`。两者职责不同，别拿窗口去掐克隆。
+  // （T14 实现门按「窗口=墙钟总时长」读它并报为缺陷，这里把契约写死免得再议。）
+  const syncWindowMs = deps.gitBaselineSyncWindowMs ?? 60_000
+  const windowDeadline = Date.now() + syncWindowMs
+  let prepared: MaterializedSpace
+  let backoffMs = 1_000
+  for (;;) {
+    try {
+      prepared = await materializeSpace(
+        input,
+        { ...deps, sourceTerminationLaunchSignal: controller.signal },
+        appHome,
+        prepTaskId,
+      )
+    } catch (err) {
+      prepared = {
+        ...space,
+        earlyError: err instanceof Error ? err.message : String(err),
+      }
+    }
+    if (prepared.earlyError === null) break
+    // 先判可重试性、再看窗口——反过来会让永久失败也白白消耗一次退避。
+    if (!isRetryableGitFailure(prepared.earlyError)) break
+    const remaining = windowDeadline - Date.now()
+    if (remaining <= 0) break
+    // 退避本身就会把窗口睡穿时，不要「睡满再开一次新尝试」——那一次是在窗口
+    // 已经耗尽之后才起步的，既拖长用户等待，也让「最多等 W」这句话不成立。
+    // 窗口内还睡得下才继续（T14 实现门）。
+    if (backoffMs >= remaining) break
+    log.warn('repo preparation failed with a retryable network error; retrying within window', {
+      taskId,
+      remainingMs: remaining,
+      error: prepared.earlyError,
+    })
+    if (controller.signal.aborted) break
+    await new Promise<void>((resolve) => {
+      const settle = (): void => {
+        controller.signal.removeEventListener('abort', onAbort)
+        resolve()
+      }
+      const onAbort = (): void => {
+        clearTimeout(timer)
+        settle()
+      }
+      const timer = setTimeout(settle, Math.min(backoffMs, remaining))
+      controller.signal.addEventListener('abort', onAbort, { once: true })
+    })
+    backoffMs = Math.min(backoffMs * 2, 15_000)
+  }
+  if (prepared.earlyError !== null) {
+    // 租约释放必须在 finally 里——两个写点都是**会抛**的 CAS：任务在准备窗口内
+    // 被取消时，`setTaskStatus` 见到 terminal 的 'canceled' 会抛
+    // ConflictError('illegal-task-transition')（lifecycle.ts 的终态保护），
+    // 直着写就会跳过下面的 release，把驱动租约永久漏在注册表里——此后这个任务
+    // 的每次重试都撞 `task-still-running`，只有重启 daemon 能解。
+    //
+    // 我原先那句注释「CAS 失败即放弃，不覆写」把语义写反了：不覆写是对的，但它
+    // 是**靠抛出**实现的，不是靠静默返回。（T14 实现门）
+    try {
+      // 合成行先落 failed，且 errorMessage 是 git 的原话——时间线上点开这一步能
+      // 看到「fatal: unable to access …」，而不是一句无从下手的「启动失败」。
+      await setNodeRunStatus({
+        db: deps.db,
+        nodeRunId: prepRunId,
+        to: 'failed',
+        allowedFrom: ['running'],
+        reason: 'repo-prep-failed',
+        extra: { finishedAt: Date.now(), errorMessage: prepared.earlyError },
+      })
+    } catch (err) {
+      // 取消路径已经把这条合成行终结过了——不是错误，记一笔即可。
+      log.warn('repo-prep row already terminal when recording failure', {
+        taskId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+    let finalStatus: TaskStatus = 'failed'
+    try {
+      // 走 RFC-097 的 CAS 写点：allowedFrom 只放 pending——准备阶段任务必然还在
+      // pending（G7 不新增状态）。已取消/已推进时抛出，此时**保留既有终态**。
+      await setTaskStatus({
+        db: deps.db,
+        taskId,
+        to: 'failed',
+        allowedFrom: ['pending'],
+        reason: 'repo-prep-failed',
+        extra: {
+          finishedAt: Date.now(),
+          errorSummary: `repo preparation failed: ${prepared.earlyError}`,
+          errorMessage: prepared.earlyError,
+        },
+      })
+    } catch (err) {
+      // 取消赢了这场竞速：任务已是 canceled，不得被准备失败改写成 failed。
+      // 回给调用方的状态也必须是库里的真值，不能一律报 failed。
+      const cur = (
+        await deps.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
+      )[0]
+      finalStatus = (cur?.status as TaskStatus | undefined) ?? 'failed'
+      log.warn('task left prep window before failure could be recorded; keeping current status', {
+        taskId,
+        status: finalStatus,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      taskDriverRegistry.release(taskId, controller)
+    }
+    return { ok: false, preparedTask: { ...task, status: finalStatus } }
+  }
+  // 所有权租约换成真的：占位态给的是空租约（ownedRoot=null、零 worktree），
+  // 物化成功后必须换成 materializeSpace 产出的那份，否则清理/回滚协议管不到
+  // 刚建出来的工作树——任务删除时会留下孤儿目录。
+  ownership.cleanup = prepared.cleanup
+  // 回填：占位落行时 `task_repos` / `task_space_nodes` 是空的（那时还没物化）。
+  // 与任务行的路径回写放进**同一个事务**——多仓任务的 repos 与 tasks.worktreePath
+  // 必须同时可见，否则一个恰好落在中间的读者（诊断接口、structural diff、前端
+  // 详情页）会看到「有工作树但没有成员仓」这种不存在的状态。
+  //
+  // RFC-066 还要求 tasks 上的 legacy 仓库列逐字镜像 task_repos[0]，repoCount
+  // 等于成员行数。延后准备的占位 INSERT 不可能提前知道这些值，所以这里必须把
+  // **整份兼容投影**一起回填；只回填路径会让成功任务永久显示成 1 仓，且详情页
+  // 丢失远端 URL / cache id / base branch。
+  const preparedHead = prepared.repos[0]
+  dbTxSync(deps.db, (tx) => {
+    tx.update(tasks)
+      .set({
+        worktreePath: prepared.worktreePath,
+        branch: prepared.branch,
+        baseCommit: prepared.baseCommit,
+        repoPath: preparedHead?.repoPath ?? '',
+        repoUrl:
+          preparedHead?.repoUrl !== null && preparedHead?.repoUrl !== undefined
+            ? redactGitUrl(preparedHead.repoUrl)
+            : null,
+        cachedRepoId: preparedHead?.cachedRepoId ?? null,
+        baseBranch: preparedHead?.baseBranch ?? '',
+        repoCount: Math.max(1, prepared.repos.length),
+        spaceKind: prepared.spaceKind,
+      })
+      .where(eq(tasks.id, taskId))
+      .run()
+    if (prepared.repos.length > 0) {
+      tx.insert(taskRepos)
+        .values(taskRepoRowsFor(taskId, prepared.repos, input.workingBranch ?? null))
+        .run()
+    }
+    if (prepared.nodePaths.length > 0) {
+      tx.insert(taskSpaceNodes)
+        .values(
+          prepared.nodePaths.map((nodePath) => ({
+            taskId,
+            nodePath,
+            schemaVersion: 1,
+          })),
+        )
+        .run()
+    }
+  })
+  await setNodeRunStatus({
+    db: deps.db,
+    nodeRunId: prepRunId,
+    to: 'done',
+    allowedFrom: ['running'],
+    reason: 'repo-prep-done',
+    extra: { finishedAt: Date.now() },
+  })
+  // 响应体重读一次：它是在准备之前、用占位值构造的，直接返回会让调用方拿到空
+  // worktreePath——前端据此显示空路径，脚本据此写文件会写到错地方（实测：HTTP
+  // 契约测试往空路径写文件，diff 自然为空）。回填已落库，重读即得真实值，比在
+  // 这里手抄一份投影更不容易走散。
+  return { ok: true, preparedTask: (await getTask(deps.db, taskId)) as Task }
+}
+
 export async function retryNode(
   db: DbClient,
   taskId: string,
@@ -4361,6 +4529,26 @@ export async function retryNode(
       'node-run-not-found',
       `node_run '${nodeRunId}' not found under task '${taskId}'`,
     )
+  }
+
+  // RFC-287 G7 / AC-11 —— 合成的「准备仓库」行走**自己的**重试路径。
+  //
+  // 它不是工作流定义里的节点，所以下面那整套（快照查 kind、算下游影响集、铸
+  // placeholder、回滚 pre_snapshot）对它全是空转：`runTask` 只驱动快照内的节点，
+  // 空 scope 会**直接把任务收成 done**——于是「重试准备」的实际效果是把一个没有
+  // 工作树、没有 task_repos 的任务标成成功。那不是没实现，是会造出坏数据。
+  // （T14 实现门实测。）
+  if (runRow.nodeId === REPO_PREP_NODE_ID) {
+    // AC-16：只有**失败**的准备行可重试。对已 done 的行重试 = 对一个已有工作树的
+    // 任务再物化一次；路由层不校验 nodeId 是否在定义里，所以判据必须落在这里。
+    if (runRow.status !== 'failed') {
+      throw new ConflictError(
+        'repo-prep-not-retryable',
+        `repository preparation for task '${taskId}' is '${runRow.status}', not 'failed'; ` +
+          'only a failed preparation can be retried',
+      )
+    }
+    return await retryRepoPreparation(db, task, opts.deps)
   }
 
   // RFC-292: a retry reuses the task's immutable webhook provenance. Keep the

@@ -440,6 +440,78 @@ async function isValidGitDir(dir: string): Promise<boolean> {
   return r.exitCode === 0
 }
 
+/**
+ * RFC-287 G7 / AC-11 —— **只登记仓库身份，不碰网络**。
+ *
+ * 为什么需要它：G7 把克隆挪到任务行落库之后（异步准备），于是「重试准备仓库」这条
+ * AC-11 语义要求重试时还能找回**原始来源**。可任务行存不住来源——`tasks.repo_url`
+ * 是**脱敏**存的，源码里那句注释写得很直白：「stored REDACTED so it can never drive
+ * a relaunch; this id (cached_repo_id) is what does」。而 `cached_repo_id` 按老流程
+ * 要等克隆成功才存在。结果就是：延后准备的任务在准备失败时，手里既没有可用的 URL
+ * 也没有 id，重试无从谈起。
+ *
+ * 修法是把「解析身份」与「取回内容」拆开：身份（canonical hash → 一行 cached_repos，
+ * URL 按既有规则密封）是**纯 DB 写**，几毫秒，留在请求路径里；克隆 / fetch / 建工作树
+ * 才是慢的那部分，异步推进。这样占位任务行就能带上一个**真实且稳定**的
+ * `cachedRepoId`，重试直接照它重建来源，既不必新增列，也不必把明文凭据多存一份。
+ *
+ * 该行以 `lastFetchedAt === 0` 标记「尚未取回内容」，这一个哨兵同时管三件事：
+ *   · `resolveCachedRepo` 的冷路径据此**领养**而不是删除重建（保住 id）；
+ *   · 后台自动保鲜不会选中它（selectDueRepos 要求 lastFetchedAt >= freshAfter）；
+ *   · UI 上如实显示为「从未同步」。
+ *
+ * 幂等：同一 URL 重复调用返回同一行；与 `resolveCachedRepo` 共用同一把 per-URL 锁，
+ * 因此不会与正在进行的克隆抢同一行。
+ */
+export async function ensureCachedRepoIdentity(
+  deps: GitRepoCacheDeps,
+  input: { url: string },
+): Promise<{ cachedRepoId: string; urlRedacted: string }> {
+  const parsed = parseGitUrl(input.url)
+  if (!parsed) {
+    throw new ValidationError('repo-url-invalid', 'unsupported or malformed Git URL', {
+      url: redactGitUrl(input.url),
+    })
+  }
+  const { hash, slug } = gitUrlCacheKeyWith(parsed, sha1Hex)
+  const appHome = deps.appHome ?? Paths.root
+  const cacheDir = join(appHome, 'repos', `${hash}-${slug}`)
+  const redacted = redactGitUrl(input.url)
+  return await withUrlLock(hash, async () => {
+    const existing = deps.db
+      .select()
+      .from(cachedRepos)
+      .where(eq(cachedRepos.urlHash, hash))
+      .limit(1)
+      .all()[0]
+    if (existing !== undefined) {
+      return { cachedRepoId: existing.id, urlRedacted: existing.urlRedacted ?? redacted }
+    }
+    const id = ulid()
+    const box = deps.secretBox
+    deps.db
+      .insert(cachedRepos)
+      .values({
+        id,
+        urlHash: hash,
+        urlEnc: box !== undefined ? box.seal(input.url) : null,
+        urlRedacted: redacted,
+        localPath: cacheDir,
+        defaultBranch: null,
+        // 哨兵：尚未取回内容。见上面的三重作用。
+        lastFetchedAt: 0,
+        createdAt: (deps.now ?? Date.now)(),
+        hasSubmodules: null,
+        lastSubmoduleSyncOk: null,
+        lastSubmoduleSyncError: null,
+      })
+      .run()
+    if (box === undefined) rememberVolatileRepoUrl(deps.db, id, input.url)
+    log.info('registered cached repo identity (no clone yet)', { url: redacted, hash })
+    return { cachedRepoId: id, urlRedacted: redacted }
+  })
+}
+
 export async function resolveCachedRepo(
   deps: GitRepoCacheDeps,
   input: ResolveCachedRepoInput,
@@ -671,7 +743,19 @@ export async function resolveCachedRepo(
       }
     }
 
-    if (row) {
+    // RFC-287 G7/AC-11：区分「**身份行**（只登记了身份、还没克隆过）」与「陈旧行
+    // （曾经克隆成功、目录后来没了）」。两者在这里长得一样——都是 row 存在但
+    // `isValidGitDir` 为假——但处置必须相反：
+    //   · 陈旧行：删掉重建（保持原行为）。它的 id 已经被外界引用过，但那份引用指向
+    //     的镜像内容已经不存在，换新 id 是诚实的。
+    //   · 身份行：**必须保住 id**。它是「先把仓库身份落定、再异步克隆」这条路的
+    //     全部意义所在——任务占位行存的就是这个 id，删了它，重试准备时就再也找不回
+    //     来源，AC-11 直接失效。
+    // 判据取 `lastFetchedAt === 0`：真正克隆成功过的行一定带真实时间戳，0 是
+    // `ensureCachedRepoIdentity` 专门留下的哨兵（它同时让该行不会被后台保鲜选中——
+    // selectDueRepos 要求 lastFetchedAt >= freshAfter）。
+    const adoptIdentityRowId = row !== undefined && row.lastFetchedAt === 0 ? row.id : null
+    if (row && adoptIdentityRowId === null) {
       // Cache row points at a missing / corrupt dir. Drop it and re-clone.
       log.warn('cached repo dir invalid; treating as cold clone', {
         url: redacted,
@@ -754,28 +838,35 @@ export async function resolveCachedRepo(
     const hasGitmodules = submodule.mode === 'never' ? false : detectSubmodules(cacheDir)
 
     const ts = now()
-    const id = ulid()
+    // 领养身份行时**沿用它的 id**（见上面 adoptIdentityRowId 的长注释）：任务占位行
+    // 存的就是这个 id，换掉等于把它变成悬空引用。
+    const id = adoptIdentityRowId ?? ulid()
     // RFC-204/RFC-279: seal at INSERT when a key is available. Key-less test /
     // embedding shapes retain only the redacted display form, never plaintext.
     const box = deps.secretBox
     const urlEnc = box !== undefined ? box.seal(input.url) : null
-    deps.db
-      .insert(cachedRepos)
-      .values({
-        id,
-        urlHash: hash,
-        urlEnc,
-        // RFC-204: store the safe display form rather than deriving it per read.
-        urlRedacted: redacted,
-        localPath: cacheDir,
-        defaultBranch: defaultBr,
-        lastFetchedAt: ts,
-        createdAt: ts,
-        hasSubmodules: hasGitmodules,
-        lastSubmoduleSyncOk: true,
-        lastSubmoduleSyncError: null,
-      })
-      .run()
+    const rowValues = {
+      urlHash: hash,
+      urlEnc,
+      // RFC-204: store the safe display form rather than deriving it per read.
+      urlRedacted: redacted,
+      localPath: cacheDir,
+      defaultBranch: defaultBr,
+      lastFetchedAt: ts,
+      hasSubmodules: hasGitmodules,
+      lastSubmoduleSyncOk: true,
+      lastSubmoduleSyncError: null,
+    }
+    if (adoptIdentityRowId !== null) {
+      // 就地补全：身份行此前只有 id/hash/url/localPath，克隆完才知道默认分支与
+      // 子模块情况。`createdAt` 保持身份登记那一刻，不覆盖。
+      deps.db.update(cachedRepos).set(rowValues).where(eq(cachedRepos.id, id)).run()
+    } else {
+      deps.db
+        .insert(cachedRepos)
+        .values({ id, createdAt: ts, ...rowValues })
+        .run()
+    }
     if (box === undefined) rememberVolatileRepoUrl(deps.db, id, input.url)
     log.info('cloned new cached repo', { url: redacted, hash, localPath: cacheDir })
     // RFC-165 (F19-r3): the COLD path must resolve requested refs to their
