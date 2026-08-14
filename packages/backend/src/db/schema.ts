@@ -1009,6 +1009,15 @@ export const tasks = sqliteTable(
     // (stamped inside the task INSERT); soft links, no FK — mirrors RFC-159.
     webhookTriggerId: text('webhook_trigger_id'),
     webhookFireId: text('webhook_fire_id'),
+    /**
+     * RFC-303: opaque, task-owned source termination snapshot. The binding is
+     * frozen by the launch guard and inherited by every child; it is never
+     * exposed on the public Task wire or recomputed from a live trigger.
+     */
+    sourceTerminationBinding: text('source_termination_binding'),
+    sourceTerminationLaunchRev: integer('source_termination_launch_rev'),
+    sourceTerminationFence: text('source_termination_fence', { enum: ['closed', 'merged'] }),
+    sourceTerminationEffectRev: integer('source_termination_effect_rev'),
     /** RFC-164: owning workgroup id (durable soft link; NULL = not a workgroup task). */
     workgroupId: text('workgroup_id'),
     /** RFC-164: launch snapshot + mid-run-editable copy of the group config
@@ -1103,6 +1112,10 @@ export const tasks = sqliteTable(
     workflowIdx: index('idx_tasks_workflow').on(t.workflowId, t.startedAt),
     schedTaskIdx: index('idx_tasks_scheduled_task').on(t.scheduledTaskId), // RFC-159
     webhookTriggerIdx: index('idx_tasks_webhook_trigger').on(t.webhookTriggerId), // RFC-257
+    sourceTerminationIdx: index('idx_tasks_source_termination').on(
+      t.sourceTerminationBinding,
+      t.sourceTerminationLaunchRev,
+    ),
   }),
 )
 
@@ -1210,6 +1223,9 @@ export const webhookTriggers = sqliteTable(
     templateSyntaxVersion: integer('template_syntax_version').notNull().default(1),
     maxConsecutiveFires: integer('max_consecutive_fires').notNull().default(3),
     autoRegisterRepos: integer('auto_register_repos', { mode: 'boolean' }).notNull().default(true),
+    cancelOnMrTerminal: integer('cancel_on_mr_terminal', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     lastFiredAt: integer('last_fired_at'),
     lastStatus: text('last_status', { enum: ['launched', 'failed'] }),
     lastError: text('last_error'),
@@ -1240,6 +1256,11 @@ export const webhookDeliveries = sqliteTable(
     eventType: text('event_type'), // 归一化摘要列（列表页免解析 body）
     repoPath: text('repo_path'),
     streamHint: text('stream_hint'),
+    /** RFC-303: verified-ingress MR fact/linearization projection. */
+    mrFactKey: text('mr_fact_key'),
+    mrStreamKey: text('mr_stream_key'),
+    mrStreamRevision: integer('mr_stream_revision'),
+    mrStateAfter: text('mr_state_after', { enum: ['open', 'closed', 'merged'] }),
     status: text('status', {
       enum: ['received', 'processing', 'rejected', 'ignored', 'matched', 'failed'],
     }).notNull(),
@@ -1282,6 +1303,10 @@ export const webhookTriggerFires = sqliteTable(
         'skipped-repo-unregistered',
         'skipped-owner-invalid',
         'skipped-trigger-disabled',
+        'skipped-mr-stream-closed',
+        'skipped-mr-stream-merged',
+        'skipped-mr-stream-terminal',
+        'skipped-trigger-invalid',
       ],
     }).notNull(),
     supersededTaskId: text('superseded_task_id'), // 本次 fire 取消的旧任务
@@ -1312,6 +1337,129 @@ export const webhookTriggerStreams = sqliteTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.triggerId, t.streamKey] }),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-303 — MR stream linearization, pre-commit launch guards, and durable
+// terminal-control effects. Every id outside the stream PK is a soft reference:
+// deleting a trigger/delivery/task must not cascade away an unfinished stop.
+// -----------------------------------------------------------------------------
+export const webhookMrStreamStates = sqliteTable(
+  'webhook_mr_stream_states',
+  {
+    endpointId: text('endpoint_id').notNull(),
+    streamKey: text('stream_key').notNull(),
+    projectId: text('project_id').notNull(),
+    mrIid: text('mr_iid').notNull(),
+    state: text('state', { enum: ['open', 'closed', 'merged'] }).notNull(),
+    revision: integer('revision').notNull(),
+    lastTerminalRevision: integer('last_terminal_revision'),
+    lastDeliveryId: text('last_delivery_id').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.endpointId, t.streamKey] }),
+    endpointStateIdx: index('idx_webhook_mr_stream_endpoint_state').on(t.endpointId, t.state),
+  }),
+)
+
+export const webhookMrLaunchGuards = sqliteTable(
+  'webhook_mr_launch_guards',
+  {
+    id: text('id').primaryKey(),
+    endpointId: text('endpoint_id').notNull(),
+    streamKey: text('stream_key').notNull(),
+    binding: text('binding').notNull(),
+    launchRevision: integer('launch_revision').notNull(),
+    deliveryId: text('delivery_id').notNull(),
+    fireId: text('fire_id').notNull(),
+    triggerId: text('trigger_id'),
+    triggerNameSnapshot: text('trigger_name_snapshot').notNull(),
+    taskId: text('task_id'),
+    launchOwnerKey: text('launch_owner_key'),
+    status: text('status', {
+      enum: [
+        'reserved',
+        'launching',
+        'revoking-terminal',
+        'task-committed',
+        'launch-settled',
+        'aborted-terminal',
+        'failed',
+      ],
+    }).notNull(),
+    error: text('error'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    streamRevisionIdx: index('idx_webhook_mr_guard_stream_revision').on(
+      t.endpointId,
+      t.streamKey,
+      t.launchRevision,
+    ),
+    taskIdx: index('idx_webhook_mr_guard_task').on(t.taskId),
+    statusIdx: index('idx_webhook_mr_guard_status').on(t.status, t.updatedAt),
+  }),
+)
+
+export const webhookMrControlEffects = sqliteTable(
+  'webhook_mr_control_effects',
+  {
+    id: text('id').primaryKey(),
+    deliveryId: text('delivery_id').notNull(),
+    endpointId: text('endpoint_id').notNull(),
+    streamKey: text('stream_key').notNull(),
+    binding: text('binding').notNull(),
+    revision: integer('revision').notNull(),
+    observedEventType: text('observed_event_type', {
+      enum: ['mr_opened', 'mr_closed', 'mr_merged'],
+    }).notNull(),
+    kind: text('kind', { enum: ['fence-closed', 'fence-merged', 'clear-closed'] }).notNull(),
+    status: text('status', {
+      enum: ['pending', 'leased', 'waiting-launches', 'retryable', 'succeeded'],
+    }).notNull(),
+    leaseOwner: text('lease_owner'),
+    leaseExpiresAt: integer('lease_expires_at'),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    nextAttemptAt: integer('next_attempt_at').notNull(),
+    lastError: text('last_error'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    deliveryUq: uniqueIndex('idx_webhook_mr_effect_delivery').on(t.deliveryId),
+    streamRevisionUq: uniqueIndex('idx_webhook_mr_effect_stream_revision').on(
+      t.endpointId,
+      t.streamKey,
+      t.revision,
+    ),
+    dueIdx: index('idx_webhook_mr_effect_due').on(t.status, t.nextAttemptAt),
+  }),
+)
+
+export const webhookMrControlTargets = sqliteTable(
+  'webhook_mr_control_targets',
+  {
+    effectId: text('effect_id').notNull(),
+    taskId: text('task_id').notNull(),
+    priorStatus: text('prior_status'),
+    fenceOutcome: text('fence_outcome', {
+      enum: ['fenced-closed', 'fenced-merged', 'cleared-closed', 'unchanged'],
+    }).notNull(),
+    cancelOutcome: text('cancel_outcome', {
+      enum: ['canceled', 'already-terminal', 'not-applicable'],
+    }).notNull(),
+    releaseOutcome: text('release_outcome', {
+      enum: ['pending', 'no-active-owner', 'released', 'unreaped'],
+    }).notNull(),
+    error: text('error'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.effectId, t.taskId] }),
+    taskIdx: index('idx_webhook_mr_target_task').on(t.taskId),
   }),
 )
 

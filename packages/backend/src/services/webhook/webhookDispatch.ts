@@ -61,6 +61,7 @@ import {
   type WebhookWorkflowPayloadTemplate,
   type WebhookWorkgroupPayloadTemplate,
   webhookTriggerContextOf,
+  webhookTriggerTerminalPolicyIssue,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import { sha1Hex } from '@/util/hash'
@@ -116,6 +117,14 @@ function parseTriggerRuleRow(
   })()
   if (eventTypes === null || !eventTypes.success) {
     return { ok: false, reason: 'event-types-invalid' }
+  }
+  if (
+    webhookTriggerTerminalPolicyIssue({
+      cancelOnMrTerminal: row.cancelOnMrTerminal,
+      eventTypes: eventTypes.data,
+    }) !== null
+  ) {
+    return { ok: false, reason: 'terminal-policy-invalid' }
   }
   const ignore = (() => {
     try {

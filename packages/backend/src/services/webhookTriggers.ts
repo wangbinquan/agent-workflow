@@ -20,6 +20,8 @@ import {
   CODE_HOST_EVENT_TYPES,
   CreateWebhookTriggerSchema,
   UpdateWebhookTriggerSchema,
+  WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT,
+  webhookTriggerTerminalPolicyIssue,
   type WebhookTrigger,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
@@ -85,6 +87,7 @@ function toWire(row: Row): WebhookTrigger {
       migrationError: null,
       maxConsecutiveFires: row.maxConsecutiveFires,
       autoRegisterRepos: row.autoRegisterRepos,
+      cancelOnMrTerminal: row.cancelOnMrTerminal,
       lastFiredAt: row.lastFiredAt,
       lastStatus: row.lastStatus,
       lastError: row.lastError,
@@ -113,9 +116,11 @@ function toWire(row: Row): WebhookTrigger {
       eventTypes: parsed.reason === 'event-types-invalid' ? parsed.reason : null,
       ignoreUsernames: parsed.reason === 'ignore-usernames-invalid' ? parsed.reason : null,
       launchPayload: parsed.reason === 'launch-payload-invalid' ? parsed.reason : null,
+      cancelOnMrTerminal: parsed.reason === 'terminal-policy-invalid' ? parsed.reason : null,
     },
     maxConsecutiveFires: row.maxConsecutiveFires,
     autoRegisterRepos: row.autoRegisterRepos,
+    cancelOnMrTerminal: row.cancelOnMrTerminal,
     lastFiredAt: row.lastFiredAt,
     lastStatus: row.lastStatus,
     lastError: row.lastError,
@@ -179,9 +184,16 @@ export async function createWebhookTrigger(
   requireLaunchPermission(actor)
   const parsed = CreateWebhookTriggerSchema.safeParse(rawBody)
   if (!parsed.success) {
-    throw new ValidationError('webhook-trigger-invalid', 'invalid trigger body', {
-      issues: parsed.error.issues,
-    })
+    const policyConflict = parsed.error.issues.some(
+      (issue) => issue.message === WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT,
+    )
+    throw new ValidationError(
+      policyConflict ? WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT : 'webhook-trigger-invalid',
+      policyConflict ? WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT : 'invalid trigger body',
+      {
+        issues: parsed.error.issues,
+      },
+    )
   }
   const body = parsed.data
   const endpoint = (
@@ -221,6 +233,7 @@ export async function createWebhookTrigger(
       templateSyntaxVersion: 2,
       maxConsecutiveFires: body.maxConsecutiveFires,
       autoRegisterRepos: body.autoRegisterRepos,
+      cancelOnMrTerminal: body.cancelOnMrTerminal,
     })
     .returning()
   return toWire(rows[0]!)
@@ -237,9 +250,16 @@ export async function updateWebhookTrigger(
   requireWrite(actor, row)
   const parsed = UpdateWebhookTriggerSchema.safeParse(rawBody)
   if (!parsed.success) {
-    throw new ValidationError('webhook-trigger-invalid', 'invalid trigger patch', {
-      issues: parsed.error.issues,
-    })
+    const policyConflict = parsed.error.issues.some(
+      (issue) => issue.message === WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT,
+    )
+    throw new ValidationError(
+      policyConflict ? WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT : 'webhook-trigger-invalid',
+      policyConflict ? WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT : 'invalid trigger patch',
+      {
+        issues: parsed.error.issues,
+      },
+    )
   }
   const patch = parsed.data
   if (patch.launchKind !== undefined && patch.launchKind !== row.launchKind) {
@@ -259,13 +279,26 @@ export async function updateWebhookTrigger(
       patch.launchPayload !== undefined ? patch.launchPayload : JSON.parse(row.launchPayload),
     eventTypes: patch.eventTypes !== undefined ? patch.eventTypes : storedEventTypes,
     autoRegisterRepos: patch.autoRegisterRepos ?? row.autoRegisterRepos,
+    cancelOnMrTerminal: patch.cancelOnMrTerminal ?? row.cancelOnMrTerminal,
+  }
+  if (
+    webhookTriggerTerminalPolicyIssue({
+      cancelOnMrTerminal: next.cancelOnMrTerminal,
+      eventTypes: next.eventTypes,
+    }) !== null
+  ) {
+    throw new ValidationError(
+      WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT,
+      WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT,
+    )
   }
   await assertSaveable(deps, actor, next)
   const launchConfigTouched =
     patch.launchRefId !== undefined ||
     patch.launchPayload !== undefined ||
     patch.eventTypes !== undefined ||
-    patch.autoRegisterRepos !== undefined
+    patch.autoRegisterRepos !== undefined ||
+    patch.cancelOnMrTerminal !== undefined
   const rows = await deps.db
     .update(webhookTriggers)
     .set({
@@ -292,6 +325,9 @@ export async function updateWebhookTrigger(
       ...(patch.autoRegisterRepos !== undefined
         ? { autoRegisterRepos: patch.autoRegisterRepos }
         : {}),
+      ...(patch.cancelOnMrTerminal !== undefined
+        ? { cancelOnMrTerminal: patch.cancelOnMrTerminal }
+        : {}),
       updatedAt: Date.now(),
     })
     .where(
@@ -303,6 +339,7 @@ export async function updateWebhookTrigger(
             eq(webhookTriggers.launchPayload, row.launchPayload),
             eq(webhookTriggers.eventTypes, row.eventTypes),
             eq(webhookTriggers.autoRegisterRepos, row.autoRegisterRepos),
+            eq(webhookTriggers.cancelOnMrTerminal, row.cancelOnMrTerminal),
           )
         : eq(webhookTriggers.id, row.id),
     )

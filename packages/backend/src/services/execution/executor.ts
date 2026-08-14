@@ -54,6 +54,7 @@ function depsForInvoker(
       webhookTriggerId: invoker.webhookTriggerId,
       webhookFireId: invoker.webhookFireId,
       triggerContext: invoker.triggerContext,
+      sourceTerminationSnapshot: invoker.sourceTerminationSnapshot,
       launchProvenance: { kind: 'webhook' },
     }
   }

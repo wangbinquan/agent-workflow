@@ -29,6 +29,7 @@ import {
 import { streamKeyOf } from '@/services/webhook/matching'
 import { createWebhookRateLimiters, type WebhookRateLimiters } from '@/services/webhook/rateLimiter'
 import { createLogger } from '@/util/log'
+import { composeVerifiedWebhookDeliveryAcceptance } from '@/modules/integration/composition/webhookTerminalControl'
 
 const log = createLogger('webhook-ingress')
 
@@ -75,6 +76,7 @@ export function mountWebhookIngressRoutes(
     return
   }
   const dispatcher = deps.webhookDispatcher
+  const acceptVerifiedDelivery = composeVerifiedWebhookDeliveryAcceptance(deps.db)
   const limiters = opts?.limiters ?? createWebhookRateLimiters()
 
   registerRoute(
@@ -202,13 +204,13 @@ export function mountWebhookIngressRoutes(
         return c.json({ deliveryId: insert.deliveryId, status: 'ignored' })
       }
 
-      const insert = await insertDelivery(deps.db, {
-        ...baseRow,
+      const insert = acceptVerifiedDelivery({
+        endpointId: endpoint.id,
+        event,
+        rawBodyBytes: rawBody.bytes,
+        rawBodyText: rawBody.text,
+        eventHeader: baseRow.gitlabEventHeader ?? null,
         objectKind: objectKind || null,
-        eventType: event.eventType,
-        repoPath: event.repoPath,
-        streamHint: streamKeyOf(event),
-        status: 'received',
       })
       if (insert.kind === 'duplicate') {
         // 同 UUID 重投（GitLab Resend / 网络重放）：不重复分发，回原行。

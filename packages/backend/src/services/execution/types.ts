@@ -18,6 +18,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { MultipartFilePart } from '@/services/launchMultipart'
 import type { UploadLimits } from '@/services/upload'
+import type { SourceTerminationSnapshot } from '@/modules/task-execution/public/types'
 
 export type ExecutionKind = 'workflow' | 'agent' | 'workgroup'
 
@@ -44,6 +45,8 @@ export type ExecutionInvoker =
       webhookTriggerId: string
       webhookFireId: string
       triggerContext: TriggerContext
+      /** RFC-303: frozen by the durable launch guard; absent for legacy/unprotected fires. */
+      sourceTerminationSnapshot?: SourceTerminationSnapshot
     }
 
 /**

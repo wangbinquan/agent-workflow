@@ -91,6 +91,8 @@ import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
 import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
 import type { StaleRunKillOutcome } from '@/util/process'
+import type { SourceTerminationSnapshot } from '@/modules/task-execution/public/types'
+import { sourceTerminationRevivalError } from '@/modules/task-execution/domain/sourceTermination'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
@@ -447,6 +449,8 @@ export interface StartTaskDeps {
    * Undefined means a non-webhook launch; callers may not supply a flat map.
    */
   triggerContext?: TriggerContext
+  /** RFC-303: root Webhook launch snapshot; child launches inherit in the INSERT tx. */
+  sourceTerminationSnapshot?: SourceTerminationSnapshot
   /**
    * RFC-164: workgroup launch payload. `snapshotJson` REPLACES the workflow
    * row's definition as the frozen workflow_snapshot (the builtin host row is
@@ -2394,9 +2398,17 @@ async function startTaskImpl(
       // the child row: child-first commits before cancel's child-set freeze;
       // cancel-first makes this launch fail with no post-terminal child.
       let launchOrigin = rootLaunchOrigin
+      let sourceTerminationSnapshot = deps.sourceTerminationSnapshot ?? null
       if (deps.callLaunch !== undefined) {
         const parent = tx
-          .select({ status: tasks.status, launchOrigin: tasks.launchOrigin })
+          .select({
+            status: tasks.status,
+            launchOrigin: tasks.launchOrigin,
+            sourceTerminationBinding: tasks.sourceTerminationBinding,
+            sourceTerminationLaunchRev: tasks.sourceTerminationLaunchRev,
+            sourceTerminationFence: tasks.sourceTerminationFence,
+            sourceTerminationEffectRev: tasks.sourceTerminationEffectRev,
+          })
           .from(tasks)
           .where(eq(tasks.id, deps.callLaunch.parentTaskId))
           .get()
@@ -2412,7 +2424,20 @@ async function startTaskImpl(
             `parent task '${deps.callLaunch.parentTaskId}' is '${parent.status}'; refusing to mint child '${taskId}'`,
           )
         }
+        const sourceFenceError = sourceTerminationRevivalError(parent.sourceTerminationFence)
+        if (sourceFenceError !== null) {
+          throw new ConflictError(sourceFenceError, sourceFenceError)
+        }
         launchOrigin = parent.launchOrigin
+        sourceTerminationSnapshot =
+          parent.sourceTerminationBinding === null || parent.sourceTerminationLaunchRev === null
+            ? null
+            : {
+                binding: parent.sourceTerminationBinding,
+                launchRevision: parent.sourceTerminationLaunchRev,
+                fence: parent.sourceTerminationFence,
+                effectRevision: parent.sourceTerminationEffectRev,
+              }
       }
       if (launchOrigin === null) {
         throw new Error('task launch origin remained unresolved before initial INSERT')
@@ -2507,6 +2532,10 @@ async function startTaskImpl(
           // task row once, so a later UPDATE is observably too late.
           triggerContextJson:
             deps.triggerContext === undefined ? null : JSON.stringify(deps.triggerContext),
+          sourceTerminationBinding: sourceTerminationSnapshot?.binding ?? null,
+          sourceTerminationLaunchRev: sourceTerminationSnapshot?.launchRevision ?? null,
+          sourceTerminationFence: sourceTerminationSnapshot?.fence ?? null,
+          sourceTerminationEffectRev: sourceTerminationSnapshot?.effectRevision ?? null,
           // RFC-164: workgroup link + runtime config copy (NULL = not a workgroup task).
           workgroupId: deps.workgroupLaunch?.workgroupId ?? null,
           workgroupConfigJson: deps.workgroupLaunch?.configJson ?? null,

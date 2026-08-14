@@ -451,6 +451,10 @@ export const WEBHOOK_FIRE_OUTCOMES = [
   'skipped-repo-unregistered', // 仓未导入且 autoRegisterRepos=false
   'skipped-owner-invalid', // owner 缺失/禁用/失去目标启动权（统一 skipped-*，设计门 F-14）
   'skipped-trigger-disabled', // 匹配后启动前被并发禁用
+  'skipped-mr-stream-closed', // RFC-303：受保护 stream 已关闭
+  'skipped-mr-stream-merged', // RFC-303：受保护 stream 已合入（吸收态）
+  'skipped-mr-stream-terminal', // RFC-303：launch guard 被更晚终态 revision 撤销
+  'skipped-trigger-invalid', // RFC-303：存量/并发坏行违反 terminal-policy 组合约束
 ] as const
 export const WebhookFireOutcomeSchema = z.enum(WEBHOOK_FIRE_OUTCOMES)
 export type WebhookFireOutcome = z.infer<typeof WebhookFireOutcomeSchema>
@@ -510,6 +514,35 @@ export type WebhookEndpoint = z.infer<typeof WebhookEndpointSchema>
 
 export const WebhookTriggerNameSchema = z.string().trim().min(1).max(255)
 
+/** RFC-303：前后端与持久化坏行共用的稳定组合错误码。 */
+export const WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT =
+  'webhook-trigger-terminal-policy-conflict' as const
+
+export function webhookTriggerTerminalPolicyIssue(input: {
+  cancelOnMrTerminal: boolean
+  eventTypes: ReadonlyArray<CodeHostEventType>
+}): typeof WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT | null {
+  if (!input.cancelOnMrTerminal) return null
+  if (!input.eventTypes.includes('mr_opened')) return WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT
+  if (input.eventTypes.includes('mr_closed') || input.eventTypes.includes('mr_merged')) {
+    return WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT
+  }
+  return null
+}
+
+function addTerminalPolicyIssue(
+  value: { cancelOnMrTerminal: boolean; eventTypes: ReadonlyArray<CodeHostEventType> },
+  ctx: z.RefinementCtx,
+): void {
+  const issue = webhookTriggerTerminalPolicyIssue(value)
+  if (issue === null) return
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['cancelOnMrTerminal'],
+    message: issue,
+  })
+}
+
 const TriggerRuleFields = {
   repoScope: WebhookRepoScopeSchema,
   eventTypes: z
@@ -527,6 +560,8 @@ const TriggerRuleFields = {
     .default([]),
   maxConsecutiveFires: z.number().int().min(1).max(100).default(3),
   autoRegisterRepos: z.boolean().default(true),
+  /** RFC-303：规则级 opt-in；closed/merged 只控制既有任务，不再 launch。 */
+  cancelOnMrTerminal: z.boolean().default(false),
 } as const
 
 export const CreateWebhookTriggerSchema = z
@@ -540,6 +575,7 @@ export const CreateWebhookTriggerSchema = z
     launchPayload: z.unknown(),
   })
   .superRefine((v, ctx) => {
+    addTerminalPolicyIssue(v, ctx)
     // 封套校验留在请求边界（对齐 CreateScheduledTaskSchema 的实现门 P1 修复：
     // unknown 穿透到服务层会炸裸 ZodError → HTTP 500）。
     const r = webhookPayloadTemplateSchemaFor(v.launchKind).safeParse(v.launchPayload)
@@ -572,11 +608,22 @@ export const UpdateWebhookTriggerSchema = z
       .optional(),
     maxConsecutiveFires: z.number().int().min(1).max(100).optional(),
     autoRegisterRepos: z.boolean().optional(),
+    cancelOnMrTerminal: z.boolean().optional(),
     launchKind: WebhookLaunchKindSchema.optional(),
     launchRefId: z.string().min(1).optional(),
     launchPayload: z.unknown().optional(),
   })
   .strict()
+  .superRefine((value, ctx) => {
+    // partial update 的完整合并校验由服务层在读取当前行后执行；两项同时给出时
+    // 仍在共享请求边界尽早返回同一个稳定错误码。
+    if (value.cancelOnMrTerminal !== undefined && value.eventTypes !== undefined) {
+      addTerminalPolicyIssue(
+        { cancelOnMrTerminal: value.cancelOnMrTerminal, eventTypes: value.eventTypes },
+        ctx,
+      )
+    }
+  })
 export type UpdateWebhookTrigger = z.infer<typeof UpdateWebhookTriggerSchema>
 
 /** GET 读形（launchPayload 容错：坏行给 null + migrationError，不炸整表——RFC-165 F18 姿势）。 */
@@ -600,11 +647,13 @@ export const WebhookTriggerSchema = z.object({
       eventTypes: z.string().nullable(),
       ignoreUsernames: z.string().nullable(),
       launchPayload: z.string().nullable(),
+      cancelOnMrTerminal: z.string().nullable(),
     })
     .nullable()
     .default(null),
   maxConsecutiveFires: z.number().int(),
   autoRegisterRepos: z.boolean(),
+  cancelOnMrTerminal: z.boolean(),
   lastFiredAt: z.number().int().nullable(),
   lastStatus: z.enum(['launched', 'failed']).nullable(),
   lastError: z.string().nullable(),

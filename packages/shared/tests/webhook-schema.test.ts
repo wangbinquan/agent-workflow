@@ -173,6 +173,10 @@ describe('RFC-257 T1 · closed enum 穷尽表（emit 域；改动此表 = 显式
       'skipped-repo-unregistered',
       'skipped-owner-invalid',
       'skipped-trigger-disabled',
+      'skipped-mr-stream-closed',
+      'skipped-mr-stream-merged',
+      'skipped-mr-stream-terminal',
+      'skipped-trigger-invalid',
     ])
   })
 
