@@ -121,6 +121,7 @@ import {
   setTaskStatus,
   transitionTaskStatusByEvent,
   trySetTaskStatus,
+  setNodeRunStatusTx,
 } from '@/services/lifecycle'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
@@ -142,6 +143,7 @@ import {
   type WorktreeLifecycleHookEvent,
   worktreeDiff,
   runGit,
+  withWorktreeRegistryLock,
 } from '@/util/git'
 import { isFileSchemeUrl, redactGitUrl } from '@agent-workflow/shared'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
@@ -3175,7 +3177,7 @@ async function rollbackNodeRunForResume(
  * scheduler kick whose cwd no longer exists (a generic 500). Mirrors
  * getTaskDiff's worktree-missing guard (single vs multi-repo).
  */
-function assertWorktreePresentForResume(task: Task, verb: string): void {
+function assertWorktreePresentForResume(db: DbClient, task: Task, verb: string): void {
   const gone = (msg: string): never => {
     throw new DomainError(
       'task-worktree-missing',
@@ -3196,7 +3198,25 @@ function assertWorktreePresentForResume(task: Task, verb: string): void {
   // 判据用墓碑区分（DTO 上是 workspaceState：pruned/pruning 即已打/正在打）：
   // 打了墓碑 = 老的「物化失败 / 工作区已回收」形态（沿用原语义）；没打墓碑 + 空
   // 路径 = G7 的准备阶段（AC-15 刻意保证准备失败不打墓碑）。
-  if (task.worktreePath === '' && (task.workspaceState ?? 'available') === 'available') {
+  // ⚠️ 判据必须再加一条「确实有 `__repo_prep__` 行」（五轮门 Codex 数据完整性面 F7）。
+  //
+  // 「空路径 + 无墓碑」在 G7 之前**也**是合法形态:那时物化失败会留下
+  // `failed + worktreePath=''` 的任务行（且迁移 0034 给它回填了一条空路径的
+  // `task_repos`、迁移 0085 新增墓碑列时不回填）。只凭这两个标量判，会把**存量**
+  // 物化失败任务谎报成「repository preparation has not completed」并劝用户去重试准备
+  // ——而它根本没有准备行，AC-11 的重试入口对它不存在，等于把人指向一扇不存在的门。
+  const hasPrepRow =
+    db
+      .select({ id: nodeRuns.id })
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
+      .limit(1)
+      .all().length > 0
+  if (
+    task.worktreePath === '' &&
+    (task.workspaceState ?? 'available') === 'available' &&
+    hasPrepRow
+  ) {
     throw new ConflictError(
       'task-repo-prep-incomplete',
       `task '${task.id}' has no worktree yet — repository preparation has not completed; ` +
@@ -3756,7 +3776,7 @@ async function resumeKick(
   // (gc reclaimed a resumable task) — never flip to pending then 500 on a
   // missing cwd. Gated per-caller (resumeTask opts in).
   if (opts.worktreePreflight === true) {
-    assertWorktreePresentForResume(task, opts.verb)
+    assertWorktreePresentForResume(db, task, opts.verb)
   }
 
   // RFC-097 ownership lock — the pending CAS moves BEFORE the git rollback so a
@@ -4357,35 +4377,69 @@ async function reclaimStalePrepArtifacts(db: DbClient, appHome: string, task: Ta
   }
 
   // ② 先删目录（git 还认着注册项，prune 才能收掉）。
-  const worktreesRoot = join(appHome, 'worktrees')
-  if (existsSync(worktreesRoot)) {
-    for (const slug of readdirSync(worktreesRoot, { withFileTypes: true })) {
-      if (!slug.isDirectory()) continue
-      const leaf = join(worktreesRoot, slug.name, task.id)
-      if (!existsSync(leaf)) continue
-      try {
-        rmSync(leaf, { recursive: true, force: true })
-        log.info('reclaimed a stale prep worktree before retry', { taskId: task.id, path: leaf })
-      } catch (err) {
-        log.warn('could not remove a stale prep worktree', {
-          taskId: task.id,
-          path: leaf,
-          error: err instanceof Error ? err.message : String(err),
-        })
+  //
+  // ⚠️ 整段包在 try 里（五轮门 Codex F5）：`readdirSync` 原来裸在任何 try 之外，而
+  // 本函数跑在 **CAS 回 pending + attach 租约之后、后台补偿闭包建立之前**。把
+  // `{appHome}/worktrees` 换成普通文件（或让 daemon 对它无读权限）就能让它抛
+  // ENOTDIR/EACCES ⇒ 异常从 `retryRepoPreparation` 穿出、无人 release 租约 ⇒ 任务
+  // 卡在 pending 且 `isTaskActive` 恒真，此后 retry 同时被 active 与 pending 两道门
+  // 拒掉，只能修磁盘 + 重启 daemon。「全部失败只记 warn」这句承诺当时并不成立。
+  try {
+    const worktreesRoot = join(appHome, 'worktrees')
+    if (existsSync(worktreesRoot)) {
+      for (const slug of readdirSync(worktreesRoot, { withFileTypes: true })) {
+        if (!slug.isDirectory()) continue
+        const leaf = join(worktreesRoot, slug.name, task.id)
+        if (!existsSync(leaf)) continue
+        try {
+          // `await rm` 而非同步 `rmSync`（五轮门 Codex F4）：本函数在**请求路径上**
+          // （retryRepoPreparation 的后台分叉之前），一个几十 GB / 百万文件的残留
+          // worktree 会把 Bun 的单事件循环冻到遍历结束——HTTP 响应、取消请求、
+          // deadline timer 全部排在它后面。与同一批把 GC 改成 `await rm` 同形。
+          await rm(leaf, { recursive: true, force: true })
+          log.info('reclaimed a stale prep worktree before retry', { taskId: task.id, path: leaf })
+        } catch (err) {
+          log.warn('could not remove a stale prep worktree', {
+            taskId: task.id,
+            path: leaf,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
       }
     }
+  } catch (err) {
+    log.warn('could not scan worktrees root while reclaiming stale prep state', {
+      taskId: task.id,
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
 
   // ③ 再在每个候选镜像里 prune 注册项 + 删掉按 taskId 派生的隔离分支。
-  //    `agent-workflow/{taskId}` 这个字面量与 util/git.ts 的建树处同源。
   for (const id of mirrorIds) {
     const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1).all()[0]
     if (row === undefined || !existsSync(row.localPath)) continue
     try {
-      await runGit(row.localPath, ['worktree', 'prune'])
-      const ref = `refs/heads/agent-workflow/${task.id}`
-      const has = await runGit(row.localPath, ['rev-parse', '--verify', '--quiet', ref])
-      if (has.exitCode === 0) {
+      // `prune` 与 `add` / `remove` 一样会改 common-dir registry，必须走同一把
+      // registry 锁（五轮门 Codex F6）：不持锁时，另一个任务正在同一镜像上
+      // `worktree add` 的半初始化注册项会被本次 prune 观察到并删掉，让对方的 add
+      // 失败或留下不完整 registry——`util/git.ts` 的锁注释里记着这类真实事故。
+      await withWorktreeRegistryLock(row.localPath, () =>
+        runGit(row.localPath, ['worktree', 'prune']),
+      )
+      // 分支名不止 `agent-workflow/{taskId}`：同一镜像在仓库组里可被挂载多次，
+      // 第 2 份起是 `agent-workflow/{taskId}-2`、`-3`…（repoGroupLayout 的去重后缀）。
+      // 只删不带后缀那条，会让第二仓的建树永远撞 "branch already exists"、每次重试
+      // 复现、无法自愈（五轮门 Codex F3）。按前缀枚举全删。
+      const listed = await runGit(row.localPath, [
+        'for-each-ref',
+        '--format=%(refname)',
+        `refs/heads/agent-workflow/${task.id}`,
+        `refs/heads/agent-workflow/${task.id}-*`,
+      ])
+      for (const ref of listed.stdout
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean)) {
         await runGit(row.localPath, ['update-ref', '-d', ref])
         log.info('reclaimed a stale prep branch before retry', { taskId: task.id, ref })
       }
@@ -4955,14 +5009,23 @@ async function runDeferredRepoPreparation(args: {
         )
         .run()
     }
-  })
-  await setNodeRunStatus({
-    db: deps.db,
-    nodeRunId: prepRunId,
-    to: 'done',
-    allowedFrom: ['running'],
-    reason: 'repo-prep-done',
-    extra: { finishedAt: Date.now() },
+    // 准备行置 done **并入同一事务**（五轮门 Codex 数据完整性面 F2，用户拍板）。
+    //
+    // 原先它是事务外的下一次 await，于是「三张投影表已提交、prep 行还是 running」
+    // 是一段必经的中间态。崩溃落在那里之后：boot reap 把 task 与 prep 都翻
+    // interrupted；auto-resume 见 worktreePath 非空 ⇒ 走普通 resume（不是 prep 重试）；
+    // 调度器又把不在 workflow scope 里的 prep 行过滤掉 ⇒ 任务可以跑完全部业务节点，
+    // 而审计历史上永久留着「仓库准备被中断」。这也直接违反 AC-10 的「prep done 之后
+    // 才有工作树」——回填后工作树已在，而 prep 没 done。
+    // 同一事务之后这个组合不可达。
+    setNodeRunStatusTx({
+      tx,
+      nodeRunId: prepRunId,
+      to: 'done',
+      allowedFrom: ['running'],
+      reason: 'repo-prep-done',
+      extra: { finishedAt: Date.now() },
+    })
   })
   // 响应体重读一次：它是在准备之前、用占位值构造的，直接返回会让调用方拿到空
   // worktreePath——前端据此显示空路径，脚本据此写文件会写到错地方（实测：HTTP
@@ -5045,16 +5108,26 @@ export async function retryNode(
     // 自然序列 `r1 failed → r2 done → n1 failed` 下，被点的 r1 自身确实是 failed，
     // 上面那道门放行 ⇒ **对一个已经准备好、工作树就在那儿的任务重做准备**。
     // 判据两条，任一成立即拒：①存在比它更新的准备行；②任务已经有工作树。
-    // 判「有没有更新的尝试」走仓内**权威**比较器 `isFresherNodeRun`（纯 id 序），
-    // 不手写 `retryIndex >`：S-13 的 G8 ratchet 把「in-memory retryIndex 比较」钉死在
-    // 唯一白名单（nodeRunMint 的分配器），任何新出现的手写比较都会翻红要求 review
-    // ——本轮门禁抓到的正是我这一处。ratchet 的理由也成立：retryIndex 只是分配序，
-    // 权威的新鲜度口径是 id 序（RFC-092/096 把全仓 fork 收敛到这一条）。
+    // ⚠️ 这里判的是**准备尝试的因果序**，用 `retryIndex`，**不是**全仓的 id 序比较器。
+    //
+    // 曲折值得记：上一版为了让 S-13 的 G8 ratchet 变绿，我把手写 `retryIndex >` 换成
+    // 了权威比较器 `isFresherNodeRun`（纯 id 序）。**那是改错了方向**——五轮门 Codex
+    // 实测:`nodeRunMint` 用的是普通 `ulid()` 而非 `monotonicFactory`，同毫秒内生成的
+    // 两个 id 有近一半是逆序的（2000 对里 989 对「后生成的反而更小」）。于是同毫秒
+    // 铸出的 r1/r2 会被判反：真正过期的 r1 被当成最新，而 CLI 按 retryIndex 选出的 r2
+    // 被拒成 `repo-prep-superseded`，两边都点不动。
+    //
+    // 为什么这里可以、而且应该用 retryIndex：`__repo_prep__` 没有 clarify / parent /
+    // iteration 任何一种分叉（那才是 RFC-092/096 当年把全仓收敛到 id 序的原因——普通
+    // 节点跨 clarify 时 retryIndex 会重置）。这个子系统里 `retryIndex` 由
+    // `nextRetryIndex(既有行)` 严格递增分配，它**就是**因果尝试序。
+    // G8 ratchet 的白名单因此新增本处并附此理由——ratchet 自己的注释写明「whitelist
+    // 刻意宽松，目标是任何新出现的至少被 review 看见」，而 review 已经发生了。
     const prepRows = await db
-      .select({ id: nodeRuns.id })
+      .select({ id: nodeRuns.id, retryIndex: nodeRuns.retryIndex })
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
-    const newer = prepRows.filter((r) => isFresherNodeRun(r, runRow))
+    const newer = prepRows.filter((r) => r.retryIndex > runRow.retryIndex)
     if (newer.length > 0) {
       throw new ConflictError(
         'repo-prep-superseded',

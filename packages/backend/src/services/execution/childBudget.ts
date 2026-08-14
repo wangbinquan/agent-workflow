@@ -318,3 +318,27 @@ export function notifyChildBudgetTaskStatus(db: DbClient, taskId: string, to: Ta
       // transient read failure — the next transition (or poll) re-resolves
     })
 }
+
+/**
+ * RFC-287 G4 / C9 —— **调用链最大深度**的即时生效值。
+ *
+ * 为什么不能读 `opts.maxInvocationDepth`（五轮门终局对账实测）：`opts` 在 `runTask`
+ * 一次性冻结，且该键在 `INHERITABLE_RUN_CONFIG_KEYS` 里 ⇒ 子任务继承根任务启动那一刻
+ * 的旧值。实效是「下次**根任务**启动才生效」——而这恰恰是 design §10.9 明文作废的那条
+ * 退路，UI 文案还写着「保存后立即生效」，属于「改了不生效的设置项比没有更误导」。
+ * 与旁边三个池 + 子任务配额同一个线性化点（`routes/config.ts` 的保存处）热应用。
+ */
+let liveMaxInvocationDepth: number | null = null
+
+/** 保存设置时热应用（`routes/config.ts` 与三个池、子任务配额同一处调用）。 */
+export function setMaxInvocationDepth(v: number): void {
+  liveMaxInvocationDepth = v
+}
+
+/**
+ * 深度判据的**唯一**读点。`frozen` 是调用方冻结的那份（保留它只为让未注入热值的
+ * 测试/内联路径逐字保持旧行为）；一旦保存过设置，热值优先。
+ */
+export function currentMaxInvocationDepth(frozen: number | undefined): number {
+  return liveMaxInvocationDepth ?? frozen ?? 3
+}

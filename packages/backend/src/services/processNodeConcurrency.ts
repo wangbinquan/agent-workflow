@@ -1,11 +1,16 @@
-// Daemon-wide process-node concurrency budgets (RFC-266: two independent pools).
+// Daemon-wide process-node concurrency budgets (RFC-266 起两池，RFC-269 起**三池**).
 //
 // A "process node" is any node kind that spawns a real child process and so
-// needs a slot. They are split across TWO pools that never queue behind each
+// needs a slot. They are split across THREE pools that never queue behind each
 // other:
 //
-//   'agent'  — agent nodes, workgroup host nodes, fan-out shards + aggregators
-//   'script' — RFC-253 script nodes
+//   'agent'     — agent nodes, workgroup host nodes, fan-out shards + aggregators
+//   'script'    — RFC-253 script nodes
+//   'code-host' — RFC-269 code-host call nodes
+//
+// （RFC-287 五轮门修正：本段头注一直停在 RFC-266 的「two / TWO pools」且只列两项，
+//  而第三个池自 RFC-269 起就在了——`routes/config.ts` 的保存处三项一起热应用。
+//  过期头注会让接手者按两池推理并发上界。）
 //
 // Why split: a script node is usually a second-scale compute/format step, and
 // before RFC-266 it queued behind the same budget as multi-minute agent runs

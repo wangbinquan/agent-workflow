@@ -823,7 +823,16 @@ export async function resolveCachedRepo(
 
     // Cold path: clone into a sibling temp dir, then atomic rename.
     mkdirSync(cacheRoot, { recursive: true })
-    const tmpDir = join(cacheRoot, `${hash}-${slug}.partial-${ulid()}`)
+    // ⚠️ 分隔符用 `~`,不是 `.partial-`(五轮门对抗面实测的数据丢失级缺陷)。
+    //
+    // `cacheSlug` 的白名单是 `[A-Za-z0-9._-]`(shared/git-url.ts),**产得出**
+    // `.partial-` 也产得出 26 位 Crockford base32 ⇒ 一个正常仓库
+    // `acme/foo.partial-01ARZ3NDEKTSV4RRFFQ69G5FAV.git` 的 canonical 镜像目录就叫
+    // `<hash>-foo.partial-01ARZ3NDEKTSV4RRFFQ69G5FAV`,与半成品**逐字同形**。四轮门
+    // 把判据从 `includes('.partial-')` 收窄成「ULID 锚结尾」只是缩小了窗口没关上,
+    // 而那处注释还断言「锚定结尾即可把两者分开」——可证伪的错误前提。
+    // `~` 不在 slug 白名单里,碰撞在**字符集层面**不可能,这才是结构性正解。
+    const tmpDir = join(cacheRoot, `${hash}-${slug}~partial~${ulid()}`)
     // RFC-034: recurse into submodules during clone so the cache is usable
     // as-is. `--jobs N` is only emitted when N > 1 (matches gitSubmodule.ts
     // policy and stays compatible with git < 2.13 if effective jobs got
@@ -1009,7 +1018,8 @@ export async function resolveCachedRepo(
           // the background refresh loop, which is exactly what NULL means here.
           lastAutoRefreshAt: null,
         },
-        await refTaskCount(deps.db, id),
+        // 与返回的 `cached.id` 同源（`rowId`）——用 `id` 会对幽灵行计数，恒 0。
+        await refTaskCount(deps.db, rowId),
       ),
       cold: true,
       fetchOk: true,
@@ -1041,8 +1051,13 @@ export async function resolveCachedRepo(
  * make its next fire die with `cached-repo-not-found`.
  */
 async function refTaskCount(db: DbClient, cachedRepoId: string): Promise<number> {
+  // 按**任务**去重，不是两张表各数一遍相加（五轮门 Codex 数据完整性面实测 F8）：
+  // 回填成功后同一个任务**两边都有**——`tasks.cached_repo_id` 在占位时落定，
+  // `task_repos.cached_repo_id` 在回填时写入——于是一个任务被报成两个。
+  // 下面那段注释里「与 task_repos 的多行不重叠计数即可」是错的，正是这条的根因。
+  // UI 直接把这个数标成「N 个任务在用」，删除确认与 operations 过滤器都读它。
   const r = db
-    .select({ count: sql<number>`count(*)`.as('count') })
+    .select({ count: sql<number>`count(distinct ${taskRepos.taskId})`.as('count') })
     .from(taskRepos)
     .where(eq(taskRepos.cachedRepoId, cachedRepoId))
     .all()
@@ -1056,10 +1071,16 @@ async function refTaskCount(db: DbClient, cachedRepoId: string): Promise<number>
   // 这道守卫存在的理由（上面注释原话）正是「deleting the row out from under …
   // a referencing task」，所以把 tasks 这一面补上。`distinct` 不必要：一个任务在
   // tasks 上只有一个 cached_repo_id，与 task_repos 的多行不重叠计数即可。
+  // 只数那些**还没有 task_repos 行**的任务（准备窗口内），避免与上面重复计数。
   const fromTasks = db
     .select({ count: sql<number>`count(*)`.as('count') })
     .from(tasks)
-    .where(eq(tasks.cachedRepoId, cachedRepoId))
+    .where(
+      and(
+        eq(tasks.cachedRepoId, cachedRepoId),
+        sql`not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})`,
+      ),
+    )
     .all()
   count += fromTasks[0]?.count ?? 0
   const needle = JSON.stringify(cachedRepoId)

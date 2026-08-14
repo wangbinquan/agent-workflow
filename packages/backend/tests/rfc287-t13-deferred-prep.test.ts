@@ -329,7 +329,13 @@ describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'orphanReconcile.ts'),
       'utf8',
     )
-    expect(src, '判据是「有驱动就跳过」，不是反过来').toMatch(/if \(hasDriver\(taskId\)\) continue/)
+    // 三处清扫各有一道豁免，存在性断言只要活一处就算过（五轮门自查实测：只反转第一处
+    // 或只删掉第一处，用例照样绿——而任何一路丢掉豁免，准备窗口里的任务就会被误收）。
+    // 按**基数**锁。
+    expect(
+      [...src.matchAll(/if \(hasDriver\(taskId\)\) continue/g)],
+      'orphanReconcile 的三处清扫都必须有驱动豁免',
+    ).toHaveLength(3)
   })
 })
 
@@ -1351,7 +1357,7 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     let resumeCalls = 0
     const r = await autoResumeInterruptedTasks({
       db,
-      breaker: { maxAttempts: 3, windowMs: 60_000 },
+      breaker: { maxPerWindow: 3, windowMs: 60_000 },
       resume: async () => {
         resumeCalls += 1
       },
@@ -1364,12 +1370,12 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     expect(r.skipped).toContain(id)
     // 「不烧熔断」这半原来只在标题里、没有断言（四轮门自查实测：在 skip 之前插一句
     // recordAutoRecoveryAttempt，用例照样全绿，而那正是它要防的损害）。跑满
-    // maxAttempts+1 轮，任务必须仍在 skipped、且从未被隔离。
+    // maxPerWindow+1 轮，任务必须仍在 skipped、且从未被隔离。
     const { isAutoRecoverySuspended } = await import('@/services/recoveryBreaker')
     for (let i = 0; i < 4; i++) {
       const again = await autoResumeInterruptedTasks({
         db,
-        breaker: { maxAttempts: 3, windowMs: 60_000 },
+        breaker: { maxPerWindow: 3, windowMs: 60_000 },
         resume: async () => {
           resumeCalls += 1
         },
@@ -1395,7 +1401,7 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     const prepped: string[] = []
     const r = await autoResumeInterruptedTasks({
       db,
-      breaker: { maxAttempts: 3, windowMs: 60_000 },
+      breaker: { maxPerWindow: 3, windowMs: 60_000 },
       resume: async () => {
         resumeCalls += 1
       },
@@ -1409,6 +1415,27 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     expect(prepped, '应当重跑准备').toContain(id)
     expect(resumeCalls, '不得走 resume').toBe(0)
     expect(r.resumed).toContain(id)
+
+    // 「熔断仍然计」这半原来零覆盖（五轮门自查实测：把 autoResume 里的
+    // isAutoRecoverySuspended + recordAutoRecoveryAttempt 两道门整段删掉，用例全绿
+    // ——而那正是「每次 boot 对一个永远拉不动的远端白跑一轮克隆」）。
+    const { isAutoRecoverySuspended } = await import('@/services/recoveryBreaker')
+    const before = prepped.length
+    for (let i = 0; i < 5; i++) {
+      await autoResumeInterruptedTasks({
+        db,
+        breaker: { maxPerWindow: 3, windowMs: 60_000 },
+        resume: async () => {
+          resumeCalls += 1
+        },
+        retryRepoPrep: async (taskId: string) => {
+          prepped.push(taskId)
+        },
+        now: () => Date.now(),
+      } as never)
+    }
+    expect(await isAutoRecoverySuspended(db, id), '超过窗口配额必须隔离').toBe(true)
+    expect(prepped.length - before, '隔离之后不得继续白跑克隆').toBeLessThan(5)
   }, 120_000)
 })
 
@@ -1587,10 +1614,12 @@ describe('RFC-287 AC-14 —— 终止条件必须穿透子模块同步', () => {
     // warm 复用那一处还必须接上 signal——上一笔只补了 timeout，于是 warm 镜像路径上
     // 取消依旧杀不掉 git（四轮门 Codex 实测）。cold 那处的 signal 由 resolveCachedRepo
     // 的调用方给，这里只锁 warm。
-    expect(
-      hits.some((h) => h[0].includes('signal: deps.signal')),
-      'warm 复用路径必须把 signal 传进子模块同步',
-    ).toBe(true)
+    // ⚠️ 必须**按位置**判，不能 `.some()`（五轮门自查实测：把 signal 从 warm 挪到手动
+    // 刷新点——正是四轮门 Codex 抓的那条 P1——`.some()` 照样绿）。文件序：warm 复用在前、
+    // 手动刷新在后。
+    expect(hits[0]?.[0], 'warm 复用路径必须把 signal 传进子模块同步').toContain(
+      'signal: deps.signal',
+    )
   })
 })
 
@@ -1606,8 +1635,8 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
     const repos = join(home, 'repos')
     mkdirSync(repos, { recursive: true })
 
-    const stale = join(repos, 'abc12345-myrepo.partial-01KZZZZZZZZZZZZZZZZZZZZZZZ')
-    const fresh = join(repos, 'abc12345-myrepo.partial-01KZZZZZZZZZZZZZZZZZZZZZZA')
+    const stale = join(repos, 'abc12345-myrepo~partial~01KZZZZZZZZZZZZZZZZZZZZZZZ')
+    const fresh = join(repos, 'abc12345-myrepo~partial~01KZZZZZZZZZZZZZZZZZZZZZZA')
     const canonical = join(repos, 'abc12345-myrepo')
     for (const d of [stale, fresh, canonical]) mkdirSync(d, { recursive: true })
     // 把 stale 的 mtime 推到 48 小时前。
@@ -1638,7 +1667,7 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
     // 合法镜像：仓库名自带 `.partial-bar`，结尾**不是** ULID。
     const legit = join(repos, 'abc12345-foo.partial-bar')
     // 真半成品：结尾是 26 位 Crockford base32。
-    const real = join(repos, 'abc12345-foo.partial-01KZZZZZZZZZZZZZZZZZZZZZZZ')
+    const real = join(repos, 'abc12345-foo~partial~01KZZZZZZZZZZZZZZZZZZZZZZZ')
     for (const d of [legit, real]) mkdirSync(d, { recursive: true })
     const old = new Date(Date.now() - 48 * 3600_000)
     utimesSync(legit, old, old)
@@ -1656,7 +1685,7 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
     const home = mkdtempSync(join(tmpdir(), 'aw-partialgc-timeout-'))
     const repos = join(home, 'repos')
     mkdirSync(repos, { recursive: true })
-    const dir = join(repos, 'abc12345-slow.partial-01KZZZZZZZZZZZZZZZZZZZZZZZ')
+    const dir = join(repos, 'abc12345-slow~partial~01KZZZZZZZZZZZZZZZZZZZZZZZ')
     mkdirSync(dir, { recursive: true })
     // 30 小时前建的：默认 24h 判据会删，但配置了 48h 克隆超时时它可能还在写
     // （顶层 mtime 不随 .git/objects/pack 的写入更新）。
@@ -1690,8 +1719,344 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
     // partial），而删除必须 await（同步 rmSync 一个接近完整镜像体量的目录会把 Bun 的
     // 单事件循环冻住，取消请求与 timer 全排在它后面）。
     expect(ticker, '必须把 gitCloneTimeoutMs 传下去').toContain('loadConfig().gitCloneTimeoutMs')
-    expect(ticker, '删除必须 await，不能阻塞事件循环').toMatch(/await runPartialCloneGc\(/)
+    expect(ticker, '调用点要 await').toMatch(/await runPartialCloneGc\(/)
+    // ⚠️ 上面那条测的是**调用点**的 await，与「删除原语是不是同步的」完全两码事
+    // ——五轮门自查实测：把函数体里的 `await rm` 改回 `rmSync`，用例全绿（函数是
+    // async，rmSync 照样过 typecheck）。真正要防的是同步递归删除冻住 Bun 的单事件
+    // 循环，所以锁必须落在函数体本身。
+    const gcSrc = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'gc.ts'), 'utf8')
+    const at = gcSrc.indexOf('export async function runPartialCloneGc(')
+    const fn = gcSrc.slice(at, gcSrc.indexOf('\n}\n', at))
+    expect(fn, '必须用异步 rm').toMatch(/await rm\(dir/)
+    expect(fn, '不得退回同步 rmSync').not.toMatch(/rmSync\(dir/)
   })
+})
+
+// RFC-287 第五轮门 · 对抗面的两条 P1。两条都精确落在**本 RFC 新增的面**上，且都
+// 是「我上一轮的修复没关上」——不是原始需求没做。
+describe('RFC-287 五轮门 —— 对抗输入', () => {
+  test('F1：合法仓库名不得与半成品目录同形（分隔符必须是 slug 产不出的字符）', async () => {
+    const { gitUrlCacheKeyWith, parseGitUrl } = await import('@agent-workflow/shared')
+    const { sha1Hex } = await import('@/util/hash')
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'gc.ts'), 'utf8')
+    const m = src.match(/const PARTIAL_CLONE_DIR = (\/.+\/)\n/)
+    expect(m, 'GC 应有半成品判据').not.toBeNull()
+    const re = new RegExp(m![1]!.slice(1, -1))
+
+    // 四轮门那版判据（`.partial-<ULID>` 锚结尾）在这个输入上**误命中**：
+    // cacheSlug 的白名单是 [A-Za-z0-9._-]，既产得出 `.partial-` 也产得出 26 位
+    // Crockford base32，于是这个**正常**仓库的 canonical 镜像目录与半成品逐字同形，
+    // 会被整个 rm -rf，而 cached_repos.local_path 还指着它。
+    const hostile = 'https://github.com/acme/foo.partial-01ARZ3NDEKTSV4RRFFQ69G5FAV.git'
+    const k = gitUrlCacheKeyWith(parseGitUrl(hostile) as never, sha1Hex)
+    const canonical = `${k.hash}-${k.slug}`
+    expect(canonical, '前提复核：这个仓库名确实产出带 .partial-<ULID> 的目录').toMatch(
+      /\.partial-[0-9A-HJKMNP-TV-Z]{26}$/,
+    )
+    expect(re.test(canonical), '合法镜像目录绝不能被判成半成品').toBe(false)
+
+    // 反向：真半成品仍必须被认出来。分隔符取自生产者本身，避免两边各写各的。
+    const cache = readSrc(
+      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      'utf8',
+    )
+    const sep = cache.match(/\$\{slug\}(.+?)\$\{ulid\(\)\}/)
+    expect(sep, '生产者应有半成品目录命名').not.toBeNull()
+    expect(re.test(`abc12345-any${sep![1]!}01ARZ3NDEKTSV4RRFFQ69G5FAV`)).toBe(true)
+    // 分隔符必须用 slug **产不出**的字符——这才是结构性正解（正则收窄只是缩小窗口）。
+    expect(sep![1]!, '分隔符必须落在 [A-Za-z0-9._-] 之外').toMatch(/[^A-Za-z0-9._-]/)
+  })
+
+  test('F2：ref 不得被当成 git 选项（--lock 会让工作树永久锁死、AC-11 承诺失效）', () => {
+    // `git rev-parse` 对不认识的 flag **以 exit 0 原样回显**，于是 ref="--lock" 会一路
+    // 穿到 `worktree add` 的 argv 里被当成选项：工作树建成且被锁，prune exit 0 但不清、
+    // remove --force 128 ⇒ AC-11 重试永久撞 "missing but locked worktree"，而本 RFC 新加
+    // 的 reclaimStalePrepArtifacts 三步全 exit 0、对锁定注册项完全免疫。
+    // 本 RFC 还把 ref 持久化进 base_branch 并在每次重试/boot 重放 ⇒ 一次性输入变永久毒化。
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'util', 'git.ts'), 'utf8')
+    const i = src.indexOf('const baseRev = await runGit(')
+    expect(i).toBeGreaterThan(-1)
+    const call = src.slice(i, src.indexOf('\n  )', i) + 4)
+    expect(call, '必须 --verify（拒绝非 revision）').toContain("'--verify'")
+    expect(call, '必须 ^{commit}（强制解析到提交）').toContain('^{commit}')
+    expect(call, '必须 -- 终结选项解析').toMatch(/,\s*'--'\s*\]/)
+    expect(call, '不得退回裸 rev-parse').not.toMatch(/\['rev-parse', base\]/)
+  })
+})
+
+// RFC-287 五轮门 · Codex「专审第四轮修复」抓到的 6 条新回归 + 1 条没修净的老问题。
+// 共同点:全部是**修复自身的收尾**没做干净,不是原始需求没做。
+describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
+  const reclaim = (): string => {
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const i = src.indexOf('async function reclaimStalePrepArtifacts(')
+    expect(i, '应有 reclaimStalePrepArtifacts').toBeGreaterThan(-1)
+    return src.slice(i, src.indexOf('\n}\n', i))
+  }
+
+  test('F8：准备行的「更新的尝试」判据用 retryIndex，不用 id 序', () => {
+    // `nodeRunMint` 用普通 `ulid()` 而非 monotonicFactory —— 实测同毫秒 2000 对里
+    // 989 对「后生成的反而更小」。一度为了让 G8 ratchet 变绿改用 id 序比较器，
+    // 结果同毫秒铸出的两条准备行会被判反、两边都点不动。
+    // `__repo_prep__` 没有 clarify/parent/iteration 分叉，retryIndex 就是因果序。
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const i = src.indexOf("'repo-prep-superseded'")
+    expect(i).toBeGreaterThan(-1)
+    const around = src.slice(Math.max(0, i - 1200), i)
+    expect(around, '必须按 retryIndex 判').toMatch(/r\.retryIndex > runRow\.retryIndex/)
+    expect(around, '不得用 id 序比较器（ULID 同毫秒不单调）').not.toContain('isFresherNodeRun(r,')
+  })
+
+  test('F3：多次挂载同一镜像时，带后缀的隔离分支也要回收', () => {
+    // 同一 cached repo 在仓库组里可挂多次，第 2 份起分支是 `…/{taskId}-2`。只删不带
+    // 后缀那条 ⇒ 第二仓建树永远撞 "branch already exists"，每次重试复现、无法自愈。
+    const body = reclaim()
+    expect(body, '必须按前缀枚举而不是只删一条').toContain('for-each-ref')
+    expect(body).toContain('${task.id}-*')
+    expect(body, '不得退回单条删除').not.toMatch(
+      /const ref = `refs\/heads\/agent-workflow\/\$\{task\.id\}`/,
+    )
+  })
+
+  test('F4：删除残留 worktree 必须异步（本函数在请求路径上）', () => {
+    // 它跑在 retryRepoPreparation 的后台分叉**之前**，同步递归删除一个几十 GB 的
+    // 残留 worktree 会把 Bun 的单事件循环冻到遍历结束。
+    const body = reclaim()
+    expect(body).toMatch(/await rm\(leaf/)
+    expect(body, '不得退回同步 rmSync').not.toMatch(/rmSync\(leaf/)
+  })
+
+  test('F5：目录扫描抛出不得穿出去（否则租约泄漏、任务永久卡 pending）', () => {
+    // 本函数在 CAS 回 pending + attach 租约之后、后台补偿闭包之前。readdirSync 裸在
+    // try 外时，把 worktrees 换成普通文件就能让它抛 ENOTDIR ⇒ 无人 release 租约。
+    const body = reclaim()
+    const at = body.indexOf('readdirSync(')
+    expect(at).toBeGreaterThan(-1)
+    // readdirSync 之前必须已经进了 try。
+    const before = body.slice(0, at)
+    expect(before.lastIndexOf('try {'), 'readdirSync 必须在 try 内').toBeGreaterThan(
+      before.lastIndexOf('} catch'),
+    )
+  })
+
+  test('F6：worktree prune 必须持 registry 锁（与 add/remove 同一把）', () => {
+    // prune 会改 common-dir registry：不持锁时会观察并删掉另一个任务正在 add 的
+    // 半初始化注册项。util/git.ts 的锁注释里记着这类真实事故。
+    const body = reclaim()
+    expect(body).toMatch(/withWorktreeRegistryLock\([\s\S]{0,160}'worktree', 'prune'/)
+  })
+
+  test('F1：引用计数必须用领养后的真实行 id（不是可能为幽灵的那个）', () => {
+    const src = readSrc(
+      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      'utf8',
+    )
+    // 冷路径返回处的计数与 `cached.id` 同源。
+    expect(src).toMatch(/await refTaskCount\(deps\.db, rowId\)/)
+    expect(src, '不得对幽灵 id 计数').not.toMatch(/await refTaskCount\(deps\.db, id\)/)
+  })
+})
+
+// 五轮门 F2（用户拍板）：准备行置 done 必须与回填**同事务**。
+// 分成两个事务时存在一段必经中间态（三张投影表已提交、prep 还是 running），崩溃落在
+// 那里 ⇒ 任务能跑完全部业务节点而审计历史永久停在「准备被中断」，且违反 AC-10。
+describe('RFC-287 五轮门 —— 回填与准备行 done 的原子性', () => {
+  test('setNodeRunStatusTx 在回填事务内被调用（不是事务后的下一次 await）', () => {
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    // ⚠️ 锚到**回填**那个事务，不是第一个 `dbTxSync`（占位落行也用它，取第一个会切错
+    // 函数——本轮反复踩过的锚点错位）。用回填独有的字段定位。
+    const at = src.lastIndexOf(
+      'dbTxSync(deps.db, (tx) => {',
+      src.indexOf("nodeRunId: prepRunId,\n      to: 'done'"),
+    )
+    expect(at, '应有回填事务').toBeGreaterThan(-1)
+    // 事务体用**括号配平**切（内层还有多个 `})`，取第一个会切在半路——这正是本轮
+    // 反复踩过的锚点错位）。
+    const open = src.indexOf('{', src.indexOf('(tx) =>', at))
+    let depth = 1
+    let i = open + 1
+    for (; i < src.length && depth > 0; i++) {
+      if (src[i] === '{') depth++
+      else if (src[i] === '}') depth--
+    }
+    const tx = src.slice(open + 1, i - 1)
+    const txEnd = i
+    expect(tx, 'prep 置 done 必须在事务内').toMatch(
+      /setNodeRunStatusTx\(\{[\s\S]{0,200}nodeRunId: prepRunId[\s\S]{0,120}to: 'done'/,
+    )
+    // 反向：事务**之后**不得再有一次异步的 prep-done 写入（那就是旧形态）。
+    const after = src.slice(txEnd)
+    expect(after.slice(0, 600), '事务后不得再异步置 done').not.toMatch(
+      /await setNodeRunStatus\(\{[\s\S]{0,200}nodeRunId: prepRunId[\s\S]{0,120}to: 'done'/,
+    )
+  })
+})
+
+// AC-9 的**正向**那半：「网络类失败在窗口内重试并最终成功」。
+// 五轮门终局对账点名它零用例——现有 G6 夹具全是黑洞地址（永不可能成功），所以把
+// 整个重试循环删掉也不会翻红，G6 的价值从未被兑现过。
+// 这里造一个 **fail-once** 远端：先关着端口让首次克隆失败，2.5 秒后在同一端口起真
+// git smart-HTTP，窗口内的下一次退避重试就该成功。
+describe('RFC-287 AC-9 —— 网络类失败在窗口内重试并最终成功', () => {
+  test('首次不可达、随后恢复：任务最终 done 且工作树真的建出来了', async () => {
+    const { createServer } = await import('node:http')
+    const { spawn } = await import('node:child_process')
+    const { mkdirSync } = await import('node:fs')
+    const { execFileSync } = await import('node:child_process')
+
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const home = mkdtempSync(join(tmpdir(), 'aw-ac9-'))
+    // 造一个真仓库供稍后服务。
+    const origin = join(home, 'origin')
+    mkdirSync(origin, { recursive: true })
+    execFileSync('git', ['init', '-q', '--bare', origin])
+    const seedDir = join(home, 'seed')
+    execFileSync('git', ['clone', '-q', origin, seedDir])
+    execFileSync('git', ['-C', seedDir, 'commit', '-q', '--allow-empty', '-m', 'base'])
+    execFileSync('git', ['-C', seedDir, 'push', '-q', 'origin', 'HEAD:refs/heads/main'])
+
+    // 先占一个端口再立刻释放，拿到一个此刻**关闭**的端口号。
+    const probe = createServer()
+    await new Promise<void>((r) => probe.listen(0, '127.0.0.1', () => r()))
+    const port = (probe.address() as { port: number }).port
+    await new Promise<void>((r) => probe.close(() => r()))
+
+    // 2.5 秒后把真服务起在同一端口——首次克隆必失败，窗口内的重试会成功。
+    const later = setTimeout(() => {
+      const srv = createServer((req, res) => {
+        const u = new URL(req.url ?? '/', 'http://127.0.0.1')
+        const child = spawn('git', ['http-backend'], {
+          env: {
+            ...process.env,
+            GIT_PROJECT_ROOT: home,
+            GIT_HTTP_EXPORT_ALL: '1',
+            PATH_INFO: decodeURIComponent(u.pathname),
+            QUERY_STRING: u.search.replace(/^\?/, ''),
+            REQUEST_METHOD: req.method ?? 'GET',
+            CONTENT_TYPE: req.headers['content-type'] ?? '',
+          },
+        })
+        req.pipe(child.stdin)
+        let head = true
+        let buf = ''
+        child.stdout.on('data', (c: Buffer) => {
+          if (!head) return res.write(c)
+          buf += c.toString('binary')
+          const i = buf.indexOf('\r\n\r\n')
+          if (i === -1) return
+          head = false
+          for (const line of buf.slice(0, i).split('\r\n')) {
+            const k = line.indexOf(':')
+            if (k > 0) res.setHeader(line.slice(0, k), line.slice(k + 1).trim())
+          }
+          res.write(Buffer.from(buf.slice(i + 4), 'binary'))
+        })
+        child.stdout.on('end', () => res.end())
+      })
+      srv.listen(port, '127.0.0.1')
+      srvRef.s = srv
+    }, 2_500)
+    const srvRef: { s: { close: (cb: () => void) => void } | null } = { s: null }
+
+    try {
+      const task = await startTask(
+        {
+          workflowId: s.workflowId,
+          name: 'ac9-recover',
+          repoUrl: `http://127.0.0.1:${port}/origin`,
+          inputs: {},
+        } as never,
+        {
+          db,
+          actorUserId: s.userId,
+          appHome: TEST_HOME,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+          deferRepoPreparation: true,
+          cloneTimeoutMs: 5_000,
+          // 窗口要够长，容得下「首次失败 → 退避 → 服务起来 → 重试成功」。
+          gitBaselineSyncWindowMs: 30_000,
+        } as never,
+      )
+      await settle(db, task.id, 90_000)
+      const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      // 关键：**最终成功**——这正是删掉重试循环就会红的那一格。
+      expect(row?.status, '窗口内恢复后任务应当成功').toBe('done')
+      expect(row?.worktreePath ?? '', '工作树必须真的建出来').not.toBe('')
+      const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
+        (r) => r.nodeId === REPO_PREP_NODE_ID,
+      )
+      expect(prep?.status).toBe('done')
+    } finally {
+      clearTimeout(later)
+      await new Promise<void>((r) => (srvRef.s ? srvRef.s.close(() => r()) : r()))
+      rmSync(home, { recursive: true, force: true })
+    }
+  }, 180_000)
+})
+
+// 五轮门终局对账点名的两处「有代码零测试」。
+describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
+  test('S4：准备窗口内的 pending 不按 5 分钟判卡死，且文案不再说「调度器没认领」', async () => {
+    const { runStuckTaskDetector } = await import('@/services/stuckTaskDetector')
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = await launchFailingPrep2(db, s, 's4-exempt')
+    // 造回准备窗口形态：pending + 空路径 + 无墓碑，且已经等了 10 分钟。
+    await db
+      .update(tasks)
+      .set({ status: 'pending', startedAt: Date.now() - 10 * 60_000, finishedAt: null })
+      .where(eq(tasks.id, id))
+
+    const r = await runStuckTaskDetector({ db, taskIdFilter: [id] } as never)
+    const s4 = r.openAlerts.filter((a) => a.rule === 'S4')
+    // 10 分钟 < 45 分钟的准备阈值 ⇒ 不该报。
+    expect(s4.length, '准备窗口内不得按 5 分钟判卡死').toBe(0)
+
+    // 反向前提复核：把它挪出准备窗口（给个工作树）之后，同样 10 分钟必须**报**
+    // ——否则上面那条零断言可能只是因为探测器压根没扫到它。
+    await db.update(tasks).set({ worktreePath: '/tmp/wt-probe' }).where(eq(tasks.id, id))
+    const r2 = await runStuckTaskDetector({ db, taskIdFilter: [id] } as never)
+    expect(
+      r2.openAlerts.filter((a) => a.rule === 'S4').length,
+      '前提复核：非准备窗口的同龄 pending 应当报 S4',
+    ).toBeGreaterThan(0)
+  }, 120_000)
+
+  test('AC-14「删除」这一格已划掉：准备中删除仍 409 并提示先取消', async () => {
+    // 用户 2026-08-15 拍板保持该语义：删除要清工作区，而准备中的任务持有驱动租约、
+    // git 在跑；先取消（现在能真杀 git）再删是安全的两步。
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const task = await startTask(
+      {
+        workflowId: s.workflowId,
+        name: 'ac14-delete',
+        repoUrl: 'http://10.255.255.1:9/nope.git',
+        inputs: {},
+      } as never,
+      {
+        db,
+        actorUserId: s.userId,
+        appHome: TEST_HOME,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        deferRepoPreparation: true,
+        cloneTimeoutMs: 30_000,
+        gitBaselineSyncWindowMs: 0,
+      } as never,
+    )
+    const { deleteTask } = await import('@/services/taskDelete')
+    let code = ''
+    try {
+      await deleteTask(db, task.id, { confirm: task.name } as never)
+    } catch (err) {
+      code = (err as { code?: string }).code ?? String(err)
+    }
+    expect(code, '准备中的任务不可直接删除').toBe('task-not-terminal')
+    // 收尾：取消掉，别把后台克隆留到别的用例里。
+    const { cancelTask } = await import('@/services/task')
+    await cancelTask(db, task.id).catch(() => {})
+  }, 120_000)
 })
 
 // 收尾：临时 home 整体删掉。没有它，克隆残留会一直堆在磁盘上（见 TEST_HOME 注释）。

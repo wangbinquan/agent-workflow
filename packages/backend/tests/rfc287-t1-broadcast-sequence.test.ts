@@ -69,6 +69,13 @@ const BASELINE: ReadonlyArray<readonly [string, readonly string[]]> = [
   // 钩子都写成 `const x = async () =>`,正则一个都不命中,切片于是跑出真实函数体
   // 159 行、把别人的广播算进了本线的序列。`bodyOf` 改成括号配平后基线随之收正。
   ['async function runHostNode(', ["'failed'", 'result.status', "'failed'"]],
+  // ⚠️ L4 一直缺席（五轮门终局对账点名）：design §7 T1-④ 点名的**第一项**就是它，
+  // 而它是本 RFC 唯一做了真手术的线（拆成 outer + 模式 B 重试窗口）。基线在
+  // `d0f6333c` 上按括号配平的 `bodyOf` 实测导出，与其余四线同法。
+  [
+    'async function runOneNode(',
+    ["'done'", "'done'", "'done'", "'pending'", "'pending'", 'lastResult.status'],
+  ],
 ]
 
 describe('RFC-287 T1④ — 广播序列快照', () => {

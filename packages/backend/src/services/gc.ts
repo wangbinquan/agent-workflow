@@ -553,9 +553,19 @@ export async function runScratchOrphanGc(
  * 一个名字里本来就带 `.partial-` 的**合法**仓库（`https://host/org/foo.partial-bar.git`）
  * 的 canonical 目录就叫 `<hash>-foo.partial-bar` —— 宽松判据会把这个**正在用的镜像**
  * 整个删掉，而 `cached_repos.local_path` 还指着它，连既存运行任务的工作树都跟着失效。
- * ULID 是 26 位 Crockford base32（无 I/L/O/U），锚定结尾即可把两者分开。
+ * ⚠️ 四轮门那版判据（`.partial-<ULID>` 锚结尾）**仍然不安全**——五轮门对抗面实测:
+ * `cacheSlug` 的白名单是 `[A-Za-z0-9._-]`，既产得出 `.partial-` 也产得出 26 位
+ * Crockford base32，于是一个**正常**仓库
+ * `acme/foo.partial-01ARZ3NDEKTSV4RRFFQ69G5FAV.git` 的 canonical 镜像目录与半成品
+ * 逐字同形，会被整个 `rm -rf`，而 `cached_repos.local_path` 还指着它。
+ * 更糟的是年龄判据在这里**必然成立**：镜像顶层目录的 mtime 在 `git fetch` 与
+ * `git worktree add` 之后逐字不变（两者只写 `.git/` 内部），所以任何克隆满 24h 的
+ * 活跃镜像都满足「陈旧」。当时那句「锚定结尾即可把两者分开」是可证伪的错误前提。
+ *
+ * 现在的分隔符是 `~partial~`：`~` **不在 slug 白名单里**，碰撞在字符集层面不可能。
+ * 这比任何正则收窄都强——它把「判据可能误命中」变成「判据不可能误命中」。
  */
-const PARTIAL_CLONE_DIR = /\.partial-[0-9A-HJKMNP-TV-Z]{26}$/
+const PARTIAL_CLONE_DIR = /~partial~[0-9A-HJKMNP-TV-Z]{26}$/
 
 export async function runPartialCloneGc(
   appHome: string,

@@ -1057,7 +1057,23 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
   // Resolve to a concrete commit so the worktree is reproducible even if base
   // is a symbolic ref that moves underneath us. RFC-068 has already synced the
   // base to remote-latest by the time we get here.
-  const baseRev = await runGit(opts.repoPath, ['rev-parse', base], { signal: opts.signal })
+  // ⚠️ `--verify … ^{commit}` + `--`,不是裸 `rev-parse <base>`（五轮门对抗面实测的
+  // P1）。`git rev-parse` 对**不认识的 flag 以 exit 0 原样回显**，于是一个形如
+  // `ref: "--lock"` 的启动参数会一路穿到下面的 `worktree add` argv 里被当成**选项**：
+  //   · `--lock`  ⇒ 工作树建成且被锁，`prune` exit 0 但不清、`remove --force` 128
+  //                  ⇒ AC-11 的重试**永久**撞 "missing but locked worktree"，
+  //                  而本 RFC 新加的 `reclaimStalePrepArtifacts` 三步全 exit 0、
+  //                  对锁定注册项完全免疫 —— 「重试永远修得好」这个承诺当场失效；
+  //   · `--force` ⇒ 静默忽略用户要的 ref，从 HEAD 建树；
+  //   · `--orphan` / `--no-checkout` ⇒ 未出生分支 / 空工作树，agent 在空树上跑。
+  // 而 `ref` 的 schema 只有 `.min(1)`，零格式校验；本 RFC 还把它**持久化**进
+  // `tasks.base_branch` 并在每次重试/boot 重放 ⇒ 一次性输入变成永久毒化。
+  // 仓内早有正解：`checkoutWorkingBranch` 用 `check-ref-format --branch` 权威校验。
+  // 这里用等价手段：`--verify` 拒绝非 revision，`^{commit}` 强制解析到提交，
+  // `--` 终结选项解析。
+  const baseRev = await runGit(opts.repoPath, ['rev-parse', '--verify', `${base}^{commit}`, '--'], {
+    signal: opts.signal,
+  })
   if (baseRev.exitCode !== 0) {
     // RFC-075: with a working branch, an unresolvable base is a hard launch
     // failure (we cannot honor "branch off remote latest"); without one we

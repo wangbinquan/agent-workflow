@@ -162,10 +162,14 @@ L5/L6 单点）按线保持、不跨线统一。
   复活判据撞 410 `workspace-pruned`），并锁住 gc/lifecycle 三处「恰好不误伤」的现状。
 - AC-16（G7）服务端拒绝对 **done** 的准备行重试（今天路由不校验 nodeId 是否在定义里
   ⇒ 会对已有工作树的任务再物化一次）。
-- AC-14（G7）取消/优雅停机/删除在准备窗口内生效，且**底层 git 子进程确实终止**
+- AC-14（G7）取消/优雅停机在准备窗口内生效，且**底层 git 子进程确实终止**
   （AbortSignal 串进 `runGit`/`spawnGit` 或 kill 进程组；顺带把 `gitCloneTimeoutMs`
   在启动路径接线——今天未接、落硬编码 30min）：`AbortController` 于准备开始前
   注册；回写与 kick 前的状态 CAS 复检，已取消任务**不得**被准备完成拉起执行。
+  **「删除」这一格已划掉（2026-08-15 用户拍板）**：`taskDelete` 硬要求终态，准备中
+  （pending）的任务返回 409 `task-not-terminal` 并提示「先取消」。保持该语义——删除要
+  清理工作区，而准备中的任务正持有驱动租约且 git 在跑；**先取消（现在能真杀 git）
+  再删**是安全的两步。回归锁见 `rfc287-t13-deferred-prep.test.ts`。
 - AC-6 每批 pin worktree gate 全绿 + exact-SHA CI 绿；实现门（独立子代理）。
 
 ## 6. 决策记录（2026-08-13 用户逐问拍板）

@@ -236,8 +236,18 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // task.ts 的 reduce 随之归零；唯一的 in-memory `retryIndex > ` 比较现在
     // 就是唯一实现内部的 max-scan（非 freshness pick——它分配下一个唯一
     // retryIndex，口径见其头注与 node-run-mint.test.ts 的矩阵/结构锁）。
+    // RFC-287 五轮门（2026-08-14）新增 `services/task.ts: 1`——`__repo_prep__` 的
+    // 「有没有更新的准备尝试」门。**经 review 判定它不是 freshness pick**：该子系统
+    // 没有 clarify / parent / iteration 分叉（那才是当年把全仓收敛到 id 序的原因），
+    // 其 `retryIndex` 由 `nextRetryIndex` 严格递增分配、就是因果尝试序。
+    // 反证也有：一度按本 ratchet 的字面要求改用 id 序比较器，结果实测 `nodeRunMint`
+    // 用的是普通 `ulid()`（非 monotonicFactory），同毫秒 2000 对里 989 对逆序 ⇒ 同毫秒
+    // 铸出的两条准备行会被判反、两边都点不动。ratchet 的价值在这次兑现了：它逼出了
+    // 这场 review，而 review 的结论是「本处该用 retryIndex」——白名单正是为此存在
+    //（本条注释上方原话：whitelist 刻意宽松，目标是任何新出现的至少被 review 看见）。
     expect(srcInventory('retryIndex > ')).toEqual({
       'services/nodeRunMint.ts': 1,
+      'services/task.ts': 1,
     })
   })
 })

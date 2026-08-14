@@ -257,7 +257,11 @@ import { isWorkgroupTask } from '@agent-workflow/shared'
 import { resolveTaskEngine } from '@/services/execution/engines'
 import { getExecutionOutcome } from '@/services/execution/outcome'
 import { watchTaskTerminal } from '@/services/execution/executionWatch'
-import { ensureChildTaskBudget, registerKnownChildTask } from '@/services/execution/childBudget'
+import {
+  currentMaxInvocationDepth,
+  ensureChildTaskBudget,
+  registerKnownChildTask,
+} from '@/services/execution/childBudget'
 import {
   childClosureSubset,
   frozenWorkflowFromClosure,
@@ -3280,7 +3284,7 @@ async function runCallWorkflowNode(
 
     // ---- gates BEFORE side effects: depth, then the global child budget
     // (ancestor-exempt scan grants — §3.2; the wait holds NO locks).
-    const maxDepth = opts.maxInvocationDepth ?? 3
+    const maxDepth = currentMaxInvocationDepth(opts.maxInvocationDepth)
     const childDepth = (taskRow.invocationDepth ?? 0) + 1
     if (childDepth > maxDepth) {
       await failCallRow(

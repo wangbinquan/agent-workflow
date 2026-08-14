@@ -1991,3 +1991,26 @@ taskId」幂等领养，要么在准备重跑前先做一次定向清理。前�
 **已修的部分（勿重复登记）**：`.partial-<ULID>` 半成品镜像目录的回收已落地
 （`services/gc.ts` 的 `runPartialCloneGc`，挂在每小时 GC 上，按 24h 年龄判据）——它此前
 **只有生产者、零消费者**，本 session 在真实 home 里实测到 13 个堆积。
+
+---
+
+## `runGit` 空 cwd 护栏：设计写死、从未实现（RFC-287 五轮门，用户拍板降级）
+
+`design/RFC-287-scheduler-assembly-convergence/design.md` §10.9 写死了「`runGit` 见空
+cwd 直接返回合成的 `exitCode!==0` 而不 spawn」。**它从未落地**——`util/git.ts` 至今是
+裸 `['-C', cwd, ...args]`，无守卫、无测试。
+
+**连续三轮审计都构造不出可达伤害**（这是不补实现的依据，不是没查）：G7 之后「空
+`worktreePath`」从罕见终态变成常态，于是逐个扫了所有能把它喂进 git 的面——
+`isGitWorkTree` 先 `existsSync('')===false` 直接返回不 spawn；`gc.ts` 的两处、
+`worktreeBackup.ts`、`structuralDiff/service.ts`、`taskDelete.ts`、snapshot-refs 各自被
+`!== ''` / `existsSync` / `isAbsolute` / null-`baseCommit` 拦在前面。实测
+`git -C "" rev-parse --show-toplevel` 在 daemon cwd 下确实成功（退出码 0），但没有一条
+生产路径能走到它。
+
+**用户口径（2026-08-15）：降级 backlog、改文档，不补实现。** 理由是现在新增一个失败面
+与 C3b 刚把清理路径统一成「吞掉 + warn」的方向相反。design §10.9d 已按「设计期设想、
+未落地」显式标注。
+
+**若将来要做**：按其自述形态实现成纯 `exitCode!==0` 合成（不抛），并同批给所有既有调用
+面加回归——否则会把一批今天靠早退兜住的路径变成新的失败分支。

@@ -6,6 +6,13 @@
 > §2 三态改「默认处置 + 逐线声明式覆写」（P1-1）、§4 改双模式窗口契约
 > （P1-2）、L8 定位/第五漂移/T1 扩容/锚勘误一并落（P2-3..7）。
 
+> **终态追记（2026-08-15，五轮门收官）**：本节的九线地图是**迁移前**的行号快照，保留
+> 作为迁移起点的历史记录。终态是：**L1 工作组主机 / L4 agent / L5 fanout 分片 /
+> L6 fanout 聚合 / L7 脚本**五条线全部迁入 `services/schedulerAssembly.ts` 的
+> `runAssembly`；**L2 / L3 / L8 / L9 与 wrapper-iso、replay 三处显式挖洞**保持豁免
+> （灭绝锁 `rfc287-t9-exemptions-and-extinction.test.ts` 逐条钉死，含三处挖洞的显式
+> 白名单）。行号请以当前源码为准，不要按本节的旧行号定位。
+
 ## 1. 现状地图（测绘交付物摘要）
 
 九条装配线（L1-L9）、骨架步骤 A-J、公共原语位置、四类漂移、参数化自然缝——
@@ -692,3 +699,67 @@ L6 :8362 if (result.processUnreaped === true) keepAggIso = true
   锚勘误：L4 的 `createClarifyRound` 实为 :6252(cross) / :6299(self)；
   `isolatedAgentRun.ts` 在 `services/`（**不在** `services/execution/`）。
 ```
+
+## 10.9b 能力影响补记：`LC_ALL=C`（五轮门补入 C 表）
+
+G6 的分类器按 git stderr 的英文原文判可重试性，所以 `nonInteractiveGitEnv()` 现在强制
+`LC_ALL=C` / `LANG=C`。这是**影响全部 `runGit` 调用点 stderr 措辞**的全局变更，
+design §10.7 当初明令「单列一条 C 并配回归」，但 proposal §4 的 C 表只到 C9、漏了它。
+在此补记：非英文 locale 下 git 的本地化 stderr 会让分类器全部落进「无法归类 = 不重试」
+的保守分支，G6 静默空转——这是为什么它必须是强制而非可选。回归见
+`packages/shared/tests/rfc287-git-failure-class.test.ts` 与 `util/git.ts` 的接线锁。
+
+## 10.9c C7 口径的两处收窄（五轮门补记）
+
+C7 原文写「限定无上传的 JSON-body 分支」。实现另外排除了两类，理由都在代码注释里但
+三份文档均无记录，在此补齐：
+
+- **`scratch`**：临时空间没有远端要克隆，G7 要解决的「拉不动远端时什么都不留」在它身上
+  不存在；而占位行必须先认领一个 `spaceKind`，写 `'remote'` 对 scratch 是错的。
+- **`sourceTaskId` 重放**：占位行存不住它的来源（冻结布局在**源任务**的 `task_repos`
+  上，`tasks` 也没有 `source_task_id` 列）⇒ `retryRepoPreparation` 必然 409，而前端只看
+  「有没有失败的准备行」就把重试按钮画出来 ⇒ 一个必然点不动的按钮。排除它 = 该路径保持
+  G7 之前的同步语义：失败在 HTTP 调用处抛出、不铸任务行、不出现死按钮。
+
+## 10.9d §10.9 的「`runGit` 空 cwd 护栏」——设计期设想，未落地（用户拍板降级）
+
+§10.9 写死了「`runGit` 见空 cwd 直接返回合成的 `exitCode!==0` 而不 spawn」。**它从未
+实现**，而且连续三轮审计都构造不出可达伤害：所有会把任务 `worktreePath` 喂进 git 的面
+（`isGitWorkTree` / `gc` / `worktreeBackup` / `structuralDiff` / `taskDelete` /
+snapshot-refs）各自被 `existsSync('')===false`、`!== ''`、`isAbsolute`、null-`baseCommit`
+拦在前面。
+
+**用户口径（2026-08-15）：降级为 backlog、改文档，不补实现**——现在新增一个失败面，
+与 C3b 刚把清理路径统一成「吞掉 + warn」的方向相反。已带可达性分析登记
+`docs/audit-backlog.md`。
+
+## 10.10 五轮门定音（2026-08-14/15，用户逐条拍板）
+
+**这一节是给后续检视看的**：下面三条都被多路审计报为缺陷，但用户已明确定性。接手者
+再遇到同形报告，按此结案，不要重开。
+
+### ① 仓库组布局**不在启动时冻结**——以准备真正获取时的最新定义为准（用户定性：不是问题）
+
+G7 之后，以 `repoGroupId` 启动的任务在占位行只存组 id，后台准备时**重新读当前组
+定义**。所以「点了启动之后再改组成员」会让这次任务用**新**成员跑。G7 之前物化是同步
+的，这个窗口几乎为零；现在它等于一次克隆的时长。
+
+**用户口径（2026-08-14）：「这不是问题，就以获取时间的最新的为准」**。即：组是可变
+资源，任务取的是**准备发生那一刻**的定义，不是点击那一刻的。据此不实现启动时冻结，
+也不加成员 id 校验。（注意这与 RFC-248 `sourceTaskId` 重放面的「冻结布局」是两件事：
+那条针对的是**已完成任务**的重放，`task_repos` 里存着真实快照。）
+
+### ② `deleteCachedRepo` 的 TOCTOU 与并发组成员 detach——本平台不考虑（用户定性）
+
+`deleteCachedRepo(force=false)` 的引用计数在锁外只查一次，随后 `await rm`；这段窗口
+里 G7 可以提交一个引用该镜像的任务 ⇒ 删除成功、`tasks.cached_repo_id` 悬空（两列都
+没有 FK）。并发保存的仓库组成员也会被静默 detach。
+
+**用户口径（2026-08-14）：「本平台不考虑这个问题」**。不加锁内重查，不改 detach 行为。
+
+### ③ 准备行置 done 与回填**同事务**（已实现）
+
+原先回填事务先提交、prep 行随后才置 done，中间是一段必经的中间态：崩溃落在那里之后
+任务能跑完全部业务节点，而审计历史永久停在「仓库准备被中断」，且违反 AC-10 的
+「prep done 之后才有工作树」。现已并入同一 `dbTxSync`（用 `setNodeRunStatusTx`），
+该组合不再可达。回归锁见 `rfc287-t13-deferred-prep.test.ts`。

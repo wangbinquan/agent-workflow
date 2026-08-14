@@ -160,14 +160,14 @@
 
 **改锚 6 件**（全部做过变异实证，逐条确认变红）：
 
-| 文件                                    | 原形态                                           | 新形态                                             |
-| --------------------------------------- | ------------------------------------------------ | -------------------------------------------------- |
-| `rfc287-t1-merge-disposition-matrix`    | 分支体含 `keepHookIso = true` + `throw err`      | spec 上 `onThrow → keep:true/rethrow`、`onConflictHuman → keep:false` |
-| `rfc210-publish-failure-hard-fails`     | `if (!keepHookIso) await discardNodeIso(...)`   | spec 声明浅锁（逐格断言归矩阵夹具）                |
-| `rfc287-t1-discard-failure-paths`       | finally 里 try/catch 吞                          | 骨架统一 `.catch(+warn)`；**反向**禁本线自兜        |
-| `rfc287-t1-release-before-discard`      | 只认 `discardNodeIso(`/具名 release             | 补认骨架的 `spec.discardIso(`/匿名 `release()`     |
-| `rfc208-unbounded-git-and-permits`      | 扫 scheduler.ts 函数体（已结构性失效）           | 不变量重钉到骨架 + 防零覆盖改判「两种形态择一」     |
-| `process-node-concurrency`              | `toContain('scriptSem.acquire()')`               | 钉死整张池清单 `pools: [scriptSem]`（更强）         |
+| 文件                                 | 原形态                                        | 新形态                                                                |
+| ------------------------------------ | --------------------------------------------- | --------------------------------------------------------------------- |
+| `rfc287-t1-merge-disposition-matrix` | 分支体含 `keepHookIso = true` + `throw err`   | spec 上 `onThrow → keep:true/rethrow`、`onConflictHuman → keep:false` |
+| `rfc210-publish-failure-hard-fails`  | `if (!keepHookIso) await discardNodeIso(...)` | spec 声明浅锁（逐格断言归矩阵夹具）                                   |
+| `rfc287-t1-discard-failure-paths`    | finally 里 try/catch 吞                       | 骨架统一 `.catch(+warn)`；**反向**禁本线自兜                          |
+| `rfc287-t1-release-before-discard`   | 只认 `discardNodeIso(`/具名 release           | 补认骨架的 `spec.discardIso(`/匿名 `release()`                        |
+| `rfc208-unbounded-git-and-permits`   | 扫 scheduler.ts 函数体（已结构性失效）        | 不变量重钉到骨架 + 防零覆盖改判「两种形态择一」                       |
+| `process-node-concurrency`           | `toContain('scriptSem.acquire()')`            | 钉死整张池清单 `pools: [scriptSem]`（更强）                           |
 
 **两处自查出的真缺口**（不是 T6 引入的，是被 T6 照出来的）：
 
@@ -213,15 +213,15 @@ envelopeNonce、写哪种审计事件）与 `spawn`（发不发续跑短提示�
 
 **改锚 8 件**（全部变异实证过）：
 
-| 文件                                 | 变化                                                             |
-| ------------------------------------ | ---------------------------------------------------------------- |
-| `rfc287-t1-merge-disposition-matrix` | throw 列**翻面**：从「各线各写一份 keep+markMergeFailed」改为「谁都不许再自己写」；conflict 列改读 spec 声明 |
-| `rfc287-t1-line-throw-disposition`   | clarify 停靠改读 `skip:'park', keep:true`                        |
-| `rfc287-t1-discard-failure-paths`    | **翻面**：从「剩余未迁线仍是完全没兜」改为「scheduler.ts 里不得再有 finally-discard」 |
-| `rfc287-t1-release-before-discard`   | 下限降到 1（骨架那一处）并注明**永不再降**——再降就是关锁         |
-| `rfc208` oracle #1                   | 扫描面并入骨架（scheduler.ts 已无此形状的 finally）              |
-| `rfc210-publish-failure-hard-fails`  | agent 线改锁「走骨架默认处置」：声明 markMergeFailed 钩子且无 onThrow 覆写 |
-| `rfc122-clarify-directive-dispatch`  | 「循环体内」等价改写为「`runOneAttempt` 体内」+ 反向禁其落在窗口外前奏 |
+| 文件                                 | 变化                                                                                                          |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `rfc287-t1-merge-disposition-matrix` | throw 列**翻面**：从「各线各写一份 keep+markMergeFailed」改为「谁都不许再自己写」；conflict 列改读 spec 声明  |
+| `rfc287-t1-line-throw-disposition`   | clarify 停靠改读 `skip:'park', keep:true`                                                                     |
+| `rfc287-t1-discard-failure-paths`    | **翻面**：从「剩余未迁线仍是完全没兜」改为「scheduler.ts 里不得再有 finally-discard」                         |
+| `rfc287-t1-release-before-discard`   | 下限降到 1（骨架那一处）并注明**永不再降**——再降就是关锁                                                      |
+| `rfc208` oracle #1                   | 扫描面并入骨架（scheduler.ts 已无此形状的 finally）                                                           |
+| `rfc210-publish-failure-hard-fails`  | agent 线改锁「走骨架默认处置」：声明 markMergeFailed 钩子且无 onThrow 覆写                                    |
+| `rfc122-clarify-directive-dispatch`  | 「循环体内」等价改写为「`runOneAttempt` 体内」+ 反向禁其落在窗口外前奏                                        |
 | `rfc188` 计数棘轮                    | `createIsoUnderLock` 8→7：首建与 fresh-session 重建收进同一个 `iso.create` 闭包（**站点合并，不是覆盖变少**） |
 
 **核实过、因而没有动骨架的一处**：模式 B 在「换树失败」路径上不走 `keepFromOutcome`，
@@ -242,13 +242,13 @@ envelopeNonce、写哪种审计事件）与 `spawn`（发不发续跑短提示�
 **差异矩阵是实证出来的、不是照设计抄的**：用 difflib 把四份手抄逐行对差（以 L4 为基准），
 差异恰好收敛到五项，与 design §10.3 逐格吻合：
 
-| 维度                       | L4 agent | L7 script | L8 call | L9 code-host |
-| -------------------------- | -------- | --------- | ------- | ------------ |
-| 继承 reviewIteration       | ✔        | ✘         | ✔       | ✘            |
-| 显式清 agentOverrideName   | ✔        | ✘         | ✔       | ✘            |
-| 复用 pending 行时追 retryIndex | ✔    | ✔         | ✔       | **✘**        |
-| 收尾广播 pending           | ✔        | ✔         | ✔       | **✘**        |
-| 领养短路（preResolve）     | ✘        | ✘         | **✔**   | ✘            |
+| 维度                           | L4 agent | L7 script | L8 call | L9 code-host |
+| ------------------------------ | -------- | --------- | ------- | ------------ |
+| 继承 reviewIteration           | ✔        | ✘         | ✔       | ✘            |
+| 显式清 agentOverrideName       | ✔        | ✘         | ✔       | ✘            |
+| 复用 pending 行时追 retryIndex | ✔        | ✔         | ✔       | **✘**        |
+| 收尾广播 pending               | ✔        | ✔         | ✔       | **✘**        |
+| 领养短路（preResolve）         | ✘        | ✘         | **✔**   | ✘            |
 
 后两项的「✘」都是真语义、不能统一：L9 没有节点级重试（只有 HTTP 幂等重试），且它铸完
 立刻转 running——多播一条 pending 会让前台看到一个不存在的中间态。
@@ -277,13 +277,13 @@ reject-aging` ——在隔离下各跑两次全绿，属我在门禁窗口内并
 
 **① 四条豁免各带「理由锁」**——不是「这条线不许改」，而是**改动时先撞到理由**：
 
-| 线                | 锁的是什么                                                                 |
-| ----------------- | -------------------------------------------------------------------------- |
-| L3 合并 agent     | 绝不取池位（调用方全程持 writeSem，再等池位就闭合死锁环）+ 源注里的理由必须在 |
-| L8 call           | 整线不迁；其许可是**带 signal 的配额 hold**（排队中可被取消 → 标 canceled），与信号量池位不同型 |
-| L8 的可取消性     | 单独一条，指向 `rfc243-child-budget` 里那条真行为夹具「abort rejects a queued waiter」——统一时最易做丢的正是它 |
-| L9 代码平台       | 没有节点级 retry（只有 HTTP 幂等重试）：无 attempt 循环、无 retryPolicy      |
-| L2 commit-push    | 无池、无 iso（canonical 直跑）                                              |
+| 线             | 锁的是什么                                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------------------------------- |
+| L3 合并 agent  | 绝不取池位（调用方全程持 writeSem，再等池位就闭合死锁环）+ 源注里的理由必须在                                  |
+| L8 call        | 整线不迁；其许可是**带 signal 的配额 hold**（排队中可被取消 → 标 canceled），与信号量池位不同型                |
+| L8 的可取消性  | 单独一条，指向 `rfc243-child-budget` 里那条真行为夹具「abort rejects a queued waiter」——统一时最易做丢的正是它 |
+| L9 代码平台    | 没有节点级 retry（只有 HTTP 幂等重试）：无 attempt 循环、无 retryPolicy                                        |
+| L2 commit-push | 无池、无 iso（canonical 直跑）                                                                                 |
 
 **② 终局灭绝锁 + 三处显式挖洞**：五条迁移线里的 iso 物化只能**经装配 spec 到达**；
 L8 整线 / wrapper 便车 / 恢复 replay 段三处显式允许直接物化，不被误伤。另加「五条线
@@ -304,10 +304,10 @@ L8 整线 / wrapper 便车 / 恢复 replay 段三处显式允许直接物化，�
 **先修后端、再补前端**——第二轮设计门核实过「不是补三个输入框就完事」，本轮实测确认
 六项里有两项根本不即时生效，且症状对用户完全不可见：
 
-| 问题 | 实测到的行为 | 修法 |
-| ---- | ------------ | ---- |
-| `getNodePoolSemaphore` 是 **resize-on-read** | 每个 `runTask` 都把 daemon 级池改成**自己 opts 的值**；子任务继承父任务 opts，于是「配置改成 9 → 父任务在跑 → 派生子任务」这条日常路径上，用户的调整被静默撤销、无任何日志 | 新增 `mode: 'set' \| 'seed-only'`；三处任务启动改传 `seed-only`（池不存在才按该值创建），配置写入点仍用默认 `set` |
-| `ensureChildTaskBudget` 的容量**凝固在第一个调用者的闭包**里 | 单例只在 `singleton === null` 时用调用方的 `capacity()`，之后永远读**首个**启动任务捕获的 opts；设置页改完要等 daemon 重启 | 容量改为模块级 live 值；`PUT /api/config` 用 `setChildTaskBudgetCapacity` 推入（与三个池热应用同一个线性化点） |
+| 问题                                                         | 实测到的行为                                                                                                                                                               | 修法                                                                                                              |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `getNodePoolSemaphore` 是 **resize-on-read**                 | 每个 `runTask` 都把 daemon 级池改成**自己 opts 的值**；子任务继承父任务 opts，于是「配置改成 9 → 父任务在跑 → 派生子任务」这条日常路径上，用户的调整被静默撤销、无任何日志 | 新增 `mode: 'set' \| 'seed-only'`；三处任务启动改传 `seed-only`（池不存在才按该值创建），配置写入点仍用默认 `set` |
+| `ensureChildTaskBudget` 的容量**凝固在第一个调用者的闭包**里 | 单例只在 `singleton === null` 时用调用方的 `capacity()`，之后永远读**首个**启动任务捕获的 opts；设置页改完要等 daemon 重启                                                 | 容量改为模块级 live 值；`PUT /api/config` 用 `setChildTaskBudgetCapacity` 推入（与三个池热应用同一个线性化点）    |
 
 **原则一句话**：daemon 级配额的实时值只由配置写入点决定，任务启动只「取」不「改」。
 
@@ -328,12 +328,12 @@ L8 整线 / wrapper 便车 / 恢复 replay 段三处显式允许直接物化，�
 
 **连带面重算结果**（设计门要求「第一件事是重算」，实测数字）：
 
-| 面 | 数量 |
-| -- | ---- |
-| e2e spec 含 `file://` / `pathToFileURL` | **21 个文件 / 50 处** |
-| backend 经 HTTP 面的测试 | **14 个文件**（含共享夹具 `helpers/repoGroupFixture.ts`） |
-| `repoGroupFixture` 的下游消费者 | **13 个文件** |
-| src 里的 file 分支 | `gitRepoCache.ts:428/511/548/742` + `codeHost/project.ts:13/19` |
+| 面                                      | 数量                                                            |
+| --------------------------------------- | --------------------------------------------------------------- |
+| e2e spec 含 `file://` / `pathToFileURL` | **21 个文件 / 50 处**                                           |
+| backend 经 HTTP 面的测试                | **14 个文件**（含共享夹具 `helpers/repoGroupFixture.ts`）       |
+| `repoGroupFixture` 的下游消费者         | **13 个文件**                                                   |
+| src 里的 file 分支                      | `gitRepoCache.ts:428/511/548/742` + `codeHost/project.ts:13/19` |
 
 **落点结论（与初稿不同，实测改判）**：
 
@@ -359,12 +359,12 @@ grandfather 的启动校验拒绝。①是纯机械但量大的一批，不可�
 
 计划把这一项排在 T13 第一位是对的——**清点结果推翻了「520 处都要审」这个前提**：
 
-| 形态 | 处数 | 是否属风险面 |
-| ---- | ---- | ------------ |
-| read | 296 | 绝大多数是**形参传递**，不读任务态 |
-| write/assign | 105 | 集中在物化与回填路径 |
-| type-decl | 94 | 纯类型声明 |
-| comment | 25 | — |
+| 形态         | 处数 | 是否属风险面                       |
+| ------------ | ---- | ---------------------------------- |
+| read         | 296  | 绝大多数是**形参传递**，不读任务态 |
+| write/assign | 105  | 集中在物化与回填路径               |
+| type-decl    | 94   | 纯类型声明                         |
+| comment      | 25   | —                                  |
 
 按文件看密度前八：`util/git.ts` 139、`scheduler.ts` 53、`task.ts` 49、
 `structuralDiff/service.ts` 26、`nodeIsolation.ts` 24、`gc.ts` 20、`gitSubmodule.ts` 18、
@@ -433,3 +433,41 @@ stderr 原文，中文环境下 git 会把 `Repository not found` 整句翻译�
 **一处覆盖缺口自查**：「删掉可重试判据」的变异首轮 0 红——用例集里没有鉴权正例
 （造一个会拒绝鉴权的真实远端不现实）。补接线层锁（判据必须是
 `isRetryableGitFailure` 且在窗口检查之前）后同一变异变红。
+
+---
+
+## 实施记录（五轮门收官补记，2026-08-15）
+
+### T11（G5 `file://` 拒运行两面）
+
+代码已落，此前 plan 无记录。**并且它当初的「接手测绘」结论已被推翻**：那份写的是
+「✅ 落 zod schema / ❌ 不落 `startTask` / ❌ 不落 `resolveCachedRepo`」，而二轮门按
+design §10.7 定音改成了**服务层来源汇流点 `resolveRepoSourceSingle` 为权威、schema 仅
+作早报错的附加层**——理由是公开面自 RFC-204 起传 `cachedRepoId` 不传 URL，schema 拦
+`file://` 对存量镜像一个都拦不住。另：该测绘提到的「起本地 git 协议」也不成立
+（`git://` 不在 `parseGitUrl` 接受的 scheme 里），实际改用了本地 smart-HTTP 夹具
+`tests/helpers/gitHttpRemote.ts`。
+
+### T14（实现门返工，共五轮）
+
+plan 此前完全没有 T14 记录。五轮累计 **90 条真缺陷**全部处置，每条带回归用例并做过
+变异实证：
+
+| 轮次                                         | findings            | 其中「前一轮修复引入的新回归」 |
+| -------------------------------------------- | ------------------- | ------------------------------ |
+| 一轮（两路 Codex，同视角）                   | 15 → 13 真 / 2 证伪 | —                              |
+| 二轮（4 路，开始错开视角）                   | 21                  | —                              |
+| 三轮（4 路）                                 | 26                  | 5（来自二轮）                  |
+| 四轮（5 路，加跨 RFC 视角）                  | 26                  | 5（来自三轮）                  |
+| 五轮（5 路，加对抗 / 数据完整性 / 专审修复） | 21                  | 6（来自四轮）                  |
+
+**这张表本身是本 RFC 最重要的产出之一**：findings 总数在三轮后不再增长，但「修复引入
+新缺陷」的比例稳定在 ~20%，说明多轮门的价值后期主要不在找原始缺陷，而在找**修复自身
+的缺陷**。五轮门专门为此设了一路（Codex「专审第四轮修复」），一次抓到 6 条。
+
+### 验收清单
+
+- [x] 五条装配线全部迁入骨架，家族套件全绿（546 pass / 0 fail，92 文件）
+- [x] G4/G5/G6/G7 四项行为改动落地并各有回归用例
+- [x] 九线地图终态已追记（见 design §1 追记）
+- [x] 每批 `gate:local` 七项全绿 + exact-SHA CI 绿
