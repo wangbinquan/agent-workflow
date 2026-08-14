@@ -137,10 +137,17 @@
 - [x] **RFC-247-T37**：`docs/audit-backlog.md` 登记 design §11 的 `mcp.ts:88-91` 过期断言。
 - [x] **RFC-247-T38**：`design/RFC-221-account-users-ux/proposal.md` 的 D1 标注
       「Superseded by RFC-247」。
-- [ ] **RFC-247-T39**：设计门（Codex review，请批前）+ 实现门（Codex review，declare done 前）
-      各一轮并修 findings。
-- [ ] **RFC-247-T40**：`bun run typecheck && bun run lint && bun run test && bun run format:check`
-      全绿 + binary build smoke + Playwright；推送后按**自己的确切 sha** 查 CI。
+- [x] **RFC-247-T39**：设计门（Codex review，请批前）+ 实现门（Codex review，declare done 前）
+      各一轮并修 findings。**已闭环**：设计门见 [`design-gate-2026-08-01.md`](./design-gate-2026-08-01.md)
+      （Codex wedge → 两个正交视角的 Claude 子代理对抗评审替代并如实记档，5 P0 / 17 P1 / 23 P2
+      全部折入为 AC-29～AC-48）；实现门见下方「2026-08-02 — 实现门（Codex 直驱，成功）」
+      （75 分钟 / 86KB 日志 / 24 findings，12 修 + 12 登记 backlog）。
+- [x] **RFC-247-T40**：`bun run typecheck && bun run lint && bun run test && bun run format:check`
+      全绿 + binary build smoke + Playwright；推送后按**自己的确切 sha** 查 CI。**已完成**：
+      PR #12 于 2026-08-02 squash 合并进 `main`。
+- [x] **RFC-247-T41（2026-08-14 追加）**：**架构收尾移交 RFC-294 W4**——见下方
+      「2026-08-14 — 收口对账（对齐 RFC-294）」。`scripts/depcheck.ts` 两条账目的
+      `removeWhen` 已从「RFC-247 收尾」改写为指向 RFC-294 W4-A/W4-D，owner 转出。
 
 ---
 
@@ -148,74 +155,142 @@
 
 对应 proposal §5 的 AC 编号。
 
+**2026-08-14 回填说明**：交付当天（2026-08-02）只勾了 7 条，其余一直空着——不是没做，是没回填
+（交付记录里的「收尾时按 AC-1〜AC-48 回扫」确实跑过，见下方 §「AC 逐条回扫抓到的两个『写了规则
+没接出口』」）。本次逐条定位锚并复跑：backend `rfc247-*.test.ts` 13 文件 **192 pass / 0 fail**、
+frontend `token-matrix` / `token-create-dialog` / `api-docs-markdown` **65 pass**、shared
+`permission.test.ts` / `permission-rfc041.test.ts` **35 pass**（均在 `4a544ef9` 上跑绿）。每组末尾
+列该组的验证锚。**两条不勾**并各自写明缺口——按 RFC-294 §17「不能以抽样和人工宣称验收」的同一
+标准，宁可留白也不空勾。
+
 ### 授权层
 
 - [x] AC-1 权限目录无 `资源:write`；三档齐全；角色点集快照锁定
 - [x] AC-2 全路由有元数据；删任一条声明 ⇒ 启动失败（有测试）
 - [x] AC-3 `server.ts` 无手工门挂载（源码层文本断言）
 - [ ] AC-4 真正无 gate 的 workgroups / reviews / clarify（+ scheduled-tasks PUT/DELETE）各有「窄令牌被拒」测试
-- [ ] AC-5 空矩阵 = 只读
-- [ ] AC-6 `scheduled-tasks` 双点 AND，无法绕过 `tasks:execute`
+- [x] AC-5 空矩阵 = 只读
+- [x] AC-6 `scheduled-tasks` 双点 AND，无法绕过 `tasks:execute`
+
+> 锚：`shared/tests/permission.test.ts` + `permission-rfc041.test.ts`（点集快照）；
+> `rfc247-route-coverage.test.ts:54-93`（正向：无声明即启动失败）与 `:94-157`（反向：无路由的点
+> 即启动失败）；`rfc247-token-grants.test.ts:34-55`（空矩阵 = 只读，且 pre-RFC 的「空 scopes =
+> 全量 role」洞已闭）；`rfc247-cross-domain-escalation.test.ts:249-266`（scheduled-task POST /
+> run-now 带 AND、PUT 保持单点）。
+> **AC-4 不勾的理由**：机制侧已封——`rfc247-route-coverage.test.ts:6-7` 的文件头就写明它锁的正是
+> 「workgroups / reviews / clarify 整域上线时无粗粒度门」这个成因，任何路由漏声明都在启动期炸。
+> 但 AC 字面要的是「这三域各有一条『窄令牌被拒』用例」，本次回填未定位到这样的逐域独立用例。
 
 ### 令牌
 
-- [ ] AC-7 创建可用；原始令牌只出现一次；越权 422 而非静默丢弃
-- [ ] AC-8 删除档不进任何模板；「完整」模板签出的令牌 DELETE 全 403
-- [ ] AC-9 `mcp_only` 打 `/api/*` → 403 专用码；通用两通道皆通
-- [ ] AC-10 令牌打 `/api/auth/*` 全方法拒绝
-- [ ] AC-11 令牌打 ACL PUT 拒绝
-- [ ] AC-12 令牌读三类 MCP 密钥字段全掩码；session 通道明文不变
+- [x] AC-7 创建可用；原始令牌只出现一次；越权 422 而非静默丢弃
+- [x] AC-8 删除档不进任何模板；「完整」模板签出的令牌 DELETE 全 403
+- [x] AC-9 `mcp_only` 打 `/api/*` → 403 专用码；通用两通道皆通
+- [x] AC-10 令牌打 `/api/auth/*` 全方法拒绝
+- [x] AC-11 令牌打 ACL PUT 拒绝
+- [x] AC-12 令牌读三类 MCP 密钥字段全掩码；session 通道明文不变
+
+> 锚：`rfc247-token-issuance.test.ts`（AC-7 / AC-18 显式标注）；`frontend/tests/token-matrix.test.ts`
+> 与 `token-create-dialog.test.tsx`（AC-8 / AC-23 显式标注）；`rfc247-token-purpose.test.ts`
+> （AC-9 / AC-30 显式标注）；`rfc247-mcp-server.test.ts` + `rfc247-mcp-transport.test.ts`
+> （AC-10 显式标注）；AC-11 = `routes/resourceAcl.ts:122-123` 声明 `tokenAccess:'never'`，语义由
+> `rfc247-route-registry.test.ts:195-226`（PAT 持全部点仍被拒 / session 同路由通过）锁定；
+> AC-12 = `rfc247-token-redaction.test.ts`（显式标注）+ `rfc247-mcp-server.test.ts:380-449`
+> （PAT 读 MCP 得到掩码 env / headers / oauth secret）。
 
 ### MCP
 
-- [ ] AC-13 `/api/mcp` 只接 PAT
-- [ ] AC-14 `tools/list` 随矩阵变化
-- [ ] AC-15 `watch_task` ≤10s 心跳、240s 超时返回快照
-- [ ] AC-16 删除工具 confirm 校验，零副作用
-- [ ] AC-17 upload 类工作流拒绝且无落库
-- [ ] AC-18 全局开关同时关掉 `/api/mcp` 与令牌创建
+- [x] AC-13 `/api/mcp` 只接 PAT
+- [x] AC-14 `tools/list` 随矩阵变化
+- [x] AC-15 `watch_task` ≤10s 心跳、240s 超时返回快照
+- [x] AC-16 删除工具 confirm 校验，零副作用
+- [x] AC-17 upload 类工作流拒绝且无落库
+- [x] AC-18 全局开关同时关掉 `/api/mcp` 与令牌创建
+
+> 锚：`rfc247-mcp-transport.test.ts:107-147`（PAT 通、session / daemon / 无凭据全 401）、
+> `:148-166`（开关关闭后逐请求拒绝）；`rfc247-mcp-server.test.ts:256-296`（tools/list 随矩阵、
+> 且「每个列出的工具都真能调」）、`:137-191`（删除工具仍要 type-to-confirm）、`:450-522`
+> （upload 工作流拒绝且不落库）；`rfc247-mcp-watch.test.ts:91-120`（240s 上限不超、全程 ≤10s
+> 心跳、心跳带任务在做什么）。
 
 ### 审计
 
-- [ ] AC-19 每次调用留痕且不含 body
-- [ ] AC-20 每次令牌 DELETE 有脱敏快照
-- [ ] AC-21 属主自查 / admin 全看 / 到期清理
+- [x] AC-19 每次调用留痕且不含 body
+- [x] AC-20 每次令牌 DELETE 有脱敏快照
+- [x] AC-21 属主自查 / admin 全看 / 到期清理
+
+> 锚：`rfc247-token-audit.test.ts:82-137`（REST 留痕含 method/path/status/tokenId、REFUSED 也留、
+> session 不留、**行里根本没有 body 字段**）、`:138-167`（MCP 按 tool 而非 POST /api/mcp 留痕）、
+> `:209-255` + `:462-533`（快照走**生产路由**而非手喂 —— 这正是实现门抓到的 AC-20 时序缺陷的
+> 回归）、`:256-317`（保留期真会 prune）、`:318-356`（属主自查 / admin 只读 / 令牌读不到审计）。
 
 ### wiki
 
-- [ ] AC-22 文档由代码派生（派生关系有测试锁定）
-- [ ] AC-23 按角色裁剪
-- [ ] AC-24 四份配置片段可直接使用
-- [ ] AC-25 opencode 片段带 `oauth: false`
-- [ ] AC-26 双语外壳 + 英文标识符
-- [ ] AC-27 复用 `Prose`，无第二个渲染器
-- [ ] AC-28 390px 无页面级横向溢出
+- [x] AC-22 文档由代码派生（派生关系有测试锁定）
+- [x] AC-23 按角色裁剪
+- [x] AC-24 四份配置片段可直接使用
+- [x] AC-25 opencode 片段带 `oauth: false`
+- [x] AC-26 双语外壳 + 英文标识符
+- [x] AC-27 复用 `Prose`，无第二个渲染器
+- [x] AC-28 390px 无页面级横向溢出
+
+> 锚：`rfc247-api-docs.test.ts`（AC-22 显式标注；`:179-200` 片段——四份 = `claude-code` /
+> `opencode` / `generic` / `curl`，见 `services/apiDocs.ts:164,170,192,210`，其中 opencode 片段
+> 断言含 `"oauth": false`，每份都指向调用方自己的 origin）；`frontend/tests/api-docs-markdown.test.ts`
+> （AC-22 / AC-27 显式标注，`:254` 锁「只有一条 markdown 渲染路径」）；`token-matrix.test.ts`
+> （AC-23 角色裁剪）；`frontend/tests/i18n-key-resolution.test.ts:10`（双语键回退，注释点名 RFC-247）；
+> `e2e/rfc247-api-docs-page.spec.ts`（AC-28 显式标注，390px 无横向溢出）。
 
 ### 设计门追加
 
 - [x] AC-29 跨域副作用族五条各有专属回归
-- [ ] AC-30 `mcp_only` 令牌无法建立 WS 连接
-- [ ] AC-31 脱敏对 REST 与 WS 两条出口一致生效
-- [ ] AC-32 `memoryDistillJobs` 门改 `memory:update`，身份门不放宽
+- [x] AC-30 `mcp_only` 令牌无法建立 WS 连接
+- [x] AC-31 脱敏对 REST 与 WS 两条出口一致生效
+- [x] AC-32 `memoryDistillJobs` 门改 `memory:update`，身份门不放宽
 - [x] AC-33 路由元数据覆盖生产 app 上每一条路由（含 whoami 与模板 ACL 路由）
+
+> 锚：`rfc247-cross-domain-escalation.test.ts:146-173`（AC-29 显式标注，五条逐条跑）、
+> `:182-214`（AC-32：memory-distill-jobs 要 resource-admin 身份，不是光有点就行）；
+> `rfc247-token-purpose.test.ts`（AC-30 显式标注）；AC-31 = `ws/registry.ts:496`
+> `redactEventPayload(payload, ws.data.actor.source)`（WS 出口与 REST 共用同一 redactor）。
 
 ### 设计门第二 / 第三批
 
-- [ ] AC-34 `PUT /api/tasks/:id/members`、`PUT /api/workgroup-tasks/:taskId/config` 为 never
-- [ ] AC-35 cancel 归 `tasks:execute`；空矩阵令牌取消被拒
+- [x] AC-34 `PUT /api/tasks/:id/members`、`PUT /api/workgroup-tasks/:taskId/config` 为 never
+- [x] AC-35 cancel 归 `tasks:execute`；空矩阵令牌取消被拒
 - [ ] AC-36 npm 安装带 `--ignore-scripts`（postinstall fixture 断言未执行）
-- [ ] AC-37 WS 默认拒绝白名单放行；新增频道未声明裁决即编译失败
-- [ ] AC-38 `rowToTask` 脱敏 `repoUrl`（对所有通道）
-- [ ] AC-39 stdout 脱敏；文案不得承诺 worktree 文件脱敏
+- [x] AC-37 WS 默认拒绝白名单放行；新增频道未声明裁决即编译失败
+- [x] AC-38 `rowToTask` 脱敏 `repoUrl`（对所有通道）
+- [x] AC-39 stdout 脱敏；文案不得承诺 worktree 文件脱敏
 - [x] AC-40 `/api/runtimes` 两条 GET 要求 `runtime:read`
-- [ ] AC-41 退役点清扫覆盖整个 backend（含 WS gate 与 `as never` 处）
-- [ ] AC-42 `/.well-known/mcp` 公开且先于 SPA catch-all
-- [ ] AC-43 管理员**不能**吊销他人令牌（负向断言）
-- [ ] AC-44 wiki 入口两处；`NAV_GROUPS` 零改动
-- [ ] AC-45 `assertDeleteConfirm` 覆盖 11 条
+- [x] AC-41 退役点清扫覆盖整个 backend（含 WS gate 与 `as never` 处）
+- [x] AC-42 `/.well-known/mcp` 公开且先于 SPA catch-all
+- [x] AC-43 管理员**不能**吊销他人令牌（负向断言）
+- [x] AC-44 wiki 入口两处；`NAV_GROUPS` 零改动
+- [x] AC-45 `assertDeleteConfirm` 覆盖 11 条
 - [x] AC-46 `RANGE_POINTS` / `ROUTE_BACKED_POINTS` 存在；`READ∩SYSTEM=∅`
 - [x] AC-47 资源键统一 `scheduled-tasks`，无 `schedules:` 变体
 - [x] AC-48 `overview` / `plantuml` 补门
+
+> 锚：`rfc247-cross-domain-escalation.test.ts:215-248`（AC-34 显式标注）；AC-35 =
+> `routes/tasks.ts:423-425`（`POST /api/tasks/:id/cancel` 声明恰为 `['tasks:execute']`）+ 空矩阵
+> 只读（AC-5 同锚）；AC-37 = `ws/server.ts:174` 的默认拒绝 + `:282` `TOKEN_ALLOWED_WS_CHANNELS`
+> 白名单；AC-38 = `services/task.ts:1976` `redactGitUrl(r.repoUrl)`；AC-39 = `routes/tasks.ts:1038`
+> `shouldRedactFor(actor.source) ? redactStdout(text) : text`（**这条是收尾回扫抓到的「写了规则
+> 零调用方」之一，现已接线**）；AC-41 = `rfc247-route-coverage.test.ts:94-157` 的反向自检；
+> AC-42 = `routes/docs.ts:65`；AC-43 = `rfc247-token-audit.test.ts:357`（显式标注的负向断言）；
+> AC-44 = `AccountTokensPanel.tsx:53` + `settings.tsx:1281` 两处入口；AC-45 覆盖面已确证 **11 条**
+> ——旧 `assertDeleteConfirm` 9 处调用覆盖 agents / skills / mcps / plugins / workflows /
+> workgroups / tasks 七条顶层 DELETE（`mcps` / `plugins` 各有重读校验的第二处），新
+> `assertTokenDeleteConfirm` 覆盖新补四条（`skills.ts:410` 技能文件 / `cached-repos.ts:94` /
+> `memories.ts:315` / `scheduledTasks.ts:197`），另加 RFC-248 后来接入的 `repoGroups.ts:203`；
+> 测试见 `rfc222-delete-confirm.test.ts`（旧七条）+ `rfc247-token-delete-confirm.test.ts`（规则本身
+> 与 memory 端到端）+ `routes-memories.test.ts`。
+> **AC-36 不勾的理由**：确实**没做**——`services/pluginInstaller.ts:277-289` 的 npm install 参数里
+> 没有 `--ignore-scripts`（全仓该 flag 只出现在 `services/scriptDepsEnv.ts:163`，是脚本节点依赖
+> 安装那条线，与插件安装无关）；`:781-787` 仍把 daemon 全量 `process.env` 转发给 npm。设计门 A1
+> 把它定级 **P0（= 宿主任意代码执行）**、design §5.4 明写「本 RFC 加 `--ignore-scripts` 修根因」，
+> 实现时降级进了 `docs/audit-backlog.md`。详见下方收口对账「档 3」。
 
 ---
 
@@ -544,3 +619,58 @@ clarify 子集、审计查询下推 SQL、反代下 origin 推导、wiki 缺请�
 > 刚发生在我身上的事），改开独立 worktree checkout main、cherry-pick、push、删除；也**不去
 > 别人分支上 revert**（重写别人正在用的分支比留一个重复提交危险得多）。教训：共享树上提交前
 > 先 `git branch --show-current`。
+
+### 2026-08-14 — 收口对账（对齐 RFC-294）
+
+RFC-247 主体 2026-08-02 已 Done。本次按 CLAUDE.md §RFC workflow 第 8 条「每个 RFC 都必须考虑向
+RFC-294 目标架构演进」重新审视遗留项，**结论是架构面这块地不该由 RFC-247 收**——它在 RFC-294
+里已经有 owner、有波次、还有一条明写的串行门。以下引用一律取 RFC-294 的**已提交 pin 版
+`be31dd62`**（即 RFC-288 钉的那版），不引工作树里他人的未提交稿；并按 `6e8c4f9f` 立的仓规
+**只引小节号、不引行号**（RFC-294 正在被并行重写，行锚必烂）。
+
+#### 档 1：架构收尾移交 RFC-294 W4（T41，本次已落）
+
+| RFC-294 锚（pin `be31dd62`） | 裁决 |
+| --- | --- |
+| `design.md` **§12 Integration** | 「HTTP 与 MCP 不再通过 MCP 内建第二套 Hono app 复用业务 handler；两者调用同一 application use case」「RouteMeta 可继续生成 docs/admission，但 **registry 下沉为 transport metadata，不让 `apiDocs`/MCP 反向依赖 server**」 |
+| `design.md` **§13.1 Operation catalog** | operation descriptor 是 admission 唯一事实源；**RouteMeta 由 operation + HTTP binding 生成或降为 binding type，不能再手写第二份权限事实**；API docs 从同一 descriptor 派生；MCP 不重挂 Hono app；catalog 不导出 generic invoker |
+| `design.md` **§18 owner 账本** | 「HTTP/MCP route 复用、API docs registry」→ owner = **inbound adapters + application operation catalog**，波次 **W4** |
+| `plan.md` **W4-A** / **W4-D** | 「API docs 从 transport descriptor 派生，不让 service import route registry」「MCP 不再 mount 第二套 Hono route table」 |
+| `plan.md` **§15 并发与冲突矩阵** | `server/mcp/route catalog` → **必须串行 W4 → W9 root 收口** |
+
+因此 `scripts/depcheck.ts` 两条账目的 `removeWhen` 已改写、owner 转出：
+
+- `:157` `mcp/dispatch → server`（三环 dispatch → server → mcp/server → dispatch）→ RFC-294 W4-D + W4-A；
+- `:203` `services/apiDocs.ts → routes/registry.ts`（唯一一条 services → routes 分层违规）→ RFC-294 W4-A。
+
+原文写的「RFC-247 收尾时把路由注册表下沉成不依赖 `server.ts` 的独立模块」**已作废**：终局不是就地
+挪位，而是 operation descriptor 成为唯一 admission 事实源后 docs 与 RouteMeta 一起从它派生。247 侧
+自行下沉一个中间态注册表既撞 §15 的串行门，又有造出 §13.1 明禁的第二份权限事实源的风险。
+
+**副作用**：RFC-288 的 DEV-5「MCP 三环账目的 `removeWhen` 指向 RFC-247 收尾，实现前须与其 owner
+协调排它窗口」前提随之消失——owner 已不是 247。但 RFC-288 的 AC-1（用户第三轮拍板扩为「真·全
+backend 零值级 SCC」，含 MCP 三环）**是否仍吞这三环，需用户重新定夺**：按 pin 版 §15 该面串行到
+W4，而 RFC-288 定位在 W2（`plan.md` §3.2 执行队列 N3–N4），pin 版 §14 里程碑也只要求 W4 后
+SCC=5、W5 后=0。
+
+#### 档 2：仍属 RFC-247 的欠工（AC-36，唯一「设计写了没做」）
+
+`--ignore-scripts` + npm env 面收敛。RFC-294 §18 owner 表**没有**这条 ⇒ 不受 W4 串行门约束，可
+独立落；owner 登记为 `resource-catalog/plugin`（§2 目标物理结构），随 W4-C/E 的资源域切片迁位。
+它是能力收缩型（依赖 postinstall 的插件将装不上），落地前按 CLAUDE.md §RFC workflow 第 7 条呈用户
+确认——design §5.4 当年按 D19「还没人用」批过，但那是 2026-08-01 的前提。
+
+#### 档 3：backlog 里其余 defer 项的收口方向（不改行为，只定方向）
+
+- **可就地做、方向与 294 一致**：origin 推导改配置注入（§15.1 config projection 按 consumer
+  allowlist 注入 `publicBaseUrl`）、`/.well-known/mcp` 反映开关状态、令牌审计查询下推 SQL
+  （owner=identity-access，W4/W9）、`shared/schemas/mcp.ts:88-91` 过期注释订正。
+- **明确「现在别做」**（做了就是逆向加固，已同步写进 `docs/audit-backlog.md` 对应条目）：
+  1. 不要扩 `resource_read/write` 的 `method` 枚举——`McpBinding = {operationId, toolName}`
+     （`design.md` §13.1）是 operation↔tool 一对一，W4-A 要求 HTTP RouteMeta 与 MCP tool
+     引用同一 operation id/handler；扩枚举是往 generic invoker 方向加固；
+  2. 不要手写第二套 wiki schema 派生——W4-A 的 descriptor 自带
+     `inputCodec/outputCodec/publicErrorCodes`；
+  3. 不要现在放宽 `redactSensitiveString` 正则——§15.3 要求 W0 建 secret canary 与
+     serializer/logger capture 负测，正解是把 `OPENAI_API_KEY` 这类前缀形态登记成 canary 负测，
+     而不是松词边界连带影响 RFC-030 探针与 daemon 日志。

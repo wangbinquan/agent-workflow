@@ -158,7 +158,7 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     to: `${B}/server.ts`,
     why: 'dispatch → server → mcp/server → dispatch。MCP 工具分发需要 server 的路由注册表来复用 HTTP 处理器。',
     removeWhen:
-      'RFC-247 收尾时把路由注册表下沉成不依赖 server.ts 的独立模块（与 apiDocs → routes/registry 同一根因，见下）。',
+      'RFC-294（pin `be31dd62`；按仓规引用其小节号不引行号）plan.md **W4-D**「MCP 不再 mount 第二套 Hono route table」+ **W4-A** operation catalog。**owner 已从「RFC-247 收尾」转出**（2026-08-14）：同 pin 的 design.md **§12 Integration** 裁决「HTTP 与 MCP 调用同一 application use case、registry 下沉为 transport metadata」，**§18 owner 账本**把「HTTP/MCP route 复用、API docs registry」判归 inbound adapters + application operation catalog、波次 W4，plan.md **§15 并发与冲突矩阵**又把 server/mcp/route catalog 定为「必须串行 W4 → W9」——247 侧自行下沉一个中间态注册表会撞该串行门，且有造出 design.md **§13.1** 明禁的第二份权限事实源的风险。与 apiDocs → routes/registry 同一根因，见下。',
   },
   {
     rule: 'no-circular',
@@ -204,7 +204,7 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     to: `${B}/routes/registry.ts`,
     why: 'apiDocs 从路由注册表派生 API 文档，是唯一一条 services → routes 的边。门禁复明后新暴露（此前 `@/routes/registry` 解析不了，这条边根本不在图里）。',
     removeWhen:
-      '把 routes/registry 的元数据下沉到 shared，或把 apiDocs 移到 routes 层（它本来就是 transport 的自描述）。与 mcp/dispatch → server 同一根因。属独立切片（未编号）。',
+      'RFC-294（pin `be31dd62`；按仓规引用其小节号不引行号）plan.md **W4-A**「API docs 从 transport descriptor 派生，不让 service import route registry」。与 mcp/dispatch → server 同一根因、同一 owner——终局不是「把元数据下沉到 shared / 把 apiDocs 移到 routes 层」这类就地挪位，而是 operation descriptor 成为唯一 admission 事实源后 docs 与 RouteMeta 一起从它派生（design.md **§13.1**；**§18 owner 账本**判波次 W4）。原记「属独立切片（未编号）」与「RFC-247 收尾」均已作废（2026-08-14 转 owner）。',
   },
 
   // ── RFC-284 T2 新规则的存量记账（2026-08-12 审计 N10/A8；棘轮只减不增）──
