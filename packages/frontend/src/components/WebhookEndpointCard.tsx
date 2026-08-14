@@ -571,7 +571,7 @@ export function WebhookEndpointCard({
                 })}
               </p>
             </NoticeBanner>
-            <Field label={t('settings.webhookEndpoints.secretLabel')}>
+            <Field label={t('settings.webhookEndpoints.secretLabel')} group>
               <code className="token-reveal" data-testid="webhook-endpoint-secret-value">
                 {minted.secret}
               </code>

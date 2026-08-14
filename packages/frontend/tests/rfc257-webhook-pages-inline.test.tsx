@@ -1,6 +1,8 @@
 // RFC-257 UI 修订 — /webhooks 单页（route-ux-inventory 的 owner）。
 // 锁：admin 三 tab（端点/触发器/投递）渲染与切换、triggers/deliveries 面板行、
 // **非 admin 拒绝态**（页面级守卫——侧栏项过滤之外的直输 URL 兜底）。
+// 2026-08-14 视觉层级回归锁：事件、目标形态与执行空间必须留在各自的路径卡片里，
+// 不能脱离「响应事件 / 启动目标」后平铺成一组无法辨认归属的标签。
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   Outlet,
@@ -163,10 +165,17 @@ describe('RFC-257 · /webhooks page (admin)', () => {
     ]
     await renderWebhooks('?tab=triggers')
     await waitFor(() => expect(screen.getByTestId('webhook-triggers-panel')).toBeTruthy())
-    await waitFor(() => expect(screen.getByTestId('webhook-trigger-tr1')).toBeTruthy())
+    const triggerCard = await screen.findByTestId('webhook-trigger-tr1')
     expect(screen.getByText(/platform\/\*/)).toBeTruthy()
-    expect(screen.getByText(/Pipeline failed/)).toBeTruthy()
-    expect(screen.getByTestId('webhook-trigger-space-tr1').textContent).toBe('Event repository')
+    const eventsGroup = within(triggerCard).getByRole('group', { name: 'Respond to' })
+    const targetGroup = within(triggerCard).getByRole('group', { name: 'Launch target' })
+    expect(within(eventsGroup).getByText('Pipeline failed')).toBeTruthy()
+    expect(within(eventsGroup).queryByText('Workflow')).toBeNull()
+    expect(within(targetGroup).getByText('Workflow')).toBeTruthy()
+    expect(within(targetGroup).getByTestId('webhook-trigger-space-tr1').textContent).toBe(
+      'Event repository',
+    )
+    expect(within(targetGroup).queryByText('Pipeline failed')).toBeNull()
   })
 
   test('corrupt trigger keeps only the corrupt badge and does not guess an execution space', async () => {

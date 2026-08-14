@@ -29,20 +29,29 @@ import { startAutoRepairLoop } from '@/services/autoRepair'
 import { startHeartbeatKillLoop } from '@/services/autoKill'
 import { startOrphanReconcileLoop } from '@/services/orphanReconcile'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
-import { resumeTask } from '@/services/task'
+import { isTaskActive, resumeTask } from '@/services/task'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { startEventsArchiver } from '@/services/eventsArchive'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
-import { startWorktreeGc } from '@/services/gc'
+import {
+  finishClaimedWebhookWorkspacePrune,
+  runClaimedWebhookWorkspacePrunes,
+  startWorktreeGc,
+} from '@/services/gc'
 import {
   startBackupScheduler,
   startWalCheckpointLoop,
   maybePreMigrationBackup,
 } from '@/services/backupScheduler'
 import { applyPendingRestoreIfAny } from '@/services/pendingRestore'
-import { registerTerminalTaskHook } from '@/services/lifecycle'
+import {
+  registerTerminalTaskHook,
+  registerTerminalWorkspacePruneEffect,
+  registerTerminalWorkspacePrunePolicy,
+} from '@/services/lifecycle'
+import { shouldRequestWebhookWorkspacePrune } from '@/services/webhook/terminalWorkspaceCleanup'
 import { startLifecycleInvariantsLoop } from '@/services/lifecycleInvariants'
 import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
 import { startStuckTaskDetectorLoop } from '@/services/stuckTaskDetector'
@@ -370,6 +379,20 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
     throw err
   }
+
+  // RFC-300 composition: integration owns the direct-Webhook attribution
+  // predicate; lifecycle owns the atomic terminal status+claim write; GC owns
+  // physical deletion. Read config at each transition so the setting is hot.
+  registerTerminalWorkspacePrunePolicy((row, to) =>
+    shouldRequestWebhookWorkspacePrune(loadConfig(Paths.config).webhookTaskWorkspaceAutoCleanup, {
+      ...row,
+      to,
+    }),
+  )
+  registerTerminalWorkspacePruneEffect((effectDb, taskId) => {
+    if (isTaskActive(taskId)) return
+    void finishClaimedWebhookWorkspacePrune(effectDb, taskId)
+  })
   const dbVersion = existsSync(migrationsFolder)
     ? readdirSync(migrationsFolder).filter((f) => f.endsWith('.sql')).length
     : 0
@@ -456,6 +479,20 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (repairedRuntimeLeases > 0) {
     log.info('released runtime session leases held by terminal orphan runs', {
       leases: repairedRuntimeLeases,
+    })
+  }
+
+  // RFC-300: singleton lock + orphan reap prove the previous daemon no longer
+  // owns these workspaces. Resume every durable claim before HTTP/auto-resume;
+  // this does not discover historical unclaimed terminal tasks.
+  try {
+    const resumed = await runClaimedWebhookWorkspacePrunes(db, { isTaskActive })
+    if (resumed.removed.length > 0 || resumed.failed.length > 0) {
+      log.info('webhook terminal workspace prune recovery', { ...resumed })
+    }
+  } catch (err) {
+    log.warn('webhook terminal workspace prune recovery failed', {
+      error: err instanceof Error ? err.message : String(err),
     })
   }
 
@@ -691,7 +728,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // 8. Background tickers (P-4-04 limits + P-4-09 worktree GC + P-5-01 events archival
   //    + RFC-033 batch-import retention GC).
   const limitsTicker = startLimitsTicker(db)
-  const gcTicker = startWorktreeGc(db, () => loadConfig(Paths.config), undefined, Paths.root)
+  const gcTicker = startWorktreeGc(
+    db,
+    () => loadConfig(Paths.config),
+    undefined,
+    Paths.root,
+    isTaskActive,
+  )
   // RFC-257 (设计门 F-12) — deliveries 保留 GC；RFC-261 (D9')：保留天数走 config
   // （默认 30 天置空 body、90 天删行），getter 每次 sweep 读取 → 热生效。
   const webhookGcTicker = startWebhookDeliveryGc(db, () => loadConfig(Paths.config))

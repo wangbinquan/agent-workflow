@@ -3880,6 +3880,10 @@ export const enUS: Resources = {
     clarifyButton: 'Answer',
     worktreePreserved:
       'Worktree preserved at {{path}}. You can inspect it manually, or run git worktree remove when done.',
+    workspacePruning:
+      'The task workspace is being cleaned up. Task history, logs, and persisted results remain available.',
+    workspacePruned:
+      'The task workspace was cleaned up. Task history, logs, and persisted results remain, but files, diff, node retry, and workflow sync are no longer available.',
     recovery: {
       title: 'Recovery',
       quarantineTitle: 'Auto-recovery paused',
@@ -5485,6 +5489,9 @@ export const enUS: Resources = {
     largeOutputThreshold: 'Large output threshold (bytes)',
     zeroUnlimited: '0 = unlimited.',
     autoGcLabel: 'Auto-GC merged worktrees',
+    webhookTaskWorkspaceAutoCleanup: 'Clean up Webhook workspaces after completion or cancel',
+    webhookTaskWorkspaceAutoCleanupHint:
+      'Off by default. When enabled, only direct Webhook root tasks that newly enter done/canceled are affected: both event-repository linked worktrees and scratch Git repositories are deleted. Failed/interrupted tasks, inherited children, and historical terminal tasks stay preserved. Task history, logs, and persisted results remain, but live files/diff, node retry, and workflow sync are unavailable after deletion.',
     gitRecurseSubmodules: 'Submodule recursion',
     gitRecurseSubmodulesHint:
       'auto: recurse only when .gitmodules exists (default); always: always recurse; never: fully off.',

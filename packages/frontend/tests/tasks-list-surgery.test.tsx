@@ -1,9 +1,14 @@
 // RFC-244 — dense task operations page behavior.
+//
+// 2026-08-14 regression: after visiting /tasks, a navigation to the Memory
+// deep link (/memory?tab=all) must commit instead of being mistaken for raw
+// task-search state and canonicalized back to /tasks.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   Outlet,
   RouterProvider,
+  Link,
   createMemoryHistory,
   createRootRoute,
   createRoute,
@@ -116,7 +121,16 @@ function installFetch(resolvePage: (url: URL) => TaskOperationsRootPage) {
 
 async function renderPage(initialEntry = '/tasks') {
   const list = await import('../src/routes/tasks')
-  const root = createRootRoute({ component: () => <Outlet /> })
+  const root = createRootRoute({
+    component: () => (
+      <>
+        <Link to="/memory" search={{ tab: 'all' }} data-testid="memory-nav-probe">
+          Memory
+        </Link>
+        <Outlet />
+      </>
+    ),
+  })
   const tasks = createRoute({
     getParentRoute: () => root,
     path: '/tasks',
@@ -134,6 +148,7 @@ async function renderPage(initialEntry = '/tasks') {
       stub('/workflows/$id'),
       stub('/workgroups/$id'),
       stub('/agents/$id'),
+      stub('/memory'),
     ]),
     history: createMemoryHistory({ initialEntries: [initialEntry] }),
   })
@@ -193,6 +208,16 @@ describe('/tasks — dense operations list (RFC-244)', () => {
 
     await waitFor(() => expect(router.state.location.href).toBe('/tasks?q=needle&statuses=running'))
     expect(router.state.location.search).toEqual({ q: 'needle', statuses: 'running' })
+  })
+
+  test('a searched destination can commit after the task page has settled', async () => {
+    installFetch(() => rootPage([item('navigation')]))
+    const { router } = await renderPage()
+    await screen.findByTestId('task-row-t_navigation')
+
+    fireEvent.click(screen.getByTestId('memory-nav-probe'))
+
+    await waitFor(() => expect(router.state.location.href).toBe('/memory?tab=all'))
   })
 
   test('business views use server facets and change the URL/request', async () => {

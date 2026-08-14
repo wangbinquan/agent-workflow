@@ -7,9 +7,10 @@
 //                    spaces ignore onlyMerged, age is their only threshold)
 //
 // RFC-165 (F8/R3-1): deletion is a TWO-PHASE tombstone, not check→delete —
-//   1. CLAIM: conditional UPDATE stamps `workspace_pruning_at` (wins only if
-//      the task is still terminal and unclaimed; a stale claim past
-//      PRUNING_LEASE_MS may be re-claimed so a crashed delete retries).
+//   1. CLAIM: conditional UPDATE stamps `workspace_pruning_at` with NULL
+//      `workspace_prune_cause` (wins only if the task is still terminal and
+//      unclaimed; a stale generic claim past PRUNING_LEASE_MS may be
+//      re-claimed so a crashed delete retries).
 //   2. DELETE the directory (multi-repo: per task_repos row, then the parent
 //      container; scratch: plain recursive rm — the workspace IS the repo, no
 //      `git worktree remove` / snapshot-ref dance applies).
@@ -68,10 +69,25 @@ export interface GcRunResult {
   skipped: number
 }
 
+export type ClaimedWorkspacePruneOutcome =
+  | { kind: 'removed' }
+  | { kind: 'finalized-missing' }
+  | { kind: 'already-pruned' }
+  | { kind: 'not-claimed' }
+  | { kind: 'busy' }
+  | { kind: 'failed'; error: string }
+
+/** One daemon can wake the same durable claim from the lifecycle effect,
+ * driver finally, and GC ticker. The DB stamp is the crash-safe inter-process
+ * claim; this set closes the much shorter same-process duplicate-delete race. */
+const workspacePrunesInFlight = new Set<string>()
+
 /**
  * Phase-1 claim (RFC-165 F8): stamp `workspace_pruning_at` iff the task is
- * still terminal, not yet pruned, and not claimed (or the claim is stale past
- * the lease). Returns whether THIS caller owns the delete.
+ * still terminal, not yet pruned, and has no source-specific claim provenance.
+ * A NULL-cause claim may be re-taken past the lease. RFC-300's
+ * `webhook-terminal` claims are resumed only by its dedicated recovery path.
+ * Returns whether THIS caller owns the delete.
  */
 async function claimWorkspacePrune(db: DbClient, taskId: string, now: number): Promise<boolean> {
   const updated = await db
@@ -81,6 +97,7 @@ async function claimWorkspacePrune(db: DbClient, taskId: string, now: number): P
       and(
         eq(tasks.id, taskId),
         inArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
+        isNull(tasks.workspacePruneCause),
         isNull(tasks.workspacePrunedAt),
         or(isNull(tasks.workspacePruningAt), lt(tasks.workspacePruningAt, now - PRUNING_LEASE_MS)),
       ),
@@ -89,10 +106,229 @@ async function claimWorkspacePrune(db: DbClient, taskId: string, now: number): P
   return updated.length === 1
 }
 
+/**
+ * RFC-300/RFC-165 shared phase-2/3 primitive. The caller must already own a
+ * durable `workspace_pruning_at` claim and prove that no task driver is using
+ * the workspace. It re-reads the row, dispatches by the persisted space shape,
+ * and stamps `workspace_pruned_at` only after physical deletion succeeds.
+ *
+ * A missing directory is a successful idempotent replay (daemon crashed after
+ * delete but before finalize). Failures keep the claim so boot/ticker recovery
+ * can resume after the lease; task history is never deleted.
+ */
+export async function finishClaimedWorkspacePrune(
+  db: DbClient,
+  taskId: string,
+  now: number = Date.now(),
+): Promise<ClaimedWorkspacePruneOutcome> {
+  if (workspacePrunesInFlight.has(taskId)) return { kind: 'busy' }
+  workspacePrunesInFlight.add(taskId)
+  try {
+    const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+    if (t === undefined || t.workspacePrunedAt !== null) return { kind: 'already-pruned' }
+    if (t.workspacePruningAt === null || !isTerminalTaskStatus(t.status as TaskStatus)) {
+      return { kind: 'not-claimed' }
+    }
+    const claimStamp = t.workspacePruningAt
+    const workspaceExisted = t.worktreePath !== '' && existsSync(t.worktreePath)
+
+    if (t.spaceKind === 'scratch') {
+      if (workspaceExisted) {
+        // Scratch owns its entire fresh Git repository; it has no linked
+        // worktree registration or source-repository snapshot refs.
+        rmSync(t.worktreePath, { recursive: true, force: true })
+        invalidateCallGraphIndex(t.worktreePath)
+      }
+    } else if (t.repoCount > 1) {
+      // Multi-repo workspaces remove each registered linked worktree before
+      // the parent container. Snapshot refs are always replayed, even when a
+      // crash already removed the directory but happened before ref cleanup.
+      const rows = await db.select().from(taskRepos).where(eq(taskRepos.taskId, t.id))
+      for (const r of rows) {
+        if (r.worktreePath !== '' && existsSync(r.worktreePath)) {
+          await removeWorktree({
+            repoPath: r.repoPath,
+            worktreePath: r.worktreePath,
+            force: true,
+          })
+          invalidateCallGraphIndex(r.worktreePath)
+        }
+        await deleteSnapshotRefs(r.repoPath, t.id)
+      }
+      if (workspaceExisted) {
+        rmSync(t.worktreePath, { recursive: true, force: true })
+      }
+    } else {
+      if (workspaceExisted) {
+        await removeWorktree({ repoPath: t.repoPath, worktreePath: t.worktreePath, force: true })
+        invalidateCallGraphIndex(t.worktreePath)
+      }
+      // This must run when the worktree path is already absent too: that is
+      // the crash window between `git worktree remove` and ref deletion.
+      await deleteSnapshotRefs(t.repoPath, t.id)
+    }
+
+    const finalized = await db
+      .update(tasks)
+      .set({ workspacePrunedAt: now })
+      .where(
+        and(
+          eq(tasks.id, taskId),
+          eq(tasks.workspacePruningAt, claimStamp),
+          isNull(tasks.workspacePrunedAt),
+        ),
+      )
+      .returning({ id: tasks.id })
+    if (finalized.length !== 1) return { kind: 'busy' }
+    return workspaceExisted ? { kind: 'removed' } : { kind: 'finalized-missing' }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    log.warn('workspace prune failed (claim kept; lease expiry retries)', {
+      taskId,
+      error,
+    })
+    return { kind: 'failed', error }
+  } finally {
+    workspacePrunesInFlight.delete(taskId)
+  }
+}
+
+/** Low-latency RFC-300 finalizer used by the terminal post-commit effect and
+ * task-driver release. It refuses every non-Webhook/non-owning/non-target row
+ * before entering the generic RFC-165 delete primitive. */
+export async function finishClaimedWebhookWorkspacePrune(
+  db: DbClient,
+  taskId: string,
+  now: number = Date.now(),
+): Promise<ClaimedWorkspacePruneOutcome> {
+  try {
+    const eligible = (
+      await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.id, taskId),
+            inArray(tasks.status, ['done', 'canceled']),
+            isNotNull(tasks.webhookTriggerId),
+            inArray(tasks.spaceKind, ['remote', 'scratch']),
+            isNotNull(tasks.workspacePruningAt),
+            eq(tasks.workspacePruneCause, 'webhook-terminal'),
+            isNull(tasks.workspacePrunedAt),
+          ),
+        )
+        .limit(1)
+    )[0]
+    if (eligible === undefined) return { kind: 'not-claimed' }
+    return await finishClaimedWorkspacePrune(db, taskId, now)
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    log.warn('webhook workspace prune eligibility check failed (claim kept)', {
+      taskId,
+      error,
+    })
+    return { kind: 'failed', error }
+  }
+}
+
+export interface ClaimedWebhookWorkspacePruneResult {
+  scanned: number
+  removed: string[]
+  skipped: number
+  failed: string[]
+}
+
+/** Resume only claims that were created by RFC-300's exact lifecycle policy.
+ * This never discovers unclaimed historical terminal rows, so turning the
+ * setting on has no retroactive sweep. The explicit `webhook-terminal` cause
+ * prevents a crashed RFC-165/iso GC stamp from being mistaken for user consent.
+ * `staleOnly` is used by the periodic ticker; boot owns the singleton daemon
+ * lock and may take over every claim. */
+export async function runClaimedWebhookWorkspacePrunes(
+  db: DbClient,
+  options: {
+    isTaskActive: (taskId: string) => boolean
+    now?: number
+    staleOnly?: boolean
+  },
+): Promise<ClaimedWebhookWorkspacePruneResult> {
+  const now = options.now ?? Date.now()
+  const rows = await db
+    .select({
+      id: tasks.id,
+      workspacePruningAt: tasks.workspacePruningAt,
+    })
+    .from(tasks)
+    .where(
+      and(
+        inArray(tasks.status, ['done', 'canceled']),
+        isNotNull(tasks.webhookTriggerId),
+        inArray(tasks.spaceKind, ['remote', 'scratch']),
+        isNotNull(tasks.workspacePruningAt),
+        eq(tasks.workspacePruneCause, 'webhook-terminal'),
+        isNull(tasks.workspacePrunedAt),
+      ),
+    )
+  const result: ClaimedWebhookWorkspacePruneResult = {
+    scanned: rows.length,
+    removed: [],
+    skipped: 0,
+    failed: [],
+  }
+  for (const row of rows) {
+    if (workspacePrunesInFlight.has(row.id)) {
+      result.skipped += 1
+      continue
+    }
+    if (options.isTaskActive(row.id)) {
+      result.skipped += 1
+      continue
+    }
+    const claimStamp = row.workspacePruningAt
+    if (claimStamp === null) {
+      result.skipped += 1
+      continue
+    }
+    if (options.staleOnly === true && claimStamp >= now - PRUNING_LEASE_MS) {
+      result.skipped += 1
+      continue
+    }
+
+    // Take ownership of the persisted claim. Exact old-stamp CAS prevents a
+    // concurrent boot/ticker/finalizer from believing it owns the same delete.
+    const claimed = await db
+      .update(tasks)
+      .set({ workspacePruningAt: now })
+      .where(
+        and(
+          eq(tasks.id, row.id),
+          eq(tasks.workspacePruningAt, claimStamp),
+          eq(tasks.workspacePruneCause, 'webhook-terminal'),
+          isNull(tasks.workspacePrunedAt),
+        ),
+      )
+      .returning({ id: tasks.id })
+    if (claimed.length !== 1) {
+      result.skipped += 1
+      continue
+    }
+    const outcome = await finishClaimedWorkspacePrune(db, row.id, now)
+    if (outcome.kind === 'removed' || outcome.kind === 'finalized-missing') {
+      result.removed.push(row.id)
+    } else if (outcome.kind === 'failed') {
+      result.failed.push(row.id)
+    } else {
+      result.skipped += 1
+    }
+  }
+  return result
+}
+
 export async function runWorktreeGc(
   db: DbClient,
   config: Pick<Config, 'worktreeAutoGc'>,
   now: number = Date.now(),
+  isTaskActive: (taskId: string) => boolean = () => false,
 ): Promise<GcRunResult> {
   const gc = config.worktreeAutoGc
   if (!gc.enabled) return { scanned: 0, removed: [], skipped: 0 }
@@ -115,12 +351,22 @@ export async function runWorktreeGc(
         // the parent's call-node iso) — nothing for THIS gc to prune.
         ne(tasks.spaceKind, 'internal'),
         ne(tasks.spaceKind, 'inherited'),
+        // A non-NULL cause belongs to a source-specific cleanup protocol.
+        // Generic GC must not even enter its legacy "directory already
+        // missing" healing branch for those rows: a Webhook-terminal replay
+        // may still need to delete snapshot refs before it may finalize the
+        // tombstone.
+        isNull(tasks.workspacePruneCause),
         isNull(tasks.workspacePrunedAt),
       ),
     )
 
   const result: GcRunResult = { scanned: candidates.length, removed: [], skipped: 0 }
   for (const t of candidates) {
+    if (isTaskActive(t.id)) {
+      result.skipped += 1
+      continue
+    }
     if (t.worktreePath === '' || !existsSync(t.worktreePath)) {
       // Legacy pre-tombstone GC (or manual rm) already took the dir — heal the
       // row forward so revive paths 410 instead of resurrecting a ghost
@@ -175,50 +421,10 @@ export async function runWorktreeGc(
       result.skipped += 1
       continue
     }
-    // Phase 2 — delete (by space kind). Failure keeps the claim; the lease
-    // expiry lets a later tick re-claim and finish (sustains the pre-165
-    // "failed remove retries next tick" behavior without a permanent 410).
-    try {
-      if (t.spaceKind === 'scratch') {
-        // The workspace IS the repo — no parent worktree registration, no
-        // snapshot refs outside it. Plain recursive rm is complete.
-        rmSync(t.worktreePath, { recursive: true, force: true })
-        invalidateCallGraphIndex(t.worktreePath)
-      } else if (t.repoCount > 1) {
-        // RFC-165 (R3-1): per-repo teardown, then the parent container. Each
-        // step tolerates an already-missing path so a crashed prior attempt
-        // resumes cleanly after re-claim.
-        const rows = await db.select().from(taskRepos).where(eq(taskRepos.taskId, t.id))
-        for (const r of rows) {
-          if (r.worktreePath !== '' && existsSync(r.worktreePath)) {
-            await removeWorktree({
-              repoPath: r.repoPath,
-              worktreePath: r.worktreePath,
-              force: true,
-            })
-            invalidateCallGraphIndex(r.worktreePath)
-          }
-          await deleteSnapshotRefs(r.repoPath, t.id)
-        }
-        rmSync(t.worktreePath, { recursive: true, force: true })
-      } else {
-        await removeWorktree({ repoPath: t.repoPath, worktreePath: t.worktreePath, force: true })
-        invalidateCallGraphIndex(t.worktreePath) // RFC-085 — free the cached class→file index
-        // RFC-098 WP-9: the snapshot refs this task pinned in the source-repo
-        // odb (refs/agent-workflow/snapshots/{taskId}/*) share the worktree's
-        // lifecycle — retryNode/resumeTask can revive any terminal task while
-        // its worktree exists, so this is the ONLY safe deletion point.
-        await deleteSnapshotRefs(t.repoPath, t.id)
-      }
-      // Phase 3 — finalize the tombstone. Revive paths now 410 deterministically.
-      await db.update(tasks).set({ workspacePrunedAt: now }).where(eq(tasks.id, t.id))
+    const outcome = await finishClaimedWorkspacePrune(db, t.id, now)
+    if (outcome.kind === 'removed' || outcome.kind === 'finalized-missing') {
       result.removed.push(t.id)
-    } catch (err) {
-      log.warn('workspace prune failed (claim kept; lease expiry retries)', {
-        taskId: t.id,
-        spaceKind: t.spaceKind,
-        error: err instanceof Error ? err.message : String(err),
-      })
+    } else {
       result.skipped += 1
     }
   }
@@ -399,6 +605,7 @@ async function hasLiveOrRevivableChild(db: DbClient, taskId: string): Promise<bo
 export async function runIsoWorktreeGc(
   db: DbClient,
   appHome: string,
+  isTaskActive: (taskId: string) => boolean = () => false,
 ): Promise<{ scanned: number; removed: string[] }> {
   const isoRoot = join(appHome, 'iso')
   if (!existsSync(isoRoot)) return { scanned: 0, removed: [] }
@@ -420,6 +627,7 @@ export async function runIsoWorktreeGc(
   const byId = new Map(rows.map((r) => [r.id, r]))
   const removed: string[] = []
   for (const taskId of taskDirs) {
+    if (isTaskActive(taskId)) continue
     const t = byId.get(taskId)
     // Skip a task that still has a row and is NOT terminal — its iso may be in flight.
     if (t !== undefined && !isTerminalTaskStatus(t.status as TaskStatus)) {
@@ -447,6 +655,7 @@ export async function runIsoWorktreeGc(
             eq(tasks.id, taskId),
             inArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
             isNull(tasks.workspacePruningAt),
+            isNull(tasks.workspacePruneCause),
             isNull(tasks.workspacePrunedAt),
           ),
         )
@@ -484,6 +693,7 @@ export async function runIsoWorktreeGc(
             and(
               eq(tasks.id, taskId),
               eq(tasks.workspacePruningAt, claimStamp),
+              isNull(tasks.workspacePruneCause),
               isNull(tasks.workspacePrunedAt),
             ),
           )
@@ -504,13 +714,15 @@ export function startWorktreeGc(
   loadConfig: () => Pick<Config, 'worktreeAutoGc'>,
   intervalMs: number = DAEMON_CADENCE.worktreeGc,
   appHome?: string,
+  isTaskActive: (taskId: string) => boolean = () => false,
 ): { stop: () => void } {
   let running = false
   const handle = setInterval(() => {
     if (running) return
     running = true
-    runWorktreeGc(db, loadConfig())
-      .then(() => (appHome !== undefined ? runIsoWorktreeGc(db, appHome) : undefined))
+    runClaimedWebhookWorkspacePrunes(db, { isTaskActive, staleOnly: true })
+      .then(() => runWorktreeGc(db, loadConfig(), Date.now(), isTaskActive))
+      .then(() => (appHome !== undefined ? runIsoWorktreeGc(db, appHome, isTaskActive) : undefined))
       .then(() => (appHome !== undefined ? runScratchOrphanGc(db, appHome) : undefined))
       // RFC-222 — sweep orphan task worktrees (deleted-task backstop, §6.4).
       .then(() => (appHome !== undefined ? runWorktreeOrphanGc(db, appHome) : undefined))

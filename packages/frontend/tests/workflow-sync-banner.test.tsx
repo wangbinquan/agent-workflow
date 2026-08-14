@@ -68,13 +68,13 @@ function installFetch(p: WorkflowSyncPreview): FetchCapture {
   return cap
 }
 
-function renderBanner() {
+function renderBanner(workspaceState?: 'available' | 'pruning' | 'pruned') {
   setBaseUrl('')
   setToken('tok')
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const view = render(
     <QueryClientProvider client={qc}>
-      <WorkflowSyncBanner taskId="t1" />
+      <WorkflowSyncBanner taskId="t1" workspaceState={workspaceState} />
     </QueryClientProvider>,
   )
   return { ...view, queryClient: qc }
@@ -131,6 +131,19 @@ describe('RFC-109 WorkflowSyncBanner', () => {
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled())
     expect(screen.queryByTestId('workflow-sync-banner')).toBeNull()
   })
+
+  test.each(['pruning', 'pruned'] as const)(
+    'workspace %s disables preview polling and keeps sync unavailable',
+    async (workspaceState) => {
+      installFetch(preview())
+      renderBanner(workspaceState)
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(globalThis.fetch).not.toHaveBeenCalled()
+      expect(screen.queryByTestId('workflow-sync-banner')).toBeNull()
+    },
+  )
 
   test('opening the dialog shows added nodes; confirm posts expectedVersion=latestVersion', async () => {
     const cap = installFetch(preview())

@@ -45,6 +45,9 @@ interface Props {
   taskId: string
   /** Used to gate the Retry button — the API rejects retry on a running task. */
   taskStatus?: Task['status']
+  /** RFC-300: a pruning/pruned task no longer has the workspace required by
+   * node retry. Optional keeps non-task/older callers compatible. */
+  workspaceState?: Task['workspaceState']
   nodeRunId: string | null
   /**
    * RFC-011: the workflow node id this drawer is currently anchored at.
@@ -83,6 +86,7 @@ const NODE_DETAIL_DRAWER_HEADING_ID = `${NODE_DETAIL_DRAWER_TAB_PREFIX}-heading`
 export function NodeDetailDrawer({
   taskId,
   taskStatus,
+  workspaceState,
   nodeRunId,
   nodeId,
   workflowNodeKind,
@@ -127,7 +131,8 @@ export function NodeDetailDrawer({
 
   if (nodeRunId === null) return null
   if (run === undefined) return null
-  const retryable = canRetryNodeRun(run.status, taskStatus)
+  const retryable =
+    (workspaceState ?? 'available') === 'available' && canRetryNodeRun(run.status, taskStatus)
 
   // P-3-10: sibling fan-out children, if this run is a multi-process parent.
   const children = runs.filter((r) => r.parentNodeRunId === nodeRunId)

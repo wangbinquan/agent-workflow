@@ -1048,6 +1048,13 @@ export const tasks = sqliteTable(
      * `pruning IS NULL AND pruned IS NULL` — pruned ⇒ 410, pruning ⇒ 409.
      */
     workspacePruningAt: integer('workspace_pruning_at'),
+    /**
+     * RFC-300: durable provenance for the pruning claim. NULL belongs to the
+     * pre-existing age/merge GC and transient iso-container GC protocols;
+     * `webhook-terminal` is minted only by the atomic done/canceled lifecycle
+     * transition and is the sole claim recovered by RFC-300 boot/ticker scans.
+     */
+    workspacePruneCause: text('workspace_prune_cause', { enum: ['webhook-terminal'] }),
     workspacePrunedAt: integer('workspace_pruned_at'),
     /**
      * RFC-243 (migration 0126): parent linkage for node-invoked child

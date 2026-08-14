@@ -4,7 +4,8 @@
 // status which need a real daemon, spawn one subprocess per scenario.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { Database } from 'bun:sqlite'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { configGetCommand, configSetCommand } from '../src/cli/config-cli'
@@ -74,6 +75,13 @@ describe('CLI subcommands (P-1-05)', () => {
     const wgc = JSON.parse(wgcRaw) as Record<string, unknown>
     expect(wgc.enabled).toBe(true)
     expect(wgc.olderThanDays).toBe(7)
+  })
+
+  test('config set/get round-trips RFC-300 Webhook workspace cleanup switch', () => {
+    configSetCommand(['webhookTaskWorkspaceAutoCleanup', 'true'])
+    expect(configGetCommand(['webhookTaskWorkspaceAutoCleanup']).output.trim()).toBe('true')
+    configSetCommand(['webhookTaskWorkspaceAutoCleanup', 'false'])
+    expect(configGetCommand(['webhookTaskWorkspaceAutoCleanup']).output.trim()).toBe('false')
   })
 
   // --- migrate ---
@@ -181,6 +189,65 @@ describe('CLI subcommands (P-1-05)', () => {
         child.kill('SIGTERM')
       } catch {
         /* ignore */
+      }
+      await child.exited
+    }
+  })
+
+  test('RFC-300 boot resumes an already-authorized scratch prune before serving', async () => {
+    migrateCommand()
+    const scratch = join(tmp, 'claimed-scratch')
+    mkdirSync(scratch)
+    writeFileSync(join(scratch, 'ephemeral.txt'), 'delete me')
+    const seeded = new Database(join(tmp, 'db.sqlite'))
+    seeded
+      .query(
+        `INSERT INTO tasks (
+           id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
+           base_branch, branch, status, inputs, started_at, finished_at,
+           webhook_trigger_id, space_kind, workspace_pruning_at,
+           workspace_prune_cause
+         ) VALUES (
+           'rfc300-boot-task', 'rfc300 boot', 'deleted-soft-workflow', '{}',
+           ?, ?, 'main', 'agent-workflow/rfc300-boot', 'done', '{}', 1, 2,
+           'deleted-trigger', 'scratch', 123, 'webhook-terminal'
+         )`,
+      )
+      .run(scratch, scratch)
+    seeded.close()
+
+    const child = Bun.spawn({
+      cmd: ['bun', 'run', mainPath, 'start', '--port', '0'],
+      env: { ...(process.env as Record<string, string>), AGENT_WORKFLOW_HOME: tmp },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    try {
+      await waitForReady(child.stdout, 10_000)
+      expect(existsSync(scratch)).toBe(false)
+      const verified = new Database(join(tmp, 'db.sqlite'), { readonly: true })
+      expect(
+        verified
+          .query(
+            `SELECT status, workspace_pruning_at, workspace_prune_cause,
+                    workspace_pruned_at
+             FROM tasks WHERE id='rfc300-boot-task'`,
+          )
+          .get(),
+      ).toEqual({
+        status: 'done',
+        workspace_pruning_at: expect.any(Number),
+        workspace_prune_cause: 'webhook-terminal',
+        workspace_pruned_at: expect.any(Number),
+      })
+      verified.close()
+    } finally {
+      if (process.platform === 'win32') {
+        const endpoint = readControlFile(join(tmp, '.daemon.control'))
+        if (endpoint !== null) await requestShutdown(endpoint)
+        else child.kill('SIGTERM')
+      } else {
+        child.kill('SIGTERM')
       }
       await child.exited
     }

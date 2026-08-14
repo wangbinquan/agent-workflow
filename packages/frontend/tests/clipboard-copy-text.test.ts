@@ -52,6 +52,42 @@ describe('copyText', () => {
     expect(exec).toHaveBeenCalledWith('copy')
   })
 
+  // Regression: Webhook/PAT one-time secrets are copied from inside Dialog.
+  // On plain-http LAN deployments the execCommand fallback must stay inside
+  // that dialog, otherwise its focus trap steals focus before the copy runs.
+  test('keeps the insecure-context fallback inside the active dialog focus trap', async () => {
+    setClipboard(undefined)
+    const panel = document.createElement('div')
+    panel.setAttribute('role', 'dialog')
+    panel.setAttribute('aria-modal', 'true')
+    const copyButton = document.createElement('button')
+    panel.appendChild(copyButton)
+    document.body.appendChild(panel)
+    copyButton.focus()
+
+    const keepFocusInside = (event: FocusEvent) => {
+      if (!panel.contains(event.target as Node)) copyButton.focus()
+    }
+    document.addEventListener('focusin', keepFocusInside)
+    let copiedValue: string | null = null
+    const exec = setExecCommand(() => {
+      const active = document.activeElement
+      if (!(active instanceof HTMLTextAreaElement) || !panel.contains(active)) return false
+      copiedValue = active.value.slice(active.selectionStart, active.selectionEnd)
+      return true
+    })
+
+    try {
+      expect(await copyText('webhook-one-time-secret')).toBe(true)
+      expect(exec).toHaveBeenCalledWith('copy')
+      expect(copiedValue).toBe('webhook-one-time-secret')
+      expect(document.activeElement).toBe(copyButton)
+    } finally {
+      document.removeEventListener('focusin', keepFocusInside)
+      panel.remove()
+    }
+  })
+
   test('returns false when both paths fail', async () => {
     setClipboard(undefined)
     setExecCommand(() => false)
