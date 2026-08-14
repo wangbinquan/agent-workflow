@@ -175,3 +175,55 @@ describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
     expect(src).toContain('hasDriver(taskId)')
   })
 })
+
+// RFC-287 T13（G7 / AC-11）—— 重试 `__repo_prep__` = 重跑准备，复用既有 retryNode。
+//
+// 用户拍板过的语义：「重试就是重试当前状态，当前状态就是在准备仓库，那就重试准备
+// 仓库」。做法上刻意**不造第二套重试**：合成行就是一条普通 node_run，点它的重试
+// 走的还是 retryNode。本测试验的是这条路真的通——而不是「看起来应该通」。
+describe('RFC-287 T13 — 重试准备（AC-11）', () => {
+  test('准备失败后，__repo_prep__ 行可被 retryNode 接受（不被前置门挡掉）', async () => {
+    const db2 = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db2)
+    const task = await startTask(
+      {
+        workflowId: s.workflowId,
+        name: 'retry-prep',
+        repoUrl: 'http://10.255.255.1:9/nope.git',
+        inputs: {},
+      } as never,
+      {
+        db: db2,
+        actorUserId: s.userId,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        deferRepoPreparation: true,
+        cloneTimeoutMs: 3_000,
+      } as never,
+    )
+    const runs = await db2.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+    const prep = runs.find((r) => r.nodeId === REPO_PREP_NODE_ID)
+    expect(prep).toBeDefined()
+
+    // 前置门必须放行：任务已 failed（非 pending/running）、调度器已解绑
+    // （准备失败那条路径 activeTasks.delete 过）。这两条是 retryNode 的硬门，
+    // 任一不满足都会 409——那样「重试准备」就成了一句空话。
+    const { retryNode } = await import('@/services/task')
+    let rejected: string | null = null
+    try {
+      await retryNode(db2, task.id, prep!.id, {
+        cascade: false,
+        deps: {
+          db: db2,
+          actorUserId: s.userId,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+          cloneTimeoutMs: 3_000,
+        } as never,
+      })
+    } catch (err) {
+      rejected = err instanceof Error ? err.message : String(err)
+    }
+    // 不要求重试**成功**（远端仍然不可达，注定再失败一次）——要求的是它
+    // **没有被前置门拒之门外**：拒绝信息里不得出现 still-running 一类。
+    expect(rejected ?? '').not.toMatch(/still-running|not found/i)
+  }, 90_000)
+})
