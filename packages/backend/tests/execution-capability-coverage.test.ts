@@ -31,7 +31,10 @@ const REQUIRED_ORCHESTRATION_SPINES = [
   'webhook-to-agent-prompt',
   'webhook-to-code-host-action',
   'webhook-launch-workflow-agent-workgroup',
+  'webhook-runtime-failure-lineage',
+  'webhook-mr-terminal-runtime-recovery',
   'intent-create-review-commit-provenance',
+  'human-gate-daemon-replacement',
   'child-workflow-execution',
   'child-workgroup-execution',
 ] as const

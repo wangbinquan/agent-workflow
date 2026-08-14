@@ -36,8 +36,19 @@ interface ScenarioStep {
   waitForFile?: string
   /** Delay before emitting/terminating. */
   delayMs?: number
+  /**
+   * POSIX-only cancellation fixture: keep the process alive for this many
+   * milliseconds after SIGTERM before exiting.  This gives crash/recovery
+   * scenarios a deterministic window in which the daemon has durably fenced
+   * the task but is still waiting for the runtime owner to release.
+   */
+  terminationDelayMs?: number
+  /** Optional state-dir barrier that releases the delayed SIGTERM immediately. */
+  terminationReleaseFile?: string
   /** Text sent to stderr before the response. */
   stderr?: string
+  /** Exit 0 after trace/delay/stderr without emitting any native stdout event. */
+  silentExit?: boolean
   /** Session id exposed by the runtime event stream. */
   sessionId?: string
   /** Non-zero simulates a runtime process crash. */
@@ -404,6 +415,35 @@ export async function run(argv: readonly string[]): Promise<void> {
   const step = steps[Math.min(callIndex, steps.length - 1)]!
   const ctx = { protocol: invocation.protocol, agent: invocation.agent, task, node, callIndex }
 
+  // Install the cancellation fixture before prompt checks or trace I/O.  A
+  // node deadline is measured from process spawn, so registering after those
+  // operations leaves a small cold-start window in which SIGTERM takes the
+  // default immediate-exit path instead of the deterministic delayed path.
+  if ((step.terminationDelayMs ?? 0) > 0 && process.platform !== 'win32') {
+    const terminationDelayMs = step.terminationDelayMs!
+    const terminationReleaseFile = step.terminationReleaseFile
+    let terminationRequested = false
+    process.once('SIGTERM', () => {
+      if (terminationRequested) return
+      terminationRequested = true
+      appendFileSync(
+        join(stateDir, 'signals.jsonl'),
+        `${JSON.stringify({
+          protocol: invocation.protocol,
+          agent: invocation.agent,
+          task,
+          node,
+          signal: 'SIGTERM',
+          terminationDelayMs,
+        })}\n`,
+      )
+      if (terminationReleaseFile !== undefined) {
+        void waitForBarrier(stateDir, terminationReleaseFile).then(() => process.exit(143))
+      }
+      setTimeout(() => process.exit(143), terminationDelayMs)
+    })
+  }
+
   for (const needle of step.requirePrompt ?? []) {
     if (!invocation.prompt.includes(needle)) {
       fail(`${invocation.agent}@${callIndex} prompt is missing ${JSON.stringify(needle)}`, 10)
@@ -442,6 +482,7 @@ export async function run(argv: readonly string[]): Promise<void> {
   writeScenarioFiles(step.writeFiles, ctx)
   if (step.stderr !== undefined) process.stderr.write(`${render(step.stderr, ctx)}\n`)
   if ((step.delayMs ?? 0) > 0) await Bun.sleep(step.delayMs)
+  if (step.silentExit === true) return
 
   // A process crash intentionally emits no protocol terminal event.
   if (

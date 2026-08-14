@@ -280,11 +280,51 @@ export const EXECUTION_CAPABILITY_COVERAGE = {
       ],
     },
     {
+      id: 'webhook-runtime-failure-lineage',
+      evidence: [
+        e2e(
+          'e2e/rfc294-webhook-runtime-failures.spec.ts',
+          'concurrent duplicate delivery launches one crashing task',
+        ),
+        e2e('e2e/rfc294-webhook-runtime-failures.spec.ts', 'runtime timeout kills every attempt'),
+        e2e(
+          'e2e/rfc294-webhook-runtime-failures.spec.ts',
+          'well-formed output carrying the wrong nonce',
+        ),
+      ],
+    },
+    {
+      id: 'webhook-mr-terminal-runtime-recovery',
+      evidence: [
+        e2e(
+          'e2e/webhook-mr-runtime-races.spec.ts',
+          'different-UUID close/update facts on one MR stream',
+        ),
+        e2e(
+          'e2e/webhook-mr-runtime-races.spec.ts',
+          'different-UUID launch-eligible facts serialize',
+        ),
+        e2e(
+          'e2e/webhook-mr-runtime-races.spec.ts',
+          'daemon crash while terminal control owns the runtime',
+        ),
+      ],
+    },
+    {
       id: 'intent-create-review-commit-provenance',
       evidence: [
         e2e(
           'e2e/intent-builder.spec.ts',
           'intent create → draft preview → commit → resource lands with provenance',
+        ),
+      ],
+    },
+    {
+      id: 'human-gate-daemon-replacement',
+      evidence: [
+        e2e(
+          'e2e/rfc294-human-gate-restart.spec.ts',
+          'clarify and review keep their durable identities across separate daemon crashes',
         ),
       ],
     },

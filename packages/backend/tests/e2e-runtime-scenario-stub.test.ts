@@ -208,5 +208,43 @@ describe('runtime-scenario deterministic stand-in', () => {
       expect(traces.map((trace) => trace.callIndex)).toEqual([0, 1, 2, 3])
       expect(traces[1]?.resumeSessionId).toBe('resume-me')
     })
+
+    test(`${protocol}: silent exit records stderr diagnostics without native stdout`, () => {
+      const root = tempDir()
+      const stateDir = join(root, 'state')
+      const worktree = join(root, 'worktree')
+      mkdirSync(worktree)
+      const planFile = writePlan(root, {
+        silent: [
+          {
+            silentExit: true,
+            stderr: 'diagnostic-only/{{protocol}}/{{callIndex}}',
+          },
+        ],
+      })
+      const result = invoke(protocol, {
+        prompt: prompt(`${protocol}-silent`, 'silent-node', 'nonce-silent'),
+        agent: 'silent',
+        planFile,
+        stateDir,
+        worktree,
+      })
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toBe(`diagnostic-only/${protocol}/0\n`)
+      const trace = JSON.parse(readFileSync(join(stateDir, 'trace.jsonl'), 'utf8')) as {
+        protocol: Protocol
+        task: string
+        callIndex: number
+        resumeSessionId: string | null
+      }
+      expect(trace).toMatchObject({
+        protocol,
+        task: `${protocol}-silent`,
+        callIndex: 0,
+        resumeSessionId: null,
+      })
+    })
   }
 })
