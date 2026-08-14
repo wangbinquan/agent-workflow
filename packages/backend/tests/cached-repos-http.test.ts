@@ -2,7 +2,8 @@
 // POST /api/tasks. Exercises the full HTTP surface so the launcher and
 // /repos management page can rely on the contract.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { beforeAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { execFileSync } from 'node:child_process'
 import type { Hono } from 'hono'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -55,7 +56,7 @@ function buildBareRemote(tmp: string): string {
   git('-C', working, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   const bare = join(tmp, 'remote-' + ulid() + '.git')
   git('clone', '--bare', working, bare)
-  return `file://${bare}`
+  return remoteUrlFor(bare)
 }
 
 function buildHarness(): Harness {
@@ -94,6 +95,10 @@ async function req(app: Hono, path: string, init?: RequestInit): Promise<Respons
     headers: { Authorization: `Bearer ${TOKEN}`, ...(init?.headers ?? {}) },
   })
 }
+
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
 
 describe('cached-repos HTTP routes (RFC-024 T5)', () => {
   let h: Harness

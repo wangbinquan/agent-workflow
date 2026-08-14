@@ -19,6 +19,7 @@
 import {
   type CachedRepo,
   gitUrlCacheKeyWith,
+  isFileSchemeUrl,
   gitUrlLegacyFileCacheKeyWith,
   parseGitUrl,
   redactGitUrl,
@@ -1046,6 +1047,23 @@ export async function refreshCachedRepo(
   const now = deps.now ?? Date.now
   const redacted = row.urlRedacted ?? UNAVAILABLE_REPO_URL
   const submodule = resolveSubmoduleParams(deps.submoduleMode, deps.submoduleJobs)
+  // RFC-287 G5（design §10.7）——刷新是启动之外的**第二条**运行面，同拒 `file://`。
+  //
+  // 只拒启动不拒刷新的话，存量本机镜像照样被 `POST /api/cached-repos/:id/refresh`
+  // 无限期保鲜（后台自动保鲜那条已在 submoduleRefresh.selectDueRepos 挡住，但手动
+  // 刷新走的是这里）。
+  //
+  // 判据用 `url_redacted` 而非解封：脱敏只吃 `user:pass@`、**scheme 原样保留**，
+  // 所以它够用且不必碰密钥（也就没有解封失败分支要处理）。NULL 同样拒——不知道
+  // scheme 就不该主动去 fetch，与 selectDueRepos 的 fail-closed 口径一致。
+  if (row.urlRedacted === null || isFileSchemeUrl(row.urlRedacted)) {
+    throw new DomainError(
+      'repo-url-file-scheme-unsupported',
+      `refusing to refresh ${redacted}: file:// mirrors are no longer a supported remote`,
+      400,
+      { url: redacted },
+    )
+  }
 
   return await withUrlLock(row.urlHash, async () => {
     if (!(await isValidGitDir(row.localPath))) {

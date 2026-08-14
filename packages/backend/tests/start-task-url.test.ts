@@ -7,7 +7,16 @@
 //   3. ref-not-found rewrap: a missing ref produces ValidationError
 //      `repo-ref-not-found` whose details carry availableRefs[] + redacted URL.
 
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import {
+  beforeAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from 'bun:test'
+import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -102,7 +111,7 @@ async function setup() {
   git('-C', working, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   const bare = join(tmp, 'remote.git')
   git('clone', '--bare', working, bare)
-  const remoteUrl = `file://${bare}`
+  const remoteUrl = remoteUrlFor(bare)
 
   const stubOpencode = makeStubOpencode(tmp)
 
@@ -149,6 +158,10 @@ async function setup() {
 
   return { tmp, appHome, db, stubOpencode, wf, remoteUrl }
 }
+
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
 
 describe('startTask URL mode (RFC-024)', () => {
   test('cold launch clones URL, persists repoUrl, does not write recent_repos', async () => {

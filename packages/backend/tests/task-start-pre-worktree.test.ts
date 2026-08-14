@@ -6,13 +6,21 @@
 // task row is created. When passed, startTask must NOT shell out to git;
 // when omitted, behavior is identical to the pre-RFC-020 path.
 
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import {
+  beforeAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from 'bun:test'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET, type StartTask } from '@agent-workflow/shared'
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
@@ -169,6 +177,10 @@ async function setup() {
   return { appHome, repoPath, db, stubOpencode, wf }
 }
 
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
+
 describe('startTask with preCreatedWorktree (RFC-020)', () => {
   test('honors caller-supplied taskId / worktreePath / branch / baseCommit', async () => {
     const { appHome, repoPath, db, stubOpencode, wf } = await setup()
@@ -229,7 +241,7 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
       {
         workflowId: wf.id,
         name: 'fixture-task',
-        repoUrl: pathToFileURL(repoPath).href,
+        repoUrl: remoteUrlFor(repoPath),
         inputs: { topic: 'orders' },
       } as unknown as StartTask,
       { db, appHome, binaryOverride: [stubOpencode], awaitScheduler: true },
@@ -290,7 +302,7 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
       {
         workflowId: wf.id,
         name: 'webhook-agent-context',
-        repoUrl: pathToFileURL(repoPath).href,
+        repoUrl: remoteUrlFor(repoPath),
         inputs: { topic: 'orders' },
       } as unknown as StartTask,
       {

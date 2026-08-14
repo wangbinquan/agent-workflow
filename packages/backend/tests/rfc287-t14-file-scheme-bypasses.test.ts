@@ -15,6 +15,8 @@ import {
   isFileSchemeUrl,
 } from '@agent-workflow/shared'
 import { selectDueRepos } from '@/services/submoduleRefresh'
+import { ulid } from 'ulid'
+import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
 import { createInMemoryDb } from '@/db/client'
 import { cachedRepos } from '@/db/schema'
 import { MIGRATIONS } from './migration-freeze'
@@ -38,37 +40,70 @@ describe('RFC-287 G5 — 判据单点化', () => {
   })
 })
 
-describe('RFC-287 G5 绕过① — 批量导入 → cachedRepoId', () => {
-  // 这条最要命：导入是**公共**接口，而它原先对 scheme 零检查。`file:///srv/private/repo`
-  // 会被真的克隆进缓存，拿到 cachedRepoId 后再 POST /api/tasks 走 cachedRepoId 分支
-  // ——启动面那道 refine 只看 repoUrl，根本不会被触发。两步就绕过去了。同一个
-  // cachedRepoId 放进仓库组、或被 sourceTaskId 重放，同样会在启动时被转回 cache spec。
-  test('POST /api/cached-repos/batch-import 拒 file://', () => {
-    const r = StartBatchImportRequestSchema.safeParse({ urls: [FILE_URL] })
-    expect(r.success).toBe(false)
-    expect(JSON.stringify(r.error?.issues)).toContain('repo-url-file-scheme-unsupported')
+describe('RFC-287 G5 —— 存量 file:// 镜像不可运行（design §10.7 定音口径）', () => {
+  // 二轮实现门纠正：一轮我把拒绝加在**注册面**（批量导入 schema），那与 design
+  // 相反，而且没堵住真正的洞。design §10.7 写得很直白：公开面自 RFC-204 起不传
+  // URL、传 `cachedRepoId`，**schema 层拦 file:// 对存量一个都拦不住**。
+  //
+  // 真正的收口点是 `resolveRepoSourceSingle` 在两条来源分支汇流成 `sourceUrl` 之后、
+  // `resolveCachedRepo` 之前——一处同时覆盖：URL 直填、cachedRepoId 反查、仓库组
+  // 成员、多仓循环、sourceTaskId 重放、webhook 命中存量缓存。
+  //
+  // 「存量可见不可运行」：行照样在、列表照样显示、导入照样允许，只是启动与刷新被拒。
+  async function seedFileMirror(db: ReturnType<typeof createInMemoryDb>): Promise<string> {
+    const id = ulid()
+    const now = Date.now()
+    db.insert(cachedRepos)
+      .values({
+        id,
+        urlHash: 'legacy-file',
+        urlRedacted: FILE_URL,
+        urlEnc: null, // 无密钥的测试形态：unseal 回落到 volatile/redacted
+        localPath: '/tmp/aw-legacy-file-mirror',
+        lastFetchedAt: now - 1000,
+        createdAt: now - 1000,
+      })
+      .run()
+    // 无密钥的测试形态：生产里 URL 存在 `url_enc`，这里用 volatile 记忆让
+    // `unsealRepoUrl` 解得出来——否则会先撞「no readable URL」，测不到本条要验的
+    // scheme 判据。
+    rememberVolatileRepoUrl(db, id, FILE_URL)
+    return id
+  }
+
+  test('拿存量 file:// 的 cachedRepoId 启动 → 被拒（这是一轮真正漏掉的洞）', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const id = await seedFileMirror(db)
+    const { resolveRepoSourceSingle } = await import('@/services/task')
+    let msg = ''
+    try {
+      await resolveRepoSourceSingle(
+        { cachedRepoId: id } as never,
+        {} as never,
+        { db, appHome: '/tmp/aw-t14-g5' } as never,
+      )
+    } catch (err) {
+      msg = err instanceof Error ? err.message : String(err)
+    }
+    expect(msg).toMatch(/file-scheme-unsupported|file:\/\/ repositories cannot be launched/i)
   })
 
-  test('混在合法 URL 里也拒（逐项校验，不是只看第一个）', () => {
-    const r = StartBatchImportRequestSchema.safeParse({
-      urls: ['https://e.com/ok.git', FILE_URL],
+  test('注册面**不拒**：批量导入仍接受 file://（design 划为不动面）', () => {
+    // 反向锁。在注册面拒会误伤允许面，并给人「已经堵住了」的错觉——真正该堵的是
+    // 上面那条运行面。
+    expect(StartBatchImportRequestSchema.safeParse({ urls: [FILE_URL] }).success).toBe(true)
+    expect(RetryBatchImportRowRequestSchema.safeParse({ url: FILE_URL }).success).toBe(true)
+  })
+
+  test('schema 层保留 file:// 拒绝，作为直填 URL 时的早报错附加层', () => {
+    const r = StartTaskSchema.safeParse({
+      workflowId: 'wf',
+      name: 'x',
+      repoUrl: FILE_URL,
+      inputs: {},
     })
     expect(r.success).toBe(false)
-  })
-
-  test('单行重试的 URL 覆盖同样拒（否则导入拒了、重试又放进来）', () => {
-    const r = RetryBatchImportRowRequestSchema.safeParse({ url: FILE_URL })
-    expect(r.success).toBe(false)
     expect(JSON.stringify(r.error?.issues)).toContain('repo-url-file-scheme-unsupported')
-  })
-
-  test('合法远端照常通过（别把正常导入一起拒了）', () => {
-    expect(StartBatchImportRequestSchema.safeParse({ urls: ['https://e.com/x.git'] }).success).toBe(
-      true,
-    )
-    expect(RetryBatchImportRowRequestSchema.safeParse({ url: 'https://e.com/x.git' }).success).toBe(
-      true,
-    )
   })
 })
 

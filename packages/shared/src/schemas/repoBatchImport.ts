@@ -6,7 +6,7 @@
 // snapshots (initial + GET) and incremental `RepoImportWsMessage` events.
 
 import { z } from 'zod'
-import { hasQueryCredential, isFileSchemeUrl } from '../git-url'
+import { hasQueryCredential } from '../git-url'
 
 export const BATCH_IMPORT_MAX_URLS = 100
 
@@ -17,15 +17,15 @@ export const BATCH_IMPORT_MAX_URLS = 100
 const noQueryCredentialUrl = (url: string): boolean => !hasQueryCredential(url)
 const QUERY_CREDENTIAL_MSG = 'repo-url-query-credential'
 
-// RFC-287 G5 / T14 实现门：批量导入必须和启动面同样拒 `file://`。
+// RFC-287 G5（design §10.7「第二轮门 P1-1 定音」）——**注册面刻意不拒 `file://`**。
 //
-// 漏掉这里等于 G5 完全形同虚设：导入是**公共**接口，`file:///srv/private/repo`
-// 会被真的克隆进缓存（repoBatchImport.ts 的 clone 分支），拿到 cachedRepoId 之后
-// 再 `POST /api/tasks` 走 cachedRepoId 分支，启动面那道 refine 只看 `repoUrl`、
-// 根本不会被触发——两步就绕过去了。同一个 cachedRepoId 放进仓库组、或被
-// `sourceTaskId` 重放，同样会在启动时被转回 cache spec。
-const noFileSchemeUrl = (url: string): boolean => !isFileSchemeUrl(url)
-const FILE_SCHEME_MSG = 'repo-url-file-scheme-unsupported'
+// 二轮实现门纠正：我一度在这里加过拒绝，那是错的。公开面自 RFC-204 起不传 URL、传
+// `cachedRepoId`，所以 schema 层拦 file 对**存量镜像一个都拦不住**；真正的收口点在
+// `services/task.ts` 的 `resolveRepoSourceSingle`（两条来源分支汇流之后、
+// `resolveCachedRepo` 之前），一处覆盖 URL 直填 / id 反查 / 仓库组成员 / 多仓循环 /
+// sourceTaskId 重放。批量导入直达镜像层、绕过那个收口点，design 把它划为不动面：
+// **存量可见不可运行**——导得进来、列得出来，但启动与刷新都会被拒。
+// 在这里拒等于误伤允许面，且给人「已经堵住了」的错觉。
 
 export const BatchImportRowStatusSchema = z.enum(['queued', 'cloning', 'done', 'failed'])
 export type BatchImportRowStatus = z.infer<typeof BatchImportRowStatusSchema>
@@ -68,13 +68,7 @@ export type BatchImportSnapshot = z.infer<typeof BatchImportSnapshotSchema>
 
 export const StartBatchImportRequestSchema = z.object({
   urls: z
-    .array(
-      z
-        .string()
-        .min(1)
-        .refine(noQueryCredentialUrl, { message: QUERY_CREDENTIAL_MSG })
-        .refine(noFileSchemeUrl, { message: FILE_SCHEME_MSG }),
-    )
+    .array(z.string().min(1).refine(noQueryCredentialUrl, { message: QUERY_CREDENTIAL_MSG }))
     .min(1)
     .max(BATCH_IMPORT_MAX_URLS),
 })
@@ -82,11 +76,6 @@ export type StartBatchImportRequest = z.infer<typeof StartBatchImportRequestSche
 
 export const RetryBatchImportRowRequestSchema = z.object({
   /** Optional URL override; when present the row's `inputUrl` is replaced before re-queueing. */
-  url: z
-    .string()
-    .min(1)
-    .refine(noQueryCredentialUrl, { message: QUERY_CREDENTIAL_MSG })
-    .refine(noFileSchemeUrl, { message: FILE_SCHEME_MSG })
-    .optional(),
+  url: z.string().min(1).refine(noQueryCredentialUrl, { message: QUERY_CREDENTIAL_MSG }).optional(),
 })
 export type RetryBatchImportRowRequest = z.infer<typeof RetryBatchImportRowRequestSchema>

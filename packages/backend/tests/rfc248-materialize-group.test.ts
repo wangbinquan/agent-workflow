@@ -14,7 +14,7 @@
 // 不能只是说法——路径、`tasks.*` 列、cwd 都要与今天字节级一致，否则每一个现存
 // 单仓任务的行为都被这个 RFC 改掉了。
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { beforeAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { RepoGroupNodeInput } from '@agent-workflow/shared'
 import { execFileSync } from 'node:child_process'
 import {
@@ -27,7 +27,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { ulid } from 'ulid'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -88,13 +88,14 @@ function seedRepo(name: string, files: Record<string, string>): { id: string; pa
 
   const id = ulid()
   const now = Date.now()
-  const url = pathToFileURL(dir).href
+  // RFC-287 G5（二轮门落点纠正后）：`file://` 已是非法**运行**来源，收口点在
+  // `resolveRepoSourceSingle`，夹具经 cachedRepoId 反查同样会被拒。改走 T11 建的
+  // 真实 git smart-HTTP 远端——这也更贴生产（生产里就没有 file:// 镜像）。
+  const url = remoteUrlFor(dir)
   db.insert(cachedRepos)
     .values({
       id,
       urlHash: `${name}00000000`.slice(0, 8),
-      // RFC-254: `file://${winPath}` is malformed on Windows (`file://C:\…`);
-      // pathToFileURL yields the valid `file:///C:/…` git can actually clone.
       urlRedacted: url,
       localPath: dir,
       defaultBranch: 'main',
@@ -171,6 +172,10 @@ async function codeOfAsync(fn: () => Promise<unknown>): Promise<string> {
   }
   return 'no-throw'
 }
+
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
 
 describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8）', () => {
   test('五个 worktree：挂根 + 只读 + 三层嵌套 + sparse + 同仓两份', async () => {

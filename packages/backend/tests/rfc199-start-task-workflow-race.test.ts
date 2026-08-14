@@ -6,11 +6,11 @@
 // insert that commits first must make the fenced workflow delete report in-use.
 
 import type { StartTask, WorkflowDefinition } from '@agent-workflow/shared'
-import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -102,6 +102,10 @@ async function expectWorktreeFullyRemoved(
 // timeout kills the in-flight clone. 60s headroom.
 setDefaultTimeout(60_000)
 
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
+
 describe('RFC-199 startTask workflow delete/version race', () => {
   let harness: Harness | undefined
 
@@ -121,7 +125,7 @@ describe('RFC-199 startTask workflow delete/version race', () => {
           workflowId: workflow.id,
           expectedWorkflowVersion: workflow.version,
           name: 'normal-race',
-          repoUrl: pathToFileURL(harness.sourcePaths[0]!).href,
+          repoUrl: remoteUrlFor(harness.sourcePaths[0]!),
           inputs: {},
         },
         {
@@ -218,7 +222,7 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         nodes: repoGroupNodesFromAttachments(
           harness.sourcePaths.map((repoPath, i) => ({
             kind: 'repo' as const,
-            repoUrl: pathToFileURL(repoPath).href,
+            repoUrl: remoteUrlFor(repoPath),
             ref: '',
             subdir: '',
             mountPath: `r${i}`,
@@ -401,7 +405,7 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         nodes: repoGroupNodesFromAttachments(
           harness.sourcePaths.map((repoPath, i) => ({
             kind: 'repo' as const,
-            repoUrl: pathToFileURL(repoPath).href,
+            repoUrl: remoteUrlFor(repoPath),
             ref: '',
             subdir: '',
             mountPath: `r${i}`,

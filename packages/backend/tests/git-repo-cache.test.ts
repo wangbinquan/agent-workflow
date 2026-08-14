@@ -2,7 +2,16 @@
 // concurrent-same-URL behavior of services/gitRepoCache.ts. Uses a real
 // local bare repo as the "remote" so the suite exercises git itself.
 
-import { describe, expect, test, setDefaultTimeout, beforeEach, afterEach } from 'bun:test'
+import {
+  beforeAll,
+  describe,
+  expect,
+  test,
+  setDefaultTimeout,
+  beforeEach,
+  afterEach,
+} from 'bun:test'
+import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -53,7 +62,7 @@ async function spawnGitInit(cwd: string, ...args: string[]): Promise<void> {
   }
 }
 
-async function buildFixtureRemote(): Promise<{ dir: string; url: string }> {
+async function buildFixtureRemote(): Promise<{ dir: string; url: string; fileUrl: string }> {
   // A working clone with a couple of commits, then `git clone --bare` it into
   // a sibling "remote" we can hand to resolveCachedRepo as `file://...`.
   const root = mkdtempSync(join(tmpdir(), 'aw-grc-fixture-'))
@@ -68,8 +77,17 @@ async function buildFixtureRemote(): Promise<{ dir: string; url: string }> {
   await spawnGitInit(working, '-C', working, 'commit', '-m', 'init')
   const bare = join(root, 'remote.git')
   await spawnGitInit(root, 'clone', '--bare', working, bare)
-  return { dir: root, url: `file://${bare}` }
+  // 两种 URL 都给：默认走 smart-HTTP（G5 之后 `file://` 已非可运行来源，夹具应贴
+  // 生产形态）；`fileUrl` 只留给**专测 `file://` 语义**的用例——RFC-165 F19 的
+  // 「yanked source / 缺分支必须硬失败而非跑陈旧镜像」就是 file 源独有的契约，
+  // 迁到 http 会让断言失去对象。这不违反 G5：拒绝点在 `resolveRepoSourceSingle`
+  // 与 `refreshCachedRepo`，而 `resolveCachedRepo` 是它们下游的镜像层。
+  return { dir: root, url: remoteUrlFor(bare), fileUrl: `file://${bare}` }
 }
+
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
 
 describe('gitRepoCache (RFC-024 T3)', () => {
   let db: DbClient
@@ -318,6 +336,7 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
   let appHome: string
   let remoteDir: string
   let remoteUrl: string
+  let remoteFileUrl: string
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
@@ -325,6 +344,7 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
     const r = await buildFixtureRemote()
     remoteDir = r.dir
     remoteUrl = r.url
+    remoteFileUrl = r.fileUrl
   })
 
   afterEach(() => {
@@ -419,11 +439,11 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
     // path-mode fidelity contract ("read the source's live state") — the
     // source dir being gone must fail the launch. Non-file schemes keep the
     // warning-and-stale behavior (network blips are expected there).
-    await resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteUrl })
+    await resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteFileUrl })
     // Nuke the bare remote so subsequent fetch fails.
     rmSync(remoteDir, { recursive: true, force: true })
     await expect(
-      resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteUrl }),
+      resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteFileUrl }),
     ).rejects.toThrow(/missing or unreadable/)
   })
 
@@ -432,12 +452,15 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
     // stale local branch. A file:// source's deleted branch must fail loudly.
     const first = await resolveCachedRepo(
       { db, appHome, syncBranches: ['main'] },
-      { url: remoteUrl },
+      { url: remoteFileUrl },
     )
     // Create a local-only branch (no origin/feature in the remote).
     await runGit(first.cached.localPath, ['branch', 'feature/local-only', 'main'])
     await expect(
-      resolveCachedRepo({ db, appHome, syncBranches: ['feature/local-only'] }, { url: remoteUrl }),
+      resolveCachedRepo(
+        { db, appHome, syncBranches: ['feature/local-only'] },
+        { url: remoteFileUrl },
+      ),
     ).rejects.toThrow(/ref 'feature\/local-only' not found in/)
   })
 

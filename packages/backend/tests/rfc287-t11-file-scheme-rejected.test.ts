@@ -88,20 +88,56 @@ describe('RFC-287 T11 ② — 后台自动保鲜也不再碰 file:// 存量镜�
 })
 
 describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
-  test('拒绝写在公共面的解析单点上，不在内部服务入口', () => {
+  // 二轮实现门纠正：这条锁原先**方向反了**——它断言 `services/task.ts` 不得含该
+  // 错误码，理由写的是「在 startTask 上加判据会把内部夹具通道一起掐掉」。那个前提
+  // 不成立，design §10.7「第三轮门修正」已核实：内部通道 `internalSource` 是
+  // **local-path 面**（`'repoPath' in spec` 在 resolveRepoSourceSingle 开头就早
+  // 返回），**根本不承载 `file://` URL**。
+  //
+  // 于是这条锁把 design 指定的收口点锁成了禁区，实际后果是：存量 `file://` 缓存行
+  // 拿 cachedRepoId 启动、放进仓库组、被 sourceTaskId 重放，全部照跑——G5 对存量
+  // 完全失效。断言随之翻面。
+  test('拒绝落在服务层的来源汇流点（schema 只作早报错的附加层）', () => {
     const shared = readFileSync(
       resolve(import.meta.dir, '..', '..', 'shared', 'src', 'schemas', 'task.ts'),
       'utf8',
     )
+    // schema 层保留：直填 URL 时能早一步报错，体验更好。但它**不是**判据的所在，
+    // 因为公开面自 RFC-204 起传的是 cachedRepoId 而不是 URL。
     expect(shared).toContain('repo-url-file-scheme-unsupported')
-    // 反向：内部服务入口不得各自再写一份——两份判据必然走散，且在 startTask 上
-    // 加判据会把内部夹具通道一起掐掉（本 RFC 刻意保留内部通道）。
-    for (const f of ['services/task.ts', 'services/gitRepoCache.ts']) {
-      const src = readFileSync(resolve(import.meta.dir, '..', 'src', f), 'utf8')
-      expect(src, `${f} 不应自带 file scheme 拒绝`).not.toContain(
-        'repo-url-file-scheme-unsupported',
-      )
-    }
+
+    // 真正的收口点：两条来源分支（id 反查解封 / 直填）汇流成 `sourceUrl` 之后、
+    // `resolveCachedRepo` 之前。一处覆盖 URL 直填 / cachedRepoId 反查 / 仓库组成员 /
+    // 多仓循环 / sourceTaskId 重放 / webhook 命中存量缓存。
+    const taskSrc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
+      'utf8',
+    )
+    const fnStart = taskSrc.indexOf('export async function resolveRepoSourceSingle')
+    expect(fnStart, '收口点所在函数应存在').toBeGreaterThan(0)
+    const body = taskSrc.slice(fnStart, taskSrc.indexOf('\nasync function ', fnStart + 10))
+    const guard = body.indexOf('isFileSchemeUrl(sourceUrl)')
+    const use = body.indexOf('resolveCachedRepo(')
+    expect(guard, 'resolveRepoSourceSingle 必须拒 file:// 来源').toBeGreaterThan(-1)
+    expect(use).toBeGreaterThan(-1)
+    expect(guard, '判据必须在 resolveCachedRepo 之前').toBeLessThan(use)
+
+    // 刷新是启动之外的第二条运行面，同拒。
+    const cacheSrc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      'utf8',
+    )
+    expect(cacheSrc).toMatch(/refreshCachedRepo[\s\S]{0,1200}isFileSchemeUrl\(row\.urlRedacted\)/)
+
+    // 反向：**注册面刻意不拒**（design §10.7 划为不动面，存量可见不可运行）。
+    // 在那里加拒绝会误伤允许面，并给人「已经堵住了」的错觉。
+    const batch = readFileSync(
+      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'schemas', 'repoBatchImport.ts'),
+      'utf8',
+    )
+    expect(batch, '批量导入不得拒 file://（注册面不动）').not.toContain(
+      'repo-url-file-scheme-unsupported',
+    )
   })
 
   test('后台保鲜的过滤按 url_redacted 判（明文只以密文列存在）', () => {

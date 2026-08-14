@@ -7,12 +7,12 @@ import {
   parseGitUrl,
   type CodeHostEvent,
 } from '@agent-workflow/shared'
-import { afterEach, expect, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, afterEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
@@ -91,6 +91,10 @@ function initRepo(path: string): void {
     { cwd: path },
   )
 }
+
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
 
 test('real Webhook remote/scratch done/canceled delete while failed/interrupted controls retain', async () => {
   currentRoot = mkdtempSync(join(tmpdir(), 'aw-rfc300-webhook-e2e-'))
@@ -213,7 +217,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
   const sourceRepo = join(currentRoot, 'cached-source')
   initRepo(originRepo)
   execFileSync('git', ['clone', '-q', originRepo, sourceRepo])
-  const repoUrl = pathToFileURL(originRepo).href
+  const repoUrl = remoteUrlFor(originRepo)
   const parsed = parseGitUrl(repoUrl)
   if (parsed === null) throw new Error('fixture URL did not parse')
   const cacheKey = gitUrlCacheKeyWith(parsed, sha1Hex)
@@ -444,7 +448,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
   const sourceRepo = join(currentRoot, 'cached-source')
   initRepo(originRepo)
   execFileSync('git', ['clone', '-q', originRepo, sourceRepo])
-  const repoUrl = pathToFileURL(originRepo).href
+  const repoUrl = remoteUrlFor(originRepo)
   const parsed = parseGitUrl(repoUrl)
   if (parsed === null) throw new Error('fixture URL did not parse')
   await db.insert(cachedRepos).values({

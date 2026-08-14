@@ -141,7 +141,7 @@ import {
   type WorktreeLifecycleHookEvent,
   worktreeDiff,
 } from '@/util/git'
-import { redactGitUrl } from '@agent-workflow/shared'
+import { isFileSchemeUrl, redactGitUrl } from '@agent-workflow/shared'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { readArchivedEvents } from '@/services/eventsArchive'
 import {
@@ -885,6 +885,27 @@ export async function resolveRepoSourceSingle(
       throw new ValidationError('start-task-source-required', 'a repoUrl source is required')
     }
     sourceUrl = specUrl
+  }
+  // RFC-287 G5（design §10.7「第二轮门 P1-1 定音」）—— `file://` 的**唯一**启动拒绝点。
+  //
+  // 为什么必须在这里、而不是 schema 层：公开面自 RFC-204 起就**不传 URL、传
+  // `cachedRepoId`**，schema 拦 `file://` 对存量镜像一个都拦不住。这一处在两条分支
+  // 汇流之后（id 反查解封出的 plain URL / 直填的 repoUrl 都已归一到 `sourceUrl`）、
+  // `resolveCachedRepo` 之前，因此一处同时覆盖：URL 直填、cachedRepoId 反查、仓库组
+  // 成员、多仓循环、`sourceTaskId` 重放、webhook 命中存量缓存。
+  //
+  // 存量**不 grandfather**：行照样在、列表照样显示，只是不能再启动（proposal §7 的
+  // 「存量可见不可运行」）。注册面（批量导入 / 仓库组保存）**刻意不拒**——它们直达
+  // 镜像层、绕过本函数，design §10.7 明确划为不动面。
+  //
+  // 内部 local-path 面不受影响：`'repoPath' in spec` 那条在函数开头就早返回了，
+  // 根本走不到这里（RFC-165 F4/F19 的既定非公开面）。
+  if (isFileSchemeUrl(sourceUrl)) {
+    throw new ValidationError(
+      'repo-url-file-scheme-unsupported',
+      'file:// repositories cannot be launched (local paths are not a supported remote)',
+      { url: redactGitUrl(sourceUrl) },
+    )
   }
   const appHome = deps.appHome ?? Paths.root
   // `spec` here is the url-or-id shape; read `ref` defensively for the same
