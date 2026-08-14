@@ -318,6 +318,7 @@ CI 修复同理，八步里两步 AI；**错误分类由脚本做，不是让 AI
 | ⑩ | **每个并行分片一棵独立一次性工作树** | design §6.1、AC-30 | 共用一棵树：省磁盘，但放弃确定性（宪法 R5） |
 | ⑪ | **新增 `code-round` execution kind**（design D5） | 触及 `task-execution` 模块 | 见 D5 表格里的三条退路，各自更差 |
 | ⑫ | **自研 CI 的 wake 入口合同**（§5.1）——⚠️ **这条还需要你先回答一个事实问题**：贵司自研流水线是由 GitLab CI 触发（有 pipeline 事件）还是完全独立？若是前者，wake 入口可降为可选 | design §5.1、AC-14d | 若完全独立且不做 wake，CI 修复能力无法启用 |
+| ⑬ | **跨 RFC 协调：`code-round` 先加后收编**——RFC-294 的 W2（TaskEngine/Executor 收口）目前是 seed-only 且要求另立新号；本 RFC 不等它，改为最小侵入新增一个变体，并登记进 W2 的输入清单 | design D5、plan T9a | 等 W2 立号并落地：RFC-304 被无限期阻塞 |
 
 ## 7. 新增能力面的代价（逐项呈报）
 

@@ -77,8 +77,20 @@ D4 不算真偏离（复用机制是对的），列出是为了说明「为什�
 序列，每个 `kind:'ai'` 阶段起一次 agent 运行并归属该 task。这是对 `task-execution` public 合同的
 **扩展而非绕过**——取消、重试、中断修复、资源限额、详情页全部按既有语义工作。
 
-代价：`task-execution` 模块需要接纳一个新 participant。这是本 RFC 唯一触及既有执行模块的改动，
-必须与该模块的 owner 对齐后再动（plan T9a）。
+代价：`task-execution` 模块需要接纳一个新 participant。这是本 RFC 唯一触及既有执行模块的改动。
+
+**与 RFC-294 W2 的协调（须在动手前谈定）**：W2 目前是 **seed-only**——「task SCC 六条、durable
+ownership、TaskEngine/Executor/Wrapper **未收口**」（`RFC-294/plan.md:79`），且总纲要求 W2 用
+**新编号 RFC** 重新取锚过门（`plan.md:18`）。也就是说，本 RFC 要加东西的那块地基本身正等着被重构。
+两条路：
+
+- **等 W2** ⇒ RFC-304 被阻塞到一个尚未立号的大件之后，不可接受；
+- **先加，但按最小侵入设计** ⇒ 本 RFC 采用这条：`code-round` 只**新增一个变体**，不改现有三种
+  kind 的语义、不动它们的调用面、不引入新的 ownership 概念（复用既有 task 行的 ownership 与
+  driver lease）。这样 W2 重构时它与其余三种一起搬，不构成额外收口负担。作为交换，本 RFC 须把
+  `code-round` 的形态**登记进 RFC-294 的 W2 输入清单**，让 W2 立号时知道要收编四种而非三种。
+
+这属于跨 RFC 协调，需用户裁决是否接受「先加后收编」（列入 §6bis-⑬）。
 
 ## 2. 领域模型
 
