@@ -191,11 +191,21 @@ lease 还承担事件 revision 仲裁：每次对外 `publish` / `push` 之前**
 「起新一轮」**不等于「从头跑一遍」**。若从头跑，`mr-comment-fix` 会重新执行 `apply-change(ai)`，
 于是**人确认的那个 patch 与最终推上去的不是同一个**——这是会真出事的。
 
-规则：每条能力的阶段契约声明一个 `resumeFrom` 阶段名。`awaiting` 被唤醒时，新一轮：
+**恢复策略按「等待原因」而不是「能力」声明**（第二轮设计门 P1）。初稿给每条能力一个 `resumeFrom`
+并加了一条总规则「绝不重跑任何 AI 阶段」，两者对 `requirement` 直接打架：反问的答案是**新输入**，
+`comprehend` 必须重做才能把答案吃进去；不重做就只能继承上一轮"信息不足"的旧产物，答案等于没给。
+故等待分两类，各有各的恢复语义：
 
-- **跳过** `resumeFrom` 之前的所有阶段，其产出从上一轮的阶段快照读取（存在 `code_round_stages`）；
-- **绝不重跑任何 `kind: 'ai'` 阶段**——人是对着上一轮的 AI 产出做的决定，重跑会让决定失效；
-- 从 `resumeFrom` 起正常推进，并按新 `roundSeq` 记账（前置阶段标记为 `inherited`）。
+| 等待原因 | 语义 | 恢复策略 |
+| --- | --- | --- |
+| `frozen-artifact-confirmation`（贴 patch 等确认） | 人是**对着已冻结的产物**做决定 | 从 `resumeFrom` 起；**禁止重跑任何 AI 阶段**——重跑会让人确认过的东西失效 |
+| `clarification-answer`（反问等作答） | 答案是**新输入**，上游理解必须更新 | 使 `comprehend` 及其下游产物**失效并重跑**；只继承取内容、建工作树这类与答案无关的前置 |
+
+`awaiting` 行记录 `waitKind`，唤醒时据此选策略。共同规则：
+
+- 被继承的阶段其产出从上一轮的阶段快照读取（存在 `code_round_stages`），标记为 `inherited`；
+- 新一轮按新 `roundSeq` 记账；
+- 契约里没为某个 `waitKind` 声明恢复策略的能力，不允许以该原因进入 `awaiting`（保存期校验）。
 
 `mr-comment-fix` 的 `resumeFrom = verify-baseline`；`requirement` 的反问唤醒 `resumeFrom = comprehend`
 （反问的答案是新输入，理解必须重做，但取内容与建工作树不必）。契约里没声明 `resumeFrom` 的能力
@@ -254,9 +264,16 @@ degradedReason 未能锚定到行时的原因（行不在 diff / 文件不在 MR
 `mr-review` 与 `mr-monitor` 定为两个工作项。若台账键含 `workItemId`，两条路径就各记各的账，
 **同一个问题会被提两次**——去重直接失效，而这恰恰是本能力最影响体验的一环。
 
-故台账键定为 `(provider, projectRef, anchorRef, fingerprint)`：它锚定的是**那个 MR**，
-不是"哪个工作项跑的这一轮"。`workItemId` / `roundSeq` 仍作为普通列记录来源，供追溯与状态图展示。
-同理，`cleanup-previous` 要 resolve 的「上轮 bot 线程」也按 `anchorRef` 查，与工作项无关。
+故台账键**直接复用 §2.1 的稳定 anchor**：`(codeHostEndpointId, stableProjectId, anchorKind,
+anchorId, fingerprint)`——它锚定的是**那个 MR**，不是"哪个工作项跑的这一轮"。
+
+初稿这里写的是 `(provider, projectRef, …)`，两路设计门同时指出这是**只改了一半**：工作项身份
+换成稳定键了，台账却还用可变路径。后果——仓库转组后旧台账整批失联，下一轮把未解决的 20 条意见
+全部重发；而若 `projectRef` 取平台内数字 id，两个 endpoint 上的同 id 又会撞车。路径与 URL 一律
+只作展示快照。
+
+`workItemId` / `roundSeq` 仍作为普通列记录来源，供追溯与状态图展示。`settle-stale` 要处理的
+「上一轮线程」同样按稳定 anchor 查，与工作项无关。
 
 #### 终局采纳比对（否则度量系统性偏低）
 
@@ -292,7 +309,7 @@ CapabilityFramework（部门层）        CapabilityBinding（小组层）
 | `code_work_rounds` | `workItemId` + `roundSeq` 唯一；`taskId`；`baselineSha`；`workPackage`；`templateSnapshot`；`stageContractVer`；`outcome` |
 | `code_round_stages` | 每阶段一行：`stageName`、`status`、`startedAt/endedAt`、聚合计数 |
 | `code_ai_attempts` | **每次 AI 调用一行**（设计门 P2）：`roundId`、`stageName`、`shardKey`、`sessionRef`、`rerunSeq`（换会话重跑第几次）、`attemptSeq`（同会话重试第几次）、`validationOutcome`、`status`、时间、关联 nodeRun/session id |
-| `code_findings` | 台账，见 §2.4；唯一键 **`(provider, projectRef, anchorRef, fingerprint)`**，**不含 workItemId** —— 见下方「台账为何与工作项解耦」 |
+| `code_findings` | 台账，见 §2.4；唯一键 **`(codeHostEndpointId, stableProjectId, anchorKind, anchorId, fingerprint, generation)`**，**不含 workItemId**；带 `lifecycle` 状态与 `createdAt/lastSeenAt/closedAt` 及仓库+时间索引 |
 | `capability_frameworks` | 部门层模板资源 |
 | `capability_bindings` | 小组层模板资源 |
 | `repo_capability_config` | 仓库 × 能力矩阵：`repoId` + `capability` 唯一，指向一个 binding，带启用开关与触发配置；另存 `readiness` 派生态（见 §3.1） |
@@ -330,27 +347,43 @@ interface StageContract {
   version: number                    // 阶段集合或语义变化时 +1
   stages: readonly StageDef[]
 }
-interface StageDef {
-  name: string                       // 公开契约，钩子按它挂载
-  kind: 'program' | 'ai' | 'script'  // 宪法 R1/R2 的强制标注
-                                     // | 'invoke'：调用另一条能力的子序列（见下）
-  parallel?: boolean                 // 并行段：钩子整段前后各一次（F5）
-  requires: readonly string[]        // 需要的前置产物
+// 判别联合：每种 kind 只能携带自己那组字段，写错即 typecheck 红
+type StageDef = StageBase &
+  ( | { kind: 'program' }
+    | { kind: 'script'; scriptSlot: ScriptSlot }
+    | { kind: 'ai'; aiSchema: JSONSchema; agentSlot: string }   // 宪法 R3：schema 必填
+    | { kind: 'invoke'; invokes: { capability: Capability; from: string; to: string } } )
+
+interface StageBase {
+  name: string                  // 公开契约，钩子按它挂载
+  parallel?: boolean            // 并行段：钩子整段前后各一次（F5）
+  requires: readonly string[]   // 需要的前置产物
   produces: readonly string[]
-  aiSchema?: JSONSchema              // kind==='ai' 必填，宪法 R3
-  invokes?: { capability: Capability; from: string; to: string }  // kind==='invoke' 必填
 }
 ```
+
+初稿把 `invoke` 只写在注释里，`kind` 的实际联合仍是三种——于是 `self-review` 既过不了类型也没有
+执行分支，PR-8/PR-9 的核心证据链（"自己审自己"）**根本跑不起来**。改为判别联合后，保存期还要校验：
+`invokes` 的 `[from, to]` 区间在目标契约里真实存在、不构成递归环、区间的输入输出闭包在父序列里
+可满足、取消信号能传播进子序列。
 
 `requires` / `produces` 不是运行期校验（序列写死，运行期无从拼错），而是**开发期**的编译时与
 测试期断言：新增或调整阶段时，若某阶段声明的 `requires` 在其上游的 `produces` 并集里找不到，
 契约自检测试直接红。它替代的是"靠人记住阶段顺序"。
 
 **`invoke` 步骤——`self-review` 靠它落地。** proposal D7/E7 要求需求实现与 CI 修复都「自己把
-改动审一遍」，即复用 `mr-review` 的核心阶段。阶段模型不支持序列嵌套会让这句话无法实现，故引入
-第四种 kind：`invoke` 以子序列方式执行另一条能力的 `[from, to]` 区间，共享同一 worktree 与同一
-轮次记账，产出并入父序列。子序列**不发布到 MR**（`publish` 不在区间内），它的 findings 直接
-喂给父序列的下一步。钩子按 `<父阶段>/<子阶段>` 命名挂载。
+改动审一遍」，即复用 `mr-review` 的核心阶段。子序列**不发布到 MR**（`publish` 不在区间内），
+它的 findings 直接喂给父序列的下一步。钩子按 `<父阶段>/<子阶段>` 命名挂载。
+
+**它和 per-shard 独立树会打架，必须在这里说清楚**（设计门 P1）：`ci-fix` 的 `fix(ai)` 在父工作树
+里产生了修改，随后 `self-review` invoke 检视的核心阶段。若照 §6.1 的规则「每个 shard 从
+`baselineSha` 建独立树」，各 reviewer 看到的是**修复前**的代码——自审了个寂寞；若让它们共享父
+工作树，又违反"并行分片必须互相隔离"。
+
+解法：**进入 `invoke` 前把父工作树冻结为一个不可变 snapshot**（detached commit / tree）。
+此后 `baselineSha` 只作 diff 的**左侧**，snapshot 作**右侧**；每个 shard 从 snapshot 各建独立树。
+于是三件事同时成立：审的是本轮真实改动、分片之间互不可见、重复执行结果一致。`invoke` 的契约
+因此必须显式携带：区间 `[from,to]`、输入 diff 的左右两侧、工作树根、产物回流方式。
 
 `kind` 字段不是注释而是**强制约束**：`kind: 'program'` 的阶段其实现不得调用任何 agent 派发
 （源码层负扫描锁定，AC-10）。
@@ -460,6 +493,7 @@ interface ClassifiedIssue { type: string; file?: string; line?: number; message:
 // 混合包（一个评论修复 + 一个 CI 修复）无法决定本轮走哪条序列，也无法定义统一的 push 边界。
 // 故用 discriminated union 在 schema 层强制同类，跨类只能分轮（设计门 P1）。
 type WorkPackage =
+  | { capability: 'noop';           reason: string; observedRevision: string }
   | { capability: 'mr-comment-fix'; items: Array<{ threadId: string }>; note?: string }
   | { capability: 'ci-fix';         items: Array<{ issueRef: string }>; note?: string }
   | { capability: 'mr-review';      items: []; note?: string }
@@ -468,6 +502,14 @@ interface AgentPlan { bySlot: Record<string, { agent: string; promptSuffix?: str
 ```
 
 四者**全部是脚本，无 AI 参与**（宪法 R1，AC-10 源码层锁定）。
+
+**`noop` 是一等结果，不是异常**（设计门 P1）。绝大多数唤醒其实无事可做——pipeline 转绿、普通
+评论、无待处理项的 update。按 50 个活跃 MR、每个每天 3 次这类事件算，一天就是 **150 次健康唤醒**。
+初稿的 union 里没有 `noop`，仲裁脚本只剩两条路：返回非法空值（被 schema 拒绝 ⇒ 阻断 ⇒ 告警风暴），
+或伪装成 `mr-review`（凭空起 150 个 task 并在 MR 上留下 150 条"本轮无新增意见"）。两条都是错的。
+
+`noop` 的语义：**不创建 `code-round` task、不在 MR 上说任何话**，只把本次采集结论落成一条可查询
+的 observation（供排障链与"上次触发时间"用）。
 
 ## 6. 阶段序列（内置）
 
@@ -489,11 +531,34 @@ resolve-target(program) → prepare-worktree(program) → fetch-diff(program)
 
 改成对**三个集合**做对账（`reconcile`），并把清理挪到发布成功之后（`settle-stale`）：
 
+对账的「台账侧」**只取 `lifecycle = 'active'` 的行**（下方状态机），否则会把早已消失的旧问题
+误判为"持续存在"。
+
 | 集合 | 判定 | 动作 |
 | --- | --- | --- |
-| **持续存在**（本轮有、台账也有） | 指纹命中且仍能锚定 | **不重发**，但**保持原线程未解决**；若位置漂移则更新台账的锚定行 |
-| **新增**（本轮有、台账没有） | 指纹未命中 | 正常发布 |
-| **已消失**（台账有、本轮没有） | 本轮结果里找不到该指纹 | **resolve** 原线程，并标记 `disappearedRound` |
+| **持续存在**（本轮有、台账 active） | 指纹命中且仍能锚定 | **不重发**，但**保持原线程未解决**；位置漂移则更新锚定行；刷新 `lastSeenAt` |
+| **新增**（本轮有、台账无 active 行） | 指纹未命中，或命中的是 `disappeared` 行 | 发布；后者以 **新 generation** 发布并把旧行标 `reappeared`（见下） |
+| **已消失**（台账 active、本轮没有） | 本轮结果里找不到该指纹 | 走 `active → disappeared` **状态边沿**动作，只做一次 |
+
+#### finding 生命周期：状态边沿而非每轮重复
+
+两路设计门同时指出初稿的两个洞：**已消失的问题再次出现时会被当成"持续存在"**（台账里有行 ⇒
+不重发），于是当前真实存在的问题**没有任何活跃线程**；以及 **GitHub 侧每轮都会追加一条"已不再
+出现"**——一个推送 80 次的 MR 上，同一条线程会收到 78 条同义回帖，把三方讨论淹掉。
+
+故显式建模：
+
+```
+active ──本轮未出现──► disappeared ──再次出现──► reappeared（= 新 generation 的 active）
+   ▲                        │
+   └────────────────────────┘  只在**状态发生变化的那一轮**执行外部动作
+```
+
+- `active → disappeared`：**仅此一次**执行 provider 动作（GitLab resolve / GitHub 追加一条回复）；
+  之后各轮该行保持 `disappeared`，**不再有任何外部动作**。
+- `disappeared → reappeared`：以**新 generation** 发布一条新意见（旧线程已 resolve/已标注，
+  复用它会让人困惑），并把旧行终结。
+- 唯一键含 `generation` 正是为了容纳重现。
 
 **GitHub 上 resolve 做不到**（设计门 P1）：`thread.resolve` 在动作注册表里对 GitHub 显式标了
 `unsupported`（`packages/shared/src/codeHost/actions.ts:315`，reasonKey `graphqlOnly`）——REST 面
