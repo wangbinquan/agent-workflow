@@ -342,6 +342,16 @@ export function awaitTaskDriverStopped(
   return taskDriverRegistry.awaitStopped(ticket)
 }
 
+/** RFC-303: a terminal effect may cancel a task that has no process-local
+ * scheduler owner (pending/waiting or recovered row). In that case there is no
+ * driver `finally` to complete RFC-300's already-claimed workspace prune. */
+export async function finalizeCanceledTaskWithoutDriver(
+  db: DbClient,
+  taskId: string,
+): Promise<void> {
+  await finishClaimedWebhookWorkspacePrune(db, taskId)
+}
+
 export interface StartTaskDeps {
   /**
    * RFC-204: needed to unseal `cached_repos.url_enc` for a reuse-by-id launch.
@@ -2404,7 +2414,7 @@ async function startTaskImpl(
         },
       ],
     }
-  } else if (deps.deferRepoPreparation === true) {
+  } else if (deps.deferRepoPreparation === true && input.scratch !== true) {
     // RFC-287 G7：JSON-body 启动把仓库准备**推迟到任务行落库之后**。
     //
     // 今天物化在落行之前，于是「克隆超时 / 远端不可达」这类失败**不留任何记录**
@@ -2414,6 +2424,13 @@ async function startTaskImpl(
     //
     // 只有 JSON-body 这一条走：multipart 要把上传物写进工作树、preCreated 是
     // 调用方已经建好的树，两者都必须保持预物化语义（proposal §G7）。
+    //
+    // **scratch 同样排除**（实现门自审补）：临时空间没有远端要克隆——G7 要解决的
+    // 「拉不动远端时什么都不留」在它身上根本不存在，延后零收益。而占位行必须先
+    // 认领一个 spaceKind，写 'remote' 对 scratch 就是**错的**，直到回填才纠正。
+    // 今天下游恰好不敏感（gc 只处理终态任务、taskDelete 的分支不涉及），但那是
+    // 运气不是保证：任何将来按 spaceKind 分流的非终态读点都会踩中这段窗口。
+    // 与其给一个零收益的路径留一段错值窗口，不如从判据上把它排除。
     deferredTaskId = ulid()
     space = {
       kind: 'single',
@@ -2899,15 +2916,16 @@ async function startTaskImpl(
       })
       if (controller.signal.aborted) break
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, Math.min(backoffMs, remaining))
-        controller.signal.addEventListener(
-          'abort',
-          () => {
-            clearTimeout(timer)
-            resolve()
-          },
-          { once: true },
-        )
+        const settle = (): void => {
+          controller.signal.removeEventListener('abort', onAbort)
+          resolve()
+        }
+        const onAbort = (): void => {
+          clearTimeout(timer)
+          settle()
+        }
+        const timer = setTimeout(settle, Math.min(backoffMs, remaining))
+        controller.signal.addEventListener('abort', onAbort, { once: true })
       })
       backoffMs = Math.min(backoffMs * 2, 15_000)
     }
@@ -3660,6 +3678,12 @@ async function resumeKick(
     })
   } catch (err) {
     if (err instanceof ConflictError) {
+      if (
+        err.code === 'task-source-terminal-closed' ||
+        err.code === 'task-source-terminal-merged'
+      ) {
+        throw err
+      }
       throw new ConflictError(
         opts.conflictCode,
         `task '${id}' changed state concurrently; only [${allowedFrom.join('/')}] tasks can ${opts.verb}`,
@@ -4343,6 +4367,12 @@ export async function retryNode(
     })
   } catch (err) {
     if (err instanceof ConflictError) {
+      if (
+        err.code === 'task-source-terminal-closed' ||
+        err.code === 'task-source-terminal-merged'
+      ) {
+        throw err
+      }
       throw new ConflictError(
         'task-still-running',
         `task '${taskId}' changed state concurrently; cancel/settle it before retrying a node`,

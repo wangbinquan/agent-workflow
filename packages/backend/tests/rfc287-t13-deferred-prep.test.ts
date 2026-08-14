@@ -240,16 +240,29 @@ describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
     const fnEnd = src.indexOf('\n}\n', fnStart)
     const body = src.slice(fnStart, fnEnd)
     const prepare = body.indexOf('if (deferredTaskId !== null) {')
-    const register = body.indexOf('activeTasks.set(taskId, controller)')
+    // 驱动注册的 API 名会随重构变（曾是 `activeTasks.set(taskId, controller)`，
+    // RFC-288/taskDriver 之后是 `tryAttachTaskDriver(...)`）。锁的是**语义**——
+    // 「准备开始前任务必须已被本进程调度器持有」——所以判据取「任一注册形态」，
+    // 而不是某个具体函数名；名字变了不该红，顺序反了才该红。
+    const register = [
+      body.indexOf('tryAttachTaskDriver('),
+      body.indexOf('activeTasks.set(taskId, controller)'),
+      body.indexOf('taskDriverRegistry.tryAttach('),
+    ]
+      .filter((i) => i !== -1)
+      .sort((a, b) => a - b)[0]
     expect(prepare, 'startTaskImpl 里应有延后准备块').toBeGreaterThan(-1)
-    expect(register, 'startTaskImpl 里应注册 AbortController').toBeGreaterThan(-1)
+    expect(register, 'startTaskImpl 里应有驱动注册（任一形态）').not.toBe(undefined)
     expect(
-      register,
+      register as number,
       '注册必须在准备之前——否则长克隆期间任务无驱动，会被孤儿回收器判死',
     ).toBeLessThan(prepare)
-    // 且中间不得插入 await：注册与准备之间若有可挂起的点，那段窗口里任务既没
-    // 驱动、又已有 running 的合成行，正是回收器要收的形状。
-    expect(body.slice(register, prepare)).not.toMatch(/\bawait\b/)
+    // 注册与准备之间不得出现「放弃驱动」的动作。原先这里锁的是「中间不得有
+    // await」，但 taskDriver 重构后注册本身就是 `await tryAttachTaskDriver(...)`，
+    // 那条判据已不适用。真正要防的是**中途把驱动放掉**——一旦释放，剩下的准备
+    // 过程就落在无驱动窗口里，正是孤儿回收器要收的形状。
+    const between = body.slice(register as number, prepare)
+    expect(between).not.toMatch(/release\(|detachTaskDriver|clearForTesting/)
   })
 
   test('回收器确实以 activeTasks 为豁免依据（判活单点未被绕过）', () => {
@@ -396,4 +409,41 @@ describe('RFC-287 G6 — 只有网络类占窗口（接线锁）', () => {
     expect(src).toMatch(/LC_ALL: 'C'/)
     expect(src).toMatch(/LANG: 'C'/)
   })
+})
+
+// RFC-287 实现门自审补 —— scratch 启动**不走**延后准备。
+//
+// 为什么：临时空间没有远端要克隆，G7 要解决的「拉不动远端时什么都不留」在它身上
+// 根本不存在，延后零收益。而占位行必须先认领一个 spaceKind，写 'remote' 对 scratch
+// 就是错的，直到回填才纠正。今天下游恰好不敏感（gc 只处理终态任务、taskDelete 的
+// 分支不涉及），但那是运气不是保证——任何将来按 spaceKind 分流的非终态读点都会
+// 踩中这段窗口。
+describe('RFC-287 — scratch 启动排除在延后准备之外', () => {
+  test('开着 deferRepoPreparation 时，scratch 任务仍立刻拿到正确的 spaceKind', async () => {
+    const db5 = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db5)
+    const task = await startTask(
+      {
+        workflowId: s.workflowId,
+        name: 'scratch-not-deferred',
+        scratch: true,
+        inputs: {},
+      } as never,
+      {
+        db: db5,
+        actorUserId: s.userId,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        // 开关开着——但 scratch 必须绕开它。
+        deferRepoPreparation: true,
+      } as never,
+    )
+    const row = (await db5.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+    // 关键断言：spaceKind 必须是 'scratch'，绝不能是占位的 'remote'。
+    expect(row?.spaceKind).toBe('scratch')
+    // 且工作区立刻可用（预物化语义保住）。
+    expect(row?.worktreePath ?? '').not.toBe('')
+    // 不该有 __repo_prep__ 合成行——它压根没走延后那条路。
+    const runs = await db5.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+    expect(runs.find((r) => r.nodeId === REPO_PREP_NODE_ID)).toBeUndefined()
+  }, 60_000)
 })
