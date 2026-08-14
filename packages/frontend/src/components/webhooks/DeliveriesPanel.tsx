@@ -8,6 +8,7 @@ import {
   type WebhookDeliveryStatus,
 } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -42,7 +43,33 @@ type DeliveryRow = {
   receivedAt: number
 }
 
-type DeliveryDetail = DeliveryRow & { bodyJson: string | null }
+type TerminalControlTarget = {
+  taskId: string
+  priorStatus: string | null
+  currentStatus: string
+  fenceOutcome: string
+  cancelOutcome: string
+  releaseOutcome: string
+  error: string | null
+  workspace: { spaceKind: string | null; state: 'retained' | 'pruning' | 'pruned' }
+}
+
+type TerminalControlAudit = {
+  kind: 'fence-closed' | 'fence-merged' | 'clear-closed'
+  observedEventType: 'mr_opened' | 'mr_closed' | 'mr_merged'
+  status: 'pending' | 'leased' | 'waiting-launches' | 'retryable' | 'succeeded'
+  revision: number
+  attemptCount: number
+  lastError: string | null
+  totalTargetCount: number
+  hiddenTargetCount: number
+  targets: TerminalControlTarget[]
+}
+
+type DeliveryDetail = DeliveryRow & {
+  bodyJson: string | null
+  terminalControl: TerminalControlAudit | null
+}
 
 /** RFC-261 列表封套（tasks /api/tasks/page 同款形态）。 */
 type DeliveryPage = {
@@ -422,6 +449,89 @@ function DeliveryDetailDialog(props: { id: string; onClose: () => void }) {
               </dd>
             </div>
           </dl>
+          {detail.data.terminalControl !== null && (
+            <section data-testid="webhook-terminal-control-audit">
+              <h3 className="webhook-delivery-detail__body-title">
+                {t('webhookDeliveries.terminalControl.title')}
+              </h3>
+              <dl className="webhook-facts webhook-delivery-detail__facts">
+                <div>
+                  <dt>{t('webhookDeliveries.terminalControl.kind')}</dt>
+                  <dd>
+                    {t(
+                      `webhookDeliveries.terminalControl.kinds.${detail.data.terminalControl.kind}`,
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('webhookDeliveries.terminalControl.status')}</dt>
+                  <dd>
+                    {t(
+                      `webhookDeliveries.terminalControl.statuses.${detail.data.terminalControl.status}`,
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('webhookDeliveries.terminalControl.revision')}</dt>
+                  <dd>{detail.data.terminalControl.revision}</dd>
+                </div>
+                <div>
+                  <dt>{t('webhookDeliveries.terminalControl.targets')}</dt>
+                  <dd>{detail.data.terminalControl.totalTargetCount}</dd>
+                </div>
+              </dl>
+              {detail.data.terminalControl.hiddenTargetCount > 0 && (
+                <p className="muted" data-testid="webhook-terminal-control-hidden-targets">
+                  {t('webhookDeliveries.terminalControl.hiddenTargets', {
+                    count: detail.data.terminalControl.hiddenTargetCount,
+                  })}
+                </p>
+              )}
+              {detail.data.terminalControl.targets.length > 0 && (
+                <TableViewport label={t('webhookDeliveries.terminalControl.targetTable')}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>{t('webhookDeliveries.terminalControl.task')}</th>
+                        <th>{t('webhookDeliveries.terminalControl.cancel')}</th>
+                        <th>{t('webhookDeliveries.terminalControl.release')}</th>
+                        <th>{t('webhookDeliveries.terminalControl.workspace')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.data.terminalControl.targets.map((target) => (
+                        <tr key={target.taskId}>
+                          <td>
+                            <Link to="/tasks/$id" params={{ id: target.taskId }} className="link">
+                              {target.taskId}
+                            </Link>
+                          </td>
+                          <td>
+                            {t(
+                              `webhookDeliveries.terminalControl.cancelOutcomes.${target.cancelOutcome}`,
+                            )}
+                          </td>
+                          <td>
+                            {t(
+                              `webhookDeliveries.terminalControl.releaseOutcomes.${target.releaseOutcome}`,
+                            )}
+                          </td>
+                          <td>
+                            {t(
+                              `webhookDeliveries.terminalControl.workspaceStates.${target.workspace.state}`,
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </TableViewport>
+              )}
+              {detail.data.terminalControl.lastError !== null && (
+                <p className="muted">{detail.data.terminalControl.lastError}</p>
+              )}
+            </section>
+          )}
           <div>
             <h3 className="webhook-delivery-detail__body-title">
               {t('webhookDeliveries.detail.payload')}

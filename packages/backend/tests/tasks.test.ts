@@ -84,6 +84,28 @@ async function seedWorkflow(db: DbClient, def: WorkflowDefinition): Promise<stri
   return id
 }
 
+/** RFC-287 deferred preparation returns the task row before clone/worktree
+ * materialization. Diff fixtures must wait for the durable prepared path;
+ * writing against the immediate empty string resolves to this package cwd and
+ * leaks README.md/NEWFILE.md into the repository under test. */
+async function preparedWorktree(db: DbClient, taskId: string): Promise<string> {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    const row = (
+      await db
+        .select({ worktreePath: tasks.worktreePath, baseCommit: tasks.baseCommit })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1)
+    )[0]
+    if (row !== undefined && row.worktreePath !== '' && row.baseCommit !== null) {
+      return row.worktreePath
+    }
+    await Bun.sleep(10)
+  }
+  throw new Error(`task ${taskId} repository preparation did not settle`)
+}
+
 const EMPTY_DEF: WorkflowDefinition = {
   $schema_version: 1,
   inputs: [],
@@ -495,10 +517,8 @@ describe('task HTTP routes', () => {
         inputs: {},
       }),
     })
-    const { id, worktreePath } = (await post.json()) as {
-      id: string
-      worktreePath: string
-    }
+    const { id } = (await post.json()) as { id: string }
+    const worktreePath = await preparedWorktree(h.db, id)
 
     // Modify a tracked file in the worktree to produce a real diff.
     writeFileSync(join(worktreePath, 'README.md'), '# changed\n')
@@ -528,7 +548,8 @@ describe('task HTTP routes', () => {
         inputs: {},
       }),
     })
-    const { id, worktreePath } = (await post.json()) as { id: string; worktreePath: string }
+    const { id } = (await post.json()) as { id: string }
+    const worktreePath = await preparedWorktree(h.db, id)
     writeFileSync(join(worktreePath, 'NEWFILE.md'), 'fresh\n')
 
     const res = await req(h.app, `/api/tasks/${id}/diff`)

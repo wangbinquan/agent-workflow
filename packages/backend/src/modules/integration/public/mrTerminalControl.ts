@@ -31,5 +31,6 @@ export interface MrTerminalControl {
   wake(effectId?: string | null): void
   /** Boot barrier: reconcile stale guards and drain every currently due effect. */
   reconcileOnBoot(): Promise<void>
-  stop(): void
+  /** Stop accepting wakeups, abort launch owners, and wait for the active effect attempt. */
+  stop(): Promise<void>
 }

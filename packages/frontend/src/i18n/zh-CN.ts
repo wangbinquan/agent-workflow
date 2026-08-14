@@ -2719,6 +2719,7 @@ export interface Resources {
     firesEmpty: string
     resetCircuit: string
     eventCount: string
+    terminalProtectionChip: string
     flowAria: string
     saveAction: string
     commonOnlySaveAction: string
@@ -2743,6 +2744,11 @@ export interface Resources {
       'skipped-repo-unregistered': string
       'skipped-owner-invalid': string
       'skipped-trigger-disabled': string
+      'skipped-mr-stream-closed': string
+      'skipped-mr-stream-merged': string
+      'skipped-mr-stream-terminal': string
+      'skipped-mr-stream-identity-missing': string
+      'skipped-trigger-invalid': string
     }
     flow: { scope: string; events: string; target: string }
     steps: { scope: string; events: string; target: string; review: string }
@@ -2751,6 +2757,9 @@ export interface Resources {
       endpoint: string
       scope: string
       events: string
+      terminalProtection: string
+      terminalProtectionOn: string
+      terminalProtectionOff: string
       target: string
       space: string
       separator: string
@@ -2776,6 +2785,10 @@ export interface Resources {
       scope: string
       scopeHint: string
       events: string
+      cancelOnMrTerminal: string
+      cancelOnMrTerminalLabel: string
+      cancelOnMrTerminalHint: string
+      cancelOnMrTerminalError: string
       eventsHint: string
       pipelineException: string
       branchFilter: string
@@ -2874,6 +2887,27 @@ export interface Resources {
       stream: string
       payload: string
     }
+    terminalControl: {
+      title: string
+      kind: string
+      status: string
+      revision: string
+      targets: string
+      hiddenTargets: string
+      targetTable: string
+      task: string
+      cancel: string
+      release: string
+      workspace: string
+      kinds: Record<'fence-closed' | 'fence-merged' | 'clear-closed', string>
+      statuses: Record<
+        'pending' | 'leased' | 'waiting-launches' | 'retryable' | 'succeeded',
+        string
+      >
+      cancelOutcomes: Record<'canceled' | 'already-terminal' | 'not-applicable', string>
+      releaseOutcomes: Record<'pending' | 'no-active-owner' | 'released' | 'unreaped', string>
+      workspaceStates: Record<'retained' | 'pruning' | 'pruned', string>
+    }
     statuses: {
       received: string
       processing: string
@@ -2891,6 +2925,8 @@ export interface Resources {
       'parse-failed': string
       'internal-error': string
       interrupted: string
+      'terminal-control-accepted': string
+      'mr-stream-identity-missing': string
     }
   }
   scheduled: {
@@ -8674,6 +8710,7 @@ export const zhCN: Resources = {
     firesEmpty: '还没有触发记录。',
     resetCircuit: '重置熔断',
     eventCount: '{{count}} 类事件',
+    terminalProtectionChip: 'MR / PR 终态即停',
     flowAria: '规则执行路径',
     saveAction: '保存规则',
     commonOnlySaveAction: '仅保存通用设置',
@@ -8711,6 +8748,11 @@ export const zhCN: Resources = {
       'skipped-repo-unregistered': '已跳过：仓库尚未导入',
       'skipped-owner-invalid': '已跳过：规则负责人不可用',
       'skipped-trigger-disabled': '已跳过：规则已停用',
+      'skipped-mr-stream-closed': '已跳过：MR / PR 已关闭',
+      'skipped-mr-stream-merged': '已跳过：MR / PR 已合入',
+      'skipped-mr-stream-terminal': '已跳过：终态事件先完成启动封锁',
+      'skipped-mr-stream-identity-missing': '已跳过：缺少稳定的 MR / PR 标识',
+      'skipped-trigger-invalid': '已跳过：终态保护配置无效',
     },
     flow: { scope: '仓库范围', events: '响应事件', target: '启动目标' },
     steps: { scope: '范围', events: '事件', target: '执行', review: '复核' },
@@ -8724,6 +8766,9 @@ export const zhCN: Resources = {
       endpoint: '接收端点',
       scope: '仓库范围',
       events: '响应事件',
+      terminalProtection: '终态保护',
+      terminalProtectionOn: 'MR / PR 关闭或合入时停止运行中的任务',
+      terminalProtectionOff: '保持原有事件行为',
       target: '启动目标',
       space: '执行空间',
       separator: '→',
@@ -8749,6 +8794,11 @@ export const zhCN: Resources = {
       scope: '仓库范围',
       scopeHint: '可覆盖全部仓库、一个路径前缀，或明确列出的仓库。',
       events: '事件类型',
+      cancelOnMrTerminal: 'MR / PR 终态保护',
+      cancelOnMrTerminalLabel: 'MR / PR 关闭或合入时停止运行中的任务',
+      cancelOnMrTerminalHint:
+        '仅用于由 MR / PR 打开事件启动的规则；关闭和合入会成为只控制停止、不启动新任务的事件。',
+      cancelOnMrTerminalError: '请选中“MR / PR 打开”，并移除“关闭”和“合入”事件后再保存。',
       eventsHint: '流水线类事件不受忽略名单过滤（修到绿循环的前提）',
       pipelineException:
         '流水线事件始终会被接收，即使作者在忽略名单中；连续触发上限负责阻止修复循环失控。',
@@ -8885,6 +8935,43 @@ export const zhCN: Resources = {
       stream: '事件流',
       payload: '事件内容',
     },
+    terminalControl: {
+      title: 'MR / PR 终态控制',
+      kind: '控制事实',
+      status: '收敛状态',
+      revision: '事件流版本',
+      targets: '命中任务',
+      hiddenTargets: '另有 {{count}} 个命中任务因任务访问权限而隐藏。',
+      targetTable: '可见任务的终态控制结果',
+      task: '任务',
+      cancel: '取消结果',
+      release: '运行资源释放',
+      workspace: '工作区',
+      kinds: {
+        'fence-closed': 'MR / PR 已关闭',
+        'fence-merged': 'MR / PR 已合入',
+        'clear-closed': 'MR / PR 已重新打开',
+      },
+      statuses: {
+        pending: '待处理',
+        leased: '处理中',
+        'waiting-launches': '等待启动所有权释放',
+        retryable: '需要重试',
+        succeeded: '已收敛',
+      },
+      cancelOutcomes: {
+        canceled: '已取消',
+        'already-terminal': '此前已终态',
+        'not-applicable': '不适用',
+      },
+      releaseOutcomes: {
+        pending: '待确认',
+        'no-active-owner': '无活动执行所有者',
+        released: '已释放',
+        unreaped: '存在未回收进程',
+      },
+      workspaceStates: { retained: '已保留', pruning: '清理中', pruned: '已清理' },
+    },
     statuses: {
       received: '已接收',
       processing: '分发中',
@@ -8902,6 +8989,8 @@ export const zhCN: Resources = {
       'parse-failed': '请求内容无法解析',
       'internal-error': '平台内部错误',
       interrupted: '服务重启时中断',
+      'terminal-control-accepted': '已接受终态控制',
+      'mr-stream-identity-missing': '缺少稳定的 MR / PR 标识',
     },
   },
   scheduled: {

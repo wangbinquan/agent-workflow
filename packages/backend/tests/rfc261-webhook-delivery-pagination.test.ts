@@ -243,6 +243,7 @@ describe('RFC-261 · AC-9 迁移 0139（规模化收口）', () => {
       'idx_webhook_deliveries_dedupe',
       'idx_webhook_deliveries_endpoint_time',
       'idx_webhook_deliveries_event_time',
+      'idx_webhook_deliveries_mr_fact',
       'idx_webhook_deliveries_received_at',
       'idx_webhook_deliveries_repo_time',
       'idx_webhook_deliveries_status_time',

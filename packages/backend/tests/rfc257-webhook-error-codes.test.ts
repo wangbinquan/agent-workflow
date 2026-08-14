@@ -177,6 +177,66 @@ describe('RFC-257 · 触发器面错误码', () => {
 })
 
 describe('RFC-257 · 投递面错误码（replay 的每条拒绝路径）', () => {
+  test('RFC-303 replay lineage is fail-closed; impossible duplicate result keeps an explicit invariant code', async () => {
+    const h = await harness()
+    const broken = await seedDelivery(h.db, { replayedFromDeliveryId: 'missing-root' })
+    expect(await codeOf(await h.call('POST', `/api/webhook-deliveries/${broken}/replay`))).toBe(
+      'webhook-delivery-replay-lineage-broken',
+    )
+
+    // `acceptVerifiedDelivery` excludes explicit replay rows from fact
+    // dedupe, so the duplicate-result branch cannot be produced through the
+    // public route today. Keep the invariant named and source-locked; if the
+    // port later admits replay dedupe, replace this with a behavioral fake.
+    const source = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'routes', 'webhookDeliveries.ts'),
+      'utf8',
+    )
+    expect(source).toContain("'webhook-delivery-replay-conflict'")
+  })
+
+  test('RFC-303 terminal replay requires the original durable revision and effect', async () => {
+    const h = await harness()
+    const terminalBody = JSON.stringify({
+      object_kind: 'merge_request',
+      event_type: 'merge_request',
+      user: { username: 'u' },
+      project: {
+        id: 77,
+        path_with_namespace: 'g/r',
+        git_http_url: 'https://gl.example.com/g/r.git',
+        git_ssh_url: 'git@gl.example.com:g/r.git',
+      },
+      object_attributes: {
+        iid: 9,
+        state: 'closed',
+        action: 'close',
+        source_branch: 'feature',
+        target_branch: 'main',
+      },
+    })
+    const legacy = await seedDelivery(h.db, {
+      gitlabEventHeader: 'Merge Request Hook',
+      objectKind: 'merge_request',
+      eventType: 'mr_closed',
+      bodyJson: terminalBody,
+      mrStreamRevision: null,
+    })
+    expect(await codeOf(await h.call('POST', `/api/webhook-deliveries/${legacy}/replay`))).toBe(
+      'webhook-terminal-replay-root-unprotected',
+    )
+    const missingEffect = await seedDelivery(h.db, {
+      gitlabEventHeader: 'Merge Request Hook',
+      objectKind: 'merge_request',
+      eventType: 'mr_closed',
+      bodyJson: terminalBody,
+      mrStreamRevision: 3,
+    })
+    expect(
+      await codeOf(await h.call('POST', `/api/webhook-deliveries/${missingEffect}/replay`)),
+    ).toBe('webhook-terminal-replay-effect-missing')
+  })
+
   test('not-found / rejected-not-replayable / in-flight / body-gone / body-invalid / unsupported / endpoint-not-found / provider-unknown', async () => {
     const h = await harness()
     expect(await codeOf(await h.call('GET', '/api/webhook-deliveries/nope'))).toBe(

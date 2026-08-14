@@ -199,6 +199,16 @@ export async function gcDeliveries(
         SELECT rowid FROM webhook_deliveries
         WHERE received_at < ${rowCutoff}
           AND status NOT IN ('received','processing')
+          AND NOT EXISTS (
+            SELECT 1 FROM webhook_mr_control_effects effect
+            WHERE effect.delivery_id = webhook_deliveries.id
+              AND effect.status <> 'succeeded'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM webhook_mr_launch_guards guard
+            WHERE guard.delivery_id = webhook_deliveries.id
+              AND guard.status IN ('reserved','launching','revoking-terminal','task-committed')
+          )
         LIMIT ${batchSize}
       )
       RETURNING id`)

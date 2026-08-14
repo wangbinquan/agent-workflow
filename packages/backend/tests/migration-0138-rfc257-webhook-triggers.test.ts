@@ -55,7 +55,7 @@ function insertDelivery(raw: Database, id: string, uuid: string | null, status: 
 }
 
 describe('RFC-257 T2 · 迁移 0138', () => {
-  test('全量迁移在全新库上跑通，五表 + tasks 两列存在', () => {
+  test('全量迁移在全新库上跑通，Webhook 基础表与 RFC-303 控制表全部存在', () => {
     const raw = freshDb()
     const tables = raw
       .query<{ name: string }, []>(
@@ -66,6 +66,10 @@ describe('RFC-257 T2 · 迁移 0138', () => {
     expect(tables).toEqual([
       'webhook_deliveries',
       'webhook_endpoints',
+      'webhook_mr_control_effects',
+      'webhook_mr_control_targets',
+      'webhook_mr_launch_guards',
+      'webhook_mr_stream_states',
       'webhook_trigger_fires',
       'webhook_trigger_streams',
       'webhook_triggers',

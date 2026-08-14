@@ -6,7 +6,7 @@
 
 import type { GitRef } from '@agent-workflow/shared'
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { mkdir, rm, stat, unlink } from 'node:fs/promises'
+import { mkdir, realpath, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
@@ -272,6 +272,10 @@ export async function runGit(
 export const GIT_TIMEOUT_EXIT_CODE = 124
 /** 取消（AbortSignal）导致的终止；与超时区分，便于上层给出不同文案。 */
 export const GIT_ABORTED_EXIT_CODE = 125
+
+function signalWasAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true
+}
 
 /** Throw a typed error if `repoPath` is not a usable git repo. */
 export async function requireGitRepo(repoPath: string): Promise<void> {
@@ -592,6 +596,8 @@ export interface WorktreeLifecycleHookEvent {
   stage:
     | 'working-branch-after-capture'
     | 'working-branch-prepared-before-cas'
+    | 'before-worktree-add'
+    | 'worktree-add-failed-before-cleanup'
     | 'post-add-before-submodules'
     | 'post-add-cleanup-worktree-remove'
     | 'post-add-cleanup-branch-restore'
@@ -1088,16 +1094,55 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
   } else {
     const branchRef = `refs/heads/${branch}`
     const branchBefore = await readLocalBranchRef(opts.repoPath, branchRef)
+    const worktreePathExisted = existsSync(worktreePath)
     // RFC-248 D17: sparse 成员先 --no-checkout 落一个空工作树，配好 sparse
     // 模式再 checkout。反过来（先全量检出再收窄）在大仓上要白检出一整棵树。
     const addArgs =
       opts.sparseSubdir !== undefined && opts.sparseSubdir !== ''
         ? ['worktree', 'add', '--no-checkout', '-b', branch, worktreePath, baseCommit]
         : ['worktree', 'add', '-b', branch, worktreePath, baseCommit]
+    await opts.lifecycleHook?.({
+      stage: 'before-worktree-add',
+      repoPath: opts.repoPath,
+      worktreePath,
+      branch,
+      branchRef,
+      branchBefore,
+      preparedCommit: baseCommit,
+    })
     const add = await withWorktreeRegistryLock(opts.repoPath, () =>
       runGit(opts.repoPath, addArgs, { signal: opts.signal }),
     )
     if (add.exitCode !== 0) {
+      if (signalWasAborted(opts.signal) || add.exitCode === GIT_ABORTED_EXIT_CODE) {
+        await opts.lifecycleHook?.({
+          stage: 'worktree-add-failed-before-cleanup',
+          repoPath: opts.repoPath,
+          worktreePath,
+          branch,
+          branchRef,
+          branchBefore,
+          preparedCommit: baseCommit,
+        })
+        const provenance: WorktreeCleanupProvenance = {
+          repoPath: opts.repoPath,
+          worktreePath,
+          branch,
+          branchRef,
+          branchBefore,
+          branchAfter: baseCommit,
+        }
+        const cleanupResult = await cleanupFailedWorktreeAdd(provenance, worktreePathExisted)
+        if (cleanupResult.failures.length > 0) {
+          throw new DomainError(
+            'worktree-abort-cleanup-incomplete',
+            'terminal launch cancellation left worktree resources that require reconciliation',
+            500,
+            { cleanup: cleanupResult },
+          )
+        }
+        throw new ConflictError('webhook-mr-launch-terminal', 'worktree creation was revoked')
+      }
       throw new DomainError(
         'worktree-add-failed',
         `git worktree add failed: ${add.stderr.trim()}`,
@@ -1213,6 +1258,15 @@ interface RegisteredWorktree {
   branchRef: string | null
 }
 
+async function sameFilesystemPath(a: string, b: string): Promise<boolean> {
+  if (resolve(a) === resolve(b)) return true
+  try {
+    return (await realpath(a)) === (await realpath(b))
+  } catch {
+    return false
+  }
+}
+
 async function listRegisteredWorktrees(repoPath: string): Promise<RegisteredWorktree[]> {
   const list = await runGit(repoPath, ['worktree', 'list', '--porcelain'])
   if (list.exitCode !== 0) {
@@ -1273,7 +1327,14 @@ async function cleanupFailedWorkingBranchAttach(
     }
   }
 
-  if (registrations.some((registration) => registration.path === provenance.worktreePath)) {
+  let ownedRegistration = false
+  for (const registration of registrations) {
+    if (await sameFilesystemPath(registration.path, provenance.worktreePath)) {
+      ownedRegistration = true
+      break
+    }
+  }
+  if (ownedRegistration) {
     return cleanupCreatedWorktree(provenance)
   }
 
@@ -1295,6 +1356,83 @@ async function cleanupFailedWorkingBranchAttach(
 
   const branch = await restoreBranchRefCas(provenance)
   return { worktreeRemoved: true, branchRestored: branch.branchRestored, failures: branch.failures }
+}
+
+/**
+ * Reconcile the ambiguous state left when an AbortSignal kills `git worktree
+ * add`. Git may have committed the registration/ref before the process group
+ * dies, or it may have created only a partial directory. The pre-existing-path
+ * bit is captured before spawn so the latter cleanup never deletes user data.
+ */
+async function cleanupFailedWorktreeAdd(
+  provenance: WorktreeCleanupProvenance,
+  worktreePathExisted: boolean,
+): Promise<WorktreeCleanupResult> {
+  const cleanup = await cleanupFailedWorkingBranchAttach(provenance)
+  if (cleanup.worktreeRemoved && !worktreePathExisted && existsSync(provenance.worktreePath)) {
+    try {
+      await rm(provenance.worktreePath, { recursive: true, force: true })
+    } catch (error) {
+      cleanup.worktreeRemoved = false
+      cleanup.failures.push({
+        stage: 'worktree-remove',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return cleanup
+}
+
+async function cleanupFailedDetachedWorktreeAdd(
+  repoPath: string,
+  worktreePath: string,
+  worktreePathExisted: boolean,
+): Promise<WorktreeCleanupResult> {
+  const failures: WorktreeCleanupResult['failures'] = []
+  let registrations: RegisteredWorktree[]
+  try {
+    registrations = await listRegisteredWorktrees(repoPath)
+  } catch (error) {
+    return {
+      worktreeRemoved: false,
+      branchRestored: true,
+      failures: [
+        {
+          stage: 'worktree-remove',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    }
+  }
+
+  let registered = false
+  for (const registration of registrations) {
+    if (await sameFilesystemPath(registration.path, worktreePath)) {
+      registered = true
+      break
+    }
+  }
+  if (registered) {
+    const remove = await runGit(repoPath, ['worktree', 'remove', '--force', worktreePath])
+    if (remove.exitCode !== 0) {
+      failures.push({
+        stage: 'worktree-remove',
+        message: remove.stderr.trim() || `git worktree remove exited ${remove.exitCode}`,
+      })
+      return { worktreeRemoved: false, branchRestored: true, failures }
+    }
+  }
+  if (!worktreePathExisted && existsSync(worktreePath)) {
+    try {
+      await rm(worktreePath, { recursive: true, force: true })
+    } catch (error) {
+      failures.push({
+        stage: 'worktree-remove',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return { worktreeRemoved: failures.length === 0, branchRestored: true, failures }
 }
 
 function cleanupFailureDetails(error: Error, cleanup: WorktreeCleanupResult): unknown {
@@ -1335,6 +1473,7 @@ async function checkoutWorkingBranch(opts: {
 }): Promise<WorktreeCleanupProvenance> {
   const { repoPath, worktreePath, branch, baseCommit } = opts
   const branchRef = `refs/heads/${branch}`
+  const worktreePathExisted = existsSync(worktreePath)
 
   // 1. Authoritative name validation (mirrors shared isLooseValidBranchName).
   const fmt = await runGit(repoPath, ['check-ref-format', '--branch', branch], {
@@ -1408,7 +1547,25 @@ async function checkoutWorkingBranch(opts: {
       ['worktree', 'add', '--detach', worktreePath, preparationStart],
       { signal: opts.signal },
     )
-    if (prepare.exitCode !== 0) throw mapWorktreeAddError(prepare.stderr, branch)
+    if (prepare.exitCode !== 0) {
+      if (signalWasAborted(opts.signal) || prepare.exitCode === GIT_ABORTED_EXIT_CODE) {
+        const cleanup = await cleanupFailedDetachedWorktreeAdd(
+          repoPath,
+          worktreePath,
+          worktreePathExisted,
+        )
+        if (cleanup.failures.length > 0) {
+          throw new DomainError(
+            'worktree-abort-cleanup-incomplete',
+            'terminal launch cancellation left a detached preparation worktree',
+            500,
+            { cleanup },
+          )
+        }
+        throw new ConflictError('webhook-mr-launch-terminal', 'worktree creation was revoked')
+      }
+      throw mapWorktreeAddError(prepare.stderr, branch)
+    }
 
     const merge = await runGit(
       worktreePath,
@@ -1521,7 +1678,7 @@ async function checkoutWorkingBranch(opts: {
   })
   if (add.exitCode !== 0) {
     const error = mapWorktreeAddError(add.stderr, branch)
-    const cleanup = await cleanupFailedWorkingBranchAttach(provenance)
+    const cleanup = await cleanupFailedWorktreeAdd(provenance, worktreePathExisted)
     if (cleanup.failures.length > 0) {
       throw new DomainError(
         'working-branch-attach-cleanup-incomplete',

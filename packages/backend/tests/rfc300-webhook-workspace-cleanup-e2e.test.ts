@@ -23,9 +23,13 @@ import {
   tasks,
   webhookDeliveries,
   webhookEndpoints,
+  webhookMrControlEffects,
+  webhookMrControlTargets,
   webhookTriggerFires,
   webhookTriggers,
 } from '../src/db/schema'
+import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
+import { createApp } from '../src/server'
 import { cancelExecution } from '../src/services/execution/executor'
 import { finishClaimedWebhookWorkspacePrune } from '../src/services/gc'
 import {
@@ -382,5 +386,220 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
     }
 
     await db.delete(webhookTriggers).where(eq(webhookTriggers.id, triggerId))
+  }
+})
+
+test('RFC-303 real GitLab close stops the task driver and prunes its remote workspace', async () => {
+  currentRoot = mkdtempSync(join(tmpdir(), 'aw-rfc303-terminal-e2e-'))
+  previousHome = process.env.AGENT_WORKFLOW_HOME
+  process.env.AGENT_WORKFLOW_HOME = currentRoot
+  const configPath = join(currentRoot, 'config.json')
+  writeFileSync(
+    configPath,
+    JSON.stringify({ $schema_version: 1, webhookTaskWorkspaceAutoCleanup: true }),
+  )
+
+  const db = createInMemoryDb(MIGRATIONS)
+  const box = createSecretBoxFromKey(Buffer.alloc(32, 31))
+  const owner = await createUser(db, {
+    username: 'rfc303-owner',
+    displayName: 'RFC 303 Owner',
+    role: 'admin',
+    password: 'longEnoughPassword',
+  })
+  const actor = buildActor({
+    user: {
+      id: owner.id,
+      username: owner.username,
+      displayName: owner.displayName,
+      role: owner.role,
+      status: owner.status,
+    },
+    source: 'session',
+  })
+  const workflow = await createWorkflow(
+    db,
+    {
+      name: 'rfc303-long-running',
+      description: '',
+      definition: {
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
+        inputs: [],
+        nodes: [
+          {
+            id: 'slow',
+            kind: 'script',
+            language: 'bash',
+            script: 'sleep 30',
+            readonly: false,
+          },
+        ],
+        edges: [],
+      },
+    },
+    { ownerUserId: owner.id, actor },
+  )
+
+  const originRepo = join(currentRoot, 'origin-source')
+  const sourceRepo = join(currentRoot, 'cached-source')
+  initRepo(originRepo)
+  execFileSync('git', ['clone', '-q', originRepo, sourceRepo])
+  const repoUrl = pathToFileURL(originRepo).href
+  const parsed = parseGitUrl(repoUrl)
+  if (parsed === null) throw new Error('fixture URL did not parse')
+  await db.insert(cachedRepos).values({
+    id: 'cached-rfc303',
+    urlHash: gitUrlCacheKeyWith(parsed, sha1Hex).hash,
+    urlEnc: box.seal(repoUrl),
+    urlRedacted: repoUrl,
+    localPath: sourceRepo,
+    defaultBranch: 'main',
+    lastFetchedAt: Date.now(),
+    createdAt: Date.now(),
+  })
+  await db.insert(webhookEndpoints).values({
+    id: 'endpoint-rfc303',
+    name: 'RFC 303 endpoint',
+    provider: 'gitlab',
+    urlToken: 'aw_whk_rfc303',
+    secretEnc: box.seal('rfc303-secret'),
+    enabled: true,
+  })
+  await db.insert(webhookTriggers).values({
+    id: 'trigger-rfc303',
+    name: 'stop-on-terminal',
+    endpointId: 'endpoint-rfc303',
+    ownerUserId: owner.id,
+    repoScope: JSON.stringify({ kind: 'all' }),
+    eventTypes: JSON.stringify(['mr_opened']),
+    ignoreUsernames: JSON.stringify([]),
+    launchKind: 'workflow',
+    launchRefId: workflow.id,
+    launchPayload: JSON.stringify({ inputs: {} }),
+    autoRegisterRepos: false,
+    cancelOnMrTerminal: true,
+  })
+
+  registerTerminalWorkspacePrunePolicy((row, to) =>
+    shouldRequestWebhookWorkspacePrune(true, { ...row, to }),
+  )
+  registerTerminalWorkspacePruneEffect((effectDb, taskId) => {
+    if (isTaskActive(taskId)) return
+    void finishClaimedWebhookWorkspacePrune(effectDb, taskId)
+  })
+
+  const terminalControl = composeMrTerminalControl(db)
+  await terminalControl.reconcileOnBoot()
+  const dispatcher = createWebhookDispatcher({
+    db,
+    configPath,
+    secretBox: box,
+    getDefaultRuntime: async () => null,
+    terminalControl,
+  })
+  const app = createApp({
+    token: 'a'.repeat(64),
+    configPath,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    db,
+    secretBox: box,
+    webhookDispatcher: dispatcher,
+    webhookTerminalControl: terminalControl,
+  })
+
+  const mrBody = (action: 'open' | 'close') =>
+    JSON.stringify({
+      object_kind: 'merge_request',
+      user: { username: 'developer' },
+      project: {
+        id: 303,
+        path_with_namespace: 'platform/rfc303',
+        git_http_url: repoUrl,
+        git_ssh_url: 'git@gitlab.example.test:platform/rfc303.git',
+      },
+      object_attributes: {
+        iid: 9,
+        action,
+        state: action === 'open' ? 'opened' : 'closed',
+        source_branch: 'main',
+        target_branch: 'main',
+      },
+    })
+  const post = (uuid: string, body: string) =>
+    app.request('/webhooks/gitlab/aw_whk_rfc303', {
+      method: 'POST',
+      headers: {
+        'x-gitlab-token': 'rfc303-secret',
+        'x-gitlab-event': 'Merge Request Hook',
+        'x-gitlab-event-uuid': uuid,
+      },
+      body,
+    })
+
+  try {
+    const open = await post('rfc303-open', mrBody('open'))
+    expect(open.status).toBe(200)
+    const fire = await waitFor(async () => {
+      const row = (
+        await db
+          .select()
+          .from(webhookTriggerFires)
+          .where(eq(webhookTriggerFires.triggerId, 'trigger-rfc303'))
+          .limit(1)
+      )[0]
+      return row?.outcome === 'launched' && row.taskId !== null ? row : null
+    }, 'RFC-303 protected task launch')
+    const taskId = fire.taskId!
+    const running = await waitFor(async () => {
+      const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+      return row?.status === 'running' && isTaskActive(taskId) ? row : null
+    }, 'RFC-303 task driver attachment')
+    expect(existsSync(running.worktreePath)).toBe(true)
+
+    const close = await post('rfc303-close', mrBody('close'))
+    expect(close.status).toBe(200)
+    const closeDeliveryId = ((await close.json()) as { deliveryId: string }).deliveryId
+    const final = await waitFor(async () => {
+      const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+      return row?.workspacePrunedAt !== null && row?.workspacePrunedAt !== undefined ? row : null
+    }, 'RFC-303 runtime release and workspace prune')
+    expect(final.status).toBe('canceled')
+    expect(final.sourceTerminationFence).toBe('closed')
+    expect(final.workspacePruneCause).toBe('webhook-terminal')
+    expect(isTaskActive(taskId)).toBe(false)
+    expect(existsSync(final.worktreePath)).toBe(false)
+    const effect = (
+      await db
+        .select()
+        .from(webhookMrControlEffects)
+        .where(eq(webhookMrControlEffects.deliveryId, closeDeliveryId))
+        .limit(1)
+    )[0]
+    expect(effect?.status).toBe('succeeded')
+    const target = (
+      await db
+        .select()
+        .from(webhookMrControlTargets)
+        .where(eq(webhookMrControlTargets.effectId, effect?.id ?? ''))
+        .limit(1)
+    )[0]
+    expect(target).toMatchObject({
+      taskId,
+      cancelOutcome: 'canceled',
+      error: null,
+    })
+    if (target === undefined) throw new Error('expected terminal control target')
+    // The scheduler may observe the durable canceled row and release its owner
+    // before the participant asks for the stop ticket. Both receipts are
+    // honest only after `isTaskActive` above reached false.
+    expect(['released', 'no-active-owner']).toContain(target.releaseOutcome)
+    const registry = execFileSync('git', ['worktree', 'list', '--porcelain'], {
+      cwd: sourceRepo,
+      encoding: 'utf8',
+    })
+    expect(registry).not.toContain(final.worktreePath)
+  } finally {
+    await terminalControl.stop()
   }
 })

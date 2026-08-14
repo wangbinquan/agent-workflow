@@ -46,6 +46,11 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
  * RFC-097 §2 第 10 行——不翻状态，故不进 status 棘轮）。
  */
 const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
+  // RFC-303: source termination applies four CAS-scoped companion updates:
+  // close/merge fence, reopen clear, target cancellation metadata, and the
+  // fixed-point settlement stamp. Task status itself still goes exclusively
+  // through lifecycle's transition helper.
+  'modules/task-execution/application/applySourceTerminationEffect.ts': 4,
   // RFC-164: persistGate writes workgroup_config_json only (gate state on the
   // task's config copy) — never the status column.
   // 2026-07-21 +1: writeWgPauseReason —— awaiting_human 成因写进同一 config

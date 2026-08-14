@@ -2,6 +2,7 @@
 // 全部零 I/O，五维矩阵与并发语义的测试都落在这里（design §10「首选可断言面」）。
 import type { CodeHostEvent, CodeHostEventType, WebhookRepoScope } from '@agent-workflow/shared'
 import { AUTHOR_FILTERED_EVENT_TYPES } from '@agent-workflow/shared'
+import { webhookStreamKeyOf } from '@/modules/integration/domain/mrTerminalControl'
 
 /** 触发器规则的运行时形态（DB 行 JSON 列解析后；wire schema 见 shared/schemas/webhook.ts）。 */
 export type TriggerRule = {
@@ -87,8 +88,7 @@ export function matchTrigger(event: CodeHostEvent, rule: TriggerRule): MatchResu
  * 同流（互相取消对方任务、熔断计数串桶）。
  */
 export function streamKeyOf(event: CodeHostEvent): string {
-  if (event.mrIid !== undefined) return `${event.repoPath}|mr:${event.mrIid}`
-  return `${event.repoPath}|branch:${event.branch ?? ''}`
+  return webhookStreamKeyOf(event)
 }
 
 /** 熔断计数的惰性重置窗口：距上次触发超过该时长视为计数归零（D22 来源③）。 */

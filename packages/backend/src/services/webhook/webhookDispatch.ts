@@ -112,6 +112,7 @@ export type ParsedTrigger = {
 
 function parseTriggerRuleRow(
   row: typeof webhookTriggers.$inferSelect,
+  options: { ignoreTerminalPolicy?: boolean } = {},
 ): { ok: true; rule: TriggerRule } | { ok: false; reason: string } {
   const scope = (() => {
     try {
@@ -132,6 +133,7 @@ function parseTriggerRuleRow(
     return { ok: false, reason: 'event-types-invalid' }
   }
   if (
+    options.ignoreTerminalPolicy !== true &&
     webhookTriggerTerminalPolicyIssue({
       cancelOnMrTerminal: row.cancelOnMrTerminal,
       eventTypes: eventTypes.data,
@@ -159,6 +161,35 @@ function parseTriggerRuleRow(
       ignoreUsernames: ignore.data,
     },
   }
+}
+
+async function recordInvalidTerminalPolicyFire(
+  deps: WebhookDispatchDeps,
+  queue: KeyedSerialQueue<string>,
+  input: {
+    deliveryId: string
+    event: CodeHostEvent
+    row: typeof webhookTriggers.$inferSelect
+  },
+): Promise<void> {
+  const streamKey = streamKeyOf(input.event)
+  await queue.run(`${input.row.id}|${streamKey}`, async () => {
+    const fresh = (
+      await deps.db
+        .select({ enabled: webhookTriggers.enabled })
+        .from(webhookTriggers)
+        .where(eq(webhookTriggers.id, input.row.id))
+        .limit(1)
+    )[0]
+    await recordFire(deps.db, {
+      fireId: ulid(),
+      deliveryId: input.deliveryId,
+      triggerId: input.row.id,
+      streamKey,
+      outcome: fresh?.enabled ? 'skipped-trigger-invalid' : 'skipped-trigger-disabled',
+      ...(fresh?.enabled ? { error: 'terminal-policy-invalid' } : {}),
+    })
+  })
 }
 
 export function parseTriggerRow(
@@ -518,19 +549,24 @@ async function fireTrigger(
       await recordFire(db, { ...base, outcome: 'skipped-trigger-disabled' })
       return
     }
-    const freshParsed = parseTriggerRow(fresh)
-    if (!freshParsed.ok) {
-      await recordFire(db, {
-        ...base,
-        outcome: 'skipped-trigger-invalid',
-        error: freshParsed.reason,
-      })
-      return
+    let effectiveTrigger = trigger
+    if (trigger.row.cancelOnMrTerminal || fresh.cancelOnMrTerminal) {
+      const freshParsed = parseTriggerRow(fresh)
+      if (!freshParsed.ok) {
+        await recordFire(db, {
+          ...base,
+          outcome: 'skipped-trigger-invalid',
+          error: freshParsed.reason,
+        })
+        return
+      }
+      // RFC-303's durable guard is the terminal-policy configuration
+      // linearization point. Legacy rules retain RFC-268's already-matched
+      // snapshot semantics; only a rule entering/leaving protection is
+      // re-read as one complete generation here.
+      if (!matchTrigger(event, freshParsed.trigger.rule).hit) return
+      effectiveTrigger = freshParsed.trigger
     }
-    // The guard commit is the configuration linearization point. An edit that
-    // removed this event before reservation wins cleanly and creates no fire.
-    if (!matchTrigger(event, freshParsed.trigger.rule).hit) return
-    const effectiveTrigger = freshParsed.trigger
 
     // 熔断闸门（D22；evaluateCircuit 顺序见 matching.ts）。
     const streamRow = (
@@ -551,7 +587,7 @@ async function fireTrigger(
         : null,
       event,
       {
-        maxConsecutiveFires: fresh.maxConsecutiveFires,
+        maxConsecutiveFires: effectiveTrigger.row.maxConsecutiveFires,
         ignoreUsernames: effectiveTrigger.rule.ignoreUsernames,
       },
       now,
@@ -604,7 +640,7 @@ async function fireTrigger(
           }
         : null
     const protectedDecision = decideProtectedLaunch({
-      cancelOnMrTerminal: fresh.cancelOnMrTerminal,
+      cancelOnMrTerminal: effectiveTrigger.row.cancelOnMrTerminal,
       endpointId: input.endpoint.id,
       event,
       streamState: deliveryState,
@@ -652,7 +688,7 @@ async function fireTrigger(
           deliveryId: input.deliveryId,
           fireId,
           triggerId,
-          triggerName: fresh.name,
+          triggerName: effectiveTrigger.row.name,
         })
       } catch (error) {
         await recordFire(db, {
@@ -714,7 +750,7 @@ async function fireTrigger(
               deps.secretBox,
               event,
               input.endpoint,
-              fresh.autoRegisterRepos,
+              effectiveTrigger.row.autoRegisterRepos,
             )
     } catch (error) {
       launchGuard?.failed(error instanceof DomainError ? error.code : 'repo-resolution-failed')
@@ -760,7 +796,7 @@ async function fireTrigger(
       },
       source: 'daemon',
     })
-    const rendered = renderWebhookLaunch(effectiveTrigger, fresh.name, event, space)
+    const rendered = renderWebhookLaunch(effectiveTrigger, effectiveTrigger.row.name, event, space)
     /** launch-failed 收尾：fires 行 + 触发器行的失败水位（熔断计数的唯一来源）。 */
     const recordLaunchFailed = async (msg: string): Promise<void> => {
       await recordFire(db, { ...base, outcome: 'launch-failed', supersededTaskId, error: msg })
@@ -956,6 +992,18 @@ export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispa
               if (parsedRule.ok && matchTrigger(event, parsedRule.rule).hit) {
                 invalidPayloadMatched = true
                 await recordInvalidPayloadFire(deps, streamQueue, {
+                  deliveryId,
+                  event,
+                  row: canonicalRow,
+                })
+              }
+            } else if (parsed.reason === 'terminal-policy-invalid') {
+              const parsedRule = parseTriggerRuleRow(canonicalRow, {
+                ignoreTerminalPolicy: true,
+              })
+              if (parsedRule.ok && matchTrigger(event, parsedRule.rule).hit) {
+                invalidPayloadMatched = true
+                await recordInvalidTerminalPolicyFire(deps, streamQueue, {
                   deliveryId,
                   event,
                   row: canonicalRow,

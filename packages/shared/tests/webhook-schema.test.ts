@@ -165,6 +165,8 @@ describe('RFC-257 T1 · closed enum 穷尽表（emit 域；改动此表 = 显式
       'parse-failed',
       'internal-error',
       'interrupted',
+      'terminal-control-accepted',
+      'mr-stream-identity-missing',
     ])
     expect([...WEBHOOK_FIRE_OUTCOMES]).toEqual([
       'launched',
@@ -176,6 +178,7 @@ describe('RFC-257 T1 · closed enum 穷尽表（emit 域；改动此表 = 显式
       'skipped-mr-stream-closed',
       'skipped-mr-stream-merged',
       'skipped-mr-stream-terminal',
+      'skipped-mr-stream-identity-missing',
       'skipped-trigger-invalid',
     ])
   })

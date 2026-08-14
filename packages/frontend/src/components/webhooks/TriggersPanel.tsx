@@ -120,6 +120,7 @@ interface Draft {
   scopePrefix: string
   scopePaths: string[]
   eventTypes: CodeHostEventType[]
+  cancelOnMrTerminal: boolean
   branchFilter: string
   commandPrefix: string
   ignoreUsernames: string[]
@@ -156,6 +157,7 @@ const EMPTY_DRAFT: Draft = {
   scopePrefix: '',
   scopePaths: [],
   eventTypes: ['mr_opened', 'mr_updated'],
+  cancelOnMrTerminal: false,
   branchFilter: '',
   commandPrefix: '',
   ignoreUsernames: [],
@@ -276,6 +278,7 @@ function draftFromRow(row: WebhookTrigger): Draft {
     scopePrefix: scope?.kind === 'prefix' ? scope.prefix : '',
     scopePaths: scope?.kind === 'exact' ? scope.paths : [],
     eventTypes: row.eventTypes ?? [],
+    cancelOnMrTerminal: row.cancelOnMrTerminal ?? false,
     branchFilter: row.branchFilter ?? '',
     commandPrefix: row.commandPrefix ?? '',
     ignoreUsernames: row.ignoreUsernames ?? [],
@@ -354,6 +357,7 @@ function bodyOf(draft: Draft): Record<string, unknown> {
           ? { kind: 'prefix', prefix: draft.scopePrefix }
           : { kind: 'exact', paths: draft.scopePaths },
     eventTypes: draft.eventTypes,
+    cancelOnMrTerminal: draft.cancelOnMrTerminal,
     ...(draft.branchFilter.trim() !== '' ? { branchFilter: draft.branchFilter.trim() } : {}),
     ...(draft.commandPrefix.trim() !== '' ? { commandPrefix: draft.commandPrefix.trim() } : {}),
     ignoreUsernames: draft.ignoreUsernames,
@@ -740,6 +744,11 @@ export function TriggersPanel() {
                           {t(`webhookTriggers.events.${eventType}`)}
                         </StatusChip>
                       ))}
+                      {row.cancelOnMrTerminal && (
+                        <StatusChip kind="info" size="sm">
+                          {t('webhookTriggers.terminalProtectionChip')}
+                        </StatusChip>
+                      )}
                     </div>
                   </div>
                   <span className="webhook-trigger__flow-arrow" aria-hidden="true">
@@ -1161,7 +1170,12 @@ function TriggerDialog(props: {
     (draft.scopeKind !== 'prefix' || draft.scopePrefix.trim() !== '') &&
     (draft.scopeKind !== 'exact' || draft.scopePaths.length > 0)
   const identityValid = draft.name.trim() !== '' && draft.endpointId !== '' && scopeValid
-  const conditionsValid = draft.eventTypes.length > 0
+  const terminalProtectionValid =
+    !draft.cancelOnMrTerminal ||
+    (draft.eventTypes.includes('mr_opened') &&
+      !draft.eventTypes.includes('mr_closed') &&
+      !draft.eventTypes.includes('mr_merged'))
+  const conditionsValid = draft.eventTypes.length > 0 && terminalProtectionValid
   const requiredWorkflowInputsMapped =
     draft.launchKind !== 'workflow' ||
     workflowInputs.every(
@@ -1187,6 +1201,7 @@ function TriggerDialog(props: {
     draft.endpointId !== '' &&
     draft.launchRefId !== '' &&
     draft.eventTypes.length > 0 &&
+    terminalProtectionValid &&
     scopeValid &&
     targetValid &&
     protectionValid
@@ -1411,6 +1426,24 @@ function TriggerDialog(props: {
                     ))}
                   </div>
                 </Field>
+                <Field
+                  label={t('webhookTriggers.fields.cancelOnMrTerminal')}
+                  hint={t('webhookTriggers.fields.cancelOnMrTerminalHint')}
+                  group
+                >
+                  <Switch
+                    checked={draft.cancelOnMrTerminal}
+                    onChange={(cancelOnMrTerminal) => set({ cancelOnMrTerminal })}
+                    disabled={props.saving}
+                    label={t('webhookTriggers.fields.cancelOnMrTerminalLabel')}
+                    data-testid="wt-cancel-on-mr-terminal"
+                  />
+                </Field>
+                {!terminalProtectionValid && (
+                  <NoticeBanner tone="warning" size="compact" testid="wt-terminal-policy-error">
+                    {t('webhookTriggers.fields.cancelOnMrTerminalError')}
+                  </NoticeBanner>
+                )}
                 <div className="form-grid--cols-2">
                   <Field
                     label={t('webhookTriggers.fields.branchFilter')}
@@ -2011,6 +2044,16 @@ function TriggerDialog(props: {
                       {draft.eventTypes
                         .map((eventType) => t(`webhookTriggers.events.${eventType}`))
                         .join(t('webhookTriggers.review.separator'))}
+                    </dd>
+                  </div>
+                  <div className="wizard-summary__row">
+                    <dt>{t('webhookTriggers.review.terminalProtection')}</dt>
+                    <dd>
+                      {t(
+                        draft.cancelOnMrTerminal
+                          ? 'webhookTriggers.review.terminalProtectionOn'
+                          : 'webhookTriggers.review.terminalProtectionOff',
+                      )}
                     </dd>
                   </div>
                   <div className="wizard-summary__row">

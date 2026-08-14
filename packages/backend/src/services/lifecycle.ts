@@ -34,13 +34,32 @@ import {
   nextNodeRunStatus,
   isTerminalNodeRunStatus,
 } from '@agent-workflow/shared'
-import { nodeRuns } from '@/db/schema'
+import { nodeRuns, tasks } from '@/db/schema'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 
 const lifecycleLog = createLogger('lifecycle')
+
+const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES: ReadonlySet<NodeRunStatus> = new Set([
+  'pending',
+  'running',
+  'awaiting_review',
+  'awaiting_human',
+])
+
+function assertNodeRunSourceTerminationAdmission(
+  taskId: string,
+  fence: 'closed' | 'merged' | null,
+  to: NodeRunStatus,
+): void {
+  if (fence === null || !SOURCE_TERMINATION_BLOCKED_NODE_STATUSES.has(to)) return
+  throw new ConflictError(
+    fence === 'closed' ? 'task-source-terminal-closed' : 'task-source-terminal-merged',
+    `task ${taskId} is fenced by an MR/PR ${fence} event; cannot move a node run to ${to}`,
+  )
+}
 
 /**
  * Extra fields that may be written alongside a status transition (mirrors
@@ -106,8 +125,13 @@ export async function transitionNodeRunStatus(args: {
 }): Promise<{ from: NodeRunStatus; to: NodeRunStatus }> {
   const row = (
     await args.db
-      .select({ status: nodeRuns.status })
+      .select({
+        status: nodeRuns.status,
+        taskId: nodeRuns.taskId,
+        sourceTerminationFence: tasks.sourceTerminationFence,
+      })
       .from(nodeRuns)
+      .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
       .where(eq(nodeRuns.id, args.nodeRunId))
       .limit(1)
   )[0]
@@ -116,6 +140,7 @@ export async function transitionNodeRunStatus(args: {
   }
   const from = row.status as NodeRunStatus
   const to = nextNodeRunStatus(from, args.event)
+  assertNodeRunSourceTerminationAdmission(row.taskId, row.sourceTerminationFence, to)
   // CAS: WHERE id = ? AND status = expectedFrom. Drizzle's bun-sqlite
   // returns the affected row(s) via .returning(); affectedRows.length === 0
   // means another writer changed status between our SELECT and UPDATE.
@@ -160,8 +185,13 @@ export async function setNodeRunStatus(args: {
 }): Promise<{ from: NodeRunStatus; to: NodeRunStatus }> {
   const row = (
     await args.db
-      .select({ status: nodeRuns.status })
+      .select({
+        status: nodeRuns.status,
+        taskId: nodeRuns.taskId,
+        sourceTerminationFence: tasks.sourceTerminationFence,
+      })
       .from(nodeRuns)
+      .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
       .where(eq(nodeRuns.id, args.nodeRunId))
       .limit(1)
   )[0]
@@ -169,6 +199,7 @@ export async function setNodeRunStatus(args: {
     throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
   }
   const from = row.status as NodeRunStatus
+  assertNodeRunSourceTerminationAdmission(row.taskId, row.sourceTerminationFence, args.to)
   if (isTerminalNodeRunStatus(from) && args.allowTerminal !== true) {
     throw new ConflictError(
       'illegal-node-run-transition',
@@ -213,8 +244,13 @@ export function setNodeRunStatusTx(args: {
   reason?: string
 }): { from: NodeRunStatus; to: NodeRunStatus } {
   const row = args.tx
-    .select({ status: nodeRuns.status })
+    .select({
+      status: nodeRuns.status,
+      taskId: nodeRuns.taskId,
+      sourceTerminationFence: tasks.sourceTerminationFence,
+    })
     .from(nodeRuns)
+    .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
     .where(eq(nodeRuns.id, args.nodeRunId))
     .limit(1)
     .get()
@@ -222,6 +258,7 @@ export function setNodeRunStatusTx(args: {
     throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
   }
   const from = row.status as NodeRunStatus
+  assertNodeRunSourceTerminationAdmission(row.taskId, row.sourceTerminationFence, args.to)
   if (isTerminalNodeRunStatus(from) && args.allowTerminal !== true) {
     throw new ConflictError(
       'illegal-node-run-transition',
@@ -266,7 +303,6 @@ import {
   type TaskStatus,
   type TaskTransitionEvent,
 } from '@agent-workflow/shared'
-import { tasks } from '@/db/schema'
 // RFC-243 §1.4: multicast terminal notification (executionWatch is a leaf
 // module — db schema + shared only — so this import cannot form a cycle).
 import { notifyTaskTerminal } from '@/services/execution/executionWatch'

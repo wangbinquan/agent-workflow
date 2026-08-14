@@ -5,16 +5,24 @@
 // 指回 replayed_from；event_uuid=NULL 绕过去重（replay 就是明确要求再跑一次）。
 // GitLab 对失败投递不自动重试（设计门 F-6）——replay 是平台侧的主恢复路径。
 import type { Hono } from 'hono'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { CodeHostEventTypeSchema, WEBHOOK_DELIVERY_STATUSES } from '@agent-workflow/shared'
 
 import type { AppDeps } from '@/server'
+import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import { webhookDeliveries, webhookEndpoints } from '@/db/schema'
+import {
+  tasks,
+  webhookDeliveries,
+  webhookEndpoints,
+  webhookMrControlEffects,
+  webhookMrControlTargets,
+} from '@/db/schema'
 import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAdapter'
 import { composeVerifiedWebhookDeliveryAcceptance } from '@/modules/integration/composition/webhookTerminalControl'
+import { canViewTask } from '@/services/taskCollab'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
@@ -153,7 +161,82 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
           .limit(1)
       )[0]
       if (!row) throw new NotFoundError('webhook-delivery-not-found', 'delivery not found')
-      return c.json(row)
+      const effectDeliveryId = row.replayedFromDeliveryId ?? row.id
+      const effect = (
+        await deps.db
+          .select()
+          .from(webhookMrControlEffects)
+          .where(eq(webhookMrControlEffects.deliveryId, effectDeliveryId))
+          .limit(1)
+      )[0]
+      if (effect === undefined) return c.json({ ...row, terminalControl: null })
+
+      const targetRows = await deps.db
+        .select()
+        .from(webhookMrControlTargets)
+        .where(eq(webhookMrControlTargets.effectId, effect.id))
+      const taskRows =
+        targetRows.length === 0
+          ? []
+          : await deps.db
+              .select({
+                id: tasks.id,
+                ownerUserId: tasks.ownerUserId,
+                status: tasks.status,
+                spaceKind: tasks.spaceKind,
+                workspacePruningAt: tasks.workspacePruningAt,
+                workspacePrunedAt: tasks.workspacePrunedAt,
+              })
+              .from(tasks)
+              .where(
+                inArray(
+                  tasks.id,
+                  targetRows.map((target) => target.taskId),
+                ),
+              )
+      const tasksById = new Map(taskRows.map((task) => [task.id, task]))
+      const visibleTargets = []
+      let hiddenTargetCount = 0
+      const actor = actorOf(c)
+      for (const target of targetRows) {
+        const task = tasksById.get(target.taskId)
+        if (task === undefined || !(await canViewTask(deps.db, actor, task))) {
+          hiddenTargetCount += 1
+          continue
+        }
+        visibleTargets.push({
+          taskId: target.taskId,
+          priorStatus: target.priorStatus,
+          currentStatus: task.status,
+          fenceOutcome: target.fenceOutcome,
+          cancelOutcome: target.cancelOutcome,
+          releaseOutcome: target.releaseOutcome,
+          error: target.error,
+          workspace: {
+            spaceKind: task.spaceKind,
+            state:
+              task.workspacePrunedAt !== null
+                ? 'pruned'
+                : task.workspacePruningAt !== null
+                  ? 'pruning'
+                  : 'retained',
+          },
+        })
+      }
+      return c.json({
+        ...row,
+        terminalControl: {
+          kind: effect.kind,
+          observedEventType: effect.observedEventType,
+          status: effect.status,
+          revision: effect.revision,
+          attemptCount: effect.attemptCount,
+          lastError: effect.lastError,
+          totalTargetCount: targetRows.length,
+          hiddenTargetCount,
+          targets: visibleTargets,
+        },
+      })
     },
   )
 
@@ -235,6 +318,27 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
         )
       }
       const isTerminal = event.eventType === 'mr_closed' || event.eventType === 'mr_merged'
+      if (isTerminal) {
+        if (root.mrStreamRevision === null) {
+          throw new ConflictError(
+            'webhook-terminal-replay-root-unprotected',
+            'the original terminal delivery predates the durable MR/PR control fact',
+          )
+        }
+        const rootEffect = (
+          await deps.db
+            .select({ id: webhookMrControlEffects.id })
+            .from(webhookMrControlEffects)
+            .where(eq(webhookMrControlEffects.deliveryId, rootDeliveryId))
+            .limit(1)
+        )[0]
+        if (rootEffect === undefined) {
+          throw new ConflictError(
+            'webhook-terminal-replay-effect-missing',
+            'the original terminal control effect is unavailable',
+          )
+        }
+      }
       const insert = acceptVerifiedDelivery({
         endpointId: endpoint.id,
         event,

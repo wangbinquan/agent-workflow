@@ -19,6 +19,7 @@ import type {
 import {
   awaitTaskDriverStopped,
   emitTaskStatus,
+  finalizeCanceledTaskWithoutDriver,
   getTask,
   requestTaskDriverStop,
 } from '@/services/task'
@@ -260,6 +261,7 @@ export function createTaskSourceTerminationParticipant(
           if (applied.stopCause !== null) {
             const ticket = requestTaskDriverStop(row.id, applied.stopCause)
             if (ticket === 'no-active-owner') {
+              await finalizeCanceledTaskWithoutDriver(db, row.id)
               receipt = { ...receipt, releaseOutcome: 'no-active-owner' }
             } else {
               const stopped = await awaitTaskDriverStopped(ticket)

@@ -162,7 +162,32 @@ beforeEach(async () => {
     if (url.includes('/api/webhook-deliveries/repos'))
       return jsonResponse(empty ? [] : ['acme/api'])
     if (url.includes('/api/webhook-deliveries/dl1'))
-      return jsonResponse({ ...DELIVERY_ROW, bodyJson: '{}' })
+      return jsonResponse({
+        ...DELIVERY_ROW,
+        bodyJson: '{}',
+        terminalControl: {
+          kind: 'fence-closed',
+          observedEventType: 'mr_closed',
+          status: 'succeeded',
+          revision: 2,
+          attemptCount: 1,
+          lastError: null,
+          totalTargetCount: 2,
+          hiddenTargetCount: 1,
+          targets: [
+            {
+              taskId: 'task-visible',
+              priorStatus: 'running',
+              currentStatus: 'canceled',
+              fenceOutcome: 'fenced-closed',
+              cancelOutcome: 'canceled',
+              releaseOutcome: 'released',
+              error: null,
+              workspace: { spaceKind: 'remote', state: 'pruned' },
+            },
+          ],
+        },
+      })
     if (url.includes('/api/webhook-deliveries'))
       return jsonResponse(
         empty
@@ -258,5 +283,11 @@ describe('RFC-260 · 非 admin 只读视图（AC-5）', () => {
     expect(screen.queryByTestId('webhook-delivery-replay-dl1')).toBeNull()
     fireEvent.click(screen.getByTestId('webhook-delivery-detail-dl1'))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeTruthy())
+    expect(await screen.findByTestId('webhook-terminal-control-audit')).toBeTruthy()
+    expect(screen.getByText('task-visible')).toBeTruthy()
+    expect(screen.getByTestId('webhook-terminal-control-hidden-targets').textContent).toContain(
+      '1 matched task',
+    )
+    expect(document.body.textContent).not.toContain('task-hidden')
   })
 })

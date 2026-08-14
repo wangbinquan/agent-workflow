@@ -157,6 +157,41 @@ afterEach(() => {
 })
 
 describe('webhook trigger wizard · template var insertion', () => {
+  test('RFC-303 terminal protection is draft-owned, validates event combinations, and serializes', async () => {
+    await renderWebhooks()
+    await screen.findByTestId('webhook-trigger-new')
+    await waitFor(() =>
+      expect((screen.getByTestId('webhook-trigger-new') as HTMLButtonElement).disabled).toBe(false),
+    )
+    fireEvent.click(screen.getByTestId('webhook-trigger-new'))
+    fireEvent.change(await screen.findByTestId('wt-name'), { target: { value: 'Terminal guard' } })
+    fireEvent.change(screen.getByTestId('wt-scope-prefix'), { target: { value: 'platform/' } })
+    fireEvent.click(screen.getByTestId('stepper-next'))
+    await screen.findByTestId('webhook-trigger-step-events')
+
+    fireEvent.click(screen.getByTestId('wt-cancel-on-mr-terminal'))
+    expect((screen.getByTestId('wt-cancel-on-mr-terminal') as HTMLInputElement).checked).toBe(true)
+    fireEvent.click(screen.getByTestId('wt-event-mr_closed'))
+    expect(screen.getByTestId('wt-terminal-policy-error')).toBeTruthy()
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByTestId('wt-event-mr_closed'))
+    expect(screen.queryByTestId('wt-terminal-policy-error')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('stepper-next'))
+    await screen.findByTestId('webhook-trigger-step-target')
+    fireEvent.click(screen.getByTestId('wt-target'))
+    fireEvent.mouseDown(await screen.findByRole('option', { name: 'Fix WF' }))
+    fireEvent.change(await screen.findByTestId('wt-map-instruction'), {
+      target: { value: 'review this MR' },
+    })
+    fireEvent.click(screen.getByTestId('stepper-next'))
+    await screen.findByTestId('webhook-trigger-step-review')
+    expect(screen.getByText('Stop running tasks when the MR / PR is closed or merged')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('webhook-trigger-save'))
+    await waitFor(() => expect(triggerWrites).toHaveLength(1))
+    expect(triggerWrites[0]?.['cancelOnMrTerminal']).toBe(true)
+  })
+
   test('整个 Webhook draft 共用一套可见历史，连续文字输入只撤销一次', async () => {
     await renderWebhooks()
     await screen.findByTestId('webhook-trigger-new')

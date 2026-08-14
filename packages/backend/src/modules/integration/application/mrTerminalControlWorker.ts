@@ -67,11 +67,12 @@ export class MrTerminalControlWorker {
     this.start()
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     this.stopped = true
     if (this.timer !== null) clearInterval(this.timer)
     this.timer = null
     this.launchGuards.supervisor.abortAll()
+    await this.running
   }
 
   private async drain(): Promise<void> {

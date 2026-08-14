@@ -1039,7 +1039,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     heartbeatKillTicker.stop()
     orphanReconcileTicker.stop()
     scheduledTaskTicker.stop()
-    webhookTerminalControl.stop()
+    await webhookTerminalControl.stop()
     removeDaemonInfo()
     server.stop(true)
     try {

@@ -15,6 +15,7 @@ import {
   mrFactKey,
   sourceTerminationBinding,
   stableMrIdentityOf,
+  webhookStreamKeyOf,
   type MrStreamState,
 } from '@/modules/integration/domain/mrTerminalControl'
 import type { DbClient } from '@/db/client'
@@ -221,7 +222,7 @@ export class SqliteVerifiedWebhookDeliveryStore implements VerifiedWebhookDelive
           objectKind: input.objectKind,
           eventType: input.event.eventType,
           repoPath: input.event.repoPath,
-          streamHint: identity?.streamKey ?? null,
+          streamHint: webhookStreamKeyOf(input.event),
           mrFactKey: factKey,
           mrStreamKey: identity?.streamKey ?? null,
           mrStreamRevision: streamRevision,

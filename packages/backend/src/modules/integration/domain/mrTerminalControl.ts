@@ -1,8 +1,7 @@
 // RFC-303 — provider-neutral MR/PR stream identity and state machine.
 // Domain-only: no DB, network, task, or filesystem dependency is allowed here.
-import { createHash } from 'node:crypto'
-
 import type { CodeHostEvent, CodeHostEventType, CodeHostProvider } from '@agent-workflow/shared'
+import { sha256Hex } from '@/util/hash'
 
 export const MR_STREAM_KEY_VERSION = 'mr-stream-v1' as const
 export const MR_TERMINATION_BINDING_VERSION = 'st1' as const
@@ -69,6 +68,16 @@ export function stableMrIdentityOf(event: CodeHostEvent): MrStreamIdentity | nul
   }
 }
 
+/**
+ * Existing dispatch/supersede and delivery-audit stream key. This remains
+ * repo-path based for compatibility; the durable RFC-303 identity is stored
+ * separately in `mrStreamKey` and uses the stable project id.
+ */
+export function webhookStreamKeyOf(event: CodeHostEvent): string {
+  if (event.mrIid !== undefined) return `${event.repoPath}|mr:${event.mrIid}`
+  return `${event.repoPath}|branch:${event.branch ?? ''}`
+}
+
 export function sourceTerminationBinding(input: {
   endpointId: string
   projectId: string
@@ -80,7 +89,7 @@ export function sourceTerminationBinding(input: {
     input.projectId,
     input.mrIid,
   ])
-  return `${MR_TERMINATION_BINDING_VERSION}:${createHash('sha256').update(tuple).digest('hex')}`
+  return `${MR_TERMINATION_BINDING_VERSION}:${sha256Hex(tuple)}`
 }
 
 export function mrFactKey(input: {
@@ -92,13 +101,11 @@ export function mrFactKey(input: {
   if (input.eventUuid !== null && input.eventUuid.length > 0) {
     return `id:${input.provider}:${input.eventUuid}`
   }
-  const digest = createHash('sha256')
-    .update(input.provider)
-    .update('\0')
-    .update(input.normalizedEventType)
-    .update('\0')
-    .update(input.rawBodyBytes)
-    .digest('hex')
+  const prefix = new TextEncoder().encode(`${input.provider}\0${input.normalizedEventType}\0`)
+  const bytes = new Uint8Array(prefix.length + input.rawBodyBytes.length)
+  bytes.set(prefix)
+  bytes.set(input.rawBodyBytes, prefix.length)
+  const digest = sha256Hex(bytes)
   return `body:v1:${digest}`
 }
 

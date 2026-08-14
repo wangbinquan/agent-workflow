@@ -15,7 +15,15 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
 import { createSession } from '../src/auth/sessionStore'
 import { createPat } from '../src/auth/patStore'
-import { webhookDeliveries, webhookEndpoints, webhookTriggers, workflows } from '../src/db/schema'
+import {
+  tasks,
+  webhookDeliveries,
+  webhookEndpoints,
+  webhookMrControlEffects,
+  webhookMrControlTargets,
+  webhookTriggers,
+  workflows,
+} from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 11))
@@ -119,6 +127,53 @@ async function harness() {
     status: 'matched',
     bodyJson: '{"object_kind":"push","secret_free":"body"}',
   })
+  const now = Date.now()
+  for (const [id, ownerUserId] of [
+    ['task-visible', user.id],
+    ['task-hidden', admin.id],
+  ] as const) {
+    await db.insert(tasks).values({
+      id,
+      name: id,
+      workflowId,
+      workflowSnapshot: '{}',
+      repoPath: '/tmp/repo',
+      worktreePath: `/tmp/${id}`,
+      baseBranch: 'main',
+      branch: `agent-workflow/${id}`,
+      status: 'canceled',
+      inputs: '{}',
+      startedAt: now,
+      ownerUserId,
+      spaceKind: 'remote',
+      workspacePrunedAt: now,
+    })
+  }
+  await db.insert(webhookMrControlEffects).values({
+    id: 'effect-1',
+    deliveryId: 'dl-1',
+    endpointId: 'ep-1',
+    streamKey: 'gitlab:77:9',
+    binding: 'binding-1',
+    revision: 2,
+    observedEventType: 'mr_closed',
+    kind: 'fence-closed',
+    status: 'succeeded',
+    nextAttemptAt: now,
+    createdAt: now,
+    updatedAt: now,
+  })
+  for (const taskId of ['task-visible', 'task-hidden']) {
+    await db.insert(webhookMrControlTargets).values({
+      effectId: 'effect-1',
+      taskId,
+      priorStatus: 'running',
+      fenceOutcome: 'fenced-closed',
+      cancelOutcome: 'canceled',
+      releaseOutcome: 'released',
+      updatedAt: now,
+    })
+  }
   const app = createApp({
     token: 'a'.repeat(64),
     configPath,
@@ -357,7 +412,31 @@ describe('RFC-260 · AC-4 投递读面', () => {
     expect(((await list.json()) as { items: unknown[] }).items.length).toBe(1)
     const detail = await get(h.app, '/api/webhook-deliveries/dl-1', h.userSession)
     expect(detail.status).toBe(200)
-    expect(((await detail.json()) as { bodyJson: string }).bodyJson).toContain('secret_free')
+    const userDetail = (await detail.json()) as {
+      bodyJson: string
+      terminalControl: {
+        totalTargetCount: number
+        hiddenTargetCount: number
+        targets: Array<{ taskId: string }>
+      }
+    }
+    expect(userDetail.bodyJson).toContain('secret_free')
+    expect(userDetail.terminalControl.totalTargetCount).toBe(2)
+    expect(userDetail.terminalControl.hiddenTargetCount).toBe(1)
+    expect(userDetail.terminalControl.targets.map((target) => target.taskId)).toEqual([
+      'task-visible',
+    ])
+    expect(JSON.stringify(userDetail.terminalControl)).not.toContain('task-hidden')
+    const adminDetail = (await (
+      await get(h.app, '/api/webhook-deliveries/dl-1', h.adminSession)
+    ).json()) as {
+      terminalControl: { hiddenTargetCount: number; targets: Array<{ taskId: string }> }
+    }
+    expect(adminDetail.terminalControl.hiddenTargetCount).toBe(0)
+    expect(adminDetail.terminalControl.targets.map((target) => target.taskId).sort()).toEqual([
+      'task-hidden',
+      'task-visible',
+    ])
     // PAT 读也开放（掩码后的元数据面）——列表与详情（含 body）都可读
     const patList = await get(h.app, '/api/webhook-deliveries', h.userPat)
     expect(patList.status).toBe(200)

@@ -149,6 +149,10 @@ import {
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
+import {
+  taskStopProjection,
+  type TaskStopCause,
+} from '@/modules/task-execution/domain/sourceTermination'
 import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
 import { getTaskFanoutSem, gcTaskFanoutSem } from '@/services/taskFanoutPools'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
@@ -4543,8 +4547,10 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
         })
         return {
           kind: 'failed',
-          summary: `script node ${node.id}: isolated worktree setup failed`,
-          message: 'script-iso-setup-failed',
+          // 文案与 failure code 逐字保持迁移前——它是**对外**的失败分类，改名等于
+          // 让既有按 `iso-setup-failed` 归类的消费方静默失配（T14 实现门抓到的漂移）。
+          summary: 'isolated worktree setup failed',
+          message: 'iso-setup-failed',
         }
       },
       spawn: async (_c, attempt) => {
@@ -4577,6 +4583,14 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
             return false
           }
           return attempt < maxRetries
+        },
+        // 换树 / 铸行 / 落基线之前先看取消——迁移前这一检查在循环最顶上，落进
+        // 骨架时只剩 spawn 入口一处，于是取消若落在换树窗口里会留下一条永不运行
+        // 的孤儿 pending 行（T14 实现门抓到的回归，见骨架 preAttempt 的注释）。
+        preAttempt: () => {
+          if (opts.signal?.aborted !== true) return null
+          canceledMsg = 'signal aborted'
+          return { kind: 'canceled' as const, summary: 'task canceled', message: 'signal aborted' }
         },
         // D24：每次重试换新树——这正是让重跑一个写文件的脚本变安全的原因。
         isoOnRetry: 'always-recreate',
@@ -4674,8 +4688,11 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
           }),
         },
       },
+      // 不要在这里 `.catch(() => {})`：骨架自己会 catch 并 `log.warn('iso discard
+      // failed')`，本地先吞掉等于把那条约定好的告警变成永不可达，残留工作树 / ref
+      // 的清理失败就彻底没了痕迹（T14 实现门）。
       discardIso: async (h: IsoLike) => {
-        await discardNodeIso(h as IsoHandle, log, writeSem).catch(() => {})
+        await discardNodeIso(h as IsoHandle, log, writeSem)
       },
       settle: async () => {
         if (succeeded) return { kind: 'ok', summary: '', message: '' }
@@ -9401,6 +9418,8 @@ async function cancelTaskRowUnlocked(
     if (won) await emitStatus(db, taskId)
     return
   }
+  const structuredCause = taskStopCauseOf(abortReason)
+  const projection = taskStopProjection(structuredCause ?? { kind: 'user' })
   // RFC-097: idempotent — cancelTask's fallback (or a failTask that raced
   // first) may already have landed a terminal status; respect the winner.
   const won = await trySetTaskStatus({
@@ -9410,8 +9429,13 @@ async function cancelTaskRowUnlocked(
     allowedFrom: ['running'],
     extra: {
       finishedAt: Date.now(),
-      errorSummary: 'canceled by user',
-      errorMessage: 'aborted by signal',
+      errorSummary: projection.summary,
+      errorMessage:
+        structuredCause?.kind === 'webhook-terminal'
+          ? `${projection.code}: delivery=${structuredCause.deliveryId} revision=${structuredCause.streamRevision}`
+          : structuredCause?.kind === 'parent-cascade' && structuredCause.rootCause !== undefined
+            ? `${projection.code}: parent=${structuredCause.parentTaskId} delivery=${structuredCause.rootCause.deliveryId} revision=${structuredCause.rootCause.streamRevision}`
+            : projection.code,
       ...(failedNodeId !== undefined ? { failedNodeId } : {}),
     },
     reason: 'cancelTaskRow',
@@ -9424,6 +9448,26 @@ async function cancelTaskRowUnlocked(
     return
   }
   await emitStatus(db, taskId)
+}
+
+function taskStopCauseOf(value: unknown): TaskStopCause | null {
+  if (typeof value !== 'object' || value === null || !('kind' in value)) return null
+  const candidate = value as TaskStopCause
+  switch (candidate.kind) {
+    case 'user':
+    case 'daemon-shutdown':
+      return candidate
+    case 'parent-cascade':
+      return typeof candidate.parentTaskId === 'string' ? candidate : null
+    case 'webhook-terminal':
+      return (candidate.terminal === 'closed' || candidate.terminal === 'merged') &&
+        typeof candidate.deliveryId === 'string' &&
+        Number.isInteger(candidate.streamRevision)
+        ? candidate
+        : null
+    default:
+      return null
+  }
 }
 
 /**

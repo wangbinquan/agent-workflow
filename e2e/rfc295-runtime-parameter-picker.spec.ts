@@ -185,3 +185,53 @@ test('Webhook Agent picker creates through the real POST and reloads the XOR des
     'Handle {{trigger.webhook.repo_path}}',
   )
 })
+
+test('RFC-303 terminal protection validates, persists, and remains usable at 390px', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await primeAuth(page)
+  await page.goto(`${daemon.baseUrl}/webhooks?tab=triggers`)
+  await expect(page.getByTestId('webhook-trigger-new')).toBeEnabled()
+  await page.getByTestId('webhook-trigger-new').click()
+
+  await page.getByTestId('wt-name').fill('RFC-303 terminal protection')
+  await page.getByTestId('wt-scope-prefix').fill('platform/')
+  await page.getByTestId('stepper-next').click()
+  await expect(page.getByTestId('webhook-trigger-step-events')).toBeVisible()
+  await page.getByTestId('wt-cancel-on-mr-terminal').click()
+  await expect(page.getByTestId('wt-cancel-on-mr-terminal')).toBeChecked()
+
+  await page.getByTestId('wt-event-mr_closed').click()
+  await expect(page.getByTestId('wt-terminal-policy-error')).toBeVisible()
+  await expect(page.getByTestId('stepper-next')).toBeDisabled()
+  await page.getByTestId('wt-event-mr_closed').click()
+  await expect(page.getByTestId('wt-terminal-policy-error')).toBeHidden()
+  await page.getByTestId('stepper-next').click()
+
+  await page.getByTestId('wt-target').click()
+  await page.getByRole('option', { name: 'rfc295-picker-workflow', exact: true }).click()
+  await page.getByTestId('stepper-next').click()
+  await expect(page.getByTestId('webhook-trigger-step-review')).toContainText(
+    'Stop running tasks when the MR / PR is closed or merged',
+  )
+
+  const saveResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === '/api/webhook-triggers',
+  )
+  await page.getByTestId('webhook-trigger-save').click()
+  const response = await saveResponse
+  expect(response.ok()).toBe(true)
+  const created = (await response.json()) as { id: string; cancelOnMrTerminal: boolean }
+  expect(created.cancelOnMrTerminal).toBe(true)
+  await expect(page.getByTestId(`webhook-trigger-${created.id}`)).toContainText(
+    'Stops on MR / PR terminal state',
+  )
+
+  await page.reload()
+  await page.getByTestId(`webhook-trigger-edit-${created.id}`).click()
+  await page.getByTestId('stepper-step-events').click()
+  await expect(page.getByTestId('wt-cancel-on-mr-terminal')).toBeChecked()
+})

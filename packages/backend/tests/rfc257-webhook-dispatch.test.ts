@@ -693,6 +693,30 @@ describe('RFC-257 T6 · dispatch 集成', () => {
     }
   })
 
+  test('RFC-303 raw-invalid terminal policy records skipped-trigger-invalid instead of silently disappearing', async () => {
+    const h = await harness()
+    const triggerId = await insertTrigger(h, {
+      eventTypes: JSON.stringify(['mr_opened', 'mr_closed']),
+      ignoreUsernames: '[]',
+      cancelOnMrTerminal: true,
+    })
+    const event = ev({
+      eventType: 'mr_opened',
+      projectId: '77',
+      mrIid: '42',
+      author: { username: 'human' },
+    })
+    const deliveryId = await dispatchOnce(h, event)
+    expect(h.launched).toHaveLength(0)
+    expect(await deliveryStatus(h, deliveryId)).toEqual(['matched', null])
+    expect(await firesOf(h, triggerId)).toEqual([
+      expect.objectContaining({
+        outcome: 'skipped-trigger-invalid',
+        error: 'terminal-policy-invalid',
+      }),
+    ])
+  })
+
   test('parseTriggerRow：四列逐列容错原因', async () => {
     const h = await harness()
     const id = await insertTrigger(h)
