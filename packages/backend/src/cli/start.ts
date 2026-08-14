@@ -12,8 +12,9 @@ import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import { startWebhookDeliveryGc } from '@/services/webhook/webhookGc'
 import { openDb, DbCorruptionError } from '@/db/client'
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
-import { cachedRepos, tasks } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
+import { cachedRepos, nodeRuns, tasks } from '@/db/schema'
+import { and, eq } from 'drizzle-orm'
 import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
 import { createApp } from '@/server'
 import { startFusionReconcileLoop } from '@/services/fusion'
@@ -29,7 +30,7 @@ import { startAutoRepairLoop } from '@/services/autoRepair'
 import { startHeartbeatKillLoop } from '@/services/autoKill'
 import { startOrphanReconcileLoop } from '@/services/orphanReconcile'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
-import { isTaskActive, resumeTask } from '@/services/task'
+import { isTaskActive, resumeTask, retryNode } from '@/services/task'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
@@ -265,8 +266,18 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   let migrationsFolder = Paths.migrationsDir
   if (IS_EMBEDDED) {
     migrationsFolder = join(Paths.root, 'runtime', 'migrations')
+    // `ms` is deliberate: this step is O(number of migrations) filesystem
+    // writes and grows with every migration added. It once reached ~23.5s on a
+    // Windows CI runner and blew the e2e harness's 30s daemon-ready budget
+    // while being completely invisible in the logs — the duration is what makes
+    // that trend observable before it breaks something again.
+    const extractStartedAt = Date.now()
     const extracted = await extractMigrationsTo(migrationsFolder)
-    log.info('extracted embedded migrations', { count: extracted, dir: migrationsFolder })
+    log.info('extracted embedded migrations', {
+      count: extracted,
+      ms: Date.now() - extractStartedAt,
+      dir: migrationsFolder,
+    })
   }
   // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
   // staged dir is quarantined and the boot continues on the untouched DB. The
@@ -986,6 +997,22 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         windowMs: config.autoRecoveryWindowMs,
       },
       resume: (taskId) => resumeTask(db, taskId, resumeDeps).then(() => undefined),
+      // RFC-287 G7（plan.md T13⑥）：仓库准备未完成的任务不走 resume——它必然撞
+      // `task-repo-prep-incomplete`。重跑的是**准备本身**，入口是既有的单节点重试
+      // （retryNode 认 `__repo_prep__` 并分流到 retryRepoPreparation）。
+      retryRepoPrep: async (taskId) => {
+        const prep = (
+          await db
+            .select({ id: nodeRuns.id, retryIndex: nodeRuns.retryIndex })
+            .from(nodeRuns)
+            .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
+        ).sort((a, b) => a.retryIndex - b.retryIndex)
+        const latest = prep.at(-1)
+        if (latest === undefined) {
+          throw new Error(`task '${taskId}' has no repository-preparation row to retry`)
+        }
+        await retryNode(db, taskId, latest.id, { cascade: false, deps: resumeDeps })
+      },
     }).catch((err) =>
       log.warn('boot auto-resume failed', {
         error: err instanceof Error ? err.message : String(err),

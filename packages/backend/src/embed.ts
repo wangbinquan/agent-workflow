@@ -9,7 +9,7 @@
 //     filesystem path. In dev that path is packages/backend/db/migrations on
 //     disk; in the binary we extract the embedded copies once on startup.
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { FRONTEND_FILES, IS_EMBEDDED, MIGRATION_FILES } from './embed.generated'
 
@@ -85,16 +85,58 @@ export async function getEmbeddedFrontendResponse(
  * can `readFileSync` them. Returns the count of files written.
  */
 export async function extractMigrationsTo(targetDir: string): Promise<number> {
+  return extractFilesTo(targetDir, MIGRATION_FILES)
+}
+
+/**
+ * The body of {@link extractMigrationsTo}, parameterised over the file map so
+ * it is testable: `MIGRATION_FILES` is empty outside the compiled binary, so
+ * the real extraction path is unreachable from unit tests and this cost stayed
+ * invisible until it broke CI.
+ *
+ * **Shape is load-bearing, do not "simplify" back into a sequential loop.**
+ * This used to be one `mkdirSync` + one read + one sync write *per file*,
+ * strictly sequential. Every e2e test mkdtemps a fresh home, so each of them
+ * re-extracts the full set; on the Windows runner each write is scanned by the
+ * AV filter, so 171 files cost ~23.5s and blew the harness's 30s
+ * daemon-ready budget — five specs failed with a single shared root cause
+ * (CI run 31802101748, `Playwright e2e (shard 2/4)` on windows-latest). The
+ * cost also grows with every migration added, so it was a worsening latent
+ * failure rather than a one-off.
+ *
+ * Two changes: the distinct destination dirs are created once up front instead
+ * of once per file, and the copies run with bounded concurrency so the
+ * per-file latency overlaps instead of summing.
+ */
+export async function extractFilesTo(
+  targetDir: string,
+  files: Readonly<Record<string, string>>,
+): Promise<number> {
   mkdirSync(targetDir, { recursive: true })
-  let count = 0
-  for (const [rel, src] of Object.entries(MIGRATION_FILES)) {
-    const dest = join(targetDir, rel)
-    mkdirSync(dirname(dest), { recursive: true })
-    const bytes = new Uint8Array(await Bun.file(src).arrayBuffer())
-    writeFileSync(dest, bytes)
-    count++
-  }
-  return count
+  const entries = Object.entries(files)
+  if (entries.length === 0) return 0
+
+  const dirs = new Set<string>()
+  for (const [rel] of entries) dirs.add(dirname(join(targetDir, rel)))
+  for (const dir of dirs) mkdirSync(dir, { recursive: true })
+
+  // Bounded rather than unbounded: 171 concurrent writes would trade the
+  // sequential stall for a file-descriptor spike on the same runners.
+  const concurrency = Math.min(16, entries.length)
+  let next = 0
+  await Promise.all(
+    Array.from({ length: concurrency }, async () => {
+      for (;;) {
+        const index = next++
+        if (index >= entries.length) return
+        const entry = entries[index]
+        if (entry === undefined) return
+        const [rel, src] = entry
+        await Bun.write(join(targetDir, rel), Bun.file(src))
+      }
+    }),
+  )
+  return entries.length
 }
 
 function embeddedAssetResponse(asset: EmbeddedAsset, assetPath: string): Response {
