@@ -8072,14 +8072,31 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
           return merge
         },
         disposition: {
+          // RFC-287 T14（用户拍板在本 RFC 内补掉的既存缺陷）：与 L1 同款，本线也
+          // 许不起「留着给人解」的承诺——`keep: false` 意味着骨架随即丢弃 iso 并删
+          // pin refs，而 `mergeBackAndSettle` **已经**把行落成了 conflict-human
+          // （isolatedAgentRun.ts 的 park-conflict-human）。库里承诺「等待人工解决」、
+          // 物理载体却没了，`replayConflictHumanResolutions` 又在每个任务的 runTask
+          // 入口都跑，下次 resume 就会去找已 GC 的提交、抛错并打挂**整个任务**。
+          //
+          // 迁移前 fanout 两条线同样漏了这一步（63adfb66^ 的 7984/8411）——RFC-187
+          // T8 当年只为工作组线修了，fanout 一直带病。这次一并补上：这份 delta 是
+          // 真的被丢弃了，状态就该如实说 abandon。
           onConflictHuman: (detail) => ({
             keep: false,
-            produce: async () => ({
-              kind: 'failed' as const,
-              shardKey,
-              outputs: {},
-              message: `merge-back-conflict (merge agent could not resolve): ${detail}`,
-            }),
+            produce: async () => {
+              await tryTransitionMergeState({
+                db,
+                nodeRunId: shardRunId,
+                event: { kind: 'abandon', reason: 'fanout-shard-merge-conflict-unresolved' },
+              })
+              return {
+                kind: 'failed' as const,
+                shardKey,
+                outputs: {},
+                message: `merge-back-conflict (merge agent could not resolve): ${detail}`,
+              }
+            },
           }),
           onThrow: (err) => ({
             keep: true,
@@ -8550,14 +8567,23 @@ async function dispatchFanoutAggregatorAttempt(
           return merge
         },
         disposition: {
+          // 与分片线同款、同理由（见那边的长注释）：keep:false 之后 iso 就没了，
+          // 所以不能把行留在 conflict-human——否则下次 resume 找不到树，整任务打挂。
           onConflictHuman: (detail) => ({
             keep: false,
-            produce: async () => ({
-              kind: 'failed' as const,
-              summary: 'aggregator merge conflict',
-              message: `merge-back-conflict (merge agent could not resolve): ${detail}`,
-              outputs: {},
-            }),
+            produce: async () => {
+              await tryTransitionMergeState({
+                db,
+                nodeRunId: aggRunId,
+                event: { kind: 'abandon', reason: 'fanout-agg-merge-conflict-unresolved' },
+              })
+              return {
+                kind: 'failed' as const,
+                summary: 'aggregator merge conflict',
+                message: `merge-back-conflict (merge agent could not resolve): ${detail}`,
+                outputs: {},
+              }
+            },
           }),
           onThrow: (err) => ({
             keep: true,

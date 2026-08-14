@@ -100,6 +100,11 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc287-t1-line-throw-disposition.test.ts',
   'rfc287-t1-merge-disposition-matrix.test.ts',
   'rfc287-t1-release-before-discard.test.ts',
+  // T14 新增（字符串序里 `t14` 在 `t5` 之前：第 9 位 '1' < '5'）：
+  //  · fanout 两条线撞冲突落 abandon（既存缺陷，用户拍板本 RFC 内补）；
+  //  · 实现门抓出的迁移期回归（脚本线 preAttempt 抢占位置 + 两处对外契约）。
+  'rfc287-t14-fanout-merge-conflict-abandon.test.ts',
+  'rfc287-t14-impl-gate-fixes.test.ts',
   'rfc287-t5-script-merge-throw.test.ts',
   // T8 新增：取行前奏收编后的「单一实现 + 四线×五项差异矩阵」锁。
   'rfc287-t8-run-row-prelude-single-source.test.ts',
