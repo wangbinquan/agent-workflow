@@ -1,14 +1,17 @@
 # RFC-294：后台最终层次架构与能力归一总纲
 
-- 状态：Draft（2026-08-13，待用户批准）
-- 性质：目标架构总纲 + 迁移治理合同；本 RFC 当前批次只落设计，不修改生产代码
-- 源码基线：`dde063510dd4b252d3f5f17680113d3cff0b5b3e`；本文同步到 HEAD
-  `6ff1e84f57da5606f4fbfb898b2ab18795a57b95`，其间只改 RFC-287 与 audit-backlog 文档，后台源码/门禁未变；量化采集点为
-  `b2e0a79920e1672129cd944c5201053d5891c29c`
+- 目标架构状态：Draft（2026-08-13，待用户批准）
+- 迁移事实：Out-of-order in progress（2026-08-14 二次刷新；RFC-287、RFC-297～303 已按各自范围落地，
+  RFC-288/289 已关闭且未实现；不代表 RFC-294 任一 wave 已获批或完成）
+- 性质：目标架构总纲 + 迁移治理合同；本次刷新只改设计文档，不修改生产代码
+- 当前仓库头：committed `HEAD=origin/main=10ee54ba3f3aaa433fd072cfa791f89dd4698225`；RFC-288/289 关闭提交为
+  `b6d325a4`。`3030d36e` 是已发布的 RFC-287 第四轮 production 行为与量化祖先锚；其后的提交只增加 RFC-294 文档、测试与 E2E
+  hardening，没有完成任何 RFC-294 production wave。本五份 Draft 架构文档仍是共享工作树 WIP。量化与下一步
+  顺序以 `plan.md` §1/§3.2 为准，开工 W0-R 时仍须重钉干净、已发布的 exact SHA
 - 直接输入：
   - `design/system-commons-unification-audit-2026-08-12.md`
   - `design/task-execution-architecture-audit-2026-08-03.md`
-  - RFC-271、RFC-280、RFC-282、RFC-284～RFC-289、RFC-292
+  - RFC-271、RFC-280、RFC-282、RFC-284～RFC-289、RFC-292、RFC-295、RFC-297～RFC-303
 
 ## 1. 摘要裁决
 
@@ -93,7 +96,7 @@ ACL 判据、生命周期写点、RouteMeta 权限元数据、触发上下文等
 - lifecycle 状态写点已归一，但 WS、child budget、execution watch、terminal human-gate sweep 等
   提交后效果仍由调用点和全局 hook 自觉拼接。
 - fanout child 的身份与来源仍依赖 `parentNodeRunId`、ULID 新旧和 JSON consumed map 组合推断；
-  RFC-289 当前设计的“当前 wrapper parent”与跨 generation 复用直接冲突。
+  RFC-289 已关闭设计的“当前 wrapper parent”与跨 generation 复用直接冲突。
 - HTTP/MCP/API docs 复用 route/server 注册表，`AppDeps` 同时暴露 DB、配置、dispatcher 和测试 seam，
   transport、composition root 与 application 边界没有真正分开。
 
@@ -216,63 +219,55 @@ fence、journal 和 post-commit 原语，不能再造另一台名为 apply 的�
   全纵切归一范例；
 - dependency-cruiser + `KNOWN_VIOLATIONS` 的账外新违规/stale 账双向棘轮。
 
-## 5. RFC-287、RFC-288、RFC-289 的定位
+## 5. RFC-287 与已关闭 RFC-288/289 的定位
 
-### 5.1 RFC-287：必要，保留并作为执行内核 Wave 1
+### 5.1 RFC-287：已落地，保留为 W1 behavior baseline
 
-RFC-287 解决的是五条 scheduler spawn 装配线的共同机制：许可/iso/铸行/spawn/merge/清理、双窗口
-retry 形态和 script merge-back 楔死。它对最终架构是必要的，因为没有 assembly kernel，后续拆
-`scheduler.ts` 只会把五份重复代码搬到五个文件。
+RFC-287 已经 Done。它把五条 scheduler spawn 装配线统一到 `runAssembly(spec)`，并交付 G4 配额设置、G5 公开
+`file://` 收缩、G6 仓库同步窗口和 G7 task 落库后可见的 `__repo_prep__`/失败留痕等行为。这些均进入兼容 oracle，RFC-294
+不重新打开其批准范围，也不得回滚公开 `file://` 收缩、stale-source hard-fail 或现有 prep 可见性。
 
-RFC-287 用户已拍板纳入的 G4/T10 还包含三个既有配额的设置页入口；它也是必要的产品尾批，但与 assembly 正交：归
-settings adapter + task-execution quota policy + platform config projection，保持独立 commit，绝不能进入 `RunAssembly`
-参数或 ExecutionKernel 机制层。
+同时必须区分“RFC-287 已交付”与“RFC-294 后来定义的终局边界”。当前 assembly 仍在 legacy `services/`；生产 G7
+仍由 `startTaskImpl` 推进，task 与 synthetic run 不是原子 admission，stronger “所有入口共用 normal `runTask` 第 0 步 +
+durable operation/receipt + SC sealed source”也不是已落事实。若目标仍保留这些能力，必须按 `plan.md` §5.2 重分配：
 
-同一 RFC 后续又按用户逐问纳入 G5～G7：公开 `file://` 下线、仓库基线同步的既有硬失败前增加窗口重试、以及把仓库准备
-改成 task normal execution 的第 0 步并留下可见 synthetic NodeRun `__repo_prep__`。这三项解决的是真实启动正确性，但不属于
-assembly：G5/G6 的 repository launchability/preparation policy 唯一归 source-control，task admission 只消费其 offered
-participant；G7 归 task launch/admission + 普通 task execution ownership 下的 repository-preparation node。Admission 照旧创建
-`pending` task，并为无上传 JSON lane 原子铸 `pending` synthetic run + 覆盖 scratch/repository/group/sealed/source-task 的 opaque
-workspace plan；repository variants 才消费 SC frozen source，不能让 scratch/source-task 掉进“无计划”可选分支。AbortController 在 INSERT 后、任何准备 effect 前登记，
-随后 `runTask` 复用既有 task `pending → running` claim CAS 并把 synthetic run 推到 `running`，再执行第 0 步。成功后原子绑定
-workspace 并放行 frontier，失败则 synthetic run 与 task 一起进入 `failed` 且不写 `workspacePrunedAt`；用户重试走
-`RetryNode` 的 terminal → pending，再由 `startTask/resumeKick/retryNode` 共享的 `runTask` 第 0 步推进，done prep 服务端拒绝
-retry。它不是独立后台 daemon worker。它们必须按两段依赖实施：G5 先完成；G6 的错误分类/
-冻结策略合同可 additive 先落，G7 异步准备切换完成后才启用 G6 的生产重试窗口，即行为切换顺序为 G5 → G7 → G6。
-G5 不得回滚到公开 `file://`，G6 窗口耗尽仍必须 fail-closed、绝不退回 stale mirror；失败只能停 admission 后
-forward-fix。它们在 W2 拆 TaskEngine 前固定“task 先 pending、claim 后 preparation 是第 0 步；`__repo_prep__` 完成前允许
-尚无 worktree；所有 workspace consumer fail-closed；resume/boot 回到同一 `runTask` 路径”的 oracle；绝不能借 RFC-287
-之名塞入 ExecutionKernel 或让
-`RunAssembly` 读取 URL/config/worktree 状态。
+- assembly port/物理归位进入 W2-A；
+- durable execution authority 进入 P0-D；
+- task/repository admission、claim、retry/resume/boot 同路进入 W2-B 的独立行为 RFC；
+- source seal/frozen preparation policy 进入 W4-E1/W5；
+- audit/committed event/after-commit WS 进入 W3。
 
-RFC-287 的 G1～G3 assembly 不解决 task↔scheduler 环、task ownership、生命周期副作用、NodeRun 身份或 fanout 内链。
-只有 assembly 实现最终归入 `modules/task-execution/engine/kernel/`；G4～G7 按上段 owners 落 settings/task application/
-source-control/repository-preparation node executor。现阶段可按 D18 留薄 facade，不能把 `runAssembly` 发展成塞满可选 hook 的万能工作流
-解释器，也不能借同一 RFC 编号把启动行为塞进 kernel。
+这不是把 RFC-287 判回未完成，而是禁止用一个已经 Done 的编号替后来扩大的架构合同背书。RFC-287 的 G1～G3
+assembly 仍只属于 ExecutionKernel 机制层；G4～G7 不能被塞进 `RunAssembly`，后续迁移必须保持现有 wire/status/错误与
+恢复 oracle，任何能力变化另行呈批。
 
-### 5.2 RFC-288：目标必要，当前设计必须按本 RFC 重写
+### 5.2 RFC-288：已关闭；结论和六条环债转入 W2
 
-拆 task↔scheduler SCC 是必要目标，但当前 `taskDriver` 同时装 active registry、status publisher、
-kick/cancel/resume service locator，会把三个不同生命周期的能力塞进一个新的 process-global 叶子。
+RFC-288 已于 2026-08-14 由用户决定关闭：**未实现、零生产改动，旧 plan 永久不可执行**。关闭不否定
+task↔scheduler 解环，而是因为三轮设计门后其有效范围已完全收敛为本 RFC §16.2/W2 的四合同拓扑；同时 P0-D
+未落、源码锚两天漂移三轮，继续维护独立三件套只会在开工前再重写。六条 depcheck ledger 的 owner 已转给 W2。
 
-修订后必须拆为：
+W2 的新号轻量 implementation RFC 必须复用 RFC-288 留下的九条结论，并至少实现：
 
 - `TaskRuntimeRegistry`：只拥有本进程 active handles/abort reason；
 - `TaskOwnershipPort`：lease/epoch/fencing；
-- `TaskStatusPublisher`：只消费已提交 domain event；
+- `TaskStatusPublisher`：只发布已提交 lifecycle fact；durable outbox cutover 仍归 W3；
 - `SchedulerDriverPort`：由 application 显式注入，未装配时 bootstrap fail-fast；
 - `TaskReadModel` 与 workspace materialization 各自归域。
 
-必须保留 `abort(reason)` 的 RFC-202 语义，不允许用无参 `abortAllActiveTasks()` 收窄为 canceled。
+同时必须携带 `OwnershipToken`/epoch，保留非可选 `abortAll(reason)` 的 RFC-202 `interrupted` 语义，覆盖
+`startTask/resumeTask/retryRepoPreparation/retryNode` 四个 kick；先把同一 `TaskExecutionContext` 穿入 consumer，再替换
+registry backing，避免双 registry。开工门是 W0-R + P0-D 退出证据与当前源码 inventory，不是重新打开 RFC-288。
 
-### 5.3 RFC-289：产品目标可保留，必须排在身份/provenance 之后重写
+### 5.3 RFC-289：已关闭；产品目标排在身份/provenance 之后另立新号
 
 fanout 内链是合理能力扩张，但当前设计把 child 上游限定为
 `parentNodeRunId === 当前 wrapperRunId`，同时既有跨 generation replay 明确保留 child 原 parent；两者不能
 同时成立。当前 child 行也不记录内链 consumed provenance，`pickReusableShardRun` 只看 shardKey/valueHash/status，
 所以“已有 consumed gate 会让 B 随 A 失效”并不成立。
 
-修订后的 RFC-289 必须：
+RFC-289 同样已于 2026-08-14 关闭：**未实现、零生产改动**。关闭的是当前设计，不是 fanout 内链产品目标；旧
+T2～T8 不得继续执行。W7 完成后，如仍要该能力，必须另立新编号并满足：
 
 - 通过 generation 的 selected-run map 找同 shard 上游，而不是改写历史 parent；
 - 在 B 行持久记录它实际消费的 A child run；
@@ -280,7 +275,8 @@ fanout 内链是合理能力扩张，但当前设计把 child 上游限定为
 - validator 规则从可达的真实集合推导，避免死规则或重复规则；
 - 先完成 NodeRun 身份轴与兼容迁移，再解除能力挡板。
 
-在这些前置完成前，RFC-289 保持 Draft，不按现状实现。
+W7 之前继续保留 `fanout-inner-chain-unsupported` 挡板。该能力属于独立、可选的 post-W7 扩张线；没有新 RFC 的
+独立批准时跳过 W8，不阻塞 RFC-294 核心分层迁移与 W9 清仓。
 
 ## 6. 前置 P0 安全与一致性阻断
 
@@ -294,16 +290,17 @@ fanout 内链是合理能力扩张，但当前设计把 child 上游限定为
    不继续双修两套 converger。
 4. **Review decision 原子性**：durable decision、文档快照、node/task transition 与 continuation intent
    必须同一事务提交；FS/output 走 prepare+journal+roll-forward，route 不再拼接 resume saga。
-5. **最小 durable ownership fence**：在 RFC-287 切换任何 mint/worktree/spawn consumer 前，先把人工、自动与
-   scheduler 入口统一到持久 owner/epoch claim；所有 execution-plane task/node DB mutation 同事务 CAS epoch，
-   control/gate command 使用 expected revisions 并原子写 desired-control/continuation 或使旧 epoch 失效；FS/Git/process
-   side effect 使用 task-scoped exclusive fence。RFC-288 再完成模块拆分与消环，不能让 W1 在无权威 owner 下扩大执行面。
-6. **RFC-288/289 设计**：RFC-288 在 W1 行为锚稳定后重写并过门；RFC-289 当前版冻结，待 NodeRun identity
-   落地后再做最终重写和批准，避免用即将失效的源码锚形成循环前置。
+5. **最小 durable ownership fence**：旧路线要求它先于 RFC-287，但历史实施已打穿此前置；现在必须前向修复，在
+   RFC-303 已落事实与 W0-R 最小 capability gate 后，把人工、自动与 scheduler 入口统一到持久 owner/epoch claim；所有
+   execution-plane task/node DB mutation 同事务 CAS epoch，control/gate command 使用 expected revisions 并原子写
+   desired-control/continuation 或使旧 epoch 失效；FS/Git/process side effect 使用 task-scoped exclusive fence。它是
+   新号 W2 implementation RFC 的硬前置，不能以 process-local supervisor 替代。
+6. **关闭项承接**：RFC-288 的九条结论与六条环债只作为 W2 新号 implementation RFC 的输入；RFC-289 的五条
+   identity/provenance 要求只作为 W7 后新号能力 RFC 的输入。两份 CLOSED 文档都不再充当 gate，也不再修订状态。
 
-P0-A/B/C/D 在 W1 前完成；RFC-288 在 W1 后、W2 前用稳定 assembly 锚重写过门；RFC-289 现在只冻结，W7
-identity/provenance 完成后再于 W8 前重写过门。这些 gate 不改变 287→288→289 的相对顺序，也不形成“289 必须在
-W1 前完成”的循环前置。
+RFC-287 已落地，旧的 P0-A/B/C/D→W1 箭头改记 prerequisite deviation，不伪造为已完成。P0-A/B/C 分别重新绑定
+W4-E2、W6、W2-C/W3；W0-R + P0-D 在新号 W2 implementation RFC 前汇合。W7 identity/provenance 完成后才允许新号
+fanout 能力 RFC；未获批时跳过 W8。最新 partial order 以 `plan.md` §3.1 为准。
 
 ## 7. 非目标
 
@@ -342,7 +339,8 @@ W1 前完成”的循环前置。
 - **D5**：NodeRun 增加 row kind、scope、persistent sequence 和逐边 provenance；ULID 不再承担 freshness 序号。
 - **D6**：`platform/atomic-apply` 唯一拥有通用 AtomicApply lifecycle；Intent/ResourcePackage/fusion/skill-restore
   只提供领域 provider 或显式证明不适配，不得复制恢复机。
-- **D7**：RFC-287 保留；RFC-288/289 按 §5 重写后另行呈批。
+- **D7**：RFC-287 作为已落 behavior baseline 保留；RFC-288/289 保持 CLOSED，不重新打开。W2 另立轻量实现 RFC，
+  fanout 内链在 W7 后另立新号能力 RFC。
 - **D8**：迁移采用逐域绞杀和单写源；任何兼容 facade 都有 owner、删除波次和棘轮。
 - **D9**：模块边界按 consumer 的最小信息预算治理：exact public entrypoint、offered/required 方向、递归 leaf 字段/方法级
   consumer 账本、capability 防伪造、DTO/event codec 与 type-taint/god-port 棘轮均为硬合同。
@@ -354,7 +352,7 @@ W1 前完成”的循环前置。
 - **AC-3**：TaskEngine/WrapperRuntime/NodeExecutor/ExecutionKernel 四级合同清楚，并说明合理特化。
 - **AC-4**：command/query、transaction/outbox、error、observability、background、composition root 合同完整。
 - **AC-5**：NodeRun identity/provenance 的目标模型可覆盖 retry/resume/wrapper/fanout/call/review/clarify。
-- **AC-6**：RFC-287～289 的保留、修订、前置和相对顺序无歧义。
+- **AC-6**：RFC-287 的已落基线、RFC-288/289 的关闭语义、结论承接与新号 successor 顺序无歧义。
 - **AC-7**：plan.md 为每波列前置、输入、动作、退出门、回滚点、冲突面和量化指标。
 - **AC-8**：终局量化目标至少包含值级 SCC=0、route→db=0、KNOWN_VIOLATIONS=0、生产全局 setter=0、
   跨 context internal import=0、事务内外发事件=0。

@@ -1,44 +1,50 @@
 # RFC-294 实施路径：从散点 services 到分层 bounded contexts
 
-- 状态：Draft（等待 RFC-294 架构决策批准；本计划尚未授权执行）
-- 规划单位：P0 安全阻断 + W0～W9 十个迁移波次
-- 总原则：单写源、逐 consumer 切换、每波可独立验收/回退；禁止 big-bang 搬树
+- 目标架构状态：Draft（等待 RFC-294 D1～D9 明确批准；本文刷新不代替批准）
+- 迁移进度状态：Out-of-order in progress（RFC-287、RFC-297～303 已按各自范围落地；RFC-288/289 已关闭且未实现；
+  没有任何 RFC-294 wave 满足完整退出门）
+- 规划单位：历史偏差收口 + P0 安全阻断 + W0-R～W9 迁移波次
+- 总原则：承认已落事实、前向修复前置偏差；单写源、逐 consumer 切换、每波可独立验收/回退；禁止
+  big-bang 搬树
 
 ## 0. 批准边界与实施纪律
 
 批准 RFC-294 只表示批准目标架构和以下路线，不等于一次性批准所有行为变化。执行时：
 
 1. P0 的权限/恢复/原子性修复分别立 RFC，列能力影响并单独批准；
-2. RFC-287 仍需单独批准，但批准前其三件套必须同步本总纲的承重门：任何 consumer cutover 前完成 P0-D，
-   review/clarify 切换前完成 P0-C；G6 classifier/config 可 additive 先落，生产行为顺序固定为 G5 → G7 → G6 window
-   enablement，且不得回退到公开 `file://` 或 stale-mirror 语义；
-3. RFC-288/289 必须先修订三件套、重新过设计门、再分别批准；
+2. RFC-287 已按自己的批准范围落地并标记 Done，本计划把其 production behavior 当成受保护基线，不重新打开
+   RFC-287。RFC-294 后来写入、但不属于 RFC-287 已交付合同的 durable ownership、source-control seal、原子 task
+   admission、committed event 与模块归位，分别归入 P0-D、W0-R、W2～W5 的新合同，不能倒签成“RFC-287 已完成”；
+3. RFC-288/289 保持 `CLOSED`，旧 plan 不得执行；W2 与 post-W7 fanout 能力分别使用新编号 RFC 重新取当前锚、过门和批准；
 4. W3～W9 任何涉及 schema、行为、错误码、恢复或能力面的批次，按范围拆独立 RFC；
 5. 每一波只允许一个 in-progress 高冲突批；共享 `main` 上精确暂存，不 broad-stage/stash/reset；
 6. 目录迁移遵守 CLAUDE.md D18：逐域迁、旧路径留薄 facade、消费者归零后再删。
 
-本 RFC 当前文档批的完成边界仅为：三件套 + `design/plan.md` 索引 + `STATE.md` 顶部登记，零生产改动。
+RFC-294 本身仍只授权设计，不授权后续生产迁移；但仓库已经通过各自获批的 RFC-287、297、298、300、301、302、303
+产生生产变化。本文因此把“架构批准状态”与“迁移事实”分开记录，不能再用“RFC-294 零生产改动”推导“目标架构尚无
+任何落点”。
 
-P0 correctness 不等待 W0 全量门落地；但任何 P0 新增/修改的 public/cross-context contract 在合并前必须附 exact 临时
-surface ledger + API snapshot + field/method consumer + authority/tx/data-class，并运行与 W0 等价的 type-taint/capability-forge/
-god-port 变异。W0 落地后这些记录并入 canonical manifests，不能以“安全修复优先”为由先造无账接口。
+P0 correctness 不等待 W0-R 全量门落地；但任何 P0 新增/修改的 public/cross-context contract 在合并前必须附 exact 临时
+surface ledger + API snapshot + field/method consumer + authority/tx/data-class，并运行与 W0-R 等价的 type-taint/capability-forge/
+god-port 变异。W0-R 落地后这些记录并入 canonical manifests，不能以“安全修复优先”为由先造无账接口。
 
 ## 1. 当前基线与量化口径
 
-源码锚：`dde063510dd4b252d3f5f17680113d3cff0b5b3e`；本文最后同步 HEAD
-`6ff1e84f57da5606f4fbfb898b2ab18795a57b95`。其间只有 RFC-287/audit-backlog 文档决策，backend/shared/frontend/门禁源码未变。
-表内量化采集于 `b2e0a79920e1672129cd944c5201053d5891c29c`。
+当前仓库头为 committed `HEAD=origin/main=10ee54ba3f3aaa433fd072cfa791f89dd4698225`；RFC-288/289 关闭提交为
+`b6d325a4`。production shape 与本表量化仍以已发布祖先 `3030d36e` 为实测锚；其后的提交只增加 RFC-294 文档、测试与 E2E
+hardening，没有完成任何 RFC-294 production wave。本五份 Draft 架构文档仍是共享工作树 WIP。正式
+开工 W0-R 时仍须在新的干净、已发布 exact SHA 重新采集并替换本段临时锚。
 
 | 指标                                  |          基线 | 采集口径                                                                                                      |
 | ------------------------------------- | ------------: | ------------------------------------------------------------------------------------------------------------- |
-| dep graph modules                     |         1,404 | `bun run depcheck` 同一解析配置                                                                               |
+| dep graph modules                     |         1,468 | committed `3030d36e` 的 production tree 运行 `bun run depcheck` 实测；`10ee54ba` 的 production graph 与其相同 |
 | backend value SCC                     |             5 | 排除 type-only 后 Tarjan                                                                                      |
 | repo value SCC                        |             7 | backend 5 + shared 1 + frontend 1                                                                             |
 | `KNOWN_VIOLATIONS`                    |            36 | exact `(rule,from,to)` ledger                                                                                 |
 | route→DB value imports                |            15 | `no-routes-to-db`；type-only 不计值通路                                                                       |
 | route/MCP imports of `server.AppDeps` |            45 | transport 反向依赖 composition root                                                                           |
 | production ambient wiring seams       |             5 | terminal hook / git credential provider / memory lang provider / WS revalidation / expired credential handler |
-| daemon `setInterval` call sites       | 24 / 22 files | 区分 daemon-lifetime job 与 execution-local timer                                                             |
+| production `setInterval` call sites   | 23 / 21 files | 当前文本分母；W0-R 需按 periodic/worker/execution-local 重建正式 manifest                                     |
 | AtomicApply lifecycle engines         |             2 | BundleApply + Intent Apply                                                                                    |
 | human-gate route resume saga          |             3 | clarify / questions / review                                                                                  |
 
@@ -52,8 +58,41 @@ services→routes 1
 routes→DB 15
 ```
 
+`modules/**` 当前已有 19 个 production 文件，但 W0-R 要求的七份 architecture manifest 仍为 0；“放进 modules”不等于
+完成 bounded-context cutover。ambient wiring 因 RFC-300/303 新增临时 register/start seam，当前没有可信机器分母，旧值 5
+只能作下界，W0-R 必须先重建 canonical inventory 后再恢复量化棘轮。
+
 每波开始重新采集；若基线因并发 RFC 合法下降，以新值为上限并同步本文实施记录。指标上升一律阻断，不能拿本表的
 旧数字作为新增债务额度。
+
+### 1.1 已落事实与 RFC-294 wave 判定
+
+| 区域     | 当前判定                                | 已落事实 / 仍缺退出门                                                                                                                      |
+| -------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| P0-A     | 未落                                    | Memory 通用 PATCH 仍接受 scope；旧/新 scope 同事务授权与 ghost-event 修复未完成                                                            |
+| P0-B     | 部分                                    | Intent 已有后续能力演进，但 lock identity、compensation retryable 等本 P0 合同未闭合                                                       |
+| P0-C     | 未落                                    | human-gate decision 后 route 仍另行 resume；gate open/decision/continuation 未同事务                                                       |
+| P0-D     | 未落                                    | RFC-303 提供 process-local supervisor/generation seed；没有 durable owner/epoch/fence authority                                            |
+| P0-E     | 已收束                                  | RFC-287 Done；RFC-288/289 CLOSED，结论分别转交 W2 新号实现 RFC 与 W7 后新号能力 RFC                                                        |
+| W0-R     | seed-only                               | CLAUDE.md 有人工治理规则；七份 manifest、modules 分层门、public-surface/type-taint/forge gate 未落                                         |
+| W1       | behavior landed / architecture residual | RFC-287 的 assembly 与 G4～G7 产品行为作为既有基线；target module、ownership、admission/event/SC 边界仍待后续波次                          |
+| W2       | seed-only                               | RFC-303 的 `TaskDriverSupervisor` 可复用；task SCC 六条、durable ownership、TaskEngine/Executor/Wrapper 未收口                             |
+| W3       | seed-only                               | RFC-300 prune claim 与 RFC-303 termination effect 是正确竖切；canonical committed-event/outbox 未落                                        |
+| W4       | seed-only                               | RFC-298 query projection、RFC-301 launch origin、RFC-302 Intent domain helper 与 RFC-297 runtime inventory 可继承；route→DB/AppDeps 未下降 |
+| W5/W6/W7 | 未落                                    | SCC/source-control、AtomicApply、NodeRun v2 均未达任一退出门                                                                               |
+| W8       | deferred / optional                     | RFC-289 旧设计已关闭；只有 W7 后新号 fanout RFC 获独立批准才进入，不阻塞核心 W9                                                            |
+| W9       | seed-only                               | 有 instance worker/stop 形态；没有统一 registry/manifest/phase/readiness/facade 清仓                                                       |
+
+### 1.2 前置偏差账
+
+旧版路线要求 W0 + P0-A/B/C/D 全部先于 W1；历史实施并未按该顺序发生。RFC-287 已经落地，这个事实不回滚，也不能
+伪造为“旧前置已完成”。处置只有前向修复：
+
+1. RFC-287 已交付行为全部进入兼容 oracle，不以 RFC-294 名义重写；
+2. P0-A/B/C 重新绑定其真实消费者，分别阻断 W4-E2、W6、W2-C/W3；
+3. P0-D 与 W0-R 在新号 W2 implementation RFC 前汇合，补上已跳过的 ownership 与机器边界；
+4. RFC-300～303 的临时 seam 进入 facade/owner/background ledger，不因已有 module 文件而豁免；
+5. 任何新 schema/worker/port 都必须满足 W0-R 最小 surface/authority/forge gate，不能继续扩大偏差。
 
 ## 2. 每波统一切换协议
 
@@ -140,7 +179,7 @@ fallback 或 module-level mutable state。新 module 禁止反向 import facade�
 - [ ] clarify/review/questions 三类 gate open 先 durable prepare journal/claim，再以 `TaskParkTx` 同事务消费 prepared ref、
       提交 gate/doc manifest + node/task park + event；prepared 未消费/失败可补偿与 GC；
 - [ ] FS/output 用 prepare+journal/roll-forward，不在事务中 await；
-- [ ] WS 只在 commit 后发；review/clarify executor 的 W1 cutover 必须等待 gate-open oracle 全绿；
+- [ ] WS 只在 commit 后发；review/clarify executor 的 W2-C cutover 必须等待 gate-open oracle 全绿；
 - [ ] route 只返回 actor-filtered gate view，不暴露 continuation/worker id，也不自己 mint/rollback/resume；
 - [ ] crash-at-every-boundary、重复 request、stale doc、部分 doc failure、resume failure 全矩阵。
 
@@ -153,7 +192,9 @@ continuation”的半态；三 gate open + review decision crash/replay 矩阵�
 
 ### P0-D 最小 durable Task ownership fence
 
-**前置**：独立 correctness RFC；必须在 RFC-287 切换第一个 mint/worktree/spawn consumer 前完成。
+**前置**：独立 correctness RFC。原计划要求它先于 RFC-287，但该前置已被历史实施打穿；现在它是**下一项 task
+execution 行为 RFC**，必须在 RFC-303 已落行为 oracle 与 W0-R 最小 capability/public-surface 门可用后实施，并在新号
+W2 implementation RFC 前完成。禁止以追责式回滚 RFC-287 代替前向补 fence。
 
 **任务**：
 
@@ -173,58 +214,80 @@ manual path 不再依赖 `activeTasks + status CAS` 约定。
 **回滚**：schema additive 保留；reader/driver 可停用新调度，但不能恢复已证实的并发写窗口。若无法安全恢复旧行为，
 fail-closed 停止新执行并 forward-fix。
 
-**冲突面**：task/scheduler/driverLease/nodeRunMint/workspace/process/shutdown；与 W1/W2 串行。
+**冲突面**：task/scheduler/driverLease/nodeRunMint/workspace/process/shutdown；与当前 execution hot path 及 W2 串行。
 
-### P0-E 大件设计修订
+### P0-E 大件状态收束（已完成）
 
-- [ ] RFC-287 三件套补齐 P0-C/P0-D 前置、T11→T13→T12 production switch（T12 classifier/config 可 additive 先落）、
-      G5/G6 fail-closed 回滚边界；未同步前不得把
-      “RFC-287 自身获批”视为 W1 入场证据；
-- [ ] RFC-288 按 TaskRuntimeRegistry / TaskOwnershipPort / SchedulerDriverPort / TaskStatusPublisher 重写；
-- [ ] 补 `abort(reason): ids`、bootstrap fail-fast、D18 facade、export inventory、无临时 KNOWN 合同；
-- [ ] RFC-289 当前版明确冻结为不可实施；W7 identity/provenance 合同稳定后，再按 SelectedRunMap + child
-      provenance + consumed-aware reuse 重写；
-- [ ] RFC-288 在 W2 前、RFC-289 在 W8 前分别重新跑设计门并单独请批。
+- [x] RFC-287 已按其批准范围完成并进入兼容基线；不再以 RFC-294 追补前置或扩充其 Done 定义；
+- [x] 把 RFC-287 之后出现的架构 residual 逐项重新归属：assembly 物理归位进 W2，durable ownership 进 P0-D，
+      repository/task admission 与 SC seal 进 W2/W4/W5，committed event 进 W3；不得继续挂在 RFC-287 名下；
+- [x] RFC-288 标记 `CLOSED`（未实现、零生产改动）；九条稳定结论与六条 exact depcheck ledger 转入 RFC-294 W2，
+      旧 plan 永久停用；
+- [x] RFC-289 标记 `CLOSED`（未实现、零生产改动）；产品目标保留，五条 identity/provenance 要求转为 W7 后新号
+      fanout 能力 RFC 的输入；
+- [x] 关闭项不再充当 DAG gate：W2 与 post-W7 fanout 分别另立新编号、按届时真实源码过门。
 
 ### 3.1 Wave/sub-wave 依赖 DAG
 
 ```mermaid
 flowchart LR
-  A["RFC-294 批准"] --> W0
-  A --> F289["P0-E: freeze RFC-289"] --> W1
-  A --> P0A["P0-A memory"]
-  A --> P0B["P0-B intent correctness"]
-  A --> P0C["P0-C review atomicity"]
-  A --> P0D["P0-D ownership fence"]
-  W0 --> W1
-  P0A --> W1
-  P0B --> W1
-  P0C --> W1
-  P0D --> W1
-  W1 --> R288["RFC-288 final gate"] --> W2 --> W3 --> W4 --> W5
-  W4 --> W6
-  P0B --> W6
+  BASE["Committed baseline<br/>RFC-287 + RFC-297~303 Done<br/>RFC-288/289 CLOSED"] --> W0R["W0-R: baseline + machine gates"]
+  BASE --> D0["P0-D design"]
+  W0R --> D1["P0-D implementation"]
+  D0 --> D1
+  D1 --> G2["new W2 implementation RFC<br/>fresh inventory + design gate"]
+  G2 --> W2A["W2-A topology"] --> W2B["W2-B TaskEngine"] --> W2C["W2-C NodeExecutor"] --> W2D["W2-D WrapperRuntime"]
+  P0C["P0-C gate atomicity"] --> W2C
+  W2D --> W3["W3 lifecycle/outbox"]
+  P0C --> W3
+  W3 --> W4["W4 context cutover"] --> W5["W5 SCC/source-control"]
+  P0A["P0-A memory"] --> W4E2["W4-E2 memory"] --> W4
+  W4 --> W6["W6 AtomicApply"]
+  P0B["P0-B intent correctness"] --> W6
   W5 --> W7
-  W2 --> W7
-  W7 --> R289["RFC-289 final gate"] --> W8
+  W2D --> W7
+  W7 -. optional capability .-> F8["new-number fanout RFC<br/>fresh design gate"] --> W8["W8 inner-chain capability"]
   W3 --> W9
   W4 --> W9
   W5 --> W9
   W6 --> W9
-  W8 --> W9
+  W7 --> W9
+  W8 -. if activated before W9 .-> W9
 ```
 
-章节顺序不代替依赖：W1 只需要 P0-E 对 RFC-289 的**冻结结论**，不需要终版 RFC-289；终版 288 在 W1 后用稳定
-assembly 锚过门，终版 289 在 W7 后用稳定 identity 锚过门。W5 的每个 SCC family 需 W4 已断 transport/root 回边；
-W6 在 W4 + P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队；W9-D/E 等所有前驱完成。
+RFC-303 已是 committed Done baseline，不再保留 `C0`。W0-R 与 P0-D 设计可并行，但 P0-D 生产 cutover 必须等 W0-R
+的 capability/public-surface 最小门；二者汇合后才允许新号 W2 RFC。P0-C 必须同时先于 review/clarify executor cutover
+与 W3。RFC-288/289 只作历史输入，不是节点。W5 的每个 SCC family 需 W4 已断 transport/root 回边；W6 在 W4 +
+P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队。W8 是 post-W7 独立能力线：未获批时保留挡板并
+跳过，不阻塞 W9；若同一 release 激活，则必须在 W9 清仓前汇入。
 
-## 4. W0：架构观测、owner 账本与机器栅栏
+### 3.2 从当前 HEAD 起的执行队列
 
-**前置**：RFC-294 目标决策获批；P0 可以并行，但 W1 前安全阻断须完成。
+| 顺序 | 批次                            | 本轮产出                                                                                                              | 开工/停止门                                                                                 |
+| ---- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| N1   | W0-R（下一零行为批）            | 当前 exact report、七份 manifest、19 个 module pilot 与存量 service 的 owner/layer/public surface、现存越界 exception | 行为 oracle 不变；规则 mutation 必红；可与 P0-D 设计并行                                    |
+| N2   | P0-D（下一行为 RFC）            | durable ownership table/epoch、统一 claim/fence、stale effect 拒绝；RFC-303 supervisor 降为 process handle cache      | W0-R 最小 capability gate 已绿；RFC-287 prep + RFC-303 terminal control 并发/crash 矩阵全绿 |
+| N3   | 新号 W2 轻量 implementation RFC | 以当前 assembly/supervisor/prep/prune/launch-origin/termination 为锚，锁四合同、六账与 exact consumer inventory       | W0-R + P0-D exit evidence 齐；继承 RFC-288 九结论但不执行其旧 plan                          |
+| N4   | W2-A topology cut               | 先线程化同一 execution context，再迁四合同；按两刀销 task SCC exact 六边                                              | `KNOWN 36→30` 只按 exact id；不得新增临时 KNOWN                                             |
+| N5   | W2-B → P0-C → W2-C/D → W3       | TaskEngine 后先原子化 gate，再切 executor/wrapper 与 lifecycle/outbox                                                 | scheduler/task/lifecycle 高冲突面全程单 owner                                               |
+| OPT  | W7 后新号 fanout capability RFC | SelectedRunMap、exact consumed edge、consumed-aware reuse 与能力扩张矩阵                                              | 仅 W7 exit 后；未批准则保持挡板、跳过 W8                                                    |
+
+P0-A、P0-B 可从当前 committed baseline 按非重叠文件面独立呈批：P0-A 只阻断 W4-E2，P0-B 只阻断 W6；它们不再被错误地用作
+“RFC-287 已经落地”的前置证明。W4 的低风险 query contract 可做设计准备，但 production cutover 必须等待 W3 范例与对应
+context gate。
+
+## 4. W0-R：重建架构基线、owner 账本与机器栅栏
+
+**前置**：当前 committed baseline 已固定；开工时重采新的干净 exact SHA。P0-D 设计可并行；所有生产 cutover仍需各自批准。
+
+这是当前**下一项零行为批**。它不是把旧 W0 当作已经做过，而是在 RFC-287 与 297～303 已经改变源码形状后重新
+建立可执行分母。
 
 **动作**：
 
 - [ ] 把本计划 §1 指标做成可复跑 architecture report；
+- [ ] 以干净 SHA 重新采集 modules/SCC/KNOWN/route→DB/AppDeps/background/ambient/facade，并把本次临时
+      `1467/36/15/45` 变成可复跑报告；任何差异按 exact edge 解释；
 - [ ] 对 repo/backend SCC、KNOWN 分类、route→DB、AppDeps、ambient wiring、facade、cross-context internal import 建棘轮；
 - [ ] 生成七份 exact manifest：mutation entrypoints（authority/auth/OCC/tx/audit/event）、transaction external effects、
       background jobs/timers、cross-context imports、facades、`architecture/public-surfaces.json`、
@@ -237,15 +300,19 @@ W6 在 W4 + P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 
       ports”，`allowedImplementers/adapterOwner` 生成的 implementation graph 必须无 SCC；
 - [ ] type-only 仅可指向 exact `public/{types,events,participants}`；required SPI 只经
       `composition/required-ports`，禁止借类型 import 暴露 internal shape；
-- [ ] 建 current file→target owner map，所有 343 个 service 文件必须有 owner 或明确 legacy facade 归属；
+- [ ] 建 current file→target owner map，当前 351 个 service 文件必须各有 owner 或明确 legacy facade 归属；正式分母由
+      干净 SHA 报告生成，不把 351 写成永久常量；
+- [ ] 把 RFC-297～303 已新增的 `modules/**`、CLI、timer、register、migration/column 全部入账；特别锁住
+      integration composition→task composition、integration application→task application/internal、application 直接 new
+      infrastructure 三类 pilot 越界，修正或登记 exact、到期可删除的临时 exception；
 - [ ] 建 `architecture/module-symbol-owners.json`：每个 production file 恰属一个 context+layer；legacy god file 按 exported/
       private symbol/capability 分解目标 owner/layer，不能用“scheduler 整文件归 task”掩盖 Task/Wrapper/Executor/Assembly 混居；
 - [ ] `module-symbol-owners` 作为 canonical non-overlap root/owner registry；public surface 以 `ownerEntryId/symbolId` 外键、
       cross-context edge 以两端 `symbolId+entrypoint` 外键关联，AST export/import 双向闭合，referential integrity=100%；
-- [ ] inventory 所有 `node_runs INSERT` 并加“新 INSERT path 不得出现”负扫描，为 W1/W7 单 writer 提供基线；
+- [ ] inventory 所有 `node_runs INSERT` 并加“新 INSERT path 不得出现”负扫描，为 W2/W7 单 writer 提供基线；
 - [ ] 先落最小 `PublicErrorDTO + toPublicError` allowlist，阻止后续 adapter cutover 复制可枚举 private cause；
 - [ ] 定义 periodic `BackgroundJobDefinition` + long-running `ManagedWorkerDefinition` 的
-      phase/dependency/readiness/state contract；W1/W3/W6 及之后任何新 daemon background work 必须从出生注册，
+      phase/dependency/readiness/state contract；W2/W3/W6 及之后任何新 daemon background work 必须从出生注册，
       W9 只收编 manifest 中的存量 scattered background work（periodic + long-running；execution-local 只归 owner 生命周期）；
 - [ ] 每模块 composition exact entrypoint 只允许 bootstrap consumer；bootstrap deep-import infrastructure 和业务 branch
       负扫描；
@@ -259,7 +326,7 @@ expiresOn/mutationTest`；禁 glob/pathNot/目录豁免，unknown/stale/expired 
 - [ ] 给每条新 dependency rule 做配置变异测试，证明规则真的能红；
 - [ ] CI/static scan 接线，保持 depcheck unknown/stale/first-party-unresolved 三判据。
 
-**退出门**：基线与七份 manifest 可重复、无未分类入口；规则变异必红；新增违规/ambient/facade/public export 无法
+**退出门**：基线与七份 manifest 可重复、所有现有 `modules/**` 与 legacy production symbol 无未分类入口；规则变异必红；新增违规/ambient/facade/public export 无法
 静默进入；账本 stale consumer/symbol 必红；
 public/private error 隔离有序列化负测；生产行为零变化。
 
@@ -267,102 +334,75 @@ public/private error 隔离有序列化负测；生产行为零变化。
 
 **冲突面**：`.dependency-cruiser.cjs`、depcheck、gate/CI、architecture tests 单 owner。
 
-## 5. W1：RFC-287 / Assembly kernel + orthogonal launch tails
+## 5. W1：RFC-287 已交付基线与 residual 重新归属
 
-**前置**：P0-A/B/C/D 完成；RFC-287 逐锚刷新并获单独批准；RFC-288/289 不得同时改 scheduler。P0-E 中
-RFC-289 的终版设计刻意等 W7，不阻塞 W1；这里只要求当前版已 frozen。
+RFC-287 已标记 Done，本计划不重新定义其批准范围，也不把后来形成的 RFC-294 目标合同倒签给 RFC-287。W1 现在只承担
+两件事：保护已经上线的行为 oracle，以及把尚未落地的**架构 residual**送到正确的后续 owner。
 
-W1 内部依赖不是编号顺序：assembly W1.0～W1.7 与 G4 在冲突面允许时可独立准备。启动半场先切 G5；G6 的 error
-classifier/config/frozen-policy contract 可 additive 准备，G7 synthetic repository-preparation NodeRun 切换后才允许启用 G6 的生产 retry window，
-即行为顺序为 W1.9 → W1.11 → W1.10 enablement。所有分支在 W1 exit 汇合后才允许 RFC-288 final gate / W2。
+### 5.1 已吸收的 production baseline
 
-**切片**：
+- [x] T1～T9：五条 assembly consumer 已统一走 `runAssembly(spec)`；run-row resolver、豁免与灭绝锁已落；
+- [x] T10/G4：RFC-287 已批准并交付的配额设置面与池/child-budget 修复作为兼容基线；
+- [x] T11/G5：公共 `file://` 拒绝与 HTTP Git fixture 作为不可回退的安全收缩；
+- [x] T12/G6：失败分类、`LC_ALL=C`、timeout/config 与窗口化重试作为当前行为基线；
+- [x] T13/G7：task 落库后准备、可见 `__repo_prep__`、失败留痕、无错误 prune tombstone、metadata 回填与可取消 Git
+      进程作为当前行为基线；multipart/pre-created/call 继续预物化；
+- [x] `3030d36e` 第四轮实现门：source-task 同步 lane、ref/Git identity 重试保真、stale preparation artifact 回收、
+      abort/auto-resume/superseded guard、partial-clone GC 与 warm-submodule signal 接线已进入 published oracle；后续发布仍须按
+      exact containing SHA 验证远端 ancestry 与 CI；
+- [x] RFC-287 索引状态与实现提交已进入历史，不因 RFC-294 前置偏差而回滚。
 
-- [ ] W1.0 九线 inventory、≥20 源码文本锁处置表、行为 golden；
-- [ ] W1.1 落未接线 `RunAssembly`、ports 与双窗口/disposition/park 单测；
-- [ ] W1.2 L6 aggregator 切换；
-- [ ] W1.3 L5 shard 切换；
-- [ ] W1.4 L7 script 切换，单独提交 merge-throw/cleanup bug 修复；
-- [ ] W1.5 L1 workgroup host 切换；
-- [ ] W1.6 L4 agent-single 切换并保持 same-session 跨 attempt iso；
-- [ ] W1.7 L2/L3/L8/L9 豁免锁、facade 与负扫描。
-- [ ] W1.8 / RFC-287 T10 配额设置面尾批：三个既有配额补 settings UI+i18n+exact config projection，保持默认值/
-      即时生效 oracle；独立 commit，负扫描证明 `RunAssembly`/ExecutionKernel 零 settings/quota 字段。
-- [ ] W1.9 / T11 `file://` 公开面下线：先把真实 commit-push E2E 换为本地 `git http-backend` 提供的 HTTP remote，再由 source-control offered
-      `PublicRepositorySourceSealPort + RepositoryLaunchSnapshotInTx` 唯一拒绝/重验；raw URL 只进 one-shot SC codec，
-      task intent 只持 sealed ref。Direct/schedule/webhook 走同一 task admission，schedule save 可提前 seal 但 fire 仍重验。
-      Adapter 不自写 parser；internal/test source 保留，存量启动不 grandfather；独立行为 commit。
-- [ ] W1.10 / T12 repository baseline sync：先 additive 落 source-control error classifier、frozen retry policy/config、
-      `gitCloneTimeoutMs` launch-path projection 与夹具；
-      等 W1.11 execution-local prep 切换后才启用生产总窗口。网络类在 synthetic node execution 内退避重试，鉴权/不存在/无权限/分支错误立即硬失败；
-      未知错误 fail-closed，窗口耗尽保持现有拒绝 stale source 的硬失败；独立行为 commit。
-- [ ] W1.11 / T13 repository preparation 异步化：`RepositoryStepAdmissionTx` 同 tx 创建 `pending` task、第一个可见且同为
-      `pending` 的 synthetic NodeRun `__repo_prep__`，并原子冻结覆盖 scratch/repository/group/sealed/source-task 的 closed
-      workspace plan 与 logical preparation generation/operation；admit/mint/freeze 不得拆成可遗漏调用。Synthetic root run 必须
-      先 pending mint，不放宽 `mintNodeRun` 的 parentless-running guard。INSERT commit 后、任何 SC/FS
-      effect 前先把 task-owned AbortController 登记进 `activeTasks`；`startTask/resumeKick/retryNode` 都调用同一 `runTask`，其
-      `RepositoryPreparationClaimTx` 复用既有 task `pending → running` claim CAS，并把 prep run `pending → running`，再将仓库
-      准备作为第 0 步推进。不得增加 `running → running` 自环或独立 daemon worker。Execution capability 绑定 exact
-      task/run/plan/logical-generation/operation/ownership generation 与 task cancellation；scratch/source-task 走 task-owned 窄实现，
-      只有 repository variants 才由 adapter 调 SC。Adapter 持 AbortSignal 并转成 SC opaque effect capability，不把 generic
-      AbortController 跨域；task infra private closure 绑定 active `handle.signal`，SC application/domain
-      只线程化 opaque effect ref，最终 platform managed-process adapter 才解成 signal，并以 spawn-before-abort check 消除启动窗。
-      SC offered `RepositoryPreparationParticipant` 必须把 cancellation 与 frozen `gitCloneTimeoutMs` 接到底层
-      `runGit/spawnGit` 可杀进程组；取消 receipt 返回前已 kill + await/reap 全组。Effect outcome 是 closed
-      `prepared | failed | stopped(stopReceipt)`；abort 不伪装 repository failure，task owner 按自身 AbortReason 落
-      canceled/interrupted。SC 对同
-      `(operation,source)` 重放同 receipt。成功时同 tx 重验 task/ownership/run、绑定 workspace、标 synthetic run done，commit
-      后才放行 frontier；失败时同 tx 标 synthetic run + task failed，保留可见、凭据脱敏的原始 git stderr，且绝不写
-      `workspacePrunedAt`。取消后的 stale completion 不得复活 task/绑定 workspace。`RetryNode(__repo_prep__)` 仅接受 failed run，
-      并在 current-authority + expected task/run revisions 的单一 tx 中把 terminal task 转回 `pending`、铸新 logical generation +
-      pending successor run + 新 operation；同 generation 的 boot/resume/takeover/technical attempt 共用 operation，再由同一
-      `runTask` 第 0 步推进；done prep 服务端在任何 transition/effect 前拒绝 retry。Resume/boot/reap 也只回到可 claim 状态并调用同一
-      `runTask`，不以空 worktree 返回 410。Canonical lifecycle writer 同 tx 写 audit + W3-compatible closed task event，WS 仅走
-      记账的一跳 after-commit facade（W3 删除），不得事务内 publish。Direct JSON/schedule/webhook 同语义。Multipart、
-      `materializedSpace`、`preCreatedWorktree` 与
-      call launch 保持现有 pre-materialized lane，本批只完成 ownership-handoff inventory、空 worktree 防护与行为 oracle；其
-      task-owned staged-upload journal/port 在 W4-E1 按零行为迁移，若要改成 post-admission preparation 另立行为 RFC。完整
-      inventory 所有“task row ⇒ worktree exists”及 multipart ownership-handoff consumer并逐项 early-state oracle；独立最大批。
+当前实现形状也必须如实冻结：assembly 仍在 `services/schedulerAssembly.ts`；G7 preparation 仍由 `startTaskImpl` 推进，
+synthetic run 与 task admission 不是同一事务，且 stronger “所有入口共用 runTask 第 0 步 + durable operation/receipt”合同尚未
+成为生产事实。它们不是 RFC-287 回归，而是 RFC-294 后续行为/边界候选；若保留目标，必须单独 RFC、单独能力影响与
+crash/replay oracle。
 
-**退出门**：五条线只有一个 assembly；pool 逆序释放、keep/park/merge 三态、广播序列、discard warn、followup/session
-行为对拍；配额 UI 六项覆盖与即时生效对拍；公开 `file://`=0、启动 stale mirror fallback 保持 0；pending admission、task/run
-双 `pending → running` claim、第 0 步 prep、`__repo_prep__` 未完成态查询/取消/`RetryNode`/恢复均不会进入要求 workspace 的
-executor；done prep retry 服务端拒绝、prep failure `workspacePrunedAt` 不变、AbortController-before-effect、brand-only opaque
-effect、SC application/domain 无 AbortSignal、spawn-before-abort 无窗、`stopped` 与 repo failure 分流、cancel 返回前 git 进程组
-已退出、frozen `gitCloneTimeoutMs` 真接线、cancel-vs-completion CAS、crash-after-SC-effect-
-before-task-receipt、duplicate/takeover 同 receipt、三入口/boot/resume 同路重放、legacy multipart handoff/空路径防误写全绿；
-transaction external effect=0，临时 WS facade 已入账。G4～G7 与 assembly import/DTO 交集=0；W1 architecture debt 每项 ≤
-exact W0 baseline、新 violation/edge=0、G7 execution-local owner/lifecycle=100%。
+### 5.2 Residual 去向（不再挂 RFC-287 名下）
 
-**回滚点**：每个 assembly consumer switch 与 G4 有独立 revert；G5/G6 是独立部署切换但不得恢复公开 `file://` 或允许
-stale source 启动。G5 故障时停相关新 admission并 forward-fix；G6 可扩大/暂停 retry window 或 fail-closed 停仓库启动。
-未使用 kernel 可暂留。G7 若已产生 `pending/running` 且 `__repo_prep__` 未完成的 task，旧 reader 不安全时不能代码回退，
-只能停相关 admission，并保留兼容 `runTask` 第 0 步将 synthetic run forward-prepare 或连同 task fail terminal；禁止把新行 stranded，
-也禁止 runtime 双路随机选择。
+| Residual                                                                                  | 新 owner / wave                                                   | 开工门                                                     |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------- |
+| `runAssembly` port、target module、legacy import/facade                                   | W2-A topology cut，最终归 `task-execution/engine/kernel/assembly` | W0-R + P0-D + 新号 W2 implementation RFC                   |
+| process-local active handle 与 durable execution authority 分离                           | P0-D；RFC-303 supervisor 只作 handle cache seed                   | RFC-303 已落 oracle + W0-R capability gate                 |
+| task + repository step 的原子 admission、claim、operation/receipt、retry/resume/boot 同路 | P0-D + W2-B TaskEngine，另立行为 RFC                              | 不得以“目录迁移”夹带；先锁 RFC-287 当前 wire/status oracle |
+| raw repository source seal、fire-time revalidation、SC frozen preparation policy          | W4-E1 + W5 source-control                                         | task admission 与 SC purpose-specific participant 获批     |
+| task/prep transition 的 audit + committed event、after-commit WS                          | W3                                                                | P0-C + W2-D                                                |
+| quota/config typed projection 与 ambient lookup 清理                                      | W4-E4b / W9-A                                                     | 保持 RFC-287 已上线默认值和可见行为                        |
 
-**冲突面**：scheduler / isolatedAgentRun / nodeRunMint / pools / task admission / gitRepoCache / worktree / config / launch routes
-排它；W1.9～W1.11 完成并固定 oracle 后才进入 W2 TaskEngine 拆分。
+**W1 判定**：RFC-287 产品交付为 Done；RFC-294 原 W1 architecture exit 为“未满足、已重分配”，不再保留一个假装可
+补勾的 W1 checklist。W0-R 必须为当前实现重做 behavior/source inventory，后续每个 residual 只在其新 wave 的退出门计账。
 
-## 6. W2：修订 RFC-288 / Ownership、Driver 与大 SCC
+**不可回退项**：不得恢复公开 `file://`，不得恢复 stale source 静默启动，不得删除现有 `__repo_prep__` 可见性或让既有
+task stranded。后续重构只能行为对拍或通过独立 RFC 明确改变能力。
 
-**前置**：W1 完成；新版 RFC-288 设计门和批准完成。
+## 6. W2：新号 Implementation RFC / Ownership、Driver 与大 SCC
 
-### W2-A RFC-288 topology cut
+**前置**：W0-R 与 P0-D 完成；基于 RFC-287/300/301/303 committed 事实另立的轻量 W2 implementation RFC 已过设计门并
+独立批准。RFC-288 只提供关闭时保存的九条结论，不再修订、不再充当 gate。W2 不等待“补做 W1”，只消费 §5 已冻结的
+production baseline。
 
-- [ ] additive 实例化 `TaskRuntimeRegistry`，只管 active handle/abort reason；
+### W2-A 四合同 topology cut
+
+- [ ] 先把同一个 private composition-level `TaskExecutionContext` 线程化进四个 kick 与所有 driver consumer，再适配
+      RFC-303 supervisor backing；禁止先造第二套 registry；
+- [ ] `TaskRuntimeRegistry` 只管 token-bound active handle/abort reason；
+- [ ] 复用 RFC-303 已有 `TaskDriverSupervisor`/generation ticket 的 process-local 语义，但修正其 composition/application
+      deep import；不得把它升级成 durable authority 或第二套 ownership；
 - [ ] **复用 P0-D canonical ownership table/port**，迁移 consumer/owner/facade并删除 legacy Map/lease authority；禁止
       新建第二张 lease 表、第二个 claim API或重置 epoch；
 - [ ] `SchedulerDriverPort` 由 application instance 构造注入，不用 `registerSchedulerDriver` global locator；
 - [ ] `TaskStatusPublisher` 先定义 committed-event port，W3 再切 outbox；
-- [ ] 拆 `TaskReadModel`、workspace materialize、workspace leases；按 export inventory 搬，不按过期行号切片；
+- [ ] 拆窄 `TaskReadModel`；workspace materialize/lease 只抽 purpose-specific seam，终局迁位归 W5，不能扩大 W2 解环范围；
 - [ ] frontier/graph 纯核归 task engine，删除测试为生产 re-export 定边界的做法；
-- [ ] 最后一刀 cohesive cutover：断 task↔scheduler A/B 回边，同一 commit 删除前 6 条 ledger；
+- [ ] 第一刀 cohesive cutover：切 A1 + B1～B4 与四个 kick，同一 commit 删除前 5 条 task SCC ledger；
+- [ ] 第二刀 E3：窄 `getTask`/read-model consumer 切完再删除第 6 条 ledger；两个提交各自必须 depcheck 绿，禁止临时 KNOWN；
 - [ ] `abortAllActiveTasks(reason): ids`、shutdown interrupted、orphan/recovery 行为对拍；
 - [ ] 旧路径按 D18 留一跳 facade，登记最早稳定 `removeAfterWave`；W9 只清理经批准仍未到期的例外。
 
 ### W2-B TaskEngine decomposition
 
 - [ ] inventory DAG task、workgroup round、dynamic workflow 的所有生产入口、resume/recovery/terminal 路径；
+- [ ] 把 RFC-287 `__repo_prep__`、RFC-301 immutable `launch_origin`、RFC-300 prune claim、RFC-303 source termination
+      guard/effect 纳入同一 task admission/drive/settle inventory；不得在拆 engine 时丢失任一 fence；
 - [ ] 提炼 `TaskEngine` 最小 interface；三种 engine 保留独立 domain state machine，只共享 ownership/lifecycle/kernel ports；
 - [ ] 按 single consumer 切换，旧 scheduler/task inline frontier/drive body 归零；
 - [ ] workgroup host execution 只调用共同 NodeExecutor/Assembly，不把 round assignment 混入 DAG。
@@ -372,13 +412,14 @@ stale source 启动。G5 故障时停相关新 admission并 forward-fix；G6 可
 - [ ] inventory 全部 `NodeKind` 及 agent/script/call-workflow/call-workgroup/code-host/review/clarify 生产 dispatch；
 - [ ] registry 与 `NODE_KIND_BEHAVIORS satisfies Record<NodeKind,...>` 同源或以穷尽 compile oracle 对拍；
 - [ ] review/clarify executor 只负责 task-side request/park outcome，gate policy 仍在 collaboration；
+- [ ] review/clarify executor production cutover 等 P0-C 完成，禁止把旧 route resume saga 搬进 executor；
 - [ ] 逐 kind cutover，旧 switch/inline body 与旁路（含 workgroup host）生产命中=0。
 
 ### W2-D WrapperRuntime
 
 - [ ] inventory loop/git/fanout 外壳、hydrate/park/merge/terminal/retry；
 - [ ] 先把 loop/git 的公共序幕/收尾/merge/park 收进 template，strategy 仅实现真正差异；
-- [ ] fanout 先迁现有能力的 outer shell，内链能力仍由 W8 扩张；call-workflow 明确不并入 wrapper；
+- [ ] fanout 先迁现有能力的 outer shell；内链只有新号 RFC 独立批准后才由可选 W8 扩张；call-workflow 明确不并入 wrapper；
 - [ ] 统一 container membership/scope write contract，为 W7 `scopePath`/backfill 建唯一语义；
 - [ ] 旧 loop/git/fanout wrapper inline shell 归零，能力表/park map 穷尽门生效。
 
@@ -393,7 +434,8 @@ repo SCC `7→6`、backend `5→4`、KNOWN `36→30`（若前序已下降则等�
 
 ## 7. W3：Lifecycle committed events + Collaboration commands
 
-**前置**：W2 提供不成环的 driver/ownership ports；P0-C 完成。
+**前置**：W2-D 提供不成环的 driver/ownership/engine ports；P0-C 完成；RFC-300/303 的 active claim/effect 已收口到
+可复现 committed baseline。
 
 **动作**：
 
@@ -401,6 +443,9 @@ repo SCC `7→6`、backend `5→4`、KNOWN `36→30`（若前序已下降则等�
       `eventId/type/schemaVersion/exact aggregate-kind+codec+aggregateId+aggregateSeq/operation+correlation+causation/
 deliveryClass/audience`，每个
       payload 有 fixture/size gate/secret-content taint test/known consumer matrix；
+- [ ] 先把 RFC-300 terminal status + `workspacePruningAt/workspacePruneCause` 的同一 CAS、RFC-303 source termination
+      guard/control effect 与 RFC-287 task/prep status emitter 纳入 writer inventory；每个事实只保留一个 canonical lifecycle
+      writer，现有 register hook/direct `emitTaskStatus` 只作记账 facade，不能固化成第二事件系统；
 - [ ] migration 加 critical outbox、consumer dedupe、claim epoch/lease/retry/dead-letter、不可变
       `deliveryMode=shadow|dispatchable`、producer epoch 与每事件族
       durable cutover ledger；transition 与 event/audit 同一 `dbTxSync`；
@@ -411,6 +456,7 @@ deliveryClass/audience`，每个
 - [ ] dispatcher claim `(deliveryMode,producerEpoch,state,leaseEpoch)`；DB effect + `(consumer,eventId)` dedupe 同事务，
       external effect 用 eventId idempotency；critical dead-letter 告警、replay/reconcile，不作为完成终态；
 - [ ] childBudget/executionWatch 改 event + reconcile；terminal gate sweep 改 durable consumer；
+- [ ] terminal transition commit 后才唤醒 workspace prune；物理删除失败不回滚终态，claim 保留并由 reconcile 重试；
 - [ ] WS 只从 event 生成最小 invalidate projection，每帧按当前 audience/ACL/role live revalidate，失败 default-drop；
 - [ ] collaboration 建统一 command envelope/continuation protocol；先 review，再 clarify，再 questions；
 - [ ] 删除三 route 的 rollback/mint/resume saga 与 `resumeFailure` 拼装；
@@ -423,7 +469,7 @@ deliveryClass/audience`，每个
 **退出门**：事务内外发事件=0；`registerTerminalTaskHook`=0；route human saga `3→0`；每次 successful transition 有
 且仅有一组 closed-schema committed events；WS payload/逐帧 authorization/可观察偏序兼容；critical pending/dead-letter
 可观测且可 replay；把 task event 绑定 memory aggregate/错误 sequence、wrong payload codec/unknown key 的变异必红；
-ambient wiring `5→≤4`。
+ambient wiring 至少删除 W0-R 记账的 terminal/event register exact ids，且总分母不升。
 
 **回滚点**：不能直接 revert 代码。先停 admission/worker、冻结该事件族 cutover、让当前 epoch 的 dispatchable row
 全部 delivered 或由兼容 dispatcher 接管，再原子切回 legacy epoch；确认 pending=0 后才可撤新 emitter。additive
@@ -433,16 +479,17 @@ outbox/shadow row 不回滚；任何时刻只能一个 delivery owner active。
 
 ## 8. W4：Application use cases、OperationCatalog 与 transport 截断
 
-**前置**：W0 新路径规则生效；W3 command/event 模式有一个成熟范例。
+**前置**：W0-R 新路径规则生效；W3 command/event 模式有一个成熟范例。
 
 子波依赖不是章节顺序：`A → E0`；`E0 + C + source-control thin seams → E1/E2`；`E1 + E2 → E3`；
 `C → E4a`；`C + E4b → E6`。E5 可独立落 contract，但生产 cutover 等 W5 的 SC/runtime seam；E7 可独立。
 每个 context contract 再流向自己的 `B(adapter cutover) → D(AppDeps/root contraction)`，所有 mutation B cutover 还必须有
 E0 trusted authority + 本域 event codec；public liveness/credential-auth/verified-ingress 用各自 exact context 例外。
 不依赖 C/E 的低风险 read-only query 可提前做 B。W4 先为 E2
-落 source-control offered `RepositoryScopeAuthorizationInTx` 薄 participant；E1 必须**复用并迁位** W1.9 已完成行为切换的
-`PublicRepositorySourceSealPort + RepositoryLaunchSnapshotInTx`（one-shot raw URL seal / current authority + sealed-or-versioned
-source → 无 path/secret 的 frozen ref），不得在 W4 首次创建 seam 或重写 launchability 语义；
+落 source-control offered `RepositoryScopeAuthorizationInTx` 薄 participant；E1 必须保留 RFC-287 已上线的公共
+`file://` 拒绝，但 `PublicRepositorySourceSealPort + RepositoryLaunchSnapshotInTx` 尚不是 production seam：它们要作为
+W4-E1/W5 的 purpose-specific additive contract 单独呈批（one-shot raw URL seal / current authority + sealed-or-versioned
+source → 无 path/secret frozen ref），不得谎称是 W1 已完成迁位；
 W4-B task worktree route 切换前另落 task-owned `TaskWorkspaceReadPort` + SC offered `WorkspaceContentParticipant` 薄 facade；
 E5 的完整 insight cutover 留在 W5 与 SC
 snapshot 一起完成，避免 W4↔W5 循环。任何 mutation route 只有对应 use case/participant/event codec 已落后才切；D
@@ -467,6 +514,8 @@ snapshot 一起完成，避免 W4↔W5 循环。任何 mutation route 只有对�
 
 - [ ] health / repos / task-owned worktree-files / port-artifacts query；worktree route 先由 task 授权，再经 task required
       `TaskWorkspaceReadPort` → SC offered `WorkspaceContentParticipant` 两跳读取；
+- [ ] task detail 保留 RFC-298 已落的最小 `webhookSourceLink` projection：只从 task 冻结 context 派生，不回查
+      integration，不把 raw TriggerContext 扩进 query DTO；
 - [ ] tasks / taskFeedback / taskClarifyDirective / taskQuestions / reviews / clarify；
 - [ ] intentSessions / auth / oidc-auth；
 - [ ] webhook ingress / deliveries；
@@ -500,12 +549,13 @@ W4-E 不是一笔“大 context move”，按下列子波独立呈批/提交。�
 rollback/admission owner；先落 domain/application contract，再切该 context 的单个 adapter consumer。
 
 - [ ] **E0 identity-access**：可信 direct/delegated request authority factory，保留 schedule/webhook/call 现授权语义；
-      sealed system-effect contract/forge gate 在 W0，event-family factory 随 W3 producer/worker 落，不等 E0；
-- [ ] **E1 task launch admission**：迁移而非重写 W1.11 已固定的 JSON-body pending admission + `runTask` step-0
-      `__repo_prep__` 语义；source fact + durable intent 同 tx，intent claim epoch + `RepositoryStepAdmissionTx` 原子写 `pending`
-      task、pending synthetic NodeRun、closed workspace plan/logical-generation operation；`RepositoryPreparationClaimTx` 复用既有 task claim CAS
-      并绑定 prep run transition。Repository preparation 继续由 normal task execution ownership 推进并经 NodeRun lifecycle
-      participant 原子提交 workspace/run/task，不能迁成独立 daemon worker；`PreMaterializedTaskAdmissionTx` 只消费
+      sealed system-effect contract/forge gate 在 W0-R，event-family factory 随 W3 producer/worker 落，不等 E0；
+- [ ] **E1 task launch admission**：消费 W2-B 已获批并稳定的 task admission 合同，不在 W4 偷改 RFC-287 行为。
+      必须统一 RFC-301 immutable `launch_origin`/child inheritance、RFC-303 `SourceTerminationSnapshot` + launch/effect revision +
+      durable guard/revival fence，以及 RFC-287 当前 `__repo_prep__` wire/status oracle。若 W2-B 另行批准
+      `source fact + durable intent`、intent claim epoch、原子 task/synthetic run/closed workspace plan 与 normal `runTask` step-0，
+      E1 只做 owner/adapter 迁位；未批准前不得在 transport cutover 中夹带。Repository preparation 仍由 normal task execution
+      ownership 推进，不能迁成独立 daemon worker；`PreMaterializedTaskAdmissionTx` 只消费
       direct-multipart/fusion/call 的 opaque prepared artifact，准备完成后才建 task，不能进入 repository-step lane；integration/
       code-host secret/provider response 不越界，knowledge-evolution internal workspace 有 artifact compensation；direct multipart
       迁入 task-owned preparation journal/port但保持“预物化后建 task”语义，任何改成 post-admission preparation 另行呈批；
@@ -516,16 +566,19 @@ rollback/admission owner；先落 domain/application contract，再切该 contex
 - [ ] **E3 knowledge-evolution**：fusion aggregate、decision、task launch intent 与 skill/memory exact-set tx participants
       收口；落 RC `SkillProvenanceVisibilityQuery` + Memory `MemoryProvenanceVisibilityQuery`，provenance query 逐 skill/memory
       批量重授权，不泄不可见 id/count；
-- [ ] **E4a intent**：session/draft/working-set commands/queries 与 legacy apply adapter 收口；只落新 AtomicApply required
-      port/provider contract，`ApplyDraft` 新 admission/provider 的生产切换留 W6，避免 W4↔W6 循环；
+- [ ] **E4a intent**：session/draft/working-set commands/queries 与 legacy apply adapter 收口；复用 RFC-302 已落的 pure domain
+      normalizer，锁 `parse → normalize → canonicalize/hash → validate → settle`，apply 不得二次 layout；只落新 AtomicApply
+      required port/provider contract，`ApplyDraft` 新 admission/provider 的生产切换留 W6，避免 W4↔W6 循环；
 - [ ] **E4b runtime-management**：profile/admin/probe 与 runtime-selection participant 独立切换/回滚，保持 per-NodeRun
-      首次 dispatch 语义；
+      首次 dispatch 语义；RFC-297 的 driver declaration/profile/probe 归 runtime-management，而 per-NodeRun observed inventory、
+      provenance history 与 task ACL query 归 task-execution，禁止一个 runtime inventory port 跨两种 authority；
 - [ ] **E5 workspace-insight contract**：先落 pure query / durable narrative-artifact job 合同；生产 cutover 在 W5 随
       source-control immutable snapshot participant 完成，claim/receipt/GC/recovery 完整；
 - [ ] **E6 resource-specific tools**：MCP runtime test 归 `resource-catalog/mcp/application/diagnostics`；落
       Start/SubmitTurn/Cancel/End + Session/Transcript、session/turn lease tx、exact MCP/runtime snapshot 与 process effect
       port，event 仅 ref/status；`testing/` 仅 fake/factory，不承载生产 use case；
-- [ ] **E7 system-operations adapter**：只切 admin command/query 与 platform coordinator port；physical restore generation
+- [ ] **E7 system-operations adapter**：只切 admin command/query 与 platform coordinator port；把 RFC-295 downgrade audit 的
+      CLI 直连 DB 记为一次性兼容命令与 sunset ledger，不据此创造 generic cross-domain audit port；physical restore generation
       protocol 不在普通 context revert 内实施，留 W9-E 独立 RFC。
 
 **退出门**：route→DB `15→0`；AppDeps imports `45→0`；services→routes `1→0`；MCP/server SCC 消失；
@@ -554,6 +607,10 @@ physical restore 不适用本回滚。
 - [ ] shared outputKinds handler registry DI，销 shared 1；
 - [ ] frontend recursive renderer 用 children/render callback，销 frontend 1；
 - [ ] source-control context 收编 repo/cache/submodule/group/worktree，util 保持叶子；
+- [ ] 吸收 RFC-300 terminal workspace 协议：task 拥有 prune candidate/claim/final stamp，SC 只执行 physical delete 并返回
+      幂等 receipt；driver ownership release、stale claim、删除失败重试与 `worktreeAutoGc` 关闭时的 terminal cleanup 不得丢；
+- [ ] 吸收 RFC-287/303 的 repository preparation/cancellation seam：task 只持 purpose-scoped capability，SC 不见 task
+      ownership token/AbortController/terminal reason；Git/process kill receipt 与 workspace mutation fence 在 adapter 两侧闭合；
 - [ ] 落 UI/task/workspace-insight 各自 purpose-specific snapshot/content participant；task 路径固定
       `TaskWorkspaceReadPort(capability,no workspace arg) → task adapter → WorkspaceContentParticipant(authorized SC snapshot)`，
       错绑 workspace/capability 变异必红；WI 同步 pure query 与 durable
@@ -601,7 +658,8 @@ requestHash/serializationKey`；canonical request hash 服务端计算，duplica
 
 ## 11. W7：NodeRun identity、sequence 与逐边 provenance
 
-**前置**：W1 唯一 mint/assembly、W2 ownership + WrapperRuntime 唯一外壳、W5 backend 零环；独立 schema RFC 获批。
+**前置**：W2 已形成唯一 TaskEngine/NodeExecutor/WrapperRuntime execution seams，P0-D ownership 单权威，W5 backend
+零环；独立 schema RFC 获批。
 
 **阶段**：
 
@@ -626,14 +684,16 @@ attemptIndex/ownershipEpoch`，以 CHECK 锁住 task owner 无 host/repo、host-
 producer run 可解释；生产 freshness 不猜 ULID；canonical NULL/unknown version=0；schema admission + Linux/macOS
 migration 全绿。
 
-**回滚点**：W8 activation 前（rollback horizon）reader 可切回 legacy oracle且 writer继续 legacy projection；additive
-columns/table 保留，single writer 不回退成两套 mint。W8 开始生成新 capability data 后只能 forward-fix，不能切旧 reader。
+**回滚点**：新号 fanout capability activation 前（当前规划为 W8）reader 可切回 legacy oracle且 writer继续 legacy
+projection；additive columns/table 保留，single writer 不回退成两套 mint。一旦新能力开始生成 provenance data，只能
+forward-fix，不能切旧 reader。
 
 **冲突面**：schema/migration/nodeRunMint/freshness/scheduler/task/session views，整个 W7 排它。
 
-## 12. W8：修订 RFC-289 / FanoutPlan 与内链
+## 12. W8（可选能力线）：新号 FanoutPlan / 内链 RFC
 
-**前置**：W1/W2/W7 完成；新版 RFC-289 获独立批准。
+**前置**：W2/W7 完成；基于 RFC-289 关闭时五条结论另立的**新编号** fanout RFC 已重新设计、过门并独立批准。
+RFC-289 旧 plan 永久不可执行。未获批准时保留 `fanout-inner-chain-unsupported`，跳过本波；核心 W0-R～W7/W9 不等待它。
 
 **动作**：
 
@@ -677,13 +737,17 @@ columns/table 保留，single writer 不回退成两套 mint。W8 开始生成�
 
 ### W9-B ManagedBackgroundRegistry
 
-- [ ] 从 `background-jobs.json` inventory 所有 production background execution entrypoint：24 个已知 interval + 非
+- [ ] 从 `background-jobs.json` inventory 所有 production background execution entrypoint：当前文本扫到的 23 个 interval + 非
       interval long-running loop/worker + execution-local timer + disabled entrypoint，并区分 lifetime；
+- [ ] 以 W0-R 刷新的实际分母替换上述临时“23 个”描述；至少点名 RFC-300 boot reconcile/stale-prune job/execution-local
+      finalizer 与 RFC-303 terminal-control worker，不能让新 RFC 在 W9 前继续新增散点 loop；
 - [ ] periodic job 全声明 cadence/overlap/config-read/retry/health/run，long-running worker 另用无 cadence 的
       `ManagedWorkerDefinition.start/stop`，禁止 start 内私设 timer；
 - [ ] 按 boot-recovery/pre-listen/pre-ready/post-ready phase + dependency DAG 启动；blocking pre-ready job 成功才开放
       readiness，shutdown 从同一 handle registry 逆序停止且有 timeout；
 - [ ] 特别锁住当前未进 shutdown 清单的 intent/token-audit timers；
+- [ ] RFC-303 worker 从 private `setInterval + stop(): void` 迁为 registry-owned cadence/lease 与
+      `stop(): Promise<StopReceipt>`，shutdown 等待 drain；storage/clock/scan 只经窄 ports；
 - [ ] id 唯一、dependency 存在且无环；disabled 单列，eligible job 状态守恒，shutdown 后
       active/starting/stopping=0，所有曾 active worker 都有 stop receipt。
 
@@ -717,7 +781,7 @@ columns/table 保留，single writer 不回退成两套 mint。W8 开始生成�
 W9 内部依赖为 `A/B → E → D`，C 可与 A/B/E 并行但必须在 D 前汇合。章节排版不代表 D 可先于 E 删除 restore/facade
 consumer；W9 公共“逐 service revert”回滚不覆盖 E，E 只按上条 generation 协议处理。
 
-**退出门**：ambient wiring `5→0`；eligible periodic job 与 managed worker 的 registration/phase/health/stop 覆盖 100%，
+**退出门**：W0-R ambient wiring ledger 全部 `→0`；eligible periodic job 与 managed worker 的 registration/phase/health/stop 覆盖 100%，
 execution-local timer owner/lifecycle 覆盖100%；facade ledger=0；cross-context internal
 import=0；终局指标全绿。
 
@@ -727,33 +791,34 @@ import=0；终局指标全绿。
 
 ## 14. 量化里程碑
 
-| 时点    | Repo SCC | Backend SCC | KNOWN | route→DB | AppDeps imports |    Ambient wiring |
-| ------- | -------: | ----------: | ----: | -------: | --------------: | ----------------: |
-| 基线    |        7 |           5 |    36 |       15 |              45 |                 5 |
-| W1 后   |       ≤7 |          ≤5 |   ≤36 |      ≤15 |             ≤45 |                ≤5 |
-| W2 后   |        6 |           4 |    30 |      ≤15 |             ≤45 |                ≤5 |
-| W3 后   |        6 |           4 |    30 |      ≤15 |             ≤45 |                ≤4 |
-| W4 后   |        5 |           3 |    13 |        0 |               0 |                ≤4 |
-| W5 后   |        0 |           0 |     0 |        0 |               0 |                ≤4 |
-| W6 后   |        0 |           0 |     0 |        0 |               0 | ≤4；AtomicApply=1 |
-| W9 终局 |        0 |           0 |     0 |        0 |               0 |                 0 |
+| 时点           |        Repo SCC | Backend SCC |  KNOWN | route→DB | AppDeps imports |                           Ambient wiring |
+| -------------- | --------------: | ----------: | -----: | -------: | --------------: | ---------------------------------------: |
+| 当前临时基线   |               7 |           5 |     36 |       15 |              45 |            未建正式分母；旧值 5 仅作下界 |
+| RFC-287 已落后 |              ≤7 |          ≤5 |    ≤36 |      ≤15 |             ≤45 |                    不以总数证明无新 seam |
+| W0-R 后        | 同干净 SHA 基线 |      同基线 | 同基线 |   同基线 |          同基线 |                      exact manifest 建立 |
+| W2 后          |               6 |           4 |     30 |      ≤15 |             ≤45 |                               ≤W0-R 基线 |
+| W3 后          |               6 |           4 |     30 |      ≤15 |             ≤45 | 至少销 terminal/event register exact ids |
+| W4 后          |               5 |           3 |     13 |        0 |               0 |                                      ≤W3 |
+| W5 后          |               0 |           0 |      0 |        0 |               0 |                                      ≤W3 |
+| W6 后          |               0 |           0 |      0 |        0 |               0 |                       ≤W3；AtomicApply=1 |
+| W9 终局        |               0 |           0 |      0 |        0 |               0 |                                        0 |
 
-W1 数字是 ceiling：所有 architecture debt 必须逐 exact id 不增、new violation/edge=0，不能靠“总数没升”用新债替换旧债；
-G7 `__repo_prep__` execution-local owner/task-run claim/cancellation process-group/NodeRun lifecycle 覆盖=100%。W2 的真实退出是“W1 exact baseline
-删除 RFC-288 指定的六条 ledger id”，
+RFC-287 后数字仍是 ceiling：所有 architecture debt 必须逐 exact id 不增、new violation/edge=0，不能靠“总数没升”用新债
+替换旧债。W0-R 的首要职责是把 RFC-297～303 新出现的 module/register/worker/facade 纳入分母；在此之前不宣称 ambient
+下降。W2 的真实退出是“W0-R exact baseline 删除 `b6d325a4` 从 RFC-288 转交的六条 exact ledger id”，
 W4/W5 同理按 exact ids 销账，表中 6/4/30 等只是当前基线下的预期 ceiling。若某一项被前置 RFC 提前销账，后续目标改为
 “保持 0/不回升”，不是制造同数目新债。
 
 ## 15. 并发与冲突矩阵
 
-| 高冲突面                             | 必须串行的 waves         | 允许并行的面                          |
-| ------------------------------------ | ------------------------ | ------------------------------------- |
-| scheduler/task/freshness/nodeRunMint | W1 → W2 → W7 → W8        | 非执行域 P0/W4 子域                   |
-| lifecycle/review/clarify/questions   | P0-C → W3                | W5 独立 SCC 族                        |
-| server/mcp/route catalog             | W4 → W9 root 收口        | W4 内不同域实现，root 单 owner        |
-| schema/migrations                    | P0/W3/W6/W7 单 owner排队 | 无并行 migration 编号分配             |
-| util/git/repository                  | W5 排它                  | agent/workflow/shared/frontend SCC 族 |
-| design/plan.md + STATE.md            | 每次收尾单 owner         | 实现文件可分工                        |
+| 高冲突面                             | 必须串行的 waves                      | 允许并行的面                          |
+| ------------------------------------ | ------------------------------------- | ------------------------------------- |
+| scheduler/task/freshness/nodeRunMint | P0-D → 新号 W2 RFC/W2 → W7；W8 如获批 | W0-R 工具面、非执行域 P0/W4 设计      |
+| lifecycle/review/clarify/questions   | P0-C → W3                             | W5 非 lifecycle SCC 族                |
+| server/mcp/route catalog             | W4 → W9 root 收口                     | W4 内不同域实现，root 单 owner        |
+| schema/migrations                    | P0/W3/W6/W7 单 owner排队              | 无并行 migration 编号分配             |
+| util/git/repository                  | P0-D/W2 admission → W5                | agent/workflow/shared/frontend SCC 族 |
+| design/plan.md + STATE.md            | 每次收尾单 owner                      | 实现文件可分工                        |
 
 任何 wave 开工前必须发 owner/文件面公告；发现同文件并发 WIP 时停该切片，不能 stash/reset/checkout 他人改动。
 
@@ -778,7 +843,7 @@ W4/W5 同理按 exact ids 销账，表中 6/4/30 等只是当前基线下的预�
 
 - [ ] proposal AC-1～AC-11 全部兑现；
 - [ ] 所有 P0 独立 RFC Done；
-- [ ] RFC-287 Done，修订 RFC-288/289 Done；
+- [ ] RFC-287 Done；RFC-288/289 保持 CLOSED；新号 W2 implementation RFC Done；仅在 W8 获批时要求新号 fanout RFC Done；
 - [ ] backend/repo value SCC、KNOWN、route→DB、AppDeps、ambient wiring 全为 0；
 - [ ] 所有业务 mutation 经 command + trusted authority，internal effect 经 family-scoped capability；OCC/tx/audit/event
       符合适用合同；

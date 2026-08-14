@@ -1,9 +1,9 @@
 # RFC-294 技术设计：后台最终层次架构
 
 > 本文描述目标态合同，不是一次性目录搬迁清单。实施期允许旧路径 facade，但不允许旧行为内核与新行为
-> 内核长期并存。源码锚以 `dde063510dd4b252d3f5f17680113d3cff0b5b3e` 为准；本文最后同步到
-> `6ff1e84f57da5606f4fbfb898b2ab18795a57b95`，其间只有 RFC-287/audit-backlog 文档决策，backend/shared/frontend/门禁源码未变。
-> 量化数字采集于 `b2e0a79920e1672129cd944c5201053d5891c29c`；开工时仍必须重新测量。
+> 内核长期并存。初稿接口锚为 `dde063510dd4b252d3f5f17680113d3cff0b5b3e`；RFC-287 与 RFC-297～303 已在其后
+> 改变 production shape，因此“当前已落事实、量化基线、前置偏差与下一步顺序”统一以 `plan.md` §1/§3.2 的
+> 2026-08-14 刷新为准。本文件中的终局接口是 target contract，不得反推为当前实现已经具备。
 
 ## 1. 设计原则
 
@@ -951,7 +951,7 @@ admission 以 `(operation,source)` 建唯一绑定，之后同 operation 换 sou
 Crash-after-effect-before-task-receipt、takeover/resume/同 generation 的 technical attempt 共用原 operation，不能再建第二份
 workspace；用户对失败 `__repo_prep__` 执行 `RetryNode` 时，独立 `RepositoryPreparationRetryInTx` 以 current authority + expected
 task/run revisions 原子完成 failed task→`pending`、铸新的 logical preparation generation + `pending` successor run + 新 operation，
-随后仍由 `runTask` 的同一 claim CAS/第 0 步推进，避免把已终结的失败 receipt 当成新尝试。W1 若尚无 canonical
+随后仍由 `runTask` 的同一 claim CAS/第 0 步推进，避免把已终结的失败 receipt 当成新尝试。W2 行为切片若尚无 canonical
 `generationSeq`，先持久化 versioned preparation-generation ref/legacy projection，W7 只迁身份表示、不改变 operation 语义。
 服务端必须在任何 task transition/
 effect 前拒绝 retry 已 `done` 的 prep run，不能只靠前端 gate。Ownership epoch/run generation 只 fence 谁能提交，不改变当前
@@ -965,8 +965,8 @@ G6 的 error classifier/frozen policy 可先 additive 落地，但 total retry w
 并以 actor-filtered diagnostics artifact 保留凭据脱敏后的 exact git stderr。Cancel 与 completion 竞争也走同一 CAS；stale
 completion 不得复活 task、绑定 workspace 或 kick scheduler；prep 失败明确**不得写 `workspacePrunedAt`**，让既有 terminal →
 pending retry CAS 可达，GC/reconcile 对空 worktree 也必须保持不写该墓碑。该事务只经 canonical lifecycle writer 写 audit 与 closed task
-committed-event；W1 可先用 W3-compatible task event family + 记账的一跳 legacy after-commit WS facade，W3 切
-emitter/dispatcher 后删 facade，禁止 W1 直接在事务内 publish。Repository-step lane 明确允许 task 在 synthetic run 完成前尚无
+committed-event；W2-B 可先用 W3-compatible task event family + 记账的一跳 legacy after-commit WS facade，W3 切
+emitter/dispatcher 后删 facade，禁止 W2-B 直接在事务内 publish。Repository-step lane 明确允许 task 在 synthetic run 完成前尚无
 worktree；所有 workspace consumer 在 receipt 前 fail-closed。Resume/boot/reap 先按既有 lifecycle 把可恢复任务送回可 claim 状态，
 再统一调用 `runTask`；第 0 步按 prep receipt/attempt 判断 skip 或幂等重放，而不是另起恢复 worker或读取空 path 返回 410。
 Direct JSON/schedule/webhook 同语义。
@@ -997,7 +997,7 @@ Multipart 不是 RFC-287 G7 的 pending task + `runTask` synthetic prep 生产�
 `MultipartLaunchPreparationPort` 按 byte/count/content-type budget 与现有 workspace ownership handoff 写 record-before-act
 artifact、digest 与 idempotency key，只返回 `PreMaterializedLaunchArtifactRef<'direct-multipart'>`；crash/retry 返回同一
 artifact，cancel/admission rejection 由 journal compensation/GC。上传 bytes、client filename、temp/absolute path 不进
-event/public task DTO。W1/T13 只清点并锁住 legacy
+event/public task DTO。RFC-287/T13 只清点并锁住 legacy
 multipart ownership handoff 与空 worktree 防护；把 multipart 也改成 post-admission preparation 必须另立行为 RFC，不能借结构迁移顺手改变。
 
 ```ts
@@ -1903,9 +1903,10 @@ interface NodeRunRepositoryRef {
 8. 收紧源码棘轮，裸 parent/null/ULID freshness 只允许 versioned legacy codec。
 
 在途任务、历史 archived rows 与 legacy NULL 必须有显式兼容策略；不能先删 fallback 再希望旧任务不 resume。
-NodeRun identity reader 的 `rollbackUntilWave=W8 capability activation`：在此之前 v2 writer 继续维护 deterministic legacy
-projection，可切回旧 reader；W8 一旦允许保存/运行依赖新 provenance 的 workflow，旧 reader 不再是合法回滚，只能
-forward-fix 并保留 v2 reader。legacy projection 停写/列删除必须另过 contract RFC 和至少一个稳定发布窗口。
+NodeRun identity reader 的 rollback horizon 是“post-W7 新号 fanout capability activation”（当前规划为可选 W8）：在此之前
+v2 writer 继续维护 deterministic legacy projection，可切回旧 reader；新能力一旦允许保存/运行依赖新 provenance 的
+workflow，旧 reader 不再是合法回滚，只能 forward-fix 并保留 v2 reader。legacy projection 停写/列删除必须另过
+contract RFC 和至少一个稳定发布窗口。
 
 ### 6.3 Fanout selected-run 合同
 
@@ -2807,7 +2808,7 @@ readiness，degraded/non-blocking 明确暴露 health。shutdown 对已 active h
 
 状态守恒按 job eligibility 计数：disabled 单列；eligible job 在任一时刻恰处于
 `registered|starting|active|start-failed|stopping|stopped`。shutdown 完成时 active/starting/stopping=0，每个曾 active 的
-job 都有 stop receipt；不能用 `registered===started===stopped` 或 no-op handle 凑覆盖率。W1/W3/W6 及之后新增的
+job 都有 stop receipt；不能用 `registered===started===stopped` 或 no-op handle 凑覆盖率。W2/W3/W6 及之后新增的
 dispatcher/converger 从出生起即注册该合同；`__repo_prep__` 明确按 task execution-local owner + AbortController/NodeRun lifecycle
 管理，不进入 managed-worker registry。W9 只收编 `background-jobs.json` 中的存量 scattered background work（periodic +
 long-running），execution-local timer 只补 owner/lifecycle，不伪装 daemon registry member。
@@ -2842,7 +2843,7 @@ AuditPort 是 durable security record；`console.log('[memory-edited]...')` 不�
   由读模型 adapter 明确拥有且只返回 projection DTO；
 - 迁移编号、schema admission、connection/transaction 仍由 `platform/persistence` 统一治理。
 
-## 16. RFC-287～289 对接合同
+## 16. RFC-287 与已关闭 RFC-288/289 的承接合同
 
 ### 16.1 RFC-287
 
@@ -2858,28 +2859,31 @@ typed command/config projection，平台只提供 consumer-specific hot config s
 
 G5/T11、G6/T12、G7/T13 也是同 RFC 的正交行为批，不属于 assembly：G5 的 public `file://` gate 属 source-control
 launchability policy；G6 是“既有 hard-fail 前的 total-window retry”，属 source-control repository-preparation policy；G7 属
-task admission + normal task execution ownership：admission 落 `pending` task/synthetic `__repo_prep__`，`runTask` 复用既有
-`pending → running` claim CAS 后把 preparation 作为第 0 步推进，绝不是独立 daemon worker。G6 classifier/config contract 可
-additive 先落，生产行为顺序固定为 G5 → G7 → G6 window enablement；三批分别落 port/facade 和行为 oracle、独立部署切换，
-在 W2 TaskEngine 拆分前完成；W4-E1/W5 只把它们迁入最终 owner，不重写语义。负扫描必须证明 URL parser、retry config、
-worktree/preparation phase 均不进入 `RunAssembly`/ExecutionKernel。
+task admission + normal task execution ownership。**目标合同**是 admission 落 `pending` task/synthetic `__repo_prep__` 后由
+execution claim 把 preparation 作为第 0 步推进，绝不是独立 daemon worker；**当前 committed behavior** 仍由
+`startTaskImpl` 在请求返回后的同一 driver ownership 下异步推进，再 kick scheduler，详见 plan §5。把当前行为迁到目标合同
+须由 W2-B 独立行为 RFC 批准，不能倒签为 RFC-287 已实现。W4-E1/W5 只把已批准合同迁入最终 owner，不顺手重写语义。
+负扫描必须证明 URL parser、retry config、worktree/preparation phase 均不进入 `RunAssembly`/ExecutionKernel。
 
-### 16.2 RFC-288
+### 16.2 RFC-288（CLOSED）
 
-RFC-294 的批准路径已经固定：P0-D 先落 canonical durable ownership/fence；RFC-288 只迁
-`TaskRuntimeRegistry/TaskOwnershipPort/SchedulerDriverPort/TaskStatusPublisher` 的 owner/consumer/import topology，并复用
-P0-D authority，不新建第二套 lease/schema。若未来要把 ownership/schema/fencing 重新并入 RFC-288，必须先显式
-Supersede RFC-294 本决策与 RFC-288 三件套，重写能力影响、schema、rollout/rollback、失败矩阵并重新请批；它不是本计划
-可在实施时临场选择的第二分支。
+RFC-288 已于 2026-08-14 关闭，未实现且零生产改动。三轮门后其有效内容已完全收敛到本节/W2，因此旧三件套不再
+修订、不再执行、不再作为 gate。`b6d325a4` 已把六条 depcheck ledger 的 owner 转给 RFC-294 W2；关闭文档保留的九条
+结论是 successor 的输入，不是第二套 authority。
 
-本路径废弃单一 `taskDriver` god singleton，并解决 bootstrap 注册先后、reason 保真、D18 facade 与按 export
-inventory 迁移。最小 `TaskExecutionModule` instance 在 P0-D/W2 即落到当前 composition root；W9 只做全局 container 清仓。
+批准路径固定为：W0-R + P0-D 先落 canonical durable ownership/fence；随后另立新号轻量 W2 implementation RFC，迁
+`TaskRuntimeRegistry/TaskOwnershipPort/SchedulerDriverPort/TaskStatusPublisher` 的 owner/consumer/import topology，复用
+P0-D authority，不新建第二套 lease/schema。先线程化同一 `TaskExecutionContext`，再替换 registry backing；四个 kick、
+非可选 abort reason、bootstrap fail-fast 与两刀销六账必须保真。最小 `TaskExecutionModule` instance 在 P0-D/W2 落到
+当前 composition root；W9 只做全局 container 清仓。
 
-### 16.3 RFC-289
+### 16.3 RFC-289（CLOSED）
 
-保留产品目标、拓扑派发、shard 并行、fail-all、empty source 和 executor 边界；废弃“current wrapper parent 查上游”与
-“既有 wrapper consumed gate 自然覆盖 child chain”的断言。新版以 SelectedRunMap + child provenance + consumed-aware reuse
-为核心；aggregator feedback 明确拒绝或纳入 topology，validator 只表达真实可达不变量。
+RFC-289 已于 2026-08-14 关闭，未实现且零生产改动。保留产品目标、拓扑派发、shard 并行、fail-all、empty source 和
+executor 边界；废弃“current wrapper parent 查上游”与“既有 wrapper consumed gate 自然覆盖 child chain”的断言。只有
+W7 identity/provenance 完成后才可另立新编号：以 SelectedRunMap + exact child provenance + consumed-aware reuse 为核心，
+aggregator feedback 明确拒绝或纳入 topology，validator 只表达真实可达不变量。未获独立批准时保持能力挡板并跳过 W8，
+不阻塞核心 W9 清仓。
 
 ## 17. 架构不变量与终局指标
 
@@ -2917,42 +2921,42 @@ W0 后上述指标使用确切 `N/M`，每波只能改善；终局按 manifest �
 
 ## 18. 现有能力到目标 owner 的映射
 
-| 现有能力/散点                                              | 目标唯一 owner                                                       | 迁移波次            | 终局消费方式                                                      |
-| ---------------------------------------------------------- | -------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------- |
-| `scheduler.ts` frontier / scope / drive                    | `task-execution/engine/task`                                         | W2、W7              | `TaskEnginePort`                                                  |
-| 五条 spawn/iso/merge 装配线                                | `task-execution/engine/kernel/assembly`                              | W1 / RFC-287        | `RunAssembly`                                                     |
-| RFC-287 三项配额 settings surface                          | task-execution quota policy + settings adapter                       | W1 / RFC-287 T10    | typed command + consumer-specific hot config projection           |
-| public repository source seal/launchability / `file://`    | source-control policy；task admission consumer                       | W1 / RFC-287 T11    | `PublicRepositorySourceSealPort` + `RepositoryLaunchSnapshotInTx` |
-| repository baseline retry / hard-fail                      | source-control repository-preparation policy                         | W1 / RFC-287 T12    | exact retry classifier + hot config projection                    |
-| pending task + `runTask` step-0 `__repo_prep__`            | task admission/normal execution owner + source-control adapter       | W1，W2/W4/W5 迁位   | task/run claim + attempt operation journal → SC participant       |
-| multipart pre-materialization/upload artifact              | task-execution direct-launch prestage                                | W4-E1               | task-owned upload journal；现有 pre-materialized 语义             |
-| loop/git/fanout                                            | `task-execution/engine/wrapper`                                      | W1、W8              | `WrapperRuntime`                                                  |
-| agent/script/call/code-host kind 分发                      | `task-execution/engine/node`                                         | W1～W2              | `NodeExecutorRegistry`                                            |
-| `activeTasks` / `driverLease` / status claim               | `task-execution/application/ports` + infrastructure                  | P0-D、W2            | `TaskOwnershipPort` + `TaskRuntimeRegistry`                       |
-| lifecycle writer + hook/watch/budget/WS                    | `task-execution/domain` + `platform/events`                          | W3                  | transition + classified committed events                          |
-| review/clarify/questions route saga                        | `collaboration/application`                                          | P0、W3              | human-gate commands + continuation worker                         |
-| `resourceAcl` / 六类 visible loaders / `ACL_TABLES`        | `resource-catalog`                                                   | W4                  | public query/command ports；tables 留 SQLite adapter              |
-| HTTP/MCP route 复用、API docs registry                     | inbound adapters + application operation catalog                     | W4                  | transport mapping → same use case                                 |
-| BundleApply / Intent apply 两台通用恢复机                  | `platform/atomic-apply`                                              | P0、W6              | one lifecycle engine + domain providers                           |
-| memory CRUD/scope/inject/distill                           | `memory`                                                             | P0、W4              | typed commands + task injection/distillation ports                |
-| ResourcePackage/Bundle manifest、admission、receipt        | `resource-catalog/package`                                           | W4、W6              | typed package participants + AtomicApply provider                 |
-| fusion aggregate/decision/apply/provenance                 | `knowledge-evolution`                                                | P0、W4、W6          | fusion commands + use-case-specific tx + apply provider           |
-| skill restore 与 memory fused membership                   | `knowledge-evolution`                                                | W4、W6              | skill/memory tx participants + exact provenance                   |
-| Intent session/draft/working set                           | `intent`                                                             | W4、W6              | Intent commands；资源提交调 AtomicApply port                      |
-| webhook/schedule/code-host                                 | `integration`                                                        | W4                  | trigger commands + Task application port                          |
-| repo/cache/submodule/worktree/git                          | `source-control` + execution workspace port                          | W5                  | source-control commands/queries + pure Git adapter                |
-| user/OIDC/session/token/role/request authority             | `identity-access`                                                    | W4、W9              | trusted authority/context factory + public auth use cases         |
-| runtime registry/status/probe/diagnostic                   | `runtime-management` + `platform/runtime`                            | W4、W9              | admin use cases + frozen runtime/kernel port                      |
-| structuralDiff/codeIntel/changeNarrative                   | `workspace-insight`                                                  | W4、W5              | pure query + durable insight job/artifact                         |
-| MCP runtime test session/continuation                      | `resource-catalog/mcp/application/diagnostics`                       | W4                  | typed test commands/query + runtime/process ports                 |
-| admin backup/restore/recovery diagnostics                  | `system-operations` orchestration + `platform/persistence` mechanism | W4、W9-E            | admin use case → generation coordinator                           |
-| task limits / workspace GC / public readiness              | `task-execution` / `source-control` / bootstrap-platform             | W4、W9              | owner jobs/participants + safe liveness projection                |
-| runtime/injection/managed process                          | `platform/runtime` / `platform/process`                              | 已有资产、W1 接口化 | kernel ports                                                      |
-| config/timers/global setters/shutdown                      | `platform/config` / `platform/background` / `bootstrap`              | W3、W6、W9          | instance-based container + managed background registry            |
-| HTTP-coupled errors、散点 log/audit                        | `platform/errors` / `platform/observability`                         | W0、W4、W9          | transport-neutral error + OperationContext/AuditPort              |
-| `node_runs` nullable axes / ULID freshness / JSON consumed | `task-execution/domain/run-identity`                                 | W7                  | generationSeq + scope/container + consumption edges               |
-| WS broadcaster/revalidation/global hook                    | inbound WS adapter + `platform/events`                               | W3、W9              | live audience policy + sanitized event projection                 |
-| RFC-292 trigger namespace                                  | `integration` public contract，task snapshot consumer                | 保持现状            | 作为纵切归一范例，不重写                                          |
+| 现有能力/散点                                              | 目标唯一 owner                                                       | 迁移波次                                     | 终局消费方式                                                      |
+| ---------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------- |
+| `scheduler.ts` frontier / scope / drive                    | `task-execution/engine/task`                                         | W2、W7                                       | `TaskEnginePort`                                                  |
+| 五条 spawn/iso/merge 装配线                                | `task-execution/engine/kernel/assembly`                              | RFC-287 behavior Done；W2-A 归位             | `RunAssembly`                                                     |
+| RFC-287 三项配额 settings surface                          | task-execution quota policy + settings adapter                       | RFC-287 T10 behavior；W4-E4b/W9-A projection | typed command + consumer-specific hot config projection           |
+| public repository source seal/launchability / `file://`    | source-control policy；task admission consumer                       | RFC-287 T11 behavior；W4-E1/W5 interface     | `PublicRepositorySourceSealPort` + `RepositoryLaunchSnapshotInTx` |
+| repository baseline retry / hard-fail                      | source-control repository-preparation policy                         | RFC-287 T12 behavior；W4-E1/W5 policy        | exact retry classifier + hot config projection                    |
+| task 落库后的 background repo prep + `__repo_prep__`       | task admission/normal execution owner + source-control adapter       | RFC-287 T13 behavior；W2-B/W4-E1/W5 迁位     | task/run claim + attempt operation journal → SC participant       |
+| multipart pre-materialization/upload artifact              | task-execution direct-launch prestage                                | W4-E1                                        | task-owned upload journal；现有 pre-materialized 语义             |
+| loop/git/fanout                                            | `task-execution/engine/wrapper`                                      | W2-D；W8 仅可选能力                          | `WrapperRuntime`                                                  |
+| agent/script/call/code-host kind 分发                      | `task-execution/engine/node`                                         | W2-C                                         | `NodeExecutorRegistry`                                            |
+| `activeTasks` / `driverLease` / status claim               | `task-execution/application/ports` + infrastructure                  | P0-D、W2                                     | `TaskOwnershipPort` + `TaskRuntimeRegistry`                       |
+| lifecycle writer + hook/watch/budget/WS                    | `task-execution/domain` + `platform/events`                          | W3                                           | transition + classified committed events                          |
+| review/clarify/questions route saga                        | `collaboration/application`                                          | P0、W3                                       | human-gate commands + continuation worker                         |
+| `resourceAcl` / 六类 visible loaders / `ACL_TABLES`        | `resource-catalog`                                                   | W4                                           | public query/command ports；tables 留 SQLite adapter              |
+| HTTP/MCP route 复用、API docs registry                     | inbound adapters + application operation catalog                     | W4                                           | transport mapping → same use case                                 |
+| BundleApply / Intent apply 两台通用恢复机                  | `platform/atomic-apply`                                              | P0、W6                                       | one lifecycle engine + domain providers                           |
+| memory CRUD/scope/inject/distill                           | `memory`                                                             | P0、W4                                       | typed commands + task injection/distillation ports                |
+| ResourcePackage/Bundle manifest、admission、receipt        | `resource-catalog/package`                                           | W4、W6                                       | typed package participants + AtomicApply provider                 |
+| fusion aggregate/decision/apply/provenance                 | `knowledge-evolution`                                                | P0、W4、W6                                   | fusion commands + use-case-specific tx + apply provider           |
+| skill restore 与 memory fused membership                   | `knowledge-evolution`                                                | W4、W6                                       | skill/memory tx participants + exact provenance                   |
+| Intent session/draft/working set                           | `intent`                                                             | W4、W6                                       | Intent commands；资源提交调 AtomicApply port                      |
+| webhook/schedule/code-host                                 | `integration`                                                        | W4                                           | trigger commands + Task application port                          |
+| repo/cache/submodule/worktree/git                          | `source-control` + execution workspace port                          | W5                                           | source-control commands/queries + pure Git adapter                |
+| user/OIDC/session/token/role/request authority             | `identity-access`                                                    | W4、W9                                       | trusted authority/context factory + public auth use cases         |
+| runtime registry/status/probe/diagnostic                   | `runtime-management` + `platform/runtime`                            | W4、W9                                       | admin use cases + frozen runtime/kernel port                      |
+| structuralDiff/codeIntel/changeNarrative                   | `workspace-insight`                                                  | W4、W5                                       | pure query + durable insight job/artifact                         |
+| MCP runtime test session/continuation                      | `resource-catalog/mcp/application/diagnostics`                       | W4                                           | typed test commands/query + runtime/process ports                 |
+| admin backup/restore/recovery diagnostics                  | `system-operations` orchestration + `platform/persistence` mechanism | W4、W9-E                                     | admin use case → generation coordinator                           |
+| task limits / workspace GC / public readiness              | `task-execution` / `source-control` / bootstrap-platform             | W4、W9                                       | owner jobs/participants + safe liveness projection                |
+| runtime/injection/managed process                          | `platform/runtime` / `platform/process`                              | 已有资产；W2/W4/W9 接口化                    | kernel ports                                                      |
+| config/timers/global setters/shutdown                      | `platform/config` / `platform/background` / `bootstrap`              | W3、W6、W9                                   | instance-based container + managed background registry            |
+| HTTP-coupled errors、散点 log/audit                        | `platform/errors` / `platform/observability`                         | W0、W4、W9                                   | transport-neutral error + OperationContext/AuditPort              |
+| `node_runs` nullable axes / ULID freshness / JSON consumed | `task-execution/domain/run-identity`                                 | W7                                           | generationSeq + scope/container + consumption edges               |
+| WS broadcaster/revalidation/global hook                    | inbound WS adapter + `platform/events`                               | W3、W9                                       | live audience policy + sanitized event projection                 |
+| RFC-292 trigger namespace                                  | `integration` public contract，task snapshot consumer                | 保持现状                                     | 作为纵切归一范例，不重写                                          |
 
 该表是 owner 账本。新增能力如果无法落到某一行的 owner，必须先补设计；不得暂存到 `services/common.ts`。
 
