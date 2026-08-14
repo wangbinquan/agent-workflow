@@ -722,49 +722,51 @@ export function TriggersPanel() {
                   </div>
                 </dl>
                 <div className="webhook-trigger__flow" aria-label={t('webhookTriggers.flowAria')}>
-                  <div>
+                  <div role="group" aria-label={t('webhookTriggers.flow.scope')}>
                     <span>{t('webhookTriggers.flow.scope')}</span>
                     <strong>{scope}</strong>
                   </div>
                   <span className="webhook-trigger__flow-arrow" aria-hidden="true">
                     →
                   </span>
-                  <div>
+                  <div role="group" aria-label={t('webhookTriggers.flow.events')}>
                     <span>{t('webhookTriggers.flow.events')}</span>
                     <strong>
                       {t('webhookTriggers.eventCount', { count: row.eventTypes?.length ?? 0 })}
                     </strong>
+                    <div className="webhook-trigger__chips">
+                      {(row.eventTypes ?? []).map((eventType) => (
+                        <StatusChip key={eventType} kind="neutral" size="sm">
+                          {t(`webhookTriggers.events.${eventType}`)}
+                        </StatusChip>
+                      ))}
+                    </div>
                   </div>
                   <span className="webhook-trigger__flow-arrow" aria-hidden="true">
                     →
                   </span>
-                  <div>
+                  <div role="group" aria-label={t('webhookTriggers.flow.target')}>
                     <span>{t('webhookTriggers.flow.target')}</span>
                     <strong>{target}</strong>
-                  </div>
-                </div>
-                <div className="webhook-chip-list">
-                  {(row.eventTypes ?? []).map((eventType) => (
-                    <StatusChip key={eventType} kind="neutral" size="sm">
-                      {t(`webhookTriggers.events.${eventType}`)}
-                    </StatusChip>
-                  ))}
-                  <StatusChip kind="info" size="sm">
-                    {t(`webhookTriggers.kinds.${row.launchKind}`)}
-                  </StatusChip>
-                  {row.launchPayload !== null && (
-                    <StatusChip
-                      kind={scratch ? 'info' : 'neutral'}
-                      size="sm"
-                      data-testid={`webhook-trigger-space-${row.id}`}
-                    >
-                      {t(
-                        scratch
-                          ? 'webhookTriggers.spaces.scratch'
-                          : 'webhookTriggers.spaces.eventRepo',
+                    <div className="webhook-trigger__chips">
+                      <StatusChip kind="info" size="sm">
+                        {t(`webhookTriggers.kinds.${row.launchKind}`)}
+                      </StatusChip>
+                      {row.launchPayload !== null && (
+                        <StatusChip
+                          kind={scratch ? 'info' : 'neutral'}
+                          size="sm"
+                          data-testid={`webhook-trigger-space-${row.id}`}
+                        >
+                          {t(
+                            scratch
+                              ? 'webhookTriggers.spaces.scratch'
+                              : 'webhookTriggers.spaces.eventRepo',
+                          )}
+                        </StatusChip>
                       )}
-                    </StatusChip>
-                  )}
+                    </div>
+                  </div>
                 </div>
               </Card>
             )
