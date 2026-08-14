@@ -1,6 +1,6 @@
 # RFC-302 Intent 新建工作流自动布局 — 实施计划
 
-状态：**In Progress（用户已批准，待完整门禁与上库验收）**
+状态：**Done（2026-08-14；完整门禁、上库与 exact-SHA CI 均通过）**
 
 ## 1. 前置门
 
@@ -125,6 +125,10 @@
 
 ## 6. 完成定义
 
-- 未获明确批准前：只允许 RFC 三件套、索引、STATE；
-- T1-T18、AC-1～AC-9、设计门/实现门、真实 E2E 与完整 local gate 全部完成才标 Done；
-- 用户已另行授权最终 commit/push；实现 commit 的 exact-SHA hosted CI 终态纳入完成门，不声称 live service 部署。
+- [x] 用户明确批准后才修改 production/test/dependency/lockfile；共享 `main` 上其他人的 WIP 未纳入本 RFC 提交。
+- [x] T1-T18、AC-1～AC-9、设计门/实现门、真实 E2E 与完整 local gate 全部完成。
+- [x] 最终 `gate:local`：shared 2079、frontend 6426、backend 10110 pass / 35 skip / 0 fail。
+- [x] RFC-302 Chromium/WebKit 4/4；相邻 RFC-287 修复的真实双仓后端文件 10/10、S-14 3/3、RFC-024/RFC-248 Chromium
+      2/2。
+- [x] 实现 `1322226f` 与相邻修复 `574d2c67` 已进入 `origin/main`；精确 SHA 主 CI `31762926366` 36/36 全绿（含 Windows）。
+- [x] 未执行部署，未声称 live service 状态改变。
