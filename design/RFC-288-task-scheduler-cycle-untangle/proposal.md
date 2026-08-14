@@ -40,8 +40,9 @@ Map + expandService.getTask）独立成环共用第 6 条账。
   `materializeSpace` / `runDeferredRepoPreparation` 形成了初稿行区间之外的
   第二组关键调用。
 
-**RFC-294 已对本 RFC 作出裁决**（`design/RFC-294-.../proposal.md:242` §5.2 +
-`design.md:2922` §16.2）：目标必要，但初稿的 `taskDriver` 单叶子同时装 active
+**RFC-294 已对本 RFC 作出裁决**（`design/RFC-294-.../proposal.md` **§5.2** +
+`design.md` **§16.2**——RFC-294 正在被重写，故一律按**小节号**引用，不引行号）：
+目标必要，但初稿的 `taskDriver` 单叶子同时装 active
 registry、status publisher、kick/cancel/resume service locator，把三个不同生命
 周期的能力塞进一个新的 process-global 叶子，**必须按 RFC-294 重写**；且
 「P0-D 先落 canonical durable ownership/fence，RFC-288 只迁四件合同的

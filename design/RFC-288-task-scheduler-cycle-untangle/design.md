@@ -98,7 +98,8 @@ export interface SchedulerDriverPort {
 ```
 
 **为什么 `resume` 不复用 `StartTaskDeps`**：它是横跨 `task.ts:359-621` 的 20+ 字段
-application API，RFC-294 `design.md:1577-1580` 已要求淘汰；`import type` 虽被
+application API，RFC-294 `design.md` **§5.2 Task application commands** 已要求
+淘汰（同上：按小节号引用，RFC-294 行锚会随其重写而烂）；`import type` 虽被
 type-only 豁免放行，但会让「窄端口」名存实亡。
 
 **admission / settlement 不下沉**：`tryAttach` 的状态 + source-fence 判定
