@@ -24,6 +24,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { DwState } from '@agent-workflow/shared'
 import {
+  isRetryableGitFailure,
   REPO_PREP_NODE_ID,
   assignBranchNames,
   directChildren,
@@ -275,6 +276,11 @@ export interface StartTaskDeps {
    * 与 RFC-284 T30 挖出的「字段因类型缺席被 spread 静默丢弃」是同一类问题。
    */
   cloneTimeoutMs?: number
+  /**
+   * RFC-287 G6：基线同步的总容忍窗口（ms，`config.gitBaselineSyncWindowMs`）。
+   * 只有网络类失败占窗口；0 = 关闭重试，保持 G6 之前的硬失败语义。
+   */
+  gitBaselineSyncWindowMs?: number
   /**
    * RFC-048: cadence + failure tolerance for the runner-side subagent live
    * capture poller. Threaded into `RunTaskOptions` → `runNode`. Omitted →
@@ -2693,14 +2699,36 @@ async function startTaskImpl(
     //   · **抛出** —— `resolveCachedRepo` 的超时/锁/校验失败走 DomainError
     //     （实测：克隆超时抛 `repo-cache-locked` 504，压根不经 earlyError）。
     // 只接前者会让最常见的一类失败（拉不动远端）重新变回「什么都不留」。
+    //
+    // RFC-287 G6：网络类失败在**总容忍窗口**内退避重试（默认 60s，可配，0=关闭）。
+    // 用总窗口而不是固定次数——用户关心「最多等多久」，不关心「重试几次」。
+    // 鉴权 / 仓库不存在 / 无权限**不占窗口**，立刻失败：让用户 1 秒内看到
+    // 「你写错地址了」，而不是等满 60 秒再告诉他同一件事。
+    const syncWindowMs = deps.gitBaselineSyncWindowMs ?? 60_000
+    const windowDeadline = Date.now() + syncWindowMs
     let prepared: MaterializedSpace
-    try {
-      prepared = await materializeSpace(input, deps, appHome, deferredTaskId)
-    } catch (err) {
-      prepared = {
-        ...space,
-        earlyError: err instanceof Error ? err.message : String(err),
+    let backoffMs = 1_000
+    for (;;) {
+      try {
+        prepared = await materializeSpace(input, deps, appHome, deferredTaskId)
+      } catch (err) {
+        prepared = {
+          ...space,
+          earlyError: err instanceof Error ? err.message : String(err),
+        }
       }
+      if (prepared.earlyError === null) break
+      // 先判可重试性、再看窗口——反过来会让永久失败也白白消耗一次退避。
+      if (!isRetryableGitFailure(prepared.earlyError)) break
+      const remaining = windowDeadline - Date.now()
+      if (remaining <= 0) break
+      log.warn('repo preparation failed with a retryable network error; retrying within window', {
+        taskId,
+        remainingMs: remaining,
+        error: prepared.earlyError,
+      })
+      await new Promise((r) => setTimeout(r, Math.min(backoffMs, remaining)))
+      backoffMs = Math.min(backoffMs * 2, 15_000)
     }
     if (prepared.earlyError !== null) {
       // 合成行先落 failed，且 errorMessage 是 git 的原话——时间线上点开这一步能

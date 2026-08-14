@@ -75,6 +75,8 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         deferRepoPreparation: true,
         cloneTimeoutMs: 3_000,
+        // 本用例验「失败留痕」而非重试——关掉 G6 窗口，否则会先退避重试满 60s。
+        gitBaselineSyncWindowMs: 0,
       } as never,
     )
 
@@ -115,6 +117,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
           actorUserId: userId,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           cloneTimeoutMs: 3_000,
+          gitBaselineSyncWindowMs: 0,
         } as never,
       )
     } catch {
@@ -198,6 +201,8 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         deferRepoPreparation: true,
         cloneTimeoutMs: 3_000,
+        // 本用例验「失败留痕」而非重试——关掉 G6 窗口，否则会先退避重试满 60s。
+        gitBaselineSyncWindowMs: 0,
       } as never,
     )
     const runs = await db2.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
@@ -217,6 +222,7 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
           actorUserId: s.userId,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           cloneTimeoutMs: 3_000,
+          gitBaselineSyncWindowMs: 0,
         } as never,
       })
     } catch (err) {
@@ -226,4 +232,86 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
     // **没有被前置门拒之门外**：拒绝信息里不得出现 still-running 一类。
     expect(rejected ?? '').not.toMatch(/still-running|not found/i)
   }, 90_000)
+})
+
+// RFC-287 G6 —— 基线同步的窗口化重试。
+//
+// 交付的是「抖动不再直接打挂启动」：网络类失败在总容忍窗口内退避重试；鉴权 /
+// 仓库不存在 / 无权限**不占窗口**，立刻失败。用总窗口而非固定次数，因为用户关心
+// 的是「最多等多久」，不是「重试几次」。
+describe('RFC-287 G6 — 基线同步窗口化重试', () => {
+  test('网络类失败会占用窗口（窗口越大耗时越长）', async () => {
+    const db3 = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db3)
+    const launch = async (windowMs: number, name: string): Promise<number> => {
+      const t0 = Date.now()
+      await startTask(
+        {
+          workflowId: s.workflowId,
+          name,
+          // 不可路由 ⇒ 连接超时 ⇒ 分类为 retryable-network。
+          repoUrl: 'http://10.255.255.1:9/nope.git',
+          inputs: {},
+        } as never,
+        {
+          db: db3,
+          actorUserId: s.userId,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+          deferRepoPreparation: true,
+          cloneTimeoutMs: 1_000,
+          gitBaselineSyncWindowMs: windowMs,
+        } as never,
+      )
+      return Date.now() - t0
+    }
+    const noWindow = await launch(0, 'g6-nowindow')
+    const withWindow = await launch(4_000, 'g6-window')
+    expect(withWindow).toBeGreaterThan(noWindow + 1_500)
+  }, 90_000)
+
+  test('窗口耗尽后仍按失败收场，且原因不被重试吞掉', async () => {
+    const db4 = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db4)
+    const task = await startTask(
+      {
+        workflowId: s.workflowId,
+        name: 'g6-exhaust',
+        repoUrl: 'http://10.255.255.1:9/nope.git',
+        inputs: {},
+      } as never,
+      {
+        db: db4,
+        actorUserId: s.userId,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        deferRepoPreparation: true,
+        cloneTimeoutMs: 1_000,
+        gitBaselineSyncWindowMs: 2_000,
+      } as never,
+    )
+    const row = (await db4.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+    expect(row?.status).toBe('failed')
+    expect(String(row?.errorMessage ?? '')).toMatch(/timed out|connect|clone|fatal/i)
+  }, 90_000)
+})
+
+// 「鉴权不占窗口」在真行为层不好造（需要一个会拒绝鉴权的真实远端），故在**接线层**
+// 锁：准备段必须以 `isRetryableGitFailure` 为唯一放行判据，且判在窗口检查之前。
+// 删掉它 = 所有失败都进窗口，鉴权失败要白等满 60 秒才报「你没权限」。
+describe('RFC-287 G6 — 只有网络类占窗口（接线锁）', () => {
+  test('重试判据是 isRetryableGitFailure，且在窗口检查之前', () => {
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const fnStart = src.indexOf('async function startTaskImpl(')
+    const body = src.slice(fnStart, src.indexOf('\n}\n', fnStart))
+    const guard = body.indexOf('isRetryableGitFailure(prepared.earlyError)')
+    const window = body.indexOf('windowDeadline - Date.now()')
+    expect(guard, '准备段必须以 isRetryableGitFailure 决定是否重试').toBeGreaterThan(-1)
+    expect(window).toBeGreaterThan(-1)
+    expect(guard).toBeLessThan(window)
+  })
+
+  test('git 输出被强制 C locale（否则分类器在中文环境全灭）', () => {
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'util', 'git.ts'), 'utf8')
+    expect(src).toMatch(/LC_ALL: 'C'/)
+    expect(src).toMatch(/LANG: 'C'/)
+  })
 })

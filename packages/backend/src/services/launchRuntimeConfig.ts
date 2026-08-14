@@ -116,6 +116,8 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
      * RFC-284 T30 那批字段被静默丢弃的成因之一）。
      */
     cloneTimeoutMs?: number
+    /** RFC-287 G6：基线同步的总容忍窗口（config.gitBaselineSyncWindowMs）。 */
+    gitBaselineSyncWindowMs?: number
   } = {}
   const commitPush = resolveCommitPushConfig(configPath)
   if (commitPush !== undefined) out.commitPush = commitPush
@@ -144,6 +146,10 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     // 而真正会卡住启动接口的那次克隆仍按 30 分钟默认值跑。
     if (cfg.gitCloneTimeoutMs !== undefined && cfg.gitCloneTimeoutMs > 0)
       out.cloneTimeoutMs = cfg.gitCloneTimeoutMs
+    // RFC-287 G6：基线同步的总容忍窗口。0 是合法值（关闭重试），故**不能**用
+    // `> 0` 过滤——那会让「显式关掉重试」被静默忽略、退回默认 60s。
+    if (cfg.gitBaselineSyncWindowMs !== undefined)
+      out.gitBaselineSyncWindowMs = cfg.gitBaselineSyncWindowMs
     // RFC-111: global default runtime threaded to the scheduler dispatch site.
     if (cfg.defaultRuntime !== undefined) out.defaultRuntime = cfg.defaultRuntime
     // RFC-115: global per-node retry budget (no `> 0` guard — 0 disables retries).

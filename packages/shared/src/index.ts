@@ -68,6 +68,7 @@ export * from './intent-dump-serialize' // RFC-234
 export * from './skill-md'
 export * from './skill-zip'
 export * from './outputKinds'
+export * from './gitFailureClass'
 export * from './lifecycle'
 export * from './lifecycle-alerts'
 export * from './diagnose-repair'

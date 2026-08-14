@@ -43,6 +43,13 @@ export function nonInteractiveGitEnv(): Record<string, string | undefined> {
       'StrictHostKeyChecking=accept-new',
     ].join(' '),
     GIT_TERMINAL_PROMPT: '0',
+    // RFC-287 G6：强制 C locale。失败分类（shared/gitFailureClass.ts）读的是
+    // git 的 stderr 原文——在中文/日文等环境里 git 会把「Repository not found」
+    // 「Authentication failed」整句翻译掉，特征词匹配当场全灭：网络抖动会被误判
+    // 成不可重试、退化回硬失败，G6 直接失效。
+    // 只影响**面向机器**的 stderr 解析，不影响任何面向用户的文案（那些走 i18n）。
+    LC_ALL: 'C',
+    LANG: 'C',
   }
 }
 

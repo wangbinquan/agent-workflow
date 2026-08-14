@@ -100,6 +100,15 @@ export const ConfigSchema = z.object({
    */
   // RFC-287 T10：上界与 SETTINGS_NUMERIC_BOUNDS 同源——UI 能填的与服务端能存的
   // 必须一致，否则设置页放行的值被 PUT 打回，用户只看到一个没有出处的报错。
+  /**
+   * RFC-287 G6：基线同步（克隆/抓取）的**总容忍窗口**，毫秒。
+   *
+   * 用总窗口而不是固定次数：用户关心的是「最多等多久」，而不是「重试几次」。
+   * 窗口内退避重试；耗尽仍失败则任务失败并写明原因。**只有网络类失败占窗口**，
+   * 鉴权 / 仓库不存在 / 无权限立刻失败（见 shared/gitFailureClass.ts）。
+   * 0 = 关闭重试（保持 G6 之前的硬失败语义）。
+   */
+  gitBaselineSyncWindowMs: z.number().int().min(0).max(600_000).default(60_000),
   maxConcurrentCodeHostCalls: z.number().int().positive().max(256).default(8),
   /** RFC-269: wall clock for ONE outbound code-host request. Node may override. */
   codeHostRequestTimeoutMs: z
@@ -565,6 +574,7 @@ export const DEFAULT_CONFIG: Config = {
   $schema_version: CONFIG_SCHEMA_VERSION,
   maxConcurrentNodes: 4,
   maxConcurrentScriptNodes: 4,
+  gitBaselineSyncWindowMs: 60_000, // RFC-287 G6 — 基线同步的总容忍窗口
   maxConcurrentCodeHostCalls: 8, // RFC-269 — no subprocess, only an in-flight request
   codeHostRequestTimeoutMs: 30 * 1000,
   codeHostResponseMaxBytes: 256 * 1024,
