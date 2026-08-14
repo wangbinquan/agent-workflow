@@ -13,6 +13,11 @@
   定式：**要么不接管道**（`bun run gate:local > <log> 2>&1`，再单独 `echo "EXIT=$?"`
   写进日志尾），**要么显式 `set -o pipefail`**。判据：后台门禁报绿但你没亲眼看到
   「全绿」摘要行时，一律回日志里 grep `exited with code` / `lane(s) failed` 复核。
+- **启动任务的后端测试若不显式给 `appHome`，会往用户真实的 `~/.agent-workflow` 里写**（RFC-287 三轮门实测，真实 home 里已攒下 13 个残留目录才被发现）。`deps.appHome` 缺省回落到 `Paths.root`，而它只认 `AGENT_WORKFLOW_HOME` —— **只有 `scripts/test-backend-sharded.ts` 设这个变量**。于是 `bun run gate:local` 是干净的，而 `bun test <file>` 和 `bun run test:backend:serial`（CLAUDE.md 明写的诊断入口）会真的去克隆、留下 `repos/<hash>-<name>.partial-<ulid>/` 与 `scratch/<ulid>/`，**且无人清理**。`tests/setup.ts` 的泄漏守卫盯的是 cwd，看不到 home。**定式**：凡是会走 `startTask` / `materializeSpace` / `resolveCachedRepo` 的用例，在文件顶层建一个 `mkdtempSync` 的 `TEST_HOME` 并显式传 `appHome`，`afterAll` 删掉。**判据**：写完新的启动类用例后，跑一次 `ls ~/.agent-workflow/repos | wc -l`，前后数字应当不变。
+- **`expect(err.message).not.toMatch(/some-error-code/)` 是空断言 —— 错误码在 `.code`，`message` 里一个字都没有**（RFC-287 三轮门实测，两条这样的断言被证明**恒绿**）。本仓的 `DomainError` / `ValidationError` / `ConflictError` 都是 `(code, message, …)` 形态。把实现改成**无条件抛出该错误码**——正是那条测试标题声称要防的回归——用例照样全绿。同源的坑还有正面版：`toMatch(/code|某句英文散文/)` 实际只靠第二个分支命中，于是它锁的不是契约而是**文案**，改个措辞就误红。**定式**：`catch (err) { code = (err as { code?: string }).code ?? (err as Error).message }`，然后 `expect(code).toBe('…')`。
+- **反向断言（`not.*`）在「前提不成立」时会静默退化成 no-op，比漏测更危险**（RFC-287 三轮门实测）。例：一条锁「身份登记不得堵在克隆锁后面」的用例，全部预言力都建立在「那个不可路由地址会一直挂到 3s 超时、锁还握着」上。换成一个**快速失败**的远端（ICMP 立刻拒绝 / 走代理 / 被沙箱掐断），克隆在 200ms 就结束——**即便缺陷还在**，耗时断言也只有 1~3ms，照样绿。CI 的网络环境恰恰最容易触发这一支。**定式**：给这类用例加一句**前提复核**断言（`expect(cloneSettled, '前提不成立：锁没被握住，本用例此刻零预言力').toBe(false)`），让前提破裂时红在前提上，而不是伪装成通过。
+- **源码锁的正则窗口 `{0,N}` 量到「刚好够用」等于埋定时炸弹**（RFC-287 三轮门实测两条，其一距离正好 400/400）。实测：在被跨越的那段注释里**加一个空格**就红；另一条 547/600，补一行中文注释（≈45 字）即红。而这类锁要防的是「失败码被改名」「钩子没接上」，与两处相距多远毫无关系。**定式**：窗口给 2~3 倍余量，或改用更贴近语义的锚（`summary: 'x'[\s\S]{0,80}message:`）。**判据**：写完 `{0,N}` 后量一下真实距离，比值 >0.8 就放宽。
+
 - **`bun test` 把模块加载期 ENOENT 计「error」不计「fail」**：本地全量出现「N errors」必须**逐个查**——常见根因是源码锁（source-lock 测试）读了已删/搬走的文件。别当噪音略过，CI 会红。
 - **`vi.mock('@/components/...')` 路径跟组件搬家**：移动/重命名组件后必 grep 全仓 `vi.mock('@/components/<旧路径>`，否则测试静默失配。
 - **cwd 敏感测试**：用相对路径 `readFileSync` 的 source-lock 在 `cwd=packages/backend` 跑会恒红、在仓根 cwd 恒绿（CI 在仓根）。写 source-lock 用 `import.meta`/绝对根，别用相对 cwd。
@@ -194,11 +199,15 @@
 - **`gate:local` 全绿 ≠ CI 会绿：有一批测试被环境开关门控，本地门禁一个都不跑**（RFC-287 T14 二轮实测，被这条坑了一次 CI 往返）。`describe.skipIf(!RUN_GIT_NETWORK)` 目前挡着 4 个后端套件（`git-repo-cache-submodule` / `worktree-submodule-init` / 两个 `mcp-probe-*-integration`），CI 会设这个变量、本地不会。症状极具迷惑性：固定快照门禁 backend 10198 全绿，推上去 CI 的 ubuntu 与 macOS **同一分片双双红**（双 OS 同红本身就说明是确定性失败而非环境抖动）。**判据**：改动若触及 git 远端 / 子模块 / MCP 探针这些「需要真网络或真 git 协议」的面，推之前补跑一次 `RUN_GIT_NETWORK=1 bun test <那几个文件>`；用 `grep -rln "skipIf(!RUN_GIT_NETWORK" tests/` 把清单取全，别凭记忆。同理还有 `skipIf(process.platform …)` 的 17 处平台门控——那些只能靠 CI 的双 OS 矩阵兜。
 - **多路评审要刻意错开「看什么」，而不是只切范围**（RFC-287 T14 两轮实证）。第一轮我按半场切了两路 Codex——范围不同，但**视角相同：都在看 diff**。结果两路**同时漏掉**一条 P0 安全问题：G7 把空 `worktreePath` 从罕见终态变成每个准备中任务的正常状态，`resolve('')` 返回进程 cwd 于是「任务还没有工作树」被当成「工作树 = daemon 的工作目录」——那段代码**一行没改**，不在 diff 里，看 diff 的评审天然看不见。第二轮我另起两路刻意错开的视角，产出立刻不同：**「不在 diff 里的连带面」**（先列出本轮放宽了取值范围的值，再反查所有消费方）挖出 2 条 P0；**「测试有效性」**（对每条新断言做变异，问「实现变得更正确时它会不会红」）挖出 5 条零预言力断言，其中一条是「重试 X = 重跑 X」把实现换成裸 `return` 仍全绿。**判据**：切多路时先问「这几路会不会因为同一个盲区一起漏」；至少留一路不看 diff、一路专审测试本身。
 - **多路 Codex 门必须串行启动，起完一路要核实 job 真的注册上了**（RFC-287 T14 第二轮实测）。同一 workspace 的 job 列表存在 `~/.claude/plugins/data/codex-openai-codex/state/<ws>/state.json` 的 `jobs` 数组里，是**读-改-写**。并行起两路 rescue agent 时后写的会把先写的那条覆盖掉，随后 jobs 目录被重建成空——两个 job **一个都没跑**。最坑的是它**不报错**：两路 agent 都正常返回「Codex Task started as task-xxx」，你以为在跑，实际等到超时才发现。定式：起一路 → `cat state.json` 确认 `jobs` 里有它 → 再起下一路；轮询脚本里加「job 文件消失」的分支，别只判 `status != running`（文件没了时那个判断恒真，会误报成"完成"）。
+- **Codex job 的 `status` 会谎报 `running`——进程早就没了**（RFC-287 三轮门实测，白等 92 分钟）。已知的僵尸形态是「进程还在、0% CPU、rollout 冻结」；这次是**进程直接消失**，而 `jobs/<id>.json` 里仍写着 `status: "running"`，轮询脚本按状态判就会一直等下去。**判据（两条同时看）**：①`ps -p <json 里的 pid>` 有没有这个进程；②`ls -l <id>.log` 的 mtime 距今多久。进程没了 + 日志冻结十几分钟以上 = 死了。日志里能看到它死前读到哪一步——本次是死在读代码阶段，**零 findings**，没有可抢救的产出。**处置**：把 job 文件的 status 改成 `failed` 免得后续轮询继续被骗，重启**一次**；再死就如实报「Codex 不可用」并改用自己的独立子代理顶上，别三连重试（本段上文已有此定式）。
+
 - **对抗式评审的 prompt 要求「给出能复现的具体输入」**，否则拿回来的是一堆看着有理、核实起来全是空的猜测。加一句「构造不出具体失败输入的就丢掉」，findings 的信噪比会完全不同——本轮两路 25 条里绝大多数自带变异验证，逐条核实后全部属实。
 
 ## impl-gate（Codex 实现门）经验规律
 
 历次 impl-gate 沉淀出的「finding 类型 → 风险」规律，接手评审/修复时按此预期：
+
+- **「这条 AC 一条测试都没有」本身就是最高价值的线索——补上第一条用例，它经常当场就红**（RFC-287 三轮门实测两次）。按 AC 逐条对账时，比「测试写得好不好」更该先问的是「**这条 AC 有没有被测过**」。本轮 AC-14（取消/停机/删除在准备窗口内生效）零覆盖，写第一条用例立刻红：git 子进程确实被打断了，但准备段把中止当成普通 git 失败、抢先把任务 CAS 成 `failed`，用户点了取消却得到「失败」。AC-15 只有一处顺带断言，补锁时发现真正危险的那个写点（`lifecycle.ts` 的惰性补墓碑）纯靠一个**巧合级前置条件**避开。**定式**：实现门里单开一路做「AC × 测试」的矩阵对账，格子空着的优先补——补出来的红比在已覆盖面上加断言值钱一个量级。
 
 - **生产逻辑 / 平台 / 基础设施类 finding 几乎都是子系统级**，且**易引入比原 bug 更严重的 regression、常需 revert + defer 到专门 RFC**。典型：
   - **固定字节阈值几乎总错**——page size、平台 ARG_MAX（macOS ~1MiB 非 256KiB、Linux `MAX_ARG_STRLEN=32×页大小`）都是**运行时量**（E2BIG spawn guard 四轮后 revert，defer 到平台感知 RFC）。
