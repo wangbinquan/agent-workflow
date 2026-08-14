@@ -352,6 +352,12 @@ CapabilityFramework（部门层）        CapabilityBinding（小组层）
 四个并行调用、其中第二个同会话重试过两次、又换会话重跑过一次"。没有这张表，AC-25 的「每次 AI
 调用」不可验收。
 
+它自己也需要状态机与恢复规则（设计门 P2）：唯一键
+`(roundId, stageName, shardKey, rerunSeq, attemptSeq)`；状态
+`claimed → running → validated | failed | interrupted`。daemon 在写回 `validationOutcome` 前崩溃时，
+恢复流程**先把悬挂的 attempt 收束为 `interrupted`**，再分配下一个 `attemptSeq`——否则重复行会让
+历史轮次无法重建，而 `attemptSeq` 的分配也会撞车。
+
 ### 3.1 首次使用：从「装好了」到「能触发」（设计门 P2）
 
 内置 framework/binding 只是**模板存在**，不等于**能跑**。新仓开了 MR 却毫无动静时，用户无从判断
@@ -366,6 +372,16 @@ CapabilityFramework（部门层）        CapabilityBinding（小组层）
 
 「启用」是一次**编排动作**而非单纯写一行配置：选默认 binding → 创建或复核 webhook 触发器 →
 校验 code-host 连接与 agent 可见性 → 落 `ready`。AC-24 的"不用写脚本即可跑通"由这条路径兑现。
+
+**`readiness` 必须会失效重算**（设计门 P2）：它是派生态，而它依赖的东西（binding、agent、
+framework 脚本、webhook 触发器、code-host 连接、CI wake 入口）都会在启用之后被改动或删除。
+没有失效机制的话，一个共享 binding 被删可以让**200 个格子继续显示 `ready`**，而事件到来才失败；
+反向也一样——用户修好了缺项却一直停在 `misconfigured`。
+
+规则：优先**按当前依赖实时计算**；若为性能而缓存，则一并保存 `dependencyRevision` 与
+`lastValidatedAt`，并订阅所有依赖的变更事件做批量失效。判据**按能力声明**——`ci-fix` 的
+readiness 必须包含 pipeline 事件或 wake 入口的可达性，否则会出现"显示就绪、但永远没有唤醒源"
+（正是 AC-14d 要防的）。
 
 ## 4. 阶段引擎
 
@@ -793,6 +809,119 @@ bot 发了一半就跑了。故：
 | clarify（RFC-023 家族） | 反问走 `collaboration.public` | 中——需要"外部回写"这条新通道 |
 | 配置包（RFC-271） | 两类新资源接入闭包与 requirements | 低——资源框架通用 |
 | 资源 ACL（RFC-099/231） | 两类新资源按既有六类同构接入 | 低 |
+
+## 11bis. 长期运行与可运维性
+
+第二轮设计门专门以「半年后会变成什么样」为视角审了一遍，报出的问题都不是边角——它们决定这套
+东西会被用起来还是被静音。集中处置如下。
+
+### 11bis.1 噪音预算与事件归属
+
+按 §8 的六个故事叠加一个普通工作日：一个开发者 3 个活跃 MR × 每天推 3 次 = 9 次检视通知，
+加 2 次 reviewer @叫的回复、2 次需求相关、CI 事故两轮——**最低 15 次机器发言**，还没算基线变化
+重叫与冲突报告。更糟的是**机器自己的 push 又是一次 MR update**，默认会再触发检视，形成级联。
+人会把 bot 静音；一旦静音，真正需要人接手的三轮失败与冲突报告**也一起丢了**。
+
+三条对策：
+
+- **事件归属**：每个 ingress event id 只能被**一个**顶层 capability claim；监视器的派发与直接
+  触发共享同一 causation id。同一条 note 不再既触发检视又唤醒监视器各跑一次。
+- **机器自身 push 打 cause 标记**：由 `mr-comment-fix` / `ci-fix` 产生的 push 默认**不**再触发
+  一轮完整检视（可配一次 post-fix review，默认关）。
+- **单条可更新的总览**：MR 上只维护**一条** bot 总览评论，每轮**编辑它**而不是追加新的；
+  行级意见照常独立。另设 MR 级通知预算，超出时只更新总览不产生新通知。
+
+### 11bis.2 失败可见性：按触发来源分，不再一刀切
+
+proposal B17 / §6bis-⑤ 把"MR 上静默"推广到全部能力，第二轮指出这对**人工指令**是错的：
+reviewer @叫改码、作者回确认关键词、issue 打标签，等了半小时毫无动静——他不知道是没收到、
+在排队、还是失败了，只会**重复 @叫**，进一步制造轮次与噪音。
+
+初稿的静默路径共八类：① AI 两级重试耗尽 ② 核心适配脚本阻断 ③ `diff_refs` 拉取失败
+④ 草稿部分失败回滚 ⑤ binding 被删后拒绝启动 ⑥ fork CI 反查零命中/多命中 ⑦ webhook/wake 丢失
+（连工作项都没有）⑧ 非阻断钩子与终局比对失败。
+
+规则改为：
+
+| 触发来源 | 失败可见性 |
+| --- | --- |
+| 自动 webhook（MR 事件、pipeline） | **保持 MR 静默**，平台内告警 |
+| **人工指令**（@叫、确认关键词、issue 标签、平台/API 发起） | **必须有回执**：收到时即创建一条可更新的 receipt（带 operation id），成功/失败都在**同一条消息上更新**，不新增通知 |
+
+⑦ 这类"根本没有工作项"的情形由 §11bis.3 的排障链兜底。
+
+### 11bis.3 排障链：`code_trigger_deliveries`
+
+管理员发现"某个仓的检视突然不工作了"时，`readiness=ready` + 上次触发时间 + 测试事件三样东西
+在下面这些情形下**全都问不出结果**：webhook 没到、到了但被路由丢弃、fork 映射零/多命中、
+卡在全局配额或 MR lease 队列里。
+
+故持久化一条完整链路：
+
+```
+received → matched config → routed | dropped(reason)
+         → queued(等 lease / 等配额，带队列年龄与排位)
+         → round/task → published | failed(reason)
+```
+
+统一 correlation id 贯穿始终；`/code` 的"发一个测试事件"必须走**真实 ingress → route → round**
+全链，并把断在哪一步直接显示在同一页面上。
+
+### 11bis.4 数据寿命
+
+一个仓 50 个活跃 MR、每个每天 3 轮，180 天 = **27,000 轮**；仅 `mr-review` 十三阶段就是 35 万条
+stage 行，4 shard + 1 global 且平均重试一次约 40 万条 AI attempt，每轮 10 条新意见则 27 万条台账。
+每轮还各存一份 `templateSnapshot`。没有寿命规则，列表与度量会持续变慢，最后管理员只能手工删数据，
+把台账和采纳率一起破坏。
+
+| 数据 | 寿命 |
+| --- | --- |
+| 活跃工作项的轮次与阶段明细 | 全量保留 |
+| `closed` 工作项 | 物化汇总（轮数、耗时、意见数、采纳数）后**归档明细** |
+| `code_ai_attempts` | 明细按期限清理，保留每阶段的次数/耗时/结果**聚合** |
+| `pendingArtifact` | 一经消费或作废**立即回收**，不等工作项 closed |
+| `templateSnapshot` | 内容寻址存储，同一模板版本多轮共享一份 |
+| `code_findings` | 长期保留（采纳率要用），带 `createdAt/lastSeenAt/closedAt` 与仓库+时间索引 |
+
+所有历史查询走 cursor 分页；状态图默认只取当前轮 + 最近 20 轮，AI attempt 按阶段惰性加载。
+
+### 11bis.5 部门框架的发布：revision + 灰度 + 回退
+
+部门框架是**一次面向全部仓库的即时生产发布**：200 个仓共用一个 `classify`/`arbitrate`，改坏之后
+当天 150 次执行立刻受影响。最危险的形态不是脚本崩溃（那会成片失败、很快发现），而是它**exit 0
+但返回错误分类**——没有任何失败信号，可能一个工作日后才靠开发者投诉发现。轮次快照只保护**正在
+跑的**那一轮，挡不住下一轮。
+
+故框架改为**不可变 revision** + 发布生命周期：
+
+```
+draft → validated（回放固定样本）→ canary（1–5 个仓）→ published → retired
+```
+
+- binding 声明 `pinnedRevision` 或 `followChannel`；
+- 发布前用固定的采集/分类样本回放，并显示**受影响仓数**；
+- 保留 last-known-good revision，灰度期失败率越阈值即停止推进并一键回退。
+
+### 11bis.6 模板副本的上游关系
+
+20 个小组各复制 5 个内置 binding = 100 个独立副本，跨实例导入还会再生更多。内置模板三个月后修好
+了一个误报，**传不到任何副本**，管理员甚至列不出哪些仓受影响。
+
+故 framework/binding 带 `upstreamRef` / `upstreamVersion` / `baseDigest` 与 `localOverrides`，
+派生 `current / update-available / conflicted / orphaned` 四态，提供三方差异预览与"只合并未被
+本地覆盖的字段"的升级操作。配置包携带来源与基线摘要；连不上原上游时明确标 `detached`，
+不伪装成最新。
+
+### 11bis.7 配置规模：三级继承 + 批量 + 唯一的最终配置
+
+200 仓 × 5 能力 = **1,000 个格子**，每格 30 秒也要 8.3 小时铺开，之后统一改一个阈值又要再来一遍。
+而一格的实际行为同时取决于框架默认、binding 覆盖、仓库触发配置、钩子、agent slot、阈值与上限、
+分片上限、重试次数、全局并发、CI 配额——出事时说不清某个值最终来自哪一层。
+
+- **三级 assignment**：`department → repo-group → repo`，覆盖顺序显式（仓库组复用 RFC-248）；
+- **批量操作**：按标签或仓库集合 preview / apply / revert；
+- **`EffectiveCapabilityConfig`**：唯一的最终配置读模型，界面逐字段显示**最终值、来源层、
+  默认值、生效范围**。
 
 ## 11. 测试策略
 
