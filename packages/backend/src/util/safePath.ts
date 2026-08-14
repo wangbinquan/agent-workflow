@@ -163,6 +163,24 @@ export function checkLexicalThenRealpath(
   rootInput: string,
   candidate: string,
 ): LexicalRealpathVerdict {
+  // RFC-287 G7：**空根一律判否**。`resolve('')` 返回的是 **daemon 进程的 cwd**，
+  // 于是下面整套包含性判定会以 cwd 为根——实测 `existsInsideRoot('', 'package.json')`
+  // 返回 true，即「任务还没有工作树」被当成了「工作树 = daemon 的工作目录」。
+  //
+  // 判在这个**共用底座**上，是因为它同时喂着 `existsInsideRoot`（探在不在）与
+  // `readInsideRoot`（真读内容）等多个消费方，只堵其中一个必漏另一个。
+  //
+  // 为什么现在才要堵：G7 把仓库准备移到任务行落库之后，空 `worktreePath` 从「物化
+  // 失败」这一罕见终态，变成了**每个**延后准备任务在准备窗口内的正常状态——同一段
+  // 代码的暴露面完全不同了。
+  if (rootInput === '') {
+    return {
+      rootAbs: '',
+      targetAbs: '',
+      lexicalInside: false,
+      realpath: { resolved: false },
+    }
+  }
   const rootAbs = resolve(rootInput)
   const targetAbs = isAbsolute(candidate) ? resolve(candidate) : resolve(rootAbs, candidate)
   const lexicalInside = targetAbs === rootAbs || targetAbs.startsWith(rootAbs + sep)

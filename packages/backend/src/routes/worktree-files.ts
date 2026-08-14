@@ -96,6 +96,20 @@ export function mountWorktreeFilesRoutes(app: Hono, deps: AppDeps): void {
         )
       }
 
+      // RFC-287 G7：任务可能**还没有工作树**——仓库准备移到任务行落库之后，准备
+      // 窗口内 `worktreePath` 是空串（AC-10 把不变量从「有任务行就有工作树」改成
+      // 「`__repo_prep__` 行 done 之后才有」）。
+      //
+      // 不挡住的话 `resolve('')` 返回的是 **daemon 进程的 cwd**，于是下面那道包含
+      // 性检查会以 cwd 为根——一个准备中的任务就成了「读 daemon 工作目录下任意文件」
+      // 的入口。G7 之前空串只在物化失败时出现（罕见终态），现在它是**每个**延后
+      // 准备任务的正常中间态，暴露面完全不同。
+      if (task.worktreePath === '') {
+        throw new NotFoundError(
+          'worktree-not-ready',
+          `task '${task.id}' has no worktree yet (repository preparation has not completed)`,
+        )
+      }
       const rootAbs = resolve(task.worktreePath)
       const target = resolve(rootAbs, rel)
       if (!(target === rootAbs || target.startsWith(rootAbs + sep))) {
