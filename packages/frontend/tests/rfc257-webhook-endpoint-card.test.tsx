@@ -193,6 +193,27 @@ describe('RFC-257 · WebhookEndpointCard', () => {
     expect(document.body.textContent).not.toContain('one-time-secret-value-zz99')
   })
 
+  // Regression for the plain-http/LAN path: the Secret copy action must pass
+  // the one-time plaintext to the shared dialog-safe clipboard helper and
+  // acknowledge success while the non-dismissible reveal Dialog remains open.
+  test('一次性 secret 的复制按钮复制完整明文并反馈成功', async () => {
+    renderCard()
+    fireEvent.click(await screen.findByTestId('webhook-endpoint-add'))
+    fireEvent.change(await screen.findByTestId('webhook-endpoint-name'), {
+      target: { value: 'New GL' },
+    })
+    fireEvent.click(screen.getByTestId('webhook-endpoint-create-submit'))
+
+    const revealDialog = await screen.findByTestId('webhook-endpoint-secret-dialog')
+    fireEvent.click(within(revealDialog).getByRole('button', { name: 'Copy' }))
+
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith('one-time-secret-value-zz99'))
+    expect(within(revealDialog).getByText('Copied', { selector: '[role="status"]' })).toBeTruthy()
+    expect(screen.getByTestId('webhook-endpoint-secret-value').textContent).toBe(
+      'one-time-secret-value-zz99',
+    )
+  })
+
   test('轮换 secret 必须先确认破坏性后果，确认前后端零写入', async () => {
     renderCard()
     const trigger = await screen.findByTestId('webhook-endpoint-rotate-ep1')

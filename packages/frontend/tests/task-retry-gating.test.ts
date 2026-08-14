@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { canOfferResume, resumeStatus } from '../src/routes/tasks.detail'
+import { canOfferResume, resumeStatus, taskDetailRefetchInterval } from '../src/routes/tasks.detail'
 import { canRetryNodeRun } from '../src/components/NodeDetailDrawer'
 import { enUS } from '../src/i18n/en-US'
 import { zhCN } from '../src/i18n/zh-CN'
@@ -58,6 +58,14 @@ describe('resumeStatus', () => {
 
   test('canceled task → not-resumable (no resume API endpoint for canceled)', () => {
     expect(resumeStatus('canceled', '/tmp/wt')).toBe('not-resumable')
+  })
+})
+
+describe('RFC-300 workspace prune polling', () => {
+  test('terminal tasks keep polling only until the durable prune is finalized', () => {
+    expect(taskDetailRefetchInterval({ status: 'done', workspaceState: 'pruning' })).toBe(3000)
+    expect(taskDetailRefetchInterval({ status: 'canceled', workspaceState: 'pruned' })).toBe(false)
+    expect(taskDetailRefetchInterval({ status: 'done', workspaceState: 'available' })).toBe(false)
   })
 })
 
@@ -120,6 +128,23 @@ describe('canOfferResume', () => {
         isDynamicWorkgroup: false,
       }),
     ).toBe(false)
+  })
+})
+
+describe('RFC-300 workspace capability wiring', () => {
+  test('detail hides preserved/retry/sync affordances and renders both cleanup states', () => {
+    expect(DETAIL_SRC).toContain("(tk.workspaceState ?? 'available') === 'available'")
+    expect(DETAIL_SRC).toContain('workspaceState={tk.workspaceState}')
+    expect(DETAIL_SRC).toContain("tk.workspaceState === 'pruning'")
+    expect(DETAIL_SRC).toContain("t('tasks.workspacePruning')")
+    expect(DETAIL_SRC).toContain("t('tasks.workspacePruned')")
+  })
+
+  test('cleanup copy is present and translated in both locales', () => {
+    expect(zhCN.tasks.workspacePruning).toContain('正在清理')
+    expect(zhCN.tasks.workspacePruned).toContain('节点重试')
+    expect(enUS.tasks.workspacePruning).toContain('being cleaned up')
+    expect(enUS.tasks.workspacePruned).toContain('node retry')
   })
 })
 

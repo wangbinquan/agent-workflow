@@ -47,6 +47,7 @@ function renderDrawer(props: {
   workflowNodeKind: string | null
   runs: NodeRun[]
   outputs?: NodeRunOutput[]
+  workspaceState?: 'available' | 'pruning' | 'pruned'
 }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -55,6 +56,7 @@ function renderDrawer(props: {
         <NodeDetailDrawer
           taskId="t1"
           taskStatus="done"
+          workspaceState={props.workspaceState}
           nodeRunId={props.nodeRunId}
           nodeId={props.nodeId}
           workflowNodeKind={props.workflowNodeKind}
@@ -103,6 +105,31 @@ afterEach(() => {
 })
 
 describe('RFC-027 NodeDetailDrawer Session tab', () => {
+  test('RFC-300 hides node retry after workspace pruning/pruned', () => {
+    const failed = run({ id: 'r-failed', status: 'failed' })
+    const available = renderDrawer({
+      nodeRunId: failed.id,
+      nodeId: failed.nodeId,
+      workflowNodeKind: 'agent-single',
+      runs: [failed],
+      workspaceState: 'available',
+    })
+    expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy()
+    available.unmount()
+
+    for (const workspaceState of ['pruning', 'pruned'] as const) {
+      const view = renderDrawer({
+        nodeRunId: failed.id,
+        nodeId: failed.nodeId,
+        workflowNodeKind: 'agent-single',
+        runs: [failed],
+        workspaceState,
+      })
+      expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
+      view.unmount()
+    }
+  })
+
   test('tab list contains "Session" (renamed from "Prompt") as the first tab', () => {
     const r = run({ id: 'r1', promptText: 'hi' })
     renderDrawer({ nodeRunId: r.id, nodeId: r.nodeId, workflowNodeKind: 'agent-single', runs: [r] })

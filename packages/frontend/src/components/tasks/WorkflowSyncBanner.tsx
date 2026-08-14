@@ -18,6 +18,7 @@ import { WorkflowSyncDialog } from './WorkflowSyncDialog'
 
 export interface WorkflowSyncBannerProps {
   taskId: string
+  workspaceState?: Task['workspaceState']
 }
 
 export function WorkflowSyncBanner(props: WorkflowSyncBannerProps): ReactElement | null {
@@ -25,6 +26,7 @@ export function WorkflowSyncBanner(props: WorkflowSyncBannerProps): ReactElement
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
   const [dismissedSignature, setDismissedSignature] = useState<string | null>(null)
+  const workspaceAvailable = (props.workspaceState ?? 'available') === 'available'
 
   const q = useQuery<WorkflowSyncPreview>({
     queryKey: ['tasks', props.taskId, 'workflow-sync-preview'],
@@ -36,11 +38,12 @@ export function WorkflowSyncBanner(props: WorkflowSyncBannerProps): ReactElement
       ),
     refetchOnWindowFocus: true,
     staleTime: 15_000,
+    enabled: workspaceAvailable,
     // Codex impl-gate F5: no WS event invalidates this query (task WS refreshes
     // task/node-runs/diff only), so a workflow edit in another tab or a task that
     // just settled into a syncable state would otherwise stay hidden until focus.
     // A conservative interval keeps the banner fresh while the page is open.
-    refetchInterval: 30_000,
+    refetchInterval: workspaceAvailable ? 30_000 : false,
   })
 
   const sync = useMutation({
@@ -63,6 +66,7 @@ export function WorkflowSyncBanner(props: WorkflowSyncBannerProps): ReactElement
   })
 
   const preview = q.data
+  if (!workspaceAvailable) return null
   if (preview === undefined || !preview.syncable || !preview.differs) return null
 
   const previewSignature = `${props.taskId}:${preview.currentVersion ?? 'unknown'}:${preview.latestVersion ?? 'unknown'}`

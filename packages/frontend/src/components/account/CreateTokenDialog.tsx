@@ -546,9 +546,9 @@ export function CreateTokenDialog({
               </p>
             )}
           </FeedbackStack>
-          {/* Selectable, not an input: the fallback copy path focuses a hidden
-              textarea, and inside a Dialog the focus trap fights it (see
-              lib/clipboard.ts). Manual select must stay possible. */}
+          {/* Selectable, not an input: manual selection remains available if
+              both browser copy paths fail. lib/clipboard.ts keeps its insecure-
+              context fallback inside this Dialog's focus boundary. */}
           <code className="token-reveal" data-testid="token-created-value">
             {created.token}
           </code>

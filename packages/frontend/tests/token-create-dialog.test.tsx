@@ -607,9 +607,9 @@ describe('RFC-247 — the secret is shown once', () => {
           { status: 201, headers: { 'Content-Type': 'application/json' } },
         ),
     )
-    // Both copy paths unavailable: no async Clipboard API, and execCommand
-    // reporting failure — the plain-http LAN case lib/clipboard.ts warns about,
-    // made worse inside a Dialog whose focus trap fights the fallback.
+    // Both copy paths unavailable: no async Clipboard API, and the dialog-safe
+    // execCommand fallback explicitly reports failure. Manual selection remains
+    // the final recovery path.
     vi.stubGlobal('navigator', { ...navigator, clipboard: undefined })
     Object.defineProperty(document, 'execCommand', { value: () => false, configurable: true })
 

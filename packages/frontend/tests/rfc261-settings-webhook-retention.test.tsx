@@ -102,4 +102,32 @@ describe('RFC-261 · 设置 GC tab webhook 保留天数', () => {
       webhookDeliveryRowRetentionDays: 30,
     })
   })
+
+  test('RFC-300 switch is accessible, defaults off, and saves only through the GC scope', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const Wrapped = wrap(qc)
+    render(
+      <Wrapped>
+        <GcTab config={mkConfig({ webhookTaskWorkspaceAutoCleanup: false })} />
+      </Wrapped>,
+    )
+
+    const toggle = (await waitFor(() =>
+      screen.getByTestId('settings-webhook-task-workspace-auto-cleanup'),
+    )) as HTMLInputElement
+    expect(toggle.checked).toBe(false)
+    expect(
+      screen.getByRole('checkbox', {
+        name: /clean up webhook workspaces after completion or cancel/i,
+      }),
+    ).toBe(toggle)
+    expect(screen.getByText(/failed\/interrupted tasks, inherited children/i)).toBeTruthy()
+
+    fireEvent.click(toggle)
+    expect(toggle.checked).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(putBodies.length).toBe(1))
+    expect(putBodies[0]).toMatchObject({ webhookTaskWorkspaceAutoCleanup: true })
+    expect(putBodies[0]).not.toHaveProperty('maxConcurrentNodes')
+  })
 })

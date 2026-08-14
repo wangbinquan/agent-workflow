@@ -888,6 +888,13 @@ export function GcTab({ config }: TabProps) {
         hint={t('settings.cardGroups.gcWorktreesHint')}
       >
         <Switch
+          checked={state.webhookTaskWorkspaceAutoCleanup === true}
+          onChange={(v) => setState({ ...state, webhookTaskWorkspaceAutoCleanup: v })}
+          label={t('settingsForm.webhookTaskWorkspaceAutoCleanup')}
+          hint={t('settingsForm.webhookTaskWorkspaceAutoCleanupHint')}
+          data-testid="settings-webhook-task-workspace-auto-cleanup"
+        />
+        <Switch
           checked={gc?.enabled === true}
           onChange={(v) => setState({ ...state, worktreeAutoGc: { ...(gc ?? {}), enabled: v } })}
           label={t('settingsForm.autoGcLabel')}

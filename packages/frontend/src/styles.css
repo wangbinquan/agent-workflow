@@ -24028,8 +24028,7 @@ button.status-chip {
 }
 
 .webhook-card__footer .page__actions,
-.webhook-trigger-card__status,
-.webhook-chip-list {
+.webhook-trigger-card__status {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -24225,7 +24224,7 @@ button.status-chip {
 }
 
 .webhook-facts dt,
-.webhook-trigger__flow span,
+.webhook-trigger__flow > div > span,
 .webhook-endpoint__url span {
   color: var(--muted);
   font-size: var(--font-xs);
@@ -24297,12 +24296,20 @@ button.status-chip {
   background: var(--bg);
 }
 
-.webhook-trigger__flow strong {
+.webhook-trigger__flow > div > strong {
   display: block;
   margin-top: 3px;
   overflow-wrap: anywhere;
   font-size: var(--font-sm);
   line-height: 1.4;
+}
+
+.webhook-trigger__chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
 }
 
 .webhook-trigger__flow-arrow {
