@@ -623,7 +623,7 @@ runner 打崩了」，而单独跑那个文件是绿的。要么**把 ssh 会话
   `rfc292-trigger-source-locks.test.ts`（冻结上下文相邻锁）里，**文件名与被改动的 RFC
   编号毫无关系**。本仓有大量「A 号 RFC 的锁写在 B 号文件里」的结构守卫，编号选面对它们
   系统性失明。正解是按依赖选：
-      grep -rl "services/<改动文件>.ts'" packages/backend/tests/
+  grep -rl "services/<改动文件>.ts'" packages/backend/tests/
   `scheduler.ts` 一查就是 91 个文件——那才是真实的连带面。计数型棘轮与「函数体里含
   什么」型的源码锁尤其吃这一刀，因为它们锁的是**文本形态**，任何搬家都会失配。
 
@@ -634,8 +634,8 @@ runner 打崩了」，而单独跑那个文件是绿的。要么**把 ssh 会话
   timeout 5000ms），且门禁总时长比上一轮涨两三成。这不是 flaky，也不是被测代码变慢
   ——是那批真起 opencode 子进程的用例本来就贴着 5s，机器一挤就整片翻。
   **判据**（红了先做这一步，再谈修代码）：
-      uptime                                   # load average 是不是异常高
-      ps -Ao pid,command | grep -E 'bun test --shard|vitest run'
+  uptime # load average 是不是异常高
+  ps -Ao pid,command | grep -E 'bun test --shard|vitest run'
   若看到**不属于自己那次运行**的分片（seed 对不上、cwd 不是自己的 pin worktree），
   就是撞车了：等对方跑完再重跑，别改代码、别加 timeout、更别按「重跑就过」放行。
   反过来，自己跑门禁期间也别在主树跑 `tsc`/`vitest`——同一枚硬币的另一面。
@@ -671,3 +671,16 @@ runner 打崩了」，而单独跑那个文件是绿的。要么**把 ssh 会话
   「同名调用出现多次」的文件天然失效。校验方式也要跟着变——变异后先打印两个
   位置的真值，确认它们的相对关系**确实被翻转**了，再看红不红；否则你验的是一个
   没被改变的条件。
+
+- **共享工作树上「跑完测试立刻提交」比「攒一批再提交」重要得多——别人的
+  `git reset --hard` 会吃掉你未提交的一切**（2026-08-14 实撞）。我把 G6 的四处生产
+  接线写完、测试全绿，先提交了分类器那半；回头要提另一半时发现**代码不见了**，
+  工作树与 HEAD 都查不到。`git reflog` 里只留下一行 `HEAD@{1} reset: moving to HEAD`
+  ——并发 session 在同一棵树上做的，事后**看不到被吃掉的内容**（reset 不产生
+  dangling blob，未提交的改动直接消失）。
+  判据：commit 之后 `git show --stat HEAD` 与预期文件数对不上，或某处代码「明明写过
+  却搜不到」，先查 `git reflog | head` 有没有 reset / checkout。
+  处置：本仓多人共用一棵工作树，**每完成一个可验证的小步就 commit**（不必 push），
+  让改动进入对象库；commit 过的东西 reset --hard 也只是移动 HEAD，`git reflog` +
+  `git cherry-pick` 就能捞回来。真要长时间持有未提交改动，先 `git stash push -m`
+  或 `cp` 一份到 /tmp。
