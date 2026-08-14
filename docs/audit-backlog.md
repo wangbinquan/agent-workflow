@@ -1820,3 +1820,32 @@ audit-backlog 里已登记的 bug#8（Windows VM + 1.18.13，业务节点侧）�
 失效）是别人的缓存，删掉等于替用户做主；
 · 无其他引用 —— 复用 `refTaskCount` 那道守卫（RFC-287 T14 已给它补上
 `tasks.cached_repo_id` 一面，此前只数 `task_repos`）。
+
+## `e2e-webkit-nightly` 长期间歇红（2026-08-14 登记，非任何单条改动引入）
+
+**现象**：cron（`schedule`，非 push）触发的 webkit e2e nightly 长期间歇失败，且**每次红在
+不同的 spec、不同的分片**：
+
+| 日期                  | 结论    | 失败用例                                                                        |
+| --------------------- | ------- | ------------------------------------------------------------------------------- |
+| 08-14                 | failure | `intent-builder.spec.ts:126` RFC-293 workbench（shard 1/4 + 2/4）               |
+| 08-13                 | failure | `rfc295-runtime-parameter-picker.spec.ts:132` Webhook Agent picker（1/4 + 3/4） |
+| 08-12                 | success | —                                                                               |
+| 08-11 / 08-10         | failure | 分片各不相同                                                                    |
+| 08-09 / 08-08 / 08-07 | success | —                                                                               |
+
+**归属核实**：它出现在某个 commit 上只是因为定时跑取到了当时的 main HEAD，与谁推了什么
+无关（`event=schedule`）。08-13 与 08-14 的失败用例毫无交集，排除「某条改动引入」。
+
+**典型形态**：Playwright 的 `locator.click` 超时，call log 停在 `waiting for …` 且从未
+`locator resolved`（元素压根没出现），或 resolved 之后 `element was detached from the DOM`
+（重渲染竞态）。chromium 上同一批用例稳定绿——webkit 的渲染/事件时序更慢，本地几乎复现
+不了（本地机器快，重渲染在点击之前就结束）。
+
+**处置建议**（未做，需要专门一轮）：不要逐条加 timeout——那只是把偶发变稀。按
+`docs/dev-gotchas.md` 里那条「CI-only 的 e2e 竞态多半是重渲染把元素从 DOM 摘下来」的判据，
+逐个找出「点击前会触发列表/面板重渲染」的动作并补真同步点。RFC-287 T14 已按此法修过
+`intent-builder.spec.ts:171` 的 chromium 侧（`2a286abc`），但 webkit 侧那次仍红且形态不同
+（按钮从未出现，不是 detach），说明该 spec 至少还有第二个竞态未解。
+
+**不属于任何进行中 RFC 的连带面**，不应计入其收官判据。
