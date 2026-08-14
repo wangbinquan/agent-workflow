@@ -127,6 +127,7 @@ import {
   wrapperDescendantIds,
   type WrapperHitInput,
 } from './wrapperMembership'
+import { planWorkflowLayout, type WorkflowLayoutSelection } from '@agent-workflow/shared'
 import {
   buildWrapperPortMinimumSizes,
   DEFAULT_NODE_SIZE_BY_KIND,
@@ -150,7 +151,6 @@ import {
   type ConnectionRequest,
 } from '../../lib/workflow-connection-plan'
 import { applyWorkflowTransition, type WorkflowTransition } from '../../lib/workflow-transition'
-import { planWorkflowLayout, type WorkflowLayoutSelection } from '../../lib/workflow-layout'
 import {
   projectWorkflowValidationIssues,
   type WorkflowValidationCounts,

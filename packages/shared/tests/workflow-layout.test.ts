@@ -1,7 +1,6 @@
-import { describe, expect, test } from 'vitest'
-import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { planWorkflowLayout, projectWorkflowLayoutDependencies } from '../src/lib/workflow-layout'
-import { createWorkflowSemanticContext } from '../src/lib/workflow-connection-plan'
+import { describe, expect, test } from 'bun:test'
+import type { Agent, WorkflowDefinition, WorkflowNode } from '../src'
+import { planWorkflowLayout, projectWorkflowLayoutDependencies } from '../src'
 
 function agent(name: string, outputKinds: Record<string, string> = { out: 'markdown' }): Agent {
   return {
@@ -39,14 +38,17 @@ function definition(nodes: WorkflowNode[], edges: WorkflowDefinition['edges']): 
   return { $schema_version: 4, inputs: [], nodes, edges }
 }
 
-const semantic = createWorkflowSemanticContext([
+const semanticAgents = [
   agent('a', { done: 'signal', out: 'markdown' }),
   agent('b'),
   agent('c'),
   agent('inner'),
   agent('child'),
   agent('sink'),
-])
+]
+const semantic = {
+  agentsByName: Object.fromEntries(semanticAgents.map((candidate) => [candidate.id, candidate])),
+}
 
 describe('RFC-199 T12 workflow layout planner', () => {
   test('projects data and signal dependencies while excluding boundary/system mirrors', () => {
@@ -320,5 +322,81 @@ describe('RFC-199 T12 workflow layout planner', () => {
       code: 'size-locked-overflow',
       wrapperNodeId: 'wrap',
     })
+  })
+
+  test('RFC-302 fixed root anchor is deterministic, immutable and idempotent', () => {
+    const def = definition(
+      [
+        node('a', { position: { x: -4_000, y: 9_000 } }),
+        node('b', { position: { x: -4_000, y: 9_000 } }),
+        node('c', { position: { x: 60_000, y: -7_000 } }),
+      ],
+      [
+        {
+          id: 'ab',
+          source: { nodeId: 'a', portName: 'out' },
+          target: { nodeId: 'b', portName: 'in' },
+        },
+      ],
+    )
+    const before = structuredClone(def)
+    const first = planWorkflowLayout(def, { rootAnchor: { x: 80, y: 80 } })
+    expect(def).toEqual(before)
+    const positions = first.next.nodes.map((candidate) => candidate.position!)
+    expect(Math.min(...positions.map((position) => position.x))).toBe(80)
+    expect(Math.min(...positions.map((position) => position.y))).toBe(80)
+    expect(planWorkflowLayout(first.next, { rootAnchor: { x: 80, y: 80 } }).next).toEqual(
+      first.next,
+    )
+    for (let replay = 0; replay < 100; replay += 1) {
+      expect(planWorkflowLayout(def, { rootAnchor: { x: 80, y: 80 } })).toEqual(first)
+    }
+  })
+
+  test('RFC-302 fixed root anchor never leaks into selection layout', () => {
+    const def = definition(
+      [
+        node('a', { position: { x: 500, y: 600 } }),
+        node('b', { position: { x: 520, y: 600 } }),
+        node('sink', { position: { x: 1_400, y: 600 } }),
+      ],
+      [
+        {
+          id: 'ab',
+          source: { nodeId: 'a', portName: 'out' },
+          target: { nodeId: 'b', portName: 'in' },
+        },
+      ],
+    )
+    const result = planWorkflowLayout(def, {
+      selection: { mode: 'selection', nodeIds: ['a', 'b'] },
+      rootAnchor: { x: -9_000, y: -9_000 },
+    })
+    const positions = result.next.nodes
+      .filter((candidate) => candidate.id === 'a' || candidate.id === 'b')
+      .map((candidate) => candidate.position!)
+    expect(Math.min(...positions.map((position) => position.x))).toBeGreaterThanOrEqual(500)
+    expect(Math.min(...positions.map((position) => position.y))).toBeGreaterThanOrEqual(600)
+  })
+
+  test('RFC-302 empty and populated semantic lookups produce identical geometry', () => {
+    const def = definition(
+      [node('a'), node('b')],
+      [
+        {
+          id: 'signal',
+          source: { nodeId: 'a', portName: 'done' },
+          target: { nodeId: 'b', portName: 'ready' },
+        },
+      ],
+    )
+    const empty = planWorkflowLayout(def, { rootAnchor: { x: 80, y: 80 } })
+    const populated = planWorkflowLayout(def, {
+      semanticContext: semantic,
+      rootAnchor: { x: 80, y: 80 },
+    })
+    expect(populated.next).toEqual(empty.next)
+    expect(projectWorkflowLayoutDependencies(def, semantic)[0]?.control).toBe(true)
+    expect(projectWorkflowLayoutDependencies(def)[0]?.control).toBe(false)
   })
 })

@@ -1,41 +1,52 @@
 import dagre from '@dagrejs/dagre'
 import {
-  buildWorkflowScopeParentMap,
-  declaredPorts,
-  isSystemChannelEdge,
   isWrapperKind,
-  projectWorkflowDependency,
-  tryHandlerForParsedKind,
-  tryParseKind,
   type WorkflowDefinition,
   type WorkflowEdge,
   type WorkflowNode,
+} from './schemas/workflow'
+import { tryParseKind } from './kindParser'
+import { declaredPorts, type PortAgentLookup } from './nodePorts'
+import { tryHandlerForParsedKind } from './outputKinds'
+import { isSystemChannelEdge } from './systemChannelPorts'
+import {
+  buildWorkflowScopeParentMap,
+  projectWorkflowDependency,
   workflowScopeOf,
-} from '@agent-workflow/shared'
+} from './workflowScope'
+import { DEFAULT_NODE_SIZE_BY_KIND, effectiveWorkflowNodePosition } from './workflowNodeGeometry'
 import {
   AUTO_FIT_BOTTOM_CLEARANCE,
   AUTO_FIT_LEFT_CLEARANCE,
   AUTO_FIT_RIGHT_CLEARANCE,
   AUTO_FIT_TOP_CLEARANCE,
   computeFitBounds,
-  DEFAULT_NODE_SIZE_BY_KIND,
   fitWrapperToInner,
-} from '@/components/canvas/wrapperFit'
-import { effectiveWorkflowNodePosition } from '@/lib/workflow-placement'
-import type { WorkflowSemanticContext } from '@/lib/workflow-connection-plan'
+} from './workflowWrapperGeometry'
 
 const ROOT_SCOPE = '__workflow_root__'
 const HORIZONTAL_GAP = 120
 const VERTICAL_GAP = 52
+
+/** Bump only when new layout results intentionally change. */
+export const WORKFLOW_LAYOUT_ALGORITHM_VERSION = 1
+
+export interface WorkflowLayoutSemanticContext {
+  agentsByName: PortAgentLookup
+}
+
+const EMPTY_SEMANTIC_CONTEXT: WorkflowLayoutSemanticContext = Object.freeze({ agentsByName: {} })
 
 export type WorkflowLayoutSelection =
   | { mode: 'all' }
   | { mode: 'selection'; nodeIds: readonly string[] }
 
 export interface WorkflowLayoutOptions {
-  semanticContext: WorkflowSemanticContext
+  semanticContext?: WorkflowLayoutSemanticContext
   measuredSizes?: ReadonlyMap<string, { width: number; height: number }>
   selection?: WorkflowLayoutSelection
+  /** Whole-layout top-level anchor. Ignored for selections and nested scopes. */
+  rootAnchor?: { x: number; y: number }
 }
 
 export interface WorkflowLayoutWarning {
@@ -92,7 +103,7 @@ function scopeKey(scopeId: string | null): string {
 function sourceIsControl(
   definition: WorkflowDefinition,
   edge: WorkflowEdge,
-  semanticContext: WorkflowSemanticContext,
+  semanticContext: WorkflowLayoutSemanticContext,
 ): boolean {
   const source = definition.nodes.find((node) => node.id === edge.source.nodeId)
   if (source === undefined) return false
@@ -113,7 +124,7 @@ function sourceIsControl(
  */
 export function projectWorkflowLayoutDependencies(
   definition: WorkflowDefinition,
-  semanticContext: WorkflowSemanticContext,
+  semanticContext: WorkflowLayoutSemanticContext = EMPTY_SEMANTIC_CONTEXT,
 ): WorkflowLayoutDependency[] {
   const parents = buildWorkflowScopeParentMap(definition)
   const nodeIds = new Set(definition.nodes.map((node) => node.id))
@@ -344,6 +355,7 @@ function layoutScope(
   measuredSizes: WorkflowLayoutOptions['measuredSizes'],
   selectionMode: boolean,
   warnings: WorkflowLayoutWarning[],
+  rootAnchor?: { x: number; y: number },
 ): void {
   if (targetIds.length === 0) return
   const originalBounds = boundsOf(targetIds, states, measuredSizes)
@@ -393,7 +405,7 @@ function layoutScope(
   const anchor = selectionMode
     ? { x: originalBounds.x, y: originalBounds.y }
     : scopePosition === undefined
-      ? { x: originalBounds.x, y: originalBounds.y }
+      ? (rootAnchor ?? { x: originalBounds.x, y: originalBounds.y })
       : {
           x: scopePosition.x + AUTO_FIT_LEFT_CLEARANCE,
           y: scopePosition.y + AUTO_FIT_TOP_CLEARANCE,
@@ -444,7 +456,10 @@ export function planWorkflowLayout(
   const measuredSizes = new Map(options.measuredSizes ?? [])
   const parents = buildWorkflowScopeParentMap(definition)
   const states = new Map(definition.nodes.map((node, index) => [node.id, { node, index }] as const))
-  const dependencies = projectWorkflowLayoutDependencies(definition, options.semanticContext)
+  const dependencies = projectWorkflowLayoutDependencies(
+    definition,
+    options.semanticContext ?? EMPTY_SEMANTIC_CONTEXT,
+  )
   const dependenciesByScope = new Map<string, WorkflowLayoutDependency[]>()
   for (const dependency of dependencies) {
     const key = scopeKey(dependency.scopeId)
@@ -476,6 +491,7 @@ export function planWorkflowLayout(
       measuredSizes,
       true,
       warnings,
+      undefined,
     )
     if (scopeId !== null) {
       fitScopeWrapper(scopeId, allDirect, states, definition, measuredSizes, warnings)
@@ -499,6 +515,7 @@ export function planWorkflowLayout(
         measuredSizes,
         false,
         warnings,
+        undefined,
       )
       fitScopeWrapper(wrapper.id, children, states, definition, measuredSizes, warnings)
     }
@@ -512,6 +529,7 @@ export function planWorkflowLayout(
       measuredSizes,
       false,
       warnings,
+      options.rootAnchor,
     )
   }
 

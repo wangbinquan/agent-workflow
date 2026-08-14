@@ -274,7 +274,10 @@ test('workflow draft makes the node graph a primary, expandable review surface',
   const workflowDaemon = await startDaemon({
     stubMode: 'intent',
     // The old `intent-workflow-opencode.sh` was this stub plus this variable.
-    extraEnv: { STUB_INTENT_VARIANT: 'workflow' },
+    extraEnv: {
+      STUB_INTENT_VARIANT: 'workflow',
+      STUB_INTENT_LAYOUT_FIXTURE: 'overlap',
+    },
   })
   try {
     await authPage(page, workflowDaemon)
@@ -294,6 +297,55 @@ test('workflow draft makes the node graph a primary, expandable review surface',
     await expect(workflowPreview).toBeVisible()
     await expect(page.getByText('3 nodes')).toBeVisible()
     await expect(page.getByText('2 edges')).toBeVisible()
+
+    const sessionId = new URL(page.url()).pathname.split('/').at(-1)!
+    const authHeaders = { Authorization: `Bearer ${workflowDaemon.token}` }
+    const detailResponse = await fetch(
+      `${workflowDaemon.baseUrl}/api/intent-sessions/${encodeURIComponent(sessionId)}`,
+      { headers: authHeaders },
+    )
+    expect(detailResponse.ok).toBe(true)
+    const detail = (await detailResponse.json()) as {
+      currentDraft: {
+        changeset: {
+          ops: Array<{
+            resourceType: string
+            payload: {
+              definition?: {
+                nodes: Array<{ id: string; position?: { x: number; y: number }; size?: unknown }>
+              }
+            }
+          }>
+        }
+      }
+    }
+    const draftDefinition = detail.currentDraft.changeset.ops.find(
+      (op) => op.resourceType === 'workflow',
+    )?.payload.definition
+    expect(draftDefinition).toBeTruthy()
+    const draftPositions = new Map(
+      draftDefinition!.nodes.map((node) => [node.id, node.position!] as const),
+    )
+    expect(Math.min(...[...draftPositions.values()].map((position) => position.x))).toBe(80)
+    expect(Math.min(...[...draftPositions.values()].map((position) => position.y))).toBe(80)
+    expect(draftPositions.get('worker')!.x).toBeLessThan(draftPositions.get('reviewer')!.x)
+    expect(draftPositions.get('reviewer')!.x).toBeLessThan(draftPositions.get('final_output')!.x)
+
+    const previewNodes = await inlineCanvas.locator('.react-flow__node').evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const rect = node.getBoundingClientRect()
+        return {
+          id: node.getAttribute('data-id'),
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+        }
+      }),
+    )
+    const previewById = new Map(previewNodes.map((node) => [node.id, node]))
+    expect(previewById.get('worker')!.right).toBeLessThan(previewById.get('reviewer')!.left)
+    expect(previewById.get('reviewer')!.right).toBeLessThan(previewById.get('final_output')!.left)
 
     const desktopGeometry = await page.evaluate(() => {
       const build = document.querySelector<HTMLElement>('[data-testid="intent-build-workspace"]')
@@ -377,8 +429,178 @@ test('workflow draft makes the node graph a primary, expandable review surface',
     await page.getByRole('tab', { name: 'Build workspace' }).click()
     await expect(build).toBeVisible()
     await expect(review).toBeHidden()
+
+    // Commit the exact reviewed draft, then prove the resource row and editor
+    // consume the same persisted geometry rather than running a second layout.
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await expect(review).toBeVisible()
+    await page.getByTestId('intent-open-commit').click()
+    await page.getByTestId('intent-commit-next').click()
+    await page.getByTestId('intent-commit-next').click()
+    await page.getByTestId('intent-commit-submit').click()
+    await expect(page.getByText('Committed', { exact: false }).first()).toBeVisible({
+      timeout: 30_000,
+    })
+
+    const workflowsResponse = await fetch(`${workflowDaemon.baseUrl}/api/workflows`, {
+      headers: authHeaders,
+    })
+    expect(workflowsResponse.ok).toBe(true)
+    const workflows = (await workflowsResponse.json()) as Array<{ id: string; name: string }>
+    const committed = workflows.find((workflow) => workflow.name === 'e2e-workflow-preview')
+    expect(committed).toBeTruthy()
+    const workflowResponse = await fetch(
+      `${workflowDaemon.baseUrl}/api/workflows/${encodeURIComponent(committed!.id)}`,
+      { headers: authHeaders },
+    )
+    expect(workflowResponse.ok).toBe(true)
+    const workflow = (await workflowResponse.json()) as {
+      definition: {
+        nodes: Array<{ id: string; position?: { x: number; y: number }; size?: unknown }>
+      }
+    }
+    expect(
+      workflow.definition.nodes.map((node) => ({
+        id: node.id,
+        position: node.position,
+        size: node.size,
+      })),
+    ).toEqual(
+      draftDefinition!.nodes.map((node) => ({
+        id: node.id,
+        position: node.position,
+        size: node.size,
+      })),
+    )
+
+    await page.goto(`${workflowDaemon.baseUrl}/workflows/${committed!.id}`)
+    await expect(page.locator('.react-flow__node')).toHaveCount(3)
+    const editorNodes = await page.locator('.react-flow__node').evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const rect = node.getBoundingClientRect()
+        return { id: node.getAttribute('data-id'), left: rect.left, right: rect.right }
+      }),
+    )
+    const editorById = new Map(editorNodes.map((node) => [node.id, node]))
+    expect(editorById.get('worker')!.right).toBeLessThan(editorById.get('reviewer')!.left)
+    expect(editorById.get('reviewer')!.right).toBeLessThan(editorById.get('final_output')!.left)
   } finally {
     await workflowDaemon.stop()
+  }
+})
+
+test('RFC-302 nested wrappers and a legal loop cycle remain commit-ready and geometry-exact', async ({
+  page,
+}) => {
+  const nestedDaemon = await startDaemon({
+    stubMode: 'intent',
+    extraEnv: {
+      STUB_INTENT_VARIANT: 'workflow',
+      STUB_INTENT_LAYOUT_FIXTURE: 'nested-cycle',
+    },
+  })
+  try {
+    await authPage(page, nestedDaemon)
+    await createSessionAndAwaitDraft(page, 'build a nested cyclic loop workflow', nestedDaemon)
+    await page
+      .getByTestId('intent-op-outline-item')
+      .filter({ hasText: 'e2e-nested-cycle-workflow' })
+      .click()
+    await expect(
+      page.getByTestId('intent-preview-canvas').locator('.react-flow__node'),
+    ).toHaveCount(4)
+
+    const sessionId = new URL(page.url()).pathname.split('/').at(-1)!
+    const authHeaders = { Authorization: `Bearer ${nestedDaemon.token}` }
+    const detailResponse = await fetch(
+      `${nestedDaemon.baseUrl}/api/intent-sessions/${encodeURIComponent(sessionId)}`,
+      { headers: authHeaders },
+    )
+    expect(detailResponse.ok).toBe(true)
+    const detail = (await detailResponse.json()) as {
+      currentDraft: {
+        validation: { errors: string[] }
+        changeset: {
+          ops: Array<{
+            resourceType: string
+            payload: {
+              definition?: {
+                nodes: Array<{
+                  id: string
+                  kind: string
+                  position?: { x: number; y: number }
+                  size?: { width: number; height: number }
+                }>
+                edges: Array<{ id: string }>
+              }
+            }
+          }>
+        }
+      }
+    }
+    expect(detail.currentDraft.validation.errors).toEqual([])
+    const draftDefinition = detail.currentDraft.changeset.ops.find(
+      (op) => op.resourceType === 'workflow',
+    )?.payload.definition
+    expect(draftDefinition).toBeTruthy()
+    expect(draftDefinition!.edges.map((edge) => edge.id)).toEqual(['a_to_b', 'b_to_a'])
+    const byId = new Map(draftDefinition!.nodes.map((node) => [node.id, node] as const))
+    const outer = byId.get('outer_loop')!
+    const inner = byId.get('git_scope')!
+    const workerA = byId.get('worker_a')!
+    const workerB = byId.get('worker_b')!
+    expect(outer.position).toEqual({ x: 80, y: 80 })
+    expect(outer.size).toBeTruthy()
+    expect(inner.position).toBeTruthy()
+    expect(inner.size).toBeTruthy()
+    expect(inner.position!.x).toBeGreaterThan(outer.position!.x)
+    expect(inner.position!.y).toBeGreaterThan(outer.position!.y)
+    expect(inner.position!.x + inner.size!.width).toBeLessThan(
+      outer.position!.x + outer.size!.width,
+    )
+    expect(inner.position!.y + inner.size!.height).toBeLessThan(
+      outer.position!.y + outer.size!.height,
+    )
+    expect(workerA.position!.x).not.toBe(workerB.position!.x)
+
+    await page.getByTestId('intent-open-commit').click()
+    await page.getByTestId('intent-commit-next').click()
+    await page.getByTestId('intent-commit-next').click()
+    await page.getByTestId('intent-commit-submit').click()
+    await expect(page.getByText('Committed', { exact: false }).first()).toBeVisible({
+      timeout: 30_000,
+    })
+
+    const workflowsResponse = await fetch(`${nestedDaemon.baseUrl}/api/workflows`, {
+      headers: authHeaders,
+    })
+    expect(workflowsResponse.ok).toBe(true)
+    const workflows = (await workflowsResponse.json()) as Array<{ id: string; name: string }>
+    const committed = workflows.find((workflow) => workflow.name === 'e2e-nested-cycle-workflow')
+    expect(committed).toBeTruthy()
+    const workflowResponse = await fetch(
+      `${nestedDaemon.baseUrl}/api/workflows/${encodeURIComponent(committed!.id)}`,
+      { headers: authHeaders },
+    )
+    expect(workflowResponse.ok).toBe(true)
+    const workflow = (await workflowResponse.json()) as {
+      definition: typeof draftDefinition
+    }
+    expect(
+      workflow.definition!.nodes.map((node) => ({
+        id: node.id,
+        position: node.position,
+        size: node.size,
+      })),
+    ).toEqual(
+      draftDefinition!.nodes.map((node) => ({
+        id: node.id,
+        position: node.position,
+        size: node.size,
+      })),
+    )
+  } finally {
+    await nestedDaemon.stop()
   }
 })
 

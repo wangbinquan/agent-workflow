@@ -339,6 +339,122 @@ describe('applyIntentChangeset', () => {
     expect(journal?.state).toBe('committed')
   })
 
+  test('RFC-302 create persists confirmed draft geometry exactly and replay never re-layouts', async () => {
+    const existing = await seedAgent('geometry-agent')
+    const { session } = await createIntentSession(db, actor, { message: 'keep reviewed geometry' })
+    const position = { x: 1_234, y: -321 }
+    const size = { width: 333, height: 211 }
+    const draft = installDraft(
+      session.id,
+      {
+        $schema_version: 1,
+        ops: [
+          {
+            opId: 'op-1',
+            action: 'create',
+            resourceType: 'workflow',
+            tempRef: '$new:geometry-flow',
+            payload: {
+              name: 'Geometry flow',
+              description: '',
+              definition: {
+                $schema_version: WORKFLOW_SCHEMA_VERSION,
+                inputs: [],
+                nodes: [
+                  {
+                    id: 'worker',
+                    kind: 'agent-single',
+                    agentRef: 'res#agent#1',
+                    promptTemplate: 'go',
+                    position,
+                    size,
+                  },
+                ],
+                edges: [],
+              },
+            },
+          },
+        ],
+      },
+      manifestWithAgent(existing.id, existing.updatedAt),
+    )
+    const clientMutationId = ulid()
+    const first = await applyIntentChangeset(deps(), {
+      sessionId: session.id,
+      clientMutationId,
+      ...draft,
+      decisions: [],
+    })
+    const workflowId = first.applied[0]?.resourceId ?? ''
+    const readGeometry = () => {
+      const row = db.select().from(workflows).where(eq(workflows.id, workflowId)).get()
+      const definition = JSON.parse(row?.definition ?? '{}') as {
+        nodes: Array<{ position?: unknown; size?: unknown }>
+      }
+      return { position: definition.nodes[0]?.position, size: definition.nodes[0]?.size }
+    }
+    expect(readGeometry()).toEqual({ position, size })
+
+    const replay = await applyIntentChangeset(deps(), {
+      sessionId: session.id,
+      clientMutationId,
+      ...draft,
+      decisions: [],
+    })
+    expect(replay).toEqual(first)
+    expect(readGeometry()).toEqual({ position, size })
+  })
+
+  test('RFC-302 legacy draft without geometry applies verbatim and is never lazily upgraded', async () => {
+    const existing = await seedAgent('legacy-geometry-agent')
+    const { session } = await createIntentSession(db, actor, { message: 'apply an old draft' })
+    const draft = installDraft(
+      session.id,
+      {
+        $schema_version: 1,
+        ops: [
+          {
+            opId: 'op-1',
+            action: 'create',
+            resourceType: 'workflow',
+            tempRef: '$new:legacy-geometry-flow',
+            payload: {
+              name: 'Legacy geometry flow',
+              description: '',
+              definition: {
+                $schema_version: WORKFLOW_SCHEMA_VERSION,
+                inputs: [],
+                nodes: [
+                  {
+                    id: 'worker',
+                    kind: 'agent-single',
+                    agentRef: 'res#agent#1',
+                    promptTemplate: 'go',
+                  },
+                ],
+                edges: [],
+              },
+            },
+          },
+        ],
+      },
+      manifestWithAgent(existing.id, existing.updatedAt),
+    )
+    const result = await applyIntentChangeset(deps(), {
+      sessionId: session.id,
+      clientMutationId: ulid(),
+      ...draft,
+      decisions: [],
+    })
+    const workflowId = result.applied[0]?.resourceId ?? ''
+    const row = db.select().from(workflows).where(eq(workflows.id, workflowId)).get()
+    const definition = JSON.parse(row?.definition ?? '{}') as {
+      nodes: Array<Record<string, unknown>>
+    }
+    expect(definition.nodes[0]).not.toHaveProperty('position')
+    expect(definition.nodes[0]).not.toHaveProperty('size')
+  })
+
   test('duplicate clientMutationId replays the receipt with zero side effects', async () => {
     const existing = await seedAgent('existing-agent')
     const { session } = await createIntentSession(db, actor, { message: 'x' })

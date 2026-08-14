@@ -6,46 +6,16 @@
 // by the explicit scope/directWrapperNodeId fields; visual containment never
 // creates membership.
 
-export interface WorkflowPlacementPoint {
-  readonly x: number
-  readonly y: number
-}
+import { type WorkflowPlacementPoint, type WorkflowPlacementSize } from '@agent-workflow/shared'
 
-export interface WorkflowPlacementSize {
-  readonly width: number
-  readonly height: number
-}
+export { effectiveWorkflowNodePosition } from '@agent-workflow/shared'
+export type {
+  WorkflowPlacementPoint,
+  WorkflowPlacementSize,
+  WorkflowPositionSource,
+} from '@agent-workflow/shared'
 
 export interface WorkflowPlacementRect extends WorkflowPlacementPoint, WorkflowPlacementSize {}
-
-export interface WorkflowPositionSource {
-  readonly position?: WorkflowPlacementPoint
-}
-
-// Legacy / imported definitions may omit position. This is the historical
-// renderer grid, now named here so rendering, placement inventory, wrapper
-// geometry, and clipboard projection cannot fork their fallback coordinates.
-const LEGACY_POSITION_COLUMNS = 4
-const LEGACY_POSITION_ORIGIN = { x: 80, y: 80 } as const
-const LEGACY_POSITION_STEP = { x: 280, y: 200 } as const
-
-/** Resolve one definition node's canonical absolute position without mutating it. */
-export function effectiveWorkflowNodePosition(
-  node: WorkflowPositionSource,
-  definitionIndex: number,
-): WorkflowPlacementPoint {
-  if (node.position !== undefined) {
-    return { x: node.position.x, y: node.position.y }
-  }
-  return {
-    x:
-      LEGACY_POSITION_ORIGIN.x +
-      (definitionIndex % LEGACY_POSITION_COLUMNS) * LEGACY_POSITION_STEP.x,
-    y:
-      LEGACY_POSITION_ORIGIN.y +
-      Math.floor(definitionIndex / LEGACY_POSITION_COLUMNS) * LEGACY_POSITION_STEP.y,
-  }
-}
 
 /**
  * Project a pointer-style anchor (drop cursor, viewport center) to the

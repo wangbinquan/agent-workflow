@@ -17,9 +17,11 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
+  INTENT_LIMITS,
   IntentMountRequestsSchema,
   IntentQuestionsSchema,
   buildProtocolBlock,
+  canonicalIntentJson,
   maskDiagnosticsText,
   parseIntentChangeset,
   type IntentQuestion,
@@ -55,6 +57,7 @@ import {
   type IntentTurnRow,
 } from './session'
 import { sha256Hex } from '@/util/hash'
+import { normalizeIntentWorkflowCreateLayouts } from '@/modules/intent/domain/workflowCreateLayout'
 
 export const INTENT_BUILDER_AGENT_NAME = 'aw-intent-builder'
 export const INTENT_SCRATCH_DIRNAME = 'intent-scratch'
@@ -822,6 +825,21 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         { runMeta, scratchRetained: result.scratchRetained },
       )
     }
+    const normalized = normalizeIntentWorkflowCreateLayouts(cs.changeset)
+    const canonicalJson = canonicalIntentJson(normalized.changeset)
+    const canonicalBytes = Buffer.byteLength(canonicalJson, 'utf8')
+    if (canonicalBytes > INTENT_LIMITS.maxChangesetBytes) {
+      return settle(
+        'error',
+        {
+          code: 'intent-changeset-invalid',
+          errors: [
+            `changeset-too-large: ${canonicalBytes} bytes > ${INTENT_LIMITS.maxChangesetBytes} after workflow auto-layout (split into multiple submissions)`,
+          ],
+        },
+        { runMeta, scratchRetained: result.scratchRetained },
+      )
+    }
     releaseScratch()
     if (cs.jsonRepair !== undefined) {
       log.warn('intent-changeset-json-repaired', {
@@ -831,12 +849,13 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         repairOffset: cs.jsonRepair.offset,
       })
     }
-    const report = validateDraftChangeset(dump.manifest, cs.changeset)
+    const report = validateDraftChangeset(dump.manifest, normalized.changeset)
+    report.errors.unshift(...normalized.errors)
     return settle(
       'changeset',
       {
         summary,
-        opCount: cs.changeset.ops.length,
+        opCount: normalized.changeset.ops.length,
         blockingErrors: report.errors.length,
         credentialFindings: report.credentialFindings.length,
         mountRequests,
@@ -847,8 +866,8 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         scratchRetained: result.scratchRetained,
         budgetDelta: { generateRounds: 1 },
         draft: {
-          changesetJson: cs.canonicalJson,
-          canonicalJson: cs.canonicalJson,
+          changesetJson: canonicalJson,
+          canonicalJson,
           validationJson: JSON.stringify(report),
         },
       },

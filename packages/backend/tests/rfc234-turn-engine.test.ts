@@ -12,7 +12,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { ROLE_PERMISSIONS, WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
+import {
+  INTENT_LIMITS,
+  ROLE_PERMISSIONS,
+  WORKFLOW_SCHEMA_VERSION,
+  canonicalIntentJson,
+  parseIntentChangeset,
+} from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, intentTurns, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
@@ -31,6 +37,8 @@ import {
   type IntentTurnConfig,
 } from '../src/services/intent/turnEngine'
 import { recoverIntentTurnsOnBoot, sweepIntentScratch } from '../src/services/intent/maintenance'
+import { sha256Hex } from '../src/util/hash'
+import { normalizeIntentWorkflowCreateLayouts } from '../src/modules/intent/domain/workflowCreateLayout'
 import {
   createIntentSession,
   createIntentSessionAndReserveTurn,
@@ -321,7 +329,18 @@ describe('runIntentTurn', () => {
     const draft = (
       await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id))
     )[0]
-    expect(JSON.parse(draft?.changesetJson ?? '{}')).toEqual(JSON.parse(workflow))
+    const persisted = JSON.parse(draft?.changesetJson ?? '{}') as {
+      ops: Array<{ payload: { definition: { nodes: Array<Record<string, unknown>> } } }>
+    }
+    const persistedNodes = persisted.ops[0]!.payload.definition.nodes
+    expect(persistedNodes.map((node) => node.id)).toEqual(['input', 'agent', 'output'])
+    expect(persistedNodes.every((node) => node.position !== undefined)).toBe(true)
+    const positions = persistedNodes.map((node) => node.position as { x: number; y: number })
+    expect(Math.min(...positions.map((position) => position.x))).toBe(80)
+    expect(Math.min(...positions.map((position) => position.y))).toBe(80)
+    expect(persistedNodes[1]).toMatchObject({ agentRef: 'res#agent#1' })
+    expect(persistedNodes[1]).not.toHaveProperty('agentId')
+    expect(draft?.draftHash).toBe(`sha256:${sha256Hex(canonicalIntentJson(persisted))}`)
     const validationErrors = JSON.parse(draft?.validationJson ?? '{}').errors as string[]
     expect(validationErrors).toEqual([
       'op-1: definition.agentRef[0] references unknown handle res#agent#1 (intent-ref-unknown)',
@@ -336,6 +355,203 @@ describe('runIntentTurn', () => {
       kind: 'missing-final-op-object-close',
       offset: malformed.length - 2,
     })
+  })
+
+  test('RFC-302 malformed layout input mints a review-blocked draft instead of crashing', async () => {
+    const { session } = await createIntentSession(db, actor, { message: 'build malformed graph' })
+    const definition = {
+      $schema_version: WORKFLOW_SCHEMA_VERSION,
+      inputs: [],
+      nodes: [
+        { id: 'duplicate', kind: 'input' },
+        { id: 'duplicate', kind: 'output' },
+      ],
+      edges: [],
+    }
+    const cs = JSON.stringify({
+      $schema_version: 1,
+      ops: [
+        {
+          opId: 'op-1',
+          action: 'create',
+          resourceType: 'workflow',
+          tempRef: '$new:bad-flow',
+          payload: { name: 'Bad flow', description: '', definition },
+        },
+      ],
+    })
+    const outcome = await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config(),
+        runFn: scriptedRun((_opts, nonce) =>
+          okResult(envelope(nonce, { summary: 'bad graph', changeset: cs })),
+        ),
+      },
+      { sessionId: session.id, actor },
+    )
+
+    expect(outcome.kind).toBe('changeset')
+    const draft = db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id)).get()
+    const report = JSON.parse(draft?.validationJson ?? '{}') as { errors: string[] }
+    expect(report.errors[0]).toBe(
+      'op-1: workflow definition cannot be auto-laid out (duplicate node id duplicate) (intent-workflow-layout-input-invalid)',
+    )
+    const turn = db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId)).get()
+    expect(JSON.parse(turn?.contentJson ?? '{}').blockingErrors).toBeGreaterThan(0)
+  })
+
+  test('RFC-302 post-layout byte gate accepts exact limit, then retains evidence at limit + 1', async () => {
+    const agentOps = Array.from({ length: 8 }, (_, index) => ({
+      opId: `op-${index + 1}`,
+      action: 'create',
+      resourceType: 'agent',
+      tempRef: `$new:padding-${index}`,
+      payload: {
+        name: `padding-${index}`,
+        description: '',
+        outputs: [],
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        bodyMd: index < 7 ? 'x'.repeat(262_000) : '',
+      },
+    }))
+    const large = {
+      $schema_version: 1,
+      ops: [
+        ...agentOps,
+        {
+          opId: 'op-9',
+          action: 'create',
+          resourceType: 'workflow',
+          tempRef: '$new:large-flow',
+          payload: {
+            name: 'Large flow',
+            description: '',
+            definition: {
+              $schema_version: WORKFLOW_SCHEMA_VERSION,
+              inputs: [],
+              nodes: Array.from({ length: 256 }, (_, index) => ({
+                id: `node-${index}`,
+                kind: 'input',
+              })),
+              edges: [],
+            },
+          },
+        },
+      ],
+    }
+    const base = parseIntentChangeset(JSON.stringify(large))
+    if (!base.ok) throw new Error(base.errors.join('\n'))
+    const targetBytes = INTENT_LIMITS.maxChangesetBytes - 16
+    const paddingBytes = targetBytes - base.bytes
+    expect(paddingBytes).toBeGreaterThan(0)
+    expect(paddingBytes).toBeLessThanOrEqual(INTENT_LIMITS.maxBodyMdBytes)
+    agentOps[7]!.payload.bodyMd = 'y'.repeat(paddingBytes)
+    const nearLimit = parseIntentChangeset(JSON.stringify(large))
+    if (!nearLimit.ok) throw new Error(nearLimit.errors.join('\n'))
+    expect(nearLimit.bytes).toBe(targetBytes)
+    const nearLimitNormalized = normalizeIntentWorkflowCreateLayouts(nearLimit.changeset)
+    expect(nearLimitNormalized.errors).toEqual([])
+    const nearLimitNormalizedBytes = Buffer.byteLength(
+      canonicalIntentJson(nearLimitNormalized.changeset),
+      'utf8',
+    )
+    const overflowBytes = nearLimitNormalizedBytes - INTENT_LIMITS.maxChangesetBytes
+    expect(overflowBytes).toBeGreaterThan(0)
+    expect(overflowBytes).toBeLessThan(paddingBytes)
+
+    const exactPaddingBytes = paddingBytes - overflowBytes
+    agentOps[7]!.payload.bodyMd = 'y'.repeat(exactPaddingBytes)
+    const exactLimit = parseIntentChangeset(JSON.stringify(large))
+    if (!exactLimit.ok) throw new Error(exactLimit.errors.join('\n'))
+    const exactNormalized = normalizeIntentWorkflowCreateLayouts(exactLimit.changeset)
+    expect(exactNormalized.errors).toEqual([])
+    expect(Buffer.byteLength(canonicalIntentJson(exactNormalized.changeset), 'utf8')).toBe(
+      INTENT_LIMITS.maxChangesetBytes,
+    )
+
+    const { session: exactSession } = await createIntentSession(db, actor, {
+      message: 'build a graph at the exact canonical limit',
+    })
+    const exactOutcome = await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config(),
+        runFn: scriptedRun((_opts, nonce) =>
+          okResult(
+            envelope(nonce, {
+              summary: 'exact-limit graph',
+              changeset: exactLimit.canonicalJson,
+            }),
+          ),
+        ),
+      },
+      { sessionId: exactSession.id, actor },
+    )
+    expect(exactOutcome.kind).toBe('changeset')
+    const exactDraft = db
+      .select()
+      .from(intentDrafts)
+      .where(eq(intentDrafts.sessionId, exactSession.id))
+      .get()
+    expect(Buffer.byteLength(exactDraft?.changesetJson ?? '', 'utf8')).toBe(
+      INTENT_LIMITS.maxChangesetBytes,
+    )
+
+    agentOps[7]!.payload.bodyMd = 'y'.repeat(exactPaddingBytes + 1)
+    const overflow = parseIntentChangeset(JSON.stringify(large))
+    if (!overflow.ok) throw new Error(overflow.errors.join('\n'))
+    expect(overflow.bytes).toBeLessThan(INTENT_LIMITS.maxChangesetBytes)
+    const overflowNormalized = normalizeIntentWorkflowCreateLayouts(overflow.changeset)
+    expect(Buffer.byteLength(canonicalIntentJson(overflowNormalized.changeset), 'utf8')).toBe(
+      INTENT_LIMITS.maxChangesetBytes + 1,
+    )
+
+    const { session: overflowSession } = await createIntentSession(db, actor, {
+      message: 'build a graph one byte over the canonical limit',
+    })
+
+    let scratchDir = ''
+    const outcome = await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config(),
+        runFn: scriptedRun((opts, nonce) => {
+          scratchDir = join(opts.scratchParent!, opts.scratchName!)
+          mkdirSync(scratchDir, { recursive: true })
+          return {
+            ...okResult(
+              envelope(nonce, {
+                summary: 'large graph',
+                changeset: overflow.canonicalJson,
+              }),
+            ),
+            scratchDir,
+            scratchRetained: true,
+          }
+        }),
+      },
+      { sessionId: overflowSession.id, actor },
+    )
+
+    expect(outcome.kind).toBe('error')
+    expect(
+      (await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, overflowSession.id)))
+        .length,
+    ).toBe(0)
+    const turn = db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId)).get()
+    expect(turn?.scratchRetained).toBe(true)
+    expect(existsSync(scratchDir)).toBe(true)
+    const content = JSON.parse(turn?.contentJson ?? '{}') as { code: string; errors: string[] }
+    expect(content.code).toBe('intent-changeset-invalid')
+    expect(content.errors[0]).toContain('changeset-too-large:')
+    expect(content.errors[0]).toContain('after workflow auto-layout')
   })
 
   test('questions turn + answers reach the next INTENT.md', async () => {

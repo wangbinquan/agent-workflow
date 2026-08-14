@@ -21,7 +21,22 @@ import { setBaseUrl, setToken } from '../src/stores/auth'
 import { enUS } from '../src/i18n/en-US'
 import '../src/i18n'
 
+const workflowCanvasProps = vi.hoisted(
+  () => [] as Array<{ definition: WorkflowDefinition; surface: string; readOnly: boolean }>,
+)
+vi.mock('../src/components/canvas/WorkflowCanvas', () => ({
+  WorkflowCanvas: (props: {
+    definition: WorkflowDefinition
+    surface: string
+    readOnly: boolean
+  }) => {
+    workflowCanvasProps.push(props)
+    return <div data-testid="workflow-canvas-mock" />
+  },
+}))
+
 beforeEach(() => {
+  workflowCanvasProps.length = 0
   setBaseUrl('http://daemon.test')
   setToken('tok')
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -150,6 +165,47 @@ describe('RFC-234 IntentOpPreview', () => {
     )
     expect(screen.getByTestId('intent-preview-canvas-dialog')).toBeTruthy()
     expect(screen.getByTestId('intent-preview-canvas-expanded')).toBeTruthy()
+  })
+
+  test('RFC-302 inline, expanded and raw views consume the same persisted geometry', () => {
+    renderPreview({
+      opId: 'op-layout',
+      action: 'create',
+      resourceType: 'workflow',
+      tempRef: '$new:laid-out',
+      payload: {
+        name: 'laid-out',
+        definition: {
+          $schema_version: WORKFLOW_SCHEMA_VERSION,
+          inputs: [],
+          nodes: [
+            {
+              id: 'n1',
+              kind: 'agent-single',
+              agentRef: '$new:auditor',
+              position: { x: 80, y: 80 },
+            },
+            { id: 'n2', kind: 'output', position: { x: 480, y: 80 } },
+          ],
+          edges: [],
+        },
+      },
+    })
+
+    expect(workflowCanvasProps).toHaveLength(1)
+    const inline = workflowCanvasProps[0]!
+    expect(inline).toMatchObject({ surface: 'intent-preview', readOnly: true })
+    expect(inline.definition.nodes.map((node) => node.position)).toEqual([
+      { x: 80, y: 80 },
+      { x: 480, y: 80 },
+    ])
+    const raw = screen.getByText(enUS.intent.previewRawJson).parentElement?.querySelector('pre')
+    expect(raw?.textContent).toContain('"x": 80')
+    expect(raw?.textContent).toContain('"x": 480')
+
+    fireEvent.click(screen.getByRole('button', { name: enUS.intent.previewOpenCanvas }))
+    expect(workflowCanvasProps.length).toBeGreaterThanOrEqual(2)
+    expect(workflowCanvasProps.at(-1)?.definition).toBe(inline.definition)
   })
 
   test('invalid workflow definition degrades to the raw payload', () => {
