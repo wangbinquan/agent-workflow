@@ -162,6 +162,12 @@ test('RFC-293 workbench queues context, iterates around checkpoints, discards, a
     await picker.focus()
     await page.getByRole('option', { name: /e2e-working-context/ }).click()
     await picker.press('Escape')
+    // 关掉下拉后弹窗要把刚选中的挂载渲染进列表，这次重渲染会把下面那个按钮从 DOM
+    // 上摘下来重挂。直接点会撞上 Playwright 的 `element is not stable` /
+    // `element was detached from the DOM` 并耗光 15s——CI 上实测复现（本地机器快，
+    // 重渲染在点击之前就结束了，所以只在 CI 红）。
+    // 先等这次重渲染**完成**（已选项出现在弹窗里）再点，是真同步点而不是 sleep。
+    await expect(workingDialog.getByText(/e2e-working-context/)).toBeVisible({ timeout: 15_000 })
     await workingDialog.getByRole('button', { name: 'Refresh after this turn' }).click()
     await expect(page.getByText('e2e-working-context', { exact: true })).toBeVisible({
       timeout: 30_000,
