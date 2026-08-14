@@ -190,6 +190,7 @@
 
 - **主干开发下 Codex 的 `review` 圈不出「你的」改动**：它按 `--base` 算 diff，而共享 main 上那个区间里必然混着并发 session 的提交——实测它会跑去读别人 RFC 的文件并对着那些代码出 findings。分离 worktree 解决的是「工作树里的未提交改动」，解决不了「区间里的他人提交」。当本轮改动跨了别人的提交，改用**独立子代理**评审并把**确切文件清单**写进 prompt（RFC-240 先例，`docs/dev-gotchas.md` 的 Codex 段已列为备选）；顺带把「忽略 rfc257/webhook 之类他人关键词」也写进 prompt，否则子代理也会去查别人的代码。
   **但先试最省事的一招：把 `--base` 钉到你这条提交的直接父提交**（`git rev-parse <yoursha>^`），区间里就只剩你一个提交，根本不需要子代理。2026-08-08 实测踩过一次反例：图省事拿「上一次审过的点」当 base，区间里混进并发 session 的两笔 RFC-271 提交（design.md 被整份重写），**报回来的 9 条 P1/P2 全部指向 `design/RFC-271-*/design.md`，与本轮改动零交集**——不是没找到问题，是把整轮算力花在别人的文件上，自己的改动一条没审。**识别信号**：findings 的 file 路径**集体**落在你没碰过的目录。所以启动 review 前先 `git diff --name-only <base> HEAD` 扫一眼，确认列出来的就是你自己的文件清单。
+- **多路 Codex 门必须串行启动，起完一路要核实 job 真的注册上了**（RFC-287 T14 第二轮实测）。同一 workspace 的 job 列表存在 `~/.claude/plugins/data/codex-openai-codex/state/<ws>/state.json` 的 `jobs` 数组里，是**读-改-写**。并行起两路 rescue agent 时后写的会把先写的那条覆盖掉，随后 jobs 目录被重建成空——两个 job **一个都没跑**。最坑的是它**不报错**：两路 agent 都正常返回「Codex Task started as task-xxx」，你以为在跑，实际等到超时才发现。定式：起一路 → `cat state.json` 确认 `jobs` 里有它 → 再起下一路；轮询脚本里加「job 文件消失」的分支，别只判 `status != running`（文件没了时那个判断恒真，会误报成"完成"）。
 - **对抗式评审的 prompt 要求「给出能复现的具体输入」**，否则拿回来的是一堆看着有理、核实起来全是空的猜测。加一句「构造不出具体失败输入的就丢掉」，findings 的信噪比会完全不同——本轮两路 25 条里绝大多数自带变异验证，逐条核实后全部属实。
 
 ## impl-gate（Codex 实现门）经验规律
