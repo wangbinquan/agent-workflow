@@ -181,7 +181,13 @@ function TasksPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const liveRegion = useManagedLiveRegion()
-  const href = useRouterState({ select: (state) => state.location.href })
+  // Canonicalize only the last committed /tasks URL. During navigation,
+  // state.location becomes the pending destination while this component is
+  // still mounted; reading it here would treat another route's search keys
+  // (for example /memory?tab=all) as invalid task filters and redirect back.
+  const href = useRouterState({
+    select: (state) => (state.resolvedLocation ?? state.location).href,
+  })
   // Parent/root search state may retain adjacent or legacy raw keys at runtime.
   // Re-run the owned-key canonicalizer before any spread/navigation so a
   // replace can actually remove those keys instead of carrying them forward.
