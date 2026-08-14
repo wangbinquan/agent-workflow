@@ -83,7 +83,9 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-243 §4.3 — cancelTask 的级联标记补写：cascade 收尾在行已 canceled
   // （status 由调度器或 fallback CAS 落定）之后，把 errorMessage 幂等改写为
   // 'canceled-by-parent-cascade'（WHERE status='canceled' 守卫，绝不翻状态）。
-  'services/task.ts': 1,
+  // RFC-287 G7 — 延后仓库准备成功后，在同一事务只回填 worktreePath / branch /
+  // baseCommit / repoPath；任务状态仍由 lifecycle CAS 写点独占。
+  'services/task.ts': 2,
   // RFC-167: persistDwState writes workgroup_config_json only (dw phase /
   // attempts / generatedDef on the task's config copy) — never `status`
   // (workgroupRunner persistGate 同款).
