@@ -300,6 +300,73 @@ describe('RFC-287 T2 — 装配骨架', () => {
     ])
   })
 
+  // T14 实现门抓到的回归（脚本线）：迁移前取消检查在**每轮循环最顶上**，先于换树与
+  // 铸行；迁进骨架后只剩 spawn 入口一处，于是取消若落在换树窗口里会先丢旧树、建新
+  // 树、铸一条 pending 行并标 isolating，spawn 才看见 abort 返回合成 canceled——那条
+  // 行永不运行也永不终结，留成孤儿，后续 retryNode 对它 begin-isolation 会抛非法
+  // merge-state 转移，把一次正常取消升级成 scheduler error。
+  //
+  // 故 preAttempt 的位置是契约：它必须先于 keepIf / discard / create / onNextAttempt
+  // **全部**副作用。这条测试正是按「有没有产生副作用」判，而不是只看返回值。
+  test('模式 B：preAttempt 抢占时，换树与 onNextAttempt 一个都不许发生', async () => {
+    let spawns = 0
+    const { spec, events } = makeSpec({
+      spawn: async () => {
+        spawns++
+        events.push(`spawn#${spawns}`)
+        return 'retryable'
+      },
+      retryPolicy: {
+        shouldRetry: (o: string) => o === 'retryable',
+        // 第 2 轮开始就抢占——模拟「第 1 次 attempt 跑完后任务被取消」。
+        preAttempt: () => {
+          events.push('preAttempt')
+          return 'canceled'
+        },
+        isoOnRetry: 'always-recreate',
+        onIsoRecreateFailure: () => 'recreate-failed',
+        onNextAttempt: async (n: number) => {
+          events.push(`nextAttempt#${n}`)
+        },
+      },
+    })
+    // 抢占返回值成为最终 outcome，走 mergePhase/settle 收场。
+    expect(await runAssembly({ id: 't' }, spec)).toBe('settled')
+    // 只跑过一次 spawn，之后立刻被抢占。
+    expect(spawns).toBe(1)
+    // **副作用一个都不许有**：没有第二次建树、没有铸行。
+    expect(events.filter((e) => e === 'iso:create')).toHaveLength(1)
+    expect(events.filter((e) => e.startsWith('nextAttempt#'))).toHaveLength(0)
+    // 且抢占确实发生在 spawn#1 之后、任何重试前奏之前。
+    expect(events.filter((e) => e === 'preAttempt' || e.startsWith('spawn#'))).toEqual([
+      'spawn#1',
+      'preAttempt',
+    ])
+  })
+
+  test('模式 B：preAttempt 返回 null 时完全不改变既有调用序', async () => {
+    let spawns = 0
+    const { spec, events } = makeSpec({
+      spawn: async () => {
+        spawns++
+        events.push(`spawn#${spawns}`)
+        return spawns < 2 ? 'retryable' : 'done'
+      },
+      retryPolicy: {
+        shouldRetry: (o: string) => o === 'retryable',
+        preAttempt: () => null,
+        isoOnRetry: { keepIf: () => true },
+        onIsoRecreateFailure: () => 'recreate-failed',
+        onNextAttempt: async (n: number) => {
+          events.push(`nextAttempt#${n}`)
+        },
+      },
+    })
+    expect(await runAssembly({ id: 't' }, spec)).toBe('settled')
+    expect(spawns).toBe(2)
+    expect(events.filter((e) => e.startsWith('nextAttempt#'))).toHaveLength(1)
+  })
+
   test("模式 B：isoOnRetry='always-recreate' 每次重试换新树（脚本线形态）", async () => {
     let spawns = 0
     const { spec, events } = makeSpec({

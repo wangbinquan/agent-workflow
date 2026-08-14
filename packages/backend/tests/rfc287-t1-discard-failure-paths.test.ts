@@ -38,10 +38,17 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
   })
 
   test('脚本线（已迁骨架）：清理由骨架统一「吞掉并记 warn」', () => {
-    // RFC-287 T5c：该线的 finally 已迁入骨架；其 discardIso 注入实现保留了原来的
-    // `.catch(() => {})` 吞法，外层再由骨架统一记 warn（C3b 对它已落地）。
+    // RFC-287 T5c 落地时这条断言锁的是**本地** `.catch(() => {})`，注释却写着
+    // 「外层再由骨架统一记 warn」——两句话互相矛盾：本地先吞掉，Promise 就变成
+    // 成功，骨架的 `.catch(err => log.warn('iso discard failed'))` 根本不会触发。
+    // 于是残留 worktree / ref 的清理失败全程静默，C3b 对这条线其实**没有**落地。
+    // T14 实现门抓到后修掉本地那道吞法：五条线（L1/L4/L5/L6/L7）现在一致地把清理
+    // 失败交给骨架单点处置，warn 真正可达。断言随之翻面。
     const body = SCHEDULER.slice(SCHEDULER.indexOf('async function runScriptNode('))
-    expect(body.slice(0, 20000)).toMatch(/discardIso: async \(h: IsoLike\)[\s\S]{0,200}\.catch\(/)
+    const m = body.slice(0, 20000).match(/discardIso: async \(h: IsoLike\)[\s\S]{0,240}?\n {6}\}/)
+    expect(m).not.toBeNull()
+    expect(m![0]).toContain('discardNodeIso(')
+    expect(m![0]).not.toMatch(/\.catch\(/)
   })
 
   test('agent 线（已迁骨架，T7 最后一条）：清理由骨架统一「吞掉并记 warn」', () => {

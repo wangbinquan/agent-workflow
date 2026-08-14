@@ -113,6 +113,53 @@ describe('RFC-287 G6 — 真实 git 失败措辞判定表（自审沉淀）', ()
     expect(classifyGitFailure(stderr)).toBe(expected)
   })
 
+  // T14 实现门实测出的**双向误判**：真实 git-over-HTTPS 里最高频的瞬时态其实是
+  // 纯数字形态（curl 只回 `The requested URL returned error: 503`，不带 reason
+  // phrase）。原表只认「503 Service Unavailable」这种带短语的写法，于是最该重试的
+  // 那一类反而落进 unknown ⇒ 直接硬失败，G6 对它形同虚设。反方向同样错：git 报
+  // 体积过大时原话是 `error: RPC failed; HTTP 413 …`，`rpc failed` 抢先命中网络组
+  // 把它判成可重试，于是一个永远不会成功的请求要白耗满整个窗口。
+  describe('数字态 HTTP 状态码（实现门实测的双向误判）', () => {
+    const NUMERIC: Array<[string, string, 'retryable-network' | 'permanent']> = [
+      [
+        '503 无 reason phrase',
+        'fatal: unable to access: The requested URL returned error: 503',
+        'retryable-network',
+      ],
+      [
+        '500 无 reason phrase',
+        'fatal: unable to access: The requested URL returned error: 500',
+        'retryable-network',
+      ],
+      [
+        '429 限流应退避',
+        'fatal: unable to access: The requested URL returned error: 429',
+        'retryable-network',
+      ],
+      ['空回复', 'fatal: unable to access: Empty reply from server', 'retryable-network'],
+      [
+        '413 体积过大不该重试',
+        'error: RPC failed; HTTP 413 curl 22 The requested URL returned error: 413',
+        'permanent',
+      ],
+      ['404 数字态', 'fatal: unable to access: The requested URL returned error: 404', 'permanent'],
+      [
+        '403 数字态',
+        'error: RPC failed; HTTP 403 curl 22 The requested URL returned error: 403',
+        'permanent',
+      ],
+    ]
+    test.each(NUMERIC)('%s → %s', (_n, stderr, expected) => {
+      expect(classifyGitFailure(stderr)).toBe(expected)
+    })
+
+    // 4xx 判永久靠的是负向前瞻排除 429；这条锁住「别顺手把 429 一起扫进去」。
+    test('4xx 归永久时必须放过 429（否则限流退避直接失效）', () => {
+      expect(classifyGitFailure('HTTP 429')).toBe('retryable-network')
+      expect(classifyGitFailure('HTTP 400')).toBe('permanent')
+    })
+  })
+
   test('HTTP 407 代理认证按不重试处理（已知的可讨论边界）', () => {
     // 企业网里它既可能是「代理凭据配错」（永久）也可能是「代理临时抽风」（可重试）。
     // 现取不重试：用户立刻看到错误，好过白等 60s 才得到同一个结论。这条单独立用例

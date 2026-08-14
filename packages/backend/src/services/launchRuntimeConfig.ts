@@ -86,6 +86,12 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
   // RFC-253 script nodes.
   scriptInterpreters?: { python?: string; bash?: string; node?: string }
   scriptDepsInstallTimeoutMs?: number
+  // RFC-287 G6/G7。这两个字段一度**只**声明在下面那个私有 `out` 类型里：运行时靠
+  // 对象 spread 恰好还带得过去，类型面却看不见它们——正是 RFC-284 T30 那批字段被
+  // 静默丢弃的同款形态（「只赋值、类型没声明」，下一次重构就断线且无人察觉）。
+  // T14 实现门抓到时我原来的源码锁只匹配到私有类型，等于没锁住。
+  cloneTimeoutMs?: number // config.gitCloneTimeoutMs → resolveCachedRepo 的入参名
+  gitBaselineSyncWindowMs?: number
 } {
   const out: {
     commitPush?: {

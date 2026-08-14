@@ -2886,6 +2886,11 @@ async function startTaskImpl(
     // 用总窗口而不是固定次数——用户关心「最多等多久」，不关心「重试几次」。
     // 鉴权 / 仓库不存在 / 无权限**不占窗口**，立刻失败：让用户 1 秒内看到
     // 「你写错地址了」，而不是等满 60 秒再告诉他同一件事。
+    //
+    // 窗口约束的是**重试等待**，不是单次克隆——proposal §2 G6 明写「一次正在推进
+    // 的克隆不打断」。所以一个 500MB 的仓在 60s 窗口下照样能克隆十分钟：管单次
+    // 时长的是另一个旋钮 `gitCloneTimeoutMs`。两者职责不同，别拿窗口去掐克隆。
+    // （T14 实现门按「窗口=墙钟总时长」读它并报为缺陷，这里把契约写死免得再议。）
     const syncWindowMs = deps.gitBaselineSyncWindowMs ?? 60_000
     const windowDeadline = Date.now() + syncWindowMs
     let prepared: MaterializedSpace
@@ -2909,6 +2914,10 @@ async function startTaskImpl(
       if (!isRetryableGitFailure(prepared.earlyError)) break
       const remaining = windowDeadline - Date.now()
       if (remaining <= 0) break
+      // 退避本身就会把窗口睡穿时，不要「睡满再开一次新尝试」——那一次是在窗口
+      // 已经耗尽之后才起步的，既拖长用户等待，也让「最多等 W」这句话不成立。
+      // 窗口内还睡得下才继续（T14 实现门）。
+      if (backoffMs >= remaining) break
       log.warn('repo preparation failed with a retryable network error; retrying within window', {
         taskId,
         remainingMs: remaining,
@@ -2930,32 +2939,64 @@ async function startTaskImpl(
       backoffMs = Math.min(backoffMs * 2, 15_000)
     }
     if (prepared.earlyError !== null) {
-      // 合成行先落 failed，且 errorMessage 是 git 的原话——时间线上点开这一步能
-      // 看到「fatal: unable to access …」，而不是一句无从下手的「启动失败」。
-      await setNodeRunStatus({
-        db: deps.db,
-        nodeRunId: prepRunId,
-        to: 'failed',
-        allowedFrom: ['running'],
-        reason: 'repo-prep-failed',
-        extra: { finishedAt: Date.now(), errorMessage: prepared.earlyError },
-      })
-      // 走 RFC-097 的 CAS 写点：allowedFrom 只放 pending——准备阶段任务必然还在
-      // pending（G7 不新增状态）；若此刻已被取消/已推进，CAS 失败即放弃，不覆写。
-      await setTaskStatus({
-        db: deps.db,
-        taskId,
-        to: 'failed',
-        allowedFrom: ['pending'],
-        reason: 'repo-prep-failed',
-        extra: {
-          finishedAt: Date.now(),
-          errorSummary: `repo preparation failed: ${prepared.earlyError}`,
-          errorMessage: prepared.earlyError,
-        },
-      })
-      taskDriverRegistry.release(taskId, controller)
-      return { ...task, status: 'failed' }
+      // 租约释放必须在 finally 里——两个写点都是**会抛**的 CAS：任务在准备窗口内
+      // 被取消时，`setTaskStatus` 见到 terminal 的 'canceled' 会抛
+      // ConflictError('illegal-task-transition')（lifecycle.ts 的终态保护），
+      // 直着写就会跳过下面的 release，把驱动租约永久漏在注册表里——此后这个任务
+      // 的每次重试都撞 `task-still-running`，只有重启 daemon 能解。
+      //
+      // 我原先那句注释「CAS 失败即放弃，不覆写」把语义写反了：不覆写是对的，但它
+      // 是**靠抛出**实现的，不是靠静默返回。（T14 实现门）
+      try {
+        // 合成行先落 failed，且 errorMessage 是 git 的原话——时间线上点开这一步能
+        // 看到「fatal: unable to access …」，而不是一句无从下手的「启动失败」。
+        await setNodeRunStatus({
+          db: deps.db,
+          nodeRunId: prepRunId,
+          to: 'failed',
+          allowedFrom: ['running'],
+          reason: 'repo-prep-failed',
+          extra: { finishedAt: Date.now(), errorMessage: prepared.earlyError },
+        })
+      } catch (err) {
+        // 取消路径已经把这条合成行终结过了——不是错误，记一笔即可。
+        log.warn('repo-prep row already terminal when recording failure', {
+          taskId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+      let finalStatus: TaskStatus = 'failed'
+      try {
+        // 走 RFC-097 的 CAS 写点：allowedFrom 只放 pending——准备阶段任务必然还在
+        // pending（G7 不新增状态）。已取消/已推进时抛出，此时**保留既有终态**。
+        await setTaskStatus({
+          db: deps.db,
+          taskId,
+          to: 'failed',
+          allowedFrom: ['pending'],
+          reason: 'repo-prep-failed',
+          extra: {
+            finishedAt: Date.now(),
+            errorSummary: `repo preparation failed: ${prepared.earlyError}`,
+            errorMessage: prepared.earlyError,
+          },
+        })
+      } catch (err) {
+        // 取消赢了这场竞速：任务已是 canceled，不得被准备失败改写成 failed。
+        // 回给调用方的状态也必须是库里的真值，不能一律报 failed。
+        const cur = (
+          await deps.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
+        )[0]
+        finalStatus = (cur?.status as TaskStatus | undefined) ?? 'failed'
+        log.warn('task left prep window before failure could be recorded; keeping current status', {
+          taskId,
+          status: finalStatus,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      } finally {
+        taskDriverRegistry.release(taskId, controller)
+      }
+      return { ...task, status: finalStatus }
     }
     // 所有权租约换成真的：占位态给的是空租约（ownedRoot=null、零 worktree），
     // 物化成功后必须换成 materializeSpace 产出的那份，否则清理/回滚协议管不到

@@ -158,6 +158,18 @@ export class ChildTaskBudget {
     if (this.counted.delete(taskId)) this.scan()
   }
 
+  /**
+   * 容量被外部改动后重扫等待队列。`scan` 是私有的，这是它唯一的对外触发口。
+   *
+   * 为什么必须有（T14 实现门）：`setChildTaskBudgetCapacity` 原先只改变量不重扫，
+   * 于是「设置页把上限从 1 调到 2」对**已经排队**的 waiter 毫无作用——它得等某个
+   * 子任务恰好发生生命周期变化才被顺带放行；而这期间**新来**的调用反而能直接拿到
+   * 那个空出来的名额。等待者饿死、插队者得利，正好反了。
+   */
+  onCapacityChanged(): void {
+    this.scan()
+  }
+
   /** Grant every currently-grantable waiter (FIFO among grantable only). */
   private scan(): void {
     if (this.waiters.length === 0) {
@@ -235,7 +247,15 @@ let liveCapacity: number | null = null
 /** PUT /api/config 的热应用入口（与 resizeAllNodePools 同处调用）。 */
 export function setChildTaskBudgetCapacity(capacity: number): void {
   liveCapacity = capacity
+  // 改完必须立刻重扫等待队列——只改变量的话，调大上限对**已排队**的 waiter 无效，
+  // 它们要等某个子任务恰好发生生命周期变化才被顺带放行，而这期间新来的调用反而
+  // 能直接抢走空出来的名额（T14 实现门）。调小时 scan 不会放行任何人，无副作用，
+  // 所以不必区分方向。
+  singleton?.onCapacityChanged()
 }
+
+/** 单例当前绑定的 DbClient——换库时必须重建，见下。 */
+let singletonDb: DbClient | null = null
 
 export async function ensureChildTaskBudget(
   db: DbClient,
@@ -244,8 +264,14 @@ export async function ensureChildTaskBudget(
   // 冷启动播种：daemon 起来后第一个走到这里的任务用自己的 opts 定初值；之后一律
   // 以 live 值为准（配置改动经 setChildTaskBudgetCapacity 落进来）。
   if (liveCapacity === null) liveCapacity = capacity()
+  // 换了 DbClient 就必须重建：单例的 `counted` 集合是从**某一个库**重建出来的，
+  // 拿着它去服务另一个库等于用甲的在跑数去限乙的并发。生产里 daemon 只有一个库，
+  // 但并行用不同库的测试会静默串扰——那种串扰表现为「另一个用例的配额莫名其妙
+  // 变了」，极难定位。（T14 实现门 P2。）
+  if (singleton !== null && singletonDb !== db) singleton = null
   if (singleton === null) {
     singleton = new ChildTaskBudget(db, () => liveCapacity ?? capacity())
+    singletonDb = db
     await singleton.rebuildFromDb()
   }
   return singleton
@@ -259,6 +285,7 @@ export function registerKnownChildTask(taskId: string): void {
 /** Test-only: drop the singleton + childness cache. */
 export function resetChildTaskBudgetForTests(): void {
   singleton = null
+  singletonDb = null
   liveCapacity = null
   childness.clear()
 }

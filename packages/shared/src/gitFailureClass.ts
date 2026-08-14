@@ -40,6 +40,15 @@ const PERMANENT_PATTERNS: readonly RegExp[] = [
   /does not appear to be a git repository/i,
   /403 forbidden/i,
   /401 unauthorized/i,
+  // 4xx 的数字态：请求本身有问题，重试一万次也一样。**唯独排除 429**——那是
+  // 服务端在说「你太快了，等会儿再来」，属于该退避重试的一类，放它落到网络组。
+  //
+  // 这条必须在 permanent 组（先判）里，否则会被网络组的 `/rpc failed/i` 抢先：
+  // git 报体积过大时的原话是 `error: RPC failed; HTTP 413 …`，两个特征词同时命中，
+  // 谁先判谁赢。原先它被判成可重试，于是一个永远不会成功的 push 要白耗满窗口。
+  // （T14 实现门实测。）
+  /returned error: 4(?!29)\d\d\b/i,
+  /\bhttp (?:code )?4(?!29)\d\d\b/i,
 ]
 
 /** 网络/瞬时特征词。 */
@@ -61,6 +70,20 @@ const NETWORK_PATTERNS: readonly RegExp[] = [
   /503 service unavailable/i,
   /504 gateway time-?out/i,
   /ssl.*(handshake|connect).*fail/i,
+  // git-over-HTTPS 最常见的瞬时态其实是**纯数字**形态——curl 只回
+  // `The requested URL returned error: 503`，并不带 reason phrase。原先只认
+  // 「503 Service Unavailable」这种带短语的写法，于是真实世界里最高频的那一类
+  // 反而落进 unknown ⇒ 不重试，G6 对它形同虚设。（T14 实现门实测：503/500/429
+  // 三种数字态全部漏判。）
+  //
+  // 只收 5xx 与 429：4xx 是「请求本身有问题」，重试无益——唯独 429 是服务端在说
+  // 「你太快了，等会儿再来」，正是应当退避的那一类。
+  /returned error: 5\d\d\b/i,
+  /returned error: 429\b/i,
+  /\bhttp (?:code )?5\d\d\b/i,
+  /\bhttp (?:code )?429\b/i,
+  // 连接建立后对端一言不发就断——典型的负载均衡器/代理抽风，重试通常就好。
+  /empty reply from server/i,
 ]
 
 /**
