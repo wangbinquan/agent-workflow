@@ -53,3 +53,74 @@ describe('RFC-287 G6 — git 失败分类', () => {
     expect(classifyGitFailure('')).toBe('unknown')
   })
 })
+
+// 实现门自审沉淀 —— 14 类**真实 git 失败措辞**的判定表。
+//
+// 这些措辞原本只活在一次性探针脚本里，探完就没了；沉淀成用例后，将来任何人改
+// 特征词表都要先面对它们。表里刻意包含「判 unknown 因而不重试」的一档：那不是
+// 遗漏，是**刻意的保守默认**——磁盘满、只读文件系统、对象损坏、目录已存在、
+// LFS 缺失，重试一万次也一样，让用户立刻看到错误远好过白等一个 60s 窗口。
+describe('RFC-287 G6 — 真实 git 失败措辞判定表（自审沉淀）', () => {
+  const TABLE: Array<[string, string, 'retryable-network' | 'permanent' | 'unknown']> = [
+    [
+      '私有仓无凭据(HTTPS)',
+      "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+      'permanent',
+    ],
+    [
+      'SSH 无权限',
+      'git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.',
+      'permanent',
+    ],
+    [
+      '仓库不存在',
+      'ERROR: Repository not found.\nfatal: Could not read from remote repository.',
+      'permanent',
+    ],
+    ['分支不存在', "fatal: couldn't find remote ref refs/heads/nope", 'permanent'],
+    [
+      '服务端 500',
+      'error: RPC failed; HTTP 500 curl 22 The requested URL returned error: 500',
+      'retryable-network',
+    ],
+    [
+      'DNS 临时失败',
+      'fatal: unable to access: Could not resolve host: git.example.com',
+      'retryable-network',
+    ],
+    ['大仓 pack 中断', 'fatal: early EOF\nfatal: index-pack failed', 'retryable-network'],
+    // 以下五类判 unknown ⇒ 不重试。**这是刻意的**，不是特征词漏了。
+    ['磁盘满', 'fatal: write error: No space left on device', 'unknown'],
+    [
+      '只读文件系统',
+      'fatal: could not create leading directories: Read-only file system',
+      'unknown',
+    ],
+    [
+      '目录已存在',
+      "fatal: destination path 'x' already exists and is not an empty directory.",
+      'unknown',
+    ],
+    [
+      '对象损坏',
+      'error: object file .git/objects/ab/cd is empty\nfatal: loose object abcd is corrupt',
+      'unknown',
+    ],
+    ['LFS 缺失', 'Error downloading object: x (abc): Smudge error', 'unknown'],
+  ]
+
+  test.each(TABLE)('%s → %s', (_name, stderr, expected) => {
+    expect(classifyGitFailure(stderr)).toBe(expected)
+  })
+
+  test('HTTP 407 代理认证按不重试处理（已知的可讨论边界）', () => {
+    // 企业网里它既可能是「代理凭据配错」（永久）也可能是「代理临时抽风」（可重试）。
+    // 现取不重试：用户立刻看到错误，好过白等 60s 才得到同一个结论。这条单独立用例
+    // 是为了让将来改判据的人**知道自己在改一个已被权衡过的选择**，而不是补漏。
+    expect(
+      classifyGitFailure(
+        'fatal: unable to access: Received HTTP code 407 from proxy after CONNECT',
+      ),
+    ).not.toBe('retryable-network')
+  })
+})
