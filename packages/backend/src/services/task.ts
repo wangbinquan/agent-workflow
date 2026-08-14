@@ -67,7 +67,7 @@ import {
   like,
   type SQL,
 } from 'drizzle-orm'
-import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
 import { ulid } from 'ulid'
@@ -125,7 +125,7 @@ import {
 } from '@/services/lifecycle'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
-import { isFresherNodeRun, pickFreshestRun } from '@/services/freshness'
+import { pickFreshestRun } from '@/services/freshness'
 import {
   ensureCachedRepoIdentity,
   listAvailableRefs,
