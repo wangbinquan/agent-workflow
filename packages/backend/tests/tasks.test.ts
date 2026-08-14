@@ -208,10 +208,14 @@ describe('task HTTP routes', () => {
     expect(list.length).toBe(0)
   })
 
-  test('POST with a non-git file:// source fails the clone up front (no task row)', async () => {
-    // RFC-165: the path-mode "create a failed task row" semantics left with
-    // repoPath. URL sources resolve through the repo cache BEFORE any task
-    // row exists, so a dir that isn't a git repo dies at clone time.
+  test('POST with a non-git source lands a failed task row with the git reason (RFC-287 G7)', async () => {
+    // **语义已变**（RFC-287 G7）。旧行为：URL 源在任务行存在之前解析，克隆失败
+    // 直接 400 且**什么都不留**——用户点了启动，转半天圈，最后一个错误码，任务
+    // 列表里空空如也，看不到原因也没法重试。
+    //
+    // 新行为：任务先落 `pending`（不新增状态），准备在后台推进；克隆失败把任务
+    // 转 `failed`，git 原文留在行上，时间线上还有一条 `__repo_prep__` 步骤可点
+    // 重试。本用例据此重写——它锁的是「失败留痕」，正是 G7 的核心交付。
     const wfId = await seedWorkflow(h.db, EMPTY_DEF)
     const notRepo = mkdtempSync(join(tmpdir(), 'aw-notrepo-'))
     try {
@@ -224,10 +228,16 @@ describe('task HTTP routes', () => {
           inputs: {},
         }),
       })
-      expect(res.status).toBe(400)
-      expect(((await res.json()) as { code: string }).code).toBe('repo-clone-failed')
-      const list = (await (await req(h.app, '/api/tasks')).json()) as Array<unknown>
-      expect(list.length).toBe(0)
+      // 接口本身成功返回（准备是后台步骤），任务行留下来且已转 failed。
+      expect(res.status).toBe(201)
+      const created = (await res.json()) as { id: string }
+      const list = (await (await req(h.app, '/api/tasks')).json()) as Array<{
+        id: string
+        status: string
+      }>
+      expect(list.length).toBe(1)
+      const row = list.find((x) => x.id === created.id)
+      expect(row?.status).toBe('failed')
     } finally {
       rmSync(notRepo, { recursive: true, force: true })
     }

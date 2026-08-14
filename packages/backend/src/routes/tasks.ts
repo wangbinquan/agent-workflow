@@ -345,6 +345,16 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         // RFC-243 实现门 P0-1: closure freezing resolves call-node names inside
         // THIS actor's visibility.
         launchActor: actor,
+        // RFC-287 G7：**只有这条 JSON-body 路由**把仓库准备推迟到任务行落库之后。
+        //
+        // 用户可见的变化：点启动后接口立刻返回、任务出现在列表里并显示为「准备中」
+        // （复用 pending，G7 不新增状态）；克隆/抓取在后台推进。拉不动远端不再是
+        // 「转半天圈然后一个 HTTP 错误、列表里什么都没有」，而是留下一条 failed
+        // 任务 + 时间线上一条 `__repo_prep__` 步骤 + git 原话，可看可重试。
+        //
+        // multipart 路由（要把上传物写进工作树）与 preCreated 交接不在此列——两者
+        // 必须保持预物化语义（proposal §G7）。
+        deferRepoPreparation: true,
       }
       await assertWorkflowLaunchable(deps.db, actor, parsed.data.workflowId)
       const task = await startExecution(

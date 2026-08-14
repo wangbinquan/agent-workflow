@@ -2010,6 +2010,42 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
   }
 }
 
+/**
+ * RFC-287 G7 —— `task_repos` 行的**单一映射**。
+ *
+ * 延后准备（G7）让这批行有了两个写入时机：预物化路径在落任务行的同一事务里写，
+ * 延后路径要等准备完成后回填。两处若各抄一份映射，迟早会走散——而走散的症状极
+ * 隐蔽：多仓任务少一列、诊断接口读空、structural diff 拿不到 worktreeDirName。
+ */
+function taskRepoRowsFor(
+  taskId: string,
+  materializedRepos: MaterializedRepo[],
+  workingBranch: string | null,
+): (typeof taskRepos.$inferInsert)[] {
+  return materializedRepos.map((r) => ({
+    taskId,
+    repoIndex: r.repoIndex,
+    repoPath: r.repoPath,
+    repoUrl: r.repoUrl !== null ? redactGitUrl(r.repoUrl) : null,
+    cachedRepoId: r.cachedRepoId,
+    baseBranch: r.baseBranch,
+    branch: r.branch,
+    workingBranch,
+    baseCommit: r.baseCommit,
+    worktreePath: r.worktreePath,
+    worktreeDirName: r.worktreeDirName,
+    mountPath: r.mountPath,
+    subdir: r.subdir,
+    readonly: r.readonly,
+    readonlyDirtyCount: null,
+    gitignoreCommit: r.gitignoreCommit,
+    hasSubmodules: r.hasSubmodules,
+    submoduleInitOk: r.submoduleInitOk,
+    submoduleInitError: r.submoduleInitError,
+    schemaVersion: 1,
+  }))
+}
+
 async function startTaskImpl(
   input: StartTask,
   deps: StartTaskDeps,
@@ -2504,34 +2540,7 @@ async function startTaskImpl(
       // from this table by `getTask`.
       if (materializedRepos.length > 0) {
         tx.insert(taskRepos)
-          .values(
-            materializedRepos.map((r) => ({
-              taskId,
-              repoIndex: r.repoIndex,
-              repoPath: r.repoPath,
-              repoUrl: r.repoUrl !== null ? redactGitUrl(r.repoUrl) : null,
-              cachedRepoId: r.cachedRepoId,
-              baseBranch: r.baseBranch,
-              branch: r.branch,
-              // RFC-075: the single working-branch name is applied to every repo
-              // (NULL → this repo uses the isolation branch in `branch`).
-              workingBranch: input.workingBranch ?? null,
-              baseCommit: r.baseCommit,
-              worktreePath: r.worktreePath,
-              worktreeDirName: r.worktreeDirName,
-              // RFC-248: mountPath 是规范 key（migration 0131 已把存量的
-              // worktree_dir_name backfill 进来，两者对平铺布局取值一致）。
-              mountPath: r.mountPath,
-              subdir: r.subdir,
-              readonly: r.readonly,
-              readonlyDirtyCount: null,
-              gitignoreCommit: r.gitignoreCommit,
-              hasSubmodules: r.hasSubmodules,
-              submoduleInitOk: r.submoduleInitOk,
-              submoduleInitError: r.submoduleInitError,
-              schemaVersion: 1,
-            })),
-          )
+          .values(taskRepoRowsFor(taskId, materializedRepos, input.workingBranch ?? null))
           .run()
       }
 
@@ -2652,6 +2661,7 @@ async function startTaskImpl(
   // 后台推进的第一步，若此刻还没注册，用户在「正在准备仓库」阶段点取消就取消不到
   // 任何东西（而那恰恰是最想取消的阶段：一个拉不动的大仓）。
   activeTasks.set(taskId, controller)
+  let preparedTask: Task | null = null
   if (deferredTaskId !== null) {
     // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
     // `failed` 并把 git 原文留在行上——这正是 G7 要的「失败可见」。
@@ -2720,14 +2730,41 @@ async function startTaskImpl(
       activeTasks.delete(taskId)
       return { ...task, status: 'failed' }
     }
-    await deps.db
-      .update(tasks)
-      .set({
-        worktreePath: prepared.worktreePath,
-        branch: prepared.branch,
-        baseCommit: prepared.baseCommit,
-      })
-      .where(eq(tasks.id, taskId))
+    // 所有权租约换成真的：占位态给的是空租约（ownedRoot=null、零 worktree），
+    // 物化成功后必须换成 materializeSpace 产出的那份，否则清理/回滚协议管不到
+    // 刚建出来的工作树——任务删除时会留下孤儿目录。
+    ownership.cleanup = prepared.cleanup
+    // 回填：占位落行时 `task_repos` / `task_space_nodes` 是空的（那时还没物化）。
+    // 与任务行的路径回写放进**同一个事务**——多仓任务的 repos 与 tasks.worktreePath
+    // 必须同时可见，否则一个恰好落在中间的读者（诊断接口、structural diff、前端
+    // 详情页）会看到「有工作树但没有成员仓」这种不存在的状态。
+    dbTxSync(deps.db, (tx) => {
+      tx.update(tasks)
+        .set({
+          worktreePath: prepared.worktreePath,
+          branch: prepared.branch,
+          baseCommit: prepared.baseCommit,
+          repoPath: prepared.repos[0]?.repoPath ?? '',
+        })
+        .where(eq(tasks.id, taskId))
+        .run()
+      if (prepared.repos.length > 0) {
+        tx.insert(taskRepos)
+          .values(taskRepoRowsFor(taskId, prepared.repos, input.workingBranch ?? null))
+          .run()
+      }
+      if (prepared.nodePaths.length > 0) {
+        tx.insert(taskSpaceNodes)
+          .values(
+            prepared.nodePaths.map((nodePath) => ({
+              taskId,
+              nodePath,
+              schemaVersion: 1,
+            })),
+          )
+          .run()
+      }
+    })
     await setNodeRunStatus({
       db: deps.db,
       nodeRunId: prepRunId,
@@ -2736,6 +2773,11 @@ async function startTaskImpl(
       reason: 'repo-prep-done',
       extra: { finishedAt: Date.now() },
     })
+    // 响应体重读一次：它是在准备之前、用占位值构造的，直接返回会让调用方拿到空
+    // worktreePath——前端据此显示空路径，脚本据此写文件会写到错地方（实测：HTTP
+    // 契约测试往空路径写文件，diff 自然为空）。回填已落库，重读即得真实值，比在
+    // 这里手抄一份投影更不容易走散。
+    preparedTask = (await getTask(deps.db, taskId)) as Task
   }
   const schedulerPromise = runTask({
     taskId,
@@ -2767,7 +2809,7 @@ async function startTaskImpl(
     await schedulerPromise
     return (await getTask(deps.db, taskId)) as Task
   }
-  return task
+  return preparedTask ?? task
 }
 
 /**
