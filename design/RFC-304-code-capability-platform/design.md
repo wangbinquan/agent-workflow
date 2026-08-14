@@ -161,19 +161,38 @@ ownership、TaskEngine/Executor/Wrapper **未收口**」（`RFC-294/plan.md:79`�
 | `running` | 轮次失败 | `failed` | 平台内告警，MR 静默 |
 | `failed` | 人工重试 / 新事件 | `queued` | |
 | `running` | 该 campaign 重试配额耗尽 | `handed_off` | 回帖汇总每轮尝试；**本 campaign 不再自动开轮** |
-| `handed_off` | 人工重试 / 新 head sha / 配置变更 | `queued` | 解除接管，开始新 campaign |
-| 任意非 `closed` | 外部闭环事件 | `closed` | 停止一切后续；**并做一次终局采纳比对**（见下） |
+| `handed_off` | 新 head sha | （先 collect+classify 预检） | **失败指纹变了才**解除并开新 campaign；指纹相同则保持 `handed_off` |
+| `handed_off` | 人工显式重试 / 配置变更 | `queued` | 显式 override，解除接管 |
+| 任意非 `closed`/`closing` | 外部闭环事件 | `closing` | epoch +1、请求取消在跑轮次、等待补偿与 lease 释放 |
+| `closing` | 旧 task 终态且补偿完成 | `closed` | 做一次**终局采纳比对**（见下）后终结 |
 
 `handed_off` 是设计门补上的状态：CI 修复三轮未成后若只落 `failed` 或 `settled`，下一条 pipeline
 事件会把它拉回 `queued` 从而**开始第四轮并再次回帖**；若为了止损落 `closed`，又会错误地终止整个
 MR 的后续监视。故需要一个「已交人、但 MR 仍在跟进」的可持久化状态，作用域是**本次 failure
 campaign**（键同 §6.4 的 `(工作项, 失败指纹)`），并在 MR 与 `/code` 上显示当前由谁接手、怎么解除。
 
+**解除条件必须收紧到"失败指纹变了"**（第二轮设计门 P1）：初稿写「任何新 head 都解除」，于是作者
+只改一个 README 推上去，同一个编译错误就白送三轮新配额，第 4–6 轮照跑——正好绕开了配额本身要
+防的东西。故新 head 只触发一次 `collect + classify` **预检**，指纹变了才算新 campaign。
+`handed_off` 行须持久化 `failureFingerprint`、已用 attempt 数、接管原因与接手人、配置 generation。
+
 **不变量一**：同一工作项同时最多一个 `running` 轮次。抢占**不是**「直接开新轮」——初稿写「新轮不
 等待旧轮清理完成」，但转移表里根本没有 `running + 新事件` 这条转移，且旧轮若正处在 publish/push
 就会与取消请求竞速，产生两个实际运行的轮次。故引入显式的 `superseding` 中间态与 **round epoch**：
-新事件先把工作项推进 `superseding` 并把 epoch +1，等旧 task 到达终态后才开新轮；所有对外
-publish/push 在动手前复检自己的 epoch 仍是当前值，否则放弃产出。
+新事件先把工作项推进 `superseding` 并把 epoch +1，等旧 task 到达终态后才开新轮。
+
+**「调用前复检 epoch」不够——那是 TOCTOU**（设计门 P1）。复检通过之后、HTTP 真正发出之前，事件
+处理器完全可以把 epoch +1，于是陈旧产出照样落到 MR 上。lease 也挡不住：它只阻止**另一轮启动**，
+不阻止**事件处理器改 epoch**。故需要一个明确的线性化点：
+
+> **发布临界区**：轮次进入对外写动作前，以 CAS 把自己标记为该 MR 的 `publishing`（带 epoch）。
+> 此后到临界区结束之前，**事件处理器不得推进该工作项到 `superseding`**，只能把事件登记为
+> `pendingRevision`。临界区结束（成功或失败并完成补偿）后才处理登记的事件。
+>
+> 即：**已进入发布临界区的旧轮赢，新事件顺延到下一轮**。反过来（事件先赢、旧轮中止）也是自洽的，
+> 但需要能中断已发出的 HTTP，代价大且对 GitLab 的分批草稿不可靠——故选前者。
+
+§9 失败模式表里原来那句"新轮不等待旧轮清理完成"与本节冲突，已一并删除。
 
 **不变量二：同一 MR 串行（MR 级 lease）。** 只有不变量一不足以兑现 proposal G7 承诺的「同一 MR
 串行」——`mr-review` 与 `mr-monitor` 是两个工作项，各自都能进 `running`：MR update 与 pipeline
@@ -183,8 +202,21 @@ failure 同时到达时，监视器正在修 CI 并推送，检视轮却基于**
 开轮前必须先取得该 MR 的 lease，取不到就排队。「检视独立于监视器」（E1）只表示**入口独立**，
 不构成独立并发域。
 
-lease 还承担事件 revision 仲裁：每次对外 `publish` / `push` 之前**复核** lease 仍持有、且本轮
-`baselineSha` 仍是该 MR 的当前 head，否则放弃本轮产出（避免基于过期代码的写入）。
+#### lease 的完整协议（设计门 P1：初稿只说了"要有"，没说怎么用）
+
+| 项 | 规则 |
+| --- | --- |
+| 键 | `(codeHostEndpointId, stableProjectId, anchorKind, anchorId)` |
+| 持有者 | 具体的 `roundId` + 一次性 token（fencing）；不是工作项 |
+| 获取 | `queued → running` 前获取；取不到则留在 `queued` |
+| 续租 | 轮次心跳续租；超时未续 ⇒ 视为失效可被抢 |
+| **释放时点** | 轮次到达**任何**终态即释放：`settled` / `failed` / 取消完成 / 进入 `awaiting` / 进入 `handed_off` |
+| `awaiting`·`handed_off` | **不持 lease**——它们可能持续数天，持锁会把该 MR 的其他能力全部饿死；恢复时重新获取 |
+| 崩溃恢复 | token 带 daemon 代际；重启后旧 token 一律失效，由恢复流程重新认领 |
+
+**排队期间的事件合并**：`queued` 期间又来新事件时不逐条排队（否则 lease 释放后会连跑一串已经
+过期的轮次），而是**只保留最新的 `pendingRevision`** 并提升 epoch；真正开轮时用最新那个。
+人工 `@叫` 与确认关键词**不参与合并**——它们是人的指令，必须各自产生一次回应。
 
 #### 恢复语义（`awaiting → queued` 时新一轮从哪开始）
 
@@ -692,9 +724,25 @@ GitHub   一次 POST /pulls/{n}/reviews，body=总览，comments[]=行级意见
 **部分失败语义**：草稿阶段任一条失败 ⇒ 删除本轮已建草稿、整轮失败，MR 上不留半截（B10 的
 "一次性发布"在失败路径上同样成立）。锚不上的意见并入 `body` 总览（B11）。
 
-**被抢占取消时同样要清理。** 抢占（§2.2：新事件到达取消在跑轮次）可能正好落在「草稿已建、
-bulk_publish 未发」这个窗口里，若只按"取消 task"处理，MR 上会留下一批**永不发布的孤儿草稿**，
-而且它们对用户可见、看起来像 bot 发了一半就跑了。故：
+#### 发布意图必须可恢复（设计门 P1）
+
+`publish` 成功之后、`settle-stale` / `ledger` 之前，若被抢占或 daemon 崩溃，远端评论**已经存在**
+而台账里还没有它们的 external id。下一轮对账会把同一批 finding 当成"新增"**再发一次**——用户看到
+的是同样的意见被贴了两遍。
+
+故发布不是"一个动作"，是**带持久化意图的两段式**：
+
+1. **发布前**持久化一条发布意图：本轮 `batchId` + 待发指纹清单 + 目标 anchor + epoch；
+2. 远端调用成功后，**先原子写回 external id**（含 `batchId`），再允许响应取消或推进下一阶段；
+3. 重启恢复时，对处于"意图已写、结果未写"的批次**按 `batchId` 核对远端**（GitLab 查该 MR 的
+   draft/notes、GitHub 查 review），已存在则补齐 id，不存在才重发。
+
+`settle-stale` 同理逐项落幂等状态（哪条已执行边沿动作），不能只依赖最后的 `ledger` 阶段——
+否则中途中断会让一部分线程被处理两次。
+
+**被抢占取消时同样要清理。** 抢占可能正好落在「草稿已建、bulk_publish 未发」这个窗口里，
+若只按"取消 task"处理，MR 上会留下一批**永不发布的孤儿草稿**，而且它们对用户可见、看起来像
+bot 发了一半就跑了。故：
 
 - `publish` 阶段登记一个**取消补偿**：取消信号到达时先删除本轮已建草稿，再让 task 退出；
 - GitLab 侧的草稿是可枚举的（按 MR + 作者），补偿失败时下一轮的 `cleanup-previous` 兜底清理；
@@ -728,7 +776,10 @@ bulk_publish 未发」这个窗口里，若只按"取消 task"处理，MR 上会
 | 推送时远端已变 | 放弃并回帖请重叫（C7） |
 | 等待期间源分支变化 | 工作项从 `awaiting` 作废回 `settled`，回帖说明（§2.2） |
 | daemon 重启 | 轮次是 task ⇒ 复用既有 interrupted 修复；工作项状态由轮次终态驱动重算 |
-| 抢占时旧 task 尚未清理完 | 新轮不等待；旧 task 取消幂等由 task-execution 保证 |
+| 抢占时旧 task 尚未清理完 | 工作项停在 `superseding`，**等旧 task 终态后才开新轮**（§2.2 不变量一）；取消幂等由 task-execution 保证 |
+| 抢占落在发布临界区内 | 旧轮赢：事件登记为 `pendingRevision`，临界区结束后再处理（§2.2 线性化点） |
+| `publish` 成功但 `settle-stale`/`ledger` 前崩溃或被取消 | 靠**发布意图**恢复：发布前已持久化批次与指纹，重启时按批次核对远端结果并补齐 external id，不重发（§7.2） |
+| 工作项在轮次运行中收到闭环事件 | 先落 `closing`：epoch +1、发取消、等补偿与 lease 释放；旧 task 终态后才做终局比对并写 `closed` |
 | 工作项引用的 binding 被删 | 轮次用的是模板**快照**，在跑的轮不受影响；下一轮拒绝启动并告警 |
 
 ## 10. 与既有机制的耦合点
