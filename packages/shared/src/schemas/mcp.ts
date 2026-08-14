@@ -84,8 +84,20 @@ export const McpLocalConfigSchema = z
     env: z.record(z.string(), z.string()).optional(),
     /** Request timeout in ms (translated to opencode `timeout` on inject). */
     timeoutMs: z.number().int().positive().optional(),
-    // INTENTIONALLY NO `cwd`: opencode McpLocalConfig has no cwd field; stdio
-    // child cwd is taken from the opencode process directory = our worktree.
+    // NO `cwd` — but NOT because opencode lacks the field. It has one:
+    // `packages/core/src/v1/config/mcp.ts:11-13` (and `src/config/mcp.ts:18`)
+    // declare `cwd: optional(String)`, "Relative paths resolve from the
+    // workspace directory". Re-verified against the local checkout 2026-08-14;
+    // the previous comment here ("opencode McpLocalConfig has no cwd field")
+    // was true when written and has since gone stale, which is exactly the kind
+    // of assertion CLAUDE.md §opencode 源码自取规则 says to re-check rather than
+    // inherit.
+    //
+    // What holds today is the BEHAVIOUR, not the impossibility: we never emit
+    // `cwd`, so the stdio child inherits the opencode process directory = the
+    // task worktree. Adding it would hand an MCP author a knob that points a
+    // child process outside that worktree, so opening it is a product decision
+    // nobody has taken — tracked in docs/audit-backlog.md, not decided here.
     // See docs/OPENCODE_CONFIG.md §3.3 and design/RFC-028.../design.md §0.3.
   })
   .strict()

@@ -222,13 +222,24 @@ export function clientSnippets(
  * it says where the endpoint is and how to authenticate, which is what
  * discovery is for. Listing tools here would be an unauthenticated inventory of
  * the platform's capabilities, and the tool list is per-token anyway.
+ *
+ * `enabled` reflects the live master switch (RFC-247 D10). The first version
+ * omitted it, so with `mcpSurfaceEnabled: false` the document still advertised
+ * a working endpoint and every client that followed it got refused on each
+ * call — a discovery document that describes a surface which is not there is
+ * worse than no document, because the failure surfaces as an auth problem at
+ * the caller rather than as "this deployment does not expose MCP". It stays
+ * unauthenticated-safe: the switch state is an operator posture, not a secret,
+ * and anyone can observe it by making one request to the endpoint anyway.
  */
-export function wellKnownMcp(baseUrl: string): Record<string, unknown> {
+export function wellKnownMcp(baseUrl: string, opts: { enabled: boolean }): Record<string, unknown> {
+  const base = baseUrl.replace(/\/$/, '')
   return {
     version: '1',
-    endpoint: `${baseUrl.replace(/\/$/, '')}/api/mcp`,
+    endpoint: `${base}/api/mcp`,
     transport: 'streamable-http',
+    enabled: opts.enabled,
     authentication: { type: 'bearer', description: 'Personal access token issued from /account' },
-    documentation: `${baseUrl.replace(/\/$/, '')}/docs/api`,
+    documentation: `${base}/docs/api`,
   }
 }

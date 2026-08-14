@@ -660,11 +660,34 @@ SCC=5、W5 后=0。
 它是能力收缩型（依赖 postinstall 的插件将装不上），落地前按 CLAUDE.md §RFC workflow 第 7 条呈用户
 确认——design §5.4 当年按 D19「还没人用」批过，但那是 2026-08-01 的前提。
 
-#### 档 3：backlog 里其余 defer 项的收口方向（不改行为，只定方向）
+#### 档 3：backlog 里其余 defer 项（四条已落，其余定方向）
 
-- **可就地做、方向与 294 一致**：origin 推导改配置注入（§15.1 config projection 按 consumer
-  allowlist 注入 `publicBaseUrl`）、`/.well-known/mcp` 反映开关状态、令牌审计查询下推 SQL
-  （owner=identity-access，W4/W9）、`shared/schemas/mcp.ts:88-91` 过期注释订正。
+**已落（2026-08-14，四条各带测试，backlog 同步销账）**：
+
+| 项 | 处置 | 锁 |
+| --- | --- | --- |
+| origin 推导（反代下 snippets / discovery URL 不可用） | **未新增配置项**：RFC-036 早有 `publicBaseUrl`，连同 forwarded 回退一起抽成纯函数 `routes/publicOrigin.ts:derivePublicOrigin`，docs 两条路由与 OIDC `resolveRedirectUri` 共用；顺带修代理链头取原始跳、以及无 Host 头时 RFC-036 版拼出的字面量 `http://undefined/...` | `rfc247-public-origin.test.ts`（12 条纯函数矩阵）+ `rfc247-api-docs.test.ts` §「the published origin survives a reverse proxy」 |
+| `/.well-known/mcp` 不反映开关 | `wellKnownMcp()` 收 `{ enabled }`，由路由从既有单一读点 `isMcpSurfaceEnabled` 注入（未新造 config reader） | `rfc247-api-docs.test.ts` §D18 两条（纯函数双向 + HTTP 随真实 config 变化） |
+| 令牌审计未下推 SQL | `WHERE`/`ORDER BY`/`LIMIT` 全下推；补 `id ASC` 二级键——JS `sort()` 稳定而裸 `ORDER BY created_at DESC` 不稳定，ULID 同毫秒单调故 `id ASC` 恰好复原插入顺序，行为与被替换的内存版逐字一致 | `rfc247-token-audit.test.ts` §「pushed into SQL」（行为三条 + 源码断言禁 `.filter(`/`.sort(`/`.slice(` 复辟） |
+| `shared/schemas/mcp.ts` 过期断言 | 对本机 opencode checkout 重新核实：`core/src/v1/config/mcp.ts:11-13` 与 `core/src/config/mcp.ts:18` **都有 `cwd`**；注释改为陈述行为（我们不下发 ⇒ 子进程继承 worktree）而非不可能性，**是否开放 `cwd` 留作产品决策**不在注释里自裁 | 零行为变化，无需测试 |
+
+两点值得记住：①`publicBaseUrl` 的**第三个消费者** `services/webhookEndpoints.ts` 规则**不同且有意
+不同**——它只认 `publicBaseUrl`、缺了返回 `null`，因为那个 URL 要交给代码平台长期存活，猜错等于
+webhook 永久失效；而 docs/discovery 的读者此刻正连着本 origin，回退才是正确答案。差异已写进
+`publicOrigin.ts` 注释，免得后人当成疏忽去「统一」。②新模块按 RFC-294 §2 落在 inbound-HTTP
+transport 层（`routes/`，与 `registry.ts` 同层，随 W4 迁 `adapters/inbound/http/`），**没有**落
+`services/`——service 去读请求头正是 W4 要拆掉的耦合。
+
+本轮自查抓到的一条（写下来因为它是「纯函数好测」的直接兑现）：`derivePublicOrigin` 初版把**空白
+头**当成有效答案——`''.trim()` 不是 `undefined`，`??` 链会收下空串并返回被截断的 origin，而请求
+URL 本可以答上。修法是每一级都过 `nonEmpty()`，并补一条「present but BLANK falls through」用例。
+这个缺陷在 HTTP 集成测试里几乎撞不到（真实请求总带 `Host`），是抽成纯函数后逐项过矩阵才现形的。
+
+另：跑门禁时撞到一条与本轮无关的超时红（`rfc210-submodule-topology.test.ts` 的
+`check-ref-format` 用例，12 次子进程 spawn 挤不进 bun test 的 5s 默认超时），根因是本机当时压着
+三份并发测试负载（含我 kill 后残留的孤儿分片）。清掉负载单跑 15 pass / 320ms。已按 CLAUDE.md
+「flaky 不能当通过依据」登记进 `docs/audit-backlog.md` 交该测试 owner 处置，**未**以「重跑就过了」
+名义放行。
 - **明确「现在别做」**（做了就是逆向加固，已同步写进 `docs/audit-backlog.md` 对应条目）：
   1. 不要扩 `resource_read/write` 的 `method` 枚举——`McpBinding = {operationId, toolName}`
      （`design.md` §13.1）是 operation↔tool 一对一，W4-A 要求 HTTP RouteMeta 与 MCP tool

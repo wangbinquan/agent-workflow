@@ -4,7 +4,7 @@
 //   GET  /api/auth/oidc/:slug/callback         IdP callback; issues a session
 
 import type { Context, Hono } from 'hono'
-import { loadConfig } from '@/config'
+import { publicOriginOf } from '@/routes/publicOrigin'
 import { resolveEndpoints } from '@/auth/oidc/endpoints'
 import { acquireIdentityClaims } from '@/auth/oidc/identity'
 import { consumeFlow, startFlow } from '@/auth/oidc/flow'
@@ -294,18 +294,14 @@ function resolveRedirectUri(c: Context, slug: string, deps: AppDeps): string {
   // RFC-036 — explicit publicBaseUrl in config.json takes precedence so dev
   // setups behind a proxy that doesn't forward X-Forwarded-* (e.g. vite)
   // still issue redirects that land back on the user-facing origin.
-  try {
-    const cfg = loadConfig(deps.configPath)
-    if (typeof cfg.publicBaseUrl === 'string' && cfg.publicBaseUrl.length > 0) {
-      const base = cfg.publicBaseUrl.replace(/\/$/, '')
-      return `${base}/api/auth/oidc/${slug}/callback`
-    }
-  } catch {
-    // ignore — fall through to header-based derivation
-  }
-  const proto = c.req.header('X-Forwarded-Proto') ?? new URL(c.req.url).protocol.replace(/:$/, '')
-  const host = c.req.header('X-Forwarded-Host') ?? c.req.header('Host')
-  return `${proto}://${host}/api/auth/oidc/${slug}/callback`
+  //
+  // The precedence itself now lives in `routes/publicOrigin.ts`, shared with the
+  // RFC-247 documentation surfaces: they need the same answer, and two copies of
+  // this rule is how the two drift. Order is unchanged (config → X-Forwarded-*
+  // → Host → request URL); the one difference is that a request carrying no
+  // Host header at all now falls back to the request URL instead of producing
+  // the literal `http://undefined/...` this used to emit.
+  return `${publicOriginOf(c, deps.configPath)}/api/auth/oidc/${slug}/callback`
 }
 
 function buildAuthorizeUrl(

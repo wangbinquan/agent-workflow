@@ -17,7 +17,7 @@
 // the failure is logged: a daemon that refuses to serve because it could not
 // write a log row has turned an observability feature into an outage.
 
-import { eq, lt } from 'drizzle-orm'
+import { desc, eq, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Context } from 'hono'
 import type { Actor } from '@/auth/actor'
@@ -193,17 +193,38 @@ export async function pruneTokenAudit(
   return { audits: audits.length, snapshots: snapshots.length }
 }
 
-/** Rows for one user, newest first. Used by the owner's self-audit view. */
+/**
+ * Ordering for both listings: newest first, ties broken by ULID ascending.
+ *
+ * The tie-breaker is not decoration. Both queries used to `select()` the whole
+ * table and sort in JS, where `sort()` is stable and equal `createdAt` rows
+ * therefore came back in insertion order. `ORDER BY created_at DESC` alone
+ * makes that order undefined, so a same-millisecond pair could swap between
+ * calls; `id ASC` restores insertion order exactly (ULIDs are monotonic within
+ * a millisecond) and keeps the pushed-down query behaviourally identical to the
+ * in-memory one it replaces.
+ */
+const AUDIT_ORDER = [desc(tokenAudit.createdAt), tokenAudit.id] as const
+
+/**
+ * Rows for one user, newest first. Used by the owner's self-audit view.
+ *
+ * Filter, sort and limit are pushed into SQL. They used to run in JS over a
+ * full-table `select()`, which made the `(user_id, created_at)` index dead
+ * weight and turned a 90-day retention window into unbounded latency and memory
+ * the moment a token got chatty (RFC-247 impl-gate P2).
+ */
 export async function listTokenAuditForUser(
   db: DbClient,
   userId: string,
   limit = 200,
 ): Promise<Array<typeof tokenAudit.$inferSelect>> {
-  const rows = await db.select().from(tokenAudit)
-  return rows
-    .filter((r) => r.userId === userId)
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, limit)
+  return db
+    .select()
+    .from(tokenAudit)
+    .where(eq(tokenAudit.userId, userId))
+    .orderBy(...AUDIT_ORDER)
+    .limit(limit)
 }
 
 /** Every row, newest first. Administrator view (D8: read-only). */
@@ -211,6 +232,9 @@ export async function listTokenAudit(
   db: DbClient,
   limit = 200,
 ): Promise<Array<typeof tokenAudit.$inferSelect>> {
-  const rows = await db.select().from(tokenAudit)
-  return rows.sort((a, b) => b.createdAt - a.createdAt).slice(0, limit)
+  return db
+    .select()
+    .from(tokenAudit)
+    .orderBy(...AUDIT_ORDER)
+    .limit(limit)
 }

@@ -315,6 +315,93 @@ describe('RFC-247 — retention actually prunes', () => {
   })
 })
 
+// RFC-247 impl-gate P2 — both listings used to `select()` the entire table and
+// then filter/sort/slice in JS, which made the `(user_id, created_at)` index
+// dead weight and turned a 90-day window into unbounded latency and memory.
+// Pushing it into SQL is only safe if the ORDER is identical, hence the
+// same-millisecond case: JS `sort()` is stable, bare `ORDER BY created_at DESC`
+// is not.
+describe('RFC-247 — the audit listings are pushed into SQL', () => {
+  async function seed(
+    db: DbClient,
+    userId: string,
+    patId: string,
+    username: string,
+    at: number[],
+  ): Promise<void> {
+    const actor = buildActor({
+      user: { id: userId, username, displayName: username, role: 'admin', status: 'active' },
+      source: 'pat',
+      patScopes: [],
+      patId,
+    })
+    for (const when of at) {
+      await recordTokenCall(db, { actor, channel: 'rest', statusCode: 200 }, when)
+    }
+  }
+
+  test('the user filter, the ordering and the limit all hold', async () => {
+    const h = await harness()
+    const other = await createUser(h.db, {
+      username: 'mallory',
+      displayName: 'Mallory',
+      role: 'user',
+      password: 'pw12345678',
+    })
+    const otherPat = await createPat({
+      db: h.db,
+      userId: other.id,
+      name: 'other',
+      scopes: [],
+      purpose: 'general',
+    })
+    const t = 1_800_000_000_000
+    await seed(h.db, h.userId, h.patId, 'alice', [t + 1, t + 3, t + 2])
+    await seed(h.db, other.id, otherPat.meta.id, 'mallory', [t + 9])
+
+    const mine = await listTokenAuditForUser(h.db, h.userId)
+    expect(mine.map((r) => r.createdAt)).toEqual([t + 3, t + 2, t + 1])
+    expect(mine.every((r) => r.userId === h.userId)).toBe(true)
+
+    // The other user's newer row is visible to the admin listing and absent
+    // from the per-user one — i.e. the WHERE really is a WHERE.
+    expect((await listTokenAudit(h.db)).map((r) => r.createdAt)).toEqual([
+      t + 9,
+      t + 3,
+      t + 2,
+      t + 1,
+    ])
+    expect(await listTokenAuditForUser(h.db, h.userId, 2)).toHaveLength(2)
+    expect((await listTokenAudit(h.db, 1)).map((r) => r.createdAt)).toEqual([t + 9])
+  })
+
+  test('same-millisecond rows keep insertion order, and keep it across calls', async () => {
+    const h = await harness()
+    const t = 1_800_000_000_000
+    await seed(h.db, h.userId, h.patId, 'alice', [t, t, t])
+
+    const first = (await listTokenAudit(h.db)).map((r) => r.id)
+    expect(first).toHaveLength(3)
+    // ULIDs are monotonic within a millisecond, so insertion order is id ASC.
+    expect(first).toEqual([...first].sort())
+    expect((await listTokenAudit(h.db)).map((r) => r.id)).toEqual(first)
+    expect((await listTokenAuditForUser(h.db, h.userId)).map((r) => r.id)).toEqual(first)
+  })
+
+  test('the source keeps the work in SQL — no in-memory filter/sort survives', async () => {
+    // A behavioural test cannot tell `WHERE` from `.filter()`; this can, and it
+    // is what stops the next refactor from quietly reintroducing the full-table
+    // read that the impl-gate flagged.
+    const src = await Bun.file(resolve(import.meta.dir, '..', 'src/services/tokenAudit.ts')).text()
+    const listings = src.slice(src.indexOf('export async function listTokenAuditForUser'))
+    expect(listings).not.toContain('.sort(')
+    expect(listings).not.toContain('.filter(')
+    expect(listings).not.toContain('.slice(')
+    expect(listings).toContain('.limit(')
+    expect(listings).toContain('eq(tokenAudit.userId')
+  })
+})
+
 describe('RFC-247 D8 — who can read the audit', () => {
   test('the owner reads their own through /api/auth/pats/audit', async () => {
     const h = await harness()

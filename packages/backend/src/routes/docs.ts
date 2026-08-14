@@ -7,28 +7,27 @@
 // can never call teaches them nothing they can act on.
 //
 // `GET /.well-known/mcp` is public by convention — that is what a discovery
-// document is for. It says where the endpoint is and how to authenticate, and
-// nothing else: an unauthenticated inventory of what the platform can do would
-// be a gift to someone deciding whether to bother attacking it, and the tool
-// list is per-token anyway.
+// document is for. It says where the endpoint is, whether the surface is
+// switched on, and how to authenticate, and nothing else: an unauthenticated
+// inventory of what the platform can do would be a gift to someone deciding
+// whether to bother attacking it, and the tool list is per-token anyway.
+//
+// Both documents embed URLs the reader is expected to paste, so the origin they
+// quote comes from `publicOriginOf` (config `publicBaseUrl` → `X-Forwarded-*` →
+// `Host` → request URL) rather than from `c.req.url` alone. Behind TLS
+// termination or a host-rewriting proxy the latter is the daemon's internal
+// origin, which made every snippet and the discovery `endpoint` unusable
+// (RFC-247 impl-gate P2).
 
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
+import { publicOriginOf } from '@/routes/publicOrigin'
 import { registerRoute } from '@/routes/registry'
 import { buildApiDocs, clientSnippets, wellKnownMcp } from '@/services/apiDocs'
+import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
 import type { AppDeps } from '@/server'
 
-/** The origin the caller reached us on, so snippets are copy-pasteable as-is. */
-function originOf(url: string): string {
-  try {
-    const parsed = new URL(url)
-    return `${parsed.protocol}//${parsed.host}`
-  } catch {
-    return ''
-  }
-}
-
-export function mountDocsRoutes(app: Hono, _deps: AppDeps): void {
+export function mountDocsRoutes(app: Hono, deps: AppDeps): void {
   registerRoute(
     app,
     {
@@ -42,10 +41,9 @@ export function mountDocsRoutes(app: Hono, _deps: AppDeps): void {
     },
     (c) => {
       const actor = actorOf(c)
-      const origin = originOf(c.req.url)
       return c.json({
         ...buildApiDocs(actor.user.role),
-        snippets: clientSnippets(origin),
+        snippets: clientSnippets(publicOriginOf(c, deps.configPath)),
       })
     },
   )
@@ -57,7 +55,7 @@ export function mountDocsRoutes(app: Hono, _deps: AppDeps): void {
  * A discovery document behind authentication cannot be discovered, which is the
  * one thing it exists to do.
  */
-export function mountWellKnownRoutes(app: Hono, _deps: AppDeps): void {
+export function mountWellKnownRoutes(app: Hono, deps: AppDeps): void {
   registerRoute(
     app,
     {
@@ -69,6 +67,11 @@ export function mountWellKnownRoutes(app: Hono, _deps: AppDeps): void {
       tokenAccess: 'allow',
       summary: 'MCP endpoint discovery',
     },
-    (c) => c.json(wellKnownMcp(originOf(c.req.url))),
+    (c) =>
+      c.json(
+        wellKnownMcp(publicOriginOf(c, deps.configPath), {
+          enabled: isMcpSurfaceEnabled(deps.configPath),
+        }),
+      ),
   )
 }
