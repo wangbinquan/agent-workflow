@@ -608,6 +608,11 @@ test.describe('RFC-248 —— 仓库组多仓启动', () => {
     const secondTaskId = page.url().match(/\/tasks\/([A-Z0-9]{26})/i)![1]!
     expect(secondTaskId).not.toBe(firstTaskId)
 
+    // RFC-287 G7：仓库准备在**任务行落库之后**推进（AC-10 把不变量从「有任务行就有
+    // 工作树」改成「`__repo_prep__` 行 done 之后才有」）。所以启动后立刻读会看到空的
+    // `repos`——必须等投影就绪，复用本文件上面那个 helper（第一处启动断言早就在用它，
+    // 这里当初漏了）。
+    await waitTaskRepoProjection(d, secondTaskId, 2)
     const replayResponse = await fetch(`${d.baseUrl}/api/tasks/${secondTaskId}`, {
       headers: { Authorization: `Bearer ${d.token}` },
     })

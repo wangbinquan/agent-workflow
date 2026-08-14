@@ -1229,6 +1229,7 @@ export const enUS: Resources = {
       columns: { repository: 'Repository', freshness: 'Freshness', usage: 'Usage' },
       branch: 'branch {{branch}}',
       fetched: 'Fetched',
+      neverFetched: 'Never synced',
       autoRefresh: 'Auto-refresh',
       referencingTasks: 'referencing tasks',
     },

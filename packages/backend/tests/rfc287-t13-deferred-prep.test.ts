@@ -576,6 +576,43 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     return task.id
   }
 
+  // exact-SHA CI（git-protocols e2e）抓到的：占位行没存 repoUrl，于是 201 响应里
+  // `task.repoUrl` 为空。这不只是测试问题——准备窗口内以及准备失败之后，任务详情
+  // 完全看不到仓库地址：用户既不知道自己在等哪个仓，失败后也无从判断是不是地址
+  // 填错了。请求里本来就有 URL，落库前按既有规则脱敏即可（RFC-054 W3-4：repo_url
+  // 存脱敏形，只用于显示、不能驱动 relaunch）。
+  test('占位行必须带上（脱敏的）repoUrl，否则准备期间看不到自己在等哪个仓', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const task = await startTask(
+      {
+        workflowId: s.workflowId,
+        name: 'ac10-repourl',
+        repoUrl: 'http://u:secret@10.255.255.1:9/nope.git',
+        inputs: {},
+      } as never,
+      {
+        db,
+        actorUserId: s.userId,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        deferRepoPreparation: true,
+        cloneTimeoutMs: 1_000,
+        gitBaselineSyncWindowMs: 0,
+      } as never,
+    )
+    // 201 那一刻就要有——不能等准备完成才出现。
+    expect(task.repoUrl ?? '').not.toBe('')
+    // 且必须是脱敏形：凭据绝不能出现在这一列上。
+    expect(task.repoUrl ?? '').not.toContain('secret')
+    expect(task.repoUrl ?? '').toContain('***')
+    // 准备失败之后依然留着（失败任务同样要能看出是哪个仓）。
+    await settle(db, task.id)
+    const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+    expect(row?.status).toBe('failed')
+    expect(row?.repoUrl ?? '').not.toBe('')
+    expect(row?.repoUrl ?? '').not.toContain('secret')
+  }, 90_000)
+
   test('占位行必须已带 cachedRepoId（否则重试无从重建来源）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)

@@ -1338,6 +1338,8 @@ export interface Resources {
       columns: { repository: string; freshness: string; usage: string }
       branch: string
       fetched: string
+      /** RFC-287 G7：仓库身份已登记但尚未克隆过（last_fetched_at=0 哨兵）。 */
+      neverFetched: string
       autoRefresh: string
       referencingTasks: string
     }
@@ -6879,6 +6881,7 @@ export const zhCN: Resources = {
       columns: { repository: '仓库', freshness: '新鲜度', usage: '使用情况' },
       branch: '分支 {{branch}}',
       fetched: '抓取于',
+      neverFetched: '从未同步',
       autoRefresh: '自动刷新',
       referencingTasks: '个关联任务',
     },

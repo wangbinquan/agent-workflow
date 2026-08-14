@@ -627,7 +627,18 @@ function ReposPage() {
                             {t('repos.operations.columns.freshness')}：
                           </span>
                           <span>
-                            {t('repos.operations.fetched')} <RelativeTime ts={item.lastFetchedAt} />
+                            {/* RFC-287 G7：`ensureCachedRepoIdentity` 会在**克隆之前**先登记
+                                仓库身份（AC-11 的重试要靠它找回来源），这类行以 epoch 0 标记
+                                「尚未取回内容」。0 是个合法时间戳，直接丢给 RelativeTime 会
+                                渲染成「56 年前」——对一个从未同步过的镜像，那是假信息。 */}
+                            {Date.parse(item.lastFetchedAt) === 0 ? (
+                              t('repos.operations.neverFetched')
+                            ) : (
+                              <>
+                                {t('repos.operations.fetched')}{' '}
+                                <RelativeTime ts={item.lastFetchedAt} />
+                              </>
+                            )}
                           </span>
                           <span className="repo-operations__secondary">
                             {t('repos.operations.autoRefresh')}{' '}

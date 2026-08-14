@@ -2504,7 +2504,18 @@ async function startTaskImpl(
   const head: MaterializedRepo | undefined = materializedRepos[0]
   const fallbackSource: ResolvedRepoSource | undefined = resolvedSources[0]
   const headRepoPath = head?.repoPath ?? fallbackSource?.repoPath ?? ''
-  const headRepoUrl = head?.repoUrl ?? fallbackSource?.repoUrl ?? null
+  // 延后准备时 head/fallbackSource 都还空着，但**请求里就有 URL**——不写进去，
+  // 准备窗口内（以及准备失败之后）任务详情就完全看不到仓库地址，用户既不知道自己
+  // 在等哪个仓，失败后也无从判断是不是地址填错了。落库前照既有规则脱敏（RFC-054
+  // W3-4：repo_url 存脱敏形，故它只能用于显示、不能驱动 relaunch——能驱动的是
+  // cached_repo_id）。（T14 exact-SHA CI 抓到：git-protocols e2e 读 201 响应的
+  // repoUrl 为空。）
+  const headRepoUrl =
+    head?.repoUrl ??
+    fallbackSource?.repoUrl ??
+    (deferredTaskId !== null && typeof input.repoUrl === 'string' && input.repoUrl.length > 0
+      ? input.repoUrl
+      : null)
   // RFC-204: the deterministic mirror ref. repo_url is stored REDACTED (RFC-054
   // W3-4) so it can never drive a relaunch; this id is what does.
   // 延后准备时 head/fallbackSource 都还是空的，此刻唯一已知的来源就是先行落定的
