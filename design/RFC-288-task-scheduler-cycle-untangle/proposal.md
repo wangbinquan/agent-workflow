@@ -1,218 +1,198 @@
-# RFC-288 — task↔scheduler 环拆解（按 RFC-294 §5.2 重写）（proposal）
+# RFC-288 — backend 值级环归零（taskDriver → 四件合同）（proposal）
 
-状态：Draft（2026-08-13 初稿；**2026-08-14 双半场 Codex 设计门后按 RFC-294 §5.2 / §16.2 整体重写**）
+状态：Draft（2026-08-13 初稿 → 08-14 第二轮门后按 RFC-294 §5.2 重写 → **08-14 第三轮门
+（三路错开视角）后再次修订**）
 来源：`design/system-commons-unification-audit-2026-08-12.md` D3 大件二；原始工作包
 =`design/task-execution-architecture-audit-2026-08-03.md` §A3（:182-188）+ WP-5
 （:306-312）。⚠️ 命名注意：`design/scheduler-audit-2026-06-10.md:303` 另有一个
 「WP-5」（写锁注册表，已随 RFC-098 完成）——本 RFC 指 **2026-08-03 审计的 WP-5**。
-**锚基线：HEAD `01d2160e`**（初稿锚 `da706b19` 已漂 160 个提交；逐条对照见
-design.md §12）。
+
+> **锚约定（第三轮门 F7 的修法）**：本文所有源码锚一律写成 **`6e8c4f9f:path:line`**
+> 的自证形式——它们对准评审基线那个 commit，**不是「当前 HEAD」**。实现期每批第一
+> 子任务仍是逐锚复核；锚漂时更新 SHA 前缀，不要默默沿用行号。
+> **RFC-294 对齐基线 pin：`be31dd62`**（RFC-294 三件套目前唯一的提交）。⚠️ RFC-294
+> 正在被并行重写（主工作树有未提交改动），本稿只依据 `be31dd62` 的**已提交**内容；
+> RFC-294 再提交后按 SHA diff 做增量对齐，不重头返工。
 
 ## 1. 背景
 
-backend services 里唯一的大值级 SCC：**8 模块环**（task.ts / scheduler.ts /
-execution/{executor,outcome} / agentLaunch / workgroup/launch / gc /
-callGraph/expandService），由 `scripts/depcheck.ts` KNOWN_VIOLATIONS 前 6 条
-记账（removeWhen 全写 WP-5）。环的唯一**闭环上行边**是 `task.ts:153 import
-{ runTask } from './scheduler'`（A1）；scheduler 反向对 task 的回边 1 静态
-（`:205` emitTaskStatus/getTask）+ 3 动态（`:3485/:3526/:3547`
-cancelTask/resumeTask/isTaskActive）；另有 workgroup 启动**绕过 executor
-facade** 的动态边（`:4181`，A3 点名）。gc 旁支环（materializingSpaces 共享
-Map + expandService.getTask）独立成环共用第 6 条账。
+backend 里最大的值级 SCC 是 **8 模块环**（task / scheduler / execution.{executor,outcome}
+/ agentLaunch / workgroup.launch / gc / callGraph.expandService），由
+`scripts/depcheck.ts` KNOWN_VIOLATIONS 前 6 条记账。唯一**闭环上行边**是
+`6e8c4f9f:packages/backend/src/services/task.ts:153`（`import { runTask } from './scheduler'`）。
 
-**初稿之后运行期事实已变（设计门实测）**，这是本次重写的根因：
+**初稿之后运行期事实已变**（第二轮门实测，本稿沿用）：active-task 注册表早已不是
+Map，而是 RFC-303 的 `TaskDriverSupervisor` 端口 + `InMemoryTaskDriverSupervisor`
+适配器；`abortAllActiveTasks` 是 `(reason?: string): string[]` 且 reason 决定
+daemon shutdown 落 `interrupted` 而非 `canceled`；kick 是**四点**
+（`6e8c4f9f:.../task.ts:2946 / 3757 / 4308 / 4936`，第三点是 RFC-287 AC-11 的
+`retryRepoPreparation`）。
 
-- **active-task 注册表早已不是一个 Map**：RFC-303 把它抽成
-  `modules/task-execution/ports/taskDriverSupervisor.ts` 的 `TaskDriverSupervisor`
-  合同 + `infrastructure/inMemoryTaskDriverSupervisor.ts` 适配器（generation
-  ticket / 精确 owner release / unreaped receipt）；`task.ts:235` 只持实例。
-  初稿里的 `activeTasks: Map<string, ActiveTaskHandle>` 与 `ActiveTaskHandle`
-  在仓内**不存在**。
-- **`abortAllActiveTasks` 不是无参 void**：`task.ts:330` 现为
-  `(reason?: string): string[]`，`shutdown.ts:28` 传
-  `DAEMON_SHUTDOWN_ABORT_REASON`——它决定终态是可恢复的 `interrupted` 而不是
-  用户 `canceled`（RFC-202 语义）。
-- **kick 是四点不是三点**：`task.ts:2919`（startTask/deferred continuation）、
-  `:3701`（resumeTask）、`:4252`（**RFC-287 AC-11 retryRepoPreparation**）、
-  `:4832`（retryNode）；计数锁已在
-  `rfc103-launch-config-passthrough.test.ts:172-180`。
-- **物化域已被 RFC-287 改形**：`ensureCachedRepoIdentity` / 同步
-  `materializeSpace` / `runDeferredRepoPreparation` 形成了初稿行区间之外的
-  第二组关键调用。
-
-**RFC-294 已对本 RFC 作出裁决**（`design/RFC-294-.../proposal.md` **§5.2** +
-`design.md` **§16.2**——RFC-294 正在被重写，故一律按**小节号**引用，不引行号）：
-目标必要，但初稿的 `taskDriver` 单叶子同时装 active
-registry、status publisher、kick/cancel/resume service locator，把三个不同生命
-周期的能力塞进一个新的 process-global 叶子，**必须按 RFC-294 重写**；且
-「P0-D 先落 canonical durable ownership/fence，RFC-288 只迁四件合同的
-owner/consumer/import 拓扑并复用 P0-D authority，不新建第二套 lease/schema」是
-**已固定的批准路径**，不是实施时可临场选择的分支。
+**RFC-294 已对本 RFC 作出裁决**（`be31dd62` 的 `proposal.md` **§5.2** +
+`design.md` **§16.2**）：目标必要，但初稿的 `taskDriver` 单叶子把 active registry、
+status publisher、kick/cancel/resume locator 三种生命周期塞进一个 process-global
+叶子，**必须拆成四件合同**；且「P0-D 先落 canonical durable ownership/fence，
+RFC-288 只迁四件合同的 owner/consumer/import 拓扑并复用 P0-D authority，不新建第二套
+lease/schema」是**已固定的批准路径**。
 
 ## 2. 目标
 
-**零产品行为变更**（G6 三族环外扩同样是纯 import 拓扑）。
-
-- **G1 四件合同替代单叶子**（RFC-294 §5.2 逐字要求）：
-  - `TaskRuntimeRegistry`——只拥有本进程 active handle 与 abort reason；实现
-    复用现有 `TaskDriverSupervisor` 端口 + `InMemoryTaskDriverSupervisor`
-    适配器，**不降级回 Map**（generation ticket / 精确 controller release /
-    unreaped receipt / `abort(reason)` 全部保真）。
-  - `TaskOwnershipPort`——lease/epoch/fencing。**复用 P0-D 落地的 canonical
-    authority**，本 RFC 不新建第二套 lease 或 schema。
-  - `TaskStatusPublisher`——只消费已提交的 domain event 再广播；`emitTaskStatus`
-    （`task.ts:4875-4899`，实测只依赖两个 broadcaster + shared `Task` 类型）
-    是它唯一的机械载荷。
-  - `SchedulerDriverPort`——kick/cancel/resume 的窄端口，**由 application 经
-    `TaskExecutionModule` 实例显式注入**；未装配时在 bootstrap **fail-fast**。
-    初稿的模块级 `registerSchedulerDriver` + 全局 `driver` + 「未注册即响亮
-    throw」被废弃（理由见 §4 与 design.md §3）。
-  - 四件均落 `modules/task-execution/`，A1 与 B1-B4 随之断开；C1/C2 转静态。
-  - `AGENT_HOST_AGENT_NODE_ID`（`agentLaunch.ts:60`，消费者
-    `execution/outcome.ts:25,160`）下沉为 task-execution node/domain owned
-    type，**不再落平铺 `services/`**；可先行独立小刀。
-- **G2 workspace / materialization 符号级迁移**：按**符号清单**（不是行区间）
-  迁出物化原语，`runDeferredRepoPreparation` 等 RFC-287 编排留在 application
-  层经 source-control materialization port 调用（清单见 design.md §4）。
-- **G3 task read model 分域**：窄义 `getTask`（`task.ts:4901-4941`，实测无编排/
-  写路径调用）迁 application queries；archived events / stdout 的 FS 读、
-  `getTaskDiff` 的 Git 调用**分别归 log/artifact query 与
-  source-control/workspace-insight**，不许整族塞进一个 read model
-  （清单见 design.md §5）。`expandService` 改 import 读模型（E3 断，第 6 条账销）。
-- **G4 scheduler 纯符号归位刀 + export 收缩锁**：先按 export inventory 把
-  `Frontier`/`deriveFrontier`/`buildContainerMap`/`isFresherNodeRun`/envelope-retry/
-  prior-output/upstream-inputs/wrapper-iso/fanout-key 各归 owner 并逐符号改锚
-  （**28 个测试文件 + 生产消费者 `lifecycleRepair/options-S1.ts:24`**，清单见
-  design.md §6），consumer 清零后才上白名单收缩锁。
-- **G5 gc 旁支**：`materializingSpaces` 与
-  `finishClaimedWebhookWorkspacePrune`（同在 `task.ts:100` 一条 import 里）
-  **一并迁走**，`task→gc` 值边真正消失。
-- **G6 services 零值级环外扩**（用户 2026-08-14 决策）：一并拆掉另外三族值级
-  SCC——`agent↔agentDeps↔agentResourceIntegrity`（3 成员）、
-  `gitRepoCache↔repoGroup`、`workflow↔workflow.validator`。各自**独立成刀、
-  可单独回退**，只动 import 拓扑不动 owner 归属。
-- **G7 归位与锁**：「scheduler 禁 import task.ts」源锁（抄 rfc257 同型）+
-  CALL_FACES 更新 + depcheck 六条销账 + 头注计数与文档账本同步。
+- **G1 四件合同**（接口**逐字采用** RFC-294 `be31dd62:design.md` §5.3，不再自创）：
+  `TaskRuntimeRegistry`（`attach(token, handle)` / `get` / `detach(token)` /
+  `abortAll(reason: TaskAbortReason)`——reason **非可选**）、`TaskOwnershipPort`
+  （由 P0-D 提供，本 RFC 只做 consumer/owner cutover）、`TaskStatusPublisher`、
+  `SchedulerDriverPort`（`TaskExecutionModule` 实例注入 + bootstrap fail-fast）。
+  停机语义走独立的 `TaskDriverSupervisor.requestStop(token, reason)` /
+  `awaitStopped(taskId, epoch)`。details 见 design §2。
+- **G2 workspace / materialization**：符号级迁移至 **source-control 终局 owner**
+  （用户决策：本 RFC 完成终局迁位，不留到 W5）。
+- **G3 task read model 三分**：窄义 `getTask` 族 → task-execution application
+  queries；archived events / stdout → 经 port 读 FS 的 log/artifact query；
+  `getTaskDiff`（`6e8c4f9f:.../task.ts:5613`）→ source-control / workspace-insight
+  participant（orchestration 仍留 task）。
+- **G4 scheduler 符号归位 + export 收缩**：先做**依赖闭包**级归位（含私有依赖，
+  见 design §6），consumer 清零后再上白名单锁。
+- **G5 gc 旁支**：`materializingSpaces` 与 `finishClaimedWebhookWorkspacePrune`
+  一并迁走，`task→gc` 值边消失；workspace GC lease 落终局 owner。
+- **G6 全 backend 环归零（用户 2026-08-14 决策，范围较上稿扩大）**：除主 8 环外，
+  另拆 **四族**——
+  1. `agent ↔ agentDeps ↔ agentResourceIntegrity`（3 成员，注入 agent/list loader 可断）
+  2. `workflow ↔ workflow.validator`（2 成员，注入 workflow loader 可断）
+  3. **git 5-SCC**：`gitRepoCache / util/git / gitSubmodule / gitVersion / repoGroup`
+     ——**含 `util/git` 的分层倒置**（`6e8c4f9f:packages/backend/src/util/git.ts:1181-1182,2744-2745`
+     以 `await import('@/services/git*')` 反向依赖 services，即架构审视 RC-4 的老债）
+  4. **MCP/server 3 环**：`mcp/dispatch:28 → server` → `server.ts:16 → mcp/server`
+     → `mcp/server.ts:24 → mcp/dispatch`
+- **G7 归位与锁**：源锁 + CALL_FACES + depcheck 全量销账 + **RFC-294 要求的机器账本**
+  （module-symbol-owners / public-surfaces / exception schema）+ 文档账本同步。
 
 ## 3. 非目标
 
-- 不动装配线内部结构（RFC-287 已收敛为骨架）。
-- 不动 fanout 内链（RFC-289，已按 RFC-294 §5.3 冻结）。
-- **不新建 durable ownership / lease / schema**——那是 P0-D 的范围（RFC-294
-  §16.2 明令：若要把 ownership/schema/fencing 并回本 RFC，必须先显式 Supersede
-  该决策与本三件套并重新请批）。
-- 不改 depcruise 规则语义（type-only 豁免保持；no-circular 不得退化为 pathNot
-  排除——gate 测试已禁止）。
-- 不做 RFC-294 W9 的全局 container 清仓；本 RFC 只把最小
-  `TaskExecutionModule` instance 落到**当前** composition root。
+- **不新建 durable ownership / lease / schema**——P0-D 的范围（RFC-294 §16.2 明令：
+  要并回本 RFC 须先显式 Supersede 该决策并重新请批）。
+- 不动装配线内部结构（RFC-287 已收敛）。
+- 不动 fanout 内链（RFC-289，按 RFC-294 §5.3 冻结）。
+- 不改 depcruise 规则语义（type-only 豁免保持；no-circular 不得退化为 pathNot）。
+- 不做 RFC-294 W9 的全局 container 清仓。
 
 ## 4. 能力影响清单
 
-**零能力变化**，但以下五项是「零」的前提，逐条为设计门 P0 的直接结论：
+**零能力变化**，以下六项是「零」的前提（前五项承自第二轮门，第六项为第三轮门新增）：
 
-| 必须保真的行为 | 若按初稿实现会怎样 | 锁在哪 |
+| 必须保真的行为 | 若按错误合同实现会怎样 | 锁 |
 | --- | --- | --- |
-| `abort(reason)` → `interrupted`（daemon shutdown）而非 `canceled` | 初稿 `abortAllActiveTasks(): void` 丢掉 reason，daemon 重启后任务不再可恢复 | `rfc202-source-locks.test.ts:16-23,35-40` |
-| 精确 generation / stale controller 拒绝 | 旧 controller 可能释放新 owner 的槽位 | `rfc303-runtime-ownership.test.ts:27-71` |
-| stop ticket：cancel 必须等确切 driver 停 | cancel 只改 DB，child driver 继续跑并写盘 | 同上 |
-| unreaped receipt（`child-unkillable`） | 结果丢失，工作区清理与子进程判定失真 | 同上 |
+| `abort(reason)` → shutdown 落 `interrupted` | 丢 reason ⇒ 降级成用户 `canceled`，任务不再可恢复 | `rfc202-source-locks.test.ts:16-23,35-40` |
+| 精确 owner（token/epoch + controller 身份） | 旧 takeover 误杀继任者（第三轮门 B 路**实测复现**：`tryAttach(old) → release → tryAttach(next) → requestStop(taskId)` 会 abort 掉 next） | `rfc303-runtime-ownership.test.ts:27-71` |
+| stop ticket：cancel 必须等确切 driver 停 | cancel 只改 DB，child driver 继续写盘 | 同上 |
+| unreaped receipt（`child-unkillable`） | 结果丢失，清理与子进程判定失真 | 同上 |
 | frozen workgroup 不重读 live resource | 破坏父任务冻结闭包 / 被 node-invoker guard 拒 | `rfc243-call-workgroup.test.ts:129` |
+| **同步准备失败路径的直接 release**（`6e8c4f9f:.../task.ts:4491`） | `awaitScheduler:true` + 准备失败时 handle 永久泄漏 ⇒ 重试 `__repo_prep__` 永远 `task-still-running`，只能重启 daemon（**AC-11 直接失效**） | 新增锁，见 design §10 |
 
-另外**两项**不是行为变更但必须登记：`SchedulerDriverPort` 改为实例注入后，
-「未装配」从**运行期静默错判**变成**bootstrap 启动失败**（这是修正，不是收缩：
-初稿的运行期 throw 会被 `scheduler.ts:3487` / `:3528` 的裸 `catch` 吞掉，表现为
-「取消看起来成功、child 仍在跑」）；G4 收缩前必须先把 `buildContainerMap` 等
-有真实消费者的符号归位，否则 typecheck 直接红。
+登记但不属能力收缩：`SchedulerDriverPort` 未装配从「运行期静默错判」变成
+**bootstrap 启动失败**（修正而非收缩——旧行为的 throw 会被
+`6e8c4f9f:.../scheduler.ts:3487` 与 `:3528` 的裸 catch 吞掉）；scheduler export 收缩
+是迁位后收内部面，现有 1 个生产 + 27 个测试 consumer 全部随刀改锚。
 
-## 5. RFC-294 对齐（强制章节）
+## 5. RFC-294 对齐（pin `be31dd62`）
 
-落位表（context / 层以 RFC-294 `design.md` §2 目标物理结构与 §18 owner 表为准）：
+落位表按第三轮门 C 路要求改为**六列**，把「本 RFC 的 W2 抽缝」与「终局 owner /
+波次」分开；带斜杠的双 owner 一律拆成 orchestration owner + participant owner：
 
-| 本 RFC 新增/迁移 | bounded context | 层 | RFC-294 依据 |
-| --- | --- | --- | --- |
-| `TaskRuntimeRegistry` | task-execution | ports（合同）+ infrastructure（进程内适配器，复用 `InMemoryTaskDriverSupervisor`） | §18「`activeTasks`/`driverLease`/status claim → application/ports + infrastructure」 |
-| `TaskOwnershipPort` | task-execution | application/ports（实现来自 P0-D） | §16.2 |
-| `TaskStatusPublisher` | task-execution → platform/events | domain event 消费 + WS adapter | §18「lifecycle writer + hook/watch/budget/WS」 |
-| `SchedulerDriverPort` | task-execution | application/ports，经 `TaskExecutionModule` 装配 | §5.2 / §16.2 |
-| `TaskReadModel`（窄义 getTask 族） | task-execution | application/queries | §18「scheduler frontier/scope/drive → engine/task」邻接项 |
-| archived events / stdout query | task-execution | log/artifact query（经 port 读 FS） | §18 同行 |
-| `getTaskDiff` | source-control / workspace-insight | query | §18「repo/cache/submodule/worktree/git → source-control」 |
-| repo/cache/worktree materialization | source-control | commands + execution workspace port | 同上 |
-| multipart / pre-created prestage | task-execution | direct-launch prestage（保持现有语义） | §18「multipart pre-materialization」 |
-| workspace GC lease | task-execution / source-control | owner job + participant | §18「task limits / workspace GC」 |
-| `AGENT_HOST_AGENT_NODE_ID` | task-execution | node/domain owned type | §18「agent/script/call kind 分发 → engine/node」 |
+| 当前 symbol | 本 RFC 抽取 owner / 层 | 本 RFC 动作 | 终局唯一 owner / 层 | 终局波次 | 偏离 ID |
+| --- | --- | --- | --- | --- | --- |
+| active handle 表 | task-execution ports + infrastructure | 采用 §5.3 合同 | 同左 | P0-D / W2 | — |
+| ownership lease/epoch | task-execution application/ports | **只做 consumer cutover**（实现来自 P0-D） | 同左 | P0-D | — |
+| `emitTaskStatus` | task-execution ports（transitional publisher） | 定义 port + adapter | platform/events committed event | **W3** | DEV-4 |
+| kick/cancel/resume | task-execution application/ports | 实例注入 | 同左 | W2 | — |
+| 窄义 `getTask` / node-run projection | task-execution application/queries | 迁位 | 同左 | W2 | — |
+| archived events / stdout | task-execution application/queries + FS port | 迁位 | 同左 | W4 | DEV-3 |
+| `getTaskDiff` | task orchestration（留）+ source-control participant | 拆双 owner | 同左 | W5 | DEV-3 |
+| repo/cache/worktree materialization | source-control commands + workspace port | **终局迁位** | 同左 | W5 | DEV-3 |
+| workspace GC lease | task-execution owner job + participant | **终局迁位** | 同左 | W4 / W9 | DEV-3 |
+| multipart / pre-created prestage | — | **本 RFC 不动** | task-execution direct-launch prestage | W4-E1 | — |
+| `AGENT_HOST_AGENT_NODE_ID` | task-execution node 域常量 | 下沉 | 同左 | W2 | — |
+| agent / workflow / git / MCP 四族环 | 各自现 owner（只改 import 拓扑与注入 seam） | 断环 | resource-catalog / source-control / bootstrap-platform | W4 / W5 | DEV-2、DEV-5 |
 
-**偏离项（逐条呈用户并已于 2026-08-14 确认）**：
+**偏离项台账**（逐条经用户确认；新增项标注日期）：
 
-1. **不留 facade、一刀清干净**（用户决策）。与 `CLAUDE.md` §services 目录组织
-   轻规则 D18「迁移时留同名 facade 保 import 路径稳定」及 RFC-294 §16.2
-   「按 export inventory 迁移」的渐迁预期相反。理由是避免长期过渡态；缓解措施
-   写死在 plan.md：每刀前 `git pull --rebase`、**改锚提交与源码提交分离**、
-   每刀 pin worktree 全量 `gate:local` + exact-SHA CI、与 RFC-289 及任何在改
-   `task.ts`/`scheduler.ts` 的工作建立同一排它文件窗口。
-2. **G6 三族环外扩早于 W4/W5**（用户决策）。`agent*` 属 resource-catalog、
-   `gitRepoCache/repoGroup` 属 source-control，按 §18 本应在 W4/W5 迁位；本 RFC
-   只动这三族的 import 拓扑、不动 owner 归属，各自独立成刀可单独回退。
-3. **`ports/` 落位与 §2 的 `application/ports/` 命名不一致**：HEAD 既有
-   `modules/task-execution/ports/taskDriverSupervisor.ts` 就在模块根 `ports/`。
-   本 RFC 与既有先例保持一致（新端口放同目录），命名归一留给 W0-R canonical
-   manifest，不在本 RFC 内二次搬迁。
+- **DEV-1 不留 facade（2026-08-14 确认；第三轮门后修订形态）**：与 D18
+  （`CLAUDE.md` §services 目录组织轻规则）及 RFC-294 §16.2 的渐迁预期相反。
+  **修订**：原「源码提交与改锚提交分离」被证明与「每刀 gate 全绿」不可兼得（无
+  facade 时至少一个 commit 必然 typecheck 红）⇒ 改为**源码移动 + 全部生产/测试
+  consumer 改锚必须在同一个原子 commit 内**；缓解措施改为 repo-wide exact consumer
+  文件窗口 + 每刀前 `git pull --rebase` + pin worktree `gate:local` + exact-SHA CI。
+- **DEV-2 G6 四族环早于 W4/W5（2026-08-14 确认，范围已扩大）**：只动 import 拓扑与
+  注入 seam，不动 owner 归属；各族独立成刀可单独回退。
+- **DEV-3 终局迁位提前（2026-08-14 确认）**：materialization（W5）、archived
+  events/stdout（W4）、GC lease（W4/W9）在本 RFC 内完成终局迁位而非只抽缝。
+- **DEV-4 status publisher 只落 transitional port**：committed-event / outbox /
+  sanitized WS projection 属 W3，本 RFC **不**提前（RFC-294 plan 明确 W2 定义 port、
+  W3 切 outbox）。
+- **DEV-5 MCP 三环与 RFC-247 收尾撞面（新增，需协调）**：该环账目的 `removeWhen`
+  写的是「RFC-247 收尾时把路由注册表下沉」。本 RFC 纳入它 = 代做 RFC-247 的未竟工作，
+  **实现前必须与 RFC-247 owner 协调排它窗口**，否则同一文件双改必撞。
+- **DEV-6 `ports/` 落位条件化**：RFC-294 目标结构是 `application/ports/`，HEAD 既有
+  `modules/task-execution/ports/` 是**存量债不是目标**。默认新端口落
+  `application/ports/`；若 W0 的 canonical inventory 批准根级过渡，则引用其 exception
+  ID / owner / `removeAfterWave`，不以「已有先例」为由自证。
 
 ## 6. 验收标准
 
-- **AC-1 零值级 SCC（用户决策扩范围）**：`packages/backend/src` 下**不存在任何
-  ≥2 成员的值级 SCC**——目标 8 成员各自成 singleton，且 G6 三族环一并消失；
-  depcheck KNOWN_VIOLATIONS 中 6 条 WP-5 账 + 三族环对应账全部删除，零新增
-  unknown、零 stale。判据脚本**复用 dependency-cruiser 的原始 `modules` 图源**
-  做 Tarjan 投影（`scripts/depcheck.ts:488` 取图处），**不另写第二套 import
-  parser**，避免两套判据打架。
-- **AC-2 中间态无双红**：每刀提交快照内 depcheck 的 unknown 与 stale 同时为
-  零（两者都是硬失败：`depcheck.ts:398/402`）。**禁止预测性预登记**——临时条目
-  只允许按当刀实跑 depcruise 报告里的 exact `(rule,from,to)` 追加。
-- **AC-3 行为对拍**：94 个 import scheduler / 93 个 import task 的测试文件全绿；
-  **四个** kick 点、shutdown 的 `abortAllActiveTasks(reason)`、orphanReconcile
-  的 driver seam 行为逐项保持（§4 表 + design.md §10 的行为锁清单）。
-- **AC-4 启动面锁更新**：rfc243 CALL_FACES（`:45-53`）+ executor 三臂锁、
-  rfc257 同型新锁（scheduler 禁 import task）、`__setActiveTaskForTesting` 族
-  （**实际只有 3 个测试文件 11 处引用**：rfc222-task-delete /
-  review-cancel-concurrency / rfc230-run-liveness）迁移后全部改锚。
-- **AC-5 装配面可验收**：未装配 `SchedulerDriverPort` 时 daemon 在
-  `Bun.serve` / schedule ticker / auto-resume **之前**失败；不存在跨测试文件
-  借用驱动的可能（`--isolate` 与手敲共享进程两种模型都锁）。
-- **AC-6 C1/C2 初始化安全**：转静态的每一刀带 import-order smoke +
-  `bun run build:binary` + 单二进制最小启动 smoke（`rfc217-architecture-locks.test.ts:3-10`
-  记录过「只有单二进制才抓到」的同类事故）。
-- **AC-7 frozen 面语义**：C2 收编为**内部 participant**（不可由 HTTP 公开面
-  构造），frozen group payload / parent linkage 与 depth / 继承的 materialized
-  space / owner-active preflight / collaborator 并集 / gates ④-⑦ 及原错误码顺序
-  逐项对拍。
-- **AC-8 文档账本同步**：depcheck 头注计数、2026-08-03 审计 ⓪ 进度回填、
-  RFC-294 §5.2/§16.2 的重写状态、路线表、STATE.md。
-- **AC-9 每刀门禁**：每刀 pin worktree `bun run gate:local` 全绿 + exact-SHA CI
-  绿；定向家族只作快速反馈，不得替代完整门禁。
-- **AC-10 实现门**：双路独立子代理（设计门已跑，见 §7）。
+每条按「owner / 精确命令 / 产物 / 绿判据」四列给出（第三轮门 F6 的修法）：
 
-## 7. 设计门记录（2026-08-14，双半场 Codex，pin `01d2160e`）
+| AC | owner | 精确命令 | 产物 | 绿判据 |
+| --- | --- | --- | --- | --- |
+| **AC-1 全 backend 零值级 SCC** | T14 / CI | `bun test --isolate packages/backend/tests/backend-value-scc.test.ts` | SCC 报告 | 值级 SCC 数 = 0（复用 depcruise 原始 `modules` 图源做 Tarjan 投影，**不另写 parser**；需把 `CruiseDependency` 扩到携带 `dependencyTypes`）；`bun run depcheck` 零 unknown / 零 stale，全部 no-circular 账目删除 |
+| **AC-2 中间态无双红** | 每刀 / CI | `bun run depcheck` | 退出码 | exit 0 且 unknown=stale=0；**禁止预测性预登记**（只按实跑 exact tuple 追加） |
+| **AC-3 行为对拍** | 每刀 / CI | `bun run gate:local` + T1 冻结的 import manifest 比对 | manifest diff | scheduler 94 / task 92 静态（含动态各 94）——**以 T1 冻结的 manifest 为准，不以本文数字为准**；四 kick、shutdown reason、driver seam 行为逐项保持 |
+| **AC-4 启动面锁** | 每刀 | 定向跑 CALL_FACES / 源锁族 | 测试结果 | rfc243 CALL_FACES、rfc257 同型源锁、helper 族（**3 文件 11 处引用**）全部改锚且绿 |
+| **AC-5 装配可验收** | T2a→T2d | `bun test --isolate packages/backend/tests/task-execution-module-assembly.test.ts` + `bun test packages/backend/tests/...`（共享进程模型另跑一条具名脚本） | 测试结果 | 未装配时在 `Bun.serve`/ticker/auto-resume **之前**失败；同实例幂等、异实例硬拒；HTTP launch / background launch / scheduler child recovery **观测到同一 module id**（canary consumer，防 T2a 零预言力）；poison-method 变异必红 |
+| **AC-6 初始化安全** | T2h / T2i | `bun test --isolate packages/backend/tests/import-order-smoke.test.ts` + `bun run build:binary` + 二进制 `--version` smoke | 二进制 + 日志 | 四种 import 顺序均可加载且真实 facade 可调用；单二进制启动零错误 |
+| **AC-7 frozen 语义** | T2i | `bun test --isolate packages/backend/tests/rfc243-call-workgroup.test.ts` + 新增逐项断言表 | 测试结果 | frozen payload / parent linkage / depth / 继承 space / owner-active preflight / collaborator 并集 / gates ④-⑦ **各有一条断言**，错误码与顺序逐项对拍 |
+| **AC-8 文档账本同步** | T13 | `bun test --isolate packages/backend/tests/rfc-index-status-drift.test.ts` + required-doc-key 检查 | 文档 diff | depcheck 头注计数、08-03 审计 ⓪、路线表、STATE 四处 required key 全部命中 |
+| **AC-9 每刀门禁** | 每刀 | `bun run gate:local`；**T4/T9 另加** `RUN_GIT_NETWORK=1 bun test --isolate <T1 扫出的清单>` | CI 结论 | 本地全绿 + exact-SHA CI terminal 绿（`gate:local` 不跑 `skipIf(!RUN_GIT_NETWORK)` 门后的套件，清单用 `grep -rln "skipIf(!RUN_GIT_NETWORK" packages/backend/tests/` 现扫，不凭记忆） |
+| **AC-10 实现门** | T14 | 双路独立子代理（错开视角） | 两份报告（路径固定） | unresolved P0/P1 = 0；分歧逐条归零 |
 
-两半场独立跑（A：环地图/边全集/账本；B：合同/切分/测试策略/仓规），各自实跑
-`depcheck`（1467 模块 / 36-36 / 0 unknown / 0 stale）与行为锁（31 pass / 47
-pass），只读、工作树干净。合计报 **P0×8 / P1×5 / P2×1**，去重后处置如下：
+## 7. 设计门记录
 
-| # | finding | 处置 |
-| --- | --- | --- |
-| P0 | 缺失强制的 RFC-294 对齐；拟建五个平铺 `services/*` 与总纲相左，且 §5.2 已裁决必须重写 | **整体重写**（本稿）；新增 §5 落位表 + 三条偏离项 |
-| P0 | `taskDriver` 契约过期（Map/`ActiveTaskHandle` 不存在；丢 generation/stop ticket/unreaped/reason） | G1 改挂现有 `TaskDriverSupervisor`，§4 五项保真表 + 行为锁 |
-| P0 | kick 四点被写成三点，漏 `retryRepoPreparation` ⇒ A1 删不掉或直接编译红 | AC-3 改四点；design.md §3 逐点迁移表 |
-| P0 | 全局 `registerSchedulerDriver` 与 orphan seam 不同型；「响亮 throw」被裸 catch 吞掉；17/19 个直调 `startTask` 的测试不走 `createApp` | 废弃全局 seam，改实例注入 + bootstrap fail-fast（AC-5） |
-| P0 | AC-1 字面不可验收（另有三族值级 SCC）；仓内无现成 Tarjan | 用户决策**扩范围**为零值级环（G6）；判据复用 depcruise 图源 |
-| P0 | 物化域 `379-1741` 是两个语法结构的中间切片，且漏 RFC-287 deferred prep | G2 改符号清单（design.md §4） |
-| P0 | 「不留 facade + 88 测试改锚」违反 D18 | 用户决定维持，登记为**偏离项 1** + 缓解措施 |
-| P0 | G4 收缩不可落地（`options-S1.ts` 用 `buildContainerMap`，28 个测试文件消费待切符号） | 新增**纯符号归位刀**（G4，design.md §6 inventory） |
-| P1 | C1/C2 转静态无 ESM 初始化验证 | AC-6：import-order + binary smoke |
-| P1 | C2 无可表达 frozen closure 的 request variant | AC-7：新增内部 participant |
-| P1 | E1 只搬 Map 断不了 `task→gc` | G5：两个符号一并迁走 |
-| P1 | C-6「身份漂移双红」推理不成立；引用的「测绘 §2.3」不存在 | AC-2 改写为禁预测性预登记；映射表直接写进 design.md §1 |
-| P1 | `getTask`「族」无边界（会把 FS/Git 拖进 read model） | G3 三分清单（design.md §5） |
-| P1 | 测试策略把拓扑 oracle 当行为 oracle；T1 夹具无文件/断言；每刀未写 gate:local | design.md §10 十组行为锁 + AC-9 |
-| P1 | T2 体量过大；串行约定只覆盖 scheduler 未覆盖 task | plan.md 细化为 T2a-T2i + 排它文件窗口（偏离项 1 缓解措施） |
-| P2 | fixture 换「真实违规对」锁不住持续真实；scheduler↔task 硬编码不止 `:63-64` | 改名 `SYNTHETIC_CYCLE` 并补 `:78/:85/:143-152/:301` |
+### 7.1 第二轮（2026-08-14，两半场）
+
+报 **P0×8 / P1×7 / P2×1**（共 16 条；此前表头误记为 P1×5，第三轮门 F8 更正）。
+逐条处置见第二轮记录；第三轮 A 路复核判定：**10 条已实质解决、4 条处置引入新问题
+（RFC-294 对齐 / taskDriver 契约 / G4 计数 / T2 拆刀 DAG）、2 条仅措辞解决
+（AC-1、C1-C2 smoke）**——这 6 条已在本稿重做。
+
+### 7.2 第三轮（2026-08-14，三路错开视角）
+
+A=回归验证、B=攻击可实施性、C=总纲与仓规一致性；三路均 NOT-CLEAN，去重后
+**P0×5 / P1×11 / P2×5**。处置：
+
+| # | finding（合并） | 提出方 | 处置 |
+| --- | --- | --- | --- |
+| P0 | 四件合同混淆 port(3 异步)/adapter(3 同步)/application 语义，且丢 `OwnershipToken`/epoch、`abortAll(reason)` 变可选 | A+B+C 三路 | §2 逐字采用 RFC-294 §5.3 两份接口；现 3 方法 port 标为迁移前兼容面 |
+| P0 | AC-1 不可达：漏 MCP 三环，且 git 是 **5 节点 SCC** 不是二环 | A+C | 用户决策扩为全 backend 归零，G6 纳入四族（含 `util/git` 分层倒置）；DEV-5 登记 RFC-247 撞面 |
+| P0 | T2b-T2g 无可独立绿的单-registry 中间态（双 registry ⇒ canceled 行 + 仍在跑的 driver） | B | 先加一刀把同一 `TaskExecutionContext` 线程化进 deps 链，再替换 backing instance |
+| P0 | T6 清单不是依赖闭包（`deriveFrontier`→`SETTLES_WITHOUT_ROW_KINDS`/`isLiveStatus`；`createOrRebuildWrapperIso`→`parseIsoJsonMap`/`parseIsoSubmodules`） | B | design §6 补闭包 + 新增源锁「T6 owner 不得值 import scheduler」 |
+| P0 | T2d 必红：切完四 kick 即等于删 A1，账本却排到 T2g 后（depcheck stale 红 / lint unused import 红二选一） | B | A1 删除 + 前 5 条销账并入 T2d 同一提交 |
+| P1 | `TaskStatusChanged` / `ResumeDriverDeps` 是占位符；`kick` 吃 god-type `RunTaskOptions` | A | §2 补全字段；resume 复用 `InheritableRunConfig`（B 路实测只需 17+4 项，非 45） |
+| P1 | T2b 漏 `6e8c4f9f:.../task.ts:4491` 直接 release ⇒ handle 泄漏、AC-11 永久失效 | B | 入 §4 保真表 + T2b 全量盘点 `taskDriverRegistry.*` |
+| P1 | `TaskExecutionModule` 生命周期/DB 权威未定义；同进程多 app 会分叉 registry | B | design §3 定死：每 daemon 一个、`createApp` 只借用、`dispose()/awaitIdle()`、registry 不闭包在 `DbClient` 上、测试统一 factory |
+| P1 | 「28 个测试文件」是分组行数之和，去重后 **27**；且漏 source-text consumer | A | §6 更正并另列源码文本锁 inventory |
+| P1 | 前置引用了不存在的 `W0-R` | A+C | 改用 `be31dd62` 的真实 DAG：`W0 + P0-A/B/C/D → W1 → RFC-288 final gate → W2` |
+| P1 | 落位表混淆 W2 抽缝与终局波次 | C | §5 改六列 + DEV-3 |
+| P1 | publisher 把 W2 端口与 W3 committed-event 混一刀 | C | DEV-4：本 RFC 只落 transitional port |
+| P1 | 缺 RFC-294 强制的机器账本 | C | T1 后增账本子刀（module-symbol-owners / public-surfaces / exception schema） |
+| P1 | 根级 `ports/` 是存量债不是目标落位 | C | DEV-6 条件化 |
+| P1 | T0/T5/T8-T10 不是可执行切片（G6 三刀只有标题） | C | plan 逐族展开 baseline oracle → additive port → 单 consumer → 负扫描 |
+| P1 | AC-3/5/6/7/8/10 无机械 oracle；AC-3 计数错 | A | §6 四列表 + manifest 冻结 |
+| P2 | 多处锚只对 `01d2160e` 成立 | A | 全量改写为 `6e8c4f9f:` 自证形式 |
+| P2 | §7 表头计数错（P1×5 应为 ×7） | A | 已更正 |
+| P2 | `gate:local` 不跑 `RUN_GIT_NETWORK` 套件 | C | AC-9 增列 |
+| P2 | T2a 装配锁零预言力 | B | AC-5 增 canary consumer + 实例身份断言 |
+| P2 | 文本锁需 AST + 变异实证 | C | design §10 |
+
+**三路「攻击未打穿」的结论**（据此不再改动）：`TaskStatusPublisher` 的「只消费已提交
+事件」成立——9 个 `emitTaskStatus` 调用点全在事务外，但 `task.ts:3745` 等 reap/rollback、
+`:4930` 等 node-run mint、`dwActions.ts:217` 等 DW state 这些**后置屏障必须原样保留**；
+`ResumeDriverDeps` 不会退化成 `StartTaskDeps` 同义词；T3 先于 T4 无编译矛盾；
+`buildContainerMap` 在 scheduler 内零调用、可干净搬走。

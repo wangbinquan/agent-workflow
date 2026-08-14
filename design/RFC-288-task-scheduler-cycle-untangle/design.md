@@ -1,318 +1,333 @@
-# RFC-288 — 技术设计（design，2026-08-14 设计门后重写）
+# RFC-288 — 技术设计（design，2026-08-14 第三轮门后修订）
 
-> 锚基线：**HEAD `01d2160e`**。初稿锚 `da706b19` 已漂 160 个提交（RFC-287
-> T1-T14 全部落地；`scheduler.ts` 10115 行、`task.ts` 5880 行），逐条对照见 §12。
-> 实现期每批第一子任务仍是**逐锚复核**——本文锚同样会漂。
+> **锚约定**：全部源码锚写成 **`6e8c4f9f:path:line`**（评审基线 commit），不是「当前
+> HEAD」。实现期每批第一子任务=逐锚复核，锚漂时更新 SHA 前缀。
+> **RFC-294 对齐 pin：`be31dd62`**（其三件套目前唯一提交；主工作树另有未提交重写稿，
+> 本文不依赖它）。
 
-## 1. 环地图（HEAD 实测）
+## 1. 环地图（基线 `6e8c4f9f` 实测）
 
-**值级 SCC = 8 成员**：`task.ts` / `scheduler.ts` / `execution/executor.ts` /
-`execution/outcome.ts` / `agentLaunch.ts` / `workgroup/launch.ts` / `gc.ts` /
-`structuralDiff/callGraph/expandService.ts`。含 type 边为 **10**（`launchMultipart.ts`
-与 `execution/types.ts` 仅以 `import type` 挂边，被 `.dependency-cruiser.cjs:137`
-的 `viaOnly.dependencyTypesNot: ['type-only']` 豁免）。**风险登记**：任何人把这
-两条改成值 import ⇒ SCC=10 + 门禁新红。
+### 1.1 主 8 环
 
-全边表（HEAD 实锚）：
+值级成员：`task` / `scheduler` / `execution.executor` / `execution.outcome` /
+`agentLaunch` / `workgroup.launch` / `gc` / `structuralDiff.callGraph.expandService`。
+含 type 边为 10（`launchMultipart`、`execution/types` 仅 `import type`，被
+`.dependency-cruiser.cjs:137` 的 `viaOnly.dependencyTypesNot: ['type-only']` 豁免；
+**风险登记**：任一改成值 import ⇒ SCC=10 + 门禁新红）。
 
-| 边 | 锚 | 说明 |
+| 边 | 锚（`6e8c4f9f:packages/backend/src/`） | 说明 |
 | --- | --- | --- |
-| A1 `task → scheduler` | `task.ts:153` | **目标 8-SCC 内唯一闭环上行边**（不是全仓唯一 importer，见 §6 的 `buildContainerMap`） |
-| B1 `scheduler → task`（静态） | `scheduler.ts:205` | `emitTaskStatus` / `getTask`；消费仅 `:9348-9350` 两行，全环最薄边 |
-| B2/B3/B4（动态） | `:3485` / `:3526` / `:3547` | `cancelTask` / `resumeTask` / `isTaskActive` |
-| C1（动态） | `:3982` | `startExecution` |
-| C2（动态） | `:4181` | `startWorkgroupTaskFromFrozen`——**facade 旁路**（A3 点名） |
-| C3（静态） | `:258` | `getExecutionOutcome`，方向正确 |
-| `executor → task/agentLaunch/workgroup/outcome` | `execution/executor.ts:21/22/23/26` | 启动臂，方向正确 |
-| `outcome → agentLaunch` | `execution/outcome.ts:25` | 含 D7 单常量 `AGENT_HOST_AGENT_NODE_ID`（定义 `agentLaunch.ts:60`，消费 `outcome.ts:25,160`） |
-| `agentLaunch → task` | `agentLaunch.ts:34-39` | |
-| `workgroup/launch → task` | `workgroup/launch.ts:45` | |
-| E1 `task → gc` | `task.ts:100` | **双符号**：`materializingSpaces` + `finishClaimedWebhookWorkspacePrune` |
-| E2 `gc → expandService` | `gc.ts:36` | 方向正确，保留 |
-| E3 `expandService → task` | `expandService.ts:12` | `getTask` |
+| A1 `task → scheduler` | `services/task.ts:153` | 8-SCC 内**唯一闭环上行边**（不是全仓唯一 importer，见 §6） |
+| B1 静态 | `services/scheduler.ts:205` | `emitTaskStatus`/`getTask`，全环最薄边 |
+| B2/B3/B4 动态 | `services/scheduler.ts:3485 / 3526 / 3547` | `cancelTask` / `resumeTask` / `isTaskActive` |
+| C1 动态 | `services/scheduler.ts:3982` | `startExecution` |
+| C2 动态 | `services/scheduler.ts:4181` | `startWorkgroupTaskFromFrozen`——facade 旁路 |
+| C3 静态 | `services/scheduler.ts:258` | `getExecutionOutcome`，方向正确 |
+| D 组 | `services/execution/executor.ts:21/22/23/26`、`execution/outcome.ts:25`、`agentLaunch.ts:34-39`、`workgroup/launch.ts:45` | 启动臂；含 D7 单常量 `AGENT_HOST_AGENT_NODE_ID`（定义 `agentLaunch.ts:60`，消费 `outcome.ts:25,160`） |
+| E1 `task → gc` | `services/task.ts:100` | **双符号**：`materializingSpaces` + `finishClaimedWebhookWorkspacePrune` |
+| E2 `gc → expandService` | `services/gc.ts:36` | 方向正确，保留 |
+| E3 `expandService → task` | `services/structuralDiff/callGraph/expandService.ts:12` | `getTask` |
 
-RFC-287 新增的 `schedulerAssembly.ts` **未入环**（`:16` 明确不 import scheduler）。
-除上表外，未发现 scheduler / executor / outcome / gc 指向 task 的其它值级或动态边。
+七环 → 六条账映射（替代初稿引用的、并不存在的「测绘 §2.3」）：
 
-### 1.1 七环 → 六条账的映射（替代初稿引用的、并不存在的「测绘 §2.3」）
-
-| # | 账目 `(rule, from, to)` | 当前 depcruise witness |
+| # | 账目 `(rule, from, to)` | witness |
 | --- | --- | --- |
-| 1 | `no-circular, scheduler.ts, task.ts` | `task → scheduler` |
-| 2 | `no-circular, scheduler.ts, workgroup/launch.ts` | `workgroup/launch → task → scheduler` |
-| 3 | `no-circular, execution/executor.ts, task.ts` | `task → scheduler → executor` |
-| 4 | `no-circular, execution/executor.ts, workgroup/launch.ts` | `workgroup/launch → task → scheduler → executor` |
-| 5 | `no-circular, agentLaunch.ts, task.ts` | `task → scheduler → executor → agentLaunch` |
-| 6 | `no-circular, gc.ts, expandService.ts` | `expandService → task → gc` |
+| 1 | `no-circular, scheduler, task` | `task → scheduler` |
+| 2 | `no-circular, scheduler, workgroup/launch` | `workgroup/launch → task → scheduler` |
+| 3 | `no-circular, executor, task` | `task → scheduler → executor` |
+| 4 | `no-circular, executor, workgroup/launch` | 经 executor 闭合 |
+| 5 | `no-circular, agentLaunch, task` | `task → scheduler → executor → agentLaunch` |
+| 6 | `no-circular, gc, expandService` | `expandService → task → gc` |
 
-**C-6**（`task → scheduler → outcome → agentLaunch → task`）没有独立账目，但它与
-C-5 共享**同一** `(from,to)` = 第 5 条；断 C-5 后 depcruise 只会换 witness，
-**不会**改 key（初稿的「身份漂移双红」推理据此作废，见 §9）。A1 断开后
-C-1..C-6 必然全塌（从 task 回到执行支的唯一出边就是 A1）；**C-7
-（`task → gc → expandService → task`）不经 A1**，必须靠 E3（+ G5 的 E1）断开。
+**C-6**（`task → scheduler → outcome → agentLaunch → task`）无独立账目，与 C-5 共享
+同一 `(from,to)`；断 C-5 只换 witness、**不换 key**。A1 断则 C-1..C-6 全塌；
+**C-7（`task → gc → expandService → task`）不经 A1**，靠 E3 + G5 的 E1 断。
 
-### 1.2 G6 外扩的另外三族值级 SCC（用户 2026-08-14 决策纳入）
+### 1.2 G6 四族（用户决策：全 backend 归零）
 
-| 族 | 成员 | 现有账目 |
-| --- | --- | --- |
-| agent 三环 | `agent.ts` / `agentDeps.ts` / `agentResourceIntegrity.ts` | `agent→agentDeps`、`agent→agentResourceIntegrity` |
-| git 二环 | `gitRepoCache.ts` / `repoGroup.ts` | `gitRepoCache→repoGroup`（git 族共五条，其余为 `util/git` 分层倒置，**不在本 RFC 范围**） |
-| workflow 二环 | `workflow.ts` / `workflow.validator.ts` | `workflow→workflow.validator` |
+| 族 | 成员 | 回边符号与锚 | 断法 | 现有账目 |
+| --- | --- | --- | --- | --- |
+| agent | `agent` / `agentDeps` / `agentResourceIntegrity` | `validateDependsOn ↔ getAgentById`、`assertAgentResourceIntegrity ↔ listAgents`（`services/agent.ts:33,51,174,212,386,423`、`agentDeps.ts:36,114,169,182`、`agentResourceIntegrity.ts:133-135`） | 注入 agent loader / list loader，**不迁 owner** | `agent→agentDeps`、`agent→agentResourceIntegrity` |
+| workflow | `workflow` / `workflow.validator` | `validateWorkflowById ↔ getWorkflow`（`services/workflow.ts:82,808-812`、`workflow.validator.ts:104,430-444`） | 注入 workflow loader | `workflow→workflow.validator` |
+| **git（5 成员）** | `gitRepoCache` / `util/git` / `gitSubmodule` / `gitVersion` / `repoGroup` | `gitRepoCache.ts:43/49/50/52 →` 四者；**`util/git.ts:1181-1182,2744-2745` 动态 `import('@/services/gitSubmodule'\|'@/services/gitRepoCache')`（RC-4 分层倒置）**；`gitVersion.ts:9 → util/git`；`gitSubmodule.ts:14 → util/git`；`repoGroup.ts:27 → gitRepoCache` | 直接对边（repoGroup↔cache）可 DI；**分层倒置须把 `resolveSubmoduleParams`/`syncSubmodules` 参数化注入 util 层**，util 不得反向 import services | 五条 git 族账 |
+| **MCP（3 成员）** | `mcp/dispatch` / `server` / `mcp/server` | `mcp/dispatch.ts:28 → @/server`；`server.ts:16 → @/mcp/server`；`mcp/server.ts:24 → @/mcp/dispatch`（另 `:29` type-only 取 `AppDeps`） | 把路由注册表下沉成不依赖 `server.ts` 的独立模块 | `mcp/dispatch→server`（`removeWhen` 写的是 **RFC-247 收尾**——见 proposal DEV-5，实现前必须协调） |
 
-各自独立成刀、可单独回退；只动 import 拓扑，**不动 owner 归属**（owner 迁位仍
-归 RFC-294 W4/W5）。
+`gitRepoCache.ts:78,97` 的两个队列是 cache owner 的私有可变状态，**继续由 cache 持有**，
+不随断环搬动。
 
-## 2. 四件合同（G1，替代初稿的单叶子）
-
-初稿的 `services/taskDriver.ts`（activeTasks + emitTaskStatus + kickScheduler +
-全局 `registerSchedulerDriver`）**作废**。按 RFC-294 §5.2 拆为：
+## 2. 四件合同（G1，逐字采用 RFC-294 `be31dd62:design.md` §5.3）
 
 ```ts
-// ① modules/task-execution/ports/taskRuntimeRegistry.ts —— 本进程 active handle
-//    直接复用 HEAD 既有合同，不重新发明：
-//    modules/task-execution/ports/taskDriverSupervisor.ts 的
-//    TaskDriverSupervisor / TaskDriverStopTicket / TaskDriverStopResult
-export interface TaskRuntimeRegistry {
-  tryAttach(taskId, controller): Promise<'attached' | 'rejected-status-or-source-fence'>
-  requestStop(taskId, cause: TaskStopCause): Promise<TaskDriverStopTicket | 'no-active-owner'>
-  awaitStopped(ticket): Promise<TaskDriverStopResult>          // released | unreaped
-  release(taskId, controller /* 精确 owner */, result): boolean
-  abortAll(cause?: unknown): string[]                          // reason 保真，返回被中止的 id
-  has(taskId): boolean
+// —— 以下四个 interface 的形状由 RFC-294 固定，本 RFC 不自创 ——
+interface OwnershipToken {                    // P0-D 提供，brand 化
+  readonly taskId: string; readonly ownerId: string
+  readonly epoch: number;  readonly leaseUntil: number
 }
-
-// ② modules/task-execution/ports/taskOwnership.ts —— lease / epoch / fencing
-//    实现来自 P0-D；本 RFC 只声明消费面，不建第二套 lease/schema。
-
-// ③ modules/task-execution/ports/taskStatusPublisher.ts
-export interface TaskStatusPublisher { publish(committed: TaskStatusChanged): void }
-//    唯一机械载荷 = 现 task.ts:4875-4899 的 emitTaskStatus（只依赖两个
-//    broadcaster + shared Task 类型，实测可无损搬运）。
-
-// ④ modules/task-execution/ports/schedulerDriver.ts —— 窄端口，实例注入
-export interface SchedulerDriverPort {
-  kick(taskId, opts: RunTaskOptions): Promise<void>
-  cancel(taskId, opts: { cascadeFromParent?: boolean }): Promise<void>
-  resume(taskId, deps: ResumeDriverDeps): Promise<void>   // 独立窄 DTO，不用 StartTaskDeps
+interface TaskOwnershipPort {                 // ← P0-D 实现；本 RFC 只做 consumer cutover
+  claim(taskId, owner, expectation): Promise<OwnershipToken>
+  heartbeat(token): Promise<OwnershipToken>
+  assertCurrent(scope: TransactionScope, token): void
+  release(token): Promise<OwnershipReleaseReceipt>
+}
+interface TaskRuntimeRegistry {               // 纯 process-local
+  attach(token: OwnershipToken, handle: ActiveTaskHandle): void
+  get(taskId): { token: OwnershipToken; handle: ActiveTaskHandle } | null
+  detach(token: OwnershipToken): void
+  abortAll(reason: TaskAbortReason): string[]      // reason 非可选
+}
+interface TaskDriverSupervisor {              // 停机语义独立于 registry
+  requestStop(token: OwnershipToken, reason: TaskAbortReason): Promise<StopRequestedReceipt>
+  awaitStopped(taskId: string, epoch: number): Promise<TaskStoppedReceipt>
 }
 ```
 
-**为什么 `resume` 不复用 `StartTaskDeps`**：它是横跨 `task.ts:359-621` 的 20+ 字段
-application API，RFC-294 `design.md` **§5.2 Task application commands** 已要求
-淘汰（同上：按小节号引用，RFC-294 行锚会随其重写而烂）；`import type` 虽被
-type-only 豁免放行，但会让「窄端口」名存实亡。
+**与 HEAD 既有面的映射（迁移前兼容面，不是目标合同）**：
 
-**admission / settlement 不下沉**：`tryAttach` 的状态 + source-fence 判定
-（`task.ts:239-267`）与 release 时的 unreaped 判定 + workspace prune 完成
-（`:269-287`）依赖 DB/GC，**留在 application use case**，只有纯 process-local 的
-handle 表进 infrastructure。初稿把它们一起说成「零 service 依赖叶子」是错的。
+| HEAD 现状（`6e8c4f9f:packages/backend/src/`） | 性质 | 退役 |
+| --- | --- | --- |
+| `modules/task-execution/ports/taskDriverSupervisor.ts:18-27`：`tryAttach/requestStop/awaitStopped` 三个**异步**方法 | 迁移前兼容 port | T2b 后由上表两份接口取代 |
+| `modules/task-execution/infrastructure/inMemoryTaskDriverSupervisor.ts:22-85`：`tryAttach`(**同步** boolean)、`requestStop`(**同步** ticket)、`release`(精确 owner 判定在 `:61`)、`has`、`abortAll`、`controllerOf`、`deleteIfOwned`、`clearForTesting` | adapter 能力（**不是 port 方法**） | 保留实现、改按 token 定位；`clearForTesting` 归测试 factory |
+| `services/task.ts:245-267` DB 状态 + source-fence admission（在 `withTaskReviewMutationLock` 内） | **application**：`admitAndAttach` use case | 保留在 application，禁止下沉 infrastructure |
+| `services/task.ts:272-287` unreaped 判定 + 精确 release + prune settlement | **application** settlement | 同上 |
+| `services/task.ts:4491` 同步准备失败路径的**直接 release** | application（承重，见 proposal §4） | T2b 必须显式登记「失败可重试、只 release、不 prune」语义 |
 
-## 3. 装配与 bootstrap（废弃全局 register seam）
+> **为什么必须带 token**：B 路实测——`tryAttach(old) → release(old) → tryAttach(next)
+> → requestStop(taskId)` 会 abort 掉 **next**。taskId-only 的停机接口无法表达
+> 「停 epoch 7 而不是 epoch 8」，P0-D 的「每 task 同时可写 epoch ≤ 1」就无法由该合同
+> 实现。
+
+### 2.1 剩余 DTO（第三轮门 F3：不能只给类型名）
+
+```ts
+// transitional publisher（DEV-4：W2 只定义 port，W3 再切 committed event/outbox）
+type TaskStatusChanged = Readonly<{
+  taskId: string
+  status: TaskStatus
+  errorSummary: string | null
+  terminal: boolean            // done|failed|canceled|interrupted
+}>
+interface TaskStatusPublisher { publish(e: TaskStatusChanged): void }
+// 映射：tasks-list 频道 'task.status'；task 频道 'task.status'（errorSummary 非 null 才带）；
+// terminal 时追发 task 频道 'task.done'。载荷源＝现 emitTaskStatus（6e8c4f9f:.../task.ts:4979）。
+// ⚠️ 后置屏障必须原样保留：task.ts:3745 等 reap/rollback、:4930 等 node-run mint、
+//    workgroup/dwActions.ts:217 等 DW state——不得改成 repository commit 即时发射。
+
+interface SchedulerDriverPort {
+  kick(req: KickRequest): Promise<void>
+  cancel(req: { taskId: string; cascadeFromParent?: boolean }): Promise<void>
+  resume(req: { taskId: string; deps: ResumeDriverDeps }): Promise<void>
+}
+// KickRequest 逐字段映射四个现有构造点（T1 产出保真表），不吃 god-type RunTaskOptions。
+// ResumeDriverDeps 复用结构化 InheritableRunConfig（B 路实测：StartTaskDeps 45 字段里
+// resume 真正读的是 17 个 Inheritable 字段 + killStaleRunProcessTree / awaitScheduler /
+// commitPush / mergeAgent 共 21 项；db 由 module context 提供，triggerContext /
+// actorUserId 在 resume 中未读、不进 DTO）。
+```
+
+## 3. 装配、生命周期与注入（G1 下半）
 
 - **不再有** `registerSchedulerDriver` / 全局 `driver` / 「未注册即响亮 throw」。
-  理由（设计门实测）：① 初稿类比的 `orphanReconcile.ts:90-127` 只是**每次调用
-  显式传入的可选依赖**（`ReconcileDeps.taskHasDriver?` + `?? isTaskActive`），
-  不是模块级 locator；② 运行期 throw 会被 `scheduler.ts:3487` 与 `:3528` 的裸
-  `catch` 吞掉——取消会「看起来成功」而 child driver 继续跑、resume 会把可恢复
-  child 误判 `child-interrupted` 进而 fail parent；③ 19 个直调 `startTask(` 的
-  测试里 **17 个不走 `createApp`**，全局注册面在 `--isolate` 下会成片红，在手敲
-  共享进程下又变成文件顺序依赖（前一个文件的注册掩盖后一个的遗漏）。
-- **改为**：最小 `TaskExecutionModule` instance 在**当前** composition root 装配
-  （`cli/start.ts:657-670` 建 app → `:675` listen → `:955-964` schedule ticker →
-  `:972-989` auto-resume——这个窗口天然安全，问题只是初稿没把它变成显式合同），
-  端口随实例注入 route / executor / scheduler；**未装配即 bootstrap fail-fast**，
-  且 fail-fast 必须发生在 `Bun.serve`、ticker、auto-resume 之前。测试显式构造
-  实例（`modules/task-execution/composition/sourceTermination.ts` 是既有先例）。
+  理由：① 初稿类比的 `services/orphanReconcile.ts:90-127` 只是每次调用显式传入的
+  可选依赖（`ReconcileDeps.taskHasDriver?` + `?? isTaskActive`），不是模块级 locator；
+  ② 运行期 throw 会被 `services/scheduler.ts:3487` / `:3528` 的裸 catch 吞掉；
+  ③ 19 个直调 `startTask(` 的测试里 17 个不走 `createApp`。
+- **生命周期定死**（第三轮门 B 路 P1）：
+  - production **每 daemon 一个** `TaskExecutionModule`；`createApp` **只借用、不拥有**
+    （`server.ts:163-165` 是可重复调用的普通 factory，不能承担 module 所有权）。
+  - module 提供 `dispose()` / `awaitIdle()`。
+  - **process-local registry 不闭包在 `DbClient` 上**；DB 由每个 application command
+    显式提供——否则 `rfc165-scratch-space.test.ts:275-317` 那种「只对单次调用注入
+    `Proxy<DbClient>`」的故障注入会被绕过，测试静默失去预言力。
+  - 测试统一 `createTaskExecutionTestModule({ driver: 'poison' | 'real' })`；
+    `rfc301-task-launch-origin-inheritance.test.ts` 需要 poison driver 来断言
+    「绝不被调用」。
+  - 装配窗口：`cli/start.ts:657-670` 建 app → `:675` listen → `:955-964` schedule
+    ticker → `:972-989` auto-resume；**fail-fast 必须早于 listen**。
+- **T2a 的 canary**（防零预言力）：装配锁除「存在/顺序/重复」外，必须断言 HTTP
+  launch、background launch、scheduler child recovery **观测到同一个 module id**，
+  并对 poison method 做变异实证。
 
-### 3.1 四个 kick 点迁移表（初稿写三点，漏第三个）
+### 3.1 四个 kick 点
 
-| # | 锚 | 场景 | 迁移后 |
-| --- | --- | --- | --- |
-| 1 | `task.ts:2919` | startTask / deferred continuation | `SchedulerDriverPort.kick` |
-| 2 | `task.ts:3701` | resumeTask | 同上 |
-| 3 | `task.ts:4252` | **RFC-287 AC-11 retryRepoPreparation**（配套 attach/release 在 `:4207`） | 同上 |
-| 4 | `task.ts:4832` | retryNode | 同上 |
+| # | 锚（`6e8c4f9f:.../task.ts`） | 场景 |
+| --- | --- | --- |
+| 1 | `:2946` | startTask / deferred continuation |
+| 2 | `:3757` | resumeTask |
+| 3 | `:4308` | **RFC-287 AC-11 retryRepoPreparation**（配套 attach/release 在 `:4263-4267`/`:4491`） |
+| 4 | `:4936` | retryNode |
 
-每点附 `RunTaskOptions` 保真表；延续
-`rfc103-launch-config-passthrough.test.ts:172-180` 的计数锁；新增负扫描
-「`task.ts` 中除注释外不得出现 `runTask(`」；新增 kick 站点必须登记 owner、
-配置透传与 attach/release。
+每点附 `KickRequest` 保真表；延续 `rfc103-launch-config-passthrough.test.ts:172-180`
+的四次计数锁；新增负扫描「`task.ts` 除注释外不得出现 `runTask(`」（AST 判定，见 §11）。
 
-## 4. workspace / materialization 符号清单（G2，替代行区间）
+### 3.2 双 registry 中间态的堵法（第三轮门 B 路 P0）
 
-初稿的 `task.ts:379-1741` **不是合法切片**：`:379` 落在 `StartTaskDeps` 的字段
-注释里，`:1741` 落在 `materializeSpace` 的参数注释里（该函数到 `:2045` 才结束）。
-改为按符号迁移：
+T2b 一旦把 registry 迁进 module 实例，而 B2/B3/B4 仍走动态 import 调 module-level
+`cancelTask/resumeTask/isTaskActive`（它们从 `services/task.ts:235` 的进程单例取状态），
+就会出现**两个 registry**：DB 被写 canceled，而真 driver 在另一个 registry 里继续跑
+（`services/task.ts:3353-3392` 的 no-driver fallback 正是这条路径）。
 
-- **迁 source-control / execution workspace**：`materializeWorktree`、repo
-  resolution（`resolveRepoSourceSingle` 等）、cleanup ledger
-  （`createMaterializedSpaceCleanup` / `cleanupMaterializedSpaceLease` /
-  `cleanupMaterializedSpace` / `withWorkspaceCleanupReport`）、
-  group/single/scratch materializer（`materializeGroupSpace` / `materializeSpace`
-  / `loadFrozenSpaceLayout` / `ensureExplicitDirectoryNodes`）。新建**窄
-  `MaterializeDeps`**，不携整个 `StartTaskDeps`。
-- **留 task-execution**：`normalizeStartTaskRepos`、`selectResumeRollbackTargets`
-  （`:981-1014`）、`selectSyncRollbackTargets`（`:1016-1050`）、
-  `runtimeConfigOpts`（`:1052-1078`）、`workflowLaunchVersionMismatch` /
-  `workflowLaunchHookEvent`——它们在初稿区间内但不属物化域。
-- **留 application 编排**：RFC-287 的 `ensureCachedRepoIdentity`（`:2453`）、
-  同步 `materializeSpace`（`:2477`）、`runDeferredRepoPreparation`（`:4280`）、
-  延后准备再次调用 `materializeSpace`（`:4338`）——经 source-control
-  materialization port 调用，**不随物化原语迁走**。
-- **`minimalNodePaths`**（定义 `:1389-1399`，被区间外的 `getTask` 在
-  `:4925-4930` 使用）：提成无 IO 的 workspace projection，供 query 与
-  materialization 共用。
+⇒ **先加一刀（T2b-0）**把同一个 `TaskExecutionContext` 线程化进
+`StartTaskDeps → KickRequest → SchedulerState → child cancel/resume/isActive`，
+此时仍适配旧 registry；下一刀才替换 backing instance。**禁止**用 global locator
+兜这个中间态。
+
+## 4. workspace / materialization（G2，终局迁位）
+
+初稿的行区间 `379-1741` 不是合法切片（两端都在注释里），改为符号级：
+
+- **迁 source-control（终局 owner，DEV-3）**：`materializeWorktree`、repo resolution
+  （`resolveRepoSourceSingle` 等）、cleanup ledger（`createMaterializedSpaceCleanup` /
+  `cleanupMaterializedSpaceLease` / `cleanupMaterializedSpace` /
+  `withWorkspaceCleanupReport`）、group/single/scratch materializer
+  （`materializeGroupSpace` / `materializeSpace` / `loadFrozenSpaceLayout` /
+  `ensureExplicitDirectoryNodes`）。新建**窄 `MaterializeDeps`**，不携整个
+  `StartTaskDeps`。
+- **留 task-execution**：`normalizeStartTaskRepos`、`selectResumeRollbackTargets`、
+  `selectSyncRollbackTargets`、`runtimeConfigOpts`、`workflowLaunchVersionMismatch` /
+  `workflowLaunchHookEvent`。
+- **留 application 编排**：`ensureCachedRepoIdentity`、同步 `materializeSpace` 调用、
+  `runDeferredRepoPreparation` 及其延后准备再次调用——经 source-control
+  materialization port 调用，不随原语迁走。
+- `minimalNodePaths`：提成无 IO 的 workspace projection，供 query 与 materialization
+  共用（现被区间外的 `getTask` 使用）。
 
 ## 5. task read model 三分（G3）
 
-- **窄义 `getTask`**（`task.ts:4901-4941`）：纯 DB 查询 + DTO 映射 + 纯投影，
-  实测无编排 / 物化 / 写路径调用 ⇒ 迁 `task-execution/application/queries`。
-  `expandService.ts:12` 改 import 它（E3 断，第 6 条账销）。
-- **`getTaskNodeRuns`**（`:5177`）：同上，task view/list/node-run projection。
-- **archived events / stdout**（`:5372-5442` 真实 FS 读在 `:5398`；
-  `:5449-5478` FS 读在 `:5470`）：归 task-execution 的 log/artifact query，
-  **经 port 读 FS**，不塞进 application query。
-- **`getTaskDiff`**（`:5509-5615`，调 `isGitWorkTree` / `worktreeDiff` /
-  `gitDiffSnapshot` 于 `:5533/:5542/:5590`）：归 source-control /
-  workspace-insight query。
+- 窄义 `getTask`（`6e8c4f9f:.../task.ts:5005` 起）与 `getTaskNodeRuns`：纯 DB + DTO +
+  纯投影 ⇒ `task-execution/application/queries`；`expandService.ts:12` 改锚（E3 断，
+  销第 6 条账）。
+- archived events / stdout（FS 读经 `readArchivedEvents` 等）：同属 application
+  queries，但 **FS 访问走 required port**，不在 query 里直接碰文件系统。
+- `getTaskDiff`（`:5613`）：**拆双 owner**——task 侧保留 orchestration（先加载 task、
+  保持 task-specific 409/410 错误顺序），Git/worktree 部分下沉 source-control /
+  workspace-insight participant。
 
-每个 query 必须列 DTO、错误码与顺序、consumer；**禁止用「族」「等」作为迁移
-范围**。
+每个 query 必须列 DTO、错误码与顺序、consumer；**禁止用「族」「等」作迁移范围**。
 
-## 6. scheduler 符号归位 inventory（G4，收缩前必须先做）
+## 6. scheduler 归位 inventory（G4）
 
-现状：除白名单外 `scheduler.ts` 仍导出 config（`:407/:429/:436`）、freshness
-转发（`:1497`）、envelope/retry（`:1516/:1549/:1578/:1594`）、frontier
-（`:2251/:2328`）、fanout/iso/query helpers（`:7072/:8749/:9511/:9744/:9787`）、
-`buildContainerMap`（`:10113`）。
+- **依赖闭包**（第三轮门 B 路 P0：清单不是闭包会 typecheck 红或造新环）：
+  - `deriveFrontier`（`:2328`）依赖 scheduler 私有 `SETTLES_WITHOUT_ROW_KINDS` /
+    `isLiveStatus`（`:2295-2305`，调用于 `:2399-2403`）；
+  - `createOrRebuildWrapperIso` 依赖 `parseIsoJsonMap` / `parseIsoSubmodules`
+    （`:2672-2725`，调用于 `:8833/:8853`）——需为 wrapper-iso 定义不依赖
+    `SchedulerState` 的 owner DTO。
+  - 这四个私有符号**必须一并纳入迁移**，否则「纯符号归位 + 不留 re-export + AC-1」
+    三者不可兼得。
+- **scheduler 内部调用数**（AST 实测）：`buildContainerMap` **0**（可干净搬）、
+  `deriveFrontier` 1、`isFresherNodeRun` 2、`decideEnvelopeFollowup` 1、
+  `pickInheritableRunConfig` 1、`shouldRetryNodeFailure` 3、`resolveUpstreamInputs` 6、
+  `composePriorOutputBlock` 2、`freshestPriorRunWithOutput` 2、`fanoutInnerAgentKey` 2、
+  `createOrRebuildWrapperIso` 2 —— 合计 22 个内部调用点。
+- **import consumer**：九组消费归属合计 28，**去重后 27 个测试文件**
+  （`rfc144-stale-replay-regression.test.ts` 同属 frontier 与 wrapper 两组）；
+  生产消费者 1 个：`services/lifecycleRepair/options-S1.ts:24`（调用于 `:69`）。
+- **source-text consumer（import inventory 覆盖不到，必须同步改断言目标）**：
+  `rerun-prior-output-source-guards.test.ts:21-29`（强制函数仍 export 于 scheduler）、
+  `scheduler-wrapper-fanout-routing.test.ts:55-61`（直接切 scheduler 里的
+  `buildContainerMap`）、`rfc096-pick-freshest.test.ts:231-235`（强制 re-export 与
+  freshness 同一函数）、`rfc287-t9-exemptions-and-extinction.test.ts:122-127`
+  （从 scheduler 函数体取源码）。
+- **新增源锁**：任何 T6 owner **不得值 import `scheduler.ts`**。
 
-- **生产消费者**：`lifecycleRepair/options-S1.ts:24` import `buildContainerMap`
-  并在 `:69` 调用 ⇒ 直接收缩 export 会 typecheck 红。
-- **测试消费者（AST 盘点 28 个文件）**：
+## 7. C2 frozen 面
 
-| 符号 | 消费方（文件数） |
-| --- | --- |
-| `deriveFrontier` / `Frontier` | 12（derive-frontier、rfc092×2、rfc095、rfc120×2、rfc130、rfc144、scheduler-audit-s01/s12/s22 等） |
-| `isFresherNodeRun` | 6（dispatch-multi-row-consistency、isfresher-noderun-baseline、lifecycle-wrapper-nested、rfc074、rfc096、scheduler-fresher-noderun-cci） |
-| `PreviousAttemptShape` / `decideEnvelopeFollowup` | 3（rfc123、scheduler-envelope-followup-branch、scheduler-port-validation-followup-decide） |
-| `INHERITABLE_RUN_CONFIG_KEYS` / `pickInheritableRunConfig` | 1（rfc284-t20） |
-| `shouldRetryNodeFailure` | 1（rfc287-t1） |
-| `resolveUpstreamInputs` | 2（resolve-upstream-inputs-picker-baseline、scheduler-audit-s05） |
-| `composePriorOutputBlock` / `freshestPriorRunWithOutput` | 1（rerun-prior-output-injection） |
-| `fanoutInnerAgentKey` | 1（rfc223-pr3a） |
-| `createOrRebuildWrapperIso` | 1（rfc144） |
-
-归位方向：`Frontier`/`deriveFrontier`/`buildContainerMap` → `dispatchFrontier`
-（终局 owner 为 `task-execution/engine/task`）；`isFresherNodeRun` →
-`freshness`；envelope/retry、prior-output、upstream-inputs、wrapper-iso、
-fanout-key 各归明确 owner。零外部 consumer 的类型（`InheritableRunConfig`、
-`EnvelopeFollowupDecision` 等）单独去 export，不与承重迁移混刀。**按偏离项 1，
-归位刀内一次改完消费方 import，不留 re-export**；改锚提交与源码提交分离。
-
-## 7. C2 frozen 面（AC-7）
-
-现有 facade 的 workgroup arm 不能复用：node invoker 只允许 workflow，workgroup
-会抛 `execution-invoker-unsupported`（`execution/executor.ts:61-75`）；公开
+现有 facade 的 workgroup arm 不能复用：node invoker 只允许 workflow
+（`execution/executor.ts:61-75` 抛 `execution-invoker-unsupported`）；公开
 `StartExecutionRequest` 的 workgroup arm 只有普通 `StartWorkgroupTask`
-（`execution/types.ts:58-67`），executor 分支调的是 **live** `startWorkgroupTask`
-（`:104-110`）——而 frozen face 明确不得重读 workgroup resource / OCC fence，且仍
-要执行 roster/resource gates（`workgroup/launch.ts:330-338,341-402`）。
+（`execution/types.ts:58-67`），executor 分支调 **live** `startWorkgroupTask`
+（`:104-110`）；而 frozen face 不得重读 workgroup resource / OCC fence，且仍要执行
+roster/resource gates（`workgroup/launch.ts:330-338,341-402`）。
 
-⇒ 新增**内部** participant（如 `LaunchFrozenWorkgroupChild`），声明：frozen group
-payload、parent task/node-run/invocation depth、继承的 materialized space、
-owner-active preflight、collaborator 并集、gates ④-⑦ 及原错误码与顺序；
-**不可由 HTTP / public operation 构造**。对拍用 `rfc243-call-workgroup.test.ts:129`
-与 call-workflow shutdown/adoption 家族。
+⇒ 新增**内部** participant（`LaunchFrozenWorkgroupChild`）：frozen group payload、
+parent task/node-run/invocation depth、继承的 materialized space、owner-active
+preflight、collaborator 并集、gates ④-⑦ 及原错误码与顺序；**不可由 HTTP / public
+operation 构造**。AC-7 要求每项一条断言。
 
 ## 8. gc 旁支（G5）
 
-`materializingSpaces` 生产读写全集：定义 `gc.ts:53-60`；GC 读
-`gc.ts:483-504,551-554`；task 写/删 `task.ts:1315,1767,1815,2156`。下沉为零依赖
-lease registry**可行**；但 `task.ts:100` 同一条 import 还带
-`finishClaimedWebhookWorkspacePrune`（消费于 `:287` driver release 与 `:352`
-无-driver 终态取消），**只搬 Map 断不了 `task→gc`**。按用户决策两个符号一并迁走
-（prune 入独立 workspace-prune 模块），并覆盖上述两条调用路径 + stop-ticket
-settlement 测试。保留 lease 的既有竞态保证：**mkdir 前登记、落行/清理后释放**。
+`materializingSpaces` 定义 `services/gc.ts:60`；GC 读 `:501` / `:551`；task 写删
+`services/task.ts:1336 / 1788 / 1836 / 2177`。`finishClaimedWebhookWorkspacePrune`
+消费于 `services/task.ts:287`（driver release）与 `:356`（无-driver 终态取消）。
+**两个符号一并迁走**（DEV-3 终局 owner），`task→gc` 值边消失；保留 lease 的既有竞态
+保证：**mkdir 前登记、落行/清理后释放**。
 
-## 9. 账本策略（AC-2 实现细则）
+## 9. 账本策略
 
-- 违规身份是 `(rule, from, to)` 三元组（`scripts/depcheck.ts:316-317`）；
-  `stale`（账上有、实际无）与 `unknown`（实际有、账上无）**都是硬失败**
-  （`:398` / `:402`）。
+- 违规身份是 `(rule, from, to)` 三元组（`scripts/depcheck.ts:316-317`）；`stale` 与
+  `unknown` **都是硬失败**（`:398` / `:402`）。
 - 每刀提交的原子顺序：改源码 → 跑 `bun run depcheck` 读**实际** unknown/stale →
-  同一提交内删除全部 stale、**只对实际出现的 exact tuple** 追加临时条目
-  （`why` 注明中间态，`removeWhen: 'RFC-288 T<n>…'`，满足
-  `depcheck-gate.test.ts:200-224` 的格式棘轮）→ 复跑 depcheck + 单测归零 → 提交。
-- **禁止预测性预登记**：预登记尚未出现的 tuple 会立刻被判 stale（这正是初稿
-  C-6 建议会踩的坑）。
-- 各刀预期：T0（D7 下沉）不产生账本变化；断 A1 那刀删前 5 条；G3/G5 那刀删第
-  6 条；G6 三刀各删本族账目。
-- fixture：`depcheck-gate.test.ts:61` 的本地 `CYCLE` / `KNOWN_CYCLE` 并不断言
-  样例真在生产 `KNOWN_VIOLATIONS` 中 ⇒ 改名 `SYNTHETIC_CYCLE` 只锁算法性质
-  （或改为从 `KNOWN_VIOLATIONS` 取样并断言存在）。scheduler↔task 硬编码不止
-  `:63-64`，还有 `:78`、`:85`、`:143-152` 与 `:301` 的注释，一并处理。
+  同一提交内删 stale、**只对实际出现的 exact tuple** 追加临时条目（`removeWhen:
+  'RFC-288 T<n>…'`，满足 `depcheck-gate.test.ts:200-224` 格式棘轮）→ 复跑归零 → 提交。
+- **禁止预测性预登记**（预登记未出现的 tuple 会立刻判 stale）。
+- 各刀预期：T0 无账本变化；**T2d 同一提交内删 A1 + 前 5 条账**（否则 depcheck stale
+  红 / lint unused import 红二选一，`--max-warnings 0`）；T5 删第 6 条；G6 各族刀各删
+  本族账。
+- fixture：`depcheck-gate.test.ts:61` 的本地 `CYCLE`/`KNOWN_CYCLE` 并不断言样例真在
+  生产账本中 ⇒ 改名 `SYNTHETIC_CYCLE`（或改为从 `KNOWN_VIOLATIONS` 取样并断言存在）；
+  同步处理 `:63-64` / `:78` / `:85` / `:143-152` / `:301`。
+- **机器账本（RFC-294 W0 强制，第三轮门 C 路 P1）**：新增/迁移的每个 symbol 要写
+  `module-symbol-owners`、`public-surfaces`、cross-context edge、composition entry、
+  facade/exception 条目（含 `removeAfterWave` / `expiresOn` / `mutationTest`）与 API
+  snapshot；每刀同步 stale/unknown、type-taint、forge、consumer-method 与规则变异门。
 
 ## 10. 测试策略
 
-**拓扑 oracle ≠ 行为 oracle**：depcheck / Tarjan 只证明 import 图，不证明终止
-原因、owner generation、WS cadence、四点配置透传、frozen closure 或失败恢复。
-每刀必须保持下列行为锁（T1 先把它们跑成基线夹具，记录**文件 + 用例 + 期望**）：
+**拓扑 oracle ≠ 行为 oracle**。每刀必须保持下列既有锁（T1 先跑成基线并记录
+「文件 + 用例 + 期望」）：
 
 | 行为面 | 锁 |
 | --- | --- |
 | generation / stale owner / stop receipt / unreaped | `rfc303-runtime-ownership.test.ts:27-71` |
-| abort reason 与 shutdown 终态（interrupted 非 canceled） | `rfc202-source-locks.test.ts:16-23,35-40` |
-| 四个 kick 与配置透传 | `rfc103-launch-config-passthrough.test.ts:172-180` |
+| abort reason 与 shutdown 终态 | `rfc202-source-locks.test.ts:16-23,35-40` |
+| 四 kick 与配置透传 | `rfc103-launch-config-passthrough.test.ts:172-180` |
 | WS 频道 / 顺序 / terminal cadence | `ws-broadcast-golden.test.ts:1-27,76-114` |
 | 级联取消 + 重启后领养同一 child | `rfc243-call-workflow.test.ts:406,615` |
 | frozen workgroup 全链 | `rfc243-call-workgroup.test.ts:129` |
-| 准备前注册 / orphan 豁免 / 重试点火 / 真异步 | `rfc287-t13-deferred-prep.test.ts:249,298,313,415,632` |
-| 物化成功/失败/清理/竞态/CAS | `rfc165-scratch-space.test.ts:169-380`、`rfc248-materialize-group.test.ts:176-525`、`rfc199-start-task-workflow-race.test.ts:113-761` |
-| 架构锁（含 top-level const 初始化事故记录） | `rfc217-architecture-locks.test.ts:3-10` |
+| 准备前注册 / orphan 豁免 / 重试点火 / 真异步 | `rfc287-t13-deferred-prep.test.ts`（**入口行已漂，T1 现扫**） |
+| 物化成功/失败/清理/竞态/CAS | `rfc165-scratch-space.test.ts`、`rfc248-materialize-group.test.ts`、`rfc199-start-task-workflow-race.test.ts` |
 
-新增锁：
+**新增锁**：
 
-- **装配锁**：未装配必须在 HTTP / background 启动前失败；重复装配（同实例幂等、
-  异实例硬拒）；同文件多 `createApp`；`--isolate` 与 serial 两种进程模型；
-  不得跨文件借到驱动。
-- **源锁**：`scheduler.ts` 禁 `from '@/services/task'`（rfc257 同型，当前该型
-  source-ban 在 `:22-28`）；`task.ts` 禁 `runTask(`；CALL_FACES（`:45-53`）更新对。
-- **初始化锁**（C1/C2 各自那一刀）：task/scheduler/executor/workgroup 不同顺序的
-  import smoke + 调用真实 facade 的最小行为锁 + `bun run build:binary` + 单二进制
-  最小启动 smoke。
-- **终局棘轮**：Tarjan 投影断言 backend 零值级 SCC；**复用 dependency-cruiser 的
-  原始 `modules`（`scripts/depcheck.ts:488` 取图处）**，只加纯 SCC 聚合器，并把
-  过窄的 `CruiseDependency` 类型（`:294`）扩到携带 `dependencyTypes`；**不另写
-  第二套 import parser**。
+- **同步准备失败 → handle 不泄漏**：驱动
+  `startTask(unreachableRepo, { deferRepoPreparation: true, awaitScheduler: true,
+  gitBaselineSyncWindowMs: 0 })`，断言随后的 `__repo_prep__` 重试**不**返回
+  `task-still-running`（对应 proposal §4 第六项）。
+- **装配锁**：见 §3（含 canary 与 poison 变异）。
+- **双 registry 负锁**：同一 DB 两个 app：A 启动、B 取消 ⇒ 必须停到同一 driver。
+- **源锁 AST 化 + 变异实证**：依赖/调用守卫改 AST exact symbol/import（文本正则
+  防漂移是无底洞）；每条守卫在射程内做变异并证明**必红**。
+- **初始化锁**（C1/C2 各自那刀）：四种 import 顺序 smoke + 真实 facade 调用 +
+  `bun run build:binary` + 单二进制启动 smoke。
+- **G6 每族**：baseline oracle → additive port/参数化 → 单 consumer cutover → 负扫描；
+  git 族另需 submodule/repo-group/cache 语义 oracle，MCP 族另需 HTTP/MCP parity 与
+  route registry oracle。
+- **终局棘轮**：Tarjan 投影断言 backend 零值级 SCC，**复用 depcruise 原始 `modules`
+  图源**（`scripts/depcheck.ts:488` 取图处），扩 `CruiseDependency`
+  （`:294`）携带 `dependencyTypes`；不另写第二套 parser。
 
-**每刀**：pin worktree 跑 `bun run gate:local` 全绿 + exact-SHA CI；定向家族只作
-快速反馈（RFC-287 T14 实测「按 RFC 编号选测试」会漏掉不含该编号的锁）。
+**每刀**：pin worktree `bun run gate:local` 全绿 + exact-SHA CI；**T4/T9 另跑**
+`RUN_GIT_NETWORK=1`（`gate:local` 对 `skipIf(!RUN_GIT_NETWORK)` 门后的套件一个都不跑，
+清单用 `grep -rln "skipIf(!RUN_GIT_NETWORK" packages/backend/tests/` 现扫）。
+**T6 改锚纪律**：除 import specifier 外，断言体/期望值/snapshot 一律不得改；任何断言
+变化逐条说明并单独评审（防「顺手改绿」）。
 
-## 11. 偏离项台账
+## 11. 提交纪律（DEV-1 修订形态）
 
-见 proposal.md §5 的三条（不留 facade / G6 早于 W4-W5 / `ports/` 命名），均已于
-2026-08-14 逐条呈用户确认。任何新增偏离必须同样入台账并再次呈批。
+「不留 facade」与「源码/改锚分提交」不可兼得——无 facade 时至少一个 commit 必然
+typecheck 红。⇒ **源码移动 + 全部生产/测试 consumer 改锚必须在同一个原子 commit**；
+缓解措施为 repo-wide exact consumer 文件窗口 + 每刀前 `git pull --rebase` +
+pin worktree `gate:local` + exact-SHA CI。共享 `main` 上**不得**出现不可构建的 SHA。
 
-## 12. 锚漂对照表（初稿 → HEAD 实测）
+## 12. 偏离台账
 
-| 初稿写的 | HEAD 实际 |
-| --- | --- |
-| A1 `task.ts:114` | `task.ts:153` |
-| `activeTasks: Map<string, ActiveTaskHandle>` @ `task.ts:191` | 模型已变：`taskDriverRegistry = new InMemoryTaskDriverSupervisor()` @ `:235`；`ActiveTaskHandle` 不存在 |
-| `abortAllActiveTasks(): void` | `abortAllActiveTasks(reason?: string): string[]` @ `:330` |
-| `emitTaskStatus` @ `:3959-3980` | `:4875-4899`（同一函数体） |
-| kick 三点 `:2498/:3158/:3916` | 四点 `:2919/:3701/:4252/:4832` |
-| B1 `scheduler.ts:202`；消费 `:9108-9109` | `:205`；消费 `:9348-9350` |
-| B2/B3/B4 `:3406/:3447/:3468` | `:3485/:3526/:3547` |
-| C1 `:3903` / C2 `:4102` / C3 `:253` | `:3982` / `:4181` / `:258` |
-| 物化域 `task.ts:379-1741` | 两处均落在注释中；`materializeSpace` 到 `:2045` 才结束（改符号清单，§4） |
-| `getTask` 读模型 | `task.ts:4901-4941` |
-| E2 `gc.ts:35` | `gc.ts:36` |
-| `orphanReconcile.ts:86` seam | 契约 `:90-108`，消费 `:122-127`（且**不是**同型注入面） |
-| rfc243 CALL_FACES `:45-51` | `:45-53` |
-| rfc257 同型锁 `:26-33` | `:22-28` |
-| 测试 import「92/88」 | scheduler 94 / task 93 |
-| 「88+ 测试文件迁 helper」 | `__setActiveTaskForTesting` 族实际 3 文件 11 处引用 |
-| `scheduler.ts` 9847 行 | 10115 行（`task.ts` 5880 行） |
-| 「测绘 §2.3」 | 该文件只有 §1-§5；映射表已直接写进本文 §1.1 |
-| 未漂 | `.dependency-cruiser.cjs:137`、`scheduledTaskRefs.ts:8-12`、`expandService.ts:12`、`depcheck.ts:317`、`depcheck-gate.test.ts:63-64` 与 `:200-238`、`.dependency-cruiser.cjs:118-122` |
+见 proposal §5 的 DEV-1..DEV-6（不留 facade 原子提交形态 / G6 四族早于 W4-W5 /
+终局迁位提前 / publisher 只落 transitional port / MCP 撞 RFC-247 收尾需协调 /
+`ports/` 落位条件化）。新增偏离必须同样入台账并再次呈批。
+
+## 13. 锚漂说明
+
+本文锚全部对准 `6e8c4f9f`。初稿（锚 `da706b19`）与第二稿（锚 `01d2160e`）的对照不再
+保留在正文——两次基线之间 `task.ts` / `scheduler.ts` 经 22 / 15 个提交、净变化近 5000
+行，逐锚复核只对**开工当刻**的 SHA 有意义。T1 的第一子任务即产出「开工 SHA → 全部
+承重锚」的冻结 manifest，AC-3 以该 manifest 为准。
