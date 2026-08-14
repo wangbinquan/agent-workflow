@@ -151,7 +151,7 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 | # | 任务 | 依赖 |
 | --- | --- | --- |
 | T35 | 四个脚本契约（collect / classify / arbitrate / select）+ 返回 schema 校验；`WorkPackage` 判别联合**含 `noop`**——不起 task、不在 MR 说话、只落 observation（50 MR×3 次/天 = 150 次健康唤醒全靠它）。**v1 的 union 只含 `noop \| mr-review`**——PR-7/PR-10 合并时才各自扩入自己那一支 | T7 |
-| T35c | **wake 入口**（design §5.1 定义为必需，此前 plan 无人实现）：public command + inbound route + 稳定 MR 定位 + 去重 + 接收回执，触发一次 `collect`。无它则独立于 GitLab 的自研流水线在零轮询前提下永不启动 | T36 |
+| T35c | **wake 入口**（**已降为可选**——proposal §6ter-H1 确认自研流水线由 GitLab CI 触发，唤醒链路天然成立）：public command + inbound route + 稳定 MR 定位 + 去重 + 接收回执，触发一次 `collect`。仍要实现（它是 readiness 判据的一部分，也为将来的独立流水线预留），但**不构成 CI 修复上线的前置**，可排在 PR-9 尾批 | T36 |
 | T10e | **事件归属**（从 PR-1 移来，其价值到监视器阶段才出现）：每个 ingress event id 只被一个顶层 capability claim；监视器派发与直接触发共享 causation id；机器自身 push 打 cause 标记**仅用于同因果链去重**——已跑过等价 `self-review` 的 revision 才跳过检视，**不反转 E2 的默认监管** | T9,T36 |
 | T35b | 核心脚本失败一律阻断（`blocking` 只适用钩子）；`collect` 失败不得带空产物继续 | T35 |
 | T36 | 主循环：事件唤醒 → 四脚本 → 起一轮；**零轮询**断言 | T35,T9 |
