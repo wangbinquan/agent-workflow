@@ -47,7 +47,7 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 
 | # | 任务 | 依赖 |
 | --- | --- | --- |
-| T19 | 扩 `CODE_HOST_ACTIONS`：GitLab `draft_notes` 创建 / `bulk_publish`；GitHub `pulls/reviews`（带 `comments[]`） | — |
+| T19 | 扩 `CODE_HOST_ACTIONS`：GitLab `draft_notes` 创建 / `bulk_publish`；GitHub `pulls/reviews`（带 `comments[]`）。注册表是 `satisfies Record<CodeHostAction, ...>`，**两家都必须给 binding**——GitLab 独有的 draft_notes 在 GitHub 侧显式标 `unsupported` + reasonKey（`singleRequestReview`），反之亦然，否则 typecheck 红 | — |
 | T20 | position 组装（domain 纯函数）：两家各自形态，新增/删除/上下文行 | — |
 | T21 | 批量发布器：草稿逐条 → 部分失败清理已建草稿 → 整轮失败；GitHub 单请求语义 | T19,T20 |
 | T22 | `thread.resolve` 批量化用于 `cleanup-previous` | T19 |
@@ -99,10 +99,11 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 
 | # | 任务 | 依赖 |
 | --- | --- | --- |
-| T46 | 三入口：issue 标签 webhook / `/code` 界面 / 平台 API | T16 |
+| T46a | **新增 issue 事件面**（设计门核实：今天完全不存在）：`CODE_HOST_EVENT_TYPES` 增 `issue_labeled` / `issue_comment`；GitLab adapter 放开 `noteable_type === 'Issue'` 分支并解析 label hook；GitHub adapter 放开非 PR 的 `issue_comment` 与 `issues.labeled`；变量表补 issue 侧字段；触发器 UI 与校验跟进 | — |
+| T46b | 三入口：issue 标签 webhook / `/code` 界面 / 平台 API | T16,T46a |
 | T47 | 模板声明参数表 → 平台渲染表单 + 校验（界面与 API 共用同一校验） | T15,T46 |
 | T48 | 入口脚本：只给引用时取回 `{title, body, attachments, writebackHandle}` | T7,T46 |
-| T49 | `clarify` 分流：有回写句柄且框架支持 ⇒ 回写 issue 评论；否则落平台 | T48 |
+| T49 | `clarify` 分流：有回写句柄且框架支持 ⇒ 回写 issue 评论；否则落平台。**回答的收取同样依赖 T46a**——answer 需带 round/question 标记以关联到具体那一问，并给提问者回执；issue 侧双向通道不可用时**拒绝启用该入口并说明原因**，不静默回退到平台 clarify（否则报告人永远等不到他以为会出现在 issue 里的问题） | T48,T46a |
 | T50 | `implement` → `run-target-gate`（读目标仓 CLAUDE.md/CONTRIBUTING）→ `self-review`（复用 PR-4 阶段）→ `open-mr` | T31 |
 
 ### CI 修复（PR-9）
