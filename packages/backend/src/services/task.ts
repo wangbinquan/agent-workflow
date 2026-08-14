@@ -2779,13 +2779,27 @@ async function startTaskImpl(
     // 与任务行的路径回写放进**同一个事务**——多仓任务的 repos 与 tasks.worktreePath
     // 必须同时可见，否则一个恰好落在中间的读者（诊断接口、structural diff、前端
     // 详情页）会看到「有工作树但没有成员仓」这种不存在的状态。
+    //
+    // RFC-066 还要求 tasks 上的 legacy 仓库列逐字镜像 task_repos[0]，repoCount
+    // 等于成员行数。延后准备的占位 INSERT 不可能提前知道这些值，所以这里必须把
+    // **整份兼容投影**一起回填；只回填路径会让成功任务永久显示成 1 仓，且详情页
+    // 丢失远端 URL / cache id / base branch。
+    const preparedHead = prepared.repos[0]
     dbTxSync(deps.db, (tx) => {
       tx.update(tasks)
         .set({
           worktreePath: prepared.worktreePath,
           branch: prepared.branch,
           baseCommit: prepared.baseCommit,
-          repoPath: prepared.repos[0]?.repoPath ?? '',
+          repoPath: preparedHead?.repoPath ?? '',
+          repoUrl:
+            preparedHead?.repoUrl !== null && preparedHead?.repoUrl !== undefined
+              ? redactGitUrl(preparedHead.repoUrl)
+              : null,
+          cachedRepoId: preparedHead?.cachedRepoId ?? null,
+          baseBranch: preparedHead?.baseBranch ?? '',
+          repoCount: Math.max(1, prepared.repos.length),
+          spaceKind: prepared.spaceKind,
         })
         .where(eq(tasks.id, taskId))
         .run()

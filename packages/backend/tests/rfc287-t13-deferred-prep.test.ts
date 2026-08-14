@@ -14,13 +14,18 @@
 // 就再也重试不了准备）。
 
 import { describe, expect, test, beforeAll } from 'bun:test'
-import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
+import { asc, eq } from 'drizzle-orm'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks, workflows, users, nodeRuns } from '../src/db/schema'
+import { tasks, workflows, users, nodeRuns, taskRepos } from '../src/db/schema'
 import { startTask } from '@/services/task'
+import { runGit } from '@/util/git'
 import { ulid } from 'ulid'
 import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
+import { startGitHttpRemote } from './helpers/gitHttpRemote'
+import { seedRepoGroup } from './helpers/repoGroupFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -54,6 +59,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
   let userId: string
 
   beforeAll(async () => {
+    await startGitHttpRemote()
     db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     workflowId = s.workflowId
@@ -100,6 +106,82 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
     expect(prep, '缺少 __repo_prep__ 合成行').toBeDefined()
     expect(prep?.status).toBe('failed')
     expect(String(prep?.errorMessage ?? '')).toMatch(/timed out|clone|fatal|unable/i)
+  }, 60_000)
+
+  test('准备成功后原子回填双仓行与 tasks 首仓兼容投影', async () => {
+    const db2 = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db2)
+    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc287-deferred-home-'))
+    const sourceRepos = [
+      mkdtempSync(join(tmpdir(), 'aw-rfc287-deferred-repo-a-')),
+      mkdtempSync(join(tmpdir(), 'aw-rfc287-deferred-repo-b-')),
+    ]
+
+    try {
+      for (const [index, repoPath] of sourceRepos.entries()) {
+        await runGit(repoPath, ['init', '-q', '-b', 'main'])
+        await runGit(repoPath, ['config', 'user.email', 'test@example.com'])
+        await runGit(repoPath, ['config', 'user.name', 'Test'])
+        writeFileSync(join(repoPath, 'README.md'), `# repo ${index}\n`)
+        await runGit(repoPath, ['add', '.'])
+        await runGit(repoPath, ['commit', '-q', '-m', 'init'])
+      }
+
+      const repoGroupId = await seedRepoGroup(db2, appHome, sourceRepos, {
+        mountPaths: ['', 'vendor/sdk'],
+        name: `deferred-group-${ulid()}`,
+      })
+      const task = await startTask(
+        {
+          workflowId: s.workflowId,
+          name: 'deferred-success',
+          repoGroupId,
+          inputs: {},
+        } as never,
+        {
+          db: db2,
+          appHome,
+          actorUserId: s.userId,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+          deferRepoPreparation: true,
+          gitBaselineSyncWindowMs: 0,
+          awaitScheduler: true,
+        } as never,
+      )
+
+      expect(task.status).toBe('done')
+      const taskRow = (await db2.select().from(tasks).where(eq(tasks.id, task.id)))[0]!
+      const repoRows = await db2
+        .select()
+        .from(taskRepos)
+        .where(eq(taskRepos.taskId, task.id))
+        .orderBy(asc(taskRepos.repoIndex))
+
+      expect(repoRows).toHaveLength(2)
+      expect(taskRow.repoCount).toBe(2)
+      expect(taskRow.spaceKind).toBe('remote')
+      expect(taskRow.worktreePath).not.toBe('')
+
+      // RFC-066：tasks 的兼容列必须逐字镜像 task_repos[0]。这组断言同时锁住
+      // RFC-024 详情页的远端 URL 与 RFC-248 列表/详情的双仓计数。
+      const head = repoRows[0]!
+      expect(taskRow.repoPath).toBe(head.repoPath)
+      expect(taskRow.repoUrl).toBe(head.repoUrl)
+      expect(taskRow.repoUrl).toMatch(/^http:\/\/127\.0\.0\.1:/)
+      expect(taskRow.cachedRepoId).toBe(head.cachedRepoId)
+      expect(taskRow.cachedRepoId).not.toBeNull()
+      expect(taskRow.baseBranch).toBe(head.baseBranch)
+      expect(taskRow.branch).toBe(head.branch)
+      expect(taskRow.baseCommit).toBe(head.baseCommit)
+      expect(taskRow.worktreePath).toBe(head.worktreePath)
+
+      const prepRuns = await db2.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+      const prep = prepRuns.find((run) => run.nodeId === REPO_PREP_NODE_ID)
+      expect(prep?.status).toBe('done')
+    } finally {
+      rmSync(appHome, { recursive: true, force: true })
+      for (const repoPath of sourceRepos) rmSync(repoPath, { recursive: true, force: true })
+    }
   }, 60_000)
 
   test('默认（不开开关）逐字维持旧行为：预物化，失败不落行', async () => {
