@@ -63,6 +63,9 @@ export async function autoResumeInterruptedTasks(
       id: tasks.id,
       workgroupId: tasks.workgroupId,
       workgroupConfigJson: tasks.workgroupConfigJson,
+      // RFC-287 G7 / AC-10：判「还没建出工作树」用（见下方 skip 分支）。
+      worktreePath: tasks.worktreePath,
+      workspacePrunedAt: tasks.workspacePrunedAt,
     })
     .from(tasks)
     .where(
@@ -82,6 +85,9 @@ export async function autoResumeInterruptedTasks(
       id: tasks.id,
       workgroupId: tasks.workgroupId,
       workgroupConfigJson: tasks.workgroupConfigJson,
+      // RFC-287 G7 / AC-10：判「还没建出工作树」用（见下方 skip 分支）。
+      worktreePath: tasks.worktreePath,
+      workspacePrunedAt: tasks.workspacePrunedAt,
     })
     .from(tasks)
     .innerJoin(nodeRuns, eq(nodeRuns.taskId, tasks.id))
@@ -111,6 +117,24 @@ export async function autoResumeInterruptedTasks(
   const resumed: string[] = []
   const skipped: string[] = []
   for (const t of candidates) {
+    // RFC-287 G7 / AC-10 —— **准备阶段的任务不走 resume**。
+    //
+    // G7 之后出现了「任务行已落、工作树还没建出来」这一段。resume 对它必然失败
+    // （`assertWorktreePresentForResume` 判 `task-repo-prep-incomplete`），可失败会被
+    // 熔断器**计数**：每次 boot 烧一次，N 次之后这行任务被隔离，恢复审计里还留下一串
+    // 归因错误的 `auto-resume failed`。它需要的是「重试准备仓库」（AC-11），不是续跑
+    // 一个还不存在的工作树。这里显式跳过，且**不计入熔断**——它不是一次失败的恢复
+    // 尝试，是一次根本不该发起的尝试。
+    //
+    // 判据与 `assertWorktreePresentForResume` 同源：空路径 + 没打墓碑。打了墓碑的是
+    // 老的「工作区已回收」形态，仍按既有路径处理（resume 报 410、计熔断）。
+    if (t.worktreePath === '' && t.workspacePrunedAt === null) {
+      log.info('auto-resume skipped a task still awaiting repository preparation', {
+        taskId: t.id,
+      })
+      skipped.push(t.id)
+      continue
+    }
     if (await isAutoRecoverySuspended(db, t.id)) {
       skipped.push(t.id)
       continue

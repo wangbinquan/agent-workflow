@@ -3133,6 +3133,26 @@ function assertWorktreePresentForResume(task: Task, verb: string): void {
       410,
     )
   }
+  // RFC-287 G7 / AC-10 —— 「工作树没建出来」与「工作树被回收了」是**两件事**。
+  //
+  // G7 之前不变量是「有任务行就有工作树」，所以空路径只可能是回收。G7 之后多了一段
+  // 新形态：任务行已落、准备（clone/物化）失败或还没跑完，`worktreePath` 是空串。
+  // 此时 `existsSync('')` 恒 false，会掉进下面那句 410，并把原因写成
+  // 「likely reclaimed by worktree GC」——归因完全错误（它从来没被建出来过，谈不上
+  // 被回收），给用户的下一步也相反：正解是**重试准备仓库**（AC-11），不是另起任务。
+  // 前端已经靠 `__repo_prep__` 行分出了第四态，服务端这一半必须跟上，否则 API 的
+  // 错误码与文案仍在误导（且开了 autoResumeOnBoot 时每次 boot 都吃一个错误归因）。
+  //
+  // 判据用墓碑区分（DTO 上是 workspaceState：pruned/pruning 即已打/正在打）：
+  // 打了墓碑 = 老的「物化失败 / 工作区已回收」形态（沿用原语义）；没打墓碑 + 空
+  // 路径 = G7 的准备阶段（AC-15 刻意保证准备失败不打墓碑）。
+  if (task.worktreePath === '' && (task.workspaceState ?? 'available') === 'available') {
+    throw new ConflictError(
+      'task-repo-prep-incomplete',
+      `task '${task.id}' has no worktree yet — repository preparation has not completed; ` +
+        `retry the preparation step instead of ${verb}`,
+    )
+  }
   // AR-15's concern is `worktreeAutoGc` REMOVING the worktree (removeWorktree
   // deletes the dir), so an existence check is the right gate — and it does not
   // false-fire on tasks whose worktree dir is present but not (yet) a git repo
@@ -4542,6 +4562,46 @@ async function runDeferredRepoPreparation(args: {
       controller.signal.addEventListener('abort', onAbort, { once: true })
     })
     backoffMs = Math.min(backoffMs * 2, 15_000)
+  }
+  if (prepared.earlyError !== null && controller.signal.aborted) {
+    // RFC-287 AC-14 —— **取消导致的失败不是失败**。
+    //
+    // 三轮门 AC 对账实测（该 AC 此前一条测试都没有）：在准备窗口内点取消，git 子
+    // 进程确实被打断了（288ms 就回来，不是等 clone 自己超时），可紧接着准备段把
+    // 这次中止**当成普通 git 失败**，抢先把 `pending → failed` CAS 成功；等
+    // `cancelTask` 回过头来写 `canceled` 时任务已是终态，于是保留 failed。用户点了
+    // 取消，得到的却是一个「失败」的任务，还附着一句 git 中止的错误——归因完全错误，
+    // 且 AC-14 要求的 canceled 落不下来。
+    //
+    // 下面那段竞速保护（CAS 抛出即保留既有终态）挡不住这一种：它防的是「取消**先**
+    // 写成功」，而这里是「取消还没来得及写」。判据只能是信号本身。
+    //
+    // 处置：合成行落 canceled（不能留在 running——恢复扫描会把它当还在跑），任务
+    // 状态**不碰**，交给 cancelTask 按它自己的流程终结；租约照常释放，否则取消之后
+    // 这行任务的每次重试都撞 `task-still-running`。
+    try {
+      await setNodeRunStatus({
+        db: deps.db,
+        nodeRunId: prepRunId,
+        to: 'canceled',
+        allowedFrom: ['running'],
+        reason: 'repo-prep-canceled',
+        extra: { finishedAt: Date.now() },
+      })
+    } catch (err) {
+      log.warn('repo-prep row already terminal when recording cancel', {
+        taskId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+    taskDriverRegistry.release(taskId, controller)
+    const cur = (
+      await deps.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
+    )[0]
+    return {
+      ok: false,
+      preparedTask: { ...task, status: (cur?.status as TaskStatus | undefined) ?? 'canceled' },
+    }
   }
   if (prepared.earlyError !== null) {
     // 租约释放必须在 finally 里——两个写点都是**会抛**的 CAS：任务在准备窗口内

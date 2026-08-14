@@ -1191,5 +1191,165 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
   }, 180_000)
 })
 
+// RFC-287 AC-14 —— 取消 / 删除在**准备窗口内**生效。
+//
+// 三轮门 AC 对账发现这条 AC 一条测试都没有。它不是锦上添花：G7 之前「有任务行就有
+// 工作树」，取消面对的永远是一个已经物化好的任务；G7 之后出现了一段**新的窗口**
+// ——任务行已在、工作树还没有、后台正卡在 clone 上。这段窗口里点取消，如果只改了
+// DB 状态而没打断底层 git，用户看到「已取消」而机器还在拉一个几 GB 的仓，取消就是
+// 假的（proposal AC-14 原话要求「底层 git 子进程确实终止」）。
+describe('RFC-287 AC-14 —— 准备窗口内的取消', () => {
+  test('准备中取消：任务落 canceled，且准备行不是永远 running 的孤儿', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const { cancelTask } = await import('@/services/task')
+    const task = await startTask(
+      {
+        workflowId: s.workflowId,
+        name: 'ac14-cancel',
+        // 不可路由 + 长超时：确保取消发生在 clone **还在跑**的时候，而不是失败之后。
+        repoUrl: 'http://10.255.255.1:9/nope.git',
+        inputs: {},
+      } as never,
+      {
+        db,
+        actorUserId: s.userId,
+        appHome: TEST_HOME,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        deferRepoPreparation: true,
+        cloneTimeoutMs: 60_000,
+        gitBaselineSyncWindowMs: 0,
+      } as never,
+    )
+    // 等准备真的开跑（合成行出现即证明已进入窗口），再取消。
+    for (let i = 0; i < 200; i++) {
+      const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+      if (runs.some((r) => r.nodeId === REPO_PREP_NODE_ID)) break
+      await new Promise((r) => setTimeout(r, 25))
+    }
+    const t0 = Date.now()
+    await cancelTask(db, task.id)
+    const cancelMs = Date.now() - t0
+    // 取消不得等到 clone 自己超时才回来（60s）——那等于没打断。
+    expect(cancelMs, '取消必须打断正在跑的 git，而不是等它自己超时').toBeLessThan(20_000)
+
+    const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+    expect(row?.status).toBe('canceled')
+    // 准备行不得停在 running：那样恢复扫描与 UI 都会把它当「还在跑」。
+    const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
+      (r) => r.nodeId === REPO_PREP_NODE_ID,
+    )
+    expect(prep, '准备行应已铸出').toBeDefined()
+    expect(prep?.status, '取消后准备行不得停在 running').not.toBe('running')
+    // AC-15 同样适用：取消不打墓碑，否则之后连重试都 CAS 不回来。
+    expect(row?.workspacePrunedAt ?? null).toBeNull()
+  }, 120_000)
+})
+
+// RFC-287 AC-15 —— 准备失败**不得**被打上工作区墓碑。
+//
+// 为什么这条要独立锁：墓碑（`workspacePrunedAt`）一旦落下，`setTaskStatus` 会以 410
+// `workspace-pruned` 拒绝一切复活，AC-11 的「重试准备仓库」当场作废——而准备失败的
+// 任务恰恰是最需要重试的那一类。三轮门 AC 对账查到 AC-15 只有一处顺带断言，没有
+// 覆盖真正危险的那个写点：`lifecycle.ts` 的**惰性补写**（发现 worktreePath 指向的
+// 目录不存在就补墓碑）。它今天靠 `row.worktreePath !== ''` 这个前置条件避开了准备
+// 失败的任务——但那是**巧合级的保护**：谁要是把判据改成「路径为空也算工作区没了」，
+// 看起来更严谨，实际会把 AC-11 整条打死，且现有用例一条都不会红。
+describe('RFC-287 AC-15 —— 准备失败不打墓碑（AC-11 的地基）', () => {
+  test('惰性补墓碑必须跳过 worktreePath 为空的任务', () => {
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'lifecycle.ts'), 'utf8')
+    // 补写分支的守卫必须同时要求「路径非空」与「路径不存在」。
+    const m = src.match(
+      /if \(row\.worktreePath !== '' && !existsSync\(row\.worktreePath\)\) \{[\s\S]{0,400}?workspacePrunedAt: Date\.now\(\)/,
+    )
+    expect(m, '惰性补墓碑的守卫必须先排除空路径（准备失败的任务正是空路径）').not.toBeNull()
+  })
+
+  test('端到端：准备失败的任务上没有墓碑，且能 CAS 回 pending', async () => {
+    // 上一条锁的是「守卫写对了」，这条锁的是「墓碑真的没落下、复活真的能走」——
+    // 只有源码锁的话，别处再补一个写点就完全测不出来。
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = await launchFailingPrep2(db, s, 'ac15-no-tombstone')
+    const before = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
+    expect(before?.status).toBe('failed')
+    expect(before?.worktreePath ?? '').toBe('')
+    expect(before?.workspacePrunedAt ?? null, '准备失败不得打墓碑').toBeNull()
+
+    // 复活闸门：能从 failed CAS 回 pending，就说明墓碑没挡路（AC-11 的前提）。
+    const { setTaskStatus } = await import('@/services/lifecycle')
+    await setTaskStatus({
+      db,
+      taskId: id,
+      to: 'pending',
+      allowedFrom: ['failed'],
+      allowTerminal: true,
+      reason: 'ac15-probe',
+      extra: {},
+    } as never)
+    const after = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
+    expect(after?.status).toBe('pending')
+  }, 120_000)
+})
+
+// RFC-287 AC-10 —— 不变量从「有任务行就有工作树」改成「`__repo_prep__` done 之后才
+// 有」，**服务端的读点必须跟上**。三轮门 AC 对账查到前端已经靠合成行分出了第四态，
+// 后端这一半还停在老不变量上。
+describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳过', () => {
+  test('resume 准备失败的任务：报 task-repo-prep-incomplete，而不是「被 GC 回收」', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = await launchFailingPrep2(db, s, 'ac10-resume')
+    const { resumeTask } = await import('@/services/task')
+    let code = ''
+    let msg = ''
+    try {
+      await resumeTask(db, id, {
+        db,
+        actorUserId: s.userId,
+        appHome: TEST_HOME,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      } as never)
+    } catch (err) {
+      code = (err as { code?: string }).code ?? ''
+      msg = err instanceof Error ? err.message : String(err)
+    }
+    // 老行为：`existsSync('')` 恒 false ⇒ 410 `task-worktree-missing`，文案写
+    // 「likely reclaimed by worktree GC」。工作树从来没建出来过，谈不上被回收；
+    // 而且它把用户指向「另起任务」，与 AC-11 的「重试准备」正好相反。
+    expect(code).toBe('task-repo-prep-incomplete')
+    expect(msg, '不得再把没建出来说成被回收').not.toMatch(/reclaimed by worktree GC/i)
+    expect(msg, '要指向重试准备这一步').toMatch(/preparation/i)
+  }, 120_000)
+
+  test('auto-resume 跳过准备阶段任务，且不烧熔断计数', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = await launchFailingPrep2(db, s, 'ac10-autoresume')
+    // 造成 boot reap 之后的形态：任务 interrupted + daemon-restart 摘要。
+    const { DAEMON_RESTART_ERROR_SUMMARY } = await import('@agent-workflow/shared')
+    await db
+      .update(tasks)
+      .set({ status: 'interrupted', errorSummary: DAEMON_RESTART_ERROR_SUMMARY })
+      .where(eq(tasks.id, id))
+
+    const { autoResumeInterruptedTasks } = await import('@/services/autoResume')
+    let resumeCalls = 0
+    const r = await autoResumeInterruptedTasks({
+      db,
+      breaker: { maxAttempts: 3, windowMs: 60_000 },
+      resume: async () => {
+        resumeCalls += 1
+      },
+      now: () => Date.now(),
+    } as never)
+    // 关键：连 resume 都不该被调用——调用了就必然失败、就会被熔断器计数，
+    // 每次 boot 烧一次，N 次之后这行任务被隔离，且恢复审计里全是归因错误的告警。
+    expect(resumeCalls, 'auto-resume 不得对准备阶段任务发起 resume').toBe(0)
+    expect(r.resumed).not.toContain(id)
+    expect(r.skipped).toContain(id)
+  }, 120_000)
+})
+
 // 收尾：临时 home 整体删掉。没有它，克隆残留会一直堆在磁盘上（见 TEST_HOME 注释）。
 afterAll(() => rmSync(TEST_HOME, { recursive: true, force: true }))
