@@ -75,6 +75,9 @@ export * from './node-kind-behavior'
 export * from './workflow-sync-diff' // RFC-109
 export * from './workflow-canonical' // RFC-199
 export * from './workflowScope'
+export * from './workflowNodeGeometry' // RFC-302
+export * from './workflowWrapperGeometry' // RFC-302
+export * from './workflowLayout' // RFC-302
 export * from './loopPolicy' // RFC-236
 export * from './workgroup-canonical' // RFC-225
 export * from './mcp-operation' // RFC-201
