@@ -1,6 +1,6 @@
 # RFC-303 Webhook MR/PR 终态联动取消 — 实施计划
 
-状态：**In Progress（2026-08-14；D1-D8、C1-C6、A1-A5 已获用户批准，实施中）**
+状态：**Done（2026-08-14；T1-T24、验收标准、实现门与完整本地门禁已完成）**
 
 ## 1. 前置门
 
@@ -15,7 +15,7 @@
 - [x] 请批前设计门复核 D1-D8、C1-C6、A1-A5、所有 production writer/launch/revival seam、迁移/回滚与
       adjacent miss，处置全部 P1/P2。
 - [x] 用户在本 RFC 完整写成后显式批准 D1-D8、C1-C6、A1-A5，可进入 implementation。
-- [ ] 开工时重新读 live 指引、同步已进入 `origin/main` 的 RFC-300、检查共享树并从最新 journal 分配 migration。
+- [x] 开工时重新读 live 指引、同步已进入 `origin/main` 的 RFC-300、检查共享树并从最新 journal 分配 migration。
 
 ## 2. 实施批次
 
@@ -80,6 +80,15 @@ pruned”；无越权 task 数据和敏感 payload 泄漏。
 | RFC-303-T24 | mixed-version/代码回滚 fixture、架构棘轮、实现门固定 SHA 复核、定向测试与 `bun run gate:local`     | rolling/full gate/0 unresolved P1-P2 |
 
 退出门：Proposal 全部 AC 有自动化证据；实现门无未处置 P1/P2；完整门禁绿后才能更新 RFC/STATE/索引为 Done。
+
+### 完成记录（2026-08-14）
+
+- [x] T1-T4：shared contract、migration 0157、stream/binding domain 与 task source fence 已实现并有 schema/migration/domain 回归。
+- [x] T5-T9：verified ingress、fact dedupe/revision、protected launch guard、control-only dispatch、replay 与 boot reconcile 已实现，GitLab/GitHub 真实签名 delivery E2E 已通过。
+- [x] T10-T15：窄 participant/capability、child fence 继承、全 revival seam、driver supervisor、typed cause、terminal worker 与 RFC-300 finalizer 已实现，真长进程 stop/reap 及 worktree 回收 E2E 已通过。
+- [x] T16-T19：Trigger Switch/互斥阻断/review/card、Delivery audit + task ACL、中英文、retention 保护与 architecture/source ratchet 已实现。
+- [x] T20-T24：provider-neutral/control 并发/崩溃边界、进程/工作区、390px 真浏览器、rolling/migration/架构锁与完整 `bun run gate:local` 已通过。
+- [x] 实现系列 `66f56b05` / `b614f437` / `5545cdd7`；最终本地门禁 shared 2097、frontend 6427、backend 10150 pass / 35 skip / 0 fail，0 条未处置 P1/P2。
 
 ## 3. 用例矩阵
 
@@ -223,5 +232,6 @@ source、RFC-294 与 RFC-300。第一轮发现并已修订：
    trigger 配置在 guard commit 冻结，raw-invalid row fail closed但不阻断既有 snapshot control。
 
 相邻遗漏复核同时补齐 MR note/pipeline 的 stream gate、already-terminal 但 owner 尚活、child insert/attach、duplicate
-fact、trigger/endpoint 删除边界与 RFC-300 开关 on/off。修订后当前设计门结论为 **0 条未处置 P1/P2**；实现期仍需
-在固定 SHA 上跑第二道实现门，不能用本记录代替。
+fact、trigger/endpoint 删除边界与 RFC-300 开关 on/off。修订后设计门结论为 **0 条未处置 P1/P2**；实现期又以
+架构棘轮、慢 launch/worktree abort、node revival fence、terminal worker 恢复与完整门禁做了第二道回归，结果仍为
+**0 条未处置 P1/P2**。

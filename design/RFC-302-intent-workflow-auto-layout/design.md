@@ -1,6 +1,6 @@
 # RFC-302 技术设计：Intent 新建工作流自动布局
 
-状态：**In Progress（用户已批准，按本设计实施与验收中）**
+状态：**Done（2026-08-14；实现门与发布门均通过）**
 源码核对基线：`15438053188af748f59b45f5cefc1ba2a678768c`
 
 ## 1. 当前链路与问题
@@ -278,3 +278,15 @@ apply 不重新布局，不增加“无 position 则布局”的启发式。crea
 相邻复核确认：post-layout byte limit 在 hash 前；old draft 不 backfill；update/update→copy 不进入 normalizer；secret pointer 因
 nodes 顺序不变而稳定；apply 不二次布局。修订后当前会话结论为 **0 条未处置 P1/P2**。实现前若用户另行要求独立 companion，
 再按固定文件清单与隔离快照补跑，不以本记录冒充独立评审。
+
+## 13. 实现与发布门记录
+
+- shared 唯一 planner、Intent domain normalizer、turn canonicalization、preview/apply exactness 与负空间均随 `1322226f`
+  进入 `origin/main`；零 migration、零 wire/权限/apply lifecycle 变化。
+- 最终候选树完整 `gate:local`：shared 2079、frontend 6426、backend 10110 pass / 35 skip / 0 fail，总耗时 10m19s。
+- RFC-302 系统 E2E：Chromium 2/2、WebKit 2/2；首轮 hosted shard 上同两条也通过。
+- 首轮 CI 暴露的相邻 RFC-287 G7 成功路径兼容投影遗漏由 `574d2c67` 修复：`tasks` 的首仓 legacy 列、`repoCount` 与
+  `spaceKind` 和 `task_repos` 在同一事务回填；真实双仓 smart-HTTP 后端行为测试 10/10 文件级通过，RFC-024/RFC-248
+  Chromium 2/2，S-14 写点棘轮 3/3。
+- 精确 SHA `574d2c67f59221eb49dab62b6507d03afaa0bd60` 的 GitHub Actions 主 CI `31762926366` completed/success，36/36
+  作业成功；Windows binary build 与 frontend 三分片均成功。未执行部署，未声称 live service 状态改变。

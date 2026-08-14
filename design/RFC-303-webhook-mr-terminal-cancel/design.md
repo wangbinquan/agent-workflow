@@ -1,6 +1,6 @@
 # RFC-303 Webhook MR/PR 终态联动取消 — 技术设计
 
-状态：**In Progress（2026-08-14；D1-D8、C1-C6、A1-A5 已获用户批准，实施中）**
+状态：**Done（2026-08-14；D1-D8、C1-C6、A1-A5 已批准并完整实现）**
 
 ## 1. 当前事实与缺口
 
@@ -693,9 +693,9 @@ pruned 的状态伪装成可恢复。
 保留 pending effect；旧 binary 无法续做时应停止 Webhook consumer并恢复新版本，而不是手工把 effect 标 succeeded。
 已经 canceled、已发 SIGKILL、已清 lease/slot 或已删除 worktree 都不可逆；external side effect 也不会回滚。
 
-## 17. 待完整 RFC 请批的设计裁决
+## 17. 已批准并实现的设计裁决
 
-除 Proposal D1-D8/C1-C6 外，请同时确认以下实现边界：
+除 Proposal D1-D8/C1-C6 外，用户同时确认了以下实现边界：
 
 - A1：引入 durable stream revision、launch guard 与 control effect，保证慢 launch/crash 不漏停；
 - A2：task snapshot/fence 随 child 继承，close/merge 期间统一阻断所有 driver-attaching revival；

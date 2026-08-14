@@ -1,6 +1,6 @@
 # RFC-302：Intent 新建工作流自动布局
 
-状态：**In Progress（用户已批准 D1-D6 与 AC-1～AC-9）**
+状态：**Done（2026-08-14；D1-D6 与 AC-1～AC-9 已实现并验收）**
 日期：2026-08-14
 
 ## 1. 背景
@@ -141,7 +141,12 @@ Intent update 一个已有 workflow 时，只改用户要求的业务字段/节�
 - **AC-9**：定向 shared/backend/frontend、真实 daemon→Intent draft→browser review→commit→editor E2E、响应式/画布几何断言与
   `bun run gate:local` 全绿；实现门无未处置 P1/P2。
 
-## 8. 待批准
+## 8. 批准与完成记录
 
-请批准 D1-D6 与 AC-1～AC-9。批准前只落本 RFC 三件套、`design/plan.md` 与 `STATE.md`，不修改 production、test、依赖或
-lockfile。
+- 用户已批准 D1-D6 与 AC-1～AC-9；实现提交 `1322226f` 已进入 `origin/main`。
+- 最终隔离发布树 `bun run gate:local` 全绿：shared 2079、frontend 6426、backend 10110 pass / 35 skip / 0 fail。
+- 真实 daemon→draft→review→commit→editor 的重叠 DAG、nested wrapper 与合法 cycle 在 Chromium/WebKit 共 4/4 通过。
+- 首轮 hosted CI 暴露的相邻 RFC-287 延迟准备投影遗漏由 `574d2c67` 修复；真实双仓 smart-HTTP 后端测试及
+  RFC-024/RFC-248 Chromium 2/2 通过。
+- 精确 SHA `574d2c67f59221eb49dab62b6507d03afaa0bd60` 的主 CI `31762926366` 36/36 作业全绿，包含 Windows binary build 与
+  frontend 3/3；未声称 live service 部署。

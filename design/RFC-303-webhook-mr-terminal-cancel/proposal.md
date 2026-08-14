@@ -1,6 +1,6 @@
 # RFC-303 Webhook MR/PR 终态联动取消
 
-状态：**In Progress（2026-08-14；D1-D8、C1-C6、A1-A5 已获用户批准，实施中）**
+状态：**Done（2026-08-14；D1-D8、C1-C6、A1-A5 已批准，实现与完整本地门禁已完成）**
 
 ## 1. 背景
 
@@ -19,8 +19,8 @@ MR/PR 后续收到关闭或合入事件时，不等待当前节点自然结束�
 
 ## 2. 需求澄清阶段已确认的产品规则
 
-以下 D1-D8 是用户在 RFC 落档前对推荐方案的确认；本三件套写完后仍需按仓库流程对完整设计与能力影响
-清单再做一次显式批准，批准前不修改 production/test/migration。
+以下 D1-D8 是用户在 RFC 落档前对推荐方案的确认；完整设计、能力影响清单与 A1-A5
+也已获显式批准，实现按该批准边界完成。
 
 ### D1. 规则级、默认关闭、GitLab/GitHub 共用
 
@@ -141,33 +141,33 @@ live trigger 外键，因为 D3 允许 trigger 后续被删除。
 
 ## 6. 验收标准
 
-- [ ] Trigger create/update/read contract 与编辑 UI 增加默认关闭的 `cancelOnMrTerminal`，中英文、a11y、review
+- [x] Trigger create/update/read contract 与编辑 UI 增加默认关闭的 `cancelOnMrTerminal`，中英文、a11y、review
       summary 与 dirty/reset 行为完整。
-- [ ] 选项只允许包含 `mr_opened` 且不包含 `mr_closed/mr_merged` 的规则；前后端返回同一稳定错误码，旧规则
+- [x] 选项只允许包含 `mr_opened` 且不包含 `mr_closed/mr_merged` 的规则；前后端返回同一稳定错误码，旧规则
       `false/omitted` 继续兼容。
-- [ ] GitLab close/merge 与 GitHub closed(unmerged/merged) 都命中同一 provider-neutral control path；terminal
+- [x] GitLab close/merge 与 GitHub closed(unmerged/merged) 都命中同一 provider-neutral control path；terminal
       delivery 不为受保护规则创建新 task/fire。
-- [ ] 受保护的 MR-family root 在 initial task INSERT 内冻结 opaque binding；push/tag/pipeline 等无 MR 标识的
+- [x] 受保护的 MR-family root 在 initial task INSERT 内冻结 opaque binding；push/tag/pipeline 等无 MR 标识的
       launch 不冻结；trigger disable/edit/delete 不改变已落任务。
-- [ ] 同一 endpoint+projectId+MR stream 的多规则根任务和全部活跃后代被取消；repo rename/transfer 不漏停，邻接
+- [x] 同一 endpoint+projectId+MR stream 的多规则根任务和全部活跃后代被取消；repo rename/transfer 不漏停，邻接
       endpoint/project/MR、手动/定时/API 任务不受影响；protected MR payload 缺稳定 identity 时不启动半保护任务。
-- [ ] running/pending/awaiting_review/awaiting_human 正常取消；already done/failed/canceled/interrupted 只记录精确
+- [x] running/pending/awaiting_review/awaiting_human 正常取消；already done/failed/canceled/interrupted 只记录精确
       receipt/fence，不伪造 canceled；terminal fence 期间 resume/retry fail closed。
-- [ ] close 后 update 被挡，显式 reopen 解除 closed fence 且不自动复活，merged 永不 reopen；close/update/reopen/
+- [x] close 后 update 被挡，显式 reopen 解除 closed fence 且不自动复活，merged 永不 reopen；close/update/reopen/
       merge 竞争、重复 delivery 与 replay 都有确定结果。
-- [ ] control intent 先持久化再发 stop；daemon crash、claim lease 过期、重复 consumer 可恢复且幂等，无“delivery
+- [x] control intent 先持久化再发 stop；daemon crash、claim lease 过期、重复 consumer 可恢复且幂等，无“delivery
       已处理但 task 永远漏停”的窗口。
-- [ ] terminal 会 revoke 更早的 precommit launch guard并中止受管 clone/fetch/materialization；不可中断的短 FS 操作
+- [x] terminal 会 revoke 更早的 precommit launch guard并中止受管 clone/fetch/materialization；不可中断的短 FS 操作
       完成后仍被二次 gate 拦截，guard/临时资源 settle 前不声称 released。
-- [ ] task 与 node-run 错误原因准确区分 close/merge/user/parent-cascade；广播、delivery audit 与日志不含凭证或
+- [x] task 与 node-run 错误原因准确区分 close/merge/user/parent-cascade；广播、delivery audit 与日志不含凭证或
       原始 payload 泄漏。
-- [ ] active managed process 收到即时 abort，默认 10 秒 grace 后升级进程组 kill；只有 driver/process settle 后
+- [x] active managed process 收到即时 abort，默认 10 秒 grace 后升级进程组 kill；只有 driver/process settle 后
       control receipt 才能声称 released，unkillable/unreaped 明确失败并可续做。
-- [ ] fan-out/script/code-host pool、runtime session lease、review/human wait 与 child task owner 均释放；终态 commit
+- [x] fan-out/script/code-host pool、runtime session lease、review/human wait 与 child task owner 均释放；终态 commit
       后不再 dispatch 新节点、retry 或外部调用，已经 in-flight 的不可撤回副作用按能力影响清单准确说明。
-- [ ] RFC-300 全局开关 off 时工作区保留，on 时 remote/scratch 在 owner release 后即时清理；internal/inherited、
+- [x] RFC-300 全局开关 off 时工作区保留，on 时 remote/scratch 在 owner release 后即时清理；internal/inherited、
       failed/interrupted 与 claim/recovery 既有边界不回归。
-- [ ] migration/rolling upgrade、正常/异常/并发/崩溃恢复、真实 GitLab/GitHub webhook daemon E2E 与浏览器配置流
+- [x] migration/rolling upgrade、正常/异常/并发/崩溃恢复、真实 GitLab/GitHub webhook daemon E2E 与浏览器配置流
       均有自动化防护，最终 `bun run gate:local` 全绿且实现门无未处置 P1/P2。
 
 ## 7. 能力影响清单
@@ -208,4 +208,4 @@ parent/child 整棵执行树是一个资源单元。call 子任务、awaiting_re
 成为唯一 Webhook consumer。代码回滚不删除新表/列；已经 canceled、merged-fenced 或已被 RFC-300 删除的工作区
 不可恢复，pending control 由恢复到新版本后续做。
 
-以上 C1-C6 需要在实现开始前随 D1-D8 一并显式批准。
+以上 C1-C6 已在实现开始前随 D1-D8 一并获得显式批准。
