@@ -44,15 +44,23 @@ describe('RFC-287 T14 — fanout 撞冲突必须落 abandon（既存缺陷，用
 
   test('分片线（L5）：onConflictHuman 在返回 failed 之前 abandon', () => {
     const decl = dispositionAfter('conflictNodeRunId: shardRunId')
+    // `await` 必须写进正则（二轮门自查实证）：改成 fire-and-forget 的 `void` 时，
+    // abandon 的落库会与骨架随后的 iso discard 竞争——而这条 finding 的要害恰恰
+    // 是「库里留下一句没人兑现的承诺」，落库时序就是全部。只锁三个片段依次出现的
+    // 话，`void` 版本照样全绿。
     expect(decl).toMatch(
-      /onConflictHuman:[\s\S]{0,800}fanout-shard-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
+      /onConflictHuman:[\s\S]{0,800}await tryTransitionMergeState\([\s\S]{0,300}fanout-shard-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
     )
   })
 
   test('聚合线（L6）：onConflictHuman 在返回 failed 之前 abandon', () => {
     const decl = dispositionAfter('conflictNodeRunId: aggRunId')
+    // `await` 必须写进正则（二轮门自查实证）：改成 fire-and-forget 的 `void` 时，
+    // abandon 的落库会与骨架随后的 iso discard 竞争——而这条 finding 的要害恰恰
+    // 是「库里留下一句没人兑现的承诺」，落库时序就是全部。只锁三个片段依次出现的
+    // 话，`void` 版本照样全绿。
     expect(decl).toMatch(
-      /onConflictHuman:[\s\S]{0,800}fanout-agg-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
+      /onConflictHuman:[\s\S]{0,800}await tryTransitionMergeState\([\s\S]{0,300}fanout-agg-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
     )
   })
 

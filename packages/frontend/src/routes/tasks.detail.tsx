@@ -513,15 +513,7 @@ function TaskDetailPage() {
     tk.status === 'awaiting_human'
   // RFC-287 G7：准备失败与「工作区已回收」在 status/worktreePath 上同形，靠合成
   // `__repo_prep__` 行区分——它失败即说明卡在准备，该给的提示是「重试准备」。
-  // `interrupted` 与 `failed` 同等对待：daemon 在准备窗口内重启时，boot reap 把准备
-  // 行标成 interrupted，而它同样是「卡在准备、该重试准备」的形态。只认 failed 会让
-  // 这类任务落回 `worktree-missing` 分支，UI 劝用户另起任务——正是本第四态要消灭的
-  // 误导，只是换了触发路径（T14 第二轮门实测）。后端 retryNode 的可重试集与此一致。
-  const repoPrepFailed =
-    nodeRuns.data?.runs.some(
-      (r) =>
-        r.nodeId === REPO_PREP_NODE_ID && (r.status === 'failed' || r.status === 'interrupted'),
-    ) ?? false
+  const repoPrepFailed = deriveRepoPrepFailed(nodeRuns.data?.runs)
   const resumability = resumeStatus(tk.status, tk.worktreePath, repoPrepFailed)
   // RFC-164/165: the task's execution subject (workgroup / agent / workflow) —
   // one derivation reused by the header subject link, the meta row and the
@@ -1979,6 +1971,29 @@ export function taskDetailRefetchInterval(
  *
  * Exported for unit tests.
  */
+/**
+ * 该任务是否**卡在仓库准备**（RFC-287 G7 / AC-10）。
+ *
+ * 抽成纯函数是为了能被直测——二轮门自查实证：只在源码里锁
+ * `expect(DETAIL_SRC).toContain('REPO_PREP_NODE_ID')` 是**没有预言力**的，
+ * `import` 那一行就满足它；把判据改成 `r.status === 'done'`、甚至写死成永不成立，
+ * 前端 36 条测试照样全绿。锁「代码里出现过某个标识符」和锁「判据算得对」完全是
+ * 两回事。
+ *
+ * `interrupted` 与 `failed` 同等对待：daemon 在准备窗口内重启时，boot reap 把准备行
+ * 标成 interrupted，而它同样是「卡在准备、该重试准备」的形态。只认 failed 会让这类
+ * 任务落回 `worktree-missing` 分支、UI 劝用户另起任务——正是第四态要消灭的误导，
+ * 只是换了触发路径。后端 `retryNode` 的可重试集与此一致。
+ */
+export function deriveRepoPrepFailed(runs: readonly NodeRun[] | undefined): boolean {
+  return (
+    runs?.some(
+      (r) =>
+        r.nodeId === REPO_PREP_NODE_ID && (r.status === 'failed' || r.status === 'interrupted'),
+    ) ?? false
+  )
+}
+
 export function resumeStatus(
   status: Task['status'],
   worktreePath: string,

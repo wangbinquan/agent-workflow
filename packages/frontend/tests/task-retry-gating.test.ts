@@ -8,7 +8,12 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { canOfferResume, resumeStatus, taskDetailRefetchInterval } from '../src/routes/tasks.detail'
+import {
+  canOfferResume,
+  deriveRepoPrepFailed,
+  resumeStatus,
+  taskDetailRefetchInterval,
+} from '../src/routes/tasks.detail'
 import { canRetryNodeRun } from '../src/components/NodeDetailDrawer'
 import { enUS } from '../src/i18n/en-US'
 import { zhCN } from '../src/i18n/zh-CN'
@@ -52,6 +57,27 @@ describe('resumeStatus', () => {
   test('准备失败 → repo-prep-failed（不得与 worktree-missing 混为一谈）', () => {
     expect(resumeStatus('failed', '', true)).toBe('repo-prep-failed')
     expect(resumeStatus('interrupted', '', true)).toBe('repo-prep-failed')
+  })
+
+  // 判据本身的直测——这是上面那条 wire 锁的另一半：wire 锁只保证「调用了」，
+  // 这里保证「算得对」。二轮门自查证明少了这一半，判据可以任意改错而不被发现。
+  test('deriveRepoPrepFailed：failed 与 interrupted 都算「卡在准备」', () => {
+    const mk = (nodeId: string, status: string) => ({ nodeId, status }) as never
+    expect(deriveRepoPrepFailed([mk('__repo_prep__', 'failed')])).toBe(true)
+    // daemon 重启打断准备时 boot reap 落的就是 interrupted —— 只认 failed 会让这类
+    // 任务掉回 worktree-missing 分支，UI 劝用户另起任务（正是第四态要消灭的误导）。
+    expect(deriveRepoPrepFailed([mk('__repo_prep__', 'interrupted')])).toBe(true)
+  })
+
+  test('deriveRepoPrepFailed：其余状态与其余节点一律不算', () => {
+    const mk = (nodeId: string, status: string) => ({ nodeId, status }) as never
+    for (const s of ['pending', 'running', 'done', 'canceled']) {
+      expect(deriveRepoPrepFailed([mk('__repo_prep__', s)]), s).toBe(false)
+    }
+    // 别的节点失败 ≠ 卡在准备。
+    expect(deriveRepoPrepFailed([mk('n1', 'failed')])).toBe(false)
+    expect(deriveRepoPrepFailed([])).toBe(false)
+    expect(deriveRepoPrepFailed(undefined)).toBe(false)
   })
 
   test('第三个入参缺省时保持既有三态（老调用方与首帧不受影响）', () => {
@@ -154,9 +180,12 @@ describe('canOfferResume', () => {
 describe('RFC-300 workspace capability wiring', () => {
   test('detail hides preserved/retry/sync affordances and renders both cleanup states', () => {
     // RFC-287 G7：纯函数会算第四态不等于 UI 用上了它——这几条锁「真的 wire 进去」。
-    // 三件缺一不可：判据取自合成 `__repo_prep__` 行、算出的第四态传给了
-    // resumeStatus、以及这一态确实渲染出自己的提示。
-    expect(DETAIL_SRC).toContain('REPO_PREP_NODE_ID')
+    //
+    // ⚠️ 二轮门自查实证：原来这里写的是 `toContain('REPO_PREP_NODE_ID')`，那是**空**
+    // 断言——`import` 那一行就满足它；把判据改成 `r.status === 'done'`、甚至写死成
+    // 永不成立，36 条照样全绿。判据本身现已抽成纯函数 `deriveRepoPrepFailed` 并在
+    // 上面直测；这里只锁「UI 确实调用了它、并把结果喂给 resumeStatus」。
+    expect(DETAIL_SRC).toContain('deriveRepoPrepFailed(nodeRuns.data?.runs)')
     expect(DETAIL_SRC).toContain('resumeStatus(tk.status, tk.worktreePath, repoPrepFailed)')
     expect(DETAIL_SRC).toContain("resumability === 'repo-prep-failed'")
     expect(DETAIL_SRC).toContain("t('tasks.resumeRepoPrepFailed')")

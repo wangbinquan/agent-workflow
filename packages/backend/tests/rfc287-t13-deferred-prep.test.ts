@@ -227,7 +227,21 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
     // 无论哪种，都**不是**本 RFC 要改的对象；这里只锁「开关默认关闭时不变」。
     const rows = await db.select().from(tasks)
     const eager = rows.find((r) => r.name === 'eager')
-    expect(threw || eager !== undefined).toBe(true)
+    // ⚠️ 原断言是 `expect(threw || eager !== undefined).toBe(true)` —— **恒真**：
+    // 抛了为真，没抛就必然有行，二者必居其一。把 `deps.deferRepoPreparation === true`
+    // 改成 `!== false`（即延后准备变成默认，正是本用例声称要防的回归）它照样全绿。
+    //
+    // 真正有判别力的是：**不开开关的启动不得产生 `__repo_prep__` 合成行**。那条行
+    // 是延后准备独有的产物，走老路径的任务身上根本不该出现。
+    if (eager !== undefined) {
+      const prepRuns = (
+        await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, eager.id))
+      ).filter((r) => r.nodeId === REPO_PREP_NODE_ID)
+      expect(prepRuns.length, '不开开关时不得走延后准备（不该有 __repo_prep__ 行）').toBe(0)
+    } else {
+      // 老路径的另一种收场：物化在落行之前失败，直接抛给调用方、不留任务行。
+      expect(threw, '既没抛也没落行 —— 两条老路径都不成立').toBe(true)
+    }
   }, 60_000)
 })
 
@@ -656,6 +670,16 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     expect(after?.status).toBe('failed')
     // 而且确实重跑过准备——工作树仍然没有（不是「假装成功」）。
     expect(after?.worktreePath ?? '').toBe('')
+
+    // ⚠️ 上面三条**在重试之前就已经全部成立**（launchFailingPrep 已经 settle 成
+    // failed 且无工作树），所以它们区分不了「重跑了准备又失败一次」与「retryNode
+    // 什么都没做」——把 retryRepoPreparation 换成裸 return 时它们照样全绿（二轮
+    // 门自查实测）。真正有判别力的是**准备行的条数**：每跑一次准备都会
+    // `mintNodeRun(REPO_PREP_NODE_ID)`，所以重跑过就必然从 1 变 2。
+    const prepRunsAfter = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).filter(
+      (r) => r.nodeId === REPO_PREP_NODE_ID,
+    )
+    expect(prepRunsAfter.length, '重试必须真的重跑准备（应铸出第二条准备行）').toBe(2)
   }, 120_000)
 
   test('AC-16：对 done 的准备行重试被拒（不得对已有工作树的任务再物化）', async () => {

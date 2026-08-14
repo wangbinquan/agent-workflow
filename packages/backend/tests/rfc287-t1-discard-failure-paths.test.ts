@@ -49,6 +49,11 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     expect(m).not.toBeNull()
     expect(m![0]).toContain('discardNodeIso(')
     expect(m![0]).not.toMatch(/\.catch\(/)
+    // 二轮门自查：只认 `.catch(` 的话，换成 `try { … } catch {}` 这种**同性质**吞法
+    // 仍会全绿。agent 线与工作组线的同类锁本就带这一条，脚本线补齐。
+    expect(m![0], '也不得用 try/catch 吞掉').not.toMatch(
+      /try \{[\s\S]{0,160}await discardNodeIso\(/,
+    )
   })
 
   test('agent 线（已迁骨架，T7 最后一条）：清理由骨架统一「吞掉并记 warn」', () => {

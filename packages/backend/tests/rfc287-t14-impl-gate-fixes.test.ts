@@ -90,7 +90,14 @@ describe('RFC-287 T14 — 两处对外契约的文本回归', () => {
     const body = scriptLineBody()
     const m = body.match(/discardIso:\s*async[\s\S]{0,240}?\n {6}\}/)
     expect(m).not.toBeNull()
-    expect(m![0]).not.toMatch(/\.catch\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)/)
+    // 两种吞法都要挡。原来只认 `.catch(() => {})` 这一种形状，换成
+    // `try { await discardNodeIso(...) } catch {}` 是**同性质**的缺陷（本地先吞掉
+    // ⇒ 骨架的 `iso discard failed` 永不可达）却照样全绿（二轮门自查实测）。
+    // 同文件里 agent 线与工作组线本就带 `try {` 反向锁，唯独真出过 bug 的脚本线没有。
+    expect(m![0], '不得用 .catch 吞掉').not.toMatch(/\.catch\(/)
+    expect(m![0], '也不得用 try/catch 吞掉').not.toMatch(
+      /try \{[\s\S]{0,160}await discardNodeIso\(/,
+    )
   })
 
   test('骨架确实在 finally 里 catch 并 warn（上一条依赖它成立）', () => {
