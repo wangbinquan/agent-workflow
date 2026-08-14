@@ -250,15 +250,25 @@ describe('task HTTP routes', () => {
           inputs: {},
         }),
       })
-      // 接口本身成功返回（准备是后台步骤），任务行留下来且已转 failed。
+      // 接口本身成功返回（准备是后台步骤），任务行留下来且**随后**转 failed。
       expect(res.status).toBe(201)
       const created = (await res.json()) as { id: string }
-      const list = (await (await req(h.app, '/api/tasks')).json()) as Array<{
-        id: string
-        status: string
-      }>
-      expect(list.length).toBe(1)
-      const row = list.find((x) => x.id === created.id)
+      // RFC-287 G7 启动异步化之后，201 返回时准备才刚开始——这里必须等它落定再断言。
+      // 原版直接读就断言 failed，只在准备还是**同步**时才成立；那正是 G7 要消灭的
+      // 形态（proposal §2：任务行先落 pending，克隆/物化在后台推进）。
+      const deadline = Date.now() + 30_000
+      let row: { id: string; status: string } | undefined
+      for (;;) {
+        const list = (await (await req(h.app, '/api/tasks')).json()) as Array<{
+          id: string
+          status: string
+        }>
+        expect(list.length).toBe(1)
+        row = list.find((x) => x.id === created.id)
+        if (row?.status === 'failed' || row?.status === 'done') break
+        if (Date.now() > deadline) break
+        await new Promise((r) => setTimeout(r, 50))
+      }
       expect(row?.status).toBe('failed')
     } finally {
       rmSync(notRepo, { recursive: true, force: true })
