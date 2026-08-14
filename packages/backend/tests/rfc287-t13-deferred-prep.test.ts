@@ -884,7 +884,8 @@ describe('RFC-287 G6 —— warm 路径失败同样进窗口', () => {
   test('warm 的 repo-fetch-failed 带上 details.stderr 后可判为可重试', async () => {
     const { classifyGitFailure } = await import('@agent-workflow/shared')
     // warm 路径的 message —— 单看它永远是 unknown（这正是缺口）。
-    const msg = 'repository fetch failed for https://e.com/x.git; refusing to launch from a stale cache'
+    const msg =
+      'repository fetch failed for https://e.com/x.git; refusing to launch from a stale cache'
     expect(classifyGitFailure(msg)).toBe('unknown')
     // 但把 details.stderr 拼进去之后，就该按 git 的原话判。
     const stderr = 'fatal: unable to access: Could not resolve host: e.com'
@@ -902,7 +903,9 @@ describe('RFC-287 G6 —— warm 路径失败同样进窗口', () => {
     const j = src.indexOf('\n}\n', i)
     const body = src.slice(i, j)
     expect(body, '准备段必须用完整诊断').toContain('earlyError: diagnosticTextOf(err)')
-    expect(body, '不得退回裸 message').not.toMatch(/earlyError: err instanceof Error \? err\.message/)
+    expect(body, '不得退回裸 message').not.toMatch(
+      /earlyError: err instanceof Error \? err\.message/,
+    )
   })
 })
 
@@ -917,9 +920,8 @@ describe('RFC-287 G6 —— warm 路径失败同样进窗口', () => {
 // fireSchedule 直接抛、taskId 无从取得 ⇒ 本条红。
 describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
   test('定时触发的准备失败也留下任务行 + __repo_prep__ 失败行（而不是什么都不留）', async () => {
-    const { createScheduledTask, fireSchedule, getScheduledTaskRow } = await import(
-      '@/services/scheduledTasks'
-    )
+    const { createScheduledTask, fireSchedule, getScheduledTaskRow } =
+      await import('@/services/scheduledTasks')
     const { buildScheduleLaunch } = await import('@/services/scheduleLaunch')
     const { buildActor } = await import('../src/auth/actor')
 
@@ -964,12 +966,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     const row = (await getScheduledTaskRow(db2, created.id))!
 
     // ① 不再抛：接线前，准备在落行之前跑，克隆一失败 fireSchedule 就整个抛出去。
-    const { taskId } = await fireSchedule(
-      db2,
-      row,
-      buildScheduleLaunch(db2, cfgPath),
-      Date.now(),
-    )
+    const { taskId } = await fireSchedule(db2, row, buildScheduleLaunch(db2, cfgPath), Date.now())
     expect(taskId).toBeTruthy()
 
     await settle(db2, taskId)
@@ -1033,13 +1030,16 @@ describe('RFC-287 G5×G7 —— 延后准备不得把地址格式拒绝也一起
     const cachedRepoId = await seedFileMirror(db)
     let code = ''
     try {
-      await startTask({ workflowId: s.workflowId, name: 'x', cachedRepoId, inputs: {} } as never, {
-        db,
-        actorUserId: s.userId,
-        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-        deferRepoPreparation: true,
-        appHome: TEST_HOME,
-      } as never)
+      await startTask(
+        { workflowId: s.workflowId, name: 'x', cachedRepoId, inputs: {} } as never,
+        {
+          db,
+          actorUserId: s.userId,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+          deferRepoPreparation: true,
+          appHome: TEST_HOME,
+        } as never,
+      )
     } catch (err) {
       code = (err as { code?: string }).code ?? String(err)
     }
@@ -1091,7 +1091,12 @@ async function launchFailingPrep2(
   name: string,
 ): Promise<string> {
   const task = await startTask(
-    { workflowId: s.workflowId, name, repoUrl: 'http://10.255.255.1:9/nope.git', inputs: {} } as never,
+    {
+      workflowId: s.workflowId,
+      name,
+      repoUrl: 'http://10.255.255.1:9/nope.git',
+      inputs: {},
+    } as never,
     {
       db,
       actorUserId: s.userId,
@@ -1178,7 +1183,10 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
       .filter((r) => r.nodeId === REPO_PREP_NODE_ID)
       .sort((a, b) => a.retryIndex - b.retryIndex)
     expect(prepRuns.length).toBe(3)
-    expect(prepRuns.map((r) => r.retryIndex), '三次尝试必须是 0/1/2').toEqual([0, 1, 2])
+    expect(
+      prepRuns.map((r) => r.retryIndex),
+      '三次尝试必须是 0/1/2',
+    ).toEqual([0, 1, 2])
     expect(prepRuns.map((r) => r.rerunCause)).toEqual(['initial', 'retry-node', 'retry-node'])
   }, 180_000)
 })

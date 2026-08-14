@@ -138,9 +138,7 @@ describe('G7 —— 身份登记不得堵在克隆锁后面', () => {
       // 的网络是 ICMP 立刻拒绝 / 走代理 / 被沙箱掐断，克隆会在 ~205ms 就结束——早于
       // 这个 200ms sleep。那时**即便缺陷还在**（身份共用克隆锁），下面的耗时也只有
       // 1~3ms，断言照样绿。所以先断言「锁此刻确实还被握着」，前提不成立就红。
-      expect(cloneSettled, '前置不成立：克隆已经结束、锁没被握住，本用例此刻零预言力').toBe(
-        false,
-      )
+      expect(cloneSettled, '前置不成立：克隆已经结束、锁没被握住，本用例此刻零预言力').toBe(false)
 
       const t0 = Date.now()
       const id = await ensureCachedRepoIdentity({ db, appHome }, { url })

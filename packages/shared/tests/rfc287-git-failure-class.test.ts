@@ -200,7 +200,9 @@ describe('RFC-287 G6 —— 带版本号的 HTTP 状态行同样要认', () => {
 
   test('代理鉴权归 permanent（部署配置问题，重试无益）', () => {
     expect(
-      classifyGitFailure('fatal: unable to access: Received HTTP/1.1 407 Proxy Authentication Required'),
+      classifyGitFailure(
+        'fatal: unable to access: Received HTTP/1.1 407 Proxy Authentication Required',
+      ),
     ).toBe('permanent')
   })
 

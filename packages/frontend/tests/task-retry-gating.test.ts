@@ -331,7 +331,6 @@ describe('RFC-287 AC-11 — 准备失败的重试入口（UI 半场）', () => {
     expect(findRepoPrepRetryTarget(undefined)).toBeNull()
   })
 
-
   test('横幅真的接上了重试动作（打的是既有单节点重试端点、cascade=false）', () => {
     // 光有纯函数不够——缺口正是「算得对但没人用」。这里锁 JSX 侧的接线。
     expect(DETAIL_SRC).toContain('const repoPrepRetryRunId = findRepoPrepRetryTarget(')
