@@ -15,8 +15,7 @@
 
 import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'

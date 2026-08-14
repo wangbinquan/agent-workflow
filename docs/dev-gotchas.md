@@ -81,6 +81,11 @@
 - **别用「我没写过所以是别人的」做归属排除法——「别人」可能不止一个**（同一天，我连续两次判错）。先 `ListAgents` 看清本机到底有几个 session：这次是三个（我 / 4f / 88），我却按两个在推理，于是把 88 的东西两次判给了 4f。共享工作树 + 共用 git identity 的组合下，排除法失效，只能靠改动内容与时间线正面认领。
 - **不要对 `docs/` 跑 `prettier --write`**：门禁的 format 面只覆盖 `packages/**/*.{ts,tsx,json,md}`，`docs/` 不在其中。对它跑格式化会把**他人未提交段落**整体重新折行，制造一大片与内容无关的 diff，还会掩盖真正的改动。
 
+- **别 stash 别人的目录——要在远端头上做一笔干净提交，就开分离 worktree**（2026-08-14 实撞，同一天同一棵树的第三次同族事故）。我为了把一笔修复做在 `origin/main` 头上，`git stash push -- <他人的 RFC 目录>` 再 pop，结果**吞掉了对方正在改的 261 行**（一整轮设计门的修复），而我判成「与已提交内容重合」。判错的两步都值得记：
+  ① `git stash show --stat` 显示 261 行时我仍判成「重合」——**看了规模还判错**，所以「先看 `--stat`」这条不够；
+  ② `git stash pop` 打印了 **`The stash entry is kept in case you need it again`** ——那句就是「没干净应用」的信号，我当噪音略过了。此时工作树里的「无差异」**不代表内容在**，而代表**内容还在 stash 里没出来**。
+  **定式**：需要在别的 base 上做提交时，`git worktree add --detach <tmp> <base>`，在那儿改、提交、推，主树一根手指都不碰。真要 stash，只 stash **你自己**的路径；pop 后必须确认没有 "entry is kept"，并抽查对方文件的关键词还在。
+- **三次事故的共同点：「我只动了自己的东西」这个直觉在共享树上不成立**——无论**读**（判归属：只 stash 自己认得的文件去做对照，结论是错的）、**写**（`git add <path>` 带走同一文件里他人的 hunk）、还是**挪**（stash 他人目录吞掉在改的工作）。三条防线各自都有漏，只有「自己的工作要么立刻整体进暂存区、要么根本别落到共享树」能同时堵住。
 - **本仓多个 session 常共用同一个 git identity**，`git log --author` / commit trailer **无法**区分归属；只能靠改动内容与时间线。判别人的锅之前先 `git show <sha> --stat` 看它到底动了哪些文件。
 
 - **共享树里 `git add <自己路径>` 之后不能裸 `git commit`**——不带 pathspec 的 commit 提交的是**整个 index**,他人已暂存（`git status` 里 `D `/`M ` 首列有字母）的改动会连坐进你的 commit。2026-08-06 真实发生：sibling 暂存的 **12 个 RFC-255 文件删除**（-2901 行）被卷进一个探测修复 commit，靠秒级 `git reset --soft HEAD~1` 挽回。定式：多人树上**一律 `git commit -m … -- <路径列表>`**（pathspec commit 只取列出的路径，他人暂存原样留在 index）；已经卷入且 HEAD 还没被别人接上时，`reset --soft` + pathspec 重提；commit 后**必看 `git show --stat HEAD` 的文件数**是否等于自己的路径数。
