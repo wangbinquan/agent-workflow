@@ -479,8 +479,17 @@ async function isValidGitDir(dir: string): Promise<boolean> {
  *   · 后台自动保鲜不会选中它（selectDueRepos 要求 lastFetchedAt >= freshAfter）；
  *   · UI 上如实显示为「从未同步」。
  *
- * 幂等：同一 URL 重复调用返回同一行；与 `resolveCachedRepo` 共用同一把 per-URL 锁，
- * 因此不会与正在进行的克隆抢同一行。
+ * 幂等：同一 URL 重复调用返回同一行。
+ *
+ * ⚠️ 锁：本函数用**独立**的 `withIdentityLock`，**不是** `resolveCachedRepo` 那把
+ * `withUrlLock`。这是刻意的——克隆的临界区一跑就是几分钟，共用一把锁会让「同一 URL
+ * 的第二次启动」堵满整个克隆超时（门禁实测 3005ms，正好等于前一次的 timeout），G7
+ * 承诺的「启动接口立刻返回」对第二个用户直接失效。
+ *
+ * 代价是本函数**可以**与正在进行的克隆并发插入同一 `urlHash` 的行，所以
+ * `resolveCachedRepo` 的冷路径在 INSERT 之前必须**复读一次**并改走领养分支（见那里
+ * 的 `adoptId`）。这段注释此前写的是「共用同一把 per-URL 锁，因此不会与正在进行的
+ * 克隆抢同一行」——拆锁之后已是假命题，而正是它让那条 UNIQUE 冲突在评审里隐形。
  */
 export async function ensureCachedRepoIdentity(
   deps: GitRepoCacheDeps,
@@ -894,10 +903,27 @@ export async function resolveCachedRepo(
       lastSubmoduleSyncOk: true,
       lastSubmoduleSyncError: null,
     }
-    if (adoptIdentityRowId !== null) {
+    // ⚠️ 复读一次：身份登记与克隆**不再共用同一把锁**（`withIdentityLock` 与
+    // `withUrlLock` 已拆开，正是为了让「立刻返回」不被几分钟的克隆堵住），所以本次
+    // 冷 resolve 在临界区开头看到的「行不存在」到这里可能已经过期——克隆期间
+    // `ensureCachedRepoIdentity` 完全可以插进同 `urlHash` 的身份行。此时若照旧走
+    // INSERT，会撞 `cached_repos.url_hash` 唯一索引并抛一句**裸 SQLite 串**（无错误码）。
+    // 三轮门并发面实测复现：`UNIQUE constraint failed: cached_repos.url_hash`。
+    // 触发面是「任一无身份行的冷 resolve」（管理员加仓 / 仓库组导入 / 批量导入 /
+    // submoduleRefresh / eager 启动）与「同 URL 的 deferred JSON 启动」重叠。
+    const adoptId =
+      adoptIdentityRowId ??
+      deps.db
+        .select({ id: cachedRepos.id })
+        .from(cachedRepos)
+        .where(eq(cachedRepos.urlHash, hash))
+        .limit(1)
+        .all()[0]?.id ??
+      null
+    if (adoptId !== null) {
       // 就地补全：身份行此前只有 id/hash/url/localPath，克隆完才知道默认分支与
       // 子模块情况。`createdAt` 保持身份登记那一刻，不覆盖。
-      deps.db.update(cachedRepos).set(rowValues).where(eq(cachedRepos.id, id)).run()
+      deps.db.update(cachedRepos).set(rowValues).where(eq(cachedRepos.id, adoptId)).run()
     } else {
       deps.db
         .insert(cachedRepos)

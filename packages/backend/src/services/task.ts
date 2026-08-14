@@ -25,6 +25,7 @@ import type {
 import type { DwState } from '@agent-workflow/shared'
 import {
   isRetryableGitFailure,
+  DAEMON_SHUTDOWN_ABORT_REASON,
   REPO_PREP_NODE_ID,
   assignBranchNames,
   directChildren,
@@ -4564,6 +4565,17 @@ async function runDeferredRepoPreparation(args: {
     backoffMs = Math.min(backoffMs * 2, 15_000)
   }
   if (prepared.earlyError !== null && controller.signal.aborted) {
+    // 停机与用户取消**共用同一个信号**，但归宿完全相反（三轮门并发面抓到的回归：
+    // 本分支上一版只判 `aborted`，把优雅停机也当成用户取消）。
+    //
+    // RFC-202 T4 的既有约定写在 `scheduler.ts` 的同名判据里：`DAEMON_SHUTDOWN_ABORT_REASON`
+    // 必须落 `interrupted` + daemon-restart 摘要，好让 Resume 与 boot auto-resume 都能
+    // 接得住——「daemon 重启」不是用户决定。判成 canceled 的后果是**永久楔死**：准备行
+    // 落终态 canceled，boot reap 把任务翻 interrupted 却改不动已终态的行，而
+    // `RETRYABLE_PREP_STATUSES` 只认 failed/interrupted ⇒ 重试撞 `repo-prep-not-retryable`、
+    // resume 撞 `task-repo-prep-incomplete`、auto-resume 按设计跳过，只剩删任务重开。
+    // 这恰好把下面 AC-16 那扇刚修好的门（认 interrupted）从 canceled 这一侧又打开了。
+    const daemonShutdown = controller.signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
     // RFC-287 AC-14 —— **取消导致的失败不是失败**。
     //
     // 三轮门 AC 对账实测（该 AC 此前一条测试都没有）：在准备窗口内点取消，git 子
@@ -4583,9 +4595,10 @@ async function runDeferredRepoPreparation(args: {
       await setNodeRunStatus({
         db: deps.db,
         nodeRunId: prepRunId,
-        to: 'canceled',
+        // 停机 ⇒ interrupted（保持可重试，与 boot reap 对齐）；用户取消 ⇒ canceled。
+        to: daemonShutdown ? 'interrupted' : 'canceled',
         allowedFrom: ['running'],
-        reason: 'repo-prep-canceled',
+        reason: daemonShutdown ? 'repo-prep-daemon-shutdown' : 'repo-prep-canceled',
         extra: { finishedAt: Date.now() },
       })
     } catch (err) {
@@ -4600,7 +4613,11 @@ async function runDeferredRepoPreparation(args: {
     )[0]
     return {
       ok: false,
-      preparedTask: { ...task, status: (cur?.status as TaskStatus | undefined) ?? 'canceled' },
+      preparedTask: {
+        ...task,
+        status:
+          (cur?.status as TaskStatus | undefined) ?? (daemonShutdown ? 'pending' : 'canceled'),
+      },
     }
   }
   if (prepared.earlyError !== null) {
@@ -4709,6 +4726,40 @@ async function runDeferredRepoPreparation(args: {
         error: err instanceof Error ? err.message : String(err),
       })
     }
+    // 三轮门并发面抓到的两条，同一个出口上：
+    //
+    // **F4——准备行不能留在 running**。本分支此前只清物化产物就返回，那条合成行永远
+    // 停在 running。同一函数的取消分支注释里已经写明理由（恢复扫描会把它当还在跑），
+    // 这里漏了。状态跟着任务的真实归宿走：任务 interrupted ⇒ 行也 interrupted（保持
+    // 可重试）；其余（canceled / 被删）⇒ canceled。
+    const leftStatus = (stillPending ?? '') === 'interrupted' ? 'interrupted' : 'canceled'
+    try {
+      await setNodeRunStatus({
+        db: deps.db,
+        nodeRunId: prepRunId,
+        to: leftStatus,
+        allowedFrom: ['running'],
+        reason: 'repo-prep-task-left-window',
+        extra: { finishedAt: Date.now() },
+      })
+    } catch (err) {
+      log.warn('repo-prep row already terminal when task left the prep window', {
+        taskId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+    // **F1——租约必须还回去**。这是本函数**唯一**一条不还租约的出口（失败分支有
+    // finally、取消分支显式 release、成功分支交给 runTask 的 finally）。首启路径侥幸
+    // 被外层闭包的 finally 兜住，**重试路径没有那层**（它把 runTask 用 void 发出去，
+    // 不能无条件在闭包里 release，否则会在 runTask 还在跑时把租约放掉）。
+    //
+    // 漏掉的后果是任务**永久楔死**：`isTaskActive` 恒真 ⇒ retryNode / resume 409
+    // `task-still-running`、deleteTask 409 `task-active`、lifecycle 修复被
+    // liveness gate 拒、orphanReconcile 与 gc 永久跳过它、`awaitTaskDriverStopped`
+    // 永不 resolve（终止参与者跟着挂死）。只有重启 daemon 能解。
+    // `releaseTaskDriverAndFinalizeWorkspace` 幂等（registry 按 controller 身份匹配），
+    // 所以首启那层 finally 再调一次也无害。
+    await releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
     return { ok: false, preparedTask: (await getTask(deps.db, taskId)) as Task }
   }
   // 所有权租约换成真的：占位态给的是空租约（ownedRoot=null、零 worktree），

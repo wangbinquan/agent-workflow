@@ -1351,5 +1351,102 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
   }, 120_000)
 })
 
+// 三轮实现门**并发面**（我自己那路）抓到的四条，逐条上锁。两条 P0 各自能把任务打成
+// 「不可重试、不可恢复、不可删除，只能重启 daemon」的永久楔死态，且都落在 G7 准备
+// 窗口这条**每次 JSON-body 启动都要经过**的路径上。
+describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
+  test('F2：优雅停机不得被当成用户取消（否则任务永久楔死）', async () => {
+    // 停机与用户取消**共用同一个 AbortSignal**，只有 `reason` 不同。上一版的取消分支
+    // 只判 `aborted`，于是 daemon 优雅停机时准备行落**终态 canceled**；随后 boot reap
+    // 把任务翻 interrupted 却改不动已终态的行，而 RETRYABLE_PREP_STATUSES 只认
+    // failed/interrupted ⇒ 重试撞 repo-prep-not-retryable、resume 撞
+    // task-repo-prep-incomplete、auto-resume 按设计跳过，只剩删任务重开。
+    // 这恰好把 AC-16 那扇刚修好的门（认 interrupted）从 canceled 这一侧又打开。
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const { DAEMON_SHUTDOWN_ABORT_REASON } = await import('@agent-workflow/shared')
+    // 用生产入口 `abortAllActiveTasks`——`gracefulShutdown` 走的正是这一条
+    // （shutdown.ts 里 `abortAllActiveTasks(DAEMON_SHUTDOWN_ABORT_REASON)`）。
+    const { abortAllActiveTasks } = await import('@/services/task')
+
+    const task = await startTask(
+      {
+        workflowId: s.workflowId,
+        name: 'f2-shutdown',
+        repoUrl: 'http://10.255.255.1:9/nope.git',
+        inputs: {},
+      } as never,
+      {
+        db,
+        actorUserId: s.userId,
+        appHome: TEST_HOME,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        deferRepoPreparation: true,
+        cloneTimeoutMs: 60_000,
+        gitBaselineSyncWindowMs: 0,
+      } as never,
+    )
+    // 等准备真的开跑，再模拟优雅停机（带 reason 的 abort）。
+    for (let i = 0; i < 200; i++) {
+      const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+      if (runs.some((r) => r.nodeId === REPO_PREP_NODE_ID)) break
+      await new Promise((r) => setTimeout(r, 25))
+    }
+    const aborted = abortAllActiveTasks(DAEMON_SHUTDOWN_ABORT_REASON)
+    expect(aborted, '前提不成立：准备段没被 abort 到，本用例此刻零预言力').toContain(task.id)
+
+    // 等准备行落终态。
+    let prep: { status: string } | undefined
+    for (let i = 0; i < 400; i++) {
+      prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
+        (r) => r.nodeId === REPO_PREP_NODE_ID,
+      )
+      if (prep !== undefined && prep.status !== 'running' && prep.status !== 'pending') break
+      await new Promise((r) => setTimeout(r, 25))
+    }
+    // 关键：停机 ⇒ interrupted（可重试），**不是** canceled（终态且不可重试）。
+    expect(prep?.status, '停机中断的准备行必须可恢复').toBe('interrupted')
+    expect(prep?.status).not.toBe('canceled')
+    // 且它确实落在 AC-16 的可重试集里——这才是「不楔死」的实际含义。
+    expect(['failed', 'interrupted']).toContain(prep!.status)
+  }, 120_000)
+
+  test('F1：任务离开准备窗口时必须还租约（否则 isTaskActive 恒真、只能重启 daemon）', async () => {
+    // `runDeferredRepoPreparation` 的 branch-3（物化成功但任务已离开 pending）此前
+    // 只清物化产物就 return，**不还租约**。首启侥幸被外层闭包的 finally 兜住，而
+    // 重试路径没有那层（它把 runTask 用 void 发出去，不能无条件在闭包里 release）。
+    // 漏掉之后 `isTaskActive` 恒真 ⇒ retryNode/resume 409 task-still-running、
+    // deleteTask 409 task-active、gc 与 orphanReconcile 永久跳过、
+    // awaitTaskDriverStopped 永不 resolve。
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const i = src.indexOf("if (stillPending !== 'pending') {")
+    expect(i, 'branch-3 应存在').toBeGreaterThan(-1)
+    const body = src.slice(i, src.indexOf('\n  }\n', i))
+    expect(body, '该出口必须还租约').toContain('releaseTaskDriverAndFinalizeWorkspace(')
+    // F4 同处：准备行不得留在 running（恢复扫描会把它当还在跑）。
+    expect(body, '该出口必须终结准备行').toMatch(
+      /setNodeRunStatus\(\{[\s\S]{0,300}nodeRunId: prepRunId/,
+    )
+    expect(body).toContain('repo-prep-task-left-window')
+  })
+
+  test('F3：冷克隆在 INSERT 前必须复读（两把锁分家后会撞 UNIQUE）', () => {
+    // 身份登记走独立的 withIdentityLock（刻意的：共用会让第二次启动堵满整个克隆
+    // 超时）。代价是克隆期间身份行可能被插进来，冷路径若照旧 INSERT 就撞
+    // cached_repos.url_hash 唯一索引，抛一句无错误码的裸 SQLite 串。
+    const src = readSrc(
+      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      'utf8',
+    )
+    expect(src).toMatch(/const adoptId =[\s\S]{0,400}cachedRepos\.urlHash, hash/)
+    expect(src, '领养分支要用复读到的 id').toMatch(/if \(adoptId !== null\)/)
+    // F5：那句「与 resolveCachedRepo 共用同一把 per-URL 锁」在拆锁后是假命题，
+    // 正是它让 F3 在评审里隐形。不得复辟。
+    expect(src, '不得再声称两者共用同一把锁').not.toContain(
+      '与 `resolveCachedRepo` 共用同一把 per-URL 锁',
+    )
+  })
+})
+
 // 收尾：临时 home 整体删掉。没有它，克隆残留会一直堆在磁盘上（见 TEST_HOME 注释）。
 afterAll(() => rmSync(TEST_HOME, { recursive: true, force: true }))
