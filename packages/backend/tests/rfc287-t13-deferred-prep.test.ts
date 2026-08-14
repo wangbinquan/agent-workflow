@@ -1448,5 +1448,119 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
   })
 })
 
+// RFC-287 AC-14 —— 取消必须**穿透到子模块同步**（三轮门 Codex 并发面 P1；我自己
+// 那路漏了这条，两路互补才补全）。
+//
+// `git.ts` 建树那一步传了 signal，紧接着进 `syncSubmodules` 就断线——本模块此前
+// 一个 `signal` 都没有。于是 `worktree add` 成功之后（大子模块的 checkout 可以跑
+// 很久）取消只 abort 了 controller：5 秒兜底把任务写成 canceled，而 git 还活着、
+// 准备行还是 running、租约还被持有 ⇒ 重试 409 task-still-running、删除 409
+// task-active。AC-14 原话要求「底层 git 子进程确实终止」。
+describe('RFC-287 AC-14 —— 终止条件必须穿透子模块同步', () => {
+  test('syncSubmodules 把 signal 注入每一次 git 调用', async () => {
+    const { syncSubmodules } = await import('@/services/gitSubmodule')
+    const seen: Array<AbortSignal | undefined> = []
+    const ac = new AbortController()
+    await syncSubmodules('/tmp/does-not-matter', {
+      mode: 'always',
+      jobs: 1,
+      signal: ac.signal,
+      runGitImpl: (async (_cwd: string, _args: string[], o?: { signal?: AbortSignal }) => {
+        seen.push(o?.signal)
+        // 让它在第一次调用后就走失败分支返回，避免真去跑 git。
+        return { exitCode: 1, stdout: '', stderr: 'stub' }
+      }) as never,
+    } as never)
+    expect(seen.length, '至少要有一次 git 调用').toBeGreaterThan(0)
+    // 关键：每一次都带上了同一个 signal——注入点在 `run` 那一层，覆盖全部 31 处。
+    for (const s of seen) expect(s).toBe(ac.signal)
+  })
+
+  test('不给 signal 时行为逐字不变（不得顺手改变既有调用面）', async () => {
+    const { syncSubmodules } = await import('@/services/gitSubmodule')
+    const seen: Array<unknown> = []
+    await syncSubmodules('/tmp/does-not-matter', {
+      mode: 'always',
+      jobs: 1,
+      runGitImpl: (async (_cwd: string, _args: string[], o?: unknown) => {
+        seen.push(o)
+        return { exitCode: 1, stdout: '', stderr: 'stub' }
+      }) as never,
+    } as never)
+    expect(seen.length).toBeGreaterThan(0)
+    // 没给终止条件时应当**原样**透传调用方自己的 opts（这里是 undefined），
+    // 而不是被包装成一个空对象——包装层在这种情况下必须整个短路掉。
+    expect(seen[0]).toBeUndefined()
+  })
+
+  test('建树调用点确实把 signal 传给了子模块同步', () => {
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'util', 'git.ts'), 'utf8')
+    const i = src.indexOf('return await syncSubmodules(worktreePath, {')
+    expect(i).toBeGreaterThan(-1)
+    // 边界取**同缩进的收尾行**，不能用第一个 `})`——内层 `{ remote: true }` 的
+    // 那个会先命中，切出来的片段根本没到 signal 那行（实撞）。
+    const body = src.slice(i, src.indexOf('\n      })', i))
+    expect(body, '建树成功后这一段必须继续受取消约束').toContain('signal: opts.signal')
+  })
+
+  test('URL 锁临界区里的子模块同步必须有界（否则永久占住该 URL 的队列）', () => {
+    const src = readSrc(
+      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      'utf8',
+    )
+    // 两处都在 withUrlLock 里：warm 复用路径与手动刷新路径。
+    const hits = [...src.matchAll(/syncSubmodules\(row\.localPath, \{[\s\S]{0,600}?\n {4,6}\}\)/g)]
+    expect(hits.length, '应有两处（warm 复用 + 手动刷新）').toBe(2)
+    for (const h of hits) expect(h[0]).toContain('timeoutMs:')
+  })
+})
+
+// RFC-287（三轮门 Codex 并发面 P1 后半）—— 半成品镜像目录此前**只有生产者、零消费者**。
+// 冷克隆先写 `repos/<hash>-<slug>.partial-<ULID>/` 再原子 rename；SIGKILL 落在中途时
+// 目录留在磁盘上，而全仓没有任何扫描认这个命名。本 session 实测：真实 home 的
+// `repos/` 下攒了 13 个 `…-nope.partial-*`，全是测试留下的。
+describe('RFC-287 —— 半成品镜像目录的回收', () => {
+  test('到龄的 .partial-* 被清掉，未到龄的与正常镜像一律不动', async () => {
+    const { runPartialCloneGc } = await import('@/services/gc')
+    const { mkdirSync, existsSync, utimesSync } = await import('node:fs')
+    const home = mkdtempSync(join(tmpdir(), 'aw-partialgc-'))
+    const repos = join(home, 'repos')
+    mkdirSync(repos, { recursive: true })
+
+    const stale = join(repos, 'abc12345-myrepo.partial-01KZZZZZZZZZZZZZZZZZZZZZZZ')
+    const fresh = join(repos, 'abc12345-myrepo.partial-01KZZZZZZZZZZZZZZZZZZZZZZA')
+    const canonical = join(repos, 'abc12345-myrepo')
+    for (const d of [stale, fresh, canonical]) mkdirSync(d, { recursive: true })
+    // 把 stale 的 mtime 推到 48 小时前。
+    const old = new Date(Date.now() - 48 * 3600_000)
+    utimesSync(stale, old, old)
+
+    const r = runPartialCloneGc(home)
+    expect(existsSync(stale), '到龄的半成品必须被清掉').toBe(false)
+    expect(existsSync(fresh), '未到龄的可能正在被写入，不得删').toBe(true)
+    expect(existsSync(canonical), '正常镜像目录一律不碰').toBe(true)
+    expect(r.removed.length).toBe(1)
+    // 扫描面只认带 `.partial-` 的目录，canonical 不计入。
+    expect(r.scanned).toBe(2)
+
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  test('repos 目录不存在时安全返回（首次启动 / 从未克隆过）', async () => {
+    const { runPartialCloneGc } = await import('@/services/gc')
+    const home = mkdtempSync(join(tmpdir(), 'aw-partialgc-empty-'))
+    expect(runPartialCloneGc(home)).toEqual({ scanned: 0, removed: [] })
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  test('已挂进每小时 GC（否则函数写了也没人调）', () => {
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'gc.ts'), 'utf8')
+    // 光有实现不算数——二轮门自查的老教训：判据算得对 ≠ 有人用。
+    const i = src.indexOf('runClaimedWebhookWorkspacePrunes(db, {')
+    expect(i, 'GC ticker 应存在').toBeGreaterThan(-1)
+    expect(src.slice(i, i + 1600)).toContain('runPartialCloneGc(appHome)')
+  })
+})
+
 // 收尾：临时 home 整体删掉。没有它，克隆残留会一直堆在磁盘上（见 TEST_HOME 注释）。
 afterAll(() => rmSync(TEST_HOME, { recursive: true, force: true }))

@@ -1188,6 +1188,9 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
         ...(effective.remote ? { remote: true } : {}),
         mode: effective.mode,
         jobs: effective.jobs,
+        // AC-14：建树那一步传了 signal，子模块这一步不能断线——否则取消之后
+        // git 还在跑，任务被写成 canceled 却永远清理不掉（见 SubmoduleSyncOptions.signal）。
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       })
     } catch (error) {
       // Once `worktree add` succeeds this helper owns both the registration and

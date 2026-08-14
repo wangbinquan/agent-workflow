@@ -40,6 +40,24 @@ export interface SubmoduleSyncOptions {
   redactStderr?: (s: string) => string
   /** Test hook: replace runGit. */
   runGitImpl?: typeof runGit
+  /**
+   * RFC-287 AC-14（三轮门并发面 Codex P1）—— 取消/停机必须**真的杀掉** git 子进程。
+   *
+   * 本模块此前一个 `signal` 都没有：`git.ts` 建树那一步传了 signal，紧接着进
+   * `syncSubmodules` 就断了线。于是一旦 `worktree add` 成功、进入子模块 checkout
+   * （大子模块可以跑很久），取消只 abort 了 controller：5 秒兜底把任务写成 canceled，
+   * 而 git 子进程还活着、准备行还是 running、驱动租约还被持有 ⇒ 重试 409
+   * `task-still-running`、删除 409 `task-active`。AC-14 原话要求「底层 git 子进程确实
+   * 终止」，这条通道是漏的。
+   *
+   * 同一缺口还会**永久占住 URL 队列**：后台保鲜在 `withUrlLock` 里做完带 timeout 的
+   * fetch 之后进入无界的 submodule update，同 URL 的启动全部排在它后面。
+   *
+   * 注入在 `run` 这一层（本文件 31 处 `runGit` 共用它），不逐处改。
+   */
+  signal?: AbortSignal
+  /** 每次 git 调用的超时上限；与 signal 同源，防「信号没来但进程也不结束」。 */
+  timeoutMs?: number
 }
 
 export interface SubmoduleSyncResult {
@@ -77,7 +95,21 @@ export async function syncSubmodules(
   opts: SubmoduleSyncOptions,
 ): Promise<SubmoduleSyncResult> {
   const redact = opts.redactStderr ?? defaultRedact
-  const run = opts.runGitImpl ?? runGit
+  const baseRun = opts.runGitImpl ?? runGit
+  // 统一注入终止条件——调用方给了就带上，没给就与从前逐字一致（不改既有行为）。
+  const run: typeof runGit =
+    opts.signal === undefined && opts.timeoutMs === undefined
+      ? baseRun
+      : (cwd, args, o) =>
+          baseRun(cwd, args, {
+            ...(o ?? {}),
+            ...(opts.signal !== undefined && o?.signal === undefined
+              ? { signal: opts.signal }
+              : {}),
+            ...(opts.timeoutMs !== undefined && o?.timeoutMs === undefined
+              ? { timeoutMs: opts.timeoutMs }
+              : {}),
+          })
 
   if (opts.mode === 'never') {
     return { ok: true, error: null, hasGitmodules: false }

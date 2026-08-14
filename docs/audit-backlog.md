@@ -79,7 +79,7 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 - ⏳ **RFC-254 唯一已知 win32 可靠性缺陷（续三十七 T41 真机定论：代码侧无可靠解，唯一确定解＝部署侧 Defender 排除）：verified 服务端 flaky 冷启动 ~⅕–⅓ 失败**。RFC-224/227 每次运行把 **175MB** 的 opencode.exe 新拷进私有密封目录再 exec；Windows Defender（真机默认 ON）在拷贝落盘瞬开始扫描并短暂持锁，exec 撞进扫描窗口 ⇒ 服务端进程零输出瞬退（exit code **5=ACCESS_DENIED**/段错误，`Bun.spawn` 有 pid 但进程瞬死）⇒ launcher 见 stdout 流关闭无 listen 行 → `bootstrap-failed`（`verifiedLauncher.ts:monitorServerStdout` 的 `!sawListen`；易误判慢启动/超时）。**续三十七 T41 真机定论（ARM64 + 1.18.13 + glm-5.2，证伪续三十五两条旧假设）**：①**内容寻址缓存复用密封二进制**（按源 digest、每次 exec 前 + launcher spawn 前重哈希＝安全等价）已实现四门全绿（POSIX 逐字零影响、win32-gated）并**已撤销**——**对本缺陷无效**：把同一份已落盘缓存 `.exe` **反复 exec** 仍 ~⅕–⅓ 零输出秒退（30s 窗口 8 次探针：5 listen / 3 `EXITED-NO-LISTEN lines=0`；**密封目录 vs 未密封目录 4/5 vs 4/5 完全同率** ⇒ DACL/位置/文件名皆非因；先前「reuse 版 bootstrap-failed ×2 vs disable 版 done ×1」实为同一 ~⅓ flaky 抽样噪声），故续三十五「Defender 首次扫净后缓存 clean ⇒ 后续 exec 免扫」**被证伪**（那句的 12/12 是 image-map 层孤立探针、不代表整条 serve）；②**有界 respawn 重试**（4 次/launch）实测 10 launch 9 成、仍有「连杀一簇」漏网，非可靠解（印证 exec 层 ~50% 老结论）。即 Defender 在**每次进程加载期**拦杀镜像、不因「扫过一次」放行后续 exec。**唯一确定解＝ops：对 appHome/密封根加 Windows Defender 排除**（operator 执行需管理员：`Add-MpPreference -ExclusionPath '<appHome/密封根>'`，可加 `-ExclusionProcess 'opencode.exe'`），应写进 Windows 部署文档作装机必备；**代码侧不再堆 exec 层重试/内容缓存**（治标、脏 RFC-227 信任核心）。详见 `dev-gotchas.md` §跨平台 RFC-254 T41 条。
 - ⏳ **RFC-254 收尾跟进（2026-08-07 拆为独立跟进项；核心已 Done）**：RFC-254 核心（Windows 原生执行 + verified 路径 + 7 处 win32 生产缺陷 + flaky 冷启动定论）已交付并真机验收、`design/plan.md` 索引标 Done；以下 D3 in-scope 但需 **CI 基建 + 人工基线评审**、与核心交付可分离的项拆出独立跟进：**① T32 A 类残留**——(a) e2e 的 `.sh` 假二进制照 T29 姿势编译为参数化原生产物（win32 不能执行 `.sh`）；(b) 拆卸期 `EBUSY`（bun:sqlite 句柄 GC 才释放，走 `tests/fixtures/tempDir.ts:removeTempDirSync` 的 `Bun.gc(true)` 姿势）；(c) `spawn('npm')` 撞 `.cmd` 垫片（win32 需 `npm.cmd` 或经 shell）。**② T33** 工作流 windows 视觉腿 + 第三套 win32 视觉基线（46 张/40 场景，需人工确认基线）。**③ T34** `e2e-webkit-nightly` 加 windows 腿。**④ T35** 全矩阵收敛（连续 3 push windows 腿零未登记红）。判据：均为 CI-pipeline / 视觉基线产物，需 CI 环境执行 + 人工基线评审，不在核心可靠性关键路径上。Job Object/AppContainer、DPAPI、windows-arm64 隔离另属**显式非目标**（后续独立 RFC）。**⚠️ 2026-08-07 补记：`.github/workflows/windows-survey.yml` 已按用户指示删除**（它自己的文件头就写了「Deleted once the matrix legs in ci.yml take over (T35)」，但删除发生在 T35 收敛之前）。后果：**T33 与 T34 失去执行载体**——T33 的 46 张 win32 视觉基线原本由该 workflow 的 `--update-snapshots` 步骤产出并上传为 artifact 供人工评审，T34 的 webkit 测量也在其中。重启这两项时须**先重建一个非门禁的 `workflow_dispatch` 勘测作业**（关键约束照抄原文件：`continue-on-error: true`、per-job `concurrency` 且 `cancel-in-progress: false`——放进 `windows-platform.yml` 的取消组里必然跑不完、backend 腿需 240 分钟预算而门禁分片只有 15 分钟；「要产出的步骤排在要测量的步骤之前」，否则一截断就什么产物都没有）。删除前的完整实现见 `ca4acfd9` 的该路径。
 - ⏳ **RFC-254 纵深健壮性（低优先，生产当前免疫）：`netlessProjection` 的 `realpath`（fs/promises）在 Windows 不展开 8.3 短名**。`realpathSync`/`realpath`（JS 版）对 `C:\OPENCO~1\...` 原样返回短名且 `resolve(p)===p` 为真，而 git（`--git-common-dir`/`worktree list`）恒返回长名 ⇒ 若输入 worktree 路径是短名形，短↔长不一致会踩 canonicality/containment ⇒ source-changed/store-unsafe（真机短名探针复现；`realpathSync.native` 走 `GetFinalPathNameByHandle` 才展开长名）。**当前生产免疫**：worktree 根出自 `os.homedir()`（长名）。**风险面**：admin 把 appHome 配在短名目录下、或任何把短名路径喂进 verified 链路的入口。**若要纵深加固**：verified 链路 win32 上统一用 `realpath.native` 展开（敏感核心，需重跑 qualification + 全平台核 native 行为）。测试侧已用 `longTemp`（`realpathSync.native`）规避（GitHub tmpdir 是 `RUNNER~1` 短名，见 `docs/dev-gotchas.md`）。
-- ⏳ **`shared/schemas/mcp.ts:88-91` 的注释断言已过期**：它写「opencode `McpLocalConfig` 没有 `cwd` 字段，所以我们故意不做」，但 opencode 现在的 `Local` schema **有 `cwd`**（`core/src/v1/config/mcp.ts:11-13`，"Relative paths resolve from the workspace directory"）。不影响当前行为（我们不下发 `cwd`，opencode 用进程 cwd = worktree），但基于过期断言做决策有风险。
+- ✅ **`shared/schemas/mcp.ts` 的过期注释断言已订正（2026-08-14，RFC-247 收口档 3）**：原注释写「opencode `McpLocalConfig` 没有 `cwd` 字段，所以我们故意不做」。本次重新对本机 checkout 核实：`packages/core/src/v1/config/mcp.ts:11-13` 与 `packages/core/src/config/mcp.ts:18` **都有 `cwd: optional(String)`**（"Relative paths resolve from the workspace directory"）。注释已改写为陈述**行为**而非不可能性：我们仍不下发 `cwd`，故 stdio 子进程继承 opencode 进程目录 = 任务 worktree。**是否开放 `cwd` 是个没人做过的产品决策**（开放等于给 MCP 作者一个把子进程指出 worktree 的旋钮），保留为待决而不在注释里自行裁决。零行为变化。⏳ 剩余待决：要不要开放 `cwd`。
 - ✅→⏳ **`/ws/repo-imports/:batchId` 无 gate 频道——WS 半边已修，REST 半边待拍板**（RFC-285 B6②，2026-08-13）：BatchRecord 自创建携 `ownerUserId`（发起路由 actor 注入，绝不来自请求体），WS 升级门=发起者 ∨ 资源管理员，缺行/非发起者**同形拒绝**（batch-not-found；矩阵锁 ws-repo-imports.test.ts）。**剩余待拍板**：同数据的 REST 面 `GET /api/cached-repos/imports/:batchId`（getBatchSnapshot）与 `POST .../rows/:rowId/retry` 仍是 token-only、任何持凭据者可读/可重试他人批次——收紧属能力收缩、不在 RFC-285 已批准的 E 清单内，按 CLAUDE.md 收缩门槛呈用户逐项确认后另行落地（判定读点 `batchOwnerUserId` 已就位，接线是小改）。
 - ✅ **空 PAT scopes = 全量 role 权限** 已收口（RFC-247 T5）：`auth/actor.ts` 的 `patScopes.length>0` 短路删除，PAT 分支恒走 `resolveTokenPermissions`，空矩阵 = 只读。
 - ✅ **任务操作面无写权限点 / `tasks:cancel:own|all` 零引用死点** 已收口（RFC-247 T2）：两个死点从目录删除；cancel/resume/retry 归 `tasks:execute`，范围仍由 `canViewTask` 承担（这正是代码一直以来的真实行为）。
@@ -87,13 +87,14 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 - ⏳ **`redactSensitiveString` 漏掉带前缀的环境变量名**（RFC-247 实现门顺带发现）：`SENSITIVE_KV_RE` 是 `\b(token|api_key|…)\b`，而 `_` 是词字符 ⇒ `\bapi_key\b` **不匹配** `OPENAI_API_KEY=…`。而「agent stdout 回显环境变量」正是它要防的主场景。未在 RFC-247 内放宽：该正则同时被 RFC-030 的 MCP 探针持久化与 daemon 日志共用，松词边界会连带影响它们的过度遮蔽风险，属那两处 owner 的决定。缺口已在 `rfc247-token-redaction.test.ts` 里用一条**显式断言**锁住（写明是 KNOWN GAP），改动时会立刻看见。**2026-08-14 收口方向（对齐 RFC-294 pin `be31dd62`）：别去松这条正则的词边界。** `design.md` §15.3 要求 W0 建 **secret canary 与 serializer/logger capture 负测**、logger fields 服从 key registry + data class——正解是把 `OPENAI_API_KEY=…` 这类带前缀的形态登记成 canary 的一条负测，由 data-class 机制统一覆盖三个消费方，而不是在共用正则上放宽词边界去连带影响 RFC-030 的 MCP 探针持久化与 daemon 日志。
 - ⏳ **`mobile-task-detail` 视觉场景非确定性（2026-08-04 取证）**：RFC-253 推送后 `visual-regression-nightly` 该场景红，1090 像素（1% ）差异，形态是**画布节点整体上移约 30px、横向与页面其余部分逐像素不变**。**同一 SHA `f864d30c` 重跑 attempt 2 直接 success** —— 同样字节两种结果，故属场景不稳而非某次改动引入。排查过程排除了三个候选：RFC-253 新增的 CSS 全部带命名空间（`.code-editor` / `.canvas-node__script-*` / `.script-*`）+ 纯 `--code-*` 变量，命不中只含 input/agent/output 的画布；中间两个提交一个纯文档、一个只碰 shared schema（`agents.network`）。**待验证的成因假设**：`canvas/wrapperFit.ts` 的 `DEFAULT_NODE_SIZE_BY_KIND` 自陈是「xyflow 尚未测量时」的兜底尺寸，若 `fitView` 在测量前跑就会得到不同的垂直居中——这与「只垂直位移、横向不变」的形态吻合。**按 CLAUDE.md「重跑就过了不能当通过依据」登记而非略过**；owner 是视觉门禁那条线（RFC-054 场景 / RFC-250 近期连续在修 Linux 与跨平台视觉门禁）。修法方向：让该场景在断言前显式等待节点测量完成（而非等固定时长），或把相机固定成不依赖测量的确定值。
 - ⏳ **`local backend shard wall-clock timeout > timeout still kills the process group when its TERM-compliant leader exits first` 在 hosted macOS runner 上红**（2026-08-11 观测，RFC-281 推送时撞上）：`local-gate-runner.test.ts`（测 `scripts/test-backend-sharded.ts` 自身的分片超时治理，owning commit `a48c18a0` / `6750165e`）在 `9b1a2fde` 的 `Backend tests (macos-latest shard 3/4)` 挂——期望 stdout 含 `term-compliant-parent-ready`，实收只有 `TIMEOUT after 100ms; sent SIGTERM…`：**子进程还没来得及打印就绪标记就被超时杀了**。用例的窗口是 100ms timeout + 50ms grace，在 hosted runner 上过紧。**与 RFC-281 无关**（该轮改动是 runner 的 boundaryMounts + 纯函数 + 测试，完全没碰分片脚本或该测试文件）；**同 commit 的本机 macOS 全绿**（`gate:local` 四分片 9439 pass，该文件单跑 13 pass），CI 前一版 `2262df76` 同一 shard 也是绿。登记而非当噪音略过（CLAUDE.md 禁「重跑就过了」）：需要分片基础设施的 owner 判定是放宽窗口（如 leader ready 后再起算超时、或 200ms/100ms）还是标记为环境敏感。
+- ⏳ **`RFC-210 ref naming safety > ref names pass git check-ref-format for hostile paths` 在满载机器上超时**（2026-08-14 观测，RFC-247 收口档 3 跑本地门禁时撞上）：该用例串行 spawn **12 次** `git check-ref-format` 子进程（6 条 hostile path × pool/worktree 两个 ref 函数，`rfc210-submodule-topology.test.ts:132-139`），用的是 bun test 的 **5s 默认超时**。撞上时本机同时压着三份测试负载（一份被 kill 但留下孤儿分片的 gate + 新起的 gate + 另一 session 的 vitest），该用例耗 5005ms 超时；**清掉负载后单独跑同文件 15 pass / 320 ms**——差一个数量级以上，且失败形态是超时而非断言失败。归因：与当轮改动（docs 路由 / publicOrigin / tokenAudit / mcp schema 注释）零交集，也不是被别人的 `gitSubmodule.ts`/`util/git.ts` WIP 改红（那会是断言失败）。**登记而非当噪音略过**（CLAUDE.md 禁「重跑就过了」）：本仓 `gate:local` 自身就是 4 分片并发，多人并发跑门禁是常态，所以「12 次子进程 spawn 挤不进 5s」在正常协作节奏下还会复发。修法方向留给该测试 owner：给这一条显式放宽超时（它的成本是 12 次 spawn 而非逻辑慢），或把 12 次调用收敛成一次批量校验。
 - ⏳ **`RFC-227 REAL macOS Seatbelt provider (gated)` 在 hosted macOS runner 上间歇性红**（2026-08-02 观测）：commit `1e87b6a1` 的 `Backend tests (macos-latest shard 2/4)` 挂在「denies app secrets, seal writes, and child network while preserving worktree writes」；**同一 shard 在严格包含它的 `f67db859` 上是 success**，且该轮改动完全没触及 containment。登记而非当噪音略过，是因为 CLAUDE.md 禁止「重跑就过了」作通过依据——需要它的 owner 判定是真时序缺陷（真实 `sandbox-exec` 子进程 + 网络探测本就时序敏感）还是 runner 环境抖动。复现线索：失败耗时 5034.88ms，接近某个 5s 超时。
 - ⏳ **MCP 收敛工具只覆盖 CRUD**（RFC-247 实现门 P2）：`resource_read`/`resource_write` 的 `method` 枚举只有 list/get/create/update/delete，因此 workflow copy·export、workgroup rename、repo refresh、memory archive·unarchive 这些**已对令牌开放**的路由，MCP-only 客户端够不着。要么扩 method 枚举，要么给它们具名工具——属 v2 的「MCP 面做多宽」范围，本轮未做。**2026-08-14 收口方向（对齐 RFC-294 pin `be31dd62`；按 `6e8c4f9f` 仓规只引小节号）：不要扩 `method` 枚举。** `McpBinding = {operationId, toolName}`（`design.md` §13.1）是 operation↔tool 一对一，`plan.md` **W4-A** 要求「HTTP RouteMeta 与 MCP tool 映射引用同一 operation id/handler」，§13.1 结尾又明禁 catalog 导出 generic invoker——扩枚举正是往 generic invoker 方向加固。等 W4-A 落地时这条自动消解。
 - ⏳ **MCP 缺 review 逐文档操作与 clarify 子集/延后**（RFC-247 实现门 P1/P2）：`submit_review` 只有整轮决策，PATCH 选择与 POST 锚定评论够不着；`answer_clarify` 表达不了 `defer` / `questionIds` / `resubmitQuestionIds`。多文档评审与逐题分派在 MCP 上因此不完整。**2026-08-14 收口方向**：与上一条同 owner——补法是各操作在 W4-A 的 operation catalog 里各拿一个 `McpBinding`，不是给现有收敛工具加参数。
-- ⏳ **令牌审计查询未下推 SQL**（RFC-247 实现门 P2）：`listTokenAudit` / `listTokenAuditForUser` 全表 select 后在内存里 filter+sort+slice。90 天保留期下调用量一大就是无界延迟与内存，`(user_id, created_at)` 索引白建。应改 `WHERE`/`ORDER BY`/`LIMIT` 下推。**2026-08-14 收口方向**：纯性能、不涉架构方向，可就地下推；终局 owner 按 RFC-294 §18 是 `identity-access`（W4/W9），就地修不造新债。
-- ⏳ **`/api/docs/api` 与 `/.well-known/mcp` 用请求 URL 推导 origin**（RFC-247 实现门 P2）：TLS 终止或反代重写 host/proto 时，`c.req.url` 拿到的是 daemon 内网 origin，生成的客户端片段与 discovery URL 不可用。应走 `publicBaseUrl` / forwarded 头，或前端用 `window.location.origin` 渲染。**2026-08-14 收口方向**：可就地做且方向与 RFC-294 一致——§15.1 的 config 合同要求 bootstrap 按 consumer 字段 allowlist 注入 typed immutable projection，`publicBaseUrl` 作为 boot projection 注入 inbound adapter 正是终局形状（不要在 adapter 里深层 `loadConfig()`）。
+- ✅ **令牌审计查询未下推 SQL 已修（2026-08-14，RFC-247 收口档 3）**（原 RFC-247 实现门 P2）：`listTokenAudit` / `listTokenAuditForUser` 曾全表 select 后在内存里 filter+sort+slice，90 天保留期下调用量一大就是无界延迟与内存、`(user_id, created_at)` 索引白建。现已改为 `WHERE`/`ORDER BY`/`LIMIT` 全下推（`services/tokenAudit.ts`）。**关键点**：排序补了 `id ASC` 二级键——JS `sort()` 稳定、裸 `ORDER BY created_at DESC` 不稳定，同毫秒两行会在两次调用间换位；ULID 在同毫秒内单调，故 `id ASC` 恰好复原插入顺序，使下推后行为与被替换的内存版逐字一致。锁：`rfc247-token-audit.test.ts` §「the audit listings are pushed into SQL」（过滤/排序/limit 行为 + 同毫秒稳定性 + 一条源码断言禁止 `.filter(`/`.sort(`/`.slice(` 复辟）。终局 owner 仍按 RFC-294 §18 归 `identity-access`（W4/W9），本次就地修未造新债。
+- ✅ **`/api/docs/api` 与 `/.well-known/mcp` 用请求 URL 推导 origin 已修（2026-08-14，RFC-247 收口档 3）**（原 RFC-247 实现门 P2）：TLS 终止或反代重写 host/proto 时 `c.req.url` 是 daemon 内网 origin，生成的客户端片段与 discovery URL 因此不可用。**未新增配置项**——RFC-036 早已有 `publicBaseUrl`，连同它的 forwarded 头回退一起被抽成纯函数 `routes/publicOrigin.ts:derivePublicOrigin`（优先级逐字不变：config → `X-Forwarded-*` → `Host` → 请求 URL），docs 两条路由与 OIDC 的 `resolveRedirectUri` 现在共用它，不再各写一份。顺带修了两处：代理链头（`X-Forwarded-Host: a, b` 取原始客户端那一跳）与「无 Host 头时 RFC-036 版会拼出字面量 `http://undefined/...`」。**与 webhook ingress URL 的规则差异是有意的**（那条只认 `publicBaseUrl`、缺了返回 null，因为那个 URL 要交给代码平台长期存活；这里读者正连着本 origin，回退才是正确答案），已写进源码注释以免被当成不一致。锁：`rfc247-public-origin.test.ts`（12 条纯函数矩阵）+ `rfc247-api-docs.test.ts` §「the published origin survives a reverse proxy」（HTTP 层四条）。落位按 RFC-294 §2 记在 inbound-HTTP transport 层（随 W4 迁 `adapters/inbound/http/`），未落 `services/`。
 - ⏳ **生成文档未含请求体 schema 与错误码**（RFC-247 实现门 P2）：`buildApiDocs` 丢掉了每个工具的 `inputSchema`，路由侧也没有 body/query/错误码，读者无法只看 wiki 就构造请求。`describe_resource` 已在实现门修复中补上派生 JSON Schema，同一套派生可以接进 wiki。**2026-08-14 收口方向：先别手写第二套派生。** RFC-294（pin `be31dd62`）`plan.md` **W4-A** 要求「API docs 从 transport descriptor 派生」，而 descriptor 自带 `inputCodec`/`outputCodec`/`publicErrorCodes`（`design.md` §13.1）——请求体 schema 与错误码是 W4-A 的自然产出，现在另起一套会在 W4 被推倒。
-- ⏳ **`/.well-known/mcp` 不反映开关状态**（RFC-247 实现门 P2）：`mcpSurfaceEnabled=false` 时该文档内容不变，客户端照着接过来每次都被拒。应把实时开关状态发布进 discovery。**2026-08-14 收口方向**：纯 payload、无架构面，可就地做（读开关走 §15.1 的 hot/operation projection，别新造全局 config reader）。
+- ✅ **`/.well-known/mcp` 不反映开关状态已修（2026-08-14，RFC-247 收口档 3）**（原 RFC-247 实现门 P2）：`mcpSurfaceEnabled=false` 时该文档曾与开启态逐字节相同，客户端照着接过来每次被拒、且拒绝表现为「认证问题」而非「这个部署不提供 MCP」。现 `wellKnownMcp()` 收 `{ enabled }` 并由路由从既有单一读点 `isMcpSurfaceEnabled(configPath)` 注入（未新造 config reader）。开关状态是 operator 姿态不是秘密（对端点发一次请求即可观测），故公开无碍。锁：`rfc247-api-docs.test.ts` §D18 两条（纯函数双向 + HTTP 层随真实 config 文件变化）。
 - ✅ review 评论 PATCH/DELETE 不验作者——**RFC-285 T7 已修（2026-08-13）**：作者校验三层判定（owner/资源管理员旁路、协作者仅本人行、LOCAL_DECIDER 兜底行 owner/admin-only），矩阵锁 reviews-comment-patch.test.ts；「delete 无 decided 冻结」半句是 v1 过期记载（现状对称冻结，锁同文件「冻结优先于作者校验」用例）。
 - `updateTaskMembers` 缺 OCC + in-tx active（`resourceAcl` RFC-170 已修、成员面没跟）；`buildLaunchCollabRows` 不排除 `__system__`。
 - WS 连接 actor 升级期钉死：撤销/降权/移出成员不断开在连，clarify 帧含全量问答（→ RFC-212 方案 D 处理）。
@@ -1870,10 +1871,10 @@ audit-backlog 里已登记的 bug#8（Windows VM + 1.18.13，业务节点侧）�
 **已证伪的假设（否定结论比猜想值钱，别再走这条死路）**：曾假设「两次 commit 会话顺序
 翻转——会话 1 抢先提交，把被断言的会话 0 饿成空提交」。本地变异实证**推翻**了它：
 
-| 变异 | 配置 | 结果 |
-| --- | --- | --- |
-| A | 关掉同步点 + 会话 0 握手后再慢 300ms、会话 1 零延迟 | 4 pass |
-| A2 | 同上，会话 0 慢 **3000ms** | 4 pass |
+| 变异 | 配置                                                | 结果   |
+| ---- | --------------------------------------------------- | ------ |
+| A    | 关掉同步点 + 会话 0 握手后再慢 300ms、会话 1 零延迟 | 4 pass |
+| A2   | 同上，会话 0 慢 **3000ms**                          | 4 pass |
 
 若顺序真能翻转，A2 必红。它没红 ⇒ **两次 commit 会话实际是被串行化的**。据此写了一个
 「会话 1 等工作树变干净」的握手修复，已**整体还原**——建立在错误因果上的修复会把间歇性
@@ -1933,10 +1934,11 @@ RFC-165 §9 的一次性 boot healer）每次 boot 都把遗留的 path-mode 定
 公民、这个改写忠实保留了本地仓（含未推送分支）。
 
 RFC-287 G5 之后，`file://` 在**运行两面**（启动来源汇流点 `resolveRepoSourceSingle`
-+ 镜像刷新 `refreshCachedRepo`）一律被拒。于是 healer 现在的净效果是：**把一批本来
-就跑不动的行，改写成另一种同样跑不动的形态**——「出厂即死」。它既不再帮任何人，也
-不会主动伤人（那些行本来也起不来），但留着会让后来者以为 `file://` 仍是受支持的
-目标形态。
+
+- 镜像刷新 `refreshCachedRepo`）一律被拒。于是 healer 现在的净效果是：**把一批本来
+  就跑不动的行，改写成另一种同样跑不动的形态**——「出厂即死」。它既不再帮任何人，也
+  不会主动伤人（那些行本来也起不来），但留着会让后来者以为 `file://` 仍是受支持的
+  目标形态。
 
 **为什么本轮不动**：①2026-08-13 拍板「存量为零、不做 grandfather」，动它的收益面是
 空集；②healer 对已是 v2-clean 的 payload 早退（`:875`），而 `file://` 行正是 v2-clean，
@@ -1949,3 +1951,43 @@ payload-heal.test.ts` 里只为它存在的用例一起清。删除前先跑一�
 
 **判据**：`design/RFC-287-scheduler-assembly-convergence/design.md` §10.7 尾部已把
 「一次性显式禁用 healer」标注为**设计期设想、未落地**；接手者不要照那句去补状态机。
+
+---
+
+## SIGKILL 落在仓库准备窗口内的两条不收敛窗口（RFC-287 三轮实现门并发面，未做）
+
+G7 把仓库准备变成任务的第 0 步之后，出现一段新的「任务行已在、工作树还没有、后台正
+跑 git」窗口。**优雅停机与用户取消已经修好**（信号穿透到子模块同步、abort 判 reason、
+租约在每条出口归还——见 RFC-287 三轮门那几笔）。剩下**只在 SIGKILL / 断电**下成立的
+两条，都需要设计决策，故未在本 RFC 内动：
+
+### ① 准备的「所有权」没有持久化 ⇒ boot 后杀不掉遗留的 git
+
+合成 `__repo_prep__` 行 mint 时**不记 pid**（`services/task.ts` 的 `mintNodeRun` 调用处），
+而 `spawnGit` 因为要支持 timeout/signal 是以**独立进程组**运行的。对 daemon PID 执行
+SIGKILL 时 controller / timeout / finally 一起消失，git 子进程继续跑；boot reap 看到
+`pid=NULL`，`killStaleRunProcessTree` 直接返回 `no-pid`，却仍把行改成 interrupted。
+于是**重试可能在旧 child 还在写的时候开始第二次克隆**。
+
+**处置方向**（需拍板）：给准备行落 pid（新增写点，或复用 node_runs 既有 pid 列）+ boot
+reap 对它走与 agent 行同款的 reap-proof 流程。代价是准备段要多一次 DB 写，且 pid 在
+warm/cold 两条路径上的归属需要界定（`runGit` 目前不回传 pid）。
+
+### ② worktree 已建、回填未提交 ⇒ 目录+分支成孤儿，且重试必然失败
+
+`git worktree add` 成功之后、回填事务提交之前被 SIGKILL：磁盘上已有
+`{appHome}/worktrees/<repoSlug>/<taskId>` 与 `agent-workflow/<taskId>` 分支，而 DB 里
+仍是 `worktreePath=''`。后果三条：
+
+- `runWorktreeOrphanGc` 按 taskId 是否存在判锚定 ⇒ **永远跳过**（任务行在）；
+- `runWorktreeGc` 因 DB 路径为空 ⇒ skip；
+- AC-11 重试用同一个 taskId 再跑 `worktree add -b agent-workflow/<taskId>` ⇒ 确定撞
+  现存路径/分支并再次失败，且该 git 报错不在可重试分类里。
+
+**处置方向**（需拍板）：要么让准备段的 `worktree add` 对「路径/分支已存在且属于本
+taskId」幂等领养，要么在准备重跑前先做一次定向清理。前者更贴「重试作用于当前阶段」，
+但改的是全仓共用的建树语义，影响面需单独评估。
+
+**已修的部分（勿重复登记）**：`.partial-<ULID>` 半成品镜像目录的回收已落地
+（`services/gc.ts` 的 `runPartialCloneGc`，挂在每小时 GC 上，按 24h 年龄判据）——它此前
+**只有生产者、零消费者**，本 session 在真实 home 里实测到 13 个堆积。

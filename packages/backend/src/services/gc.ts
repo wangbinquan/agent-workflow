@@ -528,6 +528,49 @@ export async function runScratchOrphanGc(
  * reaped these). Mirrors runScratchOrphanGc, descending one extra repo-slug
  * level, and rmSync's the dir (the iso-GC precedent for git-worktree dirs).
  */
+/**
+ * RFC-287（三轮门并发面 Codex P1）—— 回收**半成品镜像目录** `repos/<hash>-<slug>.partial-<ULID>/`。
+ *
+ * 这些目录由 `gitRepoCache.ts` 的冷克隆产出：先克隆到 `.partial-<ULID>`，成功后再
+ * 原子 rename 到 canonical 名。正常失败路径会删掉它，但**进程被 SIGKILL 时不会**
+ * ——controller、timeout 与 finally 一起消失，目录就留在磁盘上。
+ *
+ * 关键事实：全仓对这个命名**只有一个生产者、零消费者**（`gitRepoCache.ts:820` 那一处
+ * `join(cacheRoot, ...partial-${ulid()})`），此前没有任何扫描会碰它们。本 session 里
+ * 就实测到真实 home 的 `repos/` 下攒了 13 个 `…-nope.partial-*`——那还只是测试留下的。
+ *
+ * 判据只能是**年龄**：目录名里没有 taskId 可锚，而一次冷克隆本身可以跑很久，按
+ * 「有没有人在用」判会误删正在写入的那个。沿用 `SCRATCH_ORPHAN_MIN_AGE_MS`（24h）
+ * ——远大于任何合理的克隆时长（`gitCloneTimeoutMs` 默认远小于它），所以到龄的一定是
+ * 死掉的进程留下的。
+ */
+export function runPartialCloneGc(
+  appHome: string,
+  now: number = Date.now(),
+): { scanned: number; removed: string[] } {
+  const cacheRoot = join(appHome, 'repos')
+  if (!existsSync(cacheRoot)) return { scanned: 0, removed: [] }
+  const removed: string[] = []
+  let scanned = 0
+  for (const e of readdirSync(cacheRoot, { withFileTypes: true })) {
+    if (!e.isDirectory() || !e.name.includes('.partial-')) continue
+    scanned += 1
+    const dir = join(cacheRoot, e.name)
+    try {
+      if (now - statSync(dir).mtimeMs < SCRATCH_ORPHAN_MIN_AGE_MS) continue
+      rmSync(dir, { recursive: true, force: true })
+      removed.push(e.name)
+    } catch (err) {
+      log.warn('failed to remove an orphaned partial clone dir', {
+        dir,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  if (removed.length > 0) log.info('reclaimed orphaned partial clone dirs', { removed })
+  return { scanned, removed }
+}
+
 export async function runWorktreeOrphanGc(
   db: DbClient,
   appHome: string,
@@ -726,6 +769,10 @@ export function startWorktreeGc(
       .then(() => (appHome !== undefined ? runScratchOrphanGc(db, appHome) : undefined))
       // RFC-222 — sweep orphan task worktrees (deleted-task backstop, §6.4).
       .then(() => (appHome !== undefined ? runWorktreeOrphanGc(db, appHome) : undefined))
+      // RFC-287：半成品镜像目录（SIGKILL 落在冷克隆中途时留下），此前无人回收。
+      .then(() => {
+        if (appHome !== undefined) runPartialCloneGc(appHome)
+      })
       .catch((err: unknown) => {
         log.error('runWorktreeGc failed', {
           error: err instanceof Error ? err.message : String(err),

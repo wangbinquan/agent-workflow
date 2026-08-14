@@ -731,6 +731,11 @@ export async function resolveCachedRepo(
       const sub = await syncSubmodules(row.localPath, {
         mode: submodule.mode,
         jobs: submodule.jobs,
+        // 与紧邻的 fetch 同一个预算。RFC-208 的注释已经点明「约束子进程本身才真正
+        // 放开队列」，但当时只给 fetch 接了界，随后这段 submodule update 仍是无界的
+        // ——它同样在 `withUrlLock` 的临界区里，卡住等于**永久占住这个 URL 的队列**，
+        // 同 URL 的所有启动排在它后面（三轮门并发面 Codex P1）。
+        timeoutMs: deps.cloneTimeoutMs ?? DEFAULT_CLONE_TIMEOUT_MS,
       })
       if (!sub.ok) {
         log.warn('submodule sync on reuse failed', {
@@ -1173,6 +1178,8 @@ export async function refreshCachedRepo(
     const sub = await syncSubmodules(row.localPath, {
       mode: submodule.mode,
       jobs: submodule.jobs,
+      // 同上：手动刷新这条也在 URL 锁里，无界的 submodule update 会把队列焊死。
+      timeoutMs: deps.cloneTimeoutMs ?? DEFAULT_CLONE_TIMEOUT_MS,
     })
     if (!sub.ok) {
       log.warn('manual refresh submodule sync failed', {
