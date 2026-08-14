@@ -1741,7 +1741,14 @@ function NodeRunsTable({
             if (r.commitPush != null) {
               return <CommitRunRow key={r.id} run={r} allRuns={runs} />
             }
-            const name = resolveNodeNameFromSnapshot(workflowSnapshot, r.nodeId) ?? r.nodeId
+            // RFC-287 G7：`__repo_prep__` 是框架合成的第 0 步，**不在**工作流快照里，
+            // 所以 resolveNodeNameFromSnapshot 必然落空、回退到裸 nodeId ——用户看到
+            // 的是字面 `__repo_prep__`（四轮门实测）。design §10.7 要求合成行的可见性
+            // 显式写出来：可见性做了，标签没做。
+            const name =
+              r.nodeId === REPO_PREP_NODE_ID
+                ? t('tasks.repoPrepStepName')
+                : (resolveNodeNameFromSnapshot(workflowSnapshot, r.nodeId) ?? r.nodeId)
             // RFC-078: review rows show the CURRENT round's content-anchored start,
             // not the pinned slot-first-open started_at. The duration column renders
             // reviewRunDisplay's unified durationMs — a review's human-review wait and
@@ -2041,12 +2048,17 @@ export function taskDetailRefetchInterval(
  * 重试后应指向最新那次失败而不是最早那次。
  */
 export function findRepoPrepRetryTarget(runs: readonly NodeRun[] | undefined): string | null {
-  let hit: string | null = null
-  for (const r of runs ?? []) {
-    if (r.nodeId === REPO_PREP_NODE_ID && (r.status === 'failed' || r.status === 'interrupted'))
-      hit = r.id
-  }
-  return hit
+  // ⚠️ 判据是「**最新**那条准备行是不是失败态」，不是「存在某条失败的准备行」。
+  //
+  // 四轮门 Codex 契约面实测的真缺陷：一个自然序列 `r1 failed → r2 done → n1 failed`
+  // （准备第一次失败、重试成功、后面某个业务节点才失败）下，旧判据挑中 r1 并把整个
+  // 任务判成 `repo-prep-failed`，UI 于是宣称「工作树还没建出来」——而工作树明明在。
+  // 点下去更糟：后端只检查被点的那条自身是 failed/interrupted，于是**对一个已经准备
+  // 好的任务重做准备**。
+  const latest = [...(runs ?? [])].filter((r) => r.nodeId === REPO_PREP_NODE_ID).at(-1)
+  if (latest === undefined) return null
+  if (latest.status !== 'failed' && latest.status !== 'interrupted') return null
+  return latest.id
 }
 
 export function resumeStatus(

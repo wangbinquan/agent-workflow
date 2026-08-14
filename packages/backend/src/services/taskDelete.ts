@@ -137,9 +137,16 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
     .select({ repoPath: taskRepos.repoPath, worktreePath: taskRepos.worktreePath })
     .from(taskRepos)
     .where(eq(taskRepos.taskId, taskId))
-  const worktrees: WorktreeTarget[] = repoRows.length
-    ? repoRows.map((r) => ({ repoPath: r.repoPath, worktreePath: r.worktreePath }))
-    : [{ repoPath: row.repoPath, worktreePath: row.worktreePath }]
+  const worktrees: WorktreeTarget[] = (
+    repoRows.length
+      ? repoRows.map((r) => ({ repoPath: r.repoPath, worktreePath: r.worktreePath }))
+      : [{ repoPath: row.repoPath, worktreePath: row.worktreePath }]
+  )
+    // RFC-287 G7：准备失败 / 准备窗口内的任务 `task_repos` 为空、两个路径都是空串，
+    // 于是这里会用两个空串去调 git，拿到 `fatal: '' is not a working tree`，API 回给
+    // 调用方一个**假的** `cleanup: "pending"`——任务与 node_runs 其实已经删干净了，
+    // 只是从来就没有工作树要清（四轮门 Codex 契约面实测）。空路径直接不进清理面。
+    .filter((w) => w.worktreePath !== '' && w.repoPath !== '')
 
   // Serialize against in-flight writers, then re-check terminality and delete in
   // one transaction (closes the resume/retry TOCTOU — §6.2).

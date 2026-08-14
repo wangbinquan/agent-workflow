@@ -736,6 +736,12 @@ export async function resolveCachedRepo(
         // ——它同样在 `withUrlLock` 的临界区里，卡住等于**永久占住这个 URL 的队列**，
         // 同 URL 的所有启动排在它后面（三轮门并发面 Codex P1）。
         timeoutMs: deps.cloneTimeoutMs ?? DEFAULT_CLONE_TIMEOUT_MS,
+        // ⚠️ signal 也必须接上（四轮门 Codex P1）：上一笔只补了 timeout，于是**warm
+        // 镜像**这条路上取消依旧杀不掉 git——紧邻的 fetch 明明用了 `deps.signal`，
+        // 到这一步就断线。用户取消后 5 秒兜底把任务写成 canceled，而子模块 git 还在
+        // 跑、准备行还是 running、租约还被持有 ⇒ 删除稳定撞 `task-active`。
+        // AC-14 要的是「底层 git 子进程确实终止」，warm 与 cold 两条都得算。
+        ...(deps.signal !== undefined ? { signal: deps.signal } : {}),
       })
       if (!sub.ok) {
         log.warn('submodule sync on reuse failed', {
@@ -935,7 +941,18 @@ export async function resolveCachedRepo(
         .values({ id, createdAt: ts, ...rowValues })
         .run()
     }
-    if (box === undefined) rememberVolatileRepoUrl(deps.db, id, input.url)
+    // ⚠️ 后续一律用 `rowId` 而不是 `id`。
+    //
+    // 四轮门抓到的自伤:三轮门为修 UNIQUE 竞态加了「INSERT 前复读并领养」,`UPDATE`
+    // 打的是复读到的 `adoptId`,可返回值与 `rememberVolatileRepoUrl` 仍用着上面那个
+    // `id`——而在「临界区开头无行、克隆期间身份行被插进来」这一支里,`id` 是一个
+    // **从未 INSERT 过的新 ULID**。于是调用方拿到一个库里不存在的 cachedRepoId:
+    // 仓库组保存写进带 FK 的 `repo_group_nodes` 直接抛裸 SQLite FK 错误;批量导入把
+    // 它交给前端;eager 启动写进 `tasks.cached_repo_id` ⇒ AC-11 重试与 relaunch 撞
+    // `cached-repo-not-found`,`refTaskCount` 对真行再次失明。
+    // 修 UNIQUE 那一处只改了写、漏了读,是典型的「一半修复」。
+    const rowId = adoptId ?? id
+    if (box === undefined) rememberVolatileRepoUrl(deps.db, rowId, input.url)
     log.info('cloned new cached repo', { url: redacted, hash, localPath: cacheDir })
     // RFC-165 (F19-r3): the COLD path must resolve requested refs to their
     // remote-tracking state too — the source may carry a non-default local
@@ -977,7 +994,7 @@ export async function resolveCachedRepo(
     return {
       cached: rowToCached(
         {
-          id,
+          id: rowId,
           urlHash: hash,
           urlEnc,
           urlRedacted: redacted,
@@ -1146,6 +1163,17 @@ export async function refreshCachedRepo(
   }
 
   return await withUrlLock(row.urlHash, async () => {
+    // `lastFetchedAt === 0` 是**身份态**的显式哨兵（RFC-287 G7：先落身份行、再异步
+    // 取内容），不是损坏。谎报成 corrupt 会把用户引向「删掉再重启任务」——而正解是
+    // 「重试准备仓库」（四轮门 Codex 契约面实测）。
+    if (row.lastFetchedAt === 0 && !existsSync(row.localPath)) {
+      throw new DomainError(
+        'repo-cache-not-fetched-yet',
+        `cached repo '${row.id}' has not fetched its content yet (identity was registered, the clone has not completed); retry the task's repository-preparation step instead of refreshing`,
+        409,
+        { url: redacted },
+      )
+    }
     if (!(await isValidGitDir(row.localPath))) {
       throw new DomainError(
         'repo-cache-corrupt',

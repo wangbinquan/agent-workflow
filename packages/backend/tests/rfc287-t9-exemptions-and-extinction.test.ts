@@ -102,11 +102,29 @@ describe('RFC-287 T9 ② — 装配散写的终局灭绝锁（三处显式挖洞
         const at = m.index ?? 0
         if (at > asmAt) continue // ① 写在 spec 里
         // ② 向上找宿主闭包名，再确认它被 iso.create 引用。
+        //
+        // ⚠️ 必须**括号配平**确认调用点真的落在那个闭包体内（四轮门测试有效性自查
+        // 实测）：光取「最近的前一个 `const X = async (`」是**顺序逃逸**——一句真正
+        // 散写的 `await createIsoUnderLock(...)` 只要放在 `const createScriptIso =
+        // async (` 之后、`runAssembly<` 之前，就会被误认成属于 createScriptIso（而它
+        // 确实被 iso.create 引用），于是复辟**全绿**。这条锁当时只是靠代码顺序的运气。
         const before = body.slice(0, at)
         const decl = [...before.matchAll(/const (\w+) = async \(/g)].pop()
         expect(decl, `${label}: 物化既不在 spec 内、也不在具名闭包里（散写复辟）`).not.toBe(
           undefined,
         )
+        const declAt = decl?.index ?? 0
+        const declOpen = body.indexOf('{', declAt)
+        let depth = 1
+        let k = declOpen + 1
+        for (; k < body.length && depth > 0; k++) {
+          if (body[k] === '{') depth++
+          else if (body[k] === '}') depth--
+        }
+        expect(
+          at > declOpen && at < k,
+          `${label}: createIsoUnderLock 落在 ${decl?.[1] ?? '?'} 的**体外**（散写复辟，只是恰好排在它后面）`,
+        ).toBe(true)
         const name = decl?.[1] ?? ''
         // 只要求「spec 的 iso 块引用了它」——直接挂 `create: name` 与套一层
         // `create: async () => name()` 语义等价，锁死前者会让无害的重构变红。

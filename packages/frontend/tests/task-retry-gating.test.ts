@@ -191,10 +191,18 @@ describe('RFC-287 G7 wiring', () => {
     expect(DETAIL_SRC).toContain("resumability === 'repo-prep-failed'")
     expect(DETAIL_SRC).toContain("t('tasks.resumeRepoPrepFailed')")
     // 反向：这条提示**不得**带「启动新任务」链接——那正是它要纠正的错误引导。
-    const prepBanner = /resumability === 'repo-prep-failed'[\s\S]{0,900}?resumeRepoPrepFailed/.exec(
+    // ⚠️ 两处都被四轮门测试有效性自查实测出问题，一起修：
+    // ① 窗口 898/900，只剩 **2 字**余量——加一个 prop / 长一点的 className 就 null；
+    // ② 正则是 **lazy** 的，匹配止步于 `t('tasks.resumeRepoPrepFailed`，`<NoticeBanner>`
+    //    的 children 与闭合标签**在窗口之外** ⇒ 往横幅体里加一个
+    //    `<Link search={{ relaunchFrom }}>`（隔壁 worktree-missing 横幅就有）
+    //    对 `not.toContain('relaunchFrom')` 完全隐形。
+    // 改成锚到整个元素（守卫 → 闭合标签），并给足余量。
+    const prepBanner = /resumability === 'repo-prep-failed'[\s\S]{0,2500}?<\/NoticeBanner>/.exec(
       DETAIL_SRC,
     )
     expect(prepBanner).not.toBeNull()
+    expect(prepBanner![0]).toContain('resumeRepoPrepFailed')
     expect(prepBanner![0]).not.toContain('relaunchFrom')
   })
 })

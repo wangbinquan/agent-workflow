@@ -40,6 +40,13 @@ export interface AutoResumeOptions {
   breaker: BreakerConfig
   /** Resume one task. Throws on an unsafe/failed resume (counted by the breaker). */
   resume: (taskId: string) => Promise<void>
+  /**
+   * RFC-287 G7（plan.md T13⑥「boot reap / auto-resume 识别『准备未完成』**改重跑
+   * 准备**」）：仓库准备未完成的任务不能走 resume（它必然撞
+   * `task-repo-prep-incomplete`），要重跑的是准备本身。注入而非直调，避免
+   * autoResume → task 的新依赖边。缺省不传 = 退回「跳过」，老调用方不受影响。
+   */
+  retryRepoPrep?: (taskId: string) => Promise<void>
   now?: () => number
 }
 
@@ -56,7 +63,7 @@ export interface AutoResumeResult {
 export async function autoResumeInterruptedTasks(
   opts: AutoResumeOptions,
 ): Promise<AutoResumeResult> {
-  const { db, breaker, resume } = opts
+  const { db, breaker, resume, retryRepoPrep } = opts
   const now = opts.now ?? Date.now
   const rows = await db
     .select({
@@ -129,10 +136,48 @@ export async function autoResumeInterruptedTasks(
     // 判据与 `assertWorktreePresentForResume` 同源：空路径 + 没打墓碑。打了墓碑的是
     // 老的「工作区已回收」形态，仍按既有路径处理（resume 报 410、计熔断）。
     if (t.worktreePath === '' && t.workspacePrunedAt === null) {
-      log.info('auto-resume skipped a task still awaiting repository preparation', {
-        taskId: t.id,
+      // plan.md T13⑥ 要的是**重跑准备**，不是跳过——daemon 在克隆中途重启，用户期望
+      // 的是它继续把仓库准备好，而不是留一个要手点重试的任务。resume 对它必然失败
+      // （`task-repo-prep-incomplete`），所以走单独的注入口。
+      // 熔断仍然计：重跑准备是一次真正的恢复尝试，一个永远拉不动的远端应当在 N 次后
+      // 被隔离，否则每次 boot 都白跑一轮克隆。
+      if (retryRepoPrep === undefined) {
+        log.info('auto-resume skipped a task still awaiting repository preparation', {
+          taskId: t.id,
+        })
+        skipped.push(t.id)
+        continue
+      }
+      if (await isAutoRecoverySuspended(db, t.id)) {
+        skipped.push(t.id)
+        continue
+      }
+      if ((await recordAutoRecoveryAttempt(db, t.id, breaker, now())).suspended) {
+        skipped.push(t.id)
+        continue
+      }
+      const ok = await withDriverLease(t.id, HOLDER, 'auto-resume', async () => {
+        try {
+          await retryRepoPrep(t.id)
+          await recordRecoveryEvent(db, {
+            taskId: t.id,
+            kind: 'auto-resume',
+            reason: 'autoResumeOnBoot:repo-prep',
+            before: { status: 'interrupted' },
+            after: { status: 'pending' },
+            now: now(),
+          })
+          return true
+        } catch (err) {
+          log.warn('auto repo-prep retry failed', {
+            taskId: t.id,
+            error: err instanceof Error ? err.message : String(err),
+          })
+          return false
+        }
       })
-      skipped.push(t.id)
+      if (ok === true) resumed.push(t.id)
+      else skipped.push(t.id)
       continue
     }
     if (await isAutoRecoverySuspended(db, t.id)) {

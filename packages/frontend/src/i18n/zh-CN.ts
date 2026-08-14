@@ -3179,6 +3179,8 @@ export interface Resources {
     resumeRepoPrepFailed: string
     /** RFC-287 AC-11：横幅自带的「重试准备仓库」动作——准备行画不到画布上，
      *  这是它唯一的重试入口。 */
+    /** RFC-287 G7：合成的「准备仓库」第 0 步在节点表里的显示名。 */
+    repoPrepStepName: string
     retryRepoPrep: string
     retryRepoPrepPending: string
     /** RFC-164/167: turn-engine group tasks (lw / fc) can't resume in place — relaunch instead. */
@@ -9256,6 +9258,7 @@ export const zhCN: Resources = {
       'worktree 创建阶段就失败了（根本没建出 worktree），resume 救不了。请新建一个任务。',
     resumeRepoPrepFailed:
       '任务卡在「准备仓库」这一步（克隆 / 拉取失败），工作树还没建出来。修好网络或权限后，点右侧「重试准备仓库」即可，不必重新启动任务。',
+    repoPrepStepName: '准备仓库',
     retryRepoPrep: '重试准备仓库',
     retryRepoPrepPending: '重试中…',
     resumeUnavailableWorkgroup:

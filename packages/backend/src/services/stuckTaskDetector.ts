@@ -71,6 +71,8 @@ export const DEFAULT_PENDING_THRESHOLD_MS = 5 * MIN_MS
 /** RFC-284 T22（决策 D11）：子任务（parent_task_id 非空）pending 常因 childBudget
  *  预算排队属合法长等（>60s 已有日志），5min 阈值必然误报噪音 → 提高到 30min；
  *  顶层任务维持 5min 不变。 */
+/** RFC-287 G7：仓库准备（冷克隆 + G6 窗口）可以合法跑很久，别当卡死。 */
+const DEFAULT_REPO_PREP_PENDING_THRESHOLD_MS = 45 * 60_000
 export const DEFAULT_CHILD_PENDING_THRESHOLD_MS = 30 * MIN_MS
 
 export interface RunStuckTaskDetectorArgs {
@@ -106,6 +108,9 @@ interface StuckCandidate {
   parentTaskId: string | null
   status: string
   startedAt: number
+  /** RFC-287 G7：判「是不是正卡在仓库准备第 0 步」用（见 S4 的豁免）。 */
+  worktreePath: string
+  workspacePrunedAt: number | null
   ownerUserId: string | null
   /** RFC-164: non-null = workgroup task (S1/S2 exempt — engine-owned parking). */
   workgroupId: string | null
@@ -127,6 +132,8 @@ async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise
       ownerUserId: tasks.ownerUserId,
       workgroupId: tasks.workgroupId,
       parentTaskId: tasks.parentTaskId,
+      worktreePath: tasks.worktreePath,
+      workspacePrunedAt: tasks.workspacePrunedAt,
     })
     .from(tasks)
     .where(
@@ -139,6 +146,8 @@ async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise
     status: r.status,
     startedAt: r.startedAt,
     parentTaskId: r.parentTaskId,
+    worktreePath: r.worktreePath,
+    workspacePrunedAt: r.workspacePrunedAt,
     ownerUserId: r.ownerUserId,
     workgroupId: r.workgroupId,
   }))
@@ -314,8 +323,16 @@ async function checkOne(
     const pendingForMs = now - c.startedAt
     // D11：子任务在 childBudget 预算下排队是合法长等 → 更高阈值 + 提示；
     // 顶层任务维持调用方传入的阈值。
-    const effectiveThresholdMs =
-      c.parentTaskId === null
+    // RFC-287 G7：**仓库准备**期间任务合法地待在 pending —— 冷克隆一个大仓可以跑满
+    // `gitCloneTimeoutMs`（默认 30min），G6 的窗口重试还叠在上面。默认 5 分钟阈值必然
+    // 触发，且 S4 的文案「without scheduler pickup」与事实完全相反：调度器早就认领了，
+    // 正在跑第 0 步。同一文件已为 RFC-284 的子任务排队开过同款豁免（D11），这里补上
+    // 准备窗口这一类。判据与 `assertWorktreePresentForResume` / autoResume 同源：
+    // 空路径 + 没打墓碑 = 还没建出工作树。
+    const preparingRepo = c.worktreePath === '' && c.workspacePrunedAt === null
+    const effectiveThresholdMs = preparingRepo
+      ? Math.max(pendingThresholdMs, DEFAULT_REPO_PREP_PENDING_THRESHOLD_MS)
+      : c.parentTaskId === null
         ? pendingThresholdMs
         : Math.max(pendingThresholdMs, DEFAULT_CHILD_PENDING_THRESHOLD_MS)
     if (pendingForMs > effectiveThresholdMs) {
@@ -324,9 +341,17 @@ async function checkOne(
         rule: 'S4',
         detail: {
           rule: 'S4',
-          message: 'task pending too long without scheduler pickup',
+          message: preparingRepo
+            ? 'task pending too long while preparing its repository (clone/fetch may still be running)'
+            : 'task pending too long without scheduler pickup',
           pendingForMs,
           thresholdMs: effectiveThresholdMs,
+          ...(preparingRepo
+            ? {
+                repoPrepWaitHint:
+                  'repository preparation (G7 step 0) is in progress — a large cold clone can legitimately run for many minutes',
+              }
+            : {}),
           ...(c.parentTaskId === null
             ? {}
             : {

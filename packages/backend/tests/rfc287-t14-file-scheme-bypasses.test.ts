@@ -83,9 +83,13 @@ describe('RFC-287 G5 —— 存量 file:// 镜像不可运行（design §10.7 �
         { db, appHome: '/tmp/aw-t14-g5' } as never,
       )
     } catch (err) {
-      msg = err instanceof Error ? err.message : String(err)
+      // 判据必须是 `.code`——码在 `.code`，message 里一个字都没有。原来写的是
+      // `toMatch(/file-scheme-unsupported|file:\/\/ repositories cannot be launched/i)`，
+      // 第一支**永远不匹配**，整条断言其实焊在那句英文散文上：改个措辞就误红，而
+      // 换掉错误码反倒不红（四轮门测试有效性自查实测）。
+      msg = (err as { code?: string }).code ?? (err instanceof Error ? err.message : String(err))
     }
-    expect(msg).toMatch(/file-scheme-unsupported|file:\/\/ repositories cannot be launched/i)
+    expect(msg).toBe('repo-url-file-scheme-unsupported')
   })
 
   test('注册面**不拒**：批量导入仍接受 file://（design 划为不动面）', () => {

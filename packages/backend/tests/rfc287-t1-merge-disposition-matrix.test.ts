@@ -49,10 +49,20 @@ function branchAfter(body: string, marker: string): string {
 
 function bodyOf(signature: string): string {
   const start = SCHEDULER.indexOf(signature)
-  expect(start).toBeGreaterThan(-1)
-  const rest = SCHEDULER.slice(start + signature.length)
-  const next = rest.search(/\nasync function |\nfunction /)
-  return next === -1 ? rest : rest.slice(0, next)
+  expect(start, `未找到函数：${signature}`).toBeGreaterThan(-1)
+  // ⚠️ 括号配平，**不能**靠「下一个 function 声明」当边界（四轮门测试有效性自查
+  // 实测）：`runHostNode` 是嵌套在 `buildWorkgroupHooks` 里的函数，它的兄弟钩子都写成
+  // `const x = async () =>`，正则边界一个都不命中，于是切片一路跑出真实函数体
+  // 159 行——把兄弟钩子与两个导出函数全吞了进来。实测把边界补上 `export ` 前缀只收窄
+  // 了 31 行，仍然吞着别人的代码。只有配平括号才切得准。
+  const open = SCHEDULER.indexOf('{', start + signature.length - 1)
+  let depth = 1
+  let i = open + 1
+  for (; i < SCHEDULER.length && depth > 0; i++) {
+    if (SCHEDULER[i] === '{') depth++
+    else if (SCHEDULER[i] === '}') depth--
+  }
+  return SCHEDULER.slice(open + 1, i - 1)
 }
 
 /** merge 抛出的共同默认：保留 iso + 标记合并失败。 */

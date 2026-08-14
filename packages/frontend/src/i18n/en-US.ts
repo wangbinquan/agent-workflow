@@ -3763,6 +3763,7 @@ export const enUS: Resources = {
       'Resume cannot recover from a worktree-creation failure (no worktree was ever created). Launch a fresh task instead.',
     resumeRepoPrepFailed:
       'This task is stuck at the repository-preparation step (clone / fetch failed), so no worktree exists yet. Fix the network or access problem, then retry the preparation step — no need to launch a new task.',
+    repoPrepStepName: 'Prepare repository',
     retryRepoPrep: 'Retry repository preparation',
     retryRepoPrepPending: 'Retrying…',
     resumeUnavailableWorkgroup:

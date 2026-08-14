@@ -30,7 +30,11 @@ function bodyOf(signature: string): string {
   const start = SCHEDULER.indexOf(signature)
   expect(start, `未找到函数：${signature}`).toBeGreaterThan(-1)
   const rest = SCHEDULER.slice(start + signature.length)
-  const next = rest.search(/\nasync function |\nfunction /)
+  // 边界必须**同时**认 `export` 前缀（四轮门测试有效性自查实测）：`runHostNode` 是
+  // 嵌套函数，真实结尾在 L1449，而旧边界跨过了 `export function decideEnvelopeFollowup`
+  // 一路切到 L1608，把 buildWorkgroupHooks 的兄弟钩子与两个导出函数全吞了进来
+  // ——那条 BASELINE 的第 4 项其实根本不在 runHostNode 里。
+  const next = rest.search(/\n(?:export )?(?:async )?function /)
   return next === -1 ? rest : rest.slice(0, next)
 }
 
@@ -62,13 +66,18 @@ describe('RFC-287 T5 / C1 — 脚本节点合并抛出的处置（漂移 A）', 
   })
 
   test('处置内容 = 保留 iso + 标记合并失败 + 判该节点失败', () => {
-    const mergeAt = script.indexOf('mergeBackAndSettle(')
-    const around = script.slice(mergeAt, mergeAt + 2000)
-    expect(around).toMatch(/markMergeFailed/)
+    // ⚠️ 判据必须括号配平到**本线自己的 `onThrow` 分支**，不能用 2000 字窗口
+    // （四轮门测试有效性自查实测）：那个窗口会一路跨过兄弟分支——`onConflictHuman`
+    // 里带着 `keep: true`、`settle` 里带着 `kind: 'failed',`——于是把本线的 `onThrow`
+    // 整个改成 `keep: false` + `kind: 'canceled'`（正是这条红→绿对要防的回归）
+    // **三条断言全绿**，只有 `markMergeFailed` 还在起作用。
+    // 同文件早就备好了 `branchAfter()`，同族的 t1-merge-disposition-matrix 也一直这么用。
+    const thrown = branchAfter(bodyOf('async function runScriptNode('), 'onThrow:')
+    expect(thrown).toMatch(/markMergeFailed/)
     // 形态无关：现状是具名标志 `keepScriptIso = true`，迁入骨架后会变成
     // spec 声明里的 `keep: true`——两种都算。
-    expect(around).toMatch(/keep\w*Iso = true|keep: true/)
-    expect(around).toMatch(/kind: 'failed'/)
+    expect(thrown).toMatch(/keep\w*Iso = true|keep: true/)
+    expect(thrown).toMatch(/kind: 'failed'/)
   })
 
   test('与其余已迁线同处置（收敛目标）', () => {

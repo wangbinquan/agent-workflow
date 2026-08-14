@@ -67,7 +67,7 @@ import {
   like,
   type SQL,
 } from 'drizzle-orm'
-import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
 import { ulid } from 'ulid'
@@ -124,7 +124,7 @@ import {
 } from '@/services/lifecycle'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
-import { pickFreshestRun } from '@/services/freshness'
+import { isFresherNodeRun, pickFreshestRun } from '@/services/freshness'
 import {
   ensureCachedRepoIdentity,
   listAvailableRefs,
@@ -141,6 +141,7 @@ import {
   type WorktreeCleanupProvenance,
   type WorktreeLifecycleHookEvent,
   worktreeDiff,
+  runGit,
 } from '@/util/git'
 import { isFileSchemeUrl, redactGitUrl } from '@agent-workflow/shared'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
@@ -860,6 +861,21 @@ function assertLaunchSourceSchemeSync(deps: StartTaskDeps, input: StartTask): vo
   checkCachedId((input as { cachedRepoId?: unknown }).cachedRepoId)
   for (const r of (input as { repos?: readonly unknown[] }).repos ?? []) {
     checkCachedId((r as { cachedRepoId?: unknown }).cachedRepoId)
+  }
+  // `sourceTaskId` 重放（前端「重启」多仓任务的**唯一**通道）此前完全没被预筛到
+  // ——四轮门跨 RFC 面实测:以它启动一个存量 `file://` 多仓任务，同步段放行、返回
+  // 201，几秒后才后台失败。而 AC-8 原话是「同步段即拒……不得延后成『201 之后后台
+  // 失败』」，且存量 `file://` 多仓任务最可能被点到的正是这个按钮。
+  // 冻结布局里每个仓都带 `cached_repo_id`，复用同一个判据即可（仍是零解封）。
+  const sourceTaskId = (input as { sourceTaskId?: unknown }).sourceTaskId
+  if (typeof sourceTaskId === 'string' && sourceTaskId.length > 0) {
+    for (const r of deps.db
+      .select({ cachedRepoId: taskRepos.cachedRepoId })
+      .from(taskRepos)
+      .where(eq(taskRepos.taskId, sourceTaskId))
+      .all()) {
+      checkCachedId(r.cachedRepoId)
+    }
   }
   const groupId = (input as { repoGroupId?: unknown }).repoGroupId
   if (typeof groupId === 'string' && groupId.length > 0) {
@@ -2483,7 +2499,23 @@ async function startTaskImpl(
         },
       ],
     }
-  } else if (deps.deferRepoPreparation === true && input.scratch !== true) {
+  } else if (
+    deps.deferRepoPreparation === true &&
+    input.scratch !== true &&
+    // RFC-287 四轮门(用户拍板)：`sourceTaskId` 重放**不走延后准备**。
+    //
+    // 它是前端「重启」多仓任务的唯一通道，而占位行存不住它的来源——冻结布局在**源
+    // 任务**的 `task_repos` 上，新任务的那张表要等回填才写，`tasks` 也没有
+    // `source_task_id` 列。于是 `retryRepoPreparation` 的 `!hasGroup && !hasCached`
+    // 必然成立、409 `repo-prep-source-unavailable`，而前端横幅只看「有没有失败的准备
+    // 行」就把重试按钮画出来了 ⇒ **一个必然点不动的按钮**（四轮门跨 RFC 面实测）。
+    //
+    // 排除它 = 这条路径保持 G7 之前的同步语义：失败在 HTTP 调用处抛出、不铸任务行、
+    // 不出现死按钮。代价是拿不到「失败留记录」那半收益；换来的是不撒谎。
+    // （另两个候选——加 `tasks.source_task_id` 列、或只让按钮不出现——分别要一次迁移
+    // 与「确认能力缺失」，用户选了这条。）
+    typeof (input as { sourceTaskId?: unknown }).sourceTaskId !== 'string'
+  ) {
     // 同步段的地址格式校验（proposal §G7 明列）——见 assertLaunchSourceSchemeSync。
     assertLaunchSourceSchemeSync(deps, input)
     // RFC-287 G7：JSON-body 启动把仓库准备**推迟到任务行落库之后**。
@@ -2602,7 +2634,24 @@ async function startTaskImpl(
           name: resolveRepoGroupLayout(deps.db, input.repoGroupId).groupName,
         }
       : null
-  const headBaseBranch = head?.baseBranch ?? fallbackSource?.baseBranch ?? ''
+  // 延后准备时 head/fallbackSource 都还空着，但**请求里就有 `ref`**——不存下来，
+  // AC-11 的「重试准备仓库」就再也拿不到它(四轮门两路独立实测)：`retryRepoPreparation`
+  // 手工重建启动输入，`ref` 不在其中；而基线分支的唯一来源是
+  // `resolveRepoSourceSingle` 的 `specRef ?? cached.defaultBranch`，于是重试静默落到
+  // 镜像默认分支。用户在启动向导里选了 `release/2.1`、准备失败点一次重试，agent 就在
+  // `main` 上改代码并 commit&push，界面零提示。RFC-248 当年专门在 schema 里硬拒过
+  // 同一形态(「API 调用方以为自己换了分支，实际跑在别的 ref 上」)，重试路径把它从
+  // 后门放了回来。
+  //
+  // 存进 `base_branch` 是最自然的落点：这个字段的语义就是基线分支，而回填事务
+  // (prepared.baseBranch)会在准备成功后把它覆写成**解析后**的值，所以占位期存
+  // 「请求的 ref」不会污染终态。
+  const headBaseBranch =
+    head?.baseBranch ??
+    fallbackSource?.baseBranch ??
+    (deferredTaskId !== null && typeof input.ref === 'string' && input.ref.length > 0
+      ? input.ref
+      : '')
   const headBranch = head?.branch ?? (branch !== '' ? branch : `agent-workflow/${taskId}`)
   const headBaseCommit = head?.baseCommit ?? baseCommit
 
@@ -4278,6 +4327,78 @@ async function assertChildTaskDrivable(
 }
 
 /**
+ * RFC-287 四轮门(用户拍板)—— 重跑准备**之前**,把上一次准备留下的残骸定向清掉。
+ *
+ * 为什么需要:`materializeSpace` 建完工作树、回填事务提交**之前**进程被 SIGKILL /
+ * OOM / 掉电时,磁盘上已经有 `{appHome}/worktrees/{slug}/{taskId}` 与镜像里注册的
+ * `agent-workflow/{taskId}` 分支,而 DB 里 `worktree_path` 仍是 `''`。三处 GC 全都
+ * 「恰好」跳过它(任务级 GC 判空路径、孤儿回收器按 taskId 判锚定见任务行还在、
+ * taskDelete 读空路径),于是 AC-11 的重试每次都逐字撞
+ * `fatal: a branch named 'agent-workflow/{taskId}' already exists` ——**永久修不好**,
+ * 因为路径与分支名都由**不变的 taskId** 派生(四轮门实测)。
+ *
+ * 只在**重试**这条路径上做,不动全仓共用的 `createWorktree` 语义(用户在两个候选里
+ * 选了这条)。全部失败都只记 warn:清理是尽力而为,真正的判据是紧随其后的建树本身。
+ */
+async function reclaimStalePrepArtifacts(db: DbClient, appHome: string, task: Task): Promise<void> {
+  // ① 候选镜像:单仓来自 tasks.cached_repo_id;组来自成员的 cachedRepoId。
+  const mirrorIds = new Set<string>()
+  if (typeof task.cachedRepoId === 'string' && task.cachedRepoId.length > 0) {
+    mirrorIds.add(task.cachedRepoId)
+  }
+  if (typeof task.repoGroupId === 'string' && task.repoGroupId.length > 0) {
+    try {
+      for (const m of resolveRepoGroupLayout(db, task.repoGroupId).repos) {
+        if (m.cachedRepoId.length > 0) mirrorIds.add(m.cachedRepoId)
+      }
+    } catch {
+      // 组定义已变/已删——建树那步会给出更准确的错误，这里不抢报。
+    }
+  }
+
+  // ② 先删目录（git 还认着注册项，prune 才能收掉）。
+  const worktreesRoot = join(appHome, 'worktrees')
+  if (existsSync(worktreesRoot)) {
+    for (const slug of readdirSync(worktreesRoot, { withFileTypes: true })) {
+      if (!slug.isDirectory()) continue
+      const leaf = join(worktreesRoot, slug.name, task.id)
+      if (!existsSync(leaf)) continue
+      try {
+        rmSync(leaf, { recursive: true, force: true })
+        log.info('reclaimed a stale prep worktree before retry', { taskId: task.id, path: leaf })
+      } catch (err) {
+        log.warn('could not remove a stale prep worktree', {
+          taskId: task.id,
+          path: leaf,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+  }
+
+  // ③ 再在每个候选镜像里 prune 注册项 + 删掉按 taskId 派生的隔离分支。
+  //    `agent-workflow/{taskId}` 这个字面量与 util/git.ts 的建树处同源。
+  for (const id of mirrorIds) {
+    const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1).all()[0]
+    if (row === undefined || !existsSync(row.localPath)) continue
+    try {
+      await runGit(row.localPath, ['worktree', 'prune'])
+      const ref = `refs/heads/agent-workflow/${task.id}`
+      const has = await runGit(row.localPath, ['rev-parse', '--verify', '--quiet', ref])
+      if (has.exitCode === 0) {
+        await runGit(row.localPath, ['update-ref', '-d', ref])
+        log.info('reclaimed a stale prep branch before retry', { taskId: task.id, ref })
+      }
+    } catch (err) {
+      log.warn('could not reclaim stale prep git state', {
+        taskId: task.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+}
+
+/**
  * RFC-287 G7 / AC-11 —— 重试「准备仓库」这一步。
  *
  * 「重试作用于任务当前所处阶段」：任务卡在准备阶段，重试就该重跑准备，而不是去重跑
@@ -4330,6 +4451,9 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
       `task '${task.id}' was picked up by another driver; retry once it settles`,
     )
   }
+  // 清掉上一次准备可能留下的残骸（SIGKILL 窗口），否则建树必撞 already exists。
+  // 放在 attach 之后：租约在手才动磁盘，避免与另一个驱动抢。
+  await reclaimStalePrepArtifacts(db, appHome, task)
   // 重跑用的启动输入：只带**来源**三件（组 / 缓存仓 / 工作分支）。其余启动参数
   // （工作流、成员、冻结闭包…）在任务行上已经定死，重试不得改动它们。
   const input = {
@@ -4339,6 +4463,14 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
     ...(hasGroup ? { repoGroupId: task.repoGroupId } : {}),
     ...(hasCached && !hasGroup ? { cachedRepoId: task.cachedRepoId } : {}),
     ...(task.workingBranch !== null ? { workingBranch: task.workingBranch } : {}),
+    // 四轮门两路独立实测的 P1：`ref` 不带上，重试会静默把任务换到镜像默认分支。
+    // 占位行把请求的 ref 存进了 `base_branch`(见落行处的长注释)，这里取回来。
+    // 组启动不需要——成员 ref 在组定义里，`repoGroupId` 已经带了。
+    ...(!hasGroup && task.baseBranch !== '' ? { ref: task.baseBranch } : {}),
+    // 同因丢失的还有平台预置 commit 的作者身份(RFC-067)：不带上，重试后那条
+    // commit 会改由 daemon 兜底身份署名。任务行上本来就存着，取回来即可。
+    ...(task.gitUserName !== null ? { gitUserName: task.gitUserName } : {}),
+    ...(task.gitUserEmail !== null ? { gitUserEmail: task.gitUserEmail } : {}),
   } as unknown as StartTask
   const ownership: StartTaskOwnership = {
     cleanup: createMaterializedSpaceCleanup(task.id, null),
@@ -4702,7 +4834,16 @@ async function runDeferredRepoPreparation(args: {
   const stillPending = (
     await deps.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
   )[0]?.status
-  if (stillPending !== 'pending') {
+  // ⚠️ 判据必须**同时**看信号，不能只看任务状态（四轮门 Codex 并发面实测）。
+  //
+  // `cancelTask` 是「先 abort、最多等 5 秒、再写 canceled」。若物化恰好在这段窗口里
+  // **成功**返回（大仓在 gitignore 预置那步慢一点就够），`earlyError` 是 null ⇒ 上面
+  // 的取消分支被跳过；而此刻任务状态还是 pending ⇒ 这道复检也放行 ⇒ 按 id 无 CAS 地
+  // 回填 tasks/task_repos/task_space_nodes、把准备行写成 done、还点火 scheduler。
+  // 终局是 `task=canceled` 但 `__repo_prep__=done`、路径与仓库投影都已落库、调度器
+  // 确实起来过——AC-14 的「取消不得完成准备或 kick」没有兑现。
+  // 信号一旦 aborted，无论任务行有没有写完，这次准备的产物都不该落库。
+  if (stillPending !== 'pending' || controller.signal.aborted) {
     log.warn('task left the prep window before backfill; discarding the materialized space', {
       taskId,
       status: stillPending ?? '(gone)',
@@ -4732,7 +4873,11 @@ async function runDeferredRepoPreparation(args: {
     // 停在 running。同一函数的取消分支注释里已经写明理由（恢复扫描会把它当还在跑），
     // 这里漏了。状态跟着任务的真实归宿走：任务 interrupted ⇒ 行也 interrupted（保持
     // 可重试）；其余（canceled / 被删）⇒ canceled。
-    const leftStatus = (stillPending ?? '') === 'interrupted' ? 'interrupted' : 'canceled'
+    const leftStatus =
+      (stillPending ?? '') === 'interrupted' ||
+      controller.signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
+        ? 'interrupted'
+        : 'canceled'
     try {
       await setNodeRunStatus({
         db: deps.db,
@@ -4894,6 +5039,34 @@ export async function retryNode(
         'repo-prep-not-retryable',
         `repository preparation for task '${taskId}' is '${runRow.status}'; ` +
           `only ${RETRYABLE_PREP_STATUSES.join(' / ')} preparation can be retried`,
+      )
+    }
+    // ⚠️ 还要挡住「点的是一条**过期**的准备行」（四轮门 Codex 契约面实测）：
+    // 自然序列 `r1 failed → r2 done → n1 failed` 下，被点的 r1 自身确实是 failed，
+    // 上面那道门放行 ⇒ **对一个已经准备好、工作树就在那儿的任务重做准备**。
+    // 判据两条，任一成立即拒：①存在比它更新的准备行；②任务已经有工作树。
+    // 判「有没有更新的尝试」走仓内**权威**比较器 `isFresherNodeRun`（纯 id 序），
+    // 不手写 `retryIndex >`：S-13 的 G8 ratchet 把「in-memory retryIndex 比较」钉死在
+    // 唯一白名单（nodeRunMint 的分配器），任何新出现的手写比较都会翻红要求 review
+    // ——本轮门禁抓到的正是我这一处。ratchet 的理由也成立：retryIndex 只是分配序，
+    // 权威的新鲜度口径是 id 序（RFC-092/096 把全仓 fork 收敛到这一条）。
+    const prepRows = await db
+      .select({ id: nodeRuns.id })
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
+    const newer = prepRows.filter((r) => isFresherNodeRun(r, runRow))
+    if (newer.length > 0) {
+      throw new ConflictError(
+        'repo-prep-superseded',
+        `node_run '${runRow.id}' is a superseded repository-preparation attempt ` +
+          `(${newer.length} newer attempt(s) exist); retry the latest one instead`,
+      )
+    }
+    if (task.worktreePath !== '') {
+      throw new ConflictError(
+        'repo-prep-already-complete',
+        `task '${taskId}' already has a worktree at '${task.worktreePath}'; ` +
+          'repository preparation cannot be re-run over a prepared task',
       )
     }
     return await retryRepoPreparation(db, task, opts.deps)

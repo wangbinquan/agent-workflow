@@ -329,7 +329,7 @@ describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'orphanReconcile.ts'),
       'utf8',
     )
-    expect(src).toContain('hasDriver(taskId)')
+    expect(src, '判据是「有驱动就跳过」，不是反过来').toMatch(/if \(hasDriver\(taskId\)\) continue/)
   })
 })
 
@@ -1231,6 +1231,12 @@ describe('RFC-287 AC-14 —— 准备窗口内的取消', () => {
     await cancelTask(db, task.id)
     const cancelMs = Date.now() - t0
     // 取消不得等到 clone 自己超时才回来（60s）——那等于没打断。
+    //
+    // ⚠️ 这条耗时断言**判别力有限**（四轮门测试有效性自查实测）：把 runGit 的 signal
+    // 分支整个关掉、abort 完全不杀 git，它照样绿——因为 `cancelTask` 有约 5 秒的兜底，
+    // 到点就把任务写成 canceled，与子进程死没死无关。真正锁「子进程确实被打断」的是
+    // `rfc287-t13-git-abort.test.ts`（同一变异在那里红，2 fails / 30s 超时），那是
+    // runGit 原语层。这里保留耗时只作粗筛，判别力交给下面的错误码断言。
     expect(cancelMs, '取消必须打断正在跑的 git，而不是等它自己超时').toBeLessThan(20_000)
 
     const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
@@ -1322,7 +1328,15 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     expect(msg, '要指向重试准备这一步').toMatch(/preparation/i)
   }, 120_000)
 
-  test('auto-resume 跳过准备阶段任务，且不烧熔断计数', async () => {
+  // ⚠️ 本条的口径在四轮门被**翻面**了。原来锁的是「跳过且不烧熔断」——那是我按
+  // 「boot 时自动重跑一次可能很贵的 clone」的顾虑做的保守选择，但 plan.md T13⑥
+  // 白纸黑字要求「boot reap / auto-resume 识别『准备未完成』**改重跑准备**」
+  // （Codex 并发面按固定 plan 对出来的）。用户重启 daemon 时期望的是它把仓库继续
+  // 准备好，而不是留一个要手点重试的任务。
+  //
+  // 现在的契约：不传 `retryRepoPrep` ⇒ 退回跳过（老调用方不受影响）；传了 ⇒ 走重跑，
+  // 并且**计熔断**（一个永远拉不动的远端应当在 N 次后被隔离，否则每次 boot 白跑一轮）。
+  test('不传 retryRepoPrep 时退回跳过（向后兼容）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac10-autoresume')
@@ -1348,6 +1362,53 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     expect(resumeCalls, 'auto-resume 不得对准备阶段任务发起 resume').toBe(0)
     expect(r.resumed).not.toContain(id)
     expect(r.skipped).toContain(id)
+    // 「不烧熔断」这半原来只在标题里、没有断言（四轮门自查实测：在 skip 之前插一句
+    // recordAutoRecoveryAttempt，用例照样全绿，而那正是它要防的损害）。跑满
+    // maxAttempts+1 轮，任务必须仍在 skipped、且从未被隔离。
+    const { isAutoRecoverySuspended } = await import('@/services/recoveryBreaker')
+    for (let i = 0; i < 4; i++) {
+      const again = await autoResumeInterruptedTasks({
+        db,
+        breaker: { maxAttempts: 3, windowMs: 60_000 },
+        resume: async () => {
+          resumeCalls += 1
+        },
+        now: () => Date.now(),
+      } as never)
+      expect(again.skipped).toContain(id)
+    }
+    expect(await isAutoRecoverySuspended(db, id), '退回跳过时不得烧熔断').toBe(false)
+  }, 120_000)
+
+  test('传了 retryRepoPrep 时改重跑准备（plan T13⑥），且不走 resume', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = await launchFailingPrep2(db, s, 'ac10-boot-reprep')
+    const { DAEMON_RESTART_ERROR_SUMMARY } = await import('@agent-workflow/shared')
+    await db
+      .update(tasks)
+      .set({ status: 'interrupted', errorSummary: DAEMON_RESTART_ERROR_SUMMARY })
+      .where(eq(tasks.id, id))
+
+    const { autoResumeInterruptedTasks } = await import('@/services/autoResume')
+    let resumeCalls = 0
+    const prepped: string[] = []
+    const r = await autoResumeInterruptedTasks({
+      db,
+      breaker: { maxAttempts: 3, windowMs: 60_000 },
+      resume: async () => {
+        resumeCalls += 1
+      },
+      retryRepoPrep: async (taskId: string) => {
+        prepped.push(taskId)
+      },
+      now: () => Date.now(),
+    } as never)
+    // 关键：走的是重跑准备那条，**不是** resume（resume 对它必然
+    // `task-repo-prep-incomplete`）。
+    expect(prepped, '应当重跑准备').toContain(id)
+    expect(resumeCalls, '不得走 resume').toBe(0)
+    expect(r.resumed).toContain(id)
   }, 120_000)
 })
 
@@ -1419,7 +1480,9 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
     // deleteTask 409 task-active、gc 与 orphanReconcile 永久跳过、
     // awaitTaskDriverStopped 永不 resolve。
     const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
-    const i = src.indexOf("if (stillPending !== 'pending') {")
+    // 判据已扩成「状态离开 pending **或**信号已 abort」——取消是「先 abort、5 秒后
+    // 才写状态」，只看状态会漏掉「物化恰好在这段窗口里成功」的那一支。
+    const i = src.indexOf("if (stillPending !== 'pending' || controller.signal.aborted) {")
     expect(i, 'branch-3 应存在').toBeGreaterThan(-1)
     const body = src.slice(i, src.indexOf('\n  }\n', i))
     expect(body, '该出口必须还租约').toContain('releaseTaskDriverAndFinalizeWorkspace(')
@@ -1459,21 +1522,30 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
 describe('RFC-287 AC-14 —— 终止条件必须穿透子模块同步', () => {
   test('syncSubmodules 把 signal 注入每一次 git 调用', async () => {
     const { syncSubmodules } = await import('@/services/gitSubmodule')
-    const seen: Array<AbortSignal | undefined> = []
+    const seen: Array<{ args: string; signal: AbortSignal | undefined }> = []
     const ac = new AbortController()
     await syncSubmodules('/tmp/does-not-matter', {
       mode: 'always',
       jobs: 1,
       signal: ac.signal,
-      runGitImpl: (async (_cwd: string, _args: string[], o?: { signal?: AbortSignal }) => {
-        seen.push(o?.signal)
-        // 让它在第一次调用后就走失败分支返回，避免真去跑 git。
-        return { exitCode: 1, stdout: '', stderr: 'stub' }
+      runGitImpl: (async (_cwd: string, args: string[], o?: { signal?: AbortSignal }) => {
+        seen.push({ args: args.join(' '), signal: o?.signal })
+        // ⚠️ 必须返回 **0**：四轮门测试有效性自查实测，桩一旦返回 1，`syncSubmodules`
+        // 在 `submodule sync` 那一步就走失败分支 return，`seen` 只有一条 ⇒ 下面的
+        // for 循环只跑一次迭代。于是「把注入拆掉、只在第一次调用手动带上 signal」
+        // 这种变异**全绿**，而真正的 AC-14 危险点 `submodule update --checkout`
+        // （那次长 checkout 才是取消要杀的东西）根本没被观测到。
+        return { exitCode: 0, stdout: '', stderr: '' }
       }) as never,
     } as never)
-    expect(seen.length, '至少要有一次 git 调用').toBeGreaterThan(0)
-    // 关键：每一次都带上了同一个 signal——注入点在 `run` 那一层，覆盖全部 31 处。
-    for (const s of seen) expect(s).toBe(ac.signal)
+    // 至少要走到 `submodule update`，否则这条锁不到 AC-14 的危险点。
+    expect(seen.length, 'sync + update 两步都要被观测到').toBeGreaterThanOrEqual(2)
+    expect(
+      seen.some((s) => s.args.includes('submodule update')),
+      '必须观测到 submodule update（长 checkout 才是取消要杀的那步）',
+    ).toBe(true)
+    // 关键：每一次都带上了同一个 signal——注入点在 `run` 那一层，覆盖全部调用。
+    for (const s of seen) expect(s.signal).toBe(ac.signal)
   })
 
   test('不给 signal 时行为逐字不变（不得顺手改变既有调用面）', async () => {
@@ -1509,9 +1581,16 @@ describe('RFC-287 AC-14 —— 终止条件必须穿透子模块同步', () => {
       'utf8',
     )
     // 两处都在 withUrlLock 里：warm 复用路径与手动刷新路径。
-    const hits = [...src.matchAll(/syncSubmodules\(row\.localPath, \{[\s\S]{0,600}?\n {4,6}\}\)/g)]
+    const hits = [...src.matchAll(/syncSubmodules\(row\.localPath, \{[\s\S]{0,1400}?\n {4,6}\}\)/g)]
     expect(hits.length, '应有两处（warm 复用 + 手动刷新）').toBe(2)
     for (const h of hits) expect(h[0]).toContain('timeoutMs:')
+    // warm 复用那一处还必须接上 signal——上一笔只补了 timeout，于是 warm 镜像路径上
+    // 取消依旧杀不掉 git（四轮门 Codex 实测）。cold 那处的 signal 由 resolveCachedRepo
+    // 的调用方给，这里只锁 warm。
+    expect(
+      hits.some((h) => h[0].includes('signal: deps.signal')),
+      'warm 复用路径必须把 signal 传进子模块同步',
+    ).toBe(true)
   })
 })
 
@@ -1535,7 +1614,7 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
     const old = new Date(Date.now() - 48 * 3600_000)
     utimesSync(stale, old, old)
 
-    const r = runPartialCloneGc(home)
+    const r = await runPartialCloneGc(home)
     expect(existsSync(stale), '到龄的半成品必须被清掉').toBe(false)
     expect(existsSync(fresh), '未到龄的可能正在被写入，不得删').toBe(true)
     expect(existsSync(canonical), '正常镜像目录一律不碰').toBe(true)
@@ -1546,10 +1625,57 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
     rmSync(home, { recursive: true, force: true })
   })
 
+  // 四轮门 Codex 实测的**数据丢失级**缺陷：判据一度是 `name.includes('.partial-')`，
+  // 而 `cacheSlug` 刻意保留点与横线，于是一个名字里本来就带 `.partial-` 的**合法**
+  // 仓库（`https://host/org/foo.partial-bar.git` ⇒ `<hash>-foo.partial-bar`）会被整个
+  // 删掉——而 `cached_repos.local_path` 还指着它，既存运行任务的工作树跟着失效。
+  test('名字里带 .partial- 的合法镜像不得被误删（ULID 必须锚在结尾）', async () => {
+    const { runPartialCloneGc } = await import('@/services/gc')
+    const { mkdirSync, existsSync, utimesSync } = await import('node:fs')
+    const home = mkdtempSync(join(tmpdir(), 'aw-partialgc-lookalike-'))
+    const repos = join(home, 'repos')
+    mkdirSync(repos, { recursive: true })
+    // 合法镜像：仓库名自带 `.partial-bar`，结尾**不是** ULID。
+    const legit = join(repos, 'abc12345-foo.partial-bar')
+    // 真半成品：结尾是 26 位 Crockford base32。
+    const real = join(repos, 'abc12345-foo.partial-01KZZZZZZZZZZZZZZZZZZZZZZZ')
+    for (const d of [legit, real]) mkdirSync(d, { recursive: true })
+    const old = new Date(Date.now() - 48 * 3600_000)
+    utimesSync(legit, old, old)
+    utimesSync(real, old, old)
+
+    const r = await runPartialCloneGc(home)
+    expect(existsSync(legit), '合法镜像绝不能被删').toBe(true)
+    expect(existsSync(real)).toBe(false)
+    expect(r.scanned, '只有真半成品进扫描面').toBe(1)
+  })
+
+  test('年龄阈值随配置的克隆超时放大（长超时下不得删掉仍在写的 partial）', async () => {
+    const { runPartialCloneGc } = await import('@/services/gc')
+    const { mkdirSync, existsSync, utimesSync } = await import('node:fs')
+    const home = mkdtempSync(join(tmpdir(), 'aw-partialgc-timeout-'))
+    const repos = join(home, 'repos')
+    mkdirSync(repos, { recursive: true })
+    const dir = join(repos, 'abc12345-slow.partial-01KZZZZZZZZZZZZZZZZZZZZZZZ')
+    mkdirSync(dir, { recursive: true })
+    // 30 小时前建的：默认 24h 判据会删，但配置了 48h 克隆超时时它可能还在写
+    // （顶层 mtime 不随 .git/objects/pack 的写入更新）。
+    const old = new Date(Date.now() - 30 * 3600_000)
+    utimesSync(dir, old, old)
+
+    expect((await runPartialCloneGc(home, Date.now(), 48 * 3600_000)).removed.length).toBe(0)
+    expect(existsSync(dir), '长克隆超时下不得删').toBe(true)
+    // 不给超时（或超时很短）时仍按 24h 收。
+    expect((await runPartialCloneGc(home)).removed.length).toBe(1)
+    expect(existsSync(dir)).toBe(false)
+
+    rmSync(home, { recursive: true, force: true })
+  })
+
   test('repos 目录不存在时安全返回（首次启动 / 从未克隆过）', async () => {
     const { runPartialCloneGc } = await import('@/services/gc')
     const home = mkdtempSync(join(tmpdir(), 'aw-partialgc-empty-'))
-    expect(runPartialCloneGc(home)).toEqual({ scanned: 0, removed: [] })
+    expect(await runPartialCloneGc(home)).toEqual({ scanned: 0, removed: [] })
     rmSync(home, { recursive: true, force: true })
   })
 
@@ -1558,7 +1684,13 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
     // 光有实现不算数——二轮门自查的老教训：判据算得对 ≠ 有人用。
     const i = src.indexOf('runClaimedWebhookWorkspacePrunes(db, {')
     expect(i, 'GC ticker 应存在').toBeGreaterThan(-1)
-    expect(src.slice(i, i + 1600)).toContain('runPartialCloneGc(appHome)')
+    const ticker = src.slice(i, i + 1600)
+    expect(ticker).toContain('runPartialCloneGc(appHome')
+    // 两个参数都得接上：年龄阈值要随配置的克隆超时放大（否则长超时下会删掉仍在写的
+    // partial），而删除必须 await（同步 rmSync 一个接近完整镜像体量的目录会把 Bun 的
+    // 单事件循环冻住，取消请求与 timer 全排在它后面）。
+    expect(ticker, '必须把 gitCloneTimeoutMs 传下去').toContain('loadConfig().gitCloneTimeoutMs')
+    expect(ticker, '删除必须 await，不能阻塞事件循环').toMatch(/await runPartialCloneGc\(/)
   })
 })
 

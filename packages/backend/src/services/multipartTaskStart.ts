@@ -70,7 +70,7 @@ export async function handleMultipartTaskStart(
     if (retired !== null) {
       throw new ValidationError(
         'start-task-path-retired',
-        `RFC-165 retired path-mode launches; remove '${retired}' (use a file:// repoUrl for local repos)`,
+        `RFC-165 retired path-mode launches; remove '${retired}' (push the repo to a real remote and register it, then launch by cachedRepoId)`,
       )
     }
 

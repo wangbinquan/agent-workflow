@@ -27,6 +27,7 @@
 
 import { and, eq, inArray, isNotNull, isNull, lt, ne, or } from 'drizzle-orm'
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { TERMINAL_TASK_STATUSES, isTerminalTaskStatus } from '@agent-workflow/shared'
 import type { Config, TaskStatus } from '@agent-workflow/shared'
@@ -544,21 +545,45 @@ export async function runScratchOrphanGc(
  * ——远大于任何合理的克隆时长（`gitCloneTimeoutMs` 默认远小于它），所以到龄的一定是
  * 死掉的进程留下的。
  */
-export function runPartialCloneGc(
+/**
+ * 半成品目录的**结构化**判据：`<hash>-<slug>.partial-<ULID>`，ULID 锚在结尾。
+ *
+ * ⚠️ 不能用 `name.includes('.partial-')`（四轮门 Codex 实测的数据丢失级缺陷）：
+ * `cacheSlug` 刻意保留点与横线（`shared/git-url.ts` 的 `[^A-Za-z0-9._-]`），所以
+ * 一个名字里本来就带 `.partial-` 的**合法**仓库（`https://host/org/foo.partial-bar.git`）
+ * 的 canonical 目录就叫 `<hash>-foo.partial-bar` —— 宽松判据会把这个**正在用的镜像**
+ * 整个删掉，而 `cached_repos.local_path` 还指着它，连既存运行任务的工作树都跟着失效。
+ * ULID 是 26 位 Crockford base32（无 I/L/O/U），锚定结尾即可把两者分开。
+ */
+const PARTIAL_CLONE_DIR = /\.partial-[0-9A-HJKMNP-TV-Z]{26}$/
+
+export async function runPartialCloneGc(
   appHome: string,
   now: number = Date.now(),
-): { scanned: number; removed: string[] } {
+  /**
+   * 配置的克隆超时。年龄判据必须**大于**它：`gitCloneTimeoutMs` 无上限（schema 只要求
+   * 正整数），运维完全可以给慢远端配 48h，那时一个**仍在写**的 partial 会跨过 24h
+   * ——而顶层目录的 mtime 不随 `.git/objects/pack` 里的写入更新，看上去就是「陈旧」。
+   * 删掉它会让那次克隆失败，连收尾的 rename 都找不到源目录（四轮门 Codex 实测）。
+   */
+  cloneTimeoutMs?: number,
+): Promise<{ scanned: number; removed: string[] }> {
   const cacheRoot = join(appHome, 'repos')
   if (!existsSync(cacheRoot)) return { scanned: 0, removed: [] }
+  const minAgeMs = Math.max(SCRATCH_ORPHAN_MIN_AGE_MS, 2 * (cloneTimeoutMs ?? 0))
   const removed: string[] = []
   let scanned = 0
   for (const e of readdirSync(cacheRoot, { withFileTypes: true })) {
-    if (!e.isDirectory() || !e.name.includes('.partial-')) continue
+    if (!e.isDirectory() || !PARTIAL_CLONE_DIR.test(e.name)) continue
     scanned += 1
     const dir = join(cacheRoot, e.name)
     try {
-      if (now - statSync(dir).mtimeMs < SCRATCH_ORPHAN_MIN_AGE_MS) continue
-      rmSync(dir, { recursive: true, force: true })
+      if (now - statSync(dir).mtimeMs < minAgeMs) continue
+      // `await rm` 而不是同步 `rmSync`：一个接近完整镜像体量的目录同步递归删除会把
+      // Bun 的**单事件循环**冻住——取消请求、deadline timer、普通 API 全部排在它后面
+      // （同文件的正常镜像删除早就因此改用 `await rm`，见 gitRepoCache 的删除路径；
+      // 新 GC 一度把同一形态又引了回来）。
+      await rm(dir, { recursive: true, force: true })
       removed.push(e.name)
     } catch (err) {
       log.warn('failed to remove an orphaned partial clone dir', {
@@ -754,7 +779,9 @@ export async function runIsoWorktreeGc(
  */
 export function startWorktreeGc(
   db: DbClient,
-  loadConfig: () => Pick<Config, 'worktreeAutoGc'>,
+  // RFC-287：半成品目录的年龄阈值要随 `gitCloneTimeoutMs` 放大（无上限的配置项），
+  // 所以这里比原来多读一个字段。仍是**窄投影**，不是整份 Config。
+  loadConfig: () => Pick<Config, 'worktreeAutoGc' | 'gitCloneTimeoutMs'>,
   intervalMs: number = DAEMON_CADENCE.worktreeGc,
   appHome?: string,
   isTaskActive: (taskId: string) => boolean = () => false,
@@ -770,8 +797,10 @@ export function startWorktreeGc(
       // RFC-222 — sweep orphan task worktrees (deleted-task backstop, §6.4).
       .then(() => (appHome !== undefined ? runWorktreeOrphanGc(db, appHome) : undefined))
       // RFC-287：半成品镜像目录（SIGKILL 落在冷克隆中途时留下），此前无人回收。
-      .then(() => {
-        if (appHome !== undefined) runPartialCloneGc(appHome)
+      .then(async () => {
+        if (appHome !== undefined) {
+          await runPartialCloneGc(appHome, Date.now(), loadConfig().gitCloneTimeoutMs)
+        }
       })
       .catch((err: unknown) => {
         log.error('runWorktreeGc failed', {

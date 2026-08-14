@@ -450,9 +450,17 @@ parentNodeRunId/consumed(+nonce)；L7 :4533 只带 consumed，而其初次铸行
   「webhook 同形」不成立。
   **第三轮门定音（以实现为准）**：最终**没有**新增一次性禁用 healer——2026-08-13
   「存量为零、不做 grandfather」拍板之后，为一个空集合造一套 boot 期状态机是纯负债。
-  实际行为：存量 `file://` 定时任务每次触发都以 `lastStatus='failed'` +
-  `lastError`（可读的 git/参数原文）留痕，连续失败到 `scheduledTasksMaxFailures`
-  （默认 10）由既有熔断自动停发。上面那句「改为…一次性显式禁用」是**设计期设想、
+  **第四轮门再勘误（实测 + 用户定音）**：上面这句「由既有熔断自动停发」对**经过准备
+  阶段**的失败**已不成立**。`fireClaimed` 的记账判据是「`fireSchedule` 抛不抛」，而 G7
+  把准备推到后台之后它永远不抛 ⇒ 每次都走 `recordSuccess`：`consecutiveFailures` 归零、
+  `lastStatus='launched'`。实测（预置 `consecutiveFailures=9`、远端不可路由）：触发后
+  计划行仍是 `launched / 0 / enabled=true`，而任务是 `failed`。
+  **用户口径（2026-08-14）：准备失败与任务失败同等看待**——本仓的任务**执行**失败
+  （比如第 3 个节点挂了）本来也不回写计划行，所以 G7 之后准备失败与它同形是**一致**
+  而非破损，不为它单开回写路径。代价是「指向已下线远端的计划不再自动停发」，与
+  「工作流永远失败的计划不会自动停发」是同一件事。
+  存量 `file://` 仍会被同步段拒（schema + `assertLaunchSourceSchemeSync`），那条路径
+  照旧抛出、照旧记账、照旧熔断——本勘误只影响**能进到准备阶段**的失败。上面那句「改为…一次性显式禁用」是**设计期设想、
   未落地**，保留在此只作决策轨迹；接手者按本段执行，**不要**照那句去补状态机。
   ⚠️ 另注意 RFC-165 的 boot healer（`healScheduledLaunchPayloads`）至今仍会把遗留
   path payload 生产成 `file://`，即「出厂即死」。它是否退休另案评估（已登记
