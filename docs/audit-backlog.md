@@ -1850,6 +1850,55 @@ audit-backlog 里已登记的 bug#8（Windows VM + 1.18.13，业务节点侧）�
 
 **不属于任何进行中 RFC 的连带面**，不应计入其收官判据。
 
+## `rfc098-commitpush-nonblocking` B1 用例 CI 间歇红（2026-08-14 登记；**未复现、根因未定、非 flaky-waiver**）
+
+**现象**：`packages/backend/tests/rfc098-commitpush-nonblocking.test.ts` 的
+`RFC-098 B1 … ready downstream node is dispatched WHILE the slow commit session runs`
+在 CI **ubuntu shard 2/4** 单条红（run 31790944695，SHA `5337870e`）。macOS 同批绿。
+
+**归属核实**：`5337870e` 与其父 `6e8c4f9f` 都是**纯 markdown**（RFC-288 文档），其父
+`d482942f` 的 CI 是**绿**的 ⇒ 区间内无任何代码改动，排除「某条改动引入」。该文件最近一次
+改动是 RFC-282 收尾 `17b9215b`，与当时进行中的工作无关。
+
+**失败点是哪一条断言（重要）**：**不是**它的排序 oracle。`n2Start < commit0End` 与
+「无 wait-timeout 标记」都通过了；红在 `:357` 的 `expect(commitRow!.status).toBe('done')`
+拿到 `failed`。CI 日志对应
+`WARN [scheduler.commit] git commit failed nodeRunId=01KZZW1A1T8YYNSS578YQ8AW5P stderr=`
+——**stderr 为空**的 git commit 失败即「nothing to commit」（该提示走 stdout、exit 1）。
+即：那一刻工作树里没有可提交的变更。
+
+**已证伪的假设（否定结论比猜想值钱，别再走这条死路）**：曾假设「两次 commit 会话顺序
+翻转——会话 1 抢先提交，把被断言的会话 0 饿成空提交」。本地变异实证**推翻**了它：
+
+| 变异 | 配置 | 结果 |
+| --- | --- | --- |
+| A | 关掉同步点 + 会话 0 握手后再慢 300ms、会话 1 零延迟 | 4 pass |
+| A2 | 同上，会话 0 慢 **3000ms** | 4 pass |
+
+若顺序真能翻转，A2 必红。它没红 ⇒ **两次 commit 会话实际是被串行化的**。据此写了一个
+「会话 1 等工作树变干净」的握手修复，已**整体还原**——建立在错误因果上的修复会把间歇性
+伪装成「已修」，比不修更糟。
+
+**已核实的事实**：n1 的 commit 节点在库里是 **2 行**——容器行
+（`rerun_cause='commit-push'`，`commitPushJson` 非空）+ 会话行
+（`rerun_cause='commit-push-session'`，JSON 为空）。测试的 `commitPushJson !== null`
+谓词能正确区分二者，所以 CI 上失败的**确实是容器行本身**，不是 `rows.find` 挑错了行。
+
+**两个待验证方向（均未跑证，不得当作结论）**：
+
+1. 同一 harness 目录（`aw-rfc098-cp-run-qZW7Dc`）在日志里 **n1 被 spawn 两次、commit 会话
+   出现三次**。先查 `rerun_cause` 区分「会话重试」与「两个会话」——若是重试，「前一次已把
+   变更提交掉，后一次自然 nothing to commit」就说得通，且与 A2 测出的串行化不矛盾。
+2. **iso → wt 合并回写与 commit 会话的先后**：n1 的 cwd 是 iso 目录、commit 的 cwd 是 wt，
+   中间隔一次合并回写。若 commit 跑在合并回写**之前**，wt 里当然没东西可提交——那不是
+   「两个会话抢」而是「缺同步点」，修法完全不同。判据：失败那一刻 wt 里有没有 n1 的产物。
+
+**处置原则**：不许拿「重跑就过了」当通过依据（`CLAUDE.md` §Test-with-every-change）；也
+不要加 timeout——那只是把偶发变稀。需要带 RFC-098 / 装配线上下文的人跟一轮，或先在
+CI 上加一次性诊断输出（失败时 dump `git status` 与该节点全部 node_run 行）。
+
+**不属于任何进行中 RFC 的连带面**，不应计入其收官判据。
+
 ## `worktree-submodule-init` 的 `beforeEach` 会超时（2026-08-14 登记，非本轮改动引入）
 
 **现象**：`RUN_GIT_NETWORK=1` 且与另外 3 个网络门控套件**同进程**跑时，
