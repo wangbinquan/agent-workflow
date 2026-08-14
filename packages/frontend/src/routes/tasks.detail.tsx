@@ -258,6 +258,22 @@ function TaskDetailPage() {
     },
   })
 
+  // RFC-287 AC-11 —— 重试**仓库准备**这一步。打的是既有的单节点重试端点（后端已按
+  // `nodeId === REPO_PREP_NODE_ID` 分支处理，见 task.ts 的 retryNode），区别只在于
+  // 触发入口：准备行画不到画布上，只能由横幅直接给动作。cascade=false —— 准备是第 0
+  // 步，它成功后调度器自然往下推，没有需要级联作废的下游行。
+  const retryRepoPrep = useMutation({
+    mutationFn: (runId: string) =>
+      api.post<Task>(
+        `/api/tasks/${encodeURIComponent(id)}/nodes/${encodeURIComponent(runId)}/retry?cascade=false`,
+      ),
+    onSuccess: (tk) => {
+      qc.setQueryData(TASK_QUERY_KEYS.detail(id), tk)
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.nodeRuns(id) })
+      void qc.invalidateQueries({ queryKey: TASK_QUERY_KEYS.root() })
+    },
+  })
+
   // RFC-222 — admin-only hard delete (type-to-confirm). Gated in the UI by the
   // tasks:delete permission; the server re-checks name + terminality.
   const canDeleteTask = usePermission('tasks:delete')
@@ -513,7 +529,11 @@ function TaskDetailPage() {
     tk.status === 'awaiting_human'
   // RFC-287 G7：准备失败与「工作区已回收」在 status/worktreePath 上同形，靠合成
   // `__repo_prep__` 行区分——它失败即说明卡在准备，该给的提示是「重试准备」。
-  const repoPrepFailed = deriveRepoPrepFailed(nodeRuns.data?.runs)
+  // RFC-287 AC-11：重试作用于任务当前所处阶段。准备行不在工作流图里（画布画的是
+  // snapshot.definition.nodes），所以点不到 NodeDetailDrawer 的重试按钮——重试入口
+  // 必须由这条横幅自己提供。runId 从准备行取（见 findRepoPrepRetryTarget）。
+  const repoPrepRetryRunId = findRepoPrepRetryTarget(nodeRuns.data?.runs)
+  const repoPrepFailed = repoPrepRetryRunId !== null
   const resumability = resumeStatus(tk.status, tk.worktreePath, repoPrepFailed)
   // RFC-164/165: the task's execution subject (workgroup / agent / workflow) —
   // one derivation reused by the header subject link, the meta row and the
@@ -668,14 +688,29 @@ function TaskDetailPage() {
         {resume.error !== null && resume.error !== undefined && (
           <ErrorBanner error={resume.error} onDismiss={() => resume.reset()} />
         )}
-        {/* RFC-287 G7：卡在仓库准备 —— 给的动作是「重试准备那一步」，不是另起任务。
-            所以这条横幅**不带**「启动新任务」的链接（下方节点表里那一行就能重试）。 */}
+        {/* RFC-287 G7/AC-11：卡在仓库准备 —— 给的动作是「重试准备那一步」，不是另起
+            任务。重试按钮必须长在这条横幅上：准备行是合成的 `__repo_prep__`，不在
+            workflowSnapshot.definition.nodes 里，画布永远画不出它 ⇒ 走不到
+            NodeDetailDrawer 的重试按钮。三轮门 AC 对账实测到这半场原本是空的。 */}
         {resumability === 'repo-prep-failed' &&
+          repoPrepRetryRunId !== null &&
           !dismissedBanners.has(resumeUnavailableBannerKey) && (
             <NoticeBanner
               tone="info"
               size="compact"
               className="info-box--muted"
+              action={
+                <button
+                  type="button"
+                  className="btn btn--sm btn--primary"
+                  disabled={retryRepoPrep.isPending}
+                  onClick={() => retryRepoPrep.mutate(repoPrepRetryRunId)}
+                >
+                  {retryRepoPrep.isPending
+                    ? t('tasks.retryRepoPrepPending')
+                    : t('tasks.retryRepoPrep')}
+                </button>
+              }
               dismiss={{
                 label: t('common.close'),
                 onDismiss: () => dismissBanner(resumeUnavailableBannerKey),
@@ -684,6 +719,9 @@ function TaskDetailPage() {
               {t('tasks.resumeRepoPrepFailed')}
             </NoticeBanner>
           )}
+        {retryRepoPrep.error !== null && retryRepoPrep.error !== undefined && (
+          <ErrorBanner error={retryRepoPrep.error} onDismiss={() => retryRepoPrep.reset()} />
+        )}
         {resumability === 'worktree-missing' &&
           !dismissedBanners.has(resumeUnavailableBannerKey) && (
             <NoticeBanner
@@ -1985,13 +2023,30 @@ export function taskDetailRefetchInterval(
  * 任务落回 `worktree-missing` 分支、UI 劝用户另起任务——正是第四态要消灭的误导，
  * 只是换了触发路径。后端 `retryNode` 的可重试集与此一致。
  */
-export function deriveRepoPrepFailed(runs: readonly NodeRun[] | undefined): boolean {
-  return (
-    runs?.some(
-      (r) =>
-        r.nodeId === REPO_PREP_NODE_ID && (r.status === 'failed' || r.status === 'interrupted'),
-    ) ?? false
-  )
+/**
+ * 准备失败那一行的 **node_run id**——重试端点按 runId 寻址，没有它就点不动重试。
+ *
+ * 它同时是「是否卡在准备」的判据本身（`!== null` 即卡住）。曾另有一个布尔版
+ * `deriveRepoPrepFailed`，AC-11 UI 半场补齐后它退化成纯测试用包装（生产侧只需要
+ * runId），按仓规「删除优于 deprecate」删掉，避免两个判据日后各算各的。
+ *
+ * 为什么必须有这条：AC-11 说「重试作用于任务当前所处阶段」，而 UI 上唯一的重试入口
+ * 是「画布点节点 → NodeDetailDrawer 的重试按钮」。画布画的是
+ * `task.workflowSnapshot.definition.nodes`，合成行 `__repo_prep__` **不在工作流图里**
+ * ⇒ 永远画不出来、点不到。三轮门 AC 对账实测：横幅注释写着「下方节点表里那一行就能
+ * 重试」，那一行根本不存在，横幅承诺的动作是空头支票——后端 AC-11 全绿、UI 半场为零。
+ * 所以把重试动作直接挂到横幅上，这里负责给出它要打的 runId。
+ *
+ * 取**最后一条**匹配行：准备重试会铸新的 node_run（retry_index 递增），列表按时间序，
+ * 重试后应指向最新那次失败而不是最早那次。
+ */
+export function findRepoPrepRetryTarget(runs: readonly NodeRun[] | undefined): string | null {
+  let hit: string | null = null
+  for (const r of runs ?? []) {
+    if (r.nodeId === REPO_PREP_NODE_ID && (r.status === 'failed' || r.status === 'interrupted'))
+      hit = r.id
+  }
+  return hit
 }
 
 export function resumeStatus(

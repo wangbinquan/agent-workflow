@@ -171,3 +171,47 @@ describe('RFC-287 G6 — 真实 git 失败措辞判定表（自审沉淀）', ()
     ).not.toBe('retryable-network')
   })
 })
+
+// 三轮门（Codex 契约面半场）实测出来的漏判：语境词与状态码之间**有版本号**时全线失配。
+//
+// 为什么这是真缺陷而不是理论问题：curl / git 报 HTTP 错误的主流原话就带版本
+// ——`Received HTTP/1.1 407 …`、`returned error: HTTP/2 429`。原正则写死一个空格
+// （`\bhttp (?:code )?5\d\d\b`），于是 `HTTP/2 429` 判 unknown ⇒ **不进退避窗口**，
+// G6 对「服务端让你慢点」这一最该退避的情形直接失效。
+describe('RFC-287 G6 —— 带版本号的 HTTP 状态行同样要认', () => {
+  test('HTTP/1.1 与 HTTP/2 形态的 5xx / 429 进网络组', () => {
+    for (const s of [
+      'fatal: unable to access https://x/y.git/: The requested URL returned error: HTTP/2 429',
+      'fatal: unable to access: HTTP/2 503',
+      'fatal: unable to access: Received HTTP/1.1 502 Bad Gateway',
+    ]) {
+      expect(classifyGitFailure(s), s).toBe('retryable-network')
+    }
+  })
+
+  test('带版本号的 4xx（429 除外）仍归 permanent，不白耗窗口', () => {
+    for (const s of [
+      'fatal: unable to access: Received HTTP/1.1 404 Not Found',
+      'fatal: unable to access: Received HTTP/2 400 Bad Request',
+    ]) {
+      expect(classifyGitFailure(s), s).toBe('permanent')
+    }
+  })
+
+  test('代理鉴权归 permanent（部署配置问题，重试无益）', () => {
+    expect(
+      classifyGitFailure('fatal: unable to access: Received HTTP/1.1 407 Proxy Authentication Required'),
+    ).toBe('permanent')
+  })
+
+  test('回归：既有的无版本形态与 413 优先级一字不变', () => {
+    // 放宽版本号不得把老形态带偏。
+    expect(classifyGitFailure('error: RPC failed; HTTP 502 curl 22')).toBe('retryable-network')
+    expect(classifyGitFailure('fatal: The requested URL returned error: 429')).toBe(
+      'retryable-network',
+    )
+    // 413 同时命中 `rpc failed`（网络组）与 4xx（permanent 组），必须仍是 permanent
+    // ——否则一个永远不会成功的 push 会白耗满窗口（T14 实现门的老教训）。
+    expect(classifyGitFailure('error: RPC failed; HTTP 413 Payload Too Large')).toBe('permanent')
+  })
+})

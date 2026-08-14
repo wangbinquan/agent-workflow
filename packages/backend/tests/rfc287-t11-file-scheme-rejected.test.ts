@@ -115,7 +115,12 @@ describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
     )
     const fnStart = taskSrc.indexOf('export async function resolveRepoSourceSingle')
     expect(fnStart, '收口点所在函数应存在').toBeGreaterThan(0)
-    const body = taskSrc.slice(fnStart, taskSrc.indexOf('\nasync function ', fnStart + 10))
+    // 边界用顶格 `}`，不是下一个 `\nasync function `——后者会跳过每一个
+    // `export async function`，实测把函数体从 831→976 撑成 831→1252，顺带吞进
+    // selectResumeRollbackTargets / createMaterializedSpaceCleanup 等四个函数和
+    // 两处无关的 `resolveCachedRepo(`；且 indexOf 失配时 `-1` 会切到文件末尾。
+    // （三轮门测试有效性自查。同文件其余锁本就用 `\n}\n`。）
+    const body = taskSrc.slice(fnStart, taskSrc.indexOf('\n}\n', fnStart))
     const guard = body.indexOf('isFileSchemeUrl(sourceUrl)')
     const use = body.indexOf('resolveCachedRepo(')
     expect(guard, 'resolveRepoSourceSingle 必须拒 file:// 来源').toBeGreaterThan(-1)
@@ -127,7 +132,13 @@ describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
       'utf8',
     )
-    expect(cacheSrc).toMatch(/refreshCachedRepo[\s\S]{0,1200}isFileSchemeUrl\(row\.urlRedacted\)/)
+    // 窗口给足余量：这段是全仓注释最密的区域之一，收紧到刚好够用等于给别人的
+    // 注释改动埋雷（三轮门测试有效性自查在 t14 文件里实证过同类零余量正则）。
+    // 本条锁的是「刷新面确实按 url_redacted 判 file scheme」，与两者相距多远无关。
+    expect(cacheSrc).toMatch(/refreshCachedRepo[\s\S]{0,4000}isFileSchemeUrl\(row\.urlRedacted\)/)
+    // 同段还必须把「URL 不可读」与「file scheme」分成两个码（三轮门 Codex 契约面
+    // P3）：共用一个码会把密钥轮换谎报成 file 问题，指向完全错误的修复路径。
+    expect(cacheSrc).toMatch(/row\.urlRedacted === null[\s\S]{0,400}'repo-url-unavailable'/)
 
     // 反向：**注册面刻意不拒**（design §10.7 划为不动面，存量可见不可运行）。
     // 在那里加拒绝会误伤允许面，并给人「已经堵住了」的错觉。
@@ -135,8 +146,12 @@ describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
       resolve(import.meta.dir, '..', '..', 'shared', 'src', 'schemas', 'repoBatchImport.ts'),
       'utf8',
     )
-    expect(batch, '批量导入不得拒 file://（注册面不动）').not.toContain(
-      'repo-url-file-scheme-unsupported',
+    // ⚠️ 判据不能是「整个文件里不出现这个串」——那太松：三轮门自查实证，随手
+    // 追加一句无关的 `export const __MUT = '…repo-url-file-scheme-unsupported…'`
+    // 就能把它打红，而真正要防的是**校验逻辑里**冒出这条拒绝。所以按抛出/返回
+    // 该码的形态判。
+    expect(batch, '批量导入不得拒 file://（注册面不动）').not.toMatch(
+      /(?:throw|code:|message:|refine|issue)[\s\S]{0,120}repo-url-file-scheme-unsupported/,
     )
   })
 
@@ -155,5 +170,55 @@ describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
     // 且必须 fail-closed：url_redacted 为 NULL / 空白时不知 scheme，不能自动 fetch。
     // 行为断言在 rfc287-t14-file-scheme-bypasses.test.ts，这里只锁住判断确实存在。
     expect(src).toMatch(/urlRedacted !== 'string'[\s\S]{0,120}return false/)
+  })
+})
+
+// 三轮门（Codex 契约面）P3：刷新的 fail-closed 分支曾把两件完全不同的事共用一个码。
+describe('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', () => {
+  test('url_redacted 为 NULL 报 repo-url-unavailable，而不是 file 错误', async () => {
+    const { refreshCachedRepo } = await import('@/services/gitRepoCache')
+    const db = createInMemoryDb(resolve(import.meta.dir, '..', 'db', 'migrations'))
+    const id = ulid()
+    await db.insert(cachedRepos).values({
+      id,
+      urlHash: 'h_' + id,
+      urlRedacted: null,
+      localPath: '/tmp/mirror-' + id,
+      lastFetchedAt: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as never)
+    let code = ''
+    try {
+      await refreshCachedRepo({ db } as never, id)
+    } catch (err) {
+      code = (err as { code?: string }).code ?? String(err)
+    }
+    // 密钥轮换 / secret.key 丢失是**凭据问题**。谎报成 file scheme 会把用户引向
+    // 「把仓推到真实远端再注册」这条完全无关的修复路径。
+    expect(code).toBe('repo-url-unavailable')
+    expect(code).not.toBe('repo-url-file-scheme-unsupported')
+  })
+
+  test('真的 file:// 行仍报 repo-url-file-scheme-unsupported（拆码没拆错方向）', async () => {
+    const { refreshCachedRepo } = await import('@/services/gitRepoCache')
+    const db = createInMemoryDb(resolve(import.meta.dir, '..', 'db', 'migrations'))
+    const id = ulid()
+    await db.insert(cachedRepos).values({
+      id,
+      urlHash: 'h_' + id,
+      urlRedacted: 'file:///srv/private/repo',
+      localPath: '/tmp/mirror-' + id,
+      lastFetchedAt: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as never)
+    let code = ''
+    try {
+      await refreshCachedRepo({ db } as never, id)
+    } catch (err) {
+      code = (err as { code?: string }).code ?? String(err)
+    }
+    expect(code).toBe('repo-url-file-scheme-unsupported')
   })
 })

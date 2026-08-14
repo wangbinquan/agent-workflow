@@ -10,7 +10,7 @@ import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import {
   canOfferResume,
-  deriveRepoPrepFailed,
+  findRepoPrepRetryTarget,
   resumeStatus,
   taskDetailRefetchInterval,
 } from '../src/routes/tasks.detail'
@@ -61,23 +61,23 @@ describe('resumeStatus', () => {
 
   // 判据本身的直测——这是上面那条 wire 锁的另一半：wire 锁只保证「调用了」，
   // 这里保证「算得对」。二轮门自查证明少了这一半，判据可以任意改错而不被发现。
-  test('deriveRepoPrepFailed：failed 与 interrupted 都算「卡在准备」', () => {
-    const mk = (nodeId: string, status: string) => ({ nodeId, status }) as never
-    expect(deriveRepoPrepFailed([mk('__repo_prep__', 'failed')])).toBe(true)
+  test('findRepoPrepRetryTarget：failed 与 interrupted 都算「卡在准备」', () => {
+    const mk = (nodeId: string, status: string) => ({ id: 'r1', nodeId, status }) as never
+    expect(findRepoPrepRetryTarget([mk('__repo_prep__', 'failed')])).not.toBeNull()
     // daemon 重启打断准备时 boot reap 落的就是 interrupted —— 只认 failed 会让这类
     // 任务掉回 worktree-missing 分支，UI 劝用户另起任务（正是第四态要消灭的误导）。
-    expect(deriveRepoPrepFailed([mk('__repo_prep__', 'interrupted')])).toBe(true)
+    expect(findRepoPrepRetryTarget([mk('__repo_prep__', 'interrupted')])).not.toBeNull()
   })
 
-  test('deriveRepoPrepFailed：其余状态与其余节点一律不算', () => {
-    const mk = (nodeId: string, status: string) => ({ nodeId, status }) as never
+  test('findRepoPrepRetryTarget：其余状态与其余节点一律不算', () => {
+    const mk = (nodeId: string, status: string) => ({ id: 'r1', nodeId, status }) as never
     for (const s of ['pending', 'running', 'done', 'canceled']) {
-      expect(deriveRepoPrepFailed([mk('__repo_prep__', s)]), s).toBe(false)
+      expect(findRepoPrepRetryTarget([mk('__repo_prep__', s)]), s).toBeNull()
     }
     // 别的节点失败 ≠ 卡在准备。
-    expect(deriveRepoPrepFailed([mk('n1', 'failed')])).toBe(false)
-    expect(deriveRepoPrepFailed([])).toBe(false)
-    expect(deriveRepoPrepFailed(undefined)).toBe(false)
+    expect(findRepoPrepRetryTarget([mk('n1', 'failed')])).toBeNull()
+    expect(findRepoPrepRetryTarget([])).toBeNull()
+    expect(findRepoPrepRetryTarget(undefined)).toBeNull()
   })
 
   test('第三个入参缺省时保持既有三态（老调用方与首帧不受影响）', () => {
@@ -177,15 +177,16 @@ describe('canOfferResume', () => {
   })
 })
 
-describe('RFC-300 workspace capability wiring', () => {
-  test('detail hides preserved/retry/sync affordances and renders both cleanup states', () => {
-    // RFC-287 G7：纯函数会算第四态不等于 UI 用上了它——这几条锁「真的 wire 进去」。
-    //
+// RFC-287 G7 的 wire 锁**独立成组**。三轮门测试有效性自查指出：它们原本寄生在
+// 下面那条 RFC-300 用例体内，RFC-300 那条一旦被改名 / 删掉，这批锁会跟着一起
+// 消失，而且没有任何东西会因此变红——保护凭空蒸发，无人察觉。
+describe('RFC-287 G7 wiring', () => {
+  test('第四态真的 wire 进 UI（纯函数算得对 ≠ 有人用）', () => {
     // ⚠️ 二轮门自查实证：原来这里写的是 `toContain('REPO_PREP_NODE_ID')`，那是**空**
     // 断言——`import` 那一行就满足它；把判据改成 `r.status === 'done'`、甚至写死成
-    // 永不成立，36 条照样全绿。判据本身现已抽成纯函数 `deriveRepoPrepFailed` 并在
-    // 上面直测；这里只锁「UI 确实调用了它、并把结果喂给 resumeStatus」。
-    expect(DETAIL_SRC).toContain('deriveRepoPrepFailed(nodeRuns.data?.runs)')
+    // 永不成立，36 条照样全绿。判据本身已抽成纯函数并在上面直测；这里只锁「UI 确实
+    // 调用了它、并把结果喂给 resumeStatus」。
+    expect(DETAIL_SRC).toContain('findRepoPrepRetryTarget(nodeRuns.data?.runs)')
     expect(DETAIL_SRC).toContain('resumeStatus(tk.status, tk.worktreePath, repoPrepFailed)')
     expect(DETAIL_SRC).toContain("resumability === 'repo-prep-failed'")
     expect(DETAIL_SRC).toContain("t('tasks.resumeRepoPrepFailed')")
@@ -195,6 +196,11 @@ describe('RFC-300 workspace capability wiring', () => {
     )
     expect(prepBanner).not.toBeNull()
     expect(prepBanner![0]).not.toContain('relaunchFrom')
+  })
+})
+
+describe('RFC-300 workspace capability wiring', () => {
+  test('detail hides preserved/retry/sync affordances and renders both cleanup states', () => {
     expect(DETAIL_SRC).toContain("(tk.workspaceState ?? 'available') === 'available'")
     expect(DETAIL_SRC).toContain('workspaceState={tk.workspaceState}')
     expect(DETAIL_SRC).toContain("tk.workspaceState === 'pruning'")
@@ -289,5 +295,65 @@ describe('canRetryNodeRun', () => {
 
   test('missing taskStatus → still gates on run (defensive)', () => {
     expect(canRetryNodeRun('failed', undefined)).toBe(true)
+  })
+})
+
+// RFC-287 AC-11 的 **UI 半场** —— 三轮门按 AC 逐条对账时挖出来的真缺口。
+//
+// 后端半场早就绿了（retryNode 认 `__repo_prep__` 并按 failed/interrupted 放行），
+// 可用户点不到：UI 上唯一的重试入口是「画布点节点 → NodeDetailDrawer 的重试按钮」，
+// 而画布画的是 `task.workflowSnapshot.definition.nodes`——合成行 `__repo_prep__`
+// **不在工作流图里**，永远画不出来。当时横幅的注释还写着「下方节点表里那一行就能
+// 重试」、文案也写着 "retry … in the node list below"，指的是一个不存在的东西。
+// 于是 AC-11「重试作用于任务当前所处阶段」在准备阶段实际为零。
+//
+// 修法是把动作挂到横幅自己身上。下面三层锁：判据算得对 / 动作真的接上了 / 文案不再
+// 指向不存在的入口。
+describe('RFC-287 AC-11 — 准备失败的重试入口（UI 半场）', () => {
+  const mk = (id: string, nodeId: string, status: string) => ({ id, nodeId, status }) as never
+
+  test('findRepoPrepRetryTarget：给出准备行的 runId，且取最后一条', () => {
+    // 重试会铸新的 node_run（retry_index 递增）。指向最早那次失败的话，第二次点重试
+    // 会打到一条已经被 superseded 的行上。
+    expect(
+      findRepoPrepRetryTarget([
+        mk('r1', '__repo_prep__', 'failed'),
+        mk('r2', '__repo_prep__', 'failed'),
+      ]),
+    ).toBe('r2')
+    expect(findRepoPrepRetryTarget([mk('r1', '__repo_prep__', 'interrupted')])).toBe('r1')
+  })
+
+  test('findRepoPrepRetryTarget：无准备失败时给 null（横幅与按钮都不出现）', () => {
+    expect(findRepoPrepRetryTarget([mk('r1', '__repo_prep__', 'running')])).toBeNull()
+    expect(findRepoPrepRetryTarget([mk('r1', 'n1', 'failed')])).toBeNull()
+    expect(findRepoPrepRetryTarget([])).toBeNull()
+    expect(findRepoPrepRetryTarget(undefined)).toBeNull()
+  })
+
+
+  test('横幅真的接上了重试动作（打的是既有单节点重试端点、cascade=false）', () => {
+    // 光有纯函数不够——缺口正是「算得对但没人用」。这里锁 JSX 侧的接线。
+    expect(DETAIL_SRC).toContain('const repoPrepRetryRunId = findRepoPrepRetryTarget(')
+    expect(DETAIL_SRC).toMatch(/retryRepoPrep = useMutation/)
+    // 端点形状：/nodes/{runId}/retry?cascade=false —— 准备是第 0 步，没有下游要级联。
+    expect(DETAIL_SRC).toMatch(/\/nodes\/\$\{encodeURIComponent\(runId\)\}\/retry\?cascade=false/)
+    // 按钮挂在横幅的 action 槽位上，并把 runId 传进去。
+    expect(DETAIL_SRC).toMatch(/retryRepoPrep\.mutate\(repoPrepRetryRunId\)/)
+    // 复用公共 btn class，不是自写 chrome（CLAUDE.md §Frontend UI consistency）。
+    expect(DETAIL_SRC).toMatch(/className="btn btn--sm btn--primary"[\s\S]{0,200}retryRepoPrep/)
+    // 失败要看得见：重试报错走 ErrorBanner，而不是静默。
+    expect(DETAIL_SRC).toMatch(/ErrorBanner error=\{retryRepoPrep\.error\}/)
+  })
+
+  test('文案不再把用户指向不存在的「下方节点列表」', () => {
+    // 这是缺口的另一半：即便按钮补上了，旧文案仍在教用户去找一个画不出来的行。
+    expect(enUS.tasks.resumeRepoPrepFailed).not.toMatch(/node list below/i)
+    expect(zhCN.tasks.resumeRepoPrepFailed).not.toContain('下方节点列表')
+    // 两语都得有按钮文案，且 pending 态不同字（否则点下去毫无反馈）。
+    expect(enUS.tasks.retryRepoPrep.length).toBeGreaterThan(0)
+    expect(zhCN.tasks.retryRepoPrep.length).toBeGreaterThan(0)
+    expect(enUS.tasks.retryRepoPrepPending).not.toBe(enUS.tasks.retryRepoPrep)
+    expect(zhCN.tasks.retryRepoPrepPending).not.toBe(zhCN.tasks.retryRepoPrep)
   })
 })

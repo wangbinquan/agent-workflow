@@ -1090,9 +1090,22 @@ export async function refreshCachedRepo(
   // 刷新走的是这里）。
   //
   // 判据用 `url_redacted` 而非解封：脱敏只吃 `user:pass@`、**scheme 原样保留**，
-  // 所以它够用且不必碰密钥（也就没有解封失败分支要处理）。NULL 同样拒——不知道
-  // scheme 就不该主动去 fetch，与 selectDueRepos 的 fail-closed 口径一致。
-  if (row.urlRedacted === null || isFileSchemeUrl(row.urlRedacted)) {
+  // 所以它够用且不必碰密钥（也就没有解封失败分支要处理）。
+  //
+  // NULL 同样拒（不知道 scheme 就不该主动去 fetch，与 selectDueRepos 的 fail-closed
+  // 口径一致），但**错误码必须分开**：三轮门（Codex 契约面）P3 —— 存量 HTTPS 行因
+  // 密钥轮换而只剩 `url_enc`、`url_redacted` 为 NULL 时，原来会回一句「file:// 镜像
+  // 已不受支持」。fail-closed 本身没错，把「scheme 不可知 / 凭据不可用」谎报成 file
+  // 却会把用户引向完全错误的修复方向（去推仓库到远端，而真正该做的是恢复密钥）。
+  if (row.urlRedacted === null) {
+    throw new DomainError(
+      'repo-url-unavailable',
+      `refusing to refresh cached repo '${row.id}': its URL is unreadable (sealed with a different secret.key?), so the remote cannot be verified`,
+      409,
+      { url: redacted },
+    )
+  }
+  if (isFileSchemeUrl(row.urlRedacted)) {
     throw new DomainError(
       'repo-url-file-scheme-unsupported',
       `refusing to refresh ${redacted}: file:// mirrors are no longer a supported remote`,

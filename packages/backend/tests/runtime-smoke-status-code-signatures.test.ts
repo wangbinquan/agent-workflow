@@ -61,8 +61,34 @@ describe('runtimeSmoke 分类器 — 裸状态码必须带 HTTP 语境', () => {
       'wrote 5031 bytes',
       'listening on port 5290',
       'took 503ms',
+      // ⚠️ 下面这些是**有判别力**的负例。上面那批只需要一个 `\b` 词界就全过——
+      // 三轮门测试有效性自查实证：把修复换成裸的 `\b(?:503|529)\b`（零 HTTP 语境）
+      // 四条用例照样全绿，也就是说本文件标题声称的「裸状态码必须带 HTTP 语境」
+      // 当时没有任何一条在验。这些独立成词的数字才逼出语境要求。
+      'took 503 ms',
+      'wrote 529 bytes',
+      '503 files changed',
+      'retry after 529 seconds',
+      'exit 503',
+      'pid 503 exited',
     ]) {
       expect(sig.test(s.toLowerCase()), s).toBe(false)
+    }
+  })
+
+  test('带 HTTP 语境的状态码必须命中（含 JSON / 等号形态）', () => {
+    for (const s of [
+      'HTTP 503 Service Unavailable',
+      'http/1.1 529',
+      'status: 503',
+      'error: 529',
+      'code: 503',
+      // 真实中继常把状态码包成 JSON 或 kv —— 原语境正则跨不过引号与下划线。
+      '{"status": 503, "message": "overloaded"}',
+      'status_code=529',
+      'statuscode: 503',
+    ]) {
+      expect(sig.test(s.toLowerCase()), s).toBe(true)
     }
   })
 

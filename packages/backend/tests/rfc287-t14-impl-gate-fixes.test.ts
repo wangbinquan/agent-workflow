@@ -36,7 +36,8 @@ describe('RFC-287 T14 — 脚本线取消不再铸孤儿行', () => {
   // begin-isolation 会抛非法 merge-state 转移，把一次正常取消升级成 scheduler error。
   test('脚本线的 retryPolicy 声明了 preAttempt（否则抢占窗口根本不存在）', () => {
     const body = scriptLineBody()
-    expect(body).toMatch(/retryPolicy:\s*\{[\s\S]{0,600}preAttempt:/)
+    // 同上：实测 547/600，只剩 ~53 字余量 —— shouldRetry 里补一行中文注释即红。
+    expect(body).toMatch(/retryPolicy:\s*\{[\s\S]{0,1600}preAttempt:/)
   })
 
   // 二轮实现门 A-1：光有 preAttempt **不够**。它只覆盖轮顶那一瞬，覆盖不了取消
@@ -79,7 +80,10 @@ describe('RFC-287 T14 — 两处对外契约的文本回归', () => {
   // refactor RFC 不得顺手改名。
   test("脚本线 iso 建树失败仍报 'iso-setup-failed'（不带 script- 前缀）", () => {
     const body = scriptLineBody()
-    expect(body).toMatch(/onIsoSetupFailure[\s\S]{0,400}message: 'iso-setup-failed'/)
+    // 窗口给足余量：实测距离正好 400/400，在注释最密的一段代码里——**加一个空格**
+    // 就红（三轮门测试有效性自查实证）。这条锁的是「失败码没被改名」，不是「两行离
+    // 得多近」，所以别人补一行中文注释不该把它打红。
+    expect(body).toMatch(/onIsoSetupFailure[\s\S]{0,1200}message: 'iso-setup-failed'/)
     expect(body).not.toContain('script-iso-setup-failed')
   })
 

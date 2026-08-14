@@ -494,6 +494,12 @@ async function launchViaExecutor(
     ...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox),
     // 对齐 buildScheduleLaunch：闭包解析在重建的 owner actor 可见性内。
     launchActor: actor,
+    // RFC-287 G7：定时/webhook 触发与手动启动**同一套语义**（proposal §G7 原话：
+    // 「定时任务与 webhook 触发同一套语义」）。这里没有等 HTTP 响应的用户，但 G7
+    // 的另一半收益恰恰是这两条最需要的：**准备失败要留下记录**。不开的话，一次
+    // 拉不动远端的定时触发压根不铸任务行——用户在任务列表里什么都看不到，只能去
+    // 翻触发历史里的一句错误，也没有任何可重试的对象（AC-11 的重试作用面为空）。
+    deferRepoPreparation: true,
     ...(guard === undefined
       ? {}
       : {

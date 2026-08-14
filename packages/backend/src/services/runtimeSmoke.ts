@@ -82,7 +82,10 @@ const AUTH_SIGNATURES =
 // 时间戳、字节数、端口号）都会被误分类，管理员照着「限流/配额」的提示去查，方向
 // 完全错。故要求它们出现在 HTTP 状态码语境里（`http 503` / `status 529` /
 // `error: 503` / `503 service unavailable` 之类），而不是任意位置的三位数。
-const HTTP_STATUS_CTX = String.raw`(?:\bhttp[/ ]?[\d.]*\s*|\bstatus[: ]+|\berror[: ]+|\bcode[: ]+)`
+// 语境词与数字之间允许引号 / 下划线 / `=`：真实中继常把状态码包成 JSON
+// （`"status": 503`）或 `status_code=529`，而 `[: ]+` 跨不过引号和下划线，
+// 这两种形态原本全漏（三轮门测试有效性自查）。
+const HTTP_STATUS_CTX = String.raw`(?:\bhttp[/ ]?[\d.]*\s*|"?\bstatus(?:_?code)?"?\s*[:=]\s*|\berror\s*[:=]\s*|\bcode\s*[:=]\s*)`
 /** 导出供回归测试直接断言——解析源码文本抠正则太脆（转义层数会骗人）。 */
 export const MODEL_FAIL_SIGNATURES = new RegExp(
   [

@@ -13,7 +13,7 @@
 // 是否转 failed、错误里有没有 git 的原话，以及**墓碑有没有被误打**（AC-15：打了
 // 就再也重试不了准备）。
 
-import { describe, expect, test, beforeAll } from 'bun:test'
+import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -45,6 +45,19 @@ async function settle(db: DbClient, taskId: string, budgetMs = 60_000): Promise<
 }
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+/**
+ * 本文件所有启动共用的**临时** app home。
+ *
+ * 为什么必须显式给：`deps.appHome` 缺省会回落到 `Paths.root`，而它只认
+ * `AGENT_WORKFLOW_HOME` —— 只有 `scripts/test-backend-sharded.ts` 会设它。于是
+ * `bun test <file>` 与 `bun run test:backend:serial`（CLAUDE.md 记的诊断入口）
+ * 下，这些用例会往**用户真实的 `~/.agent-workflow`** 里克隆、留下
+ * `repos/<hash>-nope.partial-<ulid>/` 和 `scratch/<ulid>/`，且无人清理。
+ * 三轮门测试有效性自查实测：真实 home 里已攒了 13 个残留目录。
+ * `setup.ts` 的泄漏守卫盯的是 cwd，看不到这里。
+ */
+const TEST_HOME = mkdtempSync(join(tmpdir(), 'aw-rfc287-t13-home-'))
 
 // 最小合法定义——本用例测的是「准备阶段」，节点跑不跑无关紧要（准备失败时压根
 // 到不了调度）。形状照 gettask-multi-repo 的现成夹具。
@@ -95,6 +108,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
       {
         db,
         actorUserId: userId,
+        appHome: TEST_HOME,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         deferRepoPreparation: true,
         cloneTimeoutMs: 3_000,
@@ -215,6 +229,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
         {
           db,
           actorUserId: userId,
+          appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           cloneTimeoutMs: 3_000,
           gitBaselineSyncWindowMs: 0,
@@ -337,6 +352,7 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
       {
         db: db2,
         actorUserId: s.userId,
+        appHome: TEST_HOME,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         deferRepoPreparation: true,
         cloneTimeoutMs: 3_000,
@@ -359,6 +375,7 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
         deps: {
           db: db2,
           actorUserId: s.userId,
+          appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           cloneTimeoutMs: 3_000,
           gitBaselineSyncWindowMs: 0,
@@ -412,6 +429,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
         {
           db: db3,
           actorUserId: s.userId,
+          appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           deferRepoPreparation: true,
           cloneTimeoutMs: 1_000,
@@ -441,6 +459,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
       {
         db: dbA,
         actorUserId: s.userId,
+        appHome: TEST_HOME,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         deferRepoPreparation: true,
         cloneTimeoutMs: 3_000,
@@ -477,6 +496,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
       {
         db: db4,
         actorUserId: s.userId,
+        appHome: TEST_HOME,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         deferRepoPreparation: true,
         cloneTimeoutMs: 1_000,
@@ -538,6 +558,7 @@ describe('RFC-287 — scratch 启动排除在延后准备之外', () => {
       {
         db: db5,
         actorUserId: s.userId,
+        appHome: TEST_HOME,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         // 开关开着——但 scratch 必须绕开它。
         deferRepoPreparation: true,
@@ -580,6 +601,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
       {
         db,
         actorUserId: s.userId,
+        appHome: TEST_HOME,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         deferRepoPreparation: true,
         cloneTimeoutMs: 1_000,
@@ -608,6 +630,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
       {
         db,
         actorUserId: s.userId,
+        appHome: TEST_HOME,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         deferRepoPreparation: true,
         cloneTimeoutMs: 1_000,
@@ -658,6 +681,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
       deps: {
         db,
         actorUserId: s.userId,
+        appHome: TEST_HOME,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         cloneTimeoutMs: 1_000,
         gitBaselineSyncWindowMs: 0,
@@ -699,13 +723,19 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
         deps: {
           db,
           actorUserId: s.userId,
+          appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         } as never,
       })
     } catch (err) {
-      msg = err instanceof Error ? err.message : String(err)
+      // ⚠️ 判据必须是 `.code`：DomainError / ValidationError 把错误码放在 `.code`，
+      // **message 里一个字都没有**。三轮门测试有效性自查实证：按 message 写的
+      // `not.toMatch(/repo-prep-source-unavailable/i)` 是**空断言**——把
+      // retryRepoPreparation 改成无条件抛该码，用例照样全绿；而按 message 写的
+      // 正面断言只能匹配到英文散文那一支，改个措辞就误红。
+      msg = (err as { code?: string }).code ?? (err instanceof Error ? err.message : String(err))
     }
-    expect(msg).toMatch(/repo-prep-not-retryable|only failed \/ interrupted preparation/i)
+    expect(msg).toBe('repo-prep-not-retryable')
   }, 90_000)
 
   // daemon 在准备窗口内重启时，boot reap 把任务翻 interrupted、把 running 的准备行
@@ -737,6 +767,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
       {
         db,
         actorUserId: s2.userId,
+        appHome: TEST_HOME,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         deferRepoPreparation: true,
         cloneTimeoutMs: 1_000,
@@ -757,15 +788,21 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
         deps: {
           db,
           actorUserId: s2.userId,
+          appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           cloneTimeoutMs: 1_000,
           gitBaselineSyncWindowMs: 0,
         } as never,
       })
     } catch (err) {
-      msg = err instanceof Error ? err.message : String(err)
+      // ⚠️ 判据必须是 `.code`：DomainError / ValidationError 把错误码放在 `.code`，
+      // **message 里一个字都没有**。三轮门测试有效性自查实证：按 message 写的
+      // `not.toMatch(/repo-prep-source-unavailable/i)` 是**空断言**——把
+      // retryRepoPreparation 改成无条件抛该码，用例照样全绿；而按 message 写的
+      // 正面断言只能匹配到英文散文那一支，改个措辞就误红。
+      msg = (err as { code?: string }).code ?? (err instanceof Error ? err.message : String(err))
     }
-    expect(msg).not.toMatch(/repo-prep-source-unavailable/i)
+    expect(msg).not.toBe('repo-prep-source-unavailable')
   }, 120_000)
 
   test('AC-16 反面：interrupted 的准备行必须可重试（否则 daemon 重启 = 任务报废）', async () => {
@@ -787,17 +824,23 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
         deps: {
           db,
           actorUserId: s2.userId,
+          appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           cloneTimeoutMs: 1_000,
           gitBaselineSyncWindowMs: 0,
         } as never,
       })
     } catch (err) {
-      msg = err instanceof Error ? err.message : String(err)
+      // ⚠️ 判据必须是 `.code`：DomainError / ValidationError 把错误码放在 `.code`，
+      // **message 里一个字都没有**。三轮门测试有效性自查实证：按 message 写的
+      // `not.toMatch(/repo-prep-source-unavailable/i)` 是**空断言**——把
+      // retryRepoPreparation 改成无条件抛该码，用例照样全绿；而按 message 写的
+      // 正面断言只能匹配到英文散文那一支，改个措辞就误红。
+      msg = (err as { code?: string }).code ?? (err instanceof Error ? err.message : String(err))
     }
     // 关键：**不得**被 AC-16 的守卫拒掉。远端仍不可达所以最终还会失败，但那是
     // 重跑之后的结果，不是「不让你重试」。
-    expect(msg).not.toMatch(/repo-prep-not-retryable/i)
+    expect(msg).not.toBe('repo-prep-not-retryable')
     await settle(db, id)
     const after = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
     expect(after?.status).toBe('failed')
@@ -826,3 +869,319 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     expect((await db.select().from(cachedRepos).where(eq(cachedRepos.id, repoId))).length).toBe(1)
   }, 90_000)
 })
+
+// RFC-287 G6 —— **warm 路径**的失败也必须能进窗口（三轮门 AC 对账挖出的真缺口）。
+//
+// design §9.2 写的 G6 位置就是「gitRepoCache.ts **warm path** 的 fetch 失败分支」，
+// 也就是「镜像已经在了、这次 fetch 更新失败」——那才是稳态生产路径。可 warm 路径抛的
+// 是 `DomainError('repo-fetch-failed', '…refusing to launch from a stale cache', 502,
+// { url, stderr })`：**git 的原话在 details 里，message 里一个字都没有**。而窗口重试
+// 的判据只看 message ⇒ 判 unknown ⇒ 不可重试 ⇒ 窗口一秒不用。
+//
+// 现有 G6 用例全绿只是因为它们用**全新 URL**，走的是 cold clone 那条（它的 message
+// 自带 stderr）。本用例直接按分类器的输入面锁：warm 那句的完整诊断必须可判为网络类。
+describe('RFC-287 G6 —— warm 路径失败同样进窗口', () => {
+  test('warm 的 repo-fetch-failed 带上 details.stderr 后可判为可重试', async () => {
+    const { classifyGitFailure } = await import('@agent-workflow/shared')
+    // warm 路径的 message —— 单看它永远是 unknown（这正是缺口）。
+    const msg = 'repository fetch failed for https://e.com/x.git; refusing to launch from a stale cache'
+    expect(classifyGitFailure(msg)).toBe('unknown')
+    // 但把 details.stderr 拼进去之后，就该按 git 的原话判。
+    const stderr = 'fatal: unable to access: Could not resolve host: e.com'
+    expect(classifyGitFailure(`${msg}\n${stderr}`)).toBe('retryable-network')
+    // 反向：鉴权类仍不占窗口。
+    const authErr = 'remote: Invalid username or password.\nfatal: Authentication failed'
+    expect(classifyGitFailure(`${msg}\n${authErr}`)).toBe('permanent')
+  })
+
+  test('准备段确实把 details.stderr 折进了 earlyError（否则上一条锁的是空气）', () => {
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    // 折叠函数存在，且准备段用的是它而不是裸 message。
+    expect(src).toMatch(/function diagnosticTextOf\(err: unknown\): string/)
+    const i = src.indexOf('async function runDeferredRepoPreparation')
+    const j = src.indexOf('\n}\n', i)
+    const body = src.slice(i, j)
+    expect(body, '准备段必须用完整诊断').toContain('earlyError: diagnosticTextOf(err)')
+    expect(body, '不得退回裸 message').not.toMatch(/earlyError: err instanceof Error \? err\.message/)
+  })
+})
+
+// RFC-287 G7 的**覆盖面**：proposal §G7 最后一句是「定时任务与 webhook 触发同一套
+// 语义」，可实现只在 `POST /api/tasks` 那一条路由上把 `deferRepoPreparation` 打开
+// （三轮门 AC 对账实测）。于是一次拉不动远端的**定时**触发压根不铸任务行：用户在
+// 任务列表里什么都看不到，只能去翻触发历史里的一句错误，也没有任何可重试的对象
+// ——AC-11「重试作用于任务当前所处阶段」在这条路径上作用面为空。
+//
+// 这条按**行为**判（不是源码文本锁）：真起一次 fireSchedule，断言它不再抛、并且
+// 留下了带 `__repo_prep__` 失败行的任务。变异实证：拿掉 scheduleLaunch 里那一行，
+// fireSchedule 直接抛、taskId 无从取得 ⇒ 本条红。
+describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
+  test('定时触发的准备失败也留下任务行 + __repo_prep__ 失败行（而不是什么都不留）', async () => {
+    const { createScheduledTask, fireSchedule, getScheduledTaskRow } = await import(
+      '@/services/scheduledTasks'
+    )
+    const { buildScheduleLaunch } = await import('@/services/scheduleLaunch')
+    const { buildActor } = await import('../src/auth/actor')
+
+    const db2 = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db2)
+    const home = mkdtempSync(join(tmpdir(), 'aw-rfc287-sched-'))
+    process.env.AGENT_WORKFLOW_HOME = home
+    const cfgPath = join(home, 'config.json')
+    // 走配置面把两个窗口按到最短：本条验「失败留痕」而非重试，不然要白等 60s 退避。
+    writeFileSync(
+      cfgPath,
+      JSON.stringify({ $schema_version: 1, gitBaselineSyncWindowMs: 0, gitCloneTimeoutMs: 3000 }),
+    )
+    const actor = buildActor({
+      user: {
+        id: s.userId,
+        username: `u-${s.userId.slice(-4)}`,
+        displayName: 'U',
+        role: 'admin',
+        status: 'active',
+      },
+      source: 'daemon',
+    } as never)
+
+    const created = await createScheduledTask(
+      db2,
+      {
+        name: 'nightly',
+        launchKind: 'workflow',
+        launchPayload: {
+          workflowId: s.workflowId,
+          name: 'sched-prep-fail',
+          inputs: {},
+          // 不可路由地址：克隆必然失败，且（接线正确时）失败发生在落行**之后**。
+          repoUrl: 'http://10.255.255.1:9/nope.git',
+        },
+        scheduleSpec: { kind: 'daily', at: '09:00', timezone: 'UTC' },
+        enabled: true,
+      } as never,
+      { actor } as never,
+    )
+    const row = (await getScheduledTaskRow(db2, created.id))!
+
+    // ① 不再抛：接线前，准备在落行之前跑，克隆一失败 fireSchedule 就整个抛出去。
+    const { taskId } = await fireSchedule(
+      db2,
+      row,
+      buildScheduleLaunch(db2, cfgPath),
+      Date.now(),
+    )
+    expect(taskId).toBeTruthy()
+
+    await settle(db2, taskId)
+    // ② 任务行留下来了，且是 failed（G7 明确不新增状态）。
+    const task = (await db2.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(task).toBeDefined()
+    expect(task?.status).toBe('failed')
+    // ③ AC-15：不得打墓碑，否则重试准备这条语义直接失效。
+    expect(task?.workspacePrunedAt ?? null).toBeNull()
+    // ④ 卡在哪一步要看得见 —— 合成准备行在，且带着 git 原话。
+    const runs = await db2.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const prep = runs.find((r) => r.nodeId === REPO_PREP_NODE_ID)
+    expect(prep, '定时触发同样要铸 __repo_prep__ 行').toBeDefined()
+    expect(prep?.status).toBe('failed')
+    expect(String(prep?.errorMessage ?? '')).toMatch(
+      /clone|fatal|unable|timed out|repo preparation failed/i,
+    )
+    // ⑤ AC-11 的前提：重试要能找回来源 —— cached_repo_id 已先行落定。
+    expect(task?.cachedRepoId ?? null).not.toBeNull()
+
+    rmSync(home, { recursive: true, force: true })
+  }, 120_000)
+
+  test('webhook 派发也把延后准备打开（与定时同源的接线）', () => {
+    // webhook 那条要造一整个 provider 签名 + 渲染链才跑得起来，成本远高于它锁到的
+    // 东西；而两条路径的接线完全同形（都在自己的 launchDeps 里加同一个 flag），
+    // 上面那条已经把「打开之后行为对不对」验完了。这里只锁「webhook 也打开了」。
+    const src = readSrc(
+      resolve(import.meta.dir, '..', 'src', 'services', 'webhook', 'webhookDispatch.ts'),
+      'utf8',
+    )
+    const i = src.indexOf('const launchDeps = {')
+    expect(i, 'webhookDispatch 应有 launchDeps').toBeGreaterThan(-1)
+    const j = src.indexOf('\n  }', i)
+    expect(src.slice(i, j)).toContain('deferRepoPreparation: true')
+  })
+})
+
+// 三轮门（Codex 契约面）P1：G7 把 G5 的权威拒绝点推进了后台，于是以 `cachedRepoId`
+// 启动一个指向 `file://` 的**存量镜像**时，调用方拿到的是 201 Created，稳定错误码
+// 只出现在几秒后的任务失败里。proposal §G7 明确把「地址格式」留在同步段
+// （「填错了立刻告诉你」），§7 也写明这是「明确的参数校验失败」——延后与之相反。
+describe('RFC-287 G5×G7 —— 延后准备不得把地址格式拒绝也一起延后', () => {
+  async function seedFileMirror(db: DbClient): Promise<string> {
+    const id = ulid()
+    await db.insert(cachedRepos).values({
+      id,
+      urlHash: 'h_' + id,
+      urlRedacted: 'file:///srv/private/repo',
+      localPath: '/tmp/mirror-' + id,
+      lastFetchedAt: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as never)
+    return id
+  }
+
+  test('cachedRepoId 指向 file:// 镜像：同步拒，不铸任务行', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const cachedRepoId = await seedFileMirror(db)
+    let code = ''
+    try {
+      await startTask({ workflowId: s.workflowId, name: 'x', cachedRepoId, inputs: {} } as never, {
+        db,
+        actorUserId: s.userId,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        deferRepoPreparation: true,
+        appHome: TEST_HOME,
+      } as never)
+    } catch (err) {
+      code = (err as { code?: string }).code ?? String(err)
+    }
+    expect(code, '必须同步给出稳定错误码，而不是 201 之后后台失败').toBe(
+      'repo-url-file-scheme-unsupported',
+    )
+    // 关键差别：同步拒绝**不留任务行**（延后失败才留）。
+    expect((await db.select().from(tasks)).length).toBe(0)
+  })
+
+  test('url_redacted 为 NULL 时预筛放行（不解密、交给唯一权威拒绝点）', async () => {
+    // 密钥轮换等原因导致脱敏列缺失时，预筛拿不到 scheme。此时**不得**乱报
+    // file 错误（那会把用户引向错误的修复方向），而是放行给后台解封后再判。
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = ulid()
+    await db.insert(cachedRepos).values({
+      id,
+      urlHash: 'h_' + id,
+      urlRedacted: null,
+      localPath: '/tmp/mirror-' + id,
+      lastFetchedAt: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as never)
+    let code = ''
+    try {
+      await startTask(
+        { workflowId: s.workflowId, name: 'y', cachedRepoId: id, inputs: {} } as never,
+        {
+          db,
+          actorUserId: s.userId,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+          deferRepoPreparation: true,
+          appHome: TEST_HOME,
+        } as never,
+      )
+    } catch (err) {
+      code = (err as { code?: string }).code ?? String(err)
+    }
+    expect(code, '预筛不得对未知 scheme 报 file 错误').not.toBe('repo-url-file-scheme-unsupported')
+  })
+})
+
+/** 与 AC-11 那组同款，但提到顶层供后加的用例复用。 */
+async function launchFailingPrep2(
+  db: DbClient,
+  s: { workflowId: string; userId: string },
+  name: string,
+): Promise<string> {
+  const task = await startTask(
+    { workflowId: s.workflowId, name, repoUrl: 'http://10.255.255.1:9/nope.git', inputs: {} } as never,
+    {
+      db,
+      actorUserId: s.userId,
+      appHome: TEST_HOME,
+      launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      deferRepoPreparation: true,
+      cloneTimeoutMs: 1_000,
+      gitBaselineSyncWindowMs: 0,
+    } as never,
+  )
+  await settle(db, task.id)
+  return task.id
+}
+
+// 三轮门（Codex 契约面）P1：AC-11 的重试原本 `await` 整个准备。单次 clone 默认可跑
+// 30 分钟，而 Bun 的入站连接 **255 秒**无响应就关闭——一次 270 秒的 clone 会让客户端
+// 收到断连，而 clone 与任务其实还在后台跑并可能成功，制造「客户端认为失败、任务仍在
+// 推进」的未知态。首启早就是后台推进了，重试必须同语义。
+describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () => {
+  test('retryNode 不等准备跑完（否则长克隆必然撞连接超时）', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = await launchFailingPrep2(db, s, 'ac11-async')
+    const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).find(
+      (r) => r.nodeId === REPO_PREP_NODE_ID,
+    )
+    const { retryNode } = await import('@/services/task')
+    const t0 = Date.now()
+    const returned = await retryNode(db, id, prep!.id, {
+      cascade: false,
+      deps: {
+        db,
+        actorUserId: s.userId,
+        appHome: TEST_HOME,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        // 准备本身要卡满 3 秒才失败；若重试是同步的，下面的耗时断言必然超。
+        cloneTimeoutMs: 3_000,
+        gitBaselineSyncWindowMs: 0,
+      } as never,
+    })
+    const elapsed = Date.now() - t0
+    expect(elapsed, '重试请求必须立刻返回，不能等准备跑完').toBeLessThan(1_500)
+    // 而且返回的是「重新准备中」的任务视图：CAS 回 pending 已同步完成。
+    expect(returned.status).toBe('pending')
+    // 后台确实在推进：等它落定后仍是 failed（远端不可达），且铸出了第二条准备行。
+    await settle(db, id)
+    const runs = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).filter(
+      (r) => r.nodeId === REPO_PREP_NODE_ID,
+    )
+    expect(runs.length, '后台确实重跑了准备').toBe(2)
+  }, 120_000)
+
+  // 三轮门（Codex 契约面）P2：重试铸出的准备行原本写死 `retryIndex:0 / 'initial'`，
+  // 于是连续三次尝试在库里、API 里、UI 的「重试」列里全都是「第 0 次、首次」。
+  // 执行本身是对的，但历史被永久写成假事实——审计、诊断、按 retryIndex 排序的
+  // 调用方全被打乱。
+  test('重试铸出的准备行必须递增 retryIndex 并标 retry-node', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = await launchFailingPrep2(db, s, 'ac11-retryindex')
+    const { retryNode } = await import('@/services/task')
+    const retryOnce = async (): Promise<void> => {
+      const latest = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id)))
+        .filter((r) => r.nodeId === REPO_PREP_NODE_ID)
+        .sort((a, b) => a.retryIndex - b.retryIndex)
+        .at(-1)!
+      await retryNode(db, id, latest.id, {
+        cascade: false,
+        deps: {
+          db,
+          actorUserId: s.userId,
+          appHome: TEST_HOME,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+          cloneTimeoutMs: 1_000,
+          gitBaselineSyncWindowMs: 0,
+        } as never,
+      })
+      await settle(db, id)
+    }
+    await retryOnce()
+    await retryOnce()
+
+    const prepRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id)))
+      .filter((r) => r.nodeId === REPO_PREP_NODE_ID)
+      .sort((a, b) => a.retryIndex - b.retryIndex)
+    expect(prepRuns.length).toBe(3)
+    expect(prepRuns.map((r) => r.retryIndex), '三次尝试必须是 0/1/2').toEqual([0, 1, 2])
+    expect(prepRuns.map((r) => r.rerunCause)).toEqual(['initial', 'retry-node', 'retry-node'])
+  }, 180_000)
+})
+
+// 收尾：临时 home 整体删掉。没有它，克隆残留会一直堆在磁盘上（见 TEST_HOME 注释）。
+afterAll(() => rmSync(TEST_HOME, { recursive: true, force: true }))

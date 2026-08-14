@@ -48,7 +48,14 @@ const PERMANENT_PATTERNS: readonly RegExp[] = [
   // 谁先判谁赢。原先它被判成可重试，于是一个永远不会成功的 push 要白耗满窗口。
   // （T14 实现门实测。）
   /returned error: 4(?!29)\d\d\b/i,
-  /\bhttp (?:code )?4(?!29)\d\d\b/i,
+  // ⚠️ `http` 与状态码之间要容得下**版本号**：curl / git 的真实原话多半是
+  // `Received HTTP/1.1 407 …` / `returned error: HTTP/2 429`，而不是干净的
+  // `HTTP 429`。原来写死一个空格，于是带版本的那一大类全落进 unknown
+  // ——429 该退避的不退避、4xx 该立刻失败的走 unknown（行为恰好也是不重试，
+  // 但归因是错的）。（三轮门 Codex 契约面实测。）
+  /\bhttp(?:\/[\d.]+)? (?:code )?4(?!29)\d\d\b/i,
+  // 代理要鉴权是**部署配置**问题，重试一万次也一样。
+  /\b407 proxy authentication required/i,
 ]
 
 /** 网络/瞬时特征词。 */
@@ -80,8 +87,8 @@ const NETWORK_PATTERNS: readonly RegExp[] = [
   // 「你太快了，等会儿再来」，正是应当退避的那一类。
   /returned error: 5\d\d\b/i,
   /returned error: 429\b/i,
-  /\bhttp (?:code )?5\d\d\b/i,
-  /\bhttp (?:code )?429\b/i,
+  /\bhttp(?:\/[\d.]+)? (?:code )?5\d\d\b/i,
+  /\bhttp(?:\/[\d.]+)? (?:code )?429\b/i,
   // 连接建立后对端一言不发就断——典型的负载均衡器/代理抽风，重试通常就好。
   /empty reply from server/i,
 ]

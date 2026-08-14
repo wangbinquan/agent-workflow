@@ -30,7 +30,10 @@ describe('AC-10 读洞①②：空根不得锚到 daemon 的 cwd（openContained
     }
   })
 
-  test('空根的判否发生在任何路径推导之前（不依赖 .. 预筛）', () => {
+  // 标题只声称**结果**：不依赖 `..` 预筛也照样判否。原标题写的是「发生在任何路径
+  // 推导之前」——那是位置断言，本条验不了：把守卫挪到 `..` 预筛下面，它仍绿
+  //（三轮门测试有效性自查实证）。
+  test('空根判否不依赖 .. 预筛（干净 rel 也照样拒）', () => {
     // 这些 rel 都不含 `..`、都不是绝对路径，所以旧实现的两道预筛全都放行。
     expect(openContainedFile('', 'package.json').kind).toBe('not-found')
   })
@@ -70,11 +73,29 @@ describe('AC-10 读洞③④：code-intel 取根时必须拒「还没有工作�
   })
 
   // 多仓任务在准备窗口内 `repoCount` 也是 1（回填后才变 N），所以走的是单仓分支
-  // ——攻击者连 `repo` 参数都不用给。这条锁住那个「不需要额外参数」的事实。
-  test('多仓任务在窗口内同样落单仓分支并被拒（无需 repo 参数）', () => {
-    expect(() => resolveRepoTarget(taskLike({ repoCount: 1, repos: [] }), undefined)).toThrow(
-      /worktree/i,
-    )
+  // ——攻击者连 `repo` 参数都不用给。上一条已覆盖那支。
+  //
+  // ⚠️ 这一条原来写的是 `taskLike({ repoCount: 1, repos: [] })`——与上一条的
+  // `taskLike({})` **逐字等价**（两个字段本就是默认值），于是它零增量，而它标题
+  // 声称覆盖的**多仓分支**（fileSymbols.ts 的 `repo.worktreePath === ''`）实际
+  // 无人覆盖：把那段守卫整段删掉，全套仍绿（三轮门测试有效性自查实证）。
+  // 改成真正的多仓形态：repoCount=2 + 指名的那个仓工作树还没建出来。
+  test('多仓回填后：指名的仓工作树未就绪 → 同样拒绝，不返回空根', () => {
+    const multi = taskLike({
+      repoCount: 2,
+      worktreePath: '/tmp/wt-root',
+      baseCommit: 'abc',
+      repos: [
+        { mountPath: '', worktreePath: '/tmp/wt-root', baseCommit: 'abc' },
+        { mountPath: 'sub', worktreePath: '', baseCommit: null },
+      ],
+    })
+    expect(() => resolveRepoTarget(multi, 'sub')).toThrow(/worktree/i)
+    // 反向：同一任务里已就绪的那个仓照常返回（守卫不一刀切）。
+    expect(resolveRepoTarget(multi, '.')).toEqual({
+      worktreePath: '/tmp/wt-root',
+      baseCommit: 'abc',
+    })
   })
 
   test('已准备好的任务照常返回根（守卫不误伤正常路径）', () => {
@@ -104,11 +125,22 @@ describe('G7 —— 身份登记不得堵在克隆锁后面', () => {
       const { resolveCachedRepo, ensureCachedRepoIdentity } =
         await import('@/services/gitRepoCache')
       // 占锁：故意不 await，让它在后台把克隆锁握满 3 秒。
-      const blocking = resolveCachedRepo({ db, appHome, cloneTimeoutMs: 3_000 }, { url }).catch(
-        () => null,
-      )
+      let cloneSettled = false
+      const blocking = resolveCachedRepo({ db, appHome, cloneTimeoutMs: 3_000 }, { url })
+        .catch(() => null)
+        .finally(() => {
+          cloneSettled = true
+        })
       // 给它一点时间真正进入临界区。
       await new Promise((r) => setTimeout(r, 200))
+      // ⚠️ 前提复核，缺了它这条用例会**静默失去全部预言力**（三轮门测试有效性自查
+      // 实证）：本条的力量全靠 10.255.255.1:9 一直挂到 3s 超时、锁还握在手里。若 CI
+      // 的网络是 ICMP 立刻拒绝 / 走代理 / 被沙箱掐断，克隆会在 ~205ms 就结束——早于
+      // 这个 200ms sleep。那时**即便缺陷还在**（身份共用克隆锁），下面的耗时也只有
+      // 1~3ms，断言照样绿。所以先断言「锁此刻确实还被握着」，前提不成立就红。
+      expect(cloneSettled, '前置不成立：克隆已经结束、锁没被握住，本用例此刻零预言力').toBe(
+        false,
+      )
 
       const t0 = Date.now()
       const id = await ensureCachedRepoIdentity({ db, appHome }, { url })

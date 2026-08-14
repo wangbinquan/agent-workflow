@@ -828,6 +828,47 @@ export function normalizeStartTaskRepos(input: StartTask): RepoSourceSpec[] {
  * `resolveCachedRepo` per (cacheDir, syncBranch) pair so each multi-repo
  * URL entry hits its own cached mirror with no cross-talk.
  */
+/**
+ * RFC-287 G5×G7 —— 延后准备时的**地址格式预筛**（三轮门 Codex 契约面 P1）。
+ *
+ * 为什么需要：G7 把 `resolveRepoSourceSingle`（G5 唯一的权威拒绝点）推到了后台，
+ * 于是以 `cachedRepoId` / 仓库组启动一个指向 `file://` 的存量镜像时，HTTP 面拿到的
+ * 是 **201 Created**，稳定错误码 `repo-url-file-scheme-unsupported` 只出现在几秒后
+ * 的任务失败里。而 proposal §G7 白纸黑字把「**地址格式**」列进「同步段只留『填错了
+ * 立刻告诉你』的校验」，§7 也写明这是「明确的参数校验失败」——延后失败与之直接相反。
+ *
+ * 定位是**预筛，不是第二个权威**：只看零成本、零网络就能拿到的脱敏 URL；拿不到
+ * （`url_redacted` 为 NULL——密钥轮换等）就放行，交给后台那个唯一拒绝点解封后判。
+ * 这样既不会分叉出两套判据，也不会为了报错去做解密。
+ */
+function assertLaunchSourceSchemeSync(deps: StartTaskDeps, input: StartTask): void {
+  const reject = (redacted: string): never => {
+    throw new ValidationError(
+      'repo-url-file-scheme-unsupported',
+      `refusing to launch from ${redacted}: file:// mirrors are no longer a supported remote; push the repo to a real remote and re-register it`,
+      { url: redacted },
+    )
+  }
+  const checkCachedId = (id: unknown): void => {
+    if (typeof id !== 'string' || id.length === 0) return
+    const row = deps.db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1).all()[0]
+    // 行不存在这里不报——留给后台那条既有的 `cached-repo-not-found`，免得两处各报各的。
+    const redacted = row?.urlRedacted ?? null
+    if (typeof redacted === 'string' && isFileSchemeUrl(redacted)) reject(redacted)
+  }
+  checkCachedId((input as { cachedRepoId?: unknown }).cachedRepoId)
+  for (const r of (input as { repos?: readonly unknown[] }).repos ?? []) {
+    checkCachedId((r as { cachedRepoId?: unknown }).cachedRepoId)
+  }
+  const groupId = (input as { repoGroupId?: unknown }).repoGroupId
+  if (typeof groupId === 'string' && groupId.length > 0) {
+    // 组的成员本就带 `repoUrlRedacted`，无需再逐个查库。
+    for (const m of resolveRepoGroupLayout(deps.db, groupId).repos) {
+      if (isFileSchemeUrl(m.repoUrlRedacted)) reject(m.repoUrlRedacted)
+    }
+  }
+}
+
 export async function resolveRepoSourceSingle(
   spec: RepoSourceSpec,
   input: StartTask,
@@ -2442,6 +2483,8 @@ async function startTaskImpl(
       ],
     }
   } else if (deps.deferRepoPreparation === true && input.scratch !== true) {
+    // 同步段的地址格式校验（proposal §G7 明列）——见 assertLaunchSourceSchemeSync。
+    assertLaunchSourceSchemeSync(deps, input)
     // RFC-287 G7：JSON-body 启动把仓库准备**推迟到任务行落库之后**。
     //
     // 今天物化在落行之前，于是「克隆超时 / 远端不可达」这类失败**不留任何记录**
@@ -4281,46 +4324,102 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
     // 行早就在库里了——重试不建行，所以这一位从一开始就是 true。
     taskRowCommitted: true,
   }
-  const r = await runDeferredRepoPreparation({
-    deps: { ...deps, db },
-    input,
-    appHome,
-    controller,
-    taskId: task.id,
-    prepTaskId: task.id,
-    task,
-    space: {
-      kind: 'single',
-      spaceKind: 'remote',
+  const runPrepThenTask = async (): Promise<Task | null> => {
+    const r = await runDeferredRepoPreparation({
+      deps: { ...deps, db },
+      input,
+      appHome,
+      controller,
       taskId: task.id,
-      worktreePath: '',
-      branch: '',
-      baseCommit: null,
-      earlyError: null,
-      resolvedSources: [],
-      repos: [],
-      nodePaths: [],
-      cleanup: ownership.cleanup as MaterializedSpaceCleanup,
-    } as MaterializedSpace,
-    ownership,
-  })
-  if (!r.ok) return r.preparedTask ?? task
-  void runTask({
-    taskId: task.id,
-    db,
-    appHome,
-    ...runtimeConfigOpts(deps),
-    log,
-    signal: controller.signal,
-  })
-    .catch((err) => {
-      log.error('runTask threw after repo-prep retry', {
+      prepTaskId: task.id,
+      task,
+      space: {
+        kind: 'single',
+        spaceKind: 'remote',
+        taskId: task.id,
+        worktreePath: '',
+        branch: '',
+        baseCommit: null,
+        earlyError: null,
+        resolvedSources: [],
+        repos: [],
+        nodePaths: [],
+        cleanup: ownership.cleanup as MaterializedSpaceCleanup,
+      } as MaterializedSpace,
+      ownership,
+    })
+    if (!r.ok) return r.preparedTask ?? task
+    void runTask({
+      taskId: task.id,
+      db,
+      appHome,
+      ...runtimeConfigOpts(deps),
+      log,
+      signal: controller.signal,
+    })
+      .catch((err) => {
+        log.error('runTask threw after repo-prep retry', {
+          taskId: task.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+      .finally(() => releaseTaskDriverAndFinalizeWorkspace(db, task.id, controller))
+    return r.preparedTask ?? null
+  }
+
+  // RFC-287 AC-11 —— 重试与**首启同一套语义**：准备在后台推进，请求立刻返回。
+  //
+  // 三轮门（Codex 契约面）P1：这里原本 `await` 整个准备。单次 clone 默认可跑 30
+  // 分钟，而 Bun 的入站连接 255 秒无响应就关闭 —— 一次跑 270 秒的 clone 会让客户端
+  // 在 ~255s 收到断连 / network-unreachable，而 clone 与任务其实还在后台推进并可能
+  // 成功。前端自己的 300 秒总时限救不了（它更晚），部署前置网关时限更短则更早发作。
+  // 结果是「客户端认为失败、任务实际仍在跑」的未知态——正是 G7 要消灭的那类体验。
+  //
+  // 判据与首启一致：`awaitScheduler === true` 是「跑完再回来」的内联/测试语义，
+  // 其余（含 HTTP 路由）一律后台推进。CAS 回 pending 已在上面同步完成，所以调用方
+  // 立刻就能看到任务重新处于「准备中」。
+  if (deps.awaitScheduler === true) {
+    const prepared = await runPrepThenTask()
+    return prepared ?? ((await getTask(db, task.id)) as Task)
+  }
+  void (async () => {
+    try {
+      await runPrepThenTask()
+    } catch (err) {
+      log.error('repo-prep retry threw', {
         taskId: task.id,
         error: err instanceof Error ? err.message : String(err),
       })
-    })
-    .finally(() => releaseTaskDriverAndFinalizeWorkspace(db, task.id, controller))
-  return r.preparedTask ?? ((await getTask(db, task.id)) as Task)
+      // 补偿：后台段抛穿时既有的记账路径没走完，至少把驱动租约放掉，
+      // 否则这行任务会一直「被别的驱动持有」，连重试都 409。
+      await releaseTaskDriverAndFinalizeWorkspace(db, task.id, controller).catch(() => {})
+    }
+  })()
+  return (await getTask(db, task.id)) as Task
+}
+
+/**
+ * 把一个失败折成**可供分类器判读**的诊断串。
+ *
+ * 三轮实现门 AC 对账挖出的真缺口：G6 的窗口重试判据只看 `err.message`，而**warm
+ * 路径**（镜像已存在、fetch 更新失败）抛的是
+ * `DomainError('repo-fetch-failed', '…refusing to launch from a stale cache', 502,
+ * { url, stderr })` —— git 的原话在 `details.stderr` 里，**message 里一个字都没有**。
+ * 于是分类器只能判 `unknown` ⇒ 不可重试 ⇒ 窗口一秒不用直接失败。
+ *
+ * 这恰恰打掉了 G6 的**主场景**：design §9.2 原文写的位置就是「gitRepoCache.ts warm
+ * path 的 fetch 失败分支」。cold clone 那条反而是好的（它的 message 自带 stderr），
+ * 而现有 G6 用例全用**全新 URL**、全走 cold 路径，所以一直全绿——稳态生产路径
+ * （镜像热着、网络抖一下）才是没被覆盖的那条。
+ */
+function diagnosticTextOf(err: unknown): string {
+  if (!(err instanceof Error)) return String(err)
+  const details = (err as { details?: unknown }).details
+  const stderr =
+    typeof details === 'object' && details !== null && 'stderr' in details
+      ? (details as { stderr?: unknown }).stderr
+      : undefined
+  return typeof stderr === 'string' && stderr.length > 0 ? `${err.message}\n${stderr}` : err.message
 }
 
 /**
@@ -4354,12 +4453,23 @@ async function runDeferredRepoPreparation(args: {
   // 有了这一行，「重试准备仓库」直接复用既有的 retryNode，不必造第二套重试语义。
   // 先 pending 再转 running：RFC-098 修订 #10 的护栏禁止顶层行「born-running」
   // ——那样的行对 frontier 不可见，恢复扫描也认不出来。合成行不能例外。
+  //
+  // retryIndex / cause 按**既有的准备行**推导，不能写死 0/'initial'（三轮门 Codex
+  // 契约面 P2）：AC-11 每重试一次都从这里再铸一行，写死的话三次尝试全部落成
+  // 「第 0 次、首次」，API 原样吐出这两列、UI 的「重试」列连着显示 0——执行是对的，
+  // 但历史永久记成假事实，审计、诊断与按 retryIndex 排序的调用方全被打乱。
+  // `topLevelOnly` 不需要：准备行没有父行；同理 iteration 恒 0。
+  const priorPrepRuns = await deps.db
+    .select({ retryIndex: nodeRuns.retryIndex })
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
+  const prepRetryIndex = nextRetryIndex(priorPrepRuns)
   const prepRunId = await mintNodeRun(deps.db, {
     taskId,
     nodeId: REPO_PREP_NODE_ID,
     status: 'pending',
-    cause: 'initial',
-    retryIndex: 0,
+    cause: prepRetryIndex === 0 ? 'initial' : 'retry-node',
+    retryIndex: prepRetryIndex,
     iteration: 0,
   })
   await setNodeRunStatus({
@@ -4400,7 +4510,8 @@ async function runDeferredRepoPreparation(args: {
     } catch (err) {
       prepared = {
         ...space,
-        earlyError: err instanceof Error ? err.message : String(err),
+        // 用**完整诊断**而不是裸 message：warm 路径把 git stderr 放在 details 里。
+        earlyError: diagnosticTextOf(err),
       }
     }
     if (prepared.earlyError === null) break

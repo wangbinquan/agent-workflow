@@ -3177,6 +3177,10 @@ export interface Resources {
      * 上同形，但下一步动作完全相反——该重试准备那一步，而不是另起一个任务。
      */
     resumeRepoPrepFailed: string
+    /** RFC-287 AC-11：横幅自带的「重试准备仓库」动作——准备行画不到画布上，
+     *  这是它唯一的重试入口。 */
+    retryRepoPrep: string
+    retryRepoPrepPending: string
     /** RFC-164/167: turn-engine group tasks (lw / fc) can't resume in place — relaunch instead. */
     resumeUnavailableWorkgroup: string
     resumeLaunchLink: string
@@ -9251,7 +9255,9 @@ export const zhCN: Resources = {
     resumeUnavailableNoWorktree:
       'worktree 创建阶段就失败了（根本没建出 worktree），resume 救不了。请新建一个任务。',
     resumeRepoPrepFailed:
-      '任务卡在「准备仓库」这一步（克隆 / 拉取失败），工作树还没建出来。修好网络或权限后，在下方节点列表里重试「准备仓库」即可，不必重新启动任务。',
+      '任务卡在「准备仓库」这一步（克隆 / 拉取失败），工作树还没建出来。修好网络或权限后，点右侧「重试准备仓库」即可，不必重新启动任务。',
+    retryRepoPrep: '重试准备仓库',
+    retryRepoPrepPending: '重试中…',
     resumeUnavailableWorkgroup:
       '组任务失败后不支持原地继续（组的编排由引擎驱动，恢复靠重启而非续跑）。请重新启动该工作组。',
     resumeLaunchLink: '启动新任务 →',

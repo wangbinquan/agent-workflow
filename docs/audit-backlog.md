@@ -1873,3 +1873,30 @@ dir (mode=auto)` 间歇失败，报的却是 `afterEach` 的 `TypeError: path mu
 
 **方法教训**（已同步 `docs/dev-gotchas.md`）：看到 `afterEach` 报 TypeError 时，先往上
 找有没有 `hook timed out` —— 清理钩子的报错常常只是前置钩子失败的**次生现象**。
+
+---
+
+## RFC-165 boot healer 与 RFC-287 G5 的方向冲突（RFC-287 三轮实现门 AC 对账挖出，未做）
+
+`healScheduledLaunchPayloads`（`packages/backend/src/services/scheduledTasks.ts:780` 起，
+RFC-165 §9 的一次性 boot healer）每次 boot 都把遗留的 path-mode 定时任务 payload
+用 `pathToFileURL` **改写成 `file://` 形态**。它写于 RFC-165，当时 `file://` 是一等
+公民、这个改写忠实保留了本地仓（含未推送分支）。
+
+RFC-287 G5 之后，`file://` 在**运行两面**（启动来源汇流点 `resolveRepoSourceSingle`
++ 镜像刷新 `refreshCachedRepo`）一律被拒。于是 healer 现在的净效果是：**把一批本来
+就跑不动的行，改写成另一种同样跑不动的形态**——「出厂即死」。它既不再帮任何人，也
+不会主动伤人（那些行本来也起不来），但留着会让后来者以为 `file://` 仍是受支持的
+目标形态。
+
+**为什么本轮不动**：①2026-08-13 拍板「存量为零、不做 grandfather」，动它的收益面是
+空集；②healer 对已是 v2-clean 的 payload 早退（`:875`），而 `file://` 行正是 v2-clean，
+所以任何「反向 healer」都不能沿用那段控制流，是独立的一块活；③它属于 RFC-165 的面，
+不在 RFC-287 的改动范围内，顺手改会把两个 RFC 的回归面搅在一起。
+
+**建议处置**（另案）：确认线上确无 path-mode 存量后**直接删除该 healer**（仓规「删除
+优于 deprecate」），连同它的测试 `rfc165-scheduled-heal.test.ts` / `rfc248-scheduled-
+payload-heal.test.ts` 里只为它存在的用例一起清。删除前先跑一遍「存量行计数」确认为零。
+
+**判据**：`design/RFC-287-scheduler-assembly-convergence/design.md` §10.7 尾部已把
+「一次性显式禁用 healer」标注为**设计期设想、未落地**；接手者不要照那句去补状态机。

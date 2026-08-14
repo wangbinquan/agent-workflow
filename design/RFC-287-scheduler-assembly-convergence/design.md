@@ -417,9 +417,14 @@ parentNodeRunId/consumed(+nonce)；L7 :4533 只带 consumed，而其初次铸行
   与镜像 origin）需先 unseal 并处理解封失败分支；⑤callLaunch 子任务
   （scheduler.ts:3931/:4127 手工 materializedSpace）完全绕过收口点——**这是正确的**，
   但灭绝锁要显式挖洞。
-  全仓**无任何 schema 做协议白名单**（StartTask/StartAgentTask/StartWorkgroupTask/
-  RepoAttachmentInput 的 repoUrl 与 batch-import 的 urls[] 全部只 `.min(1)`），
-  故拒绝只能落在服务层这两点，不能指望 schema。
+  写这段时全仓**无任何 schema 做协议白名单**（StartTask/StartAgentTask/
+  StartWorkgroupTask/RepoAttachmentInput 的 repoUrl 与 batch-import 的 urls[] 全部
+  只 `.min(1)`），故**权威**拒绝点只能落在服务层这两点，不能指望 schema。
+  **第三轮门勘误**：落地后 `schemas/task.ts` 确实**保留了一层 schema 早报错**
+  （直填 `repoUrl=file://` 走它，HTTP 422 `task-invalid`，G5 码在
+  `details.issues[].message` 里）。它是**附加层不是权威**——公开面自 RFC-204 起传
+  `cachedRepoId`，schema 对存量镜像一个都拦不住。本节下文第 425 行也承认了这一层，
+  两处口径以本勘误为准：**权威=服务层汇流点，schema=早报错**。
   另：`task.ts:1700-1701` 的 `deps.preResolvedSource` 短路是一条旁路缝（当前无生产
   调用方），落地时加源码锁钉死。
 - **G5 拒绝点收口**（P1-2）：公开面自 RFC-204 起不传 URL、传 `cachedRepoId`，
@@ -442,8 +447,16 @@ parentNodeRunId/consumed(+nonce)；L7 :4533 只带 consumed，而其初次铸行
   `scheduledTasksMaxFailures` 默认 10）；**webhook 侧没有 auto-disable**
   ——webhookDispatch.ts:622-632/:737-750 只累加 `consecutiveFailures` 无 enabled 分支，
   webhook 的「熔断」是另一套 `maxConsecutiveFires`(webhook/matching.ts:123-135)，
-  「webhook 同形」不成立。改为复用 boot healer 模式（scheduledTasks.ts:806-885）做**一次性显式
-  禁用 + 可读 lastError**。
+  「webhook 同形」不成立。
+  **第三轮门定音（以实现为准）**：最终**没有**新增一次性禁用 healer——2026-08-13
+  「存量为零、不做 grandfather」拍板之后，为一个空集合造一套 boot 期状态机是纯负债。
+  实际行为：存量 `file://` 定时任务每次触发都以 `lastStatus='failed'` +
+  `lastError`（可读的 git/参数原文）留痕，连续失败到 `scheduledTasksMaxFailures`
+  （默认 10）由既有熔断自动停发。上面那句「改为…一次性显式禁用」是**设计期设想、
+  未落地**，保留在此只作决策轨迹；接手者按本段执行，**不要**照那句去补状态机。
+  ⚠️ 另注意 RFC-165 的 boot healer（`healScheduledLaunchPayloads`）至今仍会把遗留
+  path payload 生产成 `file://`，即「出厂即死」。它是否退休另案评估（已登记
+  `docs/audit-backlog.md`），本 RFC 不动。
 - **G6 落点改在启动调用点、并锁 locale**（第二轮门 P2-4/P2-9）：窗口若落在
   `gitRepoCache.ts` 库层，会打红一批以「不可达 URL」为夹具的现有用例（bun 默认
   5s/用例，而 `git-repo-cache.test.ts:230-262` 正是拿 `https://127.0.0.1:1/…` 当
