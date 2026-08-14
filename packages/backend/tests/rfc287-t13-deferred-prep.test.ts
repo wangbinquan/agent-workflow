@@ -127,3 +127,51 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
     expect(threw || eager !== undefined).toBe(true)
   }, 60_000)
 })
+
+// RFC-287 T13（G7）—— 准备期间的**孤儿回收豁免**。
+//
+// 这条不是「顺手加的」，是实测查出来的一个真风险：`__repo_prep__` 行没有 pid
+// （准备由 startTask 协程驱动、不 spawn 子进程）、没有子行、也不是 wrapper。而
+// 周期孤儿回收器在 Codex 设计门 P1-1 之后**不再保守判活**——「无驱动」直接判死。
+// 若无豁免，一个跑几分钟的大仓克隆会被中途回收，随后撞终态守卫、失败整个任务。
+//
+// 豁免来自 `activeTasks`：回收器最外层就 `if (hasDriver(taskId)) continue`，而
+// G7 把 AbortController 的注册挪到了**准备开始之前**（同一刀里做的，理由是用户
+// 在「正在准备仓库」阶段点取消要取消得到东西）。两件事因此共用同一个前提。
+//
+// 本测试锁的就是这个前提：注册时机一旦被挪回准备之后，长克隆会被误收。
+import { readFileSync as readSrc } from 'node:fs'
+
+describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
+  test('AbortController 注册在准备开始之前（回收器据此判活）', () => {
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    // ⚠ 判据必须限定在 **startTaskImpl 这一个函数体内**。
+    // `activeTasks.set(taskId, controller)` 全文有 3 处（另两处在别的函数里），
+    // 用全局 indexOf / lastIndexOf 都会被别处的命中喂饱，于是断言恒真、怎么改
+    // 都绿——实测两次：变异确实落地却 0 红，靠逐次核对才查出锁是空的。
+    // 这是「变异点要由被断言的锚定位」的镜像版：**断言本身也得锚对**。
+    const fnStart = src.indexOf('async function startTaskImpl(')
+    expect(fnStart).toBeGreaterThan(-1)
+    const fnEnd = src.indexOf('\n}\n', fnStart)
+    const body = src.slice(fnStart, fnEnd)
+    const prepare = body.indexOf('if (deferredTaskId !== null) {')
+    const register = body.indexOf('activeTasks.set(taskId, controller)')
+    expect(prepare, 'startTaskImpl 里应有延后准备块').toBeGreaterThan(-1)
+    expect(register, 'startTaskImpl 里应注册 AbortController').toBeGreaterThan(-1)
+    expect(
+      register,
+      '注册必须在准备之前——否则长克隆期间任务无驱动，会被孤儿回收器判死',
+    ).toBeLessThan(prepare)
+    // 且中间不得插入 await：注册与准备之间若有可挂起的点，那段窗口里任务既没
+    // 驱动、又已有 running 的合成行，正是回收器要收的形状。
+    expect(body.slice(register, prepare)).not.toMatch(/\bawait\b/)
+  })
+
+  test('回收器确实以 activeTasks 为豁免依据（判活单点未被绕过）', () => {
+    const src = readSrc(
+      resolve(import.meta.dir, '..', 'src', 'services', 'orphanReconcile.ts'),
+      'utf8',
+    )
+    expect(src).toContain('hasDriver(taskId)')
+  })
+})
