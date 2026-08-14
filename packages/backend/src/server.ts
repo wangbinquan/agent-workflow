@@ -26,6 +26,7 @@ import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
 import { mountWebhookIngressRoutes } from '@/routes/webhooks'
 import type { WebhookDispatcher } from '@/services/webhook/dispatcherTypes'
+import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
 import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
@@ -117,6 +118,8 @@ export interface AppDeps {
    * guaranteed-500 public route.
    */
   webhookDispatcher?: WebhookDispatcher
+  /** RFC-303 durable launch guard + terminal effect worker. */
+  webhookTerminalControl?: MrTerminalControl
   /**
    * RFC-269 — outbound `fetch` seam for code-host calls (connection tests and
    * the call-node executor). Production omits it and the real `fetch` is used;

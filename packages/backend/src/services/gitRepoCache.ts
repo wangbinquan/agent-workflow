@@ -32,7 +32,7 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { cachedRepos, scheduledTasks, taskRepos } from '@/db/schema'
-import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   classifyBaseRef,
   GIT_ABORTED_EXIT_CODE,
@@ -68,6 +68,10 @@ const log = createLogger('git-repo-cache')
 const DEFAULT_CLONE_TIMEOUT_MS = 30 * 60 * 1000
 
 const UNAVAILABLE_REPO_URL = '<url unavailable>'
+
+function signalAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true
+}
 
 /** Per-URL serialization. Same urlHash → second caller awaits the first. */
 const urlQueue = new KeyedSerialQueue<string>()
@@ -200,6 +204,8 @@ export interface GitRepoCacheDeps {
   appHome?: string
   /** Mutex + clone/fetch wait budget in ms. Default 30 min. */
   cloneTimeoutMs?: number
+  /** RFC-303 protected Webhook pre-task launch owner. */
+  signal?: AbortSignal
   /** If true, `git fetch` runs whenever a cache row is reused. Default true. */
   fetchOnReuse?: boolean
   /** Override now() for deterministic tests. */
@@ -438,6 +444,9 @@ export async function resolveCachedRepo(
   deps: GitRepoCacheDeps,
   input: ResolveCachedRepoInput,
 ): Promise<ResolveCachedRepoResult> {
+  if (signalAborted(deps.signal)) {
+    throw new ConflictError('webhook-mr-launch-terminal', 'repository preparation was revoked')
+  }
   const parsed = parseGitUrl(input.url)
   if (!parsed) {
     throw new ValidationError('repo-url-invalid', 'unsupported or malformed Git URL', {
@@ -512,13 +521,17 @@ export async function resolveCachedRepo(
         // idempotently normalise origin to the redacted URL (also the one-time
         // scrub for pre-RFC-205 mirrors), then feed the credential through a
         // one-shot askpass lease for THIS fetch only.
-        await runGit(row.localPath, ['remote', 'set-url', 'origin', redacted]).catch(() => null)
+        await runGit(row.localPath, ['remote', 'set-url', 'origin', redacted], {
+          signal: deps.signal,
+        }).catch(() => null)
         // Impl-gate P0-6 (Codex 2026-07-22): runGit does NOT reject on a nonzero
         // git exit, so the `.catch()` above silently masked a FAILED set-url
         // (read-only / locked / corrupt config). We must not then fetch off an
         // origin that STILL holds a plaintext token. Verify the origin is
         // credential-free; if it can't be proven clean, refuse the mirror.
-        const originNow = await runGit(row.localPath, ['remote', 'get-url', 'origin'])
+        const originNow = await runGit(row.localPath, ['remote', 'get-url', 'origin'], {
+          signal: deps.signal,
+        })
         const originUrl = originNow.stdout.trim()
         if (originNow.exitCode !== 0 || redactGitUrl(originUrl) !== originUrl) {
           throw new DomainError(
@@ -538,6 +551,7 @@ export async function resolveCachedRepo(
             [...(lease?.leadingArgs ?? []), 'fetch', '--all', '--prune', '--tags'],
             {
               timeoutMs,
+              signal: deps.signal,
               ...(lease !== null ? { env: lease.env } : {}),
             },
           )
@@ -689,6 +703,7 @@ export async function resolveCachedRepo(
     try {
       r = await spawnGit([...(lease?.leadingArgs ?? []), ...cloneArgs], {
         timeoutMs,
+        signal: deps.signal,
         ...(lease !== null ? { env: lease.env } : {}),
       })
     } finally {
@@ -830,7 +845,11 @@ export async function resolveCachedRepo(
     }
   })
 
-  return await withTimeout(work, timeoutMs, `resolveCachedRepo(${redacted})`)
+  const result = await withTimeout(work, timeoutMs, `resolveCachedRepo(${redacted})`)
+  if (signalAborted(deps.signal)) {
+    throw new ConflictError('webhook-mr-launch-terminal', 'repository preparation was revoked')
+  }
+  return result
 }
 
 /**

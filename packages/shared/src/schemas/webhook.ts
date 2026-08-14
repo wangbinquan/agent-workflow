@@ -440,6 +440,8 @@ export const WEBHOOK_DELIVERY_REASONS = [
   'parse-failed',
   'internal-error',
   'interrupted', // daemon 重启时 received/processing 遗留行的终态（恢复 = replay）
+  'terminal-control-accepted', // RFC-303：durable effect 已接受，异步资源结算另见 control
+  'mr-stream-identity-missing', // RFC-303：受保护 MR 事件缺稳定 projectId/IID
 ] as const
 export const WebhookDeliveryReasonSchema = z.enum(WEBHOOK_DELIVERY_REASONS)
 export type WebhookDeliveryReason = z.infer<typeof WebhookDeliveryReasonSchema>
@@ -454,6 +456,7 @@ export const WEBHOOK_FIRE_OUTCOMES = [
   'skipped-mr-stream-closed', // RFC-303：受保护 stream 已关闭
   'skipped-mr-stream-merged', // RFC-303：受保护 stream 已合入（吸收态）
   'skipped-mr-stream-terminal', // RFC-303：launch guard 被更晚终态 revision 撤销
+  'skipped-mr-stream-identity-missing', // RFC-303：无法建立可终止的稳定 MR binding
   'skipped-trigger-invalid', // RFC-303：存量/并发坏行违反 terminal-policy 组合约束
 ] as const
 export const WebhookFireOutcomeSchema = z.enum(WEBHOOK_FIRE_OUTCOMES)

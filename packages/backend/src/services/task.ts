@@ -53,7 +53,19 @@ import type {
   WorkflowDefinition,
   WorkflowSyncPreview,
 } from '@agent-workflow/shared'
-import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, type SQL } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  type SQL,
+} from 'drizzle-orm'
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
@@ -92,7 +104,15 @@ import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
 import type { StaleRunKillOutcome } from '@/util/process'
 import type { SourceTerminationSnapshot } from '@/modules/task-execution/public/types'
-import { sourceTerminationRevivalError } from '@/modules/task-execution/domain/sourceTermination'
+import {
+  sourceTerminationRevivalError,
+  type TaskStopCause,
+} from '@/modules/task-execution/domain/sourceTermination'
+import { InMemoryTaskDriverSupervisor } from '@/modules/task-execution/infrastructure/inMemoryTaskDriverSupervisor'
+import type {
+  TaskDriverStopResult,
+  TaskDriverStopTicket,
+} from '@/modules/task-execution/ports/taskDriverSupervisor'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
@@ -208,7 +228,39 @@ const log = createLogger('task')
  * tasks are reconciled by the startup orphan scan (P-4-07) — out of scope
  * for M1.
  */
-const activeTasks = new Map<string, AbortController>()
+const taskDriverRegistry = new InMemoryTaskDriverSupervisor()
+
+const DRIVER_ATTACHABLE_STATUSES: ReadonlySet<TaskStatus> = new Set(['pending', 'running'])
+
+/**
+ * RFC-303: driver ownership and source termination share the same per-task
+ * coordinator.  A terminal fence that commits first rejects the attach; an
+ * attach that wins first becomes visible to requestTaskDriverStop before the
+ * coordinator is released.
+ */
+async function tryAttachTaskDriver(
+  db: DbClient,
+  taskId: string,
+  controller: AbortController,
+): Promise<'attached' | 'rejected-status-or-source-fence'> {
+  return withTaskReviewMutationLock(taskId, async () => {
+    const row = db
+      .select({ status: tasks.status, sourceTerminationFence: tasks.sourceTerminationFence })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+      .all()[0]
+    if (
+      row === undefined ||
+      !DRIVER_ATTACHABLE_STATUSES.has(row.status) ||
+      row.sourceTerminationFence !== null ||
+      !taskDriverRegistry.tryAttach(taskId, controller)
+    ) {
+      return 'rejected-status-or-source-fence'
+    }
+    return 'attached'
+  })
+}
 
 /** RFC-300: release the in-process scheduler owner before touching its
  * workspace, then complete any lifecycle-created durable prune claim. The
@@ -218,29 +270,47 @@ async function releaseTaskDriverAndFinalizeWorkspace(
   taskId: string,
   controller: AbortController,
 ): Promise<void> {
-  if (activeTasks.get(taskId) !== controller) return
-  activeTasks.delete(taskId)
+  const unreaped = depsUnreapedProcessCode(db, taskId)
+  if (
+    !taskDriverRegistry.release(
+      taskId,
+      controller,
+      unreaped === null ? { kind: 'released' } : { kind: 'unreaped', code: unreaped },
+    )
+  ) {
+    return
+  }
   await finishClaimedWebhookWorkspacePrune(db, taskId)
+}
+
+function depsUnreapedProcessCode(db: DbClient, taskId: string): string | null {
+  const row = db
+    .select({ errorMessage: nodeRuns.errorMessage })
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, taskId), like(nodeRuns.errorMessage, '%child-unkillable%')))
+    .limit(1)
+    .all()[0]
+  return row === undefined ? null : 'child-unkillable'
 }
 
 /** RFC-097 (audit S-8/S-23): is an in-process scheduler loop attached to this
  *  task right now? Used by resume/retry entry rejection and lifecycleRepair's
  *  scheduler-liveness preflight. */
 export function isTaskActive(taskId: string): boolean {
-  return activeTasks.has(taskId)
+  return taskDriverRegistry.has(taskId)
 }
 
 /** RFC-222 — test-only: inject/clear the in-memory active-task set so the delete
  *  front-gate ('task-active') can be exercised without a live scheduler loop. */
 export function __setActiveTaskForTesting(taskId: string | undefined): void {
-  activeTasks.clear()
-  if (taskId !== undefined) activeTasks.set(taskId, new AbortController())
+  taskDriverRegistry.clearForTesting()
+  if (taskId !== undefined) taskDriverRegistry.tryAttach(taskId, new AbortController())
 }
 
 /** Test-only: register one specific controller without clearing sibling task
  *  drivers, so parent/child cancellation lock ordering can be exercised. */
 export function __registerActiveTaskForTesting(taskId: string, controller: AbortController): void {
-  activeTasks.set(taskId, controller)
+  taskDriverRegistry.tryAttach(taskId, controller)
 }
 
 /**
@@ -254,9 +324,22 @@ export function __registerActiveTaskForTesting(taskId: string, controller: Abort
  * resumable) apart from a user cancel (no-arg abort → canceled by user).
  */
 export function abortAllActiveTasks(reason?: string): string[] {
-  const ids = [...activeTasks.keys()]
-  for (const id of ids) activeTasks.get(id)?.abort(reason)
-  return ids
+  return taskDriverRegistry.abortAll(reason)
+}
+
+/** RFC-303 task-execution adapter used only by the source-termination
+ * participant. Callers receive an exact owner ticket, never the controller. */
+export function requestTaskDriverStop(
+  taskId: string,
+  cause: TaskStopCause,
+): TaskDriverStopTicket | 'no-active-owner' {
+  return taskDriverRegistry.requestStop(taskId, cause)
+}
+
+export function awaitTaskDriverStopped(
+  ticket: TaskDriverStopTicket,
+): Promise<TaskDriverStopResult> {
+  return taskDriverRegistry.awaitStopped(ticket)
 }
 
 export interface StartTaskDeps {
@@ -464,6 +547,10 @@ export interface StartTaskDeps {
   triggerContext?: TriggerContext
   /** RFC-303: root Webhook launch snapshot; child launches inherit in the INSERT tx. */
   sourceTerminationSnapshot?: SourceTerminationSnapshot
+  /** RFC-303: process-local pre-task owner for clone/fetch/materialization. */
+  sourceTerminationLaunchSignal?: AbortSignal
+  /** RFC-303: durable launch gate, also invoked inside the initial task INSERT tx. */
+  sourceTerminationAdmission?: () => void
   /**
    * RFC-164: workgroup launch payload. `snapshotJson` REPLACES the workflow
    * row's definition as the frozen workflow_snapshot (the builtin host row is
@@ -592,6 +679,8 @@ export async function materializeWorktree(opts: {
   branchName?: string
   /** RFC-199 deterministic create/post-add race seam; tests only. */
   lifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
+  /** RFC-303 protected Webhook launch owner. */
+  signal?: AbortSignal
 }): Promise<{
   worktreePath: string
   branch: string
@@ -618,6 +707,7 @@ export async function materializeWorktree(opts: {
       ...(opts.gitUserName != null ? { gitUserName: opts.gitUserName } : {}),
       ...(opts.gitUserEmail != null ? { gitUserEmail: opts.gitUserEmail } : {}),
       ...(opts.lifecycleHook !== undefined ? { lifecycleHook: opts.lifecycleHook } : {}),
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     })
     return {
       worktreePath: wt.worktreePath,
@@ -634,6 +724,9 @@ export async function materializeWorktree(opts: {
     // name, in use, base fetch failed, merge conflict) is a hard launch
     // failure surfaced as 422 — let the typed error propagate instead of
     // degrading into a `failed` task row.
+    if (err instanceof ConflictError && err.code === 'webhook-mr-launch-terminal') {
+      throw err
+    }
     if (
       err instanceof DomainError &&
       (err.code.startsWith('working-branch-') ||
@@ -792,6 +885,9 @@ export async function resolveRepoSourceSingle(
       syncBranches: syncCandidates,
       secretBox: deps.secretBox,
       ...(deps.cloneTimeoutMs !== undefined ? { cloneTimeoutMs: deps.cloneTimeoutMs } : {}),
+      ...(deps.sourceTerminationLaunchSignal !== undefined
+        ? { signal: deps.sourceTerminationLaunchSignal }
+        : {}),
     },
     { url: sourceUrl },
   )
@@ -823,6 +919,9 @@ export async function resolveRepoSourceSingle(
         syncBranches: [resolved.cached.defaultBranch],
         fetchOnReuse: false,
         secretBox: deps.secretBox,
+        ...(deps.sourceTerminationLaunchSignal !== undefined
+          ? { signal: deps.sourceTerminationLaunchSignal }
+          : {}),
       },
       { url: sourceUrl },
     )
@@ -1406,6 +1505,7 @@ async function materializeGroupSpace(opts: {
   workingBranch?: string | undefined
   gitUserName: string | null
   gitUserEmail: string | null
+  signal?: AbortSignal
 }): Promise<MaterializedSpace> {
   const { planned, nodePaths, resolvedSources, taskId, appHome } = opts
   // `resolvedSources` 与 `planned` **同序**（它是按 repoSpecs 逐个 resolve 出来
@@ -1482,6 +1582,7 @@ async function materializeGroupSpace(opts: {
         ...(opts.workingBranch !== undefined ? { workingBranch: opts.workingBranch } : {}),
         gitUserName: opts.gitUserName,
         gitUserEmail: opts.gitUserEmail,
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       })
       if (wt.cleanup !== null) cleanup.worktrees.push(wt.cleanup)
       if (wt.earlyError !== null) {
@@ -1654,6 +1755,9 @@ export async function materializeSpace(
       dir: scratchDir,
       gitUserName: input.gitUserName ?? null,
       gitUserEmail: input.gitUserEmail ?? null,
+      ...(deps.sourceTerminationLaunchSignal !== undefined
+        ? { signal: deps.sourceTerminationLaunchSignal }
+        : {}),
     })
     if (init.ok) {
       return {
@@ -1820,6 +1924,9 @@ export async function materializeSpace(
         ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
         gitUserName: input.gitUserName ?? null,
         gitUserEmail: input.gitUserEmail ?? null,
+        ...(deps.sourceTerminationLaunchSignal !== undefined
+          ? { signal: deps.sourceTerminationLaunchSignal }
+          : {}),
       })
     }
   }
@@ -1839,6 +1946,9 @@ export async function materializeSpace(
       ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
       gitUserName: input.gitUserName ?? null,
       gitUserEmail: input.gitUserEmail ?? null,
+      ...(deps.sourceTerminationLaunchSignal !== undefined
+        ? { signal: deps.sourceTerminationLaunchSignal }
+        : {}),
     })
 
     if (wt.earlyError === null && !wt.submoduleInitOk) {
@@ -2074,6 +2184,13 @@ async function startTaskImpl(
   deps: StartTaskDeps,
   ownership: StartTaskOwnership,
 ): Promise<Task> {
+  deps.sourceTerminationAdmission?.()
+  if (deps.sourceTerminationLaunchSignal?.aborted === true) {
+    throw new ConflictError(
+      'webhook-mr-launch-terminal',
+      'the MR/PR stream became terminal before launch preparation',
+    )
+  }
   // RFC-301: validate closed root provenance before workflow reads, repository
   // resolution, or filesystem materialization. Child origin stays unresolved
   // until the parent is read inside the task-row transaction below.
@@ -2368,6 +2485,7 @@ async function startTaskImpl(
     await deps.workflowLaunchCommitHook?.(
       workflowLaunchHookEvent('materialized-before-task-commit', workflow, space),
     )
+    deps.sourceTerminationAdmission?.()
 
     // RFC-165 (F17-r3): the task row + its per-repo rows + the launch
     // collaborator rows + the single-agent existence RE-check land in ONE
@@ -2375,6 +2493,9 @@ async function startTaskImpl(
     // rollback (which, per Codex P1, could even delete a PRE-EXISTING task
     // when a handed-off taskId collided). Synchronous surface only inside.
     dbTxSync(deps.db, (tx) => {
+      // This read and the initial INSERT share SQLite's transaction boundary:
+      // terminal revoke wins first, or the later effect must observe the task.
+      deps.sourceTerminationAdmission?.()
       // RFC-199 T6.5: the workflow row captured before materialization is not
       // sufficient to authorize the final task insert. Re-read inside the
       // SAME transaction that writes the FK. Delete-first linearizes here as
@@ -2708,7 +2829,9 @@ async function startTaskImpl(
   // RFC-287 G7：AbortController 必须在**行落库之后、准备开始之前**注册——准备是
   // 后台推进的第一步，若此刻还没注册，用户在「正在准备仓库」阶段点取消就取消不到
   // 任何东西（而那恰恰是最想取消的阶段：一个拉不动的大仓）。
-  activeTasks.set(taskId, controller)
+  if ((await tryAttachTaskDriver(deps.db, taskId, controller)) !== 'attached') {
+    return (await getTask(deps.db, taskId)) as Task
+  }
   let preparedTask: Task | null = null
   if (deferredTaskId !== null) {
     // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
@@ -2752,7 +2875,12 @@ async function startTaskImpl(
     let backoffMs = 1_000
     for (;;) {
       try {
-        prepared = await materializeSpace(input, deps, appHome, deferredTaskId)
+        prepared = await materializeSpace(
+          input,
+          { ...deps, sourceTerminationLaunchSignal: controller.signal },
+          appHome,
+          deferredTaskId,
+        )
       } catch (err) {
         prepared = {
           ...space,
@@ -2769,7 +2897,18 @@ async function startTaskImpl(
         remainingMs: remaining,
         error: prepared.earlyError,
       })
-      await new Promise((r) => setTimeout(r, Math.min(backoffMs, remaining)))
+      if (controller.signal.aborted) break
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, Math.min(backoffMs, remaining))
+        controller.signal.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timer)
+            resolve()
+          },
+          { once: true },
+        )
+      })
       backoffMs = Math.min(backoffMs * 2, 15_000)
     }
     if (prepared.earlyError !== null) {
@@ -2797,7 +2936,7 @@ async function startTaskImpl(
           errorMessage: prepared.earlyError,
         },
       })
-      activeTasks.delete(taskId)
+      taskDriverRegistry.release(taskId, controller)
       return { ...task, status: 'failed' }
     }
     // 所有权租约换成真的：占位态给的是空租约（ownedRoot=null、零 worktree），
@@ -3165,7 +3304,7 @@ export async function cancelTask(
     )
   }
 
-  const controller = activeTasks.get(id)
+  const controller = taskDriverRegistry.controllerOf(id)
   if (controller !== undefined) {
     controller.abort()
     // Wait OUTSIDE the review/cancel coordinator. The scheduler may currently
@@ -3184,7 +3323,7 @@ export async function cancelTask(
       // The registered driver settled without a terminal write (for example,
       // it parked just before seeing abort). There is nothing left to wait for;
       // the locked fallback below is now the authoritative closer.
-      if (activeTasks.get(id) !== controller) break
+      if (taskDriverRegistry.controllerOf(id) !== controller) break
       await Bun.sleep(50)
     }
   }
@@ -3201,7 +3340,7 @@ export async function cancelTask(
       // A controller can be attached after the lock-external snapshot (for
       // example decision-resume racing cancel). Abort it, but do not wait while
       // holding the coordinator: the terminal CAS makes its later writes lose.
-      activeTasks.get(id)?.abort()
+      taskDriverRegistry.controllerOf(id)?.abort()
       // A non-coordinator lifecycle writer can still move between two
       // cancelable states in setTaskStatus's read→CAS window. Do not interpret
       // that CAS loss as cancellation success: re-read and retry until the row
@@ -3580,11 +3719,13 @@ async function resumeKick(
   // Kick the scheduler — same plumbing as startTask but without re-creating
   // the worktree.
   const controller = new AbortController()
-  if (activeTasks.has(id)) {
+  if (taskDriverRegistry.has(id)) {
     // Should be unreachable (entry check + ownership CAS) — defensive only.
     log.error(`${opts.reason}: controller already registered for task`, { taskId: id })
   }
-  activeTasks.set(id, controller)
+  if ((await tryAttachTaskDriver(db, id, controller)) !== 'attached') {
+    return (await getTask(db, id)) as Task
+  }
   const schedulerPromise = runTask({
     taskId: id,
     db,
@@ -4333,7 +4474,9 @@ export async function retryNode(
   emitTaskStatus(next)
 
   const controller = new AbortController()
-  activeTasks.set(taskId, controller)
+  if ((await tryAttachTaskDriver(db, taskId, controller)) !== 'attached') {
+    return (await getTask(db, taskId)) as Task
+  }
   void runTask({
     taskId,
     db,

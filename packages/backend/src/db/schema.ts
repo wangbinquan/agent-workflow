@@ -1313,6 +1313,7 @@ export const webhookTriggerFires = sqliteTable(
         'skipped-mr-stream-closed',
         'skipped-mr-stream-merged',
         'skipped-mr-stream-terminal',
+        'skipped-mr-stream-identity-missing',
         'skipped-trigger-invalid',
       ],
     }).notNull(),

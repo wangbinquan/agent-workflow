@@ -95,6 +95,7 @@ export async function initScratchRepo(opts: {
   dir: string
   gitUserName?: string | null
   gitUserEmail?: string | null
+  signal?: AbortSignal
 }): Promise<{ ok: true; rootCommit: string } | { ok: false; error: string }> {
   try {
     await mkdir(opts.dir, { recursive: true })
@@ -113,19 +114,19 @@ export async function initScratchRepo(opts: {
           GIT_COMMITTER_EMAIL: opts.gitUserEmail,
         }
       : AW_INTERNAL_GIT_IDENTITY
-  const init = await runGit(opts.dir, ['init', '-b', 'main'])
+  const init = await runGit(opts.dir, ['init', '-b', 'main'], { signal: opts.signal })
   if (init.exitCode !== 0) {
     return { ok: false, error: `scratch-init-failed: ${init.stderr.trim()}` }
   }
   const commit = await runGit(
     opts.dir,
     ['commit', '--allow-empty', '-m', 'agent-workflow scratch root'],
-    { env: identity },
+    { env: identity, signal: opts.signal },
   )
   if (commit.exitCode !== 0) {
     return { ok: false, error: `scratch-root-commit-failed: ${commit.stderr.trim()}` }
   }
-  const head = await runGit(opts.dir, ['rev-parse', 'HEAD'])
+  const head = await runGit(opts.dir, ['rev-parse', 'HEAD'], { signal: opts.signal })
   if (head.exitCode !== 0) {
     return { ok: false, error: `scratch-head-failed: ${head.stderr.trim()}` }
   }
@@ -531,6 +532,8 @@ export interface CreateWorktreeOptions {
   submoduleMode?: 'auto' | 'always' | 'never'
   /** RFC-034: --jobs N for the submodule init. Defaults to 4. */
   submoduleJobs?: number
+  /** RFC-303: abort long launch-time git operations before task commit. */
+  signal?: AbortSignal
   /**
    * RFC-066: when provided, use this absolute path as the worktree directory
    * instead of the default `{appHome}/worktrees/{repoSlug}/{taskId}` layout.
@@ -882,8 +885,14 @@ export async function withWorktreeRegistryLock<T>(
  * ——同一个镜像的其它任务 worktree 完全不受影响（proposal E5）。这一点和
  * `info/exclude` 正好相反（后者是 common-dir 级的，会污染所有 worktree）。
  */
-export async function applySparseSubdir(worktreePath: string, subdir: string): Promise<void> {
-  const set = await runGit(worktreePath, ['sparse-checkout', 'set', '--no-cone', `/${subdir}/`])
+export async function applySparseSubdir(
+  worktreePath: string,
+  subdir: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const set = await runGit(worktreePath, ['sparse-checkout', 'set', '--no-cone', `/${subdir}/`], {
+    signal,
+  })
   if (set.exitCode !== 0) {
     throw new DomainError(
       'worktree-sparse-failed',
@@ -891,7 +900,7 @@ export async function applySparseSubdir(worktreePath: string, subdir: string): P
       500,
     )
   }
-  const co = await runGit(worktreePath, ['checkout'])
+  const co = await runGit(worktreePath, ['checkout'], { signal })
   if (co.exitCode !== 0) {
     throw new DomainError(
       'worktree-sparse-failed',
@@ -1025,6 +1034,9 @@ export async function commitGitignorePreset(opts: {
 }
 
 export async function createWorktree(opts: CreateWorktreeOptions): Promise<CreatedWorktree> {
+  if (opts.signal?.aborted === true) {
+    throw new ConflictError('webhook-mr-launch-terminal', 'worktree creation was revoked')
+  }
   await requireGitRepo(opts.repoPath)
   // RFC-066: caller can override the auto-composed path (multi-repo branches
   // place worktrees under `multi/{taskId}/<basename>/`). Single-repo callers
@@ -1039,7 +1051,7 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
   // Resolve to a concrete commit so the worktree is reproducible even if base
   // is a symbolic ref that moves underneath us. RFC-068 has already synced the
   // base to remote-latest by the time we get here.
-  const baseRev = await runGit(opts.repoPath, ['rev-parse', base])
+  const baseRev = await runGit(opts.repoPath, ['rev-parse', base], { signal: opts.signal })
   if (baseRev.exitCode !== 0) {
     // RFC-075: with a working branch, an unresolvable base is a hard launch
     // failure (we cannot honor "branch off remote latest"); without one we
@@ -1071,6 +1083,7 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
       gitUserName: opts.gitUserName ?? null,
       gitUserEmail: opts.gitUserEmail ?? null,
       ...(opts.lifecycleHook !== undefined ? { lifecycleHook: opts.lifecycleHook } : {}),
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     })
   } else {
     const branchRef = `refs/heads/${branch}`
@@ -1081,7 +1094,9 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
       opts.sparseSubdir !== undefined && opts.sparseSubdir !== ''
         ? ['worktree', 'add', '--no-checkout', '-b', branch, worktreePath, baseCommit]
         : ['worktree', 'add', '-b', branch, worktreePath, baseCommit]
-    const add = await withWorktreeRegistryLock(opts.repoPath, () => runGit(opts.repoPath, addArgs))
+    const add = await withWorktreeRegistryLock(opts.repoPath, () =>
+      runGit(opts.repoPath, addArgs, { signal: opts.signal }),
+    )
     if (add.exitCode !== 0) {
       throw new DomainError(
         'worktree-add-failed',
@@ -1090,7 +1105,7 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
       )
     }
     if (opts.sparseSubdir !== undefined && opts.sparseSubdir !== '') {
-      await applySparseSubdir(worktreePath, opts.sparseSubdir)
+      await applySparseSubdir(worktreePath, opts.sparseSubdir, opts.signal)
     }
     cleanup = {
       repoPath: opts.repoPath,
@@ -1316,12 +1331,15 @@ async function checkoutWorkingBranch(opts: {
   gitUserName: string | null
   gitUserEmail: string | null
   lifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
+  signal?: AbortSignal
 }): Promise<WorktreeCleanupProvenance> {
   const { repoPath, worktreePath, branch, baseCommit } = opts
   const branchRef = `refs/heads/${branch}`
 
   // 1. Authoritative name validation (mirrors shared isLooseValidBranchName).
-  const fmt = await runGit(repoPath, ['check-ref-format', '--branch', branch])
+  const fmt = await runGit(repoPath, ['check-ref-format', '--branch', branch], {
+    signal: opts.signal,
+  })
   if (fmt.exitCode !== 0) {
     throw new ValidationError('working-branch-invalid', `invalid working branch name '${branch}'`, {
       stderr: fmt.stderr.trim(),
@@ -1347,14 +1365,16 @@ async function checkoutWorkingBranch(opts: {
   // absent until the CAS below.
   let preparationStart = branchBefore
   if (preparationStart === null) {
-    const remoteLs = await runGit(repoPath, ['ls-remote', '--heads', 'origin', branch])
+    const remoteLs = await runGit(repoPath, ['ls-remote', '--heads', 'origin', branch], {
+      signal: opts.signal,
+    })
     const remoteExists = remoteLs.exitCode === 0 && remoteLs.stdout.trim().length > 0
     if (remoteExists) {
-      const fetch = await runGit(repoPath, [
-        'fetch',
-        'origin',
-        `${branch}:refs/remotes/origin/${branch}`,
-      ])
+      const fetch = await runGit(
+        repoPath,
+        ['fetch', 'origin', `${branch}:refs/remotes/origin/${branch}`],
+        { signal: opts.signal },
+      )
       if (fetch.exitCode !== 0) {
         throw new ValidationError(
           'working-branch-base-fetch-failed',
@@ -1362,11 +1382,11 @@ async function checkoutWorkingBranch(opts: {
           { stderr: fetch.stderr.trim() },
         )
       }
-      const remoteHead = await runGit(repoPath, [
-        'rev-parse',
-        '--verify',
-        `refs/remotes/origin/${branch}^{commit}`,
-      ])
+      const remoteHead = await runGit(
+        repoPath,
+        ['rev-parse', '--verify', `refs/remotes/origin/${branch}^{commit}`],
+        { signal: opts.signal },
+      )
       if (remoteHead.exitCode !== 0) {
         throw new ValidationError(
           'working-branch-base-fetch-failed',
@@ -1383,21 +1403,18 @@ async function checkoutWorkingBranch(opts: {
   // object, but cannot move the user's branch ref.
   let preparedCommit = baseCommit
   if (branchBefore !== null || preparationStart !== baseCommit) {
-    const prepare = await runGit(repoPath, [
-      'worktree',
-      'add',
-      '--detach',
-      worktreePath,
-      preparationStart,
-    ])
+    const prepare = await runGit(
+      repoPath,
+      ['worktree', 'add', '--detach', worktreePath, preparationStart],
+      { signal: opts.signal },
+    )
     if (prepare.exitCode !== 0) throw mapWorktreeAddError(prepare.stderr, branch)
 
-    const merge = await runGit(worktreePath, [
-      ...gitIdentityArgs(opts.gitUserName, opts.gitUserEmail),
-      'merge',
-      '--no-edit',
-      baseCommit,
-    ])
+    const merge = await runGit(
+      worktreePath,
+      [...gitIdentityArgs(opts.gitUserName, opts.gitUserEmail), 'merge', '--no-edit', baseCommit],
+      { signal: opts.signal },
+    )
     if (merge.exitCode !== 0) {
       await runGit(worktreePath, ['merge', '--abort'])
       const remove = await runGit(repoPath, ['worktree', 'remove', '--force', worktreePath])
@@ -1499,7 +1516,9 @@ async function checkoutWorkingBranch(opts: {
   // 6. Attach only after CAS. Failed attach rolls back exactly that CAS. A
   // raw ref writer or newly attached external worktree is preserved and
   // surfaced as incomplete cleanup.
-  const add = await runGit(repoPath, ['worktree', 'add', worktreePath, branch])
+  const add = await runGit(repoPath, ['worktree', 'add', worktreePath, branch], {
+    signal: opts.signal,
+  })
   if (add.exitCode !== 0) {
     const error = mapWorktreeAddError(add.stderr, branch)
     const cleanup = await cleanupFailedWorkingBranchAttach(provenance)
@@ -1514,7 +1533,9 @@ async function checkoutWorkingBranch(opts: {
     throw error
   }
 
-  const attachedHead = await runGit(worktreePath, ['rev-parse', '--verify', 'HEAD'])
+  const attachedHead = await runGit(worktreePath, ['rev-parse', '--verify', 'HEAD'], {
+    signal: opts.signal,
+  })
   if (attachedHead.exitCode !== 0 || attachedHead.stdout.trim() !== preparedCommit) {
     const cleanup = await cleanupCreatedWorktree(provenance)
     throw new ConflictError(

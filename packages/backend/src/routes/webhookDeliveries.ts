@@ -14,11 +14,11 @@ import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { webhookDeliveries, webhookEndpoints } from '@/db/schema'
 import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAdapter'
-import { insertDelivery } from '@/services/webhook/deliveryStore'
-import { streamKeyOf } from '@/services/webhook/matching'
+import { composeVerifiedWebhookDeliveryAcceptance } from '@/modules/integration/composition/webhookTerminalControl'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
+  const acceptVerifiedDelivery = composeVerifiedWebhookDeliveryAcceptance(deps.db)
   registerRoute(
     app,
     {
@@ -216,20 +216,42 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
       if (!normalized.ok) {
         throw new ValidationError('webhook-delivery-unsupported', normalized.detail)
       }
-      const event = { ...normalized.event, eventUuid: null } // 绕过去重（规则 3）
-      const insert = await insertDelivery(deps.db, {
+      const event = { ...normalized.event, eventUuid: null }
+      const rootDeliveryId = row.replayedFromDeliveryId ?? row.id
+      const root =
+        rootDeliveryId === row.id
+          ? row
+          : (
+              await deps.db
+                .select()
+                .from(webhookDeliveries)
+                .where(eq(webhookDeliveries.id, rootDeliveryId))
+                .limit(1)
+            )[0]
+      if (root === undefined) {
+        throw new ConflictError(
+          'webhook-delivery-replay-lineage-broken',
+          'original delivery is no longer available',
+        )
+      }
+      const isTerminal = event.eventType === 'mr_closed' || event.eventType === 'mr_merged'
+      const insert = acceptVerifiedDelivery({
         endpointId: endpoint.id,
-        eventUuid: null,
-        gitlabEventHeader: row.gitlabEventHeader,
+        event,
+        rawBodyBytes: Buffer.from(row.bodyJson, 'utf8'),
+        rawBodyText: row.bodyJson,
+        eventHeader: row.gitlabEventHeader,
         objectKind: row.objectKind,
-        eventType: event.eventType,
-        repoPath: event.repoPath,
-        streamHint: streamKeyOf(event),
-        status: 'received',
-        bodyJson: row.bodyJson,
-        replayedFromDeliveryId: row.id, // 规则 2：新行指回原行
+        replay: {
+          rootDeliveryId,
+          terminalRootRevision: isTerminal ? root.mrStreamRevision : null,
+        },
       })
+      if (insert.kind !== 'inserted') {
+        throw new ConflictError('webhook-delivery-replay-conflict', 'replay was deduplicated')
+      }
       const deliveryId = insert.deliveryId
+      deps.webhookTerminalControl?.wake(insert.effectId)
       void dispatcher.dispatch({ deliveryId, endpoint, event }).catch(() => {})
       return c.json({ deliveryId, replayedFrom: row.id, status: 'received' })
     },

@@ -74,6 +74,7 @@ import { isBootstrapRequired } from '@/auth/loginPolicy'
 import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
+import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 
 export interface StartOptions {
   port?: number
@@ -635,6 +636,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // RFC-257 — webhook 分流器 + 三段式重启恢复：上个进程遗留的 received/
   // processing 投递标 failed/interrupted（GitLab 对失败投递不自动重试，恢复
   // 路径 = 投递历史页手动 replay——design §1.3/D23）。
+  // RFC-303: orphan process/session repair above is the release proof for the
+  // previous daemon. Reconcile durable launch barriers/effects before HTTP or
+  // auto-resume can attach a new task driver.
+  const webhookTerminalControl = composeMrTerminalControl(db)
+  await webhookTerminalControl.reconcileOnBoot()
   const recoveredDeliveries = await recoverInterruptedDeliveries(db)
   if (recoveredDeliveries > 0) {
     log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
@@ -644,6 +650,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     configPath: Paths.config,
     secretBox,
     getDefaultRuntime: async () => loadConfig(Paths.config).defaultRuntime,
+    terminalControl: webhookTerminalControl,
   })
 
   // 7. HTTP server.
@@ -659,6 +666,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     secretBox,
     webhookDispatcher,
+    webhookTerminalControl,
   })
 
   const bindHost = opts.host ?? config.bindHost
@@ -1031,6 +1039,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     heartbeatKillTicker.stop()
     orphanReconcileTicker.stop()
     scheduledTaskTicker.stop()
+    webhookTerminalControl.stop()
     removeDaemonInfo()
     server.stop(true)
     try {

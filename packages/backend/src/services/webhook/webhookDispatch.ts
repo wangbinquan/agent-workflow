@@ -19,6 +19,8 @@ import {
   cachedRepos,
   tasks,
   users,
+  webhookDeliveries,
+  webhookMrControlEffects,
   webhookTriggerFires,
   webhookTriggers,
   webhookTriggerStreams,
@@ -65,6 +67,15 @@ import {
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import { sha1Hex } from '@/util/hash'
+import {
+  decideProtectedLaunch,
+  type MrStreamState,
+} from '@/modules/integration/domain/mrTerminalControl'
+import type {
+  MrTerminalControl,
+  ProtectedMrLaunchGuard,
+} from '@/modules/integration/public/mrTerminalControl'
+import { DomainError } from '@/util/errors'
 
 const log = createLogger('webhook-dispatch')
 
@@ -82,6 +93,8 @@ export type WebhookDispatchDeps = {
   cancel?: (taskId: string) => Promise<unknown>
   /** RFC-268 测试接缝：证明 scratch 在 repo resolver 入口之前即完成分流。 */
   resolveRepo?: typeof resolveRepoForEvent
+  /** RFC-303 bootstrap-owned durable guard/effect controller. */
+  terminalControl?: MrTerminalControl
 }
 
 // ---------------------------------------------------------------------------
@@ -428,11 +441,18 @@ async function launchViaExecutor(
   actor: Actor,
   rendered: RenderedLaunch,
   invoker: ExecutionInvoker,
+  guard?: ProtectedMrLaunchGuard,
 ): Promise<string> {
   const launchDeps = {
     ...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox),
     // 对齐 buildScheduleLaunch：闭包解析在重建的 owner actor 可见性内。
     launchActor: actor,
+    ...(guard === undefined
+      ? {}
+      : {
+          sourceTerminationLaunchSignal: guard.signal,
+          sourceTerminationAdmission: guard.assertCanCommit,
+        }),
   }
   if (rendered.kind === 'agent') {
     const task = await startExecution(
@@ -498,6 +518,19 @@ async function fireTrigger(
       await recordFire(db, { ...base, outcome: 'skipped-trigger-disabled' })
       return
     }
+    const freshParsed = parseTriggerRow(fresh)
+    if (!freshParsed.ok) {
+      await recordFire(db, {
+        ...base,
+        outcome: 'skipped-trigger-invalid',
+        error: freshParsed.reason,
+      })
+      return
+    }
+    // The guard commit is the configuration linearization point. An edit that
+    // removed this event before reservation wins cleanly and creates no fire.
+    if (!matchTrigger(event, freshParsed.trigger.rule).hit) return
+    const effectiveTrigger = freshParsed.trigger
 
     // 熔断闸门（D22；evaluateCircuit 顺序见 matching.ts）。
     const streamRow = (
@@ -519,7 +552,7 @@ async function fireTrigger(
       event,
       {
         maxConsecutiveFires: fresh.maxConsecutiveFires,
-        ignoreUsernames: trigger.rule.ignoreUsernames,
+        ignoreUsernames: effectiveTrigger.rule.ignoreUsernames,
       },
       now,
     )
@@ -547,6 +580,88 @@ async function fireTrigger(
     if (circuit.resetCount) {
       // 「人已介入」的清零独立于本次 launch 成败（D22）。
       await writeStream(0, false)
+    }
+
+    const deliveryFact = (
+      await db
+        .select({
+          streamKey: webhookDeliveries.mrStreamKey,
+          revision: webhookDeliveries.mrStreamRevision,
+          stateAfter: webhookDeliveries.mrStateAfter,
+        })
+        .from(webhookDeliveries)
+        .where(eq(webhookDeliveries.id, input.deliveryId))
+        .limit(1)
+    )[0]
+    const deliveryState: MrStreamState | null =
+      deliveryFact?.revision !== null &&
+      deliveryFact?.revision !== undefined &&
+      deliveryFact.stateAfter !== null
+        ? {
+            state: deliveryFact.stateAfter,
+            revision: deliveryFact.revision,
+            lastTerminalRevision: deliveryFact.stateAfter === 'open' ? null : deliveryFact.revision,
+          }
+        : null
+    const protectedDecision = decideProtectedLaunch({
+      cancelOnMrTerminal: fresh.cancelOnMrTerminal,
+      endpointId: input.endpoint.id,
+      event,
+      streamState: deliveryState,
+    })
+    if (protectedDecision.kind === 'control-only') return
+    if (protectedDecision.kind === 'invalid-mr-identity') {
+      await recordFire(db, { ...base, outcome: 'skipped-mr-stream-identity-missing' })
+      return
+    }
+    if (protectedDecision.kind === 'blocked') {
+      await recordFire(db, {
+        ...base,
+        outcome:
+          protectedDecision.state === 'closed'
+            ? 'skipped-mr-stream-closed'
+            : 'skipped-mr-stream-merged',
+      })
+      return
+    }
+
+    let launchGuard: ProtectedMrLaunchGuard | undefined
+    if (protectedDecision.kind === 'protected') {
+      if (
+        deliveryFact?.streamKey !== protectedDecision.identity.streamKey ||
+        deliveryFact.revision === null ||
+        deliveryFact.revision === undefined ||
+        deps.terminalControl === undefined
+      ) {
+        await recordFire(db, {
+          ...base,
+          outcome: 'skipped-mr-stream-identity-missing',
+          error:
+            deps.terminalControl === undefined
+              ? 'terminal-control-unavailable'
+              : 'delivery-linearization-missing',
+        })
+        return
+      }
+      try {
+        launchGuard = deps.terminalControl.reserveLaunch({
+          endpointId: input.endpoint.id,
+          streamKey: protectedDecision.identity.streamKey,
+          binding: protectedDecision.binding,
+          launchRevision: deliveryFact.revision,
+          deliveryId: input.deliveryId,
+          fireId,
+          triggerId,
+          triggerName: fresh.name,
+        })
+      } catch (error) {
+        await recordFire(db, {
+          ...base,
+          outcome: 'skipped-mr-stream-terminal',
+          error: errText(error),
+        })
+        return
+      }
     }
 
     // supersede（D8/D21）：同流最近一次 launched 的任务未终态 → 取消。
@@ -589,17 +704,34 @@ async function fireTrigger(
 
     // RFC-268：scratch 在任何 cache/decrypt/clone 前短路。payload 与
     // autoRegisterRepos 同取匹配时快照，避免排队期间编辑造成混合代配置。
-    const space: RepoResolution | { kind: 'scratch' } =
-      trigger.payloadTemplate.scratch === true
-        ? { kind: 'scratch' }
-        : await (deps.resolveRepo ?? resolveRepoForEvent)(
-            db,
-            deps.secretBox,
-            event,
-            input.endpoint,
-            trigger.row.autoRegisterRepos,
-          )
+    let space: RepoResolution | { kind: 'scratch' }
+    try {
+      space =
+        effectiveTrigger.payloadTemplate.scratch === true
+          ? { kind: 'scratch' }
+          : await (deps.resolveRepo ?? resolveRepoForEvent)(
+              db,
+              deps.secretBox,
+              event,
+              input.endpoint,
+              fresh.autoRegisterRepos,
+            )
+    } catch (error) {
+      launchGuard?.failed(error instanceof DomainError ? error.code : 'repo-resolution-failed')
+      launchGuard?.release()
+      deps.terminalControl?.wake()
+      await recordFire(db, {
+        ...base,
+        outcome: 'launch-failed',
+        supersededTaskId,
+        error: errText(error),
+      })
+      return
+    }
     if (space.kind === 'unregistered') {
+      launchGuard?.failed('repo-unregistered')
+      launchGuard?.release()
+      deps.terminalControl?.wake()
       await recordFire(db, { ...base, outcome: 'skipped-repo-unregistered', supersededTaskId })
       return
     }
@@ -607,6 +739,9 @@ async function fireTrigger(
     // owner 重建 + 目标可用性重校验（每次触发评估，AC-13；照抄 fireSchedule 骨架）。
     const owner = (await db.select().from(users).where(eq(users.id, fresh.ownerUserId)).limit(1))[0]
     if (!owner || owner.status !== 'active') {
+      launchGuard?.failed('owner-invalid')
+      launchGuard?.release()
+      deps.terminalControl?.wake()
       await recordFire(db, {
         ...base,
         outcome: 'skipped-owner-invalid',
@@ -625,7 +760,7 @@ async function fireTrigger(
       },
       source: 'daemon',
     })
-    const rendered = renderWebhookLaunch(trigger, fresh.name, event, space)
+    const rendered = renderWebhookLaunch(effectiveTrigger, fresh.name, event, space)
     /** launch-failed 收尾：fires 行 + 触发器行的失败水位（熔断计数的唯一来源）。 */
     const recordLaunchFailed = async (msg: string): Promise<void> => {
       await recordFire(db, { ...base, outcome: 'launch-failed', supersededTaskId, error: msg })
@@ -657,9 +792,15 @@ async function fireTrigger(
       //   ValidationError            → payload / 输入非法 → launch-failed（计入连续失败）
       //   NotFound / Forbidden / 其它 → 目标不可用或 owner 失去启动权 → skipped-owner-invalid
       if (err instanceof ValidationError) {
+        launchGuard?.failed(err.code)
+        launchGuard?.release()
+        deps.terminalControl?.wake()
         await recordLaunchFailed(errText(err))
         return
       }
+      launchGuard?.failed(err instanceof DomainError ? err.code : 'target-unusable')
+      launchGuard?.release()
+      deps.terminalControl?.wake()
       await recordFire(db, {
         ...base,
         outcome: 'skipped-owner-invalid',
@@ -678,13 +819,15 @@ async function fireTrigger(
       // RFC-269: compute before launch and publish with the initial task row.
       // RFC-292: full nested source context, including bounded event_json.
       triggerContext: webhookTriggerContextOf(event),
+      ...(launchGuard === undefined ? {} : { sourceTerminationSnapshot: launchGuard.snapshot }),
     }
     try {
-      const taskId = await (deps.launch ?? ((a, r, i) => launchViaExecutor(deps, a, r, i)))(
-        actor,
-        rendered,
-        invoker,
-      )
+      const taskId =
+        deps.launch !== undefined
+          ? await deps.launch(actor, rendered, invoker)
+          : await launchViaExecutor(deps, actor, rendered, invoker, launchGuard)
+      launchGuard?.taskCommitted(taskId)
+      launchGuard?.launchSettled(taskId)
       await recordFire(db, { ...base, outcome: 'launched', supersededTaskId, taskId })
       await writeStream(circuit.effectiveCount + 1, true)
       await db
@@ -699,7 +842,20 @@ async function fireTrigger(
         })
         .where(eq(webhookTriggers.id, triggerId))
     } catch (err) {
-      await recordLaunchFailed(errText(err))
+      launchGuard?.failed(err instanceof DomainError ? err.code : 'launch-failed')
+      if (err instanceof DomainError && err.code === 'webhook-mr-launch-terminal') {
+        await recordFire(db, {
+          ...base,
+          outcome: 'skipped-mr-stream-terminal',
+          supersededTaskId,
+          error: errText(err),
+        })
+      } else {
+        await recordLaunchFailed(errText(err))
+      }
+    } finally {
+      launchGuard?.release()
+      deps.terminalControl?.wake()
     }
   })
 }
@@ -775,6 +931,21 @@ export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispa
             and(eq(webhookTriggers.endpointId, endpoint.id), eq(webhookTriggers.enabled, true)),
           )
         const hits: ParsedTrigger[] = []
+        const deliveryLineage = (
+          await db
+            .select({ replayedFromDeliveryId: webhookDeliveries.replayedFromDeliveryId })
+            .from(webhookDeliveries)
+            .where(eq(webhookDeliveries.id, deliveryId))
+            .limit(1)
+        )[0]
+        const effectDeliveryId = deliveryLineage?.replayedFromDeliveryId ?? deliveryId
+        const controlEffect = (
+          await db
+            .select({ id: webhookMrControlEffects.id })
+            .from(webhookMrControlEffects)
+            .where(eq(webhookMrControlEffects.deliveryId, effectDeliveryId))
+            .limit(1)
+        )[0]
         let invalidPayloadMatched = false
         for (const row of rows) {
           const canonicalRow = await migrateTriggerRowTemplateToV2(db, row)
@@ -801,7 +972,12 @@ export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispa
           if (matchTrigger(event, parsed.trigger.rule).hit) hits.push(parsed.trigger)
         }
         if (hits.length === 0 && !invalidPayloadMatched) {
-          await markDelivery(db, deliveryId, 'ignored', 'no-trigger-matched')
+          if (controlEffect !== undefined) {
+            await markDelivery(db, deliveryId, 'matched', 'terminal-control-accepted')
+            deps.terminalControl?.wake(controlEffect.id)
+          } else {
+            await markDelivery(db, deliveryId, 'ignored', 'no-trigger-matched')
+          }
           return
         }
         // 命中触发器逐个 fire（同一 delivery 串行；跨 delivery 的并发由
@@ -810,6 +986,7 @@ export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispa
           await fireTrigger(deps, streamQueue, { deliveryId, endpoint, event, trigger })
         }
         await markDelivery(db, deliveryId, 'matched')
+        if (controlEffect !== undefined) deps.terminalControl?.wake(controlEffect.id)
       } catch (err) {
         log.error('webhook dispatch failed', { deliveryId, error: errText(err) })
         await markDelivery(db, deliveryId, 'failed', 'internal-error').catch(() => {})

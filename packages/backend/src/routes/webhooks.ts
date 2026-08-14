@@ -213,6 +213,7 @@ export function mountWebhookIngressRoutes(
         objectKind: objectKind || null,
       })
       if (insert.kind === 'duplicate') {
+        deps.webhookTerminalControl?.wake(insert.effectId)
         // 同 UUID 重投（GitLab Resend / 网络重放）：不重复分发，回原行。
         return c.json({
           deliveryId: insert.deliveryId,
@@ -222,6 +223,7 @@ export function mountWebhookIngressRoutes(
       }
 
       const deliveryId = insert.deliveryId
+      deps.webhookTerminalControl?.wake(insert.effectId)
       void touchEndpointLastDelivery(deps.db, endpoint.id, Date.now()).catch(() => {})
       // 异步分发：响应先行（AC-5）。dispatch 内部负责 processing→终态；这里只
       // 兜「dispatch 自身同步抛/整体 reject」的最后一层，标 failed 供 replay。

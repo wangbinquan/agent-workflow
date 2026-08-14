@@ -8,7 +8,7 @@ import { and, eq, inArray, notInArray, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
-import { webhookDeliveries } from '@/db/schema'
+import { webhookDeliveries, webhookMrControlEffects } from '@/db/schema'
 import type {
   CodeHostEventType,
   WebhookDeliveryReason,
@@ -118,10 +118,31 @@ export async function markDelivery(
  * failed/interrupted。返回处理行数；调用点在 cli/start.ts 的启动序列。
  */
 export async function recoverInterruptedDeliveries(db: DbClient): Promise<number> {
+  const controlledIds = db
+    .select({ id: webhookMrControlEffects.deliveryId })
+    .from(webhookMrControlEffects)
+    .all()
+    .map((row) => row.id)
+  if (controlledIds.length > 0) {
+    db.update(webhookDeliveries)
+      .set({ status: 'matched', statusReason: 'terminal-control-accepted' })
+      .where(
+        and(
+          inArray(webhookDeliveries.id, controlledIds),
+          inArray(webhookDeliveries.status, ['received', 'processing']),
+        ),
+      )
+      .run()
+  }
   const rows = await db
     .update(webhookDeliveries)
     .set({ status: 'failed', statusReason: 'interrupted' })
-    .where(inArray(webhookDeliveries.status, ['received', 'processing']))
+    .where(
+      and(
+        inArray(webhookDeliveries.status, ['received', 'processing']),
+        ...(controlledIds.length > 0 ? [notInArray(webhookDeliveries.id, controlledIds)] : []),
+      ),
+    )
     .returning({ id: webhookDeliveries.id })
   return rows.length
 }

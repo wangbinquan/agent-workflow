@@ -306,6 +306,8 @@ export type TaskStatusUpdateExtra = Partial<
     | 'workflowVersion'
     | 'refClosureJson'
     | 'workgroupConfigJson'
+    | 'sourceTerminationFence'
+    | 'sourceTerminationEffectRev'
   >
 >
 // RFC-207 §3.8 — `runningMs` / `runningSince` are DELIBERATELY excluded from the
@@ -399,6 +401,7 @@ export async function setTaskStatus(args: {
       workspacePruningAt: tasks.workspacePruningAt,
       workspacePruneCause: tasks.workspacePruneCause,
       workspacePrunedAt: tasks.workspacePrunedAt,
+      sourceTerminationFence: tasks.sourceTerminationFence,
     })
     .from(tasks)
     .where(eq(tasks.id, args.taskId))
@@ -433,6 +436,14 @@ export async function setTaskStatus(args: {
   const isRevival =
     args.allowTerminal === true && isTerminalTaskStatus(from) && !isTerminalTaskStatus(args.to)
   if (isRevival) {
+    if (row.sourceTerminationFence !== null) {
+      throw new ConflictError(
+        row.sourceTerminationFence === 'closed'
+          ? 'task-source-terminal-closed'
+          : 'task-source-terminal-merged',
+        `task ${args.taskId} is fenced by an MR/PR ${row.sourceTerminationFence} event; cannot ${args.reason}`,
+      )
+    }
     if (row.workspacePrunedAt !== null) {
       throw new DomainError(
         'workspace-pruned',

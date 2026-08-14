@@ -1,7 +1,7 @@
 // RFC-303 SQLite implementation of the verified-ingress application port.
 // The delivery row, fact dedupe, MR revision/state, and control effect are one
 // dbTxSync transaction; no abort/process side effect occurs inside it.
-import { and, eq, isNull, notInArray } from 'drizzle-orm'
+import { and, eq, inArray, isNull, lt, notInArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type {
@@ -19,7 +19,12 @@ import {
 } from '@/modules/integration/domain/mrTerminalControl'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { webhookDeliveries, webhookMrControlEffects, webhookMrStreamStates } from '@/db/schema'
+import {
+  webhookDeliveries,
+  webhookMrControlEffects,
+  webhookMrLaunchGuards,
+  webhookMrStreamStates,
+} from '@/db/schema'
 import { truncateDeliveryBody } from '@/services/webhook/deliveryStore'
 
 /** The exported class is instance-owned so tests/daemons never share ambient state. */
@@ -184,6 +189,26 @@ export class SqliteVerifiedWebhookDeliveryStore implements VerifiedWebhookDelive
               updatedAt: now,
             })
             .run()
+
+          // The durable revoke is part of the same verified-ingress fact as the
+          // stream transition/effect. Commit happens before any process signal;
+          // a crash therefore leaves the worker enough state to finish safely.
+          if (
+            linearized.effectKind === 'fence-closed' ||
+            linearized.effectKind === 'fence-merged'
+          ) {
+            tx.update(webhookMrLaunchGuards)
+              .set({ status: 'revoking-terminal', updatedAt: now })
+              .where(
+                and(
+                  eq(webhookMrLaunchGuards.endpointId, input.endpointId),
+                  eq(webhookMrLaunchGuards.streamKey, identity.streamKey),
+                  lt(webhookMrLaunchGuards.launchRevision, streamRevision),
+                  inArray(webhookMrLaunchGuards.status, ['reserved', 'launching']),
+                ),
+              )
+              .run()
+          }
         }
       }
 
