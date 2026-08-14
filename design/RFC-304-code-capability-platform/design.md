@@ -106,16 +106,23 @@ D4 不算真偏离（复用机制是对的），列出是为了说明「为什�
 ### 2.2 工作项状态机
 
 ```
-                     ┌──────────── 同一对象的新事件（抢占在跑的轮次）
-                     ▼
-  idle ──event──► queued ──►  running  ──publish ok──►  settled ──┐
-                     ▲            │                        │       │
-                     │            ├─需要人回应─► awaiting ──┘       │
-                     │            │                 │              │
-                     │            └──►  failed      │ 源分支变 → 作废
-                     └──── 人回复 ────────────────────┘              │
-                                                                    ▼
-                          外部闭环（MR 合并/关闭 · 线程 resolve · 流水线转绿）→ closed
+                        ┌───────────────────── 新事件（同一工作项）
+                        ▼
+   idle ──event──►  queued  ──►  running  ──publish ok──►  settled ──┐
+                        ▲           │  │                      │      │
+        新事件到达 ┌─────┘           │  └─需要人回应─► awaiting ─┘      │
+                  │                 │                    │           │
+          superseding ◄─────────────┘                    │ 基线变→作废 │
+             （epoch+1，等旧 task 终态）                   │           │
+                  │                 │                    └───────────┤
+                  │                 ├──► failed ──重试/新事件──► queued│
+                  │                 │                                │
+                  └─旧 task 终态────►│                                │
+                                    └──► handed_off ──人工/新 head──► queued
+                                        （CI campaign 配额耗尽；MR 仍在跟进）
+                                                                     ▼
+              外部闭环（MR 合并/关闭 · 线程 resolve · 流水线转绿）───► closed
+                                                        （并做终局采纳比对）
 ```
 
 转移表（CAS 写入，照搬 `services/lifecycle.ts` 的 `trySetTaskStatus` 姿势）：

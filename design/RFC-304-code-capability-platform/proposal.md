@@ -104,9 +104,9 @@ review-global       ⟨AI⟩   跨文件接口一致性     → envelope: findin
 validate-findings   程序   结构/字段/行号存在性校验 → 不合格按 R4 重跑
 gate                程序   严重度阈值 + 单轮上限，确定性排序截断
 resolve-positions   程序   diff_refs → position 组装
-dedupe              程序   与台账比对指纹
-cleanup-previous    程序   resolve 上轮 bot 线程
+reconcile           程序   与台账三集合对账：持续存在 / 新增 / 已消失
 publish             程序   草稿攒齐一次性发布
+settle-stale        程序   **发布成功后**才处理已消失的意见（provider-specific）
 ledger              程序   落台账
 ```
 
@@ -144,7 +144,8 @@ CI 修复同理，八步里两步 AI；**错误分类由脚本做，不是让 AI
 ### 3.3 定制的边界
 
 **阶段序列平台写死、不可自定义。** 各组定制的是 agent / 提示词 / 脚本 / 参数。这样平台才能保证
-结构性正确（`resolve-positions` 一定在 `publish` 之前、`dedupe` 一定在 `publish` 之前）——序列一旦
+结构性正确（`resolve-positions` 与 `reconcile` 一定在 `publish` 之前、`settle-stale` 一定在
+`publish` **之后**）——序列一旦
 可自由编排，拼错顺序的后果是"评论全发在错误的行上"这类无法回收、极难归因的故障。
 
 定制结果存为**模板资源**（新一类资源，复用 owner / visibility / grants / 复制），
