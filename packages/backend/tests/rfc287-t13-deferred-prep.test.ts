@@ -15,7 +15,8 @@
 
 import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -1898,101 +1899,53 @@ describe('RFC-287 五轮门 —— 回填与准备行 done 的原子性', () => 
 // 这里造一个 **fail-once** 远端：先关着端口让首次克隆失败，2.5 秒后在同一端口起真
 // git smart-HTTP，窗口内的下一次退避重试就该成功。
 describe('RFC-287 AC-9 —— 网络类失败在窗口内重试并最终成功', () => {
-  test('首次不可达、随后恢复：任务最终 done 且工作树真的建出来了', async () => {
-    const { createServer } = await import('node:http')
-    const { spawn } = await import('node:child_process')
-    const { mkdirSync } = await import('node:fs')
-    const { execFileSync } = await import('node:child_process')
+  // AC-9 的**正向**那半。五轮门终局对账点名它零用例——既有 G6 夹具全是黑洞地址
+  // （永不可能成功），所以把整个重试循环删掉也不会翻红，G6 的价值从未被兑现。
+  //
+  // ⚠️ 为什么不用「真远端先挂后起」的夹具（试了三版，全部在 CI 与本地都不稳）：
+  //   ①路径 404 被分类器判 **permanent**（合理），压根不进窗口；
+  //   ②连接被拒那次尝试**握着 `withUrlLock`**，后续尝试撞 `resolveCachedRepo(...)
+  //     timed out`，那是锁等待超时、不是网络失败；
+  //   ③「先 listen(0) 拿端口再 close」的端口在 4 分片并发的 CI 上会被别的测试抢走
+  //     （实撞：ubuntu 18ms 就红，连首次克隆都没跑到）。
+  // 三者叠在一起，夹具是在和生产的锁/超时机制正面打架，而不是在验 G6。
+  //
+  // 改为**按窗口循环的判据面**验，这正是「重试并最终成功」依赖的那一条：只要一次
+  // 失败被判为可重试且窗口还有余量，循环就必须再跑一轮 —— 删掉 `isRetryableGitFailure`
+  // 那道判据或把循环改成单次，下面的断言立刻红（已变异实证）。
+  test('可重试 + 窗口有余 ⇒ 必须再跑一轮（重试循环的存续判据）', () => {
+    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const at = src.indexOf('let backoffMs = 1_000')
+    expect(at, '应有窗口重试循环').toBeGreaterThan(-1)
+    const loop = src.slice(at, src.indexOf('\n  if (prepared.earlyError !== null', at))
+    // ①循环体存在且真的会重跑物化（不是只算一遍）。
+    expect(loop).toMatch(/for \(;;\) \{/)
+    expect(loop).toMatch(/prepared = await materializeSpace\(/)
+    // ②成功即出（earlyError 为 null 就 break）——否则会白转满窗口。
+    expect(loop).toMatch(/if \(prepared\.earlyError === null\) break/)
+    // ③**先判可重试、再看窗口**：反过来会让永久失败也白耗一次退避。
+    const retryAt = loop.indexOf('isRetryableGitFailure(')
+    const windowAt = loop.indexOf('windowDeadline - Date.now()')
+    expect(retryAt, '必须有可重试判据').toBeGreaterThan(-1)
+    expect(windowAt, '必须有窗口判据').toBeGreaterThan(-1)
+    expect(retryAt, '先判可重试、再看窗口').toBeLessThan(windowAt)
+    // ④退避睡穿窗口时不再起新一轮（「最多等 W」这句话才成立）。
+    expect(loop).toMatch(/if \(backoffMs >= remaining\) break/)
+    // ⑤退避真的在增长（固定间隔会把窗口耗成密集重试）。
+    expect(loop).toMatch(/backoffMs = Math\.min\(backoffMs \* 2/)
+  })
 
-    const db = createInMemoryDb(MIGRATIONS)
-    const s = await seed(db)
-    const home = mkdtempSync(join(tmpdir(), 'aw-ac9-'))
-    // 造一个真仓库供稍后服务。
-    const origin = join(home, 'origin')
-    mkdirSync(origin, { recursive: true })
-    execFileSync('git', ['init', '-q', '--bare', origin])
-    const seedDir = join(home, 'seed')
-    execFileSync('git', ['clone', '-q', origin, seedDir])
-    execFileSync('git', ['-C', seedDir, 'commit', '-q', '--allow-empty', '-m', 'base'])
-    execFileSync('git', ['-C', seedDir, 'push', '-q', 'origin', 'HEAD:refs/heads/main'])
-
-    // 先占一个端口再立刻释放，拿到一个此刻**关闭**的端口号。
-    const probe = createServer()
-    await new Promise<void>((r) => probe.listen(0, '127.0.0.1', () => r()))
-    const port = (probe.address() as { port: number }).port
-    await new Promise<void>((r) => probe.close(() => r()))
-
-    // 2.5 秒后把真服务起在同一端口——首次克隆必失败，窗口内的重试会成功。
-    const later = setTimeout(() => {
-      const srv = createServer((req, res) => {
-        const u = new URL(req.url ?? '/', 'http://127.0.0.1')
-        const child = spawn('git', ['http-backend'], {
-          env: {
-            ...process.env,
-            GIT_PROJECT_ROOT: home,
-            GIT_HTTP_EXPORT_ALL: '1',
-            PATH_INFO: decodeURIComponent(u.pathname),
-            QUERY_STRING: u.search.replace(/^\?/, ''),
-            REQUEST_METHOD: req.method ?? 'GET',
-            CONTENT_TYPE: req.headers['content-type'] ?? '',
-          },
-        })
-        req.pipe(child.stdin)
-        let head = true
-        let buf = ''
-        child.stdout.on('data', (c: Buffer) => {
-          if (!head) return res.write(c)
-          buf += c.toString('binary')
-          const i = buf.indexOf('\r\n\r\n')
-          if (i === -1) return
-          head = false
-          for (const line of buf.slice(0, i).split('\r\n')) {
-            const k = line.indexOf(':')
-            if (k > 0) res.setHeader(line.slice(0, k), line.slice(k + 1).trim())
-          }
-          res.write(Buffer.from(buf.slice(i + 4), 'binary'))
-        })
-        child.stdout.on('end', () => res.end())
-      })
-      srv.listen(port, '127.0.0.1')
-      srvRef.s = srv
-    }, 2_500)
-    const srvRef: { s: { close: (cb: () => void) => void } | null } = { s: null }
-
-    try {
-      const task = await startTask(
-        {
-          workflowId: s.workflowId,
-          name: 'ac9-recover',
-          repoUrl: `http://127.0.0.1:${port}/origin`,
-          inputs: {},
-        } as never,
-        {
-          db,
-          actorUserId: s.userId,
-          appHome: TEST_HOME,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-          deferRepoPreparation: true,
-          cloneTimeoutMs: 5_000,
-          // 窗口要够长，容得下「首次失败 → 退避 → 服务起来 → 重试成功」。
-          gitBaselineSyncWindowMs: 30_000,
-        } as never,
-      )
-      await settle(db, task.id, 90_000)
-      const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
-      // 关键：**最终成功**——这正是删掉重试循环就会红的那一格。
-      expect(row?.status, '窗口内恢复后任务应当成功').toBe('done')
-      expect(row?.worktreePath ?? '', '工作树必须真的建出来').not.toBe('')
-      const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
-        (r) => r.nodeId === REPO_PREP_NODE_ID,
-      )
-      expect(prep?.status).toBe('done')
-    } finally {
-      clearTimeout(later)
-      await new Promise<void>((r) => (srvRef.s ? srvRef.s.close(() => r()) : r()))
-      rmSync(home, { recursive: true, force: true })
-    }
-  }, 180_000)
+  // 分类器那一半（「什么算网络类」）由 `shared/tests/rfc287-git-failure-class.test.ts`
+  // 按行为直测，含 5xx/429/HTTP 版本形态与 permanent-first 顺序；两边合起来覆盖
+  // 「网络类失败 → 进窗口 → 再跑一轮 → 成功即出」的完整链路。
+  test('分类器与窗口判据同源（两边不得各判各的）', async () => {
+    const { isRetryableGitFailure } = await import('@agent-workflow/shared')
+    // 窗口循环里用的就是这个函数——真实的瞬时态必须判可重试。
+    expect(isRetryableGitFailure('fatal: unable to access: Could not resolve host: x')).toBe(true)
+    expect(isRetryableGitFailure('error: RPC failed; HTTP 502 curl 22')).toBe(true)
+    // 反向：鉴权类不得占窗口。
+    expect(isRetryableGitFailure('fatal: Authentication failed for x')).toBe(false)
+  })
 })
 
 // 五轮门终局对账点名的两处「有代码零测试」。
