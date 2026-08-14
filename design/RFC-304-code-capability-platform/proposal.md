@@ -431,7 +431,21 @@ CI 修复同理，八步里两步 AI；**错误分类由脚本做，不是让 AI
 - **AC-31** fork 场景两家各跑通一条：源分支能 checkout；fork PR 的 CI 事件经 head SHA 映射唤醒
   **唯一** MR，零命中或多命中时不唤醒并记事件。
 - **AC-32** 矩阵每格显示 `disabled` / `misconfigured` / `ready`；`misconfigured` 时逐条列出缺什么
-  并各带一键修复入口。
+  并各带一键修复入口；**依赖变化（binding 删除、agent 不可见、触发器丢失）时该格自动失效重算**。
+
+**长期运行与可运维性**（PR-11）
+
+- **AC-33** 仲裁脚本可返回 `noop`：**不创建 task、不在 MR 上留任何痕迹**，只落一条可查询的
+  observation。一个 pipeline 转绿事件不产生任何机器发言。
+- **AC-34** 人工指令（@叫 / 确认关键词 / issue 标签 / 平台或 API 发起）**必须有回执**：收到即
+  创建可更新的 receipt，成功与失败都在**同一条消息上更新**，不新增通知；自动 webhook 触发的失败
+  仍对 MR 静默。
+- **AC-35** 同一 MR 上只维护**一条** bot 总览评论，后续轮次**编辑它**而非追加新的。
+- **AC-36** 机器自身 push 携带 cause 标记，默认**不再触发**新一轮检视（可配开）。
+- **AC-37** 排障链可回答"事件到哪一步断的"：`received → matched → routed|dropped(原因) →
+  queued(等 lease/配额，含队列年龄) → round → published|failed`；"发测试事件"走真实全链并显示断点。
+- **AC-38** 部门框架以不可变 revision 发布，支持灰度到 1–5 个仓并一键回退到 last-known-good；
+  发布前显示受影响仓数。
 
 ## 10. 待实证清单
 
