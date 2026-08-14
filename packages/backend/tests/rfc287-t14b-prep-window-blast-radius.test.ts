@@ -12,6 +12,9 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { createInMemoryDb } from '@/db/client'
+import { MIGRATIONS } from './migration-freeze'
 import { openContainedFile } from '@/services/worktreeFileContent'
 import { resolveRepoTarget } from '@/services/codeIntel/fileSymbols'
 
@@ -82,4 +85,41 @@ describe('AC-10 读洞③④：code-intel 取根时必须拒「还没有工作�
       baseCommit: 'abc',
     })
   })
+})
+
+describe('G7 —— 身份登记不得堵在克隆锁后面', () => {
+  // 二轮门后由门禁抓到的真回归（本地绿、门禁红）：`ensureCachedRepoIdentity` 一度与
+  // 克隆共用 `withUrlLock`。那把锁的临界区里跑 `git clone`，一次可能几分钟；于是
+  // **同一 URL** 上只要有人正在克隆，后来者的请求路径就一直堵到克隆结束——G7 承诺的
+  // 「启动接口立刻返回」对第二个用户直接失效。门禁里表现为「立刻返回」那条断言从
+  // <1.5s 变成 3005ms，正好等于前一次克隆的 timeout。
+  //
+  // 直接按**行为**验，不靠时序碰巧：先起一个注定要耗满 timeout 的 resolveCachedRepo
+  // 占住克隆锁，再对**同一个 URL** 登记身份，看它是不是立刻回来。
+  test('克隆锁被占住时，同一 URL 的身份登记仍立刻返回', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const appHome = mkdtempSync(join(tmpdir(), 'aw-idlock-'))
+    // 不可路由地址：克隆会一直卡到 cloneTimeoutMs。
+    const url = 'http://10.255.255.1:9/identity-lock-probe.git'
+    try {
+      const { resolveCachedRepo, ensureCachedRepoIdentity } =
+        await import('@/services/gitRepoCache')
+      // 占锁：故意不 await，让它在后台把克隆锁握满 3 秒。
+      const blocking = resolveCachedRepo({ db, appHome, cloneTimeoutMs: 3_000 }, { url }).catch(
+        () => null,
+      )
+      // 给它一点时间真正进入临界区。
+      await new Promise((r) => setTimeout(r, 200))
+
+      const t0 = Date.now()
+      const id = await ensureCachedRepoIdentity({ db, appHome }, { url })
+      const elapsed = Date.now() - t0
+      expect(id.cachedRepoId).not.toBe('')
+      // 关键：不得被克隆锁堵住。共用一把锁时这里会是 ~2800ms（剩余的 timeout）。
+      expect(elapsed, '身份登记堵在了克隆锁后面 —— G7 的立刻返回失效').toBeLessThan(1_000)
+      await blocking
+    } finally {
+      rmSync(appHome, { recursive: true, force: true })
+    }
+  }, 30_000)
 })

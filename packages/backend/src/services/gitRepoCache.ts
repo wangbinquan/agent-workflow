@@ -81,6 +81,24 @@ function withUrlLock<T>(urlHash: string, fn: () => Promise<T>): Promise<T> {
   return urlQueue.run(urlHash, fn)
 }
 
+/**
+ * 身份登记**专用**的短临界区——与 `withUrlLock` 分开是刻意的。
+ *
+ * `withUrlLock` 是**克隆锁**：持有它的临界区里跑 `git clone`/`fetch`，一次可能几分钟。
+ * 身份登记只是一次「查有没有、没有就插一行」的纯 DB 写，若共用那把锁，同一 URL 上
+ * 只要有人正在克隆，后来者的**请求路径**就会一直堵到克隆结束——G7 承诺的「启动接口
+ * 立刻返回」对第二个用户直接失效（RFC-287 T14 二轮门实测：门禁里这条断言从 <1.5s
+ * 变成 3005ms，正好等于前一次克隆的 timeout）。
+ *
+ * 两把锁不会互相踩：身份登记只写「行在不在」，克隆只写内容列（defaultBranch /
+ * lastFetchedAt / hasSubmodules）与磁盘；且冷路径的领养走的是 `urlHash` 唯一约束
+ * 已经存在的那一行，先插后领养与先领养后插的结果一致。
+ */
+const identityQueue = new KeyedSerialQueue<string>()
+function withIdentityLock<T>(urlHash: string, fn: () => Promise<T>): Promise<T> {
+  return identityQueue.run(urlHash, fn)
+}
+
 async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   let to: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
@@ -478,7 +496,7 @@ export async function ensureCachedRepoIdentity(
   const appHome = deps.appHome ?? Paths.root
   const cacheDir = join(appHome, 'repos', `${hash}-${slug}`)
   const redacted = redactGitUrl(input.url)
-  return await withUrlLock(hash, async () => {
+  return await withIdentityLock(hash, async () => {
     const existing = deps.db
       .select()
       .from(cachedRepos)

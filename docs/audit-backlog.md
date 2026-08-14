@@ -1849,3 +1849,27 @@ audit-backlog 里已登记的 bug#8（Windows VM + 1.18.13，业务节点侧）�
 （按钮从未出现，不是 detach），说明该 spec 至少还有第二个竞态未解。
 
 **不属于任何进行中 RFC 的连带面**，不应计入其收官判据。
+
+## `worktree-submodule-init` 的 `beforeEach` 会超时（2026-08-14 登记，非本轮改动引入）
+
+**现象**：`RUN_GIT_NETWORK=1` 且与另外 3 个网络门控套件**同进程**跑时，
+`createWorktree RFC-034 submodule init > worktree on parent w/ .gitmodules populates submodule
+dir (mode=auto)` 间歇失败，报的却是 `afterEach` 的 `TypeError: path must be a string`
+——真因在紧邻的一行提示里：`a beforeEach/afterEach hook timed out for this test`。
+`beforeEach`（`:44`）超时后 `appHome` 从未被赋值，`afterEach`（`:89`）的
+`rmSync(appHome)` 于是拿到 `undefined`。**报出来的错完全不是真因**，这是这条最费时间
+的地方。
+
+**归属**：该文件最近两次提交是 `8859a671` / `122abef9`，都不属于 RFC-287；单跑该文件
+4/4 稳定绿，只在多套件同进程时抖。`beforeEach` 里要连做 `git init` + `submodule add`
+
+- `clone --bare` 若干次真实 git 操作，共享进程下与其他套件的 git 抢 I/O 就会顶到默认
+  5s 钩子超时。
+
+**处置建议**（未做）：①给该 `beforeEach` 显式抬钩子超时（bun:test 的第三参数），
+或②把夹具构建挪到 `beforeAll` 只做一次（各用例只读该夹具，不需要每例重建）。
+顺带把 `afterEach` 的两处 `rmSync` 改成先判 `!== undefined` ——那样 `beforeEach` 失败时
+报的就是真因而不是一个误导性的 TypeError。
+
+**方法教训**（已同步 `docs/dev-gotchas.md`）：看到 `afterEach` 报 TypeError 时，先往上
+找有没有 `hook timed out` —— 清理钩子的报错常常只是前置钩子失败的**次生现象**。
