@@ -27,14 +27,16 @@ MR/PR 后续收到关闭或合入事件时，不等待当前节点自然结束�
 Webhook 触发规则新增“MR/PR 关闭或合入时停止运行中的任务”选项，默认 `false`。它使用归一后的
 MR/PR 事件语义，同时覆盖 GitLab 与 GitHub，不新增 provider 私有开关。
 
-选项只对包含 `mr_opened` 的规则开放。规则还可以订阅 `mr_updated` 或其它非终态事件；只有带稳定 MR/PR
-标识的 launch 才冻结保护绑定，push/tag/pipeline 等同规则内的其它 launch 保持原行为。
+选项只对包含 `mr_opened` 且不包含 `mr_closed`/`mr_merged` 的规则开放；编辑器也只在这个组合下显示开关。
+规则还可以订阅 `mr_updated` 或其它非终态事件；只有带稳定 MR/PR 标识的 launch 才冻结保护绑定，push/tag/
+pipeline 等同规则内的其它 launch 保持原行为。
 
 ### D2. 终态事件是控制事实，不再为该规则启动终态任务
 
 开启选项后，`mr_closed` 与 `mr_merged` 对该规则是 control-only：它们用于封锁 stream、停止已启动任务和
 记录审计，不创建新的 terminal-event task。为消除一条规则内的双义性，开启选项时不得同时把
-`mr_closed`/`mr_merged` 放进该规则的 launch `eventTypes`；前后端都必须 fail closed。
+`mr_closed`/`mr_merged` 放进该规则的 launch `eventTypes`。shared/backend 对直接 API 输入继续 fail closed；编辑器
+在组合不适用时隐藏开关并把草稿值原子归 `false`，不保留隐藏的非法值，也不以红色 blocker 打断事件选择。
 
 未开启选项的既有规则完全兼容：如果它显式订阅终态事件，仍可按当前行为启动任务。
 
@@ -143,8 +145,8 @@ live trigger 外键，因为 D3 允许 trigger 后续被删除。
 
 - [x] Trigger create/update/read contract 与编辑 UI 增加默认关闭的 `cancelOnMrTerminal`，中英文、a11y、review
       summary 与 dirty/reset 行为完整。
-- [x] 选项只允许包含 `mr_opened` 且不包含 `mr_closed/mr_merged` 的规则；前后端返回同一稳定错误码，旧规则
-      `false/omitted` 继续兼容。
+- [x] 选项只在包含 `mr_opened` 且不包含 `mr_closed/mr_merged` 时显示；事件组合离开适用域即把草稿值归
+      `false`。shared/backend 对直接 API 非法组合返回同一稳定错误码，旧规则 `false/omitted` 继续兼容。
 - [x] GitLab close/merge 与 GitHub closed(unmerged/merged) 都命中同一 provider-neutral control path；terminal
       delivery 不为受保护规则创建新 task/fire。
 - [x] 受保护的 MR-family root 在 initial task INSERT 内冻结 opaque binding；push/tag/pipeline 等无 MR 标识的

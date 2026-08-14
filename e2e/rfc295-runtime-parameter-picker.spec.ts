@@ -186,7 +186,7 @@ test('Webhook Agent picker creates through the real POST and reloads the XOR des
   )
 })
 
-test('RFC-303 terminal protection validates, persists, and remains usable at 390px', async ({
+test('RFC-303 terminal protection is conditional, persists, and remains usable at 390px', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -203,10 +203,12 @@ test('RFC-303 terminal protection validates, persists, and remains usable at 390
   await expect(page.getByTestId('wt-cancel-on-mr-terminal')).toBeChecked()
 
   await page.getByTestId('wt-event-mr_closed').click()
-  await expect(page.getByTestId('wt-terminal-policy-error')).toBeVisible()
-  await expect(page.getByTestId('stepper-next')).toBeDisabled()
-  await page.getByTestId('wt-event-mr_closed').click()
+  await expect(page.getByTestId('wt-cancel-on-mr-terminal')).toBeHidden()
   await expect(page.getByTestId('wt-terminal-policy-error')).toBeHidden()
+  await expect(page.getByTestId('stepper-next')).toBeEnabled()
+  await page.getByTestId('wt-event-mr_closed').click()
+  await expect(page.getByTestId('wt-cancel-on-mr-terminal')).not.toBeChecked()
+  await page.getByTestId('wt-cancel-on-mr-terminal').click()
   await page.getByTestId('stepper-next').click()
 
   await page.getByTestId('wt-target').click()

@@ -123,8 +123,10 @@ SQLite CHECK 只能锁 boolean，不能可靠跨列解析 `event_types` JSON，�
 
 前端 Events step 复用公共 `<Switch>`，放在事件 checkbox 之后：
 
-- 没选 `mr_opened` 时提示“先选择 MR/PR 打开”，不暗改 eventTypes；
-- 已选 terminal launch type 时显示冲突并阻止 Next/Save，不静默取消用户已选事件；
+- 只有已选 `mr_opened` 且未选 `mr_closed`/`mr_merged` 时显示开关；
+- 事件选择离开上述适用域时保留用户的 eventTypes，并在同一次 draft history 操作中把
+  `cancelOnMrTerminal` 归 `false`；不显示无意义开关，也不产生红色 blocker；
+- create/update shared schema 与 backend service 仍拒绝直接 API 传入的非法 `true` 组合；
 - Review step、Trigger card/read-only view 显示“终态自动停止”状态；
 - 默认 draft 目前已有 `mr_opened + mr_updated`，新建规则无需额外操作即可开启；
 - 不新增 CSS 私有 switch，不改变现有 Trigger update 权限、owner、revision 或 enable toggle。

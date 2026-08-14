@@ -157,7 +157,7 @@ afterEach(() => {
 })
 
 describe('webhook trigger wizard · template var insertion', () => {
-  test('RFC-303 terminal protection is draft-owned, validates event combinations, and serializes', async () => {
+  test('RFC-303 terminal protection only appears for eligible MR-open selections and serializes', async () => {
     await renderWebhooks()
     await screen.findByTestId('webhook-trigger-new')
     await waitFor(() =>
@@ -171,11 +171,29 @@ describe('webhook trigger wizard · template var insertion', () => {
 
     fireEvent.click(screen.getByTestId('wt-cancel-on-mr-terminal'))
     expect((screen.getByTestId('wt-cancel-on-mr-terminal') as HTMLInputElement).checked).toBe(true)
+
+    // Selecting either terminal launch event makes the protection option
+    // irrelevant: hide it, clear the stale value, and keep navigation usable.
     fireEvent.click(screen.getByTestId('wt-event-mr_closed'))
-    expect(screen.getByTestId('wt-terminal-policy-error')).toBeTruthy()
-    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.click(screen.getByTestId('wt-event-mr_closed'))
+    expect(screen.queryByTestId('wt-cancel-on-mr-terminal')).toBeNull()
     expect(screen.queryByTestId('wt-terminal-policy-error')).toBeNull()
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(screen.getByTestId('wt-event-mr_closed'))
+    expect((screen.getByTestId('wt-cancel-on-mr-terminal') as HTMLInputElement).checked).toBe(false)
+
+    fireEvent.click(screen.getByTestId('wt-cancel-on-mr-terminal'))
+    fireEvent.click(screen.getByTestId('wt-event-mr_merged'))
+    expect(screen.queryByTestId('wt-cancel-on-mr-terminal')).toBeNull()
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(screen.getByTestId('wt-event-mr_merged'))
+    expect((screen.getByTestId('wt-cancel-on-mr-terminal') as HTMLInputElement).checked).toBe(false)
+
+    fireEvent.click(screen.getByTestId('wt-event-mr_opened'))
+    expect(screen.queryByTestId('wt-cancel-on-mr-terminal')).toBeNull()
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(screen.getByTestId('wt-event-mr_opened'))
+    expect((screen.getByTestId('wt-cancel-on-mr-terminal') as HTMLInputElement).checked).toBe(false)
+    fireEvent.click(screen.getByTestId('wt-cancel-on-mr-terminal'))
 
     fireEvent.click(screen.getByTestId('stepper-next'))
     await screen.findByTestId('webhook-trigger-step-target')

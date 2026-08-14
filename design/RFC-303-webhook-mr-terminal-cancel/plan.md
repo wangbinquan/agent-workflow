@@ -59,12 +59,12 @@ internal import，无“task canceled 就谎称资源已释放”。
 
 ### 批 D — Trigger UX、Delivery audit 与权限
 
-| #           | 任务                                                                                                | 验证                              |
-| ----------- | --------------------------------------------------------------------------------------------------- | --------------------------------- |
-| RFC-303-T16 | Events step 公共 Switch、冲突 blocker、Review/card/read-only 状态、draft history/i18n               | frontend unit/a11y/dirty/reset    |
-| RFC-303-T17 | Delivery read model/API 加 control effect/targets/workspace 分离状态；Trigger fire 加 skip outcomes | shared/backend contract/ACL       |
-| RFC-303-T18 | DeliveriesPanel 响应式 control 区、task ACL 链接、trigger deleted 降级、pending→released 实时刷新   | frontend/browser/390px/light/dark |
-| RFC-303-T19 | retention 跳过非 succeeded effect/guard，日志/错误 redaction，control ledger 不受 trigger cascade   | retention/security/source ratchet |
+| #           | 任务                                                                                                      | 验证                              |
+| ----------- | --------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| RFC-303-T16 | Events step 按合法组合显示公共 Switch、失配时原子归 false、Review/card/read-only 状态、draft history/i18n | frontend unit/a11y/dirty/reset    |
+| RFC-303-T17 | Delivery read model/API 加 control effect/targets/workspace 分离状态；Trigger fire 加 skip outcomes       | shared/backend contract/ACL       |
+| RFC-303-T18 | DeliveriesPanel 响应式 control 区、task ACL 链接、trigger deleted 降级、pending→released 实时刷新         | frontend/browser/390px/light/dark |
+| RFC-303-T19 | retention 跳过非 succeeded effect/guard，日志/错误 redaction，control ledger 不受 trigger cascade         | retention/security/source ratchet |
 
 退出门：用户能在配置时理解互斥语义，在 delivery 中区分“已接受控制 / task canceled / runtime released / workspace
 pruned”；无越权 task 数据和敏感 payload 泄漏。
@@ -86,7 +86,7 @@ pruned”；无越权 task 数据和敏感 payload 泄漏。
 - [x] T1-T4：shared contract、migration 0157、stream/binding domain 与 task source fence 已实现并有 schema/migration/domain 回归。
 - [x] T5-T9：verified ingress、fact dedupe/revision、protected launch guard、control-only dispatch、replay 与 boot reconcile 已实现，GitLab/GitHub 真实签名 delivery E2E 已通过。
 - [x] T10-T15：窄 participant/capability、child fence 继承、全 revival seam、driver supervisor、typed cause、terminal worker 与 RFC-300 finalizer 已实现，真长进程 stop/reap 及 worktree 回收 E2E 已通过。
-- [x] T16-T19：Trigger Switch/互斥阻断/review/card、Delivery audit + task ACL、中英文、retention 保护与 architecture/source ratchet 已实现。
+- [x] T16-T19：Trigger Switch 按事件组合显隐并归一非法草稿、review/card、Delivery audit + task ACL、中英文、retention 保护与 architecture/source ratchet 已实现。
 - [x] T20-T24：provider-neutral/control 并发/崩溃边界、进程/工作区、390px 真浏览器、rolling/migration/架构锁与完整 `bun run gate:local` 已通过。
 - [x] 实现系列 `66f56b05` / `b614f437` / `5545cdd7`；最终本地门禁 shared 2097、frontend 6427、backend 10150 pass / 35 skip / 0 fail，0 条未处置 P1/P2。
 
@@ -94,16 +94,16 @@ pruned”；无越权 task 数据和敏感 payload 泄漏。
 
 ### 3.1 Trigger contract 与 launch 组合
 
-| option                    | eventTypes                    | 预期                                           |
-| ------------------------- | ----------------------------- | ---------------------------------------------- |
-| omitted/false             | 任意既有非空组合              | 兼容当前行为                                   |
-| false                     | `mr_closed` / `mr_merged`     | terminal 仍可 launch task                      |
-| true                      | `mr_opened`                   | 合法；opened task冻结 binding                  |
-| true                      | `mr_opened + mr_updated`      | 合法；两类 MR launch 都冻结 binding            |
-| true                      | `mr_opened + push`            | MR task有 binding，push task无 binding         |
-| true                      | 无 `mr_opened`                | 422 + 前端 blocker                             |
-| true                      | 含 `mr_closed` 或 `mr_merged` | 422；不暗改 selection                          |
-| true→false/delete/disable | 已有 running task             | 已有 task仍保护，未来 launch 不再冻结/不再发生 |
+| option                    | eventTypes                    | 预期                                            |
+| ------------------------- | ----------------------------- | ----------------------------------------------- |
+| omitted/false             | 任意既有非空组合              | 兼容当前行为                                    |
+| false                     | `mr_closed` / `mr_merged`     | terminal 仍可 launch task                       |
+| true                      | `mr_opened`                   | 合法；opened task冻结 binding                   |
+| true                      | `mr_opened + mr_updated`      | 合法；两类 MR launch 都冻结 binding             |
+| true                      | `mr_opened + push`            | MR task有 binding，push task无 binding          |
+| true                      | 无 `mr_opened`                | API 422；前端隐藏开关并归 `false`               |
+| true                      | 含 `mr_closed` 或 `mr_merged` | API 422；前端保留事件选择、隐藏开关并归 `false` |
+| true→false/delete/disable | 已有 running task             | 已有 task仍保护，未来 launch 不再冻结/不再发生  |
 
 ### 3.2 Provider 与 stream 状态
 
@@ -150,7 +150,7 @@ pruned”；无越权 task 数据和敏感 payload 泄漏。
 
 ### 3.6 UI、ACL 与安全负空间
 
-- 新建/编辑/复制/只读、Switch on/off、event conflict、Stepper Next/Save、undo/redo/draft dirty/reset；
+- 新建/编辑/复制/只读、Switch 条件显隐与原子归 false、Stepper Next/Save、undo/redo/draft dirty/reset；
 - Trigger card/Review 与 delivery target status 中英文 1:1、键盘/focus/screen reader；
 - pending/waiting/retryable/released/unreaped、零目标、trigger deleted、task soft deleted；
 - delivery viewer 无 task ACL 时只得到聚合计数/受控结果，不返回 target task id/name/link；有 task 可见权时才投影
