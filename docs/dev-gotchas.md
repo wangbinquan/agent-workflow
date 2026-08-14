@@ -207,6 +207,10 @@
 - **但 `bun run test` 是 `backend && shared && frontend` 的 `&&` 串联——前一个包一红，后面的包一次都不跑**，而 CI 的 job 是并行的、会把三个包的红全报出来。于是本地「只有 1 条红」很可能是假象：修完那条再推，CI 照样红在你从没跑到的包上（RFC-266 实测：shared 的 fixture 红短路掉了 frontend，前端那条 i18n 守卫红只能等 CI 才暴露，多推了一次红）。**判据：本地出现任何红并修复后，别只重跑失败的那个文件——至少把被短路掉的下游包各自单跑一遍**（`bun run test:shared` / `bun run test:frontend`），或者拿 `;` 而不是 `&&` 串一遍。
 - **i18n 文案里不许出现字面 `**`**（`onboarding-guide.test.tsx` 的 RFC-211 守卫全量遍历 zh/en 两棵树）：这些字符串大多进的是纯文本组件，`**强调**`会原样显示成星号。写 hint / 说明文案时用「」或直接不强调；只有`apiDocs.\*`（`api-docs-markdown.ts`拼成 markdown 过`Prose`）是白名单，且 `title`/`subtitle` 仍被排除在外。
 
+- **测试可能把缺陷「锁成契约」——改行为前先问这条断言锁的是意图还是现状**（RFC-287 T14 实测）。G7 的目标之一是「启动接口不再同步阻塞到工作树就绪」，而当时那条用例测的正是 `await startTask(...)` 的**阻塞时长**；只要它在，任何人把启动改成异步都会看到红，然后很自然地以为是自己写错了。同一批还有一条自相矛盾的锁：断言锁住本地 `.catch(() => {})`，注释却写着「外层再由骨架统一记 warn」——两者不可能同时成立（本地先吞掉，外层的 warn 永不可达），说明写注释时的**意图**没有落进断言。**判据**：一条断言若在「实现变得更正确」时会红，它锁的就是现状而非意图，必须改测法；注释与断言互相矛盾时，必有一方是错的，别默认断言对。
+- **「按 RFC 编号选测试」会漏掉不含该编号的锁**（RFC-287 T14 再次实测；与本节前面那条「用 `grep -rl` 按被改文件选」是同一件事的两面）。本轮针对性跑了 20 个「含 startTask/deferRepoPreparation」的文件全绿，完整门禁却抓出 2 条——`tasks.test.ts`（HTTP 路由面）与 `rfc103-launch-config-passthrough.test.ts`（kick 计数锁）都不含 `rfc287` 字样，也不含我选的关键词。**判据**：改动落在热路径（`startTask` / `runTask` / 路由）时，针对性跑连带面只能当**快速反馈**，不能替代完整门禁；`gate:local` 的红才是判据。
+- **按计数断言的锁是「强制登记」机制，它红了通常说明你该登记而不是该改锁**（RFC-287 T14）。`rfc103-launch-config-passthrough` 断言 `...runtimeConfigOpts(` 恰好出现 N 次；新增一处调度器点火站点就会把它打红。这不是脆弱——RFC-108 / RFC-103 / RFC-266 三次「管理员配置对某条路径不生效」的静默断线，正是因为新增 kick 时没人想起要透传配置。**判据**：计数锁红了先确认新增站点是否**应该**纳入该不变量，是则连同理由一起把计数加一，别改成正则模糊匹配把强制力弄没。
+
 ## 新增 NodeKind（RFC-253 实测）
 
 - **「加一个 NodeKind 要改几处」不要靠人肉清点——让编译器数**。仓内目前有 **8 处**穷尽点，`satisfies Record<NodeKind,…>` / `never` 守卫会逐个把你逼红：`shared/node-kind-behavior.ts`、`shared/nodePorts.ts`、`shared/workflow-node-references.ts`、`backend/services/runLiveness.ts`（`livenessSourceOfKind` 的 `never` 分支）、`frontend/canvas/WorkflowCanvas.tsx`、`NodeInspector.tsx`、`nodePalette.ts`、`canvas/wrapperFit.ts`。RFC-253 的设计门（外部评审）只列出前 7 处，第 8 处是 typecheck 报出来的——**清单会过期，编译器不会**。
