@@ -31,7 +31,23 @@ export function resolveRepoTarget(
   task: LoadedTask,
   repoWire: string | undefined,
 ): { worktreePath: string; baseCommit: string | null } {
+  // RFC-287 G7：任务可能**还没有工作树**（仓库准备移到任务行落库之后，准备窗口内
+  // `worktreePath` 是空串）。空根往下传会出两种事故，且都不是理论：
+  //   · `openContainedFile` 里 `resolve('')` = daemon 的 cwd ⇒ 符号表接口把 daemon
+  //     自己的源码吐出来（实测 `?path=src/main.ts` 返回 17 个符号）；
+  //   · deep 模式把它当 `cwd` 交给 SCIP indexer 子进程 ⇒ `Bun.spawn({cwd:''})`
+  //     回落进程 cwd，于是在 daemon 工作目录上跑一次完整索引并缓存、对外应答。
+  // 判在这个**共同入口**：deep code-intel 与 fileSymbols 两条路都从这里取根。
+  //
+  // 注意单仓分支尤其危险：延后准备时 `repoCount` 恒为 1（回填后才变 N），所以多仓
+  // 任务在窗口内也走这一支，攻击者连 `repo` 参数都不用给。
   if (task.repoCount <= 1) {
+    if (task.worktreePath === '') {
+      throw new NotFoundError(
+        'task-worktree-not-ready',
+        `task '${task.id}' has no worktree yet (repository preparation has not completed)`,
+      )
+    }
     return { worktreePath: task.worktreePath, baseCommit: task.baseCommit }
   }
   if (repoWire === undefined || repoWire === '') {
@@ -46,6 +62,12 @@ export function resolveRepoTarget(
   const repo = idx >= 0 ? task.repos[idx] : undefined
   if (repo === undefined) {
     throw new NotFoundError('file-symbols-repo-not-found', `repo '${repoWire}' not found`)
+  }
+  if (repo.worktreePath === '') {
+    throw new NotFoundError(
+      'task-worktree-not-ready',
+      `task '${task.id}' repo '${repoWire}' has no worktree yet (preparation has not completed)`,
+    )
   }
   return { worktreePath: repo.worktreePath, baseCommit: repo.baseCommit }
 }

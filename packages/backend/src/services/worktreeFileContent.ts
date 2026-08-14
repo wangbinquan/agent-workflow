@@ -78,6 +78,21 @@ export function openContainedFile(
   relPath: string,
   hooks?: ContainedFileHooks,
 ): ContainedRead {
+  // RFC-287 G7：**空根一律判否**，且判在最前面。
+  //
+  // `resolve('')` 返回的是 **daemon 进程的 cwd**，于是下面那道 realpath 包含性检查
+  // 会以 daemon 的工作目录为根——任何 `tasks:read` 就能把 daemon 自己的源码读出来
+  // （实测：准备窗口内的任务 `GET /file-content?path=package.json` 返回 daemon 的
+  // packages/backend/package.json 全文）。
+  //
+  // G7 之前空 `worktreePath` 只在物化失败（罕见终态、无人会去读它的文件）时出现；
+  // 现在**每一次** JSON-body 启动在准备窗口内都是这个状态，时长等于整个克隆。
+  //
+  // 这是同一个 bug 的**第二套实现**：`util/safePath.checkLexicalThenRealpath` 那道
+  // 守卫喂的是 portArtifacts 一族，而本函数自己写了一份 realpath 包含性，从不经过
+  // 它——所以必须在这里独立堵一次。AC-10 点名的四扇读洞里，本函数覆盖两扇
+  // （worktreeFileContent 与 codeIntel.fileSymbols 都走它）。
+  if (root === '') return { kind: 'not-found' }
   if (relPath === '' || isAbsolute(relPath)) return { kind: 'outside' }
   // Split on the platform's ACTUAL separators: win32 accepts `\` too, so a `..`
   // spelled with a backslash must be caught there — but `\` is a legal filename

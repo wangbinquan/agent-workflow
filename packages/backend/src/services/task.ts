@@ -4550,13 +4550,24 @@ export async function retryNode(
   // 工作树、没有 task_repos 的任务标成成功。那不是没实现，是会造出坏数据。
   // （T14 实现门实测。）
   if (runRow.nodeId === REPO_PREP_NODE_ID) {
-    // AC-16：只有**失败**的准备行可重试。对已 done 的行重试 = 对一个已有工作树的
+    // AC-16：**未收场**的准备行不可重试。对已 done 的行重试 = 对一个已有工作树的
     // 任务再物化一次；路由层不校验 nodeId 是否在定义里，所以判据必须落在这里。
-    if (runRow.status !== 'failed') {
+    //
+    // `interrupted` 必须与 `failed` 同等对待——判据只认 `failed` 会造成一个**永久
+    // 不可恢复**的任务（T14 第二轮门实测）：daemon 在准备窗口内重启时，boot reap 把
+    // 任务翻 `interrupted`、把 running 的准备行 mark-interrupted，此后三条出口全封
+    //   · resume  → `assertWorktreePresentForResume` 撞 `existsSync('')` = false，
+    //                410 且文案错误归因成「工作区已被 GC 回收」；
+    //   · 本重试  → 行是 `interrupted` 不是 `failed`，409；
+    //   · 前端    → `repoPrepFailed` 只认 failed，于是仍劝「另起任务」。
+    // 唯一出路变成删任务重开，而开了 autoResumeOnBoot 时它每次 boot 还会吃一个 410
+    // 直到熔断隔离。根因是当初只想到「准备自己失败」，没想到「准备被外力打断」。
+    const RETRYABLE_PREP_STATUSES = ['failed', 'interrupted'] as const
+    if (!(RETRYABLE_PREP_STATUSES as readonly string[]).includes(runRow.status)) {
       throw new ConflictError(
         'repo-prep-not-retryable',
-        `repository preparation for task '${taskId}' is '${runRow.status}', not 'failed'; ` +
-          'only a failed preparation can be retried',
+        `repository preparation for task '${taskId}' is '${runRow.status}'; ` +
+          `only ${RETRYABLE_PREP_STATUSES.join(' / ')} preparation can be retried`,
       )
     }
     return await retryRepoPreparation(db, task, opts.deps)

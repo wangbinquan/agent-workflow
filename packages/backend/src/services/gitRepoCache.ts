@@ -31,7 +31,7 @@ import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { cachedRepos, scheduledTasks, taskRepos } from '@/db/schema'
+import { cachedRepos, scheduledTasks, taskRepos, tasks } from '@/db/schema'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   classifyBaseRef,
@@ -962,6 +962,21 @@ async function refTaskCount(db: DbClient, cachedRepoId: string): Promise<number>
     .where(eq(taskRepos.cachedRepoId, cachedRepoId))
     .all()
   let count = r[0]?.count ?? 0
+  // RFC-287 G7：`task_repos` 在**仓库准备完成之前是空的**（回填与路径回写同事务，
+  // 见 task.ts 的延后准备段），而 `tasks.cached_repo_id` 早在占位时就已指向
+  // `ensureCachedRepoIdentity` 落定的身份行。只数 task_repos 会让这道引用守卫在
+  // 整个准备窗口内**完全失明**——实测：不带 force 就能把一个正在被克隆/使用的镜像
+  // 连行带目录删掉，任务的 cached_repo_id 随即悬空。
+  //
+  // 这道守卫存在的理由（上面注释原话）正是「deleting the row out from under …
+  // a referencing task」，所以把 tasks 这一面补上。`distinct` 不必要：一个任务在
+  // tasks 上只有一个 cached_repo_id，与 task_repos 的多行不重叠计数即可。
+  const fromTasks = db
+    .select({ count: sql<number>`count(*)`.as('count') })
+    .from(tasks)
+    .where(eq(tasks.cachedRepoId, cachedRepoId))
+    .all()
+  count += fromTasks[0]?.count ?? 0
   const needle = JSON.stringify(cachedRepoId)
   for (const row of db.select().from(scheduledTasks).all()) {
     if (row.launchPayload.includes(`"cachedRepoId":${needle}`)) count++

@@ -73,8 +73,33 @@ const AUTH_SIGNATURES =
 // 【TM.00001005】". Cover both CJK orders (暂无/无权…模型 and 模型…权限) plus
 // the OpenAI-style English phrase, so these land as model-call-failed instead
 // of the bare stream-nonconforming fallback.
-const MODEL_FAIL_SIGNATURES =
-  /rate limit|overloaded|quota|model .*not found|insufficient|too many requests|503|529|does not have access to model|(?:暂无|无权).{0,10}模型|模型.{0,12}权限/i
+// 裸的 `503` / `529` **必须带 HTTP 语境**。它们原先是无边界的三位数，而 haystack
+// 里含 stdout——冒烟自己发的 nonce 就是 `awsmoke-<16 位 hex>`，hex 串里凑巧出现
+// "503"/"529" 的概率约 0.66%/次（实测 20 万次随机 nonce：1327 次误命中）。CI 上
+// 因此会间歇把「协议不合规」误判成「模型调用失败」。
+//
+// 影响不止测试：生产里任何 stdout/stderr 含这三连数字的失败（commit hash 片段、
+// 时间戳、字节数、端口号）都会被误分类，管理员照着「限流/配额」的提示去查，方向
+// 完全错。故要求它们出现在 HTTP 状态码语境里（`http 503` / `status 529` /
+// `error: 503` / `503 service unavailable` 之类），而不是任意位置的三位数。
+const HTTP_STATUS_CTX = String.raw`(?:\bhttp[/ ]?[\d.]*\s*|\bstatus[: ]+|\berror[: ]+|\bcode[: ]+)`
+/** 导出供回归测试直接断言——解析源码文本抠正则太脆（转义层数会骗人）。 */
+export const MODEL_FAIL_SIGNATURES = new RegExp(
+  [
+    'rate limit',
+    'overloaded',
+    'quota',
+    'model .*not found',
+    'insufficient',
+    'too many requests',
+    `${HTTP_STATUS_CTX}(?:503|529)\\b`,
+    String.raw`\b(?:503|529)\s+(?:service unavailable|overloaded)`,
+    'does not have access to model',
+    '(?:暂无|无权).{0,10}模型',
+    '模型.{0,12}权限',
+  ].join('|'),
+  'i',
+)
 // RFC-116: endpoint reachability failures — the binary speaks the protocol but the
 // request to the model API is refused/unreachable: 403 region block, connection
 // refused/reset/timeout, DNS failure, no route, broken proxy tunnel. Checked BEFORE

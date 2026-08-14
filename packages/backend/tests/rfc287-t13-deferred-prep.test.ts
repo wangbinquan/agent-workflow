@@ -681,6 +681,69 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     } catch (err) {
       msg = err instanceof Error ? err.message : String(err)
     }
-    expect(msg).toMatch(/not 'failed'|repo-prep-not-retryable|only a failed preparation/i)
+    expect(msg).toMatch(/repo-prep-not-retryable|only failed \/ interrupted preparation/i)
+  }, 90_000)
+
+  // daemon 在准备窗口内重启时，boot reap 把任务翻 interrupted、把 running 的准备行
+  // mark-interrupted。判据若只认 `failed`，这类任务会**永久不可恢复**：resume 撞
+  // `existsSync('')` 得 410（且文案错误归因成「工作区已被 GC 回收」）、本重试撞 409、
+  // 前端仍劝「另起任务」；开了 autoResumeOnBoot 还会每次 boot 吃一个 410 直到熔断。
+  // 唯一出路变成删任务重开。（T14 第二轮门实测。）
+  test('AC-16 反面：interrupted 的准备行必须可重试（否则 daemon 重启 = 任务报废）', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s2 = await seed(db)
+    const id = await launchFailingPrep(db, s2, 'ac16-interrupted')
+    const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).find(
+      (r) => r.nodeId === REPO_PREP_NODE_ID,
+    )
+    // 模拟 boot reap 的处置：任务与准备行都落 interrupted。
+    await db.update(nodeRuns).set({ status: 'interrupted' }).where(eq(nodeRuns.id, prep!.id))
+    await db.update(tasks).set({ status: 'interrupted' }).where(eq(tasks.id, id))
+
+    const { retryNode } = await import('@/services/task')
+    let msg = ''
+    try {
+      await retryNode(db, id, prep!.id, {
+        cascade: false,
+        deps: {
+          db,
+          actorUserId: s2.userId,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+          cloneTimeoutMs: 1_000,
+          gitBaselineSyncWindowMs: 0,
+        } as never,
+      })
+    } catch (err) {
+      msg = err instanceof Error ? err.message : String(err)
+    }
+    // 关键：**不得**被 AC-16 的守卫拒掉。远端仍不可达所以最终还会失败，但那是
+    // 重跑之后的结果，不是「不让你重试」。
+    expect(msg).not.toMatch(/repo-prep-not-retryable/i)
+    await settle(db, id)
+    const after = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
+    expect(after?.status).toBe('failed')
+  }, 120_000)
+
+  test('任务只在 tasks.cached_repo_id 上引用时，删除仍须被拒', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const s = await seed(db)
+    const id = await launchFailingPrep(db, s, 'refcount-blindspot')
+    const row = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
+    const repoId = row!.cachedRepoId!
+    expect(repoId).not.toBe('')
+    // 前提复核：该任务确实**没有** task_repos 行（守卫的旧判据在此为 0）。
+    expect((await db.select().from(taskRepos).where(eq(taskRepos.taskId, id))).length).toBe(0)
+
+    const { deleteCachedRepo } = await import('@/services/gitRepoCache')
+    let code = ''
+    try {
+      await deleteCachedRepo({ db }, repoId)
+    } catch (err) {
+      code = (err as { code?: string }).code ?? (err as Error).message
+    }
+    expect(code, '在用镜像必须拒删（否则任务的 cached_repo_id 悬空）').toMatch(
+      /reference|in-use|has-references/i,
+    )
+    expect((await db.select().from(cachedRepos).where(eq(cachedRepos.id, repoId))).length).toBe(1)
   }, 90_000)
 })
