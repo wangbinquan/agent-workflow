@@ -109,6 +109,15 @@ describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'submoduleRefresh.ts'),
       'utf8',
     )
-    expect(src).toMatch(/urlRedacted[\s\S]{0,80}file:/)
+    // T14 改锚：判据已收敛成共享谓词 `isFileSchemeUrl`（G5 第一版手抄了两份，实现门
+    // 因此一口气找出三条没被抄到的入口）。锁的**意图**不变——过滤仍只看
+    // `url_redacted`、不解密任何东西——但锚点从字面 `file:` 换成「读 urlRedacted 且
+    // 走共享谓词」，否则收敛判据这个正确动作反而会把这条锁打红。
+    expect(src).toMatch(/isFileSchemeUrl\(r\.urlRedacted\)/)
+    // 反向：这里不得自己再写一遍 scheme 正则（那就是第四份手抄）。
+    expect(src).not.toMatch(/\/\^file:/)
+    // 且必须 fail-closed：url_redacted 为 NULL / 空白时不知 scheme，不能自动 fetch。
+    // 行为断言在 rfc287-t14-file-scheme-bypasses.test.ts，这里只锁住判断确实存在。
+    expect(src).toMatch(/urlRedacted !== 'string'[\s\S]{0,120}return false/)
   })
 })

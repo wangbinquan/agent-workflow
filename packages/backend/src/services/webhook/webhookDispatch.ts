@@ -47,6 +47,7 @@ import {
   isTerminalTaskStatus,
   gitUrlCacheKeyWith,
   mapWebhookTemplateSurfaces,
+  isFileSchemeUrl,
   parseGitUrl,
   renderTemplate,
   templateVarIssues,
@@ -313,10 +314,25 @@ export async function resolveRepoForEvent(
     return { kind: 'cached', cachedRepoId: row.id }
   }
   if (!autoRegister) return { kind: 'unregistered' }
-  return {
-    kind: 'url',
-    repoUrl: endpoint.preferredCloneProtocol === 'ssh' ? event.repoSshUrl : event.repoHttpUrl,
+  const autoUrl = endpoint.preferredCloneProtocol === 'ssh' ? event.repoSshUrl : event.repoHttpUrl
+  // RFC-287 G5 / T14 实现门：自动注册这条路是 `file://` 的**第三条**绕过。
+  //
+  // webhook 的事件 schema 对两个仓库 URL 只做「非空字符串」校验，而 workflow 分支
+  // 把 payload 用 `as unknown as StartTask` 强转直接交给 executor——`StartTaskSchema`
+  // 那道 refine 全程没被执行过。于是一个签名正确、repoPath 匹配规则、
+  // `project.git_http_url` 为 `file:///srv/private/repo` 的事件，就能让平台去跑
+  // 本机路径。判在这里是因为它是「事件 URL 变成启动 spec」的唯一入口，三个
+  // spaceFields 站点都从它取值。
+  //
+  // 收场走既有的 `unregistered`——它已有完整的可见处置（launchGuard.failed +
+  // `skipped-repo-unregistered` 落 fire 记录），不需要新增失败态。
+  if (isFileSchemeUrl(autoUrl)) {
+    log.warn('refusing to auto-register a file:// repo from a webhook event', {
+      repoPath: event.repoPath,
+    })
+    return { kind: 'unregistered' }
   }
+  return { kind: 'url', repoUrl: autoUrl }
 }
 
 // ---------------------------------------------------------------------------

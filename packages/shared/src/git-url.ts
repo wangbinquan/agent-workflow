@@ -417,3 +417,22 @@ export function gitUrlLegacyFileCacheKeyWith(
   const canonical = `file:///${r.toLowerCase()}`
   return { hash: sha1Hex(canonical).slice(0, 8), canonical }
 }
+
+/**
+ * RFC-287 G5 —— 该 URL 是否为 `file://`（本机路径伪装成远端）。
+ *
+ * **单点判据**。G5 的第一版把这个正则分别手抄进了启动 schema 与后台保鲜的过滤器，
+ * 结果 T14 实现门一口气找出三条没被抄到的通道：
+ *   ① `POST /api/cached-repos/batch-import` 的 schema 对 scheme 零检查——导入完
+ *      拿到 `cachedRepoId` 再启动，就完全绕过了启动面那道 refine；
+ *   ② workflow webhook 把 payload 用 `as unknown as StartTask` 强转，压根不过
+ *      `StartTaskSchema`，开了 auto-register 就能直接注入本机路径；
+ *   ③ 后台保鲜的过滤器 fail-open：`url_redacted` 为 NULL 的存量行照旧 fetch。
+ * 手抄一次就多一条会漏的路，所以判据收在这里，所有入口一律引它。
+ *
+ * 判据只看 scheme 前缀：`redactGitUrl` 两趟都只吃 `user:pass@`、**scheme 原样
+ * 保留**，所以脱敏后的串同样可判——这正是后台保鲜不必解密就能过滤的原因。
+ */
+export function isFileSchemeUrl(input: string): boolean {
+  return /^file:\/\//i.test(input.trim())
+}

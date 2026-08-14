@@ -370,6 +370,42 @@ describe('RFC-257 T6 · resolveRepoForEvent（AC-8）', () => {
       await resolveRepoForEvent(h.db, box, ev(), { preferredCloneProtocol: 'ssh' }, true),
     ).toEqual({ kind: 'url', repoUrl: SSH_URL })
   })
+
+  // RFC-287 G5 / T14 实现门 —— webhook 是 `file://` 的第三条绕过通道，也是最隐蔽的
+  // 一条：事件 schema 对两个仓库 URL 只做「非空字符串」校验，而 workflow 分支把
+  // payload 用 `as unknown as StartTask` **强转**直接交给 executor，`StartTaskSchema`
+  // 那道 refine 全程没被执行过。于是一个签名正确、repoPath 匹配规则、
+  // `project.git_http_url` 为 `file:///…` 的事件，就能让平台去跑本机路径。
+  //
+  // 判在自动注册这一步，因为它是「事件 URL 变成启动 spec」的唯一入口——三个
+  // spaceFields 站点都从它取值。收场复用既有的 `unregistered`：那条路已有完整的
+  // 可见处置（launchGuard.failed + `skipped-repo-unregistered` 落 fire 记录）。
+  test('RFC-287 G5：file:// 事件不得被自动注册（两种协议偏好都拒）', async () => {
+    const h = await harness()
+    const fileEv = ev({
+      repoHttpUrl: 'file:///srv/private/repo',
+      repoSshUrl: 'file:///srv/private/repo',
+    })
+    expect(await resolveRepoForEvent(h.db, box, fileEv, h.endpoint, true)).toEqual({
+      kind: 'unregistered',
+    })
+    expect(
+      await resolveRepoForEvent(h.db, box, fileEv, { preferredCloneProtocol: 'ssh' }, true),
+    ).toEqual({ kind: 'unregistered' })
+  })
+
+  test('RFC-287 G5：只有被选中的那个 URL 是 file:// 才拒（另一个协议仍可用）', async () => {
+    // 端点偏好 http 且 http 是 file:// → 拒；偏好 ssh 时选到的是合法 ssh → 照常注册。
+    // 这条防的是「一刀切按 repoPath 拒」——那会把只有一侧被污染的正常仓也误伤。
+    const h = await harness()
+    const mixed = ev({ repoHttpUrl: 'file:///srv/private/repo', repoSshUrl: SSH_URL })
+    expect(
+      await resolveRepoForEvent(h.db, box, mixed, { preferredCloneProtocol: 'http' }, true),
+    ).toEqual({ kind: 'unregistered' })
+    expect(
+      await resolveRepoForEvent(h.db, box, mixed, { preferredCloneProtocol: 'ssh' }, true),
+    ).toEqual({ kind: 'url', repoUrl: SSH_URL })
+  })
 })
 
 describe('RFC-257 T6 · dispatch 集成', () => {

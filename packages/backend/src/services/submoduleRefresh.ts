@@ -11,7 +11,7 @@
 // a background refresh must never be able to take the daemon down.
 
 import { and, eq, gte, isNotNull, isNull, lt, or } from 'drizzle-orm'
-import type { Config } from '@agent-workflow/shared'
+import { isFileSchemeUrl, type Config } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { cachedRepos } from '@/db/schema'
 import { refreshCachedRepo } from '@/services/gitRepoCache'
@@ -68,9 +68,20 @@ export async function selectDueRepos(
   // 判据用 `url_redacted`：明文 URL 只以密文列存在（`url_enc`），而脱敏只动
   // userinfo、**scheme 原样保留**（git-url.ts 的 redactGitUrl 两趟都只吃 `user:pass@`），
   // 所以它是这里唯一既够用又不必解密的信号。
-  return rows.filter(
-    (r) => !(typeof r.urlRedacted === 'string' && /^file:\/\//i.test(r.urlRedacted.trim())),
-  )
+  //
+  // 判据**必须 fail-closed**：`url_redacted` 为 NULL 时我们根本不知道 scheme，就
+  // 不能自动去 fetch 它。NULL 不是理论情形——`repairCachedRepoRedaction` 在密钥
+  // 丢失/轮换导致解封失败时会 `continue`，把该行的 url_redacted 原样留在 NULL
+  // （repoCredentials.ts 的 'wrong or lost secret.key?' 分支）。原先只排除「非空
+  // 字符串且匹配 file」，于是这类存量行照旧进保鲜、照旧 fetch 本机源目录——G5 对
+  // 它完全失效。（T14 实现门。）
+  //
+  // 排掉 NULL 行也不会误伤：它们的 URL 已经解不出来，本来就不能被启动，唯一正确
+  // 的处置是等人补回密钥、由 repair 把 url_redacted 填好再谈保鲜。
+  return rows.filter((r) => {
+    if (typeof r.urlRedacted !== 'string' || r.urlRedacted.trim().length === 0) return false
+    return !isFileSchemeUrl(r.urlRedacted)
+  })
 }
 
 /**

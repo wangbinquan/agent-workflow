@@ -1,7 +1,7 @@
 // Task schemas. Mirrors design.md §3 (tasks table) + plan.md P-1-14.
 
 import { z } from 'zod'
-import { hasQueryCredential } from '../git-url'
+import { hasQueryCredential, isFileSchemeUrl } from '../git-url'
 import { WebhookTaskSourceLinkSchema } from '../webhookTaskSourceLink'
 import { InjectedMemorySnapshotSchema } from './memory'
 import { PlannedDirectoryNodeSchema } from './repoGroup'
@@ -142,7 +142,7 @@ export function refineRepoSourceFields(
   // 为什么必须拒：`file://` 指向的是 daemon 本机的一个目录，它没有「远端」这层
   // 语义——上一个任务在本地提交但没推的内容，会成为下一个任务的基线，于是「所有
   // 任务都基于远端」这条前提被悄悄破坏。存量行**不 grandfather**：启动时一律拒。
-  if (hasUrl && /^file:\/\//i.test((value.repoUrl as string).trim())) {
+  if (hasUrl && isFileSchemeUrl(value.repoUrl as string)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'repo-url-file-scheme-unsupported',
