@@ -2850,7 +2850,18 @@ async function startTaskImpl(
     return (await getTask(deps.db, taskId)) as Task
   }
   let preparedTask: Task | null = null
-  if (deferredTaskId !== null) {
+  /**
+   * G7 的仓库准备（第 0 步）。抽成闭包是为了让它能**在请求路径之外**跑——见下面
+   * 的分叉：延后准备的启动到「任务行落库」为止就返回，准备与调度在后台推进。
+   *
+   * 返回 false = 准备失败且已记账（合成行 failed、任务 failed、租约已释放），
+   * 调用方不得再往下走调度。
+   */
+  const runRepoPreparation = async (): Promise<boolean> => {
+    // 闭包化之后外层的 `if (deferredTaskId !== null)` 守卫不再为它做流收窄，
+    // 这里显式取一次。null 分支不可达——本闭包只在延后准备时被调用。
+    const prepTaskId = deferredTaskId
+    if (prepTaskId === null) return true
     // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
     // `failed` 并把 git 原文留在行上——这正是 G7 要的「失败可见」。
     //
@@ -2901,7 +2912,7 @@ async function startTaskImpl(
           input,
           { ...deps, sourceTerminationLaunchSignal: controller.signal },
           appHome,
-          deferredTaskId,
+          prepTaskId,
         )
       } catch (err) {
         prepared = {
@@ -2996,7 +3007,8 @@ async function startTaskImpl(
       } finally {
         taskDriverRegistry.release(taskId, controller)
       }
-      return { ...task, status: finalStatus }
+      preparedTask = { ...task, status: finalStatus }
+      return false
     }
     // 所有权租约换成真的：占位态给的是空租约（ownedRoot=null、零 worktree），
     // 物化成功后必须换成 materializeSpace 产出的那份，否则清理/回滚协议管不到
@@ -3060,31 +3072,76 @@ async function startTaskImpl(
     // 契约测试往空路径写文件，diff 自然为空）。回填已落库，重读即得真实值，比在
     // 这里手抄一份投影更不容易走散。
     preparedTask = (await getTask(deps.db, taskId)) as Task
+    return true
   }
-  const schedulerPromise = runTask({
-    taskId,
-    db: deps.db,
-    appHome,
-    ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
-    ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-    ...(deps.subagentLiveCapture !== undefined
-      ? { subagentLiveCapture: deps.subagentLiveCapture }
-      : {}),
-    // RFC-075 + RFC-103 T2: thread commit&push + maxConcurrentNodes runtime
-    // config through to the scheduler (single source, see runtimeConfigOpts).
-    ...runtimeConfigOpts(deps),
-    log,
-    signal: controller.signal,
-  })
-    .catch((err) => {
-      log.error('runTask threw', {
-        taskId,
-        error: err instanceof Error ? err.message : String(err),
+
+  /**
+   * 调度器点火。**同步启动与后台续跑共用这一份**——两条路各抄一遍必然走散
+   * （错误兜底、租约释放、工作区收尾都在这里，漏一样就是一类泄漏）。
+   */
+  const kickScheduler = (): Promise<void> =>
+    runTask({
+      taskId,
+      db: deps.db,
+      appHome,
+      ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
+      ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
+      ...(deps.subagentLiveCapture !== undefined
+        ? { subagentLiveCapture: deps.subagentLiveCapture }
+        : {}),
+      // RFC-075 + RFC-103 T2: thread commit&push + maxConcurrentNodes runtime
+      // config through to the scheduler (single source, see runtimeConfigOpts).
+      ...runtimeConfigOpts(deps),
+      log,
+      signal: controller.signal,
+    })
+      .catch((err) => {
+        log.error('runTask threw', {
+          taskId,
+          error: err instanceof Error ? err.message : String(err),
+        })
       })
-    })
-    .finally(() => {
-      return releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
-    })
+      .finally(() => {
+        return releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
+      })
+
+  // ---------------------------------------------------------------------
+  // G7 的**异步启动**分叉（proposal §2 G7：「任务行先落 pending，克隆/fetch/
+  // 快进/多仓物化/建工作树在后台推进」）。
+  //
+  // 修复前整条 `await` 链都还在请求路径上（routes/tasks.ts → executor.ts →
+  // startTask），所以「启动接口同步阻塞到工作树就绪」这条 G7 要消灭的现象原样
+  // 还在——一个 500MB 的仓照旧把 POST /api/tasks 挂几分钟，G6 的重试窗口更是
+  // 直接叠在请求上。（T14 实现门；当时的测试反而在**测量**这个阻塞时长，等于把
+  // 错的行为锁死了。）
+  //
+  // `awaitScheduler` 那条路不动：它是测试与内联调用要的「跑完再回来」语义。
+  if (deferredTaskId !== null && deps.awaitScheduler !== true) {
+    void (async () => {
+      try {
+        if (!(await runRepoPreparation())) return // 失败已记账（行 + 任务 + 租约）
+        await kickScheduler()
+      } catch (err) {
+        // 后台续跑没有调用方接错——漏掉这层会变成 unhandled rejection 打挂
+        // daemon。任务侧的失败记账在 runRepoPreparation 内部已做。
+        log.error('deferred repo preparation continuation threw', {
+          taskId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })()
+    // 请求路径到此为止：返回**刚落库的 pending 行**（worktreePath 仍为空——这正是
+    // AC-10 把不变量从「有任务行就有工作树」改成「`__repo_prep__` 行 done 之后才有
+    // 工作树」的原因）。
+    return (await getTask(deps.db, taskId)) as Task
+  }
+
+  if (deferredTaskId !== null && !(await runRepoPreparation())) {
+    // preparedTask 由闭包写入（失败态的真实状态），TS 的流分析看不见闭包赋值，
+    // 故用 `??` 兜底而不是断言——真取到 task 也是对的（同一行的快照）。
+    return preparedTask ?? task
+  }
+  const schedulerPromise = kickScheduler()
 
   if (deps.awaitScheduler === true) {
     await schedulerPromise

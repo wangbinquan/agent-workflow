@@ -44,6 +44,26 @@ describe('resumeStatus', () => {
     expect(resumeStatus('interrupted', '')).toBe('worktree-missing')
   })
 
+  // RFC-287 G7 / AC-10 —— 第四态。仓库准备移到任务行落库**之后**才跑，于是「卡在
+  // 准备」的失败与「工作区被回收」在 status + worktreePath 这两个标量上**完全同形**
+  // （都是 failed + ''）。少了第三个入参就必然误判，而两者该给的下一步动作正好相反：
+  // 前者是「重试准备那一步」（AC-11：重试作用于任务当前所处阶段），后者是「另起一个
+  // 任务」。误判的代价不是文案难看，是把用户推去做一件完全没必要的事。
+  test('准备失败 → repo-prep-failed（不得与 worktree-missing 混为一谈）', () => {
+    expect(resumeStatus('failed', '', true)).toBe('repo-prep-failed')
+    expect(resumeStatus('interrupted', '', true)).toBe('repo-prep-failed')
+  })
+
+  test('第三个入参缺省时保持既有三态（老调用方与首帧不受影响）', () => {
+    expect(resumeStatus('failed', '')).toBe('worktree-missing')
+    expect(resumeStatus('failed', '/tmp/wt')).toBe('ready')
+  })
+
+  test('未失败的任务不因准备行而变可恢复', () => {
+    expect(resumeStatus('running', '', true)).toBe('not-resumable')
+    expect(resumeStatus('done', '/tmp/wt', true)).toBe('not-resumable')
+  })
+
   test('done task → not-resumable (nothing to resume)', () => {
     expect(resumeStatus('done', '/tmp/wt')).toBe('not-resumable')
   })
@@ -133,6 +153,19 @@ describe('canOfferResume', () => {
 
 describe('RFC-300 workspace capability wiring', () => {
   test('detail hides preserved/retry/sync affordances and renders both cleanup states', () => {
+    // RFC-287 G7：纯函数会算第四态不等于 UI 用上了它——这几条锁「真的 wire 进去」。
+    // 三件缺一不可：判据取自合成 `__repo_prep__` 行、算出的第四态传给了
+    // resumeStatus、以及这一态确实渲染出自己的提示。
+    expect(DETAIL_SRC).toContain('REPO_PREP_NODE_ID')
+    expect(DETAIL_SRC).toContain('resumeStatus(tk.status, tk.worktreePath, repoPrepFailed)')
+    expect(DETAIL_SRC).toContain("resumability === 'repo-prep-failed'")
+    expect(DETAIL_SRC).toContain("t('tasks.resumeRepoPrepFailed')")
+    // 反向：这条提示**不得**带「启动新任务」链接——那正是它要纠正的错误引导。
+    const prepBanner = /resumability === 'repo-prep-failed'[\s\S]{0,900}?resumeRepoPrepFailed/.exec(
+      DETAIL_SRC,
+    )
+    expect(prepBanner).not.toBeNull()
+    expect(prepBanner![0]).not.toContain('relaunchFrom')
     expect(DETAIL_SRC).toContain("(tk.workspaceState ?? 'available') === 'available'")
     expect(DETAIL_SRC).toContain('workspaceState={tk.workspaceState}')
     expect(DETAIL_SRC).toContain("tk.workspaceState === 'pruning'")

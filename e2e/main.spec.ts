@@ -567,7 +567,10 @@ test('RFC-033: batch import remote repos on /repos page', async ({ page }) => {
     initGitRepo(working, { message: 'init' })
     const bare = join(root, `remote-${i}.git`)
     cloneBareGitRepo(working, bare)
-    urls.push(`file://${bare}`)
+    // RFC-287 G5：批量导入现在也拒 `file://`（实现门 T14-B 堵的绕过①——导入是
+    // 公共接口，放进来就能拿 cachedRepoId 反手启动本机路径）。夹具改走 T11 建的
+    // 本地 smart-HTTP 远端，与其余 spec 同一条路。
+    urls.push(repoRemoteUrl(bare))
   }
 
   await primeAuthLocalStorage(page, daemon)

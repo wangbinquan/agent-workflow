@@ -27,6 +27,23 @@ import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
 import { startGitHttpRemote } from './helpers/gitHttpRemote'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 
+/**
+ * 等任务落到终态。
+ *
+ * G7 之后仓库准备在**后台**推进（proposal §2：任务行先落 pending，克隆/物化在后台
+ * 进行），所以 `await startTask(...)` 返回时准备通常还没开始跑完——本文件里凡是断言
+ * 「准备后的状态」的用例都必须先等它落定，否则读到的是占位态。
+ */
+async function settle(db: DbClient, taskId: string, budgetMs = 60_000): Promise<void> {
+  const t0 = Date.now()
+  for (;;) {
+    const st = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status
+    if (st === 'failed' || st === 'done' || st === 'canceled') return
+    if (Date.now() - t0 > budgetMs) throw new Error(`task ${taskId} never settled (status=${st})`)
+    await new Promise((r) => setTimeout(r, 50))
+  }
+}
+
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // 最小合法定义——本用例测的是「准备阶段」，节点跑不跑无关紧要（准备失败时压根
@@ -86,6 +103,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
       } as never,
     )
 
+    await settle(db, task.id)
     const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
     // ① 行必须存在——这正是 G7 相对现状的核心差别（现状：什么都不留）。
     expect(row).toBeDefined()
@@ -239,7 +257,10 @@ describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
     expect(fnStart).toBeGreaterThan(-1)
     const fnEnd = src.indexOf('\n}\n', fnStart)
     const body = src.slice(fnStart, fnEnd)
-    const prepare = body.indexOf('if (deferredTaskId !== null) {')
+    // T14：准备块已被提成闭包（`runRepoPreparation`），以便在请求路径之外跑
+    // （G7 启动异步化）。锚点随之从「延后准备的 if 块」换成**闭包的调用点**——
+    // 锁的语义没变：注册必须先于准备真正开始。
+    const prepare = body.indexOf('runRepoPreparation()')
     // 驱动注册的 API 名会随重构变（曾是 `activeTasks.set(taskId, controller)`，
     // RFC-288/taskDriver 之后是 `tryAttachTaskDriver(...)`）。锁的是**语义**——
     // 「准备开始前任务必须已被本进程调度器持有」——所以判据取「任一注册形态」，
@@ -251,7 +272,7 @@ describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
     ]
       .filter((i) => i !== -1)
       .sort((a, b) => a - b)[0]
-    expect(prepare, 'startTaskImpl 里应有延后准备块').toBeGreaterThan(-1)
+    expect(prepare, 'startTaskImpl 里应有延后准备的调用点').toBeGreaterThan(-1)
     expect(register, 'startTaskImpl 里应有驱动注册（任一形态）').not.toBe(undefined)
     expect(
       register as number,
@@ -261,7 +282,16 @@ describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
     // await」，但 taskDriver 重构后注册本身就是 `await tryAttachTaskDriver(...)`，
     // 那条判据已不适用。真正要防的是**中途把驱动放掉**——一旦释放，剩下的准备
     // 过程就落在无驱动窗口里，正是孤儿回收器要收的形状。
-    const between = body.slice(register as number, prepare)
+    //
+    // 射程必须止于**闭包定义**而不是调用点：T14 把准备提成闭包后，「注册 → 调用点」
+    // 这一段文本里整个包住了闭包体，而闭包体里有一处**正当的** release（准备失败后
+    // 任务已终态，租约本来就该还）。拿它当违规会把正确实现判红——这正是「文本射程
+    // 必须跟着结构走」的又一例。取「注册 → 闭包定义」这一小段：那里若出现放弃驱动，
+    // 才是真的在准备开始前把租约丢了。
+    const prepareDef = body.indexOf('const runRepoPreparation')
+    expect(prepareDef, 'startTaskImpl 里应有准备闭包的定义').toBeGreaterThan(-1)
+    expect(register as number).toBeLessThan(prepareDef)
+    const between = body.slice(register as number, prepareDef)
     expect(between).not.toMatch(/release\(|detachTaskDriver|clearForTesting/)
   })
 
@@ -335,12 +365,29 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
 // 仓库不存在 / 无权限**不占窗口**，立刻失败。用总窗口而非固定次数，因为用户关心
 // 的是「最多等多久」，不是「重试几次」。
 describe('RFC-287 G6 — 基线同步窗口化重试', () => {
-  test('网络类失败会占用窗口（窗口越大耗时越长）', async () => {
+  // T14 改测法：原版测的是 `await startTask(...)` 的**阻塞时长**——那恰恰是 G7 要
+  // 消灭的行为（proposal §2 G7：任务行先落 pending，克隆/物化在后台推进）。启动
+  // 异步化之后 startTask 立刻返回，原断言必然失效；更要命的是，只要它还在，就等于
+  // 把「启动接口同步阻塞」这个缺陷锁成了契约。
+  //
+  // 改成测**准备本身**耗多久：窗口大 ⇒ 任务更晚落 failed。这才是 G6 的语义，且与
+  // 启动是同步还是异步无关。
+  async function msUntilTerminal(db: DbClient, taskId: string): Promise<number> {
+    const t0 = Date.now()
+    for (;;) {
+      const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const st = row?.status
+      if (st === 'failed' || st === 'done' || st === 'canceled') return Date.now() - t0
+      if (Date.now() - t0 > 60_000) throw new Error(`task ${taskId} never settled`)
+      await new Promise((r) => setTimeout(r, 50))
+    }
+  }
+
+  test('网络类失败会占用窗口（窗口越大，准备越晚收场）', async () => {
     const db3 = createInMemoryDb(MIGRATIONS)
     const s = await seed(db3)
     const launch = async (windowMs: number, name: string): Promise<number> => {
-      const t0 = Date.now()
-      await startTask(
+      const task = await startTask(
         {
           workflowId: s.workflowId,
           name,
@@ -357,11 +404,50 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
           gitBaselineSyncWindowMs: windowMs,
         } as never,
       )
-      return Date.now() - t0
+      return await msUntilTerminal(db3, task.id)
     }
     const noWindow = await launch(0, 'g6-nowindow')
     const withWindow = await launch(4_000, 'g6-window')
     expect(withWindow).toBeGreaterThan(noWindow + 1_500)
+  }, 90_000)
+
+  // G7 的核心可观察行为：启动接口**不再**等工作树。
+  test('G7：延后准备的启动立刻返回 pending 行，不等克隆完成', async () => {
+    const dbA = createInMemoryDb(MIGRATIONS)
+    const s = await seed(dbA)
+    const t0 = Date.now()
+    const task = await startTask(
+      {
+        workflowId: s.workflowId,
+        name: 'g7-async',
+        // 不可路由：真去连要耗满 cloneTimeoutMs（3s）+ 窗口（4s）。
+        repoUrl: 'http://10.255.255.1:9/nope.git',
+        inputs: {},
+      } as never,
+      {
+        db: dbA,
+        actorUserId: s.userId,
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        deferRepoPreparation: true,
+        cloneTimeoutMs: 3_000,
+        gitBaselineSyncWindowMs: 4_000,
+      } as never,
+    )
+    const elapsed = Date.now() - t0
+    // 返回必须**远快于**准备本身。给 1.5s 余量：真同步的话至少 3s 起步。
+    expect(elapsed).toBeLessThan(1_500)
+    // 返回的是尚未准备的占位态——AC-10 把不变量从「有任务行就有工作树」改成
+    // 「`__repo_prep__` 行 done 之后才有工作树」，正是为了这一刻。
+    expect(task.status).toBe('pending')
+    expect(task.worktreePath).toBe('')
+    // 而准备确实在后台推进，并最终把任务落到 failed（远端不可达）。
+    await msUntilTerminal(dbA, task.id)
+    const after = (await dbA.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+    expect(after?.status).toBe('failed')
+    const prep = (await dbA.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
+      (r) => r.nodeId === REPO_PREP_NODE_ID,
+    )
+    expect(prep?.status).toBe('failed')
   }, 90_000)
 
   test('窗口耗尽后仍按失败收场，且原因不被重试吞掉', async () => {
@@ -383,6 +469,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
         gitBaselineSyncWindowMs: 2_000,
       } as never,
     )
+    await settle(db4, task.id)
     const row = (await db4.select().from(tasks).where(eq(tasks.id, task.id)))[0]
     expect(row?.status).toBe('failed')
     expect(String(row?.errorMessage ?? '')).toMatch(/timed out|connect|clone|fatal/i)

@@ -3760,6 +3760,8 @@ export const enUS: Resources = {
     },
     resumeUnavailableNoWorktree:
       'Resume cannot recover from a worktree-creation failure (no worktree was ever created). Launch a fresh task instead.',
+    resumeRepoPrepFailed:
+      'This task is stuck at the repository-preparation step (clone / fetch failed), so no worktree exists yet. Fix the network or access problem, then retry "prepare repository" in the node list below — no need to launch a new task.',
     resumeUnavailableWorkgroup:
       "Workgroup tasks can't resume in place after failing — the group's orchestration is engine-driven, so recovery is a relaunch, not an in-place continue. Relaunch the workgroup instead.",
     resumeLaunchLink: 'Launch a new task →',

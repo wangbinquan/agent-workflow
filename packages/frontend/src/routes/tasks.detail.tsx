@@ -16,7 +16,12 @@ import type {
   TaskNodeRuns,
   WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { COMMIT_PUSH_NODE_PREFIX, redactGitUrl, taskExecutionKind } from '@agent-workflow/shared'
+import {
+  COMMIT_PUSH_NODE_PREFIX,
+  REPO_PREP_NODE_ID,
+  redactGitUrl,
+  taskExecutionKind,
+} from '@agent-workflow/shared'
 import { api } from '@/api/client'
 // RFC-286 F4（D16 定界）：仅 WS 失效关联 key 换工厂符号，与规则表单源。
 import { TASK_QUERY_KEYS } from '@/lib/query-keys'
@@ -506,7 +511,12 @@ function TaskDetailPage() {
     tk.status === 'running' ||
     tk.status === 'awaiting_review' ||
     tk.status === 'awaiting_human'
-  const resumability = resumeStatus(tk.status, tk.worktreePath)
+  // RFC-287 G7：准备失败与「工作区已回收」在 status/worktreePath 上同形，靠合成
+  // `__repo_prep__` 行区分——它失败即说明卡在准备，该给的提示是「重试准备」。
+  const repoPrepFailed =
+    nodeRuns.data?.runs.some((r) => r.nodeId === REPO_PREP_NODE_ID && r.status === 'failed') ??
+    false
+  const resumability = resumeStatus(tk.status, tk.worktreePath, repoPrepFailed)
   // RFC-164/165: the task's execution subject (workgroup / agent / workflow) —
   // one derivation reused by the header subject link, the meta row and the
   // relaunch/resume deep-links (taskExecutionKind's single-source contract).
@@ -660,6 +670,22 @@ function TaskDetailPage() {
         {resume.error !== null && resume.error !== undefined && (
           <ErrorBanner error={resume.error} onDismiss={() => resume.reset()} />
         )}
+        {/* RFC-287 G7：卡在仓库准备 —— 给的动作是「重试准备那一步」，不是另起任务。
+            所以这条横幅**不带**「启动新任务」的链接（下方节点表里那一行就能重试）。 */}
+        {resumability === 'repo-prep-failed' &&
+          !dismissedBanners.has(resumeUnavailableBannerKey) && (
+            <NoticeBanner
+              tone="info"
+              size="compact"
+              className="info-box--muted"
+              dismiss={{
+                label: t('common.close'),
+                onDismiss: () => dismissBanner(resumeUnavailableBannerKey),
+              }}
+            >
+              {t('tasks.resumeRepoPrepFailed')}
+            </NoticeBanner>
+          )}
         {resumability === 'worktree-missing' &&
           !dismissedBanners.has(resumeUnavailableBannerKey) && (
             <NoticeBanner
@@ -1950,8 +1976,20 @@ export function taskDetailRefetchInterval(
 export function resumeStatus(
   status: Task['status'],
   worktreePath: string,
-): 'ready' | 'worktree-missing' | 'not-resumable' {
+  /**
+   * RFC-287 G7 / AC-10：该任务是否**卡在仓库准备**（合成 `__repo_prep__` 行失败）。
+   *
+   * 少了这一维就会误判：G7 之后仓库准备在任务行落库**之后**才跑，准备失败的任务
+   * 同样是 `failed` + `worktreePath === ''`，与「工作区被回收」在这两个标量上
+   * 完全同形。于是 UI 会劝用户「去重新启动一个任务」——而正解是**重试准备这一步**
+   * （AC-11：重试作用于任务当前所处阶段）。两者给的下一步动作完全相反。
+   *
+   * 缺省 false：老调用方（以及尚未拿到 node runs 的首帧）保持既有三态行为。
+   */
+  repoPrepFailed = false,
+): 'ready' | 'repo-prep-failed' | 'worktree-missing' | 'not-resumable' {
   if (status !== 'failed' && status !== 'interrupted') return 'not-resumable'
+  if (repoPrepFailed) return 'repo-prep-failed'
   if (worktreePath === '') return 'worktree-missing'
   return 'ready'
 }
