@@ -121,6 +121,13 @@ interface Allowance {
 const ALLOWANCES: readonly Allowance[] = [
   // --- permanent: posix-by-contract ------------------------------------------
   {
+    rule: 'null-device',
+    file: 'modules/code-capability/domain/diffHunks.ts',
+    match: "'/dev/null'",
+    count: 1,
+    why: 'operand is a unified-diff HEADER literal, not a path anything opens — git writes `/dev/null` for an absent side on every platform including Windows, so matching `NUL` there would fail to detect added/deleted files (RFC-304 T25b)',
+  },
+  {
     rule: 'posix-path-prefix',
     file: 'util/git.ts',
     match: '`${m}/`',
