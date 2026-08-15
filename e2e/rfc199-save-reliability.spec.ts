@@ -1,7 +1,7 @@
 // RFC-199 G1 — real-browser workflow draft reliability under weak networks.
 //
-// These tests deliberately intercept the production PUT/GET endpoints in
-// Chromium. They lock the user-visible contract that a save receipt only
+// These tests deliberately intercept the production PUT/GET endpoints in a
+// real browser. They lock the user-visible contract that a save receipt only
 // acknowledges the snapshot it actually carried, and that an uncertain save
 // is reconciled by exact version/hash before a queued edit is sent.
 
@@ -145,6 +145,18 @@ async function renameDraft(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible()
 }
 
+async function requestImmediateRetry(page: Page): Promise<void> {
+  // Reconcile also has an automatic backoff timer. Once the route fault is
+  // released that timer can finish between WebKit's pointerdown/actionability
+  // checks and click, legitimately detaching both Retry buttons. Dispatch the
+  // click atomically if a button is still present; the request-order assertions
+  // below remain the behavioral oracle when automatic recovery already won.
+  await page.getByRole('button', { name: 'Retry now' }).evaluateAll((buttons) => {
+    const button = buttons[buttons.length - 1]
+    if (button instanceof HTMLButtonElement) button.click()
+  })
+}
+
 function readSaveRequest(route: Route): SaveRequestProbe {
   return route.request().postDataJSON() as SaveRequestProbe
 }
@@ -286,8 +298,9 @@ test.describe('RFC-199 G1 — weak-network save reliability', () => {
     await renameDraft(page, queuedName)
     expect((await readWorkflow(workflowId)).name).toBe(committedName)
 
+    await expect(page.getByRole('button', { name: 'Retry now' }).last()).toBeVisible()
     failReconcileReads = false
-    await page.getByRole('button', { name: 'Retry now' }).first().click()
+    await requestImmediateRetry(page)
 
     await expect(page.getByTestId('workflow-draft-phase')).toHaveText('Saved')
     await expect(page.getByTestId('workflow-draft-transport')).toHaveText('Online')
@@ -343,8 +356,9 @@ test.describe('RFC-199 G1 — weak-network save reliability', () => {
     expect((await readWorkflow(workflowId)).name).toBe(initialName)
 
     await renameDraft(page, queuedName)
+    await expect(page.getByRole('button', { name: 'Retry now' }).last()).toBeVisible()
     failReconcileReads = false
-    await page.getByRole('button', { name: 'Retry now' }).first().click()
+    await requestImmediateRetry(page)
 
     await expect(page.getByTestId('workflow-draft-phase')).toHaveText('Saved')
     await expect
