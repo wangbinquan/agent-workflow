@@ -27,8 +27,19 @@ function sourceFiles(root: string): string[] {
   return files.sort()
 }
 
+const REVIEWED_CALL_NAMES = new Set([
+  'startTask',
+  'createFusion',
+  'rejectFusion',
+  'directTaskInitiatorFromActorSource',
+])
+
+let identifierCallInventory: Map<string, Map<string, number>> | undefined
+
 function identifierCalls(name: string): Map<string, number> {
-  const counts = new Map<string, number>()
+  if (identifierCallInventory) return identifierCallInventory.get(name) ?? new Map()
+
+  const inventory = new Map<string, Map<string, number>>()
   for (const file of sourceFiles(BACKEND_SRC)) {
     const source = ts.createSourceFile(
       file,
@@ -41,16 +52,19 @@ function identifierCalls(name: string): Map<string, number> {
       if (
         ts.isCallExpression(node) &&
         ts.isIdentifier(node.expression) &&
-        node.expression.text === name
+        REVIEWED_CALL_NAMES.has(node.expression.text)
       ) {
         const rel = relative(BACKEND_SRC, file).replaceAll('\\', '/')
+        const counts = inventory.get(node.expression.text) ?? new Map<string, number>()
         counts.set(rel, (counts.get(rel) ?? 0) + 1)
+        inventory.set(node.expression.text, counts)
       }
       ts.forEachChild(node, visit)
     }
     visit(source)
   }
-  return counts
+  identifierCallInventory = inventory
+  return inventory.get(name) ?? new Map()
 }
 
 describe('RFC-301 task launch-origin architecture ratchets', () => {
