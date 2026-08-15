@@ -286,19 +286,6 @@ code {
    * the shared grid row. */
   min-height: 0;
   overflow-y: auto;
-  /* Reserve the focus-ring gutter at the scrollport edges.
-   *
-   * Without it, an item whose box ends EXACTLY at the edge counts as fully
-   * visible, so focusing it scrolls nothing and its outset ring paints into
-   * clipped space. `scroll-padding` changes that judgement — the last gutter is
-   * excluded from the "visible" region, so the browser scrolls the item just
-   * clear of the edge.
-   *
-   * `scroll-margin` on `.nav-item` alone does NOT fix this: it only applies
-   * once a scroll is triggered, and here none is. Measured locally at 1280x800
-   * (RFC-304 probe): the last nav item sat with 0px of room and the sidebar's
-   * scrollTop was 0. */
-  scroll-padding-block: var(--focus-ring-gutter);
 }
 
 .sidebar__brand {
@@ -20105,7 +20092,7 @@ button.status-chip {
   min-height: 28px;
 }
 
-:where(.btn, .nav-item, .sidebar__link, .dialog__close):focus-visible {
+:where(.btn, .sidebar__link, .dialog__close):focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
@@ -20124,6 +20111,17 @@ button.status-chip {
    Intrinsically-sized chrome that is NOT flush by construction (.btn,
    .nav-item, .sidebar__link, .dialog__close) keeps the outset ring above.
 
+   RFC-304 moved `.nav-item` in here. It was listed above as "not flush by
+   construction", and that was true until `/code` made the sidebar nav one row
+   taller: at the canonical 1280x800 the nav now overflows its scrollport, so
+   the last item sits exactly on the clip edge and its outset ring is cut on
+   every route (CI measured ink 4 vs room 1, 94 instances).
+   Three container-side attempts failed first — trailing `padding` on the list,
+   `scroll-margin` on the item, `scroll-padding` on the scroller — each landing
+   on identical geometry. That is precisely the O(containers) habit this comment
+   already warns "made this bug recur five times"; fixing the RING is O(1) and
+   holds for whatever container the nav lives in next.
+
    RFC-206 T5' widened this list once the audit could reach fixture-backed
    surfaces. `.page-section-nav__group-trigger` / `__leaf` live in
    `.page-section-nav__group-triggers` / `__active-group-leaves` — the same
@@ -20135,6 +20133,7 @@ button.status-chip {
 :where(
   .tabs__tab,
   .segmented__option,
+  .nav-item,
   .page-section-nav__group-trigger,
   .page-section-nav__leaf,
   .task-outputs-panel__option
