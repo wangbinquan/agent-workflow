@@ -167,7 +167,7 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
 
   let dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
-  await expect(dialog.locator('.user-permission-row')).toHaveCount(72)
+  await expect(dialog.locator('.user-permission-row')).toHaveCount(73)
   await expect(dialog.locator('input[type="checkbox"]:not(:disabled)')).toHaveCount(24)
   await dialog.getByRole('textbox', { name: /Username/ }).fill(username)
   await dialog.getByRole('textbox', { name: /Display name/ }).fill('RFC-305 Browser User')

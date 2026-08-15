@@ -103,8 +103,13 @@ interface Recorded {
 }
 
 function installFetch(
-  state: { workflows: Workflow[]; releaseCreate?: () => void } & Recorded,
+  state: {
+    workflows: Workflow[]
+    releaseActor?: () => void
+    releaseCreate?: () => void
+  } & Recorded,
   opts: {
+    deferActor?: boolean
     failCreate?: boolean
     deferCreate?: boolean
     importResponse?: { status: number; body: unknown }
@@ -115,6 +120,11 @@ function installFetch(
       const url = req.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
       if (method === 'GET' && new URL(url).pathname === '/api/auth/me') {
+        if (opts.deferActor === true) {
+          return await new Promise<Response>((resolve) => {
+            state.releaseActor = () => resolve(fullAccessActorResponse())
+          })
+        }
         return fullAccessActorResponse()
       }
       // Import bodies are YAML, not JSON — record those as the raw string.
@@ -190,7 +200,10 @@ function installFetch(
   )
 }
 
-async function renderPage(initialEntry: string | string[], options: { homepage?: boolean } = {}) {
+async function renderPage(
+  initialEntry: string | string[],
+  options: { homepage?: boolean; seedActor?: boolean } = {},
+) {
   const list = await import('../src/routes/workflows')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
   const homeRoute = createRoute({
@@ -230,7 +243,7 @@ async function renderPage(initialEntry: string | string[], options: { homepage?:
     }),
   })
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  seedFullAccessActor(qc)
+  if (options.seedActor !== false) seedFullAccessActor(qc)
   render(
     <QueryClientProvider client={qc}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -372,6 +385,22 @@ describe('RFC-199 B1 workflow revision wire adapter', () => {
 })
 
 describe('/workflows quick-create dialog', () => {
+  test('deep create waits for current authority before consuming the one-shot search', async () => {
+    const state = { workflows: [], calls: [] as Recorded['calls'] }
+    installFetch(state, { deferActor: true })
+    const router = await renderPage('/workflows?create=1&source=homepage', { seedActor: false })
+
+    await waitFor(() => expect(state.releaseActor).toBeTypeOf('function'))
+    expect(screen.queryByTestId('workflow-create-dialog')).toBeNull()
+    expect(router.state.location.search).toEqual({ create: true, source: 'homepage' })
+
+    state.releaseActor?.()
+    expect(await screen.findByTestId('workflow-create-dialog')).toBeTruthy()
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ source: 'homepage' })
+    })
+  })
+
   test('deep create consumes create=1 with replace, preserves adjacent search, and never replays', async () => {
     const state = { workflows: [], calls: [] as Recorded['calls'] }
     installFetch(state)

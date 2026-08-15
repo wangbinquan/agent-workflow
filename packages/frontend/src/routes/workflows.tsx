@@ -20,7 +20,7 @@ import { ResourceGalleryPage, type GalleryCardItem } from '@/components/gallery/
 import { WORKFLOW_ICON } from '@/components/icons/resourceIcons'
 import { buildQuickCreateWorkflowPayload } from '@/lib/workflow-form'
 import { IntentEntryButton } from '@/components/IntentEntryButton'
-import { usePermission } from '@/hooks/useActor'
+import { useActor, usePermission } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
 export interface WorkflowsSearch extends Record<string, unknown> {
@@ -65,6 +65,8 @@ function WorkflowsPage() {
   const routeNavigate = Route.useNavigate()
   const search = Route.useSearch()
   const qc = useQueryClient()
+  const actor = useActor()
+  const authoritySettled = actor.status === 'success' && actor.fetchStatus === 'idle'
   const canCreate = usePermission('workflows:create')
   const canWriteIntent = usePermission('intent:write')
   // RFC-151 PR-3 — shared list shell: query + owner lookup. The delete
@@ -121,6 +123,10 @@ function WorkflowsPage() {
       deepCreateConsumedRef.current = false
       return
     }
+    // Permission hooks fail closed while /api/auth/me is pending. Do not
+    // consume a one-shot deep action during that transient state: doing so
+    // would canonicalize the URL without ever opening the authorized dialog.
+    if (!authoritySettled) return
     if (deepCreateConsumedRef.current) return
     deepCreateConsumedRef.current = true
     openCreate()
@@ -128,7 +134,7 @@ function WorkflowsPage() {
       search: (previous) => withoutWorkflowCreate(previous),
       replace: true,
     })
-  }, [openCreate, routeNavigate, search.create])
+  }, [authoritySettled, openCreate, routeNavigate, search.create])
 
   // Gallery items — updatedAt desc (freshest first). Node count derives from
   // the definition the list API already returns (schema defaults nodes: []).
