@@ -23,9 +23,10 @@ import {
   type AnchoredLine,
   type GitlabDiffRefs,
 } from '@/modules/code-capability/domain/reviewPosition'
+import { decideBatch, type DraftOutcome } from '@/modules/code-capability/domain/batchPublish'
 import {
   normalizeRemoteComments,
-  observeBatch,
+  observeJustPublished,
 } from '@/modules/code-capability/domain/publishReconcileRemote'
 import { apiProjectAddress, type RoundTarget } from '@/modules/code-capability/domain/resolveTarget'
 import type { CodeHostPort } from '@/modules/code-capability/ports/codeHostPort'
@@ -114,15 +115,21 @@ function threadIdFrom(body: string): string | null {
 }
 
 /**
- * Map this batch's fingerprints to the review comments GitHub just created.
+ * Map this batch's fingerprints to the comments now on the merge request.
+ *
+ * Both hosts need this, for different reasons. GitHub's review response carries
+ * the review rather than its comments' ids. GitLab's `bulk_publish` turns drafts
+ * into notes whose discussion ids are new — the draft ids are dead. Either way
+ * the only authority on "which thread carries this finding" is the MR itself.
  *
  * Only fingerprints from THIS batch are adopted: a long-lived PR carries
  * comments from earlier rounds, and claiming one of those as a thread this
  * round created would attach the wrong id to a finding — later resolving or
  * replying to a remark somebody else's round made.
  */
-async function readBackGithubIds(
+async function readBackIds(
   codeHost: CodeHostPort,
+  provider: 'gitlab' | 'github',
   base: { project: string; mr: string },
   batch: readonly string[],
 ): Promise<Record<string, string>> {
@@ -132,7 +139,7 @@ async function readBackGithubIds(
     params: { ...base, per_page: '100' },
   })
   if (!listed.ok) return {}
-  return observeBatch(batch, normalizeRemoteComments('github', listed.body)).present
+  return observeJustPublished(batch, normalizeRemoteComments(provider, listed.body)).present
 }
 
 function renderOverview(prelude: string, carried: readonly UnplacedFinding[]): string {
@@ -216,7 +223,7 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
     // round: the comments are already published and visible, and retracting a
     // review over a bookkeeping read would be far worse than a ledger row with
     // no thread id.
-    const ids = await readBackGithubIds(codeHost, base, submitted)
+    const ids = await readBackIds(codeHost, 'github', base, submitted)
     return {
       posted: comments.length,
       carriedInOverview: carried,
@@ -229,7 +236,18 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
     }
   }
 
-  // GitLab: one request per comment, so failures are partial by nature.
+  // GitLab: stage every comment as a draft, then publish them in ONE call.
+  //
+  // The obvious implementation — one `comment.create-inline` per finding — has a
+  // partial window that is visible to the author: a failure halfway leaves the
+  // first few remarks on the MR and nothing explaining the rest. Drafts move
+  // that window somewhere harmless. A failure during staging is compensated by
+  // deleting the drafts that DID land, so the MR looks untouched; only after
+  // every draft is staged does the single publish make the review appear.
+  //
+  // Compensation is not optional politeness: an abandoned batch of drafts stays
+  // visible on the MR as notes that will never be published, which reads as the
+  // bot having got halfway and given up.
   if (input.diffRefs === undefined) {
     // Refused rather than attempted: GitLab rejects a position without
     // `diff_refs`, so every comment would fail one at a time and the round
@@ -246,14 +264,13 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
     }
   }
 
-  // Indexed rather than `for…of` + `indexOf`: two findings can legitimately be
-  // the same object reference, and `indexOf` would then resolve to the FIRST
-  // one — re-listing already-posted comments as unposted in the overview.
-  const publishedFindings: PublishedFinding[] = []
-  for (let index = 0; index < input.placed.length; index++) {
-    const item = input.placed[index]!
+  const outcomes: DraftOutcome[] = []
+  for (const item of input.placed) {
     const built = buildGitlabPosition(item.anchor, input.diffRefs)
     if (!built.ok) {
+      // Not a draft failure — it was never stageable. It rides the overview,
+      // and must NOT enter `outcomes`, or `decideBatch` would compensate a
+      // batch that is actually fine.
       carried.push({
         body: item.body,
         label: item.label,
@@ -263,33 +280,117 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
       continue
     }
     const result = await codeHost.call({
-      action: 'comment.create-inline',
+      action: 'review.draft-create',
       params: { ...base, body: item.body, position: JSON.stringify(built.position) },
     })
-    if (result.ok) {
-      posted += 1
-      // The discussion id, straight from the response that created it. This is
-      // the thread `settle-stale` resolves when the finding stops appearing, so
-      // losing it here would leave a resolved-looking MR carrying threads for
-      // problems that are long gone.
-      publishedFindings.push({
-        fingerprint: item.fingerprint,
-        externalId: threadIdFrom(result.body),
+    outcomes.push(
+      result.ok
+        ? { fingerprint: item.fingerprint, ok: true, draftId: threadIdFrom(result.body) ?? '' }
+        : {
+            fingerprint: item.fingerprint,
+            ok: false,
+            error: `${result.code}: ${result.message}`,
+          },
+    )
+  }
+
+  const decision = decideBatch(outcomes)
+  const publishedFindings: PublishedFinding[] = []
+
+  // A draft that was created but whose id we could not read cannot be deleted —
+  // it stays on the MR as an orphan. Counted rather than ignored: that is the
+  // one outcome this whole mechanism exists to prevent, so if it happens the
+  // failure message has to say so instead of claiming a clean withdrawal.
+  let orphaned = 0
+
+  if (decision.action === 'compensate') {
+    // Delete what landed, so the MR shows nothing rather than half a review.
+    for (const draftId of decision.deleteDraftIds) {
+      if (draftId === '') {
+        orphaned += 1
+        continue
+      }
+      const discarded = await codeHost.call({
+        action: 'review.draft-discard',
+        params: { ...base, draft: draftId },
       })
-      continue
+      if (!discarded.ok) orphaned += 1
     }
-    // Stop, but do NOT drop what is left: everything unposted moves into the
-    // overview so the author still sees it.
-    failure = { code: result.code, message: result.message }
-    for (const remaining of input.placed.slice(index)) {
+    // Everything moves to the overview: the findings are real and the author
+    // should still see them, even though none could be placed on a line.
+    for (const item of input.placed) {
+      if (!outcomes.some((o) => o.fingerprint === item.fingerprint)) continue
       carried.push({
-        body: remaining.body,
-        label: remaining.label,
-        reason: `publishing stopped after a host error (${result.code})`,
-        fingerprint: remaining.fingerprint,
+        body: item.body,
+        label: item.label,
+        reason: 'this review could not be staged on the merge request',
+        fingerprint: item.fingerprint,
       })
     }
-    break
+    failure = {
+      code: 'draft-staging-failed',
+      message:
+        orphaned === 0
+          ? `${decision.failedFingerprints.length} comment(s) could not be staged; the partial batch was withdrawn`
+          : `${decision.failedFingerprints.length} comment(s) could not be staged, and ${orphaned} draft(s) could NOT be withdrawn — they remain on the merge request and must be removed by hand`,
+    }
+  } else if (decision.action === 'publish') {
+    const published = await codeHost.call({ action: 'review.draft-publish', params: base })
+    if (published.ok) {
+      posted = decision.draftIds.length
+      // Read back, do NOT reuse the draft id. `bulk_publish` turns draft notes
+      // into ordinary notes and the resulting DISCUSSION has its own id; the
+      // draft id is dead the moment it publishes. Recording it would give every
+      // finding a thread reference that `thread.resolve` rejects — a ledger
+      // full of ids that look right and resolve nothing.
+      //
+      // The draft ids are still needed above, for compensation: withdrawing a
+      // staged batch addresses drafts, not discussions.
+      const ids = await readBackIds(
+        codeHost,
+        'gitlab',
+        base,
+        decision.draftIds.length > 0 ? outcomes.filter((o) => o.ok).map((o) => o.fingerprint) : [],
+      )
+      for (const outcome of outcomes) {
+        if (!outcome.ok) continue
+        publishedFindings.push({
+          fingerprint: outcome.fingerprint,
+          externalId: ids[outcome.fingerprint] ?? null,
+        })
+      }
+    } else {
+      // Staged but not published. The drafts are on the MR and invisible to
+      // nobody but the author's reviewers — withdraw them for the same reason
+      // as above.
+      for (const draftId of decision.draftIds) {
+        if (draftId === '') {
+          orphaned += 1
+          continue
+        }
+        const discarded = await codeHost.call({
+          action: 'review.draft-discard',
+          params: { ...base, draft: draftId },
+        })
+        if (!discarded.ok) orphaned += 1
+      }
+      for (const item of input.placed) {
+        if (!outcomes.some((o) => o.ok && o.fingerprint === item.fingerprint)) continue
+        carried.push({
+          body: item.body,
+          label: item.label,
+          reason: `publishing the staged review failed (${published.code})`,
+          fingerprint: item.fingerprint,
+        })
+      }
+      failure = {
+        code: published.code,
+        message:
+          orphaned === 0
+            ? published.message
+            : `${published.message} (and ${orphaned} staged draft(s) could NOT be withdrawn — they remain on the merge request)`,
+      }
+    }
   }
 
   const overview = await codeHost.call({

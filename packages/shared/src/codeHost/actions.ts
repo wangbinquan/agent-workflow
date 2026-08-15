@@ -40,6 +40,9 @@ export const CODE_HOST_ACTIONS = [
   // force one of them through a model it does not have.
   'review.draft-create',
   'review.draft-publish',
+  // 补偿删除。上面那段注释里写明「抢占或失败必须补偿删除，否则 MR 上留下一批永不
+  // 发布的孤儿草稿」——这个动作就是那句话的执行面，`draft` 字段本来也是为它加的。
+  'review.draft-discard',
   'review.submit',
   // mr
   'commit-status.set',
@@ -379,6 +382,18 @@ export const CODE_HOST_ACTION_DEFS = {
         path: '/projects/{__project__}/merge_requests/{mr}/draft_notes/bulk_publish',
         body: [],
       },
+      github: { unsupported: true, reasonKey: 'singleRequestReview' },
+    },
+  },
+  'review.draft-discard': {
+    group: 'comment',
+    fields: [PROJECT, MR_REQUIRED, { name: 'draft', control: 'text', requiredFor: ['gitlab'] }],
+    bindings: {
+      gitlab: {
+        method: 'DELETE',
+        path: '/projects/{__project__}/merge_requests/{mr}/draft_notes/{draft}',
+      },
+      // 同 draft-create：GitHub 没有可单独创建的草稿资源，也就没有可删的。
       github: { unsupported: true, reasonKey: 'singleRequestReview' },
     },
   },

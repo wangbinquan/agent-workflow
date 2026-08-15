@@ -4964,6 +4964,10 @@ export interface Resources {
     pipeline_cancel: string
     job_list: string
     job_log: string
+    'review_draft-create': string
+    'review_draft-publish': string
+    'review_draft-discard': string
+    review_submit: string
     comment_list: string
     mr_get: string
     mr_diff: string
@@ -4988,6 +4992,10 @@ export interface Resources {
     pipeline_cancel: string
     job_list: string
     job_log: string
+    'review_draft-create': string
+    'review_draft-publish': string
+    'review_draft-discard': string
+    review_submit: string
     comment_list: string
     mr_get: string
     mr_diff: string
@@ -11160,6 +11168,10 @@ export const zhCN: Resources = {
     pipeline_cancel: '取消流水线 / 工作流',
     job_list: '列出流水线 / 工作流作业',
     job_log: '读取作业日志',
+    'review_draft-create': '暂存一条草稿评审意见',
+    'review_draft-publish': '一次性发布全部草稿意见',
+    'review_draft-discard': '丢弃一条草稿意见',
+    review_submit: '一次请求提交整份评审',
     comment_list: '列出 MR/PR 上已有的评论',
     mr_get: '读取 MR/PR 元信息',
     mr_diff: '读取变更文件与差异',
@@ -11188,6 +11200,13 @@ export const zhCN: Resources = {
     pipeline_cancel: 'GitLab 取消流水线内所有作业；GitHub 取消一次工作流运行。',
     job_list: '列出指定 GitLab 流水线或 GitHub Actions 工作流运行中的作业。',
     job_log: '读取单个作业的纯文本运行日志；GitHub 会跟随短时有效的下载链接。',
+    'review_draft-create':
+      '仅 GitLab：把一条行级意见先存成草稿。攒齐草稿再一次性发布，MR 上就不会出现「发了一半」的状态；GitHub 的 review 是单请求提交，没有可单独创建的草稿资源。',
+    'review_draft-publish': '仅 GitLab：一次调用发布全部草稿，整份评审同时出现在 MR 上。',
+    'review_draft-discard':
+      '仅 GitLab：删除一条草稿。用于回滚只攒了一半的批次——没有它，中途失败会在 MR 上留下一批永不发布的孤儿草稿，用户可见且像 bot 跑了一半。',
+    review_submit:
+      '仅 GitHub：一次请求提交整份评审（正文 + 全部行级意见），并钉在指定 commit 上。要么全部落地，要么什么都没有。',
     comment_list:
       '回读 MR/PR 上已有的评审评论。用于把上一轮已经发出去的评论认回来——发布与记账之间崩溃时，不至于把整批重发。',
     mr_get:

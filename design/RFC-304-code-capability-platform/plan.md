@@ -286,9 +286,32 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T27  | `code_findings` 台账：唯一键 `(codeHostEndpointId, stableProjectId, anchorKind, anchorId, fingerprint, generation)`；`fingerprint` 含 `symbolOrHunkDigest`；**`active/disappeared/reappeared` 生命周期**；`createdAt/lastSeenAt/closedAt` 与仓库+时间索引 | T2           | ✅ 2026-08-15 |
 | T27b | `reconcile` 三集合对账：台账侧**只取 active 行**；重现的问题以**新 generation** 发布                                                                                                                                                                      | T27          | ✅ 2026-08-15 |
 | T28  | `settle-stale`：**发布成功后**执行，且**只在状态边沿**动作一次（`active→disappeared`）——否则长命 MR 上 GitHub 会重复追加 78 条同义回复；逐项落幂等状态                                                                                                    | T22,T27b,T29 | ✅ 2026-08-15 |
-| T29  | `publish`：草稿攒齐一次性发布 + 锚不上的并入总览评论                                                                                                                                                                                                      | T21,T26      |
+| T29  | `publish`：草稿攒齐一次性发布 + 锚不上的并入总览评论                                                                                                                                                                                                      | T21,T26      | ✅ 2026-08-16 |
 | T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          |
 | T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  |
+
+> **T29 草稿批量发布（2026-08-16）**：GitLab 侧从「每条一个 `comment.create-inline`」
+> 改成「逐条 `review.draft-create` 攒草稿 → 一次 `review.draft-publish`」。原实现的半发
+> 窗口是**作者可见**的：中途失败时前几条意见已经躺在 MR 上、剩下的没有任何交代。草稿把这
+> 个窗口挪到无害的地方——攒的过程中失败就把已建的草稿删掉，MR 看起来没被碰过。
+>
+> - 注册表补 `review.draft-discard`（GitLab `DELETE .../draft_notes/{draft}`）。`draft`
+>   字段本来就是为它加的（注释写着「补偿删除要用」），但动作一直没建，于是补偿这条路
+>   在代码里根本走不通。
+> - **删不掉的草稿必须说出来**：补偿失败或拿不到草稿 id 时，MR 上会留下永不发布的孤儿
+>   草稿——正是这套机制存在的唯一理由。故计数并写进失败信息，而不是静默跳过（初版就是
+>   静默跳过，测试 fixture 返回 `{}` 才暴露出来）。
+> - **一个我差点写死的错误假设**：初版记 externalId 时用了草稿 id，注释还写着「草稿 id
+>   发布后就是 note id」。**不是**——`bulk_publish` 把草稿转成新的 note、discussion 有
+>   自己的 id，草稿 id 当场作废。台账里会存一批看着对、`thread.resolve` 全拒的引用。
+>   改为发布后按指纹**回读**（与 GitHub 同一条路径，`comment.list` 一次补两家）。
+> - **回读的重复语义与恢复相反**：`observeBatch` 取**首个**匹配（恢复时最老的那条才是
+>   已经在的那条）；发布后回读必须取**最后一个**——问题消失又重现时，老评论还挂在 MR 上
+>   且指纹完全相同（指纹由内容派生），取首个会把新一代绑到那条已 resolve 的老线程上，
+>   于是 `settle-stale` 去 resolve 一条已 resolve 的，真正活着的那条永远关不掉。故新增
+>   `observeJustPublished`，两处语义各自写明。
+> - 测试侧新增共享 fake `tests/helpers/codeHostReviewFake.ts`：草稿 → 发布 → discussion
+>   的**真实序列**（含发布时 id 变更），五个轮次套件共用，避免五份手写副本各自漂移。
 
 > **§7.2 发布崩溃恢复接线（2026-08-16）**：`sqlitePublishIntentStore` /
 > `publishIntent` / `publishReconcileRemote` PR-1c 就写完了，**零调用方**——于是这个洞

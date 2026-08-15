@@ -76,6 +76,41 @@ export function observeBatch(
 }
 
 /**
+ * Like `observeBatch`, but for reading back a publish that JUST happened.
+ *
+ * The difference is which duplicate wins, and it matters more than it looks.
+ * `observeBatch` keeps the FIRST match, which is right for recovery: the oldest
+ * comment is the one that was already there, and adopting a newer copy would
+ * orphan it.
+ *
+ * After publishing, the opposite is true. A finding that disappeared and came
+ * back is republished under a new generation while its ORIGINAL comment is
+ * still on the MR carrying the same fingerprint — the fingerprint is derived
+ * from the finding's content, so a recurrence is identical to its first
+ * appearance. Keeping the first match would hand the new generation the old,
+ * already-resolved thread; `settle-stale` would then resolve a resolved thread
+ * and the live one would never be closed.
+ *
+ * Both hosts return these lists oldest-first (GitLab discussions by creation,
+ * GitHub review comments by ascending id), so the last match is the one this
+ * publish created.
+ */
+export function observeJustPublished(
+  batchFingerprints: readonly string[],
+  comments: readonly RemoteComment[],
+): { present: Record<string, string> } {
+  const wanted = new Set(batchFingerprints)
+  const present: Record<string, string> = {}
+  for (const comment of comments) {
+    const fingerprint = fingerprintOf(comment.body)
+    if (fingerprint === null || !wanted.has(fingerprint)) continue
+    // Last write wins — the newest comment carrying this fingerprint.
+    present[fingerprint] = comment.externalId
+  }
+  return { present }
+}
+
+/**
  * Which remote surfaces a host must be read from before deciding.
  *
  * GitLab needs BOTH: a crash before `bulk_publish` leaves drafts, a crash after

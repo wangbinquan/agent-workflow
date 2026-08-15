@@ -73,7 +73,17 @@ function host(
   }
 }
 
-const ok = (): CodeHostResult => ({ ok: true, status: 201, body: '{}', truncated: false })
+// Every create returns an id, because both hosts do: GitLab's draft_notes POST
+// returns the draft note, and a draft whose id we never learned is a draft we
+// can never withdraw. A fixture returning `{}` would quietly exercise the
+// can't-compensate path on every test.
+let nextId = 0
+const ok = (): CodeHostResult => ({
+  ok: true,
+  status: 201,
+  body: JSON.stringify({ id: `id-${++nextId}` }),
+  truncated: false,
+})
 
 const placed = (line: number, label: string) => ({
   body: `something is wrong on line ${line}`,
@@ -85,7 +95,10 @@ const placed = (line: number, label: string) => ({
 })
 
 describe('RFC-304 — publishing on GitLab', () => {
-  test('each finding becomes its own inline comment, then an overview', async () => {
+  test('findings are STAGED as drafts and published in one call (T29)', async () => {
+    // PR-4b replaced the comment-per-request loop. The author now sees the whole
+    // review appear at once rather than watching it arrive line by line — and,
+    // more importantly, a failure part-way can be withdrawn (below).
     const h = host(ok)
     const result = await publishReview({
       codeHost: h,
@@ -98,8 +111,12 @@ describe('RFC-304 — publishing on GitLab', () => {
     expect(result.posted).toBe(2)
     expect(result.overviewPosted).toBe(true)
     expect(h.calls.map((c) => c.action)).toEqual([
-      'comment.create-inline',
-      'comment.create-inline',
+      'review.draft-create',
+      'review.draft-create',
+      'review.draft-publish',
+      // The published discussions have new ids — `bulk_publish` does not keep
+      // the drafts' — so they are read back before the ledger records them.
+      'comment.list',
       'comment.create',
     ])
   })
@@ -139,11 +156,14 @@ describe('RFC-304 — publishing on GitLab', () => {
     expect(h.calls).toHaveLength(0)
   })
 
-  test('a host error partway carries EVERY remaining finding into the overview', async () => {
-    // The invariant. Findings 2 and 3 must not vanish because finding 2 failed.
+  test('a staging failure WITHDRAWS the drafts that landed', async () => {
+    // The reason drafts are worth the extra calls. Under the old
+    // comment-per-request loop, findings 1 stayed on the MR while 2 and 3 did
+    // not — a review that is visibly half-finished and cannot be undone.
+    // Now the partial batch is deleted and the MR looks untouched.
     let seen = 0
     const h = host((call) => {
-      if (call.action !== 'comment.create-inline') return ok()
+      if (call.action !== 'review.draft-create') return ok()
       seen += 1
       return seen === 2 ? { ok: false, code: 'code-host-rate-limited', message: 'slow down' } : ok()
     })
@@ -155,16 +175,91 @@ describe('RFC-304 — publishing on GitLab', () => {
       diffRefs: REFS,
       overviewPrelude: 'Reviewed.',
     })
-    expect(result.posted).toBe(1)
-    expect(result.carriedInOverview.map((c) => c.label)).toEqual(['b', 'c'])
-    expect(result.failure?.code).toBe('code-host-rate-limited')
+    expect(result.posted).toBe(0)
+    // The two that DID stage are discarded — not the one that failed, which
+    // never existed remotely. Compensating the failed one is the easy
+    // inversion, and it would delete nothing while leaving the batch on show.
+    expect(h.calls.filter((c) => c.action === 'review.draft-discard')).toHaveLength(2)
+    expect(h.calls.some((c) => c.action === 'review.draft-publish')).toBe(false)
+  })
+
+  test('a withdrawn batch still reaches the author, through the overview', async () => {
+    // Withdrawing must not mean discarding. The findings are real; they just
+    // could not be placed on lines, so they ride the overview instead.
+    const h = host((call) =>
+      call.action === 'review.draft-create'
+        ? { ok: false, code: 'code-host-rate-limited', message: 'slow down' }
+        : ok(),
+    )
+    const result = await publishReview({
+      codeHost: h,
+      target: targetOf(),
+      placed: [placed(11, 'a'), placed(12, 'b')],
+      unplaced: [],
+      diffRefs: REFS,
+      overviewPrelude: 'Reviewed.',
+    })
+    expect(result.carriedInOverview.map((c) => c.label).sort()).toEqual(['a', 'b'])
+    expect(result.failure?.code).toBe('draft-staging-failed')
+  })
+
+  test('a draft that could NOT be withdrawn is named, not hidden', async () => {
+    // The one outcome the whole draft mechanism exists to prevent: notes left
+    // on the MR that will never be published. If withdrawal itself fails, the
+    // round must say so — a message claiming a clean withdrawal would send
+    // somebody looking for a problem they were told did not exist.
+    let created = 0
+    const h = host((call) => {
+      if (call.action === 'review.draft-create') {
+        created += 1
+        return created === 2
+          ? { ok: false, code: 'code-host-rate-limited', message: 'slow down' }
+          : ok()
+      }
+      if (call.action === 'review.draft-discard') {
+        return { ok: false, code: 'code-host-forbidden', message: 'cannot delete' }
+      }
+      return ok()
+    })
+    const result = await publishReview({
+      codeHost: h,
+      target: targetOf(),
+      placed: [placed(11, 'a'), placed(12, 'b')],
+      unplaced: [],
+      diffRefs: REFS,
+      overviewPrelude: 'Reviewed.',
+    })
+    expect(result.failure?.code).toBe('draft-staging-failed')
+    expect(String(result.failure?.message)).toContain('could NOT be withdrawn')
+  })
+
+  test('a publish that fails after staging also withdraws the drafts', async () => {
+    // The second window: everything staged, the bulk publish rejected. Leaving
+    // them would put a batch of never-published drafts on the MR — visible, and
+    // reading as a bot that got halfway and stopped.
+    const h = host((call) =>
+      call.action === 'review.draft-publish'
+        ? { ok: false, code: 'code-host-forbidden', message: 'no' }
+        : ok(),
+    )
+    const result = await publishReview({
+      codeHost: h,
+      target: targetOf(),
+      placed: [placed(11, 'a'), placed(12, 'b')],
+      unplaced: [],
+      diffRefs: REFS,
+      overviewPrelude: 'Reviewed.',
+    })
+    expect(h.calls.filter((c) => c.action === 'review.draft-discard')).toHaveLength(2)
+    expect(result.posted).toBe(0)
+    expect(result.carriedInOverview).toHaveLength(2)
   })
 
   test('the overview is still posted after a partial failure', async () => {
     // Otherwise the carried findings are computed and then thrown away, which
     // is the silent loss this whole design avoids.
     const h = host((call) =>
-      call.action === 'comment.create-inline'
+      call.action === 'review.draft-create'
         ? { ok: false, code: 'code-host-forbidden', message: 'no' }
         : ok(),
     )

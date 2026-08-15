@@ -37,11 +37,8 @@ import {
   readLedgerForAnchor,
   type LedgerAnchor,
 } from '../src/modules/code-capability/infrastructure/sqliteFindingLedger'
-import type {
-  CodeHostCall,
-  CodeHostPort,
-  CodeHostResult,
-} from '../src/modules/code-capability/ports/codeHostPort'
+import { createReviewHostFake } from './helpers/codeHostReviewFake'
+import type { CodeHostPort } from '../src/modules/code-capability/ports/codeHostPort'
 import type { GitPort } from '../src/modules/code-capability/ports/gitPort'
 import type { WebhookTriggerFields } from '@agent-workflow/shared'
 
@@ -74,35 +71,17 @@ const MR_BODY = {
   diff_refs: { base_sha: 'base', start_sha: 'start', head_sha: HEAD },
 }
 
-const okJson = (body: unknown): CodeHostResult => ({
-  ok: true,
-  status: 200,
-  body: JSON.stringify(body),
-  truncated: false,
-})
-
 /**
- * A host that hands out a DISTINCT discussion id per inline comment.
+ * The MR, as publishing actually sees it: drafts stage, one call publishes them,
+ * and only then do discussions with their own ids exist.
  *
- * A constant id would let a wrong-thread bug pass: every resolve would name the
- * same discussion and look correct no matter which finding disappeared.
+ * Shared with the other round suites so the sequence cannot drift between them
+ * — the id changing at publish time is the whole reason the publish path reads
+ * ids back instead of reusing the draft's.
  */
 function fakeHost(provider: 'gitlab' | 'github' = 'gitlab') {
-  const calls: CodeHostCall[] = []
-  let thread = 0
-  const port: CodeHostPort = {
-    async call(call) {
-      calls.push(call)
-      if (call.action === 'mr.get') return okJson(MR_BODY)
-      if (call.action === 'mr.diff') return okJson(GITLAB_DIFF)
-      if (call.action === 'comment.create-inline') {
-        thread += 1
-        return okJson({ id: `disc-${thread}` })
-      }
-      return okJson({ id: 1 })
-    },
-  }
-  return { port, calls, provider }
+  const fake = createReviewHostFake({ provider, mrBody: MR_BODY, diff: GITLAB_DIFF })
+  return { ...fake, provider }
 }
 
 const fakeGit = (): GitPort => ({
@@ -170,8 +149,10 @@ async function runRound(
   return { outcome, roundId }
 }
 
+// A "line comment" is now a staged draft: that is the call that carries one
+// finding, and its count is what "how many remarks did this round post" means.
 const inlineCalls = (host: ReturnType<typeof fakeHost>) =>
-  host.calls.filter((c) => c.action === 'comment.create-inline')
+  host.calls.filter((c) => c.action === 'review.draft-create')
 const resolveCalls = (host: ReturnType<typeof fakeHost>) =>
   host.calls.filter((c) => c.action === 'thread.resolve')
 const overviews = (host: ReturnType<typeof fakeHost>) =>
@@ -237,7 +218,10 @@ describe('RFC-304 — a finding that is still there', () => {
     const host = fakeHost()
     await runRound(db, home, host, [findingAt(11, 'unchecked index')])
     const rows = await readLedgerForAnchor(db, ANCHOR, 'mr-review')
-    expect(rows[0]?.externalId).toBe('disc-1')
+    // Compared against what the host actually published rather than a literal:
+    // the id is read back from the MR, so hard-coding one would test the
+    // fixture's numbering instead of the read-back.
+    expect(rows[0]?.externalId).toBe(host.publishedIds()[0])
   })
 })
 
@@ -284,7 +268,10 @@ describe('RFC-304 — a finding that disappeared', () => {
 
     const resolves = resolveCalls(host)
     expect(resolves).toHaveLength(1)
-    expect(resolves[0]?.params.thread).toBe('disc-1')
+    // The thread the finding actually owns — the discussion the publish created,
+    // NOT the draft it was staged as. A draft id here would be a reference
+    // GitLab rejects, which is the bug the read-back exists to prevent.
+    expect(resolves[0]?.params.thread).toBe(host.publishedIds()[0])
   })
 
   test('is resolved EXACTLY once — a third round says nothing further', async () => {
@@ -357,7 +344,9 @@ describe('RFC-304 — a finding that came back', () => {
 
     const rows = await readLedgerForAnchor(db, ANCHOR, 'mr-review')
     const latest = rows.find((r) => r.generation === 2)
-    expect(latest?.externalId).toBe('disc-2')
+    // The second discussion the host published — the republish gets its own
+    // thread, because the first was resolved when the finding disappeared.
+    expect(latest?.externalId).toBe(host.publishedIds()[1])
     expect(latest?.lifecycle).toBe('active')
   })
 })
@@ -381,7 +370,9 @@ describe('RFC-304 — a finding the host refused', () => {
     const host = fakeHost()
     const rejecting: CodeHostPort = {
       async call(call) {
-        if (call.action === 'comment.create-inline') {
+        // Staging is where a line comment is refused now (T29). Rejecting the
+        // old per-comment action would let the round succeed and prove nothing.
+        if (call.action === 'review.draft-create') {
           return { ok: false, code: 'forbidden', message: 'no permission to comment' }
         }
         return host.port.call(call)

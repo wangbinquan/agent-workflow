@@ -39,8 +39,8 @@ import {
 } from '../src/modules/code-capability/domain/reviewComment'
 import { hunkDigestFor } from '../src/modules/code-capability/domain/anchorLine'
 import { parseDiffHunks } from '../src/modules/code-capability/domain/diffHunks'
+import { createReviewHostFake } from './helpers/codeHostReviewFake'
 import type {
-  CodeHostCall,
   CodeHostPort,
   CodeHostResult,
 } from '../src/modules/code-capability/ports/codeHostPort'
@@ -99,27 +99,9 @@ const okJson = (body: unknown): CodeHostResult => ({
   truncated: false,
 })
 
-/** A host that can be seeded with comments already on the MR. */
+/** A host that can be seeded with comments a previous round already published. */
 function fakeHost(existing: Array<{ id: string; body: string }> = []) {
-  const calls: CodeHostCall[] = []
-  let thread = existing.length
-  const port: CodeHostPort = {
-    async call(call) {
-      calls.push(call)
-      if (call.action === 'mr.get') return okJson(MR_BODY)
-      if (call.action === 'mr.diff') return okJson(GITLAB_DIFF)
-      if (call.action === 'comment.list') {
-        // GitLab's discussion shape: a thread id plus its notes.
-        return okJson(existing.map((c) => ({ id: c.id, notes: [{ body: c.body }] })))
-      }
-      if (call.action === 'comment.create-inline') {
-        thread += 1
-        return okJson({ id: `disc-${thread}` })
-      }
-      return okJson({ id: 1 })
-    },
-  }
-  return { port, calls }
+  return createReviewHostFake({ mrBody: MR_BODY, diff: GITLAB_DIFF, existing })
 }
 
 const fakeGit = (): GitPort => ({
@@ -180,8 +162,9 @@ async function runRound(
   return { outcome, roundId }
 }
 
+// Staging is what carries one finding now (T29).
 const inlineCalls = (host: ReturnType<typeof fakeHost>) =>
-  host.calls.filter((c) => c.action === 'comment.create-inline')
+  host.calls.filter((c) => c.action === 'review.draft-create')
 
 describe('RFC-304 — a round that died between publishing and recording', () => {
   let db: DbClient
@@ -292,7 +275,7 @@ describe('RFC-304 — the intent is written before the call, not after', () => {
         if (call.action === 'mr.get') return okJson(MR_BODY)
         if (call.action === 'mr.diff') return okJson(GITLAB_DIFF)
         if (call.action === 'comment.list') return okJson([])
-        if (call.action === 'comment.create-inline') {
+        if (call.action === 'review.draft-create') {
           return { ok: false, code: 'forbidden', message: 'no permission' }
         }
         return okJson({ id: 1 })

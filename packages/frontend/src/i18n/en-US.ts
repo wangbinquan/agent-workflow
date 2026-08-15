@@ -5779,6 +5779,10 @@ export const enUS: Resources = {
     pipeline_cancel: 'Cancel pipeline / workflow',
     job_list: 'List pipeline / workflow jobs',
     job_log: 'Read job log',
+    'review_draft-create': 'Stage one draft review comment',
+    'review_draft-publish': 'Publish all staged draft comments at once',
+    'review_draft-discard': 'Discard a staged draft comment',
+    review_submit: 'Submit a whole review in one request',
     comment_list: 'List existing MR/PR comments',
     mr_get: 'Read MR/PR metadata',
     mr_diff: 'Read changed files and diffs',
@@ -5817,6 +5821,14 @@ export const enUS: Resources = {
     job_list: 'List jobs in a GitLab pipeline or a GitHub Actions workflow run.',
     job_log:
       'Read the plain-text log for one job; GitHub follows its short-lived download redirect.',
+    'review_draft-create':
+      'GitLab only: stage one inline comment as a draft note. Drafts are how a whole review is published at once instead of comment by comment; GitHub has no draft resource because its review is a single request.',
+    'review_draft-publish':
+      'GitLab only: publish every staged draft note in one call, so the MR gets the whole review at once rather than partially.',
+    'review_draft-discard':
+      'GitLab only: delete a staged draft note. Used to undo a partially staged batch — without it, a failure part-way leaves orphan drafts visible on the MR that will never be published.',
+    review_submit:
+      'GitHub only: submit an entire review — body plus every inline comment — in one request, pinned to a commit. Either all of it lands or none does.',
     comment_list:
       'List review comments already on an MR/PR. Used to recognise comments a previous round already published, so a crash between publishing and recording does not repost the whole batch.',
     mr_get:

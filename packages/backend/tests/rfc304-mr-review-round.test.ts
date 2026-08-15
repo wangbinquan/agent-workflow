@@ -194,7 +194,11 @@ describe('RFC-304 — mr-review through the real runner', () => {
     expect(host.calls.map((c) => c.action)).toEqual([
       'mr.get',
       'mr.diff',
-      'comment.create-inline',
+      // T29: staged as a draft, published in one call, then read back for the
+      // discussion id (`bulk_publish` does not keep the draft's).
+      'review.draft-create',
+      'review.draft-publish',
+      'comment.list',
       'comment.create',
     ])
   })
@@ -231,7 +235,7 @@ describe('RFC-304 — mr-review through the real runner', () => {
   test('the comment carries severity, title and explanation', async () => {
     const host = fakeHost()
     await runRound(db, { host, ai: scriptedModel(envelope([FINDING])), home })
-    const body = String(host.calls.find((c) => c.action === 'comment.create-inline')?.params.body)
+    const body = String(host.calls.find((c) => c.action === 'review.draft-create')?.params.body)
     expect(body).toContain('**Major — unchecked index**')
     expect(body).toContain('This can be undefined.')
   })
@@ -363,7 +367,7 @@ describe('RFC-304 — the gate runs before positions', () => {
       gate: { threshold: 'major', maxPerRound: 20 },
     })
     expect(outcome.outcome).toBe('done')
-    expect(host.calls.some((c) => c.action === 'comment.create-inline')).toBe(false)
+    expect(host.calls.some((c) => c.action === 'review.draft-create')).toBe(false)
     expect(String(host.calls.at(-1)?.params.body)).toContain('below the configured severity')
   })
 
@@ -388,7 +392,7 @@ describe('RFC-304 — the gate runs before positions', () => {
       home,
     })
     expect(outcome.outcome).toBe('done')
-    expect(host.calls.some((c) => c.action === 'comment.create-inline')).toBe(false)
+    expect(host.calls.some((c) => c.action === 'review.draft-create')).toBe(false)
     const overview = String(host.calls.at(-1)?.params.body)
     expect(overview).toContain('could not be placed')
     expect(overview).toContain('unchecked index')
@@ -401,7 +405,7 @@ describe('RFC-304 — the gate runs before positions', () => {
       ai: scriptedModel(envelope([FINDING, { ...FINDING, line: 900, title: 'elsewhere' }])),
       home,
     })
-    expect(host.calls.filter((c) => c.action === 'comment.create-inline')).toHaveLength(1)
+    expect(host.calls.filter((c) => c.action === 'review.draft-create')).toHaveLength(1)
     expect(String(host.calls.at(-1)?.params.body)).toContain('2 findings')
   })
 })

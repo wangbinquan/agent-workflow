@@ -28,11 +28,7 @@ import {
   type MrReviewEnvironment,
 } from '../src/modules/code-capability/composition/mrReviewStages'
 import { readRoundStages } from '../src/modules/code-capability/application/stageEngine'
-import type {
-  CodeHostCall,
-  CodeHostPort,
-  CodeHostResult,
-} from '../src/modules/code-capability/ports/codeHostPort'
+import { createReviewHostFake } from './helpers/codeHostReviewFake'
 import type { GitPort } from '../src/modules/code-capability/ports/gitPort'
 import type { WebhookTriggerFields } from '@agent-workflow/shared'
 
@@ -64,29 +60,8 @@ const MR_BODY = {
   diff_refs: { base_sha: 'base', start_sha: 'start', head_sha: HEAD },
 }
 
-const okJson = (body: unknown): CodeHostResult => ({
-  ok: true,
-  status: 200,
-  body: JSON.stringify(body),
-  truncated: false,
-})
-
 function fakeHost(files: unknown[] = THREE_DIRS) {
-  const calls: CodeHostCall[] = []
-  let thread = 0
-  const port: CodeHostPort = {
-    async call(call) {
-      calls.push(call)
-      if (call.action === 'mr.get') return okJson(MR_BODY)
-      if (call.action === 'mr.diff') return okJson(files)
-      if (call.action === 'comment.create-inline') {
-        thread += 1
-        return okJson({ id: `disc-${thread}` })
-      }
-      return okJson({ id: 1 })
-    },
-  }
-  return { port, calls }
+  return createReviewHostFake({ mrBody: MR_BODY, diff: files })
 }
 
 /** Records the sha every shard tree is created at. */
@@ -333,7 +308,7 @@ describe('RFC-304 — findings from both passes are merged', () => {
           : [],
     )
     await runRound(db, home, host, ai, recordingGit())
-    expect(host.calls.filter((c) => c.action === 'comment.create-inline')).toHaveLength(2)
+    expect(host.calls.filter((c) => c.action === 'review.draft-create')).toHaveLength(2)
   })
 
   test('a global finding that REPEATS a shard’s is published once', async () => {
@@ -344,7 +319,7 @@ describe('RFC-304 — findings from both passes are merged', () => {
     const same = finding('src/a.ts', 'unchecked index')
     const ai = scripted((call) => (call === 1 || call === 4 ? [same] : []))
     await runRound(db, home, host, ai, recordingGit())
-    expect(host.calls.filter((c) => c.action === 'comment.create-inline')).toHaveLength(1)
+    expect(host.calls.filter((c) => c.action === 'review.draft-create')).toHaveLength(1)
   })
 })
 
@@ -377,6 +352,6 @@ describe('RFC-304 — degraded passes do not sink the round', () => {
     const { outcome } = await runRound(db, home, host, { prompts, makeCaller }, recordingGit())
 
     expect(outcome.outcome).toBe('done')
-    expect(host.calls.filter((c) => c.action === 'comment.create-inline').length).toBeGreaterThan(0)
+    expect(host.calls.filter((c) => c.action === 'review.draft-create').length).toBeGreaterThan(0)
   })
 })

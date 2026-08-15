@@ -201,11 +201,14 @@ describe('RFC-304 — the wire form of a GitLab review', () => {
     expect(sent.some((s) => s.url.includes('/merge_requests/412/diffs'))).toBe(true)
   })
 
-  test('the inline comment POSTs to discussions with a nested position object', () => {
+  test('the staged draft POSTs with a nested position object', () => {
     // GitLab wants `position` as an OBJECT, not a JSON string. The action
     // registry's `json-object` transform is what turns it back; a change that
     // dropped the transform would send a string and GitLab would reject it.
-    const inline = sent.find((s) => s.url.includes('/discussions'))
+    //
+    // T29 moved this from `/discussions` to `/draft_notes` — same wire contract,
+    // different endpoint, because the review is now staged and published as one.
+    const inline = sent.find((s) => s.url.endsWith('/draft_notes'))
     expect(inline?.method).toBe('POST')
     const body = inline?.body as Record<string, unknown>
     expect(typeof body?.position).toBe('object')
@@ -220,14 +223,17 @@ describe('RFC-304 — the wire form of a GitLab review', () => {
   })
 
   test('the comment body carries the finding and its fingerprint marker', () => {
-    const inline = sent.find((s) => s.url.includes('/discussions'))
-    const body = String((inline?.body as Record<string, unknown>)?.body)
+    // `note`, not `body`: GitLab's draft_notes API names the text field
+    // differently from its discussions API, and the registry maps it. Reading
+    // `body` here would silently get `undefined` and assert nothing.
+    const inline = sent.find((s) => s.url.endsWith('/draft_notes'))
+    const body = String((inline?.body as Record<string, unknown>)?.note)
     expect(body).toContain('unchecked index')
     expect(body).toContain('aw-finding:')
   })
 
-  test('the overview is a plain MR note, posted after the inline comment', () => {
-    const inlineAt = sent.findIndex((s) => s.url.includes('/discussions'))
+  test('the overview is a plain MR note, posted after the review itself', () => {
+    const inlineAt = sent.findIndex((s) => s.url.endsWith('/draft_notes'))
     const overviewAt = sent.findIndex(
       (s, i) => i > inlineAt && s.method === 'POST' && s.url.includes('/notes'),
     )
