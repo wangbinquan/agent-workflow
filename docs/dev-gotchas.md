@@ -622,6 +622,18 @@ RFC-271 批次 I 删了 `POST /api/workflows/import` 与 `GET /api/workflows/:id
 - **视觉回归「N 个失败」≠「N 张要改」——同一 test 内的 `toHaveScreenshot` 是短路的**：首个断言失败即中止该 test，后面的截图**根本不会执行**，因此改完第一张，第二张才在下一轮 CI 浮出来。2026-08-01 连踩三次：`table-edge` 遮住 `tasks.png`、`dynamic-workflow-preview-canvas` 遮住 `dynamic-workflow-preview`，每轮只暴露一张，白推三次。改基线前先 `awk '/^  test\(/{t=$0} /toHaveScreenshot\(/{print t" -> "$0}' e2e/visual-regression.spec.ts` 清点同 test 多截图的位置（当前只有 `/tasks list` 与 `dynamic-workflow preview` 两处），把同组的一次性处理完。
 - **`--update-snapshots` 会无条件重写「测试实际通过」的截图**：差异在 `maxDiffPixels`/threshold 内的快照也照写不误，直接 `git add` 会把一堆无谓的基线改动混进 commit。正解是先跑一次**不带** `--update-snapshots` 的 `bun run test:visual` 拿到真实失败清单，再更新、并把不在清单里的 `git checkout --` 还原。筛选时注意 `grep -w` 把连字符当词边界：`dynamic-workflow-preview` 会匹配进 `dynamic-workflow-preview-canvas`，用全名精确比对。
 - **本地 `bun run test:visual` 跑的是 `dist/agent-workflow-e2e-*` 预构建二进制（前端嵌在里面），不是当前源码**：改完前端不重新 `bun run build:binary:e2e` 就跑，测的是旧产物——据此做的「撤掉改动前后对照」实验完全无效（两次跑的是同一份旧二进制）。CI 每次从源码构建，所以本地绿/CI 红或反之，先怀疑本地二进制陈旧。
+- **滚动容器边缘的焦点环被裁：修法是容器的 `scroll-padding`，不是内容的 `padding`、也不是
+  条目的 `scroll-margin`**（RFC-304 实测，三次才对）。症状：某条目的**盒子恰好结束在
+  scrollport 边缘**，浏览器据此认为它「已完全可见」→ focus 时**根本不滚动** → 外扩的
+  focus ring 画进被裁区。因此：①给内容加 `padding-bottom` 不动条目位置，白改；
+  ②给条目加 `scroll-margin` 只在**真的发生滚动**时生效，此处不发生，也白改；
+  ③正解是给**滚动容器**加 `scroll-padding-block`——它改变「可见」的判定，于是浏览器愿意
+  滚那几像素。实测（1280×800，侧栏 scrollH 989 / clientH 800、scrollTop=0）：末条 nav
+  项底边 800、room 0 → 加 `scroll-padding-block: var(--focus-ring-gutter)` 后底边 792、
+  room 4。
+  **注意本地 `focus-ring-clip.spec.ts` 抓不到这一例**（darwin 上加不加都绿，原因未查明），
+  但用十几行探针直接量「末条目底边 vs scrollport 底边」可以稳定复现——**守卫跑绿不等于
+  没有该缺陷**，怀疑时自己写探针量几何量，别只信守卫。
 - **视觉基线的 darwin 侧对「palette 滚动容器底部的新条目」不稳定**：RFC-243 给 node picker 新增 CALLS 分区后，本地 `bun run test:visual` 对 `workflow-editor-1536-three-rail-light` / `1179-palette-light` 时绿时红，diff 图显示**只有 CALLS 两条目**有文字位移重影（约 3.3k~3.8k 像素、ratio 0.01），页面其余部分逐像素一致——底部条目受滚动位置/字体加载时序影响。**ubuntu（CI 权威门）稳定绿**，故未改 spec；再有人在 palette 末尾加分区且撞到同一抖动，正解是截图前显式把 palette 容器 `scrollTop=0` 或对该区域加 mask，而不是抬阈值。
 
 ## 跨任务并发（RFC-243 起）

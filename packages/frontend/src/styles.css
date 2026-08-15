@@ -286,6 +286,19 @@ code {
    * the shared grid row. */
   min-height: 0;
   overflow-y: auto;
+  /* Reserve the focus-ring gutter at the scrollport edges.
+   *
+   * Without it, an item whose box ends EXACTLY at the edge counts as fully
+   * visible, so focusing it scrolls nothing and its outset ring paints into
+   * clipped space. `scroll-padding` changes that judgement — the last gutter is
+   * excluded from the "visible" region, so the browser scrolls the item just
+   * clear of the edge.
+   *
+   * `scroll-margin` on `.nav-item` alone does NOT fix this: it only applies
+   * once a scroll is triggered, and here none is. Measured locally at 1280x800
+   * (RFC-304 probe): the last nav item sat with 0px of room and the sidebar's
+   * scrollTop was 0. */
+  scroll-padding-block: var(--focus-ring-gutter);
 }
 
 .sidebar__brand {
@@ -310,20 +323,6 @@ code {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  /* Room for the LAST item's focus ring, same mechanism as
-   * `.resource-action-list`: the gutter lives on the scrolled CONTENT so a
-   * ring painted at the end of the list stays inside its scroll region.
-   *
-   * RFC-304 surfaced it — adding `/code` made the nav one row taller, and on a
-   * viewport where the sidebar then overflows, the final item sits flush
-   * against the scrollport (CI reported 4px of ink against 1px of room, on
-   * every route). Not `padding-bottom` on `.sidebar` itself: a scroll
-   * container's bottom padding is not reliably part of the scrollable overflow
-   * area, so it vanishes exactly when scrolled to the end.
-   *
-   * Height-sensitive by nature — it reproduces on CI's Linux font metrics and
-   * not on macOS, where the same nav happens to fit. */
-  padding-bottom: var(--focus-ring-gutter);
 }
 
 .sidebar__link {
