@@ -9,7 +9,7 @@ import type { DbClient } from '@/db/client'
 import { users } from '@/db/schema'
 import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
 import type { TransactionScope } from '@/platform/persistence/transactionScope'
-import { requireSQLiteTransaction } from '@/platform/persistence/sqlite/existingTransactionScope'
+import { withSQLiteTransaction } from '@/platform/persistence/sqlite/existingTransactionScope'
 import { transitionOwnerRuntimeTestsInTx } from '@/services/mcpRuntimeTestTransitions'
 import type {
   ConditionalUserUpdate,
@@ -142,25 +142,26 @@ export function insertInitialUserAccessInTransaction(
   transactionScope: TransactionScope,
   provision: InitialUserAccessProvision,
 ): void {
-  const transaction = requireSQLiteTransaction(transactionScope)
-  const participant = new SQLiteUserAccessTransaction(transaction)
-  participant.insertUser({
-    ...provision.user,
-    updatedAt: provision.user.createdAt,
-    lastLoginAt: null,
-    schemaVersion: 1,
-    accessRevision: 0,
-  })
-  participant.appendAudit({
-    ...provision.audit,
-    targetUserId: provision.user.id,
-    correlationId: provision.audit.operationId,
-    beforeRole: provision.user.role,
-    afterRole: provision.user.role,
-    addedPermissions: [],
-    removedPermissions: [],
-    accessRevision: 0,
-    createdAt: provision.user.createdAt,
+  withSQLiteTransaction(transactionScope, (transaction) => {
+    const participant = new SQLiteUserAccessTransaction(transaction)
+    participant.insertUser({
+      ...provision.user,
+      updatedAt: provision.user.createdAt,
+      lastLoginAt: null,
+      schemaVersion: 1,
+      accessRevision: 0,
+    })
+    participant.appendAudit({
+      ...provision.audit,
+      targetUserId: provision.user.id,
+      correlationId: provision.audit.operationId,
+      beforeRole: provision.user.role,
+      afterRole: provision.user.role,
+      addedPermissions: [],
+      removedPermissions: [],
+      accessRevision: 0,
+      createdAt: provision.user.createdAt,
+    })
   })
 }
 

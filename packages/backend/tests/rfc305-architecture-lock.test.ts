@@ -13,8 +13,8 @@ import { createInMemoryDb } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
 import { ALL_TOOLS } from '../src/mcp/tools'
 import {
-  requireSQLiteTransaction,
   withExistingSQLiteTransactionScope,
+  withSQLiteTransaction,
 } from '../src/platform/persistence/sqlite/existingTransactionScope'
 import type { TransactionScope } from '../src/platform/persistence/transactionScope'
 import { allRouteMeta, resetRouteMetaRegistry } from '../src/routes/registry'
@@ -200,16 +200,23 @@ describe('RFC-305 identity-access architecture', () => {
   test('existing SQLite transactions expose only a callback-scoped RFC-294 capability', () => {
     const db = createInMemoryDb(MIGRATIONS)
     let escaped: TransactionScope | null = null
-    const result = dbTxSync(db, (transaction) =>
+    dbTxSync(db, (transaction) => {
       withExistingSQLiteTransactionScope(transaction, (scope) => {
         escaped = scope
-        expect(requireSQLiteTransaction(scope)).toBe(transaction)
-        return 'committed'
-      }),
-    )
+        withSQLiteTransaction(scope, (liveTransaction) => {
+          expect(liveTransaction).toBe(transaction)
+        })
+      })
+    })
 
-    expect(result).toBe('committed')
-    expect(() => requireSQLiteTransaction(escaped!)).toThrow('transaction scope is not live')
+    expect(() => withSQLiteTransaction(escaped!, () => {})).toThrow('transaction scope is not live')
+    expect(() =>
+      dbTxSync(db, (transaction) => {
+        withExistingSQLiteTransactionScope(transaction, (scope) => {
+          withSQLiteTransaction(scope, (liveTransaction) => liveTransaction)
+        })
+      }),
+    ).toThrow('SQLite transaction callback must not return a value')
   })
 
   test('public entrypoints expose only the reviewed exact contracts', () => {
