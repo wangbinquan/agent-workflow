@@ -393,9 +393,12 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expect(importDialog).toHaveCount(0)
     const createDialog = page.getByTestId('workflow-create-dialog').getByRole('dialog')
     await expect(createDialog).toBeVisible()
-    expect(await createDialog.evaluate((dialog) => dialog.contains(document.activeElement))).toBe(
-      true,
-    )
+    // Same race the confirm-dialog assertion below already documents: <Dialog>
+    // assigns initial focus from a 0ms timer, so visibility can win. Sampling
+    // once and hoping is exactly how this shard goes red on an unrelated commit.
+    await expect
+      .poll(() => createDialog.evaluate((dialog) => dialog.contains(document.activeElement)))
+      .toBe(true)
     await page.keyboard.press('Escape')
     await expect(createDialog).toHaveCount(0)
     await expect(trigger).toBeFocused()
@@ -992,9 +995,12 @@ test.describe('RFC-198 global UX browser matrix', () => {
         return { create: url.searchParams.has('create'), scope: url.searchParams.get('scope') }
       })
       .toEqual({ create: false, scope: 'all' })
-    expect(await createDialog.evaluate((dialog) => dialog.contains(document.activeElement))).toBe(
-      true,
-    )
+    // Same race the confirm-dialog assertion below already documents: <Dialog>
+    // assigns initial focus from a 0ms timer, so visibility can win. Sampling
+    // once and hoping is exactly how this shard goes red on an unrelated commit.
+    await expect
+      .poll(() => createDialog.evaluate((dialog) => dialog.contains(document.activeElement)))
+      .toBe(true)
     await page.keyboard.press('Escape')
     await expect(createDialog).toHaveCount(0)
 
@@ -1026,9 +1032,14 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await page.keyboard.press('Escape')
     await expect(importDialog).toHaveCount(0)
     await expect(reopenedCreateDialog).toBeVisible()
-    expect(
-      await reopenedCreateDialog.evaluate((dialog) => dialog.contains(document.activeElement)),
-    ).toBe(true)
+    // Same race the confirm-dialog assertion below already documents: <Dialog>
+    // assigns initial focus from a 0ms timer, so visibility can win. Sampling
+    // once and hoping is exactly how this shard goes red on an unrelated commit.
+    await expect
+      .poll(() =>
+        reopenedCreateDialog.evaluate((dialog) => dialog.contains(document.activeElement)),
+      )
+      .toBe(true)
     await page.keyboard.press('Escape')
     await expect(reopenedCreateDialog).toHaveCount(0)
     await expect(trigger).toBeFocused()

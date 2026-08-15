@@ -3863,6 +3863,21 @@ export const codeWorkItems = sqliteTable(
      * otherwise an unrelated push buys a fresh quota for the same failure.
      */
     handedOffFingerprint: text('handed_off_fingerprint'),
+    /**
+     * RFC-304 §2.2 — non-null while a round holds the PUBLISH CRITICAL SECTION
+     * at that epoch. The single linearization point: while set, an arriving
+     * automated event may only be registered as `pending_revision`, never
+     * advance the item to `superseding`. "Re-check the epoch before calling" is
+     * a TOCTOU — the handler can bump it between the check and the HTTP.
+     */
+    publishingEpoch: integer('publishing_epoch'),
+    /**
+     * The single merged revision registered while the item could not act. JSON.
+     * Only ONE is kept: replaying a queue of superseded events after the lease
+     * frees would run a string of already-stale rounds, each posting comments.
+     * Human instructions do NOT merge here — they queue individually.
+     */
+    pendingRevision: text('pending_revision'),
     /** Mutable display snapshot (title, path, URL, author) — never identity. */
     anchorMeta: text('anchor_meta'),
     /**
@@ -4003,5 +4018,70 @@ export const codeAiAttempts = sqliteTable(
     ),
     roundIdx: index('idx_code_ai_attempts_round').on(t.roundId),
     statusIdx: index('idx_code_ai_attempts_status').on(t.status),
+  }),
+)
+
+/**
+ * RFC-304 §2.2 invariant two — the MR-level lease.
+ *
+ * One row per protected MR/issue, keyed by the rendered lease key. The holder
+ * is a ROUND (not a work item): a work item outlives many rounds and spends
+ * most of its life idle, so a lease held by one would be held forever.
+ *
+ * `token` carries the daemon generation, which is what makes a lease left
+ * behind by a dead process reclaimable — otherwise the MR stays blocked until
+ * the expiry elapses, and a long lease means a long outage.
+ */
+export const codeMrLeases = sqliteTable(
+  'code_mr_leases',
+  {
+    /** `leaseKeyOf(...)` — endpoint|project|anchorKind|anchorId, each encoded. */
+    leaseKey: text('lease_key').primaryKey(),
+    holderRoundId: text('holder_round_id').notNull(),
+    /** `<daemonGeneration>:<nonce>`; required to renew or release. */
+    token: text('token').notNull(),
+    acquiredAt: integer('acquired_at').notNull(),
+    /** Renewal deadline; past it the lease is stealable. */
+    expiresAt: integer('expires_at').notNull(),
+  },
+  (t) => ({
+    holderIdx: index('idx_code_mr_leases_holder').on(t.holderRoundId),
+    expiryIdx: index('idx_code_mr_leases_expiry').on(t.expiresAt),
+  }),
+)
+
+/**
+ * RFC-304 §7 — the durable publish intent.
+ *
+ * Written BEFORE the outbound call and settled only after the external ids are
+ * written back. The window between those two points is where a crash produces
+ * the duplicate-comment bug: the remarks exist on the MR, the ledger has no ids
+ * for them, and the next round's reconciliation posts them again.
+ *
+ * Recovery reconciles a `pending` batch against the code host rather than
+ * guessing — both guesses are wrong in opposite directions.
+ */
+export const codePublishIntents = sqliteTable(
+  'code_publish_intents',
+  {
+    batchId: text('batch_id').primaryKey(),
+    roundId: text('round_id').notNull(),
+    /** The work item's epoch at intent time; a stale batch is ignorable. */
+    epoch: integer('epoch').notNull(),
+    state: text('state', { enum: ['pending', 'settled', 'compensated', 'abandoned'] })
+      .notNull()
+      .default('pending'),
+    /** JSON array of finding fingerprints this batch intends to post. */
+    fingerprintsJson: text('fingerprints_json').notNull(),
+    /** JSON map fingerprint → external id; filled on settle. */
+    externalIdsJson: text('external_ids_json').notNull().default('{}'),
+    /** Where it posts, so recovery can query the right remote object. */
+    anchorRef: text('anchor_ref').notNull(),
+    createdAt: integer('created_at').notNull(),
+    settledAt: integer('settled_at'),
+  },
+  (t) => ({
+    roundIdx: index('idx_code_publish_intents_round').on(t.roundId),
+    stateIdx: index('idx_code_publish_intents_state').on(t.state),
   }),
 )
