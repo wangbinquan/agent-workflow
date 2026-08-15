@@ -1885,6 +1885,16 @@ function AuthenticationTab() {
     }
     setDeleteTarget(null)
   }
+  useEffect(() => {
+    if (canConfigureOidc) return
+    // `/me` is the current-authority snapshot. A refresh, token change, or
+    // live grant revocation must end every detached write interaction instead
+    // of leaving a stale dialog capable of reaching the mutation boundary.
+    setShowCreate(false)
+    setEditing(null)
+    setDeleteTarget(null)
+    setConfirmPasswordOff(false)
+  }, [canConfigureOidc])
   return (
     <div className="auth-tab">
       <SettingsCard
@@ -1965,14 +1975,16 @@ function AuthenticationTab() {
             'Configure identity providers users can sign in with. Each provider stores its OAuth 2.0 / OIDC client_id + client_secret + scopes. The client_secret is AES-256-GCM-sealed at rest.',
         })}
         actions={
-          <button
-            ref={addProviderRef}
-            className="btn btn--primary"
-            onClick={() => setShowCreate(true)}
-            data-testid="oidc-add-provider"
-          >
-            {t('settings.auth.add', { defaultValue: 'Add provider' })}
-          </button>
+          canConfigureOidc ? (
+            <button
+              ref={addProviderRef}
+              className="btn btn--primary"
+              onClick={() => setShowCreate(true)}
+              data-testid="oidc-add-provider"
+            >
+              {t('settings.auth.add', { defaultValue: 'Add provider' })}
+            </button>
+          ) : undefined
         }
       >
         {list.isLoading && list.data === undefined && (
@@ -2024,30 +2036,34 @@ function AuthenticationTab() {
                       </StatusChip>
                     </td>
                     <td>
-                      <button
-                        ref={(element) => {
-                          if (element === null) rowEditRefs.current.delete(p.id)
-                          else rowEditRefs.current.set(p.id, element)
-                        }}
-                        className="btn btn--ghost btn--xs"
-                        onClick={() => setEditing(p)}
-                        data-testid={`oidc-edit-${p.id}`}
-                      >
-                        {t('settings.auth.edit', { defaultValue: 'Edit' })}
-                      </button>
-                      <button
-                        className="btn btn--ghost btn--xs btn--danger"
-                        onClick={(event) => openDelete(p, index, event.currentTarget)}
-                        data-testid={`oidc-delete-${p.id}`}
-                        disabled={lastEnabledProviderIsRequired(p)}
-                        title={
-                          lastEnabledProviderIsRequired(p)
-                            ? t('settings.auth.lastProviderRequired')
-                            : undefined
-                        }
-                      >
-                        {t('settings.auth.delete', { defaultValue: 'Delete' })}
-                      </button>
+                      {canConfigureOidc && (
+                        <>
+                          <button
+                            ref={(element) => {
+                              if (element === null) rowEditRefs.current.delete(p.id)
+                              else rowEditRefs.current.set(p.id, element)
+                            }}
+                            className="btn btn--ghost btn--xs"
+                            onClick={() => setEditing(p)}
+                            data-testid={`oidc-edit-${p.id}`}
+                          >
+                            {t('settings.auth.edit', { defaultValue: 'Edit' })}
+                          </button>
+                          <button
+                            className="btn btn--ghost btn--xs btn--danger"
+                            onClick={(event) => openDelete(p, index, event.currentTarget)}
+                            data-testid={`oidc-delete-${p.id}`}
+                            disabled={lastEnabledProviderIsRequired(p)}
+                            title={
+                              lastEnabledProviderIsRequired(p)
+                                ? t('settings.auth.lastProviderRequired')
+                                : undefined
+                            }
+                          >
+                            {t('settings.auth.delete', { defaultValue: 'Delete' })}
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -2057,7 +2073,7 @@ function AuthenticationTab() {
         )}
       </SettingsCard>
 
-      {showCreate && (
+      {canConfigureOidc && showCreate && (
         <OidcProviderDialog
           mode="create"
           onClose={() => setShowCreate(false)}
@@ -2067,7 +2083,7 @@ function AuthenticationTab() {
           }}
         />
       )}
-      {editing && (
+      {canConfigureOidc && editing && (
         <OidcProviderDialog
           mode="edit"
           initial={editing}

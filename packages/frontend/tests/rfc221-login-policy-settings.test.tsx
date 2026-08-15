@@ -11,8 +11,8 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { DEFAULT_CONFIG, PERMISSIONS } from '@agent-workflow/shared'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { DEFAULT_CONFIG, PERMISSIONS, type Permission } from '@agent-workflow/shared'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type * as ApiClientModule from '../src/api/client'
 
@@ -38,6 +38,7 @@ vi.mock('@/components/RuntimeList', () => ({
 import { api } from '../src/api/client'
 import i18n from '../src/i18n'
 import { getConfigQueryKey } from '../src/lib/config-resource'
+import { meQueryOptions } from '../src/hooks/useActor'
 import { Route as SettingsRoute, validateSettingsSearch } from '../src/routes/settings'
 import { clearToken, setToken } from '../src/stores/auth'
 
@@ -68,6 +69,7 @@ function renderAuthentication(options: {
   passwordLoginEnabled: boolean
   oidcDefaultRole?: 'guest' | 'user'
   providers?: (typeof ENABLED_PROVIDER)[]
+  permissions?: readonly Permission[]
 }) {
   let policy = {
     passwordLoginEnabled: options.passwordLoginEnabled,
@@ -88,7 +90,7 @@ function renderAuthentication(options: {
           status: 'active',
         },
         source: 'session',
-        permissions: [...PERMISSIONS],
+        permissions: [...(options.permissions ?? PERMISSIONS)],
         linkedIdentities: [],
         pats: [],
       })
@@ -129,6 +131,7 @@ function renderAuthentication(options: {
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
+  return client
 }
 
 beforeEach(async () => {
@@ -222,5 +225,52 @@ describe('RFC-221 authentication login policy UX', () => {
       })
       expect(user.getAttribute('aria-checked')).toBe('true')
     })
+  })
+
+  test('keeps provider and policy mutations out of a read-only permission combination', async () => {
+    renderAuthentication({
+      passwordLoginEnabled: true,
+      providers: [ENABLED_PROVIDER],
+      permissions: ['settings:read', 'oidc:read'],
+    })
+
+    const passwordSwitch = (await screen.findByTestId('password-login-switch')) as HTMLInputElement
+    expect(passwordSwitch.disabled).toBe(true)
+    expect(screen.getByTestId('oidc-default-role-guest').hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByTestId('oidc-add-provider')).toBeNull()
+    expect(screen.queryByTestId('oidc-edit-corp')).toBeNull()
+    expect(screen.queryByTestId('oidc-delete-corp')).toBeNull()
+  })
+
+  test('ends an open policy mutation when current OIDC authority is revoked', async () => {
+    const client = renderAuthentication({
+      passwordLoginEnabled: true,
+      providers: [ENABLED_PROVIDER],
+    })
+
+    fireEvent.click(await screen.findByTestId('password-login-switch'))
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+
+    act(() => {
+      client.setQueryData(meQueryOptions('settings-admin').queryKey, {
+        user: {
+          id: 'admin',
+          username: 'admin',
+          displayName: 'Admin',
+          role: 'admin',
+          status: 'active',
+        },
+        source: 'session',
+        permissions: ['settings:read', 'oidc:read'],
+        linkedIdentities: [],
+        pats: [],
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(screen.queryByTestId('oidc-add-provider')).toBeNull()
+    })
+    expect(api.put).not.toHaveBeenCalled()
   })
 })
