@@ -20,6 +20,7 @@ import type { Task } from '@agent-workflow/shared'
 import type { StartTaskDeps } from '@/services/task'
 import { cancelTask, startTask } from '@/services/task'
 import { startAgentTask } from '@/services/agentLaunch'
+import { startCodeRoundTask } from '@/services/codeRoundLaunch'
 import { startWorkgroupTask } from '@/services/workgroup/launch'
 import { ValidationError } from '@/util/errors'
 import type { ExecutionOutcome, StartExecutionRequest } from './types'
@@ -107,6 +108,17 @@ export async function startExecution(
   }
   if (req.kind === 'workgroup') {
     return await startWorkgroupTask(db, actor, req.refId, req.payload, effectiveDeps)
+  }
+  if (req.kind === 'code-round') {
+    // RFC-304. `refId` IS the round id — assert the payload agrees rather than
+    // picking a winner, same discipline as the workflow mismatch check above.
+    if (req.payload.roundId !== req.refId) {
+      throw new ValidationError(
+        'execution-ref-mismatch',
+        `ref targets code round '${req.refId}' but payload.roundId is '${req.payload.roundId}'`,
+      )
+    }
+    return await startCodeRoundTask(req.payload, { ...effectiveDeps, db })
   }
   // workflow — `refId` and the payload's own target must agree; a mismatch is
   // a programming error at the call site, surfaced loudly instead of silently

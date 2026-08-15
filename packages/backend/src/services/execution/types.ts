@@ -16,11 +16,14 @@ import type {
   TaskStatus,
   TriggerContext,
 } from '@agent-workflow/shared'
+import type { StartCodeRoundInput } from '@/services/codeRoundContract'
 import type { MultipartFilePart } from '@/services/launchMultipart'
 import type { UploadLimits } from '@/services/upload'
 import type { SourceTerminationSnapshot } from '@/modules/task-execution/public/types'
 
-export type ExecutionKind = 'workflow' | 'agent' | 'workgroup'
+// RFC-304 adds the fourth: `code-round`. Registered in RFC-294's W2 input list
+// so the eventual task-execution consolidation collects four kinds, not three.
+export type ExecutionKind = 'workflow' | 'agent' | 'workgroup' | 'code-round'
 
 export type ExecutionRef = { kind: ExecutionKind; id: string }
 
@@ -65,6 +68,22 @@ export type StartExecutionRequest =
       uploads?: { parts: MultipartFilePart[]; limits: UploadLimits }
     }
   | { kind: 'workgroup'; refId: string; invoker: ExecutionInvoker; payload: StartWorkgroupTask }
+  /**
+   * RFC-304 — one round of a code capability. `refId` is the round id, which is
+   * also what lands in `tasks.code_round_id`; there is no separate resource to
+   * disagree with it, so this variant has no ref/payload mismatch check.
+   *
+   * Note this kind is NOT reachable from `invoker: {type:'user'}` in the sense
+   * the others are: rounds are minted by the capability's state machine, not by
+   * someone filling in the launch wizard. It rides the same executor anyway so
+   * cancel / watch / outcome stay one vocabulary (design §D5).
+   */
+  | {
+      kind: 'code-round'
+      refId: string
+      invoker: ExecutionInvoker
+      payload: StartCodeRoundInput
+    }
 
 /**
  * The unified result projection (design §1.3). `outputs` is {} for any

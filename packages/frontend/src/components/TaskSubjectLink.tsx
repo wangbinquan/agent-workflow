@@ -39,6 +39,8 @@ export interface TaskSubjectFields {
   sourceAgentName?: string | null
   /** RFC-177/RFC-223: frozen stable agent id (NULL → plain text, fail closed). */
   sourceAgentId?: string | null
+  /** RFC-304: set ⇒ this task materializes one code-capability round. */
+  codeRoundId?: string | null
 }
 
 export interface TaskSubjectLinkProps {
@@ -58,6 +60,7 @@ const BADGE_KEY = {
   workgroup: 'tasks.workgroupBadge',
   agent: 'tasks.agentBadge',
   workflow: 'tasks.workflowBadge',
+  'code-round': 'tasks.codeRoundBadge',
 } as const
 
 export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLinkProps) {
@@ -82,6 +85,15 @@ export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLink
         {workflowName}
       </Link>
     )
+  } else if (kind === 'code-round') {
+    // RFC-304: the real subject of a round is its work item, which lives on
+    // /code — a route that lands with PR-5. Until then this renders as a named
+    // subject with no link: the task's FK anchor is the synthesized
+    // `__code_round_host__` workflow, and linking there would open a workflow
+    // page for a definition nobody authored and nobody can edit. A missing link
+    // is recoverable; a link to a dead page teaches the reader the wrong model
+    // of what this row is.
+    subject = <span title={t('tasks.codeRoundSubject')}>{t('tasks.codeRoundSubject')}</span>
   } else {
     // Link by the FROZEN STABLE ID directly to the canonical page (RFC-223).
     // P2 where a renamed+reused name misidentified the subject). Rendering does no

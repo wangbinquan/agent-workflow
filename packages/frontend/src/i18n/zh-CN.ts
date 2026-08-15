@@ -3463,6 +3463,10 @@ export interface Resources {
     /** Workflow task subject badge — the third kind, so the column labels all
      *  three subjects instead of leaving workflow rows bare. */
     workflowBadge: string
+    /** RFC-304: fourth subject kind — one round of a code capability. */
+    codeRoundBadge: string
+    /** RFC-304: subject text for a code-round row (no link until /code exists). */
+    codeRoundSubject: string
     worktreeFilesEmpty: string
     worktreeFilesNoWorktree: string
     worktreeFilesOversized: string
@@ -9623,6 +9627,8 @@ export const zhCN: Resources = {
     workgroupBadge: '工作组',
     agentBadge: '代理',
     workflowBadge: '工作流',
+    codeRoundBadge: '代码能力',
+    codeRoundSubject: '代码能力轮次',
     worktreeFilesEmpty: '从左侧选择一个文件以预览。',
     worktreeFilesNoWorktree: '该任务没有可用的工作目录。',
     worktreeFilesOversized: '文件过大（{{size}}），超过 {{limit}} 阈值，未预览。',

@@ -16,6 +16,10 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const EXPECTED_WRITERS = {
   insert: {
     'services/agentLaunch.ts': 1,
+    // RFC-304: the code-round host anchor seed. Same shape as the other two
+    // host seeds — a builtin, empty-definition FK anchor written through
+    // serializeWorkflowDefinitionStorageV1, never a user-visible workflow.
+    'services/codeRoundLaunch.ts': 1,
     'services/workflow.ts': 1,
     'services/workgroup/launch.ts': 1,
   },
@@ -138,7 +142,7 @@ describe('RFC-199 workflow writer inventory', () => {
   })
 
   test('every production insert stores a canonically serialized definition', () => {
-    expect(inventory.insertValueArgs).toHaveLength(3)
+    expect(inventory.insertValueArgs).toHaveLength(4)
     for (const { valueArg } of inventory.insertValueArgs) {
       expect(valueArg).not.toBeNull()
       expect(valueArg).toMatch(/\bdefinition\s*:\s*serializeWorkflowDefinitionStorageV1\s*\(/)

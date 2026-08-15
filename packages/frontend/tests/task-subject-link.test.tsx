@@ -98,6 +98,56 @@ describe('TaskSubjectLink — workflow tasks', () => {
   })
 })
 
+describe('TaskSubjectLink — RFC-304 code-round tasks', () => {
+  // A round is FK-anchored to the builtin `__code_round_host__` row, so the
+  // failure mode this locks is the same one RFC-164 locked for the other two
+  // host kinds: leaking an internal anchor name and linking to a workflow page
+  // for a definition nobody authored. It differs in one way — a round has no
+  // resource page to link to until /code exists (PR-5), so the correct render
+  // is a NAMED, UNLINKED subject. Before the dedicated branch it fell through
+  // to the agent arm and rendered an em-dash.
+  const roundTask: TaskSubjectFields = {
+    workflowId: '00000000000000CODEROUND00',
+    workflowName: '__code_round_host__',
+    codeRoundId: 'round_1',
+  }
+
+  test('renders a named subject and NO link (the anchor must not leak)', async () => {
+    mountSubject(<TaskSubjectLink task={roundTask} taskId="t20" badge />)
+    expect(await screen.findByText(i18n.t('tasks.codeRoundSubject'))).toBeTruthy()
+    // The two things that would be wrong: an em-dash (unbranched fall-through)
+    // or a link to the synthesized host workflow.
+    expect(screen.queryByText(i18n.t('common.emDash'))).toBeNull()
+    expect(screen.queryAllByRole('link')).toHaveLength(0)
+    expect(document.body.textContent).not.toContain('__code_round_host__')
+  })
+
+  test('carries its own badge, not a mislabeled workflow/agent/workgroup chip', async () => {
+    mountSubject(<TaskSubjectLink task={roundTask} taskId="t21" badge />)
+    expect((await screen.findByTestId('task-code-round-badge-t21')).textContent).toBe(
+      i18n.t('tasks.codeRoundBadge'),
+    )
+    expect(screen.queryByTestId('task-workflow-badge-t21')).toBeNull()
+    expect(screen.queryByTestId('task-agent-badge-t21')).toBeNull()
+    expect(screen.queryByTestId('task-workgroup-badge-t21')).toBeNull()
+  })
+
+  test('an empty codeRoundId is NOT a round (the discriminator tests for non-empty)', async () => {
+    // Guards the `!= null && !== ''` shape in taskExecutionKind: a row whose
+    // column was written as '' must keep behaving like the plain workflow task
+    // it is, not become a subject with no link.
+    mountSubject(
+      <TaskSubjectLink
+        task={{ workflowId: 'wf9', workflowName: 'Flow 9', codeRoundId: '' }}
+        taskId="t22"
+        badge
+      />,
+    )
+    const link = await screen.findByRole('link', { name: 'Flow 9' })
+    expect(link.getAttribute('href')).toBe('/workflows/wf9')
+  })
+})
+
 describe('TaskSubjectLink — workgroup tasks link by stable id (rename-safe)', () => {
   test('links to /workgroups/<workgroupId>, text = frozen name, never the host anchor', async () => {
     const task: TaskSubjectFields = {

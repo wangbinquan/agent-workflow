@@ -566,6 +566,21 @@ function TaskWizardPage() {
     if (actor.isPending) return
     const task = relaunchTaskQ.data
     const kind = taskExecutionKind(task)
+    // RFC-304: a code-round task is not relaunchable from this wizard. Its
+    // subject is a work item's round, not a resource a user picks — re-running
+    // it means asking the work item for another round, which is a /code action
+    // with its own precondition (an open work item that still owns the anchor).
+    // Seeding the wizard from one would produce a launch against the
+    // synthesized host workflow: superficially valid, and detached from every
+    // guarantee the round's own state machine provides. Fail closed by leaving
+    // the wizard on its own defaults, exactly like an unseedable payload below.
+    if (kind === 'code-round') {
+      relaunchSeededRef.current = true
+      setSeedFailed(true)
+      setStep(STEP_MODE)
+      setMaxVisited(STEP_CONFIRM)
+      return
+    }
     if (kind === 'workgroup' && workgroupsQ.data === undefined) return
     if (kind === 'agent' && agentsQ.data === undefined) return
     // Members feed ONLY the agent/workflow collaborator seed — a WORKGROUP

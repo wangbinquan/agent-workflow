@@ -615,6 +615,14 @@ export interface StartTaskDeps {
    */
   agentLaunch?: { agentName: string; agentId: string; snapshotJson: string }
   /**
+   * RFC-304: this task materializes one round of a code capability. `roundId`
+   * becomes `tasks.code_round_id` — the discriminator `taskExecutionKind()`
+   * reads — and `snapshotJson` is the synthesized single-node snapshot the
+   * detail page draws. Mutually exclusive with the other three launch payloads
+   * (asserted below); a task belongs to exactly one execution subject.
+   */
+  codeRoundLaunch?: { roundId: string; capability: string; snapshotJson: string }
+  /**
    * RFC-199 T6.5 deterministic race seam. Production callers never set this;
    * backend regressions use it to linearize workflow delete/version writers
    * immediately before or after the task-row transaction without sleeps.
@@ -2415,8 +2423,14 @@ async function startTaskImpl(
   // before any repo resolution/materialization so a missing required input
   // cannot silently execute as an empty string. Agent/workgroup launches own
   // different synthesized-host contracts and validate them in their launch
-  // services before entering this generic workflow funnel.
-  if (deps.agentLaunch === undefined && deps.workgroupLaunch === undefined) {
+  // services before entering this generic workflow funnel. RFC-304 code-round
+  // launches likewise: a round's inputs are its stage-sequence inputs, not a
+  // user-authored `inputs[]` form (the host workflow declares none).
+  if (
+    deps.agentLaunch === undefined &&
+    deps.workgroupLaunch === undefined &&
+    deps.codeRoundLaunch === undefined
+  ) {
     // RFC-243: child launches validate against the FROZEN definition's inputs
     // (identical map semantics — the call node wired them from its ports).
     assertWorkflowLaunchInputs(effectiveDefinition.inputs, input.inputs)
@@ -2787,6 +2801,7 @@ async function startTaskImpl(
             deps.callLaunch?.frozenSnapshotJson ??
             deps.workgroupLaunch?.snapshotJson ??
             deps.agentLaunch?.snapshotJson ??
+            deps.codeRoundLaunch?.snapshotJson ??
             JSON.stringify(workflow.definition),
           workflowVersion: workflow.version, // RFC-109: record the version this snapshot froze
           repoPath: headRepoPath,
@@ -2855,6 +2870,9 @@ async function startTaskImpl(
           // RFC-175 (§2e): the resolved stable agent id (re-verified above), so a
           // post-migration relaunch can carry an `expectedAgentId` OCC guard.
           sourceAgentId: deps.agentLaunch?.agentId ?? null,
+          // RFC-304: code-capability round link (taskExecutionKind 'code-round'
+          // discriminator). Soft reference — see the column comment in schema.ts.
+          codeRoundId: deps.codeRoundLaunch?.roundId ?? null,
           // RFC-165: execution-space kind. 'local' is transitional (path mode, until
           // its public retirement lands within this PR); 'internal' is stamped via
           // the internalSource dep (fusion) once that migration lands.
@@ -6276,6 +6294,9 @@ function rowToTask(
     parentNodeRunId: row.parentNodeRunId ?? null,
     invocationDepth: row.invocationDepth ?? 0,
     sourceAgentName: row.sourceAgentName ?? null,
+    // RFC-304: code-capability round link — the subject discriminator, so it
+    // must reach both the detail and the list projections.
+    codeRoundId: row.codeRoundId ?? null,
     // RFC-175 (§2e): stable agent id (NULL for non-agent + pre-0091 tasks).
     sourceAgentId: row.sourceAgentId ?? null,
     // RFC-298: getTask derives this from the frozen context before entering
@@ -6367,6 +6388,9 @@ function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | nul
     parentTaskId: row.parentTaskId ?? null,
     invocationDepth: row.invocationDepth ?? 0,
     sourceAgentName: row.sourceAgentName ?? null,
+    // RFC-304: code-capability round link — the subject discriminator, so it
+    // must reach both the detail and the list projections.
+    codeRoundId: row.codeRoundId ?? null,
     // RFC-177: frozen stable agent id so the list subject link resolves by id
     // (rename/reuse-safe); NULL for non-agent / pre-RFC-175 rows (by-name fallback).
     sourceAgentId: row.sourceAgentId ?? null,

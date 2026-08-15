@@ -81,35 +81,48 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     from: `${B}/services/scheduler.ts`,
     to: `${B}/services/workgroup/launch.ts`,
     why: '同上环经 workgroup/launch → task → scheduler 闭合的一支。',
-    removeWhen: 'RFC-294 §16.2 / W2：与上一条同批消失（A1 一断即塌）。owner 同上，已从 WP-5 / RFC-288 转出（2026-08-14）。',
+    removeWhen:
+      'RFC-294 §16.2 / W2：与上一条同批消失（A1 一断即塌）。owner 同上，已从 WP-5 / RFC-288 转出（2026-08-14）。',
   },
   {
     rule: 'no-circular',
     from: `${B}/services/execution/executor.ts`,
     to: `${B}/services/task.ts`,
     why: 'execution/ facade 调 task.ts 的启动动词，再经 task → scheduler → executor 闭合。RFC-242 的抽取是「任务级执行动词」的正交抽取，没有断开这条底层环。',
-    removeWhen: 'RFC-294 §16.2 / W2：A1 断后消失。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。C1（scheduler→executor 动态 import）**不必**转静态——断 A1 后该方向已无环，转静态反而引入 ESM 初始化风险（见 rfc217-architecture-locks 的事故记录）。',
+    removeWhen:
+      'RFC-294 §16.2 / W2：A1 断后消失。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。C1（scheduler→executor 动态 import）**不必**转静态——断 A1 后该方向已无环，转静态反而引入 ESM 初始化风险（见 rfc217-architecture-locks 的事故记录）。',
   },
   {
     rule: 'no-circular',
     from: `${B}/services/execution/executor.ts`,
     to: `${B}/services/workgroup/launch.ts`,
     why: '同上，经 workgroup/launch 闭合的一支。',
-    removeWhen: 'RFC-294 §16.2 / W2：A1 断后消失（**不需要**拆 task.ts——materialization 拆分与解环无关，其终局 owner 是 source-control、波次 W5）。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。',
+    removeWhen:
+      'RFC-294 §16.2 / W2：A1 断后消失（**不需要**拆 task.ts——materialization 拆分与解环无关，其终局 owner 是 source-control、波次 W5）。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。',
   },
   {
     rule: 'no-circular',
     from: `${B}/services/agentLaunch.ts`,
     to: `${B}/services/task.ts`,
     why: '单代理启动路径 → task.ts → scheduler → executor → agentLaunch 闭合，与上面同一个环族。',
-    removeWhen: 'RFC-294 §16.2 / W2：A1 断后消失（同上，不需要拆 task.ts）。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。',
+    removeWhen:
+      'RFC-294 §16.2 / W2：A1 断后消失（同上，不需要拆 task.ts）。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。',
+  },
+  {
+    rule: 'no-circular',
+    from: `${B}/services/codeRoundLaunch.ts`,
+    to: `${B}/services/task.ts`,
+    why: 'RFC-304 第四种 execution kind 的启动服务，与 agentLaunch / workgroup·launch / fusion **同一环族**（codeRoundLaunch → task.ts → scheduler → executor → codeRoundLaunch）。这条边拆不掉：不调 startTask 它就不是启动服务。**能拆的两条已经拆了**——常量与快照合成抽进无依赖叶子 `services/codeRoundContract.ts`，让 execution/outcome.ts 与 execution/types.ts 只依赖叶子，不新增环。',
+    removeWhen:
+      'RFC-294 §16.2 / W2：A1 断后与同族三条一起消失——W2 收编的是四种 kind（已登记进 RFC-294 plan.md §6 的 W2 输入清单），本条不构成额外收口负担。',
   },
   {
     rule: 'no-circular',
     from: `${B}/services/gc.ts`,
     to: `${B}/services/structuralDiff/callGraph/expandService.ts`,
     why: 'gc → expandService → task.ts → gc。gc 需要任务读模型判断工作区可否回收，task.ts 又需要 gc 的 workspace_pruning_at 复活门。',
-    removeWhen: 'RFC-294 §16.2 / W2：把**窄义 `getTask`** 迁进 task-execution/application/queries 并让 expandService 改锚即可（实测 expandService 只从 task.ts 取 `getTask` 一个符号）。**这是 C-7 唯一的必要断点**——`task → gc` 那条边不必动。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。',
+    removeWhen:
+      'RFC-294 §16.2 / W2：把**窄义 `getTask`** 迁进 task-execution/application/queries 并让 expandService 改锚即可（实测 expandService 只从 task.ts 取 `getTask` 一个符号）。**这是 C-7 唯一的必要断点**——`task → gc` 那条边不必动。owner 已从 WP-5 / RFC-288 转出（2026-08-14）。',
   },
 
   // ── util/git ↔ services/git*（分层倒置：util 应是叶子，架构审视 RC-4）──

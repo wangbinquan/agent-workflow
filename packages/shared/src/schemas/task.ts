@@ -569,6 +569,14 @@ export const TaskSchema = z.object({
    */
   sourceAgentName: z.string().nullable().optional(),
   /**
+   * RFC-304: set ⇒ this task materializes one code-capability round. It is the
+   * discriminator `taskExecutionKind` reads, so it MUST reach the wire: the
+   * frontend calls that same function, and a row that arrives without this
+   * field reads as a plain workflow task and gets a workflow subject link to a
+   * synthesized host nobody authored.
+   */
+  codeRoundId: z.string().nullable().optional(),
+  /**
    * RFC-298: the single safe navigation target derived from frozen webhook
    * context for the detail response. Optional keeps rolling compatibility
    * with older daemons; list/summary schemas deliberately do not expose it.
@@ -637,6 +645,9 @@ export const TaskSummarySchema = z.object({
    * latter render as plain text rather than linking by name.
    */
   sourceAgentId: z.string().nullable().optional(),
+  /** RFC-304: code-capability round link — the list needs it for the same
+   *  reason the detail does (subject classification runs on both). */
+  codeRoundId: z.string().nullable().optional(),
 })
 export type TaskSummary = z.infer<typeof TaskSummarySchema>
 
@@ -668,7 +679,15 @@ export type TaskListItem = z.infer<typeof TaskListItemSchema>
 export function taskExecutionKind(t: {
   workgroupId?: string | null
   sourceAgentName?: string | null
-}): 'workgroup' | 'agent' | 'workflow' {
+  codeRoundId?: string | null
+}): 'code-round' | 'workgroup' | 'agent' | 'workflow' {
+  // RFC-304: checked FIRST because it is the most specific claim a row can
+  // make. A code-round task also carries a synthesized workflow snapshot, so
+  // falling through to the `workflow` default would misread it as an ordinary
+  // workflow task — and that default is silent: buildExecutionOutcome would
+  // then look for `output` nodes the synthesized snapshot does not have and
+  // report `done` with empty outputs.
+  if (t.codeRoundId != null && t.codeRoundId !== '') return 'code-round'
   if (t.workgroupId != null && t.workgroupId !== '') return 'workgroup'
   if (t.sourceAgentName != null && t.sourceAgentName !== '') return 'agent'
   return 'workflow'

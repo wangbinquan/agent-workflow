@@ -4425,6 +4425,110 @@ async function runCodeHostCallNode(
   }
 }
 
+/**
+ * RFC-304 PR-0 (T0b) — the `code-round` dispatch branch.
+ *
+ * A round is driven by the stage engine, not by the DAG walker: the snapshot
+ * holds exactly one synthesized node and this branch runs the round's stage
+ * sequence inside it. PR-0 deliberately ships the branch with an EMPTY stage
+ * sequence — the go/no-go question is whether a round can be a task at all
+ * (start / cancel / daemon-restart recovery), and answering it with a real
+ * stage sequence would have meant writing the stage engine first and finding
+ * out afterwards. The engine lands in PR-1a and replaces the marked line below.
+ *
+ * Everything around that line is already production shape: the row is adopted
+ * or minted exactly like the script/code-host branches (so `retryNode`'s
+ * placeholder is consumed rather than orphaned), status transitions go through
+ * `setNodeRunStatus` with the same allowedFrom fencing, and the output lands in
+ * `node_run_outputs` where `buildExecutionOutcome` reads it.
+ */
+async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
+  const { db, taskId, definition, log } = state
+  const { node, iteration } = args
+
+  const capability = pickString(node, 'capability')
+  if (capability === null) {
+    return {
+      kind: 'failed',
+      summary: `code-round node ${node.id} has no capability`,
+      message: 'code-round-param-invalid',
+    }
+  }
+
+  // A round's node has no inbound edges (the synthesized snapshot has none), so
+  // this resolves to an empty map. It is called anyway because `consumed` is
+  // what the row-adoption oracle fingerprints — skipping it would make every
+  // attempt look like it consumed different upstream state.
+  const { consumed } = await resolveUpstreamInputs(
+    db,
+    taskId,
+    definition.edges,
+    node.id,
+    iteration,
+    log,
+    definition,
+    state.containerOf,
+  )
+
+  const sameNodeIterRuns = await db
+    .select()
+    .from(nodeRuns)
+    .where(
+      and(
+        eq(nodeRuns.taskId, taskId),
+        eq(nodeRuns.nodeId, node.id),
+        eq(nodeRuns.iteration, iteration),
+      ),
+    )
+    .orderBy(asc(nodeRuns.startedAt))
+  const { nodeRunId } = await resolveSchedulerRunRow({
+    db,
+    taskId,
+    nodeId: node.id,
+    iteration,
+    consumedUpstreamJson: JSON.stringify(consumed),
+    rows: sameNodeIterRuns,
+    inheritReviewIteration: false,
+    clearAgentOverride: false,
+    // Rounds DO retry at the node level (a failed round is re-run by the work
+    // item), so the retry index is tracked — unlike the code-host branch, whose
+    // retries are HTTP-level and invisible to the scheduler.
+    trackRetryIndex: true,
+    broadcastPending: (id) => broadcastNodeStatus(taskId, id, node.id, 'pending'),
+  })
+  await setNodeRunStatus({
+    db,
+    nodeRunId,
+    to: 'running',
+    allowedFrom: ['pending'],
+    reason: 'code-round-start',
+    extra: {},
+  })
+  broadcastNodeStatus(taskId, nodeRunId, node.id, 'running')
+
+  // ── PR-1a replaces this with `await runStageSequence(...)` ──────────────
+  const stagesRun = 0
+  // ───────────────────────────────────────────────────────────────────────
+
+  await db.insert(nodeRunOutputs).values([
+    {
+      nodeRunId,
+      portName: 'round_summary',
+      content: JSON.stringify({ capability, stagesRun }),
+    },
+  ])
+  await setNodeRunStatus({
+    db,
+    nodeRunId,
+    to: 'done',
+    allowedFrom: ['running'],
+    reason: 'code-round-done',
+    extra: { finishedAt: Date.now() },
+  })
+  broadcastNodeStatus(taskId, nodeRunId, node.id, 'done')
+  return { kind: 'ok', summary: `${capability}: ${stagesRun} stage(s)`, message: '' }
+}
+
 async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
   // RFC-266: the SCRIPT pool, not the agent pool — a second-scale script must
   // not queue behind multi-minute agent runs (and cannot starve them either).
@@ -5292,6 +5396,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // fall-through guard.
   if (node.kind === 'code-host-call') {
     return await runCodeHostCallNode(state, args)
+  }
+  // RFC-304 — code-capability round: driven by the stage sequence, not the DAG.
+  // Same position as the script/call/code-host kinds: before the agent
+  // fall-through guard.
+  if (node.kind === 'code-round') {
+    return await runCodeRoundNode(state, args)
   }
   if (node.kind !== 'agent-single') {
     return {

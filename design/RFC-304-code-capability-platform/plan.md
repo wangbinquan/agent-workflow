@@ -42,10 +42,21 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 | --- | --- | --- | --- |
 | T0a | 与 `task-execution` owner 对齐 participant 注册点、task/nodeRun 归属、取消与恢复事件、详情投影、W2 收编接口 | — | ✅ 2026-08-15 |
 | T0a′ | `code-round` **NodeKind** 接入：12 处穷尽点 + 「不可授权」四机制 + 单一事实源 `SYNTHESIZED_ONLY_NODE_KINDS` | T0a | ✅ 2026-08-15 |
-| T0b | `code-round` **execution kind** 合同 + 验证桩（桩内只跑一个空阶段），跑通**启动 → 取消 → daemon 重启恢复**三条真实路径 | T0a′ | ⏳ |
+| T0b | `code-round` **execution kind** 合同 + 验证桩（桩内只跑一个空阶段），跑通**启动 → 取消 → daemon 重启恢复**三条真实路径 | T0a′ | ✅ 2026-08-15 **GO** |
 | T0c | 把 `code-round` 形态登记进 RFC-294 的 W2 输入清单 | T0a′ | ✅ 2026-08-15 |
 
 > **go / no-go**：T0b 三条路径全绿才进 PR-1a。不通过则回到 design D5 重选退路（届时 RFC 需改）。
+>
+> **判定结果（2026-08-15）：GO**。三条路径全绿（`tests/rfc304-code-round-execution-kind.test.ts`，
+> 8 pass / 0 fail），实证见测试运行日志：启动路径跑到 `task done`、恢复路径
+> `auto-resume ... resumed=1 skipped=0`。D5 的地基假设成立，可进 PR-1a。
+>
+> 落地过程另抓到**两个静默失败口**（都已修 + 各自钉测试，详见 design §D5 实现约束）：
+> ①outcome 的兜底 `else` 不判 kind ⇒ 新 kind 落进 workgroup 臂，`done` + 空产出 + 一条指向
+> 该任务根本没有的工作组配置的误导警告；②`OutcomeTaskRow` 忘记 select 判别列**不是类型错误
+> 而是错误分类**（`taskExecutionKind` 判别字段全可选）。另修一处：首版 `StartCodeRoundInput`
+> 手抄 space 字段，漏 `scratch`/`repoGroupId`/`sourceTaskId` 且带上**已退役**的 `repoPath`——
+> 改走单一装配点 `applySpaceFields`，正是该函数注释所防的那类事故。
 
 **T0a 对齐结论（2026-08-15，逐条按源码核对）**：四个接入点各有现成先例，**无一处需要改动既有语义**——
 

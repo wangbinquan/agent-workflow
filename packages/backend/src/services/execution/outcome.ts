@@ -1,5 +1,5 @@
 // RFC-243 T4 — the unified outcome projection (design §1.3). One answer to
-// "the task finished — what did it produce?" for all three execution kinds:
+// "the task finished — what did it produce?" for all four execution kinds:
 //
 //   workflow  → the `output` nodes' io-virtual rows (scheduler.ts output
 //               branch), row chosen via pickUpstreamSourceRun — the SAME
@@ -8,6 +8,9 @@
 //               downstream node would have (multi-generation review/loop/
 //               fanout rows included).
 //   agent     → the `__agent_main__` host node's ports, same row oracle.
+//   code-round→ the `__code_round__` synthesized node's ports (RFC-304), same
+//               oracle again — a round is a task whose subject is a capability
+//               round rather than a resource the user picked.
 //   workgroup → single `result` port. lw/fc read the explicit result anchor
 //               (`workgroup_task_state.result_message_id`, RFC-243 PR-4);
 //               until that lands / for legacy tasks: lw falls back to
@@ -23,6 +26,7 @@ import { nodeRunOutputs, nodeRuns, tasks, workgroupMessages } from '@/db/schema'
 import { NotFoundError } from '@/util/errors'
 import { pickUpstreamSourceRun } from '@/services/freshness'
 import { AGENT_HOST_AGENT_NODE_ID } from '@/services/agentLaunch'
+import { CODE_ROUND_NODE_ID } from '@/services/codeRoundContract'
 import { loadWorkgroupTaskState } from '@/services/workgroup/state'
 import {
   isTerminalTaskStatus,
@@ -42,6 +46,14 @@ export type OutcomeTaskRow = {
   workgroupId?: string | null
   workgroupConfigJson?: string | null
   sourceAgentName?: string | null
+  /**
+   * RFC-304. MUST be selected by every caller that builds this row: the
+   * discriminator fields of `taskExecutionKind` are all optional, so a caller
+   * that forgets one gets a silent misclassification rather than a type error
+   * (a code-round task would read as `workflow` and project outputs from a
+   * snapshot that has no output nodes). Locked by rfc304-code-round-outcome.
+   */
+  codeRoundId?: string | null
 }
 
 export type OutcomeRunRow = {
@@ -162,7 +174,20 @@ export function projectExecutionOutcome(args: {
         args.outputs,
         warnings,
       )
-    } else {
+    } else if (kind === 'code-round') {
+      // RFC-304: a round's output hangs off its single synthesized node, the
+      // same way an agent host task's hangs off `__agent_main__`.
+      //
+      // This branch is not optional bookkeeping. Before it existed, a
+      // code-round task fell through to the workgroup arm below, where
+      // `workgroupModeOf(null)` returns null and the outcome came back
+      // `status: 'done'` with `outputs: {}` and a `workgroup-config-unparsable`
+      // warning — a successful-looking result, with empty outputs, blamed on a
+      // workgroup config the task never had. Note the failure was in the arm
+      // NOBODY would think to check, which is why the kind test below is now
+      // explicit rather than an `else`.
+      outputs = projectOutputNodePorts([CODE_ROUND_NODE_ID], args.runs, args.outputs, warnings)
+    } else if (kind === 'workgroup') {
       const mode = workgroupModeOf(task.workgroupConfigJson)
       const wg = args.workgroup
       if (mode === null || wg === null) {
@@ -186,6 +211,13 @@ export function projectExecutionOutcome(args: {
         warnings.push('workgroup-result-anchor-missing')
         outputs = { result: { content: '', kind: 'text' } }
       }
+    } else {
+      // Compile-time exhaustiveness. RFC-304 learned this the expensive way:
+      // when the workgroup arm was the bare `else`, a newly added kind reported
+      // `done` with empty outputs and a misattributed warning, and nothing in
+      // the type system objected. A fifth kind now fails to build here instead.
+      const unhandled: never = kind
+      warnings.push(`unhandled-execution-kind:${String(unhandled)}`)
     }
   }
 
@@ -220,6 +252,7 @@ export async function getExecutionOutcome(db: DbClient, taskId: string): Promise
       workgroupId: tasks.workgroupId,
       workgroupConfigJson: tasks.workgroupConfigJson,
       sourceAgentName: tasks.sourceAgentName,
+      codeRoundId: tasks.codeRoundId,
     })
     .from(tasks)
     .where(eq(tasks.id, taskId))

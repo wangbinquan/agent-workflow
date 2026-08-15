@@ -588,6 +588,17 @@ export function taskToLaunchPayload(task: Task): {
       payload.description = task.inputs.description ?? ''
     }
     if (snapshotClarifyState(task.workflowSnapshot) === false) payload.allowClarify = false
+  } else if (kind === 'code-round') {
+    // RFC-304: a round is minted by a work item's state machine, never picked
+    // from this wizard, so there is nothing to replay — re-running one means
+    // asking the work item for another round, which has its own precondition.
+    //
+    // Emit NO discriminant on purpose: `payloadToWizardSeed` returns null
+    // without one, so a caller that skips the route-level guard still fails
+    // closed instead of seeding a launch against the synthesized host workflow.
+    // (The guard in tasks.new.tsx returns before reaching here; this is the
+    // function refusing on its own behalf, since it is exported.)
+    spaceResolvable = false
   } else {
     payload.workgroupId = task.workgroupId ?? ''
     payload.goal = task.goal ?? ''

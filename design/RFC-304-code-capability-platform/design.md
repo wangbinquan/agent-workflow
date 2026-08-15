@@ -125,9 +125,16 @@ ownership、TaskEngine/Executor/Wrapper **未收口**」（`RFC-294/plan.md:79`�
 
 `buildExecutionOutcome`（`services/execution/outcome.ts:150`）按 `taskExecutionKind()` 决定
 **输出从哪读**——`workflow` 去 snapshot 里找 `output` 节点、`agent` 读固定的
-`AGENT_HOST_AGENT_NODE_ID`、`workgroup` 读工作组状态。code-round 的合成 snapshot 里**没有
-`output` 节点**，若不加判别就落进 `workflow` 分支，`outputs` 永远是 `{}`，而 `status` 仍是
-`done`——一种「成功但无产出」的静默错误，正是最难从日志倒查的形状。
+`AGENT_HOST_AGENT_NODE_ID`、其余落 `else` 读工作组状态。
+
+**注意那个 `else` 不判 kind**：原实现是 `if workflow / else if agent / else`，所以不加判别的
+code-round 落进的是 **workgroup 分支**（不是 workflow 分支），`workgroupModeOf(null)` 返回 null
+⇒ `outputs` 恒 `{}`、`status` 仍 `done`、外加一条 `workgroup-config-unparsable` 警告——**归因还
+指向该任务根本没有的工作组配置**。这比纯静默更糟：日志里有一条把人引向错误子系统的线索，而
+真正的原因（新 kind 没有分支）在一个没人会去看的臂里。
+
+故实现时一并把该 `else` 改成显式 `else if (kind === 'workgroup')`，末尾补 `never` 穷尽兜底——
+第五种 kind 将来**编译期**就红，而不是再上演一次同样的静默。
 
 由此确定 T0b 的实际形状（三点，均属既有形状的同形扩展，不新增概念）：
 
@@ -135,7 +142,12 @@ ownership、TaskEngine/Executor/Wrapper **未收口**」（`RFC-294/plan.md:79`�
    返回类型是字面量联合，故 38 处调用点由 TS 强制穷尽——这是选它而非新开一个并行判别函数的理由；
 2. 判别位需要 task 行上的一列（`code_round_id`，nullable）。沿用既有派生法：**不新增状态列**，
    kind 仍是从行字段**派生**而非存储，避免与行本身产生第二个可能不一致的事实源；
-3. `buildExecutionOutcome` 增加 code-round 分支，从合成节点读产出。
+3. `buildExecutionOutcome` 增加 code-round 分支，从合成节点读产出；同时把兜底 `else` 显式化 + `never` 收口。
+4. **`OutcomeTaskRow` 必须 select `code_round_id`**（实现时发现的第二个静默口）：`taskExecutionKind`
+   的判别字段**全是可选的**，所以任何忘记 select 判别列的调用方拿到的是**错误分类**而非类型错误。
+   该行类型上已加注释写明此约束，并有一条测试专门把「忘记 select ⇒ 静默 done + 空产出」这一形状钉住。
+5. `Task` / `TaskSummary` wire schema 都要带 `codeRoundId`——前端调用同一个 `taskExecutionKind`，
+   字段不上 wire 则前端永远判不出 code-round，会给它渲染一个指向合成宿主的工作流链接。
 
 `ExecutionKind`（`services/execution/types.ts:23`）的注释写明其 domain **刻意等于**
 `taskExecutionKind()`；上面三点正是维持该等式所需的全部改动，而不是打破它。

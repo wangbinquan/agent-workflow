@@ -4145,6 +4145,8 @@ export const enUS: Resources = {
     workgroupBadge: 'Workgroup',
     agentBadge: 'Agent',
     workflowBadge: 'Workflow',
+    codeRoundBadge: 'Code capability',
+    codeRoundSubject: 'Code capability round',
     worktreeFilesEmpty: 'Select a file from the left to preview.',
     worktreeFilesNoWorktree: 'This task has no worktree.',
     worktreeFilesOversized: 'File too large ({{size}}); exceeds {{limit}}. Preview skipped.',

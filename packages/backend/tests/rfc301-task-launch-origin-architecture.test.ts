@@ -57,6 +57,11 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
   test('all production startTask calls stay inside the reviewed launch adapters', () => {
     expect(Object.fromEntries(identifierCalls('startTask'))).toEqual({
       'services/agentLaunch.ts': 3,
+      // RFC-304: the code-round launch adapter, reviewed as part of PR-0's
+      // go/no-go. Like the other adapters it does NOT invent provenance — it
+      // forwards whatever deps the executor derived from the invoker, so the
+      // ownership rule this ratchet protects is unchanged by the fourth kind.
+      'services/codeRoundLaunch.ts': 1,
       'services/execution/executor.ts': 1,
       'services/fusion.ts': 2,
       'services/task.ts': 1,

@@ -1040,6 +1040,20 @@ export const tasks = sqliteTable(
     /** RFC-165/RFC-223: launch-time agent name for display only; NULL otherwise. */
     sourceAgentName: text('source_agent_name'),
     /**
+     * RFC-304: the code-capability round this task materializes; NULL on every
+     * other task. This is the discriminator `taskExecutionKind()` reads to
+     * return 'code-round' — the kind stays DERIVED from row fields (same
+     * discipline as workgroupId / sourceAgentName) rather than stored, so a row
+     * cannot disagree with its own kind.
+     *
+     * Soft reference on purpose (no FK): deleting a work item must never
+     * cascade away the execution history of the rounds it ran, and the round
+     * ledger lives in the code-capability context while this row belongs to
+     * task-execution — a FK here would be exactly the cross-context coupling
+     * RFC-294 is trying to remove.
+     */
+    codeRoundId: text('code_round_id'),
+    /**
      * RFC-175 (§2e): the launching agent's STABLE `agents.id` at launch time
      * (alongside the name soft-link). Lets "relaunch" faithfully verify the
      * subject on a post-migration task (an `expectedAgentId` OCC guard rejects

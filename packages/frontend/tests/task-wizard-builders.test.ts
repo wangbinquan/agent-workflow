@@ -386,6 +386,38 @@ describe('loadSpaceKindPref — default SCRATCH with sticky remote opt-in (用�
 // LOCKS: RFC-175 §3 — the relaunch reconstruction: a terminal task's persisted
 // fields → a payloadToWizardSeed-compatible launch payload, and the 3-state
 // clarify inference. Every field asserted explicitly (RFC-125 lesson).
+describe('RFC-304 — taskToLaunchPayload refuses a code-round task on its own', () => {
+  // The route guard in tasks.new.tsx returns before calling this, but the
+  // function is exported, so it must fail closed by itself rather than relying
+  // on every caller remembering. Without this arm a round fell through to the
+  // WORKGROUP arm and produced `workgroupId: ''` — a payload that looks like a
+  // launchable workgroup task and names a group that does not exist.
+  const roundTask = {
+    id: 't1',
+    name: 'round',
+    workflowId: '00000000000000CODEROUND00',
+    workflowName: '__code_round_host__',
+    codeRoundId: 'round_1',
+    spaceKind: 'scratch',
+    status: 'done',
+    inputs: {},
+    repos: [],
+  } as unknown as Parameters<typeof taskToLaunchPayload>[0]
+
+  test('emits no discriminant, so payloadToWizardSeed cannot seed it', () => {
+    const { payload, spaceResolvable } = taskToLaunchPayload(roundTask)
+    expect(payload.workgroupId).toBeUndefined()
+    expect(payload.workflowId).toBeUndefined()
+    expect(payload.agentId).toBeUndefined()
+    expect(spaceResolvable).toBe(false)
+    // Every wizard kind reads its discriminant from one of the three keys
+    // above; with none present the seed refuses for all of them.
+    for (const kind of ['workflow', 'agent', 'workgroup'] as const) {
+      expect(payloadToWizardSeed(kind, payload)).toBeNull()
+    }
+  })
+})
+
 describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
   const task = (o: Partial<Task>): Task =>
     ({
@@ -691,6 +723,13 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     expect(src).toContain('const { payload, spaceResolvable } = taskToLaunchPayload')
     // F4: the multipart submit threads immediateGuards() as the 4th arg
     expect(src).toMatch(/buildWorkflowStartFormData\([\s\S]*?immediateGuards\(\),/)
+    // RFC-304: the relaunch seed refuses a code-round task BEFORE consuming it.
+    // A round is minted by a work item, not picked here; seeding from one would
+    // launch against the synthesized host workflow — superficially valid and
+    // detached from every guarantee the round's own state machine provides.
+    // Source-text lock because the effect lives inside a very large route
+    // component; the pure-function half is asserted directly below.
+    expect(src).toMatch(/kind === 'code-round'[\s\S]{0,320}setSeedFailed\(true\)/)
   })
 
   // Re-review F2: the space-unresolvable heuristic keys off the EXACT backend

@@ -1248,7 +1248,13 @@ async function visibilityCheck(c: Context, deps: AppDeps): Promise<void> {
 async function assertTaskWorkflowNotBuiltin(deps: AppDeps, taskId: string): Promise<void> {
   const task = await getTask(deps.db, taskId)
   if (task === null) return
-  if (taskExecutionKind(task) === 'agent') return
+  const kind = taskExecutionKind(task)
+  if (kind === 'agent') return
+  // RFC-304: same carve-out, same reason. A code-round task is FK-anchored to
+  // the builtin `__code_round_host__` row, so without this it would 403 on
+  // every resume/retry — the builtin lock exists to stop users hand-driving the
+  // fusion workflow, not to strip host tasks of their recovery endpoints.
+  if (kind === 'code-round') return
   if (isWorkgroupTask(task)) {
     const row = (
       await deps.db
@@ -1271,10 +1277,12 @@ async function assertTaskWorkflowNotBuiltin(deps: AppDeps, taskId: string): Prom
 }
 
 /**
- * RFC-165 (F13-r3): host tasks (agent / workgroup) freeze a SYNTHESIZED
- * snapshot — there is no authored workflow to sync from, so sync-workflow is
- * uniformly 422 for them (vs. the 403 builtin lock, which is about manual
- * execution). Plain builtin-workflow tasks (fusion) keep the 403.
+ * RFC-165 (F13-r3): host tasks (agent / workgroup / RFC-304 code-round) freeze
+ * a SYNTHESIZED snapshot — there is no authored workflow to sync from, so
+ * sync-workflow is uniformly 422 for them (vs. the 403 builtin lock, which is
+ * about manual execution). Plain builtin-workflow tasks (fusion) keep the 403.
+ * The `!== 'workflow'` test covers every host kind by construction; a new host
+ * kind is 422 the day it is added rather than the day someone remembers.
  */
 async function assertTaskSyncable(deps: AppDeps, taskId: string): Promise<void> {
   const task = await getTask(deps.db, taskId)
