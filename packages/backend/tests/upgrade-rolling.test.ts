@@ -245,7 +245,10 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // 与轮次/阶段/AI 尝试四表；身份键用稳定 projectId 而非可变仓库路径）。
   // RFC-304 PR-1c bumped to 160 with 0160_rfc304_concurrency（发布临界区标记 +
   // 合并后的单个 pendingRevision、MR 级 lease 表、可恢复的发布意图表）。
-  test('HEAD journal has 160 entries (sanity — locks the freeze target indices)', () => {
+  // RFC-304 PR-2 bumped to 161 with 0161_rfc304_capability_templates（部门层
+  // framework / 小组层 binding / 仓库×能力矩阵；binding 刻意无脚本与钩子列——
+  // 那个「没有」本身就是权限边界）。
+  test('HEAD journal has 161 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -389,7 +392,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // Webhook 终态 workspace claim 与 RFC-165/iso GC claim）。
     // RFC-303 bumped to 157 with 0157_rfc303_mr_terminal_control（MR 终态
     // 控制流、稳定流身份与 durable launch/effect ledgers）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(160)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(161)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

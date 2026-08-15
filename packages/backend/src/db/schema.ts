@@ -4085,3 +4085,122 @@ export const codePublishIntents = sqliteTable(
     stateIdx: index('idx_code_publish_intents_state').on(t.state),
   }),
 )
+
+/**
+ * RFC-304 §2.5 — the DEPARTMENT layer template.
+ *
+ * Carries the scripts (entry / collect / classify / arbitrate) and the stage
+ * hooks. That content is the reason its write permission additionally requires
+ * `scripts:author`: a script here runs as the daemon, with the daemon's full
+ * credential surface (proposal C2). A group lead editing their own binding must
+ * not be able to reach it, which is enforced at the service layer by refusing
+ * these fields on the binding path rather than by hoping nobody sends them.
+ */
+export const capabilityFrameworks = sqliteTable(
+  'capability_frameworks',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description'),
+    /** Which capability this framework implements. */
+    capability: text('capability').notNull(),
+    /** JSON: {entry, collect, classify, arbitrate} script bodies + languages. */
+    scriptsJson: text('scripts_json').notNull().default('{}'),
+    /** JSON array of {stage, phase, script, language, blocking}. */
+    hooksJson: text('hooks_json').notNull().default('[]'),
+    /** JSON Schema (derived from zod at author time) describing `params`. */
+    paramSchemaJson: text('param_schema_json').notNull().default('{}'),
+    /** JSON defaults for the params a binding may override. */
+    paramDefaultsJson: text('param_defaults_json').notNull().default('{}'),
+    /** Which stage-contract version its hooks were written against (T8). */
+    stageContractVer: integer('stage_contract_ver').notNull().default(1),
+    // Standard resource ACL block (RFC-099/231), same shape as agents/skills.
+    ownerUserId: text('owner_user_id'),
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('public'),
+    aclRevision: integer('acl_revision').notNull().default(0),
+    builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    ownerNameUq: uniqueIndex('capability_frameworks_owner_name_unique').on(t.ownerUserId, t.name),
+    capabilityIdx: index('idx_capability_frameworks_capability').on(t.capability),
+  }),
+)
+
+/**
+ * RFC-304 §2.5 — the GROUP layer template.
+ *
+ * Selects one framework and says which agent and prompt each AI slot uses, plus
+ * parameter overrides. Deliberately carries NO scripts and NO hooks: that is
+ * the whole point of the split, and the reason a group lead can be given write
+ * access here without being given the daemon's credential surface.
+ */
+export const capabilityBindings = sqliteTable(
+  'capability_bindings',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description'),
+    /** Exactly one framework — a capability references one, never a chain. */
+    frameworkId: text('framework_id').notNull(),
+    /** JSON: which agent fills each `agentSlot` of the stage contract. */
+    agentBySlotJson: text('agent_by_slot_json').notNull().default('{}'),
+    /** JSON: per-slot prompt overrides. */
+    promptBySlotJson: text('prompt_by_slot_json').notNull().default('{}'),
+    /** JSON: overrides for the framework's `paramDefaults`, validated against its schema. */
+    paramsJson: text('params_json').notNull().default('{}'),
+    ownerUserId: text('owner_user_id'),
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('public'),
+    aclRevision: integer('acl_revision').notNull().default(0),
+    builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    ownerNameUq: uniqueIndex('capability_bindings_owner_name_unique').on(t.ownerUserId, t.name),
+    frameworkIdx: index('idx_capability_bindings_framework').on(t.frameworkId),
+  }),
+)
+
+/**
+ * RFC-304 §3 — the repo × capability matrix.
+ *
+ * One row per enabled cell. `readiness` is a DERIVED state cached here for the
+ * matrix view; `dependency_revision` and `last_validated_at` exist so it can be
+ * invalidated when anything it depends on changes. Without that, deleting one
+ * shared binding leaves 200 cells still claiming `ready` until an event arrives
+ * and fails — and a user who fixes a missing prerequisite stays stuck on
+ * `misconfigured`.
+ */
+export const repoCapabilityConfig = sqliteTable(
+  'repo_capability_config',
+  {
+    id: text('id').primaryKey(),
+    repoId: text('repo_id').notNull(),
+    capability: text('capability').notNull(),
+    bindingId: text('binding_id'),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
+    /** JSON: per-repo trigger configuration (which events wake this cell). */
+    triggerConfigJson: text('trigger_config_json').notNull().default('{}'),
+    readiness: text('readiness', { enum: ['disabled', 'misconfigured', 'ready'] })
+      .notNull()
+      .default('disabled'),
+    /** JSON array of what is missing while `misconfigured` — each item actionable. */
+    readinessIssuesJson: text('readiness_issues_json').notNull().default('[]'),
+    /** Bumped by any dependency change; a mismatch means the cache is stale. */
+    dependencyRevision: integer('dependency_revision').notNull().default(0),
+    lastValidatedAt: integer('last_validated_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    cellUq: uniqueIndex('uniq_repo_capability_cell').on(t.repoId, t.capability),
+    bindingIdx: index('idx_repo_capability_binding').on(t.bindingId),
+    readinessIdx: index('idx_repo_capability_readiness').on(t.readiness),
+  }),
+)
