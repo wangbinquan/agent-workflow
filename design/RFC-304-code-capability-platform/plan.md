@@ -290,6 +290,27 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          |
 | T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  |
 
+> **T7 接线补记（2026-08-16）**：`hookRunner.ts` 与其单测 PR-1a 就写完了，但 `src` 里
+> **没有任何调用方**——本模块每个 stage 文件都以「引擎在每个阶段边界触发钩子、合并阶段会
+> 静默删掉团队的注入与阻断点」论证自己为何要独立成阶段，而实际上十三个边界零钩子，
+> 该论证一直是假的，且**没有任何测试会红**（不存在的机制不会报错）。本次补上：
+>
+> - `services/codeCapabilityHooks.ts`：repo cell → binding → framework 三跳解析
+>   `hooksJson`；坏 JSON / 非列表 / 单条畸形**各自具名**且**不毁整轮**（为一列坏 JSON 让
+>   全仓 MR 停审是更糟的失败），单条坏不连累其余（否则一个可选钩子的手误会静默关掉团队的
+>   强制门）。
+> - `codeCapabilityRunner`：把解析结果转成引擎的 pre/post，`HookOutcome` 三态如实映射——
+>   `blocked` 停序列、`failed-nonblocking` 记录后继续（§4.3 F8：可选 lint 钩子红了不该
+>   卡住别人的 MR）、`needs-migration` **不跑也不静默**（跑等于喂它读不懂的形状，静默跳过
+>   等于团队的门悄悄不设防了）。
+> - `scheduler`：每轮解析（不缓存——framework 可能刚删了某个钩子，缓存会继续跑已删的门）；
+>   解释器缺失只**禁用钩子并告警**，不拖垮整仓的检视。
+> - **一个类型正确但语义反了的 bug（已修）**：初稿写 `.where(eq(repoId) && eq(capability))`
+>   ——JS 的 `&&` 在两个 drizzle 条件之间求值成**第二个**，于是仓库过滤整个消失，任何仓库
+>   都会继承首个同 capability 的 cell，即**跑别的团队以 daemon 身份执行的脚本**。它能过
+>   typecheck，也能过任何只种一个仓库的测试。锁在 `rfc304-hook-resolution.test.ts` 的跨仓
+>   两条（已变异校验：改回 `&&` 即红）。
+
 > **T23/T24/T25 落地记录（2026-08-16）**：阶段契约升到 v4，单个 `review` 阶段换成设计
 > §6.1 的 `split-diff → review-shard(parallel) → review-global → validate-findings`。
 >

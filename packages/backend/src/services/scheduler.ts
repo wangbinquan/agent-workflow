@@ -152,6 +152,8 @@ import { createCodeCapabilityRunner } from '@/modules/code-capability/compositio
 import { buildMrReviewWiring } from '@/modules/code-capability/composition/mrReviewEnvironment'
 import { settleDanglingAttempts } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
 import { withRoundLease } from '@/services/codeRoundLease'
+import { resolveCapabilityHooks } from '@/services/codeCapabilityHooks'
+import { MR_REVIEW_CONTRACT } from '@/modules/code-capability/domain/capabilityRegistry'
 import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import { createReviewAgentCaller, resolveReviewerAgent } from '@/services/codeReviewAgentCaller'
 import { REVIEW_AGENT_SLOT, REVIEW_PORT } from '@/modules/code-capability/application/reviewStage'
@@ -4613,6 +4615,80 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
   // would look like a round that never called a model.
   await settleDanglingAttempts(db, task.codeRoundId ?? taskId)
 
+  // RFC-304 T7 — a team's stage hooks. Resolved per round rather than cached:
+  // a framework can gain or lose a hook between rounds, and a stale set would
+  // keep running a gate somebody has already deleted.
+  //
+  // Absent hooks are the ordinary case (most repositories never write one), so
+  // this stays quiet when there are none. What it must NOT do is stay quiet
+  // when a repository HAS written one — every stage in the sequence justifies
+  // being a separate stage by saying a hook fires at its boundary.
+  const resolvedHooks = await resolveCapabilityHooks(db, {
+    repoId: task.repoPath,
+    capability,
+  })
+  if (resolvedHooks.problem !== null) {
+    log.warn('[code-round] capability hooks could not be loaded in full', {
+      taskId,
+      capability,
+      problem: resolvedHooks.problem,
+    })
+  }
+  const hookWiring =
+    resolvedHooks.hooks.length === 0
+      ? null
+      : await (async () => {
+          // One interpreter per language actually used by a hook: probing every
+          // language on a repository whose single hook is bash would fail the
+          // round on a machine with no python.
+          const languages = [...new Set(resolvedHooks.hooks.map((h) => h.language))]
+          const interpreter =
+            languages.length === 1
+              ? await resolveScriptInterpreter(languages[0]!, opts.scriptInterpreters ?? {})
+              : null
+          if (interpreter === null) {
+            // Reported, not fatal. A missing interpreter disarms the hooks —
+            // which a team needs to know — but taking every MR in the repository
+            // down because one hook's runtime is absent is the worse failure.
+            log.warn('[code-round] capability hooks are configured but cannot run', {
+              taskId,
+              capability,
+              languages,
+              why:
+                languages.length === 1
+                  ? `no interpreter found for '${String(languages[0])}'`
+                  : 'hooks of several languages are not supported in one round yet',
+            })
+            return null
+          }
+          const runDir = runRootFor(taskId, nodeRunId)
+          mkdirSync(runDir, { recursive: true })
+          return {
+            hooks: resolvedHooks.hooks,
+            currentStageContractVer: MR_REVIEW_CONTRACT.version,
+            runDir,
+            interpreterPath: interpreter.path,
+            workItem: {
+              // Read from the frozen trigger context rather than the lease key:
+              // the lease is computed further down, and a hook's identity must
+              // not depend on whether this round happens to take one.
+              anchorKind: 'mr',
+              anchorId: state.triggerContext?.trigger.webhook.mr_iid ?? '',
+              baselineSha: state.triggerContext?.trigger.webhook.commit_sha ?? null,
+            },
+            ...(opts.defaultPerNodeTimeoutMs !== undefined
+              ? { timeoutMs: opts.defaultPerNodeTimeoutMs }
+              : {}),
+            onHookProblem: (problem: { stage: string; phase: string; reason: string }) => {
+              log.warn('[code-round] a capability hook reported a problem', {
+                taskId,
+                capability,
+                ...problem,
+              })
+            },
+          }
+        })()
+
   const runner =
     opts.codeCapabilityRunner ??
     createCodeCapabilityRunner({
@@ -4620,6 +4696,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
       ...(wiring !== null
         ? { programStages: wiring.programStages, aiStages: wiring.aiStages }
         : {}),
+      ...(hookWiring !== null ? { hooks: hookWiring } : {}),
     })
   // RFC-304 §2.3 — the MR lease. Held for the WHOLE round, not just publishing:
   // without it, `mr-monitor` can be fixing CI and pushing while this review is
