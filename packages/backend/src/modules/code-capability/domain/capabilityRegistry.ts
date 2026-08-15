@@ -42,8 +42,11 @@ import {
 export const MR_REVIEW_CONTRACT: StageContract = {
   capability: 'mr-review',
   // 3: PR-4b added `reconcile` and `settle-stale`. PR-4a published every finding
-  // every round, so a second round reposted the whole review.
-  version: 3,
+  //    every round, so a second round reposted the whole review.
+  // 4: PR-4b replaced the single `review` stage with the design's
+  //    `split-diff → review-shard → review-global → validate-findings`. One
+  //    reviewer reading a 40-file MR silently reviews whatever fits its context.
+  version: 4,
   stages: [
     // Which MR, at which commit. Refuses rather than defaulting (§6).
     { kind: 'program', name: 'resolve-target', requires: [], produces: ['target'] },
@@ -59,18 +62,48 @@ export const MR_REVIEW_CONTRACT: StageContract = {
       requires: ['target', 'worktree'],
       produces: ['diff', 'mrMeta'],
     },
-    // The one model step. A team may prepend material to what it is shown.
+    // Deterministic, by directory, under a line cap. A program stage because
+    // nothing here needs judgement — and a model asked to "split this sensibly"
+    // would split it differently on a re-run of the same MR.
+    { kind: 'program', name: 'split-diff', requires: ['diff'], produces: ['shards'] },
+    // The parallel model segment, one shard at a time up to the concurrency
+    // bound, each in its own disposable tree. `parallel` so hooks fire once
+    // around the WHOLE segment: per-shard firing would multiply a hook's side
+    // effects by the shard count.
     {
       kind: 'ai',
-      name: 'review',
-      requires: ['diff', 'mrMeta'],
-      produces: ['findings'],
+      name: 'review-shard',
+      parallel: true,
+      requires: ['shards', 'mrMeta', 'worktree'],
+      produces: ['shardFindings'],
       injectable: ['extraContext'],
       aiSchema: ReviewEnvelopeSchema,
       // Which group-layer agent binding runs it. Named rather than hardcoded so
       // a team points the reviewer at its own agent without forking the
       // sequence (the two-layer config of §5).
       agentSlot: REVIEW_AGENT_SLOT,
+    },
+    // The pass sharding structurally cannot do: a caller changed in one shard
+    // and its callee in another looks correct to both (proposal B6 / AC-2).
+    // Same slot as the shards — one reviewer agent does both passes; a separate
+    // slot would make a team bind two agents to do one job.
+    {
+      kind: 'ai',
+      name: 'review-global',
+      requires: ['shardFindings', 'diff', 'mrMeta'],
+      produces: ['globalFindings'],
+      injectable: ['extraContext'],
+      aiSchema: ReviewEnvelopeSchema,
+      agentSlot: REVIEW_AGENT_SLOT,
+    },
+    // Merges the two model passes into the one set everything downstream reads.
+    // Structure and closed-set only (T25) — whether a line is inside the diff
+    // is anchoring, and it is judged at `resolve-positions`.
+    {
+      kind: 'program',
+      name: 'validate-findings',
+      requires: ['shardFindings', 'globalFindings'],
+      produces: ['findings'],
     },
     // Deterministic sort → threshold → cap. Before positions on purpose:
     // positioning findings that are then discarded reports anchoring failures

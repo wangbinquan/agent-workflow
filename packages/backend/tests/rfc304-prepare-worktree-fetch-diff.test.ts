@@ -66,6 +66,14 @@ function fakeGit(
       checkedOut.push(sha)
       return opts.checkout ?? { ok: true }
     },
+    // `prepare-worktree` never touches shard trees; present so the fake
+    // satisfies the port, and deliberately loud if that ever stops being true.
+    async addDisposableWorktree() {
+      throw new Error('prepare-worktree must not create shard worktrees')
+    },
+    async removeDisposableWorktree() {
+      throw new Error('prepare-worktree must not remove shard worktrees')
+    },
   }
 }
 

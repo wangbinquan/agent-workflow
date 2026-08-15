@@ -135,6 +135,12 @@ const fakeGit = (): GitPort => ({
   async checkoutDetached() {
     return { ok: true }
   },
+  async addDisposableWorktree() {
+    return { ok: true as const }
+  },
+  async removeDisposableWorktree() {
+    return { ok: true as const }
+  },
 })
 
 describe('RFC-304 — the wire form of a GitLab review', () => {

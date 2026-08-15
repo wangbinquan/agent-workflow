@@ -99,6 +99,12 @@ const fakeGit = (resolvedSha = HEAD): GitPort => ({
   async checkoutDetached() {
     return { ok: true }
   },
+  async addDisposableWorktree() {
+    return { ok: true as const }
+  },
+  async removeDisposableWorktree() {
+    return { ok: true as const }
+  },
 })
 
 const envelope = (findings: unknown[]) =>
@@ -206,7 +212,11 @@ describe('RFC-304 — mr-review through the real runner', () => {
       'resolve-target',
       'prepare-worktree',
       'fetch-diff',
-      'review',
+      // PR-4b: the design's sharded segment replaces the single `review`.
+      'split-diff',
+      'review-shard',
+      'review-global',
+      'validate-findings',
       'gate',
       'resolve-positions',
       // PR-4b: the two stages that make a second round differ from the first.
@@ -294,7 +304,10 @@ describe('RFC-304 — nothing is published on a bad review', () => {
     // review comment with nothing marking it unvalidated.
     const host = fakeHost()
     const { outcome } = await runRound(db, { host, ai: scriptedModel('no envelope here'), home })
-    expect(outcome.outcome === 'failed' && outcome.failedStage).toBe('review')
+    // `review-shard` since PR-4b: with every shard exhausted there is no review
+    // at all, so the stage fails rather than reporting an empty one — "no
+    // findings" would tell the author their code is clean when nothing read it.
+    expect(outcome.outcome === 'failed' && outcome.failedStage).toBe('review-shard')
     expect(host.calls.some((c) => c.action.startsWith('comment.'))).toBe(false)
   })
 

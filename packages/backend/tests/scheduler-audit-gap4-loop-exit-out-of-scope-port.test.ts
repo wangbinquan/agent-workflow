@@ -187,6 +187,12 @@ describe('gap4 — wrapper-loop exitCondition referencing an out-of-loop node', 
     expect(res.issues.map((issue) => issue.code)).toEqual(['wrapper-loop-exit-node-out-of-scope'])
   })
 
+  // 15s is a WALL-CLOCK allowance, not tolerance for this test getting slower.
+  // It drives four loop iterations through the real scheduler: ~1.5s on an idle
+  // machine, but `gate:local` runs four shards in parallel and the contention
+  // pushed it past bun's unrelated 5000ms default (measured 5232ms, 2026-08-16).
+  // A timeout reports no assertion at all, so it reads as broken rather than
+  // slow — see docs/dev-gotchas.md on the 5000ms family.
   test('an old invalid snapshot keeps the latest outer value instead of false-exiting', async () => {
     await seedAgent(h.db, 'lister', ['findings'])
     await seedAgent(h.db, 'worker', ['out'])
@@ -242,5 +248,5 @@ describe('gap4 — wrapper-loop exitCondition referencing an out-of-loop node', 
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'worker')))
     expect(workerRuns.map((r) => r.iteration).sort()).toEqual([0, 1, 2, 3])
-  })
+  }, 15_000)
 })

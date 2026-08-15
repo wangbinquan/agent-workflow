@@ -125,3 +125,100 @@ export function buildReviewPrompt(input: ReviewPromptInput): ReviewPromptResult 
 
   return { prompt: lines.join('\n'), diffClipped: clipped }
 }
+
+export interface GlobalReviewPromptInput extends ReviewPromptInput {
+  /**
+   * What the per-shard passes already said.
+   *
+   * Included so the global pass does not spend its answer repeating them. The
+   * titles alone are enough for that and keep the prompt small — the full
+   * bodies would reintroduce the context pressure sharding exists to relieve.
+   */
+  shardFindingTitles: readonly string[]
+  /** The directories the change was split across, in shard order. */
+  shardDirectories: readonly string[]
+}
+
+/**
+ * The cross-file pass that runs after the shards (proposal B6 / AC-2).
+ *
+ * Sharding buys a small context per reviewer and pays for it in exactly one
+ * place: a defect whose two halves live in different shards is invisible to
+ * every shard. A caller updated in `src/api/` and the function it calls changed
+ * in `src/core/` is the canonical case — each half looks correct alone.
+ *
+ * So this prompt asks for that and explicitly NOT for a second opinion on what
+ * the shards already covered: a global pass that re-reviews everything produces
+ * duplicate findings with different wording, which the fingerprint cannot
+ * dedupe (different text, different hunk) and the author reads as the platform
+ * repeating itself.
+ */
+export function buildGlobalReviewPrompt(input: GlobalReviewPromptInput): ReviewPromptResult {
+  const budget = input.budgetChars ?? REVIEW_DIFF_BUDGET_CHARS
+  const clipped = input.unifiedDiff.length > budget
+  const diffText = clipped ? input.unifiedDiff.slice(0, budget) : input.unifiedDiff
+
+  const lines: string[] = []
+  lines.push(
+    'This merge request was reviewed in parts, one part per directory. Your job is the pass those parts could not do.',
+  )
+  lines.push('')
+  if (input.mrTitle !== null && input.mrTitle.trim() !== '') {
+    lines.push(`The merge request is titled: ${input.mrTitle.trim()}`)
+    lines.push('')
+  }
+
+  if (input.shardDirectories.length > 0) {
+    lines.push('The change was reviewed in these parts:')
+    lines.push('')
+    for (const directory of input.shardDirectories) {
+      lines.push(`  - ${directory === '' ? '(repository root)' : directory}`)
+    }
+    lines.push('')
+  }
+
+  lines.push('## What to report')
+  lines.push('')
+  lines.push(
+    'Report ONLY defects that span more than one of those parts — the ones no single part could see. Typically: a caller updated in one place and the thing it calls changed in another; a type, schema or wire format written in one part and read in another; an invariant established in one part and relied on in another.',
+  )
+  lines.push('')
+  lines.push(
+    'Do NOT report anything that is contained within a single part. Those were already reviewed, and repeating them makes the same problem appear twice in different words.',
+  )
+  lines.push('')
+  lines.push(
+    'If the parts fit together correctly, report no findings at all. That is the expected answer for most merge requests — do NOT manufacture a cross-cutting finding to have something to say.',
+  )
+
+  if (input.shardFindingTitles.length > 0) {
+    lines.push('')
+    lines.push('Already reported by the per-part reviews, so do not repeat these:')
+    lines.push('')
+    for (const title of input.shardFindingTitles) lines.push(`  - ${title}`)
+  }
+
+  const paths = changedPaths(input.hunks)
+  if (paths.length > 0) {
+    lines.push('')
+    lines.push('A finding is placed on a line of one of these changed files:')
+    lines.push('')
+    for (const path of paths) lines.push(`  - ${path}`)
+  }
+
+  if (clipped) {
+    lines.push('')
+    lines.push(
+      `## Note: this diff was clipped at ${budget} characters and continues beyond what follows. Review what is here; do not guess at the rest.`,
+    )
+  }
+
+  lines.push('')
+  lines.push('## The whole change')
+  lines.push('')
+  lines.push('```diff')
+  lines.push(diffText)
+  lines.push('```')
+
+  return { prompt: lines.join('\n'), diffClipped: clipped }
+}

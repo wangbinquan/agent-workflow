@@ -112,6 +112,12 @@ const fakeGit = (): GitPort => ({
   async checkoutDetached() {
     return { ok: true }
   },
+  async addDisposableWorktree() {
+    return { ok: true as const }
+  },
+  async removeDisposableWorktree() {
+    return { ok: true as const }
+  },
 })
 
 const envelope = (findings: unknown[]) =>

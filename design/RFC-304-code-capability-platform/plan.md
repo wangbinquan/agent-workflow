@@ -277,10 +277,10 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 
 | #    | 任务                                                                                                                                                                                                                                                      | 依赖         |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------- |
-| T23  | `split-diff`：按目录层级聚合 + 体量上限，确定性                                                                                                                                                                                                           | T4           |
-| T24  | `review-shard`（并行 AI 段，**每片一棵独立一次性工作树、禁 merge-back**）+ `review-global`；aiSchema 定义                                                                                                                                                 | T6,T23       |
+| T23  | `split-diff`：按目录层级聚合 + 体量上限，确定性                                                                                                                                                                                                           | T4           | ✅ 2026-08-16 |
+| T24  | `review-shard`（并行 AI 段，**每片一棵独立一次性工作树、禁 merge-back**）+ `review-global`；aiSchema 定义                                                                                                                                                 | T6,T23       | ✅ 2026-08-16 |
 | T24b | **fork MR/PR 支持**：归一化并冻结 source project clone URL + head SHA，按 source remote 精确 fetch；fork PR 的 CI 事件经 head SHA→开放 PR 映射唤醒（唯一命中才唤醒）                                                                                      | T23          |
-| T25  | `validate-findings`：**只做结构与语义闭集校验**（schema、必填、severity 在闭集）。**行号是否在 diff 内不在这里判**——那属于锚定，见 T25b                                                                                                                   | T6,T23       |
+| T25  | `validate-findings`：**只做结构与语义闭集校验**（schema、必填、severity 在闭集）。**行号是否在 diff 内不在这里判**——那属于锚定，见 T25b                                                                                                                   | T6,T23       | ✅ 2026-08-16 |
 | T25b | `resolve-positions` 的锚定判定：行不在 hunk / 文件不在改动集 ⇒ **零 AI 重试**、标 `degraded`、阶段成功（锁 AC-3）；锚定基准是 `fetch-diff` 的产物而非当前工作树（锁 AC-4）                                                                                | T20,T23      | ✅ 2026-08-15 |
 | T26  | `gate`：确定性排序 → 阈值过滤 → 上限截断 + 未展开计数                                                                                                                                                                                                     | T25          | ✅ 2026-08-15 |
 | T27  | `code_findings` 台账：唯一键 `(codeHostEndpointId, stableProjectId, anchorKind, anchorId, fingerprint, generation)`；`fingerprint` 含 `symbolOrHunkDigest`；**`active/disappeared/reappeared` 生命周期**；`createdAt/lastSeenAt/closedAt` 与仓库+时间索引 | T2           | ✅ 2026-08-15 |
@@ -289,6 +289,27 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T29  | `publish`：草稿攒齐一次性发布 + 锚不上的并入总览评论                                                                                                                                                                                                      | T21,T26      |
 | T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          |
 | T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  |
+
+> **T23/T24/T25 落地记录（2026-08-16）**：阶段契约升到 v4，单个 `review` 阶段换成设计
+> §6.1 的 `split-diff → review-shard(parallel) → review-global → validate-findings`。
+>
+> - **每片一棵一次性可写树**（设计门 P1）：`GitPort` 加 `addDisposableWorktree` /
+>   `removeDisposableWorktree`，走仓内既有 `withWorktreeRegistryLock`——`worktree add`
+>   改的是**公共 git dir 的 registry**，并行分片不串行化会真的写坏（本仓 2026-07-27
+>   half-initialized-commondir 事故即此）。树在**任何**退出路径上都删（含抛异常），
+>   漏一棵就是永久磁盘泄漏，没有任何下游知道它存在过。
+> - **分片失败不毁整轮**（设计原文未规定，此处补决策）：八片里一片废，另外七片是真实
+>   且已校验的发现，丢掉它们帮不了任何人；但**七片当八片发**就是「七条里发四条还不说」
+>   那个 bug 换张皮。故失败分片零 findings（合宪法 R5）+ `degraded` + 总览写明**哪一块**
+>   没审成。全片皆废时才 fail 整轮——此时「无发现」等于骗作者说代码是干净的。
+> - **`review-global` 只问跨片问题**：prompt 明确禁止重复分片已报的（附已报标题），
+>   因为同一问题换个说法的指纹与 hunk 都不同，下游永远 dedupe 不掉。`validate-findings`
+>   合并两趟并按 (file,line,severity,title) 去重兜底——「指示」不等于「保证」。
+> - **一个只有集成测试能抓的接线 bug**（已修）：`prepare-worktree` 原来只发布路径、
+>   丢掉了它解析出的 sha，于是每棵分片树建在 `undefined` 上；所有 fake git 都忽略 sha，
+>   全绿。现在 `worktree` artifact 带 `baselineSha`，锁在
+>   `rfc304-sharded-review-round.test.ts`「every shard tree is created at the round's
+>   BASELINE sha」（已做变异校验：改回去即红）。
 
 > **T27/T27b/T28 落地记录（2026-08-15）**：阶段契约升到 v3，`mr-review` 序列在
 > `resolve-positions` 与 `publish` 之间插入 `reconcile`、在 `publish` 之后插入

@@ -30,7 +30,12 @@ import {
   type PublishedFinding,
   type UnplacedFinding,
 } from '@/modules/code-capability/application/publishReview'
-import { runReviewStage } from '@/modules/code-capability/application/reviewStage'
+import { REVIEW_PORT } from '@/modules/code-capability/application/reviewStage'
+import {
+  runReviewShards,
+  type ShardOutcome,
+} from '@/modules/code-capability/application/reviewShards'
+import { runGuardedAiStage } from '@/modules/code-capability/application/determinismGuard'
 import type {
   StageArtifacts,
   StageResult,
@@ -49,7 +54,7 @@ import {
   reconcileFindings,
   type ReconcileAction,
 } from '@/modules/code-capability/domain/findingReconcile'
-import type { DiffOmission } from '@/modules/code-capability/domain/mrDiffNormalize'
+import type { DiffOmission, FileDiff } from '@/modules/code-capability/domain/mrDiffNormalize'
 import {
   apiProjectAddress,
   resolveTarget,
@@ -60,7 +65,19 @@ import {
   renderFindingComment,
   renderOverviewPrelude,
 } from '@/modules/code-capability/domain/reviewComment'
-import type { ReviewFinding } from '@/modules/code-capability/domain/reviewEnvelope'
+import {
+  checkReviewSemantics,
+  ReviewEnvelopeSchema,
+  type ReviewEnvelope,
+  type ReviewFinding,
+} from '@/modules/code-capability/domain/reviewEnvelope'
+import { buildGlobalReviewPrompt } from '@/modules/code-capability/domain/reviewPrompt'
+import {
+  DEFAULT_SPLIT,
+  splitDiff,
+  type DiffShard,
+  type SplitDiffOptions,
+} from '@/modules/code-capability/domain/splitDiff'
 import type { GitlabDiffRefs } from '@/modules/code-capability/domain/reviewPosition'
 import type { LedgerAnchor } from '@/modules/code-capability/infrastructure/sqliteFindingLedger'
 import type { CodeHostPort } from '@/modules/code-capability/ports/codeHostPort'
@@ -99,6 +116,11 @@ export interface MrReviewEnvironment {
   nonce: string
   budget: RetryBudget
   gate: GateConfig
+  /** How the diff is cut into shards; defaults are deliberately conservative. */
+  split?: SplitDiffOptions
+  /** One attempt recorder per shard, so a shard's retries are attributable. */
+  shardRecorderFor?: (shardKey: string) => AttemptRecorder
+  shardConcurrency?: number
 }
 
 /**
@@ -140,6 +162,33 @@ interface DiffArtifact {
   unifiedDiff: string
   hunks: readonly DiffHunk[]
   omitted: ReadonlyArray<{ path: string; omission: DiffOmission }>
+  files: readonly FileDiff[]
+}
+
+interface WorktreeArtifact {
+  path: string
+  /** The commit `prepare-worktree` actually landed on. */
+  baselineSha: string
+}
+
+interface ShardsArtifact {
+  shards: readonly DiffShard[]
+  /** The commit every shard tree is created at — what `fetch-diff` measured. */
+  baselineSha: string
+}
+
+interface ShardFindingsArtifact {
+  findings: readonly ReviewFinding[]
+  outcomes: readonly ShardOutcome[]
+  degraded: boolean
+  diffClipped: boolean
+}
+
+interface GlobalFindingsArtifact {
+  findings: readonly ReviewFinding[]
+  degraded: boolean
+  reason: string | null
+  diffClipped: boolean
 }
 
 interface GatedArtifact {
@@ -260,7 +309,14 @@ export function mrReviewProgramStages(
         worktreePath: env.worktreePath,
         target,
       })
-      if (result.state === 'ready') return done({ worktree: env.worktreePath })
+      if (result.state === 'ready') {
+        // The resolved sha travels with the path. `split-diff` needs it to
+        // create every shard tree at the SAME commit this round measured — a
+        // shard tree at any other commit reviews code the diff never described.
+        return done({
+          worktree: { path: env.worktreePath, baselineSha: result.sha } satisfies WorktreeArtifact,
+        })
+      }
       if (result.state === 'stale') {
         // Not an ordinary failure: the round is superseded, and the caller
         // re-arms the work item at the newer sha rather than dropping it. The
@@ -285,9 +341,64 @@ export function mrReviewProgramStages(
           unifiedDiff: diff.unifiedDiff,
           hunks: diff.hunks,
           omitted: diff.omitted,
+          // Carried so `split-diff` can group by path. The reassembled
+          // unified diff cannot be re-split reliably — a patch body can
+          // contain a line that looks like a file header.
+          files: diff.files,
         } satisfies DiffArtifact,
         mrMeta: mr.meta,
       })
+    },
+
+    'split-diff': async (ctx) => {
+      const diff = required<DiffArtifact>(ctx.artifacts, 'diff')
+      const worktree = required<WorktreeArtifact>(ctx.artifacts, 'worktree')
+      return done({
+        shards: {
+          shards: splitDiff(diff.files, env.split ?? DEFAULT_SPLIT),
+          baselineSha: worktree.baselineSha,
+        } satisfies ShardsArtifact,
+      })
+    },
+
+    'validate-findings': async (ctx) => {
+      const shard = required<ShardFindingsArtifact>(ctx.artifacts, 'shardFindings')
+      const global = required<GlobalFindingsArtifact>(ctx.artifacts, 'globalFindings')
+
+      // Both passes already went through the envelope schema and the semantic
+      // check inside the determinism guard, so this is not re-validation. What
+      // it is for is the MERGE: the global pass is told not to repeat a shard's
+      // finding, and an instruction is not a guarantee. Two comments saying the
+      // same thing in different words cannot be deduped by fingerprint later —
+      // different text, different hunk digest — so it has to happen here.
+      const seen = new Set<string>()
+      const findings: ReviewFinding[] = []
+      let duplicates = 0
+      for (const finding of [...shard.findings, ...global.findings]) {
+        const key = `${finding.file}\u0000${String(finding.line)}\u0000${finding.severity}\u0000${finding.title.trim().toLowerCase()}`
+        if (seen.has(key)) {
+          duplicates += 1
+          continue
+        }
+        seen.add(key)
+        findings.push(finding)
+      }
+
+      return {
+        status: 'done',
+        produced: {
+          findings: {
+            findings,
+            // Either pass having clipped means the review did not see the whole
+            // change, and the overview must say so.
+            diffClipped: shard.diffClipped || global.diffClipped,
+            shardOutcomes: shard.outcomes,
+            degraded: shard.degraded || global.degraded,
+            ...(global.reason !== null ? { globalReason: global.reason } : {}),
+          },
+        },
+        counts: { findings: findings.length, duplicates },
+      }
     },
 
     gate: async (ctx) => {
@@ -544,37 +655,110 @@ export function mrReviewAiStages(
   env: MrReviewEnvironment,
 ): Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>> {
   return {
-    review: async (ctx) => {
+    'review-shard': async (ctx) => {
+      const shards = required<ShardsArtifact>(ctx.artifacts, 'shards')
+      const meta = required<MrMeta>(ctx.artifacts, 'mrMeta')
+
+      // Nothing reviewable — an MR of only binary files, say. Not a failure:
+      // the round proceeds and the overview says what was omitted.
+      if (shards.shards.length === 0) {
+        return done({
+          shardFindings: {
+            findings: [],
+            outcomes: [],
+            degraded: false,
+            diffClipped: false,
+          } satisfies ShardFindingsArtifact,
+        })
+      }
+
+      const result = await runReviewShards({
+        shards: shards.shards,
+        baselineSha: shards.baselineSha,
+        repoPath: env.repoPath,
+        // Siblings of the round's own tree, never inside it: a shard tree
+        // created under the worktree would show up in the round's own diff.
+        shardRoot: `${env.worktreePath}-shards`,
+        git: env.git,
+        makeCaller: env.makeCaller,
+        protocolBlock: env.protocolBlock,
+        nonce: env.nonce,
+        budget: env.budget,
+        mrTitle: meta.title,
+        ...(env.shardRecorderFor !== undefined ? { recorderFor: env.shardRecorderFor } : {}),
+        ...(env.shardConcurrency !== undefined ? { concurrency: env.shardConcurrency } : {}),
+        ...(ctx.signal !== undefined ? { signal: ctx.signal } : {}),
+      })
+
+      // Every shard failed: there is no review at all, so this is a failed
+      // stage rather than an empty one. Publishing "no findings" here would
+      // tell the author their code is clean when nothing actually read it.
+      if (result.outcomes.length > 0 && result.outcomes.every((o) => o.status !== 'done')) {
+        const canceled = result.outcomes.some((o) => o.status === 'canceled')
+        if (canceled) return fail('the round was canceled')
+        return fail(
+          `no part of this change could be reviewed: ${result.outcomes[0]?.reason ?? 'unknown'}`,
+        )
+      }
+
+      return done({
+        shardFindings: {
+          findings: result.findings,
+          outcomes: result.outcomes,
+          degraded: result.degraded,
+          diffClipped: result.outcomes.some((o) => o.diffClipped),
+        } satisfies ShardFindingsArtifact,
+      })
+    },
+
+    'review-global': async (ctx) => {
+      const shardFindings = required<ShardFindingsArtifact>(ctx.artifacts, 'shardFindings')
       const diff = required<DiffArtifact>(ctx.artifacts, 'diff')
       const meta = required<MrMeta>(ctx.artifacts, 'mrMeta')
 
-      const result = await runReviewStage({
-        makeCaller: env.makeCaller,
-        nonce: env.nonce,
-        budget: env.budget,
+      const { prompt, diffClipped } = buildGlobalReviewPrompt({
         unifiedDiff: diff.unifiedDiff,
         hunks: diff.hunks,
         omitted: diff.omitted,
         mrTitle: meta.title,
-        protocolBlock: env.protocolBlock,
+        shardFindingTitles: shardFindings.findings.map((f) => f.title),
+        shardDirectories: shardFindings.outcomes.map((o) => o.directory),
+      })
+
+      const outcome = await runGuardedAiStage<ReviewEnvelope>({
+        caller: env.makeCaller(`${prompt}\n${env.protocolBlock}`),
+        schema: ReviewEnvelopeSchema,
+        nonce: env.nonce,
+        portName: REVIEW_PORT,
+        budget: env.budget,
+        semanticCheck: checkReviewSemantics,
         ...(env.attemptRecorder !== undefined ? { recorder: env.attemptRecorder } : {}),
         ...(ctx.signal !== undefined ? { signal: ctx.signal } : {}),
       })
 
-      if (result.outcome.status === 'canceled') return fail('the round was canceled')
-      if (result.outcome.status === 'exhausted') {
-        // Constitution R5: nothing unvalidated escapes, so there is no partial
-        // value to hand downstream — the stage fails and the round publishes
-        // nothing rather than a best-effort review.
-        return fail(
-          `the reviewer did not produce a valid result after ${result.outcome.totalCalls} attempts`,
-        )
+      if (outcome.status === 'canceled') return fail('the round was canceled')
+      if (outcome.status === 'exhausted') {
+        // Unlike a shard, this one does not sink the round: the per-shard
+        // findings are real and already validated, and withholding them because
+        // the cross-file pass misbehaved would lose genuine review over the
+        // smaller half of the job. It IS recorded as degraded.
+        return done({
+          globalFindings: {
+            findings: [],
+            degraded: true,
+            reason: `the cross-file pass did not produce a valid result after ${outcome.totalCalls} attempts`,
+            diffClipped,
+          } satisfies GlobalFindingsArtifact,
+        })
       }
+
       return done({
-        findings: {
-          findings: result.outcome.value.findings,
-          diffClipped: result.diffClipped,
-        },
+        globalFindings: {
+          findings: outcome.value.findings,
+          degraded: false,
+          reason: null,
+          diffClipped,
+        } satisfies GlobalFindingsArtifact,
       })
     },
   }

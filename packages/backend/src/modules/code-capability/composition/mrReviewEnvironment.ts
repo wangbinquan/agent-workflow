@@ -165,6 +165,8 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
           'resolve-target',
           'prepare-worktree',
           'fetch-diff',
+          'split-diff',
+          'validate-findings',
           'gate',
           'resolve-positions',
           'reconcile',
@@ -174,7 +176,7 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
         ],
         message,
       ),
-      aiStages: refuseAll(['review'], message),
+      aiStages: refuseAll(['review-shard', 'review-global'], message),
     }
   }
 
@@ -189,6 +191,8 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
             'resolve-target',
             'prepare-worktree',
             'fetch-diff',
+            'split-diff',
+            'validate-findings',
             'gate',
             'resolve-positions',
             'reconcile',
@@ -198,7 +202,7 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
           ],
           resolved.message,
         ),
-        aiStages: refuseAll(['review'], resolved.message),
+        aiStages: refuseAll(['review-shard', 'review-global'], resolved.message),
       }
     }
     endpointId = resolved.id
@@ -258,9 +262,9 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
     aiStages:
       input.makeCaller === undefined
         ? refuseAll(
-            ['review'],
+            ['review-shard', 'review-global'],
             input.unresolvedAgentReason ??
-              `no agent is bound to the 'reviewer' slot for this repository, so the review stage has nothing to run — bind one in the capability configuration`,
+              `no agent is bound to the 'reviewer' slot for this repository, so the review stages have nothing to run — bind one in the capability configuration`,
           )
         : mrReviewAiStages(env),
   }

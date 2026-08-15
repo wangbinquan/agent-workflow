@@ -10,7 +10,7 @@
 // never actually checked — the same class of bug as trusting a moving MR ref,
 // arriving through a different door.
 
-import { runGit } from '@/util/git'
+import { runGit, withWorktreeRegistryLock } from '@/util/git'
 import type { GitFetchResult, GitPort } from '@/modules/code-capability/ports/gitPort'
 
 /** What a fetch failure should say when git wrote nothing useful. */
@@ -63,6 +63,35 @@ export function createGitAdapter(deps: GitAdapterDeps = {}): GitPort {
 
     async checkoutDetached({ worktreePath, sha }) {
       const result = await runGit(worktreePath, ['checkout', '--detach', sha], opts)
+      return result.exitCode === 0
+        ? { ok: true }
+        : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }
+    },
+
+    async addDisposableWorktree({ repoPath, worktreePath, sha }) {
+      // Under the registry lock: `worktree add` rewrites the COMMON git dir's
+      // worktrees registry, and shards run concurrently on one repository. The
+      // 2026-07-27 half-initialized-commondir incident in this repo is the
+      // proof that racing here corrupts for real, not in theory.
+      const result = await withWorktreeRegistryLock(repoPath, () =>
+        // `--detach`: a shard tree is scratch and must never own a branch, or a
+        // second shard on the same sha would fail with "already checked out".
+        // `--force`: the sha may already be checked out by the round's own
+        // primary worktree, which is the normal case, not an error.
+        runGit(repoPath, ['worktree', 'add', '--detach', '--force', worktreePath, sha], opts),
+      )
+      return result.exitCode === 0
+        ? { ok: true }
+        : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }
+    },
+
+    async removeDisposableWorktree({ repoPath, worktreePath }) {
+      // `--force` because the agent was allowed to modify the tree (B8): a
+      // clean-tree-only removal would leave every shard that ran a test behind
+      // as a permanent leak.
+      const result = await withWorktreeRegistryLock(repoPath, () =>
+        runGit(repoPath, ['worktree', 'remove', '--force', worktreePath], opts),
+      )
       return result.exitCode === 0
         ? { ok: true }
         : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }

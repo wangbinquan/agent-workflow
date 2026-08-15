@@ -157,6 +157,13 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-dirname',
+    file: 'modules/code-capability/domain/splitDiff.ts',
+    match: "lastIndexOf('/')",
+    count: 1,
+    why: 'operand is a diff path from the code host API (GitLab `new_path` / GitHub `filename`) — a repository-relative Git wire path, `/`-separated on every platform and never a filesystem path. `dirname()` would be the wrong tool here: on win32 it also splits on `\\`, which in a Git path is a legal filename character, not a separator (RFC-304 T23)',
+  },
+  {
+    rule: 'posix-dirname',
     file: 'services/webhook/gitlabAdapter.ts',
     match: "lastIndexOf('/')",
     count: 1,
