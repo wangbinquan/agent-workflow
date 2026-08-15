@@ -243,6 +243,33 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 > `tests/rfc304-git-adapter.test.ts`（真 git 建一个只存在于 MR ref 上的提交）。T24b 因此在
 > PR-4b 只剩「fork PR 的 CI 事件经 head SHA→开放 PR 映射唤醒」一半。
 
+> ### ⚠ T4a2 只做了一半，且另一半有个待你拍板的岔路（2026-08-15）
+>
+> T4a2 原文是「矩阵行 **+ 触发器创建**」。**矩阵行**已完工（`sqliteCapabilityMatrix.ts`，
+> `wantsCapability` 要 `ready` 而非 `enabled`）；**触发器创建**没做，于是**真实 webhook 投递
+> 目前不会启动任何 code-round**——`wakeCapabilitiesForDelivery` 写好并测过，但 `src` 里没有
+> 任何调用方（`rg` 可复核）。这是本 RFC 第二次栽在同一个形态上：机制只是**缺席**、从不
+> **出错**，测试套件对它完全无感。
+>
+> 岔路在于**归属（RFC-301）**：`taskLaunchAdmissionIssue` 规定 webhook 出身的启动必须同时带
+> 非空 `webhookTriggerId` + `webhookFireId`（`taskLaunchOrigin.ts:78`），而「能力被唤醒」既
+> 没有 trigger 行也没有 fire 行。三条路，代价各不相同：
+>
+> 1. **走触发器表（plan 原意，改动最大）**：启用单元格时写一行 `webhook_triggers`，其
+>    launch payload 是 code-round，之后**完全复用**既有 dispatch → fire → 归属 → stream key
+>    → supersede。代价：`RenderedLaunch` 要加第 4 种 kind（`webhookDispatch.ts:347`），而
+>    `launchKind` 是**持久化列**，牵动 shared schema、trigger 校验、多半还有前端触发器表单。
+> 2. **给 RFC-301 加一种 provenance（`capability`）**：改动小，但动的是别的 RFC 的封闭模型与
+>    其守卫，且要重新定义这类任务的归属语义。
+> 3. **为唤醒补记一行真 fire**：能力唤醒确实是「投递导致了工作」，记一笔说得通；但没有
+>    trigger 行可挂，等于要造一个合成 trigger id——那正是「悬挂引用」，本 RFC 刚为它写了四条
+>    互不相同的报错文案去避免。
+>
+> **不自选**：这条属「涉及设计方向由你定」。当前代码是诚实的——`wakeCapabilitiesForDelivery`
+> 要求调用方给出两个 id，缺 fire id 时会**具名失败并报出来**（已有测试锁定），而不是伪造一个。
+>
+> T4a3（真机：真实 MR 上出现行级评论）在此之上，另需活凭据与真 MR。
+
 > 仍推迟到 PR-4b 的：拆块并行与全局关联审、三集合对账与 finding 生命周期、采纳信号、
 > 配置包扩展（T17a/b）。它们都不影响"第一条评论能不能出来"。
 

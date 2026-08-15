@@ -43,7 +43,13 @@
 > 1. **`makeCaller`（能做，未做）**——`review` 阶段够到模型要先把契约的 `agentSlot` 解析成本仓
 >    的组层 agent 绑定（§5），该接线属 PR-4b 的两层配置范畴。**刻意不给可用默认值**：缺失时该
 >    阶段按名拒绝，而不是拿一个猜来的 agent 去发评审（输出里没有任何东西会表明绑定是编造的）。
-> 2. **T4a3 真机端到端（需要人的环境）**——「真实 MR 上出现行级评论」需要活的 GitLab/GitHub
+> 2. **触发器创建（T4a2 的另一半，未做，且有岔路待你拍板）**——真实 webhook 投递**目前不会
+>    启动任何 code-round**：`wakeCapabilitiesForDelivery` 写好并测过，但 `src` 里没有调用方。
+>    卡点是归属：RFC-301 规定 webhook 出身的启动必须带非空 trigger id + fire id
+>    （`taskLaunchOrigin.ts:78`），而「能力被唤醒」两者都没有。三条路及各自代价写在
+>    `plan.md §PR-4a` 的告警块里（走触发器表 / 加一种 provenance / 补记一行真 fire）。
+>    **不自选**——属「涉及设计方向由你定」。
+> 3. **T4a3 真机端到端（需要人的环境）**——「真实 MR 上出现行级评论」需要活的 GitLab/GitHub
 >    凭据与一个真 MR。可程序化的部分已到边界：`rfc304-mr-review-http-contract.test.ts` 用 stub
 >    `fetch` 跑真实 `executeCodeHostCall`，锁死两家各自的**线上形态**（路径、position 对象、
 >    `commit_id`、comments 数组、token 不进 URL）。它证明不了两家一定接受，只证明「我们这一层
