@@ -1,6 +1,6 @@
 # RFC-305 · 统一权限目录与用户级附加授权 — 实施计划
 
-> 状态：**In Progress（2026-08-15，用户已批准完整实现、测试/架构防护、提交上库和 exact-SHA CI）**。
+> 状态：**Done（2026-08-15；实现后继 `aad4085e`，本地 gate、实现审查、CI、视觉回归与 WebKit 全绿）**。
 
 ## 1. 最终边界
 
@@ -65,28 +65,28 @@
 - [x] **RFC-305-T30** Playwright 真实 daemon：390px/light/dark/a11y、create/edit/OCC/live WS、PAT cap。
 - [x] **RFC-305-T31** guest preset 与真实 HTTP 旅程：public list/detail 可读；private 即使有 ACL grant 也隐藏；创建、任务、仓库拒绝；追加 `resource-acl:private` 后只开放对应 private 读取。
 - [x] **RFC-305-T32** 迁移 0163 与 Authentication 设置：OIDC 默认 guest，可切 user；callback 在建号事务内读取策略；邀请用户保持显式预设。
-- [ ] **RFC-305-T33** 全量 format/typecheck/lint/depcheck/tests/migration/build、真实 E2E、WebKit 与 `bun run gate:local`。
-- [ ] **RFC-305-T34** 固定提交 detached worktree 安装依赖并做 Codex implementation review，处置全部 P1/P2。
-- [ ] **RFC-305-T35** 精确 staging、commit trailer、push、origin ancestry 与 exact-SHA GitHub Actions 终态验证。
-- [ ] **RFC-305-T36** RFC/索引/STATE 改 Done，记录本地门禁、提交 SHA 与远端 CI 证据。
+- [x] **RFC-305-T33** 全量 format/typecheck/lint/depcheck/tests/migration/build、真实 E2E、WebKit 与 `bun run gate:local`。
+- [x] **RFC-305-T34** 固定提交 detached worktree 安装依赖并做 Codex implementation review，处置全部 P1/P2。
+- [x] **RFC-305-T35** 精确 staging、commit trailer、push、origin ancestry 与 exact-SHA GitHub Actions 终态验证。
+- [x] **RFC-305-T36** RFC/索引/STATE 改 Done，记录本地门禁、提交 SHA 与远端 CI 证据。
 
 ## 3. 必跑行为矩阵
 
-| 主体         | 附加权限                          | 正向                            | 负向/撤销                                   |
-| ------------ | --------------------------------- | ------------------------------- | ------------------------------------------- |
-| guest session | 无                                | 公开六类资源 list/detail        | private、资源写、任务/仓库/设置均拒绝       |
-| guest session | `resource-acl:private`            | owner/显式 grant 的 private 可读 | 未获 write/execute 点仍拒绝 mutation/执行   |
-| user session | `scripts:author`                  | 可读写脚本敏感字段              | 无 grant 脱敏/403；已保存 workflow 仍可执行 |
-| user session | `resource-acl:bypass`             | 他人 private resource 200       | 无/撤销为 404                               |
-| user session | `memory-distill-jobs:manage`      | HTTP + WS 可用                  | 无/撤销为 403 / permission-required         |
-| user session | `intent:audit`                    | 跨 owner exact read / `all=1`   | mutation 仍 404；撤销读为 404               |
-| user session | `mcp-runtime-tests:audit`         | exact-id transcript read        | latest 不枚举、end 不放行；无 grant 404     |
-| user session | trigger update + `override-owner` | 跨 owner update/delete          | 撤销回 404                                  |
-| user session | `users:read` + `users:write`      | list/create/patch other user    | self access snapshot 拒绝                   |
-| user session | 全 24                             | 与 admin 的 73 点和真实能力一致 | 移除单点只收窄该能力                        |
-| PAT          | 任意 system-domain grant          | 无                              | 创建 matrix 拒绝且运行时剔除                |
-| delegated/WS | grant/revoke                      | 下一 admission/revision 生效    | stale revision 不得继续收发/副作用          |
-| OIDC first login | policy=`guest/user`              | 新建号取得策略选择的预设        | 既有/受邀账户不被策略重写                    |
+| 主体             | 附加权限                          | 正向                             | 负向/撤销                                   |
+| ---------------- | --------------------------------- | -------------------------------- | ------------------------------------------- |
+| guest session    | 无                                | 公开六类资源 list/detail         | private、资源写、任务/仓库/设置均拒绝       |
+| guest session    | `resource-acl:private`            | owner/显式 grant 的 private 可读 | 未获 write/execute 点仍拒绝 mutation/执行   |
+| user session     | `scripts:author`                  | 可读写脚本敏感字段               | 无 grant 脱敏/403；已保存 workflow 仍可执行 |
+| user session     | `resource-acl:bypass`             | 他人 private resource 200        | 无/撤销为 404                               |
+| user session     | `memory-distill-jobs:manage`      | HTTP + WS 可用                   | 无/撤销为 403 / permission-required         |
+| user session     | `intent:audit`                    | 跨 owner exact read / `all=1`    | mutation 仍 404；撤销读为 404               |
+| user session     | `mcp-runtime-tests:audit`         | exact-id transcript read         | latest 不枚举、end 不放行；无 grant 404     |
+| user session     | trigger update + `override-owner` | 跨 owner update/delete           | 撤销回 404                                  |
+| user session     | `users:read` + `users:write`      | list/create/patch other user     | self access snapshot 拒绝                   |
+| user session     | 全 24                             | 与 admin 的 73 点和真实能力一致  | 移除单点只收窄该能力                        |
+| PAT              | 任意 system-domain grant          | 无                               | 创建 matrix 拒绝且运行时剔除                |
+| delegated/WS     | grant/revoke                      | 下一 admission/revision 生效     | stale revision 不得继续收发/副作用          |
+| OIDC first login | policy=`guest/user`               | 新建号取得策略选择的预设         | 既有/受邀账户不被策略重写                   |
 
 ## 4. 架构防护
 
@@ -136,10 +136,17 @@ PERMISSIONS
 
 ## 7. Done 门
 
-- [ ] proposal AC-1…AC-15 全部实证并勾选；
-- [ ] 本计划 T1…T36 全部完成；
-- [ ] 固定提交实现审查无未处置 P1/P2；
+- [x] proposal AC-1…AC-15 全部实证并勾选；
+- [x] 本计划 T1…T36 全部完成；
+- [x] 固定提交实现审查无未处置 P1/P2；
 - [x] `bun run gate:local` 全绿；
-- [ ] commit 已推入 `origin/main` 且远端祖先关系确认；
-- [ ] exact SHA 或包含它的后继 SHA GitHub Actions 终态全绿；
-- [ ] `design/plan.md` 与 `STATE.md` 标记 Done 并记录证据。
+- [x] commit 已推入 `origin/main` 且远端祖先关系确认；
+- [x] exact SHA 或包含它的后继 SHA GitHub Actions 终态全绿；
+- [x] `design/plan.md` 与 `STATE.md` 标记 Done 并记录证据。
+
+最终证据：detached `aad4085e` frozen install 无漂移；本地 gate 7m44s（shared 2132、frontend 6474、backend
+10931 pass / 35 skip / 0 fail）；架构锁 12/12。当前 Codex 会话对指定 RFC-305 提交集做了只读 P1/P2
+实现复核，结论 CLEAN；另行调用 `codex-cli 0.147.0` 的外部模型审查在源码发出前被环境策略拒绝，未绕过且不计为
+通过证据。远端 CI [31886814586](https://github.com/wangbinquan/agent-workflow/actions/runs/31886814586) 36/36 jobs、
+视觉回归 [31886814578](https://github.com/wangbinquan/agent-workflow/actions/runs/31886814578) 44/44、WebKit
+[31886829866](https://github.com/wangbinquan/agent-workflow/actions/runs/31886829866) 8/8 jobs 均成功。

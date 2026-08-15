@@ -1,7 +1,7 @@
 # RFC-305 · 统一权限目录与用户级附加授权
 
 > 产品视角。技术设计见 [design.md](./design.md)，实施计划见 [plan.md](./plan.md)。
-> 状态：**In Progress（2026-08-15，已获用户批准）**。
+> 状态：**Done（2026-08-15；实现后继 `aad4085e`，本地/远端门禁全绿）**。
 > 目标架构：RFC-294 `identity-access` bounded context。
 
 ## 1. 摘要裁决
@@ -245,7 +245,13 @@ binary 同时写同一用户访问快照，因为旧 binary 不推进 revision�
 - [x] **AC-12** `identity-access` 按 RFC-294 分层，跨模块仅经 exact public contracts，只有一个 grant/role/revision/audit writer。
 - [x] **AC-13** `guest` baseline 只能读取公开资源；private ACL、资源写、任务/仓库/设置均拒绝；显式追加权限后只开放对应能力。
 - [x] **AC-14** OIDC 自动建号默认 `guest`，设置页可原子切换为 `user`；新建号读取事务内策略快照，邀请流程不受影响。
-- [ ] **AC-15** shared/backend/frontend/E2E、迁移、`bun run gate:local` 与固定提交实现审查全绿后提交上库。
+- [x] **AC-15** shared/backend/frontend/E2E、迁移、`bun run gate:local` 与固定提交实现审查全绿后提交上库。
+
+交付证据：detached `aad4085e` 上 `bun install --frozen-lockfile` 无漂移；`bun run gate:local` 7m44s 全绿
+（shared 2132、frontend 6474、backend 10931 pass / 35 skip / 0 fail）；RFC-305 架构锁 12/12；GitHub Actions
+CI [31886814586](https://github.com/wangbinquan/agent-workflow/actions/runs/31886814586) 36/36 jobs、视觉回归
+[31886814578](https://github.com/wangbinquan/agent-workflow/actions/runs/31886814578) 44/44、WebKit
+[31886829866](https://github.com/wangbinquan/agent-workflow/actions/runs/31886829866) 8/8 jobs 均为 `success`。
 
 ## 9. RFC-294 对齐边界
 
