@@ -128,6 +128,13 @@ const ALLOWANCES: readonly Allowance[] = [
     why: 'operand is a unified-diff HEADER literal, not a path anything opens — git writes `/dev/null` for an absent side on every platform including Windows, so matching `NUL` there would fail to detect added/deleted files (RFC-304 T25b)',
   },
   {
+    rule: 'null-device',
+    file: 'modules/code-capability/domain/mrDiffNormalize.ts',
+    match: "'/dev/null'",
+    count: 2,
+    why: 'the WRITE side of the same contract: synthesizes the `---`/`+++` header the code host omits, and `diffHunks.ts` reads it straight back. Emitting `NUL` on Windows would make the two halves disagree on the same machine, and every added or deleted file would lose its side (RFC-304 T25b)',
+  },
+  {
     rule: 'posix-path-prefix',
     file: 'util/git.ts',
     match: '`${m}/`',
