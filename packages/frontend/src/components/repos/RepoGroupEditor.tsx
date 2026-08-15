@@ -36,6 +36,7 @@ import {
   type RepoBulkAddItem,
   type RepoBulkAddMode,
 } from '@/components/repos/RepoBulkAddDialog'
+import { isRepoGroupPreviewPending } from '@/components/repos/repoGroupPreviewState'
 import { RepoTreeEditor, type RepoTreeNodeError } from '@/components/repos/RepoTreeEditor'
 import { Select } from '@/components/Select'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
@@ -235,6 +236,11 @@ export function RepoGroupEditor({
     enabled: open && canWrite,
     retry: false,
   })
+  const previewPending = isRepoGroupPreviewPending(
+    wireKey,
+    debouncedWireKey,
+    preview.isFetching,
+  )
 
   const save = useMutation({
     mutationFn: async ({ nodes: submittedNodes, session }: RepoGroupSaveRequest) => {
@@ -392,9 +398,8 @@ export function RepoGroupEditor({
     canWrite &&
     name.trim().length > 0 &&
     (preview.data?.totalRepos ?? 0) > 0 &&
-    debouncedWireKey === wireKey &&
     !preview.isError &&
-    !preview.isFetching &&
+    !previewPending &&
     !hasUnappliedDraft &&
     !save.isPending
   const selectableAttachmentPaths = nodes
@@ -582,7 +587,7 @@ export function RepoGroupEditor({
           )}
 
           <div className="repo-group-editor__status" aria-live="polite">
-            {preview.isFetching ? (
+            {previewPending ? (
               <span className="data-table__muted">{t('repoGroups.editor.validating')}</span>
             ) : preview.error !== null && preview.error !== undefined ? (
               <ErrorBanner error={preview.error} />
