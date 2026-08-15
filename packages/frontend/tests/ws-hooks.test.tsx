@@ -116,22 +116,14 @@ describe('useAuthoritySync', () => {
   })
 
   test('reconciles the current actor whenever the lossy authority socket opens', async () => {
-    const client = new QueryClient()
-    const invalidate = vi.spyOn(client, 'invalidateQueries')
-    function Host() {
-      useAuthoritySync()
-      return null
-    }
-    render(
-      <QueryClientProvider client={client}>
-        <Host />
-      </QueryClientProvider>,
-    )
+    const invalidate = vi.spyOn(appQueryClient, 'invalidateQueries')
+    renderHook(() => useAuthoritySync())
 
     await act(async () => {
       await Promise.resolve()
     })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ACTOR_QUERY_KEY })
+    invalidate.mockRestore()
   })
 })
 
