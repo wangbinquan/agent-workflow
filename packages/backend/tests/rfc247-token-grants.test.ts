@@ -14,7 +14,7 @@
 // are the interactive/bootstrap paths, not the token path.
 
 import { describe, expect, test } from 'bun:test'
-import { ROLE_PERMISSIONS, type Permission, type Role } from '@agent-workflow/shared'
+import { READ_POINTS, ROLE_PERMISSIONS, type Permission, type Role } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 
 function user(role: Role) {
@@ -37,8 +37,9 @@ describe('RFC-247 — an empty matrix yields a read-only token', () => {
       const perms = patPerms(role, [])
       expect(perms.size).toBeGreaterThan(0)
       for (const p of perms) {
-        // every granted point must be a read of some kind
-        expect(p.includes(':read')).toBe(true)
+        // Every granted point must be a read/range point. `resource-acl:private`
+        // is the range that bounds how far the resource reads may see.
+        expect(READ_POINTS.includes(p)).toBe(true)
       }
       expect(perms.has('agents:create')).toBe(false)
       expect(perms.has('agents:update')).toBe(false)

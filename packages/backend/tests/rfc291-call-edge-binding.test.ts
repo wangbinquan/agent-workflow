@@ -36,7 +36,7 @@ let appHome: string
 const actor: Actor = {
   user: { id: OWNER, username: 'owner', displayName: 'Owner', role: 'user', status: 'active' },
   source: 'session',
-  permissions: new Set(),
+  permissions: new Set(['resource-acl:private']),
 }
 
 async function seedWorkflow(name: string, nodes: unknown[], forcedId?: string): Promise<string> {

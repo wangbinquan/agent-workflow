@@ -52,6 +52,7 @@ function makeApp(db: DbClient, appHome: string): Hono {
         'plugins:read',
         'workflows:read',
         'workgroups:read',
+        'resource-acl:private',
         'agents:create',
         'agents:update',
         'skills:create',

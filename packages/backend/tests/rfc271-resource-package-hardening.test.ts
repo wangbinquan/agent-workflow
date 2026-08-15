@@ -36,7 +36,7 @@ const actorOf = (id: string, permissions: readonly string[] = []): Actor =>
   ({
     user: { id, username: id, displayName: id, role: 'user', status: 'active' },
     source: 'daemon',
-    permissions: new Set<string>(permissions),
+    permissions: new Set<string>(['resource-acl:private', ...permissions]),
   }) as unknown as Actor
 
 async function seedUser(db: DbClient, id: string): Promise<void> {

@@ -39,7 +39,7 @@ const actorOf = (id: string, permissions: string[] = ['scripts:author']): Actor 
   ({
     user: { id, username: id, displayName: id, role: 'user', status: 'active' },
     source: 'daemon',
-    permissions: new Set(permissions),
+    permissions: new Set(['resource-acl:private', ...permissions]),
   }) as unknown as Actor
 
 const defn = (nodes: unknown[]): WorkflowDefinition =>

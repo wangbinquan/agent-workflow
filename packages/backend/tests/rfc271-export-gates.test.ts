@@ -32,7 +32,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // ⚠️ **直接构造** Actor 而不是走 `buildActor`：后者按**角色**算权限、忽略调用方
 // 传的集合，于是「一个权限点都没有」这种形态根本构造不出来——而 AC-7d 的反向锁
 // 恰恰需要它。这几道门是纯函数，手工构造身份是最诚实的做法。
-const actorOf = (id: string, permissions: string[] = []): Actor =>
+const actorOf = (id: string, permissions: string[] = ['resource-acl:private']): Actor =>
   ({
     user: { id, username: id, displayName: id, role: 'user', status: 'active' },
     source: 'daemon',
@@ -215,12 +215,15 @@ describe('① 行级可见性（含传递）', () => {
 })
 
 describe('AC-7d 反向锁 · **不得**有类型级 *:read 门', () => {
-  test('actor 一个权限点都没有，但资源行级可见 ⇒ 导出成功', async () => {
+  test('actor 只有 private range、没有类型 read，但资源行级可见 ⇒ 导出成功', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const mcp = await seedMcp(db, 'u1', 'tools')
     const agent = await seedAgent(db, 'u1', 'auditor', { mcp: JSON.stringify([mcp]) })
-    // permissions 为空集：没有 mcps:read、没有 agents:read……
-    const closure = await walkExportClosure(db, actorOf('u1', []), { type: 'agent', id: agent })
+    // 没有 mcps:read、没有 agents:read；private range 只允许进入行级 ACL。
+    const closure = await walkExportClosure(db, actorOf('u1', ['resource-acl:private']), {
+      type: 'agent',
+      id: agent,
+    })
     expect(closure.resources).toHaveLength(2)
     // 这条**故意**是反向锁：将来有人以「补齐权限校验」为由加一道 `mcps:read` 门，
     // 它会立刻红，并把用户拍板的原则（可见即有读权限）摆到那个人面前。

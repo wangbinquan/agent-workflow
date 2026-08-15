@@ -47,7 +47,7 @@ function actorFor(id: string): Actor {
       status: 'active',
     },
     source: 'session',
-    permissions: new Set(),
+    permissions: new Set(['resource-acl:private']),
   }
 }
 
@@ -495,7 +495,7 @@ describe('RFC-253 T28 — script-node env masked in workflow dumps', () => {
 
     const author: Actor = {
       ...actorFor(OWNER),
-      permissions: new Set(['scripts:author'] as const),
+      permissions: new Set(['resource-acl:private', 'scripts:author'] as const),
     }
     const r = await buildIntentDump({
       db,

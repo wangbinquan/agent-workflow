@@ -39,7 +39,7 @@ const actorOf = (id: string): Actor =>
   ({
     user: { id, username: id, displayName: id, role: 'user', status: 'active' },
     source: 'daemon',
-    permissions: new Set<string>(['scripts:author']),
+    permissions: new Set<string>(['resource-acl:private', 'scripts:author']),
   }) as unknown as Actor
 
 const codeOf = async (p: Promise<unknown>): Promise<string | undefined> =>

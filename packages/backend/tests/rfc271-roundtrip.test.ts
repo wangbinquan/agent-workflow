@@ -56,7 +56,7 @@ const box = createSecretBoxFromKey(randomBytes(32))
 const WRITE_ALL = ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups'].flatMap(
   (t) => [`${t}:create`, `${t}:update`],
 )
-const SESSION_PERMISSIONS = [...WRITE_ALL, 'users:search']
+const SESSION_PERMISSIONS = [...WRITE_ALL, 'users:search', 'resource-acl:private']
 
 const actorOf = (id: string, permissions: readonly string[] = SESSION_PERMISSIONS): Actor =>
   ({
