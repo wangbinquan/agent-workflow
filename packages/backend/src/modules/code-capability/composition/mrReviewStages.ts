@@ -35,7 +35,11 @@ import type {
   StageResult,
   StageRunContext,
 } from '@/modules/code-capability/application/stageEngine'
-import type { AiCaller, RetryBudget } from '@/modules/code-capability/application/determinismGuard'
+import type {
+  AiCaller,
+  AttemptRecorder,
+  RetryBudget,
+} from '@/modules/code-capability/application/determinismGuard'
 import { hunkDigestFor, resolveAnchoredLine } from '@/modules/code-capability/domain/anchorLine'
 import type { DiffHunk } from '@/modules/code-capability/domain/anchorResolve'
 import { applyGate, type GateConfig } from '@/modules/code-capability/domain/findingGate'
@@ -58,6 +62,15 @@ import type { WebhookTriggerFields } from '@agent-workflow/shared'
 
 /** Everything one round needs that is NOT produced by a stage. */
 export interface MrReviewEnvironment {
+  /**
+   * Persists one row per AI call (`code_ai_attempts`).
+   *
+   * Optional so the stage maps stay constructible without a database in unit
+   * tests, but production always supplies it: without it, a round that was
+   * retried three times is indistinguishable from one that succeeded first try,
+   * and "why did this cost four model calls" has no answer at all.
+   */
+  attemptRecorder?: AttemptRecorder
   codeHost: CodeHostPort
   git: GitPort
   webhook: WebhookTriggerFields
@@ -325,6 +338,7 @@ export function mrReviewAiStages(
         omitted: diff.omitted,
         mrTitle: meta.title,
         protocolBlock: env.protocolBlock,
+        ...(env.attemptRecorder !== undefined ? { recorder: env.attemptRecorder } : {}),
         ...(ctx.signal !== undefined ? { signal: ctx.signal } : {}),
       })
 

@@ -150,6 +150,7 @@ import { buildProtocolBlock } from '@/services/protocol'
 import { CODE_ROUND_SUMMARY_PORT } from '@/services/codeRoundContract'
 import { createCodeCapabilityRunner } from '@/modules/code-capability/composition/codeCapabilityRunner'
 import { buildMrReviewWiring } from '@/modules/code-capability/composition/mrReviewEnvironment'
+import { settleDanglingAttempts } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
 import { createReviewAgentCaller, resolveReviewerAgent } from '@/services/codeReviewAgentCaller'
 import { REVIEW_AGENT_SLOT, REVIEW_PORT } from '@/modules/code-capability/application/reviewStage'
 import type { CodeCapabilityRunner } from '@/modules/code-capability/public/types'
@@ -4547,6 +4548,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
           worktreePath: state.scopeRoot,
           protocolBlock: buildProtocolBlock([REVIEW_PORT], undefined, envelopeNonce),
           nonce: envelopeNonce,
+          roundId: task.codeRoundId ?? taskId,
           // The same two seams the code-host NODE branch already uses (line
           // ~4360/4410). Threading them here means a test drives the real
           // adapter and the real `executeCodeHostCall` — path templating, body
@@ -4592,6 +4594,12 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
           })()),
         })
       : null
+  // RFC-304 recovery: settle attempts left claimed by a daemon that died
+  // mid-call, BEFORE any stage of this round runs again. Order matters — doing
+  // it afterwards would settle the attempts this run just made, and a restart
+  // would look like a round that never called a model.
+  await settleDanglingAttempts(db, task.codeRoundId ?? taskId)
+
   const runner =
     opts.codeCapabilityRunner ??
     createCodeCapabilityRunner({

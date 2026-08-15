@@ -42,6 +42,7 @@ import {
 } from '@/modules/code-capability/composition/mrReviewStages'
 import { createCodeHostAdapter } from '@/modules/code-capability/infrastructure/codeHostAdapter'
 import { createGitAdapter } from '@/modules/code-capability/infrastructure/gitAdapter'
+import { createSqliteAttemptRecorder } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
 import type { CodeHostConnectionsService, FetchLike } from '@/services/codeHost/connections'
 import type { WebhookTriggerFields } from '@agent-workflow/shared'
 
@@ -65,6 +66,8 @@ export interface MrReviewWiringInput {
   gate?: GateConfig
   /** Overrides endpoint resolution; tests and multi-endpoint callers use it. */
   codeHostEndpointId?: string
+  /** The round this wiring belongs to — scopes the AI attempt rows. */
+  roundId?: string
   /** Injected connection resolution; production reads the secret key file. */
   codeHostConnections?: CodeHostConnectionsService | null
   /** Replaces only the socket, so the real client still assembles the request. */
@@ -185,6 +188,17 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
   }
 
   const env: MrReviewEnvironment = {
+    // One row per AI call, scoped to this round and stage. Built here because
+    // the round id is a composition-time fact, not something a stage knows.
+    ...(input.roundId !== undefined
+      ? {
+          attemptRecorder: createSqliteAttemptRecorder(input.db, {
+            roundId: input.roundId,
+            stageName: 'review',
+            shardKey: '',
+          }),
+        }
+      : {}),
     codeHost: createCodeHostAdapter({
       db: input.db,
       provider,
