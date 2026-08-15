@@ -491,17 +491,29 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 
 ### MR 监视器（PR-6）
 
-| #    | 任务                                                                                                                                                                                                                                                                                                           | 依赖   |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| T35  | 四个脚本契约（collect / classify / arbitrate / select）+ 返回 schema 校验；`WorkPackage` 判别联合**含 `noop`**——不起 task、不在 MR 说话、只落 observation（50 MR×3 次/天 = 150 次健康唤醒全靠它）。**v1 的 union 只含 `noop \| mr-review`**——PR-7/PR-10 合并时才各自扩入自己那一支                             | T7     |
-| T35c | **wake 入口**（**已降为可选**——proposal §6ter-H1 确认自研流水线由 GitLab CI 触发，唤醒链路天然成立）：public command + inbound route + 稳定 MR 定位 + 去重 + 接收回执，触发一次 `collect`。仍要实现（它是 readiness 判据的一部分，也为将来的独立流水线预留），但**不构成 CI 修复上线的前置**，可排在 PR-9 尾批 | T36    |
-| T10e | **事件归属**（从 PR-1 移来，其价值到监视器阶段才出现）：每个 ingress event id 只被一个顶层 capability claim；监视器派发与直接触发共享 causation id；机器自身 push 打 cause 标记**仅用于同因果链去重**——已跑过等价 `self-review` 的 revision 才跳过检视，**不反转 E2 的默认监管**                               | T9,T36 |
-| T35b | 核心脚本失败一律阻断（`blocking` 只适用钩子）；`collect` 失败不得带空产物继续                                                                                                                                                                                                                                  | T35    |
-| T36  | 主循环：事件唤醒 → 四脚本 → 起一轮；**零轮询**断言                                                                                                                                                                                                                                                             | T35,T9 |
-| T37  | 默认优先级仲裁（框架未覆盖时）：冲突 > 评论 > CI；CI 内三档                                                                                                                                                                                                                                                    | T35    |
-| T38  | 多项工作包：一轮内依次做完、统一推送一次                                                                                                                                                                                                                                                                       | T36    |
-| T39  | 冲突检测与报告（**不修**）                                                                                                                                                                                                                                                                                     | T36    |
-| T40  | 闭环：MR 合并/关闭 → `closed`，停止后续                                                                                                                                                                                                                                                                        | T36    |
+| #    | 任务                                                                                                                                                                                                                                                                                                           | 依赖   | 状态 |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
+| T35  | 四个脚本契约（collect / classify / arbitrate / select）+ 返回 schema 校验；`WorkPackage` 判别联合**含 `noop`**——不起 task、不在 MR 说话、只落 observation（50 MR×3 次/天 = 150 次健康唤醒全靠它）。**v1 的 union 只含 `noop \| mr-review`**——PR-7/PR-10 合并时才各自扩入自己那一支                             | T7     | ✅ 2026-08-16 |
+| T35c | **wake 入口**（**已降为可选**——proposal §6ter-H1 确认自研流水线由 GitLab CI 触发，唤醒链路天然成立）：public command + inbound route + 稳定 MR 定位 + 去重 + 接收回执，触发一次 `collect`。仍要实现（它是 readiness 判据的一部分，也为将来的独立流水线预留），但**不构成 CI 修复上线的前置**，可排在 PR-9 尾批 | T36    | ⏳ 可选，排 PR-9 尾批 |
+| T10e | **事件归属**（从 PR-1 移来，其价值到监视器阶段才出现）：每个 ingress event id 只被一个顶层 capability claim；监视器派发与直接触发共享 causation id；机器自身 push 打 cause 标记**仅用于同因果链去重**——已跑过等价 `self-review` 的 revision 才跳过检视，**不反转 E2 的默认监管**                               | T9,T36 | ✅ 2026-08-16（observation 唯一索引 claim） |
+| T35b | 核心脚本失败一律阻断（`blocking` 只适用钩子）；`collect` 失败不得带空产物继续                                                                                                                                                                                                                                  | T35    | ✅ 2026-08-16 |
+| T36  | 主循环：事件唤醒 → 四脚本 → 起一轮；**零轮询**断言                                                                                                                                                                                                                                                             | T35,T9 | ✅ 2026-08-16 |
+| T37  | 默认优先级仲裁（框架未覆盖时）：冲突 > 评论 > CI；CI 内三档                                                                                                                                                                                                                                                    | T35    | ✅ 2026-08-16 |
+| T38  | 多项工作包：一轮内依次做完、统一推送一次                                                                                                                                                                                                                                                                       | T36    | ✅ 2026-08-16 |
+| T39  | 冲突检测与报告（**不修**）                                                                                                                                                                                                                                                                                     | T36    | ✅ 2026-08-16（每 revision 报一次，不修） |
+| T40  | 闭环：MR 合并/关闭 → `closed`，停止后续                                                                                                                                                                                                                                                                        | T36    | ✅ 2026-08-16（dispatcher 已接线） |
+
+> **PR-6 遗留一项，需拍板**：**能力轮次的 webhook 归属**。`mr_merged` / `mr_closed` 的闭环
+> （T40）已接进真实 dispatcher——它不起 task，不触碰归属。但「delivery 唤醒能力 → 起一轮」
+> 这条线还没接进 dispatcher：RFC-301 的 `webhook` provenance 要求非空 `webhookTriggerId` +
+> `webhookFireId`，而 `webhook_trigger_fires.trigger_id` 是 `NOT NULL` 且外键指向
+> `webhook_triggers`——**能力不是触发器**，没有也不该有触发器行，于是没有诚实的 id 可填。
+> 三条路：①给 `TASK_LAUNCH_ORIGINS` 加第五种 `capability`（DB enum 迁移 + 任务列表筛选 + i18n
+> 波及面）；②放宽 RFC-301 的 webhook 判据，允许「有 triggerContext、无 trigger/fire id」；
+> ③让 fires 表的 `trigger_id` 可空并给能力轮次落一条 fire 行。这是 task-execution 的合同变更，
+> 不适合在本 PR 内单方面定，**先呈用户**。在此之前 `wakeCapabilitiesForDelivery` 仍是 PR-6
+> 交付的入口函数（已全测），只是尚未由 dispatcher 调用。
+
 
 ### 评论驱动改码（PR-7）
 

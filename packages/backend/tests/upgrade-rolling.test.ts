@@ -258,11 +258,17 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // generation 进键是为了「消失后又出现」：旧线程已 resolve/标注过，回归必须开新
   // 线程，旧行留作历史，「这个问题反复出现」才答得上来。
   // RFC-304 T30 bumped to 165 with 0165_rfc304_adoption_signals（采纳信号四列）。
+  // RFC-304 T36 bumped to 166 with 0166_rfc304_monitor_observations（监视器唤醒
+  // 结论表）。监视器最常见的结果是 `noop`——不起 task、不在 MR 说任何话；按 50 个
+  // 活跃 MR × 每天 3 次算，一天约 150 次这样的健康唤醒。没有这张表，这 150 次沉默
+  // 与「监视器挂了」完全无从区分，而「它到底看没看」的自然补救恰恰是 N7 禁止的
+  // 那件事：去轮询一下看看。`event_id` 上的部分唯一索引同时承载 T10e——一条入站
+  // 事件只能被一个顶层 capability claim。
   // resolved 与 code_changed **分列**而不是合成一个 adopted：两者恰在有价值的场景
   // 里不一致——代码改了但没 resolve 是作者默默修了，resolve 了但代码没动是作者不
   // 认同；合成一个 flag 会把两者都报成「已采纳」。各带 round_id 是为了让读错的那
   // 个信号能追回是哪一轮观测的，而不是一个无从归属的时间戳。
-  test('HEAD journal has 165 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 166 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -406,7 +412,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // Webhook 终态 workspace claim 与 RFC-165/iso GC claim）。
     // RFC-303 bumped to 157 with 0157_rfc303_mr_terminal_control（MR 终态
     // 控制流、稳定流身份与 durable launch/effect ledgers）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(165)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(166)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

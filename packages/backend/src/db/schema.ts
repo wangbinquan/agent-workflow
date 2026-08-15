@@ -4185,6 +4185,43 @@ export const codeMrLeases = sqliteTable(
  * Recovery reconciles a `pending` batch against the code host rather than
  * guessing — both guesses are wrong in opposite directions.
  */
+/**
+ * RFC-304 T35/T36 — what a wake-up leaves behind when it starts no round.
+ *
+ * The monitor's commonest outcome is `noop`, and by design it creates no task
+ * and says nothing on the merge request. At ~150 healthy wake-ups a day, that
+ * silence is indistinguishable from the monitor being broken unless it is
+ * written down somewhere — and the natural fix for "did it even look?" would
+ * otherwise be the one thing N7 forbids: poll and see.
+ */
+export const codeWorkObservations = sqliteTable(
+  'code_work_observations',
+  {
+    id: text('id').primaryKey(),
+    workItemId: text('work_item_id').notNull(),
+    /** `noop` | `dispatched` | `conflict` | `blocked` — see monitorLoop. */
+    kind: text('kind').notNull(),
+    /** The arbitration's own words, shown verbatim; never paraphrased here. */
+    reason: text('reason').notNull(),
+    /** The head sha this conclusion was drawn against. */
+    observedRevision: text('observed_revision'),
+    /** Shared with the dispatched round and the ingress event that caused it. */
+    causationId: text('causation_id'),
+    /** The ingress event answered, when there was one (T10e claims it). */
+    eventId: text('event_id'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    itemIdx: index('idx_code_work_observations_item').on(t.workItemId, t.createdAt),
+    /**
+     * T10e — an ingress event is claimed by exactly one top-level capability.
+     * Partial (`WHERE event_id IS NOT NULL`) in the migration: most rows have
+     * no event id, and NULLs do not conflict in SQLite anyway.
+     */
+    eventUq: uniqueIndex('uniq_code_work_observations_event').on(t.eventId),
+  }),
+)
+
 export const codePublishIntents = sqliteTable(
   'code_publish_intents',
   {

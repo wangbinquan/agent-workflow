@@ -23,13 +23,10 @@
 //     continues (design §4.3 F8) — a team's optional lint hook going red should
 //     not strand an MR.
 
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type { ScriptLanguage } from '@agent-workflow/shared'
-import { parseEnvelope } from '@/services/envelope'
-import { runManagedProcess } from '@/services/execution/managedProcess'
-import { assembleScriptEnv, INTERPRETER_SPEC } from '@/services/scriptRun'
 import type { StageDef } from '@/modules/code-capability/domain/stageContract'
+import type { CapabilityScriptEnvironment } from '@/modules/code-capability/application/capabilityScriptRun'
+import { runCapabilityScript } from '@/modules/code-capability/application/capabilityScriptRun'
 
 export interface CapabilityHook {
   /** The stage this mounts on; `<parent>/<sub>` inside an invoke sub-sequence. */
@@ -54,25 +51,11 @@ export interface CapabilityHook {
   stageContractVer: number
 }
 
-export interface HookRunEnvironment {
-  /** Where the hook runs and writes; the round's worktree. */
-  worktreePath: string
-  /** Scratch dir for the script file and spilled inputs. */
-  runDir: string
-  repos: ReadonlyArray<{ name: string; path: string }>
-  interpreterPath: string
-  /** Work-item context the hook reads via `AW_CWI_*` (design §4.3 F10). */
-  workItem: {
-    capability: string
-    anchorKind: string
-    anchorId: string
-    roundId: string
-    roundSeq: number
-    baselineSha: string | null
-  }
-  envelopeNonce: string
-  timeoutMs?: number
-}
+/**
+ * Hooks run in the same environment as every other capability script; the type
+ * is an alias rather than a copy so a field added there reaches hooks too.
+ */
+export type HookRunEnvironment = CapabilityScriptEnvironment
 
 export type HookOutcome =
   /** Ran, exit 0. `injected` is already allowlist-filtered. */
@@ -115,62 +98,25 @@ export async function runCapabilityHook(args: RunCapabilityHookArgs): Promise<Ho
     }
   }
 
-  const spec = INTERPRETER_SPEC[hook.language]
-  const inputDir = join(env.runDir, 'inputs')
-  mkdirSync(inputDir, { recursive: true })
-  const scriptPath = join(env.runDir, `hook.${spec.ext}`)
-  writeFileSync(scriptPath, hook.script, 'utf8')
-
   const allowlist = injectableKeysFor(stage, hook.phase)
 
-  const assembly = assembleScriptEnv({
-    language: hook.language,
-    // Hooks always speak the envelope: a hook's stdout is not a port value, it
-    // is a channel that may or may not carry an injection. Treating bare stdout
-    // as data would make every debug `print` an injection attempt.
-    outputMode: 'envelope',
-    envOverlay: hook.env ?? {},
-    inputs: {},
-    runDir: env.runDir,
-    inputDir,
-    worktreePath: env.worktreePath,
-    repos: env.repos,
-    // Hooks are not node runs. These identifiers exist in the script protocol,
-    // so they are filled with the round's identity rather than left blank —
-    // a hook author debugging a failure needs to know WHICH round ran it.
-    taskId: env.workItem.roundId,
-    nodeId: `${hook.phase}:${hook.stage}`,
-    nodeRunId: env.workItem.roundId,
-    iteration: 0,
-    retryIndex: 0,
-    shardKey: null,
-    envelopeNonce: env.envelopeNonce,
-    interpreterPath: env.interpreterPath,
-    depsEnv: null,
-  })
-  for (const file of assembly.spillFiles) writeFileSync(file.path, file.content, 'utf8')
-
-  // Work-item context (design §4.3 F10). Written after the assembly so these
-  // cannot be shadowed by an author overlay.
-  const childEnv: Record<string, string> = { ...assembly.env }
-  childEnv.AW_CWI_CAPABILITY = env.workItem.capability
-  childEnv.AW_CWI_ANCHOR_KIND = env.workItem.anchorKind
-  childEnv.AW_CWI_ANCHOR_ID = env.workItem.anchorId
-  childEnv.AW_CWI_ROUND_ID = env.workItem.roundId
-  childEnv.AW_CWI_ROUND_SEQ = String(env.workItem.roundSeq)
-  childEnv.AW_CWI_BASELINE_SHA = env.workItem.baselineSha ?? ''
-  childEnv.AW_CWI_STAGE = hook.stage
-  childEnv.AW_CWI_PHASE = hook.phase
-  // Telling the hook what it MAY inject turns a silent drop into a fixable
-  // mistake: the author can print the allowlist while debugging.
-  childEnv.AW_CWI_INJECTABLE = JSON.stringify(allowlist)
-
-  const result = await runManagedProcess({
-    argv: spec.argv(env.interpreterPath, scriptPath),
-    cwd: env.worktreePath,
-    env: childEnv,
-    captureRawStdout: true,
-    ...(env.timeoutMs === undefined ? {} : { timeoutMs: env.timeoutMs }),
+  const result = await runCapabilityScript({
+    spec: {
+      language: hook.language,
+      script: hook.script,
+      ...(hook.env === undefined ? {} : { env: hook.env }),
+      fileStem: 'hook',
+      nodeId: `${hook.phase}:${hook.stage}`,
+      declaredPorts: allowlist,
+      extraEnv: {
+        AW_CWI_STAGE: hook.stage,
+        AW_CWI_PHASE: hook.phase,
+        // Telling the hook what it MAY inject turns a silent drop into a
+        // fixable mistake: the author can print the allowlist while debugging.
+        AW_CWI_INJECTABLE: JSON.stringify(allowlist),
+      },
+    },
+    env,
     ...(args.signal === undefined ? {} : { signal: args.signal }),
   })
 
@@ -184,10 +130,9 @@ export async function runCapabilityHook(args: RunCapabilityHookArgs): Promise<Ho
       : { status: 'failed-nonblocking', reason }
   }
 
-  const parsed = parseEnvelope(result.rawStdout, [...allowlist], env.envelopeNonce)
   const injected: Record<string, string> = {}
   for (const key of allowlist) {
-    const value = parsed.ports.get(key)
+    const value = result.ports.get(key)
     // A declared-but-absent port comes back as ''. Injecting an empty string
     // would blank an artifact the hook simply did not mention.
     if (value !== undefined && value !== '') injected[key] = value
@@ -197,6 +142,6 @@ export async function runCapabilityHook(args: RunCapabilityHookArgs): Promise<Ho
     injected,
     // Reported, not silently swallowed: "my hook's output did nothing" is
     // otherwise an unanswerable support question.
-    droppedKeys: parsed.undeclared.map((p) => p.name),
+    droppedKeys: result.undeclared.map((p) => p.name),
   }
 }

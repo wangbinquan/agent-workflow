@@ -33,17 +33,28 @@
 `AW_PORT_MY_PORT`（同上，保留名）、`AW_PORT_DIFF`（`backend/src/services/scriptPorts.ts`，
 diff 端口的免拷贝特例）。语义契约见 script 节点相关 RFC / 源码；此处只登记名字防漂移。
 
-### 代码能力钩子上下文族（`backend/src/modules/code-capability/application/hookRunner.ts` 组装，RFC-304）
+### 代码能力脚本上下文族（`backend/src/modules/code-capability/application/capabilityScriptRun.ts` 组装，RFC-304）
 
-钩子挂在**阶段边界**上，不是工作流节点——没有 node、没有画布位置与端口。它复用 script 节点的
-同一套装配（`assembleScriptEnv`，RFC-304 T7 已把它与 `WorkflowNode` 解耦）与受管子进程，因此
-上面那一族 `AW_*` 钩子同样可见；**本族是额外叠加的工作项上下文**（design §4.3 F10）：
+本族有两类使用者，共用同一套装配（design D4 明令**不得**出现第二套脚本执行实现）：
+
+- **钩子**（`hookRunner.ts`）——挂在**阶段边界**上，不是工作流节点，没有 node / 画布位置 / 端口；
+- **监视器四脚本**（`monitorScripts.ts`，T35）——采集 / 分类 / 仲裁 / 选型，部门层提供。
+
+两者都复用 script 节点的 `assembleScriptEnv`（RFC-304 T7 已把它与 `WorkflowNode` 解耦）与受管
+子进程，因此上面那一族 `AW_*` 同样可见；**本族是额外叠加的工作项上下文**（design §4.3 F10）：
 
 `AW_CWI_CAPABILITY`（能力名）、`AW_CWI_ANCHOR_KIND` / `AW_CWI_ANCHOR_ID`（跟进对象：MR / issue /
 pipeline 及其编号）、`AW_CWI_ROUND_ID` / `AW_CWI_ROUND_SEQ`（本轮标识与序号）、
-`AW_CWI_BASELINE_SHA`（本轮基线，空串表示未定）、`AW_CWI_STAGE` / `AW_CWI_PHASE`（挂载点与
-pre/post）、`AW_CWI_INJECTABLE`（该挂载点**允许注入的键**的 JSON 数组——告知而非静默丢弃，
-便于作者调试为何注入没生效）。
+`AW_CWI_BASELINE_SHA`（本轮基线，空串表示未定）。
+
+钩子额外可见：`AW_CWI_STAGE` / `AW_CWI_PHASE`（挂载点与 pre/post）、`AW_CWI_INJECTABLE`（该挂载
+点**允许注入的键**的 JSON 数组——告知而非静默丢弃，便于作者调试为何注入没生效）。
+
+监视器脚本额外可见：`AW_CWI_SCRIPT`（本次是四步中的哪一步，让一个适配文件能实现多步）、
+`AW_CWI_INPUT_FILE`（上一步输出的 JSON 落盘路径）。**读输入一律走这个文件**：标准端口协议在
+32 KiB 以上会把 `AW_PORT_INPUT` 换成落盘文件并**故意不留内联变量**（防止读半个值当全值），
+于是只认内联变量的适配脚本会在评论最多、最需要监视器的那些 MR 上 `KeyError`——该文件无论大小
+恒定写入，只有一种读法。
 
 这些键在装配之后写入，**作者 env overlay 覆盖不了**：它们是平台身份而非可配置项。
 

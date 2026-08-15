@@ -26,6 +26,7 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 import { tasks } from '../src/db/schema'
 import { wakeCapabilitiesForDelivery } from '../src/services/codeCapabilityWake'
 import { upsertCapabilityCell } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
+import { capabilityBindings, capabilityFrameworks } from '../src/db/schema'
 import type { TriggerContext } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -80,6 +81,31 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
       now: NOW,
       ...over,
     })
+
+  /** A real framework + binding, so script resolution has something to read. */
+  const seedTemplate = async (scriptsJson: string): Promise<void> => {
+    await db
+      .insert(capabilityFrameworks)
+      .values({
+        id: 'framework-1',
+        name: 'framework-1',
+        capability: 'mr-monitor',
+        scriptsJson,
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
+      .onConflictDoNothing()
+    await db
+      .insert(capabilityBindings)
+      .values({
+        id: 'binding-1',
+        name: 'binding-1',
+        frameworkId: 'framework-1',
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
+      .onConflictDoNothing()
+  }
 
   const deliver = (over: Record<string, unknown> = {}) =>
     wakeCapabilitiesForDelivery({
@@ -137,8 +163,13 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
   test('two capabilities on one MR get two SEPARATE tasks', async () => {
     // They are two work items with separate ledgers; sharing a task would let
     // one capability's failure settle the other's round.
+    //
+    // Deliberately NOT `mr-monitor` as the second capability, which is what
+    // this test used before T36: the monitor is the top-level claimant of an
+    // event (T10e) and suppresses the others by design, so pairing it here
+    // would test the claim rule rather than the separation it is named for.
     await enable('mr-review')
-    await enable('mr-monitor')
+    await enable('ci-fix')
     const result = await deliver()
     expect(result.started).toHaveLength(2)
     const ids = new Set(result.started.map((s) => s.taskId))
@@ -147,9 +178,32 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
 
   test('each round gets its own round id', async () => {
     await enable('mr-review')
-    await enable('mr-monitor')
+    await enable('ci-fix')
     const result = await deliver()
     expect(new Set(result.started.map((s) => s.roundId)).size).toBe(2)
+  })
+
+  test('T10e — a live monitor claims the event instead of the other cells', async () => {
+    // The rule from design §11.1: one ingress event, one top-level capability.
+    // Without it the same note both triggers a review and wakes the monitor
+    // into an independent reaction, and the merge request gets two answers to
+    // one comment — the pattern that gets a bot muted, taking the reports that
+    // actually matter with it.
+    // A framework with hooks but no scripts — a real and easy misconfiguration,
+    // and the one that proves the monitor got as far as resolving its own
+    // configuration rather than being skipped.
+    await seedTemplate('{}')
+    await enable('mr-review')
+    await enable('mr-monitor')
+    const result = await deliver({ codeHostEndpointId: 'ep-1' })
+
+    expect(result.started).toEqual([])
+    // The monitor is the one that reacted. It cannot get far here (this cell's
+    // framework has no `collect` script), and saying so is the point: the
+    // failure is reported against the monitor, not silently turned back into a
+    // review.
+    expect(result.failed.map((f) => f.capability)).toEqual(['mr-monitor'])
+    expect(result.failed[0]?.error).toContain('collect')
   })
 
   test('the bot’s own event wakes nothing', async () => {
@@ -169,7 +223,7 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
     // the second — and the failure has to surface, because a launch that
     // vanished with no row is exactly what this RFC exists to prevent.
     await enable('mr-review')
-    await enable('mr-monitor')
+    await enable('ci-fix')
     const result = await wakeCapabilitiesForDelivery({
       db,
       repoId: REPO,

@@ -30,6 +30,7 @@ import { cancelExecution, startExecution } from '@/services/execution/executor'
 import type { ExecutionInvoker } from '@/services/execution/types'
 import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { closeCapabilitiesForDelivery, isTerminalDelivery } from '@/services/codeCapabilityWake'
 import { markDelivery } from '@/services/webhook/deliveryStore'
 import {
   evaluateCircuit,
@@ -1041,6 +1042,59 @@ async function recordInvalidPayloadFire(
 // dispatcher
 // ---------------------------------------------------------------------------
 
+/**
+ * RFC-304 T40 — a merged or closed merge request ends its capability work.
+ *
+ * Runs alongside trigger dispatch rather than through it: capabilities are not
+ * triggers, and a repository that has switched on MR review has usually written
+ * no trigger at all, so a delivery that matches nothing would otherwise leave
+ * every work item on that merge request open forever. A stale open item is not
+ * inert — a late pipeline event on a merged branch would wake it and start work
+ * on code that is already in.
+ *
+ * Never throws. Closing is bookkeeping; failing a whole delivery over it would
+ * trade a stale row for a lost event.
+ */
+async function closeCodeCapabilitiesFor(
+  deps: WebhookDispatchDeps,
+  input: { endpoint: WebhookEndpointRow; event: CodeHostEvent },
+): Promise<void> {
+  if (!isTerminalDelivery(input.event.eventType)) return
+  const mrIid = input.event.mrIid ?? ''
+  const projectId = input.event.projectId ?? ''
+  if (mrIid === '' || projectId === '') return
+
+  try {
+    const resolution = await (deps.resolveRepo ?? resolveRepoForEvent)(
+      deps.db,
+      deps.secretBox,
+      input.event,
+      input.endpoint,
+      // Never auto-register on the way out: a repository nobody had registered
+      // when the merge request was open has no capability cells to close, and
+      // registering one because it just got merged is a side effect nobody
+      // asked for.
+      false,
+    )
+    if (resolution.kind !== 'cached') return
+
+    await closeCapabilitiesForDelivery({
+      db: deps.db,
+      repoId: resolution.cachedRepoId,
+      // The endpoint that DELIVERED this, not a lookup by provider: a
+      // deployment with two GitLab instances has two endpoints, and closing the
+      // other one's work item would be closing somebody else's merge request.
+      codeHostEndpointId: input.endpoint.id,
+      stableProjectId: projectId,
+      mrIid,
+      eventType: input.event.eventType,
+      ...(input.event.eventUuid === null ? {} : { eventId: input.event.eventUuid }),
+    })
+  } catch (err) {
+    log.warn('closing code capabilities failed', { error: errText(err) })
+  }
+}
+
 export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispatcher {
   const streamQueue = new KeyedSerialQueue<string>()
   return {
@@ -1049,6 +1103,7 @@ export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispa
       const db = deps.db
       try {
         await markDelivery(db, deliveryId, 'processing')
+        await closeCodeCapabilitiesFor(deps, { endpoint, event })
         const rows = await db
           .select()
           .from(webhookTriggers)

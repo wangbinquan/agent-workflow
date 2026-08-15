@@ -1156,6 +1156,13 @@
       "when": 1788278402037,
       "tag": "0165_rfc304_adoption_signals",
       "breakpoints": true
+    },
+    {
+      "idx": 165,
+      "version": "6",
+      "when": 1788278403037,
+      "tag": "0166_rfc304_monitor_observations",
+      "breakpoints": true
     }
   ]
 }

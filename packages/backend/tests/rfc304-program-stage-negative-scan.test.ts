@@ -115,8 +115,18 @@ describe('RFC-304 AC-10 — program stages do not dispatch agents', () => {
   })
 })
 
-describe('RFC-304 — hook work-item context is not author-overridable', () => {
-  const HOOK_RUNNER = resolve(MODULE_ROOT, 'application', 'hookRunner.ts')
+describe('RFC-304 — capability work-item context is not author-overridable', () => {
+  // T36 moved the mechanism: `hookRunner` and `monitorScripts` now share one
+  // execution implementation (design D4), so the env assembly and the context
+  // writes live there. The PROPERTY is unchanged and so is this guard — only
+  // the file it reads. Retargeting rather than deleting matters: a guard that
+  // is dropped when its subject moves is a guard that protected nothing after
+  // the first refactor.
+  const SCRIPT_RUN = resolve(MODULE_ROOT, 'application', 'capabilityScriptRun.ts')
+  const CALLERS = [
+    resolve(MODULE_ROOT, 'application', 'hookRunner.ts'),
+    resolve(MODULE_ROOT, 'application', 'monitorScripts.ts'),
+  ]
 
   test('the AW_CWI_* writes come AFTER the env assembly', () => {
     // The behaviour is asserted in rfc304-hook-runner; this locks the mechanism
@@ -124,23 +134,38 @@ describe('RFC-304 — hook work-item context is not author-overridable', () => {
     // overlay apply afterwards) would let a team's hook claim to be running for
     // a different work item — the whole audit trail keyed off `AW_CWI_ROUND_ID`
     // would then be forgeable by its own author.
-    const src = readFileSync(HOOK_RUNNER, 'utf8')
+    const src = readFileSync(SCRIPT_RUN, 'utf8')
     const assemblyIdx = src.indexOf('const assembly = assembleScriptEnv(')
     const contextIdx = src.indexOf('childEnv.AW_CWI_CAPABILITY')
     expect(assemblyIdx).toBeGreaterThan(-1)
     expect(contextIdx).toBeGreaterThan(assemblyIdx)
   })
 
-  test('every AW_CWI_ key the runner writes is registered in docs/env-flags.md', () => {
+  test('a caller’s extra keys are applied after the assembly too, never merged into the overlay', () => {
+    // `extraEnv` is how a caller adds `AW_CWI_STAGE` / `AW_CWI_SCRIPT`. Folding
+    // it into `envOverlay` instead would route those keys through the author
+    // filter and let a hook's own `env:` block shadow the stage it is mounted
+    // on — the same forgery the test above prevents, one indirection out.
+    const src = readFileSync(SCRIPT_RUN, 'utf8')
+    const assemblyIdx = src.indexOf('const assembly = assembleScriptEnv(')
+    const extraIdx = src.indexOf('Object.entries(spec.extraEnv')
+    expect(extraIdx).toBeGreaterThan(assemblyIdx)
+    // And the overlay must carry only the author's own env.
+    expect(src).toContain('envOverlay: spec.env ?? {}')
+  })
+
+  test('every AW_CWI_ key any caller writes is registered in docs/env-flags.md', () => {
     // Duplicates the repo-wide RFC-284 guard on purpose, scoped to this family:
     // that one reports "some token is undocumented" across the whole tree, and
     // when it fires during this RFC's work, this test says which family.
-    const src = readFileSync(HOOK_RUNNER, 'utf8')
     const docs = readFileSync(
       resolve(BACKEND_SRC, '..', '..', '..', 'docs', 'env-flags.md'),
       'utf8',
     )
-    const keys = [...src.matchAll(/childEnv\.(AW_CWI_[A-Z_]+)/g)].map((m) => m[1]!)
+    const sources = [SCRIPT_RUN, ...CALLERS].map((file) => readFileSync(file, 'utf8')).join('\n')
+    // Both spellings: the shared runner writes `childEnv.AW_CWI_*` directly,
+    // and a caller names its own keys inside an `extraEnv` literal.
+    const keys = [...sources.matchAll(/\b(AW_CWI_[A-Z_]+)\b/g)].map((m) => m[1]!)
     expect(keys.length).toBeGreaterThan(0)
     for (const key of new Set(keys)) {
       expect(docs).toContain(key)
