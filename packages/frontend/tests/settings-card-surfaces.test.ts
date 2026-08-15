@@ -46,9 +46,7 @@ describe('RFC-299 — every settings surface uses semantic SettingsCard groups',
 
   test('GC owns three retention cards plus its cardized backup/restore group', () => {
     const gc = between(settings, 'export function GcTab', '// GET /api/restore')
-    expect(
-      count(gc, '<SettingsCard'),
-    ).toBe(3)
+    expect(count(gc, '<SettingsCard')).toBe(3)
     expect(gc).toContain("usePermission('backup:run')")
     expect(gc).toContain('<BackupCard canRun={canRunBackup} />')
     expect(
