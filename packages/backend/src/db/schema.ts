@@ -3798,3 +3798,210 @@ export const resourceBundleApplies = sqliteTable(
     actorIdx: index('idx_resource_bundle_applies_actor').on(t.actorUserId),
   }),
 )
+
+// -----------------------------------------------------------------------------
+// RFC-304 code capability — work items, rounds, stages, AI attempts.
+//
+// The work item is the aggregate root: one externally-followed object (an MR's
+// review, an MR's monitoring, an issue's implementation), living an order of
+// magnitude longer than any task. Rounds are its executions; each round is one
+// `code-round` task. Stages and AI attempts are the two levels of detail the
+// /code state view draws below a round.
+// -----------------------------------------------------------------------------
+
+/**
+ * One followed-up external object.
+ *
+ * Identity is `(endpoint, stableProjectId, capability, anchorKind, anchorId)` —
+ * NOT the repository path. A path is mutable: rename or transfer a project and
+ * the same MR hashes to a different key, so the ledger, the dedup chain and the
+ * supersede relation all silently detach; meanwhile two GitLab/GHES instances
+ * with the same path would merge into one item. RFC-303's domain hit and solved
+ * this already (`modules/integration/domain/mrTerminalControl.ts`), so the
+ * stable numeric project id plus the endpoint id is the key here too. The path
+ * and URL live in `anchor_meta` as a mutable display snapshot only.
+ */
+export const codeWorkItems = sqliteTable(
+  'code_work_items',
+  {
+    id: text('id').primaryKey(),
+    codeHostEndpointId: text('code_host_endpoint_id').notNull(),
+    stableProjectId: text('stable_project_id').notNull(),
+    capability: text('capability').notNull(),
+    anchorKind: text('anchor_kind', { enum: ['mr', 'issue', 'pipeline'] }).notNull(),
+    anchorId: text('anchor_id').notNull(),
+    status: text('status', {
+      enum: [
+        'idle',
+        'queued',
+        'running',
+        'awaiting',
+        'settled',
+        'failed',
+        'superseding',
+        'handed_off',
+        'closing',
+        'closed',
+      ],
+    })
+      .notNull()
+      .default('idle'),
+    /** Bumped whenever an in-flight round is abandoned; rounds carry it. */
+    epoch: integer('epoch').notNull().default(1),
+    /** The round currently in flight (soft reference — rounds outlive cancels). */
+    currentRoundId: text('current_round_id'),
+    /**
+     * Set while `awaiting`: which patch generation the human was asked about.
+     * Guard 2 of the transition table compares an incoming confirmation against
+     * it, so a late confirmation aimed at a superseded patch cannot wake the
+     * item (domain/workItemLifecycle.ts).
+     */
+    pendingGeneration: integer('pending_generation'),
+    /**
+     * Set while `handed_off`: the failure fingerprint whose retry quota ran
+     * out. A new head only releases the hand-off if the fingerprint CHANGED —
+     * otherwise an unrelated push buys a fresh quota for the same failure.
+     */
+    handedOffFingerprint: text('handed_off_fingerprint'),
+    /** Mutable display snapshot (title, path, URL, author) — never identity. */
+    anchorMeta: text('anchor_meta'),
+    /**
+     * The human this work is on behalf of. On a bot-opened MR this is who
+     * actually asked, which is what "the author confirmed" must be judged
+     * against — not the MR's author field (proposal C3).
+     */
+    initiatorUserId: text('initiator_user_id'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    closedAt: integer('closed_at'),
+  },
+  (t) => ({
+    identityUq: uniqueIndex('uniq_code_work_items_identity').on(
+      t.codeHostEndpointId,
+      t.stableProjectId,
+      t.capability,
+      t.anchorKind,
+      t.anchorId,
+    ),
+    statusIdx: index('idx_code_work_items_status').on(t.status),
+    anchorIdx: index('idx_code_work_items_anchor').on(
+      t.codeHostEndpointId,
+      t.stableProjectId,
+      t.anchorKind,
+      t.anchorId,
+    ),
+  }),
+)
+
+/** One execution of a work item. Exactly one `code-round` task per round. */
+export const codeWorkRounds = sqliteTable(
+  'code_work_rounds',
+  {
+    id: text('id').primaryKey(),
+    workItemId: text('work_item_id').notNull(),
+    /** 1-based within the work item. */
+    roundSeq: integer('round_seq').notNull(),
+    /** The work item's epoch when this round opened; a stale round is ignorable. */
+    epoch: integer('epoch').notNull(),
+    /** Soft reference to `tasks.id` — deleting a task must not erase the round. */
+    taskId: text('task_id'),
+    /** Head sha this round reasoned about; a change invalidates its output. */
+    baselineSha: text('baseline_sha'),
+    /** The deterministic inputs the stage sequence was handed. */
+    workPackage: text('work_package'),
+    /** The binding/framework as frozen at launch, so a round stays replayable. */
+    templateSnapshot: text('template_snapshot'),
+    /** Which stage-contract version the hooks were written against (T8). */
+    stageContractVer: integer('stage_contract_ver').notNull().default(1),
+    outcome: text('outcome', {
+      enum: ['published', 'awaiting', 'failed', 'canceled', 'superseded'],
+    }),
+    startedAt: integer('started_at').notNull(),
+    endedAt: integer('ended_at'),
+  },
+  (t) => ({
+    seqUq: uniqueIndex('uniq_code_work_rounds_seq').on(t.workItemId, t.roundSeq),
+    itemIdx: index('idx_code_work_rounds_item').on(t.workItemId),
+    taskIdx: index('idx_code_work_rounds_task').on(t.taskId),
+  }),
+)
+
+/** One row per stage of a round — the middle level of the /code state view. */
+export const codeRoundStages = sqliteTable(
+  'code_round_stages',
+  {
+    id: text('id').primaryKey(),
+    roundId: text('round_id').notNull(),
+    /** Position in the sequence, so a partial run still renders in order. */
+    stageSeq: integer('stage_seq').notNull(),
+    stageName: text('stage_name').notNull(),
+    stageKind: text('stage_kind', { enum: ['program', 'script', 'ai', 'invoke'] }).notNull(),
+    status: text('status', {
+      enum: ['pending', 'running', 'done', 'failed', 'skipped', 'inherited'],
+    })
+      .notNull()
+      .default('pending'),
+    /** Aggregate counters (shards run, findings emitted, …) as JSON. */
+    countsJson: text('counts_json'),
+    error: text('error'),
+    startedAt: integer('started_at'),
+    endedAt: integer('ended_at'),
+  },
+  (t) => ({
+    seqUq: uniqueIndex('uniq_code_round_stages_seq').on(t.roundId, t.stageSeq),
+    roundIdx: index('idx_code_round_stages_round').on(t.roundId),
+  }),
+)
+
+/**
+ * ONE ROW PER AI CALL — the data contract behind the state view's third level
+ * and behind AC-25 ("every AI call is inspectable").
+ *
+ * A stage row cannot express "review-shard had four parallel calls, the second
+ * retried twice in-session and was then re-run in a fresh session"; without
+ * this table that acceptance criterion is simply unverifiable.
+ *
+ * `rerun_seq` counts fresh-session re-runs, `attempt_seq` counts same-session
+ * retries. Recovery must first settle a dangling attempt to `interrupted`
+ * before allocating the next `attempt_seq`: a daemon that died before writing
+ * `validation_outcome` would otherwise mint a duplicate row, which both breaks
+ * history reconstruction and races the seq allocation.
+ */
+export const codeAiAttempts = sqliteTable(
+  'code_ai_attempts',
+  {
+    id: text('id').primaryKey(),
+    roundId: text('round_id').notNull(),
+    stageName: text('stage_name').notNull(),
+    /** Which shard of a fanned-out stage; '' for a single-call stage. */
+    shardKey: text('shard_key').notNull().default(''),
+    /** Fresh-session re-run counter (0-based). */
+    rerunSeq: integer('rerun_seq').notNull().default(0),
+    /** Same-session retry counter (0-based). */
+    attemptSeq: integer('attempt_seq').notNull().default(0),
+    status: text('status', {
+      enum: ['claimed', 'running', 'validated', 'failed', 'interrupted'],
+    })
+      .notNull()
+      .default('claimed'),
+    /** Why the envelope was accepted or rejected — the determinism guard's verdict. */
+    validationOutcome: text('validation_outcome'),
+    /** Native runtime session id, for cross-referencing a transcript. */
+    sessionRef: text('session_ref'),
+    /** Soft reference to the node_run that carried this call. */
+    nodeRunId: text('node_run_id'),
+    startedAt: integer('started_at').notNull(),
+    endedAt: integer('ended_at'),
+  },
+  (t) => ({
+    attemptUq: uniqueIndex('uniq_code_ai_attempts_identity').on(
+      t.roundId,
+      t.stageName,
+      t.shardKey,
+      t.rerunSeq,
+      t.attemptSeq,
+    ),
+    roundIdx: index('idx_code_ai_attempts_round').on(t.roundId),
+    statusIdx: index('idx_code_ai_attempts_status').on(t.status),
+  }),
+)

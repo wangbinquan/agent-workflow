@@ -90,16 +90,22 @@ YAML 导入 / 手工 PUT 的一道**）、INTENT.md 显式声明 withheld、四�
 
 ### 地基一：工作项 + 阶段引擎 + 钩子（PR-1a）
 
-| # | 任务 | 依赖 |
-| --- | --- | --- |
-| T1 | 新建 `modules/code-capability/` 骨架：七层目录 + public 合同占位；边界规则接入既有 import 守卫 | — |
-| T2 | `code_work_items` / `code_work_rounds` / `code_round_stages` / **`code_ai_attempts`** 表与迁移；工作项身份键用 `(codeHostEndpointId, stableProjectId, …)`。（`code_trigger_deliveries` 移到 T61，它到 PR-11 才有消费者）| T1 |
-| T3 | 工作项状态机（domain 纯函数）+ CAS 写入（照搬 `lifecycle.ts` 姿势）+ 转移表穷举测试 | T2 |
-| T4 | `StageContract` / `StageDef` **判别联合**（`program` / `script` / `ai` / **`invoke`**），每种 kind 只能携带自己那组字段；保存期校验 `invoke` 的区间存在性、递归环、输入输出闭包、取消传播 | T1 |
-| T5 | `StageEngine`：按序推进、落 `code_round_stages`、失败传播 | T3,T4 |
-| T7 | `HookRunner`：抽出不依赖 `WorkflowNode` 的脚本调用面（复用 `assembleScriptEnv` + 受管子进程）；pre/post 挂载；注入数据白名单合并；blocking 语义 | T5 |
-| T8 | 阶段契约版本化：钩子声明版本，升版后旧钩子显式报迁移 | T7 |
-| T12 | 用一条最简内置流程（`prepare-worktree → 一个 program 阶段 → ledger`）跑通 port 级最简链路。**注意它只为 PR-1a 背书**——真实 task 与 AI 重试在 PR-1b 才验证 | T5,T7 |
+| # | 任务 | 依赖 | 状态 |
+| --- | --- | --- | --- |
+| T1 | 新建 `modules/code-capability/` 骨架：七层目录 + public 合同占位；边界规则接入既有 import 守卫 | — | ✅ 2026-08-15（见下方说明） |
+| T2 | `code_work_items` / `code_work_rounds` / `code_round_stages` / **`code_ai_attempts`** 表与迁移；工作项身份键用 `(codeHostEndpointId, stableProjectId, …)`。（`code_trigger_deliveries` 移到 T61，它到 PR-11 才有消费者）| T1 | ✅ 2026-08-15（migration 0159） |
+| T3 | 工作项状态机（domain 纯函数）+ CAS 写入（照搬 `lifecycle.ts` 姿势）+ 转移表穷举测试 | T2 | ✅ 2026-08-15 |
+| T4 | `StageContract` / `StageDef` **判别联合**（`program` / `script` / `ai` / **`invoke`**），每种 kind 只能携带自己那组字段；保存期校验 `invoke` 的区间存在性、递归环、输入输出闭包、取消传播 | T1 | ✅ 2026-08-15 |
+| T5 | `StageEngine`：按序推进、落 `code_round_stages`、失败传播 | T3,T4 | ✅ 2026-08-15 |
+| T7 | `HookRunner`：抽出不依赖 `WorkflowNode` 的脚本调用面（复用 `assembleScriptEnv` + 受管子进程）；pre/post 挂载；注入数据白名单合并；blocking 语义 | T5 | ⏳ |
+| T8 | 阶段契约版本化：钩子声明版本，升版后旧钩子显式报迁移 | T7 | ⏳ |
+| T12 | 用一条最简内置流程（`prepare-worktree → 一个 program 阶段 → ledger`）跑通 port 级最简链路。**注意它只为 PR-1a 背书**——真实 task 与 AI 重试在 PR-1b 才验证 | T5,T7 | ⏳ |
+
+**T1 说明（2026-08-15）**：目录按需生长，不预建空壳——本 PR 落了 `domain/`（工作项状态机、阶段契约）
+与 `application/`（阶段引擎）两层。**`public/` 暂不建**：RFC-294 的 public 合同是给**跨模块消费者**用的，
+本模块目前没有跨模块调用方，先摆五个空 entrypoint 只会是噪音；第一个消费者随 PR-1b 的 `code-round`
+runner 落地，届时一并建。边界守卫**已自动接管**——`rfc294-architecture-preflight.test.ts` 遍历
+`modules/` 下每个 context（本模块建出当天即在覆盖内），依赖分层门禁亦已复跑通过。
 
 ### 地基二：真实 `code-round` 与 AI 确定性守卫（PR-1b）
 
