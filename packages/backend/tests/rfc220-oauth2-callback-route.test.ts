@@ -24,6 +24,7 @@ import { createApp } from '../src/server'
 import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { clearEndpointCaches } from '../src/auth/oidc/endpoints'
 import { clearPendingFlows } from '../src/auth/oidc/flow'
+import { setOidcDefaultRole } from '../src/auth/loginPolicy'
 import { userIdentities, userSessions, users } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -192,6 +193,7 @@ describe('RFC-220 S8 — route-level OAuth-only chain', () => {
     const userRows = await h.db.select().from(users).where(eq(users.id, identities[0]!.userId))
     expect(userRows[0]!.displayName).toBe('zhang 我爱写代码')
     expect(userRows[0]!.status).toBe('active')
+    expect(userRows[0]!.role).toBe('guest')
     const firstSessions = await h.db
       .select()
       .from(userSessions)
@@ -214,9 +216,24 @@ describe('RFC-220 S8 — route-level OAuth-only chain', () => {
     expect(refreshed[0]!.lastLoginAt).toBe(
       Math.max(...allSessions.map((session) => session.createdAt)),
     )
+    expect(refreshed[0]!.role).toBe('guest')
     // same account, no dup (createApp seeds a __system__ row — exclude it)
     const humans = await h.db.select().from(users).where(ne(users.id, SYSTEM_USER_ID))
     expect(humans.length).toBe(1)
+  })
+
+  test('configured regular-user preset applies only to newly auto-provisioned identities', async () => {
+    const h = await buildHarness()
+    setOidcDefaultRole(h.db, 'user')
+    idpState.userinfoBody = { id: 84, login: 'configured-user' }
+    const { state } = await startLogin(h)
+    const response = await h.app.request(
+      `/api/auth/oidc/pure/callback?code=configured&state=${state}`,
+    )
+    expect(response.status).toBe(302)
+    const identity = (await h.db.select().from(userIdentities))[0]!
+    const created = await h.db.select().from(users).where(eq(users.id, identity.userId))
+    expect(created[0]!.role).toBe('user')
   })
 
   test('mid-callback subjectClaim change → 400 friendly page + ZERO side effects', async () => {

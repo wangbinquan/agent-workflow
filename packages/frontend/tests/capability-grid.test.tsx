@@ -13,6 +13,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import type * as RouterModule from '@tanstack/react-router'
 import '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { fullAccessActorResponse } from './unexpectedNetwork'
 
 vi.mock('@tanstack/react-router', async () => {
   const actual = await vi.importActual<typeof RouterModule>('@tanstack/react-router')
@@ -78,6 +79,7 @@ function mockOverview(body: unknown = HEALTHY, status = 200) {
       }
       return json(body)
     }
+    if (s.includes('/api/auth/me')) return fullAccessActorResponse()
     return json([])
   })
 }

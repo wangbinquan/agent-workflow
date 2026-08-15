@@ -13,6 +13,7 @@ export const USER_ROLE_PRESENTATION = {
   // RFC-221 owns this presentation file and may differentiate later.
   manager: { kind: 'info', labelKey: 'users.roleOption.manager' },
   user: { kind: 'neutral', labelKey: 'users.roleOption.user' },
+  guest: { kind: 'neutral', labelKey: 'users.roleOption.guest' },
 } as const satisfies Record<UserPublic['role'], { kind: StatusChipKind; labelKey: string }>
 
 export function accountInitials(displayName: string, username: string): string {

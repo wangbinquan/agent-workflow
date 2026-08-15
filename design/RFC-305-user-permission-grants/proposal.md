@@ -6,29 +6,31 @@
 
 ## 1. 摘要裁决
 
-`admin`、`manager`、`user` 只是三套默认权限预设，不是第二条授权轴。
+`admin`、`manager`、`user`、`guest` 只是四套默认权限预设，不是第二条授权轴。
 
 ```text
 effectiveAccountPermissions = ROLE_PERMISSIONS[role] ∪ additionalPermissions
 ```
 
 业务代码只判断 `effectiveAccountPermissions`。HTTP、MCP、service、ACL、WebSocket、后台委派和前端功能开关都不得通过
-`role === 'admin' | 'manager' | 'user'` 决定是否放行。`role` 只用于：
+`role === 'admin' | 'manager' | 'user' | 'guest'` 决定是否放行。`role` 只用于：
 
 - 选择默认权限预设；
 - 持久化、兼容 wire 字段与审计；
 - 用户目录中的展示、统计和筛选；
 - 管理员切换默认预设。
 
-共享目录共有 72 个权限点。除内在的 `account:self` 外，任何不在当前预设中的权限都可以逐用户显式附加。因此：
+共享目录共有 73 个权限点。除内在的 `account:self` 外，任何不在当前预设中的权限都可以逐用户显式附加。因此：
 
 | 预设      | 默认权限数 | 当前可附加数 |
 | --------- | ---------: | -----------: |
-| `user`    |         48 |           24 |
-| `manager` |         60 |           12 |
-| `admin`   |         72 |            0 |
+| `guest`   |          7 |           66 |
+| `user`    |         49 |           24 |
+| `manager` |         61 |           12 |
+| `admin`   |         73 |            0 |
 
-普通 `user` 勾满 24 个附加点后，仍保存为 `role: 'user'`，但其 72 个有效权限与 `admin` 预设完全相同；授权行为也必须完全相同。
+普通 `user` 勾满 24 个附加点后，仍保存为 `role: 'user'`，但其 73 个有效权限与 `admin` 预设完全相同；授权行为也必须完全相同。
+`guest` 是只含公开资源读取能力的最小预设；它不是业务代码里的特殊身份。
 
 ## 2. 背景
 
@@ -53,6 +55,7 @@ effectiveAccountPermissions = ROLE_PERMISSIONS[role] ∪ additionalPermissions
 5. 删除生产授权中的角色判断和并行 identity gate；把历史例外全部纳入显式权限。
 6. 按 RFC-294 建立 `modules/identity-access/`，集中访问写命令、authority 重建、OCC、审计和持久化端口。
 7. 用架构测试保证以后新增权限自然进入目录和弹窗，也不能重新引入角色授权分支。
+8. 为首次 OAuth/OIDC 自动建号提供可配置的 `guest | user` 默认预设，默认值为 `guest`。
 
 ## 4. 非目标
 
@@ -96,6 +99,16 @@ effectiveAccountPermissions = ROLE_PERMISSIONS[role] ∪ additionalPermissions
 
 `manager` 和 `admin` 之所以默认拥有其中部分能力，只因为对应点在其预设中；普通 `user` 也可被显式授予。
 
+### D3bis. 公开读取与私有可见性分离
+
+`resource-acl:private` 表示主体可以进入 owner/显式 grant 等私有资源 ACL 判定；缺少该点时，统一资源 ACL 在读取任何 private
+资源前直接 fail closed，只允许 `visibility=public`。`resource-acl:bypass` 仍表示绕过 owner/visibility/grant 的完整行级 ACL，二者
+不是同一个能力。
+
+`guest` 预设只包含六类公开资源读取点和 `account:self`：agents、skills、MCP、plugins、workflows、workgroups。它不包含
+`resource-acl:private`、任何 create/update/delete、任务读取/执行、仓库访问或系统配置权限。前后端消费者只检查这些具体权限；
+不得出现 `role === 'guest'` 的只读分支。管理员以后显式给 guest 追加权限时，新权限必须按统一公式自然生效。
+
 ### D4. 授权只看有效权限
 
 粗粒度授权统一为：
@@ -138,8 +151,10 @@ additionalPermissions ∩ ROLE_PERMISSIONS[role] = ∅
 与 no-op 不虚增 revision 或 audit。
 
 Bootstrap/OIDC 的初始账户也不例外：它们通过 identity-access exact transaction participant 写 user/revision=0/create audit，再在同一
-外层事务写登录策略或 identity。生产代码中的 `insert(users)` 因此只有 identity-access repository 一个落点。authority 和用户目录
-读取同样以单条 join 查询取得 role+grants 快照，不组合两个异步时点。
+外层事务写登录策略或 identity。OIDC 自动建号在该事务内读取 `auth_login_policy.oidc_default_role`，并以当时的 `guest | user`
+策略值选择初始预设；默认是 `guest`，管理员可在设置页以 `oidc:configure` 修改为 `user`。受邀用户继续采用邀请时显式选择的
+预设，不受该全局策略影响。生产代码中的 `insert(users)` 因此只有 identity-access repository 一个落点。authority 和用户目录读取
+同样以单条 join 查询取得 role+grants 快照，不组合两个异步时点。
 
 ### D8. 当前权限即时生效
 
@@ -171,17 +186,21 @@ tokenPermissions =
 - 可附加点为可操作 Checkbox；`account:self` 只读；
 - 支持名称、说明和稳定 id 搜索，搜索不改变选择；
 - 展示风险、PAT 可用性和行级约束；
-- 不提供“全选”捷径，避免误授 24 个高风险点；
+- 不提供“全选”捷径，避免一次误授大量高风险点；
 - 角色切换、dirty/reset、409 草稿恢复、键盘/读屏、390px、明暗主题和中英文均需覆盖。
 
 ## 6. 用户故事
 
-1. 访问管理员给普通用户勾选 `scripts:author`；该用户无需重新登录即可编辑自己可写工作流里的脚本，但仍受原资源 ACL。
-2. 访问管理员再授予 `resource-acl:bypass`；同一用户立即可访问其他 owner 的 private 资源，撤销后恢复 404。
-3. 普通 `user` 被授予 `users:read` + `users:write` 后，可创建用户并修改其他用户访问；其角色字段保持 `user`。
-4. 普通 `user` 获得全部 24 个可选点后，授权面与 `admin` 完全一致；删除任何一点只收窄对应能力。
-5. 两名访问管理员并发编辑同一用户，后提交者收到 409，已有草稿不丢失。
-6. 开发者增加新 `Permission` 时，编译器要求补齐目录和文案；完成后两个弹窗自然出现该点。
+1. 首次使用 OAuth/OIDC 登录且未被邀请的用户，在默认策略下创建为 `guest`，只能查看公开 agents、skills、MCP、plugins、workflows
+   和 workgroups，不能创建资源、读取或执行任务。
+2. 持有 `oidc:configure` 的管理员在设置中把默认值改为普通用户后，下一个首次 OAuth/OIDC 用户创建为 `user`；既有用户与受邀
+   用户不被改写。
+3. 访问管理员给普通用户勾选 `scripts:author`；该用户无需重新登录即可编辑自己可写工作流里的脚本，但仍受原资源 ACL。
+4. 访问管理员再授予 `resource-acl:bypass`；同一用户立即可访问其他 owner 的 private 资源，撤销后恢复 404。
+5. 普通 `user` 被授予 `users:read` + `users:write` 后，可创建用户并修改其他用户访问；其角色字段保持 `user`。
+6. 普通 `user` 获得全部 24 个可选点后，授权面与 `admin` 完全一致；删除任何一点只收窄对应能力。
+7. 两名访问管理员并发编辑同一用户，后提交者收到 409，已有草稿不丢失。
+8. 开发者增加新 `Permission` 时，编译器要求补齐目录和文案；完成后两个弹窗自然出现该点。
 
 ## 7. 能力影响清单
 
@@ -192,7 +211,7 @@ tokenPermissions =
 
 ### C2. 全 grant 等价于 admin 预设
 
-普通 `user` 的 24 个差集全部授予后，其有效权限与 `admin` 的 72 点集合相同，包括资源 ACL bypass、蒸馏运维和用户访问管理。
+普通 `user` 的 24 个差集全部授予后，其有效权限与 `admin` 的 73 点集合相同，包括资源 ACL bypass、蒸馏运维和用户访问管理。
 系统不保留任何隐藏的 admin 身份能力。
 
 ### C3. PAT system-domain 边界不变
@@ -206,15 +225,16 @@ tokenPermissions =
 
 ### C5. 混合版本与回滚
 
-迁移只新增 revision、grant 与 audit 表。旧 binary 忽略 grant，因此回滚期间会缺少新授能力但不会因 grant 扩权；重新升级后
-有效 grant 恢复。部署窗口不得让旧、新 binary 同时写同一用户访问快照，因为旧 binary 不推进 revision。
+迁移 0162 新增 revision、grant 与 audit 表，0163 为登录策略增加 `oidc_default_role`（默认 `guest`）。旧 binary 忽略 grant 和
+新策略列，因此回滚期间会缺少新授能力，并按旧版本行为自动建号；重新升级后有效 grant 与策略恢复。部署窗口不得让旧、新
+binary 同时写同一用户访问快照，因为旧 binary 不推进 revision。
 
 ## 8. 验收标准
 
-- [x] **AC-1** 72 个权限均有穷尽目录和中英文案；新增点漏目录/文案时门禁失败，补齐后两个弹窗自动出现。
-- [x] **AC-2** `admin/manager/user` 仅为预设；生产授权无账户角色比较、无 identity 元数据、无退役角色 helper。
-- [x] **AC-3** 除 `account:self` 外，每个预设差集点均可逐账户授予；`user` 当前恰有 24 个可选点。
-- [x] **AC-4** `user + 全部 24 grant` 与 `admin` 有效权限集合及真实授权行为完全相同，角色 wire 仍为 `user`。
+- [x] **AC-1** 73 个权限均有穷尽目录和中英文案；新增点漏目录/文案时门禁失败，补齐后两个弹窗自动出现。
+- [x] **AC-2** `admin/manager/user/guest` 仅为预设；生产授权无账户角色比较、无 identity 元数据、无退役角色 helper。
+- [x] **AC-3** 除 `account:self` 外，每个预设差集点均可逐账户授予；`guest` 当前可选 66 点，`user` 当前恰有 24 个可选点。
+- [x] **AC-4** `user + 全部 24 grant` 与 `admin` 的 73 个有效权限及真实授权行为完全相同，角色 wire 仍为 `user`。
 - [x] **AC-5** 五个历史身份能力都有显式权限、正负行为与授予/撤销覆盖；PAT 对五点始终拒绝。
 - [x] **AC-6** `scripts:author` 的读取、创建、修改、导入和撤销路径完整；既有脚本执行语义不变。
 - [x] **AC-7** 持有 `users:write` 的 active session 可管理其他用户访问，无角色要求；self、system、last-active-users:write 保护成立。
@@ -223,7 +243,9 @@ tokenPermissions =
 - [x] **AC-10** PAT 公式使用有效账户上限且剔除 system-domain；range/resource 的撤销与恢复有真实 daemon 测试。
 - [x] **AC-11** 两个弹窗共用目录组件，搜索/来源/风险/约束/OCC/dirty/a11y/390px/light/dark/i18n 完整。
 - [x] **AC-12** `identity-access` 按 RFC-294 分层，跨模块仅经 exact public contracts，只有一个 grant/role/revision/audit writer。
-- [ ] **AC-13** shared/backend/frontend/E2E、迁移、`bun run gate:local` 与固定提交实现审查全绿后提交上库。
+- [x] **AC-13** `guest` baseline 只能读取公开资源；private ACL、资源写、任务/仓库/设置均拒绝；显式追加权限后只开放对应能力。
+- [x] **AC-14** OIDC 自动建号默认 `guest`，设置页可原子切换为 `user`；新建号读取事务内策略快照，邀请流程不受影响。
+- [ ] **AC-15** shared/backend/frontend/E2E、迁移、`bun run gate:local` 与固定提交实现审查全绿后提交上库。
 
 ## 9. RFC-294 对齐边界
 

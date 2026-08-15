@@ -92,7 +92,7 @@ export async function userCommand(
     return {
       output:
         'usage: agent-workflow user <create|reset-password|list|disable|enable> [options]\n' +
-        '  user create --username <name> [--admin] [--role admin|user|manager]\n' +
+        '  user create --username <name> [--admin] [--role admin|user|manager|guest]\n' +
         '               [--display "Name"] [--email <em>] [--password <pw>]\n' +
         '  user reset-password --username <name> --new-password <pw>\n' +
         '  user list\n' +
@@ -116,7 +116,7 @@ export async function userCommand(
       } else if (flags.role !== undefined) {
         const parsed = RoleSchema.safeParse(flags.role)
         if (!parsed.success) {
-          return badUsage(`invalid --role '${flags.role}' (expected admin|user|manager)`)
+          return badUsage(`invalid --role '${flags.role}' (expected admin|user|manager|guest)`)
         }
         role = parsed.data
       }

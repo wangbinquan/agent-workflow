@@ -73,6 +73,7 @@ export interface WorkgroupContextPanelProps {
   onRemoveMember: (key: string) => Promise<void>
   onAddMember: (row: WorkgroupMemberRowState) => Promise<void>
   onTransientDraftState: (state: WorkgroupTransientDraftState) => void
+  readOnly?: boolean
 }
 
 export function WorkgroupContextPanel(props: WorkgroupContextPanelProps) {
@@ -98,6 +99,9 @@ export function WorkgroupContextPanel(props: WorkgroupContextPanelProps) {
   const transientValid =
     (!addAgentDraft.dirty || !addAgentDraft.invalid) &&
     (!addHumanDraft.dirty || !addHumanDraft.invalid)
+  useEffect(() => {
+    if (props.readOnly === true && transientDirty) discardTransient()
+  }, [discardTransient, props.readOnly, transientDirty])
   useEffect(() => {
     onTransientDraftState({
       dirty: transientDirty,
@@ -177,6 +181,7 @@ export function WorkgroupContextPanel(props: WorkgroupContextPanelProps) {
             value={props.configDraft}
             onChange={props.onConfigChange}
             errors={props.configErrors}
+            readOnly={props.readOnly}
             /* RFC-207 — from the DRAFT roster, not the server receipt: while a
                human add/removal is in flight (or failed), the two disagree and
                the gate/budget controls must match what the next save submits. */
@@ -193,13 +198,15 @@ export function WorkgroupContextPanel(props: WorkgroupContextPanelProps) {
             showLeaderControls={props.group.mode === 'leader_worker'}
             applying={props.applying}
             applyError={props.applyError}
+            readOnly={props.readOnly === true}
             onChange={(patch) => props.onPatchMember(row.key, patch)}
             onSetLeader={() => props.onSetLeader(row.key)}
             onRemove={() => props.onRemoveMember(row.key)}
           />
         )}
 
-        {panel.kind === 'add' &&
+        {props.readOnly !== true &&
+          panel.kind === 'add' &&
           (panel.memberType === 'agent' ? (
             <AddAgentBody
               key="add-agent"
@@ -238,6 +245,7 @@ function MemberBody(props: {
   onChange: (patch: { displayName?: string; roleDesc?: string }) => void
   onSetLeader: () => void
   onRemove: () => Promise<void>
+  readOnly: boolean
 }) {
   const { t } = useTranslation()
   const { row } = props
@@ -282,6 +290,7 @@ function MemberBody(props: {
           value={row.displayName}
           onChange={(displayName) => props.onChange({ displayName })}
           maxLength={64}
+          readOnly={props.readOnly}
           data-testid="workgroup-member-displayname-input"
         />
       </Field>
@@ -290,28 +299,31 @@ function MemberBody(props: {
           value={row.roleDesc}
           onChange={(roleDesc) => props.onChange({ roleDesc })}
           maxLength={2048}
+          readOnly={props.readOnly}
           data-testid="workgroup-member-role-input"
         />
       </Field>
 
-      <div className="workgroup-panel__actions">
-        {props.showLeaderControls && row.memberType === 'agent' && !props.isLeader && (
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={props.onSetLeader}
-            data-testid={`workgroup-set-leader-${row.displayName}`}
-          >
-            {t('workgroups.setLeaderButton')}
-          </button>
-        )}
-        <ConfirmButton
-          label={t('workgroups.memberRemove')}
-          onConfirm={props.onRemove}
-          variant="danger"
-          size="sm"
-        />
-      </div>
+      {!props.readOnly && (
+        <div className="workgroup-panel__actions">
+          {props.showLeaderControls && row.memberType === 'agent' && !props.isLeader && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={props.onSetLeader}
+              data-testid={`workgroup-set-leader-${row.displayName}`}
+            >
+              {t('workgroups.setLeaderButton')}
+            </button>
+          )}
+          <ConfirmButton
+            label={t('workgroups.memberRemove')}
+            onConfirm={props.onRemove}
+            variant="danger"
+            size="sm"
+          />
+        </div>
+      )}
 
       {props.applyError != null && (
         <ErrorBanner error={props.applyError} testid="workgroup-panel-error" />

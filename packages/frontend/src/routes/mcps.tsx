@@ -10,6 +10,7 @@ import { Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-r
 import { useTranslation } from 'react-i18next'
 import type { Mcp, McpProbe } from '@agent-workflow/shared'
 import { useResourceList } from '@/hooks/useResourceList'
+import { usePermission } from '@/hooks/useActor'
 import { EmptyState } from '@/components/EmptyState'
 import { ResourceBadges } from '@/components/ResourceBadges'
 import { McpProbeStatusChip, type McpProbeUiStatus } from '@/components/McpProbeStatusChip'
@@ -40,6 +41,7 @@ export function probeUiStatus(probe: McpProbe | null, mcpUpdatedAt: number): Mcp
 
 function McpsSplitLayout() {
   const { t } = useTranslation()
+  const canCreate = usePermission('mcps:create')
   const { data, isLoading, error, refetch, owners } = useResourceList<Mcp>({
     queryKey: ['mcps'],
     endpoint: '/api/mcps',
@@ -103,6 +105,7 @@ function McpsSplitLayout() {
       newActive={isNew}
       newLabel={t('mcps.newButton')}
       newTo="/mcps/new"
+      canCreate={canCreate}
       searchPlaceholder={t('common.searchEllipsis')}
       emptyListText={t('mcps.emptyList')}
       emptyDescription={t('mcps.emptyDescription')}

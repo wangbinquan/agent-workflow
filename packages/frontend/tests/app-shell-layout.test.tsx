@@ -100,6 +100,25 @@ vi.mock('@/components/LanguageSwitch', async () => {
 
 vi.mock('@/hooks/useActor', () => ({
   usePermission: () => harness.permissionAllowed,
+  useCurrentPermissions: () =>
+    new Set(
+      harness.permissionAllowed
+        ? [
+            'agents:read',
+            'skills:read',
+            'mcps:read',
+            'plugins:read',
+            'workflows:read',
+            'workgroups:read',
+            'intent:read',
+            'tasks:read',
+            'scheduled-tasks:read',
+            'repos:read',
+            'webhook-endpoints:read',
+            'memory:read',
+          ]
+        : [],
+    ),
   useActor: () => ({ data: null, isLoading: false }),
 }))
 

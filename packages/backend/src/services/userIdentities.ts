@@ -7,7 +7,7 @@ import { ulid } from 'ulid'
 import type { UserIdentity } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
-import { oidcProviders, userIdentities, users } from '@/db/schema'
+import { authLoginPolicy, oidcProviders, userIdentities, users } from '@/db/schema'
 import { insertInitialUserAccessInTransaction } from '@/modules/identity-access/public/commands'
 import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlite/existingTransactionScope'
 import { ConflictError, NotFoundError } from '@/util/errors'
@@ -143,6 +143,18 @@ export async function createUserWithIdentity(
 ): Promise<{ userId: string }> {
   const now = args.now ?? Date.now()
   return dbTxSync(db, (tx) => {
+    // The policy read and account insert share the same SQLite transaction.
+    // A concurrent administrator change therefore has one linearization point:
+    // the new account receives either the complete old preset or the complete
+    // new preset, never a route-level stale snapshot.
+    const policy = tx
+      .select({ oidcDefaultRole: authLoginPolicy.oidcDefaultRole })
+      .from(authLoginPolicy)
+      .where(eq(authLoginPolicy.id, 'global'))
+      .get()
+    if (policy === undefined) {
+      throw new Error('authentication policy singleton is missing')
+    }
     const userId = ulid()
     const operationId = ulid()
     withExistingSQLiteTransactionScope(tx, (transactionScope) => {
@@ -153,7 +165,9 @@ export async function createUserWithIdentity(
           email: args.email,
           displayName: args.displayName,
           passwordHash: null,
-          role: 'user',
+          // Only self-provisioning consults this policy. Invited identities
+          // retain the administrator-selected preset in the bind path below.
+          role: policy.oidcDefaultRole,
           // The IdP verified the identity, so the user lands as `active`
           // immediately (same rationale as the pre-RFC-220 createUser call).
           status: 'active',

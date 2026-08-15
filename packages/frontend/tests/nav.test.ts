@@ -9,9 +9,18 @@
 // silently breaking sidebar highlight on detail pages.
 
 import { describe, expect, test } from 'vitest'
-import { NAV_GROUPS, resolveActiveNav } from '@/lib/nav'
+import { ROLE_PERMISSIONS } from '@agent-workflow/shared'
+import { NAV_GROUPS, navGroupsForPermissions, resolveActiveNav } from '@/lib/nav'
 
 describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags', () => {
+  test('guest preset naturally projects to its six public-resource destinations', () => {
+    expect(
+      navGroupsForPermissions(new Set(ROLE_PERMISSIONS.guest)).flatMap((group) =>
+        group.subnav.map((item) => item.to),
+      ),
+    ).toEqual(['/agents', '/skills', '/mcps', '/plugins', '/workflows', '/workgroups'])
+  })
+
   test('every visible route has one explicit resource icon', () => {
     expect(NAV_GROUPS.flatMap((group) => group.subnav).map(({ to, icon }) => [to, icon])).toEqual([
       ['/agents', 'agent'],

@@ -70,6 +70,20 @@ function createLiveTransactionView(
 ): LiveDbTxSync {
   const views = new WeakMap<object, object>()
 
+  function assertCallablePropertyAvailable(property: PropertyKey): void {
+    if (property === 'transaction') {
+      throw new Error('nested SQLite transactions are not available in a live transaction scope')
+    }
+    if (
+      property === 'then' ||
+      property === 'catch' ||
+      property === 'finally' ||
+      property === 'execute'
+    ) {
+      throw new Error('asynchronous SQLite query execution is not available in a live scope')
+    }
+  }
+
   function wrapCallbackArgument(argument: unknown): unknown {
     if (typeof argument !== 'function') return argument
     return function guardedCallback(this: unknown, ...args: unknown[]): unknown {
@@ -86,34 +100,28 @@ function createLiveTransactionView(
     const cached = views.get(target)
     if (cached !== undefined) return cached
 
-    // The proxy wraps an empty facade rather than the Drizzle object itself.
-    // Reflection therefore cannot recover raw own-property values such as
-    // `session`, while normal method calls are forwarded to the real target.
+    // The proxy wraps a safe facade rather than the Drizzle object itself.
+    // Reflection can therefore preserve ordinary JS shape without recovering
+    // raw own-property values such as `session`.
     const facade: object =
       typeof value === 'function'
         ? function guardedCallable(this: unknown, ...args: unknown[]): unknown {
             assertLive(lifetime)
             return wrap(Reflect.apply(value, wrap(this), args.map(wrapCallbackArgument)))
           }
-        : Object.create(null)
+        : Array.isArray(value)
+          ? new Array(value.length)
+          : Object.create(null)
     const view = new Proxy(facade, {
       get(_facade, property) {
         assertLive(lifetime)
         const member: unknown = Reflect.get(target, property, target)
         if (typeof member === 'function') {
-          if (property === 'transaction') {
-            throw new Error(
-              'nested SQLite transactions are not available in a live transaction scope',
-            )
-          }
-          if (
-            property === 'then' ||
-            property === 'catch' ||
-            property === 'finally' ||
-            property === 'execute'
-          ) {
-            throw new Error('asynchronous SQLite query execution is not available in a live scope')
-          }
+          // Drizzle's entity discriminator walks `value.constructor`; retain
+          // that identity as another guarded value instead of binding it as a
+          // method of the prototype object.
+          if (property === 'constructor') return wrap(member)
+          assertCallablePropertyAvailable(property)
           return (...args: unknown[]) => {
             assertLive(lifetime)
             return wrap(Reflect.apply(member, target, args.map(wrapCallbackArgument)))
@@ -127,15 +135,45 @@ function createLiveTransactionView(
       },
       getOwnPropertyDescriptor(current, property) {
         assertLive(lifetime)
-        return Reflect.getOwnPropertyDescriptor(current, property)
+        const facadeDescriptor = Reflect.getOwnPropertyDescriptor(current, property)
+        // Proxy invariants require exact descriptors for the facade's own
+        // non-configurable keys (`length` on arrays, for example).
+        if (facadeDescriptor?.configurable === false) return facadeDescriptor
+
+        const descriptor = Reflect.getOwnPropertyDescriptor(target, property)
+        if (descriptor === undefined) return facadeDescriptor
+        if ('value' in descriptor) {
+          const member = Reflect.get(target, property, target) as unknown
+          if (typeof member === 'function') assertCallablePropertyAvailable(property)
+          return {
+            configurable: true,
+            enumerable: descriptor.enumerable,
+            writable: false,
+            value: wrap(member),
+          }
+        }
+        return {
+          configurable: true,
+          enumerable: descriptor.enumerable,
+          get:
+            descriptor.get === undefined
+              ? undefined
+              : () => {
+                  assertLive(lifetime)
+                  const member = Reflect.get(target, property, target) as unknown
+                  if (typeof member === 'function') assertCallablePropertyAvailable(property)
+                  return wrap(member)
+                },
+          set: undefined,
+        }
       },
       ownKeys(current) {
         assertLive(lifetime)
-        return Reflect.ownKeys(current)
+        return [...new Set([...Reflect.ownKeys(current), ...Reflect.ownKeys(target)])]
       },
-      getPrototypeOf(current) {
+      getPrototypeOf() {
         assertLive(lifetime)
-        return Reflect.getPrototypeOf(current)
+        return wrap(Reflect.getPrototypeOf(target)) as object | null
       },
       isExtensible(current) {
         assertLive(lifetime)
@@ -163,6 +201,7 @@ function createLiveTransactionView(
       },
     })
     views.set(target, view)
+    views.set(view, view)
     return view
   }
 

@@ -30,11 +30,11 @@ import {
   USER_PRESET_MISSING_PERMISSIONS,
 } from '../src/schemas/permission'
 
-const accountPermissions = (role: 'admin' | 'manager' | 'user') =>
+const accountPermissions = (role: 'admin' | 'manager' | 'user' | 'guest') =>
   resolveEffectiveAccountPermissions({ role, additionalPermissions: [] })
 
 describe('PERMISSIONS catalog', () => {
-  test('contains the documented 72 entries', () => {
+  test('contains the documented 73 entries', () => {
     // RFC-222 added tasks:delete (33 → 34); RFC-234 added intent:read/write (→ 36).
     // RFC-247 split the five `:write` points into create/update/delete, gave the
     // previously-ungated domains (workgroups / scheduled-tasks) real points,
@@ -55,8 +55,9 @@ describe('PERMISSIONS catalog', () => {
     // RFC-269 加 `code-host-calls:author`（代码平台调用节点 = 以管理员配置的
     // token 对 GitLab/GitHub 做写操作；与 scripts:author 同档的能力点：系统域、
     // 永不进令牌、角色基线 admin + manager）⇒ 67。
-    // RFC-305 将五个存量角色旁路实体化为权限点 ⇒ 72。
-    expect(PERMISSIONS.length).toBe(72)
+    // RFC-305 将五个存量角色旁路实体化为权限点 ⇒ 72；游客公共只读边界
+    // 将私有 owner/grant 可见性实体化为 account-range 点 ⇒ 73。
+    expect(PERMISSIONS.length).toBe(73)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -67,7 +68,7 @@ describe('PERMISSIONS catalog', () => {
     expect(ROLE_PERMISSIONS.admin.length).toBe(PERMISSIONS.length)
   })
 
-  test('user role contains exactly the documented baseline (48 entries)', () => {
+  test('user role contains exactly the documented baseline (49 entries)', () => {
     const expected: Permission[] = [
       // reads
       'agents:read',
@@ -81,6 +82,8 @@ describe('PERMISSIONS catalog', () => {
       'memory:read',
       'tasks:read',
       'runtime:read',
+      // Private owner/grant visibility is explicit; guest omits this range.
+      'resource-acl:private',
       // RFC-099 — resource writes are route-gate-open for all users; the
       // per-row owner/grant check lives in services/resourceAcl.ts.
       // RFC-247 — each former `:write` is now three points.
@@ -133,7 +136,31 @@ describe('PERMISSIONS catalog', () => {
       'webhook-endpoints:read',
     ]
     expect([...ROLE_PERMISSIONS.user].sort()).toEqual(expected.sort())
-    expect(ROLE_PERMISSIONS.user.length).toBe(48)
+    expect(ROLE_PERMISSIONS.user.length).toBe(49)
+  })
+
+  test('guest preset is exactly public-only reads for the six ACL resource domains', () => {
+    expect(ROLE_PERMISSIONS.guest).toEqual([
+      'agents:read',
+      'skills:read',
+      'mcps:read',
+      'plugins:read',
+      'workflows:read',
+      'workgroups:read',
+      'account:self',
+    ])
+    for (const permission of [
+      'resource-acl:private',
+      'agents:create',
+      'agents:update',
+      'tasks:read',
+      'tasks:execute',
+      'repos:read',
+      'memory:read',
+      'runtime:read',
+    ] as const) {
+      expect(presetHasPermission('guest', permission)).toBe(false)
+    }
   })
 
   test('user preset excludes exactly its 24 individually grantable differences', () => {
@@ -298,7 +325,7 @@ describe('RFC-247 resolveTokenPermissions', () => {
     // Pre-RFC-247 this was the docs/audit-backlog.md:61 hole: buildActor only
     // narrowed when `patScopes.length > 0`, so a scope-less PAT silently held
     // everything its owner's role held.
-    for (const role of ['user', 'manager', 'admin'] as const) {
+    for (const role of ['guest', 'user', 'manager', 'admin'] as const) {
       const granted = [
         ...resolveTokenPermissions({ accountPermissions: accountPermissions(role), matrix: [] }),
       ]
@@ -354,7 +381,7 @@ describe('RFC-247 resolveTokenPermissions', () => {
 
 describe('RFC-247 grantableMatrixPoints', () => {
   test('never offers read points (reads are always on, not tickable)', () => {
-    for (const role of ['user', 'manager', 'admin'] as const) {
+    for (const role of ['guest', 'user', 'manager', 'admin'] as const) {
       for (const p of grantableMatrixPoints(accountPermissions(role))) {
         expect(READ_POINTS.includes(p)).toBe(false)
       }
@@ -372,7 +399,7 @@ describe('RFC-247 grantableMatrixPoints', () => {
   })
 
   test('never offers a system-domain point to anyone', () => {
-    for (const role of ['user', 'manager', 'admin'] as const) {
+    for (const role of ['guest', 'user', 'manager', 'admin'] as const) {
       for (const p of grantableMatrixPoints(accountPermissions(role))) {
         expect(SYSTEM_DOMAIN_POINTS.includes(p)).toBe(false)
       }
@@ -380,7 +407,7 @@ describe('RFC-247 grantableMatrixPoints', () => {
   })
 
   test('everything offered is actually resolvable for that role', () => {
-    for (const role of ['user', 'manager', 'admin'] as const) {
+    for (const role of ['guest', 'user', 'manager', 'admin'] as const) {
       const permissions = accountPermissions(role)
       const offered = grantableMatrixPoints(permissions)
       const granted = resolveTokenPermissions({ accountPermissions: permissions, matrix: offered })
@@ -392,9 +419,10 @@ describe('RFC-247 grantableMatrixPoints', () => {
 // RFC-222/RFC-305 — the `manager` preset. Both preset membership and its
 // differences from admin are pinned; these are defaults, not role-only classes.
 describe('RFC-222 manager role', () => {
-  test('RoleSchema accepts exactly the three roles', () => {
-    expect(RoleSchema.options).toEqual(['admin', 'user', 'manager'])
+  test('RoleSchema accepts exactly the four permission presets', () => {
+    expect(RoleSchema.options).toEqual(['admin', 'user', 'manager', 'guest'])
     expect(RoleSchema.safeParse('manager').success).toBe(true)
+    expect(RoleSchema.safeParse('guest').success).toBe(true)
     expect(RoleSchema.safeParse('auditor').success).toBe(false)
   })
 

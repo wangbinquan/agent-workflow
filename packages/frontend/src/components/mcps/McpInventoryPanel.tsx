@@ -23,6 +23,7 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import type { SplitBusyRelease } from '@/components/split/splitDirty'
 import { useMcpProbe, useProbeMcpMutation } from '@/lib/mcp-probe-query'
 import { probeFreshness } from '@/lib/probe-freshness'
+import { usePermission } from '@/hooks/useActor'
 import { McpRuntimeTestDialog } from './McpRuntimeTestDialog'
 
 export interface McpInventoryPanelProps {
@@ -41,6 +42,7 @@ export interface McpInventoryPanelProps {
 
 export function McpInventoryPanel(props: McpInventoryPanelProps) {
   const { t } = useTranslation()
+  const canExecuteMcp = usePermission('mcps:execute')
   const probeQ = useMcpProbe(props.mcpId)
   const probeMut = useProbeMcpMutation(props.mcpId)
   const [preparationError, setPreparationError] = useState<unknown>(null)
@@ -88,7 +90,7 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
 
   const hash = props.operationConfigHash
   const operationActions =
-    hash === undefined ? undefined : props.dirty === true ? (
+    !canExecuteMcp || hash === undefined ? undefined : props.dirty === true ? (
       <div className="mcp-operation-basis__actions">
         <button
           type="button"
@@ -156,14 +158,16 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
               })}
           {persistedProbe !== null && ` · ${formatLatency(persistedProbe.latencyMs, t)}`}
         </span>
-        <McpRuntimeTestDialog
-          mcpId={props.mcpId}
-          operationConfigHash={props.operationConfigHash}
-          dirty={props.dirty}
-          saving={props.saving}
-          onSaveForRuntimeTest={props.onSaveForRuntimeTest}
-          beginBusy={props.beginBusy}
-        />
+        {canExecuteMcp && (
+          <McpRuntimeTestDialog
+            mcpId={props.mcpId}
+            operationConfigHash={props.operationConfigHash}
+            dirty={props.dirty}
+            saving={props.saving}
+            onSaveForRuntimeTest={props.onSaveForRuntimeTest}
+            beginBusy={props.beginBusy}
+          />
+        )}
       </header>
 
       <FeedbackStack variant="section">
@@ -185,7 +189,9 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
         <ErrorBanner
           error={probeMut.error}
           onRetry={
-            hash === undefined ? undefined : () => void runSaved(hash).catch(() => undefined)
+            !canExecuteMcp || hash === undefined
+              ? undefined
+              : () => void runSaved(hash).catch(() => undefined)
           }
         />
       ) : probeQ.isLoading ? (

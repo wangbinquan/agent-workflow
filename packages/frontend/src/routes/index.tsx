@@ -13,6 +13,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { Onboarding, useOnboardingProbe } from '@/components/Onboarding'
 import { PageHeader } from '@/components/PageHeader'
 import { Homepage } from '@/components/home/Homepage'
+import { usePermission } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -24,6 +25,10 @@ export const Route = createRoute({
 function IndexPage() {
   const { t } = useTranslation()
   const probe = useOnboardingProbe()
+  const canCreateAgent = usePermission('agents:create')
+  const canCreateWorkflow = usePermission('workflows:create')
+  const canExecuteTasks = usePermission('tasks:execute')
+  const canUseGuidedTour = canCreateAgent && canCreateWorkflow && canExecuteTasks
   const retryAction = (
     <button
       type="button"
@@ -49,7 +54,7 @@ function IndexPage() {
     )
   }
 
-  if (probe.isFirstRun) {
+  if (probe.isFirstRun && canUseGuidedTour) {
     return (
       <Onboarding
         probeError={probe.error}

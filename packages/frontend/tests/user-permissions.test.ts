@@ -25,8 +25,8 @@ describe('RFC-305 user permission view model', () => {
       locale: 'en-US',
       translate,
     })
-    expect(model.permissions).toHaveLength(72)
-    expect(model.effectiveCount).toBe(49)
+    expect(model.permissions).toHaveLength(73)
+    expect(model.effectiveCount).toBe(50)
     expect(model.additionalCount).toBe(1)
     expect(model.permissions.find((row) => row.permission === 'agents:read')).toMatchObject({
       source: 'baseline',

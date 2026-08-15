@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 import '../src/i18n'
 
 const h = vi.hoisted(() => ({
@@ -110,6 +111,7 @@ const PLUGIN = {
 
 function renderRoute(route: unknown) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(qc)
   const Comp = (route as { component: ComponentType }).component
   // RFC-169: the mcps/plugins new+detail routes are now children of the split
   // page — provide the SplitDirty context so useReportSplitDirty resolves.

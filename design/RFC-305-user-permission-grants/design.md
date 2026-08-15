@@ -127,7 +127,7 @@ interface PermissionCatalogEntry {
 }
 ```
 
-当前闭集为 72 点：`user` 预设 48、`manager` 预设 60、`admin` 预设 72。只有 `account:self` 是 `intrinsic`；其余 71 点均
+当前闭集为 73 点：`guest` 预设 7、`user` 预设 49、`manager` 预设 61、`admin` 预设 73。只有 `account:self` 是 `intrinsic`；其余 72 点均
 为 `account-additive`。某点是否可选只由“非内在且不在当前预设”派生：
 
 ```ts
@@ -145,6 +145,9 @@ resolveEffectiveAccountPermissions(user, all 24 grants)
   == new Set(ROLE_PERMISSIONS.admin)
 ```
 
+`guest` 当前有 66 个可附加点。它的 7 点 baseline 是 `account:self` 加六类公开资源 read；是否能继续访问 private、写资源或执行任务
+仍只由附加后的具体权限决定，不允许消费者读取 `role` 特判。
+
 ### 3.2 五个显式 capability
 
 历史角色谓词映射为：
@@ -158,6 +161,19 @@ resolveEffectiveAccountPermissions(user, all 24 grants)
 | `webhook-triggers:override-owner` | Webhook trigger update/delete 的 owner 行级门                            |
 
 没有 `ROLE_CAPABILITY_CATALOG`，没有 `RouteMeta.identity`，也没有 `isResourceAdminRole`。
+
+### 3.2bis private visibility capability
+
+`resource-acl:private` 把“进入 private 行级 ACL 判定”从普通 read 点中拆出。统一 `resolveResourceAuthority` 先计算：
+
+```text
+!resource-acl:private AND !resource-acl:bypass -> visibility=public only
+resource-acl:private -> continue owner / explicit grant / visibility checks
+resource-acl:bypass -> bypass the complete resource ACL
+```
+
+因此只给 guest 一条 private resource grant 并不会扩大其可见面；还必须显式授予 `resource-acl:private`。这一点由 ACL service 单点
+消费，HTTP、MCP、WS 与前端不得复制 guest 身份判断。
 
 ### 3.3 写入规范化与坏行处理
 
@@ -205,9 +221,22 @@ user_access_audit
 
 迁移不回填 grant；所有存量账户 revision=0，权限行为等于原角色预设。
 
+迁移 `0163_rfc305_oidc_default_role.sql` 为 `auth_login_policy` 增加：
+
+```text
+oidc_default_role TEXT NOT NULL DEFAULT 'guest'
+  CHECK (oidc_default_role IN ('guest', 'user'))
+```
+
+这是 OAuth/OIDC 自动建号策略，不是新的授权轴；取值只能选择两个已有权限预设。已有数据库升级后自然得到 fail-safe 的 `guest`
+默认值。
+
 Bootstrap 与 OIDC 自动建号仍须和各自的登录策略/identity 行同事务，但不得自行写 `users.role`。两条路径经
 `identity-access/public/commands` 的 exact transaction participant 写入初始 user/revision=0/create audit；实际 Drizzle
-`insert(users)` 只存在于 identity-access SQLite repository。这样既不拆散跨上下文原子性，也不制造第二个角色 writer。
+`insert(users)` 只存在于 identity-access SQLite repository。OIDC callback 在同一 SQLite 事务中读取
+`auth_login_policy.oidc_default_role` 并把该预设传给 participant，然后写 identity；因此策略更新与首次建号有可线性化顺序，不会
+组合两个异步快照。邀请流程携带管理员显式选择的预设，不读取这个默认值。这样既不拆散跨上下文原子性，也不制造第二个角色
+writer。
 
 ## 5. Authority 与 operation context
 
@@ -397,6 +426,10 @@ disabled = intrinsic/preset
 
 完成后两个弹窗自然出现。
 
+Authentication 设置页从 `/api/auth/login-policy` 读取 `{ passwordLoginEnabled, oidcDefaultRole }`，持有 `oidc:configure` 的
+主体可用同一 partial update command 在 `guest | user` 间切换。UI 展示的是“首次 OAuth/OIDC 用户默认预设”，不把它表述成
+不可变身份；既有用户不会随设置变化。
+
 角色切换只重算预设与当前显式 grants；它不会把旧预设的全部有效权限复制为 grant。409 时保留本地 draft，用户选择“加载最新访问”
 后再重新应用修改。
 
@@ -407,6 +440,9 @@ disabled = intrinsic/preset
 - 记忆蒸馏：`memory-distill-jobs:manage`；
 - Webhook endpoint 明文：`webhook-endpoints:manage`；
 - 导航项：对应页面 permission。
+
+资源列表、详情、创建、编辑、删除、复制、ACL 与执行入口同样按其具体 read/write/execute permission 进行 projection。guest 不会
+看到空壳任务、仓库或设置入口，也不会发起其无权限的数据请求；这仍是权限集合塑形，不是 role 分支。
 
 ## 11. 架构与行为防护
 
@@ -428,7 +464,9 @@ disabled = intrinsic/preset
 
 | 场景                                     | 预期                                                    |
 | ---------------------------------------- | ------------------------------------------------------- |
-| `user` 无 grant                          | 48 点 baseline                                          |
+| `guest` 无 grant                         | 7 点 baseline；只见 public 六类资源，写入/任务均拒绝    |
+| `guest + resource-acl:private`            | private 资源仍需 owner/显式 grant；写入仍拒绝           |
+| `user` 无 grant                          | 49 点 baseline                                          |
 | `user + scripts:author`                  | 脚本敏感投影/保存开放，private ACL 仍拒绝               |
 | `user + resource-acl:bypass`             | 他人 private 资源开放；撤销后恢复 404                   |
 | `user + memory-distill-jobs:manage`      | distill HTTP/WS 开放；撤销后 403/refusal                |
@@ -436,13 +474,14 @@ disabled = intrinsic/preset
 | `user + mcp-runtime-tests:audit`         | exact-id transcript 可读；latest/mutation 仍拒绝        |
 | `user + webhook-triggers:override-owner` | 有对应 update/delete 粗门时可跨 owner 写；撤销后 404    |
 | `user + users:read/write`                | 可管理其他用户，无角色提升                              |
-| `user + 全 24`                           | effective set 与 admin 72 点完全相同，角色 wire 仍 user |
+| `user + 全 24`                           | effective set 与 admin 73 点完全相同，角色 wire 仍 user |
 | 任意 PAT + system points                 | 五个新 capability 与其他 system-domain 点均被剔除       |
+| OIDC policy=`guest` / `user`              | 下一个未受邀首次登录账户取得对应预设；既有账户不变      |
 
 ### 11.3 迁移/OCC/失败路径
 
-覆盖新库和 161→162 升级、grant PK/FK、audit 删除账户后保留、DB trigger 拒绝 audit 更新/删除、并发 CAS、事务回滚、坏 grant
-fail closed、self/system/last users:write、profile no-op、禁用/启用、邀请激活和 legacy role adapter。
+覆盖新库和 161→163、162→163 升级、grant PK/FK、audit 删除账户后保留、DB trigger 拒绝 audit 更新/删除、并发 CAS、事务回滚、坏 grant
+fail closed、self/system/last users:write、profile no-op、禁用/启用、邀请激活、OIDC 默认 guest/user 策略和 legacy role adapter。
 
 ## 12. RFC-294 后续边界
 

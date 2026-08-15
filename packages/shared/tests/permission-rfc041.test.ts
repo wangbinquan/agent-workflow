@@ -80,7 +80,7 @@ describe('ROLE_PERMISSIONS — memory surface', () => {
   })
 
   test('ROLE_PERMISSIONS has no stale memory entry under any role', () => {
-    for (const role of ['admin', 'user', 'manager'] as const) {
+    for (const role of ['admin', 'user', 'manager', 'guest'] as const) {
       const stale = ROLE_PERMISSIONS[role].filter(
         (p) => p.startsWith('memory:') && !(MEMORY_PERMS as readonly string[]).includes(p),
       )

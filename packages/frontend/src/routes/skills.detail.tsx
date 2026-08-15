@@ -52,6 +52,7 @@ import {
   type StableSkillSnapshot,
 } from '@/lib/skill-composite-draft'
 import { classifyWriteOutcome } from '@/lib/write-outcome'
+import { usePermission } from '@/hooks/useActor'
 import { Route as skillsRoute } from './skills'
 
 export const Route = createRoute({
@@ -90,6 +91,9 @@ function SkillDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
+  const canUpdate = usePermission('skills:update')
+  const canDelete = usePermission('skills:delete')
+  const canExecuteTasks = usePermission('tasks:execute')
   const remoteReadEpochRef = useRef(0)
   const contentResponseEpochsRef = useRef(new WeakMap<SkillContent, number>())
   const contentReadIgnoreThroughEpochRef = useRef(0)
@@ -836,11 +840,12 @@ function SkillDetailPage() {
         <TextInput
           value={description}
           onChange={setDescription}
+          readOnly={!canUpdate}
           data-testid="skill-description-input"
         />
       </Field>
       <div className="skill-detail__body">
-        <MarkdownEditor value={bodyMd} onChange={setBodyMd} fill />
+        <MarkdownEditor value={bodyMd} onChange={setBodyMd} fill readOnly={!canUpdate} />
       </div>
       <details className="skill-detail__technical">
         <summary>{t('skills.technicalInformation')}</summary>
@@ -885,6 +890,7 @@ function SkillDetailPage() {
     <SkillVersionHistory
       skillId={id}
       currentVersion={meta.data?.contentVersion ?? 0}
+      canRestore={canUpdate}
       busy={operationBusy}
       onRestoreStart={handleRestoreStart}
       onPendingChange={handleRestorePendingChange}
@@ -897,26 +903,39 @@ function SkillDetailPage() {
       <DetailHeaderActions
         title={skillName}
         headingLevel={2}
-        acl={{
-          resourceBaseUrl: `/api/skills/${encodeURIComponent(id)}`,
-          invalidateKey: ['skills'],
-          canTransferOwner: true,
-        }}
-        save={{
-          label: saving ? t('common.saving') : t('skills.saveAllChanges'),
-          onClick: () => void handleSave(),
-          disabled: saveDisabled,
-          title: saveDisabledTitle,
-          testid: 'skill-save-button',
-        }}
-        del={{
-          label: t('common.delete'),
-          confirmName: skillName,
-          resourceType: 'skill',
-          onConfirm: (ctx) =>
-            del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(id) }),
-          disabled: del.isPending || aggregate.dirty || operationBusy || aggregate.outcomeUnknown,
-        }}
+        acl={
+          canUpdate
+            ? {
+                resourceBaseUrl: `/api/skills/${encodeURIComponent(id)}`,
+                invalidateKey: ['skills'],
+                canTransferOwner: true,
+              }
+            : undefined
+        }
+        save={
+          canUpdate
+            ? {
+                label: saving ? t('common.saving') : t('skills.saveAllChanges'),
+                onClick: () => void handleSave(),
+                disabled: saveDisabled,
+                title: saveDisabledTitle,
+                testid: 'skill-save-button',
+              }
+            : undefined
+        }
+        del={
+          canDelete
+            ? {
+                label: t('common.delete'),
+                confirmName: skillName,
+                resourceType: 'skill',
+                onConfirm: (ctx) =>
+                  del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(id) }),
+                disabled:
+                  del.isPending || aggregate.dirty || operationBusy || aggregate.outcomeUnknown,
+              }
+            : undefined
+        }
         extra={
           <>
             <IntentProvenanceBadge resourceType="skill" resourceId={id} />
@@ -925,14 +944,16 @@ function SkillDetailPage() {
               mount={{ resourceType: 'skill', resourceId: id }}
               data-testid="skill-intent-entry"
             />
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setFuseOpen(true)}
-              disabled={aggregate.dirty || operationBusy || aggregate.outcomeUnknown}
-            >
-              {t('fusion.launchFromSkillButton')}
-            </button>
+            {canUpdate && canExecuteTasks && (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setFuseOpen(true)}
+                disabled={aggregate.dirty || operationBusy || aggregate.outcomeUnknown}
+              >
+                {t('fusion.launchFromSkillButton')}
+              </button>
+            )}
           </>
         }
         moreActions={
@@ -1029,6 +1050,7 @@ function SkillDetailPage() {
               content: (
                 <SkillFileTree
                   skillId={id}
+                  readonly={!canUpdate}
                   readonlyPaths={['SKILL.md']}
                   selected={selectedFile}
                   onSelectedChange={setSelectedFile}
@@ -1065,11 +1087,13 @@ function SkillDetailPage() {
         />
       </div>
 
-      <FuseDialog
-        open={fuseOpen}
-        onClose={() => setFuseOpen(false)}
-        entry={{ kind: 'from-skill', skillId: meta.data.id, skillName: meta.data.name }}
-      />
+      {canUpdate && canExecuteTasks && (
+        <FuseDialog
+          open={fuseOpen}
+          onClose={() => setFuseOpen(false)}
+          entry={{ kind: 'from-skill', skillId: meta.data.id, skillName: meta.data.name }}
+        />
+      )}
     </fieldset>
   )
 }

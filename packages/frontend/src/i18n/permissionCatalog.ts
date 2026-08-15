@@ -83,6 +83,7 @@ const EN_ACTIONS = {
   manage: 'Manage',
   search: 'Search',
   bypass: 'Bypass',
+  private: 'View assigned private',
   audit: 'Audit',
   'override-owner': 'Override owner',
 } satisfies Record<PermissionAction, string>
@@ -101,6 +102,7 @@ const ZH_ACTIONS = {
   manage: '管理',
   search: '搜索',
   bypass: '绕过',
+  private: '查看获授权私有',
   audit: '审计',
   'override-owner': '覆盖 owner',
 } satisfies Record<PermissionAction, string>
@@ -136,6 +138,11 @@ const SPECIAL: Record<Locale, Partial<Record<Permission, PermissionCatalogTransl
     'resource-acl:bypass': {
       label: 'Bypass resource ACLs',
       description: 'View and manage ACL resources regardless of owner or explicit resource grants.',
+    },
+    'resource-acl:private': {
+      label: 'View assigned private resources',
+      description:
+        'View private ACL resources when you are their owner or have an explicit resource grant.',
     },
     'memory-distill-jobs:manage': {
       label: 'Manage memory distill jobs',
@@ -182,6 +189,10 @@ const SPECIAL: Record<Locale, Partial<Record<Permission, PermissionCatalogTransl
     'resource-acl:bypass': {
       label: '绕过资源 ACL',
       description: '不受 owner 或显式资源授权限制，查看和管理所有 ACL 资源。',
+    },
+    'resource-acl:private': {
+      label: '查看获授权的私有资源',
+      description: '作为 owner 或获得显式资源授权时，查看对应的私有 ACL 资源。',
     },
     'memory-distill-jobs:manage': {
       label: '管理记忆提炼任务',

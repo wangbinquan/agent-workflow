@@ -7,6 +7,8 @@ import type {
   AuthLoginPolicy,
   AuthMethodDiscovery,
   CreateBootstrapAdminBody,
+  OidcDefaultRole,
+  UpdateAuthLoginPolicyBody,
 } from '@agent-workflow/shared'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import { generateSessionToken, hashToken, SESSION_DEFAULT_TTL_MS } from '@/auth/sessionStore'
@@ -23,6 +25,7 @@ const GLOBAL_POLICY_ID = 'global'
 function materialize(row: typeof authLoginPolicy.$inferSelect): AuthLoginPolicy {
   return {
     passwordLoginEnabled: row.passwordLoginEnabled,
+    oidcDefaultRole: row.oidcDefaultRole,
     bootstrapCompletedAt: row.bootstrapCompletedAt,
     updatedAt: row.updatedAt,
   }
@@ -106,9 +109,9 @@ export function assertBootstrapComplete(db: DbClient): AuthLoginPolicy {
   return policy
 }
 
-export function setPasswordLoginEnabled(
+export function updateAuthLoginPolicy(
   db: DbClient,
-  enabled: boolean,
+  patch: UpdateAuthLoginPolicyBody,
   now: number = Date.now(),
 ): AuthLoginPolicy {
   return dbTxSync(db, (tx) => {
@@ -124,7 +127,8 @@ export function setPasswordLoginEnabled(
         'the first administrator must be created before login policy can change',
       )
     }
-    if (!enabled) {
+    const passwordLoginEnabled = patch.passwordLoginEnabled ?? current.passwordLoginEnabled
+    if (!passwordLoginEnabled) {
       const anyEnabledProvider =
         tx
           .select({ id: oidcProviders.id })
@@ -140,7 +144,11 @@ export function setPasswordLoginEnabled(
       }
     }
     tx.update(authLoginPolicy)
-      .set({ passwordLoginEnabled: enabled, updatedAt: now })
+      .set({
+        passwordLoginEnabled,
+        oidcDefaultRole: patch.oidcDefaultRole ?? current.oidcDefaultRole,
+        updatedAt: now,
+      })
       .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
       .run()
     const updated = tx
@@ -150,6 +158,22 @@ export function setPasswordLoginEnabled(
       .get()
     return updated === undefined ? missingPolicy() : materialize(updated)
   })
+}
+
+export function setPasswordLoginEnabled(
+  db: DbClient,
+  enabled: boolean,
+  now: number = Date.now(),
+): AuthLoginPolicy {
+  return updateAuthLoginPolicy(db, { passwordLoginEnabled: enabled }, now)
+}
+
+export function setOidcDefaultRole(
+  db: DbClient,
+  role: OidcDefaultRole,
+  now: number = Date.now(),
+): AuthLoginPolicy {
+  return updateAuthLoginPolicy(db, { oidcDefaultRole: role }, now)
 }
 
 export interface PreparedBootstrapAdmin extends Omit<CreateBootstrapAdminBody, 'password'> {

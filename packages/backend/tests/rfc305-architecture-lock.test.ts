@@ -6,7 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 
 import { PERMISSIONS, SYSTEM_DOMAIN_POINTS } from '@agent-workflow/shared'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import ts from 'typescript'
 
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
@@ -205,6 +205,7 @@ describe('RFC-305 identity-access architecture', () => {
     let escapedTransaction: DbTxSync | null = null
     let escapedQuery: { run(): unknown } | null = null
     let escapedRow: { value: number } | null = null
+    let reflectedSession: { run(query: unknown): unknown } | null = null
     dbTxSync(db, (transaction) => {
       withExistingSQLiteTransactionScope(transaction, (scope) => {
         escaped = scope
@@ -214,16 +215,38 @@ describe('RFC-305 identity-access architecture', () => {
           liveTransaction.run(sql`SELECT 1`)
           escapedQuery = liveTransaction.update(users).set({ displayName: 'must-not-run' })
           const rows = liveTransaction.all(sql`SELECT 1 AS value`) as Array<{ value: number }>
+          expect(Array.isArray(rows)).toBe(true)
+          expect(Object.keys(rows)).toEqual(['0'])
+          expect({ ...rows[0] }).toEqual({ value: 1 })
+          expect(JSON.stringify(rows)).toBe('[{"value":1}]')
           rows.map((row) => {
             escapedRow = row
             return row.value
           })
-          expect(Object.getOwnPropertyDescriptor(liveTransaction, 'session')).toBeUndefined()
-          expect(Reflect.ownKeys(liveTransaction)).toEqual([])
+          const sessionDescriptor = Object.getOwnPropertyDescriptor(liveTransaction, 'session')
+          expect(sessionDescriptor).toBeDefined()
+          expect(sessionDescriptor!.value).not.toBe(
+            (transaction as unknown as { session: unknown }).session,
+          )
+          reflectedSession = sessionDescriptor!.value as { run(query: unknown): unknown }
+          expect(Reflect.ownKeys(liveTransaction)).toContain('session')
+          expect(
+            liveTransaction
+              .select({ id: users.id })
+              .from(users)
+              .where((fields) => eq(fields.id, 'missing'))
+              .all(),
+          ).toEqual([])
           expect(() =>
             (liveTransaction as unknown as DbTxSync).transaction(() => {
               throw new Error('nested callback must never run')
             }),
+          ).toThrow('nested SQLite transactions are not available')
+          expect(() =>
+            Object.getOwnPropertyDescriptor(
+              Object.getPrototypeOf(liveTransaction) as object,
+              'transaction',
+            ),
           ).toThrow('nested SQLite transactions are not available')
           expect(() =>
             (liveTransaction.select().from(users) as unknown as { execute(): unknown }).execute(),
@@ -240,6 +263,7 @@ describe('RFC-305 identity-access architecture', () => {
     expect(() => escapedTransaction!.run(sql`SELECT 1`)).toThrow('transaction scope is not live')
     expect(() => escapedQuery!.run()).toThrow('transaction scope is not live')
     expect(() => escapedRow!.value).toThrow('transaction scope is not live')
+    expect(() => reflectedSession!.run(sql`SELECT 1`)).toThrow('transaction scope is not live')
 
     let continuation: Promise<void> | null = null
     expect(() =>
@@ -460,7 +484,7 @@ describe('RFC-305 permission catalog architecture', () => {
               ts.SyntaxKind.ExclamationEqualsToken,
               ts.SyntaxKind.ExclamationEqualsEqualsToken,
             ].includes(operator)
-            const roleNames = new Set(['admin', 'manager', 'user'])
+            const roleNames = new Set(['admin', 'manager', 'user', 'guest'])
             const propertyRole = (candidate: ts.Expression): boolean =>
               ts.isPropertyAccessExpression(candidate) && candidate.name.text === 'role'
             const roleLiteral = (candidate: ts.Expression): boolean =>

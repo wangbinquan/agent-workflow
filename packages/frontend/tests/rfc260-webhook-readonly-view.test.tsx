@@ -109,14 +109,14 @@ async function renderWebhooks(initialSearch = '') {
 let empty = false
 let actorRole: 'user' | 'manager' = 'user'
 let actorUserId = 'u1'
-let actorPermissions: string[] = []
+let actorPermissions: string[] = ['users:search']
 let triggerRows: unknown[] = [TRIGGER_ROW]
 
 beforeEach(async () => {
   empty = false
   actorRole = 'user'
   actorUserId = 'u1'
-  actorPermissions = []
+  actorPermissions = ['users:search']
   triggerRows = [TRIGGER_ROW]
   await i18n.changeLanguage('en-US')
   setBaseUrl(`http://webhooks-readonly-${crypto.randomUUID()}.test`)
@@ -234,6 +234,7 @@ describe('RFC-260/RFC-305 · 无管理权限的只读视图（AC-5）', () => {
     actorRole = 'user'
     actorUserId = 'manager-1'
     actorPermissions = [
+      'users:search',
       'webhook-triggers:create',
       'webhook-triggers:update',
       'webhook-triggers:delete',

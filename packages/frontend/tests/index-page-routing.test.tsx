@@ -18,6 +18,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type * as RouterModule from '@tanstack/react-router'
 import '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 
 vi.mock('@tanstack/react-router', async () => {
   const actual = await vi.importActual<typeof RouterModule>('@tanstack/react-router')
@@ -75,6 +76,7 @@ function wrap(node: React.ReactElement) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
+  seedFullAccessActor(qc)
   return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
 }
 

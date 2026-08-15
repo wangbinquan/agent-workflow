@@ -7,6 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { ComponentType } from 'react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 import '../src/i18n'
 
 const h = vi.hoisted(() => ({
@@ -204,6 +205,7 @@ function createServer(
 
 function renderDetail(report = vi.fn()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(client)
   const Component = (SkillDetailRoute as unknown as { component: ComponentType }).component
   const view = render(
     <QueryClientProvider client={client}>

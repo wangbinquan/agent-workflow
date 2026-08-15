@@ -35,6 +35,7 @@ import { ApiError, api } from '@/api/client'
 import type { WorkflowSyncFrame, WorkflowSyncOptions } from '@/hooks/useWorkflowSync'
 import { setBaseUrl, setToken } from '@/stores/auth'
 import { WorkflowEditorLoaded } from '@/routes/workflows.edit'
+import { fullAccessActorPayload, seedFullAccessActor } from './unexpectedNetwork'
 
 const syncHarness = vi.hoisted(
   (): {
@@ -277,6 +278,7 @@ const ObservationContext = createContext<Observation | null>(null)
 
 function renderEditor(initial: WorkflowDetail) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(qc, 'token')
   qc.setQueryData(['workflows', initial.id], initial)
   const root = createRootRoute({ component: Outlet })
   const editor = createRoute({
@@ -356,7 +358,9 @@ beforeEach(() => {
   setToken('token')
   syncHarness.options = null
   syncHarness.state = { connected: false, connectionEpoch: 0 }
-  vi.spyOn(api, 'get').mockImplementation(async () => [] as never)
+  vi.spyOn(api, 'get').mockImplementation(async (path) =>
+    path === '/api/auth/me' ? (fullAccessActorPayload() as never) : ([] as never),
+  )
 })
 
 afterEach(() => {

@@ -17,6 +17,7 @@ import {
   beginDeferredPackageCommit,
   beginUnknownPackageCommit,
 } from './resource-package-create-busy.helpers'
+import { fullAccessActorResponse, seedFullAccessActor } from './unexpectedNetwork'
 import '../src/i18n'
 
 function json(body: unknown, status = 200): Response {
@@ -80,6 +81,8 @@ function installFetch(
       const method = (init?.method ?? 'GET').toUpperCase()
       const body = typeof init?.body === 'string' && init.body ? JSON.parse(init.body) : null
       const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]!
+
+      if (method === 'GET' && path === '/api/auth/me') return fullAccessActorResponse()
 
       if (method === 'GET' && path === '/api/skills') return json(skills)
       if (method === 'POST' && path === '/api/users/lookup') return json([])
@@ -171,6 +174,7 @@ function installFetch(
 
 function renderSkills(initial: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(qc)
   const tree = RootRoute.addChildren([
     skillsRoute.addChildren([skillNewRoute, skillDetailRoute, skillsIndexRoute]),
   ])

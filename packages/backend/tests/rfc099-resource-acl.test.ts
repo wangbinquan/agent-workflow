@@ -26,7 +26,7 @@ import { ForbiddenError, NotFoundError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-function actorOfUser(id: string, role: 'admin' | 'user', patScopes?: string[]): Actor {
+function actorOfUser(id: string, role: 'admin' | 'user' | 'guest', patScopes?: string[]): Actor {
   return buildActor({
     user: { id, username: `u-${id.slice(-4)}`, displayName: 'U', role, status: 'active' },
     source: patScopes ? 'pat' : 'session',
@@ -34,7 +34,7 @@ function actorOfUser(id: string, role: 'admin' | 'user', patScopes?: string[]): 
   })
 }
 
-async function seedUser(db: DbClient, id: string, role: 'admin' | 'user'): Promise<void> {
+async function seedUser(db: DbClient, id: string, role: 'admin' | 'user' | 'guest'): Promise<void> {
   const { users } = await import('../src/db/schema')
   await db.insert(users).values({
     id,
@@ -52,6 +52,7 @@ describe('resourceAcl — visibility matrix', () => {
   const ownerId = ulid()
   const grantedId = ulid()
   const strangerId = ulid()
+  const guestId = ulid()
   const adminId = ulid()
   let privateAgent: AclRow
   let publicAgent: AclRow
@@ -62,6 +63,7 @@ describe('resourceAcl — visibility matrix', () => {
       [ownerId, 'user'],
       [grantedId, 'user'],
       [strangerId, 'user'],
+      [guestId, 'guest'],
       [adminId, 'admin'],
     ] as const) {
       await seedUser(db, id, role)
@@ -76,6 +78,13 @@ describe('resourceAcl — visibility matrix', () => {
       resourceType: 'agent',
       resourceId: privId,
       userId: grantedId,
+      addedBy: ownerId,
+      addedAt: Date.now(),
+    })
+    await db.insert(resourceGrants).values({
+      resourceType: 'agent',
+      resourceId: privId,
+      userId: guestId,
       addedBy: ownerId,
       addedAt: Date.now(),
     })
@@ -99,6 +108,32 @@ describe('resourceAcl — visibility matrix', () => {
     const stranger = actorOfUser(strangerId, 'user')
     expect(await canViewResource(db, stranger, 'agent', privateAgent)).toBe(false)
     expect(await canViewResource(db, stranger, 'agent', publicAgent)).toBe(true)
+  })
+
+  test('guest is public-only even as owner or grantee until private range is explicitly granted', async () => {
+    const guest = actorOfUser(guestId, 'guest')
+    expect(await canViewResource(db, guest, 'agent', privateAgent)).toBe(false)
+    expect(await canViewResource(db, guest, 'agent', publicAgent)).toBe(true)
+    expect(
+      isResourceOwner(guest, {
+        id: privateAgent.id,
+        ownerUserId: guestId,
+        visibility: 'private',
+      }),
+    ).toBe(false)
+
+    const upgraded: Actor = {
+      ...guest,
+      permissions: new Set([...guest.permissions, 'resource-acl:private']),
+    }
+    expect(await canViewResource(db, upgraded, 'agent', privateAgent)).toBe(true)
+    expect(
+      isResourceOwner(upgraded, {
+        id: privateAgent.id,
+        ownerUserId: guestId,
+        visibility: 'private',
+      }),
+    ).toBe(true)
   })
 
   test('session preset may include bypass; PAT strips that system-domain permission', async () => {

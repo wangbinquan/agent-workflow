@@ -96,7 +96,12 @@ const ROWS: AdminUserView[] = [
 function route(call: FetchCall): Response {
   if (call.url.includes('/api/auth/me')) return jsonResponse(ME)
   if (call.method === 'GET' && call.url.includes('/api/oidc/login-policy')) {
-    return jsonResponse({ passwordLoginEnabled: true, bootstrapCompletedAt: 1, updatedAt: 1 })
+    return jsonResponse({
+      passwordLoginEnabled: true,
+      oidcDefaultRole: 'guest',
+      bootstrapCompletedAt: 1,
+      updatedAt: 1,
+    })
   }
   if (call.method === 'GET' && /\/api\/users(\?.*)?$/.test(call.url)) return jsonResponse(ROWS)
   if (call.method === 'POST' && /\/api\/users\/[^/?]+\/reset-password$/.test(call.url)) {
@@ -392,7 +397,12 @@ describe('/users responsive directory actions', () => {
     const calls = installFetch((call) => {
       if (call.url.includes('/api/auth/me')) return jsonResponse(ME)
       if (call.method === 'GET' && call.url.includes('/api/oidc/login-policy')) {
-        return jsonResponse({ passwordLoginEnabled: true, bootstrapCompletedAt: 1, updatedAt: 1 })
+        return jsonResponse({
+          passwordLoginEnabled: true,
+          oidcDefaultRole: 'guest',
+          bootstrapCompletedAt: 1,
+          updatedAt: 1,
+        })
       }
       if (call.method === 'GET' && /\/api\/users(\?.*)?$/.test(call.url)) {
         listCalls += 1
@@ -537,7 +547,12 @@ describe('/users responsive directory actions', () => {
     const calls = installFetch((call) => {
       if (call.url.includes('/api/auth/me')) return jsonResponse(ME)
       if (call.url.includes('/api/oidc/login-policy')) {
-        return jsonResponse({ passwordLoginEnabled: true, bootstrapCompletedAt: 1, updatedAt: 1 })
+        return jsonResponse({
+          passwordLoginEnabled: true,
+          oidcDefaultRole: 'guest',
+          bootstrapCompletedAt: 1,
+          updatedAt: 1,
+        })
       }
       if (call.method === 'GET' && /\/api\/users(\?.*)?$/.test(call.url)) {
         listCalls += 1

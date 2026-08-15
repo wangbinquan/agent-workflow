@@ -1054,9 +1054,12 @@ export const enUS: Resources = {
       title: 'Manage {{name}}',
     },
     roleOption: {
+      guest: 'guest',
       user: 'user',
       admin: 'admin',
       manager: 'resource admin',
+      guestDesc:
+        'Defaults to public Agent, Skill, MCP, Plugin, Workflow, and Workgroup reads only.',
       userDesc:
         'Defaults to resource reads, task launch, and own-account management; add anything else below.',
       adminDesc: 'Defaults to every permission currently in the catalog.',
@@ -1550,6 +1553,11 @@ export const enUS: Resources = {
         'When off, both the sign-in page and password login API accept only enabled identity providers.',
       passwordLoginLockedHint:
         'No identity provider is enabled, so username and password sign-in must remain on.',
+      oidcDefaultRoleLabel: 'OAuth/OIDC new-user role',
+      oidcDefaultRoleHint:
+        'Role preset assigned only when an identity provider creates a new account. Existing and invited accounts are unchanged.',
+      oidcDefaultRoleGuest: 'Guest (read-only)',
+      oidcDefaultRoleUser: 'Regular user',
       bootstrapTokenLabel: 'Setup token',
       bootstrapTokenHint:
         'Used only to create the first administrator; it can never be enabled again after handoff.',

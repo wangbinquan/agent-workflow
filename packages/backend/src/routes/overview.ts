@@ -15,7 +15,9 @@ export function mountOverviewRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'GET',
       path: '/api/overview',
-      permissions: ['tasks:read'],
+      permissions: [],
+      publicReason:
+        'no single coarse point: each aggregate key is independently permission-gated and nulls unauthorized counts. Identity is still required because this path is not in multiAuth PUBLIC_PATH_PREFIXES.',
       tokenAccess: 'allow',
       summary: 'Home page aggregate counters',
     },

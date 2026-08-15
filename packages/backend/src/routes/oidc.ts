@@ -7,7 +7,7 @@ import {
   PatchOidcProviderBodySchema,
   UpdateAuthLoginPolicyBodySchema,
 } from '@agent-workflow/shared'
-import { getAuthLoginPolicy, setPasswordLoginEnabled } from '@/auth/loginPolicy'
+import { getAuthLoginPolicy, updateAuthLoginPolicy } from '@/auth/loginPolicy'
 import { createOidcProvidersService, redactedProvider } from '@/services/oidcProviders'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
@@ -46,7 +46,7 @@ export function mountOidcRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      return c.json(setPasswordLoginEnabled(deps.db, parsed.data.passwordLoginEnabled))
+      return c.json(updateAuthLoginPolicy(deps.db, parsed.data))
     },
   )
 

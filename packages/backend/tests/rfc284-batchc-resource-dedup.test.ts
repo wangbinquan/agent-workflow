@@ -230,23 +230,70 @@ describe('rfc284 批C T10 §2.4 — 快照式可见性全矩阵（迁移快照�
   })
 
   test('持有 resource-acl:bypass 恒可见（registry 不依赖上游捷径保正确性）', () => {
-    expect(isVisibleToAudienceSnapshot('stranger', true, snap('private', 'owner', []))).toBe(true)
+    expect(
+      isVisibleToAudienceSnapshot(
+        'stranger',
+        { bypass: true, private: false },
+        snap('private', 'owner', []),
+      ),
+    ).toBe(true)
   })
 
   test('无 bypass 的矩阵：public 恒见；private 看 owner/grant；旁人不可见', () => {
     // public × 当事人/旁人
-    expect(isVisibleToAudienceSnapshot('owner', false, snap('public', 'owner', []))).toBe(true)
-    expect(isVisibleToAudienceSnapshot('stranger', false, snap('public', 'owner', []))).toBe(true)
+    expect(
+      isVisibleToAudienceSnapshot(
+        'owner',
+        { bypass: false, private: false },
+        snap('public', 'owner', []),
+      ),
+    ).toBe(true)
+    expect(
+      isVisibleToAudienceSnapshot(
+        'stranger',
+        { bypass: false, private: false },
+        snap('public', 'owner', []),
+      ),
+    ).toBe(true)
     // private × owner
-    expect(isVisibleToAudienceSnapshot('owner', false, snap('private', 'owner', []))).toBe(true)
+    expect(
+      isVisibleToAudienceSnapshot(
+        'owner',
+        { bypass: false, private: true },
+        snap('private', 'owner', []),
+      ),
+    ).toBe(true)
     // private × grant
-    expect(isVisibleToAudienceSnapshot('g1', false, snap('private', 'owner', ['g1']))).toBe(true)
+    expect(
+      isVisibleToAudienceSnapshot(
+        'g1',
+        { bypass: false, private: true },
+        snap('private', 'owner', ['g1']),
+      ),
+    ).toBe(true)
     // private × 旁人
-    expect(isVisibleToAudienceSnapshot('stranger', false, snap('private', 'owner', ['g1']))).toBe(
-      false,
-    )
+    expect(
+      isVisibleToAudienceSnapshot(
+        'stranger',
+        { bypass: false, private: true },
+        snap('private', 'owner', ['g1']),
+      ),
+    ).toBe(false)
     // NULL owner（系统行）：不因 null 比较意外放行
-    expect(isVisibleToAudienceSnapshot('stranger', false, snap('private', null, []))).toBe(false)
+    expect(
+      isVisibleToAudienceSnapshot(
+        'stranger',
+        { bypass: false, private: true },
+        snap('private', null, []),
+      ),
+    ).toBe(false)
+    expect(
+      isVisibleToAudienceSnapshot(
+        'owner',
+        { bypass: false, private: false },
+        snap('private', 'owner', ['owner']),
+      ),
+    ).toBe(false)
   })
 
   test('迁移结构锁：registry 两处受众判定与 mcpRuntimeTestTransitions 均已委托；status 检查留调用方', () => {

@@ -51,6 +51,7 @@ import {
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { zhCN } from '../src/i18n/zh-CN'
 import { enUS } from '../src/i18n/en-US'
+import { fullAccessActorResponse, seedFullAccessActor } from './unexpectedNetwork'
 import '../src/i18n'
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url))
@@ -261,6 +262,9 @@ function installFetch(
       const url = req.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
       const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+      if (method === 'GET' && new URL(url).pathname === '/api/auth/me') {
+        return fullAccessActorResponse()
+      }
       state.calls.push({ url, method, body })
       const json = (payload: unknown, status = 200) =>
         new Response(JSON.stringify(payload), {
@@ -384,6 +388,7 @@ async function renderPage(
   initialEntry: string,
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
 ) {
+  seedFullAccessActor(qc)
   const list = await import('../src/routes/workgroups')
   const detail = await import('../src/routes/workgroups.detail')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
@@ -1217,7 +1222,9 @@ describe('/workgroups/$id — member gallery + context panel (RFC-168)', () => {
 describe('RFC-164 /workgroups wiring', () => {
   test('sidebar nav exposes /workgroups inside the workflows group', () => {
     const nav = readSrc('lib/nav.ts')
-    expect(nav).toContain("{ to: '/workgroups', i18nKey: 'nav.workgroups', icon: 'workgroup' }")
+    expect(nav).toMatch(
+      /to: '\/workgroups',[\s\S]*i18nKey: 'nav\.workgroups',[\s\S]*permission: 'workgroups:read'/,
+    )
     const workflowsGroup = nav.slice(nav.indexOf("key: 'workflows'"), nav.indexOf("key: 'tasks'"))
     expect(workflowsGroup).toContain("to: '/workgroups'")
   })

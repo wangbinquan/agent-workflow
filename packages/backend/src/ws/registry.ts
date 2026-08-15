@@ -64,11 +64,12 @@ import { canViewMemory } from '@/services/memory'
 import {
   canAuditIntentSessions,
   canViewResource,
+  hasResourceAclBypass,
   isVisibleToAudienceSnapshot,
+  resourceAclAudienceAuthority,
 } from '@/services/resourceAcl'
 import { canViewTask } from '@/services/taskCollab'
 import { batchOwnerUserId } from '@/services/repoBatchImport'
-import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { createLogger } from '@/util/log'
 import { triggerAuthorityRevalidation } from './revalidationHook'
 import {
@@ -403,7 +404,7 @@ function deletedWorkflowAudienceVisible(
   }
   // RFC-284 T10（§2.4）：判定收编快照函数自带 ACL bypass 分支，因此上游
   // shortcut 只是一条性能优化，正确性不依赖它。
-  return isVisibleToAudienceSnapshot(actor.user.id, hasResourceAclBypass(actor), context)
+  return isVisibleToAudienceSnapshot(actor.user.id, resourceAclAudienceAuthority(actor), context)
 }
 
 function deletedWorkgroupAudienceVisible(
@@ -419,7 +420,7 @@ function deletedWorkgroupAudienceVisible(
     return null
   }
   // RFC-284 T10（§2.4）：同 workflow 侧——判定收编快照函数。
-  return isVisibleToAudienceSnapshot(actor.user.id, hasResourceAclBypass(actor), context)
+  return isVisibleToAudienceSnapshot(actor.user.id, resourceAclAudienceAuthority(actor), context)
 }
 
 /**

@@ -29,6 +29,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import type { NodeRun, TaskStatus } from '@agent-workflow/shared'
 import { api } from '../src/api/client'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 import { WorkgroupRoom } from '../src/components/workgroup/room/WorkgroupRoom'
 import { workgroupRoomKey } from '../src/lib/workgroup-room'
 import type { WorkgroupRoomResponse } from '../src/lib/workgroup-room'
@@ -292,6 +293,7 @@ function installFetch(
 
 function renderRoom(room: WorkgroupRoomResponse, taskStatus: TaskStatus = 'running') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(qc)
   return render(
     <QueryClientProvider client={qc}>
       <RoomHost taskId="t1" taskStatus={taskStatus} />

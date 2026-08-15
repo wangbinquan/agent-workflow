@@ -12,6 +12,7 @@ interface CompactTopBarProps {
   inboxOpen: boolean
   onToggleInbox: () => void
   inboxTriggerRef: RefObject<HTMLButtonElement | null>
+  showInbox: boolean
 }
 
 export function CompactTopBar({
@@ -21,6 +22,7 @@ export function CompactTopBar({
   inboxOpen,
   onToggleInbox,
   inboxTriggerRef,
+  showInbox,
 }: CompactTopBarProps) {
   const { t } = useTranslation()
   return (
@@ -40,12 +42,14 @@ export function CompactTopBar({
       <div className="mobile-topbar__brand" aria-hidden="true">
         {t('nav.brand')}
       </div>
-      <InboxFooterButton
-        ref={inboxTriggerRef}
-        variant="compact"
-        open={inboxOpen}
-        onToggle={onToggleInbox}
-      />
+      {showInbox && (
+        <InboxFooterButton
+          ref={inboxTriggerRef}
+          variant="compact"
+          open={inboxOpen}
+          onToggle={onToggleInbox}
+        />
+      )}
     </header>
   )
 }

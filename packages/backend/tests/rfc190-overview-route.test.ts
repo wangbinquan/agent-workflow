@@ -6,8 +6,7 @@
 //      can never drift from what the list pages show (D1);
 //   2. the tasks permission truth table (design gate P1-2): tasks:read:all →
 //      unscoped, tasks:read:own → owner∨collaborator, neither → null;
-//   3. per-key null gating for coarse-gated resources vs always-numbers for
-//      the gate-less workgroups/scheduled keys (D2 / design gate P1-3);
+//   3. per-key null gating for every coarse-gated resource (D2 / design gate P1-3);
 //   4. the fixed-clock 7-day window boundary (D10 / design gate P2-1);
 //   5. the response contract (OverviewResponseSchema + generatedAt).
 
@@ -558,12 +557,15 @@ describe('RFC-190 buildOverview — 权限真值表 + 固定时钟 7d 边界（�
       'plugins:read',
       'workflows:read',
       'memory:read',
+      'resource-acl:private',
       'tasks:read:own',
     ])
     const ovNoRepos = await buildOverview(h.db, noRepos)
     expect(ovNoRepos.resources.repos).toBeNull()
     expect(ovNoRepos.resources.agents).toBe(5)
     expect(ovNoRepos.resources.memories).toBe(3)
+    expect(ovNoRepos.resources.workgroups).toBeNull()
+    expect(ovNoRepos.resources.scheduled).toBeNull()
   })
 
   test('7d 边界（注入时钟）：cutoff-1ms 不计 / 恰好 cutoff 计 / cutoff+1ms 计', async () => {

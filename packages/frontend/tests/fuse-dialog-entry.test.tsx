@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 import '../src/i18n'
 
 const h = vi.hoisted(() => ({ navigate: vi.fn() }))
@@ -55,6 +56,7 @@ function installFetch(handler: (call: FetchCall) => Response): FetchCall[] {
 
 function mount(entry: FuseDialogEntry) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(qc)
   return render(
     <QueryClientProvider client={qc}>
       <FuseDialog open onClose={() => {}} entry={entry} />

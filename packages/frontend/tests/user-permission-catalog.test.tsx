@@ -35,7 +35,7 @@ describe('RFC-305 UserPermissionCatalog', () => {
     expect(scripts.checked).toBe(false)
     fireEvent.click(scripts)
     expect(scripts.checked).toBe(true)
-    expect(screen.getByText(/49 effective/i)).toBeTruthy()
+    expect(screen.getByText(/50 effective/i)).toBeTruthy()
   })
 
   test('search keeps selection while hiding non-matching rows', () => {

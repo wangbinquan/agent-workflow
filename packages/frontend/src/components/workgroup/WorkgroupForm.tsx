@@ -30,9 +30,16 @@ export interface WorkgroupFormProps {
   onChange: (next: WorkgroupConfigDraft, meta?: { immediate?: boolean }) => void
   /** Raw i18n error keys from the payload builder. */
   errors: Record<string, string>
+  readOnly?: boolean
 }
 
-export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: WorkgroupFormProps) {
+export function WorkgroupForm({
+  value,
+  onChange,
+  errors,
+  hasHumanMember,
+  readOnly = false,
+}: WorkgroupFormProps) {
   const { t } = useTranslation()
   const set = <K extends keyof WorkgroupConfigDraft>(
     k: K,
@@ -70,6 +77,7 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
             onChange={(v) => set('instructions', v)}
             rows={6}
             monospace
+            readOnly={readOnly}
             maxLength={65536}
             data-testid="workgroup-field-instructions"
           />
@@ -89,6 +97,7 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
             value={value.mode}
             onChange={(v) => set('mode', v, true)}
             ariaLabel={t('workgroups.fieldMode')}
+            disabled={readOnly}
             testidPrefix="workgroup-mode"
             options={[
               { value: 'leader_worker', label: t('workgroups.modeLeaderWorker') },
@@ -113,6 +122,7 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
             value={value.outputContract}
             onChange={(v) => set('outputContract', v, true)}
             ariaLabel={t('workgroups.fieldOutputContract')}
+            disabled={readOnly}
             testidPrefix="workgroup-output-contract"
             options={[
               { value: 'files', label: t('workgroups.outputContractFiles') },
@@ -134,21 +144,21 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
           )}
           <Switch
             checked={fc ? true : value.switches.shareOutputs}
-            disabled={fc}
+            disabled={readOnly || fc}
             onChange={(v) => set('switches', { ...value.switches, shareOutputs: v }, true)}
             label={t('workgroups.fieldShareOutputs')}
             hint={t('workgroups.fieldShareOutputsHint')}
           />
           <Switch
             checked={fc ? true : value.switches.directMessages}
-            disabled={fc}
+            disabled={readOnly || fc}
             onChange={(v) => set('switches', { ...value.switches, directMessages: v }, true)}
             label={t('workgroups.fieldDirectMessages')}
             hint={t('workgroups.fieldDirectMessagesHint')}
           />
           <Switch
             checked={fc ? true : value.switches.blackboard}
-            disabled={fc}
+            disabled={readOnly || fc}
             onChange={(v) => set('switches', { ...value.switches, blackboard: v }, true)}
             label={t('workgroups.fieldBlackboard')}
             hint={t('workgroups.fieldBlackboardHint')}
@@ -165,6 +175,7 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
               min={1}
               max={WORKGROUP_MAX_ROUNDS_LIMIT}
               step={1}
+              disabled={readOnly}
               placeholder="1000"
               data-testid="workgroup-field-max-rounds"
             />
@@ -179,7 +190,7 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
                 ? t('workgroups.fieldCompletionGateHint')
                 : t('workgroups.fieldCompletionGateNoHumanHint')
             }
-            disabled={!hasHumanMember}
+            disabled={readOnly || !hasHumanMember}
           />
 
           {/* RFC-207 — ask-back budget per asker. Meaningless without a human on
@@ -197,7 +208,7 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
               onChange={(v) => set('clarifyBudget', v ?? WG_CLARIFY_BUDGET_DEFAULT)}
               min={0}
               max={50}
-              disabled={!hasHumanMember}
+              disabled={readOnly || !hasHumanMember}
             />
           </Field>
 
@@ -209,6 +220,7 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
               onChange={(v) => set('fanOut', v, true)}
               label={t('workgroups.fieldFanOut')}
               hint={t('workgroups.fieldFanOutHint')}
+              disabled={readOnly}
               data-testid="workgroup-field-fanout"
             />
           )}

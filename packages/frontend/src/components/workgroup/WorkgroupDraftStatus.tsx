@@ -16,6 +16,8 @@ export interface WorkgroupDraftStatusProps {
   onLoadRemote: ConfirmAction
   onOverwriteRemote: ConfirmAction
   onReturnToList: () => void
+  canSaveCopy?: boolean
+  canOverwrite?: boolean
 }
 
 const PHASE_KIND: Record<WorkgroupDraftPhase, StatusChipKind> = {
@@ -181,9 +183,15 @@ export function WorkgroupDraftStatus(props: WorkgroupDraftStatusProps): ReactEle
           title={t('editor.draftStatus.conflictTitle')}
           action={
             <Actions>
-              <button type="button" className="btn btn--sm btn--primary" onClick={props.onSaveCopy}>
-                {t('editor.draftStatus.saveCopyRecommended')}
-              </button>
+              {props.canSaveCopy !== false && (
+                <button
+                  type="button"
+                  className="btn btn--sm btn--primary"
+                  onClick={props.onSaveCopy}
+                >
+                  {t('editor.draftStatus.saveCopyRecommended')}
+                </button>
+              )}
               <button
                 ref={loadTriggerRef}
                 type="button"
@@ -192,14 +200,16 @@ export function WorkgroupDraftStatus(props: WorkgroupDraftStatusProps): ReactEle
               >
                 {t('editor.draftStatus.loadRemote')}
               </button>
-              <button
-                ref={overwriteTriggerRef}
-                type="button"
-                className="btn btn--sm btn--danger"
-                onClick={() => setConfirmation('overwrite')}
-              >
-                {t('editor.draftStatus.overwriteRemote')}
-              </button>
+              {props.canOverwrite !== false && (
+                <button
+                  ref={overwriteTriggerRef}
+                  type="button"
+                  className="btn btn--sm btn--danger"
+                  onClick={() => setConfirmation('overwrite')}
+                >
+                  {t('editor.draftStatus.overwriteRemote')}
+                </button>
+              )}
             </Actions>
           }
         >
@@ -217,9 +227,15 @@ export function WorkgroupDraftStatus(props: WorkgroupDraftStatusProps): ReactEle
           )}
           action={
             <Actions>
-              <button type="button" className="btn btn--sm btn--primary" onClick={props.onSaveCopy}>
-                {t('editor.draftStatus.saveCopy')}
-              </button>
+              {props.canSaveCopy !== false && (
+                <button
+                  type="button"
+                  className="btn btn--sm btn--primary"
+                  onClick={props.onSaveCopy}
+                >
+                  {t('editor.draftStatus.saveCopy')}
+                </button>
+              )}
               <button type="button" className="btn btn--sm" onClick={props.onReturnToList}>
                 {t('workgroups.autosave.returnToList')}
               </button>
@@ -244,7 +260,7 @@ export function WorkgroupDraftStatus(props: WorkgroupDraftStatusProps): ReactEle
         triggerRef={loadTriggerRef}
       />
       <ConfirmDialog
-        open={phase === 'conflict' && confirmation === 'overwrite'}
+        open={props.canOverwrite !== false && phase === 'conflict' && confirmation === 'overwrite'}
         title={t('editor.draftStatus.overwriteDialogTitle')}
         description={t('editor.draftStatus.overwriteDialogBody', {
           localRevision,

@@ -53,6 +53,7 @@ import {
 import { zhCN } from '../src/i18n/zh-CN'
 import { enUS } from '../src/i18n/en-US'
 import { HomepageGreeting } from '../src/components/home/HomepageGreeting'
+import { fullAccessActorResponse, seedFullAccessActor } from './unexpectedNetwork'
 import '../src/i18n'
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url))
@@ -113,6 +114,9 @@ function installFetch(
     async (req: RequestInfo | URL, init?: RequestInit) => {
       const url = req.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'GET' && new URL(url).pathname === '/api/auth/me') {
+        return fullAccessActorResponse()
+      }
       // Import bodies are YAML, not JSON — record those as the raw string.
       const body =
         typeof init?.body === 'string'
@@ -226,6 +230,7 @@ async function renderPage(initialEntry: string | string[], options: { homepage?:
     }),
   })
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(qc)
   render(
     <QueryClientProvider client={qc}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}

@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 import { Route as RootRoute } from '../src/routes/__root'
 import { IndexRoute as agentsIndexRoute, Route as agentsRoute } from '../src/routes/agents'
 import { IndexRoute as mcpsIndexRoute, Route as mcpsRoute } from '../src/routes/mcps'
@@ -68,6 +69,7 @@ const CASES = [
 
 function renderList(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(queryClient)
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [path] }),

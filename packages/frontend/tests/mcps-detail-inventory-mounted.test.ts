@@ -34,7 +34,7 @@ describe('/mcps/$id mounts the RFC-030 inventory panel', () => {
   test('renders the inventory with exact saved hash and save-and-probe callback', () => {
     expect(text).toMatch(/<McpInventoryPanel\s+[\s\S]*?mcpId=\{id\}/)
     expect(text).toContain('operationConfigHash={query.data?.operationConfigHash}')
-    expect(text).toContain('onSaveForProbe={saveForProbe}')
+    expect(text).toContain('onSaveForProbe={canUpdate ? saveForProbe : undefined}')
   })
 
   // RFC-169: the inventory panel moved from "stacked above the form" into the

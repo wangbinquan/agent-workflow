@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { MemorySummary } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 import { MemoryAllList } from '../src/components/memory/MemoryAllList'
 import '../src/i18n'
 
@@ -62,6 +63,7 @@ function installFetch(handler: (call: FetchCall) => Response | Promise<Response>
 
 function wrap() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(qc)
   return render(
     <QueryClientProvider client={qc}>
       <MemoryAllList />

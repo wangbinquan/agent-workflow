@@ -105,6 +105,7 @@ interface TextInputProps {
   autoComplete?: string
   autoFocus?: boolean
   disabled?: boolean
+  readOnly?: boolean
   required?: boolean
   minLength?: number
   pattern?: string
@@ -143,6 +144,7 @@ export function TextInput({
   autoComplete,
   autoFocus,
   disabled,
+  readOnly,
   required,
   minLength,
   pattern,
@@ -179,6 +181,7 @@ export function TextInput({
       onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
+      readOnly={readOnly}
       required={required}
       minLength={minLength}
       pattern={pattern}

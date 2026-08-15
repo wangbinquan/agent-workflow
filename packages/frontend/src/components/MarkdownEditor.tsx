@@ -18,6 +18,7 @@ interface MarkdownEditorProps {
   /** RFC-169: fill the parent's height (the agent Prompt tab) instead of a
    *  fixed `rows` height — the editor grows to the tab content area. */
   fill?: boolean
+  readOnly?: boolean
 }
 
 export function MarkdownEditor({
@@ -26,6 +27,7 @@ export function MarkdownEditor({
   rows = 18,
   placeholder,
   fill,
+  readOnly,
 }: MarkdownEditorProps) {
   const { t } = useTranslation()
   const deferred = useDeferredValue(value)
@@ -39,6 +41,7 @@ export function MarkdownEditor({
           rows={rows}
           placeholder={placeholder}
           monospace
+          readOnly={readOnly}
         />
       </div>
       <div className="md-editor__pane md-editor__pane--preview">

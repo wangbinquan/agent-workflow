@@ -22,6 +22,7 @@ import {
 } from '@tanstack/react-router'
 import type { Workgroup } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 import '../src/i18n'
 
 function wg(name: string, overrides: Partial<Workgroup> = {}): Workgroup {
@@ -103,6 +104,7 @@ async function renderPage(initialEntry: string) {
     history: createMemoryHistory({ initialEntries: [initialEntry] }),
   })
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(qc)
   render(
     <QueryClientProvider client={qc}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}

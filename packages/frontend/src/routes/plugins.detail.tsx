@@ -42,6 +42,7 @@ import {
   type PluginFormState,
 } from '@/lib/plugin-form'
 import { stableStringify } from '@/lib/stable-stringify'
+import { usePermission } from '@/hooks/useActor'
 import { Route as pluginsRoute } from './plugins'
 
 export const Route = createRoute({
@@ -73,6 +74,9 @@ function PluginDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
+  const canUpdate = usePermission('plugins:update')
+  const canDelete = usePermission('plugins:delete')
+  const canExecute = usePermission('plugins:execute')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [tab, setTab] = useState<PluginTab>('config')
   const [operationNotice, setOperationNotice] = useState<
@@ -410,48 +414,52 @@ function PluginDetailPage() {
         <NoticeBanner tone="info" size="compact" title={t('plugins.externalManagedTitle')}>
           {t('plugins.externalManagedBody')}
         </NoticeBanner>
-      ) : (
+      ) : canExecute || canUpdate ? (
         <div className="form-actions">
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={() => void runCheck()}
-            disabled={
-              save.isPending ||
-              del.isPending ||
-              operationBusy ||
-              (!dirty && exactResourceHash === null)
-            }
-            data-testid="plugin-check-update"
-          >
-            {checkUpdate.isPending
-              ? t('plugins.checking')
-              : dirty
-                ? t('plugins.saveAndCheckButton')
-                : t('plugins.checkUpdateButton')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--sm btn--primary"
-            onClick={runUpgrade}
-            disabled={
-              dirty ||
-              save.isPending ||
-              del.isPending ||
-              operationBusy ||
-              exactResourceHash === null ||
-              (!updateReady && !canRebaseline)
-            }
-            data-testid="plugin-upgrade"
-          >
-            {upgrade.isPending
-              ? t('plugins.upgrading')
-              : canRebaseline
-                ? t('plugins.reinstallBaselineButton')
-                : t('plugins.upgradeButton')}
-          </button>
+          {canExecute && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => void runCheck()}
+              disabled={
+                save.isPending ||
+                del.isPending ||
+                operationBusy ||
+                (!dirty && exactResourceHash === null)
+              }
+              data-testid="plugin-check-update"
+            >
+              {checkUpdate.isPending
+                ? t('plugins.checking')
+                : dirty
+                  ? t('plugins.saveAndCheckButton')
+                  : t('plugins.checkUpdateButton')}
+            </button>
+          )}
+          {canUpdate && (
+            <button
+              type="button"
+              className="btn btn--sm btn--primary"
+              onClick={runUpgrade}
+              disabled={
+                dirty ||
+                save.isPending ||
+                del.isPending ||
+                operationBusy ||
+                exactResourceHash === null ||
+                (!updateReady && !canRebaseline)
+              }
+              data-testid="plugin-upgrade"
+            >
+              {upgrade.isPending
+                ? t('plugins.upgrading')
+                : canRebaseline
+                  ? t('plugins.reinstallBaselineButton')
+                  : t('plugins.upgradeButton')}
+            </button>
+          )}
         </div>
-      )}
+      ) : null}
 
       {operationBusy && <LoadingState size="compact" data-testid="plugin-operation-loading" />}
       {!operationBusy &&
@@ -499,7 +507,15 @@ function PluginDetailPage() {
       {(checkUpdate.error ?? upgrade.error) != null && (
         <ErrorBanner
           error={checkUpdate.error ?? upgrade.error}
-          onRetry={() => (lastOperationKind === 'check' ? void runCheck() : runUpgrade())}
+          onRetry={
+            lastOperationKind === 'check'
+              ? canExecute
+                ? () => void runCheck()
+                : undefined
+              : canUpdate
+                ? runUpgrade
+                : undefined
+          }
         />
       )}
     </div>
@@ -510,26 +526,41 @@ function PluginDetailPage() {
       <DetailHeaderActions
         title={displayName}
         headingLevel={2}
-        acl={{
-          resourceBaseUrl: `/api/plugins/${encodeURIComponent(id)}`,
-          invalidateKey: ['plugins'],
-        }}
-        save={{
-          label: save.isPending ? t('plugins.saving') : t('plugins.saveButton'),
-          onClick: submitSave,
-          disabled: save.isPending || del.isPending || operationBusy || !loaded,
-          testid: 'plugin-save-button',
-        }}
-        del={{
-          label: t('common.delete'),
-          confirmName: displayName,
-          resourceType: 'plugin',
-          onConfirm: (ctx) => {
-            if (save.isPending || del.isPending || operationBusy) return Promise.resolve()
-            return del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(id) })
-          },
-          disabled: del.isPending || save.isPending || operationBusy,
-        }}
+        acl={
+          canUpdate
+            ? {
+                resourceBaseUrl: `/api/plugins/${encodeURIComponent(id)}`,
+                invalidateKey: ['plugins'],
+              }
+            : undefined
+        }
+        save={
+          canUpdate
+            ? {
+                label: save.isPending ? t('plugins.saving') : t('plugins.saveButton'),
+                onClick: submitSave,
+                disabled: save.isPending || del.isPending || operationBusy || !loaded,
+                testid: 'plugin-save-button',
+              }
+            : undefined
+        }
+        del={
+          canDelete
+            ? {
+                label: t('common.delete'),
+                confirmName: displayName,
+                resourceType: 'plugin',
+                onConfirm: (ctx) => {
+                  if (save.isPending || del.isPending || operationBusy) return Promise.resolve()
+                  return del.mutateAsync({
+                    confirm: ctx?.typedConfirm ?? '',
+                    release: beginBusy(id),
+                  })
+                },
+                disabled: del.isPending || save.isPending || operationBusy,
+              }
+            : undefined
+        }
         extra={
           <>
             <IntentProvenanceBadge resourceType="plugin" resourceId={id} />
@@ -590,7 +621,7 @@ function PluginDetailPage() {
               content: (
                 <PluginFields
                   value={form ?? EMPTY_PLUGIN_FORM}
-                  onChange={setForm}
+                  onChange={canUpdate ? setForm : () => undefined}
                   nameLocked
                   errors={errors}
                 />

@@ -9,6 +9,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { LOCAL_DECIDER, SYSTEM_DECIDER, type UserPublic } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { usePermission } from '@/hooks/useActor'
 
 /** ids that are sentinels, never real users — skipped client-side. The two
  *  decider sentinels spell through the RFC-149 shared constants; '__system__'
@@ -16,13 +17,14 @@ import { api } from '@/api/client'
 const SENTINELS = new Set<string>([LOCAL_DECIDER, SYSTEM_DECIDER, '__system__', ''])
 
 export function useUserLookup(ids: ReadonlyArray<string | null | undefined>) {
+  const canSearchUsers = usePermission('users:search')
   const wanted = [
     ...new Set(ids.filter((x): x is string => typeof x === 'string' && !SENTINELS.has(x))),
   ].sort()
   const query = useQuery<UserPublic[]>({
     queryKey: ['users', 'lookup', wanted],
     queryFn: () => api.post('/api/users/lookup', { ids: wanted }),
-    enabled: wanted.length > 0,
+    enabled: wanted.length > 0 && canSearchUsers,
     staleTime: 5 * 60_000,
   })
   const byId = new Map((query.data ?? []).map((u) => [u.id, u]))

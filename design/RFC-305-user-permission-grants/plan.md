@@ -4,23 +4,25 @@
 
 ## 1. 最终边界
 
-- `admin / manager / user` 仅为权限预设；授权消费者只能检查有效权限。
-- 72 点统一目录；`user=48`、`manager=60`、`admin=72`。
-- 只有 `account:self` 内在；所有其余预设差集均可逐账户授予，普通 `user` 当前可选 24 点。
+- `admin / manager / user / guest` 仅为权限预设；授权消费者只能检查有效权限。
+- 73 点统一目录；`guest=7`、`user=49`、`manager=61`、`admin=73`。
+- 只有 `account:self` 内在；所有其余预设差集均可逐账户授予，`guest` 当前可选 66 点、普通 `user` 当前可选 24 点。
 - `user + 全 24 grant == admin` 的有效权限与真实授权行为；角色字段仍为 `user`。
 - 五个历史身份谓词改为显式权限；RouteMeta/MCP/ACL/WS/前端不得另设角色轴。
+- `resource-acl:private` 把 private visibility 与普通 read 分离；guest baseline 只能读取公开资源且不能写入/执行。
+- OAuth/OIDC 首次自动建号默认 `guest`，管理员可在设置中把默认预设切为 `user`；邀请流程不受影响。
 - 新代码按 RFC-294 落入 `modules/identity-access/`，访问写入只有一个事务所有者。
 
 ## 2. 批次与任务
 
 ### 批 A — shared 单一事实源
 
-- [x] **RFC-305-T1** `PERMISSIONS` 扩为 72 点，加入五个历史身份 capability。
+- [x] **RFC-305-T1** `PERMISSIONS` 扩为 73 点，加入五个历史身份 capability 与 `resource-acl:private`。
 - [x] **RFC-305-T2** 建穷尽 `PERMISSION_CATALOG`：group/label/description/delegation/risk/token/constraints。
 - [x] **RFC-305-T3** delegation 收敛为 `account-additive | intrinsic`；只有 `account:self` 内在。
 - [x] **RFC-305-T4** 统一 effective account、grantable difference、role rebase、strict/fail-closed normalization。
 - [x] **RFC-305-T5** PAT 与 matrix 使用 effective account cap，system-domain 始终剔除。
-- [x] **退出门**：目录 exact coverage；48/60/72 与 user 24 差集；全 grant 等于 admin；坏输入/坏存量/PAT 正负矩阵全绿。
+- [x] **退出门**：目录 exact coverage；7/49/61/73、guest 66 与 user 24 差集；全 grant 等于 admin；坏输入/坏存量/PAT 正负矩阵全绿。
 
 ### 批 B — RFC-294 `identity-access` 纵切与存储
 
@@ -49,27 +51,31 @@
 - [x] **RFC-305-T20** Create/Edit Dialog 复用组件，不手写 permission id 表。
 - [x] **RFC-305-T21** 角色切换按显式 grant rebase；baseline/intrinsic 锁定；无“全选”。
 - [x] **RFC-305-T22** OCC 409 保留草稿与加载最新，dirty/reset/busy/error 完整。
-- [x] **RFC-305-T23** EN/ZH 72 点 label/description 及错误文案穷尽。
+- [x] **RFC-305-T23** EN/ZH 73 点 label/description 及错误文案穷尽。
 - [x] **退出门**：前端纯模型/RTL/i18n/source locks/typecheck 定向全绿。
 
 ### 批 E — 行为、E2E 与发布
 
 - [x] **RFC-305-T24** `scripts:author` grant/revoke 的敏感投影、保存和既有 workflow 执行回归。
-- [x] **RFC-305-T25** `user + 全 24` 的 set 等价与真实 HTTP 行为；`role` wire 保持 `user`。
+- [x] **RFC-305-T25** `user + 全 24` 的 set 等价与真实 HTTP 行为；有效集合为 73 点，`role` wire 保持 `user`。
 - [x] **RFC-305-T26** `resource-acl:bypass` 与 `memory-distill-jobs:manage` 正负/撤销行为。
 - [x] **RFC-305-T27** `intent:audit`、`mcp-runtime-tests:audit`、`webhook-triggers:override-owner` 正负/只读/撤销行为。
 - [x] **RFC-305-T28** `users:read` 独立开放 list/detail，`users:write` 开放 mutation；普通 user 可管理他人访问；self/system/last capability 防护。
 - [x] **RFC-305-T29** PAT 五个新 system point 永不携带，matrix/range grant revoke/regrant。
 - [x] **RFC-305-T30** Playwright 真实 daemon：390px/light/dark/a11y、create/edit/OCC/live WS、PAT cap。
-- [x] **RFC-305-T31** 全量 format/typecheck/lint/depcheck/tests/migration/build 与 `bun run gate:local`：shared 2129、frontend 6459、backend 10663 pass（35 skip、0 fail），真实 binary + Chromium E2E 2/2。
-- [ ] **RFC-305-T32** 固定提交 detached worktree 安装依赖并做 Codex implementation review，处置全部 P1/P2。
-- [ ] **RFC-305-T33** 精确 staging、commit trailer、push、origin ancestry 与 exact-SHA GitHub Actions 终态验证。
-- [ ] **RFC-305-T34** RFC/索引/STATE 改 Done，记录本地门禁、提交 SHA 与远端 CI 证据。
+- [x] **RFC-305-T31** guest preset 与真实 HTTP 旅程：public list/detail 可读；private 即使有 ACL grant 也隐藏；创建、任务、仓库拒绝；追加 `resource-acl:private` 后只开放对应 private 读取。
+- [x] **RFC-305-T32** 迁移 0163 与 Authentication 设置：OIDC 默认 guest，可切 user；callback 在建号事务内读取策略；邀请用户保持显式预设。
+- [ ] **RFC-305-T33** 全量 format/typecheck/lint/depcheck/tests/migration/build、真实 E2E、WebKit 与 `bun run gate:local`。
+- [ ] **RFC-305-T34** 固定提交 detached worktree 安装依赖并做 Codex implementation review，处置全部 P1/P2。
+- [ ] **RFC-305-T35** 精确 staging、commit trailer、push、origin ancestry 与 exact-SHA GitHub Actions 终态验证。
+- [ ] **RFC-305-T36** RFC/索引/STATE 改 Done，记录本地门禁、提交 SHA 与远端 CI 证据。
 
 ## 3. 必跑行为矩阵
 
 | 主体         | 附加权限                          | 正向                            | 负向/撤销                                   |
 | ------------ | --------------------------------- | ------------------------------- | ------------------------------------------- |
+| guest session | 无                                | 公开六类资源 list/detail        | private、资源写、任务/仓库/设置均拒绝       |
+| guest session | `resource-acl:private`            | owner/显式 grant 的 private 可读 | 未获 write/execute 点仍拒绝 mutation/执行   |
 | user session | `scripts:author`                  | 可读写脚本敏感字段              | 无 grant 脱敏/403；已保存 workflow 仍可执行 |
 | user session | `resource-acl:bypass`             | 他人 private resource 200       | 无/撤销为 404                               |
 | user session | `memory-distill-jobs:manage`      | HTTP + WS 可用                  | 无/撤销为 403 / permission-required         |
@@ -77,9 +83,10 @@
 | user session | `mcp-runtime-tests:audit`         | exact-id transcript read        | latest 不枚举、end 不放行；无 grant 404     |
 | user session | trigger update + `override-owner` | 跨 owner update/delete          | 撤销回 404                                  |
 | user session | `users:read` + `users:write`      | list/create/patch other user    | self access snapshot 拒绝                   |
-| user session | 全 24                             | 与 admin 的 72 点和真实能力一致 | 移除单点只收窄该能力                        |
+| user session | 全 24                             | 与 admin 的 73 点和真实能力一致 | 移除单点只收窄该能力                        |
 | PAT          | 任意 system-domain grant          | 无                              | 创建 matrix 拒绝且运行时剔除                |
 | delegated/WS | grant/revoke                      | 下一 admission/revision 生效    | stale revision 不得继续收发/副作用          |
+| OIDC first login | policy=`guest/user`              | 新建号取得策略选择的预设        | 既有/受邀账户不被策略重写                    |
 
 ## 4. 架构防护
 
@@ -88,7 +95,7 @@
 - `identity-access/public` 仅五个 exact entrypoint 及审核 export；
 - 模块外 import allowlist 不增长；
 - role/grant/revision/audit 单生产 writer；
-- backend/frontend 无账户角色字面量授权比较；展示和非账户 protocol role 仅 exact allowlist；
+- backend/frontend 无账户角色字面量授权比较，包括 `guest`；展示和非账户 protocol role 仅 exact allowlist；
 - `RouteMeta`、MCP tool 无 `identity`；退役 role helper 零引用；
 - system-domain 每点有真实生产消费方；
 - Create/Edit Dialog 只渲染共享目录组件；
@@ -107,7 +114,7 @@ PERMISSIONS
 ## 5. 验证顺序
 
 1. shared catalog/grant/PAT 定向；
-2. backend migration、identity-access、五 capability、HTTP/WS/delegated 定向；
+2. backend migration、identity-access、五 capability、private visibility、guest HTTP 与 OIDC policy/callback 定向；
 3. frontend model/catalog/dialog/i18n/router 定向；
 4. Playwright RFC-305 real-daemon journey；
 5. typecheck、lint、format、depcheck；
@@ -129,8 +136,8 @@ PERMISSIONS
 
 ## 7. Done 门
 
-- [ ] proposal AC-1…AC-13 全部实证并勾选；
-- [ ] 本计划 T1…T34 全部完成；
+- [ ] proposal AC-1…AC-15 全部实证并勾选；
+- [ ] 本计划 T1…T36 全部完成；
 - [ ] 固定提交实现审查无未处置 P1/P2；
 - [x] `bun run gate:local` 全绿；
 - [ ] commit 已推入 `origin/main` 且远端祖先关系确认；

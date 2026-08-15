@@ -10,7 +10,10 @@
 //     parallel authorization axis. PATs never carry this system-domain point.
 //   - the daemon-token actor is the capability-bearing '__system__' account, so the runner /
 //     scheduler / opencode injection paths are structurally unaffected.
-//   - actors without a grant or ACL-bypass permission must not observe the resource at all:
+//   - private owner/grant visibility additionally requires the account-range
+//     `resource-acl:private` point. The guest preset omits it, so public-only
+//     behavior is expressed entirely through effective permissions.
+//   - actors without private-range or ACL-bypass permission must not observe a private resource:
 //     list endpoints post-filter via filterVisibleRows, detail endpoints turn
 //     "not visible" into a 404 (NOT 403 — a 403 would leak existence, D1).
 //
@@ -144,6 +147,24 @@ export function hasResourceAclBypass(actor: Actor): boolean {
   return actor.permissions.has('resource-acl:bypass')
 }
 
+/** Account-range capability for owner/grant visibility on private ACL rows. */
+export function hasPrivateResourceAccess(actor: Actor): boolean {
+  return actor.permissions.has('resource-acl:private')
+}
+
+export interface ResourceAclAudienceAuthority {
+  readonly bypass: boolean
+  readonly private: boolean
+}
+
+/** Snapshot-friendly projection of the only two resource-ACL authority points. */
+export function resourceAclAudienceAuthority(actor: Actor): ResourceAclAudienceAuthority {
+  return {
+    bypass: hasResourceAclBypass(actor),
+    private: hasPrivateResourceAccess(actor),
+  }
+}
+
 /** The one WHERE shape for "all grants of `type` for this user" — both the
  *  async and the in-tx variant below build from it (RFC-282 D2: the grant-set
  *  query exists once; importRefs used to carry a literal copy). */
@@ -223,15 +244,16 @@ export function listResourceGrantUserIdsInTx(
  */
 export function isVisibleToAudienceSnapshot(
   userId: string,
-  resourceAclBypass: boolean,
+  authority: ResourceAclAudienceAuthority,
   snapshot: {
     visibility: 'public' | 'private'
     ownerUserId: string | null
     grantedUserIds: ReadonlySet<string>
   },
 ): boolean {
-  if (resourceAclBypass) return true
+  if (authority.bypass) return true
   if (snapshot.visibility === 'public') return true
+  if (!authority.private) return false
   if (snapshot.ownerUserId !== null && snapshot.ownerUserId === userId) return true
   return snapshot.grantedUserIds.has(userId)
 }
@@ -240,6 +262,7 @@ export function isVisibleToAudienceSnapshot(
 export function isVisibleRow(actor: Actor, row: AclRow, grantedIds: ReadonlySet<string>): boolean {
   if (hasResourceAclBypass(actor)) return true
   if ((row.visibility ?? 'public') === 'public') return true
+  if (!hasPrivateResourceAccess(actor)) return false
   if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
   return grantedIds.has(row.id)
 }
@@ -276,9 +299,10 @@ export async function discloseRefs(
   type: AclResourceType,
   rows: ReadonlyArray<AclRow & { name: string }>,
 ): Promise<DisclosedRefs> {
-  const granted = hasResourceAclBypass(actor)
-    ? new Set<string>()
-    : await listGrantedResourceIds(db, actor, type)
+  const granted =
+    hasResourceAclBypass(actor) || !hasPrivateResourceAccess(actor)
+      ? new Set<string>()
+      : await listGrantedResourceIds(db, actor, type)
   return discloseRefsSync(actor, rows, granted)
 }
 
@@ -310,6 +334,9 @@ export async function filterVisibleRows<T extends AclRow>(
   rows: readonly T[],
 ): Promise<T[]> {
   if (hasResourceAclBypass(actor)) return [...rows]
+  if (!hasPrivateResourceAccess(actor)) {
+    return rows.filter((row) => (row.visibility ?? 'public') === 'public')
+  }
   const granted = await listGrantedResourceIds(db, actor, type)
   return rows.filter((r) => isVisibleRow(actor, r, granted))
 }
@@ -323,6 +350,7 @@ export async function canViewResource(
 ): Promise<boolean> {
   if (hasResourceAclBypass(actor)) return true
   if ((row.visibility ?? 'public') === 'public') return true
+  if (!hasPrivateResourceAccess(actor)) return false
   if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
   const rows = await db
     .select({ resourceId: resourceGrants.resourceId })
@@ -341,6 +369,7 @@ export function canViewResourceInTx(
 ): boolean {
   if (hasResourceAclBypass(actor)) return true
   if ((row.visibility ?? 'public') === 'public') return true
+  if (!hasPrivateResourceAccess(actor)) return false
   if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
   return (
     tx
@@ -367,6 +396,7 @@ export async function requireResourceView(
 
 export function isResourceOwner(actor: Actor, row: AclRow): boolean {
   if (hasResourceAclBypass(actor)) return true
+  if ((row.visibility ?? 'public') === 'private' && !hasPrivateResourceAccess(actor)) return false
   return row.ownerUserId != null && row.ownerUserId === actor.user.id
 }
 

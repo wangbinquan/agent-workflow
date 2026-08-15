@@ -39,6 +39,7 @@ import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
+import { usePermission } from '@/hooks/useActor'
 import { validateAgentPortState } from '@/lib/agent-ports'
 import { Route as agentsRoute } from './agents'
 import type { AgentResourceStatus } from '@/lib/agent-resource-status'
@@ -57,6 +58,9 @@ function AgentDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
+  const canUpdate = usePermission('agents:update')
+  const canDelete = usePermission('agents:delete')
+  const canExecuteTasks = usePermission('tasks:execute')
   const tour = useTour()
   const [activeTab, setActiveTab] = useState<AgentTab>('basics')
   const [jsonFocusTarget, setJsonFocusTarget] = useState<AgentJsonFieldKey>()
@@ -159,37 +163,52 @@ function AgentDetailPage() {
       <DetailHeaderActions
         title={query.data?.name ?? id}
         headingLevel={2}
-        acl={{
-          resourceBaseUrl: `/api/agents/${encodeURIComponent(id)}`,
-          invalidateKey: ['agents'],
-        }}
-        save={{
-          label: save.isPending ? t('common.saving') : t('common.save'),
-          onClick: () => {
-            if (
-              draft !== undefined &&
-              jsonValid &&
-              portValidation.valid &&
-              !save.isPending &&
-              !del.isPending
-            ) {
-              save.mutate({ submitted: draft, release: beginBusy(id) })
-            }
-          },
-          disabled:
-            save.isPending || del.isPending || !loaded || !portValidation.valid || !jsonValid,
-          testid: 'agent-save-button',
-        }}
-        del={{
-          label: t('common.delete'),
-          confirmName: query.data?.name ?? id,
-          resourceType: 'agent',
-          onConfirm: (ctx) => {
-            if (save.isPending || del.isPending) return Promise.resolve()
-            return del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(id) })
-          },
-          disabled: del.isPending || save.isPending,
-        }}
+        acl={
+          canUpdate
+            ? {
+                resourceBaseUrl: `/api/agents/${encodeURIComponent(id)}`,
+                invalidateKey: ['agents'],
+              }
+            : undefined
+        }
+        save={
+          canUpdate
+            ? {
+                label: save.isPending ? t('common.saving') : t('common.save'),
+                onClick: () => {
+                  if (
+                    draft !== undefined &&
+                    jsonValid &&
+                    portValidation.valid &&
+                    !save.isPending &&
+                    !del.isPending
+                  ) {
+                    save.mutate({ submitted: draft, release: beginBusy(id) })
+                  }
+                },
+                disabled:
+                  save.isPending || del.isPending || !loaded || !portValidation.valid || !jsonValid,
+                testid: 'agent-save-button',
+              }
+            : undefined
+        }
+        del={
+          canDelete
+            ? {
+                label: t('common.delete'),
+                confirmName: query.data?.name ?? id,
+                resourceType: 'agent',
+                onConfirm: (ctx) => {
+                  if (save.isPending || del.isPending) return Promise.resolve()
+                  return del.mutateAsync({
+                    confirm: ctx?.typedConfirm ?? '',
+                    release: beginBusy(id),
+                  })
+                },
+                disabled: del.isPending || save.isPending,
+              }
+            : undefined
+        }
         errors={[save.error, del.error]}
         moreActions={
           <ResourcePackageExportButton
@@ -213,7 +232,8 @@ function AgentDetailPage() {
               mount={{ resourceType: 'agent', resourceId: id }}
               data-testid="agent-intent-entry"
             />
-            {query.data?.builtin !== true &&
+            {canExecuteTasks &&
+              query.data?.builtin !== true &&
               (resourceStatusQuery.data?.ok !== false ? (
                 <Link
                   to="/tasks/new"
@@ -268,7 +288,7 @@ function AgentDetailPage() {
       </FeedbackStack>
       <AgentForm
         value={draft ?? emptyAgent()}
-        onChange={setDraft}
+        onChange={canUpdate ? setDraft : () => undefined}
         resourceId={id}
         idPrefix="agents-detail"
         nameLocked
@@ -277,7 +297,7 @@ function AgentDetailPage() {
         onTabChange={setActiveTab}
         hasExternalPortAlert={blockingPortIssues.length > 0}
         jsonDraft={jsonDraft}
-        onJsonDraftChange={setJsonDraft}
+        onJsonDraftChange={canUpdate ? setJsonDraft : () => undefined}
         focusJsonField={jsonFocusTarget}
         onJsonFocusHandled={clearJsonFocusTarget}
         resourceStatus={resourceStatusQuery.data}

@@ -13,6 +13,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { DependencyAutodetectDialog } from '../src/components/agents/DependencyAutodetectDialog'
 import type { DetectionResult } from '../src/lib/agent-dep-detect'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 
 const FULL_RESULT: DetectionResult = {
   agents: {
@@ -32,6 +33,7 @@ const EMPTY_RESULT: DetectionResult = {
 
 function renderDialog(node: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(queryClient)
   return render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>)
 }
 

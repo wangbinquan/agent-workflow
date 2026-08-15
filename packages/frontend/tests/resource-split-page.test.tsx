@@ -182,6 +182,7 @@ function renderSplit(opts: {
           newActive={isNew}
           newLabel="+ New agent"
           newTo="/agents/new"
+          canCreate
           searchPlaceholder="Search…"
           emptyListText="No agents yet"
           emptyDescription={opts.emptyDescription}

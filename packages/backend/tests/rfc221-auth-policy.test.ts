@@ -17,6 +17,7 @@ import {
   createPasswordLoginSession,
   getAuthMethodDiscovery,
   getAuthLoginPolicy,
+  setOidcDefaultRole,
   setPasswordLoginEnabled,
 } from '../src/auth/loginPolicy'
 import { createUser } from '../src/services/users'
@@ -42,9 +43,11 @@ describe('RFC-221 migration 0110', () => {
     migrate(db, { migrationsFolder: MIGRATIONS })
     const row = raw.query("SELECT * FROM auth_login_policy WHERE id = 'global'").get() as {
       password_login_enabled: number
+      oidc_default_role: string
       bootstrap_completed_at: number | null
     }
     expect(row.password_login_enabled).toBe(1)
+    expect(row.oidc_default_role).toBe('guest')
     expect(row.bootstrap_completed_at).toBeNull()
   })
 
@@ -160,6 +163,7 @@ describe('RFC-221 auth policy service', () => {
     })
     expect(getAuthLoginPolicy(db)).toEqual({
       passwordLoginEnabled: true,
+      oidcDefaultRole: 'guest',
       bootstrapCompletedAt: 1234,
       updatedAt: 1234,
     })
@@ -201,6 +205,14 @@ describe('RFC-221 auth policy service', () => {
       .run()
     expect(setPasswordLoginEnabled(db, false).passwordLoginEnabled).toBe(false)
     expect(setPasswordLoginEnabled(db, true).passwordLoginEnabled).toBe(true)
+  })
+
+  test('OAuth/OIDC new-account preset is guest by default and configurable to user', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    expect(getAuthLoginPolicy(db).oidcDefaultRole).toBe('guest')
+    expect(setOidcDefaultRole(db, 'user', 200).oidcDefaultRole).toBe('user')
+    expect(getAuthLoginPolicy(db)).toMatchObject({ oidcDefaultRole: 'user', updatedAt: 200 })
+    expect(setOidcDefaultRole(db, 'guest', 201).oidcDefaultRole).toBe('guest')
   })
 
   test('password-session commit rechecks policy and leaves zero side effects', async () => {

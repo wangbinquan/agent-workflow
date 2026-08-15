@@ -20,6 +20,7 @@ import { ResourceGalleryPage, type GalleryCardItem } from '@/components/gallery/
 import { WORKFLOW_ICON } from '@/components/icons/resourceIcons'
 import { buildQuickCreateWorkflowPayload } from '@/lib/workflow-form'
 import { IntentEntryButton } from '@/components/IntentEntryButton'
+import { usePermission } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
 export interface WorkflowsSearch extends Record<string, unknown> {
@@ -64,6 +65,8 @@ function WorkflowsPage() {
   const routeNavigate = Route.useNavigate()
   const search = Route.useSearch()
   const qc = useQueryClient()
+  const canCreate = usePermission('workflows:create')
+  const canWriteIntent = usePermission('intent:write')
   // RFC-151 PR-3 — shared list shell: query + owner lookup. The delete
   // mutation is unused here since RFC-191 (delete lives in the editor header).
   const { data, isLoading, error, owners } = useResourceList<Workflow>({
@@ -102,11 +105,12 @@ function WorkflowsPage() {
 
   const resetCreate = create.reset
   const openCreate = useCallback((): void => {
+    if (!canCreate) return
     setCreateName('')
     setCreateDescription('')
     resetCreate()
     setCreateSurfaceTracked('quick')
-  }, [resetCreate, setCreateSurfaceTracked])
+  }, [canCreate, resetCreate, setCreateSurfaceTracked])
 
   // RFC-198 one-shot deep action. Replacing the flagged entry means closing,
   // refreshing the canonical URL, Back, and Forward cannot replay the dialog.
@@ -192,16 +196,18 @@ function WorkflowsPage() {
     <ResourceGalleryPage
       title={t('workflows.title')}
       headerActions={
-        <>
-          <IntentEntryButton
-            variant="create"
-            hint="workflow"
-            data-testid="workflows-intent-entry"
-          />
-          {createAction}
-        </>
+        canCreate || canWriteIntent ? (
+          <>
+            <IntentEntryButton
+              variant="create"
+              hint="workflow"
+              data-testid="workflows-intent-entry"
+            />
+            {canCreate && createAction}
+          </>
+        ) : undefined
       }
-      emptyAction={createAction}
+      emptyAction={canCreate ? createAction : undefined}
       emptyIcon={WORKFLOW_ICON}
       items={items}
       isLoading={isLoading}
@@ -215,50 +221,54 @@ function WorkflowsPage() {
       emptyTestid="workflows-empty"
       loadingTestid="workflows-loading"
     >
-      <QuickCreateDialog
-        open={createSurface === 'quick'}
-        onClose={() => setCreateSurfaceTracked('none')}
-        title={t('editor.newTitle')}
-        createLabel={t('workflows.createButton')}
-        nameLabel={t('editor.fieldName')}
-        nameHint={t('workflows.fieldNameHint')}
-        descriptionLabel={t('editor.fieldDescription')}
-        name={createName}
-        onNameChange={setCreateName}
-        description={createDescription}
-        onDescriptionChange={setCreateDescription}
-        nameError={
-          createName !== '' && !builtCreate.ok && builtCreate.errors.name !== undefined
-            ? t(builtCreate.errors.name)
-            : undefined
-        }
-        canCreate={builtCreate.ok}
-        pending={create.isPending}
-        submitError={
-          create.error !== null && create.error !== undefined
-            ? describeApiError(create.error)
-            : undefined
-        }
-        onCreate={() => {
-          if (builtCreate.ok) create.mutate(builtCreate.payload)
-        }}
-        triggerRef={createTriggerRef}
-        testidPrefix="workflow"
-        alternativeAction={{
-          label: t('resourcePackage.importTitle'),
-          description: t('resourcePackage.createMethodHint'),
-          testid: 'workflow-create-package',
-          onSelect: () => {
-            setCreateSurfaceTracked('package')
-          },
-        }}
-      />
-      <ResourcePackageImportDialog
-        expectedRootType="workflow"
-        open={createSurface === 'package'}
-        onClose={() => setCreateSurfaceTracked('quick')}
-        triggerRef={createTriggerRef}
-      />
+      {canCreate && (
+        <QuickCreateDialog
+          open={createSurface === 'quick'}
+          onClose={() => setCreateSurfaceTracked('none')}
+          title={t('editor.newTitle')}
+          createLabel={t('workflows.createButton')}
+          nameLabel={t('editor.fieldName')}
+          nameHint={t('workflows.fieldNameHint')}
+          descriptionLabel={t('editor.fieldDescription')}
+          name={createName}
+          onNameChange={setCreateName}
+          description={createDescription}
+          onDescriptionChange={setCreateDescription}
+          nameError={
+            createName !== '' && !builtCreate.ok && builtCreate.errors.name !== undefined
+              ? t(builtCreate.errors.name)
+              : undefined
+          }
+          canCreate={builtCreate.ok}
+          pending={create.isPending}
+          submitError={
+            create.error !== null && create.error !== undefined
+              ? describeApiError(create.error)
+              : undefined
+          }
+          onCreate={() => {
+            if (builtCreate.ok) create.mutate(builtCreate.payload)
+          }}
+          triggerRef={createTriggerRef}
+          testidPrefix="workflow"
+          alternativeAction={{
+            label: t('resourcePackage.importTitle'),
+            description: t('resourcePackage.createMethodHint'),
+            testid: 'workflow-create-package',
+            onSelect: () => {
+              setCreateSurfaceTracked('package')
+            },
+          }}
+        />
+      )}
+      {canCreate && (
+        <ResourcePackageImportDialog
+          expectedRootType="workflow"
+          open={createSurface === 'package'}
+          onClose={() => setCreateSurfaceTracked('quick')}
+          triggerRef={createTriggerRef}
+        />
+      )}
     </ResourceGalleryPage>
   )
 }

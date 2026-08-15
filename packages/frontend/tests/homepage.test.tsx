@@ -22,6 +22,7 @@ import type * as RouterModule from '@tanstack/react-router'
 import type { TaskStatus } from '@agent-workflow/shared'
 import '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { fullAccessActorResponse } from './unexpectedNetwork'
 
 vi.mock('@tanstack/react-router', async () => {
   const actual = await vi.importActual<typeof RouterModule>('@tanstack/react-router')
@@ -72,6 +73,7 @@ function mockEndpoints(opts: {
 }): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
     const s = typeof url === 'string' ? url : url.toString()
+    if (s.includes('/api/auth/me')) return fullAccessActorResponse()
     // RFC-190: capability tiles + hero pulse read the aggregate endpoint.
     if (s.includes('/api/overview')) {
       return json(
@@ -220,9 +222,9 @@ describe('RFC-032 Homepage dashboard', () => {
     mockEndpoints({})
     wrap(<Homepage />)
     await waitFor(() => {
-      expect(screen.getByTestId('homepage')).toBeTruthy()
+      expect(screen.getByTestId('homepage-section-running')).toBeTruthy()
     })
-    expect(screen.getByTestId('homepage-section-running')).toBeTruthy()
+    expect(screen.getByTestId('homepage')).toBeTruthy()
     expect(screen.getByTestId('homepage-section-inbox')).toBeTruthy()
     expect(screen.getByTestId('homepage-section-recent')).toBeTruthy()
     const startBtn = screen.getByTestId('homepage-start-task')

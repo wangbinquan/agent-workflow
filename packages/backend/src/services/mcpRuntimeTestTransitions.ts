@@ -148,7 +148,10 @@ export function transitionMcpAclRuntimeTestsInTx(
       accountPermissions !== null &&
       isVisibleToAudienceSnapshot(
         session.ownerUserId,
-        accountPermissions.has('resource-acl:bypass'),
+        {
+          bypass: accountPermissions.has('resource-acl:bypass'),
+          private: accountPermissions.has('resource-acl:private'),
+        },
         input,
       )
     if (!stillVisible) {

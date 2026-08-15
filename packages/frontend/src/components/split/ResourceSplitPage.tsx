@@ -95,6 +95,7 @@ export interface ResourceSplitPageProps {
   newActive: boolean
   newLabel: string
   newTo: ResourceNewTo
+  canCreate: boolean
   searchPlaceholder: string
   /** Shown when the resource list itself is empty (vs. filtered-to-nothing). */
   emptyListText: string
@@ -477,15 +478,17 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
                 )
               })}
             </div>
-            <Link
-              ref={newLinkRef}
-              to={props.newTo}
-              className={'btn btn--primary split__new' + (props.newActive ? ' is-active' : '')}
-              data-testid="split-new-button"
-              data-tour="split-new"
-            >
-              {props.newLabel}
-            </Link>
+            {props.canCreate && (
+              <Link
+                ref={newLinkRef}
+                to={props.newTo}
+                className={'btn btn--primary split__new' + (props.newActive ? ' is-active' : '')}
+                data-testid="split-new-button"
+                data-tour="split-new"
+              >
+                {props.newLabel}
+              </Link>
+            )}
           </aside>
           <section ref={detailPaneRef} className="split__detail" data-testid="split-detail">
             {mobileView === 'detail' &&

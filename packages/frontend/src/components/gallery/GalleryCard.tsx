@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { Card } from '@/components/Card'
 import { WORKFLOW_ICON, WORKGROUP_ICON } from '@/components/icons/resourceIcons'
 import { RelativeTime } from '@/components/RelativeTime'
+import { usePermission } from '@/hooks/useActor'
 
 /** The task-wizard deep-link payloads the launch button may carry
  *  (`tasks.new.tsx` validateSearch contract). */
@@ -63,6 +64,7 @@ export type GalleryCardItem = WorkflowGalleryCardItem | WorkgroupGalleryCardItem
 
 export function GalleryCard({ item }: { item: GalleryCardItem }): ReactElement {
   const { t } = useTranslation()
+  const canExecuteTasks = usePermission('tasks:execute')
   const descriptionId = useId()
   const updatedId = useId()
   const hasSubtitle = item.subtitle !== undefined && item.subtitle !== ''
@@ -88,7 +90,7 @@ export function GalleryCard({ item }: { item: GalleryCardItem }): ReactElement {
             <RelativeTime ts={item.updatedAt} />
           </span>
           <span
-            className={`gallery-card__ops${item.launch === undefined ? ' gallery-card__ops--passive' : ''}`}
+            className={`gallery-card__ops${item.launch === undefined || !canExecuteTasks ? ' gallery-card__ops--passive' : ''}`}
           >
             {item.actionHint !== undefined && (
               <span className="gallery-card__action-hint">
@@ -96,7 +98,7 @@ export function GalleryCard({ item }: { item: GalleryCardItem }): ReactElement {
                 {item.actionHint}
               </span>
             )}
-            {item.launch !== undefined && (
+            {item.launch !== undefined && canExecuteTasks && (
               <Link
                 to="/tasks/new"
                 search={item.launch}

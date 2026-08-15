@@ -33,6 +33,7 @@ import {
 } from '@tanstack/react-router'
 import type { Workflow } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { fullAccessActorResponse, seedFullAccessActor } from './unexpectedNetwork'
 import { TextInput } from '../src/components/Form'
 import {
   ResourceGalleryPage,
@@ -84,6 +85,7 @@ function installFetch(workflows: Workflow[]): void {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
+    if (new URL(url).pathname === '/api/auth/me') return fullAccessActorResponse()
     if (url.includes('/api/users/lookup')) return json([])
     if (url.endsWith('/api/workflows')) return json(workflows)
     return json({})
@@ -113,6 +115,7 @@ function renderWithRouter(component: () => React.ReactElement, initialEntry: str
     history: createMemoryHistory({ initialEntries: [initialEntry] }),
   })
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(qc)
   render(
     <QueryClientProvider client={qc}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -591,6 +594,7 @@ describe('/workflows gallery assembly (T3)', () => {
           status,
           headers: { 'content-type': 'application/json' },
         })
+      if (new URL(url).pathname === '/api/auth/me') return fullAccessActorResponse()
       if (url.includes('/api/users/lookup')) return json([])
       if (url.endsWith('/api/workflows')) {
         workflowRequests += 1
@@ -645,7 +649,7 @@ describe('gallery callsite locks (T5)', () => {
         "clearSearchLabel={t('common.clearSearch')}",
       )
       expect(body, `${rel} moves its primary CTA into genuine empty`).toContain(
-        'emptyAction={createAction}',
+        'emptyAction={canCreate ? createAction : undefined}',
       )
     }
   })

@@ -123,3 +123,12 @@ export function usePermission(perm: Permission): boolean {
   }
   return actor.data.permissions.includes(perm)
 }
+
+/** Settled current-authority snapshot for permission-shaped presentation. */
+export function useCurrentPermissions(): ReadonlySet<Permission> {
+  const actor = useActor()
+  if (actor.status !== 'success' || actor.fetchStatus !== 'idle' || !isUsableActor(actor.data)) {
+    return new Set()
+  }
+  return new Set(actor.data.permissions)
+}

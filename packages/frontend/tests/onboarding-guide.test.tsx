@@ -11,6 +11,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type * as RouterModule from '@tanstack/react-router'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 import { TourProvider } from '../src/components/tour/SpotlightTour'
 
 vi.mock('@tanstack/react-router', async () => {
@@ -61,6 +62,7 @@ function stubFetch(routes: RouteJson[]) {
 
 function wrap(node: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+  seedFullAccessActor(qc)
   // The launcher (and the spotlight overlay it starts) live under a TourProvider,
   // mounted app-wide in RootShell.
   return render(

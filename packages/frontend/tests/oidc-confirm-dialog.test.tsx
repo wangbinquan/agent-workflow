@@ -92,6 +92,7 @@ function renderAuthentication(initialRows: Provider[]) {
     if (url === '/api/oidc/login-policy') {
       return Promise.resolve({
         passwordLoginEnabled: true,
+        oidcDefaultRole: 'guest',
         bootstrapCompletedAt: 1,
         updatedAt: 1,
       })

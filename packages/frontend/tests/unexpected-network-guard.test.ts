@@ -6,8 +6,15 @@ import { describe, expect, test, vi } from 'vitest'
 import { takeUnexpectedNetworkRequests, unexpectedNetworkFetch } from './unexpectedNetwork'
 
 describe('unexpected network guard', () => {
-  test('setup installs a rejecting fetch and records the request', async () => {
+  test('setup supplies the shared authority fixture without weakening the network guard', async () => {
     expect(globalThis.fetch).toBe(unexpectedNetworkFetch)
+
+    const me = await globalThis.fetch('http://daemon.test/api/auth/me')
+    expect(me.status).toBe(200)
+    await expect(me.json()).resolves.toMatchObject({
+      user: { role: 'admin', status: 'active' },
+    })
+    expect(takeUnexpectedNetworkRequests()).toEqual([])
 
     await expect(
       globalThis.fetch('http://daemon.test/api/unmocked', { method: 'POST' }),

@@ -36,6 +36,7 @@ export function SkillVersionHistory({
   busy = false,
   onRestoreStart,
   onPendingChange,
+  canRestore = true,
 }: {
   skillId: string
   currentVersion: number
@@ -49,6 +50,8 @@ export function SkillVersionHistory({
   onRestoreStart?: () => void
   /** RFC-169: report restore-in-flight so the detail can disable Save too. */
   onPendingChange?: (pending: boolean) => void
+  /** Read-only viewers may compare revisions without mutating history. */
+  canRestore?: boolean
 }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -158,18 +161,20 @@ export function SkillVersionHistory({
                             >
                               {t('skills.versionCompare')}
                             </button>
-                            <ConfirmButton
-                              size="sm"
-                              label={t('skills.versionRestore')}
-                              confirmLabel={t('skills.versionRestoreConfirm', {
-                                n: v.versionIndex,
-                              })}
-                              onConfirm={() => {
-                                onRestoreStart?.()
-                                restore.mutate(v.versionIndex)
-                              }}
-                              disabled={restore.isPending || busy}
-                            />
+                            {canRestore && (
+                              <ConfirmButton
+                                size="sm"
+                                label={t('skills.versionRestore')}
+                                confirmLabel={t('skills.versionRestoreConfirm', {
+                                  n: v.versionIndex,
+                                })}
+                                onConfirm={() => {
+                                  onRestoreStart?.()
+                                  restore.mutate(v.versionIndex)
+                                }}
+                                disabled={restore.isPending || busy}
+                              />
+                            )}
                           </>
                         )}
                       </td>

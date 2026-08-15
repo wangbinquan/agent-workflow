@@ -19,7 +19,13 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { createRoute, Link, redirect, useRouterState } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AuthLoginPolicy, Config, ConfigPatch, OidcProvider } from '@agent-workflow/shared'
+import type {
+  AuthLoginPolicy,
+  Config,
+  ConfigPatch,
+  OidcProvider,
+  UpdateAuthLoginPolicyBody,
+} from '@agent-workflow/shared'
 import { api, apiPostMultipart, ApiError } from '@/api/client'
 import {
   SettingsDraftProvider,
@@ -1786,6 +1792,7 @@ function RenderingTab({ config }: TabProps) {
 function AuthenticationTab() {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const canConfigureOidc = usePermission('oidc:configure')
   const [editing, setEditing] = useState<OidcProviderRow | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [confirmPasswordOff, setConfirmPasswordOff] = useState(false)
@@ -1807,9 +1814,8 @@ function AuthenticationTab() {
     queryKey: ['oidc-login-policy'],
     queryFn: ({ signal }) => api.get('/api/oidc/login-policy', undefined, signal),
   })
-  const updateLoginPolicy = useMutation<AuthLoginPolicy, unknown, boolean>({
-    mutationFn: (passwordLoginEnabled) =>
-      api.put('/api/oidc/login-policy', { passwordLoginEnabled }),
+  const updateLoginPolicy = useMutation<AuthLoginPolicy, unknown, UpdateAuthLoginPolicyBody>({
+    mutationFn: (patch) => api.put('/api/oidc/login-policy', patch),
     onSuccess: (next) => {
       qc.setQueryData(['oidc-login-policy'], next)
     },
@@ -1906,12 +1912,29 @@ function AuthenticationTab() {
               <Switch
                 checked={loginPolicy.data.passwordLoginEnabled}
                 onChange={(enabled) => {
-                  if (enabled) updateLoginPolicy.mutate(true)
+                  if (enabled) updateLoginPolicy.mutate({ passwordLoginEnabled: true })
                   else if (!loginPolicyLocked) setConfirmPasswordOff(true)
                 }}
-                disabled={loginPolicyLocked || updateLoginPolicy.isPending}
+                disabled={!canConfigureOidc || loginPolicyLocked || updateLoginPolicy.isPending}
                 aria-label={t('settings.auth.passwordLoginLabel')}
                 data-testid="password-login-switch"
+              />
+            </div>
+            <div className="auth-login-policy__row">
+              <div>
+                <strong>{t('settings.auth.oidcDefaultRoleLabel')}</strong>
+                <p>{t('settings.auth.oidcDefaultRoleHint')}</p>
+              </div>
+              <Segmented<'guest' | 'user'>
+                value={loginPolicy.data.oidcDefaultRole}
+                onChange={(oidcDefaultRole) => updateLoginPolicy.mutate({ oidcDefaultRole })}
+                ariaLabel={t('settings.auth.oidcDefaultRoleLabel')}
+                testidPrefix="oidc-default-role"
+                disabled={!canConfigureOidc || updateLoginPolicy.isPending}
+                options={[
+                  { value: 'guest', label: t('settings.auth.oidcDefaultRoleGuest') },
+                  { value: 'user', label: t('settings.auth.oidcDefaultRoleUser') },
+                ]}
               />
             </div>
             <div className="auth-login-policy__row auth-login-policy__row--readonly">
@@ -2085,7 +2108,7 @@ function AuthenticationTab() {
         confirmLabel={t('settings.auth.disablePasswordConfirm')}
         tone="danger"
         onConfirm={async () => {
-          await updateLoginPolicy.mutateAsync(false)
+          await updateLoginPolicy.mutateAsync({ passwordLoginEnabled: false })
         }}
         onClose={() => setConfirmPasswordOff(false)}
       />

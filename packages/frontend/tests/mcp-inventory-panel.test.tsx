@@ -7,6 +7,7 @@ import type { McpProbe } from '@agent-workflow/shared'
 import { McpInventoryPanel } from '../src/components/mcps/McpInventoryPanel'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
+import { fullAccessActorResponse } from './unexpectedNetwork'
 
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
@@ -33,6 +34,7 @@ function mockProbeGet(name: string, probe: McpProbe | null): void {
         headers: { 'content-type': 'application/json' },
       })
     }
+    if (url.endsWith('/api/auth/me')) return fullAccessActorResponse()
     return new Response('not found', { status: 404 })
   })
 }

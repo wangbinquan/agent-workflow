@@ -29,6 +29,7 @@ import {
   type QuickCreateWorkgroupBody,
 } from '@/lib/workgroup-form'
 import { IntentEntryButton } from '@/components/IntentEntryButton'
+import { usePermission } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -41,6 +42,8 @@ function WorkgroupsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const canCreate = usePermission('workgroups:create')
+  const canWriteIntent = usePermission('intent:write')
   // RFC-151 PR-3 — shared list shell: query + owner lookup. The delete
   // mutation is unused here since RFC-191 (delete lives in the detail header).
   const { data, isLoading, error, owners } = useResourceList<Workgroup>({
@@ -79,6 +82,7 @@ function WorkgroupsPage() {
   })
 
   function openCreate(): void {
+    if (!canCreate) return
     setCreateName('')
     setCreateDescription('')
     create.reset()
@@ -186,16 +190,18 @@ function WorkgroupsPage() {
     <ResourceGalleryPage
       title={t('workgroups.title')}
       headerActions={
-        <>
-          <IntentEntryButton
-            variant="create"
-            hint="workgroup"
-            data-testid="workgroups-intent-entry"
-          />
-          {createAction}
-        </>
+        canCreate || canWriteIntent ? (
+          <>
+            <IntentEntryButton
+              variant="create"
+              hint="workgroup"
+              data-testid="workgroups-intent-entry"
+            />
+            {canCreate && createAction}
+          </>
+        ) : undefined
       }
-      emptyAction={createAction}
+      emptyAction={canCreate ? createAction : undefined}
       emptyIcon={WORKGROUP_ICON}
       items={items}
       isLoading={isLoading}
@@ -209,51 +215,55 @@ function WorkgroupsPage() {
       emptyTestid="workgroups-empty"
       loadingTestid="workgroups-loading"
     >
-      <QuickCreateDialog
-        open={createSurface === 'quick'}
-        onClose={() => setCreateSurfaceTracked('none')}
-        title={t('workgroups.newTitle')}
-        createLabel={t('workgroups.createButton')}
-        nameLabel={t('workgroups.fieldName')}
-        nameHint={t('workgroups.fieldNameHint')}
-        descriptionLabel={t('workgroups.fieldDescription')}
-        name={createName}
-        onNameChange={setCreateName}
-        description={createDescription}
-        onDescriptionChange={setCreateDescription}
-        nameError={
-          createName !== '' && !builtCreate.ok && builtCreate.errors.name !== undefined
-            ? t(builtCreate.errors.name)
-            : undefined
-        }
-        canCreate={builtCreate.ok}
-        pending={create.isPending}
-        submitError={
-          create.error !== null && create.error !== undefined
-            ? describeApiError(create.error)
-            : undefined
-        }
-        onCreate={() => {
-          if (builtCreate.ok) create.mutate(builtCreate.payload)
-        }}
-        triggerRef={createTriggerRef}
-        testidPrefix="workgroup"
-        descriptionMaxLength={4096}
-        alternativeAction={{
-          label: t('resourcePackage.importTitle'),
-          description: t('resourcePackage.createMethodHint'),
-          testid: 'workgroup-create-package',
-          onSelect: () => {
-            setCreateSurfaceTracked('package')
-          },
-        }}
-      />
-      <ResourcePackageImportDialog
-        expectedRootType="workgroup"
-        open={createSurface === 'package'}
-        onClose={() => setCreateSurfaceTracked('quick')}
-        triggerRef={createTriggerRef}
-      />
+      {canCreate && (
+        <QuickCreateDialog
+          open={createSurface === 'quick'}
+          onClose={() => setCreateSurfaceTracked('none')}
+          title={t('workgroups.newTitle')}
+          createLabel={t('workgroups.createButton')}
+          nameLabel={t('workgroups.fieldName')}
+          nameHint={t('workgroups.fieldNameHint')}
+          descriptionLabel={t('workgroups.fieldDescription')}
+          name={createName}
+          onNameChange={setCreateName}
+          description={createDescription}
+          onDescriptionChange={setCreateDescription}
+          nameError={
+            createName !== '' && !builtCreate.ok && builtCreate.errors.name !== undefined
+              ? t(builtCreate.errors.name)
+              : undefined
+          }
+          canCreate={builtCreate.ok}
+          pending={create.isPending}
+          submitError={
+            create.error !== null && create.error !== undefined
+              ? describeApiError(create.error)
+              : undefined
+          }
+          onCreate={() => {
+            if (builtCreate.ok) create.mutate(builtCreate.payload)
+          }}
+          triggerRef={createTriggerRef}
+          testidPrefix="workgroup"
+          descriptionMaxLength={4096}
+          alternativeAction={{
+            label: t('resourcePackage.importTitle'),
+            description: t('resourcePackage.createMethodHint'),
+            testid: 'workgroup-create-package',
+            onSelect: () => {
+              setCreateSurfaceTracked('package')
+            },
+          }}
+        />
+      )}
+      {canCreate && (
+        <ResourcePackageImportDialog
+          expectedRootType="workgroup"
+          open={createSurface === 'package'}
+          onClose={() => setCreateSurfaceTracked('quick')}
+          triggerRef={createTriggerRef}
+        />
+      )}
     </ResourceGalleryPage>
   )
 }

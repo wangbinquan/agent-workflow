@@ -8,6 +8,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { ReactElement } from 'react'
+import { usePermission } from '@/hooks/useActor'
 
 export interface IntentEntryButtonProps {
   variant: 'create' | 'modify'
@@ -23,10 +24,12 @@ export interface IntentEntryButtonProps {
   'data-testid'?: string
 }
 
-export function IntentEntryButton(props: IntentEntryButtonProps): ReactElement {
+export function IntentEntryButton(props: IntentEntryButtonProps): ReactElement | null {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const canWriteIntent = usePermission('intent:write')
   const label = props.variant === 'create' ? t('intent.entryCreate') : t('intent.entryModify')
+  if (!canWriteIntent) return null
   return (
     <button
       type="button"

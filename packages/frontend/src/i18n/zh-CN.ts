@@ -1178,9 +1178,11 @@ export interface Resources {
       title: string
     }
     roleOption: {
+      guest: string
       user: string
       admin: string
       manager: string
+      guestDesc: string
       userDesc: string
       adminDesc: string
       managerDesc: string
@@ -1616,6 +1618,10 @@ export interface Resources {
       passwordLoginLabel: string
       passwordLoginHint: string
       passwordLoginLockedHint: string
+      oidcDefaultRoleLabel: string
+      oidcDefaultRoleHint: string
+      oidcDefaultRoleGuest: string
+      oidcDefaultRoleUser: string
       bootstrapTokenLabel: string
       bootstrapTokenHint: string
       bootstrapPending: string
@@ -6736,9 +6742,11 @@ export const zhCN: Resources = {
       title: '管理 {{name}}',
     },
     roleOption: {
+      guest: '游客',
       user: '普通用户',
       admin: '管理员',
       manager: '资源管理员',
+      guestDesc: '默认只能读取公开的 Agent、Skill、MCP、Plugin、Workflow 与 Workgroup。',
       userDesc: '默认包含资源读取、任务启动与个人账户管理；其余权限可在清单中追加。',
       adminDesc: '默认包含当前目录中的全部权限。',
       managerDesc: '默认包含资源、记忆、仓库与任务管理；其余权限可在清单中追加。',
@@ -7197,6 +7205,11 @@ export const zhCN: Resources = {
       passwordLoginLabel: '用户名和密码登录',
       passwordLoginHint: '关闭后，登录页和密码登录 API 都只接受已启用的身份提供方。',
       passwordLoginLockedHint: '尚无已启用的身份提供方，用户名密码登录必须保持开启。',
+      oidcDefaultRoleLabel: 'OAuth/OIDC 新用户默认角色',
+      oidcDefaultRoleHint:
+        '仅用于身份提供方首次自动创建账号；既有账号和管理员预先邀请的账号不受影响。',
+      oidcDefaultRoleGuest: '游客（只读）',
+      oidcDefaultRoleUser: '普通用户',
       bootstrapTokenLabel: '初始化 Token',
       bootstrapTokenHint: '仅用于首次创建管理员；交接完成后不能再次启用。',
       bootstrapPending: '等待交接',

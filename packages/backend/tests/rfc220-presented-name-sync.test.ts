@@ -308,8 +308,8 @@ describe('RFC-220 S13 — write-time subjectClaim revalidation + atomic provisio
         .get(userId),
     ).toEqual({
       actor_kind: 'system',
-      before_role: 'user',
-      after_role: 'user',
+      before_role: 'guest',
+      after_role: 'guest',
       access_revision: 0,
     })
   })

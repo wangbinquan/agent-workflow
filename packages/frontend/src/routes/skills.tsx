@@ -8,6 +8,7 @@ import { Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-r
 import { useTranslation } from 'react-i18next'
 import type { Skill } from '@agent-workflow/shared'
 import { useResourceList } from '@/hooks/useResourceList'
+import { usePermission } from '@/hooks/useActor'
 import { EmptyState } from '@/components/EmptyState'
 import { ResourceBadges } from '@/components/ResourceBadges'
 import { ResourceSplitPage, type ResourceCardItem } from '@/components/split/ResourceSplitPage'
@@ -28,6 +29,7 @@ export const IndexRoute = createRoute({
 
 function SkillsSplitLayout() {
   const { t } = useTranslation()
+  const canCreate = usePermission('skills:create')
   const { data, isLoading, error, refetch, owners } = useResourceList<Skill>({
     queryKey: ['skills'],
     endpoint: '/api/skills',
@@ -77,6 +79,7 @@ function SkillsSplitLayout() {
       newActive={isNew}
       newLabel={t('skills.newButton')}
       newTo="/skills/new"
+      canCreate={canCreate}
       searchPlaceholder={t('common.searchEllipsis')}
       emptyListText={t('skills.emptyList')}
       emptyDescription={t('skills.emptyDescription')}

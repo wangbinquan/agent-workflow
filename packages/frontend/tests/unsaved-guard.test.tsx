@@ -105,6 +105,7 @@ function renderGuard(opts: { initial: string; Detail: () => ReactElement }) {
           newActive={false}
           newLabel="+ New"
           newTo="/agents/new"
+          canCreate
           searchPlaceholder="Search…"
           emptyListText="empty"
         >

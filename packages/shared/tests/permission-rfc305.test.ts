@@ -60,6 +60,9 @@ describe('RFC-305 exhaustive permission catalog', () => {
       'webhook-triggers:override-owner',
     ])
     expect(grantableAdditionalPermissions('admin')).toEqual([])
+    expect(grantableAdditionalPermissions('guest')).toHaveLength(66)
+    expect(grantableAdditionalPermissions('guest')).toContain('resource-acl:private')
+    expect(grantableAdditionalPermissions('guest')).toContain('tasks:execute')
   })
 
   test('historical identity bypasses are ordinary catalog permissions', () => {
@@ -148,6 +151,20 @@ describe('RFC-305 canonical additional grants', () => {
     expect(effective).toEqual(new Set(ROLE_PERMISSIONS.admin))
   })
 
+  test('a guest remains a preset and can be upgraded permission-by-permission without a role branch', () => {
+    const effective = resolveEffectiveAccountPermissions({
+      role: 'guest',
+      additionalPermissions: grantableAdditionalPermissions('guest'),
+    })
+    expect(effective).toEqual(new Set(ROLE_PERMISSIONS.admin))
+    expect(
+      normalizeAdditionalPermissionsForWrite({
+        role: 'guest',
+        additionalPermissions: ['resource-acl:private'],
+      }),
+    ).toEqual(['resource-acl:private'])
+  })
+
   test('role rebasing removes redundancy and never resurrects an unselected point', () => {
     const userEffective = resolveEffectiveAccountPermissions({
       role: 'user',
@@ -206,5 +223,28 @@ describe('RFC-305 PAT account cap', () => {
     for (const permission of formerIdentityCapabilities) {
       expect(token.has(permission)).toBe(false)
     }
+  })
+
+  test('private-resource range follows a guest account but is never selectable in the PAT matrix', () => {
+    const publicOnly = resolveEffectiveAccountPermissions({
+      role: 'guest',
+      additionalPermissions: [],
+    })
+    const privateGranted = resolveEffectiveAccountPermissions({
+      role: 'guest',
+      additionalPermissions: ['resource-acl:private'],
+    })
+    expect(
+      resolveTokenPermissions({ accountPermissions: publicOnly, matrix: [...PERMISSIONS] }).has(
+        'resource-acl:private',
+      ),
+    ).toBe(false)
+    expect(
+      resolveTokenPermissions({
+        accountPermissions: privateGranted,
+        matrix: [],
+      }).has('resource-acl:private'),
+    ).toBe(true)
+    expect(grantableMatrixPoints(privateGranted)).not.toContain('resource-acl:private')
   })
 })

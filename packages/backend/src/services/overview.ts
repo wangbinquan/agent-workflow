@@ -10,8 +10,7 @@
 // countCachedRepos (listCachedRepos does a per-repo 1+N task count).
 //
 // per-key null = the actor lacks the coarse `<res>:read` permission the list
-// route is gated by (server.ts gate block). workgroups / scheduled-tasks list
-// routes have no coarse gate → always numbers. tasks truth table (mirrors
+// route is gated by (server.ts gate block). tasks truth table (mirrors
 // routes/tasks.ts scope decision): read:all → unscoped; read:own →
 // owner∨collaborator; neither → null.
 
@@ -130,13 +129,19 @@ export async function buildOverview(
           )
         ).length,
     ),
-    // No coarse gate on the workgroups list route — always a number.
-    (async () =>
-      (await filterVisibleRows(db, actor, 'workgroup', await listWorkgroups(db))).length)(),
+    gatedCount(
+      actor,
+      'workgroups:read',
+      async () =>
+        (await filterVisibleRows(db, actor, 'workgroup', await listWorkgroups(db))).length,
+    ),
     gatedCount(actor, 'repos:read', () => countCachedRepos(db)),
-    // No coarse gate on the scheduled-tasks list route — row filter only.
-    (async () =>
-      (await listScheduledTasks(db)).filter((row) => canViewScheduledTask(actor, row)).length)(),
+    gatedCount(
+      actor,
+      'scheduled-tasks:read',
+      async () =>
+        (await listScheduledTasks(db)).filter((row) => canViewScheduledTask(actor, row)).length,
+    ),
     gatedCount(actor, 'memory:read', async () => {
       const approved = await listMemories(db, { status: 'approved' })
       return (await filterMemoriesByScopeVisibility(db, actor, approved)).length

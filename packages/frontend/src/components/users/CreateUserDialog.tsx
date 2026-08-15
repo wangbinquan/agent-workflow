@@ -185,6 +185,11 @@ export function CreateUserDialog(props: {
             disabled={props.busy}
             options={[
               {
+                value: 'guest',
+                label: t('users.roleOption.guest'),
+                description: t('users.roleOption.guestDesc'),
+              },
+              {
                 value: 'user',
                 label: t('users.roleOption.user'),
                 description: t('users.roleOption.userDesc'),

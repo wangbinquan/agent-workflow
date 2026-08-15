@@ -11,7 +11,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { DEFAULT_CONFIG } from '@agent-workflow/shared'
+import { DEFAULT_CONFIG, PERMISSIONS } from '@agent-workflow/shared'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type * as ApiClientModule from '../src/api/client'
@@ -39,6 +39,7 @@ import { api } from '../src/api/client'
 import i18n from '../src/i18n'
 import { getConfigQueryKey } from '../src/lib/config-resource'
 import { Route as SettingsRoute, validateSettingsSearch } from '../src/routes/settings'
+import { clearToken, setToken } from '../src/stores/auth'
 
 const ENABLED_PROVIDER = {
   id: 'corp',
@@ -65,23 +66,43 @@ const ENABLED_PROVIDER = {
 
 function renderAuthentication(options: {
   passwordLoginEnabled: boolean
+  oidcDefaultRole?: 'guest' | 'user'
   providers?: (typeof ENABLED_PROVIDER)[]
 }) {
   let policy = {
     passwordLoginEnabled: options.passwordLoginEnabled,
+    oidcDefaultRole: options.oidcDefaultRole ?? ('guest' as const),
     bootstrapCompletedAt: 10,
     updatedAt: 10,
   }
   const providers = options.providers ?? []
 
   ;(api.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+    if (url === '/api/auth/me') {
+      return Promise.resolve({
+        user: {
+          id: 'admin',
+          username: 'admin',
+          displayName: 'Admin',
+          role: 'admin',
+          status: 'active',
+        },
+        source: 'session',
+        permissions: [...PERMISSIONS],
+        linkedIdentities: [],
+        pats: [],
+      })
+    }
     if (url === '/api/oidc/providers') return Promise.resolve(providers)
     if (url === '/api/oidc/login-policy') return Promise.resolve(policy)
     return Promise.reject(new Error(`unexpected GET ${url}`))
   })
   ;(api.put as ReturnType<typeof vi.fn>).mockImplementation(
-    (_url: string, body: { passwordLoginEnabled: boolean }) => {
-      policy = { ...policy, passwordLoginEnabled: body.passwordLoginEnabled, updatedAt: 11 }
+    (
+      _url: string,
+      body: { passwordLoginEnabled?: boolean; oidcDefaultRole?: 'guest' | 'user' },
+    ) => {
+      policy = { ...policy, ...body, updatedAt: 11 }
       return Promise.resolve(policy)
     },
   )
@@ -112,6 +133,7 @@ function renderAuthentication(options: {
 
 beforeEach(async () => {
   await i18n.changeLanguage('en-US')
+  setToken('settings-admin')
   ;(api.get as ReturnType<typeof vi.fn>).mockReset()
   ;(api.put as ReturnType<typeof vi.fn>).mockReset()
   ;(api.post as ReturnType<typeof vi.fn>).mockReset()
@@ -120,6 +142,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  clearToken()
   cleanup()
   vi.restoreAllMocks()
 })
@@ -183,5 +206,21 @@ describe('RFC-221 authentication login policy UX', () => {
       expect(passwordSwitch.checked).toBe(true)
     })
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  test('changes the OAuth/OIDC auto-provisioning preset between guest and user', async () => {
+    renderAuthentication({ passwordLoginEnabled: true, oidcDefaultRole: 'guest' })
+
+    const guest = await screen.findByTestId('oidc-default-role-guest')
+    const user = screen.getByTestId('oidc-default-role-user')
+    expect(guest.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(user)
+
+    await waitFor(() => {
+      expect(api.put).toHaveBeenCalledWith('/api/oidc/login-policy', {
+        oidcDefaultRole: 'user',
+      })
+      expect(user.getAttribute('aria-checked')).toBe('true')
+    })
   })
 })

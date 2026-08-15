@@ -36,7 +36,7 @@ export interface DetailHeaderActionsProps {
   title: ReactNode
   /** Split-detail routes use h2 because their mounted rail already owns h1. */
   headingLevel?: 1 | 2
-  acl: {
+  acl?: {
     /** e.g. '/api/agents/01JAGENTID' — AclDialogButton appends '/acl'. */
     resourceBaseUrl: string
     invalidateKey: readonly unknown[]
@@ -55,7 +55,7 @@ export interface DetailHeaderActionsProps {
     title?: string
     testid?: string
   }
-  del: {
+  del?: {
     label: string
     /**
      * RFC-222 (D5): receives the user's typed confirmation text. The caller
@@ -86,7 +86,17 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
   const [surface, setSurface] = useState<'actions' | 'acl' | 'delete' | null>(null)
   const [moreBusy, setMoreBusy] = useState(false)
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const hasAcl = actor.data !== null && actor.data !== undefined && actor.data.source !== 'daemon'
+  const hasAcl =
+    props.acl !== undefined &&
+    actor.data !== null &&
+    actor.data !== undefined &&
+    actor.data.source !== 'daemon'
+  const hasMoreActions =
+    (props.moreActions !== null &&
+      props.moreActions !== undefined &&
+      props.moreActions !== false) ||
+    hasAcl ||
+    props.del !== undefined
   return (
     <>
       <PageHeader
@@ -107,15 +117,17 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
                 {props.save.label ?? t('common.save')}
               </button>
             )}
-            <button
-              ref={moreTriggerRef}
-              type="button"
-              className="btn"
-              onClick={() => setSurface('actions')}
-              data-testid="detail-more-actions"
-            >
-              {t('common.more')}
-            </button>
+            {hasMoreActions && (
+              <button
+                ref={moreTriggerRef}
+                type="button"
+                className="btn"
+                onClick={() => setSurface('actions')}
+                data-testid="detail-more-actions"
+              >
+                {t('common.more')}
+              </button>
+            )}
           </>
         }
       />
@@ -137,48 +149,54 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
               data-testid="acl-dialog-button"
             />
           ) : null}
-          <ResourceActionItem
-            label={props.del.label}
-            description={t('common.deleteResourceActionHint')}
-            tone="danger"
-            disabled={props.del.disabled}
-            onClick={() => setSurface('delete')}
-            data-testid="detail-delete-button"
-          />
+          {props.del !== undefined && (
+            <ResourceActionItem
+              label={props.del.label}
+              description={t('common.deleteResourceActionHint')}
+              tone="danger"
+              disabled={props.del.disabled}
+              onClick={() => setSurface('delete')}
+              data-testid="detail-delete-button"
+            />
+          )}
         </ResourceActionList>
       </Dialog>
-      <Dialog
-        open={surface === 'acl'}
-        onClose={() => setSurface(null)}
-        title={t('acl.title')}
-        triggerRef={moreTriggerRef}
-        data-testid="detail-acl-dialog"
-      >
-        <AclPanel
-          resourceBaseUrl={props.acl.resourceBaseUrl}
-          invalidateKey={props.acl.invalidateKey}
-          canTransferOwner={props.acl.canTransferOwner}
-          onSaved={() => setSurface(null)}
-          onCancel={() => setSurface(null)}
+      {props.acl !== undefined && (
+        <Dialog
+          open={surface === 'acl'}
+          onClose={() => setSurface(null)}
+          title={t('acl.title')}
+          triggerRef={moreTriggerRef}
+          data-testid="detail-acl-dialog"
+        >
+          <AclPanel
+            resourceBaseUrl={props.acl.resourceBaseUrl}
+            invalidateKey={props.acl.invalidateKey}
+            canTransferOwner={props.acl.canTransferOwner}
+            onSaved={() => setSurface(null)}
+            onCancel={() => setSurface(null)}
+          />
+        </Dialog>
+      )}
+      {props.del !== undefined && (
+        <ConfirmDialog
+          open={surface === 'delete'}
+          title={t('common.deleteConfirm.title', { name: props.del.confirmName })}
+          description={t('common.deleteConfirm.body')}
+          confirmLabel={props.del.label}
+          tone="danger"
+          confirmInput={{
+            expected: props.del.confirmName,
+            label: t('common.deleteConfirm.inputLabel', { name: props.del.confirmName }),
+            placeholder: props.del.confirmName,
+          }}
+          onConfirm={async (ctx) => {
+            await props.del?.onConfirm(ctx)
+          }}
+          onClose={() => setSurface(null)}
+          triggerRef={moreTriggerRef}
         />
-      </Dialog>
-      <ConfirmDialog
-        open={surface === 'delete'}
-        title={t('common.deleteConfirm.title', { name: props.del.confirmName })}
-        description={t('common.deleteConfirm.body')}
-        confirmLabel={props.del.label}
-        tone="danger"
-        confirmInput={{
-          expected: props.del.confirmName,
-          label: t('common.deleteConfirm.inputLabel', { name: props.del.confirmName }),
-          placeholder: props.del.confirmName,
-        }}
-        onConfirm={async (ctx) => {
-          await props.del.onConfirm(ctx)
-        }}
-        onClose={() => setSurface(null)}
-        triggerRef={moreTriggerRef}
-      />
+      )}
       <FeedbackStack variant="section">
         {present.map((e, i) => (
           <ErrorBanner error={e} key={i} />

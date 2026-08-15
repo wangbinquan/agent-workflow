@@ -2335,9 +2335,10 @@ export const users = sqliteTable(
     email: text('email').unique(), // nullable; SQLite UNIQUE allows multiple NULL
     displayName: text('display_name').notNull(),
     passwordHash: text('password_hash'), // NULL = OIDC-only or invited user
-    // RFC-222 — 'manager' (资源管理员) added. Type-only widening: the SQLite
-    // column has no CHECK constraint (0018_rfc036_users.sql), so no migration.
-    role: text('role', { enum: ['admin', 'user', 'manager'] })
+    // RFC-222 added manager; RFC-305 adds the public-read-only guest preset.
+    // Type-only widening: the SQLite column has no CHECK constraint
+    // (0018_rfc036_users.sql), so no migration is required.
+    role: text('role', { enum: ['admin', 'user', 'manager', 'guest'] })
       .notNull()
       .default('user'),
     status: text('status', { enum: ['active', 'disabled', 'invited'] })
@@ -2393,8 +2394,8 @@ export const userAccessAudit = sqliteTable(
     actorKind: text('actor_kind', { enum: ['session', 'cli', 'system'] }).notNull(),
     operationId: text('operation_id').notNull(),
     correlationId: text('correlation_id'),
-    beforeRole: text('before_role', { enum: ['admin', 'user', 'manager'] }).notNull(),
-    afterRole: text('after_role', { enum: ['admin', 'user', 'manager'] }).notNull(),
+    beforeRole: text('before_role', { enum: ['admin', 'user', 'manager', 'guest'] }).notNull(),
+    afterRole: text('after_role', { enum: ['admin', 'user', 'manager', 'guest'] }).notNull(),
     addedPermissionsJson: text('added_permissions_json').notNull(),
     removedPermissionsJson: text('removed_permissions_json').notNull(),
     accessRevision: integer('access_revision').notNull(),
@@ -2616,6 +2617,9 @@ export const authLoginPolicy = sqliteTable('auth_login_policy', {
   passwordLoginEnabled: integer('password_login_enabled', { mode: 'boolean' })
     .notNull()
     .default(true),
+  oidcDefaultRole: text('oidc_default_role', { enum: ['guest', 'user'] })
+    .notNull()
+    .default('guest'),
   bootstrapCompletedAt: integer('bootstrap_completed_at'),
   updatedAt: integer('updated_at').notNull(),
 })

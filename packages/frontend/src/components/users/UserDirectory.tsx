@@ -104,6 +104,7 @@ export function UserDirectory(props: UserDirectoryProps): ReactElement {
                 { value: 'admin', label: t('users.roleOption.admin') },
                 { value: 'manager', label: t('users.roleOption.manager') },
                 { value: 'user', label: t('users.roleOption.user') },
+                { value: 'guest', label: t('users.roleOption.guest') },
               ]}
             />
           </div>

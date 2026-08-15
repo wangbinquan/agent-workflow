@@ -15,6 +15,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { ResourcePicker, type ResourcePickerLabels } from '../src/components/ResourcePicker'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 
 // RFC-223 (PR-1): rows carry an id distinct from the name so the tests prove
 // the picker stores the ID (value identity) while the label shows the name.
@@ -41,6 +42,7 @@ function wrap(node: React.ReactElement) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
+  seedFullAccessActor(qc)
   return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
 }
 

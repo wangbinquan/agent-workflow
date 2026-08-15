@@ -16,7 +16,7 @@
 
 import type { ReactElement, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { OverviewResources } from '@agent-workflow/shared'
+import type { OverviewResources, Permission } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
 import {
   AGENT_ICON,
@@ -27,6 +27,7 @@ import {
   WORKGROUP_ICON,
 } from '@/components/icons/resourceIcons'
 import { useOverview } from './useOverview'
+import { useCurrentPermissions } from '@/hooks/useActor'
 
 type CapKey = 'agents' | 'workflows' | 'workgroups' | 'memory' | 'scheduled' | 'repos'
 
@@ -37,17 +38,43 @@ interface TileSpec {
   icon: ReactNode
   /** overview.resources key feeding the count. */
   resource: keyof OverviewResources
+  permission: Permission
 }
 
 const TILES: TileSpec[] = [
-  { key: 'agents', to: '/agents', icon: AGENT_ICON, resource: 'agents' },
-  { key: 'workflows', to: '/workflows', icon: WORKFLOW_ICON, resource: 'workflows' },
-  { key: 'workgroups', to: '/workgroups', icon: WORKGROUP_ICON, resource: 'workgroups' },
+  { key: 'agents', to: '/agents', icon: AGENT_ICON, resource: 'agents', permission: 'agents:read' },
+  {
+    key: 'workflows',
+    to: '/workflows',
+    icon: WORKFLOW_ICON,
+    resource: 'workflows',
+    permission: 'workflows:read',
+  },
+  {
+    key: 'workgroups',
+    to: '/workgroups',
+    icon: WORKGROUP_ICON,
+    resource: 'workgroups',
+    permission: 'workgroups:read',
+  },
   // Deep-link to the "all" tab — its default view is the approved pool, so
   // the tile count and the landing page agree (design gate P2-6).
-  { key: 'memory', to: '/memory', search: { tab: 'all' }, icon: MEMORY_ICON, resource: 'memories' },
-  { key: 'scheduled', to: '/scheduled', icon: SCHEDULE_ICON, resource: 'scheduled' },
-  { key: 'repos', to: '/repos', icon: REPO_ICON, resource: 'repos' },
+  {
+    key: 'memory',
+    to: '/memory',
+    search: { tab: 'all' },
+    icon: MEMORY_ICON,
+    resource: 'memories',
+    permission: 'memory:read',
+  },
+  {
+    key: 'scheduled',
+    to: '/scheduled',
+    icon: SCHEDULE_ICON,
+    resource: 'scheduled',
+    permission: 'scheduled-tasks:read',
+  },
+  { key: 'repos', to: '/repos', icon: REPO_ICON, resource: 'repos', permission: 'repos:read' },
 ]
 
 interface CapabilityGridProps {
@@ -58,15 +85,17 @@ interface CapabilityGridProps {
 export function CapabilityGrid({ variant = 'live' }: CapabilityGridProps): ReactElement {
   const { t } = useTranslation()
   const live = variant === 'live'
+  const permissions = useCurrentPermissions()
   const overview = useOverview({ enabled: live })
   const resources = overview.data?.resources
+  const visibleTiles = TILES.filter((tile) => permissions.has(tile.permission))
 
   const agentsSub = live ? describeAgentsSub(t, resources) : null
 
   return (
     <div className="home-cap" data-testid="home-cap-grid">
       <div className="home-cap-grid">
-        {TILES.map((tile) => (
+        {visibleTiles.map((tile) => (
           <Card
             key={tile.key}
             interactive

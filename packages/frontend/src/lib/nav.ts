@@ -4,6 +4,7 @@
 // workflows / tasks). `resolveActiveNav` is a pure function so unit tests can
 // exhaustively cover every route → group mapping without spinning up a router.
 
+import type { Permission } from '@agent-workflow/shared'
 import type { ResourceIconKey } from '@/components/icons/resourceIcons'
 
 export type GroupKey = 'agents' | 'workflows' | 'tasks' | 'memory'
@@ -12,6 +13,7 @@ export interface SubNavItem {
   to: string
   i18nKey: string
   icon: ResourceIconKey
+  permission: Permission
 }
 
 export interface NavGroupEntry {
@@ -33,35 +35,55 @@ export const NAV_GROUPS: NavGroupEntry[] = [
     key: 'agents',
     i18nKey: 'nav.group.agents',
     subnav: [
-      { to: '/agents', i18nKey: 'nav.agents', icon: 'agent' },
-      { to: '/skills', i18nKey: 'nav.skills', icon: 'skill' },
-      { to: '/mcps', i18nKey: 'nav.mcps', icon: 'mcp' },
-      { to: '/plugins', i18nKey: 'nav.plugins', icon: 'plugin' },
+      { to: '/agents', i18nKey: 'nav.agents', icon: 'agent', permission: 'agents:read' },
+      { to: '/skills', i18nKey: 'nav.skills', icon: 'skill', permission: 'skills:read' },
+      { to: '/mcps', i18nKey: 'nav.mcps', icon: 'mcp', permission: 'mcps:read' },
+      { to: '/plugins', i18nKey: 'nav.plugins', icon: 'plugin', permission: 'plugins:read' },
     ],
   },
   {
     key: 'workflows',
     i18nKey: 'nav.group.workflows',
     subnav: [
-      { to: '/workflows', i18nKey: 'nav.workflows', icon: 'workflow' },
+      {
+        to: '/workflows',
+        i18nKey: 'nav.workflows',
+        icon: 'workflow',
+        permission: 'workflows:read',
+      },
       // RFC-164: workgroups are launched like workflows, so they live in
       // the same group.
-      { to: '/workgroups', i18nKey: 'nav.workgroups', icon: 'workgroup' },
+      {
+        to: '/workgroups',
+        i18nKey: 'nav.workgroups',
+        icon: 'workgroup',
+        permission: 'workgroups:read',
+      },
       // RFC-234: the intent builder authors workflows/workgroups (and their
       // agents/skills), so it lives beside them.
-      { to: '/intent', i18nKey: 'nav.intent', icon: 'workflow' },
+      { to: '/intent', i18nKey: 'nav.intent', icon: 'workflow', permission: 'intent:read' },
     ],
   },
   {
     key: 'tasks',
     i18nKey: 'nav.group.tasks',
     subnav: [
-      { to: '/tasks', i18nKey: 'nav.tasks', icon: 'task' },
-      { to: '/scheduled', i18nKey: 'nav.scheduled', icon: 'schedule' },
-      { to: '/repos', i18nKey: 'nav.repos', icon: 'repo' },
+      { to: '/tasks', i18nKey: 'nav.tasks', icon: 'task', permission: 'tasks:read' },
+      {
+        to: '/scheduled',
+        i18nKey: 'nav.scheduled',
+        icon: 'schedule',
+        permission: 'scheduled-tasks:read',
+      },
+      { to: '/repos', i18nKey: 'nav.repos', icon: 'repo', permission: 'repos:read' },
       // RFC-260/RFC-305：读面由 `webhook-endpoints:read` 控制；配置动作在页内
       // 按各自具体权限显示，导航模型不携带角色概念。
-      { to: '/webhooks', i18nKey: 'nav.webhooks', icon: 'webhook' },
+      {
+        to: '/webhooks',
+        i18nKey: 'nav.webhooks',
+        icon: 'webhook',
+        permission: 'webhook-endpoints:read',
+      },
     ],
   },
   // RFC-041 PR4 follow-up: mirror the single-item Workflows-group shape so
@@ -71,9 +93,17 @@ export const NAV_GROUPS: NavGroupEntry[] = [
   {
     key: 'memory',
     i18nKey: 'nav.group.memory',
-    subnav: [{ to: '/memory', i18nKey: 'nav.memory', icon: 'memory' }],
+    subnav: [{ to: '/memory', i18nKey: 'nav.memory', icon: 'memory', permission: 'memory:read' }],
   },
 ]
+
+/** Permission-only navigation projection; empty groups disappear naturally. */
+export function navGroupsForPermissions(permissions: ReadonlySet<Permission>): NavGroupEntry[] {
+  return NAV_GROUPS.map((group) => ({
+    ...group,
+    subnav: group.subnav.filter((item) => permissions.has(item.permission)),
+  })).filter((group) => group.subnav.length > 0)
+}
 
 export interface ActiveNav {
   /** True iff the user is on `/` (the homepage). */

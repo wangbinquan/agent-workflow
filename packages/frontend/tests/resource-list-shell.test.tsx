@@ -28,6 +28,7 @@ import {
 } from '@tanstack/react-router'
 import type { UserPublic } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 import { Route as RootRoute } from '../src/routes/__root'
 import { useResourceList } from '../src/hooks/useResourceList'
 import { ResourceBadges, type OwnerLookup } from '../src/components/ResourceBadges'
@@ -95,6 +96,7 @@ function installFetch(endpoint: string, rowsByGet: () => Row[]): Call[] {
  *  shared cell renders TanStack <Link>s, which need a RouterProvider). */
 function renderAtAgents(Component: () => React.ReactElement | null) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(qc)
   const listRoute = createRoute({
     getParentRoute: () => RootRoute,
     path: '/agents',

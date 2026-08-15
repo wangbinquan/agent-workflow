@@ -57,7 +57,7 @@ export interface EditUserDraft {
 }
 
 const STATUS_FILTERS = new Set<UserStatusFilter>(['all', 'active', 'invited', 'disabled'])
-const ROLE_FILTERS = new Set<UserRoleFilter>(['all', 'admin', 'manager', 'user'])
+const ROLE_FILTERS = new Set<UserRoleFilter>(['all', 'admin', 'manager', 'user', 'guest'])
 
 function isStatusFilter(value: unknown): value is UserStatusFilter {
   return typeof value === 'string' && STATUS_FILTERS.has(value as UserStatusFilter)

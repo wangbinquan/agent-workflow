@@ -6,7 +6,7 @@
 // the role string.
 //
 // RFC-222 introduced the third role `manager` (中文「资源管理员」). RFC-305
-// makes all three roles pure permission presets: authorization code consumes
+// makes every role a pure permission preset: authorization code consumes
 // only Actor.permissions, never the role string. Resource ACL bypass and the
 // historical role exceptions are therefore explicit points in
 // this same catalog instead of a parallel identity predicate.
@@ -89,6 +89,11 @@ export const PERMISSIONS = [
   // HANDLER_CONSUMED_POINTS below.
   'tasks:read:own',
   'tasks:read:all',
+  // RFC-305 — account-level range point for owner/grant visibility on private
+  // ACL resources. Public rows remain visible without it. `guest` deliberately
+  // omits this point, so its six resource reads are public-only without any
+  // role predicate in authorization code.
+  'resource-acl:private',
 
   // ---------------------------------------------------------------------------
   // Matrix domain — create.
@@ -217,10 +222,10 @@ export const PERMISSIONS = [
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]
-export type Role = 'admin' | 'user' | 'manager'
+export type Role = 'admin' | 'user' | 'manager' | 'guest'
 
 export const PermissionSchema = z.enum(PERMISSIONS)
-export const RoleSchema = z.enum(['admin', 'user', 'manager'])
+export const RoleSchema = z.enum(['admin', 'user', 'manager', 'guest'])
 
 // -----------------------------------------------------------------------------
 // RFC-305 — exhaustive product/authorization catalog.
@@ -322,6 +327,11 @@ const permissionCatalog = {
     risk: 'elevated',
     token: 'account-range',
     constraints: taskGlobalRange,
+  }),
+  'resource-acl:private': catalogEntry('resource-acl:private', {
+    group: 'resources',
+    token: 'account-range',
+    constraints: resourceAcl,
   }),
   'agents:create': catalogEntry('agents:create', { group: 'resources', constraints: resourceAcl }),
   'skills:create': catalogEntry('skills:create', { group: 'resources', constraints: resourceAcl }),
@@ -601,6 +611,8 @@ export const RANGE_POINTS: ReadonlyArray<Permission> = [
   'tasks:read:all',
   // services/overview.ts — the "mine vs all" split
   'tasks:read:own',
+  // services/resourceAcl.ts — owner/grant visibility for private ACL rows
+  'resource-acl:private',
 ]
 
 /**
@@ -640,8 +652,22 @@ export const ROUTE_BACKED_POINTS: ReadonlyArray<Permission> = MATRIX_DOMAIN_POIN
 
 // -----------------------------------------------------------------------------
 // Role baselines. RFC-247 D15: EQUIVALENT to the pre-RFC-247 catalog — the
-// shape of the points changed, the reach of each role did not.
+// shape of the points changed, the reach of each existing role did not.
 // -----------------------------------------------------------------------------
+
+// RFC-305 guest preset: only public rows from the six resource-ACL domains.
+// No task, repository, memory, webhook, runtime or directory read is implied;
+// `account:self` only keeps the authenticated account surface usable. Private
+// visibility can be granted explicitly like any other preset difference.
+const GUEST_BASELINE: ReadonlyArray<Permission> = [
+  'agents:read',
+  'skills:read',
+  'mcps:read',
+  'plugins:read',
+  'workflows:read',
+  'workgroups:read',
+  'account:self',
+]
 
 const USER_RESOURCE_READS: ReadonlyArray<Permission> = [
   'agents:read',
@@ -701,6 +727,7 @@ const USER_EXECUTE: ReadonlyArray<Permission> = [
 
 const USER_BASELINE: ReadonlyArray<Permission> = [
   ...USER_RESOURCE_READS,
+  'resource-acl:private',
   ...USER_RESOURCE_WRITES,
   ...USER_EXECUTE,
   'users:search',
@@ -753,6 +780,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<Permission>> = {
   admin: [...PERMISSIONS],
   user: USER_BASELINE,
   manager: [...USER_BASELINE, ...MANAGER_EXTRA],
+  guest: GUEST_BASELINE,
 }
 
 export const INTRINSIC_PERMISSIONS: ReadonlyArray<Permission> = Object.freeze(

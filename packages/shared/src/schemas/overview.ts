@@ -5,8 +5,7 @@
 // coarse permission gates of the corresponding LIST routes (backend
 // server.ts gate block): a key whose list route sits behind a `<res>:read`
 // gate is null when the actor lacks that permission (counts must not leak
-// existence); workgroups / scheduled-tasks list routes have no coarse gate
-// (row-level filtering only), so those keys are always numbers. `tasks` is
+// existence). `tasks` is
 // null only when the actor holds neither tasks:read:all nor tasks:read:own.
 // Every number is "rows this actor would see on the list page" — the
 // backend oracle test locks that equality per actor.
@@ -19,9 +18,9 @@ export const OverviewResourcesSchema = z.object({
   mcps: z.number().int().nonnegative().nullable(),
   plugins: z.number().int().nonnegative().nullable(),
   workflows: z.number().int().nonnegative().nullable(),
-  workgroups: z.number().int().nonnegative(),
+  workgroups: z.number().int().nonnegative().nullable(),
   repos: z.number().int().nonnegative().nullable(),
-  scheduled: z.number().int().nonnegative(),
+  scheduled: z.number().int().nonnegative().nullable(),
   memories: z.number().int().nonnegative().nullable(),
 })
 export type OverviewResources = z.infer<typeof OverviewResourcesSchema>

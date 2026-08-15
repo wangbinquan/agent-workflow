@@ -7,8 +7,13 @@ import { z } from 'zod'
 import { OidcProviderPublicSchema } from './oidcProvider'
 import { UserSchema } from './user'
 
+/** Preset assigned only when an OAuth/OIDC callback creates a new account. */
+export const OidcDefaultRoleSchema = z.enum(['guest', 'user'])
+export type OidcDefaultRole = z.infer<typeof OidcDefaultRoleSchema>
+
 export const AuthLoginPolicySchema = z.object({
   passwordLoginEnabled: z.boolean(),
+  oidcDefaultRole: OidcDefaultRoleSchema,
   bootstrapCompletedAt: z.number().int().nonnegative().nullable(),
   updatedAt: z.number().int().nonnegative(),
 })
@@ -34,9 +39,14 @@ export type AuthMethodDiscovery = z.infer<typeof AuthMethodDiscoverySchema>
 
 export const UpdateAuthLoginPolicyBodySchema = z
   .object({
-    passwordLoginEnabled: z.boolean(),
+    passwordLoginEnabled: z.boolean().optional(),
+    oidcDefaultRole: OidcDefaultRoleSchema.optional(),
   })
   .strict()
+  .refine(
+    (value) => value.passwordLoginEnabled !== undefined || value.oidcDefaultRole !== undefined,
+    { message: 'at least one login-policy field is required' },
+  )
 
 export type UpdateAuthLoginPolicyBody = z.infer<typeof UpdateAuthLoginPolicyBodySchema>
 

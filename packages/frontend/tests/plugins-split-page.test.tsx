@@ -16,6 +16,7 @@ import {
   beginDeferredPackageCommit,
   beginUnknownPackageCommit,
 } from './resource-package-create-busy.helpers'
+import { fullAccessActorResponse, seedFullAccessActor } from './unexpectedNetwork'
 import '../src/i18n'
 
 function json(body: unknown, status = 200): Response {
@@ -81,6 +82,7 @@ function installFetch() {
       const method = (init?.method ?? 'GET').toUpperCase()
       const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]!
       const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+      if (method === 'GET' && path === '/api/auth/me') return fullAccessActorResponse()
       requests.push({ path, method, body })
 
       if (method === 'GET' && path === '/api/plugins') return json(plugins)
@@ -158,6 +160,7 @@ function installFetch() {
 
 function renderPlugins(initial: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(qc)
   latestQueryClient = qc
   const tree = RootRoute.addChildren([
     pluginsRoute.addChildren([pluginNewRoute, pluginDetailRoute, pluginsIndexRoute]),

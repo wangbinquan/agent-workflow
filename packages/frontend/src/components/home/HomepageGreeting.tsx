@@ -26,6 +26,7 @@ import { api } from '@/api/client'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { hasSeenTour } from '@/components/tour/SpotlightTour'
 import { pickGreetingKey } from '@/lib/homepage'
+import { usePermission } from '@/hooks/useActor'
 import { PipelineHero } from './PipelineHero'
 import { useOverview } from './useOverview'
 
@@ -86,6 +87,11 @@ const AGGREGATE_THRESHOLD = 3
 
 export function HomepageGreeting() {
   const { t } = useTranslation()
+  const canReadRuntime = usePermission('runtime:read')
+  const canExecuteTasks = usePermission('tasks:execute')
+  const canCreateAgent = usePermission('agents:create')
+  const canCreateWorkflow = usePermission('workflows:create')
+  const canUseGuidedTour = canCreateAgent && canCreateWorkflow && canExecuteTasks
   // The clock ticks roughly every minute so the greeting + relative date
   // line stays current without flooding the renderer.
   const [now, setNow] = useState<Date>(() => new Date())
@@ -99,6 +105,7 @@ export function HomepageGreeting() {
     queryFn: ({ signal }) => api.get('/api/runtimes/status', undefined, signal),
     staleTime: 30_000,
     refetchInterval: 60_000,
+    enabled: canReadRuntime,
   })
 
   // RFC-190: task pulse line under the runtime status (shared /api/overview
@@ -113,57 +120,65 @@ export function HomepageGreeting() {
     <header className="homepage__greet">
       <div className="homepage__greet-text">
         <h1 className="homepage__greet-title">{t(greetingKey)}</h1>
-        <p className="homepage__greet-runtime" data-testid="homepage-runtime">
-          <Link to="/settings" search={{ tab: 'runtime' }} className="homepage__runtime-link">
-            {view.kind === 'single' ? (
-              <>
-                <Dot severity={view.severity} /> {view.text}
-              </>
-            ) : (
-              view.items.map((item, i) => (
-                <span key={item.key} className="homepage__runtime-item">
-                  {i > 0 && (
-                    <span className="homepage__runtime-sep" aria-hidden="true">
-                      ·
-                    </span>
-                  )}
-                  <Dot severity={item.severity} />
-                  <span className={item.muted ? 'muted' : undefined}>{item.text}</span>
-                </span>
-              ))
-            )}
-          </Link>
-        </p>
+        {canReadRuntime && (
+          <p className="homepage__greet-runtime" data-testid="homepage-runtime">
+            <Link to="/settings" search={{ tab: 'runtime' }} className="homepage__runtime-link">
+              {view.kind === 'single' ? (
+                <>
+                  <Dot severity={view.severity} /> {view.text}
+                </>
+              ) : (
+                view.items.map((item, i) => (
+                  <span key={item.key} className="homepage__runtime-item">
+                    {i > 0 && (
+                      <span className="homepage__runtime-sep" aria-hidden="true">
+                        ·
+                      </span>
+                    )}
+                    <Dot severity={item.severity} />
+                    <span className={item.muted ? 'muted' : undefined}>{item.text}</span>
+                  </span>
+                ))
+              )}
+            </Link>
+          </p>
+        )}
         {pulse !== null && (
           <p className="homepage__pulse muted" data-testid="homepage-pulse">
             {pulse}
           </p>
         )}
         <div className="homepage__cta">
-          <Link
-            to="/tasks/new"
-            className="btn btn--primary homepage__start-task"
-            data-testid="homepage-start-task"
-          >
-            {t('home.startTask')}
-          </Link>
-          <Link
-            to="/workflows"
-            search={{ create: true }}
-            className="btn"
-            data-testid="homepage-new-workflow"
-          >
-            {t('home.newWorkflow')}
-          </Link>
+          {canExecuteTasks && (
+            <Link
+              to="/tasks/new"
+              className="btn btn--primary homepage__start-task"
+              data-testid="homepage-start-task"
+            >
+              {t('home.startTask')}
+            </Link>
+          )}
+          {canCreateWorkflow && (
+            <Link
+              to="/workflows"
+              search={{ create: true }}
+              className="btn"
+              data-testid="homepage-new-workflow"
+            >
+              {t('home.newWorkflow')}
+            </Link>
+          )}
           {/* RFC-211: the guided tour is a PERMANENT entry point, not a
               first-run one. The first-run surface only appears while the whole
               instance is empty, so a second user joining a populated instance
               would otherwise never be offered it. */}
-          <Link to="/onboarding" className="btn" data-testid="homepage-onboarding">
-            {t('onboarding.startCta')}
-          </Link>
+          {canUseGuidedTour && (
+            <Link to="/onboarding" className="btn" data-testid="homepage-onboarding">
+              {t('onboarding.startCta')}
+            </Link>
+          )}
         </div>
-        <FirstVisitGuidePrompt />
+        {canUseGuidedTour && <FirstVisitGuidePrompt />}
       </div>
       <PipelineHero />
     </header>

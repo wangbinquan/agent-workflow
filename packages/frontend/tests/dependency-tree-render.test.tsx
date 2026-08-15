@@ -10,6 +10,7 @@ import '@/i18n'
 import { DependencyCycleHint, DependencyTree } from '../src/components/agents/DependencyTree'
 import { buildDependencyTree, type DependencyTreeAgent } from '../src/lib/dependency-tree'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { seedFullAccessActor } from './unexpectedNetwork'
 
 function mk(
   name: string,
@@ -39,6 +40,7 @@ function renderTree(
   onNodeClick?: (id: string) => void,
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedFullAccessActor(queryClient)
   return render(
     <QueryClientProvider client={queryClient}>
       <DependencyTree tree={tree} onNodeClick={onNodeClick} />

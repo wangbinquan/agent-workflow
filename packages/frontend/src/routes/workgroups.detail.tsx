@@ -41,7 +41,7 @@ import {
 } from '@/components/workgroup/WorkgroupDraftStatus'
 import { WorkgroupMemberGallery } from '@/components/workgroup/WorkgroupMemberGallery'
 import { useOwnedEditScope } from '@/hooks/useOwnedEditScope'
-import { useActor } from '@/hooks/useActor'
+import { useActor, usePermission } from '@/hooks/useActor'
 import { useWorkgroupAutosave, type WorkgroupSaveContext } from '@/hooks/useWorkgroupAutosave'
 import { useWorkgroupSync } from '@/hooks/useWorkgroupSync'
 import {
@@ -179,6 +179,11 @@ export function WorkgroupEditor(props: {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const actor = useActor()
+  const canUpdate = usePermission('workgroups:update')
+  const canCreate = usePermission('workgroups:create')
+  const canDelete = usePermission('workgroups:delete')
+  const canExecuteTasks = usePermission('tasks:execute')
+  const canWriteIntent = usePermission('intent:write')
   const config = useOwnedEditScope(workgroupToConfigDraft(props.initial))
   const members = useOwnedEditScope(
     workgroupToMembersState(props.initial),
@@ -288,7 +293,7 @@ export function WorkgroupEditor(props: {
     onReceipt: settleReceipt,
     onRemoteDetail: publishDetail,
     onIntent: (intent) => {
-      if (intent.type !== 'save-copy') return
+      if (!canCreate || intent.type !== 'save-copy') return
       setCopyIntent(intent.snapshot)
       setCopyName(intent.suggestedName.slice(0, 128))
       setCopyDescription(intent.snapshot.description)
@@ -451,6 +456,7 @@ export function WorkgroupEditor(props: {
     next: { config?: WorkgroupConfigDraft; members?: WorkgroupMembersState },
     immediate = false,
   ): void {
+    if (!canUpdate) return
     let configState = config.ref.current
     let memberState = members.ref.current
     if (next.config !== undefined) {
@@ -509,10 +515,12 @@ export function WorkgroupEditor(props: {
   }
 
   function onSetLeader(key: string): void {
+    if (!canUpdate) return
     editDrafts({ members: setLeader(members.ref.current.draft, key) }, true)
   }
 
   async function onRemoveMember(key: string): Promise<void> {
+    if (!canUpdate) return
     const current = members.ref.current.draft
     const index = current.members.findIndex((member) => member.key === key)
     const next = removeMember(current, key)
@@ -523,6 +531,7 @@ export function WorkgroupEditor(props: {
   }
 
   async function onAddMember(row: WorkgroupMemberRowState): Promise<void> {
+    if (!canUpdate) return
     editDrafts({ members: addMember(members.ref.current.draft, row) }, true)
     applyPanel({ kind: 'member', key: row.key }, 'title')
   }
@@ -696,18 +705,20 @@ export function WorkgroupEditor(props: {
         }
         actions={
           <>
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={!readiness.ready || launchDisabled}
-              onClick={() => {
-                busyRef.current = true
-                launch.mutate()
-              }}
-              data-testid="workgroup-launch-button"
-            >
-              {launch.isPending ? t('common.saving') : t('workgroups.launchButton')}
-            </button>
+            {canExecuteTasks && (
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={!readiness.ready || launchDisabled}
+                onClick={() => {
+                  busyRef.current = true
+                  launch.mutate()
+                }}
+                data-testid="workgroup-launch-button"
+              >
+                {launch.isPending ? t('common.saving') : t('workgroups.launchButton')}
+              </button>
+            )}
             <button
               ref={moreTriggerRef}
               type="button"
@@ -749,6 +760,8 @@ export function WorkgroupEditor(props: {
             }}
             onOverwriteRemote={controller.confirmOverwrite}
             onReturnToList={() => void navigate({ to: '/workgroups' })}
+            canSaveCopy={canCreate}
+            canOverwrite={canUpdate}
           />
         )}
 
@@ -818,26 +831,28 @@ export function WorkgroupEditor(props: {
               onSelectCard={onSelectCard}
             />
           </div>
-          <div className="workgroup-rail__add">
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={() => applyPanel({ kind: 'add', memberType: 'agent' })}
-              data-testid="workgroup-add-agent-member"
-            >
-              {t('workgroups.addAgentMember')}
-            </button>
-            {config.state.draft.mode !== 'dynamic_workflow' && (
+          {canUpdate && (
+            <div className="workgroup-rail__add">
               <button
                 type="button"
                 className="btn btn--sm"
-                onClick={() => applyPanel({ kind: 'add', memberType: 'human' })}
-                data-testid="workgroup-add-human-member"
+                onClick={() => applyPanel({ kind: 'add', memberType: 'agent' })}
+                data-testid="workgroup-add-agent-member"
               >
-                {t('workgroups.addHumanMember')}
+                {t('workgroups.addAgentMember')}
               </button>
-            )}
-          </div>
+              {config.state.draft.mode !== 'dynamic_workflow' && (
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => applyPanel({ kind: 'add', memberType: 'human' })}
+                  data-testid="workgroup-add-human-member"
+                >
+                  {t('workgroups.addHumanMember')}
+                </button>
+              )}
+            </div>
+          )}
         </aside>
         <section className="split__detail" data-testid="split-detail">
           <WorkgroupContextPanel
@@ -858,6 +873,7 @@ export function WorkgroupEditor(props: {
             onRemoveMember={onRemoveMember}
             onAddMember={onAddMember}
             onTransientDraftState={reportTransient}
+            readOnly={!canUpdate}
           />
         </section>
       </div>
@@ -874,31 +890,33 @@ export function WorkgroupEditor(props: {
           <ErrorBanner error={copyResource.error} />
         )}
         <ResourceActionList onBusyChange={setExportActionBusy}>
-          <button
-            type="button"
-            className="resource-action-list__item"
-            disabled={
-              blockReason !== null ||
-              controller.state.transport === 'offline' ||
-              controller.state.phase === 'error' ||
-              controller.state.phase === 'conflict' ||
-              controller.state.phase === 'inaccessible' ||
-              controller.state.phase === 'deleted' ||
-              del.isPending ||
-              launch.isPending ||
-              saveCopy.isPending ||
-              copyResource.isPending
-            }
-            onClick={() => {
-              copyResource.reset()
-              busyRef.current = true
-              copyResource.mutate()
-            }}
-            data-testid="workgroup-copy-action"
-          >
-            <strong>{copyResource.isPending ? t('workgroups.copying') : t('common.copy')}</strong>
-            <span>{t('workgroups.copyActionHint')}</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              className="resource-action-list__item"
+              disabled={
+                blockReason !== null ||
+                controller.state.transport === 'offline' ||
+                controller.state.phase === 'error' ||
+                controller.state.phase === 'conflict' ||
+                controller.state.phase === 'inaccessible' ||
+                controller.state.phase === 'deleted' ||
+                del.isPending ||
+                launch.isPending ||
+                saveCopy.isPending ||
+                copyResource.isPending
+              }
+              onClick={() => {
+                copyResource.reset()
+                busyRef.current = true
+                copyResource.mutate()
+              }}
+              data-testid="workgroup-copy-action"
+            >
+              <strong>{copyResource.isPending ? t('workgroups.copying') : t('common.copy')}</strong>
+              <span>{t('workgroups.copyActionHint')}</span>
+            </button>
+          )}
           <ResourcePackageExportButton
             type="workgroup"
             id={props.initial.id}
@@ -908,163 +926,181 @@ export function WorkgroupEditor(props: {
             disabled={unsafe || busy}
             disabledReason={t('resourcePackage.saveBeforeExport')}
           />
-          <button
-            type="button"
-            className="resource-action-list__item"
-            onClick={() => {
-              setHeaderSurface(null)
-              void navigate({
-                to: '/intent',
-                search: {
-                  create: true,
-                  mountType: 'workgroup',
-                  mountId: props.initial.id,
-                },
-              })
-            }}
-            data-testid="workgroup-intent-entry"
-          >
-            <strong>{t('intent.entryModify')}</strong>
-            <span>{t('intent.entryModifyHint')}</span>
-          </button>
-          <button
-            type="button"
-            className="resource-action-list__item"
-            disabled={
-              controller.state.phase === 'inaccessible' || controller.state.phase === 'deleted'
-            }
-            onClick={() => {
-              setNewName(config.ref.current.draft.name)
-              setNewDescription(config.ref.current.draft.description)
-              setHeaderSurface('rename')
-            }}
-            data-testid="workgroup-rename-button"
-          >
-            <strong>{t('workgroups.renameButton')}</strong>
-            <span>{t('workgroups.renameActionHint')}</span>
-          </button>
-          {actor.data !== null && actor.data !== undefined && actor.data.source !== 'daemon' && (
+          {canWriteIntent && (
+            <button
+              type="button"
+              className="resource-action-list__item"
+              onClick={() => {
+                setHeaderSurface(null)
+                void navigate({
+                  to: '/intent',
+                  search: {
+                    create: true,
+                    mountType: 'workgroup',
+                    mountId: props.initial.id,
+                  },
+                })
+              }}
+              data-testid="workgroup-intent-entry"
+            >
+              <strong>{t('intent.entryModify')}</strong>
+              <span>{t('intent.entryModifyHint')}</span>
+            </button>
+          )}
+          {canUpdate && (
             <button
               type="button"
               className="resource-action-list__item"
               disabled={
                 controller.state.phase === 'inaccessible' || controller.state.phase === 'deleted'
               }
-              onClick={() => setHeaderSurface('acl')}
-              data-testid="workgroup-acl-button"
+              onClick={() => {
+                setNewName(config.ref.current.draft.name)
+                setNewDescription(config.ref.current.draft.description)
+                setHeaderSurface('rename')
+              }}
+              data-testid="workgroup-rename-button"
             >
-              <strong>{t('acl.title')}</strong>
-              <span>{t('workgroups.aclActionHint')}</span>
+              <strong>{t('workgroups.renameButton')}</strong>
+              <span>{t('workgroups.renameActionHint')}</span>
             </button>
           )}
-          <button
-            type="button"
-            className="resource-action-list__item resource-action-list__item--danger"
-            disabled={deleteDisabled}
-            onClick={() => setHeaderSurface('delete')}
-            data-testid="workgroup-delete-button"
-          >
-            <strong>{t('common.delete')}</strong>
-            <span>{t('workgroups.deleteActionHint')}</span>
-          </button>
+          {canUpdate &&
+            actor.data !== null &&
+            actor.data !== undefined &&
+            actor.data.source !== 'daemon' && (
+              <button
+                type="button"
+                className="resource-action-list__item"
+                disabled={
+                  controller.state.phase === 'inaccessible' || controller.state.phase === 'deleted'
+                }
+                onClick={() => setHeaderSurface('acl')}
+                data-testid="workgroup-acl-button"
+              >
+                <strong>{t('acl.title')}</strong>
+                <span>{t('workgroups.aclActionHint')}</span>
+              </button>
+            )}
+          {canDelete && (
+            <button
+              type="button"
+              className="resource-action-list__item resource-action-list__item--danger"
+              disabled={deleteDisabled}
+              onClick={() => setHeaderSurface('delete')}
+              data-testid="workgroup-delete-button"
+            >
+              <strong>{t('common.delete')}</strong>
+              <span>{t('workgroups.deleteActionHint')}</span>
+            </button>
+          )}
         </ResourceActionList>
       </Dialog>
 
-      <Dialog
-        open={headerSurface === 'acl'}
-        onClose={() => setHeaderSurface(null)}
-        title={t('acl.title')}
-        triggerRef={moreTriggerRef}
-        data-testid="workgroup-acl-dialog"
-      >
-        <AclPanel
-          resourceBaseUrl={`/api/workgroups/${encodeURIComponent(props.resourceId)}`}
-          invalidateKey={['workgroups']}
-          onSaved={() => setHeaderSurface(null)}
-          onCancel={() => setHeaderSurface(null)}
+      {canUpdate && (
+        <Dialog
+          open={headerSurface === 'acl'}
+          onClose={() => setHeaderSurface(null)}
+          title={t('acl.title')}
+          triggerRef={moreTriggerRef}
+          data-testid="workgroup-acl-dialog"
+        >
+          <AclPanel
+            resourceBaseUrl={`/api/workgroups/${encodeURIComponent(props.resourceId)}`}
+            invalidateKey={['workgroups']}
+            onSaved={() => setHeaderSurface(null)}
+            onCancel={() => setHeaderSurface(null)}
+          />
+        </Dialog>
+      )}
+
+      {canDelete && (
+        <ConfirmDialog
+          open={headerSurface === 'delete'}
+          onClose={() => setHeaderSurface(null)}
+          title={t('common.deleteConfirm.title', { name: controller.state.server.name })}
+          description={t('common.deleteConfirm.body')}
+          confirmLabel={t('common.delete')}
+          tone="danger"
+          triggerRef={moreTriggerRef}
+          confirmInput={{
+            expected: controller.state.server.name,
+            label: t('common.deleteConfirm.inputLabel', {
+              name: controller.state.server.name,
+            }),
+            placeholder: controller.state.server.name,
+          }}
+          onConfirm={(context) => {
+            busyRef.current = true
+            return del.mutateAsync(context?.typedConfirm ?? '')
+          }}
         />
-      </Dialog>
+      )}
 
-      <ConfirmDialog
-        open={headerSurface === 'delete'}
-        onClose={() => setHeaderSurface(null)}
-        title={t('common.deleteConfirm.title', { name: controller.state.server.name })}
-        description={t('common.deleteConfirm.body')}
-        confirmLabel={t('common.delete')}
-        tone="danger"
-        triggerRef={moreTriggerRef}
-        confirmInput={{
-          expected: controller.state.server.name,
-          label: t('common.deleteConfirm.inputLabel', {
-            name: controller.state.server.name,
-          }),
-          placeholder: controller.state.server.name,
-        }}
-        onConfirm={(context) => {
-          busyRef.current = true
-          return del.mutateAsync(context?.typedConfirm ?? '')
-        }}
-      />
-
-      <RenameDialog
-        open={headerSurface === 'rename'}
-        onClose={() => setHeaderSurface(null)}
-        title={t('workgroups.renameTitle')}
-        testidPrefix="workgroup"
-        nameLabel={t('workgroups.renameField')}
-        nameHint={t('workgroups.fieldNameHint')}
-        name={newName}
-        onNameChange={setNewName}
-        descriptionLabel={t('workgroups.fieldDescription')}
-        description={newDescription}
-        onDescriptionChange={setNewDescription}
-        descriptionMaxLength={4096}
-        canSave={renameCanSave}
-        pending={false}
-        onSave={() => {
-          if (!renameCanSave) return
-          editDrafts(
-            {
-              config: {
-                ...config.ref.current.draft,
-                // RFC-264: store the FOLDED name — the server folds on write, so
-                // keeping the raw value here would leave the draft permanently
-                // "dirty" against the persisted row.
-                name: normalizeResourceDisplayName(newName),
-                description: newDescription,
+      {canUpdate && (
+        <RenameDialog
+          open={headerSurface === 'rename'}
+          onClose={() => setHeaderSurface(null)}
+          title={t('workgroups.renameTitle')}
+          testidPrefix="workgroup"
+          nameLabel={t('workgroups.renameField')}
+          nameHint={t('workgroups.fieldNameHint')}
+          name={newName}
+          onNameChange={setNewName}
+          descriptionLabel={t('workgroups.fieldDescription')}
+          description={newDescription}
+          onDescriptionChange={setNewDescription}
+          descriptionMaxLength={4096}
+          canSave={renameCanSave}
+          pending={false}
+          onSave={() => {
+            if (!renameCanSave) return
+            editDrafts(
+              {
+                config: {
+                  ...config.ref.current.draft,
+                  // RFC-264: store the FOLDED name — the server folds on write, so
+                  // keeping the raw value here would leave the draft permanently
+                  // "dirty" against the persisted row.
+                  name: normalizeResourceDisplayName(newName),
+                  description: newDescription,
+                },
               },
-            },
-            true,
-          )
-          setHeaderSurface(null)
-        }}
-        triggerRef={moreTriggerRef}
-      />
+              true,
+            )
+            setHeaderSurface(null)
+          }}
+          triggerRef={moreTriggerRef}
+        />
+      )}
 
-      <RenameDialog
-        open={copyIntent !== null}
-        onClose={() => setCopyIntent(null)}
-        title={t('editor.draftStatus.saveCopy')}
-        testidPrefix="workgroup-copy"
-        nameLabel={t('workgroups.fieldName')}
-        nameHint={t('workgroups.fieldNameHint')}
-        name={copyName}
-        onNameChange={setCopyName}
-        descriptionLabel={t('workgroups.fieldDescription')}
-        description={copyDescription}
-        onDescriptionChange={setCopyDescription}
-        descriptionMaxLength={4096}
-        canSave={
-          copyIntent !== null && isValidResourceDisplayName(normalizeResourceDisplayName(copyName))
-        }
-        pending={saveCopy.isPending}
-        submitError={saveCopy.error === null ? undefined : String(saveCopy.error)}
-        onSave={() => {
-          busyRef.current = true
-          saveCopy.mutate()
-        }}
-        triggerRef={copyTriggerRef}
-      />
+      {canCreate && (
+        <RenameDialog
+          open={copyIntent !== null}
+          onClose={() => setCopyIntent(null)}
+          title={t('editor.draftStatus.saveCopy')}
+          testidPrefix="workgroup-copy"
+          nameLabel={t('workgroups.fieldName')}
+          nameHint={t('workgroups.fieldNameHint')}
+          name={copyName}
+          onNameChange={setCopyName}
+          descriptionLabel={t('workgroups.fieldDescription')}
+          description={copyDescription}
+          onDescriptionChange={setCopyDescription}
+          descriptionMaxLength={4096}
+          canSave={
+            copyIntent !== null &&
+            isValidResourceDisplayName(normalizeResourceDisplayName(copyName))
+          }
+          pending={saveCopy.isPending}
+          submitError={saveCopy.error === null ? undefined : String(saveCopy.error)}
+          onSave={() => {
+            busyRef.current = true
+            saveCopy.mutate()
+          }}
+          triggerRef={copyTriggerRef}
+        />
+      )}
 
       <UnsavedChangesGuard
         dirtyRef={dirtyRef}

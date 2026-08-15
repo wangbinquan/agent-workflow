@@ -52,6 +52,12 @@ describe('RFC-221 login policy routes', () => {
     expect(((await off.json()) as { passwordLoginEnabled: boolean }).passwordLoginEnabled).toBe(
       false,
     )
+    const userDefault = await admin('/api/oidc/login-policy', {
+      method: 'PUT',
+      body: JSON.stringify({ oidcDefaultRole: 'user' }),
+    })
+    expect(userDefault.status).toBe(200)
+    expect(((await userDefault.json()) as { oidcDefaultRole: string }).oidcDefaultRole).toBe('user')
     const discovery = (await (await app.request('/api/auth/oidc/providers')).json()) as {
       mode: string
       passwordLoginEnabled: boolean

@@ -60,6 +60,7 @@ export function AppShell({ pathname, children }: AppShellProps) {
   useAuthoritySync()
   const compact = useCompactShell()
   const active = resolveActiveNav(pathname)
+  const canReadTasks = usePermission('tasks:read')
   const inboxOpen = useInboxOpen()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -106,6 +107,11 @@ export function AppShell({ pathname, children }: AppShellProps) {
   }, [])
 
   useEffect(() => {
+    if (canReadTasks || !inboxOpen) return
+    setInboxOpen(false)
+  }, [canReadTasks, inboxOpen])
+
+  useEffect(() => {
     if (!compact || !inboxOpen || !mobileNavOpen) return
     pendingNavigationRef.current = null
     setMobileNavOpen(false)
@@ -132,12 +138,15 @@ export function AppShell({ pathname, children }: AppShellProps) {
           inboxOpen={inboxOpen}
           onToggleInbox={toggleCompactInbox}
           inboxTriggerRef={inboxTriggerRef}
+          showInbox={canReadTasks}
         />
       ) : (
         <aside className="sidebar desktop-sidebar" data-testid="desktop-sidebar">
           <ShellBrand />
           <ShellNavigation active={active} mode="desktop" renderBadge={renderBadge} />
-          <InboxFooterButton ref={inboxTriggerRef} open={inboxOpen} onToggle={toggleInboxOpen} />
+          {canReadTasks && (
+            <InboxFooterButton ref={inboxTriggerRef} open={inboxOpen} onToggle={toggleInboxOpen} />
+          )}
           <ShellFooter active={active} />
         </aside>
       )}
@@ -171,11 +180,13 @@ export function AppShell({ pathname, children }: AppShellProps) {
         />
       )}
 
-      <InboxDrawer
-        open={inboxOpen}
-        onClose={() => setInboxOpen(false)}
-        triggerRef={inboxTriggerRef}
-      />
+      {canReadTasks && (
+        <InboxDrawer
+          open={inboxOpen}
+          onClose={() => setInboxOpen(false)}
+          triggerRef={inboxTriggerRef}
+        />
+      )}
     </div>
   )
 }

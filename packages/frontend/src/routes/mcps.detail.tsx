@@ -31,6 +31,7 @@ import { TabPanels } from '@/components/split/TabPanels'
 import { MCP_PROBES_KEY, mcpProbeKey } from '@/lib/mcp-probe-query'
 import { buildCreatePayload, EMPTY_LOCAL_FORM, mcpToForm, type McpFormState } from '@/lib/mcp-form'
 import { stableStringify } from '@/lib/stable-stringify'
+import { usePermission } from '@/hooks/useActor'
 import { Route as mcpsRoute } from './mcps'
 
 export const Route = createRoute({
@@ -48,6 +49,8 @@ function McpDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
+  const canUpdate = usePermission('mcps:update')
+  const canDelete = usePermission('mcps:delete')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [tab, setTab] = useState<McpTab>('config')
 
@@ -187,26 +190,41 @@ function McpDetailPage() {
       <DetailHeaderActions
         title={query.data?.name ?? id}
         headingLevel={2}
-        acl={{
-          resourceBaseUrl: `/api/mcps/${encodeURIComponent(id)}`,
-          invalidateKey: ['mcps'],
-        }}
-        save={{
-          label: save.isPending ? t('common.saving') : t('common.save'),
-          onClick: submitSave,
-          disabled: save.isPending || del.isPending || !loaded,
-          testid: 'mcp-save-button',
-        }}
-        del={{
-          label: t('common.delete'),
-          confirmName: query.data?.name ?? id,
-          resourceType: 'mcp',
-          onConfirm: (ctx) => {
-            if (save.isPending || del.isPending) return Promise.resolve()
-            return del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(id) })
-          },
-          disabled: del.isPending || save.isPending,
-        }}
+        acl={
+          canUpdate
+            ? {
+                resourceBaseUrl: `/api/mcps/${encodeURIComponent(id)}`,
+                invalidateKey: ['mcps'],
+              }
+            : undefined
+        }
+        save={
+          canUpdate
+            ? {
+                label: save.isPending ? t('common.saving') : t('common.save'),
+                onClick: submitSave,
+                disabled: save.isPending || del.isPending || !loaded,
+                testid: 'mcp-save-button',
+              }
+            : undefined
+        }
+        del={
+          canDelete
+            ? {
+                label: t('common.delete'),
+                confirmName: query.data?.name ?? id,
+                resourceType: 'mcp',
+                onConfirm: (ctx) => {
+                  if (save.isPending || del.isPending) return Promise.resolve()
+                  return del.mutateAsync({
+                    confirm: ctx?.typedConfirm ?? '',
+                    release: beginBusy(id),
+                  })
+                },
+                disabled: del.isPending || save.isPending,
+              }
+            : undefined
+        }
         extra={
           <>
             <IntentProvenanceBadge resourceType="mcp" resourceId={id} />
@@ -266,7 +284,7 @@ function McpDetailPage() {
               content: (
                 <McpFields
                   value={form ?? EMPTY_LOCAL_FORM}
-                  onChange={setForm}
+                  onChange={canUpdate ? setForm : () => undefined}
                   nameLocked
                   errors={errors}
                 />
@@ -282,8 +300,8 @@ function McpDetailPage() {
                   mcpUpdatedAt={query.data?.updatedAt}
                   dirty={dirty}
                   saving={save.isPending}
-                  onSaveForProbe={saveForProbe}
-                  onSaveForRuntimeTest={saveForRuntimeTest}
+                  onSaveForProbe={canUpdate ? saveForProbe : undefined}
+                  onSaveForRuntimeTest={canUpdate ? saveForRuntimeTest : undefined}
                   beginBusy={() => beginBusy(id)}
                 />
               ),

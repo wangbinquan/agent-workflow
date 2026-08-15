@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import type { Agent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useResourceList } from '@/hooks/useResourceList'
+import { usePermission } from '@/hooks/useActor'
 import { EmptyState } from '@/components/EmptyState'
 import { ResourceSplitPage, type ResourceCardItem } from '@/components/split/ResourceSplitPage'
 import { RUNTIMES_QUERY_KEY } from '@/components/RuntimeList'
@@ -31,6 +32,8 @@ export const IndexRoute = createRoute({
 
 function AgentsSplitLayout() {
   const { t } = useTranslation()
+  const canCreate = usePermission('agents:create')
+  const canReadRuntime = usePermission('runtime:read')
   // RFC-151 PR-3 — shared list shell: query + owner lookup (delete lives in the
   // detail header now).
   const { data, isLoading, error, refetch, owners } = useResourceList<Agent>({
@@ -43,6 +46,7 @@ function AgentsSplitLayout() {
   const runtimes = useQuery<{ runtimes: Array<{ name: string; isDefault: boolean }> }>({
     queryKey: RUNTIMES_QUERY_KEY,
     queryFn: ({ signal }) => api.get('/api/runtimes', undefined, signal),
+    enabled: canReadRuntime,
   })
   const defaultRuntimeName = runtimes.data?.runtimes.find((r) => r.isDefault)?.name
 
@@ -141,6 +145,7 @@ function AgentsSplitLayout() {
       newActive={isNew}
       newLabel={t('agents.newButton')}
       newTo="/agents/new"
+      canCreate={canCreate}
       searchPlaceholder={t('common.searchEllipsis')}
       emptyListText={t('agents.emptyList')}
       emptyDescription={t('agents.emptyDescription')}

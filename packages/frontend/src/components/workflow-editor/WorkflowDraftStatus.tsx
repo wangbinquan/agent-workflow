@@ -26,8 +26,10 @@ export interface WorkflowDraftStatusProps {
   onOverwriteRemote: ConfirmAction
   onRetryAccess: () => void
   onReturnToList: () => void
-  /** Conflict always offers copy; terminal notices expose it only when authorized. */
+  /** Copy remains available by default; permission-aware callers explicitly disable it. */
   canSaveCopy?: boolean
+  /** Loading the remote revision is read-only; overwriting it is not. */
+  canOverwrite?: boolean
 }
 
 const PHASE_KIND: Record<WorkflowDraftPhase, StatusChipKind> = {
@@ -192,9 +194,15 @@ export function WorkflowDraftStatus(props: WorkflowDraftStatusProps): ReactEleme
           title={t('editor.draftStatus.conflictTitle')}
           action={
             <Actions>
-              <button type="button" className="btn btn--sm btn--primary" onClick={props.onSaveCopy}>
-                {t('editor.draftStatus.saveCopyRecommended')}
-              </button>
+              {props.canSaveCopy !== false && (
+                <button
+                  type="button"
+                  className="btn btn--sm btn--primary"
+                  onClick={props.onSaveCopy}
+                >
+                  {t('editor.draftStatus.saveCopyRecommended')}
+                </button>
+              )}
               <button
                 ref={loadTriggerRef}
                 type="button"
@@ -203,14 +211,16 @@ export function WorkflowDraftStatus(props: WorkflowDraftStatusProps): ReactEleme
               >
                 {t('editor.draftStatus.loadRemote')}
               </button>
-              <button
-                ref={overwriteTriggerRef}
-                type="button"
-                className="btn btn--sm btn--danger"
-                onClick={() => setConfirmation('overwrite')}
-              >
-                {t('editor.draftStatus.overwriteRemote')}
-              </button>
+              {props.canOverwrite !== false && (
+                <button
+                  ref={overwriteTriggerRef}
+                  type="button"
+                  className="btn btn--sm btn--danger"
+                  onClick={() => setConfirmation('overwrite')}
+                >
+                  {t('editor.draftStatus.overwriteRemote')}
+                </button>
+              )}
             </Actions>
           }
         >
@@ -287,7 +297,7 @@ export function WorkflowDraftStatus(props: WorkflowDraftStatusProps): ReactEleme
         triggerRef={loadTriggerRef}
       />
       <ConfirmDialog
-        open={phase === 'conflict' && confirmation === 'overwrite'}
+        open={props.canOverwrite !== false && phase === 'conflict' && confirmation === 'overwrite'}
         title={t('editor.draftStatus.overwriteDialogTitle')}
         description={t('editor.draftStatus.overwriteDialogBody', {
           localRevision,

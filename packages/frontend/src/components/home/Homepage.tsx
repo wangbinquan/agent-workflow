@@ -12,13 +12,15 @@
 import { CapabilityGrid } from './CapabilityGrid'
 import { HomepageGreeting } from './HomepageGreeting'
 import { TaskFeed } from './TaskFeed'
+import { usePermission } from '@/hooks/useActor'
 
 export function Homepage() {
+  const canReadTasks = usePermission('tasks:read')
   return (
     <div className="page homepage" data-testid="homepage">
       <HomepageGreeting />
       <CapabilityGrid />
-      <TaskFeed />
+      {canReadTasks && <TaskFeed />}
     </div>
   )
 }

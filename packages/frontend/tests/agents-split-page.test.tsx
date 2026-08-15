@@ -20,6 +20,7 @@ import {
   beginDeferredPackageCommit,
   beginUnknownPackageCommit,
 } from './resource-package-create-busy.helpers'
+import { fullAccessActorResponse, seedFullAccessActor } from './unexpectedNetwork'
 import '../src/i18n'
 
 interface AgentRow {
@@ -101,6 +102,8 @@ function installFetch(
       const body = typeof init?.body === 'string' && init.body ? JSON.parse(init.body) : null
       const path = url.replace(/^https?:\/\/[^/]+/, '')
 
+      if (method === 'GET' && path === '/api/auth/me') return fullAccessActorResponse()
+
       if (method === 'GET' && path.endsWith('/api/agents'))
         return opts.failList ? json({ error: 'boom' }, 500) : json(agents)
       if (method === 'POST' && path.endsWith('/api/agents/import-resolve')) return json({})
@@ -179,6 +182,7 @@ function renderAgents(
   initial: string,
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
 ) {
+  seedFullAccessActor(qc)
   const tree = RootRoute.addChildren([
     agentsRoute.addChildren([agentNewRoute, agentDetailRoute, agentsIndexRoute]),
   ])
