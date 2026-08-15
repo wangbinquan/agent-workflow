@@ -100,6 +100,44 @@ export function resolveTarget(
   }
 }
 
+export type ProjectAddress =
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly message: string }
+
+/**
+ * How to ADDRESS this project in an API path — which is not how to identify it.
+ *
+ * The two differ per provider, and the difference is the reason this function
+ * sits next to `workItemKeyOf` instead of in its own file: a reader who sees
+ * only one of them reaches for the wrong projection.
+ *
+ *   GitLab  `/projects/{id}` accepts the numeric project id directly, so the
+ *           stable identity doubles as the address. Nothing to reconcile.
+ *   GitHub  `/repos/{owner}/{repo}` takes the PATH. The numeric repository id
+ *           is not accepted on this route, so the address has to come from the
+ *           mutable display snapshot even though identity never may.
+ *
+ * When GitHub has no path, this refuses. The tempting alternative — send the
+ * numeric id and let the host 404 — is merely loud, but the other tempting
+ * alternative is not: `services/codeHost/project.ts` already records why a
+ * path-shaped value must never be sent on a hunch, because a repository that
+ * belongs to a different host will happily resolve to a same-named project on
+ * this one, and the round then comments on a stranger's code.
+ */
+export function apiProjectAddress(target: RoundTarget): ProjectAddress {
+  if (target.provider === 'gitlab') return { ok: true, value: target.stableProjectId }
+
+  const path = target.meta.repoPath ?? ''
+  if (path === '') {
+    return {
+      ok: false,
+      message:
+        'GitHub addresses a repository by owner/repo and the trigger context carries no repository path — the numeric id cannot be used on this route',
+    }
+  }
+  return { ok: true, value: path }
+}
+
 /**
  * The work item identity key this target belongs to.
  *

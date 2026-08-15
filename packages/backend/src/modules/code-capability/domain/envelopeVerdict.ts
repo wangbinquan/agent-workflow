@@ -18,7 +18,7 @@
 // `resolve-positions` stage and never reaches this module; what arrives here is
 // only ever "does the output conform to what the stage declared".
 
-import type { ZodType } from 'zod'
+import type { ZodType, ZodTypeDef } from 'zod'
 import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
 
 export type EnvelopeVerdict<T> =
@@ -43,7 +43,13 @@ export interface JudgeEnvelopeArgs<T> {
   nonce: string
   /** Which port inside the envelope carries the payload. */
   portName: string
-  schema: ZodType<T>
+  /**
+   * The input side is `unknown` on purpose: what arrives is `JSON.parse` output,
+   * and typing it as the schema's own input type would reject any schema whose
+   * input differs from its output — every schema with a `.default()`, which is
+   * exactly how an optional field with a sensible fallback is declared.
+   */
+  schema: ZodType<T, ZodTypeDef, unknown>
   /**
    * Closed-set / range checks the schema cannot express, returning one message
    * per problem. Runs only after the schema passes, so it can assume the shape.

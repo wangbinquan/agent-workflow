@@ -55,6 +55,7 @@ export const CODE_HOST_ACTIONS = [
   'job.list',
   'job.log',
   // read
+  'mr.get',
   'mr.diff',
   'mr.list',
   'file.read',
@@ -80,6 +81,11 @@ export const CODE_HOST_FIELDS = [
   'comments',
   'draft',
   'review_event',
+  // The head sha a GitHub review is pinned to. Omitting it is not "let the host
+  // decide" — GitHub then attaches the review to the PR's LATEST commit, so a
+  // push landing mid-review moves every comment onto a revision the reviewer
+  // never read, with the line numbers still computed from the one it did.
+  'commit_id',
   'sha',
   'state',
   'context',
@@ -390,6 +396,11 @@ export const CODE_HOST_ACTION_DEFS = {
         requiredFor: [],
         onlyFor: ['github'],
       },
+      // 本轮检视所依据的 head sha。**留空不是「让平台自己挑」而是「挑最新那个」**
+      // ——GitHub 明确规定 commit_id 缺省取 PR 最近一次提交。于是作者在检视跑
+      // 期间又推了一次，意见就会挂到它从未读过的那个 revision 上，行号照 A 算、
+      // 代码却是 B。RFC-304 一路把 baseline sha 钉死到这里，正是为了堵这最后一环。
+      { name: 'commit_id', control: 'text', requiredFor: [], onlyFor: ['github'] },
     ],
     bindings: {
       // GitLab 没有「一次提交整份 review」的端点——它的等价物就是上面那对
@@ -403,6 +414,7 @@ export const CODE_HOST_ACTION_DEFS = {
           { api: 'body', from: { field: 'body' } },
           { api: 'comments', from: { field: 'comments' }, transform: 'json-object' },
           { api: 'event', from: { field: 'review_event' } },
+          { api: 'commit_id', from: { field: 'commit_id' }, omitIfEmpty: true },
         ],
       },
     },
@@ -678,6 +690,18 @@ export const CODE_HOST_ACTION_DEFS = {
   // -------------------------------------------------------------------------
   // 读取类 —— 把代码平台侧的信息引进工作流当输入
   // -------------------------------------------------------------------------
+  // MR 本体。RFC-304 需要它是因为 **GitLab 的行内评论 position 必须带
+  // `diff_refs`（base_sha / start_sha / head_sha）**，而 `/diffs` 不返回这三个值
+  // ——少了它们 GitLab 一律拒收 position，行级评论根本发不出去。顺带也是拿 title /
+  // state / source_branch 的正路，省得从 `mr.list` 里捞。
+  'mr.get': {
+    group: 'read',
+    fields: [PROJECT, MR_REQUIRED],
+    bindings: {
+      gitlab: { method: 'GET', path: '/projects/{__project__}/merge_requests/{mr}' },
+      github: { method: 'GET', path: '/repos/{__project__}/pulls/{mr}' },
+    },
+  },
   'mr.diff': {
     group: 'read',
     fields: [PROJECT, MR_REQUIRED],

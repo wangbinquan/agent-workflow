@@ -32,6 +32,17 @@ export interface DiffHunk {
   /** First old-side line, 1-based; null when the file was added. */
   oldStart: number | null
   oldLines: number
+  /**
+   * The hunk's body lines, each still carrying its ` `/`+`/`-` marker.
+   *
+   * Optional because range anchoring (above) does not need them — but placing a
+   * comment does. GitLab wants both (path, line) pairs for a CONTEXT line and
+   * only one for an added or removed line, and the marker is the only thing
+   * that says which a given line is. Without bodies, `resolveAnchoredLine`
+   * refuses rather than guessing; guessing "added" for a context line puts the
+   * comment on the wrong row every time the hunk has shifted.
+   */
+  lines?: readonly string[]
 }
 
 export interface FindingLocation {

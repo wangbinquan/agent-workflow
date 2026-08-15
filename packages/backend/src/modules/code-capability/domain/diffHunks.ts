@@ -60,6 +60,10 @@ export function parseDiffHunks(unifiedDiff: string): DiffHunk[] {
         oldLines: hunk.oldLines,
         newStart: hunk.newLines > 0 ? hunk.newStart : null,
         newLines: hunk.newLines,
+        // Carried through so a comment can be PLACED, not merely anchored: the
+        // per-line markers are the only record of which lines are context, and
+        // GitLab needs that to address a context line correctly.
+        lines: hunk.lines,
       })
     }
   }

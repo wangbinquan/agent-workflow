@@ -730,8 +730,27 @@ last-known-good 反馈，绝不能出现「新的没发出去、旧的已经被�
    `source_branch`；GitLab 官方也明确顶层 `project` 是 **target** project。dispatch 随后把该 branch
    当 ref 用（`webhookDispatch.ts:372`）。fork 场景下 target clone 里根本没有那个分支，
    `fetch --all` 也只抓 target remote——非 shallow 救不了「另一个仓库的 ref」。
-   **对策**：归一化并冻结 **source project 的 clone URL + head SHA**；`prepare-worktree` 按
-   source remote 精确 fetch head ref。两家的 fork MR/PR 必须各有一条端到端用例。
+   **对策（实现时改道，见下）**：归一化并冻结 **source project 的 clone URL + head SHA**；
+   `prepare-worktree` 按 source remote 精确 fetch head ref。两家的 fork MR/PR 必须各有一条
+   端到端用例。
+
+   > **实现偏离（PR-4a，`domain/headFetchPlan.ts`）**：改为**只从 target remote 取**。两家都把
+   > MR head 发布成**目标仓内**的一个 ref——GitLab `refs/merge-requests/{iid}/head`、GitHub
+   > `refs/pull/{n}/head`——这两个 ref 对 fork 的 head 同样解析得到。相比"记住 source clone URL
+   > 再去 fork 仓 fetch"，它少一套机制，且**消除了 source remote 方案无法回避的一个失败态**：
+   > fork 可能是私有的、已删除的、或在配置 token 够不到的实例上，此时根本无从 fetch，检视永远
+   > 不会跑。target remote 恰是平台已经持有凭据的那一个。
+   >
+   > 单点 ref 仍可能缺失（自建实例 housekeeping 会清理旧 MR ref），故取数是**有序链**：先 MR
+   > ref、再裸 SHA（`uploadpack` 允许 reachable-SHA1 时可用），全败时把**每一条试过的 refspec
+   > 连同各自的错误**一起报出——这正是运维看到 `repo-ref-not-found` 与看到"对该 remote 试了这
+   > 两条 refspec"之间的差别。
+   >
+   > 同时补一条设计里没有的判据：**head 是移动靶**。webhook 到达与 fetch 执行之间作者可以再推，
+   > 此时 MR ref 已指向新处；照 ref 取就会**用 A 的 diff 锚定 B 的代码**——每条意见的行号都由
+   > 检视者从未看过的文件内容算出，而输出里对此毫无提示。故 fetch 回来必须与本轮 baseline sha
+   > 比对，不等即判 `stale`（非错误），带上新 sha 让工作项**在新 sha 上重新武装**而不是丢弃该轮
+   > ——丢弃等于赌"新推送自带 webhook"，赌输时 MR 永远得不到检视，且唯一症状是沉默。
 2. **fork PR 的 CI 事件找不到 MR。** `githubAdapter.ts:447` 已记录：fork PR 的
    `workflow_run.pull_requests[]` 为空，此时 `mrIid` 缺失，且该行为被
    `tests/rfc259-github-adapter.test.ts:291` 锁定。而工作项身份要求 `anchorId`。

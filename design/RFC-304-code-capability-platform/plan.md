@@ -209,13 +209,29 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 **一个固定的内置 review binding**、最小启用开关、**单个 review AI**（不拆块）。它不宣称完成
 `mr-review` 的全部 AC——那是 PR-4b。
 
-| #    | 任务                                                                                                                                                        | 依赖               |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| T4a1 | 最小 `mr-review` 契约：`resolve-target → prepare-worktree → fetch-diff → review(单个 AI) → validate-findings → gate → resolve-positions → publish → ledger` | T4,T6              |
-| T4a2 | 最小启用开关（矩阵行 + 触发器创建），不含 readiness 三态与一键修复                                                                                          | T16                |
-| T4a3 | 端到端：真实 webhook → 真实 code-host → **MR 上出现行级评论**（两家各一条）                                                                                 | T4a1,T4a2,T21,T25b |
+| #     | 任务                                                                                                                                                        | 依赖               | 状态          |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------- |
+| T4a1  | 最小 `mr-review` 契约：`resolve-target → prepare-worktree → fetch-diff → review(单个 AI) → validate-findings → gate → resolve-positions → publish → ledger` | T4,T6              | 各段已建并测  |
+| T4a1z | 上述各段的**装配**（按序跑通一轮 `mr-review`）                                                                                                              | T4a1               |               |
+| T4a2  | 最小启用开关（矩阵行 + 触发器创建），不含 readiness 三态与一键修复                                                                                          | T16                |               |
+| T4a3  | 端到端：真实 webhook → 真实 code-host → **MR 上出现行级评论**（两家各一条）                                                                                 | T4a1z,T4a2,T21,T25b |              |
 
-> 推迟到 PR-4b 的：拆块并行与全局关联审、fork 支持、三集合对账与 finding 生命周期、采纳信号、
+各段落位（2026-08-15）：`resolve-target` = `domain/resolveTarget.ts`；`prepare-worktree` =
+`domain/headFetchPlan.ts` + `application/prepareWorktree.ts` + `infrastructure/gitAdapter.ts`；
+`fetch-diff` = `domain/mrDiffNormalize.ts` + `application/fetchDiff.ts`；`review` =
+`domain/reviewPrompt.ts` + `domain/reviewEnvelope.ts` + `application/reviewStage.ts`（AI 派发以
+`makeCaller` 注入，不碰 scheduler，受 T11 负扫描约束）；`resolve-positions` =
+`domain/anchorLine.ts` + 既有 `domain/reviewPosition.ts`；`publish` =
+`application/publishReview.ts`。
+
+> **fork 支持提前落在 PR-4a**（原列在 PR-4b 的 T24b）：改为只从 target remote 取
+> `refs/merge-requests/{iid}/head` / `refs/pull/{n}/head`——两家都把 MR head 发布成目标仓内的
+> ref，对 fork 同样解析，比「冻结 source clone URL 再去 fork 仓 fetch」少一套机制且不受 fork
+> 私有/已删/token 够不到的影响。理由与偏离记在 `design.md §6.1`，真机验证在
+> `tests/rfc304-git-adapter.test.ts`（真 git 建一个只存在于 MR ref 上的提交）。T24b 因此在
+> PR-4b 只剩「fork PR 的 CI 事件经 head SHA→开放 PR 映射唤醒」一半。
+
+> 仍推迟到 PR-4b 的：拆块并行与全局关联审、三集合对账与 finding 生命周期、采纳信号、
 > 配置包扩展（T17a/b）。它们都不影响"第一条评论能不能出来"。
 
 ### MR 检视完整能力（PR-4b）

@@ -10,7 +10,31 @@
 >
 > **PR-1a 已完工（2026-08-15，T1-T5/T7/T8/T12，130 条新测试）**：新增第 14 个 bounded context `modules/code-capability/`——工作项状态机（纯函数 + 守卫优先级穷举）、四张表（migration 0159，身份键用**稳定 projectId 而非可变仓库路径**）、阶段契约判别联合（`ai` 的 schema 由类型强制必填）、阶段引擎（**结构上够不到 agent**，故「program 阶段不派发 AI」成立且全链路可在无模型/无子进程/无网络下真实测试）、钩子执行（按 D4 先把 `assembleScriptEnv` 与 `WorkflowNode` **解耦**再复用，而非复制第二套脚本执行）、契约版本化、最简内置链路。落地中改掉一处**隐式契约**：钩子注入原靠 mutate `ctx.artifacts` 生效（仅因 pre 与 runner 共用 ctx 对象），改为显式 `{ inject }` 并限定只作用于本阶段。`AW_CWI_*` 已登记 `docs/env-flags.md`。**PR-1b 进行中**（真实 code-round + AI 确定性守卫）：T6 确定性守卫（宪法 R3/R4/R5——判定做成纯函数、两级重试**不是一个预算写两遍**、两级耗尽返回 `exhausted` 而非尽力而为的值）、T2b AI 尝试台账与崩溃恢复（收束悬挂行**与**抬升序号缺一不可，各是独立的真 bug）、T11 负扫描 + **反向自检**均已落地。T11 附**勘误**：plan 原写「`SAFE_FORWARD_ENV` 未被修改」基于过期假设——该符号已随 RFC-276 退役、当前代码零命中，为它写扫描等于扫一个不存在的东西且永远绿；已替换为「钩子 `AW_CWI_*` 不可被作者 overlay 覆盖」。**PR-1b、PR-1c 亦已完工，三块地基全部落地并经 CI 验证**。PR-1b 后半把 PR-0 的空阶段桩换成真实引擎，并建了本模块第一个 `public/`（只暴露一个动词 `runRound`，落在 exact entrypoint `public/types.ts`——非 exact entrypoint 是 RFC-294 记录在案的试点债务，该清单只能缩）。PR-1c 交付两条并发不变量：**发布临界区**（`调用前复检 epoch` 是 TOCTOU，复检后到 HTTP 发出前事件处理器仍能改 epoch；lease 挡不住它，因为 lease 只阻止另一轮启动）与 **MR 级 lease**（`mr-review` 与 `mr-monitor` 是同一 MR 上的两个工作项，都能 running），外加**可恢复的发布意图**（防「评论已发出但台账无 id ⇒ 下一轮重发一遍」）。约 200 条测试。
 
-> **重要现状**：至此**没有任何一条能力能真正跑通**——各能力的 program 阶段实现要到各自的 PR 才落。真实启动一个 round 会**失败**并报 `program stage 'prepare-worktree' has no registered implementation`，这是刻意为之且有测试钉住：一个「悄悄跳过未实现阶段然后报 done」的 runner 正是本 RFC 存在要防的东西。第一条真实 MR 行级评论在 **PR-4a**。**当前进行 PR-2**（两层配置与模板资源）。
+> **PR-4a 进行中（2026-08-15）——`mr-review` 各阶段已建并测，尚差装配上线**。落位见
+> `plan.md §PR-4a`。本轮的取向是**每一处失败都具名拒绝，不取默认值**：以默认值起步的一轮会
+> 一路跑到发布并**真的贴出评论**，而作者看到的评论「看起来是有意为之的」——这比拒绝启动糟得多。
+> 几处值得单独记的判断：
+>
+> - **身份 vs 寻址是两个值**。工作项键用稳定 `projectId`（改名/转组后同键），但 GitHub 的
+>   `/repos/{owner}/{repo}` **不收数字 id**，寻址必须走可变的 repo path；两个投影同放
+>   `domain/resolveTarget.ts` 并互相引用，因为拆开正是让人拿错那一个的原因。GitHub 缺 path 时
+>   **拒绝**而非「看着像 project path 就发出去」（同 `services/codeHost/project.ts` 的既有铁律）。
+> - **fork 改道**（原 PR-4b 的 T24b 提前解决）：只从 target remote 取
+>   `refs/merge-requests/{iid}/head` / `refs/pull/{n}/head`。偏离记在 `design.md §6.1`，真机验证
+>   在 `tests/rfc304-git-adapter.test.ts`（真 git 造一个只存在于 MR ref 上的提交）。
+> - **head 是移动靶**：webhook 到达与 fetch 之间作者可再推，照 ref 取会「用 A 的 diff 锚定 B 的
+>   代码」。fetch 回来必与 baseline 比对，不等即 `stale`（非错误）并带新 sha 让工作项重新武装
+>   ——丢弃等于赌「新推送自带 webhook」，赌输时 MR 永远得不到检视且唯一症状是沉默。同理
+>   GitHub `review.submit` 必须带 `commit_id`（缺省会挂到 PR **最新**提交上）。
+> - **一条 finding 绝不静默丢失**：位置构不出、发布中途报错，一律并入总览评论。发四条却对另外
+>   三条只字不提，比一条不发更糟——作者会合理地把那四条当成全部答案。
+> - **空评审是完整答案**：schema 不设 `findings` 最小长度，prompt 明写「没问题就一条都别报」。
+>   逼模型至少找一条，是本平台最贵的失效模式（编造的 finding 在后续每一步都与真的无法区分）。
+>
+> **仍未跑通端到端**：装配（T4a1z）已写但未接进 runner 注册表，启用开关（T4a2）与真机端到端
+> （T4a3）未做。真实启动一个 round 仍会**失败**并报
+> `program stage 'prepare-worktree' has no registered implementation`——这是刻意为之且有测试钉住：
+> 一个「悄悄跳过未实现阶段然后报 done」的 runner 正是本 RFC 存在要防的东西。
 
 > ✅ **已完成 RFC（Done，2026-08-15）：[RFC-287 scheduler 装配线收敛 + 四个正交行为尾批](design/RFC-287-scheduler-assembly-convergence/proposal.md)** —— T1-T14 全部落地，**经五轮实现门收官**，累计 **90 条真缺陷**全部处置（每条带回归用例 + 变异实证）。
 >

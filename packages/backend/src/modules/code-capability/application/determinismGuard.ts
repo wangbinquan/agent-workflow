@@ -20,7 +20,7 @@
 // every AI call is inspectable, and a stage row cannot express "shard 2 retried
 // twice, then re-ran in a new session".
 
-import type { ZodType } from 'zod'
+import type { ZodType, ZodTypeDef } from 'zod'
 import {
   judgeEnvelope,
   type EnvelopeRejectionCode,
@@ -68,7 +68,8 @@ export interface RetryBudget {
 
 export interface GuardedAiStageArgs<T> {
   caller: AiCaller
-  schema: ZodType<T>
+  /** See `JudgeEnvelopeArgs.schema` — the input side is `unknown` by design. */
+  schema: ZodType<T, ZodTypeDef, unknown>
   nonce: string
   portName: string
   budget: RetryBudget
