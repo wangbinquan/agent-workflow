@@ -354,20 +354,22 @@ function TasksPage() {
 
   return (
     <div className="page page--operations page--task-operations">
-      {sync.dirty && (
-        <NoticeBanner
-          tone="info"
-          size="compact"
-          testid="tasks-dirty-banner"
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void sync.refresh()}>
-              {t('tasks.operations.refresh')}
-            </button>
-          }
-        >
-          {t('tasks.operations.updated')}
-        </NoticeBanner>
-      )}
+      <FeedbackStack variant="section">
+        {sync.dirty && (
+          <NoticeBanner
+            tone="info"
+            size="compact"
+            testid="tasks-dirty-banner"
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => void sync.refresh()}>
+                {t('tasks.operations.refresh')}
+              </button>
+            }
+          >
+            {t('tasks.operations.updated')}
+          </NoticeBanner>
+        )}
+      </FeedbackStack>
 
       <div className="operations-surface">
         <PageHeader

@@ -27,7 +27,9 @@ const COVERAGE: ReadonlyArray<readonly [file: string, minimumStacks: number]> = 
   ['routes/mcps.new.tsx', 1],
   ['routes/plugins.detail.tsx', 1],
   ['routes/plugins.new.tsx', 1],
-  ['routes/tasks.tsx', 1],
+  // User-reported regression (2026-08-15): the live-update banner above the
+  // task operations surface also needs the standard section gap.
+  ['routes/tasks.tsx', 2],
   ['routes/reviews.tsx', 1],
   ['routes/clarify.tsx', 1],
   ['routes/scheduled.tsx', 1],
