@@ -1,12 +1,13 @@
 // RFC-036 — user_pats store. Raw PAT token: `aws_pat_<32-hex>`. Same hash-only
 // design as user_sessions but with optional scopes (PAT narrows the actor's
-// role permissions; never widens them — see auth/actor.ts).
+// effective account permissions; never widens them — see auth/actor.ts).
 
 import { randomBytes } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   grantableMatrixPoints,
+  resolveEffectiveAccountPermissions,
   PAT_TOKEN_PREFIX,
   type PatPublic,
   type PatPurpose,
@@ -37,24 +38,31 @@ export interface CreatePatInput {
   now?: number
 }
 
-/** Raised when a requested matrix contains points the owner's role cannot grant. */
+/** Raised when a requested matrix contains points the owner's account cannot grant. */
 export class PatMatrixError extends Error {
   constructor(readonly ungrantable: ReadonlyArray<Permission>) {
-    super(`matrix contains points this role cannot grant: ${ungrantable.join(', ')}`)
+    super(`matrix contains points this account cannot grant: ${ungrantable.join(', ')}`)
   }
 }
 
 /**
  * RFC-247 AC-7 — reject an over-reaching matrix instead of silently dropping it.
  *
- * `resolveTokenPermissions` already intersects with the role baseline, so an
+ * `resolveTokenPermissions` already intersects with effective account authority, so an
  * ungrantable point simply would not take effect. Silently narrowing is the
  * wrong behaviour at CREATION time though: the user walks away believing they
  * issued a token that can do something it cannot, and only finds out when the
  * automation fails somewhere far from here. Refuse, and name what was refused.
  */
-export function assertMatrixGrantable(role: Role, scopes: ReadonlyArray<Permission>): void {
-  const grantable = new Set(grantableMatrixPoints(role))
+export function assertMatrixGrantable(
+  accountOrRole: ReadonlySet<Permission> | Role,
+  scopes: ReadonlyArray<Permission>,
+): void {
+  const accountPermissions =
+    typeof accountOrRole === 'string'
+      ? resolveEffectiveAccountPermissions({ role: accountOrRole, additionalPermissions: [] })
+      : accountOrRole
+  const grantable = new Set(grantableMatrixPoints(accountPermissions))
   const bad = scopes.filter((p) => !grantable.has(p))
   if (bad.length > 0) throw new PatMatrixError(bad)
 }

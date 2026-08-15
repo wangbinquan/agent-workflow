@@ -37,10 +37,10 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   INTENT_REDACTED,
-  ROLE_PERMISSIONS,
   SYSTEM_DOMAIN_POINTS,
   WORKFLOW_SCHEMA_VERSION,
   grantableMatrixPoints,
+  resolveEffectiveAccountPermissions,
   resolveTokenPermissions,
   canonicalIntentJson,
   parseIntentChangeset,
@@ -60,18 +60,20 @@ const BOSS = 'user_manager_priv_00000000'
 let db: DbClient
 let appHome: string
 
-/** Real role permission sets, not hand-written ones: the whole question this
- *  file answers is "what can a `role:'user'` account do", so deriving from
- *  ROLE_PERMISSIONS is what keeps the answer true if the baseline ever moves. */
-function actorOf(id: string, role: 'user' | 'manager' | 'admin'): Actor {
+/** Resolve the same preset + per-account grants used by production. */
+function actorOf(
+  id: string,
+  role: 'user' | 'manager' | 'admin',
+  additionalPermissions: ReadonlyArray<Permission> = [],
+): Actor {
   return {
     user: { id, username: id, displayName: id, role, status: 'active' },
     source: 'session',
-    permissions: new Set<Permission>(ROLE_PERMISSIONS[role]),
+    permissions: resolveEffectiveAccountPermissions({ role, additionalPermissions }),
   }
 }
 const plain = actorOf(PLAIN, 'user')
-const boss = actorOf(BOSS, 'manager')
+const boss = actorOf(BOSS, 'user', ['scripts:author', 'code-host-calls:author'])
 
 async function seedUser(id: string, role: 'user' | 'manager' | 'admin' = 'user'): Promise<void> {
   await db.insert(users).values({
@@ -286,17 +288,17 @@ beforeEach(async () => {
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-priv-'))
   mkdirSync(join(appHome, 'skills'), { recursive: true })
   await seedUser(PLAIN, 'user')
-  await seedUser(BOSS, 'manager')
+  await seedUser(BOSS, 'user')
 })
 afterEach(() => {
   rmSync(appHome, { recursive: true, force: true })
 })
 
 // ---------------------------------------------------------------------------
-// NORMAL — the capability works for the roles that hold the point.
+// NORMAL — the capability works for any effective authority that holds the point.
 // ---------------------------------------------------------------------------
-describe('normal: an author-permitted role can create privileged nodes via intent', () => {
-  test('manager creates a workflow carrying a script node', async () => {
+describe('normal: an author-permitted account can create privileged nodes via intent', () => {
+  test('a user with an explicit grant creates a workflow carrying a script node', async () => {
     const receipt = (await applyAs(boss, createBundle([{ ...SCRIPT_NODE_NO_ENV }]))) as {
       applied: Array<{ resourceId: string }>
     }
@@ -305,7 +307,7 @@ describe('normal: an author-permitted role can create privileged nodes via inten
     expect(nodes.find((n) => n.kind === 'script')?.script).toBe(SCRIPT_NODE.script)
   })
 
-  test('manager creates a workflow carrying a code-host-call node', async () => {
+  test('a user with an explicit grant creates a workflow carrying a code-host-call node', async () => {
     const receipt = (await applyAs(boss, createBundle([{ ...CODE_HOST_NODE }]))) as {
       applied: Array<{ resourceId: string }>
     }
@@ -335,13 +337,12 @@ describe('normal: an author-permitted role can create privileged nodes via inten
 // This is the direct answer to "can an ordinary user create these via intent".
 // ---------------------------------------------------------------------------
 describe('abnormal: a plain user cannot create privileged nodes via intent', () => {
-  test('the role genuinely lacks both points (derived, not assumed)', () => {
+  test('the default user preset lacks both points but explicit grants add them', () => {
     expect(plain.permissions.has('scripts:author')).toBe(false)
     expect(plain.permissions.has('code-host-calls:author')).toBe(false)
-    // and the reason they lack them: the points are manager/admin-only
-    expect(ROLE_PERMISSIONS.user).not.toContain('scripts:author')
-    expect(ROLE_PERMISSIONS.manager).toContain('scripts:author')
-    expect(ROLE_PERMISSIONS.manager).toContain('code-host-calls:author')
+    expect(boss.user.role).toBe('user')
+    expect(boss.permissions.has('scripts:author')).toBe(true)
+    expect(boss.permissions.has('code-host-calls:author')).toBe(true)
   })
 
   test('a script node is refused with script-author-forbidden and zero rows', async () => {
@@ -743,7 +744,7 @@ describe('boundary: the same rules for a code-host-call node', () => {
     })
   }
 
-  test('a manager MAY change what a plain user may not', async () => {
+  test('a user with the grant MAY change what an ungranted user may not', async () => {
     const wf = await seedWorkflow('ch-flow', BOSS, {
       $schema_version: WORKFLOW_SCHEMA_VERSION,
       inputs: [],
@@ -949,24 +950,32 @@ describe('boundary: how much of a redacted nested field may be sent', () => {
 // SYSTEM_DOMAIN_POINTS, which resolveTokenPermissions deletes unconditionally
 // (permission.ts:490) — so no token carries them whatever its owner's role or
 // grant matrix. `intent:read` / `intent:write` are system-domain as well, so a
-// token cannot even open an intent session. Asserting the full matrix at the
-// highest role is what makes that airtight rather than incidental.
+// token cannot even open an intent session. Asserting every preset plus an
+// explicitly granted user makes that airtight rather than incidental.
 // ---------------------------------------------------------------------------
 describe('abnormal: no PAT can author privileged nodes, at any role', () => {
   for (const role of ['user', 'manager', 'admin'] as const) {
     test(`a ${role}'s token with EVERY grantable point still lacks both author points`, () => {
-      const perms = resolveTokenPermissions({
+      const accountPermissions = resolveEffectiveAccountPermissions({
         role,
-        matrix: [...grantableMatrixPoints(role)],
+        additionalPermissions: [],
+      })
+      const perms = resolveTokenPermissions({
+        accountPermissions,
+        matrix: [...grantableMatrixPoints(accountPermissions)],
       })
       expect(perms.has('scripts:author')).toBe(false)
       expect(perms.has('code-host-calls:author')).toBe(false)
     })
 
     test(`a ${role}'s token cannot open an intent session at all`, () => {
-      const perms = resolveTokenPermissions({
+      const accountPermissions = resolveEffectiveAccountPermissions({
         role,
-        matrix: [...grantableMatrixPoints(role)],
+        additionalPermissions: [],
+      })
+      const perms = resolveTokenPermissions({
+        accountPermissions,
+        matrix: [...grantableMatrixPoints(accountPermissions)],
       })
       expect(perms.has('intent:read')).toBe(false)
       expect(perms.has('intent:write')).toBe(false)
@@ -978,9 +987,24 @@ describe('abnormal: no PAT can author privileged nodes, at any role', () => {
     expect(SYSTEM_DOMAIN_POINTS).toContain('code-host-calls:author')
   })
 
+  test('a user explicitly granted both author points still loses them on a PAT', () => {
+    const accountPermissions = resolveEffectiveAccountPermissions({
+      role: 'user',
+      additionalPermissions: ['scripts:author', 'code-host-calls:author'],
+    })
+    const perms = resolveTokenPermissions({
+      accountPermissions,
+      matrix: [...grantableMatrixPoints(accountPermissions)],
+    })
+    expect(perms.has('scripts:author')).toBe(false)
+    expect(perms.has('code-host-calls:author')).toBe(false)
+  })
+
   test('neither author point is even offerable in a token matrix', () => {
     for (const role of ['user', 'manager', 'admin'] as const) {
-      const offerable = grantableMatrixPoints(role)
+      const offerable = grantableMatrixPoints(
+        resolveEffectiveAccountPermissions({ role, additionalPermissions: [] }),
+      )
       expect(offerable).not.toContain('scripts:author')
       expect(offerable).not.toContain('code-host-calls:author')
     }

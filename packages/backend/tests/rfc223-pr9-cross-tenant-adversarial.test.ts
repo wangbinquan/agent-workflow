@@ -20,7 +20,11 @@ import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import {
+  resolveEffectiveAccountPermissions,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -60,7 +64,7 @@ const ADMIN_ACTOR: Actor = {
     status: 'active',
   },
   source: 'daemon',
-  permissions: new Set(),
+  permissions: resolveEffectiveAccountPermissions({ role: 'admin', additionalPermissions: [] }),
 }
 
 async function seedUser(db: DbClient, id: string): Promise<void> {

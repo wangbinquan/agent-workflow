@@ -3,8 +3,8 @@
 //
 // `GET /api/docs/api` is generated per request from the live route registry,
 // the live tool registry and the permission catalog (services/apiDocs.ts). It
-// is trimmed to the caller's role, because a page listing endpoints the reader
-// can never call teaches them nothing they can act on.
+// is trimmed to the caller's effective permissions, because a page listing
+// endpoints the reader can never call teaches them nothing they can act on.
 //
 // `GET /.well-known/mcp` is public by convention — that is what a discovery
 // document is for. It says where the endpoint is, whether the surface is
@@ -37,12 +37,12 @@ export function mountDocsRoutes(app: Hono, deps: AppDeps): void {
       publicReason:
         'documentation of the caller’s OWN capabilities; every authenticated actor may read what its credential can do, and a token needs it because RFC-247 D6 closes /api/auth/me to tokens',
       tokenAccess: 'allow',
-      summary: 'Generated REST + MCP documentation for the current role',
+      summary: 'Generated REST + MCP documentation for the current effective permissions',
     },
     (c) => {
       const actor = actorOf(c)
       return c.json({
-        ...buildApiDocs(actor.user.role),
+        ...buildApiDocs(actor.user.role, actor.permissions),
         snippets: clientSnippets(publicOriginOf(c, deps.configPath)),
       })
     },

@@ -6,20 +6,13 @@
 // Any other shape returns 401.
 
 import { timingSafeEqual } from 'node:crypto'
-import { eq } from 'drizzle-orm'
 import type { Context, MiddlewareHandler } from 'hono'
-import {
-  PAT_TOKEN_PREFIX,
-  SESSION_TOKEN_PREFIX,
-  type Permission,
-  type Role,
-} from '@agent-workflow/shared'
+import { PAT_TOKEN_PREFIX, SESSION_TOKEN_PREFIX, type Permission } from '@agent-workflow/shared'
 import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
-import { users } from '@/db/schema'
 import { getAuthLoginPolicy, isBootstrapRequired } from '@/auth/loginPolicy'
 import { ForbiddenError } from '@/util/errors'
 import { UnauthorizedError } from '@/util/errors'
-import { buildActor, SYSTEM_USER_ID, type Actor } from './actor'
+import { buildCurrentActor, SYSTEM_USER_ID, type Actor } from './actor'
 import { hashToken as hashPatToken, lookupActivePat, lookupActivePatByHash } from './patStore'
 import {
   hashToken as hashSessionToken,
@@ -140,28 +133,16 @@ export async function resolveActor(
   if (raw.startsWith(SESSION_TOKEN_PREFIX)) {
     const resolved = await lookupActiveSession(db, raw, now)
     if (!resolved) return null
-    return buildActor({
-      user: {
-        id: resolved.user.id,
-        username: resolved.user.username,
-        displayName: resolved.user.displayName,
-        role: resolved.user.role as Role,
-        status: resolved.user.status as 'active' | 'disabled' | 'invited',
-      },
+    return buildCurrentActor(db, {
+      userId: resolved.user.id,
       source: 'session',
     })
   }
   if (raw.startsWith(PAT_TOKEN_PREFIX)) {
     const resolved = await lookupActivePat(db, raw, now)
     if (!resolved) return null
-    return buildActor({
-      user: {
-        id: resolved.user.id,
-        username: resolved.user.username,
-        displayName: resolved.user.displayName,
-        role: resolved.user.role as Role,
-        status: resolved.user.status as 'active' | 'disabled' | 'invited',
-      },
+    return buildCurrentActor(db, {
+      userId: resolved.user.id,
       source: 'pat',
       patScopes: resolved.scopes as ReadonlyArray<Permission>,
       patPurpose: resolved.purpose,
@@ -175,19 +156,7 @@ export async function resolveActor(
   if (getAuthLoginPolicy(db).bootstrapCompletedAt !== null && !allowsLegacyDaemonTestAccess(db))
     return null
 
-  const sysRows = await db.select().from(users).where(eq(users.id, SYSTEM_USER_ID)).limit(1)
-  const sys = sysRows[0]
-  if (!sys) return null
-  return buildActor({
-    user: {
-      id: sys.id,
-      username: sys.username,
-      displayName: sys.displayName,
-      role: sys.role as Role,
-      status: sys.status as 'active' | 'disabled' | 'invited',
-    },
-    source: 'daemon',
-  })
+  return buildCurrentActor(db, { userId: SYSTEM_USER_ID, source: 'daemon' })
 }
 
 /**
@@ -207,28 +176,16 @@ export async function reresolveActor(
   if (credential.kind === 'session') {
     const resolved = await lookupActiveSessionByHash(db, credential.hash, now, { touch: false })
     if (!resolved) return null
-    return buildActor({
-      user: {
-        id: resolved.user.id,
-        username: resolved.user.username,
-        displayName: resolved.user.displayName,
-        role: resolved.user.role as Role,
-        status: resolved.user.status as 'active' | 'disabled' | 'invited',
-      },
+    return buildCurrentActor(db, {
+      userId: resolved.user.id,
       source: 'session',
     })
   }
   if (credential.kind === 'pat') {
     const resolved = await lookupActivePatByHash(db, credential.hash, now, { touch: false })
     if (!resolved) return null
-    return buildActor({
-      user: {
-        id: resolved.user.id,
-        username: resolved.user.username,
-        displayName: resolved.user.displayName,
-        role: resolved.user.role as Role,
-        status: resolved.user.status as 'active' | 'disabled' | 'invited',
-      },
+    return buildCurrentActor(db, {
+      userId: resolved.user.id,
       source: 'pat',
       patScopes: resolved.scopes as ReadonlyArray<Permission>,
       patPurpose: resolved.purpose,
@@ -239,19 +196,7 @@ export async function reresolveActor(
   // transaction commits.
   if (getAuthLoginPolicy(db).bootstrapCompletedAt !== null && !allowsLegacyDaemonTestAccess(db))
     return null
-  const sysRows = await db.select().from(users).where(eq(users.id, SYSTEM_USER_ID)).limit(1)
-  const sys = sysRows[0]
-  if (!sys || sys.status !== 'active') return null
-  return buildActor({
-    user: {
-      id: sys.id,
-      username: sys.username,
-      displayName: sys.displayName,
-      role: sys.role as Role,
-      status: sys.status as 'active' | 'disabled' | 'invited',
-    },
-    source: 'daemon',
-  })
+  return buildCurrentActor(db, { userId: SYSTEM_USER_ID, source: 'daemon' })
 }
 
 /**

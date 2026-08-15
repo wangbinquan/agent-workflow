@@ -9,6 +9,8 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { SYSTEM_USER_ID } from '../src/auth/actor'
+import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { createUser } from '../src/services/users'
 import { createSession } from '../src/auth/sessionStore'
 import { webhookDeliveries, webhookEndpoints, webhookTriggers, workflows } from '../src/db/schema'
@@ -173,6 +175,72 @@ describe('RFC-257 · 触发器面错误码', () => {
     expect(
       await codeOf(await h.call('POST', `/api/webhook-triggers/${tid}/streams/reset`, {})),
     ).toBe('webhook-stream-invalid')
+  })
+
+  test('webhook-triggers:override-owner grant/revoke controls cross-owner mutation', async () => {
+    const h = await harness()
+    await h.db
+      .update(workflows)
+      .set({ visibility: 'public' })
+      .where(sql`${workflows.id} = ${h.workflowId}`)
+
+    const created = await h.call('POST', '/api/webhook-triggers', {
+      name: 'owned-trigger',
+      endpointId: 'ep-1',
+      repoScope: { kind: 'all' },
+      eventTypes: ['push'],
+      launchKind: 'workflow',
+      launchRefId: h.workflowId,
+      launchPayload: { inputs: {} },
+    })
+    expect(created.status).toBe(201)
+    const triggerId = ((await created.json()) as { id: string }).id
+
+    const editor = await createUser(h.db, {
+      username: 'trigger-editor',
+      displayName: 'Trigger editor',
+      role: 'user',
+      password: 'longEnoughPassword',
+      additionalPermissions: ['webhook-triggers:update'],
+    })
+    const editorToken = (await createSession({ db: h.db, userId: editor.id })).token
+    const edit = (name: string) =>
+      h.app.request(`/api/webhook-triggers/${triggerId}`, {
+        method: 'PUT',
+        headers: {
+          authorization: `Bearer ${editorToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ name }),
+      })
+
+    expect((await edit('still-denied')).status).toBe(404)
+
+    const identityAccess = composeIdentityAccess(h.db)
+    const context = identityAccess.contexts.fromAuthenticatedPrincipal(
+      { userId: SYSTEM_USER_ID, source: 'cli' },
+      'cli',
+      Date.now(),
+    )
+    await identityAccess.updateUserAccess.execute(context, {
+      targetUserId: editor.id,
+      access: {
+        role: 'user',
+        additionalPermissions: ['webhook-triggers:update', 'webhook-triggers:override-owner'],
+        expectedRevision: 0,
+      },
+    })
+    expect((await edit('granted')).status).toBe(200)
+
+    await identityAccess.updateUserAccess.execute(context, {
+      targetUserId: editor.id,
+      access: {
+        role: 'user',
+        additionalPermissions: ['webhook-triggers:update'],
+        expectedRevision: 1,
+      },
+    })
+    expect((await edit('revoked')).status).toBe(404)
   })
 })
 

@@ -1,6 +1,6 @@
 // RFC-099 T3 — services/resourceAcl.ts matrix. This is the single authority
 // for resource visibility/ownership, so the full actor × row matrix is pinned
-// here: admin bypass (role-based, surviving PAT scope narrowing), owner,
+// here: explicit ACL-bypass permission, owner,
 // granted user, public, and the invisible-404 / non-owner-403 split.
 // resolveTaskRole precedence (D17: owner > user > admin) is locked too —
 // review/clarify attribution snapshots depend on it.
@@ -101,13 +101,14 @@ describe('resourceAcl — visibility matrix', () => {
     expect(await canViewResource(db, stranger, 'agent', publicAgent)).toBe(true)
   })
 
-  test('admin bypasses; PAT-narrowed admin still bypasses (role-based, not permission-based)', async () => {
+  test('session preset may include bypass; PAT strips that system-domain permission', async () => {
     expect(await canViewResource(db, actorOfUser(adminId, 'admin'), 'agent', privateAgent)).toBe(
       true,
     )
     const narrowedAdmin = actorOfUser(adminId, 'admin', ['agents:read'])
     expect(narrowedAdmin.permissions.has('agents:write' as never)).toBe(false)
-    expect(await canViewResource(db, narrowedAdmin, 'agent', privateAgent)).toBe(true)
+    expect(narrowedAdmin.permissions.has('resource-acl:bypass' as never)).toBe(false)
+    expect(await canViewResource(db, narrowedAdmin, 'agent', privateAgent)).toBe(false)
   })
 
   test('grant is per resource type — an agent grant does not leak to a workflow with the same id', async () => {

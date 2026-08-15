@@ -248,7 +248,7 @@ describe('PAT-bearing actor cannot escape role limits', () => {
   })
 
   // RFC-213 impl-gate P0-5 (Codex 2026-07-22): an ADMIN whose PAT is scoped away
-  // from backup:run passes the restore route's in-handler `role === 'admin'`
+  // from backup:run reaches restore with no hidden role predicate in the handler.
   // check, so ONLY the /api/restore/* middleware gate stops it. Before the fix
   // that gate was absent for the subtree and this actor could read failed-restore
   // state + dis-arm a pending restore. (Mutation: drop the `/api/restore/*` gate

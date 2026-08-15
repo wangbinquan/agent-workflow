@@ -1,6 +1,6 @@
 // RFC-261 — DeliveriesPanel 分页 + 事件/仓库过滤集成锁（proposal AC-6/7/8）：
 //   封套消费（总数展示）、上下页 / 直接跳页请求 page=N、过滤变更携带参数且页码复位 1、
-//   仓库下拉选项来自 /repos、越界页钳回、只读（isAdmin=false）下过滤分页照常。
+//   仓库下拉选项来自 /repos、越界页钳回、只读（canReplay=false）下过滤分页照常。
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
@@ -77,11 +77,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function mount(isAdmin = false) {
+function mount(canReplay = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
-      <DeliveriesPanel isAdmin={isAdmin} />
+      <DeliveriesPanel canReplay={canReplay} />
     </QueryClientProvider>,
   )
 }
@@ -105,7 +105,7 @@ async function pickOption(comboboxName: string, optionText: string): Promise<voi
 }
 
 describe('RFC-261 · 投递面板分页与过滤', () => {
-  test('封套消费：总数 + 分页控件；只读视图（isAdmin=false）下照常、无 replay（AC-6/8）', async () => {
+  test('封套消费：总数 + 分页控件；只读视图下照常、无 replay（AC-6/8）', async () => {
     mount(false)
     await waitFor(() => expect(screen.getByTestId('webhook-delivery-dl1')).toBeTruthy())
     expect(screen.getByTestId('webhook-deliveries-total').textContent).toBe('120 total')

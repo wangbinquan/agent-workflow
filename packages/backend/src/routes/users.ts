@@ -1,32 +1,43 @@
-// RFC-036 — admin users management routes + public users:search endpoint.
+// RFC-036/RFC-305 — permission-gated user management routes plus the
+// public-fields-only `users:search` endpoint.
 
 import type { Hono } from 'hono'
+import { ulid } from 'ulid'
 import {
   CreateUserBodySchema,
   PatchUserBodySchema,
   ResetPasswordBodySchema,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
+import { hashPassword } from '@/auth/passwords'
+import { revokeAllSessionsForUser } from '@/auth/sessionStore'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { listAllPats } from '@/auth/patStore'
 import { listTokenAudit } from '@/services/tokenAudit'
-import {
-  createUser,
-  disableUser,
-  findById,
-  listAllUsers,
-  patchUser,
-  resetPassword,
-  searchUsersPublic,
-} from '@/services/users'
+import { resetPassword, searchUsersPublic } from '@/services/users'
 import { isOidcManagedUser, listOidcManagedUserIds } from '@/services/accountAuthPolicy'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { Paths } from '@/util/paths'
 import { safeJsonOrEmpty } from '@/util/http'
+import type { CreateManagedUser, UpdateUserAccess } from '@/modules/identity-access/public/commands'
+import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
+import type { GetUserAccess } from '@/modules/identity-access/public/queries'
+import { UserAccessError, type AdminUserAccessView } from '@/modules/identity-access/public/types'
 
-export function mountUserRoutes(app: Hono, deps: AppDeps): void {
+interface UserRouteIdentityAccess {
+  readonly contexts: DirectOperationContextFactory
+  readonly createManagedUser: CreateManagedUser
+  readonly updateUserAccess: UpdateUserAccess
+  readonly getUserAccess: GetUserAccess
+}
+
+export function mountUserRoutes(
+  app: Hono,
+  deps: AppDeps,
+  identityAccess: UserRouteIdentityAccess,
+): void {
   const runtimeTests = getMcpRuntimeTestService({
     db: deps.db,
     configPath: deps.configPath,
@@ -35,8 +46,8 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
     now: deps.mcpRuntimeTestDependencies?.now,
     capacity: deps.mcpRuntimeTestDependencies?.capacity,
   })
-  // /api/users/search — admin + user (users:search permission). MUST come
-  // before /api/users so the literal wins over the catch-all admin gate.
+  // /api/users/search — `users:search`. MUST come before /api/users so the
+  // literal wins over the parameterized route.
   registerRoute(
     app,
     {
@@ -88,12 +99,11 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
-  // Everything below is admin-only.
-  // RFC-247 D8 / D16 / T27 — the administrator's platform-wide token view.
-  // READ-ONLY on purpose: an admin can see every token and every call made with
+  // RFC-247 D8 / D16 / T27 — the `users:read` platform-wide token view.
+  // READ-ONLY on purpose: an authorized actor can see every token and every call made with
   // one, and cannot revoke someone else's. Revocation stays with the owner
   // because a token is a credential the owner is accountable for; the lever an
-  // admin has for a compromised account is disabling the account, which revokes
+  // `users:write` holder has for a compromised account is disabling the account, which revokes
   // everything at once and is the honest action to take.
   registerRoute(
     app,
@@ -101,7 +111,6 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
       method: 'GET',
       path: '/api/tokens/audit',
       permissions: ['users:read'],
-      identity: 'admin',
       tokenAccess: 'never',
       summary: 'Platform-wide token call audit (read-only)',
     },
@@ -116,7 +125,6 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
       method: 'GET',
       path: '/api/tokens',
       permissions: ['users:read'],
-      identity: 'admin',
       tokenAccess: 'never',
       summary: 'Platform-wide token inventory (read-only)',
     },
@@ -135,7 +143,12 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List users',
     },
     async (c) => {
-      const rows = await listAllUsers(deps.db)
+      const actor = actorOf(c)
+      const context = identityAccess.contexts.queryFromAuthenticatedPrincipal(
+        { userId: actor.user.id, source: actor.source },
+        'http',
+      )
+      const rows = await accessCall(() => identityAccess.getUserAccess.list(context))
       const managed = await listOidcManagedUserIds(
         deps.db,
         rows.map((row) => row.id),
@@ -154,7 +167,14 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Get one user',
     },
     async (c) => {
-      const u = await findById(deps.db, c.req.param('id'))
+      const actor = actorOf(c)
+      const context = identityAccess.contexts.queryFromAuthenticatedPrincipal(
+        { userId: actor.user.id, source: actor.source },
+        'http',
+      )
+      const u = await accessCall(() =>
+        identityAccess.getUserAccess.execute(context, { userId: c.req.param('id') }),
+      )
       if (!u) throw new NotFoundError('user-not-found', `user '${c.req.param('id')}' not found`)
       return c.json(materializePublicAdminView(u, await isOidcManagedUser(deps.db, u.id)))
     },
@@ -172,12 +192,37 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const parsed = CreateUserBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
-        throw new ValidationError('user-invalid', 'invalid user payload', {
-          issues: parsed.error.issues,
-        })
+        throw new ValidationError(
+          userPayloadValidationCode(parsed.error.issues),
+          'invalid user payload',
+          {
+            issues: parsed.error.issues,
+          },
+        )
       }
       const actor = actorOf(c)
-      const created = await createUser(deps.db, { ...parsed.data, createdBy: actor.user.id })
+      const now = Date.now()
+      const context = identityAccess.contexts.fromAuthenticatedPrincipal(
+        { userId: actor.user.id, source: actor.source },
+        'http',
+        now,
+      )
+      const passwordHash = parsed.data.password ? await hashPassword(parsed.data.password) : null
+      const created = await accessCall(() =>
+        identityAccess.createManagedUser.execute(context, {
+          id: ulid(),
+          username: parsed.data.username,
+          email: parsed.data.email ?? null,
+          displayName: parsed.data.displayName,
+          passwordHash,
+          role: parsed.data.role,
+          status: passwordHash === null ? 'invited' : 'active',
+          forcePasswordChange: false,
+          createdBy: actor.user.id,
+          schemaVersion: 1,
+          additionalPermissions: parsed.data.additionalPermissions,
+        }),
+      )
       return c.json(materializePublicAdminView(created, false), 201)
     },
   )
@@ -194,20 +239,38 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const parsed = PatchUserBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
-        throw new ValidationError('user-invalid', 'invalid user patch', {
-          issues: parsed.error.issues,
-        })
+        throw new ValidationError(
+          userPayloadValidationCode(parsed.error.issues),
+          'invalid user patch',
+          {
+            issues: parsed.error.issues,
+          },
+        )
       }
-      const updated = await patchUser(
-        deps.db,
-        c.req.param('id'),
-        parsed.data,
-        Date.now(),
-        actorOf(c).user.id,
+      const actor = actorOf(c)
+      const now = Date.now()
+      const context = identityAccess.contexts.fromAuthenticatedPrincipal(
+        { userId: actor.user.id, source: actor.source },
+        'http',
+        now,
       )
-      if (parsed.data.status === 'disabled') await runtimeTests.reconcileDurableIntents()
+      const result = await accessCall(() =>
+        identityAccess.updateUserAccess.execute(context, {
+          targetUserId: c.req.param('id'),
+          displayName: parsed.data.displayName,
+          email: parsed.data.email,
+          status: parsed.data.status,
+          forcePasswordChange: parsed.data.forcePasswordChange,
+          access: parsed.data.access,
+          legacyRole: parsed.data.role,
+        }),
+      )
+      if (result.becameDisabled) {
+        await revokeAllSessionsForUser(deps.db, c.req.param('id'), now)
+        await runtimeTests.reconcileDurableIntents()
+      }
       return c.json(
-        materializePublicAdminView(updated, await isOidcManagedUser(deps.db, updated.id)),
+        materializePublicAdminView(result.user, await isOidcManagedUser(deps.db, result.user.id)),
       )
     },
   )
@@ -223,8 +286,23 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const userId = c.req.param('id')
-      await disableUser(deps.db, userId, Date.now(), actorOf(c).user.id)
-      await runtimeTests.reconcileDurableIntents()
+      const actor = actorOf(c)
+      const now = Date.now()
+      const context = identityAccess.contexts.fromAuthenticatedPrincipal(
+        { userId: actor.user.id, source: actor.source },
+        'http',
+        now,
+      )
+      const result = await accessCall(() =>
+        identityAccess.updateUserAccess.execute(context, {
+          targetUserId: userId,
+          status: 'disabled',
+        }),
+      )
+      if (result.becameDisabled) {
+        await revokeAllSessionsForUser(deps.db, userId, now)
+        await runtimeTests.reconcileDurableIntents()
+      }
       return c.json({ ok: true, code: 'user-deletion-soft' })
     },
   )
@@ -251,22 +329,7 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
   )
 }
 
-function materializePublicAdminView(
-  row: {
-    id: string
-    username: string
-    email: string | null
-    displayName: string
-    role: string
-    status: string
-    forcePasswordChange: boolean
-    createdBy: string | null
-    createdAt: number
-    updatedAt: number
-    lastLoginAt: number | null
-  },
-  hasOidcIdentity: boolean,
-) {
+function materializePublicAdminView(row: AdminUserAccessView, hasOidcIdentity: boolean) {
   return {
     id: row.id,
     username: row.username,
@@ -275,10 +338,51 @@ function materializePublicAdminView(
     role: row.role,
     status: row.status,
     forcePasswordChange: row.forcePasswordChange,
-    createdBy: row.createdBy,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    lastLoginAt: row.lastLoginAt,
+    createdBy: row.history.createdBy,
+    createdAt: row.history.createdAt,
+    updatedAt: row.history.updatedAt,
+    lastLoginAt: row.history.lastLoginAt,
+    additionalPermissions: row.additionalPermissions,
+    accessRevision: row.accessRevision,
     hasOidcIdentity,
   }
+}
+
+async function accessCall<T>(body: () => Promise<T>): Promise<T> {
+  try {
+    return await body()
+  } catch (error) {
+    if (!(error instanceof UserAccessError)) throw error
+    switch (error.kind) {
+      case 'conflict':
+        throw new ConflictError(error.code, error.message, error.details)
+      case 'forbidden':
+        throw new ForbiddenError(error.code, error.message, error.details)
+      case 'not-found':
+        throw new NotFoundError(error.code, error.message, error.details)
+      case 'validation':
+        throw new ValidationError(error.code, error.message, error.details)
+    }
+  }
+}
+
+function userPayloadValidationCode(
+  issues: ReadonlyArray<{
+    readonly path: ReadonlyArray<PropertyKey>
+    readonly message: string
+  }>,
+): string {
+  if (issues.some((issue) => issue.message === 'user-access-ambiguous')) {
+    return 'user-access-ambiguous'
+  }
+  if (
+    issues.some(
+      (issue) =>
+        issue.path[0] === 'additionalPermissions' ||
+        (issue.path[0] === 'access' && issue.path[1] === 'additionalPermissions'),
+    )
+  ) {
+    return 'user-permission-invalid'
+  }
+  return 'user-invalid'
 }

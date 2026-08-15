@@ -40,7 +40,7 @@ import {
   discloseScheduleRefs,
   initialBuiltinResourceAcl,
   initialPrivateResourceAcl,
-  isResourceAdminActor,
+  hasResourceAclBypass,
   listGrantedResourceIds,
 } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
@@ -587,10 +587,10 @@ export async function deleteAgent(
   // RFC-203 T6: reference-disclosure grant sets, pre-fetched OUTSIDE the
   // guard transaction (dbTxSync is sync) — used only to decide which
   // referencing resource NAMES the refusal details may show.
-  const wfGranted = isResourceAdminActor(actor)
+  const wfGranted = hasResourceAclBypass(actor)
     ? new Set<string>()
     : await listGrantedResourceIds(db, actor, 'workflow')
-  const agGranted = isResourceAdminActor(actor)
+  const agGranted = hasResourceAclBypass(actor)
     ? new Set<string>()
     : await listGrantedResourceIds(db, actor, 'agent')
   // RFC-165 (F17-r3): guards + the delete run in ONE dbTxSync — the old
@@ -826,16 +826,19 @@ function requireAgentMutationRevision(
     throw new NotFoundError('agent-not-found', 'agent not found')
   }
 
-  const isAdmin = isResourceAdminActor(actor)
+  const hasAclBypass = hasResourceAclBypass(actor)
   const isOwner = current.ownerUserId !== null && current.ownerUserId === actor.user.id
-  // RFC-282 D1 — visibility is the shared predicate; isAdmin/isOwner stay
+  // RFC-282/RFC-305 — visibility is shared; ACL-bypass/owner stay
   // local because the 403 decision below reuses them, and the error order
   // (404 before 403 before stale) is part of the route contract.
   if (!canViewResourceInTx(tx, actor, 'agent', current)) {
     throw new NotFoundError('agent-not-found', 'agent not found')
   }
-  if (!isAdmin && !isOwner) {
-    throw new ForbiddenError('forbidden', 'only the agent owner or a resource admin can modify it')
+  if (!hasAclBypass && !isOwner) {
+    throw new ForbiddenError(
+      'forbidden',
+      'only the agent owner or an actor with resource-acl:bypass can modify it',
+    )
   }
   if (
     current.updatedAt !== expected.expectedUpdatedAt ||

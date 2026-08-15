@@ -1,7 +1,7 @@
 // RFC-112 PR-B — runtime registry HTTP surface. GET is open to any authed user
-// (picking a runtime needs the list); all writes + the smoke /probe are
-// admin-only (D3 — a runtime is machine-level config incl. a local binary path,
-// and the route orchestrates spawning that binary). Mounted under /api/* by
+// (picking a runtime needs the list); all writes + the smoke /probe require
+// `settings:write` (D3 — a runtime is machine-level config incl. a local binary
+// path, and the route orchestrates spawning that binary). Mounted under /api/* by
 // server.ts; thrown DomainErrors map to status via app.onError.
 
 import type { Hono } from 'hono'
@@ -234,7 +234,6 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       path: '/api/runtimes/probe',
       permissions: ['settings:write'],
       tokenAccess: 'allow',
-      identity: 'admin',
       summary: 'Probe an arbitrary runtime binary',
     },
     async (c) => {
@@ -264,7 +263,6 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       path: '/api/runtimes',
       permissions: ['settings:write'],
       tokenAccess: 'allow',
-      identity: 'admin',
       summary: 'Register a runtime',
     },
     async (c) => {
@@ -326,7 +324,6 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       path: '/api/runtimes/:name',
       permissions: ['settings:write'],
       tokenAccess: 'allow',
-      identity: 'admin',
       summary: 'Update a runtime',
     },
     async (c) => {
@@ -363,7 +360,6 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       path: '/api/runtimes/:name/enabled',
       permissions: ['settings:write'],
       tokenAccess: 'allow',
-      identity: 'admin',
       summary: 'Enable or disable a runtime',
     },
     async (c) => {
@@ -387,7 +383,6 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       path: '/api/runtimes/:name',
       permissions: ['settings:write'],
       tokenAccess: 'allow',
-      identity: 'admin',
       summary: 'Delete a runtime',
     },
     async (c) => {
@@ -417,7 +412,6 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       path: '/api/runtimes/:name/probe',
       permissions: ['settings:write'],
       tokenAccess: 'allow',
-      identity: 'admin',
       summary: 'Probe a registered runtime',
     },
     async (c) => {

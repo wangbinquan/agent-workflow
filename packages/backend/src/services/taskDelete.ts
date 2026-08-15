@@ -1,6 +1,6 @@
-// RFC-222 (B 线) — admin-only hard delete of a terminal task.
+// RFC-222/RFC-305 (B 线) — `tasks:delete` hard delete of a terminal task.
 //
-// Route gate is the `tasks:delete` point declared on the route (admin only).
+// Route gate is the `tasks:delete` point declared on the route.
 // This service owns the rest of the contract:
 //
 //   Front gates (§6.2) — all 409:

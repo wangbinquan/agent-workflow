@@ -6,10 +6,8 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
   ACTOR_QUERY_KEY,
-  isAdminAtRequest,
   meQueryOptions,
   hasPermissionAtRequest,
-  useIsAdmin,
   usePermission,
 } from '../src/hooks/useActor'
 import { setBaseUrl, setToken } from '../src/stores/auth'
@@ -23,11 +21,11 @@ function json(body: unknown, status = 200): Response {
 
 function Probe() {
   const canCreate = usePermission('repos:create')
-  const isAdmin = useIsAdmin()
+  const canManageUsers = usePermission('users:write')
   return (
     <>
       <output data-testid="permission">{canCreate ? 'yes' : 'no'}</output>
-      <output data-testid="admin">{isAdmin ? 'yes' : 'no'}</output>
+      <output data-testid="admin">{canManageUsers ? 'yes' : 'no'}</output>
     </>
   )
 }
@@ -52,7 +50,7 @@ test('cached write/admin capability fails closed when /me refetch errors', async
       status: 'active',
     },
     source: 'session',
-    permissions: ['repos:create'],
+    permissions: ['repos:create', 'users:write'],
     linkedIdentities: [],
     pats: [],
   }
@@ -90,7 +88,7 @@ test('cached capability fails closed for the entire background-refetch window', 
       status: 'active',
     },
     source: 'session',
-    permissions: ['repos:create'],
+    permissions: ['repos:create', 'users:write'],
     linkedIdentities: [],
     pats: [],
   }
@@ -119,7 +117,7 @@ test('cached capability fails closed for the entire background-refetch window', 
   expect(screen.getByTestId('permission').textContent).toBe('no')
   expect(screen.getByTestId('admin').textContent).toBe('no')
   expect(hasPermissionAtRequest(client, 'repos:create')).toBe(false)
-  expect(isAdminAtRequest(client)).toBe(false)
+  expect(hasPermissionAtRequest(client, 'users:write')).toBe(false)
 
   await act(async () => {
     resolveRefresh(json(actor))
@@ -129,7 +127,7 @@ test('cached capability fails closed for the entire background-refetch window', 
   expect(screen.getByTestId('admin').textContent).toBe('yes')
 })
 
-test('malformed retained actor payload cannot throw or grant admin', async () => {
+test('malformed retained actor payload cannot throw or grant any permission', async () => {
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ permissions: ['repos:create'] }))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
@@ -137,7 +135,7 @@ test('malformed retained actor payload cannot throw or grant admin', async () =>
       <Probe />
     </QueryClientProvider>,
   )
-  await waitFor(() => expect(screen.getByTestId('permission').textContent).toBe('yes'))
+  await waitFor(() => expect(screen.getByTestId('permission').textContent).toBe('no'))
   expect(screen.getByTestId('admin').textContent).toBe('no')
-  expect(isAdminAtRequest(client)).toBe(false)
+  expect(hasPermissionAtRequest(client, 'users:write')).toBe(false)
 })

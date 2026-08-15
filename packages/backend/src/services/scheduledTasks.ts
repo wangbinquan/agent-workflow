@@ -204,7 +204,7 @@ export async function listScheduledTasks(db: DbClient): Promise<ScheduledTask[]>
 }
 
 /**
- * Read visibility: admins (tasks:read:all) see all; otherwise owner only.
+ * Read visibility: actors with `tasks:read:all` see all; otherwise owner only.
  * Single source shared by the list/detail routes and /api/overview counting
  * (RFC-190) — scheduled tasks are member-based-private like tasks, NOT the
  * RFC-099 five-type ACL.
@@ -749,7 +749,7 @@ export async function fireSchedule(
 
   // RFC-285 B3：owner 重建收编 buildInheritedActor 单源（active 检查在内），
   // 错误形态保持本臂既有的 `owner-inactive` 码不变。
-  const actor = await buildInheritedActor(db, row.ownerUserId)
+  const actor = await buildInheritedActor(db, row.ownerUserId, 'schedule')
   if (actor === null) {
     throw new ValidationError('owner-inactive', `owner '${row.ownerUserId}' is not an active user`)
   }

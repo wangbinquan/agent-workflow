@@ -3,7 +3,7 @@
 // The main link always opens the stable library default (`?tab=all`). The
 // count is status rather than a second destination, so the row exposes one
 // click target and one keyboard stop. Candidate permission comes only from
-// each server-returned `canManage` field; fusion count is already owner/admin
+// each server-returned `canManage` field; fusion count is already owner/ACL-bypass
 // scoped by its endpoint. Neither actor role nor a missing field is treated
 // as permission.
 

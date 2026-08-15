@@ -73,7 +73,7 @@ import {
   canViewResourceInTx,
   initialBuiltinResourceAcl,
   initialPrivateResourceAcl,
-  isResourceAdminActor,
+  hasResourceAclBypass,
   isResourceOwner,
   listResourceGrantUserIdsInTx,
 } from './resourceAcl'
@@ -724,7 +724,7 @@ export async function deleteWorkflow(
       .all()
     const referencing = scheduledRowsReferencingWorkflow(schedRows, id)
     if (referencing.length > 0) {
-      // Schedules are member-private (owner + tasks:read:all admins). Details
+      // Schedules are member-private (owner + `tasks:read:all`). Details
       // disclose names only for schedules the principal may see; the rest is
       // an aggregate count — same 404-shape hiding discipline the routes use
       // (Codex design-gate P1: do not leak private schedule names/existence).
@@ -997,7 +997,10 @@ async function assertPrincipalCanWritePreflight(
   }
   assertNotBuiltin('workflow', row)
   if (!isResourceOwner(principal.actor, row)) {
-    throw new ForbiddenError('forbidden', 'only the workflow owner or an admin can modify it')
+    throw new ForbiddenError(
+      'forbidden',
+      'only the workflow owner or an actor with resource-acl:bypass can modify it',
+    )
   }
 }
 
@@ -1012,14 +1015,17 @@ function assertPrincipalCanWriteInTx(
   }
 
   const actor = principal.actor
-  const isAdmin = isResourceAdminActor(actor)
+  const hasAclBypass = hasResourceAclBypass(actor)
   const isOwner = row.ownerUserId !== null && row.ownerUserId === actor.user.id
-  // RFC-282 D1 — visibility is the shared predicate; isAdmin/isOwner stay
+  // RFC-282 D1 — visibility is the shared predicate; hasAclBypass/isOwner stay
   // local for the 403 below, and the 404 → builtin → 403 order is contract.
   if (!canViewResourceInTx(tx, actor, 'workflow', row)) throwWorkflowNotFound(row.id)
   assertNotBuiltin('workflow', row)
-  if (!isAdmin && !isOwner) {
-    throw new ForbiddenError('forbidden', 'only the workflow owner or an admin can modify it')
+  if (!hasAclBypass && !isOwner) {
+    throw new ForbiddenError(
+      'forbidden',
+      'only the workflow owner or an actor with resource-acl:bypass can modify it',
+    )
   }
 }
 

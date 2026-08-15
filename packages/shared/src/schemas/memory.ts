@@ -83,9 +83,9 @@ export const MemorySummarySchema = z.object({
   id: z.string(),
   scopeType: MemoryScopeSchema,
   scopeId: z.string().nullable(),
-  /** RFC-099 (D12) — true when the current actor may approve/edit/archive/
-   *  delete this row (scope-resource owner or admin). Computed per request;
-   *  absent on older payloads ⇒ frontend falls back to admin-only. */
+  /** RFC-099/RFC-305 — true when the current actor may approve/edit/archive/
+   *  delete this row (scope-resource owner or `resource-acl:bypass`). Computed
+   *  per request; absent on older payloads ⇒ frontend fails closed. */
   canManage: z.boolean().optional(),
   title: z.string(),
   status: MemoryStatusSchema,

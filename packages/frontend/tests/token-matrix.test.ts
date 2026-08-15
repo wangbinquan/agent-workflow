@@ -12,7 +12,12 @@
 //     workflow it can see".
 
 import { describe, expect, it } from 'vitest'
-import { grantableMatrixPoints, type Permission } from '@agent-workflow/shared'
+import {
+  grantableMatrixPoints,
+  resolveEffectiveAccountPermissions,
+  type Permission,
+  type Role,
+} from '@agent-workflow/shared'
 import {
   buildMatrix,
   matchingTemplate,
@@ -20,11 +25,15 @@ import {
   templatePoints,
 } from '@/lib/token-matrix'
 
+const account = (role: Role) =>
+  resolveEffectiveAccountPermissions({ role, additionalPermissions: [] })
+
 describe('RFC-247 buildMatrix — only grantable cells (AC-23)', () => {
   it('every produced cell is one the role can really grant', () => {
     for (const role of ['user', 'manager', 'admin'] as const) {
-      const grantable = new Set(grantableMatrixPoints(role))
-      for (const row of buildMatrix(role)) {
+      const permissions = account(role)
+      const grantable = new Set(grantableMatrixPoints(permissions))
+      for (const row of buildMatrix(permissions)) {
         for (const cell of row.cells) {
           expect(grantable.has(cell.permission)).toBe(true)
         }
@@ -34,12 +43,12 @@ describe('RFC-247 buildMatrix — only grantable cells (AC-23)', () => {
 
   it('a plain user is offered no repos cell at all', () => {
     // repos writes belong to manager/admin. Omitted, not disabled.
-    const rows = buildMatrix('user')
+    const rows = buildMatrix(account('user'))
     expect(rows.find((r) => r.resource === 'repos')).toBeUndefined()
   })
 
   it('a manager IS offered repos cells', () => {
-    const repos = buildMatrix('manager').find((r) => r.resource === 'repos')
+    const repos = buildMatrix(account('manager')).find((r) => r.resource === 'repos')
     expect(repos).toBeDefined()
     // RFC-248 加了 update（仓库组的 PUT —— repos 域第一条 PUT/PATCH 路由）。
     expect(repos!.cells.map((c) => c.verb).sort()).toEqual([
@@ -52,7 +61,7 @@ describe('RFC-247 buildMatrix — only grantable cells (AC-23)', () => {
 
   it('never produces a row with zero cells', () => {
     for (const role of ['user', 'manager', 'admin'] as const) {
-      for (const row of buildMatrix(role)) expect(row.cells.length).toBeGreaterThan(0)
+      for (const row of buildMatrix(account(role))) expect(row.cells.length).toBeGreaterThan(0)
     }
   })
 
@@ -65,7 +74,7 @@ describe('RFC-247 buildMatrix — only grantable cells (AC-23)', () => {
     // so the point now HAS a route and belongs in the matrix. The invariant is
     // "no cell without a route", satisfied by the route existing, not by
     // keeping the cell hidden.
-    const all = buildMatrix('admin').flatMap((r) => r.cells.map((c) => c.permission))
+    const all = buildMatrix(account('admin')).flatMap((r) => r.cells.map((c) => c.permission))
     expect(all).toContain('repos:update')
     expect(all).not.toContain('skills:execute')
     // …and the two launch-subject verbs RFC-165 F15/N1 rules out
@@ -74,7 +83,7 @@ describe('RFC-247 buildMatrix — only grantable cells (AC-23)', () => {
   })
 
   it('marks delete cells so the UI can weight them', () => {
-    for (const row of buildMatrix('admin')) {
+    for (const row of buildMatrix(account('admin'))) {
       for (const cell of row.cells) {
         expect(cell.isDelete).toBe(cell.verb === 'delete')
       }
@@ -86,18 +95,18 @@ describe('RFC-247 templates — no template grants delete (AC-8)', () => {
   for (const template of ['read-only', 'task-automation', 'full'] as const) {
     for (const role of ['user', 'manager', 'admin'] as const) {
       it(`${template} / ${role} selects no delete point`, () => {
-        const points = templatePoints(template, role)
+        const points = templatePoints(template, account(role))
         expect(points.filter((p) => p.endsWith(':delete'))).toEqual([])
       })
     }
   }
 
   it('read-only is the empty matrix — reads are always on', () => {
-    expect(templatePoints('read-only', 'admin')).toEqual([])
+    expect(templatePoints('read-only', account('admin'))).toEqual([])
   })
 
   it('task-automation covers the task and schedule domains and nothing else', () => {
-    const points = templatePoints('task-automation', 'admin')
+    const points = templatePoints('task-automation', account('admin'))
     expect(points.length).toBeGreaterThan(0)
     for (const p of points) {
       expect(p.startsWith('tasks:') || p.startsWith('scheduled-tasks:')).toBe(true)
@@ -107,7 +116,7 @@ describe('RFC-247 templates — no template grants delete (AC-8)', () => {
   })
 
   it('task-automation grants nothing that edits a resource definition', () => {
-    const points = templatePoints('task-automation', 'admin')
+    const points = templatePoints('task-automation', account('admin'))
     for (const p of points) {
       expect(p.startsWith('workflows:')).toBe(false)
       expect(p.startsWith('agents:')).toBe(false)
@@ -117,46 +126,50 @@ describe('RFC-247 templates — no template grants delete (AC-8)', () => {
 
   it('full covers every grantable non-delete point for the role', () => {
     for (const role of ['user', 'manager', 'admin'] as const) {
-      const expected = grantableMatrixPoints(role).filter((p) => !p.endsWith(':delete'))
-      expect([...templatePoints('full', role)].sort()).toEqual([...expected].sort())
+      const permissions = account(role)
+      const expected = grantableMatrixPoints(permissions).filter((p) => !p.endsWith(':delete'))
+      expect([...templatePoints('full', permissions)].sort()).toEqual([...expected].sort())
     }
   })
 
   it('never offers a role a point outside its own grantable set', () => {
     for (const template of ['read-only', 'task-automation', 'full'] as const) {
-      const grantable = new Set(grantableMatrixPoints('user'))
-      for (const p of templatePoints(template, 'user')) expect(grantable.has(p)).toBe(true)
+      const permissions = account('user')
+      const grantable = new Set(grantableMatrixPoints(permissions))
+      for (const p of templatePoints(template, permissions)) expect(grantable.has(p)).toBe(true)
     }
   })
 })
 
 describe('RFC-247 matchingTemplate — reflect the selection back accurately', () => {
   it('an empty selection reads as read-only', () => {
-    expect(matchingTemplate(new Set(), 'admin')).toBe('read-only')
+    expect(matchingTemplate(new Set(), account('admin'))).toBe('read-only')
   })
 
   it('an exact template selection is recognised', () => {
-    const points = new Set(templatePoints('task-automation', 'admin'))
-    expect(matchingTemplate(points, 'admin')).toBe('task-automation')
+    const permissions = account('admin')
+    const points = new Set(templatePoints('task-automation', permissions))
+    expect(matchingTemplate(points, permissions)).toBe('task-automation')
   })
 
   it('adding ONE delete point stops it matching any template', () => {
     // Precisely the case the UI must not mislabel: a "full" chip on a selection
     // that also deletes would hide the one thing worth noticing.
-    const points = new Set<Permission>(templatePoints('full', 'admin'))
+    const permissions = account('admin')
+    const points = new Set<Permission>(templatePoints('full', permissions))
     points.add('agents:delete')
-    expect(matchingTemplate(points, 'admin')).toBe(null)
+    expect(matchingTemplate(points, permissions)).toBe(null)
   })
 
   it('a partial selection matches nothing', () => {
-    expect(matchingTemplate(new Set<Permission>(['agents:create']), 'admin')).toBe(null)
+    expect(matchingTemplate(new Set<Permission>(['agents:create']), account('admin'))).toBe(null)
   })
 })
 
 describe('RFC-247 selectionHasDelete', () => {
   it('is false for every template', () => {
     for (const template of ['read-only', 'task-automation', 'full'] as const) {
-      expect(selectionHasDelete(new Set(templatePoints(template, 'admin')))).toBe(false)
+      expect(selectionHasDelete(new Set(templatePoints(template, account('admin'))))).toBe(false)
     }
   })
 

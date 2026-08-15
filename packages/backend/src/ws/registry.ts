@@ -7,12 +7,12 @@
 //   (a) `upgradeGate`  — whole-connection gate at upgrade time
 //                        (task = canViewTask, memory-distill-jobs = admin);
 //   (b) `frameGate`    — per-frame filtering (tasks-list / workflows /
-//                        memories), with an optional `adminShortCircuit`
+//                        memories), with an optional `aclBypassShortCircuit`
 //                        that sends synchronously without consulting the gate;
 //   (c) neither        — token-only channels (repo-import).
 //
 // `gatedSubscribe` is the one subscription pipeline every channel goes
-// through (admin short-circuit → frameGate → error ⇒ drop the frame); it
+// through (ACL-bypass short-circuit → frameGate → error ⇒ drop the frame); it
 // replaces the three hand-copied per-frame blocks that used to live in
 // server.ts handleOpen. Behavior is intentionally bit-identical to the
 // pre-registry code — the frame-level lock suites (tests/ws.test.ts,
@@ -49,7 +49,6 @@ import type {
   WorkflowsWsMessage,
   WsControlMessage,
 } from '@agent-workflow/shared'
-import { isResourceAdminRole } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { redactEventPayload } from '@/services/tokenRedaction'
@@ -69,8 +68,9 @@ import {
 } from '@/services/resourceAcl'
 import { canViewTask } from '@/services/taskCollab'
 import { batchOwnerUserId } from '@/services/repoBatchImport'
-import { isResourceAdminActor } from '@/services/resourceAcl'
+import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { createLogger } from '@/util/log'
+import { triggerAuthorityRevalidation } from './revalidationHook'
 import {
   MEMORY_CHANNEL,
   MEMORY_DISTILL_JOB_CHANNEL,
@@ -185,8 +185,8 @@ export interface WsConnectionData {
   channel: AnyChannelParams
   /**
    * Resolved actor. RFC-212 makes this MUTABLE: the revalidation pass replaces
-   * it wholesale so that `adminShortCircuit` (which reads
-   * `actor.user.role` per frame) and permission-set gates pick up a demotion.
+   * it wholesale so that `aclBypassShortCircuit` and permission-set gates
+   * pick up an access change.
    * Its only writer is that pass.
    */
   actor: Actor
@@ -258,8 +258,8 @@ export interface WsBroadcasterLike<M, C = never> {
 export interface ChannelRevalidation {
   /**
    * Always true. Replacing `ws.data.actor` is what makes a demotion take effect
-   * — `adminShortCircuit` reads `actor.user.role` per frame and several gates
-   * read `actor.permissions`. Modelled as a required literal rather than an
+   * — `aclBypassShortCircuit` and several gates read `actor.permissions`.
+   * Modelled as a required literal rather than an
    * optional flag so no channel can silently opt out.
    */
   readonly refreshActor: true
@@ -299,13 +299,11 @@ export interface ChannelSpec<K extends WsChannelKind, M> {
     context?: ChannelBroadcastContextByKind[K],
   ) => Promise<boolean>
   /**
-   * Send synchronously to admins without consulting frameGate. Matches the
-   * pre-registry code exactly: true for workflows/memories (their handlers
-   * short-circuited on role==='admin'); false for tasks-list (canViewTask
-   * already short-circuits internally on `tasks:read:all`, and the frame
-   * stays on the async path like before).
+   * Send synchronously to actors with `resource-acl:bypass` without consulting
+   * frameGate. The shortcut is an optimization only; the same permission is
+   * part of the row-visibility predicate used by the asynchronous path.
    */
-  adminShortCircuit?: boolean
+  aclBypassShortCircuit?: boolean
   /** open-time extra (task `?since` replay). Runs after the hello frame. */
   onOpenExtra?: (
     ws: ServerWebSocket<WsConnectionData>,
@@ -398,9 +396,9 @@ function deletedWorkflowAudienceVisible(
   ) {
     return null
   }
-  // RFC-284 T10（§2.4）：判定收编快照函数（自带 admin 分支——此前本函数不含
-  // admin、正确性非局部依赖上游 adminShortCircuit，收编后捷径纯属性能优化）。
-  return isVisibleToAudienceSnapshot(actor.user.id, actor.user.role, context)
+  // RFC-284 T10（§2.4）：判定收编快照函数自带 ACL bypass 分支，因此上游
+  // shortcut 只是一条性能优化，正确性不依赖它。
+  return isVisibleToAudienceSnapshot(actor.user.id, hasResourceAclBypass(actor), context)
 }
 
 function deletedWorkgroupAudienceVisible(
@@ -416,7 +414,7 @@ function deletedWorkgroupAudienceVisible(
     return null
   }
   // RFC-284 T10（§2.4）：同 workflow 侧——判定收编快照函数。
-  return isVisibleToAudienceSnapshot(actor.user.id, actor.user.role, context)
+  return isVisibleToAudienceSnapshot(actor.user.id, hasResourceAclBypass(actor), context)
 }
 
 /**
@@ -495,7 +493,7 @@ async function replayTaskEvents(
       // too, or `?since=` becomes the way to read what REST masks.
       payload: redactEventPayload(payload, ws.data.actor.source),
     }
-    sendJson(ws, msg)
+    sendJson(ws, msg, db)
   }
 }
 
@@ -561,8 +559,8 @@ export const WS_CHANNELS: WsChannelRegistry = {
     broadcaster: tasksListBroadcaster,
     channelKeyOf: () => TASKS_LIST_CHANNEL,
     // RFC-054 W2-4 — per-frame RBAC filter. Every TasksListWsMessage mentions
-    // exactly one task; unknown shapes drop. NO adminShortCircuit: canViewTask
-    // short-circuits internally on `tasks:read:all`, keeping admin frames on
+    // exactly one task; unknown shapes drop. NO aclBypassShortCircuit:
+    // canViewTask short-circuits internally on `tasks:read:all`, keeping those frames on
     // the same async path as before the registry.
     frameGate: async (ctx, msg, deliveryContext) => {
       const taskId = extractTaskIdFromListMessage(msg)
@@ -583,7 +581,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
   },
   workflows: {
     kind: 'workflows',
-    // RFC-212: caches under `wf:`; also short-circuits on actor.user.role.
+    // RFC-212: caches under `wf:`; actors with ACL bypass take the synchronous shortcut.
     revalidation: {
       refreshActor: true,
       cache: { kind: 'prefixes', prefixes: ['wf:'] },
@@ -594,7 +592,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     parse: () => ({ kind: 'workflows' }),
     broadcaster: workflowsBroadcaster,
     channelKeyOf: () => WORKFLOWS_CHANNEL,
-    adminShortCircuit: true,
+    aclBypassShortCircuit: true,
     // RFC-099 — per-frame ACL filter with a self-owned cache lifecycle (the
     // two special-cased types need OPPOSITE bust/read orderings, see header):
     //   - 'workflow.acl.updated': bust FIRST, then gate — the ACL just
@@ -635,7 +633,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     parse: () => ({ kind: 'workgroups' }),
     broadcaster: workgroupsBroadcaster,
     channelKeyOf: () => WORKGROUPS_CHANNEL,
-    adminShortCircuit: true,
+    aclBypassShortCircuit: true,
     frameGate: async (ctx, msg, deliveryContext) => {
       if (msg.type === 'workgroup.acl.updated') {
         ctx.cache.delete(`wg:${msg.workgroupId}`)
@@ -663,7 +661,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
   'repo-import': {
     kind: 'repo-import',
     // RFC-285 B6②：RFC-152 D4 登记的「无门」缺口在此关闭——批次自创建携
-    // ownerUserId（repoBatchImport.ts），升级门=发起者 ∨ 资源管理员；缺行与
+    // ownerUserId（repoBatchImport.ts），升级门=发起者 ∨ `resource-acl:bypass`；缺行与
     // 无权同形拒绝（batch-not-found），不泄露批次存在性。批次是内存 Map、
     // daemon 重启即逝，门随之自然失效（无持久化需求）。
     revalidation: {
@@ -678,7 +676,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     channelKeyOf: (p) => REPO_IMPORT_CHANNEL(p.batchId),
     upgradeGate: async (_db, actor, p) => {
       const owner = batchOwnerUserId(p.batchId)
-      if (owner !== null && (owner === actor.user.id || isResourceAdminActor(actor))) return true
+      if (owner !== null && (owner === actor.user.id || hasResourceAclBypass(actor))) return true
       return { code: 'batch-not-found', message: `batch ${p.batchId} not found or expired` }
     },
   },
@@ -686,7 +684,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     kind: 'memories',
     // RFC-212: deliberately UNcached (RFC-045 edits move rows between scopes),
     // so clearing a cache would be a no-op here — the only stale source is the
-    // frozen actor behind adminShortCircuit.
+    // frozen permissions behind aclBypassShortCircuit.
     revalidation: {
       refreshActor: true,
       cache: {
@@ -700,7 +698,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     parse: () => ({ kind: 'memories' }),
     broadcaster: memoryBroadcaster,
     channelKeyOf: () => MEMORY_CHANNEL,
-    adminShortCircuit: true,
+    aclBypassShortCircuit: true,
     // RFC-099 (D12) — per-variant scope-visibility contract:
     //   - 'memory.candidate.created' carries the scope inline.
     //   - the five memoryId-carrying variants re-resolve scope from the row
@@ -743,10 +741,10 @@ export const WS_CHANNELS: WsChannelRegistry = {
   },
   'memory-distill-jobs': {
     kind: 'memory-distill-jobs',
-    // RFC-212: admin-only whole-connection gate; a demotion must re-run it.
+    // RFC-212/RFC-305: permission-gated whole connection; access changes re-run it.
     revalidation: {
       refreshActor: true,
-      cache: { kind: 'none', why: 'no frameGate — admin-only gate at upgrade' },
+      cache: { kind: 'none', why: 'no frameGate — permission gate at upgrade' },
       rerunUpgradeGate: true,
     },
     helloName: () => 'memory-distill-jobs',
@@ -754,18 +752,14 @@ export const WS_CHANNELS: WsChannelRegistry = {
     parse: () => ({ kind: 'memory-distill-jobs' }),
     broadcaster: memoryDistillJobBroadcaster,
     channelKeyOf: () => MEMORY_DISTILL_JOB_CHANNEL,
-    // RFC-152 P0 (682de313) — declared admin-only since RFC-041 (4 comment
-    // sites + all HTTP routes requireAdmin) but the WS upgrade never
-    // enforced it. Same gate as HTTP: non-resource-admin upgrades are refused.
-    // RFC-222 (D3): opened to manager alongside admin — the double-gate's
-    // permission half (memory:approve) sits in every logged-in baseline, so
-    // the identity predicate is the operative check here.
+    // RFC-305: the upgrade uses the same explicit capabilities as HTTP. Role
+    // presets may supply them, but this consumer never inspects the role.
     upgradeGate: async (_db, actor) =>
-      isResourceAdminRole(actor.user.role) && actor.permissions.has('memory:update')
+      actor.permissions.has('memory-distill-jobs:manage') && actor.permissions.has('memory:update')
         ? true
         : {
-            code: 'admin-required',
-            message: 'memory-distill-jobs channel is resource-admin only',
+            code: 'permission-required',
+            message: 'memory-distill-jobs channel requires memory-distill-jobs:manage',
           },
   },
   'scheduled-tasks': {
@@ -783,18 +777,18 @@ export const WS_CHANNELS: WsChannelRegistry = {
     broadcaster: scheduledTaskBroadcaster,
     channelKeyOf: () => SCHEDULED_TASK_CHANNEL,
     // RFC-159 — per-frame owner filter. Every frame carries `ownerUserId`; the
-    // owner + `tasks:read:all` admins receive it, everyone else drops. No DB
+    // owner + actors with `tasks:read:all` receive it, everyone else drops. No DB
     // lookup (unlike tasks-list) since the owner rides on the message.
     frameGate: async (ctx, msg) =>
       ctx.actor.permissions.has('tasks:read:all') || msg.ownerUserId === ctx.actor.user.id,
   },
   'intent-sessions': {
     kind: 'intent-sessions',
-    // RFC-234: pure in-memory decision — creator or SYSTEM admin (D26: manager
-    // deliberately has no bypass; canAuditIntentSessions is the single source).
+    // RFC-234/RFC-305: pure in-memory decision — creator or an actor with
+    // `intent:audit`; canAuditIntentSessions is the single source.
     revalidation: {
       refreshActor: true,
-      cache: { kind: 'none', why: 'pure in-memory check on actor identity + ownerUserId' },
+      cache: { kind: 'none', why: 'pure in-memory check on actor permission + ownerUserId' },
       rerunUpgradeGate: { na: 'no upgradeGate — this channel filters per frame' },
     },
     helloName: () => 'intent-sessions',
@@ -811,7 +805,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
       refreshActor: true,
       cache: {
         kind: 'none',
-        why: 'pure in-memory check on actor identity and broadcast owner context',
+        why: 'pure in-memory check on actor permission and broadcast owner context',
       },
       rerunUpgradeGate: { na: 'no upgradeGate — this channel filters per frame' },
     },
@@ -853,7 +847,7 @@ interface ErasedChannelSpec {
     msg: AnyChannelMessage,
     context?: AnyBroadcastContext,
   ) => Promise<boolean>
-  adminShortCircuit?: boolean
+  aclBypassShortCircuit?: boolean
   onOpenExtra?: (
     ws: ServerWebSocket<WsConnectionData>,
     p: AnyChannelParams,
@@ -897,7 +891,7 @@ export async function checkUpgradeGate(
  * channel, emit the hello frame (with `since` echoed for replay channels),
  * and gate every outgoing frame:
  *
- *   admin short-circuit (sync send) → frameGate (async) → gate error ⇒ DROP.
+ *   ACL-bypass short-circuit (sync send) → frameGate (async) → gate error ⇒ DROP.
  *
  * Channels without a frameGate forward every frame (their gate, if any, ran
  * at upgrade time).
@@ -945,23 +939,26 @@ export function gatedSubscribe(
       onExpiredCredential?.(ws)
       return
     }
-    // RFC-222: row-level bypass short-circuit widens to resource admin (admin OR
-    // manager) — pure identity, mirroring filterVisibleRows (§2.3 rationale:
-    // this is the row-visibility免计算 fast-path, not a capability gate).
-    if (erased.adminShortCircuit === true && isResourceAdminRole(ws.data.actor.user.role)) {
-      sendJson(ws, msg)
+    // Row-level bypass fast path. `resource-acl:bypass` is an ordinary effective
+    // account permission; the account role is irrelevant here.
+    if (erased.aclBypassShortCircuit === true && hasResourceAclBypass(ws.data.actor)) {
+      sendJson(ws, msg, db)
       return
     }
     if (erased.frameGate === undefined) {
-      sendJson(ws, msg)
+      sendJson(ws, msg, db)
       return
     }
     // Fire-and-forget the async gate; a throwing gate (DB blip) falls back
     // to NOT sending — same safer-default as the unknown-shape drops.
+    const gateActor = ws.data.actor
     erased
-      .frameGate({ db, actor: ws.data.actor, cache: ws.data.visibilityCache }, msg, context)
+      .frameGate({ db, actor: gateActor, cache: ws.data.visibilityCache }, msg, context)
       .then((visible) => {
-        if (visible) sendJson(ws, msg)
+        // RFC-305 async-continuation fence: a refresh may replace the actor
+        // while frameGate awaits DB/ACL work. A verdict minted by the prior
+        // authority must never authorize a later send.
+        if (visible && ws.data.actor === gateActor) sendJson(ws, msg, db)
       })
       .catch((err) => {
         log.warn('frame gate threw', {
@@ -974,7 +971,7 @@ export function gatedSubscribe(
   // Replay channels (task ?since=N) echo the anchor back in the hello frame.
   const since = (params as { since?: unknown }).since
   if (typeof since === 'number') hello.since = since
-  sendJson(ws, hello)
+  sendJson(ws, hello, db)
 }
 
 /** open-time entry: gatedSubscribe + the channel's onOpenExtra (task replay). */
@@ -991,7 +988,12 @@ export async function openWsChannel(
   }
 }
 
-function sendJson(ws: ServerWebSocket<WsConnectionData>, msg: WsOutboundMessage): void {
+function sendJson(
+  ws: ServerWebSocket<WsConnectionData>,
+  msg: WsOutboundMessage,
+  db: DbClient,
+): void {
+  if (!authorityRevisionCurrent(ws, db)) return
   try {
     ws.send(JSON.stringify(msg))
   } catch (err) {
@@ -999,4 +1001,39 @@ function sendJson(ws: ServerWebSocket<WsConnectionData>, msg: WsOutboundMessage)
       error: err instanceof Error ? err.message : String(err),
     })
   }
+}
+
+interface RawAuthorityRow {
+  readonly status: string
+  readonly access_revision: number
+}
+
+/** RFC-305 DB/current outbound fence. Notifications accelerate refresh, but
+ * this check is authoritative when a notification is lost or a process races
+ * an async frame continuation. The raw client is used intentionally: the
+ * broadcaster hot path is synchronous and Bun SQLite reads are synchronous. */
+function authorityRevisionCurrent(ws: ServerWebSocket<WsConnectionData>, db: DbClient): boolean {
+  let row: RawAuthorityRow | null
+  try {
+    row = db.$client
+      .query('SELECT status, access_revision FROM users WHERE id = ? LIMIT 1')
+      .get(ws.data.actor.user.id) as RawAuthorityRow | null
+  } catch (error) {
+    log.warn('authority revision fence failed', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    onExpiredCredential?.(ws)
+    return false
+  }
+  if (row === null || row.status !== 'active') {
+    onExpiredCredential?.(ws)
+    return false
+  }
+  if (row.access_revision === (ws.data.actor.authorityRevision ?? 0)) return true
+
+  // Drop this frame, synchronously freeze later ones, and ask the targeted
+  // revalidation pass to rebuild the actor from the committed revision.
+  ws.data.revalidating = true
+  triggerAuthorityRevalidation(db, ws.data.actor.user.id, row.access_revision)
+  return false
 }

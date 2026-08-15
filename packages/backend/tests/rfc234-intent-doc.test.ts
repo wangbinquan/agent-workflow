@@ -30,9 +30,9 @@ import {
 
 const NONCE = 'aabbccdd11223344'
 
-/** Both privileged node kinds available — the admin/manager case. */
+/** Both privileged node kinds available — any effective authority with both grants. */
 const ALL_PRIVILEGES = { mayAuthorScripts: true, mayAuthorCodeHostCalls: true } as const
-/** Neither available — what a plain `role:'user'` session gets. */
+/** Neither available — what any session without the grants gets. */
 const NO_PRIVILEGES = { mayAuthorScripts: false, mayAuthorCodeHostCalls: false } as const
 
 function docWith(
@@ -292,7 +292,7 @@ describe('RFC-269 — code-host-call form and derived action catalog', () => {
   })
 })
 
-// The point of the privilege split: a `role:'user'` session must not spend a
+// The point of the privilege split: a session without the grants must not spend a
 // whole model turn producing a changeset that apply will refuse as a whole.
 describe('privileged node kinds are withheld from sessions that cannot author them', () => {
   const doc = docWith({ privileges: NO_PRIVILEGES })

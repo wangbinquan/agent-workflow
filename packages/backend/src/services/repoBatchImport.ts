@@ -65,7 +65,7 @@ interface MutableRow {
 
 interface BatchRecord {
   batchId: string
-  /** RFC-285 B6②：批次发起者——WS 升级门（发起者 ∨ 资源管理员）的判定依据。 */
+  /** RFC-285 B6②：批次发起者——WS 升级门（发起者 ∨ `resource-acl:bypass`）的判定依据。 */
   ownerUserId: string
   state: BatchImportState
   createdAt: number

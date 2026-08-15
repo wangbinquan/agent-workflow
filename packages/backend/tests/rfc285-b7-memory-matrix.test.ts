@@ -67,7 +67,7 @@ describe('RFC-285 B7 — 现状矩阵（读面）', () => {
 })
 
 describe('RFC-285 B7 — 现状矩阵（管理面）', () => {
-  test('repo / repo_group / global：admin+manager 可管（isResourceAdminActor 兜底）、普通 user 不可', async () => {
+  test('repo / repo_group / global：admin+manager 可管（hasResourceAclBypass 兜底）、普通 user 不可', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     for (const scopeType of ['repo', 'repo_group', 'global'] as const) {
       const scope = { scopeType, scopeId: 's1' }

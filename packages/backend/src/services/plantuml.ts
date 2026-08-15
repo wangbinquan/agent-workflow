@@ -1,7 +1,7 @@
 // RFC-105 WP-B — server-side PlantUML rendering for the /api/plantuml/render
 // proxy. Moves the kroki/picoweb round-trip off the browser so PlantUML works
-// for ALL logged-in users (the render endpoint + auth header live in admin-only
-// config; previously only admins, who could read /api/config, rendered it).
+// for ALL logged-in users (the render endpoint + auth header live in
+// `settings:read` config; previously only actors with that permission rendered it).
 //
 // The encoders mirror the former browser logic (PlantUmlBlock.encodeFor*): raw
 // DEFLATE then either kroki's base64url alphabet or PlantUML's digits-first

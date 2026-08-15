@@ -10,8 +10,10 @@ import type {
   WebhookTemplateVar,
   WorkgroupSystemTemplateKey,
 } from '@agent-workflow/shared'
+import { buildPermissionCatalogResources } from './permissionCatalog'
 
 export interface Resources {
+  permissions: ReturnType<typeof buildPermissionCatalogResources>
   tabBar: {
     scrollStart: string
     scrollEnd: string
@@ -955,8 +957,6 @@ export interface Resources {
     colPermission: string
     needsNothing: string
     notAvailableToYou: string
-    adminOnly: string
-    resourceAdminOnly: string
   }
 
   account: {
@@ -1142,6 +1142,7 @@ export interface Resources {
     email: string
     noEmail: string
     role: string
+    roleHint: string
     status: string
     manage: string
     you: string
@@ -5299,7 +5300,6 @@ export interface Resources {
   // RFC-041 PR4: platform memory UI surface.
   memory: {
     title: string
-    adminOnly: string
     empty: string
     sectionNavLabel: string
     sectionGroups: {
@@ -5475,7 +5475,7 @@ export interface Resources {
       manual: string
     }
     distillJobDetail: {
-      adminOnly: string
+      permissionRequired: string
       attempt: string
       attemptsCount: string
       attemptPickerLabel: string
@@ -5746,6 +5746,7 @@ export interface Resources {
 }
 
 export const zhCN: Resources = {
+  permissions: buildPermissionCatalogResources('zh-CN'),
   tabBar: {
     scrollStart: '向前查看更多分区',
     scrollEnd: '向后查看更多分区',
@@ -6480,13 +6481,13 @@ export const zhCN: Resources = {
     connecting: '客户端配置',
     toolsHeading: 'MCP 工具',
     toolsIntro:
-      '`tools/list` 只返回当前令牌真正能调用的工具。下表列出全部工具；标注「当前角色不可用」的表示你的角色无法授出它所需的权限。',
+      '`tools/list` 只返回当前令牌真正能调用的工具。下表列出全部工具；不可用项表示所需权限不在当前账户的有效权限集合中。',
     restHeading: 'REST 端点',
     restIntro:
-      '下表只列出令牌可达、且你的角色能够授权的端点。账号与 ACL 接口对所有令牌关闭，故不在此列。',
+      '下表只列出令牌可达、且当前账户能够授权的端点。账户管理与 ACL bypass 权限永不进入令牌，故对应端点不在此列。',
     permissionsHeading: '权限矩阵',
     permissionsIntro:
-      '你的角色可以授予令牌的档位。角色拿不到的档位不会出现在这里，也不会出现在账号页。',
+      '当前账户的有效权限可以放入令牌的档位。账户未持有的档位不会出现在这里，也不会出现在账号页。',
     alwaysGrantedHeading: '恒定开启的读取权限',
     alwaysGrantedIntro: '任何有效令牌都带这些读取权限（可见范围仍受资源 ACL 约束），无需勾选。',
     resourcesHeading: '资源类型',
@@ -6501,9 +6502,7 @@ export const zhCN: Resources = {
     colOperation: '操作',
     colPermission: '权限',
     needsNothing: '无需额外权限',
-    notAvailableToYou: '当前角色不可用',
-    adminOnly: '仅管理员',
-    resourceAdminOnly: '仅资源管理员',
+    notAvailableToYou: '当前账户不可用',
   },
 
   account: {
@@ -6589,7 +6588,7 @@ export const zhCN: Resources = {
         custom: '自定义',
       },
       advanced: '逐项选择权限',
-      advancedHint: '只列出你当前角色真正拥有、因而能授出去的权限。',
+      advancedHint: '只列出当前账户有效权限中可以放入这枚令牌的权限。',
       deleteWarningTitle: '这枚令牌可以删除数据',
       deleteWarningDescription: '已勾选：{{points}}。删除不可撤销；只在确实需要时保留它。',
       expiryLabel: '有效期',
@@ -6686,20 +6685,21 @@ export const zhCN: Resources = {
     empty: '还没有用户',
     emptyDescription: '创建本地密码账户，或为用户首次通过身份提供方登录预先建档。',
     filteredEmpty: '没有符合当前筛选条件的用户',
-    filteredEmptyDescription: '换一个姓名搜索，或清除状态和角色筛选。',
+    filteredEmptyDescription: '换一个姓名搜索，或清除状态和权限预设筛选。',
     filtersLabel: '查找和筛选用户',
     searchLabel: '搜索用户',
     searchPlaceholder: '搜索显示名、用户名或邮箱…',
     statusFilterLabel: '按状态筛选用户',
-    roleFilterLabel: '按角色筛选用户',
+    roleFilterLabel: '按权限预设筛选用户',
     filterAll: '全部',
-    allRoles: '全部角色',
+    allRoles: '全部预设',
     directoryLabel: '真人用户账户',
     username: '用户名',
     displayName: '显示名',
     email: '邮箱',
     noEmail: '未填写邮箱',
-    role: '角色',
+    role: '权限预设',
+    roleHint: '预设只提供默认权限组合；运行时不判断角色，下方可继续逐项追加权限。',
     status: '状态',
     manage: '管理',
     you: '你',
@@ -6739,16 +6739,16 @@ export const zhCN: Resources = {
       user: '普通用户',
       admin: '管理员',
       manager: '资源管理员',
-      userDesc: '只读资源 + 启动任务 + 管理自己的账户。',
-      adminDesc: '完整权限：用户、设置、OIDC、所有任务。',
-      managerDesc: '管理所有资源、记忆、仓库与任务——不含用户/系统管理，不能删除任务。',
+      userDesc: '默认包含资源读取、任务启动与个人账户管理；其余权限可在清单中追加。',
+      adminDesc: '默认包含当前目录中的全部权限。',
+      managerDesc: '默认包含资源、记忆、仓库与任务管理；其余权限可在清单中追加。',
     },
     statusOption: {
       active: '活跃',
       invited: '待首次登录',
       disabled: '已停用',
     },
-    selfRoleLocked: '不能修改自己的角色 —— 需要另一位管理员代为操作。',
+    selfRoleLocked: '不能修改自己的访问预设或附加授权 —— 需要另一位访问管理员代为操作。',
     selfDisableLocked: '不能停用当前正在使用的账户。',
     credentialsTitle: '登录凭据',
     credentialsOidcDescription: '此账户已经绑定身份提供方。',
@@ -6785,8 +6785,8 @@ export const zhCN: Resources = {
       enabled: '账户已启用。',
     },
     noPermission: {
-      title: '需要管理员权限',
-      body: '该页面仅管理员角色可访问。',
+      title: '需要用户目录权限',
+      body: '该页面需要 users:read。',
     },
   },
   repoGroups: {
@@ -6965,7 +6965,7 @@ export const zhCN: Resources = {
       hint: '为 GitLab / GitHub 创建一个稳定的事件入口。创建后，把 URL 和 Secret 一起粘贴到代码平台的 Webhook 配置。',
       empty: '还没有接收端点',
       emptyDescription: '先创建端点，拿到只显示一次的 Secret，再回到代码平台完成连接。',
-      emptyReadonlyDescription: '管理员还没有配置接收端点。',
+      emptyReadonlyDescription: '尚未有持有 webhook-endpoints:manage 权限的用户配置接收端点。',
       enabled: '已启用',
       disabled: '已禁用',
       enabledSwitch: '启用',
@@ -7003,7 +7003,7 @@ export const zhCN: Resources = {
       copySecret: '复制',
       secretCopied: '已复制',
       urlLabel: 'Webhook URL',
-      urlMaskedHint: '完整 URL 仅管理员可见。',
+      urlMaskedHint: '查看完整 URL 需要 webhook-endpoints:manage。',
       secretPasteHintGitlab:
         '在 GitLab：Settings → Webhooks，把 URL 与 Secret token 一起粘贴保存。',
       secretPasteHintGithub:
@@ -8564,8 +8564,8 @@ export const zhCN: Resources = {
     title: 'Webhook 自动化',
     subtitle: '把 GitLab 事件接进平台，按规则启动工作，并从投递记录快速定位问题。',
     tabAria: 'Webhook 配置分区',
-    forbiddenTitle: '仅管理员可见',
-    forbiddenDescription: 'Webhook 配置（验签密钥、触发规则、投递审计）只对 admin 开放。',
+    forbiddenTitle: '需要更多权限',
+    forbiddenDescription: 'Webhook 配置按端点、触发规则与投递权限分别展示。',
     tabs: { endpoints: '接收端点', triggers: '触发规则', deliveries: '投递记录' },
   },
   runtimeParameters: {
@@ -11734,7 +11734,8 @@ export const zhCN: Resources = {
     'mcp-still-referenced__hint': '先在引用它的代理里解绑。',
     'probe-not-found': '该 MCP 还没有探测结果，请先探测。',
     'resource-operation-stale': '资源在操作期间被他人修改，请刷新后重试。',
-    'review-comment-not-author': '只有评论作者（或任务 owner/资源管理员）可以修改这条评论。',
+    'review-comment-not-author':
+      '只有评论作者、任务 owner，或持有 resource-acl:bypass 的用户可以修改这条评论。',
     'resource-operation-superseded': '已有更新的探测完成，本次结果被丢弃。',
     // --- plugin ---
     'plugin-not-found': '插件不存在。',
@@ -11866,8 +11867,9 @@ export const zhCN: Resources = {
     unauthorized: '登录状态无效或已过期。',
     unauthorized__hint: '重新登录后重试。',
     forbidden: '没有执行该操作的权限。',
-    'admin-required': '该操作需要管理员权限。',
-    'not-task-member': '只有任务成员或管理员可以执行该操作。',
+    'admin-required': '该操作需要对应的高权限能力。',
+    'permission-required': '当前账号缺少所需权限。',
+    'not-task-member': '只有任务成员或具备全局任务权限的操作者可以执行该操作。',
     'acl-invalid': '授权参数不合法。',
     'acl-missing-refs': '你没有其中部分引用资源的访问权限。',
     'acl-revision-conflict': '授权配置已被他人更新，请刷新后重试。',
@@ -11881,8 +11883,16 @@ export const zhCN: Resources = {
     'old-password-mismatch': '旧密码不正确。',
     'change-password-invalid': '修改密码参数不合法。',
     'self-disable-forbidden': '不能停用自己的账号。',
-    'self-role-change-forbidden': '不能修改自己的角色。',
-    'last-admin-protection': '不能停用最后一名管理员。',
+    'self-access-change-forbidden': '不能修改自己的权限预设或附加权限。',
+    'last-access-administrator-protection': '必须至少保留一个具备 users:write 的活跃账号。',
+    'user-management-forbidden': '用户管理需要 users:write 权限。',
+    'user-access-management-forbidden': '修改访问权限需要具备 users:write 的活跃浏览器会话。',
+    'user-access-ambiguous': '旧 role 字段与 access 快照不能同时提交。',
+    'user-access-stale': '该用户的权限已被更新，请加载最新版本后重新确认。',
+    'user-permission-invalid': '权限清单中含有未知权限。',
+    'user-permission-not-grantable': '该权限属于账号内在能力，不能单独授予。',
+    'user-permission-redundant': '所选权限预设已经包含该权限。',
+    'user-permission-duplicate': '权限清单中含有重复项。',
     'oidc-not-configured': '尚未配置 OIDC 登录。',
     'oidc-provider-not-found': '登录提供方不存在。',
     'oidc-provider-invalid': '登录提供方配置不合法。',
@@ -12070,7 +12080,6 @@ export const zhCN: Resources = {
   },
   memory: {
     title: '平台长期记忆',
-    adminOnly: '仅管理员可审批',
     empty: '暂无沉淀',
     sectionNavLabel: '记忆分区',
     sectionGroups: {
@@ -12242,7 +12251,7 @@ export const zhCN: Resources = {
       manual: '手工',
     },
     distillJobDetail: {
-      adminOnly: '提炼详情仅 admin 可见',
+      permissionRequired: '需要“管理记忆提炼任务”权限',
       attempt: '第 {{n}} 次',
       attemptsCount: '尝试次数：{{n}}',
       attemptPickerLabel: '选择尝试：',
@@ -12511,7 +12520,7 @@ export const zhCN: Resources = {
     visibilityValue: { public: '全员可用', private: '私有' },
     members: '授权用户',
     noMembers: '暂无授权用户',
-    privateHint: '私有资源仅所有者与授权用户可见可用；管理员始终可见。',
+    privateHint: '私有资源仅所有者、授权用户或持有 resource-acl:bypass 的账户可见可用。',
     save: '保存权限',
     transferOwner: '转让',
     transferTitle: '转让所有者',

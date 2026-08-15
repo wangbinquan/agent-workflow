@@ -12,7 +12,6 @@ import { enUS } from '../src/i18n/en-US'
 const NAV_KEYS = ['memory', 'memoryHint', 'memoryBadge'] as const
 const MEMORY_TOP = [
   'title',
-  'adminOnly',
   'empty',
   'confirmDelete',
   'confirmArchive',

@@ -20,10 +20,10 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
-  ADMIN_ONLY_PERMISSIONS,
-  hasPermission,
   PERMISSIONS,
+  presetHasPermission,
   ROLE_PERMISSIONS,
+  USER_PRESET_MISSING_PERMISSIONS,
 } from '../src/schemas/permission'
 
 const MEMORY_PERMS = ['memory:read', 'memory:create', 'memory:update', 'memory:delete'] as const
@@ -53,29 +53,29 @@ describe('PERMISSIONS literal — memory surface', () => {
 describe('ROLE_PERMISSIONS — memory surface', () => {
   test('admin has all 4 memory verbs', () => {
     for (const p of MEMORY_PERMS) {
-      expect(hasPermission('admin', p)).toBe(true)
+      expect(presetHasPermission('admin', p)).toBe(true)
     }
   })
 
-  // RFC-099 (D12): the memory write surface moved from admin-only to
+  // RFC-099 (D12): the memory write surface moved into the user preset and
   // route-gate-open — the real gate is per-row canManageMemory (scope-resource
-  // owner or resource-admin; repo/global rows stay resource-admin at the check).
+  // owner or an actor with resource-acl:bypass).
   // RFC-247 D15 carried that reach over unchanged.
   test('user passes the route gate for all 4 memory verbs (RFC-099)', () => {
     for (const p of MEMORY_PERMS) {
-      expect(hasPermission('user', p)).toBe(true)
+      expect(presetHasPermission('user', p)).toBe(true)
     }
   })
 
   test('manager inherits the same memory reach as user (RFC-222)', () => {
     for (const p of MEMORY_PERMS) {
-      expect(hasPermission('manager', p)).toBe(true)
+      expect(presetHasPermission('manager', p)).toBe(true)
     }
   })
 
-  test('no memory verb sits in ADMIN_ONLY_PERMISSIONS (RFC-099)', () => {
+  test('no memory verb is missing from the user preset (RFC-099)', () => {
     for (const p of MEMORY_PERMS) {
-      expect(ADMIN_ONLY_PERMISSIONS.includes(p)).toBe(false)
+      expect(USER_PRESET_MISSING_PERMISSIONS.includes(p)).toBe(false)
     }
   })
 

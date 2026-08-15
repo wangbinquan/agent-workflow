@@ -21,8 +21,18 @@ export type RevocationReason =
   | 'task-members-changed'
   | 'resource-acl-changed'
   | 'bootstrap-completed'
+  | 'authority-changed'
 
-type TriggerImpl = (db: DbClient, reason: RevocationReason) => Promise<void>
+export interface RevalidationTarget {
+  readonly userId: string
+  readonly revision: number
+}
+
+type TriggerImpl = (
+  db: DbClient,
+  reason: RevocationReason,
+  target?: RevalidationTarget,
+) => Promise<void>
 
 let impl: TriggerImpl | undefined
 
@@ -46,4 +56,18 @@ export function triggerRevalidation(db: DbClient, reason: RevocationReason): voi
 /** RFC-244: awaited variant for audience-transition notifications. */
 export function triggerRevalidationAndWait(db: DbClient, reason: RevocationReason): Promise<void> {
   return impl?.(db, reason) ?? Promise.resolve()
+}
+
+/** RFC-305 targeted account-authority refresh. The commit is already durable;
+ * only sockets for the changed subject are frozen and re-resolved. */
+export function triggerAuthorityRevalidation(
+  db: DbClient,
+  userId: string,
+  revision: number,
+  onFailure?: (error: unknown) => void,
+): void {
+  void impl?.(db, 'authority-changed', { userId, revision }).catch((error: unknown) => {
+    // Registered implementation fails closed for every targeted socket.
+    onFailure?.(error)
+  })
 }

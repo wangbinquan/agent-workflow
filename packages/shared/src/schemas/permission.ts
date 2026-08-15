@@ -5,12 +5,11 @@
 // we only add a new key to ROLE_PERMISSIONS — business code does not key off
 // the role string.
 //
-// RFC-222 — third role `manager` (中文「资源管理员」): manager = admin minus
-// user management, system settings/ops, and task deletion. It gets every
-// resource-domain capability (the default row-level ACL bypass lives in the
-// identity predicate isResourceAdminRole below, NOT in a permission point) plus
-// the coarse route points repos:* / tasks:read:all. RFC-283 webhook trigger rules
-// are the deliberate exception: manager has method capability but only owner writes.
+// RFC-222 introduced the third role `manager` (中文「资源管理员」). RFC-305
+// makes all three roles pure permission presets: authorization code consumes
+// only Actor.permissions, never the role string. Resource ACL bypass and the
+// historical role exceptions are therefore explicit points in
+// this same catalog instead of a parallel identity predicate.
 //
 // RFC-247 — the `资源:write` point is GONE. It used to cover POST/PUT/PATCH/
 // DELETE alike (the `resourcePermissionGate` middleware, since deleted along
@@ -71,12 +70,11 @@ export const PERMISSIONS = [
   'workflows:read',
   'workgroups:read',
   'scheduled-tasks:read',
-  // RFC-260/RFC-283 — webhook 读面全员可见；触发规则由
-  // admin 全局管理、manager 仅管理自己的规则。两个 read 点都在 USER_BASELINE
+  // RFC-260/RFC-283/RFC-305 — webhook 读面在 user 预设；写与跨 owner
+  // 能力由具体权限组合决定。两个 read 点都在 USER_BASELINE
   // （触发器全量只读 + 端点/投递元数据只读——hook URL 明文另由响应分层保护：
-  // 只有 admin 的 session 请求拿明文，非 admin 与一切 PAT 拿掩码 hint，见
-  // routes/webhookEndpoints.ts toWire）。triggers 三个写动词进 manager
-  // 基线（owner 行级门另行约束）；endpoints:manage 仍只属于 admin。
+  // 只有持有 webhook-endpoints:manage 的 session 请求拿明文，一切 PAT 拿掩码
+  // hint，见 routes/webhookEndpoints.ts toWire）。owner 行级门另行约束。
   'webhook-triggers:read',
   // RFC-260 — 端点与投递审计共用的读点（投递是端点级审计，RFC-257 F-13；
   // replay/写面仍走 system 域的 webhook-endpoints:manage）。
@@ -84,8 +82,8 @@ export const PERMISSIONS = [
   'repos:read',
   'memory:read',
   'tasks:read',
-  // RANGE points — how far the ACCOUNT can see, which is an identity property,
-  // not a token grant. Consumed directly by handlers via
+  // RANGE points — how far the ACCOUNT can see. They are account-level
+  // permissions, not independently selectable token grants. Consumed by handlers via
   // `actor.permissions.has(...)` (routes/tasks.ts:183,188; clarify.ts:125,178;
   // reviews.ts:120,162), so they never appear in a RouteMeta — see
   // HANDLER_CONSUMED_POINTS below.
@@ -128,7 +126,7 @@ export const PERMISSIONS = [
 
   // ---------------------------------------------------------------------------
   // Matrix domain — delete. RFC-247 D4: every one of these must be ticked
-  // EXPLICITLY on a token; none of them rides a role baseline or a preset.
+  // EXPLICITLY on a token; none of them rides an account preset.
   // ---------------------------------------------------------------------------
   'agents:delete',
   'skills:delete',
@@ -171,7 +169,7 @@ export const PERMISSIONS = [
 
   // ---------------------------------------------------------------------------
   // System domain — a token NEVER carries any of these (RFC-247 D7), not even
-  // when its owner is an administrator.
+  // regardless of which access preset its owner uses.
   // ---------------------------------------------------------------------------
   'users:read',
   'users:write',
@@ -194,7 +192,7 @@ export const PERMISSIONS = [
   // grant still cannot write a script body.
   'scripts:author',
   // RFC-269 — authoring a code-host call node, i.e. deciding what the platform
-  // does to GitLab/GitHub **with the administrator's token**. Like
+  // does to GitLab/GitHub **with the platform-configured token**. Like
   // `scripts:author` it is a capability, not a CRUD verb on a resource domain
   // (there is no "code-host call" resource — the call is inline in the
   // workflow): "may act on the code host as the platform's bot identity, on any
@@ -205,9 +203,17 @@ export const PERMISSIONS = [
   // RFC-257 (D19) — managing webhook ENDPOINTS (the verification secret and the
   // public URL token). Platform infrastructure, not a work resource: a leaked
   // PAT must never be able to read or rotate the ingress secret, so the point
-  // is system-domain (admin-only role surface — it sits in no non-admin
-  // baseline; RFC-260 opened the READ face via webhook-endpoints:read instead).
+  // is system-domain. It is absent from the user/manager default presets but
+  // RFC-305 permits an explicit account grant; RFC-260 opened the read face
+  // through webhook-endpoints:read.
   'webhook-endpoints:manage',
+  // RFC-305 — capabilities that historically lived outside Permission as
+  // admin/manager role predicates. Roles now select defaults only.
+  'resource-acl:bypass',
+  'memory-distill-jobs:manage',
+  'intent:audit',
+  'mcp-runtime-tests:audit',
+  'webhook-triggers:override-owner',
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]
@@ -215,6 +221,326 @@ export type Role = 'admin' | 'user' | 'manager'
 
 export const PermissionSchema = z.enum(PERMISSIONS)
 export const RoleSchema = z.enum(['admin', 'user', 'manager'])
+
+// -----------------------------------------------------------------------------
+// RFC-305 — exhaustive product/authorization catalog.
+//
+// PERMISSIONS remains the wire enum; this map is the mandatory metadata side of
+// the same closed set.  User-management UI, API documentation and grant
+// validation consume this object directly, so adding a permission cannot leave
+// either dialog with a stale hand-written list.
+// -----------------------------------------------------------------------------
+
+export type PermissionDelegationMode = 'account-additive' | 'intrinsic'
+export type PermissionRisk = 'standard' | 'elevated' | 'critical'
+export type PermissionTokenMode = 'matrix' | 'account-range' | 'never'
+export type PermissionGroup =
+  | 'resources'
+  | 'tasks'
+  | 'memory-intent'
+  | 'webhooks'
+  | 'repositories'
+  | 'privileged-authoring'
+  | 'platform'
+
+export type PermissionConstraint =
+  | 'resource-acl'
+  | 'task-membership'
+  | 'task-global-range'
+  | 'owner-or-override'
+
+export type PermissionLabelKey = `permissions.catalog.${string}.label`
+export type PermissionDescriptionKey = `permissions.catalog.${string}.description`
+
+export interface PermissionCatalogEntry {
+  readonly permission: Permission
+  readonly group: PermissionGroup
+  readonly labelKey: PermissionLabelKey
+  readonly descriptionKey: PermissionDescriptionKey
+  readonly delegation: PermissionDelegationMode
+  readonly risk: PermissionRisk
+  readonly token: PermissionTokenMode
+  readonly constraints: ReadonlyArray<PermissionConstraint>
+}
+
+interface CatalogEntryOptions {
+  readonly group: PermissionGroup
+  readonly delegation?: PermissionDelegationMode
+  readonly risk?: PermissionRisk
+  readonly token?: PermissionTokenMode
+  readonly constraints?: ReadonlyArray<PermissionConstraint>
+}
+
+function catalogEntry(
+  permission: Permission,
+  options: CatalogEntryOptions,
+): PermissionCatalogEntry {
+  const key = permission.replaceAll(':', '_')
+  return Object.freeze({
+    permission,
+    group: options.group,
+    labelKey: `permissions.catalog.${key}.label` as PermissionLabelKey,
+    descriptionKey: `permissions.catalog.${key}.description` as PermissionDescriptionKey,
+    delegation: options.delegation ?? 'account-additive',
+    risk: options.risk ?? 'standard',
+    token: options.token ?? 'matrix',
+    constraints: Object.freeze([...(options.constraints ?? [])]),
+  })
+}
+
+const resourceAcl = Object.freeze(['resource-acl'] as const)
+const taskMembership = Object.freeze(['task-membership'] as const)
+const taskGlobalRange = Object.freeze(['task-global-range'] as const)
+const ownerOrOverride = Object.freeze(['owner-or-override'] as const)
+
+const permissionCatalog = {
+  'agents:read': catalogEntry('agents:read', { group: 'resources', constraints: resourceAcl }),
+  'skills:read': catalogEntry('skills:read', { group: 'resources', constraints: resourceAcl }),
+  'mcps:read': catalogEntry('mcps:read', { group: 'resources', constraints: resourceAcl }),
+  'plugins:read': catalogEntry('plugins:read', { group: 'resources', constraints: resourceAcl }),
+  'workflows:read': catalogEntry('workflows:read', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'workgroups:read': catalogEntry('workgroups:read', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'scheduled-tasks:read': catalogEntry('scheduled-tasks:read', { group: 'tasks' }),
+  'webhook-triggers:read': catalogEntry('webhook-triggers:read', { group: 'webhooks' }),
+  'webhook-endpoints:read': catalogEntry('webhook-endpoints:read', { group: 'webhooks' }),
+  'repos:read': catalogEntry('repos:read', { group: 'repositories' }),
+  'memory:read': catalogEntry('memory:read', { group: 'memory-intent', constraints: resourceAcl }),
+  'tasks:read': catalogEntry('tasks:read', { group: 'tasks', constraints: taskMembership }),
+  'tasks:read:own': catalogEntry('tasks:read:own', {
+    group: 'tasks',
+    token: 'account-range',
+    constraints: taskMembership,
+  }),
+  'tasks:read:all': catalogEntry('tasks:read:all', {
+    group: 'tasks',
+    risk: 'elevated',
+    token: 'account-range',
+    constraints: taskGlobalRange,
+  }),
+  'agents:create': catalogEntry('agents:create', { group: 'resources', constraints: resourceAcl }),
+  'skills:create': catalogEntry('skills:create', { group: 'resources', constraints: resourceAcl }),
+  'mcps:create': catalogEntry('mcps:create', { group: 'resources', constraints: resourceAcl }),
+  'plugins:create': catalogEntry('plugins:create', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'workflows:create': catalogEntry('workflows:create', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'workgroups:create': catalogEntry('workgroups:create', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'scheduled-tasks:create': catalogEntry('scheduled-tasks:create', { group: 'tasks' }),
+  'webhook-triggers:create': catalogEntry('webhook-triggers:create', {
+    group: 'webhooks',
+    risk: 'elevated',
+    constraints: ownerOrOverride,
+  }),
+  'repos:create': catalogEntry('repos:create', { group: 'repositories', risk: 'elevated' }),
+  'memory:create': catalogEntry('memory:create', {
+    group: 'memory-intent',
+    constraints: resourceAcl,
+  }),
+  'agents:update': catalogEntry('agents:update', { group: 'resources', constraints: resourceAcl }),
+  'skills:update': catalogEntry('skills:update', { group: 'resources', constraints: resourceAcl }),
+  'mcps:update': catalogEntry('mcps:update', { group: 'resources', constraints: resourceAcl }),
+  'plugins:update': catalogEntry('plugins:update', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'workflows:update': catalogEntry('workflows:update', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'workgroups:update': catalogEntry('workgroups:update', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'scheduled-tasks:update': catalogEntry('scheduled-tasks:update', { group: 'tasks' }),
+  'webhook-triggers:update': catalogEntry('webhook-triggers:update', {
+    group: 'webhooks',
+    risk: 'elevated',
+    constraints: ownerOrOverride,
+  }),
+  'memory:update': catalogEntry('memory:update', {
+    group: 'memory-intent',
+    constraints: resourceAcl,
+  }),
+  'tasks:update': catalogEntry('tasks:update', { group: 'tasks', constraints: taskMembership }),
+  'repos:update': catalogEntry('repos:update', { group: 'repositories', risk: 'elevated' }),
+  'agents:delete': catalogEntry('agents:delete', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'skills:delete': catalogEntry('skills:delete', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'mcps:delete': catalogEntry('mcps:delete', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'plugins:delete': catalogEntry('plugins:delete', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'workflows:delete': catalogEntry('workflows:delete', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'workgroups:delete': catalogEntry('workgroups:delete', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'scheduled-tasks:delete': catalogEntry('scheduled-tasks:delete', {
+    group: 'tasks',
+    risk: 'elevated',
+  }),
+  'webhook-triggers:delete': catalogEntry('webhook-triggers:delete', {
+    group: 'webhooks',
+    risk: 'critical',
+    constraints: ownerOrOverride,
+  }),
+  'repos:delete': catalogEntry('repos:delete', { group: 'repositories', risk: 'critical' }),
+  'memory:delete': catalogEntry('memory:delete', {
+    group: 'memory-intent',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'tasks:delete': catalogEntry('tasks:delete', {
+    group: 'tasks',
+    risk: 'critical',
+  }),
+  'mcps:execute': catalogEntry('mcps:execute', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'plugins:execute': catalogEntry('plugins:execute', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'workflows:execute': catalogEntry('workflows:execute', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'scheduled-tasks:execute': catalogEntry('scheduled-tasks:execute', {
+    group: 'tasks',
+    risk: 'elevated',
+  }),
+  'repos:execute': catalogEntry('repos:execute', { group: 'repositories', risk: 'critical' }),
+  'tasks:execute': catalogEntry('tasks:execute', {
+    group: 'tasks',
+    risk: 'elevated',
+    constraints: taskMembership,
+  }),
+  'users:read': catalogEntry('users:read', {
+    group: 'platform',
+    token: 'never',
+  }),
+  'users:write': catalogEntry('users:write', {
+    group: 'platform',
+    risk: 'critical',
+    token: 'never',
+  }),
+  'users:search': catalogEntry('users:search', { group: 'platform', token: 'never' }),
+  'settings:read': catalogEntry('settings:read', {
+    group: 'platform',
+    token: 'never',
+  }),
+  'settings:write': catalogEntry('settings:write', {
+    group: 'platform',
+    risk: 'critical',
+    token: 'never',
+  }),
+  'oidc:read': catalogEntry('oidc:read', {
+    group: 'platform',
+    token: 'never',
+  }),
+  'oidc:configure': catalogEntry('oidc:configure', {
+    group: 'platform',
+    risk: 'critical',
+    token: 'never',
+  }),
+  'backup:run': catalogEntry('backup:run', {
+    group: 'platform',
+    risk: 'critical',
+    token: 'never',
+  }),
+  'runtime:read': catalogEntry('runtime:read', { group: 'platform', token: 'never' }),
+  'account:self': catalogEntry('account:self', {
+    group: 'platform',
+    delegation: 'intrinsic',
+    token: 'never',
+  }),
+  'intent:read': catalogEntry('intent:read', { group: 'memory-intent', token: 'never' }),
+  'intent:write': catalogEntry('intent:write', {
+    group: 'memory-intent',
+    risk: 'elevated',
+    token: 'never',
+  }),
+  'scripts:author': catalogEntry('scripts:author', {
+    group: 'privileged-authoring',
+    risk: 'critical',
+    token: 'never',
+    constraints: resourceAcl,
+  }),
+  'code-host-calls:author': catalogEntry('code-host-calls:author', {
+    group: 'privileged-authoring',
+    risk: 'critical',
+    token: 'never',
+    constraints: resourceAcl,
+  }),
+  'webhook-endpoints:manage': catalogEntry('webhook-endpoints:manage', {
+    group: 'webhooks',
+    risk: 'critical',
+    token: 'never',
+  }),
+  'resource-acl:bypass': catalogEntry('resource-acl:bypass', {
+    group: 'platform',
+    risk: 'critical',
+    token: 'never',
+  }),
+  'memory-distill-jobs:manage': catalogEntry('memory-distill-jobs:manage', {
+    group: 'memory-intent',
+    risk: 'elevated',
+    token: 'never',
+  }),
+  'intent:audit': catalogEntry('intent:audit', {
+    group: 'memory-intent',
+    risk: 'critical',
+    token: 'never',
+  }),
+  'mcp-runtime-tests:audit': catalogEntry('mcp-runtime-tests:audit', {
+    group: 'platform',
+    risk: 'critical',
+    token: 'never',
+  }),
+  'webhook-triggers:override-owner': catalogEntry('webhook-triggers:override-owner', {
+    group: 'webhooks',
+    risk: 'critical',
+    token: 'never',
+  }),
+} satisfies Record<Permission, PermissionCatalogEntry>
+
+export const PERMISSION_CATALOG: Readonly<Record<Permission, PermissionCatalogEntry>> =
+  Object.freeze(permissionCatalog)
 
 // -----------------------------------------------------------------------------
 // RFC-247 — point classification. These are SELECTORS over PERMISSIONS (they
@@ -253,11 +579,17 @@ export const SYSTEM_DOMAIN_POINTS: ReadonlyArray<Permission> = [
   'code-host-calls:author',
   // RFC-257 — see the catalog entry: the ingress secret surface never rides a token.
   'webhook-endpoints:manage',
+  // RFC-305 — permissionized replacements for retired account-role predicates.
+  'resource-acl:bypass',
+  'memory-distill-jobs:manage',
+  'intent:audit',
+  'mcp-runtime-tests:audit',
+  'webhook-triggers:override-owner',
 ]
 
 /**
- * RFC-247 — RANGE points: they bound how far an ACCOUNT can see, which is an
- * identity property rather than a token grant. They are consumed directly by
+ * RFC-247 — RANGE points bound how far an ACCOUNT can see. They are account
+ * permissions rather than independently selectable token grants, consumed by
  * handlers through `actor.permissions.has(...)` and therefore never appear in a
  * `RouteMeta`, so the startup reverse self-check (design §3.2) must treat them
  * as handler-consumed rather than dead. Every entry carries the file:line that
@@ -376,8 +708,8 @@ const USER_BASELINE: ReadonlyArray<Permission> = [
   'tasks:read:own',
   'tasks:update',
   'account:self',
-  // RFC-041 / RFC-099 D12: memory management is "scope-resource owner or
-  // resource-admin", enforced per row by services/memory.ts canManageMemory.
+  // RFC-041 / RFC-099 / RFC-305: memory management is "scope-resource owner or
+  // resource-acl:bypass", enforced per row by services/memory.ts canManageMemory.
   // RFC-247 folds the old approve/archive/edit/delete/write_feedback points
   // into the four verbs; the reach is unchanged.
   'memory:read',
@@ -387,23 +719,23 @@ const USER_BASELINE: ReadonlyArray<Permission> = [
   // RFC-234 (D22): intent building is open to all users.
   'intent:read',
   'intent:write',
-  // RFC-260/RFC-283 — webhook 读面全员开放；触发规则写面在
-  // manager 基线额外授权，端点写面仍 admin 独占。
+  // RFC-260/RFC-283/RFC-305 — webhook 读面全员开放；触发规则写面在 manager
+  // 预设中默认开启，端点管理是可单独授予的显式能力。
   'webhook-triggers:read',
   'webhook-endpoints:read',
 ]
 
-// RFC-222 — manager's extra route points over the user baseline. Row-level
-// resource bypass is NOT here (it's the isResourceAdminRole identity predicate).
-// Repos are out of the ACL model, so the repos points are plain points here.
+// RFC-222/RFC-305 — manager's extra permission preset over the user baseline.
+// Every historical bypass is an explicit point; there is no role predicate.
 const MANAGER_EXTRA: ReadonlyArray<Permission> = [
-  // RFC-253 (D19) — script authoring is admin + manager. Being a SYSTEM-domain
-  // point does not imply "admin only": `account:self`, `users:search` and
-  // `intent:*` are system-domain and sit in USER_BASELINE. The system domain
-  // bounds the TOKEN surface, not the role surface.
+  'resource-acl:bypass',
+  'memory-distill-jobs:manage',
+  // RFC-253/RFC-305 — script authoring is present in this preset and can also
+  // be granted explicitly to any account. The system domain bounds the TOKEN
+  // surface, not the account-grant surface.
   'scripts:author',
-  // RFC-269 (Q3) — same shape as script authoring: admin + manager. Being a
-  // SYSTEM-domain point bounds the TOKEN surface, not the role surface.
+  // RFC-269/RFC-305 — same shape as script authoring: preset default plus
+  // explicit account grant; never available to PATs.
   'code-host-calls:author',
   // RFC-283 — manager 可创建触发规则，并仅修改/删除自己名下的规则。
   // 这三个点只是方法粗门，owner 边界由 webhookTriggers 路由逐行判定。
@@ -423,34 +755,166 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<Permission>> = {
   manager: [...USER_BASELINE, ...MANAGER_EXTRA],
 }
 
-export function hasPermission(role: Role, perm: Permission): boolean {
-  return ROLE_PERMISSIONS[role].includes(perm)
+export const INTRINSIC_PERMISSIONS: ReadonlyArray<Permission> = Object.freeze(
+  PERMISSIONS.filter((permission) => PERMISSION_CATALOG[permission].delegation === 'intrinsic'),
+)
+
+export type AdditionalPermissionValidationCode =
+  | 'user-permission-invalid'
+  | 'user-permission-not-grantable'
+  | 'user-permission-redundant'
+  | 'user-permission-duplicate'
+
+export class AdditionalPermissionValidationError extends Error {
+  readonly code: AdditionalPermissionValidationCode
+  readonly permission: unknown
+
+  constructor(code: AdditionalPermissionValidationCode, permission: unknown) {
+    super(code)
+    this.name = 'AdditionalPermissionValidationError'
+    this.code = code
+    this.permission = permission
+  }
+}
+
+export interface StoredPermissionDiagnostic {
+  readonly code: AdditionalPermissionValidationCode
+  readonly permission: unknown
+}
+
+/** RFC-305 — strict normalization used by every write boundary. */
+export function normalizeAdditionalPermissionsForWrite(input: {
+  readonly role: Role
+  readonly additionalPermissions: ReadonlyArray<unknown>
+}): ReadonlyArray<Permission> {
+  const baseline = new Set(ROLE_PERMISSIONS[input.role])
+  const seen = new Set<Permission>()
+  const normalized: Permission[] = []
+
+  for (const raw of input.additionalPermissions) {
+    const parsed = PermissionSchema.safeParse(raw)
+    if (!parsed.success) {
+      throw new AdditionalPermissionValidationError('user-permission-invalid', raw)
+    }
+    const permission = parsed.data
+    if (seen.has(permission)) {
+      throw new AdditionalPermissionValidationError('user-permission-duplicate', permission)
+    }
+    seen.add(permission)
+    if (PERMISSION_CATALOG[permission].delegation !== 'account-additive') {
+      throw new AdditionalPermissionValidationError('user-permission-not-grantable', permission)
+    }
+    if (baseline.has(permission)) {
+      throw new AdditionalPermissionValidationError('user-permission-redundant', permission)
+    }
+    normalized.push(permission)
+  }
+
+  return Object.freeze(PERMISSIONS.filter((permission) => normalized.includes(permission)))
 }
 
 /**
- * RFC-222 — the default resource-domain identity predicate. admin AND manager
- * share the RFC-099 ACL bypass (view/modify/delete/ACL-manage any owner's
- * ACL resource). This is the SINGLE SOURCE OF TRUTH the ACL service, the auth
- * middleware, and the WS registry all derive from — business code must not
- * hand-write `role === 'admin' || role === 'manager'` (a repo guard enforces
- * this). System-domain gates (users/settings/oidc/backup/runtimes/task
- * deletion) stay keyed on `role === 'admin'` only. RFC-283 webhook triggers are
- * not RFC-099 ACL resources: their route deliberately uses owner ∨ admin instead.
+ * RFC-305 — fail-closed normalization for persisted rows. Invalid, intrinsic,
+ * duplicate and now-redundant rows never widen authority; callers
+ * receive diagnostics so operators can repair data without making auth depend
+ * on successful cleanup.
  */
-export function isResourceAdminRole(role: Role): boolean {
-  return role === 'admin' || role === 'manager'
+export function normalizeStoredAdditionalPermissions(input: {
+  readonly role: Role
+  readonly additionalPermissions: ReadonlyArray<unknown>
+}): {
+  readonly additionalPermissions: ReadonlyArray<Permission>
+  readonly diagnostics: ReadonlyArray<StoredPermissionDiagnostic>
+} {
+  const baseline = new Set(ROLE_PERMISSIONS[input.role])
+  const seen = new Set<Permission>()
+  const normalized = new Set<Permission>()
+  const diagnostics: StoredPermissionDiagnostic[] = []
+
+  for (const raw of input.additionalPermissions) {
+    const parsed = PermissionSchema.safeParse(raw)
+    if (!parsed.success) {
+      diagnostics.push({ code: 'user-permission-invalid', permission: raw })
+      continue
+    }
+    const permission = parsed.data
+    if (seen.has(permission)) {
+      diagnostics.push({ code: 'user-permission-duplicate', permission })
+      continue
+    }
+    seen.add(permission)
+    if (PERMISSION_CATALOG[permission].delegation !== 'account-additive') {
+      diagnostics.push({ code: 'user-permission-not-grantable', permission })
+      continue
+    }
+    if (baseline.has(permission)) {
+      diagnostics.push({ code: 'user-permission-redundant', permission })
+      continue
+    }
+    normalized.add(permission)
+  }
+
+  return {
+    additionalPermissions: Object.freeze(
+      PERMISSIONS.filter((permission) => normalized.has(permission)),
+    ),
+    diagnostics: Object.freeze(diagnostics.map((diagnostic) => Object.freeze(diagnostic))),
+  }
 }
 
-/** Used by snapshot tests to lock the negative set — points that must NOT leak to `user`. */
-export const ADMIN_ONLY_PERMISSIONS: ReadonlyArray<Permission> = PERMISSIONS.filter(
+/** The only account-authority union formula used by backend and frontend. */
+export function resolveEffectiveAccountPermissions(input: {
+  readonly role: Role
+  readonly additionalPermissions: ReadonlyArray<unknown>
+}): ReadonlySet<Permission> {
+  const additional = normalizeAdditionalPermissionsForWrite(input)
+  return new Set([...ROLE_PERMISSIONS[input.role], ...additional])
+}
+
+/** UI/API derivation — every non-intrinsic point outside the preset is grantable. */
+export function grantableAdditionalPermissions(role: Role): ReadonlyArray<Permission> {
+  const baseline = new Set(ROLE_PERMISSIONS[role])
+  return PERMISSIONS.filter(
+    (permission) =>
+      PERMISSION_CATALOG[permission].delegation === 'account-additive' && !baseline.has(permission),
+  )
+}
+
+/**
+ * Rebase explicitly selected additions onto a new role. Promotion removes
+ * redundant rows and downgrade never resurrects a permission that was not
+ * selected as an additional grant.
+ */
+export function additionalPermissionsForRole(
+  role: Role,
+  selectedEffectivePermissions: ReadonlySet<Permission>,
+): ReadonlyArray<Permission> {
+  const baseline = new Set(ROLE_PERMISSIONS[role])
+  return Object.freeze(
+    PERMISSIONS.filter(
+      (permission) =>
+        selectedEffectivePermissions.has(permission) &&
+        PERMISSION_CATALOG[permission].delegation === 'account-additive' &&
+        !baseline.has(permission),
+    ),
+  )
+}
+
+/** Preset membership helper. Authorization consumers must inspect effective permissions instead. */
+export function presetHasPermission(role: Role, perm: Permission): boolean {
+  return ROLE_PERMISSIONS[role].includes(perm)
+}
+
+/** Snapshot helper: points absent from the default `user` preset, all individually grantable. */
+export const USER_PRESET_MISSING_PERMISSIONS: ReadonlyArray<Permission> = PERMISSIONS.filter(
   (p) => !USER_BASELINE.includes(p),
 )
 
 /**
- * RFC-222 (P1-2 negative lock) — points that must belong to admin but NEVER to
- * manager. Snapshot tests assert each is ∈ admin and ∉ manager.
+ * Snapshot helper: points absent from the default `manager` preset. They remain
+ * individually grantable; this list describes defaults, not an authorization class.
  */
-export const MANAGER_DENIED_PERMISSIONS: ReadonlyArray<Permission> = [
+export const MANAGER_PRESET_MISSING_PERMISSIONS: ReadonlyArray<Permission> = [
   'users:read',
   'users:write',
   'settings:read',
@@ -459,6 +923,10 @@ export const MANAGER_DENIED_PERMISSIONS: ReadonlyArray<Permission> = [
   'oidc:configure',
   'backup:run',
   'tasks:delete',
+  'webhook-endpoints:manage',
+  'intent:audit',
+  'mcp-runtime-tests:audit',
+  'webhook-triggers:override-owner',
 ]
 
 // -----------------------------------------------------------------------------
@@ -467,7 +935,8 @@ export const MANAGER_DENIED_PERMISSIONS: ReadonlyArray<Permission> = [
 // -----------------------------------------------------------------------------
 
 export interface ResolveTokenPermissionsInput {
-  readonly role: Role
+  /** Current preset baseline + valid per-account grants, already resolved. */
+  readonly accountPermissions: ReadonlySet<Permission>
   /** The matrix the user ticked when creating the token. May be empty (= read-only). */
   readonly matrix: ReadonlyArray<Permission>
 }
@@ -475,25 +944,24 @@ export interface ResolveTokenPermissionsInput {
 /**
  * RFC-247 §2.2:
  *
- *   (READ_POINTS ∪ matrix) ∩ ROLE_PERMISSIONS[role] \ SYSTEM_DOMAIN_POINTS
- *                                                   \ (DELETE_POINTS \ matrix)
+ *   (READ_POINTS ∪ matrix) ∩ effectiveAccountPermissions \ SYSTEM_DOMAIN_POINTS
+ *                                                         \ (DELETE_POINTS \ matrix)
  *
  * Three invariants this encodes, each of which has a regression test:
  *
  *  1. **Reads are always on.** An empty matrix yields a read-only token rather
  *     than — as the pre-RFC-247 `patScopes.length > 0` short-circuit did — a
- *     token holding the owner's ENTIRE role baseline (docs/audit-backlog.md:62).
- *  2. **A token never exceeds its owner's role.** Unchanged from RFC-036.
+ *     token holding the owner's ENTIRE account authority (docs/audit-backlog.md:62).
+ *  2. **A token never exceeds its owner's effective permissions.**
  *  3. **Delete is opt-in per point.** A delete point the matrix does not name is
- *     stripped even though the role baseline has it (RFC-247 D4).
+ *     stripped even though the account can hold it (RFC-247 D4).
  */
 export function resolveTokenPermissions(input: ResolveTokenPermissionsInput): Set<Permission> {
-  const baseline = new Set(ROLE_PERMISSIONS[input.role])
   const ticked = new Set(input.matrix)
   const out = new Set<Permission>()
 
-  for (const p of READ_POINTS) if (baseline.has(p)) out.add(p)
-  for (const p of ticked) if (baseline.has(p)) out.add(p)
+  for (const p of READ_POINTS) if (input.accountPermissions.has(p)) out.add(p)
+  for (const p of ticked) if (input.accountPermissions.has(p)) out.add(p)
 
   for (const p of SYSTEM_DOMAIN_POINTS) out.delete(p)
   for (const p of DELETE_POINTS) if (!ticked.has(p)) out.delete(p)
@@ -502,12 +970,15 @@ export function resolveTokenPermissions(input: ResolveTokenPermissionsInput): Se
 }
 
 /**
- * RFC-247 — the matrix points a given role may ever tick. The account page only
- * renders these (D3 / AC-23: a普通 user must not see repos write verbs at all),
+ * RFC-247/RFC-305 — the matrix points the current account may tick. The account page only
+ * renders points in its effective permission set,
  * and token creation rejects anything outside this set with 422 rather than
  * silently dropping it (AC-7).
  */
-export function grantableMatrixPoints(role: Role): ReadonlyArray<Permission> {
-  const baseline = new Set(ROLE_PERMISSIONS[role])
-  return MATRIX_DOMAIN_POINTS.filter((p) => baseline.has(p) && !READ_POINTS.includes(p))
+export function grantableMatrixPoints(
+  accountPermissions: ReadonlySet<Permission>,
+): ReadonlyArray<Permission> {
+  return MATRIX_DOMAIN_POINTS.filter(
+    (permission) => accountPermissions.has(permission) && !READ_POINTS.includes(permission),
+  )
 }

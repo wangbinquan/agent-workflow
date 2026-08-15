@@ -20,7 +20,7 @@ import {
 import type { Hono } from 'hono'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
-import { isResourceAdminActor } from '@/services/resourceAcl'
+import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { actorOf } from '@/auth/actor'
@@ -46,7 +46,7 @@ import { parseBoolQuery } from '@/util/http'
 /**
  * RFC-099 (D12) — load + gate one memory row for a management operation:
  * invisible → 404 (existence isolation); visible but not the scope-resource
- * owner / admin → 403. Returns the loaded row bundle for the handler.
+ * owner / ACL-bypass actor → 403. Returns the loaded row bundle for the handler.
  */
 async function loadManagedMemory(deps: AppDeps, c: Parameters<typeof actorOf>[0], id: string) {
   const found = await getMemoryById(deps.db, id)
@@ -62,7 +62,7 @@ async function loadManagedMemory(deps: AppDeps, c: Parameters<typeof actorOf>[0]
   if (!(await canManageMemory(deps.db, actor, scope))) {
     throw new ForbiddenError(
       'forbidden',
-      'only the scoped resource owner or an admin can manage this memory',
+      'only the scoped resource owner or an actor with resource-acl:bypass can manage this memory',
     )
   }
   return found
@@ -121,11 +121,11 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
       // RFC-099 (D12): agent/workflow-scoped rows only for viewers of that resource.
       const actor = actorOf(c)
       // RFC-285 B7（Q4 拍板，E12）：candidate 状态是**未经人审的蒸馏产物**（含
-      // body）——读面收紧为仅资源管理员（admin/manager），与 distill 详情门
+      // body）——读面收紧为仅持有 `resource-acl:bypass` 的操作者，与 distill 详情门
       // （E8）同一威胁模型。人审发布（approved）后才进入全员读面。两读法
       // （含 body / 不含 body）同收。
       const dropCandidates = <T extends { status: string }>(rows: T[]): T[] =>
-        isResourceAdminActor(actor) ? rows : rows.filter((r) => r.status !== 'candidate')
+        hasResourceAclBypass(actor) ? rows : rows.filter((r) => r.status !== 'candidate')
       if (includeRaw === 'body') {
         const items = await listMemories(deps.db, parsed.data, { includeBody: true })
         const visible = await filterMemoriesByScopeVisibility(deps.db, actor, items)
@@ -160,8 +160,8 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
         scopeId: found.memory.scopeId,
       })
       if (!visible) throw new NotFoundError('memory-not-found', `memory ${id} not found`)
-      // RFC-285 B7（Q4）：candidate 行对非资源管理员与不存在同形 404。
-      if (found.memory.status === 'candidate' && !isResourceAdminActor(actorOf(c))) {
+      // RFC-285 B7（Q4）：candidate 行对无 ACL bypass 权限者与不存在同形 404。
+      if (found.memory.status === 'candidate' && !hasResourceAclBypass(actorOf(c))) {
         throw new NotFoundError('memory-not-found', `memory ${id} not found`)
       }
       const canManage = await canManageMemory(deps.db, actorOf(c), {
@@ -191,8 +191,8 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
         throw new ValidationError('invalid-body', 'invalid create request', parsed.error.format())
       }
       // RFC-099 (D12): creating a memory targets a scope — the creator must
-      // hold management rights on that scope (resource owner or admin;
-      // repo/global stay admin-only).
+      // hold management rights on that scope (resource owner or ACL bypass;
+      // repo/global require the bypass capability).
       const canCreate = await canManageMemory(deps.db, actorOf(c), {
         scopeType: parsed.data.scopeType,
         scopeId: parsed.data.scopeId ?? null,
@@ -200,7 +200,7 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
       if (!canCreate) {
         throw new ForbiddenError(
           'forbidden',
-          'only the scoped resource owner or an admin can create memories for this scope',
+          'only the scoped resource owner or an actor with resource-acl:bypass can create memories for this scope',
         )
       }
       const memory = await createManualCandidate(deps.db, parsed.data)
@@ -208,7 +208,7 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
-  // RFC-045 — admin in-place edit (scope_type / scope_id / title / body_md /
+  // RFC-045 — permission-gated in-place edit (scope_type / scope_id / title / body_md /
   // tags) on candidate / approved / archived rows. version is bumped only
   // when ≥1 field actually changes (service-side idempotent semantics).
   registerRoute(

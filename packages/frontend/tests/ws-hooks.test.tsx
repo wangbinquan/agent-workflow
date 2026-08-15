@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { useTasksSync } from '../src/hooks/useTasksSync'
 import { useWorkflowSync } from '../src/hooks/useWorkflowSync'
+import { ACTOR_QUERY_KEY } from '../src/hooks/useActor'
+import { appQueryClient } from '../src/lib/query-client'
 
 const WORKFLOW_MUTATION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV'
 const WORKFLOW_SNAPSHOT_HASH = 'a'.repeat(64)
@@ -145,6 +147,14 @@ describe('useTasksSync', () => {
       await Promise.resolve()
     })
     expect(spy).toHaveBeenCalledWith({ queryKey: ['tasks'] })
+  })
+
+  test('RFC-305 authority.changed invalidates the shared current-actor cache', () => {
+    const invalidate = vi.spyOn(appQueryClient, 'invalidateQueries')
+    renderHook(() => useTasksSync())
+    opened[0]!.fireMessage({ type: 'authority.changed', revision: 7 })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ACTOR_QUERY_KEY })
+    invalidate.mockRestore()
   })
 })
 

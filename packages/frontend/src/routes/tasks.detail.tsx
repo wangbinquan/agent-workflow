@@ -274,7 +274,7 @@ function TaskDetailPage() {
     },
   })
 
-  // RFC-222 — admin-only hard delete (type-to-confirm). Gated in the UI by the
+  // RFC-222/RFC-305 — `tasks:delete` hard delete (type-to-confirm). Gated in the UI by the
   // tasks:delete permission; the server re-checks name + terminality.
   const canDeleteTask = usePermission('tasks:delete')
   const [deleteOpen, setDeleteOpen] = useState(false)

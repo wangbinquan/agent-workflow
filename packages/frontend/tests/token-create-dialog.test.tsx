@@ -20,7 +20,11 @@ import {
 } from '@tanstack/react-router'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
-import type { PatPublic, Role } from '@agent-workflow/shared'
+import {
+  resolveEffectiveAccountPermissions,
+  type PatPublic,
+  type Role,
+} from '@agent-workflow/shared'
 import i18n from '@/i18n'
 import { enUS } from '@/i18n/en-US'
 import { CreateTokenDialog } from '@/components/account/CreateTokenDialog'
@@ -55,7 +59,7 @@ async function renderDialog(role: Role, options: RenderDialogOptions = {}) {
         open={options.open ?? true}
         onClose={onClose}
         actorId={options.actorId ?? ACTOR_ID}
-        role={role}
+        permissions={[...resolveEffectiveAccountPermissions({ role, additionalPermissions: [] })]}
         visiblePats={options.visiblePats ?? []}
         onCreated={options.onCreated ?? vi.fn()}
         onRefreshInventory={options.onRefreshInventory ?? vi.fn(async () => [])}

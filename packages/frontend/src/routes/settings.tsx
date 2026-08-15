@@ -1032,8 +1032,8 @@ export function BackupCard() {
   const [restoreCandidate, setRestoreCandidate] = useState<File | null>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
   const restoreButtonRef = useRef<HTMLButtonElement>(null)
-  // Armed staged-restore visibility. The endpoint is admin-only; for
-  // non-admins the query 403s and the banners below simply stay hidden.
+  // Armed staged-restore visibility. The endpoint requires `backup:run`; without
+  // that permission the query 403s and the banners below simply stay hidden.
   const restorePending = useQuery<{
     pending: RestorePendingInfo | null
     failed: RestoreFailedInfo[]

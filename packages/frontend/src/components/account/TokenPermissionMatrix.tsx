@@ -7,20 +7,20 @@
 // Two rules the layout encodes rather than states:
 //
 //  · Reads are not on the grid. A token always carries the read points its
-//    owner's role has, so a read column would be four hundred ticked boxes the
+//    owner's effective authority has, so a read column would be four hundred ticked boxes the
 //    user cannot untick — a control that only ever lies about being a control.
-//  · A verb the role cannot grant leaves its grid slot EMPTY instead of
+//  · A verb the account cannot grant leaves its grid slot EMPTY instead of
 //    rendering a disabled box. The columns stay aligned either way, and an
 //    empty slot says "not a thing you have" where a disabled box would say
 //    "a thing you have, switched off" (AC-23).
 
 import { useTranslation } from 'react-i18next'
-import { MATRIX_VERBS, type Permission, type Role } from '@agent-workflow/shared'
+import { MATRIX_VERBS, type Permission } from '@agent-workflow/shared'
 import { Checkbox } from '@/components/Form'
 import { buildMatrix } from '@/lib/token-matrix'
 
 export interface TokenPermissionMatrixProps {
-  role: Role
+  accountPermissions: ReadonlySet<Permission>
   selected: ReadonlySet<Permission>
   onToggle: (permission: Permission, next: boolean) => void
   disabled?: boolean
@@ -29,14 +29,14 @@ export interface TokenPermissionMatrixProps {
 }
 
 export function TokenPermissionMatrix({
-  role,
+  accountPermissions,
   selected,
   onToggle,
   disabled,
   testidPrefix,
 }: TokenPermissionMatrixProps) {
   const { t } = useTranslation()
-  const rows = buildMatrix(role)
+  const rows = buildMatrix(accountPermissions)
   return (
     <div className="token-matrix" role="group" aria-label={t('account.token.matrixLabel')}>
       <div className="token-matrix__head" aria-hidden="true">

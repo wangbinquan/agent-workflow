@@ -1,9 +1,8 @@
-// RFC-041 PR4 — admin-only WS subscription for distill-job lifecycle.
+// RFC-041/RFC-305 — capability-gated WS subscription for distill-job lifecycle.
 //
-// /ws/memory-distill-jobs is admin-only (backend WS upgrade enforces it).
-// The hook is safe to mount unconditionally for non-admins because we
-// short-circuit on `enabled=false` — callers gate it on
-// usePermission('memory:approve').
+// The backend upgrade and callers both use `memory-distill-jobs:manage`.
+// The hook is safe to mount unconditionally because `enabled=false` does not
+// open a connection.
 //
 // Events drive the Distill Jobs table; for `distill.done` we additionally
 // invalidate the memory candidate queries so new candidates appear in the

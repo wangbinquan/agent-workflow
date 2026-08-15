@@ -27,6 +27,7 @@ import { mountHealthRoutes } from '@/routes/health'
 import { mountWebhookIngressRoutes } from '@/routes/webhooks'
 import type { WebhookDispatcher } from '@/services/webhook/dispatcherTypes'
 import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
+import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
@@ -163,6 +164,7 @@ export interface AppDeps {
 export function createApp(deps: AppDeps): Hono {
   const log = createLogger('http')
   const app = new Hono()
+  const identityAccess = composeIdentityAccess(deps.db)
 
   app.use('*', async (c, next) => {
     const started = performance.now()
@@ -172,7 +174,7 @@ export function createApp(deps: AppDeps): Hono {
   })
 
   // Public routes (no auth).
-  mountHealthRoutes(app, deps)
+  mountHealthRoutes(app, deps, identityAccess.diagnostics)
   // RFC-247 D18 — discovery must answer before any credential exists.
   mountWellKnownRoutes(app, deps)
   // RFC-257 — code-host webhook ingress. Public by design (caller is GitLab);
@@ -362,6 +364,6 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountAuthRoutes(app, deps)
   mountOidcAuthRoutes(app, deps)
   mountOidcRoutes(app, deps)
-  mountUserRoutes(app, deps)
+  mountUserRoutes(app, deps, composeIdentityAccess(deps.db))
   mountDocsRoutes(app, deps) // RFC-247 D17
 }

@@ -15,6 +15,8 @@
 // listeners after JSON-parse; non-JSON frames are silently dropped.
 
 import { useEffect, useRef, useState } from 'react'
+import { ACTOR_QUERY_KEY } from '@/hooks/useActor'
+import { appQueryClient } from '@/lib/query-client'
 import { clearToken, getBaseUrl, getToken, subscribeAuth } from '@/stores/auth'
 
 type Listener = (msg: unknown) => void
@@ -166,6 +168,13 @@ function connect(conn: SharedConn): void {
       msg = JSON.parse(String(e.data))
     } catch {
       return /* ignore non-JSON frames */
+    }
+    if (
+      msg !== null &&
+      typeof msg === 'object' &&
+      (msg as { type?: unknown }).type === 'authority.changed'
+    ) {
+      void appQueryClient.invalidateQueries({ queryKey: ACTOR_QUERY_KEY })
     }
     // Snapshot so a listener that (un)subscribes mid-dispatch doesn't mutate
     // the live set; swallow listener throws so one bad subscriber can't

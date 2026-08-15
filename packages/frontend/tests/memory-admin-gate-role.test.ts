@@ -1,5 +1,5 @@
-// Locks the two distinct memory access authorities after RFC-201:
-//   - distill-job administration is still an actor-role gate (useIsAdmin);
+// Locks the two distinct memory access authorities after RFC-305:
+//   - distill-job administration uses its explicit account capability;
 //   - the sidebar candidate badge follows each server-returned canManage bit.
 //
 // `memory:approve` is in the user baseline, so it is not an admin oracle. The
@@ -21,20 +21,16 @@ const PENDING_BADGE = readFileSync(
 )
 
 describe('memory access authorities', () => {
-  test('distill-job detail remains role-gated, never permission-point gated', () => {
+  test('distill-job detail is gated by its exact capability and never by role', () => {
     expect(DISTILL_ROUTE).not.toContain("usePermission('memory:approve')")
-    // RFC-285 B7（E11）：角色门从 admin-only 放宽为 admin+manager
-    // （useIsResourceAdmin），对齐后端 canManageMemory/isResourceAdminActor；
-    // 仍是角色门、绝不许退回权限点门（memory:approve 在 user baseline，
-    // 用它当门等于无门——本锁的原始意图不变）。
-    expect(DISTILL_ROUTE).toContain('useIsResourceAdmin')
-    expect(DISTILL_ROUTE).not.toContain('useIsAdmin()')
-    expect(DISTILL_ROUTE).toMatch(/enabled: isAdmin/)
+    expect(DISTILL_ROUTE).toContain("usePermission('memory-distill-jobs:manage')")
+    expect(DISTILL_ROUTE).not.toMatch(/useIsAdmin|useIsResourceAdmin|\.user\.role/)
+    expect(DISTILL_ROUTE).toMatch(/enabled: canManageDistillJobs/)
   })
 
   test('pending badge delegates candidate eligibility only to explicit canManage=true', () => {
     expect(PENDING_BADGE).not.toContain("usePermission('memory:approve')")
-    expect(PENDING_BADGE).not.toContain('useIsAdmin')
+    expect(PENDING_BADGE).not.toMatch(/useIsAdmin|useIsResourceAdmin|\.user\.role/)
     expect(PENDING_BADGE).toContain('item.canManage === true')
 
     const candidates = [

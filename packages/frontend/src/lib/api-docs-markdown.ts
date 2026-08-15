@@ -24,7 +24,6 @@ export interface ApiDocsPayload {
     path: string
     summary: string
     permissions: string[]
-    identity?: string
     open: boolean
   }>
   tools: Array<{
@@ -74,8 +73,6 @@ export interface ApiDocsStrings {
   colPermission: string
   needsNothing: string
   notAvailableToYou: string
-  adminOnly: string
-  resourceAdminOnly: string
 }
 
 function table(headers: string[], rows: string[][]): string {
@@ -125,7 +122,7 @@ export function buildApiDocsMarkdown(docs: ApiDocsPayload, s: ApiDocsStrings): s
     table(
       [s.colTool, s.colNeeds, s.colDescription],
       docs.tools.map((t) => [
-        // A tool this role can never hold the points for is listed but marked:
+        // A tool this account cannot place on a token is listed but marked:
         // hiding it would leave the reader wondering why a capability they read
         // about elsewhere is missing here.
         t.grantable ? code(t.name) : `${code(t.name)} _(${cell(s.notAvailableToYou)})_`,
@@ -180,16 +177,7 @@ export function buildApiDocsMarkdown(docs: ApiDocsPayload, s: ApiDocsStrings): s
       docs.endpoints.map((e) => [
         code(e.method),
         code(e.path),
-        e.open
-          ? cell(s.needsNothing)
-          : [
-              ...e.permissions.map(code),
-              ...(e.identity === 'admin'
-                ? [`_${cell(s.adminOnly)}_`]
-                : e.identity === 'resource-admin'
-                  ? [`_${cell(s.resourceAdminOnly)}_`]
-                  : []),
-            ].join(', '),
+        e.open ? cell(s.needsNothing) : e.permissions.map(code).join(', '),
         cell(e.summary),
       ]),
     ),

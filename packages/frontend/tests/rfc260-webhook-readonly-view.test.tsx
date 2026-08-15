@@ -1,8 +1,8 @@
-// RFC-260 — /webhooks 非 admin 只读视图（proposal AC-5）：
+// RFC-260/RFC-305 — /webhooks 缺少管理权限时的只读视图（proposal AC-5）：
 //   三 tab 可见但配置动作零渲染（新建/编辑/删除/开关/轮换/replay/重置/复制），
 //   hook URL 渲染后端脱敏形状（urlToken null + 尾 4 hint → 掩码文本），
-//   空态文案分角色。admin 视图与现状逐像素一致由既有 rfc257/259 套件锁定
-//  （组件 isAdmin 默认 false——评审门 F-8 的 fail-closed；那些测试显式传 isAdmin）。
+//   空态文案按能力分层。管理视图由既有 rfc257/259 套件锁定
+//  （组件 canManage 默认 false——评审门 F-8 的 fail-closed）。
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   Outlet,
@@ -25,7 +25,7 @@ function jsonResponse(body: unknown): Response {
   })
 }
 
-/** 后端脱敏形状（RFC-260 D3）：非 admin 的响应里 urlToken/ingressUrl 就是 null。 */
+/** 后端脱敏形状（RFC-260 D3）：无 `webhook-endpoints:manage` 时明文就是 null。 */
 const MASKED_ENDPOINT = {
   id: 'ep1',
   name: 'Internal GitLab',
@@ -203,13 +203,13 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('RFC-260 · 非 admin 只读视图（AC-5）', () => {
+describe('RFC-260/RFC-305 · 无管理权限的只读视图（AC-5）', () => {
   test('端点 tab：掩码 URL 渲染、无新建/轮换/删除/复制/开关', async () => {
     await renderWebhooks()
     await waitFor(() => expect(screen.getByTestId('webhook-endpoint-ep1')).toBeTruthy())
     const masked = screen.getByTestId('webhook-endpoint-url-masked-ep1')
     expect(masked.textContent).toBe('/webhooks/gitlab/•••• tok1')
-    expect(document.body.textContent).toContain('visible to administrators only')
+    expect(document.body.textContent).toContain('requires webhook-endpoints:manage')
     expect(screen.queryByTestId('webhook-endpoint-add')).toBeNull()
     expect(screen.queryByTestId('webhook-endpoint-rotate-ep1')).toBeNull()
     expect(screen.queryByRole('button', { name: /copy url/i })).toBeNull()
@@ -230,8 +230,8 @@ describe('RFC-260 · 非 admin 只读视图（AC-5）', () => {
     expect(await within(owner).findByText('Root')).toBeTruthy()
   })
 
-  test('manager 可新建且只显示自己规则的编辑/开关/删除，他人规则只读', async () => {
-    actorRole = 'manager'
+  test('普通 user 获得触发器权限后可新建且只管理自己的规则', async () => {
+    actorRole = 'user'
     actorUserId = 'manager-1'
     actorPermissions = [
       'webhook-triggers:create',
@@ -260,12 +260,14 @@ describe('RFC-260 · 非 admin 只读视图（AC-5）', () => {
     expect(within(other).getByTestId('webhook-trigger-fires-tr-other')).toBeTruthy()
   })
 
-  test('空态文案分角色：非 admin 版无「新建」引导、无 action 按钮（评审门 F-5c）', async () => {
+  test('空态文案按权限分层：无管理权限时无「新建」引导、无 action 按钮（评审门 F-5c）', async () => {
     empty = true
     await renderWebhooks()
     await waitFor(() =>
       expect(
-        screen.getByText('No ingress endpoints have been configured by an administrator yet.'),
+        screen.getByText(
+          'No ingress endpoints have been configured by someone with webhook-endpoints:manage yet.',
+        ),
       ).toBeTruthy(),
     )
     expect(screen.queryByTestId('webhook-endpoint-add')).toBeNull()

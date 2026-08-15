@@ -15,6 +15,7 @@ import { resolve } from 'node:path'
 import { buildInheritedActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { users } from '../src/db/schema'
+import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -44,6 +45,36 @@ describe('RFC-285 B3 — buildInheritedActor 判定单源', () => {
     expect(actor!.user.id).toBe('u1')
     expect(actor!.source).toBe('daemon')
     expect(actor!.permissions.size).toBeGreaterThan(0) // 角色基线，非幽灵空集
+  })
+
+  test('active owner → 每次按 grant + revision 重建，撤销无需重启后台', async () => {
+    const db = makeDb()
+    await seedUser(db, 'u-grant', 'active')
+    const module = composeIdentityAccess(db)
+    const context = module.contexts.fromAuthenticatedPrincipal(
+      { userId: SYSTEM_USER_ID, source: 'cli' },
+      'cli',
+      1_000,
+    )
+    await module.updateUserAccess.execute(context, {
+      targetUserId: 'u-grant',
+      access: {
+        role: 'user',
+        additionalPermissions: ['scripts:author'],
+        expectedRevision: 0,
+      },
+    })
+    const granted = await buildInheritedActor(db, 'u-grant')
+    expect(granted?.permissions.has('scripts:author')).toBe(true)
+    expect(granted?.authorityRevision).toBe(1)
+
+    await module.updateUserAccess.execute(context, {
+      targetUserId: 'u-grant',
+      access: { role: 'user', additionalPermissions: [], expectedRevision: 1 },
+    })
+    const revoked = await buildInheritedActor(db, 'u-grant')
+    expect(revoked?.permissions.has('scripts:author')).toBe(false)
+    expect(revoked?.authorityRevision).toBe(2)
   })
 
   test('失活 owner → null（错误形态归调用方）', async () => {
@@ -85,9 +116,9 @@ describe('RFC-285 B3 — 三臂接线源码锁', () => {
     const scheduler = src('services/scheduler.ts')
     expect(scheduler.includes('as unknown as Parameters<typeof startExecution>')).toBe(false)
     // 臂 1（call-workflow）+ 臂 2（call-workgroup preflight）各一次判定 + 抛码。
-    expect(
-      (scheduler.match(/buildInheritedActor\(db, taskRow\.ownerUserId \?\? null\)/g) ?? []).length,
-    ).toBe(2)
+    expect((scheduler.match(/buildInheritedActor\(/g) ?? []).length).toBe(2)
+    expect(scheduler).toContain("'call-workflow'")
+    expect(scheduler).toContain("'call-workgroup'")
     expect((scheduler.match(/'call-owner-inactive'/g) ?? []).length).toBe(2)
   })
 
@@ -99,7 +130,7 @@ describe('RFC-285 B3 — 三臂接线源码锁', () => {
 
   test('scheduled 臂收编：手写 owner rebuild 归零、错误码 owner-inactive 不变', () => {
     const scheduled = src('services/scheduledTasks.ts')
-    expect(scheduled).toContain('buildInheritedActor(db, row.ownerUserId)')
+    expect(scheduled).toContain("buildInheritedActor(db, row.ownerUserId, 'schedule')")
     expect(scheduled.includes('buildActor(')).toBe(false) // 手写 rebuild 已收编
     expect(scheduled).toContain("'owner-inactive'")
   })

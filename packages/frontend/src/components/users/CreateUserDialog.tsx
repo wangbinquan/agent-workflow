@@ -6,11 +6,13 @@ import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextInput } from '@/components/Form'
 import { NoticeBanner } from '@/components/NoticeBanner'
+import { UserPermissionCatalog } from '@/components/users/UserPermissionCatalog'
 import {
   serializeCreateUser,
   type CreateUserDraft,
   type CreateUserMode,
 } from '@/lib/user-directory'
+import { rebaseUserAdditionalPermissions } from '@/lib/user-permissions'
 
 export function CreateUserDialog(props: {
   triggerRef?: RefObject<HTMLElement | null>
@@ -30,6 +32,7 @@ export function CreateUserDialog(props: {
     role: 'user',
     mode: 'password',
     password: '',
+    additionalPermissions: [],
   })
   const update = <K extends keyof CreateUserDraft>(key: K, value: CreateUserDraft[K]) =>
     setDraft((previous) => ({ ...previous, [key]: value }))
@@ -41,7 +44,7 @@ export function CreateUserDialog(props: {
     <Dialog
       open
       title={t('users.create.title')}
-      size="md"
+      size="lg"
       onClose={props.onClose}
       initialFocusRef={usernameRef}
       triggerRef={props.triggerRef}
@@ -82,6 +85,7 @@ export function CreateUserDialog(props: {
             onChange={setMode}
             ariaLabel={t('users.create.accountType')}
             testidPrefix="users-create-mode"
+            disabled={props.busy}
             options={[
               {
                 value: 'password',
@@ -113,6 +117,7 @@ export function CreateUserDialog(props: {
               maxLength={64}
               autoComplete="off"
               required
+              disabled={props.busy}
             />
           </Field>
           <Field label={t('users.displayName')} required>
@@ -121,6 +126,7 @@ export function CreateUserDialog(props: {
               onChange={(value) => update('displayName', value)}
               maxLength={128}
               required
+              disabled={props.busy}
             />
           </Field>
         </div>
@@ -139,6 +145,7 @@ export function CreateUserDialog(props: {
             maxLength={254}
             autoComplete="email"
             required={draft.mode === 'sso'}
+            disabled={props.busy}
           />
         </Field>
 
@@ -152,16 +159,30 @@ export function CreateUserDialog(props: {
               maxLength={256}
               autoComplete="new-password"
               required
+              disabled={props.busy}
             />
           </Field>
         )}
 
-        <Field label={t('users.role')} group>
+        <Field label={t('users.role')} hint={t('users.roleHint')} group>
           <ChoiceCards<Role>
             value={draft.role}
-            onChange={(role) => update('role', role)}
+            onChange={(role) =>
+              setDraft((previous) => ({
+                ...previous,
+                role,
+                additionalPermissions: [
+                  ...rebaseUserAdditionalPermissions({
+                    previousRole: previous.role,
+                    nextRole: role,
+                    additionalPermissions: previous.additionalPermissions,
+                  }),
+                ],
+              }))
+            }
             ariaLabel={t('users.role')}
             testidPrefix="users-create-role"
+            disabled={props.busy}
             options={[
               {
                 value: 'user',
@@ -181,6 +202,15 @@ export function CreateUserDialog(props: {
             ]}
           />
         </Field>
+
+        <UserPermissionCatalog
+          role={draft.role}
+          additionalPermissions={draft.additionalPermissions}
+          disabled={props.busy}
+          onChange={(additionalPermissions) =>
+            update('additionalPermissions', [...additionalPermissions])
+          }
+        />
 
         {draft.mode === 'sso' && (
           <NoticeBanner tone="info" size="compact">

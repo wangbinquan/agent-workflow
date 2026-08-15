@@ -1,4 +1,11 @@
-import type { AdminUserView, CreateUserBody, PatchUserBody, Role } from '@agent-workflow/shared'
+import type {
+  AdminUserView,
+  CreateUserBody,
+  PatchUserBody,
+  Permission,
+  Role,
+} from '@agent-workflow/shared'
+import { diffUserAccess } from '@/lib/user-permissions'
 
 export type UserStatusFilter = 'all' | 'active' | 'invited' | 'disabled'
 export type UserRoleFilter = 'all' | Role
@@ -38,12 +45,15 @@ export interface CreateUserDraft {
   role: Role
   mode: CreateUserMode
   password: string
+  additionalPermissions: Permission[]
 }
 
 export interface EditUserDraft {
   displayName: string
   email: string
   role: Role
+  additionalPermissions: Permission[]
+  accessRevision: number
 }
 
 const STATUS_FILTERS = new Set<UserStatusFilter>(['all', 'active', 'invited', 'disabled'])
@@ -150,6 +160,7 @@ export function serializeCreateUser(draft: CreateUserDraft): CreateUserBody {
     username: draft.username.trim(),
     displayName: draft.displayName.trim(),
     role: draft.role,
+    additionalPermissions: [...draft.additionalPermissions],
     ...(email === '' ? {} : { email }),
   }
   if (draft.mode === 'password') return { ...base, password: draft.password }
@@ -161,6 +172,8 @@ export function editDraftForUser(user: AdminUserView): EditUserDraft {
     displayName: user.displayName,
     email: user.email ?? '',
     role: user.role,
+    additionalPermissions: [...user.additionalPermissions],
+    accessRevision: user.accessRevision,
   }
 }
 
@@ -171,6 +184,14 @@ export function diffUserPatch(original: AdminUserView, draft: EditUserDraft): Pa
   const patch: PatchUserBody = {}
   if (displayName !== original.displayName) patch.displayName = displayName
   if (email !== original.email) patch.email = email
-  if (draft.role !== original.role) patch.role = draft.role
+  const access = diffUserAccess(
+    {
+      role: original.role,
+      additionalPermissions: original.additionalPermissions,
+      accessRevision: original.accessRevision,
+    },
+    draft,
+  )
+  if (access !== undefined) patch.access = access
   return patch
 }

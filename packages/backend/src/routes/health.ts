@@ -8,7 +8,25 @@ import { sql } from 'drizzle-orm'
 import { tasks } from '@/db/schema'
 import { recoveryCountersSnapshot } from '@/services/recovery'
 
-export function mountHealthRoutes(app: Hono, deps: AppDeps): void {
+export interface IdentityAccessHealthDiagnostics {
+  snapshot(): {
+    readonly accessUpdate: Readonly<{
+      success: number
+      noOp: number
+      conflict: number
+      rejected: number
+    }>
+    readonly authorityReresolution: number
+    readonly invalidStoredGrant: number
+    readonly wsTargetedRefreshFailure: number
+  }
+}
+
+export function mountHealthRoutes(
+  app: Hono,
+  deps: AppDeps,
+  identityAccess: IdentityAccessHealthDiagnostics,
+): void {
   registerRoute(
     app,
     {
@@ -42,6 +60,9 @@ export function mountHealthRoutes(app: Hono, deps: AppDeps): void {
         // RFC-108 T3 (AR-11): since-boot counters of system recovery actions, so a
         // daemon that silently reaps orphans every restart is no longer invisible.
         recovery: recoveryCountersSnapshot(),
+        // RFC-305 §9: since-boot access/authority diagnostics. Permission ids,
+        // credentials and account profile fields never enter this public gauge.
+        identityAccess: identityAccess.snapshot(),
       })
     },
   )

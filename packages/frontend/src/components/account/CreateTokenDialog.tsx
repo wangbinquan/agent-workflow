@@ -11,14 +11,13 @@
 // (D4-2), so reaching a delete grant requires opening the grid and ticking the
 // individual box.
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   DELETE_POINTS,
   type PatPublic,
   type PatPurpose,
   type Permission,
-  type Role,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -53,7 +52,7 @@ interface CreateTokenDialogProps {
   open: boolean
   onClose: () => void
   actorId: string
-  role: Role
+  permissions: ReadonlyArray<Permission>
   /** Invalidate the actor query so the new token appears in the list. */
   onCreated: () => Promise<void> | void
   /** Inventory visible when the attempt starts, used to distinguish new ids. */
@@ -155,7 +154,7 @@ export function CreateTokenDialog({
   open,
   onClose,
   actorId,
-  role,
+  permissions,
   onCreated,
   visiblePats,
   onRefreshInventory,
@@ -176,7 +175,8 @@ export function CreateTokenDialog({
   const busyRef = useRef(false)
   const busySinceRef = useRef<number | null>(null)
 
-  const template = matchingTemplate(selected, role)
+  const accountPermissions = useMemo(() => new Set(permissions), [permissions])
+  const template = matchingTemplate(selected, accountPermissions)
   const hasDelete = selectionHasDelete(selected)
   const creating = state.phase === 'creating'
 
@@ -246,7 +246,7 @@ export function CreateTokenDialog({
   }
 
   const applyTemplate = (id: TemplateId): void => {
-    setSelected(new Set(templatePoints(id, role)))
+    setSelected(new Set(templatePoints(id, accountPermissions)))
   }
 
   const toggle = (permission: Permission, next: boolean): void => {
@@ -800,7 +800,7 @@ export function CreateTokenDialog({
           </summary>
           <p className="form-field__hint">{t('account.token.advancedHint')}</p>
           <TokenPermissionMatrix
-            role={role}
+            accountPermissions={accountPermissions}
             selected={selected}
             onToggle={toggle}
             disabled={creating}

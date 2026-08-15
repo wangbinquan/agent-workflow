@@ -1,8 +1,6 @@
-// Locks in the self-role lockout guard on /users: an admin demoting
-// themselves loses the very permission needed to undo it, so the row for the
-// current user must render a static role chip instead of the role <Select>.
-// Mirrors the backend's `self-role-change-forbidden` guard in
-// services/users.ts (patchUser).
+// Locks the self-access lockout guard on /users: an account cannot replace its
+// own role preset or additional grants. The edit dialog therefore disables both
+// controls for the current user. Mirrors `self-access-change-forbidden`.
 //
 // Source-text assertions per CLAUDE.md's test-with-every-change rule.
 
@@ -24,7 +22,8 @@ describe('routes/users.tsx — current user cannot edit own role', () => {
   })
 
   test('self edit dialog disables role selection while system stays outside the human list', () => {
-    expect(EDIT_SRC).toMatch(/disabled=\{props\.isSelf\}/)
+    expect(EDIT_SRC).toMatch(/disabled=\{props\.isSelf \|\| props\.busy\}/)
+    expect(EDIT_SRC).toMatch(/disabled=\{props\.busy \|\| props\.isSelf\}/)
     expect(DIRECTORY_SRC).toMatch(/props\.model\.system !== null/)
     expect(DIRECTORY_SRC).toMatch(/<SystemPrincipal user=\{props\.model\.system\}/)
   })

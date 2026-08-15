@@ -7,8 +7,8 @@
 // 端点 = 平台基础设施（验签 secret + 公开 URL token）。写面（CRUD/轮换）走
 // `webhook-endpoints:manage`（system 域：零令牌面——RFC-253 scripts:author 先例），
 // tokenAccess:'never' 双保险；读面（RFC-260）走矩阵点 `webhook-endpoints:read`
-// （全员基线），但 **URL 明文按 viewer 分层**：只有 admin 的 session 请求拿明文
-// urlToken/ingressUrl，非 admin 与一切 PAT（含 admin 的 PAT）拿 null + 尾 4 位
+// （全员基线），但 **URL 明文按 viewer 分层**：只有持有
+// `webhook-endpoints:manage` 的 session 请求拿明文；无权限者与一切 PAT 拿 null + 尾 4 位
 // urlTokenHint——RFC-257 D19「ingress 面不上令牌」在读点开放后由响应分层继续兑现。
 // secret 三形态（RFC-255 姿势）：创建/轮换响应一次性明文、存储 secretBox 密封、
 // 读取面只有 hasSecret + 尾 4 位 hint。
@@ -48,12 +48,12 @@ function mintSecret(): string {
 }
 
 /**
- * RFC-260 D3 — URL 明文的 viewer 白名单：admin 的交互 session。其余（非 admin、
+ * RFC-260/RFC-305 — URL 明文要求端点管理权限与交互 session。其余（无权限、
  * PAT、daemon 内部调用）一律掩码——fail-closed，新增 ActorSource 值默认拿不到
  * 明文。
  */
 function revealsUrl(actor: Actor): boolean {
-  return actor.user.role === 'admin' && actor.source === 'session'
+  return actor.permissions.has('webhook-endpoints:manage') && actor.source === 'session'
 }
 
 function unsealHintOf(secretBox: SecretBox, enc: string): string | null {

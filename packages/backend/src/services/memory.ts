@@ -686,9 +686,9 @@ export function _scopeKey(scope: MemoryScope, id: string | null): string {
 // ---------------------------------------------------------------------------
 // RFC-099 (D12) — memory visibility + management rights follow the scoped
 // resource: agent-scoped rows are visible to whoever can view that agent and
-// manageable by its owner (+admin); workflow-scoped rows likewise; repo and
-// global rows stay all-readable / admin-managed. Runtime injection
-// (memoryInject.ts) is untouched — the daemon actor is the __system__ admin.
+// manageable by its owner (+ `resource-acl:bypass`); workflow-scoped rows
+// likewise; repo and global rows stay all-readable / ACL-bypass-managed. Runtime
+// injection (memoryInject.ts) is untouched — the daemon actor is `__system__`.
 // ---------------------------------------------------------------------------
 
 import type { Actor } from '@/auth/actor'
@@ -696,14 +696,14 @@ import { agents as agentsTable, workflows as workflowsTable } from '@/db/schema'
 import {
   canViewResource,
   filterVisibleRows,
-  isResourceAdminActor,
+  hasResourceAclBypass,
   isResourceOwner,
   type AclRow,
 } from '@/services/resourceAcl'
 
 export interface MemoryScopeRef {
   // RFC-248: 第 5 种 scope。`repo_group` 与 repo/global 同档——全员可读、仅
-  // admin 可管（下面 canViewMemory / canManageMemory / filterVisibleMemories
+  // 仅 ACL-bypass 可管（下面 canViewMemory / canManageMemory / filterVisibleMemories
   // 三处的提前放行分支）。
   scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global'
   scopeId: string | null
@@ -744,7 +744,7 @@ export async function canViewMemory(
   actor: Actor,
   scope: MemoryScopeRef,
 ): Promise<boolean> {
-  if (isResourceAdminActor(actor)) return true
+  if (hasResourceAclBypass(actor)) return true
   // RFC-248 AC-29: repo_group 与 repo/global 同档——全员可读。
   if (
     scope.scopeType === 'repo' ||
@@ -754,20 +754,20 @@ export async function canViewMemory(
     return true
   }
   const row = await loadScopeAclRow(db, scope)
-  // Scope resource vanished → fail closed for non-admins (nothing to anchor
-  // visibility on; admins still see it for cleanup).
+  // Scope resource vanished → fail closed without ACL bypass (nothing to anchor
+  // visibility on; bypass actors still see it for cleanup).
   if (row === null) return false
   return canViewResource(db, actor, scope.scopeType, row)
 }
 
-/** Management rights (D12): scope-resource owner or admin; repo/global admin-only. */
+/** Management rights (D12): scope-resource owner or ACL bypass; repo/global require bypass. */
 export async function canManageMemory(
   db: DbClient,
   actor: Actor,
   scope: MemoryScopeRef,
 ): Promise<boolean> {
-  if (isResourceAdminActor(actor)) return true
-  // RFC-248 AC-29: repo_group 与 repo/global 同档——仅 admin 可管。
+  if (hasResourceAclBypass(actor)) return true
+  // RFC-248/RFC-305: repo_group 与 repo/global 同档——仅 ACL bypass 可管。
   if (
     scope.scopeType === 'repo' ||
     scope.scopeType === 'repo_group' ||
@@ -782,14 +782,14 @@ export async function canManageMemory(
 
 /**
  * List filter: one pass that resolves the visible agent/workflow id sets,
- * then filters in memory. Admins short-circuit.
+ * then filters in memory. ACL-bypass actors short-circuit.
  */
 export async function filterMemoriesByScopeVisibility<T extends MemoryScopeRef>(
   db: DbClient,
   actor: Actor,
   rows: readonly T[],
 ): Promise<T[]> {
-  if (isResourceAdminActor(actor)) return [...rows]
+  if (hasResourceAclBypass(actor)) return [...rows]
   const agentIds = new Set(
     rows.filter((r) => r.scopeType === 'agent' && r.scopeId !== null).map((r) => r.scopeId!),
   )
@@ -834,7 +834,7 @@ export async function filterMemoriesByScopeVisibility<T extends MemoryScopeRef>(
 
 /**
  * RFC-099 (D12) — stamp per-row `canManage` for the UI (approve/edit/archive
- * buttons): admin → all true; otherwise true only on agent/workflow rows
+ * buttons): `resource-acl:bypass` → all true; otherwise true only on agent/workflow rows
  * whose scope resource the actor OWNS. One query per scope type.
  */
 export async function annotateMemoryManageRights<T extends MemoryScopeRef>(
@@ -842,7 +842,7 @@ export async function annotateMemoryManageRights<T extends MemoryScopeRef>(
   actor: Actor,
   rows: readonly T[],
 ): Promise<Array<T & { canManage: boolean }>> {
-  if (isResourceAdminActor(actor)) return rows.map((r) => ({ ...r, canManage: true }))
+  if (hasResourceAclBypass(actor)) return rows.map((r) => ({ ...r, canManage: true }))
   const agentIds = [
     ...new Set(
       rows.filter((r) => r.scopeType === 'agent' && r.scopeId !== null).map((r) => r.scopeId!),

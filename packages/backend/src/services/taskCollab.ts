@@ -4,7 +4,7 @@
 // (owner + collaborators) is now the single answer-rights boundary for
 // reviews and clarifications, and task users hold the same operational
 // rights as the owner (cancel / retry / resume) — only member management,
-// owner transfer and task deletion stay owner/admin.
+// owner transfer and task deletion stay with the owner or explicit permission holders.
 
 import type { TaskActorRole, TaskMembers, UserPublic } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
@@ -15,7 +15,7 @@ import { dbTxSync } from '@/db/txSync'
 import type { tasks } from '@/db/schema'
 import { taskCollaborators, tasks as tasksTable, users } from '@/db/schema'
 import { NotFoundError } from '@/util/errors'
-import { isResourceAdminActor, resolveTaskRole } from '@/services/resourceAcl'
+import { hasResourceAclBypass, resolveTaskRole } from '@/services/resourceAcl'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { triggerRevalidationAndWait } from '@/ws/revalidationHook'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
@@ -25,10 +25,10 @@ export type TaskRowForVisibility = Pick<typeof tasks.$inferSelect, 'id' | 'owner
 
 /**
  * Pure read: is the actor allowed to see this task?
- * - admins (tasks:read:all) see everything;
+ * - actors with `tasks:read:all` see everything;
  * - owner sees their own;
  * - any collaborator role sees the task;
- * - daemon-token actor (__system__) sees everything via tasks:read:all.
+ * - daemon-token actor (__system__) sees everything via `tasks:read:all`.
  */
 export async function canViewTask(
   db: DbClient,
@@ -92,8 +92,8 @@ export async function listCollaborators(
 /**
  * RFC-099 (D5/D7) — the answer-rights gate for reviews and clarifications,
  * returning the role snapshot to record on the action. Member identity wins
- * over the global admin role (D17): owner → 'owner', collaborator → 'user',
- * non-member admin → 'admin', anyone else → ForbiddenError.
+ * over global permissions (D17): owner → 'owner', collaborator → 'user',
+ * non-member privileged actor → a legacy audit label, anyone else → ForbiddenError.
  */
 export async function requireTaskMember(
   db: DbClient,
@@ -103,7 +103,10 @@ export async function requireTaskMember(
   const member = await hasMembership(db, task.id, actor.user.id)
   const role = resolveTaskRole(actor, task.ownerUserId ?? null, member)
   if (role !== null) return role
-  throw new ForbiddenError('not-task-member', 'only task members or an admin can do this')
+  throw new ForbiddenError(
+    'not-task-member',
+    'only task members or an actor with the required global task authority can do this',
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +145,7 @@ export async function getTaskMembers(
     .filter((u): u is UserRow => u !== undefined)
     .map(toUserPublic)
   const canManage =
-    isResourceAdminActor(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
+    hasResourceAclBypass(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
   return {
     taskId: task.id,
     ownerUserId: task.ownerUserId ?? null,
@@ -153,7 +156,7 @@ export async function getTaskMembers(
 }
 
 /**
- * PUT members — owner/admin only. `userIds` is full-replace of the
+ * PUT members — task owner or `resource-acl:bypass`. `userIds` is full-replace of the
  * collaborator set. On owner transfer the previous human owner is kept as a
  * collaborator so they don't lose sight of their own task (mirror of the
  * resource-ACL rule).
@@ -165,9 +168,12 @@ export async function updateTaskMembers(
   body: { ownerUserId?: string; userIds?: string[] },
 ): Promise<TaskMembers> {
   const canManage =
-    isResourceAdminActor(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
+    hasResourceAclBypass(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
   if (!canManage) {
-    throw new ForbiddenError('forbidden', 'only the task owner or an admin can manage members')
+    throw new ForbiddenError(
+      'forbidden',
+      'only the task owner or an actor with resource-acl:bypass can manage members',
+    )
   }
 
   const referenced = new Set<string>(body.userIds ?? [])

@@ -122,9 +122,9 @@ beforeEach(async () => {
     const url = typeof input === 'string' ? input : (input as URL | Request).toString()
     if (url.includes('/api/auth/me')) {
       return jsonResponse({
-        user: { id: 'u1', username: 'root', displayName: 'root', role: 'admin', status: 'active' },
+        user: { id: 'u1', username: 'root', displayName: 'root', role: 'user', status: 'active' },
         source: 'session',
-        permissions: [],
+        permissions: ['webhook-triggers:update'],
         linkedIdentities: [],
         pats: [],
       })

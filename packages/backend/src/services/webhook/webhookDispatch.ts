@@ -12,13 +12,12 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import { buildActor } from '@/auth/actor'
+import { buildInheritedActor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import {
   cachedRepos,
   tasks,
-  users,
   webhookDeliveries,
   webhookMrControlEffects,
   webhookTriggerFires,
@@ -795,8 +794,8 @@ async function fireTrigger(
     }
 
     // owner 重建 + 目标可用性重校验（每次触发评估，AC-13；照抄 fireSchedule 骨架）。
-    const owner = (await db.select().from(users).where(eq(users.id, fresh.ownerUserId)).limit(1))[0]
-    if (!owner || owner.status !== 'active') {
+    const actor = await buildInheritedActor(db, fresh.ownerUserId, 'webhook')
+    if (actor === null) {
       launchGuard?.failed('owner-invalid')
       launchGuard?.release()
       deps.terminalControl?.wake()
@@ -808,16 +807,6 @@ async function fireTrigger(
       })
       return
     }
-    const actor = buildActor({
-      user: {
-        id: owner.id,
-        username: owner.username,
-        displayName: owner.displayName,
-        role: owner.role,
-        status: owner.status,
-      },
-      source: 'daemon',
-    })
     const rendered = renderWebhookLaunch(effectiveTrigger, effectiveTrigger.row.name, event, space)
     /** launch-failed 收尾：fires 行 + 触发器行的失败水位（熔断计数的唯一来源）。 */
     const recordLaunchFailed = async (msg: string): Promise<void> => {

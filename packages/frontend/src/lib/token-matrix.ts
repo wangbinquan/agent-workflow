@@ -13,10 +13,9 @@ import {
   type MatrixResource,
   type MatrixVerb,
   type Permission,
-  type Role,
 } from '@agent-workflow/shared'
 
-/** One cell: a (resource, verb) pair the current role is allowed to tick. */
+/** One cell: a (resource, verb) pair the current account is allowed to tick. */
 export interface MatrixCell {
   readonly resource: MatrixResource
   readonly verb: MatrixVerb
@@ -29,26 +28,25 @@ export interface MatrixCell {
   readonly isDelete: boolean
 }
 
-/** One row of the advanced grid: a resource plus the verbs this role may grant. */
+/** One row of the advanced grid: a resource plus the verbs this account may grant. */
 export interface MatrixRow {
   readonly resource: MatrixResource
   readonly cells: ReadonlyArray<MatrixCell>
 }
 
 /**
- * Build the grid for one role.
+ * Build the grid for one effective account authority.
  *
- * RFC-247 C10 / AC-23: only cells the role can ACTUALLY grant are produced. A
- * plain user never sees a repos write cell, because `repos:*` writes belong to
- * manager and admin — rendering it disabled would be worse than omitting it: it
+ * RFC-247 C10 / AC-23 / RFC-305: only cells present in the account's effective
+ * permission set are produced. Rendering any other cell disabled would be worse than omitting it: it
  * teaches the user that the capability exists for them and is merely switched
  * off, which is the opposite of true.
  *
  * A resource whose row would be empty is dropped entirely rather than rendered
  * as a header with nothing under it.
  */
-export function buildMatrix(role: Role): ReadonlyArray<MatrixRow> {
-  const grantable = new Set(grantableMatrixPoints(role))
+export function buildMatrix(accountPermissions: ReadonlySet<Permission>): ReadonlyArray<MatrixRow> {
+  const grantable = new Set(grantableMatrixPoints(accountPermissions))
   const rows: MatrixRow[] = []
   for (const resource of MATRIX_RESOURCES) {
     const cells: MatrixCell[] = []
@@ -68,7 +66,7 @@ export type TemplateId = 'read-only' | 'task-automation' | 'full'
 export interface TemplateDef {
   readonly id: TemplateId
   /**
-   * Which points this template selects, given the role's grantable set.
+   * Which points this template selects, given the account's grantable set.
    * NEVER includes a delete point — see `templatePoints`.
    */
   readonly select: (grantable: ReadonlySet<Permission>) => ReadonlyArray<Permission>
@@ -83,8 +81,11 @@ export interface TemplateDef {
  * workflows" and not fine for "may delete every workflow it can see". Delete
  * stays a deliberate, individual tick.
  */
-export function templatePoints(template: TemplateId, role: Role): ReadonlyArray<Permission> {
-  const grantable = new Set(grantableMatrixPoints(role))
+export function templatePoints(
+  template: TemplateId,
+  accountPermissions: ReadonlySet<Permission>,
+): ReadonlyArray<Permission> {
+  const grantable = new Set(grantableMatrixPoints(accountPermissions))
   const notDelete = (p: Permission): boolean => !p.endsWith(':delete')
   switch (template) {
     case 'read-only':
@@ -103,9 +104,12 @@ export function templatePoints(template: TemplateId, role: Role): ReadonlyArray<
 }
 
 /** Which template, if any, exactly matches the current selection. */
-export function matchingTemplate(selected: ReadonlySet<Permission>, role: Role): TemplateId | null {
+export function matchingTemplate(
+  selected: ReadonlySet<Permission>,
+  accountPermissions: ReadonlySet<Permission>,
+): TemplateId | null {
   for (const id of ['read-only', 'task-automation', 'full'] as const) {
-    const points = templatePoints(id, role)
+    const points = templatePoints(id, accountPermissions)
     if (points.length !== selected.size) continue
     if (points.every((p) => selected.has(p))) return id
   }

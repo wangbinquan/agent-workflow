@@ -84,9 +84,7 @@ type TriggerWritePermission =
   | 'webhook-triggers:delete'
 
 function canCreateTrigger(actor: MeResponse | null | undefined): boolean {
-  return (
-    actor?.user.role === 'admin' || actor?.permissions.includes('webhook-triggers:create') === true
-  )
+  return actor?.permissions.includes('webhook-triggers:create') === true
 }
 
 function canWriteTrigger(
@@ -95,8 +93,8 @@ function canWriteTrigger(
   permission: Exclude<TriggerWritePermission, 'webhook-triggers:create'>,
 ): boolean {
   return (
-    actor?.user.role === 'admin' ||
-    (actor?.user.id === ownerUserId && actor.permissions.includes(permission))
+    actor?.permissions.includes(permission) === true &&
+    (actor.user.id === ownerUserId || actor.permissions.includes('webhook-triggers:override-owner'))
   )
 }
 

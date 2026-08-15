@@ -145,7 +145,7 @@ describe('C4/C5/C6 · 导出与覆盖侧的三条收缩仍然生效', () => {
       'bundle-overwrite-not-owned',
     )
     // manager / admin 不再能跨 owner 覆盖：判据里没有任何角色分支。
-    expect(commit).not.toMatch(/role === 'admin'|isResourceAdminActor/)
+    expect(commit).not.toMatch(/role === 'admin'|hasResourceAclBypass/)
   })
 
   test('C6：传递闭包里有不可见资源 ⇒ 整体拒绝', () => {

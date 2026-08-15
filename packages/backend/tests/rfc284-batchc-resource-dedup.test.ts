@@ -10,7 +10,7 @@
 // T10 §2.3 grant 单点：grantsOfResourceWhere / listResourceGrantUserIds(InTx)
 //     与直查等价；§2.4 快照式可见性 isVisibleToAudienceSnapshot 的
 //     角色×关系×可见性 全矩阵（迁移前后判定不变的快照锁——admin 分支入函数，
-//     ws/registry 对上游 adminShortCircuit 的正确性依赖就此消除）。
+//     ws/registry 对上游 aclBypassShortCircuit 的正确性依赖就此消除）。
 // T11 §2.5 skill 唯一性：ownerScopedNameWhere 三态（占用/他人同名不占用/
 //     NULL-owner 域隔离）+ isOwnerNameUniqueViolation 对新旧两代错误文案的识别。
 import { describe, expect, test } from 'bun:test'
@@ -229,33 +229,31 @@ describe('rfc284 批C T10 §2.4 — 快照式可见性全矩阵（迁移快照�
     grantedUserIds: new Set(granted),
   })
 
-  test('admin/manager 恒可见（分支入函数——registry 不再依赖上游捷径保正确性）', () => {
-    for (const role of ['admin', 'manager'] as const) {
-      expect(isVisibleToAudienceSnapshot('stranger', role, snap('private', 'owner', []))).toBe(true)
-    }
+  test('持有 resource-acl:bypass 恒可见（registry 不依赖上游捷径保正确性）', () => {
+    expect(isVisibleToAudienceSnapshot('stranger', true, snap('private', 'owner', []))).toBe(true)
   })
 
-  test('user 角色矩阵：public 恒见；private 看 owner/grant；旁人不可见', () => {
+  test('无 bypass 的矩阵：public 恒见；private 看 owner/grant；旁人不可见', () => {
     // public × 当事人/旁人
-    expect(isVisibleToAudienceSnapshot('owner', 'user', snap('public', 'owner', []))).toBe(true)
-    expect(isVisibleToAudienceSnapshot('stranger', 'user', snap('public', 'owner', []))).toBe(true)
+    expect(isVisibleToAudienceSnapshot('owner', false, snap('public', 'owner', []))).toBe(true)
+    expect(isVisibleToAudienceSnapshot('stranger', false, snap('public', 'owner', []))).toBe(true)
     // private × owner
-    expect(isVisibleToAudienceSnapshot('owner', 'user', snap('private', 'owner', []))).toBe(true)
+    expect(isVisibleToAudienceSnapshot('owner', false, snap('private', 'owner', []))).toBe(true)
     // private × grant
-    expect(isVisibleToAudienceSnapshot('g1', 'user', snap('private', 'owner', ['g1']))).toBe(true)
+    expect(isVisibleToAudienceSnapshot('g1', false, snap('private', 'owner', ['g1']))).toBe(true)
     // private × 旁人
-    expect(isVisibleToAudienceSnapshot('stranger', 'user', snap('private', 'owner', ['g1']))).toBe(
+    expect(isVisibleToAudienceSnapshot('stranger', false, snap('private', 'owner', ['g1']))).toBe(
       false,
     )
     // NULL owner（系统行）：不因 null 比较意外放行
-    expect(isVisibleToAudienceSnapshot('stranger', 'user', snap('private', null, []))).toBe(false)
+    expect(isVisibleToAudienceSnapshot('stranger', false, snap('private', null, []))).toBe(false)
   })
 
   test('迁移结构锁：registry 两处受众判定与 mcpRuntimeTestTransitions 均已委托；status 检查留调用方', () => {
     const registry = SRC('ws/registry.ts')
     expect(registry.split('isVisibleToAudienceSnapshot(').length - 1).toBeGreaterThanOrEqual(2)
     const trans = SRC('services/mcpRuntimeTestTransitions.ts')
-    expect(trans).toContain('isVisibleToAudienceSnapshot(session.ownerUserId, account.role, input)')
+    expect(trans).toContain("accountPermissions.has('resource-acl:bypass')")
     expect(trans).toContain("account?.status === 'active' &&")
   })
 })

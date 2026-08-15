@@ -1,8 +1,8 @@
 // RFC-257 UI 修订 — webhook 配置单页：侧栏「运行与仓库」组（远端仓下方），
 // 三 tab（端点 / 触发器 / 投递审计），骨架与 tab 语义照抄 /repos（TabBar +
-// search param + 无效值归一化）。RFC-260/RFC-283：页面对全部角色可见；
-// 端点与重放仍按 isAdmin 渲染，触发规则按 actor + owner 渲染。真正边界在后端方法门与
-// URL 明文的响应分层（非 admin 的响应里就没有 urlToken 明文）。
+// search param + 无效值归一化）。RFC-260/RFC-283/RFC-305：页面按读取权限可见；
+// 端点与重放按具体管理权限渲染，触发规则按 method permission + owner/override 判定。
+// 真正边界在后端方法门与 URL 明文的响应分层。
 import { createRoute } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
@@ -13,7 +13,7 @@ import { TabBar } from '@/components/TabBar'
 import { WebhookEndpointCard } from '@/components/WebhookEndpointCard'
 import { DeliveriesPanel } from '@/components/webhooks/DeliveriesPanel'
 import { TriggersPanel } from '@/components/webhooks/TriggersPanel'
-import { useActor, useIsAdmin } from '@/hooks/useActor'
+import { useActor, usePermission } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
 export type WebhooksTab = 'endpoints' | 'triggers' | 'deliveries'
@@ -43,11 +43,11 @@ function WebhooksPage() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const actor = useActor()
-  const isAdmin = useIsAdmin()
+  const canManageEndpoints = usePermission('webhook-endpoints:manage')
   const tab: WebhooksTab = search.tab ?? 'endpoints'
 
-  // RFC-260/RFC-283：页面全员可见。isAdmin 只控制端点/投递写动作；
-  // 触发规则面板自己按当前 actor 和 owner 判定。
+  // 具体 capability 控制端点/投递写动作；触发规则面板自行按当前
+  // method permissions 和 owner/override permission 判定。
   if (actor.isLoading) {
     return (
       <div className="page page--operations webhooks-page">
@@ -104,7 +104,7 @@ function WebhooksPage() {
             {
               key: 'endpoints',
               testid: 'webhooks-panel-endpoints',
-              content: <WebhookEndpointCard isAdmin={isAdmin} />,
+              content: <WebhookEndpointCard canManage={canManageEndpoints} />,
             },
             {
               key: 'triggers',
@@ -114,7 +114,7 @@ function WebhooksPage() {
             {
               key: 'deliveries',
               testid: 'webhooks-panel-deliveries',
-              content: <DeliveriesPanel isAdmin={isAdmin} />,
+              content: <DeliveriesPanel canReplay={canManageEndpoints} />,
             },
           ]}
         />

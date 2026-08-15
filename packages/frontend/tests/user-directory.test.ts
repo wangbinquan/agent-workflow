@@ -24,6 +24,8 @@ function user(id: string, overrides: Partial<AdminUserView> = {}): AdminUserView
     updatedAt: 1,
     lastLoginAt: null,
     hasOidcIdentity: false,
+    additionalPermissions: [],
+    accessRevision: 0,
     ...overrides,
   }
 }
@@ -110,6 +112,7 @@ describe('RFC-221 user directory model', () => {
         role: 'user',
         mode: 'password',
         password: 'password-123',
+        additionalPermissions: [],
       }),
     ).toEqual({
       username: 'alice',
@@ -117,6 +120,7 @@ describe('RFC-221 user directory model', () => {
       email: 'alice@example.test',
       role: 'user',
       password: 'password-123',
+      additionalPermissions: [],
     })
     expect(
       serializeCreateUser({
@@ -126,12 +130,14 @@ describe('RFC-221 user directory model', () => {
         role: 'admin',
         mode: 'sso',
         password: 'must-not-leak',
+        additionalPermissions: [],
       }),
     ).toEqual({
       username: 'bob',
       displayName: 'Bob',
       email: 'bob@example.test',
       role: 'admin',
+      additionalPermissions: [],
     })
   })
 
@@ -146,10 +152,22 @@ describe('RFC-221 user directory model', () => {
         displayName: ' Alice ',
         email: ' ALICE@EXAMPLE.TEST ',
         role: 'user',
+        additionalPermissions: [],
+        accessRevision: 0,
       }),
     ).toEqual({})
     expect(
-      diffUserPatch(original, { displayName: 'Alice Chen', email: '', role: 'admin' }),
-    ).toEqual({ displayName: 'Alice Chen', email: null, role: 'admin' })
+      diffUserPatch(original, {
+        displayName: 'Alice Chen',
+        email: '',
+        role: 'admin',
+        additionalPermissions: [],
+        accessRevision: 0,
+      }),
+    ).toEqual({
+      displayName: 'Alice Chen',
+      email: null,
+      access: { role: 'admin', additionalPermissions: [], expectedRevision: 0 },
+    })
   })
 })

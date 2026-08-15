@@ -3,14 +3,14 @@
 // Six resource types (agent / skill / mcp / plugin / workflow / workgroup)
 // carry a single
 // owner + a per-user grant list + a 'public' switch. Granted users can view
-// and use; owner and admins can modify / delete / transfer / manage grants.
-// Non-granted non-admin users must not be able to observe the resource at all
+// and use; owner and `resource-acl:bypass` holders can modify / delete /
+// transfer / manage grants. Non-granted actors without bypass must not observe the resource at all
 // (lists filter, detail 404s).
 //
 // TaskActorRole is the task-relationship role snapshot recorded on review
 // comments / review decisions / clarify submissions (D7/D17): member identity
-// wins over the global admin role — 'admin' is only recorded when a
-// non-member admin steps in. These snapshots are UI/audit-only and must never
+// wins over global bypass authority — legacy 'admin'/'manager' labels are only
+// recorded when a non-member permission holder steps in. These snapshots are UI/audit-only and must never
 // reach agent prompts.
 
 import { z } from 'zod'
@@ -31,7 +31,7 @@ export type AclResourceType = z.infer<typeof AclResourceTypeSchema>
 export const ResourceVisibilitySchema = z.enum(['private', 'public'])
 export type ResourceVisibility = z.infer<typeof ResourceVisibilitySchema>
 
-// RFC-222 — 'manager' added: a resource admin acting on a task from outside its
+// RFC-222/RFC-305 — an ACL-bypass actor acting on a task from outside its
 // membership is attributed truthfully, not folded into 'admin'.
 export const TaskActorRoleSchema = z.enum(['owner', 'user', 'admin', 'manager'])
 export type TaskActorRole = z.infer<typeof TaskActorRoleSchema>
@@ -45,7 +45,7 @@ export const ResourceAclSchema = z.object({
   owner: UserPublicSchema.nullable(),
   visibility: ResourceVisibilitySchema,
   users: z.array(UserPublicSchema),
-  /** True when the current actor may PUT this ACL (owner or admin). */
+  /** True when the current actor may PUT this ACL (owner or `resource-acl:bypass`). */
   canManage: z.boolean(),
   /**
    * RFC-170 §8 — monotonic ACL revision. The client holds this from GET and

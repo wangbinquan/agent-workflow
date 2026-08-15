@@ -12,26 +12,29 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
-  ADMIN_ONLY_PERMISSIONS,
   DELETE_POINTS,
   grantableMatrixPoints,
-  hasPermission,
-  isResourceAdminRole,
-  MANAGER_DENIED_PERMISSIONS,
+  MANAGER_PRESET_MISSING_PERMISSIONS,
   MATRIX_DOMAIN_POINTS,
   PERMISSIONS,
+  presetHasPermission,
   RANGE_POINTS,
   READ_POINTS,
+  resolveEffectiveAccountPermissions,
   resolveTokenPermissions,
   ROLE_PERMISSIONS,
   RoleSchema,
   ROUTE_BACKED_POINTS,
   SYSTEM_DOMAIN_POINTS,
   type Permission,
+  USER_PRESET_MISSING_PERMISSIONS,
 } from '../src/schemas/permission'
 
+const accountPermissions = (role: 'admin' | 'manager' | 'user') =>
+  resolveEffectiveAccountPermissions({ role, additionalPermissions: [] })
+
 describe('PERMISSIONS catalog', () => {
-  test('contains the documented 59 entries', () => {
+  test('contains the documented 72 entries', () => {
     // RFC-222 added tasks:delete (33 → 34); RFC-234 added intent:read/write (→ 36).
     // RFC-247 split the five `:write` points into create/update/delete, gave the
     // previously-ungated domains (workgroups / scheduled-tasks) real points,
@@ -46,13 +49,14 @@ describe('PERMISSIONS catalog', () => {
     // 永不进令牌，角色基线 admin + manager）⇒ 60。
     // RFC-257 加 webhook-triggers 四动词（owner 制行，路由粗门 + 服务行级判定，
     // 对齐 scheduled-tasks）与 `webhook-endpoints:manage`（入站验签 secret 面；
-    // 系统域点，永不进令牌，角色面 admin-only）⇒ 65。
+    // 系统域点，永不进令牌，默认只在 admin 预设）⇒ 65。
     // RFC-260 加 `webhook-endpoints:read`（端点/投递元数据只读，全员；URL 明文
     // 由响应分层保护——PAT 恒拿掩码）⇒ 66。
     // RFC-269 加 `code-host-calls:author`（代码平台调用节点 = 以管理员配置的
     // token 对 GitLab/GitHub 做写操作；与 scripts:author 同档的能力点：系统域、
     // 永不进令牌、角色基线 admin + manager）⇒ 67。
-    expect(PERMISSIONS.length).toBe(67)
+    // RFC-305 将五个存量角色旁路实体化为权限点 ⇒ 72。
+    expect(PERMISSIONS.length).toBe(72)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -123,8 +127,8 @@ describe('PERMISSIONS catalog', () => {
       // RFC-234 — intent builder is open to every logged-in user (D22)
       'intent:read',
       'intent:write',
-      // RFC-260 — webhook 读面全员开放（写面仍 admin 独占；URL 明文只走
-      // admin session，响应分层见 routes/webhookEndpoints.ts）。
+      // RFC-260/RFC-305 — webhook 读面全员开放；端点管理和 URL 明文由
+      // `webhook-endpoints:manage` + session 响应分层控制。
       'webhook-triggers:read',
       'webhook-endpoints:read',
     ]
@@ -132,13 +136,13 @@ describe('PERMISSIONS catalog', () => {
     expect(ROLE_PERMISSIONS.user.length).toBe(48)
   })
 
-  test('user role does NOT include any admin-only point (snapshot guard)', () => {
-    const adminOnly: Permission[] = [
-      // RFC-099: repos stay OUT of the ownership ACL model — the repos write
-      // verbs remain admin/manager while the five resource writes are baseline.
+  test('user preset excludes exactly its 24 individually grantable differences', () => {
+    const userPresetMissing: Permission[] = [
+      // RFC-099/RFC-305: repos stay OUT of the ownership ACL model — the repos
+      // write verbs are absent from the user preset but individually grantable.
       'repos:create',
       // RFC-248: 仓库组的 PUT 引入了 repos 域的第一个 update 点，它与其余
-      // repos 写动词同档——admin/manager 有、普通用户没有。
+      // repos 写动词同档——manager/admin 预设有、user 预设没有，但可逐项授予。
       'repos:update',
       'repos:delete',
       'repos:execute',
@@ -150,47 +154,51 @@ describe('PERMISSIONS catalog', () => {
       'oidc:configure',
       'backup:run',
       'tasks:read:all',
-      // RFC-222 — task deletion is admin-only (NOT manager, NOT user).
+      // RFC-222 — task deletion is absent from manager/user default presets.
       'tasks:delete',
-      // RFC-253 — 脚本正文编写。它同时也在 manager 基线里（见下面的
-      // MANAGER_DENIED 断言不含它），但相对 user 仍是 admin-only。
+      // RFC-253 — 脚本正文编写默认也在 manager 预设，但不在 user 预设。
       'scripts:author',
       // RFC-269 — 代码平台调用节点的编写。与 scripts:author 完全同档：manager
-      // 也有，但相对普通用户是 admin-only（该节点携带的是管理员配置的 token 对
+      // 预设也有，user 预设没有（该节点携带的是平台配置的 token 对
       // GitLab/GitHub 的写权限，平台侧 ACL 约束不了它能碰到的仓库）。
       'code-host-calls:author',
       // RFC-257（UI 修订收紧）→ RFC-260（读面重新放开）：写动词与端点 manage
-      // 仍 admin-only；两个 read 点（webhook-triggers:read /
+      // 默认只在 admin 预设；两个 read 点（webhook-triggers:read /
       // webhook-endpoints:read）自 RFC-260 起进 user 基线，已从本负向清单移除。
       'webhook-endpoints:manage',
       'webhook-triggers:create',
       'webhook-triggers:update',
       'webhook-triggers:delete',
+      // RFC-305：原先位于角色判断中的五个能力现在全部是显式权限点。
+      'resource-acl:bypass',
+      'memory-distill-jobs:manage',
+      'intent:audit',
+      'mcp-runtime-tests:audit',
+      'webhook-triggers:override-owner',
     ]
-    for (const p of adminOnly) {
+    for (const p of userPresetMissing) {
       expect(ROLE_PERMISSIONS.user.includes(p)).toBe(false)
     }
-    // ADMIN_ONLY_PERMISSIONS is still "PERMISSIONS − user baseline" — it stays
-    // admin-vs-user by design even though some members (repos:*) are now ALSO
-    // manager's. Manager's negative set is MANAGER_DENIED below.
-    expect([...ADMIN_ONLY_PERMISSIONS].sort()).toEqual(adminOnly.sort())
+    // This is a preset difference, not a protected role class: RFC-305 makes
+    // every member individually grantable to a user account.
+    expect([...USER_PRESET_MISSING_PERMISSIONS].sort()).toEqual(userPresetMissing.sort())
   })
 
-  test('hasPermission truth matrix', () => {
-    expect(hasPermission('admin', 'agents:update')).toBe(true)
-    expect(hasPermission('admin', 'oidc:configure')).toBe(true)
-    expect(hasPermission('admin', 'users:read')).toBe(true)
-    expect(hasPermission('user', 'agents:read')).toBe(true)
+  test('presetHasPermission truth matrix', () => {
+    expect(presetHasPermission('admin', 'agents:update')).toBe(true)
+    expect(presetHasPermission('admin', 'oidc:configure')).toBe(true)
+    expect(presetHasPermission('admin', 'users:read')).toBe(true)
+    expect(presetHasPermission('user', 'agents:read')).toBe(true)
     // RFC-099: route-gate write open to users (row-level ACL is the real gate)
-    expect(hasPermission('user', 'agents:create')).toBe(true)
-    expect(hasPermission('user', 'agents:update')).toBe(true)
-    expect(hasPermission('user', 'agents:delete')).toBe(true)
-    expect(hasPermission('user', 'repos:create')).toBe(false)
-    expect(hasPermission('user', 'settings:read')).toBe(false)
-    expect(hasPermission('user', 'users:read')).toBe(false)
-    expect(hasPermission('user', 'users:search')).toBe(true)
-    expect(hasPermission('user', 'tasks:read:all')).toBe(false)
-    expect(hasPermission('user', 'tasks:read:own')).toBe(true)
+    expect(presetHasPermission('user', 'agents:create')).toBe(true)
+    expect(presetHasPermission('user', 'agents:update')).toBe(true)
+    expect(presetHasPermission('user', 'agents:delete')).toBe(true)
+    expect(presetHasPermission('user', 'repos:create')).toBe(false)
+    expect(presetHasPermission('user', 'settings:read')).toBe(false)
+    expect(presetHasPermission('user', 'users:read')).toBe(false)
+    expect(presetHasPermission('user', 'users:search')).toBe(true)
+    expect(presetHasPermission('user', 'tasks:read:all')).toBe(false)
+    expect(presetHasPermission('user', 'tasks:read:own')).toBe(true)
   })
 })
 
@@ -291,7 +299,9 @@ describe('RFC-247 resolveTokenPermissions', () => {
     // narrowed when `patScopes.length > 0`, so a scope-less PAT silently held
     // everything its owner's role held.
     for (const role of ['user', 'manager', 'admin'] as const) {
-      const granted = [...resolveTokenPermissions({ role, matrix: [] })]
+      const granted = [
+        ...resolveTokenPermissions({ accountPermissions: accountPermissions(role), matrix: [] }),
+      ]
       expect(granted.length).toBeGreaterThan(0)
       for (const p of granted) expect(READ_POINTS.includes(p)).toBe(true)
     }
@@ -299,7 +309,7 @@ describe('RFC-247 resolveTokenPermissions', () => {
 
   test('a token never exceeds its owner role', () => {
     const granted = resolveTokenPermissions({
-      role: 'user',
+      accountPermissions: accountPermissions('user'),
       matrix: ['repos:create', 'agents:create', 'settings:write'],
     })
     expect(granted.has('agents:create')).toBe(true)
@@ -309,19 +319,22 @@ describe('RFC-247 resolveTokenPermissions', () => {
 
   test('system-domain points are stripped even for an admin owner', () => {
     const granted = resolveTokenPermissions({
-      role: 'admin',
+      accountPermissions: accountPermissions('admin'),
       matrix: [...SYSTEM_DOMAIN_POINTS],
     })
     for (const p of SYSTEM_DOMAIN_POINTS) expect(granted.has(p)).toBe(false)
   })
 
   test('delete is opt-in per point, even for admin', () => {
-    const withoutDelete = resolveTokenPermissions({ role: 'admin', matrix: ['agents:update'] })
+    const withoutDelete = resolveTokenPermissions({
+      accountPermissions: accountPermissions('admin'),
+      matrix: ['agents:update'],
+    })
     expect(withoutDelete.has('agents:update')).toBe(true)
     expect(withoutDelete.has('agents:delete')).toBe(false)
 
     const withDelete = resolveTokenPermissions({
-      role: 'admin',
+      accountPermissions: accountPermissions('admin'),
       matrix: ['agents:update', 'agents:delete'],
     })
     expect(withDelete.has('agents:delete')).toBe(true)
@@ -331,7 +344,10 @@ describe('RFC-247 resolveTokenPermissions', () => {
   })
 
   test('no matrix can grant a token a delete point its role lacks', () => {
-    const granted = resolveTokenPermissions({ role: 'user', matrix: ['tasks:delete'] })
+    const granted = resolveTokenPermissions({
+      accountPermissions: accountPermissions('user'),
+      matrix: ['tasks:delete'],
+    })
     expect(granted.has('tasks:delete')).toBe(false)
   })
 })
@@ -339,22 +355,25 @@ describe('RFC-247 resolveTokenPermissions', () => {
 describe('RFC-247 grantableMatrixPoints', () => {
   test('never offers read points (reads are always on, not tickable)', () => {
     for (const role of ['user', 'manager', 'admin'] as const) {
-      for (const p of grantableMatrixPoints(role)) {
+      for (const p of grantableMatrixPoints(accountPermissions(role))) {
         expect(READ_POINTS.includes(p)).toBe(false)
       }
     }
   })
 
   test('never offers a point the role lacks — a plain user sees no repos verb', () => {
-    const userGrantable = grantableMatrixPoints('user')
+    const userGrantable = grantableMatrixPoints(accountPermissions('user'))
     expect(userGrantable.filter((p) => p.startsWith('repos:'))).toEqual([])
     // RFC-248: create / update / delete / execute —— update 是新加的（仓库组的 PUT）。
-    expect(grantableMatrixPoints('manager').filter((p) => p.startsWith('repos:')).length).toBe(4)
+    expect(
+      grantableMatrixPoints(accountPermissions('manager')).filter((p) => p.startsWith('repos:'))
+        .length,
+    ).toBe(4)
   })
 
   test('never offers a system-domain point to anyone', () => {
     for (const role of ['user', 'manager', 'admin'] as const) {
-      for (const p of grantableMatrixPoints(role)) {
+      for (const p of grantableMatrixPoints(accountPermissions(role))) {
         expect(SYSTEM_DOMAIN_POINTS.includes(p)).toBe(false)
       }
     }
@@ -362,17 +381,16 @@ describe('RFC-247 grantableMatrixPoints', () => {
 
   test('everything offered is actually resolvable for that role', () => {
     for (const role of ['user', 'manager', 'admin'] as const) {
-      const offered = grantableMatrixPoints(role)
-      const granted = resolveTokenPermissions({ role, matrix: offered })
+      const permissions = accountPermissions(role)
+      const offered = grantableMatrixPoints(permissions)
+      const granted = resolveTokenPermissions({ accountPermissions: permissions, matrix: offered })
       for (const p of offered) expect(granted.has(p)).toBe(true)
     }
   })
 })
 
-// RFC-222 — the `manager` (资源管理员) role. manager = admin minus user
-// management, system settings/ops, and task deletion; plus every resource-
-// domain capability. Both the positive and negative sets are pinned so a future
-// edit that hands manager a system-domain point (or drops a resource one) reds.
+// RFC-222/RFC-305 — the `manager` preset. Both preset membership and its
+// differences from admin are pinned; these are defaults, not role-only classes.
 describe('RFC-222 manager role', () => {
   test('RoleSchema accepts exactly the three roles', () => {
     expect(RoleSchema.options).toEqual(['admin', 'user', 'manager'])
@@ -399,6 +417,10 @@ describe('RFC-222 manager role', () => {
       'webhook-triggers:create',
       'webhook-triggers:update',
       'webhook-triggers:delete',
+      // RFC-305 — the manager preset retains its historical ACL and distill
+      // reach through explicit permissions.
+      'resource-acl:bypass',
+      'memory-distill-jobs:manage',
     ]
     expect([...ROLE_PERMISSIONS.manager].sort()).toEqual([...new Set(expected)].sort())
   })
@@ -422,12 +444,12 @@ describe('RFC-222 manager role', () => {
       'webhook-triggers:update',
       'webhook-triggers:delete',
     ] as const) {
-      expect(hasPermission('manager', p)).toBe(true)
+      expect(presetHasPermission('manager', p)).toBe(true)
     }
   })
 
-  test('MANAGER_DENIED points are ∈ admin and ∉ manager (and ∉ user)', () => {
-    expect([...MANAGER_DENIED_PERMISSIONS].sort()).toEqual(
+  test('manager preset differences are ∈ admin and ∉ manager (and ∉ user)', () => {
+    expect([...MANAGER_PRESET_MISSING_PERMISSIONS].sort()).toEqual(
       [
         'users:read',
         'users:write',
@@ -437,24 +459,28 @@ describe('RFC-222 manager role', () => {
         'oidc:configure',
         'backup:run',
         'tasks:delete',
+        'webhook-endpoints:manage',
+        'intent:audit',
+        'mcp-runtime-tests:audit',
+        'webhook-triggers:override-owner',
       ].sort(),
     )
-    for (const p of MANAGER_DENIED_PERMISSIONS) {
-      expect(hasPermission('admin', p)).toBe(true)
-      expect(hasPermission('manager', p)).toBe(false)
-      expect(hasPermission('user', p)).toBe(false)
+    for (const p of MANAGER_PRESET_MISSING_PERMISSIONS) {
+      expect(presetHasPermission('admin', p)).toBe(true)
+      expect(presetHasPermission('manager', p)).toBe(false)
+      expect(presetHasPermission('user', p)).toBe(false)
     }
   })
 
-  test('tasks:delete belongs to admin only', () => {
-    expect(hasPermission('admin', 'tasks:delete')).toBe(true)
-    expect(hasPermission('manager', 'tasks:delete')).toBe(false)
-    expect(hasPermission('user', 'tasks:delete')).toBe(false)
+  test('tasks:delete belongs only to the admin default preset', () => {
+    expect(presetHasPermission('admin', 'tasks:delete')).toBe(true)
+    expect(presetHasPermission('manager', 'tasks:delete')).toBe(false)
+    expect(presetHasPermission('user', 'tasks:delete')).toBe(false)
   })
 
-  test('isResourceAdminRole: admin ∪ manager, not user', () => {
-    expect(isResourceAdminRole('admin')).toBe(true)
-    expect(isResourceAdminRole('manager')).toBe(true)
-    expect(isResourceAdminRole('user')).toBe(false)
+  test('resource ACL bypass is a preset permission, not a role predicate', () => {
+    expect(presetHasPermission('admin', 'resource-acl:bypass')).toBe(true)
+    expect(presetHasPermission('manager', 'resource-acl:bypass')).toBe(true)
+    expect(presetHasPermission('user', 'resource-acl:bypass')).toBe(false)
   })
 })

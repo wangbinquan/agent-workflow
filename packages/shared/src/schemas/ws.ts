@@ -340,8 +340,8 @@ export type RepoImportWsMessage = z.infer<typeof RepoImportWsMessageSchema>
 
 // -----------------------------------------------------------------------------
 // /ws/memories — RFC-041 platform memory candidate / promotion stream.
-// All logged-in users may subscribe; the actual UI only renders the admin
-// "approval queue" badge when the actor's role allows it.
+// All logged-in users may subscribe; the actual UI renders the approval queue
+// badge only from row-level `canManage` values.
 // -----------------------------------------------------------------------------
 
 export const MemoryWsMessageSchema = z.discriminatedUnion('type', [
@@ -363,7 +363,7 @@ export const MemoryWsMessageSchema = z.discriminatedUnion('type', [
     oldId: z.string(),
     newId: z.string(),
   }),
-  // RFC-045: in-place admin edit of candidate / approved / archived rows.
+  // RFC-045/RFC-305: in-place permission-gated edit of candidate / approved / archived rows.
   // changedFields is the (non-empty) subset of {scopeType, scopeId, title,
   // bodyMd, tags} that actually changed in this PATCH; version is the
   // resulting row.version (>= 2 since version 1 belongs to creation/promote,
@@ -383,8 +383,8 @@ export const MemoryWsMessageSchema = z.discriminatedUnion('type', [
 export type MemoryWsMessage = z.infer<typeof MemoryWsMessageSchema>
 
 // -----------------------------------------------------------------------------
-// /ws/memory-distill-jobs — RFC-041 admin monitor of the distill queue.
-// Subscribed only by admin clients; backend WS upgrade enforces the same.
+// /ws/memory-distill-jobs — RFC-041/RFC-305 capability-gated distill monitor.
+// Backend WS upgrade requires `memory-distill-jobs:manage` + `memory:update`.
 // -----------------------------------------------------------------------------
 
 export const MemoryDistillJobWsMessageSchema = z.discriminatedUnion('type', [
@@ -408,7 +408,7 @@ export const MemoryDistillJobWsMessageSchema = z.discriminatedUnion('type', [
 export type MemoryDistillJobWsMessage = z.infer<typeof MemoryDistillJobWsMessageSchema>
 
 // RFC-159 — scheduled-task list stream. `ownerUserId` rides on every frame so the
-// per-frame gate can filter to owner + tasks:read:all admins without a DB lookup.
+// per-frame gate can filter to owner + `tasks:read:all` without a DB lookup.
 export const ScheduledTaskWsMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('scheduled.created'), id: z.string(), ownerUserId: z.string() }),
   z.object({ type: z.literal('scheduled.updated'), id: z.string(), ownerUserId: z.string() }),
@@ -418,7 +418,7 @@ export const ScheduledTaskWsMessageSchema = z.discriminatedUnion('type', [
 export type ScheduledTaskWsMessage = z.infer<typeof ScheduledTaskWsMessageSchema>
 
 // RFC-234 — intent-session stream. `ownerUserId` rides on every frame so the
-// per-frame gate filters to creator + SYSTEM admin (no manager bypass, D26)
+// per-frame gate filters to creator + `intent:audit` (D26 / RFC-305)
 // without a DB lookup. Frames are invalidation signals; payloads stay in HTTP.
 export const IntentSessionWsMessageSchema = z.discriminatedUnion('type', [
   z.object({
@@ -477,6 +477,7 @@ export type McpRuntimeTestWsMessage = z.infer<typeof McpRuntimeTestWsMessageSche
 export const WsControlMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('hello'), channel: z.string(), since: z.number().int().optional() }),
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
+  z.object({ type: z.literal('authority.changed'), revision: z.number().int().nonnegative() }),
 ])
 export type WsControlMessage = z.infer<typeof WsControlMessageSchema>
 
@@ -502,11 +503,11 @@ export const WS_PATHS = {
   repoImport: (batchId: string): string => `/ws/repo-imports/${encodeURIComponent(batchId)}`,
   /** RFC-041 — platform memory candidate / promotion stream (per-frame scope-filtered). */
   memories: '/ws/memories',
-  /** RFC-041 — distill queue monitor (admin-only upgrade gate). */
+  /** RFC-041/RFC-305 — distill queue monitor (`memory-distill-jobs:manage` upgrade gate). */
   memoryDistillJobs: '/ws/memory-distill-jobs',
-  /** RFC-159 — scheduled-task list stream (per-frame owner/admin filtered). */
+  /** RFC-159 — scheduled-task list stream (per-frame owner/`tasks:read:all` filtered). */
   scheduledTasks: '/ws/scheduled-tasks',
-  /** RFC-234 — intent-session stream (creator + system admin only). */
+  /** RFC-234/RFC-305 — intent-session stream (creator + `intent:audit`). */
   intentSessions: '/ws/intent-sessions',
   /** RFC-238 — MCP runtime-test locator stream (creator only). */
   mcpRuntimeTests: '/ws/mcp-runtime-tests',

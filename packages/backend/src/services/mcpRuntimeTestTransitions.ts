@@ -5,6 +5,10 @@
 // performs abort/reap/cleanup after commit.
 
 import { and, eq, inArray, isNull } from 'drizzle-orm'
+import {
+  normalizeStoredAdditionalPermissions,
+  resolveEffectiveAccountPermissions,
+} from '@agent-workflow/shared'
 import { isVisibleToAudienceSnapshot, listResourceGrantUserIdsInTx } from '@/services/resourceAcl'
 import type { DbTxSync } from '@/db/txSync'
 import {
@@ -12,6 +16,7 @@ import {
   mcpRuntimeTestSessions,
   mcpRuntimeTestSessionLeases,
   runtimes,
+  userPermissionGrants,
   users,
 } from '@/db/schema'
 import { ConflictError } from '@/util/errors'
@@ -121,10 +126,31 @@ export function transitionMcpAclRuntimeTestsInTx(
       .from(users)
       .where(eq(users.id, session.ownerUserId))
       .get()
+    const storedPermissions = tx
+      .select({ permission: userPermissionGrants.permission })
+      .from(userPermissionGrants)
+      .where(eq(userPermissionGrants.userId, session.ownerUserId))
+      .all()
+      .map((grant) => grant.permission)
+    const accountPermissions =
+      account === undefined
+        ? null
+        : resolveEffectiveAccountPermissions({
+            role: account.role,
+            additionalPermissions: normalizeStoredAdditionalPermissions({
+              role: account.role,
+              additionalPermissions: storedPermissions,
+            }).additionalPermissions,
+          })
     // RFC-284 T10（§2.4）：可见性四分支收编快照判定；status 检查按设计留调用方。
     const stillVisible =
       account?.status === 'active' &&
-      isVisibleToAudienceSnapshot(session.ownerUserId, account.role, input)
+      accountPermissions !== null &&
+      isVisibleToAudienceSnapshot(
+        session.ownerUserId,
+        accountPermissions.has('resource-acl:bypass'),
+        input,
+      )
     if (!stillVisible) {
       endNow(tx, session, 'access-revoked', input.now)
     } else {

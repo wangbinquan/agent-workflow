@@ -1,6 +1,6 @@
-// RFC-043 — admin-only distill job detail page. Reachable from the
-// Distill Jobs tab inside /memory (row → click); non-admin actors land
-// on a placeholder identical in tone to the existing "Admin only" tab.
+// RFC-043/RFC-305 — permission-gated distill job detail page. Reachable from
+// the Distill Jobs tab inside /memory; actors without the capability land on
+// an explicit access placeholder.
 //
 // The page composes 6 independent sections:
 //   - DetailHeader          status + meta
@@ -11,7 +11,7 @@
 //   - ConversationSection   reuses RFC-027 ConversationFlow
 //
 // Detail + session data are two independent queries. A failure in the
-// session query never blanks the detail page — admin can still see the
+// session query never blanks the detail page — the authorized viewer can still see the
 // other 5 sections + a localized error inside ConversationSection.
 
 import { createRoute } from '@tanstack/react-router'
@@ -24,7 +24,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
-import { useActor, useIsResourceAdmin } from '@/hooks/useActor'
+import { useActor, usePermission } from '@/hooks/useActor'
 import { useMemoryDistillJobWs } from '@/hooks/useMemoryDistillJobWs'
 import { describeApiError } from '@/i18n'
 import { Route as RootRoute } from './__root'
@@ -44,27 +44,26 @@ export const Route = createRoute({
 function DistillJobDetailPage() {
   const { t } = useTranslation()
   const actor = useActor()
-  // RFC-285 B7（E11）：对齐后端 admin+manager 管理面。
-  const isAdmin = useIsResourceAdmin()
+  const canManageDistillJobs = usePermission('memory-distill-jobs:manage')
   const { jobId } = Route.useParams()
 
   // Keep WS subscription mounted so detail page invalidates when the
   // scheduler updates the job (e.g. retry succeeds while admin is on
   // the page).
-  useMemoryDistillJobWs({ enabled: isAdmin })
+  useMemoryDistillJobWs({ enabled: canManageDistillJobs })
 
   const detailQ = useQuery<MemoryDistillJobDetail, ApiError>({
     queryKey: ['memory-distill-jobs', 'detail', jobId],
     queryFn: ({ signal }) =>
       api.get(`/api/memory-distill-jobs/${encodeURIComponent(jobId)}`, undefined, signal),
-    enabled: isAdmin,
+    enabled: canManageDistillJobs,
   })
 
   const sessionQ = useQuery<MemoryDistillSessionView, ApiError>({
     queryKey: ['memory-distill-jobs', 'session', jobId],
     queryFn: ({ signal }) =>
       api.get(`/api/memory-distill-jobs/${encodeURIComponent(jobId)}/session`, undefined, signal),
-    enabled: isAdmin,
+    enabled: canManageDistillJobs,
   })
 
   if (actor.isLoading) {
@@ -85,13 +84,13 @@ function DistillJobDetailPage() {
     )
   }
 
-  if (!isAdmin) {
+  if (!canManageDistillJobs) {
     return (
       <div className="page page--memory page--distill-job-detail">
         <PageHeader title={jobId} />
         <EmptyState
-          title={t('memory.distillJobDetail.adminOnly')}
-          data-testid="distill-detail-admin-only"
+          title={t('memory.distillJobDetail.permissionRequired')}
+          data-testid="distill-detail-permission-required"
         />
       </div>
     )

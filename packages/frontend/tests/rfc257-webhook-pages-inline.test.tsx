@@ -1,6 +1,6 @@
 // RFC-257 UI 修订 — /webhooks 单页（route-ux-inventory 的 owner）。
-// 锁：admin 三 tab（端点/触发器/投递）渲染与切换、triggers/deliveries 面板行、
-// **非 admin 拒绝态**（页面级守卫——侧栏项过滤之外的直输 URL 兜底）。
+// 锁：具备相应权限时三 tab（端点/触发器/投递）渲染与切换、
+// triggers/deliveries 面板行，以及缺少写权限时的只读态。
 // 2026-08-14 视觉层级回归锁：事件、目标形态与执行空间必须留在各自的路径卡片里，
 // 不能脱离「响应事件 / 启动目标」后平铺成一组无法辨认归属的标签。
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -25,7 +25,13 @@ function jsonResponse(body: unknown): Response {
   })
 }
 
-let role: 'admin' | 'user' = 'admin'
+const WEBHOOK_WRITE_PERMISSIONS = [
+  'webhook-endpoints:manage',
+  'webhook-triggers:create',
+  'webhook-triggers:update',
+  'webhook-triggers:delete',
+] as const
+let permissions: string[] = [...WEBHOOK_WRITE_PERMISSIONS]
 let triggers: unknown[] = []
 let deliveries: unknown[] = []
 let endpoints: unknown[] = []
@@ -33,9 +39,9 @@ let triggerWriteCount = 0
 
 function meResponse() {
   return {
-    user: { id: 'u1', username: 'root', displayName: 'root', role, status: 'active' },
+    user: { id: 'u1', username: 'root', displayName: 'root', role: 'user', status: 'active' },
     source: 'session',
-    permissions: [],
+    permissions,
     linkedIdentities: [],
     pats: [],
   }
@@ -73,7 +79,7 @@ beforeEach(async () => {
   await i18n.changeLanguage('en-US')
   setBaseUrl(`http://webhooks-page-${crypto.randomUUID()}.test`)
   setToken('tok')
-  role = 'admin'
+  permissions = [...WEBHOOK_WRITE_PERMISSIONS]
   triggers = []
   deliveries = []
   endpoints = [
@@ -123,7 +129,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('RFC-257 · /webhooks page (admin)', () => {
+describe('RFC-257 · /webhooks page (write-capable actor)', () => {
   test('renders the header, the three tabs, and the endpoints tab by default', async () => {
     await renderWebhooks()
     await waitFor(() => {
@@ -276,7 +282,7 @@ describe('RFC-257 · /webhooks page (admin)', () => {
     expect(screen.getByTestId('webhook-trigger-dialog')).toBeTruthy()
   })
 
-  test('downgrade clears an admin draft and an invoked connected stale toggle sends zero write', async () => {
+  test('permission revocation clears a draft and an invoked connected stale toggle sends zero write', async () => {
     triggers = [
       {
         id: 'tr1',
@@ -311,14 +317,14 @@ describe('RFC-257 · /webhooks page (admin)', () => {
     expect(await screen.findByTestId('webhook-trigger-dialog')).toBeTruthy()
 
     act(() => {
-      role = 'user'
+      permissions = []
       client.setQueryData(meQueryOptions('tok').queryKey, meResponse())
     })
     await waitFor(() => expect(screen.queryByTestId('webhook-trigger-dialog')).toBeNull())
     expect(screen.queryByTestId('webhook-trigger-new')).toBeNull()
 
     act(() => {
-      role = 'admin'
+      permissions = [...WEBHOOK_WRITE_PERMISSIONS]
       client.setQueryData(meQueryOptions('tok').queryKey, meResponse())
     })
     const staleToggle = (await screen.findByTestId('webhook-trigger-enable-tr1')) as HTMLElement
@@ -327,7 +333,7 @@ describe('RFC-257 · /webhooks page (admin)', () => {
       invocations += 1
     })
     act(() => {
-      role = 'user'
+      permissions = []
       client.setQueryData(meQueryOptions('tok').queryKey, meResponse())
       fireEvent.click(staleToggle)
     })
@@ -337,12 +343,11 @@ describe('RFC-257 · /webhooks page (admin)', () => {
   })
 })
 
-describe('RFC-260 · /webhooks page (non-admin, read-only)', () => {
-  // RFC-257 原语义是拒绝态（webhooks-forbidden）；RFC-260 显式改判为「读全员、
-  // 写 admin」——user 看到只读视图，配置动作零渲染（真正边界在后端方法门与
-  // URL 响应分层）。
-  test('a user role sees the read-only page with zero configuration actions', async () => {
-    role = 'user'
+describe('RFC-260 · /webhooks page (read-only actor)', () => {
+  // RFC-260 显式改判为「读面开放、写面按具体权限」；同一个 user 预设主体在
+  // 撤掉显式写权限后仍看到只读视图，证明角色不是授权轴。
+  test('an actor without write permissions sees zero configuration actions', async () => {
+    permissions = []
     await renderWebhooks()
     await waitFor(() => expect(screen.getByTestId('webhooks-tab')).toBeTruthy())
     expect(screen.queryByTestId('webhooks-forbidden')).toBeNull()

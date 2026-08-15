@@ -22,7 +22,7 @@ import { createPat } from '../src/auth/patStore'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tokenAudit, tokenDeleteSnapshot } from '../src/db/schema'
+import { agents, tokenAudit, tokenDeleteSnapshot } from '../src/db/schema'
 import { createApp } from '../src/server'
 import {
   listTokenAudit,
@@ -47,6 +47,7 @@ interface Harness {
   db: DbClient
   app: Hono
   userId: string
+  ownedAgentId: string
   patId: string
   patToken: string
   sessionToken: string
@@ -59,6 +60,13 @@ async function harness(): Promise<Harness> {
     displayName: 'Alice',
     role: 'admin',
     password: 'pw12345678',
+  })
+  const ownedAgentId = 'rfc247-audit-owner-agent'
+  await db.insert(agents).values({
+    id: ownedAgentId,
+    name: 'RFC 247 audit owner agent',
+    ownerUserId: user.id,
+    visibility: 'private',
   })
   const app = createApp({
     token: DAEMON_TOKEN,
@@ -76,7 +84,7 @@ async function harness(): Promise<Harness> {
     purpose: 'general',
   })
   const { token: sessionToken } = await createSession({ db, userId: user.id })
-  return { db, app, userId: user.id, patId: meta.id, patToken, sessionToken }
+  return { db, app, userId: user.id, ownedAgentId, patId: meta.id, patToken, sessionToken }
 }
 
 describe('RFC-247 — the REST channel writes an audit row', () => {
@@ -554,8 +562,8 @@ describe('RFC-247 AC-20 — the snapshot is captured in PRODUCTION, not just in 
     // gone — so no real delete had ever produced one.
     const h = await harness()
     const memory = await createManualCandidate(h.db, {
-      scopeType: 'global',
-      scopeId: null,
+      scopeType: 'agent',
+      scopeId: h.ownedAgentId,
       title: 'about to be deleted',
       bodyMd: 'the body worth keeping a copy of',
       tags: [],
@@ -593,8 +601,8 @@ describe('RFC-247 AC-20 — the snapshot is captured in PRODUCTION, not just in 
   test('a SESSION delete writes no snapshot — this table is token attribution', async () => {
     const h = await harness()
     const memory = await createManualCandidate(h.db, {
-      scopeType: 'global',
-      scopeId: null,
+      scopeType: 'agent',
+      scopeId: h.ownedAgentId,
       title: 'session deletes leave no audit',
       bodyMd: 'body',
       tags: [],
@@ -611,8 +619,11 @@ describe('RFC-247 AC-20 — the snapshot is captured in PRODUCTION, not just in 
   test('a REFUSED delete leaves no snapshot — nothing was destroyed', async () => {
     const h = await harness()
     const memory = await createManualCandidate(h.db, {
-      scopeType: 'global',
-      scopeId: null,
+      // PATs never carry resource-acl:bypass. Anchor this confirmation test to
+      // a resource the token's account owns so only the type-to-confirm gate is
+      // under test.
+      scopeType: 'agent',
+      scopeId: h.ownedAgentId,
       title: 'survives the refusal',
       bodyMd: 'body',
       tags: [],

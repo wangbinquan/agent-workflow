@@ -203,7 +203,7 @@ function canResumeNativeSession(
 
 function assertSessionActor(row: SessionRow, actor: Actor, auditOnly = false): void {
   if (row.ownerUserId === actor.user.id) return
-  if (auditOnly && actor.user.role === 'admin') return
+  if (auditOnly && actor.permissions.has('mcp-runtime-tests:audit')) return
   throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
 }
 

@@ -90,7 +90,7 @@ export function AccountTokensPanel({ me }: { me: MeResponse }) {
         open={creating}
         onClose={() => setCreating(false)}
         actorId={me.user.id}
-        role={me.user.role}
+        permissions={me.permissions}
         triggerRef={createTriggerRef}
         visiblePats={me.pats}
         onCreated={refreshCreatedList}

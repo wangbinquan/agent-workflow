@@ -199,7 +199,7 @@ export const SkillZipCandidateViewSchema = z.object({
   conflict: SkillZipCandidateConflictSchema.optional(),
   /**
    * Exact targets the actor may overwrite. Owners see their own target;
-   * resource admins may see multiple same-named cross-owner targets and must
+   * actors with `resource-acl:bypass` may see multiple same-named cross-owner targets and must
    * choose one by id. An empty list is fail-closed.
    */
   overwriteCandidates: z.array(SkillZipOverwriteCandidateSchema),
@@ -237,7 +237,7 @@ export const SkillZipCommitFailureCodeSchema = z.enum([
   'skill-write-failed',
   'skill-md-missing',
   'skill-name-invalid',
-  // RFC-102: overwrite requested but the actor is not the owner/admin.
+  // RFC-102/RFC-305: overwrite requested but the actor is neither owner nor ACL-bypass holder.
   'skill-overwrite-forbidden',
   // RFC-223 AC19: preview target or owner/ACL/content generation drifted.
   'resource-operation-stale', // RFC-285 B5：原 skill-overwrite-stale 入族归一

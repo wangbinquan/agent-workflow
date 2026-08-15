@@ -111,16 +111,15 @@ describe('RFC-270 AC-11 / AC-12 · CodeHostCallEdit', () => {
     expect(screen.queryByTestId('code-host-manage-connections')).toBeNull()
   })
 
-  test('AC-12 有 author 但无 settings:read（manager）：面板在，但配置入口不渲染', () => {
-    // manager 正是这批人 —— `MANAGER_DENIED_PERMISSIONS` 显式拒了 `settings:read`，
-    // 所以今天点这个链接只会吃一个 403。
+  test('AC-12 有 author 但无 settings:read：面板在，但配置入口不渲染', () => {
+    // 只看具体权限组合，不根据账户角色推断配置页能力。
     permissions.current = ['code-host-calls:author']
     render(<CodeHostCallEdit node={callNode} {...editProps} />)
     expect(screen.queryByTestId('code-host-inspector-no-view-permission')).toBeNull()
     expect(screen.queryByTestId('code-host-manage-connections')).toBeNull()
   })
 
-  test('AC-12 两个权限都有（admin）：配置入口渲染', () => {
+  test('AC-12 两个权限都有：配置入口渲染', () => {
     permissions.current = ['code-host-calls:author', 'settings:read']
     render(<CodeHostCallEdit node={callNode} {...editProps} />)
     const link = screen.getByTestId('code-host-manage-connections')

@@ -58,7 +58,7 @@ function renderCard() {
   const hostRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: () => <WebhookEndpointCard isAdmin />,
+    component: () => <WebhookEndpointCard canManage />,
   })
   const router = createRouter({
     routeTree: rootRoute.addChildren([hostRoute]),
@@ -83,9 +83,9 @@ beforeEach(async () => {
     const method = init?.method ?? 'GET'
     if (url.includes('/api/auth/me')) {
       return jsonResponse({
-        user: { id: 'u1', username: 'root', displayName: 'root', role: 'admin', status: 'active' },
+        user: { id: 'u1', username: 'dev', displayName: 'dev', role: 'user', status: 'active' },
         source: 'session',
-        permissions: [],
+        permissions: ['webhook-endpoints:manage'],
         linkedIdentities: [],
         pats: [],
       })

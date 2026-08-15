@@ -726,7 +726,7 @@ describe('RFC-238 MCP runtime test service', () => {
     expect((await service.get(actor, mcp.id, idle.id)).turns).toHaveLength(2)
   })
 
-  test('transcripts are owner-only while system admin audit requires an exact id', async () => {
+  test('transcripts are owner-only while mcp-runtime-tests:audit grants exact-id read only', async () => {
     const { db, mcp, root } = await seed()
     for (const id of ['owner-user', 'stranger-user']) {
       db.insert(users)
@@ -762,6 +762,17 @@ describe('RFC-238 MCP runtime test service', () => {
       },
       source: 'session',
     })
+    const auditorActor = buildActor({
+      user: {
+        id: 'stranger-user',
+        username: 'stranger-user',
+        displayName: 'Auditor',
+        role: 'user',
+        status: 'active',
+      },
+      source: 'session',
+      additionalPermissions: ['mcp-runtime-tests:audit'],
+    })
     const service = new McpRuntimeTestService({
       db,
       configPath: join(root, 'config.json'),
@@ -791,9 +802,9 @@ describe('RFC-238 MCP runtime test service', () => {
       code: 'mcp-test-session-not-found',
     })
     expect(await service.latest(strangerActor, mcp.id)).toBeNull()
-    expect((await service.get(actor, mcp.id, created.sessionId)).id).toBe(created.sessionId)
-    expect(await service.latest(actor, mcp.id)).toBeNull()
-    await expect(service.end(actor, mcp.id, created.sessionId)).rejects.toMatchObject({
+    expect((await service.get(auditorActor, mcp.id, created.sessionId)).id).toBe(created.sessionId)
+    expect(await service.latest(auditorActor, mcp.id)).toBeNull()
+    await expect(service.end(auditorActor, mcp.id, created.sessionId)).rejects.toMatchObject({
       code: 'mcp-test-session-not-found',
     })
   })

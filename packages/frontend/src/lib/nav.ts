@@ -12,12 +12,6 @@ export interface SubNavItem {
   to: string
   i18nKey: string
   icon: ResourceIconKey
-  /**
-   * RFC-257 UI 修订：仅 admin 角色渲染（webhook 配置面）。过滤发生在
-   * ShellNavigation（唯一消费点）；resolveActiveNav 不看这个字段——非 admin
-   * 直接输入 URL 时页面自身再守卫。
-   */
-  adminOnly?: boolean
 }
 
 export interface NavGroupEntry {
@@ -65,9 +59,8 @@ export const NAV_GROUPS: NavGroupEntry[] = [
       { to: '/tasks', i18nKey: 'nav.tasks', icon: 'task' },
       { to: '/scheduled', i18nKey: 'nav.scheduled', icon: 'schedule' },
       { to: '/repos', i18nKey: 'nav.repos', icon: 'repo' },
-      // RFC-257 UI 修订：webhook 配置（端点/触发器/投递）挂在远端仓下方，
-      // 仅 admin 可见。
-      // RFC-260：读面全员可见（配置动作在页内按 role 隐藏、后端方法门为界）。
+      // RFC-260/RFC-305：读面由 `webhook-endpoints:read` 控制；配置动作在页内
+      // 按各自具体权限显示，导航模型不携带角色概念。
       { to: '/webhooks', i18nKey: 'nav.webhooks', icon: 'webhook' },
     ],
   },

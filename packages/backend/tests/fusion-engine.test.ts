@@ -24,6 +24,7 @@ import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { resolveEffectiveAccountPermissions } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
@@ -97,7 +98,7 @@ const adminActor: Actor = {
     status: 'active',
   },
   source: 'daemon',
-  permissions: new Set(),
+  permissions: resolveEffectiveAccountPermissions({ role: 'admin', additionalPermissions: [] }),
 }
 
 /**

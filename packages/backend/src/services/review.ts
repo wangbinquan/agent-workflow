@@ -43,7 +43,6 @@ import type {
 import {
   type TaskActorRole,
   buildWorkflowScopeParentMap,
-  isResourceAdminRole,
   isMultiMarkdownUpstream,
   migrateWorkflowDefinitionToLatest,
   resolveWorkflowSourceRef,
@@ -1915,24 +1914,25 @@ async function addReviewCommentUnlocked(args: AddReviewCommentArgs): Promise<Rev
 // outcome once the review has been approved/rejected/iterated.
 /**
  * RFC-285 B6①（作者校验）—— 评论写权的三层判定：
- * - task owner / 资源管理员（admin+manager，isResourceAdminRole）旁路；
+ * - task owner / 持有 `resource-acl:bypass` 的操作者旁路；
  * - 普通协作者只能改/删**自己**的评论（row.author === actorUserId）；
  * - 历史行 author 为 LOCAL_DECIDER 兜底值（'local'）时永远不等于任何真实
- *   user id ⇒ 自然落入 owner/admin-only（用户拍板：无法归属作者的行不给
+ *   user id ⇒ 自然落入 owner/`resource-acl:bypass` 通道（用户拍板：无法归属作者的行不给
  *   「作者」通道）。
  * 此前 PATCH/DELETE 均无 actor 入参——任何任务成员可改/删他人评论（冒名洞）。
  */
 export interface ReviewCommentAuthz {
   actorUserId: string
   role: TaskActorRole
+  resourceAclBypass?: boolean
 }
 
 function assertCommentWriteAllowed(author: string, authz: ReviewCommentAuthz): void {
-  if (authz.role === 'owner' || isResourceAdminRole(authz.role)) return
+  if (authz.role === 'owner' || authz.resourceAclBypass === true) return
   if (author !== authz.actorUserId) {
     throw new ForbiddenError(
       'review-comment-not-author',
-      'only the comment author (or the task owner / a resource admin) may modify this comment',
+      'only the comment author (or the task owner / an actor with resource-acl:bypass) may modify this comment',
     )
   }
 }

@@ -1,5 +1,5 @@
 // RFC-198 PR4 — /memory must wait for the actor query before choosing its
-// admin/non-admin surface. These rendered regressions prevent a cold-start
+// permission-bearing/read-only surface. These rendered regressions prevent a cold-start
 // forbidden flash and keep the truthful permission branch visible when a
 // background actor refresh fails.
 
@@ -45,9 +45,10 @@ const userActor: MeResponse = {
   pats: [],
 }
 
-const adminActor: MeResponse = {
+const distillManagerActor: MeResponse = {
   ...userActor,
-  user: { ...userActor.user, id: 'admin-1', username: 'admin', role: 'admin' },
+  user: { ...userActor.user, id: 'distill-1', username: 'distill-manager' },
+  permissions: [...userActor.permissions, 'memory-distill-jobs:manage'],
 }
 
 const distillJob: MemoryDistillJob = {
@@ -142,7 +143,7 @@ describe('/memory actor query continuity', () => {
     })
   })
 
-  test('cold start renders LoadingState without flashing admin or forbidden content', async () => {
+  test('cold start renders LoadingState without flashing privileged or forbidden content', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (request: RequestInfo | URL) => {
       const path = new URL(request.toString()).pathname
       if (path === '/api/auth/me') return new Promise<Response>(() => {})
@@ -190,14 +191,14 @@ describe('/memory actor query continuity', () => {
     expect(actorRequests).toBe(2)
   })
 
-  test('stale admin actor error hides admin content and recovers in place', async () => {
+  test('stale actor error hides capability-gated content and recovers in place', async () => {
     let failActorRefresh = true
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (request: RequestInfo | URL) => {
       const path = new URL(request.toString()).pathname
       if (path === '/api/auth/me') {
         return failActorRefresh
           ? json({ code: 'actor-refresh-failed', message: 'Actor refresh failed' }, 503)
-          : json(adminActor)
+          : json(distillManagerActor)
       }
       if (path === '/api/memories') return json({ items: [] })
       if (path === '/api/fusions/pending-count') return json({ count: 0 })
@@ -206,7 +207,7 @@ describe('/memory actor query continuity', () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
     })
-    client.setQueryData(['auth', 'me', 'tok'], adminActor)
+    client.setQueryData(['auth', 'me', 'tok'], distillManagerActor)
     client.setQueryData(['memory-distill-jobs', 'list'], { items: [distillJob] })
 
     const router = renderMemory(client)

@@ -43,7 +43,7 @@ export function initialDecisionFor(c: SkillZipCandidateView): DecisionState {
  * RFC-102: actions offered for a candidate row, gated by conflict + write
  * exact preview targets.
  *   no own conflict, no target → import / skip
- *   no own conflict + target   → import / skip / overwrite (resource admin)
+ *   no own conflict + target   → import / skip / overwrite (`resource-acl:bypass`)
  *   own conflict + target      → skip / overwrite / rename
  *   own conflict, no target    → skip / rename (hidden/unavailable target)
  */

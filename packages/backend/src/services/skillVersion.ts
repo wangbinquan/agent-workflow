@@ -455,7 +455,7 @@ function assertCompositePrecondition(
     // requireResourceOwner) against the owner at request time; if it transferred
     // during the operation's await window that authorization is stale → reject, so
     // a demoted ex-owner cannot commit a post-revocation version. Conservative for
-    // admins (an owner change during their write also 409s → reload), which is safe.
+    // ACL-bypass actors (an owner change during their write also 409s → reload), which is safe.
     (commit.expectedOwnerUserId !== undefined && live.ownerUserId !== commit.expectedOwnerUserId) ||
     (commit.expectedAclRevision !== undefined && live.aclRevision !== commit.expectedAclRevision) ||
     (commit.expectedVisibility !== undefined && live.visibility !== commit.expectedVisibility)

@@ -81,7 +81,7 @@ export const WORKGROUPS_CHANNEL: ChannelKey = 'workgroups'
 export const REPO_IMPORT_CHANNEL = (batchId: string): ChannelKey => `repo-import:${batchId}`
 /** RFC-041: platform-wide memory candidate / promotion stream. */
 export const MEMORY_CHANNEL: ChannelKey = 'memories'
-/** RFC-041: admin-only distill queue monitor. */
+/** RFC-041/RFC-305: capability-gated distill queue monitor. */
 export const MEMORY_DISTILL_JOB_CHANNEL: ChannelKey = 'memory-distill-jobs'
 export const SCHEDULED_TASK_CHANNEL: ChannelKey = 'scheduled-tasks' // RFC-159
 export const INTENT_SESSIONS_CHANNEL: ChannelKey = 'intent-sessions' // RFC-234

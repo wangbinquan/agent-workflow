@@ -370,6 +370,7 @@ export function UsersPage(
       )}
       {canWrite && dialog?.kind === 'edit' && target !== null && (
         <EditUserDialog
+          key={`${target.id}:${target.accessRevision}`}
           user={target}
           isSelf={target.id === actor.data?.user.id}
           triggerRef={dialog.triggerRef}
@@ -398,6 +399,9 @@ export function UsersPage(
             if (!requestIsCurrent(writeSession, authRevision)) return
             enable.reset()
             setDialog({ ...dialog, kind: 'enable' })
+          }}
+          onReloadLatest={() => {
+            void refreshUsers(authRevision).then(() => update.reset())
           }}
         />
       )}

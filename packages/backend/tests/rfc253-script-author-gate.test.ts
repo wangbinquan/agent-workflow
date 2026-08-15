@@ -13,6 +13,7 @@ import {
   PERMISSIONS,
   ROLE_PERMISSIONS,
   SYSTEM_DOMAIN_POINTS,
+  resolveEffectiveAccountPermissions,
   resolveTokenPermissions,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -50,7 +51,10 @@ describe('permission catalog placement', () => {
   test('no token can carry it, even one granted every point (AC-26)', () => {
     for (const role of ['admin', 'manager', 'user'] as const) {
       const granted = resolveTokenPermissions({
-        role,
+        accountPermissions: resolveEffectiveAccountPermissions({
+          role,
+          additionalPermissions: [],
+        }),
         matrix: [...PERMISSIONS],
       })
       expect(granted.has('scripts:author')).toBe(false)

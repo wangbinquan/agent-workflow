@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   WorkflowsWsMessageSchema,
+  type Permission,
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
@@ -32,10 +33,15 @@ import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 
 const SCRIPT_BODY = 'import os\nprint(os.environ["AW_PORT_DIFF"])\n'
 
-function actorOfRole(role: 'admin' | 'manager' | 'user', source: 'session' | 'pat' = 'session') {
+function actorOfRole(
+  role: 'admin' | 'manager' | 'user',
+  source: 'session' | 'pat' = 'session',
+  additionalPermissions: ReadonlyArray<Permission> = [],
+) {
   return buildActor({
     source,
     user: { id: `u-${role}`, username: role, displayName: role, role, status: 'active' },
+    additionalPermissions,
     ...(source === 'pat' ? { patScopes: [], patPurpose: 'mcp_only' as const } : {}),
   })
 }
@@ -85,13 +91,19 @@ function readWorkflowThrough(actor: Actor): unknown {
 }
 
 describe('RFC-270 · 镜头由 permissions 推出', () => {
-  test('admin / manager 透明；plain user 两项全遮', () => {
+  test('预设有 author 权限时透明；默认 user 两项全遮', () => {
     expect(privilegedNodeLensFor(actorOfRole('admin'))).toEqual({ scripts: false, codeHost: false })
     expect(privilegedNodeLensFor(actorOfRole('manager'))).toEqual({
       scripts: false,
       codeHost: false,
     })
     expect(privilegedNodeLensFor(actorOfRole('user'))).toEqual({ scripts: true, codeHost: true })
+  })
+
+  test('role=user 逐项获授后两项透明', () => {
+    const granted = actorOfRole('user', 'session', ['scripts:author', 'code-host-calls:author'])
+    expect(granted.user.role).toBe('user')
+    expect(privilegedNodeLensFor(granted)).toEqual({ scripts: false, codeHost: false })
   })
 
   test('PAT 永远两项全遮 —— 两个点都是系统域，任何令牌都拿不到', () => {
@@ -101,6 +113,11 @@ describe('RFC-270 · 镜头由 permissions 推出', () => {
       scripts: true,
       codeHost: true,
     })
+    expect(
+      privilegedNodeLensFor(
+        actorOfRole('user', 'pat', ['scripts:author', 'code-host-calls:author']),
+      ),
+    ).toEqual({ scripts: true, codeHost: true })
   })
 
   test('镜头判据与 author 门读的是同一个集合（能写的一定能看）', () => {

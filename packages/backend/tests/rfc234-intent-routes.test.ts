@@ -11,8 +11,10 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from '../src/auth/sessionStore'
+import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, intentSessions } from '../src/db/schema'
+import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import { seedBuiltinRuntimes, updateRuntime } from '../src/services/runtimeRegistry'
@@ -447,7 +449,7 @@ describe('intent session routes', () => {
     ).toHaveLength(1)
   })
 
-  test('creator-only 404 shape: stranger AND manager get not-found; admin reads', async () => {
+  test('intent:audit grant/revoke changes cross-owner reads without changing owner-only writes', async () => {
     const created = await req(ownerToken, '/api/intent-sessions', {
       method: 'POST',
       body: JSON.stringify({ message: 'x' }),
@@ -458,20 +460,49 @@ describe('intent session routes', () => {
     expect(asStranger.status).toBe(404)
     const asManager = await req(managerToken, `/api/intent-sessions/${session.id}`)
     expect(asManager.status).toBe(404)
-    // daemon token = system admin actor → read-only audit works
-    const asAdmin = await req(DAEMON_TOKEN, `/api/intent-sessions/${session.id}`)
-    expect(asAdmin.status).toBe(200)
-    // …but admin/manager/stranger cannot write into someone else's session
+
+    const identityAccess = composeIdentityAccess(db)
+    const context = identityAccess.contexts.fromAuthenticatedPrincipal(
+      { userId: SYSTEM_USER_ID, source: 'cli' },
+      'cli',
+      Date.now(),
+    )
+    await identityAccess.updateUserAccess.execute(context, {
+      targetUserId: strangerUserId,
+      access: {
+        role: 'user',
+        additionalPermissions: ['intent:audit'],
+        expectedRevision: 0,
+      },
+    })
+
+    // The existing user session observes the grant immediately.
+    expect((await req(strangerToken, `/api/intent-sessions/${session.id}`)).status).toBe(200)
+    const audited = (await (
+      await req(strangerToken, '/api/intent-sessions?all=1')
+    ).json()) as Array<{ id: string; ownerUserId?: string }>
+    expect(audited.some((row) => row.id === session.id)).toBe(true)
+    expect(audited.every((row) => typeof row.ownerUserId === 'string')).toBe(true)
+
+    // Audit never grants mutation of someone else's session.
     const strangerMsg = await req(strangerToken, `/api/intent-sessions/${session.id}/messages`, {
       method: 'POST',
       body: JSON.stringify({ message: 'hi' }),
     })
     expect(strangerMsg.status).toBe(404)
-    // stranger list does not include the session
+
+    await identityAccess.updateUserAccess.execute(context, {
+      targetUserId: strangerUserId,
+      access: { role: 'user', additionalPermissions: [], expectedRevision: 1 },
+    })
+    expect((await req(strangerToken, `/api/intent-sessions/${session.id}`)).status).toBe(404)
     const list = (await (await req(strangerToken, '/api/intent-sessions')).json()) as Array<{
       id: string
     }>
     expect(list.some((s) => s.id === session.id)).toBe(false)
+
+    // The daemon preset contains the same explicit capability.
+    expect((await req(DAEMON_TOKEN, `/api/intent-sessions/${session.id}`)).status).toBe(200)
   })
 
   test('turn Session view reuses owner/admin read scope; user turns are typed 410', async () => {

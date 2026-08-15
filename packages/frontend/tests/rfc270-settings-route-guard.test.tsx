@@ -69,9 +69,8 @@ describe('RFC-270 AC-13 · /settings beforeLoad', () => {
     expect(outcome).toEqual({ to: '/' })
   })
 
-  test('manager 同样被挡（MANAGER_DENIED_PERMISSIONS 显式拒了 settings:read）', async () => {
-    // manager 有一堆管理能力，但配置页不在其中 —— 这条防的是「manager 听起来像
-    // 管理员所以放进去」的顺手改动。
+  test('缺 settings:read 的任意权限组合都会被挡', async () => {
+    // 角色名不参与判定；即使已有多项高风险能力，缺具体页面权限仍不能进入。
     const outcome = await outcomeOf(
       assertSettingsRouteAccess(clientWith(['scripts:author', 'code-host-calls:author'])),
     )

@@ -1,7 +1,8 @@
 // RFC-257 T8/T9 — 触发器管理面路由（薄壳）。RFC-284 T28：全部业务判定与
 // db/schema 访问下沉 services/webhookTriggers.ts（权限语义/owner 制/保存期校验
 // 的领域注释也在那里）；本文件只剩 registerRoute 元数据 + actor/param/query/body
-// 抽取。方法级权限门在 registerRoute，行级 owner∨admin 门在服务层。
+// 抽取。方法级权限门在 registerRoute，行级
+// owner∨`webhook-triggers:override-owner` 门在服务层。
 import type { Hono } from 'hono'
 
 import { actorOf } from '@/auth/actor'

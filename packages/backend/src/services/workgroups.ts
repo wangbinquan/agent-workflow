@@ -56,7 +56,7 @@ import {
   canViewResourceInTx,
   discloseScheduleRefs,
   initialPrivateResourceAcl,
-  isResourceAdminActor,
+  hasResourceAclBypass,
   isResourceOwner,
   listResourceGrantUserIdsInTx,
 } from './resourceAcl'
@@ -857,7 +857,7 @@ async function assertPrincipalCanWritePreflight(
   if (!isResourceOwner(principal.actor, row)) {
     throw new ForbiddenError(
       'forbidden',
-      'only the workgroup owner or a resource admin can modify it',
+      'only the workgroup owner or an actor with resource-acl:bypass can modify it',
     )
   }
 }
@@ -869,15 +869,15 @@ function assertPrincipalCanWriteInTx(
 ): void {
   if (principal.kind === 'system') return
   const actor = principal.actor
-  const isAdmin = isResourceAdminActor(actor)
+  const hasAclBypass = hasResourceAclBypass(actor)
   const isOwner = row.ownerUserId !== null && row.ownerUserId === actor.user.id
-  // RFC-282 D1 — visibility is the shared predicate; isAdmin/isOwner stay
+  // RFC-282 D1 — visibility is the shared predicate; hasAclBypass/isOwner stay
   // local for the 403 below (404 before 403 is contract).
   if (!canViewResourceInTx(tx, actor, 'workgroup', row)) throwWorkgroupNotFound(row.id)
-  if (!isAdmin && !isOwner) {
+  if (!hasAclBypass && !isOwner) {
     throw new ForbiddenError(
       'forbidden',
-      'only the workgroup owner or a resource admin can modify it',
+      'only the workgroup owner or an actor with resource-acl:bypass can modify it',
     )
   }
 }

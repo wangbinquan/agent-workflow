@@ -439,7 +439,7 @@ interface DelegatedAuthorityResolver {
   resolve(
     source: 'schedule' | 'webhook' | 'call-workflow' | 'call-workgroup' | 'code-host',
     subject: AuthorizationSubjectRef,
-  ): Promise<DelegatedAuthorityRef> // subject active/current role rebuilt here
+  ): Promise<DelegatedAuthorityRef> // subject active/current effective permissions rebuilt here
 }
 
 interface DirectOperationContextFactory {
@@ -1377,7 +1377,7 @@ interface BootstrapAuthorityContext {
 
 | 异步面                          | Actor/authority 合同                                                                   |
 | ------------------------------- | -------------------------------------------------------------------------------------- |
-| schedule、webhook、call 新启动  | 保留各入口 delegated-owner contract：重读 owner active/current role 与目标可用性       |
+| schedule、webhook、call 新启动  | 保留各入口 delegated-owner contract：重读 owner active/current effective permissions 与目标可用性 |
 | code-host inbound/continuation  | 由 integration 明确绑定 triggering connection/owner；每次触发重验，不升级成通用 system |
 | 人工 resume/retry/cancel        | 使用本次请求 current actor，并在 command 内按当前目标重授权                            |
 | 已运行 task 的内部 continuation | task ownership epoch + 窄化 `SystemEffectCapability`；保留现有 Q6 resume 豁免          |
@@ -2588,7 +2588,6 @@ error/DTO 映射；adapter 自己不能铸造 Actor。
 ```ts
 interface AdmissionPolicy {
   permissions: readonly Permission[] // AND
-  identity?: 'admin' | 'resource-admin'
   publicReason?: string
 }
 
@@ -2679,9 +2678,10 @@ interface McpBinding {
 }
 ```
 
-完整 transport-neutral admission（permissions AND、identity、publicReason）只在 operation descriptor 声明一次；HTTP
+完整 transport-neutral admission（permissions AND、publicReason）只在 operation descriptor 声明一次；账户角色只选择
+默认 permission preset，不构成并行 identity gate。HTTP
 binding 只补 method/path/tokenAccess，MCP binding 补 tool/purpose access。RouteMeta 由 operation + HTTP binding 生成或降为
-binding type，不能再手写第二份权限事实。Startup 双向 self-check 验证 operation、binding、schema、handler、identity、
+binding type，不能再手写第二份权限事实。Startup 双向 self-check 验证 operation、binding、schema、handler、
 publicReason、tokenAccess 全闭合，并保留空 permissions 必须有 publicReason 的门。Transport 粗粒度 gate 后，command 仍在
 事务内执行资源/行级授权与 OCC。API docs 从同一 descriptor/binding 派生，MCP 不重挂 Hono app。
 HTTP/MCP input schema 与输出 sanitizer 只从 descriptor 的 exact versioned codecs 派生；wire 前再次 parse/unknown-key

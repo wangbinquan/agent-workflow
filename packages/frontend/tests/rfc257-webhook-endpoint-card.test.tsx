@@ -50,10 +50,10 @@ let createCalls = 0
 let meRefreshGate: ReturnType<typeof deferred<Response>> | null = null
 let rotateGate: ReturnType<typeof deferred<Response>> | null = null
 
-const ADMIN_ACTOR: MeResponse = {
-  user: { id: 'u1', username: 'root', displayName: 'root', role: 'admin', status: 'active' },
+const GRANTED_USER_ACTOR: MeResponse = {
+  user: { id: 'u1', username: 'dev', displayName: 'dev', role: 'user', status: 'active' },
   source: 'session',
-  permissions: [],
+  permissions: ['webhook-endpoints:manage'],
   linkedIdentities: [],
   pats: [],
 }
@@ -74,7 +74,7 @@ function renderCard() {
   const hostRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: () => <WebhookEndpointCard isAdmin />,
+    component: () => <WebhookEndpointCard canManage />,
   })
   const triggersStub = createRoute({
     getParentRoute: () => rootRoute,
@@ -114,7 +114,7 @@ beforeEach(async () => {
     const url = typeof input === 'string' ? input : (input as URL | Request).toString()
     const method = init?.method ?? 'GET'
     if (url.includes('/api/auth/me')) {
-      return meRefreshGate?.promise ?? jsonResponse(ADMIN_ACTOR)
+      return meRefreshGate?.promise ?? jsonResponse(GRANTED_USER_ACTOR)
     }
     if (url.includes('/api/webhook-endpoints') && method === 'GET') {
       return jsonResponse(endpoints)
@@ -283,7 +283,7 @@ describe('RFC-257 · WebhookEndpointCard', () => {
     )
   })
 
-  test('cached admin refetch fetching/error closes the draft and an invoked connected stale submit sends zero POST', async () => {
+  test('cached management grant refetch fetching/error closes the draft and an invoked connected stale submit sends zero POST', async () => {
     const client = renderCard()
     fireEvent.click(await screen.findByTestId('webhook-endpoint-add'))
     fireEvent.change(await screen.findByTestId('webhook-endpoint-name'), {
@@ -308,7 +308,7 @@ describe('RFC-257 · WebhookEndpointCard', () => {
       meRefreshGate?.reject(new Error('me unavailable'))
       await refresh
     })
-    expect(client.getQueryData(meQueryOptions('tok').queryKey)).toEqual(ADMIN_ACTOR)
+    expect(client.getQueryData(meQueryOptions('tok').queryKey)).toEqual(GRANTED_USER_ACTOR)
     expect(screen.queryByTestId('webhook-endpoint-add')).toBeNull()
     expect(createCalls).toBe(0)
   })
@@ -328,8 +328,8 @@ describe('RFC-257 · WebhookEndpointCard', () => {
 
     act(() => {
       client.setQueryData(meQueryOptions('tok').queryKey, {
-        ...ADMIN_ACTOR,
-        user: { ...ADMIN_ACTOR.user, role: 'user' },
+        ...GRANTED_USER_ACTOR,
+        permissions: [],
       })
       fireEvent.click(staleCopy)
     })
@@ -356,12 +356,12 @@ describe('RFC-257 · WebhookEndpointCard', () => {
       ),
     ).not.toContain(sentinel)
 
-    act(() => client.setQueryData(meQueryOptions('tok').queryKey, ADMIN_ACTOR))
+    act(() => client.setQueryData(meQueryOptions('tok').queryKey, GRANTED_USER_ACTOR))
     await screen.findByTestId('webhook-endpoint-rotate-ep1')
     expect(document.body.textContent).not.toContain(sentinel)
   })
 
-  test('token A late secret cannot enter cached-admin token B session or MutationCache', async () => {
+  test('token A late secret cannot enter token B management session or MutationCache', async () => {
     const client = renderCard()
     rotateGate = deferred<Response>()
     fireEvent.click(await screen.findByTestId('webhook-endpoint-rotate-ep1'))
@@ -370,8 +370,8 @@ describe('RFC-257 · WebhookEndpointCard', () => {
     await waitFor(() => expect(rotateCalls).toBe(1))
 
     const actorB: MeResponse = {
-      ...ADMIN_ACTOR,
-      user: { ...ADMIN_ACTOR.user, id: 'u2', username: 'admin-b' },
+      ...GRANTED_USER_ACTOR,
+      user: { ...GRANTED_USER_ACTOR.user, id: 'u2', username: 'operator-b' },
     }
     act(() => {
       setToken('tok-b')

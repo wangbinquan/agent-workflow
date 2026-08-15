@@ -43,10 +43,11 @@ describe('① --as-user 强制', () => {
   })
 
   test('构造的是与 HTTP 同构的 Actor（源码层）', () => {
-    // `source: 'daemon'` ⇒ 权限点按角色算，与网页登录同一条路径；自己拼一个
-    // permissions 集合就会与 HTTP 侧漂移。
-    expect(SRC).toContain('buildActor(')
+    // CLI 与 HTTP 都从当前数据库访问状态解析最终 permissions；不能自己拼集合，
+    // 更不能在消费者里把 account role 当作第二条授权轴。
+    expect(SRC).toContain('buildCurrentActor(')
     expect(SRC).toContain("source: 'daemon'")
+    expect(SRC).toContain('access revision')
   })
 })
 

@@ -111,6 +111,9 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   // T9 新增：G3 四条豁免的理由锁 + 装配散写的终局灭绝锁（三处显式挖洞）。
   'rfc287-t9-exemptions-and-extinction.test.ts',
   'rfc292-trigger-source-locks.test.ts',
+  // RFC-305 delegated-authority architecture lock verifies the three reviewed
+  // scheduler launch sources while keeping the underlying behavior fixtures.
+  'rfc305-architecture-lock.test.ts',
   'runner-injected-memories.test.ts',
   'runner-resume-session-flag.test.ts',
   'scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts',

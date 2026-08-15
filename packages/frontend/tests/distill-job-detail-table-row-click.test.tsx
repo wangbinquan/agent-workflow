@@ -1,5 +1,5 @@
 // RFC-043 T6 — MemoryDistillJobsTable: whole-row click jumps to the
-// admin detail page; retry / cancel buttons stop propagation so they
+// capability-gated detail page; retry / cancel buttons stop propagation so they
 // stay row-local controls.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
@@ -59,11 +59,11 @@ async function renderTable(rows: MemoryDistillJob[], onPathChange: (p: string) =
             id: 'u1',
             username: 'root',
             displayName: 'root',
-            role: 'admin',
+            role: 'user',
             status: 'active',
           },
           source: 'session',
-          permissions: [],
+          permissions: ['memory-distill-jobs:manage'],
           linkedIdentities: [],
           pats: [],
         }),
@@ -136,7 +136,7 @@ describe('MemoryDistillJobsTable row interactions (RFC-043)', () => {
     })
   })
 
-  test('an invoked connected stale retry handler sends zero POST after admin downgrade', async () => {
+  test('an invoked connected stale retry handler sends zero POST after permission revocation', async () => {
     let path = '/'
     const { qc, fetchSpy } = await renderTable([mkJob({ status: 'failed' })], (next) => {
       path = next

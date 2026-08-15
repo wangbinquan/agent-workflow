@@ -11,7 +11,7 @@
 // The fix (RFC-212 方案 D) runs the re-check in the REVOKER's async context, not
 // in the broadcast path — `broadcaster.broadcast` is a synchronous for-of and
 // two existing locks (`rfc152-ws-channel-registry.test.ts` "no frameGate ⇒ every
-// frame forwards" / "adminShortCircuit sends synchronously") assert that frames
+// frame forwards" / "aclBypassShortCircuit sends synchronously") assert that frames
 // are delivered without ever awaiting. To rescan on revocation we need one flat
 // set of live connections; that is this file. Deliberately NOT a reverse index
 // (user→conn, task→conn): the rescan is coarse, so a single set suffices and
@@ -22,6 +22,7 @@
 // behavioural change.
 
 import type { ServerWebSocket } from 'bun'
+import type { WsControlMessage } from '@agent-workflow/shared'
 import { reresolveActor } from '@/auth/session'
 import type { DbClient } from '@/db/client'
 import { createLogger, type Logger } from '@/util/log'
@@ -48,7 +49,11 @@ export function currentRevalidationEpoch(): number {
 export const WS_CLOSE_AUTH_REVOKED = 4401
 export const WS_CLOSE_NOT_VISIBLE = 4403
 
-import { registerRevalidationTrigger, type RevocationReason } from './revalidationHook'
+import {
+  registerRevalidationTrigger,
+  type RevalidationTarget,
+  type RevocationReason,
+} from './revalidationHook'
 
 export type { RevocationReason }
 
@@ -133,8 +138,8 @@ setExpiredCredentialHandler((ws) => {
  * untouched. For each connection:
  *   ① re-resolve the actor from its credential fingerprint (read-only)
  *   ② null → credential revoked/expired/user disabled → close(4401)
- *   ③ replace ws.data.actor so adminShortCircuit / permission gates see the new
- *      role — this is what makes a demotion take effect
+ *   ③ replace ws.data.actor so ACL-bypass / permission gates see the new
+ *      effective permission set
  *   ④ clear the visibility cache (only meaningful for channels that have one)
  *   ⑤ if the channel declares rerunUpgradeGate, re-run it; fail → close(4403)
  * Fail-closed: a resolver that throws closes the socket as auth-revoked.
@@ -143,11 +148,13 @@ export async function revalidateAllConnections(
   deps: RevalidateDeps,
   reason: RevocationReason,
   now: number = Date.now(),
+  target?: RevalidationTarget,
 ): Promise<RevalidateStats> {
   const stats: RevalidateStats = { scanned: 0, closedAuth: 0, closedGate: 0, refreshed: 0 }
   // Snapshot: closeConnection mutates `live` while we iterate.
   for (const ws of liveConnections()) {
     if (ws.data.closing) continue
+    if (target !== undefined && ws.data.actor.user.id !== target.userId) continue
     stats.scanned += 1
     let freshActor
     try {
@@ -192,6 +199,9 @@ export async function revalidateAllConnections(
         continue
       }
     }
+    if (reason === 'authority-changed') {
+      sendAuthorityChanged(ws, freshActor.authorityRevision ?? target?.revision ?? 0)
+    }
     // Survived the pass with a refreshed actor — unfreeze so the broadcast path
     // delivers again (impl-gate: the frame freeze is only for the pass duration).
     if (!ws.data.closing) ws.data.revalidating = false
@@ -202,13 +212,22 @@ export async function revalidateAllConnections(
   return stats
 }
 
+function sendAuthorityChanged(ws: ServerWebSocket<WsConnectionData>, revision: number): void {
+  const frame: WsControlMessage = { type: 'authority.changed', revision }
+  try {
+    ws.send(JSON.stringify(frame))
+  } catch {
+    closeConnection(ws, WS_CLOSE_AUTH_REVOKED, 'authority-notification-failed')
+  }
+}
+
 const revalidateLog = createLogger('ws.revalidate')
 
 // RFC-212 T6 — register the real trigger so revocation write points (which only
 // import the light revalidationHook module) fan out here. Fire-and-forget: the
 // write point does not wait for sockets to close. Tests drive
 // revalidateAllConnections directly for determinism.
-registerRevalidationTrigger((db, reason) => {
+registerRevalidationTrigger((db, reason, target) => {
   // finding 2: bump the epoch FIRST so an upgrade in flight (which already
   // captured the old epoch) can detect that it raced this revocation.
   revalidationEpoch += 1
@@ -218,11 +237,13 @@ registerRevalidationTrigger((db, reason) => {
   // connection's re-resolve the synchronous broadcast for-of must not deliver a
   // frame under the stale actor. `revalidating` is cleared per-connection by the
   // pass once its actor is refreshed (or the socket is closed).
-  const frozen = liveConnections()
+  const frozen = liveConnections().filter(
+    (ws) => target === undefined || ws.data.actor.user.id === target.userId,
+  )
   for (const ws of frozen) {
     if (!ws.data.closing) ws.data.revalidating = true
   }
-  return revalidateAllConnections({ db, log: revalidateLog }, reason)
+  return revalidateAllConnections({ db, log: revalidateLog }, reason, Date.now(), target)
     .then(() => undefined)
     .catch((err) => {
       revalidateLog.warn('ws-revalidate-threw', {
@@ -237,5 +258,9 @@ registerRevalidationTrigger((db, reason) => {
           closeConnection(ws, WS_CLOSE_AUTH_REVOKED, 'auth-revalidation-failed')
         }
       }
+      // Legacy fire-and-forget callers suppress this after the fail-closed
+      // cleanup. Targeted RFC-305 callers attach an onFailure observer and
+      // must receive the failure for health diagnostics.
+      throw err
     })
 })

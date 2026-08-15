@@ -5,21 +5,18 @@
 // in resource_grants. This module is the single authority for "can this actor
 // see / modify this resource":
 //
-//   - resource admins (admin OR manager — RFC-222) bypass everything. The bypass
-//     keys off `actor.user.role` (the identity), NOT the resolved permission set
-//     — a PAT with narrowed scopes still belongs to a resource admin and must
-//     not flip row visibility, only route gates (auth/actor.ts buildActor
-//     narrows permissions, never the role). The identity predicate lives in
-//     shared (isResourceAdminRole); isResourceAdminActor wraps it here.
-//   - the daemon-token actor is the '__system__' admin, so the runner /
+//   - `resource-acl:bypass` bypasses row ACLs. RFC-305 deliberately keys this
+//     off the resolved authority set, so roles remain presets rather than a
+//     parallel authorization axis. PATs never carry this system-domain point.
+//   - the daemon-token actor is the capability-bearing '__system__' account, so the runner /
 //     scheduler / opencode injection paths are structurally unaffected.
-//   - non-granted non-admin users must not observe the resource at all:
+//   - actors without a grant or ACL-bypass permission must not observe the resource at all:
 //     list endpoints post-filter via filterVisibleRows, detail endpoints turn
 //     "not visible" into a 404 (NOT 403 — a 403 would leak existence, D1).
 //
 // Role snapshots (D7/D17): resolveTaskRole computes the task-relationship
 // role recorded on review comments / decisions / clarify submissions. Member
-// identity wins over the global admin role.
+// task membership wins over global ACL-bypass authority.
 //
 // ── RFC-284 T12（§2.6）——六类资源的 OCC fence 选型对照（现状登记，非规范）──
 //
@@ -39,15 +36,13 @@ import type {
   AclResourceType,
   ResourceAcl,
   ResourceVisibility,
-  Role,
   TaskActorRole,
   UpdateResourceAclBody,
   UserPublic,
 } from '@agent-workflow/shared'
-import { isResourceAdminRole } from '@agent-workflow/shared'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import { SYSTEM_USER_ID } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { DbClient } from '@/db/client'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
 import {
@@ -68,7 +63,7 @@ import { triggerRevalidation } from '@/ws/revalidationHook'
  * DTOs superset it. The two ACL fields are optional so shared DTOs (which
  * declare them optional for fixture back-compat) plug in directly; absent
  * visibility means 'public' (the D2 legacy semantics) and absent owner means
- * "no owner yet" (admin-managed).
+ * "no owner yet" (platform-managed).
  */
 export interface AclRow {
   id: string
@@ -139,27 +134,14 @@ export const OWNER_NAME_UNIQUE_TYPES: ReadonlySet<AclResourceType> = new Set([
   'workgroup',
 ])
 
-/** Global system-admin identity (system domain: users / settings / oidc /
- *  backup / runtimes / task deletion). Kept distinct from the resource-admin
- *  predicate below — manager is NOT a system admin. */
-export function isAdminActor(actor: Actor): boolean {
-  return actor.user.role === 'admin'
-}
-
-/** RFC-234 D26 (design-gate P1-8) — intent-session audit bypass is SYSTEM
- *  admin only. Managers are resource-domain admins (isResourceAdminActor) and
- *  deliberately get NO bypass here: an intent session holds the creator's raw
- *  conversational intent, not a shared resource. Lives in this file so the
- *  RFC-222 G-1 single-source guard keeps every admin-identity predicate home. */
+/** RFC-234/RFC-305 — cross-owner Intent audit is a dedicated permission. */
 export function canAuditIntentSessions(actor: Actor): boolean {
-  return isAdminActor(actor)
+  return actor.permissions.has('intent:audit')
 }
 
-/** RFC-222 — resource-domain admin identity (admin ∪ manager). Every row-level
- *  ACL bypass in this file and its callers keys off THIS, not isAdminActor.
- *  Derived from the shared single-source predicate. */
-export function isResourceAdminActor(actor: Actor): boolean {
-  return isResourceAdminRole(actor.user.role)
+/** Single source for the row-level resource ACL bypass. */
+export function hasResourceAclBypass(actor: Actor): boolean {
+  return actor.permissions.has('resource-acl:bypass')
 }
 
 /** The one WHERE shape for "all grants of `type` for this user" — both the
@@ -169,7 +151,7 @@ function grantsOfUserWhere(type: AclResourceType, userId: string) {
   return and(eq(resourceGrants.resourceType, type), eq(resourceGrants.userId, userId))
 }
 
-/** All resource ids of `type` granted to this user (one query; empty for admins — they don't need it). */
+/** All resource ids of `type` granted to this user (ACL-bypass actors do not need the result). */
 export async function listGrantedResourceIds(
   db: DbClient,
   actor: Actor,
@@ -183,7 +165,7 @@ export async function listGrantedResourceIds(
 }
 
 /** Sync twin of `listGrantedResourceIds` for services already inside dbTxSync.
- *  Same contract: callers short-circuit admins themselves. */
+ *  Same contract: callers short-circuit actors with `resource-acl:bypass`. */
 export function listGrantedResourceIdsInTx(
   tx: DbTxSync,
   actor: Actor,
@@ -234,21 +216,21 @@ export function listResourceGrantUserIdsInTx(
 /**
  * RFC-284 T10（§2.4）——「快照式受众可见性」唯一判定：对一份 DELETE 前捕获的
  * （或事务内自建的）{visibility, ownerUserId, grantedUserIds} 快照判某用户可见。
- * 含 admin 分支（isResourceAdminRole）——ws/registry 的 deleted-audience 两处此前
- * 不带 admin 分支、其正确性非局部依赖上游 adminShortCircuit（:942）；收编后上游
+ * 含显式 ACL bypass 分支——ws/registry 的 deleted-audience 两处此前
+ * 不带 bypass 分支、其正确性非局部依赖上游 aclBypassShortCircuit；收编后上游
  * 捷径退化为纯性能优化。mcpRuntimeTestTransitions 的 status==='active' 检查按
  * 设计留在调用方（本函数只答"可见性"，不答"账号是否存活"）。
  */
 export function isVisibleToAudienceSnapshot(
   userId: string,
-  role: Role,
+  resourceAclBypass: boolean,
   snapshot: {
     visibility: 'public' | 'private'
     ownerUserId: string | null
     grantedUserIds: ReadonlySet<string>
   },
 ): boolean {
-  if (isResourceAdminRole(role)) return true
+  if (resourceAclBypass) return true
   if (snapshot.visibility === 'public') return true
   if (snapshot.ownerUserId !== null && snapshot.ownerUserId === userId) return true
   return snapshot.grantedUserIds.has(userId)
@@ -256,7 +238,7 @@ export function isVisibleToAudienceSnapshot(
 
 /** Pure visibility predicate against a pre-fetched grant set. */
 export function isVisibleRow(actor: Actor, row: AclRow, grantedIds: ReadonlySet<string>): boolean {
-  if (isResourceAdminActor(actor)) return true
+  if (hasResourceAclBypass(actor)) return true
   if ((row.visibility ?? 'public') === 'public') return true
   if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
   return grantedIds.has(row.id)
@@ -294,13 +276,13 @@ export async function discloseRefs(
   type: AclResourceType,
   rows: ReadonlyArray<AclRow & { name: string }>,
 ): Promise<DisclosedRefs> {
-  const granted = isResourceAdminActor(actor)
+  const granted = hasResourceAclBypass(actor)
     ? new Set<string>()
     : await listGrantedResourceIds(db, actor, type)
   return discloseRefsSync(actor, rows, granted)
 }
 
-/** Schedules are member-private (owner + tasks:read:all admins), not an
+/** Schedules are member-private (owner + `tasks:read:all`), not an
  *  ACL_TABLES resource — mirror the deleteWorkflow precedent for
  *  *-scheduled-referenced refusals. */
 export function discloseScheduleRefs(
@@ -317,7 +299,7 @@ export function discloseScheduleRefs(
 
 /**
  * Post-filter a full list query down to what the actor may see. One grants
- * query per call; admins short-circuit without touching resource_grants.
+ * query per call; actors with `resource-acl:bypass` short-circuit without touching resource_grants.
  * (List endpoints in this codebase load full tables — system scale is small,
  * so a JS post-filter keeps the five routes uniform; see design §3.)
  */
@@ -327,7 +309,7 @@ export async function filterVisibleRows<T extends AclRow>(
   type: AclResourceType,
   rows: readonly T[],
 ): Promise<T[]> {
-  if (isResourceAdminActor(actor)) return [...rows]
+  if (hasResourceAclBypass(actor)) return [...rows]
   const granted = await listGrantedResourceIds(db, actor, type)
   return rows.filter((r) => isVisibleRow(actor, r, granted))
 }
@@ -339,7 +321,7 @@ export async function canViewResource(
   type: AclResourceType,
   row: AclRow,
 ): Promise<boolean> {
-  if (isResourceAdminActor(actor)) return true
+  if (hasResourceAclBypass(actor)) return true
   if ((row.visibility ?? 'public') === 'public') return true
   if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
   const rows = await db
@@ -357,7 +339,7 @@ export function canViewResourceInTx(
   type: AclResourceType,
   row: AclRow,
 ): boolean {
-  if (isResourceAdminActor(actor)) return true
+  if (hasResourceAclBypass(actor)) return true
   if ((row.visibility ?? 'public') === 'public') return true
   if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
   return (
@@ -384,12 +366,12 @@ export async function requireResourceView(
 }
 
 export function isResourceOwner(actor: Actor, row: AclRow): boolean {
-  if (isResourceAdminActor(actor)) return true
+  if (hasResourceAclBypass(actor)) return true
   return row.ownerUserId != null && row.ownerUserId === actor.user.id
 }
 
 /**
- * Write-route gate (modify / delete / ACL management): owner or admin.
+ * Write-route gate (modify / delete / ACL management): owner or ACL bypass.
  * A granted-but-not-owner user CAN see the resource, so a plain 403 here
  * leaks nothing new; an invisible caller still gets the view-404 first
  * (routes call requireResourceView before requireResourceOwner).
@@ -402,15 +384,18 @@ export async function requireResourceOwner(
 ): Promise<void> {
   await requireResourceView(db, actor, type, row)
   if (isResourceOwner(actor, row)) return
-  throw new ForbiddenError('forbidden', `only the ${type} owner or a resource admin can modify it`)
+  throw new ForbiddenError(
+    'forbidden',
+    `only the ${type} owner or an actor with resource-acl:bypass can modify it`,
+  )
 }
 
 /**
  * Task-relationship role snapshot (D7/D17) — member identity first:
- *   task owner → 'owner'; collaborator → 'user'; otherwise a system admin
- *   acting from outside the membership → 'admin'; a manager acting from
- *   outside → 'manager' (RFC-222: recorded truthfully, never impersonating
- *   admin, and — like all attribution — never entering an agent prompt);
+ *   task owner → 'owner'; collaborator → 'user'; otherwise an access manager
+ *   (`users:write`) is attributed as 'admin', and a resource ACL operator as
+ *   'manager'. These legacy audit labels are derived from permissions, not the
+ *   account role preset;
  *   anyone else → null (caller must have rejected already).
  */
 export function resolveTaskRole(
@@ -420,8 +405,8 @@ export function resolveTaskRole(
 ): TaskActorRole | null {
   if (taskOwnerUserId !== null && taskOwnerUserId === actor.user.id) return 'owner'
   if (isMember) return 'user'
-  if (actor.user.role === 'admin') return 'admin'
-  if (actor.user.role === 'manager') return 'manager'
+  if (actor.permissions.has('users:write')) return 'admin'
+  if (hasResourceAclBypass(actor)) return 'manager'
   return null
 }
 
@@ -484,7 +469,7 @@ export async function getResourceAcl(
 }
 
 /**
- * PUT /acl — owner/admin only. `userIds` is full-replace. On owner transfer
+ * PUT /acl — owner or `resource-acl:bypass`. `userIds` is full-replace. On owner transfer
  * the previous owner is auto-appended to the grant list so they don't lock
  * themselves out of their own (now someone else's) resource. The new owner is
  * never materialised as a grant row (canViewResource short-circuits owners).
@@ -557,10 +542,10 @@ export async function updateResourceAcl(
       )
     }
 
-    if (!isResourceAdminActor(actor) && cur.ownerUserId !== actor.user.id) {
+    if (!hasResourceAclBypass(actor) && cur.ownerUserId !== actor.user.id) {
       throw new ForbiddenError(
         'forbidden',
-        `only the ${type} owner or a resource admin can modify it`,
+        `only the ${type} owner or an actor with resource-acl:bypass can modify it`,
       )
     }
 

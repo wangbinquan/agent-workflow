@@ -1,5 +1,5 @@
-// RFC-036 — sidebar footer user dropdown. Admin sees: Manage users +
-// Sign out. Regular user sees: My account + Sign out. The Settings entry
+// RFC-036/RFC-305 — sidebar footer user dropdown. `users:read` exposes Manage
+// users; every signed-in account sees My account + Sign out. The Settings entry
 // is intentionally NOT included here — the sidebar gear icon (rendered
 // next to LanguageSwitch when the actor has settings:read) is the
 // canonical Settings entry, so duplicating it inside this menu would
@@ -20,7 +20,7 @@ import { clearToken, getToken, subscribeAuth } from '@/stores/auth'
 export function UserMenu() {
   const { data, isLoading } = useActor()
   const { t } = useTranslation()
-  const isAdmin = usePermission('users:read')
+  const canReadUsers = usePermission('users:read')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -153,7 +153,7 @@ export function UserMenu() {
               {t('userMenu.account', { defaultValue: 'My account' })}
             </Link>
           )}
-          {isAdmin && (
+          {canReadUsers && (
             <Link
               to="/users"
               className="user-menu__item"
@@ -164,7 +164,7 @@ export function UserMenu() {
             </Link>
           )}
           {/* "Settings" intentionally omitted — the sidebar's gear icon
-              (rendered next to LanguageSwitch for admin actors) is the
+              (rendered next to LanguageSwitch when settings:read is present) is the
               canonical entry to /settings. Keeping a duplicate link here
               just adds visual noise. */}
           <button className="user-menu__item user-menu__item--danger" onClick={logout}>

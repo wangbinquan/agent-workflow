@@ -25,7 +25,7 @@ import { agents } from '@/db/schema'
 import { ValidationError } from '@/util/errors'
 import {
   ACL_TABLES,
-  isResourceAdminActor,
+  hasResourceAclBypass,
   isVisibleRow,
   listGrantedResourceIds,
   listGrantedResourceIdsInTx,
@@ -143,7 +143,7 @@ export async function resolveRefsUsableByName(
   const grandfathered = opts.grandfatheredNames ?? new Set<string>()
   const refs = [...new Set(names)].filter((n) => n.length > 0 && !grandfathered.has(n))
   const missing: Array<{ type: AclResourceType; name: string }> = []
-  const enforce = actor !== null && !isResourceAdminActor(actor)
+  const enforce = actor !== null && !hasResourceAclBypass(actor)
   if (refs.length === 0 || !enforce) return { missing }
   const table = ACL_TABLES[type]
   const rows = (await db
@@ -222,7 +222,7 @@ export async function assertNewRefsUsable(
   actor: Actor,
   groups: readonly RefCheckGroup[],
 ): Promise<void> {
-  if (isResourceAdminActor(actor)) return
+  if (hasResourceAclBypass(actor)) return
   const missing: Array<{ type: AclResourceType; name: string }> = []
   for (const group of groups) {
     if (group.domain === 'name') {
@@ -272,7 +272,7 @@ export async function assertNewRefsUsable(
  *
  * Missing and invisible fenced rows share `acl-missing-refs`, echoing only the
  * caller-supplied canonical id. That preserves D1's non-enumerating shape.
- * Framework callers (`actor === null`) and resource admins bypass visibility,
+ * Framework callers (`actor === null`) and actors with `resource-acl:bypass` bypass visibility,
  * but never existence — they cannot commit a new dangling reference either.
  *
  * `'name'`-domain groups (RFC-243 workflow call selectors) invert the
@@ -293,8 +293,8 @@ export function assertRefsUsableInTx(
     if (refs.length === 0) continue
     const nameDomain = group.domain === 'name'
     const table = ACL_TABLES[group.type]
-    // Narrowed enforcement identity: null ⇒ framework caller or resource admin.
-    const enforcingActor = actor !== null && !isResourceAdminActor(actor) ? actor : null
+    // Narrowed enforcement identity: null ⇒ framework caller or ACL-bypass actor.
+    const enforcingActor = actor !== null && !hasResourceAclBypass(actor) ? actor : null
     if (nameDomain && enforcingActor === null) continue // dangle-tolerant + no ACL to enforce
     const rows = tx
       .select({
@@ -377,7 +377,7 @@ export interface ResolvedRefsById {
  * - A NEW reference (resolved id NOT in `grandfatheredIds`, D15) whose row the
  *   actor cannot view is collected in `missing`, echoing the INPUT token.
  * - `actor === null` (framework/system callers) skips the ACL gate; a resource
- *   admin actor likewise resolves without ACL filtering.
+ *   actor with `resource-acl:bypass` likewise resolves without ACL filtering.
  *
  * Never throws — the caller aggregates `missing` across ref groups and raises a
  * single `acl-missing-refs`.
@@ -391,7 +391,7 @@ export async function resolveRefsUsableById(
 ): Promise<ResolvedRefsById> {
   if (tokens.length === 0) return { ids: [], byToken: new Map(), missing: [] }
   const { byId } = await loadAclRefRows(db, type, [...new Set(tokens)])
-  const enforce = actor !== null && !isResourceAdminActor(actor)
+  const enforce = actor !== null && !hasResourceAclBypass(actor)
   const granted = enforce ? await listGrantedResourceIds(db, actor, type) : new Set<string>()
   const grandfathered = opts.grandfatheredIds ?? new Set<string>()
   const missing: Array<{ type: AclResourceType; name: string }> = []

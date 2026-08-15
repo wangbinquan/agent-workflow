@@ -27,7 +27,7 @@ import {
   type FusionDeps,
 } from '@/services/fusion'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { isResourceAdminActor } from '@/services/resourceAcl'
+import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -100,7 +100,7 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
         ...(skillId ? { skillId } : {}),
         ...(status ? { status } : {}),
       })
-      const visible = isResourceAdminActor(actor)
+      const visible = hasResourceAclBypass(actor)
         ? all
         : all.filter((f) => f.ownerUserId === actor.user.id)
       return c.json(visible)
@@ -123,7 +123,7 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const owners = await awaitingApprovalFusionOwners(fusionDeps())
-      const count = isResourceAdminActor(actor)
+      const count = hasResourceAclBypass(actor)
         ? owners.length
         : owners.filter((o) => o.ownerUserId === actor.user.id).length
       return c.json({ count })
@@ -145,7 +145,7 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
       // RFC-099-style existence isolation: not-owner / not-found are identical.
       if (
         fusion === null ||
-        (!isResourceAdminActor(actor) && fusion.ownerUserId !== actor.user.id)
+        (!hasResourceAclBypass(actor) && fusion.ownerUserId !== actor.user.id)
       ) {
         throw new NotFoundError('fusion-not-found', `fusion '${c.req.param('id')}' not found`)
       }

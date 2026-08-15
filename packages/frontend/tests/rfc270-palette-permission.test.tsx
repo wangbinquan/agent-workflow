@@ -50,7 +50,7 @@ describe('RFC-270 · privilegedNodeAccessOf（纯判定）', () => {
     expect(access.paletteDisabledReason(itemOf('code-host-call'))).toBeNull()
   })
 
-  test('有权限：一律 null（admin / manager 一切照旧）', () => {
+  test('有权限：一律 null，与权限来自哪个预设或附加授权无关', () => {
     const access = privilegedNodeAccessOf(ALL_GRANTS, t)
     expect(access.paletteDisabledReason(itemOf('script'))).toBeNull()
     expect(access.paletteDisabledReason(itemOf('code-host-call'))).toBeNull()

@@ -2,8 +2,10 @@
 // Mirrors zh-CN keys so a future en-US release just edits strings, not keys.
 
 import type { Resources } from './zh-CN'
+import { buildPermissionCatalogResources } from './permissionCatalog'
 
 export const enUS: Resources = {
+  permissions: buildPermissionCatalogResources('en-US'),
   tabBar: {
     scrollStart: 'Show more sections before',
     scrollEnd: 'Show more sections after',
@@ -774,13 +776,13 @@ export const enUS: Resources = {
     connecting: 'Client configuration',
     toolsHeading: 'MCP tools',
     toolsIntro:
-      '`tools/list` returns only the tools the presented token can actually call. Every tool is listed below; the ones marked as unavailable need a permission your role cannot grant.',
+      '`tools/list` returns only the tools the presented token can actually call. Every tool is listed below; unavailable tools require a permission outside your account’s current effective permissions.',
     restHeading: 'REST endpoints',
     restIntro:
-      'Only endpoints a token can reach AND your role can authorize. The account and ACL surfaces are closed to every token, so they do not appear here.',
+      'Only endpoints a token can reach AND your account can authorize. Account-management and ACL-bypass permissions never enter a token, so those endpoints do not appear here.',
     permissionsHeading: 'Permission matrix',
     permissionsIntro:
-      'What your role can put on a token. Anything your role does not hold is absent here and on the account page too.',
+      'What your current effective account permissions can place on a token. Anything your account does not hold is absent here and on the account page too.',
     alwaysGrantedHeading: 'Reads, always granted',
     alwaysGrantedIntro:
       'Every valid token carries these without ticking anything (what it can see is still bounded by each resource’s ACL).',
@@ -796,9 +798,7 @@ export const enUS: Resources = {
     colOperation: 'Operation',
     colPermission: 'Permission',
     needsNothing: 'no extra permission',
-    notAvailableToYou: 'not available to your role',
-    adminOnly: 'admin only',
-    resourceAdminOnly: 'resource admin only',
+    notAvailableToYou: 'not available to your account',
   },
 
   account: {
@@ -888,7 +888,7 @@ export const enUS: Resources = {
         custom: 'Custom',
       },
       advanced: 'Choose permissions individually',
-      advancedHint: 'Only permissions your role actually holds, and can therefore hand out.',
+      advancedHint: 'Only permissions your account currently holds and can place on this token.',
       deleteWarningTitle: 'This token can delete data',
       deleteWarningDescription:
         'Selected: {{points}}. Deletion cannot be undone — keep it only if you truly need it.',
@@ -1002,20 +1002,22 @@ export const enUS: Resources = {
     emptyDescription:
       'Create a local password account or prepare an account for its first identity-provider sign-in.',
     filteredEmpty: 'No users match these filters',
-    filteredEmptyDescription: 'Try another name or clear the status and role filters.',
+    filteredEmptyDescription: 'Try another name or clear the status and access-preset filters.',
     filtersLabel: 'Find and filter users',
     searchLabel: 'Search users',
     searchPlaceholder: 'Search name, username, or email…',
     statusFilterLabel: 'Filter users by status',
-    roleFilterLabel: 'Filter users by role',
+    roleFilterLabel: 'Filter users by access preset',
     filterAll: 'All',
-    allRoles: 'All roles',
+    allRoles: 'All presets',
     directoryLabel: 'Human user accounts',
     username: 'Username',
     displayName: 'Display name',
     email: 'Email',
     noEmail: 'No email address',
-    role: 'Role',
+    role: 'Access preset',
+    roleHint:
+      'A preset supplies a default permission bundle; runtime authorization never checks the role. Add individual permissions below.',
     status: 'Status',
     manage: 'Manage',
     you: 'You',
@@ -1055,17 +1057,19 @@ export const enUS: Resources = {
       user: 'user',
       admin: 'admin',
       manager: 'resource admin',
-      userDesc: 'Resource read + launch tasks + manage own account.',
-      adminDesc: 'Full access: users, settings, OIDC, all tasks.',
+      userDesc:
+        'Defaults to resource reads, task launch, and own-account management; add anything else below.',
+      adminDesc: 'Defaults to every permission currently in the catalog.',
       managerDesc:
-        'Manage all resources, memory, repos & tasks — no user/system admin, no task deletion.',
+        'Defaults to resource, memory, repository, and task management; add anything else below.',
     },
     statusOption: {
       active: 'Active',
       invited: 'Awaiting first sign-in',
       disabled: 'Disabled',
     },
-    selfRoleLocked: 'You cannot change your own role — ask another admin.',
+    selfRoleLocked:
+      'You cannot change your own access preset or grants — ask another access administrator.',
     selfDisableLocked: 'You cannot disable the account you are currently using.',
     credentialsTitle: 'Credentials',
     credentialsOidcDescription: 'This account is linked to an identity provider.',
@@ -1106,8 +1110,8 @@ export const enUS: Resources = {
       enabled: 'The account was enabled.',
     },
     noPermission: {
-      title: 'Admin permission required',
-      body: 'This page is only available to administrators.',
+      title: 'User-directory permission required',
+      body: 'This page requires users:read.',
     },
   },
   repoGroups: {
@@ -1294,7 +1298,7 @@ export const enUS: Resources = {
       emptyDescription:
         'Create an endpoint, save its one-time secret, then finish the connection on your code host.',
       emptyReadonlyDescription:
-        'No ingress endpoints have been configured by an administrator yet.',
+        'No ingress endpoints have been configured by someone with webhook-endpoints:manage yet.',
       enabled: 'Enabled',
       disabled: 'Disabled',
       enabledSwitch: 'Enabled',
@@ -1335,7 +1339,7 @@ export const enUS: Resources = {
       copySecret: 'Copy',
       secretCopied: 'Copied',
       urlLabel: 'Webhook URL',
-      urlMaskedHint: 'The full URL is visible to administrators only.',
+      urlMaskedHint: 'The full URL requires webhook-endpoints:manage.',
       secretPasteHintGitlab:
         'In GitLab: Settings → Webhooks — paste the URL and secret token together.',
       secretPasteHintGithub:
@@ -3011,9 +3015,9 @@ export const enUS: Resources = {
     subtitle:
       'Bring GitLab events into the platform, launch work by rule, and diagnose issues from delivery history.',
     tabAria: 'Webhook configuration sections',
-    forbiddenTitle: 'Admins only',
+    forbiddenTitle: 'Additional permissions required',
     forbiddenDescription:
-      'Webhook configuration (secrets, trigger rules, delivery audit) is limited to admins.',
+      'Webhook configuration is shown according to your endpoint, trigger, and delivery permissions.',
     tabs: { endpoints: 'Ingress', triggers: 'Rules', deliveries: 'Deliveries' },
   },
   runtimeParameters: {
@@ -6463,7 +6467,7 @@ export const enUS: Resources = {
     'resource-operation-stale':
       'The resource changed since this operation started; refresh and retry.',
     'review-comment-not-author':
-      'Only the comment author (or the task owner / a resource admin) may modify this comment.',
+      'Only the comment author, task owner, or an actor with resource-acl:bypass may modify this comment.',
     'resource-operation-superseded': 'A newer probe completed; this result was discarded.',
     // --- plugin ---
     'plugin-not-found': 'Plugin not found.',
@@ -6613,8 +6617,9 @@ export const enUS: Resources = {
     unauthorized: 'Your session is invalid or expired.',
     unauthorized__hint: 'Sign in again, then retry.',
     forbidden: 'You do not have permission for this action.',
-    'admin-required': 'This action requires an admin.',
-    'not-task-member': 'Only task members or an admin can do this.',
+    'admin-required': 'This action requires an elevated permission.',
+    'permission-required': 'Your account is missing a required permission.',
+    'not-task-member': 'Only task members or an actor with global task authority can do this.',
     'acl-invalid': 'Invalid sharing payload.',
     'acl-missing-refs': 'You lack access to some referenced resources.',
     'acl-revision-conflict': 'The sharing settings changed; reload and retry.',
@@ -6628,8 +6633,17 @@ export const enUS: Resources = {
     'old-password-mismatch': 'The old password is incorrect.',
     'change-password-invalid': 'Invalid change-password payload.',
     'self-disable-forbidden': 'You cannot disable your own account.',
-    'self-role-change-forbidden': 'You cannot change your own role.',
-    'last-admin-protection': 'The last active admin cannot be disabled.',
+    'self-access-change-forbidden': 'You cannot change your own access preset or grants.',
+    'last-access-administrator-protection': 'At least one active account must retain users:write.',
+    'user-management-forbidden': 'User management requires users:write.',
+    'user-access-management-forbidden':
+      'Changing access requires an active browser session with users:write.',
+    'user-access-ambiguous': 'Send either the legacy role field or the access snapshot, not both.',
+    'user-access-stale': 'This user’s access changed. Reload the latest version and review again.',
+    'user-permission-invalid': 'The permission list contains an unknown permission.',
+    'user-permission-not-grantable': 'That permission is intrinsic and cannot be granted.',
+    'user-permission-redundant': 'That permission is already supplied by the selected preset.',
+    'user-permission-duplicate': 'The permission list contains a duplicate permission.',
     'oidc-not-configured': 'OIDC sign-in is not configured.',
     'oidc-provider-not-found': 'OIDC provider not found.',
     'oidc-provider-invalid': 'Invalid OIDC provider payload.',
@@ -6832,7 +6846,6 @@ export const enUS: Resources = {
   },
   memory: {
     title: 'Platform long-term memory',
-    adminOnly: 'Admin only',
     empty: 'No learned context yet',
     sectionNavLabel: 'Memory sections',
     sectionGroups: {
@@ -7013,7 +7026,7 @@ export const enUS: Resources = {
       manual: 'Manual',
     },
     distillJobDetail: {
-      adminOnly: 'Distill detail is admin-only',
+      permissionRequired: 'The Manage memory distill jobs permission is required',
       attempt: 'Attempt {{n}}',
       attemptsCount: 'attempts: {{n}}',
       attemptPickerLabel: 'Attempt:',
@@ -7283,7 +7296,7 @@ export const enUS: Resources = {
     members: 'Authorized users',
     noMembers: 'No authorized users yet',
     privateHint:
-      'Private resources are visible and usable only by the owner and authorized users; admins always see everything.',
+      'Private resources are visible and usable only by the owner, authorized users, or an account with resource-acl:bypass.',
     save: 'Save permissions',
     transferOwner: 'Transfer',
     transferTitle: 'Transfer ownership',

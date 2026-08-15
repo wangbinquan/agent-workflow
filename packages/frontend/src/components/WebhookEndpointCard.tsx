@@ -23,7 +23,7 @@ import { QueryState } from '@/components/QueryState'
 import { RelativeTime } from '@/components/RelativeTime'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
-import { isAdminAtRequest, useAuthSessionRevision, useIsAdmin } from '@/hooks/useActor'
+import { hasPermissionAtRequest, useAuthSessionRevision, usePermission } from '@/hooks/useActor'
 import { copyText } from '@/lib/clipboard'
 import { getAuthSessionRevision } from '@/stores/auth'
 
@@ -32,7 +32,7 @@ type EndpointWithSecret = EndpointWire & { secret: string }
 type CopyState = 'idle' | 'ok' | 'failed'
 type Provider = WebhookEndpoint['provider']
 
-interface AdminRequest<T> {
+interface ManagementRequest<T> {
   session: number
   authRevision: number
   input: T
@@ -44,18 +44,18 @@ const QUERY_KEY = ['webhook-endpoints']
 const PROVIDER_NAMES: Record<Provider, string> = { gitlab: 'GitLab', github: 'GitHub' }
 
 /**
- * RFC-260：isAdmin=false 渲染只读视图——无新建/轮换/删除/开关；hook URL 由后端
+ * RFC-260/RFC-305：canManage=false 渲染只读视图——无新建/轮换/删除/开关；hook URL 由后端
  * 响应分层脱敏（urlToken/ingressUrl 为 null），这里只负责把掩码 hint 渲染出来。
  */
 export function WebhookEndpointCard({
-  // fail-closed（评审门 F-8）：漏传按只读渲染；admin 视图必须显式声明。
-  isAdmin = false,
-}: { isAdmin?: boolean } = {}): React.ReactElement {
+  // fail-closed（评审门 F-8）：漏传按只读渲染；管理视图必须显式声明。
+  canManage: requestedCanManage = false,
+}: { canManage?: boolean } = {}): React.ReactElement {
   const { t } = useTranslation()
   const client = useQueryClient()
-  const liveIsAdmin = useIsAdmin()
+  const liveCanManage = usePermission('webhook-endpoints:manage')
   const authRevision = useAuthSessionRevision()
-  const canAdmin = isAdmin && liveIsAdmin
+  const canManage = requestedCanManage && liveCanManage
   const [error, setError] = useState<unknown>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
@@ -70,29 +70,29 @@ export function WebhookEndpointCard({
   const secretTriggerRef = useRef<HTMLButtonElement | null>(null)
   /** One-time secret reveal (the only frontend state allowed to hold plaintext). */
   const [minted, setMinted] = useState<EndpointWithSecret | null>(null)
-  const adminSessionRef = useRef(0)
-  const previousCanAdminRef = useRef(canAdmin)
+  const managementSessionRef = useRef(0)
+  const previousCanManageRef = useRef(canManage)
   const activeAuthRevisionRef = useRef(authRevision)
   const resetMutationsRef = useRef<() => void>(() => {})
 
   const query = useQuery({
-    queryKey: [...QUERY_KEY, authRevision, canAdmin ? 'admin' : 'viewer'],
+    queryKey: [...QUERY_KEY, authRevision, canManage ? 'manage' : 'viewer'],
     queryFn: ({ signal }) => api.get<EndpointWire[]>('/api/webhook-endpoints', undefined, signal),
   })
   const invalidate = () => void client.invalidateQueries({ queryKey: QUERY_KEY })
   const requestIsCurrent = (session: number, expectedAuthRevision: number): boolean =>
     expectedAuthRevision === getAuthSessionRevision() &&
-    session === adminSessionRef.current &&
-    isAdminAtRequest(client)
+    session === managementSessionRef.current &&
+    hasPermissionAtRequest(client, 'webhook-endpoints:manage')
 
   const create = useMutation({
     mutationFn: async ({
       input,
       session,
       authRevision: requestAuthRevision,
-    }: AdminRequest<{ name: string; provider: Provider; protocol: 'http' | 'ssh' }>) => {
+    }: ManagementRequest<{ name: string; provider: Provider; protocol: 'http' | 'ssh' }>) => {
       if (!requestIsCurrent(session, requestAuthRevision)) {
-        throw new Error('Webhook admin session ended')
+        throw new Error('Webhook endpoint management permission changed')
       }
       const created = await api.post<EndpointWithSecret>('/api/webhook-endpoints', {
         name: input.name,
@@ -101,7 +101,7 @@ export function WebhookEndpointCard({
       })
       // MutationCache must never retain the one-time plaintext. Consume it in
       // the request function, publish only to the dedicated reveal state while
-      // this admin session is still current, and resolve with no data.
+      // this management session is still current, and resolve with no data.
       if (requestIsCurrent(session, requestAuthRevision)) {
         setSecretCopyState('idle')
         setMinted(created)
@@ -123,9 +123,9 @@ export function WebhookEndpointCard({
       input: id,
       session,
       authRevision: requestAuthRevision,
-    }: AdminRequest<string>) => {
+    }: ManagementRequest<string>) => {
       if (!requestIsCurrent(session, requestAuthRevision)) {
-        throw new Error('Webhook admin session ended')
+        throw new Error('Webhook endpoint management permission changed')
       }
       const rotated = await api.post<EndpointWithSecret>(
         `/api/webhook-endpoints/${encodeURIComponent(id)}/rotate-secret`,
@@ -149,9 +149,9 @@ export function WebhookEndpointCard({
       input,
       session,
       authRevision: requestAuthRevision,
-    }: AdminRequest<{ id: string; enabled: boolean }>) => {
+    }: ManagementRequest<{ id: string; enabled: boolean }>) => {
       if (!requestIsCurrent(session, requestAuthRevision)) {
-        throw new Error('Webhook admin session ended')
+        throw new Error('Webhook endpoint management permission changed')
       }
       return api.put<EndpointWire>(`/api/webhook-endpoints/${encodeURIComponent(input.id)}`, {
         enabled: input.enabled,
@@ -171,9 +171,9 @@ export function WebhookEndpointCard({
       input: id,
       session,
       authRevision: requestAuthRevision,
-    }: AdminRequest<string>) => {
+    }: ManagementRequest<string>) => {
       if (!requestIsCurrent(session, requestAuthRevision)) {
-        throw new Error('Webhook admin session ended')
+        throw new Error('Webhook endpoint management permission changed')
       }
       return api.delete(`/api/webhook-endpoints/${encodeURIComponent(id)}`)
     },
@@ -194,16 +194,16 @@ export function WebhookEndpointCard({
   }
 
   useLayoutEffect(() => {
-    const lostAdmin = previousCanAdminRef.current && !canAdmin
-    previousCanAdminRef.current = canAdmin
+    const lostManagement = previousCanManageRef.current && !canManage
+    previousCanManageRef.current = canManage
     const previousAuthRevision = activeAuthRevisionRef.current
     const authChanged = previousAuthRevision !== authRevision
     activeAuthRevisionRef.current = authRevision
-    if (!canAdmin || authChanged) {
-      if (lostAdmin || authChanged) adminSessionRef.current += 1
-      if (lostAdmin || authChanged) {
+    if (!canManage || authChanged) {
+      if (lostManagement || authChanged) managementSessionRef.current += 1
+      if (lostManagement || authChanged) {
         client.removeQueries({
-          queryKey: [...QUERY_KEY, previousAuthRevision, 'admin'],
+          queryKey: [...QUERY_KEY, previousAuthRevision, 'manage'],
           exact: true,
         })
       }
@@ -218,12 +218,12 @@ export function WebhookEndpointCard({
       setMinted(null)
       resetMutationsRef.current()
     }
-  }, [authRevision, canAdmin, client])
+  }, [authRevision, canManage, client])
 
-  const adminSession = adminSessionRef.current
+  const managementSession = managementSessionRef.current
 
   const openCreate = (trigger: HTMLButtonElement) => {
-    if (!requestIsCurrent(adminSession, authRevision)) return
+    if (!requestIsCurrent(managementSession, authRevision)) return
     secretTriggerRef.current = trigger
     setError(null)
     setCreateOpen(true)
@@ -239,11 +239,11 @@ export function WebhookEndpointCard({
     </button>
   )
   const copyUrl = async (value: string): Promise<void> => {
-    if (!requestIsCurrent(adminSession, authRevision)) return
+    if (!requestIsCurrent(managementSession, authRevision)) return
     setUrlCopyState((await copyText(value)) ? 'ok' : 'failed')
   }
   const copySecret = async (value: string): Promise<void> => {
-    if (!requestIsCurrent(adminSession, authRevision)) return
+    if (!requestIsCurrent(managementSession, authRevision)) return
     setSecretCopyState((await copyText(value)) ? 'ok' : 'failed')
   }
 
@@ -255,7 +255,7 @@ export function WebhookEndpointCard({
           <h2>{t('settings.webhookEndpoints.title')}</h2>
           <p>{t('settings.webhookEndpoints.hint')}</p>
         </div>
-        {canAdmin && createAction}
+        {canManage && createAction}
       </div>
 
       <FeedbackStack variant="section">
@@ -289,7 +289,7 @@ export function WebhookEndpointCard({
       <QueryState
         query={query}
         data={
-          canAdmin
+          canManage
             ? (query.data ?? [])
             : (query.data ?? []).map((row) => ({
                 ...row,
@@ -301,11 +301,11 @@ export function WebhookEndpointCard({
           <EmptyState
             title={t('settings.webhookEndpoints.empty')}
             description={
-              canAdmin
+              canManage
                 ? t('settings.webhookEndpoints.emptyDescription')
                 : t('settings.webhookEndpoints.emptyReadonlyDescription')
             }
-            action={canAdmin ? createAction : undefined}
+            action={canManage ? createAction : undefined}
           />
         }
       >
@@ -326,13 +326,13 @@ export function WebhookEndpointCard({
                   </StatusChip>
                 }
                 footer={
-                  canAdmin ? (
+                  canManage ? (
                     <div className="webhook-card__footer">
                       <Switch
                         checked={row.enabled}
                         onChange={(enabled) =>
                           toggle.mutate({
-                            session: adminSession,
+                            session: managementSession,
                             authRevision,
                             input: { id: row.id, enabled },
                           })
@@ -361,7 +361,7 @@ export function WebhookEndpointCard({
                           confirmationKey={row.id}
                           onConfirm={() =>
                             remove.mutateAsync({
-                              session: adminSession,
+                              session: managementSession,
                               authRevision,
                               input: row.id,
                             })
@@ -445,7 +445,7 @@ export function WebhookEndpointCard({
       </QueryState>
 
       <Dialog
-        open={canAdmin && createOpen}
+        open={canManage && createOpen}
         onClose={() => setCreateOpen(false)}
         title={t('settings.webhookEndpoints.addTitle')}
         size="md"
@@ -468,7 +468,7 @@ export function WebhookEndpointCard({
               disabled={name.trim() === '' || create.isPending}
               onClick={() =>
                 create.mutate({
-                  session: adminSession,
+                  session: managementSession,
                   authRevision,
                   input: { name, provider, protocol },
                 })
@@ -528,7 +528,7 @@ export function WebhookEndpointCard({
       </Dialog>
 
       <ConfirmDialog
-        open={canAdmin && rotateTarget !== null}
+        open={canManage && rotateTarget !== null}
         title={t('settings.webhookEndpoints.rotateConfirmTitle')}
         description={t('settings.webhookEndpoints.rotateConfirmDescription', {
           name: rotateTarget?.name ?? '',
@@ -540,7 +540,7 @@ export function WebhookEndpointCard({
         onConfirm={async () => {
           if (rotateTarget === null) return
           await rotateSecret.mutateAsync({
-            session: adminSession,
+            session: managementSession,
             authRevision,
             input: rotateTarget.id,
           })
@@ -548,7 +548,7 @@ export function WebhookEndpointCard({
       />
 
       <Dialog
-        open={canAdmin && minted !== null}
+        open={canManage && minted !== null}
         onClose={() => {}}
         title={t('settings.webhookEndpoints.secretTitle')}
         size="md"

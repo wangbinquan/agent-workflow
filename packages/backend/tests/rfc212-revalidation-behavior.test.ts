@@ -3,7 +3,7 @@
 // Drives `revalidateAllConnections` directly against a real in-memory DB with
 // fake sockets that record close(code, reason) and expose their mutable
 // `ws.data.actor`. That keeps the auth logic deterministic — no Bun.serve
-// timing — while still exercising the real gates (taskVisibleTo, adminShortCircuit
+// timing — while still exercising the real gates (taskVisibleTo, aclBypassShortCircuit
 // reads ws.data.actor per frame) and the real credential re-resolution.
 //
 // The end-to-end wire path (a live socket actually closing with code 4401/4403)
@@ -34,6 +34,7 @@ import {
 } from '../src/ws/connections'
 import type { AnyChannelParams, WsConnectionData, WsCredential } from '../src/ws/registry'
 import type { Actor } from '../src/auth/actor'
+import { triggerAuthorityRevalidation } from '../src/ws/revalidationHook'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('test')
@@ -41,10 +42,12 @@ const log = createLogger('test')
 interface FakeWs {
   ws: ServerWebSocket<WsConnectionData>
   closes: Array<{ code: number; reason: string }>
+  sent: unknown[]
 }
 
 function fakeConn(actor: Actor, credential: WsCredential, channel: AnyChannelParams): FakeWs {
   const closes: Array<{ code: number; reason: string }> = []
+  const sent: unknown[] = []
   const data: WsConnectionData = {
     channel,
     actor,
@@ -57,11 +60,15 @@ function fakeConn(actor: Actor, credential: WsCredential, channel: AnyChannelPar
   }
   const ws = {
     data,
+    send(payload: string) {
+      sent.push(JSON.parse(payload))
+      return payload.length
+    },
     close(code: number, reason: string) {
       closes.push({ code, reason })
     },
   } as unknown as ServerWebSocket<WsConnectionData>
-  return { ws, closes }
+  return { ws, closes, sent }
 }
 
 async function seedUser(
@@ -176,7 +183,9 @@ describe('RFC-212 AC-2 — demotion refreshes the actor (admin short-circuit + p
     expect(before.refreshed).toBe(1)
 
     // Demote to user via the real Web-UI path.
-    await patchUser(db, admin.id, { role: 'user' })
+    await patchUser(db, admin.id, {
+      access: { role: 'user', additionalPermissions: [], expectedRevision: 0 },
+    })
     await revalidateAllConnections({ db, log }, 'user-patched')
     expect(conn.ws.data.actor.user.role).toBe('user')
     expect(conn.ws.data.actor.permissions.has('tasks:read:all')).toBe(false)
@@ -206,6 +215,54 @@ describe('RFC-212 AC-3 — revoked / disabled credentials close with 4401', () =
     await disableUser(db, victim.id, Date.now(), admin.id)
     await revalidateAllConnections({ db, log }, 'user-disabled')
     expect(conn.closes).toEqual([{ code: WS_CLOSE_AUTH_REVOKED, reason: 'auth-revoked' }])
+  })
+})
+
+describe('RFC-305 targeted authority refresh', () => {
+  test('refreshes only the changed subject and emits a revision-only control frame', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const alice = await seedUser(db, 'target-alice', 'user')
+    const bob = await seedUser(db, 'other-bob', 'user')
+    const aliceConn = fakeConn(alice.actor, alice.credential, { kind: 'workflows' })
+    const bobConn = fakeConn(bob.actor, bob.credential, { kind: 'workflows' })
+    trackConnection(aliceConn.ws)
+    trackConnection(bobConn.ws)
+    db.$client.query('UPDATE users SET access_revision = 1 WHERE id = ?').run(alice.id)
+    db.$client
+      .query(
+        'INSERT INTO user_permission_grants ' +
+          '(user_id, permission, granted_by_user_id, granted_at) VALUES (?, ?, ?, ?)',
+      )
+      .run(alice.id, 'scripts:author', bob.id, 1)
+
+    const stats = await revalidateAllConnections({ db, log }, 'authority-changed', Date.now(), {
+      userId: alice.id,
+      revision: 1,
+    })
+
+    expect(stats).toMatchObject({ scanned: 1, refreshed: 1 })
+    expect(aliceConn.ws.data.actor.authorityRevision).toBe(1)
+    expect(aliceConn.ws.data.actor.permissions.has('scripts:author')).toBe(true)
+    expect(aliceConn.sent).toEqual([{ type: 'authority.changed', revision: 1 }])
+    expect(bobConn.ws.data.actor.authorityRevision).toBe(0)
+    expect(bobConn.sent).toEqual([])
+  })
+
+  test('fails closed and reports a catastrophic targeted refresh failure', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const alice = await seedUser(db, 'target-failure', 'user')
+    const conn = fakeConn(alice.actor, alice.credential, {
+      kind: 'invalid-test-channel',
+    } as unknown as AnyChannelParams)
+    trackConnection(conn.ws)
+    const observed = new Promise<unknown>((resolveFailure) => {
+      triggerAuthorityRevalidation(db, alice.id, 0, resolveFailure)
+    })
+
+    await expect(observed).resolves.toMatchObject({ message: expect.any(String) })
+    expect(conn.closes).toEqual([
+      { code: WS_CLOSE_AUTH_REVOKED, reason: 'auth-revalidation-failed' },
+    ])
   })
 })
 
@@ -290,16 +347,6 @@ describe('RFC-212 T6 — write-surface ratchet', () => {
         file: 'services/userIdentities.ts',
         marker: /export async function deleteIdentity\(/,
         reason: 'identity-deleted',
-      },
-      {
-        file: 'services/users.ts',
-        marker: /export async function disableUser\(/,
-        reason: 'user-disabled',
-      },
-      {
-        file: 'services/users.ts',
-        marker: /export async function patchUser\(/,
-        reason: 'user-patched',
       },
       {
         file: 'services/taskCollab.ts',

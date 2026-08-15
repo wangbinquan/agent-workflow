@@ -10,7 +10,7 @@
 
 import { openDb } from '@/db/client'
 import { Paths } from '@/util/paths'
-import { buildActor } from '@/auth/actor'
+import { buildCurrentActor, type Actor } from '@/auth/actor'
 import { createSecretBox } from '@/auth/secretBox'
 import { users } from '@/db/schema'
 import { ACL_TABLES } from '@/services/resourceAcl'
@@ -110,17 +110,12 @@ export async function packageCommand(
       status: 'error',
     }
   }
-  // 与 HTTP 同构：`source: 'daemon'` ⇒ 权限点按角色算，与网页登录的同一条路径。
-  const actor = buildActor({
-    user: {
-      id: row.id,
-      username: row.username,
-      displayName: row.displayName,
-      role: row.role,
-      status: row.status,
-    } as never,
-    source: 'daemon',
-  })
+  // 与 HTTP 同构：从当前数据库行解析角色预设 + 显式附加权限 + access revision；
+  // 运行时消费者只读取最终 permissions，不把角色当成第二条授权轴。
+  const actor = await buildCurrentActor(db, { userId: row.id, source: 'daemon' })
+  if (actor === null) {
+    return { output: `user '${username}' is not active\n`, status: 'error' }
+  }
 
   try {
     if (sub === 'export') return await runExport(db, actor, flags)
@@ -133,7 +128,7 @@ export async function packageCommand(
 
 async function runExport(
   db: ReturnType<typeof openDb>,
-  actor: ReturnType<typeof buildActor>,
+  actor: Actor,
   flags: Map<string, string>,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
   const type = flags.get('type') as AclResourceType | undefined
@@ -180,7 +175,7 @@ async function runExport(
 
 async function runImport(
   db: ReturnType<typeof openDb>,
-  actor: ReturnType<typeof buildActor>,
+  actor: Actor,
   flags: Map<string, string>,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
   const file = flags.get('file')

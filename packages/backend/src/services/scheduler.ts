@@ -3996,7 +3996,7 @@ async function launchCallChild(
   // owner 失活/缺行 → 子任务拒启（外层 catch 把 code 直通 failCallRow →
   // 节点以 call-owner-inactive 失败）；NULL owner legacy 行按 Q5 放行
   // （__system__ 幽灵，空权限，语义与历史伪造一致）。
-  const actor = await buildInheritedActor(db, taskRow.ownerUserId ?? null)
+  const actor = await buildInheritedActor(db, taskRow.ownerUserId ?? null, 'call-workflow')
   if (actor === null) {
     throw new ValidationError(
       'call-owner-inactive',
@@ -4193,7 +4193,7 @@ async function launchCallWorkgroupChild(
   const { startWorkgroupTaskFromFrozen } = await import('@/services/workgroup/launch')
   // RFC-285 B3（D7/E4）：本臂不构造 actor（冻结面内部装配），但同受 owner
   // 失活拒启约束——preflight 判定，失败经外层 catch 落 call-owner-inactive。
-  if ((await buildInheritedActor(db, taskRow.ownerUserId ?? null)) === null) {
+  if ((await buildInheritedActor(db, taskRow.ownerUserId ?? null, 'call-workgroup')) === null) {
     throw new ValidationError(
       'call-owner-inactive',
       `task owner '${taskRow.ownerUserId}' is not an active user; refusing to start call child`,

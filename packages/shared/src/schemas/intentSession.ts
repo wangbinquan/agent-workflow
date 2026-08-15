@@ -1,6 +1,6 @@
 // RFC-234 §6 (T7) — intent-session HTTP wire schemas.
 //
-// Sessions are creator-private (+ system-admin read); every mutating request
+// Sessions are creator-private (+ `intent:audit` read); every mutating request
 // is validated here at the route boundary and re-authorized per-row in
 // services/intent/*. The commit request carries the exact confirmed draft
 // identity (revision + sha-256 hash) plus per-op decisions that may only
@@ -351,7 +351,7 @@ export const IntentSessionSummarySchema = z
     inFlight: z.boolean(),
     currentDraftRevision: z.number().int().nullable(),
     journey: IntentJourneySnapshotSchema,
-    /** Present only on the admin audit list. */
+    /** Present only on the cross-owner audit list. */
     ownerUserId: z.string().optional(),
     createdAt: z.number().int(),
     updatedAt: z.number().int(),
@@ -528,7 +528,7 @@ export const IntentApplyReceiptSchema = z
 export type IntentApplyReceiptWire = z.infer<typeof IntentApplyReceiptSchema>
 
 // AC-11: resource-side provenance annotation. Rows are filtered server-side to
-// sessions the actor can read (creator or admin auditor) — a plain viewer of
+// sessions the actor can read (creator or `intent:audit`) — a plain viewer of
 // the resource gets an empty list, indistinguishable from "not intent-built".
 export const IntentProvenanceEntrySchema = z.object({
   commitId: z.string(),

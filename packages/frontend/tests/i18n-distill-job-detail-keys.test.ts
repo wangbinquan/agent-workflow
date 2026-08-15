@@ -12,7 +12,7 @@ import { enUS } from '../src/i18n/en-US'
 const SOURCE_KINDS = ['clarify', 'review', 'feedback', 'manual'] as const
 
 const DETAIL_TOP = [
-  'adminOnly',
+  'permissionRequired',
   'attempt',
   'attemptsCount',
   'attemptPickerLabel',

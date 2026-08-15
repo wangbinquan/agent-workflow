@@ -23,7 +23,7 @@ import { users } from '@/db/schema'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {
   ACL_TABLES,
-  isResourceAdminActor,
+  hasResourceAclBypass,
   isVisibleRow,
   listGrantedResourceIdsInTx,
 } from './resourceAcl'
@@ -445,9 +445,9 @@ function buildCandidateSnapshotsInTx(
 }
 
 /** RFC-282 D2 — the grant-set SQL lives in resourceAcl only; this shell keeps
- *  importRefs' admin short-circuit semantics. */
+ *  importRefs' `resource-acl:bypass` short-circuit semantics. */
 function grantedIdsInTx(tx: DbTxSync, actor: Actor, type: ImportRefType): ReadonlySet<string> {
-  if (isResourceAdminActor(actor)) return new Set()
+  if (hasResourceAclBypass(actor)) return new Set()
   return listGrantedResourceIdsInTx(tx, actor, type)
 }
 

@@ -372,12 +372,12 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       // discovers otherwise when their automation 403s hours later, was failed
       // at exactly this line.
       try {
-        assertMatrixGrantable(actor.user.role, parsed.data.scopes)
+        assertMatrixGrantable(actor.permissions, parsed.data.scopes)
       } catch (err) {
         if (err instanceof PatMatrixError) {
           throw new ValidationError(
             'pat-scope-ungrantable',
-            'your role cannot grant some of the selected permissions',
+            'your account cannot grant some of the selected permissions',
             { ungrantable: err.ungrantable },
           )
         }

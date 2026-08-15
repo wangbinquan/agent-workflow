@@ -91,6 +91,17 @@ export const ENDPOINTS: EndpointSpec[] = [
           dbVersion: z.number(),
           uptime: z.number(),
           runningTasks: z.number(),
+          identityAccess: z.object({
+            accessUpdate: z.object({
+              success: z.number(),
+              noOp: z.number(),
+              conflict: z.number(),
+              rejected: z.number(),
+            }),
+            authorityReresolution: z.number(),
+            invalidStoredGrant: z.number(),
+            wsTargetedRefreshFailure: z.number(),
+          }),
         })
         .passthrough(),
     },

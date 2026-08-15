@@ -28,7 +28,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
-import type { Permission } from '@agent-workflow/shared'
+import { SYSTEM_DOMAIN_POINTS, type Permission } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { errorHandler } from '@/util/errors'
 import { lookupRouteMeta, routeMetaGate, type RouteMeta } from '@/routes/registry'
@@ -77,13 +77,16 @@ function meta(method: string, path: string): RouteMeta {
 }
 
 /** Drive just the declared gate with a token holding exactly `matrix`. */
-async function probe(m: RouteMeta, matrix: Permission[]): Promise<Response> {
+async function probe(
+  m: RouteMeta,
+  matrix: Permission[],
+  source: 'pat' | 'session' = 'pat',
+): Promise<Response> {
   const app = new Hono()
   const actor = buildActor({
     user: { id: 'u1', username: 'u1', displayName: 'U1', role: 'admin', status: 'active' },
-    source: 'pat',
-    patScopes: matrix,
-    patPurpose: 'general',
+    source,
+    ...(source === 'pat' ? { patScopes: matrix, patPurpose: 'general' as const } : {}),
   })
   const inject: MiddlewareHandler = async (c, next) => {
     c.set('actor', actor)
@@ -158,8 +161,12 @@ describe('RFC-247 AC-29 — cross-domain side effects need BOTH domains', () => 
       const body = (await res.json()) as { details?: { requiredPermission?: string } }
       expect(body.details?.requiredPermission).toBe(c.hidden)
 
-      // holding both passes the gate
-      const ok = await probe(m, [c.surface, c.hidden])
+      // Holding the complete declaration (including any operation capability)
+      // passes the gate.
+      const hasSystemCapability = m.permissions.some((permission) =>
+        SYSTEM_DOMAIN_POINTS.includes(permission),
+      )
+      const ok = await probe(m, [...m.permissions], hasSystemCapability ? 'session' : 'pat')
       expect(ok.status).toBe(200)
       expect(await ok.text()).toBe('reached-handler')
     })
@@ -179,16 +186,10 @@ describe('RFC-247 — launch endpoints stay uniformly gated (RFC-165 F15/N1)', (
   }
 })
 
-describe('RFC-247 — the identity door AND the point door', () => {
-  // RFC-222's two-door pattern moved INTO the metadata so the generated API
-  // documentation states the whole contract. Both doors must still be enforced:
-  // identity alone would let a scope-stripped token through (the hole RFC-099's
-  // route-gate contract warns about); the point alone would let a plain `user`
-  // through on a point that sits in the user baseline — and `memory:update`
-  // does sit there.
-  test('memory-distill-jobs demands resource-admin identity, not just the point', async () => {
+describe('RFC-247/RFC-305 — every authorization door is a permission point', () => {
+  test('memory-distill-jobs names its dedicated management capability', async () => {
     const m = meta('POST', '/api/memory-distill-jobs/:id/cancel')
-    expect(m.identity).toBe('resource-admin')
+    expect(m.permissions).toEqual(['memory:update', 'memory-distill-jobs:manage'])
 
     const app = new Hono()
     const plainUser = buildActor({
@@ -197,7 +198,7 @@ describe('RFC-247 — the identity door AND the point door', () => {
       patScopes: ['memory:update'],
       patPurpose: 'general',
     })
-    // the point IS held — a plain user has memory:update in its baseline
+    // The ordinary point is held, but the explicit management capability is not.
     expect(plainUser.permissions.has('memory:update')).toBe(true)
     const inject: MiddlewareHandler = async (c, next) => {
       c.set('actor', plainUser)
@@ -208,7 +209,8 @@ describe('RFC-247 — the identity door AND the point door', () => {
     app.all('/probe', routeMetaGate(m), () => new Response('reached-handler'))
     const res = await app.request('/probe', { method: 'POST' })
     expect(res.status).toBe(403)
-    expect(((await res.json()) as { message: string }).message).toBe('resource admin only')
+    const body = (await res.json()) as { details?: { requiredPermission?: string } }
+    expect(body.details?.requiredPermission).toBe('memory-distill-jobs:manage')
   })
 })
 

@@ -92,8 +92,8 @@ type StatusFilter = 'all' | WebhookDeliveryStatus
 
 const STATUS_FILTERS: StatusFilter[] = ['all', 'matched', 'ignored', 'rejected', 'failed']
 
-/** RFC-260：isAdmin=false 渲染只读视图（replay 隐藏；列表与详情照常）。 */
-export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
+/** RFC-260/RFC-305：缺 replay capability 时渲染只读视图。 */
+export function DeliveriesPanel({ canReplay = false }: { canReplay?: boolean } = {}) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [status, setStatus] = useState<StatusFilter>('all')
@@ -343,7 +343,7 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
                     >
                       {t('common.details')}
                     </button>
-                    {isAdmin && (
+                    {canReplay && (
                       <button
                         type="button"
                         className="btn btn--xs"

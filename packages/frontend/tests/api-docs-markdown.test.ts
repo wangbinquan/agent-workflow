@@ -39,8 +39,6 @@ const STRINGS: ApiDocsStrings = {
   colPermission: 'Permission',
   needsNothing: 'NOTHING',
   notAvailableToYou: 'UNAVAILABLE',
-  adminOnly: 'ADMIN_ONLY',
-  resourceAdminOnly: 'RESOURCE_ADMIN_ONLY',
 }
 
 function payload(overrides: Partial<ApiDocsPayload> = {}): ApiDocsPayload {
@@ -149,10 +147,7 @@ describe('RFC-247 — the body states requirements honestly', () => {
     expect(body).toContain('NOTHING')
   })
 
-  test('an identity requirement is shown ALONGSIDE the permission, not instead of it', () => {
-    // A doc that printed only `memory:update` would understate the requirement:
-    // that point sits in the plain-user baseline, so a reader would conclude
-    // any user can call it.
+  test('every capability requirement is shown as an explicit permission', () => {
     const body = buildApiDocsMarkdown(
       payload({
         endpoints: [
@@ -160,8 +155,7 @@ describe('RFC-247 — the body states requirements honestly', () => {
             method: 'POST',
             path: '/api/memory-distill-jobs/:id/retry',
             summary: 'Retry',
-            permissions: ['memory:update', 'tasks:execute'],
-            identity: 'resource-admin',
+            permissions: ['memory:update', 'tasks:execute', 'memory-distill-jobs:manage'],
             open: false,
           },
         ],
@@ -170,7 +164,7 @@ describe('RFC-247 — the body states requirements honestly', () => {
     )
     expect(body).toContain('`memory:update`')
     expect(body).toContain('`tasks:execute`')
-    expect(body).toContain('RESOURCE_ADMIN_ONLY')
+    expect(body).toContain('`memory-distill-jobs:manage`')
   })
 
   test('a tool the role cannot use is listed AND marked', () => {

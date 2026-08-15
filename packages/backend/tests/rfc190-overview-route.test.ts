@@ -520,16 +520,17 @@ describe('RFC-190 buildOverview — 权限真值表 + 固定时钟 7d 边界（�
     const readAllOnly = patActor('ghost-admin', 'admin', ['tasks:read:all'])
     const ovAll = await buildOverview(h.db, readAllOnly)
     expect(ovAll.tasks).toEqual({ running: 1, awaiting: 2, done7d: 2, failed7d: 1 })
-    // RFC-247: reads ride along, so NO resource key is null for a token any more.
-    // This is the visible face of D3 — a token cannot be scoped away from reads.
-    expect(ovAll.resources.agents).toBe(5)
+    // RFC-247: reads ride along, so NO resource key is null for a token. RFC-305
+    // separately strips resource-acl:bypass from every PAT, so this ghost actor
+    // sees the three public agents rather than private rows owned by others.
+    expect(ovAll.resources.agents).toBe(3)
     expect(ovAll.resources.skills).not.toBeNull()
     expect(ovAll.resources.mcps).not.toBeNull()
     expect(ovAll.resources.plugins).not.toBeNull()
     expect(ovAll.resources.workflows).not.toBeNull()
     expect(ovAll.resources.repos).not.toBeNull()
     expect(ovAll.resources.memories).not.toBeNull()
-    expect(ovAll.resources.workgroups).toBe(2)
+    expect(ovAll.resources.workgroups).toBe(1)
     expect(ovAll.resources.scheduled).toBe(2)
 
     // user PAT ticking tasks:read:own only → mine numbers (alice's view).

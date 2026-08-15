@@ -29,7 +29,7 @@ export function mountWebhookEndpointRoutes(app: Hono, deps: AppDeps): void {
       method: 'GET',
       path: '/api/webhook-endpoints',
       // RFC-260：读面全员（矩阵点）；URL 明文由服务层按 viewer 分层——PAT
-      // 可读掩码后的元数据（tokenAccess allow），明文只走 admin session。
+      // 可读掩码后的元数据（tokenAccess allow），明文只走持有管理权限的 session。
       permissions: ['webhook-endpoints:read'],
       tokenAccess: 'allow',
       summary: 'List webhook ingress endpoints (RFC-257/260)',

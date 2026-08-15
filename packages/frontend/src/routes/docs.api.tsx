@@ -71,8 +71,6 @@ function DocsApiPage() {
                 colPermission: t('apiDocs.colPermission'),
                 needsNothing: t('apiDocs.needsNothing'),
                 notAvailableToYou: t('apiDocs.notAvailableToYou'),
-                adminOnly: t('apiDocs.adminOnly'),
-                resourceAdminOnly: t('apiDocs.resourceAdminOnly'),
               })}
             />
           )

@@ -60,8 +60,8 @@ export interface IntentDocTurn {
  * RFC-253 / RFC-269 — 会话发起者手上有没有两个特权节点的创作权。
  *
  * 这不是排版偏好，是**别让用户白跑一轮**：两类节点的落库门在持久化原语上
- * （`scriptAuthorGate` / `codeHostAuthorGate`），一个 `role:'user'` 的发起者拿不
- * 到 `scripts:author` / `code-host-calls:author`，模型就算把节点写得完全正确，
+ * （`scriptAuthorGate` / `codeHostAuthorGate`），发起者若没有
+ * `scripts:author` / `code-host-calls:author`，模型就算把节点写得完全正确，
  * 整包 changeset 也在 apply 时 403 —— 而一轮 intent 是一次真实的模型进程。所以
  * 无权限时形态根本不进 doc，另换一条明确的禁令，让模型改为跟用户解释。
  *
@@ -194,10 +194,10 @@ export function buildIntentDoc(input: IntentDocInput): string {
   ].filter((entry) => entry !== null)
   const privilegedNodeForms = [
     mayAuthorScripts
-      ? `  - \`{id,kind:'script',language:'python'|'bash'|'node',script,outputs?:[{name,kind?}],dependencies?:[string],env?:{KEY:'‹secret›'},readonly?:boolean}\`. Runs \`script\` inline in the task worktree — no agent, no model. Inbound port values arrive as env vars \`AW_PORT_<PORT>\` (port name uppercased, chars outside [A-Z0-9_] folded to \`_\`); they are NEVER substituted into the body, so read them from the environment. Absent/empty \`outputs\` ⇒ one implicit port \`stdout\` = raw stdout; non-empty ⇒ the script must print \`<workflow-output nonce="$AW_ENVELOPE_NONCE"><port name="…">…</port></workflow-output>\`; \`path<…>\` output kinds are unsupported. \`dependencies\` must pin exact versions (pip \`pkg==1.2.3\` / npm \`pkg@1.2.3\`); bash declares none. \`env\` VALUES must be \`'‹secret›'\` or \`''\` — the confirm UI collects real values, literals are rejected (same closed carrier as MCP env). Script nodes cannot sit inside wrapper-fanout, and authoring one requires \`scripts:author\` (admin/manager) — which this session holds.`
+      ? `  - \`{id,kind:'script',language:'python'|'bash'|'node',script,outputs?:[{name,kind?}],dependencies?:[string],env?:{KEY:'‹secret›'},readonly?:boolean}\`. Runs \`script\` inline in the task worktree — no agent, no model. Inbound port values arrive as env vars \`AW_PORT_<PORT>\` (port name uppercased, chars outside [A-Z0-9_] folded to \`_\`); they are NEVER substituted into the body, so read them from the environment. Absent/empty \`outputs\` ⇒ one implicit port \`stdout\` = raw stdout; non-empty ⇒ the script must print \`<workflow-output nonce="$AW_ENVELOPE_NONCE"><port name="…">…</port></workflow-output>\`; \`path<…>\` output kinds are unsupported. \`dependencies\` must pin exact versions (pip \`pkg==1.2.3\` / npm \`pkg@1.2.3\`); bash declares none. \`env\` VALUES must be \`'‹secret›'\` or \`''\` — the confirm UI collects real values, literals are rejected (same closed carrier as MCP env). Script nodes cannot sit inside wrapper-fanout, and authoring one requires \`scripts:author\` — which this session holds.`
       : null,
     mayAuthorCodeHostCalls
-      ? `  - \`{id,kind:'code-host-call',provider:'gitlab'|'github',action:'<key from the list below>',params:{field:'template'},request?,allowDestructive?,timeoutMs?}\`. The PLATFORM itself issues ONE REST call to GitLab/GitHub with the base URL + token an administrator configured in settings — no agent, no model, no subprocess, and that token never enters a prompt, a port or your context. Fixed output ports \`response\` (raw body) and \`status\` (HTTP status code); the node declares NO input ports, so nothing has to be wired into it. Every \`params\` VALUE is a template: \`{{port_name}}\` reads an inbound edge's port, and the canonical webhook trigger references documented in the public workflow section need no edge. Leave \`project\` empty to act on the task's own repository. A non-2xx response FAILS the node. Authoring one requires \`code-host-calls:author\` (admin/manager) — which this session holds.
+      ? `  - \`{id,kind:'code-host-call',provider:'gitlab'|'github',action:'<key from the list below>',params:{field:'template'},request?,allowDestructive?,timeoutMs?}\`. The PLATFORM itself issues ONE REST call to GitLab/GitHub with the base URL + token a settings operator configured — no agent, no model, no subprocess, and that token never enters a prompt, a port or your context. Fixed output ports \`response\` (raw body) and \`status\` (HTTP status code); the node declares NO input ports, so nothing has to be wired into it. Every \`params\` VALUE is a template: \`{{port_name}}\` reads an inbound edge's port, and the canonical webhook trigger references documented in the public workflow section need no edge. Leave \`project\` empty to act on the task's own repository. A non-2xx response FAILS the node. Authoring one requires \`code-host-calls:author\` — which this session holds.
     \`action:'custom'\` is the escape hatch and its \`request\` is stricter than it looks: \`method\` is one of ${CODE_HOST_METHODS.join(' | ')} (uppercase); \`path\` must start with a single \`/\`, is RELATIVE to the configured base URL (a node can never name a host, so no scheme, no \`//\` prefix), and may contain no \`?\`, no \`#\`, no \`..\` segment and no whitespace — put query parameters in \`query\`, whose values are strings; \`body\` is a STRING holding JSON, not an object, and every \`{{var}}\` in it must sit INSIDE a JSON string value (never as a key, never bare), because the platform escapes each rendered value as a JSON string before re-parsing the whole body. Any \`DELETE\` additionally needs \`allowDestructive:true\`. Actions (\`*\` = required on that provider, \`?\` = optional):
 ${renderCodeHostActionCatalog()}`
       : null,
@@ -326,7 +326,7 @@ anything credential-shaped anywhere in the changeset is rejected.${
 The user who started this session does NOT hold the permission these node kinds
 require:
 ${withheldNodeKinds
-  .map((entry) => `- \`kind:'${entry.kind}'\` requires \`${entry.point}\` (admin / manager).`)
+  .map((entry) => `- \`kind:'${entry.kind}'\` requires \`${entry.point}\`.`)
   .join('\n')}
 
 So you must not CREATE one and must not CHANGE one — **and must not DELETE one

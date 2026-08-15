@@ -26,7 +26,7 @@ import type { DbClient } from './client'
 export type DbTxSync = Parameters<Parameters<DbClient['transaction']>[0]>[0]
 
 /** Collapses Promise-returning callbacks to `never` at the type level. */
-type NotPromise<T> = T extends PromiseLike<unknown> ? never : T
+export type NotPromise<T> = T extends PromiseLike<unknown> ? never : T
 
 export function dbTxSync<T>(db: DbClient, fn: (tx: DbTxSync) => NotPromise<T>): T {
   return db.transaction((tx) => {

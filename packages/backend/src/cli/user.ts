@@ -16,7 +16,7 @@ import {
   listAllUsers,
   resetPassword,
 } from '@/services/users'
-import { RoleSchema, type Role } from '@agent-workflow/shared'
+import { RoleSchema, resolveEffectiveAccountPermissions, type Role } from '@agent-workflow/shared'
 
 interface ParsedFlags {
   username?: string
@@ -121,7 +121,11 @@ export async function userCommand(
         role = parsed.data
       }
       if (isBootstrapRequired(db)) {
-        if (role !== 'admin' || !flags.password) {
+        const bootstrapCanManageUsers = resolveEffectiveAccountPermissions({
+          role,
+          additionalPermissions: [],
+        }).has('users:write')
+        if (!bootstrapCanManageUsers || !flags.password) {
           return badUsage(
             'bootstrap requires the first user to be an admin with --password (use --admin --password <pw>)',
           )

@@ -1123,7 +1123,7 @@ describe('RFC-237 claude-code intent turn', () => {
 //
 // intentDoc.test.ts proves the doc renders both ways; this proves the engine
 // actually asks. A hardcoded `privileges: {all true}` here would keep every
-// doc-level test green while teaching a plain `role:'user'` session to emit
+// doc-level test green while teaching a session without the grants to emit
 // script / code-host-call nodes that apply then refuses as a whole — the exact
 // wasted-turn this split exists to prevent.
 // ---------------------------------------------------------------------------

@@ -20,7 +20,7 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSectionLink, PageSectionNav, type PageSectionGroup } from '@/components/PageSectionNav'
 import { useMemoryPendingCounts } from '@/components/shell/MemoryPendingBadge'
-import { useActor, useIsResourceAdmin } from '@/hooks/useActor'
+import { useActor, usePermission } from '@/hooks/useActor'
 import { useMemoryWs } from '@/hooks/useMemoryWs'
 import { useMemoryDistillJobWs } from '@/hooks/useMemoryDistillJobWs'
 
@@ -78,12 +78,9 @@ export const Route = createRoute({
 
 function MemoryPage() {
   const { t } = useTranslation()
-  // RFC-099 (D12): memory:approve moved into the user baseline (the real
-  // gate is per-row canManage), so the ADMIN surfaces here key off the
-  // actor's role instead of the permission point.
+  // RFC-305: every privileged surface keys off a concrete effective permission.
   const actor = useActor()
-  // RFC-285 B7（E11）：对齐后端 admin+manager 管理面。
-  const isAdmin = useIsResourceAdmin()
+  const canManageDistillJobs = usePermission('memory-distill-jobs:manage')
   const actorReady =
     actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data !== undefined
   const actorError = actor.error !== null && actor.error !== undefined
@@ -93,7 +90,8 @@ function MemoryPage() {
   const href = useRouterState({ select: (state) => state.location.href })
   const rawTab = rawMemoryTab(href)
   const requestedTab = isMemoryTab(search.tab) ? search.tab : 'all'
-  const tab: MemoryTab = !isAdmin && requestedTab === 'distill-jobs' ? 'all' : requestedTab
+  const tab: MemoryTab =
+    !canManageDistillJobs && requestedTab === 'distill-jobs' ? 'all' : requestedTab
   const [newDialogOpen, setNewDialogOpen] = useState(false)
   const [allView, setAllView] = useState<'approved' | 'archived'>('approved')
   const [showUnavailableNotice, setShowUnavailableNotice] = useState(false)
@@ -116,18 +114,18 @@ function MemoryPage() {
   }, [hash, navigate, rawTab])
 
   useEffect(() => {
-    if (!actorReady || isAdmin || search.tab !== 'distill-jobs') return
+    if (!actorReady || canManageDistillJobs || search.tab !== 'distill-jobs') return
     setShowUnavailableNotice(true)
     void navigate({
       search: (previous) => withMemoryTab(previous, 'all'),
       hash,
       replace: true,
     })
-  }, [actorReady, hash, isAdmin, navigate, search.tab])
+  }, [actorReady, canManageDistillJobs, hash, navigate, search.tab])
 
   // Live updates for the entire surface.
   useMemoryWs()
-  useMemoryDistillJobWs({ enabled: isAdmin })
+  useMemoryDistillJobWs({ enabled: canManageDistillJobs })
 
   return (
     <div className="page page--memory">
@@ -177,7 +175,7 @@ function MemoryPage() {
           </FeedbackStack>
           <MemorySections
             tab={tab}
-            isAdmin={isAdmin}
+            canManageDistillJobs={canManageDistillJobs}
             hash={hash}
             pendingCounts={pendingCounts}
             allView={allView}
@@ -193,7 +191,7 @@ function MemoryPage() {
 
 interface MemorySectionsProps {
   tab: MemoryTab
-  isAdmin: boolean
+  canManageDistillJobs: boolean
   hash: string
   pendingCounts: ReturnType<typeof useMemoryPendingCounts>
   allView: 'approved' | 'archived'
@@ -243,7 +241,7 @@ function MemorySections(props: MemorySectionsProps) {
         },
       ],
     },
-    ...(props.isAdmin
+    ...(props.canManageDistillJobs
       ? [
           {
             key: 'automation',
@@ -302,7 +300,7 @@ function MemorySections(props: MemorySectionsProps) {
           <MemoryAllList view={props.allView} onViewChange={props.onAllViewChange} />
         )}
         {props.tab === 'by-scope' && <MemoryByScopeBrowser />}
-        {props.tab === 'distill-jobs' && props.isAdmin && <MemoryDistillJobsTable />}
+        {props.tab === 'distill-jobs' && props.canManageDistillJobs && <MemoryDistillJobsTable />}
         {props.tab === 'fusion' && <MemoryFusionList />}
       </section>
     </div>

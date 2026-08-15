@@ -1,4 +1,5 @@
-// RFC-036 — admin-only /api/oidc/providers CRUD + /test endpoint.
+// RFC-036/RFC-305 — OIDC reads require `oidc:read`; configuration and probes
+// require `oidc:configure`. Account roles are presets and are not inspected here.
 
 import type { Hono } from 'hono'
 import {

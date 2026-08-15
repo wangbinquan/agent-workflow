@@ -448,10 +448,8 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                 }}
               />
             </div>
-            {/* RFC-270 — 这个入口通向 admin-only 的配置页。它对**有**
-                `code-host-calls:author` 却**无** `settings:read` 的人可见，
-                也就是 manager（`MANAGER_DENIED_PERMISSIONS` 显式拒了
-                `settings:read`）——正是今天点进去只会吃 403 的那批人。 */}
+            {/* RFC-270/RFC-305 — 配置入口只由 `settings:read` 决定；
+                `code-host-calls:author` 不能替代该权限。 */}
             {canManageConnections ? (
               <a
                 href="/settings?tab=codeHosts"

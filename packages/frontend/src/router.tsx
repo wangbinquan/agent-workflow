@@ -80,8 +80,8 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   authRoute,
   setupAdminRoute,
-  // RFC-257 UI 修订: webhook 配置单页（端点/触发器/投递三 tab），侧栏
-  // 「运行与仓库」组 adminOnly 项。
+  // RFC-257/RFC-305: webhook 配置单页（端点/触发器/投递三 tab）；页面动作按
+  // 具体有效权限守卫，导航不按角色分叉。
   webhooksRoute,
   // RFC-211: the guided tour. Intentionally NOT in the sidebar — it is entered
   // from the homepage, so `resolveActiveNav` leaves it unhighlighted the same

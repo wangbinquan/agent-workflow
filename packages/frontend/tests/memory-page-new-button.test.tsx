@@ -1,8 +1,7 @@
 // RFC-045 — /memory page header `[+ New memory]` button.
 //
 // Locks:
-//   * admin (memory:approve) sees the button.
-//   * non-admin does NOT see the button.
+//   * every authenticated user sees the create entry; scope authorization is server-side.
 //   * clicking opens MemoryNewDialog (titled "New memory" via i18n).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
@@ -19,21 +18,17 @@ import {
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
 
-// Flip admin vs non-admin via this mock. RFC-099: the page keys off the
-// actor's ROLE (memory:approve moved into the user baseline).
+// Keep the account role fixed and toggle the distill capability independently.
 vi.mock('../src/hooks/useActor', () => ({
-  useIsAdmin: () => mockIsAdmin,
-  // RFC-285 B7（E11）：memory 管理面换 admin+manager 谓词——mock 同步补导出。
-  useIsResourceAdmin: () => mockIsAdmin,
-  usePermission: (perm: string) =>
-    perm === 'memory:create' ? mockIsAdmin : perm === 'memory:update' ? mockIsAdmin : false,
+  usePermission: (permission: string) =>
+    permission === 'memory-distill-jobs:manage' && mockCanManageDistillJobs,
   useActor: () => ({
     data: {
       user: {
         id: 'u1',
         username: 'u1',
         displayName: 'U1',
-        role: mockIsAdmin ? 'admin' : 'user',
+        role: 'user',
         status: 'active',
       },
       source: 'session',
@@ -48,7 +43,7 @@ vi.mock('../src/hooks/useActor', () => ({
     status: 'success',
   }),
 }))
-let mockIsAdmin = true
+let mockCanManageDistillJobs = true
 
 // Avoid real WebSocket / fetch from the memory hooks.
 vi.mock('../src/hooks/useMemoryWs', () => ({
@@ -68,7 +63,7 @@ vi.mock('../src/hooks/useMemoryDistillJobWs', () => ({
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
-  mockIsAdmin = true
+  mockCanManageDistillJobs = true
   // Stub fetch with empty list responses so the queries resolve cleanly.
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (request: RequestInfo | URL) => {
     const url = request.toString()
@@ -112,16 +107,16 @@ async function loadMemoryPage(initialEntry = '/memory') {
 }
 
 describe('/memory page header — [+ New memory] (RFC-045)', () => {
-  test('admin sees the New button', async () => {
-    mockIsAdmin = true
+  test('a capability holder sees the New button', async () => {
+    mockCanManageDistillJobs = true
     await loadMemoryPage()
     const btn = await screen.findByTestId('memory-new-button')
     expect(btn.closest('header')?.querySelector('h1.page__title')).not.toBeNull()
     expect(btn).toBeTruthy()
   })
 
-  test('non-admin ALSO sees the New button (RFC-099 D12 — owners create scoped memories)', async () => {
-    mockIsAdmin = false
+  test('an actor without distill capability also sees the New button', async () => {
+    mockCanManageDistillJobs = false
     await loadMemoryPage()
     await waitFor(() => {
       expect(screen.getByRole('navigation', { name: /Memory sections|记忆分区/i })).toBeTruthy()
@@ -132,7 +127,7 @@ describe('/memory page header — [+ New memory] (RFC-045)', () => {
   })
 
   test('clicking the New button opens the MemoryNewDialog', async () => {
-    mockIsAdmin = true
+    mockCanManageDistillJobs = true
     await loadMemoryPage()
     const btn = await screen.findByTestId('memory-new-button')
     fireEvent.click(btn)

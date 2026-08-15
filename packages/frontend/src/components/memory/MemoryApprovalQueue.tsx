@@ -1,8 +1,8 @@
-// RFC-041 PR4 — admin approval queue.
+// RFC-041/RFC-305 PR4 — row-level permission-gated approval queue.
 //
 // Lists every status='candidate' memory and exposes [Approve] / [Reject]
-// (and [Compare] for conflict_with). Non-admin users land here only
-// because of misnavigation: action buttons are rendered disabled.
+// (and [Compare] for conflict_with). Rows expose server-computed `canManage`;
+// action buttons fail closed when it is false.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'

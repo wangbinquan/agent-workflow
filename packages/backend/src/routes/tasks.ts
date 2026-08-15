@@ -374,7 +374,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
 
   // RFC-099 (D10) — task members panel. Read open to anyone who can see the
   // task (the visibility middleware above already gated us); writes are
-  // owner/admin only (enforced in updateTaskMembers).
+  // owner or `resource-acl:bypass` only (enforced in updateTaskMembers).
   registerRoute(
     app,
     {
@@ -432,9 +432,9 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
-  // RFC-222 — admin-only hard delete of a terminal task. Route gate
+  // RFC-222/RFC-305 — `tasks:delete` hard delete of a terminal task. Route gate
   // tasks:delete is registered in server.ts; visibilityCheck (the /:id
-  // middleware) has already confirmed the task exists + is admin-visible.
+  // middleware) has already confirmed the task exists + is visible to this actor.
   registerRoute(
     app,
     {

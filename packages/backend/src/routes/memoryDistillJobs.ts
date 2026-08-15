@@ -1,13 +1,11 @@
-// RFC-041 — admin monitoring + control of the distill queue (PR2 scope).
+// RFC-041/RFC-305 — capability-gated monitoring + control of the distill queue.
 //
 //   GET  /api/memory-distill-jobs[?status=pending|running|done|failed|canceled]
 //   POST /api/memory-distill-jobs/:id/retry    failed → pending
 //   POST /api/memory-distill-jobs/:id/cancel   pending → canceled
 //
-// RFC-222: resource-admin (admin OR manager) — D3 — gated by `memory:approve` which sits in the
-// admin baseline (see permissions.ts). The same permission point governs
-// the candidate approval queue, so the operator who can approve a
-// candidate can also tell the worker to retry / skip distill jobs.
+// Every endpoint explicitly requires `memory-distill-jobs:manage`; role presets
+// are not inspected by this transport or its service consumers.
 
 import { DistillJobStatusSchema } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
@@ -28,9 +26,8 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'GET',
       path: '/api/memory-distill-jobs',
-      permissions: ['memory:read'],
+      permissions: ['memory:read', 'memory-distill-jobs:manage'],
       tokenAccess: 'allow',
-      identity: 'resource-admin',
       summary: 'List memory distill jobs',
     },
     async (c) => {
@@ -53,9 +50,8 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'POST',
       path: '/api/memory-distill-jobs/:id/retry',
-      permissions: ['memory:update', 'tasks:execute'],
+      permissions: ['memory:update', 'tasks:execute', 'memory-distill-jobs:manage'],
       tokenAccess: 'allow',
-      identity: 'resource-admin',
       summary: 'Retry a failed distill job (spawns a model run)',
     },
     async (c) => {
@@ -77,9 +73,8 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'POST',
       path: '/api/memory-distill-jobs/:id/cancel',
-      permissions: ['memory:update'],
+      permissions: ['memory:update', 'memory-distill-jobs:manage'],
       tokenAccess: 'allow',
-      identity: 'resource-admin',
       summary: 'Cancel a pending distill job',
     },
     async (c) => {
@@ -95,15 +90,14 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
-  // RFC-043: admin-only distill job detail page support.
+  // RFC-043/RFC-305: capability-gated distill job detail page support.
   registerRoute(
     app,
     {
       method: 'GET',
       path: '/api/memory-distill-jobs/:id',
-      permissions: ['memory:read'],
+      permissions: ['memory:read', 'memory-distill-jobs:manage'],
       tokenAccess: 'allow',
-      identity: 'resource-admin',
       summary: 'Get one distill job',
     },
     async (c) => {
@@ -117,9 +111,8 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'GET',
       path: '/api/memory-distill-jobs/:id/session',
-      permissions: ['memory:read'],
+      permissions: ['memory:read', 'memory-distill-jobs:manage'],
       tokenAccess: 'allow',
-      identity: 'resource-admin',
       summary: 'Distill job session view',
     },
     async (c) => {

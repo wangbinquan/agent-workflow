@@ -504,8 +504,9 @@ snapshot 一起完成，避免 W4↔W5 循环。任何 mutation route 只有对�
 
 ### W4-A Operation catalog 与 adapter parity
 
-- [ ] 定义 command/query 判别的 transport-neutral operation descriptor，完整 admission 含 permissions AND、identity、
-      publicReason；RouteMeta 从 operation + HTTP binding 派生，tokenAccess 仍是 HTTP binding 独立门；
+- [ ] 定义 command/query 判别的 transport-neutral operation descriptor，完整 admission 含 permissions AND 与
+      publicReason；账户角色只选择 permission preset，不设 identity gate；RouteMeta 从 operation + HTTP binding 派生，
+      tokenAccess 仍是 HTTP binding 独立门；
 - [ ] HTTP RouteMeta 与 MCP tool 映射引用同一 operation id/handler；
 - [ ] 保留 transport admission，行级 auth/OCC 在 command 内；
 - [ ] API docs 从 transport descriptor 派生，不让 service import route registry；
@@ -513,7 +514,8 @@ snapshot 一起完成，避免 W4↔W5 循环。任何 mutation route 只有对�
 - [ ] code→transport exact golden 覆盖既有 404/409/410/412；unknown code fail-closed 500，public DTO exact codec
       不含 private cause；
 - [ ] 建 authority matrix：direct current actor；schedule/webhook/call/code-host delegated owner 每次重建 active/current
-      role 并在目标 tx 重验 usability；manual resume 维持 Q6；maintenance/outbox/apply 用窄 capability，不伪装 Actor。
+      effective permissions 并在目标 tx 重验 usability；manual resume 维持 Q6；maintenance/outbox/apply 用窄 capability，
+      不伪装 Actor。
 
 ### W4-B 15 个 route→DB vertical slices
 

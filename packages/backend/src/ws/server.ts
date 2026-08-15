@@ -184,7 +184,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     //   task               → canViewTask (RFC-054 W2-4; the tasks-list channel
     //                        does per-frame filtering instead because it
     //                        enumerates all tasks system-wide),
-    //   memory-distill-jobs → admin-only (P0 fix 682de313),
+    //   memory-distill-jobs → explicit capability gate,
     //   everything else     → gate-less, passes through.
     const verdict = await checkUpgradeGate(deps.db, actor, channel)
     if (verdict !== true) {
@@ -226,7 +226,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     // and was invisible to that rescan's live snapshot. It's tracked now, so
     // re-resolve it once against the post-revocation DB before it can receive any
     // frame — close it if the credential was revoked, refresh the actor otherwise
-    // (a role demotion). The subscribe below then runs under the fresh actor.
+    // (an access change). The subscribe below then runs under the fresh actor.
     if (currentRevalidationEpoch() !== ws.data.upgradeEpoch) {
       const fresh = await reresolveActor(deps.db, ws.data.credential, Date.now()).catch(() => null)
       if (fresh === null) {
@@ -235,7 +235,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
       }
       ws.data.actor = fresh
     }
-    // RFC-152 — gatedSubscribe (admin short-circuit → frameGate → error ⇒
+    // RFC-152/RFC-305 — gatedSubscribe (ACL-bypass shortcut → frameGate → error ⇒
     // drop) + hello frame + onOpenExtra (task `?since` replay), all driven
     // by the channel's registry spec.
     await openWsChannel(ws, ch, deps.db)

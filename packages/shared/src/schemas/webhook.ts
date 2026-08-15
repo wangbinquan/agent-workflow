@@ -494,8 +494,9 @@ export const WebhookEndpointSchema = z.object({
   provider: CodeHostProviderSchema,
   /**
    * 「给代码平台填的 URL」的 token 段（寻址 + 弱凭据，不是验签锚）。
-   * RFC-260 响应分层：明文只出现在 admin 的 **session** 响应里；非 admin 与
-   * 一切 PAT（含 admin 的 PAT）拿 null——掩码提示走 urlTokenHint。
+   * RFC-260/RFC-305 响应分层：明文只出现在持有
+   * `webhook-endpoints:manage` 的 **session** 响应里；无权限者与一切 PAT
+   * 均拿 null——掩码提示走 urlTokenHint。
    */
   urlToken: z.string().nullable(),
   /** 尾 4 位提示（secretHint 同款姿势）；所有 viewer 都有，前端统一渲染掩码。 */

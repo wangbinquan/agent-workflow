@@ -11,12 +11,13 @@
 // once by the page that told them what to ask for. AC-22 locks this: change a
 // `RouteMeta` permission or add a tool, and this output changes with it.
 //
-// The docs are also TRIMMED PER ROLE. A plain user reading about repo-import
-// endpoints they can never call learns nothing except that the product has
-// surfaces they are locked out of.
+// The docs are trimmed against the caller's effective account permissions.
+// `role` remains response/display metadata and a preset-only fallback for pure
+// tests; authorization consumers receive the already-resolved permission set.
 
 import {
   grantableMatrixPoints,
+  resolveEffectiveAccountPermissions,
   MATRIX_RESOURCES,
   MATRIX_VERBS,
   READ_POINTS,
@@ -32,7 +33,6 @@ export interface ApiDocEndpoint {
   readonly path: string
   readonly summary: string
   readonly permissions: ReadonlyArray<Permission>
-  readonly identity?: 'admin' | 'resource-admin'
   /** True when no permission point is required (see `publicReason`). */
   readonly open: boolean
 }
@@ -42,13 +42,13 @@ export interface ApiDocTool {
   readonly title: string
   readonly description: string
   readonly permissions: ReadonlyArray<Permission>
-  /** Whether this role could ever hold the points this tool needs. */
+  /** Whether the current account can place the points on a token. */
   readonly grantable: boolean
 }
 
 export interface ApiDocs {
   readonly role: Role
-  /** Every point this role can put on a token, grouped for the matrix UI. */
+  /** Every point this account can put on a token, grouped for the matrix UI. */
   readonly grantablePermissions: ReadonlyArray<{
     readonly resource: MatrixResource
     readonly verbs: ReadonlyArray<{ readonly verb: string; readonly permission: Permission }>
@@ -66,19 +66,25 @@ export interface ApiDocs {
 }
 
 /**
- * Build the documentation one role should see.
+ * Build the documentation for one effective account authority.
  *
  * `tokenAccess: 'never'` endpoints are omitted entirely rather than listed as
  * forbidden: this page documents what a TOKEN can do, and an endpoint no token
  * can reach is not part of that story. (The account and ACL surfaces are the
  * bulk of them — see D6.)
  */
-export function buildApiDocs(role: Role): ApiDocs {
-  const grantable = new Set(grantableMatrixPoints(role))
+export function buildApiDocs(
+  role: Role,
+  currentAccountPermissions?: ReadonlySet<Permission>,
+): ApiDocs {
+  const accountPermissions =
+    currentAccountPermissions ??
+    resolveEffectiveAccountPermissions({ role, additionalPermissions: [] })
+  const grantable = new Set(grantableMatrixPoints(accountPermissions))
 
   const endpoints = allRouteMeta()
     .filter((m) => m.tokenAccess !== 'never')
-    // Role trimming: an endpoint whose points this role can never hold is not
+    // Effective-authority trimming: an endpoint whose points the account cannot hold is not
     // "advanced", it is unreachable, and listing it teaches the wrong thing.
     .filter((m) => m.permissions.every((p) => grantable.has(p) || READ_POINTS.includes(p)))
     .map((m) => ({
@@ -86,7 +92,6 @@ export function buildApiDocs(role: Role): ApiDocs {
       path: m.path,
       summary: m.summary,
       permissions: m.permissions,
-      identity: m.identity,
       open: m.permissions.length === 0,
     }))
     .sort((a, b) =>

@@ -27,6 +27,7 @@ import { nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
+import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { resumeTask } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import {
@@ -443,7 +444,7 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
         nodeRunId,
         commentId,
         parsed.data.commentText,
-        { actorUserId: actor.user.id, role },
+        { actorUserId: actor.user.id, role, resourceAclBypass: hasResourceAclBypass(actor) },
       )
       return c.json(updated)
     },
@@ -466,6 +467,7 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       await deleteReviewComment(deps.db, nodeRunId, commentId, {
         actorUserId: actor.user.id,
         role,
+        resourceAclBypass: hasResourceAclBypass(actor),
       })
       return c.json({ ok: true })
     },

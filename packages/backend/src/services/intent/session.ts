@@ -1,8 +1,8 @@
 // RFC-234 §2/§6 (T5) — intent session CRUD + user-side turns.
 //
 // Visibility contract (design §2, design-gate P1-8): a session is readable by
-// its CREATOR or a SYSTEM admin (`canAuditIntentSessions`) — managers get the same
-// 404-shape as strangers. All writes are creator-only.
+// its CREATOR or an actor with `intent:audit` (`canAuditIntentSessions`) — all
+// callers get the same 404-shape as strangers. All writes are creator-only.
 //
 // Epoch discipline: mount add/remove and rebase bump `context_revision`; the
 // current draft becomes stale by DERIVATION (draft.context_revision !==

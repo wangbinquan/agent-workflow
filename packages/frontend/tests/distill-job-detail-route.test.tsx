@@ -1,9 +1,9 @@
-// RFC-043 T5 — admin gating + loading on the new
+// RFC-043/RFC-305 — capability gating + loading on the
 // /memory/distill-jobs/$jobId route component. We bypass the real
 // router by rendering the page component directly and stubbing
 // fetch / Route.useParams.
 //
-// Goal: lock the admin / non-admin branches and the load-error
+// Goal: lock the allowed / denied branches and the load-error
 // branch — full integration coverage of the route comes via the
 // component-level tests for the 6 sections, which together exercise
 // every observable surface of the page.
@@ -22,17 +22,19 @@ import {
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
 
-// Mock the actor hook so we can flip admin / non-admin freely. The gate keys
-// off the admin ROLE (useIsAdmin) — memory:approve is a user-baseline
-// permission and no longer implies admin (RFC-099 D12).
+// Keep the account role fixed as `user` while toggling only the effective
+// capability. This proves the component does not infer authority from role.
 vi.mock('../src/hooks/useActor', () => ({
-  useIsAdmin: () => mockIsAdmin,
-  // RFC-285 B7（E11）：memory 管理面换 admin+manager 谓词——mock 同步补导出。
-  useIsResourceAdmin: () => mockIsAdmin,
-  usePermission: () => false,
-  useActor: () => ({ data: null }),
+  usePermission: (permission: string) =>
+    permission === 'memory-distill-jobs:manage' && mockCanManageDistillJobs,
+  useActor: () => ({
+    data: { user: { role: 'user' } },
+    error: null,
+    isLoading: false,
+    refetch: vi.fn(),
+  }),
 }))
-let mockIsAdmin = true
+let mockCanManageDistillJobs = true
 
 // Mock the WS hook so the route doesn't try to open a real socket.
 vi.mock('../src/hooks/useMemoryDistillJobWs', () => ({
@@ -42,7 +44,7 @@ vi.mock('../src/hooks/useMemoryDistillJobWs', () => ({
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
-  mockIsAdmin = true
+  mockCanManageDistillJobs = true
 })
 
 afterEach(() => {
@@ -77,20 +79,20 @@ async function renderRoute(jobId: string) {
 }
 
 describe('memory.distill-jobs.$jobId route page (RFC-043)', () => {
-  test('non-admin sees Admin-only placeholder', async () => {
-    mockIsAdmin = false
+  test('actor without the capability sees the permission placeholder', async () => {
+    mockCanManageDistillJobs = false
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async () =>
         new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
     )
     await renderRoute('job-1')
     await waitFor(() => {
-      expect(screen.getByTestId('distill-detail-admin-only')).toBeTruthy()
+      expect(screen.getByTestId('distill-detail-permission-required')).toBeTruthy()
     })
     expect(screen.getByRole('heading', { level: 1, name: 'job-1' })).toBeTruthy()
   })
 
-  test('admin: load error renders the localized error box', async () => {
+  test('capability holder: load error renders the localized error box', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.endsWith('/api/memory-distill-jobs/job-x')) {
@@ -110,7 +112,7 @@ describe('memory.distill-jobs.$jobId route page (RFC-043)', () => {
     expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy()
   })
 
-  test('admin: happy path renders 4 section titles', async () => {
+  test('capability holder: happy path renders 4 section titles', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.endsWith('/session')) {

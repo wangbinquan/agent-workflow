@@ -2351,9 +2351,62 @@ export const users = sqliteTable(
     updatedAt: integer('updated_at').notNull(),
     lastLoginAt: integer('last_login_at'),
     schemaVersion: integer('schema_version').notNull().default(1),
+    // RFC-305 — monotonic CAS fence for role + additional-permission changes.
+    // Profile/status-only writes deliberately leave this unchanged.
+    accessRevision: integer('access_revision').notNull().default(0),
   },
   (t) => ({
     statusIdx: index('idx_users_status').on(t.status),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-305 user_permission_grants — account-additive permissions beyond the
+// selected permission preset. Permission ids intentionally have no static DB CHECK:
+// the shared catalog evolves without an enum migration; module writes validate
+// strictly and reads fail closed on unknown/intrinsic values.
+// -----------------------------------------------------------------------------
+export const userPermissionGrants = sqliteTable(
+  'user_permission_grants',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    permission: text('permission').notNull(),
+    grantedByUserId: text('granted_by_user_id'),
+    grantedAt: integer('granted_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.permission] }),
+    permissionIdx: index('idx_user_permission_grants_permission').on(t.permission),
+  }),
+)
+
+// RFC-305 append-only access history. Target/actor ids are deliberately weak
+// references: deleting or retiring an account must never erase audit evidence.
+export const userAccessAudit = sqliteTable(
+  'user_access_audit',
+  {
+    id: text('id').primaryKey(),
+    targetUserId: text('target_user_id').notNull(),
+    actorUserId: text('actor_user_id'),
+    actorKind: text('actor_kind', { enum: ['session', 'cli', 'system'] }).notNull(),
+    operationId: text('operation_id').notNull(),
+    correlationId: text('correlation_id'),
+    beforeRole: text('before_role', { enum: ['admin', 'user', 'manager'] }).notNull(),
+    afterRole: text('after_role', { enum: ['admin', 'user', 'manager'] }).notNull(),
+    addedPermissionsJson: text('added_permissions_json').notNull(),
+    removedPermissionsJson: text('removed_permissions_json').notNull(),
+    accessRevision: integer('access_revision').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    targetRevisionIdx: index('idx_user_access_audit_target_revision').on(
+      t.targetUserId,
+      t.accessRevision,
+    ),
+    createdIdx: index('idx_user_access_audit_created').on(t.createdAt),
+    operationIdx: index('idx_user_access_audit_operation').on(t.operationId),
   }),
 )
 
@@ -2731,7 +2784,7 @@ export const memoryDistillJobs = sqliteTable(
     createdAt: integer('created_at').notNull(),
     startedAt: integer('started_at'),
     finishedAt: integer('finished_at'),
-    // RFC-043: artefacts persisted for the admin-only distill job detail
+    // RFC-043/RFC-305: artefacts persisted for the permission-gated distill job detail
     // page. All nullable so pre-migration rows render with empty Section
     // placeholders. `opencode_session_id` is overwritten on each retry
     // attempt; per-attempt history is recoverable through
@@ -3449,8 +3502,8 @@ export const mcpRuntimeTestSessionLeases = sqliteTable(
 
 // -----------------------------------------------------------------------------
 // RFC-234 intent_sessions — intent-builder persistent sessions (design §2).
-// Visibility = creator + SYSTEM admin only (isAdminActor; manager has no bypass
-// — design-gate P1-8). `context_revision` is the monotonic context epoch: it
+// Visibility = creator + `intent:audit` (RFC-305; no account-role bypass).
+// `context_revision` is the monotonic context epoch: it
 // advances on mount change / rebase / approved disclosure / successful commit,
 // and every turn result is CAS'd against it (late results archive as error,
 // never install as the current draft — design-gate P0-3).

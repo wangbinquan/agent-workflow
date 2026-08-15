@@ -46,7 +46,7 @@ import { dbTxSync } from '@/db/txSync'
 import { agents, fusions, memories, skills, skillVersions, workflows } from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { canManageMemory, fuseMemoriesTx, getMemoryById } from '@/services/memory'
-import { canViewResource, isResourceAdminActor, isResourceOwner } from '@/services/resourceAcl'
+import { canViewResource, hasResourceAclBypass, isResourceOwner } from '@/services/resourceAcl'
 import { getSkillById, getSkillPreconditionTokenById } from '@/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
@@ -181,7 +181,7 @@ function loadFusionRow(db: DbClient, id: string): FusionRow | null {
 
 /** Owner or admin may decide (approve/reject/cancel) a fusion. */
 function canDecide(actor: Actor, row: FusionRow): boolean {
-  return isResourceAdminActor(actor) || actor.user.id === row.ownerUserId
+  return hasResourceAclBypass(actor) || actor.user.id === row.ownerUserId
 }
 
 // ---------------------------------------------------------------------------
@@ -538,7 +538,7 @@ export async function createFusion(
   if (skill.sourceKind !== 'managed') {
     throw new ConflictError('fusion-skill-not-managed', 'can only fuse into a managed skill')
   }
-  if (!isResourceAdminActor(actor) && !isResourceOwner(actor, skill)) {
+  if (!hasResourceAclBypass(actor) && !isResourceOwner(actor, skill)) {
     throw new ConflictError('fusion-skill-forbidden', 'you cannot write this skill')
   }
 
@@ -1181,7 +1181,7 @@ async function requireCurrentSkillWritable(
       'the target skill no longer exists; re-initiate the fusion',
     )
   }
-  if (!isResourceAdminActor(actor) && !isResourceOwner(actor, skill)) {
+  if (!hasResourceAclBypass(actor) && !isResourceOwner(actor, skill)) {
     throw new ConflictError(
       'fusion-skill-forbidden',
       'you no longer have write access to the target skill',
@@ -1255,7 +1255,7 @@ function claimFusionDecision(
     // managed ACL transfer doesn't drift the token, so an owner check outside the
     // claim is TOCTOU). The pre-claim `requireCurrentSkillWritable` is a fast-fail;
     // this is the authoritative gate atomic with the status transition.
-    if (!isResourceAdminActor(actor) && live!.ownerUserId !== actor.user.id) {
+    if (!hasResourceAclBypass(actor) && live!.ownerUserId !== actor.user.id) {
       throw new ConflictError(
         'fusion-skill-forbidden',
         'you no longer have write access to the target skill',
@@ -1379,7 +1379,10 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
   const row = loadFusionRow(db, id)
   if (!row) throw new NotFoundError('fusion-not-found', `fusion '${id}' not found`)
   if (!canDecide(actor, row)) {
-    throw new ConflictError('fusion-forbidden', 'only the fusion owner or an admin may approve')
+    throw new ConflictError(
+      'fusion-forbidden',
+      'only the fusion owner or an actor with resource-acl:bypass may approve',
+    )
   }
   if (row.status !== 'awaiting_approval') {
     throw new ConflictError(
@@ -1482,7 +1485,10 @@ export async function rejectFusion(
   const row = loadFusionRow(db, id)
   if (!row) throw new NotFoundError('fusion-not-found', `fusion '${id}' not found`)
   if (!canDecide(actor, row)) {
-    throw new ConflictError('fusion-forbidden', 'only the fusion owner or an admin may reject')
+    throw new ConflictError(
+      'fusion-forbidden',
+      'only the fusion owner or an actor with resource-acl:bypass may reject',
+    )
   }
   if (row.status !== 'awaiting_approval') {
     throw new ConflictError(
@@ -1675,7 +1681,10 @@ export async function cancelFusion(deps: FusionDeps, id: string, actor: Actor): 
   const row = loadFusionRow(db, id)
   if (!row) throw new NotFoundError('fusion-not-found', `fusion '${id}' not found`)
   if (!canDecide(actor, row)) {
-    throw new ConflictError('fusion-forbidden', 'only the fusion owner or an admin may cancel')
+    throw new ConflictError(
+      'fusion-forbidden',
+      'only the fusion owner or an actor with resource-acl:bypass may cancel',
+    )
   }
   if (FUSION_TERMINAL_STATUSES.has(row.status)) {
     throw new ConflictError('fusion-terminal', `fusion is already '${row.status}'`)

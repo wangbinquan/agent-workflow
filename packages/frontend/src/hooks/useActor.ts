@@ -93,20 +93,22 @@ export function currentActorAtRequest(client: QueryClient): MeResponse | null | 
   return client.getQueryData<MeResponse | null>(key)
 }
 
-/** Final request-boundary permission check for detached/stale event handlers. */
-export function hasPermissionAtRequest(client: QueryClient, perm: Permission): boolean {
-  const actor = currentActorAtRequest(client)
+function isUsableActor(value: unknown): value is MeResponse {
+  if (typeof value !== 'object' || value === null) return false
+  const actor = value as Partial<MeResponse>
   return (
-    actor !== null &&
-    actor !== undefined &&
-    Array.isArray(actor.permissions) &&
-    actor.permissions.includes(perm)
+    typeof actor.user === 'object' &&
+    actor.user !== null &&
+    typeof actor.user.id === 'string' &&
+    actor.user.status === 'active' &&
+    Array.isArray(actor.permissions)
   )
 }
 
-/** Final request-boundary admin identity check for detached/stale handlers. */
-export function isAdminAtRequest(client: QueryClient): boolean {
-  return currentActorAtRequest(client)?.user?.role === 'admin'
+/** Final request-boundary permission check for detached/stale event handlers. */
+export function hasPermissionAtRequest(client: QueryClient, perm: Permission): boolean {
+  const actor = currentActorAtRequest(client)
+  return isUsableActor(actor) && actor.permissions.includes(perm)
 }
 
 export function usePermission(perm: Permission): boolean {
@@ -116,39 +118,8 @@ export function usePermission(perm: Permission): boolean {
   // React Query deliberately retains the last successful data after a
   // background error; consulting data alone would keep stale write capability
   // visible indefinitely while `/me` is failing.
-  if (
-    actor.status !== 'success' ||
-    actor.fetchStatus !== 'idle' ||
-    !actor.data ||
-    !Array.isArray(actor.data.permissions)
-  ) {
+  if (actor.status !== 'success' || actor.fetchStatus !== 'idle' || !isUsableActor(actor.data)) {
     return false
   }
   return actor.data.permissions.includes(perm)
-}
-
-/**
- * Admin-IDENTITY gate — distinct from usePermission. Several permission points
- * now sit in the user baseline (e.g. memory:approve after RFC-099 D12), so a
- * surface that is genuinely admin-only must key off the ROLE: keying it off
- * such a permission would make the gate a no-op for every logged-in user.
- */
-export function useIsAdmin(): boolean {
-  const actor = useActor()
-  return (
-    actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data?.user?.role === 'admin'
-  )
-}
-
-/**
- * RFC-285 B7（E11）—— 资源管理员身份门（admin+manager），对齐后端
- * `isResourceAdminActor`。记忆管理面后端早已放行 manager
- * （memory.ts canManageMemory 首行），前端此前用 useIsAdmin() 窄于后端，
- * manager 在 UI 看不到自己本就有权的入口。
- */
-export function useIsResourceAdmin(): boolean {
-  const actor = useActor()
-  if (actor.status !== 'success' || actor.fetchStatus !== 'idle') return false
-  const role = actor.data?.user?.role
-  return role === 'admin' || role === 'manager'
 }

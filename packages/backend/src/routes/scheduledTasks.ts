@@ -1,16 +1,15 @@
 // RFC-159 — scheduled-task HTTP routes.
-// GET    /api/scheduled-tasks       — list (owner + tasks:read:all admin see all)
+// GET    /api/scheduled-tasks       — list (owner + `tasks:read:all` sees all)
 // GET    /api/scheduled-tasks/:id   — one (invisible == 404)
 // POST   /api/scheduled-tasks       — create (owner = actor; create-time launch gate)
-// PUT    /api/scheduled-tasks/:id   — update (owner/admin)
-// DELETE /api/scheduled-tasks/:id   — delete (owner/admin)
+// PUT    /api/scheduled-tasks/:id   — update (owner/`resource-acl:bypass`)
+// DELETE /api/scheduled-tasks/:id   — delete (owner/`resource-acl:bypass`)
 //
-// Member-based-private like tasks (owner_user_id + tasks:read:all admin bypass),
+// Member-based-private like tasks (owner_user_id + `tasks:read:all` bypass),
 // NOT the RFC-099 five-type ACL. Run history for a schedule = its launched tasks
 // via GET /api/tasks?scheduledTaskId= (see routes/tasks.ts).
 import {
   CreateScheduledTaskSchema,
-  isResourceAdminRole,
   rejectRetiredStartTaskKeys,
   UpdateScheduledTaskSchema,
 } from '@agent-workflow/shared'
@@ -36,10 +35,10 @@ import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { loadConfig } from '@/config'
 import { safeJsonOrThrowInvalid } from '@/util/http'
 
-/** Write authority: owner or a resource admin (admin OR manager — RFC-222 D2). */
+/** Write authority: owner or explicit resource ACL bypass. */
 function requireWriteAccess(actor: Actor, row: ScheduledTask): void {
   if (row.ownerUserId === actor.user.id) return
-  if (isResourceAdminRole(actor.user.role)) return
+  if (actor.permissions.has('resource-acl:bypass')) return
   throw new ForbiddenError('scheduled-task-forbidden', `not permitted to modify '${row.id}'`)
 }
 

@@ -916,5 +916,7 @@ export const ALL_TOOLS: ReadonlyArray<McpToolDef> = [
  * offered it.
  */
 export function toolsFor(actor: Actor): ReadonlyArray<McpToolDef> {
-  return ALL_TOOLS.filter((tool) => tool.permissions.every((p) => actor.permissions.has(p)))
+  return ALL_TOOLS.filter((tool) =>
+    tool.permissions.every((permission) => actor.permissions.has(permission)),
+  )
 }

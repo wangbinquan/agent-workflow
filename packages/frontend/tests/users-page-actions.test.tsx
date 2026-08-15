@@ -69,6 +69,8 @@ function row(id: string, overrides: Partial<AdminUserView> = {}): AdminUserView 
     updatedAt: 1,
     lastLoginAt: null,
     hasOidcIdentity: false,
+    additionalPermissions: [],
+    accessRevision: 0,
     ...overrides,
   }
 }
@@ -228,6 +230,7 @@ describe('/users responsive directory actions', () => {
     fireEvent.change(username, { target: { value: 'new-user' } })
     fireEvent.change(displayName, { target: { value: 'New User' } })
     fireEvent.change(password, { target: { value: 'password-123' } })
+    fireEvent.click(within(dialog).getByTestId('user-permission-scripts:author'))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
 
     await waitFor(() => expect(calls.some((call) => call.method === 'POST')).toBe(true))
@@ -236,7 +239,61 @@ describe('/users responsive directory actions', () => {
       displayName: 'New User',
       role: 'user',
       password: 'password-123',
+      additionalPermissions: ['scripts:author'],
     })
+  })
+
+  test('busy locks the permission draft and a failed create keeps every entered value', async () => {
+    let settleCreate: ((response: Response) => void) | undefined
+    const pendingCreate = new Promise<Response>((resolveCreate) => {
+      settleCreate = resolveCreate
+    })
+    installFetch((call) => {
+      if (call.method === 'POST' && /\/api\/users$/.test(call.url)) return pendingCreate
+      return route(call)
+    })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'New user' }))
+    const dialog = await screen.findByRole('dialog')
+    const username = within(dialog).getByRole('textbox', { name: /Username/ }) as HTMLInputElement
+    const displayName = within(dialog).getByRole('textbox', {
+      name: /Display name/,
+    }) as HTMLInputElement
+    const password = within(dialog).getByLabelText(/^Password/) as HTMLInputElement
+    const scripts = within(dialog).getByTestId('user-permission-scripts:author') as HTMLInputElement
+
+    fireEvent.change(username, { target: { value: 'retry-user' } })
+    fireEvent.change(displayName, { target: { value: 'Retry User' } })
+    fireEvent.change(password, { target: { value: 'password-123' } })
+    fireEvent.click(scripts)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => {
+      expect(
+        (within(dialog).getByRole('button', { name: 'Saving…' }) as HTMLButtonElement).disabled,
+      ).toBe(true)
+      expect(scripts.disabled).toBe(true)
+      expect(
+        (within(dialog).getByTestId('user-permission-search') as HTMLInputElement).disabled,
+      ).toBe(true)
+      expect(
+        (within(dialog).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled,
+      ).toBe(true)
+    })
+
+    act(() => {
+      settleCreate?.(
+        jsonResponse(
+          { ok: false, code: 'user-create-failed', message: 'Create failed; retry safely' },
+          500,
+        ),
+      )
+    })
+    expect(await within(dialog).findByText('Create failed; retry safely')).toBeTruthy()
+    expect(username.value).toBe('retry-user')
+    expect(displayName.value).toBe('Retry User')
+    expect(password.value).toBe('password-123')
+    expect(scripts.checked).toBe(true)
   })
 
   test('creates an SSO invitation without leaking the hidden password', async () => {
@@ -264,6 +321,7 @@ describe('/users responsive directory actions', () => {
       displayName: 'SSO User',
       email: 'sso@example.test',
       role: 'user',
+      additionalPermissions: [],
     })
   })
 
@@ -302,8 +360,80 @@ describe('/users responsive directory actions', () => {
     expect((within(dialog).getByTestId('users-edit-role-user') as HTMLButtonElement).disabled).toBe(
       true,
     )
-    expect(dialog.textContent).toContain('You cannot change your own role')
+    expect(dialog.textContent).toContain('You cannot change your own access preset or grants')
     expect(within(dialog).queryByRole('button', { name: 'Disable' })).toBeNull()
+  })
+
+  test('updates an exact permission set with the observed access revision', async () => {
+    const calls = installFetch(route)
+    renderPage()
+    fireEvent.click(await screen.findByTestId('user-manage-u-alice'))
+    const dialog = await screen.findByRole('dialog')
+
+    fireEvent.click(within(dialog).getByTestId('user-permission-scripts:author'))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(calls.some((call) => call.method === 'PATCH' && call.url.endsWith('/u-alice'))).toBe(
+        true,
+      ),
+    )
+    expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
+      access: {
+        role: 'user',
+        additionalPermissions: ['scripts:author'],
+        expectedRevision: 0,
+      },
+    })
+  })
+
+  test('keeps the permission draft after an OCC conflict until reload is requested', async () => {
+    let listCalls = 0
+    const calls = installFetch((call) => {
+      if (call.url.includes('/api/auth/me')) return jsonResponse(ME)
+      if (call.method === 'GET' && call.url.includes('/api/oidc/login-policy')) {
+        return jsonResponse({ passwordLoginEnabled: true, bootstrapCompletedAt: 1, updatedAt: 1 })
+      }
+      if (call.method === 'GET' && /\/api\/users(\?.*)?$/.test(call.url)) {
+        listCalls += 1
+        return jsonResponse(
+          ROWS.map((user) =>
+            user.id === 'u-alice' ? { ...user, accessRevision: listCalls === 1 ? 7 : 8 } : user,
+          ),
+        )
+      }
+      if (call.method === 'PATCH' && call.url.endsWith('/api/users/u-alice')) {
+        return jsonResponse(
+          { error: { code: 'user-access-stale', message: 'Access changed concurrently' } },
+          409,
+        )
+      }
+      return jsonResponse({ code: 'not-mocked', message: call.url }, 500)
+    })
+    renderPage()
+    fireEvent.click(await screen.findByTestId('user-manage-u-alice'))
+    const dialog = await screen.findByRole('dialog')
+    const scripts = within(dialog).getByTestId('user-permission-scripts:author') as HTMLInputElement
+
+    fireEvent.click(scripts)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    expect(await within(dialog).findByText('Permissions changed elsewhere')).toBeTruthy()
+    expect(scripts.checked).toBe(true)
+    expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
+      access: {
+        role: 'user',
+        additionalPermissions: ['scripts:author'],
+        expectedRevision: 7,
+      },
+    })
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reload latest' }))
+    await waitFor(() => expect(listCalls).toBeGreaterThan(1))
+    await waitFor(() => {
+      const latest = screen.getByTestId('user-permission-scripts:author') as HTMLInputElement
+      expect(latest.checked).toBe(false)
+    })
   })
 
   test('OIDC-managed users have no reset-password action', async () => {

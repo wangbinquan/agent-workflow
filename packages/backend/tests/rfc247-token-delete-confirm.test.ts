@@ -21,6 +21,7 @@ import { createPat } from '../src/auth/patStore'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { agents } from '../src/db/schema'
 import { assertTokenDeleteConfirm } from '../src/services/deleteConfirm'
 import { createManualCandidate } from '../src/services/memory'
 import { createApp } from '../src/server'
@@ -59,6 +60,7 @@ interface Harness {
   db: DbClient
   app: Hono
   userId: string
+  ownedAgentId: string
   patToken: string
   sessionToken: string
 }
@@ -70,6 +72,13 @@ async function harness(): Promise<Harness> {
     displayName: 'Alice',
     role: 'admin',
     password: 'pw12345678',
+  })
+  const ownedAgentId = 'rfc247-delete-owner-agent'
+  await db.insert(agents).values({
+    id: ownedAgentId,
+    name: 'RFC 247 delete owner agent',
+    ownerUserId: user.id,
+    visibility: 'private',
   })
   const app = createApp({
     token: DAEMON_TOKEN,
@@ -89,7 +98,7 @@ async function harness(): Promise<Harness> {
     purpose: 'general',
   })
   const { token: sessionToken } = await createSession({ db, userId: user.id })
-  return { db, app, userId: user.id, patToken, sessionToken }
+  return { db, app, userId: user.id, ownedAgentId, patToken, sessionToken }
 }
 
 async function del(app: Hono, token: string, path: string, body?: unknown): Promise<Response> {
@@ -104,8 +113,8 @@ describe('RFC-247 T20 — DELETE /api/memories/:id over a token', () => {
   test('without the title it is refused, and the row survives', async () => {
     const h = await harness()
     const memory = await createManualCandidate(h.db, {
-      scopeType: 'global',
-      scopeId: null,
+      scopeType: 'agent',
+      scopeId: h.ownedAgentId,
       title: 'never delete me blindly',
       bodyMd: 'body',
       tags: [],
@@ -131,8 +140,8 @@ describe('RFC-247 T20 — DELETE /api/memories/:id over a token', () => {
   test('with the exact title it goes through', async () => {
     const h = await harness()
     const memory = await createManualCandidate(h.db, {
-      scopeType: 'global',
-      scopeId: null,
+      scopeType: 'agent',
+      scopeId: h.ownedAgentId,
       title: 'delete me deliberately',
       bodyMd: 'body',
       tags: [],

@@ -34,7 +34,7 @@
 
 import type { Handler, Hono, MiddlewareHandler } from 'hono'
 import type { BlankEnv } from 'hono/types'
-import { isResourceAdminRole, ROUTE_BACKED_POINTS, type Permission } from '@agent-workflow/shared'
+import { ROUTE_BACKED_POINTS, type Permission } from '@agent-workflow/shared'
 import { tryActorOf } from '@/auth/actor'
 import { ForbiddenError, UnauthorizedError } from '@/util/errors'
 
@@ -89,20 +89,6 @@ export interface RouteMeta<P extends string = string> {
   /** Required when `permissions` is empty: why this route needs no point. */
   readonly publicReason?: string
   readonly tokenAccess: TokenAccess
-  /**
-   * RFC-222 identity requirement, when the route needs one IN ADDITION to its
-   * points. Kept in the metadata rather than mounted as a separate middleware
-   * so the declaration is the FULL authorization contract: the generated API
-   * documentation reads from here, and a doc that said "needs memory:update"
-   * for a route that also demands resource-admin identity would understate the
-   * requirement — which is the failure mode this registry exists to prevent.
-   *
-   * The identity door and the point door are AND-ed, and both are needed:
-   * identity alone would let a scope-stripped token through (the hole RFC-099's
-   * route-gate contract warns about); the point alone would let a plain `user`
-   * through on points that sit in the user baseline.
-   */
-  readonly identity?: 'admin' | 'resource-admin'
   /** One-line English summary; feeds the generated API documentation. */
   readonly summary: string
 }
@@ -132,7 +118,6 @@ export class RouteMetaError extends Error {}
 function sameMeta(a: RouteMeta, b: RouteMeta): boolean {
   return (
     a.tokenAccess === b.tokenAccess &&
-    a.identity === b.identity &&
     a.publicReason === b.publicReason &&
     a.summary === b.summary &&
     a.permissions.length === b.permissions.length &&
@@ -206,17 +191,10 @@ export function routeMetaGate(meta: RouteMeta): MiddlewareHandler {
         { route: key(meta.method, meta.path) },
       )
     }
-    if (meta.identity === 'admin' && actor.user.role !== 'admin') {
-      throw new ForbiddenError('forbidden', 'admin only')
-    }
-    if (meta.identity === 'resource-admin' && !isResourceAdminRole(actor.user.role)) {
-      throw new ForbiddenError('forbidden', 'resource admin only')
-    }
     for (const perm of meta.permissions) {
       if (!actor.permissions.has(perm)) {
         throw new ForbiddenError('forbidden', `missing permission: ${perm}`, {
           requiredPermission: perm,
-          actorPermissions: [...actor.permissions],
         })
       }
     }

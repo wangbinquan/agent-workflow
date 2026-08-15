@@ -27,6 +27,10 @@ export type User = z.infer<typeof UserSchema>
  *  UI can omit inapplicable password actions without an N+1 identity query. */
 export const AdminUserViewSchema = UserSchema.extend({
   hasOidcIdentity: z.boolean(),
+  /** Canonical per-account grants only; role-baseline points are never repeated. */
+  additionalPermissions: z.array(PermissionSchema),
+  /** Optimistic-concurrency token for role/additional-permission changes. */
+  accessRevision: z.number().int().nonnegative(),
 })
 
 export type AdminUserView = z.infer<typeof AdminUserViewSchema>
@@ -58,19 +62,41 @@ export const CreateUserBodySchema = z.object({
   role: UserSchema.shape.role,
   password: z.string().min(8).max(256).optional(),
   sendInvite: z.boolean().optional(),
+  additionalPermissions: z.array(PermissionSchema).default([]),
 })
 
 export type CreateUserBody = z.infer<typeof CreateUserBodySchema>
+
+export const UserAccessPatchSchema = z
+  .object({
+    role: RoleSchema,
+    additionalPermissions: z.array(PermissionSchema),
+    expectedRevision: z.number().int().nonnegative(),
+  })
+  .strict()
+
+export type UserAccessPatch = z.infer<typeof UserAccessPatchSchema>
 
 export const PatchUserBodySchema = z
   .object({
     displayName: UserSchema.shape.displayName.optional(),
     email: UserSchema.shape.email.optional(),
+    /** @deprecated RFC-305 compatibility adapter; new clients send `access`. */
     role: UserSchema.shape.role.optional(),
+    access: UserAccessPatchSchema.optional(),
     status: UserSchema.shape.status.optional(),
     forcePasswordChange: z.boolean().optional(),
   })
   .strict()
+  .superRefine((value, context) => {
+    if (value.role !== undefined && value.access !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'user-access-ambiguous',
+        path: ['access'],
+      })
+    }
+  })
 
 export type PatchUserBody = z.infer<typeof PatchUserBodySchema>
 

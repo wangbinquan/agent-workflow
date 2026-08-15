@@ -9,10 +9,10 @@
 //      ws-repo-imports / ws-auth-multi-token — depend on them),
 //   3. the three auth forms are NOT flattened (D1): upgradeGate exactly on
 //      task + memory-distill-jobs, frameGate exactly on tasks-list +
-//      workflows + memories, adminShortCircuit exactly on workflows +
+//      workflows + memories, aclBypassShortCircuit exactly on workflows +
 //      memories, repo-import bare (token-only),
 //   4. pathRe/parse round-trips (incl. task `?since` and %-decoding),
-//   5. the gatedSubscribe pipeline: hello first, admin short-circuit is
+//   5. the gatedSubscribe pipeline: hello first, ACL-bypass short-circuit is
 //      synchronous, gate=false / gate-throw ⇒ frame dropped.
 
 import { describe, expect, test } from 'bun:test'
@@ -183,19 +183,18 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(WS_CHANNELS.workflows.upgradeGate).toBeUndefined()
     expect(WS_CHANNELS.workgroups.upgradeGate).toBeUndefined()
     expect(WS_CHANNELS.memories.upgradeGate).toBeUndefined()
-    // Admin short-circuit exactly where the old handlers had a sync
-    // role==='admin' fast path: workflows + workgroups + memories. tasks-list stays on
+    // ACL-bypass short-circuit exactly on workflows + workgroups + memories. tasks-list stays on
     // the async path (canViewTask short-circuits internally).
-    expect(WS_CHANNELS.workflows.adminShortCircuit).toBe(true)
-    expect(WS_CHANNELS.workgroups.adminShortCircuit).toBe(true)
-    expect(WS_CHANNELS.memories.adminShortCircuit).toBe(true)
-    expect(WS_CHANNELS['tasks-list'].adminShortCircuit).not.toBe(true)
-    expect(WS_CHANNELS.task.adminShortCircuit).not.toBe(true)
-    expect(WS_CHANNELS['repo-import'].adminShortCircuit).not.toBe(true)
-    expect(WS_CHANNELS['memory-distill-jobs'].adminShortCircuit).not.toBe(true)
-    expect(WS_CHANNELS['scheduled-tasks'].adminShortCircuit).not.toBe(true)
-    expect(WS_CHANNELS['intent-sessions'].adminShortCircuit).not.toBe(true)
-    expect(WS_CHANNELS['mcp-runtime-tests'].adminShortCircuit).not.toBe(true)
+    expect(WS_CHANNELS.workflows.aclBypassShortCircuit).toBe(true)
+    expect(WS_CHANNELS.workgroups.aclBypassShortCircuit).toBe(true)
+    expect(WS_CHANNELS.memories.aclBypassShortCircuit).toBe(true)
+    expect(WS_CHANNELS['tasks-list'].aclBypassShortCircuit).not.toBe(true)
+    expect(WS_CHANNELS.task.aclBypassShortCircuit).not.toBe(true)
+    expect(WS_CHANNELS['repo-import'].aclBypassShortCircuit).not.toBe(true)
+    expect(WS_CHANNELS['memory-distill-jobs'].aclBypassShortCircuit).not.toBe(true)
+    expect(WS_CHANNELS['scheduled-tasks'].aclBypassShortCircuit).not.toBe(true)
+    expect(WS_CHANNELS['intent-sessions'].aclBypassShortCircuit).not.toBe(true)
+    expect(WS_CHANNELS['mcp-runtime-tests'].aclBypassShortCircuit).not.toBe(true)
     // onOpenExtra (replay) only on task.
     expect(WS_CHANNELS.task.onOpenExtra).toBeDefined()
     for (const kind of ALL_KINDS.filter((k) => k !== 'task')) {
@@ -246,18 +245,17 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
   })
 })
 
-describe('RFC-152 — upgrade gates (registry semantics == pre-registry branches)', () => {
-  test('memory-distill-jobs: non-resource-admin refused; admin + manager pass (RFC-222 D3)', async () => {
+describe('RFC-152 — upgrade gates', () => {
+  test('memory-distill-jobs checks effective capabilities, not the account role', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const params: AnyChannelParams = { kind: 'memory-distill-jobs' }
     const refusal = await checkUpgradeGate(db, makeActor('user'), params)
     expect(refusal).toEqual({
-      code: 'admin-required',
-      message: 'memory-distill-jobs channel is resource-admin only',
+      code: 'permission-required',
+      message: 'memory-distill-jobs channel requires memory-distill-jobs:manage',
     })
     expect(await checkUpgradeGate(db, makeActor('admin'), params)).toBe(true)
-    // RFC-222: manager reaches the distill-job ops surface (double-gate:
-    // isResourceAdminRole ∧ memory:approve — both hold for manager).
+    // The manager preset currently includes both required points.
     expect(await checkUpgradeGate(db, makeActor('manager'), params)).toBe(true)
   })
 
@@ -290,13 +288,13 @@ describe('RFC-152 — upgrade gates (registry semantics == pre-registry branches
   })
 })
 
-describe('RFC-152 — gatedSubscribe pipeline (admin short-circuit → frameGate → error ⇒ drop)', () => {
+describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate → error ⇒ drop)', () => {
   type ProbeMsg = { type: string; n: number }
 
   /** Build a scratch spec around a hand-rolled broadcaster so the pipeline
    *  can be driven without a real server. */
   function makeProbeSpec(opts: {
-    adminShortCircuit?: boolean
+    aclBypassShortCircuit?: boolean
     frameGate?: (ctx: unknown, msg: ProbeMsg) => Promise<boolean>
   }) {
     let listener: ((msg: ProbeMsg) => void) | null = null
@@ -315,7 +313,7 @@ describe('RFC-152 — gatedSubscribe pipeline (admin short-circuit → frameGate
         },
       },
       channelKeyOf: () => 'probe-key',
-      adminShortCircuit: opts.adminShortCircuit,
+      aclBypassShortCircuit: opts.aclBypassShortCircuit,
       frameGate: opts.frameGate,
     }
     return {
@@ -326,6 +324,17 @@ describe('RFC-152 — gatedSubscribe pipeline (admin short-circuit → frameGate
   }
 
   const db = createInMemoryDb(MIGRATIONS)
+  db.$client.exec(`
+    INSERT INTO users (
+      id, username, email, display_name, password_hash, role, status,
+      force_password_change, created_by, created_at, updated_at,
+      last_login_at, schema_version, access_revision
+    ) VALUES
+      ('u-test', 'u-test', NULL, 'u-test', NULL, 'user', 'active', 0, NULL, 0, 0, NULL, 1, 0),
+      ('owner-1', 'owner-1', NULL, 'owner-1', NULL, 'user', 'active', 0, NULL, 0, 0, NULL, 1, 0),
+      ('stranger-1', 'stranger-1', NULL, 'stranger-1', NULL, 'user', 'active', 0, NULL, 0, 0, NULL, 1, 0),
+      ('admin-1', 'admin-1', NULL, 'admin-1', NULL, 'admin', 'active', 0, NULL, 0, 0, NULL, 1, 0);
+  `)
   const flush = () => new Promise((r) => setTimeout(r, 10))
 
   test('hello frame is sent first; since is echoed when params carry one', () => {
@@ -371,10 +380,50 @@ describe('RFC-152 — gatedSubscribe pipeline (admin short-circuit → frameGate
     ])
   })
 
-  test('adminShortCircuit sends synchronously for admins without consulting the gate', () => {
+  test('RFC-305 DB revision fence drops a frame even when the change notification was lost', () => {
+    const probe = makeProbeSpec({})
+    const { ws, sent } = makeFakeWs(makeActor('user'))
+    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, db)
+    db.$client.query("UPDATE users SET access_revision = 1 WHERE id = 'u-test'").run()
+    probe.fire({ type: 'x', n: 1 })
+    expect(sent).toEqual([{ type: 'hello', channel: 'probe' }])
+    expect(ws.data.revalidating).toBe(true)
+    db.$client.query("UPDATE users SET access_revision = 0 WHERE id = 'u-test'").run()
+  })
+
+  test('RFC-305 async gate verdict cannot send after the actor was replaced', async () => {
+    let finish: ((visible: boolean) => void) | undefined
+    const probe = makeProbeSpec({
+      frameGate: () =>
+        new Promise<boolean>((resolveVisible) => {
+          finish = resolveVisible
+        }),
+    })
+    const { ws, sent } = makeFakeWs(makeActor('user'))
+    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, db)
+    probe.fire({ type: 'x', n: 1 })
+    db.$client.query("UPDATE users SET access_revision = 1 WHERE id = 'u-test'").run()
+    ws.data.actor = buildActor({
+      user: {
+        id: 'u-test',
+        username: 'u-test',
+        displayName: 'u-test',
+        role: 'user',
+        status: 'active',
+      },
+      source: 'session',
+      authorityRevision: 1,
+    })
+    finish?.(true)
+    await flush()
+    expect(sent).toEqual([{ type: 'hello', channel: 'probe' }])
+    db.$client.query("UPDATE users SET access_revision = 0 WHERE id = 'u-test'").run()
+  })
+
+  test('aclBypassShortCircuit sends synchronously for actors with ACL bypass', () => {
     let gateCalls = 0
     const probe = makeProbeSpec({
-      adminShortCircuit: true,
+      aclBypassShortCircuit: true,
       frameGate: async () => {
         gateCalls += 1
         return false

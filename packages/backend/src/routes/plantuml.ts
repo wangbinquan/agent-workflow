@@ -2,7 +2,7 @@
 //
 // Server-side PlantUML proxy. Mounted under /api/* (multiAuth), with NO extra
 // permission gate, so ANY logged-in user can render PlantUML — unlike
-// /api/config (settings:read, admin-only) which previously gated the endpoint.
+// /api/config (`settings:read`) which previously gated the endpoint.
 // The configured endpoint + auth header stay server-side; the browser only
 // receives the SVG (which it still DOMPurify-sanitizes).
 //

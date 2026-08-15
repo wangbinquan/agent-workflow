@@ -57,6 +57,7 @@ const FREEZE_TARGETS: FreezeTarget[] = [
   { idx: 1, tag: '0001_cold_sentry' },
   { idx: 13, tag: '0014_rfc031_plugins' },
   { idx: 19, tag: '0020_rfc036_task_collab' },
+  { idx: 160, tag: '0161_rfc304_capability_templates' },
 ]
 
 interface JournalEntry {
@@ -248,7 +249,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // RFC-304 PR-2 bumped to 161 with 0161_rfc304_capability_templates（部门层
   // framework / 小组层 binding / 仓库×能力矩阵；binding 刻意无脚本与钩子列——
   // 那个「没有」本身就是权限边界）。
-  test('HEAD journal has 161 entries (sanity — locks the freeze target indices)', () => {
+  // RFC-305 bumped to 162 with 0162_rfc305_user_permission_grants（用户 access
+  // revision、附加授权集合与 append-only access audit）。
+  test('HEAD journal has 162 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -392,7 +395,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // Webhook 终态 workspace claim 与 RFC-165/iso GC claim）。
     // RFC-303 bumped to 157 with 0157_rfc303_mr_terminal_control（MR 终态
     // 控制流、稳定流身份与 durable launch/effect ledgers）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(161)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(162)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

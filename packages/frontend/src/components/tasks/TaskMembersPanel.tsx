@@ -1,7 +1,7 @@
 // RFC-099 (D10) — task members panel, hosted in a Dialog behind the
 // TaskMembersDialogButton header button (uniform with AclDialogButton on the
-// resource pages). Shows owner + task users to every member; owner/admin add
-// & remove users and transfer ownership. Task users hold the same
+// resource pages). Shows owner + task users to every member; owner/ACL-bypass
+// holders add & remove users and transfer ownership. Task users hold the same
 // operational rights as the owner (D13) — this panel is the only owner-gated
 // surface besides task deletion.
 //

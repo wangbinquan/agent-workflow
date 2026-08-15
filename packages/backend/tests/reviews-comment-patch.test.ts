@@ -340,14 +340,24 @@ describe('RFC-285 B6① — review comment authorship matrix', () => {
     expect(updated.commentText).toBe('mine')
   })
 
-  test('owner / admin / manager 旁路可改他人评论', async () => {
-    for (const role of ['owner', 'admin', 'manager'] as const) {
+  test('任务 owner 或显式 resource-acl:bypass 可改他人评论', async () => {
+    for (const authz of [
+      { role: 'owner' as const, resourceAclBypass: false },
+      { role: 'user' as const, resourceAclBypass: true },
+    ]) {
       const s = await seedAuthored('u_author')
-      const updated = await updateReviewCommentText(s.db, s.nodeRunId, s.commentId, `by-${role}`, {
-        actorUserId: 'u_priv',
-        role,
-      })
-      expect(updated.commentText).toBe(`by-${role}`)
+      const marker = authz.role === 'owner' ? 'owner' : 'acl-bypass'
+      const updated = await updateReviewCommentText(
+        s.db,
+        s.nodeRunId,
+        s.commentId,
+        `by-${marker}`,
+        {
+          actorUserId: 'u_priv',
+          ...authz,
+        },
+      )
+      expect(updated.commentText).toBe(`by-${marker}`)
     }
   })
 

@@ -13,7 +13,7 @@
 //
 // 当前**不可利用**，本测试锁的是顺序不变量本身：`webhook-triggers:create` /
 //   `:update` 今天只在 admin 的权限集里（shared/schemas/permission.ts —— 既不在
-//   USER_BASELINE 也不在 MANAGER_EXTRA），而 admin 恒 `isResourceAdminActor`
+//   USER_BASELINE 也不在 MANAGER_EXTRA），而 admin 恒 `hasResourceAclBypass`
 //   ⇒ `canViewResource` 对任何 workflow 都返回 true，能走到这条路径的人本就全可见。
 //   但 RFC-260 已经把 webhook 的**读**面下放给了全体用户，写面下放是可预见的演进；
 //   没有这条锁，那一天泄漏会静默变成真漏洞。因此测试直接在**服务层**构造一个
