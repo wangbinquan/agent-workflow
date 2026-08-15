@@ -11,8 +11,13 @@ interface TransactionLifetime {
 }
 
 interface SQLiteTransactionClaim {
-  readonly transaction: DbTxSync
+  readonly transaction: LiveDbTxSync
   readonly lifetime: TransactionLifetime
+}
+
+export type LiveDbTxSync = DbTxSync & {
+  /** Nested transactions would receive an unguarded Drizzle handle. */
+  readonly transaction: never
 }
 
 const claims = new WeakMap<TransactionScope, SQLiteTransactionClaim>()
@@ -38,7 +43,7 @@ export function withExistingSQLiteTransactionScope<T extends undefined>(
 
 export function withSQLiteTransaction<T extends undefined>(
   scope: TransactionScope,
-  body: (transaction: DbTxSync) => NotPromise<T>,
+  body: (transaction: LiveDbTxSync) => NotPromise<T>,
 ): void {
   const claim = claims.get(scope)
   if (claim === undefined) throw new Error('transaction scope is not live')
@@ -59,34 +64,107 @@ function assertLive(lifetime: TransactionLifetime): void {
  * nor a prepared builder captured by adapter code remains usable after the
  * outer callback exits.
  */
-function createLiveTransactionView(transaction: DbTxSync, lifetime: TransactionLifetime): DbTxSync {
+function createLiveTransactionView(
+  transaction: DbTxSync,
+  lifetime: TransactionLifetime,
+): LiveDbTxSync {
   const views = new WeakMap<object, object>()
-  const wrap = (value: unknown): unknown => {
+
+  function wrapCallbackArgument(argument: unknown): unknown {
+    if (typeof argument !== 'function') return argument
+    return function guardedCallback(this: unknown, ...args: unknown[]): unknown {
+      assertLive(lifetime)
+      return Reflect.apply(argument, wrap(this), args.map(wrap))
+    }
+  }
+
+  function wrap(value: unknown): unknown {
     if (value === null || (typeof value !== 'object' && typeof value !== 'function')) {
       return value
     }
     const target = value as object
     const cached = views.get(target)
     if (cached !== undefined) return cached
-    const view = new Proxy(target, {
-      get(current, property) {
+
+    // The proxy wraps an empty facade rather than the Drizzle object itself.
+    // Reflection therefore cannot recover raw own-property values such as
+    // `session`, while normal method calls are forwarded to the real target.
+    const facade: object =
+      typeof value === 'function'
+        ? function guardedCallable(this: unknown, ...args: unknown[]): unknown {
+            assertLive(lifetime)
+            return wrap(Reflect.apply(value, wrap(this), args.map(wrapCallbackArgument)))
+          }
+        : Object.create(null)
+    const view = new Proxy(facade, {
+      get(_facade, property) {
         assertLive(lifetime)
-        const member: unknown = Reflect.get(current, property, current)
+        const member: unknown = Reflect.get(target, property, target)
         if (typeof member === 'function') {
+          if (property === 'transaction') {
+            throw new Error(
+              'nested SQLite transactions are not available in a live transaction scope',
+            )
+          }
+          if (
+            property === 'then' ||
+            property === 'catch' ||
+            property === 'finally' ||
+            property === 'execute'
+          ) {
+            throw new Error('asynchronous SQLite query execution is not available in a live scope')
+          }
           return (...args: unknown[]) => {
             assertLive(lifetime)
-            return wrap(Reflect.apply(member, current, args))
+            return wrap(Reflect.apply(member, target, args.map(wrapCallbackArgument)))
           }
         }
         return wrap(member)
       },
-      set(current, property, next) {
+      has(_facade, property) {
         assertLive(lifetime)
-        return Reflect.set(current, property, next, current)
+        return Reflect.has(target, property)
+      },
+      getOwnPropertyDescriptor(current, property) {
+        assertLive(lifetime)
+        return Reflect.getOwnPropertyDescriptor(current, property)
+      },
+      ownKeys(current) {
+        assertLive(lifetime)
+        return Reflect.ownKeys(current)
+      },
+      getPrototypeOf(current) {
+        assertLive(lifetime)
+        return Reflect.getPrototypeOf(current)
+      },
+      isExtensible(current) {
+        assertLive(lifetime)
+        return Reflect.isExtensible(current)
+      },
+      set() {
+        assertLive(lifetime)
+        throw new Error('live SQLite transaction views are immutable')
+      },
+      defineProperty() {
+        assertLive(lifetime)
+        throw new Error('live SQLite transaction views are immutable')
+      },
+      deleteProperty() {
+        assertLive(lifetime)
+        throw new Error('live SQLite transaction views are immutable')
+      },
+      setPrototypeOf() {
+        assertLive(lifetime)
+        throw new Error('live SQLite transaction views are immutable')
+      },
+      preventExtensions() {
+        assertLive(lifetime)
+        throw new Error('live SQLite transaction views are immutable')
       },
     })
     views.set(target, view)
     return view
   }
-  return wrap(transaction) as DbTxSync
+
+  return wrap(transaction) as LiveDbTxSync
 }

@@ -204,6 +204,7 @@ describe('RFC-305 identity-access architecture', () => {
     let escaped: TransactionScope | null = null
     let escapedTransaction: DbTxSync | null = null
     let escapedQuery: { run(): unknown } | null = null
+    let escapedRow: { value: number } | null = null
     dbTxSync(db, (transaction) => {
       withExistingSQLiteTransactionScope(transaction, (scope) => {
         escaped = scope
@@ -212,6 +213,21 @@ describe('RFC-305 identity-access architecture', () => {
           expect(liveTransaction).not.toBe(transaction)
           liveTransaction.run(sql`SELECT 1`)
           escapedQuery = liveTransaction.update(users).set({ displayName: 'must-not-run' })
+          const rows = liveTransaction.all(sql`SELECT 1 AS value`) as Array<{ value: number }>
+          rows.map((row) => {
+            escapedRow = row
+            return row.value
+          })
+          expect(Object.getOwnPropertyDescriptor(liveTransaction, 'session')).toBeUndefined()
+          expect(Reflect.ownKeys(liveTransaction)).toEqual([])
+          expect(() =>
+            (liveTransaction as unknown as DbTxSync).transaction(() => {
+              throw new Error('nested callback must never run')
+            }),
+          ).toThrow('nested SQLite transactions are not available')
+          expect(() =>
+            (liveTransaction.select().from(users) as unknown as { execute(): unknown }).execute(),
+          ).toThrow('asynchronous SQLite query execution is not available')
           return undefined
         })
         return undefined
@@ -223,6 +239,7 @@ describe('RFC-305 identity-access architecture', () => {
     )
     expect(() => escapedTransaction!.run(sql`SELECT 1`)).toThrow('transaction scope is not live')
     expect(() => escapedQuery!.run()).toThrow('transaction scope is not live')
+    expect(() => escapedRow!.value).toThrow('transaction scope is not live')
 
     let continuation: Promise<void> | null = null
     expect(() =>
@@ -251,6 +268,11 @@ describe('RFC-305 identity-access architecture', () => {
       withExistingSQLiteTransactionScope(transaction, async () => undefined)
       // @ts-expect-error -- RFC-294 transaction participants must remain synchronous.
       withSQLiteTransaction(scope, async () => undefined)
+      withSQLiteTransaction(scope, (liveTransaction) => {
+        // @ts-expect-error -- nested transactions can expose an unguarded Drizzle handle.
+        liveTransaction.transaction(() => undefined)
+        return undefined
+      })
     })
   })
 
