@@ -83,6 +83,30 @@ export interface CodeWorkItemContext {
    * `resumeFrom` (design §2.2 "恢复语义"). Null = start from the beginning.
    */
   resumeFromStage: string | null
+  /**
+   * Non-null while a round is inside the PUBLISH CRITICAL SECTION — it has
+   * CAS-marked itself as this MR's publisher at that epoch and is now issuing
+   * outbound writes.
+   *
+   * This is the system's single linearization point, and it exists because
+   * "re-check the epoch before calling" is a TOCTOU: between the re-check and
+   * the HTTP actually leaving, an event handler can bump the epoch, and the
+   * stale output lands on the MR anyway. The lease does not help — it stops
+   * another ROUND from starting, not an event handler from changing state.
+   *
+   * So while this is set, an arriving event may only be REGISTERED; the round
+   * in the critical section wins and the event is served by the next round.
+   * (The opposite choice — event wins, round aborts — is also coherent, but
+   * needs interruptible in-flight HTTP, which GitLab's batched drafts make
+   * unreliable.)
+   */
+  publishingEpoch: number | null
+  /**
+   * The latest event registered while the item could not act on it. Only ONE
+   * is kept: replaying a queue of superseded events after the lease frees would
+   * run a string of rounds that are all already stale.
+   */
+  pendingRevision: { epoch: number } | null
 }
 
 export type CodeWorkItemEffect =
@@ -103,6 +127,21 @@ export type CodeWorkItemEffect =
    */
   | { kind: 'precheck-failure-fingerprint' }
   | { kind: 'final-adoption-comparison' }
+  /**
+   * Record this event as the item's single pending revision and raise the
+   * epoch. Used both inside the publish critical section and while queued —
+   * in both cases the item cannot act now, and only the newest event matters.
+   */
+  | { kind: 'register-pending-revision' }
+  /** Consume the registered revision now that the item can act on it. */
+  | { kind: 'consume-pending-revision' }
+  /**
+   * Queue a human's instruction WITHOUT merging. Automated signals collapse
+   * into one pending revision because only their latest state matters; a person
+   * who asked twice is owed two answers, and collapsing the second into the
+   * first reads — from their side — as being ignored.
+   */
+  | { kind: 'enqueue-human-command' }
 
 export type CodeWorkItemDecision =
   | { outcome: 'transition'; to: CodeWorkItemStatus; effects: CodeWorkItemEffect[] }
@@ -153,6 +192,23 @@ export function decideCodeWorkItemTransition(
     ])
   }
 
+  // ── The publish critical section outranks the supersede rule ──────────────
+  // Placed after closure and before everything else: a round that is mid-publish
+  // must not be superseded out from under its own in-flight HTTP, but a merged
+  // MR still has to converge on `closed` (the closure arm above already ran).
+  //
+  // Human commands are exempt on purpose — see `isHumanCommand`.
+  if (
+    ctx.publishingEpoch !== null &&
+    event.kind === 'external-signal' &&
+    !isHumanCommand(event.signal)
+  ) {
+    return stay(
+      'a round is inside the publish critical section; event registered for the next one',
+      [{ kind: 'register-pending-revision' }],
+    )
+  }
+
   if (status === 'closing') {
     // Only two things matter now: the old task dying and compensation landing.
     if (event.kind === 'round-task-terminal') {
@@ -190,6 +246,13 @@ export function decideCodeWorkItemTransition(
         }
         return externalArrival(ctx)
       }
+      // A human's instruction arriving while the item is already scheduled is
+      // QUEUED, not merged (design §2.2 排队期间的事件合并).
+      if (isHumanCommand(signal) && (status === 'queued' || status === 'superseding')) {
+        return stay('human instructions queue individually rather than merging', [
+          { kind: 'enqueue-human-command' },
+        ])
+      }
       // Guard 2 — a confirmation must name the generation it answers.
       if (signal.kind === 'confirmation') {
         if (status !== 'awaiting') return externalArrival(ctx)
@@ -215,7 +278,11 @@ export function decideCodeWorkItemTransition(
 
     case 'scheduler-take':
       if (status !== 'queued') return no(`scheduler-take applies to 'queued', not '${status}'`)
-      return t('running')
+      // Taking the round is where the merged revision is finally acted on.
+      return t(
+        'running',
+        ctx.pendingRevision !== null ? [{ kind: 'consume-pending-revision' }] : [],
+      )
 
     case 'round-published':
       if (status !== 'running') return no(`round-published applies to 'running', not '${status}'`)
@@ -256,6 +323,19 @@ export function decideCodeWorkItemTransition(
 }
 
 /**
+ * A human's direct instruction — an `@mention` reply or a confirmation keyword.
+ *
+ * These never merge into a single pending revision and are never deferred by
+ * the publish critical section: a person who asked twice is owed two answers,
+ * and silently collapsing their second request into the first reads, from
+ * their side, as the platform ignoring them. Automated signals (a push, a
+ * pipeline result) carry no such expectation — only their latest state matters.
+ */
+function isHumanCommand(signal: CodeExternalSignal): boolean {
+  return signal.kind === 'confirmation'
+}
+
+/**
  * What an ordinary external arrival does, once the three guards above have had
  * their say. Split out because five arms funnel into it and inlining it made
  * the guard order harder to read than the rules it implements.
@@ -267,9 +347,12 @@ function externalArrival(ctx: CodeWorkItemContext): CodeWorkItemDecision {
     case 'failed':
       return t('queued', [{ kind: 'start-round', resumeFromStage: null }])
     case 'queued':
-      // Already scheduled — collapsing a burst of events into one round is the
-      // point, not a missed transition.
-      return stay('already queued; the pending round will see the latest state')
+      // Collapsing a burst into ONE round is the point. Queueing each event
+      // would run a string of rounds that are all already stale by the time the
+      // lease frees, each posting its own comments.
+      return stay('already queued; merged into the single pending revision', [
+        { kind: 'register-pending-revision' },
+      ])
     case 'running':
       // Do NOT open the new round here: the old task has to die first, or two
       // rounds would write the same worktree. `superseding` is that wait.

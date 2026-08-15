@@ -33,6 +33,8 @@ const ctxOf = (over: Partial<CodeWorkItemContext> = {}): CodeWorkItemContext => 
   hasLiveRound: false,
   handedOffFingerprint: null,
   resumeFromStage: null,
+  publishingEpoch: null,
+  pendingRevision: null,
   ...over,
 })
 
@@ -152,6 +154,77 @@ describe('RFC-304 §2.2 — superseding never opens the new round early', () => 
   test('further events while superseding do not stack up more rounds', () => {
     const d = decideCodeWorkItemTransition(ctxOf({ status: 'superseding' }), NOTE)
     expect(d.outcome).toBe('stay')
+  })
+})
+
+describe('RFC-304 §2.2 — the publish critical section is the linearization point', () => {
+  // What it closes: "re-check the epoch before calling" is a TOCTOU. Between the
+  // re-check and the HTTP leaving, an event handler can bump the epoch — and the
+  // stale output lands on the MR anyway. The MR lease does not help: it stops
+  // another ROUND from starting, not an event handler from changing state.
+  //
+  // The rule chosen (design §2.2): the round already inside the section WINS,
+  // and the event is served by the next round. The opposite (event wins, round
+  // aborts) is coherent too, but needs interruptible in-flight HTTP, which
+  // GitLab's batched drafts make unreliable.
+  const publishing = ctxOf({ status: 'running', hasLiveRound: true, publishingEpoch: 5 })
+
+  test('an event arriving mid-publish is REGISTERED, not superseded', () => {
+    const d = decideCodeWorkItemTransition(publishing, NOTE)
+    expect(d.outcome).toBe('stay')
+    expect(effectKinds(d.outcome === 'stay' ? d.effects : [])).toEqual([
+      'register-pending-revision',
+    ])
+    // The two effects that would break it: bumping the epoch out from under the
+    // in-flight publish, or cancelling a round that is mid-write.
+    expect(effectKinds(d.outcome === 'stay' ? d.effects : [])).not.toContain('bump-epoch')
+    expect(effectKinds(d.outcome === 'stay' ? d.effects : [])).not.toContain('request-round-cancel')
+  })
+
+  test('the SAME event supersedes when no publish is in flight', () => {
+    // The contrast that proves the section is doing the work, rather than notes
+    // simply never superseding.
+    const d = decideCodeWorkItemTransition(
+      ctxOf({ status: 'running', hasLiveRound: true, publishingEpoch: null }),
+      NOTE,
+    )
+    expect(d.outcome === 'transition' && d.to).toBe('superseding')
+  })
+
+  test('a head change mid-publish is also deferred — even though it is guard 1', () => {
+    // Guard 1 (baseline change wins) is about awaiting. Inside the critical
+    // section nothing wins over the in-flight write, or the guarantee is not a
+    // guarantee.
+    const d = decideCodeWorkItemTransition(publishing, HEAD_CHANGED)
+    expect(d.outcome).toBe('stay')
+    expect(effectKinds(d.outcome === 'stay' ? d.effects : [])).toEqual([
+      'register-pending-revision',
+    ])
+  })
+
+  test('closure still converges even mid-publish', () => {
+    // The one thing that must NOT be deferred: an MR that got merged has to
+    // reach `closed`. Deferring it would leave the item following a dead MR
+    // until something else happened to it.
+    const d = decideCodeWorkItemTransition(publishing, MERGED)
+    expect(d.outcome === 'transition' && d.to).toBe('closing')
+  })
+
+  test('a human confirmation is NOT deferred by the critical section', () => {
+    // A person who replied is owed a reply. Automated signals carry no such
+    // expectation — only their latest state matters, so they merge.
+    const d = decideCodeWorkItemTransition(
+      ctxOf({ status: 'awaiting', pendingGeneration: 7, publishingEpoch: 5 }),
+      confirmation(7),
+    )
+    expect(d.outcome === 'transition' && d.to).toBe('queued')
+  })
+
+  test('non-event decisions still work while publishing', () => {
+    // The section defers EVENTS; the round reporting its own outcome must still
+    // land, or the item would never leave `running`.
+    expect(toOf(publishing, { kind: 'round-published' })).toBe('settled')
+    expect(toOf(publishing, { kind: 'round-failed' })).toBe('failed')
   })
 })
 
@@ -327,10 +400,52 @@ describe('RFC-304 §2.2 — the ordinary path still works', () => {
     expect(start?.kind === 'start-round' && start.resumeFromStage).toBe('apply-patch')
   })
 
-  test('a burst of events while queued collapses into the one pending round', () => {
+  test('a burst of events while queued collapses into ONE pending revision', () => {
+    // Previously this asserted "no effects at all". Merging is now explicit: the
+    // event is registered as the item's single pending revision rather than
+    // dropped, so the round that eventually runs sees the LATEST state instead
+    // of the state as of whenever it was first queued.
     const d = decideCodeWorkItemTransition(ctxOf({ status: 'queued' }), NOTE)
     expect(d.outcome).toBe('stay')
-    expect(effectKinds(d.outcome === 'stay' ? d.effects : [])).toEqual([])
+    expect(effectKinds(d.outcome === 'stay' ? d.effects : [])).toEqual([
+      'register-pending-revision',
+    ])
+  })
+
+  test('a human instruction while queued does NOT merge — it queues on its own', () => {
+    // Automated signals collapse because only their latest state matters. A
+    // person who asked twice is owed two answers; collapsing the second into
+    // the first reads, from their side, as being ignored.
+    const d = decideCodeWorkItemTransition(ctxOf({ status: 'queued' }), confirmation(1))
+    expect(d.outcome).toBe('stay')
+    expect(effectKinds(d.outcome === 'stay' ? d.effects : [])).toEqual(['enqueue-human-command'])
+    expect(effectKinds(d.outcome === 'stay' ? d.effects : [])).not.toContain(
+      'register-pending-revision',
+    )
+  })
+
+  test('the same is true while superseding — the instruction outlives the old round', () => {
+    const d = decideCodeWorkItemTransition(ctxOf({ status: 'superseding' }), confirmation(1))
+    expect(effectKinds(d.outcome === 'stay' ? d.effects : [])).toEqual(['enqueue-human-command'])
+  })
+
+  test('taking a queued round consumes the merged revision', () => {
+    const withPending = decideCodeWorkItemTransition(
+      ctxOf({ status: 'queued', pendingRevision: { epoch: 3 } }),
+      { kind: 'scheduler-take' },
+    )
+    expect(withPending.outcome === 'transition' && withPending.to).toBe('running')
+    expect(effectKinds(withPending.outcome === 'transition' ? withPending.effects : [])).toEqual([
+      'consume-pending-revision',
+    ])
+
+    // Nothing registered ⇒ nothing to consume; the effect is not emitted
+    // unconditionally, or a caller would clear a revision that arrived between
+    // the decision and the write.
+    const without = decideCodeWorkItemTransition(ctxOf({ status: 'queued' }), {
+      kind: 'scheduler-take',
+    })
+    expect(effectKinds(without.outcome === 'transition' ? without.effects : [])).toEqual([])
   })
 
   test('failure is platform-visible but MR-silent', () => {
