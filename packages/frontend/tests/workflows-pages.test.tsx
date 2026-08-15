@@ -386,7 +386,10 @@ describe('RFC-199 B1 workflow revision wire adapter', () => {
 
 describe('/workflows quick-create dialog', () => {
   test('deep create waits for current authority before consuming the one-shot search', async () => {
-    const state = { workflows: [], calls: [] as Recorded['calls'] }
+    const state: { workflows: Workflow[]; releaseActor?: () => void } & Recorded = {
+      workflows: [],
+      calls: [],
+    }
     installFetch(state, { deferActor: true })
     const router = await renderPage('/workflows?create=1&source=homepage', { seedActor: false })
 

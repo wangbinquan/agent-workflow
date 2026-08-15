@@ -1920,7 +1920,7 @@ function AuthenticationTab() {
                 data-testid="password-login-switch"
               />
             </div>
-            <div className="auth-login-policy__row">
+            <div className="auth-login-policy__row auth-login-policy__row--role">
               <div>
                 <strong>{t('settings.auth.oidcDefaultRoleLabel')}</strong>
                 <p>{t('settings.auth.oidcDefaultRoleHint')}</p>

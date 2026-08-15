@@ -1744,6 +1744,17 @@ code {
   flex: none;
 }
 
+/* The translated role options are intentionally unbroken. Let the picker move
+   below its explanatory copy before their combined intrinsic widths can widen
+   the settings scrollport (the 1280px browser matrix exercises this seam). */
+.auth-login-policy__row--role {
+  flex-wrap: wrap;
+}
+
+.auth-login-policy__row--role > .segmented {
+  max-width: 100%;
+}
+
 @media (max-width: 36rem) {
   .auth-login-policy__row {
     align-items: flex-start;
