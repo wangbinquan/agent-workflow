@@ -10,7 +10,13 @@ import ts from 'typescript'
 
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
+import { dbTxSync } from '../src/db/txSync'
 import { ALL_TOOLS } from '../src/mcp/tools'
+import {
+  requireSQLiteTransaction,
+  withExistingSQLiteTransactionScope,
+} from '../src/platform/persistence/sqlite/existingTransactionScope'
+import type { TransactionScope } from '../src/platform/persistence/transactionScope'
 import { allRouteMeta, resetRouteMetaRegistry } from '../src/routes/registry'
 import { createApp } from '../src/server'
 
@@ -191,6 +197,21 @@ function filesCallingTableMethod(root: string, method: string, table: string): s
 }
 
 describe('RFC-305 identity-access architecture', () => {
+  test('existing SQLite transactions expose only a callback-scoped RFC-294 capability', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    let escaped: TransactionScope | null = null
+    const result = dbTxSync(db, (transaction) =>
+      withExistingSQLiteTransactionScope(transaction, (scope) => {
+        escaped = scope
+        expect(requireSQLiteTransaction(scope)).toBe(transaction)
+        return 'committed'
+      }),
+    )
+
+    expect(result).toBe('committed')
+    expect(() => requireSQLiteTransaction(escaped!)).toThrow('transaction scope is not live')
+  })
+
   test('public entrypoints expose only the reviewed exact contracts', () => {
     const publicRoot = resolve(IDENTITY_ROOT, 'public')
     expect(
@@ -410,6 +431,9 @@ describe('RFC-305 permission catalog architecture', () => {
     expect(filesReadingAccountRole(BACKEND_SRC)).toEqual([
       'packages/backend/src/auth/actor.ts',
       'packages/backend/src/mcp/tools.ts',
+      // The identity-access writer copies the initial preset into its audit
+      // record; it never branches authorization behavior on the role.
+      'packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts',
       'packages/backend/src/routes/docs.ts',
       'packages/backend/src/server.ts',
     ])

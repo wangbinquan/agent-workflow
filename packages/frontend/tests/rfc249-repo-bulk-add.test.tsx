@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import type { CachedRepo } from '@agent-workflow/shared'
 import { RepoBulkAddDialog, type RepoBulkAddItem } from '@/components/repos/RepoBulkAddDialog'
 
@@ -109,7 +109,9 @@ describe('RepoBulkAddDialog', () => {
     fireEvent.change(screen.getByTestId('repo-group-bulk-urls'), {
       target: { value: 'https://git.example/acme/draft.git' },
     })
-    await waitFor(() => expect(onDraftDirtyChange).toHaveBeenLastCalledWith(true))
+    // The router guard consumes this callback synchronously. A passive-effect
+    // only publication lets an immediate WebKit Back escape with the draft.
+    expect(onDraftDirtyChange).toHaveBeenLastCalledWith(true)
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onClose).not.toHaveBeenCalled()

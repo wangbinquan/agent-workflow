@@ -78,6 +78,15 @@ describe('resolveApiError', () => {
     expect(r.hint).toContain('daemon')
   })
 
+  test('RFC-305 user-directory denial has exact bilingual copy', () => {
+    const code = 'user-directory-forbidden'
+    const r = resolveApiError(new ApiError(403, code, 'user directory requires users:read'))
+    expect(r.matched).toBe('exact')
+    expect(r.title).toBe('查看用户目录需要 users:read 权限。')
+    expect(i18n.exists(`errors.${code}`, { lng: 'en-US' })).toBe(true)
+    expect(i18n.exists(`errors.${code}`, { lng: 'zh-CN' })).toBe(true)
+  })
+
   test('RFC-223 import reference failures have exact bilingual copy and recovery hints', () => {
     for (const code of [
       'import-ref-unresolved',

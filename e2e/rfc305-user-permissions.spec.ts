@@ -90,17 +90,43 @@ function waitForWorkflowHello(page: Page): Promise<void> {
   })
 }
 
-function nextMeWith(page: Page, required: readonly string[], absent: readonly string[] = []) {
-  return page.waitForResponse(async (response) => {
+async function nextMeWith(
+  page: Page,
+  required: readonly string[],
+  absent: readonly string[] = [],
+): Promise<void> {
+  // The application request proves the lossy authority notification caused an
+  // actor-cache refresh. Do not read its body in the wait predicate: Chromium
+  // and WebKit can retire the protocol resource between response notification
+  // and Network.getResponseBody. Read a fresh authenticated snapshot only
+  // after the application response has completed.
+  await page.waitForResponse((response) => {
     const url = new URL(response.url())
-    if (url.pathname !== '/api/auth/me' || response.status() !== 200) return false
-    const body = (await response.json()) as { permissions?: string[] }
-    const permissions = new Set(body.permissions ?? [])
-    return (
-      required.every((permission) => permissions.has(permission)) &&
-      absent.every((permission) => !permissions.has(permission))
-    )
+    return url.pathname === '/api/auth/me' && response.status() === 200
   })
+
+  await expect
+    .poll(
+      async () => {
+        const values = await page.evaluate(async () => {
+          const baseUrl = window.localStorage.getItem('agent-workflow.baseUrl')
+          const token = window.localStorage.getItem('agent-workflow.token')
+          if (baseUrl === null || token === null) throw new Error('missing browser auth fixture')
+          const response = await fetch(`${baseUrl}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!response.ok) throw new Error(`actor snapshot returned ${response.status}`)
+          return ((await response.json()) as { permissions?: string[] }).permissions ?? []
+        })
+        const permissions = new Set(values)
+        return (
+          required.every((permission) => permissions.has(permission)) &&
+          absent.every((permission) => !permissions.has(permission))
+        )
+      },
+      { message: 'current actor converges after authority.changed' },
+    )
+    .toBe(true)
 }
 
 async function createScriptWorkflow(token: string, name: string): Promise<Response> {

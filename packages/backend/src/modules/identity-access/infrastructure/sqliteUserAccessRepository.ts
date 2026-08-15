@@ -8,6 +8,8 @@ import {
 import type { DbClient } from '@/db/client'
 import { users } from '@/db/schema'
 import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
+import type { TransactionScope } from '@/platform/persistence/transactionScope'
+import { requireSQLiteTransaction } from '@/platform/persistence/sqlite/existingTransactionScope'
 import { transitionOwnerRuntimeTestsInTx } from '@/services/mcpRuntimeTestTransitions'
 import type {
   ConditionalUserUpdate,
@@ -22,6 +24,7 @@ import type {
   UserAccessTransactionRunner,
 } from '../application/ports/userAccessTransaction'
 import type { UserAccessAuditRecord } from '../application/ports/userAccessAuditRepository'
+import type { ManagedUserStatus } from '../public/types'
 import { appendUserAccessAudit } from './sqliteUserAccessAuditRepository'
 
 interface RawUserAccessRow {
@@ -111,8 +114,24 @@ export class SQLiteUserAccessTransactionRunner implements UserAccessTransactionR
 }
 
 export interface InitialUserAccessProvision {
-  readonly user: InsertManagedUserRecord
-  readonly audit: UserAccessAuditRecord
+  readonly user: {
+    readonly id: string
+    readonly username: string
+    readonly email: string | null
+    readonly displayName: string
+    readonly passwordHash: string | null
+    readonly role: Role
+    readonly status: ManagedUserStatus
+    readonly forcePasswordChange: boolean
+    readonly createdBy: string | null
+    readonly createdAt: number
+  }
+  readonly audit: {
+    readonly id: string
+    readonly actorUserId: string | null
+    readonly actorKind: 'session' | 'cli' | 'system'
+    readonly operationId: string
+  }
 }
 
 /** Exact transaction participant for cross-context account provisioning.
@@ -120,12 +139,29 @@ export interface InitialUserAccessProvision {
  * while the identity-access infrastructure remains the sole role/revision and
  * access-audit writer. */
 export function insertInitialUserAccessInTransaction(
-  transaction: DbTxSync,
+  transactionScope: TransactionScope,
   provision: InitialUserAccessProvision,
 ): void {
+  const transaction = requireSQLiteTransaction(transactionScope)
   const participant = new SQLiteUserAccessTransaction(transaction)
-  participant.insertUser(provision.user)
-  participant.appendAudit(provision.audit)
+  participant.insertUser({
+    ...provision.user,
+    updatedAt: provision.user.createdAt,
+    lastLoginAt: null,
+    schemaVersion: 1,
+    accessRevision: 0,
+  })
+  participant.appendAudit({
+    ...provision.audit,
+    targetUserId: provision.user.id,
+    correlationId: provision.audit.operationId,
+    beforeRole: provision.user.role,
+    afterRole: provision.user.role,
+    addedPermissions: [],
+    removedPermissions: [],
+    accessRevision: 0,
+    createdAt: provision.user.createdAt,
+  })
 }
 
 class SQLiteUserAccessTransaction implements UserAccessTransaction {

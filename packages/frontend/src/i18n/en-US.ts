@@ -6635,6 +6635,7 @@ export const enUS: Resources = {
     'self-disable-forbidden': 'You cannot disable your own account.',
     'self-access-change-forbidden': 'You cannot change your own access preset or grants.',
     'last-access-administrator-protection': 'At least one active account must retain users:write.',
+    'user-directory-forbidden': 'Viewing the user directory requires users:read.',
     'user-management-forbidden': 'User management requires users:write.',
     'user-access-management-forbidden':
       'Changing access requires an active browser session with users:write.',

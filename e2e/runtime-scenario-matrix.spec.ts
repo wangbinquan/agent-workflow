@@ -75,6 +75,8 @@ const SCENARIO_AGENTS = {
   timeout: 'scenario-timeout',
   cancel: 'scenario-cancel',
 } as const
+const RUNTIME_SCENARIO_TIMEOUT_MS = 8_000
+const RUNTIME_TIMEOUT_DELAY_MS = 12_000
 
 test.setTimeout(180_000)
 
@@ -447,7 +449,7 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
               },
             ],
             [SCENARIO_AGENTS.timeout]: [
-              { delayMs: 4_000, output: { answer: 'timeout-must-not-project' } },
+              { delayMs: RUNTIME_TIMEOUT_DELAY_MS, output: { answer: 'timeout-must-not-project' } },
             ],
             [SCENARIO_AGENTS.cancel]: [
               { delayMs: 10_000, output: { answer: 'cancel-must-not-project' } },
@@ -459,10 +461,14 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       daemon = await startDaemon({
         stubMode: 'runtime-scenario',
         extraEnv: { SCENARIO_PLAN_FILE: planFile, SCENARIO_STATE_DIR: stateDir },
-        // Leave headroom for the first compiled-stub page-in on slower hosts.
-        // The timeout scenario sleeps 4s, so both of its 2s attempts still
-        // prove the hard deadline and late-output suppression deterministically.
-        configOverrides: { defaultNodeRetries: 1, defaultPerNodeTimeoutMs: 2_000 },
+        // macOS WebKit runners can spend more than two seconds paging in the
+        // first compiled stub process. Keep that host cost outside the timeout
+        // oracle; the dedicated scenario sleeps longer than this value, so
+        // both attempts still prove the hard deadline and late-output fence.
+        configOverrides: {
+          defaultNodeRetries: 1,
+          defaultPerNodeTimeoutMs: RUNTIME_SCENARIO_TIMEOUT_MS,
+        },
       })
 
       for (const name of Object.values(SCENARIO_AGENTS)) {

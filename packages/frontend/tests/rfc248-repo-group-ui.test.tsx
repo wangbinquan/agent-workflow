@@ -208,6 +208,7 @@ describe('RFC-249 —— 紧凑目录树编辑主路径', () => {
     expect(EDITOR_SRC).toContain('newDirectory !==')
     expect(EDITOR_SRC).toContain('directoryNameDraft !== nodeName(selectedPath)')
     expect(EDITOR_SRC).toContain('bulkDraftDirty')
+    expect(EDITOR_SRC).toContain('debouncedWireKey === wireKey')
     expect(EDITOR_SRC).toContain('<UnsavedChangesGuard')
     expect(EDITOR_SRC).toContain('dismissDisabled={save.isPending}')
     expect(EDITOR_SRC).toContain('disabled={save.isPending}')

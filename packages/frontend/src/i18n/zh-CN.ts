@@ -11885,6 +11885,7 @@ export const zhCN: Resources = {
     'self-disable-forbidden': '不能停用自己的账号。',
     'self-access-change-forbidden': '不能修改自己的权限预设或附加权限。',
     'last-access-administrator-protection': '必须至少保留一个具备 users:write 的活跃账号。',
+    'user-directory-forbidden': '查看用户目录需要 users:read 权限。',
     'user-management-forbidden': '用户管理需要 users:write 权限。',
     'user-access-management-forbidden': '修改访问权限需要具备 users:write 的活跃浏览器会话。',
     'user-access-ambiguous': '旧 role 字段与 access 快照不能同时提交。',

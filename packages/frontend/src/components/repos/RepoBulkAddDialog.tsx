@@ -56,6 +56,18 @@ export function RepoBulkAddDialog({
     onDraftDirtyChange?.(open && draftDirty)
   }, [draftDirty, onDraftDirtyChange, open])
 
+  // The parent owns the router-level guard through a synchronously-readable
+  // ref. Publish from the input event as well as the effect so an immediate
+  // browser Back cannot overtake React's passive-effect flush in WebKit.
+  const updateSelectedRepoIds = (next: Set<string>): void => {
+    setSelectedRepoIds(next)
+    onDraftDirtyChange?.(open && (next.size > 0 || pastedUrls !== ''))
+  }
+  const updatePastedUrls = (next: string): void => {
+    setPastedUrls(next)
+    onDraftDirtyChange?.(open && (selectedRepoIds.size > 0 || next !== ''))
+  }
+
   const filteredRepos = useMemo(() => {
     const needle = search.trim().toLowerCase()
     if (needle === '') return [...repos]
@@ -196,13 +208,11 @@ export function RepoBulkAddDialog({
                   className="btn btn--xs"
                   data-testid="repo-group-bulk-select-visible"
                   disabled={filteredRepos.length === 0}
-                  onClick={() =>
-                    setSelectedRepoIds((current) => {
-                      const next = new Set(current)
-                      for (const repo of filteredRepos) next.add(repo.id)
-                      return next
-                    })
-                  }
+                  onClick={() => {
+                    const next = new Set(selectedRepoIds)
+                    for (const repo of filteredRepos) next.add(repo.id)
+                    updateSelectedRepoIds(next)
+                  }}
                 >
                   {t('repoGroups.editor.selectVisibleRepos', { count: filteredRepos.length })}
                 </button>
@@ -211,7 +221,7 @@ export function RepoBulkAddDialog({
                   className="btn btn--xs"
                   data-testid="repo-group-bulk-clear"
                   disabled={selectedRepoIds.size === 0}
-                  onClick={() => setSelectedRepoIds(new Set())}
+                  onClick={() => updateSelectedRepoIds(new Set())}
                 >
                   {t('repoGroups.editor.clearSelection')}
                 </button>
@@ -221,14 +231,12 @@ export function RepoBulkAddDialog({
                   <Checkbox
                     key={repo.id}
                     checked={selectedRepoIds.has(repo.id)}
-                    onChange={(checked) =>
-                      setSelectedRepoIds((current) => {
-                        const next = new Set(current)
-                        if (checked) next.add(repo.id)
-                        else next.delete(repo.id)
-                        return next
-                      })
-                    }
+                    onChange={(checked) => {
+                      const next = new Set(selectedRepoIds)
+                      if (checked) next.add(repo.id)
+                      else next.delete(repo.id)
+                      updateSelectedRepoIds(next)
+                    }}
                     label={repo.urlRedacted}
                     hint={repo.defaultBranch ?? undefined}
                   />
@@ -239,7 +247,7 @@ export function RepoBulkAddDialog({
             <>
               <TextArea
                 value={pastedUrls}
-                onChange={setPastedUrls}
+                onChange={updatePastedUrls}
                 placeholder={t('repoGroups.editor.pasteUrlsPlaceholder')}
                 data-testid="repo-group-bulk-urls"
               />

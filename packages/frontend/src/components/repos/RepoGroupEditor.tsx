@@ -225,10 +225,11 @@ export function RepoGroupEditor({
     const id = setTimeout(() => setDebouncedNodes(nodes), 350)
     return () => clearTimeout(id)
   }, [wireKey, nodes])
+  const debouncedWireKey = useMemo(() => JSON.stringify(debouncedNodes), [debouncedNodes])
   const preview = useQuery<RepoGroupLayoutResponse & { pendingImports: number }>({
     // Layout validity depends only on the tree. The group's display name is
     // deliberately not a cache identity component (RFC-223).
-    queryKey: ['repo-group-preview-v2', JSON.stringify(debouncedNodes)],
+    queryKey: ['repo-group-preview-v2', debouncedWireKey],
     queryFn: ({ signal }) =>
       api.post('/api/repo-groups/preview', { nodes: debouncedNodes }, signal),
     enabled: open && canWrite,
@@ -391,6 +392,7 @@ export function RepoGroupEditor({
     canWrite &&
     name.trim().length > 0 &&
     (preview.data?.totalRepos ?? 0) > 0 &&
+    debouncedWireKey === wireKey &&
     !preview.isError &&
     !preview.isFetching &&
     !hasUnappliedDraft &&
@@ -855,7 +857,12 @@ export function RepoGroupEditor({
           setBulkDraftDirty(false)
         }}
         onAdd={addRepos}
-        onDraftDirtyChange={setBulkDraftDirty}
+        onDraftDirtyChange={(dirty) => {
+          setBulkDraftDirty(dirty)
+          if (dirty && open && canWrite) {
+            dirtyRef.current = `repo-group:${group?.id ?? 'new'}`
+          }
+        }}
       />
       <ConfirmDialog
         open={canWrite && deleteIntent !== null}

@@ -9,6 +9,7 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { oidcProviders, userIdentities, users } from '@/db/schema'
 import { insertInitialUserAccessInTransaction } from '@/modules/identity-access/public/commands'
+import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlite/existingTransactionScope'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
@@ -144,40 +145,30 @@ export async function createUserWithIdentity(
   return dbTxSync(db, (tx) => {
     const userId = ulid()
     const operationId = ulid()
-    insertInitialUserAccessInTransaction(tx, {
-      user: {
-        id: userId,
-        username: args.username,
-        email: args.email,
-        displayName: args.displayName,
-        passwordHash: null,
-        role: 'user',
-        // The IdP verified the identity, so the user lands as `active`
-        // immediately (same rationale as the pre-RFC-220 createUser call).
-        status: 'active',
-        forcePasswordChange: false,
-        createdBy: null,
-        createdAt: now,
-        updatedAt: now,
-        lastLoginAt: null,
-        schemaVersion: 1,
-        accessRevision: 0,
-      },
-      audit: {
-        id: ulid(),
-        targetUserId: userId,
-        actorUserId: null,
-        actorKind: 'system',
-        operationId,
-        correlationId: operationId,
-        beforeRole: 'user',
-        afterRole: 'user',
-        addedPermissions: [],
-        removedPermissions: [],
-        accessRevision: 0,
-        createdAt: now,
-      },
-    })
+    withExistingSQLiteTransactionScope(tx, (transactionScope) =>
+      insertInitialUserAccessInTransaction(transactionScope, {
+        user: {
+          id: userId,
+          username: args.username,
+          email: args.email,
+          displayName: args.displayName,
+          passwordHash: null,
+          role: 'user',
+          // The IdP verified the identity, so the user lands as `active`
+          // immediately (same rationale as the pre-RFC-220 createUser call).
+          status: 'active',
+          forcePasswordChange: false,
+          createdBy: null,
+          createdAt: now,
+        },
+        audit: {
+          id: ulid(),
+          actorUserId: null,
+          actorKind: 'system',
+          operationId,
+        },
+      }),
+    )
     insertIdentityTx(tx, { ...args.identity, userId, now })
     return { userId }
   })

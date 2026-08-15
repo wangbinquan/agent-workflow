@@ -14,6 +14,7 @@ import type { DbClient } from '@/db/client'
 import { authLoginPolicy, oidcProviders, userSessions, users } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { insertInitialUserAccessInTransaction } from '@/modules/identity-access/public/commands'
+import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlite/existingTransactionScope'
 import { ConflictError, DomainError, ForbiddenError, UnauthorizedError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
@@ -199,38 +200,28 @@ export function completeBootstrapWithAdmin(
         throw new ConflictError('email-taken', `email '${input.email}' already exists`)
       }
     }
-    insertInitialUserAccessInTransaction(tx, {
-      user: {
-        id,
-        username: input.username,
-        email: input.email?.toLowerCase() ?? null,
-        displayName: input.displayName,
-        passwordHash: input.passwordHash,
-        role: 'admin',
-        status: 'active',
-        forcePasswordChange: false,
-        createdBy: SYSTEM_USER_ID,
-        createdAt: now,
-        updatedAt: now,
-        lastLoginAt: null,
-        schemaVersion: 1,
-        accessRevision: 0,
-      },
-      audit: {
-        id: ulid(),
-        targetUserId: id,
-        actorUserId: SYSTEM_USER_ID,
-        actorKind: 'system',
-        operationId,
-        correlationId: operationId,
-        beforeRole: 'admin',
-        afterRole: 'admin',
-        addedPermissions: [],
-        removedPermissions: [],
-        accessRevision: 0,
-        createdAt: now,
-      },
-    })
+    withExistingSQLiteTransactionScope(tx, (transactionScope) =>
+      insertInitialUserAccessInTransaction(transactionScope, {
+        user: {
+          id,
+          username: input.username,
+          email: input.email?.toLowerCase() ?? null,
+          displayName: input.displayName,
+          passwordHash: input.passwordHash,
+          role: 'admin',
+          status: 'active',
+          forcePasswordChange: false,
+          createdBy: SYSTEM_USER_ID,
+          createdAt: now,
+        },
+        audit: {
+          id: ulid(),
+          actorUserId: SYSTEM_USER_ID,
+          actorKind: 'system',
+          operationId,
+        },
+      }),
+    )
     tx.update(authLoginPolicy)
       .set({
         passwordLoginEnabled: true,
