@@ -156,6 +156,24 @@ agent 进程的环境白名单，已随 RFC-276「运行时作为普通子进程
 
 ### 两层配置与模板（PR-2）
 
+**T13 的跨 RFC 依赖（2026-08-15 实测发现，需在 RFC-305 落定后接续）**：把两类模板注册进
+`ACL_RESOURCE_TYPES` 后，编译器指出的落点里有一处是硬依赖——`routes/resourceAcl.ts` 的
+`ACL_PERMISSION_PREFIX` **类型故意收窄**（其注释写明：每个资源类型的 `${resource}:update`
+必须是真实存在的权限点，靠 TypeScript 挡住不存在的组合）。故两类新资源需要新增权限点
+`capability-frameworks:*` / `capability-bindings:*`。
+
+**而 shared `Permission` 目录正由并发的 RFC-305 重构**（建穷尽的名称/分组/风险/delegation/
+token/constraint 目录，新权限须补齐元数据）。此刻新增权限点会基于一个正在变的元数据形状、
+几乎必然返工，且与对方改动在同一批文件上交错。故 **T13 的 ACL 全面接入推迟到 RFC-305 的
+权限目录稳定之后**，届时一并补：`ACL_RESOURCE_TYPES` 两项、`ACL_TABLES` 两项、
+`OWNER_NAME_UNIQUE_TYPES` 两项（两表均有 owner+name 唯一索引）、`resourceGrants.resourceType`
+enum、`bundle/provider.ts` 的 `TYPE_RANK`（framework 排在 binding 之前——binding 引用
+framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyChangeset.ts`。
+探路时已确认这些**多为映射表补项而非深度实现**，接入成本不高；卡点纯粹在权限目录。
+
+**已完成且不受该依赖影响的部分**：三张表与 migration 0161、两层的领域约束（framework-only
+字段拒收、`canWriteFramework` 双条件）、参数继承与来源追溯、readiness 三态派生。
+
 | #    | 任务                                                                                                                                                                                                                                                                                                                                                                                             | 依赖    |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
 | T13  | `capability_frameworks` / `capability_bindings` 表；两类资源接入既有资源框架（owner/visibility/grants/复制）                                                                                                                                                                                                                                                                                     | T1      |
