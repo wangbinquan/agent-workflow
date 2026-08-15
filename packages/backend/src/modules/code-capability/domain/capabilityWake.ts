@@ -40,7 +40,10 @@ export interface WakeEvent {
 
 export type WakeVerdict =
   | { wake: true }
-  | { wake: false; reason: 'not-ready' | 'event-not-subscribed' | 'no-mr' | 'own-comment' }
+  | {
+      wake: false
+      reason: 'not-ready' | 'event-not-subscribed' | 'no-mr' | 'own-comment' | 'bot-authored-mr'
+    }
 
 /**
  * Which events this cell subscribes to.
@@ -89,6 +92,18 @@ export function judgeWake(
     return { wake: false, reason: 'own-comment' }
   }
 
+  // Opt-in only (E2): a machine's MR is supervised by DEFAULT, and this skips it
+  // only for a team that has both switched it on AND named the accounts. Two
+  // deliberate steps, because "we stopped reviewing a whole class of change" is
+  // not something anybody should discover by accident.
+  if (
+    skipsBotAuthoredMr(cell) &&
+    event.authorUsername !== undefined &&
+    botAuthorsOf(cell).includes(event.authorUsername)
+  ) {
+    return { wake: false, reason: 'bot-authored-mr' }
+  }
+
   return { wake: true }
 }
 
@@ -101,4 +116,73 @@ export function cellsWokenBy(
   return cells
     .filter((cell) => judgeWake(cell, event, options).wake)
     .sort((a, b) => (a.capability < b.capability ? -1 : a.capability > b.capability ? 1 : 0))
+}
+
+/** An open merge request, as the host lists it. */
+export interface OpenMrCandidate {
+  mrIid: string
+  headSha: string
+}
+
+export type CiEventTarget =
+  /** Exactly one open MR has this commit at its head — safe to review. */
+  | { kind: 'unique'; mrIid: string }
+  /** No open MR has it: a branch build, a closed MR, or a stale pipeline. */
+  | { kind: 'none' }
+  /**
+   * Several do. NOT reviewed: the same commit heads more than one open MR when
+   * a branch is shared or a stack of MRs is chained, and picking one would post
+   * a review on an MR whose author never triggered anything.
+   */
+  | { kind: 'ambiguous'; mrIids: readonly string[] }
+
+/**
+ * Which merge request a CI event belongs to, when the event does not say.
+ *
+ * A pipeline event from a FORK carries no MR number — GitHub's
+ * `pull_requests[]` arrives empty for fork PRs, because the pipeline ran in the
+ * fork's own repository. So the only link back is the commit, and the mapping
+ * is head-sha → open MR.
+ *
+ * Unique-match-only is the whole point. Reviewing on a guess means commenting
+ * on somebody else's merge request in their name, which is worse than not
+ * reacting to a CI event at all — the second is a missing feature, the first is
+ * the platform doing something nobody asked for on a change nobody submitted.
+ */
+export function resolveCiEventMr(
+  candidates: readonly OpenMrCandidate[],
+  headSha: string,
+): CiEventTarget {
+  if (headSha === '') return { kind: 'none' }
+  const matches = candidates.filter((c) => c.headSha === headSha).map((c) => c.mrIid)
+  if (matches.length === 0) return { kind: 'none' }
+  if (matches.length === 1) return { kind: 'unique', mrIid: matches[0]! }
+  return { kind: 'ambiguous', mrIids: [...matches].sort() }
+}
+
+/**
+ * Whether this cell declines to review merge requests opened by a machine.
+ *
+ * Default FALSE, deliberately. The user's decision (E2, recorded in design
+ * §11.1) is that bot-authored MRs are supervised by DEFAULT — a machine's code
+ * is not more trustworthy than a person's, and the case for reviewing it is if
+ * anything stronger. So this is an opt-in for teams whose bots open MRs the
+ * review has nothing useful to say about (dependency bumps, generated
+ * lockfiles), never a default that quietly stops reviewing a class of change.
+ */
+export function skipsBotAuthoredMr(cell: WakeableCell): boolean {
+  return cell.triggerConfig.skipBotAuthoredMr === true
+}
+
+/**
+ * The accounts this cell treats as machines.
+ *
+ * Configured rather than inferred. GitLab's payload has no reliable bot marker,
+ * and guessing from a username ("*-bot") would silently stop reviewing a person
+ * called `alice-bot` while missing a machine called `deploy`.
+ */
+export function botAuthorsOf(cell: WakeableCell): readonly string[] {
+  const configured = cell.triggerConfig.botAuthors
+  if (!Array.isArray(configured)) return []
+  return configured.filter((a): a is string => typeof a === 'string' && a !== '')
 }

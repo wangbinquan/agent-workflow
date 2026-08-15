@@ -392,6 +392,12 @@ test('RFC-253 T41: 拖入两个脚本节点 → 写代码 → 连线 → 启动 
   })
   await page.locator(`.react-flow__node[data-id="${producerId}"] .canvas-node`).click()
   const tabBar = page.locator('.tabs--inspector')
+  // 同步点，不是礼貌：点节点之后抽屉才挂载，而下一行点的是抽屉**里面**的页签。
+  // 没有这一句时，CI 上（机器满载、reload 后画布刚挂完）会出现「抽屉还没挂、
+  // 页签压根不存在」，Playwright 对着不存在的元素重试满 15s 才报 click 超时——
+  // 报头是 `locator.click: Timeout`，读起来像页签点不动，实际是它还没出生。
+  // 2026-08-16 CI shard 2/3 实测翻红一次（本地 gate 不跑 e2e，抓不到）。
+  await expect(page.locator('.inspector')).toBeVisible({ timeout: 20_000 })
   // 页签的可及名把 badge 计数拼在标签后面（"Events1" / "Output1"，见 NodeDetailDrawer 的
   // TabBar badge）。exact 匹配在这两个页签上必然落空——只有无 badge 的 Session 才碰巧能用。
   await tabBar.getByRole('tab', { name: /^Events/ }).click()
@@ -399,6 +405,8 @@ test('RFC-253 T41: 拖入两个脚本节点 → 写代码 → 连线 → 启动 
 
   // ── 8. output 拿到值：下游节点抽屉的 Output 页签渲染同一个值 ───────────────
   await page.locator(`.react-flow__node[data-id="${consumerId}"] .canvas-node`).click()
+  // 同上：切到另一个节点会重挂抽屉内容，页签在那之前不可点。
+  await expect(page.locator('.inspector')).toBeVisible({ timeout: 20_000 })
   await tabBar.getByRole('tab', { name: /^Output/ }).click()
   await expect(
     page.locator('.task-output-card__body', { hasText: `${CONSUMED_PREFIX}${PRODUCED}` }),

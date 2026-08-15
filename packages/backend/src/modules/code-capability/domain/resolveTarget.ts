@@ -124,7 +124,20 @@ export type ProjectAddress =
  * belongs to a different host will happily resolve to a same-named project on
  * this one, and the round then comments on a stranger's code.
  */
-export function apiProjectAddress(target: RoundTarget): ProjectAddress {
+/**
+ * The fields addressing a project actually needs.
+ *
+ * Narrower than `RoundTarget` on purpose: a CI event knows the project long
+ * before it knows which MR it belongs to, and forcing it to fabricate a whole
+ * RoundTarget (with an empty anchorId and a made-up endpoint id) to ask a
+ * question about the project would be a cast that hides exactly the fields that
+ * are not known yet.
+ */
+export type ProjectAddressable = Pick<RoundTarget, 'provider' | 'stableProjectId'> & {
+  meta: Pick<RoundTarget['meta'], 'repoPath'>
+}
+
+export function apiProjectAddress(target: ProjectAddressable): ProjectAddress {
   if (target.provider === 'gitlab') return { ok: true, value: target.stableProjectId }
 
   const path = target.meta.repoPath ?? ''

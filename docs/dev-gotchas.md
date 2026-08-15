@@ -280,6 +280,14 @@
 - **i18n 文案里不许出现字面 `**`**（`onboarding-guide.test.tsx` 的 RFC-211 守卫全量遍历 zh/en 两棵树）：这些字符串大多进的是纯文本组件，`**强调**`会原样显示成星号。写 hint / 说明文案时用「」或直接不强调；只有`apiDocs.\*`（`api-docs-markdown.ts`拼成 markdown 过`Prose`）是白名单，且 `title`/`subtitle` 仍被排除在外。
 
 - **改「不变量」时，真正危险的代码往往不在 diff 里**（RFC-287 G7 实测，双路实现门都没抓到）。G7 把「有任务行就有工作树」改成「准备完成后才有」，于是空 `worktreePath` 从罕见终态变成了**每个**准备中任务的正常状态。`util/safePath.checkLexicalThenRealpath` 一行没改，但它的输入分布彻底变了——而 `resolve('')` 返回的是**当前进程的 cwd**，实测 `existsInsideRoot('', 'package.json')` 返回 true、`readInsideRoot` 真能读出来，等于「任务还没有工作树」被当成了「工作树 = daemon 的工作目录」。两路实现门都在看 diff，所以都漏了。**判据**：凡是改动**放宽了某个值的取值范围**（新增空值/新增中间态/延长某状态的存活窗口），就必须去查**所有消费该值的既有代码**，而不是只审自己改的行；这类复核的产出常常不在 diff 里。空值守卫要放在**共用底座**上（`checkLexicalThenRealpath` 同时喂 exists 与 read 两个消费方，只堵一个必漏另一个）。
+- **点开抽屉/弹层之后，点它里面的东西之前，必须有同步点**（2026-08-16 CI 实测）：
+  `rfc253-script-node` 里「点画布节点 → 点抽屉里的 Events 页签」中间没有任何等待，CI
+  shard 满载时抽屉尚未挂载，Playwright 对着**还不存在**的页签重试满 15s。报头是
+  `locator.click: Timeout 15000ms exceeded`，读起来像「页签点不动」，实际是「它还没出生」
+  ——两者的修法完全不同，前者会让人去查 CSS/pointer-events，白花时间。判据：click 超时
+  且紧跟着一条对该容器内元素的 `element(s) not found`。修法是加**真同步点**
+  （`await expect(page.locator('.inspector')).toBeVisible()`），不是加 timeout。
+  注意 `gate:local` 不跑 e2e，这类只在 CI 现形。
 - **CI-only 的 e2e 竞态多半是「重渲染把元素从 DOM 摘下来」**，修法是加真同步点而不是 sleep 或加 timeout（RFC-287 T14 顺手修的 intent-builder；同文件此前已有两次同类修复 `e82d04e3` / `c3146c36`）。症状是 Playwright 的 `element is not stable` → `element was detached from the DOM, retrying` 后超时，且**本地永远复现不了**——本地机器快，重渲染在点击之前就结束了。**判据**：先看那次点击前面有没有「会触发列表/面板重渲染」的动作（关闭下拉、提交表单、切 tab），有就 `await expect(<重渲染后才会出现的东西>).toBeVisible()` 作为同步点。加 `timeout` 只是把偶发变稀，不解决问题。
 - **本地跑 e2e 前必须重建二进制，否则你测的是旧代码**（RFC-287 T14 实测，真被误导了一轮）。`e2e/harness.ts` 起的是 `dist/agent-workflow-e2e-<plat>-<arch>`——**构建产物**，不是当前源码。改完生产代码直接 `bunx playwright test` 会拿旧二进制跑，症状极具迷惑性：我据此得到一条「`repo-groups-new` 匹配到 2 个元素」的红，源码里那个 testid 明明只有一处，差点去追一个不存在的 UI 重复；重建后同一批 5/5 全绿。**判据**：跑 e2e 前先 `bun run build && bun run build:binary:e2e`；看到「源码与现象对不上」的 e2e 红，第一件事是查 `ls -la dist/` 的时间戳与你上次改动的先后。
 - **测试可能把缺陷「锁成契约」——改行为前先问这条断言锁的是意图还是现状**（RFC-287 T14 实测）。G7 的目标之一是「启动接口不再同步阻塞到工作树就绪」，而当时那条用例测的正是 `await startTask(...)` 的**阻塞时长**；只要它在，任何人把启动改成异步都会看到红，然后很自然地以为是自己写错了。同一批还有一条自相矛盾的锁：断言锁住本地 `.catch(() => {})`，注释却写着「外层再由骨架统一记 warn」——两者不可能同时成立（本地先吞掉，外层的 warn 永不可达），说明写注释时的**意图**没有落进断言。**判据**：一条断言若在「实现变得更正确」时会红，它锁的就是现状而非意图，必须改测法；注释与断言互相矛盾时，必有一方是错的，别默认断言对。

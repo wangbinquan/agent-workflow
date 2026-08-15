@@ -290,6 +290,21 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          | ✅ 2026-08-16 |
 | T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  |
 
+> **T24b 后半 + T31 bot 开关（2026-08-16）**：
+>
+> - **fork PR 的 CI 事件定位**：fork 的流水线事件不带 MR 号（GitHub 的
+>   `pull_requests[]` 为空，因为流水线跑在 fork 自己的仓里），唯一可靠的线索是 commit，
+>   故反向映射 head sha → 开放 MR。**只有唯一命中才唤醒**：一个 commit 可能同时是多个开放
+>   MR 的 head（共享分支、堆叠 MR），猜一个等于**以他人名义在他人的 MR 上发检视**——不响应
+>   CI 事件只是功能缺失，响应错 MR 是平台擅自做了没人要求的事。查的是**目标仓**的开放 MR
+>   列表（与 §6.1 从 target remote 取 head 同一个信任判断：凭据已持有、fork 可能私有或已删、
+>   且不跟随第三方 webhook 载荷给的 URL）。「读不到」与「没有」分开返回——合并会让 host 故障
+>   期间静默丢掉 CI 事件。
+> - **bot 开的 MR 默认照审（E2）**：开关**两步才生效**——既要打开 `skipBotAuthoredMr`，
+>   又要在 `botAuthors` 里点名。不从用户名猜（`*-bot`）：会把叫 `alice-bot` 的人静默排除，
+>   又漏掉叫 `deploy` 的机器。默认关闭是用户拍板的产品决定，代码与测试都写明这一点，免得
+>   后人「顺手」把它改成默认开。
+
 > **T30 采纳信号（2026-08-16）**：迁移 `0165` 给 `code_findings` 加四列——
 > `resolved_at` / `resolved_round_id` / `code_changed_at` / `code_changed_round_id`。
 >
