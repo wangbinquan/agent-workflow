@@ -7,6 +7,7 @@ const MAX_LOCAL_SHARDS = 16
 const MAX_SHARD_TIMEOUT_MS = 86_400_000
 const MAX_SHARD_KILL_GRACE_MS = 60_000
 const POST_KILL_SETTLE_MS = 1_000
+const POST_EXIT_PIPE_DRAIN_MS = 1_000
 
 // Real 10-core local-gate measurements (2026-08-13): four shards are the
 // highest cold-gate-safe default. Five once completed in 281.5s, but two later
@@ -15,6 +16,7 @@ const POST_KILL_SETTLE_MS = 1_000
 // explicit override for larger machines, but default to the stable budget.
 export const DEFAULT_LOCAL_BACKEND_SHARDS = 4
 export const DEFAULT_LOCAL_BACKEND_SHARD_TIMEOUT_MS = 15 * 60_000
+export const DEFAULT_LOCAL_BACKEND_SHARD_IDLE_TIMEOUT_MS = 2 * 60_000
 export const DEFAULT_LOCAL_BACKEND_SHARD_KILL_GRACE_MS = 2_000
 
 export interface BackendShardPlan {
@@ -65,6 +67,7 @@ interface BackendShardInterruptControllerOptions {
 
 export interface RunBackendShardOptions {
   timeoutMs: number
+  idleTimeoutMs?: number
   killGraceMs: number
   active?: Set<KillableProcess>
 }
@@ -105,6 +108,16 @@ export function resolveLocalBackendShardTimeoutMs(raw: string | undefined): numb
     raw,
     'AW_LOCAL_BACKEND_SHARD_TIMEOUT_MS',
     DEFAULT_LOCAL_BACKEND_SHARD_TIMEOUT_MS,
+    1,
+    MAX_SHARD_TIMEOUT_MS,
+  )
+}
+
+export function resolveLocalBackendShardIdleTimeoutMs(raw: string | undefined): number {
+  return parseInteger(
+    raw,
+    'AW_LOCAL_BACKEND_SHARD_IDLE_TIMEOUT_MS',
+    DEFAULT_LOCAL_BACKEND_SHARD_IDLE_TIMEOUT_MS,
     1,
     MAX_SHARD_TIMEOUT_MS,
   )
@@ -186,12 +199,49 @@ interface StreamCapture {
   cancel(reason: string): Promise<void>
 }
 
+interface IdleDeadline {
+  expired: Promise<void>
+  touch(): void
+  dispose(): void
+}
+
+function createIdleDeadline(timeoutMs: number): IdleDeadline {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let settled = false
+  let resolveExpired: () => void = () => {}
+  const expired = new Promise<void>((resolve) => {
+    resolveExpired = resolve
+  })
+  const touch = (): void => {
+    if (settled) return
+    if (timer !== undefined) clearTimeout(timer)
+    timer = setTimeout(() => {
+      settled = true
+      timer = undefined
+      resolveExpired()
+    }, timeoutMs)
+  }
+  touch()
+  return {
+    expired,
+    touch,
+    dispose(): void {
+      settled = true
+      if (timer !== undefined) clearTimeout(timer)
+      timer = undefined
+    },
+  }
+}
+
 /**
  * Read a child pipe while retaining partial output. `Response(stream).text()`
  * cannot be interrupted when a descendant inherits the descriptor, so timeout
  * handling owns the reader and can explicitly cancel the pending read.
  */
-function captureStream(stream: ReadableStream<Uint8Array>): StreamCapture {
+function captureStream(
+  stream: ReadableStream<Uint8Array>,
+  onActivity: () => void = () => {},
+): StreamCapture {
   const reader = stream.getReader()
   const decoder = new TextDecoder()
   let output = ''
@@ -203,6 +253,7 @@ function captureStream(stream: ReadableStream<Uint8Array>): StreamCapture {
         const next = await reader.read()
         if (next.done) break
         output += decoder.decode(next.value, { stream: true })
+        onActivity()
       }
       output += decoder.decode()
       return output
@@ -356,6 +407,14 @@ export async function runBackendShard(
   ) {
     throw new Error(`timeoutMs must be an integer between 1 and ${MAX_SHARD_TIMEOUT_MS}`)
   }
+  const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_LOCAL_BACKEND_SHARD_IDLE_TIMEOUT_MS
+  if (
+    !Number.isInteger(idleTimeoutMs) ||
+    idleTimeoutMs < 1 ||
+    idleTimeoutMs > MAX_SHARD_TIMEOUT_MS
+  ) {
+    throw new Error(`idleTimeoutMs must be an integer between 1 and ${MAX_SHARD_TIMEOUT_MS}`)
+  }
   if (
     !Number.isInteger(options.killGraceMs) ||
     options.killGraceMs < 0 ||
@@ -381,36 +440,86 @@ export async function runBackendShard(
       detached: true,
     })
     active.add(child)
-    const stdoutCapture = captureStream(child.stdout)
-    const stderrCapture = captureStream(child.stderr)
-    const completed = Promise.all([child.exited, stdoutCapture.done, stderrCapture.done]).then(
-      ([exitCode, stdout, stderr]) => ({ exitCode, stdout, stderr }),
+    const idleDeadline = createIdleDeadline(idleTimeoutMs)
+    const stdoutCapture = captureStream(child.stdout, idleDeadline.touch)
+    const stderrCapture = captureStream(child.stderr, idleDeadline.touch)
+    const streamsCompleted = Promise.all([stdoutCapture.done, stderrCapture.done])
+    const completed = Promise.all([child.exited, streamsCompleted]).then(
+      ([exitCode, [stdout, stderr]]) => ({ exitCode, stdout, stderr }),
     )
-    try {
-      const beforeDeadline = await waitWithin(completed, options.timeoutMs)
-      if (beforeDeadline.settled) {
-        const { exitCode, stdout, stderr } = beforeDeadline.value
-        const output = [stdout, stderr].filter(Boolean).join('\n')
-        const durationMs = performance.now() - startedAt
+    const finish = async (
+      exitCode: number,
+      stdout: string,
+      stderr: string,
+      diagnosticLines: string[] = [],
+    ): Promise<ShardResult> => {
+      const output = [stdout, stderr, ...diagnosticLines].filter(Boolean).join('\n')
+      const durationMs = performance.now() - startedAt
 
-        if (exitCode === 0) {
-          const summary = summaryLines(output).join(' | ')
-          console.log(
-            `[backend ${plan.index}/${plan.count}] pass ${durationLabel(durationMs)}${summary ? ` | ${summary}` : ''}`,
-          )
-        } else {
-          const logPath = join(runRoot, `shard-${plan.index}.log`)
-          await Bun.write(logPath, output)
-          console.error(
-            `[backend ${plan.index}/${plan.count}] FAIL exit=${exitCode} ${durationLabel(durationMs)} log=${logPath}`,
-          )
-          console.error(outputTail(output))
-        }
-
-        return { plan, exitCode, durationMs, output, timedOut: false }
+      if (exitCode === 0) {
+        const summary = summaryLines(output).join(' | ')
+        console.log(
+          `[backend ${plan.index}/${plan.count}] pass ${durationLabel(durationMs)}${summary ? ` | ${summary}` : ''}`,
+        )
+      } else {
+        const logPath = join(runRoot, `shard-${plan.index}.log`)
+        await Bun.write(logPath, output)
+        console.error(
+          `[backend ${plan.index}/${plan.count}] FAIL exit=${exitCode} ${durationLabel(durationMs)} log=${logPath}`,
+        )
+        console.error(outputTail(output))
       }
 
-      const timeoutLine = `[backend ${plan.index}/${plan.count}] TIMEOUT after ${options.timeoutMs}ms; sent SIGTERM to process group ${child.pid}; grace=${options.killGraceMs}ms`
+      return { plan, exitCode, durationMs, output, timedOut: false }
+    }
+    try {
+      const exitOrIdle = Promise.race([
+        child.exited.then((exitCode) => ({ kind: 'exit' as const, exitCode })),
+        idleDeadline.expired.then(() => ({ kind: 'idle' as const })),
+      ])
+      const beforeDeadline = await waitWithin(exitOrIdle, options.timeoutMs)
+      if (beforeDeadline.settled && beforeDeadline.value.kind === 'exit') {
+        const directExitCode = beforeDeadline.value.exitCode
+        const drained = await waitWithin(streamsCompleted, POST_EXIT_PIPE_DRAIN_MS)
+        if (drained.settled) {
+          return await finish(directExitCode, drained.value[0], drained.value[1])
+        }
+
+        // A test descendant can inherit the Bun runner's output descriptor and
+        // outlive the runner itself. Waiting for the global shard timeout turns
+        // an otherwise finished 6-minute gate into a 15-minute false hang.
+        // Bound post-exit drain independently, then reap the detached group.
+        const leakLine = `[backend ${plan.index}/${plan.count}] child exited but output pipes remained open for ${POST_EXIT_PIPE_DRAIN_MS}ms; sent SIGTERM to leaked process group ${child.pid}`
+        console.error(leakLine)
+        signalBackendShardProcessTree(child, 'SIGTERM')
+        const graceElapsed = Bun.sleep(options.killGraceMs)
+        const duringGrace = await waitWithin(streamsCompleted, options.killGraceMs)
+        await graceElapsed
+        const killLine = `[backend ${plan.index}/${plan.count}] post-exit cleanup grace expired; sent SIGKILL to leaked process group ${child.pid}`
+        console.error(killLine)
+        signalBackendShardProcessTree(child, 'SIGKILL')
+
+        let stdout: string
+        let stderr: string
+        if (duringGrace.settled) {
+          stdout = duringGrace.value[0]
+          stderr = duringGrace.value[1]
+        } else {
+          await Promise.all([
+            stdoutCapture.cancel('backend shard post-exit pipe cleanup'),
+            stderrCapture.cancel('backend shard post-exit pipe cleanup'),
+          ])
+          const captured = await Promise.all([stdoutCapture.done, stderrCapture.done])
+          stdout = captured[0]
+          stderr = captured[1]
+        }
+        return await finish(directExitCode, stdout, stderr, [leakLine, killLine])
+      }
+
+      const timeoutLine =
+        beforeDeadline.settled && beforeDeadline.value.kind === 'idle'
+          ? `[backend ${plan.index}/${plan.count}] IDLE TIMEOUT after ${idleTimeoutMs}ms without output; sent SIGTERM to process group ${child.pid}; grace=${options.killGraceMs}ms`
+          : `[backend ${plan.index}/${plan.count}] TIMEOUT after ${options.timeoutMs}ms; sent SIGTERM to process group ${child.pid}; grace=${options.killGraceMs}ms`
       console.error(timeoutLine)
       signalBackendShardProcessTree(child, 'SIGTERM')
       // Once the wall-clock deadline fires, the direct Bun handle is no longer
@@ -465,6 +574,7 @@ export async function runBackendShard(
       ])
       throw error
     } finally {
+      idleDeadline.dispose()
       active.delete(child)
     }
   } catch (error) {
@@ -484,6 +594,9 @@ export async function runBackendShards(): Promise<number> {
   const shardCount = resolveLocalBackendShardCount(process.env.AW_LOCAL_BACKEND_SHARDS)
   const baseSeed = resolveLocalTestSeed(process.env.AW_LOCAL_TEST_SEED)
   const timeoutMs = resolveLocalBackendShardTimeoutMs(process.env.AW_LOCAL_BACKEND_SHARD_TIMEOUT_MS)
+  const idleTimeoutMs = resolveLocalBackendShardIdleTimeoutMs(
+    process.env.AW_LOCAL_BACKEND_SHARD_IDLE_TIMEOUT_MS,
+  )
   const killGraceMs = resolveLocalBackendShardKillGraceMs(
     process.env.AW_LOCAL_BACKEND_SHARD_KILL_GRACE_MS,
   )
@@ -515,13 +628,18 @@ export async function runBackendShards(): Promise<number> {
   process.on('SIGTERM', onSigterm)
 
   console.log(
-    `[backend] ${shardCount} isolated local shards | base-seed=${baseSeed} | timeout=${timeoutMs}ms | kill-grace=${killGraceMs}ms | temp=${runRoot}`,
+    `[backend] ${shardCount} isolated local shards | base-seed=${baseSeed} | timeout=${timeoutMs}ms | idle-timeout=${idleTimeoutMs}ms | kill-grace=${killGraceMs}ms | temp=${runRoot}`,
   )
   const startedAt = performance.now()
   try {
     const results = await Promise.all(
       plans.map((plan) =>
-        runBackendShard(repoRoot, runRoot, plan, { timeoutMs, killGraceMs, active }),
+        runBackendShard(repoRoot, runRoot, plan, {
+          timeoutMs,
+          idleTimeoutMs,
+          killGraceMs,
+          active,
+        }),
       ),
     )
     const failed = results.filter((result) => result.exitCode !== 0)

@@ -5,19 +5,25 @@
 // serial Bun shards and gives every process a distinct home/temp namespace.
 
 import { describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { LOCAL_GATE_LANES } from '../../../scripts/local-gate'
+import {
+  acquireLocalGateLock,
+  LOCAL_GATE_LANES,
+  resolveLocalGateLockPath,
+} from '../../../scripts/local-gate'
 import {
   backendShardInterruptExitCode,
   buildBackendShardPlans,
   createBackendShardInterruptController,
+  DEFAULT_LOCAL_BACKEND_SHARD_IDLE_TIMEOUT_MS,
   DEFAULT_LOCAL_BACKEND_SHARD_KILL_GRACE_MS,
   DEFAULT_LOCAL_BACKEND_SHARD_TIMEOUT_MS,
   DEFAULT_LOCAL_BACKEND_SHARDS,
   type BackendShardPlan,
   type KillableProcess,
+  resolveLocalBackendShardIdleTimeoutMs,
   resolveLocalBackendShardKillGraceMs,
   resolveLocalBackendShardCount,
   resolveLocalBackendShardTimeoutMs,
@@ -87,6 +93,16 @@ describe('local backend shard plan', () => {
     for (const bad of ['0', '-1', '1.5', ' 10', '10 ', '+10', '1e3', '86400001']) {
       expect(() => resolveLocalBackendShardTimeoutMs(bad)).toThrow(
         'AW_LOCAL_BACKEND_SHARD_TIMEOUT_MS',
+      )
+    }
+
+    expect(resolveLocalBackendShardIdleTimeoutMs(undefined)).toBe(
+      DEFAULT_LOCAL_BACKEND_SHARD_IDLE_TIMEOUT_MS,
+    )
+    expect(resolveLocalBackendShardIdleTimeoutMs('750')).toBe(750)
+    for (const bad of ['0', '-1', '1.5', ' 10', '10 ', '+10', '1e3', '86400001']) {
+      expect(() => resolveLocalBackendShardIdleTimeoutMs(bad)).toThrow(
+        'AW_LOCAL_BACKEND_SHARD_IDLE_TIMEOUT_MS',
       )
     }
 
@@ -253,6 +269,39 @@ describe('local backend shard wall-clock timeout', () => {
     }
   })
 
+  test('a silent shard is stopped by the activity deadline before its hard timeout', async () => {
+    if (process.platform === 'win32') return
+    const runRoot = mkdtempSync(join(tmpdir(), 'aw-local-shard-idle-'))
+    const survivorMarker = join(runRoot, 'idle-process-survived')
+    const script = `
+      process.on('SIGTERM', () => {})
+      console.log('idle-process-ready')
+      setTimeout(async () => {
+        await Bun.write(${JSON.stringify(survivorMarker)}, 'survived')
+        process.exit(0)
+      }, 800)
+      setInterval(() => {}, 1000)
+    `
+    try {
+      const result = await runBackendShard(
+        repoRoot,
+        runRoot,
+        runtimePlan(runRoot, [process.execPath, '-e', script]),
+        { timeoutMs: 10_000, idleTimeoutMs: 150, killGraceMs: 50 },
+      )
+
+      expect(result.exitCode).toBe(124)
+      expect(result.timedOut).toBe(true)
+      expect(result.durationMs).toBeLessThan(1_000)
+      expect(result.output).toContain('idle-process-ready')
+      expect(result.output).toContain('IDLE TIMEOUT after 150ms without output')
+      await Bun.sleep(700)
+      expect(existsSync(survivorMarker)).toBe(false)
+    } finally {
+      rmSync(runRoot, { recursive: true, force: true })
+    }
+  })
+
   test('timeout still kills the process group when its TERM-compliant leader exits first', async () => {
     if (process.platform === 'win32') return
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-local-shard-leader-exits-'))
@@ -287,6 +336,48 @@ describe('local backend shard wall-clock timeout', () => {
       expect(result.output).toContain('term-compliant-parent-ready')
       expect(result.output).toContain('SIGKILL to process group')
       await Bun.sleep(350)
+      expect(existsSync(survivorMarker)).toBe(false)
+    } finally {
+      rmSync(runRoot, { recursive: true, force: true })
+    }
+  })
+
+  test('a successful leader cannot leave inherited output pipes hanging until the shard timeout', async () => {
+    if (process.platform === 'win32') return
+    const runRoot = mkdtempSync(join(tmpdir(), 'aw-local-shard-post-exit-pipe-'))
+    const survivorMarker = join(runRoot, 'pipe-holder-survived')
+    const grandchildScript = `
+      process.on('SIGTERM', () => {})
+      setTimeout(async () => {
+        await Bun.write(${JSON.stringify(survivorMarker)}, 'survived')
+        process.exit(0)
+      }, 1600)
+      setInterval(() => {}, 1000)
+    `
+    const parentScript = `
+      Bun.spawn([${JSON.stringify(process.execPath)}, '-e', ${JSON.stringify(grandchildScript)}], {
+        stdout: 'inherit',
+        stderr: 'inherit',
+      })
+      console.log('successful-leader-exited')
+      process.exit(0)
+    `
+    try {
+      const startedAt = performance.now()
+      const result = await runBackendShard(
+        repoRoot,
+        runRoot,
+        runtimePlan(runRoot, [process.execPath, '-e', parentScript]),
+        { timeoutMs: 10_000, killGraceMs: 50 },
+      )
+
+      expect(result.exitCode).toBe(0)
+      expect(result.timedOut).toBe(false)
+      expect(result.durationMs).toBeLessThan(2_000)
+      expect(performance.now() - startedAt).toBeLessThan(2_000)
+      expect(result.output).toContain('successful-leader-exited')
+      expect(result.output).toContain('output pipes remained open for 1000ms')
+      await Bun.sleep(650)
       expect(existsSync(survivorMarker)).toBe(false)
     } finally {
       rmSync(runRoot, { recursive: true, force: true })
@@ -403,5 +494,95 @@ describe('local full-gate plan', () => {
     expect(source).toContain('continuing to collect remaining results')
     expect(source).toContain('await Promise.allSettled(lanes)')
     expect(source).not.toContain('await Promise.all(lanes)')
+  })
+})
+
+describe('local full-gate concurrency guard', () => {
+  test('uses one lock identity across the main checkout and linked worktrees', () => {
+    const fixture = mkdtempSync(join(tmpdir(), 'aw-local-gate-lock-path-'))
+    const mainRoot = join(fixture, 'main')
+    const worktreeRoot = join(fixture, 'linked')
+    const commonGitDir = join(mainRoot, '.git')
+    const worktreeGitDir = join(commonGitDir, 'worktrees', 'linked')
+    const lockRoot = join(fixture, 'locks')
+    try {
+      mkdirSync(worktreeGitDir, { recursive: true })
+      mkdirSync(worktreeRoot, { recursive: true })
+      mkdirSync(lockRoot)
+      writeFileSync(join(worktreeGitDir, 'commondir'), '../..\n')
+      writeFileSync(join(worktreeRoot, '.git'), `gitdir: ${worktreeGitDir}\n`)
+
+      expect(resolveLocalGateLockPath(mainRoot, lockRoot)).toBe(
+        resolveLocalGateLockPath(worktreeRoot, lockRoot),
+      )
+    } finally {
+      rmSync(fixture, { recursive: true, force: true })
+    }
+  })
+
+  test('rejects an overlapping gate and releases the lock for the next run', () => {
+    const fixture = mkdtempSync(join(tmpdir(), 'aw-local-gate-lock-live-'))
+    const repoRoot = join(fixture, 'repo')
+    const lockRoot = join(fixture, 'locks')
+    try {
+      mkdirSync(join(repoRoot, '.git'), { recursive: true })
+      const first = acquireLocalGateLock(repoRoot, {
+        lockRoot,
+        pid: 101,
+        token: 'first',
+        now: () => new Date('2026-08-15T12:00:00.000Z'),
+        isProcessAlive: (pid) => pid === 101,
+      })
+
+      expect(() =>
+        acquireLocalGateLock(repoRoot, {
+          lockRoot,
+          pid: 202,
+          token: 'second',
+          isProcessAlive: (pid) => pid === 101,
+        }),
+      ).toThrow('pid 101')
+
+      first.release()
+      const second = acquireLocalGateLock(repoRoot, {
+        lockRoot,
+        pid: 202,
+        token: 'second',
+        isProcessAlive: () => true,
+      })
+      expect(existsSync(second.path)).toBe(true)
+      second.release()
+      expect(existsSync(second.path)).toBe(false)
+    } finally {
+      rmSync(fixture, { recursive: true, force: true })
+    }
+  })
+
+  test('recovers a dead-owner lock without letting the old owner remove the replacement', () => {
+    const fixture = mkdtempSync(join(tmpdir(), 'aw-local-gate-lock-stale-'))
+    const repoRoot = join(fixture, 'repo')
+    const lockRoot = join(fixture, 'locks')
+    try {
+      mkdirSync(join(repoRoot, '.git'), { recursive: true })
+      const stale = acquireLocalGateLock(repoRoot, {
+        lockRoot,
+        pid: 303,
+        token: 'stale',
+        isProcessAlive: () => true,
+      })
+      const replacement = acquireLocalGateLock(repoRoot, {
+        lockRoot,
+        pid: 404,
+        token: 'replacement',
+        isProcessAlive: () => false,
+      })
+
+      stale.release()
+      expect(existsSync(replacement.path)).toBe(true)
+      replacement.release()
+      expect(existsSync(replacement.path)).toBe(false)
+    } finally {
+      rmSync(fixture, { recursive: true, force: true })
+    }
   })
 })

@@ -137,7 +137,11 @@ export const WebhookRepoScopeSchema = z.discriminatedUnion('kind', [
 ])
 export type WebhookRepoScope = z.infer<typeof WebhookRepoScopeSchema>
 
-export const WEBHOOK_LAUNCH_KINDS = ['workflow', 'agent', 'workgroup'] as const
+// RFC-304：第 4 种发射形态 `code-round`。它与前三种的区别在于**不是人写的**——
+// 启用一个「仓库 × 能力」单元格时由平台自动建行、停用时撤行，用户在触发器页只读
+// 可见。走触发器表而不是另起一条唤醒通路，是为了白拿既有的 fire 记录、stream key、
+// supersede 与熔断：同一个 MR 连推三次必须取消前两轮，那套逻辑已经在这里了。
+export const WEBHOOK_LAUNCH_KINDS = ['workflow', 'agent', 'workgroup', 'code-round'] as const
 export const WebhookLaunchKindSchema = z.enum(WEBHOOK_LAUNCH_KINDS)
 export type WebhookLaunchKind = z.infer<typeof WebhookLaunchKindSchema>
 
@@ -398,10 +402,29 @@ export const WebhookWorkgroupPayloadTemplateSchema = z
   .superRefine(refineWebhookTemplateSpace)
 export type WebhookWorkgroupPayloadTemplate = z.infer<typeof WebhookWorkgroupPayloadTemplateSchema>
 
+/**
+ * RFC-304 code-round 的载荷模板。
+ *
+ * 刻意只有一个字段：一轮检视需要的其余东西（MR、commit、diff）全在**冻结的
+ * trigger context** 里，由 `resolve-target` 阶段现取；把它们抄进模板等于给同一份
+ * 事实造第二个副本，而两份副本迟早会不一致。
+ *
+ * 也没有 `CommonTemplateFields`：那些是给人填的启动选项（工作分支、自动提交推送、
+ * 时长/预算上限），而 code-round 的这些由能力契约与组层配置决定——放开它们等于让
+ * 触发器页能覆盖能力配置，两处配同一件事正是本 RFC 要避免的。
+ */
+export const WebhookCodeRoundPayloadTemplateSchema = z
+  .object({
+    capability: z.string().min(1).max(64),
+  })
+  .strict()
+export type WebhookCodeRoundPayloadTemplate = z.infer<typeof WebhookCodeRoundPayloadTemplateSchema>
+
 export type WebhookLaunchPayloadTemplate =
   | WebhookWorkflowPayloadTemplate
   | WebhookAgentPayloadTemplate
   | WebhookWorkgroupPayloadTemplate
+  | WebhookCodeRoundPayloadTemplate
 
 /** save/edit/fire 共用的封套选择器（对齐 scheduledPayloadSchemaFor 的单选择器模式）。 */
 export function webhookPayloadTemplateSchemaFor(
@@ -412,7 +435,9 @@ export function webhookPayloadTemplateSchemaFor(
       ? WebhookWorkflowPayloadTemplateSchema
       : kind === 'agent'
         ? WebhookAgentPayloadTemplateSchema
-        : WebhookWorkgroupPayloadTemplateSchema
+        : kind === 'code-round'
+          ? WebhookCodeRoundPayloadTemplateSchema
+          : WebhookWorkgroupPayloadTemplateSchema
   return schema as unknown as z.ZodType<WebhookLaunchPayloadTemplate, z.ZodTypeDef, unknown>
 }
 

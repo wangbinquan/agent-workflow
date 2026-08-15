@@ -1,4 +1,7 @@
-import { resolve } from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 
 export interface LocalGateCommand {
   label: string
@@ -34,6 +37,36 @@ interface KillableProcess {
   kill(signal?: NodeJS.Signals | number): void
 }
 
+interface LocalGateLockOwner {
+  pid: number
+  token: string
+  repoRoot: string
+  startedAt: string
+}
+
+export interface LocalGateLockOptions {
+  lockRoot?: string
+  pid?: number
+  token?: string
+  now?: () => Date
+  isProcessAlive?: (pid: number) => boolean
+}
+
+export interface LocalGateLock {
+  path: string
+  release(): void
+}
+
+class LocalGateAlreadyRunningError extends Error {
+  constructor(readonly owner: LocalGateLockOwner) {
+    super(
+      `another local gate is already running for this repository ` +
+        `(pid ${owner.pid}, started ${owner.startedAt}, cwd ${owner.repoRoot})`,
+    )
+    this.name = 'LocalGateAlreadyRunningError'
+  }
+}
+
 class GateCommandError extends Error {
   constructor(
     readonly lane: string,
@@ -42,6 +75,126 @@ class GateCommandError extends Error {
   ) {
     super(`${lane}: ${label} exited with code ${exitCode}`)
   }
+}
+
+function errorCode(error: unknown): string | undefined {
+  if (!(error instanceof Error) || !('code' in error)) return undefined
+  return String((error as NodeJS.ErrnoException).code)
+}
+
+function gitCommonDir(repoRoot: string): string {
+  const dotGit = resolve(repoRoot, '.git')
+  if (statSync(dotGit).isDirectory()) return realpathSync(dotGit)
+
+  const directive = readFileSync(dotGit, 'utf8').trim()
+  const prefix = 'gitdir:'
+  if (!directive.startsWith(prefix)) {
+    throw new Error(`invalid worktree gitdir file: ${dotGit}`)
+  }
+  const gitDir = resolve(repoRoot, directive.slice(prefix.length).trim())
+  let commonDir = gitDir
+  try {
+    const relativeCommonDir = readFileSync(resolve(gitDir, 'commondir'), 'utf8').trim()
+    commonDir = resolve(gitDir, relativeCommonDir)
+  } catch (error) {
+    if (errorCode(error) !== 'ENOENT') throw error
+  }
+  return realpathSync(commonDir)
+}
+
+export function resolveLocalGateLockPath(repoRoot: string, lockRoot = tmpdir()): string {
+  const identity = createHash('sha256').update(gitCommonDir(repoRoot)).digest('hex').slice(0, 16)
+  return join(lockRoot, `agent-workflow-local-gate-${identity}.lock`)
+}
+
+function readLockOwner(lockPath: string): LocalGateLockOwner | undefined {
+  try {
+    const parsed = JSON.parse(
+      readFileSync(resolve(lockPath, 'owner.json'), 'utf8'),
+    ) as Partial<LocalGateLockOwner>
+    if (
+      typeof parsed.pid !== 'number' ||
+      !Number.isInteger(parsed.pid) ||
+      parsed.pid <= 0 ||
+      typeof parsed.token !== 'string' ||
+      typeof parsed.repoRoot !== 'string' ||
+      typeof parsed.startedAt !== 'string'
+    ) {
+      return undefined
+    }
+    return parsed as LocalGateLockOwner
+  } catch {
+    return undefined
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return errorCode(error) !== 'ESRCH'
+  }
+}
+
+export function acquireLocalGateLock(
+  repoRoot: string,
+  options: LocalGateLockOptions = {},
+): LocalGateLock {
+  const lockRoot = options.lockRoot ?? tmpdir()
+  const pid = options.pid ?? process.pid
+  const token = options.token ?? randomUUID()
+  const now = options.now ?? (() => new Date())
+  const processIsAlive = options.isProcessAlive ?? isProcessAlive
+  mkdirSync(lockRoot, { recursive: true })
+  const lockPath = resolveLocalGateLockPath(repoRoot, lockRoot)
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      mkdirSync(lockPath)
+    } catch (error) {
+      if (errorCode(error) !== 'EEXIST') throw error
+      const owner = readLockOwner(lockPath)
+      if (owner !== undefined && processIsAlive(owner.pid)) {
+        throw new LocalGateAlreadyRunningError(owner)
+      }
+      if (owner === undefined) {
+        const ageMs = Date.now() - statSync(lockPath).mtimeMs
+        if (ageMs < 5_000) {
+          throw new Error(`local gate lock is still initializing: ${lockPath}`)
+        }
+      }
+      rmSync(lockPath, { recursive: true, force: true })
+      continue
+    }
+
+    const owner: LocalGateLockOwner = {
+      pid,
+      token,
+      repoRoot,
+      startedAt: now().toISOString(),
+    }
+    try {
+      writeFileSync(resolve(lockPath, 'owner.json'), JSON.stringify(owner, null, 2))
+    } catch (error) {
+      rmSync(lockPath, { recursive: true, force: true })
+      throw error
+    }
+
+    let released = false
+    return {
+      path: lockPath,
+      release(): void {
+        if (released) return
+        released = true
+        if (readLockOwner(lockPath)?.token === token) {
+          rmSync(lockPath, { recursive: true, force: true })
+        }
+      },
+    }
+  }
+
+  throw new Error(`unable to acquire local gate lock: ${lockPath}`)
 }
 
 function durationLabel(durationMs: number): string {
@@ -97,6 +250,13 @@ async function runLane(
 
 export async function runLocalGate(): Promise<number> {
   const repoRoot = resolve(import.meta.dir, '..')
+  let gateLock: LocalGateLock | undefined
+  try {
+    gateLock = acquireLocalGateLock(repoRoot)
+  } catch (error) {
+    console.error(`[gate] ${String(error)}`)
+    return 2
+  }
   const active = new Set<KillableProcess>()
   let interruptedSignal: NodeJS.Signals | undefined
 
@@ -133,6 +293,7 @@ export async function runLocalGate(): Promise<number> {
   } finally {
     process.off('SIGINT', onSigint)
     process.off('SIGTERM', onSigterm)
+    gateLock.release()
   }
 }
 

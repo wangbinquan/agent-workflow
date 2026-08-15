@@ -27,6 +27,7 @@ import {
   migrateTriggerRowTemplateToV2,
   parseTriggerRow,
   renderWebhookLaunch,
+  renderedLaunchPayload,
   resolveRepoForEvent,
   type WebhookDispatchDeps,
 } from '../src/services/webhook/webhookDispatch'
@@ -138,7 +139,7 @@ async function harness(): Promise<Harness> {
         taskId,
         kind: rendered.kind,
         fireId: invoker.webhookFireId,
-        payload: rendered.payload,
+        payload: renderedLaunchPayload(rendered) as never,
         // RFC-269 regression: the context must already be part of the launch
         // request. A post-launch UPDATE races scheduler's one-time task read.
         triggerContext: (invoker as typeof invoker & { triggerContext?: unknown }).triggerContext,
@@ -237,7 +238,7 @@ describe('RFC-257 T6 · renderWebhookLaunch（纯装配）', () => {
       cachedRepoId: 'repo-1',
     })
     expect(r.kind).toBe('workflow')
-    const p = r.payload as Record<string, unknown>
+    const p = renderedLaunchPayload(r) as never as Record<string, unknown>
     expect(p['workflowId']).toBe('wf-1')
     expect(p['name']).toBe('[审计] platform/api!42')
     expect(p['cachedRepoId']).toBe('repo-1')
@@ -259,7 +260,7 @@ describe('RFC-257 T6 · renderWebhookLaunch（纯装配）', () => {
       ev(),
       { kind: 'url', repoUrl: HTTP_URL },
     )
-    const p = r.payload as Record<string, unknown>
+    const p = renderedLaunchPayload(r) as never as Record<string, unknown>
     expect(p['agentId']).toBe('ag-1')
     expect(p['description']).toBe('修 platform/api 的 !42')
     expect(p['repoUrl']).toBe(HTTP_URL)
@@ -291,7 +292,7 @@ describe('RFC-257 T6 · renderWebhookLaunch（纯装配）', () => {
     ]
     for (const trigger of cases) {
       const rendered = renderWebhookLaunch(trigger, '临时任务', ev(), { kind: 'scratch' })
-      const payload = rendered.payload as unknown as Record<string, unknown>
+      const payload = renderedLaunchPayload(rendered) as never as unknown as Record<string, unknown>
       expect(payload['scratch']).toBe(true)
       if (rendered.kind === 'workflow') {
         const inputs = payload['inputs'] as Record<string, string>

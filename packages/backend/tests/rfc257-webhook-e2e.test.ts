@@ -21,7 +21,10 @@ import {
   webhookTriggers,
   workflows,
 } from '../src/db/schema'
-import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
+import {
+  createWebhookDispatcher,
+  renderedLaunchPayload,
+} from '../src/services/webhook/webhookDispatch'
 import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -94,7 +97,7 @@ async function harness() {
       const taskId = ulid()
       await db.insert(tasks).values({
         id: taskId,
-        name: (rendered.payload as { name: string }).name,
+        name: (renderedLaunchPayload(rendered) as never as { name: string }).name,
         workflowId,
         workflowSnapshot: '{}',
         repoPath: '/repo',

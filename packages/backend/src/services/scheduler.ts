@@ -4547,6 +4547,15 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
           worktreePath: state.scopeRoot,
           protocolBlock: buildProtocolBlock([REVIEW_PORT], undefined, envelopeNonce),
           nonce: envelopeNonce,
+          // The same two seams the code-host NODE branch already uses (line
+          // ~4360/4410). Threading them here means a test drives the real
+          // adapter and the real `executeCodeHostCall` — path templating, body
+          // mapping, retries — with only the socket replaced. Injecting a whole
+          // fake runner instead would skip the wiring this is meant to prove.
+          ...(opts.codeHostConnections !== undefined
+            ? { codeHostConnections: opts.codeHostConnections }
+            : {}),
+          ...(opts.codeHostFetch !== undefined ? { codeHostFetch: opts.codeHostFetch } : {}),
           // Resolved per round, not cached: a team can rebind the slot between
           // rounds, and a stale agent would keep reviewing after somebody
           // changed which one should.

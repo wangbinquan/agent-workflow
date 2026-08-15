@@ -251,7 +251,13 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // 那个「没有」本身就是权限边界）。
   // RFC-305 bumped to 162 with 0162_rfc305_user_permission_grants（用户 access
   // revision、附加授权集合与 append-only access audit）。
-  test('HEAD journal has 163 entries (sanity — locks the freeze target indices)', () => {
+  // RFC-304 PR-4b bumped to 164 with 0164_rfc304_code_findings（意见台账：唯一键
+  // (endpoint, stableProjectId, anchorKind, anchorId, fingerprint, generation)，
+  // **刻意不含 workItemId**——意见属于这个 MR，不属于恰好观测到它的那个工作项；
+  // 挂在工作项上会让工作项重建的那天整段历史脱钩、所有未解决意见被当成新问题重发。
+  // generation 进键是为了「消失后又出现」：旧线程已 resolve/标注过，回归必须开新
+  // 线程，旧行留作历史，「这个问题反复出现」才答得上来。
+  test('HEAD journal has 164 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -395,7 +401,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // Webhook 终态 workspace claim 与 RFC-165/iso GC claim）。
     // RFC-303 bumped to 157 with 0157_rfc303_mr_terminal_control（MR 终态
     // 控制流、稳定流身份与 durable launch/effect ledgers）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(163)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(164)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

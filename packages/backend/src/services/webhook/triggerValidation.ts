@@ -178,7 +178,11 @@ export async function assertTriggerSaveable(
     candidate.eventTypes,
     workflowInputs,
   )
-  if (payload.scratch === true && candidate.autoRegisterRepos !== false) {
+  // `scratch` is a human-authored launch option; a code-round template has no
+  // such field (its space is decided by the capability contract, not here).
+  // Reading it off the union would be a lie about what the payload contains.
+  const payloadScratch = 'scratch' in payload && payload.scratch === true
+  if (payloadScratch && candidate.autoRegisterRepos !== false) {
     issues.push({
       code: 'scratch-auto-register-conflict',
       detail: 'autoRegisterRepos must be false when launchPayload.scratch is true',
@@ -204,10 +208,20 @@ export async function assertTriggerSaveable(
     },
     'rehearsal',
     rehearsalEvent(candidate.eventTypes[0] ?? 'push'),
-    payload.scratch === true
+    payloadScratch
       ? { kind: 'scratch' }
       : { kind: 'url', repoUrl: 'https://rehearsal.invalid/repo.git' },
   )
+  // Same reasoning as the dispatch-time gate: a code-round's target is a
+  // platform-owned stage contract, not a user-selected resource that could be
+  // missing or invisible, and its payload is one capability name. There is
+  // nothing here for this gate to check.
+  //
+  // It should also be unreachable in practice — code-round triggers are created
+  // by the platform when a capability cell is enabled, never through the
+  // user-facing trigger validation path. Handling it explicitly rather than
+  // asserting it away keeps a future caller from getting a confusing cast error.
+  if (rendered.kind === 'code-round') return
   await assertScheduledTargetUsable(
     db,
     actor,

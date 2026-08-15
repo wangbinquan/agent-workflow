@@ -58,9 +58,22 @@
 
 - **「只被 `import type` 引用」的模块在 `bun test` 面前是隐形的**：类型导入在运行期被整段抹掉，所以这类模块**丢了 / 拷漏了 / 改名了，测试照样全绿**——300 个文件、上万条断言，一条都不会红。只有 typecheck 与 depcheck 看得见（后者报「第一方 import 解析不了」）。2026-08-15 实际发生：往隔离工作树拷文件时 `cp -R src/ports/ dest/` 把**目录内容**摊进了上层（macOS 上 `cp -R foo/ bar/` 拷的是 foo 的内容），`ports/` 成了空目录，四个 shard 依然 `0 fail`，是 typecheck 22 条 TS2307 + depcheck 才把它揪出来。两条推论：①**别拿 `bun test` 绿当「文件都到位了」的判据**，隔离树跑门禁必须跑完整门禁（typecheck/depcheck 那两步正是为这种失明存在的）；②往隔离树拷贝时**逐文件拷、不要拷目录**（`git status --porcelain` 列出的目录项要先展开成文件），否则一个静默的路径偏移能让整轮门禁结论失真。
 
+- **「有实现、有测试、没有调用方」是分层架构下最容易累积、且任何测试都照不到的债**（2026-08-15 RFC-304 一次扫出 8 处）：先把 domain/infrastructure 写完测完、再在后续 PR 接线，是很自然的节奏；一旦接线那步漏了，**两半各自都对、测试全绿、功能不存在**。它和「写错了」完全不同——错的代码会红，缺席的接线不会红。RFC-304 里连栽三次（`wantsCapability`、唤醒服务，以及扫描发现的工作项存储 / 钩子执行 / AI 尝试记录 / MR lease / 发布意图 / 批量发布 / 台账对账 / readiness 失效共 8 个模块，全部 src 消费者为 0、测试俱全）。**定式**：每个 PR 收尾扫一次零消费者，别留给下一个 PR 撞见——
+
+  ```bash
+  cd packages/backend/src/modules/<ctx>
+  for f in */*.ts; do n=$(basename "$f" .ts)
+    echo "$(rg -l "from '@/modules/<ctx>/$(dirname $f)/$n'" ../../ | wc -l) $f"
+  done | sort -n | head
+  ```
+
+  结果为 `0` 的，要么**本 PR 就该接而漏了**，要么必须在 plan 里写明**由哪个 PR 接**；两者都强过让下一个人发现。反过来这也是 code review 的好问题：新加的 domain 模块，谁调用它？
+
 - **`git stash push -- <paths>` 在「没东西可存」时也返回 0，于是 `&& STASHED=1` 会骗你去 pop 别人的 stash**（2026-08-15 真实事故）：共享 checkout 上推送前常写成「先把他人未提改动 stash 起来 → pull --rebase → push → stash pop 还回去」。坑在于 `git stash push -u -m msg -- <paths>` 当所列路径全都干净时只打印 `No local changes to save` 并 **exit 0**——`git stash push ... && STASHED=1` 因此把标志置上了，后面的 `git stash pop` 就去弹了栈顶那个**本来就存在的、别人的** stash。那个 stash 基于很旧的 commit，套到今天的 HEAD 上直接炸出 12 个 `UU` 冲突文件。**判据**：绝不用退出码推断「我建了 stash」，要么 pop 前后比对 `git stash list` 的**条数**，要么用 `REF=$(git stash create)` 拿到确切的 stash ref 再 `git stash apply "$REF"`（`create` 不进栈，天然不会误伤别人的）。**恢复姿势**（本次实测无损）：先把冲突文件与 `git stash show -p stash@{0}` 快照到 scratchpad，再 `git checkout HEAD -- <每个冲突文件>`——冲突文件在 pop 之前必定是干净的（git 遇到脏文件是**拒绝** pop 而不是产生冲突），所以回 HEAD 不会丢别人任何未提交改动；别人的 stash 因为 pop 失败而**原样保留**在栈上。
 
 - **仓内有一批测试「静息就贴着 5000ms」，分片并行下必然间歇翻红**（2026-08-15 实测三例）：bun 默认单测超时 5000ms，而下列测试**在空载机器上单跑**就已逼近它——`rfc131-review-reject-aging-prior-output` 2.6–3.1s、`rfc305-architecture-lock` 的 roles 那条 3.97s、`listWorktreeDir > truncates beyond WORKTREE_DIR_MAX_ENTRIES` ~5.7s（I/O 重）。`gate:local` 跑 4 个并行分片，于是它们在**任何**有别的活儿的机器上都会随机超时。**判据**：看到 `(fail)` 先去日志里找 `^ this test timed out after 5000ms`——有这行就是超时不是断言，跟着单跑一次确认；**别**把它当成自己改动的回归去查。**根治**属各自 owner：给这些测试显式 timeout（`test(name, fn, 15_000)`）而不是靠机器够快。
+
+- **别在自己的门禁跑着的时候继续跑重活——你会把自己的门禁跑挂**（2026-08-15 实测两次）：隔离门禁开 4 个并行分片、单片上限 900s，本来就吃满机器；此时再在主树上跑 `bun test` 全量 / `bun run typecheck` / 全仓 `eslint`，分片直接撞 900s 墙被杀，日志里**一条 `(fail)` 都没有**、只有 `1/4 shard(s) failed after 902.0s`，看起来像神秘失败。判据同前：先看有没有 `timed out after` / `FAIL timeout`，再看 `(fail)` 计数是否为 0——两者同时成立就是被饿死的，不是代码问题。**定式**：门禁一旦启动，等待期间只做**不吃 CPU** 的事（读代码、写文件、改文档），把跑测试/typecheck/lint 攒到门禁结束之后。想边等边验证就再开一棵隔离树，别在同一台机器上抢。
 
 - **隔离工作树的「基线」本身可能是红的，先量它再读自己的门禁**：共享 main 上跑隔离门禁的标准姿势是 `git worktree` pin 到某个 commit + 拷自己的文件，好处是红了能归因到自己。但 pin 的那个 commit **是别人刚推的**，它自己可能就带着红——2026-08-15 实测：pin 到 `c6cc4854` 时该 commit 已有两条 RFC-294 public-surface ratchet 红（`modules/identity-access/...`，另一个 session 的），于是我的门禁必然也报这两条，而它们和我的改动毫无关系。**判据**：读自己门禁结果前，先确定 pin 的基线红有哪些——最省的办法不是再跑一遍空白门禁（8 分钟），而是**在主树上单跑那几个守卫测试**拿到确切的失败断言与断言里指名的路径，然后看自己门禁的失败集合是否**恰好等于**它。多出来的才是自己的。反过来，如果图省事直接把「门禁红了」当成自己的问题去改，就会去动别人正在改的文件。
 

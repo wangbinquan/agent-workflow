@@ -191,6 +191,13 @@ export function collectWebhookTemplateSurfaces(
     return out
   }
 
+  // RFC-304: a code-round template has no user-authored text at all — its only
+  // field is the capability name, which is an identifier and not a surface to
+  // render. Returning early matters because the tail of this function is an
+  // UNGUARDED workgroup fall-through: without this, a code-round payload gets
+  // parsed by the workgroup schema and fails on a missing `goal`.
+  if (kind === 'code-round') return out
+
   const parsed = WebhookWorkgroupPayloadTemplateSchema.parse(payload)
   add('workgroup-goal', '/goal', parsed.goal)
   add('working-branch', '/workingBranch', parsed.workingBranch)
@@ -258,6 +265,9 @@ export function mapWebhookTemplateSurfaces(
         : { workingBranch: rewrite('working-branch', '/workingBranch', parsed.workingBranch) }),
     }
   }
+
+  // Same unguarded fall-through as above; same reason to return first.
+  if (kind === 'code-round') return payload
 
   const parsed = WebhookWorkgroupPayloadTemplateSchema.parse(payload)
   return {

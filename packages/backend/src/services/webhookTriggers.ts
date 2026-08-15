@@ -35,6 +35,7 @@ import {
 import { migrateTriggerRowTemplateToV2, parseTriggerRow } from '@/services/webhook/webhookDispatch'
 import { assertTriggerSaveable } from '@/services/webhook/triggerValidation'
 import { loadConfig } from '@/config'
+import { assertTriggerIsUserOwned } from '@/services/codeCapabilityTrigger'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
 export interface WebhookTriggerServiceDeps {
@@ -248,6 +249,10 @@ export async function updateWebhookTrigger(
   rawBody: unknown,
 ): Promise<WebhookTrigger> {
   const storedRow = await loadRowOrThrow(deps.db, id)
+  // RFC-304: capability-backed triggers are platform-owned. Editing one here
+  // would let the trigger page and the capability matrix disagree about the
+  // same behaviour, with no indication which one is in force.
+  await assertTriggerIsUserOwned(deps.db, id)
   const row = await migrateTriggerRowTemplateToV2(deps.db, storedRow)
   requireWrite(actor, row)
   const parsed = UpdateWebhookTriggerSchema.safeParse(rawBody)
@@ -361,6 +366,9 @@ export async function deleteWebhookTrigger(
   id: string,
 ): Promise<void> {
   const row = await loadRowOrThrow(deps.db, id)
+  // RFC-304: deleting a capability's trigger from here would silently switch
+  // the capability off from a screen that never mentions capabilities.
+  await assertTriggerIsUserOwned(deps.db, id)
   requireWrite(actor, row)
   await deps.db.delete(webhookTriggers).where(eq(webhookTriggers.id, row.id))
 }

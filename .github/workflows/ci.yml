@@ -528,16 +528,21 @@ jobs:
     # rebuilding on every shard. download/upload-artifact drops the +x bit, so
     # a one-line
     # `chmod +x` restores it (cheap, vs. a full vite build + --compile per
-    # shard). This eliminates 8 redundant binary rebuilds (2 OS × 4 shards)
-    # per CI run; e2e/harness.ts only needs the file to exist + be executable.
+    # shard). This keeps binary compilation at one job per OS instead of
+    # repeating it in every e2e job; e2e/harness.ts only needs the file to
+    # exist + be executable.
     #
-    # RFC-054 W1-8 — `shard` matrix splits the suite into 4 buckets per OS
-    # so total e2e wall-clock drops from ~50s (single runner) to ~15s per
-    # shard runner running in parallel. Each shard runner uses Playwright's
+    # RFC-054 W1-8 — `shard` splits the suite at file granularity. The current
+    # suite is deliberately two-way rather than four-way: across the seven
+    # successful main runs measured on 2026-08-15, the extra jobs queued in
+    # multiple macOS/Windows runner waves and pushed CI as high as 12m53s.
+    # Two shards retain the same test/platform coverage while removing six
+    # repeated checkout/install/cache jobs and their queue positions. Each
+    # shard runner uses Playwright's
     # built-in `--shard=N/M` flag (which distributes test files round-robin
     # at file granularity, so a single file's tests stay co-located and
     # `test.beforeAll` semantics hold).
-    name: Playwright e2e (shard ${{ matrix.shard }}/4)
+    name: Playwright e2e (shard ${{ matrix.shard }}/2)
     needs: build-binary
     # Same reasoning as build-binary's `if`: a red unit shard must not silently
     # skip the only layer that exercises real layout and browser a11y. If
@@ -549,7 +554,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        shard: [1, 2, 3, 4]
+        shard: [1, 2]
     runs-on: ${{ matrix.os }}
     # Cold browser/system-dependency installation needs more headroom than the
     # unit jobs, but must not inherit Actions' six-hour default.
@@ -571,7 +576,7 @@ jobs:
         # On windows-latest this ~313 MB archive consistently takes 41–105s
         # to restore, while the following frozen install takes 7–11s with the
         # cache. Skip only this download cache on Windows; dependency install,
-        # Playwright's browser cache, artifacts, and all four shards stay live.
+        # Playwright's browser cache, artifacts, and both shards stay live.
         if: runner.os != 'Windows'
         uses: actions/cache@v6
         with:
@@ -626,7 +631,7 @@ jobs:
         shell: bash
         run: bunx playwright install-deps chromium
 
-      - name: Run e2e (shard ${{ matrix.shard }}/4)
+      - name: Run e2e (shard ${{ matrix.shard }}/2)
         env:
           CI: 'true'
           # RFC-254 T31 — the windows leg skips two specs, and ONLY these two.
@@ -658,19 +663,19 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            bun run e2e -- --shard=${{ matrix.shard }}/4 \
+            bun run e2e -- --shard=${{ matrix.shard }}/2 \
               --grep-invert "$AW_E2E_WINDOWS_EXCLUDE"
           else
-            bun run e2e -- --shard=${{ matrix.shard }}/4
+            bun run e2e -- --shard=${{ matrix.shard }}/2
           fi
 
       - name: Upload Playwright trace on failure
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          # Shard in the artifact name so all 8 shards' traces can coexist
-          # in the same workflow run when multiple fail (otherwise the
-          # later one would overwrite the earlier).
+          # Shard in the artifact name so all six jobs' traces can coexist in
+          # the same workflow run when multiple fail (otherwise the later one
+          # would overwrite the earlier).
           name: playwright-trace-${{ matrix.os }}-shard${{ matrix.shard }}
           path: |
             test-results/

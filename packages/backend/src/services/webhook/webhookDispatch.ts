@@ -10,6 +10,7 @@
 // 任务后各自启动 —— 双任务存活且 fires 链出孤儿。
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { startCodeRoundTask } from '@/services/codeRoundLaunch'
 
 import type { Actor } from '@/auth/actor'
 import { buildInheritedActor } from '@/auth/actor'
@@ -61,6 +62,7 @@ import {
   type WebhookLaunchKind,
   type WebhookLaunchPayloadTemplate,
   type WebhookWorkflowPayloadTemplate,
+  type WebhookCodeRoundPayloadTemplate,
   type WebhookWorkgroupPayloadTemplate,
   webhookTriggerContextOf,
   webhookTriggerTerminalPolicyIssue,
@@ -348,6 +350,25 @@ type RenderedLaunch =
   | { kind: 'workflow'; refId: string; payload: StartTask }
   | { kind: 'agent'; refId: string; payload: StartAgentTask & { agentId: string } }
   | { kind: 'workgroup'; refId: string; payload: StartWorkgroupTask & { workgroupId: string } }
+  /**
+   * RFC-304. Carries only the capability: a round reads its MR, commit and diff
+   * from the frozen trigger context, so copying them here would make a second
+   * copy of the same fact — and two copies eventually disagree.
+   */
+  | { kind: 'code-round'; refId: string; capability: string }
+
+/**
+ * The launch payload, for the three kinds that have one.
+ *
+ * `code-round` deliberately carries no payload — its whole input is a
+ * capability name plus the frozen trigger context — so callers that want a
+ * payload have to say what they expect when there is none. Returning
+ * `undefined` rather than widening the union keeps that decision at the call
+ * site instead of hiding it behind a cast.
+ */
+export function renderedLaunchPayload(rendered: RenderedLaunch): unknown {
+  return rendered.kind === 'code-round' ? undefined : rendered.payload
+}
 
 export function renderWebhookLaunch(
   trigger: Pick<ParsedTrigger, 'launchKind' | 'launchRefId' | 'payloadTemplate'>,
@@ -371,6 +392,13 @@ export function renderWebhookLaunch(
   // scratch 是新建空白 Git 仓，不得把事件仓 branch 误当成 checkout ref。
   const refFields =
     space.kind !== 'scratch' && event.branch !== undefined ? { ref: event.branch } : {}
+  if (trigger.launchKind === 'code-round') {
+    // No template rendering: there is nothing user-authored to render. The
+    // capability name is the whole payload, and the round takes everything else
+    // from the trigger context at `resolve-target`.
+    const t = renderedTemplate as WebhookCodeRoundPayloadTemplate
+    return { kind: 'code-round', refId: trigger.launchRefId, capability: t.capability }
+  }
   if (trigger.launchKind === 'workflow') {
     const t = renderedTemplate as WebhookWorkflowPayloadTemplate
     const inputs: Record<string, string> = {}
@@ -531,6 +559,42 @@ async function launchViaExecutor(
         payload: { ...rendered.payload, expectedWorkgroupId: rendered.refId },
       },
       launchDeps,
+    )
+    return task.id
+  }
+  if (rendered.kind === 'code-round') {
+    // Narrowed, not cast: `ExecutionInvoker` is a union and only its webhook
+    // arm carries the attribution. This function is only ever reached from the
+    // webhook path, so the other arms are a programming error rather than a
+    // runtime case — but saying so beats reading the fields off a union that
+    // does not have them.
+    if (invoker.type !== 'webhook') {
+      throw new Error('a code-round launch must come from a webhook delivery')
+    }
+    // RFC-304: a round is not a workflow launch — it goes through the capability
+    // module's own entry, which mints the round id and freezes the snapshot.
+    // Provenance rides the same webhook attribution as every other fire, which
+    // is the whole reason capabilities were routed through the trigger table.
+    const task = await startCodeRoundTask(
+      {
+        roundId: ulid(),
+        capability: rendered.capability,
+        roundSeq: 1,
+        name: rendered.capability,
+        scratch: true,
+      },
+      {
+        ...launchDeps,
+        // RFC-301 attribution, taken straight off the invoker. This is the
+        // payoff of routing capabilities through the trigger table: the trigger
+        // id, the fire id and the frozen context all already exist here, so a
+        // round is attributable exactly like every other webhook-started task —
+        // no new provenance kind, no synthesized ids.
+        launchProvenance: { kind: 'webhook' as const },
+        webhookTriggerId: invoker.webhookTriggerId,
+        webhookFireId: invoker.webhookFireId,
+        triggerContext: invoker.triggerContext,
+      } as never,
     )
     return task.id
   }
@@ -763,8 +827,14 @@ async function fireTrigger(
     // autoRegisterRepos 同取匹配时快照，避免排队期间编辑造成混合代配置。
     let space: RepoResolution | { kind: 'scratch' }
     try {
+      // A code-round always runs in a scratch space: the round fetches the MR
+      // head itself (`prepare-worktree`), so resolving the event's repository
+      // here would clone something the round is about to replace. Its template
+      // carries no `scratch` field at all — the capability decides, not a form.
       space =
-        effectiveTrigger.payloadTemplate.scratch === true
+        effectiveTrigger.launchKind === 'code-round' ||
+        ('scratch' in effectiveTrigger.payloadTemplate &&
+          effectiveTrigger.payloadTemplate.scratch === true)
           ? { kind: 'scratch' }
           : await (deps.resolveRepo ?? resolveRepoForEvent)(
               db,
@@ -822,14 +892,22 @@ async function fireTrigger(
         .where(eq(webhookTriggers.id, triggerId))
     }
     try {
-      await assertScheduledTargetUsable(
-        db,
-        actor,
-        rendered.kind,
-        rendered.payload as unknown as Record<string, unknown>,
-        await deps.getDefaultRuntime(),
-        { kind: 'context', value: webhookTriggerContextOf(event) },
-      )
+      // A code-round skips this gate, and not as a shortcut: the gate checks a
+      // USER-SELECTED target (workflow / agent / workgroup) that may have been
+      // deleted or made invisible, plus the rendered payload. A round's target
+      // is a platform-owned stage contract already validated at author time by
+      // `checkBuiltinContracts`, and its payload is one capability name — there
+      // is no user-chosen thing here that could have gone missing.
+      if (rendered.kind !== 'code-round') {
+        await assertScheduledTargetUsable(
+          db,
+          actor,
+          rendered.kind,
+          rendered.payload as unknown as Record<string, unknown>,
+          await deps.getDefaultRuntime(),
+          { kind: 'context', value: webhookTriggerContextOf(event) },
+        )
+      }
     } catch (err) {
       // 这个 gate 同时做两件事：目标可用性（缺失 / 不可见 / built-in 不可调度）与
       // 渲染后的 payload·输入校验。早期实现把两类异常一律记成 skipped-owner-invalid

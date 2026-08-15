@@ -42,6 +42,7 @@ import {
 } from '@/modules/code-capability/composition/mrReviewStages'
 import { createCodeHostAdapter } from '@/modules/code-capability/infrastructure/codeHostAdapter'
 import { createGitAdapter } from '@/modules/code-capability/infrastructure/gitAdapter'
+import type { CodeHostConnectionsService, FetchLike } from '@/services/codeHost/connections'
 import type { WebhookTriggerFields } from '@agent-workflow/shared'
 
 /** Defaults chosen to be visibly conservative rather than silently permissive. */
@@ -64,6 +65,10 @@ export interface MrReviewWiringInput {
   gate?: GateConfig
   /** Overrides endpoint resolution; tests and multi-endpoint callers use it. */
   codeHostEndpointId?: string
+  /** Injected connection resolution; production reads the secret key file. */
+  codeHostConnections?: CodeHostConnectionsService | null
+  /** Replaces only the socket, so the real client still assembles the request. */
+  codeHostFetch?: FetchLike
   /**
    * Why no caller could be built, when the caller's owner tried and failed.
    *
@@ -180,7 +185,14 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
   }
 
   const env: MrReviewEnvironment = {
-    codeHost: createCodeHostAdapter({ db: input.db, provider }),
+    codeHost: createCodeHostAdapter({
+      db: input.db,
+      provider,
+      ...(input.codeHostConnections !== undefined
+        ? { connections: input.codeHostConnections }
+        : {}),
+      ...(input.codeHostFetch !== undefined ? { fetchImpl: input.codeHostFetch } : {}),
+    }),
     git: createGitAdapter(),
     webhook: input.webhook,
     codeHostEndpointId: endpointId,

@@ -287,10 +287,10 @@ describe('repository test entrypoint', () => {
     expect(e2eJob).toContain('needs: build-binary')
     expect(e2eJob).toContain('fail-fast: false')
     expect(e2eJob).toContain('os: [ubuntu-latest, macos-latest, windows-latest]')
-    expect(e2eJob).toContain('shard: [1, 2, 3, 4]')
+    expect(e2eJob).toContain('shard: [1, 2]')
     // TWO invocations now — the windows branch and the POSIX one — and both must
     // keep the shard denominator, which is what this count is really guarding.
-    expect(occurrenceCount(e2eJob, `--shard=\${{ matrix.shard }}/4`)).toBe(2)
+    expect(occurrenceCount(e2eJob, `--shard=\${{ matrix.shard }}/2`)).toBe(2)
     expect(e2eJob).toContain('AW_E2E_WINDOWS_EXCLUDE')
   })
 

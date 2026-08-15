@@ -1154,7 +1154,7 @@ export const scheduledTasks = sqliteTable(
     ownerUserId: text('owner_user_id').notNull(), // creator; fires launch as this user
     // RFC-165 §9b (0087): which subject face this schedule fires. Existing
     // rows are workflow schedules — the column default is the backfill.
-    launchKind: text('launch_kind', { enum: ['workflow', 'agent', 'workgroup'] })
+    launchKind: text('launch_kind', { enum: ['workflow', 'agent', 'workgroup', 'code-round'] })
       .notNull()
       .default('workflow'),
     launchPayload: text('launch_payload').notNull(), // JSON: kind-enveloped launch body
@@ -1237,7 +1237,9 @@ export const webhookTriggers = sqliteTable(
     branchFilter: text('branch_filter'), // glob; NULL = no filter
     commandPrefix: text('command_prefix'), // note-event command; NULL = none
     ignoreUsernames: text('ignore_usernames').notNull().default('[]'), // JSON string[]
-    launchKind: text('launch_kind', { enum: ['workflow', 'agent', 'workgroup'] }).notNull(),
+    launchKind: text('launch_kind', {
+      enum: ['workflow', 'agent', 'workgroup', 'code-round'],
+    }).notNull(),
     launchRefId: text('launch_ref_id').notNull(), // workflowId/agentId/workgroupId（单一事实源）
     launchPayload: text('launch_payload').notNull(), // JSON 模板封套（webhookPayloadTemplateSchemaFor）
     // RFC-292: 1 = historical flat {{field}}, 2 = trigger.webhook.<field>.
@@ -3878,6 +3880,58 @@ export const resourceBundleApplies = sqliteTable(
  * stable numeric project id plus the endpoint id is the key here too. The path
  * and URL live in `anchor_meta` as a mutable display snapshot only.
  */
+// RFC-304 PR-4b — the findings ledger. One row per (finding, generation) on one
+// anchor; this is what makes a review continuous instead of a fresh opinion per
+// push. The unique key deliberately excludes `workItemId`: a finding belongs to
+// the MR, not to whichever work item observed it (see migration 0164).
+export const codeFindings = sqliteTable(
+  'code_findings',
+  {
+    id: text('id').primaryKey(),
+    codeHostEndpointId: text('code_host_endpoint_id').notNull(),
+    stableProjectId: text('stable_project_id').notNull(),
+    anchorKind: text('anchor_kind', { enum: ['mr', 'issue', 'pipeline'] }).notNull(),
+    anchorId: text('anchor_id').notNull(),
+    capability: text('capability').notNull(),
+    /** Stable across a rebase; changes when the surrounding code does. */
+    fingerprint: text('fingerprint').notNull(),
+    /** Bumped when a disappeared finding returns — the old row stays as history. */
+    generation: integer('generation').notNull().default(1),
+    lifecycle: text('lifecycle', { enum: ['active', 'disappeared', 'reappeared'] })
+      .notNull()
+      .default('active'),
+    severity: text('severity'),
+    title: text('title'),
+    filePath: text('file_path'),
+    anchorLine: integer('anchor_line'),
+    /** The host's thread id, once published; null while unanchored. */
+    externalId: text('external_id'),
+    publishedRoundId: text('published_round_id'),
+    disappearedRoundId: text('disappeared_round_id'),
+    createdAt: integer('created_at').notNull(),
+    lastSeenAt: integer('last_seen_at').notNull(),
+    closedAt: integer('closed_at'),
+  },
+  (t) => ({
+    identityUq: uniqueIndex('uniq_code_finding_identity').on(
+      t.codeHostEndpointId,
+      t.stableProjectId,
+      t.anchorKind,
+      t.anchorId,
+      t.fingerprint,
+      t.generation,
+    ),
+    anchorIdx: index('idx_code_findings_anchor').on(
+      t.codeHostEndpointId,
+      t.stableProjectId,
+      t.anchorKind,
+      t.anchorId,
+      t.lifecycle,
+    ),
+    seenIdx: index('idx_code_findings_seen').on(t.stableProjectId, t.lastSeenAt),
+  }),
+)
+
 export const codeWorkItems = sqliteTable(
   'code_work_items',
   {
