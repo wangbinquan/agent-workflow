@@ -150,7 +150,8 @@ import { buildProtocolBlock } from '@/services/protocol'
 import { CODE_ROUND_SUMMARY_PORT } from '@/services/codeRoundContract'
 import { createCodeCapabilityRunner } from '@/modules/code-capability/composition/codeCapabilityRunner'
 import { buildMrReviewWiring } from '@/modules/code-capability/composition/mrReviewEnvironment'
-import { REVIEW_PORT } from '@/modules/code-capability/application/reviewStage'
+import { createReviewAgentCaller, resolveReviewerAgent } from '@/services/codeReviewAgentCaller'
+import { REVIEW_AGENT_SLOT, REVIEW_PORT } from '@/modules/code-capability/application/reviewStage'
 import type { CodeCapabilityRunner } from '@/modules/code-capability/public/types'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
@@ -4546,6 +4547,40 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
           worktreePath: state.scopeRoot,
           protocolBlock: buildProtocolBlock([REVIEW_PORT], undefined, envelopeNonce),
           nonce: envelopeNonce,
+          // Resolved per round, not cached: a team can rebind the slot between
+          // rounds, and a stale agent would keep reviewing after somebody
+          // changed which one should.
+          //
+          // An unresolvable slot leaves `makeCaller` undefined, and the review
+          // stage then refuses by name with THIS message — the resolution
+          // failure travels to where a person reads it instead of becoming a
+          // generic "no agent".
+          ...(await (async () => {
+            const resolved = await resolveReviewerAgent(db, {
+              repoId: task.repoPath,
+              capability,
+              slot: REVIEW_AGENT_SLOT,
+            })
+            if (!resolved.ok) return { unresolvedAgentReason: resolved.message }
+            return {
+              makeCaller: createReviewAgentCaller({
+                db,
+                appHome: opts.appHome ?? Paths.root,
+                taskId,
+                nodeId: node.id,
+                agent: resolved.agent,
+                skills: [],
+                worktreePath: state.scopeRoot,
+                repoPath: task.repoPath,
+                baseBranch: task.baseBranch,
+                portName: REVIEW_PORT,
+                nonce: envelopeNonce,
+                ...(opts.defaultPerNodeTimeoutMs !== undefined
+                  ? { timeoutMs: opts.defaultPerNodeTimeoutMs }
+                  : {}),
+              }),
+            }
+          })()),
         })
       : null
   const runner =

@@ -29,6 +29,16 @@ import { buildReviewPrompt } from '@/modules/code-capability/domain/reviewPrompt
 /** The port the findings JSON is carried in. */
 export const REVIEW_PORT = 'findings'
 
+/**
+ * Which group-layer agent binding runs this stage.
+ *
+ * Declared once and referenced by the contract, because the slot name is a
+ * JOIN key: the contract declares it, `capability_bindings.agent_by_slot_json`
+ * is keyed by it, and the resolver looks it up. Two spellings would resolve to
+ * "no agent bound" for a slot somebody had, in fact, bound.
+ */
+export const REVIEW_AGENT_SLOT = 'reviewer'
+
 export interface ReviewStageInput {
   /** Turns the built prompt into a caller. Keeps the scheduler out of here. */
   makeCaller: (prompt: string) => AiCaller

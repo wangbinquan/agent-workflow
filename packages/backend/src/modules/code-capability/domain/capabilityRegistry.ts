@@ -16,6 +16,7 @@
 // same assertion the day it is added.
 
 import { ReviewEnvelopeSchema } from '@/modules/code-capability/domain/reviewEnvelope'
+import { REVIEW_AGENT_SLOT } from '@/modules/code-capability/application/reviewStage'
 import {
   validateStageContract,
   type CodeCapabilityId,
@@ -67,7 +68,7 @@ export const MR_REVIEW_CONTRACT: StageContract = {
       // Which group-layer agent binding runs it. Named rather than hardcoded so
       // a team points the reviewer at its own agent without forking the
       // sequence (the two-layer config of §5).
-      agentSlot: 'reviewer',
+      agentSlot: REVIEW_AGENT_SLOT,
     },
     // Deterministic sort → threshold → cap. Before positions on purpose:
     // positioning findings that are then discarded reports anchoring failures

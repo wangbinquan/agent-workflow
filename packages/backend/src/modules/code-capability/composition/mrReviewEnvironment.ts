@@ -64,6 +64,16 @@ export interface MrReviewWiringInput {
   gate?: GateConfig
   /** Overrides endpoint resolution; tests and multi-endpoint callers use it. */
   codeHostEndpointId?: string
+  /**
+   * Why no caller could be built, when the caller's owner tried and failed.
+   *
+   * Threaded through rather than re-derived so the REAL reason reaches the
+   * person reading the round's failure: "the agent bound to 'reviewer' no
+   * longer exists (id …)" is a repair instruction, and collapsing it to a
+   * generic "no agent bound" would send them to look at an empty field that is
+   * not empty.
+   */
+  unresolvedAgentReason?: string
 }
 
 /**
@@ -194,7 +204,8 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
       input.makeCaller === undefined
         ? refuseAll(
             ['review'],
-            `no agent is bound to the 'reviewer' slot for this repository, so the review stage has nothing to run — bind one in the capability configuration`,
+            input.unresolvedAgentReason ??
+              `no agent is bound to the 'reviewer' slot for this repository, so the review stage has nothing to run — bind one in the capability configuration`,
           )
         : mrReviewAiStages(env),
   }
