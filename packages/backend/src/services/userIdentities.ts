@@ -145,7 +145,7 @@ export async function createUserWithIdentity(
   return dbTxSync(db, (tx) => {
     const userId = ulid()
     const operationId = ulid()
-    withExistingSQLiteTransactionScope(tx, (transactionScope) =>
+    withExistingSQLiteTransactionScope(tx, (transactionScope) => {
       insertInitialUserAccessInTransaction(transactionScope, {
         user: {
           id: userId,
@@ -167,8 +167,9 @@ export async function createUserWithIdentity(
           actorKind: 'system',
           operationId,
         },
-      }),
-    )
+      })
+      return undefined
+    })
     insertIdentityTx(tx, { ...args.identity, userId, now })
     return { userId }
   })

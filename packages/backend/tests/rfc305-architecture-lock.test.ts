@@ -6,11 +6,13 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 
 import { PERMISSIONS, SYSTEM_DOMAIN_POINTS } from '@agent-workflow/shared'
+import { sql } from 'drizzle-orm'
 import ts from 'typescript'
 
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
-import { dbTxSync } from '../src/db/txSync'
+import { users } from '../src/db/schema'
+import { dbTxSync, type DbTxSync } from '../src/db/txSync'
 import { ALL_TOOLS } from '../src/mcp/tools'
 import {
   withExistingSQLiteTransactionScope,
@@ -197,26 +199,59 @@ function filesCallingTableMethod(root: string, method: string, table: string): s
 }
 
 describe('RFC-305 identity-access architecture', () => {
-  test('existing SQLite transactions expose only a callback-scoped RFC-294 capability', () => {
+  test('existing SQLite transactions expose only a callback-scoped RFC-294 capability', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     let escaped: TransactionScope | null = null
+    let escapedTransaction: DbTxSync | null = null
+    let escapedQuery: { run(): unknown } | null = null
     dbTxSync(db, (transaction) => {
       withExistingSQLiteTransactionScope(transaction, (scope) => {
         escaped = scope
         withSQLiteTransaction(scope, (liveTransaction) => {
-          expect(liveTransaction).toBe(transaction)
+          escapedTransaction = liveTransaction
+          expect(liveTransaction).not.toBe(transaction)
+          liveTransaction.run(sql`SELECT 1`)
+          escapedQuery = liveTransaction.update(users).set({ displayName: 'must-not-run' })
+          return undefined
         })
+        return undefined
       })
     })
 
-    expect(() => withSQLiteTransaction(escaped!, () => {})).toThrow('transaction scope is not live')
+    expect(() => withSQLiteTransaction(escaped!, () => undefined)).toThrow(
+      'transaction scope is not live',
+    )
+    expect(() => escapedTransaction!.run(sql`SELECT 1`)).toThrow('transaction scope is not live')
+    expect(() => escapedQuery!.run()).toThrow('transaction scope is not live')
+
+    let continuation: Promise<void> | null = null
     expect(() =>
       dbTxSync(db, (transaction) => {
-        withExistingSQLiteTransactionScope(transaction, (scope) => {
-          withSQLiteTransaction(scope, (liveTransaction) => liveTransaction)
-        })
+        const smuggledAsyncBody = ((scope: TransactionScope) => {
+          continuation = (async () => {
+            let liveTransaction: DbTxSync | null = null
+            withSQLiteTransaction(scope, (currentTransaction) => {
+              liveTransaction = currentTransaction
+              return undefined
+            })
+            await Promise.resolve()
+            liveTransaction!.run(sql`SELECT 1`)
+          })()
+          return continuation
+        }) as unknown as (scope: TransactionScope) => undefined
+        withExistingSQLiteTransactionScope(transaction, smuggledAsyncBody)
       }),
-    ).toThrow('SQLite transaction callback must not return a value')
+    ).toThrow('transaction scope callback must not return a value')
+    await expect(continuation!).rejects.toThrow('transaction scope is not live')
+  })
+
+  test('existing SQLite transaction callbacks reject async bodies at compile time', () => {
+    void ((transaction: DbTxSync, scope: TransactionScope): void => {
+      // @ts-expect-error -- RFC-294 transaction scopes must remain synchronous.
+      withExistingSQLiteTransactionScope(transaction, async () => undefined)
+      // @ts-expect-error -- RFC-294 transaction participants must remain synchronous.
+      withSQLiteTransaction(scope, async () => undefined)
+    })
   })
 
   test('public entrypoints expose only the reviewed exact contracts', () => {

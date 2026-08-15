@@ -200,7 +200,7 @@ export function completeBootstrapWithAdmin(
         throw new ConflictError('email-taken', `email '${input.email}' already exists`)
       }
     }
-    withExistingSQLiteTransactionScope(tx, (transactionScope) =>
+    withExistingSQLiteTransactionScope(tx, (transactionScope) => {
       insertInitialUserAccessInTransaction(transactionScope, {
         user: {
           id,
@@ -220,8 +220,9 @@ export function completeBootstrapWithAdmin(
           actorKind: 'system',
           operationId,
         },
-      }),
-    )
+      })
+      return undefined
+    })
     tx.update(authLoginPolicy)
       .set({
         passwordLoginEnabled: true,

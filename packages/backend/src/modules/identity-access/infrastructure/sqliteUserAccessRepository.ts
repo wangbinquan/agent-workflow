@@ -162,6 +162,7 @@ export function insertInitialUserAccessInTransaction(
       accessRevision: 0,
       createdAt: provision.user.createdAt,
     })
+    return undefined
   })
 }
 
