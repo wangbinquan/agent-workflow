@@ -31,10 +31,23 @@
 > - **空评审是完整答案**：schema 不设 `findings` 最小长度，prompt 明写「没问题就一条都别报」。
 >   逼模型至少找一条，是本平台最贵的失效模式（编造的 finding 在后续每一步都与真的无法区分）。
 >
-> **仍未跑通端到端**：装配（T4a1z）已写但未接进 runner 注册表，启用开关（T4a2）与真机端到端
-> （T4a3）未做。真实启动一个 round 仍会**失败**并报
-> `program stage 'prepare-worktree' has no registered implementation`——这是刻意为之且有测试钉住：
-> 一个「悄悄跳过未实现阶段然后报 done」的 runner 正是本 RFC 存在要防的东西。
+> **装配已接线（T4a1z）**：`composition/mrReviewEnvironment.ts` 把 scheduler 已持有的东西
+> （冻结 trigger context、scope root、repo）转成两张 name→实现表，code-round 分支据此构造
+> runner。带 trigger context 的一轮**真的按序跑各程序阶段**了：端到端测试锁死「失败信息不再是
+> `no registered implementation`，而是 `stage 'prepare-worktree' failed: … refs/merge-requests/412/head …`」
+> ——scratch 任务没有 clone 可取是正确结局，而这条信息本身证明 `resolve-target` 已读到 webhook
+> 字段。**启用开关（T4a2）**的单元格读写也已落地（`wantsCapability` 要 `ready` 而非 `enabled`）。
+>
+> **仍差两处，且性质不同**：
+>
+> 1. **`makeCaller`（能做，未做）**——`review` 阶段够到模型要先把契约的 `agentSlot` 解析成本仓
+>    的组层 agent 绑定（§5），该接线属 PR-4b 的两层配置范畴。**刻意不给可用默认值**：缺失时该
+>    阶段按名拒绝，而不是拿一个猜来的 agent 去发评审（输出里没有任何东西会表明绑定是编造的）。
+> 2. **T4a3 真机端到端（需要人的环境）**——「真实 MR 上出现行级评论」需要活的 GitLab/GitHub
+>    凭据与一个真 MR。可程序化的部分已到边界：`rfc304-mr-review-http-contract.test.ts` 用 stub
+>    `fetch` 跑真实 `executeCodeHostCall`，锁死两家各自的**线上形态**（路径、position 对象、
+>    `commit_id`、comments 数组、token 不进 URL）。它证明不了两家一定接受，只证明「我们这一层
+>    不是拒收的理由」。
 
 > ✅ **已完成 RFC（Done，2026-08-15）：[RFC-287 scheduler 装配线收敛 + 四个正交行为尾批](design/RFC-287-scheduler-assembly-convergence/proposal.md)** —— T1-T14 全部落地，**经五轮实现门收官**，累计 **90 条真缺陷**全部处置（每条带回归用例 + 变异实证）。
 >

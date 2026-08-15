@@ -146,8 +146,11 @@ import {
   resolveFrozenRuntime,
   resolveSchedulerRunRow,
 } from '@/services/nodeRunMint'
+import { buildProtocolBlock } from '@/services/protocol'
 import { CODE_ROUND_SUMMARY_PORT } from '@/services/codeRoundContract'
 import { createCodeCapabilityRunner } from '@/modules/code-capability/composition/codeCapabilityRunner'
+import { buildMrReviewWiring } from '@/modules/code-capability/composition/mrReviewEnvironment'
+import { REVIEW_PORT } from '@/modules/code-capability/application/reviewStage'
 import type { CodeCapabilityRunner } from '@/modules/code-capability/public/types'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
@@ -4522,7 +4525,37 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
   // branch never learns what a stage or a hook is. Falling back to a locally
   // built instance mirrors the code-host branch's `?? resolveFrom…` shape and
   // is transitional — once bootstrap assembles it, this becomes pure injection.
-  const runner = opts.codeCapabilityRunner ?? createCodeCapabilityRunner({ db })
+  //
+  // RFC-304 T4a1z: the stage IMPLEMENTATIONS are wired here too. A runner built
+  // with no stage map reaches the engine and fails at stage one with "no
+  // registered implementation" — correct as a guard, useless as a capability.
+  // `buildMrReviewWiring` turns what this branch already holds (the frozen
+  // trigger context, the scope root, the repo) into the maps the runner needs.
+  //
+  // `makeCaller` is deliberately NOT supplied: reaching a model means resolving
+  // the contract's `agentSlot` against this repo's group-layer binding, which
+  // is not wired yet. Omitting it makes the `review` stage refuse by name
+  // rather than run against a guessed agent — see the module header.
+  const envelopeNonce = await loadRunEnvelopeNonce(db, nodeRunId)
+  const wiring =
+    capability === 'mr-review' && state.triggerContext !== null
+      ? await buildMrReviewWiring({
+          db,
+          webhook: state.triggerContext.trigger.webhook,
+          repoPath: task.repoPath,
+          worktreePath: state.scopeRoot,
+          protocolBlock: buildProtocolBlock([REVIEW_PORT], undefined, envelopeNonce),
+          nonce: envelopeNonce,
+        })
+      : null
+  const runner =
+    opts.codeCapabilityRunner ??
+    createCodeCapabilityRunner({
+      db,
+      ...(wiring !== null
+        ? { programStages: wiring.programStages, aiStages: wiring.aiStages }
+        : {}),
+    })
   const roundSeqRaw = (node as unknown as { roundSeq?: unknown }).roundSeq
   const result = await runner.runRound({
     roundId: task.codeRoundId ?? taskId,
@@ -4533,7 +4566,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
       name: r.mountPath === '' ? 'main' : r.mountPath,
       path: r.worktreePath,
     })),
-    envelopeNonce: await loadRunEnvelopeNonce(db, nodeRunId),
+    envelopeNonce,
     // Resume-from is a work-item decision (design §2.2). PR-1c threads it in
     // with the work item; a round started directly runs its whole sequence.
     resumeFromStage: null,

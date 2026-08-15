@@ -24,7 +24,7 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { tasks } from '../src/db/schema'
+import { tasks, webhookEndpoints } from '../src/db/schema'
 import { startCodeRoundTask } from '../src/services/codeRoundLaunch'
 import { createCodeCapabilityRunner } from '../src/modules/code-capability/composition/codeCapabilityRunner'
 import { readRoundStages } from '../src/modules/code-capability/application/stageEngine'
@@ -117,6 +117,83 @@ describe('RFC-304 T12b — code-round runs a real stage sequence', () => {
     // and they need different fixes.
     expect(row?.errorSummary ?? '').toContain('resolve-target')
     expect(row?.errorSummary ?? '').toContain('no registered implementation')
+  })
+
+  test('WITH a trigger context the stages are registered and actually run', async () => {
+    // T4a1z, stated as the difference it makes. Without the wiring the round
+    // dies at stage one with "no registered implementation" — a guard, not a
+    // capability. With it, `resolve-target` reads the frozen webhook fields and
+    // the round proceeds into stages that do real work.
+    //
+    // This round still fails: a scratch task has no clone to fetch the MR head
+    // from, and no code-host connection is configured. That is the correct
+    // outcome and the assertion is about WHERE it fails — a failure naming a
+    // later stage is proof the earlier ones ran.
+    //
+    // The endpoint row is required, not decoration: it is a component of the
+    // work item's identity key, and the wiring refuses rather than picking one
+    // arbitrarily — a round keyed to the wrong endpoint would write a parallel
+    // ledger invisible to the rounds before it.
+    await db.insert(webhookEndpoints).values({
+      id: 'ep-test-1',
+      name: 'test',
+      provider: 'gitlab',
+      urlToken: 'tok',
+      secretEnc: 'enc',
+      enabled: true,
+    })
+
+    const task = await startCodeRoundTask(
+      {
+        roundId: ulid(),
+        capability: 'mr-review',
+        roundSeq: 1,
+        name: 'MR review round 1',
+        scratch: true,
+      },
+      {
+        db,
+        appHome,
+        // Webhook provenance, not direct-json: RFC-301's admission guard
+        // refuses a direct launch that claims webhook attribution, and it is
+        // right to — a round carrying a trigger context WAS woken by a
+        // delivery, and recording otherwise would misattribute its origin.
+        // A webhook launch must carry the delivery it came from: trigger id,
+        // fire id and the canonical context. RFC-301 enforces all three
+        // together, so a round cannot claim a webhook origin it cannot point at.
+        launchProvenance: { kind: 'webhook' },
+        webhookTriggerId: 'trigger-1',
+        webhookFireId: 'fire-1',
+        triggerContext: {
+          trigger: {
+            webhook: {
+              event_type: 'mr_opened',
+              provider: 'gitlab',
+              project_id: '41823',
+              mr_iid: '412',
+              commit_sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              repo_path: 'group/project',
+            },
+          },
+        },
+      } as never,
+    )
+
+    const settled = await waitForTerminal(db, task.id)
+    expect(settled).toBe('failed')
+
+    const [row] = await db.select().from(tasks).where(eq(tasks.id, task.id))
+    const summary = row?.errorSummary ?? ''
+    // The load-bearing negative: stage one is no longer unimplemented.
+    expect(summary).not.toContain('no registered implementation')
+    // It got PAST resolving the target, which is only possible if that stage
+    // ran and read the webhook fields out of the frozen trigger context.
+    expect(summary).not.toContain("stage 'resolve-target'")
+    // And it stopped somewhere real. A scratch task has no clone, so fetching
+    // the MR head is where it can get to — the failure names the refspecs it
+    // tried, which is the whole point of reporting attempts rather than a code.
+    expect(summary).toContain("stage 'prepare-worktree'")
+    expect(summary).toContain('refs/merge-requests/412/head')
   })
 
   test('with stages registered, the whole sequence runs and every stage lands a row', async () => {

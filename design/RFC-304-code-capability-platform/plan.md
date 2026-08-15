@@ -212,9 +212,21 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | #     | 任务                                                                                                                                                        | 依赖               | 状态          |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------- |
 | T4a1  | 最小 `mr-review` 契约：`resolve-target → prepare-worktree → fetch-diff → review(单个 AI) → validate-findings → gate → resolve-positions → publish → ledger` | T4,T6              | 各段已建并测  |
-| T4a1z | 上述各段的**装配**（按序跑通一轮 `mr-review`）                                                                                                              | T4a1               |               |
-| T4a2  | 最小启用开关（矩阵行 + 触发器创建），不含 readiness 三态与一键修复                                                                                          | T16                |               |
+| T4a1z | 上述各段的**装配**（按序跑通一轮 `mr-review`）                                                                                                              | T4a1               | ✅ 2026-08-15 |
+| T4a2  | 最小启用开关（矩阵行 + 触发器创建），不含 readiness 三态与一键修复                                                                                          | T16                | ✅ 单元格读写   |
 | T4a3  | 端到端：真实 webhook → 真实 code-host → **MR 上出现行级评论**（两家各一条）                                                                                 | T4a1z,T4a2,T21,T25b |              |
+
+**装配现状（T4a1z 已接线，2026-08-15）**：`composition/mrReviewEnvironment.ts` 把 scheduler
+已持有的东西（冻结的 trigger context、scope root、repo）转成 runner 要的两张 name→实现表，
+`services/scheduler.ts` 的 code-round 分支据此构造 runner。带 trigger context 的一轮现在会
+**真的按序跑各程序阶段**——`rfc304-code-round-end-to-end.test.ts` 锁死这条：失败信息不再是
+「no registered implementation」，而是 `stage 'prepare-worktree' failed: … refs/merge-requests/412/head …`
+（scratch 任务没有 clone 可取，是正确结局），证明 `resolve-target` 已读到 webhook 字段。
+
+**唯一未闭合的缝：`makeCaller`**。让 `review` 阶段够到模型，需要把契约里的 `agentSlot` 解析成
+本仓的组层 agent 绑定（§5），该接线尚未做。故**刻意不提供可用的默认实现**：缺失时 `review`
+阶段按名拒绝（「no agent is bound to the 'reviewer' slot」），而不是拿一个猜来的 agent 去跑
+——后者会发出一份由「碰巧排在第一个」的 agent 写的评审，且输出里没有任何东西表明绑定是编造的。
 
 各段落位（2026-08-15）：`resolve-target` = `domain/resolveTarget.ts`；`prepare-worktree` =
 `domain/headFetchPlan.ts` + `application/prepareWorktree.ts` + `infrastructure/gitAdapter.ts`；
