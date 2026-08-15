@@ -33,6 +33,14 @@ export const CODE_HOST_ACTIONS = [
   'comment.create-inline',
   'comment.update',
   'thread.resolve',
+  // RFC-304 — batch review publication. Deliberately three actions rather than
+  // one "publish a review", because the two hosts are not the same shape:
+  // GitLab builds drafts one at a time then publishes them together, GitHub
+  // takes the whole review in a single request. Pretending otherwise would
+  // force one of them through a model it does not have.
+  'review.draft-create',
+  'review.draft-publish',
+  'review.submit',
   // mr
   'commit-status.set',
   'label.add',
@@ -67,6 +75,11 @@ export const CODE_HOST_FIELDS = [
   'comment_scope',
   'body',
   'position',
+  // RFC-304: the whole review payload for GitHub's single-request submit, and
+  // the draft id GitLab needs to delete one during compensation.
+  'comments',
+  'draft',
+  'review_event',
   'sha',
   'state',
   'context',
@@ -313,6 +326,85 @@ export const CODE_HOST_ACTION_DEFS = {
       // 是 GraphQL mutation，且它要的 PRRT_ 线程 node id 在 REST 面拿不到 ——
       // 所以这不是"我们没做"，是 REST 结构上做不到。
       github: { unsupported: true, reasonKey: 'graphqlOnly' },
+    },
+  },
+
+  // RFC-304 §7.2 — 批量发布。三个动作而非一个，因为两家的形状**真的不一样**，
+  // 而本表的规矩是「真实不对称如实暴露」。
+  //
+  //   GitLab：逐条建 draft note（每条一个请求）→ 一次 bulk_publish。中间存在
+  //           「草稿已建、尚未发布」的窗口，抢占或失败必须补偿删除，否则 MR 上
+  //           留下一批**永不发布的孤儿草稿**，对用户可见且像 bot 跑了一半。
+  //   GitHub：一次 POST /pulls/{n}/reviews 带 comments[]，要么整份落地要么什么
+  //           都没有——**结构上不存在那个窗口**，所以它没有 draft 动作。
+  'review.draft-create': {
+    group: 'comment',
+    fields: [
+      PROJECT,
+      MR_REQUIRED,
+      BODY_REQUIRED,
+      { name: 'position', control: 'textarea', requiredFor: ['gitlab'] },
+    ],
+    bindings: {
+      gitlab: {
+        method: 'POST',
+        path: '/projects/{__project__}/merge_requests/{mr}/draft_notes',
+        body: [
+          { api: 'note', from: { field: 'body' } },
+          { api: 'position', from: { field: 'position' }, transform: 'json-object' },
+        ],
+      },
+      // 不是「我们没做」：GitHub 的 review 是单请求提交，没有可单独创建的草稿
+      // 资源。要「先攒后发」就用 review.submit 一次带齐 comments[]。
+      github: { unsupported: true, reasonKey: 'singleRequestReview' },
+    },
+  },
+  'review.draft-publish': {
+    group: 'comment',
+    fields: [PROJECT, MR_REQUIRED],
+    bindings: {
+      gitlab: {
+        method: 'POST',
+        path: '/projects/{__project__}/merge_requests/{mr}/draft_notes/bulk_publish',
+        body: [],
+      },
+      github: { unsupported: true, reasonKey: 'singleRequestReview' },
+    },
+  },
+  'review.submit': {
+    group: 'comment',
+    fields: [
+      PROJECT,
+      MR_REQUIRED,
+      BODY_REQUIRED,
+      // 整份 review 的行级意见数组，按 GitHub 的 comments[] 形状打包。
+      { name: 'comments', control: 'textarea', requiredFor: ['github'] },
+      // 默认 COMMENT：本平台发的是**意见**，不代表人做批准决定——产品边界是
+      // 「平台只承载输入问题与反问澄清，其余落在 MR 上」，替人按下 approve
+      // 显然越界。APPROVE / REQUEST_CHANGES 仍列出，因为定制流程可能需要，
+      // 但要由配置显式选择而不是平台默认。
+      {
+        name: 'review_event',
+        control: 'select',
+        options: ['COMMENT', 'APPROVE', 'REQUEST_CHANGES'],
+        requiredFor: [],
+        onlyFor: ['github'],
+      },
+    ],
+    bindings: {
+      // GitLab 没有「一次提交整份 review」的端点——它的等价物就是上面那对
+      // draft_notes + bulk_publish，所以这里如实标 unsupported 而不是伪造一个
+      // 会静默只发总览的映射。
+      gitlab: { unsupported: true, reasonKey: 'useDraftNotes' },
+      github: {
+        method: 'POST',
+        path: '/repos/{__project__}/pulls/{mr}/reviews',
+        body: [
+          { api: 'body', from: { field: 'body' } },
+          { api: 'comments', from: { field: 'comments' }, transform: 'json-object' },
+          { api: 'event', from: { field: 'review_event' } },
+        ],
+      },
     },
   },
 

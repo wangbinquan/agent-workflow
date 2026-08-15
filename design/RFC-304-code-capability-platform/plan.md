@@ -156,6 +156,13 @@ agent 进程的环境白名单，已随 RFC-276「运行时作为普通子进程
 
 ### 两层配置与模板（PR-2）
 
+**T19 的 i18n 部分同样待 RFC-305 落定**（2026-08-15）：三个 review 动作的中英 label / hint /
+两条 unsupported 理由已写好，但 `i18n/{zh-CN,en-US}.ts` 已被 RFC-305 改动且其新增的
+`permissionCatalog.ts` 依赖对方尚未提交的 `ROLE_CAPABILITY_CATALOG`——**部分拉取会向 backend
+传染**，故这部分无法在隔离 worktree 独立验证。补丁已存
+`scratchpad/rfc304-t19-i18n.patch`（283 行，纯新增 key），待对方提交后打回并单独过门禁。
+期间 UI 有 `defaultValue: field.name` 兜底：显示英文字段名而非裸 key，可接受。
+
 **T13 的跨 RFC 依赖（2026-08-15 实测发现，需在 RFC-305 落定后接续）**：把两类模板注册进
 `ACL_RESOURCE_TYPES` 后，编译器指出的落点里有一处是硬依赖——`routes/resourceAcl.ts` 的
 `ACL_PERMISSION_PREFIX` **类型故意收窄**（其注释写明：每个资源类型的 `${resource}:update`
