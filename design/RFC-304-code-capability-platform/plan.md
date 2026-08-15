@@ -209,12 +209,12 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 **一个固定的内置 review binding**、最小启用开关、**单个 review AI**（不拆块）。它不宣称完成
 `mr-review` 的全部 AC——那是 PR-4b。
 
-| #     | 任务                                                                                                                                                        | 依赖               | 状态          |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------- |
-| T4a1  | 最小 `mr-review` 契约：`resolve-target → prepare-worktree → fetch-diff → review(单个 AI) → validate-findings → gate → resolve-positions → publish → ledger` | T4,T6              | 各段已建并测  |
-| T4a1z | 上述各段的**装配**（按序跑通一轮 `mr-review`）                                                                                                              | T4a1               | ✅ 2026-08-15 |
-| T4a2  | 最小启用开关（矩阵行 + 触发器创建），不含 readiness 三态与一键修复                                                                                          | T16                | ✅ 单元格读写   |
-| T4a3  | 端到端：真实 webhook → 真实 code-host → **MR 上出现行级评论**（两家各一条）                                                                                 | T4a1z,T4a2,T21,T25b |              |
+| #     | 任务                                                                                                                                                        | 依赖                | 状态          |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ------------- |
+| T4a1  | 最小 `mr-review` 契约：`resolve-target → prepare-worktree → fetch-diff → review(单个 AI) → validate-findings → gate → resolve-positions → publish → ledger` | T4,T6               | 各段已建并测  |
+| T4a1z | 上述各段的**装配**（按序跑通一轮 `mr-review`）                                                                                                              | T4a1                | ✅ 2026-08-15 |
+| T4a2  | 最小启用开关（矩阵行 + 触发器创建），不含 readiness 三态与一键修复                                                                                          | T16                 | ✅ 单元格读写 |
+| T4a3  | 端到端：真实 webhook → 真实 code-host → **MR 上出现行级评论**（两家各一条）                                                                                 | T4a1z,T4a2,T21,T25b |               |
 
 **装配现状（T4a1z 已接线，2026-08-15）**：`composition/mrReviewEnvironment.ts` 把 scheduler
 已持有的东西（冻结的 trigger context、scope root、repo）转成 runner 要的两张 name→实现表，
@@ -279,7 +279,7 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------- |
 | T23  | `split-diff`：按目录层级聚合 + 体量上限，确定性                                                                                                                                                                                                           | T4           | ✅ 2026-08-16 |
 | T24  | `review-shard`（并行 AI 段，**每片一棵独立一次性工作树、禁 merge-back**）+ `review-global`；aiSchema 定义                                                                                                                                                 | T6,T23       | ✅ 2026-08-16 |
-| T24b | **fork MR/PR 支持**：归一化并冻结 source project clone URL + head SHA，按 source remote 精确 fetch；fork PR 的 CI 事件经 head SHA→开放 PR 映射唤醒（唯一命中才唤醒）                                                                                      | T23          |
+| T24b | **fork MR/PR 支持**：归一化并冻结 source project clone URL + head SHA，按 source remote 精确 fetch；fork PR 的 CI 事件经 head SHA→开放 PR 映射唤醒（唯一命中才唤醒）                                                                                      | T23          | ✅ 2026-08-16 |
 | T25  | `validate-findings`：**只做结构与语义闭集校验**（schema、必填、severity 在闭集）。**行号是否在 diff 内不在这里判**——那属于锚定，见 T25b                                                                                                                   | T6,T23       | ✅ 2026-08-16 |
 | T25b | `resolve-positions` 的锚定判定：行不在 hunk / 文件不在改动集 ⇒ **零 AI 重试**、标 `degraded`、阶段成功（锁 AC-3）；锚定基准是 `fetch-diff` 的产物而非当前工作树（锁 AC-4）                                                                                | T20,T23      | ✅ 2026-08-15 |
 | T26  | `gate`：确定性排序 → 阈值过滤 → 上限截断 + 未展开计数                                                                                                                                                                                                     | T25          | ✅ 2026-08-15 |
@@ -288,7 +288,7 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T28  | `settle-stale`：**发布成功后**执行，且**只在状态边沿**动作一次（`active→disappeared`）——否则长命 MR 上 GitHub 会重复追加 78 条同义回复；逐项落幂等状态                                                                                                    | T22,T27b,T29 | ✅ 2026-08-15 |
 | T29  | `publish`：草稿攒齐一次性发布 + 锚不上的并入总览评论                                                                                                                                                                                                      | T21,T26      | ✅ 2026-08-16 |
 | T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          | ✅ 2026-08-16 |
-| T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  |
+| T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  | ✅ 2026-08-16 |
 
 > **T24b 后半 + T31 bot 开关（2026-08-16）**：
 >
