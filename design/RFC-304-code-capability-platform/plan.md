@@ -97,15 +97,31 @@ YAML 导入 / 手工 PUT 的一道**）、INTENT.md 显式声明 withheld、四�
 | T3 | 工作项状态机（domain 纯函数）+ CAS 写入（照搬 `lifecycle.ts` 姿势）+ 转移表穷举测试 | T2 | ✅ 2026-08-15 |
 | T4 | `StageContract` / `StageDef` **判别联合**（`program` / `script` / `ai` / **`invoke`**），每种 kind 只能携带自己那组字段；保存期校验 `invoke` 的区间存在性、递归环、输入输出闭包、取消传播 | T1 | ✅ 2026-08-15 |
 | T5 | `StageEngine`：按序推进、落 `code_round_stages`、失败传播 | T3,T4 | ✅ 2026-08-15 |
-| T7 | `HookRunner`：抽出不依赖 `WorkflowNode` 的脚本调用面（复用 `assembleScriptEnv` + 受管子进程）；pre/post 挂载；注入数据白名单合并；blocking 语义 | T5 | ⏳ |
-| T8 | 阶段契约版本化：钩子声明版本，升版后旧钩子显式报迁移 | T7 | ⏳ |
-| T12 | 用一条最简内置流程（`prepare-worktree → 一个 program 阶段 → ledger`）跑通 port 级最简链路。**注意它只为 PR-1a 背书**——真实 task 与 AI 重试在 PR-1b 才验证 | T5,T7 | ⏳ |
+| T7 | `HookRunner`：抽出不依赖 `WorkflowNode` 的脚本调用面（复用 `assembleScriptEnv` + 受管子进程）；pre/post 挂载；注入数据白名单合并；blocking 语义 | T5 | ✅ 2026-08-15 |
+| T8 | 阶段契约版本化：钩子声明版本，升版后旧钩子显式报迁移 | T7 | ✅ 2026-08-15 |
+| T12 | 用一条最简内置流程（`prepare-worktree → 一个 program 阶段 → ledger`）跑通 port 级最简链路。**注意它只为 PR-1a 背书**——真实 task 与 AI 重试在 PR-1b 才验证 | T5,T7 | ✅ 2026-08-15 |
 
 **T1 说明（2026-08-15）**：目录按需生长，不预建空壳——本 PR 落了 `domain/`（工作项状态机、阶段契约）
 与 `application/`（阶段引擎）两层。**`public/` 暂不建**：RFC-294 的 public 合同是给**跨模块消费者**用的，
 本模块目前没有跨模块调用方，先摆五个空 entrypoint 只会是噪音；第一个消费者随 PR-1b 的 `code-round`
 runner 落地，届时一并建。边界守卫**已自动接管**——`rfc294-architecture-preflight.test.ts` 遍历
 `modules/` 下每个 context（本模块建出当天即在覆盖内），依赖分层门禁亦已复跑通过。
+
+**T7 说明（2026-08-15）**：按 D4「复用机制、不复用节点」，第一步是把 `assembleScriptEnv` 与
+`WorkflowNode` **解耦**——它原本从 node 上读 language / outputMode / env 三项，现改为接受纯数据，
+script 节点分支在调用前自行读取。这样钩子（没有 node、没有画布位置与端口）能复用**同一套**装配与
+受管子进程，而不是长出第二套脚本执行实现。既有 script 节点行为不变（`rfc253-script-execution` 20 pass）。
+
+钩子的三种权力各自钉在边界上：注入走 envelope + **按阶段白名单**过滤（未列出的键**丢弃并上报**，
+否则钩子可重定义序列依赖的任何 artifact，「program 阶段确定性」就只在没人写创意钩子时成立）；
+中止需**显式声明** `blocking`（否则某组的可选 lint 钩子一红就卡死所有 MR）；副作用直接写工作树
+（工作树本就是共享媒介，不设中介）。T8 的版本检查测的是它**不做**什么：过期钩子既不执行（会被喂
+它读不懂的形状）也不静默跳过（某组的门会悄悄不再设防）。
+
+**落地时改掉一处隐式契约**：注入原本靠钩子 mutate `ctx.artifacts` 生效——能工作只因 pre 钩子与
+runner 共用同一个 ctx 对象，任一侧将来加个防御性拷贝就会断，且断在很久以后。改为 `pre` 显式返回
+`{ inject }` 由引擎合并，并**限定只作用于本阶段**（不进序列累积产物，否则一个钩子会为其下游所有
+阶段静默重定义该 artifact）；`block` 与 `inject` 同时返回时 block 优先。
 
 ### 地基二：真实 `code-round` 与 AI 确定性守卫（PR-1b）
 

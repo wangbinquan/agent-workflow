@@ -291,6 +291,74 @@ describe('RFC-304 T5 — stage engine', () => {
     expect(log).toEqual(['collect'])
   })
 
+  test('an injected value reaches its stage but NOT the ones after it', async () => {
+    // Injection feeds the stage about to run. If it leaked into the sequence's
+    // accumulated artifacts, one team's hook on one stage would silently
+    // redefine that artifact for every stage downstream.
+    const seen: Array<Record<string, unknown>> = []
+    const runners: StageRunners = {
+      program: async (ctx) => {
+        seen.push({ ...ctx.artifacts })
+        return { status: 'done' }
+      },
+      script: async () => ({ status: 'done' }),
+      ai: async () => ({ status: 'done' }),
+      invoke: async () => ({ status: 'done' }),
+    }
+    const out = await runStageSequence({
+      db,
+      roundId,
+      contract: CONTRACT,
+      runners,
+      hooks: {
+        pre: async (ctx) =>
+          ctx.stage.name === 'review' ? { inject: { extraContext: 'team-rules' } } : undefined,
+      },
+    })
+
+    expect(seen[0]).toEqual({})
+    expect(seen[1]).toEqual({ extraContext: 'team-rules' })
+    expect(seen[2]).toEqual({})
+    expect(out.outcome === 'done' && out.artifacts).toEqual({})
+  })
+
+  test('a post hook sees the same injected view its stage ran with', async () => {
+    // Otherwise a cleanup hook would reason about different inputs than the
+    // stage it is cleaning up after.
+    const postArtifacts: Array<Record<string, unknown>> = []
+    await runStageSequence({
+      db,
+      roundId,
+      contract: CONTRACT,
+      runners: stubRunners({ log: [] }),
+      hooks: {
+        pre: async (ctx) => (ctx.stage.name === 'review' ? { inject: { k: 'v' } } : undefined),
+        post: async (ctx) => {
+          if (ctx.stage.name === 'review') postArtifacts.push({ ...ctx.artifacts })
+        },
+      },
+    })
+    expect(postArtifacts).toEqual([{ k: 'v' }])
+  })
+
+  test('block wins over inject when a hook returns both', async () => {
+    // A gate that also offers data is still a gate; running the stage with the
+    // data would be acting on a hook that said "no".
+    const log: string[] = []
+    const out = await runStageSequence({
+      db,
+      roundId,
+      contract: CONTRACT,
+      runners: stubRunners({ log }),
+      hooks: {
+        pre: async (ctx) =>
+          ctx.stage.name === 'review' ? { block: 'denied', inject: { k: 'v' } } : undefined,
+      },
+    })
+    expect(out.outcome).toBe('blocked')
+    expect(log).toEqual(['collect'])
+  })
+
   test('hooks fire around every stage, in order, and see the result', async () => {
     const trace: string[] = []
     await runStageSequence({

@@ -299,7 +299,18 @@ export interface ScriptEnvAssembly {
  * normal HOME, PATH, credentials, proxies, and toolchain discovery.
  */
 export function assembleScriptEnv(input: {
-  node: WorkflowNode
+  /**
+   * RFC-304 T7: the three things this function used to read off a
+   * `WorkflowNode` are now passed as data, so a caller that has no node — a
+   * capability HOOK, which mounts on a stage boundary rather than a canvas —
+   * can reuse this exact assembly instead of growing a second one. Design D4 is
+   * explicit that a second script-execution implementation is NOT acceptable.
+   * The script-node caller reads them off its node as before.
+   */
+  language: ScriptLanguage
+  outputMode: 'envelope' | 'stdout'
+  /** Author-supplied env overlay; reserved/product keys are filtered here. */
+  envOverlay: Record<string, string>
   inputs: Record<string, string>
   runDir: string
   inputDir: string
@@ -318,8 +329,8 @@ export function assembleScriptEnv(input: {
   gitUserEmail?: string | null
 }): ScriptEnvAssembly {
   const plan = planScriptPortEnv(input.inputs)
-  const language = readScriptLanguage(input.node) ?? 'python'
-  const mode = scriptOutputMode(input.node)
+  const language = input.language
+  const mode = input.outputMode
 
   // 1. Natural daemon environment.
   const env = Object.fromEntries(
@@ -329,7 +340,7 @@ export function assembleScriptEnv(input: {
   )
 
   // 2. Author overlay, excluding product-owned and pre-execution injection keys.
-  for (const [key, value] of Object.entries(readScriptEnv(input.node))) {
+  for (const [key, value] of Object.entries(input.envOverlay)) {
     if (scriptReservedEnvKeyIssue(key) !== null) continue
     env[key] = value
   }
@@ -444,7 +455,10 @@ export async function runScriptProcess(req: ScriptRunRequest): Promise<ScriptRun
   writeFileSync(scriptPath, readScriptBody(req.node), 'utf8')
 
   const assembly = assembleScriptEnv({
-    node: req.node,
+    // The node-shaped reads stay HERE, where a node exists.
+    language: readScriptLanguage(req.node) ?? 'python',
+    outputMode: scriptOutputMode(req.node) === 'envelope' ? 'envelope' : 'stdout',
+    envOverlay: readScriptEnv(req.node),
     inputs: req.inputs,
     runDir: req.runDir,
     inputDir,

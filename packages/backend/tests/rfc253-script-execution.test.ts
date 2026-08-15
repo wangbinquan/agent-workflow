@@ -21,6 +21,19 @@ import type { WorkflowNode } from '@agent-workflow/shared'
 import { extractScriptPorts } from '@/services/scriptPorts'
 import { runManagedProcess } from '@/services/execution/managedProcess'
 import { assembleScriptEnv } from '@/services/scriptRun'
+import { readScriptEnv, readScriptLanguage, scriptOutputMode } from '@agent-workflow/shared'
+
+/**
+ * RFC-304 T7 decoupled `assembleScriptEnv` from `WorkflowNode` so capability
+ * hooks (which have no node) can reuse the same assembly instead of growing a
+ * second one. These tests still express their intent in terms of a node, so
+ * they adapt here — the assertions below are unchanged.
+ */
+const fromNode = (n: WorkflowNode) => ({
+  language: readScriptLanguage(n) ?? ('python' as const),
+  outputMode: scriptOutputMode(n) === 'envelope' ? ('envelope' as const) : ('stdout' as const),
+  envOverlay: readScriptEnv(n),
+})
 
 const NONCE = 'abc123'
 
@@ -115,15 +128,17 @@ describe('environment assembly', () => {
   test('platform protocol keys win while ordinary authored env stays natural', () => {
     const { env } = assembleScriptEnv({
       ...common,
-      node: node({
-        language: 'python',
-        env: {
-          PWD: '/tmp/evil',
-          AW_TASK_ID: 'wrong-task',
-          HOME: '/tmp/authored-home',
-          API_TOKEN: 'keep-me',
-        },
-      }),
+      ...fromNode(
+        node({
+          language: 'python',
+          env: {
+            PWD: '/tmp/evil',
+            AW_TASK_ID: 'wrong-task',
+            HOME: '/tmp/authored-home',
+            API_TOKEN: 'keep-me',
+          },
+        }),
+      ),
     })
     expect(env.PWD).toBe('/wt')
     expect(env.AW_TASK_ID).toBe('T1')
@@ -134,7 +149,7 @@ describe('environment assembly', () => {
   test('a deps environment sets the interpreter search path, not the user', () => {
     const { env } = assembleScriptEnv({
       ...common,
-      node: node({ language: 'python', env: { PYTHONPATH: '/tmp/evil' } }),
+      ...fromNode(node({ language: 'python', env: { PYTHONPATH: '/tmp/evil' } })),
       depsEnv: { hash: 'h', libDir: '/envs/h/lib', rootDir: '/envs/h' },
     })
     expect(env.PYTHONPATH).toBe('/envs/h/lib')
@@ -146,7 +161,7 @@ describe('environment assembly', () => {
     const before = process.env[key]
     process.env[key] = 'visible'
     try {
-      const { env } = assembleScriptEnv({ ...common, node: node({ language: 'python' }) })
+      const { env } = assembleScriptEnv({ ...common, ...fromNode(node({ language: 'python' })) })
       expect(env[key]).toBe('visible')
       expect(env.AW_PORT_REPORT).toBe('hello')
       expect(env.AW_OUTPUT_MODE).toBe('stdout')
@@ -245,7 +260,7 @@ describe('spilled port files cannot escape the run directory', () => {
   test('a port named with traversal segments still lands inside AW_INPUT_DIR', () => {
     const big = 'x'.repeat(64 * 1024)
     const { env, spillFiles } = assembleScriptEnv({
-      node: node({ language: 'python' }),
+      ...fromNode(node({ language: 'python' })),
       inputs: { '../../../../tmp/evil': big },
       runDir: '/run/dir',
       inputDir: '/run/dir/inputs',
@@ -293,7 +308,7 @@ describe('T28 — plaintext at execution, masked in diagnostics', () => {
       envelopeNonce: NONCE,
       interpreterPath: '/usr/bin/python3',
       depsEnv: null,
-      node: node({ language: 'python', env: { API_TOKEN: 'sk-live-exec-plaintext' } }),
+      ...fromNode(node({ language: 'python', env: { API_TOKEN: 'sk-live-exec-plaintext' } })),
     })
     expect(env.API_TOKEN).toBe('sk-live-exec-plaintext')
   })

@@ -51,6 +51,16 @@ export interface StageBase {
   requires: readonly string[]
   /** Artifacts this stage publishes for downstream stages. */
   produces: readonly string[]
+  /**
+   * Keys a `pre` hook on this stage may inject (design §4.3 F6 — e.g.
+   * `promptSuffix`, `extraContext`). Absent means a hook here may still write
+   * the worktree and abort, but may not hand data back.
+   *
+   * An allowlist rather than free-form merge: without it a hook could redefine
+   * any artifact the sequence depends on, and "program stages are
+   * deterministic" would hold only until someone wrote a creative hook.
+   */
+  injectable?: readonly string[]
 }
 
 export type StageDef = StageBase &

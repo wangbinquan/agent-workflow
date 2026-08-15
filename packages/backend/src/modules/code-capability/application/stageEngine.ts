@@ -48,7 +48,20 @@ export interface StageRunners {
  * from a stage that errored.
  */
 export interface StageHooks {
-  pre?(ctx: StageRunContext): Promise<{ block?: string } | void>
+  /**
+   * `block` stops the sequence. `inject` is merged into the artifacts THIS
+   * stage sees and nothing further — injection feeds the stage about to run,
+   * so leaking it downstream would let one team's hook silently redefine an
+   * artifact for every stage after it.
+   *
+   * Injection is an explicit return value rather than a mutation of
+   * `ctx.artifacts`: a hook that scribbled on the context would happen to work
+   * today (pre and the runner share one object) and break the moment either
+   * side takes a defensive copy — the kind of coupling that fails long after
+   * the change that caused it. The caller is responsible for having filtered
+   * against the stage's allowlist before returning it (see `injectableKeysFor`).
+   */
+  pre?(ctx: StageRunContext): Promise<{ block?: string; inject?: StageArtifacts } | void>
   post?(ctx: StageRunContext, result: StageResult): Promise<void>
 }
 
@@ -121,16 +134,23 @@ export async function runStageSequence(args: RunStageSequenceArgs): Promise<Stag
 
     const stageRowId = await recordStage(db, roundId, seq, stage, 'running', now())
 
+    // Injection applies to THIS stage only — it is not written into the
+    // accumulated artifacts, so the next stage sees the sequence's own state.
+    const runCtx: StageRunContext =
+      gate != null && gate.inject !== undefined
+        ? { ...ctx, artifacts: { ...ctx.artifacts, ...gate.inject } }
+        : ctx
+
     let result: StageResult
     try {
-      result = await runners[stage.kind](ctx)
+      result = await runners[stage.kind](runCtx)
     } catch (err) {
       // A runner that throws is a failed stage, not a crashed round: the round
       // row must still settle, or the work item waits on a task that is gone.
       result = { status: 'failed', error: err instanceof Error ? err.message : String(err) }
     }
 
-    await args.hooks?.post?.(ctx, result)
+    await args.hooks?.post?.(runCtx, result)
 
     if (result.status === 'failed') {
       await settleStage(db, stageRowId, 'failed', now(), { error: result.error })
