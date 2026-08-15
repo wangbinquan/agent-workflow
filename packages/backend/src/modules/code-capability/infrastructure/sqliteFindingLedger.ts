@@ -19,7 +19,7 @@
 // would detach the entire history the day a work item is rebuilt — and the
 // rebuilt one would then republish every open finding as brand new.
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { codeFindings } from '@/db/schema'
@@ -280,6 +280,17 @@ export function createSqliteFindingLedger(
         anchorLine,
         now: clock(),
       }),
+    markAdoption: (anchor, fingerprint, signal) =>
+      markAdoptionSignal({
+        db,
+        anchor,
+        capability: bind.capability,
+        fingerprint,
+        signal,
+        roundId: bind.roundId,
+        now: clock(),
+      }),
+    readAnchors: (anchor) => readLedgerAnchors(db, anchor, bind.capability),
     markDisappeared: (anchor, fingerprint) =>
       markFindingDisappeared({
         db,
@@ -290,4 +301,53 @@ export function createSqliteFindingLedger(
         now: clock(),
       }),
   }
+}
+
+/**
+ * Record an adoption signal, once.
+ *
+ * Guarded on the column still being null, which is what makes "first
+ * observation wins" a property of the data rather than of whichever caller
+ * happens to run. Returns whether THIS call set it — the caller uses that to
+ * avoid reporting the same adoption every round.
+ */
+export async function markAdoptionSignal(input: {
+  db: DbClient
+  anchor: LedgerAnchor
+  capability: string
+  fingerprint: string
+  signal: 'resolved' | 'code-changed'
+  roundId: string
+  now: number
+}): Promise<boolean> {
+  const column = input.signal === 'resolved' ? codeFindings.resolvedAt : codeFindings.codeChangedAt
+  const updated = await input.db
+    .update(codeFindings)
+    .set(
+      input.signal === 'resolved'
+        ? { resolvedAt: input.now, resolvedRoundId: input.roundId }
+        : { codeChangedAt: input.now, codeChangedRoundId: input.roundId },
+    )
+    .where(
+      and(
+        anchorWhere(input.anchor),
+        eq(codeFindings.capability, input.capability),
+        eq(codeFindings.fingerprint, input.fingerprint),
+        isNull(column),
+      ),
+    )
+    .returning({ id: codeFindings.id })
+  return updated.length > 0
+}
+
+/** Each finding's last recorded anchor line, for detecting drift. */
+export async function readLedgerAnchors(
+  db: DbClient,
+  anchor: LedgerAnchor,
+  capability: string,
+): Promise<Array<{ fingerprint: string; anchorLine: number | null }>> {
+  return await db
+    .select({ fingerprint: codeFindings.fingerprint, anchorLine: codeFindings.anchorLine })
+    .from(codeFindings)
+    .where(and(anchorWhere(anchor), eq(codeFindings.capability, capability)))
 }

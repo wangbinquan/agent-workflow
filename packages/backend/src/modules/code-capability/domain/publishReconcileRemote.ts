@@ -271,3 +271,58 @@ export function findPreviousOverview(comments: readonly RemoteComment[]): string
   }
   return found
 }
+
+/** A thread as the host reports it, for reading adoption back. */
+export interface RemoteThreadState {
+  externalId: string
+  body: string
+  /** GitLab reports this per note; GitHub has no equivalent on the REST face. */
+  resolved: boolean
+}
+
+/**
+ * Which of this platform's findings a human has marked resolved.
+ *
+ * GitLab only. GitHub's REST face does not expose a review thread's resolved
+ * state (the same gap that makes `thread.resolve` unsupported there), so a
+ * GitHub round reports nothing rather than guessing — an absent signal and a
+ * negative one must not look alike, or "nobody resolved anything" would be
+ * indistinguishable from "we cannot see resolutions on this host".
+ */
+export function readResolvedFindings(
+  provider: 'gitlab' | 'github',
+  body: string,
+): { supported: boolean; resolved: Record<string, string> } {
+  if (provider !== 'gitlab') return { supported: false, resolved: {} }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    return { supported: true, resolved: {} }
+  }
+  if (!Array.isArray(parsed)) return { supported: true, resolved: {} }
+
+  const resolved: Record<string, string> = {}
+  for (const entry of parsed) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const row = entry as Record<string, unknown>
+    const id = row.id
+    const notes = row.notes
+    if (typeof id !== 'string' && typeof id !== 'number') continue
+    if (!Array.isArray(notes) || notes.length === 0) continue
+    const first = notes[0] as Record<string, unknown> | undefined
+    const text = first?.body
+    if (typeof text !== 'string') continue
+    // The whole discussion counts as resolved when GitLab says its notes are.
+    // Reading only the first note would miss a thread resolved after a reply.
+    const isResolved = notes.some(
+      (n) => typeof n === 'object' && n !== null && (n as { resolved?: unknown }).resolved === true,
+    )
+    if (!isResolved) continue
+    const fingerprint = fingerprintOf(text)
+    if (fingerprint === null) continue
+    resolved[fingerprint] = String(id)
+  }
+  return { supported: true, resolved }
+}

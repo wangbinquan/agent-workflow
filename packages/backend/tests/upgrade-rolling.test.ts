@@ -257,7 +257,12 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // 挂在工作项上会让工作项重建的那天整段历史脱钩、所有未解决意见被当成新问题重发。
   // generation 进键是为了「消失后又出现」：旧线程已 resolve/标注过，回归必须开新
   // 线程，旧行留作历史，「这个问题反复出现」才答得上来。
-  test('HEAD journal has 164 entries (sanity — locks the freeze target indices)', () => {
+  // RFC-304 T30 bumped to 165 with 0165_rfc304_adoption_signals（采纳信号四列）。
+  // resolved 与 code_changed **分列**而不是合成一个 adopted：两者恰在有价值的场景
+  // 里不一致——代码改了但没 resolve 是作者默默修了，resolve 了但代码没动是作者不
+  // 认同；合成一个 flag 会把两者都报成「已采纳」。各带 round_id 是为了让读错的那
+  // 个信号能追回是哪一轮观测的，而不是一个无从归属的时间戳。
+  test('HEAD journal has 165 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -401,7 +406,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // Webhook 终态 workspace claim 与 RFC-165/iso GC claim）。
     // RFC-303 bumped to 157 with 0157_rfc303_mr_terminal_control（MR 终态
     // 控制流、稳定流身份与 durable launch/effect ledgers）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(164)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(165)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

@@ -182,3 +182,30 @@ export function ledgerWriteFor(
       return null
   }
 }
+
+/**
+ * Findings whose anchored code moved since the ledger last saw them.
+ *
+ * "Moved" is the evidence that somebody edited the region a finding points at.
+ * It is deliberately NOT read as "fixed": the review cannot tell a fix from a
+ * rename, a reformat, or an unrelated edit two lines away. What it supports is
+ * the honest question — "did anything happen where we pointed?" — which is
+ * exactly what a team wants when deciding whether the reviewer is worth having.
+ *
+ * A finding with no recorded anchor (it rode the overview) is skipped rather
+ * than reported as changed: null-to-a-number is a first observation, not drift.
+ */
+export function detectCodeChanged(
+  current: readonly CurrentFinding[],
+  ledger: ReadonlyArray<{ fingerprint: string; anchorLine: number | null }>,
+): string[] {
+  const before = new Map(ledger.map((l) => [l.fingerprint, l.anchorLine]))
+  const changed: string[] = []
+  for (const finding of current) {
+    const was = before.get(finding.fingerprint)
+    if (was === undefined || was === null) continue
+    if (finding.anchorLine === null) continue
+    if (finding.anchorLine !== was) changed.push(finding.fingerprint)
+  }
+  return changed.sort()
+}

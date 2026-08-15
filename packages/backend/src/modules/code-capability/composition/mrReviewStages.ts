@@ -57,10 +57,12 @@ import { hunkDigestFor, resolveAnchoredLine } from '@/modules/code-capability/do
 import type { DiffHunk } from '@/modules/code-capability/domain/anchorResolve'
 import { applyGate, type GateConfig } from '@/modules/code-capability/domain/findingGate'
 import {
+  detectCodeChanged,
   planSettleStale,
   reconcileFindings,
   type ReconcileAction,
 } from '@/modules/code-capability/domain/findingReconcile'
+import { readResolvedFindings } from '@/modules/code-capability/domain/publishReconcileRemote'
 import type { DiffOmission, FileDiff } from '@/modules/code-capability/domain/mrDiffNormalize'
 import {
   apiProjectAddress,
@@ -521,6 +523,40 @@ export function mrReviewProgramStages(
         // moved when nothing did.
         anchorLine: 'anchor' in item ? item.anchor.newLine : null,
       }))
+
+      // T30 — adoption, observed before this round's own writes move anything.
+      //
+      // Two independent signals (design §6.1): a human resolving the thread, and
+      // the anchored code changing. Recorded separately because they disagree in
+      // the informative cases — code changed with no resolve is a quiet fix,
+      // resolved with no change is a disagreement — and one "adopted" flag would
+      // report both as success.
+      if (env.ledger !== undefined) {
+        const anchor = anchorOf(target, env.codeHostEndpointId)
+        const previousAnchors = await env.ledger.readAnchors(anchor)
+        for (const fingerprint of detectCodeChanged(current, previousAnchors)) {
+          await env.ledger.markAdoption(anchor, fingerprint, 'code-changed')
+        }
+
+        const project = apiProjectAddress(target)
+        if (project.ok) {
+          const listed = await env.codeHost.call({
+            action: 'comment.list',
+            params: {
+              project: project.value,
+              mr: target.anchorId,
+              per_page: '100',
+              comment_scope: 'pulls',
+            },
+          })
+          if (listed.ok) {
+            const { resolved } = readResolvedFindings(target.provider, listed.body)
+            for (const fingerprint of Object.keys(resolved)) {
+              await env.ledger.markAdoption(anchor, fingerprint, 'resolved')
+            }
+          }
+        }
+      }
 
       const { actions } = reconcileFindings(current, ledger)
 

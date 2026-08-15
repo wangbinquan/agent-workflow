@@ -3908,6 +3908,19 @@ export const codeFindings = sqliteTable(
     externalId: text('external_id'),
     publishedRoundId: text('published_round_id'),
     disappearedRoundId: text('disappeared_round_id'),
+    /**
+     * RFC-304 T30 — adoption, as two independent signals.
+     *
+     * `resolvedAt` is a human marking the thread resolved; `codeChangedAt` is
+     * the anchored code changing in a later round. Separate because they
+     * disagree in the informative cases: code changed but never resolved is a
+     * quiet fix, resolved but unchanged is a disagreement. One "adopted" flag
+     * reports both as success, which is true of one of them.
+     */
+    resolvedAt: integer('resolved_at'),
+    resolvedRoundId: text('resolved_round_id'),
+    codeChangedAt: integer('code_changed_at'),
+    codeChangedRoundId: text('code_changed_round_id'),
     createdAt: integer('created_at').notNull(),
     lastSeenAt: integer('last_seen_at').notNull(),
     closedAt: integer('closed_at'),

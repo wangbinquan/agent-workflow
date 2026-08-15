@@ -287,8 +287,25 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T27b | `reconcile` 三集合对账：台账侧**只取 active 行**；重现的问题以**新 generation** 发布                                                                                                                                                                      | T27          | ✅ 2026-08-15 |
 | T28  | `settle-stale`：**发布成功后**执行，且**只在状态边沿**动作一次（`active→disappeared`）——否则长命 MR 上 GitHub 会重复追加 78 条同义回复；逐项落幂等状态                                                                                                    | T22,T27b,T29 | ✅ 2026-08-15 |
 | T29  | `publish`：草稿攒齐一次性发布 + 锚不上的并入总览评论                                                                                                                                                                                                      | T21,T26      | ✅ 2026-08-16 |
-| T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          |
+| T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          | ✅ 2026-08-16 |
 | T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  |
+
+> **T30 采纳信号（2026-08-16）**：迁移 `0165` 给 `code_findings` 加四列——
+> `resolved_at` / `resolved_round_id` / `code_changed_at` / `code_changed_round_id`。
+>
+> **两个信号分列而不是合成一个 `adopted`**：它们回答不同问题，且恰在有价值的场景里不一致
+> ——「代码改了但线程没 resolve」是作者默默修了，「resolve 了但代码没动」是作者不认同。
+> 合成一个 flag 会把两者都报成「已采纳」，而这对其中一个是假的。
+>
+> - `code_changed` **不解读为「已修复」**：检视分不清修复、重命名、格式化、隔壁两行的无关
+>   改动。它支持的是那个诚实的问题——「我们指的地方有没有动过」。首次出现（台账无锚）与
+>   本轮失锚都不算漂移，否则每条新发现一发布就被标成已采纳。
+> - `resolved` 只有 GitLab 有：GitHub REST 面不暴露 review thread 的 resolved 状态（同一个
+>   让 `thread.resolve` 在 GitHub 标 unsupported 的缺口）。故返回 `supported: false` 而不是
+>   空集——「看不到」与「没人 resolve」不能长一样，否则 GitHub 上的采纳率会永远读作 0。
+>   GitLab 侧按 note 逐条看 `resolved`，只看首条会漏掉「先回复再 resolve」的绝大多数线程。
+> - **首次观测写入即冻结**（SQL 层 `IS NULL` 守卫）：这个值的语义是「什么时候有人动的」，
+>   每轮覆盖会把日期变成「我们最后一次看的时间」，什么都答不了。
 
 > **单条可更新总览（2026-08-16，design §11.1 第三条对策）**：原实现每轮**追加**一条总览
 > 评论。设计里算过账：一个活跃 MR 上机器发言最低 15 次，机器自己的 push 还会再触发检视，

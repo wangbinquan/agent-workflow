@@ -36,4 +36,21 @@ export interface FindingLedgerPort {
    * finds nothing active to move and gets `false`.
    */
   markDisappeared(anchor: LedgerAnchor, fingerprint: string): Promise<boolean>
+
+  /**
+   * Record an adoption signal (T30). First observation wins.
+   *
+   * Once, not every round: the value being kept is WHEN somebody acted, and
+   * overwriting it each round would turn a date into "the last time we looked".
+   */
+  markAdoption(
+    anchor: LedgerAnchor,
+    fingerprint: string,
+    signal: 'resolved' | 'code-changed',
+  ): Promise<boolean>
+
+  /** What the ledger recorded as each finding's anchor, for drift detection. */
+  readAnchors(
+    anchor: LedgerAnchor,
+  ): Promise<Array<{ fingerprint: string; anchorLine: number | null }>>
 }
