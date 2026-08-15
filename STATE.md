@@ -4,7 +4,7 @@
 
 > ✅ **已完成 RFC（Done，2026-08-15）：[RFC-305 统一权限目录与用户级附加授权](design/RFC-305-user-permission-grants/proposal.md)** —— `admin/manager/user/guest` 仅是 73/61/49/7 点权限预设，授权消费者只检查 effective permissions；除内在 `account:self` 外，预设差集均可逐账户授予，普通 `user` 全授 24 点后与 admin 的 73 点授权面相同而角色 wire 仍为 `user`。`resource-acl:private` 将 private visibility 与普通 read 分离，guest baseline 只能查看六类公开资源，不能创建资源或读取/执行任务；OAuth/OIDC 首次自动建号默认 guest，管理员可在 Authentication 设置中切换为普通 user，邀请用户不受影响。shared 穷尽目录与双语自动 UI、迁移 0162/0163、RFC-294 `identity-access` 单 writer、revision CAS/audit/current authority/WS fence、用户弹窗与 permission-shaped UI 全部落地。实现后继 `aad4085e` 的 detached gate 7m44s 全绿（shared 2132 / frontend 6474 / backend 10931 pass，35 skip，0 fail），架构锁 12/12；exact-SHA CI 31886814586（36/36 jobs）、视觉回归 31886814578（44/44）、WebKit 31886829866（8/8 jobs）终态成功。
 
-> ▶ **进行中 RFC（In Progress，2026-08-16：PR-0 ~ PR-4b 已完工并 CI 绿，PR-5 起待续）：[RFC-304 代码能力平台](design/RFC-304-code-capability-platform/proposal.md)** —— `/code` 模块承载 MR 检视（行级提问）、评论驱动改码、需求实现、CI 修复与 MR 监视器主循环。**两条宪法**：①平台只承载「输入问题/设计文档」与「反问澄清」两类人机交互，其余全部落在 MR 上；②**确定性调度**——不需要 AI 的一律程序化，AI 步骤 envelope 封死并经程序校验后才继续（mr-review 十三步仅两步为 AI；选择器/分类/仲裁一律脚本、不得为 AI）。新增 bounded context `code-capability`（RFC-294 第 14 个，**偏离项已在 design §1.4 逐条呈报待确认**）：工作项聚合根提供跨事件跨天生命周期、每轮物化为一个 task 复用既有执行内核；阶段序列平台写死且版本化、每个边界可挂钩子；两层配置（部门层脚本框架含钩子走 `scripts:author` + 小组层 agent 绑定与阈值），模板经 RFC-271 配置包 zip 在组间流转。**不依赖 fanout**（内层 kind 扩展仍属 RFC-294 W8，另立新号）。三件套已落档，十二轮反问的逐条拍板见 proposal §6；首个 PR 为框架地基（工作项 + 阶段引擎 + 钩子），十个 PR 的拆分与依赖见 plan.md §2。
+> ▶ **进行中 RFC（In Progress，2026-08-16：PR-0 ~ PR-5 已完工并 CI 绿，PR-6 起待续）：[RFC-304 代码能力平台](design/RFC-304-code-capability-platform/proposal.md)** —— `/code` 模块承载 MR 检视（行级提问）、评论驱动改码、需求实现、CI 修复与 MR 监视器主循环。**两条宪法**：①平台只承载「输入问题/设计文档」与「反问澄清」两类人机交互，其余全部落在 MR 上；②**确定性调度**——不需要 AI 的一律程序化，AI 步骤 envelope 封死并经程序校验后才继续（mr-review 十三步仅两步为 AI；选择器/分类/仲裁一律脚本、不得为 AI）。新增 bounded context `code-capability`（RFC-294 第 14 个，**偏离项已在 design §1.4 逐条呈报待确认**）：工作项聚合根提供跨事件跨天生命周期、每轮物化为一个 task 复用既有执行内核；阶段序列平台写死且版本化、每个边界可挂钩子；两层配置（部门层脚本框架含钩子走 `scripts:author` + 小组层 agent 绑定与阈值），模板经 RFC-271 配置包 zip 在组间流转。**不依赖 fanout**（内层 kind 扩展仍属 RFC-294 W8，另立新号）。三件套已落档，十二轮反问的逐条拍板见 proposal §6；首个 PR 为框架地基（工作项 + 阶段引擎 + 钩子），十个 PR 的拆分与依赖见 plan.md §2。
 >
 > **进度（2026-08-16）**：PR-0 ~ PR-4b 全部完工，逐个 commit CI 绿。PR-4b 收口的十二项
 > 见 `plan.md` 的 PR-4b 表（全 ✅）与其后的逐条落地记录。本轮的形状是——**每补一处功能，
@@ -12,7 +12,22 @@
 > `src` 里零调用方」，缺口一直是活的且**没有任何测试会红**（不存在的机制不会报错）。
 > 故每处补接线都连一条**跨接线测试**并做变异校验（把接线关掉必须转红）。
 >
-> 下一步：PR-5（`/code` 前端最小面）。T4a3 真机验收（真实 MR 上出现行级评论）待用户环境。
+> **PR-5（2026-08-16）**：`/code` 最小面（仓库×能力矩阵 + 活动视图）、后端查询合同、
+> 任务列表按 `code-round` 筛选。顺带修出四个真 bug：readiness 死锁（真实仓库永远到不了
+> ready）、「要按两次保存」、`resolveReviewerAgent` 漏过滤 capability（会拿另一个能力的
+> agent 跑本能力）、以及导航多一行导致的侧栏焦点环被裁。
+>
+> **本轮最大的教训是「绿灯不等于验证」**：五次绿灯毫无意义——测试跑的是旧二进制、断言的是
+> 类型而不是选项表、失败分片和成功分片一样会删工作树、死锁只修一半也照样绿、焦点环守卫在
+> 本地加不加修复都绿。唯一可靠的手法是**把修复撤掉看它是否转红**；守卫无法转红时（焦点环
+> 那例），就自己写探针直接量几何量。
+>
+> **另一条**：焦点环改了三次容器才发现正解写在那段 CSS 上方的注释里——「控件按构造贴边时
+> 修环（O(1)），别修每一个将来会装它的容器（O(containers)，这个习惯让该 bug 复发了五次）」。
+> 三次 CI 几何量一字不差本该早两轮提示「我的改动不在因果链上」。**动手前先读那段代码周围
+> 的注释**。
+>
+> 下一步：PR-6（MR 监视器主循环）。T4a3 真机验收（真实 MR 上出现行级评论）待用户环境。
 
 > **实现进度（PR-0 go/no-go 前置，2026-08-15）**：T0a（与 `task-execution` 对齐）与 T0c（登记进 RFC-294 W2 输入清单）**已完成**，T0a 结论是四个接入点各有现成先例、**无一处需改既有语义**（对照表见 plan.md §PR-0）。`code-round` 的 **NodeKind 半**已落地：12 处穷尽点全填（编译器强制 9 + 非编译器强制 3——`docs/workflow-yaml.md`、RFC-199 strict-target ratchet、执行能力目录），「用户不可授权」由四机制保证并各自单测锁定，共读单一事实源 `SYNTHESIZED_ONLY_NODE_KINDS`。**T0b 亦已完成，判定 GO**：`code-round` execution kind 落地（`tasks.code_round_id` 判别列 + migration 0158、`taskExecutionKind` 第四支判在最前、`StartExecutionRequest` 第四变体 + executor 分发、`runOneNode` 分支跑空阶段桩、sentinel 宿主工作流 `__code_round_host__`），三条真实路径全绿（8 pass / 0 fail）。落地中另抓到两个**静默失败口**并修复钉测：outcome 兜底 `else` 不判 kind（新 kind 落 workgroup 臂 ⇒ done + 空产出 + 误导警告，已显式化 + `never` 收口）、`OutcomeTaskRow` 漏 select 判别列不报类型错而是**错误分类**。**PR-0 完结**。
 >
