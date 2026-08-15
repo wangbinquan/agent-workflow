@@ -38,6 +38,7 @@ import { api } from '../src/api/client'
 import i18n from '../src/i18n'
 import { getConfigQueryKey } from '../src/lib/config-resource'
 import { Route as SettingsRoute, validateSettingsSearch } from '../src/routes/settings'
+import { clearToken, setToken } from '../src/stores/auth'
 
 interface Provider {
   id: string
@@ -88,6 +89,21 @@ function deferred<T>(): {
 function renderAuthentication(initialRows: Provider[]) {
   const server = { rows: initialRows.slice() }
   ;(api.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+    if (url === '/api/auth/me') {
+      return Promise.resolve({
+        user: {
+          id: 'oidc-configurer',
+          username: 'oidc-configurer',
+          displayName: 'OIDC configurer',
+          role: 'user',
+          status: 'active',
+        },
+        source: 'session',
+        permissions: ['settings:read', 'oidc:read', 'oidc:configure'],
+        linkedIdentities: [],
+        pats: [],
+      })
+    }
     if (url === '/api/oidc/providers') return Promise.resolve(server.rows.slice())
     if (url === '/api/oidc/login-policy') {
       return Promise.resolve({
@@ -127,6 +143,7 @@ function renderAuthentication(initialRows: Provider[]) {
 
 beforeEach(async () => {
   await i18n.changeLanguage('en-US')
+  setToken('oidc-confirm-configurer')
   ;(api.get as ReturnType<typeof vi.fn>).mockReset()
   ;(api.put as ReturnType<typeof vi.fn>).mockReset()
   ;(api.post as ReturnType<typeof vi.fn>).mockReset()
@@ -135,6 +152,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  clearToken()
   cleanup()
   vi.restoreAllMocks()
 })
