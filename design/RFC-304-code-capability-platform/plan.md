@@ -290,6 +290,29 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          | ✅ 2026-08-16 |
 | T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  | ✅ 2026-08-16 |
 
+> **T31b 后端查询合同（2026-08-16）**：`public/queries` + `public/commands`（RFC-294 的
+> exact 入口）、`CodeMatrixQuery` / `CodeWorkItemProjectionQuery` / `EnableCommand` 实现，
+> 三条 HTTP 路由（`repos:read` / `repos:update`——权限是闭合集合，为最小面新增
+> `code:*` 会波及角色预设与 i18n，等 `/code` 长出自己的资源再说）。
+>
+> - **readiness 从「声称」变成「观测」**：`deriveReadiness` PR-2 就写好了，但**没有任何
+>   东西生产它的 facts**——所有调用方都是测试手喂 `ready`。于是一个仓库可以在没有绑定、
+>   没有触发器、没有 agent 的情况下显示 ready，正是 readiness 要暴露的那个状态。新增
+>   `gatherReadinessFacts` 逐项去库里问，且**用轮次将来会问的同一个问题问**——「选了绑定」
+>   与「这个仓看得见该 slot 的 agent」不是一回事，前者会 ready 然后死在 MR 上、当着作者的面。
+> - **修好一处死锁**：readiness 要求 `hasTrigger`，而 `enableCapability` **只给已经 ready
+>   的 cell 装触发器**——真实仓库永远到不了 ready。触发器是平台自己装的、不是用户要提供的
+>   前置，故「只差触发器」的 cell 继续走到装配、再按 `hasTrigger: true` 重新推导。
+> - **再修一处「要按两次保存」**：`invisibleSlots` 原本经 `resolveReviewerAgent` 读**已存**
+>   的 cell，而首次保存时 cell 还不存在 → 每个新仓第一次保存都报 `agent-not-visible`、
+>   第二次才 ready。改为按**请求里的** bindingId 解析（`resolveAgentForBinding`）。
+>   回归测试**只保存一次**——保存两次的版本在死锁只修一半时同样会绿，而「你得按两次」正是
+>   用户会报的那个症状。
+> - **顺带修一个 PR-4a 的真 bug**：`resolveReviewerAgent` 只按 `repoId` 过滤 + `limit(1)`，
+>   同时跑 `mr-review` 与 `mr-monitor` 的仓会**拿另一个能力的 agent** 去跑本能力的阶段，
+>   而四条错误信息都声称在读「'{capability}' 的 cell」。所有测试都是一仓一能力，故一直没红。
+>   已加跨能力回归并变异校验。
+
 > **T24b 后半 + T31 bot 开关（2026-08-16）**：
 >
 > - **fork PR 的 CI 事件定位**：fork 的流水线事件不带 MR 号（GitHub 的
@@ -447,8 +470,8 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 ### 前端最小面（PR-5）
 
 | #    | 任务                                                                                                                                                                                                                               | 依赖    |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| T31b | **后端查询合同**（此前 PR-5 只有前端任务，没有支撑它的 API）：`CodeMatrixQuery` / `EnableCommand`（矩阵行 + readiness + 缺失项 + 修复动作）与 `CodeWorkItemProjectionQuery`（工作项 → 轮次 → 阶段投影，cursor 分页），含 HTTP 适配 | T16c,T5 |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------- |
+| T31b | **后端查询合同**（此前 PR-5 只有前端任务，没有支撑它的 API）：`CodeMatrixQuery` / `EnableCommand`（矩阵行 + readiness + 缺失项 + 修复动作）与 `CodeWorkItemProjectionQuery`（工作项 → 轮次 → 阶段投影，cursor 分页），含 HTTP 适配 | T16c,T5 | ✅ 2026-08-16 |
 | T32  | `/code` 路由与导航；仓库 × 能力矩阵配置页（复用既有表单原语）                                                                                                                                                                      | T31b    |
 | T33  | 状态机流转图第一、二层：工作项状态 + 展开当前轮阶段                                                                                                                                                                                | T31b    |
 | T34  | 任务列表按新任务类型筛选                                                                                                                                                                                                           | T9      |

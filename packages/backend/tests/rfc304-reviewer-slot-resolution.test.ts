@@ -89,6 +89,55 @@ describe('RFC-304 — resolving the reviewer slot', () => {
     expect(result.ok && result.agent.name).toBe('reviewer-agent')
   })
 
+  test('resolves THIS capability’s cell, not whichever one sorts first', async () => {
+    // The bug this locks (fixed 2026-08-16): the query filtered on `repoId`
+    // alone with `limit(1)`, so a repository running two capabilities resolved
+    // the binding from whichever cell came back first. `mr-review` would then
+    // run its stage with `mr-monitor`'s agent — silently, while every error
+    // message claimed to be reading "the 'mr-review' cell".
+    //
+    // Invisible to any test that seeds ONE capability per repository, which is
+    // every other test in this file.
+    const otherAgentId = ulid()
+    await db.insert(agents).values({
+      id: otherAgentId,
+      name: 'monitor-agent',
+      bodyMd: 'You watch pipelines.',
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    await db.insert(capabilityFrameworks).values({
+      id: 'fw-monitor',
+      name: 'monitor',
+      capability: 'mr-monitor',
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    await db.insert(capabilityBindings).values({
+      id: 'binding-monitor',
+      name: 'monitor binding',
+      frameworkId: 'fw-monitor',
+      agentBySlotJson: JSON.stringify({ reviewer: otherAgentId }),
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    // Written FIRST, so it is the row a repo-only query is most likely to hit.
+    await upsertCapabilityCell(db, {
+      repoId: REPO,
+      capability: 'mr-monitor',
+      bindingId: 'binding-monitor',
+      enabled: true,
+      facts,
+      dependencyRevision: 1,
+      now: NOW,
+    })
+    await bindWith(JSON.stringify({ reviewer: agentId }))
+
+    const result = await ask(db)
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.agent.name).toBe('reviewer-agent')
+  })
+
   test('a repository with no cell says so, naming the capability', async () => {
     const result = await ask(db)
     expect(result.ok).toBe(false)

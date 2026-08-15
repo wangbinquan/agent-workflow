@@ -25,7 +25,7 @@
 // usable envelope, so this returns empty stdout and the guard reports
 // `envelope-missing` — the same verdict it would have reached itself.
 
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { capabilityBindings, repoCapabilityConfig } from '@/db/schema'
 import { getAgentById } from '@/services/agent'
@@ -72,7 +72,18 @@ export async function resolveReviewerAgent(
   const [cell] = await db
     .select({ bindingId: repoCapabilityConfig.bindingId })
     .from(repoCapabilityConfig)
-    .where(eq(repoCapabilityConfig.repoId, input.repoId))
+    // BOTH keys. Filtering on `repoId` alone resolved the binding from
+    // whichever cell sorted first, so a repository running `mr-review` AND
+    // `mr-monitor` would silently run one capability's stage with the OTHER
+    // capability's agent — while every message below claimed it was reading
+    // "the '{capability}' cell". Every test seeds one capability per repo,
+    // which is exactly why this survived (fixed 2026-08-16).
+    .where(
+      and(
+        eq(repoCapabilityConfig.repoId, input.repoId),
+        eq(repoCapabilityConfig.capability, input.capability),
+      ),
+    )
     .limit(1)
 
   if (cell === undefined) {
@@ -88,10 +99,29 @@ export async function resolveReviewerAgent(
     }
   }
 
+  return await resolveAgentForBinding(db, {
+    bindingId: cell.bindingId,
+    slot: input.slot,
+  })
+}
+
+/**
+ * Resolve a slot against a SPECIFIC binding, rather than the one a cell stores.
+ *
+ * Split out for readiness (T31b): when a capability is being enabled, the
+ * binding that matters is the one in the request, not the one currently saved —
+ * which on a first save is nothing at all. Reading the stored cell there made
+ * every new repository report `agent-not-visible` on its first save and
+ * resolve only on the second, i.e. "press save twice", with no explanation.
+ */
+export async function resolveAgentForBinding(
+  db: DbClient,
+  input: { bindingId: string; slot: string },
+): Promise<ReviewerResolution> {
   const [binding] = await db
     .select({ agentBySlotJson: capabilityBindings.agentBySlotJson })
     .from(capabilityBindings)
-    .where(eq(capabilityBindings.id, cell.bindingId))
+    .where(eq(capabilityBindings.id, input.bindingId))
     .limit(1)
 
   if (binding === undefined) {

@@ -52,6 +52,7 @@ import { mountReviewRoutes } from '@/routes/reviews'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
 import { mountCodeHostRoutes } from '@/routes/codeHosts'
+import { mountCodeRoutes } from '@/routes/code'
 import { mountWebhookEndpointRoutes } from '@/routes/webhookEndpoints'
 import { mountWebhookTriggerRoutes } from '@/routes/webhookTriggers'
 import { mountWebhookDeliveryRoutes } from '@/routes/webhookDeliveries'
@@ -344,6 +345,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountScheduledTaskRoutes(app, deps) // RFC-159
   mountWebhookEndpointRoutes(app, deps) // RFC-257 T7
   mountCodeHostRoutes(app, deps) // RFC-269
+  mountCodeRoutes(app, deps) // RFC-304 T31b
   mountWebhookTriggerRoutes(app, deps) // RFC-257 T8
   mountWebhookDeliveryRoutes(app, deps) // RFC-257 T9
   mountBackupRoutes(app, deps)

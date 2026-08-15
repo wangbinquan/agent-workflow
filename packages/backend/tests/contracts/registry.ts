@@ -162,6 +162,14 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'DELETE', path: '/api/code-hosts/:provider' },
   { method: 'POST', path: '/api/code-hosts/:provider/test' },
 
+  // RFC-304 T31b — `/code` 的最小读写面。权限复用 `repos:*`：启用一个能力就是
+  // 仓库配置，而权限是闭合集合，为最小面新增 `code:*` 会波及角色预设与 i18n。
+  // 部门层（framework，含以 daemon 身份执行的脚本）刻意不在此面，它走
+  // `scripts:author`。
+  { method: 'GET', path: '/api/code/matrix/:repoId' },
+  { method: 'PUT', path: '/api/code/matrix/:repoId' },
+  { method: 'GET', path: '/api/code/work-items' },
+
   // ---- oidc-auth (mixed: providers list + login flow are public) ----
   { method: 'GET', path: '/api/auth/oidc/providers', public: true },
   { method: 'POST', path: '/api/auth/oidc/:slug/login/start', public: true },

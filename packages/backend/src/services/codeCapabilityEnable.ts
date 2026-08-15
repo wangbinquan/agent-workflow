@@ -48,7 +48,23 @@ export async function enableCapability(
   const { db, endpointId, ownerUserId, ...cellInput } = input
   const cell = await upsertCapabilityCell(db, cellInput)
 
-  if (cell.readiness !== 'ready') {
+  // The trigger is the one prerequisite the PLATFORM supplies rather than the
+  // user, and that asymmetry used to deadlock: readiness requires a trigger,
+  // and this function armed one only for an already-ready cell — so a real
+  // repository could never reach `ready`. Nobody noticed because every caller
+  // was a test passing `hasTrigger: true` by hand (found 2026-08-16, once the
+  // facts were actually observed).
+  //
+  // So a cell whose ONLY gap is the trigger proceeds to arming, and is then
+  // re-derived with the trigger present. Every other gap still returns early:
+  // those are things a person must go and fix, and arming a trigger for them
+  // would fire rounds that fail later, on the MR, in front of the author.
+  const onlyTriggerMissing =
+    cell.readiness === 'misconfigured' &&
+    cell.readinessIssues.length > 0 &&
+    cell.readinessIssues.every((issue) => issue.code === 'no-trigger')
+
+  if (cell.readiness !== 'ready' && !onlyTriggerMissing) {
     // Retract any trigger from a previous ready state: a cell that has just
     // become misconfigured must stop firing, not keep firing with stale config.
     await retractCapabilityTrigger(db, {
@@ -80,7 +96,18 @@ export async function enableCapability(
     ...(events !== undefined ? { events } : {}),
     now: cellInput.now,
   })
-  return { cell, triggerId, triggerSkipped: null }
+
+  // Re-derived rather than patched: readiness is never accepted from a caller,
+  // and writing `ready` directly here would be exactly that. Re-deriving from
+  // the now-true fact keeps one path to the value.
+  const armed = onlyTriggerMissing
+    ? await upsertCapabilityCell(db, {
+        ...cellInput,
+        facts: { ...cellInput.facts, hasTrigger: true },
+      })
+    : cell
+
+  return { cell: armed, triggerId, triggerSkipped: null }
 }
 
 /**
