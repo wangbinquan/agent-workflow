@@ -1,64 +1,66 @@
-// RFC-304 §6.1 — one whole round of `mr-review`, from trigger to comment.
+// RFC-304 §6.1 — one whole round of `mr-review`, driven the way production
+// drives it: through `createCodeCapabilityRunner` and the stage engine.
 //
-// Every stage has its own tests; this one is about the SEAMS, which is where a
-// chain of individually-correct steps still produces a wrong review:
+// Going through the runner rather than calling a chain function directly is the
+// point of this file. The engine is what enforces stage ORDER, writes a row per
+// stage, and fires hooks at each boundary; a test that called the stages itself
+// would pass while the real path was mis-registered, mis-ordered, or hookless.
+// An earlier draft of PR-4a did exactly that — one function running the whole
+// chain — and it would have shipped a capability whose hooks never fire.
 //
-//   - a stale head must abort before the model is called at all (otherwise the
-//     round pays for a review of a revision that is already obsolete, and then
-//     posts it);
-//   - the gate must run BEFORE positions (otherwise findings are anchored and
-//     then discarded, and anchoring failures are reported for remarks nobody
-//     was going to see);
-//   - a reviewer that never conforms must publish NOTHING (constitution R5);
-//   - a finding whose line is not in the diff must still reach the author,
-//     through the overview.
+// What is exercised here is the SEAMS, since each stage has its own unit tests:
+//
+//   - a stale head aborts before the model is called at all;
+//   - the gate runs BEFORE positions, so nothing withheld is ever positioned;
+//   - a reviewer that never conforms publishes NOTHING (constitution R5);
+//   - a finding that cannot be anchored still reaches the author, via the
+//     overview;
+//   - every stage lands a row, in contract order.
 
-import { describe, expect, test } from 'bun:test'
-import { runMrReviewRound } from '../src/modules/code-capability/application/mrReviewRound'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { ulid } from 'ulid'
+import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createCodeCapabilityRunner } from '../src/modules/code-capability/composition/codeCapabilityRunner'
 import {
-  resolveTarget,
-  type RoundTarget,
-} from '../src/modules/code-capability/domain/resolveTarget'
+  mrReviewAiStages,
+  mrReviewProgramStages,
+  type MrReviewEnvironment,
+} from '../src/modules/code-capability/composition/mrReviewStages'
+import { readRoundStages } from '../src/modules/code-capability/application/stageEngine'
 import type {
   CodeHostCall,
   CodeHostPort,
   CodeHostResult,
 } from '../src/modules/code-capability/ports/codeHostPort'
 import type { GitPort } from '../src/modules/code-capability/ports/gitPort'
+import type { WebhookTriggerFields } from '@agent-workflow/shared'
 
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 const NEWER = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 const NONCE = 'roundnonce'
 
-function targetOf(provider: 'gitlab' | 'github' = 'gitlab'): RoundTarget {
-  const r = resolveTarget(
-    {
-      event_type: 'mr_opened',
-      provider,
-      project_id: '41823',
-      mr_iid: '412',
-      commit_sha: HEAD,
-      repo_path: 'group/project',
-      mr_title: 'Add retry logic',
-    },
-    'ep_7',
-  )
-  if (!r.ok) throw new Error('fixture did not resolve')
-  return r.target
-}
+const webhookOf = (provider: 'gitlab' | 'github' = 'gitlab'): WebhookTriggerFields => ({
+  event_type: 'mr_opened',
+  provider,
+  project_id: '41823',
+  mr_iid: '412',
+  commit_sha: HEAD,
+  repo_path: 'group/project',
+  mr_title: 'Add retry logic',
+})
 
 const PATCH = '@@ -10,3 +10,4 @@\n context\n-removed\n+added one\n+added two\n context2\n'
 
-// The two hosts answer `mr.diff` in different shapes, and serving the wrong one
-// is not a harmless fixture detail: normalization correctly yields NO files, so
-// nothing anchors and every finding degrades into the overview. That is exactly
-// what a real provider-shape mismatch would look like in production, which is
-// why each provider gets its own body here.
-const GITLAB_DIFF_BODY = [{ old_path: 'src/a.ts', new_path: 'src/a.ts', diff: PATCH }]
-const GITHUB_DIFF_BODY = [
+// Each host answers `mr.diff` in its own shape; serving the wrong one yields no
+// files at all, which is what a real provider mismatch looks like.
+const GITLAB_DIFF = [{ old_path: 'src/a.ts', new_path: 'src/a.ts', diff: PATCH }]
+const GITHUB_DIFF = [
   { filename: 'src/a.ts', status: 'modified', patch: PATCH, additions: 2, deletions: 1 },
 ]
-
 const MR_BODY = {
   title: 'Add retry logic',
   diff_refs: { base_sha: 'base', start_sha: 'start', head_sha: HEAD },
@@ -82,7 +84,7 @@ function fakeHost(
       if (over[call.action] !== undefined) return over[call.action]!
       if (call.action === 'mr.get') return okJson(MR_BODY)
       if (call.action === 'mr.diff') {
-        return okJson(provider === 'github' ? GITHUB_DIFF_BODY : GITLAB_DIFF_BODY)
+        return okJson(provider === 'github' ? GITHUB_DIFF : GITLAB_DIFF)
       }
       return okJson({ id: 1 })
     },
@@ -90,21 +92,19 @@ function fakeHost(
   return { port, calls }
 }
 
-function fakeGit(resolvedSha = HEAD): GitPort {
-  return {
-    async fetchRef() {
-      return { ok: true, resolvedSha }
-    },
-    async checkoutDetached() {
-      return { ok: true }
-    },
-  }
-}
+const fakeGit = (resolvedSha = HEAD): GitPort => ({
+  async fetchRef() {
+    return { ok: true, resolvedSha }
+  },
+  async checkoutDetached() {
+    return { ok: true }
+  },
+})
 
 const envelope = (findings: unknown[]) =>
   `<workflow-output nonce="${NONCE}"><port name="findings">${JSON.stringify({ findings })}</port></workflow-output>`
 
-function model(stdout: string) {
+function scriptedModel(stdout: string) {
   let calls = 0
   return {
     get calls() {
@@ -125,36 +125,66 @@ const FINDING = {
   body: 'This can be undefined.',
 }
 
-const run = (opts: {
-  host?: ReturnType<typeof fakeHost>
+interface RunOpts {
+  host: ReturnType<typeof fakeHost>
+  ai: ReturnType<typeof scriptedModel>
+  home: string
   git?: GitPort
-  stdout?: string
   provider?: 'gitlab' | 'github'
-  maxPerRound?: number
-  threshold?: 'blocker' | 'major' | 'minor' | 'info'
-  ai?: ReturnType<typeof model>
-}) => {
-  const host = opts.host ?? fakeHost({}, opts.provider)
-  const ai = opts.ai ?? model(opts.stdout ?? envelope([FINDING]))
-  return runMrReviewRound({
-    codeHost: host.port,
+  gate?: { threshold: 'blocker' | 'major' | 'minor' | 'info'; maxPerRound: number }
+}
+
+/** Exactly the production wiring: name→stage maps handed to the real runner. */
+function runRound(db: DbClient, opts: RunOpts) {
+  const env: MrReviewEnvironment = {
+    codeHost: opts.host.port,
     git: opts.git ?? fakeGit(),
-    target: targetOf(opts.provider),
-    repoPath: '/repo',
-    worktreePath: '/wt',
-    makeCaller: ai.makeCaller,
+    webhook: webhookOf(opts.provider),
+    codeHostEndpointId: 'ep_7',
+    repoPath: opts.home,
+    worktreePath: opts.home,
+    makeCaller: opts.ai.makeCaller,
     protocolBlock: '',
     nonce: NONCE,
     budget: { sameSession: 1, freshSession: 0 },
-    gate: { threshold: opts.threshold ?? 'info', maxPerRound: opts.maxPerRound ?? 20 },
+    gate: opts.gate ?? { threshold: 'info', maxPerRound: 20 },
+  }
+  const runner = createCodeCapabilityRunner({
+    db,
+    programStages: mrReviewProgramStages(env),
+    aiStages: mrReviewAiStages(env),
   })
+  const roundId = ulid()
+  return runner
+    .runRound({
+      roundId,
+      capability: 'mr-review',
+      roundSeq: 1,
+      worktreePath: opts.home,
+      repos: [{ name: 'main', path: opts.home }],
+      envelopeNonce: NONCE,
+      resumeFromStage: null,
+    })
+    .then((outcome) => ({ outcome, roundId }))
 }
 
-describe('RFC-304 — a round that works', () => {
-  test('a finding on a changed line ends up as an inline comment', async () => {
+describe('RFC-304 — mr-review through the real runner', () => {
+  let db: DbClient
+  let home: string
+
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+    home = mkdtempSync(join(tmpdir(), 'aw-rfc304-round-'))
+  })
+  afterEach(() => {
+    db.$client.close()
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  test('a finding on a changed line becomes an inline comment', async () => {
     const host = fakeHost()
-    const result = await run({ host })
-    expect(result).toMatchObject({ state: 'published', posted: 1, carried: 0, failure: null })
+    const { outcome } = await runRound(db, { host, ai: scriptedModel(envelope([FINDING])), home })
+    expect(outcome.outcome).toBe('done')
     expect(host.calls.map((c) => c.action)).toEqual([
       'mr.get',
       'mr.diff',
@@ -163,121 +193,191 @@ describe('RFC-304 — a round that works', () => {
     ])
   })
 
-  test('the comment carries the severity, the title and the explanation', async () => {
+  test('every contract stage lands a row, in order', async () => {
+    // The property only the engine path can show: a chain function running the
+    // stages internally would produce one row, or none.
+    const { roundId } = await runRound(db, {
+      host: fakeHost(),
+      ai: scriptedModel(envelope([FINDING])),
+      home,
+    })
+    const rows = await readRoundStages(db, roundId)
+    expect(rows.map((r) => r.stageName)).toEqual([
+      'resolve-target',
+      'prepare-worktree',
+      'fetch-diff',
+      'review',
+      'gate',
+      'resolve-positions',
+      'publish',
+      'ledger',
+    ])
+    expect(rows.every((r) => r.status === 'done')).toBe(true)
+  })
+
+  test('the comment carries severity, title and explanation', async () => {
     const host = fakeHost()
-    await run({ host })
+    await runRound(db, { host, ai: scriptedModel(envelope([FINDING])), home })
     const body = String(host.calls.find((c) => c.action === 'comment.create-inline')?.params.body)
     expect(body).toContain('**Major — unchecked index**')
     expect(body).toContain('This can be undefined.')
   })
 
   test('an empty review still posts an overview saying so', async () => {
-    // Silence would be indistinguishable from a broken bot.
+    // Silence is indistinguishable from a broken bot.
     const host = fakeHost()
-    const result = await run({ host, stdout: envelope([]) })
-    expect(result).toMatchObject({ state: 'published', posted: 0 })
-    const overview = String(host.calls.at(-1)?.params.body)
-    expect(overview).toContain('no findings this round')
+    const { outcome } = await runRound(db, { host, ai: scriptedModel(envelope([])), home })
+    expect(outcome.outcome).toBe('done')
+    expect(String(host.calls.at(-1)?.params.body)).toContain('no findings this round')
   })
 
   test('GitHub takes the whole round as one review', async () => {
     const host = fakeHost({}, 'github')
-    const result = await run({ host, provider: 'github' })
-    expect(result).toMatchObject({ state: 'published', posted: 1 })
+    const { outcome } = await runRound(db, {
+      host,
+      ai: scriptedModel(envelope([FINDING])),
+      home,
+      provider: 'github',
+    })
+    expect(outcome.outcome).toBe('done')
     expect(host.calls.map((c) => c.action)).toEqual(['mr.get', 'mr.diff', 'review.submit'])
   })
 })
 
-describe('RFC-304 — a stale head stops the round early', () => {
-  test('a moved head aborts BEFORE the model is called', async () => {
+describe('RFC-304 — a stale head stops the round before the model runs', () => {
+  let db: DbClient
+  let home: string
+
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+    home = mkdtempSync(join(tmpdir(), 'aw-rfc304-stale-'))
+  })
+  afterEach(() => {
+    db.$client.close()
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  test('a moved head fails at prepare-worktree, naming the newer sha', async () => {
     // Paying for a review of an obsolete revision is the smaller half of the
-    // cost; publishing it is the larger one.
-    const ai = model(envelope([FINDING]))
+    // cost; publishing it is the larger one. The sha rides in the message
+    // because re-arming the work item is what happens next.
     const host = fakeHost()
-    const result = await run({ host, git: fakeGit(NEWER), ai })
-    expect(result).toEqual({ state: 'stale', fetchedSha: NEWER })
+    const ai = scriptedModel(envelope([FINDING]))
+    const { outcome } = await runRound(db, { host, ai, home, git: fakeGit(NEWER) })
+
+    expect(outcome.outcome).toBe('failed')
+    expect(outcome.outcome === 'failed' && outcome.failedStage).toBe('prepare-worktree')
+    expect(outcome.outcome === 'failed' && outcome.error).toContain(NEWER)
     expect(ai.calls).toBe(0)
     expect(host.calls).toHaveLength(0)
   })
 })
 
 describe('RFC-304 — nothing is published on a bad review', () => {
+  let db: DbClient
+  let home: string
+
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+    home = mkdtempSync(join(tmpdir(), 'aw-rfc304-bad-'))
+  })
+  afterEach(() => {
+    db.$client.close()
+    rmSync(home, { recursive: true, force: true })
+  })
+
   test('a reviewer that never conforms publishes NOTHING', async () => {
     // Constitution R5. A best-effort value escaping here would be posted as a
     // review comment with nothing marking it unvalidated.
     const host = fakeHost()
-    const result = await run({ host, stdout: 'no envelope here' })
-    expect(result).toMatchObject({ state: 'aborted', stage: 'review' })
+    const { outcome } = await runRound(db, { host, ai: scriptedModel('no envelope here'), home })
+    expect(outcome.outcome === 'failed' && outcome.failedStage).toBe('review')
     expect(host.calls.some((c) => c.action.startsWith('comment.'))).toBe(false)
   })
 
-  test('a diff the host would not return aborts before the model runs', async () => {
-    const ai = model(envelope([FINDING]))
+  test('a diff the host refuses aborts before the model runs', async () => {
+    const ai = scriptedModel(envelope([FINDING]))
     const host = fakeHost({
       'mr.diff': { ok: false, code: 'code-host-forbidden', message: 'no access' },
     })
-    const result = await run({ host, ai })
-    expect(result).toMatchObject({ state: 'aborted', stage: 'fetch-diff' })
+    const { outcome } = await runRound(db, { host, ai, home })
+    expect(outcome.outcome === 'failed' && outcome.failedStage).toBe('fetch-diff')
     expect(ai.calls).toBe(0)
   })
 
   test('a GitLab MR with no diff_refs is named, not left to fail per comment', async () => {
     const host = fakeHost({ 'mr.get': okJson({ title: 'x' }) })
-    const result = await run({ host })
-    expect(result).toMatchObject({ state: 'aborted', stage: 'mr.get' })
-    expect(result.state === 'aborted' && result.message).toContain('diff_refs')
+    const { outcome } = await runRound(db, {
+      host,
+      ai: scriptedModel(envelope([FINDING])),
+      home,
+    })
+    expect(outcome.outcome === 'failed' && outcome.failedStage).toBe('fetch-diff')
+    expect(outcome.outcome === 'failed' && outcome.error).toContain('diff_refs')
   })
 })
 
 describe('RFC-304 — the gate runs before positions', () => {
+  let db: DbClient
+  let home: string
+
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+    home = mkdtempSync(join(tmpdir(), 'aw-rfc304-gate-'))
+  })
+  afterEach(() => {
+    db.$client.close()
+    rmSync(home, { recursive: true, force: true })
+  })
+
   test('a below-threshold finding is never positioned or posted', async () => {
     const host = fakeHost()
-    const result = await run({
+    const { outcome } = await runRound(db, {
       host,
-      stdout: envelope([{ ...FINDING, severity: 'info' }]),
-      threshold: 'major',
+      ai: scriptedModel(envelope([{ ...FINDING, severity: 'info' }])),
+      home,
+      gate: { threshold: 'major', maxPerRound: 20 },
     })
-    expect(result).toMatchObject({ state: 'published', posted: 0, carried: 0 })
+    expect(outcome.outcome).toBe('done')
     expect(host.calls.some((c) => c.action === 'comment.create-inline')).toBe(false)
     expect(String(host.calls.at(-1)?.params.body)).toContain('below the configured severity')
   })
 
   test('cap-withheld findings are counted in the overview, not silently dropped', async () => {
     const host = fakeHost()
-    await run({
+    await runRound(db, {
       host,
-      stdout: envelope([FINDING, { ...FINDING, line: 12, title: 'second' }]),
-      maxPerRound: 1,
+      ai: scriptedModel(envelope([FINDING, { ...FINDING, line: 12, title: 'second' }])),
+      home,
+      gate: { threshold: 'info', maxPerRound: 1 },
     })
     expect(String(host.calls.at(-1)?.params.body)).toContain('withheld by the per-round limit')
   })
-})
 
-describe('RFC-304 — a finding that cannot be placed still reaches the author', () => {
-  test('a line outside the diff rides the overview', async () => {
+  test('a finding outside the diff rides the overview rather than vanishing', async () => {
     // AC-3/AC-4: not a validation failure, not a retry, and above all not a
     // finding that disappears.
     const host = fakeHost()
-    const result = await run({ host, stdout: envelope([{ ...FINDING, line: 900 }]) })
-    expect(result).toMatchObject({ state: 'published', posted: 0, carried: 1 })
+    const { outcome } = await runRound(db, {
+      host,
+      ai: scriptedModel(envelope([{ ...FINDING, line: 900 }])),
+      home,
+    })
+    expect(outcome.outcome).toBe('done')
+    expect(host.calls.some((c) => c.action === 'comment.create-inline')).toBe(false)
     const overview = String(host.calls.at(-1)?.params.body)
     expect(overview).toContain('could not be placed')
     expect(overview).toContain('unchecked index')
   })
 
-  test('a finding on an untouched file rides the overview too', async () => {
-    const host = fakeHost()
-    const result = await run({ host, stdout: envelope([{ ...FINDING, file: 'src/elsewhere.ts' }]) })
-    expect(result).toMatchObject({ state: 'published', posted: 0, carried: 1 })
-  })
-
   test('placed and unplaced findings coexist in one round', async () => {
     const host = fakeHost()
-    const result = await run({
+    await runRound(db, {
       host,
-      stdout: envelope([FINDING, { ...FINDING, line: 900, title: 'elsewhere' }]),
+      ai: scriptedModel(envelope([FINDING, { ...FINDING, line: 900, title: 'elsewhere' }])),
+      home,
     })
-    expect(result).toMatchObject({ state: 'published', posted: 1, carried: 1 })
+    expect(host.calls.filter((c) => c.action === 'comment.create-inline')).toHaveLength(1)
     expect(String(host.calls.at(-1)?.params.body)).toContain('2 findings')
   })
 })

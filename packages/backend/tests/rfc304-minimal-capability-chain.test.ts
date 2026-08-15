@@ -20,9 +20,10 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   checkBuiltinContracts,
   lookupStageContract,
-  MINIMAL_CONTRACT,
   registeredCapabilities,
 } from '../src/modules/code-capability/domain/capabilityRegistry'
+import type { StageContract } from '../src/modules/code-capability/domain/stageContract'
+
 import {
   readRoundStages,
   runStageSequence,
@@ -32,6 +33,30 @@ import {
   runCapabilityHook,
   type HookRunEnvironment,
 } from '../src/modules/code-capability/application/hookRunner'
+
+// A three-stage fixture, defined HERE rather than imported from the registry.
+//
+// What this file tests is the ENGINE — stage rows, ordering, hook boundaries —
+// and the engine should be exercised by the smallest contract that has all
+// three, not by whichever real capability happens to be registered. Until
+// PR-4a this fixture lived in the registry as `MINIMAL_CONTRACT`, where it was
+// indistinguishable from production config; when `mr-review` became the real
+// eight-stage sequence, that placeholder had nothing left to be.
+const ENGINE_FIXTURE: StageContract = {
+  capability: 'mr-review',
+  version: 1,
+  stages: [
+    { kind: 'program', name: 'prepare-worktree', requires: [], produces: ['worktree'] },
+    {
+      kind: 'program',
+      name: 'collect-context',
+      requires: ['worktree'],
+      produces: ['context'],
+      injectable: ['extraContext'],
+    },
+    { kind: 'program', name: 'ledger', requires: ['context'], produces: ['ledgerEntry'] },
+  ],
+}
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const PYTHON = process.platform === 'win32' ? 'python' : 'python3'
@@ -53,11 +78,20 @@ describe('RFC-304 — the built-in contract registry checks itself', () => {
     }
   })
 
-  test('the minimal contract is all-program — PR-1a has no determinism guard yet', () => {
-    // A contract with an `ai` stage would imply a guard exists. It does not
-    // until PR-1b, and a stage that ran a model unguarded is exactly what the
-    // constitution forbids.
-    expect(MINIMAL_CONTRACT.stages.every((s) => s.kind === 'program')).toBe(true)
+  test('every AI stage in every registered contract declares a schema', () => {
+    // Constitution R3, swept across the registry rather than asserted about one
+    // contract: a stage that reached a model with no envelope schema would be a
+    // hole straight through the determinism guarantee. The type already forbids
+    // it; this catches a contract assembled dynamically past the type.
+    for (const capability of registeredCapabilities()) {
+      for (const stage of lookupStageContract(capability)?.stages ?? []) {
+        if (stage.kind === 'ai') expect(stage.aiSchema).toBeDefined()
+      }
+    }
+  })
+
+  test('the engine fixture stays all-program, so it exercises ordering not models', () => {
+    expect(ENGINE_FIXTURE.stages.every((s) => s.kind === 'program')).toBe(true)
   })
 })
 
@@ -108,7 +142,7 @@ describe('RFC-304 T12 — minimal chain: prepare-worktree → work → ledger', 
     const out = await runStageSequence({
       db,
       roundId,
-      contract: MINIMAL_CONTRACT,
+      contract: ENGINE_FIXTURE,
       runners: chainRunners(log),
     })
 
@@ -127,7 +161,7 @@ describe('RFC-304 T12 — minimal chain: prepare-worktree → work → ledger', 
   test('a real pre hook injects into the chain and the value reaches the ledger', async () => {
     // The full loop: subprocess → envelope → allowlist → engine artifacts →
     // downstream stage. Each link is where an injection could silently vanish.
-    const stageDef = MINIMAL_CONTRACT.stages[1]!
+    const stageDef = ENGINE_FIXTURE.stages[1]!
     const env: HookRunEnvironment = {
       worktreePath: home,
       runDir: join(home, 'run'),
@@ -149,7 +183,7 @@ describe('RFC-304 T12 — minimal chain: prepare-worktree → work → ledger', 
     const out = await runStageSequence({
       db,
       roundId,
-      contract: MINIMAL_CONTRACT,
+      contract: ENGINE_FIXTURE,
       runners: chainRunners(log),
       hooks: {
         pre: async (ctx) => {
@@ -184,12 +218,12 @@ describe('RFC-304 T12 — minimal chain: prepare-worktree → work → ledger', 
   })
 
   test('a blocking hook stops the chain before its stage runs', async () => {
-    const stageDef = MINIMAL_CONTRACT.stages[1]!
+    const stageDef = ENGINE_FIXTURE.stages[1]!
     const log: string[] = []
     const out = await runStageSequence({
       db,
       roundId,
-      contract: MINIMAL_CONTRACT,
+      contract: ENGINE_FIXTURE,
       runners: chainRunners(log),
       hooks: {
         pre: async (ctx) => {
@@ -237,12 +271,12 @@ describe('RFC-304 T12 — minimal chain: prepare-worktree → work → ledger', 
     // The other power: side effects need no channel at all, because the
     // worktree is the shared medium.
     const marker = join(home, 'from-hook.txt')
-    const stageDef = MINIMAL_CONTRACT.stages[1]!
+    const stageDef = ENGINE_FIXTURE.stages[1]!
     const seen: string[] = []
     await runStageSequence({
       db,
       roundId,
-      contract: MINIMAL_CONTRACT,
+      contract: ENGINE_FIXTURE,
       runners: {
         program: async (ctx) => {
           if (ctx.stage.name === 'collect-context') seen.push(readFileSync(marker, 'utf8'))

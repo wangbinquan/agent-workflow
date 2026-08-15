@@ -106,10 +106,16 @@ describe('RFC-304 T12b — code-round runs a real stage sequence', () => {
     // the summary names the stage so "why did my round fail" is answerable
     // without reading the scheduler.
     expect(row?.errorMessage).toBe('code-round-stage-failed')
-    // The built-in minimal contract's first stage. The message says both WHICH
-    // stage and WHY — "no registered implementation" is a different problem
-    // from "the stage ran and threw", and they need different fixes.
-    expect(row?.errorSummary ?? '').toContain('prepare-worktree')
+    // The registered contract's FIRST stage — `mr-review` begins by resolving
+    // which MR the round is about. Named explicitly rather than read from the
+    // contract: this asserts the failure message identifies a real stage, and
+    // deriving the expectation from the same source the code uses would make
+    // the assertion true by construction.
+    //
+    // The message says both WHICH stage and WHY — "no registered
+    // implementation" is a different problem from "the stage ran and threw",
+    // and they need different fixes.
+    expect(row?.errorSummary ?? '').toContain('resolve-target')
     expect(row?.errorSummary ?? '').toContain('no registered implementation')
   })
 
