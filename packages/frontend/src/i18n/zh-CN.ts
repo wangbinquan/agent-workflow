@@ -1117,7 +1117,9 @@ export interface Resources {
     revokePatDescription: string
     roles: {
       admin: string
+      manager: string
       user: string
+      guest: string
     }
   }
   // RFC-036 — /users admin page.
@@ -6681,7 +6683,9 @@ export const zhCN: Resources = {
     revokePatDescription: '使用它的脚本或 CI 将立即失去访问权限，且令牌无法恢复。',
     roles: {
       admin: '管理员',
+      manager: '资源管理员',
       user: '用户',
+      guest: '游客',
     },
   },
   users: {

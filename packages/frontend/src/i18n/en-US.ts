@@ -990,7 +990,9 @@ export const enUS: Resources = {
       'Scripts or CI using it will immediately lose access, and the token cannot be restored.',
     roles: {
       admin: 'admin',
+      manager: 'resource admin',
       user: 'user',
+      guest: 'guest',
     },
   },
   users: {

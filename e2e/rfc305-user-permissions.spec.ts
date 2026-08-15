@@ -384,3 +384,75 @@ test('real daemon PAT range/resource cap follows grant revoke and regrant', asyn
   expect(await listContainsTask()).toBe(true)
   expect(await exerciseRepoUpdate()).not.toBe(403)
 })
+
+test('guest browser exposes public resources without mutation or task affordances', async ({
+  page,
+}) => {
+  const username = 'rfc305-browser-guest'
+  const password = 'longEnoughPassword'
+  const createdGuest = await request(daemon.token, '/api/users', {
+    method: 'POST',
+    body: JSON.stringify({
+      username,
+      displayName: 'RFC-305 Browser Guest',
+      role: 'guest',
+      password,
+    }),
+  })
+  expect(createdGuest.status).toBe(201)
+
+  const createAgent = async (name: string): Promise<string> => {
+    const response = await request(daemon.token, '/api/agents', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        description: 'RFC-305 guest browser fixture',
+        outputs: ['answer'],
+        readonly: true,
+        bodyMd: 'public-read-only fixture',
+      }),
+    })
+    expect(response.status).toBe(201)
+    return ((await response.json()) as { id: string }).id
+  }
+
+  const publicName = 'rfc305-guest-public-agent'
+  const privateName = 'rfc305-guest-private-agent'
+  const publicId = await createAgent(publicName)
+  await createAgent(privateName)
+  const madePublic = await request(daemon.token, `/api/agents/${publicId}/acl`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      visibility: 'public',
+      expectedResourceId: publicId,
+      expectedAclRevision: 0,
+    }),
+  })
+  expect(madePublic.status).toBe(200)
+
+  const guestToken = await login(username, password)
+  await primeAuth(page, guestToken)
+  await page.goto(`${daemon.baseUrl}/agents`)
+  await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: publicName }).first()).toBeVisible()
+  await expect(page.getByText(privateName, { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'New agent', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Tasks', exact: true })).toHaveCount(0)
+
+  await page.locator('.user-menu__trigger').click()
+  await expect(page.locator('.user-menu__role')).toHaveText('guest')
+
+  await page.goto(`${daemon.baseUrl}/workflows?create=1&source=guest-check`)
+  await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible()
+  await expect(page.getByTestId('workflow-new-button')).toHaveCount(0)
+  await expect(page.getByTestId('workflow-create-dialog')).toHaveCount(0)
+  await expect.poll(() => new URL(page.url()).searchParams.has('create')).toBe(false)
+
+  await page.goto(`${daemon.baseUrl}/agents/${publicId}`)
+  await expect(page.getByRole('heading', { name: publicName, exact: true })).toBeVisible()
+  await expect(page.getByTestId('agent-save-button')).toHaveCount(0)
+  await page.getByTestId('detail-more-actions').click()
+  await expect(page.getByTestId('export-package-agent')).toBeVisible()
+  await expect(page.getByTestId('acl-dialog-button')).toHaveCount(0)
+  await expect(page.getByTestId('detail-delete-button')).toHaveCount(0)
+})

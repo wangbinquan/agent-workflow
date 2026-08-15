@@ -1,5 +1,7 @@
+import { RoleSchema } from '@agent-workflow/shared'
 import { describe, expect, test } from 'vitest'
 import { enUS } from '@/i18n/en-US'
+import { zhCN } from '@/i18n/zh-CN'
 import {
   derivePermissionRows,
   diffUserAccess,
@@ -18,6 +20,13 @@ function translate(key: string): string {
 }
 
 describe('RFC-305 user permission view model', () => {
+  test('every account role preset has a user-menu label in both locales', () => {
+    for (const role of RoleSchema.options) {
+      expect(enUS.account.roles[role]).toBeTruthy()
+      expect(zhCN.account.roles[role]).toBeTruthy()
+    }
+  })
+
   test('derives all rows from the shared catalog with no dialog-owned permission list', () => {
     const model = derivePermissionRows({
       role: 'user',
