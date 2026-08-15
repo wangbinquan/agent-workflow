@@ -64,6 +64,11 @@ const DISPOSITION = {
   // execution surface.
   codeCapabilityRunner: 'dropped-registered',
   codeHostFetch: 'dropped-registered',
+  // RFC-304: the daemon generation fencing MR leases. INHERITED, unlike the
+  // service instances above — it identifies the process, and a child task runs
+  // in the same one. Giving a child a different generation would make it treat
+  // its own parent's live leases as void and take an MR out from under it.
+  daemonGeneration: 'inherit',
   commitPushModel: 'dropped-registered',
   commitPushRuntime: 'dropped-registered',
   commitPushMaxRepairRetries: 'dropped-registered',
@@ -105,8 +110,9 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
     )
   })
 
-  test('picker 与登记面同构：全值透传 17 键（T30 修配 +2）、undefined 不落键、appHome 恒在', () => {
+  test('picker 与登记面同构：全值透传 18 键（T30 修配 +2、RFC-304 +1）、undefined 不落键、appHome 恒在', () => {
     const full: RunTaskOptions = {
+      daemonGeneration: 'gen-1',
       taskId: 't1',
       db: {} as RunTaskOptions['db'],
       appHome: '/home',

@@ -41,7 +41,9 @@ import {
  */
 export const MR_REVIEW_CONTRACT: StageContract = {
   capability: 'mr-review',
-  version: 2,
+  // 3: PR-4b added `reconcile` and `settle-stale`. PR-4a published every finding
+  // every round, so a second round reposted the whole review.
+  version: 3,
   stages: [
     // Which MR, at which commit. Refuses rather than defaulting (§6).
     { kind: 'program', name: 'resolve-target', requires: [], produces: ['target'] },
@@ -80,13 +82,39 @@ export const MR_REVIEW_CONTRACT: StageContract = {
       requires: ['gated', 'diff'],
       produces: ['placements'],
     },
+    // Three sets, not "dedupe": a finding the author has NOT fixed is present
+    // in both this round and the ledger, and the first draft's dedupe-plus-
+    // cleanup pair would suppress the new comment AND resolve the old thread —
+    // leaving the MR with no live remark about a problem that is still there,
+    // which is the case that most needs to be visible (§6.1).
+    {
+      kind: 'program',
+      name: 'reconcile',
+      requires: ['placements', 'target'],
+      produces: ['reconciled'],
+    },
     {
       kind: 'program',
       name: 'publish',
-      requires: ['placements', 'target', 'mrMeta'],
+      requires: ['reconciled', 'target', 'mrMeta'],
       produces: ['published'],
     },
-    { kind: 'program', name: 'ledger', requires: ['published'], produces: ['ledgerEntry'] },
+    // After publishing, never before: a finding that stopped appearing gets its
+    // thread settled once, on the active→disappeared EDGE. Firing it every
+    // round is what produced 78 identical "no longer present" replies on one
+    // long-lived MR.
+    {
+      kind: 'program',
+      name: 'settle-stale',
+      requires: ['reconciled', 'published', 'target'],
+      produces: ['settled'],
+    },
+    {
+      kind: 'program',
+      name: 'ledger',
+      requires: ['published', 'settled', 'reconciled'],
+      produces: ['ledgerEntry'],
+    },
   ],
 }
 

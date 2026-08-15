@@ -28,8 +28,16 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { tasks, webhookDeliveries, webhookEndpoints, webhookTriggerFires } from '../src/db/schema'
+import {
+  nodeRuns,
+  tasks,
+  webhookDeliveries,
+  webhookEndpoints,
+  webhookTriggerFires,
+} from '../src/db/schema'
 import { enableCapability } from '../src/services/codeCapabilityEnable'
+import { acquireRoundLease } from '../src/services/codeRoundLease'
+import { resolveTarget } from '../src/modules/code-capability/domain/resolveTarget'
 import { runGit } from '../src/util/git'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
@@ -233,6 +241,113 @@ describe('RFC-304 T4a3 (mock) — delivery → round → line comment', () => {
     // And the frozen context the round reads its target from.
     expect(String(round?.triggerContextJson ?? '')).toContain('41823')
     expect(String(round?.triggerContextJson ?? '')).toContain(MR_IID)
+  })
+
+  test('a round does NOT start while another round holds this MR', async () => {
+    // The lease's join, driven the same way — because `codeRoundLease` and its
+    // tests can both be perfectly correct while the scheduler never calls them,
+    // which is the exact shape of the two breaks this file already caught.
+    //
+    // Held here by the equivalent of an `mr-monitor` round mid-flight: if the
+    // review started anyway it would read the sha the monitor is about to move,
+    // and publish remarks on lines that no longer exist.
+    await enableCapability({
+      db,
+      endpointId: 'ep-1',
+      ownerUserId: ownerId,
+      repoId: REPO_PATH,
+      capability: 'mr-review',
+      bindingId: 'binding-1',
+      enabled: true,
+      facts: readyFacts,
+      dependencyRevision: 1,
+      now: NOW,
+    } as never)
+
+    // The key is derived through the SAME domain function the scheduler uses,
+    // so a change to how a round identifies its MR turns this red rather than
+    // quietly leaving the two sides keyed differently — which would look like a
+    // working lease that never contends.
+    const target = resolveTarget(
+      {
+        provider: 'gitlab',
+        project_id: '41823',
+        mr_iid: MR_IID,
+        commit_sha: headSha,
+      } as never,
+      // The endpoint the round keys its findings to is the enabled gitlab
+      // webhook endpoint — `resolveCodeHostEndpointId` resolves `ep-1` here,
+      // and a lease keyed to anything else would never contend.
+      'ep-1',
+    )
+    expect(target.ok).toBe(true)
+    if (!target.ok) return
+
+    const held = await acquireRoundLease({
+      db,
+      daemonGeneration: 'dev',
+      key: {
+        codeHostEndpointId: target.target.codeHostEndpointId,
+        stableProjectId: target.target.stableProjectId,
+        anchorKind: target.target.anchorKind,
+        anchorId: target.target.anchorId,
+      },
+      roundId: 'monitor-round',
+    })
+    expect(held.ok).toBe(true)
+
+    const dispatcher = createWebhookDispatcher({
+      db,
+      configPath: '/nonexistent/config.json',
+      secretBox: { seal: (v: string) => v, open: (v: string) => v } as never,
+      getDefaultRuntime: async () => null,
+    } as never)
+
+    const deliveryId = ulid()
+    await db.insert(webhookDeliveries).values({
+      id: deliveryId,
+      endpointId: 'ep-1',
+      eventType: 'mr_opened',
+      repoPath: REPO_PATH,
+      status: 'received',
+    })
+
+    await dispatcher.dispatch({
+      deliveryId,
+      endpoint: { id: 'ep-1', provider: 'gitlab' } as never,
+      event: {
+        provider: 'gitlab',
+        eventUuid: 'uuid-busy',
+        eventType: 'mr_opened',
+        repoPath: REPO_PATH,
+        repoHttpUrl: `file://${upstream}`,
+        repoSshUrl: `file://${upstream}`,
+        branch: 'contrib',
+        targetBranch: 'main',
+        mrIid: MR_IID,
+        mrTitle: 'Add a line',
+        commitSha: headSha,
+        projectId: '41823',
+        author: { username: 'a-human' },
+      } as never,
+    } as never)
+
+    // The launch still happens — the lease governs the ROUND, not the trigger.
+    // A delivery that never launched would pass the next assertion for the
+    // wrong reason, so this one is load-bearing.
+    const fires = await db.select().from(webhookTriggerFires)
+    expect(fires[0]?.outcome).toBe('launched')
+    const taskId = fires[0]!.taskId
+    expect(taskId).not.toBeNull()
+
+    const settled = await waitForTerminal(db, taskId!)
+    expect(settled).toBe('failed')
+
+    // Named, not merely failed: `failed` is also what a broken round produces,
+    // so without the code this would pass against a round that crashed for an
+    // entirely unrelated reason.
+    const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId!))
+    expect(runs.map((r) => r.failureCode)).toContain('code-round-mr-busy')
   })
 })
 

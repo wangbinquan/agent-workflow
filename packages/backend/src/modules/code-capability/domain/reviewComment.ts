@@ -89,6 +89,14 @@ export interface OverviewInput {
   /** True when the diff did not fit the review prompt. */
   diffClipped: boolean
   headSha: string
+  /**
+   * Findings raised in an earlier round that are STILL present.
+   *
+   * They are not reposted (that is the point of the ledger), so without this
+   * the overview of a later round would say "no findings this round" while
+   * three unresolved threads sit above it — the summary contradicting the MR.
+   */
+  stillOpen?: number
 }
 
 /**
@@ -102,12 +110,26 @@ export interface OverviewInput {
 export function renderOverviewPrelude(input: OverviewInput): string {
   const lines: string[] = []
   const total = input.posted + input.carried
+  const stillOpen = input.stillOpen ?? 0
+  const sha = input.headSha.slice(0, 8)
 
-  lines.push(
-    total === 0
-      ? `Reviewed \`${input.headSha.slice(0, 8)}\` — no findings this round.`
-      : `Reviewed \`${input.headSha.slice(0, 8)}\` — ${total} finding${total === 1 ? '' : 's'}.`,
-  )
+  // "No findings" and "no NEW findings" are different statements, and only one
+  // of them is true when earlier rounds left open threads.
+  if (total === 0) {
+    lines.push(
+      stillOpen === 0
+        ? `Reviewed \`${sha}\` — no findings this round.`
+        : `Reviewed \`${sha}\` — no new findings; ${stillOpen} from earlier round${stillOpen === 1 ? '' : 's'} ${stillOpen === 1 ? 'is' : 'are'} still open above.`,
+    )
+  } else {
+    // "new" only earns its place once there is history to be new against; on a
+    // first round it just reads as noise.
+    lines.push(
+      stillOpen === 0
+        ? `Reviewed \`${sha}\` — ${total} finding${total === 1 ? '' : 's'}.`
+        : `Reviewed \`${sha}\` — ${total} new finding${total === 1 ? '' : 's'}, and ${stillOpen} still open from earlier rounds.`,
+    )
+  }
 
   const caveats: string[] = []
   if (input.truncated > 0) {

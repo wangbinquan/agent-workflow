@@ -27,6 +27,7 @@ import type {
   FindingLifecycle,
   LedgerFinding,
 } from '@/modules/code-capability/domain/findingReconcile'
+import type { FindingLedgerPort } from '@/modules/code-capability/ports/findingLedgerPort'
 
 /** The anchor a ledger row belongs to — the MR, never the work item. */
 export interface LedgerAnchor {
@@ -238,4 +239,55 @@ export async function highestGeneration(
       ),
     )
   return rows.reduce((max, row) => (row.generation > max ? row.generation : max), 0)
+}
+
+/**
+ * Bind the ledger to one round.
+ *
+ * The round id and capability are fixed here rather than passed per call: they
+ * are the same for every write a round makes, and a stage that could choose
+ * them could attribute this round's findings to another one — which is exactly
+ * the history the ledger exists to keep straight.
+ */
+export function createSqliteFindingLedger(
+  db: DbClient,
+  bind: { capability: string; roundId: string; now?: () => number },
+): FindingLedgerPort {
+  const clock = bind.now ?? (() => Date.now())
+  return {
+    read: (anchor) => readLedgerForAnchor(db, anchor, bind.capability),
+    recordPublished: (args) =>
+      recordPublishedFinding({
+        db,
+        anchor: args.anchor,
+        capability: bind.capability,
+        fingerprint: args.fingerprint,
+        generation: args.generation,
+        roundId: bind.roundId,
+        now: clock(),
+        ...(args.externalId !== null ? { externalId: args.externalId } : {}),
+        ...(args.severity !== undefined ? { severity: args.severity } : {}),
+        ...(args.title !== undefined ? { title: args.title } : {}),
+        ...(args.filePath !== undefined ? { filePath: args.filePath } : {}),
+        ...(args.anchorLine !== undefined ? { anchorLine: args.anchorLine } : {}),
+      }),
+    refreshSeen: (anchor, fingerprint, anchorLine) =>
+      refreshSeenFinding({
+        db,
+        anchor,
+        capability: bind.capability,
+        fingerprint,
+        anchorLine,
+        now: clock(),
+      }),
+    markDisappeared: (anchor, fingerprint) =>
+      markFindingDisappeared({
+        db,
+        anchor,
+        capability: bind.capability,
+        fingerprint,
+        roundId: bind.roundId,
+        now: clock(),
+      }),
+  }
 }

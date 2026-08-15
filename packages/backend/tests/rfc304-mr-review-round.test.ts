@@ -209,7 +209,10 @@ describe('RFC-304 — mr-review through the real runner', () => {
       'review',
       'gate',
       'resolve-positions',
+      // PR-4b: the two stages that make a second round differ from the first.
+      'reconcile',
       'publish',
+      'settle-stale',
       'ledger',
     ])
     expect(rows.every((r) => r.status === 'done')).toBe(true)

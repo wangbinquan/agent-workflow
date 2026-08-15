@@ -79,6 +79,9 @@ const placed = (line: number, label: string) => ({
   body: `something is wrong on line ${line}`,
   anchor: added(line),
   label,
+  // Distinct per finding: the publish result is keyed by fingerprint, so a
+  // shared constant would make two findings look like one to the ledger.
+  fingerprint: `fp-${label}-${line}`,
 })
 
 describe('RFC-304 — publishing on GitLab', () => {
@@ -184,7 +187,10 @@ describe('RFC-304 — publishing on GitLab', () => {
     const result = await publishReview({
       codeHost: h,
       target: targetOf(),
-      placed: [{ body: 'x', anchor: unbuildable, label: 'broken' }, placed(11, 'a')],
+      placed: [
+        { body: 'x', anchor: unbuildable, label: 'broken', fingerprint: 'fp-broken' },
+        placed(11, 'a'),
+      ],
       unplaced: [],
       diffRefs: REFS,
       overviewPrelude: '',
@@ -276,7 +282,14 @@ describe('RFC-304 — the overview is the safety net', () => {
       codeHost: h,
       target: targetOf(),
       placed: [placed(11, 'a')],
-      unplaced: [{ body: 'about an untouched file', label: 'z', reason: 'file-not-in-diff' }],
+      unplaced: [
+        {
+          body: 'about an untouched file',
+          label: 'z',
+          reason: 'file-not-in-diff',
+          fingerprint: 'fp-z',
+        },
+      ],
       diffRefs: REFS,
       overviewPrelude: 'Reviewed.',
     })

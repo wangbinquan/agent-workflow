@@ -151,6 +151,8 @@ import { CODE_ROUND_SUMMARY_PORT } from '@/services/codeRoundContract'
 import { createCodeCapabilityRunner } from '@/modules/code-capability/composition/codeCapabilityRunner'
 import { buildMrReviewWiring } from '@/modules/code-capability/composition/mrReviewEnvironment'
 import { settleDanglingAttempts } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
+import { withRoundLease } from '@/services/codeRoundLease'
+import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import { createReviewAgentCaller, resolveReviewerAgent } from '@/services/codeReviewAgentCaller'
 import { REVIEW_AGENT_SLOT, REVIEW_PORT } from '@/modules/code-capability/application/reviewStage'
 import type { CodeCapabilityRunner } from '@/modules/code-capability/public/types'
@@ -302,6 +304,13 @@ export interface RunTaskOptions {
   taskId: string
   db: DbClient
   appHome: string
+  /**
+   * RFC-304: fences MR leases across a restart. A lease minted by a previous
+   * daemon is void, so a machine that died holding leases does not lock every
+   * MR it touched until each one expires. Defaults to `'dev'` when unset, which
+   * is correct for tests and single-process runs.
+   */
+  daemonGeneration?: string
   /** TEST-ONLY runtime-neutral command-head override (mock binaries; its
    *  presence also keeps real credential bridges off — RFC-282 C1). */
   binaryOverride?: readonly string[]
@@ -422,6 +431,10 @@ export interface RunTaskOptions {
  * 派生型给出同等单源与更强的双向锁，类型面零搬迁。
  */
 export const INHERITABLE_RUN_CONFIG_KEYS = [
+  // RFC-304: identifies the PROCESS, so a child task must carry the same one.
+  // A child with a different generation would treat its own parent's live MR
+  // leases as void and take an MR out from under a running round.
+  'daemonGeneration',
   'binaryOverride',
   'configPath',
   'appHome',
@@ -4608,21 +4621,79 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
         ? { programStages: wiring.programStages, aiStages: wiring.aiStages }
         : {}),
     })
+  // RFC-304 §2.3 — the MR lease. Held for the WHOLE round, not just publishing:
+  // without it, `mr-monitor` can be fixing CI and pushing while this review is
+  // still working from the old sha, and the author gets remarks on code the
+  // machine already changed. Keyed by the MR, so two capabilities on one MR
+  // serialise even though they are separate work items.
+  const leaseTarget =
+    state.triggerContext !== null
+      ? resolveTarget(state.triggerContext.trigger.webhook, wiring?.codeHostEndpointId ?? '')
+      : null
+  const leaseKey =
+    leaseTarget !== null && leaseTarget.ok
+      ? {
+          codeHostEndpointId: leaseTarget.target.codeHostEndpointId,
+          stableProjectId: leaseTarget.target.stableProjectId,
+          anchorKind: leaseTarget.target.anchorKind,
+          anchorId: leaseTarget.target.anchorId,
+        }
+      : null
+
   const roundSeqRaw = (node as unknown as { roundSeq?: unknown }).roundSeq
-  const result = await runner.runRound({
-    roundId: task.codeRoundId ?? taskId,
-    capability,
-    roundSeq: typeof roundSeqRaw === 'number' ? roundSeqRaw : 1,
-    worktreePath: state.scopeRoot,
-    repos: state.repos.map((r) => ({
-      name: r.mountPath === '' ? 'main' : r.mountPath,
-      path: r.worktreePath,
-    })),
-    envelopeNonce,
-    // Resume-from is a work-item decision (design §2.2). PR-1c threads it in
-    // with the work item; a round started directly runs its whole sequence.
-    resumeFromStage: null,
-  })
+  const runRound = () =>
+    runner.runRound({
+      roundId: task.codeRoundId ?? taskId,
+      capability,
+      roundSeq: typeof roundSeqRaw === 'number' ? roundSeqRaw : 1,
+      worktreePath: state.scopeRoot,
+      repos: state.repos.map((r) => ({
+        name: r.mountPath === '' ? 'main' : r.mountPath,
+        path: r.worktreePath,
+      })),
+      envelopeNonce,
+      // Resume-from is a work-item decision (design §2.2). PR-1c threads it in
+      // with the work item; a round started directly runs its whole sequence.
+      resumeFromStage: null,
+    })
+
+  // No lease key runs unguarded. Two ways to get there, both harmless: a round
+  // started without a trigger context has no MR to contend over, and one whose
+  // endpoint could not be resolved has every stage already refusing, so it
+  // publishes nothing to interleave with. With a key, the round only runs while holding
+  // it, and the lease is released on EVERY exit path: a leaked lease is worse
+  // than a failed round, because it silently blocks every capability on that MR
+  // until it expires and nothing on the MR says why.
+  const leased =
+    leaseKey === null
+      ? ({ ok: true, value: await runRound() } as const)
+      : await withRoundLease(
+          {
+            db,
+            daemonGeneration: opts.daemonGeneration ?? 'dev',
+            key: leaseKey,
+            roundId: task.codeRoundId ?? taskId,
+          },
+          async () => await runRound(),
+        )
+
+  if (!leased.ok) {
+    // Another capability holds this MR. Not an error — the round simply must
+    // not start, because starting it produces exactly the interleaving the
+    // lease exists to prevent.
+    const summary = `another round (${leased.heldBy}) holds this merge request; this one did not start`
+    await setNodeRunStatus({
+      db,
+      nodeRunId,
+      to: 'failed',
+      allowedFrom: ['running'],
+      reason: 'code-round-mr-busy',
+      extra: { finishedAt: Date.now(), errorMessage: summary, failureCode: 'code-round-mr-busy' },
+    })
+    broadcastNodeStatus(taskId, nodeRunId, node.id, 'failed')
+    return { kind: 'failed', summary, message: 'code-round-mr-busy' }
+  }
+  const result = leased.value
 
   if (result.outcome !== 'done') {
     const failureCode =

@@ -22,9 +22,10 @@
 //   - leaving the stage unregistered: the round dies at stage one with "no
 //     registered implementation", which says nothing about what to configure.
 //
-// With the refusal, a round runs seven of its eight stages for real — target,
-// worktree, diff, gate, positions, publish, ledger are all exercised against
-// the live task — and stops at `review` with a sentence an operator can act on.
+// With the refusal, a round runs every program stage for real — target,
+// worktree, diff, gate, positions, reconcile, publish, settle-stale, ledger are
+// all exercised against the live task — and stops at `review`, the one AI
+// stage, with a sentence an operator can act on.
 
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
@@ -42,6 +43,7 @@ import {
 } from '@/modules/code-capability/composition/mrReviewStages'
 import { createCodeHostAdapter } from '@/modules/code-capability/infrastructure/codeHostAdapter'
 import { createGitAdapter } from '@/modules/code-capability/infrastructure/gitAdapter'
+import { createSqliteFindingLedger } from '@/modules/code-capability/infrastructure/sqliteFindingLedger'
 import { createSqliteAttemptRecorder } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
 import type { CodeHostConnectionsService, FetchLike } from '@/services/codeHost/connections'
 import type { WebhookTriggerFields } from '@agent-workflow/shared'
@@ -133,6 +135,15 @@ function refuseAll(
 export interface MrReviewWiring {
   programStages: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
   aiStages: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
+  /**
+   * The endpoint this round is keyed to, when it could be resolved.
+   *
+   * Handed back rather than re-derived by the caller: it is a component of both
+   * the work-item identity and the MR lease key, and resolving it twice invites
+   * the two from drifting apart — which would key a round's lease to a
+   * different MR than its ledger.
+   */
+  codeHostEndpointId: string | null
 }
 
 /**
@@ -148,6 +159,7 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
   if (provider !== 'gitlab' && provider !== 'github') {
     const message = `the trigger context names provider '${String(provider)}', which this platform does not drive`
     return {
+      codeHostEndpointId: null,
       programStages: refuseAll(
         [
           'resolve-target',
@@ -155,7 +167,9 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
           'fetch-diff',
           'gate',
           'resolve-positions',
+          'reconcile',
           'publish',
+          'settle-stale',
           'ledger',
         ],
         message,
@@ -169,6 +183,7 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
     const resolved = await resolveCodeHostEndpointId(input.db, provider)
     if (!resolved.ok) {
       return {
+        codeHostEndpointId: null,
         programStages: refuseAll(
           [
             'resolve-target',
@@ -176,7 +191,9 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
             'fetch-diff',
             'gate',
             'resolve-positions',
+            'reconcile',
             'publish',
+            'settle-stale',
             'ledger',
           ],
           resolved.message,
@@ -196,6 +213,17 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
             roundId: input.roundId,
             stageName: 'review',
             shardKey: '',
+          }),
+        }
+      : {}),
+    // Cross-round history. Bound to THIS round and capability so a stage cannot
+    // write into another round's findings; without it every round republishes
+    // its whole review (see `MrReviewEnvironment.ledger`).
+    ...(input.roundId !== undefined
+      ? {
+          ledger: createSqliteFindingLedger(input.db, {
+            capability: 'mr-review',
+            roundId: input.roundId,
           }),
         }
       : {}),
@@ -225,6 +253,7 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
   }
 
   return {
+    codeHostEndpointId: endpointId,
     programStages: mrReviewProgramStages(env),
     aiStages:
       input.makeCaller === undefined

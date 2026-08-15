@@ -283,12 +283,28 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T25  | `validate-findings`：**只做结构与语义闭集校验**（schema、必填、severity 在闭集）。**行号是否在 diff 内不在这里判**——那属于锚定，见 T25b                                                                                                                   | T6,T23       |
 | T25b | `resolve-positions` 的锚定判定：行不在 hunk / 文件不在改动集 ⇒ **零 AI 重试**、标 `degraded`、阶段成功（锁 AC-3）；锚定基准是 `fetch-diff` 的产物而非当前工作树（锁 AC-4）                                                                                | T20,T23      | ✅ 2026-08-15 |
 | T26  | `gate`：确定性排序 → 阈值过滤 → 上限截断 + 未展开计数                                                                                                                                                                                                     | T25          | ✅ 2026-08-15 |
-| T27  | `code_findings` 台账：唯一键 `(codeHostEndpointId, stableProjectId, anchorKind, anchorId, fingerprint, generation)`；`fingerprint` 含 `symbolOrHunkDigest`；**`active/disappeared/reappeared` 生命周期**；`createdAt/lastSeenAt/closedAt` 与仓库+时间索引 | T2           |
-| T27b | `reconcile` 三集合对账：台账侧**只取 active 行**；重现的问题以**新 generation** 发布                                                                                                                                                                      | T27          |
-| T28  | `settle-stale`：**发布成功后**执行，且**只在状态边沿**动作一次（`active→disappeared`）——否则长命 MR 上 GitHub 会重复追加 78 条同义回复；逐项落幂等状态                                                                                                    | T22,T27b,T29 |
+| T27  | `code_findings` 台账：唯一键 `(codeHostEndpointId, stableProjectId, anchorKind, anchorId, fingerprint, generation)`；`fingerprint` 含 `symbolOrHunkDigest`；**`active/disappeared/reappeared` 生命周期**；`createdAt/lastSeenAt/closedAt` 与仓库+时间索引 | T2           | ✅ 2026-08-15 |
+| T27b | `reconcile` 三集合对账：台账侧**只取 active 行**；重现的问题以**新 generation** 发布                                                                                                                                                                      | T27          | ✅ 2026-08-15 |
+| T28  | `settle-stale`：**发布成功后**执行，且**只在状态边沿**动作一次（`active→disappeared`）——否则长命 MR 上 GitHub 会重复追加 78 条同义回复；逐项落幂等状态                                                                                                    | T22,T27b,T29 | ✅ 2026-08-15 |
 | T29  | `publish`：草稿攒齐一次性发布 + 锚不上的并入总览评论                                                                                                                                                                                                      | T21,T26      |
 | T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          |
 | T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  |
+
+> **T27/T27b/T28 落地记录（2026-08-15）**：阶段契约升到 v3，`mr-review` 序列在
+> `resolve-positions` 与 `publish` 之间插入 `reconcile`、在 `publish` 之后插入
+> `settle-stale`，与 `design.md §6.1` 的规范序列一致。行为锁在
+> `packages/backend/tests/rfc304-multi-round-ledger.test.ts`——**跑三轮**而不是两轮，
+> 因为「边沿只触发一次」在两轮里无论实现对错都是绿的。
+>
+> **一处如实记录的缺口（GitHub）**：`settle-stale` 在 GitHub 上退化为 `skip`，不追加
+> 「已不再出现」回复。原因不是没做：GitHub 走 `review.submit` 一次性提交整批评论，
+> 其响应体只回 review 本身、不回每条评论的 id，而动作注册表里**没有**可回读评论列表的
+> list 动作（`packages/shared/src/codeHost/actions.ts` 的 `CODE_HOST_ACTIONS` 无
+> `comment.list`/`review.list-comments`）。于是 GitHub 侧 finding 的 `externalId` 落
+> `null`，`planSettleStale` 依既有分支返回 `skip`。**GitLab 侧完整可用**（`comment.create-inline`
+> 的响应体直接带 discussion id）。补齐路径已明确：给注册表加一个回读动作，用
+> `publishReconcileRemote.ts` 既有的指纹标记扫描把评论 id 认回来——那套机制本来就是为
+> §7.2 崩溃恢复写的，正好同形。留作 PR-4b 后续或独立小 RFC。
 
 ### 前端最小面（PR-5）
 

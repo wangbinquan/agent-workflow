@@ -32,6 +32,14 @@ export interface PlacedFinding {
   anchor: AnchoredLine
   /** For the overview's "could not place" list. */
   label: string
+  /**
+   * The finding's identity across rounds.
+   *
+   * Carried here rather than recomputed after publishing because the ledger row
+   * has to name the same finding the comment does — and the fingerprint depends
+   * on the hunk text, which this stage no longer has.
+   */
+  fingerprint: string
 }
 
 export interface UnplacedFinding {
@@ -39,6 +47,7 @@ export interface UnplacedFinding {
   label: string
   /** Why it could not be attached to a line. */
   reason: string
+  fingerprint: string
 }
 
 export interface PublishReviewInput {
@@ -53,13 +62,51 @@ export interface PublishReviewInput {
   overviewPrelude: string
 }
 
+/**
+ * What one published finding became on the host.
+ *
+ * `externalId` is the thread the finding owns, and it is what `settle-stale`
+ * later resolves or replies to. It is null on GitHub: `review.submit` posts the
+ * whole batch in one request and its response carries the review, not the
+ * individual comment ids, and the action registry has no list action to read
+ * them back with. A GitHub finding therefore settles as `skip` rather than
+ * getting a "no longer present" reply — a real gap, recorded here instead of
+ * looking like a lifecycle that silently does nothing.
+ */
+export interface PublishedFinding {
+  fingerprint: string
+  externalId: string | null
+}
+
 export interface PublishReviewResult {
   posted: number
   /** Everything that ended up in the overview instead of on a line. */
   carriedInOverview: UnplacedFinding[]
   overviewPosted: boolean
+  /** Per finding, in publish order — what the ledger records. */
+  publishedFindings: PublishedFinding[]
   /** Set when publishing stopped early; the round failed, but visibly. */
   failure: { code: string; message: string } | null
+}
+
+/**
+ * The host's id for a thread just created.
+ *
+ * Returns null rather than throwing on anything unexpected: a response we
+ * cannot read means the comment still landed, and failing the round over an
+ * unrecognised body would retract a review the author can already see.
+ */
+function threadIdFrom(body: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(body)
+    if (typeof parsed !== 'object' || parsed === null) return null
+    const id = (parsed as { id?: unknown }).id
+    if (typeof id === 'string') return id
+    if (typeof id === 'number') return String(id)
+    return null
+  } catch {
+    return null
+  }
 }
 
 function renderOverview(prelude: string, carried: readonly UnplacedFinding[]): string {
@@ -84,6 +131,7 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
       posted: 0,
       carriedInOverview: carried,
       overviewPosted: false,
+      publishedFindings: [],
       failure: { code: 'unaddressable', message: project.message },
     }
   }
@@ -96,13 +144,20 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
     // One request. `commit_id` sits on the review rather than on each comment,
     // which is what makes the whole thing atomic.
     const comments: Array<Record<string, unknown>> = []
+    const submitted: string[] = []
     for (const item of input.placed) {
       const built = buildGithubPosition(item.anchor)
       if (!built.ok) {
-        carried.push({ body: item.body, label: item.label, reason: built.reason })
+        carried.push({
+          body: item.body,
+          label: item.label,
+          reason: built.reason,
+          fingerprint: item.fingerprint,
+        })
         continue
       }
       comments.push({ ...built.position, body: item.body })
+      submitted.push(item.fingerprint)
     }
 
     const result = await codeHost.call({
@@ -120,6 +175,7 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
         posted: 0,
         carriedInOverview: carried,
         overviewPosted: false,
+        publishedFindings: [],
         failure: { code: result.code, message: result.message },
       }
     }
@@ -127,6 +183,10 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
       posted: comments.length,
       carriedInOverview: carried,
       overviewPosted: true,
+      // Recorded WITHOUT thread ids — see `PublishedFinding`. The ledger still
+      // gets its rows, so dedup across rounds works on GitHub; only the
+      // settle-stale reply is unavailable there.
+      publishedFindings: submitted.map((fingerprint) => ({ fingerprint, externalId: null })),
       failure: null,
     }
   }
@@ -140,6 +200,7 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
       posted: 0,
       carriedInOverview: carried,
       overviewPosted: false,
+      publishedFindings: [],
       failure: {
         code: 'diff-refs-missing',
         message: 'GitLab inline comments need the MR diff_refs (base/start/head sha)',
@@ -150,11 +211,17 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
   // Indexed rather than `for…of` + `indexOf`: two findings can legitimately be
   // the same object reference, and `indexOf` would then resolve to the FIRST
   // one — re-listing already-posted comments as unposted in the overview.
+  const publishedFindings: PublishedFinding[] = []
   for (let index = 0; index < input.placed.length; index++) {
     const item = input.placed[index]!
     const built = buildGitlabPosition(item.anchor, input.diffRefs)
     if (!built.ok) {
-      carried.push({ body: item.body, label: item.label, reason: built.reason })
+      carried.push({
+        body: item.body,
+        label: item.label,
+        reason: built.reason,
+        fingerprint: item.fingerprint,
+      })
       continue
     }
     const result = await codeHost.call({
@@ -163,6 +230,14 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
     })
     if (result.ok) {
       posted += 1
+      // The discussion id, straight from the response that created it. This is
+      // the thread `settle-stale` resolves when the finding stops appearing, so
+      // losing it here would leave a resolved-looking MR carrying threads for
+      // problems that are long gone.
+      publishedFindings.push({
+        fingerprint: item.fingerprint,
+        externalId: threadIdFrom(result.body),
+      })
       continue
     }
     // Stop, but do NOT drop what is left: everything unposted moves into the
@@ -173,6 +248,7 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
         body: remaining.body,
         label: remaining.label,
         reason: `publishing stopped after a host error (${result.code})`,
+        fingerprint: remaining.fingerprint,
       })
     }
     break
@@ -186,6 +262,7 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
   return {
     posted,
     carriedInOverview: carried,
+    publishedFindings,
     overviewPosted: overview.ok,
     failure: failure ?? (overview.ok ? null : { code: overview.code, message: overview.message }),
   }
