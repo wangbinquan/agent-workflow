@@ -310,6 +310,20 @@ code {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* Room for the LAST item's focus ring, same mechanism as
+   * `.resource-action-list`: the gutter lives on the scrolled CONTENT so a
+   * ring painted at the end of the list stays inside its scroll region.
+   *
+   * RFC-304 surfaced it — adding `/code` made the nav one row taller, and on a
+   * viewport where the sidebar then overflows, the final item sits flush
+   * against the scrollport (CI reported 4px of ink against 1px of room, on
+   * every route). Not `padding-bottom` on `.sidebar` itself: a scroll
+   * container's bottom padding is not reliably part of the scrollable overflow
+   * area, so it vanishes exactly when scrolled to the end.
+   *
+   * Height-sensitive by nature — it reproduces on CI's Linux font metrics and
+   * not on macOS, where the same nav happens to fit. */
+  padding-bottom: var(--focus-ring-gutter);
 }
 
 .sidebar__link {

@@ -487,7 +487,7 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T31b | **后端查询合同**（此前 PR-5 只有前端任务，没有支撑它的 API）：`CodeMatrixQuery` / `EnableCommand`（矩阵行 + readiness + 缺失项 + 修复动作）与 `CodeWorkItemProjectionQuery`（工作项 → 轮次 → 阶段投影，cursor 分页），含 HTTP 适配 | T16c,T5 | ✅ 2026-08-16 |
 | T32  | `/code` 路由与导航；仓库 × 能力矩阵配置页（复用既有表单原语）                                                                                                                                                                      | T31b    | ✅ 2026-08-16 |
 | T33  | 状态机流转图第一、二层：工作项状态 + 展开当前轮阶段                                                                                                                                                                                | T31b    | ✅ 2026-08-16 |
-| T34  | 任务列表按新任务类型筛选                                                                                                                                                                                                           | T9      |
+| T34  | 任务列表按新任务类型筛选                                                                                                                                                                                                           | T9      | ✅ 2026-08-16 |
 
 ### MR 监视器（PR-6）
 

@@ -3653,6 +3653,7 @@ export const enUS: Resources = {
       workflow: 'Workflow',
       workgroup: 'Workgroup',
       agent: 'Agent',
+      'code-round': 'Code review',
     },
     // RFC-243 PR-5 — child-task nesting / call-node deep links.
     scopeFilter: {

@@ -8,7 +8,7 @@
 import type { TaskSummary } from '@agent-workflow/shared'
 import { taskExecutionKind } from '@agent-workflow/shared'
 
-export type TaskSubjectFilter = 'all' | 'workflow' | 'workgroup' | 'agent'
+export type TaskSubjectFilter = 'all' | 'workflow' | 'workgroup' | 'agent' | 'code-round'
 
 export interface TaskListFilter {
   subject: TaskSubjectFilter

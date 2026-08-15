@@ -3067,6 +3067,7 @@ export interface Resources {
       workflow: string
       workgroup: string
       agent: string
+      'code-round': string
     }
     /** RFC-243 PR-5: child-task nesting on /tasks + detail call-node links.
      *  scopeFilter toggles the flat `include_children=true` listing; the
@@ -9196,6 +9197,7 @@ export const zhCN: Resources = {
       workflow: '工作流',
       workgroup: '工作组',
       agent: '单代理',
+      'code-round': '代码检视',
     },
     // RFC-243 PR-5 — 子任务嵌套 / 调用节点直链。
     scopeFilter: {

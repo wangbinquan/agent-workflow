@@ -31,7 +31,12 @@ export const TASK_LIST_ATTENTION_STATUSES = [
   'awaiting_human',
 ] as const satisfies readonly TaskStatus[]
 
-export const TASK_LIST_SUBJECTS = ['all', 'workflow', 'workgroup', 'agent'] as const
+// RFC-304 T34 — `code-round` joins the closed set. `taskExecutionKind` has
+// returned it since PR-0, so without this entry a code round is reachable only
+// under "all": it belongs to no other bucket, and filtering by any subject
+// hides it entirely. The literal matches that oracle exactly — a second
+// spelling here would filter out every row it was meant to select.
+export const TASK_LIST_SUBJECTS = ['all', 'workflow', 'workgroup', 'agent', 'code-round'] as const
 export const TaskListSubjectSchema = z.enum(TASK_LIST_SUBJECTS)
 export type TaskListSubject = z.infer<typeof TaskListSubjectSchema>
 
