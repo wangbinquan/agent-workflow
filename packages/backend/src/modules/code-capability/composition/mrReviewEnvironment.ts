@@ -229,6 +229,19 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
             capability: 'mr-review',
             roundId: input.roundId,
           }),
+          // §7.2. The anchor ref is keyed the same way the ledger is — endpoint
+          // plus project plus MR — because recovery has to find a batch written
+          // by a round that is gone, and only the MR's identity survives that.
+          publishIntents: {
+            db: input.db,
+            roundId: input.roundId,
+            // 1, not 0: the schema constrains `epoch >= 1` and the work item's
+            // own column defaults to 1, so 1 is what "no supersession has
+            // happened yet" means here. No work item is wired into this path
+            // until PR-6; when one is, its epoch replaces this.
+            epoch: 1,
+            anchorRef: `${endpointId}:${input.webhook.project_id ?? ''}:mr:${input.webhook.mr_iid ?? ''}`,
+          },
         }
       : {}),
     codeHost: createCodeHostAdapter({

@@ -4964,6 +4964,8 @@ export interface Resources {
     pipeline_cancel: string
     job_list: string
     job_log: string
+    comment_list: string
+    mr_get: string
     mr_diff: string
     mr_list: string
     file_read: string
@@ -4986,6 +4988,8 @@ export interface Resources {
     pipeline_cancel: string
     job_list: string
     job_log: string
+    comment_list: string
+    mr_get: string
     mr_diff: string
     mr_list: string
     file_read: string
@@ -11156,6 +11160,8 @@ export const zhCN: Resources = {
     pipeline_cancel: '取消流水线 / 工作流',
     job_list: '列出流水线 / 工作流作业',
     job_log: '读取作业日志',
+    comment_list: '列出 MR/PR 上已有的评论',
+    mr_get: '读取 MR/PR 元信息',
     mr_diff: '读取变更文件与差异',
     mr_list: '列出 MR/PR',
     file_read: '读取仓库文件',
@@ -11182,6 +11188,10 @@ export const zhCN: Resources = {
     pipeline_cancel: 'GitLab 取消流水线内所有作业；GitHub 取消一次工作流运行。',
     job_list: '列出指定 GitLab 流水线或 GitHub Actions 工作流运行中的作业。',
     job_log: '读取单个作业的纯文本运行日志；GitHub 会跟随短时有效的下载链接。',
+    comment_list:
+      '回读 MR/PR 上已有的评审评论。用于把上一轮已经发出去的评论认回来——发布与记账之间崩溃时，不至于把整批重发。',
+    mr_get:
+      '读取 MR/PR 自身字段。GitLab 的行级评论需要它返回的 diff_refs（base/start/head sha），diff 接口并不带这些。',
     mr_diff: '读取 MR/PR 的变更文件及逐文件差异；结果不是单个原始补丁文件。',
     mr_list: '列出项目中的 MR/PR，可按状态和每页数量过滤。',
     file_read: '读取指定分支、标签或提交上的仓库文件原始内容。',

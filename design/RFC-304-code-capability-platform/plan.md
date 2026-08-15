@@ -290,6 +290,31 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          |
 | T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  |
 
+> **§7.2 发布崩溃恢复接线（2026-08-16）**：`sqlitePublishIntentStore` /
+> `publishIntent` / `publishReconcileRemote` PR-1c 就写完了，**零调用方**——于是这个洞
+> 一直是活的：`publish` 发完评论、`ledger` 记账，两者之间崩溃/取消/被抢占，评论已经在
+> MR 上而台账一无所知；下一轮对着空台账判定「全是新的」，把整篇检视**再发一遍**。台账
+> 存在的意义被崩溃反噬。
+>
+> - `comment.list` 动作入注册表（两家各自路径；GitHub 特别注明**不能**用
+>   `/issues/{n}/comments`——那是 MR 级评论、不含行级，恢复时会把整批行级评论判成
+>   「没发出去」而重发）。
+> - `application/recoverPublishIntents.ts`：读远端 → `observeBatch` 按指纹标记认领 →
+>   `planPublishRecovery` 决策。**读失败时保持 pending**：pending 下一轮还能救，误判
+>   settled 就永久救不回来了。三种结局都覆盖（全中 adopt / 全无 resend / 部分 complete
+>   ——最后一种是天真实现必错的：重发整批指望 host 去重，它不会）。
+> - `publish` 阶段：意图**在外发调用之前**写盘（写在之后只会记下那些不需要恢复的批次），
+>   成功后 settle。`reconcile` 阶段先跑恢复再读台账——因为恢复会写台账行，而台账里有的
+>   指纹会被判成 `keep` 而不是 `publish`，这正是「不重发」的机制。
+> - **schema 抓到一个我推错的默认值**：`epoch` 有 `CHECK (epoch >= 1)`，我按「还没接
+>   工作项、0 最诚实」写了 0，直接 CHECK 失败。正解是 **1**——与工作项自身列默认值一致，
+>   语义是「还没发生过任何 supersede」。
+>
+> 锁在 `rfc304-publish-crash-recovery.test.ts`：真的把崩溃现场摆出来（意图行已写、评论
+> 已在假 host 上、台账为空）再跑一轮正常检视。已变异校验：关掉恢复调用，「不重发」等三条
+> 立刻转红。指纹**按 `resolve-positions` 的同一路径现算**而非硬编码常量，否则测试只是在
+> 比对两个字符串碰巧相等。
+
 > **T7 接线补记（2026-08-16）**：`hookRunner.ts` 与其单测 PR-1a 就写完了，但 `src` 里
 > **没有任何调用方**——本模块每个 stage 文件都以「引擎在每个阶段边界触发钩子、合并阶段会
 > 静默删掉团队的注入与阻断点」论证自己为何要独立成阶段，而实际上十三个边界零钩子，
@@ -338,15 +363,16 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 > `packages/backend/tests/rfc304-multi-round-ledger.test.ts`——**跑三轮**而不是两轮，
 > 因为「边沿只触发一次」在两轮里无论实现对错都是绿的。
 >
-> **一处如实记录的缺口（GitHub）**：`settle-stale` 在 GitHub 上退化为 `skip`，不追加
-> 「已不再出现」回复。原因不是没做：GitHub 走 `review.submit` 一次性提交整批评论，
-> 其响应体只回 review 本身、不回每条评论的 id，而动作注册表里**没有**可回读评论列表的
-> list 动作（`packages/shared/src/codeHost/actions.ts` 的 `CODE_HOST_ACTIONS` 无
-> `comment.list`/`review.list-comments`）。于是 GitHub 侧 finding 的 `externalId` 落
-> `null`，`planSettleStale` 依既有分支返回 `skip`。**GitLab 侧完整可用**（`comment.create-inline`
-> 的响应体直接带 discussion id）。补齐路径已明确：给注册表加一个回读动作，用
-> `publishReconcileRemote.ts` 既有的指纹标记扫描把评论 id 认回来——那套机制本来就是为
-> §7.2 崩溃恢复写的，正好同形。留作 PR-4b 后续或独立小 RFC。
+> **~~一处如实记录的缺口（GitHub）~~ 已于 2026-08-16 补齐**：原记录为 `settle-stale` 在
+> GitHub 上退化为 `skip`，因为 `review.submit` 一次性提交整批、响应只回 review 不回每条
+> 评论 id，而动作注册表当时**没有**可回读评论列表的动作。补齐方式正如当时写下的路径：
+> 给注册表加 `comment.list`（GitLab `/discussions`、GitHub `/pulls/{n}/comments`），
+> 用 `publishReconcileRemote.ts` 既有的指纹标记扫描把评论 id 认回来。同一个动作**同时**
+> 解掉了 §7.2 发布崩溃恢复（见下条），两处缺口一次补上。
+>
+> GitHub 侧现在在 `review.submit` 成功后多发一次**读**请求回认 id。这不削弱「一次写入、
+> 无半发状态」的原子性——读不会造出半发状态——测试也相应从「只有一次调用」改成
+> 「只有一次**写**调用」，并单独锁住回读确实发生。
 
 ### 前端最小面（PR-5）
 

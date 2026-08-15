@@ -23,6 +23,10 @@ import {
   type AnchoredLine,
   type GitlabDiffRefs,
 } from '@/modules/code-capability/domain/reviewPosition'
+import {
+  normalizeRemoteComments,
+  observeBatch,
+} from '@/modules/code-capability/domain/publishReconcileRemote'
 import { apiProjectAddress, type RoundTarget } from '@/modules/code-capability/domain/resolveTarget'
 import type { CodeHostPort } from '@/modules/code-capability/ports/codeHostPort'
 
@@ -109,6 +113,28 @@ function threadIdFrom(body: string): string | null {
   }
 }
 
+/**
+ * Map this batch's fingerprints to the review comments GitHub just created.
+ *
+ * Only fingerprints from THIS batch are adopted: a long-lived PR carries
+ * comments from earlier rounds, and claiming one of those as a thread this
+ * round created would attach the wrong id to a finding — later resolving or
+ * replying to a remark somebody else's round made.
+ */
+async function readBackGithubIds(
+  codeHost: CodeHostPort,
+  base: { project: string; mr: string },
+  batch: readonly string[],
+): Promise<Record<string, string>> {
+  if (batch.length === 0) return {}
+  const listed = await codeHost.call({
+    action: 'comment.list',
+    params: { ...base, per_page: '100' },
+  })
+  if (!listed.ok) return {}
+  return observeBatch(batch, normalizeRemoteComments('github', listed.body)).present
+}
+
 function renderOverview(prelude: string, carried: readonly UnplacedFinding[]): string {
   if (carried.length === 0) return prelude
   const lines = [prelude, '', '---', '', 'These findings could not be placed on a line:', '']
@@ -179,14 +205,26 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
         failure: { code: result.code, message: result.message },
       }
     }
+    // GitHub's review response carries the review, not the ids of the comments
+    // inside it, so the ids are read back. That extra call is the only way to
+    // get them: without it every GitHub finding lands in the ledger with a null
+    // thread, and `settle-stale` can never say "this is gone" — the remark just
+    // goes quiet when the problem is fixed.
+    //
+    // The read-back is keyed by the fingerprint marker each body carries, which
+    // is the same mechanism §7.2 recovery uses. A failure here does NOT fail the
+    // round: the comments are already published and visible, and retracting a
+    // review over a bookkeeping read would be far worse than a ledger row with
+    // no thread id.
+    const ids = await readBackGithubIds(codeHost, base, submitted)
     return {
       posted: comments.length,
       carriedInOverview: carried,
       overviewPosted: true,
-      // Recorded WITHOUT thread ids — see `PublishedFinding`. The ledger still
-      // gets its rows, so dedup across rounds works on GitHub; only the
-      // settle-stale reply is unavailable there.
-      publishedFindings: submitted.map((fingerprint) => ({ fingerprint, externalId: null })),
+      publishedFindings: submitted.map((fingerprint) => ({
+        fingerprint,
+        externalId: ids[fingerprint] ?? null,
+      })),
       failure: null,
     }
   }

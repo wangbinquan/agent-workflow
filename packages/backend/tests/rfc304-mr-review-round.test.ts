@@ -253,7 +253,15 @@ describe('RFC-304 — mr-review through the real runner', () => {
       provider: 'github',
     })
     expect(outcome.outcome).toBe('done')
-    expect(host.calls.map((c) => c.action)).toEqual(['mr.get', 'mr.diff', 'review.submit'])
+    // The WRITE sequence — `comment.list` after the submit is PR-4b's read-back
+    // for the per-comment ids GitHub's review response does not return. It is a
+    // read, so it does not reintroduce a half-posted state; what this asserts is
+    // that exactly one write carried the whole review.
+    expect(host.calls.filter((c) => c.action !== 'comment.list').map((c) => c.action)).toEqual([
+      'mr.get',
+      'mr.diff',
+      'review.submit',
+    ])
   })
 })
 

@@ -202,9 +202,15 @@ describe('RFC-304 — publishing on GitLab', () => {
 })
 
 describe('RFC-304 — publishing on GitHub', () => {
-  test('the whole review is one request', async () => {
+  test('the whole review is ONE write, so there is no half-posted state', async () => {
     // GitHub has no partial window: one request carries every comment, so there
-    // is no half-posted state to compensate for.
+    // is nothing to compensate for.
+    //
+    // Asserted as "one WRITE" rather than "one call": PR-4b added a read-back
+    // afterwards to recover the per-comment ids GitHub's review response does
+    // not return. A read cannot create a half-posted state, so it does not
+    // weaken this property — but a second WRITE would, and that is what this
+    // guards.
     const h = host(ok)
     const result = await publishReview({
       codeHost: h,
@@ -213,9 +219,25 @@ describe('RFC-304 — publishing on GitHub', () => {
       unplaced: [],
       overviewPrelude: 'Reviewed.',
     })
-    expect(h.calls).toHaveLength(1)
-    expect(h.calls[0]?.action).toBe('review.submit')
+    const writes = h.calls.filter((c) => c.action !== 'comment.list')
+    expect(writes).toHaveLength(1)
+    expect(writes[0]?.action).toBe('review.submit')
     expect(result.posted).toBe(2)
+  })
+
+  test('the comment ids are read back, so a finding can be settled later', async () => {
+    // Without them every GitHub finding lands in the ledger with a null thread
+    // and `settle-stale` can never say the problem is gone — the remark just
+    // goes quiet.
+    const h = host(ok)
+    await publishReview({
+      codeHost: h,
+      target: targetOf('github'),
+      placed: [placed(11, 'a')],
+      unplaced: [],
+      overviewPrelude: 'Reviewed.',
+    })
+    expect(h.calls.some((c) => c.action === 'comment.list')).toBe(true)
   })
 
   test('the review is pinned to the head sha the round actually read', async () => {

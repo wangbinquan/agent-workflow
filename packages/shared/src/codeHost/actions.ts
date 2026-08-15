@@ -58,6 +58,11 @@ export const CODE_HOST_ACTIONS = [
   'mr.get',
   'mr.diff',
   'mr.list',
+  // RFC-304 §7.2 —— 回读 MR 上已有的评论。发布崩溃恢复要靠它把「已经发出去的」
+  // 认回来（否则下一轮会把整批重发，正是台账存在的意义被崩溃反噬）；GitHub 侧
+  // 还要靠它拿到每条评论的 id——`review.submit` 一次性提交整批，响应只回 review
+  // 本身、不回每条评论的 id。
+  'comment.list',
   'file.read',
   // 逃生舱
   'custom',
@@ -716,6 +721,22 @@ export const CODE_HOST_ACTION_DEFS = {
         ],
       },
       github: { method: 'GET', path: '/repos/{__project__}/pulls/{mr}/files' },
+    },
+  },
+  'comment.list': {
+    group: 'read',
+    fields: [PROJECT, MR_REQUIRED, { name: 'per_page', control: 'text', requiredFor: [] }],
+    bindings: {
+      // GitLab 的 discussion 是线程，`id` 就是 `thread.resolve` 要的那个；一条
+      // discussion 下有多条 note，指纹标记在首条 note 的正文里。
+      gitlab: {
+        method: 'GET',
+        path: '/projects/{__project__}/merge_requests/{mr}/discussions',
+      },
+      // GitHub 的 review comment 是扁平的，`id` 即 `comment.reply-thread` 的
+      // `in_reply_to`。注意这里**不能**用 `/issues/{n}/comments`——那是 MR 级
+      // 普通评论，不含行级评论，恢复时会把整批行级评论判成"没发出去"而重发。
+      github: { method: 'GET', path: '/repos/{__project__}/pulls/{mr}/comments' },
     },
   },
   'mr.list': {

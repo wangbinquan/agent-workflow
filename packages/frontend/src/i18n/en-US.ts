@@ -5779,6 +5779,8 @@ export const enUS: Resources = {
     pipeline_cancel: 'Cancel pipeline / workflow',
     job_list: 'List pipeline / workflow jobs',
     job_log: 'Read job log',
+    comment_list: 'List existing MR/PR comments',
+    mr_get: 'Read MR/PR metadata',
     mr_diff: 'Read changed files and diffs',
     mr_list: 'List MRs/PRs',
     file_read: 'Read repository file',
@@ -5815,6 +5817,10 @@ export const enUS: Resources = {
     job_list: 'List jobs in a GitLab pipeline or a GitHub Actions workflow run.',
     job_log:
       'Read the plain-text log for one job; GitHub follows its short-lived download redirect.',
+    comment_list:
+      'List review comments already on an MR/PR. Used to recognise comments a previous round already published, so a crash between publishing and recording does not repost the whole batch.',
+    mr_get:
+      'Read an MR/PR’s own fields. GitLab inline comments need the diff_refs (base/start/head sha) this returns; the diff endpoint does not carry them.',
     mr_diff:
       'Read changed files and per-file diffs for an MR/PR; the result is not one raw patch file.',
     mr_list: 'List MR/PRs in a project, optionally filtered by state and page size.',

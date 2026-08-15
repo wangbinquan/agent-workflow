@@ -22,6 +22,8 @@
 // works today and breaks the moment someone reorders the sequence — the failure
 // then surfaces as a wrong review rather than as a missing input.
 
+import { ulid } from 'ulid'
+import type { DbClient } from '@/db/client'
 import { fetchDiff } from '@/modules/code-capability/application/fetchDiff'
 import { prepareWorktree } from '@/modules/code-capability/application/prepareWorktree'
 import {
@@ -36,6 +38,11 @@ import {
   type ShardOutcome,
 } from '@/modules/code-capability/application/reviewShards'
 import { runGuardedAiStage } from '@/modules/code-capability/application/determinismGuard'
+import { recoverPublishIntents } from '@/modules/code-capability/application/recoverPublishIntents'
+import {
+  settleIntent,
+  writeIntent,
+} from '@/modules/code-capability/infrastructure/sqlitePublishIntentStore'
 import type {
   StageArtifacts,
   StageResult,
@@ -116,6 +123,15 @@ export interface MrReviewEnvironment {
   nonce: string
   budget: RetryBudget
   gate: GateConfig
+  /**
+   * Durable record of what a publish batch is ABOUT to say, written before the
+   * outbound call (§7.2).
+   *
+   * Optional so stage maps stay constructible without a database. Absent means
+   * a crash between publishing and recording is unrecoverable — the next round
+   * sees an empty ledger and posts the entire review a second time.
+   */
+  publishIntents?: PublishIntentWiring
   /** How the diff is cut into shards; defaults are deliberately conservative. */
   split?: SplitDiffOptions
   /** One attempt recorder per shard, so a shard's retries are attributable. */
@@ -133,6 +149,15 @@ export interface MrReviewEnvironment {
  */
 const STALE_NOTE =
   'This finding no longer appears in the latest revision under review, so it is being closed out. If it is still relevant, reply here and it will be picked up again.'
+
+export interface PublishIntentWiring {
+  db: DbClient
+  roundId: string
+  /** The work item's epoch; a batch from an older epoch is ignorable. */
+  epoch: number
+  /** How this MR is named in the intent rows — stable across rounds. */
+  anchorRef: string
+}
 
 const fail = (error: string): StageResult => ({ status: 'failed', error })
 const done = (produced: StageArtifacts): StageResult => ({ status: 'done', produced })
@@ -451,6 +476,31 @@ export function mrReviewProgramStages(
       const placements = required<PlacementsArtifact>(ctx.artifacts, 'placements')
       const target = required<RoundTarget>(ctx.artifacts, 'target')
 
+      // FIRST: adopt anything a previous round published but never recorded
+      // (§7.2). This has to happen before the ledger is read, because adopting
+      // writes ledger rows — and a fingerprint the ledger knows about becomes
+      // `keep` rather than `publish`, which is exactly what stops the re-post.
+      if (env.publishIntents !== undefined && env.ledger !== undefined) {
+        const recovered = await recoverPublishIntents({
+          db: env.publishIntents.db,
+          codeHost: env.codeHost,
+          target,
+          anchorRef: env.publishIntents.anchorRef,
+        })
+        const anchor = anchorOf(target, env.codeHostEndpointId)
+        for (const [fingerprint, externalId] of Object.entries(recovered.adopted)) {
+          await env.ledger.recordPublished({
+            anchor,
+            fingerprint,
+            // Generation 1: an adopted comment is the first time this finding
+            // was said on this MR. A dead round cannot have republished
+            // anything — it never reached the ledger to learn otherwise.
+            generation: 1,
+            externalId,
+          })
+        }
+      }
+
       // Without a ledger there is no history to reconcile against, so every
       // finding is new. Stated rather than assumed: silently treating "no
       // ledger" as "nothing changed" would publish nothing at all.
@@ -524,6 +574,20 @@ export function mrReviewProgramStages(
         stillOpen: reconciled.keeps.length,
       })
 
+      // Written BEFORE the call, never after: the whole point is to survive a
+      // crash during it. An intent written afterwards records only the batches
+      // that already succeeded — precisely the ones that need no recovery.
+      const batchId = ulid()
+      if (env.publishIntents !== undefined) {
+        await writeIntent(env.publishIntents.db, {
+          batchId,
+          roundId: env.publishIntents.roundId,
+          epoch: env.publishIntents.epoch,
+          fingerprints: [...placed, ...unplaced].map((f) => f.fingerprint),
+          anchorRef: env.publishIntents.anchorRef,
+        })
+      }
+
       const result = await publishReview({
         codeHost: env.codeHost,
         target,
@@ -534,7 +598,22 @@ export function mrReviewProgramStages(
       })
 
       if (result.failure !== null) {
+        // Left pending, deliberately. A partial GitLab batch means some
+        // comments ARE on the MR, and only a read-back can say which — that is
+        // recovery's job next round, not a guess made here.
         return fail(`${result.failure.code}: ${result.failure.message}`)
+      }
+
+      if (env.publishIntents !== undefined) {
+        await settleIntent(
+          env.publishIntents.db,
+          batchId,
+          Object.fromEntries(
+            result.publishedFindings
+              .filter((f) => f.externalId !== null)
+              .map((f) => [f.fingerprint, f.externalId as string]),
+          ),
+        )
       }
       return done({
         published: {

@@ -108,3 +108,62 @@ export function duplicateFingerprints(comments: readonly RemoteComment[]): strin
     .map(([fingerprint]) => fingerprint)
     .sort()
 }
+
+/**
+ * Read a host's comment list into the shape `observeBatch` consumes.
+ *
+ * The two hosts differ in a way that matters. GitLab returns DISCUSSIONS — a
+ * thread with an id and a list of notes — and the id is the one `thread.resolve`
+ * needs, while the fingerprint marker is in the first note's body. GitHub
+ * returns flat review comments whose own id is what a reply targets.
+ *
+ * Reading GitLab's notes as if they were top-level comments would collect note
+ * ids, which no action accepts; reading GitHub's list from `/issues/{n}/comments`
+ * would return MR-level comments and miss every inline one — recovery would then
+ * conclude that a whole batch never landed and repost all of it.
+ *
+ * Anything unparsable yields an empty list rather than throwing: this feeds a
+ * recovery decision, and the caller distinguishes "nothing is there" from "we
+ * could not look" by whether the CALL failed, not by whether the body parsed.
+ */
+export function normalizeRemoteComments(
+  provider: 'gitlab' | 'github',
+  body: string,
+): RemoteComment[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(parsed)) return []
+
+  const out: RemoteComment[] = []
+  for (const entry of parsed) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const row = entry as Record<string, unknown>
+
+    if (provider === 'github') {
+      const id = row.id
+      const text = row.body
+      if ((typeof id === 'string' || typeof id === 'number') && typeof text === 'string') {
+        out.push({ externalId: String(id), body: text })
+      }
+      continue
+    }
+
+    // GitLab: the discussion id is the thread identity; the marker rides in the
+    // first note. Later notes are replies — a human's, or our own settle note —
+    // and adopting one of those as the finding's thread would resolve the wrong
+    // thing later.
+    const id = row.id
+    const notes = row.notes
+    if (typeof id !== 'string' && typeof id !== 'number') continue
+    if (!Array.isArray(notes) || notes.length === 0) continue
+    const first = notes[0] as Record<string, unknown> | undefined
+    const text = first?.body
+    if (typeof text !== 'string') continue
+    out.push({ externalId: String(id), body: text })
+  }
+  return out
+}

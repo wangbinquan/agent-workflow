@@ -114,6 +114,28 @@ export async function readPendingIntents(db: DbClient, roundId?: string): Promis
   return rows.map(rowToIntent)
 }
 
+/**
+ * Pending batches for one MR, regardless of which round wrote them.
+ *
+ * Keyed by anchor rather than round because that is what recovery needs: the
+ * batch worth recovering belongs to the round that DIED, and the round doing
+ * the recovering has a different id. Reading by round id would find only the
+ * current round's own batches — always none at the point recovery runs — and
+ * the pass would look like it worked while never recovering anything.
+ */
+export async function readPendingIntentsForAnchor(
+  db: DbClient,
+  anchorRef: string,
+): Promise<PublishIntent[]> {
+  const rows = await db
+    .select()
+    .from(codePublishIntents)
+    .where(
+      and(eq(codePublishIntents.state, 'pending'), eq(codePublishIntents.anchorRef, anchorRef)),
+    )
+  return rows.map(rowToIntent)
+}
+
 export async function readIntent(db: DbClient, batchId: string): Promise<PublishIntent | null> {
   const [row] = await db
     .select()
