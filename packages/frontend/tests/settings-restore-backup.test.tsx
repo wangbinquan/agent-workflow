@@ -50,10 +50,16 @@ async function pickFileAndConfirm(file: File): Promise<void> {
 }
 
 describe('Settings restore-from-backup', () => {
+  test('without backup:run the card and pending query stay absent', () => {
+    render(wrap(<BackupCard canRun={false} />))
+    expect(screen.queryByTestId('restore-file-input')).toBeNull()
+    expect(apiGet).not.toHaveBeenCalled()
+  })
+
   test('uploading a backup POSTs multipart to /api/restore and shows staged', async () => {
     apiGet.mockResolvedValue({ pending: null, failed: [] })
     apiPostMultipart.mockResolvedValue({ status: 'staged' })
-    render(wrap(<BackupCard />))
+    render(wrap(<BackupCard canRun />))
 
     const file = new File([new Uint8Array([1, 2, 3])], 'backup.tar.gz', {
       type: 'application/gzip',
@@ -70,7 +76,7 @@ describe('Settings restore-from-backup', () => {
   test('a failed upload surfaces an error, not a staged message', async () => {
     apiGet.mockResolvedValue({ pending: null, failed: [] })
     apiPostMultipart.mockRejectedValue(new Error('boom'))
-    render(wrap(<BackupCard />))
+    render(wrap(<BackupCard canRun />))
 
     await pickFileAndConfirm(new File([new Uint8Array([1])], 'b.tar.gz'))
 

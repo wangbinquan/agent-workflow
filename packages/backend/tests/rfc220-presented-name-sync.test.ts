@@ -222,6 +222,9 @@ describe('RFC-220 S13 — write-time subjectClaim revalidation + atomic provisio
   test('createUserWithIdentity is atomic: a config mismatch leaves NO user row behind', async () => {
     const provider = await makeProvider(db, 'id')
     const before = (await db.select().from(users)).length
+    const auditsBefore = db.$client.query('SELECT COUNT(*) AS n FROM user_access_audit').get() as {
+      n: number
+    }
     const err = await createUserWithIdentity(db, {
       username: 'ghost',
       displayName: 'Ghost',
@@ -238,6 +241,9 @@ describe('RFC-220 S13 — write-time subjectClaim revalidation + atomic provisio
     expect(err).toBeInstanceOf(DomainError)
     expect((err as DomainError).code).toBe('provider-config-changed')
     expect((await db.select().from(users)).length).toBe(before) // rolled back
+    expect(db.$client.query('SELECT COUNT(*) AS n FROM user_access_audit').get()).toEqual(
+      auditsBefore,
+    )
     expect(await snapshotOf(db, provider.id, '42')).toBeNull()
   })
 
@@ -294,6 +300,18 @@ describe('RFC-220 S13 — write-time subjectClaim revalidation + atomic provisio
     const identity = await snapshotOf(db, provider.id, '42')
     expect(identity!.userId).toBe(userId)
     expect(identity!.preferredSnapshot).toBe('zhang hello')
+    expect(
+      db.$client
+        .query(
+          'SELECT actor_kind, before_role, after_role, access_revision FROM user_access_audit WHERE target_user_id = ?',
+        )
+        .get(userId),
+    ).toEqual({
+      actor_kind: 'system',
+      before_role: 'user',
+      after_role: 'user',
+      access_revision: 0,
+    })
   })
 
   test('legacy createIdentity callers (no expectation) skip the recheck', async () => {

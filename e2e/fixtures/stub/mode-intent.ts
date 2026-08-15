@@ -11,6 +11,7 @@
 // matrix is preserved by the fact that it never had its own version string.
 
 import { emitTextEvent, parseInvocation, requireOutputOpen } from './skeleton'
+import { existsSync } from 'node:fs'
 
 const NAME = 'stub-opencode-intent'
 
@@ -124,9 +125,20 @@ export async function run(argv: readonly string[]): Promise<void> {
     ? 'stub intent build: workflow preview'
     : 'stub intent build: one auditor agent'
 
-  const delayMs = Number.parseInt(process.env.STUB_INTENT_DELAY_MS ?? '0', 10)
-  if (Number.isFinite(delayMs) && delayMs > 0) {
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs))
+  const holdFile = process.env.STUB_INTENT_HOLD_FILE
+  if (holdFile !== undefined) {
+    const deadline = Date.now() + 30_000
+    while (existsSync(holdFile) && Date.now() < deadline) {
+      await new Promise((releaseCheck) => setTimeout(releaseCheck, 25))
+    }
+    if (existsSync(holdFile)) {
+      throw new Error(`stub intent hold was not released within 30000ms: ${holdFile}`)
+    }
+  } else {
+    const delayMs = Number.parseInt(process.env.STUB_INTENT_DELAY_MS ?? '0', 10)
+    if (Number.isFinite(delayMs) && delayMs > 0) {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs))
+    }
   }
 
   emitTextEvent(

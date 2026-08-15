@@ -21,6 +21,7 @@ import type { ServerWebSocket } from 'bun'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import {
+  AUTHORITY_CHANNEL,
   MEMORY_CHANNEL,
   MEMORY_DISTILL_JOB_CHANNEL,
   MCP_RUNTIME_TESTS_CHANNEL,
@@ -84,6 +85,7 @@ function makeFakeWs(actor: Actor): {
 }
 
 const ALL_KINDS: WsChannelKind[] = [
+  'authority',
   'task',
   'tasks-list',
   'workflows',
@@ -97,7 +99,7 @@ const ALL_KINDS: WsChannelKind[] = [
 ]
 
 describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
-  test('registry keys are exactly the ten channels (and WS_CHANNEL_KINDS mirrors them)', () => {
+  test('registry keys are exactly the eleven channels (and WS_CHANNEL_KINDS mirrors them)', () => {
     expect(Object.keys(WS_CHANNELS).sort()).toEqual([...ALL_KINDS].sort())
     expect([...WS_CHANNEL_KINDS].sort()).toEqual([...ALL_KINDS].sort())
     for (const kind of ALL_KINDS) {
@@ -106,6 +108,9 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
   })
 
   test('helloName/channelKey pairs match the pre-registry strings exactly', () => {
+    expect(WS_CHANNELS.authority.helloName({ kind: 'authority' })).toBe('authority')
+    expect(WS_CHANNELS.authority.channelKeyOf({ kind: 'authority' })).toBe(AUTHORITY_CHANNEL)
+    expect(AUTHORITY_CHANNEL).toBe('authority')
     // task
     expect(WS_CHANNELS.task.helloName({ kind: 'task', taskId: 'T1' })).toBe('tasks/T1')
     expect(WS_CHANNELS.task.channelKeyOf({ kind: 'task', taskId: 'T1' })).toBe('task:T1')
@@ -183,6 +188,7 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(WS_CHANNELS.workflows.upgradeGate).toBeUndefined()
     expect(WS_CHANNELS.workgroups.upgradeGate).toBeUndefined()
     expect(WS_CHANNELS.memories.upgradeGate).toBeUndefined()
+    expect(WS_CHANNELS.authority.upgradeGate).toBeUndefined()
     // ACL-bypass short-circuit exactly on workflows + workgroups + memories. tasks-list stays on
     // the async path (canViewTask short-circuits internally).
     expect(WS_CHANNELS.workflows.aclBypassShortCircuit).toBe(true)
@@ -195,6 +201,7 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(WS_CHANNELS['scheduled-tasks'].aclBypassShortCircuit).not.toBe(true)
     expect(WS_CHANNELS['intent-sessions'].aclBypassShortCircuit).not.toBe(true)
     expect(WS_CHANNELS['mcp-runtime-tests'].aclBypassShortCircuit).not.toBe(true)
+    expect(WS_CHANNELS.authority.aclBypassShortCircuit).not.toBe(true)
     // onOpenExtra (replay) only on task.
     expect(WS_CHANNELS.task.onOpenExtra).toBeDefined()
     for (const kind of ALL_KINDS.filter((k) => k !== 'task')) {
@@ -204,6 +211,7 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
 
   test('parseWsChannel round-trips every channel path (incl. %-decoding and ?since)', () => {
     const parse = (path: string) => parseWsChannel(new URL(path, 'http://x'))
+    expect(parse('/ws/authority')).toEqual({ kind: 'authority' })
     expect(parse('/ws/tasks/T1')).toEqual({ kind: 'task', taskId: 'T1' })
     expect(parse('/ws/tasks/T%2F1')).toEqual({ kind: 'task', taskId: 'T/1' })
     expect(parse('/ws/tasks/T1?since=5&token=t')).toEqual({ kind: 'task', taskId: 'T1', since: 5 })
@@ -227,6 +235,7 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
 
   test('every pathRe matches exactly one channel for the sample paths (no overlap)', () => {
     const samples: Array<[string, WsChannelKind]> = [
+      ['/ws/authority', 'authority'],
       ['/ws/tasks/T1', 'task'],
       ['/ws/tasks', 'tasks-list'],
       ['/ws/workflows', 'workflows'],
@@ -285,6 +294,7 @@ describe('RFC-152 — upgrade gates', () => {
     expect(await checkUpgradeGate(db, actor, { kind: 'scheduled-tasks' })).toBe(true)
     expect(await checkUpgradeGate(db, actor, { kind: 'intent-sessions' })).toBe(true)
     expect(await checkUpgradeGate(db, actor, { kind: 'mcp-runtime-tests' })).toBe(true)
+    expect(await checkUpgradeGate(db, actor, { kind: 'authority' })).toBe(true)
   })
 })
 

@@ -392,8 +392,9 @@ export async function requireResourceOwner(
 
 /**
  * Task-relationship role snapshot (D7/D17) — member identity first:
- *   task owner → 'owner'; collaborator → 'user'; otherwise an access manager
- *   (`users:write`) is attributed as 'admin', and a resource ACL operator as
+ *   task owner → 'owner'; collaborator → 'user'; otherwise only a resource ACL
+ *   operator may bypass membership. One that also has `users:write` is
+ *   attributed as 'admin'; every other bypass holder is attributed as
  *   'manager'. These legacy audit labels are derived from permissions, not the
  *   account role preset;
  *   anyone else → null (caller must have rejected already).
@@ -405,9 +406,8 @@ export function resolveTaskRole(
 ): TaskActorRole | null {
   if (taskOwnerUserId !== null && taskOwnerUserId === actor.user.id) return 'owner'
   if (isMember) return 'user'
-  if (actor.permissions.has('users:write')) return 'admin'
-  if (hasResourceAclBypass(actor)) return 'manager'
-  return null
+  if (!hasResourceAclBypass(actor)) return null
+  return actor.permissions.has('users:write') ? 'admin' : 'manager'
 }
 
 // ---------------------------------------------------------------------------

@@ -74,6 +74,7 @@ class TypedBroadcaster<M, C = never> {
 // in to avoid taskId/workflowId collisions.
 
 export const TASK_CHANNEL = (taskId: string): ChannelKey => `task:${taskId}`
+export const AUTHORITY_CHANNEL: ChannelKey = 'authority'
 export const TASKS_LIST_CHANNEL: ChannelKey = 'tasks-list'
 export const WORKFLOWS_CHANNEL: ChannelKey = 'workflows'
 export const WORKGROUPS_CHANNEL: ChannelKey = 'workgroups'
@@ -98,6 +99,7 @@ import type {
   TasksListWsMessage,
   WorkgroupsWsMessage,
   WorkflowsWsMessage,
+  WsControlMessage,
 } from '@agent-workflow/shared'
 
 /**
@@ -151,6 +153,9 @@ export interface McpRuntimeTestBroadcastContext {
 }
 
 export const taskBroadcaster = new TypedBroadcaster<TaskWsMessage>()
+/** Silent product channel: revision notifications are sent directly by the
+ * revalidation pass, while the registry still requires a typed subscriber. */
+export const authorityBroadcaster = new TypedBroadcaster<WsControlMessage>()
 export const tasksListBroadcaster = new TypedBroadcaster<
   TasksListWsMessage,
   TasksListBroadcastContext

@@ -13,6 +13,7 @@ import { generateSessionToken, hashToken, SESSION_DEFAULT_TTL_MS } from '@/auth/
 import type { DbClient } from '@/db/client'
 import { authLoginPolicy, oidcProviders, userSessions, users } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
+import { insertInitialUserAccessInTransaction } from '@/modules/identity-access/public/commands'
 import { ConflictError, DomainError, ForbiddenError, UnauthorizedError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
@@ -161,6 +162,7 @@ export function completeBootstrapWithAdmin(
   now: number = Date.now(),
 ): typeof users.$inferSelect {
   const id = input.id ?? ulid()
+  const operationId = ulid()
   const created = dbTxSync(db, (tx) => {
     const policy = tx
       .select()
@@ -197,8 +199,8 @@ export function completeBootstrapWithAdmin(
         throw new ConflictError('email-taken', `email '${input.email}' already exists`)
       }
     }
-    tx.insert(users)
-      .values({
+    insertInitialUserAccessInTransaction(tx, {
+      user: {
         id,
         username: input.username,
         email: input.email?.toLowerCase() ?? null,
@@ -212,8 +214,23 @@ export function completeBootstrapWithAdmin(
         updatedAt: now,
         lastLoginAt: null,
         schemaVersion: 1,
-      })
-      .run()
+        accessRevision: 0,
+      },
+      audit: {
+        id: ulid(),
+        targetUserId: id,
+        actorUserId: SYSTEM_USER_ID,
+        actorKind: 'system',
+        operationId,
+        correlationId: operationId,
+        beforeRole: 'admin',
+        afterRole: 'admin',
+        addedPermissions: [],
+        removedPermissions: [],
+        accessRevision: 0,
+        createdAt: now,
+      },
+    })
     tx.update(authLoginPolicy)
       .set({
         passwordLoginEnabled: true,

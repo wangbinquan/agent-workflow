@@ -43,11 +43,13 @@ interface FakeWs {
   ws: ServerWebSocket<WsConnectionData>
   closes: Array<{ code: number; reason: string }>
   sent: unknown[]
+  events: string[]
 }
 
 function fakeConn(actor: Actor, credential: WsCredential, channel: AnyChannelParams): FakeWs {
   const closes: Array<{ code: number; reason: string }> = []
   const sent: unknown[] = []
+  const events: string[] = []
   const data: WsConnectionData = {
     channel,
     actor,
@@ -61,14 +63,17 @@ function fakeConn(actor: Actor, credential: WsCredential, channel: AnyChannelPar
   const ws = {
     data,
     send(payload: string) {
-      sent.push(JSON.parse(payload))
+      const frame = JSON.parse(payload) as { type?: string }
+      sent.push(frame)
+      events.push(`send:${frame.type ?? 'unknown'}`)
       return payload.length
     },
     close(code: number, reason: string) {
       closes.push({ code, reason })
+      events.push(`close:${code}`)
     },
   } as unknown as ServerWebSocket<WsConnectionData>
-  return { ws, closes, sent }
+  return { ws, closes, sent, events }
 }
 
 async function seedUser(
@@ -246,6 +251,26 @@ describe('RFC-305 targeted authority refresh', () => {
     expect(aliceConn.sent).toEqual([{ type: 'authority.changed', revision: 1 }])
     expect(bobConn.ws.data.actor.authorityRevision).toBe(0)
     expect(bobConn.sent).toEqual([])
+  })
+
+  test('emits authority.changed before a revoked channel gate closes with 4403', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const target = await seedUser(db, 'gate-revoked-admin', 'admin')
+    const conn = fakeConn(target.actor, target.credential, { kind: 'memory-distill-jobs' })
+    trackConnection(conn.ws)
+
+    db.$client
+      .query("UPDATE users SET role = 'user', access_revision = 1 WHERE id = ?")
+      .run(target.id)
+    const stats = await revalidateAllConnections({ db, log }, 'authority-changed', Date.now(), {
+      userId: target.id,
+      revision: 1,
+    })
+
+    expect(conn.sent).toEqual([{ type: 'authority.changed', revision: 1 }])
+    expect(conn.closes).toEqual([{ code: WS_CLOSE_NOT_VISIBLE, reason: 'permission-required' }])
+    expect(conn.events).toEqual(['send:authority.changed', `close:${WS_CLOSE_NOT_VISIBLE}`])
+    expect(stats).toMatchObject({ scanned: 1, refreshed: 1, closedGate: 1 })
   })
 
   test('fails closed and reports a catastrophic targeted refresh failure', async () => {

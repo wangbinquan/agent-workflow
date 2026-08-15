@@ -1,5 +1,5 @@
 import { UserAccessError, type AdminUserAccessView } from '../../public/types'
-import { admissionSubjectOf, admitUserDirectoryAccess } from '../accessAdmission'
+import { admissionSubjectOf, admitUserDirectoryQuery } from '../accessAdmission'
 import { subjectRefOf, trustedContextMetadata, type QueryContext } from '../operationContext'
 import type { UserAccessReadRepository } from '../ports/userAccessRepository'
 import { materializeUserAccessView } from '../view'
@@ -16,31 +16,24 @@ export class GetUserAccess {
     query: GetUserAccessQuery,
   ): Promise<AdminUserAccessView | null> {
     await this.admit(context)
-    const user = await this.repository.findUser(query.userId)
-    if (user === null) return null
-    const grants = await this.repository.listGrants([user.id])
-    return materializeUserAccessView(user, grants)
+    const snapshot = await this.repository.findAccessSnapshot(query.userId)
+    return snapshot === null ? null : materializeUserAccessView(snapshot.user, snapshot.grants)
   }
 
   async list(context: QueryContext): Promise<ReadonlyArray<AdminUserAccessView>> {
     await this.admit(context)
-    const users = await this.repository.listUsers()
-    const grants = await this.repository.listGrants(users.map((user) => user.id))
-    const grantsByUser = new Map<string, typeof grants>()
-    for (const grant of grants) {
-      const current = grantsByUser.get(grant.userId) ?? []
-      grantsByUser.set(grant.userId, [...current, grant])
-    }
-    return users.map((user) => materializeUserAccessView(user, grantsByUser.get(user.id) ?? []))
+    const snapshots = await this.repository.listAccessSnapshots()
+    return snapshots.map(({ user, grants }) => materializeUserAccessView(user, grants))
   }
 
   private async admit(context: QueryContext): Promise<void> {
-    const actor = await this.repository.findUser(subjectRefOf(context.authority).userId)
-    const grants = actor === null ? [] : await this.repository.listGrants([actor.id])
-    admitUserDirectoryAccess(
+    const snapshot = await this.repository.findAccessSnapshot(
+      subjectRefOf(context.authority).userId,
+    )
+    admitUserDirectoryQuery(
       admissionSubjectOf(
-        actor,
-        grants.map((grant) => grant.permission),
+        snapshot?.user ?? null,
+        snapshot?.grants.map((grant) => grant.permission) ?? [],
       ),
       trustedContextMetadata(context),
     )

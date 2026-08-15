@@ -83,26 +83,26 @@ packages/backend/src/modules/identity-access/
 
 职责：
 
-| 层 | 拥有 | 不拥有 |
-| -- | ---- | ------ |
-| `domain` | grant 规范化、预设替换、访问不变量、纯 transition | DB、HTTP、WS、日志 |
-| `application` | command/query、admission、opaque context、事务编排 | SQL、Hono、React |
-| `application/ports` | repository、transaction、observer、event port | adapter 实现 |
-| `infrastructure` | SQLite 和可观测性 adapter | 业务授权分支 |
-| `public` | exact command/query/participant/event/type 合同 | domain/infrastructure 导出 |
-| `composition` | 唯一装配 | 业务规则 |
+| 层                  | 拥有                                               | 不拥有                     |
+| ------------------- | -------------------------------------------------- | -------------------------- |
+| `domain`            | grant 规范化、预设替换、访问不变量、纯 transition  | DB、HTTP、WS、日志         |
+| `application`       | command/query、admission、opaque context、事务编排 | SQL、Hono、React           |
+| `application/ports` | repository、transaction、observer、event port      | adapter 实现               |
+| `infrastructure`    | SQLite 和可观测性 adapter                          | 业务授权分支               |
+| `public`            | exact command/query/participant/event/type 合同    | domain/infrastructure 导出 |
+| `composition`       | 唯一装配                                           | 业务规则                   |
 
 外部模块只可 import `public/*` 或 `composition.ts` 的审核入口；禁止跨界 import `domain`、`application` 或 `infrastructure`。
 
 ### 2.1 兼容 facade
 
-| 存量位置 | 本 RFC 后职责 | 删除波次 |
-| -------- | ------------- | -------- |
-| `auth/actor.ts` | 把 current authority 投影成存量 `Actor.permissions` | RFC-294 W4/W9 |
-| `auth/session.ts` | credential lookup 与 current actor adapter | RFC-294 W4/W9 |
-| `services/users.ts` | CLI/OIDC/旧调用兼容，访问写转发 exact command | RFC-294 identity vertical slice 后续 |
-| `routes/users.ts` | HTTP codec、context 构造、public error 映射 | RFC-294 W4-A |
-| `ws/revalidationHook.ts` | post-commit 定向刷新加速 | RFC-294 committed event/outbox 波次 |
+| 存量位置                 | 本 RFC 后职责                                       | 删除波次                             |
+| ------------------------ | --------------------------------------------------- | ------------------------------------ |
+| `auth/actor.ts`          | 把 current authority 投影成存量 `Actor.permissions` | RFC-294 W4/W9                        |
+| `auth/session.ts`        | credential lookup 与 current actor adapter          | RFC-294 W4/W9                        |
+| `services/users.ts`      | CLI/OIDC/旧调用兼容，访问写转发 exact command       | RFC-294 identity vertical slice 后续 |
+| `routes/users.ts`        | HTTP codec、context 构造、public error 映射         | RFC-294 W4-A                         |
+| `ws/revalidationHook.ts` | post-commit 定向刷新加速                            | RFC-294 committed event/outbox 波次  |
 
 架构测试冻结 public exact exports、外部 import allowlist 和 writer 分母。
 
@@ -132,7 +132,7 @@ interface PermissionCatalogEntry {
 
 ```ts
 grantableAdditionalPermissions(role) = PERMISSIONS.filter(
-  permission =>
+  (permission) =>
     PERMISSION_CATALOG[permission].delegation === 'account-additive' &&
     !ROLE_PERMISSIONS[role].includes(permission),
 )
@@ -149,13 +149,13 @@ resolveEffectiveAccountPermissions(user, all 24 grants)
 
 历史角色谓词映射为：
 
-| 权限 | 生产消费点 |
-| ---- | ---------- |
-| `resource-acl:bypass` | `services/resourceAcl.ts` 及依赖其统一 helper 的资源操作 |
-| `memory-distill-jobs:manage` | memory distill HTTP routes、WS channel 与前端入口 |
-| `intent:audit` | Intent session 列表/详情、turn session 与 provenance 只读投影 |
-| `mcp-runtime-tests:audit` | MCP runtime test exact-id transcript 读取；不授予 latest 枚举或 mutation |
-| `webhook-triggers:override-owner` | Webhook trigger update/delete 的 owner 行级门 |
+| 权限                              | 生产消费点                                                               |
+| --------------------------------- | ------------------------------------------------------------------------ |
+| `resource-acl:bypass`             | `services/resourceAcl.ts` 及依赖其统一 helper 的资源操作                 |
+| `memory-distill-jobs:manage`      | memory distill HTTP routes、WS channel 与前端入口                        |
+| `intent:audit`                    | Intent session 列表/详情、turn session 与 provenance 只读投影            |
+| `mcp-runtime-tests:audit`         | MCP runtime test exact-id transcript 读取；不授予 latest 枚举或 mutation |
+| `webhook-triggers:override-owner` | Webhook trigger update/delete 的 owner 行级门                            |
 
 没有 `ROLE_CAPABILITY_CATALOG`，没有 `RouteMeta.identity`，也没有 `isResourceAdminRole`。
 
@@ -205,6 +205,10 @@ user_access_audit
 
 迁移不回填 grant；所有存量账户 revision=0，权限行为等于原角色预设。
 
+Bootstrap 与 OIDC 自动建号仍须和各自的登录策略/identity 行同事务，但不得自行写 `users.role`。两条路径经
+`identity-access/public/commands` 的 exact transaction participant 写入初始 user/revision=0/create audit；实际 Drizzle
+`insert(users)` 只存在于 identity-access SQLite repository。这样既不拆散跨上下文原子性，也不制造第二个角色 writer。
+
 ## 5. Authority 与 operation context
 
 ### 5.1 Direct request
@@ -215,7 +219,7 @@ user_access_audit
 ```text
 credential lookup
   -> authenticated principal {userId, source}
-  -> identity-access resolves current active row + canonical grants + revision
+  -> identity-access uses one joined DB statement to resolve active row + canonical grants + revision
   -> build Actor with effective permissions
   -> route permission AND gate
   -> row-level/application authorization
@@ -325,22 +329,25 @@ AdminUserView = User + {
 ```
 
 `routes/users.ts` 只做 parse、operation context 构造、public view 与 error 映射。路由粗门仍声明 `users:read` / `users:write`；真正的
-访问快照命令在模块内再次校验可信 source/transport/current authority，避免 route metadata 成为唯一保护。
+访问快照命令在模块内再次校验可信 source/transport/current authority，避免 route metadata 成为唯一保护。目录 list/detail 的
+模块内 query admission 要求 `users:read`；profile/status 与访问快照 mutation 要求 `users:write`。actor 自身的 role+grants 以及返回的
+每个用户访问视图都来自单条 join 查询快照，不跨 `await` 拼接两个版本。
 
 主要错误：
 
-| code | HTTP | 条件 |
-| ---- | ---: | ---- |
-| `user-management-forbidden` | 403 | profile/directory 管理缺 `users:write` 或 source 不可信 |
-| `user-access-management-forbidden` | 403 | access mutation 不是 active `users:write` session/CLI |
-| `user-access-stale` | 409 | revision CAS 冲突 |
-| `user-access-ambiguous` | 422 | legacy role 与 access 同时出现 |
-| `user-permission-invalid` | 422 | 未知权限 |
-| `user-permission-duplicate` | 422 | 重复 grant |
-| `user-permission-not-grantable` | 422 | intrinsic grant |
-| `user-permission-redundant` | 422 | 与目标预设重复 |
-| `self-access-change-forbidden` | 422 | 修改自己的访问快照 |
-| `last-access-administrator-protection` | 422 | 移除最后 active `users:write` 账户 |
+| code                                   | HTTP | 条件                                                  |
+| -------------------------------------- | ---: | ----------------------------------------------------- |
+| `user-directory-forbidden`             |  403 | directory query 缺 `users:read` 或 source 不可信      |
+| `user-management-forbidden`            |  403 | profile/status 管理缺 `users:write` 或 source 不可信  |
+| `user-access-management-forbidden`     |  403 | access mutation 不是 active `users:write` session/CLI |
+| `user-access-stale`                    |  409 | revision CAS 冲突                                     |
+| `user-access-ambiguous`                |  422 | legacy role 与 access 同时出现                        |
+| `user-permission-invalid`              |  422 | 未知权限                                              |
+| `user-permission-duplicate`            |  422 | 重复 grant                                            |
+| `user-permission-not-grantable`        |  422 | intrinsic grant                                       |
+| `user-permission-redundant`            |  422 | 与目标预设重复                                        |
+| `self-access-change-forbidden`         |  422 | 修改自己的访问快照                                    |
+| `last-access-administrator-protection` |  422 | 移除最后 active `users:write` 账户                    |
 
 ## 8. PAT
 
@@ -360,10 +367,11 @@ tokenPermissions =
 ## 9. WebSocket 与前端刷新
 
 每个 WS connection 保存 subject 与 authority revision。订阅、入帧和广播前核对 DB 中用户 active 状态与 revision；不匹配则拒绝
-继续使用旧 actor。access commit 后的 targeted refresh 会：
+继续使用旧 actor。认证后的 `AppShell` 常驻 `/ws/authority`，因此 users/account/settings 等不挂业务 socket 的页面也能收到变更。
+access commit 后的 targeted refresh 会：
 
 - 重新解析该用户连接或关闭失活连接；
-- 发 `authority.changed`；
+- 在重跑业务 channel gate 前发 `authority.changed`，即使该 channel 随后因撤权以 4403 关闭也不丢刷新信号；
 - 前端 `useWebSocket` invalidates `ACTOR_QUERY_KEY`，重新读取 `/api/auth/me`；
 - 前端权限 hook fail closed：me 未加载或 payload 非法时不放行。
 
@@ -408,7 +416,7 @@ disabled = intrinsic/preset
 
 - `identity-access/public` exact 文件和 export 集合；
 - 模块外 import allowlist；
-- role/grant/revision/audit 唯一 writer；
+- role/grant/revision/audit 唯一 writer；AST 同时锁所有 Drizzle `insert(users)`，不能再用 `.values({ role })` 绕过分母；
 - RouteMeta/MCP 无 `identity`；
 - backend/frontend 生产代码无账户角色字面量授权比较；仅明确的展示/非账户 protocol role allowlist；
 - 退役 helper（`isResourceAdminRole`、`useIsAdmin`、`adminShortCircuit` 等）零引用；
@@ -418,18 +426,18 @@ disabled = intrinsic/preset
 
 ### 11.2 行为矩阵
 
-| 场景 | 预期 |
-| ---- | ---- |
-| `user` 无 grant | 48 点 baseline |
-| `user + scripts:author` | 脚本敏感投影/保存开放，private ACL 仍拒绝 |
-| `user + resource-acl:bypass` | 他人 private 资源开放；撤销后恢复 404 |
-| `user + memory-distill-jobs:manage` | distill HTTP/WS 开放；撤销后 403/refusal |
-| `user + intent:audit` | 跨 owner 只读；mutation 仍 404；撤销即时收敛 |
-| `user + mcp-runtime-tests:audit` | exact-id transcript 可读；latest/mutation 仍拒绝 |
-| `user + webhook-triggers:override-owner` | 有对应 update/delete 粗门时可跨 owner 写；撤销后 404 |
-| `user + users:read/write` | 可管理其他用户，无角色提升 |
-| `user + 全 24` | effective set 与 admin 72 点完全相同，角色 wire 仍 user |
-| 任意 PAT + system points | 五个新 capability 与其他 system-domain 点均被剔除 |
+| 场景                                     | 预期                                                    |
+| ---------------------------------------- | ------------------------------------------------------- |
+| `user` 无 grant                          | 48 点 baseline                                          |
+| `user + scripts:author`                  | 脚本敏感投影/保存开放，private ACL 仍拒绝               |
+| `user + resource-acl:bypass`             | 他人 private 资源开放；撤销后恢复 404                   |
+| `user + memory-distill-jobs:manage`      | distill HTTP/WS 开放；撤销后 403/refusal                |
+| `user + intent:audit`                    | 跨 owner 只读；mutation 仍 404；撤销即时收敛            |
+| `user + mcp-runtime-tests:audit`         | exact-id transcript 可读；latest/mutation 仍拒绝        |
+| `user + webhook-triggers:override-owner` | 有对应 update/delete 粗门时可跨 owner 写；撤销后 404    |
+| `user + users:read/write`                | 可管理其他用户，无角色提升                              |
+| `user + 全 24`                           | effective set 与 admin 72 点完全相同，角色 wire 仍 user |
+| 任意 PAT + system points                 | 五个新 capability 与其他 system-domain 点均被剔除       |
 
 ### 11.3 迁移/OCC/失败路径
 

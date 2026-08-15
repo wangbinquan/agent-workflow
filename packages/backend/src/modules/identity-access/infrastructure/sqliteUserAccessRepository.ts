@@ -14,6 +14,7 @@ import type {
   InsertManagedUserRecord,
   UserAccessReadRepository,
   UserAccessRecord,
+  UserAccessSnapshot,
   UserPermissionGrantRecord,
 } from '../application/ports/userAccessRepository'
 import type {
@@ -47,6 +48,13 @@ interface RawGrantRow {
   granted_at: number
 }
 
+interface RawAccessSnapshotRow extends RawUserAccessRow {
+  grant_user_id: string | null
+  grant_permission: string | null
+  grant_granted_by_user_id: string | null
+  grant_granted_at: number | null
+}
+
 const USER_SELECT = sql.raw(`
   SELECT id, username, email, display_name, password_hash, role, status,
          force_password_change, created_by, created_at, updated_at,
@@ -54,44 +62,43 @@ const USER_SELECT = sql.raw(`
   FROM users
 `)
 
+const ACCESS_SNAPSHOT_SELECT = sql.raw(`
+  SELECT u.id, u.username, u.email, u.display_name, u.password_hash,
+         u.role, u.status, u.force_password_change, u.created_by,
+         u.created_at, u.updated_at, u.last_login_at, u.schema_version,
+         u.access_revision,
+         g.user_id AS grant_user_id,
+         g.permission AS grant_permission,
+         g.granted_by_user_id AS grant_granted_by_user_id,
+         g.granted_at AS grant_granted_at
+  FROM users AS u
+  LEFT JOIN user_permission_grants AS g ON g.user_id = u.id
+`)
+
 export class SQLiteUserAccessRepository implements UserAccessReadRepository {
   constructor(private readonly db: DbClient) {}
 
-  async findUser(id: string): Promise<UserAccessRecord | null> {
-    const rows = (await this.db.all(
-      sql`${USER_SELECT} WHERE id = ${id} LIMIT 1`,
-    )) as RawUserAccessRow[]
-    return rows[0] === undefined ? null : mapUser(rows[0])
-  }
-
-  async findUserByUsername(username: string): Promise<UserAccessRecord | null> {
-    const rows = (await this.db.all(
-      sql`${USER_SELECT} WHERE username = ${username} LIMIT 1`,
-    )) as RawUserAccessRow[]
-    return rows[0] === undefined ? null : mapUser(rows[0])
-  }
-
-  async listUsers(): Promise<ReadonlyArray<UserAccessRecord>> {
-    const rows = (await this.db.all(
-      sql`${USER_SELECT} ORDER BY created_at, id`,
-    )) as RawUserAccessRow[]
-    return rows.map(mapUser)
-  }
-
-  async listGrants(
-    userIds: ReadonlyArray<string>,
-  ): Promise<ReadonlyArray<UserPermissionGrantRecord>> {
-    if (userIds.length === 0) return []
+  async findAccessSnapshot(id: string): Promise<UserAccessSnapshot | null> {
     const rows = (await this.db.all(sql`
-      SELECT user_id, permission, granted_by_user_id, granted_at
-      FROM user_permission_grants
-      WHERE user_id IN (${sql.join(
-        userIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})
-      ORDER BY user_id, permission
-    `)) as RawGrantRow[]
-    return rows.map(mapGrant)
+      ${ACCESS_SNAPSHOT_SELECT}
+      WHERE u.id = ${id}
+      ORDER BY g.permission
+    `)) as RawAccessSnapshotRow[]
+    return rows.length === 0 ? null : mapAccessSnapshot(rows)
+  }
+
+  async listAccessSnapshots(): Promise<ReadonlyArray<UserAccessSnapshot>> {
+    const rows = (await this.db.all(sql`
+      ${ACCESS_SNAPSHOT_SELECT}
+      ORDER BY u.created_at, u.id, g.permission
+    `)) as RawAccessSnapshotRow[]
+    const grouped = new Map<string, RawAccessSnapshotRow[]>()
+    for (const row of rows) {
+      const current = grouped.get(row.id) ?? []
+      current.push(row)
+      grouped.set(row.id, current)
+    }
+    return [...grouped.values()].map(mapAccessSnapshot)
   }
 }
 
@@ -101,6 +108,24 @@ export class SQLiteUserAccessTransactionRunner implements UserAccessTransactionR
   run<T>(body: (transaction: UserAccessTransaction) => NotPromise<T>): T {
     return dbTxSync(this.db, (transaction) => body(new SQLiteUserAccessTransaction(transaction)))
   }
+}
+
+export interface InitialUserAccessProvision {
+  readonly user: InsertManagedUserRecord
+  readonly audit: UserAccessAuditRecord
+}
+
+/** Exact transaction participant for cross-context account provisioning.
+ * Bootstrap/OIDC keep their adjacent writes in the same SQLite transaction,
+ * while the identity-access infrastructure remains the sole role/revision and
+ * access-audit writer. */
+export function insertInitialUserAccessInTransaction(
+  transaction: DbTxSync,
+  provision: InitialUserAccessProvision,
+): void {
+  const participant = new SQLiteUserAccessTransaction(transaction)
+  participant.insertUser(provision.user)
+  participant.appendAudit(provision.audit)
 }
 
 class SQLiteUserAccessTransaction implements UserAccessTransaction {
@@ -259,6 +284,26 @@ function mapGrant(row: RawGrantRow): UserPermissionGrantRecord {
     permission: row.permission,
     grantedByUserId: row.granted_by_user_id,
     grantedAt: row.granted_at,
+  }
+}
+
+function mapAccessSnapshot(rows: ReadonlyArray<RawAccessSnapshotRow>): UserAccessSnapshot {
+  const first = rows[0]
+  if (first === undefined) throw new Error('cannot materialize an empty user access snapshot')
+  return {
+    user: mapUser(first),
+    grants: rows.flatMap((row) =>
+      row.grant_user_id === null || row.grant_permission === null || row.grant_granted_at === null
+        ? []
+        : [
+            mapGrant({
+              user_id: row.grant_user_id,
+              permission: row.grant_permission,
+              granted_by_user_id: row.grant_granted_by_user_id,
+              granted_at: row.grant_granted_at,
+            }),
+          ],
+    ),
   }
 }
 

@@ -27,7 +27,7 @@
 - [x] **RFC-305-T6** 迁移 0162：`access_revision`、grant 表、append-only audit 表/trigger/index。
 - [x] **RFC-305-T7** 建 `domain / application / ports / infrastructure / public / composition`。
 - [x] **RFC-305-T8** exact create/update command、query 与 current/delegated authority resolver。
-- [x] **RFC-305-T9** role/grant/revision/audit 单 writer，同事务 OCC + audit，post-commit targeted refresh。
+- [x] **RFC-305-T9** role/grant/revision/audit 单 writer；Bootstrap/OIDC 经 exact transaction participant；同事务 OCC + audit，单语句 authority snapshot 与 post-commit targeted refresh。
 - [x] **RFC-305-T10** self/system/last-active-`users:write`、disabled/invited、profile no-op 与 legacy role adapter。
 - [x] **RFC-305-T11** opaque direct/delegated operation context；禁止对象字面量伪造 authority。
 - [x] **退出门**：public export/import allowlist、writer 分母、迁移、并发、回滚、审计、invariant 定向测试全绿。
@@ -36,7 +36,7 @@
 
 - [x] **RFC-305-T12** session/PAT/daemon/current actor 每请求重读 role+grants+status+revision。
 - [x] **RFC-305-T13** scheduled/call/workgroup/webhook 以 subject ref 重新解析 delegated authority。
-- [x] **RFC-305-T14** WS subscribe/input/output 全部 DB revision fenced；`authority.changed` 刷新前端 `/me`。
+- [x] **RFC-305-T14** WS subscribe/input/output 全部 DB revision fenced；认证 AppShell 常驻 `/ws/authority`，先发 `authority.changed` 再执行业务 channel 撤权关闭。
 - [x] **RFC-305-T15** 删除 RouteMeta/MCP identity 轴及 `isResourceAdminRole` / admin short-circuit helpers。
 - [x] **RFC-305-T16** 五个显式 capability 接回真实消费者：ACL、distill、Intent、MCP runtime test、Webhook owner override。
 - [x] **RFC-305-T17** 所有前端 route/nav/action 改用具体 permission；malformed `/me` fail closed。
@@ -58,7 +58,7 @@
 - [x] **RFC-305-T25** `user + 全 24` 的 set 等价与真实 HTTP 行为；`role` wire 保持 `user`。
 - [x] **RFC-305-T26** `resource-acl:bypass` 与 `memory-distill-jobs:manage` 正负/撤销行为。
 - [x] **RFC-305-T27** `intent:audit`、`mcp-runtime-tests:audit`、`webhook-triggers:override-owner` 正负/只读/撤销行为。
-- [x] **RFC-305-T28** `users:read/write` 普通 user 可管理他人访问；self/system/last capability 防护。
+- [x] **RFC-305-T28** `users:read` 独立开放 list/detail，`users:write` 开放 mutation；普通 user 可管理他人访问；self/system/last capability 防护。
 - [x] **RFC-305-T29** PAT 五个新 system point 永不携带，matrix/range grant revoke/regrant。
 - [x] **RFC-305-T30** Playwright 真实 daemon：390px/light/dark/a11y、create/edit/OCC/live WS、PAT cap。
 - [x] **RFC-305-T31** 全量 format/typecheck/lint/depcheck/tests/migration/build 与 `bun run gate:local`：shared 2129、frontend 6459、backend 10663 pass（35 skip、0 fail），真实 binary + Chromium E2E 2/2。
@@ -68,18 +68,18 @@
 
 ## 3. 必跑行为矩阵
 
-| 主体 | 附加权限 | 正向 | 负向/撤销 |
-| ---- | -------- | ---- | --------- |
-| user session | `scripts:author` | 可读写脚本敏感字段 | 无 grant 脱敏/403；已保存 workflow 仍可执行 |
-| user session | `resource-acl:bypass` | 他人 private resource 200 | 无/撤销为 404 |
-| user session | `memory-distill-jobs:manage` | HTTP + WS 可用 | 无/撤销为 403 / permission-required |
-| user session | `intent:audit` | 跨 owner exact read / `all=1` | mutation 仍 404；撤销读为 404 |
-| user session | `mcp-runtime-tests:audit` | exact-id transcript read | latest 不枚举、end 不放行；无 grant 404 |
-| user session | trigger update + `override-owner` | 跨 owner update/delete | 撤销回 404 |
-| user session | `users:read` + `users:write` | list/create/patch other user | self access snapshot 拒绝 |
-| user session | 全 24 | 与 admin 的 72 点和真实能力一致 | 移除单点只收窄该能力 |
-| PAT | 任意 system-domain grant | 无 | 创建 matrix 拒绝且运行时剔除 |
-| delegated/WS | grant/revoke | 下一 admission/revision 生效 | stale revision 不得继续收发/副作用 |
+| 主体         | 附加权限                          | 正向                            | 负向/撤销                                   |
+| ------------ | --------------------------------- | ------------------------------- | ------------------------------------------- |
+| user session | `scripts:author`                  | 可读写脚本敏感字段              | 无 grant 脱敏/403；已保存 workflow 仍可执行 |
+| user session | `resource-acl:bypass`             | 他人 private resource 200       | 无/撤销为 404                               |
+| user session | `memory-distill-jobs:manage`      | HTTP + WS 可用                  | 无/撤销为 403 / permission-required         |
+| user session | `intent:audit`                    | 跨 owner exact read / `all=1`   | mutation 仍 404；撤销读为 404               |
+| user session | `mcp-runtime-tests:audit`         | exact-id transcript read        | latest 不枚举、end 不放行；无 grant 404     |
+| user session | trigger update + `override-owner` | 跨 owner update/delete          | 撤销回 404                                  |
+| user session | `users:read` + `users:write`      | list/create/patch other user    | self access snapshot 拒绝                   |
+| user session | 全 24                             | 与 admin 的 72 点和真实能力一致 | 移除单点只收窄该能力                        |
+| PAT          | 任意 system-domain grant          | 无                              | 创建 matrix 拒绝且运行时剔除                |
+| delegated/WS | grant/revoke                      | 下一 admission/revision 生效    | stale revision 不得继续收发/副作用          |
 
 ## 4. 架构防护
 

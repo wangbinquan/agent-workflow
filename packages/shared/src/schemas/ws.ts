@@ -491,6 +491,8 @@ export type WsControlMessage = z.infer<typeof WsControlMessageSchema>
 // -----------------------------------------------------------------------------
 
 export const WS_PATHS = {
+  /** Authenticated app-wide authority revision stream. */
+  authority: '/ws/authority',
   /** Per-task detail stream (`?since=N` replays node_run_events). */
   task: (taskId: string): string => `/ws/tasks/${encodeURIComponent(taskId)}`,
   /** Global task list stream (per-frame RBAC-filtered). */

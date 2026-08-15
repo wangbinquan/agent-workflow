@@ -166,6 +166,30 @@ function filesReadingAccountRole(root: string): string[] {
   return matches.sort()
 }
 
+function filesCallingTableMethod(root: string, method: string, table: string): string[] {
+  const matches: string[] = []
+  for (const file of sourceFiles(root)) {
+    const source = parse(file)
+    let matched = false
+    const visit = (node: ts.Node): void => {
+      if (matched) return
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.name.text === method &&
+        node.arguments.some((argument) => ts.isIdentifier(argument) && argument.text === table)
+      ) {
+        matched = true
+        return
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(source)
+    if (matched) matches.push(relativeToRepo(file))
+  }
+  return matches.sort()
+}
+
 describe('RFC-305 identity-access architecture', () => {
   test('public entrypoints expose only the reviewed exact contracts', () => {
     const publicRoot = resolve(IDENTITY_ROOT, 'public')
@@ -176,9 +200,11 @@ describe('RFC-305 identity-access architecture', () => {
       'CreateManagedUser',
       'CreateManagedUserCommand',
       'ExactAccessSnapshot',
+      'InitialUserAccessProvision',
       'UpdateUserAccess',
       'UpdateUserAccessCommand',
       'UpdateUserAccessResult',
+      'insertInitialUserAccessInTransaction',
     ])
     expect(exportedNames(resolve(publicRoot, 'events.ts'))).toEqual([
       'AuthorityRevisionChanged',
@@ -221,17 +247,22 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/auth/actor.ts -> @/modules/identity-access/composition',
       'packages/backend/src/auth/actor.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/auth/actor.ts -> @/modules/identity-access/public/types',
+      'packages/backend/src/auth/loginPolicy.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition',
+      'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/services/users.ts -> @/modules/identity-access/composition',
       'packages/backend/src/services/users.ts -> @/modules/identity-access/public/types',
     ])
   })
 
   test('role/grants/revision/audit retain a single production writer', () => {
+    expect(filesCallingTableMethod(BACKEND_SRC, 'insert', 'users')).toEqual([
+      'packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts',
+    ])
     expect(
       filesContainingCodePattern(
         BACKEND_SRC,
@@ -260,6 +291,29 @@ describe('RFC-305 identity-access architecture', () => {
     const facade = readFileSync(resolve(BACKEND_SRC, 'services', 'users.ts'), 'utf8')
     expect(facade).not.toMatch(/ROLE_PERMISSIONS|user_permission_grants|\.update\(users\)/)
     expect(filesContainingIdentifier(BACKEND_SRC, 'ROLE_PERMISSIONS')).toEqual([])
+  }, 20_000)
+
+  test('authority and directory views consume one-statement access snapshots', () => {
+    const authority = readFileSync(
+      resolve(IDENTITY_ROOT, 'application', 'queries', 'resolveAuthority.ts'),
+      'utf8',
+    )
+    const directory = readFileSync(
+      resolve(IDENTITY_ROOT, 'application', 'queries', 'getUserAccess.ts'),
+      'utf8',
+    )
+    const repository = readFileSync(
+      resolve(IDENTITY_ROOT, 'infrastructure', 'sqliteUserAccessRepository.ts'),
+      'utf8',
+    )
+    expect(authority).toContain('findAccessSnapshot')
+    expect(authority).not.toContain('.findUser(')
+    expect(authority).not.toContain('.listGrants(')
+    expect(directory).toContain('findAccessSnapshot')
+    expect(directory).toContain('listAccessSnapshots')
+    expect(directory).not.toContain('.findUser(')
+    expect(directory).not.toContain('.listGrants(')
+    expect(repository).toContain('LEFT JOIN user_permission_grants AS g ON g.user_id = u.id')
   })
 })
 
@@ -364,7 +418,7 @@ describe('RFC-305 permission catalog architecture', () => {
       'packages/frontend/src/components/account/AccountOverviewPanel.tsx',
       'packages/frontend/src/components/users/EditUserDialog.tsx',
     ])
-  })
+  }, 20_000)
 
   test('every system-domain point has an AST string-literal production consumer', () => {
     const consumed = new Set(
@@ -429,11 +483,21 @@ describe('RFC-305 reusable-authority fences', () => {
     const registry = readFileSync(resolve(BACKEND_SRC, 'ws', 'registry.ts'), 'utf8')
     const connections = readFileSync(resolve(BACKEND_SRC, 'ws', 'connections.ts'), 'utf8')
     const hook = readFileSync(resolve(FRONTEND_SRC, 'hooks', 'useWebSocket.ts'), 'utf8')
+    const authorityHook = readFileSync(
+      resolve(FRONTEND_SRC, 'hooks', 'useAuthoritySync.ts'),
+      'utf8',
+    )
+    const appShell = readFileSync(
+      resolve(FRONTEND_SRC, 'components', 'shell', 'AppShell.tsx'),
+      'utf8',
+    )
     expect(registry).toContain('SELECT status, access_revision FROM users WHERE id = ? LIMIT 1')
     expect(registry).toContain('if (!authorityRevisionCurrent(ws, db)) return')
     expect(registry).not.toMatch(/\?\.\$client|\$client\?\?/)
     expect(connections).toContain("type: 'authority.changed'")
     expect(hook).toContain("type === 'authority.changed'")
     expect(hook).toContain('invalidateQueries({ queryKey: ACTOR_QUERY_KEY })')
+    expect(authorityHook).toContain('WS_PATHS.authority')
+    expect(appShell).toContain('useAuthoritySync()')
   })
 })

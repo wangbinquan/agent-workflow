@@ -185,6 +185,44 @@ async function selectAndWriteBashBody(page: Page, nodeIndex: number, body: strin
   await expect(content).toContainText(body)
 }
 
+async function stableCenter(
+  locator: ReturnType<Page['locator']>,
+  label: string,
+): Promise<{ x: number; y: number }> {
+  type Box = { x: number; y: number; width: number; height: number }
+  let previous: Box | null = null
+  let stableSamples = 0
+  await expect
+    .poll(
+      async () => {
+        const latest = await locator.boundingBox()
+        if (latest === null) {
+          previous = null
+          stableSamples = 0
+          return stableSamples
+        }
+        if (
+          previous !== null &&
+          Math.abs(latest.x - previous.x) < 0.25 &&
+          Math.abs(latest.y - previous.y) < 0.25 &&
+          Math.abs(latest.width - previous.width) < 0.25 &&
+          Math.abs(latest.height - previous.height) < 0.25
+        ) {
+          stableSamples += 1
+        } else {
+          stableSamples = 0
+        }
+        previous = latest
+        return stableSamples
+      },
+      { message: `${label} geometry never settled`, timeout: 5_000, intervals: [50] },
+    )
+    .toBeGreaterThanOrEqual(2)
+  const settled = await locator.boundingBox()
+  if (settled === null) throw new Error(`${label} geometry missing`)
+  return { x: settled.x + settled.width / 2, y: settled.y + settled.height / 2 }
+}
+
 async function pollUntilTerminal(taskId: string, timeoutMs: number): Promise<string> {
   const terminal = new Set(['done', 'failed', 'canceled', 'interrupted', 'exhausted'])
   const deadline = Date.now() + timeoutMs
@@ -227,21 +265,33 @@ test('RFC-253 T41: 拖入两个脚本节点 → 写代码 → 连线 → 启动 
   const consumerId = await cards.nth(1).getAttribute('data-id')
   if (producerId === null || consumerId === null) throw new Error('节点 data-id 缺失')
 
+  // Fit both nodes before measuring. At the default camera the source handle
+  // can sit underneath React Flow's MiniMap on WebKit; the overlay then owns
+  // pointerdown and no connection gesture starts.
+  await page.getByTestId('workflow-camera-overview').click()
+  await expect(page.locator('.workflow-canvas')).toHaveAttribute('data-camera-mode', 'overview')
+
   const sourceHandle = page.locator(
     `.react-flow__node[data-id="${producerId}"] .react-flow__handle-right`,
   )
   const targetCard = page.locator(`.react-flow__node[data-id="${consumerId}"] .canvas-node`)
-  const sourceBox = await sourceHandle.boundingBox()
-  const targetBox = await targetCard.boundingBox()
-  if (sourceBox === null || targetBox === null) throw new Error('连线几何缺失')
-  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  const sourceCenter = await stableCenter(sourceHandle, 'producer source handle')
+  const targetCenter = await stableCenter(targetCard, 'consumer card')
+  expect(
+    await page.evaluate(({ x, y }) => {
+      const hit = document.elementFromPoint(x, y)
+      return hit instanceof Element && hit.closest('.react-flow__handle-right') !== null
+    }, sourceCenter),
+  ).toBe(true)
+  await page.mouse.move(sourceCenter.x, sourceCenter.y)
   await page.mouse.down()
-  // 分步移动 + 释放前先停一拍：xyflow 要看到中间的 pointermove 才会进入连线态。
-  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
-    steps: 20,
-  })
-  await expect(targetCard).toHaveAttribute('data-connect-preview', 'new')
-  await page.mouse.up()
+  try {
+    // 分步移动：xyflow 要看到中间的 pointermove 才会进入连线态。
+    await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 20 })
+    await expect(targetCard).toHaveAttribute('data-connect-preview', 'new')
+  } finally {
+    await page.mouse.up()
+  }
   await expect(page.locator('.react-flow__edge')).toHaveCount(1)
 
   // ── 4. 自动保存落库，并从 wire 上确认端口命名规则真的生效 ─────────────────

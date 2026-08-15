@@ -229,8 +229,8 @@ describe('RFC-212 T4 — every channel declares its revalidation strategy (AC-5)
   const kinds = Object.keys(WS_CHANNELS) as WsChannelKind[]
 
   test('the registry is non-empty and every kind is present', () => {
-    // RFC-238 adds the private MCP runtime-test locator channel.
-    expect(kinds.length).toBe(10)
+    // RFC-305 adds the authenticated app-wide authority revision channel.
+    expect(kinds.length).toBe(11)
     for (const kind of kinds) expect(WS_CHANNELS[kind].kind).toBe(kind)
   })
 

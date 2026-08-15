@@ -72,6 +72,8 @@ import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { createLogger } from '@/util/log'
 import { triggerAuthorityRevalidation } from './revalidationHook'
 import {
+  AUTHORITY_CHANNEL,
+  authorityBroadcaster,
   MEMORY_CHANNEL,
   MEMORY_DISTILL_JOB_CHANNEL,
   INTENT_SESSIONS_CHANNEL,
@@ -107,6 +109,7 @@ const log = createLogger('ws.registry')
 // -----------------------------------------------------------------------------
 
 export interface ChannelParamsByKind {
+  authority: { kind: 'authority' }
   task: { kind: 'task'; taskId: string; since?: number }
   'tasks-list': { kind: 'tasks-list' }
   workflows: { kind: 'workflows' }
@@ -120,6 +123,7 @@ export interface ChannelParamsByKind {
 }
 
 export interface ChannelMessageByKind {
+  authority: WsControlMessage
   task: TaskWsMessage
   'tasks-list': TasksListWsMessage
   workflows: WorkflowsWsMessage
@@ -134,6 +138,7 @@ export interface ChannelMessageByKind {
 
 /** Process-local metadata delivered beside frames; never part of JSON wire. */
 export interface ChannelBroadcastContextByKind {
+  authority: never
   task: never
   'tasks-list': TasksListBroadcastContext
   workflows: WorkflowsBroadcastContext
@@ -506,6 +511,19 @@ export type WsChannelRegistry = {
 }
 
 export const WS_CHANNELS: WsChannelRegistry = {
+  authority: {
+    kind: 'authority',
+    revalidation: {
+      refreshActor: true,
+      cache: { kind: 'none', why: 'revision-only control channel has no product frames' },
+      rerunUpgradeGate: { na: 'authenticated upgrade is the complete gate' },
+    },
+    helloName: () => 'authority',
+    pathRe: /^\/ws\/authority$/,
+    parse: () => ({ kind: 'authority' }),
+    broadcaster: authorityBroadcaster,
+    channelKeyOf: () => AUTHORITY_CHANNEL,
+  },
   task: {
     kind: 'task',
     // RFC-212: gated once at upgrade (taskVisibleTo); a member removal must

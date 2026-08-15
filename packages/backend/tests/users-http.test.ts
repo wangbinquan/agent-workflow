@@ -62,19 +62,52 @@ async function reqAs(
   return app.request(path, { ...init, headers: h })
 }
 
-describe('/api/users (users:write capability)', () => {
+describe('/api/users (users:read/users:write capabilities)', () => {
   let h: Harness
   beforeEach(async () => {
     h = await buildHarness()
   })
 
-  test('GET /api/users — preset holder and daemon OK; account without users:write gets 403', async () => {
+  test('GET /api/users — preset holder and daemon OK; account without users:read gets 403', async () => {
     const admin = await reqAs(h.app, h.adminToken, '/api/users')
     expect(admin.status).toBe(200)
     const daemon = await reqAs(h.app, DAEMON_TOKEN, '/api/users')
     expect(daemon.status).toBe(200)
     const user = await reqAs(h.app, h.bobToken, '/api/users')
     expect(user.status).toBe(403)
+  })
+
+  test('users:read grants directory detail/list but not account mutation', async () => {
+    const granted = await reqAs(h.app, h.adminToken, `/api/users/${h.bobId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        access: {
+          role: 'user',
+          additionalPermissions: ['users:read'],
+          expectedRevision: 0,
+        },
+      }),
+    })
+    expect(granted.status).toBe(200)
+
+    expect((await reqAs(h.app, h.bobToken, '/api/users')).status).toBe(200)
+    expect((await reqAs(h.app, h.bobToken, `/api/users/${h.adminId}`)).status).toBe(200)
+
+    const create = await reqAs(h.app, h.bobToken, '/api/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: 'read-only-cannot-create',
+        displayName: 'Read Only',
+        role: 'user',
+        password: 'longEnoughPassword',
+      }),
+    })
+    expect(create.status).toBe(403)
+    const update = await reqAs(h.app, h.bobToken, `/api/users/${h.adminId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ displayName: 'Must Not Change' }),
+    })
+    expect(update.status).toBe(403)
   })
 
   test('a user preset with users:read/write can administer accounts without becoming admin', async () => {

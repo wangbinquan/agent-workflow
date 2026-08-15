@@ -180,6 +180,14 @@ export async function revalidateAllConnections(
     if (spec.revalidation.cache.kind === 'prefixes') {
       ws.data.visibilityCache.clear()
     }
+    // Notify while the freshly resolved credential is still connected. A
+    // revocation can make the channel's own gate fail below; sending first lets
+    // the app-wide authority socket refresh navigation and route guards even
+    // when this particular business socket is about to close with 4403.
+    if (reason === 'authority-changed') {
+      sendAuthorityChanged(ws, freshActor.authorityRevision ?? target?.revision ?? 0)
+      if (ws.data.closing) continue
+    }
     // ⑤ re-run the whole-connection gate where the channel has one.
     if (spec.revalidation.rerunUpgradeGate === true) {
       let verdict
@@ -198,9 +206,6 @@ export async function revalidateAllConnections(
         stats.closedGate += 1
         continue
       }
-    }
-    if (reason === 'authority-changed') {
-      sendAuthorityChanged(ws, freshActor.authorityRevision ?? target?.revision ?? 0)
     }
     // Survived the pass with a refreshed actor — unfreeze so the broadcast path
     // delivers again (impl-gate: the frame freeze is only for the pass duration).

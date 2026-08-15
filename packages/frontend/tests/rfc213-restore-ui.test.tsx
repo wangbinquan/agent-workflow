@@ -59,7 +59,7 @@ describe('RFC-213 P1-5 restore confirmation gate', () => {
   test('picking a file opens the confirm dialog without uploading; cancel sends nothing; confirm POSTs', async () => {
     apiGet.mockResolvedValue(EMPTY)
     apiPostMultipart.mockResolvedValue({ status: 'staged' })
-    render(wrap(<BackupCard />))
+    render(wrap(<BackupCard canRun />))
 
     pickFile()
     const dialog = await screen.findByRole('dialog')
@@ -98,7 +98,7 @@ describe('RFC-213 P1-5 staged-restore visibility', () => {
     })
     apiGet.mockResolvedValue(EMPTY)
     apiDelete.mockResolvedValue({ cleared: true })
-    render(wrap(<BackupCard />))
+    render(wrap(<BackupCard canRun />))
 
     const banner = await screen.findByTestId('restore-pending-banner')
     expect(banner.textContent).toContain(i18n.t('settings.restorePendingTitle'))
@@ -131,7 +131,7 @@ describe('RFC-213 P1-5 staged-restore visibility', () => {
         },
       ],
     })
-    render(wrap(<BackupCard />))
+    render(wrap(<BackupCard canRun />))
 
     const banner = await screen.findByTestId('restore-failed-banner')
     expect(banner.textContent).toContain(i18n.t('settings.restoreFailedTitle'))

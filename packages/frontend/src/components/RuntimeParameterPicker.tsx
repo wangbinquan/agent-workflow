@@ -182,6 +182,7 @@ export function RuntimeParameterPicker({
   const [position, setPosition] = useState<PickerPosition | null>(null)
   const [error, setError] = useState<string | null>(null)
   const popoverId = useId()
+  const listboxId = useId()
   const descriptionId = useId()
   latestTargetRef.current = target
 
@@ -474,7 +475,7 @@ export function RuntimeParameterPicker({
       ? (emptyMessage ?? t('runtimeParameters.unavailable'))
       : t('runtimeParameters.noMatches')
   const activeDescendant =
-    activeIndex < 0 ? undefined : `${popoverId}-option-${String(activeIndex)}`
+    activeIndex < 0 ? undefined : `${listboxId}-option-${String(activeIndex)}`
 
   return (
     <div className={className === undefined ? 'runtime-parameter-picker' : className}>
@@ -512,6 +513,7 @@ export function RuntimeParameterPicker({
       {open &&
         createPortal(
           <div
+            id={popoverId}
             ref={popoverRef}
             className="runtime-parameter-popover"
             style={popoverStyle}
@@ -536,7 +538,7 @@ export function RuntimeParameterPicker({
                 value={query}
                 placeholder={t('runtimeParameters.search')}
                 aria-label={t('runtimeParameters.search')}
-                aria-controls={popoverId}
+                aria-controls={listboxId}
                 aria-expanded
                 aria-autocomplete="list"
                 aria-activedescendant={activeDescendant}
@@ -558,7 +560,7 @@ export function RuntimeParameterPicker({
               <div className="runtime-parameter-popover__breadcrumb">{breadcrumb.join(' / ')}</div>
             ) : null}
             <div
-              id={popoverId}
+              id={listboxId}
               className="runtime-parameter-popover__list"
               role="listbox"
               aria-label={t('runtimeParameters.insertFor', { field: target.label })}
@@ -572,7 +574,7 @@ export function RuntimeParameterPicker({
                 return (
                   <button
                     key={action.id}
-                    id={`${popoverId}-option-${String(index)}`}
+                    id={`${listboxId}-option-${String(index)}`}
                     ref={(element) => {
                       if (element === null) actionRefs.current.delete(action.id)
                       else actionRefs.current.set(action.id, element)

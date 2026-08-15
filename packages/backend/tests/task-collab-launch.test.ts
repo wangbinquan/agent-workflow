@@ -156,6 +156,14 @@ describe('taskCollab — RFC-099 membership model', () => {
     expect(await requireTaskMember(db, actorFor(bob, 'user'), task)).toBe('owner')
     expect(await requireTaskMember(db, actorFor(carol, 'user'), task)).toBe('user')
     expect(await requireTaskMember(db, actorFor(admin, 'admin'), task)).toBe('admin')
+    const daveBase = actorFor(dave, 'user')
+    const daveUsersWriter: Actor = {
+      ...daveBase,
+      permissions: new Set([...daveBase.permissions, 'users:write']),
+    }
+    await expect(requireTaskMember(db, daveUsersWriter, task)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    )
     await expect(requireTaskMember(db, actorFor(dave, 'user'), task)).rejects.toBeInstanceOf(
       ForbiddenError,
     )

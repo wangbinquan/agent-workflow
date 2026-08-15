@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { useTasksSync } from '../src/hooks/useTasksSync'
 import { useWorkflowSync } from '../src/hooks/useWorkflowSync'
+import { useAuthoritySync } from '../src/hooks/useAuthoritySync'
 import { ACTOR_QUERY_KEY } from '../src/hooks/useActor'
 import { appQueryClient } from '../src/lib/query-client'
 
@@ -98,6 +99,22 @@ function renderHook(useHook: () => void) {
     </QueryClientProvider>,
   )
 }
+
+describe('useAuthoritySync', () => {
+  test('keeps an app-wide authenticated authority channel open', () => {
+    renderHook(() => useAuthoritySync())
+    expect(opened).toHaveLength(1)
+    expect(opened[0]?.url).toContain('/ws/authority?token=tok')
+  })
+
+  test('authority.changed invalidates the current-actor cache without a product subscriber', () => {
+    const invalidate = vi.spyOn(appQueryClient, 'invalidateQueries')
+    renderHook(() => useAuthoritySync())
+    opened[0]!.fireMessage({ type: 'authority.changed', revision: 8 })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ACTOR_QUERY_KEY })
+    invalidate.mockRestore()
+  })
+})
 
 describe('useTasksSync', () => {
   test('opens a /ws/tasks connection with the stored token', () => {

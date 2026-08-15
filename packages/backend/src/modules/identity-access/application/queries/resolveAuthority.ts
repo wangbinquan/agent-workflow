@@ -20,9 +20,9 @@ export class ResolveAuthority implements CurrentSubjectAccessResolver {
 
   async execute(userId: string): Promise<ResolvedAuthoritySubject | null> {
     this.deps.observer?.authorityReresolution(userId)
-    const user = await this.deps.repository.findUser(userId)
-    if (user === null || user.status !== 'active') return null
-    const grants = await this.deps.repository.listGrants([userId])
+    const snapshot = await this.deps.repository.findAccessSnapshot(userId)
+    if (snapshot === null || snapshot.user.status !== 'active') return null
+    const { user, grants } = snapshot
     const canonical = canonicalStoredAccess({
       role: user.role,
       storedPermissions: grants.map((grant) => grant.permission),

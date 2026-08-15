@@ -206,6 +206,20 @@ describe('resourceAcl — resolveTaskRole precedence (D17: member identity first
     expect(resolveTaskRole(actorOfUser(me, 'user'), ulid(), false)).toBeNull()
   })
 
+  test('users:write alone does not bypass task membership', () => {
+    const base = actorOfUser(me, 'user')
+    const usersWriter = {
+      ...base,
+      permissions: new Set([...base.permissions, 'users:write'] as const),
+    }
+    expect(resolveTaskRole(usersWriter, ulid(), false)).toBeNull()
+    const bypassWriter = {
+      ...base,
+      permissions: new Set([...base.permissions, 'users:write', 'resource-acl:bypass'] as const),
+    }
+    expect(resolveTaskRole(bypassWriter, ulid(), false)).toBe('admin')
+  })
+
   test('null task owner never matches as owner', () => {
     expect(resolveTaskRole(actorOfUser(me, 'user'), null, true)).toBe('user')
     expect(resolveTaskRole(actorOfUser(me, 'admin'), null, false)).toBe('admin')

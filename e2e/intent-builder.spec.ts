@@ -16,6 +16,9 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { startDaemon, type DaemonHandle } from './harness'
 import { describeBlocking } from './axe-blocking'
 
@@ -126,11 +129,15 @@ test('US-6: modify entry pre-mounts the target resource in a new session', async
 test('RFC-293 workbench queues context, iterates around checkpoints, discards, and scrolls independently', async ({
   page,
 }, testInfo) => {
-  const workbenchDaemon = await startDaemon({
-    stubMode: 'intent',
-    extraEnv: { STUB_INTENT_DELAY_MS: '900' },
-  })
+  const holdDir = mkdtempSync(join(tmpdir(), 'aw-intent-hold-'))
+  const holdFile = join(holdDir, 'first-turn.hold')
+  writeFileSync(holdFile, 'held')
+  let workbenchDaemon: DaemonHandle | undefined
   try {
+    workbenchDaemon = await startDaemon({
+      stubMode: 'intent',
+      extraEnv: { STUB_INTENT_HOLD_FILE: holdFile },
+    })
     await authPage(page, workbenchDaemon)
     await page.setViewportSize({ width: 1800, height: 1000 })
     const targetResponse = await fetch(`${workbenchDaemon.baseUrl}/api/agents`, {
@@ -169,6 +176,7 @@ test('RFC-293 workbench queues context, iterates around checkpoints, discards, a
     // 先等这次重渲染**完成**（已选项出现在弹窗里）再点，是真同步点而不是 sleep。
     await expect(workingDialog.getByText(/e2e-working-context/)).toBeVisible({ timeout: 15_000 })
     await workingDialog.getByRole('button', { name: 'Refresh after this turn' }).click()
+    rmSync(holdFile, { force: true })
     await expect(page.getByText('e2e-working-context', { exact: true })).toBeVisible({
       timeout: 30_000,
     })
@@ -270,7 +278,9 @@ test('RFC-293 workbench queues context, iterates around checkpoints, discards, a
       contentType: 'image/png',
     })
   } finally {
-    await workbenchDaemon.stop()
+    rmSync(holdFile, { force: true })
+    if (workbenchDaemon !== undefined) await workbenchDaemon.stop()
+    rmSync(holdDir, { recursive: true, force: true })
   }
 })
 

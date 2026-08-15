@@ -57,7 +57,7 @@ import { describeApiError, setLanguage, type SupportedLanguage } from '@/i18n'
 import { isSupportedLanguage } from '@/hooks/useLanguage'
 import { queryConfig, useConfigQueryKey } from '@/lib/config-resource'
 import { appQueryClient } from '@/lib/query-client'
-import { meQueryOptions, type MeResponse } from '@/hooks/useActor'
+import { meQueryOptions, usePermission, type MeResponse } from '@/hooks/useActor'
 import { getToken } from '@/stores/auth'
 import {
   SETTINGS_CONFIG_SCOPE_IDS,
@@ -871,6 +871,7 @@ function GitTab({ config }: TabProps) {
 
 export function GcTab({ config }: TabProps) {
   const { t } = useTranslation()
+  const canRunBackup = usePermission('backup:run')
   const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.gc, config)
   const { state, setState, save } = draft
   const gc = state.worktreeAutoGc
@@ -995,7 +996,7 @@ export function GcTab({ config }: TabProps) {
           </Field>
         </div>
       </SettingsCard>
-      <BackupCard />
+      {canRunBackup && <BackupCard canRun={canRunBackup} />}
     </SectionForm>
   )
 }
@@ -1019,7 +1020,7 @@ function formatMb(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
 }
 
-export function BackupCard() {
+export function BackupCard({ canRun }: { canRun: boolean }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [busy, setBusy] = useState(false)
@@ -1032,14 +1033,15 @@ export function BackupCard() {
   const [restoreCandidate, setRestoreCandidate] = useState<File | null>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
   const restoreButtonRef = useRef<HTMLButtonElement>(null)
-  // Armed staged-restore visibility. The endpoint requires `backup:run`; without
-  // that permission the query 403s and the banners below simply stay hidden.
+  // Armed staged-restore visibility. `enabled` is a component-level capability
+  // fence in addition to the parent visibility gate and the server boundary.
   const restorePending = useQuery<{
     pending: RestorePendingInfo | null
     failed: RestoreFailedInfo[]
   }>({
     queryKey: ['restore-pending'],
     queryFn: ({ signal }) => api.get('/api/restore/pending', undefined, signal),
+    enabled: canRun,
     retry: false,
   })
   const cancelStaged = useMutation({
@@ -1082,6 +1084,7 @@ export function BackupCard() {
   }
   const pending = restorePending.data?.pending ?? null
   const lastFailed = restorePending.data?.failed[0]
+  if (!canRun) return null
   return (
     <SettingsCard title={t('settings.backupTitle')} hint={t('settings.backupHint')}>
       <button type="button" className="btn" onClick={runBackup} disabled={busy}>

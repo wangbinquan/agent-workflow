@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
 import { UserMenu } from '@/components/UserMenu'
 import { usePermission } from '@/hooks/useActor'
+import { useAuthoritySync } from '@/hooks/useAuthoritySync'
 import { resolveActiveNav, type ActiveNav, type SubNavItem } from '@/lib/nav'
 import { setInboxOpen, toggleInboxOpen, useInboxOpen } from '@/stores/inbox'
 import { CompactTopBar } from './CompactTopBar'
@@ -56,6 +57,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ pathname, children }: AppShellProps) {
+  useAuthoritySync()
   const compact = useCompactShell()
   const active = resolveActiveNav(pathname)
   const inboxOpen = useInboxOpen()

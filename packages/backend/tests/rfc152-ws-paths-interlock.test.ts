@@ -14,10 +14,11 @@ import { parseWsChannel, WS_CHANNELS, type WsChannelKind } from '../src/ws/regis
 const parse = (path: string) => parseWsChannel(new URL(path, 'http://daemon.test'))
 
 describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
-  test('WS_PATHS key set is exactly the ten channels (bijection lock)', () => {
+  test('WS_PATHS key set is exactly the eleven channels (bijection lock)', () => {
     expect(Object.keys(WS_PATHS).sort()).toEqual(
       // RFC-159 added `scheduledTasks`; RFC-234 added `intentSessions`.
       [
+        'authority',
         'task',
         'tasksList',
         'workflows',
@@ -44,6 +45,7 @@ describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
   })
 
   test('static paths parse', () => {
+    expect(parse(WS_PATHS.authority)).toEqual({ kind: 'authority' })
     expect(parse(WS_PATHS.tasksList)).toEqual({ kind: 'tasks-list' })
     expect(parse(WS_PATHS.workflows)).toEqual({ kind: 'workflows' })
     expect(parse(WS_PATHS.workgroups)).toEqual({ kind: 'workgroups' })
@@ -61,6 +63,7 @@ describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
 
   test('every WS_PATHS sample matches exactly ONE registry pathRe (no overlap)', () => {
     const samples: Array<[string, WsChannelKind]> = [
+      [WS_PATHS.authority, 'authority'],
       [WS_PATHS.task('01ABC'), 'task'],
       [WS_PATHS.tasksList, 'tasks-list'],
       [WS_PATHS.workflows, 'workflows'],

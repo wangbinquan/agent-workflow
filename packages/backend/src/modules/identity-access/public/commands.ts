@@ -8,3 +8,7 @@ export {
   type UpdateUserAccessCommand,
   type UpdateUserAccessResult,
 } from '../application/commands/updateUserAccess'
+export {
+  insertInitialUserAccessInTransaction,
+  type InitialUserAccessProvision,
+} from '../infrastructure/sqliteUserAccessRepository'

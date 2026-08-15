@@ -53,8 +53,15 @@ async function chooseParameter(page: Page, pickerTestId: string, query: string):
   await page.getByTestId(pickerTestId).click()
   const popover = page.locator('[data-runtime-parameter-popover]')
   await expect(popover).toBeVisible()
-  await popover.getByRole('combobox').fill(query)
-  await popover.getByRole('option', { name: new RegExp(query.replaceAll('_', '.*'), 'i') }).click()
+  const search = popover.getByRole('combobox')
+  await search.click()
+  await search.pressSequentially(query)
+  await expect(search).toHaveValue(query)
+  const option = popover.getByRole('option', {
+    name: new RegExp(query.replaceAll('_', '.*'), 'i'),
+  })
+  await expect(option).toBeVisible()
+  await option.click()
   await expect(popover).toBeHidden()
 }
 
@@ -109,8 +116,20 @@ test('Workflow Agent picker autosaves through the real PUT and reloads the token
   await expect(page.getByTestId('agent-runtime-parameter-picker')).toBeVisible()
   await expect(page.getByText('{{trigger.webhook.comment_text}}', { exact: true })).toHaveCount(0)
   const prompt = page.getByRole('textbox', { name: 'Prompt template' })
-  await prompt.focus()
-  await prompt.press('End')
+  await prompt.evaluate((element: HTMLInputElement | HTMLTextAreaElement) => {
+    element.focus()
+    const end = element.value.length
+    element.setSelectionRange(end, end)
+  })
+  await expect
+    .poll(() =>
+      prompt.evaluate((element: HTMLInputElement | HTMLTextAreaElement) => ({
+        start: element.selectionStart,
+        end: element.selectionEnd,
+        length: element.value.length,
+      })),
+    )
+    .toEqual({ start: 4, end: 4, length: 4 })
 
   const saveResponse = page.waitForResponse(
     (response) =>

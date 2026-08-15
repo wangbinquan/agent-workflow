@@ -86,13 +86,13 @@ effectiveAccountPermissions = ROLE_PERMISSIONS[role] ∪ additionalPermissions
 
 以下五项加入 `Permission` 闭集，并由原消费方直接检查：
 
-| 权限点                            | 能力 |
-| --------------------------------- | ---- |
-| `resource-acl:bypass`             | 绕过资源 owner/visibility/grant 的行级 ACL |
-| `memory-distill-jobs:manage`      | 查看与控制记忆蒸馏任务 |
-| `intent:audit`                    | 跨 owner 只读审计 Intent session / provenance |
+| 权限点                            | 能力                                                     |
+| --------------------------------- | -------------------------------------------------------- |
+| `resource-acl:bypass`             | 绕过资源 owner/visibility/grant 的行级 ACL               |
+| `memory-distill-jobs:manage`      | 查看与控制记忆蒸馏任务                                   |
+| `intent:audit`                    | 跨 owner 只读审计 Intent session / provenance            |
 | `mcp-runtime-tests:audit`         | 通过精确 session id 跨 owner 只读 MCP runtime transcript |
-| `webhook-triggers:override-owner` | 修改或删除其他 owner 的 Webhook trigger |
+| `webhook-triggers:override-owner` | 修改或删除其他 owner 的 Webhook trigger                  |
 
 `manager` 和 `admin` 之所以默认拥有其中部分能力，只因为对应点在其预设中；普通 `user` 也可被显式授予。
 
@@ -137,12 +137,17 @@ additionalPermissions ∩ ROLE_PERMISSIONS[role] = ∅
 `expectedRevision`；并发冲突返回 409，前端保留草稿并允许加载最新状态。仅有效访问变化推进 revision；profile/status-only
 与 no-op 不虚增 revision 或 audit。
 
+Bootstrap/OIDC 的初始账户也不例外：它们通过 identity-access exact transaction participant 写 user/revision=0/create audit，再在同一
+外层事务写登录策略或 identity。生产代码中的 `insert(users)` 因此只有 identity-access repository 一个落点。authority 和用户目录
+读取同样以单条 join 查询取得 role+grants 快照，不组合两个异步时点。
+
 ### D8. 当前权限即时生效
 
 - REST/session/PAT：每次请求重新读取 active 状态、角色预设、grants 和 revision；
 - WebSocket：DB revision 作为正确性围栏，post-commit 定向刷新只是加速；后续入帧和出帧不得继续使用旧 revision；
 - scheduled/call/webhook：持久化 subject ref，在新委派与副作用 admission 前重新解析当前 authority；
-- 前端收到 `authority.changed` 后失效 `/api/auth/me` 缓存。
+- 认证后的所有页面常驻 `/ws/authority`；前端收到 `authority.changed` 后失效 `/api/auth/me` 缓存。业务 channel 因撤权需关闭时，
+  服务端先发 revision frame 再执行 4403 close。
 
 ### D9. PAT 仍受双重上限
 

@@ -25,6 +25,14 @@ export interface UserPermissionGrantRecord {
   readonly grantedAt: number
 }
 
+/** One database-statement snapshot of the account preset and its explicit
+ * grants. Consumers must materialize effective authority from this value,
+ * rather than combining independently observed user and grant rows. */
+export interface UserAccessSnapshot {
+  readonly user: UserAccessRecord
+  readonly grants: ReadonlyArray<UserPermissionGrantRecord>
+}
+
 export type InsertManagedUserRecord = UserAccessRecord
 
 export interface ConditionalUserUpdate {
@@ -46,10 +54,8 @@ export interface ConditionalUserUpdate {
 }
 
 export interface UserAccessReadRepository {
-  findUser(id: string): Promise<UserAccessRecord | null>
-  findUserByUsername(username: string): Promise<UserAccessRecord | null>
-  listUsers(): Promise<ReadonlyArray<UserAccessRecord>>
-  listGrants(userIds: ReadonlyArray<string>): Promise<ReadonlyArray<UserPermissionGrantRecord>>
+  findAccessSnapshot(id: string): Promise<UserAccessSnapshot | null>
+  listAccessSnapshots(): Promise<ReadonlyArray<UserAccessSnapshot>>
 }
 
 export interface UserAccessTransactionParticipant {

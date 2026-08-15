@@ -146,6 +146,18 @@ describe('RFC-221 auth policy service', () => {
     expect(created.role).toBe('admin')
     expect(created.status).toBe('active')
     expect(created.email).toBe('admin@example.test')
+    expect(
+      db.$client
+        .query(
+          'SELECT actor_kind, before_role, after_role, access_revision FROM user_access_audit WHERE target_user_id = ?',
+        )
+        .get(created.id),
+    ).toEqual({
+      actor_kind: 'system',
+      before_role: 'admin',
+      after_role: 'admin',
+      access_revision: 0,
+    })
     expect(getAuthLoginPolicy(db)).toEqual({
       passwordLoginEnabled: true,
       bootstrapCompletedAt: 1234,

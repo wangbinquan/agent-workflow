@@ -8,6 +8,7 @@ import type { UserIdentity } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { oidcProviders, userIdentities, users } from '@/db/schema'
+import { insertInitialUserAccessInTransaction } from '@/modules/identity-access/public/commands'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
@@ -142,8 +143,9 @@ export async function createUserWithIdentity(
   const now = args.now ?? Date.now()
   return dbTxSync(db, (tx) => {
     const userId = ulid()
-    tx.insert(users)
-      .values({
+    const operationId = ulid()
+    insertInitialUserAccessInTransaction(tx, {
+      user: {
         id: userId,
         username: args.username,
         email: args.email,
@@ -159,8 +161,23 @@ export async function createUserWithIdentity(
         updatedAt: now,
         lastLoginAt: null,
         schemaVersion: 1,
-      })
-      .run()
+        accessRevision: 0,
+      },
+      audit: {
+        id: ulid(),
+        targetUserId: userId,
+        actorUserId: null,
+        actorKind: 'system',
+        operationId,
+        correlationId: operationId,
+        beforeRole: 'user',
+        afterRole: 'user',
+        addedPermissions: [],
+        removedPermissions: [],
+        accessRevision: 0,
+        createdAt: now,
+      },
+    })
     insertIdentityTx(tx, { ...args.identity, userId, now })
     return { userId }
   })

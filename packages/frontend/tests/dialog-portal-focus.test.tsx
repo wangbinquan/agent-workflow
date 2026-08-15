@@ -1,5 +1,4 @@
-// Regression lock for the Dialog focus-trap vs. body-portaled <Select>
-// popover conflict.
+// Regression lock for the Dialog focus-trap vs. body-portaled popovers.
 //
 // Symptom (reported 2026-06-06, Settings → Authentication → Add provider):
 // opening the "Provisioning policy" <Select> inside the dialog snapped the
@@ -11,15 +10,17 @@
 // panel focus as an escape and yanked focus to the panel's first focusable
 // — the × close button at the top — scroll-jumping the panel to the top.
 //
-// Fix: Dialog.isFocusInsideDialog() now treats focus inside a popover that
-// a panel control owns via aria-controls (combobox → listbox) as "inside".
-// These tests must stay green so the trap never re-grabs an open <Select>,
-// while still trapping focus that genuinely escapes the dialog.
+// Fix: Dialog.isFocusInsideDialog() treats focus inside a popover that a panel
+// control owns via aria-controls as "inside". RuntimeParameterPicker therefore
+// exposes the whole portaled layer to its trigger (while its search combobox
+// separately controls the listbox). These tests must stay green so the trap
+// never re-grabs an open Select or picker, while still trapping real escapes.
 
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/react'
 import { useState } from 'react'
 import { Dialog } from '../src/components/Dialog'
+import { RuntimeParameterPicker } from '../src/components/RuntimeParameterPicker'
 import { Select } from '../src/components/Select'
 
 function DialogWithSelect() {
@@ -59,6 +60,41 @@ function ClosableDialogWithSelect({ onClose }: { onClose: () => void }) {
           { value: 'a', label: 'A' },
           { value: 'b', label: 'B' },
         ]}
+      />
+    </Dialog>
+  )
+}
+
+function DialogWithRuntimeParameterPicker() {
+  return (
+    <Dialog open onClose={() => {}} title="t">
+      <RuntimeParameterPicker
+        authority="workflow:model-prompt"
+        entries={[
+          {
+            id: 'global:trigger:webhook:context:repo_path',
+            token: '{{trigger.webhook.repo_path}}',
+            label: 'Repository path',
+            description: 'Repository path from the Webhook event.',
+            path: {
+              scope: 'global',
+              type: 'trigger',
+              source: 'webhook',
+              group: 'context',
+              field: 'repo_path',
+            },
+            pathLabels: ['Global', 'Trigger', 'Webhook', 'Context'],
+          },
+        ]}
+        target={{
+          id: 'dialog:prompt',
+          label: 'Prompt',
+          mode: 'insert-at-caret',
+          value: '',
+          revision: 0,
+          commit: () => {},
+        }}
+        testId="dialog-parameter-picker"
       />
     </Dialog>
   )
@@ -120,5 +156,23 @@ describe('Dialog focus trap × portaled <Select>', () => {
     fireEvent.keyDown(trigger as HTMLElement, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(document.querySelector('[role="dialog"]')).toBeNull()
+  })
+})
+
+describe('Dialog focus trap × portaled RuntimeParameterPicker', () => {
+  test('keeps focus and typing inside the picker search instead of yanking back to the dialog', async () => {
+    render(<DialogWithRuntimeParameterPicker />)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    fireEvent.click(document.querySelector('[data-testid="dialog-parameter-picker"]')!)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    const search = document.querySelector<HTMLInputElement>(
+      '[data-runtime-parameter-popover] [role="combobox"]',
+    )
+    expect(search).not.toBeNull()
+    expect(document.activeElement).toBe(search)
+    fireEvent.change(search!, { target: { value: 'repo_path' } })
+    expect(search?.value).toBe('repo_path')
   })
 })

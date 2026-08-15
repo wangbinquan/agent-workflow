@@ -21,9 +21,34 @@ export function admissionSubjectOf(
   }
 }
 
-/** Directory/profile administration accepts trusted daemon HTTP calls for
- * backward compatibility. Every account-side admission uses `users:write`;
- * the stored role is only an input to the shared preset resolver above. */
+/** Directory reads accept trusted daemon HTTP calls for backward
+ * compatibility. The stored role is only an input to the shared preset
+ * resolver above. */
+export function admitUserDirectoryQuery(
+  actor: {
+    readonly permissions: ReadonlySet<Permission>
+    readonly status: ManagedUserStatus
+  } | null,
+  context: { readonly source: string; readonly transport: string },
+): void {
+  if (context.source === 'cli' && context.transport === 'cli') return
+  if (
+    (context.source !== 'session' && context.source !== 'daemon') ||
+    context.transport !== 'http' ||
+    actor === null ||
+    actor.status !== 'active' ||
+    !actor.permissions.has('users:read')
+  ) {
+    throw new UserAccessError(
+      'forbidden',
+      'user-directory-forbidden',
+      'user directory requires users:read',
+    )
+  }
+}
+
+/** Profile/status administration is a write even when it does not replace
+ * the role/grant snapshot, so it requires `users:write`. */
 export function admitUserDirectoryAccess(
   actor: {
     readonly permissions: ReadonlySet<Permission>
