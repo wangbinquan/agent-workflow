@@ -236,11 +236,7 @@ export function RepoGroupEditor({
     enabled: open && canWrite,
     retry: false,
   })
-  const previewPending = isRepoGroupPreviewPending(
-    wireKey,
-    debouncedWireKey,
-    preview.isFetching,
-  )
+  const previewPending = isRepoGroupPreviewPending(wireKey, debouncedWireKey, preview.isFetching)
 
   const save = useMutation({
     mutationFn: async ({ nodes: submittedNodes, session }: RepoGroupSaveRequest) => {
