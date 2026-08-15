@@ -236,10 +236,10 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 `domain/anchorLine.ts` + 既有 `domain/reviewPosition.ts`；`publish` =
 `application/publishReview.ts`。
 
-> **fork 支持提前落在 PR-4a**（原列在 PR-4b 的 T24b）：改为只从 target remote 取
+> **fork 支持提前落在 PR-4a**（原列在 PR-4b 的 T24b）：只从 target remote 取
 > `refs/merge-requests/{iid}/head` / `refs/pull/{n}/head`——两家都把 MR head 发布成目标仓内的
 > ref，对 fork 同样解析，比「冻结 source clone URL 再去 fork 仓 fetch」少一套机制且不受 fork
-> 私有/已删/token 够不到的影响。理由与偏离记在 `design.md §6.1`，真机验证在
+> 私有/已删/token 够不到的影响。该方案即 `design.md §6.1` 的定稿对策（初稿方案与不采用理由存档在同节的折叠块里，含改回配方），真机验证在
 > `tests/rfc304-git-adapter.test.ts`（真 git 建一个只存在于 MR ref 上的提交）。T24b 因此在
 > PR-4b 只剩「fork PR 的 CI 事件经 head SHA→开放 PR 映射唤醒」一半。
 

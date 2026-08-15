@@ -730,35 +730,45 @@ last-known-good 反馈，绝不能出现「新的没发出去、旧的已经被�
    `source_branch`；GitLab 官方也明确顶层 `project` 是 **target** project。dispatch 随后把该 branch
    当 ref 用（`webhookDispatch.ts:372`）。fork 场景下 target clone 里根本没有那个分支，
    `fetch --all` 也只抓 target remote——非 shallow 救不了「另一个仓库的 ref」。
-   **对策（实现时改道，见下）**：归一化并冻结 **source project 的 clone URL + head SHA**；
-   `prepare-worktree` 按 source remote 精确 fetch head ref。两家的 fork MR/PR 必须各有一条
-   端到端用例。
+   **对策（2026-08-15 定稿，PR-4a 实现）**：**只从 target remote 取 MR head ref**——
+   GitLab `refs/merge-requests/{iid}/head`、GitHub `refs/pull/{n}/head`。两家都把 MR head
+   发布成**目标仓内**的一个 ref，对 fork 的 head 同样解析得到，因此不需要知道 source 仓在哪。
+   取数是**有序链**：先 MR ref、再裸 SHA（`uploadpack` 允许 reachable-SHA1 时可用），全败时
+   把每一条试过的 refspec 连同各自的错误一并报出。两家的 fork MR/PR 必须各有一条端到端用例。
 
-   > **实现偏离（PR-4a，`domain/headFetchPlan.ts`）**：改为**只从 target remote 取**。两家都把
-   > MR head 发布成**目标仓内**的一个 ref——GitLab `refs/merge-requests/{iid}/head`、GitHub
-   > `refs/pull/{n}/head`——这两个 ref 对 fork 的 head 同样解析得到。相比"记住 source clone URL
-   > 再去 fork 仓 fetch"，它少一套机制，且**消除了 source remote 方案无法回避的一个失败态**：
-   > fork 可能是私有的、已删除的、或在配置 token 够不到的实例上，此时根本无从 fetch，检视永远
-   > 不会跑。target remote 恰是平台已经持有凭据的那一个。
-   >
-   > 单点 ref 仍可能缺失（自建实例 housekeeping 会清理旧 MR ref），故取数是**有序链**：先 MR
-   > ref、再裸 SHA（`uploadpack` 允许 reachable-SHA1 时可用），全败时把**每一条试过的 refspec
-   > 连同各自的错误**一起报出——这正是运维看到 `repo-ref-not-found` 与看到"对该 remote 试了这
-   > 两条 refspec"之间的差别。
-   >
-   > 同时补一条设计里没有的判据：**head 是移动靶**。webhook 到达与 fetch 执行之间作者可以再推，
-   > 此时 MR ref 已指向新处；照 ref 取就会**用 A 的 diff 锚定 B 的代码**——每条意见的行号都由
-   > 检视者从未看过的文件内容算出，而输出里对此毫无提示。故 fetch 回来必须与本轮 baseline sha
-   > 比对，不等即判 `stale`（非错误），带上新 sha 让工作项**在新 sha 上重新武装**而不是丢弃该轮
-   > ——丢弃等于赌"新推送自带 webhook"，赌输时 MR 永远得不到检视，且唯一症状是沉默。
-2. **fork PR 的 CI 事件找不到 MR。** `githubAdapter.ts:447` 已记录：fork PR 的
-   `workflow_run.pull_requests[]` 为空，此时 `mrIid` 缺失，且该行为被
-   `tests/rfc259-github-adapter.test.ts:291` 锁定。而工作项身份要求 `anchorId`。
-   **对策**：以 head SHA 反查该仓当前开放的 PR 建立映射（带缓存）；命中唯一才唤醒对应工作项，
-   零命中或多命中时**不唤醒**并记事件——绝不按 branch 另起一条与既有台账无关的流。
+   <details><summary><b>初稿方案与不采用的理由（存档，可复议）</b></summary>
 
-两条都属于"不处理就静默失效"的形态：用户看到的是"机器对 fork 的 MR 从来不响应"，而日志里只有
-一条 `repo-ref-not-found` 或什么都没有。
+   初稿写的是：归一化并冻结 **source project 的 clone URL + head SHA**，`prepare-worktree`
+   按 source remote 精确 fetch head ref。改用 target remote 有三条理由：
+
+   1. **少一套机制**：source clone URL 不在 RFC-269/292 的 30 个 canonical webhook 字段里，
+      要落它得动那个闭合集合 + 两家 adapter + 各自守卫，而 target remote 是平台**已经持有
+      凭据**的那一个。
+   2. **消掉一个 source remote 方案无法回避的失败态**：fork 可能是私有的、已删除的、或在配置
+      token 够不到的实例上——此时根本无从 fetch，检视永远不会跑，而这正是本条要修的病。
+   3. **信任面**：按 source clone URL 取数意味着 daemon 会去请求一个**由第三方 webhook 载荷
+      提供**的 URL；只从 target remote 取则不存在这个入口。
+
+   代价与已知边界：MR ref 可能被自建实例的 housekeeping 清理，故有裸 SHA 兜底；两者都失败时
+   本轮以 `unreachable` 具名失败并列出试过的 refspec，而不是静默不响应。真机验证见
+   `tests/rfc304-git-adapter.test.ts`（用真 git 造一个**只存在于 MR ref 上**的提交，模拟
+   fork head 从目标仓视角看到的形态）。
+
+   若要改回初稿方案：改 `domain/headFetchPlan.ts` 的 `planHeadFetch` 与 `ports/gitPort.ts`
+   的 `fetchRef`（加 remote 参数），并把 `source_repo_url` 加进 canonical 字段与两家 adapter。
+
+   </details>
+
+   > **连带影响**：这条把原列在 PR-4b 的 **T24b 做掉了一半**——「源分支不在目标仓里」已解决；
+> T24b 在 PR-4b 只剩「fork PR 的 CI 事件经 head SHA→开放 PR 映射唤醒」那一半。
+
+> **另补一条设计里原本没有的判据：head 是移动靶**。webhook 到达与 fetch 执行之间作者可以再
+> 推，此时 MR ref 已指向新处；照 ref 取就会**用 A 的 diff 锚定 B 的代码**——每条意见的行号都由
+> 检视者从未看过的文件内容算出，而输出里对此毫无提示。故 fetch 回来必须与本轮 baseline sha
+> 比对，不等即判 `stale`（非错误），带上新 sha 让工作项**在新 sha 上重新武装**而不是丢弃该轮
+> ——丢弃等于赌「新推送自带 webhook」，赌输时 MR 永远得不到检视，且唯一症状是沉默。
+> 同理 GitHub `review.submit` 必须显式带 `commit_id`：缺省会把整份 review 挂到 PR **最新**
+> 提交上。
 
 ### 6.2 `mr-comment-fix`
 
