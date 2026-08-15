@@ -169,6 +169,8 @@ const TRUE_TAB_CALLSITES = [
   'components/workflow-editor/WorkflowNodePicker.tsx::{categoryTabsId}',
   'routes/agents.new.tsx::agents-create',
   'routes/auth.tsx::auth-method',
+  // RFC-304 — `/code` 的两个页签（仓库矩阵 / 活动）。
+  'routes/code.tsx::code',
   'routes/intent.detail.tsx::intent-workspace',
   'routes/mcps.detail.tsx::mcps-detail',
   'routes/mcps.new.tsx::mcps-create',

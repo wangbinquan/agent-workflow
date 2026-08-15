@@ -84,6 +84,9 @@ export const NAV_GROUPS: NavGroupEntry[] = [
         icon: 'webhook',
         permission: 'webhook-endpoints:read',
       },
+      // RFC-304 — `/code` 的读面按 `repos:read`：能力矩阵就是仓库配置的一部分。
+      // 页内的写动作各自按 `repos:update` 渲染，导航模型不携带角色概念。
+      { to: '/code', i18nKey: 'nav.code', icon: 'repo', permission: 'repos:read' },
     ],
   },
   // RFC-041 PR4 follow-up: mirror the single-item Workflows-group shape so

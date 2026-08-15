@@ -290,6 +290,19 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          | ✅ 2026-08-16 |
 | T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  | ✅ 2026-08-16 |
 
+> **T32/T33 前端最小面（2026-08-16）**：`/code` 两个页签——仓库 × 能力矩阵、活动
+> （工作项 → 轮次 → 阶段，即状态图前两层）。全部复用既有原语（PageHeader / TabBar +
+> TabPanels / Field / TextInput / Switch / StatusChip / EmptyState / ErrorBanner /
+> LoadingState），无自写 chrome。
+>
+> - **readiness 渲染成动作而不是徽章**：后端已把每条缺失与修它的路由配好对，页面渲染的是
+>   链接。只显示一个红标签等于把问题从「不知道为什么不跑」挪成「不知道去哪修」。
+> - **`disabled` 用中性色**：关掉是选择、不是故障；和故障同色会训练人忽略这个颜色。
+> - **四条前端守卫各自照办**：TabBar 必须带 `idPrefix` 且与同前缀的 `TabPanels` 配对——
+>   我原本写的三元切换渲染是对的，但会让 tab 的 `aria-controls` 指向不存在的面板；
+>   nav 图标清单与 route-UX 双向棘轮各自登记，后者**要求先有渲染测试**才允许登记路由
+>   （`code-page-inline.test.tsx`，承重用例是「misconfigured 的每条缺失都渲染出修复链接」）。
+
 > **T31b 后端查询合同（2026-08-16）**：`public/queries` + `public/commands`（RFC-294 的
 > exact 入口）、`CodeMatrixQuery` / `CodeWorkItemProjectionQuery` / `EnableCommand` 实现，
 > 三条 HTTP 路由（`repos:read` / `repos:update`——权限是闭合集合，为最小面新增
@@ -472,8 +485,8 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | #    | 任务                                                                                                                                                                                                                               | 依赖    |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------- |
 | T31b | **后端查询合同**（此前 PR-5 只有前端任务，没有支撑它的 API）：`CodeMatrixQuery` / `EnableCommand`（矩阵行 + readiness + 缺失项 + 修复动作）与 `CodeWorkItemProjectionQuery`（工作项 → 轮次 → 阶段投影，cursor 分页），含 HTTP 适配 | T16c,T5 | ✅ 2026-08-16 |
-| T32  | `/code` 路由与导航；仓库 × 能力矩阵配置页（复用既有表单原语）                                                                                                                                                                      | T31b    |
-| T33  | 状态机流转图第一、二层：工作项状态 + 展开当前轮阶段                                                                                                                                                                                | T31b    |
+| T32  | `/code` 路由与导航；仓库 × 能力矩阵配置页（复用既有表单原语）                                                                                                                                                                      | T31b    | ✅ 2026-08-16 |
+| T33  | 状态机流转图第一、二层：工作项状态 + 展开当前轮阶段                                                                                                                                                                                | T31b    | ✅ 2026-08-16 |
 | T34  | 任务列表按新任务类型筛选                                                                                                                                                                                                           | T9      |
 
 ### MR 监视器（PR-6）

@@ -409,6 +409,7 @@ export const enUS: Resources = {
     clarify: 'Clarify',
     repos: 'Repos',
     webhooks: 'Webhooks',
+    code: 'Code',
     settings: 'Settings',
     brand: 'Agent Workflow',
     openMenu: 'Open navigation menu',
@@ -554,6 +555,25 @@ export const enUS: Resources = {
     },
     feed: {
       title: 'Task activity',
+    },
+  },
+  code: {
+    title: 'Code capabilities',
+    subtitle: 'Which capabilities each repository runs, and what they have been doing',
+    tab: { matrix: 'Repositories', activity: 'Activity' },
+    repoLabel: 'Repository',
+    repoHint: 'The project path events arrive for, e.g. group/project',
+    load: 'Show',
+    pickRepo: 'Enter a repository to see its capabilities',
+    noCapabilities: 'No capability has been configured for this repository yet',
+    noActivity: 'Nothing has run yet',
+    noActivityHint: 'Work appears here once a merge request event wakes an enabled capability.',
+    enabled: 'Enabled',
+    round: 'Round {{seq}}',
+    readiness: {
+      ready: 'Ready',
+      misconfigured: 'Needs setup',
+      disabled: 'Off',
     },
   },
   reviews: {

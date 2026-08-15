@@ -54,7 +54,7 @@
 - **删掉一份「参照实现」之前，先把它的行为录成 golden**：差分测试（新旧同时跑、逐字节比对）只在旧实现还在时才成立，删了旧实现就等于把证明一起删了。做法是先把旧实现在全部用例上的**可观测行为**（stdout / stderr / exit / 状态文件 / 日志 / 副作用）录进仓库，再删旧实现，测试改为回放录音。三条配套断言缺一不可：重录必须跑**旧实现**（所以只在还有旧实现的 checkout 里能重录，不是给回归开绿灯的口子）、缺 golden 直接报错、以及「每个实现都有 golden、每个 golden 都有实现」的双向核对。副作用往往是意外之喜：录音在旧实现跑不起来的平台上照样回放（RFC-254 里 shell stub 在 Windows 上不能执行，但它的录音能）。
 - **源码里裸 `0x00` 让 grep/rg 静默跳过整文件**（却过 tsc/prettier/eslint/build/tests）；`file` / `tr -cd '\000'` 检测，改回 `\x00`；守卫 `no-nul-bytes-in-source`（注释里的字面量也会踩）。
   **最常见的引入方式是「拿 NUL 当分隔符」**：`return `${a}\0${b}``拼 Map key 看着很合理（NUL 不会出现在业务字符串里），但它把裸 0x00 写进了源码。正解是`JSON.stringify([a, b])` —— 既没有分隔符问题，也不碰 NUL。**另注意检测姿势**：`grep -q $'\000' file`在 zsh 下退化成空模式、对每个文件都返回真，别拿它当判据；用`tr -cd '\000' < file | wc -c`。
-  **它为什么总能活到门禁那一步**（2026-08-15 RFC-304 再犯一次，写进本条之后仍然踩）：NUL 当分隔符**功能上完全正确**——键唯一、去重照常、单测全绿；typecheck / lint / prettier 也都不管。把文件 Read 回来同样看不见（渲染成空）。于是从写下到 `no-nul-bytes-in-source` 报红之间，**没有任何一个信号是红的**。推论是别指望「自查时会发现」，而是**根本不要写分隔符**：拼键一律 `JSON.stringify([...])`。顺带一提这也是唯一能防住「标题里正好含分隔符」的写法——`file="a", title="b"` 与 `file="a<sep>b", title=""` 在 join 下同键，一条真 finding 会被当成另一条的重复丢掉。
+**它为什么总能活到门禁那一步**（2026-08-15 RFC-304 再犯一次，写进本条之后仍然踩）：NUL 当分隔符**功能上完全正确**——键唯一、去重照常、单测全绿；typecheck / lint / prettier 也都不管。把文件 Read 回来同样看不见（渲染成空）。于是从写下到 `no-nul-bytes-in-source`报红之间，**没有任何一个信号是红的**。推论是别指望「自查时会发现」，而是**根本不要写分隔符**：拼键一律`JSON.stringify([...])`。顺带一提这也是唯一能防住「标题里正好含分隔符」的写法——`file="a", title="b"`与`file="a<sep>b", title=""` 在 join 下同键，一条真 finding 会被当成另一条的重复丢掉。
 
 - **「只被 `import type` 引用」的模块在 `bun test` 面前是隐形的**：类型导入在运行期被整段抹掉，所以这类模块**丢了 / 拷漏了 / 改名了，测试照样全绿**——300 个文件、上万条断言，一条都不会红。只有 typecheck 与 depcheck 看得见（后者报「第一方 import 解析不了」）。2026-08-15 实际发生：往隔离工作树拷文件时 `cp -R src/ports/ dest/` 把**目录内容**摊进了上层（macOS 上 `cp -R foo/ bar/` 拷的是 foo 的内容），`ports/` 成了空目录，四个 shard 依然 `0 fail`，是 typecheck 22 条 TS2307 + depcheck 才把它揪出来。两条推论：①**别拿 `bun test` 绿当「文件都到位了」的判据**，隔离树跑门禁必须跑完整门禁（typecheck/depcheck 那两步正是为这种失明存在的）；②往隔离树拷贝时**逐文件拷、不要拷目录**（`git status --porcelain` 列出的目录项要先展开成文件），否则一个静默的路径偏移能让整轮门禁结论失真。
 
@@ -102,7 +102,7 @@
 - **接到跨 session 关于远端状态的断言，先自己 `git fetch` 核一遍再据此决策**（同一天，双向各救了一次）。我把「已 push」当成既成事实通报出去，实际那次 push **根本没执行**（动作排在门禁之后，我却按已完成叙述）；对方两次 fetch 才发现不对。反过来他们的转述也被独立复核纠正过一次。**判据**：凡涉及「远端有什么」的话，说之前先 `git rev-parse origin/main`，听之后先 `git fetch && git merge-base --is-ancestor <sha> origin/main`。这条与「推理出错」不同——它是把没做的事报告成做了，对协作方的伤害是让他们基于一个不存在的状态决策。
 - **别用「我没写过所以是别人的」做归属排除法——「别人」可能不止一个**（同一天，我连续两次判错）。先 `ListAgents` 看清本机到底有几个 session：这次是三个（我 / 4f / 88），我却按两个在推理，于是把 88 的东西两次判给了 4f。共享工作树 + 共用 git identity 的组合下，排除法失效，只能靠改动内容与时间线正面认领。
 - **不要对 `docs/` 跑 `prettier --write`**：门禁的 format 面只覆盖 `packages/**/*.{ts,tsx,json,md}`，`docs/` 不在其中。对它跑格式化会把**他人未提交段落**整体重新折行，制造一大片与内容无关的 diff，还会掩盖真正的改动。
-- **中文排版一致性（全半角标点、中英文间距）没有任何自动化保障——`prettier` 覆盖与否都一样**，它不把半角逗号改成全角，中英文标点混用不在它职责内。所以**别指望把 `docs/**` 加进 format glob 来解决**（2026-08-15 并发 session 复核纠正：原先的写法会让下一个人去改 prettier 配置然后发现没用）。这类问题**门禁全绿、行为零影响、复制粘贴也不报错**，是最容易被作者与复核方双方默契跳过的一类——只能靠人复核。实撞：本轮两笔文档新增 13 行里，代码块外紧跟中文的半角标点 **39 处**（逗号 34 + 冒号 5），全角 0 处，作者整轮无自觉。
+- **中文排版一致性（全半角标点、中英文间距）没有任何自动化保障——`prettier` 覆盖与否都一样**，它不把半角逗号改成全角，中英文标点混用不在它职责内。所以**别指望把 `docs/**` 加进 format glob 来解决**（2026-08-15 并发 session 复核纠正：原先的写法会让下一个人去改 prettier 配置然后发现没用）。这类问题**门禁全绿、行为零影响、复制粘贴也不报错**，是最容易被作者与复核方双方默契跳过的一类——只能靠人复核。实撞：本轮两笔文档新增 13 行里，代码块外紧跟中文的半角标点 **39 处\*\*（逗号 34 + 冒号 5），全角 0 处，作者整轮无自觉。
   - **要批量修就按反引号切段、只改代码块外**，且只改紧跟中文字符之后的半角标点。全文件 `sed` 会把 `STUB_INTENT_DELAY_MS: '900'` / `gh api "…"` 里的半角一起转掉，**从观感问题升级成「照着抄必然报错」的真 bug，而全角冒号肉眼几乎看不出来**。改完专门校验几处代码块原样保留。
 
 - **别 stash 别人的目录——要在远端头上做一笔干净提交，就开分离 worktree**（2026-08-14 实撞，同一天同一棵树的第三次同族事故）。我为了把一笔修复做在 `origin/main` 头上，`git stash push -- <他人的 RFC 目录>` 再 pop，结果**吞掉了对方正在改的 261 行**（一整轮设计门的修复），而我判成「与已提交内容重合」。判错的两步都值得记：
@@ -280,6 +280,15 @@
 - **i18n 文案里不许出现字面 `**`**（`onboarding-guide.test.tsx` 的 RFC-211 守卫全量遍历 zh/en 两棵树）：这些字符串大多进的是纯文本组件，`**强调**`会原样显示成星号。写 hint / 说明文案时用「」或直接不强调；只有`apiDocs.\*`（`api-docs-markdown.ts`拼成 markdown 过`Prose`）是白名单，且 `title`/`subtitle` 仍被排除在外。
 
 - **改「不变量」时，真正危险的代码往往不在 diff 里**（RFC-287 G7 实测，双路实现门都没抓到）。G7 把「有任务行就有工作树」改成「准备完成后才有」，于是空 `worktreePath` 从罕见终态变成了**每个**准备中任务的正常状态。`util/safePath.checkLexicalThenRealpath` 一行没改，但它的输入分布彻底变了——而 `resolve('')` 返回的是**当前进程的 cwd**，实测 `existsInsideRoot('', 'package.json')` 返回 true、`readInsideRoot` 真能读出来，等于「任务还没有工作树」被当成了「工作树 = daemon 的工作目录」。两路实现门都在看 diff，所以都漏了。**判据**：凡是改动**放宽了某个值的取值范围**（新增空值/新增中间态/延长某状态的存活窗口），就必须去查**所有消费该值的既有代码**，而不是只审自己改的行；这类复核的产出常常不在 diff 里。空值守卫要放在**共用底座**上（`checkLexicalThenRealpath` 同时喂 exists 与 read 两个消费方，只堵一个必漏另一个）。
+- **新增路由文件时，`gate:local` 看不见它的错误码——必须先 `git add` 再跑门禁**（2026-08-16
+  实撞，CI 红在已推的 commit 上）：`route-error-code-coverage` 的**两侧**（被扫的
+  `routes/*.ts` 与命名错误码的测试语料）都只取 **git-tracked** 文件。这是刻意的（见该文件
+  头注：本仓工作树常带着别人未提的路由文件，基线随人而变的守卫比没有守卫更糟），代价是
+  **全新的路由 + 全新的测试在 `git add` 之前对门禁双双隐形**：本地全绿，一提交 CI 立刻红。
+  判据：CI 报 `no NEW error code ships without a test that names it` 而本地同一测试是绿的。
+  **定式：新建 `routes/*.ts` 或其测试后，先 `git add`，再跑 `gate:local`。**
+  顺带一条：错误码别写成 `` `code-${x}` `` 模板串——扫描器只认字面量，会**默认漏测**；
+  而且事后没人 grep 得到 `code-unknown-binding` 是从哪儿抛的。
 - **点开抽屉/弹层之后，点它里面的东西之前，必须有同步点**（2026-08-16 CI 实测）：
   `rfc253-script-node` 里「点画布节点 → 点抽屉里的 Events 页签」中间没有任何等待，CI
   shard 满载时抽屉尚未挂载，Playwright 对着**还不存在**的页签重试满 15s。报头是
@@ -304,7 +313,7 @@
 
 - **第 9 处穷尽点不受编译器保护，而且它不在代码里：`services/intent/intentDoc.ts` 的 "Supported node forms"**（2026-08-08 实测）。INTENT.md 明说这份清单是穷举的，模型据此认定「不在清单里的 kind 不存在」——RFC-253 补 `script` 时把这条机制写进了 `rfc234-intent-doc.test.ts` 的注释，但 **RFC-243（`call-workflow` / `call-workgroup`）与 RFC-269（`code-host-call`）落 `NODE_KIND` 时都没回来补**，于是意图构建器**静默地**只会写 13 种节点里的 10 种：typecheck 绿、测试绿、功能不存在。定式：新增 NodeKind 必须同时补 intentDoc，并且**守卫要按 `NODE_KIND` 枚举**而不是手抄清单（`rfc234-intent-doc.test.ts` 的 `form(kind)` 锚点即为此，锚 `{id,kind:'x'` 而不是宽松的 `kind:'x'`——后者分不清「教了」和「明确禁止」）。
 
-- **第 10–12 处穷尽点，同样不受编译器保护**（RFC-304 加 `code-round` 时实测，2026-08-15）：①`docs/workflow-yaml.md`——每个 kind 一个 `### \`x\`` 小节，**且标题里的英文数字计数**（"the thirteen kinds"）也被断言；②`tests/rfc199-workflow-validation-targets.test.ts` 的 emission **计数** ratchet——新增一条 `issues.push` 就涨 1；③`tests/fixtures/execution-capability-coverage.ts`——每个 kind 要有**指向真实文件 + 真实锚点文本**的证据条目（锚点文本不存在即红）。三处都只有跑 `gate:local` 才现形，typecheck 与 lint 全绿。
+- **第 10–12 处穷尽点，同样不受编译器保护**（RFC-304 加 `code-round` 时实测，2026-08-15）：①`docs/workflow-yaml.md`——每个 kind 一个 `### \`x\`` 小节，**且标题里的英文数字计数**（"the thirteen kinds"）也被断言；②`tests/rfc199-workflow-validation-targets.test.ts`的 emission **计数** ratchet——新增一条`issues.push` 就涨 1；③`tests/fixtures/execution-capability-coverage.ts`——每个 kind 要有**指向真实文件 + 真实锚点文本**的证据条目（锚点文本不存在即红）。三处都只有跑 `gate:local` 才现形，typecheck 与 lint 全绿。
 - **更一般的规律：本仓有一层「登记面」，是设计如此的护栏，但只有门禁能发现**。除上面三处外，同一轮还撞到：migration journal 计数（`upgrade-rolling.test.ts`）、`rfc199-workflow-writer-inventory` 的 workflow 写入方 allowlist（新增一处 `db.insert(workflows)` 就要登记）、`rfc301-task-launch-origin-architecture` 的 `startTask` 调用方 allowlist、`docs/env-flags.md`（RFC-284 T26：src 里每个 `AGENT_WORKFLOW_*` / `AW_*` token 都要有记载）。**省时做法**：新增「一个 kind / 一张表 / 一个 env 变量 / 一个 `startTask` 调用方 / 一处 `db.insert(workflows)`」之前，先 `grep -rn "<同类的既有值>" packages/backend/tests docs` 看它在哪些清单里出现过，一次补齐；否则就是「改代码 5 分钟、跑 7 分钟门禁发现漏一处」重复 N 轮。**正面样板**：`RunTaskOptions` 的 `satisfies Record<keyof RunTaskOptions, Disposition>`（RFC-284 T20）是同类护栏里做得最好的——**编译期就红**，不必等门禁。新增此类「每项都要表态」的清单时优先照它做。
 - **给「永远绿」的负扫描配反向自检**（RFC-304 T11 实测）：负扫描的特征失败是**扫了个寂寞**——正则写错、目录改名、规则匹配零文件，它会永远绿并被当成证据。故每条负扫描都成对：正向扫真实源码、反向喂一段**故意违规的样本**给**同一个扫描器**且必须报。另配三条：目录存在性断言（改名会让扫描空过）、动态 `await import()` 变体（只查静态 import 会漏掉这个绕过形状）、「注释里提到禁用符号不算违规」（否则规则没法在它适用的地方被解释）。同轮还实证一条：**plan / design 里写的扫描目标可能已经不存在**——RFC-304 plan 要求扫 `SAFE_FORWARD_ENV`，而该符号已随 RFC-276 退役、当前代码零命中。**动手前先 grep 确认扫描目标真的存在**，否则写出来的就是一条永远绿的假护栏。
 

@@ -568,6 +568,13 @@ export const ROUTE_UX_INVENTORY = {
     owners: [rendered('rfc257-webhook-pages-inline.test.tsx')],
     header: { mode: 'direct', sourceFile: 'routes/webhooks.tsx', primitive: 'PageHeader' },
   },
+  // RFC-304 — `/code` 能力矩阵与活动视图（两 tab）。
+  '@/routes/code#Route': {
+    surface: '/code',
+    classification: 'standard',
+    owners: [rendered('code-page-inline.test.tsx')],
+    header: { mode: 'direct', sourceFile: 'routes/code.tsx', primitive: 'PageHeader' },
+  },
   // RFC-234 intent builder.
   '@/routes/intent#Route': {
     surface: '/intent',

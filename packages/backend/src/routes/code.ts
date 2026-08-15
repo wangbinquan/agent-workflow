@@ -98,7 +98,18 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
       })
 
       if (!result.ok) {
-        throw new ValidationError(`code-${result.code}`, result.message)
+        // Spelled out rather than interpolated. `code-${result.code}` is
+        // ungreppable: nobody can find where `code-unknown-binding` comes from,
+        // and the guard that requires every route error code to be named by a
+        // test cannot see it either — so it would ship untested by default.
+        throw new ValidationError(
+          result.code === 'unknown-capability'
+            ? 'code-unknown-capability'
+            : result.code === 'unknown-binding'
+              ? 'code-unknown-binding'
+              : 'code-forbidden',
+          result.message,
+        )
       }
       return c.json({ row: result.row })
     },

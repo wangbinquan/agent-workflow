@@ -355,6 +355,7 @@ export interface Resources {
     clarify: string
     repos: string
     webhooks: string
+    code: string
     settings: string
     brand: string
     openMenu: string
@@ -1320,6 +1321,21 @@ export interface Resources {
       via: string
       empty: string
     }
+  }
+  code: {
+    title: string
+    subtitle: string
+    tab: { matrix: string; activity: string }
+    repoLabel: string
+    repoHint: string
+    load: string
+    pickRepo: string
+    noCapabilities: string
+    noActivity: string
+    noActivityHint: string
+    enabled: string
+    round: string
+    readiness: { ready: string; misconfigured: string; disabled: string }
   }
   repos: {
     title: string
@@ -6144,6 +6160,7 @@ export const zhCN: Resources = {
     clarify: '反问',
     repos: '远端仓',
     webhooks: 'Webhook',
+    code: '代码',
     settings: '设置',
     brand: 'Agent Workflow',
     openMenu: '打开导航菜单',
@@ -6903,6 +6920,25 @@ export const zhCN: Resources = {
       readonlyChip: '只读',
       via: '经由 {{chain}}',
       empty: '这个组还没有目录节点。',
+    },
+  },
+  code: {
+    title: '代码能力',
+    subtitle: '每个仓库启用了哪些能力，以及它们做过什么',
+    tab: { matrix: '仓库', activity: '活动' },
+    repoLabel: '仓库',
+    repoHint: '事件所属的项目路径，例如 group/project',
+    load: '查看',
+    pickRepo: '输入一个仓库以查看它的能力',
+    noCapabilities: '这个仓库还没有配置任何能力',
+    noActivity: '还没有跑过任何轮次',
+    noActivityHint: '当 MR 事件唤醒一个已启用的能力后，工作项会出现在这里。',
+    enabled: '已启用',
+    round: '第 {{seq}} 轮',
+    readiness: {
+      ready: '就绪',
+      misconfigured: '待配置',
+      disabled: '已关闭',
     },
   },
   repos: {
