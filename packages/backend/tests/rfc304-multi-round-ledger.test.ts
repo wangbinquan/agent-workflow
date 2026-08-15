@@ -155,8 +155,10 @@ const inlineCalls = (host: ReturnType<typeof fakeHost>) =>
   host.calls.filter((c) => c.action === 'review.draft-create')
 const resolveCalls = (host: ReturnType<typeof fakeHost>) =>
   host.calls.filter((c) => c.action === 'thread.resolve')
+// Create OR update: there is one overview and later rounds edit it, so a
+// filter on `comment.create` alone would always return the first round's.
 const overviews = (host: ReturnType<typeof fakeHost>) =>
-  host.calls.filter((c) => c.action === 'comment.create')
+  host.calls.filter((c) => c.action === 'comment.create' || c.action === 'comment.update')
 
 describe('RFC-304 — a finding that is still there', () => {
   let db: DbClient
@@ -222,6 +224,56 @@ describe('RFC-304 — a finding that is still there', () => {
     // the id is read back from the MR, so hard-coding one would test the
     // fixture's numbering instead of the read-back.
     expect(rows[0]?.externalId).toBe(host.publishedIds()[0])
+  })
+})
+
+describe('RFC-304 — there is ONE overview, edited each round', () => {
+  let db: DbClient
+  let home: string
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+    home = mkdtempSync(join(tmpdir(), 'aw-rfc304-ledger-'))
+  })
+  afterEach(() => {
+    db.$client.close()
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  test('a second round EDITS the overview instead of posting another', async () => {
+    // The noise that gets a bot muted. The design counts ~15 machine comments on
+    // a moderately active MR before overviews are even considered; one per round
+    // buries the human discussion. And a muted bot takes the messages that
+    // needed a person — three failed rounds, a conflict report — down with it.
+    const host = fakeHost()
+    await runRound(db, home, host, [findingAt(11, 'unchecked index')])
+    await runRound(db, home, host, [findingAt(11, 'unchecked index')])
+
+    expect(host.calls.filter((c) => c.action === 'comment.create')).toHaveLength(1)
+    expect(host.calls.filter((c) => c.action === 'comment.update')).toHaveLength(1)
+  })
+
+  test('the edit targets the comment the first round created', async () => {
+    const host = fakeHost()
+    await runRound(db, home, host, [findingAt(11, 'unchecked index')])
+    const created = host.calls.find((c) => c.action === 'comment.create')
+    await runRound(db, home, host, [findingAt(11, 'unchecked index')])
+    const updated = host.calls.find((c) => c.action === 'comment.update')
+
+    expect(created).toBeDefined()
+    // The NOTE id, not the discussion id — GitLab's notes endpoint 404s on the
+    // latter, and the fake keeps the two distinct so a swap cannot pass.
+    expect(updated?.params.comment).toBe(host.noteIds().at(-1))
+  })
+
+  test('the edited overview reports THIS round, not the first one', async () => {
+    // An overview that is reused but never refreshed is worse than a new one:
+    // it states a stale conclusion in a comment that looks current.
+    const host = fakeHost()
+    await runRound(db, home, host, [findingAt(11, 'unchecked index')])
+    await runRound(db, home, host, [findingAt(11, 'unchecked index')])
+
+    const updated = host.calls.find((c) => c.action === 'comment.update')
+    expect(String(updated?.params.body)).toContain('no new findings')
   })
 })
 
@@ -343,10 +395,15 @@ describe('RFC-304 — a finding that came back', () => {
     await runRound(db, home, host, [findingAt(11, 'unchecked index')])
 
     const rows = await readLedgerForAnchor(db, ANCHOR, 'mr-review')
+    const first = rows.find((r) => r.generation === 1)
     const latest = rows.find((r) => r.generation === 2)
-    // The second discussion the host published — the republish gets its own
-    // thread, because the first was resolved when the finding disappeared.
-    expect(latest?.externalId).toBe(host.publishedIds()[1])
+    // The invariant, stated directly rather than by position: the republish owns
+    // a DIFFERENT thread from the one that was resolved. Binding it to the old
+    // thread would resolve an already-resolved discussion and leave the live one
+    // open forever.
+    expect(latest?.externalId).not.toBeNull()
+    expect(latest?.externalId).not.toBe(first?.externalId)
+    expect(host.publishedIds()).toContain(String(latest?.externalId))
     expect(latest?.lifecycle).toBe('active')
   })
 })

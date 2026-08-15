@@ -198,6 +198,9 @@ describe('RFC-304 — mr-review through the real runner', () => {
       // discussion id (`bulk_publish` does not keep the draft's).
       'review.draft-create',
       'review.draft-publish',
+      // Read back for the discussion ids, then again at MR-comment scope to
+      // find the overview to edit (there is one, not one per round).
+      'comment.list',
       'comment.list',
       'comment.create',
     ])

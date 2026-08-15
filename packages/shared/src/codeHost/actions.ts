@@ -740,18 +740,31 @@ export const CODE_HOST_ACTION_DEFS = {
   },
   'comment.list': {
     group: 'read',
-    fields: [PROJECT, MR_REQUIRED, { name: 'per_page', control: 'text', requiredFor: [] }],
+    fields: [
+      PROJECT,
+      MR_REQUIRED,
+      { name: 'per_page', control: 'text', requiredFor: [] },
+      // GitHub 的**行级**评论与 **MR 级**评论是两个端点（同 `comment.update`）。
+      // 回读行级意见要 `pulls`；找平台自己那条总览评论要 `issues`——它是 MR 级
+      // 评论，不在 `pulls` 那个列表里。GitLab 无此分裂：`/discussions` 两类都在。
+      {
+        name: 'comment_scope',
+        control: 'select',
+        options: ['pulls', 'issues'],
+        requiredFor: ['github'],
+        onlyFor: ['github'],
+      },
+    ],
     bindings: {
       // GitLab 的 discussion 是线程，`id` 就是 `thread.resolve` 要的那个；一条
-      // discussion 下有多条 note，指纹标记在首条 note 的正文里。
+      // discussion 下有多条 note，指纹标记在首条 note 的正文里。**注意**：改一条
+      // 普通 note 要的是 `notes[0].id`（note id），不是 discussion id——两者不同，
+      // 用错了 `comment.update` 会 404。
       gitlab: {
         method: 'GET',
         path: '/projects/{__project__}/merge_requests/{mr}/discussions',
       },
-      // GitHub 的 review comment 是扁平的，`id` 即 `comment.reply-thread` 的
-      // `in_reply_to`。注意这里**不能**用 `/issues/{n}/comments`——那是 MR 级
-      // 普通评论，不含行级评论，恢复时会把整批行级评论判成"没发出去"而重发。
-      github: { method: 'GET', path: '/repos/{__project__}/pulls/{mr}/comments' },
+      github: { method: 'GET', path: '/repos/{__project__}/{comment_scope}/{mr}/comments' },
     },
   },
   'mr.list': {

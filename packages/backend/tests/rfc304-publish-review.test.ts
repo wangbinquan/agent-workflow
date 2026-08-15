@@ -13,6 +13,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { publishReview } from '../src/modules/code-capability/application/publishReview'
+import { OVERVIEW_MARKER } from '../src/modules/code-capability/domain/publishReconcileRemote'
 import {
   resolveTarget,
   type RoundTarget,
@@ -116,6 +117,9 @@ describe('RFC-304 — publishing on GitLab', () => {
       'review.draft-publish',
       // The published discussions have new ids — `bulk_publish` does not keep
       // the drafts' — so they are read back before the ledger records them.
+      'comment.list',
+      // And again, at MR-comment scope, to find the overview this platform left
+      // last round: there is ONE overview and each round edits it.
       'comment.list',
       'comment.create',
     ])
@@ -425,7 +429,12 @@ describe('RFC-304 — the overview is the safety net', () => {
       diffRefs: REFS,
       overviewPrelude: 'Reviewed 2 files, 1 finding.',
     })
-    expect(h.calls.at(-1)?.params.body).toBe('Reviewed 2 files, 1 finding.')
+    // The visible content is exactly the prelude — nothing invented. The marker
+    // is an HTML comment a reader never sees, and it is what lets the NEXT round
+    // find and edit this same comment instead of posting another one.
+    const body = String(h.calls.at(-1)?.params.body)
+    expect(body).toContain('Reviewed 2 files, 1 finding.')
+    expect(body.replace(OVERVIEW_MARKER, '').trim()).toBe('Reviewed 2 files, 1 finding.')
   })
 
   test('an unaddressable GitHub target refuses before any call', async () => {

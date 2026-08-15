@@ -202,3 +202,72 @@ export function normalizeRemoteComments(
   }
   return out
 }
+
+/**
+ * The marker that identifies the platform's own overview comment.
+ *
+ * Distinct from the finding marker: an overview is not a finding and must never
+ * be adopted as one. Kept in an HTML comment so a reader never sees it.
+ */
+export const OVERVIEW_MARKER = '<!-- aw-review-overview -->'
+
+export function withOverviewMarker(body: string): string {
+  return `${body}\n\n${OVERVIEW_MARKER}`
+}
+
+/**
+ * Candidates for "the overview this platform posted last round".
+ *
+ * Returns the id that can be UPDATED, which is not the same id `settle-stale`
+ * resolves: on GitLab a plain note lives inside a single-note discussion, and
+ * `comment.update` addresses the NOTE (`notes[0].id`), while `thread.resolve`
+ * addresses the DISCUSSION. Passing one where the other is expected 404s.
+ */
+export function normalizeOverviewCandidates(
+  provider: 'gitlab' | 'github',
+  body: string,
+): RemoteComment[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(parsed)) return []
+
+  const out: RemoteComment[] = []
+  for (const entry of parsed) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const row = entry as Record<string, unknown>
+
+    if (provider === 'github') {
+      const id = row.id
+      const text = row.body
+      if ((typeof id === 'string' || typeof id === 'number') && typeof text === 'string') {
+        out.push({ externalId: String(id), body: text })
+      }
+      continue
+    }
+
+    const notes = row.notes
+    if (!Array.isArray(notes) || notes.length === 0) continue
+    const first = notes[0] as Record<string, unknown> | undefined
+    const noteId = first?.id
+    const text = first?.body
+    if (typeof noteId !== 'string' && typeof noteId !== 'number') continue
+    if (typeof text !== 'string') continue
+    out.push({ externalId: String(noteId), body: text })
+  }
+  return out
+}
+
+/** The platform's previous overview, if it is still there. */
+export function findPreviousOverview(comments: readonly RemoteComment[]): string | null {
+  // Last wins: if an older version somehow survived, the newest is the one a
+  // reader is looking at.
+  let found: string | null = null
+  for (const comment of comments) {
+    if (comment.body.includes(OVERVIEW_MARKER)) found = comment.externalId
+  }
+  return found
+}

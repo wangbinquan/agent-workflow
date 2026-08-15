@@ -42,9 +42,18 @@ export function createReviewHostFake(options: ReviewFakeOptions = {}) {
 
   /** Staged but not yet published. Invisible to `comment.list` until publish. */
   const drafts = new Map<string, string>()
-  /** Published comments: id → body. Seeded with whatever was already there. */
-  const published = new Map<string, string>(
-    (options.existing ?? []).map((c) => [c.id, c.body] as const),
+  /**
+   * Published comments, keyed by DISCUSSION id, each carrying its own NOTE id.
+   *
+   * The two are deliberately different values, because the code depends on the
+   * difference: `thread.resolve` addresses the discussion, `comment.update`
+   * addresses the note, and GitLab 404s if they are swapped. A fake that used
+   * one id for both would make that mistake untestable.
+   */
+  const published = new Map<string, { noteId: string; body: string }>(
+    (options.existing ?? []).map(
+      (c) => [c.id, { noteId: `note-of-${c.id}`, body: c.body }] as const,
+    ),
   )
   let nextId = published.size
 
@@ -78,7 +87,7 @@ export function createReviewHostFake(options: ReviewFakeOptions = {}) {
           // that reused the draft id would be storing a dead reference.
           for (const body of drafts.values()) {
             nextId += 1
-            published.set(`disc-${nextId}`, body)
+            published.set(`disc-${nextId}`, { noteId: `note-${nextId}`, body })
           }
           drafts.clear()
           return okJson({})
@@ -91,7 +100,10 @@ export function createReviewHostFake(options: ReviewFakeOptions = {}) {
           if (Array.isArray(comments)) {
             for (const comment of comments) {
               nextId += 1
-              published.set(`${nextId}`, String((comment as { body?: unknown }).body ?? ''))
+              published.set(`${nextId}`, {
+                noteId: `${nextId}`,
+                body: String((comment as { body?: unknown }).body ?? ''),
+              })
             }
           }
           return okJson({ id: nextId })
@@ -100,15 +112,35 @@ export function createReviewHostFake(options: ReviewFakeOptions = {}) {
         case 'comment.create-inline': {
           nextId += 1
           const id = `disc-${nextId}`
-          published.set(id, String(call.params.body ?? ''))
+          published.set(id, { noteId: `note-${nextId}`, body: String(call.params.body ?? '') })
           return okJson({ id })
+        }
+
+        // The MR-level overview comment.
+        case 'comment.create': {
+          nextId += 1
+          const id = `disc-${nextId}`
+          published.set(id, { noteId: `note-${nextId}`, body: String(call.params.body ?? '') })
+          return okJson({ id })
+        }
+
+        case 'comment.update': {
+          // Addressed by NOTE id, which is how GitLab's notes endpoint works.
+          // Looking it up by discussion id here would let a swapped-id bug pass.
+          const wanted = String(call.params.comment ?? '')
+          for (const [discussionId, entry] of published) {
+            if (entry.noteId !== wanted) continue
+            published.set(discussionId, { ...entry, body: String(call.params.body ?? '') })
+            return okJson({ id: wanted })
+          }
+          return { ok: false, code: 'not-found', message: `no note ${wanted}` }
         }
 
         case 'comment.list':
           return okJson(
             provider === 'gitlab'
-              ? [...published].map(([id, body]) => ({ id, notes: [{ body }] }))
-              : [...published].map(([id, body]) => ({ id, body })),
+              ? [...published].map(([id, e]) => ({ id, notes: [{ id: e.noteId, body: e.body }] }))
+              : [...published].map(([id, e]) => ({ id, body: e.body })),
           )
 
         default:
@@ -121,9 +153,12 @@ export function createReviewHostFake(options: ReviewFakeOptions = {}) {
   return {
     port,
     calls,
-    /** Line comments that actually reached the MR this round. */
-    publishedBodies: () => [...published.values()],
+    /** Bodies of everything currently on the MR. */
+    publishedBodies: () => [...published.values()].map((e) => e.body),
+    /** Discussion ids — what `thread.resolve` addresses. */
     publishedIds: () => [...published.keys()],
+    /** Note ids — what `comment.update` addresses. */
+    noteIds: () => [...published.values()].map((e) => e.noteId),
     /** Staged and never withdrawn — the orphan case. */
     liveDrafts: () => [...drafts.keys()],
     /** How many line comments were staged, whatever became of them. */

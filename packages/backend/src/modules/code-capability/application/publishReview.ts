@@ -25,11 +25,14 @@ import {
 } from '@/modules/code-capability/domain/reviewPosition'
 import { decideBatch, type DraftOutcome } from '@/modules/code-capability/domain/batchPublish'
 import {
+  findPreviousOverview,
+  normalizeOverviewCandidates,
   normalizeRemoteComments,
   observeJustPublished,
+  withOverviewMarker,
 } from '@/modules/code-capability/domain/publishReconcileRemote'
 import { apiProjectAddress, type RoundTarget } from '@/modules/code-capability/domain/resolveTarget'
-import type { CodeHostPort } from '@/modules/code-capability/ports/codeHostPort'
+import type { CodeHostPort, CodeHostResult } from '@/modules/code-capability/ports/codeHostPort'
 
 export interface PlacedFinding {
   /** Rendered comment body. */
@@ -136,7 +139,9 @@ async function readBackIds(
   if (batch.length === 0) return {}
   const listed = await codeHost.call({
     action: 'comment.list',
-    params: { ...base, per_page: '100' },
+    // `pulls`: the LINE comments. GitHub keeps MR-level comments on a different
+    // endpoint, and reading that one here would find none of this batch.
+    params: { ...base, per_page: '100', comment_scope: 'pulls' },
   })
   if (!listed.ok) return {}
   return observeJustPublished(batch, normalizeRemoteComments(provider, listed.body)).present
@@ -393,10 +398,12 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
     }
   }
 
-  const overview = await codeHost.call({
-    action: 'comment.create',
-    params: { ...base, body: renderOverview(input.overviewPrelude, carried) },
-  })
+  const overview = await upsertOverview(
+    codeHost,
+    target.provider,
+    base,
+    renderOverview(input.overviewPrelude, carried),
+  )
 
   return {
     posted,
@@ -405,4 +412,55 @@ export async function publishReview(input: PublishReviewInput): Promise<PublishR
     overviewPosted: overview.ok,
     failure: failure ?? (overview.ok ? null : { code: overview.code, message: overview.message }),
   }
+}
+
+/**
+ * Keep ONE overview on the merge request, editing it each round.
+ *
+ * Appending a new one per round is how a bot gets muted. The design counts it:
+ * a moderately active MR already draws around fifteen machine comments, and the
+ * machine's own pushes trigger further rounds — so an overview per round buries
+ * the human discussion under a changelog nobody asked for. Once somebody mutes
+ * the bot, the messages that actually needed a person (three failed rounds, a
+ * conflict report) are lost with it.
+ *
+ * Falls back to creating when the previous one cannot be found — deleted by a
+ * human, or a first round. Failing to READ is not a reason to say nothing.
+ */
+async function upsertOverview(
+  codeHost: CodeHostPort,
+  provider: 'gitlab' | 'github',
+  base: { project: string; mr: string },
+  body: string,
+): Promise<CodeHostResult> {
+  const marked = withOverviewMarker(body)
+
+  const listed = await codeHost.call({
+    action: 'comment.list',
+    // `issues` on GitHub: the overview is an MR-level comment, and the review
+    // comments endpoint does not carry it.
+    params: { ...base, per_page: '100', comment_scope: 'issues' },
+  })
+
+  const previous = listed.ok
+    ? findPreviousOverview(normalizeOverviewCandidates(provider, listed.body))
+    : null
+
+  if (previous !== null) {
+    const updated = await codeHost.call({
+      action: 'comment.update',
+      params: {
+        ...base,
+        comment: previous,
+        body: marked,
+        // GitHub's update endpoint is scoped the same way its list is.
+        comment_scope: 'issues',
+      },
+    })
+    // An update that fails — the comment was deleted between the read and the
+    // write — falls through to creating one, so the round still says something.
+    if (updated.ok) return updated
+  }
+
+  return await codeHost.call({ action: 'comment.create', params: { ...base, body: marked } })
 }

@@ -290,6 +290,21 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T30  | 采纳信号：`resolved`（回读线程）与 `code_changed`（下轮比对锚定行）分列落账                                                                                                                                                                               | T27          |
 | T31  | `mr-review` 阶段契约 v1 装配 + webhook 触发路由（含"bot 自动提的 MR 可配置不检视"）                                                                                                                                                                       | T23–T30,T16  |
 
+> **单条可更新总览（2026-08-16，design §11.1 第三条对策）**：原实现每轮**追加**一条总览
+> 评论。设计里算过账：一个活跃 MR 上机器发言最低 15 次，机器自己的 push 还会再触发检视，
+> 每轮一条总览会把人的讨论彻底埋掉；而人一旦把 bot 静音，**真正需要人接手的三轮失败与
+> 冲突报告也一起丢了**。改为 MR 上只维护**一条**，每轮编辑它。
+>
+> - `comment.list` 加 `comment_scope`（GitHub 的 MR 级评论与行级评论是两个端点，找总览
+>   要 `issues`、回读行级意见要 `pulls`）。
+> - 总览带 `OVERVIEW_MARKER`（HTML 注释，读者看不见），下一轮据此找回自己那条。
+> - **discussion id ≠ note id**：GitLab 上 `thread.resolve` 认 discussion、
+>   `comment.update` 认 note（`notes[0].id`），互换即 404。故单列
+>   `normalizeOverviewCandidates` 取 note id，与取 discussion id 的
+>   `normalizeRemoteComments` 分开；共享 fake 也**给两者不同的值**，否则这个 bug 无法被
+>   测出来。
+> - 读不到或更新失败（评论被人删了）就退回新建——读失败不是「本轮什么都不说」的理由。
+
 > **T29 草稿批量发布（2026-08-16）**：GitLab 侧从「每条一个 `comment.create-inline`」
 > 改成「逐条 `review.draft-create` 攒草稿 → 一次 `review.draft-publish`」。原实现的半发
 > 窗口是**作者可见**的：中途失败时前几条意见已经躺在 MR 上、剩下的没有任何交代。草稿把这
