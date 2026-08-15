@@ -85,6 +85,10 @@ export function deriveNodePickerCatalog(input: {
   const entries = buildEntries(input.sections)
   const categoryCounts: Record<NodePickerCategory, number> = {
     all: entries.length,
+    // RFC-304 — see the note on categoryLabels: 'internal' never receives
+    // entries because buildPalette emits no section for it. Counted at 0 so the
+    // record stays exhaustive.
+    internal: 0,
     agents: 0,
     wrappers: 0,
     calls: 0,

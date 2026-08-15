@@ -217,7 +217,11 @@ describe('RFC-199 strict workflow validation targets', () => {
     // action / 支持性 / 必填 / 枚举 / 自定义请求四条 / 变量域 / strict schema），
     // 全部带 node 级 strict target ⇒ 130 → 142。RFC-292 再为 agent/workgroup
     // 与 review template 的 invalid-ref 分支增加 2 条 strict emission ⇒ 144。
-    expect(emissions).toHaveLength(144)
+    // RFC-304 增加 1 条 `code-round-not-authorable`（合成节点出现在用户提交的
+    // 定义里即拒），node 级 strict target ⇒ 145。它是 SYNTHESIZED_ONLY_NODE_KINDS
+    // 全表共用的一条 emission，**将来再加合成 kind 不会再涨这个数**——这正是
+    // 用列表而非逐 kind 硬编码分支的收益。
+    expect(emissions).toHaveLength(145)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

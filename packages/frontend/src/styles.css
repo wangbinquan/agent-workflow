@@ -8087,6 +8087,13 @@ details.form-section[open] > summary {
   --node-accent: #4f46e5;
 }
 
+/* RFC-304. Adjacent to code-host-call in hue because they belong to the same
+   world (the code platform), one step warmer so a snapshot reader can still
+   tell the synthesized round apart from the call node an author wired. */
+.canvas-node--card[data-node-kind='code-round'] {
+  --node-accent: #7c3aed;
+}
+
 .canvas-node--card[data-node-kind='review'],
 .canvas-node--card[data-node-kind='clarify'],
 .canvas-node--card[data-node-kind='clarify-cross-agent'] {

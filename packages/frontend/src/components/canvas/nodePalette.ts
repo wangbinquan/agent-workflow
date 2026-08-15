@@ -52,13 +52,13 @@ export const PALETTE_MIME = 'application/x-agent-workflow-node'
 
 /** Sidebar section a kind's palette entry renders under. */
 export type PaletteSectionKey =
-  | 'agents'
-  | 'wrappers'
-  | 'calls'
-  | 'scripts'
-  | 'integrations'
-  | 'io'
-  | 'human'
+  // RFC-304 — 'internal' is DELIBERATELY absent from PALETTE_SECTIONS below.
+  // `buildPalette` iterates PALETTE_SECTIONS and filters descriptors by
+  // section, so a kind parked here can never reach the drag palette. This is
+  // the mechanism that keeps the synthesized `code-round` node out of the
+  // editor while still satisfying the exhaustive descriptor matrix.
+  // Locked by a test — do NOT "fix" it by adding 'internal' to PALETTE_SECTIONS.
+  'internal' | 'agents' | 'wrappers' | 'calls' | 'scripts' | 'integrations' | 'io' | 'human'
 
 interface PaletteDescriptor {
   section: PaletteSectionKey
@@ -233,6 +233,18 @@ export const PALETTE_DESCRIPTORS = {
       action: 'comment.reply-thread',
       params: {},
     }),
+  },
+  // RFC-304 — synthesized single node of a code-capability round. Never
+  // user-authorable: section 'internal' keeps it out of buildPalette, and the
+  // validator rejects it in any user-submitted definition. The entry exists
+  // only because the matrix is exhaustive; `makeDefaults` is never called.
+  'code-round': {
+    section: 'internal',
+    glyph: '\u25c8',
+    labelKey: null,
+    descKey: null,
+    idPrefix: 'code_round',
+    makeDefaults: () => ({}),
   },
 } as const satisfies Record<NodeKind, PaletteDescriptor>
 

@@ -27,17 +27,17 @@ SIGTERM delay/release windows. It never bypasses the daemon or scheduler.
 expected sets from the production registries. A new registered element without
 named checked-in evidence fails the fast suite.
 
-| Dimension               | Current exhaustive set                                                                                                        |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Workflow node kinds     | All 13: agent, input/output, three wrappers, three human gates, two call nodes, script, code-host call                        |
-| Workflow input kinds    | All 5: text, files, enum, git, upload, including rejection and multipart paths                                                |
-| Output shapes           | string, markdown, signal, path and list; concrete path/list round-trips include list-string, list-path and list-markdown      |
-| Workgroup modes         | leader-worker, free-collab and dynamic-workflow                                                                               |
-| Runtime × workgroup     | 2 × 3: every OpenCode/Claude Code driver runs every workgroup mode through its native transport                               |
-| Runtime drivers         | OpenCode and Claude Code                                                                                                      |
-| Runtime × state/fault   | 2 × 7: success, process-crash retry, envelope follow-up, inline clarify resume, missing-session fallback, timeout and cancel  |
-| Runtime × memory prompt | 2 × 1: candidate exclusion, approval boundary, snapshot, and native persona/system-prompt injection                           |
-| Wrapper parent × child  | 3 × 3: every git/loop/fanout pair is classified as supported, static-rejected or runtime-rejected and has executable evidence |
+| Dimension               | Current exhaustive set                                                                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workflow node kinds     | All 14: agent, input/output, three wrappers, three human gates, two call nodes, script, code-host call, code-round (synthesized — covered by its rejection) |
+| Workflow input kinds    | All 5: text, files, enum, git, upload, including rejection and multipart paths                                                                              |
+| Output shapes           | string, markdown, signal, path and list; concrete path/list round-trips include list-string, list-path and list-markdown                                    |
+| Workgroup modes         | leader-worker, free-collab and dynamic-workflow                                                                                                             |
+| Runtime × workgroup     | 2 × 3: every OpenCode/Claude Code driver runs every workgroup mode through its native transport                                                             |
+| Runtime drivers         | OpenCode and Claude Code                                                                                                                                    |
+| Runtime × state/fault   | 2 × 7: success, process-crash retry, envelope follow-up, inline clarify resume, missing-session fallback, timeout and cancel                                |
+| Runtime × memory prompt | 2 × 1: candidate exclusion, approval boundary, snapshot, and native persona/system-prompt injection                                                         |
+| Wrapper parent × child  | 3 × 3: every git/loop/fanout pair is classified as supported, static-rejected or runtime-rejected and has executable evidence                               |
 
 ## Named orchestration spines
 

@@ -120,6 +120,15 @@ export const WORKFLOW_NODE_REFERENCE_INVENTORY = {
     bindingLists: [],
     opaqueFields: ['params', 'request'],
   },
+  // RFC-304 — synthesized, never user-authored: it carries no node ids, no port
+  // refs and no resource bindings. `stage` holds the engine's own opaque state.
+  'code-round': {
+    nodeIdLists: [],
+    directPortRefs: [],
+    embeddedPortRefs: [],
+    bindingLists: [],
+    opaqueFields: ['round'],
+  },
 } as const satisfies Record<NodeKind, WorkflowNodeReferenceDescriptor>
 
 export type WorkflowNodeReferenceWarningCode =

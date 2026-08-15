@@ -38,13 +38,44 @@ CLAUDE.md §RFC workflow 第 5 条允许「确需拆分时在 plan.md 说明并�
 它是整条链的首个阻塞点：要给 `StartExecutionRequest` 增第四种 kind，而 `task-execution` 本身正
 等着 RFC-294 W2 重构（design D5）。**先验证再依赖**，不要等 StageEngine 写完才发现接不进去。
 
-| # | 任务 | 依赖 |
-| --- | --- | --- |
-| T0a | 与 `task-execution` owner 对齐 participant 注册点、task/nodeRun 归属、取消与恢复事件、详情投影、W2 收编接口 | — |
-| T0b | `code-round` 合同 + 验证桩（桩内只跑一个空阶段），跑通**启动 → 取消 → daemon 重启恢复**三条真实路径 | T0a |
-| T0c | 把 `code-round` 形态登记进 RFC-294 的 W2 输入清单 | T0b |
+| # | 任务 | 依赖 | 状态 |
+| --- | --- | --- | --- |
+| T0a | 与 `task-execution` owner 对齐 participant 注册点、task/nodeRun 归属、取消与恢复事件、详情投影、W2 收编接口 | — | ✅ 2026-08-15 |
+| T0a′ | `code-round` **NodeKind** 接入：12 处穷尽点 + 「不可授权」四机制 + 单一事实源 `SYNTHESIZED_ONLY_NODE_KINDS` | T0a | ✅ 2026-08-15 |
+| T0b | `code-round` **execution kind** 合同 + 验证桩（桩内只跑一个空阶段），跑通**启动 → 取消 → daemon 重启恢复**三条真实路径 | T0a′ | ⏳ |
+| T0c | 把 `code-round` 形态登记进 RFC-294 的 W2 输入清单 | T0a′ | ✅ 2026-08-15 |
 
 > **go / no-go**：T0b 三条路径全绿才进 PR-1a。不通过则回到 design D5 重选退路（届时 RFC 需改）。
+
+**T0a 对齐结论（2026-08-15，逐条按源码核对）**：四个接入点各有现成先例，**无一处需要改动既有语义**——
+
+| 接入点 | 障碍 | 先例 | 结论 |
+| --- | --- | --- | --- |
+| `tasks.workflowId` notNull | 合成轮次没有用户工作流 | `AGENT_HOST_WORKFLOW_ID`（`services/agentLaunch.ts`）| sentinel 常量 + 懒 seed 锚点行 |
+| `tasks.workflowSnapshot` notNull | 同上 | `callLaunch ?? workgroupLaunch ?? agentLaunch ?? workflow.definition`（`services/task.ts`）| `??` 链再加一条 |
+| 节点执行 | 需要非 agent 的执行分支 | `script` / `code-host-call` 在 `runOneNode` 各有分支 | 同形加一支，位置在 agent fall-through 前 |
+| 启动面 | 需要第四种 kind | 既有三种 kind 的 dispatch | `StartExecutionRequest` 加变体 + `executor.ts` 分发 |
+
+T0c 已把「W2 立号时按四种收编」写进 RFC-294 `plan.md §6`，作为「先加后收编」的交换条件（用户 §6ter-H3 拍板）。
+
+**T0b 实现清单（T0a 核实后确定，逐条对应源码位置）**：
+
+| 步 | 改动 | 位置 |
+| --- | --- | --- |
+| 1 | `tasks` 加 `code_round_id`（nullable text，软引用——同 RFC-303 既例，删业务行不得级联掉执行行） | `db/schema.ts` → `bun run db:generate` 出 `0158_rfc304_code_round.sql` |
+| 2 | `taskExecutionKind()` 增第四支并**判在最前** | `shared/schemas/task.ts:668` |
+| 3 | 38 处调用点由 TS 强制穷尽（11 个文件，前后端各半） | 见 `grep -rn taskExecutionKind` |
+| 4 | `ExecutionKind` / `StartExecutionRequest` 各加一项 | `services/execution/types.ts:23,58` |
+| 5 | `buildExecutionOutcome` 增 code-round 分支（否则产出恒空——见 design §D5 实现约束） | `services/execution/outcome.ts:150` |
+| 6 | sentinel workflow 常量 + 懒 seed + `startCodeRoundTask` | 仿 `services/agentLaunch.ts` |
+| 7 | `runOneNode` 增 `code-round` 分支（桩内只跑一个空阶段） | `services/scheduler.ts`，位置在 agent fall-through 之前 |
+| 8 | 三条真实路径测试：启动 / 取消 / daemon 重启恢复 | 恢复路径已确认**不按 kind 过滤**（`services/autoResume.ts:79` 只看 status + errorSummary），故自动纳入 |
+
+**T0a′ 交付内容**：`code-round` 作为 NodeKind 已全量接入，12 处穷尽点（编译器强制 9 处 + 非编译器强制 3 处：
+`docs/workflow-yaml.md` 章节与计数、RFC-199 strict-target ratchet、执行能力目录）全部填齐。「用户不可授权」由四机制保证，
+各自单测锁定：palette 停在不参与渲染的 `internal` section、validator 拒收（`code-round-not-authorable`，**唯一挡得住
+YAML 导入 / 手工 PUT 的一道**）、INTENT.md 显式声明 withheld、四者共读 `SYNTHESIZED_ONLY_NODE_KINDS` 单一事实源。
+画布投影与 accent 同期补齐（避免重蹈 RFC-253 「卡片有壳无数据」坑）。
 
 ### 地基一：工作项 + 阶段引擎 + 钩子（PR-1a）
 

@@ -155,6 +155,15 @@ async function seedTaskWithEdge(
           action: 'comment.create',
           params: { mr: '1', body: '{{out}}' },
         }
+      case 'code-round':
+        // RFC-304 — `code-round` is synthesized by startCodeRoundTask, never
+        // authored into a user definition (the validator rejects it), so it can
+        // never BE a downstream node in this matrix. It still shares the
+        // process-kind retry-cascade row ('mint-placeholder'), which is asserted
+        // directly against NODE_KIND_BEHAVIORS in node-kind-behavior-table.test.
+        // Throwing here keeps the switch exhaustive without pretending this
+        // graph shape is constructible.
+        throw new Error('code-round is synthesized-only and cannot be a downstream node')
       default: {
         const _exhaustive: never = downstreamKind
         throw new Error(`unexpected kind ${_exhaustive as string}`)

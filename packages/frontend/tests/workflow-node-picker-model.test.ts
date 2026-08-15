@@ -38,6 +38,11 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
     expect(model.categoryCounts).toEqual({
       // RFC-269 显式改判：新增 code-host-call ⇒ 全量 61 → 62、新增 integrations 分区。
       all: 62,
+      // RFC-304 —— `internal` 恒为 0，而且必须恒为 0：它装的是平台合成、用户永不可
+      // 授权的 kind（当前只有 `code-round`），`buildPalette` 根本不为它产出 section。
+      // 这个 0 因此不是「暂时没有」而是不变量——它一旦变成非 0，说明某个合成专用
+      // 节点漏进了拖拽面板，`all` 也会跟着虚高。
+      internal: 0,
       agents: 50,
       wrappers: 3,
       // RFC-243 — call-workflow + call-workgroup entries in the Calls category.

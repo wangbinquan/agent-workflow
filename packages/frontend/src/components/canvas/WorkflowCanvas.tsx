@@ -72,6 +72,7 @@ import type { CallNodeNavKind } from '@/lib/call-node-nav'
 import { AgentNode } from './nodes/AgentNode'
 import { CallWorkflowNode } from './nodes/CallWorkflowNode'
 import { CodeHostCallNode, type CodeHostCallNodeData } from './nodes/CodeHostCallNode'
+import { CodeRoundNode, type CodeRoundNodeData } from './nodes/CodeRoundNode'
 import { CallWorkgroupNode } from './nodes/CallWorkgroupNode'
 import { useWorkflowRefResolver } from './useWorkflowRefResolver'
 import { usePrivilegedNodes } from '@/hooks/usePrivilegedNodes'
@@ -198,6 +199,8 @@ const NODE_TYPES = {
   // RFC-253 — script node card.
   script: ScriptNode,
   'code-host-call': CodeHostCallNode,
+  // RFC-304 — synthesized round node; rendered on task detail, never authored.
+  'code-round': CodeRoundNode,
 } satisfies Record<NodeKind, ComponentType<never>>
 
 const EDGE_TYPES = { 'workflow-insertable': WorkflowCanvasEdge }
@@ -3795,6 +3798,17 @@ function toFlowNodes(
           else callData.method = binding.method
         }
       }
+    }
+    // RFC-304: same bridge for the synthesized code-round node. A reader only
+    // ever meets this kind in a finished task's snapshot, which is exactly when
+    // "which capability, which round" is the thing they came to find out — an
+    // unbridged card would show the em-dash placeholder on a node whose
+    // definition carries both fields.
+    if (n.kind === 'code-round') {
+      const rec = n as unknown as Record<string, unknown>
+      const roundData = data as CodeRoundNodeData
+      if (typeof rec.capability === 'string') roundData.capability = rec.capability
+      if (typeof rec.roundSeq === 'number') roundData.roundSeq = rec.roundSeq
     }
     // RFC-060 PR-E: agent-multi sourcePort mirroring removed.
     if (n.kind === 'wrapper-fanout') {

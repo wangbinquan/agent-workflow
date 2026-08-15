@@ -61,4 +61,7 @@ export const DEFAULT_NODE_SIZE_BY_KIND: Record<NodeKind, WorkflowPlacementSize> 
   'call-workgroup': { width: 280, height: 180 },
   script: { width: 280, height: 180 },
   'code-host-call': { width: 280, height: 180 },
+  // RFC-304 — never placed on a canvas (not user-authorable); the entry exists
+  // only to satisfy the exhaustive matrix. Same footprint as code-host-call.
+  'code-round': { width: 280, height: 180 },
 }

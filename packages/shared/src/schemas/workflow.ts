@@ -47,6 +47,13 @@ export const NODE_KIND = [
   'call-workgroup', // RFC-243: hand a DAG stage to a workgroup as an independent child task
   'script', // RFC-253: run an inline python/bash/node script — no model process
   'code-host-call', // RFC-269: one outbound GitLab/GitHub API call — no model, no subprocess
+  // RFC-304: the single node of a synthesized `code-round` task snapshot. It is
+  // NOT user-authorable — no palette entry, and the validator rejects it in any
+  // user-submitted definition (see workflow.validator.ts). It exists so a code
+  // capability round rides the ordinary task lifecycle (cancel / retry /
+  // interrupted-repair / detail page) while its stage sequence is driven by the
+  // code-capability StageEngine rather than by the graph frontier.
+  'code-round',
 ] as const
 // RFC-060 PR-E: 'agent-multi' was the M3 fan-out kind; superseded by
 // wrapper-fanout (RFC-060). Its node_runs / row shape are no longer minted by
@@ -54,6 +61,28 @@ export const NODE_KIND = [
 // `unknown-node-kind`.
 export const NodeKindSchema = z.enum(NODE_KIND)
 export type NodeKind = z.infer<typeof NodeKindSchema>
+
+/**
+ * RFC-304 — kinds the PLATFORM synthesizes and a user may never author.
+ *
+ * SINGLE SOURCE for that distinction. Four independent mechanisms have to agree
+ * on it, and each one silently re-exposes the kind if it drifts:
+ *   - `workflow.validator.ts` rejects these in any submitted definition;
+ *   - `nodePalette.ts` parks them in the 'internal' section so `buildPalette`
+ *     never emits them (that section is deliberately absent from
+ *     `PALETTE_SECTIONS`);
+ *   - `intentDoc.ts` must NOT teach their node form, and must name them as
+ *     withheld instead — otherwise the intent builder writes nodes that the
+ *     validator then rejects;
+ *   - the tests that lock all of the above enumerate THIS list rather than
+ *     hand-copying kind names (the RFC-253/243/269 drift that left three kinds
+ *     untaught for months came from hand-copied lists).
+ */
+export const SYNTHESIZED_ONLY_NODE_KINDS = ['code-round'] as const satisfies readonly NodeKind[]
+
+export function isSynthesizedOnlyNodeKind(kind: NodeKind | string | null | undefined): boolean {
+  return (SYNTHESIZED_ONLY_NODE_KINDS as readonly string[]).includes(kind ?? '')
+}
 
 // flag-audit W0 (§4.2) — the container ("wrapper") kind set, SINGLE SOURCE.
 // This membership was previously hand-copied as or-chains / private Sets in

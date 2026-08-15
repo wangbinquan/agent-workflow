@@ -41,6 +41,7 @@ import { OutputEdit } from './inspector/OutputEdit'
 import { ReviewEdit } from './inspector/ReviewEdit'
 import { ScriptEdit } from './inspector/ScriptEdit'
 import { CodeHostCallEdit } from './inspector/CodeHostCallEdit'
+import { CodeRoundEdit } from './inspector/CodeRoundEdit'
 import { WrapperFanoutEdit } from './inspector/WrapperFanoutEdit'
 import { WrapperGitLoopEdit } from './inspector/WrapperGitLoopEdit'
 import type { InspectorChangeMeta } from './inspector/historyMeta'
@@ -104,6 +105,8 @@ const KIND_INSPECTORS = {
   // RFC-253 — script node: language + inline body + runtime knobs.
   script: ScriptEdit,
   'code-host-call': CodeHostCallEdit,
+  // RFC-304 — synthesized round node: nothing is editable here (see the panel).
+  'code-round': CodeRoundEdit,
 } as const satisfies Record<NodeKind, FC<EditProps>>
 
 export function NodeInspector({

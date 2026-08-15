@@ -32,6 +32,7 @@ import type {
   WorkflowValidationTarget,
 } from '@agent-workflow/shared'
 import {
+  isSynthesizedOnlyNodeKind,
   DEPRECATED_PROMPT_TOKENS,
   CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT,
   CROSS_CLARIFY_OUT_TO_DESIGNER_PORT,
@@ -1318,6 +1319,26 @@ export function validateWorkflowDef(
         severity: 'warning',
       })
     }
+  }
+
+  // 3a-bis. RFC-304 — `code-round` is synthesized-only ------------------------
+  //
+  // The kind exists so a code-capability round rides the ordinary task
+  // lifecycle, and `startCodeRoundTask` is the ONLY thing allowed to mint it.
+  // Rejecting it here is what makes "not user-authorable" true rather than
+  // merely conventional: the palette omission (section 'internal') hides the
+  // node from the editor, but a hand-written YAML import or a PUT with a
+  // crafted body would otherwise sail straight through — and such a node would
+  // then be dispatched with no round record behind it, failing at 2am with a
+  // shape no one can explain.
+  for (const node of nodes) {
+    if (!isSynthesizedOnlyNodeKind(node.kind)) continue
+    issues.push({
+      code: 'code-round-not-authorable',
+      message: `node '${node.id}': '${node.kind}' nodes are synthesized by the platform and cannot appear in a user-authored workflow`,
+      pointer: node.id,
+      target: target.node(node.id),
+    })
   }
 
   // 3b. RFC-253 script nodes ---------------------------------------------------

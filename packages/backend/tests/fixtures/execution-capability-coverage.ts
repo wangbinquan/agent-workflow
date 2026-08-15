@@ -89,6 +89,22 @@ export const EXECUTION_CAPABILITY_COVERAGE = {
         ),
       ],
     },
+    {
+      // RFC-304. This is the one kind whose coverage is NOT "an author wired it
+      // and it ran": it is synthesized, so the reachable contract right now is
+      // that a submitted definition carrying it is refused. The execution
+      // evidence lands with PR-0's second half (the `code-round` execution kind
+      // + its runOneNode branch), and this entry gets a second, e2e line then —
+      // it is listed with the weaker evidence rather than omitted, because
+      // omission is what this catalog exists to catch.
+      id: 'code-round',
+      evidence: [
+        fast(
+          'packages/backend/tests/rfc304-synthesized-only-node-kinds.test.ts',
+          'the list is non-empty and code-round is on it',
+        ),
+      ],
+    },
   ] satisfies CoverageItem[],
 
   inputKinds: [

@@ -380,6 +380,13 @@ task stranded。后续重构只能行为对拍或通过独立 RFC 明确改变�
 独立批准。RFC-288 只提供关闭时保存的九条结论，不再修订、不再充当 gate。W2 不等待“补做 W1”，只消费 §5 已冻结的
 production baseline。
 
+> **W2 输入清单登记（RFC-304，2026-08-15）**：`StartExecutionRequest` 将由三种 kind 增至**四种**——
+> 新增 `code-round`（RFC-304 design D5）。登记在此是 RFC-304 与本总纲协调的**交换条件**：它不等 W2
+> 立号（W2 目前 seed-only，等下去等于把 RFC-304 无限期阻塞），改为**最小侵入先加**——只新增一个变体，
+> 不改现有三种 kind 的语义与调用面，不引入新的 ownership 概念（复用既有 task 行 ownership 与
+> driver lease）。**W2 立号时按四种收编，不是三种**；届时它与其余三种一起搬，不构成额外收口负担。
+> 用户已就此拍板（RFC-304 proposal §6ter-H3 / §6bis-⑬）。
+
 ### W2-A 四合同 topology cut
 
 - [ ] 先把同一个 private composition-level `TaskExecutionContext` 线程化进四个 kick 与所有 driver consumer，再适配

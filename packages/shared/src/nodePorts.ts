@@ -316,6 +316,11 @@ const PORT_DERIVERS = {
       { name: 'status', kind: 'text' },
     ],
   }),
+  // RFC-304 — the synthesized code-round node has NO user-connectable ports:
+  // it is not authorable on the canvas and nothing wires into or out of it.
+  // Its stage sequence consumes/produces values through the code-capability
+  // round record, not through workflow ports.
+  'code-round': (): DeclaredPorts => ({ ...NO_PORTS }),
 } as const satisfies Record<NodeKind, (ctx: DeriverCtx) => DeclaredPorts>
 
 /**

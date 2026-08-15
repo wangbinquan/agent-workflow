@@ -99,11 +99,22 @@ describe('RFC-146 NODE_KIND_BEHAVIORS — 全真表', () => {
     // （一条评论发出去了），所以要级联、要自己的 node_run 行；但它既不 spawn
     // 进程也不拥有模型 session（isAgent=false），更不是容器。
     const isCodeHostKind = (k: string): boolean => k === 'code-host-call'
+    // RFC-304：code-round 是第六类 process 载体 —— 它在一行 node_run 里驱动整条
+    // 阶段序列（program / script / ai / invoke），有真实外部副作用，所以要级联、
+    // 要自己的行。它不是容器（不入 WRAPPER_NODE_KINDS），也不拥有单一模型
+    // session：内部的 ai 阶段各自起 agent run，但「一行一 session」这个前提对
+    // 整轮不成立，故 isAgent=false（见 node-kind-behavior.ts 该条注释）。
+    const isCodeRoundKind = (k: string): boolean => k === 'code-round'
     for (const k of NODE_KIND) {
       const row = NODE_KIND_BEHAVIORS[k]
       if (row.isAgent) expect(row.isProcess).toBe(true)
       expect(row.isProcess).toBe(
-        row.isAgent || isWrapperKind(k) || isCallKind(k) || isScriptKind(k) || isCodeHostKind(k),
+        row.isAgent ||
+          isWrapperKind(k) ||
+          isCallKind(k) ||
+          isScriptKind(k) ||
+          isCodeHostKind(k) ||
+          isCodeRoundKind(k),
       )
       if (row.settlesWithoutRow) expect(row.isProcess).toBe(false)
       // RFC-052 语义：级联恰是 process 家族。

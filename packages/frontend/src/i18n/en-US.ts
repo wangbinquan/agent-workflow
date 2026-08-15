@@ -5717,6 +5717,19 @@ export const enUS: Resources = {
     intro:
       'Code-host call nodes in your workflows use these credentials. Tokens are stored encrypted and only their last characters are ever shown.',
   },
+  codeRoundNode: {
+    label: 'Code capability round',
+    notEditable:
+      'This node is synthesized by the platform and cannot be edited. Its stage sequence is fixed and versioned; to change which agent, prompt or threshold a stage uses, edit the capability configuration instead.',
+    capabilityHint: 'Capability for this round: {{capability}}',
+  },
+  codeCapability: {
+    mr_review: 'MR review',
+    mr_comment_fix: 'Comment-driven fix',
+    requirement: 'Requirement delivery',
+    ci_fix: 'CI fix',
+    mr_monitor: 'MR monitor',
+  },
   codeHostNode: {
     label: 'code host',
     destructive: 'DELETE request',
@@ -6101,6 +6114,8 @@ export const enUS: Resources = {
       'code-host-body-invalid':
         'The request body is not valid JSON, or a variable sits outside a JSON string.',
       'code-host-var-unknown': 'References a port or trigger variable that does not exist.',
+      'code-round-not-authorable':
+        'A code-round node is synthesized by the platform and cannot appear in a hand-authored or imported workflow.',
       'script-body-empty': 'The script node has an empty body.',
       'script-language-invalid': 'The script language must be python, bash or node.',
       'script-in-fanout-unsupported':

@@ -118,6 +118,28 @@ ownership、TaskEngine/Executor/Wrapper **未收口**」（`RFC-294/plan.md:79`�
 
 这属于跨 RFC 协调，需用户裁决是否接受「先加后收编」（列入 §6bis-⑬）。
 
+#### D5 实现约束（T0a 期间按源码核实，2026-08-15）
+
+「最小侵入」不等于「只在启动入口加一个变体」。核实发现**第四种 kind 必须同时进
+`taskExecutionKind()`**（`packages/shared/src/schemas/task.ts`），否则 code-round 的产出恒为空：
+
+`buildExecutionOutcome`（`services/execution/outcome.ts:150`）按 `taskExecutionKind()` 决定
+**输出从哪读**——`workflow` 去 snapshot 里找 `output` 节点、`agent` 读固定的
+`AGENT_HOST_AGENT_NODE_ID`、`workgroup` 读工作组状态。code-round 的合成 snapshot 里**没有
+`output` 节点**，若不加判别就落进 `workflow` 分支，`outputs` 永远是 `{}`，而 `status` 仍是
+`done`——一种「成功但无产出」的静默错误，正是最难从日志倒查的形状。
+
+由此确定 T0b 的实际形状（三点，均属既有形状的同形扩展，不新增概念）：
+
+1. `taskExecutionKind()` 返回值增加 `'code-round'`，且**判在最前**（它比 workgroup / agent 更特殊）；
+   返回类型是字面量联合，故 38 处调用点由 TS 强制穷尽——这是选它而非新开一个并行判别函数的理由；
+2. 判别位需要 task 行上的一列（`code_round_id`，nullable）。沿用既有派生法：**不新增状态列**，
+   kind 仍是从行字段**派生**而非存储，避免与行本身产生第二个可能不一致的事实源；
+3. `buildExecutionOutcome` 增加 code-round 分支，从合成节点读产出。
+
+`ExecutionKind`（`services/execution/types.ts:23`）的注释写明其 domain **刻意等于**
+`taskExecutionKind()`；上面三点正是维持该等式所需的全部改动，而不是打破它。
+
 ## 2. 领域模型
 
 ### 2.1 工作项（CodeWorkItem）——聚合根

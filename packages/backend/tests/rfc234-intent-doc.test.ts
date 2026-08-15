@@ -10,6 +10,8 @@ import {
   CODE_HOST_REDACTED_FIELDS,
   INTENT_REDACTED,
   NODE_KIND,
+  SYNTHESIZED_ONLY_NODE_KINDS,
+  isSynthesizedOnlyNodeKind,
   SCRIPT_REDACTED_FIELDS,
   TRIGGER_CONTEXT_FIELDS,
   codeHostActionDef,
@@ -192,10 +194,25 @@ describe('RFC-264 — per-type name rules in the payload tutorial', () => {
 const form = (kind: string): string => `{id,kind:'${kind}'`
 
 describe('INTENT.md node-form coverage is derived from NODE_KIND', () => {
-  test('a fully privileged session is taught EVERY node kind', () => {
+  test('a fully privileged session is taught every AUTHORABLE node kind', () => {
     const doc = docWith()
     for (const kind of NODE_KIND) {
+      if (isSynthesizedOnlyNodeKind(kind)) continue
       expect(doc).toContain(form(kind))
+    }
+  })
+
+  // RFC-304 — the mirror half. A synthesized-only kind must NOT be taught (the
+  // validator rejects it, so teaching it would make the intent builder emit
+  // definitions that fail to save), and it must be named as withheld rather
+  // than merely omitted — silent omission is exactly how RFC-243/253/269 left
+  // three kinds unauthorable for months without anyone noticing.
+  test('synthesized-only kinds are withheld explicitly, never taught', () => {
+    const doc = docWith()
+    expect(SYNTHESIZED_ONLY_NODE_KINDS.length).toBeGreaterThan(0)
+    for (const kind of SYNTHESIZED_ONLY_NODE_KINDS) {
+      expect(doc).not.toContain(form(kind))
+      expect(doc).toContain(kind)
     }
   })
 
@@ -303,9 +320,16 @@ describe('privileged node kinds are withheld from sessions that cannot author th
   })
 
   test('the unprivileged kinds are the ONLY ones missing', () => {
-    const withheld = new Set<string>(['script', 'code-host-call'])
+    // Two DIFFERENT reasons a kind can be absent, and the distinction matters:
+    // `script` / `code-host-call` are withheld from THIS session for lack of a
+    // permission (another session would be taught them), whereas RFC-304's
+    // synthesized-only kinds are withheld from EVERY session because no user
+    // may author them at all. Folding them together would let a genuine
+    // permission regression hide behind the synthesized-only exemption.
+    const withheldByPermission = new Set<string>(['script', 'code-host-call'])
     for (const kind of NODE_KIND) {
-      if (withheld.has(kind)) continue
+      if (withheldByPermission.has(kind)) continue
+      if (isSynthesizedOnlyNodeKind(kind)) continue
       expect(doc).toContain(form(kind))
     }
   })

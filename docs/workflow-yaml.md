@@ -100,9 +100,13 @@ repo-internal references to that path resolve to. Two uploaded files that would 
 on the same path are rejected at launch (`upload-duplicate-filename`) under either
 policy.
 
-## `nodes[]` — the thirteen kinds
+## `nodes[]` — the fourteen kinds
 
 Every node has `id`, `kind`, `position: {x, y}`. The rest depends on `kind`.
+
+Thirteen of them you author. The fourteenth — [`code-round`](#code-round) — is
+synthesized by the platform and **rejected** if you write it yourself; it is
+documented here because you can still read it in a task snapshot.
 
 ### `input`
 
@@ -387,6 +391,34 @@ scheme, no `//` prefix, no `?`, `#`, `..` segment or whitespace — query
 parameters go in `query`), and `body` is a **string** holding JSON in which every
 `{{var}}` sits inside a JSON string value. Authoring one requires the
 `code-host-calls:author` permission (admin + manager).
+
+### `code-round`
+
+**You cannot write this one.** A definition containing it is rejected with
+`code-round-not-authorable`, whether it arrives by YAML import, by
+`PUT /api/workflows/:id`, or by hand-editing an export. It has no palette entry
+for the same reason.
+
+```yaml
+# read-only: what a task snapshot looks like, not something you author
+- id: round
+  kind: code-round
+  position: { x: 0, y: 0 }
+  capability: mr-review # which code capability this round runs
+  roundSeq: 1 # 1-based, within the work item
+```
+
+It exists because a code capability (RFC-304) runs a **stage sequence**, not a
+node graph: most stages are plain program code, and program stages have no node
+kind to compile into. So a capability round is one synthesized node driven by the
+stage engine, and this kind is what a task's frozen snapshot records so the task
+detail page has something to draw. What the round actually does is configured one
+level up, on the capability binding — never on the node.
+
+Every synthesized-only kind is listed in `SYNTHESIZED_ONLY_NODE_KINDS`
+(`packages/shared/src/schemas/workflow.ts`), which the validator, the palette and
+this page's coverage test all read; adding a kind to that list is what makes it
+unauthorable, not any hand-copied list.
 
 ## `edges[]`
 

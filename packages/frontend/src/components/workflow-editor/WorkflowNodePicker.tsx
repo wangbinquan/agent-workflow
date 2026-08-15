@@ -139,6 +139,13 @@ function WorkflowNodePickerCatalogBody({
   const sections = useMemo(() => buildPalette(agents, t, ownerLabel), [agents, ownerLabel, t])
   const categoryLabels = useMemo<Record<PaletteSectionKey, string>>(
     () => ({
+      // RFC-304 — 'internal' holds kinds that are synthesized by the platform and
+      // never authorable (currently only `code-round`). `buildPalette` produces
+      // no section for it, so this label is unreachable in the UI; the entry
+      // exists solely because the record is exhaustive over PaletteSectionKey.
+      // Do NOT add it to the tab list — a tab would render an always-empty
+      // category. Locked by palette tests.
+      internal: '',
       agents: t('editor.nodePicker.categoryAgent'),
       wrappers: t('editor.nodePicker.categoryWrapper'),
       // RFC-243 — call-workflow lives in its own Calls category.

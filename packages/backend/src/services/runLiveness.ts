@@ -107,6 +107,7 @@ export function livenessSourceOfKind(kind: NodeKind): 'process' | 'delegated' {
     case 'clarify-cross-agent':
     case 'script': // RFC-253 — see the note below
     case 'code-host-call': // RFC-269 — see the note below
+    case 'code-round': // RFC-304 — see the note below
       // RFC-253: a script node spawns its own subprocess and the executor
       // writes `pid` + `spawn_binary_path` on the same update as every agent
       // run, so its liveness is direct process evidence — never delegated (it
@@ -122,6 +123,16 @@ export function livenessSourceOfKind(kind: NodeKind): 'process' | 'delegated' {
       // pre-spawn window. Calling it 'delegated' would instead route it down
       // the EMPTY-delegation path, whose whole purpose is reaping containers
       // that have nothing running underneath them.
+      //
+      // RFC-304: a code-round row LOOKS container-ish (its stage sequence can
+      // spawn agent runs for `kind:'ai'` stages), but it must NOT be
+      // 'delegated' — and the reason is the same reaping hazard, only sharper.
+      // Most of a round's wall-clock is spent in `kind:'program'` stages
+      // (split-diff, gate, position assembly, dedupe, publish): platform code
+      // running in-process with ZERO rows underneath it. A 'delegated'
+      // classification would hand exactly those windows to the
+      // empty-delegation reaper. Only the AI stages briefly have inner rows,
+      // and their liveness is already covered by those rows themselves.
       return 'process'
     // RFC-243: a call node's liveness is carried by its independent child
     // task (the childTaskId probe in resolveRunLiveness, which outranks this

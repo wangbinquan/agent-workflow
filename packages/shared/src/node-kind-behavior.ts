@@ -200,6 +200,25 @@ export const NODE_KIND_BEHAVIORS = {
     isAgent: false,
     settlesWithoutRow: false,
   },
+  // RFC-304 — the single synthesized node of a code-capability round. It drives
+  // a whole stage sequence (program / script / ai / invoke steps) inside one
+  // node_run, so it is process-bearing and cascades on retry exactly like
+  // `script` and `code-host-call`.
+  //
+  // `isAgent: false` is load-bearing and NOT a statement about "does it use a
+  // model": individual `kind:'ai'` stages inside it DO spawn agent runs. What
+  // the flag means here is that the node itself owns no single session — there
+  // is no one prompt / inventory snapshot / transcript for the round as a whole
+  // (a round can hold several AI calls across several stages, plus retries and
+  // cross-session reruns). Keeping it false is what holds the round out of the
+  // agent-only paths: inventory capture, memory injection and clarify all key
+  // off `isAgentNodeKind`, and each of them assumes exactly one session per row.
+  'code-round': {
+    retryCascade: 'mint-placeholder',
+    isProcess: true,
+    isAgent: false,
+    settlesWithoutRow: false,
+  },
 } as const satisfies Record<NodeKind, NodeKindBehavior>
 
 // ---------------------------------------------------------------------------

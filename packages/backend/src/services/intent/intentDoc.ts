@@ -407,6 +407,10 @@ Per-type payload fields:
   \`rename\` writes \`report (1).pdf\` and keeps the existing file, \`overwrite\` replaces it and keeps
   the original path. Two uploaded files landing on the same path are rejected at launch either way).
   Every node has \`{id,kind}\` and may carry \`position:{x,y}\` / \`title\`. Supported node forms:
+  - NOT AVAILABLE TO YOU: \`code-round\`. The platform synthesizes it for code-capability
+    rounds; a workflow you author containing that kind is rejected at save time. It is named
+    here so you know it exists and is withheld — do not emit it, and do not treat its absence
+    from the list below as an oversight.
   - \`{id,kind:'input',inputKey}\`.
   - \`{id,kind:'agent-single',agentRef:ref,promptTemplate,overrides?}\`. Use \`agentRef\`, never agentId/agentName.
   - \`{id,kind:'output',ports:[{name,bind:{nodeId,portName}}]}\`. Every incoming edge target port MUST be declared here with the same binding; omitting \`ports\` produces no task output.

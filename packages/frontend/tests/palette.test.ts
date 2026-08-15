@@ -189,13 +189,39 @@ describe('buildPalette', () => {
     })
   })
 
-  test('every NodeKind belongs to exactly one declared RFC-219 category', () => {
+  test('every AUTHORABLE NodeKind belongs to exactly one declared RFC-219 category', () => {
     const declaredSections = new Set(PALETTE_SECTIONS.map((section) => section.key))
     expect(NODE_KIND.map((kind) => PALETTE_DESCRIPTORS[kind].section)).toHaveLength(
       NODE_KIND.length,
     )
     for (const kind of NODE_KIND) {
-      expect(declaredSections.has(PALETTE_DESCRIPTORS[kind].section)).toBe(true)
+      const section = PALETTE_DESCRIPTORS[kind].section
+      // RFC-304 — 'internal' kinds are synthesized by the platform and must NOT
+      // have a declared palette section; that absence is what keeps them out of
+      // the drag palette. Asserted positively in the next test.
+      if (section === 'internal') continue
+      expect(declaredSections.has(section)).toBe(true)
+    }
+  })
+
+  // RFC-304 — the synthesized `code-round` node must never be draggable. This
+  // locks all three halves of the mechanism, because any one of them silently
+  // re-exposes the kind: the descriptor must stay in 'internal', 'internal'
+  // must stay OUT of PALETTE_SECTIONS (adding it would render an always-empty
+  // category tab), and buildPalette must therefore never emit the kind.
+  test('internal (synthesized-only) kinds never reach the palette', () => {
+    const internalKinds = NODE_KIND.filter(
+      (kind) => PALETTE_DESCRIPTORS[kind].section === 'internal',
+    )
+    expect(internalKinds).toContain('code-round')
+
+    expect(PALETTE_SECTIONS.map((section) => section.key)).not.toContain('internal')
+
+    const emitted = buildPalette([], identityT).flatMap((section) =>
+      section.items.map((entry) => entry.item.kind),
+    )
+    for (const kind of internalKinds) {
+      expect(emitted).not.toContain(kind)
     }
   })
 

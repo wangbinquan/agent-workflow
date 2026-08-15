@@ -4906,6 +4906,18 @@ export interface Resources {
     loading: string
     intro: string
   }
+  codeRoundNode: {
+    label: string
+    notEditable: string
+    capabilityHint: string
+  }
+  codeCapability: {
+    mr_review: string
+    mr_comment_fix: string
+    requirement: string
+    ci_fix: string
+    mr_monitor: string
+  }
   codeHostNode: {
     label: string
     destructive: string
@@ -11075,6 +11087,19 @@ export const zhCN: Resources = {
     intro:
       '工作流里的「代码平台调用」节点用这里配置的凭据调用 GitLab / GitHub。令牌加密存储，读取时只显示尾号。',
   },
+  codeRoundNode: {
+    label: '代码能力轮次',
+    notEditable:
+      '该节点由平台自动生成，不可编辑。它执行的阶段序列是写死且版本化的；要改用哪个 agent、提示词或阈值，请到对应的能力配置里改。',
+    capabilityHint: '本轮执行的能力：{{capability}}',
+  },
+  codeCapability: {
+    mr_review: 'MR 代码检视',
+    mr_comment_fix: '评论驱动改码',
+    requirement: '需求实现',
+    ci_fix: 'CI 修复',
+    mr_monitor: 'MR 监视器',
+  },
   codeHostNode: {
     label: '代码平台调用',
     destructive: 'DELETE 请求',
@@ -11411,6 +11436,8 @@ export const zhCN: Resources = {
       'code-host-path-invalid': '请求路径必须是所配 API 根之下的相对路径。',
       'code-host-body-invalid': '请求体不是合法 JSON，或变量放在了 JSON 字符串之外。',
       'code-host-var-unknown': '引用了不存在的端口或触发上下文变量。',
+      'code-round-not-authorable':
+        '「代码能力轮次」节点由平台自动生成，不能出现在手工编辑或导入的工作流里。',
       'script-body-empty': '脚本节点的正文为空。',
       'script-language-invalid': '脚本节点的语言必须是 python、bash 或 node。',
       'script-in-fanout-unsupported':
