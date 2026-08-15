@@ -1,3 +1,5 @@
+import type { ZodTypeAny } from 'zod'
+
 // RFC-304 — the stage contract: what a capability's round actually runs.
 //
 // Every capability has ONE stage sequence, defined in platform code and
@@ -28,15 +30,44 @@ export const CODE_CAPABILITIES = [
   'ci-fix',
   'mr-monitor',
 ] as const
-export type CodeCapability = (typeof CODE_CAPABILITIES)[number]
+/**
+ * The NAME of a capability — a closed string union, not a runtime credential.
+ *
+ * Named `…Id` rather than `…Capability` on purpose: this repo reserves the
+ * `Capability` suffix (alongside `Actor`, `Authority`, `Claim`, `Token`) for
+ * runtime authority objects, which the architecture preflight requires to be
+ * minted by an owner factory, frozen, and tracked in a private registry. This
+ * is none of those things — it identifies which stage sequence to run. Renaming
+ * it back would claim a guarantee it does not provide.
+ */
+export type CodeCapabilityId = (typeof CODE_CAPABILITIES)[number]
 
 /**
- * A JSON Schema object. Kept structural rather than importing a validator's
- * type: the contract only needs to carry it to the determinism guard, and
- * pinning a library type here would leak that choice into every capability
- * definition.
+ * The ONLY way an arbitrary string becomes a `CodeCapabilityId`.
+ *
+ * A `value as CodeCapabilityId` cast would let any string — a typo in a binding,
+ * a field from a webhook payload — pose as a capability the platform ships,
+ * and the type system would stop being evidence of anything. Returning
+ * `undefined` forces the caller to say what happens when it is not one, which
+ * is a configuration fault worth reporting rather than a stage failure.
  */
-export type AiEnvelopeSchema = Readonly<Record<string, unknown>>
+export function parseCodeCapabilityId(value: string): CodeCapabilityId | undefined {
+  return (CODE_CAPABILITIES as readonly string[]).includes(value)
+    ? (value as CodeCapabilityId)
+    : undefined
+}
+
+/**
+ * The schema an AI stage's envelope must satisfy.
+ *
+ * A zod schema, not a hand-written JSON Schema object (design §4.1 deviation):
+ * this repo has no JSON Schema validator, and its established practice is
+ * zod-as-source with `zodToJsonSchema` for export (see `mcp/resourceSchemas.ts`).
+ * Writing JSON Schema by hand here would mean a second schema system and a new
+ * dependency for one RFC. The model still receives JSON Schema text — it is
+ * derived, not authored.
+ */
+export type AiEnvelopeSchema = ZodTypeAny
 
 export interface StageBase {
   /** Public contract — hooks mount by this name, so renaming one breaks hooks. */
@@ -93,12 +124,12 @@ export type StageDef = StageBase &
          * does NOT publish to the MR — its findings feed the parent's next
          * stage. Hooks inside it mount as `<parentStage>/<subStage>`.
          */
-        invokes: { capability: CodeCapability; from: string; to: string }
+        invokes: { capability: CodeCapabilityId; from: string; to: string }
       }
   )
 
 export interface StageContract {
-  capability: CodeCapability
+  capability: CodeCapabilityId
   /** Bumped whenever the stage set or a stage's semantics change (T8). */
   version: number
   stages: readonly StageDef[]
@@ -117,7 +148,7 @@ export type StageContractIssue = {
 }
 
 /** Look up a capability's contract; used to resolve `invoke` targets. */
-export type StageContractRegistry = (capability: CodeCapability) => StageContract | undefined
+export type StageContractRegistry = (capability: CodeCapabilityId) => StageContract | undefined
 
 /**
  * Self-check a contract. Runs in tests and at registry build time — never on
@@ -221,9 +252,9 @@ function checkInvoke(
 
 function reachesCapability(
   from: StageContract,
-  goal: CodeCapability,
+  goal: CodeCapabilityId,
   registry: StageContractRegistry,
-  visited: Set<CodeCapability>,
+  visited: Set<CodeCapabilityId>,
 ): boolean {
   if (from.capability === goal) return true
   for (const stage of from.stages) {

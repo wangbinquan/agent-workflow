@@ -146,6 +146,9 @@ import {
   resolveFrozenRuntime,
   resolveSchedulerRunRow,
 } from '@/services/nodeRunMint'
+import { CODE_ROUND_SUMMARY_PORT } from '@/services/codeRoundContract'
+import { createCodeCapabilityRunner } from '@/modules/code-capability/composition/codeCapabilityRunner'
+import type { CodeCapabilityRunner } from '@/modules/code-capability/public/types'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
@@ -343,6 +346,11 @@ export interface RunTaskOptions {
    * webhook surfaces use when `secretBox` is missing).
    */
   codeHostConnections?: CodeHostConnectionsService
+  /**
+   * RFC-304: runs a code-capability round's stage sequence. Injected by tests
+   * and (later) by bootstrap; absent ⇒ a default instance is built locally.
+   */
+  codeCapabilityRunner?: CodeCapabilityRunner
   /** RFC-269: outbound fetch seam; production omits it, tests inject a stub. */
   codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
   /** Concurrency cap for fan-out child subprocesses (P-3-02). Default 4. */
@@ -4443,7 +4451,7 @@ async function runCodeHostCallNode(
  * `node_run_outputs` where `buildExecutionOutcome` reads it.
  */
 async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
-  const { db, taskId, definition, log } = state
+  const { db, task, taskId, definition, opts, log } = state
   const { node, iteration } = args
 
   const capability = pickString(node, 'capability')
@@ -4506,15 +4514,65 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
   })
   broadcastNodeStatus(taskId, nodeRunId, node.id, 'running')
 
-  // ── PR-1a replaces this with `await runStageSequence(...)` ──────────────
-  const stagesRun = 0
-  // ───────────────────────────────────────────────────────────────────────
+  // RFC-304 T9 — the real stage sequence. PR-0 shipped an empty-stage stub
+  // here to answer "can a round be a task at all"; that question is settled, so
+  // the round now runs its capability's contract through the stage engine.
+  //
+  // The runner is reached through the module's PUBLIC interface only: this
+  // branch never learns what a stage or a hook is. Falling back to a locally
+  // built instance mirrors the code-host branch's `?? resolveFrom…` shape and
+  // is transitional — once bootstrap assembles it, this becomes pure injection.
+  const runner = opts.codeCapabilityRunner ?? createCodeCapabilityRunner({ db })
+  const roundSeqRaw = (node as unknown as { roundSeq?: unknown }).roundSeq
+  const result = await runner.runRound({
+    roundId: task.codeRoundId ?? taskId,
+    capability,
+    roundSeq: typeof roundSeqRaw === 'number' ? roundSeqRaw : 1,
+    worktreePath: state.scopeRoot,
+    repos: state.repos.map((r) => ({
+      name: r.mountPath === '' ? 'main' : r.mountPath,
+      path: r.worktreePath,
+    })),
+    envelopeNonce: await loadRunEnvelopeNonce(db, nodeRunId),
+    // Resume-from is a work-item decision (design §2.2). PR-1c threads it in
+    // with the work item; a round started directly runs its whole sequence.
+    resumeFromStage: null,
+  })
+
+  if (result.outcome !== 'done') {
+    const failureCode =
+      result.outcome === 'blocked'
+        ? 'code-round-blocked'
+        : result.outcome === 'canceled'
+          ? 'code-round-canceled'
+          : result.outcome === 'unknown-capability'
+            ? 'code-round-unknown-capability'
+            : 'code-round-stage-failed'
+    const summary =
+      result.outcome === 'blocked'
+        ? `blocked at '${result.blockedStage}': ${result.reason}`
+        : result.outcome === 'canceled'
+          ? `canceled at '${result.canceledStage}'`
+          : result.outcome === 'unknown-capability'
+            ? `no stage contract is registered for capability '${result.capability}'`
+            : `stage '${result.failedStage}' failed: ${result.error}`
+    await setNodeRunStatus({
+      db,
+      nodeRunId,
+      to: 'failed',
+      allowedFrom: ['running'],
+      reason: failureCode,
+      extra: { finishedAt: Date.now(), errorMessage: summary, failureCode },
+    })
+    broadcastNodeStatus(taskId, nodeRunId, node.id, 'failed')
+    return { kind: 'failed', summary, message: failureCode }
+  }
 
   await db.insert(nodeRunOutputs).values([
     {
       nodeRunId,
-      portName: 'round_summary',
-      content: JSON.stringify({ capability, stagesRun }),
+      portName: CODE_ROUND_SUMMARY_PORT,
+      content: JSON.stringify({ capability, summary: result.summary }),
     },
   ])
   await setNodeRunStatus({
@@ -4526,7 +4584,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
     extra: { finishedAt: Date.now() },
   })
   broadcastNodeStatus(taskId, nodeRunId, node.id, 'done')
-  return { kind: 'ok', summary: `${capability}: ${stagesRun} stage(s)`, message: '' }
+  return { kind: 'ok', summary: result.summary, message: '' }
 }
 
 async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {

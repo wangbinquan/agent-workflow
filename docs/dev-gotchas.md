@@ -271,6 +271,10 @@
 
 - **第 9 处穷尽点不受编译器保护，而且它不在代码里：`services/intent/intentDoc.ts` 的 "Supported node forms"**（2026-08-08 实测）。INTENT.md 明说这份清单是穷举的，模型据此认定「不在清单里的 kind 不存在」——RFC-253 补 `script` 时把这条机制写进了 `rfc234-intent-doc.test.ts` 的注释，但 **RFC-243（`call-workflow` / `call-workgroup`）与 RFC-269（`code-host-call`）落 `NODE_KIND` 时都没回来补**，于是意图构建器**静默地**只会写 13 种节点里的 10 种：typecheck 绿、测试绿、功能不存在。定式：新增 NodeKind 必须同时补 intentDoc，并且**守卫要按 `NODE_KIND` 枚举**而不是手抄清单（`rfc234-intent-doc.test.ts` 的 `form(kind)` 锚点即为此，锚 `{id,kind:'x'` 而不是宽松的 `kind:'x'`——后者分不清「教了」和「明确禁止」）。
 
+- **第 10–12 处穷尽点，同样不受编译器保护**（RFC-304 加 `code-round` 时实测，2026-08-15）：①`docs/workflow-yaml.md`——每个 kind 一个 `### \`x\`` 小节，**且标题里的英文数字计数**（"the thirteen kinds"）也被断言；②`tests/rfc199-workflow-validation-targets.test.ts` 的 emission **计数** ratchet——新增一条 `issues.push` 就涨 1；③`tests/fixtures/execution-capability-coverage.ts`——每个 kind 要有**指向真实文件 + 真实锚点文本**的证据条目（锚点文本不存在即红）。三处都只有跑 `gate:local` 才现形，typecheck 与 lint 全绿。
+- **更一般的规律：本仓有一层「登记面」，是设计如此的护栏，但只有门禁能发现**。除上面三处外，同一轮还撞到：migration journal 计数（`upgrade-rolling.test.ts`）、`rfc199-workflow-writer-inventory` 的 workflow 写入方 allowlist（新增一处 `db.insert(workflows)` 就要登记）、`rfc301-task-launch-origin-architecture` 的 `startTask` 调用方 allowlist、`docs/env-flags.md`（RFC-284 T26：src 里每个 `AGENT_WORKFLOW_*` / `AW_*` token 都要有记载）。**省时做法**：新增「一个 kind / 一张表 / 一个 env 变量 / 一个 `startTask` 调用方 / 一处 `db.insert(workflows)`」之前，先 `grep -rn "<同类的既有值>" packages/backend/tests docs` 看它在哪些清单里出现过，一次补齐；否则就是「改代码 5 分钟、跑 7 分钟门禁发现漏一处」重复 N 轮。**正面样板**：`RunTaskOptions` 的 `satisfies Record<keyof RunTaskOptions, Disposition>`（RFC-284 T20）是同类护栏里做得最好的——**编译期就红**，不必等门禁。新增此类「每项都要表态」的清单时优先照它做。
+- **给「永远绿」的负扫描配反向自检**（RFC-304 T11 实测）：负扫描的特征失败是**扫了个寂寞**——正则写错、目录改名、规则匹配零文件，它会永远绿并被当成证据。故每条负扫描都成对：正向扫真实源码、反向喂一段**故意违规的样本**给**同一个扫描器**且必须报。另配三条：目录存在性断言（改名会让扫描空过）、动态 `await import()` 变体（只查静态 import 会漏掉这个绕过形状）、「注释里提到禁用符号不算违规」（否则规则没法在它适用的地方被解释）。同轮还实证一条：**plan / design 里写的扫描目标可能已经不存在**——RFC-304 plan 要求扫 `SAFE_FORWARD_ENV`，而该符号已随 RFC-276 退役、当前代码零命中。**动手前先 grep 确认扫描目标真的存在**，否则写出来的就是一条永远绿的假护栏。
+
 ## iso / merge_state 生命周期（RFC-276 回归实测，2026-08-11）
 
 - **凡是新开 iso 隔离（`persistIsoBase` 盖 `'isolating'`）的执行路径，成功收口时必须把

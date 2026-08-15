@@ -15,7 +15,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   CODE_CAPABILITIES,
   validateStageContract,
-  type CodeCapability,
+  type CodeCapabilityId,
   type StageContract,
   type StageDef,
 } from '../src/modules/code-capability/domain/stageContract'
@@ -27,7 +27,7 @@ const program = (name: string, requires: string[] = [], produces: string[] = [])
   produces,
 })
 
-const contract = (capability: CodeCapability, stages: StageDef[]): StageContract => ({
+const contract = (capability: CodeCapabilityId, stages: StageDef[]): StageContract => ({
   capability,
   version: 1,
   stages,
@@ -35,7 +35,7 @@ const contract = (capability: CodeCapability, stages: StageDef[]): StageContract
 
 const registryOf = (...contracts: StageContract[]) => {
   const byCapability = new Map(contracts.map((c) => [c.capability, c]))
-  return (capability: CodeCapability) => byCapability.get(capability)
+  return (capability: CodeCapabilityId) => byCapability.get(capability)
 }
 
 describe('RFC-304 §4.1 — requires/produces closure', () => {

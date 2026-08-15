@@ -127,12 +127,12 @@ runner 共用同一个 ctx 对象，任一侧将来加个防御性拷贝就会�
 
 | #    | 任务                                                                                                                                                                             | 依赖      |
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------------------------- |
-| T9a  | 落地 `code-round` execution kind（合同已由 PR-0 验证）：participant、进程归属、取消与恢复                                                                                        | T0b,T1    |
-| T9   | `TaskLauncherPort` + 适配：起一轮 = 起一个 `code-round` task；新增独立任务类型并接入列表筛选                                                                                     | T3,T9a    |
+| T9a  | 落地 `code-round` execution kind（合同已由 PR-0 验证）：participant、进程归属、取消与恢复                                                                                        | T0b,T1    | ✅ 2026-08-15               |
+| T9   | `TaskLauncherPort` + 适配：起一轮 = 起一个 `code-round` task；新增独立任务类型并接入列表筛选                                                                                     | T3,T9a    | ✅ 2026-08-15               |
 | T6   | `DeterminismGuard`：envelope 提取 → 结构/语义校验 → 同会话重试 → 换会话重跑 → 失败                                                                                               | T4,T9     | ✅ 2026-08-15               |
 | T2b  | `code_ai_attempts` 状态机：唯一键 `(roundId, stage, shard, rerunSeq, attemptSeq)`，`claimed→running→validated\|failed\|interrupted`；**恢复时先收束悬挂 attempt 再分配下一序号** | T2,T6     | ✅ 2026-08-15               |
 | T11  | 源码层负扫描：`kind:'program'` 阶段不得出现 agent 派发；钩子上下文键不可被作者 overlay 覆盖；**各配一条反向自检**（把实现改错、扫描必须变红）                                    | T4,T6     | ✅ 2026-08-15（见下方勘误） |
-| T12b | 端到端：一条含 AI 阶段的最简流程跑通，含两级重试与 daemon 重启恢复                                                                                                               | T6,T2b,T9 |
+| T12b | 端到端：一条含 AI 阶段的最简流程跑通，含两级重试与 daemon 重启恢复                                                                                                               | T6,T2b,T9 | ✅ 2026-08-15               |
 
 **T11 勘误（2026-08-15，按源码核对）**：原文第二项「`SAFE_FORWARD_ENV` 未被修改」**基于过期假设**——
 该符号在当前代码库里**不存在**（`grep -rn SAFE_FORWARD_ENV packages/` 零命中）。它是 RFC-269 时代

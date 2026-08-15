@@ -58,6 +58,11 @@ const DISPOSITION = {
   scriptDepsInstallTimeoutMs: 'inherit',
   fanoutMaxShardTotal: 'dropped-registered',
   codeHostConnections: 'dropped-registered',
+  // RFC-304: a service instance, like codeHostConnections. A child task started
+  // by a call node builds its own — inheriting a runner bound to the parent's
+  // db handle and program-stage registry would give the child the parent's
+  // execution surface.
+  codeCapabilityRunner: 'dropped-registered',
   codeHostFetch: 'dropped-registered',
   commitPushModel: 'dropped-registered',
   commitPushRuntime: 'dropped-registered',
@@ -85,6 +90,10 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'fanoutMaxShardTotal',
         'codeHostConnections',
         'codeHostFetch',
+        // RFC-304: the code-capability runner. Dropped for the same reason as
+        // codeHostConnections — a child builds its own rather than inheriting
+        // a service bound to the parent's db handle and stage registry.
+        'codeCapabilityRunner',
         'commitPushModel',
         'commitPushRuntime',
         'commitPushMaxRepairRetries',

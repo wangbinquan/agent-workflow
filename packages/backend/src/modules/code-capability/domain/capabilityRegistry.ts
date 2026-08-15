@@ -16,7 +16,7 @@
 
 import {
   validateStageContract,
-  type CodeCapability,
+  type CodeCapabilityId,
   type StageContract,
   type StageContractIssue,
 } from '@/modules/code-capability/domain/stageContract'
@@ -60,19 +60,19 @@ export const MINIMAL_CONTRACT: StageContract = {
 
 const BUILTIN_CONTRACTS: readonly StageContract[] = [MINIMAL_CONTRACT]
 
-const BY_CAPABILITY = new Map<CodeCapability, StageContract>(
+const BY_CAPABILITY = new Map<CodeCapabilityId, StageContract>(
   BUILTIN_CONTRACTS.map((c) => [c.capability, c]),
 )
 
-export function lookupStageContract(capability: CodeCapability): StageContract | undefined {
+export function lookupStageContract(capability: CodeCapabilityId): StageContract | undefined {
   return BY_CAPABILITY.get(capability)
 }
 
-export function registeredCapabilities(): readonly CodeCapability[] {
+export function registeredCapabilities(): readonly CodeCapabilityId[] {
   return [...BY_CAPABILITY.keys()]
 }
 
-export type RegistryIssue = StageContractIssue & { capability: CodeCapability }
+export type RegistryIssue = StageContractIssue & { capability: CodeCapabilityId }
 
 /**
  * Validate every registered contract against the registry itself, so `invoke`

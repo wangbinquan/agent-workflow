@@ -19,6 +19,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
+import { z } from 'zod'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   readRoundStages,
@@ -427,7 +428,14 @@ describe('RFC-304 T5 — stage engine', () => {
       stages: [
         program('p'),
         { kind: 'script', name: 's', scriptSlot: 'slot', requires: [], produces: [] },
-        { kind: 'ai', name: 'a', aiSchema: {}, agentSlot: 'reviewer', requires: [], produces: [] },
+        {
+          kind: 'ai',
+          name: 'a',
+          aiSchema: z.unknown(),
+          agentSlot: 'reviewer',
+          requires: [],
+          produces: [],
+        },
         {
           kind: 'invoke',
           name: 'i',
