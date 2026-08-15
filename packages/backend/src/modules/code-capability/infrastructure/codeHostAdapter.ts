@@ -19,6 +19,7 @@ import { executeCodeHostCall, type ProjectFallback } from '@/services/codeHost/c
 import {
   resolveCodeHostConnectionsFromKeyFile,
   type CodeHostConnectionsService,
+  type FetchLike,
 } from '@/services/codeHost/connections'
 import { Paths } from '@/util/paths'
 import type {
@@ -40,8 +41,13 @@ export interface CodeHostAdapterDeps {
   /** Injected in tests; production resolves from the secret key file. */
   connections?: CodeHostConnectionsService | null
   timeoutMs?: number
-  /** Mirrors `CodeHostCallDeps.fetchImpl` — the seam the client already exposes. */
-  fetchImpl?: typeof fetch
+  /**
+   * Mirrors `CodeHostCallDeps.fetchImpl` — the seam the client already exposes.
+   * Typed as the client's own `FetchLike` rather than `typeof fetch`: Bun's
+   * global carries a `preconnect` property that no test double has, and
+   * demanding it would reject every stub for a reason unrelated to fetching.
+   */
+  fetchImpl?: FetchLike
 }
 
 export function createCodeHostAdapter(deps: CodeHostAdapterDeps): CodeHostPort {
