@@ -7,12 +7,12 @@
 
 **必读的四节**，其余可按需查阅：
 
-| 先读 | 为什么 |
-| --- | --- |
-| §2.1–2.2 工作项与状态机 | 整个系统的骨架。身份键、状态转移、守卫优先级、两条不变量（工作项串行 / MR lease）都在这里，后面各节都建在它上面 |
-| §2.2「恢复语义」+「发布临界区」 | 两处最容易实现错的地方：前者关系到"人确认的 patch 与推送的是不是同一个"，后者是唯一的并发线性化点 |
-| §4 阶段引擎 | 四种 `kind`、确定性守卫（宪法 R3–R5 的落地）、钩子 |
-| §6.1 `mr-review` 序列 | 第一条要做的能力，也是另三条"自审"时复用的核心 |
+| 先读                            | 为什么                                                                                                          |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| §2.1–2.2 工作项与状态机         | 整个系统的骨架。身份键、状态转移、守卫优先级、两条不变量（工作项串行 / MR lease）都在这里，后面各节都建在它上面 |
+| §2.2「恢复语义」+「发布临界区」 | 两处最容易实现错的地方：前者关系到"人确认的 patch 与推送的是不是同一个"，后者是唯一的并发线性化点               |
+| §4 阶段引擎                     | 四种 `kind`、确定性守卫（宪法 R3–R5 的落地）、钩子                                                              |
+| §6.1 `mr-review` 序列           | 第一条要做的能力，也是另三条"自审"时复用的核心                                                                  |
 
 **读的时候注意两个标记**：
 
@@ -62,13 +62,13 @@ modules/code-capability/
 
 ### 1.3 跨模块依赖：只走 public 合同
 
-| 依赖 | 用途 | 合同 |
-| --- | --- | --- |
-| `integration.public` | 归一化 webhook 信封、code-host 出站调用 | 事件订阅 + 调用命令 |
-| `task-execution.public` | 起一轮（= 一个 task）、查状态、取消抢占 | 启动命令 + 状态查询 + 事件 |
-| `source-control.public` | worktree 准备与回收、diff 读取 | 命令 |
-| `resource-catalog.public` | agent 解析、模板资源 CRUD 与 ACL | 查询 + 命令 |
-| `collaboration.public` | 反问（clarify）发起与作答回收 | 命令 + 事件 |
+| 依赖                      | 用途                                    | 合同                       |
+| ------------------------- | --------------------------------------- | -------------------------- |
+| `integration.public`      | 归一化 webhook 信封、code-host 出站调用 | 事件订阅 + 调用命令        |
+| `task-execution.public`   | 起一轮（= 一个 task）、查状态、取消抢占 | 启动命令 + 状态查询 + 事件 |
+| `source-control.public`   | worktree 准备与回收、diff 读取          | 命令                       |
+| `resource-catalog.public` | agent 解析、模板资源 CRUD 与 ACL        | 查询 + 命令                |
+| `collaboration.public`    | 反问（clarify）发起与作答回收           | 命令 + 事件                |
 
 **禁止**：读对方的表、import 对方 `domain/` 或 `infrastructure/` 下任何符号、复用对方的全局单例。
 新增代码**不得**在 `routes/` 或 `services/` 平铺层落任何跨域 facade。
@@ -78,13 +78,13 @@ modules/code-capability/
 > ✅ **D1–D5 全部经用户确认（2026-08-15）**，无异议。D5 的跨 RFC 协调按「先加后收编」执行
 > （proposal §6ter-H3）。
 
-| # | 偏离 | 理由 | 备选与代价 |
-| --- | --- | --- | --- |
-| **D1** | 新增第 14 个 bounded context | 三个候选 context 收编它都会破坏各自的职责边界（§1.1） | 并入 `integration`：让通道模块承载业务聚合，后续 W-wave 拆分成本更高 |
-| **D2** | 引入**第二套生命周期状态机**（工作项），与 task 状态机并存 | 两者层次不同：工作项跨多个 task；等待人回应发生在工作项层，故不存在"挂着一个 task 空等三天" | 复用 task 状态机：需要 task 支持天级挂起，与 RFC-097 转移表和恢复语义正面冲突 |
-| **D3** | 编排层不落 `workflow_definitions`，自带阶段序列定义 | 阶段序列平台写死且版本化，与用户可编辑的工作流定义语义不同；混存会互相污染校验规则 | 复用 workflow 表：用户会在工作流列表里看到一堆不可编辑的系统行 |
-| **D4** | 脚本挂载点直接消费 `scriptRun` 的执行机制而非 script **节点** | 钩子与适配脚本不是工作流节点，没有画布位置与端口连线 | 造成第二套脚本执行实现——**不接受**，故复用机制、不复用节点 |
-| **D5** | **新增第四种 execution kind `code-round`** | 见下方论证：现有三种都承载不了一轮 | 三条退路各自更差，见下表 |
+| #      | 偏离                                                          | 理由                                                                                        | 备选与代价                                                                    |
+| ------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **D1** | 新增第 14 个 bounded context                                  | 三个候选 context 收编它都会破坏各自的职责边界（§1.1）                                       | 并入 `integration`：让通道模块承载业务聚合，后续 W-wave 拆分成本更高          |
+| **D2** | 引入**第二套生命周期状态机**（工作项），与 task 状态机并存    | 两者层次不同：工作项跨多个 task；等待人回应发生在工作项层，故不存在"挂着一个 task 空等三天" | 复用 task 状态机：需要 task 支持天级挂起，与 RFC-097 转移表和恢复语义正面冲突 |
+| **D3** | 编排层不落 `workflow_definitions`，自带阶段序列定义           | 阶段序列平台写死且版本化，与用户可编辑的工作流定义语义不同；混存会互相污染校验规则          | 复用 workflow 表：用户会在工作流列表里看到一堆不可编辑的系统行                |
+| **D4** | 脚本挂载点直接消费 `scriptRun` 的执行机制而非 script **节点** | 钩子与适配脚本不是工作流节点，没有画布位置与端口连线                                        | 造成第二套脚本执行实现——**不接受**，故复用机制、不复用节点                    |
+| **D5** | **新增第四种 execution kind `code-round`**                    | 见下方论证：现有三种都承载不了一轮                                                          | 三条退路各自更差，见下表                                                      |
 
 D4 不算真偏离（复用机制是对的），列出是为了说明「为什么钩子不是 script 节点」。
 
@@ -93,11 +93,11 @@ D4 不算真偏离（复用机制是对的），列出是为了说明「为什�
 初稿写「每轮物化为一个 task，复用既有执行内核」，设计门核实后发现**没有可用载体**——
 `StartExecutionRequest`（`packages/backend/src/services/execution/types.ts:58`）只有三种 kind：
 
-| 退路 | 为什么不行 |
-| --- | --- |
-| `kind: 'workflow'` | 要求持久化的 `workflowId` 并从库里读定义，与 D3「阶段序列不落 `workflow_definitions`」直接冲突；且十三阶段里有程序步、脚本步、`invoke` 子序列，workflow 节点模型表达不了 |
-| `kind: 'agent'` | 只承载**单个** agent 的一次运行，一轮里有多个 AI 步 + 大量程序步 |
-| 直接调 `runSystemAgent` | 它是明确的 non-task primitive：各次 AI 调用不属于任何 task，取消/回放/中断修复/详情页**全部落空**——而"复用这些"正是本 RFC 选择跑在任务引擎上的全部理由 |
+| 退路                    | 为什么不行                                                                                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `kind: 'workflow'`      | 要求持久化的 `workflowId` 并从库里读定义，与 D3「阶段序列不落 `workflow_definitions`」直接冲突；且十三阶段里有程序步、脚本步、`invoke` 子序列，workflow 节点模型表达不了 |
+| `kind: 'agent'`         | 只承载**单个** agent 的一次运行，一轮里有多个 AI 步 + 大量程序步                                                                                                         |
+| 直接调 `runSystemAgent` | 它是明确的 non-task primitive：各次 AI 调用不属于任何 task，取消/回放/中断修复/详情页**全部落空**——而"复用这些"正是本 RFC 选择跑在任务引擎上的全部理由                   |
 
 故新增 `kind: 'code-round'`：它拥有一个 task 行与完整生命周期，其内部由 `StageEngine` 驱动阶段
 序列，每个 `kind:'ai'` 阶段起一次 agent 运行并归属该 task。这是对 `task-execution` public 合同的
@@ -207,24 +207,24 @@ code-round 落进的是 **workgroup 分支**（不是 workflow 分支），`work
    迟到的旧确认（generation 不匹配）被丢弃并回帖说明"该请求已失效，请重新发起"。
 3. 普通 note / pipeline 事件**不得**唤醒一个等待推送确认的工作项。
 
-| from | event | to | 副作用 |
-| --- | --- | --- | --- |
-| `idle`/`settled` | 外部事件到达 | `queued` | 若有在跑轮次 → 请求 `task-execution` 取消 |
-| `awaiting` | 外部事件到达（且通过上述三条守卫） | `queued` | 同上 |
-| `queued` | 调度取用 | `running` | 起一个 task（一轮） |
-| `running` | 轮次完成且已发布 | `settled` | 落台账 |
-| `running` | 轮次产出需人回应 | `awaiting` | 记录等待句柄（线程 id / clarify 会话 id） |
-| `awaiting` | 人回复 | `queued` | 起**新一轮**，不复活旧 task。**新一轮从该能力声明的 `resumeFrom` 阶段开始**，不从头跑——见下方「恢复语义」 |
-| `awaiting` | 基线 sha 变化 | `settled` | **作废**：本轮无产出，回帖说明并请重新发起。此处 `settled` 读作"本轮已收束"，不蕴含"已发布" |
-| `running` | 同一工作项的新事件到达 | `superseding` | 请求取消旧 task；**epoch +1**；**不立即开新轮** |
-| `superseding` | 旧 task 到达终态 | `queued` | 开新轮（携带新 epoch） |
-| `running` | 轮次失败 | `failed` | 平台内告警，MR 静默 |
-| `failed` | 人工重试 / 新事件 | `queued` | |
-| `running` | 该 campaign 重试配额耗尽 | `handed_off` | 回帖汇总每轮尝试；**本 campaign 不再自动开轮** |
-| `handed_off` | 新 head sha | （先 collect+classify 预检） | **失败指纹变了才**解除并开新 campaign；指纹相同则保持 `handed_off` |
-| `handed_off` | 人工显式重试 / 配置变更 | `queued` | 显式 override，解除接管 |
-| 任意非 `closed`/`closing` | 外部闭环事件 | `closing` | epoch +1、请求取消在跑轮次、等待补偿与 lease 释放 |
-| `closing` | 旧 task 终态且补偿完成 | `closed` | 做一次**终局采纳比对**（见下）后终结 |
+| from                      | event                              | to                           | 副作用                                                                                                    |
+| ------------------------- | ---------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `idle`/`settled`          | 外部事件到达                       | `queued`                     | 若有在跑轮次 → 请求 `task-execution` 取消                                                                 |
+| `awaiting`                | 外部事件到达（且通过上述三条守卫） | `queued`                     | 同上                                                                                                      |
+| `queued`                  | 调度取用                           | `running`                    | 起一个 task（一轮）                                                                                       |
+| `running`                 | 轮次完成且已发布                   | `settled`                    | 落台账                                                                                                    |
+| `running`                 | 轮次产出需人回应                   | `awaiting`                   | 记录等待句柄（线程 id / clarify 会话 id）                                                                 |
+| `awaiting`                | 人回复                             | `queued`                     | 起**新一轮**，不复活旧 task。**新一轮从该能力声明的 `resumeFrom` 阶段开始**，不从头跑——见下方「恢复语义」 |
+| `awaiting`                | 基线 sha 变化                      | `settled`                    | **作废**：本轮无产出，回帖说明并请重新发起。此处 `settled` 读作"本轮已收束"，不蕴含"已发布"               |
+| `running`                 | 同一工作项的新事件到达             | `superseding`                | 请求取消旧 task；**epoch +1**；**不立即开新轮**                                                           |
+| `superseding`             | 旧 task 到达终态                   | `queued`                     | 开新轮（携带新 epoch）                                                                                    |
+| `running`                 | 轮次失败                           | `failed`                     | 平台内告警，MR 静默                                                                                       |
+| `failed`                  | 人工重试 / 新事件                  | `queued`                     |                                                                                                           |
+| `running`                 | 该 campaign 重试配额耗尽           | `handed_off`                 | 回帖汇总每轮尝试；**本 campaign 不再自动开轮**                                                            |
+| `handed_off`              | 新 head sha                        | （先 collect+classify 预检） | **失败指纹变了才**解除并开新 campaign；指纹相同则保持 `handed_off`                                        |
+| `handed_off`              | 人工显式重试 / 配置变更            | `queued`                     | 显式 override，解除接管                                                                                   |
+| 任意非 `closed`/`closing` | 外部闭环事件                       | `closing`                    | epoch +1、请求取消在跑轮次、等待补偿与 lease 释放                                                         |
+| `closing`                 | 旧 task 终态且补偿完成             | `closed`                     | 做一次**终局采纳比对**（见下）后终结                                                                      |
 
 `handed_off` 是设计门补上的状态：CI 修复三轮未成后若只落 `failed` 或 `settled`，下一条 pipeline
 事件会把它拉回 `queued` 从而**开始第四轮并再次回帖**；若为了止损落 `closed`，又会错误地终止整个
@@ -264,15 +264,15 @@ failure 同时到达时，监视器正在修 CI 并推送，检视轮却基于**
 
 #### lease 的完整协议（设计门 P1：初稿只说了"要有"，没说怎么用）
 
-| 项 | 规则 |
-| --- | --- |
-| 键 | `(codeHostEndpointId, stableProjectId, anchorKind, anchorId)` |
-| 持有者 | 具体的 `roundId` + 一次性 token（fencing）；不是工作项 |
-| 获取 | `queued → running` 前获取；取不到则留在 `queued` |
-| 续租 | 轮次心跳续租；超时未续 ⇒ 视为失效可被抢 |
-| **释放时点** | 轮次到达**任何**终态即释放：`settled` / `failed` / 取消完成 / 进入 `awaiting` / 进入 `handed_off` |
-| `awaiting`·`handed_off` | **不持 lease**——它们可能持续数天，持锁会把该 MR 的其他能力全部饿死；恢复时重新获取 |
-| 崩溃恢复 | token 带 daemon 代际；重启后旧 token 一律失效，由恢复流程重新认领 |
+| 项                      | 规则                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------- |
+| 键                      | `(codeHostEndpointId, stableProjectId, anchorKind, anchorId)`                                     |
+| 持有者                  | 具体的 `roundId` + 一次性 token（fencing）；不是工作项                                            |
+| 获取                    | `queued → running` 前获取；取不到则留在 `queued`                                                  |
+| 续租                    | 轮次心跳续租；超时未续 ⇒ 视为失效可被抢                                                           |
+| **释放时点**            | 轮次到达**任何**终态即释放：`settled` / `failed` / 取消完成 / 进入 `awaiting` / 进入 `handed_off` |
+| `awaiting`·`handed_off` | **不持 lease**——它们可能持续数天，持锁会把该 MR 的其他能力全部饿死；恢复时重新获取                |
+| 崩溃恢复                | token 带 daemon 代际；重启后旧 token 一律失效，由恢复流程重新认领                                 |
 
 **排队期间的事件合并**：`queued` 期间又来新事件时不逐条排队（否则 lease 释放后会连跑一串已经
 过期的轮次），而是**只保留最新的 `pendingRevision`** 并提升 epoch；真正开轮时用最新那个。
@@ -288,10 +288,10 @@ failure 同时到达时，监视器正在修 CI 并推送，检视轮却基于**
 `comprehend` 必须重做才能把答案吃进去；不重做就只能继承上一轮"信息不足"的旧产物，答案等于没给。
 故等待分两类，各有各的恢复语义：
 
-| 等待原因 | 语义 | 恢复策略 |
-| --- | --- | --- |
-| `frozen-artifact-confirmation`（贴 patch 等确认） | 人是**对着已冻结的产物**做决定 | 从 `resumeFrom` 起；**禁止重跑任何 AI 阶段**——重跑会让人确认过的东西失效 |
-| `clarification-answer`（反问等作答） | 答案是**新输入**，上游理解必须更新 | 使 `comprehend` 及其下游产物**失效并重跑**；只继承取内容、建工作树这类与答案无关的前置 |
+| 等待原因                                          | 语义                               | 恢复策略                                                                               |
+| ------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------- |
+| `frozen-artifact-confirmation`（贴 patch 等确认） | 人是**对着已冻结的产物**做决定     | 从 `resumeFrom` 起；**禁止重跑任何 AI 阶段**——重跑会让人确认过的东西失效               |
+| `clarification-answer`（反问等作答）              | 答案是**新输入**，上游理解必须更新 | 使 `comprehend` 及其下游产物**失效并重跑**；只继承取内容、建工作树这类与答案无关的前置 |
 
 `awaiting` 行记录 `waitKind`，唤醒时据此选策略。共同规则：
 
@@ -395,16 +395,16 @@ CapabilityFramework（部门层）        CapabilityBinding（小组层）
 
 新增表（全部落在 `code-capability/infrastructure`）：
 
-| 表 | 要点 |
-| --- | --- |
-| `code_work_items` | 身份键唯一索引；`status`；`currentRoundId`；`anchorMeta`（MR/issue 元信息快照）；`initiatorUserId`（C3 的"事实作者"）；`closedAt` |
-| `code_work_rounds` | `workItemId` + `roundSeq` 唯一；`taskId`；`baselineSha`；`workPackage`；`templateSnapshot`；`stageContractVer`；`outcome` |
-| `code_round_stages` | 每阶段一行：`stageName`、`status`、`startedAt/endedAt`、聚合计数 |
-| `code_ai_attempts` | **每次 AI 调用一行**（设计门 P2）：`roundId`、`stageName`、`shardKey`、`sessionRef`、`rerunSeq`（换会话重跑第几次）、`attemptSeq`（同会话重试第几次）、`validationOutcome`、`status`、时间、关联 nodeRun/session id |
-| `code_findings` | 台账，见 §2.4；唯一键 **`(codeHostEndpointId, stableProjectId, anchorKind, anchorId, fingerprint, generation)`**，**不含 workItemId**；带 `lifecycle` 状态与 `createdAt/lastSeenAt/closedAt` 及仓库+时间索引 |
-| `capability_frameworks` | 部门层模板资源 |
-| `capability_bindings` | 小组层模板资源 |
-| `repo_capability_config` | 仓库 × 能力矩阵：`repoId` + `capability` 唯一，指向一个 binding，带启用开关与触发配置；另存 `readiness` 派生态（见 §3.1） |
+| 表                       | 要点                                                                                                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code_work_items`        | 身份键唯一索引；`status`；`currentRoundId`；`anchorMeta`（MR/issue 元信息快照）；`initiatorUserId`（C3 的"事实作者"）；`closedAt`                                                                                   |
+| `code_work_rounds`       | `workItemId` + `roundSeq` 唯一；`taskId`；`baselineSha`；`workPackage`；`templateSnapshot`；`stageContractVer`；`outcome`                                                                                           |
+| `code_round_stages`      | 每阶段一行：`stageName`、`status`、`startedAt/endedAt`、聚合计数                                                                                                                                                    |
+| `code_ai_attempts`       | **每次 AI 调用一行**（设计门 P2）：`roundId`、`stageName`、`shardKey`、`sessionRef`、`rerunSeq`（换会话重跑第几次）、`attemptSeq`（同会话重试第几次）、`validationOutcome`、`status`、时间、关联 nodeRun/session id |
+| `code_findings`          | 台账，见 §2.4；唯一键 **`(codeHostEndpointId, stableProjectId, anchorKind, anchorId, fingerprint, generation)`**，**不含 workItemId**；带 `lifecycle` 状态与 `createdAt/lastSeenAt/closedAt` 及仓库+时间索引        |
+| `capability_frameworks`  | 部门层模板资源                                                                                                                                                                                                      |
+| `capability_bindings`    | 小组层模板资源                                                                                                                                                                                                      |
+| `repo_capability_config` | 仓库 × 能力矩阵：`repoId` + `capability` 唯一，指向一个 binding，带启用开关与触发配置；另存 `readiness` 派生态（见 §3.1）                                                                                           |
 
 `initiatorUserId` 是 C3 的落点：bot 开的 MR 上，「作者确认推送」的判定读它而不是 MR 的 author。
 
@@ -424,11 +424,11 @@ CapabilityFramework（部门层）        CapabilityBinding（小组层）
 是没开能力、触发器没建、code-host 没配、还是 agent 不可用——这类"配了但不动、且看不出为什么"
 的体验是这类平台最常见的弃用原因。故矩阵每一格计算并显示一个 `readiness`：
 
-| 态 | 含义 | 界面动作 |
-| --- | --- | --- |
-| `disabled` | 该仓未开这个能力 | 「启用」按钮 |
-| `misconfigured` | 已开但缺前置：无触发器 / code-host 未配 / binding 引用的 agent 不可见 / 框架脚本缺失 | **逐条列出缺什么**，每条给一键修复入口 |
-| `ready` | 前置齐备，等事件 | 显示上次触发时间；提供「发一个测试事件」 |
+| 态              | 含义                                                                                 | 界面动作                                 |
+| --------------- | ------------------------------------------------------------------------------------ | ---------------------------------------- |
+| `disabled`      | 该仓未开这个能力                                                                     | 「启用」按钮                             |
+| `misconfigured` | 已开但缺前置：无触发器 / code-host 未配 / binding 引用的 agent 不可见 / 框架脚本缺失 | **逐条列出缺什么**，每条给一键修复入口   |
+| `ready`         | 前置齐备，等事件                                                                     | 显示上次触发时间；提供「发一个测试事件」 |
 
 「启用」是一次**编排动作**而非单纯写一行配置：选默认 binding → 创建或复核 webhook 触发器 →
 校验 code-host 连接与 agent 可见性 → 落 `ready`。AC-24 的"不用写脚本即可跑通"由这条路径兑现。
@@ -452,20 +452,22 @@ readiness 必须包含 pipeline 事件或 wake 入口的可达性，否则会出
 ```ts
 interface StageContract {
   capability: Capability
-  version: number                    // 阶段集合或语义变化时 +1
+  version: number // 阶段集合或语义变化时 +1
   stages: readonly StageDef[]
 }
 // 判别联合：每种 kind 只能携带自己那组字段，写错即 typecheck 红
 type StageDef = StageBase &
-  ( | { kind: 'program' }
+  (
+    | { kind: 'program' }
     | { kind: 'script'; scriptSlot: ScriptSlot }
-    | { kind: 'ai'; aiSchema: JSONSchema; agentSlot: string }   // 宪法 R3：schema 必填
-    | { kind: 'invoke'; invokes: { capability: Capability; from: string; to: string } } )
+    | { kind: 'ai'; aiSchema: JSONSchema; agentSlot: string } // 宪法 R3：schema 必填
+    | { kind: 'invoke'; invokes: { capability: Capability; from: string; to: string } }
+  )
 
 interface StageBase {
-  name: string                  // 公开契约，钩子按它挂载
-  parallel?: boolean            // 并行段：钩子整段前后各一次（F5）
-  requires: readonly string[]   // 需要的前置产物
+  name: string // 公开契约，钩子按它挂载
+  parallel?: boolean // 并行段：钩子整段前后各一次（F5）
+  requires: readonly string[] // 需要的前置产物
   produces: readonly string[]
 }
 ```
@@ -496,6 +498,16 @@ interface StageBase {
 `kind` 字段不是注释而是**强制约束**：`kind: 'program'` 的阶段其实现不得调用任何 agent 派发
 （源码层负扫描锁定，AC-10）。
 
+#### 实现偏离（PR-1b 落地时按仓内实践确定，2026-08-15）
+
+`aiSchema` 的**表示形式**改为 **zod schema**，而非手写 JSON Schema 对象。理由是本仓没有 JSON
+Schema 校验器（无 ajv 等依赖），既有实践是**zod 为事实源、JSON Schema 为导出产物**——`mcp/
+resourceSchemas.ts` 即以 `zodToJsonSchema` 导出给外部。若按字面写手写 JSON Schema，等于为本 RFC
+单独引入第二套 schema 体系与一个新依赖。
+
+**对外行为不变**：给 AI 的提示里仍带 JSON Schema 文本（由 `zodToJsonSchema` 导出），平台仍在
+**下一步之前**校验（R3），校验失败仍按 R4 两级重试。变的只是「schema 在代码里长什么样」。
+
 钩子声明它针对的 `stageContractVer`；平台升版后，声明旧版本的钩子**显式报需要迁移**而不是静默
 跳过（F9 / AC-23）。
 
@@ -520,9 +532,9 @@ run AI step
 
 拆开：
 
-| 情形 | 归属 | 处理 |
-| --- | --- | --- |
-| 结构不合 schema、字段缺失、severity 不在闭集 | **校验失败** | R4 两级重试，耗尽则阶段失败 |
+| 情形                                                        | 归属         | 处理                                             |
+| ----------------------------------------------------------- | ------------ | ------------------------------------------------ |
+| 结构不合 schema、字段缺失、severity 不在闭集                | **校验失败** | R4 两级重试，耗尽则阶段失败                      |
 | 结构合法，但该行不在本次 diff 的 hunk 内 / 文件不在改动集合 | **锚定失败** | 不重试；标 `degraded` 并入总览评论，阶段**成功** |
 
 判据：**AI 把话说得不对**是校验问题（它能改），**AI 把话说在了别处**是锚定问题（重试也不会变好，
@@ -594,22 +606,30 @@ provider / project / MR / run revision），平台据此唤醒一次 collect。�
 interface CollectResult {
   conflict: boolean
   unresolvedComments: Array<{ threadId: string; author: string; body: string; anchor?: Anchor }>
-  gate: { status: 'pass'|'fail'|'running'|'unknown'; runId?: string; rawLogRef?: string }
+  gate: { status: 'pass' | 'fail' | 'running' | 'unknown'; runId?: string; rawLogRef?: string }
   headSha: string
 }
 // classify —— 输入：collect 的 gate + 日志。输出：
-interface ClassifiedIssue { type: string; file?: string; line?: number; message: string; raw?: string }
+interface ClassifiedIssue {
+  type: string
+  file?: string
+  line?: number
+  message: string
+  raw?: string
+}
 // arbitrate —— 输入：CollectResult + ClassifiedIssue[]。输出：
 // 一包**必须同 capability**：Round.capability 与 StageContract.capability 都是单值，
 // 混合包（一个评论修复 + 一个 CI 修复）无法决定本轮走哪条序列，也无法定义统一的 push 边界。
 // 故用 discriminated union 在 schema 层强制同类，跨类只能分轮（设计门 P1）。
 type WorkPackage =
-  | { capability: 'noop';           reason: string; observedRevision: string }
+  | { capability: 'noop'; reason: string; observedRevision: string }
   | { capability: 'mr-comment-fix'; items: Array<{ threadId: string }>; note?: string }
-  | { capability: 'ci-fix';         items: Array<{ issueRef: string }>; note?: string }
-  | { capability: 'mr-review';      items: []; note?: string }
+  | { capability: 'ci-fix'; items: Array<{ issueRef: string }>; note?: string }
+  | { capability: 'mr-review'; items: []; note?: string }
 // select —— 输入：WorkPackage。输出：
-interface AgentPlan { bySlot: Record<string, { agent: string; promptSuffix?: string }> }
+interface AgentPlan {
+  bySlot: Record<string, { agent: string; promptSuffix?: string }>
+}
 ```
 
 四者**全部是脚本，无 AI 参与**（宪法 R1，AC-10 源码层锁定）。
@@ -645,11 +665,11 @@ resolve-target(program) → prepare-worktree(program) → fetch-diff(program)
 对账的「台账侧」**只取 `lifecycle = 'active'` 的行**（下方状态机），否则会把早已消失的旧问题
 误判为"持续存在"。
 
-| 集合 | 判定 | 动作 |
-| --- | --- | --- |
-| **持续存在**（本轮有、台账 active） | 指纹命中且仍能锚定 | **不重发**，但**保持原线程未解决**；位置漂移则更新锚定行；刷新 `lastSeenAt` |
-| **新增**（本轮有、台账无 active 行） | 指纹未命中，或命中的是 `disappeared` 行 | 发布；后者以 **新 generation** 发布并把旧行标 `reappeared`（见下） |
-| **已消失**（台账 active、本轮没有） | 本轮结果里找不到该指纹 | 走 `active → disappeared` **状态边沿**动作，只做一次 |
+| 集合                                 | 判定                                    | 动作                                                                        |
+| ------------------------------------ | --------------------------------------- | --------------------------------------------------------------------------- |
+| **持续存在**（本轮有、台账 active）  | 指纹命中且仍能锚定                      | **不重发**，但**保持原线程未解决**；位置漂移则更新锚定行；刷新 `lastSeenAt` |
+| **新增**（本轮有、台账无 active 行） | 指纹未命中，或命中的是 `disappeared` 行 | 发布；后者以 **新 generation** 发布并把旧行标 `reappeared`（见下）          |
+| **已消失**（台账 active、本轮没有）  | 本轮结果里找不到该指纹                  | 走 `active → disappeared` **状态边沿**动作，只做一次                        |
 
 #### finding 生命周期：状态边沿而非每轮重复
 
@@ -767,10 +787,10 @@ documents: Array<{ name, role?, content | attachmentRef }>   // role 如 'propos
 **按发起来源硬分流，没有兜底**（设计门 P1：此处原有一句"否则落平台 clarify"，与 AC-14c
 「issue 侧双向通道不可用时拒绝启用该入口」直接矛盾）：
 
-| 发起来源 | 反问落点 | 通道不可用时 |
-| --- | --- | --- |
-| issue 标签 | **只能**回写 issue 评论 | **拒绝启用该入口**并说明原因，不静默回退 |
-| `/code` 界面 / 平台 API | 平台 clarify | — |
+| 发起来源                | 反问落点                | 通道不可用时                             |
+| ----------------------- | ----------------------- | ---------------------------------------- |
+| issue 标签              | **只能**回写 issue 评论 | **拒绝启用该入口**并说明原因，不静默回退 |
+| `/code` 界面 / 平台 API | 平台 clarify            | —                                        |
 
 理由就是用户拍板的 D2 原文——「从哪进就从哪问」。若允许 issue 发起的反问落到平台，报告人会
 一直盯着 issue 等问题，而问题出现在他可能根本没有账号的 `/code` 上。
@@ -792,10 +812,10 @@ collect(script) → classify(script) → arbitrate(script) → select(script)
 
 `anti-cheat-check`（E7）——**要诚实说清哪一半是程序、哪一半不是**：
 
-| 判据 | 谁来判 | 强度 |
-| --- | --- | --- |
+| 判据                                                             | 谁来判                    | 强度               |
+| ---------------------------------------------------------------- | ------------------------- | ------------------ |
 | 本轮 diff 是否删除断言 / 新增 skip / 测试行净减少 / 放宽断言常量 | **程序**（diff 结构分析） | **硬**：命中即拦下 |
-| 命中之后，"这个测试本来就该挂"是否成立 | **判不了** | 见下 |
+| 命中之后，"这个测试本来就该挂"是否成立                           | **判不了**                | 见下               |
 
 第二行是关键：程序**无法**验证一段论证的正确性。若只做"要求 envelope 里带论证、检查论证字段
 非空"，那等于**把判断权交还给了 AI 的自述**——AI 只要写一段话就能过，与宪法 R1/R2 的精神相悖。
@@ -881,14 +901,14 @@ bot 发了一半就跑了。故：
 
 ## 8. 权限与凭据
 
-| 面 | 判据 | 说明 |
-| --- | --- | --- |
-| 配置仓库 × 能力 | 该仓库的管理权（走既有仓库 ACL） | 不新增权限体系（G6） |
-| 编辑小组层 binding | 该 binding 资源的写权 + 引用的 agent 可见 | 普通资源 ACL |
-| 编辑部门层 framework | 资源写权 **且** `scripts:author` | 承载脚本与钩子 = daemon 全凭据（C2） |
-| 叫机器发 suggestion | 代码平台侧对该仓有写权限 | 反查平台权限（C2） |
-| 叫机器推送 | MR 作者；bot 开的 MR ⇒ `initiatorUserId` | C3 |
-| 平台 API 发起 | 普通 PAT + 对目标仓的可见性 | 发起不涉及特权配置 |
+| 面                   | 判据                                      | 说明                                 |
+| -------------------- | ----------------------------------------- | ------------------------------------ |
+| 配置仓库 × 能力      | 该仓库的管理权（走既有仓库 ACL）          | 不新增权限体系（G6）                 |
+| 编辑小组层 binding   | 该 binding 资源的写权 + 引用的 agent 可见 | 普通资源 ACL                         |
+| 编辑部门层 framework | 资源写权 **且** `scripts:author`          | 承载脚本与钩子 = daemon 全凭据（C2） |
+| 叫机器发 suggestion  | 代码平台侧对该仓有写权限                  | 反查平台权限（C2）                   |
+| 叫机器推送           | MR 作者；bot 开的 MR ⇒ `initiatorUserId`  | C3                                   |
+| 平台 API 发起        | 普通 PAT + 对目标仓的可见性               | 发起不涉及特权配置                   |
 
 **凭据边界不变**：agent 进程的 `SAFE_FORWARD_ENV` 白名单逐字节不动（N5 / AC-20）；一切需要凭据的
 外部访问都发生在**脚本**里（脚本继承 daemon 环境，`services/scriptRun.ts:325`）或**平台代发**
@@ -896,34 +916,34 @@ bot 发了一半就跑了。故：
 
 ## 9. 失败模式
 
-| 场景 | 处理 |
-| --- | --- |
-| AI 输出不合 schema | R4 两级重试；耗尽则阶段失败（AC-8） |
-| **钩子**非零退出 | 按该钩子声明的 `blocking` 决定阻断或记事件（F8） |
+| 场景                                                         | 处理                                                                                                                                                                                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AI 输出不合 schema                                           | R4 两级重试；耗尽则阶段失败（AC-8）                                                                                                                                                                                       |
+| **钩子**非零退出                                             | 按该钩子声明的 `blocking` 决定阻断或记事件（F8）                                                                                                                                                                          |
 | **核心适配脚本**（entry/collect/classify/arbitrate）非零退出 | **一律阻断本轮**，`blocking` 字段对它们不适用。理由：它们产出的是后续阶段的必需输入——`collect` 失败就没有 `CollectResult`，`classify` 在 R5 下无从继续。允许"非阻断"等于允许用空产物往下跑，与确定性宪法冲突（设计门 P2） |
-| `diff_refs` 拉不到 | 整轮失败；MR 静默、平台告警（B17） |
-| 全部意见都锚不上 | 仍发布一条总览评论，`published=0 / degraded=N`，轮次算成功 |
-| 草稿部分失败 | 清理已建草稿、整轮失败，MR 上不留半截（§7.2） |
-| 推送时远端已变 | 放弃并回帖请重叫（C7） |
-| 等待期间源分支变化 | 工作项从 `awaiting` 作废回 `settled`，回帖说明（§2.2） |
-| daemon 重启 | 轮次是 task ⇒ 复用既有 interrupted 修复；工作项状态由轮次终态驱动重算 |
-| 抢占时旧 task 尚未清理完 | 工作项停在 `superseding`，**等旧 task 终态后才开新轮**（§2.2 不变量一）；取消幂等由 task-execution 保证 |
-| 抢占落在发布临界区内 | 旧轮赢：事件登记为 `pendingRevision`，临界区结束后再处理（§2.2 线性化点） |
-| `publish` 成功但 `settle-stale`/`ledger` 前崩溃或被取消 | 靠**发布意图**恢复：发布前已持久化批次与指纹，重启时按批次核对远端结果并补齐 external id，不重发（§7.2） |
-| 工作项在轮次运行中收到闭环事件 | 先落 `closing`：epoch +1、发取消、等补偿与 lease 释放；旧 task 终态后才做终局比对并写 `closed` |
-| 工作项引用的 binding 被删 | 轮次用的是模板**快照**，在跑的轮不受影响；下一轮拒绝启动并告警 |
+| `diff_refs` 拉不到                                           | 整轮失败；MR 静默、平台告警（B17）                                                                                                                                                                                        |
+| 全部意见都锚不上                                             | 仍发布一条总览评论，`published=0 / degraded=N`，轮次算成功                                                                                                                                                                |
+| 草稿部分失败                                                 | 清理已建草稿、整轮失败，MR 上不留半截（§7.2）                                                                                                                                                                             |
+| 推送时远端已变                                               | 放弃并回帖请重叫（C7）                                                                                                                                                                                                    |
+| 等待期间源分支变化                                           | 工作项从 `awaiting` 作废回 `settled`，回帖说明（§2.2）                                                                                                                                                                    |
+| daemon 重启                                                  | 轮次是 task ⇒ 复用既有 interrupted 修复；工作项状态由轮次终态驱动重算                                                                                                                                                     |
+| 抢占时旧 task 尚未清理完                                     | 工作项停在 `superseding`，**等旧 task 终态后才开新轮**（§2.2 不变量一）；取消幂等由 task-execution 保证                                                                                                                   |
+| 抢占落在发布临界区内                                         | 旧轮赢：事件登记为 `pendingRevision`，临界区结束后再处理（§2.2 线性化点）                                                                                                                                                 |
+| `publish` 成功但 `settle-stale`/`ledger` 前崩溃或被取消      | 靠**发布意图**恢复：发布前已持久化批次与指纹，重启时按批次核对远端结果并补齐 external id，不重发（§7.2）                                                                                                                  |
+| 工作项在轮次运行中收到闭环事件                               | 先落 `closing`：epoch +1、发取消、等补偿与 lease 释放；旧 task 终态后才做终局比对并写 `closed`                                                                                                                            |
+| 工作项引用的 binding 被删                                    | 轮次用的是模板**快照**，在跑的轮不受影响；下一轮拒绝启动并告警                                                                                                                                                            |
 
 ## 10. 与既有机制的耦合点
 
-| 既有机制 | 耦合方式 | 风险 |
-| --- | --- | --- |
-| webhook 入站（RFC-257/259） | 订阅归一化信封，新增一条"代码能力路由" | 低——不改入站链路 |
-| 任务引擎 | 每轮起一个 task，新增独立任务类型（G7） | 中——需确认任务类型枚举扩展点 |
-| code-host 调用（RFC-269） | 复用动作注册表与凭据；**新增**批量发布与 draft_notes 动作 | 中——动作表新增列 |
-| 脚本执行（RFC-253） | 复用 `assembleScriptEnv` 与受管子进程 | 中——需要抽出不依赖 WorkflowNode 的调用面 |
-| clarify（RFC-023 家族） | 反问走 `collaboration.public` | 中——需要"外部回写"这条新通道 |
-| 配置包（RFC-271） | 两类新资源接入闭包与 requirements | 低——资源框架通用 |
-| 资源 ACL（RFC-099/231） | 两类新资源按既有六类同构接入 | 低 |
+| 既有机制                    | 耦合方式                                                  | 风险                                     |
+| --------------------------- | --------------------------------------------------------- | ---------------------------------------- |
+| webhook 入站（RFC-257/259） | 订阅归一化信封，新增一条"代码能力路由"                    | 低——不改入站链路                         |
+| 任务引擎                    | 每轮起一个 task，新增独立任务类型（G7）                   | 中——需确认任务类型枚举扩展点             |
+| code-host 调用（RFC-269）   | 复用动作注册表与凭据；**新增**批量发布与 draft_notes 动作 | 中——动作表新增列                         |
+| 脚本执行（RFC-253）         | 复用 `assembleScriptEnv` 与受管子进程                     | 中——需要抽出不依赖 WorkflowNode 的调用面 |
+| clarify（RFC-023 家族）     | 反问走 `collaboration.public`                             | 中——需要"外部回写"这条新通道             |
+| 配置包（RFC-271）           | 两类新资源接入闭包与 requirements                         | 低——资源框架通用                         |
+| 资源 ACL（RFC-099/231）     | 两类新资源按既有六类同构接入                              | 低                                       |
 
 ## 11. 长期运行与可运维性
 
@@ -960,9 +980,9 @@ reviewer @叫改码、作者回确认关键词、issue 打标签，等了半小�
 
 规则改为：
 
-| 触发来源 | 失败可见性 |
-| --- | --- |
-| 自动 webhook（MR 事件、pipeline） | **保持 MR 静默**，平台内告警 |
+| 触发来源                                                   | 失败可见性                                                                                                         |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 自动 webhook（MR 事件、pipeline）                          | **保持 MR 静默**，平台内告警                                                                                       |
 | **人工指令**（@叫、确认关键词、issue 标签、平台/API 发起） | **必须有回执**：收到时即创建一条可更新的 receipt（带 operation id），成功/失败都在**同一条消息上更新**，不新增通知 |
 
 ⑦ 这类"根本没有工作项"的情形由 §11.3 的排障链兜底。
@@ -991,14 +1011,14 @@ stage 行，4 shard + 1 global 且平均重试一次约 40 万条 AI attempt，�
 每轮还各存一份 `templateSnapshot`。没有寿命规则，列表与度量会持续变慢，最后管理员只能手工删数据，
 把台账和采纳率一起破坏。
 
-| 数据 | 寿命 |
-| --- | --- |
-| 活跃工作项的轮次与阶段明细 | 全量保留 |
-| `closed` 工作项 | 物化汇总（轮数、耗时、意见数、采纳数）后**归档明细** |
-| `code_ai_attempts` | 明细按期限清理，保留每阶段的次数/耗时/结果**聚合** |
-| `pendingArtifact` | 一经消费或作废**立即回收**，不等工作项 closed |
-| `templateSnapshot` | 内容寻址存储，同一模板版本多轮共享一份 |
-| `code_findings` | 长期保留（采纳率要用），带 `createdAt/lastSeenAt/closedAt` 与仓库+时间索引 |
+| 数据                       | 寿命                                                                       |
+| -------------------------- | -------------------------------------------------------------------------- |
+| 活跃工作项的轮次与阶段明细 | 全量保留                                                                   |
+| `closed` 工作项            | 物化汇总（轮数、耗时、意见数、采纳数）后**归档明细**                       |
+| `code_ai_attempts`         | 明细按期限清理，保留每阶段的次数/耗时/结果**聚合**                         |
+| `pendingArtifact`          | 一经消费或作废**立即回收**，不等工作项 closed                              |
+| `templateSnapshot`         | 内容寻址存储，同一模板版本多轮共享一份                                     |
+| `code_findings`            | 长期保留（采纳率要用），带 `createdAt/lastSeenAt/closedAt` 与仓库+时间索引 |
 
 所有历史查询走 cursor 分页；状态图默认只取当前轮 + 最近 20 轮，AI attempt 按阶段惰性加载。
 
