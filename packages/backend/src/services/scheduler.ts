@@ -4849,6 +4849,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
       : null
 
   const roundSeqRaw = (node as unknown as { roundSeq?: unknown }).roundSeq
+  const roundResumeFromStage = await resumeStageForRound(db, task.codeRoundId)
   const runRound = () =>
     runner.runRound({
       roundId: task.codeRoundId ?? taskId,
@@ -4860,9 +4861,14 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
         path: r.worktreePath,
       })),
       envelopeNonce,
-      // Resume-from is a work-item decision (design §2.2). PR-1c threads it in
-      // with the work item; a round started directly runs its whole sequence.
-      resumeFromStage: null,
+      // Resume-from is a work-item decision (design §2.2), carried on the round
+      // that the decision opened. A confirming round resumes at
+      // `verify-baseline`: the change was frozen when it was posted, and
+      // re-running the AI stages would produce a DIFFERENT change with the same
+      // justification — the person approved a specific diff, not a topic.
+      //
+      // Null means "run the whole sequence", which is every ordinary round.
+      resumeFromStage: roundResumeFromStage,
     })
 
   // No lease key runs unguarded. Two ways to get there, both harmless: a round
@@ -4994,6 +5000,38 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
  * query and the GC alike — from one still in flight. Null `codeRoundId` means
  * this task is not a round, which is the ordinary case for every other task.
  */
+/**
+ * Where a round resumes, as recorded when it was opened.
+ *
+ * Stored inside the round's `work_package` rather than in a column of its own:
+ * that field is defined as "the deterministic inputs the stage sequence was
+ * handed", and a resume point is exactly that. A malformed package resumes from
+ * the beginning, which is the safe direction — re-running stages is wasteful,
+ * whereas skipping them silently would push a change nobody verified.
+ */
+async function resumeStageForRound(
+  db: DbClient,
+  codeRoundId: string | null,
+): Promise<string | null> {
+  if (codeRoundId === null || codeRoundId === '') return null
+  const [row] = await db
+    .select({ workPackage: codeWorkRounds.workPackage })
+    .from(codeWorkRounds)
+    .where(eq(codeWorkRounds.id, codeRoundId))
+    .limit(1)
+  if (row?.workPackage == null) return null
+  try {
+    const parsed: unknown = JSON.parse(row.workPackage)
+    const resume =
+      typeof parsed === 'object' && parsed !== null
+        ? (parsed as { resumeFromStage?: unknown }).resumeFromStage
+        : undefined
+    return typeof resume === 'string' && resume !== '' ? resume : null
+  } catch {
+    return null
+  }
+}
+
 async function finalizeRound(
   db: DbClient,
   codeRoundId: string | null,

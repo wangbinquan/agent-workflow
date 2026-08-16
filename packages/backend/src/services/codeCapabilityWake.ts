@@ -40,6 +40,8 @@ import {
   type WorkItemIdentity,
 } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
 import { claimTerminalMr } from '@/modules/code-capability/application/producedMrIndex'
+import { classifyComment } from '@/modules/code-capability/application/classifyComment'
+import { createCodeHostAdapter } from '@/modules/code-capability/infrastructure/codeHostAdapter'
 import { noteWorkItemEvent } from '@/modules/code-capability/application/workItemProgress'
 import type { StartTaskDeps } from '@/services/task'
 import type { TriggerContext } from '@agent-workflow/shared'
@@ -93,6 +95,11 @@ export interface WokenRound {
   workItemId?: string
   /** 1-based within the work item. */
   roundSeq?: number
+  /**
+   * Set when a confirmation could not be honoured and was ANSWERED instead of
+   * started. No round exists; the reply is already on the thread.
+   */
+  refused?: string
 }
 
 export interface WakeResult {
@@ -302,6 +309,41 @@ async function runMonitorLoopFor(
 }
 
 /**
+ * Tell the person why their confirmation was not acted on.
+ *
+ * Posted from here rather than from a round because there IS no round — the
+ * confirmation named a change that is gone or superseded. Silence is the one
+ * outcome the design rules out: the person believes they approved something,
+ * waits, and then stops trusting the mechanism.
+ *
+ * A failure to post is swallowed. The alternative — failing the delivery —
+ * would retry the whole wake and could open a round for a confirmation the
+ * platform has already decided not to honour.
+ */
+async function replyRefusal(
+  input: WakeDeliveryInput,
+  fields: ReturnType<typeof webhookFieldsOf>,
+  message: string,
+): Promise<void> {
+  const provider = fields.provider
+  if (provider !== 'gitlab' && provider !== 'github') return
+  const thread = fields.comment_thread_id ?? ''
+  const project = fields.project_id ?? ''
+  const mr = fields.mr_iid ?? ''
+  if (thread === '' || project === '' || mr === '') return
+
+  try {
+    const codeHost = createCodeHostAdapter({ db: input.db, provider })
+    await codeHost.call({
+      action: 'comment.reply-thread',
+      params: { __project__: project, mr, thread, body: message },
+    })
+  } catch {
+    // Best effort; see the note above.
+  }
+}
+
+/**
  * Start a round for a capability that is dispatched directly.
  *
  * The work item is created FIRST and the round is allocated from it, so
@@ -320,10 +362,46 @@ async function startDirectRound(
 
   if (identity !== null) {
     const item = await ensureWorkItem({ db: input.db, ...identity })
+
+    // Is this reply a confirmation of a change already posted and waiting?
+    //
+    // Until this ran, `judgeConfirmation` had no production caller: the diff
+    // said "reply `/aw apply` to push this", somebody replied, and Guard 3
+    // correctly refused to wake an `awaiting` item for what looked like an
+    // ordinary note. The instruction the platform itself printed did nothing.
+    const fields = webhookFieldsOf(input.triggerContext)
+    const commentBody = fields.comment_text ?? ''
+    const classification =
+      commentBody === ''
+        ? ({ kind: 'ordinary' } as const)
+        : await classifyComment({
+            db: input.db,
+            workItemId: item.id,
+            body: commentBody,
+            currentHeadSha: fields.commit_sha ?? '',
+          })
+
+    if (classification.kind === 'refused') {
+      // Answered, never silent — a confirmation that vanishes teaches people
+      // the feature is unreliable, which costs more than the refusal.
+      await replyRefusal(input, fields, classification.message)
+      return { capability, taskId: '', roundId: '', roundSeq: 0, refused: classification.message }
+    }
     const round = await openRound({
       db: input.db,
       workItemId: item.id,
       epoch: item.epoch,
+      // A confirming round RESUMES at `verify-baseline`. Re-running the AI
+      // stages would produce a different change with the same justification,
+      // and the person approved a specific diff rather than a topic.
+      ...(classification.kind === 'confirmation'
+        ? {
+            workPackage: {
+              resumeFromStage: 'verify-baseline',
+              artifactDigest: classification.artifactDigest,
+            },
+          }
+        : {}),
       ...(webhookFieldsOf(input.triggerContext).commit_sha === undefined
         ? {}
         : { baselineSha: webhookFieldsOf(input.triggerContext).commit_sha }),
@@ -346,7 +424,16 @@ async function startDirectRound(
       db: input.db,
       workItemId: item.id,
       hasLiveRound: false,
-      event: { kind: 'external-signal', signal: { kind: 'note' } },
+      event:
+        classification.kind === 'confirmation'
+          ? {
+              kind: 'external-signal',
+              // Guard 2 compares this against the pending generation: a
+              // confirmation aimed at a superseded patch is answered, not
+              // applied.
+              signal: { kind: 'confirmation', generation: classification.generation },
+            }
+          : { kind: 'external-signal', signal: { kind: 'note' } },
     })
     await noteWorkItemEvent({
       db: input.db,
