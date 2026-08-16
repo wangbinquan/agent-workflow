@@ -10,6 +10,8 @@ import { loadConfig } from '@/config'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import { resumeSupersedingWorkItems } from '@/services/codeCapabilitySupersede'
+import { reclaimCodeLeasesOnBoot } from '@/services/codeRoundLease'
+import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { startWebhookDeliveryGc } from '@/services/webhook/webhookGc'
@@ -665,6 +667,23 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // restarts inside that window, the in-process wait dies with it and the item
   // stays `superseding` forever — silently, because a merge request that stops
   // being reviewed raises nothing. This is that wait, re-armed.
+  // RFC-304 §2.3 崩溃恢复 — void what the previous daemon was holding.
+  //
+  // The generation fence already makes those leases takeable, so nothing is
+  // BLOCKED by skipping this; what it buys is an honest table. A row whose
+  // owning process is gone is not a claim, and leaving it means `/code` reports
+  // a merge request as leased when nothing holds it. Before boot recovery,
+  // because everything after this may start rounds that ask for leases.
+  await reclaimCodeLeasesOnBoot(db, DAEMON_GENERATION)
+    .then((reclaimed) => {
+      if (reclaimed > 0) log.info('reclaimed code MR leases from a previous daemon', { reclaimed })
+    })
+    .catch((err: unknown) => {
+      log.warn('reclaiming code MR leases failed', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+
   await resumeSupersedingWorkItems({
     db,
     launchDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),

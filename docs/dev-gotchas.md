@@ -4,6 +4,14 @@
 
 ## 测试 / CI
 
+- **`bun run gate:local | tail -40` 的退出码是 `tail` 的，永远是 0——门禁红了你也看到「exit 0」（2026-08-17 实测，红代码直接进了主干）**：
+  管道的退出码取**最后一个**命令。把门禁/typecheck/lint 接到 `tail` / `head` / `grep` 后面看输出，
+  等于把它们的成败**丢掉**：后台跑一条 `bun run gate:local 2>&1 | tail -40`，通知里回报 `exit code 0`，
+  实际 backend typecheck 是红的，那条改动照样 commit + push 上了 main。
+  定式：**要退出码就别接管道**——`bun run gate:local > gate.log 2>&1`，事后再 `tail` 看日志；
+  非要接管道就 `set -o pipefail` 或显式读 `${PIPESTATUS[0]}`。
+  判据：一条本该跑好几分钟的门禁「秒回 exit 0」、或输出文件是 0 字节而退出码是 0 ⇒ 就是这个坑。
+
 - **`gate:local` 不跑 Playwright —— 新增 e2e spec 时「本地门禁全绿」不构成任何证据（2026-08-16 实测被 CI 打脸）**：
   门禁只跑 backend / shared / frontend 三条单测 + typecheck/lint/format，**e2e spec 只在 CI 跑**。
   于是「新写一条 e2e + gate:local 全绿 + push」的流程里，那条新用例**一次都没被执行过**就上了主干。
@@ -90,6 +98,11 @@
 - **变异实证的还原步骤要用绝对路径，并且**逐字 diff 核对**——`cd ..` 很容易落错目录**（RFC-287 三轮门实撞，三条变异的还原全部静默失败）。写成 `cd packages/backend && bun test … ; cd .. && cp /tmp/x.bak packages/backend/src/…` 时，`cd ..` 从 `packages/backend` 回到的是 **`packages/`** 而不是仓根，于是 `cp` 报 `No such file or directory` ——而这行 `cp` 的失败混在一大段输出里毫不显眼，**变异就留在了生产代码里**。更糟的是下一条变异接着施加，等于叠加。**定式**：备份与还原一律写绝对路径（`R=$(git rev-parse --show-toplevel)` 开头取一次）；还原后不要只 `grep -c` 关键字（改动可能不止一处），直接 `diff <(cat /tmp/x.bak) <file>` 求逐字一致再继续。判据：还原那步的输出里必须有一句明确的「一致」，没有就当没还原。
 - **做变异实证时别用 `git checkout` 还原「未跟踪文件」**：新写的文件还没进版本库，`git checkout <file>` 报 `did not match any file`——配上顺手加的 `|| true` 就**静默什么也没做**，于是下一轮「restored」跑出来的其实是**带着变异**的结果，你会照着它报一个假的通过。还原用 `cp` 备份（变异前先 `cp x /tmp/x.bak`），并让最后那次「restored」跑出的数字与基线**逐个数字核对**——对不上就是没还原干净。
 - **「写了规则 + 单测绿」≠「接上了」**：脱敏/校验这类横切规则，单测测的是**函数**，接线是另一件事。RFC-247 里 `redactMcpRecord` 与 `redactStdout` **各自**都是「定义了、单测了、零调用方」——`GET /api/mcps/:id` 一直原样吐 `config.env`/`oauth.clientSecret`。单测不会红，因为它没在测出口。**收尾必须从 AC/需求反查「谁调它」**（`grep -rn '<fn>' src | grep -v '<定义文件>'`，命中为空即未接线），或把出口写成唯一入口（`serializeXForActor(record, source)`）让调用方无从绕过。
+  **成规模地查它**（RFC-304 实测，一次扫出 61 处生产不可达、6 个整文件零导入）：对目标目录每个
+  `export function` 走三步——①除定义文件外全仓零引用 ⇒ 候选；②**本文件内**也无人调用（被同文件
+  入口调用的只是「为测试而 export」，行为仍可达）；③两条都为零 ⇒ 生产不可达。只做第 ① 步会把
+  大批纯函数误报成缺陷，第 ② 步是必须的。判据反过来也成立：写新模块时**接线与实现同一个
+  commit**，或至少有一条用例从**入口**（路由 / 调度器 / 启动流程）打进去。
 - **上一条的镜像：迁移「只删调用方、不删实现」，残骸会被它自己的测试续命**。RFC-247 T4 把权限门迁到 `registerRoute` 后删的是 `server.ts` 里的**挂载**，`auth/permissions.ts` 那 202 行实现原封留下；此后全仓零生产引用，唯一 import 是 `rfc247-verb-for-route.test.ts` 那条逐行测试——覆盖率报表上它一直是绿的、看起来还像一条权限不变量锁。代价是它**在教育后来人**：文件头断言「server.ts 的手挂网关 still runs alongside 迁移后的路由」（同一时刻 server.ts 明写 GONE），而 `verbForRoute` 悄悄成了「路由 → 权限点」的第二份、无人执行、无人比对的事实源（与真实声明分歧 7 条）。**判据**：迁移收尾时对被替换的模块跑 `rg -n "<导出名>" packages e2e scripts | grep -v "<自身文件>"`，若命中**只剩测试文件**，那不是「还有人用」，是死码 + 假合格证，删。删完补一条「不复辟」ratchet（`tests/route-gate-single-source.test.ts` 是范本）并做变异实证。2026-08-03 架构审视 G0。
 - **改符号前先 grep 测试源码锁**：改函数/常量名前全量盘「锁住旧接线的测试」，定向重跑集 = grep 命中集；否则本地绿、CI 红（他人 source-lock 锁了旧名，2026-07-08 三连事故）。
 - **`e2e/` 在 workspace typecheck 之外**：删/改 wire 字段能过所有本地门却红 Playwright CI；推前 grep `e2e/` 找该字段（inline response 类型 + 断言都要改）。

@@ -218,7 +218,7 @@ describe('RFC-304 — the work-item projection', () => {
         workItemId: 'busy',
         roundSeq: i + 1,
         epoch: 1,
-        outcome: 'published',
+        outcome: 'published' as const,
         startedAt: NOW + i,
         endedAt: NOW + i + 1,
       })),

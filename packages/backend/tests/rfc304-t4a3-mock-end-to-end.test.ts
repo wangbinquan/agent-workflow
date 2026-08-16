@@ -37,6 +37,7 @@ import {
 } from '../src/db/schema'
 import { enableCapability } from '../src/services/codeCapabilityEnable'
 import { acquireRoundLease } from '../src/services/codeRoundLease'
+import { DAEMON_GENERATION } from '../src/services/daemonGeneration'
 import { resolveTarget } from '../src/modules/code-capability/domain/resolveTarget'
 import { runGit } from '../src/util/git'
 import { createUser } from '../src/services/users'
@@ -285,7 +286,13 @@ describe('RFC-304 T4a3 (mock) — delivery → round → line comment', () => {
 
     const held = await acquireRoundLease({
       db,
-      daemonGeneration: 'dev',
+      // THIS daemon's generation, not a literal. The competing holder is meant
+      // to be a live round, and a lease minted under another generation is by
+      // definition a dead process's — the crash fence grants it away, the
+      // second round starts, and the case passes for the wrong reason (it used
+      // to read `'dev'`, which happened to match the production fallback back
+      // when nothing supplied a real generation).
+      daemonGeneration: DAEMON_GENERATION,
       key: {
         codeHostEndpointId: target.target.codeHostEndpointId,
         stableProjectId: target.target.stableProjectId,

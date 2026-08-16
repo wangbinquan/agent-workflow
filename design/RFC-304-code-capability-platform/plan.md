@@ -1032,6 +1032,34 @@ E2E `a SECOND capability is reachable` 全绿：格子 `ready`（zero issues）�
 `collect` 一开始跑该条件就成立了。它先前是**碰巧赢了这个 race**，加进第五条能力后
 才输。改成等「`classify` 进入终态」，即等它真正断言的那个条件；连跑三遍稳定。
 
+### 2ter.7 §2.3 lease 协议表的三行从未执行（已修）+ 不可达面全量盘点
+
+顺着「长命 MR」查下去，撞上的是 design §2.2「lease 的完整协议」那张表——三行**建了
+没接**：
+
+| 表里那行 | 实际状态                                                                                                                       | 后果                                                                                                                      |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| 续租     | `renewLease` 零调用方，`withRoundLease` 从不续                                                                                 | 轮次一超过 `ROUND_LEASE_MS`（15min，AI 轮次的常态）就悄悄丢掉 MR；`acquireLease` 走 expiry 分支放行，同一 MR 上第二轮开跑 |
+| 崩溃恢复 | `daemonGeneration` 在 `RunTaskOptions` 上、在 `INHERITABLE_RUN_CONFIG_KEYS` 里、scheduler 也读——**没人赋值**，生产恒为 `'dev'` | 重启前后同代际 ⇒ `decideLeaseAcquisition` 的 fence 永不触发，崩掉的 daemon 把它持过的每个 MR 锁满一个租期                 |
+| 崩溃恢复 | `reclaimStaleLeases` 自带 "Run at boot" 文档、零调用方                                                                         | 表里长期留着没有主人的行                                                                                                  |
+
+修法：`services/daemonGeneration.ts`（模块加载期铸 ULID；`resolveDaemonGeneration`
+显式优先，保证**子任务跑在父任务的代际**上，否则子任务会把父任务活着的 lease 当作
+废票抢走）+ `withRoundLease` 起心跳（`leaseMs/3`，ticker 可注入以免用例依赖挂钟；
+`finally` 里先置终止标志再停表再释放，避免在途心跳误报「lease 丢了」）+
+`reclaimCodeLeasesOnBoot` 接进 `cli/start.ts` 启动恢复段。
+
+**代际这条修完立刻照出一条测试的假绿**：`rfc304-t4a3-mock-end-to-end` 里那条「另一
+轮持锁时本轮不得开跑」，夹具用 `daemonGeneration: 'dev'` 铸竞争 lease——那恰好等于
+当时的生产兜底值，所以它一直**是对的**；生产改成真代际后，那把 lease 变成「上个
+daemon 的」被 fence 放行，用例转红。夹具改用 `DAEMON_GENERATION`（竞争者按定义是
+本代际的活轮次）。这正是这类缺陷的典型形状：**夹具与生产共用同一个错误常量时，
+用例证明不了任何东西**。
+
+同时做了一次**全模块不可达面盘点**（61 个函数生产不可达、6 个 `.ts` 零导入，逐条
+对账过「功能缺失」还是「同功能另有实现」），结论与可复跑的扫描方法见
+`unreachable-surface-audit.md`。
+
 ## 3. 验收清单
 
 > **两列口径**（第三轮 P2：原表把"主实现"与"E2E 验证"混在一起，出现 AC 无归属或错归属）：

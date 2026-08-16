@@ -158,6 +158,7 @@ import { COMMENT_FIX_AGENT_SLOT } from '@/modules/code-capability/domain/comment
 import { CI_FIX_AGENT_SLOT } from '@/modules/code-capability/domain/ciFixEnvelope'
 import { settleDanglingAttempts } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
 import { withRoundLease } from '@/services/codeRoundLease'
+import { resolveDaemonGeneration } from '@/services/daemonGeneration'
 import { resolveCapabilityHooks } from '@/services/codeCapabilityHooks'
 import { closeRound } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
 import { noteWorkItemEvent } from '@/modules/code-capability/application/workItemProgress'
@@ -5090,7 +5091,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
       : await withRoundLease(
           {
             db,
-            daemonGeneration: opts.daemonGeneration ?? 'dev',
+            daemonGeneration: resolveDaemonGeneration(opts.daemonGeneration),
             key: leaseKey,
             roundId: task.codeRoundId ?? taskId,
           },

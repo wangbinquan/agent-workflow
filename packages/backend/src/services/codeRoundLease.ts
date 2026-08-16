@@ -29,16 +29,58 @@ import type { MrLeaseKey } from '@/modules/code-capability/domain/mrLease'
 import { mintLeaseToken } from '@/modules/code-capability/domain/mrLease'
 import {
   acquireLease,
+  reclaimStaleLeases,
   releaseLease,
   releaseLeaseOfEndedRound,
+  renewLease,
 } from '@/modules/code-capability/infrastructure/sqliteMrLeaseStore'
+import { createLogger } from '@/util/log'
+
+const log = createLogger('code-round-lease')
 
 /** How long a lease survives without renewal. */
 export const ROUND_LEASE_MS = 15 * 60 * 1000
 
+/**
+ * How often the holder renews, as a fraction of the lease.
+ *
+ * A third, not the whole lease: beating exactly at the expiry renews the lease
+ * as it dies, so one slow write loses a merge request that was never actually
+ * unattended. Two missed beats are survivable; the third is a real stall, and
+ * by then the round genuinely should lose its claim.
+ */
+const RENEW_DIVISOR = 3
+
+/**
+ * How the heartbeat is scheduled. Injected so the tests can drive it by hand —
+ * a renewal case that depends on wall-clock timing is a flaky case, and this one
+ * has to be trustworthy: it is the only thing standing between a long round and
+ * a second round on the same merge request.
+ */
+export interface LeaseTicker {
+  /** Run `tick` every `everyMs` until the returned stopper is called. */
+  start: (everyMs: number, tick: () => Promise<void>) => () => void
+}
+
+const intervalTicker: LeaseTicker = {
+  start: (everyMs, tick) => {
+    const handle = setInterval(() => {
+      void tick()
+    }, everyMs)
+    // Never a reason to keep the process alive: if the round is gone, so is the
+    // reason to renew.
+    handle.unref?.()
+    return () => {
+      clearInterval(handle)
+    }
+  },
+}
+
 export interface RoundLease {
   key: MrLeaseKey
   token: string
+  /** Push the expiry out. False once the lease has moved on — token-checked. */
+  renew: () => Promise<boolean>
   /** Release is idempotent and token-checked; safe to call more than once. */
   release: () => Promise<void>
 }
@@ -73,11 +115,14 @@ export async function acquireRoundLease(input: {
   key: MrLeaseKey
   roundId: string
   leaseMs?: number
+  /** Injectable clock; the expiry cases would otherwise be wall-clock races. */
+  now?: () => number
 }): Promise<RoundLeaseResult> {
   const deps = {
     db: input.db,
     daemonGeneration: input.daemonGeneration,
     leaseMs: input.leaseMs ?? ROUND_LEASE_MS,
+    ...(input.now !== undefined ? { now: input.now } : {}),
   }
   const token = mintLeaseToken(input.daemonGeneration, ulid())
   let outcome = await acquireLease(deps, input.key, input.roundId, token)
@@ -108,6 +153,7 @@ export async function acquireRoundLease(input: {
     lease: {
       key: input.key,
       token,
+      renew: async () => await renewLease(deps, input.key, token),
       release: async () => {
         // Token-checked inside the store: a round whose lease was reclaimed
         // while it ran must NOT release the new holder's lease on its way out.
@@ -132,14 +178,79 @@ export async function withRoundLease<T>(
     key: MrLeaseKey
     roundId: string
     leaseMs?: number
+    now?: () => number
+    ticker?: LeaseTicker
   },
   body: (lease: RoundLease) => Promise<T>,
 ): Promise<{ ok: true; value: T } | { ok: false; heldBy: string }> {
   const acquired = await acquireRoundLease(input)
   if (!acquired.ok) return acquired
+
+  // design §2.2「续租：轮次心跳续租；超时未续 ⇒ 视为失效可被抢」.
+  //
+  // Without this the lease is not held "for the whole round" as §2.3 claims —
+  // it is held for fifteen minutes, and an AI code round routinely runs longer.
+  // Past that the expiry branch of `acquireLease` grants, a second round starts
+  // on the same merge request, and the interleaving the lease exists to prevent
+  // happens on exactly the slow rounds where there is most to interleave.
+  const leaseMs = input.leaseMs ?? ROUND_LEASE_MS
+  // A beat already in flight when the round ends would otherwise find the row
+  // released and report a LOST lease — a false alarm on the one log line an
+  // operator is meant to trust.
+  let roundOver = false
+  const stopHeartbeat = (input.ticker ?? intervalTicker).start(
+    Math.max(1, Math.floor(leaseMs / RENEW_DIVISOR)),
+    async () => {
+      try {
+        if (roundOver) return
+        const held = await acquired.lease.renew()
+        if (!held && !roundOver) {
+          // Nothing to do about it from here — the renewal is token-checked, so
+          // this round cannot take the merge request back, and it must not try.
+          // Logged because a lost lease means a second round may now be writing
+          // to the same merge request, which is the one thing an operator
+          // reading a confused merge request needs to be able to find out.
+          log.warn('round lease lost while the round was still running', {
+            roundId: input.roundId,
+            anchorId: input.key.anchorId,
+            stableProjectId: input.key.stableProjectId,
+          })
+        }
+      } catch (err: unknown) {
+        // The beat runs on a timer with nobody to catch it: an unhandled
+        // rejection here would take the daemon down over one failed write, and
+        // the next beat is a third of a lease away with the lease still valid.
+        log.warn('round lease renewal threw', {
+          roundId: input.roundId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
   try {
     return { ok: true, value: await body(acquired.lease) }
   } finally {
+    // Stop BEFORE releasing, so a beat cannot land between the release and the
+    // clear and re-extend a lease this round no longer holds.
+    roundOver = true
+    stopHeartbeat()
     await acquired.lease.release()
   }
+}
+
+/**
+ * RFC-304 §2.3 崩溃恢复 — drop every lease minted by a previous daemon, at boot.
+ *
+ * The generation fence already makes those leases takeable, so this is not what
+ * keeps a restarted daemon working; it is what keeps the table honest and gives
+ * the boot log a number. A row whose owning process is gone is not a claim, and
+ * leaving it means `/code` reports a merge request as leased when nothing holds
+ * it.
+ */
+export async function reclaimCodeLeasesOnBoot(
+  db: DbClient,
+  daemonGeneration: string,
+): Promise<number> {
+  return await reclaimStaleLeases(db, daemonGeneration)
 }
