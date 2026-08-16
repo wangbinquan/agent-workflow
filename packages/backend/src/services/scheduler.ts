@@ -102,6 +102,7 @@ import {
   nodeRuns,
   taskCollaborators,
   taskRepos,
+  codeWorkRounds,
   tasks,
 } from '@/db/schema'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
@@ -160,6 +161,7 @@ import { settleDanglingAttempts } from '@/modules/code-capability/infrastructure
 import { withRoundLease } from '@/services/codeRoundLease'
 import { resolveCapabilityHooks } from '@/services/codeCapabilityHooks'
 import { closeRound } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
+import { noteWorkItemEvent } from '@/modules/code-capability/application/workItemProgress'
 import { MR_REVIEW_CONTRACT } from '@/modules/code-capability/domain/capabilityRegistry'
 import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import { createReviewAgentCaller, resolveReviewerAgent } from '@/services/codeReviewAgentCaller'
@@ -4996,9 +4998,45 @@ async function finalizeRound(
   db: DbClient,
   codeRoundId: string | null,
   outcome: 'published' | 'awaiting' | 'failed' | 'canceled',
+  awaiting?: { pendingGeneration: number },
 ): Promise<void> {
   if (codeRoundId === null || codeRoundId === '') return
   await closeRound(db, codeRoundId, outcome)
+
+  // …and move the WORK ITEM, which is the thing a person watches. Closing the
+  // round records what this attempt did; the item is what says whether the
+  // merge request is now settled, waiting on a human, or given up on.
+  //
+  // Design D2 made these two separate lifecycles on purpose: the item spans
+  // many rounds, and `awaiting` has to outlive the task rather than suspend one
+  // for three days. Until this call existed the item never left `idle`, so the
+  // state view showed nothing happening while rounds ran, and `awaiting` — the
+  // state the entire human-confirmation design turns on — was unreachable.
+  const [round] = await db
+    .select({ workItemId: codeWorkRounds.workItemId })
+    .from(codeWorkRounds)
+    .where(eq(codeWorkRounds.id, codeRoundId))
+    .limit(1)
+
+  await noteWorkItemEvent({
+    db,
+    workItemId: round?.workItemId ?? null,
+    // The task is finishing as this runs, so no round is live any more — which
+    // is what lets `closing` converge and `superseding` release.
+    hasLiveRound: false,
+    event:
+      outcome === 'published'
+        ? { kind: 'round-published' }
+        : outcome === 'awaiting'
+          ? {
+              kind: 'round-needs-human',
+              // The generation the human was asked about. Guard 2 refuses a
+              // confirmation from an older one, so a wrong value here would
+              // either reject every confirmation or accept a stale one.
+              pendingGeneration: awaiting?.pendingGeneration ?? 1,
+            }
+          : { kind: 'round-failed' },
+  })
 }
 
 async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {

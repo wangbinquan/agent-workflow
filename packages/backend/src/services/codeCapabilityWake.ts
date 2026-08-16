@@ -40,6 +40,7 @@ import {
   type WorkItemIdentity,
 } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
 import { claimTerminalMr } from '@/modules/code-capability/application/producedMrIndex'
+import { noteWorkItemEvent } from '@/modules/code-capability/application/workItemProgress'
 import type { StartTaskDeps } from '@/services/task'
 import type { TriggerContext } from '@agent-workflow/shared'
 
@@ -330,6 +331,29 @@ async function startDirectRound(
     workItemId = item.id
     roundId = round.roundId
     roundSeq = round.roundSeq
+
+    // The delivery, as the state machine sees it: an external signal that
+    // queues the item and then a scheduler take that runs it. Both are emitted
+    // here because the round IS being opened and dispatched in one step — the
+    // table still wants the two transitions so the guards that key off `queued`
+    // (supersede, pending-revision merge) have a state to key off.
+    //
+    // A `note` classification rather than `head-changed`: this path opens a
+    // round for a delivery whose meaning was already decided upstream, and
+    // claiming a head change here would invalidate a pending patch that the
+    // author never actually superseded (T45).
+    await noteWorkItemEvent({
+      db: input.db,
+      workItemId: item.id,
+      hasLiveRound: false,
+      event: { kind: 'external-signal', signal: { kind: 'note' } },
+    })
+    await noteWorkItemEvent({
+      db: input.db,
+      workItemId: item.id,
+      hasLiveRound: true,
+      event: { kind: 'scheduler-take' },
+    })
   }
 
   const task = await startCodeRoundTask(

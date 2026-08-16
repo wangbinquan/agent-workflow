@@ -207,7 +207,15 @@ describe('RFC-304 T40 — the dispatcher closes capability work items', () => {
 
     await deliver(eventOf({ eventType: 'mr_updated' }))
 
-    expect(await itemStatus()).toBe('idle')
+    // NOT closed — that is what this test is about. It no longer asserts
+    // `idle`: since the work-item state machine was wired (§2.2), an ordinary
+    // update legitimately advances the item through `queued` → `running`,
+    // because a round really is opened and dispatched for it. `idle` was a
+    // proxy for "nothing happened", and now something does.
+    const status = await itemStatus()
+    expect(status).not.toBe('closed')
+    expect(status).not.toBe('closing')
+    expect(status).toBe('running')
   })
 
   test("a merge on a DIFFERENT instance's project leaves this item alone", async () => {

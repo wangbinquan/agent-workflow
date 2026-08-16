@@ -328,6 +328,16 @@ test('the round ends PUBLISHED, with every stage of the contract done', async ()
   //     stage while everything before it looked perfectly healthy.
   const round = (await currentRound())!
   expect(round).toBeDefined()
+  // The WORK ITEM moved too, not just the round. Design D2 made these separate
+  // lifecycles: the round records one attempt, the item is what a person
+  // watches across days. Until §2.2 was wired the item sat `idle` through the
+  // whole life of a round, so the state view could not tell a busy merge
+  // request from a silent one.
+  const page = await requestJson<{ items: Array<{ status: string }> }>(
+    '/api/code/work-items?capability=mr-review',
+  )
+  expect(page.items[0]?.status).toBe('settled')
+
   // `status` is DERIVED from the outcome rather than stored, so the two agree
   // by construction — asserting both is what pins that they still do.
   expect({ outcome: round.outcome, status: round.status }).toEqual({
