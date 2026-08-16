@@ -302,6 +302,67 @@ export function serializeClosure(
         } as unknown as BundleOp)
         break
       }
+      // RFC-304 T17a — the two capability template layers.
+      //
+      // Everything else about them shipped: they are in `BUNDLE_RESOURCE_TYPES`,
+      // the wire schema has all four ops with payloads, the closure walks
+      // binding→framework, the import applier writes both rows, and the import
+      // permission map demands `scripts:author` on top of create for a
+      // framework. Only these two cases were missing — so a package naming a
+      // capability template as its root produced NO create op and the exporter
+      // rejected its own output with `bundle-dangling-root`. The feature was
+      // complete in both directions except for the step that puts the rows on
+      // the wire.
+      case 'capability_framework': {
+        ops.push({
+          opId: nextOpId(),
+          kind: 'capability-framework-create',
+          slug,
+          payload: {
+            name: r.name,
+            description: String(row.description ?? ''),
+            capability: String(row.capability ?? ''),
+            // The `*Json` column names, not the API's field names: this reads
+            // the ROW, and a mismatch here is silent — `parseJson(undefined,
+            // {})` returns an empty object, so the package would import a
+            // framework with no scripts and fail at round time with "the
+            // framework's scripts could not be resolved".
+            scripts: parseJson(row.scriptsJson, {}),
+            hooks: parseJson(row.hooksJson, []),
+            paramSchema: parseJson(row.paramSchemaJson, []),
+            paramDefaults: parseJson(row.paramDefaultsJson, {}),
+            stageContractVer: Number(row.stageContractVer ?? 1),
+          },
+        } as unknown as BundleOp)
+        break
+      }
+      case 'capability_binding': {
+        // `agentBySlot` holds local agent ids; every one becomes a ref so the
+        // destination binds to ITS agent of that name rather than to an id that
+        // means nothing there. Same reason `frameworkRef` is a ref: a binding
+        // whose framework pointer survived as a raw id would name a template the
+        // destination does not have.
+        const agentBySlot: Record<string, string> = {}
+        for (const [slotName, agentId] of Object.entries(
+          parseJson(row.agentBySlotJson, {}) as Record<string, unknown>,
+        )) {
+          agentBySlot[slotName] = refWire(slugOfId, String(agentId ?? ''), builtinOfId)
+        }
+        ops.push({
+          opId: nextOpId(),
+          kind: 'capability-binding-create',
+          slug,
+          payload: {
+            name: r.name,
+            description: String(row.description ?? ''),
+            frameworkRef: refWire(slugOfId, String(row.frameworkId ?? ''), builtinOfId),
+            agentBySlot,
+            promptBySlot: parseJson(row.promptBySlotJson, {}),
+            params: parseJson(row.paramsJson, {}),
+          },
+        } as unknown as BundleOp)
+        break
+      }
     }
   }
 

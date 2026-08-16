@@ -459,6 +459,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/plugins/:id/export-package' },
   { method: 'GET', path: '/api/workflows/:id/export-package' },
   { method: 'GET', path: '/api/workgroups/:id/export-package' },
+  // RFC-304 T17a — the two capability template layers travel as packages too.
+  { method: 'GET', path: '/api/capability-frameworks/:id/export-package' },
+  { method: 'GET', path: '/api/capability-bindings/:id/export-package' },
   { method: 'POST', path: '/api/resource-packages/preview' },
   { method: 'POST', path: '/api/resource-packages/commit' },
   { method: 'POST', path: '/api/workgroups' },

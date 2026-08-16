@@ -46,7 +46,7 @@ Alice 的 `lint`）和代理 B（用 Bob 的 `lint`）。
 
 ## 2. 导出
 
-`GET /api/{类}/:id/export-package`（六条），或 CLI。
+`GET /api/{类}/:id/export-package`（八条：agent / skill / mcp / plugin / workflow / workgroup，以及 RFC-304 的 capability-frameworks / capability-bindings），或 CLI。
 
 可选 `?expectedVersion=` / `?expectedSnapshotHash=`：**只 fence root**，对不上给 409
 （`package-root-changed`）。防的是「你看着 v1 按了导出，实际拿到 v2」。

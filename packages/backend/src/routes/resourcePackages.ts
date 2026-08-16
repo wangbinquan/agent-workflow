@@ -196,9 +196,10 @@ function parseRootFence(c: Context): Record<string, unknown> {
   return out
 }
 
-// Typed by the PACKAGEABLE set: every call below passes a literal, and the
-// narrower type is what keeps a future capability-template route from being
-// added here before the bundle can actually carry one (RFC-304 T17a).
+// Typed by the PACKAGEABLE set: every call below passes a literal, so a route
+// cannot be added for a type the bundle does not carry. That gate is why the
+// capability-template routes below arrived only once T17a's ops, closure,
+// applier and — last — serializer were all in place.
 function exportHandler(type: BundleResourceType, deps: ResourcePackageRouteDeps) {
   return async (c: Context): Promise<Response> => {
     const pkg = await exportResourcePackage(
@@ -288,6 +289,39 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
       summary: 'Export a workgroup with its transitive closure (config package)',
     },
     exportHandler('workgroup', deps),
+  )
+  // RFC-304 T17a — the two capability template layers.
+  //
+  // Everything else about the round trip shipped and this was the only missing
+  // producer: the bundle carries both types, the closure walks
+  // binding→framework, and the import applier writes both rows. Without a route
+  // a group could import a package somebody handed them and nobody could hand
+  // one over.
+  //
+  // Exporting a BINDING pulls its framework in with it, which is what makes the
+  // package usable at the far end — a binding alone names a template the
+  // destination does not have.
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/capability-frameworks/:id/export-package',
+      permissions: ['capability-frameworks:read'],
+      tokenAccess: 'allow',
+      summary: 'Export a capability framework (config package)',
+    },
+    exportHandler('capability_framework', deps),
+  )
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/capability-bindings/:id/export-package',
+      permissions: ['capability-bindings:read'],
+      tokenAccess: 'allow',
+      summary: 'Export a capability binding with its framework (config package)',
+    },
+    exportHandler('capability_binding', deps),
   )
 
   registerRoute(

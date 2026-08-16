@@ -135,6 +135,13 @@ const ALLOWANCES: readonly Allowance[] = [
     why: 'the WRITE side of the same contract: synthesizes the `---`/`+++` header the code host omits, and `diffHunks.ts` reads it straight back. Emitting `NUL` on Windows would make the two halves disagree on the same machine, and every added or deleted file would lose its side (RFC-304 T25b)',
   },
   {
+    rule: 'null-device',
+    file: 'modules/code-capability/domain/localDiffFiles.ts',
+    match: "'/dev/null'",
+    count: 1,
+    why: 'the READ side of the same contract as `diffHunks.ts`, for a LOCAL `git diff` rather than a code host payload: git writes `--- /dev/null` for an absent side on every platform including Windows, so a self-review that matched `NUL` there would read every added file as having an old side and place its remarks against lines that never existed (RFC-304 §invoke)',
+  },
+  {
     rule: 'posix-path-prefix',
     file: 'util/git.ts',
     match: '`${m}/`',
