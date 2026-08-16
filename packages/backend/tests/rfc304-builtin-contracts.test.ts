@@ -18,6 +18,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
+  CI_FIX_CONTRACT,
   MR_COMMENT_FIX_CONTRACT,
   MR_REVIEW_CONTRACT,
   REQUIREMENT_CONTRACT,
@@ -220,5 +221,84 @@ describe('RFC-304 §6.3 — the requirement sequence', () => {
     expect(openMr?.requires).toContain('selfFindings')
     expect(stages.find((s) => s.name === 'run-target-gate')?.produces).toContain('gateResult')
     expect(stages.find((s) => s.name === 'self-review')?.requires).toContain('gateResult')
+  })
+})
+
+describe('RFC-304 §6.4 — the ci-fix sequence', () => {
+  const stages = CI_FIX_CONTRACT.stages
+  const names = stages.map((s) => s.name)
+
+  test('the design’s stage list is the implemented one, in order', () => {
+    expect(names).toEqual([
+      'collect',
+      'classify',
+      'arbitrate',
+      'select',
+      'prepare-worktree',
+      'fix',
+      'validate-fix',
+      'self-review',
+      'anti-cheat-check',
+      'push',
+      'ledger',
+    ])
+  })
+
+  test('the four front stages are SCRIPTS — the platform does not guess at a CI system', () => {
+    // Which pipeline, which logs, what counts as an issue, which agent handles
+    // it: none of that is knowable about somebody else's CI. §3.1.
+    const scripts = stages.filter((s) => s.kind === 'script').map((s) => s.name)
+    expect(scripts).toEqual(['collect', 'classify', 'arbitrate', 'select'])
+  })
+
+  test('exactly one stage involves a model, and it is the one that edits code', () => {
+    expect(stages.filter((s) => s.kind === 'ai').map((s) => s.name)).toEqual(['fix'])
+  })
+
+  test('the fixer has its OWN agent slot', () => {
+    // Repairing a build is a different job from reviewing a diff or
+    // implementing a specification, and this is the capability that runs most
+    // often — a team may well want a cheaper model for it.
+    const fix = stages.find((s) => s.name === 'fix')
+    expect(fix?.kind === 'ai' && fix.agentSlot).toBe('ci-fixer')
+    const slots = new Set(
+      [...MR_REVIEW_CONTRACT.stages, ...MR_COMMENT_FIX_CONTRACT.stages, ...stages]
+        .filter((s) => s.kind === 'ai')
+        .map((s) => (s.kind === 'ai' ? s.agentSlot : '')),
+    )
+    expect(slots.has('ci-fixer')).toBe(true)
+    expect(slots.size).toBeGreaterThan(1)
+  })
+
+  test('the push can only be reached through the integrity check', () => {
+    // Structural: `push` requires what `anti-cheat-check` produces, so a
+    // sequence that skipped it could not satisfy the contract. The cheapest way
+    // to make CI green is to delete the test, and this is what stands in the
+    // way.
+    expect(stages.find((s) => s.name === 'push')?.requires).toContain('integrity')
+    expect(stages.find((s) => s.name === 'anti-cheat-check')?.produces).toContain('integrity')
+  })
+
+  test('the integrity check sees the frozen BASELINE, not just the change', () => {
+    // Without the baseline it cannot answer the only question with adjudicating
+    // power — was this test failing before? — and would be left grading the
+    // agent's own justification.
+    expect(stages.find((s) => s.name === 'anti-cheat-check')?.requires).toContain('baseline')
+  })
+
+  test('self-review runs BEFORE the integrity check, in a separate session', () => {
+    // A deleted assertion is a conspicuous finding to a reader that is not the
+    // author. Not a guarantee, but not self-assessment either.
+    expect(names.indexOf('self-review')).toBeLessThan(names.indexOf('anti-cheat-check'))
+    const selfReview = stages.find((s) => s.name === 'self-review')
+    expect(selfReview?.kind).toBe('invoke')
+  })
+
+  test('the gate decides whether the fix worked — not the agent', () => {
+    // `validate-fix` produces `fixResult`, and everything downstream reads it.
+    // An agent-supplied "succeeded" flag would look authoritative, cost nothing
+    // to set, and be wrong exactly when it matters.
+    expect(stages.find((s) => s.name === 'validate-fix')?.produces).toContain('fixResult')
+    expect(stages.find((s) => s.name === 'anti-cheat-check')?.requires).toContain('fixResult')
   })
 })

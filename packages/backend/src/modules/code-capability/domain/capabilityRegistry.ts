@@ -21,6 +21,10 @@ import {
   COMMENT_FIX_AGENT_SLOT,
 } from '@/modules/code-capability/domain/commentFixEnvelope'
 import {
+  CiFixEnvelopeSchema,
+  CI_FIX_AGENT_SLOT,
+} from '@/modules/code-capability/domain/ciFixEnvelope'
+import {
   ComprehendEnvelopeSchema,
   ImplementEnvelopeSchema,
   COMPREHEND_AGENT_SLOT,
@@ -363,10 +367,119 @@ export const REQUIREMENT_CONTRACT: StageContract = {
   ],
 }
 
+/**
+ * `ci-fix` v1 — making a red pipeline green (design §6.4).
+ *
+ * ```
+ * collect(script) → classify(script) → arbitrate(script) → select(script)
+ *   → prepare-worktree → fix(ai) → validate-fix(program) → self-review(invoke)
+ *   → anti-cheat-check(program) → push(program) → ledger
+ * ```
+ *
+ * The four scripts at the front are the department's, not the platform's: which
+ * pipeline, which logs, what counts as an issue and which agent handles it are
+ * all things the platform cannot know about somebody else's CI system. They are
+ * the same four the monitor runs, and they run here because a `ci-fix` round
+ * may be entered directly rather than through the monitor.
+ *
+ * ## Why `anti-cheat-check` is a stage rather than a check inside `push`
+ *
+ * The cheapest way to make CI green is to delete the test. This stage exists to
+ * notice that, and it is separate because its verdict is not binary: it can
+ * ALLOW (the evidence shows the test was really failing), REJECT (the evidence
+ * shows the test was passing, so this change broke it), or ESCALATE (no
+ * evidence either way — nothing is pushed and a person looks). Only the middle
+ * one is a failure. Folded into `push`, the third outcome would have nowhere to
+ * live and would collapse into one of the other two.
+ *
+ * `self-review` runs BEFORE it, in a separate session, looking at this round's
+ * diff — a deleted assertion is a conspicuous finding to a reader that is not
+ * the author. It is not a guarantee, but it is not self-assessment either.
+ */
+export const CI_FIX_CONTRACT: StageContract = {
+  capability: 'ci-fix',
+  version: 1,
+  stages: [
+    {
+      kind: 'script',
+      name: 'collect',
+      scriptSlot: 'collect',
+      requires: [],
+      produces: ['gateState'],
+    },
+    {
+      kind: 'script',
+      name: 'classify',
+      scriptSlot: 'classify',
+      requires: ['gateState'],
+      produces: ['issues'],
+    },
+    {
+      kind: 'script',
+      name: 'arbitrate',
+      scriptSlot: 'arbitrate',
+      requires: ['gateState', 'issues'],
+      produces: ['workPackage'],
+    },
+    {
+      kind: 'script',
+      name: 'select',
+      scriptSlot: 'select',
+      requires: ['workPackage'],
+      produces: ['agentPlan'],
+    },
+    {
+      kind: 'program',
+      name: 'prepare-worktree',
+      requires: ['gateState'],
+      produces: ['worktree', 'baseline'],
+    },
+    {
+      kind: 'ai',
+      name: 'fix',
+      requires: ['issues', 'workPackage', 'worktree'],
+      produces: ['attempt'],
+      injectable: ['promptSuffix', 'extraContext'],
+      aiSchema: CiFixEnvelopeSchema,
+      agentSlot: CI_FIX_AGENT_SLOT,
+    },
+    // Runs the repository's own gate against the change. This is the stage that
+    // decides whether the fix worked — not the agent's report of it.
+    {
+      kind: 'program',
+      name: 'validate-fix',
+      requires: ['attempt', 'worktree'],
+      produces: ['fixResult'],
+    },
+    {
+      kind: 'invoke',
+      name: 'self-review',
+      requires: ['fixResult', 'worktree'],
+      produces: ['selfFindings'],
+      invokes: { capability: 'mr-review', from: 'split-diff', to: 'validate-findings' },
+      collect: { selfFindings: 'findings' },
+    },
+    {
+      kind: 'program',
+      name: 'anti-cheat-check',
+      requires: ['fixResult', 'baseline', 'selfFindings'],
+      produces: ['integrity'],
+    },
+    { kind: 'program', name: 'push', requires: ['integrity', 'fixResult'], produces: ['pushed'] },
+    {
+      kind: 'program',
+      name: 'ledger',
+      requires: ['pushed', 'issues'],
+      produces: ['ledgerEntry'],
+    },
+  ],
+}
+
 const BUILTIN_CONTRACTS: readonly StageContract[] = [
   MR_REVIEW_CONTRACT,
   MR_COMMENT_FIX_CONTRACT,
   REQUIREMENT_CONTRACT,
+  CI_FIX_CONTRACT,
 ]
 
 const BY_CAPABILITY = new Map<CodeCapabilityId, StageContract>(
