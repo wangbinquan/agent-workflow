@@ -23,6 +23,7 @@ import {
   type StageResult,
   type StageRunners,
 } from '@/modules/code-capability/application/stageEngine'
+import { invokeSubSequence } from '@/modules/code-capability/application/invokeSubSequence'
 import {
   injectableKeysFor,
   runCapabilityHook,
@@ -59,6 +60,27 @@ export interface CodeCapabilityRunnerDeps {
   lookupContract?: (capability: CodeCapabilityId) => StageContract | undefined
   /** AI-stage implementations, keyed by stage name (PR-4a onward). */
   aiStages?: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
+  /**
+   * Stage implementations for capabilities this one INVOKES, keyed by
+   * capability then stage name (RFC-304 §6.3 `self-review`).
+   *
+   * Keyed by capability rather than merged into the maps above, because stage
+   * names collide across contracts on purpose — `prepare-worktree` means
+   * something in `requirement` and something else in `mr-review`. One flat map
+   * would silently resolve a sub-stage to the parent's implementation, and the
+   * sub-sequence would run against the wrong tree while looking healthy.
+   */
+  invokedStages?: Readonly<
+    Partial<
+      Record<
+        CodeCapabilityId,
+        {
+          program?: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
+          ai?: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
+        }
+      >
+    >
+  >
   /**
    * Artifacts the resumed prefix would have produced (RFC-304 §6.2).
    *
@@ -133,7 +155,91 @@ export function createCodeCapabilityRunner(deps: CodeCapabilityRunnerDeps): Code
       }
       return await impl(ctx)
     },
-    invoke: notImplemented('invoke'),
+    invoke: async (ctx) => {
+      if (ctx.stage.kind !== 'invoke') {
+        return { status: 'failed', error: `stage '${ctx.stage.name}' is not an invoke stage` }
+      }
+      const target = ctx.stage.invokes.capability
+      const supplied = deps.invokedStages?.[target]
+      if (supplied === undefined) {
+        // Loud rather than silent: a `self-review` that quietly did nothing
+        // would let a requirement round open a merge request claiming it had
+        // been reviewed.
+        return {
+          status: 'failed',
+          error: `stage '${ctx.stage.name}' invokes '${target}', whose stage implementations were not supplied to the runner`,
+        }
+      }
+
+      const out = await invokeSubSequence({
+        db: deps.db,
+        roundId: ctx.roundId,
+        parentStage: ctx.stage.name,
+        invokes: ctx.stage.invokes,
+        seedArtifacts: ctx.artifacts,
+        runners: {
+          program: async (sub) => {
+            const impl = supplied.program?.[sub.stage.name]
+            return impl === undefined
+              ? {
+                  status: 'failed',
+                  error: `invoked program stage '${sub.stage.name}' has no registered implementation`,
+                }
+              : await impl(sub)
+          },
+          ai: async (sub) => {
+            const impl = supplied.ai?.[sub.stage.name]
+            return impl === undefined
+              ? {
+                  status: 'failed',
+                  error: `invoked ai stage '${sub.stage.name}' has no registered implementation`,
+                }
+              : await impl(sub)
+          },
+          script: notImplemented('script'),
+          // No nesting. An invoke inside an invoke has no defined hook naming
+          // and no reason to exist yet; refusing beats inventing semantics
+          // nobody has thought through.
+          invoke: notImplemented('nested invoke'),
+        },
+        ...(deps.lookupContract === undefined ? {} : { lookupContract: deps.lookupContract }),
+        ...(deps.signal === undefined ? {} : { signal: deps.signal }),
+      })
+
+      if (out.outcome === 'failed') return { status: 'failed', error: out.error }
+      if (out.outcome === 'blocked') {
+        return { status: 'failed', error: `blocked at '${out.blockedStage}': ${out.reason}` }
+      }
+      if (out.outcome === 'canceled') {
+        return { status: 'failed', error: `canceled at '${out.canceledStage}'` }
+      }
+
+      // Only the declared outputs cross back. Merging the whole sub-artifact set
+      // would let the invoked capability's `worktree` or `target` overwrite the
+      // parent's — same names, different meanings.
+      const produced: Record<string, unknown> = {}
+      for (const name of ctx.stage.produces) {
+        const source = ctx.stage.collect[name]
+        if (source === undefined) {
+          return {
+            status: 'failed',
+            error: `stage '${ctx.stage.name}' declares output '${name}' but its \`collect\` map does not say which sub-artifact it comes from`,
+          }
+        }
+        const value = out.artifacts[source]
+        if (value === undefined) {
+          // A declared output the sub-sequence never produced. Loud, because
+          // the parent's next stage would otherwise read an empty review as a
+          // clean one.
+          return {
+            status: 'failed',
+            error: `stage '${ctx.stage.name}' expected '${source}' from '${target}', which produced nothing under that name`,
+          }
+        }
+        produced[name] = value
+      }
+      return { status: 'done', produced }
+    },
   }
 
   return {

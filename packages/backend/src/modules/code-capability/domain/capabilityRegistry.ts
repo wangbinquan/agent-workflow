@@ -20,6 +20,12 @@ import {
   CommentFixEnvelopeSchema,
   COMMENT_FIX_AGENT_SLOT,
 } from '@/modules/code-capability/domain/commentFixEnvelope'
+import {
+  ComprehendEnvelopeSchema,
+  ImplementEnvelopeSchema,
+  COMPREHEND_AGENT_SLOT,
+  IMPLEMENT_AGENT_SLOT,
+} from '@/modules/code-capability/domain/requirementEnvelope'
 import { REVIEW_AGENT_SLOT } from '@/modules/code-capability/application/reviewStage'
 import {
   validateStageContract,
@@ -260,7 +266,108 @@ export const MR_COMMENT_FIX_CONTRACT: StageContract = {
   ],
 }
 
-const BUILTIN_CONTRACTS: readonly StageContract[] = [MR_REVIEW_CONTRACT, MR_COMMENT_FIX_CONTRACT]
+/**
+ * `requirement` v1 — building from an issue or a design set (design §6.3).
+ *
+ * ```
+ * resolve-input → materialize-attachments → prepare-worktree
+ *   → comprehend(ai) → [needs-clarification → clarify → awaiting]
+ *   → implement(ai) → run-target-gate → self-review(invoke) → open-mr → ledger
+ * ```
+ *
+ * Two stages involve a model and they are deliberately separate. `comprehend`
+ * decides whether the requirement says enough to build; `implement` builds it.
+ * Merged into one, there would be nowhere to stop and ask — and an agent that
+ * cannot ask will not ask: it fills the gap with the most plausible reading and
+ * produces a merge request implementing a requirement nobody wrote.
+ *
+ * `self-review` is an `invoke`, the first in the registry. It runs `mr-review`'s
+ * core reading stages against the tree this round just built, WITHOUT the
+ * publishing half — there is no merge request yet to publish to, and the point
+ * is to catch the problem before a human is asked to look. Reusing the review's
+ * own stages rather than re-describing them is what keeps the two from drifting.
+ */
+export const REQUIREMENT_CONTRACT: StageContract = {
+  capability: 'requirement',
+  version: 1,
+  stages: [
+    // Parameters when they were given, an entry script when only a reference
+    // was (design D5). Either way the round starts from a document SET.
+    { kind: 'program', name: 'resolve-input', requires: [], produces: ['requirement'] },
+    {
+      kind: 'program',
+      name: 'materialize-attachments',
+      requires: ['requirement'],
+      produces: ['attachments'],
+    },
+    {
+      kind: 'program',
+      name: 'prepare-worktree',
+      requires: ['requirement'],
+      produces: ['worktree'],
+    },
+    {
+      kind: 'ai',
+      name: 'comprehend',
+      requires: ['requirement', 'attachments', 'worktree'],
+      produces: ['understanding'],
+      injectable: ['promptSuffix', 'extraContext'],
+      aiSchema: ComprehendEnvelopeSchema,
+      agentSlot: COMPREHEND_AGENT_SLOT,
+    },
+    // Reached only when `comprehend` asked. Posts the questions where the
+    // requirement came from (D2) and settles the round `awaiting`; the answer
+    // resumes at `comprehend`, which is why the recovery for this wait kind
+    // DOES re-run the model — the answer changes the reading (T4b).
+    {
+      kind: 'program',
+      name: 'clarify',
+      requires: ['understanding', 'requirement'],
+      produces: ['clarification'],
+    },
+    {
+      kind: 'ai',
+      name: 'implement',
+      requires: ['understanding', 'worktree'],
+      produces: ['implementation'],
+      injectable: ['promptSuffix', 'extraContext'],
+      aiSchema: ImplementEnvelopeSchema,
+      agentSlot: IMPLEMENT_AGENT_SLOT,
+    },
+    // The TARGET repository's own gate, read from its CLAUDE.md / CONTRIBUTING
+    // rather than configured here: a platform that hardcoded `npm test` would
+    // be wrong in most repositories and confidently so.
+    {
+      kind: 'program',
+      name: 'run-target-gate',
+      requires: ['implementation', 'worktree'],
+      produces: ['gateResult'],
+    },
+    {
+      kind: 'invoke',
+      name: 'self-review',
+      requires: ['gateResult', 'worktree'],
+      produces: ['selfFindings'],
+      invokes: { capability: 'mr-review', from: 'split-diff', to: 'validate-findings' },
+      // `mr-review` calls it `findings`; here it is findings about our OWN
+      // work, which is a different thing to the next stage and to a reader.
+      collect: { selfFindings: 'findings' },
+    },
+    {
+      kind: 'program',
+      name: 'open-mr',
+      requires: ['implementation', 'selfFindings', 'worktree'],
+      produces: ['producedMr'],
+    },
+    { kind: 'program', name: 'ledger', requires: ['producedMr'], produces: ['ledgerEntry'] },
+  ],
+}
+
+const BUILTIN_CONTRACTS: readonly StageContract[] = [
+  MR_REVIEW_CONTRACT,
+  MR_COMMENT_FIX_CONTRACT,
+  REQUIREMENT_CONTRACT,
+]
 
 const BY_CAPABILITY = new Map<CodeCapabilityId, StageContract>(
   BUILTIN_CONTRACTS.map((c) => [c.capability, c]),

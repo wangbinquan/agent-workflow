@@ -442,6 +442,7 @@ describe('RFC-304 T5 — stage engine', () => {
           requires: [],
           produces: [],
           invokes: { capability: 'mr-review', from: 'collect', to: 'review' },
+          collect: {},
         },
       ],
     }

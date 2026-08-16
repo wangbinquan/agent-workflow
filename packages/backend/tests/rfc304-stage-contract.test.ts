@@ -105,6 +105,7 @@ describe('RFC-304 §4.1 — invoke ranges', () => {
         requires: ['patch'],
         produces: ['findings'],
         invokes: { capability: 'mr-review', from: 'collect', to: 'resolve-positions' },
+        collect: {},
       },
     ])
     expect(validateStageContract(ciFix, registryOf(reviewContract, ciFix))).toEqual([])
@@ -118,6 +119,7 @@ describe('RFC-304 §4.1 — invoke ranges', () => {
         requires: [],
         produces: [],
         invokes: { capability: 'mr-review', from: 'collect', to: 'publish' },
+        collect: {},
       },
     ])
     // Empty registry — the target was never registered.
@@ -133,6 +135,7 @@ describe('RFC-304 §4.1 — invoke ranges', () => {
         requires: [],
         produces: [],
         invokes: { capability: 'mr-review', from: 'nope', to: 'also-nope' },
+        collect: {},
       },
     ])
     const issues = validateStageContract(c, registryOf(reviewContract, c))
@@ -147,6 +150,7 @@ describe('RFC-304 §4.1 — invoke ranges', () => {
         requires: [],
         produces: [],
         invokes: { capability: 'mr-review', from: 'publish', to: 'collect' },
+        collect: {},
       },
     ])
     const issues = validateStageContract(c, registryOf(reviewContract, c))
@@ -165,6 +169,7 @@ describe('RFC-304 §4.1 — invoke ranges', () => {
           requires: ['patch'],
           produces: [],
           invokes: { capability: 'ci-fix', from: 'fix', to: 'fix' },
+          collect: {},
         },
       ],
     }
@@ -185,6 +190,7 @@ describe('RFC-304 §4.1 — invoke ranges', () => {
           requires: [],
           produces: [],
           invokes: { capability: 'requirement', from: 'via-a', to: 'via-a' },
+          collect: {},
         },
       ],
     }
@@ -198,6 +204,7 @@ describe('RFC-304 §4.1 — invoke ranges', () => {
           requires: [],
           produces: [],
           invokes: { capability: 'ci-fix', from: 'via-b', to: 'via-b' },
+          collect: {},
         },
       ],
     }
@@ -214,6 +221,7 @@ describe('RFC-304 §4.1 — invoke ranges', () => {
         requires: [],
         produces: [],
         invokes: { capability: 'mr-review', from: 'collect', to: 'review' },
+        collect: {},
       },
     ])
     const issues = validateStageContract(ciFix, registryOf(reviewContract, ciFix))

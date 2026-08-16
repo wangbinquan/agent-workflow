@@ -125,6 +125,17 @@ export type StageDef = StageBase &
          * stage. Hooks inside it mount as `<parentStage>/<subStage>`.
          */
         invokes: { capability: CodeCapabilityId; from: string; to: string }
+        /**
+         * `produces` name → the sub-sequence's artifact name.
+         *
+         * Required rather than inferred, because the two vocabularies are
+         * genuinely different: `mr-review` calls its output `findings`, and to
+         * a `requirement` round that same value is `selfFindings` — findings
+         * about its OWN work, not about somebody's merge request. Matching by
+         * name would silently produce `undefined` for every renamed output, and
+         * the parent's next stage would read an empty review as a clean one.
+         */
+        collect: Readonly<Record<string, string>>
       }
   )
 

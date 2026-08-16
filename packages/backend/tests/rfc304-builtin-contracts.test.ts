@@ -20,6 +20,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   MR_COMMENT_FIX_CONTRACT,
   MR_REVIEW_CONTRACT,
+  REQUIREMENT_CONTRACT,
   checkBuiltinContracts,
   lookupStageContract,
   registeredCapabilities,
@@ -140,5 +141,84 @@ describe('RFC-304 §6.2 — the mr-comment-fix sequence', () => {
       if (stage.name === 'apply-change') continue
       expect(stage.injectable ?? []).toEqual([])
     }
+  })
+})
+
+describe('RFC-304 §6.3 — the requirement sequence', () => {
+  const stages = REQUIREMENT_CONTRACT.stages
+  const names = stages.map((s) => s.name)
+
+  test('the design’s stage list is the implemented one, in order', () => {
+    expect(names).toEqual([
+      'resolve-input',
+      'materialize-attachments',
+      'prepare-worktree',
+      'comprehend',
+      'clarify',
+      'implement',
+      'run-target-gate',
+      'self-review',
+      'open-mr',
+      'ledger',
+    ])
+  })
+
+  test('comprehending and implementing are SEPARATE model stages', () => {
+    // Merged into one there would be nowhere to stop and ask — and an agent
+    // that cannot ask will not ask: it fills the gap with the most plausible
+    // reading and produces a merge request implementing a requirement nobody
+    // wrote. That result compiles, has tests, and solves the wrong problem.
+    const ai = stages.filter((s) => s.kind === 'ai').map((s) => s.name)
+    expect(ai).toEqual(['comprehend', 'implement'])
+  })
+
+  test('the two model stages use DIFFERENT agent slots', () => {
+    // Reading a specification and writing a system are different jobs; a team
+    // that wants one agent for both points both slots at it.
+    const [comprehend, implement] = stages.filter((s) => s.kind === 'ai')
+    expect(comprehend?.kind === 'ai' && comprehend.agentSlot).toBe('analyst')
+    expect(implement?.kind === 'ai' && implement.agentSlot).toBe('implementer')
+  })
+
+  test('self-review invokes the review’s READING half, never its publishing half', () => {
+    // Running past `validate-findings` reaches `publish`, which on a
+    // requirement round means posting review comments to a merge request that
+    // does not exist yet.
+    const selfReview = stages.find((s) => s.name === 'self-review')
+    expect(selfReview?.kind).toBe('invoke')
+    if (selfReview?.kind !== 'invoke') return
+    expect(selfReview.invokes).toEqual({
+      capability: 'mr-review',
+      from: 'split-diff',
+      to: 'validate-findings',
+    })
+
+    const reviewNames = MR_REVIEW_CONTRACT.stages.map((s) => s.name)
+    const from = reviewNames.indexOf(selfReview.invokes.from)
+    const to = reviewNames.indexOf(selfReview.invokes.to)
+    expect(reviewNames.slice(from, to + 1)).not.toContain('publish')
+    expect(reviewNames.slice(from, to + 1)).not.toContain('settle-stale')
+  })
+
+  test('every invoked output says which sub-artifact it comes from', () => {
+    // The two vocabularies differ on purpose: `mr-review` calls it `findings`,
+    // and here it is findings about our OWN work. Matching by name would
+    // produce `undefined`, and the next stage would read an empty review as a
+    // clean one.
+    for (const stage of stages) {
+      if (stage.kind !== 'invoke') continue
+      for (const output of stage.produces) {
+        expect(Object.keys(stage.collect)).toContain(output)
+      }
+    }
+  })
+
+  test('the merge request is opened only after the gate AND the self-review', () => {
+    // Structural, not conventional: `open-mr` requires what both produce, so a
+    // sequence that skipped either could not satisfy the contract.
+    const openMr = stages.find((s) => s.name === 'open-mr')
+    expect(openMr?.requires).toContain('selfFindings')
+    expect(stages.find((s) => s.name === 'run-target-gate')?.produces).toContain('gateResult')
+    expect(stages.find((s) => s.name === 'self-review')?.requires).toContain('gateResult')
   })
 })
