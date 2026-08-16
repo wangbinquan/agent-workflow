@@ -12,6 +12,25 @@
   非要接管道就 `set -o pipefail` 或显式读 `${PIPESTATUS[0]}`。
   判据：一条本该跑好几分钟的门禁「秒回 exit 0」、或输出文件是 0 字节而退出码是 0 ⇒ 就是这个坑。
 
+- **「这个函数零调用方」≠「这个产品承诺没兑现」（2026-08-17 实测，差点把噪音当修复推上去）**：
+  查出 `mrVoice.updateSummary` 全仓零调用方，据此判定「MR 上从未出现过 bot 总览评论」并接线；
+  接完 e2e 立刻红——`POST /notes` 从 1 变 3。真相是 **mr-review 早就在维护一条总览**，走的是
+  另一个标记（`<!-- aw-review-overview -->`）和另一条路径（`publishReview.renderOverview`），
+  承诺**早已兑现**；我加的是第二条互相竞争的总览，等于亲手制造那条规则要防的噪音。
+  定式：符号级的「零调用方」只是**线索**，下结论前必须回答「这件事在产品面上到底发生没有」
+  ——换个词再 grep 一遍（marker / 正文关键字 / 路由），或直接跑一条端到端场景看真实产物。
+  判据：你要接的东西**是产品对外可见的一次输出**（评论 / 通知 / 邮件 / 文件）⇒ 接线前先确认
+  现在到底有没有这条输出，别只看有没有人调你手上这个函数。
+
+- **`mock.module` 是**进程级**的，而 backend 分片一个进程跑几百个文件——在 A 文件里 mock 一个模块，B 文件跟着中招（2026-08-17 实测，十四条无关用例集体转红）**：
+  给新写的用例换掉 `codeHostAdapter`，本文件 7 条全绿，跑全量时 `rfc304-code-host-wire-*`
+  的十四条 wire-format 用例（另外两个文件）全红——它们拿到的是我的假 adapter。
+  bun 的 module registry 没有按文件隔离，`bun test` 的分片又是**一个进程跑一批文件**。
+  定式：**依赖注入优先**——给生产函数加一个可选端口参数（`codeHost?: CodeHostPort`），
+  用例按参数传假的；`mock.module` 只在「被 mock 的模块全仓只有这一个文件用」时才安全。
+  判据：新用例本文件绿、`bun test packages/backend/tests/` 全量红，且红的是你没碰过的文件
+  ⇒ 先查自己有没有 `mock.module`。
+
 - **`gate:local` 不跑 Playwright —— 新增 e2e spec 时「本地门禁全绿」不构成任何证据（2026-08-16 实测被 CI 打脸）**：
   门禁只跑 backend / shared / frontend 三条单测 + typecheck/lint/format，**e2e spec 只在 CI 跑**。
   于是「新写一条 e2e + gate:local 全绿 + push」的流程里，那条新用例**一次都没被执行过**就上了主干。

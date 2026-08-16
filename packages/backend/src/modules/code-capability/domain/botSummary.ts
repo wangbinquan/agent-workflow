@@ -25,7 +25,18 @@ export interface SummaryEntry {
   at: number
 }
 
-const SUMMARY_MARKER = '<!-- aw-summary -->'
+/**
+ * The marker, which is also where the overview keeps its state.
+ *
+ * The entries travel as JSON inside the HTML comment rather than being scraped
+ * back out of the rendered list. Two reasons, and both bite in practice: every
+ * wording change would otherwise be a migration of a format living on other
+ * people's merge requests, and a human who edits the bot's comment — to reply
+ * under it, to fix a typo — would corrupt the state rather than just the prose.
+ *
+ * Neither GitLab nor GitHub renders an HTML comment, so this is invisible.
+ */
+const SUMMARY_MARKER = '<!-- aw-summary:'
 
 /**
  * How many rounds the overview keeps.
@@ -53,7 +64,11 @@ export function renderSummary(entries: readonly SummaryEntry[]): string {
   const dropped = ordered.length - shown.length
 
   const lines = [
-    SUMMARY_MARKER,
+    // Only what is SHOWN goes into the state, so the marker is bounded by the
+    // same cap as the text. Carrying every entry ever written would grow the
+    // comment without bound on exactly the long-lived merge request the cap
+    // exists for, while the visible list stayed at twenty.
+    `${SUMMARY_MARKER}${JSON.stringify({ entries: shown })} -->`,
     '**What the platform has done here**',
     '',
     ...shown.map((e) => `- \`${e.capability}\` — ${e.line}`),
@@ -62,6 +77,42 @@ export function renderSummary(entries: readonly SummaryEntry[]): string {
     lines.push('', `…and ${String(dropped)} earlier ${dropped === 1 ? 'entry' : 'entries'}.`)
   }
   return lines.join('\n')
+}
+
+/**
+ * Read an overview's state back out of its marker.
+ *
+ * Never throws. A comment somebody edited by hand, or one written by an older
+ * format, parses as no entries — the overview loses its history and the next
+ * update rewrites the marker. That is the right trade: failing a round on the
+ * way out because a person edited the bot's comment would be far worse than
+ * forgetting what the bot said last week.
+ */
+export function parseSummary(body: string): SummaryEntry[] {
+  const start = body.indexOf(SUMMARY_MARKER)
+  if (start < 0) return []
+  const from = start + SUMMARY_MARKER.length
+  const end = body.indexOf('-->', from)
+  if (end < 0) return []
+
+  try {
+    const parsed: unknown = JSON.parse(body.slice(from, end).trim())
+    if (typeof parsed !== 'object' || parsed === null) return []
+    const entries = (parsed as { entries?: unknown }).entries
+    if (!Array.isArray(entries)) return []
+    return entries.flatMap((raw): SummaryEntry[] => {
+      if (typeof raw !== 'object' || raw === null) return []
+      const row = raw as Record<string, unknown>
+      // Each field checked rather than cast: the state comes back off a merge
+      // request, which anybody with write access can edit.
+      if (typeof row.capability !== 'string' || row.capability === '') return []
+      if (typeof row.line !== 'string') return []
+      if (typeof row.at !== 'number' || !Number.isFinite(row.at)) return []
+      return [{ capability: row.capability, line: row.line, at: row.at }]
+    })
+  } catch {
+    return []
+  }
 }
 
 /**

@@ -23,6 +23,7 @@ import {
   DEFAULT_NOTIFICATION_BUDGET,
   foldSummaryEntry,
   isSummaryComment,
+  parseSummary,
   judgeNotificationBudget,
   renderSummary,
   SUMMARY_MAX_ENTRIES,
@@ -172,6 +173,51 @@ describe('RFC-304 T60 — one overview, edited', () => {
     )
     expect(renderSummary(exact)).not.toContain('earlier')
   })
+
+  test('what was rendered can be READ BACK — without this the overview forgets every round', () => {
+    // The half that was missing. `updateSummary` folds the new entry into what
+    // it parses out of the existing comment, and the only `parsePrevious` that
+    // ever existed was a test stub returning `[]`. So each round would have
+    // folded into nothing: the overview would show the latest capability's line
+    // and silently drop every other one — the exact opposite of a standing
+    // summary of what the platform has done here.
+    const rendered = renderSummary([
+      entry({ capability: 'mr-review', line: 'reviewed 12 files', at: 2 }),
+      entry({ capability: 'ci-fix', line: 'fixed the pipeline', at: 1 }),
+    ])
+    expect(parseSummary(rendered)).toEqual([
+      { capability: 'mr-review', line: 'reviewed 12 files', at: 2 },
+      { capability: 'ci-fix', line: 'fixed the pipeline', at: 1 },
+    ])
+  })
+
+  test('the state is read from the MARKER, not scraped back out of the prose', () => {
+    // Re-parsing the rendered markdown would make every wording change a
+    // migration, and a human editing the comment would corrupt the state. The
+    // entries travel as JSON inside the HTML comment, which neither host
+    // renders.
+    const body = renderSummary([entry({ capability: 'mr-review', line: 'x — with — dashes' })])
+    expect(body).toContain('<!-- aw-summary:')
+    expect(parseSummary(body)[0]?.line).toBe('x — with — dashes')
+  })
+
+  test('a summary comment a human mangled parses as empty rather than throwing', () => {
+    // The alternative is a round that fails on the way out because somebody
+    // edited the bot's comment. Losing the history is bad; failing the round
+    // over it is worse, and the next update rewrites the marker anyway.
+    expect(parseSummary('<!-- aw-summary:{not json} -->\nwhatever')).toEqual([])
+    expect(parseSummary('an ordinary human comment')).toEqual([])
+  })
+
+  test('entries beyond the cap are dropped from the STATE too, not just from the text', () => {
+    // Otherwise the marker grows without bound on a long-lived merge request:
+    // the visible list stays at twenty while the comment body carries every
+    // entry ever written, forever.
+    const many = Array.from({ length: SUMMARY_MAX_ENTRIES + 5 }, (_, i) =>
+      entry({ capability: `cap-${String(i)}`, at: i }),
+    )
+    expect(parseSummary(renderSummary(many))).toHaveLength(SUMMARY_MAX_ENTRIES)
+  })
 })
 
 describe('RFC-304 T60 — the notification budget', () => {
@@ -315,7 +361,127 @@ describe('RFC-304 §11 — mrVoice is the only road', () => {
       target: { __project__: 'p', mr: '412' },
       notificationsSpent: 0,
     }
-    await expect(answer(env, 'op-1', { kind: 'received' })).resolves.toEqual({ ok: true })
+    await expect(answer(env, 'op-1', { kind: 'received' })).resolves.toEqual({
+      ok: true,
+      existed: false,
+    })
     expect(rec.map((c) => c.action)).toContain('comment.create')
+  })
+})
+
+describe('RFC-304 §11.1 — the budget counts what is actually on the merge request', () => {
+  // Why this exists: the budget shipped complete and never engaged. Nothing in
+  // production ever set `notificationsSpent`, so `say` judged "0 spent" on
+  // every call for the life of the feature — a merge request could receive any
+  // number of machine comments and the cap never once applied. The rule was
+  // right, the arithmetic was right, and the input was always zero.
+  //
+  // The measure is the merge request itself: one platform-authored COMMENT is
+  // one notification, because creating notifies and editing does not.
+
+  const hostOf = (
+    comments: Array<{ id: string; body: string }>,
+  ): { env: MrVoiceEnv; created: string[] } => {
+    const created: string[] = []
+    return {
+      created,
+      env: {
+        codeHost: {
+          call: async (call) => {
+            if (call.action === 'comment.list') {
+              return { ok: true, status: 200, body: JSON.stringify(comments), truncated: false }
+            }
+            created.push(String((call.params as { body?: unknown }).body ?? ''))
+            return { ok: true, status: 201, body: '{"id":"new"}', truncated: false }
+          },
+        },
+        target: { project: 'p', mr: '412' },
+      },
+    }
+  }
+
+  /** A merge request already carrying `n` machine comments. */
+  const machineComments = (n: number): Array<{ id: string; body: string }> =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `m-${String(i)}`,
+      body: `<!-- aw-note:review -->\nsomething the platform said`,
+    }))
+
+  test('an ordinary comment is MARKED, or the next count cannot see it', async () => {
+    // The load-bearing half. An unmarked comment is invisible to the counter,
+    // and a counter that cannot see the platform's own comments is the zero
+    // this whole case exists to stop returning.
+    const { env, created } = hostOf([])
+    await say(env, 'review', 'three findings')
+
+    expect(created[0]).toContain('<!-- aw-note:review -->')
+    expect(created[0]).toContain('three findings')
+  })
+
+  test('past the budget an ordinary comment is REFUSED — the cap finally applies', async () => {
+    const { env, created } = hostOf(machineComments(DEFAULT_NOTIFICATION_BUDGET))
+    const outcome = await say(env, 'review', 'one more thing')
+
+    expect(outcome).toEqual({ posted: false, reason: 'budget-exhausted' })
+    expect(created).toEqual([])
+  })
+
+  test('under the budget it still speaks', async () => {
+    const { env, created } = hostOf(machineComments(DEFAULT_NOTIFICATION_BUDGET - 1))
+    expect(await say(env, 'review', 'still room')).toEqual({ posted: true })
+    expect(created).toHaveLength(1)
+  })
+
+  test('a HUMAN conversation does not spend the platform’s budget', async () => {
+    // Counting every comment would let a busy discussion silence the platform,
+    // which is backwards: the noise the budget guards against is the machine's
+    // own.
+    const chatty = Array.from({ length: 40 }, (_, i) => ({
+      id: `h-${String(i)}`,
+      body: 'a person saying something',
+    }))
+    const { env, created } = hostOf(chatty)
+    expect(await say(env, 'review', 'a finding')).toEqual({ posted: true })
+    expect(created).toHaveLength(1)
+  })
+
+  test('the overview and receipts count too — they each cost a notification when created', async () => {
+    const mixed = [
+      { id: 's', body: renderSummary([{ capability: 'mr-review', line: 'x', at: 1 }]) },
+      ...Array.from({ length: DEFAULT_NOTIFICATION_BUDGET - 1 }, (_, i) => ({
+        id: `r-${String(i)}`,
+        body: renderReceipt(`op-${String(i)}`, { kind: 'received' }),
+      })),
+    ]
+    const { env } = hostOf(mixed)
+    expect(await say(env, 'review', 'one more')).toEqual({
+      posted: false,
+      reason: 'budget-exhausted',
+    })
+  })
+
+  test('the protected two still get through with the budget long gone', async () => {
+    // The reason the budget exists at all. A cap that silenced the conflict
+    // report and the three-attempt hand-off would have inverted its own
+    // purpose — and now that the cap actually engages, that inversion is
+    // reachable for the first time.
+    const { env } = hostOf(machineComments(DEFAULT_NOTIFICATION_BUDGET * 3))
+    expect(await say(env, 'conflict', 'this needs a person')).toEqual({ posted: true })
+    expect(await say(env, 'handed-off', 'three attempts, handing over')).toEqual({ posted: true })
+  })
+
+  test('a listing the host refuses counts as zero, not as exhausted', async () => {
+    // Otherwise a transient code-host hiccup silences the very messages the
+    // budget exists to preserve — failing closed here fails the wrong way.
+    const env: MrVoiceEnv = {
+      codeHost: {
+        call: async (call) =>
+          call.action === 'comment.list'
+            ? { ok: false, status: 500, body: '', truncated: false, code: 'x', message: 'down' }
+            : { ok: true, status: 201, body: '{"id":"new"}', truncated: false },
+      },
+      target: { project: 'p', mr: '412' },
+    } as MrVoiceEnv
+    expect(await say(env, 'review', 'a finding')).toEqual({ posted: true })
   })
 })

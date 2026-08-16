@@ -59,6 +59,31 @@ export function isManualInstruction(source: TriggerSource): boolean {
   return source !== 'webhook'
 }
 
+/**
+ * Which source an incoming webhook event represents.
+ *
+ * The mapping is the whole of §11.2 in one place: everything a person TYPED at
+ * the platform gets an answer, everything the code host emitted on its own does
+ * not. Getting it wrong in one direction produces a bot that comments on every
+ * red pipeline; in the other, a reviewer who @-mentions the platform and hears
+ * nothing, then @-mentions it again.
+ *
+ * Unknown event types are `webhook` — the quiet default. A new event type that
+ * turns out to be a manual instruction is a missing line here, and the symptom
+ * is silence rather than a merge request full of machine comments.
+ */
+export function triggerSourceOfEvent(eventType: string): TriggerSource {
+  // A comment is the one event a person definitely typed. Whether it was an
+  // @-mention or the confirmation keyword is decided further in, by whoever
+  // reads the body; both are manual, which is all this decides. `note` is the
+  // platform's own name for a merge-request comment on BOTH hosts
+  // (gitlabAdapter / githubAdapter both normalise to it), and `issue_comment`
+  // is the same event on an issue.
+  if (eventType === 'note' || eventType === 'issue_comment') return 'mention'
+  if (eventType === 'issue_labeled') return 'issue-label'
+  return 'webhook'
+}
+
 export type FailureVisibility =
   /** Post nothing on the merge request; raise it inside the platform. */
   | { kind: 'platform-only'; reason: string }

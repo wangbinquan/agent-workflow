@@ -115,6 +115,11 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   // 行为断言看不出「恒为 'dev'」与「每次启动新铸」的区别，所以这条只能锁源码：
   // scheduler 必须走 `resolveDaemonGeneration`，且不得退回字面量兜底。
   'rfc304-lease-heartbeat-and-generation.test.ts',
+  // RFC-304 §11.2：人工指令回执的接线锁。加它的直接原因是一次过界的回退把
+  // `closeReceiptForRound` 的调用整块删掉了——照样编译、单测照样全绿，只有
+  // `--max-warnings 0` 因为那个 import 变成未使用才报出来。没有锁的接线可以在
+  // 没有任何红用例的情况下消失，而那正是本 RFC 一直在修的那类缺陷。
+  'rfc304-manual-receipt.test.ts',
   // RFC-304 2ter.2：能力配置的主键锁——`repo_capability_config.repo_id` 存的是
   // cached-repo ULID，而调度器曾传 `task.repoPath`（文件路径）。两者都是 string，
   // 类型与运行时都抓不住，只能锁「那个错误写法不许再出现」。

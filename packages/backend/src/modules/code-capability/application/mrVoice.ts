@@ -23,6 +23,7 @@ import {
   foldSummaryEntry,
   isSummaryComment,
   judgeNotificationBudget,
+  parseSummary,
   renderSummary,
   type SummaryEntry,
 } from '@/modules/code-capability/domain/botSummary'
@@ -37,11 +38,39 @@ export interface MrVoiceEnv {
   codeHost: CodeHostPort
   /** Addressing params for this merge request, as `codeHost` expects them. */
   target: Readonly<Record<string, string>>
-  /** Notifications already produced for this merge request. */
-  notificationsSpent: number
+  /**
+   * Notifications already produced for this merge request.
+   *
+   * Omit it and `say` counts them off the merge request itself — see
+   * `countNotificationsSpent`. It stays overridable for the cases that already
+   * know (and for tests, which must not need a fake listing to exercise the
+   * budget rule).
+   */
+  notificationsSpent?: number
   budget?: number
   /** Records a notification so the budget survives the round. */
   onNotified?: () => Promise<void> | void
+}
+
+/**
+ * The hidden marker on an ordinary comment.
+ *
+ * Without it the platform cannot recognise its own ordinary comments, and the
+ * budget has nothing to count. `updateSummary` and `answer` already leave a
+ * marker each, which is how those two are found for editing; this is the same
+ * device for the one kind that is never edited.
+ */
+const NOTE_MARKER_PREFIX = '<!-- aw-note:'
+
+function noteMarker(kind: string): string {
+  return `${NOTE_MARKER_PREFIX}${kind} -->`
+}
+
+/** Whether this comment is one the platform wrote. */
+function isPlatformComment(body: string): boolean {
+  return (
+    body.includes(NOTE_MARKER_PREFIX) || isSummaryComment(body) || readReceiptMarker(body) !== null
+  )
 }
 
 interface HostComment {
@@ -107,7 +136,11 @@ async function editOrCreate(
 export async function updateSummary(
   env: MrVoiceEnv,
   entry: SummaryEntry,
-  parsePrevious: (body: string) => SummaryEntry[],
+  // Defaulted, because for its whole life this parameter had exactly one
+  // implementation anywhere — a test stub returning `[]`. A caller that had to
+  // supply the parser was a caller that could fold every round into nothing,
+  // which is what an overview must never do.
+  parsePrevious: (body: string) => SummaryEntry[] = parseSummary,
 ): Promise<{ ok: boolean }> {
   const comments = await listComments(env)
   const existing = comments.find((c) => isSummaryComment(c.body))
@@ -132,12 +165,29 @@ export async function answer(
   env: MrVoiceEnv,
   operationId: string,
   state: ReceiptState,
-): Promise<{ ok: boolean }> {
+  opts: {
+    /**
+     * Whether a missing receipt may be created.
+     *
+     * False is how the closing update stays honest about WHO asked. Only the
+     * ingress creates receipts, and only for an instruction a person typed — so
+     * at the end of a round, "is there a receipt with this id" is exactly the
+     * question "was anybody waiting for this". Creating one here instead would
+     * post a comment on every automatic round, which is the behaviour §11.2
+     * separates the two paths to avoid.
+     */
+    createIfMissing?: boolean
+  } = {},
+): Promise<{ ok: boolean; existed: boolean }> {
   const comments = await listComments(env)
   const existing = comments.find((c) => readReceiptMarker(c.body) === operationId)
+  if (existing === undefined && opts.createIfMissing === false) {
+    return { ok: true, existed: false }
+  }
+
   const result = await editOrCreate(env, existing, renderReceipt(operationId, state))
   if (result.created && result.ok) await env.onNotified?.()
-  return { ok: result.ok }
+  return { ok: result.ok, existed: existing !== undefined }
 }
 
 export type SayOutcome =
@@ -155,14 +205,41 @@ export type SayOutcome =
  */
 export async function say(env: MrVoiceEnv, kind: string, body: string): Promise<SayOutcome> {
   if (!bypassesBudget(kind)) {
-    const verdict = judgeNotificationBudget(env.notificationsSpent, env.budget)
+    const spent = env.notificationsSpent ?? (await countNotificationsSpent(env))
+    const verdict = judgeNotificationBudget(spent, env.budget)
     if (!verdict.mayNotify) return { posted: false, reason: 'budget-exhausted' }
   }
   const res = await env.codeHost.call({
     action: 'comment.create',
-    params: { ...env.target, body },
+    // Marked, so this comment counts against the budget the next time one is
+    // judged. An unmarked comment is invisible to the count, which is how the
+    // budget stayed at zero spent forever.
+    params: { ...env.target, body: `${noteMarker(kind)}\n${body}` },
   })
   if (!res.ok) return { posted: false, reason: 'host-refused' }
   await env.onNotified?.()
   return { posted: true }
+}
+
+/**
+ * How many notifications the platform has already produced on this merge
+ * request — counted off the merge request itself.
+ *
+ * §11.1 puts the budget per MR, and the merge request is where the evidence
+ * lives: one platform-authored COMMENT is exactly one notification, because
+ * creating notifies and every subsequent edit does not. So the count is the
+ * number of comments carrying one of the platform's markers.
+ *
+ * The alternative was a counter column. This needs no migration, cannot drift
+ * from what a reader actually sees, and self-heals — delete the bot's comments
+ * and the budget genuinely is spent again, which matches what a person means
+ * when they clear a merge request of noise.
+ *
+ * A listing that fails counts as zero rather than as exhausted: the budget
+ * exists to protect the conflict report and the hand-off, and a transient
+ * code-host hiccup must not be what silences them.
+ */
+export async function countNotificationsSpent(env: MrVoiceEnv): Promise<number> {
+  const comments = await listComments(env)
+  return comments.filter((c) => isPlatformComment(c.body)).length
 }

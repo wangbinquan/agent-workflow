@@ -14,7 +14,10 @@ import {
   type DeliveryRow,
 } from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
 import { listCapabilityCells } from '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
+import { gatherReadinessFacts } from '@/modules/code-capability/application/readinessFacts'
+import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
 import { repairActionsFor } from '@/modules/code-capability/domain/repairActions'
+import { deriveReadiness } from '@/modules/code-capability/domain/templateLayers'
 import type {
   CodeAiAttemptProjection,
   CodeMatrixQuery,
@@ -81,20 +84,62 @@ export function createCodeRoundAttemptsQuery(db: DbClient): CodeRoundAttemptsQue
   }
 }
 
+/**
+ * The matrix, with readiness DERIVED at read time rather than read back.
+ *
+ * The stored `readiness` is written by exactly one path — `enable` — so a cell
+ * used to carry whatever was true the last time somebody saved it. Delete the
+ * framework a binding points at, make the agent invisible, remove the trigger:
+ * the cell went on reading `ready` because nothing had reason to touch it. The
+ * person found out when a webhook arrived and nothing happened, which is the
+ * worst way to learn it — a `ready` that cannot run stops the search.
+ *
+ * Deriving on read makes staleness structurally impossible instead of something
+ * an invalidation pass has to chase across every mutation path (every route
+ * that deletes an agent, a binding, a framework, a trigger — with nothing to
+ * catch the one you forget). `domain/readinessInvalidation.ts` was built for
+ * that other design and is now redundant; it is left in place rather than
+ * deleted so the choice stays reversible.
+ *
+ * The cost is one fact-gathering pass per cell per read — a handful of indexed
+ * lookups for the five capabilities of one repository, on a page a person opens
+ * by hand. The stored value stays as the record of what `enable` observed.
+ */
 export function createCodeMatrixQuery(db: DbClient): CodeMatrixQuery {
   return {
     async forRepo(repoId) {
       const cells = await listCapabilityCells(db, repoId)
-      return cells.map(
-        (cell): CodeMatrixRow => ({
-          repoId: cell.repoId,
-          capability: cell.capability,
-          enabled: cell.enabled,
-          readiness: cell.readiness,
-          issues: cell.readinessIssues,
-          // Paired positionally with `issues` — see `repairActionsFor`.
-          repairActions: repairActionsFor(cell.readinessIssues),
-          bindingId: cell.bindingId,
+      if (cells.length === 0) return []
+
+      // Which code host this repository belongs to. A repository whose endpoint
+      // cannot be resolved is not an error here: `codeHostConfigured` is one of
+      // the facts, and reporting it as missing is the honest answer — the same
+      // one the round would reach.
+      const endpoint = await resolveRepoEndpoint(db, repoId)
+
+      return await Promise.all(
+        cells.map(async (cell): Promise<CodeMatrixRow> => {
+          const facts = await gatherReadinessFacts({
+            db,
+            repoId,
+            capability: cell.capability,
+            endpointId: endpoint.ok ? endpoint.endpointId : '',
+            bindingId: cell.bindingId,
+            enabled: cell.enabled,
+            ...(endpoint.ok ? { provider: endpoint.provider } : {}),
+          })
+          const derived = deriveReadiness(facts)
+
+          return {
+            repoId: cell.repoId,
+            capability: cell.capability,
+            enabled: cell.enabled,
+            readiness: derived.state,
+            issues: derived.issues,
+            // Paired positionally with `issues` — see `repairActionsFor`.
+            repairActions: repairActionsFor(derived.issues),
+            bindingId: cell.bindingId,
+          }
         }),
       )
     },

@@ -11,6 +11,7 @@
 //     the resulting readiness, rather than pretending it is now running.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
@@ -57,15 +58,51 @@ describe('RFC-304 — the capability matrix a page renders', () => {
   afterEach(() => db.$client.close())
 
   test('a ready cell carries no issues and needs no repairs', async () => {
-    await upsertCapabilityCell(db, {
+    // Seeded as ROWS rather than as stored facts. It used to hand
+    // `upsertCapabilityCell` a `READY_FACTS` object and read the answer back,
+    // which asserted only that the query returns what it was given — the cell
+    // could claim `ready` with no binding, no framework and no agent anywhere
+    // in the database. Now that readiness is derived on read, `ready` means the
+    // pieces are actually there, and the fixture has to make them so.
+    await db.insert(webhookEndpoints).values({
+      id: ENDPOINT,
+      name: 'gl',
+      provider: 'gitlab',
+      urlToken: 'aw_whk_matrix',
+      secretEnc: 'sealed',
+      enabled: true,
+    })
+    await db.insert(agents).values({
+      id: 'agent-1',
+      name: 'reviewer-agent',
+      bodyMd: 'x',
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    await db.insert(capabilityFrameworks).values({
+      id: 'fw-1',
+      name: 'f',
+      capability: 'mr-review',
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    await db.insert(capabilityBindings).values({
+      id: 'binding-1',
+      name: 'b',
+      frameworkId: 'fw-1',
+      agentBySlotJson: JSON.stringify({ reviewer: 'agent-1' }),
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    const enabled = await createEnableCommand({ db, endpointId: ENDPOINT, now: () => NOW }).enable({
       repoId: REPO,
       capability: 'mr-review',
-      bindingId: 'binding-1',
       enabled: true,
-      facts: READY_FACTS,
-      dependencyRevision: 1,
-      now: NOW,
+      bindingId: 'binding-1',
+      actorUserId: 'user-1',
     })
+    expect(enabled.ok).toBe(true)
+
     const [row] = await createCodeMatrixQuery(db).forRepo(REPO)
     expect(row?.readiness).toBe('ready')
     expect(row?.issues).toEqual([])
@@ -382,6 +419,61 @@ describe('RFC-304 — enabling a capability', () => {
 
     expect(result.ok).toBe(true)
     expect(result.ok && result.row.readiness).toBe('ready')
+  })
+
+  test('the matrix RE-DERIVES readiness — a cell does not stay `ready` after its framework is deleted', async () => {
+    // The defect this closes. `forRepo` used to read the STORED readiness
+    // verbatim, and the only writer is `enable` — so a cell's readiness was
+    // whatever was true the last time somebody saved it. Delete the framework
+    // the binding points at, or the agent, or the trigger, and the matrix still
+    // said `ready`. The person only found out when a webhook arrived and
+    // nothing happened, which is the worst possible way to learn it: a `ready`
+    // that cannot run is worse than a red one, because it stops the search.
+    const agentId = 'agent-1'
+    await db.insert(agents).values({
+      id: agentId,
+      name: 'reviewer-agent',
+      bodyMd: 'x',
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    await db.insert(capabilityFrameworks).values({
+      id: 'fw-1',
+      name: 'f',
+      capability: 'mr-review',
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    await db.insert(capabilityBindings).values({
+      id: 'binding-1',
+      name: 'b',
+      frameworkId: 'fw-1',
+      agentBySlotJson: JSON.stringify({ reviewer: agentId }),
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    await command().enable({
+      repoId: REPO,
+      capability: 'mr-review',
+      enabled: true,
+      bindingId: 'binding-1',
+      actorUserId: 'user-1',
+    })
+    // Ready as saved — the baseline, so the assertion below cannot pass merely
+    // because this repository was never ready in the first place.
+    const before = await createCodeMatrixQuery(db).forRepo(REPO)
+    expect(before[0]?.readiness).toBe('ready')
+
+    // Somebody removes the framework. Nothing touches the cell: no save, no
+    // event, no revision bump — which is precisely why a stored answer goes
+    // stale and a derived one cannot.
+    await db.delete(capabilityFrameworks).where(eq(capabilityFrameworks.id, 'fw-1'))
+
+    const after = await createCodeMatrixQuery(db).forRepo(REPO)
+    expect(after[0]?.readiness).toBe('misconfigured')
+    expect(after[0]?.issues.map((i) => i.code)).toContain('framework-missing')
+    // And it comes with somewhere to go, same as any other issue.
+    expect(after[0]?.repairActions.length).toBeGreaterThan(0)
   })
 
   test('the trigger deadlock stays broken: ONE save reaches ready', async () => {
