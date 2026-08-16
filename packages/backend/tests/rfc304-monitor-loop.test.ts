@@ -546,3 +546,147 @@ describe('RFC-304 — work item identity', () => {
     expect(second.created).toBe(false)
   })
 })
+
+// RFC-304 T51a — the arms the monitor can actually select.
+//
+// This block exists because of a gap found while wiring `ci-fix`: the whole
+// `mr-comment-fix` sequence shipped in PR-7, complete and unit-tested, while
+// `WorkPackageSchema` still admitted only `noop` and `mr-review`. An arbitration
+// script that selected comment repair was therefore rejected as malformed and
+// the round was `blocked` — the capability was unreachable through the only
+// path that reaches it, and nothing was red, because a missing arm looks
+// exactly like a well-formed refusal.
+//
+// The union is deliberately closed (declaring an arm the platform cannot run
+// lets a script select work that dies at round start with "no such sequence",
+// which reads as the platform being broken). Closed means each capability has
+// to be let in ON PURPOSE — so each one gets a test that it was.
+describe('RFC-304 T51a — every shipped capability is selectable', () => {
+  let db: DbClient
+
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+  afterEach(() => {
+    db.$client.close()
+  })
+
+  test('arbitration can select mr-comment-fix', async () => {
+    const dispatcher = recordingDispatcher()
+    const out = await runMonitorWake({
+      db,
+      identity: IDENTITY,
+      scripts: {
+        collect: collectOf(),
+        arbitrate: emits('arbitrate', [
+          { capability: 'mr-comment-fix', items: [{ threadId: 'thread-1' }] },
+        ]),
+      },
+      dispatch: dispatcher.dispatch,
+    })
+
+    expect(out.kind).toBe('dispatched')
+    expect(out.kind === 'dispatched' && out.capability).toBe('mr-comment-fix')
+  })
+
+  test('arbitration can select ci-fix', async () => {
+    const dispatcher = recordingDispatcher()
+    const out = await runMonitorWake({
+      db,
+      identity: IDENTITY,
+      scripts: {
+        collect: collectOf({ gate: { status: 'fail' } }),
+        arbitrate: emits('arbitrate', [
+          { capability: 'ci-fix', items: [{ issueRef: 'compile:src/a.ts' }] },
+        ]),
+      },
+      dispatch: dispatcher.dispatch,
+    })
+
+    expect(out.kind).toBe('dispatched')
+    expect(out.kind === 'dispatched' && out.capability).toBe('ci-fix')
+  })
+
+  test('a red pipeline dispatches ci-fix with NO arbitrate script configured', async () => {
+    // The join that matters most, and the one nothing else covers: on day one
+    // no deployment has written an arbitrate script, so the built-in
+    // `defaultArbitrate` is what every red pipeline meets. While it answered
+    // "this version cannot repair that yet", the entire capability was
+    // unreachable in practice and nothing anywhere went red.
+    const dispatcher = recordingDispatcher()
+    const out = await runMonitorWake({
+      db,
+      identity: IDENTITY,
+      scripts: {
+        collect: collectOf({ gate: { status: 'fail' } }),
+        classify: emits('classify', [
+          { type: 'unit-test', message: 'retry spec failed' },
+          { type: 'compile', file: 'src/a.ts', message: 'cannot find name Foo' },
+        ]),
+        // deliberately no `arbitrate`
+      },
+      dispatch: dispatcher.dispatch,
+    })
+
+    expect(out.kind).toBe('dispatched')
+    expect(out.kind === 'dispatched' && out.capability).toBe('ci-fix')
+    // And it arrived ordered: compile before unit-test, because a compile break
+    // makes the other result unmeasurable.
+    const pkg = out.kind === 'dispatched' ? out.packages[0] : undefined
+    expect(pkg?.capability === 'ci-fix' && pkg.items.map((i) => i.issueRef)).toEqual([
+      'compile:src/a.ts',
+      'unit-test',
+    ])
+  })
+
+  test('an unresolved comment dispatches mr-comment-fix with no arbitrate script', async () => {
+    const dispatcher = recordingDispatcher()
+    const out = await runMonitorWake({
+      db,
+      identity: IDENTITY,
+      scripts: {
+        collect: collectOf({
+          unresolvedComments: [{ threadId: 'disc-1', author: 'ann', body: 'why?' }],
+        }),
+      },
+      dispatch: dispatcher.dispatch,
+    })
+
+    expect(out.kind).toBe('dispatched')
+    expect(out.kind === 'dispatched' && out.capability).toBe('mr-comment-fix')
+  })
+
+  test('a red pipeline nobody classified stays a noop', async () => {
+    // Red with no classification is a real state, and it needs a person rather
+    // than an agent dispatched into a worktree with nothing to go on.
+    const dispatcher = recordingDispatcher()
+    const out = await runMonitorWake({
+      db,
+      identity: IDENTITY,
+      scripts: { collect: collectOf({ gate: { status: 'fail' } }) },
+      dispatch: dispatcher.dispatch,
+    })
+
+    expect(out.kind).toBe('noop')
+    expect(dispatcher.seen).toEqual([])
+  })
+
+  test('a capability the platform does NOT ship is still refused', async () => {
+    // The other half of "closed". Opening the union arm by arm is only
+    // meaningful if an unknown name is still rejected here rather than at round
+    // start, where the failure names a missing sequence instead of a bad script.
+    const dispatcher = recordingDispatcher()
+    const out = await runMonitorWake({
+      db,
+      identity: IDENTITY,
+      scripts: {
+        collect: collectOf(),
+        arbitrate: emits('arbitrate', [{ capability: 'deploy-to-prod', items: [] }]),
+      },
+      dispatch: dispatcher.dispatch,
+    })
+
+    expect(out.kind).toBe('blocked')
+    expect(dispatcher.seen).toEqual([])
+  })
+})

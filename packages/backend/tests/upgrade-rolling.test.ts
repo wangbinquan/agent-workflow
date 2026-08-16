@@ -422,7 +422,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // Webhook 终态 workspace claim 与 RFC-165/iso GC claim）。
     // RFC-303 bumped to 157 with 0157_rfc303_mr_terminal_control（MR 终态
     // 控制流、稳定流身份与 durable launch/effect ledgers）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(168)
+    // RFC-304 bumped to 169 with 0169_rfc304_fix_attempts（CI 修复配额落库：
+    // 一轮 = 一次尝试，计数必须跨轮存活，否则「三次」等于「永远」）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(169)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

@@ -93,12 +93,18 @@ export type ClassifiedIssue = z.infer<typeof ClassifiedIssueSchema>
 /**
  * `arbitrate` — what this round should do.
  *
- * v1 admits only `noop` and `mr-review`. The other two arms arrive with the
- * PRs that can actually execute them (PR-7 comment fixes, PR-9 CI repair);
- * declaring an arm the platform cannot run would let an arbitration script
- * select work that fails at round start with "no such sequence", which reads to
- * a team as the platform being broken rather than as a capability not yet
- * shipped.
+ * The union is CLOSED, and each arm was let in when the sequence behind it
+ * could actually run: declaring an arm the platform cannot execute would let an
+ * arbitration script select work that dies at round start with "no such
+ * sequence", which reads to a team as the platform being broken rather than as
+ * a capability not yet shipped.
+ *
+ * The converse cost is just as real and is what a missing arm looks like: the
+ * comment-fix sequence shipped complete while this union still refused its
+ * name, so selecting it was reported as a malformed arbitration and the
+ * capability was unreachable. Nothing was red — a missing arm is
+ * indistinguishable from a well-formed refusal. `rfc304-monitor-loop.test.ts`
+ * now asserts each shipped capability is selectable, one test per arm.
  */
 export const WorkPackageSchema = z.discriminatedUnion('capability', [
   z
@@ -113,6 +119,30 @@ export const WorkPackageSchema = z.discriminatedUnion('capability', [
     .object({
       capability: z.literal('mr-review'),
       items: z.array(z.never()).max(0),
+      note: z.string().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      capability: z.literal('mr-comment-fix'),
+      /**
+       * Which threads to answer. Non-empty on purpose: a comment-fix package
+       * with no threads would open a round, prepare a worktree and dispatch an
+       * agent with nothing to do — an expensive way to write `noop`.
+       */
+      items: z.array(z.object({ threadId: z.string().min(1) }).strict()).min(1),
+      note: z.string().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      capability: z.literal('ci-fix'),
+      /**
+       * Which classified failures this round is for. A reference rather than
+       * the issue itself: `classify` already produced the detail, and copying
+       * it here would let the two disagree about what is being fixed.
+       */
+      items: z.array(z.object({ issueRef: z.string().min(1) }).strict()).min(1),
       note: z.string().optional(),
     })
     .strict(),
@@ -192,25 +222,43 @@ export function defaultArbitrate(
   }
 
   if (collected.unresolvedComments.length > 0) {
+    // One package carrying every unresolved thread, so a round answers them
+    // together and pushes once (T38). One package per thread would push once
+    // per comment and rebuild the branch under the reviewer mid-read.
     return [
       {
-        capability: 'noop',
-        reason: `${collected.unresolvedComments.length} unresolved comment(s) need a reply, which this version cannot act on yet`,
-        observedRevision: collected.headSha,
+        capability: 'mr-comment-fix',
+        items: collected.unresolvedComments.map((c) => ({ threadId: c.threadId })),
+        note: `${collected.unresolvedComments.length} unresolved comment(s)`,
       },
     ]
   }
 
   if (collected.gate.status === 'fail') {
-    const worst = [...issues].sort((a, b) => ciPriorityRank(a.type) - ciPriorityRank(b.type))[0]
+    if (issues.length === 0) {
+      // Red, and nothing said why. Dispatching an empty `ci-fix` would put an
+      // agent in a worktree with no idea what to repair — worse than silence,
+      // because it looks like the platform is working on it.
+      return [
+        {
+          capability: 'noop',
+          reason:
+            'the gate is failing but nothing classified the failure, so there is no actionable item',
+          observedRevision: collected.headSha,
+        },
+      ]
+    }
+
+    // Ordered by the same priority the design states: a compile break makes
+    // codecheck and unit-test results unmeasurable, so repairing those first
+    // produces work that has to be redone. The fix agent reads the list in
+    // order, which is why the sort belongs here rather than in the prompt.
+    const ordered = [...issues].sort((a, b) => ciPriorityRank(a.type) - ciPriorityRank(b.type))
     return [
       {
-        capability: 'noop',
-        reason:
-          worst === undefined
-            ? 'the gate is failing but nothing classified the failure, so there is no actionable item'
-            : `the gate is failing (${worst.type}), which this version cannot repair yet`,
-        observedRevision: collected.headSha,
+        capability: 'ci-fix',
+        items: ordered.map((i) => ({ issueRef: issueRefOf(i) })),
+        note: `the gate is failing (${ordered[0]!.type})`,
       },
     ]
   }
@@ -224,6 +272,19 @@ export function defaultArbitrate(
       observedRevision: collected.headSha,
     },
   ]
+}
+
+/**
+ * How a classified issue is named in a work package.
+ *
+ * A reference rather than the issue itself: `classify` already produced the
+ * detail, and copying it into the package would let the two disagree about what
+ * is being repaired. The file is included when there is one because two
+ * `compile` failures in different files are two different problems, and a
+ * package that called both `compile` would look like one.
+ */
+function issueRefOf(issue: ClassifiedIssue): string {
+  return issue.file === undefined ? issue.type : `${issue.type}:${issue.file}`
 }
 
 /**

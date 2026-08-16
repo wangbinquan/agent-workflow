@@ -4292,6 +4292,48 @@ export const codeWorkObservations = sqliteTable(
   }),
 )
 
+/**
+ * RFC-304 T52/T54 — the retry quota's memory.
+ *
+ * One round is one attempt, so the count has to outlive the round: the pipeline
+ * fails, a round runs, and the next pipeline event opens a new one. Without a
+ * durable count every round would believe it was the first, and the platform
+ * would retry the same broken fix forever.
+ *
+ * Keyed by `(work item, fingerprint)` rather than by work item — design §6.4
+ * (E9). Keyed by item alone, a long-lived merge request permanently loses
+ * automatic repair the third time it meets ANY CI problem, and the quota was
+ * spent by failures its author has long forgotten.
+ */
+export const codeFixAttempts = sqliteTable(
+  'code_fix_attempts',
+  {
+    id: text('id').primaryKey(),
+    workItemId: text('work_item_id').notNull(),
+    /** The normalized failure identity; see `failureFingerprint.ts`. */
+    fingerprint: text('fingerprint').notNull(),
+    /**
+     * 1-based attempt NUMBER, claimed by insert rather than derived from a
+     * count. Two rounds racing would both read "2 so far" and both write 3,
+     * turning a three-attempt quota into four.
+     */
+    attemptSeq: integer('attempt_seq').notNull(),
+    roundId: text('round_id').notNull(),
+    /** The agent's own words, quoted back to the person; never paraphrased. */
+    summary: text('summary').notNull(),
+    /** `fixed` | `still-red` | `rejected` | `escalated` — decided by the gate. */
+    outcome: text('outcome').notNull(),
+    /** The gate's own words for whatever remained red. */
+    detail: text('detail'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    /** The quota check, and the claim that keeps two rounds off one slot. */
+    seqUq: uniqueIndex('uniq_code_fix_attempts_seq').on(t.workItemId, t.fingerprint, t.attemptSeq),
+    itemIdx: index('idx_code_fix_attempts_item').on(t.workItemId, t.fingerprint),
+  }),
+)
+
 export const codePublishIntents = sqliteTable(
   'code_publish_intents',
   {

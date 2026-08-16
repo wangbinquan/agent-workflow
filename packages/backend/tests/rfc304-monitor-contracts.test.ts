@@ -93,14 +93,41 @@ describe('RFC-304 T35 — contract shapes', () => {
     ).toBe(true)
   })
 
-  test('a capability the platform cannot run yet is refused at the schema', () => {
-    // v1 executes `noop` and `mr-review`. Admitting `ci-fix` here would let an
-    // arbitration script select work that fails at round start with "no such
-    // sequence", which reads as the platform being broken rather than as a
-    // capability that has not shipped.
+  test('a capability the platform cannot run is refused at the schema', () => {
+    // Admitting a name no sequence implements would let an arbitration script
+    // select work that dies at round start with "no such sequence", which reads
+    // as the platform being broken rather than as a bad script.
+    //
+    // This used to name `ci-fix` as the example, which stopped being true the
+    // day PR-9 shipped it — so the example is now a capability that genuinely
+    // does not exist, and the shipped ones are asserted admitted below. A
+    // closed union only works if BOTH halves are checked: a missing arm makes a
+    // working capability unreachable and looks exactly like a well-formed
+    // refusal, which is how `mr-comment-fix` stayed unselectable after PR-7.
+    expect(WorkPackageSchema.safeParse({ capability: 'deploy-to-prod', items: [] }).success).toBe(
+      false,
+    )
+  })
+
+  test('every capability the platform DOES run is admitted', () => {
     expect(
       WorkPackageSchema.safeParse({ capability: 'ci-fix', items: [{ issueRef: 'r' }] }).success,
-    ).toBe(false)
+    ).toBe(true)
+    expect(
+      WorkPackageSchema.safeParse({ capability: 'mr-comment-fix', items: [{ threadId: 't' }] })
+        .success,
+    ).toBe(true)
+    expect(WorkPackageSchema.safeParse({ capability: 'mr-review', items: [] }).success).toBe(true)
+  })
+
+  test('a work package with nothing in it is refused', () => {
+    // An empty items list opens a round, prepares a worktree and dispatches an
+    // agent with nothing to do — an expensive way to write `noop`, and one that
+    // reports itself as work having been done.
+    expect(WorkPackageSchema.safeParse({ capability: 'ci-fix', items: [] }).success).toBe(false)
+    expect(WorkPackageSchema.safeParse({ capability: 'mr-comment-fix', items: [] }).success).toBe(
+      false,
+    )
   })
 
   test('an agent plan maps slots to agents', () => {
@@ -149,9 +176,14 @@ describe('RFC-304 T37 — the default priority', () => {
     expect(packages[0]?.capability === 'noop' && packages[0].reason).toContain('conflict')
   })
 
-  test('comments outrank a failing gate', () => {
+  test('comments outrank a failing gate, and now SELECT the repair', () => {
     // A person is waiting at the other end of a comment; a red pipeline is
     // waiting on nobody.
+    //
+    // This asserted `noop` while comment repair had not shipped. It has, and a
+    // built-in arbitration that still answered "this version cannot act on
+    // that" would make the capability unreachable in every deployment that did
+    // not write its own arbitrate script — which is all of them on day one.
     const packages = defaultArbitrate(
       collect({
         unresolvedComments: [{ threadId: 't', author: 'a', body: 'b' }],
@@ -159,32 +191,47 @@ describe('RFC-304 T37 — the default priority', () => {
       }),
       [issue('compile')],
     )
-    expect(packages[0]?.capability === 'noop' && packages[0].reason).toContain('comment')
+    expect(packages[0]?.capability).toBe('mr-comment-fix')
+    expect(
+      packages[0]?.capability === 'mr-comment-fix' && packages[0].items.map((i) => i.threadId),
+    ).toEqual(['t'])
   })
 
-  test('a failing gate names the highest-priority failure it was given', () => {
+  test('a failing gate selects ci-fix, led by the highest-priority failure', () => {
     const packages = defaultArbitrate(collect({ gate: { status: 'fail' } }), [
       issue('unit-test'),
       issue('compile'),
       issue('codecheck'),
     ])
-    expect(packages[0]?.capability === 'noop' && packages[0].reason).toContain('compile')
+    expect(packages[0]?.capability).toBe('ci-fix')
+    // Ordered, not just present: the fix agent reads this list top-down, and a
+    // compile break makes the other two unmeasurable — repairing them first
+    // produces work that has to be redone.
+    expect(
+      packages[0]?.capability === 'ci-fix' && packages[0].items.map((i) => i.issueRef),
+    ).toEqual(['compile', 'codecheck', 'unit-test'])
   })
 
   test('a failing gate nobody classified says so, rather than inventing work', () => {
+    // Still `noop`, and deliberately: an empty `ci-fix` package would dispatch
+    // an agent with no idea what to repair. "The gate is red and we cannot tell
+    // why" is a real state and it needs a person, not a round.
     const packages = defaultArbitrate(collect({ gate: { status: 'fail' } }), [])
+    expect(packages[0]?.capability).toBe('noop')
     expect(packages[0]?.capability === 'noop' && packages[0].reason).toContain('nothing classified')
   })
 
   test('an unreadable gate is not treated as a failing one', () => {
     // `unknown` must not produce the same output as `fail`, or a pipeline
-    // outage becomes a wave of repair attempts.
-    const unknown = defaultArbitrate(collect({ gate: { status: 'unknown' } }), [])
-    const failing = defaultArbitrate(collect({ gate: { status: 'fail' } }), [])
+    // outage becomes a wave of repair attempts — now a wave of real ones.
+    const unknown = defaultArbitrate(collect({ gate: { status: 'unknown' } }), [issue('compile')])
+    const failing = defaultArbitrate(collect({ gate: { status: 'fail' } }), [issue('compile')])
+    expect(unknown[0]?.capability).toBe('noop')
+    expect(failing[0]?.capability).toBe('ci-fix')
     expect(unknown[0]?.capability === 'noop' && unknown[0].reason).toBe(
       'nothing outstanding on this merge request',
     )
-    expect(failing[0]?.capability === 'noop' && failing[0].reason).not.toBe(
+    expect(failing[0]?.capability === 'noop' && failing[0]?.reason).not.toBe(
       'nothing outstanding on this merge request',
     )
   })
