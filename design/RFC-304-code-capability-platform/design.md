@@ -495,6 +495,32 @@ interface StageBase {
 于是三件事同时成立：审的是本轮真实改动、分片之间互不可见、重复执行结果一致。`invoke` 的契约
 因此必须显式携带：区间 `[from,to]`、输入 diff 的左右两侧、工作树根、产物回流方式。
 
+**契约的落地形状（2026-08-17 实现，用户确认）**：
+
+```ts
+invokes: {
+  capability: 'mr-review',
+  from: 'split-diff',
+  to: 'validate-findings',
+  worktreeFrom: 'worktree',   // 父序列里持有工作树的产物名
+  diffLeftFrom: 'worktree',   // diff 左侧 = 该产物的 baselineSha
+  // 右侧不写在这里：它不是父产物，而是进 invoke 时现冻的 snapshot
+}
+collect: { selfFindings: 'findings' }   // 产物回流：子产物名 → 父产物名
+```
+
+四件事各自的落点：区间与产物回流本来就在（`from`/`to`/`collect`）；**工作树根**与
+**diff 左侧**由上面两个新字段按名指向父产物——不按名而按约定去猜，会在两套词汇
+（父序列叫 `worktree`，`mr-review` 也叫 `worktree`，含义不同）之间静默错配；**diff 右侧**
+由 `buildInvokeSeed` 现冻：`commitWorktree` 把父工作树提交到 `refs/aw/self-review/<round>`，
+子序列拿到的 `worktree.baselineSha` 是**这个 snapshot** 而非父基线，于是各 shard 从 snapshot
+建树，审到的是本轮真实改动。snapshot 的 keep-ref 由 runner 在子序列结束后释放——留着就是
+每修一次流水线钉住一个对象（`rfc304-ci-fix-round` 的「不得残留 ref」断言正是查这个）。
+
+自审用哪个 agent **不引入新规则**：与其它 slot 完全一致，走本轮 binding 的 `reviewer` slot。
+想让 `ci-fix` 的轮次自审的团队，在 ci-fix 的 binding 里绑一个 `reviewer` 即可；没绑就按名
+拒绝（消息里点名 slot 与仓库），与任何未绑 slot 的表现相同。
+
 `kind` 字段不是注释而是**强制约束**：`kind: 'program'` 的阶段其实现不得调用任何 agent 派发
 （源码层负扫描锁定，AC-10）。
 

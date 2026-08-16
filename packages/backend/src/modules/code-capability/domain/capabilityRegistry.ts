@@ -352,7 +352,16 @@ export const REQUIREMENT_CONTRACT: StageContract = {
       name: 'self-review',
       requires: ['gateResult', 'worktree'],
       produces: ['selfFindings'],
-      invokes: { capability: 'mr-review', from: 'split-diff', to: 'validate-findings' },
+      invokes: {
+        capability: 'mr-review',
+        from: 'split-diff',
+        to: 'validate-findings',
+        // The tree this round built, and the commit it started from. The right
+        // side of the diff is a snapshot of that tree taken here — see
+        // `StageDef`'s `invokes`.
+        worktreeFrom: 'worktree',
+        diffLeftFrom: 'worktree',
+      },
       // `mr-review` calls it `findings`; here it is findings about our OWN
       // work, which is a different thing to the next stage and to a reader.
       collect: { selfFindings: 'findings' },
@@ -456,7 +465,17 @@ export const CI_FIX_CONTRACT: StageContract = {
       name: 'self-review',
       requires: ['fixResult', 'worktree'],
       produces: ['selfFindings'],
-      invokes: { capability: 'mr-review', from: 'split-diff', to: 'validate-findings' },
+      invokes: {
+        capability: 'mr-review',
+        from: 'split-diff',
+        to: 'validate-findings',
+        // The tree the fix was made in, and the commit the round started from.
+        // The right side is a snapshot of that tree, frozen here: reviewing
+        // from the baseline instead would read the code as it was BEFORE the
+        // fix, which is a self-review of nothing (design §invoke).
+        worktreeFrom: 'worktree',
+        diffLeftFrom: 'worktree',
+      },
       collect: { selfFindings: 'findings' },
     },
     {

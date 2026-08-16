@@ -40,6 +40,12 @@ test.describe.configure({ mode: 'serial' })
 
 const PROJECT_PATH = 'system-e2e/rfc304-cifix'
 const FIXER_AGENT = 'e2e-cifix-fixer'
+/**
+ * The self-review's reviewer. It resolves through THIS round's binding like
+ * every other slot, so a team that wants its ci-fix rounds self-reviewed binds
+ * a `reviewer` in the ci-fix binding.
+ */
+const REVIEWER_AGENT = 'e2e-cifix-reviewer'
 
 /**
  * The repository's gate: green only once `src/broken.txt` says `fixed`.
@@ -76,6 +82,10 @@ test.beforeAll(async () => {
     JSON.stringify({
       version: 1,
       agents: {
+        // The self-review reads the frozen snapshot of the fix and finds
+        // nothing wrong with it — the ordinary case, and the one that lets the
+        // round continue to push.
+        [REVIEWER_AGENT]: [{ output: { findings: JSON.stringify({ findings: [] }) } }],
         [FIXER_AGENT]: [
           {
             // The fix itself: the agent edits the tree, which is what the gate
@@ -121,6 +131,17 @@ test.beforeAll(async () => {
       // `ci-fix` exists for.
       'src/broken.txt': 'red\n',
       'src/change.ts': 'export const changed = true\n',
+    },
+  })
+
+  const reviewer = await requestJson<{ id: string }>('/api/agents', {
+    method: 'POST',
+    body: {
+      name: REVIEWER_AGENT,
+      description: 'RFC-304 ci-fix e2e self-reviewer',
+      outputs: ['findings'],
+      readonly: true,
+      bodyMd: 'Review the change.',
     },
   })
 
@@ -187,7 +208,7 @@ test.beforeAll(async () => {
     body: {
       name: 'ci-fix gate binding',
       frameworkId: framework.id,
-      agentBySlot: { 'ci-fixer': agent.id },
+      agentBySlot: { 'ci-fixer': agent.id, reviewer: reviewer.id },
       promptBySlot: {},
       params: {},
     },
@@ -258,27 +279,44 @@ test('the fix is proved by RUNNING the repository’s own gate — red before, g
   expect(fix?.status).toBe('done')
 })
 
-test('the round stops at self-review, and says exactly what is missing', async () => {
-  // The current frontier, pinned rather than papered over. `invokedStages` is a
-  // runner input nothing supplies yet, so `self-review` — which re-reads the
-  // change through `mr-review`'s stages — cannot run. It fails by NAME, which
-  // is the difference between a gap and a mystery.
-  //
-  // When that wiring lands (with the snapshot semantics the design requires, or
-  // the self-review reads the code from before the fix), this test becomes the
-  // one that proves the chain continues to `push`.
+test('the change is SELF-REVIEWED against a frozen snapshot, and the round continues', async () => {
+  // `self-review` re-reads this round's own change through `mr-review`'s
+  // reading stages. Two things had to be true for it to mean anything, and
+  // neither was: the stage implementations had to be supplied to the runner (no
+  // caller ever did — both capabilities that self-review failed here), and the
+  // diff had to span the round's baseline to a SNAPSHOT of the fixed tree. With
+  // the baseline on both sides the reviewers would read the code as it was
+  // before the fix, which the design calls a self-review of nothing.
   const stages = await waitForStages()
   const selfReview = stages.find((s) => s.stageName === 'self-review')
 
   expect(
-    `${selfReview?.status ?? '?'} | ${stages
-      .map((x) => `${x.stageName}:${x.status}`)
-      .join(', ')}`.startsWith('failed'),
-    `self-review should have run and failed by name; got: ${stages
+    `${selfReview?.status ?? 'missing'}${selfReview?.error === null || selfReview?.error === undefined ? '' : ` (${selfReview.error})`}`,
+  ).toBe('done')
+
+  // And the stages after it ran — the round did not stop at the review.
+  const after = stages.slice(stages.findIndex((s) => s.stageName === 'self-review') + 1)
+  expect(
+    after.filter((s) => s.status === 'done').length,
+    `nothing ran after the self-review: ${stages
       .map((x) => `${x.stageName}:${x.status}${x.error === null ? '' : `(${x.error})`}`)
       .join(', ')}`,
-  ).toBe(true)
-  expect(selfReview?.error ?? '').toContain('were not supplied to the runner')
+  ).toBeGreaterThan(0)
+})
+
+test('the whole ci-fix sequence reaches its end', async () => {
+  // The claim the capability makes, end to end: red pipeline in, a proved fix
+  // out. Stated as a stage list so a future change that quietly stops one stage
+  // short shows up here rather than as "the round says done".
+  const stages = await waitForStages()
+  const digest = stages
+    .map((s) => `${s.stageName}:${s.status}${s.error === null ? '' : `(${s.error})`}`)
+    .join(', ')
+
+  for (const name of ['anti-cheat-check', 'push', 'ledger']) {
+    const stage = stages.find((s) => s.stageName === name)
+    expect(stage?.status, `${name} did not run; ${digest}`).not.toBe('skipped')
+  }
 })
 
 // ---------------------------------------------------------------------------

@@ -154,6 +154,8 @@ describe('RFC-304 §6.3 — the requirement round', () => {
       db,
       programStages: requirementProgramStages(env),
       aiStages: requirementAiStages(env),
+      // See the ci-fix round test: the invoke needs a git port for the snapshot.
+      git: env.git,
       // `self-review` invokes `mr-review`'s reading half. Stubbed here: what is
       // under test is the requirement sequence, and the invoke runner has its
       // own file.

@@ -162,6 +162,7 @@ import { resolveCapabilityHooks } from '@/services/codeCapabilityHooks'
 import { closeRound } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
 import { noteWorkItemEvent } from '@/modules/code-capability/application/workItemProgress'
 import { makeGateRunner, makeWorktreeFileReader } from '@/services/codeCapabilityGate'
+import { createGitAdapter } from '@/modules/code-capability/infrastructure/gitAdapter'
 import { MR_REVIEW_CONTRACT } from '@/modules/code-capability/domain/capabilityRegistry'
 import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import { createReviewAgentCaller, resolveReviewerAgent } from '@/services/codeReviewAgentCaller'
@@ -4831,6 +4832,76 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             })()),
           })
         : null
+  /**
+   * The stage implementations `self-review` runs — `mr-review`'s reading half.
+   *
+   * Built from the SAME builder a real review uses, because the design's reason
+   * for `invoke` is that describing the review twice would let the two drift
+   * and the self-review would quietly stop matching what a real review does.
+   *
+   * The reviewer resolves through THIS round's binding, like every other slot:
+   * a team that wants its `ci-fix` rounds self-reviewed binds a `reviewer` in
+   * the ci-fix binding. Unbound leaves the AI stages refusing by name, which
+   * names the slot and the repository — the same refusal any unbound slot gets.
+   */
+  const triggerForInvoke = state.triggerContext
+  const invokedReviewStages =
+    wiring === null || triggerForInvoke === null || capability === 'mr-review'
+      ? null
+      : await (async () => {
+          const reviewWiring = await buildMrReviewWiring({
+            db,
+            webhook: triggerForInvoke.trigger.webhook,
+            repoPath: task.repoPath,
+            worktreePath: state.scopeRoot,
+            nonce: envelopeNonce,
+            roundId: task.codeRoundId ?? taskId,
+            ...(identity?.workItemId == null ? {} : { workItemId: identity.workItemId }),
+            ...(identity?.epoch === undefined ? {} : { epoch: identity.epoch }),
+            ...(opts.codeHostConnections !== undefined
+              ? { codeHostConnections: opts.codeHostConnections }
+              : {}),
+            ...(opts.codeHostFetch !== undefined ? { codeHostFetch: opts.codeHostFetch } : {}),
+            ...(await (async () => {
+              const resolved = await resolveReviewerAgent(db, {
+                repoId: await cachedRepoIdForTask(db, taskId),
+                capability,
+                slot: REVIEW_AGENT_SLOT,
+              })
+              if (!resolved.ok) {
+                return {
+                  unresolvedAgentReason: `${resolved.message} — a self-review runs the review stages, so this capability's binding needs a '${REVIEW_AGENT_SLOT}' slot too`,
+                }
+              }
+              return {
+                makeCaller: (prompt: string, port: string) =>
+                  createReviewAgentCaller({
+                    db,
+                    appHome: opts.appHome ?? Paths.root,
+                    taskId,
+                    nodeId: node.id,
+                    agent: resolved.agent,
+                    skills: [],
+                    worktreePath: state.scopeRoot,
+                    repoPath: task.repoPath,
+                    baseBranch: task.baseBranch,
+                    portName: port,
+                    nonce: envelopeNonce,
+                    ...(opts.defaultPerNodeTimeoutMs !== undefined
+                      ? { timeoutMs: opts.defaultPerNodeTimeoutMs }
+                      : {}),
+                  })(prompt),
+              }
+            })()),
+          })
+          return {
+            'mr-review': {
+              program: reviewWiring.programStages,
+              ai: reviewWiring.aiStages,
+            },
+          }
+        })()
+
   // RFC-304 recovery: settle attempts left claimed by a daemon that died
   // mid-call, BEFORE any stage of this round runs again. Order matters — doing
   // it afterwards would settle the attempts this run just made, and a restart
@@ -4946,6 +5017,15 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             ...(Object.keys(wiring.inheritedArtifacts).length > 0
               ? { inheritedArtifacts: wiring.inheritedArtifacts }
               : {}),
+            // What `self-review` runs, and what freezes the tree it reads.
+            //
+            // `invokedStages` has been a runner input since PR-1b and nothing
+            // ever supplied it, so BOTH capabilities that self-review — `ci-fix`
+            // before pushing, `requirement` before opening a merge request —
+            // failed at that stage with "whose stage implementations were not
+            // supplied to the runner". Neither could finish a round.
+            ...(invokedReviewStages === null ? {} : { invokedStages: invokedReviewStages }),
+            git: createGitAdapter(),
           }
         : {}),
       ...(hookWiring !== null ? { hooks: hookWiring } : {}),

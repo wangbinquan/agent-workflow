@@ -192,6 +192,14 @@ describe('RFC-304 §6.3 — the requirement sequence', () => {
       capability: 'mr-review',
       from: 'split-diff',
       to: 'validate-findings',
+      // The input half of the contract, added when the invoke was actually
+      // wired: which parent artifact holds the tree the sub-sequence reads, and
+      // which holds the LEFT side of its diff. The right side is a snapshot of
+      // the parent tree taken at the invoke — without it every review shard
+      // would build from the baseline and read the code as it was BEFORE this
+      // round changed it, which is a self-review of nothing.
+      worktreeFrom: 'worktree',
+      diffLeftFrom: 'worktree',
     })
 
     const reviewNames = MR_REVIEW_CONTRACT.stages.map((s) => s.name)

@@ -24,6 +24,8 @@ import {
   type StageRunners,
 } from '@/modules/code-capability/application/stageEngine'
 import { invokeSubSequence } from '@/modules/code-capability/application/invokeSubSequence'
+import { buildInvokeSeed } from '@/modules/code-capability/application/invokeSeed'
+import type { GitPort } from '@/modules/code-capability/ports/gitPort'
 import {
   injectableKeysFor,
   runCapabilityHook,
@@ -78,6 +80,11 @@ export interface CodeCapabilityRunnerDeps {
    * would silently resolve a sub-stage to the parent's implementation, and the
    * sub-sequence would run against the wrong tree while looking healthy.
    */
+  /**
+   * Freezes the parent tree for an `invoke`. Absent means invoke stages refuse
+   * by name rather than reviewing the wrong revision.
+   */
+  git?: GitPort
   invokedStages?: Readonly<
     Partial<
       Record<
@@ -190,12 +197,42 @@ export function createCodeCapabilityRunner(deps: CodeCapabilityRunnerDeps): Code
         }
       }
 
+      // What the sub-sequence reads: the parent's tree frozen into an immutable
+      // snapshot, and the diff between the round's baseline and that snapshot.
+      // Seeding it with the parent's raw artifacts instead would hand
+      // `mr-review` the code as it was BEFORE this round changed anything —
+      // every shard builds from the baseline, so the reviewers would be reading
+      // nothing (design §invoke).
+      if (deps.git === undefined) {
+        return {
+          status: 'failed',
+          error: `stage '${ctx.stage.name}' needs a git port to freeze the tree it asks '${target}' to review, and none was supplied to the runner`,
+        }
+      }
+      const seed = await buildInvokeSeed({
+        invokes: ctx.stage.invokes,
+        artifacts: ctx.artifacts,
+        git: deps.git,
+        roundId: ctx.roundId,
+      })
+      if (!seed.ok) return { status: 'failed', error: seed.message }
+
+      // The snapshot must outlive the shards and NOT outlive the round: it is
+      // released on every exit path below, because a keep-alive ref per round
+      // pins one object per repaired pipeline forever.
+      const releaseSnapshot = async (): Promise<void> => {
+        if (seed.keepRef === null || deps.git === undefined) return
+        await deps.git
+          .deleteRef({ repoPath: worktreePathOf(seed.artifacts), ref: seed.keepRef })
+          .catch(() => undefined)
+      }
+
       const out = await invokeSubSequence({
         db: deps.db,
         roundId: ctx.roundId,
         parentStage: ctx.stage.name,
         invokes: ctx.stage.invokes,
-        seedArtifacts: ctx.artifacts,
+        seedArtifacts: seed.artifacts,
         runners: {
           program: async (sub) => {
             const impl = supplied.program?.[sub.stage.name]
@@ -232,6 +269,8 @@ export function createCodeCapabilityRunner(deps: CodeCapabilityRunnerDeps): Code
         ...(deps.lookupContract === undefined ? {} : { lookupContract: deps.lookupContract }),
         ...(deps.signal === undefined ? {} : { signal: deps.signal }),
       })
+
+      await releaseSnapshot()
 
       if (out.outcome === 'failed') return { status: 'failed', error: out.error }
       if (out.outcome === 'blocked') {
@@ -319,6 +358,14 @@ export function createCodeCapabilityRunner(deps: CodeCapabilityRunnerDeps): Code
       }
     },
   }
+}
+
+/** The worktree the seed pointed the sub-sequence at — where its ref lives. */
+function worktreePathOf(artifacts: Readonly<Record<string, unknown>>): string {
+  const worktree = artifacts.worktree
+  return typeof worktree === 'object' && worktree !== null && 'path' in worktree
+    ? String((worktree as { path: unknown }).path)
+    : ''
 }
 
 /**

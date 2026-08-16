@@ -124,7 +124,32 @@ export type StageDef = StageBase &
          * does NOT publish to the MR — its findings feed the parent's next
          * stage. Hooks inside it mount as `<parentStage>/<subStage>`.
          */
-        invokes: { capability: CodeCapabilityId; from: string; to: string }
+        invokes: {
+          capability: CodeCapabilityId
+          from: string
+          to: string
+          /**
+           * The parent artifact holding the worktree the sub-sequence reads,
+           * and the one holding the LEFT side of its diff.
+           *
+           * Explicit because the design says the invoke contract must carry
+           * them (§invoke): the sub-sequence is handed a diff, and a diff has
+           * two sides. The right side is not named here because it is not a
+           * parent artifact — it is a SNAPSHOT of the parent worktree frozen at
+           * the moment of the invoke.
+           *
+           * Why the snapshot matters, in the design's own terms: `ci-fix` makes
+           * its change in the parent worktree and then self-reviews. If each
+           * review shard built its tree from the baseline — which is what
+           * `mr-review`'s own rule says — every reviewer would read the code as
+           * it was BEFORE the fix, and the self-review would be reviewing
+           * nothing. Freezing the parent tree gives a right-hand side that is
+           * both the real change and immutable, so shards stay isolated from
+           * each other and the run is reproducible.
+           */
+          worktreeFrom: string
+          diffLeftFrom: string
+        }
         /**
          * `produces` name → the sub-sequence's artifact name.
          *

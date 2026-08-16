@@ -199,6 +199,10 @@ describe('RFC-304 §6.4 — the ci-fix round', () => {
       db,
       programStages: ciFixProgramStages(env),
       aiStages: ciFixAiStages(env),
+      // The invoke freezes the parent tree into a snapshot before handing it to
+      // the review stages — without a git port it refuses rather than review
+      // the pre-fix code.
+      git: env.git,
       // `self-review` invokes a slice of `mr-review`; stubbed to a clean result
       // so these tests are about the fix path rather than about review.
       invokedStages: {
