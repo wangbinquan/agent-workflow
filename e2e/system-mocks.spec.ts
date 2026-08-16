@@ -33,7 +33,7 @@ test.afterAll(async () => {
   if (daemon !== undefined) await daemon.stop()
 })
 
-test('GitLab and GitHub connections use the real REST clients; webhook emitter signs both providers', async () => {
+test('GitLab and GitHub use real REST clients and accept signed MR and issue events', async () => {
   for (const provider of ['gitlab', 'github'] as const) {
     const baseUrl = requiredEnv(
       provider === 'gitlab'
@@ -51,7 +51,11 @@ test('GitLab and GitHub connections use the real REST clients; webhook emitter s
     expect(probe).toMatchObject({ ok: true, login: 'system-mock-user' })
 
     const projectPath = `system-e2e/${provider}-project`
-    await mocks.seedCodeHost({ provider, projectPath })
+    await mocks.seedCodeHost({
+      provider,
+      projectPath,
+      issues: [{ number: 23, title: 'Implement the requested capability' }],
+    })
     const endpoint = await requestJson<{ urlToken: string; secret: string }>(
       '/api/webhook-endpoints',
       {
@@ -69,6 +73,22 @@ test('GitLab and GitHub connections use the real REST clients; webhook emitter s
     })
     expect(delivered.status).toBe(200)
     expect(JSON.parse(delivered.body) as Record<string, unknown>).toHaveProperty('deliveryId')
+
+    for (const event of ['issue_labeled', 'issue_comment'] as const) {
+      const issueDelivery = await mocks.deliverWebhook({
+        provider,
+        callbackUrl: `${daemon.baseUrl}/webhooks/${provider}/${endpoint.urlToken}`,
+        secret: endpoint.secret,
+        projectPath,
+        number: 23,
+        event,
+        ...(event === 'issue_labeled'
+          ? { label: 'agent-workflow' }
+          : { body: 'The acceptance criterion is now explicit.' }),
+      })
+      expect(issueDelivery.status).toBe(200)
+      expect(JSON.parse(issueDelivery.body) as Record<string, unknown>).toHaveProperty('deliveryId')
+    }
   }
 
   const gitlabRequests = await mocks.requests('gitlab')
@@ -200,6 +220,14 @@ test('registry endpoints and fault injection stay reachable from worker processe
   const pypi = await fetch(`${requiredEnv('AW_SYSTEM_MOCK_PYPI_INDEX_URL')}system-mock-python/`)
   expect(pypi.status).toBe(200)
   expect(await pypi.text()).toContain('.whl')
+
+  await mocks.seedHttpRoute({
+    id: 'worker-ci',
+    path: '/ci/runs/42',
+    responses: [{ json: { state: 'failed', failedJobs: ['compile'] } }],
+  })
+  const external = await fetch(`${requiredEnv('AW_SYSTEM_MOCK_EXTERNAL_HTTP_BASE_URL')}/ci/runs/42`)
+  expect(await external.json()).toEqual({ state: 'failed', failedJobs: ['compile'] })
 
   await mocks.addFault({
     service: 'github',

@@ -84,6 +84,11 @@ export class CodeHostStore {
     })
 
     const hostPrefix = seed.provider === 'gitlab' ? '/gitlab' : '/github'
+    const effectiveHeadFiles = structuredClone(baseFiles)
+    for (const [path, content] of Object.entries(headFiles)) {
+      if (content === null) delete effectiveHeadFiles[path]
+      else effectiveHeadFiles[path] = content
+    }
     const project: StoredProject = {
       provider: seed.provider,
       projectId,
@@ -98,7 +103,10 @@ export class CodeHostStore {
       repoHttpUrl: gitRemoteUrl(this.#baseUrl(), this.#gitRoot, repositoryPath),
       webUrl: `${this.#baseUrl()}${hostPrefix}/${seed.projectPath}`,
       baseFiles: structuredClone(baseFiles),
-      headFiles: { ...structuredClone(baseFiles), ...structuredClone(headFiles) },
+      headFiles: effectiveHeadFiles,
+      mergeRequests: [],
+      issues: [],
+      pipelines: [],
     }
     this.#projects.set(`${seed.provider}:${seed.projectPath}`, project)
     return stripStoredProject(project)
@@ -148,10 +156,14 @@ function stripStoredProject(project: StoredProject): MockCodeHostProject {
   return structuredClone(wire)
 }
 
-async function writeFiles(root: string, files: Record<string, string>): Promise<void> {
+async function writeFiles(root: string, files: Record<string, string | null>): Promise<void> {
   for (const [path, content] of Object.entries(files)) {
     const absolute = join(root, path)
     if (!relative(root, absolute).startsWith('..')) {
+      if (content === null) {
+        await rm(absolute, { force: true })
+        continue
+      }
       await mkdir(join(absolute, '..'), { recursive: true })
       await writeFile(absolute, content)
     }

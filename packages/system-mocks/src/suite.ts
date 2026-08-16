@@ -5,7 +5,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { CodeHostStore } from './code-host/store'
+import { handleCodeHostApi } from './code-host/stateful-http'
+import { CodeHostStore } from './code-host/stateful-store'
 import { SystemMockClient } from './client'
 import {
   applyFault,
@@ -17,7 +18,7 @@ import {
   writeText,
 } from './core/http'
 import { FaultRegistry, RequestJournal } from './core/state'
-import { handleCodeHostApi } from './code-host/http'
+import { ExternalHttpMock } from './external-http/server'
 import { handleGitSmartHttp } from './git/http'
 import { McpHttpMock } from './mcp/server'
 import { createOauthMock } from './oauth/server'
@@ -25,8 +26,10 @@ import { OidcMock } from './oidc/server'
 import { PackageRegistryMock } from './registry/server'
 import { handlePlantuml } from './plantuml/server'
 import type {
+  MockCodeHostMutationInput,
   MockCodeHostSeed,
   MockFaultRule,
+  MockHttpRoute,
   MockNpmPackage,
   MockOidcTokenMode,
   MockOidcUser,
@@ -57,6 +60,7 @@ class SystemMockGateway {
   readonly #oidc: OidcMock
   readonly #oauth: OidcMock
   readonly #registries: PackageRegistryMock
+  readonly #externalHttp = new ExternalHttpMock()
   #baseUrl = ''
   #closed = false
 
@@ -154,6 +158,7 @@ class SystemMockGateway {
         gitRoot: this.#gitRoot,
         routePrefix: '/git',
       })
+      await this.#codeHosts.syncRefsFromGit()
       return
     }
     if (service === 'gitlab' || service === 'github') {
@@ -174,6 +179,11 @@ class SystemMockGateway {
     )
       return
     if (service === 'mcp' && (await this.#mcp.handle({ request, response, url, body }))) return
+    if (
+      service === 'external' &&
+      this.#externalHttp.handle({ request, response, url, routePrefix: '/external' })
+    )
+      return
     if (
       (service === 'npm' || service === 'pypi') &&
       this.#registries.handle({ request, response, url })
@@ -212,6 +222,7 @@ class SystemMockGateway {
       this.#oidc.reset()
       this.#oauth.reset()
       this.#registries.reset()
+      this.#externalHttp.reset()
       this.#faults.clear()
       this.#journal.clear()
       response.writeHead(204)
@@ -248,6 +259,24 @@ class SystemMockGateway {
       writeJson(response, 201, await this.#codeHosts.seed(parseJsonBody<MockCodeHostSeed>(body)))
       return
     }
+    if (path === '/code-hosts/mutate' && request.method === 'POST') {
+      writeJson(
+        response,
+        200,
+        await this.#codeHosts.mutate(parseJsonBody<MockCodeHostMutationInput>(body)),
+      )
+      return
+    }
+    if (path === '/external/routes' && request.method === 'POST') {
+      writeJson(response, 201, this.#externalHttp.seed(parseJsonBody<MockHttpRoute>(body)))
+      return
+    }
+    if (path === '/external/routes' && request.method === 'DELETE') {
+      this.#externalHttp.reset()
+      response.writeHead(204)
+      response.end()
+      return
+    }
     if (path === '/npm' && request.method === 'POST') {
       this.#registries.seedNpm(parseJsonBody<MockNpmPackage>(body))
       response.writeHead(204)
@@ -276,6 +305,7 @@ class SystemMockGateway {
       requests: this.#journal.list(),
       faults: this.#faults.list(),
       codeHosts: this.#codeHosts.list(),
+      externalHttp: this.#externalHttp.snapshot(),
       oidc: this.#oidc.snapshot(),
       oauth: this.#oauth.snapshot(),
       packages: this.#registries.snapshot(),
@@ -294,6 +324,7 @@ function endpointsFor(baseUrl: string): SystemMockEndpoints {
     gitBaseUrl: `${baseUrl}/git`,
     gitlabApiBaseUrl: `${baseUrl}/gitlab/api/v4`,
     githubApiBaseUrl: `${baseUrl}/github/api/v3`,
+    externalHttpBaseUrl: `${baseUrl}/external`,
     oauthIssuerUrl: `${baseUrl}/oauth`,
     oidcIssuerUrl: `${baseUrl}/oidc`,
     mcpStreamableUrl: `${baseUrl}/mcp`,
@@ -315,6 +346,7 @@ function environmentFor(
     AW_SYSTEM_MOCK_GIT_BASE_URL: endpoints.gitBaseUrl,
     AW_SYSTEM_MOCK_GITLAB_API_BASE_URL: endpoints.gitlabApiBaseUrl,
     AW_SYSTEM_MOCK_GITHUB_API_BASE_URL: endpoints.githubApiBaseUrl,
+    AW_SYSTEM_MOCK_EXTERNAL_HTTP_BASE_URL: endpoints.externalHttpBaseUrl,
     AW_SYSTEM_MOCK_OAUTH_ISSUER_URL: endpoints.oauthIssuerUrl,
     AW_SYSTEM_MOCK_OIDC_ISSUER_URL: endpoints.oidcIssuerUrl,
     AW_SYSTEM_MOCK_MCP_URL: endpoints.mcpStreamableUrl,
@@ -329,6 +361,7 @@ function serviceFor(path: string): SystemMockService {
   if (path.startsWith('/git/')) return 'git'
   if (path.startsWith('/gitlab/api/v4')) return 'gitlab'
   if (path.startsWith('/github/api/v3')) return 'github'
+  if (path.startsWith('/external')) return 'external'
   if (path.startsWith('/oauth')) return 'oauth'
   if (path.startsWith('/oidc')) return 'oidc'
   if (path.startsWith('/mcp')) return 'mcp'

@@ -1,7 +1,10 @@
 import type {
+  MockCodeHostMutationInput,
   MockCodeHostProject,
   MockCodeHostSeed,
   MockFaultRule,
+  MockHttpRoute,
+  MockHttpRouteSnapshot,
   MockNpmPackage,
   MockOidcTokenMode,
   MockOidcUser,
@@ -60,6 +63,18 @@ export class SystemMockClient {
 
   async seedCodeHost(seed: MockCodeHostSeed): Promise<MockCodeHostProject> {
     return await this.#request('POST', '/code-hosts', seed)
+  }
+
+  async mutateCodeHost(input: MockCodeHostMutationInput): Promise<MockCodeHostProject> {
+    return await this.#request('POST', '/code-hosts/mutate', input)
+  }
+
+  async seedHttpRoute(route: MockHttpRoute): Promise<MockHttpRouteSnapshot> {
+    return await this.#request('POST', '/external/routes', route)
+  }
+
+  async clearHttpRoutes(): Promise<void> {
+    await this.#request('DELETE', '/external/routes')
   }
 
   async seedNpm(pkg: MockNpmPackage): Promise<void> {
