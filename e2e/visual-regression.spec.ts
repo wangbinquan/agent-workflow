@@ -131,6 +131,19 @@ async function waitForStableAuthenticatedShell(page: Page): Promise<void> {
   await expect(
     page.locator('[data-testid^="shell-navigation-"]:visible a[href="/webhooks"]'),
   ).toBeVisible()
+  // …and the LAST permission-gated row, which is what actually settles the
+  // sidebar's height. `/webhooks` alone stopped being sufficient the moment
+  // RFC-304 added `/code` after it: the screenshot could land with `/code`
+  // still unrendered, so the same commit produced a passing run at 08:56 and a
+  // failing one at 09:19 (visual-regression-nightly, 2026-08-16) — one nav row
+  // of vertical shift in every scene that shows the sidebar.
+  //
+  // ⚠️ This anchor must move whenever a row is appended to the nav. Pinning
+  // anything but the last row silently reopens the race, and the failure shows
+  // up as an unrelated-looking pixel diff in whichever scenes happen to run.
+  await expect(
+    page.locator('[data-testid^="shell-navigation-"]:visible a[href="/code"]'),
+  ).toBeVisible()
   await page.waitForLoadState('networkidle')
 }
 
