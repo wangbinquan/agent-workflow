@@ -4,6 +4,22 @@
 
 ## 测试 / CI
 
+- **`gate:local` 不跑 Playwright —— 新增 e2e spec 时「本地门禁全绿」不构成任何证据（2026-08-16 实测被 CI 打脸）**：
+  门禁只跑 backend / shared / frontend 三条单测 + typecheck/lint/format，**e2e spec 只在 CI 跑**。
+  于是「新写一条 e2e + gate:local 全绿 + push」的流程里，那条新用例**一次都没被执行过**就上了主干。
+  实测后果：一条自己写出来的 race 在本地从没跑过、CI 上连 retry 一起红。
+  定式：**新增/改动 e2e spec 必须本地显式 `bunx playwright test <spec> --project=chromium --workers=1` 跑过**
+  （改了后端源码还要先 `bun run build:binary:e2e`），并且**连跑三遍**再 push。
+  判据：commit 里有 `e2e/*.spec.ts` 而你只看了 gate:local 的绿 ⇒ 你还没测过它。
+
+- **等的条件比断言的条件弱 = 一条迟早会红的 race（同一次实测）**：
+  写法长这样——`waitFor(stages.length > 0)` 然后 `expect(stages.find('classify').status).toBe('done')`。
+  第一个阶段一开始跑等待就满足了，而断言的是**后面**那个阶段的终态。它会**一直碰巧赢**，
+  直到某次时序变化（本例：给同一个 spec 加了第五条能力）或换台更忙的机器才输。
+  定式：**等待条件必须与断言条件同一个**——要断言 `classify` 终态，就等 `classify` 终态，
+  别等「有任何阶段」。判据：`waitFor` 里的谓词与 `expect` 的主语不是同一个对象 ⇒ 就是这个坑。
+  （修法不是加 timeout、更不是重跑到绿——见本节开头「flaky 不能掩盖红 case」的仓规。）
+
 - **Playwright e2e 跑的是 `dist/` 里的二进制，不是你刚改的源码（2026-08-16 实测，浪费一整轮）**：
   `e2e/harness.ts` 的 `startDaemon()` 启的是 `dist/agent-workflow-e2e-<platform>`。改完
   `packages/backend/src/**` 直接跑 `bunx playwright test`，**跑的还是上一次 build 的行为**——
