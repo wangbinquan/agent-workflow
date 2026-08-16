@@ -131,11 +131,19 @@ describe('RFC-210 ref naming safety', () => {
 
   test('ref names pass git check-ref-format for hostile paths', async () => {
     const hostile = ['vendor', 'vendor/inner', 'dir with space', 'weird.lock', '.hidden', 'a~b^c:d']
-    for (const p of hostile) {
-      for (const ref of [poolRefName('T1', 'N1', p), worktreeRefName('T1', p)]) {
-        expect(await runCli('git', ['check-ref-format', ref])).toBe(0)
-      }
-    }
+    const refs = hostile.flatMap((p) => [poolRefName('T1', 'N1', p), worktreeRefName('T1', p)])
+
+    // Concurrently, deliberately. These twelve checks are independent and the
+    // assertion is deterministic — `check-ref-format` either accepts a name or
+    // does not. Awaited one at a time they cost twelve serial process spawns,
+    // which on a loaded macOS runner (four backend shards in parallel) took
+    // 5002ms against this file's 5000ms budget and failed CI on 2026-08-16
+    // while passing everywhere else. Concurrency removes the marginality
+    // without removing a single check; raising the timeout instead would have
+    // left the same race one busier runner away.
+    const codes = await Promise.all(refs.map((ref) => runCli('git', ['check-ref-format', ref])))
+
+    expect(codes).toEqual(refs.map(() => 0))
   })
 
   test('pool ref is node-scoped, worktree ref is not', () => {
