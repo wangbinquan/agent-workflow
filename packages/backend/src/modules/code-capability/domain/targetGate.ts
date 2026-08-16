@@ -124,6 +124,13 @@ const KNOWN_RUNNERS: ReadonlySet<string> = new Set([
   'pnpm',
   'yarn',
   'npx',
+  'pnpx',
+  // `node scripts/check.js` is as ordinary a gate as `npm test`, and leaving it
+  // out made the discovery answer "no gate command was found" for a repository
+  // that plainly names one — the least useful way to be wrong, because the
+  // round then reports that the FIX could not be proved.
+  'node',
+  'deno',
   'make',
   'just',
   'task',
@@ -149,7 +156,6 @@ const KNOWN_RUNNERS: ReadonlySet<string> = new Set([
   'ctest',
   'cmake',
   'bazel',
-  'pnpx',
   'deno',
   'tsc',
   'vitest',

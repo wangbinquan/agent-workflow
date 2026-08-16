@@ -161,6 +161,7 @@ import { withRoundLease } from '@/services/codeRoundLease'
 import { resolveCapabilityHooks } from '@/services/codeCapabilityHooks'
 import { closeRound } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
 import { noteWorkItemEvent } from '@/modules/code-capability/application/workItemProgress'
+import { makeGateRunner, makeWorktreeFileReader } from '@/services/codeCapabilityGate'
 import { MR_REVIEW_CONTRACT } from '@/modules/code-capability/domain/capabilityRegistry'
 import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import { createReviewAgentCaller, resolveReviewerAgent } from '@/services/codeReviewAgentCaller'
@@ -4685,6 +4686,19 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             // The patch generation a confirmation has to name. Same value the
             // wait handle records, so Guard 2 compares like with like.
             generation: identity?.epoch ?? 1,
+            // The target repository's own gate, and the file that names it.
+            // Both seams existed from PR-1a and neither was ever supplied, so
+            // `ci-fix` could produce a change and then had no way to say
+            // whether it worked — the one thing that capability is for — and
+            // `requirement` could not run a gate before opening its merge
+            // request. The placeholder they got instead threw
+            // "no gate runner is wired for this round".
+            readWorktreeFile: makeWorktreeFileReader(state.scopeRoot),
+            runGateCommand: makeGateRunner(state.scopeRoot, {
+              ...(opts.defaultPerNodeTimeoutMs !== undefined
+                ? { timeoutMs: opts.defaultPerNodeTimeoutMs }
+                : {}),
+            }),
             // How `ci-fix` resolves the framework's four scripts. The cached-repo
             // ID, never the path — see `cachedRepoIdForTask`.
             repoId: await cachedRepoIdForTask(db, taskId),

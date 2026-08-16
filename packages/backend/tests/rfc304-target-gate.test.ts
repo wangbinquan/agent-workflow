@@ -25,6 +25,20 @@ import {
 } from '../src/modules/code-capability/domain/targetGate'
 
 describe('RFC-304 — finding a gate command', () => {
+  test('`node` is a runner like any other', () => {
+    // It was missing from the list that already held `npm`, `npx`, `bun` and
+    // `python`, so `Run \`node gate.js\` before you push.` — a perfectly
+    // ordinary instruction — was refused, and `ci-fix` reported that it could
+    // not PROVE its fix. Found by the ci-fix e2e, whose fixture named its gate
+    // exactly that way.
+    expect(findGateCommand('CLAUDE.md', 'Run `node gate.js` before you push.\n')?.command).toBe(
+      'node gate.js',
+    )
+    expect(findGateCommand('CLAUDE.md', 'Run `deno task check` before you push.\n')?.command).toBe(
+      'deno task check',
+    )
+  })
+
   test('inline, on the same line as the instruction', () => {
     // The commonest phrasing by a distance.
     const found = findGateCommand(

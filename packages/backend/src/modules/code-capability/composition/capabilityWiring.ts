@@ -22,6 +22,7 @@
 
 import { buildProtocolBlock } from '@agent-workflow/shared'
 import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
+import { findGateCommand, GATE_DOC_CANDIDATES } from '@/modules/code-capability/domain/targetGate'
 import type { AiCaller, RetryBudget } from '@/modules/code-capability/application/determinismGuard'
 import type {
   StageResult,
@@ -352,12 +353,40 @@ export async function buildCapabilityWiring(
     }
 
     case 'ci-fix': {
+      /**
+       * The gate `validate-fix` runs to prove red-before / green-after.
+       *
+       * The command is DISCOVERED from the repository's own contributor
+       * document, exactly as `requirement`'s `run-target-gate` does — the
+       * design's reason is that a platform hardcoding `npm test` would be wrong
+       * in most repositories and confidently so.
+       *
+       * This used to call the runner with an empty string, so even once a
+       * runner existed the gate could only ever answer "the gate command found
+       * in the repository was empty" — a round that made a change and then
+       * declared its own fix a failure, three times, before handing off to a
+       * human who had been told nothing useful.
+       */
       const runGate =
-        input.runGateCommand === undefined
+        input.runGateCommand === undefined || input.readWorktreeFile === undefined
           ? async (): Promise<GateRun> => {
               throw new Error('no gate runner is wired for this round')
             }
-          : async (): Promise<GateRun> => await input.runGateCommand!('')
+          : async (): Promise<GateRun> => {
+              for (const candidate of GATE_DOC_CANDIDATES) {
+                const contents = await input.readWorktreeFile!(candidate)
+                if (contents === null) continue
+                const found = findGateCommand(candidate, contents)
+                if (found !== null) return await input.runGateCommand!(found.command)
+              }
+              // Not a throw: "this repository does not say how to check itself"
+              // is a fact about the repository, and the round reports it on the
+              // merge request instead of failing with a stack trace.
+              return {
+                exitCode: 1,
+                output: `no gate command was found — none of ${GATE_DOC_CANDIDATES.join(', ')} says how to check this repository, so the fix cannot be proved`,
+              }
+            }
       const env: CiFixEnvironment = {
         db: input.db,
         codeHost,
