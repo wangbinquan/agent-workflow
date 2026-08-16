@@ -723,6 +723,37 @@ PR-0 code-round 可行性（go/no-go）
 - **PR-4 是第一个用户可见价值点**，也是 PR-7/8/9 的前置（三者都要"自己审自己"）。
 - **PR-6 之后 PR-7/8/9 可并行**，各自独立可验收。
 
+## 2bis. 实现完整性审视（2026-08-16，任务 #19）
+
+按源码逐条对账，不看任务表状态列——本轮已三次发现表记完成而源码未落。方法是扫
+「两半都对、就是没接上」：**规则/表/schema 已建但零调用**、**union 缺一支**、
+**点位无路由**、**写侧有读侧无**。
+
+**最大的一处，也是这次审视存在的理由**：**调度器只接线了 `mr-review` 一条能力**。
+
+```
+scheduler.ts:4558   capability === 'mr-review' && state.triggerContext !== null
+                      ? await buildMrReviewWiring({...})
+                      : null      ← 其余四条能力全部走到这里
+```
+
+后果是具体的：`mr-comment-fix` / `requirement` / `ci-fix` 的 stage composition
+（`mrCommentFixStages.ts` / `requirementStages.ts` / `ciFixStages.ts`）**写完了、
+单测全绿、但调度器对它们零引用**——起一轮拿到的是没有任何 programStages/aiStages
+的 runner，于是第一个阶段就以
+`stage 'X' is kind 'program', which has no runner registered yet` 失败。
+
+**而且 PR-9 把这件事从「够不着」变成了「够得着但会炸」**：我在 PR-9 给
+`WorkPackageSchema` 补了 `mr-comment-fix` / `ci-fix` 两支 union arm（那本身是对的
+——缺一支 union 和一次合法拒绝长得一模一样），于是监视器**现在真的会派发**它们。
+派发 → 起轮 → 持 MR lease → 每个阶段失败。补 union 而不补接线，等于把一个安静的
+不可达变成一个响亮的失败；两者都要修，而正确的修法是**补接线**，不是缩回 union。
+
+`mr-review` 本身是**真正端到端通的**：`buildMrReviewWiring` + `resolveReviewerAgent`
++ `createReviewAgentCaller` 都在调度器里接上了（早期注释说「makeCaller 故意不给」
+是过期的，代码后来补上了）。所以这不是「整条 RFC 没接」，而是**四条能力里只接了
+一条**。
+
 ## 3. 验收清单
 
 > **两列口径**（第三轮 P2：原表把"主实现"与"E2E 验证"混在一起，出现 AC 无归属或错归属）：

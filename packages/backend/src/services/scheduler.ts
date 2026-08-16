@@ -150,6 +150,9 @@ import { buildProtocolBlock } from '@/services/protocol'
 import { CODE_ROUND_SUMMARY_PORT } from '@/services/codeRoundContract'
 import { createCodeCapabilityRunner } from '@/modules/code-capability/composition/codeCapabilityRunner'
 import { buildMrReviewWiring } from '@/modules/code-capability/composition/mrReviewEnvironment'
+import { buildCapabilityWiring } from '@/modules/code-capability/composition/capabilityWiring'
+import { COMMENT_FIX_AGENT_SLOT } from '@/modules/code-capability/domain/commentFixEnvelope'
+import { CI_FIX_AGENT_SLOT } from '@/modules/code-capability/domain/ciFixEnvelope'
 import { settleDanglingAttempts } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
 import { withRoundLease } from '@/services/codeRoundLease'
 import { resolveCapabilityHooks } from '@/services/codeCapabilityHooks'
@@ -157,6 +160,23 @@ import { MR_REVIEW_CONTRACT } from '@/modules/code-capability/domain/capabilityR
 import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import { createReviewAgentCaller, resolveReviewerAgent } from '@/services/codeReviewAgentCaller'
 import { REVIEW_AGENT_SLOT, REVIEW_PORT } from '@/modules/code-capability/application/reviewStage'
+
+/**
+ * Which agent slot a capability resolves against.
+ *
+ * Named per capability rather than reusing the reviewer slot everywhere: a team
+ * may well want a cheaper model repairing pipelines than reviewing diffs, and
+ * one shared slot would make that inexpressible. `requirement` has two slots
+ * (analyst, implementer); its comprehension slot is the one resolved here, and
+ * the wiring hands the same caller to both — splitting them is a configuration
+ * refinement, not a correctness gap.
+ */
+function agentSlotFor(capability: string): string {
+  if (capability === 'ci-fix') return CI_FIX_AGENT_SLOT
+  if (capability === 'mr-comment-fix') return COMMENT_FIX_AGENT_SLOT
+  if (capability === 'requirement') return 'analyst'
+  return REVIEW_AGENT_SLOT
+}
 import type { CodeCapabilityRunner } from '@/modules/code-capability/public/types'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
@@ -4608,7 +4628,68 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             }
           })()),
         })
-      : null
+      : state.triggerContext !== null &&
+          (capability === 'mr-comment-fix' ||
+            capability === 'requirement' ||
+            capability === 'ci-fix')
+        ? // RFC-304 — the other three capabilities. Before this, the scheduler
+          // referenced only `buildMrReviewWiring`, so a round for any of these
+          // got a runner with no stages and died at stage one with "has no
+          // runner registered yet" — three complete, unit-tested stage
+          // compositions that production could never reach.
+          //
+          // Each half was green on its own, which is why nothing was red. PR-9
+          // then made it louder rather than better by opening the `WorkPackage`
+          // union arms: the monitor began genuinely dispatching `ci-fix`, so a
+          // round would start, take the MR lease, and fail every stage.
+          await buildCapabilityWiring({
+            db,
+            capability,
+            webhook: state.triggerContext.trigger.webhook,
+            repoPath: task.repoPath,
+            worktreePath: state.scopeRoot,
+            protocolBlock: buildProtocolBlock([REVIEW_PORT], undefined, envelopeNonce),
+            nonce: envelopeNonce,
+            roundId: task.codeRoundId ?? taskId,
+            roundSeq: 1,
+            workItemId: task.codeRoundId ?? taskId,
+            ...(opts.codeHostConnections !== undefined
+              ? { codeHostConnections: opts.codeHostConnections }
+              : {}),
+            ...(opts.codeHostFetch !== undefined ? { codeHostFetch: opts.codeHostFetch } : {}),
+            // Same per-round slot resolution as the review branch. An
+            // unresolvable slot leaves `makeCaller` absent, so the PROGRAM
+            // stages still run for real and only the AI stages refuse, naming
+            // what to bind.
+            ...(await (async () => {
+              const resolved = await resolveReviewerAgent(db, {
+                repoId: task.repoPath,
+                capability,
+                slot: agentSlotFor(capability),
+              })
+              if (!resolved.ok) return { unresolvedAgentReason: resolved.message }
+              return {
+                makeCaller: (prompt: string, _slot: string) =>
+                  createReviewAgentCaller({
+                    db,
+                    appHome: opts.appHome ?? Paths.root,
+                    taskId,
+                    nodeId: node.id,
+                    agent: resolved.agent,
+                    skills: [],
+                    worktreePath: state.scopeRoot,
+                    repoPath: task.repoPath,
+                    baseBranch: task.baseBranch,
+                    portName: REVIEW_PORT,
+                    nonce: envelopeNonce,
+                    ...(opts.defaultPerNodeTimeoutMs !== undefined
+                      ? { timeoutMs: opts.defaultPerNodeTimeoutMs }
+                      : {}),
+                  })(prompt),
+              }
+            })()),
+          })
+        : null
   // RFC-304 recovery: settle attempts left claimed by a daemon that died
   // mid-call, BEFORE any stage of this round runs again. Order matters — doing
   // it afterwards would settle the attempts this run just made, and a restart
