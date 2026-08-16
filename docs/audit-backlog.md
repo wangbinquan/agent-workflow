@@ -395,6 +395,21 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 
 ## 其他 backlog
 
+- ⏳ **backend 分片「静默 120s 被 SIGKILL」实撞一次（2026-08-16，未复现，但**杀进程时不报是哪条用例**）**：
+  `gate:local` 一次红在 `[backend 4/4] FAIL timeout 239.9s`，日志形态是
+  `IDLE TIMEOUT after 120000ms without output; sent SIGTERM to process group … SIGKILL`
+  ——**没有失败断言**，已跑出约 1000 个点后整片静默。当次改动只有一个 e2e spec（backend
+  lane 根本不读 e2e/），同一棵树立即重跑 `EXIT=0` 全绿，当日其余多轮门禁亦全绿 ⇒ 判为
+  **某条用例阻塞 >120s**，而非新引入的确定性挂起。
+  静默前最后的日志上下文是 `rfc213` 的 `pendingRestore` 负向用例（`tar` 解包失败 /
+  DB swap 后失败那两条）——它们会 spawn 子进程，**子进程不返回**正好产生「静默而非断言
+  失败」这个签名，是首要怀疑对象（未证实）。
+  **真正该修的是可诊断性**：`scripts/local-gate.ts` 的 idle-timeout 杀手只打印进程组，
+  **不打印当时正在跑哪个测试文件**，所以撞上的人（本次即我）除了瞪着一排点以外无从下手。
+  待办：让 idle 超时在 SIGTERM 前先打印「最后开始 / 尚未结束的测试文件」（bun test 的
+  `--dots` 下需换 reporter 或记录最近一次文件切换），否则下次复现还是从零开始。判据：
+  再次出现 `IDLE TIMEOUT` 且无用例名 ⇒ 先补这条诊断输出，别急着猜是哪条。
+
 - ⏳ **sandbox-era backlog 条目全量重定性（2026-08-12 审计对账登记）**：RFC-276 删除 sandbox/containment/netless/verified 体系后，本文件「运行时/沙箱能力收口盘点」「沙箱/containment 功能性审计」「RFC-252 残留」「RFC-224 能力回退」「verified TOCTOU」「RFC-254 verified 簇」各节数十条条目需逐条判定 moot / 转世为新形态欠账 / 仍有效（例：hooksPath 豁免的 hook 执行风险不依赖沙箱、仍真实存在；bwrap 系全部 moot）。本轮只加了节级横幅，逐条重定性属独立对账轮。
 - ⏳ **2026-08-12 系统公共功能审计的「本轮不修」清单**：前端 UI 层（Card 迁移 ~151 条 bespoke 规则、CopyButton/MetaGrid/LocalizedDateTime/CollapsibleSection/MetaDots 等可抽取原语、intent 选项 UI 复用 QuestionForm、canvas inspector `form-input` 直落×5、Checkbox 迁移收尾 8 处、死 CSS ≥17 namespace、33 处裸 details、copy 状态机 8 文件）+ fanout hydration 语义分叉（scheduler.ts:6951-6954）+ DB 列 `opencode_session_id` 命名残留。完整清单与理由见 `design/system-commons-unification-audit-2026-08-12.md` §7；决策 D13-D17 拍板不做。
 - ⏳ **syncTaskWorkflow 未开 worktree 预检（2026-08-12 审计登记，代码注释 "for now" 此前无登记载体）**：`services/task.ts:2893-2897` `worktreePreflight` 仅 resumeTask 开启；sync 复活 worktree 已被 GC 的任务不会 410-fail-fast（RFC-165 复活门兜住墓碑行，缺口仅「墓碑未打但 dir 已丢」走 CAS 内 heal-forward）。待 sync harness 用真 worktree 时开启同一预检。

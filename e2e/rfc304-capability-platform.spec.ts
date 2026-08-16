@@ -719,6 +719,36 @@ test('the FIFTH capability — mr-monitor observes and stays SILENT (AC-33)', as
   expect(before).toBe(before)
 })
 
+test('the capability catalog is what the configuration UI is built from', async () => {
+  // The `/code` page derives its capability list and its per-capability agent
+  // pickers from this endpoint. Hard-coding either in the frontend is the drift
+  // that produced every registry defect in this RFC — the scheduler that wired
+  // one capability, the i18n table that stopped at `pipeline_succeeded`.
+  //
+  // Asserted through the real daemon because the UI reads it there: a catalog
+  // that is correct in a unit test and unreachable over HTTP configures nothing.
+  const catalog = await requestJson<{
+    items: Array<{ capability: string; agentSlots: string[] }>
+  }>('/api/code/capabilities')
+
+  const byCapability = new Map(catalog.items.map((row) => [row.capability, row.agentSlots]))
+  expect([...byCapability.keys()].sort()).toEqual([
+    'ci-fix',
+    'mr-comment-fix',
+    'mr-monitor',
+    'mr-review',
+    'requirement',
+  ])
+
+  // The slots a binding must fill. An empty list for a capability that needs an
+  // agent would render a create dialog with nothing to fill in, and produce a
+  // binding whose round dies at its first AI stage holding the MR lease.
+  expect(byCapability.get('mr-review')).toEqual(['reviewer'])
+  expect(byCapability.get('requirement')?.length).toBe(2)
+  // Scripts only — its binding legitimately maps no agent.
+  expect(byCapability.get('mr-monitor')).toEqual([])
+})
+
 test('no stage fails with "no runner registered" — the shape the audit found', async () => {
   // Stated as its own case because it is the REGRESSION, not the feature. A
   // capability can legitimately fail for a dozen reasons; failing because
