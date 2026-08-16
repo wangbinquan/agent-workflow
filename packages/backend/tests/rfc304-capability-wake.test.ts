@@ -14,9 +14,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
+  anchorKindFor,
   cellsWokenBy,
   judgeWake,
   subscribedEvents,
+  DEFAULT_EVENTS_BY_CAPABILITY,
   DEFAULT_MR_REVIEW_EVENTS,
   type WakeableCell,
 } from '../src/modules/code-capability/domain/capabilityWake'
@@ -157,5 +159,88 @@ describe('RFC-304 — selecting the cells a delivery wakes', () => {
 
   test('a delivery matching nothing wakes nothing, quietly', () => {
     expect(cellsWokenBy([cell()], event({ eventType: 'push' }))).toEqual([])
+  })
+})
+
+describe('RFC-304 T46b — each capability hears its OWN entry event', () => {
+  // One shared default was right while `mr-review` was the only capability and
+  // wrong the moment a second arrived. A `requirement` cell subscribed to
+  // `mr_opened` would never hear its own entry event: the person labels an
+  // issue, nothing happens, and the matrix still says `ready`.
+  test('a requirement is entered by LABELLING an issue', () => {
+    expect([...(DEFAULT_EVENTS_BY_CAPABILITY.requirement ?? [])]).toEqual(['issue_labeled'])
+
+    const verdict = judgeWake(cell({ capability: 'requirement' }), {
+      eventType: 'issue_labeled',
+      issueIid: '88',
+    })
+    expect(verdict).toEqual({ wake: true })
+  })
+
+  test('an issue COMMENT is not an entry point', () => {
+    // It is how a clarifying question gets answered. Treating it as an entry
+    // point would start a second round for every reply.
+    expect(
+      judgeWake(cell({ capability: 'requirement' }), {
+        eventType: 'issue_comment',
+        issueIid: '88',
+      }),
+    ).toEqual({ wake: false, reason: 'event-not-subscribed' })
+  })
+
+  test('an issue-anchored capability is not rejected for having no MR', () => {
+    // The gate that would otherwise reject its only entry point: a requirement
+    // woken by a label has no merge request and will not until it opens one.
+    const verdict = judgeWake(cell({ capability: 'requirement' }), {
+      eventType: 'issue_labeled',
+      issueIid: '88',
+      mrIid: undefined,
+    })
+    expect(verdict.wake).toBe(true)
+  })
+
+  test('…but it IS rejected when the event names no issue', () => {
+    expect(judgeWake(cell({ capability: 'requirement' }), { eventType: 'issue_labeled' })).toEqual({
+      wake: false,
+      reason: 'no-issue',
+    })
+  })
+
+  test('an MR-anchored capability still needs an MR', () => {
+    expect(judgeWake(cell(), { eventType: 'mr_opened', issueIid: '88' })).toEqual({
+      wake: false,
+      reason: 'no-mr',
+    })
+  })
+
+  test('the anchor kind follows the capability, not the event', () => {
+    // Anchoring a requirement to `mr` would key its work item to a merge
+    // request number that happens to equal the issue number — a different
+    // object with the same digits, and nothing errors to say so.
+    expect(anchorKindFor('requirement')).toBe('issue')
+    for (const capability of ['mr-review', 'mr-comment-fix', 'ci-fix', 'mr-monitor']) {
+      expect(anchorKindFor(capability)).toBe('mr')
+    }
+  })
+
+  test('a comment fix is entered by a comment; a CI fix by a failing pipeline', () => {
+    expect([...(DEFAULT_EVENTS_BY_CAPABILITY['mr-comment-fix'] ?? [])]).toEqual(['note'])
+    expect([...(DEFAULT_EVENTS_BY_CAPABILITY['ci-fix'] ?? [])]).toEqual(['pipeline_failed'])
+  })
+
+  test('an unknown capability falls back to the review set, not to nothing', () => {
+    // A cell subscribed to no events is a repository that reports `ready` and
+    // never responds — the hardest failure here to notice.
+    expect([...subscribedEvents(cell({ capability: 'something-new' }))]).toEqual([
+      ...DEFAULT_MR_REVIEW_EVENTS,
+    ])
+  })
+
+  test('an explicit list still overrides the per-capability default', () => {
+    expect([
+      ...subscribedEvents(
+        cell({ capability: 'requirement', triggerConfig: { events: ['mr_opened'] } }),
+      ),
+    ]).toEqual(['mr_opened'])
   })
 })

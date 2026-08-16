@@ -22,6 +22,47 @@
 /** Events that start a review when a cell does not say otherwise. */
 export const DEFAULT_MR_REVIEW_EVENTS: readonly string[] = ['mr_opened', 'mr_updated']
 
+/**
+ * The default event set PER CAPABILITY (RFC-304 T46b).
+ *
+ * One shared default was right while `mr-review` was the only capability and
+ * wrong the moment a second arrived. Each capability is entered by a different
+ * kind of thing happening, and a `requirement` cell subscribed to `mr_opened`
+ * would never hear its own entry event — the person labels an issue and nothing
+ * happens, with the matrix still reporting `ready`.
+ *
+ *   mr-review       an MR appearing or changing.
+ *   mr-comment-fix  somebody commenting on one. Narrower than it looks: the
+ *                   `mr-monitor` claim rule and the bot-author guard already
+ *                   keep this from firing on the platform's own remarks.
+ *   requirement     an issue being LABELLED. Not `issue_comment`: a comment on
+ *                   an issue is how a clarifying question gets answered, and
+ *                   treating it as an entry point would start a second round
+ *                   for every reply.
+ *   ci-fix          a pipeline failing.
+ *   mr-monitor      everything that could mean work — it decides, and most of
+ *                   the time it decides `noop`.
+ */
+export const DEFAULT_EVENTS_BY_CAPABILITY: Readonly<Record<string, readonly string[]>> = {
+  'mr-review': DEFAULT_MR_REVIEW_EVENTS,
+  'mr-comment-fix': ['note'],
+  requirement: ['issue_labeled'],
+  'ci-fix': ['pipeline_failed'],
+  'mr-monitor': ['mr_opened', 'mr_updated', 'note', 'pipeline_failed', 'pipeline_succeeded'],
+}
+
+/**
+ * Which anchor a capability's work item hangs off.
+ *
+ * A `requirement` is about an ISSUE; everything else is about a merge request.
+ * Getting this wrong does not error — it creates a work item keyed to a merge
+ * request number that happens to equal an issue number, which is a different
+ * object with the same digits.
+ */
+export function anchorKindFor(capability: string): 'mr' | 'issue' {
+  return capability === 'requirement' ? 'issue' : 'mr'
+}
+
 export interface WakeableCell {
   capability: string
   enabled: boolean
@@ -34,6 +75,8 @@ export interface WakeEvent {
   eventType: string
   /** Present on MR-associated events; absent means there is nothing to review. */
   mrIid?: string | undefined
+  /** Present on issue-associated events; what an issue-anchored round works on. */
+  issueIid?: string | undefined
   /** The account that caused the event, for the bot-loop guard. */
   authorUsername?: string | undefined
 }
@@ -42,7 +85,13 @@ export type WakeVerdict =
   | { wake: true }
   | {
       wake: false
-      reason: 'not-ready' | 'event-not-subscribed' | 'no-mr' | 'own-comment' | 'bot-authored-mr'
+      reason:
+        | 'not-ready'
+        | 'event-not-subscribed'
+        | 'no-mr'
+        | 'no-issue'
+        | 'own-comment'
+        | 'bot-authored-mr'
     }
 
 /**
@@ -54,7 +103,13 @@ export type WakeVerdict =
  */
 export function subscribedEvents(cell: WakeableCell): readonly string[] {
   const configured = cell.triggerConfig.events
-  if (!Array.isArray(configured)) return DEFAULT_MR_REVIEW_EVENTS
+  if (!Array.isArray(configured)) {
+    // An unknown capability falls back to the review set rather than to
+    // nothing: a cell that silently subscribes to no events is a repository
+    // that reports `ready` and never responds, which is the hardest failure
+    // here to notice.
+    return DEFAULT_EVENTS_BY_CAPABILITY[cell.capability] ?? DEFAULT_MR_REVIEW_EVENTS
+  }
   return configured.filter((e): e is string => typeof e === 'string')
 }
 
@@ -76,10 +131,21 @@ export function judgeWake(
     return { wake: false, reason: 'event-not-subscribed' }
   }
 
-  // Every `mr-review` round needs something to review and somewhere to publish.
-  // An MR-shaped event without an iid cannot supply either (design §6.1 records
-  // this for fork PR CI events, whose `pull_requests[]` arrives empty).
-  if (event.mrIid === undefined || event.mrIid === '') return { wake: false, reason: 'no-mr' }
+  // Every MR-anchored round needs something to work on and somewhere to
+  // publish. An MR-shaped event without an iid cannot supply either (design
+  // §6.1 records this for fork PR CI events, whose `pull_requests[]` arrives
+  // empty).
+  //
+  // Issue-anchored capabilities are checked against the ISSUE instead: a
+  // `requirement` woken by a label has no merge request and never will until it
+  // opens one, so demanding an iid here would reject its only entry point.
+  if (anchorKindFor(cell.capability) === 'issue') {
+    if (event.issueIid === undefined || event.issueIid === '') {
+      return { wake: false, reason: 'no-issue' }
+    }
+  } else if (event.mrIid === undefined || event.mrIid === '') {
+    return { wake: false, reason: 'no-mr' }
+  }
 
   // The bot's own comments must not wake it. Without this a round publishes,
   // the publication is itself an event, and the next round starts — a loop that

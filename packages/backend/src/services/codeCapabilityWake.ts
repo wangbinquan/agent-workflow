@@ -19,7 +19,11 @@ import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { repoCapabilityConfig } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import { cellsWokenBy, type WakeableCell } from '@/modules/code-capability/domain/capabilityWake'
+import {
+  anchorKindFor,
+  cellsWokenBy,
+  type WakeableCell,
+} from '@/modules/code-capability/domain/capabilityWake'
 import { startCodeRoundTask } from '@/services/codeRoundLaunch'
 import { resolveMonitorScripts } from '@/services/codeCapabilityScripts'
 import {
@@ -63,6 +67,8 @@ export interface WakeDeliveryInput {
   repoId: string
   eventType: string
   mrIid?: string | undefined
+  /** Issue number, for the capabilities anchored to one (`requirement`). */
+  issueIid?: string | undefined
   authorUsername?: string | undefined
   /** The frozen context each round reads its target from. */
   triggerContext: TriggerContext
@@ -135,6 +141,7 @@ export async function wakeCapabilitiesForDelivery(input: WakeDeliveryInput): Pro
     {
       eventType: input.eventType,
       mrIid: input.mrIid,
+      issueIid: input.issueIid,
       authorUsername: input.authorUsername,
     },
     { botUsername: input.botUsername },
@@ -214,13 +221,18 @@ function webhookFieldsOf(context: TriggerContext | undefined): Partial<Record<st
 function identityFor(input: WakeDeliveryInput, capability: string): WorkItemIdentity | null {
   const projectId = webhookFieldsOf(input.triggerContext).project_id ?? ''
   const endpointId = input.codeHostEndpointId ?? ''
-  const anchorId = input.mrIid ?? ''
+  // A `requirement` is about an ISSUE; everything else is about a merge
+  // request. Anchoring it to `mr` would key its work item to a merge request
+  // number that happens to equal the issue number — a different object with
+  // the same digits, and no error anywhere to say so.
+  const anchorKind = anchorKindFor(capability)
+  const anchorId = (anchorKind === 'issue' ? input.issueIid : input.mrIid) ?? ''
   if (projectId === '' || endpointId === '' || anchorId === '') return null
   return {
     codeHostEndpointId: endpointId,
     stableProjectId: projectId,
     capability,
-    anchorKind: 'mr',
+    anchorKind,
     anchorId,
   }
 }
@@ -236,7 +248,9 @@ function missingIdentityFields(input: WakeDeliveryInput): string[] {
   const missing: string[] = []
   if ((webhookFieldsOf(input.triggerContext).project_id ?? '') === '') missing.push('project id')
   if ((input.codeHostEndpointId ?? '') === '') missing.push('code host connection')
-  if ((input.mrIid ?? '') === '') missing.push('merge request number')
+  if ((input.mrIid ?? '') === '' && (input.issueIid ?? '') === '') {
+    missing.push('merge request or issue number')
+  }
   return missing
 }
 

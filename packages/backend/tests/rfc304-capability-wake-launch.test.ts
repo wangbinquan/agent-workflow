@@ -169,7 +169,11 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
     // event (T10e) and suppresses the others by design, so pairing it here
     // would test the claim rule rather than the separation it is named for.
     await enable('mr-review')
-    await enable('ci-fix')
+    // Explicitly widened: since T46b each capability has its OWN default event
+    // set, and `ci-fix` defaults to `pipeline_failed` only. A team widening a
+    // capability's set is a supported case, and saying so here keeps this test
+    // about SEPARATION rather than about which defaults happen to overlap.
+    await enable('ci-fix', { triggerConfig: { events: ['mr_opened'] } })
     const result = await deliver()
     expect(result.started).toHaveLength(2)
     const ids = new Set(result.started.map((s) => s.taskId))
@@ -178,7 +182,7 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
 
   test('each round gets its own round id', async () => {
     await enable('mr-review')
-    await enable('ci-fix')
+    await enable('ci-fix', { triggerConfig: { events: ['mr_opened'] } })
     const result = await deliver()
     expect(new Set(result.started.map((s) => s.roundId)).size).toBe(2)
   })
@@ -229,7 +233,7 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
     // accepts either anchor (`hasCodeRound`), and an ordinary trigger launch
     // still needs both ids.
     await enable('mr-review')
-    await enable('ci-fix')
+    await enable('ci-fix', { triggerConfig: { events: ['mr_opened'] } })
     const result = await wakeCapabilitiesForDelivery({
       db,
       repoId: REPO,
@@ -249,7 +253,7 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
     // the second — and the failure has to surface, because a launch that
     // vanished with no row is exactly what this RFC exists to prevent.
     await enable('mr-review')
-    await enable('ci-fix')
+    await enable('ci-fix', { triggerConfig: { events: ['mr_opened'] } })
     const result = await wakeCapabilitiesForDelivery({
       db,
       repoId: REPO,

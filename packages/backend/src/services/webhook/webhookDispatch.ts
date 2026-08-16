@@ -1151,6 +1151,7 @@ async function wakeCodeCapabilitiesFor(
       repoId: resolution.cachedRepoId,
       eventType: input.event.eventType,
       ...(input.event.mrIid === undefined ? {} : { mrIid: input.event.mrIid }),
+      ...(input.event.issueIid === undefined ? {} : { issueIid: input.event.issueIid }),
       ...(input.event.author.username === undefined
         ? {}
         : { authorUsername: input.event.author.username }),

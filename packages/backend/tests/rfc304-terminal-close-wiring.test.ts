@@ -414,6 +414,41 @@ describe('RFC-304 §3.1 — the dispatcher wakes capability cells', () => {
     expect((await db.select().from(tasks)).length).toBe(1)
   })
 
+  test('T46b — labelling an issue starts a requirement round, anchored to the ISSUE', async () => {
+    // The entry point end to end: an `issue_labeled` delivery, through the real
+    // dispatcher, to a work item anchored to issue 88. Anchored to `mr` it
+    // would key the item to merge request 88 — a different object that happens
+    // to share the number, with nothing anywhere to say so.
+    await readyCell('requirement')
+
+    const deliveryId = ulid()
+    await db.insert(webhookDeliveries).values({
+      id: deliveryId,
+      endpointId: ENDPOINT,
+      eventType: 'issue_labeled',
+      status: 'received',
+      receivedAt: Date.now(),
+    })
+    await createWebhookDispatcher(deps).dispatch({
+      deliveryId,
+      endpoint,
+      event: eventOf({
+        eventType: 'issue_labeled',
+        mrIid: undefined,
+        issueIid: '88',
+        issueTitle: 'Retry logic drops the last attempt',
+        addedLabels: ['aw:implement'],
+      }),
+    })
+
+    const items = await db.select().from(codeWorkItems)
+    expect(items.length).toBe(1)
+    expect(items[0]?.capability).toBe('requirement')
+    expect(items[0]?.anchorKind).toBe('issue')
+    expect(items[0]?.anchorId).toBe('88')
+    expect((await db.select().from(codeWorkRounds)).length).toBe(1)
+  })
+
   test('a repository with no cells stays silent', async () => {
     await deliverUpdate()
     expect((await db.select().from(codeWorkItems)).length).toBe(0)
