@@ -120,8 +120,8 @@ export interface MrReviewEnvironment {
   repoPath: string
   worktreePath: string
   /** Injected: this module must not reach the scheduler (AC-10 negative scan). */
-  makeCaller: (prompt: string) => AiCaller
-  protocolBlock: string
+  /** See `ReviewStageInput.makeCaller` — the port travels with the prompt. */
+  makeCaller: (prompt: string, port: string) => AiCaller
   nonce: string
   budget: RetryBudget
   gate: GateConfig
@@ -796,7 +796,6 @@ export function mrReviewAiStages(
         shardRoot: `${env.worktreePath}-shards`,
         git: env.git,
         makeCaller: env.makeCaller,
-        protocolBlock: env.protocolBlock,
         nonce: env.nonce,
         budget: env.budget,
         mrTitle: meta.title,
@@ -841,7 +840,7 @@ export function mrReviewAiStages(
       })
 
       const outcome = await runGuardedAiStage<ReviewEnvelope>({
-        caller: env.makeCaller(`${prompt}\n${env.protocolBlock}`),
+        caller: env.makeCaller(prompt, REVIEW_PORT),
         schema: ReviewEnvelopeSchema,
         nonce: env.nonce,
         portName: REVIEW_PORT,

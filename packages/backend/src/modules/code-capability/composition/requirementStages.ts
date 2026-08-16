@@ -27,7 +27,10 @@
 // and configuring one per cell would make every team restate what their
 // CONTRIBUTING.md already says.
 
-import { runGuardedAiStage } from '@/modules/code-capability/application/determinismGuard'
+import {
+  runGuardedAiStage,
+  exhaustionDetail,
+} from '@/modules/code-capability/application/determinismGuard'
 import type {
   AiCaller,
   AttemptRecorder,
@@ -103,8 +106,8 @@ export interface RequirementEnvironment {
   workItemId: string
   roundId: string
   roundSeq: number
-  makeCaller: (prompt: string, slot: 'analyst' | 'implementer') => AiCaller
-  protocolBlock: string
+  /** See `MrCommentFixEnvironment.makeCaller` for why the port is a parameter. */
+  makeCaller: (prompt: string, slot: 'analyst' | 'implementer', port: string) => AiCaller
   nonce: string
   budget: RetryBudget
   attemptRecorder?: AttemptRecorder
@@ -304,7 +307,7 @@ export function requirementProgramStages(
       const created = await env.codeHost.call({
         action: 'mr.create',
         params: {
-          __project__: env.projectRef,
+          project: env.projectRef,
           source_branch: branch,
           target_branch: env.targetBranch,
           title: implementation.title,
@@ -365,7 +368,7 @@ export function requirementAiStages(
       ].join('\n')
 
       const outcome = await runGuardedAiStage<ComprehendEnvelope>({
-        caller: env.makeCaller(`${prompt}\n${env.protocolBlock}`, 'analyst'),
+        caller: env.makeCaller(prompt, 'analyst', COMPREHEND_PORT),
         schema: ComprehendEnvelopeSchema,
         nonce: env.nonce,
         portName: COMPREHEND_PORT,
@@ -377,7 +380,7 @@ export function requirementAiStages(
       if (outcome.status === 'canceled') return fail('the round was canceled')
       if (outcome.status === 'exhausted') {
         return fail(
-          `the analyst did not produce a valid result after ${String(outcome.totalCalls)} attempts`,
+          `the analyst did not produce a valid result after ${String(outcome.totalCalls)} attempts${exhaustionDetail(outcome.rejections)}`,
         )
       }
       return done({ understanding: outcome.value })
@@ -411,7 +414,7 @@ export function requirementAiStages(
       ].join('\n')
 
       const outcome = await runGuardedAiStage<ImplementEnvelope>({
-        caller: env.makeCaller(`${prompt}\n${env.protocolBlock}`, 'implementer'),
+        caller: env.makeCaller(prompt, 'implementer', IMPLEMENT_PORT),
         schema: ImplementEnvelopeSchema,
         nonce: env.nonce,
         portName: IMPLEMENT_PORT,
@@ -423,7 +426,7 @@ export function requirementAiStages(
       if (outcome.status === 'canceled') return fail('the round was canceled')
       if (outcome.status === 'exhausted') {
         return fail(
-          `the implementer did not produce a valid result after ${String(outcome.totalCalls)} attempts`,
+          `the implementer did not produce a valid result after ${String(outcome.totalCalls)} attempts${exhaustionDetail(outcome.rejections)}`,
         )
       }
       return done({ implementation: outcome.value })

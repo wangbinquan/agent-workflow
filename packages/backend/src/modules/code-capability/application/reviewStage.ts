@@ -40,16 +40,22 @@ export const REVIEW_PORT = 'findings'
 export const REVIEW_AGENT_SLOT = 'reviewer'
 
 export interface ReviewStageInput {
-  /** Turns the built prompt into a caller. Keeps the scheduler out of here. */
-  makeCaller: (prompt: string) => AiCaller
+  /**
+   * Turns the built prompt into a caller. Keeps the scheduler out of here.
+   *
+   * Takes the PORT it will validate: the caller reads the model's reply out of
+   * `outputs[port]` and the protocol block asks for it, so handing it over once
+   * is what stops the two from drifting. They did drift — the scheduler built
+   * both around this port for every capability, and the other three read an
+   * empty port for six attempts and reported "no envelope".
+   */
+  makeCaller: (prompt: string, port: string) => AiCaller
   nonce: string
   budget: RetryBudget
   unifiedDiff: string
   hunks: readonly DiffHunk[]
   omitted: ReadonlyArray<{ path: string; omission: DiffOmission }>
   mrTitle: string | null
-  /** Appended verbatim — the platform's single envelope protocol builder. */
-  protocolBlock: string
   recorder?: AttemptRecorder
   signal?: AbortSignal
 }
@@ -69,7 +75,7 @@ export async function runReviewStage(input: ReviewStageInput): Promise<ReviewSta
   })
 
   const outcome = await runGuardedAiStage<ReviewEnvelope>({
-    caller: input.makeCaller(`${prompt}\n${input.protocolBlock}`),
+    caller: input.makeCaller(prompt, REVIEW_PORT),
     schema: ReviewEnvelopeSchema,
     nonce: input.nonce,
     portName: REVIEW_PORT,

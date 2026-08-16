@@ -59,8 +59,8 @@ export interface RunReviewShardsInput {
   /** Directory the per-shard trees are created under. */
   shardRoot: string
   git: GitPort
-  makeCaller: (prompt: string) => AiCaller
-  protocolBlock: string
+  /** See `ReviewStageInput.makeCaller` — the port travels with the prompt. */
+  makeCaller: (prompt: string, port: string) => AiCaller
   nonce: string
   budget: RetryBudget
   mrTitle: string | null
@@ -139,7 +139,6 @@ async function runOneShard(
       // prompt and make a single binary file look like many.
       omitted: [],
       mrTitle: input.mrTitle,
-      protocolBlock: input.protocolBlock,
       ...(input.recorderFor !== undefined ? { recorder: input.recorderFor(shard.key) } : {}),
       ...(input.signal !== undefined ? { signal: input.signal } : {}),
     })

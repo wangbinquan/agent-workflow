@@ -179,7 +179,6 @@ describe('RFC-304 §6.4 — the ci-fix round', () => {
     workItemId,
     roundId: ulid(),
     makeCaller: modelReturning({ summary: 'Corrected the import.', touched: ['src/retry.ts'] }),
-    protocolBlock: '',
     nonce: NONCE,
     budget: { sameSession: 0, freshSession: 0 },
     runGate: async () => GREEN,

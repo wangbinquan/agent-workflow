@@ -167,7 +167,6 @@ function reviewEnvironment(
     repoPath: worktree,
     worktreePath: worktree,
     makeCaller: () => async () => ({ stdout: envelope, sessionId: 'system-mock-session' }),
-    protocolBlock: '',
     nonce: NONCE,
     budget: { sameSession: 1, freshSession: 0 },
     gate: { threshold: 'info', maxPerRound: 20 },

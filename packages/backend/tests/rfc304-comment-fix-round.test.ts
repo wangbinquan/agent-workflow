@@ -194,7 +194,6 @@ describe('RFC-304 §6.2 — the comment-fix round', () => {
         generation: 1,
         roundId: ulid(),
         makeCaller: modelReturning({ outcome: 'changed', message: 'Hoisted the allocation.' }),
-        protocolBlock: '',
         nonce: NONCE,
         budget: { sameSession: 0, freshSession: 0 },
         ...over,

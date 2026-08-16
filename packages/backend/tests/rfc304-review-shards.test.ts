@@ -96,7 +96,6 @@ function inputFor(
     shardRoot: '/scratch',
     git: git.port,
     makeCaller: caller,
-    protocolBlock: '',
     nonce: NONCE,
     budget: { sameSession: 0, freshSession: 0 },
     mrTitle: 'Add retry logic',

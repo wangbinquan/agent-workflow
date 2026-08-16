@@ -28,6 +28,8 @@
 // stage, with a sentence an operator can act on.
 
 import { and, eq } from 'drizzle-orm'
+import { buildProtocolBlock } from '@agent-workflow/shared'
+import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import type { DbClient } from '@/db/client'
 import { webhookEndpoints } from '@/db/schema'
 import type { AiCaller, RetryBudget } from '@/modules/code-capability/application/determinismGuard'
@@ -57,13 +59,12 @@ export interface MrReviewWiringInput {
   webhook: WebhookTriggerFields
   repoPath: string
   worktreePath: string
-  protocolBlock: string
   nonce: string
   /**
    * Supplied by whoever can run an agent. Absent means the `review` stage
    * refuses by name — see the header.
    */
-  makeCaller?: (prompt: string) => AiCaller
+  makeCaller?: (prompt: string, port: string) => AiCaller
   budget?: RetryBudget
   gate?: GateConfig
   /** Overrides endpoint resolution; tests and multi-endpoint callers use it. */
@@ -133,6 +134,14 @@ function refuseAll(
 }
 
 export interface MrReviewWiring {
+  /**
+   * What a resuming round inherits — see
+   * `CapabilityWiring.inheritedArtifacts`, which this mirrors so the two
+   * builders present one shape to the scheduler. `mr-review` opens no
+   * confirming round today, so it is normally the resolved target and nothing
+   * else; a crash-resume reads it for the same reason a confirmation does.
+   */
+  inheritedArtifacts: Readonly<Record<string, unknown>>
   programStages: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
   aiStages: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
   /**
@@ -160,6 +169,7 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
     const message = `the trigger context names provider '${String(provider)}', which this platform does not drive`
     return {
       codeHostEndpointId: null,
+      inheritedArtifacts: {},
       programStages: refuseAll(
         [
           'resolve-target',
@@ -186,6 +196,7 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
     if (!resolved.ok) {
       return {
         codeHostEndpointId: null,
+        inheritedArtifacts: {},
         programStages: refuseAll(
           [
             'resolve-target',
@@ -257,20 +268,28 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
     codeHostEndpointId: endpointId,
     repoPath: input.repoPath,
     worktreePath: input.worktreePath,
-    makeCaller:
-      input.makeCaller ??
-      (() => async () => {
-        // Reached only if the stage runs; the refusal below replaces it.
-        throw new Error('no agent caller is wired for the review stage')
-      }),
-    protocolBlock: input.protocolBlock,
+    // The protocol block is composed HERE, for the port the stage passes in,
+    // rather than handed down ready-made: one argument then drives both the
+    // instruction and the reader, which is what `capabilityWiring` does for the
+    // other capabilities and what none of them did before.
+    makeCaller: (prompt: string, port: string) =>
+      (
+        input.makeCaller ??
+        (() => async () => {
+          // Reached only if the stage runs; the refusal below replaces it.
+          throw new Error('no agent caller is wired for the review stage')
+        })
+      )(`${prompt}\n${buildProtocolBlock([port], undefined, input.nonce)}`, port),
     nonce: input.nonce,
     budget: input.budget ?? DEFAULT_REVIEW_BUDGET,
     gate: input.gate ?? DEFAULT_REVIEW_GATE,
   }
 
+  const resolvedTarget = resolveTarget(input.webhook, endpointId)
+
   return {
     codeHostEndpointId: endpointId,
+    inheritedArtifacts: resolvedTarget.ok ? { target: resolvedTarget.target } : {},
     programStages: mrReviewProgramStages(env),
     aiStages:
       input.makeCaller === undefined

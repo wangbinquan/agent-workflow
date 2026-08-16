@@ -20,6 +20,8 @@
 // configure. A stage that refuses BY NAME — naming the slot, the repository,
 // the missing endpoint — puts the resolution failure where somebody reads it.
 
+import { buildProtocolBlock } from '@agent-workflow/shared'
+import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import type { AiCaller, RetryBudget } from '@/modules/code-capability/application/determinismGuard'
 import type {
   StageResult,
@@ -66,6 +68,26 @@ export interface CapabilityWiring {
    */
   scriptStages?: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
   codeHostEndpointId: string | null
+  /**
+   * What a RESUMING round inherits from the one it continues.
+   *
+   * A round that resumes at `verify-baseline` marks every earlier stage
+   * `inherited` — it does not run them, and so does not produce what they
+   * produced. `verify-baseline` then asked for `target` and got "stage artifact
+   * 'target' is missing though the contract requires it": the confirming round
+   * failed at its first live stage, every time, so `/aw apply` could never
+   * push. The engine has taken `inheritedArtifacts` since PR-1a and nothing
+   * ever passed any.
+   *
+   * Only artifacts that are pure functions of the trigger context belong here.
+   * `target` is exactly that — `resolve-target` reads the frozen webhook and
+   * nothing else — so recomputing it is the same value the skipped stage would
+   * have produced, not a guess at it. Anything a model or the merge request
+   * decided is NOT reconstructible this way and must not be faked; it either
+   * lives in the artifact ledger (the frozen change does) or the stage that
+   * needs it cannot be skipped.
+   */
+  inheritedArtifacts: Readonly<Record<string, unknown>>
 }
 
 export interface CapabilityWiringInput {
@@ -74,13 +96,25 @@ export interface CapabilityWiringInput {
   webhook: WebhookTriggerFields
   repoPath: string
   worktreePath: string
-  protocolBlock: string
   nonce: string
   roundId: string
   roundSeq: number
   workItemId: string
-  /** Absent means every AI stage refuses by name — see the header. */
-  makeCaller?: (prompt: string, slot: string) => AiCaller
+  /**
+   * The patch generation artifacts are frozen at — the round's epoch. Hardcoded
+   * to 1 before, which matched the wait handle only until a supersede bumped
+   * one of them.
+   */
+  generation?: number
+  /**
+   * Absent means every AI stage refuses by name — see the header.
+   *
+   * Takes the port as well as the slot: the caller reads the model's reply out
+   * of `outputs[port]`, and it used to be handed `mr-review`'s port for every
+   * capability. The protocol block asking for that port is composed HERE, from
+   * the same argument, so the instruction and the reader cannot drift apart.
+   */
+  makeCaller?: (prompt: string, slot: string, port: string) => AiCaller
   /** Why no agent could be resolved, when that is the reason `makeCaller` is absent. */
   unresolvedAgentReason?: string
   budget?: RetryBudget
@@ -167,6 +201,7 @@ export async function buildCapabilityWiring(
     const message = `the trigger context names provider '${String(provider)}', which this platform does not drive`
     return {
       codeHostEndpointId: null,
+      inheritedArtifacts: {},
       programStages: refuseAll(programNames, message),
       aiStages: refuseAll(aiNames, message),
     }
@@ -178,12 +213,43 @@ export async function buildCapabilityWiring(
     if (!resolved.ok) {
       return {
         codeHostEndpointId: null,
+        inheritedArtifacts: {},
         programStages: refuseAll(programNames, resolved.message),
         aiStages: refuseAll(aiNames, resolved.message),
       }
     }
     endpointId = resolved.id
   }
+
+  /**
+   * One place where a stage's port becomes an instruction and a reader.
+   *
+   * The block is built for THIS port rather than passed in already built: the
+   * scheduler used to build one block per round out of `mr-review`'s port and
+   * hand it to every capability, which asked `mr-comment-fix`'s agent for
+   * `findings` while its stage waited for `fix`. Composing it from the argument
+   * the stage supplies makes that impossible to spell.
+   */
+  /**
+   * What a resuming round inherits — see `CapabilityWiring.inheritedArtifacts`.
+   *
+   * The SAME call `resolve-target` makes, on the same frozen trigger context,
+   * so the skipped stage's value is reproduced rather than approximated. A
+   * context that cannot resolve a target contributes nothing and the resuming
+   * stage fails by name, which is the honest outcome: there is no target to
+   * push to.
+   */
+  const resolvedTarget = resolveTarget(input.webhook, endpointId)
+  const inheritedArtifacts: Record<string, unknown> = resolvedTarget.ok
+    ? { target: resolvedTarget.target }
+    : {}
+
+  const callFor = (prompt: string, slot: string, port: string): AiCaller =>
+    (input.makeCaller ?? throwUnwired)(
+      `${prompt}\n${buildProtocolBlock([port], undefined, input.nonce)}`,
+      slot,
+      port,
+    )
 
   const codeHost = createCodeHostAdapter({
     db: input.db,
@@ -218,16 +284,16 @@ export async function buildCapabilityWiring(
         // than guessing a thread.
         threadId: input.webhook.comment_thread_id ?? '',
         workItemId: input.workItemId,
-        generation: 1,
+        generation: input.generation ?? 1,
         roundId: input.roundId,
-        makeCaller: (prompt) => (input.makeCaller ?? throwUnwired)(prompt, 'fixer'),
-        protocolBlock: input.protocolBlock,
+        makeCaller: (prompt, port) => callFor(prompt, 'fixer', port),
         nonce: input.nonce,
         budget: input.budget ?? DEFAULT_CAPABILITY_BUDGET,
         attemptRecorder: recorderFor('apply-change'),
       }
       return {
         codeHostEndpointId: endpointId,
+        inheritedArtifacts,
         programStages: mrCommentFixProgramStages(env),
         aiStages:
           input.makeCaller === undefined
@@ -260,8 +326,7 @@ export async function buildCapabilityWiring(
         workItemId: input.workItemId,
         roundId: input.roundId,
         roundSeq: input.roundSeq,
-        makeCaller: (prompt, slot) => (input.makeCaller ?? throwUnwired)(prompt, slot),
-        protocolBlock: input.protocolBlock,
+        makeCaller: (prompt, slot, port) => callFor(prompt, slot, port),
         nonce: input.nonce,
         budget: input.budget ?? DEFAULT_CAPABILITY_BUDGET,
         attemptRecorder: recorderFor('comprehend'),
@@ -277,6 +342,7 @@ export async function buildCapabilityWiring(
       }
       return {
         codeHostEndpointId: endpointId,
+        inheritedArtifacts,
         programStages: requirementProgramStages(env),
         aiStages:
           input.makeCaller === undefined
@@ -299,14 +365,15 @@ export async function buildCapabilityWiring(
         repoPath: input.repoPath,
         worktreePath: input.worktreePath,
         reportTarget: {
-          __project__: input.webhook.project_id ?? '',
+          // Spread verbatim into `params` by the MR voice, so it takes the
+          // explicit param name rather than the path placeholder's.
+          project: input.webhook.project_id ?? '',
           mr: input.webhook.mr_iid ?? '',
         },
         sourceBranch: input.webhook.branch ?? '',
         workItemId: input.workItemId,
         roundId: input.roundId,
-        makeCaller: (prompt) => (input.makeCaller ?? throwUnwired)(prompt, 'ci-fixer'),
-        protocolBlock: input.protocolBlock,
+        makeCaller: (prompt, _slot, port) => callFor(prompt, 'ci-fixer', port),
         nonce: input.nonce,
         budget: input.budget ?? DEFAULT_CAPABILITY_BUDGET,
         attemptRecorder: recorderFor('fix'),
@@ -362,6 +429,7 @@ export async function buildCapabilityWiring(
 
       return {
         codeHostEndpointId: endpointId,
+        inheritedArtifacts,
         programStages: ciFixProgramStages(env),
         scriptStages,
         aiStages:
@@ -372,6 +440,6 @@ export async function buildCapabilityWiring(
 }
 
 /** Reached only if an AI stage runs without a caller; the refusal replaces it. */
-const throwUnwired: (prompt: string, slot: string) => AiCaller = () => () => {
+const throwUnwired: (prompt: string, slot: string, port: string) => AiCaller = () => () => {
   throw new Error('no agent caller is wired for this capability')
 }

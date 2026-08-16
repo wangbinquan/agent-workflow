@@ -138,7 +138,6 @@ function runRound(db: DbClient, opts: RunOpts) {
     repoPath: opts.home,
     worktreePath: opts.home,
     makeCaller: opts.ai.makeCaller,
-    protocolBlock: '',
     nonce: NONCE,
     budget: { sameSession: 1, freshSession: 0 },
     gate: opts.gate ?? { threshold: 'info', maxPerRound: 20 },

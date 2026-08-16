@@ -41,6 +41,7 @@ import {
 } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
 import { claimTerminalMr } from '@/modules/code-capability/application/producedMrIndex'
 import { classifyComment } from '@/modules/code-capability/application/classifyComment'
+import type { ApplyOutcome } from '@/modules/code-capability/infrastructure/sqliteWorkItemStore'
 import { createCodeHostAdapter } from '@/modules/code-capability/infrastructure/codeHostAdapter'
 import { noteWorkItemEvent } from '@/modules/code-capability/application/workItemProgress'
 import type { StartTaskDeps } from '@/services/task'
@@ -100,6 +101,13 @@ export interface WokenRound {
    * started. No round exists; the reply is already on the thread.
    */
   refused?: string
+  /**
+   * Set when the work item's state machine withheld the round — an ordinary
+   * comment under a diff that is waiting for a person, say. No round exists and
+   * NOTHING was posted: the conversation is not addressed to the platform, and
+   * a bot answering every remark is its own problem.
+   */
+  declined?: string
 }
 
 export interface WakeResult {
@@ -336,7 +344,7 @@ async function replyRefusal(
     const codeHost = createCodeHostAdapter({ db: input.db, provider })
     await codeHost.call({
       action: 'comment.reply-thread',
-      params: { __project__: project, mr, thread, body: message },
+      params: { project, mr, thread, body: message },
     })
   } catch {
     // Best effort; see the note above.
@@ -387,6 +395,40 @@ async function startDirectRound(
       await replyRefusal(input, fields, classification.message)
       return { capability, taskId: '', roundId: '', roundSeq: 0, refused: classification.message }
     }
+    // Ask the state machine BEFORE opening a round, and let it say no.
+    //
+    // This used to run after `openRound`, which made the answer decorative: an
+    // ordinary comment on an item that was `awaiting` a person's decision
+    // recorded "the table declined" and then opened a round anyway. Guard 3
+    // exists precisely so that discussion under a posted diff does not start a
+    // competing round — the frozen change is waiting for a yes, and the
+    // conversation continuing is not one.
+    const signal = await noteWorkItemEvent({
+      db: input.db,
+      workItemId: item.id,
+      hasLiveRound: false,
+      // The delivery, as the state machine sees it. A `note` classification
+      // rather than `head-changed`: this path opens a round for a delivery
+      // whose meaning was already decided upstream, and claiming a head change
+      // here would invalidate a pending patch that the author never actually
+      // superseded (T45).
+      event:
+        classification.kind === 'confirmation'
+          ? {
+              kind: 'external-signal',
+              // Guard 2 compares this against the pending generation: a
+              // confirmation aimed at a superseded patch is answered, not
+              // applied.
+              signal: { kind: 'confirmation', generation: classification.generation },
+            }
+          : { kind: 'external-signal', signal: { kind: 'note' } },
+    })
+
+    const declined = withheldRoundReason(signal)
+    if (declined !== null) {
+      return { capability, taskId: '', roundId: '', roundSeq: 0, declined }
+    }
+
     const round = await openRound({
       db: input.db,
       workItemId: item.id,
@@ -410,31 +452,10 @@ async function startDirectRound(
     roundId = round.roundId
     roundSeq = round.roundSeq
 
-    // The delivery, as the state machine sees it: an external signal that
-    // queues the item and then a scheduler take that runs it. Both are emitted
-    // here because the round IS being opened and dispatched in one step — the
-    // table still wants the two transitions so the guards that key off `queued`
-    // (supersede, pending-revision merge) have a state to key off.
-    //
-    // A `note` classification rather than `head-changed`: this path opens a
-    // round for a delivery whose meaning was already decided upstream, and
-    // claiming a head change here would invalidate a pending patch that the
-    // author never actually superseded (T45).
-    await noteWorkItemEvent({
-      db: input.db,
-      workItemId: item.id,
-      hasLiveRound: false,
-      event:
-        classification.kind === 'confirmation'
-          ? {
-              kind: 'external-signal',
-              // Guard 2 compares this against the pending generation: a
-              // confirmation aimed at a superseded patch is answered, not
-              // applied.
-              signal: { kind: 'confirmation', generation: classification.generation },
-            }
-          : { kind: 'external-signal', signal: { kind: 'note' } },
-    })
+    // The take that turns the queued item into a running one — the round IS
+    // being opened and dispatched in one step, and the table wants both
+    // transitions so the guards that key off `queued` (supersede,
+    // pending-revision merge) have a state to key off.
     await noteWorkItemEvent({
       db: input.db,
       workItemId: item.id,
@@ -547,6 +568,42 @@ export async function closeCapabilitiesForDelivery(
 /** Whether this delivery ends the merge request rather than waking it. */
 export function isTerminalDelivery(eventType: string): boolean {
   return TERMINAL_EVENTS.has(eventType)
+}
+
+/**
+ * Whether the state machine withheld the round, and why — `null` to go ahead.
+ *
+ * Reads the table's `start-round` EFFECT rather than the status it moved to,
+ * because the effect is the instruction: `workItemProgress`'s header says
+ * plainly that `start-round` is the caller's to perform, and no caller ever
+ * did. The round was opened either way, so `awaiting` — the state the whole
+ * human-confirmation design turns on — could be talked straight through.
+ *
+ * Two states withhold it in a way the platform can honour today:
+ *
+ *   awaiting    a person is deciding on a frozen change; ordinary comments are
+ *               discussion, and a round started here competes with the diff
+ *               they were asked about.
+ *   handed_off  the campaign is over and was handed to a human; a new remark
+ *               does not reopen it.
+ *
+ * The other withholding states — `queued`, `running`, `superseding` — mean "a
+ * round must start LATER", and the platform has no deferred start to hand:
+ * nothing emits `round-task-terminal` and nothing performs `start-round`, so
+ * honouring them here would drop the delivery entirely rather than defer it.
+ * Those keep today's behaviour until the supersede work lands the performers,
+ * which is the one place this function knowingly disagrees with the table.
+ */
+function withheldRoundReason(outcome: ApplyOutcome): string | null {
+  if (outcome.outcome !== 'applied' && outcome.outcome !== 'stayed') return null
+  if (outcome.effects.some((effect) => effect.kind === 'start-round')) return null
+
+  const status = outcome.outcome === 'applied' ? outcome.to : outcome.status
+  if (status === 'awaiting') {
+    return 'the item is waiting for a person to answer a change that is already posted'
+  }
+  if (status === 'handed_off') return 'the item was handed to a human and is no longer running'
+  return null
 }
 
 /**

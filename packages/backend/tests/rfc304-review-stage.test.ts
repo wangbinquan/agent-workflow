@@ -38,18 +38,23 @@ const FINDING = {
 
 /** Replies with each scripted stdout in turn, recording the prompts it saw. */
 function scriptedModel(replies: string[]): {
-  makeCaller: (prompt: string) => AiCaller
+  makeCaller: (prompt: string, port: string) => AiCaller
   prompts: string[]
+  /** The port each call asked for — see the test that pins it. */
+  ports: string[]
   inputs: Array<{ sessionId: string | null; feedback: string | null }>
 } {
   const prompts: string[] = []
+  const ports: string[] = []
   const inputs: Array<{ sessionId: string | null; feedback: string | null }> = []
   let turn = 0
   return {
     prompts,
+    ports,
     inputs,
-    makeCaller(prompt) {
+    makeCaller(prompt, port) {
       prompts.push(prompt)
+      ports.push(port)
       return async (input) => {
         inputs.push({ sessionId: input.sessionId, feedback: input.feedback })
         const stdout = replies[Math.min(turn, replies.length - 1)] ?? ''
@@ -69,7 +74,6 @@ const run = (replies: string[], budget = { sameSession: 2, freshSession: 1 }) =>
     hunks: parseDiffHunks(DIFF),
     omitted: [],
     mrTitle: 'Add retry logic',
-    protocolBlock: '<<protocol block>>',
   })
 
 describe('RFC-304 — the review stage produces validated findings or nothing', () => {
@@ -122,9 +126,14 @@ describe('RFC-304 — the review stage produces validated findings or nothing', 
 })
 
 describe('RFC-304 — what the stage hands the model', () => {
-  test('the protocol block is appended to the prompt', async () => {
-    // The platform has one envelope-protocol builder and every node's
-    // instruction has to stay identical to it; the stage appends, never rewords.
+  test('the stage names the port it will validate', async () => {
+    // What the protocol block is built from, one level up. The stage used to
+    // append a block handed to it ready-made, and the scheduler built that
+    // block — and the caller that reads the reply — around THIS port for every
+    // capability, so `mr-comment-fix`, `requirement` and `ci-fix` each asked
+    // for `findings` and then waited on a port nothing wrote. Passing the port
+    // out from the stage that validates it is what removed the chance to
+    // disagree, and this pins that it is still the guard's own port.
     const model = scriptedModel([envelope(JSON.stringify({ findings: [] }))])
     await runReviewStage({
       makeCaller: model.makeCaller,
@@ -134,9 +143,8 @@ describe('RFC-304 — what the stage hands the model', () => {
       hunks: parseDiffHunks(DIFF),
       omitted: [],
       mrTitle: null,
-      protocolBlock: '<<protocol block>>',
     })
-    expect(model.prompts[0]).toContain('<<protocol block>>')
+    expect(model.ports).toEqual([REVIEW_PORT])
   })
 
   test('the prompt carries the diff and the permission to find nothing', async () => {
@@ -149,7 +157,6 @@ describe('RFC-304 — what the stage hands the model', () => {
       hunks: parseDiffHunks(DIFF),
       omitted: [],
       mrTitle: null,
-      protocolBlock: '',
     })
     expect(model.prompts[0]).toContain('@@ -10,3 +10,4 @@')
     expect(model.prompts[0]).toContain('report no findings at all')
@@ -168,7 +175,6 @@ describe('RFC-304 — what the stage hands the model', () => {
       hunks: parseDiffHunks(DIFF),
       omitted: [],
       mrTitle: null,
-      protocolBlock: '',
     })
     expect(model.inputs[0]?.feedback).toBeNull()
     expect(model.inputs[1]?.feedback).toBeTruthy()
@@ -186,7 +192,6 @@ describe('RFC-304 — what the stage hands the model', () => {
       hunks: parseDiffHunks(DIFF),
       omitted: [],
       mrTitle: null,
-      protocolBlock: '',
     })
     expect(result.diffClipped).toBe(false)
   })

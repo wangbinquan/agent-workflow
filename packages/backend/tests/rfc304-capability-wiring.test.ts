@@ -71,13 +71,79 @@ describe('RFC-304 — the scheduler can reach every capability', () => {
       webhook: webhook(),
       repoPath: '/tmp/repo',
       worktreePath: '/tmp/wt',
-      protocolBlock: '',
       nonce: 'n',
       roundId: 'round-1',
       roundSeq: 1,
       workItemId: 'item-1',
       ...over,
     })
+
+  /**
+   * What each capability's first AI stage needs on the table before it will
+   * reach a model, and the port its guard then validates.
+   *
+   * The ports are spelled out here rather than imported so that renaming a
+   * capability's port has to be a deliberate two-place edit — this file is the
+   * record of what the caller and the protocol block were built for.
+   */
+  const AI_STAGE_FIXTURES = {
+    'mr-comment-fix': {
+      artifacts: { thread: { threadId: 'd1', messages: [], resolved: false } },
+      port: 'fix',
+      slot: 'fixer',
+    },
+    requirement: {
+      artifacts: { requirement: { title: 'Add a retry', body: 'x', documents: [] } },
+      port: 'comprehension',
+      slot: 'analyst',
+    },
+    'ci-fix': {
+      artifacts: { issues: [] },
+      port: 'fix',
+      slot: 'ci-fixer',
+    },
+  } as const
+
+  for (const capability of WIRED_HERE) {
+    test(`${capability}: the caller is handed the port its guard validates`, async () => {
+      // The join that was missing for every capability but `mr-review`. The
+      // scheduler built ONE protocol block per round out of `mr-review`'s
+      // `findings` port and handed it to all of them, and built the caller —
+      // which reads the reply out of `outputs[port]` — around the same port. So
+      // this stage asked the agent for `findings`, the agent answered on the
+      // port the plan named, the caller read `findings`, found nothing, and the
+      // guard reported "no envelope was found" six times before giving up.
+      //
+      // Three capabilities could not reach a model at all. Nothing was red:
+      // every unit test supplies its own caller, so each half agreed with
+      // itself. What this pins is that the port the stage validates is the one
+      // the caller is built for AND the one the block asks for.
+      const fixture = AI_STAGE_FIXTURES[capability]
+      const seen: Array<{ prompt: string; slot: string; port: string }> = []
+      const wiring = await build(capability, {
+        makeCaller: (prompt: string, slot: string, port: string) => {
+          seen.push({ prompt, slot, port })
+          return async () => ({ stdout: '', sessionId: null })
+        },
+        budget: { sameSession: 0, freshSession: 0 },
+      })
+      const contract = lookupStageContract(capability)
+      const aiStage = contract?.stages.find((s) => s.kind === 'ai')
+
+      await wiring.aiStages[aiStage!.name]!({
+        roundId: 'round-1',
+        stage: aiStage!,
+        artifacts: fixture.artifacts as unknown as Record<string, unknown>,
+      })
+
+      expect(seen.length, 'the stage never reached the caller').toBe(1)
+      expect(seen[0]!.port).toBe(fixture.port)
+      expect(seen[0]!.slot).toBe(fixture.slot)
+      // And the instruction agrees with the reader: same port, same nonce.
+      expect(seen[0]!.prompt).toContain(`<port name="${fixture.port}">`)
+      expect(seen[0]!.prompt).toContain('nonce="n"')
+    })
+  }
 
   test('every capability the platform ships is either wired here or is mr-review/mr-monitor', () => {
     // Enumerated from the shipped list. A sixth capability added later either
@@ -221,7 +287,6 @@ describe('RFC-304 — the scheduler can reach every capability', () => {
         webhook: webhook(),
         repoPath: '/tmp/repo',
         worktreePath: '/tmp/wt',
-        protocolBlock: '',
         nonce: 'n',
         roundId: 'r',
         roundSeq: 1,

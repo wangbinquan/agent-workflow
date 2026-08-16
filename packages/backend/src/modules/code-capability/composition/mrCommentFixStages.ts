@@ -34,7 +34,10 @@ import { prepareWorktree } from '@/modules/code-capability/application/prepareWo
 import { judgePushAuthority } from '@/modules/code-capability/domain/pushAuthority'
 import { codeWorkItems } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import { runGuardedAiStage } from '@/modules/code-capability/application/determinismGuard'
+import {
+  runGuardedAiStage,
+  exhaustionDetail,
+} from '@/modules/code-capability/application/determinismGuard'
 import type {
   AiCaller,
   AttemptRecorder,
@@ -104,8 +107,17 @@ export interface MrCommentFixEnvironment {
   generation?: number
   roundId: string
   /** Injected: this module must not reach the scheduler (AC-10 negative scan). */
-  makeCaller: (prompt: string) => AiCaller
-  protocolBlock: string
+  /**
+   * Reaches the model. The PORT is an argument because three things have to
+   * agree on it — the protocol block that asks for it, the caller that reads
+   * `outputs[port]`, and the guard that validates it — and when they were
+   * threaded separately they silently disagreed: the scheduler built every
+   * capability's block and caller around `mr-review`'s `findings` port, so this
+   * stage asked for `fix`, the caller looked for `findings`, found nothing, and
+   * the guard reported "no envelope" six times over. Passing it once, from the
+   * stage that validates it, is what makes them agree by construction.
+   */
+  makeCaller: (prompt: string, port: string) => AiCaller
   nonce: string
   budget: RetryBudget
   attemptRecorder?: AttemptRecorder
@@ -142,7 +154,12 @@ export function mrCommentFixProgramStages(
       const listed = await env.codeHost.call({
         action: 'comment.list',
         params: {
-          __project__: project.value,
+          // `project`, not `__project__`: the latter is the PATH PLACEHOLDER's
+          // name, and `executeCodeHostCall` reads the explicit `project` param
+          // to fill it. Passing the placeholder name reached the fallback — and
+          // capabilities wire the fallback to a refusal — so this call could
+          // never read a thread in production.
+          project: project.value,
           mr: target.anchorId,
           per_page: '100',
           // GitHub splits line comments and MR-level comments across two
@@ -448,7 +465,7 @@ export function mrCommentFixAiStages(
       ].join('\n')
 
       const outcome = await runGuardedAiStage<CommentFixEnvelope>({
-        caller: env.makeCaller(`${prompt}\n${env.protocolBlock}`),
+        caller: env.makeCaller(prompt, COMMENT_FIX_PORT),
         schema: CommentFixEnvelopeSchema,
         nonce: env.nonce,
         portName: COMMENT_FIX_PORT,
@@ -460,7 +477,7 @@ export function mrCommentFixAiStages(
       if (outcome.status === 'canceled') return fail('the round was canceled')
       if (outcome.status === 'exhausted') {
         return fail(
-          `the fixing agent did not produce a valid result after ${String(outcome.totalCalls)} attempts`,
+          `the fixing agent did not produce a valid result after ${String(outcome.totalCalls)} attempts${exhaustionDetail(outcome.rejections)}`,
         )
       }
       return done({ change: outcome.value })
@@ -522,7 +539,7 @@ async function replyToThread(
   const result = await env.codeHost.call({
     action: 'comment.reply-thread',
     params: {
-      __project__: project.value,
+      project: project.value,
       mr: target.anchorId,
       thread: env.threadId,
       body,

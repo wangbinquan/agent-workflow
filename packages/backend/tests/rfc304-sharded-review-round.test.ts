@@ -138,7 +138,6 @@ async function runRound(
     repoPath: home,
     worktreePath: home,
     makeCaller: ai.makeCaller,
-    protocolBlock: '',
     nonce: NONCE,
     budget: { sameSession: 0, freshSession: 0 },
     gate: { threshold: 'info', maxPerRound: 20 },

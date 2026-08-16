@@ -26,7 +26,10 @@
 // than failing it, because "the platform cannot tell" is not "the change is
 // bad", and a red round would send someone looking for a bug that isn't there.
 
-import { runGuardedAiStage } from '@/modules/code-capability/application/determinismGuard'
+import {
+  runGuardedAiStage,
+  exhaustionDetail,
+} from '@/modules/code-capability/application/determinismGuard'
 import type {
   AiCaller,
   AttemptRecorder,
@@ -115,8 +118,8 @@ export interface CiFixEnvironment {
   sourceBranch: string
   workItemId: string
   roundId: string
-  makeCaller: (prompt: string, slot: 'ci-fixer') => AiCaller
-  protocolBlock: string
+  /** See `MrCommentFixEnvironment.makeCaller` for why the port is a parameter. */
+  makeCaller: (prompt: string, slot: 'ci-fixer', port: string) => AiCaller
   nonce: string
   budget: RetryBudget
   attemptRecorder?: AttemptRecorder
@@ -406,7 +409,7 @@ export function ciFixAiStages(
       ].join('\n')
 
       const outcome = await runGuardedAiStage<CiFixEnvelope>({
-        caller: env.makeCaller(`${prompt}\n${env.protocolBlock}`, 'ci-fixer'),
+        caller: env.makeCaller(prompt, 'ci-fixer', CI_FIX_PORT),
         schema: CiFixEnvelopeSchema,
         nonce: env.nonce,
         portName: CI_FIX_PORT,
@@ -418,7 +421,7 @@ export function ciFixAiStages(
       if (outcome.status === 'canceled') return fail('the round was canceled')
       if (outcome.status === 'exhausted') {
         return fail(
-          `the fixer did not produce a valid result after ${String(outcome.totalCalls)} attempts`,
+          `the fixer did not produce a valid result after ${String(outcome.totalCalls)} attempts${exhaustionDetail(outcome.rejections)}`,
         )
       }
       return done({ attempt: outcome.value })

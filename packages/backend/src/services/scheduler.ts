@@ -147,7 +147,6 @@ import {
   resolveFrozenRuntime,
   resolveSchedulerRunRow,
 } from '@/services/nodeRunMint'
-import { buildProtocolBlock } from '@/services/protocol'
 import { CODE_ROUND_SUMMARY_PORT } from '@/services/codeRoundContract'
 import { createCodeCapabilityRunner } from '@/modules/code-capability/composition/codeCapabilityRunner'
 import { buildMrReviewWiring } from '@/modules/code-capability/composition/mrReviewEnvironment'
@@ -165,7 +164,7 @@ import { noteWorkItemEvent } from '@/modules/code-capability/application/workIte
 import { MR_REVIEW_CONTRACT } from '@/modules/code-capability/domain/capabilityRegistry'
 import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import { createReviewAgentCaller, resolveReviewerAgent } from '@/services/codeReviewAgentCaller'
-import { REVIEW_AGENT_SLOT, REVIEW_PORT } from '@/modules/code-capability/application/reviewStage'
+import { REVIEW_AGENT_SLOT } from '@/modules/code-capability/application/reviewStage'
 
 /**
  * Which agent slot a capability resolves against.
@@ -4600,6 +4599,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
   // is not wired yet. Omitting it makes the `review` stage refuse by name
   // rather than run against a guessed agent — see the module header.
   const envelopeNonce = await loadRunEnvelopeNonce(db, nodeRunId)
+  const identity = await roundIdentity(db, task.codeRoundId)
   const wiring =
     capability === 'mr-review' && state.triggerContext !== null
       ? await buildMrReviewWiring({
@@ -4607,7 +4607,6 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
           webhook: state.triggerContext.trigger.webhook,
           repoPath: task.repoPath,
           worktreePath: state.scopeRoot,
-          protocolBlock: buildProtocolBlock([REVIEW_PORT], undefined, envelopeNonce),
           nonce: envelopeNonce,
           roundId: task.codeRoundId ?? taskId,
           // The same two seams the code-host NODE branch already uses (line
@@ -4635,22 +4634,24 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             })
             if (!resolved.ok) return { unresolvedAgentReason: resolved.message }
             return {
-              makeCaller: createReviewAgentCaller({
-                db,
-                appHome: opts.appHome ?? Paths.root,
-                taskId,
-                nodeId: node.id,
-                agent: resolved.agent,
-                skills: [],
-                worktreePath: state.scopeRoot,
-                repoPath: task.repoPath,
-                baseBranch: task.baseBranch,
-                portName: REVIEW_PORT,
-                nonce: envelopeNonce,
-                ...(opts.defaultPerNodeTimeoutMs !== undefined
-                  ? { timeoutMs: opts.defaultPerNodeTimeoutMs }
-                  : {}),
-              }),
+              // The port comes from the stage, like the other capabilities'.
+              makeCaller: (prompt: string, port: string) =>
+                createReviewAgentCaller({
+                  db,
+                  appHome: opts.appHome ?? Paths.root,
+                  taskId,
+                  nodeId: node.id,
+                  agent: resolved.agent,
+                  skills: [],
+                  worktreePath: state.scopeRoot,
+                  repoPath: task.repoPath,
+                  baseBranch: task.baseBranch,
+                  portName: port,
+                  nonce: envelopeNonce,
+                  ...(opts.defaultPerNodeTimeoutMs !== undefined
+                    ? { timeoutMs: opts.defaultPerNodeTimeoutMs }
+                    : {}),
+                })(prompt),
             }
           })()),
         })
@@ -4674,11 +4675,16 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             webhook: state.triggerContext.trigger.webhook,
             repoPath: task.repoPath,
             worktreePath: state.scopeRoot,
-            protocolBlock: buildProtocolBlock([REVIEW_PORT], undefined, envelopeNonce),
             nonce: envelopeNonce,
             roundId: task.codeRoundId ?? taskId,
-            roundSeq: 1,
-            workItemId: task.codeRoundId ?? taskId,
+            // From the round ROW: `roundSeq: 1` and a work-item id that was
+            // really a round id were placeholders nothing ever replaced, and
+            // the artifact ledger is keyed by the item.
+            roundSeq: identity?.roundSeq ?? 1,
+            workItemId: identity?.workItemId ?? task.codeRoundId ?? taskId,
+            // The patch generation a confirmation has to name. Same value the
+            // wait handle records, so Guard 2 compares like with like.
+            generation: identity?.epoch ?? 1,
             // How `ci-fix` resolves the framework's four scripts. The cached-repo
             // ID, never the path — see `cachedRepoIdForTask`.
             repoId: await cachedRepoIdForTask(db, taskId),
@@ -4698,7 +4704,14 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
               })
               if (!resolved.ok) return { unresolvedAgentReason: resolved.message }
               return {
-                makeCaller: (prompt: string, _slot: string) =>
+                // The PORT comes from the stage that will validate the reply.
+                // This used to be `REVIEW_PORT` for all three capabilities, so
+                // the caller read `outputs.findings` while `mr-comment-fix`
+                // wrote `fix`, `requirement` wrote `comprehension` /
+                // `implementation` and `ci-fix` wrote `fix` — every AI stage in
+                // every capability but `mr-review` exhausted its retries
+                // against an empty port and reported "no envelope".
+                makeCaller: (prompt: string, _slot: string, port: string) =>
                   createReviewAgentCaller({
                     db,
                     appHome: opts.appHome ?? Paths.root,
@@ -4709,7 +4722,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
                     worktreePath: state.scopeRoot,
                     repoPath: task.repoPath,
                     baseBranch: task.baseBranch,
-                    portName: REVIEW_PORT,
+                    portName: port,
                     nonce: envelopeNonce,
                     ...(opts.defaultPerNodeTimeoutMs !== undefined
                       ? { timeoutMs: opts.defaultPerNodeTimeoutMs }
@@ -4825,6 +4838,15 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             // `mr-review`'s builder returns no such map (its contract declares
             // no script stage), hence the narrowing rather than a bare read.
             ...(roundScriptStages === undefined ? {} : { scriptStages: roundScriptStages }),
+            // What a RESUMING round inherits from the round it continues. The
+            // engine has accepted this since PR-1a and nothing ever passed it,
+            // so a confirming round skipped `resolve-target` and then died on
+            // the next stage asking for its `target` — `/aw apply` could not
+            // push, every time. Empty for an ordinary round, which runs every
+            // stage and produces its own.
+            ...(Object.keys(wiring.inheritedArtifacts).length > 0
+              ? { inheritedArtifacts: wiring.inheritedArtifacts }
+              : {}),
           }
         : {}),
       ...(hookWiring !== null ? { hooks: hookWiring } : {}),
@@ -5009,6 +5031,36 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
  * the beginning, which is the safe direction — re-running stages is wasteful,
  * whereas skipping them silently would push a change nobody verified.
  */
+/**
+ * Who this round belongs to, and which attempt it is.
+ *
+ * The wiring used to be handed `task.codeRoundId` for `workItemId` and a
+ * literal `1` for `roundSeq`. A round id is not a work item id, so every
+ * artifact a round froze was filed under an owner that does not exist: the
+ * confirmation path then looked for the pending change under the REAL item,
+ * found nothing, and answered "no change waiting" to the person who had just
+ * been told to reply `/aw apply`. The instruction the platform printed could
+ * not be followed, and no error was raised by either half.
+ */
+async function roundIdentity(
+  db: DbClient,
+  codeRoundId: string | null,
+): Promise<{ workItemId: string | null; roundSeq: number; epoch: number } | null> {
+  if (codeRoundId === null || codeRoundId === '') return null
+  const [row] = await db
+    .select({
+      workItemId: codeWorkRounds.workItemId,
+      roundSeq: codeWorkRounds.roundSeq,
+      epoch: codeWorkRounds.epoch,
+    })
+    .from(codeWorkRounds)
+    .where(eq(codeWorkRounds.id, codeRoundId))
+    .limit(1)
+  return row === undefined
+    ? null
+    : { workItemId: row.workItemId, roundSeq: row.roundSeq, epoch: row.epoch }
+}
+
 async function resumeStageForRound(
   db: DbClient,
   codeRoundId: string | null,
@@ -5051,7 +5103,7 @@ async function finalizeRound(
   // state view showed nothing happening while rounds ran, and `awaiting` — the
   // state the entire human-confirmation design turns on — was unreachable.
   const [round] = await db
-    .select({ workItemId: codeWorkRounds.workItemId })
+    .select({ workItemId: codeWorkRounds.workItemId, epoch: codeWorkRounds.epoch })
     .from(codeWorkRounds)
     .where(eq(codeWorkRounds.id, codeRoundId))
     .limit(1)
@@ -5071,7 +5123,10 @@ async function finalizeRound(
               // The generation the human was asked about. Guard 2 refuses a
               // confirmation from an older one, so a wrong value here would
               // either reject every confirmation or accept a stale one.
-              pendingGeneration: awaiting?.pendingGeneration ?? 1,
+              // The round's epoch, which is what the artifact was frozen at:
+              // a literal 1 on both sides only agreed until the first
+              // supersede bumped one of them.
+              pendingGeneration: awaiting?.pendingGeneration ?? round?.epoch ?? 1,
             }
           : { kind: 'round-failed' },
   })

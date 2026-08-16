@@ -328,6 +328,16 @@ export function gitlabNormalize(headers: HeaderBag, body: unknown): NormalizeRes
         mrId: mr.mrId,
         mrTitle: mr.mrTitle,
         mrUrl: mr.mrUrl,
+        // The revision the comment is about. Omitted here until now, while the
+        // `mr_*` arms mapped it from the same block — so `mr-comment-fix` died
+        // at its first stage with "the trigger context is missing: commit_sha"
+        // and could never resolve a target in production.
+        //
+        // It is also what the round anchors to: a fix computed against whatever
+        // HEAD happened to be at read time, rather than the revision the
+        // reviewer was looking at, is the mismatch RFC-304 pins baselines to
+        // avoid.
+        commitSha: mr.lastCommitSha,
         commentText,
         // RFC-263：回复到同一线程的三件套。`discussion_id` 是 GitLab 讨论线程的
         // 主键（`hook_data/note_builder.rb` 的 SAFE_HOOK_ATTRIBUTES 成员），

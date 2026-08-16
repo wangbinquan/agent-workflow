@@ -93,6 +93,32 @@ export type GuardedAiOutcome<T> =
     }
   | { status: 'canceled'; totalCalls: number }
 
+/**
+ * Why an exhausted stage gave up, in one line fit for a stage failure.
+ *
+ * Every call site used to report only the attempt count — "did not produce a
+ * valid result after 6 attempts" — and drop `rejections` on the floor. That
+ * reads as "the model is bad today" for what is usually a wiring fault the
+ * platform already knows the shape of: a nonce that never matched, a port the
+ * agent does not declare, a schema the envelope misses a field of. The count
+ * says only how many times the same thing happened.
+ *
+ * The LAST rejection is the one reported: retries carry feedback forward, so
+ * the final attempt is the one that saw the most correction and still failed.
+ * The feedback is trimmed, because it can carry a whole envelope and this
+ * string lands in a stage summary a person reads at a glance.
+ */
+export function exhaustionDetail(rejections: {
+  readonly length: number
+  readonly [index: number]: { readonly code: EnvelopeRejectionCode; readonly feedback: string }
+}): string {
+  const last = rejections.length > 0 ? rejections[rejections.length - 1] : undefined
+  if (last === undefined) return ''
+  const feedback = last.feedback.replace(/\s+/g, ' ').trim()
+  const trimmed = feedback.length > 220 ? `${feedback.slice(0, 217)}...` : feedback
+  return trimmed.length > 0 ? ` (last: ${last.code} — ${trimmed})` : ` (last: ${last.code})`
+}
+
 export async function runGuardedAiStage<T>(
   args: GuardedAiStageArgs<T>,
 ): Promise<GuardedAiOutcome<T>> {

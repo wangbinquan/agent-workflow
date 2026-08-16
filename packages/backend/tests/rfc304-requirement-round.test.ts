@@ -142,7 +142,6 @@ describe('RFC-304 §6.3 — the requirement round', () => {
     roundId: ulid(),
     roundSeq: 1,
     makeCaller: modelReturning(READY),
-    protocolBlock: '',
     nonce: NONCE,
     budget: { sameSession: 0, freshSession: 0 },
     readWorktreeFile: async (path) => (path === 'CLAUDE.md' ? CLAUDE_MD : null),
