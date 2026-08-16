@@ -137,6 +137,64 @@ describe('RFC-304 T36 — the monitor loop', () => {
     expect(observations[0]?.observedRevision).toBe('sha-aaa')
   })
 
+  test('a ci-fix round inherits what the monitor already decided', async () => {
+    // `CI_FIX_RESUME_STAGE` says it plainly — everything before
+    // `prepare-worktree` belongs to the monitor — and the round used to ignore
+    // that: it re-ran collect / classify / arbitrate / select itself. Not merely
+    // wasteful. Those scripts ask the code host the same questions a second
+    // time and can get DIFFERENT answers, so the round ends up repairing a
+    // failure other than the one it was dispatched for, while the ledger still
+    // names the first.
+    //
+    // `ciFixResumeArtifacts` was written for exactly this and had no caller.
+    const dispatcher = recordingDispatcher()
+    const out = await runMonitorWake({
+      db,
+      identity: IDENTITY,
+      scripts: {
+        collect: collectOf({ gate: { status: 'fail' } }),
+        classify: emits('classify', [{ type: 'test-failure', message: 'unit tests are red' }]),
+        arbitrate: emits('arbitrate', [
+          { capability: 'ci-fix', items: [{ issueRef: 'test-failure:1' }] },
+        ]),
+      },
+      dispatch: dispatcher.dispatch,
+    })
+    expect(out.kind).toBe('dispatched')
+
+    const [round] = await db.select().from(codeWorkRounds)
+    const pkg = JSON.parse(round?.workPackage ?? '{}') as {
+      resumeFromStage?: string
+      inherited?: { gateState?: unknown; issues?: unknown[]; workPackage?: unknown }
+    }
+
+    // The round starts where the monitor left off …
+    expect(pkg.resumeFromStage).toBe('prepare-worktree')
+    // … and carries the answers, so the skipped stages' outputs exist.
+    expect(pkg.inherited?.gateState).toBeDefined()
+    expect(pkg.inherited?.issues).toHaveLength(1)
+    expect(pkg.inherited?.workPackage).toBeDefined()
+  })
+
+  test('an mr-review round carries no resume — nothing ran before it', async () => {
+    // The contrast that keeps the rule honest: only `ci-fix` has script stages
+    // the monitor owns. A review round that claimed to resume would skip its
+    // own `resolve-target` and die asking for the artifact it produces.
+    const dispatcher = recordingDispatcher()
+    await runMonitorWake({
+      db,
+      identity: IDENTITY,
+      scripts: {
+        collect: collectOf(),
+        arbitrate: emits('arbitrate', [{ capability: 'mr-review', items: [] }]),
+      },
+      dispatch: dispatcher.dispatch,
+    })
+    const [round] = await db.select().from(codeWorkRounds)
+    const pkg = JSON.parse(round?.workPackage ?? '{}') as { resumeFromStage?: string }
+    expect(pkg.resumeFromStage).toBeUndefined()
+  })
+
   test('a work package opens exactly one round and starts its task', async () => {
     const dispatcher = recordingDispatcher()
     const out = await runMonitorWake({

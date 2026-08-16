@@ -4681,6 +4681,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
   // rather than run against a guessed agent — see the module header.
   const envelopeNonce = await loadRunEnvelopeNonce(db, nodeRunId)
   const identity = await roundIdentity(db, task.codeRoundId)
+  const roundInherited = await inheritedArtifactsForRound(db, task.codeRoundId)
   const wiring =
     capability === 'mr-review' && state.triggerContext !== null
       ? await buildMrReviewWiring({
@@ -5014,9 +5015,13 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             // the next stage asking for its `target` — `/aw apply` could not
             // push, every time. Empty for an ordinary round, which runs every
             // stage and produces its own.
-            ...(Object.keys(wiring.inheritedArtifacts).length > 0
-              ? { inheritedArtifacts: wiring.inheritedArtifacts }
-              : {}),
+            // The round's own record first — the monitor writes what it already
+            // decided there — then whatever the wiring can recompute from the
+            // frozen trigger context.
+            ...((): Record<string, unknown> => {
+              const merged = { ...wiring.inheritedArtifacts, ...(roundInherited ?? {}) }
+              return Object.keys(merged).length > 0 ? { inheritedArtifacts: merged } : {}
+            })(),
             // What `self-review` runs, and what freezes the tree it reads.
             //
             // `invokedStages` has been a runner input since PR-1b and nothing
@@ -5238,6 +5243,41 @@ async function roundIdentity(
   return row === undefined
     ? null
     : { workItemId: row.workItemId, roundSeq: row.roundSeq, epoch: row.epoch }
+}
+
+/**
+ * The artifacts a resuming round inherits, as recorded by whoever opened it.
+ *
+ * The monitor writes them when it dispatches `ci-fix`: it has already run the
+ * four script stages to decide there is a pipeline worth repairing, and the
+ * round resumes at `prepare-worktree`. Without reading them back the round
+ * skipped those stages and then had nothing they produced — or, before the
+ * monitor recorded them at all, re-ran the four scripts and could get different
+ * answers than the ones it was dispatched for.
+ */
+async function inheritedArtifactsForRound(
+  db: DbClient,
+  codeRoundId: string | null,
+): Promise<Readonly<Record<string, unknown>> | null> {
+  if (codeRoundId === null || codeRoundId === '') return null
+  const [row] = await db
+    .select({ workPackage: codeWorkRounds.workPackage })
+    .from(codeWorkRounds)
+    .where(eq(codeWorkRounds.id, codeRoundId))
+    .limit(1)
+  if (row?.workPackage == null) return null
+  try {
+    const parsed: unknown = JSON.parse(row.workPackage)
+    const inherited =
+      typeof parsed === 'object' && parsed !== null
+        ? (parsed as { inherited?: unknown }).inherited
+        : undefined
+    return typeof inherited === 'object' && inherited !== null
+      ? (inherited as Record<string, unknown>)
+      : null
+  } catch {
+    return null
+  }
 }
 
 async function resumeStageForRound(

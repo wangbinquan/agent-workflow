@@ -37,6 +37,10 @@
 // wake-up would be ~150 worktrees a day per repository to run four scripts that
 // never look at a file. The round that follows gets a real worktree.
 
+import {
+  CI_FIX_RESUME_STAGE,
+  ciFixResumeArtifacts,
+} from '@/modules/code-capability/domain/ciFixResume'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -382,7 +386,31 @@ export async function runMonitorWake(input: MonitorWakeInput): Promise<MonitorWa
       db: input.db,
       workItemId: item.id,
       epoch: item.epoch,
-      workPackage: { packages, agentPlan },
+      workPackage: {
+        packages,
+        agentPlan,
+        // What the monitor has ALREADY decided, handed to the round instead of
+        // being asked again.
+        //
+        // `CI_FIX_RESUME_STAGE` says it plainly — everything before
+        // `prepare-worktree` belongs to the monitor — and until now the round
+        // ignored that and re-ran collect / classify / arbitrate / select
+        // itself. That is not merely wasteful: the four scripts ask the code
+        // host the same questions a second time and can get DIFFERENT answers,
+        // so the round ends up repairing a failure other than the one it was
+        // dispatched for, while the ledger still names the first.
+        ...(capability === 'ci-fix'
+          ? {
+              resumeFromStage: CI_FIX_RESUME_STAGE,
+              inherited: ciFixResumeArtifacts({
+                gateState: state,
+                issues,
+                workPackage: packages,
+                ...(agentPlan === null ? {} : { agentPlan }),
+              }),
+            }
+          : {}),
+      },
       baselineSha: state.headSha,
       now,
     })
