@@ -24,9 +24,9 @@
 // on (an agent writes and runs code in that worktree by design). It is noted
 // here so the boundary is explicit rather than incidental.
 
-import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, normalize, relative, resolve } from 'node:path'
+import { runManagedProcess } from '@/services/execution/managedProcess'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('code-gate')
@@ -89,9 +89,17 @@ export interface GateRunnerOptions {
  * `make check && npm test` — and splitting that ourselves would get quoting and
  * operators wrong in ways that look like the gate failing.
  *
- * A timeout, a non-zero exit and a crash all come back the same way: a non-zero
- * `exitCode` and whatever output there was. The caller's question is only
- * "green or not", and a gate that hung is not green.
+ * Through `runManagedProcess` rather than a `spawn` of its own: that is the
+ * platform's single process entry point, and it already owns the things a
+ * hand-rolled spawn gets subtly wrong — TERM→KILL escalation across the whole
+ * process TREE (a gate is usually a script that starts compilers and test
+ * runners, and killing only the shell leaks every one of them), the bounded
+ * post-exit drain, and the output caps. RFC-284's spawn-site ratchet exists to
+ * keep exactly this from proliferating.
+ *
+ * A timeout, a non-zero exit and a failure to start all come back the same way:
+ * a non-zero `exitCode` and whatever output there was. The caller's question is
+ * only "green or not", and a gate that hung is not green.
  */
 export function makeGateRunner(
   worktreePath: string,
@@ -105,76 +113,76 @@ export function makeGateRunner(
       return { exitCode: 1, output: 'the gate command found in the repository was empty' }
     }
 
-    const shell =
+    const argv =
       process.platform === 'win32'
-        ? { file: process.env.COMSPEC ?? 'cmd.exe', args: ['/d', '/s', '/c', trimmed] }
-        : { file: '/bin/sh', args: ['-c', trimmed] }
+        ? [process.env.COMSPEC ?? 'cmd.exe', '/d', '/s', '/c', trimmed]
+        : ['/bin/sh', '-c', trimmed]
 
-    return await new Promise<GateCommandResult>((settle) => {
-      let finished = false
-      let collected = ''
-      let truncated = false
-
-      const child = spawn(shell.file, shell.args, {
-        cwd: worktreePath,
-        env: { ...process.env, ...(options.env ?? {}) },
-        // The gate is not interactive; a command that waits on stdin must fail
-        // rather than hang until the timeout.
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
-
-      const absorb = (chunk: Buffer | string): void => {
-        if (collected.length >= GATE_OUTPUT_LIMIT) {
-          truncated = true
-          return
-        }
-        collected += String(chunk)
-        if (collected.length > GATE_OUTPUT_LIMIT) {
-          collected = collected.slice(0, GATE_OUTPUT_LIMIT)
-          truncated = true
-        }
+    // Merged, not separated: a failing gate usually says why on stderr, and
+    // splitting the two would hand the model half the story.
+    const lines: string[] = []
+    let size = 0
+    let truncated = false
+    const absorb = (line: string): void => {
+      const room = GATE_OUTPUT_LIMIT - size
+      if (room <= 0) {
+        truncated = true
+        return
       }
-      child.stdout?.on('data', absorb)
-      // Merged, not separated: a failing gate usually says why on stderr, and
-      // splitting them here would hand the model half the story.
-      child.stderr?.on('data', absorb)
+      // Cut the line that crosses the cap rather than letting it through whole:
+      // a single line of a test log can be long, and "the limit, plus however
+      // much the last line happened to be" is not a limit.
+      const kept = line.length + 1 <= room ? line : line.slice(0, room)
+      if (kept !== line) truncated = true
+      lines.push(kept)
+      size += kept.length + 1
+    }
 
-      const done = (exitCode: number, note?: string): void => {
-        if (finished) return
-        finished = true
-        clearTimeout(timer)
-        options.signal?.removeEventListener('abort', onAbort)
-        const suffix = [
-          truncated ? `\n[output truncated at ${String(GATE_OUTPUT_LIMIT)} characters]` : '',
-          note === undefined ? '' : `\n[${note}]`,
-        ].join('')
-        settle({ exitCode, output: `${collected}${suffix}` })
-      }
-
-      const timer = setTimeout(() => {
-        child.kill('SIGKILL')
-        done(124, `the gate did not finish within ${String(Math.round(timeoutMs / 1000))}s`)
-      }, timeoutMs)
-
-      const onAbort = (): void => {
-        child.kill('SIGKILL')
-        done(125, 'the round was cancelled while the gate was running')
-      }
-      options.signal?.addEventListener('abort', onAbort, { once: true })
-
-      child.on('error', (err: Error) => {
-        // Could not start at all — a command naming a tool this host does not
-        // have. Reported as a failed gate with the reason, which is what an
-        // operator needs to see on the merge request.
-        log.warn('the gate command could not be started', {
-          worktreePath,
-          error: err.message,
-        })
-        done(127, `the gate command could not be started: ${err.message}`)
-      })
-      child.on('close', (code: number | null, signal: string | null) => {
-        done(code ?? (signal === null ? 1 : 137))
-      })
+    const result = await runManagedProcess({
+      argv,
+      cwd: worktreePath,
+      env: { ...(process.env as Record<string, string>), ...(options.env ?? {}) },
+      timeoutMs,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
+      // The gate is not interactive; a command that waits on stdin must fail
+      // rather than hang until the timeout.
+      stdin: { mode: 'ignore' },
+      onStdoutLine: absorb,
+      onStderrLine: absorb,
+      log,
     })
+
+    const note =
+      result.outcome === 'timeout'
+        ? `the gate did not finish within ${String(Math.round(timeoutMs / 1000))}s`
+        : result.outcome === 'aborted'
+          ? 'the round was cancelled while the gate was running'
+          : result.outcome === 'spawn-failed'
+            ? 'the gate command could not be started on this host'
+            : result.outcome === 'child-unkillable'
+              ? 'the gate left a process behind that could not be killed'
+              : null
+
+    if (note !== null) {
+      log.warn('the gate did not complete normally', {
+        worktreePath,
+        outcome: result.outcome,
+      })
+    }
+
+    const output = [
+      lines.join('\n'),
+      truncated || result.truncated.stdout || result.truncated.stderr
+        ? `\n[output truncated at ${String(GATE_OUTPUT_LIMIT)} characters]`
+        : '',
+      note === null ? '' : `\n[${note}]`,
+    ].join('')
+
+    return {
+      // A null exit code means the child never reported one — timed out, was
+      // aborted, or never started. None of those is green.
+      exitCode: result.exitCode ?? (result.outcome === 'exited' ? 0 : 1),
+      output,
+    }
   }
 }
