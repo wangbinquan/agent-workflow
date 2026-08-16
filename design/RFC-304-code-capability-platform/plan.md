@@ -1004,7 +1004,23 @@ E2E `a SECOND capability is reachable` 全绿：格子 `ready`（zero issues）�
 （不是 review 的）→ 框架的两个 python 脚本真跑、输出被接受（`collect` / `classify`
 均 `done`）→ 无任何 "no runner registered"。
 
-E2E 共 9 条全绿。
+### 2ter.6 E2E 覆盖五条能力（12 条全绿，连跑三遍稳定）
+
+`e2e/rfc304-capability-platform.spec.ts` 现在逐条能力断言**可达性**，而不是从一条通
+推断其余四条通——因为本 RFC 里每条能力都曾各自因不同原因不可达：
+
+| 能力           | 唤醒事件          | 断言                                                                                                            |
+| -------------- | ----------------- | --------------------------------------------------------------------------------------------------------------- |
+| mr-review      | `mr_opened`       | 十三阶段全 done、`outcome=published`、MR 上出现行级评论（draft_notes + **一次** bulk_publish）                  |
+| ci-fix         | `pipeline_failed` | 格子 ready → 首阶段是自己的 `collect`（不是 review 的）→ 框架两个 python 脚本真跑、`collect`/`classify` 均 done |
+| mr-comment-fix | `comment_created` | 首阶段 `resolve-target`，无 "no runner registered"                                                              |
+| requirement    | `issue_labeled`   | **anchor 是 issue 不是 mr**（弄错不报错，只会把工作项键到一个数字相同的另一个对象上）+ 首阶段 `resolve-input`   |
+| mr-monitor     | `mr_updated`      | 观察到了但**什么都不做**（AC-33 `noop`）：有工作项、零轮次、不起 task 不发言                                    |
+
+**一处自己写出来的 flake 已修**（按仓规「flaky 不能掩盖红 case」）：ci-fix 那条原先
+等的是「有任何阶段」（`stages.length > 0`），却断言**后面**的 `classify` 已 done——
+`collect` 一开始跑该条件就成立了。它先前是**碰巧赢了这个 race**，加进第五条能力后
+才输。改成等「`classify` 进入终态」，即等它真正断言的那个条件；连跑三遍稳定。
 
 ## 3. 验收清单
 

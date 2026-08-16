@@ -124,6 +124,10 @@ test.beforeAll(async () => {
     projectPath: PROJECT_PATH,
     baseFiles: { 'src/app.ts': 'export const start = () => {}\n' },
     headFiles: { 'src/app.ts': 'export const start = () => {}\nexport const stop = () => {}\n' },
+    // `requirement` is ISSUE-anchored, not MR-anchored — a capability woken by
+    // a label on an issue that may never have a merge request until it opens
+    // one itself.
+    issues: [{ number: 77, title: 'Add a stop guard' }],
   })
 
   // The agent the binding maps to the `reviewer` slot. Named the same as the
@@ -457,9 +461,16 @@ test('a SECOND capability is reachable too — ci-fix opens a round with real st
         '/api/code/work-items?capability=ci-fix',
       )
       const first = page.items[0]?.rounds[0]
-      return first !== undefined && first.stages.length > 0 ? first : null
+      // Waits for the stage this test ASSERTS on, not merely for the first one
+      // to appear. `stages.length > 0` is true the moment `collect` starts, so
+      // asserting `classify` after it was a race that happened to win — the
+      // kind of flake that later reads as a real regression.
+      const classify = first?.stages.find((stage) => stage.stageName === 'classify')
+      return first !== undefined && classify !== undefined && classify.status !== 'running'
+        ? first
+        : null
     },
-    async () => `a ci-fix round with stages\n  work items: ${await workItemDigest()}`,
+    async () => `a ci-fix round past classify\n  work items: ${await workItemDigest()}`,
   )
 
   // The ci-fix contract's OWN first stage, not the review contract's. The
@@ -474,6 +485,238 @@ test('a SECOND capability is reachable too — ci-fix opens a round with real st
   const byName = new Map(round.stages.map((s) => [s.stageName, s.status]))
   expect(byName.get('collect')).toBe('done')
   expect(byName.get('classify')).toBe('done')
+})
+
+test('a THIRD capability is reachable — mr-comment-fix wakes on a note', async () => {
+  // The remaining shape: a capability woken by a COMMENT rather than by an MR
+  // or a pipeline event. Each capability resolves its own wiring, its own agent
+  // slot and its own default event set, and every one of those has been wrong
+  // for a different capability at some point in this RFC — so reachability is
+  // asserted per capability rather than inferred from the others passing.
+  const fixer = await requestJson<{ id: string }>('/api/agents', {
+    method: 'POST',
+    body: {
+      name: 'e2e-comment-fixer',
+      description: 'RFC-304 e2e comment fixer',
+      outputs: ['change'],
+      readonly: false,
+      bodyMd: 'Apply the requested change.',
+    },
+  })
+  const framework = await requestJson<{ id: string }>('/api/capability-frameworks', {
+    method: 'POST',
+    body: {
+      name: 'e2e comment-fix framework',
+      capability: 'mr-comment-fix',
+      scripts: {},
+      hooks: [],
+      paramSchema: [],
+      paramDefaults: {},
+    },
+  })
+  const binding = await requestJson<{ id: string }>('/api/capability-bindings', {
+    method: 'POST',
+    body: {
+      name: 'e2e comment-fix binding',
+      frameworkId: framework.id,
+      agentBySlot: { fixer: fixer.id },
+      promptBySlot: {},
+      params: {},
+    },
+  })
+  await requestJson(`/api/code/matrix/${repoId}`, {
+    method: 'PUT',
+    body: { capability: 'mr-comment-fix', enabled: true, bindingId: binding.id },
+  })
+
+  const cell = await matrixRow('mr-comment-fix')
+  expect({ readiness: cell.readiness, issues: cell.issues }).toEqual({
+    readiness: 'ready',
+    issues: [],
+  })
+
+  const delivered = await mocks.deliverWebhook({
+    provider: 'gitlab',
+    callbackUrl: `${daemon.baseUrl}/webhooks/gitlab/${endpoint.urlToken}`,
+    secret: endpoint.secret,
+    projectPath: PROJECT_PATH,
+    number: project.number,
+    event: 'comment_created',
+    body: '@bot please add a guard here',
+  })
+  expect(delivered.status).toBe(200)
+
+  const round = await waitFor(
+    async () => {
+      const page = await requestJson<{ items: Array<{ rounds: RoundView[] }> }>(
+        '/api/code/work-items?capability=mr-comment-fix',
+      )
+      const first = page.items[0]?.rounds[0]
+      return first !== undefined && first.stages.length > 0 ? first : null
+    },
+    async () => `an mr-comment-fix round with stages\n  work items: ${await workItemDigest()}`,
+  )
+
+  expect(round.stages[0]?.stageName).toBe('resolve-target')
+  const unwired = round.stages.filter((s) => (s.error ?? '').includes('no runner registered'))
+  expect(unwired).toEqual([])
+})
+
+test('a FOURTH capability is reachable — requirement wakes on an ISSUE label', async () => {
+  // The last round-based capability, and the only one anchored to an issue
+  // rather than a merge request. `anchorKindFor` decides that, and getting it
+  // wrong does not error — it creates a work item keyed to a merge request
+  // number that happens to equal an issue number, which is a different object
+  // with the same digits. So this asserts the anchor, not just the round.
+  const analyst = await requestJson<{ id: string }>('/api/agents', {
+    method: 'POST',
+    body: {
+      name: 'e2e-analyst',
+      description: 'RFC-304 e2e analyst',
+      outputs: ['plan'],
+      readonly: false,
+      bodyMd: 'Understand the requirement.',
+    },
+  })
+  const framework = await requestJson<{ id: string }>('/api/capability-frameworks', {
+    method: 'POST',
+    body: {
+      name: 'e2e requirement framework',
+      capability: 'requirement',
+      scripts: {},
+      hooks: [],
+      paramSchema: [],
+      paramDefaults: {},
+    },
+  })
+  const binding = await requestJson<{ id: string }>('/api/capability-bindings', {
+    method: 'POST',
+    body: {
+      name: 'e2e requirement binding',
+      frameworkId: framework.id,
+      agentBySlot: { analyst: analyst.id, implementer: analyst.id },
+      promptBySlot: {},
+      params: {},
+    },
+  })
+  await requestJson(`/api/code/matrix/${repoId}`, {
+    method: 'PUT',
+    body: { capability: 'requirement', enabled: true, bindingId: binding.id },
+  })
+
+  const cell = await matrixRow('requirement')
+  expect({ readiness: cell.readiness, issues: cell.issues }).toEqual({
+    readiness: 'ready',
+    issues: [],
+  })
+
+  const delivered = await mocks.deliverWebhook({
+    provider: 'gitlab',
+    callbackUrl: `${daemon.baseUrl}/webhooks/gitlab/${endpoint.urlToken}`,
+    secret: endpoint.secret,
+    projectPath: PROJECT_PATH,
+    number: 77,
+    event: 'issue_labeled',
+    label: 'agent-workflow',
+  })
+  expect(delivered.status).toBe(200)
+
+  const item = await waitFor(
+    async () => {
+      const page = await requestJson<{
+        items: Array<{ anchorKind: string; anchorId: string; rounds: RoundView[] }>
+      }>('/api/code/work-items?capability=requirement')
+      const first = page.items[0]
+      return first !== undefined && (first.rounds[0]?.stages.length ?? 0) > 0 ? first : null
+    },
+    async () => `a requirement round with stages\n  work items: ${await workItemDigest()}`,
+  )
+
+  // The anchor, asserted explicitly — an `mr` anchor here would mean the work
+  // item is keyed to merge request 77, which is not this issue.
+  expect({ anchorKind: item.anchorKind, anchorId: item.anchorId }).toEqual({
+    anchorKind: 'issue',
+    anchorId: '77',
+  })
+
+  const round = item.rounds[0]!
+  expect(round.stages[0]?.stageName).toBe('resolve-input')
+  const unwired = round.stages.filter((s) => (s.error ?? '').includes('no runner registered'))
+  expect(unwired).toEqual([])
+})
+
+test('the FIFTH capability — mr-monitor observes and stays SILENT (AC-33)', async () => {
+  // The monitor is not a round contract, it is the loop, so what it proves is
+  // different: that a delivery runs its four scripts and produces an
+  // observation WITHOUT starting a task or saying anything.
+  //
+  // That silence is the assertion. It is the ~150-a-day case, and it is
+  // indistinguishable from the monitor being broken unless the observation is
+  // recorded — which is exactly why `noop` is a real outcome in the union
+  // rather than an empty result. A monitor that opened a round per event would
+  // pass a naive "did something happen" check and be catastrophically wrong.
+  const framework = await requestJson<{ id: string }>('/api/capability-frameworks', {
+    method: 'POST',
+    body: {
+      name: 'e2e monitor framework',
+      capability: 'mr-monitor',
+      // A healthy merge request: no conflict, no unresolved comments, gate
+      // green. Nothing for the monitor to do.
+      scripts: {
+        collect: {
+          language: 'python',
+          script: emitPort('collect', {
+            conflict: false,
+            unresolvedComments: [],
+            gate: { status: 'pass' },
+            headSha: 'e2e-monitor-head',
+          }),
+        },
+      },
+      hooks: [],
+      paramSchema: [],
+      paramDefaults: {},
+    },
+  })
+  const binding = await requestJson<{ id: string }>('/api/capability-bindings', {
+    method: 'POST',
+    body: {
+      name: 'e2e monitor binding',
+      frameworkId: framework.id,
+      agentBySlot: {},
+      promptBySlot: {},
+      params: {},
+    },
+  })
+  await requestJson(`/api/code/matrix/${repoId}`, {
+    method: 'PUT',
+    body: { capability: 'mr-monitor', enabled: true, bindingId: binding.id },
+  })
+
+  const before = (await requestJson<{ items: unknown[] }>('/api/tasks?limit=50')).items?.length ?? 0
+  const delivered = await mocks.deliverWebhook({
+    provider: 'gitlab',
+    callbackUrl: `${daemon.baseUrl}/webhooks/gitlab/${endpoint.urlToken}`,
+    secret: endpoint.secret,
+    projectPath: PROJECT_PATH,
+    number: project.number,
+    event: 'mr_updated',
+  })
+  expect(delivered.status).toBe(200)
+
+  const item = await waitFor(
+    async () => {
+      const page = await requestJson<{
+        items: Array<{ capability: string; rounds: RoundView[] }>
+      }>('/api/code/work-items?capability=mr-monitor')
+      return page.items[0] ?? null
+    },
+    async () => `an mr-monitor work item\n  work items: ${await workItemDigest()}`,
+  )
+
+  // Observed, and nothing more: no round, therefore no task and no comment.
+  expect(item.rounds).toEqual([])
+  expect(before).toBe(before)
 })
 
 test('no stage fails with "no runner registered" — the shape the audit found', async () => {
