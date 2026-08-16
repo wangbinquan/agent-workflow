@@ -169,6 +169,8 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/code/matrix/:repoId' },
   { method: 'PUT', path: '/api/code/matrix/:repoId' },
   { method: 'GET', path: '/api/code/work-items' },
+  // RFC-304 T61 — the troubleshooting chain's read side.
+  { method: 'GET', path: '/api/code/deliveries' },
   // RFC-304 T55 — the state view's third level. Its own endpoint rather than a
   // field on the work-item page: attempts are the widest rows in the model and
   // most rounds are never expanded.

@@ -168,6 +168,59 @@ describe('RFC-304 — enabling a capability over HTTP', () => {
   })
 })
 
+describe('RFC-304 T61 — the troubleshooting chain over HTTP', () => {
+  // The table has been written since T61 and nothing could read it, so the
+  // question it exists to answer — "why did review stop on this repository?" —
+  // had no way to be asked. These pin the endpoint's shape rather than the
+  // query behind it (that has its own file): which filters it accepts, and the
+  // one request it refuses.
+
+  test('a project filter answers with that project’s chain', async () => {
+    const { app } = buildApp()
+    const res = await app.request('/api/code/deliveries?projectId=proj-1', { headers: auth })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ deliveries: [] })
+  })
+
+  test('a correlation id answers on its own, without needing a project', async () => {
+    // The id follows one event across tables; an operator holding it has
+    // already narrowed the question and should not have to narrow it again.
+    const { app } = buildApp()
+    const res = await app.request('/api/code/deliveries?correlationId=abc', { headers: auth })
+    expect(res.status).toBe(200)
+  })
+
+  test('failures may be asked for across every project', async () => {
+    const { app } = buildApp()
+    const res = await app.request('/api/code/deliveries?failedOnly=true', { headers: auth })
+    expect(res.status).toBe(200)
+  })
+
+  test('an unfiltered request is REFUSED, and says what to name', async () => {
+    // The whole table is every delivery on the instance, which buries the
+    // incident the operator came for. Refusing with the three options is more
+    // useful than answering with all of them.
+    const { app } = buildApp()
+    const res = await app.request('/api/code/deliveries', { headers: auth })
+    expect(res.status).toBeGreaterThanOrEqual(400)
+    const body = JSON.stringify(await res.json())
+    expect(body).toContain('code-delivery-filter-required')
+    expect(body).toContain('correlationId')
+  })
+
+  test('a non-numeric limit is refused by name, like every other list here', async () => {
+    const { app } = buildApp()
+    const res = await app.request('/api/code/deliveries?projectId=p&limit=lots', { headers: auth })
+    expect(res.status).toBeGreaterThanOrEqual(400)
+    expect(JSON.stringify(await res.json())).toContain('code-limit-invalid')
+  })
+
+  test('without a bearer token it is refused', async () => {
+    const { app } = buildApp()
+    expect((await app.request('/api/code/deliveries?projectId=p')).status).toBe(401)
+  })
+})
+
 describe('RFC-304 — listing work items', () => {
   test('an empty deployment returns an empty page with no cursor', async () => {
     const { app } = buildApp()

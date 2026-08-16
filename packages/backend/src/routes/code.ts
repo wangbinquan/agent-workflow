@@ -24,6 +24,7 @@ import { z } from 'zod'
 import { actorOf } from '@/auth/actor'
 import {
   createCodeMatrixQuery,
+  createCodeDeliveryChainQuery,
   createCodeRoundAttemptsQuery,
   createCodeWorkItemProjectionQuery,
 } from '@/modules/code-capability/application/codeMatrixQuery'
@@ -48,6 +49,7 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
   const matrix = createCodeMatrixQuery(deps.db)
   const projection = createCodeWorkItemProjectionQuery(deps.db)
   const attempts = createCodeRoundAttemptsQuery(deps.db)
+  const deliveries = createCodeDeliveryChainQuery(deps.db)
   const metrics = createCodeMetricsQuery(deps.db)
 
   registerRoute(
@@ -161,6 +163,67 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
           ...(cursor !== undefined ? { cursor } : {}),
         }),
       )
+    },
+  )
+
+  // RFC-304 T61 — the delivery chain, readable at last.
+  //
+  // The table has been written since T61 and nothing read it: an administrator
+  // asking "why did review stop on this repository?" had `readiness = ready`
+  // (the config is complete, which is not "anything ran") and a last-trigger
+  // time, which does not separate "the webhook was never sent" from "it arrived
+  // and routing dropped it" from "it is queued behind a merge-request lease".
+  // Those three have different fixes, so the answer was a guess.
+  //
+  // One endpoint with three filters rather than three endpoints: they are three
+  // questions about one table, and an operator moves between them while looking
+  // at the same incident.
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/code/deliveries',
+      permissions: ['repos:read'],
+      tokenAccess: 'allow',
+      summary: 'Webhook deliveries and what became of them (troubleshooting chain)',
+    },
+    async (c) => {
+      const limitRaw = c.req.query('limit')
+      const limit = limitRaw === undefined ? undefined : Number(limitRaw)
+      if (limit !== undefined && !Number.isFinite(limit)) {
+        throw new ValidationError('code-limit-invalid', `'${String(limitRaw)}' is not a number`)
+      }
+      const correlationId = c.req.query('correlationId')
+      const projectId = c.req.query('projectId')
+      const failedOnly = c.req.query('failedOnly') === 'true'
+
+      // Most specific first: a correlation id names ONE incident, and an
+      // operator who has it does not want it filtered by anything else.
+      if (correlationId !== undefined && correlationId !== '') {
+        return c.json({ deliveries: await deliveries.forCorrelation(correlationId) })
+      }
+      if (failedOnly) {
+        return c.json({
+          deliveries: await deliveries.failures({
+            ...(projectId === undefined ? {} : { stableProjectId: projectId }),
+            ...(limit === undefined ? {} : { limit }),
+          }),
+        })
+      }
+      if (projectId === undefined || projectId === '') {
+        // Refused rather than answered with everything: the unfiltered table is
+        // every delivery on the instance, which is not a troubleshooting view.
+        throw new ValidationError(
+          'code-delivery-filter-required',
+          'name a projectId, a correlationId, or ask for failedOnly — the whole table is not an answer',
+        )
+      }
+      return c.json({
+        deliveries: await deliveries.forProject({
+          stableProjectId: projectId,
+          ...(limit === undefined ? {} : { limit }),
+        }),
+      })
     },
   )
 

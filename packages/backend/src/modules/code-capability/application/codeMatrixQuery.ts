@@ -7,6 +7,12 @@
 import { and, desc, eq, lt, type SQL } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { codeAiAttempts, codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
+import {
+  deliveriesByCorrelation,
+  failedDeliveries,
+  recentDeliveries,
+  type DeliveryRow,
+} from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
 import { listCapabilityCells } from '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
 import { repairActionsFor } from '@/modules/code-capability/domain/repairActions'
 import type {
@@ -229,4 +235,50 @@ async function projectRounds(db: DbClient, workItemId: string): Promise<CodeRoun
     })
   }
   return out
+}
+
+/**
+ * RFC-304 T61 — the delivery chain, readable.
+ *
+ * The table has been written since T61 (`openDelivery` / `advanceDelivery` are
+ * called from the dispatch path) and the three queries over it had NO caller and
+ * no route, so nothing could look at it. The migration's own header says why
+ * that matters: an administrator reporting "review stopped on this repository"
+ * gets `readiness = ready` (the CONFIG is complete, which is not "anything
+ * ran") and a last-trigger time (which does not separate "the webhook was never
+ * sent" from "it arrived and routing dropped it" from "it is queued behind a
+ * merge-request lease"). Each has a different fix, so without this the operator
+ * is guessing between three.
+ *
+ * Three questions, one query object, because they are three filters over one
+ * table rather than three features: what happened on this project lately, what
+ * happened to THIS delivery (by correlation id, which is the id that follows
+ * one event across tables), and what has been failing.
+ */
+export interface CodeDeliveryChainQuery {
+  forProject(input: { stableProjectId: string; limit?: number }): Promise<DeliveryRow[]>
+  forCorrelation(correlationId: string): Promise<DeliveryRow[]>
+  failures(input: { stableProjectId?: string; limit?: number }): Promise<DeliveryRow[]>
+}
+
+export function createCodeDeliveryChainQuery(db: DbClient): CodeDeliveryChainQuery {
+  return {
+    async forProject(input) {
+      return await recentDeliveries({
+        db,
+        stableProjectId: input.stableProjectId,
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      })
+    },
+    async forCorrelation(correlationId) {
+      return await deliveriesByCorrelation({ db, correlationId })
+    },
+    async failures(input) {
+      return await failedDeliveries({
+        db,
+        ...(input.stableProjectId === undefined ? {} : { stableProjectId: input.stableProjectId }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      })
+    },
+  }
 }
