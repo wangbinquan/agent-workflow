@@ -57,6 +57,7 @@ import { startLifecycleInvariantsLoop } from '@/services/lifecycleInvariants'
 import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
 import { startStuckTaskDetectorLoop } from '@/services/stuckTaskDetector'
 import { startBatchImportGc } from '@/services/repoBatchImport'
+import { startCapabilityDataGc } from '@/modules/code-capability/application/dataLifetimeGc'
 import { startPluginGenerationGc } from '@/services/pluginGenerationGc'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
@@ -789,6 +790,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     batchImportCfg.repoBatchImportRetentionMs,
   )
   const pluginGenerationGcTicker = startPluginGenerationGc({ db, pluginsDir: Paths.pluginsDir })
+  // RFC-304 T62 — the capability data sweep. Without this the retention rules
+  // are a policy nobody enforces, and the specific consequence is not slowness:
+  // an administrator eventually deletes rows by hand and takes the finding
+  // ledger — and therefore the adoption numbers — with it.
+  const capabilityDataGcTicker = startCapabilityDataGc({ db })
   // RFC-050: register an ambient provider so enqueueDistillJob callers
   // pick up the current `config.memoryDistillLang` without us having to
   // thread configPath through review.ts / clarify.ts / taskFeedback.ts.
@@ -1057,6 +1063,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     submoduleRefreshTicker.stop()
     unregisterSubmoduleRefreshConfig()
     batchImportGcTicker.stop()
+    capabilityDataGcTicker.stop()
     pluginGenerationGcTicker.stop()
     memoryDistillTicker.stop()
     lifecycleInvariantsTicker.stop()

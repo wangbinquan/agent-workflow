@@ -754,6 +754,85 @@ scheduler.ts:4558   capability === 'mr-review' && state.triggerContext !== null
 是过期的，代码后来补上了）。所以这不是「整条 RFC 没接」，而是**四条能力里只接了
 一条**。
 
+### 2bis.1 「零生产引用」模块普查
+
+判据是机械的：模块在 `src` 下被 import 的次数为 0（测试不算）。全模块扫出 8 个，
+逐个定性如下——**「零引用」本身不是缺陷，缺陷是「本该有人调而没人调」**。
+
+| 模块                       | 定性                | 处置                                    |
+| -------------------------- | ------------------- | --------------------------------------- |
+| `dataLifetimeGc`（T62）    | **该调没调**        | 已修：`cli/start.ts` 起 ticker + 停机停 |
+| `mrVoice`                  | **该调没调**        | 已修：ci-fix 发言改走 `say()`           |
+| `invalidatePending`（T45） | **该调没调**        | 已修：接在 `collect` 之后，见 2bis.2    |
+| `pushAuthority`（T44）     | **该调没调**        | 未修，见 2bis.3——需新数据，属设计决策   |
+| `sqliteWorkItemStore` 链   | 与生产实现**重复**  | 未修，见 2bis.4                         |
+| `sampleMonitorScripts`     | 样例，测试内执行    | 可接受（无生产调用面是本意）            |
+| `configScale` / `stateViewScale`（T65/T66） | 规模判据，供前端/文档 | 可接受                    |
+| `frameworkRelease`（T63）  | 灰度判据            | 可接受                                  |
+| `templateUpstream`（T64）  | 经 service 暴露     | 可接受                                  |
+| `readinessInvalidation`    | 判据纯函数          | 可接受                                  |
+
+### 2bis.2 T45 失效从未运行（已修）
+
+`invalidatePendingOnPush` 写完、单测全绿、`src` 下零 import。规则在，**该触发的
+时刻不存在**。
+
+这一处的破坏是安静的，所以活得久：`verify-baseline` 仍然拒绝推送过期 artifact，
+**不会推错东西**。发生的是另一回事——diff 挂在 thread 上看起来还有效，作者两天后
+回 `/aw apply`，此时才知道它早就过期了。没人告诉过他，而平台让他做的事失败了。
+T45 的全部意义就是**在分支移动的那一刻说话**，而不是在有人尝试使用的那一刻。
+
+接线点选在 `collect` 之后：`collect` 报出当前 head，是整个循环里平台**唯一**知道
+分支动过的时刻。锁在 `rfc304-monitor-invalidation-join.test.ts`（去掉接线 → 2 条
+正向断言转红，3 条「什么都不该发生」保持绿）。
+
+### 2bis.3 T44 推送授权从未运行（未修，需用户决策）
+
+`judgePushAuthority` 零调用。它自己的注释写明了后果：patch 形态由**平台用自己的
+凭据推送**，下游不校验任何人的权限，「一条评论与别人分支上的一个 commit 之间，
+唯一挡着的就是这个函数」。当前 `verify-baseline` 只做 C7 基线校验（`pending.baseSha
+!== target.headSha`），**不看是谁要求的**。
+
+未修的原因是**缺数据、且补数据是设计决策**，不是实现细节：
+
+- `commenter` —— 有（trigger `comment_author`）
+- `initiator` —— 有（`code_work_items.initiator_user_id`）
+- `botUsername` —— **没有**：`codeHostConnections` 无此列，全库无人产出（见 2bis.5）
+- `mrAuthor` —— **没有**：不在 trigger 变量表里，须新增一次 `mr.get`（action 存在，
+  `mrReviewStages.ts:283` 已在用）
+
+只接一半会**更糟**：没有 `mrAuthor` 就只剩 `initiator` 一支，而普通人开的 MR 上
+`initiator` 为 null，于是**作者确认自己的 MR 会被拒**——把一个缺失的门变成一个
+拦住主路径的门。要么整条接（新增 bot 账号配置 + verify-baseline 里取 MR 作者），
+要么明确不接。**留给用户裁决**。
+
+### 2bis.4 工作项状态机与生产实现重复（未修）
+
+`decideCodeWorkItemTransition` / `applyWorkItemEvent`（10 状态 / 10 事件 / 12 效果）
+**只有测试调用者**，`sqliteWorkItemStore` 整条链在 `src` 下零引用。
+
+但**这不是可靠性没实现**——先查了再说：它声明的行为在生产里由另一套命令式实现
+承担，且都接上了：MR lease（`mrLease.ts` + `sqliteMrLeaseStore` + scheduler）、
+epoch（`mrReviewStages` / `mrReviewEnvironment`）、handed_off（`ciFixStages`）。
+真正没接的是**声明式的 queue-and-merge**，而 `codeRoundLease.ts` 的文件头自己就
+写明了这一点：「不排队……keep 最新 `pendingRevision`、bump epoch 的行为属于工作项，
+那是后面的 PR」。
+
+后果因此是**退化而非错误**：拿不到 lease 的一轮不会起，事件仍被监视器观察并记录
+（wake 层不受 lease 管辖，`codeCapabilityWake` 总是跑 `runMonitorLoopFor`），只是
+不会为它开轮。缺的是「一轮跑着时到达的新版本，等这轮结束后被处理」这一步。
+两套设计留一套是正确终局，属独立一波。
+
+### 2bis.5 自评论回环守卫是失效的冗余防线（未修，风险已定级）
+
+`capabilityWake.ts:153` 的 `options.botUsername` 守卫在生产里恒为 undefined——
+全仓无人产出该值。但**主防线是接上的**：webhook 层 `ignoreUsernames` 按作者过滤，
+作用域含 `note` / `issue_comment`（`AUTHOR_FILTERED_EVENT_TYPES`），正是回环路径。
+
+所以结论不是「平台会自己刷自己」，而是**回环防护依赖运维把平台账号填进
+`ignoreUsernames`**；填了就安全，没填则第二道防线不生效。与 2bis.3 的 bot 账号
+是同一份缺失数据，一并决策。
+
 ## 3. 验收清单
 
 > **两列口径**（第三轮 P2：原表把"主实现"与"E2E 验证"混在一起，出现 AC 无归属或错归属）：

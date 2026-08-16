@@ -69,6 +69,8 @@ import {
   type WorkItemIdentity,
 } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
 import type { CodeHostPort } from '@/modules/code-capability/ports/codeHostPort'
+import type { GitPort } from '@/modules/code-capability/ports/gitPort'
+import { invalidatePendingOnPush } from '@/modules/code-capability/application/invalidatePending'
 
 /** The scripts a department framework supplies. Only `collect` is required. */
 export interface MonitorScriptSet {
@@ -103,6 +105,13 @@ export interface MonitorWakeInput {
   dispatch: RoundDispatcher
   /** Used only to report a conflict. A loop with no host cannot report one. */
   codeHost?: CodeHostPort
+  /**
+   * T45 — releases a pending change once the branch moves past it.
+   *
+   * Optional because a loop without one still works: it simply never
+   * invalidates, which is the pre-T45 behaviour rather than a broken state.
+   */
+  git?: GitPort
   /** Params the conflict report needs to address the merge request. */
   reportTarget?: Readonly<Record<string, string>>
   /** The ingress event being answered; claiming it is the T10e rule. */
@@ -198,6 +207,30 @@ export async function runMonitorWake(input: MonitorWakeInput): Promise<MonitorWa
       return await blocked(input, item.id, collected.reason, causationId, null, now)
     }
     const state: CollectResult = collected.value
+
+    // T45 — a push past a pending change invalidates it, BEFORE anything is
+    // arbitrated. `collect` has just reported the current head, which is the
+    // only moment the platform knows the branch moved.
+    //
+    // The failure this prevents is specific and bad: a frozen patch is posted
+    // and waits for `/aw apply`, the author pushes, and the confirmation then
+    // materialises a change computed against code that no longer exists. The
+    // artifact's own base check is the guard, and this is what runs it.
+    //
+    // Idempotent by construction, which matters because one push arrives as
+    // several events (mr_updated, a pipeline start, a comment from CI) and each
+    // of them wakes the monitor.
+    if (input.git !== undefined) {
+      await invalidatePendingOnPush({
+        db: input.db,
+        git: input.git,
+        workItemId: item.id,
+        newHeadSha: state.headSha,
+        ...(input.codeHost !== undefined && input.reportTarget !== undefined
+          ? { notify: { codeHost: input.codeHost, threadParams: input.reportTarget } }
+          : {}),
+      })
+    }
 
     // ---- conflict (T39) --------------------------------------------------
     // Before arbitration, and not as a work package: no arm of the union can

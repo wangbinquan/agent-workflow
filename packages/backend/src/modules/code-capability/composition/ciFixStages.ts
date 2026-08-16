@@ -57,6 +57,7 @@ import type {
   ClassifiedIssue,
   CollectResult,
 } from '@/modules/code-capability/domain/monitorContracts'
+import { say } from '@/modules/code-capability/application/mrVoice'
 import {
   claimFixAttempt,
   readFixAttempts,
@@ -130,6 +131,8 @@ export interface CiFixEnvironment {
   /** The change as it stands, for structural analysis. */
   readWorktreeDiff: () => Promise<string>
   attemptLimit?: number
+  /** How many notifications this merge request has already produced (T60). */
+  notificationsSpent?: number
   commitAuthor?: { name: string; email: string }
   now?: () => number
 }
@@ -182,7 +185,7 @@ export function ciFixProgramStages(
         // T54 — the quota was already spent by earlier rounds against this same
         // failure. Say so with the full history and stop; `handed_off` is what
         // keeps the next pipeline event from starting a fourth.
-        await postComment(env, renderQuotaExhausted(fingerprint, prior))
+        await postComment(env, renderQuotaExhausted(fingerprint, prior), 'handed-off')
         return {
           status: 'settled',
           reason: `the retry quota for this failure is spent after ${String(quota.attempts)} attempts`,
@@ -441,11 +444,24 @@ export function evidenceFrom(baseline: BaselineSnapshot): BaselineEvidence {
     : { kind: 'red-before-green-after' }
 }
 
-async function postComment(env: CiFixEnvironment, body: string): Promise<void> {
-  // Best-effort: a comment that cannot be posted must not turn a decided round
-  // into a failed one. The decision is already recorded in the attempt ledger,
-  // which is what the next round reads.
-  await env.codeHost.call({ action: 'comment.create', params: { ...env.reportTarget, body } })
+async function postComment(env: CiFixEnvironment, body: string, kind = 'ci-fix'): Promise<void> {
+  // Routed through `say` rather than calling `comment.create` directly, which
+  // is what makes T60's notification budget real: a rule enforced beside a call
+  // site that does not consult it is documentation. `handed-off` bypasses the
+  // budget — it is one of the two messages the quieting exists to preserve.
+  //
+  // Best-effort either way: a comment that cannot be posted must not turn a
+  // decided round into a failed one. The decision is already in the attempt
+  // ledger, which is what the next round reads.
+  await say(
+    {
+      codeHost: env.codeHost,
+      target: env.reportTarget,
+      notificationsSpent: env.notificationsSpent ?? 0,
+    },
+    kind,
+    body,
+  )
 }
 
 export type { CheatSignal }
