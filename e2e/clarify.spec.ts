@@ -6,7 +6,7 @@
 // surfaces are covered by component tests (QuestionForm, list/detail
 // routes, draftStore).
 //
-// The stub binary in e2e/fixtures/stub-opencode-clarify.sh emits a
+// The compiled runtime mock in packages/system-mocks emits a
 // <workflow-clarify> envelope on first invocation per (agent, shard_key),
 // then a <workflow-output> envelope on subsequent invocations — so the
 // scheduler walks awaiting_human → done after the user POSTs answers.

@@ -48,6 +48,7 @@ explicitly instead of being treated as incidental coverage from one node kind.
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Memory distillation and injection | Both runtime output parsers, source/scope collection, candidate persistence, approval boundary, next-task injection block/snapshot, and actual OpenCode + Claude Code runtime prompts. A candidate is also proved absent before approval.                                               |
 | Webhook ingress                   | GitLab and GitHub delivery flows plus provider/token mismatch, signature, unsupported event, body limit, rate limit, UUID deduplication, interrupted recovery and ordered supersede behavior.                                                                                           |
+| Unified external infrastructure   | `@agent-workflow/system-mocks` supplies runtime, Git smart HTTP, GitLab/GitHub REST + signed webhooks, OAuth/OIDC, MCP HTTP/SSE/stdio, npm, PyPI, PlantUML and SCIP. `system-mocks.spec.ts` crosses the compiled-daemon/browser boundaries; package tests use native protocol clients.  |
 | Webhook → Agent                   | Dispatcher → transactional task context → scheduler expansion → first Agent prompt, including an Intent-created workflow and a negative check against root-input flattening.                                                                                                            |
 | Webhook → code platform           | Dispatcher → first scheduler read → `code-host-call` parameter expansion → real local HTTP peer; the asserted project/MR path and credential header prove what the platform receives.                                                                                                   |
 | Webhook launch targets            | Workflow, standalone Agent and Workgroup launches all create real scratch repositories and retain trigger/fire ownership.                                                                                                                                                               |
@@ -81,7 +82,7 @@ Keep the task's observable contract, not a transcript tied to a model version:
    live release sweep; do not move the whole fault matrix to a billed provider.
 
 The scenario schema is implemented by
-`e2e/fixtures/stub/mode-runtime-scenario.ts`. Calls are scoped by
+`packages/system-mocks/src/runtime/mode-runtime-scenario.ts`. Calls are scoped by
 task/node/agent, session-resume mappings preserve internal envelope follow-ups,
 and exclusive claim files make step assignment safe under concurrent calls.
 

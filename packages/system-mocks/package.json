@@ -1,0 +1,32 @@
+{
+  "name": "@agent-workflow/system-mocks",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "agent-workflow-system-mocks": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./runtime": "./src/runtime/dispatch.ts",
+    "./mcp-stdio": "./src/mcp/stdio.ts",
+    "./scip": "./src/scip/cli.ts",
+    "./tool": "./src/tool.ts"
+  },
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "lint": "eslint src tests --max-warnings=0 --cache --cache-strategy content --cache-location ../../node_modules/.cache/eslint/system-mocks",
+    "lint:fix": "eslint src tests --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --isolate --randomize"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.27.1",
+    "fflate": "^0.8.2",
+    "jose": "^6.2.3",
+    "protobufjs": "^8.6.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

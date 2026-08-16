@@ -5,7 +5,7 @@
 // merge-back, workgroup prompt/protocol projection and human gates. The only
 // replacement is the external model process, which is deterministic and
 // network-free while speaking each runtime's production wire protocol
-// (fixtures/stub/mode-workgroup-matrix.ts).
+// (packages/system-mocks/src/runtime/mode-workgroup-matrix.ts).
 
 import { expect, test } from '@playwright/test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'

@@ -18,11 +18,12 @@
     "format:check:repo-ui": "prettier --check package.json playwright.config.ts \"e2e/**/*.{ts,md}\" \".github/workflows/*.{yml,yaml}\" scripts/local-gate.ts scripts/test-backend-sharded.ts --cache --cache-strategy content --cache-location node_modules/.cache/prettier/repo-ui",
     "typecheck": "bun run --filter '*' typecheck",
     "gate:local": "bun run scripts/local-gate.ts",
-    "test": "bun run test:backend && bun run test:shared && bun run test:frontend",
+    "test": "bun run test:backend && bun run test:shared && bun run test:frontend && bun run test:system-mocks",
     "test:backend": "bun run scripts/test-backend-sharded.ts",
     "test:backend:serial": "bun test --isolate --randomize",
     "test:shared": "bun run --filter @agent-workflow/shared test",
     "test:frontend": "bun run --filter @agent-workflow/frontend test",
+    "test:system-mocks": "bun run --filter @agent-workflow/system-mocks test",
     "test:frontend:gate": "bun run --filter @agent-workflow/frontend test:gate",
     "build:binary": "bun run scripts/build-binary.ts",
     "build:binary:e2e": "bun run scripts/build-binary.ts --include-e2e",
@@ -35,6 +36,7 @@
     "depcheck": "bun run scripts/depcheck.ts"
   },
   "devDependencies": {
+    "@agent-workflow/system-mocks": "workspace:*",
     "@axe-core/playwright": "^4.11.3",
     "@eslint/js": "^9.17.0",
     "@playwright/test": "^1.50.0",

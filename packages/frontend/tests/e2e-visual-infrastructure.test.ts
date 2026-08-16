@@ -54,12 +54,11 @@ describe('RFC-198 visual infrastructure source gates', () => {
     expect(workflow).toContain("bun-version: '1.3.13'")
   })
 
-  test('path-filtered visual jobs include the e2e stub in push and PR gates', () => {
-    // RFC-254 T28b: one compiled stub with per-mode modules replaced the nine
-    // shell scripts, so the filter watches the directory rather than naming
-    // two files — a new mode must not silently fall outside the gate.
+  test('path-filtered visual jobs include unified system mocks in push and PR gates', () => {
+    // Runtime modes and every external service now live under one test-only
+    // package, so a new protocol or mode must not silently fall outside the gate.
     const workflow = repoFile('.github/workflows/visual-regression-nightly.yml')
-    expect(workflow.match(/e2e\/fixtures\/stub\/\*\*/g)).toHaveLength(2)
+    expect(workflow.match(/packages\/system-mocks\/\*\*/g)).toHaveLength(2)
   })
 
   test('RFC-250 high-risk scenes are counted, invoked, and retained by hosted CI', () => {

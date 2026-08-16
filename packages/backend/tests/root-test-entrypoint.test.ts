@@ -174,14 +174,17 @@ describe('repository test entrypoint', () => {
     }
   })
 
-  test('bun run test dispatches backend, shared, and frontend in order', () => {
+  test('bun run test dispatches backend, shared, frontend, and system mocks in order', () => {
     expect(pkg.scripts?.test).toBe(
-      'bun run test:backend && bun run test:shared && bun run test:frontend',
+      'bun run test:backend && bun run test:shared && bun run test:frontend && bun run test:system-mocks',
     )
     expect(pkg.scripts?.['test:backend']).toBe(localShardedBackendCommand)
     expect(pkg.scripts?.['test:backend:serial']).toBe(hardenedBunCommand)
     expect(pkg.scripts?.['test:shared']).toBe('bun run --filter @agent-workflow/shared test')
     expect(pkg.scripts?.['test:frontend']).toBe('bun run --filter @agent-workflow/frontend test')
+    expect(pkg.scripts?.['test:system-mocks']).toBe(
+      'bun run --filter @agent-workflow/system-mocks test',
+    )
     expect(pkg.scripts?.['test:frontend:gate']).toBe(
       'bun run --filter @agent-workflow/frontend test:gate',
     )

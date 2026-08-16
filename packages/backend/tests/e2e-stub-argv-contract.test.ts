@@ -41,7 +41,7 @@ import { resolve } from 'node:path'
 import { buildCommand } from '../src/services/runtime/opencode/spawn'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
-const STUB = resolve(REPO_ROOT, 'e2e', 'fixtures', 'stub', 'dispatch.ts')
+const STUB = resolve(REPO_ROOT, 'packages', 'system-mocks', 'src', 'runtime', 'dispatch.ts')
 
 const NONCE = 'AWNONCE_argv_contract_9f3c'
 // A realistic prompt: multi-line, leads with `-` (the exact shape that forced the

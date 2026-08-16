@@ -52,7 +52,7 @@ on:
       # Process lifecycle changes can alter the live CLI integration path.
       - 'packages/backend/src/services/execution/**'
       - 'packages/backend/tests/integration-opencode/**'
-      - 'e2e/fixtures/stub/**'
+      - 'packages/system-mocks/src/runtime/**'
       - '.github/workflows/integration-opencode.yml'
   pull_request:
     paths:
@@ -67,7 +67,7 @@ on:
       # Process lifecycle changes can alter the live CLI integration path.
       - 'packages/backend/src/services/execution/**'
       - 'packages/backend/tests/integration-opencode/**'
-      - 'e2e/fixtures/stub/**'
+      - 'packages/system-mocks/src/runtime/**'
       - '.github/workflows/integration-opencode.yml'
 
 concurrency:

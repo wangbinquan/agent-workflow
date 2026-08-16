@@ -481,7 +481,8 @@ export async function run(argv: readonly string[]): Promise<void> {
   await waitForBarrier(stateDir, step.waitForFile)
   writeScenarioFiles(step.writeFiles, ctx)
   if (step.stderr !== undefined) process.stderr.write(`${render(step.stderr, ctx)}\n`)
-  if ((step.delayMs ?? 0) > 0) await Bun.sleep(step.delayMs)
+  const delayMs = step.delayMs ?? 0
+  if (delayMs > 0) await Bun.sleep(delayMs)
   if (step.silentExit === true) return
 
   // A process crash intentionally emits no protocol terminal event.

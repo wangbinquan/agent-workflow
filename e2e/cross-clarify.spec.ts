@@ -10,7 +10,7 @@
 // "Designer-by-default" was removed; making the upstream designer revise is now
 // an explicit reassign, not the default. So the designer runs exactly ONCE here.
 //
-// The (agent-driven) stub in e2e/fixtures/stub-opencode-cross-clarify.sh emits,
+// The (agent-driven) compiled runtime mock in packages/system-mocks emits,
 // under RFC-162's questioner-rerun sequence:
 //   designer round 1    → <workflow-output> "design v1"   (runs ONCE)
 //   questioner round 1  → <workflow-clarify> (1 question)

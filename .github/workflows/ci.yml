@@ -518,6 +518,7 @@ jobs:
           path: |
             dist/agent-workflow-e2e-*
             dist/stub-opencode-*
+            dist/system-mock-tool-*
           if-no-files-found: error
 
   e2e:
@@ -621,7 +622,7 @@ jobs:
           name: agent-workflow-e2e-${{ matrix.os }}
           path: dist
 
-      - name: Restore executable bit on the e2e binary and stub
+      - name: Restore executable bit on the e2e binary and mock executables
         # upload/download-artifact does not preserve the +x mode bit. Both are
         # spawned — the stub by the daemon as `opencodePath` — so both need it,
         # and a missing stub must fail HERE rather than as an unexplained
@@ -632,6 +633,8 @@ jobs:
           chmod +x dist/agent-workflow-e2e-*
           test -n "$(find dist -maxdepth 1 -type f -name 'stub-opencode-*')"
           chmod +x dist/stub-opencode-*
+          test -n "$(find dist -maxdepth 1 -type f -name 'system-mock-tool-*')"
+          chmod +x dist/system-mock-tool-*
 
       - name: Cache Playwright browsers
         id: pw-cache

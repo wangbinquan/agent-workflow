@@ -37,7 +37,7 @@ on:
       - 'packages/backend/tests/rfc254-*.test.ts'
       - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
       - 'packages/backend/src/util/windowsJobObject.ts'
-      - 'e2e/fixtures/stub/**'
+      - 'packages/system-mocks/**'
       - 'scripts/build-binary.ts'
       - '.github/workflows/windows-platform.yml'
   pull_request:
@@ -56,7 +56,7 @@ on:
       - 'packages/backend/tests/rfc254-*.test.ts'
       - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
       - 'packages/backend/src/util/windowsJobObject.ts'
-      - 'e2e/fixtures/stub/**'
+      - 'packages/system-mocks/**'
       - 'scripts/build-binary.ts'
       - '.github/workflows/windows-platform.yml'
 
@@ -185,8 +185,8 @@ jobs:
       # compiled binary actually starts on Windows. `build:binary` runs its own
       # `version` smoke at the end.
       - name: Build single binary + the e2e stub
-        # `--include-e2e` also compiles `e2e/fixtures/stub/dispatch.ts`, so this
-        # proves the stub cross-compiles and starts on Windows — the artifact
+        # `--include-e2e` also compiles the system-mocks runtime dispatcher and
+        # CLI tool, so this proves both test executables start on Windows — the artifact
         # `opencodePath` will point at once the e2e leg lands (T31-T35).
         run: bun run build:binary:e2e
 
@@ -221,3 +221,11 @@ jobs:
             echo "unknown mode should have failed" >&2
             exit 1
           fi
+
+      - name: The compiled system mock tool answers on Windows
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(find dist -maxdepth 1 -type f -name 'system-mock-tool-windows-*' | head -n 1)
+          test -n "$tool"
+          "$tool" --version

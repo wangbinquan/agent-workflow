@@ -34,8 +34,9 @@ const backendSrc = join(repoRoot, 'packages', 'backend', 'src')
 const pluginsDir = join(backendSrc, 'services', 'runtime', 'opencode', 'plugin')
 const generatedPath = join(backendSrc, 'embed.generated.ts')
 const mainEntry = join(backendSrc, 'main.ts')
-// RFC-254 T28b — the e2e opencode stand-in, compiled alongside the test binary.
-const stubEntry = join(repoRoot, 'e2e', 'fixtures', 'stub', 'dispatch.ts')
+// Test-only external executables are owned by the unified system mock package.
+const stubEntry = join(repoRoot, 'packages', 'system-mocks', 'src', 'runtime', 'dispatch.ts')
+const systemMockToolEntry = join(repoRoot, 'packages', 'system-mocks', 'src', 'tool.ts')
 const outDir = join(repoRoot, 'dist')
 
 const STUB_CONTENTS = `// P-5-05 single-binary embed table.
@@ -292,6 +293,10 @@ async function main(): Promise<void> {
   const outfile = join(outDir, `agent-workflow-${platformSuffix()}${executableExtension()}`)
   const e2eOutfile = join(outDir, `agent-workflow-e2e-${platformSuffix()}${executableExtension()}`)
   const stubOutfile = join(outDir, `stub-opencode-${platformSuffix()}${executableExtension()}`)
+  const systemMockToolOutfile = join(
+    outDir,
+    `system-mock-tool-${platformSuffix()}${executableExtension()}`,
+  )
   // RFC-213 impl-gate P1-3: stamp a real binary identity into the executable so
   // the pre-migration restore gate can tell two releases apart (util/version.ts).
   // git describe gives the tag on releases and tag-N-gSHA on intermediate builds;
@@ -362,6 +367,26 @@ async function main(): Promise<void> {
       process.stdout.write(
         `\nbuilt e2e stub: ${stubOutfile} (${(stubSize / 1024 / 1024).toFixed(1)} MiB)\n`,
       )
+      // One additional executable covers every external CLI-shaped dependency:
+      // SCIP indexers are selected from their argv, while `mcp-stdio` selects
+      // the long-lived stdio MCP server. Keeping them together avoids embedding
+      // another Bun runtime per protocol.
+      await run(
+        [
+          'bun',
+          'build',
+          systemMockToolEntry,
+          '--compile',
+          '--target=bun',
+          '--minify',
+          `--outfile=${systemMockToolOutfile}`,
+        ],
+        repoRoot,
+      )
+      const toolSize = statSync(systemMockToolOutfile).size
+      process.stdout.write(
+        `\nbuilt system mock tool: ${systemMockToolOutfile} (${(toolSize / 1024 / 1024).toFixed(1)} MiB)\n`,
+      )
     }
   } finally {
     // 4. Always restore the stub so dev mode is unaffected.
@@ -378,6 +403,8 @@ async function main(): Promise<void> {
     // dispatcher survived compilation with its mode table intact.
     await run([stubOutfile, '--version'], repoRoot, { AW_STUB_MODE: 'basic' })
     process.stdout.write(`\nsmoke ok: ${stubOutfile} --version\n`)
+    await run([systemMockToolOutfile, '--version'], repoRoot)
+    process.stdout.write(`\nsmoke ok: ${systemMockToolOutfile} --version\n`)
   }
 }
 

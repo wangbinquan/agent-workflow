@@ -47,7 +47,7 @@ import { dirname, join, resolve, sep } from 'node:path'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const originalStub = (name: string): string => join(REPO_ROOT, 'e2e', 'fixtures', name)
-const PORTED_STUB = join(REPO_ROOT, 'e2e', 'fixtures', 'stub', 'dispatch.ts')
+const PORTED_STUB = join(REPO_ROOT, 'packages', 'system-mocks', 'src', 'runtime', 'dispatch.ts')
 
 interface Capture {
   stdout: string

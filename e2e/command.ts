@@ -5,10 +5,9 @@
 // entire Playwright shard. Keep every Git/SQLite invocation parameterized,
 // non-interactive, and covered by a hard deadline here.
 
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { createServer, type Server } from 'node:http'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -133,110 +132,16 @@ function sqliteExec(args: string[], sql: string): string {
 // 直接跑任务）。而 e2e 全程走公共 HTTP 面，等于用户真实路径——它继续用 `file://`
 // 就意味着「拒绝」这条规则在最像用户的那条通道上被绕过，锁也就成了摆设。
 //
-// 换成什么：本机 `git daemon`（git 自带，三个 CI 平台都有），`--base-path` 指向
-// 系统临时目录，URL 用相对路径，于是任何 mkdtemp 出来的夹具仓都能直接被服务，
-// 不需要额外软链或搬运。`--enable=receive-pack` 让 commit&push 一类用例照跑。
-//
-// 每个 Playwright worker 是独立进程，各自起一个 daemon；端口随机挑并在冲突时重试，
-// 进程退出时收尾。
+// 换成什么：统一 system-mocks 包里的 smart-HTTP CGI。globalSetup 只起一个网关，
+// 每个 worker 通过环境变量拿到同一根 URL；请求日志与故障注入也因此覆盖 Git。
 // ---------------------------------------------------------------------------
 
-/** globalSetup 起服务后写进来的端口；worker 进程从环境变量读。 */
-const GIT_HTTP_PORT_ENV = 'AW_E2E_GIT_HTTP_PORT'
-let gitHttpServer: Server | null = null
+/** globalSetup 起服务后写进来的 URL；worker 进程从环境变量读。 */
+const GIT_HTTP_BASE_ENV = 'AW_SYSTEM_MOCK_GIT_BASE_URL'
 
 /** 服务根：所有夹具仓都在系统临时目录下。 */
 function gitHttpRoot(): string {
   return realpathSync(tmpdir())
-}
-
-/**
- * 起一个把请求转给 `git http-backend`（CGI）的本机 HTTP 服务，**在 Playwright 的
- * globalSetup 里调用一次**，端口经环境变量下发给各 worker。
- *
- * 为什么是 smart HTTP 而不是别的：
- *   · `git://` **不在后端接受的 scheme 里**（只认 ssh/http/https/file + scp 形式），
- *     用它会被启动接口 422 挡掉——而「为了跑测试去放宽产品接受的 URL 形态」是
- *     capability 扩张，不能顺手做；
- *   · dumb HTTP（静态目录 + update-server-info）只支持 clone/fetch，而 commit&push
- *     一类用例要**推**到同一个 repoUrl 上，必须 receive-pack。
- * 用 `node:http` 而非 `Bun.serve`：e2e 跑在 Playwright 的 node 运行时里。
- *
- * ⚠️ **不要在起了本服务的那个进程里用同步 git 调用去访问它**（`execFileSync`
- * 克隆自己）：同步调用阻塞事件循环 → 服务永远响应不了 → 死锁（量延迟时实撞）。
- * e2e 里天然不触发——服务在 globalSetup 进程，git 跑在 worker 与 daemon 进程。
- *
- * 代价：相比 `file://`，每次克隆约 **+224ms**（本机实测 118ms → 342ms，主要是
- * 每请求 spawn 一个 CGI 进程）。换来的是 e2e 与真实用户走同一条协议路径。
- * 放在 globalSetup 而不是首次取 URL 时懒启动：`listen` 是异步的，而调用点遍布
- * 31 处同步表达式，懒启动要么把它们全改成 await，要么用同步等待阻塞事件循环
- * ——后者会让 listen 的回调永远发不出来（实撞）。
- */
-export async function startGitHttpServer(): Promise<number> {
-  const root = gitHttpRoot()
-  const server = createServer((req, res) => {
-    const url = new URL(req.url ?? '/', 'http://127.0.0.1')
-    const child = spawn('git', ['http-backend'], {
-      env: {
-        ...process.env,
-        GIT_PROJECT_ROOT: root,
-        GIT_HTTP_EXPORT_ALL: '1',
-        // 夹具仓要能被推：http-backend 只在这个开关下放行 receive-pack。
-        GIT_HTTP_RECEIVE_PACK: '1',
-        PATH_INFO: decodeURIComponent(url.pathname),
-        QUERY_STRING: url.search.replace(/^\?/, ''),
-        REQUEST_METHOD: req.method ?? 'GET',
-        CONTENT_TYPE: req.headers['content-type'] ?? '',
-        CONTENT_LENGTH: req.headers['content-length'] ?? '',
-        HTTP_CONTENT_ENCODING: req.headers['content-encoding'] ?? '',
-        REMOTE_ADDR: '127.0.0.1',
-        REMOTE_USER: 'e2e',
-      },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    req.pipe(child.stdin)
-    const chunks: Buffer[] = []
-    child.stdout.on('data', (c: Buffer) => chunks.push(c))
-    child.on('close', () => {
-      const out = Buffer.concat(chunks)
-      // CGI：头部与正文以空行分隔；把头逐条搬到 HTTP 响应上。
-      const crlf = out.indexOf('\r\n\r\n')
-      const headEnd = crlf === -1 ? out.indexOf('\n\n') : crlf
-      const sepLen = crlf === -1 ? 2 : 4
-      if (headEnd === -1) {
-        res.writeHead(500)
-        res.end()
-        return
-      }
-      let status = 200
-      const headers: Record<string, string> = {}
-      for (const line of out.subarray(0, headEnd).toString('utf8').split(/\r?\n/)) {
-        const idx = line.indexOf(':')
-        if (idx <= 0) continue
-        const k = line.slice(0, idx).trim()
-        const v = line.slice(idx + 1).trim()
-        if (k.toLowerCase() === 'status') status = Number.parseInt(v, 10) || 200
-        else headers[k] = v
-      }
-      res.writeHead(status, headers)
-      res.end(out.subarray(headEnd + sepLen))
-    })
-  })
-  const port = await new Promise<number>((resolve, reject) => {
-    server.on('error', reject)
-    // 端口 0 = 让内核挑一个空闲的，省掉自己随机重试的那套。
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address()
-      if (addr === null || typeof addr === 'string') {
-        reject(new Error('git http server: unexpected address shape'))
-        return
-      }
-      resolve(addr.port)
-    })
-  })
-  gitHttpServer = server
-  process.env[GIT_HTTP_PORT_ENV] = String(port)
-  return port
 }
 
 /**
@@ -246,10 +151,10 @@ export async function startGitHttpServer(): Promise<number> {
  * 抛错而不是悄悄退回 `file://`——退回去等于把这条规则又绕过一次。
  */
 export function repoRemoteUrl(repoPath: string): string {
-  const port = process.env[GIT_HTTP_PORT_ENV]
-  if (port === undefined || port.length === 0) {
+  const gitBaseUrl = process.env[GIT_HTTP_BASE_ENV]
+  if (gitBaseUrl === undefined || gitBaseUrl.length === 0) {
     throw new Error(
-      `repoRemoteUrl: ${GIT_HTTP_PORT_ENV} is unset — Playwright globalSetup must call startGitHttpServer()`,
+      `repoRemoteUrl: ${GIT_HTTP_BASE_ENV} is unset — Playwright globalSetup must start system mocks`,
     )
   }
   const base = gitHttpRoot()
@@ -261,15 +166,5 @@ export function repoRemoteUrl(repoPath: string): string {
     )
   }
   const rel = real.slice(base.length).replace(/\\/g, '/').replace(/^\/+/, '')
-  return `http://127.0.0.1:${port}/${rel}`
+  return `${gitBaseUrl.replace(/\/$/, '')}/${rel}`
 }
-
-/** Playwright teardown 用；进程退出时也会兜底收。 */
-export function stopGitHttpServer(): void {
-  if (gitHttpServer === null) return
-  gitHttpServer.close()
-  gitHttpServer = null
-  delete process.env[GIT_HTTP_PORT_ENV]
-}
-
-process.on('exit', stopGitHttpServer)

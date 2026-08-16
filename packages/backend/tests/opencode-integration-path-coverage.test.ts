@@ -43,7 +43,7 @@ const CANONICAL = [
   // Process lifecycle changes can alter the live runtime path.
   'packages/backend/src/services/execution/**',
   'packages/backend/tests/integration-opencode/**',
-  'e2e/fixtures/stub/**',
+  'packages/system-mocks/src/runtime/**',
   '.github/workflows/integration-opencode.yml',
 ].sort()
 

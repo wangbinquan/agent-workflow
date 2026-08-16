@@ -160,7 +160,7 @@ export function defaultProductionBinaryPath(): string {
  * RFC-254 T28b — the compiled e2e model stand-in.
  *
  * There is ONE artifact for every behaviour; `AW_STUB_MODE` selects between the
- * modes in `e2e/fixtures/stub/`. It is compiled rather than scripted because
+ * modes in `packages/system-mocks/src/runtime/`. It is compiled rather than scripted because
  * `opencodePath` has to name something the OS can execute, and Windows cannot
  * execute a `#!/bin/sh` file — nor a `.cmd` shim, which would hand the argv back
  * to cmd.exe to re-tokenize.
@@ -170,7 +170,7 @@ export function defaultStubPath(): string {
   return resolve(repoRoot, 'dist', `stub-opencode-${platformSuffix()}${executableExtension()}`)
 }
 
-/** Behaviours the compiled stub can be asked for. Mirrors `stub/dispatch.ts`. */
+/** Behaviours the compiled stub can be asked for. Mirrors system-mocks runtime dispatch. */
 export type StubMode =
   | 'basic'
   | 'clarify'
@@ -184,6 +184,13 @@ export type StubMode =
   | 'business-workflows'
   | 'business-workgroups'
   | 'workgroup-matrix'
+
+/** Compiled test-only entry for SCIP indexers and local MCP stdio. */
+export function defaultSystemMockToolPath(): string {
+  if (process.env.AGENT_WORKFLOW_E2E_SYSTEM_MOCK_TOOL)
+    return process.env.AGENT_WORKFLOW_E2E_SYSTEM_MOCK_TOOL
+  return resolve(repoRoot, 'dist', `system-mock-tool-${platformSuffix()}${executableExtension()}`)
+}
 
 function isExecutableFile(path: string): boolean {
   try {

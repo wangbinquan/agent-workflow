@@ -6,7 +6,7 @@
 // DiffView). What this spec proves is the end-to-end wire: real daemon +
 // scheduler + DB + WS rebroadcast, exercised by a real opencode stub.
 //
-// The stub binary in e2e/fixtures/stub-opencode.sh emits a fixed envelope
+// The compiled runtime mock in packages/system-mocks emits a fixed envelope
 //   <port name="answer">stub e2e output</port>
 // so every regen produces the same body. That's enough to walk the state
 // machine and assert task transitions: awaiting_review → running → ...

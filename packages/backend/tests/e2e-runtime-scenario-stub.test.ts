@@ -22,7 +22,7 @@ interface InvocationResult {
 }
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
-const STUB = resolve(REPO_ROOT, 'e2e', 'fixtures', 'stub', 'dispatch.ts')
+const STUB = resolve(REPO_ROOT, 'packages', 'system-mocks', 'src', 'runtime', 'dispatch.ts')
 const scratch: string[] = []
 
 function tempDir(): string {
