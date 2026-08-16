@@ -4,6 +4,29 @@
 
 ## 测试 / CI
 
+- **Playwright e2e 跑的是 `dist/` 里的二进制，不是你刚改的源码（2026-08-16 实测，浪费一整轮）**：
+  `e2e/harness.ts` 的 `startDaemon()` 启的是 `dist/agent-workflow-e2e-<platform>`。改完
+  `packages/backend/src/**` 直接跑 `bunx playwright test`，**跑的还是上一次 build 的行为**——
+  症状是「我明明修了，e2e 结果一个字没变」。改一次源码就 `bun run build:binary:e2e` 一次，
+  再跑 spec。判据：e2e 的失败输出与改动前**逐字节相同**（连时间戳外的措辞都没变）⇒ 先怀疑
+  二进制陈旧，别去怀疑自己的改动没生效。反过来也成立：e2e 绿但你没重新 build，那条绿不作数。
+
+- **单测把「出错的那个东西」当参数递进去，于是永远发现不了它错了（RFC-304 2ter 实测，一次挖出三处）**：
+  典型形状是 `f(db, { repoId: task.repoPath })`——`repo_capability_config.repo_id` 存 ULID，
+  `task.repoPath` 是文件路径，两者都是 `string`，**类型检查、lint、单测全绿，运行时永远匹配不上**。
+  这类缺陷单测天然看不见：单测自己构造那个参数，构造的当然是对的那个。同族还有「起任务时给的是
+  scratch 空目录，而阶段要求一个带 `origin` 的 clone」「有 `openRound` 没有 `closeRound`」。
+  判据：**一个值跨模块传递、两端各自都有测试、而两端对这个值的"含义"没有类型区分** ⇒ 只有
+  端到端（真 daemon + 真 DB + 真调度）才照得出来。能便宜兜的是**源码层断言**（「`repoId: task.repoPath`
+  这个写法不许出现」）——弱，但对「类型正确、语义错误」是唯一抓得住的自动化手段。
+
+- **产品明令禁 `file://` 之后，凡「经真实启动路径」的后端单测都要用真 smart-HTTP 远端**：
+  现成的是 `packages/backend/tests/helpers/gitHttpRemote.ts`（`startGitHttpRemote()` +
+  `remoteUrlFor(dir)`）。reuse-by-id 启动会**逐层**校验：行在不在 → URL 能不能解封（seal 的 key
+  必须与该测试里调度器用的同一把）→ scheme 合不合法 → 镜像有没有 `origin`（要剥凭据）→
+  `last_fetched_at` 够不够新（旧的按 stale cache 拒）。每一层都是**对的行为、错的夹具**，
+  别改生产代码去迁就夹具——那等于把刚立的规则自己拆了。
+
 - **串行 spawn 的用例天生贴着超时线（2026-08-16 实测）**：一条断言确定性的用例
   （`rfc210-submodule-topology` 的 `check-ref-format`）在本地与多数 CI 上稳过，却在一次
   macOS runner 上以 **5002ms / 5000ms** 超时红了——它顺序 spawn 了 12 个子进程，而 backend
@@ -116,7 +139,7 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 - **其中会藏真缺陷，而且恰恰藏在「更宽」和 `as` 里**。两个实例：
   - `resourcePackage/parse.ts` 用**更宽**的 schema 校验包 manifest 的 root，于是一个声明了不可打包类型为根的包**能解析通过**，到下游才带着更差的报错失败；
   - `cli/package.ts` 写的是 `flags.get('type') as AclResourceType`，随后那次 `includes` 检查早已被断言废掉——**对用户输入做断言，等于把随后的校验变成装饰**。改成在类型化清单上 `find`，真正收窄。
-  两者在两个集合还相等时**都不可见**，与「union 少一支」同形：不是错，是**够不着**。
+    两者在两个集合还相等时**都不可见**，与「union 少一支」同形：不是错，是**够不着**。
 
 - **权限点与路由必须同批落地——这是结构性的，不是约定**。RFC-247 的启动自检会遍历 `ROUTE_BACKED_POINTS`，任何没有 `RouteMeta` 引用的点位让 daemon **拒绝启动**。这次先加了 8 个点、路由还没写，于是**全仓 20 条测试失败全是这一条拒绝**（凡是 `createApp` 的用例都挂）——症状离原因很远，但只要想到「刚加过点位」就一步到位。反向同理：删路由不删点位一样起不来。
 

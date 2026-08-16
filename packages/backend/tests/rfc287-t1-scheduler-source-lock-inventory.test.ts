@@ -111,6 +111,10 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   // T9 新增：G3 四条豁免的理由锁 + 装配散写的终局灭绝锁（三处显式挖洞）。
   'rfc287-t9-exemptions-and-extinction.test.ts',
   'rfc292-trigger-source-locks.test.ts',
+  // RFC-304 2ter.2：能力配置的主键锁——`repo_capability_config.repo_id` 存的是
+  // cached-repo ULID，而调度器曾传 `task.repoPath`（文件路径）。两者都是 string，
+  // 类型与运行时都抓不住，只能锁「那个错误写法不许再出现」。
+  'rfc304-round-lifecycle-and-keys.test.ts',
   // RFC-305 delegated-authority architecture lock verifies the three reviewed
   // scheduler launch sources while keeping the underlying behavior fixtures.
   'rfc305-architecture-lock.test.ts',

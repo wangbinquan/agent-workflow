@@ -183,6 +183,7 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 
 > **接续完成（2026-08-16，RFC-305 已落定）**。上面那张待补清单的实际落法，与原计划有两处
 > 不同，记在这里免得下一个人以为漏了：
+>
 > - **按计划补的**：`ACL_RESOURCE_TYPES` 两项、`ACL_TABLES` 两项、`resourceGrants.resourceType`
 >   enum、新权限点 `capability-frameworks:*` / `capability-bindings:*`（八个，两层分开：binding
 >   四个是普通矩阵点，framework 三个写点进系统域）——均随 T57(a) 落地。**零迁移**：
@@ -517,17 +518,17 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 
 ### MR 监视器（PR-6）
 
-| #    | 任务                                                                                                                                                                                                                                                                                                           | 依赖   | 状态 |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
-| T35  | 四个脚本契约（collect / classify / arbitrate / select）+ 返回 schema 校验；`WorkPackage` 判别联合**含 `noop`**——不起 task、不在 MR 说话、只落 observation（50 MR×3 次/天 = 150 次健康唤醒全靠它）。**v1 的 union 只含 `noop \| mr-review`**——PR-7/PR-10 合并时才各自扩入自己那一支                             | T7     | ✅ 2026-08-16 |
-| T35c | **wake 入口**（**已降为可选**——proposal §6ter-H1 确认自研流水线由 GitLab CI 触发，唤醒链路天然成立）：public command + inbound route + 稳定 MR 定位 + 去重 + 接收回执，触发一次 `collect`。仍要实现（它是 readiness 判据的一部分，也为将来的独立流水线预留），但**不构成 CI 修复上线的前置**，可排在 PR-9 尾批 | T36    | ⏳ 可选，排 PR-9 尾批 |
+| #    | 任务                                                                                                                                                                                                                                                                                                           | 依赖   | 状态                                        |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------- |
+| T35  | 四个脚本契约（collect / classify / arbitrate / select）+ 返回 schema 校验；`WorkPackage` 判别联合**含 `noop`**——不起 task、不在 MR 说话、只落 observation（50 MR×3 次/天 = 150 次健康唤醒全靠它）。**v1 的 union 只含 `noop \| mr-review`**——PR-7/PR-10 合并时才各自扩入自己那一支                             | T7     | ✅ 2026-08-16                               |
+| T35c | **wake 入口**（**已降为可选**——proposal §6ter-H1 确认自研流水线由 GitLab CI 触发，唤醒链路天然成立）：public command + inbound route + 稳定 MR 定位 + 去重 + 接收回执，触发一次 `collect`。仍要实现（它是 readiness 判据的一部分，也为将来的独立流水线预留），但**不构成 CI 修复上线的前置**，可排在 PR-9 尾批 | T36    | ⏳ 可选，排 PR-9 尾批                       |
 | T10e | **事件归属**（从 PR-1 移来，其价值到监视器阶段才出现）：每个 ingress event id 只被一个顶层 capability claim；监视器派发与直接触发共享 causation id；机器自身 push 打 cause 标记**仅用于同因果链去重**——已跑过等价 `self-review` 的 revision 才跳过检视，**不反转 E2 的默认监管**                               | T9,T36 | ✅ 2026-08-16（observation 唯一索引 claim） |
-| T35b | 核心脚本失败一律阻断（`blocking` 只适用钩子）；`collect` 失败不得带空产物继续                                                                                                                                                                                                                                  | T35    | ✅ 2026-08-16 |
-| T36  | 主循环：事件唤醒 → 四脚本 → 起一轮；**零轮询**断言                                                                                                                                                                                                                                                             | T35,T9 | ✅ 2026-08-16 |
-| T37  | 默认优先级仲裁（框架未覆盖时）：冲突 > 评论 > CI；CI 内三档                                                                                                                                                                                                                                                    | T35    | ✅ 2026-08-16 |
-| T38  | 多项工作包：一轮内依次做完、统一推送一次                                                                                                                                                                                                                                                                       | T36    | ✅ 2026-08-16 |
-| T39  | 冲突检测与报告（**不修**）                                                                                                                                                                                                                                                                                     | T36    | ✅ 2026-08-16（每 revision 报一次，不修） |
-| T40  | 闭环：MR 合并/关闭 → `closed`，停止后续                                                                                                                                                                                                                                                                        | T36    | ✅ 2026-08-16（dispatcher 已接线） |
+| T35b | 核心脚本失败一律阻断（`blocking` 只适用钩子）；`collect` 失败不得带空产物继续                                                                                                                                                                                                                                  | T35    | ✅ 2026-08-16                               |
+| T36  | 主循环：事件唤醒 → 四脚本 → 起一轮；**零轮询**断言                                                                                                                                                                                                                                                             | T35,T9 | ✅ 2026-08-16                               |
+| T37  | 默认优先级仲裁（框架未覆盖时）：冲突 > 评论 > CI；CI 内三档                                                                                                                                                                                                                                                    | T35    | ✅ 2026-08-16                               |
+| T38  | 多项工作包：一轮内依次做完、统一推送一次                                                                                                                                                                                                                                                                       | T36    | ✅ 2026-08-16                               |
+| T39  | 冲突检测与报告（**不修**）                                                                                                                                                                                                                                                                                     | T36    | ✅ 2026-08-16（每 revision 报一次，不修）   |
+| T40  | 闭环：MR 合并/关闭 → `closed`，停止后续                                                                                                                                                                                                                                                                        | T36    | ✅ 2026-08-16（dispatcher 已接线）          |
 
 > **PR-6 那条遗留项已解决（2026-08-16），记下选法与理由**：**能力轮次的 webhook 归属**。
 > 原本三条路都不理想：①给 `TASK_LAUNCH_ORIGINS` 加第五种要改 `tasks` 表的 CHECK，而 SQLite
@@ -545,19 +546,18 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 > 每条投递都无条件解析。改为**先查有没有任何启用中的单元格**再解析——没配能力的部署（也就是
 > 今天所有部署、以及那批 RFC-268 用例描述的形态）行为一字未变。
 
-
 ### 评论驱动改码（PR-7）
 
-| #    | 任务                                                                                                                                                                                                                                                 | 依赖    | 状态 |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------ |
-| T2c  | **artifact store**（从 PR-1 移来，主要服务本 PR）：不可变产物（detached commit / blob）+ digest + 引用计数；`inherited` 阶段投影；消费或作废后**立即回收**                                                                                           | T2      | ✅ 2026-08-16 |
-| T4b  | **恢复策略按等待原因**（从 PR-1 移来）：`waitKind` ∈ {`frozen-artifact-confirmation`（禁重跑 AI）, `clarification-answer`（令 comprehend 及下游失效重跑）}                                                                                           | T4      | ◐ 见下方说明（冻结产物一支已落，clarify 一支随 PR-8） |
+| #    | 任务                                                                                                                                                                                                                                                 | 依赖    | 状态                                                    |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------- |
+| T2c  | **artifact store**（从 PR-1 移来，主要服务本 PR）：不可变产物（detached commit / blob）+ digest + 引用计数；`inherited` 阶段投影；消费或作废后**立即回收**                                                                                           | T2      | ✅ 2026-08-16                                           |
+| T4b  | **恢复策略按等待原因**（从 PR-1 移来）：`waitKind` ∈ {`frozen-artifact-confirmation`（禁重跑 AI）, `clarification-answer`（令 comprehend 及下游失效重跑）}                                                                                           | T4      | ◐ 见下方说明（冻结产物一支已落，clarify 一支随 PR-8）   |
 | T41a | **共同主干装配**：`resolve-target → collect-thread → prepare-worktree → apply-change → validate-change` + `mr-comment-fix` StageContract + 监视器/ingress 接线（此前只有两个出口任务，主干无人做）                                                   | T4,T36  | ✅ 2026-08-16（阶段已装配；ingress 接线同 PR-6 遗留项） |
-| T41  | `decide-form`：单文件 + 连续行数在阈值内 ⇒ suggestion，否则 patch                                                                                                                                                                                    | T41a    | ✅ 2026-08-16 |
-| T42  | suggestion 渲染（两家语法）与发布                                                                                                                                                                                                                    | T41,T19 | ✅ 2026-08-16 |
-| T43  | patch 路径：生成改动 → **固化为 detached commit + digest（`pendingArtifact`）** → 贴 diff（带 digest 短标识）→ `awaiting` → 关键词识别（须匹配 generation）→ `verify-baseline`（校 head/artifact/digest 三者）→ **物化并推送该确切产物**，不重新生成 | T41,T3  | ✅ 2026-08-16 |
-| T44  | 权限：suggestion 放宽到仓库写权限者；推送锁 MR 作者，bot MR 读 `initiatorUserId`                                                                                                                                                                     | T43     | ✅ 2026-08-16（判定规则；接线随确认入口） |
-| T45  | 源分支变化作废 + 回帖说明                                                                                                                                                                                                                            | T43     | ✅ 2026-08-16 |
+| T41  | `decide-form`：单文件 + 连续行数在阈值内 ⇒ suggestion，否则 patch                                                                                                                                                                                    | T41a    | ✅ 2026-08-16                                           |
+| T42  | suggestion 渲染（两家语法）与发布                                                                                                                                                                                                                    | T41,T19 | ✅ 2026-08-16                                           |
+| T43  | patch 路径：生成改动 → **固化为 detached commit + digest（`pendingArtifact`）** → 贴 diff（带 digest 短标识）→ `awaiting` → 关键词识别（须匹配 generation）→ `verify-baseline`（校 head/artifact/digest 三者）→ **物化并推送该确切产物**，不重新生成 | T41,T3  | ✅ 2026-08-16                                           |
+| T44  | 权限：suggestion 放宽到仓库写权限者；推送锁 MR 作者，bot MR 读 `initiatorUserId`                                                                                                                                                                     | T43     | ✅ 2026-08-16（判定规则；接线随确认入口）               |
+| T45  | 源分支变化作废 + 回帖说明                                                                                                                                                                                                                            | T43     | ✅ 2026-08-16                                           |
 
 > **T4b 的落法（与原文措辞不同，此处说明）**：原计划要一个 `waitKind` 枚举来区分恢复策略。
 > 实现时改为由 `awaiting` 结果自带的 **`resumeAt` 阶段名**表达——`frozen-artifact-confirmation`
@@ -566,28 +566,27 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 > 锁死这一点）。再加一个 `waitKind` 字段等于把同一件事编码两遍，两者一旦不一致，真正生效的是
 > 阶段名而告警看的是字段。`clarification-answer` 那一支属于 `requirement`，随 PR-8 落地。
 
-
 ### 需求实现（PR-8）
 
-| #    | 任务                                                                                                                                                                                                                                                                                                    | 依赖     | 状态 |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
-| T46a | **新增 issue 事件面**（设计门核实：今天完全不存在）：`CODE_HOST_EVENT_TYPES` 增 `issue_labeled` / `issue_comment`；GitLab adapter 放开 `noteable_type === 'Issue'` 分支并解析 label hook；GitHub adapter 放开非 PR 的 `issue_comment` 与 `issues.labeled`；变量表补 issue 侧字段；触发器 UI 与校验跟进  | —        | ✅ 2026-08-16 |
+| #    | 任务                                                                                                                                                                                                                                                                                                    | 依赖     | 状态                                                                |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------- |
+| T46a | **新增 issue 事件面**（设计门核实：今天完全不存在）：`CODE_HOST_EVENT_TYPES` 增 `issue_labeled` / `issue_comment`；GitLab adapter 放开 `noteable_type === 'Issue'` 分支并解析 label hook；GitHub adapter 放开非 PR 的 `issue_comment` 与 `issues.labeled`；变量表补 issue 侧字段；触发器 UI 与校验跟进  | —        | ✅ 2026-08-16                                                       |
 | T46b | 三入口：issue 标签 webhook / `/code` 界面 / 平台 API                                                                                                                                                                                                                                                    | T16,T46a | ◐ issue 标签入口已通（含 dispatcher 接线）；`/code` 与 API 入口待做 |
-| T47  | 模板声明参数表 → 平台渲染表单 + 校验（界面与 API 共用同一校验）                                                                                                                                                                                                                                         | T15,T46b | ◐ 声明格式 + 单一校验器 + 解析链已落；表单渲染随 PR-10 |
-| T48  | 入口脚本：只给引用时取回文档集合 `{documents[], writebackHandle}`（用户原话是「一组」设计文档）                                                                                                                                                                                                         | T7,T46b  | ✅ 2026-08-16（输入契约与预算；入口脚本待接） |
-| T49  | `clarify` 分流：有回写句柄且框架支持 ⇒ 回写 issue 评论；否则落平台。**回答的收取同样依赖 T46a**——answer 需带 round/question 标记以关联到具体那一问，并给提问者回执；issue 侧双向通道不可用时**拒绝启用该入口并说明原因**，不静默回退到平台 clarify（否则报告人永远等不到他以为会出现在 issue 里的问题） | T48,T46a | ✅ 2026-08-16（分流判定与标记；发问接线待做） |
-| T50  | `implement` → `run-target-gate`（读目标仓 CLAUDE.md/CONTRIBUTING）→ `self-review`（`invoke` 子序列，进入前冻结父树为 snapshot）→ `open-mr`                                                                                                                                                              | T31,T4   | ✅ 2026-08-16（阶段实现 + invoke 运行器 + 目标仓门禁读取） |
-| T50b | **闭环反向索引**（design §6.3 定义、此前无人实现）：`open-mr` 在同一事务内写回 produced MR 并注册 `(codeHostEndpointId, stableProjectId, mrIid) → workItemId`；MR 终态事件幂等消费后推进 requirement 工作项到 `closing/closed`。不做则需求工作项**永远闭不了环**                                        | T50,T40  | ✅ 2026-08-16（已接进终态路径） |
+| T47  | 模板声明参数表 → 平台渲染表单 + 校验（界面与 API 共用同一校验）                                                                                                                                                                                                                                         | T15,T46b | ◐ 声明格式 + 单一校验器 + 解析链已落；表单渲染随 PR-10              |
+| T48  | 入口脚本：只给引用时取回文档集合 `{documents[], writebackHandle}`（用户原话是「一组」设计文档）                                                                                                                                                                                                         | T7,T46b  | ✅ 2026-08-16（输入契约与预算；入口脚本待接）                       |
+| T49  | `clarify` 分流：有回写句柄且框架支持 ⇒ 回写 issue 评论；否则落平台。**回答的收取同样依赖 T46a**——answer 需带 round/question 标记以关联到具体那一问，并给提问者回执；issue 侧双向通道不可用时**拒绝启用该入口并说明原因**，不静默回退到平台 clarify（否则报告人永远等不到他以为会出现在 issue 里的问题） | T48,T46a | ✅ 2026-08-16（分流判定与标记；发问接线待做）                       |
+| T50  | `implement` → `run-target-gate`（读目标仓 CLAUDE.md/CONTRIBUTING）→ `self-review`（`invoke` 子序列，进入前冻结父树为 snapshot）→ `open-mr`                                                                                                                                                              | T31,T4   | ✅ 2026-08-16（阶段实现 + invoke 运行器 + 目标仓门禁读取）          |
+| T50b | **闭环反向索引**（design §6.3 定义、此前无人实现）：`open-mr` 在同一事务内写回 produced MR 并注册 `(codeHostEndpointId, stableProjectId, mrIid) → workItemId`；MR 终态事件幂等消费后推进 requirement 工作项到 `closing/closed`。不做则需求工作项**永远闭不了环**                                        | T50,T40  | ✅ 2026-08-16（已接进终态路径）                                     |
 
 ### CI 修复（PR-9）
 
-| #    | 任务                                                                                                                                                       | 依赖     | 状态 |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
-| T51a | **`ci-fix` StageContract 装配**（此前只有零散阶段任务，无人把它们接成能力）：完整序列 + 监视器派发接线 + push + ledger + `handed_off` 与 campaign 指纹落账 | T31,T36  | ✅ 2026-08-16（契约 + 完整序列 + 派发接线；补齐 union 缺失的两支） |
-| T51  | 采集/分类脚本接入自研流水线（框架侧样例脚本 + schema 校验）                                                                                                | T35,T51a | ⏳ 采集/分类样例脚本待写（schema 与运行器已就绪） |
-| T52  | `fix` → `validate-fix`（跑门禁脚本）→ 重跑循环上限 3 轮                                                                                                    | T6,T51   | ◐ 配额与指纹已落，`validate-fix` 阶段实现待做 |
+| #    | 任务                                                                                                                                                       | 依赖     | 状态                                                                           |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------ |
+| T51a | **`ci-fix` StageContract 装配**（此前只有零散阶段任务，无人把它们接成能力）：完整序列 + 监视器派发接线 + push + ledger + `handed_off` 与 campaign 指纹落账 | T31,T36  | ✅ 2026-08-16（契约 + 完整序列 + 派发接线；补齐 union 缺失的两支）             |
+| T51  | 采集/分类脚本接入自研流水线（框架侧样例脚本 + schema 校验）                                                                                                | T35,T51a | ⏳ 采集/分类样例脚本待写（schema 与运行器已就绪）                              |
+| T52  | `fix` → `validate-fix`（跑门禁脚本）→ 重跑循环上限 3 轮                                                                                                    | T6,T51   | ◐ 配额与指纹已落，`validate-fix` 阶段实现待做                                  |
 | T53  | `anti-cheat-check`（程序）：删断言 / 加 skip / 测试行净减 ⇒ 要求论证，缺则本轮失败                                                                         | T52      | ✅ 2026-08-16（结构信号 + red-before/green-after 裁决 + 无从论证的一支转人工） |
-| T54  | 三轮未成功 ⇒ 停止并回帖汇总每轮尝试                                                                                                                        | T52      | ✅ 2026-08-16（耗尽后逐轮汇总 + 写明重置条件） |
+| T54  | 三轮未成功 ⇒ 停止并回帖汇总每轮尝试                                                                                                                        | T52      | ✅ 2026-08-16（耗尽后逐轮汇总 + 写明重置条件）                                 |
 
 > **T52 的落法（与原文措辞不同，此处说明）**：原计划写「重跑循环上限 3 轮」，实现时**没有**在轮次内
 > 做循环。理由是配额的计数键（§6.4 E9）是 **`(工作项, 失败指纹)`**——指纹存在的唯一意义就是**跨轮**
@@ -597,6 +596,7 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 > 单轮测试**看不见**它。
 >
 > **顺带补上的三处「两半都对、就是没接上」**（都不是新需求，是既有能力够不着）：
+>
 > 1. `WorkPackageSchema` 从来没有 `mr-comment-fix` / `ci-fix` 两支——PR-7 的整条评论修复序列写完、
 >    单测全绿，但仲裁脚本一旦选它就被判为「产出不合契约」→ `blocked`。**缺一支 union 和一次合法拒绝
 >    长得一模一样**，所以全仓无一处标红。
@@ -615,8 +615,8 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 第二轮设计门以"半年后会变成什么样"为视角报出的一批，体量足以独立成 PR；它们不阻塞前面任何
 能力交付，但**不做就会在上线三个月后集中爆发**。
 
-| #   | 任务                                                                                                                                                                                                                              | 依赖    | 状态 |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---- |
+| #   | 任务                                                                                                                                                                                                                              | 依赖    | 状态          |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------- |
 | T59 | **失败可见性按来源分**：自动 webhook 保持 MR 静默；人工指令（@叫 / 确认 / issue 标签 / API 发起）必须给可更新的 receipt（带 operation id，同一条消息上更新结果）。八类静默路径逐条归位                                            | T31,T43 | ✅ 2026-08-16 |
 | T60 | **噪音控制**：MR 上只维护一条**可编辑**的 bot 总览（每轮编辑而非追加）+ MR 级通知预算                                                                                                                                             | T29     | ✅ 2026-08-16 |
 | T61 | **排障链**：`code_trigger_deliveries` 全链落库（received → matched → routed\|dropped(reason) → queued(lease/配额 + 队列年龄) → round → published\|failed）+ 统一 correlation id；"发测试事件"走真实全链并显示断点                 | T2,T36  | ✅ 2026-08-16 |
@@ -628,16 +628,17 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 
 ### 前端完整面（PR-10）
 
-| #   | 任务                                                                             | 依赖     | 状态 |
-| --- | -------------------------------------------------------------------------------- | -------- | ---- |
-| T55 | 状态图第三层：每次 AI 调用（envelope 校验结果、重试次数），可跳转任务详情        | T33,T6   | ✅ 2026-08-16 |
-| T56 | 轮次切换回看                                                                     | T33      | ✅ 2026-08-16 |
+| #   | 任务                                                                             | 依赖     | 状态                                                    |
+| --- | -------------------------------------------------------------------------------- | -------- | ------------------------------------------------------- |
+| T55 | 状态图第三层：每次 AI 调用（envelope 校验结果、重试次数），可跳转任务详情        | T33,T6   | ✅ 2026-08-16                                           |
+| T56 | 轮次切换回看                                                                     | T33      | ✅ 2026-08-16                                           |
 | T57 | 模板管理页：两层资源的列表、复制、配置包导入导出；显示上游关系四态与三方差异预览 | T17b,T64 | ✅ 2026-08-16（(a)(b)(c) 全落，T17a/T17b/T64 同日补齐） |
-| T58 | 采纳率与运行度量面                                                               | T30      | ✅ 2026-08-16 |
+| T58 | 采纳率与运行度量面                                                               | T30      | ✅ 2026-08-16                                           |
 
 > **T57 开工前对账（2026-08-16，按源码而非按计划表）**：它的两个依赖**都还没实现**，而 PR-2 在
 > 任务表里是「已完成」——原因是 T17a/T17b 那两行当时被压成一句话、且 PR-2 那张表**没有状态列**，
 > 于是「表已建 + ACL 列已加」被当成了「接入完成」。按源码实际：
+>
 > - `ACL_RESOURCE_TYPES` 只有六种（agent/skill/mcp/plugin/workflow/workgroup），**没有**
 >   capability_framework / capability_binding。两张表虽然带了 owner/visibility/acl_revision 列，
 >   但 `filterVisibleRows(db, actor, 'capability_framework', …)` 连类型都过不了——列在、闭包不在。
@@ -653,6 +654,7 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 > （需先补 T17a/T17b）；**(c)** 上游四态与三方差异（需先补 T64）。
 >
 > **(a) 已完成（2026-08-16）**，落法与踩到的坑：
+>
 > - ACL 闭包扩两型**零迁移**——`resource_grants.resource_type` 在 SQL 里是裸 `text`、无 CHECK，
 >   闭合集合只活在类型系统里。（对照：`tasks` 的 launch origin 有真 CHECK，同一个 RFC 里
 >   为此换了判据绕开，见 PR-6 遗留项那段。）
@@ -750,27 +752,28 @@ scheduler.ts:4558   capability === 'mr-review' && state.triggerContext !== null
 不可达变成一个响亮的失败；两者都要修，而正确的修法是**补接线**，不是缩回 union。
 
 `mr-review` 本身是**真正端到端通的**：`buildMrReviewWiring` + `resolveReviewerAgent`
-+ `createReviewAgentCaller` 都在调度器里接上了（早期注释说「makeCaller 故意不给」
-是过期的，代码后来补上了）。所以这不是「整条 RFC 没接」，而是**四条能力里只接了
-一条**。
+
+- `createReviewAgentCaller` 都在调度器里接上了（早期注释说「makeCaller 故意不给」
+  是过期的，代码后来补上了）。所以这不是「整条 RFC 没接」，而是**四条能力里只接了
+  一条**。
 
 ### 2bis.1 「零生产引用」模块普查
 
 判据是机械的：模块在 `src` 下被 import 的次数为 0（测试不算）。全模块扫出 8 个，
 逐个定性如下——**「零引用」本身不是缺陷，缺陷是「本该有人调而没人调」**。
 
-| 模块                       | 定性                | 处置                                    |
-| -------------------------- | ------------------- | --------------------------------------- |
-| `dataLifetimeGc`（T62）    | **该调没调**        | 已修：`cli/start.ts` 起 ticker + 停机停 |
-| `mrVoice`                  | **该调没调**        | 已修：ci-fix 发言改走 `say()`           |
-| `invalidatePending`（T45） | **该调没调**        | 已修：接在 `collect` 之后，见 2bis.2    |
-| `pushAuthority`（T44）     | **该调没调**        | 未修，见 2bis.3——需新数据，属设计决策   |
-| `sqliteWorkItemStore` 链   | 与生产实现**重复**  | 未修，见 2bis.4                         |
-| `sampleMonitorScripts`     | 样例，测试内执行    | 可接受（无生产调用面是本意）            |
-| `configScale` / `stateViewScale`（T65/T66） | 规模判据，供前端/文档 | 可接受                    |
-| `frameworkRelease`（T63）  | 灰度判据            | 可接受                                  |
-| `templateUpstream`（T64）  | 经 service 暴露     | 可接受                                  |
-| `readinessInvalidation`    | 判据纯函数          | 可接受                                  |
+| 模块                                        | 定性                  | 处置                                    |
+| ------------------------------------------- | --------------------- | --------------------------------------- |
+| `dataLifetimeGc`（T62）                     | **该调没调**          | 已修：`cli/start.ts` 起 ticker + 停机停 |
+| `mrVoice`                                   | **该调没调**          | 已修：ci-fix 发言改走 `say()`           |
+| `invalidatePending`（T45）                  | **该调没调**          | 已修：接在 `collect` 之后，见 2bis.2    |
+| `pushAuthority`（T44）                      | **该调没调**          | 未修，见 2bis.3——需新数据，属设计决策   |
+| `sqliteWorkItemStore` 链                    | 与生产实现**重复**    | 未修，见 2bis.4                         |
+| `sampleMonitorScripts`                      | 样例，测试内执行      | 可接受（无生产调用面是本意）            |
+| `configScale` / `stateViewScale`（T65/T66） | 规模判据，供前端/文档 | 可接受                                  |
+| `frameworkRelease`（T63）                   | 灰度判据              | 可接受                                  |
+| `templateUpstream`（T64）                   | 经 service 暴露       | 可接受                                  |
+| `readinessInvalidation`                     | 判据纯函数            | 可接受                                  |
 
 ### 2bis.2 T45 失效从未运行（已修）
 
@@ -832,6 +835,126 @@ epoch（`mrReviewStages` / `mrReviewEnvironment`）、handed_off（`ciFixStages`
 所以结论不是「平台会自己刷自己」，而是**回环防护依赖运维把平台账号填进
 `ignoreUsernames`**；填了就安全，没填则第二道防线不生效。与 2bis.3 的 bot 账号
 是同一份缺失数据，一并决策。
+
+## 2ter. system-mock E2E 找到的三处断链（任务 #20，均已修）
+
+§2bis 是**读代码**扫出来的；这一节是**跑起来**扫出来的。`e2e/rfc304-capability-platform.spec.ts`
+把一条签名 webhook 打进编译后的 daemon，走真 SQLite / 真调度器 / 有状态 GitLab /
+真 Git，只有模型是确定性替身。三处断链单测一条都看不见，原因完全一致：
+**单测把出错的那个东西当参数递进去了**。
+
+### 2ter.1 轮次的宿主任务起在 scratch 空间（`prepare-worktree` 必死）
+
+```
+"spaceKind":"scratch"  "cachedRepoId":null
+"repoPath":".../scratch/01M050A984AS4ZH8ZWSA519754"
+→ stage 'prepare-worktree' failed: fatal: 'origin' does not appear to be a git repository
+```
+
+`codeCapabilityWake.ts` 两个起轮点都写死 `scratch: true`，于是 `repoPath` 是个**没有
+remote 的空目录**；而 `prepare-worktree` 要从 `origin` 取 MR head（design §5.2 明确
+裁决：从 **target remote** 取，因为那是平台已持有凭据的那一个）。**任何部署里
+mr-review 都活不过第二个阶段**。单测永远把一个现成的 clone 当 `repoPath` 递进去，
+所以这个阶段从来没拿到过生产真正会给它的东西。
+
+修法用的是既有机制、不是新造：`LaunchSpaceFields` 本来就有 `cachedRepoId`，而投递
+早就解析出来了（`resolution.cachedRepoId` → `input.repoId`）。两处改成
+`cachedRepoId: input.repoId`。
+
+**对夹具的连带要求**（改这块的人会撞上）：起轮从此走 reuse-by-id，于是单测夹具
+必须给出**真能启动的**缓存仓——只写一行 `repo_capability_config.repo_id='repo-1'`
+不再够。逐层被拒的顺序即是产品的真实约束链，每一层都是**对的行为、错的夹具**：
+
+| 夹具缺什么             | 产品怎么拒                                           |
+| ---------------------- | ---------------------------------------------------- |
+| 无 `cached_repos` 行   | `cached repo 'repo-1' not found`                     |
+| `url_enc` 为 null      | `has no readable URL (sealed with a different key?)` |
+| 封的 key 与调度器不同  | 同上——正确的报错、错误的原因                         |
+| 裸路径 / `file://`     | `local paths are not a supported remote`（产品明令） |
+| 镜像无 `origin`        | 拒绝复用：剥凭据失败，明文 token 可能残留            |
+| `last_fetched_at` 太旧 | `refusing to launch from a stale cache`              |
+
+正解是复用既有的 `tests/helpers/gitHttpRemote.ts`（真 smart-HTTP 远端）——它本来
+就是为「产品把 `file://` 判非法后单测怎么办」而建的，理由与此处完全同源：另一条路
+是在生产代码里开测试旁路，那等于把刚立的规则自己拆掉。已按此改好
+`rfc304-capability-wake-launch` 与 `rfc304-terminal-close-wiring` 两个夹具（25 条全绿）。
+
+### 2ter.2 用文件路径当能力配置的主键（AI 阶段全部拒绝 + 钩子从未触发）
+
+```
+scheduler.ts  resolveReviewerAgent(db, { repoId: task.repoPath, ... })
+scheduler.ts  resolveCapabilityHooks(db, { repoId: task.repoPath, ... })
+→ "no capability configuration exists for this repository"
+```
+
+`repo_capability_config.repo_id` 存的是 **cached-repo ULID**，`task.repoPath` 是**文件
+系统路径**。两者都是 `string`，所以类型检查、lint、单测全绿，运行时**永远匹配不上**。
+后果：每一轮的 AI 阶段都以「这仓库没有能力配置」拒绝，且**任何团队写的 stage hook
+从来没有触发过**——两个消费者读同一张表，两个都错。
+
+修法：新增 `cachedRepoIdForTask(db, taskId)`（读 `task_repos.cached_repo_id`），三个
+调用点统一走它。
+
+> 这条在 2ter.1 修好前是**看不见**的：轮次死在 `prepare-worktree`，根本走不到解析
+> agent 那一步。三处断链是**串行**暴露的，每修一处才露出下一处。
+
+### 2ter.3 没有人给轮次写终态
+
+`code_work_rounds` 全生产只有两处写：`openRound` 插入、`attachRoundTask` 补 `taskId`。
+**没有任何代码写 `outcome` / `endedAt`**。于是十三个阶段全 `done`、评论都发到 MR 上了，
+轮次还是 `running`。
+
+读侧早就按完整词汇表写好了——`deriveRoundStatus`、`codeMetricsQuery` 的
+`published/failed/awaiting` 分桶（连「ended 但没写 outcome = daemon 中途死」的分支都
+有）、`dataLifetimeGc` 的回收判据。**缺的只是写侧，而缺一个写侧永远不报错。**
+
+修法：`sqliteMonitorStore.closeRound()`（`endedAt IS NULL` 守卫保幂等——**第一个终态
+才是真的**，重试不得改写历史），scheduler 的三个出口（awaiting / 失败 / 成功）各调一次。
+
+### 现在跑通到哪
+
+```
+resolve-target → prepare-worktree → fetch-diff → split-diff → review-shard(ai)
+→ review-global(ai) → validate-findings → gate → resolve-positions → reconcile
+→ publish → settle-stale → ledger        全部 done，outcome=published
+```
+
+且 MR 上真的出现了行级评论：`POST draft_notes`（带 `position`）+ **一次**
+`draft_notes/bulk_publish`——即 B10「一次性发布」，design §10-1 明确禁止降级为逐条发布，
+E2E 断言 `bulk_publish` 恰好一次把这条锁住。
+
+门禁保护：E2E 只在 CI 跑，故 `packages/backend/tests/rfc304-round-lifecycle-and-keys.test.ts`
+把三条同样的回归放到 `gate:local` 面前（`closeRound` 行为 + 两条源码层断言——
+后者是弱形式的测试，此处是**刻意**：缺陷是 5000 行调度分支里一个类型正确的实参，
+类型系统和运行时都抓不住，能便宜锁住的只有「那个错误写法不许再出现」）。
+
+### 2ter.4 `script` 阶段种类在轮次引擎里没有实现（未修，ci-fix 因此跑不起来）
+
+准备给 ci-fix 补一条 E2E 时读出来的，**没有写成测试**——不该把一个坏掉的现状写成
+「期望值」。
+
+```
+codeCapabilityRunner.ts:147   script: notImplemented('script'),
+scheduler.ts:4839             resumeFromStage: null,
+CI_FIX_CONTRACT.stages[0]     { kind: 'script', name: 'collect', scriptSlot: 'collect' }
+```
+
+三条合起来：ci-fix 的轮次从第 0 个阶段起跑，那是 `script` 种类，而该种类**没有
+runner**，于是每一轮都以 `stage 'collect' is kind 'script', which has no runner
+registered yet` 立刻失败。
+
+注意**不要混淆两条脚本路径**：监视器自己的 collect/classify/arbitrate/select 走
+`monitorLoop.ts` 的 `runMonitorScript`，那条是通的、E2E 也验过；没通的是**阶段引擎里
+的 script 种类**，也就是框架作者在 stage contract 里声明的脚本槽。所以恰恰是「靠
+stage-contract 脚本」的那条能力（ci-fix）整条死掉。
+
+影响面是**确切**的，不是「可能还有别的」：全部 stage contract 里只有 `CI_FIX_CONTRACT`
+用了 script 种类（4 个阶段），其余四条能力一个都没有。所以这条只打掉 ci-fix，
+2ter.1–2ter.3 修好的 mr-review 全链不受影响。
+
+修它 = 把 `runMonitorScript` 那套（框架脚本槽解析 + env + envelope + 超时）接进阶段
+引擎的 script 分支。零件都在，但这是独立一波，**留待用户裁决优先级**；本轮不做，
+以免把三处已验证的修复混进一个更大的改动里。
 
 ## 3. 验收清单
 

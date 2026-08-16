@@ -17,7 +17,7 @@
 // read: the loser of the race gets the winner's row, which is the correct
 // answer rather than an error.
 
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { codeWorkItems, codeWorkObservations, codeWorkRounds } from '@/db/schema'
@@ -169,6 +169,36 @@ export async function openRound(args: OpenRoundArgs): Promise<OpenedRound> {
 
   if (inserted === undefined) throw new Error('failed to open a round')
   return { roundId: inserted.id, roundSeq: inserted.roundSeq }
+}
+
+/**
+ * Write a round's terminal outcome.
+ *
+ * The counterpart to `openRound`, and it was missing: rounds were inserted and
+ * only ever updated to attach a task id, so every round stayed `running`
+ * forever — including the ones whose thirteen stages had all finished and whose
+ * review was already on the merge request.
+ *
+ * Nothing errored, which is why it survived. What it cost was every reader:
+ * `deriveRoundStatus` had no terminal state to derive, the state view showed
+ * perpetual spinners, `codeMetricsQuery` — which already branches on
+ * `published` / `failed` / `awaiting` — counted every round as in-flight, and
+ * the data-lifetime GC found nothing old enough to collect. The whole
+ * vocabulary existed on the reading side, waiting for a writer.
+ *
+ * Idempotent by the `endedAt IS NULL` guard: a retried finalisation must not
+ * move the end time, and the FIRST terminal answer is the true one.
+ */
+export async function closeRound(
+  db: DbClient,
+  roundId: string,
+  outcome: 'published' | 'awaiting' | 'failed' | 'canceled' | 'superseded',
+  now: number = Date.now(),
+): Promise<void> {
+  await db
+    .update(codeWorkRounds)
+    .set({ outcome, endedAt: now })
+    .where(and(eq(codeWorkRounds.id, roundId), isNull(codeWorkRounds.endedAt)))
 }
 
 /** Point the work item at the round now in flight. */

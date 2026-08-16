@@ -13,15 +13,18 @@
 // ordinary event, and it would wake the item and start work on a branch whose
 // changes are already in.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { resolve } from 'node:path'
+import { resolve, join } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { remoteUrlFor, startGitHttpRemote, stopGitHttpRemote } from './helpers/gitHttpRemote'
+import { gitUrlCacheKeyWith, parseGitUrl } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { upsertCapabilityCell } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
 import {
@@ -31,6 +34,7 @@ import {
   tasks,
   webhookDeliveries,
   webhookEndpoints,
+  cachedRepos,
 } from '../src/db/schema'
 import {
   createWebhookDispatcher,
@@ -44,7 +48,24 @@ import {
 } from '../src/modules/code-capability/application/producedMrIndex'
 import { isTerminalTaskStatus, type CodeHostEvent } from '@agent-workflow/shared'
 
+// File-level: BOTH describe blocks seed a cached repo, and the remote has to be
+// up before either of them runs.
+beforeAll(async () => {
+  await startGitHttpRemote()
+})
+afterAll(() => {
+  stopGitHttpRemote()
+})
+
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+/**
+ * RFC-304 2ter.1: a reuse-by-id launch unseals the cached repo's URL.
+ *
+ * Same key the dispatcher fixtures below use. A different one seals a URL this
+ * file's own dispatcher cannot read, and the launch fails with "sealed with a
+ * different secret.key?" — which is the correct error for the wrong reason.
+ */
+const TEST_SECRET_BOX = createSecretBoxFromKey(Buffer.alloc(32, 9))
 const ENDPOINT = 'ep-1'
 const PROJECT = '41823'
 const MR = '412'
@@ -75,6 +96,7 @@ describe('RFC-304 T40 — the dispatcher closes capability work items', () => {
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedCachedRepo(db, REPO_ID)
     const box = createSecretBoxFromKey(Buffer.alloc(32, 9))
     await db.insert(webhookEndpoints).values({
       id: ENDPOINT,
@@ -320,6 +342,7 @@ describe('RFC-304 §3.1 — the dispatcher wakes capability cells', () => {
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedCachedRepo(db, REPO_ID)
     await seedTestDefaultOpencodeRuntime(db)
     const box = createSecretBoxFromKey(Buffer.alloc(32, 9))
     await db.insert(webhookEndpoints).values({
@@ -466,3 +489,54 @@ describe('RFC-304 §3.1 — the dispatcher wakes capability cells', () => {
     expect(rounds.map((r) => r.roundSeq).sort()).toEqual([1, 2])
   })
 })
+
+/**
+ * A real `cached_repos` row whose mirror can actually be launched from.
+ *
+ * Required since RFC-304 2ter.1: a capability round is launched with
+ * `cachedRepoId` rather than into a scratch space, because `prepare-worktree`
+ * fetches the merge-request head from `origin` of the round's repository. A
+ * fixture naming a repo id with nothing behind it now fails at launch — which
+ * is correct, since in production the delivery resolved the repository before
+ * anything woke.
+ *
+ * The remote is the shared smart-HTTP fixture rather than a `file://` URL: the
+ * product deliberately refuses local paths as remotes (`file:// repositories
+ * cannot be launched`), and the launcher re-fetches on reuse, so nothing short
+ * of a real remote gets through. Same reasoning as `helpers/gitHttpRemote.ts`
+ * itself — the alternative is a test-only bypass in production code, which
+ * would dismantle the rule it is meant to respect.
+ */
+async function seedCachedRepo(db: DbClient, id: string): Promise<void> {
+  const source = mkdtempSync(join(tmpdir(), 'aw-rfc304-remote-'))
+  makeRepoAt(source)
+  const url = remoteUrlFor(source)
+
+  await db.insert(cachedRepos).values({
+    id,
+    urlHash: gitUrlCacheKeyWith(parseGitUrl(url)!, (value: string) =>
+      createHash('sha1').update(value).digest('hex'),
+    ).hash,
+    urlEnc: TEST_SECRET_BOX.seal(url),
+    urlRedacted: url,
+    localPath: join(source, '..', `${id}-mirror`),
+    defaultBranch: 'main',
+    lastFetchedAt: Date.now(),
+    createdAt: Date.now(),
+  })
+}
+
+/** A minimal repository with one commit on `main`, for `seedCachedRepo`. */
+function makeRepoAt(dir: string): void {
+  mkdirSync(dir, { recursive: true })
+  const git = (...args: string[]): void => {
+    const out = spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' })
+    if (out.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${out.stderr}`)
+  }
+  spawnSync('git', ['init', '-b', 'main', dir], { encoding: 'utf8' })
+  git('config', 'user.email', 'e2e@example.invalid')
+  git('config', 'user.name', 'RFC-304 fixture')
+  writeFileSync(join(dir, 'README.md'), 'rfc304 fixture\n')
+  git('add', '.')
+  git('commit', '-m', 'fixture')
+}

@@ -16,20 +16,27 @@
 //     work items and sharing a task would let one settle the other's round;
 //   - one cell failing to launch does not swallow the others.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { remoteUrlFor, startGitHttpRemote, stopGitHttpRemote } from './helpers/gitHttpRemote'
+import { gitUrlCacheKeyWith, parseGitUrl } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { tasks } from '../src/db/schema'
+import { cachedRepos, tasks } from '../src/db/schema'
 import { wakeCapabilitiesForDelivery } from '../src/services/codeCapabilityWake'
 import { upsertCapabilityCell } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
 import { capabilityBindings, capabilityFrameworks } from '../src/db/schema'
 import type { TriggerContext } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+/** RFC-304 2ter.1: a reuse-by-id launch unseals the cached repo's URL. */
+const TEST_SECRET_BOX = createSecretBoxFromKey(Buffer.alloc(32, 7))
 const NOW = 1_700_000_000_000
 const REPO = 'repo-1'
 
@@ -60,10 +67,18 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
   let db: DbClient
   let appHome: string
 
+  beforeAll(async () => {
+    await startGitHttpRemote()
+  })
+  afterAll(() => {
+    stopGitHttpRemote()
+  })
+
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
     await seedTestDefaultOpencodeRuntime(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc304-wake-'))
+    await seedCachedRepo(db, REPO)
   })
   afterEach(() => {
     db.$client.close()
@@ -116,7 +131,7 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
       triggerContext,
       webhookTriggerId: 'trigger-1',
       webhookFireId: 'fire-1',
-      launchDeps: { db, appHome } as never,
+      launchDeps: { db, appHome, secretBox: TEST_SECRET_BOX } as never,
       ...over,
     })
 
@@ -242,7 +257,7 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
       triggerContext,
       webhookTriggerId: '',
       webhookFireId: '',
-      launchDeps: { db, appHome } as never,
+      launchDeps: { db, appHome, secretBox: TEST_SECRET_BOX } as never,
     })
     expect(result.failed).toEqual([])
     expect(result.started).toHaveLength(2)
@@ -285,7 +300,7 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
       triggerContext: undefined as never,
       webhookTriggerId: '',
       webhookFireId: '',
-      launchDeps: { db, appHome } as never,
+      launchDeps: { db, appHome, secretBox: TEST_SECRET_BOX } as never,
     })
     // Reported, not thrown. The launch itself is still refused — a
     // webhook-origin round with no canonical context has nothing for
@@ -305,3 +320,54 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
     expect((await deliver()).started).toHaveLength(1)
   })
 })
+
+/**
+ * A real `cached_repos` row whose mirror can actually be launched from.
+ *
+ * Required since RFC-304 2ter.1: a capability round is launched with
+ * `cachedRepoId` rather than into a scratch space, because `prepare-worktree`
+ * fetches the merge-request head from `origin` of the round's repository. A
+ * fixture naming a repo id with nothing behind it now fails at launch — which
+ * is correct, since in production the delivery resolved the repository before
+ * anything woke.
+ *
+ * The remote is the shared smart-HTTP fixture rather than a `file://` URL: the
+ * product deliberately refuses local paths as remotes (`file:// repositories
+ * cannot be launched`), and the launcher re-fetches on reuse, so nothing short
+ * of a real remote gets through. Same reasoning as `helpers/gitHttpRemote.ts`
+ * itself — the alternative is a test-only bypass in production code, which
+ * would dismantle the rule it is meant to respect.
+ */
+async function seedCachedRepo(db: DbClient, id: string): Promise<void> {
+  const source = mkdtempSync(join(tmpdir(), 'aw-rfc304-remote-'))
+  makeRepoAt(source)
+  const url = remoteUrlFor(source)
+
+  await db.insert(cachedRepos).values({
+    id,
+    urlHash: gitUrlCacheKeyWith(parseGitUrl(url)!, (value: string) =>
+      createHash('sha1').update(value).digest('hex'),
+    ).hash,
+    urlEnc: TEST_SECRET_BOX.seal(url),
+    urlRedacted: url,
+    localPath: join(source, '..', `${id}-mirror`),
+    defaultBranch: 'main',
+    lastFetchedAt: Date.now(),
+    createdAt: Date.now(),
+  })
+}
+
+/** A minimal repository with one commit on `main`, for `seedCachedRepo`. */
+function makeRepoAt(dir: string): void {
+  mkdirSync(dir, { recursive: true })
+  const git = (...args: string[]): void => {
+    const out = spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' })
+    if (out.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${out.stderr}`)
+  }
+  spawnSync('git', ['init', '-b', 'main', dir], { encoding: 'utf8' })
+  git('config', 'user.email', 'e2e@example.invalid')
+  git('config', 'user.name', 'RFC-304 fixture')
+  writeFileSync(join(dir, 'README.md'), 'rfc304 fixture\n')
+  git('add', '.')
+  git('commit', '-m', 'fixture')
+}

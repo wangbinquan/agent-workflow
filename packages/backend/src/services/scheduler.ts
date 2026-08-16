@@ -156,6 +156,7 @@ import { CI_FIX_AGENT_SLOT } from '@/modules/code-capability/domain/ciFixEnvelop
 import { settleDanglingAttempts } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
 import { withRoundLease } from '@/services/codeRoundLease'
 import { resolveCapabilityHooks } from '@/services/codeCapabilityHooks'
+import { closeRound } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
 import { MR_REVIEW_CONTRACT } from '@/modules/code-capability/domain/capabilityRegistry'
 import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import { createReviewAgentCaller, resolveReviewerAgent } from '@/services/codeReviewAgentCaller'
@@ -171,6 +172,26 @@ import { REVIEW_AGENT_SLOT, REVIEW_PORT } from '@/modules/code-capability/applic
  * the wiring hands the same caller to both — splitting them is a configuration
  * refinement, not a correctness gap.
  */
+/**
+ * The cached-repo id a capability cell is keyed by, for this task.
+ *
+ * Load-bearing and easy to get wrong: `repo_capability_config.repo_id` holds a
+ * cached-repo ULID, while `task.repoPath` is a filesystem path. Both are
+ * `string`, so passing the path compiles and simply never matches — every round
+ * then reported "no capability configuration exists for this repository" and
+ * every AI stage refused, in every deployment. Found by the system-mock E2E
+ * once rounds got far enough to reach agent resolution at all.
+ */
+async function cachedRepoIdForTask(db: DbClient, taskId: string): Promise<string> {
+  const [row] = await db
+    .select({ cachedRepoId: taskRepos.cachedRepoId })
+    .from(taskRepos)
+    .where(eq(taskRepos.taskId, taskId))
+    .orderBy(taskRepos.repoIndex)
+    .limit(1)
+  return row?.cachedRepoId ?? ''
+}
+
 function agentSlotFor(capability: string): string {
   if (capability === 'ci-fix') return CI_FIX_AGENT_SLOT
   if (capability === 'mr-comment-fix') return COMMENT_FIX_AGENT_SLOT
@@ -4603,7 +4624,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
           // generic "no agent".
           ...(await (async () => {
             const resolved = await resolveReviewerAgent(db, {
-              repoId: task.repoPath,
+              repoId: await cachedRepoIdForTask(db, taskId),
               capability,
               slot: REVIEW_AGENT_SLOT,
             })
@@ -4663,7 +4684,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             // what to bind.
             ...(await (async () => {
               const resolved = await resolveReviewerAgent(db, {
-                repoId: task.repoPath,
+                repoId: await cachedRepoIdForTask(db, taskId),
                 capability,
                 slot: agentSlotFor(capability),
               })
@@ -4705,7 +4726,10 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
   // when a repository HAS written one — every stage in the sequence justifies
   // being a separate stage by saying a hook fires at its boundary.
   const resolvedHooks = await resolveCapabilityHooks(db, {
-    repoId: task.repoPath,
+    // The cached-repo id, not the path — `repo_capability_config` is keyed by
+    // id, so the path matched nothing and NO team's hook has ever fired. Same
+    // mismatch as the agent-slot resolution above; see `cachedRepoIdForTask`.
+    repoId: await cachedRepoIdForTask(db, taskId),
     capability,
   })
   if (resolvedHooks.problem !== null) {
@@ -4881,6 +4905,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
       reason: 'code-round-awaiting',
       extra: { finishedAt: Date.now() },
     })
+    await finalizeRound(db, task.codeRoundId, 'awaiting')
     broadcastNodeStatus(taskId, nodeRunId, node.id, 'done')
     return { kind: 'ok', summary, message: '' }
   }
@@ -4910,6 +4935,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
       reason: failureCode,
       extra: { finishedAt: Date.now(), errorMessage: summary, failureCode },
     })
+    await finalizeRound(db, task.codeRoundId, result.outcome === 'canceled' ? 'canceled' : 'failed')
     broadcastNodeStatus(taskId, nodeRunId, node.id, 'failed')
     return { kind: 'failed', summary, message: failureCode }
   }
@@ -4929,8 +4955,26 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
     reason: 'code-round-done',
     extra: { finishedAt: Date.now() },
   })
+  await finalizeRound(db, task.codeRoundId, 'published')
   broadcastNodeStatus(taskId, nodeRunId, node.id, 'done')
   return { kind: 'ok', summary: result.summary, message: '' }
+}
+
+/**
+ * Close the round this task materialized, if it is one.
+ *
+ * Every exit of the code-round branch goes through here, because a round that
+ * ends without an outcome is indistinguishable — to the state view, the metrics
+ * query and the GC alike — from one still in flight. Null `codeRoundId` means
+ * this task is not a round, which is the ordinary case for every other task.
+ */
+async function finalizeRound(
+  db: DbClient,
+  codeRoundId: string | null,
+  outcome: 'published' | 'awaiting' | 'failed' | 'canceled',
+): Promise<void> {
+  if (codeRoundId === null || codeRoundId === '') return
+  await closeRound(db, codeRoundId, outcome)
 }
 
 async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {

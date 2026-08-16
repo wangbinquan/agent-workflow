@@ -282,7 +282,15 @@ async function runMonitorLoopFor(
           capability: request.capability,
           roundSeq: request.roundSeq,
           name: `${request.capability} · MR ${identity.anchorId}`,
-          scratch: true,
+          // The repository the delivery already resolved, NOT a scratch space.
+          // `prepare-worktree` fetches the merge request head from `origin` of
+          // the round's repo path (design §5.2 — from the TARGET remote, the
+          // one the platform holds credentials for). A scratch launch gives it
+          // an empty directory with no remote, so every round died at stage two
+          // with "'origin' does not appear to be a git repository" — found by
+          // the system-mock E2E, and invisible to every unit test because they
+          // all hand `repoPath` in as an already-cloned fixture.
+          cachedRepoId: input.repoId,
         },
         launchDepsFor(input),
       )
@@ -330,7 +338,9 @@ async function startDirectRound(
       capability,
       roundSeq,
       name: `${capability} · MR ${input.mrIid ?? '?'}`,
-      scratch: true,
+      // Same reason as the monitor's dispatch above: the round's stages fetch
+      // and check out inside this repository, so it has to BE the repository.
+      cachedRepoId: input.repoId,
     },
     launchDepsFor(input),
   )
