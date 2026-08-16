@@ -132,6 +132,24 @@ export interface GitPort {
     | { ok: false; reason: 'failed'; error: string }
   >
 
+  /**
+   * Push a commit to a NEW branch at the remote.
+   *
+   * Separate from `pushCommit` rather than a parameter on it, because the two
+   * are different promises. `pushCommit` guards with `--force-with-lease`
+   * against a branch that already exists and may have moved; this one creates a
+   * branch that should not exist yet. Expressing "create" as a lease against an
+   * empty sha is not a thing git supports, and the shape that would make it
+   * compile — an optional expected sha — is exactly how a lease ends up
+   * silently bypassed on the path that needed it.
+   */
+  pushNewBranch(input: { repoPath: string; commitSha: string; branch: string }): Promise<
+    | { ok: true }
+    /** The branch already exists; the caller picks another name. */
+    | { ok: false; reason: 'exists'; error: string }
+    | { ok: false; reason: 'failed'; error: string }
+  >
+
   /** Drop a keep-alive ref so the object becomes collectable again. */
   deleteRef(input: {
     repoPath: string

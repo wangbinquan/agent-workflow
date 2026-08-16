@@ -219,6 +219,28 @@ export function createGitAdapter(deps: GitAdapterDeps = {}): GitPort {
       return stale ? { ok: false, reason: 'stale', error } : { ok: false, reason: 'failed', error }
     },
 
+    async pushNewBranch({ repoPath, commitSha, branch }) {
+      // No `--force` and no lease: creating a ref that does not exist needs
+      // neither, and a plain push is refused by the remote if it does exist and
+      // this is not a fast-forward — which is the outcome we want to hear about
+      // rather than override.
+      const result = await runGit(
+        repoPath,
+        ['push', remote, `${commitSha}:refs/heads/${branch}`],
+        opts,
+      )
+      if (result.exitCode === 0) return { ok: true }
+
+      const error = describeGitFailure(result.stderr, result.exitCode)
+      // A name collision is ordinary — two rounds on one issue, or a leftover
+      // branch from a previous attempt — and the caller renames rather than
+      // treating it as a failure needing a person.
+      const exists = /already exists|non-fast-forward|fetch first|rejected/i.test(error)
+      return exists
+        ? { ok: false, reason: 'exists', error }
+        : { ok: false, reason: 'failed', error }
+    },
+
     async deleteRef({ repoPath, ref }) {
       const result = await runGit(repoPath, ['update-ref', '-d', ref], opts)
       return result.exitCode === 0

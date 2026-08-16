@@ -52,6 +52,9 @@ export function createGitPortFake(
     async pushCommit() {
       return { ok: true }
     },
+    async pushNewBranch() {
+      return { ok: true }
+    },
     async deleteRef() {
       return { ok: true }
     },
