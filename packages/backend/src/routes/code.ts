@@ -31,7 +31,7 @@ import { createCodeMetricsQuery } from '@/modules/code-capability/application/co
 import { createEnableCommand } from '@/modules/code-capability/application/enableCommand'
 import { CODE_CAPABILITIES } from '@/modules/code-capability/domain/stageContract'
 import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
-import { resolveCodeHostEndpointId } from '@/modules/code-capability/composition/mrReviewEnvironment'
+import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
 import { registerRoute } from '@/routes/registry'
 import type { AppDeps } from '@/server'
 import { ValidationError } from '@/util/errors'
@@ -84,14 +84,21 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
       // taken from the request: it is a component of the work item's identity,
       // and letting a caller name it would let two requests key the same
       // repository's cells to different endpoints.
-      const endpoint = await resolveCodeHostEndpointId(deps.db, 'gitlab')
-      if (!endpoint.ok) {
-        // Not a 500: the platform is working, this deployment simply has no
-        // endpoint yet, and the message says which one to configure.
-        throw new ValidationError('code-endpoint-unresolved', endpoint.message)
-      }
+      // Which code host this repository belongs to, and the endpoint its cells
+      // are keyed to. Resolved in the module: `no-routes-to-db` forbids a route
+      // reaching the schema, and this is identity work rather than parsing.
+      //
+      // It used to be hardcoded `'gitlab'`, so a GitHub repository could never
+      // have a capability enabled — the failure even named a provider the
+      // operator had not configured.
+      const endpoint = await resolveRepoEndpoint(deps.db, c.req.param('repoId'))
+      if (!endpoint.ok) throw new ValidationError('code-endpoint-unresolved', endpoint.message)
 
-      const command = createEnableCommand({ db: deps.db, endpointId: endpoint.id })
+      const command = createEnableCommand({
+        db: deps.db,
+        endpointId: endpoint.endpointId,
+        provider: endpoint.provider,
+      })
       const result = await command.enable({
         repoId: c.req.param('repoId'),
         capability: parsed.data.capability,
