@@ -622,7 +622,7 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T61 | **排障链**：`code_trigger_deliveries` 全链落库（received → matched → routed\|dropped(reason) → queued(lease/配额 + 队列年龄) → round → published\|failed）+ 统一 correlation id；"发测试事件"走真实全链并显示断点                 | T2,T36  | ✅ 2026-08-16 |
 | T62 | **数据寿命**：closed 后物化汇总并归档明细；attempt 明细按期限清理保留聚合；artifact 消费即回收；`templateSnapshot` 内容寻址共享；历史查询走 cursor                                                                                | T2,T27  | ✅ 2026-08-16 |
 | T63 | **框架发布生命周期**：不可变 revision + `draft→validated→canary→published→retired`；binding 声明 `pinnedRevision`/`followChannel`；发布前回放固定样本并显示受影响仓数；保留 last-known-good 可一键回退                            | T13,T14 | ✅ 2026-08-16 |
-| T64 | **模板上游关系**：`upstreamRef`/`upstreamVersion`/`baseDigest`/`localOverrides` + `current\|update-available\|conflicted\|orphaned` 四态 + 三方差异预览与"只合并未覆盖字段"；配置包携带来源与基线摘要，连不上标 `detached`        | T17b    | ⏳ 阻塞于 T17a/T17b |
+| T64 | **模板上游关系**：`upstreamRef`/`upstreamVersion`/`baseDigest`/`localOverrides` + `current\|update-available\|conflicted\|orphaned` 四态 + 三方差异预览与"只合并未覆盖字段"；配置包携带来源与基线摘要，连不上标 `detached`        | T17b    | ✅ 2026-08-16 |
 | T65 | **配置规模化**：按标签/集合批量 preview/apply/revert（落地为**对具体矩阵格的显式批量写入**）+ 唯一的 `EffectiveCapabilityConfig` 读模型。⚠️ **三级 assignment 继承不在本任务内**——它推翻了 F11/G4，登记在 §6bis-B 改-3 待用户确认 | T15,T16 | ✅ 2026-08-16 |
 | T66 | 状态图规模化：默认只取当前轮 + 最近 20 轮，attempt 按阶段惰性加载与虚拟化；百万级数据与 80 轮长命 MR 的性能验收                                                                                                                   | T55,T62 | ✅ 2026-08-16 |
 
@@ -632,7 +632,7 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | --- | -------------------------------------------------------------------------------- | -------- | ---- |
 | T55 | 状态图第三层：每次 AI 调用（envelope 校验结果、重试次数），可跳转任务详情        | T33,T6   | ✅ 2026-08-16 |
 | T56 | 轮次切换回看                                                                     | T33      | ✅ 2026-08-16 |
-| T57 | 模板管理页：两层资源的列表、复制、配置包导入导出；显示上游关系四态与三方差异预览 | T17b,T64 | ◐ (a) 已落 2026-08-16；(b) 待 T17a/T17b；(c) 待 T64 |
+| T57 | 模板管理页：两层资源的列表、复制、配置包导入导出；显示上游关系四态与三方差异预览 | T17b,T64 | ✅ 2026-08-16（(a)(b)(c) 全落，T17a/T17b/T64 同日补齐） |
 | T58 | 采纳率与运行度量面                                                               | T30      | ✅ 2026-08-16 |
 
 > **T57 开工前对账（2026-08-16，按源码而非按计划表）**：它的两个依赖**都还没实现**，而 PR-2 在

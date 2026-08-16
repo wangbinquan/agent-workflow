@@ -30,6 +30,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
+import { ResourcePackageExportButton } from '@/components/ResourcePackageExportButton'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
@@ -596,6 +597,12 @@ function MetricsPanel(): ReactElement {
   )
 }
 
+interface UpstreamLinkWire {
+  upstreamId: string
+  upstreamVersion: number
+  baseDigest: string
+}
+
 interface FrameworkRow {
   id: string
   name: string
@@ -608,6 +615,9 @@ interface FrameworkRow {
   ownerUserId: string | null
   visibility: 'private' | 'public'
   builtin: boolean
+  aclRevision: number
+  upstream: UpstreamLinkWire | null
+  updatedAt: number
 }
 
 interface BindingRow {
@@ -620,6 +630,9 @@ interface BindingRow {
   ownerUserId: string | null
   visibility: 'private' | 'public'
   builtin: boolean
+  aclRevision: number
+  upstream: UpstreamLinkWire | null
+  updatedAt: number
 }
 
 /**
@@ -698,6 +711,14 @@ function TemplatesPanel(): ReactElement {
                     {t('code.templates.scriptsHidden')}
                   </StatusChip>
                 )}
+                {/* T57(c) — the upstream state. Shown only for a copy: a
+                    template nobody copied has no origin, and a badge saying so
+                    on every original would be noise on the common case. */}
+                {row.upstream !== null && (
+                  <StatusChip kind="neutral" size="sm">
+                    {t('code.templates.copiedFrom')}
+                  </StatusChip>
+                )}
                 <button
                   type="button"
                   className="btn btn--sm"
@@ -706,6 +727,21 @@ function TemplatesPanel(): ReactElement {
                 >
                   {t('code.templates.copy')}
                 </button>
+                {/* T57(b) — export. The fence is BOTH values or nothing: an
+                    empty fence is not "no protection", it is a 422, and a
+                    caller who believes they have what-you-see-is-what-you-get
+                    and silently has none is worse off than one who gets an
+                    error. */}
+                <ResourcePackageExportButton
+                  type="capability_framework"
+                  id={row.id}
+                  name={row.name}
+                  fence={{
+                    expectedUpdatedAt: row.updatedAt,
+                    expectedAclRevision: row.aclRevision,
+                  }}
+                  variant="action"
+                />
               </div>
               {row.description !== null && <p>{row.description}</p>}
               {row.paramSchema.length > 0 && (
@@ -736,6 +772,11 @@ function TemplatesPanel(): ReactElement {
                 <StatusChip kind="info" size="sm">
                   {frameworkNames.get(row.frameworkId) ?? t('code.templates.frameworkMissing')}
                 </StatusChip>
+                {row.upstream !== null && (
+                  <StatusChip kind="neutral" size="sm">
+                    {t('code.templates.copiedFrom')}
+                  </StatusChip>
+                )}
                 <button
                   type="button"
                   className="btn btn--sm"
@@ -744,6 +785,16 @@ function TemplatesPanel(): ReactElement {
                 >
                   {t('code.templates.copy')}
                 </button>
+                <ResourcePackageExportButton
+                  type="capability_binding"
+                  id={row.id}
+                  name={row.name}
+                  fence={{
+                    expectedUpdatedAt: row.updatedAt,
+                    expectedAclRevision: row.aclRevision,
+                  }}
+                  variant="action"
+                />
               </div>
               {Object.keys(row.agentBySlot).length > 0 && (
                 <p>

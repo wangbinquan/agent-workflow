@@ -115,6 +115,21 @@ export interface CapabilityFrameworkWire {
   ownerUserId: string | null
   visibility: 'private' | 'public'
   builtin: boolean
+  /**
+   * Part of the export fence, alongside `updatedAt`.
+   *
+   * Both are required: exporting with an empty fence is not "no protection", it
+   * is a 422 — and the page must DISABLE export rather than send a blank one,
+   * because a caller who thinks they have what-you-see-is-what-you-get
+   * protection and silently has none is worse off than one who gets an error.
+   */
+  aclRevision: number
+  /** RFC-304 T64 — where this was copied from, if anywhere. */
+  upstream: {
+    upstreamId: string
+    upstreamVersion: number
+    baseDigest: string
+  } | null
   createdAt: number
   updatedAt: number
 }
@@ -130,6 +145,21 @@ export interface CapabilityBindingWire {
   ownerUserId: string | null
   visibility: 'private' | 'public'
   builtin: boolean
+  /**
+   * Part of the export fence, alongside `updatedAt`.
+   *
+   * Both are required: exporting with an empty fence is not "no protection", it
+   * is a 422 — and the page must DISABLE export rather than send a blank one,
+   * because a caller who thinks they have what-you-see-is-what-you-get
+   * protection and silently has none is worse off than one who gets an error.
+   */
+  aclRevision: number
+  /** RFC-304 T64 — where this was copied from, if anywhere. */
+  upstream: {
+    upstreamId: string
+    upstreamVersion: number
+    baseDigest: string
+  } | null
   createdAt: number
   updatedAt: number
 }

@@ -1346,6 +1346,7 @@ export interface Resources {
       builtin: string
       scriptsHidden: string
       copy: string
+      copiedFrom: string
       params: string
       slots: string
       frameworkMissing: string
@@ -6992,6 +6993,7 @@ export const zhCN: Resources = {
       builtin: '内置',
       scriptsHidden: '脚本已隐藏',
       copy: '复制一份',
+      copiedFrom: '复制自另一个模板',
       params: '参数：{{names}}',
       slots: 'agent：{{pairs}}',
       frameworkMissing: '模板已不存在',

@@ -588,6 +588,7 @@ export const enUS: Resources = {
       builtin: 'Built in',
       scriptsHidden: 'Scripts hidden',
       copy: 'Copy',
+      copiedFrom: 'Copied from another template',
       params: 'Parameters: {{names}}',
       slots: 'Agents: {{pairs}}',
       frameworkMissing: 'Template missing',

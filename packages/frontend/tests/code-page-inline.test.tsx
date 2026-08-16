@@ -559,6 +559,9 @@ describe('RFC-304 T57 — the templates tab', () => {
     ownerUserId: null,
     visibility: 'public',
     builtin: true,
+    aclRevision: 0,
+    upstream: null,
+    updatedAt: 1000,
   }
 
   const BINDING = {
@@ -571,6 +574,10 @@ describe('RFC-304 T57 — the templates tab', () => {
     ownerUserId: 'u-1',
     visibility: 'private',
     builtin: false,
+    aclRevision: 0,
+    // T64 — this one is a copy, so the page shows its origin.
+    upstream: { upstreamId: 'fw-1', upstreamVersion: 900, baseDigest: 'd0' },
+    updatedAt: 1000,
   }
 
   test('a redacted framework SAYS its scripts are hidden', async () => {
@@ -636,5 +643,57 @@ describe('RFC-304 T57 — the templates tab', () => {
 
     expect(await screen.findByTestId('code-frameworks')).toBeTruthy()
     expect(screen.getByTestId('code-bindings')).toBeTruthy()
+  })
+})
+
+// RFC-304 T57(b)/(c) — export and origin, unblocked once T17a and T64 landed.
+describe('RFC-304 T57 — export and upstream state', () => {
+  const FRAMEWORK = {
+    id: 'fw-1',
+    name: 'gitlab standard',
+    description: null,
+    capability: 'mr-review',
+    scriptsRedacted: true,
+    paramSchema: [],
+    paramDefaults: {},
+    stageContractVer: 1,
+    ownerUserId: null,
+    visibility: 'public',
+    builtin: true,
+    aclRevision: 0,
+    upstream: null,
+    updatedAt: 1000,
+  }
+
+  const COPY = {
+    ...FRAMEWORK,
+    id: 'fw-2',
+    name: 'my copy',
+    builtin: false,
+    upstream: { upstreamId: 'fw-1', upstreamVersion: 900, baseDigest: 'd0' },
+  }
+
+  test('a template nobody copied shows NO origin badge', async () => {
+    // A badge on every original would be noise on the common case, which is
+    // how a badge stops being read at all.
+    installFetch({ frameworks: [FRAMEWORK], bindings: [] })
+    await renderPage('/code?tab=templates')
+    await screen.findByTestId('code-framework-fw-1')
+    expect(screen.queryByText(/copied from/i)).toBeNull()
+  })
+
+  test('a copy shows where it came from', async () => {
+    installFetch({ frameworks: [COPY], bindings: [] })
+    await renderPage('/code?tab=templates')
+    expect(await screen.findByText(/copied from/i)).toBeTruthy()
+  })
+
+  test('export is offered for both layers', async () => {
+    installFetch({ frameworks: [FRAMEWORK], bindings: [] })
+    await renderPage('/code?tab=templates')
+    const row = await screen.findByTestId('code-framework-fw-1')
+    // The shared export primitive, not a hand-rolled link: it carries the
+    // fence, the filename and the error handling every other resource gets.
+    expect(row.textContent?.toLowerCase()).toContain('export')
   })
 })

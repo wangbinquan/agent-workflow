@@ -104,6 +104,15 @@ export function serializeFramework(row: FrameworkRow, actor: Actor): CapabilityF
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
     builtin: row.builtin,
+    aclRevision: row.aclRevision,
+    upstream:
+      row.upstreamId === null || row.upstreamVersion === null || row.baseDigest === null
+        ? null
+        : {
+            upstreamId: row.upstreamId,
+            upstreamVersion: row.upstreamVersion,
+            baseDigest: row.baseDigest,
+          },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
@@ -135,6 +144,15 @@ export function serializeBinding(row: BindingRow): CapabilityBindingWire {
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
     builtin: row.builtin,
+    aclRevision: row.aclRevision,
+    upstream:
+      row.upstreamId === null || row.upstreamVersion === null || row.baseDigest === null
+        ? null
+        : {
+            upstreamId: row.upstreamId,
+            upstreamVersion: row.upstreamVersion,
+            baseDigest: row.baseDigest,
+          },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
