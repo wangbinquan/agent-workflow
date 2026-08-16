@@ -24,18 +24,35 @@ export async function runProcess(
     })
     const stdout: Buffer[] = []
     const stderr: Buffer[] = []
-    const timer = setTimeout(() => {
+    let settled = false
+    function rejectOnce(error: unknown): void {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
       child.kill('SIGKILL')
-      reject(new Error(`${command} timed out after ${options.timeoutMs ?? 15_000}ms`))
+      reject(error)
+    }
+    const timer = setTimeout(() => {
+      rejectOnce(new Error(`${command} timed out after ${options.timeoutMs ?? 15_000}ms`))
     }, options.timeoutMs ?? 15_000)
     timer.unref?.()
     child.once('error', (error) => {
-      clearTimeout(timer)
-      reject(error)
+      rejectOnce(error)
+    })
+    // A CGI child is allowed to reject or stop reading a request body. Node's
+    // child_process socket reports that normal early-close path asynchronously;
+    // without a listener, EventEmitter treats EPIPE as an uncaught exception and
+    // terminates the whole Playwright globalSetup process. The child's close
+    // event remains authoritative for its exit code and captured diagnostics.
+    child.stdin.on('error', (error: NodeJS.ErrnoException) => {
+      if (isExpectedStdinClosure(error)) return
+      rejectOnce(error)
     })
     child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk))
     child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
     child.once('close', (exitCode) => {
+      if (settled) return
+      settled = true
       clearTimeout(timer)
       resolve({
         stdout: Buffer.concat(stdout),
@@ -43,9 +60,19 @@ export async function runProcess(
         exitCode: exitCode ?? -1,
       })
     })
-    if (options.input === undefined) child.stdin.end()
-    else child.stdin.end(options.input)
+    try {
+      if (options.input === undefined) child.stdin.end()
+      else child.stdin.end(options.input)
+    } catch (error) {
+      if (!isExpectedStdinClosure(error)) rejectOnce(error)
+    }
   })
+}
+
+function isExpectedStdinClosure(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return false
+  const code = (error as { code?: unknown }).code
+  return code === 'EPIPE' || code === 'ECONNRESET' || code === 'ERR_STREAM_DESTROYED'
 }
 
 export async function runChecked(
