@@ -39,6 +39,14 @@ import {
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { plugins, resourceBundleApplies, skillOperations } from '@/db/schema'
+import {
+  commitBindingInTx,
+  commitFrameworkInTx,
+  prepareBindingFromBundle,
+  prepareFrameworkFromBundle,
+  type PreparedBindingWrite,
+  type PreparedFrameworkWrite,
+} from '@/services/capabilityTemplates'
 import { ACL_TABLES, initialPrivateResourceAcl } from '@/services/resourceAcl'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
@@ -167,6 +175,8 @@ type PreparedOp =
   | { op: LoweredOp; kind: 'workflow-update'; prepared: PreparedWorkflowSave }
   | { op: LoweredOp; kind: 'workgroup-create'; prepared: PreparedWorkgroupCreate }
   | { op: LoweredOp; kind: 'workgroup-update'; prepared: PreparedWorkgroupSave }
+  | { op: LoweredOp; kind: 'capability-framework'; prepared: PreparedFrameworkWrite }
+  | { op: LoweredOp; kind: 'capability-binding'; prepared: PreparedBindingWrite }
 
 export async function applyResourceBundle(
   deps: BundleApplyDeps,
@@ -695,6 +705,29 @@ async function prepareOne(
         prepared: { ...prepared, groupId: op.resourceId },
       }
     }
+    // RFC-304 T17b — create and update collapse into one prepared kind because
+    // the row builder is the same either way; `existing` is what distinguishes
+    // them, and it is a fact about the database rather than about the op.
+    case 'capability-framework-create':
+    case 'capability-framework-update': {
+      const prepared = await prepareFrameworkFromBundle(
+        db,
+        { ...(op.payload as Record<string, unknown>), id: op.resourceId } as never,
+        actor,
+        op.kind === 'capability-framework-update' ? op.resourceId : null,
+      )
+      return { op, kind: 'capability-framework', prepared }
+    }
+    case 'capability-binding-create':
+    case 'capability-binding-update': {
+      const prepared = await prepareBindingFromBundle(
+        db,
+        { ...(op.payload as Record<string, unknown>), id: op.resourceId } as never,
+        actor,
+        op.kind === 'capability-binding-update' ? op.resourceId : null,
+      )
+      return { op, kind: 'capability-binding', prepared }
+    }
     case 'workgroup-update': {
       const expect = op.expect as { expectedVersion: number }
       const prepared = await prepareWorkgroupSave(
@@ -849,6 +882,12 @@ function commitOne(
       }
       return
     }
+    case 'capability-framework':
+      commitFrameworkInTx(tx, item.prepared)
+      return
+    case 'capability-binding':
+      commitBindingInTx(tx, item.prepared)
+      return
   }
 }
 

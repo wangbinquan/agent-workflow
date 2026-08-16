@@ -52,6 +52,14 @@ export const BUNDLE_RESOURCE_TYPES = [
   'plugin',
   'workflow',
   'workgroup',
+  // RFC-304 T17a — config packages now carry the two capability template
+  // layers. Importing a FRAMEWORK is host code execution on the destination
+  // instance (its payload holds script bodies), so the import path requires
+  // `scripts:author` on top of the ordinary create/update point — the same
+  // two-factor rule the HTTP route enforces, because a package is only another
+  // way to write the same row.
+  'capability_framework',
+  'capability_binding',
 ] as const
 export type BundleResourceType = (typeof BUNDLE_RESOURCE_TYPES)[number]
 // `ResourcePackageType` in `./resourcePackage` is this same set, derived from
@@ -78,18 +86,31 @@ export function asBundleResourceType(value: AclResourceType): BundleResourceType
     : null
 }
 
-export const INTENT_RESOURCE_TYPES = BUNDLE_RESOURCE_TYPES
-export type IntentResourceType = BundleResourceType
+export const INTENT_RESOURCE_TYPES = [
+  'agent',
+  'skill',
+  'mcp',
+  'plugin',
+  'workflow',
+  'workgroup',
+] as const
+export type IntentResourceType = (typeof INTENT_RESOURCE_TYPES)[number]
 
 /**
  * Narrow an ACL type to one an Intent session can create, or null.
  *
- * Presently the same function as `asBundleResourceType` because the two sets are
- * the same six. Aliased rather than inlined so the call sites read in their own
- * vocabulary, and so the day the sets diverge this becomes a real function in
- * one place instead of a search for every "bundle" call that meant "intent".
+ * This USED to alias `asBundleResourceType`, back when the two sets were the
+ * same six — with a note saying it would become a real function the day they
+ * diverged. RFC-304 T17a is that day: config packages now carry the capability
+ * template layers and Intent sessions still cannot create them. Having named
+ * the two questions separately is what made this a one-line change rather than
+ * a hunt through every "bundle" call that meant "intent".
  */
-export const asIntentResourceType = asBundleResourceType
+export function asIntentResourceType(value: AclResourceType): IntentResourceType | null {
+  return (INTENT_RESOURCE_TYPES as readonly string[]).includes(value)
+    ? (value as IntentResourceType)
+    : null
+}
 
 export const AclResourceTypeSchema = z.enum(ACL_RESOURCE_TYPES)
 export type AclResourceType = z.infer<typeof AclResourceTypeSchema>

@@ -28,9 +28,11 @@ import type {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { DbTxSync } from '@/db/txSync'
 import { capabilityBindings, capabilityFrameworks } from '@/db/schema'
 import { canWriteFramework } from '@/modules/code-capability/domain/templateLayers'
 import { ConflictError, ForbiddenError, ValidationError } from '@/util/errors'
+import { sha256Hex } from '@/util/hash'
 
 type FrameworkRow = typeof capabilityFrameworks.$inferSelect
 type BindingRow = typeof capabilityBindings.$inferSelect
@@ -45,6 +47,44 @@ function parseJson<T>(raw: string, fallback: T): T {
     // than 500-ing the whole page over one row.
     return fallback
   }
+}
+
+/**
+ * The body digest a copy records as its base (T64).
+ *
+ * Covers only the fields a merge would compare — not `updatedAt`, not the ACL,
+ * not the id. Including those would make every ACL edit look like a body change
+ * and mark healthy copies `conflicted`.
+ */
+export function frameworkDigest(row: {
+  capability: string
+  scriptsJson: string
+  hooksJson: string
+  paramSchemaJson: string
+  paramDefaultsJson: string
+  stageContractVer: number
+}): string {
+  return sha256Hex(
+    JSON.stringify([
+      row.capability,
+      row.scriptsJson,
+      row.hooksJson,
+      row.paramSchemaJson,
+      row.paramDefaultsJson,
+      row.stageContractVer,
+    ]),
+  )
+}
+
+export function bindingDigest(row: {
+  frameworkId: string
+  agentBySlotJson: string
+  promptBySlotJson: string
+  paramsJson: string
+}): string {
+  return sha256Hex(
+    JSON.stringify([row.frameworkId, row.agentBySlotJson, row.promptBySlotJson, row.paramsJson]),
+  )
 }
 
 /** Whether this actor may see script bodies. */
@@ -192,6 +232,11 @@ export async function createFramework(
     visibility: input.visibility ?? 'private',
     aclRevision: 0,
     builtin: false,
+    // Authored here, not copied — no origin, which is a normal state rather
+    // than missing data.
+    upstreamId: null,
+    upstreamVersion: null,
+    baseDigest: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -256,6 +301,9 @@ export async function createBinding(
     visibility: input.visibility ?? 'private',
     aclRevision: 0,
     builtin: false,
+    upstreamId: null,
+    upstreamVersion: null,
+    baseDigest: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -315,6 +363,12 @@ export async function copyFramework(
     // A copy of a built-in is an ordinary resource — that is the point of
     // copying one. Carrying the flag across would make it uneditable.
     builtin: false,
+    // T64 — the link, written HERE because this is the only moment all three
+    // facts are true at once. After this the source moves on and its `updatedAt`
+    // no longer describes what was copied.
+    upstreamId: source.id,
+    upstreamVersion: source.updatedAt,
+    baseDigest: frameworkDigest(source),
     createdAt: now,
     updatedAt: now,
   }
@@ -340,6 +394,9 @@ export async function copyBinding(
     visibility: 'private',
     aclRevision: 0,
     builtin: false,
+    upstreamId: source.id,
+    upstreamVersion: source.updatedAt,
+    baseDigest: bindingDigest(source),
     createdAt: now,
     updatedAt: now,
   }
@@ -377,4 +434,171 @@ function assertBuiltinImmutable(builtin: boolean, kind: 'framework' | 'binding')
     'capability-template-builtin',
     `this ${kind} ships with the platform; copy it and edit the copy`,
   )
+}
+
+// ---------------------------------------------------------------------------
+// RFC-304 T17b — the config-package path.
+//
+// Split into prepare (async, validates and resolves refs) and commit (sync,
+// inside the bundle's single transaction), because that is the shape the bundle
+// applier requires: every op is validated BEFORE anything is written, so a
+// package that is going to fail fails without leaving half of itself behind.
+//
+// Reusing the same row builders as the HTTP path rather than a parallel set: a
+// package is another way to write the same row, and two writers that drift are
+// how an imported template ends up subtly unlike a created one.
+
+export interface PreparedFrameworkWrite {
+  row: FrameworkRow
+  /** Present for an update; the row being replaced. */
+  existing: FrameworkRow | null
+}
+
+export interface PreparedBindingWrite {
+  row: BindingRow
+  existing: BindingRow | null
+}
+
+/**
+ * Validate a framework write from a package.
+ *
+ * The two-factor check runs HERE as well as at the HTTP route, and that is not
+ * belt-and-braces: the package path never passes through the route, so leaving
+ * it to the route would mean an import is a way around the rule rather than
+ * another way to use it.
+ */
+export async function prepareFrameworkFromBundle(
+  db: DbClient,
+  input: CapabilityFrameworkWrite & { id: string },
+  actor: Actor,
+  existingId: string | null,
+  now = Date.now(),
+): Promise<PreparedFrameworkWrite> {
+  assertMayWriteFramework(actor, true)
+  const existing = existingId === null ? null : await getFrameworkRow(db, existingId)
+  if (existingId !== null && existing === null) {
+    throw new ValidationError(
+      'capability-framework-not-found',
+      `framework '${existingId}' no longer exists`,
+    )
+  }
+  if (existing !== null) assertBuiltinImmutable(existing.builtin, 'framework')
+  await assertNameFree(
+    db,
+    capabilityFrameworks,
+    existing?.ownerUserId ?? actor.user.id,
+    input.name,
+    existing?.id ?? null,
+  )
+
+  return {
+    existing,
+    row: {
+      id: existing?.id ?? input.id,
+      name: input.name,
+      description: input.description ?? null,
+      capability: input.capability,
+      scriptsJson: JSON.stringify(input.scripts),
+      hooksJson: JSON.stringify(input.hooks),
+      paramSchemaJson: JSON.stringify(input.paramSchema),
+      paramDefaultsJson: JSON.stringify(input.paramDefaults),
+      stageContractVer: input.stageContractVer,
+      // An import lands as the IMPORTER's private resource, never carrying the
+      // source instance's owner across: that user id means nothing here, and a
+      // package that could set visibility would publish somebody else's
+      // template on arrival.
+      ownerUserId: existing?.ownerUserId ?? actor.user.id,
+      visibility: existing?.visibility ?? 'private',
+      aclRevision: existing?.aclRevision ?? 0,
+      builtin: false,
+      // An imported template keeps whatever origin it already had here; the
+      // package itself carries no resolvable link (`packagedUpstreamState`
+      // reports `detached` on an instance that never saw the upstream), so
+      // inventing one would claim a relationship this instance cannot check.
+      upstreamId: existing?.upstreamId ?? null,
+      upstreamVersion: existing?.upstreamVersion ?? null,
+      baseDigest: existing?.baseDigest ?? null,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    },
+  }
+}
+
+export async function prepareBindingFromBundle(
+  db: DbClient,
+  input: CapabilityBindingWrite & { id: string },
+  actor: Actor,
+  existingId: string | null,
+  now = Date.now(),
+): Promise<PreparedBindingWrite> {
+  const existing = existingId === null ? null : await getBindingRow(db, existingId)
+  if (existingId !== null && existing === null) {
+    throw new ValidationError(
+      'capability-binding-not-found',
+      `binding '${existingId}' no longer exists`,
+    )
+  }
+  if (existing !== null) assertBuiltinImmutable(existing.builtin, 'binding')
+
+  // The framework must resolve on THIS instance. A binding whose framework did
+  // not come along is not importable — it would land pointing at nothing and
+  // report `framework-missing` on every cell that used it.
+  const framework = await getFrameworkRow(db, input.frameworkId)
+  if (framework === null) {
+    throw new ValidationError(
+      'capability-framework-not-found',
+      `this binding names framework '${input.frameworkId}', which is not in the package or on this instance`,
+    )
+  }
+  await assertNameFree(
+    db,
+    capabilityBindings,
+    existing?.ownerUserId ?? actor.user.id,
+    input.name,
+    existing?.id ?? null,
+  )
+
+  return {
+    existing,
+    row: {
+      id: existing?.id ?? input.id,
+      name: input.name,
+      description: input.description ?? null,
+      frameworkId: input.frameworkId,
+      agentBySlotJson: JSON.stringify(input.agentBySlot),
+      promptBySlotJson: JSON.stringify(input.promptBySlot),
+      paramsJson: JSON.stringify(input.params),
+      ownerUserId: existing?.ownerUserId ?? actor.user.id,
+      visibility: existing?.visibility ?? 'private',
+      aclRevision: existing?.aclRevision ?? 0,
+      builtin: false,
+      upstreamId: existing?.upstreamId ?? null,
+      upstreamVersion: existing?.upstreamVersion ?? null,
+      baseDigest: existing?.baseDigest ?? null,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    },
+  }
+}
+
+export function commitFrameworkInTx(tx: DbTxSync, prepared: PreparedFrameworkWrite): void {
+  if (prepared.existing === null) {
+    tx.insert(capabilityFrameworks).values(prepared.row).run()
+    return
+  }
+  tx.update(capabilityFrameworks)
+    .set(prepared.row)
+    .where(eq(capabilityFrameworks.id, prepared.row.id))
+    .run()
+}
+
+export function commitBindingInTx(tx: DbTxSync, prepared: PreparedBindingWrite): void {
+  if (prepared.existing === null) {
+    tx.insert(capabilityBindings).values(prepared.row).run()
+    return
+  }
+  tx.update(capabilityBindings)
+    .set(prepared.row)
+    .where(eq(capabilityBindings.id, prepared.row.id))
+    .run()
 }

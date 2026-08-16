@@ -19,6 +19,14 @@ export const RESOURCE_PACKAGE_WRITE_POINTS: Record<
   plugin: { create: 'plugins:create', update: 'plugins:update' },
   workflow: { create: 'workflows:create', update: 'workflows:update' },
   workgroup: { create: 'workgroups:create', update: 'workgroups:update' },
+  capability_framework: {
+    create: 'capability-frameworks:create',
+    update: 'capability-frameworks:update',
+  },
+  capability_binding: {
+    create: 'capability-bindings:create',
+    update: 'capability-bindings:update',
+  },
 }
 
 export function requiredImportPermissions(op: BundleOp, action: PackageWriteAction): Permission[] {
@@ -29,6 +37,13 @@ export function requiredImportPermissions(op: BundleOp, action: PackageWriteActi
       ? RESOURCE_PACKAGE_WRITE_POINTS[type].create
       : RESOURCE_PACKAGE_WRITE_POINTS[type].update,
   ]
+  // RFC-304 — importing a FRAMEWORK writes script bodies that later run as the
+  // daemon, so it carries the same two-factor rule the HTTP route enforces. A
+  // package must not be a way around the permission model, only another way to
+  // use it. Bindings deliberately carry no scripts and need nothing extra.
+  if (type === 'capability_framework' && !required.includes('scripts:author')) {
+    required.push('scripts:author')
+  }
   if (type !== 'workflow') return required
 
   const definition = (op.payload as { definition?: { nodes?: unknown } }).definition

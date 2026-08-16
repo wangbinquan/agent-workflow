@@ -167,6 +167,22 @@ function parseJsonArray(value: unknown): unknown[] {
   }
 }
 
+/** Sibling of `parseJsonArray` for the object-valued JSON columns. */
+function parseJsonObject(value: unknown): Record<string, unknown> {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  if (typeof value !== 'string') return {}
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
 function definitionOf(row: Record<string, unknown>): WorkflowDefinition | null {
   const raw = row.definition
   try {
@@ -215,6 +231,27 @@ export function directRefsOf(
     }
     return out
   }
+  if (type === 'capability_binding') {
+    // RFC-304 T17b — a binding references its framework AND the agents filling
+    // its slots. Without this arm the walker returns nothing for a binding, the
+    // export produces a package whose binding points at a framework that is not
+    // in it, and the import refuses — a defect the compiler cannot see, because
+    // the extractor's default is an empty list rather than a missing case.
+    const frameworkId = row.frameworkId
+    if (typeof frameworkId === 'string' && frameworkId.length > 0) {
+      out.push({ type: 'capability_framework', id: frameworkId })
+    }
+    for (const agentId of Object.values(parseJsonObject(row.agentBySlotJson))) {
+      if (typeof agentId === 'string' && agentId.length > 0) {
+        out.push({ type: 'agent', id: agentId })
+      }
+    }
+    return out
+  }
+  // A FRAMEWORK references nothing: its scripts are self-contained bodies and
+  // its parameter table is a declaration. That is why it can be the leaf of a
+  // closure, and why `TYPE_RANK` may place it before bindings unconditionally.
+  if (type === 'capability_framework') return out
   if (type === 'workgroup') {
     // `row.members` 由 `attachWorkgroupMembers` 在装载层补上（成员是独立表）。
     for (const raw of parseJsonArray(row.members)) {

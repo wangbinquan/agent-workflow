@@ -59,6 +59,12 @@ function resourceTypeOfBundleOp(op: BundleOp): AclResourceType {
     case 'workgroup-create':
     case 'workgroup-update':
       return 'workgroup'
+    case 'capability-framework-create':
+    case 'capability-framework-update':
+      return 'capability_framework'
+    case 'capability-binding-create':
+    case 'capability-binding-update':
+      return 'capability_binding'
   }
 }
 

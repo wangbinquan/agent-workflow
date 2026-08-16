@@ -84,6 +84,7 @@ function identityRefWireFor(expectedType: AclResourceType) {
 }
 
 const BundleAgentIdentityRefWireSchema = identityRefWireFor('agent')
+const BundleFrameworkIdentityRefWireSchema = identityRefWireFor('capability_framework')
 const BundleMcpIdentityRefWireSchema = identityRefWireFor('mcp')
 const BundlePluginIdentityRefWireSchema = identityRefWireFor('plugin')
 
@@ -340,3 +341,54 @@ export const BundleWorkgroupPayloadSchema = z
   })
   .strict()
 export type BundleWorkgroupPayload = z.infer<typeof BundleWorkgroupPayloadSchema>
+
+/**
+ * RFC-304 T17a — the DEPARTMENT template in a config package.
+ *
+ * Carries script bodies, which is what makes this payload different from every
+ * other one here: importing it is host code execution on the destination
+ * instance. The import path therefore requires `scripts:author` on top of the
+ * ordinary create/update point (see `requiredImportPermissions`) — the same
+ * two-factor rule the HTTP route enforces, because a package is just another
+ * way to write the same row.
+ */
+export const BundleCapabilityFrameworkPayloadSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    description: z.string().max(4096).default(''),
+    capability: z.string().min(1).max(64),
+    /** `{entry,collect,classify,arbitrate,select}` → {language, script, env?}. */
+    scripts: z.record(z.string(), z.unknown()).default({}),
+    hooks: z.array(z.record(z.string(), z.unknown())).max(64).default([]),
+    paramSchema: z.array(z.record(z.string(), z.unknown())).max(50).default([]),
+    paramDefaults: z.record(z.string(), z.unknown()).default({}),
+    stageContractVer: z.number().int().positive().default(1),
+  })
+  .strict()
+export type BundleCapabilityFrameworkPayload = z.infer<
+  typeof BundleCapabilityFrameworkPayloadSchema
+>
+
+/**
+ * RFC-304 T17a — the GROUP template in a config package.
+ *
+ * Deliberately carries NO scripts and NO hooks, exactly like the HTTP write
+ * schema: the absence is the layer boundary, and a package that could smuggle
+ * them would be a way around the permission model rather than a second way to
+ * use it.
+ *
+ * `frameworkRef` is an identity ref rather than a raw id, so the closure can
+ * resolve it against whatever the framework became on the destination — a raw
+ * id would point at a row that only exists on the source instance.
+ */
+export const BundleCapabilityBindingPayloadSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    description: z.string().max(4096).default(''),
+    frameworkRef: BundleFrameworkIdentityRefWireSchema,
+    agentBySlot: z.record(z.string(), BundleAgentIdentityRefWireSchema).default({}),
+    promptBySlot: z.record(z.string(), z.string()).default({}),
+    params: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict()
+export type BundleCapabilityBindingPayload = z.infer<typeof BundleCapabilityBindingPayloadSchema>

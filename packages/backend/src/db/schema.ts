@@ -4440,6 +4440,15 @@ export const capabilityFrameworks = sqliteTable(
     paramDefaultsJson: text('param_defaults_json').notNull().default('{}'),
     /** Which stage-contract version its hooks were written against (T8). */
     stageContractVer: integer('stage_contract_ver').notNull().default(1),
+    /**
+     * RFC-304 T64 — where this was copied from, when it was copied, and what it
+     * looked like then. All three are written at COPY time because none can be
+     * reconstructed later; `base_digest` in particular is what makes an update
+     * a three-way merge instead of a guess.
+     */
+    upstreamId: text('upstream_id'),
+    upstreamVersion: integer('upstream_version'),
+    baseDigest: text('base_digest'),
     // Standard resource ACL block (RFC-099/231), same shape as agents/skills.
     ownerUserId: text('owner_user_id'),
     visibility: text('visibility', { enum: ['private', 'public'] })
@@ -4478,6 +4487,15 @@ export const capabilityBindings = sqliteTable(
     promptBySlotJson: text('prompt_by_slot_json').notNull().default('{}'),
     /** JSON: overrides for the framework's `paramDefaults`, validated against its schema. */
     paramsJson: text('params_json').notNull().default('{}'),
+    /**
+     * RFC-304 T64 — where this was copied from, when it was copied, and what it
+     * looked like then. All three are written at COPY time because none can be
+     * reconstructed later; `base_digest` in particular is what makes an update
+     * a three-way merge instead of a guess.
+     */
+    upstreamId: text('upstream_id'),
+    upstreamVersion: integer('upstream_version'),
+    baseDigest: text('base_digest'),
     ownerUserId: text('owner_user_id'),
     visibility: text('visibility', { enum: ['private', 'public'] })
       .notNull()

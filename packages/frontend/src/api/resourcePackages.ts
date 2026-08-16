@@ -57,6 +57,9 @@ export interface ResourcePackageExportFenceByType {
   plugin: { expectedConfigHash: string }
   workflow: { expectedVersion: number }
   workgroup: { expectedVersion: number }
+  // RFC-304 — both capability tables carry the agent drift surface.
+  capability_framework: { expectedUpdatedAt: number; expectedAclRevision: number }
+  capability_binding: { expectedUpdatedAt: number; expectedAclRevision: number }
 }
 export type ResourcePackageExportFence = ResourcePackageExportFenceByType[ExportableType]
 
@@ -67,6 +70,8 @@ const SEGMENT: Record<ExportableType, string> = {
   plugin: 'plugins',
   workflow: 'workflows',
   workgroup: 'workgroups',
+  capability_framework: 'capability-frameworks',
+  capability_binding: 'capability-bindings',
 }
 
 export function exportPackageUrl(type: ExportableType, id: string): string {

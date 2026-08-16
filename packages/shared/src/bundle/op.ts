@@ -11,6 +11,8 @@
 import { z } from 'zod'
 import {
   BundleAgentPayloadSchema,
+  BundleCapabilityBindingPayloadSchema,
+  BundleCapabilityFrameworkPayloadSchema,
   BundleMcpPayloadSchema,
   BundlePluginPayloadSchema,
   BundleSkillPayloadSchema,
@@ -57,7 +59,7 @@ export const BundleExpectTokenSchema = z.union([
 ])
 export type BundleExpectToken = z.infer<typeof BundleExpectTokenSchema>
 
-// --- 12 分支 ---
+// --- 16 分支 ---
 
 const createOp = <K extends string, P extends z.ZodTypeAny>(kind: K, payload: P) =>
   z
@@ -97,6 +99,15 @@ export const BundleOpSchema = z.discriminatedUnion('kind', [
   updateOp('workflow-update', BundleWorkflowPayloadSchema, VersionExpect),
   createOp('workgroup-create', BundleWorkgroupPayloadSchema),
   updateOp('workgroup-update', BundleWorkgroupPayloadSchema, VersionExpect),
+  // RFC-304 T17a — the two capability template layers.
+  //
+  // Both use `AgentExpect`'s shape because both tables carry exactly that drift
+  // surface (`updatedAt` + `aclRevision`) — the same reasoning that put agents
+  // on it, not a coincidence worth a fourth expect type.
+  createOp('capability-framework-create', BundleCapabilityFrameworkPayloadSchema),
+  updateOp('capability-framework-update', BundleCapabilityFrameworkPayloadSchema, AgentExpect),
+  createOp('capability-binding-create', BundleCapabilityBindingPayloadSchema),
+  updateOp('capability-binding-update', BundleCapabilityBindingPayloadSchema, AgentExpect),
 ])
 export type BundleOp = z.infer<typeof BundleOpSchema>
 
@@ -113,5 +124,9 @@ export const BUNDLE_OP_KINDS = [
   'workflow-update',
   'workgroup-create',
   'workgroup-update',
+  'capability-framework-create',
+  'capability-framework-update',
+  'capability-binding-create',
+  'capability-binding-update',
 ] as const
 export type BundleOpKind = (typeof BUNDLE_OP_KINDS)[number]

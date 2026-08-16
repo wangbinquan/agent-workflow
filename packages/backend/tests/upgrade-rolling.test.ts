@@ -278,7 +278,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // MR 终态事件只带 provider / project / iid，里面根本没有 issue 的影子。没有这张表，
   // 代码合了、平台不知道，需求在活动视图里永远显示「进行中」。反向而不是正向：正向指针
   // 意味着每次合并都要把全库未闭合工作项的 JSON 扫一遍。
-  test('HEAD journal has 170 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 171 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -427,7 +427,11 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-304 T61 bumped to 170 with 0170_rfc304_trigger_deliveries（投递链路落库：
     // 「这个仓的检视突然不工作了」此前问不出结果——readiness/上次触发时间/测试事件
     // 都区分不了「没到」「到了被丢」「排在 lease 后面」，而三者的修法各不相同）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(170)
+    // RFC-304 T64 bumped to 171 with 0171_rfc304_template_upstream（复制来源三元组：
+    // upstream_id / upstream_version / base_digest。三者都只能在**复制那一刻**写下——
+    // 之后源会继续演进，它的 updatedAt 不再描述当初被复制的是什么；缺 base_digest
+    // 则合并退化成两路，「上游说 A、本地说 B」分不清是谁改的）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(171)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

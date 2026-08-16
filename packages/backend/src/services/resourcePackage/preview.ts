@@ -265,6 +265,15 @@ export function expectTokenOf(
     case 'workflow':
     case 'workgroup':
       return { expectedVersion: Number(row.version ?? 1) }
+    // RFC-304 — both capability tables carry exactly the agent drift surface
+    // (`updatedAt` + `aclRevision`), which is why they share its expect shape
+    // rather than getting a fourth one.
+    case 'capability_framework':
+    case 'capability_binding':
+      return {
+        expectedUpdatedAt: Number(row.updatedAt ?? 0),
+        expectedAclRevision: Number(row.aclRevision ?? 0),
+      }
   }
 }
 
