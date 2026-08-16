@@ -167,8 +167,11 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
 
   let dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
-  await expect(dialog.locator('.user-permission-row')).toHaveCount(73)
-  await expect(dialog.locator('input[type="checkbox"]:not(:disabled)')).toHaveCount(24)
+  // RFC-304 added two capability template layers × four verbs ⇒ 81 rows. The
+  // three DEPARTMENT-layer writes are system-domain, so they join the
+  // individually-grantable set ⇒ 27 enabled boxes.
+  await expect(dialog.locator('.user-permission-row')).toHaveCount(81)
+  await expect(dialog.locator('input[type="checkbox"]:not(:disabled)')).toHaveCount(27)
   await dialog.getByRole('textbox', { name: /Username/ }).fill(username)
   await dialog.getByRole('textbox', { name: /Display name/ }).fill('RFC-305 Browser User')
   await dialog.getByLabel(/^Password/).fill(password)
