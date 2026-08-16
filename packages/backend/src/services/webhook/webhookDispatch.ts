@@ -36,6 +36,10 @@ import {
   isTerminalDelivery,
   wakeCapabilitiesForDelivery,
 } from '@/services/codeCapabilityWake'
+import {
+  advanceDelivery,
+  openDelivery,
+} from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
 import { markDelivery } from '@/services/webhook/deliveryStore'
 import {
   evaluateCircuit,
@@ -1118,6 +1122,12 @@ async function wakeCodeCapabilitiesFor(
   // A terminal delivery closes rather than wakes (T40); that path already ran.
   if (isTerminalDelivery(input.event.eventType)) return false
 
+  // Hoisted so the catch can reach it. A crash that left the row saying
+  // `received / ok` would be worse than no row at all: it actively tells an
+  // administrator the delivery was fine, which is precisely the misreading the
+  // chain exists to prevent.
+  let chainId: string | null = null
+
   try {
     // Cheap existence check BEFORE resolving the repository, and it is load
     // bearing rather than an optimisation. RFC-268 guarantees that a `scratch`
@@ -1131,7 +1141,23 @@ async function wakeCodeCapabilitiesFor(
       .from(repoCapabilityConfig)
       .where(eq(repoCapabilityConfig.enabled, true))
       .limit(1)
+    // No chain row either: a deployment with no capabilities configured is not
+    // troubleshooting capability delivery, and one row per webhook on every
+    // such deployment is pure cost.
     if (anyCell === undefined) return false
+
+    // T61 — the chain starts here, at the first point the delivery is known to
+    // concern capabilities at all. Advanced in place from now on, so the row
+    // always says where this delivery actually got to.
+    const chain = await openDelivery({
+      db: deps.db,
+      correlationId: input.deliveryId,
+      codeHostEndpointId: input.endpoint.id,
+      stableProjectId: input.event.projectId ?? null,
+      anchorKind: input.event.mrIid !== undefined ? 'mr' : 'issue',
+      anchorId: input.event.mrIid ?? input.event.issueIid ?? null,
+    })
+    chainId = chain.id
 
     const resolution = await (deps.resolveRepo ?? resolveRepoForEvent)(
       deps.db,
@@ -1143,7 +1169,25 @@ async function wakeCodeCapabilitiesFor(
       // nobody has.
       false,
     )
-    if (resolution.kind !== 'cached') return false
+    if (resolution.kind !== 'cached') {
+      // Dropped, not failed: a webhook for a repository nobody registered is
+      // the ordinary case, and marking it red would train an administrator to
+      // ignore the colour that means something is broken.
+      await advanceDelivery({
+        db: deps.db,
+        deliveryId: chain.id,
+        step: 'matched',
+        outcome: 'dropped',
+        reason: 'no registered repository matches this event',
+      })
+      return false
+    }
+    await advanceDelivery({
+      db: deps.db,
+      deliveryId: chain.id,
+      step: 'matched',
+      outcome: 'ok',
+    })
 
     const context = webhookTriggerContextOf(input.event)
     const result = await wakeCapabilitiesForDelivery({
@@ -1177,9 +1221,58 @@ async function wakeCodeCapabilitiesFor(
         error: failure.error,
       })
     }
+
+    // The reason is what makes the row worth keeping — "routed" alone moves the
+    // administrator's question rather than answering it.
+    const firstFailure = result.failed[0]
+    const firstStarted = result.started[0]
+    if (firstFailure !== undefined) {
+      await advanceDelivery({
+        db: deps.db,
+        deliveryId: chain.id,
+        step: 'routed',
+        outcome: 'failed',
+        reason: firstFailure.error,
+        capability: firstFailure.capability,
+      })
+    } else if (firstStarted !== undefined) {
+      await advanceDelivery({
+        db: deps.db,
+        deliveryId: chain.id,
+        step: 'round',
+        outcome: 'ok',
+        capability: firstStarted.capability,
+        roundId: firstStarted.roundId ?? null,
+      })
+    } else {
+      await advanceDelivery({
+        db: deps.db,
+        deliveryId: chain.id,
+        step: 'routed',
+        outcome: 'dropped',
+        reason: 'no enabled capability wanted this event',
+      })
+    }
+
     return result.started.length > 0 || (result.observed ?? []).length > 0
   } catch (err) {
     log.warn('waking code capabilities failed', { error: errText(err) })
+    if (chainId !== null) {
+      // Best-effort, and swallowed on its own failure: this is the error path
+      // already, and a database hiccup here must not replace the original
+      // problem with a different one in the log.
+      try {
+        await advanceDelivery({
+          db: deps.db,
+          deliveryId: chainId,
+          step: 'routed',
+          outcome: 'failed',
+          reason: errText(err),
+        })
+      } catch {
+        /* the log line above is the record of last resort */
+      }
+    }
     return false
   }
 }

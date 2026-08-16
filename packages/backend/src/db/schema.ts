@@ -4346,6 +4346,47 @@ export const codeFixAttempts = sqliteTable(
   }),
 )
 
+/**
+ * RFC-304 T61 — the delivery chain behind "review stopped working here".
+ *
+ * `readiness = ready` says the config is complete, not that anything ran; the
+ * last-trigger time cannot separate "never arrived" from "dropped by routing"
+ * from "queued behind a lease". Each has a different fix, so the step and the
+ * REASON are what make the record worth keeping.
+ */
+export const codeTriggerDeliveries = sqliteTable(
+  'code_trigger_deliveries',
+  {
+    id: text('id').primaryKey(),
+    /** Shared with the round and the ingress event; one id, one story. */
+    correlationId: text('correlation_id').notNull(),
+    codeHostEndpointId: text('code_host_endpoint_id'),
+    stableProjectId: text('stable_project_id'),
+    anchorKind: text('anchor_kind'),
+    anchorId: text('anchor_id'),
+    capability: text('capability'),
+    /** received | matched | routed | queued | round | published */
+    step: text('step').notNull(),
+    /** ok | dropped | failed — `dropped` is a decision, not a fault. */
+    outcome: text('outcome').notNull(),
+    reason: text('reason'),
+    queuedAt: integer('queued_at'),
+    queuePosition: integer('queue_position'),
+    waitingOn: text('waiting_on'),
+    roundId: text('round_id'),
+    /** A "send test event" delivery. Walks the same path; the flag is for the
+     *  list view, never for a shortcut in the code. */
+    isProbe: integer('is_probe', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    projectIdx: index('idx_code_trigger_deliveries_project').on(t.stableProjectId, t.createdAt),
+    correlationIdx: index('idx_code_trigger_deliveries_correlation').on(t.correlationId),
+    outcomeIdx: index('idx_code_trigger_deliveries_outcome').on(t.outcome, t.createdAt),
+  }),
+)
+
 export const codePublishIntents = sqliteTable(
   'code_publish_intents',
   {
