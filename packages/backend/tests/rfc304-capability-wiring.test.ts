@@ -158,6 +158,58 @@ describe('RFC-304 — the scheduler can reach every capability', () => {
     })
   }
 
+  test('ci-fix comes back with an implementation for every SCRIPT stage', async () => {
+    // The join for the script-stage runner, and it needs its own assertion for
+    // an uncomfortable reason: `ci-fix` cannot start in production yet (its
+    // cell is permanently `misconfigured` — `hasWakeSource` is hardcoded false,
+    // plan §2ter.4), so a broken join here would stay invisible until whenever
+    // that second gate opens. That is precisely how every other gap in this RFC
+    // survived: nothing exercised the path, so nothing was red.
+    //
+    // Derived from the CONTRACT rather than a hand-written list of four, so a
+    // script stage added later must appear here too.
+    const wiring = await build('ci-fix')
+    const contract = lookupStageContract('ci-fix')
+    const scriptNames = (contract?.stages ?? [])
+      .filter((stage) => stage.kind === 'script')
+      .map((stage) => stage.name)
+
+    expect(scriptNames.length).toBeGreaterThan(0)
+    expect(Object.keys(wiring.scriptStages ?? {}).sort()).toEqual([...scriptNames].sort())
+  })
+
+  test('with no resolvable framework the script stages REFUSE rather than vanish', async () => {
+    // Absent is the dangerous answer: an unregistered stage fails with "no
+    // runner registered", which reads as a platform defect and tells an
+    // operator nothing. A refusal names what could not be resolved.
+    //
+    // `build()` passes no `repoId`, so the framework's scripts cannot be
+    // resolved — the ordinary state for a round whose repository has no cell.
+    const wiring = await build('ci-fix')
+    const first = Object.values(wiring.scriptStages ?? {})[0]
+    expect(first).toBeDefined()
+
+    const result = await first!({
+      roundId: 'round-1',
+      stage: { kind: 'script', name: 'collect', scriptSlot: 'collect', requires: [], produces: [] },
+      artifacts: {},
+    } as never)
+    expect(result.status).toBe('failed')
+    expect(result.status === 'failed' && result.error).toContain('could not be resolved')
+  })
+
+  test('the four other capabilities declare no script stage, so none is wired', () => {
+    // The other half of the same fact. `ci-fix` is the ONLY contract using the
+    // script kind; if that ever changes, whoever changes it has to come here
+    // and think about whether that capability's wiring supplies them.
+    for (const capability of CODE_CAPABILITIES) {
+      if (capability === 'ci-fix') continue
+      const contract = lookupStageContract(capability)
+      const scripts = (contract?.stages ?? []).filter((stage) => stage.kind === 'script')
+      expect(scripts.map((stage) => stage.name)).toEqual([])
+    }
+  })
+
   test('an unresolvable code host refuses rather than throwing', async () => {
     // Same shape as the provider case, and it is the commoner one: a deployment
     // that has configured a capability but not the code-host connection.
