@@ -5992,6 +5992,13 @@ export const enUS: Resources = {
   codeHostUnsupported: {
     graphqlOnly:
       'GitHub exposes this only through GraphQL, and the thread ID is not available over REST',
+    // Names the action to use instead. "Not supported" alone reads as a gap in
+    // the platform and sends people looking for a setting; the truth is that
+    // the two hosts model reviews differently and another action does the job.
+    singleRequestReview:
+      'GitHub submits a whole review in one request, so there are no drafts to stage — use “Submit a whole review in one request”',
+    useDraftNotes:
+      'GitLab stages draft comments and publishes them together, so there is no single-request review — use “Stage one draft review comment” then “Publish all staged draft comments at once”',
   },
   codeHostInspector: {
     provider: 'Code host',

@@ -181,6 +181,32 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 **已完成且不受该依赖影响的部分**：三张表与 migration 0161、两层的领域约束（framework-only
 字段拒收、`canWriteFramework` 双条件）、参数继承与来源追溯、readiness 三态派生。
 
+> **接续完成（2026-08-16，RFC-305 已落定）**。上面那张待补清单的实际落法，与原计划有两处
+> 不同，记在这里免得下一个人以为漏了：
+> - **按计划补的**：`ACL_RESOURCE_TYPES` 两项、`ACL_TABLES` 两项、`resourceGrants.resourceType`
+>   enum、新权限点 `capability-frameworks:*` / `capability-bindings:*`（八个，两层分开：binding
+>   四个是普通矩阵点，framework 三个写点进系统域）——均随 T57(a) 落地。**零迁移**：
+>   `resource_grants.resource_type` 在 SQL 里是裸 `text` 无 CHECK。
+> - **补漏一项**：`OWNER_NAME_UNIQUE_TYPES` 当时**漏了**，2026-08-16 补上并配红测试。症状具体：
+>   两张表都带 owner+name 唯一索引，而驱动**属主转移**冲突检查的正是这个集合——不登记就让
+>   「把模板转给一个已有同名模板的人」抛出裸 `UNIQUE constraint failed`，即本该 409 的地方给
+>   500。（注意它与 `services/capabilityTemplates.ts` 里的 `assertNameFree` **不重复**：后者管
+>   创建/改名/复制，前者管属主转移，是互补的两半。）
+> - **故意不按计划做的**：`bundle/provider.ts` 的 `TYPE_RANK`、`cli/package.ts`、
+>   `bundle/{apply,lower}.ts`、`intent/applyChangeset.ts` —— 原计划是给这些映射表**补项**，
+>   实际改成**把类型收窄**（引入 `BundleResourceType` / `IntentResourceType`）。理由：配置包
+>   现在**载不了**这两类（T17a 未落），给映射表补项等于新增一条编译通过却什么也不产出的导出
+>   路径；而收窄反而逼出了两个真缺陷（包 manifest root 用更宽 schema 校验、CLI 对用户输入
+>   `as` 断言使随后的校验失效）。等 T17a/T17b 落地时再把这些放开——那才是补项的正确时机。
+
+> **T19 的 i18n 残留（2026-08-16 收口）**：那份 283 行的 patch 只被打回了一部分——三个 review
+> 动作的 label 在，但两条 unsupported 理由（`singleRequestReview` / `useDraftNotes`）**中英都
+> 缺**。之所以长期没人发现：`CodeHostCallEdit` 用的是
+> `t(key, { defaultValue: t('codeHostInspector.unsupportedGeneric') })`，**缺翻译时界面显示的是
+> 一句像模像样的泛化文案而不是裸 key**——带兜底的缺失比不带兜底的更难被看见。已补齐，并加
+> `code-host-unsupported-reasons.test.ts` 把注册表与 i18n 表**接上**：此前 shared 那侧只断言
+> `reasonKey` 被设置、i18n 那侧只断言中英对称，**没有任何一条跨过两者**。
+
 | #    | 任务                                                                                                                                                                                                                                                                                                                                                                                             | 依赖    |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
 | T13  | `capability_frameworks` / `capability_bindings` 表；两类资源接入既有资源框架（owner/visibility/grants/复制）                                                                                                                                                                                                                                                                                     | T1      |

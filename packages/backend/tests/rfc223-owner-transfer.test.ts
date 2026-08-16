@@ -6,6 +6,8 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
+  capabilityBindings,
+  capabilityFrameworks,
   mcps,
   plugins,
   resourceGrants,
@@ -18,7 +20,20 @@ import { updateResourceAcl, type AclRow } from '../src/services/resourceAcl'
 import { ConflictError, ForbiddenError, NotFoundError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const OWNER_SCOPED_TYPES = ['agent', 'skill', 'mcp', 'plugin', 'workgroup'] as const
+// RFC-304 — the two capability template layers carry owner+name unique indexes
+// exactly like the five above, so a transfer into an occupied name bucket must
+// produce the same typed 409. They were absent from `OWNER_NAME_UNIQUE_TYPES`
+// while the tables already had the constraint, which turns that transfer into a
+// raw SQLite error instead — a 500 where a 409 was designed.
+const OWNER_SCOPED_TYPES = [
+  'agent',
+  'skill',
+  'mcp',
+  'plugin',
+  'workgroup',
+  'capability_framework',
+  'capability_binding',
+] as const
 
 function actor(id: string, role: 'admin' | 'user'): Actor {
   return buildActor({
@@ -74,6 +89,26 @@ async function seedResource(
     case 'workgroup':
       await db.insert(workgroups).values({ id, name, ...acl })
       break
+    case 'capability_framework':
+      await db.insert(capabilityFrameworks).values({
+        id,
+        name,
+        capability: 'mr-review',
+        createdAt: 1,
+        updatedAt: 1,
+        ...acl,
+      })
+      break
+    case 'capability_binding':
+      await db.insert(capabilityBindings).values({
+        id,
+        name,
+        frameworkId: 'fw-any',
+        createdAt: 1,
+        updatedAt: 1,
+        ...acl,
+      })
+      break
   }
   return { id, ownerUserId, visibility: 'public' }
 }
@@ -92,7 +127,7 @@ describe('RFC-223 owner transfer and fresh-ACL fences', () => {
     admin = actor('admin', 'admin')
   })
 
-  test('five owner-scoped types reject a transfer into the target owner name bucket', async () => {
+  test('every owner-scoped type rejects a transfer into the target owner name bucket', async () => {
     for (const type of OWNER_SCOPED_TYPES) {
       const source = await seedResource(db, type, `${type}-source`, 'shared-name', 'owner-a')
       await seedResource(db, type, `${type}-target`, 'shared-name', 'owner-b')
@@ -113,6 +148,8 @@ describe('RFC-223 owner transfer and fresh-ACL fences', () => {
         skill: skills,
         mcp: mcps,
         plugin: plugins,
+        capability_framework: capabilityFrameworks,
+        capability_binding: capabilityBindings,
         workgroup: workgroups,
       }[type]
       expect(

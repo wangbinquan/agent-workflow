@@ -5123,6 +5123,8 @@ export interface Resources {
   }
   codeHostUnsupported: {
     graphqlOnly: string
+    singleRequestReview: string
+    useDraftNotes: string
   }
   codeHostInspector: {
     provider: string
@@ -11420,6 +11422,12 @@ export const zhCN: Resources = {
   },
   codeHostUnsupported: {
     graphqlOnly: 'GitHub 的 REST 面没有这个端点（只有 GraphQL），且线程 ID 在 REST 里拿不到',
+    // 具体到「该改用哪个动作」。只说「不支持」会让人以为是平台没做，于是去
+    // 翻文档找开关；真相是两家的检视模型不同，换一个动作就能做成同一件事。
+    singleRequestReview:
+      'GitHub 是一次请求提交整份检视，没有可暂存的草稿——改用「一次提交整份检视」',
+    useDraftNotes:
+      'GitLab 走草稿评论再批量发布，没有「一次提交整份检视」——改用「暂存草稿」+「批量发布」',
   },
   codeHostInspector: {
     provider: '代码平台',

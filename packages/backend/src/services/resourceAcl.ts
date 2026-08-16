@@ -139,6 +139,13 @@ export const OWNER_NAME_UNIQUE_TYPES: ReadonlySet<AclResourceType> = new Set([
   'mcp',
   'plugin',
   'workgroup',
+  // RFC-304 — both capability template tables carry an owner+name unique index
+  // (`capability_{frameworks,bindings}_owner_name_unique`). Registering them
+  // here is what turns a transfer into an occupied name bucket into the typed
+  // 409 every other owner-scoped type gives; without it the constraint still
+  // fires, as a raw SQLite error the route reports as a 500.
+  'capability_framework',
+  'capability_binding',
 ])
 
 /** RFC-234/RFC-305 — cross-owner Intent audit is a dedicated permission. */
