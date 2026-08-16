@@ -52,6 +52,14 @@ export interface CodeCapabilityRunnerDeps {
    */
   programStages?: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
   /**
+   * SCRIPT-stage implementations, keyed by stage name.
+   *
+   * Built from the capability's own contract by `buildScriptStages`. Injected
+   * like the others rather than resolved here, because a script belongs to a
+   * team's FRAMEWORK — this module must not learn how to read one.
+   */
+  scriptStages?: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
+  /**
    * Where a capability's contract comes from. Defaults to the built-in
    * registry. Injectable because a group's binding will eventually select which
    * contract version a repo runs (PR-2) — the runner should not hard-code the
@@ -77,6 +85,8 @@ export interface CodeCapabilityRunnerDeps {
         {
           program?: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
           ai?: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
+          /** Only `ci-fix` declares script stages today, but an invoked range may. */
+          script?: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
         }
       >
     >
@@ -144,7 +154,16 @@ export function createCodeCapabilityRunner(deps: CodeCapabilityRunnerDeps): Code
       }
       return await impl(ctx)
     },
-    script: notImplemented('script'),
+    script: async (ctx) => {
+      const impl = deps.scriptStages?.[ctx.stage.name]
+      if (impl === undefined) {
+        return {
+          status: 'failed',
+          error: `script stage '${ctx.stage.name}' has no registered implementation`,
+        }
+      }
+      return await impl(ctx)
+    },
     ai: async (ctx) => {
       const impl = deps.aiStages?.[ctx.stage.name]
       if (impl === undefined) {
@@ -196,7 +215,15 @@ export function createCodeCapabilityRunner(deps: CodeCapabilityRunnerDeps): Code
                 }
               : await impl(sub)
           },
-          script: notImplemented('script'),
+          script: async (sub) => {
+            const impl = supplied.script?.[sub.stage.name]
+            return impl === undefined
+              ? {
+                  status: 'failed',
+                  error: `invoked script stage '${sub.stage.name}' has no registered implementation`,
+                }
+              : await impl(sub)
+          },
           // No nesting. An invoke inside an invoke has no defined hook naming
           // and no reason to exist yet; refusing beats inventing semantics
           // nobody has thought through.

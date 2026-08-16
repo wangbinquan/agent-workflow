@@ -928,33 +928,54 @@ E2E 断言 `bulk_publish` 恰好一次把这条锁住。
 后者是弱形式的测试，此处是**刻意**：缺陷是 5000 行调度分支里一个类型正确的实参，
 类型系统和运行时都抓不住，能便宜锁住的只有「那个错误写法不许再出现」）。
 
-### 2ter.4 `script` 阶段种类在轮次引擎里没有实现（未修，ci-fix 因此跑不起来）
+### 2ter.4 ci-fix 跑不起来有**两道**闸，已修其一
 
-准备给 ci-fix 补一条 E2E 时读出来的，**没有写成测试**——不该把一个坏掉的现状写成
-「期望值」。
+准备给 ci-fix 补 E2E 时挖出来的，且**第二道是在第一道修好后才露出来的**——与
+2ter.1–2ter.3 完全同一种串行暴露。
+
+**闸一：阶段引擎的 `script` 种类没有实现（已修）**
 
 ```
-codeCapabilityRunner.ts:147   script: notImplemented('script'),
-scheduler.ts:4839             resumeFromStage: null,
-CI_FIX_CONTRACT.stages[0]     { kind: 'script', name: 'collect', scriptSlot: 'collect' }
+codeCapabilityRunner.ts  script: notImplemented('script')
+scheduler.ts             resumeFromStage: null       ← 每轮从第 0 阶段起跑
+CI_FIX_CONTRACT.stages[0..3]  kind: 'script'（collect / classify / arbitrate / select）
 ```
 
-三条合起来：ci-fix 的轮次从第 0 个阶段起跑，那是 `script` 种类，而该种类**没有
-runner**，于是每一轮都以 `stage 'collect' is kind 'script', which has no runner
-registered yet` 立刻失败。
+于是每一轮都以 `stage 'collect' is kind 'script', which has no runner registered
+yet` 立刻失败。**这一处没有任何未决**：四个槽位就是框架的脚本槽，`runMonitorScript`
+本来就在给监视器跑同样这四个，结果 schema 也早就有且与各阶段 `produces` 一一对应
+——**四个零件全在，没有一个接上**。
 
-注意**不要混淆两条脚本路径**：监视器自己的 collect/classify/arbitrate/select 走
-`monitorLoop.ts` 的 `runMonitorScript`，那条是通的、E2E 也验过；没通的是**阶段引擎里
-的 script 种类**，也就是框架作者在 stage contract 里声明的脚本槽。所以恰恰是「靠
-stage-contract 脚本」的那条能力（ci-fix）整条死掉。
+修法：新增 `composition/scriptStages.ts`（按 contract 派生实现，而不是手写清单，
+所以以后新增 script 阶段自动有实现）+ 引擎补 `script` 分派 + `buildCapabilityWiring`
+从框架解析脚本。缺脚本时**具名拒绝并点明层级**（脚本属部门层、需 `scripts:author`），
+**不得回退到问 AI**——那会把确定性流水线悄悄变成不确定的，而且看起来还成功了。
+锁在 `rfc304-script-stages.test.ts`（5 条，真 python 子进程；去掉 `requires` 过滤
+即转红）。
 
-影响面是**确切**的，不是「可能还有别的」：全部 stage contract 里只有 `CI_FIX_CONTRACT`
-用了 script 种类（4 个阶段），其余四条能力一个都没有。所以这条只打掉 ci-fix，
-2ter.1–2ter.3 修好的 mr-review 全链不受影响。
+注意**别混淆两条脚本路径**：监视器自己的四个脚本走 `monitorLoop.ts` 的
+`runMonitorScript`，那条一直是通的；没通的是**阶段引擎里的 script 种类**。
 
-修它 = 把 `runMonitorScript` 那套（框架脚本槽解析 + env + envelope + 超时）接进阶段
-引擎的 script 分支。零件都在，但这是独立一波，**留待用户裁决优先级**；本轮不做，
-以免把三处已验证的修复混进一个更大的改动里。
+**闸二：`hasWakeSource` 硬编码 `false`（未修，需用户裁决）**
+
+```
+readinessFacts.ts:98    hasWakeSource: false,
+readinessFacts.ts:33    const NEEDS_WAKE_SOURCE = new Set(['ci-fix'])
+```
+
+源码注释自陈：「还没有人提供 wake source（wake entry point 是 PR-6 T35c），所以
+对需要它的能力这里诚实地写 false，而不是乐观地写 true」。后果是 **ci-fix 的格子
+永远 `misconfigured`（`no-wake-source`）⇒ 永远不会被唤醒**——所以闸一修好之后，
+它仍然起不了轮。
+
+不自行修的理由是**这一步要定义"什么算 wake source"**，而不是接线：按 PR-9 打开
+`WorkPackage` union 的形状看，ci-fix 是**由监视器派发**的（不是被 `pipeline_failed`
+直接唤醒），那么"本仓启用了监视器"是否即算 wake source？这是产品判断，且写错的
+后果正是该规则要防的那一种——把一个**起不来的格子标成 ready**（注释里写明这是
+「最糟的 readiness 答案，因为它自信地错」）。**留给用户裁决**。
+
+E2E 里为此写的 ci-fix 用例已撤掉：不该把一个被另一处**有意延后**的决定挡住的路径
+写成「期望值」。闸二一旦拍板，那条用例即可直接接上（脚本执行已具备）。
 
 ## 3. 验收清单
 

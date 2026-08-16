@@ -45,6 +45,10 @@ import { createCodeHostAdapter } from '@/modules/code-capability/infrastructure/
 import { createGitAdapter } from '@/modules/code-capability/infrastructure/gitAdapter'
 import { createSqliteAttemptRecorder } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
 import { resolveCodeHostEndpointId } from '@/modules/code-capability/composition/mrReviewEnvironment'
+import { buildScriptStages } from '@/modules/code-capability/composition/scriptStages'
+import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
+import { resolveMonitorScripts } from '@/services/codeCapabilityScripts'
+import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import type { CodeHostConnectionsService, FetchLike } from '@/services/codeHost/connections'
 import type { WebhookTriggerFields } from '@agent-workflow/shared'
@@ -55,6 +59,12 @@ export const DEFAULT_CAPABILITY_BUDGET: RetryBudget = { sameSession: 2, freshSes
 export interface CapabilityWiring {
   programStages: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
   aiStages: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
+  /**
+   * Present only for a capability whose contract declares script stages, which
+   * today is `ci-fix` alone. Absent is not "none needed" for it — an absent map
+   * is why every `ci-fix` round used to die at stage zero.
+   */
+  scriptStages?: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
   codeHostEndpointId: string | null
 }
 
@@ -81,6 +91,17 @@ export interface CapabilityWiringInput {
   readWorktreeFile?: (relativePath: string) => Promise<string | null>
   /** Runs the target repository's own gate; `requirement` and `ci-fix` use it. */
   runGateCommand?: (command: string) => Promise<{ exitCode: number; output: string }>
+  /**
+   * The cached-repo id this round runs for — how the framework's SCRIPTS are
+   * resolved (`repo_capability_config` → binding → framework).
+   *
+   * An id, never a path: the same distinction that made every AI stage refuse
+   * before plan §2ter.2, and it is silent in exactly the same way here.
+   */
+  repoId?: string
+  /** Where a script stage runs; defaults to the round's worktree. */
+  scriptRunDir?: string
+  interpreterPath?: string
 }
 
 /** Stage names per capability, so a refusal can name every one of them. */
@@ -295,9 +316,54 @@ export async function buildCapabilityWiring(
           return diff.ok ? diff.diff : ''
         },
       }
+      // The four script stages that open a `ci-fix` round. Resolved from the
+      // framework rather than defaulted: these are the deterministic half of
+      // the capability (what failed, how it is classified, what to do, who
+      // does it), and a default would silently make one team's policy stand in
+      // for another's.
+      const contract = lookupStageContract('ci-fix')
+      const resolvedScripts =
+        input.repoId === undefined || input.repoId === ''
+          ? {
+              ok: false as const,
+              problem: 'this round has no repository, so no framework scripts could be resolved',
+            }
+          : await resolveMonitorScripts(input.db, { repoId: input.repoId, capability: 'ci-fix' })
+
+      const scriptNames = (contract?.stages ?? [])
+        .filter((stage) => stage.kind === 'script')
+        .map((stage) => stage.name)
+
+      const scriptStages = !resolvedScripts.ok
+        ? refuseAll(
+            scriptNames,
+            `the framework's scripts could not be resolved: ${resolvedScripts.problem}`,
+          )
+        : contract === undefined
+          ? refuseAll(scriptNames, 'no stage contract is registered for ci-fix')
+          : buildScriptStages(contract, {
+              scripts: resolvedScripts.scripts,
+              makeEnv: (stageName) => ({
+                worktreePath: input.worktreePath,
+                runDir: input.scriptRunDir ?? join(input.worktreePath, '.aw-run', stageName),
+                repos: [],
+                interpreterPath: input.interpreterPath ?? '',
+                workItem: {
+                  capability: 'ci-fix',
+                  anchorKind: 'mr',
+                  anchorId: input.webhook.mr_iid ?? '',
+                  roundId: input.roundId,
+                  roundSeq: input.roundSeq,
+                  baselineSha: input.webhook.commit_sha ?? null,
+                },
+                envelopeNonce: input.nonce,
+              }),
+            })
+
       return {
         codeHostEndpointId: endpointId,
         programStages: ciFixProgramStages(env),
+        scriptStages,
         aiStages:
           input.makeCaller === undefined ? refuseAll(aiNames, agentRefusal) : ciFixAiStages(env),
       }

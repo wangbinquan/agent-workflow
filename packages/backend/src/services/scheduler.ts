@@ -150,7 +150,10 @@ import { buildProtocolBlock } from '@/services/protocol'
 import { CODE_ROUND_SUMMARY_PORT } from '@/services/codeRoundContract'
 import { createCodeCapabilityRunner } from '@/modules/code-capability/composition/codeCapabilityRunner'
 import { buildMrReviewWiring } from '@/modules/code-capability/composition/mrReviewEnvironment'
-import { buildCapabilityWiring } from '@/modules/code-capability/composition/capabilityWiring'
+import {
+  buildCapabilityWiring,
+  type CapabilityWiring,
+} from '@/modules/code-capability/composition/capabilityWiring'
 import { COMMENT_FIX_AGENT_SLOT } from '@/modules/code-capability/domain/commentFixEnvelope'
 import { CI_FIX_AGENT_SLOT } from '@/modules/code-capability/domain/ciFixEnvelope'
 import { settleDanglingAttempts } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
@@ -4674,6 +4677,9 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             roundId: task.codeRoundId ?? taskId,
             roundSeq: 1,
             workItemId: task.codeRoundId ?? taskId,
+            // How `ci-fix` resolves the framework's four scripts. The cached-repo
+            // ID, never the path — see `cachedRepoIdForTask`.
+            repoId: await cachedRepoIdForTask(db, taskId),
             ...(opts.codeHostConnections !== undefined
               ? { codeHostConnections: opts.codeHostConnections }
               : {}),
@@ -4794,12 +4800,30 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
           }
         })()
 
+  // `mr-review` has its own builder whose contract declares no script stage;
+  // every other capability goes through `buildCapabilityWiring`, and today only
+  // `ci-fix` comes back with a script map. Keyed off the capability rather than
+  // a property probe so the two builders stay distinguishable by type.
+  const roundScriptStages: CapabilityWiring['scriptStages'] =
+    wiring === null || capability === 'mr-review'
+      ? undefined
+      : (wiring as CapabilityWiring).scriptStages
+
   const runner =
     opts.codeCapabilityRunner ??
     createCodeCapabilityRunner({
       db,
       ...(wiring !== null
-        ? { programStages: wiring.programStages, aiStages: wiring.aiStages }
+        ? {
+            programStages: wiring.programStages,
+            aiStages: wiring.aiStages,
+            // RFC-304: `ci-fix` opens with FOUR script stages, and the engine
+            // answered that kind with "no runner registered" until this map
+            // existed — so the capability could never reach stage one.
+            // `mr-review`'s builder returns no such map (its contract declares
+            // no script stage), hence the narrowing rather than a bare read.
+            ...(roundScriptStages === undefined ? {} : { scriptStages: roundScriptStages }),
+          }
         : {}),
       ...(hookWiring !== null ? { hooks: hookWiring } : {}),
     })
