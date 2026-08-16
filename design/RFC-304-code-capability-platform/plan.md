@@ -767,7 +767,7 @@ scheduler.ts:4558   capability === 'mr-review' && state.triggerContext !== null
 | `dataLifetimeGc`（T62）                     | **该调没调**          | 已修：`cli/start.ts` 起 ticker + 停机停 |
 | `mrVoice`                                   | **该调没调**          | 已修：ci-fix 发言改走 `say()`           |
 | `invalidatePending`（T45）                  | **该调没调**          | 已修：接在 `collect` 之后，见 2bis.2    |
-| `pushAuthority`（T44）                      | **该调没调**          | 未修，见 2bis.3——需新数据，属设计决策   |
+| `pushAuthority`（T44）                      | **该调没调**          | 已修：接在 `verify-baseline`，见 2bis.3 |
 | `sqliteWorkItemStore` 链                    | 与生产实现**重复**    | 未修，见 2bis.4                         |
 | `sampleMonitorScripts`                      | 样例，测试内执行      | 可接受（无生产调用面是本意）            |
 | `configScale` / `stateViewScale`（T65/T66） | 规模判据，供前端/文档 | 可接受                                  |
@@ -789,25 +789,35 @@ T45 的全部意义就是**在分支移动的那一刻说话**，而不是在有
 分支动过的时刻。锁在 `rfc304-monitor-invalidation-join.test.ts`（去掉接线 → 2 条
 正向断言转红，3 条「什么都不该发生」保持绿）。
 
-### 2bis.3 T44 推送授权从未运行（未修，需用户决策）
+### 2bis.3 T44 推送授权从未运行（已修）
 
-`judgePushAuthority` 零调用。它自己的注释写明了后果：patch 形态由**平台用自己的
-凭据推送**，下游不校验任何人的权限，「一条评论与别人分支上的一个 commit 之间，
-唯一挡着的就是这个函数」。当前 `verify-baseline` 只做 C7 基线校验（`pending.baseSha
-!== target.headSha`），**不看是谁要求的**。
+`judgePushAuthority` 零调用。它自己的注释写明后果：patch 形态由**平台用自己的凭据
+推送**，下游不校验任何人的权限，「一条评论与别人分支上的一个 commit 之间，唯一挡着
+的就是这个函数」。`verify-baseline` 此前只做 C7 基线校验，**不看是谁要求的**。
 
-未修的原因是**缺数据、且补数据是设计决策**，不是实现细节：
+**我此前判为「需用户裁决」，判错了**——与 2ter.4 闸二同一个错误：把「我没找到数据」
+当成「设计没定」。实际上两头都是现成的：
 
-- `commenter` —— 有（trigger `comment_author`）
-- `initiator` —— 有（`code_work_items.initiator_user_id`）
-- `botUsername` —— **没有**：`codeHostConnections` 无此列，全库无人产出（见 2bis.5）
-- `mrAuthor` —— **没有**：不在 trigger 变量表里，须新增一次 `mr.get`（action 存在，
-  `mrReviewStages.ts:283` 已在用）
+- **规则早定了**：design §939「叫机器推送 | MR 作者；bot 开的 MR ⇒ `initiatorUserId`
+  | C3」，§1163 更把它写成验收判据（「非 MR 作者叫推送被拒；bot MR 上
+  `initiatorUserId` 可叫、他人不可」）。
+- **数据也拿得到**：`mrAuthor` 不在 webhook 规范字段里，但 `mr.get` 返回它，而
+  `mrReviewStages.ts:283` 早就在调这个 action。我先前「只接一半会拦住主路径」的结论，
+  建立在「拿不到 mrAuthor」这个错误前提上。
 
-只接一半会**更糟**：没有 `mrAuthor` 就只剩 `initiator` 一支，而普通人开的 MR 上
-`initiator` 为 null，于是**作者确认自己的 MR 会被拒**——把一个缺失的门变成一个
-拦住主路径的门。要么整条接（新增 bot 账号配置 + verify-baseline 里取 MR 作者），
-要么明确不接。**留给用户裁决**。
+修法：`verify-baseline` 在 C7 之后、返回 done 之前判 T44。四个身份——commenter 取
+trigger 的 `comment_author`；`mrAuthor` 取 `mr.get`（**不新增 webhook 字段**：授权
+输入不该信第三方载荷）；`initiator` 取 `code_work_items.initiator_user_id`；
+`botUsername` 暂缺且**不阻塞**——它喂的是纵深防御那一层，规则本身已拦住平台自授权
+（bot 开的 MR 上 initiator 优先，而平台永远不是 initiator）。
+
+拒绝**回帖说明**而非静默丢弃：被静默忽略的确认会教会用户「这功能不可靠」，代价比
+拒绝本身大。实测文案点名有权的人并给出下一步（「Nothing was pushed — copy the diff
+if you want to apply it yourself」）。
+
+测试：`rfc304-comment-fix-round.test.ts` 加两条（非作者被拒且回帖点名、无法归属的
+确认被拒而不是假定为作者），去掉这道判定即转红（已验证）。既有「确认轮推送冻结
+commit」那条同步更新夹具——它此前**不必说明是谁在确认**，现在必须。
 
 ### 2bis.4 工作项状态机与生产实现重复（未修）
 

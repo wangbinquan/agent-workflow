@@ -31,6 +31,9 @@ import {
   type ArtifactRow,
 } from '@/modules/code-capability/application/artifactStore'
 import { prepareWorktree } from '@/modules/code-capability/application/prepareWorktree'
+import { judgePushAuthority } from '@/modules/code-capability/domain/pushAuthority'
+import { codeWorkItems } from '@/db/schema'
+import { eq } from 'drizzle-orm'
 import { runGuardedAiStage } from '@/modules/code-capability/application/determinismGuard'
 import type {
   AiCaller,
@@ -349,6 +352,24 @@ export function mrCommentFixProgramStages(
         )
       }
 
+      // T44 — WHO asked. The C7 check above proves the change still applies;
+      // this proves the person asking is entitled to have the platform push.
+      //
+      // It runs last, and it is the only thing standing between a comment and a
+      // commit on somebody else's branch: the patch form pushes with the
+      // PLATFORM's credentials, so nothing downstream consults anyone's
+      // permissions. Design §C3: the merge request's author, or — on one the
+      // platform itself opened, where the author IS the platform — the human
+      // who asked for the work.
+      const authority = await judgeConfirmationAuthority(env, target)
+      if (!authority.allowed) {
+        // Answered on the thread rather than dropped. A confirmation that is
+        // silently ignored teaches people the feature is unreliable, which
+        // costs more than the refusal it was trying to be polite about.
+        await replyToThread(env, target, authority.message)
+        return fail(authority.message)
+      }
+
       return done({ verified: { artifactId: pending.id, commitSha: pending.commitSha } })
     },
 
@@ -542,4 +563,79 @@ export function renderPatchComment(
     '',
     patchArtifactMarker(digest),
   ].join('\n')
+}
+
+/**
+ * The T44 verdict for this confirmation, with the identities read live.
+ *
+ * `mrAuthor` comes from `mr.get` rather than the trigger context because the
+ * author is not one of the canonical webhook fields — and inventing a field for
+ * it would mean trusting a third-party payload for an authorisation input.
+ *
+ * `botUsername` is deliberately absent for now: the platform has no stored
+ * identity for its own account, and the check it feeds is defence-in-depth
+ * rather than the rule. The rule itself already denies the platform
+ * self-authorisation, because `initiator` takes precedence on a bot-opened MR
+ * and the platform is never the initiator.
+ */
+async function judgeConfirmationAuthority(
+  env: MrCommentFixEnvironment,
+  target: RoundTarget,
+): Promise<{ allowed: true } | { allowed: false; message: string }> {
+  const initiator = env.workItemId === undefined ? null : await readInitiator(env, env.workItemId)
+
+  const verdict = judgePushAuthority({
+    commenter: env.webhook.comment_author ?? null,
+    mrAuthor: await readMrAuthor(env, target),
+    initiator,
+    botUsername: null,
+  })
+  return verdict.allowed ? { allowed: true } : { allowed: false, message: verdict.message }
+}
+
+/** The merge request's author login, or null when the host will not say. */
+async function readMrAuthor(
+  env: MrCommentFixEnvironment,
+  target: RoundTarget,
+): Promise<string | null> {
+  const project = apiProjectAddress(target)
+  if (!project.ok) return null
+
+  const result = await env.codeHost.call({
+    action: 'mr.get',
+    params: { project: project.value, mr: target.anchorId },
+  })
+  if (!result.ok) return null
+
+  try {
+    const body: unknown = JSON.parse(result.body)
+    const record =
+      typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {}
+    // GitLab nests `author.username`; GitHub nests `user.login`. Neither is
+    // guessed from the other — an absent author yields null, and the verdict
+    // then refuses rather than silently allowing.
+    for (const key of ['author', 'user'] as const) {
+      const holder = record[key]
+      if (typeof holder !== 'object' || holder === null) continue
+      const named = holder as Record<string, unknown>
+      const login = named['username'] ?? named['login']
+      if (typeof login === 'string' && login !== '') return login
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+/** The human this work is on behalf of, when the platform opened the MR. */
+async function readInitiator(
+  env: MrCommentFixEnvironment,
+  workItemId: string,
+): Promise<string | null> {
+  const [row] = await env.db
+    .select({ initiatorUserId: codeWorkItems.initiatorUserId })
+    .from(codeWorkItems)
+    .where(eq(codeWorkItems.id, workItemId))
+    .limit(1)
+  return row?.initiatorUserId ?? null
 }

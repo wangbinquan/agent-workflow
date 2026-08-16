@@ -61,6 +61,9 @@ const BIG_DIFF = (() => {
   return lines.join('\n')
 })()
 
+/** The MR's author — and, in the happy path, whoever confirms the change. */
+const AUTHOR = 'branch-owner'
+
 const webhook: WebhookTriggerFields = {
   event_type: 'note',
   provider: 'gitlab',
@@ -69,6 +72,10 @@ const webhook: WebhookTriggerFields = {
   commit_sha: HEAD,
   repo_path: 'group/project',
   branch: 'feature/retry',
+  // T44 — WHO is asking. The confirming round pushes with the PLATFORM's
+  // credentials, so the merge request's author is the only person entitled to
+  // ask for it; a fixture without an identity is refused, which is the point.
+  comment_author: AUTHOR,
 }
 
 const discussions = JSON.stringify([
@@ -85,7 +92,10 @@ const discussions = JSON.stringify([
   },
 ])
 
-function fakeHost(over: { listing?: string } = {}): { port: CodeHostPort; calls: CodeHostCall[] } {
+function fakeHost(over: { listing?: string; mrAuthor?: string } = {}): {
+  port: CodeHostPort
+  calls: CodeHostCall[]
+} {
   const calls: CodeHostCall[] = []
   return {
     calls,
@@ -94,6 +104,14 @@ function fakeHost(over: { listing?: string } = {}): { port: CodeHostPort; calls:
         calls.push(call)
         if (call.action === 'comment.list') {
           return { ok: true, status: 200, body: over.listing ?? discussions, truncated: false }
+        }
+        if (call.action === 'mr.get') {
+          return {
+            ok: true,
+            status: 200,
+            body: JSON.stringify({ author: { username: over.mrAuthor ?? AUTHOR } }),
+            truncated: false,
+          }
         }
         return { ok: true, status: 201, body: '{"id":99}', truncated: false }
       },
@@ -297,6 +315,60 @@ describe('RFC-304 §6.2 — the comment-fix round', () => {
     const [row] = await db.select().from(codeArtifacts)
     expect(row?.state).toBe('consumed')
     expect(git.refs.size).toBe(0)
+  })
+
+  test('T44 — a NON-author confirming is refused, and told why on the thread', async () => {
+    // design §1163 / C3. The patch form pushes with the PLATFORM's credentials,
+    // so nothing downstream consults the commenter's permissions: this check is
+    // the only thing between a comment and a commit on somebody's branch.
+    //
+    // A reviewer with write access can push to that branch themselves. What
+    // nobody should be able to do is have the PLATFORM push to an author's
+    // in-progress branch on their say-so — an unexpected commit there is a
+    // rebase conflict at best and a silently overwritten local change at worst.
+    const host = fakeHost()
+    const git = fakeGit(BIG_DIFF)
+    const { env } = await envOf({ codeHost: host.port, git: git.port, diff: BIG_DIFF })
+    await run(env)
+
+    const byStranger: MrCommentFixEnvironment = {
+      ...env,
+      roundId: ulid(),
+      webhook: { ...webhook, comment_author: 'a-passing-reviewer' },
+    }
+    const outcome = await run(byStranger, 'verify-baseline')
+
+    expect(outcome.outcome).toBe('failed')
+    expect(git.pushes).toEqual([])
+
+    // Answered, not dropped. A silently ignored confirmation teaches people the
+    // feature is unreliable, which costs more than the refusal.
+    const replies = host.calls.filter((c) => c.action === 'comment.reply-thread')
+    expect(replies.length).toBeGreaterThan(0)
+    const body = String(replies.at(-1)?.params['body'])
+    // NAMES who may confirm, and says what to do instead. "Permission denied"
+    // would leave the reviewer with no next step; this one hands them the diff.
+    expect(body).toContain(AUTHOR)
+    expect(body).toContain('Nothing was pushed')
+  })
+
+  test('T44 — an unattributable confirmation is refused rather than assumed', async () => {
+    // A comment the host will not attribute cannot be checked against anything.
+    // Treating "unknown" as "probably the author" would make the whole rule
+    // depend on a field a third-party payload controls.
+    const git = fakeGit(BIG_DIFF)
+    const { env } = await envOf({ git: git.port, diff: BIG_DIFF })
+    await run(env)
+
+    const anonymous: MrCommentFixEnvironment = {
+      ...env,
+      roundId: ulid(),
+      webhook: { ...webhook, comment_author: undefined },
+    }
+    const outcome = await run(anonymous, 'verify-baseline')
+
+    expect(outcome.outcome).toBe('failed')
+    expect(git.pushes).toEqual([])
   })
 
   test('a branch that moved while waiting refuses the push and frees the artifact', async () => {
