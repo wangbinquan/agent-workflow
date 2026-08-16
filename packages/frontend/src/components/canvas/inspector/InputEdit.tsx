@@ -129,6 +129,14 @@ export function InputEdit({
           ]}
         />
       </Field>
+      {inputKind === 'enum' && (
+        <EnumInputFields
+          nodeId={node.id}
+          def={inputDef ?? { kind: 'enum', key, label: inputLabel }}
+          onPatch={(patch, meta) => onCommitDef(patchInputDef(definition, key, patch), meta)}
+          onHistoryBoundary={onHistoryBoundary}
+        />
+      )}
       {inputKind === 'upload' && (
         <UploadInputFields
           nodeId={node.id}
@@ -178,6 +186,77 @@ export function InputEdit({
         </InspectorHistoryBoundary>
       </Field>
     </div>
+  )
+}
+
+function EnumInputFields({
+  nodeId,
+  def,
+  onPatch,
+  onHistoryBoundary,
+}: {
+  nodeId: string
+  def: WorkflowInput
+  onPatch: (patch: Partial<WorkflowInput>, meta: InspectorChangeMeta) => void
+  onHistoryBoundary: (meta: InspectorChangeMeta) => void
+}) {
+  const { t } = useTranslation()
+  const rec = def as Record<string, unknown>
+  const choices = Array.isArray(rec.choices)
+    ? rec.choices.filter((choice): choice is string => typeof choice === 'string')
+    : []
+  const multiSelect = rec.multiSelect === true
+  const allowOther = rec.allowOther === true
+  const choicesMeta = continuousNodeInspectorChange(
+    nodeId,
+    'input.choices',
+    t('inspector.enum.choices'),
+  )
+
+  return (
+    <>
+      <Field label={t('inspector.enum.choices')} hint={t('inspector.enum.choicesHint')} required>
+        <InspectorHistoryBoundary meta={choicesMeta} onBoundary={onHistoryBoundary}>
+          <ChipsInput
+            value={choices}
+            onChange={(next) =>
+              onPatch({ ...(def as object), choices: next } as Partial<WorkflowInput>, choicesMeta)
+            }
+            placeholder={t('inspector.enum.choicesPlaceholder')}
+            ariaLabel={t('inspector.enum.choices')}
+            testidPrefix="enum-choices"
+          />
+        </InspectorHistoryBoundary>
+      </Field>
+      <Field label={t('inspector.enum.multiSelect')}>
+        <Switch
+          checked={multiSelect}
+          onChange={(checked) =>
+            onPatch(
+              { ...(def as object), multiSelect: checked } as Partial<WorkflowInput>,
+              atomicNodeInspectorChange(
+                nodeId,
+                'input.multiSelect',
+                t('inspector.enum.multiSelect'),
+              ),
+            )
+          }
+          label={t('inspector.enum.multiSelect')}
+        />
+      </Field>
+      <Field label={t('inspector.enum.allowOther')}>
+        <Switch
+          checked={allowOther}
+          onChange={(checked) =>
+            onPatch(
+              { ...(def as object), allowOther: checked } as Partial<WorkflowInput>,
+              atomicNodeInspectorChange(nodeId, 'input.allowOther', t('inspector.enum.allowOther')),
+            )
+          }
+          label={t('inspector.enum.allowOther')}
+        />
+      </Field>
+    </>
   )
 }
 

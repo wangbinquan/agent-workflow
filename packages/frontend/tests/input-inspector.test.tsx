@@ -206,4 +206,39 @@ describe('input NodeInspector (RFC-004)', () => {
     expect(next.inputs[0]?.kind).toBe('files')
     expect((next.nodes[0] as Record<string, unknown>).inputKey).toBe('req')
   })
+
+  test('enum fields edit choices, multi-select, and allow-other on the matching input definition', () => {
+    const def = makeDef({
+      inputs: [
+        {
+          kind: 'enum',
+          key: 'environment',
+          label: 'Environment',
+          choices: ['development'],
+          multiSelect: false,
+          allowOther: false,
+        },
+      ],
+      nodes: [{ id: 'i1', kind: 'input', inputKey: 'environment' } as WorkflowNode],
+    })
+    const spy = vi.fn()
+    render(<Host initial={def} onChangeSpy={spy} />)
+
+    const choicesInput = screen.getByTestId('enum-choices-input')
+    fireEvent.change(choicesInput, { target: { value: 'staging' } })
+    fireEvent.keyDown(choicesInput, { key: ',' })
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Allow multiple selections' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Allow other values' }))
+
+    const next = last(spy)
+    expect(next.inputs[0]).toMatchObject({
+      kind: 'enum',
+      key: 'environment',
+      choices: ['development', 'staging'],
+      multiSelect: true,
+      allowOther: true,
+    })
+    expect((next.nodes[0] as Record<string, unknown>).inputKey).toBe('environment')
+  })
 })
