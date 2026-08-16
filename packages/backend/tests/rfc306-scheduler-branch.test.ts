@@ -316,6 +316,12 @@ describe('RFC-306 — a closed branch skips its subgraph', () => {
           worker: { summary: 'worked' },
         }),
         MOCK_OPENCODE_INACTIVE_PORTS: JSON.stringify({ judge: ['all_clear'] }),
+        // A same-session follow-up requires a resumable session id from the
+        // prior attempt (`decideEnvelopeFollowup` refuses without one). Emitting
+        // it here is what makes this fixture exercise the RE-ASK rather than a
+        // plain fresh-session retry — and the re-ask wording is half of what
+        // D4 promises for this failure.
+        MOCK_OPENCODE_EMIT_SESSION_ID: '1',
       },
       () =>
         runTask({
@@ -331,6 +337,20 @@ describe('RFC-306 — a closed branch skips its subgraph', () => {
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const judgeRows = rows.filter((r) => r.nodeId === 'judge')
     expect(judgeRows.some((r) => r.failureCode === 'branch-port-not-declared')).toBe(true)
+
+    // …and the re-ask must NAME the legal branch ports. The offending name the
+    // agent already knows (it just wrote it); what it evidently does not know is
+    // the legal set, so a correction round that omits it asks the model to guess.
+    //
+    // This assertion also guards a "both halves built, never connected" failure:
+    // `branchMarkerDetail` is declared on the renderer input and consumed by the
+    // renderer, so a missing PRODUCER at the runner call site is invisible to
+    // every renderer-level test. Mutation-verified: deleting the runner's feed
+    // turns this red while all the shared/prompt tests stay green.
+    const followupPrompts = judgeRows.map((r) => r.promptText ?? '').filter((p) => p.length > 0)
+    expect(
+      followupPrompts.some((p) => p.includes('Declared branch ports on this agent: `need_fix`')),
+    ).toBe(true)
   })
 })
 

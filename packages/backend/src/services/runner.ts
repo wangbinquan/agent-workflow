@@ -788,6 +788,22 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           ...(followupRepairBlocks !== undefined
             ? { perKindRepairBlocks: followupRepairBlocks }
             : {}),
+          // RFC-306: on a branch-marker rejection, tell the agent which ports
+          // ARE branch ports. That is the actionable half — the offending name
+          // it already knows (it just wrote it), the legal set it evidently did
+          // not. Derived here from the agent's own declaration rather than from
+          // the prior attempt's errorMessage: machine reads of errorMessage are
+          // forbidden (RFC-145 source guard), and this is available for free.
+          ...(followupMode.reason === 'branch-marker'
+            ? {
+                branchMarkerDetail:
+                  (opts.agent.branchPorts ?? []).length > 0
+                    ? `Declared branch ports on this agent: ${(opts.agent.branchPorts ?? [])
+                        .map((p) => `\`${p}\``)
+                        .join(', ')}.`
+                    : 'This agent declares NO branch ports, so no port of it may be marked inactive.',
+              }
+            : {}),
         })
       : renderUserPrompt({
           promptTemplate: opts.promptTemplate,

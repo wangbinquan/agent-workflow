@@ -756,7 +756,12 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     trailing = inlineMode
       ? buildOptionalClarifyInlineReminder(nonce)
       : buildOptionalClarifyPreamble() +
-        buildOptionalDualProtocolBlock(input.agentOutputs, input.agentOutputKinds, nonce)
+        buildOptionalDualProtocolBlock(
+          input.agentOutputs,
+          input.agentOutputKinds,
+          nonce,
+          input.agentBranchPorts,
+        )
   } else if (input.workgroupProtocolBlock !== undefined) {
     // RFC-164: workgroup runs replace (never extend) the agent-outputs block.
     // Host protocol renderers return a Markdown heading without the standard
@@ -1071,6 +1076,15 @@ export function buildOptionalDualProtocolBlock(
   agentOutputs: string[],
   agentOutputKinds?: AgentOutputKindsMap,
   nonce?: string,
+  /**
+   * RFC-306 — branch ports, forwarded to the Option B (finalize) block.
+   *
+   * Load-bearing: this is the ONLY output format an optional-clarify round
+   * shows, so leaving it out meant an agent on such a node was told which ports
+   * to emit but never told that two of them are branch switches — it could not
+   * close a branch at all, and would have to invent the syntax to try.
+   */
+  branchPorts?: readonly string[],
 ): string {
   const optionA =
     `\n\n---\n` +
@@ -1087,7 +1101,7 @@ export function buildOptionalDualProtocolBlock(
   const outTag = envelopeOpenTag(nonce)
   const MANDATORY_HEAD = `You MUST end your reply with a \`${outTag}\` block listing these ports:`
   const OPTIONAL_HEAD = `**Option B — finalize (reply with ONE \`<workflow-output>\` block).** If you choose to finalize instead of asking, end your reply with a \`${outTag}\` block listing these ports:`
-  const outputBlock = buildProtocolBlock(agentOutputs, agentOutputKinds, nonce)
+  const outputBlock = buildProtocolBlock(agentOutputs, agentOutputKinds, nonce, branchPorts)
   // The head swap is locked by tests; if the mandatory head ever changes,
   // fall back to prefixing so the choice framing is never silently lost.
   const optionB = outputBlock.includes(MANDATORY_HEAD)

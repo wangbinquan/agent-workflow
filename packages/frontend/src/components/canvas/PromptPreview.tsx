@@ -29,11 +29,17 @@ interface Props {
    * aligned with what the runner sends opencode.
    */
   outputKinds?: AgentOutputKindsMap
+  /**
+   * RFC-306 — branch ports declared by the agent. The runner passes these
+   * unconditionally, so the preview must too: an author debugging a prompt that
+   * differs from the one actually sent is worse than no preview.
+   */
+  branchPorts?: readonly string[]
 }
 
 const DEFAULT_PLACEHOLDER = '<sample content>'
 
-export function PromptPreview({ template, inputPorts, outputs, outputKinds }: Props) {
+export function PromptPreview({ template, inputPorts, outputs, outputKinds, branchPorts }: Props) {
   const { t } = useTranslation()
   const [inputs, setInputs] = useState<Record<string, string>>(() => seedInputs(inputPorts))
   const [withWebhookContext, setWithWebhookContext] = useState(true)
@@ -67,12 +73,15 @@ export function PromptPreview({ template, inputPorts, outputs, outputKinds }: Pr
           // deterministic marker instead of pretending new runs use legacy tags.
           envelopeNonce: 'PREVIEW',
           ...(outputKinds !== undefined ? { agentOutputKinds: outputKinds } : {}),
+          ...(branchPorts !== undefined && branchPorts.length > 0
+            ? { agentBranchPorts: branchPorts }
+            : {}),
         }),
       }
     } catch (error) {
       return { ok: false as const, value: error instanceof Error ? error.message : String(error) }
     }
-  }, [template, inputs, outputs, outputKinds, withWebhookContext])
+  }, [template, inputs, outputs, outputKinds, branchPorts, withWebhookContext])
 
   return (
     <div className="prompt-preview">

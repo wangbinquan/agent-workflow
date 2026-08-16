@@ -384,6 +384,7 @@ function PreviewPane({ node, agents, definition }: PreviewProps) {
       inputPorts={ports.inputs}
       outputs={agent?.outputs ?? []}
       outputKinds={agent?.outputKinds}
+      branchPorts={agent?.branchPorts}
     />
   )
 }

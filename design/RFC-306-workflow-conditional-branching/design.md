@@ -169,8 +169,24 @@ const inactive = new Set(parsed.inactivePorts)
 > `<port name="p1" active="false">short reason</port>`. The reason text is recorded for the run trace
 > and is NOT passed to any downstream node. Never mark a non-branch port inactive.
 
-以及 followup repair 段（`prompt.ts:1193-1280` 的 reason 家族）新增两条：
-`branch-port-not-declared` / `branch-marker-malformed`。
+以及 followup repair 段（`prompt.ts` 的 reason 家族）新增渲染理由 `branch-marker`
+（两条生产码共用：修法相同）。
+
+**必须逐条走遍「渲染了输出格式」的每条路径**——这段说明是这套机制唯一的可发现性来源，
+漏一条路径 = 那条路径上的 agent 根本不知道自己可以关分支（或者自己编语法然后被拒）：
+
+| 路径                                         | 是否注入       | 说明                                                                                             |
+| -------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
+| 普通输出协议块（无 clarify 通道）            | 是             | `buildProtocolBlock`                                                                             |
+| **OPTIONAL clarify 的 Option B（finalize）** | 是             | `buildOptionalDualProtocolBlock` —— 这是该轮**唯一**的输出格式；曾漏，补测后才发现               |
+| MANDATORY clarify 轮                         | **否（刻意）** | 该轮根本不渲染输出格式、也不允许 finalize；给它分支说明等于引诱它发出随后必被拒的回复            |
+| 同 session followup 重问                     | 是             | 走 `branch-marker` 理由，并由 runner 填 `branchMarkerDetail` 报出**本 agent 声明的合法分支端口** |
+| 编辑器 PromptPreview                         | 是             | 与运行时同源；预览与实际发出的 prompt 不一致比没有预览更糟                                       |
+
+`branchMarkerDetail` 由 runner 从 `opts.agent.branchPorts` 推出，**不读上一轮的 errorMessage**
+（RFC-145 源码守卫禁止机器读 errorMessage）。这条曾是典型的「两半都对、没接上」：字段声明了、
+渲染器也读了，但没有任何生产者填过——renderer 级测试全绿也照不出来，靠端到端断言重问 prompt
+里出现声明清单才抓到（对应用例带变异实证）。
 
 ### 3.5 script 节点（`services/scriptPorts.ts:43-73`）
 
