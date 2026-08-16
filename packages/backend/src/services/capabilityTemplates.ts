@@ -548,6 +548,16 @@ export async function prepareBindingFromBundle(
   actor: Actor,
   existingId: string | null,
   now = Date.now(),
+  /**
+   * Ids this same apply is about to create.
+   *
+   * Every op is PREPARED before any row is written, so a binding that arrives
+   * in one package with its framework would otherwise be validated against a
+   * database that does not have the framework yet — and refuse the package it
+   * came in. The workgroup path solves the same problem with
+   * `pendingAgentNames`; this is the id-shaped twin.
+   */
+  pendingIds: ReadonlySet<string> = new Set(),
 ): Promise<PreparedBindingWrite> {
   const existing = existingId === null ? null : await getBindingRow(db, existingId)
   if (existingId !== null && existing === null) {
@@ -562,7 +572,7 @@ export async function prepareBindingFromBundle(
   // not come along is not importable — it would land pointing at nothing and
   // report `framework-missing` on every cell that used it.
   const framework = await getFrameworkRow(db, input.frameworkId)
-  if (framework === null) {
+  if (framework === null && !pendingIds.has(input.frameworkId)) {
     throw new ValidationError(
       'capability-framework-not-found',
       `this binding names framework '${input.frameworkId}', which is not in the package or on this instance`,

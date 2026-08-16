@@ -725,6 +725,9 @@ async function prepareOne(
         { ...(op.payload as Record<string, unknown>), id: op.resourceId } as never,
         actor,
         op.kind === 'capability-binding-update' ? op.resourceId : null,
+        undefined,
+        // The framework may be arriving in this very package.
+        ctx.pendingIds,
       )
       return { op, kind: 'capability-binding', prepared }
     }

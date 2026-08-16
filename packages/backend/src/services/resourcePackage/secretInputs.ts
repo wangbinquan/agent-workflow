@@ -11,8 +11,11 @@
 // bundle without ever placing the submitted values back into the parsed package object.
 
 import {
+  BUNDLE_RESOURCE_TYPES,
   BundleSchema,
   encodePackageSecretFieldSegments,
+  resourceTypeOfBundleOp,
+  type BundleOp,
   PACKAGE_SECRET_PLACEHOLDER,
   type ResourcePackageType,
   type PackageSecretFieldSegment,
@@ -21,14 +24,17 @@ import {
 } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
 
-const RESOURCE_TYPES = new Set<ResourcePackageType>([
-  'agent',
-  'skill',
-  'mcp',
-  'plugin',
-  'workflow',
-  'workgroup',
-])
+/**
+ * Derived from the shared constant, not restated.
+ *
+ * The hand-written copy listed the original six and went stale the moment
+ * RFC-304 added the capability layers: every capability template package was
+ * refused here with "unsupported bundle op", after the exporter, the closure,
+ * the applier and the ACL map had all been taught about them. A second list of
+ * "which types can be packaged" drifts the first time one of them is extended,
+ * silently, because nothing compares the two.
+ */
+const RESOURCE_TYPES = new Set<ResourcePackageType>(BUNDLE_RESOURCE_TYPES)
 
 const ENCODED_PLACEHOLDER_RE = /%3cREDACTED%3aSECRET%3e/i
 
@@ -294,7 +300,7 @@ function indexSecretSlots(bundle: ResourceBundle): Map<string, SecretSlot[]> {
   const resourceCounts = new Map<string, number>()
 
   for (const op of bundle.ops) {
-    const resourceType = resourceTypeOfKind(op.kind)
+    const resourceType = resourceTypeOfKind(op)
     const payload = op.payload as Record<string, unknown>
     const resourceName = typeof payload.name === 'string' ? payload.name : ''
     const resourceKey = JSON.stringify([resourceType, resourceName])
@@ -477,10 +483,22 @@ function containsReservedPlaceholder(value: string): boolean {
   return value.includes(PACKAGE_SECRET_PLACEHOLDER) || ENCODED_PLACEHOLDER_RE.test(value)
 }
 
-function resourceTypeOfKind(kind: string): ResourcePackageType {
-  const type = kind.slice(0, kind.lastIndexOf('-'))
+/**
+ * The resource type an op writes, from the ONE canonical mapping.
+ *
+ * This used to strip the text after the last `-`, which is right for
+ * `agent-create` and wrong for `capability-binding-create` — that yields
+ * `capability-binding`, which is not a resource type, so importing any
+ * capability template package was refused with "unsupported bundle op". The
+ * heuristic worked for exactly as long as every packageable type was one word.
+ */
+function resourceTypeOfKind(op: BundleOp): ResourcePackageType {
+  const type = resourceTypeOfBundleOp(op)
   if (!RESOURCE_TYPES.has(type as ResourcePackageType)) {
-    throw new ValidationError('package-secret-manifest-invalid', `unsupported bundle op '${kind}'`)
+    throw new ValidationError(
+      'package-secret-manifest-invalid',
+      `unsupported bundle op '${op.kind}'`,
+    )
   }
   return type as ResourcePackageType
 }

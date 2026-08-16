@@ -150,6 +150,29 @@ export function translateDecisions(
           if (Array.isArray(payload[key])) payload[key] = payload[key].map(rewriteRef)
         }
         return payload
+      // RFC-304 T17a — a binding's two reference slots.
+      //
+      // Without this arm the refs stay `local:<slug>` even when the operator
+      // chose to REUSE the destination's own agent or framework: that slug then
+      // names no op in the applied bundle, and lowering fails with
+      // "bundle ref 'local:agent-…' does not name any op in this bundle" — a
+      // message about the package, for a decision the operator made.
+      case 'capability-binding-create':
+      case 'capability-binding-update': {
+        if (typeof payload.frameworkRef === 'string') {
+          payload.frameworkRef = rewriteRef(payload.frameworkRef)
+        }
+        const slots = payload.agentBySlot
+        if (typeof slots === 'object' && slots !== null && !Array.isArray(slots)) {
+          payload.agentBySlot = Object.fromEntries(
+            Object.entries(slots as Record<string, unknown>).map(([slot, ref]) => [
+              slot,
+              rewriteRef(ref),
+            ]),
+          )
+        }
+        return payload
+      }
       case 'workgroup-create':
       case 'workgroup-update':
         if (Array.isArray(payload.members)) {

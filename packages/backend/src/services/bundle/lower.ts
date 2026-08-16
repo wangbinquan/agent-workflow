@@ -151,6 +151,15 @@ function collectExternalRefs(
   for (const raw of Array.isArray(payload.members) ? payload.members : []) {
     take('agent', (raw as Record<string, unknown>).agentRef)
   }
+  // RFC-304 T17a — a binding points at its framework and at one agent per slot.
+  // Both are refs for the same reason every other cross-resource pointer is:
+  // an id from the source instance means nothing here.
+  take('capability_framework', payload.frameworkRef)
+  for (const slotRef of Object.values(
+    (payload.agentBySlot as Record<string, unknown> | undefined) ?? {},
+  )) {
+    take('agent', slotRef)
+  }
   const definition = payload.definition as { nodes?: unknown } | undefined
   for (const raw of Array.isArray(definition?.nodes) ? definition.nodes : []) {
     const node = raw as Record<string, unknown>
@@ -217,6 +226,29 @@ async function lowerPayload(
       ) {
         delete payload.leaderDisplayName
       }
+      return payload
+    }
+    // RFC-304 T17a — a binding's two pointers become local ids.
+    //
+    // The applier reads `frameworkId` and `agentBySlot[slot]` as ids; the wire
+    // carries refs. Without this the applier saw `undefined` and refused with
+    // "this binding names framework 'undefined'", which reads as a corrupt
+    // package rather than as a step nobody wrote.
+    case 'capability-binding-create':
+    case 'capability-binding-update': {
+      payload.frameworkId = await resolveIdentityRef(
+        String(payload.frameworkRef ?? ''),
+        'capability_framework',
+        ctx,
+      )
+      delete payload.frameworkRef
+
+      const slots = (payload.agentBySlot as Record<string, unknown> | undefined) ?? {}
+      const resolved: Record<string, string> = {}
+      for (const [slot, ref] of Object.entries(slots)) {
+        resolved[slot] = await resolveIdentityRef(String(ref ?? ''), 'agent', ctx)
+      }
+      payload.agentBySlot = resolved
       return payload
     }
     case 'workflow-create':

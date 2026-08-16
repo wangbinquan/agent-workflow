@@ -39,7 +39,16 @@ interface LocalRefUse {
   expectedType: AclResourceType
 }
 
-function resourceTypeOfBundleOp(op: BundleOp): AclResourceType {
+/**
+ * The resource type an op writes.
+ *
+ * Exported because it is the ONLY correct mapping: deriving it by stripping the
+ * text after the last `-` works for `agent-create` and silently fails for
+ * `capability-binding-create` (which yields `capability-binding`, not
+ * `capability_binding`). The import path had exactly that heuristic and refused
+ * every capability template package with "unsupported bundle op".
+ */
+export function resourceTypeOfBundleOp(op: BundleOp): AclResourceType {
   switch (op.kind) {
     case 'agent-create':
     case 'agent-update':
