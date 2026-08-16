@@ -620,11 +620,11 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T59 | **失败可见性按来源分**：自动 webhook 保持 MR 静默；人工指令（@叫 / 确认 / issue 标签 / API 发起）必须给可更新的 receipt（带 operation id，同一条消息上更新结果）。八类静默路径逐条归位                                            | T31,T43 | ✅ 2026-08-16 |
 | T60 | **噪音控制**：MR 上只维护一条**可编辑**的 bot 总览（每轮编辑而非追加）+ MR 级通知预算                                                                                                                                             | T29     | ✅ 2026-08-16 |
 | T61 | **排障链**：`code_trigger_deliveries` 全链落库（received → matched → routed\|dropped(reason) → queued(lease/配额 + 队列年龄) → round → published\|failed）+ 统一 correlation id；"发测试事件"走真实全链并显示断点                 | T2,T36  | ✅ 2026-08-16 |
-| T62 | **数据寿命**：closed 后物化汇总并归档明细；attempt 明细按期限清理保留聚合；artifact 消费即回收；`templateSnapshot` 内容寻址共享；历史查询走 cursor                                                                                | T2,T27  | ⏳ |
-| T63 | **框架发布生命周期**：不可变 revision + `draft→validated→canary→published→retired`；binding 声明 `pinnedRevision`/`followChannel`；发布前回放固定样本并显示受影响仓数；保留 last-known-good 可一键回退                            | T13,T14 | ⏳ |
+| T62 | **数据寿命**：closed 后物化汇总并归档明细；attempt 明细按期限清理保留聚合；artifact 消费即回收；`templateSnapshot` 内容寻址共享；历史查询走 cursor                                                                                | T2,T27  | ✅ 2026-08-16 |
+| T63 | **框架发布生命周期**：不可变 revision + `draft→validated→canary→published→retired`；binding 声明 `pinnedRevision`/`followChannel`；发布前回放固定样本并显示受影响仓数；保留 last-known-good 可一键回退                            | T13,T14 | ✅ 2026-08-16 |
 | T64 | **模板上游关系**：`upstreamRef`/`upstreamVersion`/`baseDigest`/`localOverrides` + `current\|update-available\|conflicted\|orphaned` 四态 + 三方差异预览与"只合并未覆盖字段"；配置包携带来源与基线摘要，连不上标 `detached`        | T17b    | ⏳ 阻塞于 T17a/T17b |
-| T65 | **配置规模化**：按标签/集合批量 preview/apply/revert（落地为**对具体矩阵格的显式批量写入**）+ 唯一的 `EffectiveCapabilityConfig` 读模型。⚠️ **三级 assignment 继承不在本任务内**——它推翻了 F11/G4，登记在 §6bis-B 改-3 待用户确认 | T15,T16 | ⏳ |
-| T66 | 状态图规模化：默认只取当前轮 + 最近 20 轮，attempt 按阶段惰性加载与虚拟化；百万级数据与 80 轮长命 MR 的性能验收                                                                                                                   | T55,T62 | ⏳ |
+| T65 | **配置规模化**：按标签/集合批量 preview/apply/revert（落地为**对具体矩阵格的显式批量写入**）+ 唯一的 `EffectiveCapabilityConfig` 读模型。⚠️ **三级 assignment 继承不在本任务内**——它推翻了 F11/G4，登记在 §6bis-B 改-3 待用户确认 | T15,T16 | ✅ 2026-08-16 |
+| T66 | 状态图规模化：默认只取当前轮 + 最近 20 轮，attempt 按阶段惰性加载与虚拟化；百万级数据与 80 轮长命 MR 的性能验收                                                                                                                   | T55,T62 | ✅ 2026-08-16 |
 
 ### 前端完整面（PR-10）
 
