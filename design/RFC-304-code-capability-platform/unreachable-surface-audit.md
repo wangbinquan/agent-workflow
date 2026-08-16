@@ -23,21 +23,28 @@
 
 ## A. 功能缺失（做了一半，产品面拿不到）
 
-| 面                          | 死在哪                                                                                          | 用户侧后果                                                                                |
-| --------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| §11.1 AC-35 单条可更新总览  | `application/mrVoice.ts` 的 `updateSummary` 零调用方；且 `parsePrevious` 全仓**无生产实现**     | MR 上从未出现过平台总览评论；即便接上，没有 render→parse 往返，每轮折叠都从空表开始       |
-| §11.2 T59 人工指令回执      | `mrVoice.answer` 零调用方                                                                       | @叫 / 确认关键词 / issue 标签发起后**没有任何回执**，人只会重复 @叫，进一步制造噪音       |
-| §11.1 噪音上限              | `notificationsSpent` 生产侧无人赋值，`say()` 永远判「已花 0」                                   | 预算形同虚设；`bypassesBudget` 保护的冲突报告 / 三轮交接也就失去了「被听见」的前提        |
-| §11.5 AC-38 框架灰度与回退  | `domain/frameworkRelease.ts` **整文件零导入**（revision 解析 / canary 判定 / 状态机 / 回退）    | 部门框架无法灰度到 1–5 个仓，也无一键回退到 last-known-good                               |
-| §11.7 T63 批量启用与回滚    | `domain/configScale.ts` **整文件零导入**；`routes/code.ts` 无任何 bulk/batch 端点               | 「200 仓批量启用 + 一键回滚」在产品面不存在（三级继承本身另有实现，见 B）                 |
-| T64 模板上游四态 / 三方差异 | `domain/templateUpstream.ts` **整文件零导入**，无路由                                           | 复制出来的模板与上游的关系、三方差异预览都拿不到                                          |
-| T66 单工作项状态图          | `domain/stateViewScale.ts` **整文件零导入**；无 per-work-item 详情端点                          | 设计说「当前轮 + 最近 20 轮 + attempt 惰性加载/虚拟化」，实际只有列表页每项 3 轮          |
-| readiness 失效传播          | `domain/readinessInvalidation.ts` **整文件零导入**（`cellsInvalidatedBy`）                      | 配置改动后哪些 cell 该被标记失效，没有执行者                                              |
-| 发布意图崩溃恢复            | `sqlitePublishIntentStore` 的 `readPendingIntents` / `planRecoveryFor` / `closeIntent` 零调用方 | 崩在发布中途的意图无人清算                                                                |
-| 重启清理发布临界区          | `sqliteWorkItemStore.clearStalePublishSections` 零调用方                                        | 崩在临界区里的工作项 `publishingEpoch` 长期非空 ⇒ 之后只能登记 pending_revision、不再动作 |
+| 面                          | 死在哪                                                                                                                    | 用户侧后果                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §11.1 AC-35 单条可更新总览  | `application/mrVoice.ts` 的 `updateSummary` 零调用方；且 `parsePrevious` 全仓**无生产实现**                               | MR 上从未出现过平台总览评论；即便接上，没有 render→parse 往返，每轮折叠都从空表开始                                                                                                                                                                                                                                                                       |
+| §11.2 T59 人工指令回执      | `mrVoice.answer` 零调用方                                                                                                 | @叫 / 确认关键词 / issue 标签发起后**没有任何回执**，人只会重复 @叫，进一步制造噪音                                                                                                                                                                                                                                                                       |
+| §11.1 噪音上限              | `notificationsSpent` 生产侧无人赋值，`say()` 永远判「已花 0」                                                             | 预算形同虚设；`bypassesBudget` 保护的冲突报告 / 三轮交接也就失去了「被听见」的前提                                                                                                                                                                                                                                                                        |
+| §11.5 AC-38 框架灰度与回退  | `domain/frameworkRelease.ts` **整文件零导入**（revision 解析 / canary 判定 / 状态机 / 回退）                              | 部门框架无法灰度到 1–5 个仓，也无一键回退到 last-known-good                                                                                                                                                                                                                                                                                               |
+| §11.7 T63 批量启用与回滚    | `domain/configScale.ts` **整文件零导入**；`routes/code.ts` 无任何 bulk/batch 端点                                         | 「200 仓批量启用 + 一键回滚」在产品面不存在（三级继承本身另有实现，见 B）                                                                                                                                                                                                                                                                                 |
+| T64 模板上游四态 / 三方差异 | `domain/templateUpstream.ts` **整文件零导入**，无路由                                                                     | 复制出来的模板与上游的关系、三方差异预览都拿不到                                                                                                                                                                                                                                                                                                          |
+| T66 单工作项状态图          | `domain/stateViewScale.ts` **整文件零导入**；无 per-work-item 详情端点                                                    | 设计说「当前轮 + 最近 20 轮 + attempt 惰性加载/虚拟化」，实际只有列表页每项 3 轮                                                                                                                                                                                                                                                                          |
+| readiness 失效传播          | `domain/readinessInvalidation.ts` **整文件零导入**；且 `enableCommand.ts:84` 把 `dependencyRevision` 硬编码为 1、永不递增 | 格子的 readiness 是**启用那一刻**算出来的，`forRepo` 逐字读存储值、从不重推。删掉 binding 指的 agent、改成不可见、删掉 trigger——格子照样 `ready`，用户要等 webhook 到了什么都没发生才知道。两条路：**读时推导**（结构上不可能陈旧，这套失效机制随之可删）vs **写时失效**（要在每条变更路径上接，漏一条就是同一个 bug 换入口，且无编译期保障）——方向待裁决 |
+| 发布意图的**重启**恢复      | `readPendingIntents` / `planRecoveryFor` / `closeIntent` 零调用方                                                         | 注意：design §7.2 点名的危害（同一批 finding 被贴两遍）**已被挡住**——`recoverPublishIntents` 在每轮 `publish` 前按 anchor 对账，是活路径。真正没覆盖的只剩「此后再没有轮次跑过的那个 MR」：意图行长期 pending、GitLab 侧孤儿草稿要等下一轮 `cleanup-previous`。要不要为它做启动全表扫（代价是启动期 N 次 code-host 调用）是个待裁决项，不是纯接线         |
 
-已于本轮修掉、不在上表：§2.3 lease 协议表的三行（心跳续租 / daemon 代际 / 启动
-回收），见 `packages/backend/tests/rfc304-lease-heartbeat-and-generation.test.ts`。
+已于本轮修掉、不在上表：
+
+- §2.3 lease 协议表的三行（心跳续租 / daemon 代际 / 启动回收），见
+  `packages/backend/tests/rfc304-lease-heartbeat-and-generation.test.ts`；
+- §2.2 重启清理发布临界区——`clearStalePublishSections` 的两条用例**从写出来那天
+  就是绿的**，而它描述的停摆在生产里一直可达，原因只有一个：没人调它。崩在发布
+  临界区里的工作项 `publishingEpoch` 长期非空 ⇒ 此后每个事件只能登记
+  `pending_revision`、该 MR 永不再动，且**静默**。已接进 `cli/start.ts`（必须排在
+  `resumeSupersedingWorkItems` 之前，否则会清掉活轮次正持有的临界区），并补一条
+  接线锁。
 
 ## B. 同功能另有实现，本模块是死码（该删或该统一，不是缺功能）
 

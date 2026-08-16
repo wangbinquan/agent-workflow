@@ -21,7 +21,8 @@
 // event as a pending revision and never advance again.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -36,6 +37,7 @@ import {
 import type { CodeWorkItemStatus } from '../src/modules/code-capability/domain/workItemLifecycle'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const SRC = resolve(import.meta.dir, '..', 'src')
 
 describe('RFC-304 T10 — work item store', () => {
   let db: DbClient
@@ -290,5 +292,21 @@ describe('RFC-304 T10b — the publish critical section, persisted', () => {
     // Reverse assertion: a sweep that touched every row would pass the test
     // above while stamping updatedAt across the whole table.
     expect(await clearStalePublishSections(db)).toBe(0)
+  })
+
+  test('the daemon actually calls it at boot', async () => {
+    // The two cases above were green from the day the function was written, and
+    // the stall they describe was still reachable in production for exactly one
+    // reason: nothing called it. A sweep with no caller is a docstring.
+    //
+    // Source-level because the alternative is booting a daemon in a unit test.
+    // It must sit BEFORE `resumeSupersedingWorkItems`, which can start rounds —
+    // clearing the marker after a live round entered its section would drop a
+    // section that IS held.
+    const src = readFileSync(join(SRC, 'cli', 'start.ts'), 'utf8')
+    expect(src).toContain('clearStalePublishSections')
+    expect(src.indexOf('clearStalePublishSections')).toBeLessThan(
+      src.indexOf('await resumeSupersedingWorkItems('),
+    )
   })
 })

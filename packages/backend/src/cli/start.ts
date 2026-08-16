@@ -11,6 +11,7 @@ import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import { resumeSupersedingWorkItems } from '@/services/codeCapabilitySupersede'
 import { reclaimCodeLeasesOnBoot } from '@/services/codeRoundLease'
+import { clearStalePublishSections } from '@/modules/code-capability/infrastructure/sqliteWorkItemStore'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -680,6 +681,26 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
     .catch((err: unknown) => {
       log.warn('reclaiming code MR leases failed', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+
+  // RFC-304 §2.2 — clear publish critical sections a dead daemon left claimed.
+  //
+  // The marker is a CAS held across the publish, and the release runs in the
+  // process that took it. A daemon killed mid-publish leaves it set forever:
+  // from then on EVERY event on that merge request may only be registered as a
+  // pending revision, and the work item never advances again. It stalls
+  // silently — a merge request that stops being reviewed raises nothing.
+  //
+  // Before `resumeSupersedingWorkItems`, which can start rounds: clearing after
+  // a live round entered its section would drop a section that IS held.
+  await clearStalePublishSections(db)
+    .then((cleared) => {
+      if (cleared > 0) log.info('cleared publish sections from a previous daemon', { cleared })
+    })
+    .catch((err: unknown) => {
+      log.warn('clearing stale publish sections failed', {
         error: err instanceof Error ? err.message : String(err),
       })
     })
