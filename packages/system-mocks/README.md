@@ -4,6 +4,12 @@ This private workspace package is the single deterministic source for external
 infrastructure used by system E2E tests. Production packages must never import
 it or expose a switch that enables it.
 
+That boundary is fail-closed in two places: the package test verifies private
+and dev-only manifest placement plus direct package references, while
+`bun run depcheck` rejects every resolved dependency edge from production
+backend/frontend/shared sources into this directory, including relative-path
+imports.
+
 ## Layout
 
 | Directory        | External boundary                                                                                                                  |

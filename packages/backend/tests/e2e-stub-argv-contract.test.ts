@@ -162,7 +162,10 @@ describe('the e2e stub parses the buildCommand argv layout (post-191bc32c `--` r
     // MORE than the single trailing positional, so they keep "working" until
     // the layout grows an argument and then silently return the wrong string.
     // Three modes carried it in from the TypeScript stubs they were ported from.
-    const modeDir = resolve(REPO_ROOT, 'e2e', 'fixtures', 'stub')
+    // Runtime stand-ins live in the unified test-only package. Keeping this
+    // scan on the canonical package path makes the guard platform-independent
+    // and prevents a removed legacy fixture directory from hiding bad modes.
+    const modeDir = resolve(REPO_ROOT, 'packages', 'system-mocks', 'src', 'runtime')
     const offenders: string[] = []
     for (const name of readdirSync(modeDir).filter((f) => f.startsWith('mode-'))) {
       const source = readFileSync(resolve(modeDir, name), 'utf8')

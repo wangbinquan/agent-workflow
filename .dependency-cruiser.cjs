@@ -40,6 +40,16 @@ if (!tsConfigFileName) {
 module.exports = {
   forbidden: [
     {
+      name: 'no-production-to-system-mocks',
+      severity: 'error',
+      comment:
+        'The unified system mock package is test-only. Production backend, ' +
+        'frontend, and shared source graphs must never import it, including ' +
+        'through a relative path that bypasses the workspace package name.',
+      from: { path: '^packages/(backend|frontend|shared)/src/' },
+      to: { path: '^packages/system-mocks/' },
+    },
+    {
       name: 'no-frontend-to-backend',
       severity: 'error',
       comment:
