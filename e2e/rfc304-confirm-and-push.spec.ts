@@ -177,15 +177,26 @@ test('a request for a change produces one and then WAITS for a person', async ()
   })
   expect(delivered.status).toBe(200)
 
+  // Waits for the SAME thing it asserts. It used to wait for the round to end
+  // and then assert the ITEM says `awaiting` — a weaker condition than the
+  // assertion, so it passed only while the gap between the two writes stayed
+  // small. It went red on CI the moment a code-host call landed between them:
+  // the round was over, the item had not moved yet, and the assertion read the
+  // state from a millisecond earlier. (The production ordering was fixed too —
+  // the item now moves before anything talks to the code host — but a case that
+  // waits on a weaker condition than it asserts is a case that will find
+  // another way to lose.)
   const item = await waitFor(
     async () => {
       const page = await requestJson<{
         items: Array<{ status: string; rounds: Array<{ endedAt: number | null }> }>
       }>('/api/code/work-items?capability=mr-comment-fix')
       const first = page.items[0]
-      return first !== undefined && (first.rounds[0]?.endedAt ?? null) !== null ? first : null
+      if (first === undefined) return null
+      if ((first.rounds[0]?.endedAt ?? null) === null) return null
+      return first.status === 'awaiting' ? first : null
     },
-    async () => `a finished first round; items: ${await itemsDigest()}`,
+    async () => `the item to reach awaiting; items: ${await itemsDigest()}`,
   )
 
   // The work item — not the round — is what carries the wait. Design D2: a task

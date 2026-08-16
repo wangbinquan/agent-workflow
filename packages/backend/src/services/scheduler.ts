@@ -5338,7 +5338,37 @@ async function finalizeRound(
     .where(eq(codeWorkRounds.id, codeRoundId))
     .limit(1)
 
+  await noteWorkItemEvent({
+    db,
+    workItemId: round?.workItemId ?? null,
+    // The task is finishing as this runs, so no round is live any more — which
+    // is what lets `closing` converge and `superseding` release.
+    hasLiveRound: false,
+    event:
+      outcome === 'published'
+        ? { kind: 'round-published' }
+        : outcome === 'awaiting'
+          ? {
+              kind: 'round-needs-human',
+              // The generation the human was asked about. Guard 2 refuses a
+              // confirmation from an older one, so a wrong value here would
+              // either reject every confirmation or accept a stale one.
+              // The round's epoch, which is what the artifact was frozen at:
+              // a literal 1 on both sides only agreed until the first
+              // supersede bumped one of them.
+              pendingGeneration: awaiting?.pendingGeneration ?? round?.epoch ?? 1,
+            }
+          : { kind: 'round-failed' },
+  })
+
   // §11.2 T59 — close the receipt, if a person opened one.
+  //
+  // AFTER the work-item transition, not before. This talks to the code host,
+  // and the item's state is what a person (and the `/code` page, and every
+  // test) watches — putting a network round-trip in front of it means the
+  // round is visibly over while the item still reads `running`. That window
+  // was wide enough on CI to turn `rfc304-confirm-and-push` red: it waits for
+  // the round to end and then asserts the item says `awaiting`.
   //
   // `createIfMissing: false` inside means this stays silent on the automatic
   // paths without needing to know which they were: only the ingress creates a
@@ -5364,29 +5394,6 @@ async function finalizeRound(
       error: err instanceof Error ? err.message : String(err),
     })
     return { answered: false as const, reason: 'threw' }
-  })
-
-  await noteWorkItemEvent({
-    db,
-    workItemId: round?.workItemId ?? null,
-    // The task is finishing as this runs, so no round is live any more — which
-    // is what lets `closing` converge and `superseding` release.
-    hasLiveRound: false,
-    event:
-      outcome === 'published'
-        ? { kind: 'round-published' }
-        : outcome === 'awaiting'
-          ? {
-              kind: 'round-needs-human',
-              // The generation the human was asked about. Guard 2 refuses a
-              // confirmation from an older one, so a wrong value here would
-              // either reject every confirmation or accept a stale one.
-              // The round's epoch, which is what the artifact was frozen at:
-              // a literal 1 on both sides only agreed until the first
-              // supersede bumped one of them.
-              pendingGeneration: awaiting?.pendingGeneration ?? round?.epoch ?? 1,
-            }
-          : { kind: 'round-failed' },
   })
 }
 
