@@ -32,6 +32,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
+import { TableViewport } from '@/components/TableViewport'
 import { Switch } from '@/components/Form'
 import { TabPanels } from '@/components/split/TabPanels'
 import { TabBar } from '@/components/TabBar'
@@ -533,56 +534,64 @@ function MetricsPanel(): ReactElement {
       <p>{t('code.metrics.window', { days })}</p>
 
       <h3>{t('code.metrics.adoptionTitle')}</h3>
-      <table data-testid="code-metrics-adoption">
-        <thead>
-          <tr>
-            <th scope="col">{t('code.metrics.capability')}</th>
-            <th scope="col">{t('code.metrics.published')}</th>
-            <th scope="col">{t('code.metrics.adopted')}</th>
-            <th scope="col">{t('code.metrics.quietFix')}</th>
-            <th scope="col">{t('code.metrics.disagreed')}</th>
-            <th scope="col">{t('code.metrics.outstanding')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {adoption.map((row) => (
-            <tr key={row.capability} data-testid={`code-metrics-adoption-${row.capability}`}>
-              <td>{row.capability}</td>
-              <td>{row.published}</td>
-              <td>{row.adopted}</td>
-              <td>{row.quietFix}</td>
-              <td>{row.disagreed}</td>
-              <td>{row.outstanding}</td>
+      {/* Six numeric columns overflow a narrow viewport, and a page that
+          scrolls sideways as a whole loses the row labels first. `TableViewport`
+          owns the scroll container and the overflow-edge affordance so the
+          table scrolls inside itself and stays keyboard-reachable. */}
+      <TableViewport label={t('code.metrics.adoptionTitle')}>
+        <table data-testid="code-metrics-adoption">
+          <thead>
+            <tr>
+              <th scope="col">{t('code.metrics.capability')}</th>
+              <th scope="col">{t('code.metrics.published')}</th>
+              <th scope="col">{t('code.metrics.adopted')}</th>
+              <th scope="col">{t('code.metrics.quietFix')}</th>
+              <th scope="col">{t('code.metrics.disagreed')}</th>
+              <th scope="col">{t('code.metrics.outstanding')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {adoption.map((row) => (
+              <tr key={row.capability} data-testid={`code-metrics-adoption-${row.capability}`}>
+                <td>{row.capability}</td>
+                <td>{row.published}</td>
+                <td>{row.adopted}</td>
+                <td>{row.quietFix}</td>
+                <td>{row.disagreed}</td>
+                <td>{row.outstanding}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableViewport>
 
       <h3>{t('code.metrics.runsTitle')}</h3>
-      <table data-testid="code-metrics-runs">
-        <thead>
-          <tr>
-            <th scope="col">{t('code.metrics.capability')}</th>
-            <th scope="col">{t('code.metrics.rounds')}</th>
-            <th scope="col">{t('code.metrics.roundsPublished')}</th>
-            <th scope="col">{t('code.metrics.roundsFailed')}</th>
-            <th scope="col">{t('code.metrics.roundsAwaiting')}</th>
-            <th scope="col">{t('code.metrics.roundsIncomplete')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {runs.map((row) => (
-            <tr key={row.capability} data-testid={`code-metrics-runs-${row.capability}`}>
-              <td>{row.capability}</td>
-              <td>{row.rounds}</td>
-              <td>{row.published}</td>
-              <td>{row.failed}</td>
-              <td>{row.awaiting}</td>
-              <td>{row.incomplete}</td>
+      <TableViewport label={t('code.metrics.runsTitle')}>
+        <table data-testid="code-metrics-runs">
+          <thead>
+            <tr>
+              <th scope="col">{t('code.metrics.capability')}</th>
+              <th scope="col">{t('code.metrics.rounds')}</th>
+              <th scope="col">{t('code.metrics.roundsPublished')}</th>
+              <th scope="col">{t('code.metrics.roundsFailed')}</th>
+              <th scope="col">{t('code.metrics.roundsAwaiting')}</th>
+              <th scope="col">{t('code.metrics.roundsIncomplete')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {runs.map((row) => (
+              <tr key={row.capability} data-testid={`code-metrics-runs-${row.capability}`}>
+                <td>{row.capability}</td>
+                <td>{row.rounds}</td>
+                <td>{row.published}</td>
+                <td>{row.failed}</td>
+                <td>{row.awaiting}</td>
+                <td>{row.incomplete}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableViewport>
     </section>
   )
 }

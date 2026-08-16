@@ -35,7 +35,9 @@ describe('RFC-305 UserPermissionCatalog', () => {
     expect(scripts.checked).toBe(false)
     fireEvent.click(scripts)
     expect(scripts.checked).toBe(true)
-    expect(screen.getByText(/50 effective/i)).toBeTruthy()
+    // 54 baseline (RFC-304 added the two template reads and the three group-layer
+    // writes) + the one explicitly ticked `scripts:author`.
+    expect(screen.getByText(/55 effective/i)).toBeTruthy()
   })
 
   test('search keeps selection while hiding non-matching rows', () => {

@@ -34,8 +34,12 @@ describe('RFC-305 user permission view model', () => {
       locale: 'en-US',
       translate,
     })
-    expect(model.permissions).toHaveLength(73)
-    expect(model.effectiveCount).toBe(50)
+    // RFC-304 +8: two capability template layers × four verbs. The user
+    // baseline gains 5 of them (both reads + the three GROUP-layer writes);
+    // the three DEPARTMENT-layer writes are system-domain, so they show as
+    // grantable rows rather than baseline ones.
+    expect(model.permissions).toHaveLength(81)
+    expect(model.effectiveCount).toBe(55)
     expect(model.additionalCount).toBe(1)
     expect(model.permissions.find((row) => row.permission === 'agents:read')).toMatchObject({
       source: 'baseline',

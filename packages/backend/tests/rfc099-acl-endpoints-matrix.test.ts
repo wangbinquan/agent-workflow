@@ -38,7 +38,16 @@ import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, mcps, plugins, skills, workflows, workgroups } from '../src/db/schema'
+import {
+  agents,
+  capabilityBindings,
+  capabilityFrameworks,
+  mcps,
+  plugins,
+  skills,
+  workflows,
+  workgroups,
+} from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 
@@ -64,7 +73,7 @@ async function buildHarness(): Promise<Harness> {
     dbVersion: 1,
     db,
   })
-  const mkUser = async (username: string, role: 'admin' | 'user') => {
+  const mkUser = async (username: string, role: 'admin' | 'user' | 'manager') => {
     const u = await createUser(db, {
       username,
       displayName: username,
@@ -78,6 +87,13 @@ async function buildHarness(): Promise<Harness> {
     db,
     app,
     alice: await mkUser('alice', 'user'),
+    // RFC-304 — a DEPARTMENT-layer owner. A capability framework cannot be
+    // owned by an ordinary user at all: creating one needs a system-domain
+    // point that is not in the user preset, so seeding `alice` as its owner
+    // would test a state the API cannot produce. Every other actor in the
+    // matrix stays an ordinary user, which is what the stranger and grantee
+    // cases need.
+    dept: await mkUser('dept', 'manager'),
     bob: await mkUser('bob', 'user'),
     carol: await mkUser('carol', 'user'),
     admin: await mkUser('root', 'admin'),
@@ -104,6 +120,14 @@ interface ResourceCase {
   /** Route param: the key used in the URL. */
   keyOf: (seeded: { id: string; name: string }) => string
   missingKey: string
+  /**
+   * Which harness actor owns the seeded row.
+   *
+   * `user` for every resource an ordinary account may create. `dept` for the
+   * capability framework, whose write points are system-domain — an ordinary
+   * user cannot create one, so an ordinary-user owner is an unreachable state.
+   */
+  ownerActor?: 'alice' | 'dept'
   seed: (db: DbClient, ownerUserId: string) => Promise<{ id: string; name: string }>
 }
 
@@ -204,6 +228,57 @@ const CASES: ResourceCase[] = [
     },
   },
   {
+    // RFC-304 — the DEPARTMENT layer. Enrolled here rather than trusted to its
+    // own file: this matrix is what checks 404-not-403 for a non-owner, owner
+    // transfer, and grant editing, and those are exactly the properties a new
+    // resource type is most likely to get subtly wrong.
+    type: 'capability_framework',
+    base: '/api/capability-frameworks',
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
+    ownerActor: 'dept',
+    seed: async (db, ownerUserId) => {
+      const row = { id: ulid(), name: KEY }
+      await db.insert(capabilityFrameworks).values({
+        ...row,
+        description: 'acl matrix subject',
+        capability: 'mr-review',
+        scriptsJson: '{}',
+        hooksJson: '[]',
+        paramSchemaJson: '[]',
+        paramDefaultsJson: '{}',
+        stageContractVer: 1,
+        ownerUserId,
+        visibility: 'private',
+        createdAt: now,
+        updatedAt: now,
+      })
+      return row
+    },
+  },
+  {
+    type: 'capability_binding',
+    base: '/api/capability-bindings',
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
+    seed: async (db, ownerUserId) => {
+      const row = { id: ulid(), name: KEY }
+      await db.insert(capabilityBindings).values({
+        ...row,
+        description: 'acl matrix subject',
+        frameworkId: ulid(),
+        agentBySlotJson: '{}',
+        promptBySlotJson: '{}',
+        paramsJson: '{}',
+        ownerUserId,
+        visibility: 'private',
+        createdAt: now,
+        updatedAt: now,
+      })
+      return row
+    },
+  },
+  {
     type: 'workgroup',
     base: '/api/workgroups',
     keyOf: (s) => s.id,
@@ -244,10 +319,13 @@ for (const rc of CASES) {
   describe(`RFC-099 ACL endpoints — ${rc.type}`, () => {
     let h: Harness
     let key: string
+    /** The actor that owns the seeded row for THIS case. */
+    let owner: Harness['alice']
 
     beforeEach(async () => {
       h = await buildHarness()
-      key = rc.keyOf(await rc.seed(h.db, h.alice.id))
+      owner = rc.ownerActor === 'dept' ? h.dept : h.alice
+      key = rc.keyOf(await rc.seed(h.db, owner.id))
     })
 
     const aclPath = (k: string): string => `${rc.base}/${k}/acl`
@@ -278,20 +356,36 @@ for (const rc of CASES) {
     })
 
     test('a stranger cannot grant themselves access, and the ACL is unchanged', async () => {
-      const attack = await req(h.app, h.carol.token, aclPath(key), {
+      const body = JSON.stringify(mutation({ userIds: [h.carol.id], visibility: 'public' }))
+      const attack = await req(h.app, h.carol.token, aclPath(key), { method: 'PUT', body })
+      // Indistinguishable from the SAME request against an id that does not
+      // exist — which is the actual invariant, and stricter than pinning one
+      // status. Pinning 404 encoded an implementation detail (that the handler
+      // refuses before the method gate does), and it is not true for every
+      // resource: a capability framework's write point is system-domain, so an
+      // ordinary account is turned away at the gate with 403 for ANY id. That
+      // is not a weaker answer — the response does not vary with existence,
+      // which is the whole property. What would be a leak is the two differing.
+      const missing = await req(h.app, h.carol.token, aclPath(rc.missingKey), {
         method: 'PUT',
-        body: JSON.stringify(mutation({ userIds: [h.carol.id], visibility: 'public' })),
+        body,
       })
-      expect(attack.status).toBe(404)
+      expect(attack.status).toBe(missing.status)
+      const normalise = (text: string, k: string): string => text.split(k).join('<KEY>')
+      expect(normalise(await attack.clone().text(), key)).toBe(
+        normalise(await missing.text(), rc.missingKey),
+      )
+      // …and it is still a refusal, not a quiet success.
+      expect(attack.status).toBeGreaterThanOrEqual(400)
 
       // Asserting the status alone would still pass if the handler wrote first
       // and threw afterwards — re-read as the owner and prove nothing moved.
-      const acl = (await (await req(h.app, h.alice.token, aclPath(key))).json()) as {
+      const acl = (await (await req(h.app, owner.token, aclPath(key))).json()) as {
         ownerUserId: string
         visibility: string
         users: Array<{ id: string }>
       }
-      expect(acl.ownerUserId).toBe(h.alice.id)
+      expect(acl.ownerUserId).toBe(owner.id)
       expect(acl.visibility).toBe('private')
       expect(acl.users).toEqual([])
       // …and the stranger still cannot see it.
@@ -301,10 +395,10 @@ for (const rc of CASES) {
     test('owner and admin can read the ACL; owner can grant, grantee can read but not manage', async () => {
       // Positive controls: without these, a handler that refused everyone would
       // satisfy every negative case above and this matrix would have no teeth.
-      expect((await req(h.app, h.alice.token, aclPath(key))).status).toBe(200)
+      expect((await req(h.app, owner.token, aclPath(key))).status).toBe(200)
       expect((await req(h.app, h.admin.token, aclPath(key))).status).toBe(200)
 
-      const grant = await req(h.app, h.alice.token, aclPath(key), {
+      const grant = await req(h.app, owner.token, aclPath(key), {
         method: 'PUT',
         body: JSON.stringify(mutation({ userIds: [h.bob.id] })),
       })
@@ -315,7 +409,7 @@ for (const rc of CASES) {
         users: Array<{ id: string }>
         canManage: boolean
       }
-      expect(asBob.ownerUserId).toBe(h.alice.id)
+      expect(asBob.ownerUserId).toBe(owner.id)
       expect(asBob.users.map((u) => u.id)).toEqual([h.bob.id])
       expect(asBob.canManage).toBe(false)
 
@@ -330,14 +424,14 @@ for (const rc of CASES) {
     })
 
     test('granting an unknown or system user is refused with a typed 422', async () => {
-      const unknown = await req(h.app, h.alice.token, aclPath(key), {
+      const unknown = await req(h.app, owner.token, aclPath(key), {
         method: 'PUT',
         body: JSON.stringify(mutation({ userIds: ['01HFAKEUSERID0000000000000'] })),
       })
       expect(unknown.status).toBe(422)
       expect(((await unknown.json()) as { code: string }).code).toBe('acl-user-invalid')
 
-      const system = await req(h.app, h.alice.token, aclPath(key), {
+      const system = await req(h.app, owner.token, aclPath(key), {
         method: 'PUT',
         body: JSON.stringify(mutation({ userIds: ['__system__'] })),
       })
