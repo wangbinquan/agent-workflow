@@ -22,6 +22,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { acquireRoundLease, withRoundLease } from '../src/services/codeRoundLease'
 import { readLease } from '../src/modules/code-capability/infrastructure/sqliteMrLeaseStore'
 import type { MrLeaseKey } from '../src/modules/code-capability/domain/mrLease'
+import { codeWorkItems, codeWorkRounds } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -42,6 +43,81 @@ describe('RFC-304 — two capabilities on one MR serialise', () => {
   test('the first round takes the lease', async () => {
     const got = await acquireRoundLease({ db, daemonGeneration: 'g1', key, roundId: 'round-1' })
     expect(got.ok).toBe(true)
+  })
+
+  test('a lease left behind by a round that has ENDED is reclaimed at once', async () => {
+    // The leak this closes, found by the preemption e2e: the ordinary release
+    // runs in a `finally`, and a task killed by a supersede never reaches it.
+    // So the preempted round kept the merge request locked for the lease's full
+    // fifteen minutes, and the replacement round — the entire point of the
+    // preemption — died at the door with "another round holds this merge
+    // request". The author saw one round cancelled, the next refused, and
+    // nothing on the merge request explaining either.
+    //
+    // A round with `ended_at` set cannot be writing, so its lease is a leak and
+    // not a claim; reclaiming by round id makes the recovery immediate and
+    // provable rather than waiting out an expiry.
+    await acquireRoundLease({ db, daemonGeneration: 'g1', key, roundId: 'round-1' })
+    await db.insert(codeWorkItems).values({
+      id: 'item-1',
+      codeHostEndpointId: 'ep-1',
+      stableProjectId: '41823',
+      capability: 'mr-review',
+      anchorKind: 'mr',
+      anchorId: '412',
+      status: 'superseding',
+      epoch: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    await db.insert(codeWorkRounds).values({
+      id: 'round-1',
+      workItemId: 'item-1',
+      roundSeq: 1,
+      epoch: 1,
+      startedAt: 1,
+      endedAt: 2,
+      outcome: 'superseded',
+    } as typeof codeWorkRounds.$inferInsert)
+
+    const replacement = await acquireRoundLease({
+      db,
+      daemonGeneration: 'g1',
+      key,
+      roundId: 'round-2',
+    })
+    expect(replacement.ok).toBe(true)
+    expect((await readLease(db, key))?.roundId).toBe('round-2')
+  })
+
+  test('a lease whose holder is STILL RUNNING is not reclaimed', async () => {
+    // The other half, and the reason the check is on `ended_at` rather than on
+    // "looks stuck": stealing from a live round is precisely the interleaving
+    // the lease exists to prevent.
+    await acquireRoundLease({ db, daemonGeneration: 'g1', key, roundId: 'round-1' })
+    await db.insert(codeWorkItems).values({
+      id: 'item-1',
+      codeHostEndpointId: 'ep-1',
+      stableProjectId: '41823',
+      capability: 'mr-review',
+      anchorKind: 'mr',
+      anchorId: '412',
+      status: 'running',
+      epoch: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    await db.insert(codeWorkRounds).values({
+      id: 'round-1',
+      workItemId: 'item-1',
+      roundSeq: 1,
+      epoch: 1,
+      startedAt: 1,
+    } as typeof codeWorkRounds.$inferInsert)
+
+    const second = await acquireRoundLease({ db, daemonGeneration: 'g1', key, roundId: 'round-2' })
+    expect(second.ok).toBe(false)
+    expect((await readLease(db, key))?.roundId).toBe('round-1')
   })
 
   test('a second round on the SAME MR is refused while the first holds it', async () => {

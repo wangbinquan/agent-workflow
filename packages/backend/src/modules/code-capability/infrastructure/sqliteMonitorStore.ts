@@ -194,11 +194,19 @@ export async function closeRound(
   roundId: string,
   outcome: 'published' | 'awaiting' | 'failed' | 'canceled' | 'superseded',
   now: number = Date.now(),
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const updated = await db
     .update(codeWorkRounds)
     .set({ outcome, endedAt: now })
     .where(and(eq(codeWorkRounds.id, roundId), isNull(codeWorkRounds.endedAt)))
+    .returning({ id: codeWorkRounds.id })
+  // Whether THIS call is the one that closed it. The caller needs to know:
+  // a round closed by somebody else has already had its terminal answer
+  // recorded, and driving the work item a second time from a late finalisation
+  // moves an item that has since started another round — which is how a
+  // preempted round's cancellation ended up failing the replacement that had
+  // just started.
+  return updated.length > 0
 }
 
 /** Point the work item at the round now in flight. */

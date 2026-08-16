@@ -356,9 +356,24 @@ function externalArrival(ctx: CodeWorkItemContext): CodeWorkItemDecision {
     case 'running':
       // Do NOT open the new round here: the old task has to die first, or two
       // rounds would write the same worktree. `superseding` is that wait.
-      return t('superseding', [{ kind: 'bump-epoch' }, { kind: 'request-round-cancel' }])
+      //
+      // The revision is registered as well as the cancel requested, because the
+      // wait has to END in a round: `round-task-terminal` asks for
+      // `start-round`, and a round needs the event it is serving. Registering
+      // only in `queued` — as this did — left the replacement with nothing to
+      // run against, so an item could be preempted and then never resume.
+      return t('superseding', [
+        { kind: 'bump-epoch' },
+        { kind: 'request-round-cancel' },
+        { kind: 'register-pending-revision' },
+      ])
     case 'superseding':
-      return stay('already superseding; the new round starts when the old task dies')
+      // Same merge, one step later: further arrivals overwrite the registered
+      // revision rather than queueing a round each, so the replacement serves
+      // the LATEST event (design §2.2 排队期间的事件合并).
+      return stay('already superseding; the new round starts when the old task dies', [
+        { kind: 'register-pending-revision' },
+      ])
     default:
       return stay(`no external-arrival rule for '${ctx.status}'`)
   }

@@ -86,7 +86,13 @@ test.beforeAll(async () => {
     requiredEnv('AW_SYSTEM_MOCK_CONTROL_URL'),
     requiredEnv('AW_SYSTEM_MOCK_CONTROL_TOKEN'),
   )
-  await mocks.reset()
+  // NOT `mocks.reset()`: one system-mock suite serves every Playwright worker
+  // (see `e2e/global-setup.ts`) and CI runs four workers per shard, so a global
+  // wipe deletes the projects of whichever specs happen to be running beside
+  // this one. That is not hypothetical — it turned up as
+  // `unknown gitlab project system-e2e/rfc304-confirm` mid-run, from a spec
+  // that had seeded that project seconds earlier. Isolation comes from a unique
+  // project path per spec and from scoping request assertions to it.
 
   // The model is the only faked participant, and it answers with a fixed
   // envelope. That is what makes "a line comment appeared" an assertion about
@@ -371,7 +377,7 @@ test('AC-1 — the finding reaches the merge request as a LINE comment, publishe
   // stubbed: the finding asserted here is the one the stand-in returned, so a
   // failure means the platform lost or mangled it rather than that a model said
   // something different today.
-  const requests = await mocks.requests('gitlab')
+  const requests = mine(await mocks.requests('gitlab'))
   const drafts = requests.filter(
     (request) => request.method === 'POST' && request.path.endsWith('/draft_notes'),
   )
@@ -919,6 +925,32 @@ async function requestJson<T = unknown>(
     throw new Error(`${options.method ?? 'GET'} ${path} returned ${status}: ${text}`)
   }
   return (text.length === 0 ? null : JSON.parse(text)) as T
+}
+
+/**
+ * Only this spec's traffic.
+ *
+ * One system-mock suite serves every Playwright worker (`e2e/global-setup.ts`)
+ * and CI runs four workers per shard, so the request log carries whatever else
+ * is running. Scoping by the project this spec seeded is what makes a COUNT
+ * ("published exactly once") mean anything at all — and it replaces the global
+ * `mocks.reset()` these specs used to call, which deleted the projects of the
+ * specs running beside them.
+ *
+ * Three spellings of the same project, because each surface names it
+ * differently: GitLab's REST paths carry the numeric id, GitHub's carry
+ * `owner/repo`, and the git remote carries the directory slug.
+ */
+function mine<T extends { path: string }>(requests: T[]): T[] {
+  const slug = PROJECT_PATH.split('/').at(-1) ?? PROJECT_PATH
+  const id = project?.projectId ?? ''
+  return requests.filter(
+    (r) =>
+      (id !== '' && r.path.includes(`/projects/${id}/`)) ||
+      r.path.includes(PROJECT_PATH) ||
+      r.path.includes(encodeURIComponent(PROJECT_PATH)) ||
+      r.path.includes(slug),
+  )
 }
 
 function requiredEnv(name: string): string {

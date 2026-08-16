@@ -9,6 +9,9 @@ import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
+import { resumeSupersedingWorkItems } from '@/services/codeCapabilitySupersede'
+import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
+import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { startWebhookDeliveryGc } from '@/services/webhook/webhookGc'
 import { openDb, DbCorruptionError } from '@/db/client'
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
@@ -657,6 +660,22 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (recoveredDeliveries > 0) {
     log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
   }
+  // RFC-304 §2.2 不变量一: a work item preempted by a new event waits for the
+  // old round's task to die before the replacement starts. If the daemon
+  // restarts inside that window, the in-process wait dies with it and the item
+  // stays `superseding` forever — silently, because a merge request that stops
+  // being reviewed raises nothing. This is that wait, re-armed.
+  await resumeSupersedingWorkItems({
+    db,
+    launchDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),
+  }).catch((err: unknown) => {
+    // Recovery must not keep the daemon from booting: an item left mid-
+    // preemption is repaired by the next delivery either way.
+    log.warn('resuming preempted code work items failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return 0
+  })
   const webhookDispatcher = createWebhookDispatcher({
     db,
     configPath: Paths.config,

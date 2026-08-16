@@ -57,7 +57,13 @@ test.beforeAll(async () => {
     requiredEnv('AW_SYSTEM_MOCK_CONTROL_URL'),
     requiredEnv('AW_SYSTEM_MOCK_CONTROL_TOKEN'),
   )
-  await mocks.reset()
+  // NOT `mocks.reset()`: one system-mock suite serves every Playwright worker
+  // (see `e2e/global-setup.ts`) and CI runs four workers per shard, so a global
+  // wipe deletes the projects of whichever specs happen to be running beside
+  // this one. That is not hypothetical — it turned up as
+  // `unknown gitlab project system-e2e/rfc304-confirm` mid-run, from a spec
+  // that had seeded that project seconds earlier. Isolation comes from a unique
+  // project path per spec and from scoping request assertions to it.
 
   const stateDir = mkdtempSync(join(tmpdir(), 'rfc304-gh-'))
   const planFile = join(stateDir, 'plan.json')
@@ -173,7 +179,7 @@ test('the review is submitted as ONE reviews call, not a stream of comments', as
   // author once per remark — the behaviour B10 exists to prevent — and would
   // lose the all-or-nothing property that makes the GitHub path safe without
   // compensation logic.
-  const requests = await mocks.requests('github')
+  const requests = mine(await mocks.requests('github'))
   const reviews = requests.filter(
     (r) => r.method === 'POST' && /\/pulls\/\d+\/reviews$/.test(r.path),
   )
@@ -194,7 +200,7 @@ test('the review pins commit_id to the revision it actually read', async () => {
   // receives remarks anchored to code the reviewer never saw — line numbers
   // from A against contents of B, which reads as the bot being wrong rather
   // than the bot being late.
-  const requests = await mocks.requests('github')
+  const requests = mine(await mocks.requests('github'))
   const review = requests.find((r) => r.method === 'POST' && /\/pulls\/\d+\/reviews$/.test(r.path))
   const body = JSON.parse(review!.bodyText) as { commit_id?: string }
 
@@ -207,7 +213,7 @@ test('GitLab-only draft endpoints are NEVER called for a GitHub pull request', a
   // `unsupported` for GitLab and the draft pair is absent for GitHub; a mapping
   // that silently fell back to the other provider's shape would still "publish"
   // and would be wrong in a way no single-provider suite could see.
-  const requests = await mocks.requests('github')
+  const requests = mine(await mocks.requests('github'))
   expect(requests.filter((r) => r.path.includes('draft_notes'))).toEqual([])
 })
 
@@ -266,6 +272,32 @@ async function requestJson<T = unknown>(
     throw new Error(`${options.method ?? 'GET'} ${path} returned ${response.status}: ${text}`)
   }
   return (text.length === 0 ? null : JSON.parse(text)) as T
+}
+
+/**
+ * Only this spec's traffic.
+ *
+ * One system-mock suite serves every Playwright worker (`e2e/global-setup.ts`)
+ * and CI runs four workers per shard, so the request log carries whatever else
+ * is running. Scoping by the project this spec seeded is what makes a COUNT
+ * ("published exactly once") mean anything at all — and it replaces the global
+ * `mocks.reset()` these specs used to call, which deleted the projects of the
+ * specs running beside them.
+ *
+ * Three spellings of the same project, because each surface names it
+ * differently: GitLab's REST paths carry the numeric id, GitHub's carry
+ * `owner/repo`, and the git remote carries the directory slug.
+ */
+function mine<T extends { path: string }>(requests: T[]): T[] {
+  const slug = PROJECT_PATH.split('/').at(-1) ?? PROJECT_PATH
+  const id = project?.projectId ?? ''
+  return requests.filter(
+    (r) =>
+      (id !== '' && r.path.includes(`/projects/${id}/`)) ||
+      r.path.includes(PROJECT_PATH) ||
+      r.path.includes(encodeURIComponent(PROJECT_PATH)) ||
+      r.path.includes(slug),
+  )
 }
 
 function requiredEnv(name: string): string {

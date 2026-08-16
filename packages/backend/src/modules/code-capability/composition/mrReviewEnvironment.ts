@@ -61,6 +61,17 @@ export interface MrReviewWiringInput {
   worktreePath: string
   nonce: string
   /**
+   * The work item this round belongs to, and the epoch it belongs to.
+   *
+   * Absent leaves the publish critical section unclaimed — the shape every
+   * round had until now, because the scheduler passed neither and the intent
+   * ledger hardcoded `epoch: 1`. With them, a round that a newer revision has
+   * already preempted fails the section's CAS instead of publishing a review of
+   * code the author has replaced.
+   */
+  workItemId?: string
+  epoch?: number
+  /**
    * Supplied by whoever can run an agent. Absent means the `review` stage
    * refuses by name — see the header.
    */
@@ -243,6 +254,15 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
           // §7.2. The anchor ref is keyed the same way the ledger is — endpoint
           // plus project plus MR — because recovery has to find a batch written
           // by a round that is gone, and only the MR's identity survives that.
+          ...(input.workItemId === undefined || input.workItemId === ''
+            ? {}
+            : {
+                publishSection: {
+                  db: input.db,
+                  workItemId: input.workItemId,
+                  epoch: input.epoch ?? 1,
+                },
+              }),
           publishIntents: {
             db: input.db,
             roundId: input.roundId,
@@ -250,7 +270,10 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
             // own column defaults to 1, so 1 is what "no supersession has
             // happened yet" means here. No work item is wired into this path
             // until PR-6; when one is, its epoch replaces this.
-            epoch: 1,
+            // The round's own epoch. `1` was a placeholder for "no work item
+            // is wired into this path yet"; one is now, and a stale batch is
+            // recognised by comparing against the item's current epoch.
+            epoch: input.epoch ?? 1,
             anchorRef: `${endpointId}:${input.webhook.project_id ?? ''}:mr:${input.webhook.mr_iid ?? ''}`,
           },
         }

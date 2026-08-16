@@ -5091,7 +5091,16 @@ async function finalizeRound(
   awaiting?: { pendingGeneration: number },
 ): Promise<void> {
   if (codeRoundId === null || codeRoundId === '') return
-  await closeRound(db, codeRoundId, outcome)
+  const closedByThisCall = await closeRound(db, codeRoundId, outcome)
+  if (!closedByThisCall) {
+    // Somebody already recorded this round's terminal answer — in practice the
+    // preemption driver, which closes a round as `superseded` the moment its
+    // task dies. Driving the work item from here as well would apply THIS
+    // round's outcome to an item that has already started the replacement: a
+    // cancelled round's `round-failed` landed on a running item and failed the
+    // round that had just begun.
+    return
+  }
 
   // …and move the WORK ITEM, which is the thing a person watches. Closing the
   // round records what this attempt did; the item is what says whether the

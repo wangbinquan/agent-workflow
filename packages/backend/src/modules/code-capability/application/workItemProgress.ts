@@ -53,6 +53,8 @@ export interface NoteWorkItemEventArgs {
   /** Whether a round's task is still live; the table's guards read it. */
   hasLiveRound: boolean
   resumeFromStage?: string | null
+  /** Passed through when the table asks to register a pending revision. */
+  pendingRevision?: Readonly<Record<string, unknown>>
 }
 
 /**
@@ -73,6 +75,7 @@ export async function noteWorkItemEvent(args: NoteWorkItemEventArgs): Promise<Ap
       event: args.event,
       hasLiveRound: args.hasLiveRound,
       ...(args.resumeFromStage === undefined ? {} : { resumeFromStage: args.resumeFromStage }),
+      ...(args.pendingRevision === undefined ? {} : { pendingRevision: args.pendingRevision }),
     })
 
     if (outcome.outcome === 'rejected') {

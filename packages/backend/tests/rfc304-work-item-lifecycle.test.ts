@@ -412,6 +412,34 @@ describe('RFC-304 §2.2 — the ordinary path still works', () => {
     ])
   })
 
+  test('preemption registers the revision it will eventually serve', () => {
+    // The effect that was missing, and what its absence cost: the item moved to
+    // `superseding` carrying a cancel and an epoch bump, and NOTHING recorded
+    // what the replacement round was supposed to run against. So even once the
+    // performers existed, `round-task-terminal` asked for a round the platform
+    // had no context to start — the merge request stayed preempted for good.
+    const d = decideCodeWorkItemTransition(ctxOf({ status: 'running', hasLiveRound: true }), NOTE)
+    expect(d.outcome === 'transition' && d.to).toBe('superseding')
+    expect(effectKinds(d.outcome === 'transition' ? d.effects : [])).toEqual([
+      'bump-epoch',
+      'request-round-cancel',
+      'register-pending-revision',
+    ])
+  })
+
+  test('a further event while superseding overwrites the registered revision', () => {
+    // Three pushes in a row: the replacement must serve the THIRD, not the
+    // second. Queueing a round per event instead would run a string of rounds
+    // that are each already stale by the time the lease frees.
+    const d = decideCodeWorkItemTransition(ctxOf({ status: 'superseding' }), NOTE)
+    expect(d.outcome).toBe('stay')
+    expect(effectKinds(d.outcome === 'stay' ? d.effects : [])).toEqual([
+      'register-pending-revision',
+    ])
+    // And still no round — that is what `superseding` means.
+    expect(effectKinds(d.outcome === 'stay' ? d.effects : [])).not.toContain('start-round')
+  })
+
   test('a human instruction while queued does NOT merge — it queues on its own', () => {
     // Automated signals collapse because only their latest state matters. A
     // person who asked twice is owed two answers; collapsing the second into

@@ -25,7 +25,13 @@ test.beforeAll(async () => {
   const controlUrl = requiredEnv('AW_SYSTEM_MOCK_CONTROL_URL')
   const controlToken = requiredEnv('AW_SYSTEM_MOCK_CONTROL_TOKEN')
   mocks = new SystemMockClient(controlUrl, controlToken)
-  await mocks.reset()
+  // NOT `mocks.reset()`: one system-mock suite serves every Playwright worker
+  // (see `e2e/global-setup.ts`) and CI runs four workers per shard, so a global
+  // wipe deletes the projects of whichever specs happen to be running beside
+  // this one. That is not hypothetical — it turned up as
+  // `unknown gitlab project system-e2e/rfc304-confirm` mid-run, from a spec
+  // that had seeded that project seconds earlier. Isolation comes from a unique
+  // project path per spec and from scoping request assertions to it.
   daemon = await startDaemon()
 })
 

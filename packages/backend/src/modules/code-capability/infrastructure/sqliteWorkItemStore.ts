@@ -88,6 +88,17 @@ export interface ApplyEventArgs {
   hasLiveRound: boolean
   resumeFromStage?: string | null
   now?: () => number
+  /**
+   * What a `register-pending-revision` effect should REMEMBER — everything the
+   * deferred round needs to launch once the superseded one dies.
+   *
+   * Stored only when the table asks for that effect, so the caller cannot
+   * write a revision the machine did not register. It used to be `{at}` alone,
+   * which recorded that something arrived but not what: the replacement round
+   * then had no trigger context to run against, and a supersede could only
+   * ever cancel — never restart. See design §2.2 不变量一.
+   */
+  pendingRevision?: Readonly<Record<string, unknown>>
 }
 
 /**
@@ -123,7 +134,7 @@ export async function applyWorkItemEvent(args: ApplyEventArgs): Promise<ApplyOut
         patch.pendingGeneration = null
         break
       case 'register-pending-revision':
-        patch.pendingRevision = JSON.stringify({ at: now })
+        patch.pendingRevision = JSON.stringify({ at: now, ...(args.pendingRevision ?? {}) })
         break
       case 'consume-pending-revision':
         patch.pendingRevision = null

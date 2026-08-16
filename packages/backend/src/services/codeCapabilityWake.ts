@@ -17,8 +17,8 @@
 
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import { repoCapabilityConfig } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { repoCapabilityConfig, codeWorkRounds } from '@/db/schema'
+import { and, eq, isNull } from 'drizzle-orm'
 import {
   anchorKindFor,
   cellsWokenBy,
@@ -41,6 +41,10 @@ import {
 } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
 import { claimTerminalMr } from '@/modules/code-capability/application/producedMrIndex'
 import { classifyComment } from '@/modules/code-capability/application/classifyComment'
+import {
+  advanceSupersedingWorkItem,
+  requestRoundCancelAndArm,
+} from '@/services/codeCapabilitySupersede'
 import type { ApplyOutcome } from '@/modules/code-capability/infrastructure/sqliteWorkItemStore'
 import { createCodeHostAdapter } from '@/modules/code-capability/infrastructure/codeHostAdapter'
 import { noteWorkItemEvent } from '@/modules/code-capability/application/workItemProgress'
@@ -371,6 +375,14 @@ async function startDirectRound(
   if (identity !== null) {
     const item = await ensureWorkItem({ db: input.db, ...identity })
 
+    // Heal a preemption whose replacement never started — the in-process wait
+    // for the old task lives in a process that can die, and an item left in
+    // `superseding` is invisible: no round, no error, the merge request simply
+    // stops being reviewed. A no-op unless the item is superseding AND its
+    // round's task has really settled, so it costs one read on the ordinary
+    // path.
+    await advanceSupersedingWorkItem({ db: input.db, launchDeps: launchDepsFor(input) }, item.id)
+
     // Is this reply a confirmation of a change already posted and waiting?
     //
     // Until this ran, `judgeConfirmation` had no production caller: the diff
@@ -406,7 +418,23 @@ async function startDirectRound(
     const signal = await noteWorkItemEvent({
       db: input.db,
       workItemId: item.id,
-      hasLiveRound: false,
+      // Whether a round of this item is still alive decides between "open one"
+      // and "preempt the one that is running" — the table reads it for exactly
+      // that. It was hardcoded `false`, so a delivery arriving mid-round was
+      // judged as if nothing were running.
+      hasLiveRound: await hasLiveRound(input.db, item.id),
+      // What the replacement round will need if this delivery preempts a
+      // running one: the machine registers a pending revision, and until now it
+      // recorded only a timestamp — nothing a round could be started from.
+      pendingRevision: {
+        capability,
+        repoId: input.repoId,
+        mrIid: input.mrIid,
+        triggerContext: input.triggerContext,
+        webhookTriggerId: input.webhookTriggerId,
+        webhookFireId: input.webhookFireId,
+        baselineSha: webhookFieldsOf(input.triggerContext).commit_sha,
+      },
       // The delivery, as the state machine sees it. A `note` classification
       // rather than `head-changed`: this path opens a round for a delivery
       // whose meaning was already decided upstream, and claiming a head change
@@ -423,6 +451,16 @@ async function startDirectRound(
             }
           : { kind: 'external-signal', signal: { kind: 'note' } },
     })
+
+    // `request-round-cancel` is the caller's to perform (see
+    // `workItemProgress`'s header), and nobody ever did: an item could enter
+    // `superseding` but the round it was superseding kept running to
+    // completion, publishing a review of a revision that had already moved.
+    if (signal.outcome === 'applied' || signal.outcome === 'stayed') {
+      if (signal.effects.some((effect) => effect.kind === 'request-round-cancel')) {
+        await requestRoundCancelAndArm({ db: input.db, launchDeps: launchDepsFor(input) }, item.id)
+      }
+    }
 
     const declined = withheldRoundReason(signal)
     if (declined !== null) {
@@ -594,16 +632,43 @@ export function isTerminalDelivery(eventType: string): boolean {
  * Those keep today's behaviour until the supersede work lands the performers,
  * which is the one place this function knowingly disagrees with the table.
  */
+/**
+ * Whether a round of this item still has a task that has not settled.
+ *
+ * The table's guards turn on it: with a live round an arriving event PREEMPTS
+ * (`superseding`, epoch bump, cancel), without one it simply opens a round. The
+ * wake path passed a literal `false`, so every delivery was judged as if the
+ * item were idle — which is why three pushes in a row produced three concurrent
+ * rounds instead of one.
+ */
+async function hasLiveRound(db: DbClient, workItemId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: codeWorkRounds.id })
+    .from(codeWorkRounds)
+    .where(and(eq(codeWorkRounds.workItemId, workItemId), isNull(codeWorkRounds.endedAt)))
+    .limit(1)
+  return row !== undefined
+}
+
 function withheldRoundReason(outcome: ApplyOutcome): string | null {
   if (outcome.outcome !== 'applied' && outcome.outcome !== 'stayed') return null
   if (outcome.effects.some((effect) => effect.kind === 'start-round')) return null
 
   const status = outcome.outcome === 'applied' ? outcome.to : outcome.status
-  if (status === 'awaiting') {
-    return 'the item is waiting for a person to answer a change that is already posted'
+  switch (status) {
+    case 'awaiting':
+      return 'the item is waiting for a person to answer a change that is already posted'
+    case 'handed_off':
+      return 'the item was handed to a human and is no longer running'
+    case 'queued':
+      return 'a round is already queued for this item; this delivery merged into it'
+    case 'superseding':
+      return 'the running round is being preempted; the replacement starts when it ends'
+    case 'running':
+      return 'a round is running; this delivery preempts it rather than joining it'
+    default:
+      return `the work item is '${status}' and the state machine asked for no round`
   }
-  if (status === 'handed_off') return 'the item was handed to a human and is no longer running'
-  return null
 }
 
 /**

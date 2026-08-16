@@ -40,6 +40,10 @@ import {
 import { runGuardedAiStage } from '@/modules/code-capability/application/determinismGuard'
 import { recoverPublishIntents } from '@/modules/code-capability/application/recoverPublishIntents'
 import {
+  enterPublishSection,
+  leavePublishSection,
+} from '@/modules/code-capability/infrastructure/sqliteWorkItemStore'
+import {
   settleIntent,
   writeIntent,
 } from '@/modules/code-capability/infrastructure/sqlitePublishIntentStore'
@@ -134,6 +138,8 @@ export interface MrReviewEnvironment {
    * sees an empty ledger and posts the entire review a second time.
    */
   publishIntents?: PublishIntentWiring
+  /** See `PublishSectionWiring` — absent means no work item to claim against. */
+  publishSection?: PublishSectionWiring
   /** How the diff is cut into shards; defaults are deliberately conservative. */
   split?: SplitDiffOptions
   /** One attempt recorder per shard, so a shard's retries are attributable. */
@@ -159,6 +165,25 @@ export interface PublishIntentWiring {
   epoch: number
   /** How this MR is named in the intent rows — stable across rounds. */
   anchorRef: string
+}
+
+/**
+ * The publish critical section (design §2.2) — the round's claim on writing to
+ * this merge request at this epoch.
+ *
+ * `enterPublishSection` / `leavePublishSection` shipped with the CAS that makes
+ * this correct and had NO production callers, so the section was a table in the
+ * transition machine and nothing else. What it costs when absent: a round
+ * preempted mid-flight still finishes and posts its review, because the cancel
+ * lands after the stage has already started publishing — the author gets
+ * remarks on a revision they had already replaced, which is the exact outcome
+ * §2.2 introduces the section to prevent.
+ */
+export interface PublishSectionWiring {
+  db: DbClient
+  workItemId: string
+  /** The epoch this round belongs to; a bumped epoch fails the CAS. */
+  epoch: number
 }
 
 const fail = (error: string): StageResult => ({ status: 'failed', error })
@@ -613,6 +638,26 @@ export function mrReviewProgramStages(
       // Written BEFORE the call, never after: the whole point is to survive a
       // crash during it. An intent written afterwards records only the batches
       // that already succeeded — precisely the ones that need no recovery.
+      // Claim the merge request for THIS epoch before anything leaves the
+      // process. A round whose epoch has been bumped — i.e. one that a newer
+      // event already preempted — fails the CAS and must not write: its review
+      // describes a revision the author has replaced, and posting it is worse
+      // than posting nothing, because the remarks look current.
+      const section = env.publishSection
+      if (section !== undefined) {
+        const held = await enterPublishSection(section.db, section.workItemId, section.epoch)
+        if (!held) {
+          return fail(
+            'this round was superseded before it could publish; a newer revision is being reviewed instead',
+          )
+        }
+      }
+      const releaseSection = async (): Promise<void> => {
+        if (section !== undefined) {
+          await leavePublishSection(section.db, section.workItemId, section.epoch)
+        }
+      }
+
       const batchId = ulid()
       if (env.publishIntents !== undefined) {
         await writeIntent(env.publishIntents.db, {
@@ -637,6 +682,11 @@ export function mrReviewProgramStages(
         // Left pending, deliberately. A partial GitLab batch means some
         // comments ARE on the MR, and only a read-back can say which — that is
         // recovery's job next round, not a guess made here.
+        //
+        // The section IS released: it guards the window in which a write is in
+        // flight, and holding it after a failed write would block the next
+        // round from ever publishing.
+        await releaseSection()
         return fail(`${result.failure.code}: ${result.failure.message}`)
       }
 
@@ -651,6 +701,7 @@ export function mrReviewProgramStages(
           ),
         )
       }
+      await releaseSection()
       return done({
         published: {
           posted: result.posted,

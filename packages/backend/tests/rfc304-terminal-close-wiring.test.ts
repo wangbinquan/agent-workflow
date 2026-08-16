@@ -486,15 +486,35 @@ describe('RFC-304 §3.1 — the dispatcher wakes capability cells', () => {
     expect((await db.select().from(tasks)).length).toBe(0)
   })
 
-  test('the second delivery is round 2, not a second work item', async () => {
+  test('the second delivery joins the SAME work item and preempts its round', async () => {
+    // This used to expect rounds [1, 2] — a second round opened immediately.
+    // That was the shape before the preemption effects were performed, and it
+    // is the one design §2.2 不变量一 forbids: one work item may have at most
+    // one running round, because two rounds on one merge request write the same
+    // worktree and each publishes a review of a revision the other has already
+    // replaced.
+    //
+    // What the second delivery does now: bumps the epoch, asks for the running
+    // round to be cancelled, and registers itself as the revision the
+    // REPLACEMENT round will serve once that task is genuinely terminal. No
+    // task runs in this test, so the replacement correctly never starts — the
+    // item is left mid-preemption, which is the state the boot sweep and the
+    // next delivery both know how to resume.
     await readyCell('mr-review')
 
     await deliverUpdate()
     await deliverUpdate()
 
-    expect((await db.select().from(codeWorkItems)).length).toBe(1)
+    // The identity assertion this test has always been about: one MR, one work
+    // item, however many deliveries.
+    const items = await db.select().from(codeWorkItems)
+    expect(items.length).toBe(1)
+    expect(items[0]?.status).toBe('superseding')
+    // The epoch every stale-output check compares against moved.
+    expect(items[0]?.epoch).toBe(2)
+    // And the second delivery did NOT open a round beside the first.
     const rounds = await db.select().from(codeWorkRounds)
-    expect(rounds.map((r) => r.roundSeq).sort()).toEqual([1, 2])
+    expect(rounds.map((r) => r.roundSeq).sort()).toEqual([1])
   })
 })
 

@@ -10,6 +10,7 @@
 // never actually checked — the same class of bug as trusting a moving MR ref,
 // arriving through a different door.
 
+import { AW_INTERNAL_GIT_IDENTITY } from '@/util/git'
 import { runGit, withWorktreeRegistryLock } from '@/util/git'
 import type { GitFetchResult, GitPort } from '@/modules/code-capability/ports/gitPort'
 
@@ -116,13 +117,39 @@ export function createGitAdapter(deps: GitAdapterDeps = {}): GitPort {
       const dirty = await runGit(worktreePath, ['diff', '--cached', '--quiet', '--exit-code'], opts)
       if (dirty.exitCode === 0) return { ok: false, reason: 'no-changes' }
 
-      const identity: string[] = []
-      if (authorName !== undefined && authorName !== '') {
-        identity.push('-c', `user.name=${authorName}`, '-c', `author.name=${authorName}`)
-      }
-      if (authorEmail !== undefined && authorEmail !== '') {
-        identity.push('-c', `user.email=${authorEmail}`, '-c', `author.email=${authorEmail}`)
-      }
+      // An identity is ALWAYS supplied, never inherited.
+      //
+      // A task worktree cloned from a URL carries no local `user.*`, and a host
+      // can have no global identity either — GitHub's runners do not, and
+      // cannot auto-detect one. Setting these only when the caller named an
+      // author therefore meant "works on the developer's laptop, fails on the
+      // server": freezing a patch died with `Author identity unknown; *** Please
+      // tell me who you are.` after the agent had already made the change, so
+      // the round failed at the last step with a message about git configuration
+      // that has nothing to do with the review.
+      //
+      // Same fixed identity the platform's other internal commits use
+      // (`AW_INTERNAL_GIT_IDENTITY`, RFC-130) — a fallback, not a preference:
+      // when the caller names the author (the person whose branch this is), that
+      // wins.
+      const name =
+        authorName !== undefined && authorName !== ''
+          ? authorName
+          : AW_INTERNAL_GIT_IDENTITY.GIT_AUTHOR_NAME
+      const email =
+        authorEmail !== undefined && authorEmail !== ''
+          ? authorEmail
+          : AW_INTERNAL_GIT_IDENTITY.GIT_AUTHOR_EMAIL
+      const identity: string[] = [
+        '-c',
+        `user.name=${name}`,
+        '-c',
+        `author.name=${name}`,
+        '-c',
+        `user.email=${email}`,
+        '-c',
+        `author.email=${email}`,
+      ]
 
       const committed = await runGit(
         worktreePath,

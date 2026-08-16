@@ -131,6 +131,38 @@ export async function renewLease(
 }
 
 /**
+ * Drop a lease whose holding round has ENDED.
+ *
+ * The ordinary release is token-checked and runs in a `finally`, which a task
+ * that is hard-killed never reaches — so a preempted round left its merge
+ * request locked for the lease's full lifetime (fifteen minutes), and the
+ * replacement round the preemption exists to start died immediately with
+ * "another round holds this merge request". The author saw nothing at all:
+ * one round cancelled, the next refused, and no message on the merge request
+ * explaining either.
+ *
+ * Scoped to the named round so a takeover cannot drop the NEW holder's lease —
+ * the same reasoning as the token check, expressed against the one identity the
+ * caller can verify is finished.
+ */
+export async function releaseLeaseOfEndedRound(
+  db: DbClient,
+  key: MrLeaseKey,
+  holderRoundId: string,
+): Promise<boolean> {
+  const deleted = await db
+    .delete(codeMrLeases)
+    .where(
+      and(
+        eq(codeMrLeases.leaseKey, leaseKeyOf(key)),
+        eq(codeMrLeases.holderRoundId, holderRoundId),
+      ),
+    )
+    .returning({ leaseKey: codeMrLeases.leaseKey })
+  return deleted.length > 0
+}
+
+/**
  * Release, proving holdership with the token.
  *
  * Token-checked rather than round-checked: after a takeover the previous round

@@ -21,13 +21,16 @@
 // round anyway would produce exactly the interleaving the lease exists to stop,
 // so refusing is the safe half to build first.
 
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
+import { codeWorkRounds } from '@/db/schema'
 import type { MrLeaseKey } from '@/modules/code-capability/domain/mrLease'
 import { mintLeaseToken } from '@/modules/code-capability/domain/mrLease'
 import {
   acquireLease,
   releaseLease,
+  releaseLeaseOfEndedRound,
 } from '@/modules/code-capability/infrastructure/sqliteMrLeaseStore'
 
 /** How long a lease survives without renewal. */
@@ -44,6 +47,18 @@ export type RoundLeaseResult =
   | { ok: true; lease: RoundLease }
   /** Someone else holds this MR. The round must not start. */
   | { ok: false; heldBy: string }
+
+/** Whether the round holding a lease has already recorded its terminal answer. */
+async function holderRoundHasEnded(db: DbClient, roundId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ endedAt: codeWorkRounds.endedAt })
+    .from(codeWorkRounds)
+    .where(eq(codeWorkRounds.id, roundId))
+    .limit(1)
+  // An unknown round is treated as alive: better a round that waits than one
+  // that steals a lease from a holder this process cannot see.
+  return row !== undefined && row.endedAt !== null
+}
 
 /**
  * Take the MR lease for a round, or report who holds it.
@@ -65,7 +80,24 @@ export async function acquireRoundLease(input: {
     leaseMs: input.leaseMs ?? ROUND_LEASE_MS,
   }
   const token = mintLeaseToken(input.daemonGeneration, ulid())
-  const outcome = await acquireLease(deps, input.key, input.roundId, token)
+  let outcome = await acquireLease(deps, input.key, input.roundId, token)
+
+  if (outcome.outcome === 'busy') {
+    // Is the holder actually alive? The ordinary release runs in a `finally`,
+    // which a hard-killed task never reaches — so a preempted round holds its
+    // merge request for the lease's full lifetime and the replacement round
+    // dies at the door with "another round holds this merge request". Nothing
+    // says so on the merge request, and fifteen minutes later the lease expires
+    // and the whole thing looks like it simply took a while.
+    //
+    // A round that has ENDED cannot be writing, so its lease is a leak rather
+    // than a claim. Reclaimed by round id (not by expiry) so the recovery is
+    // immediate and provable, and only for the round the ledger says is over.
+    if (await holderRoundHasEnded(input.db, outcome.heldBy)) {
+      await releaseLeaseOfEndedRound(input.db, input.key, outcome.heldBy)
+      outcome = await acquireLease(deps, input.key, input.roundId, token)
+    }
+  }
 
   if (outcome.outcome === 'busy') {
     return { ok: false, heldBy: outcome.heldBy }

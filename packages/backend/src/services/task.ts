@@ -3027,7 +3027,19 @@ async function startTaskImpl(
   // 后台推进的第一步，若此刻还没注册，用户在「正在准备仓库」阶段点取消就取消不到
   // 任何东西（而那恰恰是最想取消的阶段：一个拉不动的大仓）。
   if ((await tryAttachTaskDriver(deps.db, taskId, controller)) !== 'attached') {
-    return (await getTask(deps.db, taskId)) as Task
+    // Silent until now, and the silence is the problem: the row exists, the
+    // caller gets a Task back, and NOTHING ever runs it. Whoever launched it
+    // sees a task that stays pending for good with no error anywhere — which is
+    // exactly how a preempted code round's replacement looked when its launch
+    // hit this branch.
+    const fenced = await getTask(deps.db, taskId)
+    log.warn('task will not be driven: the scheduler refused to attach', {
+      taskId,
+      status: fenced?.status ?? 'unknown',
+      sourceTerminationFence: (fenced as { sourceTerminationFence?: unknown } | null)
+        ?.sourceTerminationFence,
+    })
+    return fenced as Task
   }
   let preparedTask: Task | null = null
   /**

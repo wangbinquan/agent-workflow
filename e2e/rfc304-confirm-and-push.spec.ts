@@ -54,7 +54,13 @@ test.beforeAll(async () => {
     requiredEnv('AW_SYSTEM_MOCK_CONTROL_URL'),
     requiredEnv('AW_SYSTEM_MOCK_CONTROL_TOKEN'),
   )
-  await mocks.reset()
+  // NOT `mocks.reset()`: one system-mock suite serves every Playwright worker
+  // (see `e2e/global-setup.ts`) and CI runs four workers per shard, so a global
+  // wipe deletes the projects of whichever specs happen to be running beside
+  // this one. That is not hypothetical — it turned up as
+  // `unknown gitlab project system-e2e/rfc304-confirm` mid-run, from a spec
+  // that had seeded that project seconds earlier. Isolation comes from a unique
+  // project path per spec and from scoping request assertions to it.
 
   const stateDir = mkdtempSync(join(tmpdir(), 'rfc304-confirm-'))
   const planFile = join(stateDir, 'plan.json')
@@ -227,7 +233,9 @@ test('`/aw apply` from the author pushes the FROZEN commit', async () => {
   // `verify-baseline`. The scenario stub has exactly one scripted turn, so a
   // second invocation would either reuse it or fail — either way the assertion
   // that matters is that the change pushed is the frozen one, checked below.
-  const pushed = (await mocks.requests('git')).filter((r) => r.path.includes('git-receive-pack'))
+  const pushed = mine(await mocks.requests('git')).filter((r) =>
+    r.path.includes('git-receive-pack'),
+  )
   expect(
     pushed.length,
     `the frozen commit must reach the branch; confirming round: ${await stageDigest(0)}`,
@@ -238,11 +246,11 @@ test('a confirmation from somebody who is not the author is REFUSED and answered
   // T44, end to end. The patch form pushes with the PLATFORM's credentials, so
   // nothing downstream consults the commenter's permissions — this check is the
   // only thing between a comment and a commit on an author's branch.
-  const before = (await mocks.requests('gitlab')).length
+  const before = mine(await mocks.requests('gitlab')).length
   await deliverComment('/aw apply', 'a-passing-reviewer')
 
   const replies = await waitFor(async () => {
-    const posted = (await mocks.requests('gitlab'))
+    const posted = mine(await mocks.requests('gitlab'))
       .slice(before)
       .filter((r) => r.method === 'POST' && r.path.includes('notes'))
     return posted.length > 0 ? posted : null
@@ -344,6 +352,32 @@ async function requestJson<T = unknown>(
     throw new Error(`${options.method ?? 'GET'} ${path} returned ${response.status}: ${text}`)
   }
   return (text.length === 0 ? null : JSON.parse(text)) as T
+}
+
+/**
+ * Only this spec's traffic.
+ *
+ * One system-mock suite serves every Playwright worker (`e2e/global-setup.ts`)
+ * and CI runs four workers per shard, so the request log carries whatever else
+ * is running. Scoping by the project this spec seeded is what makes a COUNT
+ * ("published exactly once") mean anything at all — and it replaces the global
+ * `mocks.reset()` these specs used to call, which deleted the projects of the
+ * specs running beside them.
+ *
+ * Three spellings of the same project, because each surface names it
+ * differently: GitLab's REST paths carry the numeric id, GitHub's carry
+ * `owner/repo`, and the git remote carries the directory slug.
+ */
+function mine<T extends { path: string }>(requests: T[]): T[] {
+  const slug = PROJECT_PATH.split('/').at(-1) ?? PROJECT_PATH
+  const id = project?.projectId ?? ''
+  return requests.filter(
+    (r) =>
+      (id !== '' && r.path.includes(`/projects/${id}/`)) ||
+      r.path.includes(PROJECT_PATH) ||
+      r.path.includes(encodeURIComponent(PROJECT_PATH)) ||
+      r.path.includes(slug),
+  )
 }
 
 function requiredEnv(name: string): string {
