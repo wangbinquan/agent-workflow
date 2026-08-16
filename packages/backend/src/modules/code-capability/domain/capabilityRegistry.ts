@@ -16,6 +16,10 @@
 // same assertion the day it is added.
 
 import { ReviewEnvelopeSchema } from '@/modules/code-capability/domain/reviewEnvelope'
+import {
+  CommentFixEnvelopeSchema,
+  COMMENT_FIX_AGENT_SLOT,
+} from '@/modules/code-capability/domain/commentFixEnvelope'
 import { REVIEW_AGENT_SLOT } from '@/modules/code-capability/application/reviewStage'
 import {
   validateStageContract,
@@ -151,7 +155,112 @@ export const MR_REVIEW_CONTRACT: StageContract = {
   ],
 }
 
-const BUILTIN_CONTRACTS: readonly StageContract[] = [MR_REVIEW_CONTRACT]
+/**
+ * `mr-comment-fix` v1 — answering a reviewer's comment with code (design §6.2).
+ *
+ * ```
+ * resolve-target → collect-thread → prepare-worktree → apply-change(ai)
+ *   → validate-change → decide-form → publish-suggestion
+ *                                   ↘ post-patch → [awaiting] → verify-baseline → push
+ * ```
+ *
+ * The branch at `decide-form` is the shape of the whole capability, and it is a
+ * PROGRAM decision (T41): a small single-file edit becomes a native suggestion
+ * the reviewer applies with one click and no repository write access, and
+ * anything else becomes a posted diff that waits for an explicit confirmation.
+ * Both terminal stages are declared here rather than resolved at runtime,
+ * because a hook mounts on a stage NAME — a branch hidden inside one stage
+ * would silently offer teams half the mount points they were promised.
+ *
+ * Exactly one stage involves a model, and it is the one that writes code.
+ * Reading the thread, judging the edit, choosing the form, checking the base and
+ * pushing are all decisions a program can make.
+ */
+export const MR_COMMENT_FIX_CONTRACT: StageContract = {
+  capability: 'mr-comment-fix',
+  version: 1,
+  stages: [
+    { kind: 'program', name: 'resolve-target', requires: [], produces: ['target'] },
+    // The whole thread, not just the comment that woke us: a reviewer's point
+    // is routinely spread over a reply chain ("see above", "same as the other
+    // one"), and answering only the last message answers the wrong question.
+    {
+      kind: 'program',
+      name: 'collect-thread',
+      requires: ['target'],
+      produces: ['thread', 'threadAnchor'],
+    },
+    {
+      kind: 'program',
+      name: 'prepare-worktree',
+      requires: ['target'],
+      produces: ['worktree'],
+    },
+    {
+      kind: 'ai',
+      name: 'apply-change',
+      requires: ['thread', 'threadAnchor', 'worktree'],
+      produces: ['change'],
+      injectable: ['promptSuffix', 'extraContext'],
+      aiSchema: CommentFixEnvelopeSchema,
+      agentSlot: COMMENT_FIX_AGENT_SLOT,
+    },
+    // Structural checks on what the model actually did to the tree — that it
+    // changed something, and that it stayed inside the repository. Not a review
+    // of whether the fix is right; that judgement belongs to the human whose
+    // comment started this.
+    {
+      kind: 'program',
+      name: 'validate-change',
+      requires: ['change', 'worktree'],
+      produces: ['validated'],
+    },
+    // Suggestion or patch (T41). Deterministic: one file and a contiguous span
+    // inside the threshold, or not.
+    {
+      kind: 'program',
+      name: 'decide-form',
+      requires: ['validated'],
+      produces: ['form'],
+    },
+    // Terminal for the suggestion path. Posting it SETTLES the round — whether
+    // the reviewer clicks apply is theirs to decide and the host's to record,
+    // and watching for it would mean polling (N7).
+    {
+      kind: 'program',
+      name: 'publish-suggestion',
+      requires: ['form', 'threadAnchor', 'target'],
+      produces: ['published'],
+    },
+    // The patch path: freeze the change as an artifact, post the diff carrying
+    // its digest, and wait. Freezing here rather than at confirmation time is
+    // what makes the eventual push the change the human actually read (T2c).
+    {
+      kind: 'program',
+      name: 'post-patch',
+      requires: ['form', 'validated', 'threadAnchor', 'target'],
+      produces: ['pendingArtifact'],
+    },
+    // Resumed by the confirmation, not reached in the first pass. Re-checks the
+    // remote head against the artifact's base: the branch can move while a
+    // person is deciding, and applying a change built on what it used to be
+    // would clobber whatever arrived in between (C7).
+    {
+      kind: 'program',
+      name: 'verify-baseline',
+      requires: ['pendingArtifact', 'target'],
+      produces: ['verified'],
+    },
+    {
+      kind: 'program',
+      name: 'push',
+      requires: ['verified', 'pendingArtifact'],
+      produces: ['pushed'],
+    },
+  ],
+}
+
+const BUILTIN_CONTRACTS: readonly StageContract[] = [MR_REVIEW_CONTRACT, MR_COMMENT_FIX_CONTRACT]
 
 const BY_CAPABILITY = new Map<CodeCapabilityId, StageContract>(
   BUILTIN_CONTRACTS.map((c) => [c.capability, c]),

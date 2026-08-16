@@ -60,4 +60,65 @@ export interface GitPort {
     repoPath: string
     worktreePath: string
   }): Promise<{ ok: true } | { ok: false; error: string }>
+
+  /**
+   * RFC-304 T2c — freeze a worktree's current state as an immutable commit.
+   *
+   * The commit is what makes "push exactly what the human saw" possible. A
+   * patch is posted, the human reads it, and some time later says yes; between
+   * those two moments the agent's worktree is long gone and re-running the model
+   * would produce a DIFFERENT change with the same justification. So the change
+   * is committed at the moment it is shown, and confirmation pushes that object.
+   *
+   * `keepRef` is not optional bookkeeping: a commit reachable only from a
+   * removed worktree's detached HEAD is unreferenced, and `git gc` may prune it
+   * between the diff being posted and the reply arriving — which on a busy
+   * repository is a real window, not a theoretical one.
+   */
+  commitWorktree(input: {
+    repoPath: string
+    worktreePath: string
+    message: string
+    /** Ref that keeps the commit alive, e.g. `refs/aw/artifacts/<id>`. */
+    keepRef: string
+    authorName?: string
+    authorEmail?: string
+  }): Promise<
+    | { ok: true; commitSha: string }
+    /** Nothing was changed in the worktree — not an error, just no artifact. */
+    | { ok: false; reason: 'no-changes' }
+    | { ok: false; reason: 'failed'; error: string }
+  >
+
+  /** The unified diff a frozen commit introduces, for posting and for digesting. */
+  readCommitDiff(input: {
+    repoPath: string
+    commitSha: string
+  }): Promise<{ ok: true; diff: string } | { ok: false; error: string }>
+
+  /**
+   * Push a frozen commit onto a branch at the remote.
+   *
+   * `expectedRemoteSha` makes it a compare-and-swap: the push is refused if the
+   * branch has moved, rather than force-updating over whatever arrived while
+   * the platform was waiting for a human (C7). Without it, "verify then push"
+   * is a TOCTOU with a human-sized window in the middle.
+   */
+  pushCommit(input: {
+    repoPath: string
+    commitSha: string
+    branch: string
+    expectedRemoteSha: string
+  }): Promise<
+    | { ok: true }
+    /** The remote moved between the check and the push. */
+    | { ok: false; reason: 'stale'; error: string }
+    | { ok: false; reason: 'failed'; error: string }
+  >
+
+  /** Drop a keep-alive ref so the object becomes collectable again. */
+  deleteRef(input: {
+    repoPath: string
+    ref: string
+  }): Promise<{ ok: true } | { ok: false; error: string }>
 }

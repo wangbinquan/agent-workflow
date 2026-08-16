@@ -30,6 +30,7 @@ import {
 import { readRoundStages } from '../src/modules/code-capability/application/stageEngine'
 import { createReviewHostFake } from './helpers/codeHostReviewFake'
 import type { GitPort } from '../src/modules/code-capability/ports/gitPort'
+import { createGitPortFake } from './helpers/gitPortFake'
 import type { WebhookTriggerFields } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -69,24 +70,21 @@ function recordingGit() {
   const shardShas: string[] = []
   const shardPaths: string[] = []
   const live = new Set<string>()
-  const port: GitPort = {
-    async fetchRef() {
-      return { ok: true, resolvedSha: HEAD }
+  const port: GitPort = createGitPortFake(
+    { resolvedSha: HEAD },
+    {
+      async addDisposableWorktree({ worktreePath, sha }) {
+        shardShas.push(sha)
+        shardPaths.push(worktreePath)
+        live.add(worktreePath)
+        return { ok: true }
+      },
+      async removeDisposableWorktree({ worktreePath }) {
+        live.delete(worktreePath)
+        return { ok: true }
+      },
     },
-    async checkoutDetached() {
-      return { ok: true }
-    },
-    async addDisposableWorktree({ worktreePath, sha }) {
-      shardShas.push(sha)
-      shardPaths.push(worktreePath)
-      live.add(worktreePath)
-      return { ok: true }
-    },
-    async removeDisposableWorktree({ worktreePath }) {
-      live.delete(worktreePath)
-      return { ok: true }
-    },
-  }
+  )
   return { port, shardShas, shardPaths, live }
 }
 

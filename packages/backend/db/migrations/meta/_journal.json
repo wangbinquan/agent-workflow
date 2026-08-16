@@ -1163,6 +1163,13 @@
       "when": 1788278403037,
       "tag": "0166_rfc304_monitor_observations",
       "breakpoints": true
+    },
+    {
+      "idx": 166,
+      "version": "6",
+      "when": 1788278404037,
+      "tag": "0167_rfc304_code_artifacts",
+      "breakpoints": true
     }
   ]
 }

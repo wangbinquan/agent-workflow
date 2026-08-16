@@ -21,6 +21,7 @@ import {
   type RoundTarget,
 } from '../src/modules/code-capability/domain/resolveTarget'
 import type { GitPort, GitFetchResult } from '../src/modules/code-capability/ports/gitPort'
+import { createGitPortFake } from './helpers/gitPortFake'
 import type {
   CodeHostCall,
   CodeHostPort,
@@ -58,22 +59,34 @@ function fakeGit(
   return {
     asked,
     checkedOut,
-    async fetchRef({ refspec }) {
-      asked.push(refspec)
-      return fetches[refspec] ?? { ok: false, error: 'couldn’t find remote ref' }
-    },
-    async checkoutDetached({ sha }) {
-      checkedOut.push(sha)
-      return opts.checkout ?? { ok: true }
-    },
-    // `prepare-worktree` never touches shard trees; present so the fake
-    // satisfies the port, and deliberately loud if that ever stops being true.
-    async addDisposableWorktree() {
-      throw new Error('prepare-worktree must not create shard worktrees')
-    },
-    async removeDisposableWorktree() {
-      throw new Error('prepare-worktree must not remove shard worktrees')
-    },
+    ...createGitPortFake(
+      {},
+      {
+        async fetchRef({ refspec }) {
+          asked.push(refspec)
+          return fetches[refspec] ?? { ok: false, error: 'couldn’t find remote ref' }
+        },
+        async checkoutDetached({ sha }) {
+          checkedOut.push(sha)
+          return opts.checkout ?? { ok: true }
+        },
+        // `prepare-worktree` touches none of the other verbs; these are loud
+        // rather than inert, so the day one of them starts being called the
+        // test says so instead of quietly succeeding.
+        async addDisposableWorktree() {
+          throw new Error('prepare-worktree must not create shard worktrees')
+        },
+        async removeDisposableWorktree() {
+          throw new Error('prepare-worktree must not remove shard worktrees')
+        },
+        async commitWorktree() {
+          throw new Error('prepare-worktree must not freeze artifacts')
+        },
+        async pushCommit() {
+          throw new Error('prepare-worktree must not push')
+        },
+      },
+    ),
   }
 }
 

@@ -96,5 +96,117 @@ export function createGitAdapter(deps: GitAdapterDeps = {}): GitPort {
         ? { ok: true }
         : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }
     },
+
+    async commitWorktree({ repoPath, worktreePath, message, keepRef, authorName, authorEmail }) {
+      // `add -A` rather than `add -u`: an agent's fix routinely adds a file
+      // (a new test, an extracted module), and staging only tracked paths would
+      // freeze a commit that does not build.
+      const staged = await runGit(worktreePath, ['add', '-A'], opts)
+      if (staged.exitCode !== 0) {
+        return {
+          ok: false,
+          reason: 'failed',
+          error: describeGitFailure(staged.stderr, staged.exitCode),
+        }
+      }
+
+      // `--quiet --exit-code` reports 1 when something is staged. An empty
+      // commit is not an error here — the agent looked and changed nothing —
+      // but it must not be posted as a patch, so it comes back as `no-changes`.
+      const dirty = await runGit(worktreePath, ['diff', '--cached', '--quiet', '--exit-code'], opts)
+      if (dirty.exitCode === 0) return { ok: false, reason: 'no-changes' }
+
+      const identity: string[] = []
+      if (authorName !== undefined && authorName !== '') {
+        identity.push('-c', `user.name=${authorName}`, '-c', `author.name=${authorName}`)
+      }
+      if (authorEmail !== undefined && authorEmail !== '') {
+        identity.push('-c', `user.email=${authorEmail}`, '-c', `author.email=${authorEmail}`)
+      }
+
+      const committed = await runGit(
+        worktreePath,
+        [...identity, 'commit', '--no-verify', '--no-gpg-sign', '-m', message],
+        opts,
+      )
+      if (committed.exitCode !== 0) {
+        return {
+          ok: false,
+          reason: 'failed',
+          error: describeGitFailure(committed.stderr, committed.exitCode),
+        }
+      }
+
+      const resolved = await runGit(worktreePath, ['rev-parse', '--verify', 'HEAD^{commit}'], opts)
+      const commitSha = resolved.stdout.trim()
+      if (resolved.exitCode !== 0 || commitSha === '') {
+        return {
+          ok: false,
+          reason: 'failed',
+          error: `committed but could not resolve HEAD: ${describeGitFailure(resolved.stderr, resolved.exitCode)}`,
+        }
+      }
+
+      // The keep-alive ref, written into the COMMON repository rather than the
+      // worktree: the worktree is about to be deleted, and a commit reachable
+      // only from its detached HEAD is prunable by `git gc` while a human is
+      // still deciding whether to accept it.
+      const kept = await runGit(repoPath, ['update-ref', keepRef, commitSha], opts)
+      if (kept.exitCode !== 0) {
+        return {
+          ok: false,
+          reason: 'failed',
+          error: `froze ${commitSha.slice(0, 12)} but could not keep it alive: ${describeGitFailure(kept.stderr, kept.exitCode)}`,
+        }
+      }
+
+      return { ok: true, commitSha }
+    },
+
+    async readCommitDiff({ repoPath, commitSha }) {
+      // `show` against the commit's first parent. `--format=` drops the commit
+      // header so the output is a plain unified diff the diff parsers accept.
+      const result = await runGit(
+        repoPath,
+        ['show', '--format=', '--no-color', '--unified=3', commitSha],
+        opts,
+      )
+      return result.exitCode === 0
+        ? { ok: true, diff: result.stdout }
+        : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }
+    },
+
+    async pushCommit({ repoPath, commitSha, branch, expectedRemoteSha }) {
+      // A compare-and-swap push. Plain `push` would succeed by fast-forwarding
+      // over whatever arrived while the platform was waiting for a human, and
+      // `--force` would discard it outright; `--force-with-lease=<ref>:<sha>`
+      // refuses unless the remote is still exactly where it was checked.
+      const result = await runGit(
+        repoPath,
+        [
+          'push',
+          `--force-with-lease=refs/heads/${branch}:${expectedRemoteSha}`,
+          remote,
+          `${commitSha}:refs/heads/${branch}`,
+        ],
+        opts,
+      )
+      if (result.exitCode === 0) return { ok: true }
+
+      const error = describeGitFailure(result.stderr, result.exitCode)
+      // git reports a lease failure as `stale info` / `rejected`. Distinguished
+      // because the two need different words on the merge request: a stale
+      // branch is "somebody pushed, here is a fresh one", while a real failure
+      // is "this needs a person".
+      const stale = /stale info|non-fast-forward|rejected/i.test(error)
+      return stale ? { ok: false, reason: 'stale', error } : { ok: false, reason: 'failed', error }
+    },
+
+    async deleteRef({ repoPath, ref }) {
+      const result = await runGit(repoPath, ['update-ref', '-d', ref], opts)
+      return result.exitCode === 0
+        ? { ok: true }
+        : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }
+    },
   }
 }

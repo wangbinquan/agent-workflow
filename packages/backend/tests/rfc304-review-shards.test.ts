@@ -26,6 +26,7 @@ import {
 import { splitDiff } from '../src/modules/code-capability/domain/splitDiff'
 import type { FileDiff } from '../src/modules/code-capability/domain/mrDiffNormalize'
 import type { GitPort } from '../src/modules/code-capability/ports/gitPort'
+import { createGitPortFake } from './helpers/gitPortFake'
 
 const NONCE = 'shardnonce'
 const BASE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
@@ -54,26 +55,23 @@ function recordingGit(over: { addFails?: boolean } = {}) {
   const removed: string[] = []
   const live = new Set<string>()
   let maxConcurrent = 0
-  const port: GitPort = {
-    async fetchRef() {
-      return { ok: true, resolvedSha: BASE }
+  const port: GitPort = createGitPortFake(
+    { resolvedSha: BASE },
+    {
+      async addDisposableWorktree({ worktreePath }) {
+        if (over.addFails === true) return { ok: false, error: 'no space left on device' }
+        added.push(worktreePath)
+        live.add(worktreePath)
+        maxConcurrent = Math.max(maxConcurrent, live.size)
+        return { ok: true }
+      },
+      async removeDisposableWorktree({ worktreePath }) {
+        removed.push(worktreePath)
+        live.delete(worktreePath)
+        return { ok: true }
+      },
     },
-    async checkoutDetached() {
-      return { ok: true }
-    },
-    async addDisposableWorktree({ worktreePath }) {
-      if (over.addFails === true) return { ok: false, error: 'no space left on device' }
-      added.push(worktreePath)
-      live.add(worktreePath)
-      maxConcurrent = Math.max(maxConcurrent, live.size)
-      return { ok: true }
-    },
-    async removeDisposableWorktree({ worktreePath }) {
-      removed.push(worktreePath)
-      live.delete(worktreePath)
-      return { ok: true }
-    },
-  }
+  )
   return {
     port,
     added,

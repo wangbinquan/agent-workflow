@@ -4186,6 +4186,48 @@ export const codeMrLeases = sqliteTable(
  * guessing — both guesses are wrong in opposite directions.
  */
 /**
+ * RFC-304 T2c — immutable artifacts, so a confirmation pushes what was shown.
+ *
+ * The patch path posts a diff and waits, sometimes for days. By the time the
+ * reply arrives the agent's worktree is gone, and re-running the model would
+ * produce a DIFFERENT change carrying the same justification. Freezing the
+ * change as a commit when it is posted is what makes "yes" mean something.
+ */
+export const codeArtifacts = sqliteTable(
+  'code_artifacts',
+  {
+    id: text('id').primaryKey(),
+    /** Which repository's object store holds the commit — part of its identity. */
+    repoPath: text('repo_path').notNull(),
+    commitSha: text('commit_sha').notNull(),
+    /** What it was built on; `verify-baseline` compares against the branch head. */
+    baseSha: text('base_sha').notNull(),
+    /**
+     * Content digest of the diff as shown. Distinct from `commitSha`: two
+     * commits with different parents carry the identical change, and it is the
+     * CHANGE the human agreed to.
+     */
+    digest: text('digest').notNull(),
+    /** The ref keeping the commit alive against `git gc`; dropped on release. */
+    keepRef: text('keep_ref').notNull(),
+    roundId: text('round_id'),
+    workItemId: text('work_item_id'),
+    /** A confirmation from an older generation is refused, not applied. */
+    generation: integer('generation').notNull().default(1),
+    /** Zero means nothing is waiting on it, so the object can be collected. */
+    refCount: integer('ref_count').notNull().default(0),
+    state: text('state').notNull().default('live'),
+    createdAt: integer('created_at').notNull(),
+    releasedAt: integer('released_at'),
+  },
+  (t) => ({
+    digestIdx: index('idx_code_artifacts_digest').on(t.digest),
+    itemIdx: index('idx_code_artifacts_item').on(t.workItemId, t.state),
+    reclaimIdx: index('idx_code_artifacts_reclaim').on(t.state, t.refCount),
+  }),
+)
+
+/**
  * RFC-304 T35/T36 — what a wake-up leaves behind when it starts no round.
  *
  * The monitor's commonest outcome is `noop`, and by design it creates no task

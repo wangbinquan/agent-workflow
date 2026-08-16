@@ -36,6 +36,7 @@ import type {
   CodeHostResult,
 } from '../src/modules/code-capability/ports/codeHostPort'
 import type { GitPort } from '../src/modules/code-capability/ports/gitPort'
+import { createGitPortFake } from './helpers/gitPortFake'
 import type { WebhookTriggerFields } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -92,20 +93,7 @@ function fakeHost(
   return { port, calls }
 }
 
-const fakeGit = (resolvedSha = HEAD): GitPort => ({
-  async fetchRef() {
-    return { ok: true, resolvedSha }
-  },
-  async checkoutDetached() {
-    return { ok: true }
-  },
-  async addDisposableWorktree() {
-    return { ok: true as const }
-  },
-  async removeDisposableWorktree() {
-    return { ok: true as const }
-  },
-})
+const fakeGit = (resolvedSha = HEAD): GitPort => createGitPortFake({ resolvedSha })
 
 const envelope = (findings: unknown[]) =>
   `<workflow-output nonce="${NONCE}"><port name="findings">${JSON.stringify({ findings })}</port></workflow-output>`

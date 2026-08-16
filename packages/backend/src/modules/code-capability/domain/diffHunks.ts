@@ -16,8 +16,14 @@
 import { parsePatch } from 'diff'
 import type { DiffHunk } from '@/modules/code-capability/domain/anchorResolve'
 
-/** `a/src/x.ts` → `src/x.ts`; `/dev/null` → null (the side does not exist). */
-function normalizePath(raw: string | undefined): string | null {
+/**
+ * `a/src/x.ts` → `src/x.ts`; `/dev/null` → null (the side does not exist).
+ *
+ * Exported because more than one reader of a diff header needs it and the
+ * prefix rule below is subtle enough that a second copy would eventually get it
+ * wrong. `mrDiffNormalize` writes these headers; this reads them.
+ */
+export function normalizeDiffHeaderPath(raw: string | undefined): string | null {
   if (raw === undefined || raw === '') return null
   if (raw === '/dev/null') return null
   // Only the FIRST segment is a prefix. A file genuinely named `a/b/c.ts`
@@ -46,8 +52,8 @@ export function parseDiffHunks(unifiedDiff: string): DiffHunk[] {
 
   const out: DiffHunk[] = []
   for (const file of files) {
-    const oldPath = normalizePath(file.oldFileName)
-    const newPath = normalizePath(file.newFileName)
+    const oldPath = normalizeDiffHeaderPath(file.oldFileName)
+    const newPath = normalizeDiffHeaderPath(file.newFileName)
     for (const hunk of file.hunks) {
       out.push({
         oldPath,

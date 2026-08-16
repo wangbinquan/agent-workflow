@@ -30,6 +30,7 @@ import {
   type MrReviewEnvironment,
 } from '../src/modules/code-capability/composition/mrReviewStages'
 import type { GitPort } from '../src/modules/code-capability/ports/gitPort'
+import { createGitPortFake } from './helpers/gitPortFake'
 import type { CodeHostConnectionsService, FetchLike } from '../src/services/codeHost/connections'
 import type { WebhookTriggerFields } from '@agent-workflow/shared'
 
@@ -128,20 +129,7 @@ const envelope = () =>
     findings: [FINDING],
   })}</port></workflow-output>`
 
-const fakeGit = (): GitPort => ({
-  async fetchRef() {
-    return { ok: true, resolvedSha: HEAD }
-  },
-  async checkoutDetached() {
-    return { ok: true }
-  },
-  async addDisposableWorktree() {
-    return { ok: true as const }
-  },
-  async removeDisposableWorktree() {
-    return { ok: true as const }
-  },
-})
+const fakeGit = (): GitPort => createGitPortFake({ resolvedSha: HEAD })
 
 describe('RFC-304 — the wire form of a GitLab review', () => {
   let db: DbClient
