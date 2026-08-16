@@ -97,6 +97,22 @@ export interface GitPort {
   }): Promise<{ ok: true; diff: string } | { ok: false; error: string }>
 
   /**
+   * What an agent has changed in a worktree, before anything is committed.
+   *
+   * Read rather than frozen at this point on purpose: `decide-form` needs the
+   * diff to choose between a suggestion and a patch, and only the patch path
+   * needs a commit. Freezing first would mint an artifact — with a keep-alive
+   * ref pinning a commit — for every suggestion too, and each would then have
+   * to be released again to avoid leaking it.
+   *
+   * Untracked files are included: an agent's fix routinely adds one, and a diff
+   * that silently omitted it would show a change that does not build.
+   */
+  readWorktreeDiff(input: {
+    worktreePath: string
+  }): Promise<{ ok: true; diff: string } | { ok: false; error: string }>
+
+  /**
    * Push a frozen commit onto a branch at the remote.
    *
    * `expectedRemoteSha` makes it a compare-and-swap: the push is refused if the

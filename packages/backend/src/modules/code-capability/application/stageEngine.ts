@@ -25,6 +25,43 @@ export type StageArtifacts = Readonly<Record<string, unknown>>
 export type StageResult =
   | { status: 'done'; produced?: StageArtifacts; counts?: Readonly<Record<string, number>> }
   | { status: 'failed'; error: string }
+  /**
+   * RFC-304 §6.2 — the stage did its work and the sequence now WAITS for a
+   * person (design's `[awaiting]`).
+   *
+   * Distinct from `done` because the remaining stages must not run: `post-patch`
+   * has posted a diff and the next stages push it, which is precisely what
+   * nobody has agreed to yet. Distinct from `failed` because nothing went
+   * wrong — an operator seeing a red round here would go looking for a bug that
+   * does not exist.
+   *
+   * Waiting lives at the WORK ITEM, not the task (design D2): the round ends,
+   * its task settles, and the confirmation later opens a NEW round resuming at
+   * `resumeAt`. A task suspended for three days would sit in the scheduler
+   * holding a worktree and a slot for a reply that may never come.
+   */
+  | {
+      status: 'awaiting'
+      /** Which stage the confirming round resumes from. */
+      resumeAt: string
+      /** Shown on the work item; why a person is being waited on. */
+      reason: string
+      produced?: StageArtifacts
+    }
+  /**
+   * RFC-304 §6.2 — the sequence is FINISHED here; later stages do not apply.
+   *
+   * A branching capability declares every branch's stages (a hook mounts on a
+   * stage name, so hiding a branch inside one stage removes mount points teams
+   * were promised). Only one branch runs per round, and the stages of the other
+   * must not.
+   *
+   * The alternative — letting them run and no-op — is what this exists to
+   * avoid: a stage that returns `done` having done nothing is indistinguishable
+   * from one that worked, both in the state view and to the next reader of the
+   * code. Remaining stages are recorded `skipped`, which says what happened.
+   */
+  | { status: 'settled'; produced?: StageArtifacts; reason?: string }
 
 export interface StageRunContext {
   roundId: string
@@ -70,6 +107,17 @@ export type StageSequenceOutcome =
   | { outcome: 'failed'; failedStage: string; error: string }
   | { outcome: 'blocked'; blockedStage: string; reason: string }
   | { outcome: 'canceled'; canceledStage: string }
+  /**
+   * Paused for a person. The round succeeded up to here; `resumeAt` is where
+   * the confirming round picks up, and `artifacts` is what it inherits.
+   */
+  | {
+      outcome: 'awaiting'
+      awaitingStage: string
+      resumeAt: string
+      reason: string
+      artifacts: StageArtifacts
+    }
 
 export interface RunStageSequenceArgs {
   db: DbClient
@@ -155,6 +203,46 @@ export async function runStageSequence(args: RunStageSequenceArgs): Promise<Stag
     if (result.status === 'failed') {
       await settleStage(db, stageRowId, 'failed', now(), { error: result.error })
       return { outcome: 'failed', failedStage: stage.name, error: result.error }
+    }
+
+    if (result.status === 'settled') {
+      await settleStage(db, stageRowId, 'done', now(), { countsJson: null })
+      Object.assign(artifacts, result.produced ?? {})
+      // The stages of the branch that did not run are `skipped`, not left
+      // `pending`: the state view would otherwise show a round that never
+      // finished, and the boot reaper would eventually repair it as
+      // interrupted.
+      for (const [laterSeq, later] of contract.stages.entries()) {
+        if (laterSeq <= seq) continue
+        await recordStage(db, roundId, laterSeq, later, 'skipped', now(), {
+          ...(result.reason === undefined ? {} : { error: result.reason }),
+        })
+      }
+      return { outcome: 'done', artifacts }
+    }
+
+    if (result.status === 'awaiting') {
+      // Settled `done`, not left `running`: the stage finished its work. What
+      // is unfinished is the SEQUENCE, and that is carried by the outcome. A
+      // stage row stuck at `running` would show the state view a round that is
+      // still going, and the boot reaper would eventually repair it as
+      // interrupted.
+      await settleStage(db, stageRowId, 'done', now(), { countsJson: null })
+      Object.assign(artifacts, result.produced ?? {})
+      // This round's later rows are `skipped`. They are not pending: the stages
+      // that eventually run belong to the CONFIRMING round, which has its own
+      // rows. Leaving them pending shows a round that never finished.
+      for (const [laterSeq, later] of contract.stages.entries()) {
+        if (laterSeq <= seq) continue
+        await recordStage(db, roundId, laterSeq, later, 'skipped', now(), { error: result.reason })
+      }
+      return {
+        outcome: 'awaiting',
+        awaitingStage: stage.name,
+        resumeAt: result.resumeAt,
+        reason: result.reason,
+        artifacts,
+      }
     }
 
     await settleStage(db, stageRowId, 'done', now(), {

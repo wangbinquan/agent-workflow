@@ -4772,6 +4772,38 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
   }
   const result = leased.value
 
+  if (result.outcome === 'awaiting') {
+    // RFC-304 §6.2 — the round finished its work and now waits for a person.
+    // The TASK completes: waiting lives at the work item (design D2), and a
+    // task suspended for three days would hold a worktree and a scheduler slot
+    // for a reply that may never come. Reporting it as a failure would be worse
+    // still — an operator would go looking for a bug that is not there.
+    const summary = `awaiting a human at '${result.awaitingStage}': ${result.reason}`
+    await db.insert(nodeRunOutputs).values([
+      {
+        nodeRunId,
+        portName: CODE_ROUND_SUMMARY_PORT,
+        // `resumeAt` travels with the summary because it is what the confirming
+        // round needs, and the node run is the durable record of this one.
+        content: JSON.stringify({
+          capability,
+          summary,
+          awaiting: { stage: result.awaitingStage, resumeAt: result.resumeAt },
+        }),
+      },
+    ])
+    await setNodeRunStatus({
+      db,
+      nodeRunId,
+      to: 'done',
+      allowedFrom: ['running'],
+      reason: 'code-round-awaiting',
+      extra: { finishedAt: Date.now() },
+    })
+    broadcastNodeStatus(taskId, nodeRunId, node.id, 'done')
+    return { kind: 'ok', summary, message: '' }
+  }
+
   if (result.outcome !== 'done') {
     const failureCode =
       result.outcome === 'blocked'

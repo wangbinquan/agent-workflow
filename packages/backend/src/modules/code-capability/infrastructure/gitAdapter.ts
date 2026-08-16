@@ -176,6 +176,23 @@ export function createGitAdapter(deps: GitAdapterDeps = {}): GitPort {
         : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }
     },
 
+    async readWorktreeDiff({ worktreePath }) {
+      // `add -A --intent-to-add` first, then `diff` — the only way `git diff`
+      // reports a NEW file. Without it an agent that added a module shows a
+      // diff missing the module, which reads as a change that cannot compile.
+      // `--intent-to-add` records the path without staging content, so the
+      // tree is left exactly as the agent left it.
+      const marked = await runGit(worktreePath, ['add', '-A', '--intent-to-add'], opts)
+      if (marked.exitCode !== 0) {
+        return { ok: false, error: describeGitFailure(marked.stderr, marked.exitCode) }
+      }
+
+      const result = await runGit(worktreePath, ['diff', '--no-color', '--unified=3'], opts)
+      return result.exitCode === 0
+        ? { ok: true, diff: result.stdout }
+        : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }
+    },
+
     async pushCommit({ repoPath, commitSha, branch, expectedRemoteSha }) {
       // A compare-and-swap push. Plain `push` would succeed by fast-forwarding
       // over whatever arrived while the platform was waiting for a human, and

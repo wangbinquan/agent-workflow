@@ -517,16 +517,24 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 
 ### 评论驱动改码（PR-7）
 
-| #    | 任务                                                                                                                                                                                                                                                 | 依赖    |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| T2c  | **artifact store**（从 PR-1 移来，主要服务本 PR）：不可变产物（detached commit / blob）+ digest + 引用计数；`inherited` 阶段投影；消费或作废后**立即回收**                                                                                           | T2      |
-| T4b  | **恢复策略按等待原因**（从 PR-1 移来）：`waitKind` ∈ {`frozen-artifact-confirmation`（禁重跑 AI）, `clarification-answer`（令 comprehend 及下游失效重跑）}                                                                                           | T4      |
-| T41a | **共同主干装配**：`resolve-target → collect-thread → prepare-worktree → apply-change → validate-change` + `mr-comment-fix` StageContract + 监视器/ingress 接线（此前只有两个出口任务，主干无人做）                                                   | T4,T36  |
-| T41  | `decide-form`：单文件 + 连续行数在阈值内 ⇒ suggestion，否则 patch                                                                                                                                                                                    | T41a    |
-| T42  | suggestion 渲染（两家语法）与发布                                                                                                                                                                                                                    | T41,T19 |
-| T43  | patch 路径：生成改动 → **固化为 detached commit + digest（`pendingArtifact`）** → 贴 diff（带 digest 短标识）→ `awaiting` → 关键词识别（须匹配 generation）→ `verify-baseline`（校 head/artifact/digest 三者）→ **物化并推送该确切产物**，不重新生成 | T41,T3  |
-| T44  | 权限：suggestion 放宽到仓库写权限者；推送锁 MR 作者，bot MR 读 `initiatorUserId`                                                                                                                                                                     | T43     |
-| T45  | 源分支变化作废 + 回帖说明                                                                                                                                                                                                                            | T43     |
+| #    | 任务                                                                                                                                                                                                                                                 | 依赖    | 状态 |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------ |
+| T2c  | **artifact store**（从 PR-1 移来，主要服务本 PR）：不可变产物（detached commit / blob）+ digest + 引用计数；`inherited` 阶段投影；消费或作废后**立即回收**                                                                                           | T2      | ✅ 2026-08-16 |
+| T4b  | **恢复策略按等待原因**（从 PR-1 移来）：`waitKind` ∈ {`frozen-artifact-confirmation`（禁重跑 AI）, `clarification-answer`（令 comprehend 及下游失效重跑）}                                                                                           | T4      | ◐ 见下方说明（冻结产物一支已落，clarify 一支随 PR-8） |
+| T41a | **共同主干装配**：`resolve-target → collect-thread → prepare-worktree → apply-change → validate-change` + `mr-comment-fix` StageContract + 监视器/ingress 接线（此前只有两个出口任务，主干无人做）                                                   | T4,T36  | ✅ 2026-08-16（阶段已装配；ingress 接线同 PR-6 遗留项） |
+| T41  | `decide-form`：单文件 + 连续行数在阈值内 ⇒ suggestion，否则 patch                                                                                                                                                                                    | T41a    | ✅ 2026-08-16 |
+| T42  | suggestion 渲染（两家语法）与发布                                                                                                                                                                                                                    | T41,T19 | ✅ 2026-08-16 |
+| T43  | patch 路径：生成改动 → **固化为 detached commit + digest（`pendingArtifact`）** → 贴 diff（带 digest 短标识）→ `awaiting` → 关键词识别（须匹配 generation）→ `verify-baseline`（校 head/artifact/digest 三者）→ **物化并推送该确切产物**，不重新生成 | T41,T3  | ✅ 2026-08-16 |
+| T44  | 权限：suggestion 放宽到仓库写权限者；推送锁 MR 作者，bot MR 读 `initiatorUserId`                                                                                                                                                                     | T43     | ✅ 2026-08-16（判定规则；接线随确认入口） |
+| T45  | 源分支变化作废 + 回帖说明                                                                                                                                                                                                                            | T43     | ✅ 2026-08-16 |
+
+> **T4b 的落法（与原文措辞不同，此处说明）**：原计划要一个 `waitKind` 枚举来区分恢复策略。
+> 实现时改为由 `awaiting` 结果自带的 **`resumeAt` 阶段名**表达——`frozen-artifact-confirmation`
+> 就是 `resumeAt: 'verify-baseline'`，它位于 `apply-change` **之后**，因此「禁重跑 AI」不是一条
+> 需要遵守的规则，而是序列本身的形状（`rfc304-comment-fix-round` 用一个「被调用就抛」的假模型
+> 锁死这一点）。再加一个 `waitKind` 字段等于把同一件事编码两遍，两者一旦不一致，真正生效的是
+> 阶段名而告警看的是字段。`clarification-answer` 那一支属于 `requirement`，随 PR-8 落地。
+
 
 ### 需求实现（PR-8）
 

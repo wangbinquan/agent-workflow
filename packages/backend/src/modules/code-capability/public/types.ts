@@ -25,7 +25,17 @@ export interface CodeRoundExecutionInput {
   readonly repos: ReadonlyArray<{ readonly name: string; readonly path: string }>
   /** Envelope scoping for this round's AI stages and hooks. */
   readonly envelopeNonce: string
-  /** Restart from this stage, inheriting the prefix (design §2.2 恢复语义). */
+  /**
+   * Restart from this stage, inheriting the prefix (design §2.2 恢复语义).
+   *
+   * What the skipped stages would have PRODUCED is not passed here. A resumed
+   * round starts cold — the posting round's task ended, possibly days ago — so
+   * that state has to be reconstituted from durable sources, and the artifact
+   * vocabulary doing it is a capability's private business. It is supplied
+   * through the runner's assembly (`CodeCapabilityRunnerDeps.inheritedArtifacts`)
+   * rather than through this contract, which would otherwise have to carry an
+   * open `unknown`-valued map across a public surface (RFC-294 W0-R).
+   */
   readonly resumeFromStage: string | null
 }
 
@@ -35,6 +45,21 @@ export type CodeRoundExecutionResult =
   /** A team's own pre-hook refused this stage — a policy decision, not an error. */
   | { readonly outcome: 'blocked'; readonly blockedStage: string; readonly reason: string }
   | { readonly outcome: 'canceled'; readonly canceledStage: string }
+  /**
+   * RFC-304 §6.2 — the round did its work and now waits for a person.
+   *
+   * Neither `done` nor `failed`, and conflating it with either loses something
+   * real: reported as done, the work item settles and the confirmation has
+   * nothing to wake; reported as failed, an operator goes looking for a bug
+   * that does not exist. The caller moves the WORK ITEM to `awaiting` and
+   * records `resumeAt` for the round the confirmation will open.
+   */
+  | {
+      readonly outcome: 'awaiting'
+      readonly awaitingStage: string
+      readonly resumeAt: string
+      readonly reason: string
+    }
   /** No contract is registered for this capability — a configuration fault. */
   | { readonly outcome: 'unknown-capability'; readonly capability: string }
 

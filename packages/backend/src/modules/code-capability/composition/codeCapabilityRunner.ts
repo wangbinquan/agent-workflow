@@ -60,6 +60,20 @@ export interface CodeCapabilityRunnerDeps {
   /** AI-stage implementations, keyed by stage name (PR-4a onward). */
   aiStages?: Readonly<Record<string, (ctx: StageRunContext) => Promise<StageResult>>>
   /**
+   * Artifacts the resumed prefix would have produced (RFC-304 §6.2).
+   *
+   * A confirming round skips the stages that posted the change; whatever the
+   * remaining stages read has to be supplied here, recomputed from durable
+   * state — the trigger context on the task row, the artifact store — rather
+   * than remembered from a process that has exited.
+   *
+   * On the runner's assembly rather than the public round contract: the
+   * artifact vocabulary is this module's own, and putting an open
+   * `unknown`-valued map on the public surface is exactly what the
+   * architecture preflight forbids.
+   */
+  inheritedArtifacts?: Readonly<Record<string, unknown>>
+  /**
    * A team's stage hooks, and what they need to run.
    *
    * Absent means no hooks fire — which is the ordinary case, since most
@@ -143,6 +157,9 @@ export function createCodeCapabilityRunner(deps: CodeCapabilityRunnerDeps): Code
         contract,
         runners,
         resumeFromStage: input.resumeFromStage,
+        ...(deps.inheritedArtifacts === undefined
+          ? {}
+          : { inheritedArtifacts: { ...deps.inheritedArtifacts } }),
         ...(deps.hooks !== undefined ? { hooks: buildStageHooks(deps.hooks, input) } : {}),
         ...(deps.signal !== undefined ? { signal: deps.signal } : {}),
       })
@@ -159,6 +176,13 @@ export function createCodeCapabilityRunner(deps: CodeCapabilityRunnerDeps): Code
           return { outcome: 'blocked', blockedStage: out.blockedStage, reason: out.reason }
         case 'canceled':
           return { outcome: 'canceled', canceledStage: out.canceledStage }
+        case 'awaiting':
+          return {
+            outcome: 'awaiting',
+            awaitingStage: out.awaitingStage,
+            resumeAt: out.resumeAt,
+            reason: out.reason,
+          }
       }
     },
   }

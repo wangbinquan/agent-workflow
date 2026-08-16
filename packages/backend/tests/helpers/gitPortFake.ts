@@ -46,6 +46,9 @@ export function createGitPortFake(
     async readCommitDiff() {
       return { ok: true, diff: options.diff ?? '' }
     },
+    async readWorktreeDiff() {
+      return { ok: true, diff: options.diff ?? '' }
+    },
     async pushCommit() {
       return { ok: true }
     },
