@@ -606,7 +606,7 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | --- | -------------------------------------------------------------------------------- | -------- | ---- |
 | T55 | 状态图第三层：每次 AI 调用（envelope 校验结果、重试次数），可跳转任务详情        | T33,T6   | ✅ 2026-08-16 |
 | T56 | 轮次切换回看                                                                     | T33      | ✅ 2026-08-16 |
-| T57 | 模板管理页：两层资源的列表、复制、配置包导入导出；显示上游关系四态与三方差异预览 | T17b,T64 | ⏳ 依赖链比原表记的长，见下 |
+| T57 | 模板管理页：两层资源的列表、复制、配置包导入导出；显示上游关系四态与三方差异预览 | T17b,T64 | ◐ (a) 已落 2026-08-16；(b) 待 T17a/T17b；(c) 待 T64 |
 | T58 | 采纳率与运行度量面                                                               | T30      | ✅ 2026-08-16 |
 
 > **T57 开工前对账（2026-08-16，按源码而非按计划表）**：它的两个依赖**都还没实现**，而 PR-2 在
@@ -625,6 +625,26 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 >
 > 故 T57 拆为：**(a)** ACL 闭包扩两型 + 两类资源 CRUD/复制 + 管理页；**(b)** 配置包导入导出
 > （需先补 T17a/T17b）；**(c)** 上游四态与三方差异（需先补 T64）。
+>
+> **(a) 已完成（2026-08-16）**，落法与踩到的坑：
+> - ACL 闭包扩两型**零迁移**——`resource_grants.resource_type` 在 SQL 里是裸 `text`、无 CHECK，
+>   闭合集合只活在类型系统里。（对照：`tasks` 的 launch origin 有真 CHECK，同一个 RFC 里
+>   为此换了判据绕开，见 PR-6 遗留项那段。）
+> - 扩宽 `AclResourceType` 后编译器点出 12 处，**每一处都是三个不同问题此前被同一个类型
+>   回答**（因为答案恰好相同）：哪些类型有行级 ACL / 哪些能进配置包 / 哪些能被 Intent 会话
+>   创建。现拆为 `AclResourceType` / `BundleResourceType` / `IntentResourceType`，后两者共用
+>   一份清单，`ResourcePackageTypeSchema` 由它派生而非第三次重抄。其中两处是真缺陷（包
+>   manifest root 用更宽 schema 校验；CLI 对用户输入 `as` 断言使随后的校验失效），两个集合
+>   还相等时都不可见。
+> - **八个权限点，两层分开**：binding 四个是普通矩阵点（进 user 基线、可上令牌、有 MCP 工具
+>   面）；framework 三个写点进**系统域**（永不进令牌、无 MCP 工具面——让 agent 去编辑「配置
+>   agent 的模板」是没人要过的循环）。framework 的 read 仍是普通点，脚本正文在序列化时对非
+>   `scripts:author` 遮蔽：**遮蔽而非扣留**——扣留会让小组层在不发放部门层的前提下不可用，
+>   而那正是分层的全部意义。
+> - `rejectFrameworkOnlyFields` / `canWriteFramework` 自 PR-2 起零调用，这两条路由就是那个接头。
+>   framework 写是真 AND（资源写权 ∧ scripts:author），两个方向都有用例：只有资源写权时报错
+>   **点名缺的是哪一个**（真实部署里最常见的正是这一种，光说 forbidden 会让人去申请错的权限）。
+> - 启动自检按设计工作：5 个无路由权限点让 daemon 拒绝启动，20 条测试失败全是这一条拒绝。
 
 > **顺带删掉一处重复实现**：`templateLayers.resolveParams` 与 shared 的
 > `resolveCapabilityParams` 是同一件事的两份实现，前者**零调用**。两份永远不一起跑的实现可以
