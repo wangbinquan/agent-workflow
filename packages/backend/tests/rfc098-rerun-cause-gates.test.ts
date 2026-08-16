@@ -66,6 +66,9 @@ const GATE2_EXPECTED: Record<RerunCause, boolean> = {
   'fanout-shard': false,
   'fanout-aggregator': false,
   'wrapper-init': false,
+  // RFC-306: a branch-skip row is a RECORD that a node did not run — it never
+  // carries a clarify lineage, so gate-2 stays closed.
+  'branch-skip': false,
   'commit-push': false,
   'commit-push-session': false,
   'merge-resolve': false, // RFC-130 internal merge-agent session — not a clarify rerun

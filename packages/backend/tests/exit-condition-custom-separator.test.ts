@@ -43,10 +43,10 @@ describe('evaluateExitCondition — port-count-lt custom separator + empty-token
       n: 3,
       separator: ',',
     }
-    expect(evaluateExitCondition(cond, 'a,,b,')).toBe(true) // 2 < 3
+    expect(evaluateExitCondition(cond, { content: 'a,,b,', active: true })).toBe(true) // 2 < 3
     // Pin the exact count: 2 < 2 is false, 2 < 1 is false.
-    expect(evaluateExitCondition({ ...cond, n: 2 }, 'a,,b,')).toBe(false)
-    expect(evaluateExitCondition({ ...cond, n: 1 }, 'a,,b,')).toBe(false)
+    expect(evaluateExitCondition({ ...cond, n: 2 }, { content: 'a,,b,', active: true })).toBe(false)
+    expect(evaluateExitCondition({ ...cond, n: 1 }, { content: 'a,,b,', active: true })).toBe(false)
   })
 
   test('multi-char separator absent from content yields a single whole-string token (count === 1)', () => {
@@ -59,8 +59,8 @@ describe('evaluateExitCondition — port-count-lt custom separator + empty-token
       separator: ', ',
     }
     const content = 'one\ntwo\nthree'
-    expect(evaluateExitCondition({ ...base, n: 1 }, content)).toBe(false) // 1 < 1 → false
-    expect(evaluateExitCondition({ ...base, n: 2 }, content)).toBe(true) // 1 < 2 → true
+    expect(evaluateExitCondition({ ...base, n: 1 }, { content, active: true })).toBe(false) // 1 < 1 → false
+    expect(evaluateExitCondition({ ...base, n: 2 }, { content, active: true })).toBe(true) // 1 < 2 → true
   })
 
   test('multi-char separator present is counted normally', () => {
@@ -72,8 +72,10 @@ describe('evaluateExitCondition — port-count-lt custom separator + empty-token
       n: 4,
       separator: ', ',
     }
-    expect(evaluateExitCondition(cond, 'one, two, three')).toBe(true) // 3 < 4
-    expect(evaluateExitCondition({ ...cond, n: 3 }, 'one, two, three')).toBe(false) // 3 < 3 → false
+    expect(evaluateExitCondition(cond, { content: 'one, two, three', active: true })).toBe(true) // 3 < 4
+    expect(
+      evaluateExitCondition({ ...cond, n: 3 }, { content: 'one, two, three', active: true }),
+    ).toBe(false) // 3 < 3 → false
   })
 
   test('empty content short-circuits to count 0 regardless of custom separator', () => {
@@ -84,7 +86,7 @@ describe('evaluateExitCondition — port-count-lt custom separator + empty-token
       n: 1,
       separator: ', ',
     }
-    expect(evaluateExitCondition(cond, '')).toBe(true) // 0 < 1
+    expect(evaluateExitCondition(cond, { content: '', active: true })).toBe(true) // 0 < 1
   })
 })
 

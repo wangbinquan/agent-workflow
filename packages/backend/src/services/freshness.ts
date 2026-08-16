@@ -179,10 +179,26 @@ export function isFresherNodeRun<R extends { id: string }>(
 export function pickUpstreamSourceRun<
   R extends { id: string; iteration: number; parentNodeRunId: string | null; status: string },
 >(rows: readonly R[], iterationWindow: number): R | undefined {
-  return pickVisibleUpstreamRun(
-    rows.filter((row) => row.status === 'done'),
-    iterationWindow,
-  )
+  return pickVisibleUpstreamRun(rows.filter(isSettledRunStatus), iterationWindow)
+}
+
+/**
+ * RFC-306 — the SETTLED set: `done` ∪ `skipped`.
+ *
+ * Before RFC-306 the pickers were done-only, which was the same thing: nothing
+ * ever minted a `skipped` row. Now a node that a closed branch bypassed settles
+ * as `skipped`, and every "what is this upstream's current answer?" read must
+ * see that row — otherwise the picker walks PAST it to an older `done` row and
+ * hands downstream the output of a generation the branch decision has since
+ * superseded. Concretely: run 1 emits `need_fix`, run 2 (after the user retried
+ * the judge) closes that branch, and a done-only picker would keep feeding
+ * run 1's findings into the fixer that RFC-306 just decided must not run.
+ *
+ * Skipped rows carry no `node_run_outputs`, so a consumer that picks one reads
+ * empty content — which is exactly right: the branch produced nothing.
+ */
+export function isSettledRunStatus(row: { status: string }): boolean {
+  return row.status === 'done' || row.status === 'skipped'
 }
 
 /**
@@ -269,12 +285,15 @@ export function pickReusableShardRun<
 }
 
 /**
- * RFC-074 §3.2 / §4.2: each in-scope node's freshest DONE top-level row at the
- * given scope iteration, keyed by nodeId. This is the map `isNodeRunFresh`
+ * RFC-074 §3.2 / §4.2: each in-scope node's freshest SETTLED top-level row at
+ * the given scope iteration, keyed by nodeId. This is the map `isNodeRunFresh`
  * consults — a consumed upstream run is "still fresh" iff it equals the id of
- * that upstream's entry here. (RFC-096: moved here from scheduler.ts.)
+ * that upstream's entry here. (RFC-096: moved here from scheduler.ts;
+ * RFC-306 widened "settled" from done-only to done ∪ skipped and renamed it
+ * from buildFreshestDonePerNode — no alias is kept, so any missed call site is
+ * a compile error rather than a silently done-only read.)
  */
-export function buildFreshestDonePerNode(
+export function buildFreshestSettledPerNode(
   rows: ReadonlyArray<NodeRunRow>,
   scopeIds: Set<string>,
   iteration: number,
@@ -284,7 +303,12 @@ export function buildFreshestDonePerNode(
     if (r.iteration !== iteration) continue
     if (!scopeIds.has(r.nodeId)) continue
     if (r.parentNodeRunId !== null) continue
-    if (r.status !== 'done') continue
+    // RFC-306: `skipped` joins `done` here — see isSettledRunStatus. This map is
+    // what `isNodeRunFresh` consults, so leaving skipped rows out would make a
+    // downstream that consumed a skipped upstream PERMANENTLY stale: its
+    // consumed id could never equal the map entry, and the frontier would
+    // re-dispatch it every tick.
+    if (!isSettledRunStatus(r)) continue
     if (isFresherNodeRun(r, m.get(r.nodeId))) m.set(r.nodeId, r)
   }
   return m

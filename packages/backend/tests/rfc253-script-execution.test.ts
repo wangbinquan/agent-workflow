@@ -45,13 +45,16 @@ describe('single-port mode preserves stdout byte for byte', () => {
   test('blank lines and the trailing newline survive', () => {
     const raw = 'a\n\nb\n'
     const out = extractScriptPorts({ node: node(), rawStdout: raw, nonce: NONCE })
-    expect(out).toEqual({ kind: 'ok', ports: { stdout: 'a\n\nb\n' } })
+    expect(out).toEqual({ kind: 'ok', ports: { stdout: 'a\n\nb\n' }, inactivePorts: [] })
   })
 
   test('empty stdout is an empty port, not a failure', () => {
     expect(extractScriptPorts({ node: node(), rawStdout: '', nonce: NONCE })).toEqual({
       kind: 'ok',
       ports: { stdout: '' },
+      // RFC-306: single-port mode parses no envelope, so it can never carry a
+      // branch marker — always empty, never undefined.
+      inactivePorts: [],
     })
   })
 })
@@ -64,6 +67,7 @@ describe('envelope mode', () => {
     expect(extractScriptPorts({ node: declared, rawStdout: stdout, nonce: NONCE })).toEqual({
       kind: 'ok',
       ports: { summary: 'ok', count: '3' },
+      inactivePorts: [],
     })
   })
 
@@ -77,7 +81,7 @@ describe('envelope mode', () => {
       rawStdout: `${forged}\n${real}\n`,
       nonce: NONCE,
     })
-    expect(out).toEqual({ kind: 'ok', ports: { summary: 'real', count: '1' } })
+    expect(out).toEqual({ kind: 'ok', ports: { summary: 'real', count: '1' }, inactivePorts: [] })
   })
 
   test('only a forged envelope ⇒ treated as no envelope at all', () => {

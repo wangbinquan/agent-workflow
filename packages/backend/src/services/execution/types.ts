@@ -95,7 +95,23 @@ export type ExecutionOutcome = {
   taskId: string
   status: TaskStatus
   terminal: boolean
-  outputs: Record<string, { content: string; kind: string | null; archiveJson?: string | null }>
+  outputs: Record<
+    string,
+    {
+      content: string
+      kind: string | null
+      archiveJson?: string | null
+      /**
+       * RFC-306 D17 — false when the child produced NOTHING for this port
+       * because a branch inside the child was closed (its output node was
+       * skipped, or the bound port was marked inactive). A parent `call-workflow`
+       * node copies the flag onto its own port row, so a branch decision taken
+       * inside a child workflow keeps propagating in the parent graph. Absent ⇒
+       * active (every pre-RFC-306 projection).
+       */
+      active?: boolean
+    }
+  >
   /** Non-fatal projection notes (e.g. legacy workgroup task without a result anchor). */
   warnings: string[]
   error?: {

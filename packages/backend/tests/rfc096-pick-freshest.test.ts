@@ -15,7 +15,7 @@
 //      `{ id }` (lifecycleRepair's projected RepairNodeRunRow has no
 //      parentNodeRunId column) and pickFreshestRun accepts the minimal
 //      `{ id, parentNodeRunId, status }` projection;
-//   4. buildFreshestDonePerNode post-migration smoke — the four filters
+//   4. buildFreshestSettledPerNode post-migration smoke — the four filters
 //      (scope / iteration / parent / done) moved verbatim from scheduler.ts;
 //   5. scheduler.ts's compatibility re-export of isFresherNodeRun is the SAME
 //      function object as freshness.ts's export (6 historical test files keep
@@ -28,7 +28,7 @@ import { describe, expect, test } from 'bun:test'
 
 import type { nodeRuns } from '../src/db/schema'
 import {
-  buildFreshestDonePerNode,
+  buildFreshestSettledPerNode,
   isFresherNodeRun,
   pickFreshestRun,
 } from '../src/services/freshness'
@@ -194,7 +194,7 @@ describe('RFC-096 generic widening', () => {
   })
 })
 
-describe('RFC-096 buildFreshestDonePerNode — post-migration smoke', () => {
+describe('RFC-096 buildFreshestSettledPerNode — post-migration smoke', () => {
   test('four filters: out-of-scope / wrong-iteration / child / non-done rows are all excluded', () => {
     const scopeIds = new Set(['a'])
     const oldDone = fullRow('a')
@@ -205,7 +205,7 @@ describe('RFC-096 buildFreshestDonePerNode — post-migration smoke', () => {
     const childRow = fullRow('a', { parentNodeRunId: 'parent-x' })
     const nonDone = fullRow('a', { status: 'running' })
     const outOfScope = fullRow('zz')
-    const m = buildFreshestDonePerNode(
+    const m = buildFreshestSettledPerNode(
       [oldDone, freshDone, wrongIteration, childRow, nonDone, outOfScope],
       scopeIds,
       0,
@@ -221,7 +221,7 @@ describe('RFC-096 buildFreshestDonePerNode — post-migration smoke', () => {
     const b1 = fullRow('b')
     const a2 = fullRow('a')
     const b2 = fullRow('b')
-    const m = buildFreshestDonePerNode([a1, b1, a2, b2], scopeIds, 0)
+    const m = buildFreshestSettledPerNode([a1, b1, a2, b2], scopeIds, 0)
     expect(m.get('a')?.id).toBe(a2.id)
     expect(m.get('b')?.id).toBe(b2.id)
   })

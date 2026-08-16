@@ -121,12 +121,15 @@ export interface OutputPortState {
   outputs: readonly string[]
   outputKinds?: Readonly<AgentOutputKindsMap>
   outputWrapperPortNames?: Readonly<Record<string, string>>
+  /** RFC-306 — subset of `outputs` the agent may close at run time. */
+  branchPorts?: readonly string[]
 }
 
 export interface MutableOutputPortState {
   outputs: string[]
   outputKinds?: AgentOutputKindsMap
   outputWrapperPortNames?: Record<string, string>
+  branchPorts?: string[]
 }
 
 export interface OutputPortDraft {
@@ -134,6 +137,8 @@ export interface OutputPortDraft {
   kind: string
   /** undefined means the role-hidden field was not touched. */
   wrapperPortName?: string
+  /** RFC-306 — whether this port controls a workflow branch. */
+  branch?: boolean
 }
 
 export interface OutputPortMutationOptions {
@@ -228,8 +233,10 @@ function applyOutputSidecars(args: {
   nextName: string
   nextKind: string
   wrapperPortName: string | undefined
+  /** RFC-306; undefined = leave the port's current branch flag alone. */
+  branch?: boolean
   role: AgentRole
-}): Pick<MutableOutputPortState, 'outputKinds' | 'outputWrapperPortNames'> {
+}): Pick<MutableOutputPortState, 'outputKinds' | 'outputWrapperPortNames' | 'branchPorts'> {
   const { state, oldName, oldNameStillDeclared, nextName, nextKind, role } = args
   const originalWrapper =
     oldName === undefined ? undefined : state.outputWrapperPortNames?.[oldName]
@@ -259,7 +266,21 @@ function applyOutputSidecars(args: {
       : originalWrapper
   outputWrapperPortNames = setMapEntry(outputWrapperPortNames, nextName, finalWrapper)
 
-  return { outputKinds, outputWrapperPortNames }
+  // RFC-306 — the branch flag is a NAME LIST, so a rename has to move the entry
+  // rather than leave a dangling one (the backend rejects `branchPorts` naming a
+  // port that is not declared, so a stale entry would make the whole agent
+  // unsaveable — and the author would have no field to fix it in).
+  const wasBranch =
+    oldName !== undefined
+      ? (state.branchPorts ?? []).includes(oldName)
+      : (state.branchPorts ?? []).includes(nextName)
+  const nextBranch = args.branch ?? wasBranch
+  const keep = (state.branchPorts ?? []).filter(
+    (p) => p !== nextName && (oldNameStillDeclared || p !== oldName),
+  )
+  const branchPorts = nextBranch ? [...keep, nextName] : keep
+
+  return { outputKinds, outputWrapperPortNames, ...(branchPorts.length > 0 ? { branchPorts } : {}) }
 }
 
 export function addOutputPort(
@@ -292,6 +313,7 @@ export function addOutputPort(
     nextName: nameResult.value,
     nextKind: draft.kind,
     wrapperPortName: draft.wrapperPortName,
+    ...(draft.branch === undefined ? {} : { branch: draft.branch }),
     role,
   })
   if (
@@ -342,6 +364,7 @@ export function replaceOutputPort(
     nextName: nameResult.value,
     nextKind: draft.kind,
     wrapperPortName: draft.wrapperPortName,
+    ...(draft.branch === undefined ? {} : { branch: draft.branch }),
     role,
   })
   if (
@@ -375,10 +398,14 @@ export function removeOutputPort(state: OutputPortState, index: number): Mutable
         : { outputWrapperPortNames: { ...state.outputWrapperPortNames } }),
     }
   }
+  const branchPorts = (state.branchPorts ?? []).filter((p) => p !== name)
   return {
     outputs,
     outputKinds: setMapEntry(state.outputKinds, name, undefined),
     outputWrapperPortNames: setMapEntry(state.outputWrapperPortNames, name, undefined),
+    // RFC-306: deleting a port must delete its branch flag, or the save fails
+    // validation on a sidecar the author can no longer see.
+    ...(branchPorts.length > 0 ? { branchPorts } : {}),
   }
 }
 

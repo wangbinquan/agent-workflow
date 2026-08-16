@@ -4,6 +4,18 @@
 
 > ✅ **已完成 RFC（Done，2026-08-15）：[RFC-305 统一权限目录与用户级附加授权](design/RFC-305-user-permission-grants/proposal.md)** —— `admin/manager/user/guest` 仅是 73/61/49/7 点权限预设，授权消费者只检查 effective permissions；除内在 `account:self` 外，预设差集均可逐账户授予，普通 `user` 全授 24 点后与 admin 的 73 点授权面相同而角色 wire 仍为 `user`。`resource-acl:private` 将 private visibility 与普通 read 分离，guest baseline 只能查看六类公开资源，不能创建资源或读取/执行任务；OAuth/OIDC 首次自动建号默认 guest，管理员可在 Authentication 设置中切换为普通 user，邀请用户不受影响。shared 穷尽目录与双语自动 UI、迁移 0162/0163、RFC-294 `identity-access` 单 writer、revision CAS/audit/current authority/WS fence、用户弹窗与 permission-shaped UI 全部落地。实现后继 `aad4085e` 的 detached gate 7m44s 全绿（shared 2132 / frontend 6474 / backend 10931 pass，35 skip，0 fail），架构锁 12/12；exact-SHA CI 31886814586（36/36 jobs）、视觉回归 31886814578（44/44）、WebKit 31886829866（8/8 jobs）终态成功。
 
+> ✅ **已完成 RFC（Done，2026-08-17）：[RFC-306 工作流条件分支（端口级激活）](design/RFC-306-workflow-conditional-branching/proposal.md)** —— 输出端口可在 agent/script 端口配置里标记为「分支端口」，运行时以 `<port name="p" active="false">理由</port>` 显式关闭该端口的**全部出边**，下游子图以 `skipped` 结算（不是失败），任务照常 `done`。**不采用**「端口缺失 / envelope 缺失即断链」（会把漏写与模型跑飞洗成正常决策）；未标记一律激活，存量工作流零行为变化，越权标记按协议违规 `branch-port-not-declared` 同 session 重问。默认 OR 汇合、节点可切 `joinMode:'all'`；跳过沿 wrapper-loop / fanout / git 与 call 边界继承传播；上游重跑后跳过可被推翻（与 `done` 同一 freshness 语义 ⇒ **结算口径从 done-only 扩为 done ∪ skipped**，是本 RFC 最大的存量语义改动）；新增 `port-inactive` 退出条件、`port-empty` 兼容未激活；fanout 只有活跃分片进入聚合；review/clarify 跟随跳过不弹人工；不变量 T3 放宽为 done ∨ skipped；画布以灰虚线/置灰呈现运行轨迹（轨迹只由后端 `getTaskBranchTrace` 下发，前端不得重算），`skipped` 节点可人工「仍然执行」。按 RFC-294 落 `task-execution` 的 `domain/application/public`，偏离项（调用点仍在 `services/scheduler.ts`）已在 design §1.2 呈报。三件套 + 实现 + 测试 + E2E 全部落地。五轮反问逐条拍板见 proposal §6。
+> **设计门（Codex，只审功能设计）判 NOT-CLEAN：9×P1 + 5×P2，逐条处置记在 proposal §7bis**——其中最重的三条：
+> ①判定只看显式 edge，漏掉 `review.inputSource` / `output.ports[].bind` 两类隐式依赖（被关闭分支上的 review 会照样弹给人审、output 照样落 done）；
+> ②同一次 `runScope` 内翻转 skipped 会被 node 级 dedup 拦住，把一次**正常的分支翻转**报成 `scheduler stalled`；
+> ③直接铸 skipped 违反行状态机，还会把既有 pending / awaiting 锚点留在新行后面（旧待办仍可提交）。
+> P1#1「节点已合入工作区的改动在转 skipped 后不撤销」经**用户拍板保持不撤销**，改为在轨迹里显式标注
+> `hasEarlierProducedGeneration`（「跳过」= 不再做新工作，不等于撤销已发生的工作）。
+> 门禁：backend 3163 pass / shared 2165 / frontend 6522 全绿，唯一红项 `rfc284-spawn-site-ratchet`
+> 属并发 RFC-304 提交 `05c10557`（**pristine main 同样红**，已实测确认非本 RFC 引入）；
+> `e2e/rfc306-conditional-branching.spec.ts`（system-mock `branch` 模式）本地连跑三遍 3/3 绿。
+> 开放项 Q-A/Q-B/Q-C/Q-D 见 proposal §8。
+>
 > ▶ **进行中 RFC（In Progress，2026-08-16：PR-0 ~ PR-11 全部落地；实现完整性审视 + system-mock E2E 已完成，mr-review 全链跑通，待用户真机验收）：[RFC-304 代码能力平台](design/RFC-304-code-capability-platform/proposal.md)** —— `/code` 模块承载 MR 检视（行级提问）、评论驱动改码、需求实现、CI 修复与 MR 监视器主循环。**两条宪法**：①平台只承载「输入问题/设计文档」与「反问澄清」两类人机交互，其余全部落在 MR 上；②**确定性调度**——不需要 AI 的一律程序化，AI 步骤 envelope 封死并经程序校验后才继续（mr-review 十三步仅两步为 AI；选择器/分类/仲裁一律脚本、不得为 AI）。新增 bounded context `code-capability`（RFC-294 第 14 个，**偏离项已在 design §1.4 逐条呈报待确认**）：工作项聚合根提供跨事件跨天生命周期、每轮物化为一个 task 复用既有执行内核；阶段序列平台写死且版本化、每个边界可挂钩子；两层配置（部门层脚本框架含钩子走 `scripts:author` + 小组层 agent 绑定与阈值），模板经 RFC-271 配置包 zip 在组间流转。**不依赖 fanout**（内层 kind 扩展仍属 RFC-294 W8，另立新号）。三件套已落档，十二轮反问的逐条拍板见 proposal §6；首个 PR 为框架地基（工作项 + 阶段引擎 + 钩子），十个 PR 的拆分与依赖见 plan.md §2。
 >
 > **2026-08-16 收尾两步（`8313a7d4` / `f1e394e1`）**：①**实现完整性审视**——按源码逐条对账扫「两半都对、就是没接上」，全模块「零生产引用」普查 8 个模块，接上 T45 失效 / T62 数据 GC / `mrVoice` 三处「写完了没人调」；②**system-mock E2E**（`e2e/rfc304-capability-platform.spec.ts`，8 条全绿）——一条签名 webhook 打进编译后 daemon，立刻照出三处单测永远看不见的断链（轮次起在 scratch 空间 ⇒ `prepare-worktree` 必死；`repoId` 传了文件路径 ⇒ AI 阶段全拒、团队钩子从未触发；没有人给轮次写终态 ⇒ 永远 `running`），均已修。现在 **mr-review 十三阶段全绿、outcome=published、MR 上真的出现行级评论**（draft_notes + 一次 bulk_publish）。

@@ -59,6 +59,8 @@ export interface AgentPortDialogDraft {
   required: boolean
   description: string
   wrapperPortName: string
+  /** RFC-306 — output ports only: may this port close a workflow branch? */
+  branch: boolean
 }
 
 interface LocalState {
@@ -78,6 +80,7 @@ function emptyDraft(): AgentPortDialogDraft {
     required: true,
     description: '',
     wrapperPortName: '',
+    branch: false,
   }
 }
 
@@ -142,6 +145,7 @@ function seedLocalState(props: AgentPortDialogProps): LocalState {
         required: port.required !== false,
         description: port.description ?? '',
         wrapperPortName: '',
+        branch: false,
       },
     }
   }
@@ -157,6 +161,7 @@ function seedLocalState(props: AgentPortDialogProps): LocalState {
       name,
       kind: props.outputState.outputKinds?.[name] ?? DEFAULT_OUTPUT_KIND,
       wrapperPortName: props.outputState.outputWrapperPortNames?.[name] ?? '',
+      branch: (props.outputState.branchPorts ?? []).includes(name),
     },
   }
 }
@@ -366,6 +371,7 @@ export function AgentPortDialog(props: AgentPortDialogProps) {
       name: nameResult.value,
       kind: draft.kind,
       wrapperPortName: props.role === 'aggregator' ? draft.wrapperPortName : undefined,
+      branch: draft.branch,
     }
     const result =
       props.mode.kind === 'add'
@@ -481,6 +487,20 @@ export function AgentPortDialog(props: AgentPortDialogProps) {
               />
             </Field>
           </>
+        )}
+
+        {props.direction === 'output' && (
+          <Field
+            label={t('agentForm.ports.fieldBranch')}
+            hint={t('agentForm.ports.fieldBranchHint')}
+          >
+            <Switch
+              checked={draft.branch}
+              onChange={(branch) => patchDraft({ branch })}
+              label={t('agentForm.ports.fieldBranchToggle')}
+              data-testid={`${prefix}-branch`}
+            />
+          </Field>
         )}
 
         {props.direction === 'output' && props.role === 'aggregator' && (

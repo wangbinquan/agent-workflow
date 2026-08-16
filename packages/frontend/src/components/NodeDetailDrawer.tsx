@@ -306,11 +306,29 @@ function OutputTab({ outputs }: { outputs: NodeRunOutput[] }) {
         <article key={`${o.port}-${i}`} className="task-output-card">
           <header className="task-output-card__header">
             <div className="task-output-card__name">{o.port}</div>
-            <CopyButton text={o.value} />
+            {/* RFC-306: a CLOSED port has no result to copy — its text is the
+                agent's reason for not running that branch. Offering "copy" and
+                rendering it in the body would present a justification as if it
+                were the node's output. */}
+            {o.active === false ? (
+              <StatusChip kind="neutral" size="sm">
+                {t('nodeDrawer.outputBranchClosed')}
+              </StatusChip>
+            ) : (
+              <CopyButton text={o.value} />
+            )}
           </header>
-          <pre className="task-output-card__body">
-            {o.value === '' ? <span className="muted">{t('common.empty')}</span> : o.value}
-          </pre>
+          {o.active === false ? (
+            <p className="task-output-card__body muted">
+              {o.value === ''
+                ? t('nodeDrawer.outputBranchClosedNoReason')
+                : t('nodeDrawer.outputBranchClosedReason', { reason: o.value })}
+            </p>
+          ) : (
+            <pre className="task-output-card__body">
+              {o.value === '' ? <span className="muted">{t('common.empty')}</span> : o.value}
+            </pre>
+          )}
         </article>
       ))}
     </div>

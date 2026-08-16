@@ -188,6 +188,7 @@ export async function prepareAgentCreate(
   // or typo'd runtime (e.g. `claude_code`) that saves fine but silently falls back
   // to built-in opencode at dispatch — a hard-to-detect runtime/profile drift.
   await validateRuntimeReference(db, input.runtime)
+  assertBranchPortsDeclared(input.outputs, input.branchPorts)
 
   // RFC-228: validate the complete candidate closure, not only the resource
   // fields with legacy per-kind guards. This is the missing managed-Skill gate
@@ -229,6 +230,10 @@ export async function prepareAgentCreate(
   if (input.outputWrapperPortNames !== undefined) {
     fmExtra.outputWrapperPortNames = input.outputWrapperPortNames
   }
+  // RFC-306: branch ports ride the same sidecar. Absent stays absent — an agent
+  // with no branch ports must keep its fmExtra byte-identical to pre-RFC-306
+  // (the `role: 'normal'` precedent above).
+  if (input.branchPorts !== undefined) fmExtra.branchPorts = input.branchPorts
   return {
     id,
     input,
@@ -403,6 +408,16 @@ export async function prepareAgentUpdate(
   if (patch.runtime !== undefined) {
     await validateRuntimeReference(db, patch.runtime, existing.runtime)
   }
+  // RFC-306: validate the MERGED pair, not just the patched half. Patching only
+  // `outputs` (dropping a port that `branchPorts` still names) leaves exactly the
+  // dangling sidecar this guard exists to prevent, and a patch that touches
+  // neither must stay valid.
+  if (patch.outputs !== undefined || patch.branchPorts !== undefined) {
+    assertBranchPortsDeclared(
+      patch.outputs ?? existing.outputs,
+      patch.branchPorts ?? existing.branchPorts,
+    )
+  }
 
   // RFC-228: sparse PATCHes cannot leave a historically dangling closure
   // hidden behind "the resource field was not touched". Validate the merged
@@ -455,7 +470,10 @@ export async function prepareAgentUpdate(
     patch.frontmatterExtra !== undefined ||
     patch.outputKinds !== undefined ||
     patch.role !== undefined ||
-    patch.outputWrapperPortNames !== undefined
+    patch.outputWrapperPortNames !== undefined ||
+    // RFC-306: branchPorts joins the sidecar family — a patch touching only it
+    // must still trigger the merge, or the write silently drops.
+    patch.branchPorts !== undefined
   ) {
     const baseFm =
       patch.frontmatterExtra !== undefined
@@ -481,6 +499,9 @@ export async function prepareAgentUpdate(
         ) {
           ;(baseFm as Record<string, unknown>).outputWrapperPortNames = fresh.outputWrapperPortNames
         }
+        if (fresh.branchPorts !== undefined && patch.branchPorts === undefined) {
+          ;(baseFm as Record<string, unknown>).branchPorts = fresh.branchPorts
+        }
       }
     }
     if (patch.outputKinds !== undefined) {
@@ -495,6 +516,15 @@ export async function prepareAgentUpdate(
     }
     if (patch.outputWrapperPortNames !== undefined) {
       ;(baseFm as Record<string, unknown>).outputWrapperPortNames = patch.outputWrapperPortNames
+    }
+    if (patch.branchPorts !== undefined) {
+      // Empty array = "this agent has no branch ports": drop the key entirely so
+      // the row goes back to the pre-RFC-306 shape instead of carrying `[]`.
+      if (patch.branchPorts.length === 0) {
+        delete (baseFm as Record<string, unknown>).branchPorts
+      } else {
+        ;(baseFm as Record<string, unknown>).branchPorts = patch.branchPorts
+      }
     }
     set.frontmatterExtra = JSON.stringify(baseFm)
   }
@@ -903,6 +933,33 @@ function parseDependsOnColumn(value: string | null | undefined): string[] {
  * hard-to-detect runtime + generation-profile drift (the F6 import widened the
  * exposure: agent.md authors can now pin arbitrary names).
  */
+/**
+ * RFC-306 (design-gate P2#14) — `branchPorts` must name real `outputs`.
+ *
+ * The sidecar is a second list of port names, so it can drift from the real
+ * declaration set. A stray entry (`branchPorts: ['need_fixx']`) is invisible in
+ * the editor and produces no error until run time, when the agent marks the
+ * REAL port inactive and gets a `branch-port-not-declared` rejection that names
+ * a port the author is certain they declared. Failing at save time keeps the two
+ * lists honest — the same rule the script node gets for free by carrying
+ * `branch` on the port object itself.
+ */
+function assertBranchPortsDeclared(
+  outputs: readonly string[] | undefined,
+  branchPorts: readonly string[] | undefined,
+): void {
+  if (branchPorts === undefined || branchPorts.length === 0) return
+  const declared = new Set(outputs ?? [])
+  const unknown = branchPorts.filter((p) => !declared.has(p))
+  if (unknown.length > 0) {
+    throw new ValidationError(
+      'branch-port-not-declared',
+      `agent branchPorts reference undeclared output port(s): ${unknown.join(', ')}`,
+      { notFound: unknown },
+    )
+  }
+}
+
 async function validateRuntimeReference(
   db: DbClient,
   name: string | null | undefined,
@@ -1100,10 +1157,23 @@ function rowToAgent(row: AgentRow): Agent {
     }
   }
 
+  // RFC-306: branch ports lift out the same way. Only well-formed non-empty
+  // string entries survive; an empty / malformed list leaves the field absent so
+  // downstream reads (`agent.branchPorts ?? []`) see "no branch ports" rather
+  // than a half-parsed one — a bogus entry must never widen what may be closed.
+  let branchPorts: Agent['branchPorts'] | undefined
+  if (Array.isArray(fmExtra.branchPorts)) {
+    const names = (fmExtra.branchPorts as unknown[]).filter(
+      (p): p is string => typeof p === 'string' && p.length > 0,
+    )
+    if (names.length > 0) branchPorts = names
+  }
+
   const exposedFm = { ...fmExtra }
   delete (exposedFm as Record<string, unknown>).outputKinds
   delete (exposedFm as Record<string, unknown>).role
   delete (exposedFm as Record<string, unknown>).outputWrapperPortNames
+  delete (exposedFm as Record<string, unknown>).branchPorts
 
   const agent: Agent = {
     id: row.id,
@@ -1134,6 +1204,7 @@ function rowToAgent(row: AgentRow): Agent {
   if (outputWrapperPortNames !== undefined) {
     agent.outputWrapperPortNames = outputWrapperPortNames
   }
+  if (branchPorts !== undefined) agent.branchPorts = branchPorts
   // RFC-111 / RFC-112: map the runtime column — now any registered runtime NAME
   // (built-ins 'opencode'/'claude-code' + custom). Empty/NULL stays absent (→
   // inherit config.defaultRuntime). An unknown name fail-safes at dispatch.

@@ -32,9 +32,9 @@
 //     boolean shell kept for the existing predicate consumers.
 //
 // PURE module: only types + freshness primitives (isNodeRunFresh /
-// isFresherNodeRun / buildFreshestDonePerNode, freshness.ts) +
+// isFresherNodeRun / buildFreshestSettledPerNode, freshness.ts) +
 // decodeWrapperProgress (wrapperProgress.ts, itself pure). No DB / scheduler
-// import. The frontier ORCHESTRATION (read rows → latestPerNode → freshestDone
+// import. The frontier ORCHESTRATION (read rows → latestPerNode → freshestSettled
 // → completed → ready) lives in scheduler.ts deriveFrontier (PR-B, live).
 // Pure-function locks: dispatch-frontier.test.ts + derive-frontier.test.ts.
 
@@ -46,7 +46,7 @@ import {
 } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { nodeRuns } from '../db/schema'
-import { buildFreshestDonePerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
+import { buildFreshestSettledPerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
 import { decodeWrapperProgress } from './wrapperProgress'
 
 type NodeRunRow = typeof nodeRuns.$inferSelect
@@ -221,8 +221,8 @@ export interface WrapperRevivalEvidence {
  *
  * CONTRACT (RFC-098 adversarial-review revision #8): the review done∧fresh
  * judgment MUST use a freshest-done map built INSIDE this function at the
- * inner window — `buildFreshestDonePerNode(rows, innerDescendants, innerIter)`.
- * The caller's outer-scope freshestDone map is keyed to the WRAPPER's own
+ * inner window — `buildFreshestSettledPerNode(rows, innerDescendants, innerIter)`.
+ * The caller's outer-scope freshestSettled map is keyed to the WRAPPER's own
  * iteration/scope and would mis-judge i≥1 inner rows (silently never/always
  * fresh). Do not "optimize" by threading the outer map in.
  *
@@ -268,7 +268,7 @@ export function wrapperRevivalEvidence(
       qualifies = true
     } else if (r.status === 'done' && kindById.get(r.nodeId) === 'review') {
       if (innerFreshest === null) {
-        innerFreshest = buildFreshestDonePerNode(rows, inner, innerIter)
+        innerFreshest = buildFreshestSettledPerNode(rows, inner, innerIter)
       }
       qualifies = isNodeRunFresh(r, innerFreshest)
     }
@@ -311,8 +311,9 @@ export function wrapperHasFreshInnerWork(
  *                                  review done∧fresh rows — see
  *                                  wrapperRevivalEvidence)
  *   leaf awaiting_*      → !fresh (stale parked re-runs; fresh parked stays — C2)
- *   exhausted | running | skipped → false (loop-max true terminal / in flight /
- *                                  no mint path — see the exhaustive switch)
+ *   skipped              → !fresh (RFC-306: a closed branch is settled, not
+ *                                  terminal — a stale skip re-evaluates)
+ *   exhausted | running  → false  (loop-max true terminal / in flight)
  *
  * In-pass busy-loop protection does NOT come from this gate — it comes from the
  * scheduler's per-invocation `dispatchedThisInvocation` set (N3) + runOneNode
@@ -321,7 +322,7 @@ export function wrapperHasFreshInnerWork(
 export function isDispatchable(
   row: NodeRunRow | undefined,
   kind: NodeKind,
-  freshestDonePerUpstream: Map<string, NodeRunRow>,
+  freshestSettledPerUpstream: Map<string, NodeRunRow>,
   rows: readonly NodeRunRow[],
   definition: WorkflowDefinition,
 ): boolean {
@@ -333,7 +334,7 @@ export function isDispatchable(
     case 'pending':
       return true
     case 'done':
-      return !isNodeRunFresh(row, freshestDonePerUpstream)
+      return !isNodeRunFresh(row, freshestSettledPerUpstream)
     case 'failed':
     case 'interrupted':
       return true
@@ -362,7 +363,7 @@ export function isDispatchable(
       // model performed via recomputeFreshnessAndDemote; combination-scenarios
       // S8/S11/S12 lock this). `dispatchedThisInvocation` (N3) still bounds it to
       // one re-dispatch per invocation, so no busy-loop.
-      return !isNodeRunFresh(row, freshestDonePerUpstream)
+      return !isNodeRunFresh(row, freshestSettledPerUpstream)
     }
     case 'exhausted':
       // loop-max true terminal (RFC-076 HIGH-2) — never re-dispatched.
@@ -371,9 +372,22 @@ export function isDispatchable(
       // In flight (or an orphaned row — surfaced via Frontier.blocked, not here).
       return false
     case 'skipped':
-      // Zero mint points in src today; whoever enables it must decide its
-      // dispatch semantics HERE first (this case makes that explicit).
-      return false
+      // RFC-306 answers the question this branch was left open for.
+      //
+      // A `skipped` row records "the branch feeding this node was closed, so it
+      // did not run". That is a SETTLED answer about a specific generation of
+      // upstream output — not a terminal fact about the node. So it gets exactly
+      // the `done` treatment: fresh ⇒ leave it alone; stale (an upstream has
+      // since produced newer output) ⇒ re-dispatch, which re-evaluates the branch
+      // and may now run the node for real. That is what makes a skip reversible
+      // by a retry of the deciding node, instead of a dead end only a new task
+      // could escape (RFC-306 D10 / AC-10).
+      //
+      // Load-bearing prerequisite: the mint MUST stamp consumed_upstream_runs_json
+      // (scheduler.ts branch-skip mint). Without provenance `isNodeRunFresh`
+      // treats the row as never-fresh and the frontier re-dispatches it on every
+      // single tick — a busy loop that looks like "the branch keeps flapping".
+      return !isNodeRunFresh(row, freshestSettledPerUpstream)
     default: {
       const _exhaustive: never = row.status
       return _exhaustive

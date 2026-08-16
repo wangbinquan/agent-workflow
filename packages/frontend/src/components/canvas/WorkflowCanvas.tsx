@@ -81,7 +81,11 @@ import { classifyClarifyConnection } from './clarifyDragHelper'
 import { classifyCrossClarifyConnection } from './crossClarifyDragHelper'
 import { existingInputPorts, namedInputDropPolicy, nextFreeInputPort } from './dropTarget'
 import { getNodeBoxes, resolveDropTarget } from './connectResolve'
-import { buildControlFlowEdgeIds, CONTROL_FLOW_EDGE_CLASS } from './controlFlowEdge'
+import {
+  buildControlFlowEdgeIds,
+  CONTROL_FLOW_EDGE_CLASS,
+  INACTIVE_EDGE_CLASS,
+} from './controlFlowEdge'
 import { nodeAgentDisplayName, nodeTitle } from './nodeTitle'
 import { ConnectDropHint, type ConnectPreviewTarget } from './ConnectDropHint'
 import { WorkflowCanvasEdge, type WorkflowCanvasEdgeData } from './WorkflowCanvasEdge'
@@ -248,6 +252,14 @@ export interface WorkflowCanvasProps {
    * Used by the task-detail status view (P-2-12).
    */
   nodeStatuses?: Record<string, CanvasNodeData['status'] | undefined>
+  /**
+   * RFC-306 — edge ids that carried NO value this run (their source port was
+   * closed, or its producing node was skipped). Rendered as a faded dashed line
+   * so the canvas doubles as the run trace. Server-derived (`branchTrace`); the
+   * canvas never computes activation itself. Undefined (editor canvas) ⇒ nothing
+   * faded and a byte-for-byte unchanged canvas.
+   */
+  inactiveEdgeIds?: readonly string[]
   /**
    * RFC-007: task-detail canvas can pass per-review iteration counters so
    * we reject drag-rebinding the inputs of a review that has already gone
@@ -418,6 +430,7 @@ function CanvasInner({
   readOnly,
   validationIssues,
   nodeStatuses,
+  inactiveEdgeIds,
   taskContext,
   questionCounts,
   onNodeQuestionBadgeClick,
@@ -648,6 +661,13 @@ function CanvasInner({
       ),
     ),
   )
+  // RFC-306: stable Set for the three toFlowEdges call sites. Identity changes
+  // only when the server-sent trace changes, so an unchanged trace rebuilds
+  // nothing.
+  const inactiveEdgeIdSet = useMemo(
+    () => (inactiveEdgeIds === undefined ? undefined : new Set(inactiveEdgeIds)),
+    [inactiveEdgeIds],
+  )
   const [edges, setEdges] = useState<Edge[]>(() =>
     toFlowEdges(
       definition.edges,
@@ -661,6 +681,7 @@ function CanvasInner({
         showInlineActions: inlineActionsVisible,
       },
       validationProjection.edges,
+      inactiveEdgeIdSet,
     ),
   )
   const externalDefRef = useRef(definition)
@@ -1179,6 +1200,7 @@ function CanvasInner({
                 showInlineActions: inlineActionsVisible,
               },
               validationProjection.edges,
+              inactiveEdgeIdSet,
             ),
             sel.edges,
           ),
@@ -1203,6 +1225,10 @@ function CanvasInner({
     edgeInsertEnabled,
     editableEditor,
     handleInsertNodeOnEdge,
+    // RFC-306: the trace arrives asynchronously (it rides the node-runs query),
+    // so the effect must re-run when it changes or the canvas keeps rendering
+    // the run BEFORE the branch decision was known.
+    inactiveEdgeIdSet,
     inlineActionsVisible,
     onChange,
     readOnly,
@@ -2013,6 +2039,8 @@ function CanvasInner({
             onInsertNode: handleInsertNodeOnEdge,
             showInlineActions: inlineActionsVisible,
           },
+          undefined,
+          inactiveEdgeIdSet,
         ),
         restoredSelection.edges,
       )
@@ -2033,6 +2061,7 @@ function CanvasInner({
       handleClarifyDirectiveToggle,
       handleAddInsideWrapper,
       handleQuestionBadgeClick,
+      inactiveEdgeIdSet,
       nodeStatuses,
       onChange,
       questionCounts,
@@ -3900,6 +3929,9 @@ function toFlowEdges(
     showInlineActions?: boolean
   },
   validationCounts?: Readonly<Record<string, WorkflowValidationCounts | undefined>>,
+  /** RFC-306 — appended LAST on purpose: inserting it mid-list would silently
+   *  re-bind every existing positional call site. */
+  inactiveEdgeIds?: ReadonlySet<string>,
 ): Edge[] {
   const onInsertNode =
     edgeInsertion !== undefined &&
@@ -3922,6 +3954,8 @@ function toFlowEdges(
           : 'canvas-edge--validation-warning'
     const className = [
       controlFlowEdgeIds?.has(e.id) ? CONTROL_FLOW_EDGE_CLASS : undefined,
+      // RFC-306: the branch this edge belongs to did not run.
+      inactiveEdgeIds?.has(e.id) ? INACTIVE_EDGE_CLASS : undefined,
       validationClass,
     ]
       .filter((value): value is string => value !== undefined)

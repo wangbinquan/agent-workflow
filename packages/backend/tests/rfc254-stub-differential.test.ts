@@ -1333,13 +1333,31 @@ describe('RFC-254 T28b — dispatcher', () => {
     expect(missing.exitCode).toBe(2)
   }, 30_000)
 
-  test('every mode has a golden, and every golden has a mode', () => {
+  /**
+   * Modes that were BORN in the ported stub — there was never a shell original,
+   * so there is nothing to record a parity golden from.
+   *
+   * This is an explicit allowlist, not a wildcard, and it must stay one: the
+   * ratchet's real jobs both survive it — a DELETED golden still fails (the mode
+   * is neither in the goldens nor here), and a NEW mode still has to be added
+   * here by hand, with the reason it needs no parity proof. What it must never
+   * become is "modes without goldens are fine".
+   *
+   * Each entry names where its behaviour IS proven instead:
+   *   branch — RFC-306. Emits `<port … active="false">` on demand; proven by
+   *            `e2e/rfc306-conditional-branching.spec.ts`, which fails outright
+   *            if the marker stops being emitted (the branch then runs and the
+   *            skipped-node assertions go red).
+   */
+  const POST_PORT_MODES = new Set(['branch'])
+
+  test('every ported mode has a golden, and every golden has a mode', () => {
     // A mode with no recording is unproven; a recording with no mode is a
     // deleted behaviour nobody noticed. Both are silent by default.
     const modes = new Set(
-      [...readFileSync(PORTED_STUB, 'utf8').matchAll(/^\s*'?([a-z-]+)'?: run[A-Z]/gm)].map(
-        (match) => match[1],
-      ),
+      [...readFileSync(PORTED_STUB, 'utf8').matchAll(/^\s*'?([a-z-]+)'?: run[A-Z]/gm)]
+        .map((match) => match[1])
+        .filter((mode): mode is string => mode !== undefined && !POST_PORT_MODES.has(mode)),
     )
     const goldens = new Set(
       readdirSync(GOLDEN_DIR)
@@ -1347,5 +1365,17 @@ describe('RFC-254 T28b — dispatcher', () => {
         .map((name) => name.slice(0, -'.json'.length)),
     )
     expect([...modes].sort()).toEqual([...goldens].sort())
+  })
+
+  test('every post-port mode is actually registered in the dispatcher', () => {
+    // Symmetry guard for the allowlist above: an entry that no longer names a
+    // real mode is a stale exemption, and a stale exemption is how a mode later
+    // slips back in without a golden.
+    const registered = new Set(
+      [...readFileSync(PORTED_STUB, 'utf8').matchAll(/^\s*'?([a-z-]+)'?: run[A-Z]/gm)].map(
+        (match) => match[1],
+      ),
+    )
+    for (const mode of POST_PORT_MODES) expect(registered.has(mode)).toBe(true)
   })
 })

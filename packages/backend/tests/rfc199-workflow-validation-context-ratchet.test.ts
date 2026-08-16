@@ -292,6 +292,8 @@ describe('RFC-199 validation-context semantic source ratchet', () => {
       // RFC-223 (PR-1): closure/ref checks resolve BY ID, so the validator now
       // reads agent.id + skill.id + plugin.id (was skill.name / plugin.name).
       agent: [
+        // RFC-306: nodePorts' agent deriver reads it to mark branch ports.
+        'branchPorts',
         'dependsOn',
         'id',
         'mcp',

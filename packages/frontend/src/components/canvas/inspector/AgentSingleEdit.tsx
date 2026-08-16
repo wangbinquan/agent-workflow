@@ -26,6 +26,7 @@ import {
   type InspectorChangeMeta,
 } from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
+import { JoinModeField } from './JoinModeField'
 import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 import { ResourceReferenceControl } from './ResourceReferenceControl'
 import type { EditProps } from './types'
@@ -80,6 +81,8 @@ export function AgentSingleEdit({
   return (
     <div className="form-grid">
       <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
+      {/* RFC-306 — only rendered when this node has 2+ inbound dependencies. */}
+      <JoinModeField node={node} definition={definition} onPatch={onPatch} />
       <InspectorFieldAnchor nodeId={node.id} field="agent">
         <Field label={t('inspector.fieldAgent')} required group>
           <ResourceReferenceControl

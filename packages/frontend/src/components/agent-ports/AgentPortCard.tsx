@@ -28,6 +28,8 @@ export interface AgentPortCardProps {
   aggregator?: boolean
   wrapperPortName?: string
   wrapperDuplicate?: boolean
+  /** RFC-306 — this output port may close a workflow branch at run time. */
+  branch?: boolean
   legacy?: boolean
   duplicate?: boolean
   editButtonRef?: Ref<HTMLButtonElement>
@@ -58,6 +60,7 @@ export function AgentPortCard({
   wrapperDuplicate = false,
   legacy = false,
   duplicate = false,
+  branch,
   editButtonRef,
   onEdit,
   onDelete,
@@ -103,6 +106,11 @@ export function AgentPortCard({
               {translatedKind}
             </StatusChip>
             <code className="agent-port-card__kind-code">{canonicalKind}</code>
+            {branch === true && (
+              <StatusChip kind="info" size="sm">
+                {t('agentForm.ports.card.branch', { defaultValue: 'Branch port' })}
+              </StatusChip>
+            )}
             {legacy && (
               <StatusChip kind="warn" size="sm">
                 {t('agentForm.ports.card.legacy', { defaultValue: 'Legacy name' })}

@@ -103,6 +103,16 @@ export function wgFollowupNotice(reason: EnvelopeFollowupReason): string {
         '- This turn requires a <workflow-clarify> envelope. Re-emit your reply as\n' +
         '  a single valid <workflow-clarify> envelope.'
       )
+    case 'branch-marker':
+      // RFC-306. A workgroup turn speaks the wg_* protocol and declares no branch
+      // ports at all, so reaching this case means the model invented a marker.
+      // Telling it to drop the marker is the only correct instruction here — a
+      // workgroup turn has no branch it could legitimately close.
+      return (
+        '- You marked a <port> with active="false". Workgroup turn ports are NOT\n' +
+        '  branch ports — re-emit ONE <workflow-output> with plain <port> tags and\n' +
+        '  no active attribute.'
+      )
   }
 }
 

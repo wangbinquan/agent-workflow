@@ -211,12 +211,18 @@ import {
   taskStopProjection,
   type TaskStopCause,
 } from '@/modules/task-execution/domain/sourceTermination'
+import {
+  collectDataflowInboundEdges,
+  collectImplicitInboundRefs,
+  nodeKindIndex,
+} from '@/modules/task-execution/domain/inboundEdges'
+import { resolveNodeActivationForDispatch } from '@/modules/task-execution/application/resolveNodeActivation'
 import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
 import { getTaskFanoutSem, gcTaskFanoutSem } from '@/services/taskFanoutPools'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import {
   areTransitiveUpstreamsCompleted,
-  buildFreshestDonePerNode,
+  buildFreshestSettledPerNode,
   consumedMapsEqual,
   isFresherNodeRun,
   isNodeRunFresh,
@@ -2309,7 +2315,7 @@ async function maybeRunCommitPush(
   return {}
 }
 
-// RFC-096: `buildFreshestDonePerNode` moved to freshness.ts alongside the
+// RFC-096: `buildFreshestSettledPerNode` moved to freshness.ts alongside the
 // comparator (audit S-13 / WP-3).
 
 // -----------------------------------------------------------------------------
@@ -2323,7 +2329,7 @@ async function maybeRunCommitPush(
 // reconcile. Composes fix A's areTransitiveUpstreamsCompleted + PR-A's
 // isDispatchable / wrapperHasFreshInnerWork, plus RFC-092's pending-anchor
 // row-id release (mid-run clarify answer / review decision pickup, audit S-1).
-// The row-ordering primitives (isFresherNodeRun / buildFreshestDonePerNode)
+// The row-ordering primitives (isFresherNodeRun / buildFreshestSettledPerNode)
 // live in freshness.ts since RFC-096. Pure-function locks: derive-frontier.test.ts.
 
 export interface Frontier {
@@ -2403,6 +2409,30 @@ function isLiveStatus(status: string): boolean {
  *   `Frontier.pendingAnchors` of every dispatch). Bounds the bypass to one
  *   release per row — see Frontier.pendingAnchors.
  */
+/**
+ * RFC-306 (design-gate P1#7) — the upstream run that makes a stale skip stale.
+ *
+ * Returns the freshest settled run id among this node's structural upstreams
+ * that the skip row did NOT consume. That id is the release key: it identifies
+ * the generation of new evidence, so the release fires once per upstream re-run
+ * rather than once per tick.
+ */
+function freshestUpstreamEvidenceId(
+  skippedRow: typeof nodeRuns.$inferSelect,
+  upstreams: readonly string[],
+  freshestSettled: Map<string, typeof nodeRuns.$inferSelect>,
+): string | undefined {
+  const consumed = parseConsumedJson(skippedRow.consumedUpstreamRunsJson)
+  let best: string | undefined
+  for (const upstreamId of upstreams) {
+    const current = freshestSettled.get(upstreamId)
+    if (current === undefined) continue
+    if (consumed[upstreamId] === current.id) continue // this leg is unchanged
+    if (best === undefined || current.id > best) best = current.id
+  }
+  return best
+}
+
 export function deriveFrontier(
   rows: ReadonlyArray<typeof nodeRuns.$inferSelect>,
   definition: WorkflowDefinition,
@@ -2429,7 +2459,7 @@ export function deriveFrontier(
     if (r.parentNodeRunId !== null) continue // skip fan-out child rows
     if (isFresherNodeRun(r, latestPerNode.get(r.nodeId))) latestPerNode.set(r.nodeId, r)
   }
-  const freshestDone = buildFreshestDonePerNode(rows, scopeIds, iteration)
+  const freshestSettled = buildFreshestSettledPerNode(rows, scopeIds, iteration)
 
   // Pass 1 — done∧fresh (old seed口径) + exhausted (loop-max true terminal,
   // HIGH-2). An asking agent's `done` run with an OPEN clarify session is NOT a
@@ -2452,13 +2482,27 @@ export function deriveFrontier(
     // merge_state NULL and pass this gate byte-for-byte (golden-lock).
     if (
       r.status === 'done' &&
-      isNodeRunFresh(r, freshestDone) &&
+      isNodeRunFresh(r, freshestSettled) &&
       // RFC-144: the settled set {NULL, merged} now derives from the shared
       // transition table (SETTLED_MERGE_STATES) — in-flight iso states
       // ('isolating' / 'pending-merge' / 'conflict-human' / 'merge-failed' /
       // 'abandoned') are gated out; null/'merged' pass (legacy golden-lock).
       isMergeStateSettled(r.mergeState)
     ) {
+      completed.add(nodeId)
+    }
+    // RFC-306: a fresh `skipped` row completes its node. The node did not run —
+    // by design — and holding the scope open for it would turn every closed
+    // branch into `scheduler stalled` (the pre-RFC-306 outcome of a node that
+    // could never become ready). No merge_state gate: a skipped node spawns no
+    // process and therefore owns no isolated worktree to merge back.
+    //
+    // Downstream is NOT force-skipped from here. Each downstream node becomes
+    // ready and makes its OWN judgment at dispatch (runOneNode), because with
+    // `joinMode: 'any'` a node fed by one skipped and one live upstream must
+    // still run. Propagation is the emergent result of that per-node judgment,
+    // never a graph walk that assumes it.
+    else if (r.status === 'skipped' && isNodeRunFresh(r, freshestSettled)) {
       completed.add(nodeId)
     }
     // 'exhausted' (loop hit maxIterations without exit) is a TERMINAL FAILURE,
@@ -2569,15 +2613,45 @@ export function deriveFrontier(
       wrapperEvidence !== null &&
       !dispatchedPendingRowIds.has(wrapperEvidence.rowId) &&
       !openAskingNodeIds.has(wrapperEvidence.nodeId)
+    // RFC-306 (design-gate P1#7) — a STALE skip gets the same one-shot release.
+    //
+    // Without it: `N` is skipped early in an invocation; later in the SAME
+    // invocation the deciding upstream re-runs (a review iterate released by a
+    // pending anchor) and re-opens the branch. `N`'s skip is now stale, but `N`
+    // is already in `dispatchedThisInvocation` and owns no pending row of its
+    // own, so it can never go ready again — the scope quiesces and reports
+    // `scheduler stalled`, i.e. a NORMAL branch flip surfaces as task failure.
+    //
+    // The release is keyed on the EVIDENCE — the upstream run that made the skip
+    // stale — not on the skip row, so it is one-shot per new upstream generation
+    // (layer ① of the RFC-092 no-busy-loop argument): the same upstream row can
+    // release this node at most once per invocation, and a further release needs
+    // a genuinely newer upstream run.
+    const staleSkipEvidenceId =
+      latest !== undefined &&
+      latest.status === 'skipped' &&
+      !isNodeRunFresh(latest, freshestSettled)
+        ? (freshestUpstreamEvidenceId(latest, upstreamsOf.get(n.id) ?? [], freshestSettled) ?? null)
+        : null
+    const staleSkipReleasable =
+      staleSkipEvidenceId !== null && !dispatchedPendingRowIds.has(staleSkipEvidenceId)
     const dispatchable =
       areTransitiveUpstreamsCompleted(n.id, upstreamsOf, completed) &&
       !inFlight.has(n.id) &&
-      (pendingAnchorReleasable || wrapperAnchorReleasable || !dispatchedThisInvocation.has(n.id)) &&
-      isDispatchable(latest, n.kind, freshestDone, rows, definition)
+      (pendingAnchorReleasable ||
+        wrapperAnchorReleasable ||
+        staleSkipReleasable ||
+        !dispatchedThisInvocation.has(n.id)) &&
+      isDispatchable(latest, n.kind, freshestSettled, rows, definition)
     if (dispatchable) {
       ready.push(n.id)
       if (latest !== undefined && latest.status === 'pending') {
         pendingAnchors.set(n.id, latest.id)
+      } else if (staleSkipEvidenceId !== null) {
+        // Record the evidence on EVERY ready pass (same reasoning as the wrapper
+        // anchor below): a re-skip against the same upstream generation must not
+        // release the node a second time.
+        pendingAnchors.set(n.id, staleSkipEvidenceId)
       } else if (wrapperEvidence !== null) {
         // Record the wrapper's evidence row EVERY time it goes ready (also on
         // the plain !dispatchedThisInvocation release) so layer ① holds: a
@@ -3751,6 +3825,10 @@ async function runCallWorkflowNode(
         }
     : outcome.outputs
   for (const [portName, v] of Object.entries(projectedOutputs)) {
+    // RFC-306 D17: a branch closed INSIDE the child keeps propagating in the
+    // parent graph — the child's inactive port projects onto an inactive parent
+    // port, so a reusable "decider" workflow can be called as a sub-workflow.
+    const active = v.active !== false
     await db
       .insert(nodeRunOutputs)
       .values({
@@ -3759,10 +3837,11 @@ async function runCallWorkflowNode(
         content: v.content,
         kind: v.kind,
         archiveJson: v.archiveJson ?? null,
+        active,
       })
       .onConflictDoUpdate({
         target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-        set: { content: v.content, kind: v.kind, archiveJson: v.archiveJson ?? null },
+        set: { content: v.content, kind: v.kind, archiveJson: v.archiveJson ?? null, active },
       })
   }
   // Row goes done BEFORE merge (runner precedent) — downstream still gates on
@@ -4610,6 +4689,12 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
           worktreePath: state.scopeRoot,
           nonce: envelopeNonce,
           roundId: task.codeRoundId ?? taskId,
+          // The work item and the epoch this round belongs to — what the
+          // publish critical section is claimed against. Passed for the first
+          // time here: the ledger hardcoded epoch 1 and the section had no
+          // caller at all, so a preempted round published anyway.
+          ...(identity?.workItemId == null ? {} : { workItemId: identity.workItemId }),
+          ...(identity?.epoch === undefined ? {} : { epoch: identity.epoch }),
           // The same two seams the code-host NODE branch already uses (line
           // ~4360/4410). Threading them here means a test drives the real
           // adapter and the real `executeCodeHostCall` — path templating, body
@@ -5678,6 +5763,8 @@ async function runOneScriptAttempt(
       ? null
       : (outcome.result.spawnError ?? outcome.result.stderrTail.slice(-2000))
   const ports: Record<string, string> = {}
+  /** RFC-306: ports this script closed with `active="false"`. */
+  const inactivePorts = new Set<string>()
 
   if (failureCode === null) {
     const extraction = extractScriptPorts({
@@ -5687,6 +5774,7 @@ async function runOneScriptAttempt(
     })
     if (extraction.kind === 'ok') {
       Object.assign(ports, extraction.ports)
+      for (const p of extraction.inactivePorts) inactivePorts.add(p)
     } else {
       failureCode = extraction.code
       errorMessage = extraction.detail
@@ -5723,7 +5811,11 @@ async function runOneScriptAttempt(
   }
 
   for (const [portName, content] of Object.entries(ports)) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: a.nodeRunId, portName, content })
+    // RFC-306: a script closes a branch the same way an agent does; the flag has
+    // to reach the row or the marker is decoration.
+    await db
+      .insert(nodeRunOutputs)
+      .values({ nodeRunId: a.nodeRunId, portName, content, active: !inactivePorts.has(portName) })
   }
   // RFC-276 regression fix: a readonly script's iso is discarded without a
   // merge-back, but its 'isolating' stamp must still SETTLE — deriveFrontier's
@@ -5750,6 +5842,141 @@ async function runOneScriptAttempt(
   return { kind: 'done' }
 }
 
+// -----------------------------------------------------------------------------
+// RFC-306 — branch judgment + skip row (design §6.2)
+// -----------------------------------------------------------------------------
+
+/**
+ * Decide whether `node` runs this iteration. Returns `null` to proceed with the
+ * ordinary dispatch, or a settled OneNodeResult when the node was skipped.
+ *
+ * Three details are load-bearing:
+ *
+ *  1. **Provenance.** The skipped row stores the same `consumed_upstream_runs_json`
+ *     an executed row would. That is what lets `isNodeRunFresh` mark the skip
+ *     stale once an upstream re-runs, so retrying the deciding node re-opens the
+ *     branch (D10 / AC-10). Without it the frontier would re-dispatch the node on
+ *     every tick forever — the skip would look like it is "flapping".
+ *
+ *  2. **Mint pending → mark-skipped**, not a direct `skipped` mint: `skipped` is
+ *     not in MintableNodeRunStatus, and the lifecycle table already owns the
+ *     `pending → skipped` edge. A crash between the two writes leaves a pending
+ *     row, which the orphan reaper flips to `interrupted` and the next pass
+ *     re-judges — self-healing, no wedged state.
+ *
+ *  3. **`force_activated` is read from the LATEST row at this (node, iteration)**
+ *     — retryNode stamps it on the placeholder it mints, and this is the read
+ *     that turns "run anyway" into an actual run (§10).
+ */
+async function judgeBranchActivation(
+  state: SchedulerState,
+  node: WorkflowNode,
+  iteration: number,
+): Promise<OneNodeResult | null> {
+  const { db, taskId, definition, log } = state
+  // Fast path: a node with NO inbound dependency at all can never be branched
+  // away (graph roots included), so a workflow that uses no branch ports pays
+  // zero extra queries per dispatch — "existing behavior is unchanged" has to
+  // hold for cost as well as for outcome.
+  //
+  // The implicit refs are part of this test, not just of the judgment below:
+  // review and output nodes carry their dependency in `inputSource` /
+  // `ports[].bind` and often have no edge at all, so an edges-only fast path
+  // would return early for exactly the two kinds design-gate P1#2 is about.
+  const hasInbound =
+    collectDataflowInboundEdges(definition.edges, node.id, nodeKindIndex(definition)).length > 0 ||
+    collectImplicitInboundRefs(node as { kind: string; inputSource?: unknown; ports?: unknown })
+      .length > 0
+  if (!hasInbound) return null
+  const existing = await db
+    .select()
+    .from(nodeRuns)
+    .where(
+      and(
+        eq(nodeRuns.taskId, taskId),
+        eq(nodeRuns.nodeId, node.id),
+        eq(nodeRuns.iteration, iteration),
+      ),
+    )
+  const latest = pickFreshestRun(existing, { topLevelOnly: true })
+  const forceActivated = latest?.forceActivated === true
+
+  const decision = await resolveNodeActivationForDispatch({
+    db,
+    taskId,
+    definition,
+    node,
+    iteration,
+    parents: state.containerOf,
+    ...(forceActivated ? { forceActivated: true } : {}),
+  })
+  if (decision.activation.kind === 'active') return null
+
+  const consumedJson = JSON.stringify(decision.consumed)
+  // Design-gate P1#8 — a skip must SETTLE the node's current anchor, not park a
+  // terminal sibling next to it. Two anchors matter:
+  //
+  //   pending      — minted out of band by a clarify answer / review iterate.
+  //                  Leaving it behind means the row resolver later reuses it and
+  //                  runs the node against the very branch decision that closed
+  //                  it, and (because that row is OLDER than the skip row) the
+  //                  skip stays "latest" and the scope can stall. Reuse it.
+  //   awaiting_*   — a parked human gate. Leaving it behind keeps an actionable
+  //                  item in the review inbox for a branch nobody will run.
+  //                  Supersede it, then record the skip.
+  //
+  // Anything else (done / failed / interrupted / canceled / absent) is a settled
+  // generation; the skip is a NEW generation on top of it, so it mints normally.
+  let nodeRunId: string
+  if (latest?.status === 'pending') {
+    nodeRunId = latest.id
+    await db
+      .update(nodeRuns)
+      .set({ consumedUpstreamRunsJson: consumedJson })
+      .where(eq(nodeRuns.id, nodeRunId))
+    await transitionNodeRunStatus({
+      db,
+      nodeRunId,
+      event: { kind: 'mark-skipped', reason: decision.activation.reason },
+      extra: { finishedAt: Date.now() },
+    })
+  } else {
+    if (latest?.status === 'awaiting_review' || latest?.status === 'awaiting_human') {
+      await transitionNodeRunStatus({
+        db,
+        nodeRunId: latest.id,
+        event: { kind: 'cancel-by-supersede', reason: 'branch-skipped' },
+        extra: { finishedAt: Date.now() },
+      })
+      broadcastNodeStatus(taskId, latest.id, node.id, 'canceled')
+    }
+    nodeRunId = await mintNodeRun(db, {
+      taskId,
+      nodeId: node.id,
+      status: 'pending',
+      cause: 'branch-skip',
+      iteration,
+      overrides: { consumedUpstreamRunsJson: consumedJson },
+    })
+    await transitionNodeRunStatus({
+      db,
+      nodeRunId,
+      event: { kind: 'mark-skipped', reason: decision.activation.reason },
+      extra: { finishedAt: Date.now() },
+    })
+  }
+  broadcastNodeStatus(taskId, nodeRunId, node.id, 'skipped')
+  log.info('node skipped — inbound branch inactive', {
+    nodeId: node.id,
+    iteration,
+    reason: decision.activation.reason,
+    inactiveFrom: decision.edges
+      .filter((e) => e.activation.kind === 'inactive')
+      .map((e) => `${e.sourceNodeId}.${e.sourcePortName}`),
+  })
+  return { kind: 'ok', summary: '', message: 'branch-skipped' }
+}
+
 async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
   const { db, task, taskId, definition, opts, inputsMap, agentSem, writeSem, log } = state
   const { node, iteration } = args
@@ -5757,6 +5984,23 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   if (opts.signal?.aborted === true) {
     return { kind: 'canceled', summary: 'task canceled', message: 'signal aborted' }
   }
+
+  // ---------------------------------------------------------------------------
+  // RFC-306 — branch judgment. FIRST thing after the abort check, so it applies
+  // uniformly to every dispatchable kind (agent / script / wrapper / call /
+  // review / output). Placing it per-kind would guarantee the next new kind
+  // silently runs on a closed branch.
+  //
+  // NOT applied to the settles-without-row family (clarify / cross-clarify):
+  // deriveFrontier settles those by derivation and they own no row, so minting
+  // one here would break the C1/N6 contract. Their visual "greyed out" state
+  // comes from the trace query, which derives it the same way.
+  // ---------------------------------------------------------------------------
+  if (!SETTLES_WITHOUT_ROW_KINDS.has(node.kind)) {
+    const branch = await judgeBranchActivation(state, node, iteration)
+    if (branch !== null) return branch
+  }
+
   if (node.kind === 'output') {
     // Output nodes are display-only sinks: no subprocess, no envelope. The
     // node's declared `ports[]` bindings resolve to upstream (nodeId, portName)
@@ -5808,6 +6052,11 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         content: row.content,
         kind: row.kind,
         archiveJson: row.archiveJson,
+        // RFC-306: an output node is pure projection, and that includes the
+        // branch state. With joinMode 'any' the node itself can be active while
+        // ONE of its bound sources sits on a closed branch — that port then
+        // renders as "not produced" instead of as a genuine empty result.
+        active: row.active,
       })
     }
     broadcastNodeStatus(taskId, nrId, node.id, 'done')
@@ -7514,6 +7763,8 @@ async function completeLoopWrapperIteration(args: {
       value.content,
       value.kind,
       value.archiveJson,
+      // RFC-306 D9: inheritance across the loop boundary.
+      value.active,
     )
   }
 
@@ -7754,8 +8005,11 @@ async function runLoopWrapperNode(
       iteration: i,
       phase: 'iter-done',
     })
-    const portContent = await readPortAtIteration(db, taskId, cond.nodeId, cond.portName, i)
-    if (evaluateExitCondition(cond, portContent)) {
+    // RFC-306: the exit rule now sees ACTIVATION as well as content, so a loop
+    // can exit on "the body closed this branch" (`port-inactive`) instead of
+    // having to encode that as an empty string.
+    const portRow = await readPortRowAtIteration(db, taskId, cond.nodeId, cond.portName, i)
+    if (evaluateExitCondition(cond, { content: portRow.content, active: portRow.active })) {
       return completeLoopWrapperIteration({
         state,
         node,
@@ -8298,6 +8552,10 @@ async function runFanoutWrapperNode(
               )
           : []
       const row = aggRows[0]
+      // RFC-306 D9 (design-gate P1#5): the aggregator may itself declare a branch
+      // port — that is how a decision made INSIDE a fanout leaves the wrapper.
+      // Dropping `active` here silently re-opened the branch at the boundary, so
+      // downstream ran with the aggregator's reason text as its input.
       await upsertWrapperOutput(
         db,
         wrapperRunId,
@@ -8305,6 +8563,7 @@ async function runFanoutWrapperNode(
         content,
         row?.kind ?? null,
         row !== undefined && row.content === content ? (row.archiveJson ?? null) : null,
+        row?.active !== false,
       )
     }
   } else {
@@ -8442,7 +8701,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
   // wrapper generation (failed → resume mints a FRESH wrapperRunId) can replay
   // the previous generation's done children instead of re-running every shard.
   // The non-null parent filter keeps frontier invisibility intact (deriveFrontier
-  // / buildFreshestDonePerNode / pickFreshestRun all skip child rows) AND
+  // / buildFreshestSettledPerNode / pickFreshestRun all skip child rows) AND
   // excludes the top-level inert placeholder rows retryNode mints for inner
   // nodes. Three branches on the FRESHEST candidate (pure id-order):
   //   1. freshest is done + value-hash match (NULL=match, legacy rows) + reuse
@@ -9004,7 +9263,14 @@ async function dispatchFanoutAggregatorAttempt(
           .from(nodeRunOutputs)
           .where(eq(nodeRunOutputs.nodeRunId, row.id))
         const port = outRows.find((o) => o.portName === edge.source.portName)
-        if (port !== undefined) {
+        // RFC-306 D13: only ACTIVE shards feed the aggregation. A shard that
+        // closed this branch contributes nothing at all — not an empty `###`
+        // block. Two reasons it must be absent rather than blank: the aggregator
+        // prompt would otherwise carry N empty sections that read as "these
+        // shards found nothing" (they were never asked), and the port's content
+        // on an inactive port is the shard's REASON text, which would land in
+        // the aggregate as if it were a finding.
+        if (port !== undefined && port.active !== false) {
           blocks.push(`### ${s.shardKey}\n${port.content}`)
         }
       }
@@ -9018,7 +9284,8 @@ async function dispatchFanoutAggregatorAttempt(
           .from(nodeRunOutputs)
           .where(eq(nodeRunOutputs.nodeRunId, row.id))
         const port = outRows.find((o) => o.portName === edge.source.portName)
-        if (port !== undefined) blocks.push(port.content)
+        // Same rule for a shared (broadcast) upstream — see above.
+        if (port !== undefined && port.active !== false) blocks.push(port.content)
       }
     }
     aggInputs[edge.target.portName] = blocks.join('\n\n')
@@ -9485,13 +9752,21 @@ async function upsertWrapperOutput(
   // (synthesized outlets — __done__, git_diff — have no source row: NULL).
   kind: string | null = null,
   archiveJson: string | null = null,
+  /**
+   * RFC-306 D9 — whether the promoted outlet carries a value. A wrapper outlet
+   * whose bound inner source sat on a closed branch is itself inactive, and that
+   * is how a branch escapes a loop / fanout to the graph outside it. Defaults to
+   * true so synthesized outlets (`__done__`, `git_diff`) and every existing
+   * caller keep their current behavior.
+   */
+  active = true,
 ): Promise<void> {
   await db
     .insert(nodeRunOutputs)
-    .values({ nodeRunId: wrapperRunId, portName, content, kind, archiveJson })
+    .values({ nodeRunId: wrapperRunId, portName, content, kind, archiveJson, active })
     .onConflictDoUpdate({
       target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-      set: { content, kind, archiveJson },
+      set: { content, kind, archiveJson, active },
     })
 }
 
@@ -10268,7 +10543,6 @@ export async function resolveUpstreamInputs(
   parents?: ReadonlyMap<string, string>,
 ): Promise<{ inputs: Record<string, string>; consumed: Record<string, string> }> {
   const grouped = new Map<string, string[]>()
-  const kindById = new Map(definition?.nodes.map((node) => [node.id, node.kind]) ?? [])
   // Fanout boundary edges are structural mirrors, and clarify/cross-clarify
   // response edges are prompt-injected system channels — neither is ordinary
   // row-to-row dataflow. Reading them here would either observe a still-running
@@ -10277,12 +10551,12 @@ export async function resolveUpstreamInputs(
   // record false consumed provenance. Keep agent.__clarify__ → cross-clarify:
   // channelEdgeDataflowSkip deliberately treats that direction as a real
   // dependency when the target kind is clarify-cross-agent.
-  const incoming = edges.filter(
-    (e) =>
-      e.target.nodeId === nodeId &&
-      e.boundary === undefined &&
-      !channelEdgeDataflowSkip(e, (targetId) => kindById.get(targetId)),
-  )
+  //
+  // RFC-306: the projection now lives in task-execution/domain/inboundEdges so
+  // the branch-activation judgment reads EXACTLY the same edge set — see that
+  // module's header for why a second hand-rolled copy would be a bug factory.
+  const kindById = nodeKindIndex(definition)
+  const incoming = collectDataflowInboundEdges(edges, nodeId, kindById)
   // RFC-074 provenance: which upstream node_run each source edge actually read.
   // Keyed by source nodeId — all edges from the same source resolve to the same
   // picked run, so this stays consistent across multi-port fan-in.
@@ -10326,7 +10600,19 @@ export async function resolveUpstreamInputs(
       .from(nodeRunOutputs)
       .where(eq(nodeRunOutputs.nodeRunId, run.id))
     const port = outRows.find((o) => o.portName === source.portName)
-    const content = port?.content ?? ''
+    // RFC-306: a closed branch contributes NOTHING to a downstream prompt.
+    //
+    //   * source row `skipped` ⇒ it produced no ports at all;
+    //   * port row `active === false` ⇒ its content is the author's REASON for
+    //     closing the branch. That text must never reach another agent: it is
+    //     one model's private justification, and injecting it as if it were data
+    //     invents an input the author never wired.
+    //
+    // Reaching this line at all means the node was judged ACTIVE — i.e. some
+    // OTHER inbound edge is live (joinMode 'any'), or the operator forced the
+    // node to run. Empty string is exactly the right value for the dead legs.
+    const inactive = run.status === 'skipped' || port?.active === false
+    const content = inactive ? '' : (port?.content ?? '')
     const list = grouped.get(edge.target.portName) ?? []
     list.push(content)
     grouped.set(edge.target.portName, list)
@@ -10342,16 +10628,6 @@ export async function resolveUpstreamInputs(
 // RFC-060 PR-E: pickLatestSourceRun + sumChildTokens were used only by the
 // agent-multi runFanOutNode path (now removed). Deleted alongside the fan-out
 // implementation.
-
-async function readPortAtIteration(
-  db: DbClient,
-  taskId: string,
-  nodeId: string,
-  portName: string,
-  iteration: number,
-): Promise<string> {
-  return (await readPortRowAtIteration(db, taskId, nodeId, portName, iteration)).content
-}
 
 /**
  * RFC-193 D16 — row-returning variant: derived-output projections (output
@@ -10370,6 +10646,14 @@ async function readPortRowAtIteration(
   content: string
   kind: string | null
   archiveJson: string | null
+  /**
+   * RFC-306: false when this port is NOT carrying a value this round — either
+   * the producer marked it `active="false"`, or the producing run was itself
+   * skipped. Every projection built on this read (output nodes, wrapper outlet
+   * promotion, loop exit conditions) has to propagate it, or a closed branch
+   * silently re-opens one layer up.
+   */
+  active: boolean
 }> {
   const rows = await db
     .select()
@@ -10380,7 +10664,7 @@ async function readPortRowAtIteration(
   // snapshot that references an outer source, iteration 0 remains visible in
   // later loop rounds instead of turning into a synthetic empty value.
   // RFC-096 (audit 附录 C #5): the done-only filter aligns this read with
-  // buildFreshestDonePerNode / the RFC-074 freshness口径 — without it, a
+  // buildFreshestSettledPerNode / the RFC-074 freshness口径 — without it, a
   // freshly minted non-done row (e.g. a concurrent designer-rerun pending
   // row) was picked as freshest, had no outputs, and the port read returned
   // '': a loop `port-empty` exit condition false-fired and the wrapper
@@ -10390,16 +10674,26 @@ async function readPortRowAtIteration(
   // inherited from isFresherNodeRun; the old comment describing the retired
   // (clarifyIteration, retryIndex, id) triple was stale and is gone.)
   const chosen = pickUpstreamSourceRun(rows, iteration)
-  if (chosen === undefined) return { runId: null, content: '', kind: null, archiveJson: null }
+  if (chosen === undefined) {
+    // No settled run at all. `active: true` (not false) on purpose: "nothing has
+    // run yet" is not a branch decision, and reporting it as inactive would let
+    // a bookkeeping gap masquerade as a deliberate skip.
+    return { runId: null, content: '', kind: null, archiveJson: null, active: true }
+  }
   const out = await db
     .select()
     .from(nodeRunOutputs)
     .where(and(eq(nodeRunOutputs.nodeRunId, chosen.id), eq(nodeRunOutputs.portName, portName)))
+  // A skipped producing run has no port rows at all, so the port-row check alone
+  // would read it as "absent ⇒ active" (the compatibility default). The run
+  // status has to be consulted too.
+  const active = chosen.status !== 'skipped' && out[0]?.active !== false
   return {
     runId: chosen.id,
-    content: out[0]?.content ?? '',
+    content: active ? (out[0]?.content ?? '') : '',
     kind: out[0]?.kind ?? null,
     archiveJson: out[0]?.archiveJson ?? null,
+    active,
   }
 }
 

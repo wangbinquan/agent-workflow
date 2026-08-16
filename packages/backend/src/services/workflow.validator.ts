@@ -530,6 +530,11 @@ export function projectWorkflowValidationContext(ctx: ValidatorContext) {
       outputs: [...(agent.outputs ?? [])],
       outputKinds: { ...(agent.outputKinds ?? {}) },
       outputWrapperPortNames: { ...(agent.outputWrapperPortNames ?? {}) },
+      // RFC-306: the branch declaration affects validation (the `port-inactive`
+      // exit-condition rule reads it) and port semantics on the canvas, so it
+      // must be part of the context hash — flipping a port's branch flag has to
+      // invalidate a cached validation result.
+      branchPorts: [...(agent.branchPorts ?? [])],
       dependsOn: [...(agent.dependsOn ?? [])],
       skills: [...(agent.skills ?? [])],
       mcp: [...(agent.mcp ?? [])],
@@ -786,6 +791,15 @@ export function validateWorkflowDef(
         })
         break
     }
+  }
+
+  // RFC-306 — the exitCondition's `kind`, read defensively off the raw node
+  // (the parsed union is only available where parseExitCondition already ran).
+  const readExitConditionKind = (n: (typeof nodes)[number]): string | undefined => {
+    const cond = (n as Record<string, unknown>).exitCondition
+    if (cond === null || typeof cond !== 'object') return undefined
+    const kind = (cond as Record<string, unknown>).kind
+    return typeof kind === 'string' ? kind : undefined
   }
 
   // 1. wrapper-required-fields ------------------------------------------------
@@ -1988,6 +2002,26 @@ export function validateWorkflowDef(
               pointer: node.id,
               target: target.nodeField(node.id, 'loop-exit-condition'),
             })
+          } else if (portsKnown && readExitConditionKind(node) === 'port-inactive') {
+            // RFC-306: `port-inactive` asks "did the producer close this branch?".
+            // A port that is not declared as a BRANCH port can never be closed, so
+            // the condition would be false on every iteration and the loop would
+            // silently run to max_iterations. Refused at save time — the author
+            // meant something, and it is not this.
+            const exitNodeDecl =
+              exitNode === undefined
+                ? undefined
+                : declaredPorts(exitNode, defnForPorts, agentByIdOrName, { workflowByRef })
+            const isBranchPort =
+              exitNodeDecl?.dataOutputs.find((p) => p.name === exitPortName)?.branch === true
+            if (!isBranchPort) {
+              issues.push({
+                code: 'exit-condition-port-not-branch',
+                message: `wrapper-loop '${node.id}' exitCondition uses kind 'port-inactive' on '${exitNodeId}.${exitPortName}', which is not declared as a branch port — the condition could never become true`,
+                pointer: node.id,
+                target: target.nodeField(node.id, 'loop-exit-condition'),
+              })
+            }
           }
         }
       }

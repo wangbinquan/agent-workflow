@@ -329,6 +329,8 @@ export interface RenderPromptInput {
    * (legacy behaviour — no extra wording).
    */
   agentOutputKinds?: AgentOutputKindsMap
+  /** RFC-306 — branch ports among `agentOutputs` (see buildProtocolBlock). */
+  agentBranchPorts?: readonly string[]
   /**
    * RFC-164: when set, the trailing protocol block is REPLACED by this
    * workgroup-generated block (leader/worker/fc variants) — the agent's own
@@ -764,7 +766,12 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     // Markdown readers and models.
     trailing = `\n\n${input.workgroupProtocolBlock.replace(/^\n+/, '')}`
   } else {
-    trailing = buildProtocolBlock(input.agentOutputs, input.agentOutputKinds, nonce)
+    trailing = buildProtocolBlock(
+      input.agentOutputs,
+      input.agentOutputKinds,
+      nonce,
+      input.agentBranchPorts,
+    )
   }
   const rendered = body + sections + trailing
   if (
@@ -817,10 +824,44 @@ export function clarifyOpenTag(nonce?: string): string {
     : '<workflow-clarify>'
 }
 
+/**
+ * RFC-306 — the branch-port paragraph appended to the output protocol block.
+ *
+ * Three things it must get across, in this order, because they are the three
+ * ways agents get this wrong:
+ *   1. emitting the port normally is what RUNS the branch (the default is not
+ *      "off" — an agent that simply omits the port does not close anything);
+ *   2. closing a branch still requires EMITTING the port, with the marker;
+ *   3. the marker is illegal anywhere else, and the framework rejects the reply
+ *      rather than guessing.
+ */
+function renderBranchGuidance(
+  agentOutputs: readonly string[],
+  branchPorts: readonly string[] | undefined,
+): string {
+  const declared = (branchPorts ?? []).filter((p) => agentOutputs.includes(p))
+  if (declared.length === 0) return ''
+  const list = declared.map((p) => `\`${p}\``).join(', ')
+  return (
+    '\n' +
+    `Branch ports (${list}): each one controls whether the workflow branch fed by that port runs. ` +
+    'Emit the port normally to RUN its branch. To NOT run it, still emit the port and mark it inactive: ' +
+    '`<port name="NAME" active="false">short reason</port>`. ' +
+    'The reason text is recorded for the run trace and is never passed to any downstream node, so put the data in the ports you keep active. ' +
+    'Marking any other port inactive — or using any value other than "true"/"false" — is rejected and you will be asked to re-emit.\n'
+  )
+}
+
 export function buildProtocolBlock(
   agentOutputs: string[],
   agentOutputKinds?: AgentOutputKindsMap,
   nonce?: string,
+  /**
+   * RFC-306 — the subset of `agentOutputs` declared as BRANCH ports. Empty /
+   * absent emits nothing at all, so a prompt for an agent without branch ports
+   * is byte-identical to the pre-RFC-306 one (AC-3's prompt half).
+   */
+  branchPorts?: readonly string[],
 ): string {
   // RFC-080: per-port bullet / example annotation is owned by each kind's
   // handler (parsed-kind dispatch) — no more literal `=== 'markdown_file'`
@@ -867,6 +908,7 @@ export function buildProtocolBlock(
     s += renderBullet(port)
   }
   s += renderPerKindGuidance()
+  s += renderBranchGuidance(agentOutputs, branchPorts)
   s += `\nFormat:\n${openTag}\n`
   for (const port of agentOutputs) {
     s += renderExample(port)
@@ -1107,6 +1149,11 @@ export type EnvelopeFollowupReason =
   | 'port-validation'
   | 'clarify-required'
   | 'envelope-port-malformed'
+  // RFC-306 — the envelope parsed fine, but a branch marker on it was illegal
+  // (a non-branch port carried `active="false"`, or an `active` value was
+  // neither true nor false). Both producer codes render as this one reason: the
+  // correction is identical — fix the marker and re-emit.
+  | 'branch-marker'
 
 /**
  * RFC-145 — projection from the 7-value envelope producer domain
@@ -1133,6 +1180,8 @@ export const FOLLOWUP_POLICY: Record<FollowupFailureCode, { reason: EnvelopeFoll
   'clarify-forbidden': { reason: 'envelope-missing' },
   'envelope-port-malformed': { reason: 'envelope-port-malformed' },
   'port-validation-failed': { reason: 'port-validation' },
+  'branch-port-not-declared': { reason: 'branch-marker' },
+  'branch-marker-malformed': { reason: 'branch-marker' },
 }
 
 /**
@@ -1232,6 +1281,14 @@ export interface EnvelopeFollowupInput {
    */
   perKindRepairBlocks?: ReadonlyArray<string>
   /**
+   * RFC-306: backend-prerendered specifics for `reason === 'branch-marker'` —
+   * which port(s) were marked illegally and which ports (if any) actually are
+   * branch ports. Threaded in rather than computed here for the same reason as
+   * `perKindRepairBlocks`: this renderer stays a pure string splicer with no
+   * knowledge of agent declarations. Other reasons ignore it.
+   */
+  branchMarkerDetail?: string
+  /**
    * RFC-165 (F12, implementation-gate P2 fix): true when the clarify channel
    * is OPTIONAL — the correction round must keep BOTH envelopes on the table
    * (the mandatory-only bullets would forbid a perfectly valid output-only
@@ -1255,7 +1312,13 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
       ? 'port-validation'
       : input.reason === 'envelope-port-malformed'
         ? 'envelope-port-malformed'
-        : 'envelope-missing'
+        : // RFC-306: a branch-marker slip is about `<workflow-output>` ports, so
+          // it survives the clarify-off narrowing exactly like the two above —
+          // coercing it to 'envelope-missing' would tell the agent to re-emit an
+          // envelope it DID emit, hiding the actual defect.
+          input.reason === 'branch-marker'
+          ? 'branch-marker'
+          : 'envelope-missing'
 
   const isPortValidation = reason === 'port-validation'
 
@@ -1274,6 +1337,16 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
     // than "no envelope found".
     opening =
       'Your previous reply in this session emitted a `<workflow-output>` envelope, but one or more `<port name="...">` tags were never properly closed — the matching `</port>` was missing or corrupted (for example a stray token turned it into `</|...|port>`), so the framework could not extract those ports. Re-emit the envelope and make sure EVERY port is closed with a literal `</port>` tag — nothing inside the close tag, no extra characters.'
+  } else if (reason === 'branch-marker') {
+    // RFC-306. Same placement reasoning as the malformed-port branch above: this
+    // failure happens with a perfectly well-formed envelope, so the generic
+    // "no envelope found" wording would send the agent chasing the wrong defect.
+    opening =
+      'Your previous reply in this session emitted a valid `<workflow-output>` envelope, but its branch marking was rejected. `active="false"` may ONLY appear on a port declared as a branch port, and its value must be exactly `true` or `false`.' +
+      (input.branchMarkerDetail !== undefined && input.branchMarkerDetail.length > 0
+        ? ` ${input.branchMarkerDetail}`
+        : '') +
+      ' Re-emit the envelope: either drop the marker (the branch then runs) or move it to a declared branch port.'
   } else if (!hasClarify) {
     opening =
       'Your previous reply in this session did not contain a `<workflow-output>` envelope. The framework cannot parse your result without it.'
@@ -1304,7 +1377,15 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
   // ---------------------------------------------------------------------------
   const optional = hasClarify && input.clarifyOptional === true
   let bullets: string
-  if (optional && !isPortValidation && reason !== 'envelope-port-malformed') {
+  if (
+    optional &&
+    !isPortValidation &&
+    reason !== 'envelope-port-malformed' &&
+    // RFC-306: like the two output-shaped reasons above, the fix is always to
+    // re-emit `<workflow-output>` — offering the clarify escape hatch here would
+    // let the agent dodge the correction entirely.
+    reason !== 'branch-marker'
+  ) {
     bullets =
       '- This node has an OPTIONAL clarify channel: reply with EXACTLY ONE envelope — either a `<workflow-clarify>` block (if something material is still unclear) or a `<workflow-output>` block (if you are ready to finalize), using the formats previously specified in this session.\n' +
       '- Never emit both, and do not emit anything after the closing tag of whichever envelope you pick.\n' +

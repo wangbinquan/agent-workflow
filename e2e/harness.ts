@@ -173,6 +173,8 @@ export function defaultStubPath(): string {
 /** Behaviours the compiled stub can be asked for. Mirrors system-mocks runtime dispatch. */
 export type StubMode =
   | 'basic'
+  // RFC-306 — emits `<port … active="false">` on demand (see mode-branch.ts).
+  | 'branch'
   | 'clarify'
   | 'clarify-inline'
   | 'commit'

@@ -54,6 +54,8 @@ export interface PortLookupAgent {
   outputKinds?: Record<string, string>
   outputWrapperPortNames?: Record<string, string>
   role?: string
+  /** RFC-306 — subset of `outputs` that may be deactivated at runtime. */
+  branchPorts?: readonly string[]
 }
 
 export type PortAgentLookup =
@@ -62,6 +64,17 @@ export type PortAgentLookup =
 
 export interface DeclaredPort {
   name: string
+  /**
+   * RFC-306 — this OUTPUT port may be marked inactive at runtime
+   * (`<port name="…" active="false">`), deactivating every edge that leaves it.
+   * Sources: `agent.branchPorts` for agent nodes, `outputs[].branch` for script
+   * nodes. Undefined everywhere else — and undefined means "may not be
+   * deactivated", so a kind that grows branch support must opt in HERE, not by
+   * accident. Consumed by the canvas (branch-port styling), the validator
+   * (`port-inactive` exit conditions) and the runner (declaration check that
+   * turns an undeclared marker into `branch-port-not-declared`).
+   */
+  branch?: boolean
   /** Output-port kind (e.g. 'signal', 'list<path<md>>') where the source
    *  declares one — agent outputs via `agent.outputKinds`, fanout outlets
    *  via `deriveWrapperFanoutOutputs`, fanout inputs via their declared
@@ -196,7 +209,15 @@ const PORT_DERIVERS = {
       dataInputs: [], // agent inputs are edge-derived prompt vars, never declared
       dataOutputs: [...(agent?.outputs ?? [])].map((name) => {
         const kind = agent?.outputKinds?.[name]
-        return kind !== undefined ? { name, kind } : { name }
+        // RFC-306: `branch` is only ever stamped TRUE (never `branch: false`) so
+        // a non-branch port's declaration stays byte-identical to pre-RFC-306 —
+        // several equality-shaped tests compare these objects wholesale.
+        const branch = agent?.branchPorts?.includes(name) === true
+        return {
+          name,
+          ...(kind !== undefined ? { kind } : {}),
+          ...(branch ? { branch: true } : {}),
+        }
       }),
       // RFC-023/RFC-056 framework channels: __clarify__ outbound is accepted
       // on every agent; __clarify_response__ / __external_feedback__ inbound

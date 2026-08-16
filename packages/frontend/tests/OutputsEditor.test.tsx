@@ -14,12 +14,15 @@ type OnChange = (
   outputs: string[],
   kinds: AgentOutputKindsMap | undefined,
   wrappers: WrapperMap | undefined,
+  // RFC-306 — the branch-port list travels with the other two sidecars.
+  branchPorts: string[] | undefined,
 ) => void
 
 interface InitialState {
   outputs: string[]
   kinds?: AgentOutputKindsMap
   wrappers?: WrapperMap
+  branchPorts?: string[]
   aggregator?: boolean
 }
 
@@ -28,17 +31,20 @@ function mountStateful(initial: InitialState, spy: OnChange = vi.fn<OnChange>())
     const [outputs, setOutputs] = useState(initial.outputs)
     const [kinds, setKinds] = useState<AgentOutputKindsMap | undefined>(initial.kinds)
     const [wrappers, setWrappers] = useState<WrapperMap | undefined>(initial.wrappers)
+    const [branchPorts, setBranchPorts] = useState<string[] | undefined>(initial.branchPorts)
     return (
       <OutputsEditor
         outputs={outputs}
         outputKinds={kinds}
         outputWrapperPortNames={wrappers}
+        branchPorts={branchPorts}
         aggregator={initial.aggregator}
-        onChange={(nextOutputs, nextKinds, nextWrappers) => {
-          spy(nextOutputs, nextKinds, nextWrappers)
+        onChange={(nextOutputs, nextKinds, nextWrappers, nextBranchPorts) => {
+          spy(nextOutputs, nextKinds, nextWrappers, nextBranchPorts)
           setOutputs(nextOutputs)
           setKinds(nextKinds)
           setWrappers(nextWrappers)
+          setBranchPorts(nextBranchPorts)
         }}
       />
     )
@@ -93,7 +99,7 @@ describe('OutputsEditor explicit card and Dialog flow', () => {
     expect(spy).not.toHaveBeenCalled()
     await saveDialog()
 
-    expect(spy).toHaveBeenLastCalledWith(['result'], undefined, undefined)
+    expect(spy).toHaveBeenLastCalledWith(['result'], undefined, undefined, undefined)
     expect(screen.queryByTestId('agent-output-ports-empty')).toBeNull()
     expect(screen.getByTestId('agent-port-card-output-0')).toBeTruthy()
   })
@@ -141,10 +147,18 @@ describe('OutputsEditor explicit card and Dialog flow', () => {
       ['final_report', 'keep'],
       { keep: 'signal', final_report: 'markdown' },
       { keep: 'keep_promoted', final_report: 'new_promoted' },
+      // RFC-306: no port was ticked as a branch port, so the 4th argument stays
+      // undefined — an agent without branch ports keeps its exact prior payload.
+      undefined,
     )
 
     confirmDelete('final_report', 1)
-    expect(spy).toHaveBeenLastCalledWith(['keep'], { keep: 'signal' }, { keep: 'keep_promoted' })
+    expect(spy).toHaveBeenLastCalledWith(
+      ['keep'],
+      { keep: 'signal' },
+      { keep: 'keep_promoted' },
+      undefined,
+    )
   })
 
   test('normal role hides the wrapper field but preserves and migrates its stored mapping', async () => {
@@ -167,6 +181,7 @@ describe('OutputsEditor explicit card and Dialog flow', () => {
       ['final_report'],
       { final_report: 'markdown' },
       { final_report: 'promoted_report' },
+      undefined,
     )
   })
 
@@ -187,14 +202,14 @@ describe('OutputsEditor explicit card and Dialog flow', () => {
     expect(
       screen.getByRole('button', { name: /Clean up.*outputWrapperPortNames:ghost/i }),
     ).toBeTruthy()
-    expect(spy).toHaveBeenLastCalledWith([], {}, { ghost: 'published' })
+    expect(spy).toHaveBeenLastCalledWith([], {}, { ghost: 'published' }, undefined)
 
     fireEvent.click(screen.getByRole('button', { name: /Clean up.*outputWrapperPortNames:ghost/i }))
     fireEvent.click(
       screen.getByRole('button', { name: /Confirm cleanup.*outputWrapperPortNames:ghost/i }),
     )
     await waitFor(() => expect(screen.queryByText(/Unlinked output mappings found/)).toBeNull())
-    expect(spy).toHaveBeenLastCalledWith([], {}, {})
+    expect(spy).toHaveBeenLastCalledWith([], {}, {}, undefined)
   })
 
   test('orphan confirmation is reset when a refetch replaces the same source and key value', () => {
@@ -214,7 +229,7 @@ describe('OutputsEditor explicit card and Dialog flow', () => {
     expect(screen.getByRole('button', { name: /Confirm cleanup.*outputKinds:ghost/i })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /Confirm cleanup.*outputKinds:ghost/i }))
-    expect(onChange).toHaveBeenCalledWith([], {}, undefined)
+    expect(onChange).toHaveBeenCalledWith([], {}, undefined, undefined)
   })
 
   test('duplicate and invalid names stay local and cannot be submitted', () => {
@@ -232,5 +247,39 @@ describe('OutputsEditor explicit card and Dialog flow', () => {
     expect(save.disabled).toBe(true)
     expect(screen.getByText(/Start with a lowercase letter/)).toBeTruthy()
     expect(spy).not.toHaveBeenCalled()
+  })
+
+  // RFC-306 — the branch flag is a NAME LIST living beside the port array, so
+  // the two ways it can silently rot are (a) a rename leaving a dangling entry
+  // and (b) a delete leaving one. Both make the agent unsaveable server-side
+  // (`branchPorts ⊆ outputs` is enforced), with no field left in the UI to fix
+  // it — so both are locked here.
+  test('branch port survives a rename and disappears with a delete', async () => {
+    const { spy } = mountStateful({ outputs: ['all_clear'], branchPorts: ['all_clear'] })
+
+    // The card advertises it…
+    expect(screen.getByTestId('agent-port-card-output-0').textContent).toMatch(/branch port/i)
+
+    // …a rename MOVES the flag rather than orphaning the old name.
+    openEdit('all_clear', 1)
+    fireEvent.change(screen.getByTestId('agent-output-port-name'), {
+      target: { value: 'release_ok' },
+    })
+    await saveDialog()
+    expect(spy).toHaveBeenLastCalledWith(['release_ok'], undefined, undefined, ['release_ok'])
+
+    // …and deleting the port takes the flag with it. (kinds/wrappers stay
+    // `undefined` here because this fixture never had either sidecar — the
+    // point of the assertion is the trailing `undefined`: no dangling branch.)
+    confirmDelete('release_ok', 1)
+    expect(spy).toHaveBeenLastCalledWith([], undefined, undefined, undefined)
+  })
+
+  test('toggling the branch switch off removes the port from branchPorts', async () => {
+    const { spy } = mountStateful({ outputs: ['all_clear'], branchPorts: ['all_clear'] })
+    openEdit('all_clear', 1)
+    fireEvent.click(screen.getByTestId('agent-output-port-branch'))
+    await saveDialog()
+    expect(spy).toHaveBeenLastCalledWith(['all_clear'], undefined, undefined, undefined)
   })
 })

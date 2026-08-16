@@ -9,6 +9,7 @@
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
 import {
+  AgentBranchPortsSchema,
   AgentInputPortSchema,
   AgentOutputKindsMapSchema,
   AgentOutputWrapperPortNamesSchema,
@@ -76,6 +77,8 @@ const KNOWN_KEYS = new Set<string>([
   'inputs',
   'outputs',
   'outputKinds',
+  // RFC-306 — branch ports (see AgentBranchPortsSchema).
+  'branchPorts',
   'role',
   'outputWrapperPortNames',
   // RFC-111 (Codex audit F6): runtime name this agent dispatches to. String
@@ -193,6 +196,21 @@ export function parseAgentMarkdown(
     } else {
       extras.outputKinds = data.outputKinds
       warnings.push('outputKinds must map port names to registered kinds; kept in frontmatterExtra')
+    }
+  }
+
+  // RFC-306: branch ports. A malformed value demotes to frontmatterExtra with a
+  // warning (the outputKinds precedent) rather than failing the import — but it
+  // then declares NOTHING, so a runtime `active="false"` on those ports is
+  // rejected as undeclared. Failing closed here is deliberate: silently widening
+  // what may be deactivated is the one outcome this feature must never produce.
+  if (data.branchPorts !== undefined) {
+    const parsed = AgentBranchPortsSchema.safeParse(data.branchPorts)
+    if (parsed.success) {
+      partial.branchPorts = parsed.data
+    } else {
+      extras.branchPorts = data.branchPorts
+      warnings.push('branchPorts must be an array of port names; kept in frontmatterExtra')
     }
   }
 

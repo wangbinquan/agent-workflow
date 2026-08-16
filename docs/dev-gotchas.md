@@ -385,6 +385,25 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 - **另一类只有门禁看得见的东西是「唯一性锁」，而它的正解通常不是把自己加进白名单**：仓内有一批「某个 idiom 在 `src` 下只准出现在这几个文件」的文本锁（`rfc284-microhelpers.test.ts` T7：`createHash('sha1')` 只准在 `util/hash.ts`，`createHash('sha256')` 只准在多步 builder 族 / raw-digest / 镜像桥那几处；`Math.max(Date.now()` 只准在 `util/time.ts`；`Promise.race([p, new Promise` 只准在 `util/process.ts`）。它报红时看着像「白名单漏登记了我」，**多数情况下它其实在说「你手写了一份已有 helper 的第二种拼法」**——单步 hex 摘要就该走 `sha256Hex`。2026-08-15 RFC-304 实测：我在 domain 里直写 `createHash('sha256')` 被 T7 拦下，正解是改调 `sha256Hex`，而不是往合法集合里加一行。**判据**：先问「这条 idiom 有没有现成 helper」，只有当自己确实属于被豁免的形态（多步 update / 非 hex 输出 / shared 侧无 node:crypto 的镜像桥）才登记，并把属于哪一类写进注释。
 
+## 端口读点的「结算口径」（RFC-306 实测，2026-08-16）
+
+- **凡是「读上游端口当前答案」的地方，行过滤必须是 done ∪ skipped，不能只认 done**。
+  RFC-306 起 `node_runs.status='skipped'` 有了真实产生者（分支被关闭的节点）。
+  `pickUpstreamSourceRun` / `buildFreshestSettledPerNode`（`services/freshness.ts`）如果继续 done-only，
+  picker 会**跳过**那条 skipped 行、往前捞到更早的 done 行，于是下游拿到的是「已被后来的分支决策
+  推翻的那一代产物」——症状不是报错，是拿着陈旧内容正常跑完。
+  同一口径还决定 freshness：skipped 行若不进 freshest map，消费了它的下游永远判 stale ⇒ 每 tick 重派发（活锁）。
+  **判据**：新增任何 `status === 'done'` 的行过滤前，先问「skipped 行落在这个语义里算什么」。
+
+- **端口「没输出」与「输出了空」必须在库里可分**。二者在 RFC-306 之前同形（都是一行 content=''），
+  于是任何「按端口决定要不要走下去」的设计都没有可判定的信号。RFC-306 用
+  `node_run_outputs.active` 分开，且**默认 1**——默认值选错（默认 0 / 用 NULL 表示未知）会让存量行
+  全部变成「未激活」，一次迁移就能让所有历史任务的下游读法改变。
+
+- **给容器边界加字段时，「三层都要」**：子任务产物穿过 `call` 节点要经过
+  DB select → `ExecutionOutcome` 值对象 → 父行插入三层，漏任何一层，语义都会在边界处**静默复位**
+  （RFC-306 设计门 P1#6 实测：只在最终投影处写了继承，前两层没带，跨任务的分支决策全部复活）。
+
 ## iso / merge_state 生命周期（RFC-276 回归实测，2026-08-11）
 
 - **凡是新开 iso 隔离（`persistIsoBase` 盖 `'isolating'`）的执行路径，成功收口时必须把

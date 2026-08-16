@@ -88,6 +88,13 @@ export interface MintNodeRunOverrides {
   consumedUpstreamRunsJson?: string | null
   errorMessage?: string | null
   /**
+   * RFC-306 §10 — one-shot "run anyway" marker. Set only on the retry
+   * placeholder the user's click produced; the run that follows mints its own
+   * row WITHOUT it, which is what makes the override apply to exactly one
+   * dispatch instead of becoming a permanent property of the node.
+   */
+  forceActivated?: boolean
+  /**
    * Default is `Date.now()`. The clarify / cross-clarify / review rerun
    * mints historically wrote NO startedAt (NULL) — they pass `null`
    * explicitly to preserve that (the runner stamps real timing when the row
@@ -231,6 +238,7 @@ export function buildMintNodeRunValues(
     shardValueHash: o.shardValueHash ?? null,
     consumedUpstreamRunsJson: o.consumedUpstreamRunsJson ?? null,
     errorMessage: o.errorMessage ?? null,
+    forceActivated: o.forceActivated ?? false,
     startedAt: o.startedAt !== undefined ? o.startedAt : now,
     finishedAt: o.finishedAt !== undefined ? o.finishedAt : args.status === 'done' ? now : null,
     agentOverrideName: o.agentOverrideName ?? null,

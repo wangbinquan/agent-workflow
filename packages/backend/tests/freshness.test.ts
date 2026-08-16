@@ -44,7 +44,7 @@ describe('RFC-074 PR-B — isNodeRunFresh (B1-B4)', () => {
   })
 
   // B2 — every consumed upstream run is still the freshest done → fresh.
-  test('B2: all consumed == freshestDone → fresh', () => {
+  test('B2: all consumed == freshestSettled → fresh', () => {
     const r = run('r', { designer: '01A', spec: '01B' })
     expect(isNodeRunFresh(r, fresnel({ designer: '01A', spec: '01B' }))).toBe(true)
   })
@@ -59,7 +59,7 @@ describe('RFC-074 PR-B — isNodeRunFresh (B1-B4)', () => {
   // B4 — defensive: a consumed upstream that has NO current-scope done row
   // (absent from the map, e.g. a settled cross-loop boundary input) is NOT a
   // staleness signal.
-  test('B4: consumed upstream absent from freshestDone map → not stale (fresh)', () => {
+  test('B4: consumed upstream absent from freshestSettled map → not stale (fresh)', () => {
     const r = run('r', { gitwrapper: '01OLD', designer: '01A' })
     // gitwrapper not in the current-scope freshest map; designer matches.
     expect(isNodeRunFresh(r, fresnel({ designer: '01A' }))).toBe(true)

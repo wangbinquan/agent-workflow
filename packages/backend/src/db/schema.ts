@@ -1722,6 +1722,12 @@ export const nodeRuns = sqliteTable(
     // followup so an inline session's earlier nonce stays valid. NULL = a run
     // dispatched before RFC-200 (parser falls back to bare-tag matching).
     envelopeNonce: text('envelope_nonce'),
+    // RFC-306 §10 — the user pressed "run anyway" on a node the branch logic had
+    // skipped. Set on the retry placeholder and inherited by the row the
+    // scheduler mints from it; the activation judgment then treats THIS node as
+    // active regardless of its inbound edges. Deliberately not propagated to
+    // downstream nodes — they re-decide from what this node actually emits.
+    forceActivated: integer('force_activated', { mode: 'boolean' }).notNull().default(false),
     // token usage
     tokInput: integer('tok_input'),
     tokOutput: integer('tok_output'),
@@ -2012,6 +2018,12 @@ export const nodeRunOutputs = sqliteTable(
     // for pre-RFC-193 rows (readers fall back to the worktree) and for
     // non-path kinds (content is the body itself).
     archiveJson: text('archive_json'),
+    // RFC-306: 0 = the producer marked this port `active="false"`, closing every
+    // edge that leaves it; 1 = ordinary port (the DEFAULT, so existing rows and
+    // every unmarked port keep behaving exactly as before). When 0, `content`
+    // holds the author's REASON for closing the branch, not data — no downstream
+    // prompt ever receives it.
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.nodeRunId, t.portName] }),

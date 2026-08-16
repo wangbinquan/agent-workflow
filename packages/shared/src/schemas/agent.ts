@@ -88,6 +88,26 @@ export type AgentRole = z.infer<typeof AgentRoleSchema>
 export const AgentOutputWrapperPortNamesSchema = z.record(z.string(), z.string().min(1))
 export type AgentOutputWrapperPortNames = z.infer<typeof AgentOutputWrapperPortNamesSchema>
 
+/**
+ * RFC-306 — the BRANCH ports among this agent's `outputs`. A branch port may be
+ * marked inactive at runtime (`<port name="p" active="false">reason</port>`),
+ * which deactivates every edge leaving that port and skips the downstream
+ * subgraph. Declaring the port here is what makes that marker legal: a marker on
+ * a NON-declared port is a protocol violation (`branch-port-not-declared`), not a
+ * silent no-op — an agent that believes it closed a branch while the branch ran
+ * anyway is the worst failure mode this feature can have.
+ *
+ * Names must appear in `outputs`. Absent / empty ⇒ the agent has no branch ports
+ * and can never deactivate anything (the pre-RFC-306 behavior of every existing
+ * agent, byte for byte).
+ *
+ * Sidecar map kept symmetrical with `outputKinds` / `outputWrapperPortNames`:
+ * authored in agent.md frontmatter `branchPorts:`, persisted through the
+ * `frontmatter_extra` JSON column.
+ */
+export const AgentBranchPortsSchema = z.array(z.string().min(1))
+export type AgentBranchPorts = z.infer<typeof AgentBranchPortsSchema>
+
 /** Permitted characters in agent name (URL-safe; matches /agents/:name). */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
@@ -213,6 +233,8 @@ export const AgentSchema = z.object({
   builtin: z.boolean().optional(),
   outputs: z.array(z.string()),
   outputKinds: AgentOutputKindsMapSchema.optional(),
+  /** RFC-306 — which of `outputs` are branch ports (see AgentBranchPortsSchema). */
+  branchPorts: AgentBranchPortsSchema.optional(),
   /** RFC-166 — declarative input ports. OPTIONAL on the DTO (same as
    *  outputKinds/role, RFC-060 precedent): existing fixtures/built-in agents
    *  need not spell it. rowToAgent always populates `[]` so real responses
@@ -327,6 +349,8 @@ export const CreateAgentSchema = z.object({
   description: z.string().default(''),
   outputs: z.array(z.string()).default([]),
   outputKinds: AgentOutputKindsMapSchema.optional(),
+  /** RFC-306 — which of `outputs` may be marked inactive at runtime. */
+  branchPorts: AgentBranchPortsSchema.optional(),
   /** RFC-166 — declarative input ports; OPTIONAL on create bodies (server
    *  fills []). Duplicate port names rejected (AgentInputPortsSchema); existing
    *  callers/fixtures need not spell it. */

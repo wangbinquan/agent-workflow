@@ -19,6 +19,13 @@
 //                                tag like `</|DSML|port>`). When set, the normal
 //                                <workflow-output>/<workflow-clarify> emission is
 //                                suppressed so this is the ONLY agent text.
+//   MOCK_OPENCODE_OUTPUTS_BY_AGENT  RFC-306: JSON `{agentName: {port: content}}`;
+//                                overrides MOCK_OPENCODE_OUTPUTS for that agent so one
+//                                run can drive several agents down different branches.
+//   MOCK_OPENCODE_INACTIVE_PORTS RFC-306: JSON `["port", …]` (all agents) or
+//                                `{agentName: ["port", …]}`; those ports are emitted
+//                                as `<port name="…" active="false">` — i.e. the agent
+//                                closes that branch and the content is its reason.
 //   MOCK_OPENCODE_EXIT_CODE      number; default 0
 //   MOCK_OPENCODE_DELAY_MS       sleep this long before exiting (for timeout tests)
 //   MOCK_OPENCODE_STDERR         emit this string on stderr (line by line)
@@ -405,9 +412,39 @@ if (
     } catch (e) {
       fail(`MOCK_OPENCODE_OUTPUTS is not valid JSON: ${(e as Error).message}`)
     }
+    // RFC-306: per-agent overrides. A branching workflow needs DIFFERENT agents
+    // to emit different envelopes in one run, which the single global
+    // MOCK_OPENCODE_OUTPUTS cannot express.
+    const thisAgent = argv[agentFlagIdx + 1] ?? ''
+    if (env.MOCK_OPENCODE_OUTPUTS_BY_AGENT !== undefined) {
+      try {
+        const byAgent = JSON.parse(env.MOCK_OPENCODE_OUTPUTS_BY_AGENT) as Record<
+          string,
+          Record<string, string>
+        >
+        if (byAgent[thisAgent] !== undefined) outputs = byAgent[thisAgent]
+      } catch (e) {
+        fail(`MOCK_OPENCODE_OUTPUTS_BY_AGENT is not valid JSON: ${(e as Error).message}`)
+      }
+    }
+    // RFC-306: ports to mark `active="false"` (branch closed). Either a flat
+    // array (applies to every agent) or a per-agent map.
+    let inactive: string[] = []
+    if (env.MOCK_OPENCODE_INACTIVE_PORTS !== undefined) {
+      try {
+        const parsed: unknown = JSON.parse(env.MOCK_OPENCODE_INACTIVE_PORTS)
+        inactive = Array.isArray(parsed)
+          ? (parsed as string[])
+          : (((parsed as Record<string, string[]>)[thisAgent] ?? []) as string[])
+      } catch (e) {
+        fail(`MOCK_OPENCODE_INACTIVE_PORTS is not valid JSON: ${(e as Error).message}`)
+      }
+    }
     let envelope = `${openEnvelope('output')}\n`
     for (const [name, content] of Object.entries(outputs)) {
-      envelope += `  <port name="${name}">${content}</port>\n`
+      envelope += inactive.includes(name)
+        ? `  <port name="${name}" active="false">${content}</port>\n`
+        : `  <port name="${name}">${content}</port>\n`
     }
     envelope += '</workflow-output>'
     blocks.push(envelope)

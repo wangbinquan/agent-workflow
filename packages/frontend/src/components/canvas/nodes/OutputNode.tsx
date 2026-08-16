@@ -22,6 +22,11 @@ export function OutputNode({ data, selected }: Props) {
       data={data}
       selected={selected}
       className="canvas-node--io canvas-node--output"
+      // RFC-306: IO nodes must carry their run status like every other kind —
+      // a `skipped` output node (its branch was closed) has to read as not-run on
+      // the canvas. Before this they rendered status-less, which was invisible
+      // only because `skipped` had no producer.
+      status={data.status ?? 'default'}
       icon={NODE_GLYPHS.output}
       kindLabel={t('ioNode.labelOutput')}
       title={data.title}

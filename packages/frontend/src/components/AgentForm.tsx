@@ -430,10 +430,11 @@ export function AgentForm({
           outputs={value.outputs ?? []}
           outputKinds={value.outputKinds}
           outputWrapperPortNames={value.outputWrapperPortNames}
+          branchPorts={value.branchPorts}
           aggregator={value.role === 'aggregator'}
           hasExternalPortAlert={hasExternalPortAlert}
-          onChange={(outputs, outputKinds, outputWrapperPortNames) =>
-            onChange({ ...value, outputs, outputKinds, outputWrapperPortNames })
+          onChange={(outputs, outputKinds, outputWrapperPortNames, branchPorts) =>
+            onChange({ ...value, outputs, outputKinds, outputWrapperPortNames, branchPorts })
           }
         />
       </div>

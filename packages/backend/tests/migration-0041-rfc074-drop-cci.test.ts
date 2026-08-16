@@ -170,7 +170,10 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       expect(cols).toContain('startup_verification_json')
       // RFC-297 (0154): + runtime_inventory_json — 跨运行时统一的清单观测。
       expect(cols).toContain('runtime_inventory_json')
-      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2 + 1 + 1 + 1 + 1)
+      // RFC-306 (0172): + force_activated — 「对被跳过的节点点仍然执行」的一次性覆盖，
+      // 只写在 retryNode 铸的 placeholder 上，随后真正执行铸的行不带它。
+      expect(cols).toContain('force_activated')
+      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2 + 1 + 1 + 1 + 1 + 1)
 
       // 4b. row count unchanged.
       const n = (up.query('SELECT count(*) AS n FROM node_runs').get() as { n: number }).n

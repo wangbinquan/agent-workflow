@@ -110,6 +110,31 @@ export function isWrapperKind(kind: NodeKind | string | null | undefined): boole
 export const WORKFLOW_INPUT_KIND = ['text', 'files', 'enum', 'git', 'upload'] as const
 export const WorkflowInputKindSchema = z.enum(WORKFLOW_INPUT_KIND)
 
+/**
+ * RFC-306 — how a node reacts when only SOME of its inbound edges are active
+ * (an upstream branch port was marked `active="false"`, or an upstream node was
+ * itself skipped):
+ *
+ *   'any' (DEFAULT) — run as long as at least one inbound edge is active;
+ *                     inactive inputs render as the empty string. This is the
+ *                     merge-point semantics: two mutually exclusive branches can
+ *                     rejoin at one node.
+ *   'all'           — every inbound edge must be active, otherwise this node is
+ *                     skipped too and the skip keeps propagating.
+ *
+ * Absent ⇒ 'any', which is what makes every pre-RFC-306 workflow behave exactly
+ * as before (no branch ports ⇒ every edge is active ⇒ both modes agree).
+ */
+export const JOIN_MODES = ['any', 'all'] as const
+export const JoinModeSchema = z.enum(JOIN_MODES)
+export type JoinMode = z.infer<typeof JoinModeSchema>
+
+/** Node-level `joinMode` read, tolerant of raw/legacy shapes (absent ⇒ 'any'). */
+export function joinModeOf(node: { joinMode?: unknown } | null | undefined): JoinMode {
+  const raw = node?.joinMode
+  return raw === 'all' ? 'all' : 'any'
+}
+
 // --- pieces of a workflow definition (kept permissive in M1) ---
 
 export const XYSchema = z.object({ x: z.number(), y: z.number() })
@@ -167,6 +192,9 @@ export const PortRefSchema = z.object({
   nodeId: z.string().min(1),
   portName: z.string().min(1),
 })
+/** A (node, port) reference — the shape both edge endpoints and every implicit
+ *  binding (review.inputSource, output.ports[].bind) already carry. */
+export type PortRef = z.infer<typeof PortRefSchema>
 
 /**
  * RFC-060: when an edge crosses the boundary between a wrapper-fanout
@@ -515,6 +543,7 @@ export const WORKFLOW_NODE_FIELD_KEYS = [
   'script-env', // RFC-253: the process env overlay
   'code-host-request', // RFC-269: the custom request (method / path / body)
   'code-host-params', // RFC-269: the typed-form parameters
+  'join-mode', // RFC-306: how this node reacts to partly-inactive inbound edges
 ] as const
 export const WorkflowNodeFieldKeySchema = z.enum(WORKFLOW_NODE_FIELD_KEYS)
 export type WorkflowNodeFieldKey = z.infer<typeof WorkflowNodeFieldKeySchema>
@@ -903,6 +932,14 @@ export const ScriptOutputPortSchema = z
     name: z.string().min(1).max(64),
     /** AgentOutputKind grammar string; absent ⇒ plain text (D11). */
     kind: z.string().min(1).max(128).optional(),
+    /**
+     * RFC-306 — branch port: the script may emit
+     * `<port name="x" active="false">reason</port>` to deactivate every edge
+     * leaving this port. Only meaningful in envelope mode (declared `outputs`);
+     * single-port mode never parses an envelope, so the validator rejects
+     * `branch` there rather than letting it read as a silently dead switch.
+     */
+    branch: z.boolean().optional(),
   })
   .strict()
 export type ScriptOutputPort = z.infer<typeof ScriptOutputPortSchema>

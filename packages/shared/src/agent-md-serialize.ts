@@ -31,6 +31,8 @@ export interface AgentMarkdownDocument {
   inputs?: Array<{ name: string; kind: string; required?: boolean; description?: string }>
   outputs?: string[]
   outputKinds?: Record<string, string>
+  /** RFC-306 — which outputs may be marked `active="false"` at runtime. */
+  branchPorts?: string[]
   role?: 'normal' | 'aggregator'
   outputWrapperPortNames?: Record<string, string>
   runtime?: string
@@ -52,6 +54,7 @@ const EMIT_ORDER = [
   'inputs',
   'outputs',
   'outputKinds',
+  'branchPorts',
   'role',
   'outputWrapperPortNames',
   'runtime',
@@ -89,6 +92,7 @@ export function serializeAgentMarkdown(doc: AgentMarkdownDocument): string {
     inputs: doc.inputs,
     outputs: doc.outputs,
     outputKinds: doc.outputKinds,
+    branchPorts: doc.branchPorts,
     role: doc.role,
     outputWrapperPortNames: doc.outputWrapperPortNames,
     runtime: doc.runtime,

@@ -52,6 +52,8 @@ import { dbTxSync } from '@/db/txSync'
 import { retrySqliteWrite, sqliteWriteDiagnostic } from '@/db/sqliteWriteRetry'
 import { createLogger, type Logger } from '@/util/log'
 import {
+  BRANCH_MARKER_MALFORMED_PREFIX,
+  BRANCH_PORT_NOT_DECLARED_PREFIX,
   CLARIFY_FORBIDDEN_PREFIX,
   CLARIFY_REQUIRED_PREFIX,
   detectEnvelopeKind,
@@ -434,6 +436,14 @@ export interface RunResult {
   processUnreaped?: true
   /** Resolved declared port values (missing ones present as ""). */
   outputs: Record<string, string>
+  /**
+   * RFC-306: which of `outputs` the agent marked `active="false"`. Carried on
+   * the result — not left to a DB re-read — because the in-process consumers
+   * (fanout shard/aggregator dispatch, wrapper outlet promotion) read
+   * `RunResult.outputs` directly; without this they would treat a closed
+   * branch's REASON text as ordinary port data.
+   */
+  inactiveOutputs?: string[]
   tokenUsage: {
     input: number
     output: number
@@ -801,6 +811,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           // the live runner stay in lock-step.
           ...(opts.agent.outputKinds !== undefined
             ? { agentOutputKinds: opts.agent.outputKinds }
+            : {}),
+          // RFC-306: the branch-port paragraph. Same unconditional pass-through
+          // as outputKinds above — the runner and the editor's PromptPreview must
+          // show the agent the same contract, or authors debug a prompt that
+          // isn't the one being sent.
+          ...(opts.agent.branchPorts !== undefined
+            ? { agentBranchPorts: opts.agent.branchPorts }
             : {}),
           ...(opts.reviewContext !== undefined ? { reviewContext: opts.reviewContext } : {}),
           ...(opts.clarifyContext !== undefined ? { clarifyContext: opts.clarifyContext } : {}),
@@ -1764,6 +1781,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     //    (both / neither). detectEnvelopeKind is the single source of truth
     //    for which form the reply took.
     let outputs: Record<string, string> = {}
+    // RFC-306: names of ports the agent closed this round (see RunResult).
+    let inactiveOutputs: string[] = []
     let clarifyResult:
       | { questions: ClarifyQuestion[]; truncationWarnings: ClarifyTruncationWarning[] }
       | undefined
@@ -1932,6 +1951,39 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             errorMessage = `${ENVELOPE_PORT_MALFORMED_PREFIX}: agent opened <port name="..."> tag(s) without a parseable </port> close (corrupted or truncated close tag): ${parsed.malformedPorts.join(', ')}`
           }
 
+          // RFC-306 — branch marker admission, BEFORE per-kind validation and
+          // before anything is persisted.
+          //
+          // Two rejections, both deliberately loud:
+          //   * an `active` value that is neither true nor false — we refuse to
+          //     guess which way the author meant it;
+          //   * `active="false"` on a port the agent never declared as a branch
+          //     port — the agent believes it closed a branch; treating the port
+          //     as active would run that branch anyway, which is the single
+          //     worst outcome this feature can produce. Both re-ask in-session
+          //     (FOLLOWUP_POLICY) and hard-fail after the retry budget.
+          //
+          // Ordered AFTER the malformed-port guard on purpose: a corrupted frame
+          // makes every marker inside it untrustworthy, so framing wins.
+          if (status !== 'failed') {
+            const declaredBranch = new Set(opts.agent.branchPorts ?? [])
+            const illegal = parsed.inactivePorts.filter((p) => !declaredBranch.has(p))
+            if (parsed.badActiveAttr.length > 0) {
+              status = 'failed'
+              failureCode = 'branch-marker-malformed'
+              errorMessage = `${BRANCH_MARKER_MALFORMED_PREFIX}: port(s) ${parsed.badActiveAttr.join(', ')} carry an \`active\` attribute whose value is neither "true" nor "false"`
+            } else if (illegal.length > 0) {
+              status = 'failed'
+              failureCode = 'branch-port-not-declared'
+              const declaredList =
+                declaredBranch.size > 0
+                  ? [...declaredBranch].join(', ')
+                  : '(this agent declares no branch ports)'
+              errorMessage = `${BRANCH_PORT_NOT_DECLARED_PREFIX}: port(s) ${illegal.join(', ')} marked active="false" but are not declared branch ports; declared branch ports: ${declaredList}`
+            }
+          }
+          inactiveOutputs = parsed.inactivePorts
+
           // RFC-049: eagerly validate port content against the declared
           // OutputKindHandler BEFORE persisting to node_run_outputs. Failures
           // here surface the producer's session immediately so the scheduler
@@ -1966,9 +2018,17 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           // their persisted value is a relative path, not the file body.
           const normalizedContent = new Map<string, string>()
           if (status === 'done' && outputKinds !== undefined) {
+            const inactiveSet = new Set(parsed.inactivePorts)
             for (const [name, content] of parsed.ports) {
               const kind = outputKinds[name]
               if (kind === undefined) continue
+              // RFC-306: an inactive port's body is the author's REASON for
+              // closing the branch, not a value of the declared kind. Validating
+              // it would fail every `path<…>` / `list<…>` branch port for the
+              // wrong reason ("no such file"), and archiving it would copy a
+              // sentence as if it were an artifact. Skipping both is what makes
+              // a branch port free to carry a normal kind while it is open.
+              if (inactiveSet.has(name)) continue
               try {
                 const resolved = resolvePortContentDetailed({
                   rawContent: content,
@@ -2072,6 +2132,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             try {
               await persistRunnerWrite('node-run-output/batch', () =>
                 dbTxSync(opts.db, (tx) => {
+                  const inactiveSet = new Set(parsed.inactivePorts)
                   for (const [name, content] of parsed.ports) {
                     // RFC-072: persist the resolved output kind so the Outputs
                     // tab can tell file-path ports from text. Keep every port in
@@ -2081,6 +2142,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
                     const kind = rawKind !== undefined ? normalizeKindString(rawKind) : null
                     const persisted = normalizedContent.get(name) ?? content
                     const archiveJson = archiveJsonByPort.get(name) ?? null
+                    // RFC-306: `active` must be part of the UPSERT's `set` too —
+                    // a re-run of the same node_run (inline followup) may flip a
+                    // branch open again, and a set-list that omitted the column
+                    // would leave the previous round's closure in place.
+                    const active = !inactiveSet.has(name)
                     tx.insert(nodeRunOutputs)
                       .values({
                         nodeRunId: opts.nodeRunId,
@@ -2088,10 +2154,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
                         content: persisted,
                         kind,
                         archiveJson,
+                        active,
                       })
                       .onConflictDoUpdate({
                         target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-                        set: { content: persisted, kind, archiveJson },
+                        set: { content: persisted, kind, archiveJson, active },
                       })
                       .run()
                   }
@@ -2297,6 +2364,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       .where(eq(nodeRuns.id, opts.nodeRunId))
 
     const result: RunResult = { status, exitCode, outputs, tokenUsage, prompt }
+    // RFC-306: only attach when non-empty so every existing result object stays
+    // byte-identical (several tests compare whole RunResults).
+    if (inactiveOutputs.length > 0) result.inactiveOutputs = inactiveOutputs
     if (childUnkillable) result.processUnreaped = true
     if (portFilePaths.length > 0) result.portFilePaths = portFilePaths
     if (errorMessage !== undefined) result.errorMessage = errorMessage

@@ -3925,6 +3925,10 @@ export const enUS: Resources = {
         'The script printed no <workflow-output> envelope carrying this run’s nonce.',
       'script-envelope-malformed': 'The script’s envelope framing is corrupted.',
       'script-port-missing': 'The script’s envelope omitted a declared output port.',
+      'script-branch-port-not-declared':
+        'The script marked a port inactive that is not declared as a branch port.',
+      'script-branch-port-not-declared__hint':
+        'Tick “branch port” on that output in the script node, or drop the active="false" marker.',
       'script-interpreter-missing':
         'No interpreter for that script language is available on this host.',
       'script-deps-install-failed': 'Installing the script’s dependencies failed.',
@@ -3954,6 +3958,13 @@ export const enUS: Resources = {
       'call-owner-inactive__hint':
         'Reactivate the owner account or transfer task ownership, then Resume.',
       'envelope-port-malformed': 'An output port tag was incomplete (possibly truncated).',
+      'branch-port-not-declared':
+        'The agent closed a branch on a port that is not declared as a branch port.',
+      'branch-port-not-declared__hint':
+        'Tick “branch port” on that output in the agent’s port settings, then Resume.',
+      'branch-marker-malformed':
+        'A port carried an active="…" value that is neither true nor false.',
+      'branch-marker-malformed__hint': 'The agent is re-asked automatically; Resume to retry.',
       'port-validation-failed': "The agent's port output failed validation.",
       'port-validation-failed__hint':
         'Check the port validation info in the node drawer, then Resume to retry.',
@@ -4898,6 +4909,11 @@ export const enUS: Resources = {
       onConflictRename: 'Keep both',
       onConflictOverwrite: 'Overwrite',
     },
+    fieldJoinMode: 'When only some inputs are live',
+    fieldJoinModeHint:
+      'Branch behaviour: “Run on any input” executes this node as long as one input carried a value (inputs from closed branches render empty). “Require all inputs” skips this node whenever any input came from a closed branch.',
+    joinModeAny: 'Run on any input',
+    joinModeAll: 'Require all inputs',
     fieldNodeTitle: 'Display name',
     fieldNodeTitleHint:
       'Shown on the canvas card. When empty, falls back to the agent name / input key / node id.',
@@ -5175,6 +5191,7 @@ export const enUS: Resources = {
         required: 'required',
         wrapperSameName: 'Promoted with the same name, {{name}}',
         wrapperDuplicate: 'duplicate promoted name',
+        branch: 'branch port',
         normalOutput: 'The runtime envelope must emit this exact name.',
         inactiveWrapperMap:
           'Reserved promotion {{name}} → {{wrapper}} is inactive for a normal agent.',
@@ -5223,6 +5240,10 @@ export const enUS: Resources = {
       fieldDescriptionHint: 'Optional, up to 2,048 characters. Shown on capability cards.',
       fieldWrapperName: 'Promoted port name',
       fieldWrapperNameHint: 'Leave empty to keep the output port name.',
+      fieldBranch: 'Branch port',
+      fieldBranchToggle: 'This port controls a workflow branch',
+      fieldBranchHint:
+        'The agent may close this branch at run time by emitting <port name="…" active="false">reason</port>. Everything fed by this port is then skipped instead of running. Ports that are not branch ports always run their downstream.',
       saveAdd: 'Add port',
       saveEdit: 'Save changes',
       cancel: 'Cancel',
@@ -5449,6 +5470,9 @@ export const enUS: Resources = {
     tokenPrefix: 'tok',
     promptPending: "Prompt hasn't been assembled yet (node is still pending).",
     outputNone: 'No outputs captured yet.',
+    outputBranchClosed: 'branch not run',
+    outputBranchClosedNoReason: 'The agent closed this branch; it produced no value.',
+    outputBranchClosedReason: 'The agent closed this branch: {{reason}}',
     statStatus: 'Status',
     statStarted: 'Started',
     statFinished: 'Finished',
@@ -5590,7 +5614,7 @@ export const enUS: Resources = {
     failed: 'Failed',
     canceled: 'Canceled',
     interrupted: 'Interrupted',
-    skipped: 'Skipped',
+    skipped: 'Not run',
     exhausted: 'Exhausted',
     awaiting_review: 'Awaiting review',
     awaiting_human: 'Awaiting answer',
@@ -6305,6 +6329,8 @@ export const enUS: Resources = {
       'wrapper-loop-exit-node-out-of-scope':
         'The loop exit condition must reference a direct member of the loop body.',
       'wrapper-loop-exit-port-missing': 'The loop exit condition references an unknown port.',
+      'exit-condition-port-not-branch':
+        'The loop exits on “port inactive”, but that port is not a branch port — the condition can never become true.',
       'wrapper-loop-inner-data-cycle': 'The loop wrapper has a data cycle between its inner nodes.',
       'wrapper-loop-max-iterations': 'The loop wrapper is missing maxIterations.',
       'wrapper-loop-continue-on-max-iterations':

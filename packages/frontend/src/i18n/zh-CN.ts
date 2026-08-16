@@ -4137,6 +4137,10 @@ export interface Resources {
       onConflictRename: string
       onConflictOverwrite: string
     }
+    fieldJoinMode: string
+    fieldJoinModeHint: string
+    joinModeAny: string
+    joinModeAll: string
     fieldNodeTitle: string
     fieldNodeTitleHint: string
     fieldReviewDescription: string
@@ -4387,6 +4391,7 @@ export interface Resources {
         required: string
         wrapperSameName: string
         wrapperDuplicate: string
+        branch: string
         normalOutput: string
         inactiveWrapperMap: string
       }
@@ -4435,6 +4440,9 @@ export interface Resources {
       fieldDescriptionHint: string
       fieldWrapperName: string
       fieldWrapperNameHint: string
+      fieldBranch: string
+      fieldBranchToggle: string
+      fieldBranchHint: string
       saveAdd: string
       saveEdit: string
       cancel: string
@@ -4657,6 +4665,9 @@ export interface Resources {
     tokenPrefix: string
     promptPending: string
     outputNone: string
+    outputBranchClosed: string
+    outputBranchClosedNoReason: string
+    outputBranchClosedReason: string
     statStatus: string
     statStarted: string
     statFinished: string
@@ -9524,6 +9535,9 @@ export const zhCN: Resources = {
       'script-envelope-missing': '脚本没有输出带本次运行 nonce 的 <workflow-output> 信封。',
       'script-envelope-malformed': '脚本输出的信封结构破损。',
       'script-port-missing': '脚本的信封里缺少已声明的输出端口。',
+      'script-branch-port-not-declared': '脚本把一个未声明为分支端口的端口标成了不执行。',
+      'script-branch-port-not-declared__hint':
+        '在脚本节点的输出端口上勾选「分支端口」，或去掉 active="false" 标记。',
       'script-interpreter-missing': '宿主上找不到该脚本语言的解释器。',
       'script-deps-install-failed': '脚本依赖安装失败。',
       'script-spawn-failed': '脚本进程无法启动。',
@@ -9545,6 +9559,10 @@ export const zhCN: Resources = {
       'call-owner-inactive__hint': '恢复 owner 账户或转移任务归属后 Resume。',
       'clarify-forbidden': '已停止反问，但代理仍在提出反问。',
       'envelope-port-malformed': '代理输出的端口标签不完整（可能被截断）。',
+      'branch-port-not-declared': '代理在一个未声明为分支端口的端口上关闭了分支。',
+      'branch-port-not-declared__hint': '在该代理的端口设置里勾选「分支端口」，再点「继续任务」。',
+      'branch-marker-malformed': '端口上的 active="…" 取值既不是 true 也不是 false。',
+      'branch-marker-malformed__hint': '框架已自动重问一次；点「继续任务」重试。',
       'port-validation-failed': '代理输出的端口内容未通过校验。',
       'port-validation-failed__hint': '查看节点详情里的端口校验信息，点「继续任务」重试。',
       summary: {
@@ -10433,6 +10451,11 @@ export const zhCN: Resources = {
       onConflictRename: '改名保留',
       onConflictOverwrite: '覆盖',
     },
+    fieldJoinMode: '只有部分输入激活时',
+    fieldJoinModeHint:
+      '分支语义：「任一即可」= 只要有一个输入带来了值就执行本节点（来自被关闭分支的输入渲染为空）；「必须全部」= 只要有一个输入来自被关闭的分支，本节点也不执行。',
+    joinModeAny: '任一即可',
+    joinModeAll: '必须全部',
     fieldNodeTitle: '显示名',
     fieldNodeTitleHint: '画布卡片上的标题；为空时回退到 agent 名 / input key / 节点 id。',
     fieldReviewDescription: '评审说明',
@@ -10689,6 +10712,7 @@ export const zhCN: Resources = {
         required: '必填',
         wrapperSameName: '聚合后保持名称 {{name}}',
         wrapperDuplicate: '聚合名称重复',
+        branch: '分支端口',
         normalOutput: '运行信封必须按此名称产出。',
         inactiveWrapperMap: '保留的聚合映射 {{name}} → {{wrapper}} 在普通代理角色下不生效。',
       },
@@ -10732,6 +10756,10 @@ export const zhCN: Resources = {
       fieldDescriptionHint: '可选，最多 2048 个字符；会显示在能力卡中。',
       fieldWrapperName: '聚合后端口名',
       fieldWrapperNameHint: '留空表示与当前输出端口同名。',
+      fieldBranch: '分支端口',
+      fieldBranchToggle: '该端口用于控制工作流分支',
+      fieldBranchHint:
+        '运行时 agent 可以输出 <port name="…" active="false">理由</port> 关闭这条分支——由该端口出发的下游整条不执行（记为「未执行」，不是失败）。非分支端口的下游永远执行。',
       saveAdd: '添加端口',
       saveEdit: '保存更改',
       cancel: '取消',
@@ -10951,6 +10979,9 @@ export const zhCN: Resources = {
     tokenPrefix: 'tok',
     promptPending: '该节点还没拼完 prompt（仍 pending）。',
     outputNone: '还没有捕获到输出。',
+    outputBranchClosed: '分支未执行',
+    outputBranchClosedNoReason: '代理关闭了这条分支，未产出内容。',
+    outputBranchClosedReason: '代理关闭了这条分支：{{reason}}',
     statStatus: '状态',
     statStarted: '开始',
     statFinished: '完成',
@@ -11082,7 +11113,7 @@ export const zhCN: Resources = {
     failed: '失败',
     canceled: '已取消',
     interrupted: '已中断',
-    skipped: '已跳过',
+    skipped: '未执行',
     exhausted: '已耗尽重试',
     awaiting_review: '待评审',
     awaiting_human: '待回答反问',
@@ -11721,6 +11752,8 @@ export const zhCN: Resources = {
       'wrapper-loop-exit-node-missing': '循环退出条件引用了不存在的节点。',
       'wrapper-loop-exit-node-out-of-scope': '循环退出条件必须引用循环体的直接成员。',
       'wrapper-loop-exit-port-missing': '循环退出条件引用了不存在的端口。',
+      'exit-condition-port-not-branch':
+        '退出条件用的是「端口未激活」，但该端口不是分支端口——这个条件永远不会成立。',
       'wrapper-loop-inner-data-cycle': '循环包装器内部存在数据环。',
       'wrapper-loop-max-iterations': '循环包装器缺少最大迭代次数。',
       'wrapper-loop-continue-on-max-iterations': '循环包装器的迭代上限处理开关必须为开启或关闭。',

@@ -69,6 +69,8 @@ export type OutcomeOutputRow = {
   portName: string
   content: string
   kind: string | null
+  /** RFC-306 — false ⇒ the port was closed by a branch marker (absent ⇒ active). */
+  active?: boolean
   /** RFC-193 archive reference — copied verbatim into a parent call row so
    *  the forced-port roster keeps covering child-produced gitignored files. */
   archiveJson?: string | null
@@ -82,7 +84,18 @@ export type WorkgroupOutcomeInput = {
   resultMessageBody: string | null
 }
 
-function outputNodeIdsOfSnapshot(snapshot: string | null, warnings: string[]): string[] {
+/**
+ * Output nodes of a snapshot, each with the port names it DECLARES.
+ *
+ * RFC-306 needs the declared names, not just the node ids: a skipped output node
+ * owns no `node_run_outputs` rows, so the only way to report "this port exists
+ * but carries nothing" — instead of dropping it from the projection entirely —
+ * is to read the names off the definition.
+ */
+function outputNodesOfSnapshot(
+  snapshot: string | null,
+  warnings: string[],
+): Array<{ id: string; portNames: string[] }> {
   if (snapshot === null || snapshot === '') {
     warnings.push('workflow-snapshot-missing')
     return []
@@ -96,14 +109,27 @@ function outputNodeIdsOfSnapshot(snapshot: string | null, warnings: string[]): s
     }
     return nodes
       .filter(
-        (n): n is { id: string; kind: string } =>
+        (n): n is { id: string; kind: string; ports?: unknown } =>
           typeof n === 'object' &&
           n !== null &&
           (n as { kind?: unknown }).kind === 'output' &&
           typeof (n as { id?: unknown }).id === 'string',
       )
-      .map((n) => n.id)
-      .sort()
+      .map((n) => ({
+        id: n.id,
+        portNames: Array.isArray(n.ports)
+          ? (n.ports as unknown[])
+              .map((p) =>
+                typeof p === 'object' &&
+                p !== null &&
+                typeof (p as { name?: unknown }).name === 'string'
+                  ? (p as { name: string }).name
+                  : null,
+              )
+              .filter((x): x is string => x !== null)
+          : [],
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id))
   } catch {
     warnings.push('workflow-snapshot-unparsable')
     return []
@@ -111,19 +137,32 @@ function outputNodeIdsOfSnapshot(snapshot: string | null, warnings: string[]): s
 }
 
 function projectOutputNodePorts(
-  outputNodeIds: readonly string[],
+  outputNodes: ReadonlyArray<{ id: string; portNames: readonly string[] }>,
   runs: readonly OutcomeRunRow[],
   outputs: readonly OutcomeOutputRow[],
   warnings: string[],
 ): ExecutionOutcome['outputs'] {
   const result: ExecutionOutcome['outputs'] = {}
-  for (const nodeId of outputNodeIds) {
+  for (const { id: nodeId, portNames } of outputNodes) {
     const rows = runs.filter((r) => r.nodeId === nodeId)
     const picked = pickUpstreamSourceRun(rows, Number.POSITIVE_INFINITY)
     if (picked === undefined) {
-      // task done ⟹ every output node has a done row (lifecycle invariant T3);
+      // task done ⟹ every output node has a settled row (lifecycle invariant T3);
       // defensive for hand-edited fixtures / historical rows.
       warnings.push(`output-node-without-done-run:${nodeId}`)
+      continue
+    }
+    // RFC-306 D17 — a SKIPPED output node has no port rows at all. Dropping it
+    // silently would make a parent `call-workflow` node see the port simply
+    // vanish, and "absent" is indistinguishable from "the child does not declare
+    // it" — the branch decision would die at the task boundary. Project the
+    // declared names explicitly as inactive instead, so the parent can keep
+    // propagating the closed branch.
+    if (picked.status === 'skipped') {
+      for (const portName of portNames) {
+        if (Object.hasOwn(result, portName)) warnings.push(`output-port-collision:${portName}`)
+        result[portName] = { content: '', kind: null, active: false }
+      }
       continue
     }
     for (const o of outputs) {
@@ -138,6 +177,9 @@ function projectOutputNodePorts(
         content: o.content,
         kind: o.kind,
         ...(o.archiveJson != null ? { archiveJson: o.archiveJson } : {}),
+        // RFC-306: an ACTIVE output node can still project an inactive port when
+        // only one of its bindings sat on a closed branch (joinMode 'any').
+        ...(o.active === false ? { active: false } : {}),
       }
     }
   }
@@ -162,14 +204,17 @@ export function projectExecutionOutcome(args: {
     const kind = taskExecutionKind(task)
     if (kind === 'workflow') {
       outputs = projectOutputNodePorts(
-        outputNodeIdsOfSnapshot(task.workflowSnapshot, warnings),
+        outputNodesOfSnapshot(task.workflowSnapshot, warnings),
         args.runs,
         args.outputs,
         warnings,
       )
     } else if (kind === 'agent') {
       outputs = projectOutputNodePorts(
-        [AGENT_HOST_AGENT_NODE_ID],
+        // An agent-host task has one synthetic node and no declared output-node
+        // ports; the empty list only matters for the skipped branch above, which
+        // a host node never takes.
+        [{ id: AGENT_HOST_AGENT_NODE_ID, portNames: [] }],
         args.runs,
         args.outputs,
         warnings,
@@ -186,7 +231,12 @@ export function projectExecutionOutcome(args: {
       // workgroup config the task never had. Note the failure was in the arm
       // NOBODY would think to check, which is why the kind test below is now
       // explicit rather than an `else`.
-      outputs = projectOutputNodePorts([CODE_ROUND_NODE_ID], args.runs, args.outputs, warnings)
+      outputs = projectOutputNodePorts(
+        [{ id: CODE_ROUND_NODE_ID, portNames: [] }],
+        args.runs,
+        args.outputs,
+        warnings,
+      )
     } else if (kind === 'workgroup') {
       const mode = workgroupModeOf(task.workgroupConfigJson)
       const wg = args.workgroup
@@ -195,7 +245,7 @@ export function projectExecutionOutcome(args: {
       } else if (mode === 'dynamic_workflow') {
         if (wg.dwPhase === 'executing') {
           outputs = projectOutputNodePorts(
-            outputNodeIdsOfSnapshot(task.workflowSnapshot, warnings),
+            outputNodesOfSnapshot(task.workflowSnapshot, warnings),
             args.runs,
             args.outputs,
             warnings,
@@ -300,6 +350,7 @@ export async function getExecutionOutcome(db: DbClient, taskId: string): Promise
         content: nodeRunOutputs.content,
         kind: nodeRunOutputs.kind,
         archiveJson: nodeRunOutputs.archiveJson,
+        active: nodeRunOutputs.active,
       })
       .from(nodeRunOutputs)
       .innerJoin(nodeRuns, eq(nodeRunOutputs.nodeRunId, nodeRuns.id))

@@ -278,7 +278,11 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // MR 终态事件只带 provider / project / iid，里面根本没有 issue 的影子。没有这张表，
   // 代码合了、平台不知道，需求在活动视图里永远显示「进行中」。反向而不是正向：正向指针
   // 意味着每次合并都要把全库未闭合工作项的 JSON 扫一遍。
-  test('HEAD journal has 171 entries (sanity — locks the freeze target indices)', () => {
+  // RFC-306 T10 bumped to 172 with 0172_rfc306_branch_activation（分支激活两列）。
+  // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
+  // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
+  // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
+  test('HEAD journal has 172 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -431,7 +435,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // upstream_id / upstream_version / base_digest。三者都只能在**复制那一刻**写下——
     // 之后源会继续演进，它的 updatedAt 不再描述当初被复制的是什么；缺 base_digest
     // 则合并退化成两路，「上游说 A、本地说 B」分不清是谁改的）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(171)
+    // RFC-306 T10 bumped to 172 with 0172_rfc306_branch_activation。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(172)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

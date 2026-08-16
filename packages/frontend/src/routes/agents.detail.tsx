@@ -338,6 +338,10 @@ export function agentToDraft(a: Agent): CreateAgent {
   // when the patch omits it); the form just lied.
   if (a.role !== undefined) out.role = a.role
   if (a.outputWrapperPortNames !== undefined) out.outputWrapperPortNames = a.outputWrapperPortNames
+  // RFC-306: same round-trip hazard as role / outputWrapperPortNames above —
+  // without this the edit form shows every port as non-branch and the next save
+  // silently clears the agent's branch declarations.
+  if (a.branchPorts !== undefined) out.branchPorts = a.branchPorts
   // RFC-166 round-trip (same shape as role/runtime above): carry declared input
   // ports into the draft so the InputsEditor shows them and a subsequent save
   // doesn't silently clear them. rowToAgent always populates inputs ([] or a

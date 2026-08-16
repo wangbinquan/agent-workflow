@@ -15,8 +15,12 @@
 //     窗口内派发会让 agent 丢失 review 上下文——标记行永久停泊，rerun 行承载复活。
 //   - running（不在飞）→ blocked('orphaned-running-row' 前缀)：遗弃 running 行
 //     获得显式诊断（重启 daemon 收割）而非静默 stall。
-//   - skipped → blocked('skipped-has-no-dispatch-semantics')：schema 有值、全 src
-//     零 mint 点；谁启用谁先过 isDispatchable 的显式 case 决策。
+//   - skipped → **completed**（RFC-306 起）：分支判定真正铸出该状态，其语义与 done 完全
+//     对称——「针对某一代上游输出作出的已结算回答」，不是节点级终态。fresh ⇒ 已结算
+//     （scope 得以收敛，否则每条被关闭的分支都会把任务拖成 stalled）；stale ⇒ 重新评估
+//     分支（见下方补充用例，这正是「retry 判定节点即可推翻跳过」的机制）。
+//     本表此前锁的是 RFC-095 时代的占位语义（零 mint 点、blocked 诊断），
+//     那条 case 明写着「谁启用谁先在 isDispatchable 里定义语义」——RFC-306 就是那次启用。
 //   - pending ∈ dispatchedPendingRowIds（RFC-092 锚已耗，第 11 参）→ blocked
 //     ('pending-anchor-consumed')：有界退化从"无桶"升级为可诊断（见
 //     design/RFC-092-scheduler-p0-stopgap/design.md §1.2；dedup 集为空时仍 ready）。
@@ -104,12 +108,9 @@ const EXPECTED: Record<NodeRunStatus, { kind: NodeKind; bucket: Bucket; reasonPr
   // RFC-095 / S-22：复活信号，与 interrupted 同类（supersede 标记行例外，见补充用例）。
   canceled: { kind: 'agent-single', bucket: 'ready' },
   interrupted: { kind: 'agent-single', bucket: 'ready' }, // daemon-restart 重铸信号
-  // RFC-095：零 mint 点状态 → blocked 诊断；启用前必须先过 isDispatchable 显式决策。
-  skipped: {
-    kind: 'agent-single',
-    bucket: 'blocked',
-    reasonPrefix: 'skipped-has-no-dispatch-semantics',
-  },
+  // RFC-306：分支跳过是**可被推翻的已结算态**，与 done 同构。本行无 consumed ⇒
+  // 空真为 fresh ⇒ completed（与同表的 `done` 同理）。stale 一侧见下方补充用例。
+  skipped: { kind: 'agent-single', bucket: 'completed' },
   exhausted: { kind: 'wrapper-loop', bucket: 'exhausted' }, // loop-max 真终态（深组合见 derive-frontier-exhausted.test.ts）
   awaiting_review: { kind: 'review', bucket: 'awaitingReview' }, // fresh parked leaf 保持 park（C2）
   awaiting_human: { kind: 'clarify', bucket: 'awaitingHuman' },
@@ -180,18 +181,35 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
     expect((got.reason ?? '').startsWith('review-superseded')).toBe(true)
   })
 
-  test('原黑洞三形态全部落 blocked + allSettled=false ⇒ decideScopeOutcome 给出点名各节点的 stalled 诊断（不再是裸 "scheduler stalled"）', () => {
+  // RFC-306 补充：STALE 的 skip 重新进入 ready —— 这是「跳过可被推翻」的调度侧证据。
+  // 与上表的 fresh 行成对：两行状态相同，只差 consumed 是否仍指向上游的最新结算行。
+  test("补充表项：skipped 且 consumed 指向已过期的上游代次 → 'ready'（重新评估分支）", () => {
+    const { definition, scopeNodes, scopeIds } = def([
+      { id: 'up', kind: 'agent-single' },
+      { id: 'n', kind: 'agent-single' },
+    ])
+    const rows = [
+      // 上游最新结算行是 02UP，而 n 的 skip 记录的是 01UP —— 判定所依据的那一代已被取代。
+      row('up', 'done', { id: '02UP' }),
+      row('n', 'skipped', { consumedUpstreamRunsJson: JSON.stringify({ up: '01UP' }) }),
+    ]
+    const f = deriveFrontier(rows, definition, scopeNodes, scopeIds, 0, new Map(), NONE, NONE, NONE)
+    expect(f.ready).toContain('n')
+    expect([...f.completed]).not.toContain('n')
+  })
+
+  test('原黑洞两形态全部落 blocked + allSettled=false ⇒ decideScopeOutcome 给出点名各节点的 stalled 诊断（不再是裸 "scheduler stalled"）', () => {
+    // RFC-306 把 skipped 移出了这一组：它不再是「无桶黑洞」，而是一个正常的已结算态
+    // （见上表）。running / superseded-canceled 两形态仍是真卡点，诊断出口不变。
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'orphanA', kind: 'agent-single' },
       { id: 'supersededB', kind: 'agent-single' },
-      { id: 'skippedC', kind: 'agent-single' },
     ])
     const rows = [
       row('orphanA', 'running'),
       row('supersededB', 'canceled', {
         supersededByReview: 'iterated',
       }),
-      row('skippedC', 'skipped'),
     ]
     const f = deriveFrontier(rows, definition, scopeNodes, scopeIds, 0, new Map(), NONE, NONE, NONE)
     // 五出口仍全空，但卡点不再不可见：三节点全部入 blocked 诊断。
@@ -201,14 +219,14 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
     expect(f.failed).toEqual([])
     expect(f.exhausted).toEqual([])
     expect(f.allSettled).toBe(false)
-    expect(f.blocked.map((b) => b.nodeId).sort()).toEqual(['orphanA', 'skippedC', 'supersededB'])
+    expect(f.blocked.map((b) => b.nodeId).sort()).toEqual(['orphanA', 'supersededB'])
     // 接缝：quiescent 块的纯函数决策把 blocked 清单带进 stalled detail。
     const outcome = decideScopeOutcome(f)
     expect(outcome.kind).toBe('failed')
     if (outcome.kind !== 'failed') throw new Error('unreachable')
     expect(outcome.detail.message).toBe('no ready nodes in scope') // 机器面恒定（design §3）
     expect(outcome.detail.summary.startsWith('scheduler stalled')).toBe(true)
-    for (const id of ['orphanA', 'supersededB', 'skippedC']) {
+    for (const id of ['orphanA', 'supersededB']) {
       expect(outcome.detail.summary).toContain(id)
     }
     expect(outcome.detail.nodeId).toBe(f.blocked[0]!.nodeId)

@@ -317,7 +317,12 @@ const EXPECTED_BUCKET: Record<NodeRunStatus, Bucket> = {
   // read 'review-superseded' (reason is diagnostic payload, not a contract).
   canceled: 'blocked',
   interrupted: 'blocked',
-  skipped: 'blocked',
+  // RFC-306: a branch skip is a SETTLED answer, symmetric with `done` — this row
+  // carries no consumed provenance, so it is vacuously fresh ⇒ completed. The
+  // stale half (upstream advanced ⇒ re-evaluate the branch) is locked in
+  // scheduler-audit-s12-status-bucket-universe.test.ts and
+  // rfc306-exit-condition-and-revival.test.ts.
+  skipped: 'completed',
   exhausted: 'exhausted', // pass-1 terminal-failure bucket
   awaiting_review: 'awaitingReview', // park bucket, unconditional
   awaiting_human: 'awaitingHuman', // park bucket, unconditional
@@ -328,7 +333,6 @@ const BLOCKED_REASON_PREFIX: Partial<Record<NodeRunStatus, string>> = {
   running: 'orphaned-running-row',
   canceled: 'canceled-in-invocation-dedup',
   interrupted: 'interrupted-in-invocation-dedup',
-  skipped: 'skipped-has-no-dispatch-semantics',
 }
 
 describe('RFC-095 — NodeRunStatus universe → exactly one frontier bucket', () => {

@@ -182,6 +182,7 @@ import {
   taskLaunchAdmissionIssue,
   type TaskLaunchProvenance,
 } from '@/modules/task-execution/domain/taskLaunchOrigin'
+import { branchTraceForTask } from '@/modules/task-execution/application/branchTrace'
 
 /**
  * RFC-243 实现门 P0-1 — closure freezing needs the LAUNCH ACTOR (visibility
@@ -5413,6 +5414,16 @@ export async function retryNode(
     // RFC-284 T21：口径=全行集（刻意含 child rows），收编 nextRetryIndex。
     const nextRetry = nextRetryIndex(existing)
     const inherit = nodeId === runRow.nodeId ? runRow : prev
+    // RFC-306 §10 — "run anyway" on a node the branch logic skipped.
+    //
+    // The flag rides ONLY the placeholder of the node the user actually clicked
+    // (never the cascade), and it is one-shot BY CONSTRUCTION: the activation
+    // judgment reads the freshest row at dispatch time — this placeholder — and
+    // the run that follows mints its own row without the flag. A later
+    // re-evaluation therefore sees a clean row and re-decides the branch on its
+    // merits. Cascaded downstream nodes are deliberately NOT forced: they judge
+    // themselves against what the forced node actually emits.
+    const forceThisNode = nodeId === runRow.nodeId && runRow.status === 'skipped'
     await mintNodeRun(db, {
       taskId,
       nodeId,
@@ -5421,7 +5432,11 @@ export async function retryNode(
       retryIndex: nextRetry,
       iteration: inherit?.iteration ?? 0,
       inheritFrom: inherit ?? null,
-      overrides: { finishedAt: Date.now(), errorMessage: 'queued for retry' },
+      overrides: {
+        finishedAt: Date.now(),
+        errorMessage: 'queued for retry',
+        ...(forceThisNode ? { forceActivated: true } : {}),
+      },
     })
   }
 
@@ -5961,9 +5976,16 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
       port: o.portName,
       value: o.content,
       kind: o.kind, // RFC-072: surface resolved output kind for the Outputs tab
+      // RFC-306: only sent when the port was CLOSED, so an ordinary response is
+      // byte-identical to the pre-RFC-306 one.
+      ...(o.active === false ? { active: false } : {}),
     }))
   }
-  return { runs, outputs }
+  // RFC-306: the run trace rides this response — the task detail already fetches
+  // it and already invalidates it on every node-status WS event. Absent when the
+  // task took no branch decisions at all.
+  const branchTrace = await branchTraceForTask(db, taskId)
+  return { runs, outputs, ...(branchTrace !== undefined ? { branchTrace } : {}) }
 }
 
 /**

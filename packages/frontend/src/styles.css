@@ -8886,6 +8886,16 @@ details.form-section[open] > summary {
   border-color: #b45309;
   border-style: dotted;
 }
+/* RFC-306 — the node did not run because the branch feeding it was closed.
+ * Faded rather than colored: this is not an outcome (good / bad / pending), it
+ * is an absence, and it must be legible at a glance which parts of the graph the
+ * run actually took. Dashed border echoes the inactive EDGE below, so a closed
+ * branch reads as one continuous faded path instead of unrelated grey bits. */
+.canvas-node[data-status='skipped'] {
+  border-color: var(--muted);
+  border-style: dashed;
+  opacity: 0.55;
+}
 
 /* Highlight the *running* node so it's unmistakable on a busy canvas full of
  * done/pending peers: an accent halo that breathes on a ~1.4s loop (same
@@ -9293,6 +9303,27 @@ details.form-section[open] > summary {
   stroke: var(--muted);
   stroke-width: 2.5;
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--muted) 60%, transparent));
+}
+
+/* RFC-306 — this edge carried NOTHING in the run being displayed: its source
+ * port was closed (`active="false"`) or the producing node was skipped.
+ *
+ * Distinct from `--control` above even though both are dashed: control-flow is a
+ * property of the DEFINITION (this port never carries data), inactive is a
+ * property of ONE RUN. The added transparency is what separates them visually —
+ * an inactive edge reads as "this path was not taken", a control edge as "this
+ * path carries no payload". Selection re-asserts both so clicking a faded edge
+ * still shows which one is selected. */
+.workflow-canvas .react-flow__edge.canvas-edge--inactive .react-flow__edge-path {
+  stroke: var(--muted);
+  stroke-dasharray: 4 5;
+  opacity: 0.5;
+}
+.workflow-canvas .react-flow__edge.canvas-edge--inactive.selected .react-flow__edge-path,
+.workflow-canvas .react-flow__edge.canvas-edge--inactive:focus .react-flow__edge-path {
+  stroke: var(--muted);
+  stroke-width: 2.5;
+  opacity: 0.8;
 }
 
 /* Low-zoom edge selection/validation must remain visible after the SVG

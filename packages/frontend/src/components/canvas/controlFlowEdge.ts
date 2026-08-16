@@ -35,6 +35,19 @@ import {
 export const CONTROL_FLOW_EDGE_CLASS = 'canvas-edge--control'
 
 /**
+ * RFC-306 — className for an edge that carried NO value in the run being
+ * displayed (its source port was closed with `active="false"`, or the producing
+ * node was itself skipped).
+ *
+ * Deliberately a SEPARATE class from the control-flow one above, even though
+ * both render dashed: control-flow is a property of the DEFINITION (this port
+ * never carries data), inactive is a property of one RUN (this port carried
+ * nothing this time). Collapsing them would make an editor-time fact and a
+ * runtime fact indistinguishable on screen.
+ */
+export const INACTIVE_EDGE_CLASS = 'canvas-edge--inactive'
+
+/**
  * Whether a port-kind string is "control-flow" — i.e. carries no data (e.g.
  * `signal`).
  *

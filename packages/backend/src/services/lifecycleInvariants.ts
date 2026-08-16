@@ -14,7 +14,9 @@
 //   C1  clarify_session.status ∈ {answered, canceled} ⟹ clarify node_run.status ∉ {awaiting_human}
 //   T1  tasks.status='awaiting_review'   ⟹ ∃ node_run.status='awaiting_review'
 //   T2  tasks.status='awaiting_human'    ⟹ ∃ node_run.status='awaiting_human'
-//   T3  tasks.status='done'              ⟹ ∀ output-kind nodes have done node_run
+//   T3  tasks.status='done'              ⟹ ∀ output-kind nodes have a done or
+//                                            skipped node_run (RFC-306: a closed
+//                                            branch settles as skipped)
 //   U1  per (task,nodeId,iter,shard) ≤ 1 row in {awaiting_review|awaiting_human}
 //
 // 24h grace: a newly-detected finding starts at severity='warning'.
@@ -405,22 +407,49 @@ async function checkT2(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
 }
 
 async function checkT3(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInvariantFinding[]> {
-  // T3: done task ⟹ every output-kind node has a done node_run.
+  // T3: done task ⟹ every output-kind node has a SETTLED node_run.
+  //
+  // RFC-306 widened "settled" from `done` to `done ∪ skipped`. A conditional
+  // workflow legitimately finishes with some output nodes never produced —
+  // that is the entire point of a branch — and those nodes carry a `skipped`
+  // row rather than a `done` one. Keeping the rule done-only would make every
+  // successful branching task report an invariant violation.
+  //
+  // The rule's TEETH are unchanged, and that is the part worth guarding: an
+  // output node with NO row at all, or whose latest row is `failed` /
+  // `interrupted` / still pending, is still a finding. "Done task, output node
+  // that nobody ever settled" remains exactly as loud as before.
   if (ctx.taskStatus !== 'done') return []
   const outputNodes = ctx.workflowKinds.byKind.get('output') ?? []
   if (outputNodes.length === 0) return [] // no output nodes ⇒ vacuously satisfied
-  const doneOutputRuns = await db
-    .select({ nodeId: nodeRuns.nodeId })
+  // Design-gate P2#10 — judge the FRESHEST top-level row per output node, not
+  // "does a settled row exist anywhere in history".
+  //
+  // The old shape ("any done row") had a hole that RFC-306 would have widened:
+  // an output node with an old `done` row and a newer `failed` row passed the
+  // check, because the old row still satisfied the existence test. Widening the
+  // status set to `done ∪ skipped` without also pinning "freshest" would have
+  // made that hole bigger, and design.md promises the opposite — that a latest
+  // `failed` output node still reports.
+  const outputRuns = await db
+    .select({
+      id: nodeRuns.id,
+      nodeId: nodeRuns.nodeId,
+      status: nodeRuns.status,
+      parentNodeRunId: nodeRuns.parentNodeRunId,
+    })
     .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, ctx.taskId),
-        eq(nodeRuns.status, 'done'),
-        inArray(nodeRuns.nodeId, outputNodes),
-      ),
-    )
-  const doneSet = new Set(doneOutputRuns.map((r) => r.nodeId))
-  const missing = outputNodes.filter((n) => !doneSet.has(n))
+    .where(and(eq(nodeRuns.taskId, ctx.taskId), inArray(nodeRuns.nodeId, outputNodes)))
+  const freshestByNode = new Map<string, { id: string; status: string }>()
+  for (const r of outputRuns) {
+    if (r.parentNodeRunId !== null) continue // shard/child rows never settle a node
+    const cur = freshestByNode.get(r.nodeId)
+    if (cur === undefined || r.id > cur.id) freshestByNode.set(r.nodeId, r)
+  }
+  const missing = outputNodes.filter((n) => {
+    const latest = freshestByNode.get(n)
+    return latest === undefined || (latest.status !== 'done' && latest.status !== 'skipped')
+  })
   if (missing.length === 0) return []
   return [
     {
@@ -428,7 +457,7 @@ async function checkT3(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
       rule: 'T3',
       detail: {
         rule: 'T3',
-        message: 'task.status=done but not every output node has a done node_run',
+        message: 'task.status=done but not every output node has a done or skipped node_run',
         missingOutputNodeIds: missing,
       },
     },

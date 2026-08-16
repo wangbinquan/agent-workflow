@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import type {
   Agent,
   ClarifyDirective,
+  BranchTrace,
   NodeRun,
   StructuralDiff,
   Task,
@@ -974,6 +975,7 @@ function TaskDetailPage() {
                     canvasRef={canvasRef}
                     task={tk}
                     runs={nodeRuns.data?.runs ?? []}
+                    branchTrace={nodeRuns.data?.branchTrace}
                     onSelectNodeRun={setSelectedNodeRunId}
                     onJumpToQuestions={jumpToQuestions}
                   />
@@ -1354,6 +1356,7 @@ function TaskStatusCanvas({
   canvasRef,
   task,
   runs,
+  branchTrace,
   onSelectNodeRun,
   onJumpToQuestions,
 }: {
@@ -1362,6 +1365,8 @@ function TaskStatusCanvas({
   canvasRef?: React.RefObject<WorkflowCanvasHandle | null>
   task: Task
   runs: NodeRun[]
+  /** RFC-306 — server-derived run trace; the canvas renders it, never re-derives it. */
+  branchTrace?: BranchTrace
   onSelectNodeRun: (id: string | null) => void
   // RFC-120 D13: invoked with a node id when a canvas question badge is clicked.
   onJumpToQuestions: (nodeId: string) => void
@@ -1459,6 +1464,14 @@ function TaskStatusCanvas({
   }, [definition])
 
   const statuses = useMemo(() => deriveCanvasNodeStatuses(runs, callNodeIds), [callNodeIds, runs])
+
+  // RFC-306: which edges did NOT carry a value this run. Straight from the
+  // server-computed trace — deriving it here would be a second implementation of
+  // the activation rule and would eventually disagree with what actually ran.
+  const inactiveEdgeIds = useMemo(
+    () => (branchTrace?.inactiveEdges ?? []).map((e) => e.edgeId),
+    [branchTrace],
+  )
 
   const latestRunByNode = useMemo(() => {
     const m = new Map<string, NodeRun>()
@@ -1559,6 +1572,7 @@ function TaskStatusCanvas({
         definition={definition}
         agents={agents.data ?? []}
         nodeStatuses={statuses}
+        inactiveEdgeIds={inactiveEdgeIds}
         questionCounts={questionCounts}
         onNodeQuestionBadgeClick={onJumpToQuestions}
         clarifyDirectives={directives.data ?? {}}

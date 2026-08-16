@@ -45,9 +45,16 @@ export function readScriptOutputPorts(node: WorkflowNode): ScriptOutputPort[] {
   if (!Array.isArray(raw)) return []
   const out: ScriptOutputPort[] = []
   for (const entry of raw) {
-    const row = entry as { name?: unknown; kind?: unknown } | null
+    const row = entry as { name?: unknown; kind?: unknown; branch?: unknown } | null
     if (typeof row?.name !== 'string' || row.name.length === 0) continue
-    out.push(typeof row.kind === 'string' ? { name: row.name, kind: row.kind } : { name: row.name })
+    out.push({
+      name: row.name,
+      ...(typeof row.kind === 'string' ? { kind: row.kind } : {}),
+      // RFC-306: only a literal `true` declares a branch port. Anything else
+      // (absent, 'true', 1, null) leaves it undeclared — a runtime marker on it
+      // then fails loudly instead of quietly deactivating a branch.
+      ...(row.branch === true ? { branch: true } : {}),
+    })
   }
   return out
 }
@@ -89,19 +96,35 @@ export function scriptOutputMode(node: WorkflowNode): ScriptOutputMode {
 }
 
 /** The node's outlets: declared ports, or the implicit single `stdout`. */
-export function declaredScriptOutputs(node: WorkflowNode): Array<{ name: string; kind?: string }> {
+export function declaredScriptOutputs(
+  node: WorkflowNode,
+): Array<{ name: string; kind?: string; branch?: boolean }> {
   const declared = readScriptOutputPorts(node)
   if (declared.length === 0) return [{ name: SCRIPT_DEFAULT_OUTPUT_PORT }]
   // Dedup by name so a duplicate (which the validator rejects) still renders a
   // stable handle set instead of colliding React keys.
   const seen = new Set<string>()
-  const out: Array<{ name: string; kind?: string }> = []
+  const out: Array<{ name: string; kind?: string; branch?: boolean }> = []
   for (const port of declared) {
     if (seen.has(port.name)) continue
     seen.add(port.name)
-    out.push(port.kind === undefined ? { name: port.name } : { name: port.name, kind: port.kind })
+    // RFC-306: `branch` only ever appears as `true` — see the agent deriver's
+    // note; a false/absent flag must leave the object byte-identical to before.
+    out.push({
+      name: port.name,
+      ...(port.kind === undefined ? {} : { kind: port.kind }),
+      ...(port.branch === true ? { branch: true } : {}),
+    })
   }
   return out
+}
+
+/** RFC-306 — declared branch ports of a script node (empty in single-port mode). */
+export function scriptBranchPorts(node: WorkflowNode): string[] {
+  if (scriptOutputMode(node) === 'single') return []
+  return declaredScriptOutputs(node)
+    .filter((p) => p.branch === true)
+    .map((p) => p.name)
 }
 
 // ---------------------------------------------------------------------------

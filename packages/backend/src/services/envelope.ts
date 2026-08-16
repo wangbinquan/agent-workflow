@@ -207,7 +207,67 @@ function clarifyRe(nonce?: string): RegExp {
 // each port's content is delimited by the next opening tag (container-based,
 // see parseEnvelope) instead of a non-greedy `</port>` that truncated a port
 // whose content legitimately contained a literal `</port>` string.
-const PORT_OPEN_RE = /<port\s+name=(?:"([^"]+)"|'([^']+)')\s*>/g
+// RFC-306: the opening tag may now carry attributes (today only `active`).
+// The attribute segment is spelled STRICTLY — `name="..."` pairs only — rather
+// than the obvious `[^>]*`: content that legitimately contains prose such as
+// `<port name="a" is what we call the left port>` must keep being treated as
+// TEXT, exactly as it was before this RFC. With no attributes the pattern is
+// character-for-character the old one (`\s*>`), so every pre-RFC-306 envelope
+// parses identically.
+const PORT_ATTRS_RE_SRC = String.raw`(?:\s+[A-Za-z_][\w:.-]*\s*=\s*(?:"[^"]*"|'[^']*'))*`
+const PORT_OPEN_RE_SRC = String.raw`<port\s+name=(?:"([^"]+)"|'([^']+)')${PORT_ATTRS_RE_SRC}\s*>`
+const PORT_OPEN_RE = new RegExp(PORT_OPEN_RE_SRC, 'g')
+/**
+ * One `name="value"` / `name='value'` pair, matched from a KNOWN position so the
+ * scan below can walk the tag contiguously.
+ */
+const PORT_ATTR_PAIR_RE = /\s+([A-Za-z_][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/y
+
+/**
+ * Attributes of an already-matched `<port …>` opening tag, as a lowercased-name
+ * map.
+ *
+ * A plain `/\sactive\s*=/` search over the tag is NOT good enough, and the
+ * failure is not exotic — design-gate P2#11 constructed it:
+ * `<port name="p" note="x active='false'">` has a space before `active=` INSIDE
+ * another attribute's value, so a text search closes a branch the author never
+ * closed. Scanning pair by pair from the tag start consumes each quoted value
+ * whole, so nothing inside a value can ever be read as an attribute.
+ * (`data-active="false"` is separately excluded: the name token is `data-active`,
+ * not `active`.)
+ */
+function parsePortOpenAttrs(openTag: string): Map<string, string> {
+  const attrs = new Map<string, string>()
+  // Skip `<port`; every following pair is scanned sticky (`/y`) so a gap or a
+  // malformed segment stops the walk instead of resyncing mid-value.
+  const start = openTag.indexOf('port') + 'port'.length
+  PORT_ATTR_PAIR_RE.lastIndex = start
+  for (;;) {
+    const m = PORT_ATTR_PAIR_RE.exec(openTag)
+    if (m === null) break
+    attrs.set((m[1] ?? '').toLowerCase(), m[2] ?? m[3] ?? '')
+  }
+  return attrs
+}
+
+/**
+ * RFC-306 — read the branch marker off one matched `<port …>` opening tag.
+ *
+ * Returns `true`/`false` for a well-formed value, `undefined` when the attribute
+ * is absent (⇒ active, the default that keeps every existing agent working), and
+ * `'invalid'` for anything else. `'invalid'` is NOT coerced to a boolean on
+ * purpose: `active="0"` most likely means the agent intended to close a branch,
+ * and guessing either way silently produces the wrong graph — the runner turns
+ * it into a re-ask instead.
+ */
+export function readPortActiveAttr(openTag: string): boolean | undefined | 'invalid' {
+  const raw = parsePortOpenAttrs(openTag).get('active')
+  if (raw === undefined) return undefined
+  const v = raw.trim().toLowerCase()
+  if (v === 'true') return true
+  if (v === 'false') return false
+  return 'invalid'
+}
 
 export interface EnvelopeParseResult {
   /**
@@ -237,6 +297,16 @@ export interface EnvelopeParseResult {
    * {@link ENVELOPE_PORT_MALFORMED_PREFIX}).
    */
   malformedPorts: string[]
+  /**
+   * RFC-306 — ports whose opening tag carried `active="false"`. Names appear
+   * here whether or not they are DECLARED outputs: the declaration check is the
+   * runner's job (an undeclared name must fail loudly, not vanish here).
+   * Their `ports` entry still holds the emitted text, which for an inactive port
+   * is the author's REASON, not data — see runner.ts for where the two part ways.
+   */
+  inactivePorts: string[]
+  /** RFC-306 — ports whose `active` attribute value was neither true nor false. */
+  badActiveAttr: string[]
 }
 
 /**
@@ -314,6 +384,16 @@ export const CLARIFY_FORBIDDEN_PREFIX = 'clarify-forbidden'
 export const ENVELOPE_PORT_MALFORMED_PREFIX = 'envelope-port-malformed'
 
 /**
+ * RFC-306 — errorMessage prefixes for the two branch-marker rejections. Same
+ * rationale as the prefix above: defined in this leaf module so the runner
+ * (producer) and any matcher share one literal. The machine-readable signal is
+ * `node_runs.failure_code`; these strings are human breadcrumbs and the text the
+ * follow-up prompt quotes back at the agent.
+ */
+export const BRANCH_PORT_NOT_DECLARED_PREFIX = 'branch-port-not-declared'
+export const BRANCH_MARKER_MALFORMED_PREFIX = 'branch-marker-malformed'
+
+/**
  * Cheap pre-scan over agent stdout to decide which envelope path the runner
  * should take. We do not parse the body here — just count global regex hits
  * for either form.
@@ -368,6 +448,8 @@ export function parseEnvelope(
   const collected = new Map<string, string>()
   const undeclared: Array<{ name: string; content: string }> = []
   const malformed = new Set<string>()
+  const inactive = new Set<string>()
+  const badActive = new Set<string>()
 
   // RFC-103 T6 (05-PORT-02): structural port parsing. Reduce to the inner body
   // (so the last port can't absorb `</workflow-output>`), then for each
@@ -430,6 +512,18 @@ export function parseEnvelope(
     }
     if (name.length === 0) continue
     const content = inner.slice(contentStart, closeIdx).trim()
+    // RFC-306 branch marker. Recorded per OCCURRENCE and last-one-wins, matching
+    // the content rule right below: an agent that emits `p` twice has its final
+    // emission honoured for both the text and the marker, never a mix of the two.
+    const active = readPortActiveAttr(m[0])
+    if (active === 'invalid') {
+      badActive.add(name)
+      inactive.delete(name)
+    } else {
+      badActive.delete(name)
+      if (active === false) inactive.add(name)
+      else inactive.delete(name)
+    }
     if (declaredOutputs.includes(name)) {
       // If an agent emits the same port name twice, keep the LAST one — most
       // intuitive for a buggy / iterating agent.
@@ -461,11 +555,29 @@ export function parseEnvelope(
   for (const name of missingDeclared) {
     if (malformed.has(name)) continue
     const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const openRe = new RegExp(`<port\\s+name=(?:"${esc}"|'${esc}')\\s*>`)
+    // RFC-306: the attribute segment must be allowed here as well — otherwise an
+    // absorbed port that happened to carry `active="false"` would no longer be
+    // recognised as absorbed and would silently read as "legitimately omitted".
+    const openRe = new RegExp(`<port\\s+name=(?:"${esc}"|'${esc}')${PORT_ATTRS_RE_SRC}\\s*>`)
     if (openRe.test(inner)) malformed.add(name)
   }
 
-  return { ports, missingDeclared, undeclared, malformedPorts: [...malformed] }
+  // A port that never framed correctly is reported ONLY as malformed: its marker
+  // (like its content) cannot be trusted, and reporting it as a branch decision
+  // too would make the runner pick a branch failure over the framing failure that
+  // actually caused it.
+  for (const name of malformed) {
+    inactive.delete(name)
+    badActive.delete(name)
+  }
+  return {
+    ports,
+    missingDeclared,
+    undeclared,
+    malformedPorts: [...malformed],
+    inactivePorts: [...inactive],
+    badActiveAttr: [...badActive],
+  }
 }
 
 // ---------------------------------------------------------------------------

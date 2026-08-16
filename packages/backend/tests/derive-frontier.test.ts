@@ -280,7 +280,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     )
     // designer's latest is the pending rerun → dispatchable.
     expect(f.ready).toEqual(['designer'])
-    // rev1 consumed the OLD designer done but freshestDone[designer] is still that
+    // rev1 consumed the OLD designer done but freshestSettled[designer] is still that
     // old done (the rerun isn't done yet) → rev1 is one-hop fresh ⇒ completed; but
     // it is NOT dispatched because designer (its upstream) is not completed.
     // questioner is held (upstream rev1's upstream designer not settled).

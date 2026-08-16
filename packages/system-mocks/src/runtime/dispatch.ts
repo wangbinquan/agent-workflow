@@ -10,6 +10,7 @@
 // the wrong thing" this whole RFC keeps running into.
 
 import { run as runBasic } from './mode-basic'
+import { run as runBranch } from './mode-branch'
 import { run as runBusinessWorkflows } from './mode-business-workflows'
 import { run as runBusinessWorkgroups } from './mode-business-workgroups'
 import { run as runClarify } from './mode-clarify'
@@ -26,6 +27,7 @@ type ModeRunner = (argv: readonly string[]) => void | Promise<void>
 
 const MODES: Record<string, ModeRunner> = {
   basic: runBasic,
+  branch: runBranch,
   'business-workflows': runBusinessWorkflows,
   'business-workgroups': runBusinessWorkgroups,
   clarify: runClarify,

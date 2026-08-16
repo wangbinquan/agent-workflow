@@ -53,29 +53,31 @@ describe('parseExitCondition', () => {
 describe('evaluateExitCondition — port-empty', () => {
   const cond: ExitCondition = { kind: 'port-empty', nodeId: 'a', portName: 'p' }
   test('true for "" / whitespace-only', () => {
-    expect(evaluateExitCondition(cond, '')).toBe(true)
-    expect(evaluateExitCondition(cond, '   \n\t')).toBe(true)
+    expect(evaluateExitCondition(cond, { content: '', active: true })).toBe(true)
+    expect(evaluateExitCondition(cond, { content: '   \n\t', active: true })).toBe(true)
   })
   test('false for any non-whitespace content', () => {
-    expect(evaluateExitCondition(cond, 'x')).toBe(false)
-    expect(evaluateExitCondition(cond, '\nfoo\n')).toBe(false)
+    expect(evaluateExitCondition(cond, { content: 'x', active: true })).toBe(false)
+    expect(evaluateExitCondition(cond, { content: '\nfoo\n', active: true })).toBe(false)
   })
 })
 
 describe('evaluateExitCondition — port-not-empty (RFC-023 clarify exit)', () => {
   const cond: ExitCondition = { kind: 'port-not-empty', nodeId: 'a', portName: 'p' }
   test('true the moment the port produces any non-whitespace content', () => {
-    expect(evaluateExitCondition(cond, 'design content')).toBe(true)
-    expect(evaluateExitCondition(cond, '\nfoo\n')).toBe(true)
+    expect(evaluateExitCondition(cond, { content: 'design content', active: true })).toBe(true)
+    expect(evaluateExitCondition(cond, { content: '\nfoo\n', active: true })).toBe(true)
   })
   test('false while the port is still empty (loop should keep iterating)', () => {
-    expect(evaluateExitCondition(cond, '')).toBe(false)
-    expect(evaluateExitCondition(cond, '   \n\t')).toBe(false)
+    expect(evaluateExitCondition(cond, { content: '', active: true })).toBe(false)
+    expect(evaluateExitCondition(cond, { content: '   \n\t', active: true })).toBe(false)
   })
   test('is the exact inverse of port-empty over the same input', () => {
     const inv: ExitCondition = { kind: 'port-empty', nodeId: 'a', portName: 'p' }
     for (const sample of ['', ' ', '\n', 'x', 'multi\nline\n']) {
-      expect(evaluateExitCondition(cond, sample)).toBe(!evaluateExitCondition(inv, sample))
+      expect(evaluateExitCondition(cond, { content: sample, active: true })).toBe(
+        !evaluateExitCondition(inv, { content: sample, active: true }),
+      )
     }
   })
 })
@@ -83,9 +85,9 @@ describe('evaluateExitCondition — port-not-empty (RFC-023 clarify exit)', () =
 describe('evaluateExitCondition — port-equals', () => {
   const cond: ExitCondition = { kind: 'port-equals', nodeId: 'a', portName: 'p', value: 'done' }
   test('true only on exact match (no trim)', () => {
-    expect(evaluateExitCondition(cond, 'done')).toBe(true)
-    expect(evaluateExitCondition(cond, 'done\n')).toBe(false)
-    expect(evaluateExitCondition(cond, 'Done')).toBe(false)
+    expect(evaluateExitCondition(cond, { content: 'done', active: true })).toBe(true)
+    expect(evaluateExitCondition(cond, { content: 'done\n', active: true })).toBe(false)
+    expect(evaluateExitCondition(cond, { content: 'Done', active: true })).toBe(false)
   })
 })
 
@@ -98,9 +100,9 @@ describe('evaluateExitCondition — port-count-lt', () => {
     separator: '\n',
   }
   test('counts non-empty tokens and compares < n', () => {
-    expect(evaluateExitCondition(cond, '')).toBe(true) // 0 < 2
-    expect(evaluateExitCondition(cond, 'one')).toBe(true) // 1 < 2
-    expect(evaluateExitCondition(cond, 'one\ntwo')).toBe(false) // 2 < 2 → false
-    expect(evaluateExitCondition(cond, 'one\ntwo\nthree')).toBe(false)
+    expect(evaluateExitCondition(cond, { content: '', active: true })).toBe(true) // 0 < 2
+    expect(evaluateExitCondition(cond, { content: 'one', active: true })).toBe(true) // 1 < 2
+    expect(evaluateExitCondition(cond, { content: 'one\ntwo', active: true })).toBe(false) // 2 < 2 → false
+    expect(evaluateExitCondition(cond, { content: 'one\ntwo\nthree', active: true })).toBe(false)
   })
 })

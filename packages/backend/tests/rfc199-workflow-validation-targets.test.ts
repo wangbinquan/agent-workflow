@@ -221,7 +221,10 @@ describe('RFC-199 strict workflow validation targets', () => {
     // 定义里即拒），node 级 strict target ⇒ 145。它是 SYNTHESIZED_ONLY_NODE_KINDS
     // 全表共用的一条 emission，**将来再加合成 kind 不会再涨这个数**——这正是
     // 用列表而非逐 kind 硬编码分支的收益。
-    expect(emissions).toHaveLength(145)
+    // RFC-306 增加 1 条 `exit-condition-port-not-branch`（`port-inactive` 退出条件指向
+    // 非分支端口 ⇒ 该条件永不成立，循环只会跑到 max_iterations 才失败），锚在
+    // loop-exit-condition 字段上 ⇒ 146。
+    expect(emissions).toHaveLength(146)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

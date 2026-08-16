@@ -19,6 +19,7 @@
 
 import {
   declaredScriptOutputs,
+  scriptBranchPorts,
   scriptOutputMode,
   SCRIPT_DEFAULT_OUTPUT_PORT,
   type ScriptFailureCode,
@@ -27,7 +28,17 @@ import {
 import { extractLastEnvelope, parseEnvelope } from './envelope'
 
 export type ScriptPortExtraction =
-  | { kind: 'ok'; ports: Record<string, string> }
+  | {
+      kind: 'ok'
+      ports: Record<string, string>
+      /**
+       * RFC-306 — ports the script closed with `active="false"`. Always present
+       * (empty in single-port mode, which never parses an envelope) so callers
+       * cannot forget the distinction between "no branch closed" and "this shape
+       * cannot express branches".
+       */
+      inactivePorts: string[]
+    }
   | { kind: 'failed'; code: ScriptFailureCode; detail: string }
 
 export function extractScriptPorts(input: {
@@ -36,7 +47,15 @@ export function extractScriptPorts(input: {
   nonce: string
 }): ScriptPortExtraction {
   if (scriptOutputMode(input.node) === 'single') {
-    return { kind: 'ok', ports: { [SCRIPT_DEFAULT_OUTPUT_PORT]: input.rawStdout } }
+    // Single-port mode is raw stdout — there is no envelope to carry a marker,
+    // so a branch simply cannot be expressed here. The validator rejects
+    // `branch: true` in this mode so the author finds out at save time rather
+    // than watching a marker do nothing at run time.
+    return {
+      kind: 'ok',
+      ports: { [SCRIPT_DEFAULT_OUTPUT_PORT]: input.rawStdout },
+      inactivePorts: [],
+    }
   }
 
   const declared = declaredScriptOutputs(input.node).map((p) => p.name)
@@ -74,7 +93,33 @@ export function extractScriptPorts(input: {
     }
   }
 
+  // RFC-306 — same admission the runner applies to agents (design §3.5): a
+  // malformed `active` value, or a marker on a port not declared `branch: true`,
+  // is a hard failure rather than a silently-ignored marker. It is PERMANENT for
+  // scripts (SCRIPT_PERMANENT_FAILURE_CODES): the declaration lives in the frozen
+  // workflow definition, so retrying re-renders the identical mismatch.
+  if (parsed.badActiveAttr.length > 0) {
+    return {
+      kind: 'failed',
+      code: 'script-branch-port-not-declared',
+      detail: `port(s) ${parsed.badActiveAttr.join(', ')} carry an \`active\` attribute whose value is neither "true" nor "false"`,
+    }
+  }
+  const declaredBranch = new Set(scriptBranchPorts(input.node))
+  const illegal = parsed.inactivePorts.filter((p) => !declaredBranch.has(p))
+  if (illegal.length > 0) {
+    return {
+      kind: 'failed',
+      code: 'script-branch-port-not-declared',
+      detail:
+        `port(s) ${illegal.join(', ')} marked active="false" but are not declared branch ports; ` +
+        (declaredBranch.size > 0
+          ? `declared branch ports: ${[...declaredBranch].join(', ')}`
+          : 'this node declares no branch ports'),
+    }
+  }
+
   const ports: Record<string, string> = {}
   for (const [name, content] of parsed.ports) ports[name] = content
-  return { kind: 'ok', ports }
+  return { kind: 'ok', ports, inactivePorts: parsed.inactivePorts }
 }

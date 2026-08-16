@@ -21,6 +21,8 @@ interface OutputsEditorProps {
   outputs: string[]
   outputKinds?: AgentOutputKindsMap
   outputWrapperPortNames?: Record<string, string>
+  /** RFC-306 — which outputs may be closed at run time. */
+  branchPorts?: string[]
   aggregator?: boolean
   /** A route-level compact summary is already the page's live alert. */
   hasExternalPortAlert?: boolean
@@ -28,6 +30,7 @@ interface OutputsEditorProps {
     outputs: string[],
     outputKinds: AgentOutputKindsMap | undefined,
     outputWrapperPortNames: Record<string, string> | undefined,
+    branchPorts: string[] | undefined,
   ) => void
   /** Pre-RFC-194 compatibility only; adding is now an explicit Dialog action. */
   placeholder?: string
@@ -39,6 +42,7 @@ export function OutputsEditor({
   outputs,
   outputKinds,
   outputWrapperPortNames,
+  branchPorts,
   aggregator = false,
   hasExternalPortAlert,
   onChange,
@@ -49,7 +53,7 @@ export function OutputsEditor({
   const dialogTriggerRef = useRef<HTMLElement | null>(null)
   const editRefs = useRef(new Map<number, HTMLButtonElement>())
   const pendingFocusRef = useRef<PendingFocus>(null)
-  const state = { outputs, outputKinds, outputWrapperPortNames }
+  const state = { outputs, outputKinds, outputWrapperPortNames, branchPorts }
 
   useEffect(() => {
     const pending = pendingFocusRef.current
@@ -69,7 +73,7 @@ export function OutputsEditor({
   const orphans = findOrphanOutputSidecars(state)
 
   function emit(next: MutableOutputPortState) {
-    onChange(next.outputs, next.outputKinds, next.outputWrapperPortNames)
+    onChange(next.outputs, next.outputKinds, next.outputWrapperPortNames, next.branchPorts)
   }
 
   function open(mode: AgentPortDialogMode, trigger: HTMLElement | null) {
@@ -126,6 +130,7 @@ export function OutputsEditor({
               kind={outputKinds?.[name] ?? DEFAULT_OUTPUT_KIND}
               aggregator={aggregator}
               wrapperPortName={outputWrapperPortNames?.[name]}
+              branch={(branchPorts ?? []).includes(name)}
               wrapperDuplicate={
                 aggregator && (wrapperCounts.get(outputWrapperPortNames?.[name] ?? name) ?? 0) > 1
               }

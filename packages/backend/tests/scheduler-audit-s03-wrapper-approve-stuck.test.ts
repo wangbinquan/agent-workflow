@@ -13,7 +13,7 @@
 // 「窗口内 kind==='review' 的 done∧fresh 行」也视为复活证据——approve 翻 done 的
 // review 行本身就是放行信号；非 review 的 inner done 行**不**解锁（clarify park
 // 语义不受影响，dispatch-frontier.test.ts N2 锁定）。fresh 判定按修订 #8 在函数
-// 内部以 innerIter 构 buildFreshestDonePerNode——误用外层 map 即回归。
+// 内部以 innerIter 构 buildFreshestSettledPerNode——误用外层 map 即回归。
 // 任何 refactor 把下方 [S-3 LOCK] 断言翻回 false = S-3 回归。
 //
 // 既有覆盖说明：dispatch-frontier.test.ts 锁 awaiting_human + 无 pending +
@@ -150,7 +150,7 @@ describe('S-3 — wrapper-loop ∋ review 被 approve 后复活（机制核心�
   test('修订 #8 契约：review done 行的 fresh 判定按 innerIter 内部构图——窗口内 stale 的 done review 不解锁', () => {
     // rev 的 done 行 consumed 了 worker 的旧 run（01OLD），而窗口内 worker 的
     // freshest done 已是 01A → 该 review done 行 stale，不是复活证据。若实现误用
-    // 外层（wrapper iteration=0 作用域）的 freshestDone map，worker@iter1 不在图
+    // 外层（wrapper iteration=0 作用域）的 freshestSettled map，worker@iter1 不在图
     // 内 → 误判 fresh → 本断言翻红。
     const staleReviewDone = [
       parkedLoopRow,

@@ -252,6 +252,17 @@ export const FOLLOWUP_FAILURE_CODES = [
   /** RFC-049 port content validation failed (payload rides in
    *  port_validation_failures_json, NOT in this code). */
   'port-validation-failed',
+  /**
+   * RFC-306 — the agent marked a port `active="false"` that is NOT declared as a
+   * branch port. Follow-up-able on purpose: the agent expressed a real intent
+   * ("do not run this branch") against a port that cannot carry it, and one
+   * same-session correction usually fixes it (either it picks the right port or
+   * it drops the marker). The alternative — treating the port as active — would
+   * run a branch the agent believed it had closed.
+   */
+  'branch-port-not-declared',
+  /** RFC-306 — an `active` attribute whose value is neither true nor false. */
+  'branch-marker-malformed',
 ] as const
 export type FollowupFailureCode = (typeof FOLLOWUP_FAILURE_CODES)[number]
 
@@ -279,6 +290,11 @@ export const SCRIPT_FAILURE_CODES = [
   'script-envelope-missing',
   'script-envelope-malformed',
   'script-port-missing',
+  // RFC-306 — the script marked a port inactive that is not declared
+  // `branch: true` (or wrote a non-boolean `active` value). Permanent: the
+  // declaration lives in the frozen workflow definition, so another attempt
+  // renders the same mismatch forever.
+  'script-branch-port-not-declared',
   'script-interpreter-missing',
   'script-deps-install-failed',
   'script-spawn-failed',
@@ -297,6 +313,9 @@ export const SCRIPT_PERMANENT_FAILURE_CODES: ReadonlyArray<ScriptFailureCode> = 
   // Retrying cannot shrink the output; the author has to declare ports or emit
   // less.
   'script-output-truncated',
+  // RFC-306: the branch declaration is frozen in the definition — a retry
+  // re-renders the identical mismatch.
+  'script-branch-port-not-declared',
 ]
 
 /**
@@ -1092,6 +1111,16 @@ export const RERUN_CAUSES = [
   'merge-resolve',
   /** Virtual done row for input / output IO nodes. */
   'io-virtual',
+  /**
+   * RFC-306 — the row exists to RECORD that this node was not executed: every
+   * inbound edge that had to be active was inactive (an upstream branch port was
+   * marked `active="false"`, or an upstream node was itself skipped). The row is
+   * minted `pending` and immediately transitioned to `skipped`; it carries the
+   * consumed-upstream provenance so a later upstream re-run makes it stale and
+   * the branch decision gets re-evaluated (the skip is reversible, not terminal
+   * like `exhausted`).
+   */
+  'branch-skip',
   /** Cross-clarify scheduler guard rows (missing-questioner failure /
    *  persistent-stop short-circuit). */
   'cross-clarify-guard',
@@ -1395,13 +1424,89 @@ export const NodeRunOutputSchema = z.object({
    * tell file-path ports (whose `value` is a worktree-relative path) from text.
    */
   kind: z.string().nullable().optional(),
+  /**
+   * RFC-306 — false when this port was closed by a branch marker
+   * (`<port name="…" active="false">`). Its `value` is then the author's REASON
+   * for closing the branch, not data: the Outputs tab renders it as "not
+   * produced · <reason>" rather than as a result. Absent ⇒ active (every
+   * pre-RFC-306 row and every ordinary port).
+   */
+  active: z.boolean().optional(),
 })
 export type NodeRunOutput = z.infer<typeof NodeRunOutputSchema>
+
+/**
+ * RFC-306 — the run TRACE: which parts of the graph this task actually took.
+ *
+ * Derived SERVER-SIDE from the same domain rule the dispatcher uses. The
+ * frontend must not recompute it: two implementations of "is this edge live"
+ * would drift, and the canvas would then disagree with what actually ran.
+ *
+ * DISPLAY SLICE (design-gate P2#13). A node/edge has no single activation state
+ * once loops and fanout are involved — a loop edge can be active in iteration 0
+ * and inactive in iteration 1; a fanout node is active in 3 shards and inactive
+ * in 17. This payload deliberately reports ONE slice, the LATEST settled
+ * generation per node (`iteration` says which), and carries per-shard counts
+ * separately so the canvas can label a fanout wrapper "3/20 分片激活" instead of
+ * pretending the wrapper is simply on or off.
+ */
+export const BranchTraceEdgeSchema = z.object({
+  edgeId: z.string(),
+  sourceNodeId: z.string(),
+  sourcePortName: z.string(),
+  targetNodeId: z.string(),
+  /** Which generation this verdict was read from. */
+  iteration: z.number().int().nonnegative(),
+  reason: z.enum(['port-inactive', 'source-skipped']),
+})
+export type BranchTraceEdge = z.infer<typeof BranchTraceEdgeSchema>
+
+export const BranchTraceNodeSchema = z.object({
+  nodeId: z.string(),
+  iteration: z.number().int().nonnegative(),
+  /** Why the node did not run. */
+  reason: z.string(),
+  /**
+   * True when an EARLIER generation of this node did run and merged its work
+   * into the task worktree. RFC-306 does not roll that work back (a closed
+   * branch means "do no more work", not "undo work already done"), so the trace
+   * has to say so out loud instead of leaving a `skipped` badge implying the
+   * repository is untouched.
+   */
+  hasEarlierProducedGeneration: z.boolean().optional(),
+})
+export type BranchTraceNode = z.infer<typeof BranchTraceNodeSchema>
+
+export const BranchTraceSchema = z.object({
+  skippedNodes: z.array(BranchTraceNodeSchema),
+  inactiveEdges: z.array(BranchTraceEdgeSchema),
+  /** Per-port decision reasons, keyed for the Outputs tab / node detail. */
+  decisions: z.array(
+    z.object({
+      nodeId: z.string(),
+      nodeRunId: z.string(),
+      portName: z.string(),
+      reason: z.string(),
+    }),
+  ),
+  /** fanout wrapper id → how many shards stayed active this generation. */
+  shardActivation: z.array(
+    z.object({ nodeId: z.string(), active: z.number().int(), total: z.number().int() }),
+  ),
+})
+export type BranchTrace = z.infer<typeof BranchTraceSchema>
 
 /** Response shape of GET /api/tasks/:id/node-runs. */
 export const TaskNodeRunsSchema = z.object({
   runs: z.array(NodeRunSchema),
   outputs: z.array(NodeRunOutputSchema),
+  /**
+   * RFC-306 — run trace, delivered on the response the task detail already
+   * fetches and already invalidates on every node-status WS event. A separate
+   * endpoint would need its own invalidation and could render a canvas whose
+   * greying disagreed with the node table beside it.
+   */
+  branchTrace: BranchTraceSchema.optional(),
 })
 export type TaskNodeRuns = z.infer<typeof TaskNodeRunsSchema>
 
