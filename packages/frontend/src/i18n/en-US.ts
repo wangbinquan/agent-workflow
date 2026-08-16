@@ -3362,6 +3362,8 @@ export const enUS: Resources = {
       note: 'MR / PR comment',
       pipeline_failed: 'Pipeline failed',
       pipeline_succeeded: 'Pipeline succeeded',
+      issue_labeled: 'Issue labeled',
+      issue_comment: 'Issue comment',
     },
     scope: {
       all: 'All',
@@ -4853,6 +4855,13 @@ export const enUS: Resources = {
     fieldInputRequired: 'Required',
     fieldInputDescription: 'Description',
     fieldInputDescriptionHint: 'Optional helper text rendered under the launcher field.',
+    enum: {
+      choices: 'Options',
+      choicesHint: 'Type an option and press Enter or comma to add it; use × to remove it.',
+      choicesPlaceholder: 'For example: development, staging, production',
+      multiSelect: 'Allow multiple selections',
+      allowOther: 'Allow other values',
+    },
     upload: {
       targetDir: 'Target directory (worktree-relative)',
       targetDirHint:

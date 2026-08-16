@@ -2843,6 +2843,8 @@ export interface Resources {
       note: string
       pipeline_failed: string
       pipeline_succeeded: string
+      issue_labeled: string
+      issue_comment: string
     }
     scope: { all: string; prefix: string; exact: string; exactPlaceholder: string }
     fields: {
@@ -4096,6 +4098,13 @@ export interface Resources {
     fieldInputRequired: string
     fieldInputDescription: string
     fieldInputDescriptionHint: string
+    enum: {
+      choices: string
+      choicesHint: string
+      choicesPlaceholder: string
+      multiSelect: string
+      allowOther: string
+    }
     upload: {
       targetDir: string
       targetDirHint: string
@@ -8977,6 +8986,8 @@ export const zhCN: Resources = {
       note: 'MR / PR 评论',
       pipeline_failed: '流水线失败',
       pipeline_succeeded: '流水线成功',
+      issue_labeled: 'Issue 打标签',
+      issue_comment: 'Issue 评论',
     },
     scope: { all: '全部', prefix: '前缀', exact: '精确清单', exactPlaceholder: 'group/sub/repo' },
     fields: {
@@ -10365,6 +10376,13 @@ export const zhCN: Resources = {
     fieldInputRequired: '必填',
     fieldInputDescription: '说明',
     fieldInputDescriptionHint: 'launcher 字段下方的额外说明，可空。',
+    enum: {
+      choices: '选项列表',
+      choicesHint: '输入选项后按回车或逗号添加；点击选项后的 × 可删除。',
+      choicesPlaceholder: '例如：开发、预发布、生产',
+      multiSelect: '允许多选',
+      allowOther: '允许填写其他值',
+    },
     upload: {
       targetDir: '落点目录（worktree 相对路径）',
       targetDirHint: '提交任务时上传的文件会写入 worktree 下的该相对目录，例如 inputs/refs。',
