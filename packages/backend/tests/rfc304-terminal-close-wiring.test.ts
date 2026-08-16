@@ -18,10 +18,17 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { upsertCapabilityCell } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
 import {
   codeWorkItems,
+  codeWorkRounds,
   repoCapabilityConfig,
+  tasks,
   webhookDeliveries,
   webhookEndpoints,
 } from '../src/db/schema'
@@ -35,7 +42,7 @@ import {
   lookupProducedMr,
   registerProducedMr,
 } from '../src/modules/code-capability/application/producedMrIndex'
-import type { CodeHostEvent } from '@agent-workflow/shared'
+import { isTerminalTaskStatus, type CodeHostEvent } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const ENDPOINT = 'ep-1'
@@ -44,6 +51,7 @@ const MR = '412'
 
 /** Every capability cell is keyed by this; the resolver must return it. */
 const REPO_ID = 'repo-1'
+const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc304-wake-join-'))
 
 const eventOf = (over: Partial<CodeHostEvent> = {}): CodeHostEvent =>
   ({
@@ -293,5 +301,133 @@ describe('RFC-304 T40 — the dispatcher closes capability work items', () => {
     // Reaching here without throwing IS the assertion; the explicit check keeps
     // the intent visible.
     expect(true).toBe(true)
+  })
+})
+
+describe('RFC-304 §3.1 — the dispatcher wakes capability cells', () => {
+  // The join that did not exist. `wakeCapabilitiesForDelivery` shipped in PR-4a
+  // with tests and ZERO callers: capabilities could be configured, cells could
+  // report `ready`, and no webhook would ever start a round. Nothing was red,
+  // because an absent join never errors.
+  //
+  // The case that matters is a repository with NO trigger at all, which is the
+  // normal state of one whose only automation is a capability. Before this, the
+  // dispatcher found no trigger hits, marked the delivery `ignored`, and
+  // returned.
+  let db: DbClient
+  let deps: WebhookDispatchDeps
+  let endpoint: WebhookEndpointRow
+
+  beforeEach(async () => {
+    db = createInMemoryDb(MIGRATIONS)
+    await seedTestDefaultOpencodeRuntime(db)
+    const box = createSecretBoxFromKey(Buffer.alloc(32, 9))
+    await db.insert(webhookEndpoints).values({
+      id: ENDPOINT,
+      name: 'gitlab',
+      provider: 'gitlab',
+      urlToken: 'aw_whk_tok1',
+      secretEnc: box.seal('s'),
+      enabled: true,
+    })
+    endpoint = (
+      await db.select().from(webhookEndpoints).where(eq(webhookEndpoints.id, ENDPOINT)).limit(1)
+    )[0]!
+    deps = {
+      db,
+      configPath: join(appHome, 'config.json'),
+      secretBox: box,
+      getDefaultRuntime: async () => null,
+      resolveRepo: async () => ({ kind: 'cached', cachedRepoId: REPO_ID }),
+      launch: async () => ulid(),
+      cancel: async () => undefined,
+    }
+  })
+  afterEach(async () => {
+    // The dispatcher builds REAL launch deps, so a started round is a real task
+    // that the driver is still finishing when the test body returns. Closing
+    // the database under it throws from a background frame — which is a test
+    // teardown race, not a production defect, and the honest fix is to wait
+    // rather than to stop asserting that a real task was started.
+    await settleTasks()
+    db.$client.close()
+  })
+
+  /** Wait for every task this test started to reach a terminal status. */
+  const settleTasks = async (): Promise<void> => {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const rows = await db.select({ status: tasks.status }).from(tasks)
+      if (rows.every((row) => isTerminalTaskStatus(row.status))) return
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+  }
+
+  const readyCell = async (capability: string): Promise<void> => {
+    await upsertCapabilityCell(db, {
+      repoId: REPO_ID,
+      capability,
+      bindingId: 'binding-1',
+      enabled: true,
+      facts: {
+        hasBinding: true,
+        frameworkExists: true,
+        hasTrigger: true,
+        codeHostConfigured: true,
+        invisibleAgentSlots: [],
+        requiresWakeSource: false,
+        hasWakeSource: false,
+      },
+      dependencyRevision: 1,
+      now: Date.now(),
+    })
+  }
+
+  const deliverUpdate = async (): Promise<void> => {
+    const deliveryId = ulid()
+    await db.insert(webhookDeliveries).values({
+      id: deliveryId,
+      endpointId: ENDPOINT,
+      eventType: 'mr_updated',
+      status: 'received',
+      receivedAt: Date.now(),
+    })
+    await createWebhookDispatcher(deps).dispatch({
+      deliveryId,
+      endpoint,
+      event: eventOf({ eventType: 'mr_updated', commitSha: 'a'.repeat(40), branch: 'feature/x' }),
+    })
+  }
+
+  test('a ready cell starts a round even though NO trigger matched', async () => {
+    await readyCell('mr-review')
+
+    await deliverUpdate()
+
+    // A real work item, a real round, a real task — reached from the same
+    // entry point the ingress route uses.
+    const items = await db.select().from(codeWorkItems)
+    expect(items.length).toBe(1)
+    expect(items[0]?.capability).toBe('mr-review')
+    const rounds = await db.select().from(codeWorkRounds)
+    expect(rounds.length).toBe(1)
+    expect(rounds[0]?.roundSeq).toBe(1)
+    expect((await db.select().from(tasks)).length).toBe(1)
+  })
+
+  test('a repository with no cells stays silent', async () => {
+    await deliverUpdate()
+    expect((await db.select().from(codeWorkItems)).length).toBe(0)
+    expect((await db.select().from(tasks)).length).toBe(0)
+  })
+
+  test('the second delivery is round 2, not a second work item', async () => {
+    await readyCell('mr-review')
+
+    await deliverUpdate()
+    await deliverUpdate()
+
+    expect((await db.select().from(codeWorkItems)).length).toBe(1)
+    const rounds = await db.select().from(codeWorkRounds)
+    expect(rounds.map((r) => r.roundSeq).sort()).toEqual([1, 2])
   })
 })

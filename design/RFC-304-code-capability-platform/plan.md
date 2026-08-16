@@ -503,16 +503,21 @@ framework）、`cli/package.ts` 与 `bundle/{apply,lower}.ts`、`intent/applyCha
 | T39  | 冲突检测与报告（**不修**）                                                                                                                                                                                                                                                                                     | T36    | ✅ 2026-08-16（每 revision 报一次，不修） |
 | T40  | 闭环：MR 合并/关闭 → `closed`，停止后续                                                                                                                                                                                                                                                                        | T36    | ✅ 2026-08-16（dispatcher 已接线） |
 
-> **PR-6 遗留一项，需拍板**：**能力轮次的 webhook 归属**。`mr_merged` / `mr_closed` 的闭环
-> （T40）已接进真实 dispatcher——它不起 task，不触碰归属。但「delivery 唤醒能力 → 起一轮」
-> 这条线还没接进 dispatcher：RFC-301 的 `webhook` provenance 要求非空 `webhookTriggerId` +
-> `webhookFireId`，而 `webhook_trigger_fires.trigger_id` 是 `NOT NULL` 且外键指向
-> `webhook_triggers`——**能力不是触发器**，没有也不该有触发器行，于是没有诚实的 id 可填。
-> 三条路：①给 `TASK_LAUNCH_ORIGINS` 加第五种 `capability`（DB enum 迁移 + 任务列表筛选 + i18n
-> 波及面）；②放宽 RFC-301 的 webhook 判据，允许「有 triggerContext、无 trigger/fire id」；
-> ③让 fires 表的 `trigger_id` 可空并给能力轮次落一条 fire 行。这是 task-execution 的合同变更，
-> 不适合在本 PR 内单方面定，**先呈用户**。在此之前 `wakeCapabilitiesForDelivery` 仍是 PR-6
-> 交付的入口函数（已全测），只是尚未由 dispatcher 调用。
+> **PR-6 那条遗留项已解决（2026-08-16），记下选法与理由**：**能力轮次的 webhook 归属**。
+> 原本三条路都不理想：①给 `TASK_LAUNCH_ORIGINS` 加第五种要改 `tasks` 表的 CHECK，而 SQLite
+> 改 CHECK 只能整表重建——`tasks` 是全库最大、被外键指得最多的表，为一个枚举值重建它不划算；
+> ③让 fires 表 `trigger_id` 可空同样是重建。
+>
+> 最终走的是**把不变量说得更准**而不是放松它：RFC-301 的 webhook 分支要求的是「可归属」，
+> 而可归属的锚点本来就有**两种**——触发器 fire，以及**能力轮次**（`code_work_rounds` 行，
+> 带工作项、轮次号与事件链）。能力不是触发器（§3.1 明写），所以它没有 trigger 行可指是**正确**
+> 的，不是缺陷。判据改为「有 canonical context，且 (trigger+fire) 或 capability round 其一」，
+> 普通触发器启动**仍然两个 id 都要**——所以丢了 fire id 不会伪装成能力轮次混过去。
+> 纯代码改动，零迁移。dispatcher 的唤醒接线随之落地（`wakeCodeCapabilitiesFor`）。
+>
+> 接线时被 RFC-268 的既有断言拦下一次：scratch 启动**不得**走到 repo resolver，而我一开始
+> 每条投递都无条件解析。改为**先查有没有任何启用中的单元格**再解析——没配能力的部署（也就是
+> 今天所有部署、以及那批 RFC-268 用例描述的形态）行为一字未变。
 
 
 ### 评论驱动改码（PR-7）

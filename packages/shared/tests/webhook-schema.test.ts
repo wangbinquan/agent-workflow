@@ -167,6 +167,9 @@ describe('RFC-257 T1 · closed enum 穷尽表（emit 域；改动此表 = 显式
       'interrupted',
       'terminal-control-accepted',
       'mr-stream-identity-missing',
+      // RFC-304：没命中触发器但唤醒了能力单元格。与 `no-trigger-matched` 分开，
+      // 因为两者对运维说的是相反的话——后者是「什么都没发生」，这里有一轮在跑。
+      'capability-woken',
     ])
     expect([...WEBHOOK_FIRE_OUTCOMES]).toEqual([
       'launched',

@@ -2195,6 +2195,8 @@ function rootLaunchOriginFromDeps(deps: StartTaskDeps): TaskLaunchOrigin | null 
     webhookTriggerId: deps.webhookTriggerId,
     webhookFireId: deps.webhookFireId,
     hasTriggerContext: deps.triggerContext !== undefined,
+    // RFC-304: a capability round's anchor is its round row, not a trigger fire.
+    hasCodeRound: deps.codeRoundLaunch !== undefined,
   })
   if (issue !== null) throw new ValidationError(issue.code, issue.message)
   return deriveTaskLaunchOrigin(deps.launchProvenance)

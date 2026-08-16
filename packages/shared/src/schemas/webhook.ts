@@ -538,6 +538,9 @@ export const WEBHOOK_DELIVERY_REASONS = [
   'interrupted', // daemon 重启时 received/processing 遗留行的终态（恢复 = replay）
   'terminal-control-accepted', // RFC-303：durable effect 已接受，异步资源结算另见 control
   'mr-stream-identity-missing', // RFC-303：受保护 MR 事件缺稳定 projectId/IID
+  // RFC-304：没命中任何触发器，但唤醒了「仓库 × 能力」单元格。与 `no-trigger-matched`
+  // 分开是因为它们对运维说的是相反的话——后者是「什么都没发生」，而这里有一轮在跑。
+  'capability-woken',
 ] as const
 export const WebhookDeliveryReasonSchema = z.enum(WEBHOOK_DELIVERY_REASONS)
 export type WebhookDeliveryReason = z.infer<typeof WebhookDeliveryReasonSchema>

@@ -192,6 +192,19 @@ export async function wakeCapabilitiesForDelivery(input: WakeDeliveryInput): Pro
 }
 
 /**
+ * The webhook fields of a trigger context, defensively.
+ *
+ * This function is documented as never throwing, and a malformed or absent
+ * context reaching it must not be the exception to that: it is called from the
+ * webhook dispatcher on live deliveries, so a crash here takes down a delivery
+ * that had other work to do. An empty field set flows on to the identity check,
+ * which then reports precisely what is missing.
+ */
+function webhookFieldsOf(context: TriggerContext | undefined): Partial<Record<string, string>> {
+  return context?.trigger?.webhook ?? {}
+}
+
+/**
  * The work item this delivery is about, or null when it cannot be identified.
  *
  * Both halves are required and neither can be defaulted: a work item without a
@@ -199,7 +212,7 @@ export async function wakeCapabilitiesForDelivery(input: WakeDeliveryInput): Pro
  * without an endpoint id would merge two GitLab instances'.
  */
 function identityFor(input: WakeDeliveryInput, capability: string): WorkItemIdentity | null {
-  const projectId = input.triggerContext.trigger.webhook?.project_id ?? ''
+  const projectId = webhookFieldsOf(input.triggerContext).project_id ?? ''
   const endpointId = input.codeHostEndpointId ?? ''
   const anchorId = input.mrIid ?? ''
   if (projectId === '' || endpointId === '' || anchorId === '') return null
@@ -221,7 +234,7 @@ function identityFor(input: WakeDeliveryInput, capability: string): WorkItemIden
  */
 function missingIdentityFields(input: WakeDeliveryInput): string[] {
   const missing: string[] = []
-  if ((input.triggerContext.trigger.webhook?.project_id ?? '') === '') missing.push('project id')
+  if ((webhookFieldsOf(input.triggerContext).project_id ?? '') === '') missing.push('project id')
   if ((input.codeHostEndpointId ?? '') === '') missing.push('code host connection')
   if ((input.mrIid ?? '') === '') missing.push('merge request number')
   return missing
@@ -288,9 +301,9 @@ async function startDirectRound(
       db: input.db,
       workItemId: item.id,
       epoch: item.epoch,
-      ...(input.triggerContext.trigger.webhook?.commit_sha === undefined
+      ...(webhookFieldsOf(input.triggerContext).commit_sha === undefined
         ? {}
-        : { baselineSha: input.triggerContext.trigger.webhook.commit_sha }),
+        : { baselineSha: webhookFieldsOf(input.triggerContext).commit_sha }),
     })
     workItemId = item.id
     roundId = round.roundId
@@ -412,6 +425,12 @@ function launchDepsFor(input: WakeDeliveryInput): StartTaskDeps & { db: DbClient
   return {
     ...input.launchDeps,
     launchProvenance: { kind: 'webhook' },
+    // Empty when the delivery matched no trigger, which is the NORMAL case for
+    // a capability: a repository that switched on MR review has written no
+    // trigger at all. The round row is the attribution anchor instead
+    // (`hasCodeRound` in the RFC-301 admission check), and passing empty
+    // strings here rather than omitting the fields keeps the shape stable for
+    // the launches that do have them.
     webhookTriggerId: input.webhookTriggerId,
     webhookFireId: input.webhookFireId,
     triggerContext: input.triggerContext,

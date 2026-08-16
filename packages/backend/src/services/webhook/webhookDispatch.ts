@@ -12,12 +12,13 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { startCodeRoundTask } from '@/services/codeRoundLaunch'
 
-import type { Actor } from '@/auth/actor'
+import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import { buildInheritedActor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import {
   cachedRepos,
+  repoCapabilityConfig,
   tasks,
   webhookDeliveries,
   webhookMrControlEffects,
@@ -30,7 +31,11 @@ import { cancelExecution, startExecution } from '@/services/execution/executor'
 import type { ExecutionInvoker } from '@/services/execution/types'
 import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { closeCapabilitiesForDelivery, isTerminalDelivery } from '@/services/codeCapabilityWake'
+import {
+  closeCapabilitiesForDelivery,
+  isTerminalDelivery,
+  wakeCapabilitiesForDelivery,
+} from '@/services/codeCapabilityWake'
 import { markDelivery } from '@/services/webhook/deliveryStore'
 import {
   evaluateCircuit,
@@ -1095,6 +1100,89 @@ async function closeCodeCapabilitiesFor(
   }
 }
 
+/**
+ * RFC-304 §3.1 — wake the capability cells this delivery turns on.
+ *
+ * Returns whether anything reacted, so the delivery can be marked `matched`
+ * rather than `ignored`: a repository whose only automation is a capability
+ * matches no trigger, and reporting `ignored` would tell an operator that
+ * nothing happened while a round was starting.
+ *
+ * Never throws. A capability that cannot start must not fail the delivery —
+ * other capabilities and any matched triggers still have work to do.
+ */
+async function wakeCodeCapabilitiesFor(
+  deps: WebhookDispatchDeps,
+  input: { endpoint: WebhookEndpointRow; event: CodeHostEvent; deliveryId: string },
+): Promise<boolean> {
+  // A terminal delivery closes rather than wakes (T40); that path already ran.
+  if (isTerminalDelivery(input.event.eventType)) return false
+
+  try {
+    // Cheap existence check BEFORE resolving the repository, and it is load
+    // bearing rather than an optimisation. RFC-268 guarantees that a `scratch`
+    // launch never reaches the repo resolver — a repository that cannot be
+    // resolved must not block one — and resolving here unconditionally would
+    // break that for every deployment, including the overwhelming majority
+    // that have configured no capabilities at all. With no cells anywhere,
+    // this returns before the resolver and the guarantee is untouched.
+    const [anyCell] = await deps.db
+      .select({ id: repoCapabilityConfig.id })
+      .from(repoCapabilityConfig)
+      .where(eq(repoCapabilityConfig.enabled, true))
+      .limit(1)
+    if (anyCell === undefined) return false
+
+    const resolution = await (deps.resolveRepo ?? resolveRepoForEvent)(
+      deps.db,
+      deps.secretBox,
+      input.event,
+      input.endpoint,
+      // Capabilities do not auto-register repositories. A cell can only exist
+      // on a repository somebody registered, so there is nothing to wake on one
+      // nobody has.
+      false,
+    )
+    if (resolution.kind !== 'cached') return false
+
+    const context = webhookTriggerContextOf(input.event)
+    const result = await wakeCapabilitiesForDelivery({
+      db: deps.db,
+      repoId: resolution.cachedRepoId,
+      eventType: input.event.eventType,
+      ...(input.event.mrIid === undefined ? {} : { mrIid: input.event.mrIid }),
+      ...(input.event.author.username === undefined
+        ? {}
+        : { authorUsername: input.event.author.username }),
+      triggerContext: context,
+      // Empty: this delivery matched no trigger, which is the normal case for a
+      // capability. The round row is the attribution anchor instead (RFC-301
+      // admission, `hasCodeRound`).
+      webhookTriggerId: '',
+      webhookFireId: '',
+      // The endpoint that DELIVERED this — part of a work item's identity. A
+      // lookup by provider would pick the wrong one in a two-instance
+      // deployment and key the round's ledger to somebody else's endpoint.
+      codeHostEndpointId: input.endpoint.id,
+      ...(input.event.eventUuid === null ? {} : { eventId: input.event.eventUuid }),
+      // The platform's own actor: a capability round is started by the
+      // repository's configuration, not by whoever happened to comment.
+      launchDeps: buildStartTaskDeps(deps.db, deps.configPath, SYSTEM_USER_ID, deps.secretBox),
+    })
+
+    for (const failure of result.failed) {
+      log.warn('code capability did not start', {
+        capability: failure.capability,
+        error: failure.error,
+      })
+    }
+    return result.started.length > 0 || (result.observed ?? []).length > 0
+  } catch (err) {
+    log.warn('waking code capabilities failed', { error: errText(err) })
+    return false
+  }
+}
+
 export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispatcher {
   const streamQueue = new KeyedSerialQueue<string>()
   return {
@@ -1163,10 +1251,25 @@ export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispa
           }
           if (matchTrigger(event, parsed.trigger.rule).hit) hits.push(parsed.trigger)
         }
+        // RFC-304 §3.1 — capability cells, BEFORE the no-trigger early return.
+        //
+        // Capabilities are deliberately not triggers, so a repository that
+        // switched on MR review has no trigger row and this delivery matches
+        // nothing. Waking them after the return below would mean they never
+        // woke at all: every stage was built and tested, the matrix was built
+        // and tested, and nothing joined them — no test anywhere goes red for
+        // a join that is simply absent.
+        const woken = await wakeCodeCapabilitiesFor(deps, { endpoint, event, deliveryId })
+
         if (hits.length === 0 && !invalidPayloadMatched) {
           if (controlEffect !== undefined) {
             await markDelivery(db, deliveryId, 'matched', 'terminal-control-accepted')
             deps.terminalControl?.wake(controlEffect.id)
+          } else if (woken) {
+            // Matched, not ignored: a capability reacted. Reporting `ignored`
+            // would tell an operator debugging a quiet repository that nothing
+            // happened, when in fact a round is running.
+            await markDelivery(db, deliveryId, 'matched', 'capability-woken')
           } else {
             await markDelivery(db, deliveryId, 'ignored', 'no-trigger-matched')
           }

@@ -218,6 +218,32 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
     expect(result.started).toEqual([])
   })
 
+  test('a capability round launches with NO trigger or fire id', async () => {
+    // This test used to assert the opposite, and the change is deliberate.
+    //
+    // RFC-301 required a webhook-origin launch to carry both a trigger id and a
+    // fire id. A capability has neither and correctly so: it is not a trigger,
+    // the repository wrote none, and there is no `webhook_triggers` row to point
+    // at. The requirement being enforced is that a root task is ATTRIBUTABLE,
+    // and a capability round is — by its round row. So the admission check now
+    // accepts either anchor (`hasCodeRound`), and an ordinary trigger launch
+    // still needs both ids.
+    await enable('mr-review')
+    await enable('ci-fix')
+    const result = await wakeCapabilitiesForDelivery({
+      db,
+      repoId: REPO,
+      eventType: 'mr_opened',
+      mrIid: '412',
+      triggerContext,
+      webhookTriggerId: '',
+      webhookFireId: '',
+      launchDeps: { db, appHome } as never,
+    })
+    expect(result.failed).toEqual([])
+    expect(result.started).toHaveLength(2)
+  })
+
   test('a launch failure is reported, not swallowed, and does not stop the others', async () => {
     // A delivery that woke two cells and failed on the first must still start
     // the second — and the failure has to surface, because a launch that
@@ -230,15 +256,40 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
       eventType: 'mr_opened',
       mrIid: '412',
       triggerContext,
-      // Missing fire id: RFC-301 refuses a webhook launch that cannot point at
-      // the delivery it claims to come from.
       webhookTriggerId: 'trigger-1',
-      webhookFireId: '',
-      launchDeps: { db, appHome } as never,
+      webhookFireId: 'fire-1',
+      // Deps with no database: `startCodeRoundTask` throws, which is what a
+      // real launch failure looks like from here.
+      launchDeps: {} as never,
     })
     expect(result.started).toEqual([])
     expect(result.failed).toHaveLength(2)
     expect(result.failed[0]?.error.length).toBeGreaterThan(0)
+  })
+
+  test('a malformed trigger context does not crash the delivery', async () => {
+    // This function is documented as never throwing, and the webhook dispatcher
+    // now calls it on live deliveries — so a context that is absent or the
+    // wrong shape must be reported, not thrown. It previously crashed here,
+    // taking down a delivery that had other work to do.
+    await enable('mr-review')
+    const result = await wakeCapabilitiesForDelivery({
+      db,
+      repoId: REPO,
+      eventType: 'mr_opened',
+      mrIid: '412',
+      triggerContext: undefined as never,
+      webhookTriggerId: '',
+      webhookFireId: '',
+      launchDeps: { db, appHome } as never,
+    })
+    // Reported, not thrown. The launch itself is still refused — a
+    // webhook-origin round with no canonical context has nothing for
+    // `resolve-target` to read, and would fail on the merge request in front of
+    // the author. Both halves matter: no crash, and no silent start either.
+    expect(result.started).toEqual([])
+    expect(result.failed).toHaveLength(1)
+    expect(result.failed[0]?.capability).toBe('mr-review')
   })
 
   test('a malformed trigger config falls back to the default events', async () => {
