@@ -273,7 +273,12 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // 那时 agent 的工作树早没了，重跑模型会产出**另一份**改动却带着同样的说辞。
   // `keep_ref` 不是记账：只被已删除工作树的 detached HEAD 引用的 commit 是不可达的，
   // `git gc` 会在人还没决定时把它回收掉——所以每个产物持一条 ref，释放时删掉。
-  test('HEAD journal has 167 entries (sanity — locks the freeze target indices)', () => {
+  // RFC-304 T50b bumped to 168 with 0168_rfc304_produced_mr_index（产出 MR 反向索引）。
+  // `requirement` 工作项锚在 **issue** 上，而它的完成条件是「它产出的那个 MR 被合并」；
+  // MR 终态事件只带 provider / project / iid，里面根本没有 issue 的影子。没有这张表，
+  // 代码合了、平台不知道，需求在活动视图里永远显示「进行中」。反向而不是正向：正向指针
+  // 意味着每次合并都要把全库未闭合工作项的 JSON 扫一遍。
+  test('HEAD journal has 168 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -417,7 +422,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // Webhook 终态 workspace claim 与 RFC-165/iso GC claim）。
     // RFC-303 bumped to 157 with 0157_rfc303_mr_terminal_control（MR 终态
     // 控制流、稳定流身份与 durable launch/effect ledgers）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(167)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(168)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

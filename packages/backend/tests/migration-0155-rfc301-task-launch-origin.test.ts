@@ -125,19 +125,45 @@ describe('migration 0155 · RFC-301 task launch origin', () => {
     expect(rows.get('new-root-default')).toBe('manual')
   })
 
-  test('SQL allowlists stay in parity with the shared canonical context constants', () => {
+  test('the SQL allowlists are a SUBSET of today’s canonical constants', () => {
+    // This assertion used to demand exact equality, which was right while the
+    // two lists could not diverge — and wrong the first time one grew. RFC-304
+    // T46a added `issue_labeled` / `issue_comment` and six issue fields, and
+    // the correct response is NOT to edit this migration.
+    //
+    // 0155 is a one-time backfill that classified rows written BEFORE it ran.
+    // Its allowlist describes what a legacy trigger context could legitimately
+    // contain at that moment; a field that did not exist then could not have
+    // appeared in one. Editing an applied migration to mention it would change
+    // history to say something that was never true, and would rewrite a file
+    // every existing database has already executed.
+    //
+    // What is still worth asserting is the other direction: everything the
+    // migration allowed must STILL EXIST. A rename or removal upstream would
+    // silently change which legacy rows this backfill matched, and nothing else
+    // would notice.
     const fieldBlock = SQL.match(
       /FROM json_each\(`tasks`\.`trigger_context_json`, '\$\.trigger\.webhook'\) AS `webhook_ctx`[\s\S]*?NOT IN \(([\s\S]*?)\)\n\s*\)/,
     )?.[1]
     expect(fieldBlock).toBeDefined()
-    const fields = [...(fieldBlock?.matchAll(/'([^']+)'/g) ?? [])].map((match) => match[1])
-    expect(fields.sort()).toEqual([...TRIGGER_CONTEXT_FIELDS].sort())
+    const fields = [...(fieldBlock?.matchAll(/'([^']+)'/g) ?? [])].flatMap((m) =>
+      m[1] === undefined ? [] : [m[1]],
+    )
+    // Non-empty first: a regex that stopped matching would make every
+    // containment check below vacuously true.
+    expect(fields.length).toBeGreaterThan(0)
+    const knownFields: readonly string[] = TRIGGER_CONTEXT_FIELDS
+    for (const field of fields) expect(knownFields).toContain(field)
 
     const eventBlock = SQL.match(
       /json_extract\(`trigger_context_json`, '\$\.trigger\.webhook\.event_type'\) IN \(([\s\S]*?)\)/,
     )?.[1]
     expect(eventBlock).toBeDefined()
-    const events = [...(eventBlock?.matchAll(/'([^']+)'/g) ?? [])].map((match) => match[1])
-    expect(events.sort()).toEqual([...CODE_HOST_EVENT_TYPES].sort())
+    const events = [...(eventBlock?.matchAll(/'([^']+)'/g) ?? [])].flatMap((m) =>
+      m[1] === undefined ? [] : [m[1]],
+    )
+    expect(events.length).toBeGreaterThan(0)
+    const knownEvents: readonly string[] = CODE_HOST_EVENT_TYPES
+    for (const event of events) expect(knownEvents).toContain(event)
   })
 })

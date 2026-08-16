@@ -31,6 +31,10 @@ import {
 } from '../src/services/webhook/webhookDispatch'
 import type { WebhookEndpointRow } from '../src/services/webhook/dispatcherTypes'
 import { ensureWorkItem } from '../src/modules/code-capability/infrastructure/sqliteMonitorStore'
+import {
+  lookupProducedMr,
+  registerProducedMr,
+} from '../src/modules/code-capability/application/producedMrIndex'
 import type { CodeHostEvent } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -214,6 +218,65 @@ describe('RFC-304 T40 — the dispatcher closes capability work items', () => {
     await deliver(eventOf())
 
     expect(await itemStatus()).toBe('idle')
+  })
+
+  test('T50b — merging a produced MR closes the REQUIREMENT that produced it', async () => {
+    // The requirement's work item is anchored to an issue, so the per-capability
+    // loop above cannot reach it: its identity has a different anchor entirely.
+    // The produced-MR index is the only path from the merged MR back to it, and
+    // without this the requirement stays open after its code has shipped —
+    // visible forever in the activity view as work in progress.
+    const requirement = await ensureWorkItem({
+      db,
+      codeHostEndpointId: ENDPOINT,
+      stableProjectId: PROJECT,
+      capability: 'requirement',
+      anchorKind: 'issue',
+      anchorId: '88',
+    })
+    await registerProducedMr({
+      db,
+      codeHostEndpointId: ENDPOINT,
+      stableProjectId: PROJECT,
+      mrIid: MR,
+      workItemId: requirement.id,
+    })
+
+    await deliver(eventOf())
+
+    const [row] = await db
+      .select({ status: codeWorkItems.status })
+      .from(codeWorkItems)
+      .where(eq(codeWorkItems.id, requirement.id))
+    expect(row?.status).toBe('closed')
+    // …and the index row is claimed, so a second delivery of the same merge
+    // does not close it again.
+    const indexed = await lookupProducedMr(db, {
+      codeHostEndpointId: ENDPOINT,
+      stableProjectId: PROJECT,
+      mrIid: MR,
+    })
+    expect(indexed?.closedAt).not.toBeNull()
+  })
+
+  test('T50b — an ordinary merge closes no requirement', async () => {
+    // Most merges in a repository have nothing to do with this platform.
+    const requirement = await ensureWorkItem({
+      db,
+      codeHostEndpointId: ENDPOINT,
+      stableProjectId: PROJECT,
+      capability: 'requirement',
+      anchorKind: 'issue',
+      anchorId: '88',
+    })
+
+    await deliver(eventOf())
+
+    const [row] = await db
+      .select({ status: codeWorkItems.status })
+      .from(codeWorkItems)
+      .where(eq(codeWorkItems.id, requirement.id))
+    expect(row?.status).toBe('idle')
   })
 
   test('a repo-resolution failure does not fail the delivery', async () => {

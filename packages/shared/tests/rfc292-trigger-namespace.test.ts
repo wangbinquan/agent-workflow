@@ -78,7 +78,10 @@ describe('RFC-292 template scanner', () => {
 describe('RFC-292 trigger context', () => {
   test('the context field set is exactly the 30-field webhook source', () => {
     expect(TRIGGER_CONTEXT_FIELDS).toEqual(WEBHOOK_TEMPLATE_VARS)
-    expect(TRIGGER_CONTEXT_FIELDS).toHaveLength(30)
+    // 36 since RFC-304 T46a added the six issue fields. The count is asserted
+    // as well as the equality so that ADDING a field to both lists at once —
+    // which keeps them equal — still has to be a deliberate edit here.
+    expect(TRIGGER_CONTEXT_FIELDS).toHaveLength(36)
     expect(TRIGGER_CONTEXT_FIELDS).toContain('event_json')
   })
 

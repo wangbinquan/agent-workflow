@@ -27,6 +27,18 @@ export const CODE_HOST_EVENT_TYPES = [
   'note',
   'pipeline_failed',
   'pipeline_succeeded',
+  // RFC-304 T46a — the issue surface. Until now the platform saw merge requests
+  // and pipelines only: a GitLab note on an Issue was rejected as
+  // `unsupported-event`, and GitHub's `issues` hook was not routed at all. The
+  // `requirement` capability is entered by labelling an issue, so without these
+  // two the entry point has nothing to hear.
+  //
+  // Two, not one. `issue_labeled` is how work STARTS (someone tags an issue for
+  // the platform); `issue_comment` is how a clarifying question gets ANSWERED
+  // (design D2 — from where it was asked). A single `issue_updated` would make
+  // every edit to every issue look like a request to build something.
+  'issue_labeled',
+  'issue_comment',
 ] as const
 export const CodeHostEventTypeSchema = z.enum(CODE_HOST_EVENT_TYPES)
 export type CodeHostEventType = z.infer<typeof CodeHostEventTypeSchema>
@@ -44,6 +56,11 @@ export const AUTHOR_FILTERED_EVENT_TYPES: ReadonlyArray<CodeHostEventType> = [
   'mr_merged',
   'mr_closed',
   'note',
+  // Issue events are human-authored like notes, so the ignore list applies:
+  // without it the platform's own clarifying question — posted as an issue
+  // comment — comes straight back in as an answer to itself.
+  'issue_labeled',
+  'issue_comment',
 ]
 
 // ---------------------------------------------------------------------------
@@ -109,6 +126,20 @@ export const CodeHostEventSchema = z.object({
    * 键名与该平台建评论 API 的参数名一一对应，agent 原样回传即可。
    */
   commentPosition: z.unknown().optional(),
+  // ---------------------------------------------------------------------------
+  // RFC-304 T46a —— issue 面。`requirement` 能力的入口是「给 issue 打标签」，
+  // 澄清回答的落点是 issue 评论，两者都需要能定位到具体那条 issue。
+  // ---------------------------------------------------------------------------
+  /** issue 编号（GitLab `iid` / GitHub `number`），REST 路径实参。 */
+  issueIid: z.string().optional(),
+  issueTitle: z.string().optional(),
+  issueUrl: z.string().optional(),
+  /** issue 正文——需求内容本身，`resolve-input` 的直接输入。 */
+  issueBody: z.string().optional(),
+  /** 当前全部标签。触发判据看的是「有没有那个标签」，不是「这次加了什么」。 */
+  issueLabels: z.array(z.string()).optional(),
+  /** 本次新增的标签（GitLab `changes.labels` / GitHub `label`）。 */
+  addedLabels: z.array(z.string()).optional(),
   /** GitLab pipeline id / GitHub workflow run id。 */
   pipelineId: z.string().optional(),
   pipelineUrl: z.string().optional(),
@@ -179,6 +210,15 @@ export const WEBHOOK_TEMPLATE_VARS = [
   'repo_owner',
   'repo_name',
   'author_id',
+  // RFC-304 T46a —— issue 面。`issue_labels` / `added_labels` 渲染为逗号分隔，
+  // 模板里是文本而不是数组：这套模板没有循环，一个数组变量渲染出来只会是
+  // `[object Object]` 或一段 JSON，两者都不是作者写模板时想要的东西。
+  'issue_iid',
+  'issue_title',
+  'issue_url',
+  'issue_body',
+  'issue_labels',
+  'added_labels',
   'event_json',
 ] as const
 export type WebhookTemplateVar = (typeof WEBHOOK_TEMPLATE_VARS)[number]
@@ -220,6 +260,15 @@ const MR_VARS: ReadonlyArray<WebhookTemplateVar> = [
   'mr_url',
 ]
 
+const ISSUE_VARS: ReadonlyArray<WebhookTemplateVar> = [
+  'issue_iid',
+  'issue_title',
+  'issue_url',
+  'issue_body',
+  'issue_labels',
+  'added_labels',
+]
+
 export const WEBHOOK_EVENT_VAR_MATRIX: Readonly<
   Record<CodeHostEventType, ReadonlyArray<WebhookTemplateVar>>
 > = {
@@ -255,6 +304,19 @@ export const WEBHOOK_EVENT_VAR_MATRIX: Readonly<
     'pipeline_id',
     'pipeline_url',
   ],
+  // RFC-304 T46a. No `MR_VARS`: an issue is not a merge request, and declaring
+  // them would let an author write `{{trigger.webhook.mr_iid}}` into an
+  // issue-triggered launch, save it green, and get an empty string at run time.
+  issue_labeled: [...COMMON_VARS, ...ISSUE_VARS],
+  issue_comment: [
+    ...COMMON_VARS,
+    ...ISSUE_VARS,
+    'comment_text',
+    'comment_author',
+    'comment_id',
+    'comment_url',
+    // No `comment_thread_id`: an issue comment is not threaded on either host.
+  ],
 }
 
 /**
@@ -281,6 +343,14 @@ export const WEBHOOK_VAR_GROUPS = [
       'comment_text',
       'comment_author',
       'pipeline_status',
+      // RFC-304 T46a. Context, not API locators: these are what an issue-driven
+      // prompt is written FROM (the requirement's title, body and labels),
+      // whereas `issue_url` is how a reader gets back to it.
+      'issue_iid',
+      'issue_title',
+      'issue_body',
+      'issue_labels',
+      'added_labels',
       'event_json',
     ],
   },
@@ -295,6 +365,7 @@ export const WEBHOOK_VAR_GROUPS = [
       'author_id',
       'mr_id',
       'mr_url',
+      'issue_url',
       'comment_id',
       'comment_thread_id',
       'comment_url',

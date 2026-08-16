@@ -3117,6 +3117,12 @@ export const enUS: Resources = {
       repo_owner: 'Repository owner',
       repo_name: 'Repository name',
       author_id: 'Event author ID',
+      issue_iid: 'Issue number',
+      issue_title: 'Issue title',
+      issue_url: 'Issue URL',
+      issue_body: 'Issue description',
+      issue_labels: 'Issue labels (comma-separated)',
+      added_labels: 'Labels just added (comma-separated)',
       event_json: 'Raw event JSON',
     },
     builtins: {
@@ -3426,6 +3432,14 @@ export const enUS: Resources = {
         repo_owner: "GitHub REST's {owner}; the namespace path on GitLab.",
         repo_name: "GitHub REST's {repo}.",
         author_id: 'Platform user id of the event author (assignment, mentions).',
+        issue_iid: 'Issue number — this is the one REST paths take.',
+        issue_title: 'Issue title.',
+        issue_url: 'Issue web URL.',
+        issue_body: 'Issue description — the requirement text itself.',
+        issue_labels:
+          'Every label currently on the issue, comma-separated. Use this to test whether a label is present; added_labels tells you what this event changed.',
+        added_labels:
+          'Labels this event added, comma-separated. On GitLab this is the difference against the previous set, so an existing label is not reported as new.',
         mr_id:
           'Global id of the MR / PR. REST paths take mr_iid — this one is only for GraphQL and a few endpoints.',
         mr_url: 'MR / PR web URL.',
@@ -3726,6 +3740,7 @@ export const enUS: Resources = {
     webhookSource: {
       comment: 'Open original comment',
       mergeRequest: 'Open original merge request/PR',
+      issue: 'Open original issue',
       pipeline: 'Open original pipeline',
       commit: 'Open original commit',
       project: 'Open source project',

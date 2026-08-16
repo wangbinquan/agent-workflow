@@ -4186,6 +4186,34 @@ export const codeMrLeases = sqliteTable(
  * guessing — both guesses are wrong in opposite directions.
  */
 /**
+ * RFC-304 T50b — the reverse index that lets a requirement close.
+ *
+ * A `requirement` work item is anchored to the REQUIREMENT (`issue-88`) and is
+ * finished when the merge request it produced is merged. Those two facts never
+ * meet on their own: the terminal event carries a provider, a project and an MR
+ * number, and nothing in it mentions the issue. Without this lookup the work
+ * item stays open forever — the code shipped and the platform never noticed.
+ */
+export const codeProducedMrs = sqliteTable(
+  'code_produced_mrs',
+  {
+    /** `endpoint|project|iid` — what a terminal event can construct. */
+    mrKey: text('mr_key').primaryKey(),
+    codeHostEndpointId: text('code_host_endpoint_id').notNull(),
+    stableProjectId: text('stable_project_id').notNull(),
+    mrIid: text('mr_iid').notNull(),
+    workItemId: text('work_item_id').notNull(),
+    roundId: text('round_id'),
+    createdAt: integer('created_at').notNull(),
+    /** Set when the MR ended and the work item was advanced; kept as history. */
+    closedAt: integer('closed_at'),
+  },
+  (t) => ({
+    itemIdx: index('idx_code_produced_mrs_item').on(t.workItemId),
+  }),
+)
+
+/**
  * RFC-304 T2c — immutable artifacts, so a confirmation pushes what was shown.
  *
  * The patch path posts a diff and waits, sometimes for days. By the time the

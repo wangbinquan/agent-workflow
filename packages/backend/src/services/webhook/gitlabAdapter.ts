@@ -274,11 +274,42 @@ export function gitlabNormalize(headers: HeaderBag, body: unknown): NormalizeRes
   if (objectKind === 'note') {
     const attrs = rec(root['object_attributes'])
     const noteableType = attrs ? str(attrs['noteable_type']) : undefined
+
+    // RFC-304 T46a — a comment on an ISSUE. Until this existed the branch below
+    // rejected it as `unsupported-event`, which meant an answer to the
+    // platform's own clarifying question was dropped at the door: the person
+    // replied where they were asked, and nothing happened.
+    if (noteableType === 'Issue') {
+      const issue = parseIssueBlock(root['issue'])
+      const commentText = attrs ? str(attrs['note']) : undefined
+      if (commentText === undefined || issue.issueIid === undefined) {
+        return { ok: false, reason: 'parse-failed', detail: 'issue note missing note text / issue' }
+      }
+      return {
+        ok: true,
+        event: {
+          ...base,
+          eventType: 'issue_comment',
+          issueIid: issue.issueIid,
+          issueTitle: issue.issueTitle,
+          issueUrl: issue.issueUrl,
+          issueBody: issue.issueBody,
+          issueLabels: issue.issueLabels,
+          commentText,
+          commentId: numStr(attrs?.['id']),
+          commentUrl: str(attrs?.['url']),
+          // No `commentThreadId`: an issue note is not threaded on GitLab the
+          // way a diff note is, and claiming a thread id would make a reply
+          // attempt address a discussion that does not exist.
+        },
+      }
+    }
+
     if (noteableType !== 'MergeRequest') {
       return {
         ok: false,
         reason: 'unsupported-event',
-        detail: `note on '${noteableType ?? '(unknown)'}' not handled (v1: MR comments only)`,
+        detail: `note on '${noteableType ?? '(unknown)'}' not handled (MR and issue comments only)`,
       }
     }
     const commentText = attrs ? str(attrs['note']) : undefined
@@ -352,11 +383,105 @@ export function gitlabNormalize(headers: HeaderBag, body: unknown): NormalizeRes
     }
   }
 
+  if (objectKind === 'issue') {
+    // RFC-304 T46a — labelling an issue is how `requirement` is entered.
+    //
+    // Only the LABEL action is routed. GitLab fires this hook on every issue
+    // edit — title, description, assignee, milestone — and treating all of them
+    // as an entry point would start work every time somebody fixed a typo in a
+    // requirement they had already submitted.
+    const attrs = rec(root['object_attributes'])
+    const issue = parseIssueBlock(root['object_attributes'])
+    if (issue.issueIid === undefined) {
+      return { ok: false, reason: 'parse-failed', detail: 'issue event missing iid' }
+    }
+
+    const added = addedLabelsOf(root['changes'])
+    if (added.length === 0) {
+      return {
+        ok: false,
+        reason: 'unsupported-event',
+        detail: `issue action '${str(attrs?.['action']) ?? '(none)'}' added no label`,
+      }
+    }
+
+    return {
+      ok: true,
+      event: {
+        ...base,
+        eventType: 'issue_labeled',
+        issueIid: issue.issueIid,
+        issueTitle: issue.issueTitle,
+        issueUrl: issue.issueUrl,
+        issueBody: issue.issueBody,
+        // Current labels from the top-level `labels` array, which GitLab sends
+        // alongside `changes`; the object_attributes copy carries label ids
+        // rather than titles on some versions.
+        issueLabels: labelTitles(root['labels']) ?? issue.issueLabels,
+        addedLabels: added,
+      },
+    }
+  }
+
   return {
     ok: false,
     reason: 'unsupported-event',
     detail: `object_kind '${objectKind}' not handled`,
   }
+}
+
+interface IssueBlock {
+  issueIid?: string
+  issueTitle?: string
+  issueUrl?: string
+  issueBody?: string
+  issueLabels?: string[]
+}
+
+/** Soft-extract the issue fields; a missing one must never fail the delivery. */
+function parseIssueBlock(raw: unknown): IssueBlock {
+  const issue = rec(raw)
+  if (issue === undefined) return {}
+  return {
+    issueIid: numStr(issue['iid']),
+    issueTitle: str(issue['title']),
+    issueUrl: str(issue['url']),
+    issueBody: str(issue['description']),
+    ...(labelTitles(issue['labels']) === undefined
+      ? {}
+      : { issueLabels: labelTitles(issue['labels']) }),
+  }
+}
+
+/** GitLab labels arrive as objects with a `title`; plain strings are accepted too. */
+function labelTitles(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out: string[] = []
+  for (const entry of raw) {
+    if (typeof entry === 'string') {
+      out.push(entry)
+      continue
+    }
+    const title = str(rec(entry)?.['title'])
+    if (title !== undefined) out.push(title)
+  }
+  return out
+}
+
+/**
+ * Which labels this edit ADDED.
+ *
+ * `changes.labels` carries `previous` and `current`; the difference is what was
+ * added. Reading `current` alone would report every existing label as newly
+ * added, so an issue that already carried the trigger label would re-enter the
+ * capability on every unrelated edit.
+ */
+function addedLabelsOf(raw: unknown): string[] {
+  const labels = rec(rec(raw)?.['labels'])
+  if (labels === undefined) return []
+  const previous = new Set(labelTitles(labels['previous']) ?? [])
+  const current = labelTitles(labels['current']) ?? []
+  return current.filter((name) => !previous.has(name))
 }
 
 /** 摘要判别符（原 routes/webhooks.ts objectKindOf，RFC-259 迁入；类型窄化零 cast——routes-no-cast 锁）。 */

@@ -29,10 +29,13 @@ import {
 } from '@/modules/code-capability/application/monitorLoop'
 import {
   attachRoundTask,
+  closeWorkItem,
   ensureWorkItem,
   openRound,
+  recordObservation,
   type WorkItemIdentity,
 } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
+import { claimTerminalMr } from '@/modules/code-capability/application/producedMrIndex'
 import type { StartTaskDeps } from '@/services/task'
 import type { TriggerContext } from '@agent-workflow/shared'
 
@@ -367,6 +370,29 @@ export async function closeCapabilitiesForDelivery(
     })
     if (result.closed) closed.push(row.capability)
   }
+
+  // T50b — the OTHER thing a terminal event closes: the requirement that
+  // produced this merge request. That work item is anchored to an issue, not to
+  // this MR, so the loop above cannot reach it — its identity has a different
+  // anchor entirely. The index is the only path from one to the other, and
+  // without this call the requirement stays open after its code has shipped.
+  const produced = await claimTerminalMr(input.db, {
+    codeHostEndpointId: input.codeHostEndpointId,
+    stableProjectId: input.stableProjectId,
+    mrIid: input.mrIid,
+  })
+  if (produced.claimed) {
+    await closeWorkItem(input.db, produced.workItemId)
+    await recordObservation({
+      db: input.db,
+      workItemId: produced.workItemId,
+      kind: 'noop',
+      reason: `the merge request this produced was ${input.eventType === 'mr_merged' ? 'merged' : 'closed'}`,
+      ...(input.eventId === undefined ? {} : { eventId: `${input.eventId}:produced` }),
+    })
+    closed.push('requirement:produced-mr')
+  }
+
   return { closed }
 }
 

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 const SOURCE_LABEL_KEYS = {
   comment: 'tasks.webhookSource.comment',
   merge_request: 'tasks.webhookSource.mergeRequest',
+  issue: 'tasks.webhookSource.issue',
   pipeline: 'tasks.webhookSource.pipeline',
   commit: 'tasks.webhookSource.commit',
   project: 'tasks.webhookSource.project',

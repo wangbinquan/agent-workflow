@@ -3132,6 +3132,7 @@ export interface Resources {
     webhookSource: {
       comment: string
       mergeRequest: string
+      issue: string
       pipeline: string
       commit: string
       project: string
@@ -8699,6 +8700,12 @@ export const zhCN: Resources = {
       repo_owner: '仓库所有者',
       repo_name: '仓库名称',
       author_id: '事件作者 ID',
+      issue_iid: 'issue 编号',
+      issue_title: 'issue 标题',
+      issue_url: 'issue 地址',
+      issue_body: 'issue 正文',
+      issue_labels: 'issue 当前全部标签（逗号分隔）',
+      added_labels: '本次新增的标签（逗号分隔）',
       event_json: '原始事件 JSON',
     },
     builtins: {
@@ -8979,6 +8986,14 @@ export const zhCN: Resources = {
         repo_owner: 'GitHub REST 路径里的 {owner}；GitLab 侧为 namespace 路径。',
         repo_name: 'GitHub REST 路径里的 {repo}。',
         author_id: '事件作者的平台用户 ID（指派、@ 提及用）。',
+        issue_iid: 'issue 编号——REST 路径用的就是它。',
+        issue_title: 'issue 标题。',
+        issue_url: 'issue 网页地址。',
+        issue_body: 'issue 正文——需求内容本身。',
+        issue_labels:
+          'issue 当前的全部标签，逗号分隔。判断「有没有某个标签」用这个；本次改了什么看 added_labels。',
+        added_labels:
+          '本次新增的标签，逗号分隔。GitLab 侧是与改动前的差集，所以本来就有的标签不会被当成新加的。',
         mr_id: 'MR / PR 的全局 ID。REST 路径请用 mr_iid，这个只在 GraphQL 等少数接口用。',
         mr_url: 'MR / PR 网页地址。',
         comment_id: '评论本身的 ID（编辑、删除、加表情用；GitHub 的回复接口也用它）。',
@@ -9270,6 +9285,7 @@ export const zhCN: Resources = {
     webhookSource: {
       comment: '查看原始评论',
       mergeRequest: '查看原始 MR/PR',
+      issue: '查看原始 issue',
       pipeline: '查看原始流水线',
       commit: '查看原始提交',
       project: '查看源项目',

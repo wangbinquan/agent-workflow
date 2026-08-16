@@ -114,6 +114,14 @@ export function eventVarsOf(event: CodeHostEvent): Record<WebhookTemplateVar, st
     repo_owner: event.repoOwner ?? '',
     repo_name: event.repoName ?? '',
     author_id: event.authorId ?? '',
+    issue_iid: event.issueIid ?? '',
+    issue_title: event.issueTitle ?? '',
+    issue_url: event.issueUrl ?? '',
+    issue_body: event.issueBody ?? '',
+    // Comma-separated, not JSON: this template language has no loops, so a
+    // JSON array in a prompt is something the author has to explain away.
+    issue_labels: (event.issueLabels ?? []).join(', '),
+    added_labels: (event.addedLabels ?? []).join(', '),
     event_json: eventJson,
   }
 }

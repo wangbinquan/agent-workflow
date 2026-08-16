@@ -20,6 +20,7 @@ const PROJECT = 'https://gitlab.example/platform/api'
 const MR = `${PROJECT}/-/merge_requests/42`
 const COMMENT = `${MR}#note_17`
 const PIPELINE = `${PROJECT}/-/pipelines/99`
+const ISSUE = `${PROJECT}/-/issues/88`
 
 function context(
   eventType: CodeHostEventType,
@@ -38,7 +39,7 @@ function context(
 }
 
 describe('RFC-298 webhookTaskSourceLinkOf', () => {
-  test('covers all nine event types and selects their most precise target', () => {
+  test('covers every event type and selects their most precise target', () => {
     const sha = 'a'.repeat(40)
     const cases: ReadonlyArray<{
       eventType: CodeHostEventType
@@ -70,6 +71,19 @@ describe('RFC-298 webhookTaskSourceLinkOf', () => {
         fields: { pipeline_url: PIPELINE, mr_url: MR },
         expected: { kind: 'pipeline', url: PIPELINE },
       })),
+      // RFC-304 T46a. The comment wins over the issue for the same reason it
+      // wins over the merge request on `note`: the task was started by
+      // something someone SAID, and that sentence is what a reader needs.
+      {
+        eventType: 'issue_comment',
+        fields: { comment_url: COMMENT, issue_url: ISSUE },
+        expected: { kind: 'comment', url: COMMENT },
+      },
+      {
+        eventType: 'issue_labeled',
+        fields: { issue_url: ISSUE },
+        expected: { kind: 'issue', url: ISSUE },
+      },
     ]
 
     expect(cases.map((entry) => entry.eventType).sort()).toEqual([...CODE_HOST_EVENT_TYPES].sort())

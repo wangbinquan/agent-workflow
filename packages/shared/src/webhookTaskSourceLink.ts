@@ -10,6 +10,10 @@ import { webhookFieldsOf } from './triggerContext'
 export const WEBHOOK_TASK_SOURCE_LINK_KINDS = [
   'comment',
   'merge_request',
+  // RFC-304 T46a — an issue is its own kind of source, not a merge request.
+  // Folding it into `merge_request` would label the link "merge request" on
+  // every task started from an issue, which is simply false to the reader.
+  'issue',
   'pipeline',
   'commit',
   'project',
@@ -142,6 +146,21 @@ export function webhookTaskSourceLinkOf(context: TriggerContext): WebhookTaskSou
     case 'tag_push':
       return firstSafe([
         ['commit', commitUrlOf(fields)],
+        ['project', fields.project_web_url],
+      ])
+    // RFC-304 T46a. The comment link comes first on `issue_comment` for the
+    // same reason it does on `note`: the task was started by something someone
+    // said, and that sentence is what a reader needs to see, not the issue it
+    // happened to be under.
+    case 'issue_comment':
+      return firstSafe([
+        ['comment', fields.comment_url],
+        ['issue', fields.issue_url],
+        ['project', fields.project_web_url],
+      ])
+    case 'issue_labeled':
+      return firstSafe([
+        ['issue', fields.issue_url],
         ['project', fields.project_web_url],
       ])
   }

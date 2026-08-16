@@ -182,6 +182,21 @@ function parseSender(body: Record<string, unknown>): {
   }
 }
 
+/** GitHub labels are objects with a `name`; plain strings are accepted too. */
+function githubLabelNames(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out: string[] = []
+  for (const entry of raw) {
+    if (typeof entry === 'string') {
+      out.push(entry)
+      continue
+    }
+    const name = str(rec(entry)?.['name'])
+    if (name !== undefined) out.push(name)
+  }
+  return out
+}
+
 /** pull_request 对象的公共字段块（pull_request / pull_request_review_comment 事件）。 */
 function parsePrBlock(v: unknown): {
   mrIid?: string
@@ -333,12 +348,40 @@ export function githubNormalize(headers: HeaderBag, body: unknown): NormalizeRes
       }
     }
     const issue = rec(root['issue'])
-    if (!issue || rec(issue['pull_request']) === undefined) {
-      // issue（非 PR）上的评论：对齐 GitLab noteable_type 门（v1 只做 MR/PR 评论）。
+    if (!issue) {
+      return { ok: false, reason: 'parse-failed', detail: 'issue_comment missing issue block' }
+    }
+
+    // RFC-304 T46a — a comment on a real ISSUE, not a pull request.
+    //
+    // GitHub sends both through the same `issue_comment` hook and distinguishes
+    // them only by the presence of `issue.pull_request`. Until now the non-PR
+    // side was rejected, which meant an answer to the platform's own clarifying
+    // question was dropped at the door: the person replied where they were
+    // asked, and nothing happened.
+    if (rec(issue['pull_request']) === undefined) {
+      const comment = rec(root['comment'])
+      const commentText = comment ? str(comment['body']) : undefined
+      const issueIid = numStr(issue['number'])
+      if (commentText === undefined || issueIid === undefined) {
+        return { ok: false, reason: 'parse-failed', detail: 'issue_comment missing body/number' }
+      }
       return {
-        ok: false,
-        reason: 'unsupported-event',
-        detail: 'issue comment (not on a pull request) not handled',
+        ok: true,
+        event: {
+          ...base,
+          eventType: 'issue_comment',
+          issueIid,
+          issueTitle: str(issue['title']),
+          issueUrl: str(issue['html_url']),
+          issueBody: str(issue['body']),
+          ...(githubLabelNames(issue['labels']) === undefined
+            ? {}
+            : { issueLabels: githubLabelNames(issue['labels']) }),
+          commentText,
+          commentId: numStr(comment?.['id']),
+          commentUrl: comment ? str(comment['html_url']) : undefined,
+        },
       }
     }
     const comment = rec(root['comment'])
@@ -367,6 +410,49 @@ export function githubNormalize(headers: HeaderBag, body: unknown): NormalizeRes
         commentUrl: comment ? str(comment['html_url']) : undefined,
         // commentThreadId 有意不填：普通 PR 评论没有线程概念（回复只能新开一条
         // issue comment），编造一个 id 会让模板作者以为能回到线程里（proposal AC-2）。
+      },
+    }
+  }
+
+  if (eventName === 'issues') {
+    // RFC-304 T46a — labelling an issue is how `requirement` is entered.
+    //
+    // Only `labeled` is routed. The `issues` hook fires on opened, edited,
+    // assigned, milestoned and half a dozen more; treating them all as an entry
+    // point would start work every time somebody fixed a typo in a requirement
+    // they had already submitted.
+    const action = str(root['action'])
+    if (action !== 'labeled') {
+      return {
+        ok: false,
+        reason: 'unsupported-event',
+        detail: `issues action '${action ?? '(none)'}' not handled (only 'labeled')`,
+      }
+    }
+    const issue = rec(root['issue'])
+    const issueIid = issue ? numStr(issue['number']) : undefined
+    if (issue === undefined || issueIid === undefined) {
+      return { ok: false, reason: 'parse-failed', detail: 'issues event missing issue/number' }
+    }
+
+    // GitHub names the label that was just added in a top-level `label` block —
+    // which is why `labeled` is a distinct action rather than something to
+    // diff out of the labels array, as it has to be on GitLab.
+    const added = str(rec(root['label'])?.['name'])
+
+    return {
+      ok: true,
+      event: {
+        ...base,
+        eventType: 'issue_labeled',
+        issueIid,
+        issueTitle: str(issue['title']),
+        issueUrl: str(issue['html_url']),
+        issueBody: str(issue['body']),
+        ...(githubLabelNames(issue['labels']) === undefined
+          ? {}
+          : { issueLabels: githubLabelNames(issue['labels']) }),
+        ...(added === undefined ? {} : { addedLabels: [added] }),
       },
     }
   }

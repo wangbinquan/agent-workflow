@@ -240,16 +240,27 @@ describe('RFC-259 · githubNormalize（design §2.2 映射表）', () => {
     expect(r.event.author.username).toBe('reviewer-b')
   })
 
-  test('issue_comment：非 PR / 非 created → unsupported（AC-6）', () => {
-    const notPr = githubNormalize(headers('issue_comment'), issueCommentPayload({ onPr: false }))
-    expect(notPr.ok).toBe(false)
-    if (!notPr.ok) expect(notPr.reason).toBe('unsupported-event')
+  test('issue_comment：非 created → unsupported（AC-6）', () => {
     const edited = githubNormalize(
       headers('issue_comment'),
       issueCommentPayload({ action: 'edited' }),
     )
     expect(edited.ok).toBe(false)
     if (!edited.ok) expect(edited.reason).toBe('unsupported-event')
+  })
+
+  test('issue_comment 非 PR → issue_comment（RFC-304 T46a 起不再 unsupported）', () => {
+    // 原来这里断言的是 `unsupported-event`：v1 只做 MR/PR 评论。RFC-304 的
+    // `requirement` 能力从 issue 进、澄清也回到 issue，那条断言就等于把「人在被问
+    // 的地方回答了」这件事挡在门外——他回了，然后什么都没发生。
+    const notPr = githubNormalize(headers('issue_comment'), issueCommentPayload({ onPr: false }))
+    expect(notPr.ok).toBe(true)
+    if (!notPr.ok) return
+    expect(notPr.event.eventType).toBe('issue_comment')
+    expect(notPr.event.issueIid).toBe('7')
+    expect(notPr.event.commentText).toBe('/fix 把这个空指针处理掉')
+    // 不是 MR：填了 mrIid 会让下游按 MR 去查一个不存在的东西。
+    expect(notPr.event.mrIid).toBeUndefined()
   })
 
   test('pull_request_review_comment → note：带 head.ref 分支（AC-6 行内评论正例）', () => {
