@@ -24,6 +24,7 @@ import {
   webhookEndpoints,
 } from '../src/db/schema'
 import {
+  ROUNDS_PER_ITEM,
   createCodeMatrixQuery,
   createCodeRoundAttemptsQuery,
   createCodeWorkItemProjectionQuery,
@@ -197,6 +198,39 @@ describe('RFC-304 — the work-item projection', () => {
     await seedItem('monitor', NOW + 1, 'mr-monitor')
     const page = await createCodeWorkItemProjectionQuery(db).page({ capability: 'mr-review' })
     expect(page.items.map((i) => i.workItemId)).toEqual(['review'])
+  })
+
+  test('a long-lived merge request returns its LATEST rounds, not all of them', async () => {
+    // The 80-round merge request (design §11 运维四条). A work item lives for as
+    // long as its merge request does, and one that has been pushed to for weeks
+    // accumulates rounds without bound. The page is a list somebody reads, so it
+    // carries the most recent few per item and nothing else — otherwise one busy
+    // merge request pushes every other item off the screen and the response
+    // grows with the repository's history.
+    //
+    // Untested until now: `ROUNDS_PER_ITEM` was a constant nothing asserted, so
+    // raising it — or losing the limit in a refactor — would have been silent
+    // until somebody opened `/code` on a long-lived merge request.
+    await seedItem('busy', NOW)
+    await db.insert(codeWorkRounds).values(
+      Array.from({ length: 12 }, (_, i) => ({
+        id: `r${String(i)}`,
+        workItemId: 'busy',
+        roundSeq: i + 1,
+        epoch: 1,
+        outcome: 'published',
+        startedAt: NOW + i,
+        endedAt: NOW + i + 1,
+      })),
+    )
+
+    const page = await createCodeWorkItemProjectionQuery(db).page({})
+    const rounds = page.items[0]?.rounds ?? []
+
+    expect(rounds).toHaveLength(ROUNDS_PER_ITEM)
+    // The LATEST ones, newest first: an operator looking at a merge request now
+    // cares about what just happened, not about round 1 of 12.
+    expect(rounds.map((r) => r.roundSeq)).toEqual([12, 11, 10])
   })
 
   test('rounds and their stages are projected in reading order', async () => {
