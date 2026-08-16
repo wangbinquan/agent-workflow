@@ -23,7 +23,73 @@ export const ACL_RESOURCE_TYPES = [
   'plugin',
   'workflow',
   'workgroup', // RFC-164 — sixth resource type
+  // RFC-304 T13/T57 — the two capability template layers. Both tables have
+  // carried the owner/visibility/acl_revision columns since PR-2, but the type
+  // was never added here, so no ACL helper could be called for them: the
+  // columns existed and the closure did not. They are separate types rather
+  // than one because the department layer carries scripts that run as the
+  // daemon and the group layer deliberately cannot — granting one must never
+  // grant the other.
+  'capability_framework',
+  'capability_binding',
 ] as const
+
+/**
+ * The resource types a CONFIG PACKAGE can carry.
+ *
+ * A subset of `AclResourceType`, and a separate constant on purpose. The two
+ * sets were identical until RFC-304 added the capability template layers, which
+ * have row-level ACLs but no bundle ops — T17a is the task that would add them,
+ * and it is not done. Keying the bundle machinery off `AclResourceType` made
+ * "has an ACL" and "can be packaged" the same claim; the first type where they
+ * differ would otherwise have silently acquired a half-built export path that
+ * type-checks and produces nothing.
+ */
+export const BUNDLE_RESOURCE_TYPES = [
+  'agent',
+  'skill',
+  'mcp',
+  'plugin',
+  'workflow',
+  'workgroup',
+] as const
+export type BundleResourceType = (typeof BUNDLE_RESOURCE_TYPES)[number]
+// `ResourcePackageType` in `./resourcePackage` is this same set, derived from
+// this constant — the wire name for it. Two names, one list.
+
+/**
+ * The resource types an INTENT session can create.
+ *
+ * Same reasoning as `BUNDLE_RESOURCE_TYPES`, and the same six: an intent
+ * conversation produces work resources, not the platform's own capability
+ * templates. `intent_provenance.resource_type` is stored against this set.
+ */
+/**
+ * Narrow an ACL type to a package-carryable one, or null.
+ *
+ * The one conversion point between the two sets. It returns null rather than
+ * throwing so each caller phrases the refusal in its own terms — a CLI flag, an
+ * HTTP body and an export root all need different wording for the same fact:
+ * config packages do not carry capability templates yet (RFC-304 T17a).
+ */
+export function asBundleResourceType(value: AclResourceType): BundleResourceType | null {
+  return (BUNDLE_RESOURCE_TYPES as readonly string[]).includes(value)
+    ? (value as BundleResourceType)
+    : null
+}
+
+export const INTENT_RESOURCE_TYPES = BUNDLE_RESOURCE_TYPES
+export type IntentResourceType = BundleResourceType
+
+/**
+ * Narrow an ACL type to one an Intent session can create, or null.
+ *
+ * Presently the same function as `asBundleResourceType` because the two sets are
+ * the same six. Aliased rather than inlined so the call sites read in their own
+ * vocabulary, and so the day the sets diverge this becomes a real function in
+ * one place instead of a search for every "bundle" call that meant "intent".
+ */
+export const asIntentResourceType = asBundleResourceType
 
 export const AclResourceTypeSchema = z.enum(ACL_RESOURCE_TYPES)
 export type AclResourceType = z.infer<typeof AclResourceTypeSchema>

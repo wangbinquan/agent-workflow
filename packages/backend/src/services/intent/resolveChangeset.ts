@@ -23,6 +23,7 @@ import {
   WORKFLOW_SCHEMA_VERSION,
   WorkflowDefinitionSchema,
   type AclResourceType,
+  type IntentResourceType,
   type CredentialFinding,
   type IntentChangeset,
   type IntentOp,
@@ -332,7 +333,9 @@ export interface IntentDecision {
 
 export type ResolvedIntentOp = {
   opId: string
-  resourceType: AclResourceType
+  // An intent op only ever names a type a session can create — the changeset
+  // schema enforces it — and  stores exactly that set.
+  resourceType: IntentResourceType
   /** Final canonical id this op lands on (pre-minted for creates/copies). */
   resourceId: string
   /** Manifest entry for in-place updates (fence source); absent for creates. */

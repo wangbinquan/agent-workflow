@@ -320,8 +320,13 @@ describe('P1-1 · 写权限点表两头受检', () => {
 
   test('六类齐全且点位名字来自 Permission 联合（打错字编译失败）', () => {
     const src = permissionSource()
-    // `Record<AclResourceType, …>` 保证六类一个不漏；值标 `Permission` 保证点位真存在。
-    expect(src).toContain('AclResourceType')
+    // `Record<BundleResourceType, …>` 保证六类一个不漏；值标 `Permission` 保证点位真存在。
+    //
+    // 原本写的是 `AclResourceType`。RFC-304 之后这两者不再等价：能力模板的两类
+    // 有行级 ACL 但**配置包载不了**（T17a 未落），继续按更宽的集合定型只会把
+    // 「有 ACL」和「能打包」当成同一件事——而第一个把两者区分开的类型，就会
+    // 悄悄获得一条编译通过却什么也不产出的导出路径。
+    expect(src).toContain('BundleResourceType')
     expect(src).toContain('{ create: Permission; update: Permission }')
     for (const t of ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups']) {
       expect(src).toContain(`create: '${t}:create'`)

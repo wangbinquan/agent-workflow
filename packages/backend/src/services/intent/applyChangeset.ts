@@ -30,6 +30,7 @@
 
 import { and, eq } from 'drizzle-orm'
 import {
+  INTENT_RESOURCE_TYPES,
   CreateAgentSchema,
   CreateMcpSchema,
   CreateWorkgroupSchema,
@@ -283,7 +284,11 @@ async function occupiedNamesFor(
   ownerUserId: string,
 ): Promise<ReadonlyMap<ResolvedIntentOp['resourceType'], ReadonlySet<string>>> {
   const out = new Map<ResolvedIntentOp['resourceType'], Set<string>>()
-  for (const type of Object.keys(ACL_TABLES) as Array<keyof typeof ACL_TABLES>) {
+  // Over the INTENT types, not every ACL table. This map answers "which names
+  // does this owner already use, among the types an op could collide with" —
+  // walking the capability template tables would add two sets nothing reads
+  // and, once they were keys, quietly widen what an intent op may name.
+  for (const type of INTENT_RESOURCE_TYPES) {
     const table = ACL_TABLES[type]
     const rows = await db
       .select({ name: table.name })

@@ -44,6 +44,10 @@ export const MATRIX_RESOURCES = [
   'plugins',
   'workflows',
   'workgroups',
+  // RFC-304 — the GROUP layer only. `capability-frameworks` is deliberately
+  // absent: its writes are system-domain (script bodies run as the daemon), so
+  // it must never appear as a tickable box on the token matrix.
+  'capability-bindings',
   'tasks',
   'scheduled-tasks',
   'repos',
@@ -69,6 +73,17 @@ export const PERMISSIONS = [
   'plugins:read',
   'workflows:read',
   'workgroups:read',
+  // RFC-304 T57 — the two capability template layers.
+  //
+  // Both reads are ordinary matrix points, including the framework one: a group
+  // lead has to see which frameworks exist, and what parameters each takes, to
+  // bind one at all. What the read does NOT include is the script bodies —
+  // those are redacted from anyone without `scripts:author` at serialization
+  // time, the same shape as token redaction on plugins. Gating the whole read
+  // instead would make the group layer unusable without handing out the
+  // department layer, which is the split's entire purpose.
+  'capability-frameworks:read',
+  'capability-bindings:read',
   'scheduled-tasks:read',
   // RFC-260/RFC-283/RFC-305 — webhook 读面在 user 预设；写与跨 owner
   // 能力由具体权限组合决定。两个 read 点都在 USER_BASELINE
@@ -104,6 +119,10 @@ export const PERMISSIONS = [
   'plugins:create',
   'workflows:create',
   'workgroups:create',
+  // Framework writes are SYSTEM-domain (below): a framework carries scripts
+  // that run as the daemon. Binding writes are ordinary matrix points.
+  'capability-frameworks:create',
+  'capability-bindings:create',
   'scheduled-tasks:create',
   'webhook-triggers:create',
   'repos:create',
@@ -119,6 +138,8 @@ export const PERMISSIONS = [
   'plugins:update',
   'workflows:update',
   'workgroups:update',
+  'capability-frameworks:update',
+  'capability-bindings:update',
   'scheduled-tasks:update',
   'webhook-triggers:update',
   'memory:update',
@@ -139,6 +160,8 @@ export const PERMISSIONS = [
   'plugins:delete',
   'workflows:delete',
   'workgroups:delete',
+  'capability-frameworks:delete',
+  'capability-bindings:delete',
   'scheduled-tasks:delete',
   'webhook-triggers:delete',
   'repos:delete',
@@ -311,6 +334,14 @@ const permissionCatalog = {
     group: 'resources',
     constraints: resourceAcl,
   }),
+  'capability-frameworks:read': catalogEntry('capability-frameworks:read', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'capability-bindings:read': catalogEntry('capability-bindings:read', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
   'scheduled-tasks:read': catalogEntry('scheduled-tasks:read', { group: 'tasks' }),
   'webhook-triggers:read': catalogEntry('webhook-triggers:read', { group: 'webhooks' }),
   'webhook-endpoints:read': catalogEntry('webhook-endpoints:read', { group: 'webhooks' }),
@@ -348,6 +379,15 @@ const permissionCatalog = {
     group: 'resources',
     constraints: resourceAcl,
   }),
+  'capability-frameworks:create': catalogEntry('capability-frameworks:create', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'capability-bindings:create': catalogEntry('capability-bindings:create', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
   'scheduled-tasks:create': catalogEntry('scheduled-tasks:create', { group: 'tasks' }),
   'webhook-triggers:create': catalogEntry('webhook-triggers:create', {
     group: 'webhooks',
@@ -371,6 +411,15 @@ const permissionCatalog = {
     constraints: resourceAcl,
   }),
   'workgroups:update': catalogEntry('workgroups:update', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'capability-frameworks:update': catalogEntry('capability-frameworks:update', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'capability-bindings:update': catalogEntry('capability-bindings:update', {
     group: 'resources',
     constraints: resourceAcl,
   }),
@@ -412,6 +461,16 @@ const permissionCatalog = {
     constraints: resourceAcl,
   }),
   'workgroups:delete': catalogEntry('workgroups:delete', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'capability-frameworks:delete': catalogEntry('capability-frameworks:delete', {
+    group: 'resources',
+    risk: 'elevated',
+    constraints: resourceAcl,
+  }),
+  'capability-bindings:delete': catalogEntry('capability-bindings:delete', {
     group: 'resources',
     risk: 'elevated',
     constraints: resourceAcl,
@@ -584,6 +643,14 @@ export const SYSTEM_DOMAIN_POINTS: ReadonlyArray<Permission> = [
   // RFC-253 — see the catalog entry: host code execution is a system-domain
   // capability, so no token may carry it (AC-26).
   'scripts:author',
+  // RFC-304 — a capability FRAMEWORK carries script bodies that run as the
+  // daemon, so writing one is the same capability as `scripts:author` wearing a
+  // CRUD verb. A leaked PAT holding every matrix grant still cannot author one.
+  // The framework READ point is not here: it is an ordinary matrix read whose
+  // response redacts script bodies from non-authors.
+  'capability-frameworks:create',
+  'capability-frameworks:update',
+  'capability-frameworks:delete',
   // RFC-269 — see the catalog entry: acting on the code host as the platform's
   // bot identity is a system-domain capability, so no token may carry it.
   'code-host-calls:author',
@@ -676,6 +743,12 @@ const USER_RESOURCE_READS: ReadonlyArray<Permission> = [
   'plugins:read',
   'workflows:read',
   'workgroups:read',
+  // RFC-304 — both template layers are readable by any user. Binding one
+  // requires seeing which frameworks exist; the script bodies inside them are
+  // redacted from non-authors at serialization rather than by withholding the
+  // whole read.
+  'capability-frameworks:read',
+  'capability-bindings:read',
   'scheduled-tasks:read',
   'repos:read',
   'runtime:read',
@@ -704,6 +777,12 @@ const USER_RESOURCE_WRITES: ReadonlyArray<Permission> = [
   'workflows:update',
   'workflows:delete',
   'workgroups:create',
+  // RFC-304 — the GROUP layer. Any user may create one and modify their own;
+  // the per-row check is the resource ACL, as with every other type here.
+  // Framework writes are deliberately NOT in this list: they are system-domain.
+  'capability-bindings:create',
+  'capability-bindings:update',
+  'capability-bindings:delete',
   'workgroups:update',
   'workgroups:delete',
   // Creating / editing a schedule arms a future launch, so it sat behind
@@ -761,6 +840,14 @@ const MANAGER_EXTRA: ReadonlyArray<Permission> = [
   // be granted explicitly to any account. The system domain bounds the TOKEN
   // surface, not the account-grant surface.
   'scripts:author',
+  // RFC-304 — authoring the DEPARTMENT layer. Same reach as `scripts:author`
+  // (a framework is where those scripts live), so it sits in the same preset
+  // and can likewise be granted explicitly. The route additionally requires
+  // BOTH this and `scripts:author`: either one alone would be a way around the
+  // other (see `canWriteFramework`).
+  'capability-frameworks:create',
+  'capability-frameworks:update',
+  'capability-frameworks:delete',
   // RFC-269/RFC-305 — same shape as script authoring: preset default plus
   // explicit account grant; never available to PATs.
   'code-host-calls:author',

@@ -1325,7 +1325,7 @@ export interface Resources {
   code: {
     title: string
     subtitle: string
-    tab: { matrix: string; activity: string }
+    tab: { matrix: string; activity: string; metrics: string; templates: string }
     repoLabel: string
     repoHint: string
     load: string
@@ -1335,6 +1335,46 @@ export interface Resources {
     noActivityHint: string
     enabled: string
     round: string
+    roundPicker: string
+    templates: {
+      frameworksTitle: string
+      frameworksHint: string
+      bindingsTitle: string
+      bindingsHint: string
+      noFrameworks: string
+      noBindings: string
+      builtin: string
+      scriptsHidden: string
+      copy: string
+      params: string
+      slots: string
+      frameworkMissing: string
+    }
+    metrics: {
+      empty: string
+      emptyHint: string
+      window: string
+      adoptionTitle: string
+      runsTitle: string
+      capability: string
+      published: string
+      adopted: string
+      quietFix: string
+      disagreed: string
+      outstanding: string
+      rounds: string
+      roundsPublished: string
+      roundsFailed: string
+      roundsAwaiting: string
+      roundsIncomplete: string
+    }
+    attempts: {
+      show: string
+      hide: string
+      none: string
+      label: string
+      openTask: string
+    }
     readiness: { ready: string; misconfigured: string; disabled: string }
   }
   repos: {
@@ -6927,7 +6967,7 @@ export const zhCN: Resources = {
   code: {
     title: '代码能力',
     subtitle: '每个仓库启用了哪些能力，以及它们做过什么',
-    tab: { matrix: '仓库', activity: '活动' },
+    tab: { matrix: '仓库', activity: '活动', metrics: '成效', templates: '模板' },
     repoLabel: '仓库',
     repoHint: '事件所属的项目路径，例如 group/project',
     load: '查看',
@@ -6937,6 +6977,52 @@ export const zhCN: Resources = {
     noActivityHint: '当 MR 事件唤醒一个已启用的能力后，工作项会出现在这里。',
     enabled: '已启用',
     round: '第 {{seq}} 轮',
+    roundPicker: '查看哪一轮',
+    templates: {
+      frameworksTitle: '部门层模板',
+      frameworksHint:
+        '它装的是能力实际运行的脚本。改它需要「脚本编写」权限——那些脚本是以平台自己的身份跑的。',
+      bindingsTitle: '小组层模板',
+      bindingsHint:
+        '它挑一个部门层模板，并指定每一步用哪个 agent、哪段提示词。不带任何脚本——这正是小组能自己拥有它的原因。',
+      noFrameworks: '你还看不到任何部门层模板',
+      noBindings: '还没有小组层模板',
+      builtin: '内置',
+      scriptsHidden: '脚本已隐藏',
+      copy: '复制一份',
+      params: '参数：{{names}}',
+      slots: 'agent：{{pairs}}',
+      frameworkMissing: '模板已不存在',
+    },
+    metrics: {
+      empty: '还没有可统计的数据',
+      emptyHint: '当能力发布过评论或跑过轮次后，这里会出现数字。',
+      window: '最近 {{days}} 天',
+      adoptionTitle: '发出去的评论后来怎么样了',
+      runsTitle: '轮次是怎么结束的',
+      capability: '能力',
+      published: '已发布',
+      // 四列，不合成一个采纳率：「已解决」与「代码已改」恰恰在最值得知道的
+      // 情况下互相矛盾，合成一个数就必然在其中一种上说谎。
+      adopted: '改了且已解决',
+      quietFix: '改了但没解决',
+      disagreed: '解决了但没改',
+      outstanding: '仍未处理',
+      rounds: '轮次',
+      roundsPublished: '已发布',
+      roundsFailed: '失败',
+      roundsAwaiting: '等待人处理',
+      roundsIncomplete: '中断未完成',
+    },
+    attempts: {
+      show: '模型调用',
+      hide: '收起模型调用',
+      none: '这个阶段没有记录到模型调用',
+      // 两个计数分开显示：同会话重试是「告诉了模型哪里不对」，换会话重跑是
+      // 「从头再来」，合成一个数字就把两级重试的设计意图丢了。
+      label: '第 {{rerun}} 次会话 · 第 {{attempt}} 次尝试',
+      openTask: '打开任务',
+    },
     readiness: {
       ready: '就绪',
       misconfigured: '待配置',

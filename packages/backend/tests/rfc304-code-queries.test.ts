@@ -17,6 +17,7 @@ import {
   agents,
   capabilityBindings,
   capabilityFrameworks,
+  codeAiAttempts,
   codeRoundStages,
   codeWorkItems,
   codeWorkRounds,
@@ -24,6 +25,7 @@ import {
 } from '../src/db/schema'
 import {
   createCodeMatrixQuery,
+  createCodeRoundAttemptsQuery,
   createCodeWorkItemProjectionQuery,
   deriveRoundStatus,
 } from '../src/modules/code-capability/application/codeMatrixQuery'
@@ -403,5 +405,107 @@ describe('RFC-304 — enabling a capability', () => {
       actorUserId: 'user-1',
     })
     expect(result.ok && result.row.readiness).toBe('disabled')
+  })
+})
+
+// RFC-304 T55 — the state view's third level: the model calls themselves.
+//
+// The determinism guard has always written these rows. Nothing read them back,
+// so a stage that succeeded on its fourth try looked exactly like one that
+// succeeded on its first, and the only way to find out was to open a runtime
+// transcript. That is the gap this projection closes, and the tests below are
+// mostly about the two things a naive version gets wrong: the ORDER (retries
+// have to read the way they happened) and the VERDICT (kept verbatim rather
+// than reduced to pass/fail, because different rejections need different fixes).
+describe('RFC-304 T55 — a round’s AI attempts', () => {
+  let db: DbClient
+
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+  afterEach(() => {
+    db.$client.close()
+  })
+
+  const attempt = async (over: Partial<typeof codeAiAttempts.$inferInsert> = {}) => {
+    await db.insert(codeAiAttempts).values({
+      id: over.id ?? `att-${String(Math.random()).slice(2, 8)}`,
+      roundId: 'round-1',
+      stageName: 'review-shard',
+      shardKey: '',
+      rerunSeq: 0,
+      attemptSeq: 0,
+      status: 'validated',
+      startedAt: NOW,
+      ...over,
+    })
+  }
+
+  test('attempts read in the order they happened, retries included', async () => {
+    // The ids run OPPOSITE to the timeline on purpose. An earlier version of
+    // this test used ids that happened to sort the same way as the timestamps,
+    // so ordering by id passed it — a green that proved nothing. ULIDs are only
+    // monotonic across milliseconds and a same-session retry can land inside
+    // one, which is exactly when id order and real order diverge.
+    await attempt({ id: 'zz-first', attemptSeq: 0, startedAt: NOW, status: 'failed' })
+    await attempt({ id: 'mm-second', rerunSeq: 1, startedAt: NOW + 10, status: 'failed' })
+    await attempt({ id: 'aa-third', attemptSeq: 1, startedAt: NOW + 20, status: 'validated' })
+
+    const rows = await createCodeRoundAttemptsQuery(db).forRound('round-1')
+    expect(rows.map((r) => r.attemptId)).toEqual(['zz-first', 'mm-second', 'aa-third'])
+  })
+
+  test('the guard’s verdict survives verbatim', async () => {
+    // Reduced to "invalid", the reader has to open a transcript to learn which
+    // rule rejected it — and "named an undeclared port" and "the JSON did not
+    // parse" lead to completely different fixes.
+    await attempt({
+      id: 'a1',
+      status: 'failed',
+      validationOutcome: 'the envelope named a port the stage does not declare',
+    })
+
+    const rows = await createCodeRoundAttemptsQuery(db).forRound('round-1')
+    expect(rows[0]?.validationOutcome).toBe('the envelope named a port the stage does not declare')
+  })
+
+  test('the two retry counters stay distinct', async () => {
+    // They mean different things: `attemptSeq` is a same-session retry (the
+    // model was told what was wrong), `rerunSeq` is a fresh session (it was
+    // not). Collapsing them into one number loses the distinction the whole
+    // two-level retry design rests on.
+    await attempt({ id: 'zz', rerunSeq: 0, attemptSeq: 2 })
+    await attempt({ id: 'aa', rerunSeq: 1, attemptSeq: 0, startedAt: NOW + 5 })
+
+    const rows = await createCodeRoundAttemptsQuery(db).forRound('round-1')
+    expect(rows.map((r) => [r.rerunSeq, r.attemptSeq])).toEqual([
+      [0, 2],
+      [1, 0],
+    ])
+  })
+
+  test('a shard key distinguishes parallel calls of one stage', async () => {
+    // A fanned-out review makes several calls from ONE stage. Without the shard
+    // key they are indistinguishable rows, and "three attempts" reads as three
+    // retries of one call rather than one call each on three shards.
+    await attempt({ id: 'zz', shardKey: 'src/a.ts' })
+    await attempt({ id: 'aa', shardKey: 'src/b.ts', startedAt: NOW + 1 })
+
+    const rows = await createCodeRoundAttemptsQuery(db).forRound('round-1')
+    expect(rows.map((r) => r.shardKey)).toEqual(['src/a.ts', 'src/b.ts'])
+  })
+
+  test('another round’s attempts are not included', async () => {
+    await attempt({ id: 'a1' })
+    await attempt({ id: 'b1', roundId: 'round-2' })
+
+    const rows = await createCodeRoundAttemptsQuery(db).forRound('round-1')
+    expect(rows.map((r) => r.attemptId)).toEqual(['a1'])
+  })
+
+  test('a round with no AI stages returns empty rather than failing', async () => {
+    // Every capability has program-only rounds. An empty list is the answer;
+    // an error here would make the third level look broken on the common case.
+    expect(await createCodeRoundAttemptsQuery(db).forRound('round-nothing')).toEqual([])
   })
 })

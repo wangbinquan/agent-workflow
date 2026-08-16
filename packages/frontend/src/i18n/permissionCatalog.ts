@@ -40,6 +40,11 @@ const EN_RESOURCES = {
   'resource-acl': 'Resource ACL',
   'memory-distill-jobs': 'Memory distill jobs',
   'mcp-runtime-tests': 'MCP runtime tests',
+  // RFC-304 — the two capability template layers. Named for what a reader
+  // manages rather than for the table: "department template" is what the
+  // scripts live in, "team template" is what points it at agents and prompts.
+  'capability-frameworks': 'Capability templates (department)',
+  'capability-bindings': 'Capability templates (team)',
 } satisfies Record<PermissionResource, string>
 
 const ZH_RESOURCES = {
@@ -67,6 +72,8 @@ const ZH_RESOURCES = {
   'resource-acl': '资源 ACL',
   'memory-distill-jobs': '记忆提炼任务',
   'mcp-runtime-tests': 'MCP 运行测试',
+  'capability-frameworks': '能力模板（部门层）',
+  'capability-bindings': '能力模板（小组层）',
 } satisfies Record<PermissionResource, string>
 
 const EN_ACTIONS = {

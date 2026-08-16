@@ -11,7 +11,7 @@
 // 「为了让人读懂而改了机器格式」或反过来。
 
 import { stringify as stringifyYaml } from 'yaml'
-import type { AclResourceType } from '@agent-workflow/shared'
+import type { BundleResourceType } from '@agent-workflow/shared'
 import { eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -167,7 +167,7 @@ skills/         技能文件树 / skill file trees
 export async function exportResourcePackage(
   db: DbClient,
   actor: Actor,
-  root: { type: AclResourceType; id: string },
+  root: { type: BundleResourceType; id: string },
   opts: { appHome: string; exportedAt?: number; expect?: RootExportFence },
 ): Promise<ExportedPackage> {
   const closure = await walkExportClosure(db, actor, root)
@@ -244,7 +244,7 @@ export type RootExportFence = Record<string, unknown>
  * 整棵闭包，也不会把两个时刻的依赖拼成一个包。
  */
 function assertRootUnchanged(
-  type: AclResourceType,
+  type: BundleResourceType,
   row: Record<string, unknown>,
   expect: RootExportFence | undefined,
 ): void {
@@ -296,7 +296,7 @@ function assertRootUnchanged(
 async function assertRootStillCurrent(
   db: DbClient,
   actor: Actor,
-  type: AclResourceType,
+  type: BundleResourceType,
   id: string,
   expect: RootExportFence | undefined,
 ): Promise<void> {
@@ -358,7 +358,7 @@ async function assertClosureStillCurrent(
   captured: SerializedPackage,
   appHome: string,
 ): Promise<void> {
-  const byType = new Map<AclResourceType, Array<(typeof closure.resources)[number]>>()
+  const byType = new Map<BundleResourceType, Array<(typeof closure.resources)[number]>>()
   for (const resource of closure.resources) {
     const list = byType.get(resource.type) ?? []
     list.push(resource)

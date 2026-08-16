@@ -26,7 +26,6 @@ import {
   deriveReadiness,
   FRAMEWORK_ONLY_FIELDS,
   rejectFrameworkOnlyFields,
-  resolveParams,
   type ReadinessInput,
   type ReadinessIssue,
 } from '../src/modules/code-capability/domain/templateLayers'
@@ -86,71 +85,11 @@ describe('RFC-304 §2.5 — the group layer cannot reach the daemon surface', ()
   })
 })
 
-describe('RFC-304 §2.5 — parameter resolution is traceable', () => {
-  const declaredKeys = ['maxFindings', 'severityThreshold']
-
-  test('a binding override wins, and the trace says so', () => {
-    const r = resolveParams({
-      frameworkDefaults: { maxFindings: 20, severityThreshold: 'minor' },
-      bindingOverrides: { severityThreshold: 'major' },
-      declaredKeys,
-    })
-    expect(r.params).toEqual({ maxFindings: 20, severityThreshold: 'major' })
-    // "Which value won and from where" is the question asked about a
-    // misbehaving cell; assembling the answer ad-hoc at three call sites is how
-    // three call sites come to disagree.
-    expect(r.trace).toEqual([
-      { key: 'maxFindings', value: 20, source: 'framework-default' },
-      { key: 'severityThreshold', value: 'major', source: 'binding-override' },
-    ])
-  })
-
-  test('an override of an UNDECLARED key is reported and not applied', () => {
-    // A typo that silently does nothing is worse than a rejection: the cell
-    // looks configured and behaves as if it is not.
-    const r = resolveParams({
-      frameworkDefaults: { maxFindings: 20 },
-      bindingOverrides: { maxFinding: 5 },
-      declaredKeys: ['maxFindings'],
-    })
-    expect(r.params).toEqual({ maxFindings: 20 })
-    expect(r.unknownKeys).toEqual(['maxFinding'])
-  })
-
-  test('an override to a falsy value still wins over the default', () => {
-    // The classic `||` bug: 0 and false are legitimate overrides.
-    const r = resolveParams({
-      frameworkDefaults: { maxFindings: 20, verbose: true },
-      bindingOverrides: { maxFindings: 0, verbose: false },
-      declaredKeys: ['maxFindings', 'verbose'],
-    })
-    expect(r.params.maxFindings).toBe(0)
-    expect(r.params.verbose).toBe(false)
-    expect(r.trace.every((t) => t.source === 'binding-override')).toBe(true)
-  })
-
-  test('an override to undefined is still an override, not a fallthrough', () => {
-    // `Object.hasOwn`, not a truthiness test: a binding that explicitly clears
-    // a value means to clear it.
-    const r = resolveParams({
-      frameworkDefaults: { maxFindings: 20 },
-      bindingOverrides: { maxFindings: undefined },
-      declaredKeys: ['maxFindings'],
-    })
-    expect(r.params.maxFindings).toBeUndefined()
-    expect(r.trace[0]?.source).toBe('binding-override')
-  })
-
-  test('a framework declaring no params accepts none', () => {
-    const r = resolveParams({
-      frameworkDefaults: {},
-      bindingOverrides: { anything: 1 },
-      declaredKeys: [],
-    })
-    expect(r.params).toEqual({})
-    expect(r.unknownKeys).toEqual(['anything'])
-  })
-})
+// Parameter resolution moved to `traceCapabilityParams` in the shared package
+// and is covered by `packages/shared/tests/rfc304-capability-params.test.ts`.
+// There were two implementations of it — this module's `resolveParams`, which
+// nothing called, and the shared one, which everything called. Two resolvers
+// that never run together can disagree forever without a test noticing.
 
 describe('RFC-304 §3.1 — readiness names what is missing', () => {
   const ready = (over: Partial<ReadinessInput> = {}): ReadinessInput => ({

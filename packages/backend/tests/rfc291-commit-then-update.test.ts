@@ -26,7 +26,7 @@ import {
   canonicalIntentJson,
   parseIntentChangeset,
   WORKFLOW_SCHEMA_VERSION,
-  type AclResourceType,
+  type IntentResourceType,
 } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, users } from '../src/db/schema'
@@ -232,7 +232,7 @@ const PLUGIN_SPEC_WAIVER = [
 /** Minimal in-place update payload per type, targeting `handle`.
  *  `agentHandle` is only needed by workgroup (its leader must be an agent). */
 function updateOpFor(
-  type: AclResourceType,
+  type: IntentResourceType,
   handle: string,
   name: string,
   agentHandle = 'res#agent#1',
@@ -320,8 +320,11 @@ describe('提交入库后，创建物在下一轮可直接修改（AC-2，六类
       expect(entry?.root, `${applied.resourceType} not a mount root`).toBe(true)
       // fence 是 update 的前提；每类的 fence 形状各不相同，缺一类就说明该类接线坏了
       // 回执里的 resourceType 是 wire 层 string；fence.kind 是同一取值域的联合类型
+      // `IntentResourceType`, not `AclResourceType`: a fence kind is one of the
+      // six types a package/intent op can carry, and RFC-304's capability
+      // templates are ACL resources that are neither.
       expect(entry?.fence?.kind, `${applied.resourceType} fence missing`).toBe(
-        applied.resourceType as AclResourceType,
+        applied.resourceType as IntentResourceType,
       )
       // 文档真的进了 mounted/
       expect(

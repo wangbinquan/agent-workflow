@@ -35,6 +35,7 @@ import {
   PostIntentMessageSchema,
   PostIntentMountApprovalsSchema,
   IntentMountRefSchema,
+  IntentProvenanceRefSchema,
   parseIntentChangeset,
   type IntentDraftDto,
   type IntentJourneySnapshot,
@@ -1020,7 +1021,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Intent provenance for a resource',
     },
     async (c) => {
-      const parsed = IntentMountRefSchema.safeParse({
+      const parsed = IntentProvenanceRefSchema.safeParse({
         resourceType: c.req.param('resourceType'),
         resourceId: c.req.param('resourceId'),
       })

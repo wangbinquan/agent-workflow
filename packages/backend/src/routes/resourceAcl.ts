@@ -79,7 +79,14 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
   // that today; keeping the narrow type means it keeps catching it.
   const ACL_PERMISSION_PREFIX: Record<
     AclResourceType,
-    'agents' | 'skills' | 'mcps' | 'plugins' | 'workflows' | 'workgroups'
+    | 'agents'
+    | 'skills'
+    | 'mcps'
+    | 'plugins'
+    | 'workflows'
+    | 'workgroups'
+    | 'capability-frameworks'
+    | 'capability-bindings'
   > = {
     agent: 'agents',
     skill: 'skills',
@@ -87,6 +94,8 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
     plugin: 'plugins',
     workflow: 'workflows',
     workgroup: 'workgroups',
+    capability_framework: 'capability-frameworks',
+    capability_binding: 'capability-bindings',
   }
   const resource = ACL_PERMISSION_PREFIX[cfg.type]
 

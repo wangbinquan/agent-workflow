@@ -8,7 +8,7 @@
 // 资源实例**串行，不是按命名空间。配置包若直接拿常量 `scope:'package'` 当串行键，
 // 所有导入会全局串行：Alice 一个慢 npm 安装堵死 Bob 完全无关的纯 agent 包。
 
-import type { AclResourceType } from '@agent-workflow/shared'
+import type { AclResourceType, BundleResourceType } from '@agent-workflow/shared'
 import type { BundleOp, BundleOpKind, ResourceBundle } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbTxSync } from '@/db/txSync'
@@ -129,7 +129,7 @@ export interface BundleApplyProvider {
 
 // --- T12b 依赖规划器 ---------------------------------------------------------
 
-const RESOURCE_OF_KIND: Record<BundleOpKind, AclResourceType> = {
+const RESOURCE_OF_KIND: Record<BundleOpKind, BundleResourceType> = {
   'agent-create': 'agent',
   'agent-update': 'agent',
   'skill-create': 'skill',
@@ -144,7 +144,7 @@ const RESOURCE_OF_KIND: Record<BundleOpKind, AclResourceType> = {
   'workgroup-update': 'workgroup',
 }
 
-export function resourceTypeOfOp(op: BundleOp): AclResourceType {
+export function resourceTypeOfOp(op: BundleOp): BundleResourceType {
   return RESOURCE_OF_KIND[op.kind]
 }
 
@@ -162,7 +162,7 @@ export function opSlug(op: BundleOp): string | null {
  * skills → mcps → plugins → agents → wf/wg。
  * 理由是引用方向：agent 引用技能/MCP/插件，工作流与工作组引用 agent。
  */
-const TYPE_RANK: Record<AclResourceType, number> = {
+const TYPE_RANK: Record<BundleResourceType, number> = {
   skill: 0,
   mcp: 1,
   plugin: 2,

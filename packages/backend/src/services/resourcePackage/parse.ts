@@ -12,7 +12,7 @@
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
 import {
-  AclResourceTypeSchema,
+  ResourcePackageTypeSchema,
   BundleSchema,
   collectBundleRefIssues,
   type ResourceBundle,
@@ -33,14 +33,14 @@ export const MAX_DECLARED_BUILTINS = 1000
 const ManifestResourceSchema = z
   .object({
     slug: z.string().min(1),
-    type: AclResourceTypeSchema,
+    type: ResourcePackageTypeSchema,
     name: z.string().min(1),
   })
   .strict()
 
 export const PackageSecretRefSchema = z
   .object({
-    resourceType: AclResourceTypeSchema,
+    resourceType: ResourcePackageTypeSchema,
     resourceName: z.string().min(1),
     field: z.string().min(1),
   })

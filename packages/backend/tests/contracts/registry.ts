@@ -169,6 +169,34 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/code/matrix/:repoId' },
   { method: 'PUT', path: '/api/code/matrix/:repoId' },
   { method: 'GET', path: '/api/code/work-items' },
+  // RFC-304 T55 — the state view's third level. Its own endpoint rather than a
+  // field on the work-item page: attempts are the widest rows in the model and
+  // most rounds are never expanded.
+  { method: 'GET', path: '/api/code/rounds/:roundId/attempts' },
+  // RFC-304 T58 — adoption buckets and round outcomes.
+  { method: 'GET', path: '/api/code/metrics' },
+
+  // RFC-304 T57 — the two capability template layers. Separate resources with
+  // separate permission points, because the department layer carries scripts
+  // that run as the daemon and the group layer deliberately carries none:
+  // granting one must never grant the other. The framework WRITE points are
+  // system-domain, so no token carries them however its owner is granted.
+  { method: 'GET', path: '/api/capability-frameworks' },
+  { method: 'POST', path: '/api/capability-frameworks' },
+  { method: 'GET', path: '/api/capability-frameworks/:id' },
+  { method: 'PUT', path: '/api/capability-frameworks/:id' },
+  { method: 'DELETE', path: '/api/capability-frameworks/:id' },
+  { method: 'POST', path: '/api/capability-frameworks/:id/copy' },
+  { method: 'GET', path: '/api/capability-frameworks/:id/acl' },
+  { method: 'PUT', path: '/api/capability-frameworks/:id/acl' },
+  { method: 'GET', path: '/api/capability-bindings' },
+  { method: 'POST', path: '/api/capability-bindings' },
+  { method: 'GET', path: '/api/capability-bindings/:id' },
+  { method: 'PUT', path: '/api/capability-bindings/:id' },
+  { method: 'DELETE', path: '/api/capability-bindings/:id' },
+  { method: 'POST', path: '/api/capability-bindings/:id/copy' },
+  { method: 'GET', path: '/api/capability-bindings/:id/acl' },
+  { method: 'PUT', path: '/api/capability-bindings/:id/acl' },
 
   // ---- oidc-auth (mixed: providers list + login flow are public) ----
   { method: 'GET', path: '/api/auth/oidc/providers', public: true },

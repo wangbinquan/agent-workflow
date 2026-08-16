@@ -24,8 +24,10 @@ import { z } from 'zod'
 import { actorOf } from '@/auth/actor'
 import {
   createCodeMatrixQuery,
+  createCodeRoundAttemptsQuery,
   createCodeWorkItemProjectionQuery,
 } from '@/modules/code-capability/application/codeMatrixQuery'
+import { createCodeMetricsQuery } from '@/modules/code-capability/application/codeMetricsQuery'
 import { createEnableCommand } from '@/modules/code-capability/application/enableCommand'
 import { resolveCodeHostEndpointId } from '@/modules/code-capability/composition/mrReviewEnvironment'
 import { registerRoute } from '@/routes/registry'
@@ -43,6 +45,8 @@ const EnableBodySchema = z.object({
 export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
   const matrix = createCodeMatrixQuery(deps.db)
   const projection = createCodeWorkItemProjectionQuery(deps.db)
+  const attempts = createCodeRoundAttemptsQuery(deps.db)
+  const metrics = createCodeMetricsQuery(deps.db)
 
   registerRoute(
     app,
@@ -148,6 +152,43 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
           ...(cursor !== undefined ? { cursor } : {}),
         }),
       )
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/code/rounds/:roundId/attempts',
+      permissions: ['repos:read'],
+      tokenAccess: 'allow',
+      summary: "One round's AI calls, with each envelope verdict and retry index",
+    },
+    // Its own endpoint rather than a field on the work-item page: attempts are
+    // the widest rows in the model, and most rounds are never expanded. Folding
+    // them into the list makes every visit pay for a level almost nobody opens.
+    async (c) => c.json({ attempts: await attempts.forRound(c.req.param('roundId')) }),
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/code/metrics',
+      permissions: ['repos:read'],
+      tokenAccess: 'allow',
+      summary: 'Adoption buckets and round outcomes per capability, over a window',
+    },
+    async (c) => {
+      const windowRaw = c.req.query('windowMs')
+      const windowMs = windowRaw === undefined ? undefined : Number(windowRaw)
+      if (windowMs !== undefined && (!Number.isFinite(windowMs) || windowMs <= 0)) {
+        throw new ValidationError(
+          'code-window-invalid',
+          `'${String(windowRaw)}' is not a positive number of milliseconds`,
+        )
+      }
+      return c.json(await metrics.summary(windowMs === undefined ? {} : { windowMs }))
     },
   )
 }

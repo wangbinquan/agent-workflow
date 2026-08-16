@@ -642,6 +642,20 @@ const RESOURCE_ROUTES: Partial<Record<McpResourceKind, ResourceRoutes>> = {
       'Repos are imported in batches: `create` takes a batch payload, not one repo. There is no update — ' +
       'a mirror is refreshed, not edited.',
   },
+  'capability-bindings': {
+    list: { method: 'GET', path: '/api/capability-bindings' },
+    get: { method: 'GET', path: '/api/capability-bindings/:id' },
+    create: { method: 'POST', path: '/api/capability-bindings' },
+    update: { method: 'PUT', path: '/api/capability-bindings/:id' },
+    delete: { method: 'DELETE', path: '/api/capability-bindings/:id' },
+    note:
+      'RFC-304: a capability binding is the GROUP-layer template — it picks one department ' +
+      'framework and says which agent and prompt fills each AI slot, plus parameter overrides. ' +
+      'It carries NO scripts and NO hooks: a payload naming `scripts` or `hooks` is rejected, ' +
+      'because those belong to the framework, which runs them with the daemon’s own credentials. ' +
+      'There is deliberately no tool for capability FRAMEWORKS — authoring one is host code ' +
+      'execution, gated on `scripts:author`, and never reachable from a tool surface.',
+  },
   'repo-groups': {
     list: { method: 'GET', path: '/api/repo-groups' },
     get: { method: 'GET', path: '/api/repo-groups/:id' },
@@ -685,6 +699,10 @@ const RESOURCE_KINDS = [
   'repos',
   // RFC-248: 独立 kind、权限沿用 `repos:*`（见 PERMISSION_DOMAIN）。
   'repo-groups',
+  // RFC-304 — the GROUP layer only. `capability-frameworks` is deliberately
+  // absent: authoring one is host code execution, and an agent editing the
+  // templates that configure agents is a loop nobody asked for.
+  'capability-bindings',
   'memory',
 ] as const
 

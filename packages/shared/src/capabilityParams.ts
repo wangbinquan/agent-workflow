@@ -246,6 +246,30 @@ export function validateCapabilityParams(
   return issues
 }
 
+/** Where a resolved parameter's winning value came from. */
+export type CapabilityParamSource = 'framework-default' | 'binding-override'
+
+export interface CapabilityParamTraceEntry {
+  name: string
+  value: CapabilityParamValue
+  /** The answer to "why is it this?" for a cell that is behaving oddly. */
+  source: CapabilityParamSource
+}
+
+export interface CapabilityParamResolution {
+  params: Record<string, CapabilityParamValue>
+  /** Per-key provenance, in table order. */
+  trace: CapabilityParamTraceEntry[]
+  /**
+   * Override keys the framework never declared.
+   *
+   * Reported rather than applied. A typo that silently does nothing is worse
+   * than a rejection: the cell looks configured and behaves as if it is not,
+   * and "why is my threshold ignored?" has no answer anywhere in the system.
+   */
+  unknownKeys: string[]
+}
+
 /**
  * The effective parameters: the framework's defaults with the binding on top.
  *
@@ -258,11 +282,43 @@ export function resolveCapabilityParams(
   defaults: Readonly<Record<string, unknown>>,
   overrides: Readonly<Record<string, unknown>>,
 ): Record<string, CapabilityParamValue> {
-  const out: Record<string, CapabilityParamValue> = {}
+  return traceCapabilityParams(table, defaults, overrides).params
+}
+
+/**
+ * The same resolution, plus WHERE each value came from.
+ *
+ * Separate from `resolveCapabilityParams` only so the common caller — a script
+ * that just wants the values — is not made to destructure. There is one
+ * implementation, because there used to be two: this one, and an unused
+ * `resolveParams` in the backend's domain layer that computed the same thing
+ * from a bare key list. Two resolvers eventually disagree, and the one that
+ * disagrees silently is whichever a given call site happened to import.
+ */
+export function traceCapabilityParams(
+  table: CapabilityParamTable,
+  defaults: Readonly<Record<string, unknown>>,
+  overrides: Readonly<Record<string, unknown>>,
+): CapabilityParamResolution {
+  const params: Record<string, CapabilityParamValue> = {}
+  const trace: CapabilityParamTraceEntry[] = []
+
   for (const field of table) {
-    const value = field.name in overrides ? overrides[field.name] : defaults[field.name]
+    const overridden = field.name in overrides
+    const value = overridden ? overrides[field.name] : defaults[field.name]
     if (value === undefined || value === null) continue
-    out[field.name] = value as CapabilityParamValue
+    params[field.name] = value as CapabilityParamValue
+    trace.push({
+      name: field.name,
+      value: value as CapabilityParamValue,
+      source: overridden ? 'binding-override' : 'framework-default',
+    })
   }
-  return out
+
+  const declared = new Set(table.map((f) => f.name))
+  const unknownKeys = Object.keys(overrides)
+    .filter((key) => !declared.has(key))
+    .sort()
+
+  return { params, trace, unknownKeys }
 }

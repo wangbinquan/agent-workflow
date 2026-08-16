@@ -17,6 +17,7 @@ import {
   type IntentMountApprovalReceipt,
   type IntentMountSuggestionDecision,
   type AclResourceType,
+  type IntentResourceType,
 } from '@agent-workflow/shared'
 /*
  * Keep all Intent wire parsing at this service boundary. Route handlers pass
@@ -984,7 +985,10 @@ export async function setIntentSessionStatus(
 export async function listIntentProvenanceForActor(
   db: DbClient,
   actor: Actor,
-  ref: { resourceType: AclResourceType; resourceId: string },
+  // `IntentResourceType`: this reads `intent_provenance`, whose column stores
+  // only the types an Intent session can create. RFC-304's template layers have
+  // ACLs but are not among them.
+  ref: { resourceType: IntentResourceType; resourceId: string },
 ): Promise<
   Array<{ commitId: string; sessionId: string; sessionTitle: string; createdAt: number }>
 > {

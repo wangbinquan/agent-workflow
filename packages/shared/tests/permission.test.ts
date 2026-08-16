@@ -34,7 +34,7 @@ const accountPermissions = (role: 'admin' | 'manager' | 'user' | 'guest') =>
   resolveEffectiveAccountPermissions({ role, additionalPermissions: [] })
 
 describe('PERMISSIONS catalog', () => {
-  test('contains the documented 73 entries', () => {
+  test('contains the documented 81 entries', () => {
     // RFC-222 added tasks:delete (33 → 34); RFC-234 added intent:read/write (→ 36).
     // RFC-247 split the five `:write` points into create/update/delete, gave the
     // previously-ungated domains (workgroups / scheduled-tasks) real points,
@@ -57,7 +57,12 @@ describe('PERMISSIONS catalog', () => {
     // 永不进令牌、角色基线 admin + manager）⇒ 67。
     // RFC-305 将五个存量角色旁路实体化为权限点 ⇒ 72；游客公共只读边界
     // 将私有 owner/grant 可见性实体化为 account-range 点 ⇒ 73。
-    expect(PERMISSIONS.length).toBe(73)
+    // RFC-304 加两类能力模板资源各四动词 ⇒ 81。两类分开而不是合成一类：
+    // 部门层（framework）带的是**以 daemon 身份跑的脚本**，组层（binding）
+    // 刻意什么脚本都不带——授予其一必须不等于授予另一，这正是两层拆分的
+    // 全部意义。故 framework 的三个写点进系统域（永不进令牌），
+    // binding 的四个点是普通矩阵点。
+    expect(PERMISSIONS.length).toBe(81)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -68,7 +73,7 @@ describe('PERMISSIONS catalog', () => {
     expect(ROLE_PERMISSIONS.admin.length).toBe(PERMISSIONS.length)
   })
 
-  test('user role contains exactly the documented baseline (49 entries)', () => {
+  test('user role contains exactly the documented baseline (54 entries)', () => {
     const expected: Permission[] = [
       // reads
       'agents:read',
@@ -77,6 +82,10 @@ describe('PERMISSIONS catalog', () => {
       'plugins:read',
       'workflows:read',
       'workgroups:read',
+      // RFC-304 — both template layers are readable by any user; the framework
+      // read redacts script bodies from non-authors rather than being withheld.
+      'capability-frameworks:read',
+      'capability-bindings:read',
       'scheduled-tasks:read',
       'repos:read',
       'memory:read',
@@ -105,6 +114,10 @@ describe('PERMISSIONS catalog', () => {
       // RFC-247 — workgroups had NO permission point at all before, i.e. every
       // logged-in user could use them. Same reach, now expressible.
       'workgroups:create',
+      // RFC-304 — the GROUP layer only. Framework writes are system-domain.
+      'capability-bindings:create',
+      'capability-bindings:update',
+      'capability-bindings:delete',
       'workgroups:update',
       'workgroups:delete',
       // RFC-247 — schedule create/edit sat behind `tasks:launch` (RFC-165 N1-r3);
@@ -136,7 +149,9 @@ describe('PERMISSIONS catalog', () => {
       'webhook-endpoints:read',
     ]
     expect([...ROLE_PERMISSIONS.user].sort()).toEqual(expected.sort())
-    expect(ROLE_PERMISSIONS.user.length).toBe(49)
+    // RFC-304 +5: two template-layer reads and the three GROUP-layer writes.
+    // The three FRAMEWORK writes are not here — they are system-domain.
+    expect(ROLE_PERMISSIONS.user.length).toBe(54)
   })
 
   test('guest preset is exactly public-only reads for the six ACL resource domains', () => {
@@ -163,7 +178,7 @@ describe('PERMISSIONS catalog', () => {
     }
   })
 
-  test('user preset excludes exactly its 24 individually grantable differences', () => {
+  test('user preset excludes exactly its 27 individually grantable differences', () => {
     const userPresetMissing: Permission[] = [
       // RFC-099/RFC-305: repos stay OUT of the ownership ACL model — the repos
       // write verbs are absent from the user preset but individually grantable.
@@ -185,6 +200,12 @@ describe('PERMISSIONS catalog', () => {
       'tasks:delete',
       // RFC-253 — 脚本正文编写默认也在 manager 预设，但不在 user 预设。
       'scripts:author',
+      // RFC-304 — 部门层（framework）的写面与 scripts:author 完全同档：它承载
+      // 的正是那些以 daemon 身份运行的脚本。manager 预设有、user 预设没有，
+      // 可逐项授予。组层（binding）的三个写点则在 user 基线里。
+      'capability-frameworks:create',
+      'capability-frameworks:update',
+      'capability-frameworks:delete',
       // RFC-269 — 代码平台调用节点的编写。与 scripts:author 完全同档：manager
       // 预设也有，user 预设没有（该节点携带的是平台配置的 token 对
       // GitLab/GitHub 的写权限，平台侧 ACL 约束不了它能碰到的仓库）。
@@ -304,7 +325,9 @@ describe('RFC-247 point classification', () => {
     expect([...DELETE_POINTS].sort()).toEqual(
       PERMISSIONS.filter((p) => p.endsWith(':delete')).sort(),
     )
-    expect(DELETE_POINTS.length).toBe(11)
+    // RFC-304 added `capability-frameworks:delete` and
+    // `capability-bindings:delete` ⇒ 13.
+    expect(DELETE_POINTS.length).toBe(13)
   })
 
   test('MATRIX_DOMAIN_POINTS = PERMISSIONS − SYSTEM_DOMAIN_POINTS', () => {
@@ -441,6 +464,11 @@ describe('RFC-222 manager role', () => {
       'scripts:author',
       // RFC-269 Q3 — 代码平台调用节点的编写同样下放到 manager，同样是系统域点。
       'code-host-calls:author',
+      // RFC-304 — 部门层模板的写面与上面两个同档：它装的就是那些以 daemon
+      // 身份跑的脚本，所以同样下放到 manager、同样是系统域点、同样永不进令牌。
+      'capability-frameworks:create',
+      'capability-frameworks:update',
+      'capability-frameworks:delete',
       // RFC-283 — 方法粗门对 manager 开放，路由内仍只允许自己的规则。
       'webhook-triggers:create',
       'webhook-triggers:update',

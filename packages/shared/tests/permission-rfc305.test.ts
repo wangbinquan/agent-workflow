@@ -35,10 +35,16 @@ describe('RFC-305 exhaustive permission catalog', () => {
     expect(INTRINSIC_PERMISSIONS).toEqual(['account:self'])
     expect(grantableAdditionalPermissions('user')).toEqual([
       'tasks:read:all',
+      // RFC-304 — the three DEPARTMENT-layer writes. Individually grantable to
+      // a user account like every other preset difference; the point is that
+      // they are not in the user PRESET, not that they are unreachable.
+      'capability-frameworks:create',
       'webhook-triggers:create',
       'repos:create',
+      'capability-frameworks:update',
       'webhook-triggers:update',
       'repos:update',
+      'capability-frameworks:delete',
       'webhook-triggers:delete',
       'repos:delete',
       'tasks:delete',
@@ -60,7 +66,9 @@ describe('RFC-305 exhaustive permission catalog', () => {
       'webhook-triggers:override-owner',
     ])
     expect(grantableAdditionalPermissions('admin')).toEqual([])
-    expect(grantableAdditionalPermissions('guest')).toHaveLength(66)
+    // RFC-304 +8: a guest holds neither template layer, so all eight points
+    // are differences it can be granted individually.
+    expect(grantableAdditionalPermissions('guest')).toHaveLength(74)
     expect(grantableAdditionalPermissions('guest')).toContain('resource-acl:private')
     expect(grantableAdditionalPermissions('guest')).toContain('tasks:execute')
   })

@@ -14,14 +14,14 @@ import {
   BundleSchema,
   encodePackageSecretFieldSegments,
   PACKAGE_SECRET_PLACEHOLDER,
-  type AclResourceType,
+  type ResourcePackageType,
   type PackageSecretFieldSegment,
   type PackageSecretRef,
   type ResourceBundle,
 } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
 
-const RESOURCE_TYPES = new Set<AclResourceType>([
+const RESOURCE_TYPES = new Set<ResourcePackageType>([
   'agent',
   'skill',
   'mcp',
@@ -269,7 +269,7 @@ function parseRef(value: unknown, label: string, withValue: boolean): PackageSec
   }
   if (
     typeof record.resourceType !== 'string' ||
-    !RESOURCE_TYPES.has(record.resourceType as AclResourceType) ||
+    !RESOURCE_TYPES.has(record.resourceType as ResourcePackageType) ||
     typeof record.resourceName !== 'string' ||
     record.resourceName.length === 0 ||
     typeof record.field !== 'string' ||
@@ -477,12 +477,12 @@ function containsReservedPlaceholder(value: string): boolean {
   return value.includes(PACKAGE_SECRET_PLACEHOLDER) || ENCODED_PLACEHOLDER_RE.test(value)
 }
 
-function resourceTypeOfKind(kind: string): AclResourceType {
+function resourceTypeOfKind(kind: string): ResourcePackageType {
   const type = kind.slice(0, kind.lastIndexOf('-'))
-  if (!RESOURCE_TYPES.has(type as AclResourceType)) {
+  if (!RESOURCE_TYPES.has(type as ResourcePackageType)) {
     throw new ValidationError('package-secret-manifest-invalid', `unsupported bundle op '${kind}'`)
   }
-  return type as AclResourceType
+  return type as ResourcePackageType
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

@@ -24,7 +24,7 @@ import {
   type HumanMemberMapping,
   type ImportDecision,
 } from '@/services/resourcePackage/commit'
-import type { AclResourceType } from '@agent-workflow/shared'
+import type { BundleResourceType } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
 const USAGE = `usage: agent-workflow package <export|import> --as-user <username> [options]
@@ -74,7 +74,14 @@ function parseArgs(args: readonly string[]): Parsed {
   return { flags, bools }
 }
 
-const RESOURCE_TYPES: readonly AclResourceType[] = [
+/**
+ * The types `package export` understands.
+ *
+ * `BundleResourceType`, not `AclResourceType`: RFC-304's capability templates
+ * have row ACLs but no bundle ops, and typing this list by the wider set is
+ * what let a capability type reach the exporter as a compile-time no-op.
+ */
+const RESOURCE_TYPES: readonly BundleResourceType[] = [
   'agent',
   'skill',
   'mcp',
@@ -131,8 +138,11 @@ async function runExport(
   actor: Actor,
   flags: Map<string, string>,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
-  const type = flags.get('type') as AclResourceType | undefined
-  if (type === undefined || !RESOURCE_TYPES.includes(type)) {
+  // `find` rather than a cast plus `includes`: the cast is what made this
+  // compile when the ACL set grew past the packageable one, and a lookup on a
+  // typed list narrows for real.
+  const type = RESOURCE_TYPES.find((candidate) => candidate === flags.get('type'))
+  if (type === undefined) {
     return { output: `--type must be one of ${RESOURCE_TYPES.join('|')}\n`, status: 'error' }
   }
   const out = flags.get('out')

@@ -501,7 +501,19 @@ export const resourceGrants = sqliteTable(
   'resource_grants',
   {
     resourceType: text('resource_type', {
-      enum: ['agent', 'skill', 'mcp', 'plugin', 'workflow', 'workgroup'],
+      // RFC-304 added the two capability template layers. No migration: this
+      // column is plain `text` in SQL with no CHECK, so the closed set lives
+      // in the type system only.
+      enum: [
+        'agent',
+        'skill',
+        'mcp',
+        'plugin',
+        'workflow',
+        'workgroup',
+        'capability_framework',
+        'capability_binding',
+      ],
     }).notNull(),
     resourceId: text('resource_id').notNull(),
     userId: text('user_id')

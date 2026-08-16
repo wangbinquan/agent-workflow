@@ -560,7 +560,12 @@ export const enUS: Resources = {
   code: {
     title: 'Code capabilities',
     subtitle: 'Which capabilities each repository runs, and what they have been doing',
-    tab: { matrix: 'Repositories', activity: 'Activity' },
+    tab: {
+      matrix: 'Repositories',
+      activity: 'Activity',
+      metrics: 'Results',
+      templates: 'Templates',
+    },
     repoLabel: 'Repository',
     repoHint: 'The project path events arrive for, e.g. group/project',
     load: 'Show',
@@ -570,6 +575,52 @@ export const enUS: Resources = {
     noActivityHint: 'Work appears here once a merge request event wakes an enabled capability.',
     enabled: 'Enabled',
     round: 'Round {{seq}}',
+    roundPicker: 'Which round to show',
+    templates: {
+      frameworksTitle: 'Department templates',
+      frameworksHint:
+        'These carry the scripts a capability runs. Editing one needs the script-author permission, because those scripts run with the platform’s own credentials.',
+      bindingsTitle: 'Team templates',
+      bindingsHint:
+        'These pick a department template and say which agent and prompt fills each step. No scripts — that is what lets a team own one.',
+      noFrameworks: 'No department template is visible to you',
+      noBindings: 'No team template yet',
+      builtin: 'Built in',
+      scriptsHidden: 'Scripts hidden',
+      copy: 'Copy',
+      params: 'Parameters: {{names}}',
+      slots: 'Agents: {{pairs}}',
+      frameworkMissing: 'Template missing',
+    },
+    metrics: {
+      empty: 'Nothing to measure yet',
+      emptyHint: 'Numbers appear here once capabilities have published findings or run rounds.',
+      window: 'Last {{days}} days',
+      adoptionTitle: 'What happened to the findings',
+      runsTitle: 'How the rounds ended',
+      capability: 'Capability',
+      published: 'Published',
+      // Four columns, never one rate: `resolved` and `code changed` disagree in
+      // exactly the cases worth knowing about.
+      adopted: 'Fixed and resolved',
+      quietFix: 'Fixed, not resolved',
+      disagreed: 'Resolved, not fixed',
+      outstanding: 'Still open',
+      rounds: 'Rounds',
+      roundsPublished: 'Published',
+      roundsFailed: 'Failed',
+      roundsAwaiting: 'Waiting on a person',
+      roundsIncomplete: 'Ended incomplete',
+    },
+    attempts: {
+      show: 'Model calls',
+      hide: 'Hide model calls',
+      none: 'No model call was recorded for this stage',
+      // Both counters, because they mean different things: a same-session retry
+      // told the model what was wrong, a fresh-session re-run started over.
+      label: 'Session {{rerun}}, try {{attempt}}',
+      openTask: 'Open task',
+    },
     readiness: {
       ready: 'Ready',
       misconfigured: 'Needs setup',

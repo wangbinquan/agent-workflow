@@ -15,9 +15,13 @@
 // fields on the write path, so a caller sending them gets told, rather than
 // having them silently dropped and wondering why their hook never ran.
 //
-// Parameter resolution is here too because "which value won, and from where" is
-// a question users will ask about a misbehaving cell, and an answer assembled
-// ad-hoc at three call sites will disagree with itself.
+// Parameter resolution used to live here as well, as a second implementation
+// alongside `traceCapabilityParams` in @agent-workflow/shared. It has been
+// deleted rather than kept in sync: this one was never called, so the two could
+// disagree indefinitely without anything failing, and the surviving one knows
+// more (the whole param TABLE, not just a list of key names). Provenance — the
+// "which value won and from where" that support questions turn on — moved
+// across with it.
 
 /**
  * Fields only a framework may carry. A binding write naming any of them is
@@ -73,56 +77,6 @@ export function canWriteFramework(input: {
   // granted the framework reach the daemon's surface; `scripts:author` alone
   // would bypass the resource ACL entirely.
   return input.hasResourceWrite && input.hasScriptsAuthor
-}
-
-export type ParamSource = 'framework-default' | 'binding-override'
-
-export interface ResolvedParam {
-  key: string
-  value: unknown
-  /** Where the winning value came from — the answer to "why is it this?". */
-  source: ParamSource
-}
-
-export interface ParamResolution {
-  params: Readonly<Record<string, unknown>>
-  /** Per-key provenance, in key order, for the config view and for support. */
-  trace: readonly ResolvedParam[]
-  /** Binding keys the framework never declared — reported, not silently applied. */
-  unknownKeys: readonly string[]
-}
-
-/**
- * Resolve a cell's parameters: framework defaults, then binding overrides.
- *
- * Unknown binding keys are REPORTED and dropped. Applying them would mean a
- * typo in a binding silently does nothing while looking configured — and the
- * user's next question ("why is my threshold ignored?") would have no answer
- * anywhere in the system.
- */
-export function resolveParams(input: {
-  frameworkDefaults: Readonly<Record<string, unknown>>
-  bindingOverrides: Readonly<Record<string, unknown>>
-  /** Declared keys. Empty ⇒ the framework declares no params, so none are valid. */
-  declaredKeys: readonly string[]
-}): ParamResolution {
-  const declared = new Set(input.declaredKeys)
-  const params: Record<string, unknown> = {}
-  const trace: ResolvedParam[] = []
-  const unknownKeys: string[] = []
-
-  for (const key of [...declared].sort()) {
-    const hasOverride = Object.hasOwn(input.bindingOverrides, key)
-    const value = hasOverride ? input.bindingOverrides[key] : input.frameworkDefaults[key]
-    params[key] = value
-    trace.push({ key, value, source: hasOverride ? 'binding-override' : 'framework-default' })
-  }
-
-  for (const key of Object.keys(input.bindingOverrides)) {
-    if (!declared.has(key)) unknownKeys.push(key)
-  }
-
-  return { params, trace, unknownKeys: unknownKeys.sort() }
 }
 
 export type ReadinessState = 'disabled' | 'misconfigured' | 'ready'

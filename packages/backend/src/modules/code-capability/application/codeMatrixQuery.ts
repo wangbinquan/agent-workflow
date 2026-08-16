@@ -6,12 +6,14 @@
 
 import { and, desc, eq, lt, type SQL } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
+import { codeAiAttempts, codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
 import { listCapabilityCells } from '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
 import { repairActionsFor } from '@/modules/code-capability/domain/repairActions'
 import type {
+  CodeAiAttemptProjection,
   CodeMatrixQuery,
   CodeMatrixRow,
+  CodeRoundAttemptsQuery,
   CodeRoundProjection,
   CodeStageProjection,
   CodeWorkItemProjection,
@@ -30,6 +32,48 @@ export const WORK_ITEM_PAGE_LIMIT = 20
  * fifty-round item would dominate a page of twenty.
  */
 export const ROUNDS_PER_ITEM = 3
+
+/**
+ * How many AI calls one round may return.
+ *
+ * A fanned-out review of a large diff is one call per shard, times the retries
+ * each one took — this bounds the pathological case rather than the ordinary
+ * one, which is a handful of rows.
+ */
+export const ATTEMPTS_PER_ROUND = 200
+
+export function createCodeRoundAttemptsQuery(db: DbClient): CodeRoundAttemptsQuery {
+  return {
+    async forRound(roundId) {
+      const rows = await db
+        .select()
+        .from(codeAiAttempts)
+        .where(eq(codeAiAttempts.roundId, roundId))
+        // Ascending by when it started, so the retries of one stage read in the
+        // order they were made. Ordering by id would be close but not the same:
+        // ULIDs are only monotonic across milliseconds, and a same-session retry
+        // can land inside one.
+        .orderBy(codeAiAttempts.startedAt, codeAiAttempts.rerunSeq, codeAiAttempts.attemptSeq)
+        .limit(ATTEMPTS_PER_ROUND)
+
+      return rows.map(
+        (row): CodeAiAttemptProjection => ({
+          attemptId: row.id,
+          stageName: row.stageName,
+          shardKey: row.shardKey,
+          rerunSeq: row.rerunSeq,
+          attemptSeq: row.attemptSeq,
+          status: row.status,
+          validationOutcome: row.validationOutcome,
+          sessionRef: row.sessionRef,
+          nodeRunId: row.nodeRunId,
+          startedAt: row.startedAt,
+          endedAt: row.endedAt,
+        }),
+      )
+    },
+  }
+}
 
 export function createCodeMatrixQuery(db: DbClient): CodeMatrixQuery {
   return {

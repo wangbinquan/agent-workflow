@@ -11,7 +11,7 @@
 import type { Context, Hono, MiddlewareHandler } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { ulid } from 'ulid'
-import { SKILL_ZIP_LIMITS, type AclResourceType } from '@agent-workflow/shared'
+import { SKILL_ZIP_LIMITS, type BundleResourceType } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
@@ -196,7 +196,10 @@ function parseRootFence(c: Context): Record<string, unknown> {
   return out
 }
 
-function exportHandler(type: AclResourceType, deps: ResourcePackageRouteDeps) {
+// Typed by the PACKAGEABLE set: every call below passes a literal, and the
+// narrower type is what keeps a future capability-template route from being
+// added here before the bundle can actually carry one (RFC-304 T17a).
+function exportHandler(type: BundleResourceType, deps: ResourcePackageRouteDeps) {
   return async (c: Context): Promise<Response> => {
     const pkg = await exportResourcePackage(
       deps.db,

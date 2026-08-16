@@ -21,7 +21,7 @@ import { users } from '@/db/schema'
 import type { SecretBox } from '@/auth/secretBox'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { canonicalJson, type AclResourceType, type BundleOp } from '@agent-workflow/shared'
+import { canonicalJson, type BundleOp, type BundleResourceType } from '@agent-workflow/shared'
 import { ACL_TABLES, isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import { ValidationError } from '@/util/errors'
 import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
@@ -58,7 +58,7 @@ export interface PreviewCandidate {
 
 export interface PreviewEntry {
   localSlug: string
-  type: AclResourceType
+  type: BundleResourceType
   name: string
   /** 本地已有的同名候选。**可以多个**（名字是 (owner,name) 复合唯一）。 */
   candidates: PreviewCandidate[]
@@ -243,7 +243,7 @@ export function verifyPreviewToken(box: SecretBox, token: string): VerifiedPrevi
 
 /** 各类型的内容级 CAS token —— 与 `BundleExpectToken` 的形态一一对应。 */
 export function expectTokenOf(
-  type: AclResourceType,
+  type: BundleResourceType,
   row: Record<string, unknown>,
 ): Record<string, unknown> {
   switch (type) {
@@ -359,7 +359,7 @@ export async function buildPackagePreview(
     box: SecretBox
     importId: string
     now?: number
-    configHashOf?: (type: AclResourceType, row: Record<string, unknown>) => string
+    configHashOf?: (type: BundleResourceType, row: Record<string, unknown>) => string
   },
 ): Promise<PackagePreview> {
   const now = opts.now ?? Date.now()

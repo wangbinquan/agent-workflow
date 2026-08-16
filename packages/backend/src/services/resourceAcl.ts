@@ -50,6 +50,8 @@ import type { DbClient } from '@/db/client'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
 import {
   agents,
+  capabilityBindings,
+  capabilityFrameworks,
   mcps,
   plugins,
   resourceGrants,
@@ -125,6 +127,8 @@ export const ACL_TABLES = {
   plugin: plugins,
   workflow: workflows,
   workgroup: workgroups, // RFC-164
+  capability_framework: capabilityFrameworks, // RFC-304
+  capability_binding: capabilityBindings, // RFC-304
 } as const
 
 /** RFC-223: these five resource types have owner-scoped display-name uniqueness.

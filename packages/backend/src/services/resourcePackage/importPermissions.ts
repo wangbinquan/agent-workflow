@@ -4,13 +4,13 @@
 // package service therefore computes permissions per entry, and commit must run
 // the exact same oracle again against its current Actor.
 
-import type { AclResourceType, BundleOp, Permission } from '@agent-workflow/shared'
+import type { BundleOp, BundleResourceType, Permission } from '@agent-workflow/shared'
 import { resourceTypeOfOp } from '@/services/bundle/provider'
 
 export type PackageWriteAction = 'new' | 'reuse' | 'overwrite'
 
 export const RESOURCE_PACKAGE_WRITE_POINTS: Record<
-  AclResourceType,
+  BundleResourceType,
   { create: Permission; update: Permission }
 > = {
   agent: { create: 'agents:create', update: 'agents:update' },

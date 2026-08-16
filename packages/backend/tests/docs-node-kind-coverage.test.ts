@@ -29,7 +29,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ACL_RESOURCE_TYPES, NODE_KIND } from '@agent-workflow/shared'
+import { INTENT_RESOURCE_TYPES, NODE_KIND } from '@agent-workflow/shared'
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..')
 const yamlDoc = readFileSync(join(REPO_ROOT, 'docs', 'workflow-yaml.md'), 'utf8')
@@ -123,7 +123,12 @@ describe('INTENT.md documents every ACL resource type', () => {
       langDirective: 'x',
       privileges: { mayAuthorScripts: true, mayAuthorCodeHostCalls: true },
     })
-    for (const type of ACL_RESOURCE_TYPES) {
+    // `INTENT_RESOURCE_TYPES`, not `AclResourceType`. INTENT.md is the
+    // prompt an intent session writes against, so it documents what a session
+    // can CREATE. RFC-304 added two ACL resource types it cannot create at all
+    // — the capability template layers — and iterating the wider set would
+    // demand a payload spec for something the changeset schema rejects.
+    for (const type of INTENT_RESOURCE_TYPES) {
       expect(doc, `no payload spec for resource type '${type}'`).toContain(`- **${type}**:`)
     }
   })

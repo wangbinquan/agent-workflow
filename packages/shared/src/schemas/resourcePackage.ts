@@ -14,15 +14,17 @@
 
 import { z } from 'zod'
 import type { PackageSecretRef } from '../bundle/secrets'
+import { BUNDLE_RESOURCE_TYPES } from './resourceAcl'
 
-export const ResourcePackageTypeSchema = z.enum([
-  'agent',
-  'skill',
-  'mcp',
-  'plugin',
-  'workflow',
-  'workgroup',
-])
+/**
+ * Derived from `BUNDLE_RESOURCE_TYPES` rather than restating the six.
+ *
+ * It used to be its own literal list, which was harmless while every ACL
+ * resource was also packageable. RFC-304 made those sets differ, and two hand-
+ * maintained copies of "which types can be packaged" would drift the first time
+ * one of them was extended — silently, because nothing compares them.
+ */
+export const ResourcePackageTypeSchema = z.enum(BUNDLE_RESOURCE_TYPES)
 export type ResourcePackageType = z.infer<typeof ResourcePackageTypeSchema>
 
 export const ImportActionSchema = z.enum(['new', 'reuse', 'overwrite'])

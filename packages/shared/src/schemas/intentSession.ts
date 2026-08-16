@@ -7,7 +7,7 @@
 // address SERVER-ISSUED slots (design §9.3).
 
 import { z } from 'zod'
-import { AclResourceTypeSchema } from './resourceAcl'
+import { AclResourceTypeSchema, INTENT_RESOURCE_TYPES } from './resourceAcl'
 
 export const INTENT_MESSAGE_MAX = 16 * 1024
 
@@ -24,7 +24,9 @@ export const CreateIntentSessionSchema = z
      */
     mounts: z
       .array(
-        z.object({ resourceType: AclResourceTypeSchema, resourceId: z.string().min(1) }).strict(),
+        z
+          .object({ resourceType: z.enum(INTENT_RESOURCE_TYPES), resourceId: z.string().min(1) })
+          .strict(),
       )
       .max(16)
       .optional(),
@@ -49,13 +51,24 @@ export const PostIntentAnswersSchema = z
   .strict()
 export type PostIntentAnswers = z.infer<typeof PostIntentAnswersSchema>
 
+/**
+ * A reference to a resource an Intent session can mount or has produced.
+ *
+ * `INTENT_RESOURCE_TYPES`, not the full ACL set. RFC-304 added two ACL resource
+ * types the intent flow cannot handle at all — no list endpoint, no dump
+ * format, and `intent_provenance` has no room for the value — so accepting
+ * them here would only move the failure somewhere with a worse message.
+ */
 export const IntentMountRefSchema = z
   .object({
-    resourceType: AclResourceTypeSchema,
+    resourceType: z.enum(INTENT_RESOURCE_TYPES),
     resourceId: z.string().min(1).max(128),
   })
   .strict()
 export type IntentMountRefWire = z.infer<typeof IntentMountRefSchema>
+
+/** The same shape; provenance lookups ask about the same set. */
+export const IntentProvenanceRefSchema = IntentMountRefSchema
 
 /** RFC-235 v22 — every suggestion decision is bound to the exact agent turn
  *  and context the user reviewed. The concrete resource id is server-checked

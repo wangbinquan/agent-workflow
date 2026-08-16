@@ -22,7 +22,7 @@
 // 权限」——`isVisibleRow` 的 owner/public/grant 判定本身就是读权限模型；类型级权限点
 // 管的是「能不能走这一类的列表 / 详情路由」。测试用**反向锁**钉住。
 
-import type { AclResourceType, WorkflowDefinition } from '@agent-workflow/shared'
+import type { BundleResourceType, WorkflowDefinition } from '@agent-workflow/shared'
 import {
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,
@@ -39,7 +39,7 @@ import { ValidationError } from '@/util/errors'
 
 /** 闭包里的一条资源。`row` 是 canonical 行（未脱敏——脱敏在序列化段）。 */
 export interface ClosureResource {
-  type: AclResourceType
+  type: BundleResourceType
   id: string
   name: string
   row: Record<string, unknown>
@@ -84,7 +84,7 @@ export const rowName = (row: Record<string, unknown>): string =>
 /** 一次装载一层。**只返回对 actor 可见的行**——不可见的由 ① 号门报错。 */
 async function loadRows(
   db: DbClient,
-  type: AclResourceType,
+  type: BundleResourceType,
   ids: readonly string[],
 ): Promise<Record<string, unknown>[]> {
   if (ids.length === 0) return []
@@ -181,10 +181,10 @@ function definitionOf(row: Record<string, unknown>): WorkflowDefinition | null {
 
 /** 一个资源直接引用了哪些 id 域资源（不含 call 的名字域）。 */
 export function directRefsOf(
-  type: AclResourceType,
+  type: BundleResourceType,
   row: Record<string, unknown>,
-): Array<{ type: AclResourceType; id: string }> {
-  const out: Array<{ type: AclResourceType; id: string }> = []
+): Array<{ type: BundleResourceType; id: string }> {
+  const out: Array<{ type: BundleResourceType; id: string }> = []
   if (type === 'agent') {
     for (const raw of parseJsonArray(row.skills)) {
       const ref = raw as { kind?: string; skillId?: string }
@@ -273,10 +273,10 @@ export interface ExportGateOptions {
 export async function walkExportClosure(
   db: DbClient,
   actor: Actor,
-  root: { type: AclResourceType; id: string },
+  root: { type: BundleResourceType; id: string },
 ): Promise<ExportClosure> {
-  const grantsByType = new Map<AclResourceType, ReadonlySet<string>>()
-  const grantsOf = async (type: AclResourceType): Promise<ReadonlySet<string>> => {
+  const grantsByType = new Map<BundleResourceType, ReadonlySet<string>>()
+  const grantsOf = async (type: BundleResourceType): Promise<ReadonlySet<string>> => {
     const cached = grantsByType.get(type)
     if (cached !== undefined) return cached
     const ids = new Set(await listGrantedResourceIds(db, actor, type))
@@ -286,15 +286,15 @@ export async function walkExportClosure(
 
   const byKey = new Map<string, ClosureResource>()
   const callRefs: ClosureCallRef[] = []
-  const keyOf = (type: AclResourceType, id: string): string => `${type}:${id}`
+  const keyOf = (type: BundleResourceType, id: string): string => `${type}:${id}`
 
-  let frontier: Array<{ type: AclResourceType; id: string; from: string | null }> = [
+  let frontier: Array<{ type: BundleResourceType; id: string; from: string | null }> = [
     { ...root, from: null },
   ]
   let rootResource: ClosureResource | null = null
 
   while (frontier.length > 0) {
-    const wanted = new Map<AclResourceType, Set<string>>()
+    const wanted = new Map<BundleResourceType, Set<string>>()
     for (const item of frontier) {
       const existing = byKey.get(keyOf(item.type, item.id))
       if (existing !== undefined) {
@@ -309,7 +309,7 @@ export async function walkExportClosure(
     }
     if (wanted.size === 0) break
 
-    const next: Array<{ type: AclResourceType; id: string; from: string | null }> = []
+    const next: Array<{ type: BundleResourceType; id: string; from: string | null }> = []
     for (const [type, ids] of wanted) {
       const rows = await loadRows(db, type, [...ids])
       const grants = await grantsOf(type)

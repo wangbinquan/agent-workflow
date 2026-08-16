@@ -22,7 +22,7 @@ import {
   BundleSchema,
   canonicalJson,
   decodeBundleIdentityRef,
-  type AclResourceType,
+  type BundleResourceType,
   type BundleOp,
   type ResourceBundle,
 } from '@agent-workflow/shared'
@@ -759,7 +759,7 @@ function makePackageProvider(
   }
 }
 
-function typeOfSlug(pkg: ParsedPackage, slug: string): AclResourceType | null {
+function typeOfSlug(pkg: ParsedPackage, slug: string): BundleResourceType | null {
   for (const op of pkg.bundle.ops) {
     if (opSlug(op) === slug) return resourceTypeOfOp(op)
   }

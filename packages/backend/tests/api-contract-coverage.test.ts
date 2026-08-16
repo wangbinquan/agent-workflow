@@ -207,6 +207,11 @@ describe('API contract registry coverage', () => {
         '/api/workgroups/:id',
         '/api/plugins/:id',
         '/api/workflows/:id',
+        // RFC-304 — the seventh and eighth ACL resource types. Two, not one:
+        // the department layer carries scripts that run as the daemon and the
+        // group layer carries none, so granting one must never grant the other.
+        '/api/capability-frameworks/:id',
+        '/api/capability-bindings/:id',
       ]
         .flatMap((base) => [`GET ${base}/acl`, `PUT ${base}/acl`])
         .sort(),

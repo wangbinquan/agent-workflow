@@ -22,7 +22,7 @@
 import { z } from 'zod'
 import { AgentOutputKindSchema } from './review'
 import { AGENT_NAME_RE } from './agent'
-import { ACL_RESOURCE_TYPES, type AclResourceType } from './resourceAcl'
+import { asIntentResourceType, INTENT_RESOURCE_TYPES, type IntentResourceType } from './resourceAcl'
 import {
   isValidResourceDisplayName,
   normalizeResourceDisplayName,
@@ -59,10 +59,15 @@ export const IntentTempRefSchema = z
 export const IntentRefSchema = z.union([IntentHandleSchema, IntentTempRefSchema])
 export type IntentRef = z.infer<typeof IntentRefSchema>
 
-export function intentHandleType(handle: string): AclResourceType | null {
+export function intentHandleType(handle: string): IntentResourceType | null {
   // RFC-282 D3 — parse via the intent-domain codec, not a second regex read.
   const ast = decodeIntentRef(handle)
-  return ast?.k === 'handle' ? ast.type : null
+  if (ast?.k !== 'handle') return null
+  // The ref AST admits any ACL resource — a reference to one is meaningful even
+  // where creating one is not. This function answers the narrower question, so
+  // a handle naming a capability template is "not an intent handle" rather than
+  // a value `intent_provenance` cannot store.
+  return asIntentResourceType(ast.type)
 }
 
 export function isIntentTempRef(ref: string): boolean {
@@ -499,7 +504,11 @@ const opBase = {
   note: z.string().max(512).optional(),
 }
 
-function opPair<T extends AclResourceType, P extends z.ZodTypeAny>(resourceType: T, payload: P) {
+// `IntentResourceType`, not `AclResourceType`: an Intent session produces work
+// resources, never the platform's own capability templates. Typed by the wider
+// set, adding a template layer would silently declare it Intent-creatable while
+// `intent_provenance` cannot store the value.
+function opPair<T extends IntentResourceType, P extends z.ZodTypeAny>(resourceType: T, payload: P) {
   const create = z
     .object({
       ...opBase,
@@ -646,7 +655,7 @@ export const IntentQuestionsSchema = z
  *  visibility. */
 export const IntentMountRequestSchema = z
   .object({
-    resourceType: z.enum(ACL_RESOURCE_TYPES),
+    resourceType: z.enum(INTENT_RESOURCE_TYPES),
     name: z.string().min(1).max(200),
     reason: z.string().max(512).optional(),
   })

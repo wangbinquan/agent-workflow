@@ -103,6 +103,7 @@ export * from './wrapperFanout'
 export * from './nodePorts'
 export * from './scriptNode' // RFC-253
 export * from './capabilityParams' // RFC-304 T47
+export * from './schemas/capabilityTemplate' // RFC-304 T57
 export * from './workflowNodeAncestry' // RFC-269（RFC-253 抽取）
 export * from './privilegedNodeRedaction' // RFC-270
 // RFC-271 决策 29 — 统一引用模型（归一化 AST + 六域 wire codec + 解析契约）。

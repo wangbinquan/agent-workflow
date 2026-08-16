@@ -15,6 +15,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   parseCapabilityParamTable,
   resolveCapabilityParams,
+  traceCapabilityParams,
   validateCapabilityParams,
   type CapabilityParamTable,
 } from '../src/capabilityParams'
@@ -254,5 +255,91 @@ describe('RFC-304 T47 — defaults and overrides', () => {
     const out = resolveCapabilityParams(declared, {}, { a: 'x' })
     expect(out).toEqual({ a: 'x' })
     expect('b' in out).toBe(false)
+  })
+})
+
+// RFC-304 §2.5 — provenance, relocated here when the backend's duplicate
+// `resolveParams` was deleted.
+//
+// "Which value won, and from where" is the question asked about a cell that is
+// behaving oddly, and it needs one answer. It previously had two
+// implementations: this one, which every caller used, and an unused one in the
+// backend domain layer that computed it from a bare list of key names. Nothing
+// would ever have caught them diverging, because the second one never ran.
+describe('RFC-304 §2.5 — parameter resolution is traceable', () => {
+  const table = parseCapabilityParamTable(
+    JSON.stringify([
+      { name: 'maxFindings', kind: 'number' },
+      { name: 'severityThreshold', kind: 'enum', options: ['minor', 'major'] },
+    ]),
+  )
+  const fields = table.ok ? table.table : []
+
+  test('a binding override wins, and the trace says so', () => {
+    const r = traceCapabilityParams(
+      fields,
+      { maxFindings: 20, severityThreshold: 'minor' },
+      { severityThreshold: 'major' },
+    )
+    expect(r.params).toEqual({ maxFindings: 20, severityThreshold: 'major' })
+    expect(r.trace).toEqual([
+      { name: 'maxFindings', value: 20, source: 'framework-default' },
+      { name: 'severityThreshold', value: 'major', source: 'binding-override' },
+    ])
+  })
+
+  test('an override of an UNDECLARED key is reported and not applied', () => {
+    // A typo that silently does nothing is worse than a rejection: the cell
+    // looks configured and behaves as if it is not, and "why is my threshold
+    // ignored?" has no answer anywhere in the system.
+    const r = traceCapabilityParams(fields, { maxFindings: 20 }, { maxFinding: 5 })
+    expect(r.params).toEqual({ maxFindings: 20 })
+    expect(r.unknownKeys).toEqual(['maxFinding'])
+  })
+
+  test('an override to a falsy value still wins over the default', () => {
+    // The classic `||` bug: 0 and false are legitimate overrides, and a
+    // threshold someone deliberately set to 0 silently becoming 20 is the kind
+    // of bug that gets blamed on the model.
+    const zeroTable = parseCapabilityParamTable(
+      JSON.stringify([
+        { name: 'maxFindings', kind: 'number' },
+        { name: 'verbose', kind: 'boolean' },
+      ]),
+    )
+    const r = traceCapabilityParams(
+      zeroTable.ok ? zeroTable.table : [],
+      { maxFindings: 20, verbose: true },
+      { maxFindings: 0, verbose: false },
+    )
+    expect(r.params.maxFindings).toBe(0)
+    expect(r.params.verbose).toBe(false)
+    expect(r.trace.every((t) => t.source === 'binding-override')).toBe(true)
+  })
+
+  test('an explicit null clears the value rather than falling through', () => {
+    // The real version of a case the deleted implementation tested with
+    // `undefined` — which `params_json` can never carry, JSON having no such
+    // value. `null` it can, and it means "no value here", so the parameter is
+    // absent rather than silently reverting to the framework default.
+    const r = traceCapabilityParams(fields, { maxFindings: 20 }, { maxFindings: null })
+    expect('maxFindings' in r.params).toBe(false)
+    expect(r.trace.some((t) => t.name === 'maxFindings')).toBe(false)
+  })
+
+  test('a framework declaring no params accepts none', () => {
+    const r = traceCapabilityParams([], {}, { anything: 1 })
+    expect(r.params).toEqual({})
+    expect(r.unknownKeys).toEqual(['anything'])
+  })
+
+  test('resolve and trace cannot disagree — one is defined by the other', () => {
+    // The guard against the duplication returning. If these ever diverge, a
+    // script and the page explaining that script would show different values.
+    const defaults = { maxFindings: 20, severityThreshold: 'minor' }
+    const overrides = { severityThreshold: 'major' }
+    expect(resolveCapabilityParams(fields, defaults, overrides)).toEqual(
+      traceCapabilityParams(fields, defaults, overrides).params,
+    )
   })
 })
