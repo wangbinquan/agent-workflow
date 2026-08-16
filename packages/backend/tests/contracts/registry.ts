@@ -175,6 +175,8 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/code/rounds/:roundId/attempts' },
   // RFC-304 T58 — adoption buckets and round outcomes.
   { method: 'GET', path: '/api/code/metrics' },
+  // RFC-304 — the capability catalog the configuration UI derives from.
+  { method: 'GET', path: '/api/code/capabilities' },
 
   // RFC-304 T57 — the two capability template layers. Separate resources with
   // separate permission points, because the department layer carries scripts

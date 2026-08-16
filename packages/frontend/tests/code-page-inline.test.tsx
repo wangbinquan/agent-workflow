@@ -39,6 +39,49 @@ interface Recorded {
   calls: Array<{ url: string; method: string; body: unknown }>
 }
 
+/**
+ * A framework/binding as the API actually returns them.
+ *
+ * Named apart from the per-describe `FRAMEWORK` fixtures below on purpose:
+ * `TabPanels` mounts EVERY panel, so the templates list renders even while the
+ * matrix tab is the visible one — and a partial fixture there crashes tests
+ * that are nominally about the matrix (a missing `paramSchema` took down three).
+ */
+const API_FRAMEWORK = {
+  id: 'fw-1',
+  name: 'Review framework',
+  description: null,
+  capability: 'mr-review',
+  scriptsRedacted: false,
+  paramSchema: [],
+  paramDefaults: {},
+  stageContractVer: 1,
+  ownerUserId: null,
+  visibility: 'private',
+  builtin: false,
+  aclRevision: 1,
+  upstream: null,
+  createdAt: 1,
+  updatedAt: 1,
+}
+
+const API_BINDING = {
+  id: 'bd-1',
+  name: 'Our reviewers',
+  description: null,
+  frameworkId: 'fw-1',
+  agentBySlot: {},
+  promptBySlot: {},
+  params: {},
+  ownerUserId: null,
+  visibility: 'private',
+  builtin: false,
+  aclRevision: 1,
+  upstream: null,
+  createdAt: 1,
+  updatedAt: 1,
+}
+
 function installFetch(handlers: {
   rows?: unknown[]
   workItems?: unknown[]
@@ -46,6 +89,8 @@ function installFetch(handlers: {
   metrics?: unknown
   frameworks?: unknown[]
   bindings?: unknown[]
+  catalog?: unknown[]
+  agents?: unknown[]
 }): Recorded {
   const rec: Recorded = { calls: [] }
   vi.spyOn(globalThis, 'fetch').mockImplementation(
@@ -66,6 +111,12 @@ function installFetch(handlers: {
       if (url.includes('/api/capability-bindings')) {
         if (method === 'POST') return json({ id: 'bd-copy', name: 'y copy' })
         return json(handlers.bindings ?? [])
+      }
+      if (url.includes('/api/code/capabilities')) {
+        return json({ items: handlers.catalog ?? [] })
+      }
+      if (url.includes('/api/agents')) {
+        return json(handlers.agents ?? [])
       }
       if (url.includes('/api/code/metrics')) {
         return json(handlers.metrics ?? { windowMs: 30 * 86_400_000, adoption: [], runs: [] })
@@ -146,8 +197,12 @@ describe('RFC-304 — the capability matrix', () => {
   test('a ready capability is shown as ready', async () => {
     installFetch({ rows: [READY_ROW] })
     await renderPage('/code?repo=group%2Fproject')
-    expect(await screen.findByText('mr-review')).toBeTruthy()
-    expect(await screen.findByText(/ready/i)).toBeTruthy()
+    // The NAME, not the machine id. An operator configuring "issue → MR" should
+    // not have to know that capability is spelled `requirement`.
+    expect(await screen.findByText('Merge request review')).toBeTruthy()
+    // Exact, not /ready/i: the binding hint legitimately contains the word
+    // "ready" in a sentence, and a loose regex matched both.
+    expect(await screen.findByText('Ready')).toBeTruthy()
   })
 
   test('a misconfigured capability names EACH missing piece', async () => {
@@ -695,5 +750,101 @@ describe('RFC-304 T57 — export and upstream state', () => {
     // The shared export primitive, not a hand-rolled link: it carries the
     // fence, the filename and the error handling every other resource gets.
     expect(row.textContent?.toLowerCase()).toContain('export')
+  })
+
+  test('the matrix can POINT a capability at a binding — the step that was missing', async () => {
+    // The page could switch a capability ON but never give it one, so the cell
+    // sat `misconfigured` forever and the only way to configure the platform
+    // was the HTTP API. This is that gap, closed.
+    const rec = installFetch({
+      rows: [
+        {
+          repoId: 'repo-1',
+          capability: 'mr-review',
+          enabled: false,
+          readiness: 'misconfigured',
+          issues: [
+            { code: 'no-binding', detail: 'no capability binding is selected for this repo' },
+          ],
+          repairActions: [
+            { code: 'no-binding', label: 'Choose one', route: '/code?tab=templates' },
+          ],
+          bindingId: null,
+        },
+      ],
+      frameworks: [API_FRAMEWORK],
+      bindings: [API_BINDING],
+    })
+    await renderPage('/code?repo=repo-1')
+
+    // The repo's Select idiom: click the combobox, then mouseDown the option.
+    fireEvent.click(await screen.findByTestId('code-binding-mr-review'))
+    fireEvent.mouseDown(await screen.findByRole('option', { name: 'Our reviewers' }))
+
+    await waitFor(() => {
+      const put = rec.calls.find((c) => c.method === 'PUT' && c.url.includes('/api/code/matrix'))
+      expect(put?.body).toMatchObject({ capability: 'mr-review', bindingId: 'bd-1' })
+    })
+  })
+
+  test('only bindings for THIS capability are offered', async () => {
+    // A binding belongs to one capability through its framework. Offering a
+    // review binding for `ci-fix` would produce a cell that reads `ready` and
+    // fails at its first AI stage, on the merge request, in front of the author.
+    installFetch({
+      rows: [
+        {
+          repoId: 'repo-1',
+          capability: 'ci-fix',
+          enabled: false,
+          readiness: 'misconfigured',
+          issues: [],
+          repairActions: [],
+          bindingId: null,
+        },
+      ],
+      frameworks: [
+        FRAMEWORK,
+        { ...FRAMEWORK, id: 'fw-2', name: 'CI framework', capability: 'ci-fix' },
+      ],
+      bindings: [
+        API_BINDING,
+        { ...API_BINDING, id: 'bd-2', name: 'Our CI fixers', frameworkId: 'fw-2' },
+      ],
+    })
+    await renderPage('/code?repo=repo-1')
+
+    fireEvent.click(await screen.findByTestId('code-binding-ci-fix'))
+    expect(await screen.findByRole('option', { name: 'Our CI fixers' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'Our reviewers' })).toBeNull()
+  })
+
+  test('toggling enabled KEEPS the chosen binding', async () => {
+    // The server takes the cell as sent. A toggle that omitted `bindingId`
+    // would silently clear a configuration somebody had just made — and the
+    // capability would go back to `misconfigured` for no visible reason.
+    const rec = installFetch({
+      rows: [
+        {
+          repoId: 'repo-1',
+          capability: 'mr-review',
+          enabled: false,
+          readiness: 'ready',
+          issues: [],
+          repairActions: [],
+          bindingId: 'bd-1',
+        },
+      ],
+      frameworks: [API_FRAMEWORK],
+      bindings: [API_BINDING],
+    })
+    await renderPage('/code?repo=repo-1')
+
+    fireEvent.click(await screen.findByTestId('code-toggle-mr-review'))
+
+    await waitFor(() => {
+      const put = rec.calls.find((c) => c.method === 'PUT' && c.url.includes('/api/code/matrix'))
+      expect(put?.body).toMatchObject({ enabled: true, bindingId: 'bd-1' })
+    })
   })
 })

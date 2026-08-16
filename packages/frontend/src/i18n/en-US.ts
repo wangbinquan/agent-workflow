@@ -576,7 +576,25 @@ export const enUS: Resources = {
     enabled: 'Enabled',
     round: 'Round {{seq}}',
     roundPicker: 'Which round to show',
+    bindingLabel: 'Which group configuration to use',
+    bindingHint:
+      'A capability with no configuration can never become ready — it has no agent to do the work.',
+    bindingNone: '(none selected)',
+    capability: {
+      'mr-review': 'Merge request review',
+      'mr-comment-fix': 'Comment-driven fix',
+      requirement: 'Requirement (issue → MR)',
+      'ci-fix': 'CI fix',
+      'mr-monitor': 'Merge request monitor',
+    },
     templates: {
+      createAction: 'Create',
+      newFramework: 'New department template',
+      newBinding: 'New group template',
+      nameLabel: 'Name',
+      capabilityLabel: 'Which capability it drives',
+      frameworkLabel: 'Based on which department template',
+      slotLabel: 'Agent for the “{{slot}}” step',
       frameworksTitle: 'Department templates',
       frameworksHint:
         'These carry the scripts a capability runs. Editing one needs the script-author permission, because those scripts run with the platform’s own credentials.',

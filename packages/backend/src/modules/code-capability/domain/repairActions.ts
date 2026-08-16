@@ -24,7 +24,9 @@ import type { CodeRepairAction } from '@/modules/code-capability/public/queries'
 const REPAIR: Record<ReadinessIssue['code'], { label: string; route: string }> = {
   'no-binding': {
     label: 'Choose which review configuration this repository uses',
-    route: '/code/bindings',
+    // The templates TAB, not a `/code/bindings` page — that route never
+    // existed, so the one button whose whole job is "go fix it" 404'd.
+    route: '/code?tab=templates',
   },
   'no-trigger': {
     label: 'Connect a webhook so events can reach this repository',

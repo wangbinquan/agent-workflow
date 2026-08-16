@@ -192,6 +192,11 @@ const OVERLAY_CALLSITES = {
   },
   'components/review/MultiDocReviewView.tsx': { family: 'review-and-clarify', count: 1 },
   'routes/clarify.detail.tsx': { family: 'review-and-clarify', count: 1 },
+  // RFC-304 — the two dialogs that make the code capability configurable at
+  // all: a department framework, and the group binding that names which agent
+  // fills each of its AI slots. Before them the matrix could switch a
+  // capability on but never point it at a configuration.
+  'routes/code.tsx': { family: 'resource-management', count: 2 },
   'routes/reviews.detail.tsx': { family: 'review-and-clarify', count: 1 },
 
   'components/fusion/FuseDialog.tsx': { family: 'memory-and-fusion', count: 1 },

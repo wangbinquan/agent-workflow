@@ -1336,7 +1336,24 @@ export interface Resources {
     enabled: string
     round: string
     roundPicker: string
+    bindingLabel: string
+    bindingHint: string
+    bindingNone: string
+    capability: {
+      'mr-review': string
+      'mr-comment-fix': string
+      requirement: string
+      'ci-fix': string
+      'mr-monitor': string
+    }
     templates: {
+      newFramework: string
+      newBinding: string
+      createAction: string
+      nameLabel: string
+      capabilityLabel: string
+      frameworkLabel: string
+      slotLabel: string
       frameworksTitle: string
       frameworksHint: string
       bindingsTitle: string
@@ -6990,7 +7007,24 @@ export const zhCN: Resources = {
     enabled: '已启用',
     round: '第 {{seq}} 轮',
     roundPicker: '查看哪一轮',
+    bindingLabel: '使用哪个小组层模板',
+    bindingHint: '没选模板的能力永远不会就绪——它不知道该用哪个 agent 干活。',
+    bindingNone: '（未选择）',
+    capability: {
+      'mr-review': 'MR 检视',
+      'mr-comment-fix': '评论驱动改码',
+      requirement: '需求实现（issue → MR）',
+      'ci-fix': 'CI 修复',
+      'mr-monitor': 'MR 监视器',
+    },
     templates: {
+      createAction: '创建',
+      newFramework: '新建部门层模板',
+      newBinding: '新建小组层模板',
+      nameLabel: '名称',
+      capabilityLabel: '驱动哪条能力',
+      frameworkLabel: '基于哪个部门层模板',
+      slotLabel: '「{{slot}}」这一步用哪个 agent',
       frameworksTitle: '部门层模板',
       frameworksHint:
         '它装的是能力实际运行的脚本。改它需要「脚本编写」权限——那些脚本是以平台自己的身份跑的。',

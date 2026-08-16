@@ -29,6 +29,8 @@ import {
 } from '@/modules/code-capability/application/codeMatrixQuery'
 import { createCodeMetricsQuery } from '@/modules/code-capability/application/codeMetricsQuery'
 import { createEnableCommand } from '@/modules/code-capability/application/enableCommand'
+import { CODE_CAPABILITIES } from '@/modules/code-capability/domain/stageContract'
+import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
 import { resolveCodeHostEndpointId } from '@/modules/code-capability/composition/mrReviewEnvironment'
 import { registerRoute } from '@/routes/registry'
 import type { AppDeps } from '@/server'
@@ -168,6 +170,35 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
     // the widest rows in the model, and most rounds are never expanded. Folding
     // them into the list makes every visit pay for a level almost nobody opens.
     async (c) => c.json({ attempts: await attempts.forRound(c.req.param('roundId')) }),
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/code/capabilities',
+      permissions: ['repos:read'],
+      tokenAccess: 'allow',
+      summary: 'The capability catalog:每条能力及其 agent 槽位（供配置界面派生）',
+    },
+    // Derived from the registry, never a hand-written list. The configuration
+    // UI needs to know which capabilities exist and which agent slots each one
+    // asks a binding to fill; hard-coding that in the frontend is exactly the
+    // drift that left `issue_labeled` rendering as a raw i18n key — a registry
+    // grew and its second reader did not.
+    async (c) =>
+      c.json({
+        items: CODE_CAPABILITIES.map((capability) => ({
+          capability,
+          agentSlots: [
+            ...new Set(
+              (lookupStageContract(capability)?.stages ?? []).flatMap((stage) =>
+                stage.kind === 'ai' ? [stage.agentSlot] : [],
+              ),
+            ),
+          ],
+        })),
+      }),
   )
 
   registerRoute(

@@ -28,6 +28,8 @@ import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextInput } from '@/components/Form'
+import { Select } from '@/components/Select'
+import { Dialog } from '@/components/Dialog'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
 import { ResourcePackageExportButton } from '@/components/ResourcePackageExportButton'
@@ -222,11 +224,32 @@ function MatrixPanel() {
     enabled: repoId !== '',
   })
 
+  // The bindings a capability can be pointed at. Without this the page could
+  // switch a capability ON and never give it a binding — which is what it did:
+  // the cell then sits `misconfigured` forever with no way forward from the UI.
+  const bindings = useQuery({
+    queryKey: ['capability-bindings'],
+    queryFn: () => api.get<BindingRow[]>('/api/capability-bindings'),
+  })
+  const frameworks = useQuery({
+    queryKey: ['capability-frameworks'],
+    queryFn: () => api.get<FrameworkRow[]>('/api/capability-frameworks'),
+  })
+
   const toggle = useMutation({
-    mutationFn: (row: { capability: string; enabled: boolean }) =>
+    mutationFn: (row: { capability: string; enabled: boolean; bindingId?: string | null }) =>
       api.put<{ row: MatrixRow }>(`/api/code/matrix/${encodeURIComponent(repoId)}`, row),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['code-matrix', repoId] }),
   })
+
+  // A binding belongs to exactly one capability, through its framework. Showing
+  // every binding would invite pointing `ci-fix` at a review binding, which the
+  // round would only discover at its first AI stage.
+  const capabilityOfFramework = new Map(
+    (frameworks.data ?? []).map((f) => [f.id, f.capability] as const),
+  )
+  const bindingsFor = (capability: string): BindingRow[] =>
+    (bindings.data ?? []).filter((b) => capabilityOfFramework.get(b.frameworkId) === capability)
 
   return (
     <section className="page__section">
@@ -263,17 +286,49 @@ function MatrixPanel() {
           {matrix.data?.rows.map((row) => (
             <li key={row.capability} className="card">
               <div className="page__header--row">
-                <strong>{row.capability}</strong>
+                <strong>{t(`code.capability.${row.capability}`)}</strong>
                 <StatusChip kind={readinessKind(row.readiness)}>
                   {t(`code.readiness.${row.readiness}`)}
                 </StatusChip>
                 <Switch
                   checked={row.enabled}
-                  onChange={(enabled) => toggle.mutate({ capability: row.capability, enabled })}
+                  onChange={(enabled) =>
+                    toggle.mutate({
+                      capability: row.capability,
+                      enabled,
+                      // Carried on every write: the server takes the cell as
+                      // sent, so omitting it on a toggle would silently clear a
+                      // binding somebody had chosen.
+                      bindingId: row.bindingId,
+                    })
+                  }
                   label={t('code.enabled')}
                   data-testid={`code-toggle-${row.capability}`}
                 />
               </div>
+
+              {/* Which configuration this repository runs. Empty is not a
+                  neutral default — a capability with no binding cannot become
+                  `ready`, so the empty option says so rather than looking like
+                  a legitimate choice. */}
+              <Field label={t('code.bindingLabel')} hint={t('code.bindingHint')}>
+                <Select<string>
+                  value={row.bindingId ?? ''}
+                  options={[
+                    { value: '', label: t('code.bindingNone') },
+                    ...bindingsFor(row.capability).map((b) => ({ value: b.id, label: b.name })),
+                  ]}
+                  onChange={(bindingId) =>
+                    toggle.mutate({
+                      capability: row.capability,
+                      enabled: row.enabled,
+                      bindingId: bindingId === '' ? null : bindingId,
+                    })
+                  }
+                  ariaLabel={t('code.bindingLabel')}
+                  data-testid={`code-binding-${row.capability}`}
+                />
+              </Field>
 
               {/* The point of the page: what is missing, and where to fix it. */}
               {row.issues.length > 0 && (
@@ -661,6 +716,13 @@ function TemplatesPanel(): ReactElement {
     queryFn: () => api.get<BindingRow[]>('/api/capability-bindings'),
   })
 
+  const catalog = useQuery({
+    queryKey: ['code-capabilities'],
+    queryFn: () => api.get<{ items: CapabilityCatalogRow[] }>('/api/code/capabilities'),
+  })
+  const [newFramework, setNewFramework] = useState(false)
+  const [newBinding, setNewBinding] = useState(false)
+
   const copy = useMutation({
     mutationFn: (input: { kind: 'frameworks' | 'bindings'; id: string }) =>
       api.post<FrameworkRow | BindingRow>(
@@ -685,7 +747,38 @@ function TemplatesPanel(): ReactElement {
 
   return (
     <section className="page__section">
-      <h3>{t('code.templates.frameworksTitle')}</h3>
+      <NewFrameworkDialog
+        open={newFramework}
+        onClose={() => setNewFramework(false)}
+        capabilities={catalog.data?.items ?? []}
+      />
+      <NewBindingDialog
+        open={newBinding}
+        onClose={() => setNewBinding(false)}
+        frameworks={frameworks.data ?? []}
+        capabilities={catalog.data?.items ?? []}
+      />
+
+      <div className="page__header--row">
+        <h3>{t('code.templates.frameworksTitle')}</h3>
+        <button
+          type="button"
+          className="btn btn--sm btn--primary"
+          onClick={() => setNewFramework(true)}
+          data-testid="code-new-framework"
+        >
+          {t('code.templates.newFramework')}
+        </button>
+        <button
+          type="button"
+          className="btn btn--sm"
+          onClick={() => setNewBinding(true)}
+          disabled={(frameworks.data?.length ?? 0) === 0}
+          data-testid="code-new-binding"
+        >
+          {t('code.templates.newBinding')}
+        </button>
+      </div>
       <p>{t('code.templates.frameworksHint')}</p>
       {(frameworks.data?.length ?? 0) === 0 ? (
         <EmptyState title={t('code.templates.noFrameworks')} />
@@ -811,5 +904,210 @@ function TemplatesPanel(): ReactElement {
       )}
       {copy.isError && <ErrorBanner error={copy.error} />}
     </section>
+  )
+}
+
+/** What the catalog endpoint says a binding must fill in for a capability. */
+interface CapabilityCatalogRow {
+  capability: string
+  agentSlots: string[]
+}
+
+interface AgentRow {
+  id: string
+  name: string
+}
+
+/**
+ * Create a framework (department layer) — name + which capability it drives.
+ *
+ * Scripts are deliberately NOT collected here. They run as the daemon, so
+ * authoring one needs `scripts:author` and a proper editor; a team that only
+ * needs "review my merge requests" should never be asked for a script to get
+ * started. A framework with no scripts is valid for every capability whose
+ * contract has no script stage — which today is all of them but `ci-fix`.
+ */
+function NewFrameworkDialog(props: {
+  open: boolean
+  onClose: () => void
+  capabilities: CapabilityCatalogRow[]
+}): ReactElement {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [name, setName] = useState('')
+  const [capability, setCapability] = useState('')
+
+  const create = useMutation({
+    mutationFn: () =>
+      api.post<FrameworkRow>('/api/capability-frameworks', {
+        name,
+        capability,
+        scripts: {},
+        hooks: [],
+        paramSchema: [],
+        paramDefaults: {},
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['capability-frameworks'] })
+      setName('')
+      setCapability('')
+      props.onClose()
+    },
+  })
+
+  const ready = name.trim() !== '' && capability !== ''
+
+  return (
+    <Dialog
+      open={props.open}
+      onClose={props.onClose}
+      title={t('code.templates.newFramework')}
+      footer={
+        <>
+          <button type="button" className="btn btn--sm" onClick={props.onClose}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--sm btn--primary"
+            disabled={!ready || create.isPending}
+            onClick={() => create.mutate()}
+            data-testid="code-framework-create"
+          >
+            {t('code.templates.createAction')}
+          </button>
+        </>
+      }
+    >
+      <Field label={t('code.templates.nameLabel')} required>
+        <TextInput value={name} onChange={setName} data-testid="code-framework-name" />
+      </Field>
+      <Field label={t('code.templates.capabilityLabel')} required>
+        <Select<string>
+          value={capability}
+          options={props.capabilities.map((row) => ({
+            value: row.capability,
+            label: t(`code.capability.${row.capability}`),
+          }))}
+          onChange={setCapability}
+          placeholder={t('code.templates.capabilityLabel')}
+          ariaLabel={t('code.templates.capabilityLabel')}
+          data-testid="code-framework-capability"
+        />
+      </Field>
+      {create.isError && <ErrorBanner error={create.error} />}
+    </Dialog>
+  )
+}
+
+/**
+ * Create a binding (group layer) — which agent fills each of the capability's
+ * AI slots.
+ *
+ * The slots come from the catalog rather than a list written here: a capability
+ * that gains a slot must show it without a frontend change, which is the whole
+ * reason that endpoint derives from the stage contracts.
+ */
+function NewBindingDialog(props: {
+  open: boolean
+  onClose: () => void
+  frameworks: FrameworkRow[]
+  capabilities: CapabilityCatalogRow[]
+}): ReactElement {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [name, setName] = useState('')
+  const [frameworkId, setFrameworkId] = useState('')
+  const [agentBySlot, setAgentBySlot] = useState<Record<string, string>>({})
+
+  const agents = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => api.get<AgentRow[]>('/api/agents'),
+    enabled: props.open,
+  })
+
+  const capabilityOf = props.frameworks.find((f) => f.id === frameworkId)?.capability ?? ''
+  const slots = props.capabilities.find((c) => c.capability === capabilityOf)?.agentSlots ?? []
+
+  const create = useMutation({
+    mutationFn: () =>
+      api.post<BindingRow>('/api/capability-bindings', {
+        name,
+        frameworkId,
+        agentBySlot,
+        promptBySlot: {},
+        params: {},
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['capability-bindings'] })
+      setName('')
+      setFrameworkId('')
+      setAgentBySlot({})
+      props.onClose()
+    },
+  })
+
+  // Every slot filled, not just some: a round whose second AI stage has no
+  // agent fails halfway, after it has already taken the merge-request lease.
+  const ready = name.trim() !== '' && frameworkId !== '' && slots.every((s) => agentBySlot[s])
+
+  return (
+    <Dialog
+      open={props.open}
+      onClose={props.onClose}
+      title={t('code.templates.newBinding')}
+      footer={
+        <>
+          <button type="button" className="btn btn--sm" onClick={props.onClose}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--sm btn--primary"
+            disabled={!ready || create.isPending}
+            onClick={() => create.mutate()}
+            data-testid="code-binding-create"
+          >
+            {t('code.templates.createAction')}
+          </button>
+        </>
+      }
+    >
+      <Field label={t('code.templates.nameLabel')} required>
+        <TextInput value={name} onChange={setName} data-testid="code-binding-name" />
+      </Field>
+      <Field label={t('code.templates.frameworkLabel')} required>
+        <Select<string>
+          value={frameworkId}
+          options={props.frameworks.map((f) => ({
+            value: f.id,
+            label: `${f.name} · ${t(`code.capability.${f.capability}`)}`,
+          }))}
+          onChange={(id) => {
+            setFrameworkId(id)
+            // Slots belong to the capability; keeping the old picks would carry
+            // a reviewer into a ci-fix binding under a slot name that no longer
+            // exists.
+            setAgentBySlot({})
+          }}
+          placeholder={t('code.templates.frameworkLabel')}
+          ariaLabel={t('code.templates.frameworkLabel')}
+          data-testid="code-binding-framework"
+        />
+      </Field>
+      {slots.map((slot) => (
+        <Field key={slot} label={t('code.templates.slotLabel', { slot })} required>
+          <Select<string>
+            value={agentBySlot[slot] ?? ''}
+            options={(agents.data ?? []).map((a) => ({ value: a.id, label: a.name }))}
+            onChange={(agentId) => setAgentBySlot((prev) => ({ ...prev, [slot]: agentId }))}
+            placeholder={t('code.templates.slotLabel', { slot })}
+            ariaLabel={t('code.templates.slotLabel', { slot })}
+            data-testid={`code-binding-slot-${slot}`}
+          />
+        </Field>
+      ))}
+      {create.isError && <ErrorBanner error={create.error} />}
+    </Dialog>
   )
 }
