@@ -42,7 +42,6 @@ import {
   receiptMarker,
   renderReceipt,
   TRIGGER_SOURCES,
-  type TriggerSource,
 } from '../src/modules/code-capability/domain/triggerSource'
 
 describe('RFC-304 T59 — who is owed an answer', () => {
