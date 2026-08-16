@@ -8,9 +8,9 @@
 >
 > **2026-08-16 收尾两步（`8313a7d4` / `f1e394e1`）**：①**实现完整性审视**——按源码逐条对账扫「两半都对、就是没接上」，全模块「零生产引用」普查 8 个模块，接上 T45 失效 / T62 数据 GC / `mrVoice` 三处「写完了没人调」；②**system-mock E2E**（`e2e/rfc304-capability-platform.spec.ts`，8 条全绿）——一条签名 webhook 打进编译后 daemon，立刻照出三处单测永远看不见的断链（轮次起在 scratch 空间 ⇒ `prepare-worktree` 必死；`repoId` 传了文件路径 ⇒ AI 阶段全拒、团队钩子从未触发；没有人给轮次写终态 ⇒ 永远 `running`），均已修。现在 **mr-review 十三阶段全绿、outcome=published、MR 上真的出现行级评论**（draft_notes + 一次 bulk_publish）。
 >
-> **追加（`5566b1f2`）**：实现了阶段引擎的 `script` 种类（`composition/scriptStages.ts`，按 contract 派生 + 引擎分派 + 从框架解析脚本），这是 ci-fix 的**第一道闸**。但修好后露出**第二道**：`readinessFacts.ts:98` 把 `hasWakeSource` 硬编码 `false` 而 `NEEDS_WAKE_SOURCE` 恰好只含 ci-fix ⇒ 格子永远 misconfigured、永远不被唤醒（源码注释自陈延后到 T35c）。
+> **追加（`5566b1f2` / `dbad7f1e`）：ci-fix 也跑通了**——连拆五道闸，每道都被前一道挡着：①阶段引擎 `script` 种类未实现；②`hasWakeSource` 硬编码 false；③arm trigger 死锁（只容忍 `no-trigger`，而 `no-wake-source` 恰恰要靠 arm 才能满足）；④`syncCapabilityTrigger` 缺省回退到 MR-review 事件集，ci-fix 的 trigger 不含 pipeline 事件；⑤arm 后 re-derive 只补 `hasTrigger` 没补 `hasWakeSource`。第②条**我此前误判为待裁决**：proposal §6ter-H1 早已结掉（GitLab CI 触发、链路天然成立、wake 入口降为可选且「PR-9 范围不变」），那只是个比裁决活得久的过期占位符。E2E 共 9 条全绿。
 >
-> **待用户裁决的四项**（均已在 plan §2bis / §2ter 记账，不自行开工）：T44 推送授权零调用（缺 `mrAuthor` / bot 账号两份数据，只接一半会拦住主路径）、工作项状态机与生产实现重复、自评论回环守卫是失效的冗余防线（主防线 `ignoreUsernames` 是通的）、**ci-fix 的 wake source 判据**（要定义「什么算 wake source」——按 PR-9 union 形状 ci-fix 由监视器派发；写错就会把起不来的格子标成 ready）。
+> **待用户裁决的三项**（均已在 plan §2bis / §2ter 记账，不自行开工）：T44 推送授权零调用（缺 `mrAuthor` / bot 账号两份数据，只接一半会拦住主路径）、工作项状态机与生产实现重复、自评论回环守卫是失效的冗余防线（主防线 `ignoreUsernames` 是通的）、（原列的第四项「ci-fix wake source」已查明是 §6ter-H1 结过的事，非待裁决，已修）。
 >
 > **下一步：T4a3 真机验收**（真实 MR 上出现行级评论，需用户环境）。
 >
