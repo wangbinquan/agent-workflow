@@ -1076,7 +1076,7 @@ daemon 的」被 fence 放行，用例转红。夹具改用 `DAEMON_GENERATION`�
 | ---------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | AC-35 单条可更新总览   | **我先前的判断是错的**——见下方勘误                                                                          | 无生产改动（只补了 `parsePrevious` 这缺失的一半）                                                   |
 | §11.1 噪音上限         | `notificationsSpent` 无人赋值，`say()` 永远判「已花 0」，上限从未生效一次                                   | 口径 = **MR 上平台自己的评论数**（建一条 = 一次通知，编辑不通知）；`say` 给正文打不可见标记以便计数 |
-| §11.2 T59 人工指令回执 | `answer` 零调用方，没人收到过回执                                                                           | issue 打标签入口建回执，路由结果与轮次终局在**同一条**上更新                                        |
+| §11.2 T59 人工指令回执 | `answer` 零调用方，没人收到过回执                                                                           | **仍未接线**——见下方「回执被下一层挡住」。模块与 14 条单测保留                                      |
 | readiness 陈旧         | `forRepo` 逐字读存储值，唯一写点是 enable；`dependencyRevision` 硬编码 1；`readinessInvalidation.ts` 零导入 | **读时推导**——结构上不可能陈旧                                                                      |
 
 **AC-35 勘误（e2e 当场打脸，值得写下来）**：我按「`updateSummary` 零调用方」判定「MR 上
@@ -1096,6 +1096,27 @@ daemon 的」被 fence 放行，用例转红。夹具改用 `DAEMON_GENERATION`�
 （ci-fix / mr-comment-fix / requirement / mr-monitor）不参与。要让它们也进这条总览，得把
 mr-review 的总览统一到 `mrVoice.updateSummary` 上，那会动到 review 总览的正文契约
 （e2e 断言里的 `still open` 等），是一次独立重构，未做。
+
+**回执被下一层挡住（e2e 第二次打脸，同样值得写下来）**：我把回执接在 issue 打标签
+入口 + 轮次终局上，单测 14 条全绿；写了条 e2e 用真事件走真 daemon，回执**从未到达**。
+原因在 shared 的 code-host action 目录：`comment.create` **只支持 MR**，GitLab binding
+是 `/projects/{id}/merge_requests/{mr}/notes`，整个 registry **没有任何 issue 版本**
+——「在 issue 上发一条评论」这件事平台现在做不到。GitHub 恰好能（它 issue/PR 评论
+同一个端点），正是这种不对称让半残功能看起来像完成了。
+
+评论源是刻意不开的（见下），issue 打标签是仅剩入口；没有 issue 端点，那条接线只能
+记一条 warning 然后返回——**静默什么也不做的接线**，正是本 RFC 一直在清的那类缺陷。
+所以整体撤回，不留「看起来做完了」的假象；`application/manualReceipt.ts` 与其 14 条
+单测保留，文件头写明未接线与原因。
+
+**前置条件（建议单独立 RFC）**：给 action 目录加 issue 作用域的评论三件套 create /
+list / update——GitLab `/projects/{id}/issues/{iid}/notes`、GitHub
+`/repos/{owner}/{repo}/issues/{n}/comments`。它动的是 UI 里可配置的 action 选择面
+（`CODE_HOST_ACTIONS` 是闭合集合，带 i18n 与 intent-doc 断言），属产品面变更。
+
+**两次打脸的共同点**：都是「符号级判断」对、「产品级判断」错，而且**两次都只有
+e2e 抓得住**——单测测的是模块，模块一直是对的。总览那次是「这件事早就有人做了」，
+回执这次是「这件事下一层根本做不到」。定式已进 `docs/dev-gotchas.md`。
 
 两处**刻意收窄**，都写在代码注释里：
 

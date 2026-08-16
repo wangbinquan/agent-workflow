@@ -159,7 +159,6 @@ import { CI_FIX_AGENT_SLOT } from '@/modules/code-capability/domain/ciFixEnvelop
 import { settleDanglingAttempts } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
 import { withRoundLease } from '@/services/codeRoundLease'
 import { resolveDaemonGeneration } from '@/services/daemonGeneration'
-import { closeReceiptForRound } from '@/modules/code-capability/application/manualReceipt'
 import { resolveCapabilityHooks } from '@/services/codeCapabilityHooks'
 import { closeRound } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
 import { noteWorkItemEvent } from '@/modules/code-capability/application/workItemProgress'
@@ -5359,41 +5358,6 @@ async function finalizeRound(
               pendingGeneration: awaiting?.pendingGeneration ?? round?.epoch ?? 1,
             }
           : { kind: 'round-failed' },
-  })
-
-  // §11.2 T59 — close the receipt, if a person opened one.
-  //
-  // AFTER the work-item transition, not before. This talks to the code host,
-  // and the item's state is what a person (and the `/code` page, and every
-  // test) watches — putting a network round-trip in front of it means the
-  // round is visibly over while the item still reads `running`. That window
-  // was wide enough on CI to turn `rfc304-confirm-and-push` red: it waits for
-  // the round to end and then asserts the item says `awaiting`.
-  //
-  // `createIfMissing: false` inside means this stays silent on the automatic
-  // paths without needing to know which they were: only the ingress creates a
-  // receipt, and only for an instruction somebody typed, so "is there a receipt
-  // for this round's delivery" IS "was anybody waiting".
-  //
-  // Awaited but never thrown: the round's answer is already recorded, and a
-  // comment the host refuses must not turn a finished round into a failed one.
-  await closeReceiptForRound({
-    db,
-    roundId: codeRoundId,
-    state:
-      outcome === 'published'
-        ? { kind: 'done', detail: 'Done — the result is on this merge request.' }
-        : outcome === 'awaiting'
-          ? { kind: 'awaiting', detail: 'Ready for you: confirm the change and I will push it.' }
-          : outcome === 'canceled'
-            ? { kind: 'failed', detail: 'Cancelled before it finished.' }
-            : { kind: 'failed', detail: 'The round failed; the platform has the details.' },
-  }).catch((err: unknown) => {
-    createLogger('scheduler').warn('closing the instruction receipt threw', {
-      codeRoundId,
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return { answered: false as const, reason: 'threw' }
   })
 }
 

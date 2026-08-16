@@ -40,12 +40,6 @@ import {
   advanceDelivery,
   openDelivery,
 } from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
-import { answerManualInstruction } from '@/modules/code-capability/application/manualReceipt'
-import {
-  triggerSourceOfEvent,
-  type ReceiptState,
-  type TriggerSource,
-} from '@/modules/code-capability/domain/triggerSource'
 import { markDelivery } from '@/services/webhook/deliveryStore'
 import {
   evaluateCircuit,
@@ -1122,54 +1116,6 @@ async function closeCodeCapabilitiesFor(
  * other capabilities and any matched triggers still have work to do.
  */
 
-/**
- * Which manual sources open a receipt at INGRESS.
- *
- * Narrower than `isManualInstruction`, on purpose. Labelling an issue is
- * unambiguously an instruction — nobody labels an issue at the platform by
- * accident — and `requirement` then works for a long time without saying
- * anything, which is exactly the "half an hour and no sign of life" case §11.2
- * describes.
- *
- * A COMMENT is not included, and that is the deliberate gap. `mr-comment-fix`
- * wakes on any note on the merge request, so acknowledging every one would put
- * a machine reply under every line of an ordinary human conversation — the feed
- * §11.1 exists to prevent, produced by the rule meant to help. That capability
- * already answers for itself: its `declined` path posts an explanation, and its
- * applied path posts the change. Narrowing this further (recognising a genuine
- * @-mention rather than any comment) needs mention-detection that does not
- * exist yet, and guessing at it would be the same over-reach in a new place.
- */
-function opensReceipt(source: TriggerSource): boolean {
-  return source === 'issue-label'
-}
-
-/**
- * Edit an instruction's receipt to its new state, best-effort.
- *
- * A small wrapper because the same three fields are addressed from four places,
- * and getting one of them wrong (answering the wrong thread, or the wrong id)
- * fails silently on the far side of the wire.
- */
-async function updateReceipt(
-  db: DbClient,
-  input: { deliveryId: string; endpoint: { id: string }; event: CodeHostEvent },
-  state: ReceiptState,
-): Promise<void> {
-  await answerManualInstruction({
-    db,
-    operationId: input.deliveryId,
-    endpointId: input.endpoint.id,
-    stableProjectId: input.event.projectId ?? null,
-    anchorKind: input.event.mrIid !== undefined ? 'mr' : 'issue',
-    anchorId: input.event.mrIid ?? input.event.issueIid ?? null,
-    state,
-  }).catch((err: unknown) => {
-    log.warn('could not update a manual instruction receipt', { error: errText(err) })
-    return { answered: false as const, reason: 'threw' }
-  })
-}
-
 async function wakeCodeCapabilitiesFor(
   deps: WebhookDispatchDeps,
   input: { endpoint: WebhookEndpointRow; event: CodeHostEvent; deliveryId: string },
@@ -1244,32 +1190,6 @@ async function wakeCodeCapabilitiesFor(
       outcome: 'ok',
     })
 
-    // §11.2 T59 — a person who TYPED at the platform gets an answer, starting
-    // now. Created before routing rather than after it, because "queued behind
-    // a lease" and "nobody is listening" look identical from the outside, and
-    // the whole failure this prevents is somebody re-sending the instruction
-    // into that silence.
-    //
-    // The receipt's id IS the correlation id, so the comment a person reads and
-    // the troubleshooting row an administrator greps are provably one event.
-    const triggerSource = triggerSourceOfEvent(input.event.eventType)
-    if (opensReceipt(triggerSource)) {
-      await answerManualInstruction({
-        db: deps.db,
-        operationId: input.deliveryId,
-        endpointId: input.endpoint.id,
-        stableProjectId: input.event.projectId ?? null,
-        anchorKind: input.event.mrIid !== undefined ? 'mr' : 'issue',
-        anchorId: input.event.mrIid ?? input.event.issueIid ?? null,
-        state: { kind: 'received' },
-      }).catch((err: unknown) => {
-        // Never fatal: the instruction is being carried out either way, and
-        // failing it because the acknowledgement failed is the wrong way round.
-        log.warn('could not acknowledge a manual instruction', { error: errText(err) })
-        return { answered: false as const, reason: 'threw' }
-      })
-    }
-
     const context = webhookTriggerContextOf(input.event)
     const result = await wakeCapabilitiesForDelivery({
       db: deps.db,
@@ -1316,9 +1236,6 @@ async function wakeCodeCapabilitiesFor(
         reason: firstFailure.error,
         capability: firstFailure.capability,
       })
-      if (opensReceipt(triggerSource)) {
-        await updateReceipt(deps.db, input, { kind: 'failed', detail: firstFailure.error })
-      }
     } else if (firstStarted !== undefined) {
       await advanceDelivery({
         db: deps.db,
@@ -1328,14 +1245,6 @@ async function wakeCodeCapabilitiesFor(
         capability: firstStarted.capability,
         roundId: firstStarted.roundId ?? null,
       })
-      // Edited, not appended: the same receipt now reads "working on it", so
-      // the whole exchange still costs the one notification it opened with.
-      if (opensReceipt(triggerSource)) {
-        await updateReceipt(deps.db, input, {
-          kind: 'running',
-          detail: firstStarted.capability,
-        })
-      }
     } else {
       await advanceDelivery({
         db: deps.db,
@@ -1344,15 +1253,6 @@ async function wakeCodeCapabilitiesFor(
         outcome: 'dropped',
         reason: 'no enabled capability wanted this event',
       })
-      // A dropped instruction is the case this rule exists for. Left
-      // unanswered, the person sees "Got it — queued." forever and concludes
-      // the platform is slow rather than that nothing is listening.
-      if (opensReceipt(triggerSource)) {
-        await updateReceipt(deps.db, input, {
-          kind: 'failed',
-          detail: 'no capability on this repository is set up to handle that',
-        })
-      }
     }
 
     return result.started.length > 0 || (result.observed ?? []).length > 0

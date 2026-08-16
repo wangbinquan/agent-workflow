@@ -1,4 +1,6 @@
-// RFC-304 §11.2 T59 — the receipt, now that something creates one.
+// RFC-304 §11.2 T59 — the receipt module, and the reason it still has no caller.
+//
+// ⚠️ NOT WIRED. Read this before concluding the platform sends receipts.
 //
 // The rule exists because silence on the manual paths does not reduce noise, it
 // multiplies it: a reviewer @-mentions the platform, hears nothing for half an
@@ -11,10 +13,34 @@
 // in either direction: a manual instruction is always answered, an automatic
 // event never is, and the closing update finds the receipt by the same
 // correlation id the troubleshooting chain uses rather than by guessing.
+//
+// ## Why nothing calls this yet
+//
+// It WAS wired — ingress plus round-finalize — and an e2e driving a real
+// `issue_labeled` event through a real daemon showed the receipt never arrived.
+// The cause is one layer down: `comment.create` in the shared code-host catalog
+// is merge-request-only. Its GitLab binding is
+// `/projects/{id}/merge_requests/{mr}/notes`, and there is no issue equivalent
+// anywhere in the registry, so a receipt on an ISSUE cannot be posted at all.
+// (GitHub happens to be able to — its issue and PR comments are one endpoint —
+// which is exactly the kind of asymmetry that makes a half-working feature look
+// finished.)
+//
+// Comments were deliberately excluded as a receipt source (`mr-comment-fix`
+// wakes on any note, so acknowledging each would reply under every line of a
+// human conversation), and issue labels were the one source left. With no issue
+// endpoint, the wiring could only log a warning and return — wiring that
+// silently does nothing, which is the exact defect class this RFC has been
+// clearing out. So it was taken back out rather than left looking done.
+//
+// Delivering T59 needs an issue-scoped comment action in the catalog
+// (GitLab `/projects/{id}/issues/{iid}/notes`, GitHub
+// `/repos/{owner}/{repo}/issues/{n}/comments`) for create, list and update.
+// That is a change to the configurable action surface the UI renders, so it
+// belongs to its own RFC rather than to this one's cleanup.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { codeTriggerDeliveries, webhookEndpoints } from '../src/db/schema'
 import { triggerSourceOfEvent } from '../src/modules/code-capability/domain/triggerSource'
@@ -85,23 +111,6 @@ describe('RFC-304 §11.2 — which events a person is waiting on', () => {
     expect(triggerSourceOfEvent('mr_opened')).toBe('webhook')
     expect(triggerSourceOfEvent('mr_updated')).toBe('webhook')
     expect(triggerSourceOfEvent('pipeline_failed')).toBe('webhook')
-  })
-
-  test('a comment does NOT open a receipt at ingress, and that is deliberate', () => {
-    // `mr-comment-fix` wakes on ANY note on a merge request, so acknowledging
-    // each one would put a machine reply under every line of an ordinary human
-    // conversation — the feed §11.1 exists to prevent, produced by the rule
-    // meant to help. That capability already answers for itself: it posts an
-    // explanation when it declines and the change when it does not.
-    //
-    // Asserted at source level because the predicate is a private decision of
-    // the dispatch path, and the cost of getting it wrong lands on real merge
-    // requests rather than in a test.
-    const src = readFileSync(
-      join(import.meta.dir, '..', 'src', 'services', 'webhook', 'webhookDispatch.ts'),
-      'utf8',
-    )
-    expect(src).toContain("return source === 'issue-label'")
   })
 
   test('an event type nobody has mapped yet defaults to SILENT', () => {
@@ -275,19 +284,6 @@ describe('RFC-304 T59 — the receipt chain', () => {
     })
     expect(host.comments[0]?.body).toContain('Ready for you')
     expect(host.comments[0]?.body).not.toContain('did not work')
-  })
-
-  test('the finalize path actually calls it — the join, locked', async () => {
-    // Added after a revert silently deleted this call: an over-greedy edit took
-    // the block out, everything still compiled, every unit case above stayed
-    // green, and only `--max-warnings 0` noticed the now-unused import. A join
-    // with no lock is a join that can vanish without a red test — which is the
-    // whole defect class this RFC has been fixing.
-    const src = readFileSync(join(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'), 'utf8')
-    expect(src).toContain('closeReceiptForRound({')
-    // On EVERY terminal outcome, not only the happy one: a person left on
-    // "queued" by a failed round is the exact silence §11.2 exists to end.
-    expect(src).toContain("outcome === 'awaiting'")
   })
 
   test('a round with no delivery row is a refusal, not a crash in finalize', async () => {
