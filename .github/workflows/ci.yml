@@ -18,7 +18,7 @@ jobs:
     # ubuntu — instead of on every OS as the old monolithic `check` job did —
     # removes ~120s of duplicated work from the critical path with zero loss of
     # signal. No opencode needed: none of these spawn the daemon.
-    name: Lint + Typecheck + Format + Shared tests
+    name: Lint + Typecheck + Format + Shared + system mock tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -60,6 +60,10 @@ jobs:
       - name: Test (shared, bun:test)
         shell: bash
         run: bun run --filter @agent-workflow/shared test
+
+      - name: Test (system mocks, bun:test)
+        shell: bash
+        run: bun run test:system-mocks
 
   test-backend:
     # The backend suite (~740 files) is the single biggest CI cost center, and
