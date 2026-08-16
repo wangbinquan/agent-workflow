@@ -956,26 +956,55 @@ yet` 立刻失败。**这一处没有任何未决**：四个槽位就是框架�
 注意**别混淆两条脚本路径**：监视器自己的四个脚本走 `monitorLoop.ts` 的
 `runMonitorScript`，那条一直是通的；没通的是**阶段引擎里的 script 种类**。
 
-**闸二：`hasWakeSource` 硬编码 `false`（未修，需用户裁决）**
+**闸二：`hasWakeSource` 硬编码 `false`（已修）**
 
 ```
 readinessFacts.ts:98    hasWakeSource: false,
 readinessFacts.ts:33    const NEEDS_WAKE_SOURCE = new Set(['ci-fix'])
 ```
 
-源码注释自陈：「还没有人提供 wake source（wake entry point 是 PR-6 T35c），所以
-对需要它的能力这里诚实地写 false，而不是乐观地写 true」。后果是 **ci-fix 的格子
-永远 `misconfigured`（`no-wake-source`）⇒ 永远不会被唤醒**——所以闸一修好之后，
-它仍然起不了轮。
+源码注释自陈「wake entry point 是 PR-6 T35c，所以诚实地写 false」。但**那条注释比它
+依据的裁决活得久**：proposal §6ter-H1 早已把这条唯一的待证事实结掉了——
 
-不自行修的理由是**这一步要定义"什么算 wake source"**，而不是接线：按 PR-9 打开
-`WorkPackage` union 的形状看，ci-fix 是**由监视器派发**的（不是被 `pipeline_failed`
-直接唤醒），那么"本仓启用了监视器"是否即算 wake source？这是产品判断，且写错的
-后果正是该规则要防的那一种——把一个**起不来的格子标成 ready**（注释里写明这是
-「最糟的 readiness 答案，因为它自信地错」）。**留给用户裁决**。
+> 由 GitLab CI 触发，GitLab 侧有 pipeline 对象 → 唤醒链路**天然成立**；wake 入口从
+> 「必需」**降为可选**；**PR-9 范围不变**。「链路本来就通，不需要你们的流水线做任何改动。」
 
-E2E 里为此写的 ci-fix 用例已撤掉：不该把一个被另一处**有意延后**的决定挡住的路径
-写成「期望值」。闸二一旦拍板，那条用例即可直接接上（脚本执行已具备）。
+plan.md 的 T35c 行同样写着「**不构成 CI 修复上线的前置**」。所以这不是待裁决项，是
+**一个过期占位符把一整条能力关掉了**——`ci-fix` 是唯一需要 wake source 的能力，于是
+它的格子永远 misconfigured。
+
+修在**事实层**而非规则层：`deriveReadiness` 一直是对的（`rfc304-template-layers` 双向
+都测了），错的只是喂给它的事实。改为按 contract 派生：**ci-fix 的 wake source 就是它
+自己那条 trigger 上的 pipeline 事件**。两个方向都保持诚实——普通格子可被唤醒即
+`ready`，而有人把 events 收窄到不含 pipeline 事件时仍报 `no-wake-source`（AC-14d 立
+这条规则正是为了这种情况）。
+
+### 2ter.5 修完闸二又连出三处（都已修，全是同一族）
+
+闸二一开，后面三处依次露出来——**每一处都被前一处挡着看不见**，与 2ter.1–2ter.3 完全同形：
+
+| #   | 症状                           | 根因                                                                                                                                                                             |
+| --- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | armed 不了 trigger             | `onlyTriggerMissing` 只容忍 `no-trigger`，而 ci-fix 起手同时有 `no-wake-source`——**而后者恰恰要靠 arm trigger 才能满足**。死锁：没 trigger 因为没 ready，没 ready 因为没 trigger |
+| 2   | trigger armed 了但事件不对     | `syncCapabilityTrigger` 缺省回退到 **MR-review 的事件集**（它是为那条能力写的），于是 ci-fix 的 trigger 不含任何 pipeline 事件                                                   |
+| 3   | 事件对了但格子仍 misconfigured | arm 之后的 re-derive 只手工补了 `hasTrigger: true`，没补 `hasWakeSource`——**紧接着供给了 wake source 的那个动作之后，格子仍说没有 wake source**，且此后无人重算                  |
+
+三处的修法分别是：容忍「arm 本身能消掉的那些 issue」（并用事件检查兜住——收窄了事件
+的格子 arm 也救不了，必须继续报错）、把**本格子的事件**显式传给 sync、re-derive 时把
+arm 真正变true的**两个**事实都补上。
+
+另有一处小的：`buildCapabilityWiring` 把 `interpreterPath` 缺省成空串，spawn 时表现为
+可执行文件缺失、读起来像框架作者的脚本写错了。改为复用 `defaultInterpreterFor`（含
+Windows 的 `python` / `python3` 分支），**按每个脚本各自的语言解析**。
+
+### ci-fix 现在跑通到哪
+
+E2E `a SECOND capability is reachable` 全绿：格子 `ready`（zero issues）→ 一条
+`pipeline_failed` 投递 → 轮次起来 → 第一个阶段是 ci-fix 自己 contract 的 `collect`
+（不是 review 的）→ 框架的两个 python 脚本真跑、输出被接受（`collect` / `classify`
+均 `done`）→ 无任何 "no runner registered"。
+
+E2E 共 9 条全绿。
 
 ## 3. 验收清单
 

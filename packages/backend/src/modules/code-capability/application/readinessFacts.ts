@@ -19,7 +19,7 @@ import { lookupStageContract } from '@/modules/code-capability/domain/capability
 import { parseCodeCapabilityId } from '@/modules/code-capability/domain/stageContract'
 import type { ReadinessInput } from '@/modules/code-capability/domain/templateLayers'
 import { resolveCodeHostEndpointId } from '@/modules/code-capability/composition/mrReviewEnvironment'
-import { findCapabilityTrigger } from '@/services/codeCapabilityTrigger'
+import { findCapabilityTriggerRow } from '@/services/codeCapabilityTrigger'
 import { resolveAgentForBinding } from '@/services/codeReviewAgentCaller'
 
 /**
@@ -72,7 +72,7 @@ export async function gatherReadinessFacts(input: GatherFactsInput): Promise<Rea
     }
   }
 
-  const triggerId = await findCapabilityTrigger(db, {
+  const trigger = await findCapabilityTriggerRow(db, {
     endpointId: input.endpointId,
     repoId: input.repoId,
     capability: input.capability,
@@ -87,15 +87,25 @@ export async function gatherReadinessFacts(input: GatherFactsInput): Promise<Rea
     enabled: input.enabled,
     hasBinding,
     frameworkExists,
-    hasTrigger: triggerId !== null,
+    hasTrigger: trigger !== null,
     codeHostConfigured: endpoint.ok,
     invisibleAgentSlots: await invisibleSlots(db, input),
     requiresWakeSource: NEEDS_WAKE_SOURCE.has(input.capability),
-    // Whatever wakes this capability other than an MR event. Nothing supplies
-    // one yet (the wake entry point is PR-6 T35c), so for the capabilities that
-    // need it this is honestly false rather than optimistically true — a `ready`
-    // that cannot start is worse than a `misconfigured` that says why.
-    hasWakeSource: false,
+    // What can start this capability, given it is not woken by an MR event.
+    //
+    // This was hardcoded `false` while the wake entry point (T35c) was believed
+    // mandatory — which meant `ci-fix`, the only capability requiring one, was
+    // permanently `misconfigured` and could never run at all. Proposal
+    // §6ter-H1 settled that: the pipelines are GitLab-triggered and GitLab
+    // already produces a pipeline object, so «链路本来就通» and T35c was demoted
+    // to optional with «PR-9 范围不变». The placeholder outlived the ruling.
+    //
+    // Derived rather than assumed, so both directions stay honest: an ordinary
+    // cell subscribed to pipeline events can be started and reads `ready`,
+    // while one whose events were narrowed to exclude them still reports
+    // `no-wake-source` — which is exactly the case AC-14d put the rule there
+    // for. A `ready` that cannot start remains the worst possible answer.
+    hasWakeSource: (trigger?.events ?? []).some((event) => event.startsWith('pipeline_')),
   }
 }
 

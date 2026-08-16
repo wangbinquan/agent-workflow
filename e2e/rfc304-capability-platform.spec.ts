@@ -49,6 +49,28 @@ const STUB_FINDING = {
   body: 'This line is what the E2E asserts reaches the merge request.',
 }
 
+/** `collect`'s result, in the monitor contract's shape. */
+const COLLECT_RESULT = {
+  conflict: false,
+  unresolvedComments: [],
+  gate: { status: 'fail' },
+  headSha: 'e2e-head',
+}
+
+/** `classify`'s result — one actionable issue. */
+const CLASSIFIED = [{ type: 'test-failure', message: 'the e2e fixture failed on purpose' }]
+
+/** A python script emitting one envelope port, the way a framework author would. */
+const emitPort = (port: string, value: unknown): string =>
+  [
+    'import os, json',
+    'n = os.environ["AW_ENVELOPE_NONCE"]',
+    `body = json.dumps(json.loads(r'''${JSON.stringify(value)}'''))`,
+    'print(f"<workflow-output nonce=\\"{n}\\">")',
+    `print(f"<port name=\\"${port}\\">{body}</port>")`,
+    'print("</workflow-output>")',
+  ].join('\n')
+
 let daemon: DaemonHandle
 let mocks: SystemMockClient
 let stateDir = ''
@@ -355,6 +377,103 @@ test('AC-1 — the finding reaches the merge request as a LINE comment, publishe
   // posted each finding separately must fail here rather than look equivalent.
   const bulk = requests.filter((request) => request.path.endsWith('/draft_notes/bulk_publish'))
   expect(bulk).toHaveLength(1)
+})
+
+test('a SECOND capability is reachable too — ci-fix opens a round with real stages', async () => {
+  // The audit's headline finding, asserted in production rather than in a unit
+  // test. The scheduler referenced `buildMrReviewWiring` and nothing else, so
+  // `ci-fix`, `mr-comment-fix` and `requirement` had complete, unit-tested
+  // stage compositions that a round could never reach — it got a runner with no
+  // stages and died at stage one with "has no runner registered yet".
+  //
+  // `buildCapabilityWiring` fixed that and has its own unit test, but a unit
+  // test cannot prove the SCHEDULER calls it. Only a real round can, and this
+  // is the cheapest real round to drive: one `pipeline_failed` delivery.
+  //
+  // What is NOT asserted is that the fix succeeds. There is no real CI here and
+  // no gate command wired, so the round is expected to stop somewhere. The
+  // assertion is that it stops for a REASON THE PLATFORM CAN NAME, having run
+  // actual stages — which is exactly the difference between wired and unwired.
+  const fixer = await requestJson<{ id: string }>('/api/agents', {
+    method: 'POST',
+    body: {
+      name: 'e2e-ci-fixer',
+      description: 'RFC-304 e2e ci-fixer',
+      outputs: ['fix'],
+      readonly: false,
+      bodyMd: 'Fix the pipeline.',
+    },
+  })
+  const framework = await requestJson<{ id: string }>('/api/capability-frameworks', {
+    method: 'POST',
+    body: {
+      name: 'e2e ci-fix framework',
+      capability: 'ci-fix',
+      scripts: {
+        collect: { language: 'python', script: emitPort('collect', COLLECT_RESULT) },
+        classify: { language: 'python', script: emitPort('classify', CLASSIFIED) },
+      },
+      hooks: [],
+      paramSchema: [],
+      paramDefaults: {},
+    },
+  })
+  const binding = await requestJson<{ id: string }>('/api/capability-bindings', {
+    method: 'POST',
+    body: {
+      name: 'e2e ci-fix binding',
+      frameworkId: framework.id,
+      agentBySlot: { 'ci-fixer': fixer.id },
+      promptBySlot: {},
+      params: {},
+    },
+  })
+  await requestJson(`/api/code/matrix/${repoId}`, {
+    method: 'PUT',
+    body: { capability: 'ci-fix', enabled: true, bindingId: binding.id },
+  })
+
+  // Asserted BEFORE delivering: a `misconfigured` cell is never woken, so
+  // without this the wait below would time out saying nothing about why.
+  const cell = await matrixRow('ci-fix')
+  expect({ readiness: cell.readiness, issues: cell.issues }).toEqual({
+    readiness: 'ready',
+    issues: [],
+  })
+
+  const delivered = await mocks.deliverWebhook({
+    provider: 'gitlab',
+    callbackUrl: `${daemon.baseUrl}/webhooks/gitlab/${endpoint.urlToken}`,
+    secret: endpoint.secret,
+    projectPath: PROJECT_PATH,
+    number: project.number,
+    event: 'pipeline_failed',
+  })
+  expect(delivered.status).toBe(200)
+
+  const round = await waitFor(
+    async () => {
+      const page = await requestJson<{ items: Array<{ rounds: RoundView[] }> }>(
+        '/api/code/work-items?capability=ci-fix',
+      )
+      const first = page.items[0]?.rounds[0]
+      return first !== undefined && first.stages.length > 0 ? first : null
+    },
+    async () => `a ci-fix round with stages\n  work items: ${await workItemDigest()}`,
+  )
+
+  // The ci-fix contract's OWN first stage, not the review contract's. The
+  // wiring is per capability, and a round handed the review stages would look
+  // just as "wired" here while reviewing a diff on a pipeline failure.
+  //
+  expect(round.stages[0]?.stageName).toBe('collect')
+  const unwired = round.stages.filter((s) => (s.error ?? '').includes('no runner registered'))
+  expect(unwired).toEqual([])
+
+  // The framework's own scripts ran and their output was accepted.
+  const byName = new Map(round.stages.map((s) => [s.stageName, s.status]))
+  expect(byName.get('collect')).toBe('done')
+  expect(byName.get('classify')).toBe('done')
 })
 
 test('no stage fails with "no runner registered" — the shape the audit found', async () => {

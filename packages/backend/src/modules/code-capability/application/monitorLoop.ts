@@ -488,7 +488,7 @@ export async function closeMonitorItem(args: {
 }
 
 /** The interpreter a script runs under when the caller did not name one. */
-function defaultInterpreterFor(definition: MonitorScriptDefinition): string {
+export function defaultInterpreterFor(definition: MonitorScriptDefinition): string {
   switch (definition.language) {
     case 'python':
       return process.platform === 'win32' ? 'python' : 'python3'

@@ -28,7 +28,10 @@ import {
   type MonitorScriptDefinition,
   type MonitorScriptEnvironment,
 } from '@/modules/code-capability/application/monitorScripts'
-import type { MonitorScriptSet } from '@/modules/code-capability/application/monitorLoop'
+import {
+  defaultInterpreterFor,
+  type MonitorScriptSet,
+} from '@/modules/code-capability/application/monitorLoop'
 import type {
   StageResult,
   StageRunContext,
@@ -120,10 +123,18 @@ export function buildScriptStages(
       const input: Record<string, unknown> = {}
       for (const key of stage.requires) input[key] = ctx.artifacts[key]
 
+      // Resolved per SCRIPT, because each stage's script may be a different
+      // language and the default differs by platform (`python` vs `python3`).
+      // An empty interpreter reaches the spawn as a missing executable, which
+      // surfaces as a script failure and reads like the author's fault.
+      const stageEnv = env.makeEnv(stage.name)
       const outcome = await runMonitorScript({
         definition: { ...definition, name: slot as MonitorScriptDefinition['name'] },
         schema,
-        env: env.makeEnv(stage.name),
+        env:
+          stageEnv.interpreterPath === ''
+            ? { ...stageEnv, interpreterPath: defaultInterpreterFor(definition) }
+            : stageEnv,
         input,
         ...(env.signal === undefined ? {} : { signal: env.signal }),
       })

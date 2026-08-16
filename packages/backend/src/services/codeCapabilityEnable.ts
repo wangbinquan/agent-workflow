@@ -18,6 +18,7 @@ import {
   type UpsertCellInput,
 } from '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
 import { retractCapabilityTrigger, syncCapabilityTrigger } from '@/services/codeCapabilityTrigger'
+import { DEFAULT_EVENTS_BY_CAPABILITY } from '@/modules/code-capability/domain/capabilityWake'
 
 export interface EnableCapabilityInput extends UpsertCellInput {
   db: DbClient
@@ -59,10 +60,36 @@ export async function enableCapability(
   // re-derived with the trigger present. Every other gap still returns early:
   // those are things a person must go and fix, and arming a trigger for them
   // would fire rounds that fail later, on the MR, in front of the author.
+  //
+  // `no-wake-source` counts as trigger-missing TOO, but only when arming would
+  // actually fix it. `ci-fix`'s wake source IS its pipeline event, and that
+  // event arrives through this very trigger — so before arming, the cell shows
+  // both gaps, and demanding `no-trigger` alone deadlocks: no trigger because
+  // not ready, not ready because no trigger. It reads as "ci-fix cannot be
+  // switched on", which is what it was.
+  //
+  // Guarded by the event check rather than waved through, because arming does
+  // NOT fix it when somebody narrowed the cell's events to exclude pipeline
+  // ones — there the cell must stay misconfigured and say so, which is the
+  // whole point of AC-14d's rule.
+  const cellEvents =
+    (Array.isArray(cellInput.triggerConfig?.events)
+      ? (cellInput.triggerConfig.events as unknown[]).filter(
+          (e): e is string => typeof e === 'string',
+        )
+      : undefined) ??
+    DEFAULT_EVENTS_BY_CAPABILITY[cellInput.capability] ??
+    []
+  const armingSuppliesWakeSource = cellEvents.some((event) => event.startsWith('pipeline_'))
+
   const onlyTriggerMissing =
     cell.readiness === 'misconfigured' &&
     cell.readinessIssues.length > 0 &&
-    cell.readinessIssues.every((issue) => issue.code === 'no-trigger')
+    cell.readinessIssues.every(
+      (issue) =>
+        issue.code === 'no-trigger' ||
+        (issue.code === 'no-wake-source' && armingSuppliesWakeSource),
+    )
 
   if (cell.readiness !== 'ready' && !onlyTriggerMissing) {
     // Retract any trigger from a previous ready state: a cell that has just
@@ -81,29 +108,41 @@ export async function enableCapability(
     }
   }
 
-  const events = Array.isArray(cellInput.triggerConfig?.events)
-    ? (cellInput.triggerConfig.events as unknown[]).filter(
-        (e): e is string => typeof e === 'string',
-      )
-    : undefined
-
+  // The CELL's events, already resolved above — the cell's own list when it has
+  // one, otherwise this capability's defaults.
+  //
+  // Passed explicitly because `syncCapabilityTrigger` falls back to the
+  // MR-REVIEW defaults when given nothing, which is right for the capability it
+  // was written for and silently wrong for every other: a `ci-fix` trigger
+  // armed with merge-request events carries no pipeline event, so the cell it
+  // just armed stays `no-wake-source` and nothing can ever start it.
   const { triggerId } = await syncCapabilityTrigger({
     db,
     endpointId,
     repoId: cellInput.repoId,
     capability: cellInput.capability,
     ownerUserId,
-    ...(events !== undefined ? { events } : {}),
+    ...(cellEvents.length > 0 ? { events: cellEvents } : {}),
     now: cellInput.now,
   })
 
   // Re-derived rather than patched: readiness is never accepted from a caller,
   // and writing `ready` directly here would be exactly that. Re-deriving from
   // the now-true fact keeps one path to the value.
+  //
+  // BOTH facts the arming just made true, not only the obvious one. A wake
+  // source for `ci-fix` IS the pipeline event on this trigger, so patching
+  // `hasTrigger` alone leaves the cell reading `no-wake-source` immediately
+  // after the very act that supplied one — and it would never clear, because
+  // nothing re-derives it later.
   const armed = onlyTriggerMissing
     ? await upsertCapabilityCell(db, {
         ...cellInput,
-        facts: { ...cellInput.facts, hasTrigger: true },
+        facts: {
+          ...cellInput.facts,
+          hasTrigger: true,
+          ...(armingSuppliesWakeSource ? { hasWakeSource: true } : {}),
+        },
       })
     : cell
 

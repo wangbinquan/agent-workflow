@@ -112,8 +112,28 @@ export async function findCapabilityTrigger(
   db: DbClient,
   key: { endpointId: string; repoId: string; capability: string },
 ): Promise<string | null> {
+  return (await findCapabilityTriggerRow(db, key))?.triggerId ?? null
+}
+
+/**
+ * The trigger backing a cell, WITH the events it fires on.
+ *
+ * The events are what readiness needs beyond "a trigger exists": `ci-fix` is
+ * started by an ordinary pipeline event (proposal §6ter-H1 — the chain holds
+ * because GitLab CI already produces one), so a cell whose trigger carries no
+ * pipeline event has nothing that can start it, however complete the rest of
+ * its configuration looks.
+ */
+export async function findCapabilityTriggerRow(
+  db: DbClient,
+  key: { endpointId: string; repoId: string; capability: string },
+): Promise<{ triggerId: string; events: readonly string[] } | null> {
   const rows = await db
-    .select({ id: webhookTriggers.id, repoScope: webhookTriggers.repoScope })
+    .select({
+      id: webhookTriggers.id,
+      repoScope: webhookTriggers.repoScope,
+      eventTypes: webhookTriggers.eventTypes,
+    })
     .from(webhookTriggers)
     .where(
       and(
@@ -132,7 +152,22 @@ export async function findCapabilityTrigger(
         typeof scope === 'object' && scope !== null
           ? (scope as { paths?: unknown }).paths
           : undefined
-      if (Array.isArray(paths) && paths.includes(key.repoId)) return row.id
+      if (Array.isArray(paths) && paths.includes(key.repoId)) {
+        let events: string[] = []
+        try {
+          const parsed: unknown = JSON.parse(row.eventTypes)
+          if (Array.isArray(parsed)) {
+            events = parsed.filter((e): e is string => typeof e === 'string')
+          }
+        } catch {
+          // An unreadable event list is reported as EMPTY rather than skipped:
+          // empty makes readiness say "nothing can start this", which is the
+          // truth, while skipping the row would say "no trigger at all" and
+          // send somebody to create a second one.
+          events = []
+        }
+        return { triggerId: row.id, events }
+      }
     } catch {
       continue
     }
