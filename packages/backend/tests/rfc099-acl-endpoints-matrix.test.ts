@@ -58,13 +58,21 @@ const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
 interface Harness {
   db: DbClient
   app: Hono
-  alice: { id: string; token: string } // owner
+  alice: { id: string; token: string } // owner (ordinary account)
+  /** RFC-304 — a department-layer owner, for resources an ordinary user cannot create. */
+  dept: { id: string; token: string }
   bob: { id: string; token: string } // grantee
   carol: { id: string; token: string } // stranger
   admin: { id: string; token: string }
 }
 
-async function buildHarness(): Promise<Harness> {
+/**
+ * `needsDept` gates a FIFTH user, and it is gated for a reason: user creation
+ * hashes a password, deliberately slowly. Building the department-layer actor
+ * for all eight cases would make the seven that never use it pay for the one
+ * that does, on every `beforeEach` — and this file already runs 33 tests.
+ */
+async function buildHarness(needsDept = false): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS)
   const app = createApp({
     token: DAEMON_TOKEN,
@@ -93,7 +101,7 @@ async function buildHarness(): Promise<Harness> {
     // would test a state the API cannot produce. Every other actor in the
     // matrix stays an ordinary user, which is what the stranger and grantee
     // cases need.
-    dept: await mkUser('dept', 'manager'),
+    dept: needsDept ? await mkUser('dept', 'manager') : { id: '__unused__', token: '__unused__' },
     bob: await mkUser('bob', 'user'),
     carol: await mkUser('carol', 'user'),
     admin: await mkUser('root', 'admin'),
@@ -323,7 +331,7 @@ for (const rc of CASES) {
     let owner: Harness['alice']
 
     beforeEach(async () => {
-      h = await buildHarness()
+      h = await buildHarness(rc.ownerActor === 'dept')
       owner = rc.ownerActor === 'dept' ? h.dept : h.alice
       key = rc.keyOf(await rc.seed(h.db, owner.id))
     })
