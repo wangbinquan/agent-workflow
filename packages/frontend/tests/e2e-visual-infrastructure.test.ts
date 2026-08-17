@@ -15,11 +15,11 @@ function repoFile(path: string): string {
 }
 
 describe('RFC-198 visual infrastructure source gates', () => {
-  test('visual spec declares exactly 35 counted scenes', () => {
+  test('visual spec declares exactly 36 counted scenes', () => {
     const source = repoFile('e2e/visual-regression.spec.ts')
-    expect(source).toContain('const EXPECTED_VISUAL_SCENE_COUNT = 35')
+    expect(source).toContain('const EXPECTED_VISUAL_SCENE_COUNT = 36')
     expect(source).toContain('const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)')
-    expect(source.match(/^\s{2}test\(/gm)).toHaveLength(35)
+    expect(source.match(/^\s{2}test\(/gm)).toHaveLength(36)
     expect(source).toContain('declaredVisualSceneCount !== EXPECTED_VISUAL_SCENE_COUNT')
     expect(source).toContain('async function waitForStableAuthenticatedShell(page: Page)')
     expect(source).toContain("await expect(userMenu).toContainText('e2e_admin')")
