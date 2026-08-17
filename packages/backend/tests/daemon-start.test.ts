@@ -192,6 +192,17 @@ describe('daemon start — lifecycle (per-test daemon)', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
+  // Two full daemon boots, and each `waitForReady` below already grants ten
+  // seconds — so the case declared a twenty-second intent inside bun's default
+  // five, and those inner budgets could never be reached. It passed only while
+  // boots were fast; on a macOS runner hosting four shards, two boots (each
+  // running migrations and writing a pre-migration backup) exceed five seconds
+  // and it died at 5029ms with the daemon still starting.
+  //
+  // Raising the budget is right HERE because nothing about the assertion is
+  // time-dependent: the token either survives a restart or it does not. That is
+  // the distinction between a timeout caused by a race (never paper over it)
+  // and one caused by work that outgrew its allowance.
   test('token + config persist across daemon restarts', async () => {
     let token1: string
     {
@@ -234,7 +245,7 @@ describe('daemon start — lifecycle (per-test daemon)', () => {
     expect(logged).toContain('lock acquired')
     expect(logged).not.toContain('opencode probe ok')
     expect(logged).toContain('db ready')
-  })
+  }, 30_000)
 
   test('missing OpenCode binary does not block startup and health reports not probed', async () => {
     const configPath = join(tmp, 'config.json')
