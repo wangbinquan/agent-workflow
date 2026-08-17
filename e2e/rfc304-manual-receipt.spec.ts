@@ -95,7 +95,7 @@ test.beforeAll(async () => {
 
   const repoId = await importRepo(project.repoHttpUrl)
 
-  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
+  const template = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'receipt framework',
@@ -104,13 +104,6 @@ test.beforeAll(async () => {
       hooks: [],
       paramSchema: [],
       paramDefaults: {},
-    },
-  })
-  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
-    method: 'POST',
-    body: {
-      name: 'receipt binding',
-      frameworkId: framework.id,
       agentBySlot: { analyst: analyst.id, implementer: analyst.id },
       promptBySlot: {},
       params: {},
@@ -118,7 +111,7 @@ test.beforeAll(async () => {
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'requirement', enabled: true, templateId: binding.id },
+    body: { capability: 'requirement', enabled: true, templateId: template.id },
   })
 })
 

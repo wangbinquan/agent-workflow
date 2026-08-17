@@ -124,7 +124,7 @@ test.beforeAll(async () => {
 
   const repoId = await importRepo(project.repoHttpUrl)
 
-  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
+  const template = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'reconcile framework',
@@ -133,13 +133,6 @@ test.beforeAll(async () => {
       hooks: [],
       paramSchema: [],
       paramDefaults: {},
-    },
-  })
-  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
-    method: 'POST',
-    body: {
-      name: 'reconcile binding',
-      frameworkId: framework.id,
       agentBySlot: { reviewer: agent.id },
       promptBySlot: {},
       params: {},
@@ -147,7 +140,7 @@ test.beforeAll(async () => {
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'mr-review', enabled: true, templateId: binding.id },
+    body: { capability: 'mr-review', enabled: true, templateId: template.id },
   })
 })
 

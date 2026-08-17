@@ -123,7 +123,7 @@ test('a prompt edited on the graph is saved and still there after a reload', asy
   const prompt = page.getByTestId('stage-prompt-review-shard')
   await expect(prompt).toBeVisible()
   await prompt.fill(edited)
-  await page.getByTestId('stage-save-binding-review-shard').click()
+  await page.getByTestId('stage-save-agent-review-shard').click()
 
   // Round-trips through `PUT /api/capability-templates/:id` and comes back from
   // the database, not from local state.
@@ -161,8 +161,6 @@ test('the demo content is labelled as a sample and is not read-only', async ({ p
   await expect(page.getByText('[demo] Review a change')).toBeVisible({ timeout: 30_000 })
 
   await page.goto(`${daemon.baseUrl}/code?tab=templates`)
-  // By row id: the framework's name also appears as a chip on the binding row
-  // that references it, so matching on text alone is ambiguous.
-  await expect(page.getByTestId('code-framework-aw-demo-framework-mr-review')).toBeVisible()
-  await expect(page.getByTestId('code-binding-aw-demo-binding-mr-review')).toBeVisible()
+  // RFC-309 hard-cut the framework/binding pair to one editable template.
+  await expect(page.getByTestId('code-template-aw-demo-template-mr-review')).toBeVisible()
 })

@@ -26,6 +26,9 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, capabilityTemplates, users } from '../src/db/schema'
+import { lowerBundlePayloads } from '../src/services/bundle/lower'
+import { opSlug, resourceTypeOfOp, type BundleApplyProvider } from '../src/services/bundle/provider'
+import { translateDecisions } from '../src/services/resourcePackage/commit'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -191,6 +194,65 @@ describe('RFC-304 T17a → RFC-309 — exporting a capability template', () => {
 
     expect(payload.promptBySlot).toEqual({ reviewer: 'be strict' })
     expect(payload.params).toEqual({ maxAttempts: 2 })
+  })
+
+  test('a reused destination agent is rewritten and lowered into the imported template', async () => {
+    const source = freshDb()
+    const { templateId } = await seedSource(source)
+    const parsed = await parseResourcePackage(
+      (await exportOf(source, 'capability_template', templateId)).zip,
+    )
+    const templateOp = parsed.bundle.ops.find(
+      (op) => resourceTypeOfOp(op) === 'capability_template',
+    )
+    const agentOp = parsed.bundle.ops.find((op) => resourceTypeOfOp(op) === 'agent')
+    const templateSlug = templateOp === undefined ? null : opSlug(templateOp)
+    const agentSlug = agentOp === undefined ? null : opSlug(agentOp)
+    expect(templateSlug).not.toBeNull()
+    expect(agentSlug).not.toBeNull()
+
+    const destinationAgentId = ulid()
+    const translated = translateDecisions(
+      parsed,
+      [
+        { localSlug: templateSlug!, action: 'new', finalName: 'imported ci-fix' },
+        { localSlug: agentSlug!, action: 'reuse', targetId: destinationAgentId },
+      ],
+      new Map(),
+    )
+    const translatedTemplate = translated.ops.find(
+      (op) => resourceTypeOfOp(op) === 'capability_template',
+    )
+    expect((translatedTemplate?.payload as { agentBySlot?: unknown }).agentBySlot).toEqual({
+      reviewer: `external:${destinationAgentId}`,
+    })
+
+    const destination = freshDb()
+    await destination.insert(agents).values({
+      id: destinationAgentId,
+      name: 'department-reviewer',
+      description: 'destination agent',
+      bodyMd: 'Review it.',
+      outputs: '["findings"]',
+      ownerUserId: null,
+      visibility: 'public',
+      createdAt: 1,
+      updatedAt: 1,
+    } as typeof agents.$inferInsert)
+    const provider: BundleApplyProvider = {
+      idempotencyKey: { scope: 'test', key: ulid() },
+      serializationKey: ulid(),
+      actor: ACTOR,
+      resolveExternal: async (ref, type) => {
+        expect(ref).toBe(`external:${destinationAgentId}`)
+        expect(type).toBe('agent')
+        return destinationAgentId
+      },
+      readSkillFile: () => new Uint8Array(),
+    }
+    const lowered = await lowerBundlePayloads(destination, translated.ops, provider)
+    const loweredTemplate = lowered.find((op) => op.resourceType === 'capability_template')
+    expect(loweredTemplate?.payload.agentBySlot).toEqual({ reviewer: destinationAgentId })
   })
 })
 

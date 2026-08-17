@@ -1,17 +1,17 @@
-// RFC-304 T17a / §两层配置 — a department's template travels to another
+// RFC-304 T17a / RFC-309 — a department's template travels to another
 // instance and RUNS there.
 //
-// The promise is that the department's script framework and the group's binding
-// move between instances as an RFC-271 config package. Proving the rows arrived
+// The promise is that one complete template and its referenced agent move
+// between instances as an RFC-271 config package. Proving the rows arrived
 // is not proving the promise: what a receiving team needs is that the imported
 // template WORKS, and the way it silently does not is that the scripts arrive
-// empty — a framework whose `scripts` came through as `{}` looks perfectly fine
-// in a list, and fails at round time with "the framework's scripts could not be
+// empty — a template whose `scripts` came through as `{}` looks perfectly fine
+// in a list, and fails at round time with "the template's scripts could not be
 // resolved". (That exact bug existed in the serializer's first draft, from
 // reading `row.scripts` when the column is `scripts_json`.)
 //
 // So this drives the whole trip: export from daemon A, import into daemon B,
-// point a repository at the IMPORTED binding, and make a red pipeline go green
+// point a repository at the IMPORTED template, and make a red pipeline go green
 // using scripts that arrived in a zip.
 
 import { expect, test } from '@playwright/test'
@@ -38,7 +38,7 @@ const GATE_SCRIPT = [
 ].join('\n')
 const GATE_DOC = ['# Contributing', '', 'Run `node gate.js` before you push.', ''].join('\n')
 
-/** A node script emitting one envelope port, the way a framework author writes it. */
+/** A node script emitting one envelope port, the way a template author writes it. */
 function emitPort(port: string, value: unknown): string {
   return [
     'const nonce = process.env.AW_ENVELOPE_NONCE',
@@ -55,7 +55,7 @@ let mocks: SystemMockClient
 let endpoint: { urlToken: string; secret: string }
 let project: { projectId: string; repoHttpUrl: string; number: number; headSha: string }
 let packageZip: Buffer = Buffer.alloc(0)
-let importedBindingId = ''
+let importedTemplateId = ''
 /** The commit must present the token its own preview issued — see test 2. */
 let previewToken = ''
 let previewEntries: Array<{
@@ -140,9 +140,7 @@ test.afterAll(async () => {
   if (dest !== undefined) await dest.stop()
 })
 
-test('a department exports its framework and binding as one package', async () => {
-  // The producer that did not exist: the bundle has carried these two types
-  // since T17a and there was no route to make one.
+test('a department exports one template and its referenced agent as a package', async () => {
   const agent = await api(source, '/api/agents', {
     method: 'POST',
     body: {
@@ -154,7 +152,7 @@ test('a department exports its framework and binding as one package', async () =
     },
   })
 
-  const framework = await api<{ id: string }>(source, '/api/capability-templates', {
+  const template = await api<{ id: string }>(source, '/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'department ci-fix template',
@@ -189,14 +187,6 @@ test('a department exports its framework and binding as one package', async () =
       hooks: [],
       paramSchema: [],
       paramDefaults: {},
-    },
-  })
-
-  const binding = await api<{ id: string }>(source, '/api/capability-templates', {
-    method: 'POST',
-    body: {
-      name: 'department binding',
-      frameworkId: framework.id,
       agentBySlot: { 'ci-fixer': (agent as { id: string }).id },
       promptBySlot: {},
       params: {},
@@ -204,7 +194,7 @@ test('a department exports its framework and binding as one package', async () =
   })
 
   const res = await fetch(
-    `${source.baseUrl}/api/capability-templates/${binding.id}/export-package`,
+    `${source.baseUrl}/api/capability-templates/${template.id}/export-package`,
     {
       headers: { authorization: `Bearer ${source.token}` },
     },
@@ -215,10 +205,9 @@ test('a department exports its framework and binding as one package', async () =
   expect(packageZip.byteLength).toBeGreaterThan(0)
 })
 
-test('the receiving instance previews BOTH layers before writing anything', async () => {
-  // The operator sees what is about to be written. A binding arriving without
-  // its framework would import a template the destination does not have — the
-  // closure is what prevents that, and the preview is where it becomes visible.
+test('the receiving instance previews the template closure before writing anything', async () => {
+  // The operator sees both the template and its referenced agent before either
+  // is written; the preview is where that closure becomes visible.
   const form = new FormData()
   form.append('file', new Blob([packageZip]), 'template.awpkg.zip')
   const res = await fetch(`${dest.baseUrl}/api/resource-packages/preview`, {
@@ -229,7 +218,7 @@ test('the receiving instance previews BOTH layers before writing anything', asyn
   const text = await res.text()
   expect(res.status, text).toBe(200)
   expect(text).toContain('capability_template')
-  expect(text).toContain('capability_template')
+  expect(text).toContain('agent')
   const preview = JSON.parse(text) as {
     previewToken: string
     entries: typeof previewEntries
@@ -237,16 +226,15 @@ test('the receiving instance previews BOTH layers before writing anything', asyn
   previewToken = preview.previewToken
   previewEntries = preview.entries
   expect(previewToken).toBeTruthy()
-  // Both layers are listed for the operator BEFORE anything is written — that
-  // listing is also what the commit answers entry by entry.
+  // Both closure entries are listed BEFORE anything is written — that listing
+  // is also what the commit answers entry by entry.
   expect(previewEntries.length).toBeGreaterThanOrEqual(2)
 })
 
-test('importing it writes both rows, and the agent slot binds to THIS instance', async () => {
+test('importing it writes the template, and the agent slot binds to THIS instance', async () => {
   // The destination already had its own agents before the package arrived (set
-  // up in `beforeAll`) — that is the situation the two-layer design is for, and
-  // it is why the preview's default for those entries is `reuse` rather than a
-  // name collision.
+  // up in `beforeAll`) — the closure therefore defaults that agent entry to
+  // `reuse` rather than treating it as a name collision.
   const form = new FormData()
   form.append('file', new Blob([packageZip]), 'template.awpkg.zip')
   // The commit presents the token its own preview issued: the operator commits
@@ -285,18 +273,18 @@ test('importing it writes both rows, and the agent slot binds to THIS instance',
   const text = await res.text()
   expect(res.status, text).toBe(200)
 
-  const bindings = await api<
+  const templates = await api<
     { items?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>
   >(dest, '/api/capability-templates')
-  const rows = Array.isArray(bindings) ? bindings : (bindings.items ?? [])
-  const imported = rows.find((b) => b.name === 'department binding')
-  expect(imported, `binding did not arrive: ${JSON.stringify(rows).slice(0, 300)}`).toBeDefined()
-  importedBindingId = imported?.id ?? ''
+  const rows = Array.isArray(templates) ? templates : (templates.items ?? [])
+  const imported = rows.find((row) => row.name === 'department ci-fix template')
+  expect(imported, `template did not arrive: ${JSON.stringify(rows).slice(0, 300)}`).toBeDefined()
+  importedTemplateId = imported?.id ?? ''
 })
 
 test('the IMPORTED template drives a real round — scripts and all', async () => {
   // The promise, end to end. The failure this rules out is the quiet one: a
-  // framework whose scripts arrived as `{}` looks fine in a list and dies at
+  // template whose scripts arrived as `{}` looks fine in a list and dies at
   // round time. Here the four script stages must run, and the gate they lead to
   // must go from red to green.
   endpoint = await api(dest, '/api/webhook-endpoints', {
@@ -313,7 +301,7 @@ test('the IMPORTED template drives a real round — scripts and all', async () =
   const repoId = await importRepo(dest, project.repoHttpUrl)
   await api(dest, `/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'ci-fix', enabled: true, templateId: importedBindingId },
+    body: { capability: 'ci-fix', enabled: true, templateId: importedTemplateId },
   })
 
   await mocks.deliverWebhook({

@@ -228,20 +228,23 @@ async function lowerPayload(
       }
       return payload
     }
-    // RFC-304 T17a — a binding's two pointers become local ids.
+    // RFC-304 T17a → RFC-309 — template refs become destination-local ids.
     //
-    // The applier reads `frameworkId` and `agentBySlot[slot]` as ids; the wire
-    // carries refs. Without this the applier saw `undefined` and refused with
-    // "this binding names framework 'undefined'", which reads as a corrupt
-    // package rather than as a step nobody wrote.
+    // The applier reads `agentBySlot[slot]` as ids while the wire carries refs.
+    // Pre-merge binding packages additionally carry `frameworkRef`; the merged
+    // template does not, but it needs the same agent lowering.
     case 'capability-binding-create':
-    case 'capability-binding-update': {
-      payload.frameworkId = await resolveIdentityRef(
-        String(payload.frameworkRef ?? ''),
-        'capability_template',
-        ctx,
-      )
-      delete payload.frameworkRef
+    case 'capability-binding-update':
+    case 'capability-template-create':
+    case 'capability-template-update': {
+      if (payload.frameworkRef !== undefined) {
+        payload.frameworkId = await resolveIdentityRef(
+          String(payload.frameworkRef ?? ''),
+          'capability_template',
+          ctx,
+        )
+        delete payload.frameworkRef
+      }
 
       const slots = (payload.agentBySlot as Record<string, unknown> | undefined) ?? {}
       const resolved: Record<string, string> = {}

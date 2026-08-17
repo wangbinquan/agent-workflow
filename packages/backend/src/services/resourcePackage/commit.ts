@@ -150,15 +150,19 @@ export function translateDecisions(
           if (Array.isArray(payload[key])) payload[key] = payload[key].map(rewriteRef)
         }
         return payload
-      // RFC-304 T17a — a binding's two reference slots.
+      // RFC-304 T17a → RFC-309 — a template's agent reference slots.
       //
       // Without this arm the refs stay `local:<slug>` even when the operator
-      // chose to REUSE the destination's own agent or framework: that slug then
+      // chose to REUSE the destination's own agent: that slug then
       // names no op in the applied bundle, and lowering fails with
       // "bundle ref 'local:agent-…' does not name any op in this bundle" — a
       // message about the package, for a decision the operator made.
       case 'capability-binding-create':
-      case 'capability-binding-update': {
+      case 'capability-binding-update':
+      case 'capability-template-create':
+      case 'capability-template-update': {
+        // Pre-merge binding packages also carry a framework reference. New
+        // one-row templates do not, but both forms carry agent refs.
         if (typeof payload.frameworkRef === 'string') {
           payload.frameworkRef = rewriteRef(payload.frameworkRef)
         }
