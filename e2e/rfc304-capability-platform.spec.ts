@@ -60,7 +60,7 @@ const COLLECT_RESULT = {
 /** `classify`'s result — one actionable issue. */
 const CLASSIFIED = [{ type: 'test-failure', message: 'the e2e fixture failed on purpose' }]
 
-/** A python script emitting one envelope port, the way a framework author would. */
+/** A python script emitting one envelope port, the way a template author would. */
 const emitPort = (port: string, value: unknown): string =>
   [
     'import os, json',
@@ -78,7 +78,6 @@ let endpoint: { urlToken: string; secret: string }
 let project: { projectId: string; repoHttpUrl: string; number: number }
 let repoId = ''
 let reviewerAgentId = ''
-let frameworkId = ''
 let templateId = ''
 
 test.beforeAll(async () => {
@@ -136,7 +135,7 @@ test.beforeAll(async () => {
     issues: [{ number: 77, title: 'Add a stop guard' }],
   })
 
-  // The agent the binding maps to the `reviewer` slot. Named the same as the
+  // The agent the template maps to the `reviewer` slot. Named the same as the
   // key in the scenario plan, because that name is what reaches the runtime as
   // `--agent` and is how the stand-in picks its scripted answer.
   const agent = await requestJson<{ id: string }>('/api/agents', {
@@ -167,48 +166,45 @@ test.afterAll(async () => {
   if (daemon !== undefined) await daemon.stop()
 })
 
-test('a framework and a binding configure a capability, and the binding REFUSES framework-only fields', async () => {
-  // T57's two-layer split, asserted where it is enforced rather than where it
-  // is declared. `rejectFrameworkOnlyFields` existed with zero callers for
-  // several PRs — a rule that is only unit-tested cannot tell you that.
-  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
+test('one template carries the capability scripts and agent slots, with no two-layer payload', async () => {
+  const template = await requestJson<{
+    id: string
+    capability: string
+    agentBySlot: Record<string, string>
+  }>('/api/capability-templates', {
     method: 'POST',
     body: {
-      name: 'e2e review framework',
+      name: 'e2e review template',
       capability: 'mr-review',
       scripts: {},
       hooks: [],
       paramSchema: [],
       paramDefaults: {},
-    },
-  })
-  frameworkId = framework.id
-
-  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
-    method: 'POST',
-    body: {
-      name: 'e2e review binding',
-      frameworkId,
       agentBySlot: { reviewer: reviewerAgentId },
       promptBySlot: {},
       params: {},
     },
   })
-  templateId = binding.id
+  templateId = template.id
+  expect(template.capability).toBe('mr-review')
+  expect(template.agentBySlot).toEqual({ reviewer: reviewerAgentId })
 
-  // The load-bearing half: a binding carrying a script must be REJECTED, not
-  // quietly stripped. Silently dropping a hook is how a team comes to believe
-  // their gate runs when it never did — and they would only find out from the
-  // absence of failures.
+  // RFC-309 is a hard cut: an old binding pointer is rejected rather than
+  // accepted and silently ignored, while scripts and slots legitimately live
+  // together on the new single template.
   const refused = await rawRequest('/api/capability-templates', {
     method: 'POST',
     body: {
-      name: 'e2e binding with a script',
-      frameworkId,
+      name: 'e2e legacy binding payload',
+      capability: 'mr-review',
+      frameworkId: 'removed-layer',
       agentBySlot: {},
       promptBySlot: {},
       params: {},
       scripts: { collect: { language: 'bash', script: 'echo hi' } },
+      hooks: [],
+      paramSchema: [],
+      paramDefaults: {},
     },
   })
   expect(refused.status).toBeGreaterThanOrEqual(400)
@@ -238,15 +234,19 @@ test('enabling a capability round-trips, and the matrix reports READINESS not ju
   })
 })
 
-test('a cell whose binding names no agent reports the missing piece and a repair for it', async () => {
+test('a cell whose template names no agent reports the missing piece and a repair for it', async () => {
   // The negative half, and the one that matters operationally: an unready cell
   // must say what to do about it. A bare `blocked` sends somebody hunting
-  // through five screens for a binding they never made.
+  // through five screens for a template they never made.
   const empty = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
-      name: 'e2e binding with no agent',
-      frameworkId,
+      name: 'e2e template with no agent',
+      capability: 'mr-comment-fix',
+      scripts: {},
+      hooks: [],
+      paramSchema: [],
+      paramDefaults: {},
       agentBySlot: {},
       promptBySlot: {},
       params: {},
@@ -424,10 +424,10 @@ test('a SECOND capability is reachable too — ci-fix opens a round with real st
       bodyMd: 'Fix the pipeline.',
     },
   })
-  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
+  const template = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
-      name: 'e2e ci-fix framework',
+      name: 'e2e ci-fix template',
       capability: 'ci-fix',
       scripts: {
         collect: { language: 'python', script: emitPort('collect', COLLECT_RESULT) },
@@ -436,13 +436,6 @@ test('a SECOND capability is reachable too — ci-fix opens a round with real st
       hooks: [],
       paramSchema: [],
       paramDefaults: {},
-    },
-  })
-  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
-    method: 'POST',
-    body: {
-      name: 'e2e ci-fix binding',
-      frameworkId: framework.id,
       agentBySlot: { 'ci-fixer': fixer.id },
       promptBySlot: {},
       params: {},
@@ -450,7 +443,7 @@ test('a SECOND capability is reachable too — ci-fix opens a round with real st
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'ci-fix', enabled: true, templateId: binding.id },
+    body: { capability: 'ci-fix', enabled: true, templateId: template.id },
   })
 
   // Asserted BEFORE delivering: a `misconfigured` cell is never woken, so
@@ -497,7 +490,7 @@ test('a SECOND capability is reachable too — ci-fix opens a round with real st
   const unwired = round.stages.filter((s) => (s.error ?? '').includes('no runner registered'))
   expect(unwired).toEqual([])
 
-  // The framework's own scripts ran and their output was accepted.
+  // The template's own scripts ran and their output was accepted.
   const byName = new Map(round.stages.map((s) => [s.stageName, s.status]))
   expect(byName.get('collect')).toBe('done')
   expect(byName.get('classify')).toBe('done')
@@ -519,22 +512,15 @@ test('a THIRD capability is reachable — mr-comment-fix wakes on a note', async
       bodyMd: 'Apply the requested change.',
     },
   })
-  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
+  const template = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
-      name: 'e2e comment-fix framework',
+      name: 'e2e comment-fix template',
       capability: 'mr-comment-fix',
       scripts: {},
       hooks: [],
       paramSchema: [],
       paramDefaults: {},
-    },
-  })
-  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
-    method: 'POST',
-    body: {
-      name: 'e2e comment-fix binding',
-      frameworkId: framework.id,
       agentBySlot: { fixer: fixer.id },
       promptBySlot: {},
       params: {},
@@ -542,7 +528,7 @@ test('a THIRD capability is reachable — mr-comment-fix wakes on a note', async
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'mr-comment-fix', enabled: true, templateId: binding.id },
+    body: { capability: 'mr-comment-fix', enabled: true, templateId: template.id },
   })
 
   const cell = await matrixRow('mr-comment-fix')
@@ -594,22 +580,15 @@ test('a FOURTH capability is reachable — requirement wakes on an ISSUE label',
       bodyMd: 'Understand the requirement.',
     },
   })
-  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
+  const template = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
-      name: 'e2e requirement framework',
+      name: 'e2e requirement template',
       capability: 'requirement',
       scripts: {},
       hooks: [],
       paramSchema: [],
       paramDefaults: {},
-    },
-  })
-  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
-    method: 'POST',
-    body: {
-      name: 'e2e requirement binding',
-      frameworkId: framework.id,
       agentBySlot: { analyst: analyst.id, implementer: analyst.id },
       promptBySlot: {},
       params: {},
@@ -617,7 +596,7 @@ test('a FOURTH capability is reachable — requirement wakes on an ISSUE label',
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'requirement', enabled: true, templateId: binding.id },
+    body: { capability: 'requirement', enabled: true, templateId: template.id },
   })
 
   const cell = await matrixRow('requirement')
@@ -671,10 +650,10 @@ test('the FIFTH capability — mr-monitor observes and stays SILENT (AC-33)', as
   // recorded — which is exactly why `noop` is a real outcome in the union
   // rather than an empty result. A monitor that opened a round per event would
   // pass a naive "did something happen" check and be catastrophically wrong.
-  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
+  const template = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
-      name: 'e2e monitor framework',
+      name: 'e2e monitor template',
       capability: 'mr-monitor',
       // A healthy merge request: no conflict, no unresolved comments, gate
       // green. Nothing for the monitor to do.
@@ -692,13 +671,6 @@ test('the FIFTH capability — mr-monitor observes and stays SILENT (AC-33)', as
       hooks: [],
       paramSchema: [],
       paramDefaults: {},
-    },
-  })
-  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
-    method: 'POST',
-    body: {
-      name: 'e2e monitor binding',
-      frameworkId: framework.id,
       agentBySlot: {},
       promptBySlot: {},
       params: {},
@@ -706,7 +678,7 @@ test('the FIFTH capability — mr-monitor observes and stays SILENT (AC-33)', as
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'mr-monitor', enabled: true, templateId: binding.id },
+    body: { capability: 'mr-monitor', enabled: true, templateId: template.id },
   })
 
   const before = (await requestJson<{ items: unknown[] }>('/api/tasks?limit=50')).items?.length ?? 0
@@ -756,12 +728,12 @@ test('the capability catalog is what the configuration UI is built from', async 
     'requirement',
   ])
 
-  // The slots a binding must fill. An empty list for a capability that needs an
+  // The slots a template must fill. An empty list for a capability that needs an
   // agent would render a create dialog with nothing to fill in, and produce a
-  // binding whose round dies at its first AI stage holding the MR lease.
+  // template whose round dies at its first AI stage holding the MR lease.
   expect(byCapability.get('mr-review')).toEqual(['reviewer'])
   expect(byCapability.get('requirement')?.length).toBe(2)
-  // Scripts only — its binding legitimately maps no agent.
+  // Scripts only — its template legitimately maps no agent.
   expect(byCapability.get('mr-monitor')).toEqual([])
 })
 

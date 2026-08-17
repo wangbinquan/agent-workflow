@@ -41,9 +41,9 @@ test.describe.configure({ mode: 'serial' })
 const PROJECT_PATH = 'system-e2e/rfc304-cifix'
 const FIXER_AGENT = 'e2e-cifix-fixer'
 /**
- * The self-review's reviewer. It resolves through THIS round's binding like
- * every other slot, so a team that wants its ci-fix rounds self-reviewed binds
- * a `reviewer` in the ci-fix binding.
+ * The self-review's reviewer. It resolves through THIS round's template like
+ * every other slot, so a team that wants its ci-fix rounds self-reviewed maps
+ * a `reviewer` in the ci-fix template.
  */
 const REVIEWER_AGENT = 'e2e-cifix-reviewer'
 
@@ -163,12 +163,12 @@ test.beforeAll(async () => {
 
   const repoId = await importRepo(project.repoHttpUrl)
 
-  // The department layer: four scripts that adapt this team's pipeline. Written
-  // as a framework author would write them — deterministic, no model anywhere.
-  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
+  // Four scripts adapt this team's pipeline. They live beside the agent slots
+  // in RFC-309's single template — deterministic, no model anywhere.
+  const template = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
-      name: 'ci-fix gate framework',
+      name: 'ci-fix gate template',
       capability: 'ci-fix',
       scripts: {
         collect: {
@@ -201,13 +201,6 @@ test.beforeAll(async () => {
       hooks: [],
       paramSchema: [],
       paramDefaults: {},
-    },
-  })
-  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
-    method: 'POST',
-    body: {
-      name: 'ci-fix gate binding',
-      frameworkId: framework.id,
       agentBySlot: { 'ci-fixer': agent.id, reviewer: reviewer.id },
       promptBySlot: {},
       params: {},
@@ -215,7 +208,7 @@ test.beforeAll(async () => {
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'ci-fix', enabled: true, templateId: binding.id },
+    body: { capability: 'ci-fix', enabled: true, templateId: template.id },
   })
 })
 
@@ -223,7 +216,7 @@ test.afterAll(async () => {
   if (daemon !== undefined) await daemon.stop()
 })
 
-test('a red pipeline runs the framework SCRIPTS, not a model, for the deterministic half', async () => {
+test('a red pipeline runs the template SCRIPTS, not a model, for the deterministic half', async () => {
   // Constitution R1: what can be decided by a program is decided by a program.
   // Four script stages precede the one AI stage, and each of them is the team's
   // own code — a platform default here would make one team's policy stand in
