@@ -40,9 +40,13 @@ import {
   serializeTemplate,
   updateTemplate,
 } from '@/services/capabilityTemplates'
+import {
+  mergeFromUpstream,
+  readUpstreamReport,
+} from '@/modules/code-capability/application/templateUpstreamStatus'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import type { AppDeps } from '@/server'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 
 export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
@@ -200,6 +204,65 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
       await requireResourceOwner(deps.db, actor, 'capability_template', existing)
       await deleteTemplate(deps.db, existing)
       return c.body(null, 204)
+    },
+  )
+
+  // RFC-309 T16 — the upstream link, finally readable and actionable.
+  //
+  // A GET rather than a field on the template itself: answering it costs a
+  // second row read and a nine-field diff, and putting that on every list
+  // response would make the templates page pay for it once per row to render a
+  // badge most templates do not have.
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/capability-templates/:id/upstream',
+      permissions: ['capability-templates:read'],
+      tokenAccess: 'allow',
+      summary: 'Where this template stands relative to the one it was copied from',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const row = await loadVisibleTemplate(actor, c.req.param('id'))
+      return c.json(await readUpstreamReport(deps.db, row))
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/capability-templates/:id/upstream/merge',
+      permissions: ['capability-templates:update'],
+      tokenAccess: 'allow',
+      summary: 'Take every upstream change this copy has not overridden',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const row = await loadVisibleTemplate(actor, c.req.param('id'))
+      await requireResourceOwner(deps.db, actor, 'capability_template', row)
+      // The `scripts:author` check lives in the command, not here: the merge
+      // can carry SCRIPTS across and those run as the daemon, so a route-only
+      // check would make any second caller a way around the rule.
+      const outcome = await mergeFromUpstream(deps.db, row, actor)
+      if (!outcome.ok) {
+        if (outcome.code === 'scripts-forbidden') {
+          throw new ForbiddenError(
+            'capability-template-scripts-forbidden',
+            'merging from upstream can change scripts, which requires the scripts:author permission',
+          )
+        }
+        throw new ValidationError(
+          outcome.code === 'no-upstream'
+            ? 'capability-template-no-upstream'
+            : 'capability-template-upstream-gone',
+          outcome.code === 'no-upstream'
+            ? 'this template was authored here, not copied — there is nothing to merge from'
+            : 'the template this was copied from no longer exists',
+        )
+      }
+      return c.json(outcome)
     },
   )
 

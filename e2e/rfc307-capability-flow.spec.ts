@@ -1,6 +1,12 @@
 // RFC-307 T27 — the flow is visible and editable on a real daemon, and the
 // demo content is there to make that provable without a code host.
 //
+// RFC-309 MOVED the surface these assertions read: the standalone Flow tab is
+// gone, because its first two questions (which capability, then which
+// configuration) are both answered by opening a template. Everything RFC-307
+// claimed still has to be true — it is just reached at `/code/templates/$id`
+// now, which is why this file was rewritten rather than deleted.
+//
 // The unit suites already lock the projection, the soundness check, the route
 // and the seeder. What only this spec can show is the thing the user actually
 // asked for — that on a FRESH INSTALL, with nothing configured and no merge
@@ -41,6 +47,9 @@ test.afterAll(async () => {
  * spec that passes or fails on the tester's language preference is not testing
  * the product.
  */
+/** The demo template the seed plants — the only one on a fresh install. */
+const DEMO_TEMPLATE = 'aw-demo-template-mr-review'
+
 async function attach(page: Page): Promise<void> {
   await page.addInitScript(
     ({ baseUrl, token }) => {
@@ -58,9 +67,11 @@ async function attach(page: Page): Promise<void> {
 
 test('a fresh install can see a capability flow with nothing configured', async ({ page }) => {
   // AC-1: no repository, no enabled capability, no round. The question "what
-  // does this thing do?" has to be answerable BEFORE any of that.
+  // does this thing do?" has to be answerable BEFORE any of that. RFC-309 keeps
+  // the guarantee and changes the door: the demo template is what a fresh
+  // install has, and opening it IS opening the flow.
   await attach(page)
-  await page.goto(`${daemon.baseUrl}/code?tab=flow`)
+  await page.goto(`${daemon.baseUrl}/code/templates/${DEMO_TEMPLATE}`)
 
   await expect(page.getByTestId('code-flow-panel')).toBeVisible()
   const cards = page.locator('[data-testid="stage-node-flow"] .stage-node')
@@ -74,16 +85,21 @@ test('a fresh install can see a capability flow with nothing configured', async 
   await expect(page.getByTestId('stage-node-publish')).toBeVisible()
 })
 
-test('mr-monitor says it has no sequence rather than drawing an empty canvas', async ({ page }) => {
+test('a capability with no sequence says so rather than drawing an empty canvas', async ({
+  page,
+}) => {
+  // `mr-monitor` is the standing monitor loop. Reached now by pointing a
+  // template at it — the Flow tab's capability switcher is gone with the tab.
   await attach(page)
-  await page.goto(`${daemon.baseUrl}/code?tab=flow`)
-  await expect(page.getByTestId('code-flow-panel')).toBeVisible()
+  await page.goto(`${daemon.baseUrl}/code?tab=templates`)
+  await expect(page.getByTestId('code-new-template')).toBeVisible({ timeout: 30_000 })
+  await page.getByTestId('code-new-template').click()
 
-  await page.getByTestId('code-flow-capability-mr-monitor').click()
+  await page.getByTestId('code-template-capability').click()
+  await page.getByRole('option', { name: /monitor/i }).click()
 
   // A real answer in words. An empty canvas would read as "nothing happens
   // here", and a 404 would send someone hunting for a typo that is not there.
-  await expect(page.locator('[data-testid="stage-node-flow"]')).toHaveCount(0)
   await expect(page.getByText('not driven by a stage sequence')).toBeVisible()
 })
 
@@ -91,7 +107,7 @@ test('clicking a step opens its real configuration, and the shared slot is named
   page,
 }) => {
   await attach(page)
-  await page.goto(`${daemon.baseUrl}/code?tab=flow`)
+  await page.goto(`${daemon.baseUrl}/code/templates/${DEMO_TEMPLATE}`)
   await expect(page.getByTestId('stage-node-review-shard')).toBeVisible({ timeout: 30_000 })
 
   await page.getByTestId('stage-node-review-shard').click()
@@ -115,7 +131,7 @@ test('a prompt edited on the graph is saved and still there after a reload', asy
   // possible only by finding `promptBySlot` in a JSON form with no indication of
   // which of thirteen steps it belonged to.
   await attach(page)
-  await page.goto(`${daemon.baseUrl}/code?tab=flow`)
+  await page.goto(`${daemon.baseUrl}/code/templates/${DEMO_TEMPLATE}`)
   await expect(page.getByTestId('stage-node-review-shard')).toBeVisible({ timeout: 30_000 })
   await page.getByTestId('stage-node-review-shard').click()
 
@@ -146,8 +162,7 @@ test('the demo round shows the same picture with its state on it', async ({ page
 
   // Every stage of the seeded round finished, so every card carries `done` —
   // the runtime overlay reusing the canvas status rules rather than defining
-  // its own. Scoped to the round's own namespaced canvas: the Flow tab behind
-  // this one renders the same thirteen stages with no status at all.
+  // its own. Scoped to the round's own namespaced canvas.
   const done = page.locator('[data-testid^="round-stage-"][data-status="done"]')
   await expect(done).toHaveCount(13, { timeout: 30_000 })
 })

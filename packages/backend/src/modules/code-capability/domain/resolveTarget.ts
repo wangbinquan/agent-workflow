@@ -19,7 +19,7 @@
 // Defaulting any of these produces a round that runs to completion and posts
 // somewhere — which is worse than a round that refuses to start.
 
-import type { WebhookTriggerFields } from '@agent-workflow/shared'
+import type { CodeContextFields } from '@agent-workflow/shared'
 
 export interface RoundTarget {
   provider: 'gitlab' | 'github'
@@ -52,7 +52,10 @@ export type ResolveTargetResult =
  * configured connection), not something the webhook payload carries.
  */
 export function resolveTarget(
-  webhook: WebhookTriggerFields,
+  // RFC-309 — the neutral bag: a platform launch fills the same fields without
+  // claiming a code-host event. Nothing here reads `event_type`, so widening
+  // costs nothing and stops the caller inventing one.
+  webhook: CodeContextFields,
   codeHostEndpointId: string,
 ): ResolveTargetResult {
   const missing: string[] = []

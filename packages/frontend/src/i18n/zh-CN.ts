@@ -1343,12 +1343,9 @@ export interface Resources {
   code: {
     title: string
     subtitle: string
-    tab: { matrix: string; activity: string; flow: string; metrics: string; templates: string }
+    tab: { matrix: string; activity: string; metrics: string; templates: string }
     flow: {
       capability: string
-      binding: string
-      bindingHint: string
-      bindingNone: string
       hint: string
       sharedSlot: string
       agent: string
@@ -1421,6 +1418,43 @@ export interface Resources {
       copiedFrom: string
       params: string
       slots: string
+      backToList: string
+      detailSubtitle: string
+    }
+    upstream: {
+      title: string
+      from: string
+      state: {
+        current: string
+        'update-available': string
+        conflicted: string
+        orphaned: string
+      }
+      action: {
+        'take-upstream': string
+        'keep-local': string
+        conflict: string
+      }
+      noBase: string
+      merge_one: string
+      merge_other: string
+      merged: string
+    }
+    launch: {
+      title: string
+      hint: string
+      notLaunchable: string
+      repo: string
+      repoNone: string
+      reqTitle: string
+      reqBody: string
+      reqBodyHint: string
+      mrIid: string
+      mrIidHint: string
+      discussionId: string
+      discussionIdHint: string
+      pipelineId: string
+      submit: string
     }
     metrics: {
       empty: string
@@ -7095,12 +7129,9 @@ export const zhCN: Resources = {
   code: {
     title: '代码能力',
     subtitle: '每个仓库启用了哪些能力，以及它们做过什么',
-    tab: { matrix: '仓库', activity: '活动', flow: '流程', metrics: '成效', templates: '模板' },
+    tab: { matrix: '仓库', activity: '活动', metrics: '成效', templates: '模板' },
     flow: {
       capability: '能力',
-      binding: '配置哪一份绑定',
-      bindingHint: '流程结构由平台固定；这里选的是它用哪套代理 / 提示词 / 参数。',
-      bindingNone: '（不选，只看结构）',
       hint: '点任意一步即可查看并修改它实际用到的配置。结构（有哪些步、怎么连）由平台固定。',
       sharedSlot: '此槽位同时被另外 {{count}} 步使用（{{stages}}）——在这里改动会一并影响它们。',
       agent: '代理',
@@ -7176,6 +7207,46 @@ export const zhCN: Resources = {
       copiedFrom: '复制自另一个模板',
       params: '参数：{{names}}',
       slots: 'agent：{{pairs}}',
+      backToList: '全部模板',
+      detailSubtitle: '这份模板一步步跑些什么',
+    },
+    // RFC-309 T16 —— 一份复制品与它的来源之间是什么关系。
+    upstream: {
+      title: '来自哪里',
+      from: '复制自「{{name}}」',
+      state: {
+        current: '已是最新',
+        'update-available': '有更新',
+        conflicted: '需要你决定',
+        orphaned: '来源已删除',
+      },
+      action: {
+        'take-upstream': '对方改了',
+        'keep-local': '你改了',
+        conflict: '双方都改了',
+      },
+      noBase:
+        '这份复制品早于变更追踪，平台无从判断某个字段是谁改的。因此所有差异都按「需要你决定」呈现，不会自动合并任何内容。',
+      merge_one: '合入你没有改过的 {{count}} 处',
+      merge_other: '合入你没有改过的 {{count}} 处',
+      merged: '合入 {{applied}} 处，保留你自己的 {{kept}} 处，还剩 {{conflicted}} 处等你决定。',
+    },
+    // RFC-309 T23 —— 用这份模板发起一轮。
+    launch: {
+      title: '用这份模板发起',
+      hint: '立即开一轮。不需要先在矩阵里为该仓库启用这条能力——那个开关管的是「自动响应代码托管平台」，和手动发起是两回事。',
+      notLaunchable: '这条能力是常驻监视循环、不是轮次概念，没有可手动发起的东西。',
+      repo: '仓库',
+      repoNone: '（请选择）',
+      reqTitle: '要做什么',
+      reqBody: '详细说明',
+      reqBodyHint: '把原本会写在 issue 正文里的都写这里——约束、验收、链接。',
+      mrIid: 'MR 编号',
+      mrIidHint: '代码托管平台上显示的那个编号，不是内部 id。',
+      discussionId: '讨论串 id',
+      discussionIdHint: '从代码托管平台上该讨论串的永久链接里复制。',
+      pipelineId: '流水线 id',
+      submit: '发起',
     },
     metrics: {
       empty: '还没有可统计的数据',

@@ -21,6 +21,7 @@
 
 import type { Hono } from 'hono'
 import { z } from 'zod'
+import { ulid } from 'ulid'
 import { actorOf } from '@/auth/actor'
 import {
   createCodeMatrixQuery,
@@ -41,6 +42,8 @@ import { lookupStageContract } from '@/modules/code-capability/domain/capability
 import { projectStageGraph } from '@/modules/code-capability/domain/stageGraph'
 import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
 import { registerRoute } from '@/routes/registry'
+import { startCodeRoundTask } from '@/services/codeRoundLaunch'
+import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import type { AppDeps } from '@/server'
 import { ValidationError } from '@/util/errors'
 import { safeJsonOrThrowInvalid } from '@/util/http'
@@ -420,11 +423,34 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
           parsed.error.issues[0]?.message ?? 'invalid body',
         )
       }
-      const result = await createLaunchRoundCommand(deps.db).run({
+      const actor = actorOf(c)
+      const result = await createLaunchRoundCommand(
+        deps.db,
+        Date.now,
+        ulid,
+        // The join that makes the entrance do something. Without it the round
+        // is opened, the receipt looks right, and nothing ever runs — which is
+        // exactly the failure shape RFC-304's own scheduler had for three of
+        // the four capabilities.
+        async (start) =>
+          await startCodeRoundTask(start, {
+            ...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox),
+            db: deps.db,
+            // `direct-json`, not `webhook`. RFC-301's admission rule is about
+            // being ATTRIBUTABLE, and this round is attributable to the person
+            // who pressed the button — there is no delivery, no trigger and no
+            // fire to point at, and claiming `webhook` would put a code-host
+            // event that never happened into the task's launch origin.
+            launchProvenance: {
+              kind: 'direct-json',
+              initiator: actor.source === 'session' ? 'manual' : 'api',
+            },
+          }),
+      ).run({
         repoId: parsed.data.repoId,
         templateId: parsed.data.templateId,
         input: parsed.data.input,
-        actor: actorOf(c),
+        actor,
       })
       if (!result.ok) {
         // Spelled out rather than interpolated: `code-${result.code}` is
@@ -439,14 +465,23 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
                 ? 'code-launch-capability-mismatch'
                 : result.code === 'template-incomplete'
                   ? 'code-launch-template-incomplete'
-                  : 'code-launch-agent-not-visible',
+                  : result.code === 'round-already-in-flight'
+                    ? 'code-launch-round-in-flight'
+                    : 'code-launch-agent-not-visible',
           result.message,
         )
       }
       // The receipt (RFC-304 AC-34): a human instruction must come back with
       // something to follow, immediately.
       return c.json(
-        { workItemId: result.workItemId, roundId: result.roundId, roundSeq: result.roundSeq },
+        {
+          workItemId: result.workItemId,
+          roundId: result.roundId,
+          roundSeq: result.roundSeq,
+          // The thing a person can actually open. A receipt naming only the
+          // round would send them to a page keyed by task id.
+          taskId: result.taskId,
+        },
         201,
       )
     },

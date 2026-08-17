@@ -1,24 +1,30 @@
-// RFC-307 — the `/code` Flow tab: see a capability's sequence, and change it.
+// RFC-309 T13 — a template IS its flow.
 //
-// The gap this closes is not that the configuration was missing. RFC-304 built
-// all of it: `agentSlot` picks the agent, `promptBySlot` the prompt,
-// `scriptSlot` the script, `paramSchema` the thresholds, and a hook may mount
-// at every stage boundary. What was missing is that all of it was entered into
-// JSON forms with NO CONNECTION TO POSITION. A user reading
-// `agentBySlot: {"reviewer": "..."}` had no way to know which of thirteen steps
-// `reviewer` is, or what else changes when they change it.
+// RFC-307 put this behind a standalone "Flow" tab that asked two questions
+// before it could show anything: which capability, and then which of that
+// capability's configurations. The user's first question after seeing it was
+// 「流程和模版两个页签什么关系」 — and the honest answer was that they were the
+// same thing entered twice, once as a list of JSON forms and once as a picture.
 //
-// So the flow IS the configuration surface: click the step you mean, and edit
-// what that step actually uses. The two-layer split survives intact —
+// So the picker is gone. This component is handed ONE template, draws the
+// sequence its capability runs, and edits that template in place. The two
+// questions the tab used to ask are answered by the route: you got here by
+// opening a template.
+//
+// The gap RFC-307 closed still holds and is what makes the drawer worth having:
+// RFC-304 already had every knob — `agentSlot` picks the agent, `promptBySlot`
+// the prompt, `scriptSlot` the script, `paramSchema` the thresholds, hooks at
+// each boundary — but all of it was entered with NO CONNECTION TO POSITION.
+// Reading `agentBySlot: {"reviewer": "..."}` told nobody which of thirteen
+// steps `reviewer` is, or what else moves when it changes.
+//
+// The permission boundary survived RFC-309's merge as a FIELD-level rule:
 //
 //   name / agent / prompt / params  → capability-templates:update
 //   scripts / hooks                 → + scripts:author
 //
-// RFC-309 merged the two template layers into one row, and the boundary above
-// is what survived: it is a FIELD-level check now, because scripts run as the
-// daemon while choosing an agent does not. The drawer greys out what a reader
-// may not write rather than hiding it — someone who cannot author scripts must
-// still be able to see that a step runs one.
+// The drawer greys out what a reader may not write rather than hiding it —
+// someone who cannot author scripts must still see that a step runs one.
 //
 // Structure is NOT editable here (adding, removing or rewiring steps). That is
 // RFC-304's D3, and the reason survives contact with this surface: five of the
@@ -26,7 +32,7 @@
 // the two-phase publish intent), and their invariants are guarantees the
 // platform makes, not properties of how someone drew a line.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { CapabilityTemplateWire } from '@agent-workflow/shared'
@@ -53,73 +59,39 @@ const SCRIPT_LANGUAGES = ['bash', 'python', 'node'] as const
 type ScriptLanguage = (typeof SCRIPT_LANGUAGES)[number]
 
 /**
- * `active` exists because RFC-169 keeps inactive tab panels MOUNTED (so their
- * local state survives a tab switch). Without gating, opening `/code` on any
- * tab would fire this panel's four queries — and the flow is the one panel
- * whose data nobody has asked for until they ask for it.
+ * One template, drawn as the sequence it configures.
+ *
+ * The graph is fetched by CAPABILITY (it is the same for every template of that
+ * capability — structure is the platform's, configuration is the template's),
+ * and cached forever: it is compiled into the binary and cannot change under a
+ * running daemon.
  */
-export function CapabilityFlowPanel({ active = true }: { active?: boolean }): React.ReactElement {
+export function TemplateFlowEditor({
+  template,
+}: {
+  template: CapabilityTemplateWire
+}): React.ReactElement {
   const { t } = useTranslation()
-  const [capability, setCapability] = useState('mr-review')
-  const [templateId, setTemplateId] = useState<string | null>(null)
   const [openStage, setOpenStage] = useState<string | null>(null)
+  const capability = template.capability
 
-  const catalog = useQuery({
-    queryKey: ['code-capabilities'],
-    queryFn: () =>
-      api.get<{ items: { capability: string; agentSlots: string[] }[] }>('/api/code/capabilities'),
-    enabled: active,
-  })
   const graph = useQuery({
     queryKey: ['code-capability-graph', capability],
     queryFn: () =>
       api.get<CapabilityGraphResponse>(
         `/api/code/capabilities/${encodeURIComponent(capability)}/graph`,
       ),
-    enabled: active,
-    // Compiled into the binary — it cannot change under a running daemon.
     staleTime: Infinity,
   })
-  const templates = useQuery({
-    queryKey: ['capability-templates'],
-    queryFn: () => api.get<CapabilityTemplateWire[]>('/api/capability-templates'),
-    enabled: active,
-  })
-
-  // Templates for this capability. RFC-309 makes this a direct filter — it used
-  // to be a two-step join through the framework, which is exactly the kind of
-  // indirection the merge removed.
-  const candidates = useMemo(
-    () => (templates.data ?? []).filter((t) => t.capability === capability),
-    [templates.data, capability],
-  )
-
-  // Keyed on the candidate IDS, not the array. `candidates` is rebuilt whenever
-  // either query returns — including a background refetch that changed nothing
-  // — so depending on its identity re-ran this effect at arbitrary moments. The
-  // first version also cleared `openStage` here, which meant the drawer the
-  // user had just opened closed itself the instant the second query resolved,
-  // and any later refetch would close it mid-edit.
-  const candidateKey = candidates.map((b) => b.id).join(',')
-  useEffect(() => {
-    // `''.split(',')` is `['']`, not `[]` — without this guard an empty
-    // candidate list would select the empty string rather than nothing.
-    const ids = candidateKey === '' ? [] : candidateKey.split(',')
-    setTemplateId((current) =>
-      current !== null && ids.includes(current) ? current : (ids[0] ?? null),
-    )
-  }, [candidateKey])
 
   // Closing the drawer belongs to the CAPABILITY changing, which is the only
-  // event that makes the open stage meaningless — its stages are gone.
+  // event that makes the open stage meaningless — its stages are gone. It can
+  // still happen here: a template's capability is editable.
   useEffect(() => {
     setOpenStage(null)
   }, [capability])
 
-  const template = candidates.find((t) => t.id === templateId) ?? null
-
-  if (!active) return <></>
-  if (catalog.isPending || graph.isPending) return <LoadingState />
+  if (graph.isPending) return <LoadingState />
   if (graph.isError) return <ErrorBanner error={graph.error} onRetry={() => void graph.refetch()} />
 
   const answer = readGraph(graph.data)
@@ -143,17 +115,6 @@ export function CapabilityFlowPanel({ active = true }: { active?: boolean }): Re
 
   return (
     <section className="page__section" data-testid="code-flow-panel">
-      <Segmented
-        ariaLabel={t('code.flow.capability')}
-        value={capability}
-        onChange={setCapability}
-        options={(catalog.data?.items ?? []).map((item) => ({
-          value: item.capability,
-          label: item.capability,
-        }))}
-        testidPrefix="code-flow-capability"
-      />
-
       {answer.kind !== 'graph' ? (
         // A real answer, not an error: `mr-monitor` is the standing monitor
         // loop. Drawing an empty canvas would say "nothing happens here".
@@ -163,28 +124,6 @@ export function CapabilityFlowPanel({ active = true }: { active?: boolean }): Re
         />
       ) : (
         <>
-          <div className="page__header--row">
-            <Field label={t('code.flow.binding')} hint={t('code.flow.bindingHint')}>
-              <Select
-                value={templateId ?? ''}
-                onChange={(next) => {
-                  setTemplateId(next === '' ? null : next)
-                }}
-                ariaLabel={t('code.flow.binding')}
-                data-testid="code-flow-binding"
-                options={[
-                  { value: '', label: t('code.flow.bindingNone') },
-                  ...candidates.map((b) => ({ value: b.id, label: b.name })),
-                ]}
-              />
-            </Field>
-            {template !== null && template.scriptsRedacted && (
-              <StatusChip kind="neutral" size="sm">
-                {t('code.flow.scriptsRedactedChip')}
-              </StatusChip>
-            )}
-          </div>
-
           <p>{t('code.flow.hint')}</p>
 
           <CapabilityFlow
@@ -229,7 +168,7 @@ function StageDrawer({
 }: {
   stage: CapabilityGraphNode
   siblings: readonly string[]
-  template: CapabilityTemplateWire | null
+  template: CapabilityTemplateWire
   onClose: () => void
 }): React.ReactElement {
   const { t } = useTranslation()
@@ -253,11 +192,11 @@ function StageDrawer({
   // Without this, opening a second stage would show the first one's text and a
   // save would write it to the wrong slot.
   useEffect(() => {
-    setAgentId(stage.agentSlot !== undefined ? (template?.agentBySlot[stage.agentSlot] ?? '') : '')
-    setPrompt(stage.agentSlot !== undefined ? (template?.promptBySlot[stage.agentSlot] ?? '') : '')
+    setAgentId(stage.agentSlot !== undefined ? (template.agentBySlot[stage.agentSlot] ?? '') : '')
+    setPrompt(stage.agentSlot !== undefined ? (template.promptBySlot[stage.agentSlot] ?? '') : '')
     const script =
       stage.scriptSlot !== undefined
-        ? (template?.scripts as Record<string, { language: string; script: string }> | undefined)?.[
+        ? (template.scripts as Record<string, { language: string; script: string }> | undefined)?.[
             stage.scriptSlot
           ]
         : undefined
@@ -267,9 +206,9 @@ function StageDrawer({
     )
     setParams(
       Object.fromEntries(
-        (template?.paramSchema ?? []).map((p) => [
+        template.paramSchema.map((p) => [
           p.name,
-          String(template?.params[p.name] ?? template?.paramDefaults[p.name] ?? ''),
+          String(template.params[p.name] ?? template.paramDefaults[p.name] ?? ''),
         ]),
       ),
     )
@@ -288,7 +227,6 @@ function StageDrawer({
    */
   const saveTemplate = useMutation({
     mutationFn: (next: Partial<CapabilityTemplateWire>) => {
-      if (template === null) throw new Error('no template selected')
       return api.put<CapabilityTemplateWire>(`/api/capability-templates/${template.id}`, {
         name: template.name,
         description: template.description,
@@ -304,10 +242,16 @@ function StageDrawer({
         ...next,
       })
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['capability-templates'] }),
+    onSuccess: async () => {
+      // Both keys: the list this template appears in AND the single-row query
+      // the detail page reads. Invalidating only the list leaves the open flow
+      // showing pre-save values while the list behind it is correct.
+      await queryClient.invalidateQueries({ queryKey: ['capability-templates'] })
+      await queryClient.invalidateQueries({ queryKey: ['capability-template', template.id] })
+    },
   })
 
-  const hooksHere = (template?.hooks ?? []).filter((h) => h.stage === stage.name)
+  const hooksHere = (template.hooks ?? []).filter((h) => h.stage === stage.name)
 
   return (
     <Dialog
@@ -362,7 +306,7 @@ function StageDrawer({
             <Select
               value={agentId}
               onChange={setAgentId}
-              disabled={template === null || !canEditTemplate}
+              disabled={!canEditTemplate}
               ariaLabel={t('code.flow.agent')}
               data-testid={`stage-agent-${stage.name}`}
               options={[
@@ -377,7 +321,7 @@ function StageDrawer({
               onChange={setPrompt}
               monospace
               rows={6}
-              disabled={template === null || !canEditTemplate}
+              disabled={!canEditTemplate}
               data-testid={`stage-prompt-${stage.name}`}
             />
           </Field>
@@ -386,9 +330,9 @@ function StageDrawer({
               type="button"
               className="btn btn--sm btn--primary"
               data-testid={`stage-save-agent-${stage.name}`}
-              disabled={template === null || !canEditTemplate || saveTemplate.isPending}
+              disabled={!canEditTemplate || saveTemplate.isPending}
               onClick={() => {
-                if (stage.agentSlot === undefined || template === null) return
+                if (stage.agentSlot === undefined) return
                 saveTemplate.mutate({
                   agentBySlot: { ...template.agentBySlot, [stage.agentSlot]: agentId },
                   promptBySlot: { ...template.promptBySlot, [stage.agentSlot]: prompt },
@@ -404,7 +348,7 @@ function StageDrawer({
 
       {stage.kind === 'script' && stage.scriptSlot !== undefined && (
         <div className="page__section form-grid" data-testid={`stage-script-${stage.name}`}>
-          {template?.scriptsRedacted === true ? (
+          {template.scriptsRedacted ? (
             // Absent, not empty — an empty editor would invite someone to save
             // over a script they were never shown.
             <p data-testid={`stage-script-redacted-${stage.name}`}>
@@ -418,7 +362,7 @@ function StageDrawer({
                   onChange={(next) => {
                     setScriptLanguage(next as ScriptLanguage)
                   }}
-                  disabled={template === null || !canEditTemplate || !canAuthorScripts}
+                  disabled={!canEditTemplate || !canAuthorScripts}
                   ariaLabel={t('code.flow.scriptLanguage')}
                   data-testid={`stage-script-language-${stage.name}`}
                   options={SCRIPT_LANGUAGES.map((l) => ({ value: l, label: l }))}
@@ -433,7 +377,7 @@ function StageDrawer({
                   onChange={setScriptBody}
                   monospace
                   rows={12}
-                  disabled={template === null || !canEditTemplate || !canAuthorScripts}
+                  disabled={!canEditTemplate || !canAuthorScripts}
                   data-testid={`stage-script-body-${stage.name}`}
                 />
               </Field>
@@ -442,14 +386,9 @@ function StageDrawer({
                   type="button"
                   className="btn btn--sm btn--primary"
                   data-testid={`stage-save-script-${stage.name}`}
-                  disabled={
-                    template === null ||
-                    !canEditTemplate ||
-                    !canAuthorScripts ||
-                    saveTemplate.isPending
-                  }
+                  disabled={!canEditTemplate || !canAuthorScripts || saveTemplate.isPending}
                   onClick={() => {
-                    if (stage.scriptSlot === undefined || template === null) return
+                    if (stage.scriptSlot === undefined) return
                     saveTemplate.mutate({
                       scripts: {
                         ...(template.scripts ?? {}),
@@ -477,17 +416,17 @@ function StageDrawer({
       {/* Params belong to the framework's declared table and are overridden per
             binding, so they appear on every stage rather than being guessed at
             per-kind: the contract does not say which stage reads which param. */}
-      {(template?.paramSchema.length ?? 0) > 0 && (
+      {template.paramSchema.length > 0 && (
         <div className="page__section form-grid" data-testid={`stage-params-${stage.name}`}>
           <h4>{t('code.flow.params')}</h4>
-          {template?.paramSchema.map((param) => (
+          {template.paramSchema.map((param) => (
             <Field key={param.name} label={param.name} hint={param.kind}>
               <TextInput
                 value={params[param.name] ?? ''}
                 onChange={(next) => {
                   setParams((prev) => ({ ...prev, [param.name]: next }))
                 }}
-                disabled={template === null || !canEditTemplate}
+                disabled={!canEditTemplate}
                 data-testid={`stage-param-${param.name}`}
               />
             </Field>
@@ -497,9 +436,9 @@ function StageDrawer({
               type="button"
               className="btn btn--sm"
               data-testid={`stage-save-params-${stage.name}`}
-              disabled={template === null || !canEditTemplate || saveTemplate.isPending}
+              disabled={!canEditTemplate || saveTemplate.isPending}
               onClick={() => {
-                saveTemplate.mutate({ params: coerceParams(params, template?.paramSchema ?? []) })
+                saveTemplate.mutate({ params: coerceParams(params, template.paramSchema) })
               }}
             >
               {t('code.flow.saveParams')}
@@ -540,7 +479,7 @@ function StageHooks({
   pending,
 }: {
   stage: CapabilityGraphNode
-  template: CapabilityTemplateWire | null
+  template: CapabilityTemplateWire
   hooks: NonNullable<CapabilityTemplateWire['hooks']>
   canEdit: boolean
   onSave: (hooks: NonNullable<CapabilityTemplateWire['hooks']>) => void
@@ -578,9 +517,7 @@ function StageHooks({
                   disabled={pending}
                   onClick={() => {
                     onSave(
-                      (template?.hooks ?? []).filter(
-                        (h) => !(h.stage === stage.name && h === hook),
-                      ),
+                      (template.hooks ?? []).filter((h) => !(h.stage === stage.name && h === hook)),
                     )
                   }}
                 >
@@ -630,10 +567,10 @@ function StageHooks({
         type="button"
         className="btn btn--sm"
         data-testid={`stage-hook-add-${stage.name}`}
-        disabled={!canEdit || pending || body.trim() === '' || template === null}
+        disabled={!canEdit || pending || body.trim() === ''}
         onClick={() => {
           onSave([
-            ...(template?.hooks ?? []),
+            ...(template.hooks ?? []),
             {
               stage: stage.name,
               phase,
@@ -643,7 +580,7 @@ function StageHooks({
               // Stamped with the version the author wrote against, which is what
               // `hookRunner` compares before running it — an unstamped hook
               // would keep running after a contract change that invalidated it.
-              stageContractVer: template?.stageContractVer ?? 1,
+              stageContractVer: template.stageContractVer,
             },
           ])
           setBody('')

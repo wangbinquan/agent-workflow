@@ -47,13 +47,16 @@ import {
 } from '@/modules/code-capability/domain/launchInput'
 import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
 import {
+  attachRoundTask,
   ensureWorkItem,
   openRound,
 } from '@/modules/code-capability/infrastructure/sqliteMonitorStore'
+import { noteWorkItemEvent } from '@/modules/code-capability/application/workItemProgress'
 import { getTemplateRow } from '@/services/capabilityTemplates'
 import { canViewResource } from '@/services/resourceAcl'
 
 export type LaunchRoundFailure =
+  | 'round-already-in-flight'
   | 'repo-unresolvable'
   | 'template-not-visible'
   | 'template-capability-mismatch'
@@ -62,7 +65,14 @@ export type LaunchRoundFailure =
 
 export type LaunchRoundResult =
   | { ok: false; code: LaunchRoundFailure; message: string }
-  | { ok: true; workItemId: string; roundId: string; roundSeq: number }
+  | {
+      ok: true
+      workItemId: string
+      roundId: string
+      roundSeq: number
+      /** Empty when no task starter was supplied — see `startRoundTask`. */
+      taskId: string
+    }
 
 export interface LaunchRoundInput {
   repoId: string
@@ -71,10 +81,33 @@ export interface LaunchRoundInput {
   actor: Actor
 }
 
+/**
+ * Turns the opened round into a running task.
+ *
+ * A PORT rather than a direct call, for the reason RFC-294 gives: starting a
+ * task needs `StartTaskDeps` — the secret box, the config path, the runtime
+ * overrides — which belong to the composition root, not to a command in the
+ * capability module.
+ *
+ * Its absence is a real mode, not a missing dependency: the unit tests below
+ * exercise the six checks without spinning up the task engine. But an absent
+ * starter means the round is opened and NOTHING RUNS IT, so the route must
+ * always pass one — which is exactly the "both halves correct, no join" shape
+ * this repo keeps finding, and the reason `taskId` is in the receipt.
+ */
+export type StartRoundTask = (input: {
+  roundId: string
+  capability: string
+  roundSeq: number
+  name: string
+  cachedRepoId: string
+}) => Promise<{ id: string }>
+
 export function createLaunchRoundCommand(
   db: DbClient,
   now: () => number = Date.now,
   mintId: () => string = ulid,
+  startRoundTask?: StartRoundTask,
 ) {
   return {
     async run(args: LaunchRoundInput): Promise<LaunchRoundResult> {
@@ -148,6 +181,21 @@ export function createLaunchRoundCommand(
       const item = await ensureWorkItem({
         db,
         codeHostEndpointId: endpoint.endpointId,
+        // ## A known consequence, stated rather than hidden
+        //
+        // A webhook round keys its work item by the code host's own project id
+        // (GitLab's numeric id, carried in the delivery). A manual launch has
+        // no delivery and cannot compute that id without an API call, so it
+        // keys by the CACHED REPO id — a ULID, which can never collide with a
+        // code-host project id.
+        //
+        // What that costs: a manual round and a webhook round on the SAME merge
+        // request are two work items, so they neither deduplicate nor share the
+        // merge-request lease. The visible effect is duplicate work (two reviews
+        // posted, or a second push that git rejects as non-fast-forward), not
+        // corruption — and the alternative, refusing to launch until the
+        // platform has seen a delivery for the repository, would take away the
+        // "try this template once" path this entrance exists to provide.
         stableProjectId: args.repoId,
         capability,
         anchorKind: anchor.anchorKind,
@@ -155,6 +203,24 @@ export function createLaunchRoundCommand(
         initiatorUserId: args.actor.user.id,
         now: now(),
       })
+
+      // The item has to reach `queued` before a round is opened, exactly as the
+      // webhook path does — and the table is what decides whether it may. A
+      // second manual launch while a round is in flight is REFUSED here rather
+      // than opening a rival round that would take the same lease.
+      const queued = await noteWorkItemEvent({
+        db,
+        workItemId: item.id,
+        hasLiveRound: false,
+        event: { kind: 'platform-launch' },
+      })
+      if (queued.outcome === 'rejected') {
+        return {
+          ok: false,
+          code: 'round-already-in-flight',
+          message: queued.reason,
+        }
+      }
 
       const round = await openRound({
         db,
@@ -181,7 +247,58 @@ export function createLaunchRoundCommand(
         now: now(),
       })
 
-      return { ok: true, workItemId: item.id, roundId: round.roundId, roundSeq: round.roundSeq }
+      // The take that turns the queued item into a running one — the same pair
+      // of transitions the webhook path performs, so the guards that key off
+      // `queued` (supersede, pending-revision merge) have a state to key off.
+      await noteWorkItemEvent({
+        db,
+        workItemId: item.id,
+        hasLiveRound: true,
+        event: { kind: 'scheduler-take' },
+      })
+
+      if (startRoundTask === undefined) {
+        return {
+          ok: true,
+          workItemId: item.id,
+          roundId: round.roundId,
+          roundSeq: round.roundSeq,
+          taskId: '',
+        }
+      }
+
+      const task = await startRoundTask({
+        roundId: round.roundId,
+        capability,
+        roundSeq: round.roundSeq,
+        name: `${capability} · ${launchLabel(args.input)}`,
+        // The cached-repo id, never a path: the round's stages fetch and check
+        // out inside this repository.
+        cachedRepoId: args.repoId,
+      })
+      await attachRoundTask(db, round.roundId, task.id)
+
+      return {
+        ok: true,
+        workItemId: item.id,
+        roundId: round.roundId,
+        roundSeq: round.roundSeq,
+        taskId: task.id,
+      }
     },
+  }
+}
+
+/** A name a person will recognise in their task list. */
+function launchLabel(input: LaunchInput): string {
+  switch (input.capability) {
+    case 'requirement':
+      return input.title
+    case 'mr-review':
+      return `MR ${input.mrIid}`
+    case 'ci-fix':
+      return `pipeline ${input.pipelineId}`
+    case 'mr-comment-fix':
+      return `MR ${input.mrIid} · ${input.discussionId}`
   }
 }

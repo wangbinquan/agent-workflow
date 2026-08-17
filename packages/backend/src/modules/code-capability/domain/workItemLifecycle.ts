@@ -65,6 +65,15 @@ export type CodeWorkItemEvent =
   /** The previously-running task reached a terminal status. */
   | { kind: 'round-task-terminal' }
   | { kind: 'manual-retry' }
+  /**
+   * RFC-309 — a person pressed "run this template" inside the platform.
+   *
+   * Distinct from `external-signal` because it is not a signal FROM the code
+   * host: there is no delivery, no push, no comment. Distinct from
+   * `manual-retry` because it is not retrying anything — the common case is an
+   * item that has never run.
+   */
+  | { kind: 'platform-launch' }
   /** Cancellation + lease release finished; `closing` may finalize. */
   | { kind: 'compensation-complete' }
 
@@ -314,6 +323,17 @@ export function decideCodeWorkItemTransition(
     case 'manual-retry':
       if (status !== 'failed' && status !== 'handed_off') {
         return no(`manual-retry applies to 'failed'/'handed_off', not '${status}'`)
+      }
+      return t('queued', [{ kind: 'start-round', resumeFromStage: null }])
+
+    case 'platform-launch':
+      // Legal only when nothing is in flight. A second manual round on the same
+      // anchor while one runs would take the same merge-request lease and write
+      // the same worktree — and unlike a webhook burst there is nothing to
+      // merge it INTO, because a person asked for this specific round rather
+      // than reporting that the world changed.
+      if (status !== 'idle' && status !== 'settled' && status !== 'failed') {
+        return no(`this work item is ${status}; wait for the round in flight to finish`)
       }
       return t('queued', [{ kind: 'start-round', resumeFromStage: null }])
 

@@ -76,7 +76,7 @@ import {
 import type { CodeHostPort } from '@/modules/code-capability/ports/codeHostPort'
 import type { GitPort } from '@/modules/code-capability/ports/gitPort'
 import type { DbClient } from '@/db/client'
-import type { WebhookTriggerFields } from '@agent-workflow/shared'
+import type { CodeContextFields } from '@agent-workflow/shared'
 
 const fail = (error: string): StageResult => ({ status: 'failed', error })
 const done = (produced: StageArtifacts): StageResult => ({ status: 'done', produced })
@@ -96,7 +96,11 @@ export interface MrCommentFixEnvironment {
   db: DbClient
   codeHost: CodeHostPort
   git: GitPort
-  webhook: WebhookTriggerFields
+  /**
+   * RFC-309 — the neutral field bag, `event_type` optional: a platform launch
+   * fills the rest without claiming a code-host event that never happened.
+   */
+  webhook: CodeContextFields
   codeHostEndpointId: string
   repoPath: string
   worktreePath: string

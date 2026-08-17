@@ -235,6 +235,9 @@ describe('S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC
   })
   afterEach(() => h.cleanup())
 
+  // docs/dev-gotchas.md — two real git repos, a failed attempt and a rollback:
+  // close enough to bun's 5000ms default that four parallel shards push it over.
+  // Budgeted explicitly rather than left to machine speed.
   test('failed writer attempt dirties both sub-repos; attempt 2 starts on CLEAN trees and no stray survives into the done task', async () => {
     const fixerAgentId = await seedWriterAgent(h.db, 'fixer')
     const taskId = await seedMultiRepoTask(h, fixerAgentId)
@@ -307,7 +310,7 @@ describe('S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC
     expect(existsSync(strayB)).toBe(false)
     expect(readFileSync(join(h.repoA, 'src.txt'), 'utf-8')).toBe('base\n')
     expect(readFileSync(join(h.repoB, 'src.txt'), 'utf-8')).toBe('base\n')
-  })
+  }, 30_000)
 
   test('contrast oracle: retry path and resume path now share ONE rollback authority (services/nodeRollback.ts)', () => {
     // Source-text companion tying the rollback call sites together (the

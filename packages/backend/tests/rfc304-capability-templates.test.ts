@@ -104,6 +104,17 @@ describe('RFC-309 — the permission boundary survives the merge', () => {
     expect(() => assertTemplateFieldsAllowed(NOT_AN_AUTHOR, true, TEMPLATE_INPUT, null)).toThrow(
       /scripts:author/,
     )
+    // The CODE as well as the message. A caller that branches on the code (and
+    // the guard that requires every route-thrown code to be named by a test)
+    // sees `capability-template-scripts-forbidden`, so pinning only the prose
+    // would let a rename ship silently.
+    let code: unknown
+    try {
+      assertTemplateFieldsAllowed(NOT_AN_AUTHOR, true, TEMPLATE_INPUT, null)
+    } catch (err) {
+      code = (err as { code?: unknown }).code
+    }
+    expect(code).toBe('capability-template-scripts-forbidden')
   })
 
   test('a template with NO scripts needs no extra grant', () => {

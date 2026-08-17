@@ -157,6 +157,10 @@ import {
 import { CODE_ROUND_SUMMARY_PORT } from '@/services/codeRoundContract'
 import { createCodeCapabilityRunner } from '@/modules/code-capability/composition/codeCapabilityRunner'
 import { buildMrReviewWiring } from '@/modules/code-capability/composition/mrReviewEnvironment'
+import { LaunchInputSchema, type LaunchInput } from '@/modules/code-capability/domain/launchInput'
+import type { ClarifyOrigin } from '@/modules/code-capability/domain/clarifyRouting'
+import type { RequirementInput } from '@/modules/code-capability/domain/requirementInput'
+import type { CodeContextFields } from '@agent-workflow/shared'
 import {
   buildCapabilityWiring,
   type CapabilityWiring,
@@ -4745,6 +4749,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
   const envelopeNonce = await loadRunEnvelopeNonce(db, nodeRunId)
   const identity = await roundIdentity(db, task.codeRoundId)
   const roundInherited = await inheritedArtifactsForRound(db, task.codeRoundId)
+  const platformLaunch = await platformLaunchForRound(db, task.codeRoundId)
   const commitExcludePatterns = readCommitExcludePatterns(opts)
   const taskCommit = bindTaskWorkspaceCommitParticipant({
     candidate: bindRepositoryCommitParticipant({
@@ -4818,7 +4823,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             }
           })()),
         })
-      : state.triggerContext !== null &&
+      : (state.triggerContext !== null || platformLaunch !== null) &&
           (capability === 'mr-comment-fix' ||
             capability === 'requirement' ||
             capability === 'ci-fix')
@@ -4835,7 +4840,16 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
           await buildCapabilityWiring({
             db,
             capability,
-            webhook: state.triggerContext.trigger.webhook,
+            // RFC-309 — whichever entrance opened this round. The webhook wins
+            // when both are present: a round can only have been opened once,
+            // and a launch recorded on a webhook-opened round would be stale.
+            webhook: state.triggerContext?.trigger.webhook ?? platformLaunch?.fields ?? {},
+            ...(platformLaunch === null
+              ? {}
+              : {
+                  requirementInput: platformLaunch.requirementInput,
+                  clarifyOrigin: platformLaunch.clarifyOrigin,
+                }),
             repoPath: task.repoPath,
             worktreePath: state.scopeRoot,
             nonce: envelopeNonce,
@@ -5359,6 +5373,84 @@ async function inheritedArtifactsForRound(
       : null
   } catch {
     return null
+  }
+}
+
+/**
+ * The platform launch this round was opened by, if it was not a webhook.
+ *
+ * RFC-309 — before this, a round opened from `/api/code/rounds` reached the
+ * scheduler with no trigger context, and the branch below required one. The
+ * round started, took its lease, and every stage refused: the entrance existed
+ * and led nowhere, which is exactly the failure shape RFC-304's own scheduler
+ * had for three capabilities before T4a1z.
+ *
+ * Returns the field bag those stages read, built from what the launcher typed.
+ * `event_type` is deliberately absent — see `CodeContextFields`.
+ */
+async function platformLaunchForRound(
+  db: DbClient,
+  codeRoundId: string | null,
+): Promise<{
+  fields: CodeContextFields
+  requirementInput: RequirementInput | null
+  clarifyOrigin: ClarifyOrigin
+} | null> {
+  if (codeRoundId === null || codeRoundId === '') return null
+  const [row] = await db
+    .select({ workPackage: codeWorkRounds.workPackage })
+    .from(codeWorkRounds)
+    .where(eq(codeWorkRounds.id, codeRoundId))
+    .limit(1)
+  if (row?.workPackage == null) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(row.workPackage)
+  } catch {
+    return null
+  }
+  const launch =
+    typeof parsed === 'object' && parsed !== null
+      ? (parsed as { launch?: unknown }).launch
+      : undefined
+  const decoded = LaunchInputSchema.safeParse(launch)
+  if (!decoded.success) return null
+
+  const origin =
+    typeof parsed === 'object' && parsed !== null
+      ? (parsed as { clarifyOrigin?: unknown }).clarifyOrigin
+      : undefined
+
+  return {
+    fields: contextFieldsForLaunch(decoded.data),
+    requirementInput:
+      decoded.data.capability === 'requirement'
+        ? {
+            title: decoded.data.title,
+            body: decoded.data.body,
+            documents: decoded.data.documents,
+          }
+        : null,
+    // The stored value is a plain discriminator; the domain type carries the
+    // write-back flags an issue entry needs, and a platform launch has neither.
+    clarifyOrigin:
+      origin === 'platform'
+        ? { kind: 'platform' }
+        : { kind: 'issue', hasWritebackHandle: false, frameworkSupportsWriteback: false },
+  }
+}
+
+/** What the launcher typed, in the shape the stages read. */
+function contextFieldsForLaunch(input: LaunchInput): CodeContextFields {
+  switch (input.capability) {
+    case 'requirement':
+      return {}
+    case 'mr-review':
+      return { mr_iid: input.mrIid }
+    case 'ci-fix':
+      return { pipeline_id: input.pipelineId }
+    case 'mr-comment-fix':
+      return { mr_iid: input.mrIid, comment_thread_id: input.discussionId }
   }
 }
 

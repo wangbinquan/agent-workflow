@@ -1219,6 +1219,13 @@
       "when": 1788278411037,
       "tag": "0174_rfc309_capability_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 174,
+      "version": "6",
+      "when": 1788278412037,
+      "tag": "0175_rfc309_template_base_snapshot",
+      "breakpoints": true
     }
   ]
 }

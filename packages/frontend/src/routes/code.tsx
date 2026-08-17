@@ -20,7 +20,7 @@
 // the row says "on, and still needs X".
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute } from '@tanstack/react-router'
+import { createRoute, Link } from '@tanstack/react-router'
 import { useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -42,10 +42,12 @@ import { TabPanels } from '@/components/split/TabPanels'
 import { TabBar } from '@/components/TabBar'
 import { CapabilityFlow, type StageRunStatus } from '@/components/code/CapabilityFlow'
 import { readGraph, type CapabilityGraphResponse } from '@/components/code/graphResponse'
-import { CapabilityFlowPanel as FlowPanel } from '@/components/code/CapabilityFlowPanel'
 import { Route as RootRoute } from './__root'
 
-export type CodeTab = 'matrix' | 'activity' | 'flow' | 'metrics' | 'templates'
+// RFC-309 T14 — the standalone Flow tab is gone. It asked two questions before
+// it could show anything (which capability, then which configuration), and both
+// are answered by opening a template: `/code/templates/$id` IS the flow.
+export type CodeTab = 'matrix' | 'activity' | 'metrics' | 'templates'
 
 interface CodeSearch extends Record<string, unknown> {
   tab?: CodeTab
@@ -53,13 +55,7 @@ interface CodeSearch extends Record<string, unknown> {
 }
 
 function isCodeTab(value: unknown): value is CodeTab {
-  return (
-    value === 'matrix' ||
-    value === 'activity' ||
-    value === 'flow' ||
-    value === 'metrics' ||
-    value === 'templates'
-  )
+  return value === 'matrix' || value === 'activity' || value === 'metrics' || value === 'templates'
 }
 
 /** Unknown values are dropped rather than rendered — same rule as /webhooks. */
@@ -208,7 +204,6 @@ function CodePage() {
         tabs={[
           { key: 'matrix', label: t('code.tab.matrix') },
           { key: 'activity', label: t('code.tab.activity') },
-          { key: 'flow', label: t('code.tab.flow') },
           { key: 'metrics', label: t('code.tab.metrics') },
           { key: 'templates', label: t('code.tab.templates') },
         ]}
@@ -229,11 +224,6 @@ function CodePage() {
         panels={[
           { key: 'matrix', testid: 'code-panel-matrix', content: <MatrixPanel /> },
           { key: 'activity', testid: 'code-panel-activity', content: <ActivityPanel /> },
-          {
-            key: 'flow',
-            testid: 'code-panel-flow',
-            content: <FlowPanel active={tab === 'flow'} />,
-          },
           { key: 'metrics', testid: 'code-panel-metrics', content: <MetricsPanel /> },
           { key: 'templates', testid: 'code-panel-templates', content: <TemplatesPanel /> },
         ]}
@@ -1094,7 +1084,16 @@ function TemplatesPanel(): ReactElement {
           {templates.data?.map((row) => (
             <li key={row.id} className="card" data-testid={`code-template-${row.id}`}>
               <div className="page__header--row">
-                <strong>{row.name}</strong>
+                {/* RFC-309 T14 — the name IS the way in. The row used to be a
+                    read-only summary of JSON entered elsewhere; opening it now
+                    shows the sequence this template runs. */}
+                <Link
+                  to="/code/templates/$id"
+                  params={{ id: row.id }}
+                  data-testid={`code-template-open-${row.id}`}
+                >
+                  <strong>{row.name}</strong>
+                </Link>
                 <StatusChip kind="info" size="sm">
                   {row.capability}
                 </StatusChip>
@@ -1297,7 +1296,34 @@ function NewTemplateDialog(props: {
           />
         </Field>
       ))}
+      {/* RFC-309 T15 / AC-5 — the capability's own sequence, read-only, HERE.
+          RFC-307 promised the structure is viewable before anything is
+          configured, and deleting the Flow tab would have taken that away: with
+          no templates there would be nothing to open. This is also where it is
+          most useful — it names the steps whose slots the fields above fill. */}
+      {capability !== '' && <CapabilityStructurePreview capability={capability} />}
       {create.isError && <ErrorBanner error={create.error} />}
     </Dialog>
+  )
+}
+
+/**
+ * A capability's stage sequence, drawn read-only.
+ *
+ * RFC-307 AC-1 says the structure must be viewable with nothing configured, and
+ * that acceptance survives RFC-309 removing the Flow tab — this is where it now
+ * lives. Read-only on purpose: there is no template yet to write a change to,
+ * and offering an editor that saves nowhere is worse than offering none.
+ */
+function CapabilityStructurePreview({ capability }: { capability: string }): ReactElement {
+  const { t } = useTranslation()
+  const graph = useCapabilityGraph(capability)
+  const answer = readGraph(graph.data)
+  if (answer.kind !== 'graph') return <></>
+  return (
+    <div className="page__section" data-testid="code-capability-structure">
+      <p>{t('code.flow.hint')}</p>
+      <CapabilityFlow nodes={answer.nodes} edges={answer.edges} height={320} />
+    </div>
   )
 }

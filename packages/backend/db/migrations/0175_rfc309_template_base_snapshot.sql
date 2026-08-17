@@ -1,0 +1,19 @@
+-- RFC-309 T16 — the base VALUES a copy was taken from, not just their digest.
+--
+-- RFC-304's T64 recorded three facts at copy time: where it came from, which
+-- upstream version, and a digest of that version. Those three answer "has this
+-- copy been edited" (digest differs) and "has upstream moved" (version differs),
+-- which is enough for the four states — and that is where T64 stopped, because
+-- nothing consumed it.
+--
+-- Wiring it to a real three-way merge needs one more thing the digest cannot
+-- give back: the base VALUES, per field. Without them "upstream says A, local
+-- says B" cannot tell "upstream changed it" from "we changed it", so a merge has
+-- to guess — and it guesses wrong on exactly the fields somebody cared enough to
+-- edit. `resolveThreeWay` has taken a `base` per field since the day it was
+-- written; this column is what finally supplies it.
+--
+-- NULL is a real state, not missing data: every copy made before this migration
+-- has no base recorded. Those are handled by treating every difference as a
+-- conflict rather than by inventing a base — see `templateUpstreamStatus.ts`.
+ALTER TABLE `capability_templates` ADD COLUMN `base_snapshot_json` text;

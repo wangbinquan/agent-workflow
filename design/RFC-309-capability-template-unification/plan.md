@@ -20,41 +20,41 @@
 
 | 编号 | 任务                                                                                                                                              | 依赖  | 状态 |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ---- |
-| T1   | `capability_templates` 表 + 迁移 `0165`：N 绑定 → N 模板（**模板 id 延用绑定 id**）、零绑定框架保留、`upstream_id` 指向原框架、`base_digest` 计算 | —     | ⬜   |
-| T2   | `repo_capability_config.binding_id` → `template_id`（**只改名不改值**）                                                                           | T1    | ⬜   |
-| T3   | 迁移用例：N→N 且脚本各自继承；零绑定框架保留；**矩阵指针前后指向同一份配置**；旧表已 DROP                                                         | T1,T2 | ⬜   |
-| T4   | `anchorKind` 放宽加 `'platform'`（`codeWorkItems` + `codeFindings` 同批）                                                                         | T1    | ⬜   |
-| T5   | 权限目录：8 点 → `capability-templates:{read,create,update,delete}` 4 点 + 新增 `code-rounds:launch`；闭集断言 81 → 78；四角色预设更新；双语目录  | —     | ⬜   |
-| T6   | 迁移删除指向已删权限点的存量 grant（**D5 用户裁决**，迁移注释写明是有意为之）                                                                     | T5    | ⬜   |
-| T7   | 模板 CRUD 路由归一（list/get/create/update/delete/copy），`api-contract-coverage` 同步                                                            | T1,T5 | ⬜   |
-| T8   | **字段级权限**：body 改动 `scripts`/`hooks` 且无 `scripts:author` ⇒ 整个请求 403（不静默忽略字段）                                                | T7    | ⬜   |
-| T9   | 权限用例**两条分支都写**：有权可改脚本；无权 403 且 agent/prompt 仍可改（**AC-6**）                                                               | T8    | ⬜   |
-| T10  | 配置包：导出只产 `capability-template-create`；导入三种 op 都认，旧两种按同一规则合成（**AC-12**）                                                | T1    | ⬜   |
-| T11  | `services/demoSeed.ts` 改播一份合并后的模板                                                                                                       | T1    | ⬜   |
+| T1   | `capability_templates` 表 + 迁移 `0165`：N 绑定 → N 模板（**模板 id 延用绑定 id**）、零绑定框架保留、`upstream_id` 指向原框架、`base_digest` 计算 | —     | ✅   |
+| T2   | `repo_capability_config.binding_id` → `template_id`（**只改名不改值**）                                                                           | T1    | ✅   |
+| T3   | 迁移用例：N→N 且脚本各自继承；零绑定框架保留；**矩阵指针前后指向同一份配置**；旧表已 DROP                                                         | T1,T2 | ✅   |
+| T4   | `anchorKind` 放宽加 `'platform'`（`codeWorkItems` + `codeFindings` 同批）                                                                         | T1    | ✅   |
+| T5   | 权限目录：8 点 → `capability-templates:{read,create,update,delete}` 4 点 + 新增 `code-rounds:launch`；闭集断言 81 → 78；四角色预设更新；双语目录  | —     | ✅   |
+| T6   | 迁移删除指向已删权限点的存量 grant（**D5 用户裁决**，迁移注释写明是有意为之）                                                                     | T5    | ✅   |
+| T7   | 模板 CRUD 路由归一（list/get/create/update/delete/copy），`api-contract-coverage` 同步                                                            | T1,T5 | ✅   |
+| T8   | **字段级权限**：body 改动 `scripts`/`hooks` 且无 `scripts:author` ⇒ 整个请求 403（不静默忽略字段）                                                | T7    | ✅   |
+| T9   | 权限用例**两条分支都写**：有权可改脚本；无权 403 且 agent/prompt 仍可改（**AC-6**）                                                               | T8    | ✅   |
+| T10  | 配置包：导出只产 `capability-template-create`；导入三种 op 都认，旧两种按同一规则合成（**AC-12**）                                                | T1    | ✅   |
+| T11  | `services/demoSeed.ts` 改播一份合并后的模板                                                                                                       | T1    | ✅   |
 
 ### PR-2：模板即流程
 
 | 编号 | 任务                                                                              | 依赖    | 状态 |
 | ---- | --------------------------------------------------------------------------------- | ------- | ---- |
-| T12  | 新增嵌套路由 `/code/templates/:id`（`/code` 现为单层）                            | T7      | ⬜   |
-| T13  | 详情页 = `CapabilityFlow`（组件零改动复用）+ 去掉「选绑定」下拉，模板从路由参数取 | T12     | ⬜   |
-| T14  | 模板列表行 → 详情；删除独立「流程」页签                                           | T13     | ⬜   |
-| T15  | 能力级只读流程移到**能力目录** + 新建模板向导（**AC-5**：没有任何模板时仍可看）   | T14     | ⬜   |
-| T16  | **T64 接线**：四态徽标 + 三方差异预览 + 「只合并未被覆盖的字段」（**AC-11**）     | T13     | ⬜   |
-| T17  | i18n 两语言；前端用例：详情渲染、无权限置灰、四态呈现                             | T13–T16 | ⬜   |
+| T12  | 新增嵌套路由 `/code/templates/:id`（`/code` 现为单层）                            | T7      | ✅   |
+| T13  | 详情页 = `CapabilityFlow`（组件零改动复用）+ 去掉「选绑定」下拉，模板从路由参数取 | T12     | ✅   |
+| T14  | 模板列表行 → 详情；删除独立「流程」页签                                           | T13     | ✅   |
+| T15  | 能力级只读流程移到**能力目录** + 新建模板向导（**AC-5**：没有任何模板时仍可看）   | T14     | ✅   |
+| T16  | **T64 接线**：四态徽标 + 三方差异预览 + 「只合并未被覆盖的字段」（**AC-11**）     | T13     | ✅   |
+| T17  | i18n 两语言；前端用例：详情渲染、无权限置灰、四态呈现                             | T13–T16 | ✅   |
 
 ### PR-3：从模板起跑
 
-| 编号 | 任务                                                                                                              | 依赖    | 状态 |
-| ---- | ----------------------------------------------------------------------------------------------------------------- | ------- | ---- |
-| T18  | `domain/launchInput.ts`：四种能力的判别联合 + 校验（**编译期**拒绝张冠李戴的 input）                              | T4      | ⬜   |
-| T19  | `application/launchRoundCommand.ts`：§4.2 六条校验 + `ensureWorkItem` + `openRound` + 标 `ClarifyOrigin.platform` | T18     | ⬜   |
-| T20  | `public/commands.ts` 加 `LaunchRoundCommand`（跨模块只走 exact 合同）                                             | T19     | ⬜   |
-| T21  | `POST /api/code/rounds`（权限 `code-rounds:launch`）+ 201 回执；`api-contract-coverage` 登记（**AC-9**）          | T20     | ⬜   |
-| T22  | 命令用例：六条校验各一条；**矩阵未启用时仍能发起**（**AC-8** 正面）；同一需求两次发起 = 两件工作项                | T19     | ⬜   |
-| T23  | 发起界面：详情页「用这份模板发起一次」→ 选仓库 + 按能力切换输入 → 直达该轮                                        | T21,T13 | ⬜   |
-| T24  | 平台发起的澄清落平台、**不回写任何 issue** 的用例（**AC-10**）                                                    | T19     | ⬜   |
-| T25  | e2e：全新库 → 复制 demo 模板 → 改 agent → 选仓库发起 requirement → 出现在活动页 → 澄清落平台                      | T23     | ⬜   |
+| 编号 | 任务                                                                                                              | 依赖    | 状态  |
+| ---- | ----------------------------------------------------------------------------------------------------------------- | ------- | ----- |
+| T18  | `domain/launchInput.ts`：四种能力的判别联合 + 校验（**编译期**拒绝张冠李戴的 input）                              | T4      | ✅    |
+| T19  | `application/launchRoundCommand.ts`：§4.2 六条校验 + `ensureWorkItem` + `openRound` + 标 `ClarifyOrigin.platform` | T18     | ✅    |
+| T20  | `public/commands.ts` 加 `LaunchRoundCommand`（跨模块只走 exact 合同）                                             | T19     | ✅    |
+| T21  | `POST /api/code/rounds`（权限 `code-rounds:launch`）+ 201 回执；`api-contract-coverage` 登记（**AC-9**）          | T20     | ✅    |
+| T22  | 命令用例：六条校验各一条；**矩阵未启用时仍能发起**（**AC-8** 正面）；同一需求两次发起 = 两件工作项                | T19     | ✅    |
+| T23  | 发起界面：详情页「用这份模板发起一次」→ 选仓库 + 按能力切换输入 → 直达该轮                                        | T21,T13 | ✅    |
+| T24  | 平台发起的澄清落平台、**不回写任何 issue** 的用例（**AC-10**）                                                    | T19     | ✅    |
+| T25  | e2e：全新库 → 复制 demo 模板 → 改 agent → 选仓库发起 requirement → 出现在活动页 → 澄清落平台                      | T23     | ⬜ ⬜ |
 
 ### 收尾
 

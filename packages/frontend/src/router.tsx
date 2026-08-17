@@ -13,6 +13,7 @@ import { Route as usersRoute } from '@/routes/users'
 import { Route as rootRoute } from '@/routes/__root'
 import { Route as settingsRoute } from '@/routes/settings'
 import { Route as codeRoute } from '@/routes/code'
+import { Route as codeTemplateDetailRoute } from '@/routes/code.templates.$id'
 import { IndexRoute as mcpsIndexRoute, Route as mcpsRoute } from '@/routes/mcps'
 import { Route as mcpDetailRoute } from '@/routes/mcps.detail'
 import { Route as mcpNewRoute } from '@/routes/mcps.new'
@@ -135,6 +136,8 @@ const routeTree = rootRoute.addChildren([
   memoryRoute,
   // RFC-101: memory→skill fusion detail + approval gate.
   fusionDetailRoute,
+  // RFC-309: '/code/templates/$id' literal must precede '/code'.
+  codeTemplateDetailRoute,
   codeRoute,
   settingsRoute,
   // RFC-247 — the generated API & MCP wiki. Reachable from /account (where a

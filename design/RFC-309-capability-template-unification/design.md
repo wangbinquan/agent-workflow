@@ -222,3 +222,65 @@ POST /api/code/rounds
 - **Q-C** 发起权限点：**默认新增** `code-rounds:launch`（不复用 `repos:write`）。
 - **Q-D**（本文档新增）迁移后旧表**直接 DROP**，不保留空表。若你要求可回滚窗口，
   需改为保留一个版本周期再删——但那与 RFC-275 前向单向的迁移纪律相悖。
+
+## 11. 实现期发现（跑起来才照出的四条，写回本文档）
+
+起草时以为 PR-3 只差一个路由。实现时发现「打开轮次」离「轮次真的在跑」还有三个接口，
+每一个都是本仓反复出现的同一种缺陷形状——**两半各自正确、中间没有接线**。逐条记录，
+因为它们都不是读代码能读出来的。
+
+### 11.1 `openRound` 不会让任何东西跑起来
+
+`launchRoundCommand` 起初只做 `ensureWorkItem` + `openRound`：两行写库、回执长得完全正确、
+`/code` 活动页也能看到那一轮——**而它永远停在原地**。webhook 路径在同一口气里还做了
+`noteWorkItemEvent(scheduler-take)` + `startCodeRoundTask` + `attachRoundTask`。
+
+处置：命令新增 `StartRoundTask` **端口**（不是直接调用——起任务要 `StartTaskDeps`，那属于
+装配根），路由注入 `startCodeRoundTask`；回执增加 `taskId`。用例锁两处：命令层断言启动器
+被调用且 `code_work_rounds.task_id` 落库；路由层用一个**克隆不了的仓库**断言它确实尝试了
+启动（能拿到仓库类错误 = 接线在；拿到 201 = 接线断了）。
+
+### 11.2 工作项状态机没有「人按了按钮」这一事件
+
+`scheduler-take` 只接受 `queued`，而 `ensureWorkItem` 出来的新行是 `idle`；webhook 路径先靠
+`external-signal` 把它推到 `queued`。手动发起借用 `external-signal` 就是在说谎（没有任何
+托管侧信号），于是给状态机加了 `platform-launch`：只在 `idle/settled/failed` 合法，**运行中
+一律拒绝**（`round-already-in-flight`）。这条拒绝是有意义的产品行为——webhook 突发可以合并
+成一个 pending revision（只有最新状态要紧），而人按两次按钮没有东西可合并，同一 MR 上两轮
+会抢同一把锁、写同一棵工作树。
+
+### 11.3 调度器要求「冻结的 webhook 上下文」，平台发起没有
+
+`buildCapabilityWiring` 那一支的判据是 `state.triggerContext !== null`。平台发起没有投递，
+于是整支不进——轮次起来、拿到锁、每个阶段拒绝。而 `requirement` 的两个关键字段更是**写死**的：
+`input: null`（于是 `resolve-input` 回答「这是引用、没有 entry 脚本」——在说一份就躺在轮次里的
+需求正文）与 `origin: {kind:'issue', 两个 false}`（于是 `routeClarify` **拒绝启动**，理由是
+「请改从平台提交」——而人正是从平台提交的）。
+
+处置：①`WebhookTriggerFields` 旁边加 `CodeContextFields`（同一字段袋、`event_type` 可选），
+两个入口共用，平台发起不再需要伪造一个从未发生的托管事件；②`CapabilityWiringInput` 增加
+`requirementInput` / `clarifyOrigin` 两个可选口，**默认值保持原样**（issue 形状 + 两个 false），
+所以 issue 入口一字未改；③调度器从轮次的 `workPackage.launch` 读回发起输入。
+用例把两个方向都锁上：给了 `requirementInput` 就 `done`、没给仍旧 `failed('reference')`；
+`platform` 走 platform、默认仍旧 `refuse`。
+
+### 11.4 三方合并的「新基线」取错方向会在**第二次**才暴露
+
+最自然的写法是把合并后的本地行记为新基线。第一次合并看起来完全正确；第二次读时，
+被我们**保留**的字段基线等于我方值、上游仍是他方值 ⇒ 判成「上游改了、我方没改」⇒
+反过来劝你撤销刚保护住的改动。基线是**共同祖先**，只能往上游走；**唯独仍在冲突的字段
+保留旧基线**，否则一次「合并」就把没人裁决过的分歧按上游意见静默了结。`upstreamVersion`
+同理：只有冲突清零才推进，否则徽标会在还有未决分歧时消失。（另：应用了零个字段的合并
+写作彻底 no-op——连 `updatedAt` 都不动，否则**下游**模板会因为一次什么都没做的操作集体
+显示「有更新」。）
+
+## 12. 已知取舍（本 RFC 有意留下）
+
+- **手动发起的 `stable_project_id` 用的是缓存仓 id，不是托管侧 project id**。后者只有投递
+  才带得来（GitLab 是数字 id），手动发起没有投递也无法在不发 API 请求的前提下算出。
+  代价：同一个 MR 上「手动一轮」与「webhook 一轮」是两件工作项，不去重、不共享 MR 锁。
+  可见后果是重复劳动（两份检视，或第二次 push 被 git 以 non-fast-forward 拒掉），不是数据
+  损坏；替代方案「平台没见过该仓库的投递就不许发起」会直接废掉本入口存在的理由。
+- **迁移后的模板一律呈 `orphaned`**：`upstream_id` 指向的原框架已被 DROP（AC-2 如此规定）。
+  这是 T64 四态里**准确**的那一个（「来源已删除，这份复制品从此独立」），也正是 §5 已呈报的
+  能力收缩的如实呈现；「改上游 → 各组显示有更新」适用于**此后**的复制，不适用于迁移存量。

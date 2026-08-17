@@ -79,6 +79,7 @@ function installFetch(handlers: {
   metrics?: unknown
   templates?: unknown[]
   catalog?: unknown[]
+  graph?: unknown
   agents?: unknown[]
 }): Recorded {
   const rec: Recorded = { calls: [] }
@@ -96,6 +97,12 @@ function installFetch(handlers: {
       if (url.includes('/api/capability-templates')) {
         if (method === 'POST') return json({ id: 'tpl-copy', name: 'x copy' })
         return json(handlers.templates ?? [])
+      }
+      // Before the catalog: `/api/code/capabilities/:id/graph` also contains
+      // `/api/code/capabilities`, and answering it with the catalog's shape
+      // makes the flow render nothing while every request still returns 200.
+      if (url.includes('/graph')) {
+        return json(handlers.graph ?? { capability: 'mr-review', reason: 'no-stage-contract' })
       }
       if (url.includes('/api/code/capabilities')) {
         return json({ items: handlers.catalog ?? [] })
@@ -665,6 +672,45 @@ describe('RFC-309 — the templates tab', () => {
     expect(list.querySelectorAll('li[data-testid^="code-template-"]').length).toBe(2)
     expect(screen.queryByTestId('code-frameworks')).toBeNull()
     expect(screen.queryByTestId('code-bindings')).toBeNull()
+  })
+
+  test("the wizard draws the capability's steps — RFC-307 AC-1 keeps its home", async () => {
+    // RFC-309 deleted the Flow tab, and with it the only place the structure
+    // could be seen before anything was configured. Without this the deletion
+    // would have quietly taken away an acceptance criterion another RFC still
+    // holds: on a fresh install there are no templates to open.
+    installFetch({
+      templates: [],
+      catalog: [{ capability: 'mr-review', agentSlots: ['reviewer'] }],
+      agents: [{ id: 'agent-1', name: 'auditor' }],
+      graph: {
+        capability: 'mr-review',
+        stageContractVer: 1,
+        nodes: [
+          {
+            name: 'collect-diff',
+            kind: 'program',
+            requires: [],
+            produces: ['diff'],
+            terminal: [],
+            injectable: [],
+            parallel: false,
+          },
+        ],
+        edges: [],
+      },
+    })
+    await renderPage('/code?tab=templates')
+    fireEvent.click(await screen.findByTestId('code-new-template'))
+
+    // Nothing is drawn until a capability is chosen — there is no structure to
+    // show, and an empty canvas would read as "this capability does nothing".
+    expect(screen.queryByTestId('code-capability-structure')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('code-template-capability'))
+    fireEvent.mouseDown(await screen.findByRole('option', { name: /Merge request review/i }))
+
+    expect(await screen.findByTestId('code-capability-structure')).toBeTruthy()
   })
 
   test('creating a template is offered from the list itself', async () => {

@@ -68,6 +68,11 @@ describe('listWorktreeDir', () => {
     expect(subRes.entries.map((e) => e.name)).not.toContain('.git')
   })
 
+  // docs/dev-gotchas.md — this case writes `limit + 7` files and takes ~5.7s
+  // ALONE on an idle machine, so under `gate:local`'s four parallel shards it
+  // is not slow, it is over bun's 5000ms default. Budgeted explicitly, which is
+  // the owner's fix that gotcha asks for: left implicit it turns an unrelated
+  // RFC's gate red and sends its author hunting a regression that is not there.
   test('truncates beyond WORKTREE_DIR_MAX_ENTRIES', async () => {
     const limit = WORKTREE_DIR_MAX_ENTRIES
     // create limit + 7 files; size kept tiny to keep test fast.
@@ -81,7 +86,7 @@ describe('listWorktreeDir', () => {
     expect(res.truncated).toBe(true)
     // sort prefix preserved
     expect(res.entries[0]?.name).toBe('f-00000.txt')
-  })
+  }, 30_000)
 
   test('symlink inside worktree is listed with target kind', async () => {
     await mkdir(join(root, 'real'))

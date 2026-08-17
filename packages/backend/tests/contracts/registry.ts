@@ -204,6 +204,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'PUT', path: '/api/capability-templates/:id' },
   { method: 'DELETE', path: '/api/capability-templates/:id' },
   { method: 'POST', path: '/api/capability-templates/:id/copy' },
+  // RFC-309 T16 — the T64 upstream link, read and acted on.
+  { method: 'GET', path: '/api/capability-templates/:id/upstream' },
+  { method: 'POST', path: '/api/capability-templates/:id/upstream/merge' },
   { method: 'GET', path: '/api/capability-templates/:id/acl' },
   { method: 'PUT', path: '/api/capability-templates/:id/acl' },
 

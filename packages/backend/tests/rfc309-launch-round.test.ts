@@ -19,13 +19,31 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
-import { agents, capabilityTemplates, codeWorkItems, webhookEndpoints } from '../src/db/schema'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
+import {
+  agents,
+  cachedRepos,
+  capabilityTemplates,
+  codeWorkItems,
+  codeWorkRounds,
+  webhookEndpoints,
+} from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import type { Permission } from '@agent-workflow/shared'
 import { createLaunchRoundCommand } from '../src/modules/code-capability/application/launchRoundCommand'
 import { anchorFor, isPlatformOrigin } from '../src/modules/code-capability/domain/launchInput'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+// A private home for the one case that really starts a task. Without it a
+// direct `bun test` run (no shard home) writes worktrees into the developer's
+// own `~/.agent-workflow`.
+const HOME = mkdtempSync(join(tmpdir(), 'aw-rfc309-home-'))
+process.env.AGENT_WORKFLOW_HOME = HOME
 const NOW = 1_700_000_000_000
 
 const ACTOR = {
@@ -63,6 +81,38 @@ async function seed(db: DbClient, over: { agentBySlot?: Record<string, string> }
 }
 
 const REVIEW = { capability: 'mr-review', mrIid: '42' } as const
+const BOX = createSecretBoxFromKey(Buffer.alloc(32, 7))
+
+/**
+ * A real cached repo, because the launch now really starts a task.
+ *
+ * Before the task start was wired the command wrote two rows and returned; the
+ * fixture could name any string. That it now needs a repository on disk is the
+ * point — a launch that cannot reach the repository must fail here rather than
+ * at stage one.
+ */
+async function seedCachedRepo(db: DbClient): Promise<string> {
+  // Deliberately unreachable. This fixture exists to prove the route ATTEMPTS
+  // the task launch — reaching a repository error is the observable proof —
+  // and a fixture that really cloned would either hit the network or write into
+  // the developer's own `~/.agent-workflow` (docs/dev-gotchas.md). The happy
+  // path with a real remote belongs to the e2e suite, which has a git server.
+  const id = 'repo-launch-1'
+  const url = 'https://gitlab.invalid.test/group/project.git'
+  await db.insert(cachedRepos).values({
+    id,
+    urlHash: 'deadbeef',
+    // Sealed, like every real row: a reuse-by-id launch unseals it, so a
+    // fixture with a plaintext URL would exercise a path production never takes.
+    urlEnc: BOX.seal(url),
+    urlRedacted: url,
+    localPath: join(tmpdir(), 'aw-rfc309-never-created'),
+    defaultBranch: 'main',
+    lastFetchedAt: NOW,
+    createdAt: NOW,
+  })
+  return id
+}
 
 describe('RFC-309 — the anchor a launch attaches to', () => {
   test('a platform requirement gets a MINTED anchor, not a fake issue number', () => {
@@ -142,6 +192,55 @@ describe('RFC-309 — launching', () => {
     expect(item?.anchorId).toBe('42')
     // Who pressed start, kept for the audit trail — and never handed to a model.
     expect(item?.initiatorUserId).toBe('u1')
+  })
+
+  test('the round is HANDED to a task starter — without one nothing runs it', async () => {
+    // `openRound` writes two rows. That is not a running round, and the gap
+    // between the two is invisible: the receipt looks right and the page never
+    // changes. This pins that the command reaches its starter and records the
+    // task on the round, so the activity view can join them.
+    await seed(db)
+    const started: Array<{ roundId: string; capability: string; cachedRepoId: string }> = []
+    const result = await createLaunchRoundCommand(
+      db,
+      () => NOW,
+      () => 'minted',
+      async (start) => {
+        started.push({
+          roundId: start.roundId,
+          capability: start.capability,
+          cachedRepoId: start.cachedRepoId,
+        })
+        return { id: 'task-1' }
+      },
+    ).run({ repoId: 'group/project', templateId: 'tpl-1', input: REVIEW, actor: ACTOR })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(started).toEqual([
+      { roundId: result.roundId, capability: 'mr-review', cachedRepoId: 'group/project' },
+    ])
+    expect(result.taskId).toBe('task-1')
+
+    const [round] = await db
+      .select({ taskId: codeWorkRounds.taskId })
+      .from(codeWorkRounds)
+      .where(eq(codeWorkRounds.id, result.roundId))
+    expect(round?.taskId).toBe('task-1')
+  })
+
+  test('a second launch while one is in flight is refused, not queued behind it', async () => {
+    // Two manual rounds on the same merge request would take the same lease and
+    // write the same worktree. A webhook burst merges into one pending revision
+    // because only the latest state matters; a person who pressed the button
+    // asked for THIS round, so there is nothing to merge it into — the honest
+    // answer is to say the item is busy.
+    await seed(db)
+    expect((await launch()).ok).toBe(true)
+    const second = await launch()
+    expect(second.ok).toBe(false)
+    expect(second.ok === false && second.code).toBe('round-already-in-flight')
+    expect(second.ok === false && second.message).toContain('running')
   })
 
   test('a repository with no code host is refused, by name', async () => {
@@ -226,7 +325,14 @@ describe('RFC-309 — the launch route names every code it can throw', () => {
 
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
-    app = createApp({ token: TOKEN, configPath: '', opencodeVersion: '1.15.0', dbVersion: 1, db })
+    app = createApp({
+      token: TOKEN,
+      configPath: '',
+      opencodeVersion: '1.15.0',
+      dbVersion: 1,
+      db,
+      secretBox: BOX,
+    })
   })
   afterEach(() => db.$client.close())
 
@@ -292,14 +398,36 @@ describe('RFC-309 — the launch route names every code it can throw', () => {
     expect(JSON.stringify(await res.json())).toContain('code-launch-agent-not-visible')
   })
 
-  test('a successful launch returns the receipt — AC-9', async () => {
+  test('a second launch while one is in flight: `code-launch-round-in-flight`', async () => {
+    // Its own code, not a generic 4xx: "your template is broken" and "this
+    // merge request already has a round running" send the caller to completely
+    // different places, and only the second one resolves itself by waiting.
     await seed(db)
-    const res = await post({ repoId: 'group/project', templateId: 'tpl-1', input: REVIEW })
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as { roundId: string; workItemId: string; roundSeq: number }
-    expect(body.roundId).toBeTruthy()
-    expect(body.workItemId).toBeTruthy()
-    expect(body.roundSeq).toBe(1)
+    const repoId = await seedCachedRepo(db)
+    // The first attempt reaches the task launch and fails THERE (this fixture's
+    // repository is deliberately not cloneable) — but the work item is already
+    // running by then, which is the state the second attempt must be told about.
+    const first = await post({ repoId, templateId: 'tpl-1', input: REVIEW })
+    expect(first.status).toBeGreaterThanOrEqual(400)
+
+    const second = await post({ repoId, templateId: 'tpl-1', input: REVIEW })
+    expect(JSON.stringify(await second.json())).toContain('code-launch-round-in-flight')
+  })
+
+  test("the route really starts the round's task — AC-9", async () => {
+    // The join that was missing and looked present. `openRound` writes two rows
+    // and returns; without a task nothing ever runs them, and the receipt would
+    // name a round whose page never changes.
+    //
+    // Asserted through a repository the daemon CANNOT clone, because that error
+    // can only be reached by attempting the launch. A 201 here would mean the
+    // route opened a round and wired no task — the exact failure this locks.
+    await seed(db)
+    const repoId = await seedCachedRepo(db)
+    const res = await post({ repoId, templateId: 'tpl-1', input: REVIEW })
+    const body = JSON.stringify(await res.json())
+    expect(res.status, body).toBeGreaterThanOrEqual(400)
+    expect(body).toContain('repo-')
   })
 
   test('without a bearer token it is refused', async () => {

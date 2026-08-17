@@ -97,6 +97,44 @@ export function templateDigest(row: {
   )
 }
 
+/**
+ * The fields a merge compares.
+ *
+ * `name` is deliberately absent: a copy is renamed by definition, and merging
+ * the name would rename somebody's template back to the one they copied.
+ * `capability` is absent for a harder reason — changing it would point every
+ * matrix cell holding this template at a sequence it was never configured for,
+ * which is not a merge but a different template.
+ */
+export const MERGEABLE_FIELDS = [
+  'description',
+  'scripts',
+  'hooks',
+  'paramSchema',
+  'paramDefaults',
+  'agentBySlot',
+  'promptBySlot',
+  'params',
+  'stageContractVer',
+] as const
+
+export type MergeableField = (typeof MERGEABLE_FIELDS)[number]
+
+/** The stored row, projected onto the fields a merge is about. */
+export function mergeableSnapshot(row: TemplateRow): Record<MergeableField, unknown> {
+  return {
+    description: row.description,
+    scripts: parseJson<unknown>(row.scriptsJson, {}),
+    hooks: parseJson<unknown>(row.hooksJson, []),
+    paramSchema: parseJson<unknown>(row.paramSchemaJson, []),
+    paramDefaults: parseJson<unknown>(row.paramDefaultsJson, {}),
+    agentBySlot: parseJson<unknown>(row.agentBySlotJson, {}),
+    promptBySlot: parseJson<unknown>(row.promptBySlotJson, {}),
+    params: parseJson<unknown>(row.paramsJson, {}),
+    stageContractVer: row.stageContractVer,
+  }
+}
+
 /** Whether this actor may see — and write — script bodies. */
 export function mayReadScripts(actor: Actor): boolean {
   return actor.permissions.has('scripts:author')
@@ -234,7 +272,7 @@ function rowFromInput(
     TemplateRow,
     'id' | 'ownerUserId' | 'visibility' | 'aclRevision' | 'builtin' | 'createdAt'
   > &
-    Pick<TemplateRow, 'upstreamId' | 'upstreamVersion' | 'baseDigest'>,
+    Pick<TemplateRow, 'upstreamId' | 'upstreamVersion' | 'baseDigest' | 'baseSnapshotJson'>,
   now: number,
 ): TemplateRow {
   return {
@@ -280,6 +318,7 @@ export async function createTemplate(
       upstreamId: null,
       upstreamVersion: null,
       baseDigest: null,
+      baseSnapshotJson: null,
       createdAt: now,
     },
     now,
@@ -310,6 +349,7 @@ export async function updateTemplate(
       upstreamId: existing.upstreamId,
       upstreamVersion: existing.upstreamVersion,
       baseDigest: existing.baseDigest,
+      baseSnapshotJson: existing.baseSnapshotJson,
       createdAt: existing.createdAt,
     },
     now,
@@ -359,6 +399,10 @@ export async function copyTemplate(
     upstreamId: source.id,
     upstreamVersion: source.updatedAt,
     baseDigest: templateDigest(source),
+    // RFC-309 T16 — the values as well as their digest. The digest answers
+    // "was this edited"; only the values answer "which side changed this
+    // field", and a merge that cannot answer the second one has to guess.
+    baseSnapshotJson: JSON.stringify(mergeableSnapshot(source)),
     createdAt: now,
     updatedAt: now,
   }
@@ -449,6 +493,7 @@ export async function prepareTemplateFromBundle(
         upstreamId: existing?.upstreamId ?? null,
         upstreamVersion: existing?.upstreamVersion ?? null,
         baseDigest: existing?.baseDigest ?? null,
+        baseSnapshotJson: existing?.baseSnapshotJson ?? null,
         createdAt: existing?.createdAt ?? now,
       },
       now,

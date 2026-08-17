@@ -582,16 +582,11 @@ export const enUS: Resources = {
     tab: {
       matrix: 'Repositories',
       activity: 'Activity',
-      flow: 'Flow',
       metrics: 'Results',
       templates: 'Templates',
     },
     flow: {
       capability: 'Capability',
-      binding: 'Which binding to configure',
-      bindingHint:
-        'The structure is fixed by the platform; this picks which agents, prompts and parameters it runs with.',
-      bindingNone: '(none — just show the structure)',
       hint: 'Click any step to see and change what it actually uses. The structure — which steps exist and how they connect — is fixed by the platform.',
       sharedSlot:
         'This slot is also used by {{count}} other step(s) ({{stages}}) — changing it here changes them too.',
@@ -668,6 +663,47 @@ export const enUS: Resources = {
       copiedFrom: 'Copied from another template',
       params: 'Parameters: {{names}}',
       slots: 'Agents: {{pairs}}',
+      backToList: 'All templates',
+      detailSubtitle: 'What this template runs, step by step',
+    },
+    // RFC-309 T16 — where a copy stands relative to what it came from.
+    upstream: {
+      title: 'Where this came from',
+      from: 'Copied from “{{name}}”',
+      state: {
+        current: 'Up to date',
+        'update-available': 'Update available',
+        conflicted: 'Needs a decision',
+        orphaned: 'Original is gone',
+      },
+      action: {
+        'take-upstream': 'They changed it',
+        'keep-local': 'You changed it',
+        conflict: 'Both changed it',
+      },
+      noBase:
+        'This copy predates change tracking, so the platform cannot tell which side changed what. Every difference is shown as needing a decision, and nothing will be merged automatically.',
+      merge_one: 'Take the 1 change you have not overridden',
+      merge_other: 'Take the {{count}} changes you have not overridden',
+      merged: 'Took {{applied}}, kept {{kept}} of your own, left {{conflicted}} for you to decide.',
+    },
+    // RFC-309 T23 — starting a round from this template.
+    launch: {
+      title: 'Run this template',
+      hint: 'Starts one round now. It does not need this capability switched on for the repository — that setting is about responding to the code host automatically.',
+      notLaunchable:
+        'This capability is a standing monitor rather than a round, so there is nothing to start by hand.',
+      repo: 'Repository',
+      repoNone: '(choose one)',
+      reqTitle: 'What needs building',
+      reqBody: 'Details',
+      reqBodyHint: 'Everything an issue body would have carried — constraints, acceptance, links.',
+      mrIid: 'Merge request number',
+      mrIidHint: 'The number the code host shows, not the internal id.',
+      discussionId: 'Discussion id',
+      discussionIdHint: 'Copy it from the thread’s permalink on the code host.',
+      pipelineId: 'Pipeline id',
+      submit: 'Start',
     },
     metrics: {
       empty: 'Nothing to measure yet',

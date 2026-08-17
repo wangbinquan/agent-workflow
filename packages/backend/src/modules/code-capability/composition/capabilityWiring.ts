@@ -20,7 +20,7 @@
 // configure. A stage that refuses BY NAME — naming the slot, the repository,
 // the missing endpoint — puts the resolution failure where somebody reads it.
 
-import { buildProtocolBlock, type WebhookTriggerFields } from '@agent-workflow/shared'
+import { buildProtocolBlock, type CodeContextFields } from '@agent-workflow/shared'
 import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import { findGateCommand, GATE_DOC_CANDIDATES } from '@/modules/code-capability/domain/targetGate'
 import type { AiCaller, RetryBudget } from '@/modules/code-capability/application/determinismGuard'
@@ -54,6 +54,8 @@ import { resolveMonitorScripts } from '@/services/codeCapabilityScripts'
 import type { DbClient } from '@/db/client'
 import type { CodeHostConnectionsService, FetchLike } from '@/services/codeHost/connections'
 import type { TaskWorkspaceCommitParticipant } from '@/modules/task-execution/public/participants'
+import type { ClarifyOrigin } from '@/modules/code-capability/domain/clarifyRouting'
+import type { RequirementInput } from '@/modules/code-capability/domain/requirementInput'
 
 /** Conservative by default, like the review budget. */
 export const DEFAULT_CAPABILITY_BUDGET: RetryBudget = { sameSession: 2, freshSession: 1 }
@@ -93,7 +95,26 @@ export interface CapabilityWiring {
 export interface CapabilityWiringInput {
   db: DbClient
   capability: 'mr-comment-fix' | 'requirement' | 'ci-fix'
-  webhook: WebhookTriggerFields
+  /** RFC-309 — either source's field bag; see `CodeContextFields`. */
+  webhook: CodeContextFields
+  /**
+   * RFC-309 — the requirement itself, when a person submitted it here.
+   *
+   * Absent means the round arrived as a REFERENCE (an issue label), and
+   * `resolve-input` refuses rather than fetching: fetching "issue 88" means
+   * knowing which system and whose credentials.
+   */
+  requirementInput?: RequirementInput | null
+  /**
+   * RFC-309 — where a question about this round goes (AC-10).
+   *
+   * Defaults to the issue shape with both flags false, which makes
+   * `routeClarify` REFUSE — the right answer for an issue-entered requirement
+   * whose write-back channel is unconfigured, and the wrong one for a platform
+   * launch, which is why a platform launch must pass `{ kind: 'platform' }`
+   * rather than letting the default stand.
+   */
+  clarifyOrigin?: ClarifyOrigin
   repoPath: string
   worktreePath: string
   nonce: string
@@ -320,13 +341,19 @@ export async function buildCapabilityWiring(
         // Null means the requirement arrived as a reference rather than as
         // content; `resolve-input` refuses rather than fetching, because
         // fetching "issue 88" needs to know which system and whose credentials.
-        input: null,
+        input: input.requirementInput ?? null,
         // An issue-labelled requirement can be answered where it was asked
         // (design D2) only when the framework supplies a write-back handle.
         // Both flags default FALSE: `routeClarify` then refuses to start rather
         // than asking into a channel nobody is watching, which is the failure
-        // that rule exists to prevent.
-        origin: { kind: 'issue', hasWritebackHandle: false, frameworkSupportsWriteback: false },
+        // that rule exists to prevent. RFC-309 — a PLATFORM launch overrides
+        // this, because the question can be asked where the person is already
+        // looking.
+        origin: input.clarifyOrigin ?? {
+          kind: 'issue',
+          hasWritebackHandle: false,
+          frameworkSupportsWriteback: false,
+        },
         workItemId: input.workItemId,
         roundId: input.roundId,
         roundSeq: input.roundSeq,

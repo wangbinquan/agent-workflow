@@ -27,6 +27,18 @@ export type WebhookTriggerFields = Readonly<
   >
 >
 
+/**
+ * The same field bag, without claiming a code-host event.
+ *
+ * RFC-292's header already says webhook is a launch SOURCE and its consumers
+ * are equal; RFC-309 added the second source — a person pressing "run this
+ * template" — which fills the same fields and has no `event_type`, because no
+ * code-host event happened. Synthesizing one would put a fabricated delivery
+ * into the context every downstream consumer reads and trusts.
+ */
+export type CodeContextFields = Omit<WebhookTriggerFields, 'event_type'> &
+  Partial<Pick<WebhookTriggerFields, 'event_type'>>
+
 export interface TriggerContext {
   readonly trigger: {
     readonly webhook: WebhookTriggerFields

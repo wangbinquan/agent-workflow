@@ -4485,6 +4485,15 @@ export const capabilityTemplates = sqliteTable(
     upstreamId: text('upstream_id'),
     upstreamVersion: integer('upstream_version'),
     baseDigest: text('base_digest'),
+    /**
+     * RFC-309 T16 — the base VALUES, so an update is a three-way merge.
+     *
+     * The digest above answers "was this edited"; only the values answer "who
+     * changed this field". NULL on every copy made before RFC-309 and on every
+     * template migrated from the old two-layer model — a real state, handled by
+     * treating each difference as a conflict rather than by guessing a base.
+     */
+    baseSnapshotJson: text('base_snapshot_json'),
     ownerUserId: text('owner_user_id'),
     visibility: text('visibility', { enum: ['public', 'private'] })
       .notNull()

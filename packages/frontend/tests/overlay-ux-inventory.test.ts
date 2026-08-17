@@ -206,7 +206,9 @@ const OVERLAY_CALLSITES = {
   // flow behind it is the context, and pushing it out of view to make room
   // would lose exactly the connection between position and configuration this
   // RFC exists to create.
-  'components/code/CapabilityFlowPanel.tsx': { family: 'resource-management', count: 1 },
+  // RFC-309 — renamed with its scope: the panel used to pick a capability and
+  // then a configuration; it is now handed one template and edits that.
+  'components/code/TemplateFlowEditor.tsx': { family: 'resource-management', count: 1 },
   'routes/reviews.detail.tsx': { family: 'review-and-clarify', count: 1 },
 
   'components/fusion/FuseDialog.tsx': { family: 'memory-and-fusion', count: 1 },

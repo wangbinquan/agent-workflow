@@ -124,6 +124,10 @@ describe('RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e (派生老�
     resetBroadcastersForTests()
   })
 
+  // docs/dev-gotchas.md — a two-round scheduler e2e: it rests near bun's 5000ms
+  // default and tips over under `gate:local`'s four parallel shards (measured
+  // 6018ms there, green alone). Budgeted explicitly rather than left to machine
+  // speed, which is the owner's fix that gotcha asks for.
   test('round1→round2→产出 doc:最终 rerun prompt 同含两轮答案(锁死 01KWDKBS)', async () => {
     const planner = await createAgent(h.db, {
       name: 'planner',
@@ -259,5 +263,5 @@ describe('RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e (派生老�
     expect(prompt).toContain('ROUND1_PLATFORM_Q')
     expect(prompt).toContain('ROUND2_LANGUAGE_Q')
     expect(prompt).not.toContain('### Round')
-  })
+  }, 30_000)
 })
