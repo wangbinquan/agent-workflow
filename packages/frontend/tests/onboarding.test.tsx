@@ -99,6 +99,42 @@ describe('computeIsFirstRun', () => {
     )
   })
 
+  // RFC-307 regression. The demo seed puts one agent and two workflows into
+  // every fresh install so `/code` has something to open — and this check read
+  // "there are agents and workflows here", so a brand-new install stopped
+  // seeing the onboarding screen entirely the day that shipped. Caught by
+  // `e2e/a11y.spec.ts`, whose premise is literally "on a clean daemon".
+  //
+  // "First run" means THE USER has created nothing. Rows the platform seeded
+  // itself are not the user's.
+  test('platform-seeded demo rows do NOT count as the user having set things up', () => {
+    expect(
+      computeIsFirstRun({
+        agents: [{ id: 'aw-demo-reviewer', name: '[demo] reviewer' } as never],
+        workflows: [
+          { id: 'aw-demo-workflow-review', name: '[demo] Review a change' } as never,
+          { id: 'aw-demo-workflow-fanout', name: '[demo] Review, then ask' } as never,
+        ],
+        isLoading: false,
+        error: null,
+      }),
+    ).toBe(true)
+  })
+
+  test('one row the user actually made ends first-run, demo rows beside it or not', () => {
+    expect(
+      computeIsFirstRun({
+        agents: [
+          { id: 'aw-demo-reviewer', name: '[demo] reviewer' } as never,
+          { id: '01JQMINE', name: 'my reviewer' } as never,
+        ],
+        workflows: [{ id: 'aw-demo-workflow-review', name: '[demo] x' } as never],
+        isLoading: false,
+        error: null,
+      }),
+    ).toBe(false)
+  })
+
   test('any list has items → not first-run', () => {
     expect(
       computeIsFirstRun({

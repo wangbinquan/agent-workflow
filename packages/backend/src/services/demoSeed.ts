@@ -45,6 +45,8 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { eq } from 'drizzle-orm'
 
+import { DEMO_RESOURCE_ID_PREFIX } from '@agent-workflow/shared'
+
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import {
@@ -65,18 +67,21 @@ const log = createLogger('demo-seed')
 /**
  * Stable ids, so a second run is a no-op and a user can recognise the samples.
  *
- * Prefixed `aw-demo-` rather than being ULIDs: an id a person can read is one
- * they can grep for when they want every trace of the demo gone.
+ * Built from the SHARED prefix rather than being ULIDs, for two reasons: an id
+ * a person can read is one they can grep for when they want every trace of the
+ * demo gone, and the frontend's first-run check needs to recognise these rows
+ * as platform-seeded (see `shared/demoContent.ts`). A local string literal here
+ * would let the two drift silently.
  */
-export const DEMO_AGENT_ID = 'aw-demo-reviewer'
-export const DEMO_FRAMEWORK_ID = 'aw-demo-framework-mr-review'
-export const DEMO_BINDING_ID = 'aw-demo-binding-mr-review'
+export const DEMO_AGENT_ID = `${DEMO_RESOURCE_ID_PREFIX}reviewer`
+export const DEMO_FRAMEWORK_ID = `${DEMO_RESOURCE_ID_PREFIX}framework-mr-review`
+export const DEMO_BINDING_ID = `${DEMO_RESOURCE_ID_PREFIX}binding-mr-review`
 /** Opaque code-host identity for the demo round. NOT a `webhook_endpoints` row — see `seedDemoRound`. */
-export const DEMO_ENDPOINT_ID = 'aw-demo-endpoint'
-export const DEMO_WORK_ITEM_ID = 'aw-demo-work-item'
-export const DEMO_ROUND_ID = 'aw-demo-round'
-export const DEMO_WORKFLOW_REVIEW_ID = 'aw-demo-workflow-review'
-export const DEMO_WORKFLOW_FANOUT_ID = 'aw-demo-workflow-fanout'
+export const DEMO_ENDPOINT_ID = `${DEMO_RESOURCE_ID_PREFIX}endpoint`
+export const DEMO_WORK_ITEM_ID = `${DEMO_RESOURCE_ID_PREFIX}work-item`
+export const DEMO_ROUND_ID = `${DEMO_RESOURCE_ID_PREFIX}round`
+export const DEMO_WORKFLOW_REVIEW_ID = `${DEMO_RESOURCE_ID_PREFIX}workflow-review`
+export const DEMO_WORKFLOW_FANOUT_ID = `${DEMO_RESOURCE_ID_PREFIX}workflow-fanout`
 
 const DEMO_NOTE = '示例数据，可以安全删除；删除后不会再次生成。 / Sample data — safe to delete.'
 

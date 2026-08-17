@@ -2,6 +2,35 @@
 
 > 产品视角见 [proposal.md](./proposal.md)，技术设计见 [design.md](./design.md)。
 
+## 0. 交付状态（2026-08-17）
+
+**T1–T27 全部落地**，两个提交：`0d1f411d`（图 + 图上配置 + demo）与 `4334a4b3`
+（跑起来才照出的四条）。三个 PR 合成一批交付，因为 demo 内容只有在界面存在时才验得动。
+
+**实际数字修正了 RFC 起草时的估计**：四条能力共 **44 步**（program 32 / ai 6 /
+script 4 / invoke 2），不是 45/7——先前的 grep 把 `capabilityRegistry.ts:6` 的一句
+注释也数进去了。`mr-monitor` **没有阶段合同**（它是监视器主循环），路由为它答
+`no-stage-contract`（200）而非 404。
+
+**T2 的健全性检查确有产出**：`validateStageContract` 只查「依赖无人生产」，从没查过
+反面。补上后跑在四条真合同上照出三条，逐条核实**都是合法形状**——但是三种不同的
+合法形状（分支终点 / 轮次终点 / 被派发器消费）。故给 `StageBase` 加 `terminal`
+显式声明：全豁免等于检查永不触发，要声明才能在「消费者被重构删掉」时仍然抓到。
+
+**四个既有护栏各抓到我一次**（都是真回归，不是误报）：`api-contract-coverage`
+（新路由未登记）、RFC-294 preflight（public 类型经 `typeof CODE_CAPABILITIES` 开口
+⇒ 改为 public 层自声明线上形状 + 类型层可赋值断言防漂移）、`overlay-ux-inventory`
+（新 Dialog 未登记）、RFC-199 writer inventory（绕过服务层直写工作流元数据 ⇒ 改为
+给 `createWorkflow` 加可选 `visibility`）。
+
+**偏离设计的一处**：design §2.2 原计划「薄适配层复用 `WorkflowCanvas`」。实现时确认
+该组件吃 `WorkflowDefinition`，`NodeKind` 里**没有 program 这一类**，把程序步渲染成
+`script` 节点是在界面上说假话。改为直接用 xyflow + 复用既有 `.canvas-node` 类，
+状态色因此仍免费继承（`.canvas-node[data-status]` 已有规则）。
+
+**Q-D（demo 是否计入 `/code` 指标）落空**：demo 轮次确实会计入，未加排除列（保持
+「零 schema 变更」）。若你要排除，需接受给 `code_work_items` 加一列。
+
 ## 1. 拆分原则
 
 三个 PR，每个都能独立交付价值、独立跑绿门禁：
@@ -16,64 +45,64 @@
 
 ### PR-1：流程看得见
 
-| 编号 | 任务                                                                                                                                                     | 依赖  | 状态 |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ---- |
-| T1   | `domain/stageGraph.ts`：`projectStageGraph(contract) → {nodes, edges}`，纯函数零 IO；边由 `requires`/`produces` 推导；标记 `parallel` 与 `invoke` 子序列 | —     | ⬜   |
-| T2   | **合同健全性断言**：五条能力各跑一遍——无「产出无人消费」、无「依赖找不到上游」（`invoke` 注入除外）。这条同时是合同自身的体检，比画图更有价值            | T1    | ⬜   |
-| T3   | `public/queries.ts` 加 `StageGraph` / `StageGraphNode` / `StageGraphEdge` 类型（跨模块只走 exact 合同）                                                  | T1    | ⬜   |
-| T4   | `GET /api/code/capabilities/:capability/graph`（权限 `repos:read`，带 `stageContractVer`）；未知能力 404                                                 | T3    | ⬜   |
-| T5   | `api-contract-coverage` 的 `ENDPOINTS` 登记新端点（仓规：新路由必须登记，否则门禁红）                                                                    | T4    | ⬜   |
-| T6   | `components/code/CapabilityFlow.tsx`：`StageGraph` → `CanvasNodeData` 薄适配 + 复用 `WorkflowCanvas` `readOnly`；四类 kind 视觉区分                      | T4    | ⬜   |
-| T7   | 模板面接入：选一条能力 → 看结构图（**AC-1**：未开启任何能力、无任何轮次也能看）                                                                          | T6    | ⬜   |
-| T8   | 活动面接入：把该轮 `stages[]` 按 `stageName` 映射成 `nodeStatuses` 叠色；失败步显示 `error`；未开始的步渲染为 `pending` 而非缺节点（**AC-3**）           | T6    | ⬜   |
-| T9   | 轮次的 `stage_contract_ver` 与当前合同版本不一致时，图上提示「此轮使用的是旧版合同」，不静默丢弃未知步                                                   | T8    | ⬜   |
-| T10  | i18n 两语言：节点 kind 名、artifact 提示、空态与版本不一致提示                                                                                           | T7,T8 | ⬜   |
-| T11  | 前端用例：节点数与 kind 区分、状态叠色、error 文案、版本不一致提示                                                                                       | T7,T8 | ⬜   |
+| 编号 | 任务                                                                                                                                                                                                                            | 依赖  | 状态 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ---- |
+| T1   | `domain/stageGraph.ts`：`projectStageGraph(contract) → {nodes, edges}`，纯函数零 IO；边由 `requires`/`produces` 推导；标记 `parallel` 与 `invoke` 子序列                                                                        | —     | ✅   |
+| T2   | **合同健全性断言**：五条能力各跑一遍——无「产出无人消费」、无「依赖找不到上游」（`invoke` 注入除外）。这条同时是合同自身的体检，比画图更有价值                                                                                   | T1    | ✅   |
+| T3   | `public/queries.ts` 加 `StageGraph` / `StageGraphNode` / `StageGraphEdge` 类型（跨模块只走 exact 合同）                                                                                                                         | T1    | ✅   |
+| T4   | `GET /api/code/capabilities/:capability/graph`（权限 `repos:read`，带 `stageContractVer`）；未知能力 404                                                                                                                        | T3    | ✅   |
+| T5   | `api-contract-coverage` 的 `ENDPOINTS` 登记新端点（仓规：新路由必须登记，否则门禁红）                                                                                                                                           | T4    | ✅   |
+| T6   | `components/code/CapabilityFlow.tsx`：四类 kind 视觉区分。**改为直接用 xyflow + 复用 `.canvas-node` 类**——`WorkflowCanvas` 吃 `WorkflowDefinition`，`NodeKind` 里没有 program，把程序步画成 script 节点是说假话（见 §0 偏离项） | T4    | ✅   |
+| T7   | 模板面接入：选一条能力 → 看结构图（**AC-1**：未开启任何能力、无任何轮次也能看）                                                                                                                                                 | T6    | ✅   |
+| T8   | 活动面接入：把该轮 `stages[]` 按 `stageName` 映射成 `nodeStatuses` 叠色；失败步显示 `error`；未开始的步渲染为 `pending` 而非缺节点（**AC-3**）                                                                                  | T6    | ✅   |
+| T9   | 轮次的 `stage_contract_ver` 与当前合同版本不一致时，图上提示「此轮使用的是旧版合同」，不静默丢弃未知步                                                                                                                          | T8    | ✅   |
+| T10  | i18n 两语言：节点 kind 名、artifact 提示、空态与版本不一致提示                                                                                                                                                                  | T7,T8 | ✅   |
+| T11  | 前端用例：节点数与 kind 区分、状态叠色、error 文案、版本不一致提示                                                                                                                                                              | T7,T8 | ✅   |
 
 ### PR-2：流程改得动
 
 | 编号 | 任务                                                                                                                                                 | 依赖    | 状态 |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---- |
-| T12  | 抽屉骨架：点节点 → 右侧抽屉（复用 `Dialog` / Form 原语，不新写 chrome）                                                                              | T6      | ⬜   |
-| T13  | **AI 步**：抽屉按**槽位**呈现（Q-A），换 agent + 改 prompt → `PUT /api/capability-bindings/:id`（**AC-4**）                                          | T12     | ⬜   |
-| T14  | **同槽位高亮**：抽屉里明写「此槽位被 N 步使用：…」，图上同时高亮——避免用户以为只改了一步                                                             | T13     | ⬜   |
-| T15  | **script 步**：编辑框架脚本 → `PUT /api/capability-frameworks/:id`（**AC-5**）；语法/校验错误显示在抽屉里                                            | T12     | ⬜   |
-| T16  | **参数**：按框架 `paramSchema` 生成表单 → 写回绑定 `params`                                                                                          | T12     | ⬜   |
-| T17  | **钩子**：边中点「＋」→ 选 `pre`/`post` → 写回框架 `hooks`；按该步 `injectable` 白名单显示「可回传哪些键」，未声明则明写「不能回传数据」（**AC-6**） | T12     | ⬜   |
-| T18  | 权限如实：无 `capability-bindings:update` / `scripts:author` 时抽屉只读、保存**置灰而非隐藏**（**AC-7**）                                            | T13,T15 | ⬜   |
-| T19  | 前端用例：写回四条路径各一条 + 同槽位高亮 + 无权限置灰 + `injectable` 白名单呈现                                                                     | T13–T18 | ⬜   |
+| T12  | 抽屉骨架：点节点 → 右侧抽屉（复用 `Dialog` / Form 原语，不新写 chrome）                                                                              | T6      | ✅   |
+| T13  | **AI 步**：抽屉按**槽位**呈现（Q-A），换 agent + 改 prompt → `PUT /api/capability-bindings/:id`（**AC-4**）                                          | T12     | ✅   |
+| T14  | **同槽位高亮**：抽屉里明写「此槽位被 N 步使用：…」，图上同时高亮——避免用户以为只改了一步                                                             | T13     | ✅   |
+| T15  | **script 步**：编辑框架脚本 → `PUT /api/capability-frameworks/:id`（**AC-5**）；语法/校验错误显示在抽屉里                                            | T12     | ✅   |
+| T16  | **参数**：按框架 `paramSchema` 生成表单 → 写回绑定 `params`                                                                                          | T12     | ✅   |
+| T17  | **钩子**：边中点「＋」→ 选 `pre`/`post` → 写回框架 `hooks`；按该步 `injectable` 白名单显示「可回传哪些键」，未声明则明写「不能回传数据」（**AC-6**） | T12     | ✅   |
+| T18  | 权限如实：无 `capability-bindings:update` / `scripts:author` 时抽屉只读、保存**置灰而非隐藏**（**AC-7**）                                            | T13,T15 | ✅   |
+| T19  | 前端用例：写回四条路径各一条 + 同槽位高亮 + 无权限置灰 + `injectable` 白名单呈现                                                                     | T13–T18 | ✅   |
 
 ### PR-3：能上手体验
 
-| 编号 | 任务                                                                                                                | 依赖    | 状态 |
-| ---- | ------------------------------------------------------------------------------------------------------------------- | ------- | ---- |
-| T20  | `services/demoSeed.ts`：demo agent + demo 框架（含示例 `collect` 脚本与一条示例钩子）+ demo 绑定，固定 id 幂等      | —       | ⬜   |
-| T21  | demo 工作流 2–3 条（Q-C：与能力流程可对照的简化版），`builtin: true`，出现在工作流列表                              | T20     | ⬜   |
-| T22  | demo 轮次：一条 `settled` 工作项 + 一轮 + 全套 `code_round_stages` 行（**播种历史行**，Q-B）                        | T20     | ⬜   |
-| T23  | 在 `cli/start.ts` 现有 seeder 段接线（`seedFusionResources` 邻位）                                                  | T20–T22 | ⬜   |
-| T24  | **删掉不重播**：判据是「该固定 id 曾存在过」而非「表为空」——用户可能只删 demo 而留着自己的数据（RFC-153 先例）      | T23     | ⬜   |
-| T25  | 标注：名称带 `[demo]` 前缀 + description 写明「示例数据，可安全删除」；`/code` 空态区分「从未播种」与「示例已删除」 | T23     | ⬜   |
-| T26  | 播种用例：幂等（跑两次一份）+ 删掉不重播 + **零网络**（断言未发起任何 code-host 调用，**AC-9**）                    | T23,T24 | ⬜   |
-| T27  | e2e：全新库启动 → `/code` 看到 demo 模板与 demo 轮次 → 打开流程图 → 改一个 prompt 并保存 → 重开仍在（**AC-8**）     | T22,T13 | ⬜   |
+| 编号 | 任务                                                                                                                                                                                                                  | 依赖    | 状态                                    |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------------- |
+| T20  | `services/demoSeed.ts`：demo agent + demo 框架（含示例 `collect` 脚本与一条示例钩子）+ demo 绑定，固定 id 幂等                                                                                                        | —       | ✅                                      |
+| T21  | demo 工作流 2 条（Q-C：与能力流程可对照的简化版），出现在工作流列表。**不能用 `builtin: true`**——那会隐藏并锁死它们；改为 `__system__` 拥有 + `visibility: 'public'`（为此给 `createWorkflow` 加了可选 `visibility`） | T20     | ✅                                      |
+| T22  | demo 轮次：一条 `settled` 工作项 + 一轮 + 全套 `code_round_stages` 行（**播种历史行**，Q-B）                                                                                                                          | T20     | ✅                                      |
+| T23  | 在 `cli/start.ts` 现有 seeder 段接线（`seedFusionResources` 邻位）                                                                                                                                                    | T20–T22 | ✅                                      |
+| T24  | **删掉不重播**：判据是「该固定 id 曾存在过」而非「表为空」——用户可能只删 demo 而留着自己的数据（RFC-153 先例）                                                                                                        | T23     | ✅                                      |
+| T25  | 标注：名称带 `[demo]` 前缀 + description 写明「示例数据，可安全删除」；`/code` 空态区分「从未播种」与「示例已删除」                                                                                                   | T23     | ✅                                      |
+| T26  | 播种用例：幂等（跑两次一份）+ 删掉不重播 + **零网络**（断言未发起任何 code-host 调用，**AC-9**）                                                                                                                      | T23,T24 | ✅                                      |
+| T27  | e2e：全新库启动 → `/code` 看到 demo 模板与 demo 轮次 → 打开流程图 → 改一个 prompt 并保存 → 重开仍在（**AC-8**）                                                                                                       | T22,T13 | ✅ `e2e/rfc307-capability-flow.spec.ts` |
 
 ### 收尾
 
 | 编号 | 任务                                                                                  | 依赖 | 状态 |
 | ---- | ------------------------------------------------------------------------------------- | ---- | ---- |
-| T28  | `docs/dev-gotchas.md`：若本轮踩到通用坑则补录                                         | 全部 | ⬜   |
-| T29  | `design/plan.md` RFC 索引登记 + `STATE.md` 同步；关闭时按仓规「零待办、逐项写明归宿」 | 全部 | ⬜   |
+| T28  | `docs/dev-gotchas.md`：若本轮踩到通用坑则补录                                         | 全部 | ✅   |
+| T29  | `design/plan.md` RFC 索引登记 + `STATE.md` 同步；关闭时按仓规「零待办、逐项写明归宿」 | 全部 | ✅   |
 
 ## 3. 验收清单（对齐 proposal §6）
 
-- [ ] **AC-1** 未开启任何能力、无任何轮次也能看到完整流程图（T7）
-- [ ] **AC-2** 图与运行期同源：合同改了图跟着变，前端不得手抄（T1/T2 锁定）
-- [ ] **AC-3** 已结束轮次叠状态色 + 失败原因 + AI 步可展开 attempts（T8）
-- [ ] **AC-4** 图上改 agent/prompt 写回绑定 + 同槽位高亮（T13/T14）
-- [ ] **AC-5** 图上改脚本写回框架（T15）
-- [ ] **AC-6** 钩子可挂 + `injectable` 白名单如实呈现（T17）
-- [ ] **AC-7** 无权限只读、保存置灰（T18）
-- [ ] **AC-8** 全新库有 demo 模板 / demo 工作流 / demo 轮次，删掉不重播（T20–T25）
-- [ ] **AC-9** demo 零外部依赖（T26）
+- [x] **AC-1** 未开启任何能力、无任何轮次也能看到完整流程图（T7）
+- [x] **AC-2** 图与运行期同源：合同改了图跟着变，前端不得手抄（T1/T2 锁定）
+- [x] **AC-3** 已结束轮次叠状态色 + 失败原因 + AI 步可展开 attempts（T8）
+- [x] **AC-4** 图上改 agent/prompt 写回绑定 + 同槽位高亮（T13/T14）
+- [x] **AC-5** 图上改脚本写回框架（T15）
+- [x] **AC-6** 钩子可挂 + `injectable` 白名单如实呈现（T17）
+- [x] **AC-7** 无权限只读、保存置灰（T18）
+- [x] **AC-8** 全新库有 demo 模板 / demo 工作流 / demo 轮次，删掉不重播（T20–T25）
+- [x] **AC-9** demo 零外部依赖（T26）
 
 ## 4. 风险与前置
 

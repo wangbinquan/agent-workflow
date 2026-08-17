@@ -97,12 +97,14 @@ export * from './agentCapability' // RFC-166
 // conversion survive, reused by the workgroup dynamic-mode engine.
 export * from './dynamicWorkflow' // RFC-167
 export * from './agentLaunchForm' // RFC-218
+export * from './workspaceConvention' // RFC-308
 export * from './shardingRegistry'
 export * from './signalPromptGuard'
 export * from './wrapperFanout'
 export * from './nodePorts'
 export * from './scriptNode' // RFC-253
 export * from './capabilityParams' // RFC-304 T47
+export * from './demoContent' // RFC-307 — platform-seeded sample content
 export * from './schemas/capabilityTemplate' // RFC-304 T57
 export * from './workflowNodeAncestry' // RFC-269（RFC-253 抽取）
 export * from './privilegedNodeRedaction' // RFC-270

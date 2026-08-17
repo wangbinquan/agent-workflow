@@ -14,7 +14,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import type { Agent, Workflow } from '@agent-workflow/shared'
+import { isDemoResourceId, type Agent, type Workflow } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { CapabilityGrid } from '@/components/home/CapabilityGrid'
@@ -43,7 +43,14 @@ export function computeIsFirstRun(opts: {
   error: unknown
 }): boolean {
   if (opts.agents === undefined || opts.workflows === undefined) return false
-  return opts.agents.length === 0 && opts.workflows.length === 0
+  // RFC-307: sample content the PLATFORM seeded does not make an install
+  // "already set up". Counting it meant a brand-new install never saw the
+  // onboarding screen again the day the demo seed shipped — the first-run
+  // check read "there are agents and workflows here" and it was technically
+  // right and completely wrong.
+  const userAgents = opts.agents.filter((a) => !isDemoResourceId(a.id))
+  const userWorkflows = opts.workflows.filter((w) => !isDemoResourceId(w.id))
+  return userAgents.length === 0 && userWorkflows.length === 0
 }
 
 export function useOnboardingProbe(): OnboardingProbe {
