@@ -102,6 +102,8 @@ export interface WorkflowWriteInTxGuard {
 export interface CreateWorkflowOptions {
   ownerUserId?: string
   builtin?: boolean
+  /** RFC-307 — see `insertWorkflowInTx`. Public without being infrastructure. */
+  visibility?: 'private' | 'public'
   id?: string
   inTxGuard?: WorkflowWriteInTxGuard
   /** User whose new canonical refs must remain usable at commit time. */
@@ -219,6 +221,7 @@ export async function createWorkflow(
       definition: normalized,
       ownerUserId,
       builtin: opts?.builtin === true,
+      ...(opts?.visibility === undefined ? {} : { visibility: opts.visibility }),
       now,
       // A null actor is a platform-internal seed (builtin workflows, fixtures),
       // not an anonymous user: those paths are trusted by construction.
@@ -826,6 +829,16 @@ export function insertWorkflowInTx(
     definition: WorkflowDefinition
     ownerUserId: string | null
     builtin: boolean
+    /**
+     * RFC-307 — public WITHOUT being platform infrastructure.
+     *
+     * Until now the only route to `public` was `builtin: true`, which also
+     * makes a row read-only and hides it from every list. That pairing is right
+     * for engine resources and wrong for the demo samples, which exist to be
+     * opened, edited and deleted. Optional and defaulting to the previous
+     * behaviour exactly, so no existing caller changes.
+     */
+    visibility?: 'private' | 'public'
     now: number
     /**
      * RFC-253 — who is introducing this definition's executable content.
@@ -842,9 +855,10 @@ export function insertWorkflowInTx(
   // RFC-269 — same persistence primitive, same provenance value (the two
   // principal types are structurally identical by design).
   assertCodeHostAuthorAllowed({ next: input.definition, principal: input.scriptPrincipal })
-  const initialAcl = input.builtin
-    ? initialBuiltinResourceAcl(input.ownerUserId)
-    : initialPrivateResourceAcl(input.ownerUserId)
+  const initialAcl =
+    input.builtin || input.visibility === 'public'
+      ? initialBuiltinResourceAcl(input.ownerUserId)
+      : initialPrivateResourceAcl(input.ownerUserId)
   const inserted = tx
     .insert(workflows)
     .values({

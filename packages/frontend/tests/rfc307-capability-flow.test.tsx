@@ -122,6 +122,26 @@ describe('CapabilityFlow', () => {
     )
   })
 
+  test('the test anchors are namespaced, so two mounted flows do not collide', () => {
+    // RFC-169 keeps inactive tab panels MOUNTED, so the Flow tab and every
+    // round overlay on the Activity tab are in the document at the same time.
+    // Measured on a running daemon: 26 stage cards for a 13-stage capability,
+    // two of every anchor. `getByTestId` then matches several elements and
+    // fails, and a reader inspecting the DOM cannot tell the flows apart.
+    const { container } = render(
+      <>
+        <CapabilityFlow nodes={NODES} edges={EDGES} />
+        <CapabilityFlow nodes={NODES} edges={EDGES} testidPrefix="round-stage-r1" />
+      </>,
+    )
+    expect(container.querySelectorAll('[data-testid="stage-node-collect"]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-testid="round-stage-r1-collect"]')).toHaveLength(1)
+    // And the container itself is namespaced too, so the two canvases are
+    // separable without reaching for a parent selector.
+    expect(container.querySelectorAll('[data-testid="stage-node-flow"]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-testid="round-stage-r1-flow"]')).toHaveLength(1)
+  })
+
   test('slot and parallel facts reach the card', () => {
     render(<CapabilityFlow nodes={NODES} edges={EDGES} />)
     const ai = screen.getByTestId('stage-node-review-shard')

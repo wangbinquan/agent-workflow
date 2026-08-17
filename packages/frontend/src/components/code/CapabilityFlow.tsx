@@ -84,12 +84,31 @@ interface Props {
   /** Stages sharing the selected node's slot. Highlighted together (AC-4). */
   siblings?: readonly string[]
   height?: number
+  /**
+   * Namespace for the per-stage test anchors.
+   *
+   * Needed because RFC-169 keeps inactive tab panels MOUNTED: the Flow tab and
+   * every round overlay on the Activity tab are all in the document at the same
+   * time, and without a namespace they all publish `stage-node-<name>`. A
+   * `getByTestId` then matches several elements and fails — and a reader
+   * inspecting the DOM cannot tell which flow they are looking at.
+   */
+  testidPrefix?: string
 }
 
 interface StageNodeData extends Record<string, unknown> {
+  testid: string
   stage: CapabilityGraphNode
   status?: StageRunState | undefined
   sibling: boolean
+  /**
+   * Selection carried in `data`, NOT through ReactFlow's `selected` node prop.
+   *
+   * Which stage is open is already this component's state (`openStage`), so
+   * also handing ReactFlow a controlled `selected` on every node gives the same
+   * fact two owners that have to be kept in step. One owner, one render path.
+   */
+  active: boolean
   label: string
   kindLabel: string
   slot?: string
@@ -109,16 +128,16 @@ const KIND_GLYPH: Record<StageLayoutKind, string> = {
   invoke: '⤷',
 }
 
-function StageNode({ data, selected }: NodeProps) {
+function StageNode({ data }: NodeProps) {
   const d = data as StageNodeData
   const stage = d.stage
   return (
     <div
       className={`canvas-node canvas-node--card stage-node ${KIND_CLASS[stage.kind]}${
-        selected === true ? ' canvas-node--selected' : ''
+        d.active ? ' canvas-node--selected' : ''
       }${d.sibling ? ' stage-node--sibling' : ''}`}
       data-status={d.status?.status}
-      data-testid={`stage-node-${stage.name}`}
+      data-testid={d.testid}
       data-stage-kind={stage.kind}
     >
       {/* Handles on all four sides: the layout wraps into rows and runs
@@ -159,6 +178,7 @@ export function CapabilityFlow({
   onPick,
   siblings,
   height = 460,
+  testidPrefix = 'stage-node',
 }: Props) {
   const { t } = useTranslation()
 
@@ -173,12 +193,14 @@ export function CapabilityFlow({
       const stage = nodes.find((n) => n.name === placed.name)
       if (stage === undefined) throw new Error(`layout produced unknown stage ${placed.name}`)
       const data: StageNodeData = {
+        testid: `${testidPrefix}-${stage.name}`,
         stage,
         // A stage with no row has not started. Rendered `pending` rather than
         // omitted, so the picture is the whole sequence at every moment.
         status:
           statuses === undefined ? undefined : (statuses[stage.name] ?? { status: 'pending' }),
         sibling: siblingSet.has(stage.name),
+        active: selected === stage.name,
         label: t('capabilityFlow.parallel'),
         kindLabel: t(`capabilityFlow.kind.${stage.kind}`),
         ...(stage.agentSlot !== undefined
@@ -194,13 +216,12 @@ export function CapabilityFlow({
         type: 'stage',
         position: { x: placed.x, y: placed.y },
         data,
-        selected: selected === stage.name,
         draggable: false,
         connectable: false,
         width: STAGE_CARD_WIDTH,
       }
     })
-  }, [layout.nodes, nodes, statuses, selected, siblings, t])
+  }, [layout.nodes, nodes, statuses, selected, siblings, testidPrefix, t])
 
   const flowEdges = useMemo<Edge[]>(() => {
     const byName = new Map<string, StageLayoutNode>(layout.nodes.map((n) => [n.name, n]))
@@ -225,7 +246,7 @@ export function CapabilityFlow({
   }, [layout])
 
   return (
-    <div className="stage-flow" style={{ height }} data-testid="capability-flow">
+    <div className="stage-flow" style={{ height }} data-testid={`${testidPrefix}-flow`}>
       <ReactFlowProvider>
         <ReactFlow
           nodes={flowNodes}

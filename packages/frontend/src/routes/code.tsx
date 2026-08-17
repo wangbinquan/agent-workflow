@@ -589,7 +589,15 @@ function RoundFlow({ item, round }: { item: WorkItemRow; round: RoundRow }): Rea
           {unplaceable.length > 0 && ` (${unplaceable.map((s) => s.stageName).join(', ')})`}
         </p>
       )}
-      <CapabilityFlow nodes={answer.nodes} edges={answer.edges} statuses={statuses} />
+      {/* Namespaced per round: the Flow tab stays mounted behind this one
+          (RFC-169), and every round rendered here adds another whole sequence
+          to the document. Unprefixed anchors would collide across all of them. */}
+      <CapabilityFlow
+        nodes={answer.nodes}
+        edges={answer.edges}
+        statuses={statuses}
+        testidPrefix={`round-stage-${round.roundId}`}
+      />
     </div>
   )
 }

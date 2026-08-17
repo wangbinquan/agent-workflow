@@ -23,6 +23,23 @@
 //   4. NEVER FATAL. A failure here leaves a daemon with no samples, which is
 //      the state every install before this RFC was in. It must not be able to
 //      stop a daemon from starting.
+//
+// One flag deliberately NOT set: `builtin`. The first version of this file
+// copied it from `seedFusionResources`, and running the result showed what it
+// actually means in this repo — `excludeBuiltinWorkflows` hides the row from
+// every list, and `assertNotBuiltin` refuses every edit and delete with
+// `builtin-readonly`. For fusion's engine resources that is exactly right: they
+// are infrastructure the daemon references by name. For samples it is the
+// precise opposite of the point, and it broke all three promises at once — the
+// demo agent never appeared in the agent picker, the demo binding answered
+// `capability-template-builtin` to the very prompt edit this RFC exists to
+// make possible, and the framework could not be deleted at all, which made
+// "safe to delete" false.
+//
+// So the samples are ordinary rows: `__system__`-owned and `public`, which
+// makes them visible to everyone and editable/removable by anyone with
+// resource-ACL bypass. A user without it copies one and edits the copy, which
+// is the platform's normal answer for a shared resource.
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -37,7 +54,6 @@ import {
   codeRoundStages,
   codeWorkItems,
   codeWorkRounds,
-  webhookEndpoints,
   workflows,
 } from '@/db/schema'
 import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
@@ -55,6 +71,7 @@ const log = createLogger('demo-seed')
 export const DEMO_AGENT_ID = 'aw-demo-reviewer'
 export const DEMO_FRAMEWORK_ID = 'aw-demo-framework-mr-review'
 export const DEMO_BINDING_ID = 'aw-demo-binding-mr-review'
+/** Opaque code-host identity for the demo round. NOT a `webhook_endpoints` row — see `seedDemoRound`. */
 export const DEMO_ENDPOINT_ID = 'aw-demo-endpoint'
 export const DEMO_WORK_ITEM_ID = 'aw-demo-work-item'
 export const DEMO_ROUND_ID = 'aw-demo-round'
@@ -127,8 +144,13 @@ async function seedCapabilityTemplates(db: DbClient): Promise<void> {
           '\n',
         ),
       },
-      { id: DEMO_AGENT_ID, ownerUserId: SYSTEM_USER_ID, builtin: true },
+      { id: DEMO_AGENT_ID, ownerUserId: SYSTEM_USER_ID },
     )
+    // `createAgent` has no visibility option and every new resource lands
+    // `private` (RFC-099). A private sample is invisible to everyone but its
+    // owner, and its owner here is `__system__` — i.e. nobody. Same follow-up
+    // update `seedFusionResources` does for the merger agent.
+    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, DEMO_AGENT_ID))
   }
 
   await db
@@ -161,10 +183,14 @@ async function seedCapabilityTemplates(db: DbClient): Promise<void> {
           script: [
             '#!/usr/bin/env bash',
             '# [demo] Runs before each sharded review.',
-            '# `review-shard` allows `promptSuffix`, so a hook here may add to the',
-            '# prompt. Anything not on that allowlist is refused by the runner.',
+            '#',
+            '# It returns `extraContext` because that is what `review-shard`',
+            '# DECLARES in its `injectable` allowlist. Returning anything else —',
+            '# `promptSuffix`, say — is refused by the runner, so a sample that',
+            '# did would be teaching a mistake. The flow view shows the allowed',
+            '# keys for each step so this never has to be guessed.',
             'set -euo pipefail',
-            'echo \'{"promptSuffix": "Prefer concrete, reproducible findings."}\'',
+            'echo \'{"extraContext": "Prefer concrete, reproducible findings."}\'',
           ].join('\n'),
           blocking: true,
           stageContractVer: lookupStageContract('mr-review')?.version ?? 1,
@@ -178,7 +204,6 @@ async function seedCapabilityTemplates(db: DbClient): Promise<void> {
       stageContractVer: lookupStageContract('mr-review')?.version ?? 1,
       ownerUserId: SYSTEM_USER_ID,
       visibility: 'public',
-      builtin: true,
       createdAt: DEMO_AT,
       updatedAt: DEMO_AT,
     })
@@ -200,7 +225,6 @@ async function seedCapabilityTemplates(db: DbClient): Promise<void> {
       paramsJson: JSON.stringify({ maxFindings: 10 }),
       ownerUserId: SYSTEM_USER_ID,
       visibility: 'public',
-      builtin: true,
       createdAt: DEMO_AT,
       updatedAt: DEMO_AT,
     })
@@ -220,21 +244,18 @@ async function seedDemoRound(db: DbClient): Promise<void> {
   const contract = lookupStageContract('mr-review')
   if (contract === undefined) return
 
-  await db
-    .insert(webhookEndpoints)
-    .values({
-      id: DEMO_ENDPOINT_ID,
-      name: '[demo] sample code host',
-      provider: 'gitlab',
-      // Never reachable and never used: the demo round is history, so nothing
-      // dials this. Disabled so it cannot be picked up by anything that scans
-      // for live endpoints.
-      urlToken: 'aw_whk_demo_placeholder_0000000000',
-      secretEnc: 'demo-not-a-secret',
-      enabled: false,
-    })
-    .onConflictDoNothing()
-
+  // NO `webhook_endpoints` ROW is created for this.
+  //
+  // The first version seeded one, and CI showed why that is wrong: a fake
+  // endpoint appears in every endpoint picker in the product, and pickers
+  // default to their first option — so `[demo] sample code host` became the
+  // DEFAULT selection on the trigger form. An endpoint that can never receive a
+  // delivery, pre-selected on the screen where someone wires up a real one, is
+  // a trap regardless of what it is called.
+  //
+  // It is not needed: `code_work_items.code_host_endpoint_id` carries no
+  // foreign key and no read path joins `webhook_endpoints`, because the id is
+  // opaque here. The demo round is history — nothing will ever dial it.
   await db
     .insert(codeWorkItems)
     .values({
@@ -351,7 +372,7 @@ async function seedDemoWorkflows(db: DbClient): Promise<void> {
           outputs: [{ name: 'findings', bind: { nodeId: 'review', portName: 'findings' } }],
         },
       },
-      { id: DEMO_WORKFLOW_REVIEW_ID, ownerUserId: SYSTEM_USER_ID, builtin: true },
+      { id: DEMO_WORKFLOW_REVIEW_ID, ownerUserId: SYSTEM_USER_ID, visibility: 'public' },
     )
   }
 
@@ -416,7 +437,7 @@ async function seedDemoWorkflows(db: DbClient): Promise<void> {
           outputs: [{ name: 'findings', bind: { nodeId: 'review', portName: 'findings' } }],
         },
       },
-      { id: DEMO_WORKFLOW_FANOUT_ID, ownerUserId: SYSTEM_USER_ID, builtin: true },
+      { id: DEMO_WORKFLOW_FANOUT_ID, ownerUserId: SYSTEM_USER_ID, visibility: 'public' },
     )
   }
 }

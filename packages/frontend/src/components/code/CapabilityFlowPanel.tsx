@@ -98,17 +98,27 @@ export function CapabilityFlowPanel({ active = true }: { active?: boolean }): Re
     return (bindings.data ?? []).filter((b) => forCapability.has(b.frameworkId))
   }, [bindings.data, frameworks.data, capability])
 
-  // Follow the capability: a binding selected for the previous one is not a
-  // valid target here, and leaving it selected would show the wrong template's
-  // values against these stages.
+  // Keyed on the candidate IDS, not the array. `candidates` is rebuilt whenever
+  // either query returns — including a background refetch that changed nothing
+  // — so depending on its identity re-ran this effect at arbitrary moments. The
+  // first version also cleared `openStage` here, which meant the drawer the
+  // user had just opened closed itself the instant the second query resolved,
+  // and any later refetch would close it mid-edit.
+  const candidateKey = candidates.map((b) => b.id).join(',')
   useEffect(() => {
+    // `''.split(',')` is `['']`, not `[]` — without this guard an empty
+    // candidate list would select the empty string rather than nothing.
+    const ids = candidateKey === '' ? [] : candidateKey.split(',')
     setBindingId((current) =>
-      current !== null && candidates.some((b) => b.id === current)
-        ? current
-        : (candidates[0]?.id ?? null),
+      current !== null && ids.includes(current) ? current : (ids[0] ?? null),
     )
+  }, [candidateKey])
+
+  // Closing the drawer belongs to the CAPABILITY changing, which is the only
+  // event that makes the open stage meaningless — its stages are gone.
+  useEffect(() => {
     setOpenStage(null)
-  }, [candidates])
+  }, [capability])
 
   const binding = candidates.find((b) => b.id === bindingId) ?? null
   const framework = (frameworks.data ?? []).find((f) => f.id === binding?.frameworkId) ?? null
@@ -353,7 +363,7 @@ function StageDrawer({
       )}
 
       {stage.kind === 'ai' && stage.agentSlot !== undefined && (
-        <div className="page__section" data-testid={`stage-ai-${stage.name}`}>
+        <div className="page__section form-grid" data-testid={`stage-ai-${stage.name}`}>
           <Field
             label={t('code.flow.agent')}
             hint={t('capabilityFlow.agentSlot', {
@@ -382,27 +392,29 @@ function StageDrawer({
               data-testid={`stage-prompt-${stage.name}`}
             />
           </Field>
-          <button
-            type="button"
-            className="btn btn--sm btn--primary"
-            data-testid={`stage-save-binding-${stage.name}`}
-            disabled={binding === null || !canEditBinding || saveBinding.isPending}
-            onClick={() => {
-              if (stage.agentSlot === undefined || binding === null) return
-              saveBinding.mutate({
-                agentBySlot: { ...binding.agentBySlot, [stage.agentSlot]: agentId },
-                promptBySlot: { ...binding.promptBySlot, [stage.agentSlot]: prompt },
-              })
-            }}
-          >
-            {t('common.save')}
-          </button>
+          <div className="page__actions">
+            <button
+              type="button"
+              className="btn btn--sm btn--primary"
+              data-testid={`stage-save-binding-${stage.name}`}
+              disabled={binding === null || !canEditBinding || saveBinding.isPending}
+              onClick={() => {
+                if (stage.agentSlot === undefined || binding === null) return
+                saveBinding.mutate({
+                  agentBySlot: { ...binding.agentBySlot, [stage.agentSlot]: agentId },
+                  promptBySlot: { ...binding.promptBySlot, [stage.agentSlot]: prompt },
+                })
+              }}
+            >
+              {t('common.save')}
+            </button>
+          </div>
           {saveBinding.isError && <ErrorBanner error={saveBinding.error} />}
         </div>
       )}
 
       {stage.kind === 'script' && stage.scriptSlot !== undefined && (
-        <div className="page__section" data-testid={`stage-script-${stage.name}`}>
+        <div className="page__section form-grid" data-testid={`stage-script-${stage.name}`}>
           {framework?.scriptsRedacted === true ? (
             // Absent, not empty — an empty editor would invite someone to save
             // over a script they were never shown.
@@ -436,28 +448,30 @@ function StageDrawer({
                   data-testid={`stage-script-body-${stage.name}`}
                 />
               </Field>
-              <button
-                type="button"
-                className="btn btn--sm btn--primary"
-                data-testid={`stage-save-script-${stage.name}`}
-                disabled={
-                  framework === null ||
-                  !canEditFramework ||
-                  !canAuthorScripts ||
-                  saveFramework.isPending
-                }
-                onClick={() => {
-                  if (stage.scriptSlot === undefined || framework === null) return
-                  saveFramework.mutate({
-                    scripts: {
-                      ...(framework.scripts ?? {}),
-                      [stage.scriptSlot]: { language: scriptLanguage, script: scriptBody },
-                    } as CapabilityFrameworkWire['scripts'],
-                  })
-                }}
-              >
-                {t('common.save')}
-              </button>
+              <div className="page__actions">
+                <button
+                  type="button"
+                  className="btn btn--sm btn--primary"
+                  data-testid={`stage-save-script-${stage.name}`}
+                  disabled={
+                    framework === null ||
+                    !canEditFramework ||
+                    !canAuthorScripts ||
+                    saveFramework.isPending
+                  }
+                  onClick={() => {
+                    if (stage.scriptSlot === undefined || framework === null) return
+                    saveFramework.mutate({
+                      scripts: {
+                        ...(framework.scripts ?? {}),
+                        [stage.scriptSlot]: { language: scriptLanguage, script: scriptBody },
+                      } as CapabilityFrameworkWire['scripts'],
+                    })
+                  }}
+                >
+                  {t('common.save')}
+                </button>
+              </div>
               {saveFramework.isError && <ErrorBanner error={saveFramework.error} />}
             </>
           )}
@@ -472,10 +486,10 @@ function StageDrawer({
       )}
 
       {/* Params belong to the framework's declared table and are overridden per
-          binding, so they appear on every stage rather than being guessed at
-          per-kind: the contract does not say which stage reads which param. */}
+            binding, so they appear on every stage rather than being guessed at
+            per-kind: the contract does not say which stage reads which param. */}
       {(framework?.paramSchema.length ?? 0) > 0 && (
-        <div className="page__section" data-testid={`stage-params-${stage.name}`}>
+        <div className="page__section form-grid" data-testid={`stage-params-${stage.name}`}>
           <h4>{t('code.flow.params')}</h4>
           {framework?.paramSchema.map((param) => (
             <Field key={param.name} label={param.name} hint={param.kind}>
@@ -489,17 +503,19 @@ function StageDrawer({
               />
             </Field>
           ))}
-          <button
-            type="button"
-            className="btn btn--sm"
-            data-testid={`stage-save-params-${stage.name}`}
-            disabled={binding === null || !canEditBinding || saveBinding.isPending}
-            onClick={() => {
-              saveBinding.mutate({ params: coerceParams(params, framework?.paramSchema ?? []) })
-            }}
-          >
-            {t('code.flow.saveParams')}
-          </button>
+          <div className="page__actions">
+            <button
+              type="button"
+              className="btn btn--sm"
+              data-testid={`stage-save-params-${stage.name}`}
+              disabled={binding === null || !canEditBinding || saveBinding.isPending}
+              onClick={() => {
+                saveBinding.mutate({ params: coerceParams(params, framework?.paramSchema ?? []) })
+              }}
+            >
+              {t('code.flow.saveParams')}
+            </button>
+          </div>
         </div>
       )}
 
@@ -547,7 +563,7 @@ function StageHooks({
   const [language, setLanguage] = useState<ScriptLanguage>('bash')
 
   return (
-    <div className="page__section" data-testid={`stage-hooks-${stage.name}`}>
+    <div className="page__section form-grid" data-testid={`stage-hooks-${stage.name}`}>
       <h4>{t('code.flow.hooks')}</h4>
       <p data-testid={`stage-injectable-${stage.name}`}>
         {stage.injectable.length > 0

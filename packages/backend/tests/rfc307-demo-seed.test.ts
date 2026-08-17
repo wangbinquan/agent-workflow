@@ -24,11 +24,13 @@ import {
   codeRoundStages,
   codeWorkItems,
   codeWorkRounds,
+  webhookEndpoints,
   workflows,
 } from '../src/db/schema'
 import {
   DEMO_AGENT_ID,
   DEMO_BINDING_ID,
+  DEMO_ENDPOINT_ID,
   DEMO_FRAMEWORK_ID,
   DEMO_ROUND_ID,
   DEMO_WORKFLOW_REVIEW_ID,
@@ -255,6 +257,85 @@ describe('RFC-307 — demo content', () => {
     expect(round?.endedAt).not.toBeNull()
     expect(round?.id).toBe(DEMO_ROUND_ID)
     expect(item?.currentRoundId).toBe(DEMO_ROUND_ID)
+  })
+
+  test('NOTHING seeded is marked builtin — the samples must be editable and deletable', async () => {
+    // The bug this locks, found by running the daemon rather than by reading
+    // the code. The first version copied `builtin: true` from the fusion
+    // seeder, and in this repo that flag means "platform infrastructure":
+    // `excludeBuiltinWorkflows` hides the row from every list, and
+    // `assertNotBuiltin` refuses every edit and delete. All three promises
+    // broke at once — the demo agent never reached the agent picker, the demo
+    // binding answered `capability-template-builtin` to the exact prompt edit
+    // this RFC exists to enable, and "safe to delete" was simply false.
+    await seedDemoContent(db)
+    for (const row of await db.select().from(workflows)) expect(row.builtin).toBe(false)
+    for (const row of await db.select().from(capabilityFrameworks)) expect(row.builtin).toBe(false)
+    for (const row of await db.select().from(capabilityBindings)) expect(row.builtin).toBe(false)
+    const agent = (await db.select().from(agents)).find((a) => a.id === DEMO_AGENT_ID)
+    expect(agent?.builtin).toBe(false)
+  })
+
+  test('the samples are public, so they are visible without being infrastructure', async () => {
+    // The other half of the same decision: not builtin, but not private either
+    // — a sample nobody can see is not a sample.
+    await seedDemoContent(db)
+    for (const row of await db.select().from(capabilityFrameworks)) {
+      expect(row.visibility).toBe('public')
+    }
+    for (const row of await db.select().from(capabilityBindings)) {
+      expect(row.visibility).toBe('public')
+    }
+    expect((await db.select().from(agents)).find((a) => a.id === DEMO_AGENT_ID)?.visibility).toBe(
+      'public',
+    )
+    // Workflows too: `createWorkflow` also defaults to `private` (RFC-099), so
+    // the sample needs the same follow-up. Caught by this case going red.
+    for (const row of await db.select().from(workflows)) expect(row.visibility).toBe('public')
+  })
+
+  test('every demo hook returns ONLY keys its stage declares injectable', async () => {
+    // Also found by running it: the sample hook returned `promptSuffix` while
+    // `review-shard` declares `extraContext`, so the runner would have refused
+    // it. A first example that does not work teaches the wrong thing twice —
+    // once about hooks, once about whether the samples can be trusted.
+    await seedDemoContent(db)
+    const [framework] = await db.select().from(capabilityFrameworks)
+    const hooks = JSON.parse(framework?.hooksJson ?? '[]') as Array<{
+      stage: string
+      script: string
+    }>
+    const stages = new Map(
+      (lookupStageContract('mr-review')?.stages ?? []).map((s) => [s.name, s.injectable ?? []]),
+    )
+    for (const hook of hooks) {
+      const allowed = stages.get(hook.stage) ?? []
+      // Read the keys the sample script actually emits out of its own body.
+      const emitted = [...hook.script.matchAll(/"([A-Za-z][A-Za-z0-9]*)":/g)].flatMap((m) =>
+        m[1] === undefined ? [] : [m[1]],
+      )
+      expect(emitted.length).toBeGreaterThan(0)
+      for (const key of emitted) expect(allowed).toContain(key)
+    }
+  })
+
+  test('NO webhook endpoint is created — a fake one would be pre-selected on real forms', async () => {
+    // Found by CI, not by reading the code. The first version seeded a
+    // `webhook_endpoints` row so the demo work item had something to point at.
+    // Every endpoint picker in the product then listed `[demo] sample code
+    // host`, and pickers default to their first option — so it became the
+    // DEFAULT selection on the trigger form, which is where somebody wires up a
+    // real code host. Three e2e shards caught it as
+    // `expected "rfc295-picker-endpoint", received "[demo] sample code host"`.
+    //
+    // It is also unnecessary: the column carries no foreign key and no read
+    // path joins the endpoint table, because the id is opaque there.
+    await seedDemoContent(db)
+    expect(await db.select().from(webhookEndpoints)).toEqual([])
+    // The work item still names its (opaque) host identity, so the row is not
+    // half-populated.
+    const [item] = await db.select().from(codeWorkItems)
+    expect(item?.codeHostEndpointId).toBe(DEMO_ENDPOINT_ID)
   })
 
   test('ids are stable and readable, so a user can find every trace of the demo', async () => {
