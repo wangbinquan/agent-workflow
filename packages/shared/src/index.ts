@@ -97,7 +97,6 @@ export * from './agentCapability' // RFC-166
 // conversion survive, reused by the workgroup dynamic-mode engine.
 export * from './dynamicWorkflow' // RFC-167
 export * from './agentLaunchForm' // RFC-218
-export * from './workspaceConvention' // RFC-308
 export * from './shardingRegistry'
 export * from './signalPromptGuard'
 export * from './wrapperFanout'
