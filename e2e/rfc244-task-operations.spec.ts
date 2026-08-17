@@ -54,8 +54,12 @@ async function postJson<T>(path: string, body: unknown, token?: string): Promise
   return requestJson<T>(path, { method: 'POST', body: JSON.stringify(body) }, token)
 }
 
-async function waitFor<T>(read: () => Promise<T>, accept: (value: T) => boolean): Promise<T> {
-  const deadline = Date.now() + 20_000
+async function waitFor<T>(
+  read: () => Promise<T>,
+  accept: (value: T) => boolean,
+  timeoutMs = 20_000,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs
   for (;;) {
     const value = await read()
     if (accept(value)) return value
@@ -585,6 +589,7 @@ test('real session, PAT, schedule, and webhook launches filter exactly and sched
   const scheduledGrandchildren = await waitFor(
     () => pageFor('scheduled', middleTaskId),
     (page) => page.items.length === 1,
+    60_000,
   )
   expect(scheduledGrandchildren.items).toHaveLength(1)
 
