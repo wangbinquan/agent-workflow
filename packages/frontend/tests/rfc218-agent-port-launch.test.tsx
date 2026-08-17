@@ -34,12 +34,15 @@ vi.mock('../src/hooks/useActor', () => ({
     data: {
       user: { id: 'me', username: 'me', displayName: 'Me', role: 'user', status: 'active' },
       source: 'session',
-      permissions: [],
+      permissions: ['tasks:read'],
       linkedIdentities: [],
       pats: [],
     },
   }),
-  usePermission: () => false,
+  // Relaunch reads the source task and members before it can seed the form.
+  // Keep this harness on the exact capability it exercises; unrelated
+  // catalogs remain denied.
+  usePermission: (permission: string) => permission === 'tasks:read',
 }))
 
 const AGENTS = [
