@@ -136,6 +136,17 @@ describe('NAV_GROUPS includes memory', () => {
 })
 
 describe('MemoryPendingBadge', () => {
+  test('missing memory:read stays request-free and cannot expose cached badge state', async () => {
+    const { urls } = installFetch({ permissions: [], role: 'user' }, [mkSum()], 3)
+    renderBadge()
+    await waitFor(() => expect(urls.some((url) => url.includes('/api/auth/me'))).toBe(true))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(urls.some((url) => url.includes('/api/memories'))).toBe(false)
+    expect(urls.some((url) => url.includes('/api/fusions/pending-count'))).toBe(false)
+    expect(screen.queryByTestId('nav-memory-badge')).toBeNull()
+  })
+
   test('admin with pending candidates renders a non-interactive badge', async () => {
     installFetch({ permissions: ['memory:read', 'memory:update'] }, [mkSum(), mkSum({ id: 'm2' })])
     renderBadge()
@@ -159,7 +170,7 @@ describe('MemoryPendingBadge', () => {
   })
 
   test('admin with zero pending candidates does not render the badge', async () => {
-    installFetch({ permissions: ['memory:update'] }, [])
+    installFetch({ permissions: ['memory:read', 'memory:update'] }, [])
     renderBadge()
     // Wait long enough for the actor + candidate fetches to settle.
     await new Promise((r) => setTimeout(r, 20))
@@ -177,7 +188,11 @@ describe('MemoryPendingBadge', () => {
   })
 
   test('RFC-121: admin badge sums pending candidates + awaiting fusions', async () => {
-    installFetch({ permissions: ['memory:update'] }, [mkSum(), mkSum({ id: 'm2' })], 3)
+    installFetch(
+      { permissions: ['memory:read', 'memory:update'] },
+      [mkSum(), mkSum({ id: 'm2' })],
+      3,
+    )
     renderBadge()
     await waitFor(() => {
       expect(screen.getByTestId('nav-memory-badge').textContent).toBe('5')

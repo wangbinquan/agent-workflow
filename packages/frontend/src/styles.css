@@ -3123,6 +3123,17 @@ code {
   height: 100%;
 }
 
+/* Keep routed React state alive across a transient /me refresh without
+ * displaying or exposing the stale-authority subtree. `display: contents`
+ * preserves the existing page geometry and `.content:has(...)` contracts. */
+.app-shell__route-content {
+  display: contents;
+}
+
+.app-shell__route-content--suspended {
+  display: none;
+}
+
 /* ---- Pages ---- */
 
 .page {

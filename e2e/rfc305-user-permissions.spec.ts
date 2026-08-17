@@ -456,7 +456,12 @@ test('guest browser exposes public resources without mutation or task affordance
     if (pathname === '/api/runtimes') {
       runtimeRegistryRequests.push(browserRequest.url())
     }
-    if (pathname === '/api/tasks/page' || pathname === '/api/cached-repos') {
+    if (
+      pathname === '/api/tasks/page' ||
+      pathname === '/api/cached-repos' ||
+      pathname === '/api/memories' ||
+      pathname === '/api/fusions/pending-count'
+    ) {
       protectedDestinationRequests.push(browserRequest.url())
     }
   })
@@ -495,6 +500,8 @@ test('guest browser exposes public resources without mutation or task affordance
   await page.goto(`${daemon.baseUrl}/tasks`)
   await expect(page.getByTestId('app-shell-main').locator(':scope > *')).toHaveCount(0)
   await page.goto(`${daemon.baseUrl}/repos`)
+  await expect(page.getByTestId('app-shell-main').locator(':scope > *')).toHaveCount(0)
+  await page.goto(`${daemon.baseUrl}/memory`)
   await expect(page.getByTestId('app-shell-main').locator(':scope > *')).toHaveCount(0)
   expect(protectedDestinationRequests).toEqual([])
 

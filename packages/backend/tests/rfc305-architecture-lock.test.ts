@@ -574,6 +574,10 @@ describe('RFC-305 permission catalog architecture', () => {
       resolve(FRONTEND_SRC, 'components', 'shell', 'AppShell.tsx'),
       'utf8',
     )
+    const memoryBadge = readFileSync(
+      resolve(FRONTEND_SRC, 'components', 'shell', 'MemoryPendingBadge.tsx'),
+      'utf8',
+    )
     const agentForm = readFileSync(resolve(FRONTEND_SRC, 'components', 'AgentForm.tsx'), 'utf8')
     const workflowEditor = readFileSync(
       resolve(FRONTEND_SRC, 'routes', 'workflows.edit.tsx'),
@@ -586,8 +590,13 @@ describe('RFC-305 permission catalog architecture', () => {
     expect(shellNavigation).toContain('NAV_GROUPS.map')
     expect(shellNavigation).not.toMatch(/useCurrentPermissions|navGroupsForPermissions/)
     expect(navigation).toContain('navPermissionForPath')
+    expect(navigation).toContain("{ path: '/tasks/new', permission: 'tasks:execute' }")
     expect(appShell).toContain('navPermissionForPath(pathname)')
-    expect(appShell).toContain('canReadDestination ? children : null')
+    expect(appShell).toContain('lastAuthorizedDestinationRef')
+    expect(appShell).toContain('mountDestination &&')
+    expect(appShell).toContain("permissions.has('memory:read')")
+    expect(memoryBadge).toContain("usePermission('memory:read')")
+    expect(memoryBadge).toContain('enabled: canReadMemory')
     expect(agentForm).toContain('enabled: runtimeRegistryReadable')
     expect(agentForm).toContain(
       'runtimeRegistryReadable ? (runtimesQuery.data?.runtimes ?? []) : []',

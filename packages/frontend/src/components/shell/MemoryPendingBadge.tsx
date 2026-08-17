@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { FusionPendingCount, MemorySummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { usePermission } from '@/hooks/useActor'
 
 interface ListResponse {
   items: MemorySummary[]
@@ -53,8 +54,11 @@ export function useMemoryPendingCounts(options: { enabled?: boolean } = {}): Mem
 
 export function MemoryPendingBadge() {
   const { t } = useTranslation()
-  const counts = useMemoryPendingCounts()
-  if (counts.total === 0) return null
+  const canReadMemory = usePermission('memory:read')
+  const counts = useMemoryPendingCounts({ enabled: canReadMemory })
+  // `enabled:false` may still expose old query data from the shared cache.
+  // Check current authority again before projecting any count into the shell.
+  if (!canReadMemory || counts.total === 0) return null
   const badgeText = counts.total > 99 ? '99+' : String(counts.total)
   const description = t('nav.memoryBadge', { count: counts.total })
   return (

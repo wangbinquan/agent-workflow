@@ -40,6 +40,8 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
   test('destination permissions come from the same navigation catalog', () => {
     expect(navPermissionForPath('/tasks')).toBe('tasks:read')
     expect(navPermissionForPath('/tasks/task_1')).toBe('tasks:read')
+    expect(navPermissionForPath('/tasks/new')).toBe('tasks:execute')
+    expect(navPermissionForPath('/tasks/new/confirm')).toBe('tasks:execute')
     expect(navPermissionForPath('/repos')).toBe('repos:read')
     expect(navPermissionForPath('/agents/agent_1')).toBe('agents:read')
     expect(navPermissionForPath('/')).toBeNull()

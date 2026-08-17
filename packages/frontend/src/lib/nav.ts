@@ -105,11 +105,26 @@ export const NAV_GROUPS: NavGroupEntry[] = [
 ]
 
 /**
+ * Deep routes whose capability differs from their visible parent destination.
+ * Keep these exact overrides beside NAV_GROUPS so AppShell never infers a write
+ * or execute surface from a role or from the parent list's read permission.
+ */
+export const NAV_CONTENT_PERMISSION_OVERRIDES: ReadonlyArray<{
+  path: string
+  permission: Permission
+}> = [{ path: '/tasks/new', permission: 'tasks:execute' }]
+
+/**
  * Resolve the read capability that owns a visible navigation destination.
  * Keeping this lookup on the same catalog prevents shell content gating from
  * drifting away from the menu it protects.
  */
 export function navPermissionForPath(pathname: string): Permission | null {
+  for (const override of NAV_CONTENT_PERMISSION_OVERRIDES) {
+    if (pathname === override.path || pathname.startsWith(override.path + '/')) {
+      return override.permission
+    }
+  }
   for (const group of NAV_GROUPS) {
     for (const item of group.subnav) {
       if (pathname === item.to || pathname.startsWith(item.to + '/')) return item.permission

@@ -15,6 +15,11 @@ interface MockLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
 const harness = vi.hoisted(() => ({
   pathname: '/',
   permissionAllowed: true,
+  permissions: null as string[] | null,
+  actorStatus: 'success' as 'pending' | 'error' | 'success',
+  actorFetchStatus: 'idle' as 'idle' | 'fetching' | 'paused',
+  actorError: null as unknown,
+  actorRefetchCalls: 0,
   linkClicks: [] as Array<{ to: string; focusedTestId: string | null }>,
   settingsClicks: [] as Array<{ focusedTestId: string | null }>,
 }))
@@ -99,27 +104,40 @@ vi.mock('@/components/LanguageSwitch', async () => {
 })
 
 vi.mock('@/hooks/useActor', () => ({
-  usePermission: () => harness.permissionAllowed,
+  usePermission: (permission: string) =>
+    harness.permissions === null
+      ? harness.permissionAllowed
+      : harness.permissions.includes(permission),
   useCurrentPermissions: () =>
     new Set(
-      harness.permissionAllowed
-        ? [
-            'agents:read',
-            'skills:read',
-            'mcps:read',
-            'plugins:read',
-            'workflows:read',
-            'workgroups:read',
-            'intent:read',
-            'tasks:read',
-            'scheduled-tasks:read',
-            'repos:read',
-            'webhook-endpoints:read',
-            'memory:read',
-          ]
-        : [],
+      harness.permissions ??
+        (harness.permissionAllowed
+          ? [
+              'agents:read',
+              'skills:read',
+              'mcps:read',
+              'plugins:read',
+              'workflows:read',
+              'workgroups:read',
+              'intent:read',
+              'tasks:read',
+              'scheduled-tasks:read',
+              'repos:read',
+              'webhook-endpoints:read',
+              'memory:read',
+            ]
+          : []),
     ),
-  useActor: () => ({ data: null, isLoading: false }),
+  useActor: () => ({
+    data: null,
+    isLoading: harness.actorStatus === 'pending',
+    status: harness.actorStatus,
+    fetchStatus: harness.actorFetchStatus,
+    error: harness.actorError,
+    refetch: () => {
+      harness.actorRefetchCalls += 1
+    },
+  }),
 }))
 
 vi.mock('@/components/shell/SettingsGearButton', async () => {
@@ -250,6 +268,11 @@ beforeEach(async () => {
   await i18n.changeLanguage('en-US')
   harness.pathname = '/'
   harness.permissionAllowed = true
+  harness.permissions = null
+  harness.actorStatus = 'success'
+  harness.actorFetchStatus = 'idle'
+  harness.actorError = null
+  harness.actorRefetchCalls = 0
   harness.linkClicks.length = 0
   harness.settingsClicks.length = 0
   act(() => setInboxOpen(false))
@@ -274,7 +297,91 @@ describe('RFC-198 responsive AppShell', () => {
 
     expect(screen.getByRole('link', { name: 'Tasks', exact: true })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Repos', exact: true })).toBeTruthy()
+    expect(screen.queryByTestId('memory-badge')).toBeNull()
     expect(screen.queryByTestId('protected-task-content')).toBeNull()
+  })
+
+  test('tasks:execute opens the launcher without granting task-list read access', () => {
+    vi.stubGlobal('matchMedia', undefined)
+    harness.permissions = ['tasks:execute']
+    render(
+      <AppShell pathname="/tasks/new">
+        <h1 data-testid="task-launcher-content">Start task</h1>
+      </AppShell>,
+    )
+
+    expect(screen.getByRole('link', { name: 'Tasks', exact: true })).toBeTruthy()
+    expect(screen.getByTestId('task-launcher-content')).toBeTruthy()
+    expect(screen.queryByTestId('memory-badge')).toBeNull()
+  })
+
+  test('authority refresh hides but preserves a routed draft until exact permission settles', () => {
+    vi.stubGlobal('matchMedia', undefined)
+    const route = () => (
+      <AppShell pathname="/agents/new">
+        <input data-testid="routed-draft" defaultValue="seed" />
+      </AppShell>
+    )
+    const view = render(route())
+    const draft = screen.getByTestId('routed-draft') as HTMLInputElement
+    fireEvent.change(draft, { target: { value: 'unsaved local draft' } })
+
+    harness.permissionAllowed = false
+    harness.actorFetchStatus = 'fetching'
+    view.rerender(route())
+    expect(screen.getByTestId('routed-draft')).toBe(draft)
+    expect(draft.value).toBe('unsaved local draft')
+    expect(screen.getByTestId('app-shell-route-content').className).toContain(
+      'app-shell__route-content--suspended',
+    )
+
+    harness.actorFetchStatus = 'idle'
+    harness.actorStatus = 'error'
+    harness.actorError = new Error('authority refresh failed')
+    view.rerender(route())
+    expect(screen.getByTestId('routed-draft')).toBe(draft)
+    expect(draft.value).toBe('unsaved local draft')
+    expect(screen.getByTestId('authority-refresh-error')).toBeTruthy()
+
+    harness.permissionAllowed = true
+    harness.actorStatus = 'success'
+    harness.actorError = null
+    view.rerender(route())
+    expect(screen.getByTestId('routed-draft')).toBe(draft)
+    expect(draft.value).toBe('unsaved local draft')
+    expect(screen.getByTestId('app-shell-route-content').className).not.toContain(
+      'app-shell__route-content--suspended',
+    )
+
+    harness.permissionAllowed = false
+    view.rerender(route())
+    expect(screen.queryByTestId('routed-draft')).toBeNull()
+  })
+
+  test('an unsettled authority snapshot never reuses a prior grant for a different route', () => {
+    vi.stubGlobal('matchMedia', undefined)
+    const view = render(
+      <AppShell pathname="/agents/new">
+        <div data-testid="first-route">first</div>
+      </AppShell>,
+    )
+    expect(screen.getByTestId('first-route')).toBeTruthy()
+
+    harness.permissionAllowed = false
+    harness.actorFetchStatus = 'fetching'
+    view.rerender(
+      <AppShell pathname="/agents/another">
+        <div data-testid="different-route">different</div>
+      </AppShell>,
+    )
+    expect(screen.queryByTestId('different-route')).toBeNull()
+
+    view.rerender(
+      <AppShell pathname="/agents/new">
+        <div data-testid="remounted-first-route">first again</div>
+      </AppShell>,
+    )
+    expect(screen.queryByTestId('remounted-first-route')).toBeNull()
   })
 
   // Regression: the Memory label and its pending count used to be separate

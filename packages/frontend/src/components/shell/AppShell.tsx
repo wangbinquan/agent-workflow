@@ -14,9 +14,11 @@ import {
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
+import { LoadingState } from '@/components/LoadingState'
 import { UserMenu } from '@/components/UserMenu'
-import { useCurrentPermissions, usePermission } from '@/hooks/useActor'
+import { useActor, useCurrentPermissions, usePermission } from '@/hooks/useActor'
 import { useAuthoritySync } from '@/hooks/useAuthoritySync'
 import { navPermissionForPath, resolveActiveNav, type ActiveNav, type SubNavItem } from '@/lib/nav'
 import { setInboxOpen, toggleInboxOpen, useInboxOpen } from '@/stores/inbox'
@@ -58,6 +60,7 @@ interface AppShellProps {
 
 export function AppShell({ pathname, children }: AppShellProps) {
   useAuthoritySync()
+  const actor = useActor()
   const compact = useCompactShell()
   const active = resolveActiveNav(pathname)
   const permissions = useCurrentPermissions()
@@ -65,8 +68,9 @@ export function AppShell({ pathname, children }: AppShellProps) {
   // RFC-305 guest follow-up: navigation remains a complete discovery surface,
   // but a destination without its catalog read capability must not mount route
   // children (and therefore must not start queries that can only return 403).
-  const canReadDestination =
+  const destinationGranted =
     destinationPermission === null || permissions.has(destinationPermission)
+  const canReadMemory = permissions.has('memory:read')
   const canReadTasks = usePermission('tasks:read')
   const inboxOpen = useInboxOpen()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -75,10 +79,37 @@ export function AppShell({ pathname, children }: AppShellProps) {
   const mainRef = useRef<HTMLElement | null>(null)
   const pendingNavigationRef = useRef<string | null>(null)
   const previousCompactRef = useRef(compact)
+  const lastAuthorizedDestinationRef = useRef<string | null>(null)
+
+  // A WS-driven /me refresh must fail closed immediately, but unmounting the
+  // routed subtree throws away unsaved local drafts without consulting that
+  // route's navigation guard. Preserve only the exact path that was already
+  // authorized, keep it non-rendered while authority is unsettled, and unmount
+  // it once a fresh successful snapshot explicitly denies the permission.
+  const destinationKey = `${pathname}\u0000${destinationPermission ?? 'public'}`
+  const destinationAuthorityUnsettled =
+    destinationPermission !== null &&
+    (actor.status === 'pending' ||
+      actor.status === 'error' ||
+      actor.fetchStatus === 'fetching' ||
+      actor.fetchStatus === 'paused')
+  if (destinationGranted) {
+    lastAuthorizedDestinationRef.current = destinationKey
+  } else if (
+    lastAuthorizedDestinationRef.current !== destinationKey ||
+    !destinationAuthorityUnsettled
+  ) {
+    lastAuthorizedDestinationRef.current = null
+  }
+  const preserveDestination =
+    !destinationGranted &&
+    destinationAuthorityUnsettled &&
+    lastAuthorizedDestinationRef.current === destinationKey
+  const mountDestination = destinationGranted || preserveDestination
 
   const renderBadge = useCallback(
-    (item: SubNavItem) => (item.to === '/memory' ? <MemoryPendingBadge /> : null),
-    [],
+    (item: SubNavItem) => (item.to === '/memory' && canReadMemory ? <MemoryPendingBadge /> : null),
+    [canReadMemory],
   )
 
   const openMobileNav = useCallback(() => {
@@ -159,7 +190,28 @@ export function AppShell({ pathname, children }: AppShellProps) {
       )}
 
       <main ref={mainRef} className="content" tabIndex={-1} data-testid="app-shell-main">
-        {canReadDestination ? children : null}
+        {mountDestination && (
+          <div
+            className={`app-shell__route-content${
+              destinationGranted ? '' : ' app-shell__route-content--suspended'
+            }`}
+            data-testid="app-shell-route-content"
+            aria-hidden={destinationGranted ? undefined : true}
+          >
+            {children}
+          </div>
+        )}
+        {!destinationGranted &&
+          destinationAuthorityUnsettled &&
+          (actor.status === 'error' ? (
+            <ErrorBanner
+              error={actor.error}
+              onRetry={() => void actor.refetch()}
+              testid="authority-refresh-error"
+            />
+          ) : (
+            <LoadingState size="compact" data-testid="authority-refresh-loading" />
+          ))}
       </main>
 
       <RouteCommitFocus
