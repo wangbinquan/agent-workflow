@@ -40,4 +40,16 @@ describe('editorLayoutClass', () => {
     expect(editorLayoutClass('agent_1', 'compact')).toBe('editor-layout editor-layout--compact')
     expect(editorLayoutClass('agent_1', 'phone')).toBe('editor-layout editor-layout--phone')
   })
+
+  test('read-only workflow uses one full-width track even when a node is selected', () => {
+    // RFC-305 guest follow-up: the palette and inspector are both omitted for
+    // a read-only actor. Reserving either invisible rail squeezes the visible
+    // canvas into a narrow strip, most noticeably in the 1536px wide mode.
+    expect(editorLayoutClass(null, 'wide', false)).toBe(
+      'editor-layout editor-layout--wide editor-layout--read-only',
+    )
+    expect(editorLayoutClass('agent_1', 'wide', false)).toBe(
+      'editor-layout editor-layout--wide editor-layout--read-only',
+    )
+  })
 })

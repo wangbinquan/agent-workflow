@@ -391,6 +391,7 @@ test('real daemon PAT range/resource cap follows grant revoke and regrant', asyn
 test('guest browser exposes public resources without mutation or task affordances', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1536, height: 900 })
   const username = 'rfc305-browser-guest'
   const password = 'longEnoughPassword'
   const createdGuest = await request(daemon.token, '/api/users', {
@@ -433,26 +434,102 @@ test('guest browser exposes public resources without mutation or task affordance
   })
   expect(madePublic.status).toBe(200)
 
+  const publicWorkflow = await createScriptWorkflow(daemon.token, 'rfc305-guest-public-workflow')
+  expect(publicWorkflow.status).toBe(201)
+  const publicWorkflowId = ((await publicWorkflow.json()) as { id: string }).id
+  const madeWorkflowPublic = await request(daemon.token, `/api/workflows/${publicWorkflowId}/acl`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      visibility: 'public',
+      expectedResourceId: publicWorkflowId,
+      expectedAclRevision: 0,
+    }),
+  })
+  expect(madeWorkflowPublic.status).toBe(200)
+
   const guestToken = await login(username, password)
   await primeAuth(page, guestToken)
+  const runtimeRegistryRequests: string[] = []
+  const protectedDestinationRequests: string[] = []
+  page.on('request', (browserRequest) => {
+    const pathname = new URL(browserRequest.url()).pathname
+    if (pathname === '/api/runtimes') {
+      runtimeRegistryRequests.push(browserRequest.url())
+    }
+    if (pathname === '/api/tasks/page' || pathname === '/api/cached-repos') {
+      protectedDestinationRequests.push(browserRequest.url())
+    }
+  })
   await page.goto(`${daemon.baseUrl}/agents`)
   await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: publicName }).first()).toBeVisible()
   await expect(page.getByText(privateName, { exact: true })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'New agent', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('link', { name: 'Tasks', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Tasks', exact: true })).toBeVisible()
+  expect(
+    await page
+      .getByTestId('shell-navigation-desktop')
+      .locator('a')
+      .evaluateAll((links) =>
+        links.map((link) => new URL((link as HTMLAnchorElement).href).pathname),
+      ),
+  ).toEqual([
+    '/',
+    '/agents',
+    '/skills',
+    '/mcps',
+    '/plugins',
+    '/workflows',
+    '/workgroups',
+    '/intent',
+    '/tasks',
+    '/scheduled',
+    '/repos',
+    '/webhooks',
+    '/code',
+    '/memory',
+  ])
+
+  // The menu remains a complete product map, but destinations for which the
+  // guest lacks the catalog read permission stay empty and request-free.
+  await page.goto(`${daemon.baseUrl}/tasks`)
+  await expect(page.getByTestId('app-shell-main').locator(':scope > *')).toHaveCount(0)
+  await page.goto(`${daemon.baseUrl}/repos`)
+  await expect(page.getByTestId('app-shell-main').locator(':scope > *')).toHaveCount(0)
+  expect(protectedDestinationRequests).toEqual([])
 
   await page.locator('.user-menu__trigger').click()
   await expect(page.locator('.user-menu__role')).toHaveText('guest')
 
   await page.goto(`${daemon.baseUrl}/workflows?create=1&source=guest-check`)
   await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('link', { name: 'rfc305-guest-public-workflow', exact: true }).first(),
+  ).toBeVisible()
   await expect(page.getByTestId('workflow-new-button')).toHaveCount(0)
   await expect(page.getByTestId('workflow-create-dialog')).toHaveCount(0)
   await expect.poll(() => new URL(page.url()).searchParams.has('create')).toBe(false)
 
+  await page.goto(`${daemon.baseUrl}/workflows/${publicWorkflowId}`)
+  await expect(
+    page.getByRole('heading', { name: 'rfc305-guest-public-workflow', exact: true }),
+  ).toBeVisible()
+  const readOnlyGeometry = await page.locator('.editor-layout').evaluate((layout) => {
+    const canvas = layout.querySelector<HTMLElement>('.canvas-frame')
+    if (canvas === null) throw new Error('missing read-only workflow canvas')
+    return {
+      className: layout.className,
+      layoutWidth: layout.getBoundingClientRect().width,
+      canvasWidth: canvas.getBoundingClientRect().width,
+    }
+  })
+  expect(readOnlyGeometry.className).toContain('editor-layout--read-only')
+  expect(readOnlyGeometry.canvasWidth).toBeGreaterThanOrEqual(readOnlyGeometry.layoutWidth - 2)
+
   await page.goto(`${daemon.baseUrl}/agents/${publicId}`)
   await expect(page.getByRole('heading', { name: publicName, exact: true })).toBeVisible()
+  await expect(page.getByTestId('agent-runtime-load-error')).toHaveCount(0)
+  expect(runtimeRegistryRequests).toEqual([])
   await expect(page.getByTestId('agent-save-button')).toHaveCount(0)
   await page.getByTestId('detail-more-actions').click()
   await expect(page.getByTestId('export-package-agent')).toBeVisible()

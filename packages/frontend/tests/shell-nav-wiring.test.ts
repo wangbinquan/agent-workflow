@@ -29,8 +29,8 @@ describe('RFC-032 shell wiring — extracted components retain the grouped navig
 
   test('ShellNavigation maps NAV_GROUPS through the real NavGroup component', () => {
     expect(shellNavigationTsx).toMatch(/from '\.\/NavGroup'/)
-    expect(shellNavigationTsx).toMatch(/navGroupsForPermissions\(permissions\)/)
-    expect(shellNavigationTsx).toMatch(/visibleGroups\.map/)
+    expect(shellNavigationTsx).toMatch(/NAV_GROUPS\.map/)
+    expect(shellNavigationTsx).not.toMatch(/useCurrentPermissions|navGroupsForPermissions/)
     expect(shellNavigationTsx).toMatch(/<NavGroup\s/)
     expect(shellNavigationTsx).toMatch(/<ResourceIcon name="home"/)
     expect(navGroupTsx).toMatch(/<ResourceIcon name=\{item\.icon\}/)

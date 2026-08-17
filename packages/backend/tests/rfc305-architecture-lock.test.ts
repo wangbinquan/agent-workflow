@@ -563,6 +563,46 @@ describe('RFC-305 permission catalog architecture', () => {
     )
     expect(component).not.toMatch(/selectAll|select-all|select all/i)
   })
+
+  test('guest presentation keeps navigation stable and gates nested data by exact capability', () => {
+    const navigation = readFileSync(resolve(FRONTEND_SRC, 'lib', 'nav.ts'), 'utf8')
+    const shellNavigation = readFileSync(
+      resolve(FRONTEND_SRC, 'components', 'shell', 'ShellNavigation.tsx'),
+      'utf8',
+    )
+    const appShell = readFileSync(
+      resolve(FRONTEND_SRC, 'components', 'shell', 'AppShell.tsx'),
+      'utf8',
+    )
+    const agentForm = readFileSync(resolve(FRONTEND_SRC, 'components', 'AgentForm.tsx'), 'utf8')
+    const workflowEditor = readFileSync(
+      resolve(FRONTEND_SRC, 'routes', 'workflows.edit.tsx'),
+      'utf8',
+    )
+    const agentFormCallers = sourceFiles(FRONTEND_SRC, ['.ts', '.tsx']).filter((file) =>
+      readFileSync(file, 'utf8').includes('<AgentForm'),
+    )
+
+    expect(shellNavigation).toContain('NAV_GROUPS.map')
+    expect(shellNavigation).not.toMatch(/useCurrentPermissions|navGroupsForPermissions/)
+    expect(navigation).toContain('navPermissionForPath')
+    expect(appShell).toContain('navPermissionForPath(pathname)')
+    expect(appShell).toContain('canReadDestination ? children : null')
+    expect(agentForm).toContain('enabled: runtimeRegistryReadable')
+    expect(agentForm).toContain(
+      'runtimeRegistryReadable ? (runtimesQuery.data?.runtimes ?? []) : []',
+    )
+    expect(agentFormCallers.map(relativeToRepo)).toEqual([
+      'packages/frontend/src/routes/agents.detail.tsx',
+      'packages/frontend/src/routes/agents.new.tsx',
+    ])
+    for (const caller of agentFormCallers) {
+      expect(readFileSync(caller, 'utf8')).toContain('runtimeRegistryReadable={canReadRuntime}')
+    }
+    expect(workflowEditor).toContain(
+      'editorLayoutClass(selection?.id ?? null, workspaceMode, canUpdate)',
+    )
+  })
 })
 
 describe('RFC-305 reusable-authority fences', () => {

@@ -10,15 +10,40 @@
 
 import { describe, expect, test } from 'vitest'
 import { ROLE_PERMISSIONS } from '@agent-workflow/shared'
-import { NAV_GROUPS, navGroupsForPermissions, resolveActiveNav } from '@/lib/nav'
+import { NAV_GROUPS, navPermissionForPath, resolveActiveNav } from '@/lib/nav'
 
 describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags', () => {
-  test('guest preset naturally projects to its six public-resource destinations', () => {
-    expect(
-      navGroupsForPermissions(new Set(ROLE_PERMISSIONS.guest)).flatMap((group) =>
-        group.subnav.map((item) => item.to),
-      ),
-    ).toEqual(['/agents', '/skills', '/mcps', '/plugins', '/workflows', '/workgroups'])
+  test('guest keeps the complete navigation catalog while permissions shape page content', () => {
+    // RFC-305 guest follow-up: navigation is product discovery, not an
+    // authorization boundary. The guest preset deliberately lacks task and
+    // repository reads, but those destinations must remain visible; backend
+    // permissions and each page's read projection still own the data surface.
+    expect(ROLE_PERMISSIONS.guest).not.toContain('tasks:read')
+    expect(ROLE_PERMISSIONS.guest).not.toContain('repos:read')
+    expect(NAV_GROUPS.flatMap((group) => group.subnav.map((item) => item.to))).toEqual([
+      '/agents',
+      '/skills',
+      '/mcps',
+      '/plugins',
+      '/workflows',
+      '/workgroups',
+      '/intent',
+      '/tasks',
+      '/scheduled',
+      '/repos',
+      '/webhooks',
+      '/code',
+      '/memory',
+    ])
+  })
+
+  test('destination permissions come from the same navigation catalog', () => {
+    expect(navPermissionForPath('/tasks')).toBe('tasks:read')
+    expect(navPermissionForPath('/tasks/task_1')).toBe('tasks:read')
+    expect(navPermissionForPath('/repos')).toBe('repos:read')
+    expect(navPermissionForPath('/agents/agent_1')).toBe('agents:read')
+    expect(navPermissionForPath('/')).toBeNull()
+    expect(navPermissionForPath('/account')).toBeNull()
   })
 
   test('every visible route has one explicit resource icon', () => {

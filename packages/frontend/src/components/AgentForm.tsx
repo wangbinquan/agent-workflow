@@ -80,6 +80,8 @@ export interface AgentFormProps {
   onJsonFocusHandled?: () => void
   /** RFC-228: server-authoritative labels and closure integrity. */
   resourceStatus?: AgentResourceStatus
+  /** Whether this actor may read the runtime registry used by the selector. */
+  runtimeRegistryReadable?: boolean
 }
 
 const DEFAULT: CreateAgent = {
@@ -191,6 +193,7 @@ export function AgentForm({
   focusJsonField,
   onJsonFocusHandled,
   resourceStatus,
+  runtimeRegistryReadable = true,
 }: AgentFormProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -233,8 +236,11 @@ export function AgentForm({
     if (next.parsed !== undefined) patch(key, next.parsed)
   }
 
-  // RFC-112: registered runtimes (GET /api/runtimes — open to all users) drive
-  // the picker options + each runtime's protocol. flag-audit §8 决策：claude
+  // RFC-112: registered runtimes drive the picker options + each runtime's
+  // protocol. RFC-305: the registry requires `runtime:read`; a public-resource
+  // viewer without that capability sees only the saved pin/inherit value and
+  // must not issue the request or consume another account's cached snapshot.
+  // flag-audit §8 决策：claude
   // 可用性由注册表派生（存在 enabled 的 claude-protocol 行）——RFC-111 D17 的
   // `claudeCodeEnabled` 配置门已删除，per-runtime `enabled` 是唯一开关。
   const runtimesQuery = useQuery<{
@@ -249,8 +255,9 @@ export function AgentForm({
     queryKey: ['runtimes'],
     queryFn: ({ signal }) => api.get('/api/runtimes', undefined, signal),
     staleTime: 30_000,
+    enabled: runtimeRegistryReadable,
   })
-  const registeredRuntimes = runtimesQuery.data?.runtimes ?? []
+  const registeredRuntimes = runtimeRegistryReadable ? (runtimesQuery.data?.runtimes ?? []) : []
   // RFC-118: drop DISABLED runtimes from the picker — EXCEPT the one this agent
   // already pins (keep it visible so editing other fields doesn't silently switch the
   // runtime; the backend allows KEEPING an already-pinned disabled runtime, D6).
@@ -262,10 +269,14 @@ export function AgentForm({
   // of making it disappear based on async inventory cardinality. Until the
   // initial inventory resolves, preserve the visible current value but freeze
   // the selector; an unavailable registry cannot safely validate a new pin.
-  const runtimeRegistryUnavailable = runtimesQuery.data === undefined
-  const runtimeRegistryLoading = runtimeRegistryUnavailable && runtimesQuery.isFetching
+  const runtimeRegistryUnavailable = !runtimeRegistryReadable || runtimesQuery.data === undefined
+  const runtimeRegistryLoading =
+    runtimeRegistryReadable && runtimeRegistryUnavailable && runtimesQuery.isFetching
   const runtimeRegistryError =
-    runtimeRegistryUnavailable && runtimesQuery.isError && !runtimesQuery.isFetching
+    runtimeRegistryReadable &&
+    runtimeRegistryUnavailable &&
+    runtimesQuery.isError &&
+    !runtimesQuery.isFetching
   const runtimeOptions = [
     { value: '', label: t('agentForm.runtimeInherit') },
     ...selectableRuntimes.map((runtime) => ({ value: runtime.name, label: runtime.name })),

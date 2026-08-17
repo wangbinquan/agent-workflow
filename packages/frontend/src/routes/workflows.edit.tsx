@@ -86,11 +86,13 @@ import { Route as RootRoute } from './__root'
 export function editorLayoutClass(
   selectedNodeId: string | null,
   mode: WorkflowEditorWorkspaceMode = 'wide',
+  editable = true,
 ): string {
   return [
     'editor-layout',
     `editor-layout--${mode}`,
-    selectedNodeId !== null && workspaceHasInspectorRail(mode)
+    !editable ? 'editor-layout--read-only' : null,
+    editable && selectedNodeId !== null && workspaceHasInspectorRail(mode)
       ? 'editor-layout--with-inspector'
       : null,
   ]
@@ -1051,7 +1053,7 @@ export function WorkflowEditorLoaded({
         )}
 
         <div
-          className={editorLayoutClass(selection?.id ?? null, workspaceMode)}
+          className={editorLayoutClass(selection?.id ?? null, workspaceMode, canUpdate)}
           data-workspace-mode={workspaceMode}
         >
           {canUpdate && hasPaletteRail ? (

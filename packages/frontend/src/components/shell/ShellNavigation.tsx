@@ -4,9 +4,7 @@ import { Link } from '@tanstack/react-router'
 import { useLayoutEffect, useRef, type MouseEvent, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ResourceIcon } from '@/components/icons/resourceIcons'
-import { useCurrentPermissions } from '@/hooks/useActor'
-import type { ActiveNav, SubNavItem } from '@/lib/nav'
-import { navGroupsForPermissions } from '@/lib/nav'
+import { NAV_GROUPS, type ActiveNav, type SubNavItem } from '@/lib/nav'
 import { NavGroup } from './NavGroup'
 
 export interface ShellNavigationProps {
@@ -28,8 +26,6 @@ export function ShellNavigation({
   renderBadge,
 }: ShellNavigationProps) {
   const { t } = useTranslation()
-  const permissions = useCurrentPermissions()
-  const visibleGroups = navGroupsForPermissions(permissions)
   const navRef = useRef<HTMLElement | null>(null)
   // NavGroup stays the single owner of grouped nav rows. Resolve its rendered
   // anchor after commit so Dialog still gets a deterministic initial-focus ref
@@ -85,7 +81,7 @@ export function ShellNavigation({
         <span className="nav-item__label">{t('nav.home')}</span>
       </Link>
 
-      {visibleGroups.map((group) => (
+      {NAV_GROUPS.map((group) => (
         <NavGroup key={group.key} group={group} active={active} renderBadge={renderBadge} />
       ))}
     </nav>

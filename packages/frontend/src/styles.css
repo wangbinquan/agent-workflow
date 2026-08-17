@@ -6214,6 +6214,13 @@ details.form-section[open] > summary {
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* RFC-305 guest follow-up: read-only workflows render neither the palette nor
+ * the inspector. Keep exactly one track regardless of the responsive workspace
+ * mode so invisible editor rails cannot squeeze the canvas into a strip. */
+.editor-layout--read-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* ---- Node inspector ---- */
 
 .inspector {

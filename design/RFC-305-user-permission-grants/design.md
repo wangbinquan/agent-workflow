@@ -439,10 +439,16 @@ Authentication 设置页从 `/api/auth/login-policy` 读取 `{ passwordLoginEnab
 - 设置：`settings:read` / `settings:write`；
 - 记忆蒸馏：`memory-distill-jobs:manage`；
 - Webhook endpoint 明文：`webhook-endpoints:manage`；
-- 导航项：对应页面 permission。
+- 导航目录：对所有已认证账户保持完整可见；每项 `permission` 是目标页的数据挂载门，不是菜单显隐门。
 
-资源列表、详情、创建、编辑、删除、复制、ACL 与执行入口同样按其具体 read/write/execute permission 进行 projection。guest 不会
-看到空壳任务、仓库或设置入口，也不会发起其无权限的数据请求；这仍是权限集合塑形，不是 role 分支。
+`NAV_GROUPS` 同时提供稳定菜单目录与目标页 read capability。AppShell 用同一项的 `permission` 决定是否挂载 route children：缺少该点时
+保留菜单和空 main，不挂载页面查询，因此不会把预期的 403 变成前端运行时错误；后端 permission gate 仍是真实授权边界。资源列表、
+详情、创建、编辑、删除、复制、ACL 与执行入口继续按其具体 read/write/execute permission projection。guest 能看到完整菜单，只有六类
+public 资源页有内容；显式 grant 到达 effective permissions 后，对应内容自然出现，全程不得读取 `role`。
+
+页面内部的辅助目录也必须用自己的 exact capability，而不能借宿主资源 read 放行。例如公开 Agent 详情在缺少 `runtime:read` 时不得请求
+或消费 React Query 中可能由上一主体留下的 runtime registry cache，只显示已保存的 runtime pin/inherit 值且禁用选择器。只读 Workflow
+不渲染 palette/inspector 时，editor grid 必须强制为单轨，不能为不可见的编辑 rail 保留宽度。
 
 ## 11. 架构与行为防护
 

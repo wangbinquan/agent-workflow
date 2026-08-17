@@ -11,6 +11,7 @@
 - 五个历史身份谓词改为显式权限；RouteMeta/MCP/ACL/WS/前端不得另设角色轴。
 - `resource-acl:private` 把 private visibility 与普通 read 分离；guest baseline 只能读取公开资源且不能写入/执行。
 - OAuth/OIDC 首次自动建号默认 `guest`，管理员可在设置中把默认预设切为 `user`；邀请流程不受影响。
+- 已认证菜单始终完整；同一 `NAV_GROUPS.permission` 只控制目标页内容挂载，未授权页为空且不发数据请求。
 - 新代码按 RFC-294 落入 `modules/identity-access/`，访问写入只有一个事务所有者。
 
 ## 2. 批次与任务
@@ -70,23 +71,31 @@
 - [x] **RFC-305-T35** 精确 staging、commit trailer、push、origin ancestry 与 exact-SHA GitHub Actions 终态验证。
 - [x] **RFC-305-T36** RFC/索引/STATE 改 Done，记录本地门禁、提交 SHA 与远端 CI 证据。
 
+### 批 F — guest UI follow-up（2026-08-17）
+
+- [x] **RFC-305-T37** 导航改为稳定完整目录；AppShell 复用目录 permission 做内容挂载门，未授权目标页为空且 request-free。
+- [x] **RFC-305-T38** 只读 Workflow editor 强制单轨，palette/inspector 缺席时 canvas 占满可用宽度。
+- [x] **RFC-305-T39** Agent runtime registry 按 `runtime:read` 精确启停；无权限时既不请求也不消费跨主体缓存。
+- [x] **RFC-305-T40** 补纯函数、RTL、source lock 与真实 daemon browser E2E；Chromium/WebKit 同链验证完整菜单、空页、画布几何和
+      runtime request absence。
+
 ## 3. 必跑行为矩阵
 
-| 主体             | 附加权限                          | 正向                             | 负向/撤销                                   |
-| ---------------- | --------------------------------- | -------------------------------- | ------------------------------------------- |
-| guest session    | 无                                | 公开六类资源 list/detail         | private、资源写、任务/仓库/设置均拒绝       |
-| guest session    | `resource-acl:private`            | owner/显式 grant 的 private 可读 | 未获 write/execute 点仍拒绝 mutation/执行   |
-| user session     | `scripts:author`                  | 可读写脚本敏感字段               | 无 grant 脱敏/403；已保存 workflow 仍可执行 |
-| user session     | `resource-acl:bypass`             | 他人 private resource 200        | 无/撤销为 404                               |
-| user session     | `memory-distill-jobs:manage`      | HTTP + WS 可用                   | 无/撤销为 403 / permission-required         |
-| user session     | `intent:audit`                    | 跨 owner exact read / `all=1`    | mutation 仍 404；撤销读为 404               |
-| user session     | `mcp-runtime-tests:audit`         | exact-id transcript read         | latest 不枚举、end 不放行；无 grant 404     |
-| user session     | trigger update + `override-owner` | 跨 owner update/delete           | 撤销回 404                                  |
-| user session     | `users:read` + `users:write`      | list/create/patch other user     | self access snapshot 拒绝                   |
-| user session     | 全 24                             | 与 admin 的 73 点和真实能力一致  | 移除单点只收窄该能力                        |
-| PAT              | 任意 system-domain grant          | 无                               | 创建 matrix 拒绝且运行时剔除                |
-| delegated/WS     | grant/revoke                      | 下一 admission/revision 生效     | stale revision 不得继续收发/副作用          |
-| OIDC first login | policy=`guest/user`               | 新建号取得策略选择的预设         | 既有/受邀账户不被策略重写                   |
+| 主体             | 附加权限                          | 正向                               | 负向/撤销                                                                    |
+| ---------------- | --------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
+| guest session    | 无                                | 完整菜单；公开六类资源 list/detail | 无 read 点的菜单页为空且 request-free；backend 仍拒绝 private、写、任务/仓库 |
+| guest session    | `resource-acl:private`            | owner/显式 grant 的 private 可读   | 未获 write/execute 点仍拒绝 mutation/执行                                    |
+| user session     | `scripts:author`                  | 可读写脚本敏感字段                 | 无 grant 脱敏/403；已保存 workflow 仍可执行                                  |
+| user session     | `resource-acl:bypass`             | 他人 private resource 200          | 无/撤销为 404                                                                |
+| user session     | `memory-distill-jobs:manage`      | HTTP + WS 可用                     | 无/撤销为 403 / permission-required                                          |
+| user session     | `intent:audit`                    | 跨 owner exact read / `all=1`      | mutation 仍 404；撤销读为 404                                                |
+| user session     | `mcp-runtime-tests:audit`         | exact-id transcript read           | latest 不枚举、end 不放行；无 grant 404                                      |
+| user session     | trigger update + `override-owner` | 跨 owner update/delete             | 撤销回 404                                                                   |
+| user session     | `users:read` + `users:write`      | list/create/patch other user       | self access snapshot 拒绝                                                    |
+| user session     | 全 24                             | 与 admin 的 73 点和真实能力一致    | 移除单点只收窄该能力                                                         |
+| PAT              | 任意 system-domain grant          | 无                                 | 创建 matrix 拒绝且运行时剔除                                                 |
+| delegated/WS     | grant/revoke                      | 下一 admission/revision 生效       | stale revision 不得继续收发/副作用                                           |
+| OIDC first login | policy=`guest/user`               | 新建号取得策略选择的预设           | 既有/受邀账户不被策略重写                                                    |
 
 ## 4. 架构防护
 
@@ -99,6 +108,7 @@
 - `RouteMeta`、MCP tool 无 `identity`；退役 role helper 零引用；
 - system-domain 每点有真实生产消费方；
 - Create/Edit Dialog 只渲染共享目录组件；
+- 菜单始终映射完整 `NAV_GROUPS`；AppShell 从同一项解析目标页 permission，禁止另造 role/菜单 allowlist；
 - delegated opaque authority 和 WS DB revision/前端 refresh 围栏存在。
 
 新权限的最小变更路径固定为：

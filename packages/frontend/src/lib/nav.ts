@@ -1,8 +1,11 @@
 // RFC-032: navigation data model + active-state resolver.
 //
-// `NAV_GROUPS` is the source of truth for the three sidebar groups (agents /
-// workflows / tasks). `resolveActiveNav` is a pure function so unit tests can
-// exhaustively cover every route → group mapping without spinning up a router.
+// `NAV_GROUPS` is the source of truth for the sidebar groups. Navigation is a
+// stable product-discovery surface: every authenticated account sees the whole
+// catalog, while `permission` describes the destination's data capability and
+// never decides whether the menu row exists. `resolveActiveNav` is pure so unit
+// tests can exhaustively cover route → group mapping without spinning up a
+// router.
 
 import type { Permission } from '@agent-workflow/shared'
 import type { ResourceIconKey } from '@/components/icons/resourceIcons'
@@ -13,6 +16,7 @@ export interface SubNavItem {
   to: string
   i18nKey: string
   icon: ResourceIconKey
+  /** Data capability for the destination; not a navigation visibility gate. */
   permission: Permission
 }
 
@@ -100,12 +104,18 @@ export const NAV_GROUPS: NavGroupEntry[] = [
   },
 ]
 
-/** Permission-only navigation projection; empty groups disappear naturally. */
-export function navGroupsForPermissions(permissions: ReadonlySet<Permission>): NavGroupEntry[] {
-  return NAV_GROUPS.map((group) => ({
-    ...group,
-    subnav: group.subnav.filter((item) => permissions.has(item.permission)),
-  })).filter((group) => group.subnav.length > 0)
+/**
+ * Resolve the read capability that owns a visible navigation destination.
+ * Keeping this lookup on the same catalog prevents shell content gating from
+ * drifting away from the menu it protects.
+ */
+export function navPermissionForPath(pathname: string): Permission | null {
+  for (const group of NAV_GROUPS) {
+    for (const item of group.subnav) {
+      if (pathname === item.to || pathname.startsWith(item.to + '/')) return item.permission
+    }
+  }
+  return null
 }
 
 export interface ActiveNav {

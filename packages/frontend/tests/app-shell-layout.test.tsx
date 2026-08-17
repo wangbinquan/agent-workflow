@@ -263,6 +263,20 @@ afterEach(() => {
 })
 
 describe('RFC-198 responsive AppShell', () => {
+  test('permissionless destination keeps the complete menu without mounting protected content', () => {
+    vi.stubGlobal('matchMedia', undefined)
+    harness.permissionAllowed = false
+    render(
+      <AppShell pathname="/tasks">
+        <h1 data-testid="protected-task-content">Tasks</h1>
+      </AppShell>,
+    )
+
+    expect(screen.getByRole('link', { name: 'Tasks', exact: true })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Repos', exact: true })).toBeTruthy()
+    expect(screen.queryByTestId('protected-task-content')).toBeNull()
+  })
+
   // Regression: the Memory label and its pending count used to be separate
   // sibling links, which exposed two click targets and two keyboard stops for
   // one navigation row. The count is now status inside the stable Memory link.

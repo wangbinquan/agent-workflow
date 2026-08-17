@@ -192,7 +192,8 @@ tokenPermissions =
 ## 6. 用户故事
 
 1. 首次使用 OAuth/OIDC 登录且未被邀请的用户，在默认策略下创建为 `guest`，只能查看公开 agents、skills、MCP、plugins、workflows
-   和 workgroups，不能创建资源、读取或执行任务。
+   和 workgroups，不能创建资源、读取或执行任务。认证后的完整菜单仍然可见；没有对应 read permission 的菜单页为空且不发起数据请求，
+   菜单本身不承担授权。
 2. 持有 `oidc:configure` 的管理员在设置中把默认值改为普通用户后，下一个首次 OAuth/OIDC 用户创建为 `user`；既有用户与受邀
    用户不被改写。
 3. 访问管理员给普通用户勾选 `scripts:author`；该用户无需重新登录即可编辑自己可写工作流里的脚本，但仍受原资源 ACL。
@@ -243,7 +244,8 @@ binary 同时写同一用户访问快照，因为旧 binary 不推进 revision�
 - [x] **AC-10** PAT 公式使用有效账户上限且剔除 system-domain；range/resource 的撤销与恢复有真实 daemon 测试。
 - [x] **AC-11** 两个弹窗共用目录组件，搜索/来源/风险/约束/OCC/dirty/a11y/390px/light/dark/i18n 完整。
 - [x] **AC-12** `identity-access` 按 RFC-294 分层，跨模块仅经 exact public contracts，只有一个 grant/role/revision/audit writer。
-- [x] **AC-13** `guest` baseline 只能读取公开资源；private ACL、资源写、任务/仓库/设置均拒绝；显式追加权限后只开放对应能力。
+- [x] **AC-13** `guest` baseline 只能读取公开资源；private ACL、资源写、任务/仓库/设置均拒绝；完整菜单保持可见，无对应 read
+      permission 的菜单页为空且 request-free；显式追加权限后只开放对应能力。
 - [x] **AC-14** OIDC 自动建号默认 `guest`，设置页可原子切换为 `user`；新建号读取事务内策略快照，邀请流程不受影响。
 - [x] **AC-15** shared/backend/frontend/E2E、迁移、`bun run gate:local` 与固定提交实现审查全绿后提交上库。
 

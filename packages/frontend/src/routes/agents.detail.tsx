@@ -61,6 +61,7 @@ function AgentDetailPage() {
   const canUpdate = usePermission('agents:update')
   const canDelete = usePermission('agents:delete')
   const canExecuteTasks = usePermission('tasks:execute')
+  const canReadRuntime = usePermission('runtime:read')
   const tour = useTour()
   const [activeTab, setActiveTab] = useState<AgentTab>('basics')
   const [jsonFocusTarget, setJsonFocusTarget] = useState<AgentJsonFieldKey>()
@@ -301,6 +302,7 @@ function AgentDetailPage() {
         focusJsonField={jsonFocusTarget}
         onJsonFocusHandled={clearJsonFocusTarget}
         resourceStatus={resourceStatusQuery.data}
+        runtimeRegistryReadable={canReadRuntime}
       />
     </fieldset>
   )

@@ -2,6 +2,13 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ✅ **RFC-305 游客 UI follow-up（Done，2026-08-17）** —— 按用户实报修复三条并加固目录边界：①只读 Workflow 不再为未渲染的
+> palette/inspector 保留 grid rail，单轨 canvas 占满可用宽度；②所有已认证账户始终看到完整 `NAV_GROUPS`，同一目录项的 permission
+> 只作为 AppShell 内容挂载门，guest 无权目标页为空且不发数据请求，后端 gate 不变；③公开 Agent 详情缺少 `runtime:read` 时不请求也不
+> 消费 runtime registry 跨主体缓存，只保留禁用的已保存值。全程只看 effective permissions，无 `role === guest` 分支；RFC-305 架构锁新增
+> stable-nav / content-gate / nested-capability / read-only-layout seam。定向 frontend 51/51、真实 daemon Chromium 3/3、WebKit 3/3 已通过，
+> 应用内浏览器实测只读 editor `layoutWidth=canvasWidth=996px` 且资源页零 runtime error；按用户要求，完整 local gate 与 hosted CI 在 push 后执行。
+
 > ✅ **已完成 RFC（Done，2026-08-15）：[RFC-305 统一权限目录与用户级附加授权](design/RFC-305-user-permission-grants/proposal.md)** —— `admin/manager/user/guest` 仅是 73/61/49/7 点权限预设，授权消费者只检查 effective permissions；除内在 `account:self` 外，预设差集均可逐账户授予，普通 `user` 全授 24 点后与 admin 的 73 点授权面相同而角色 wire 仍为 `user`。`resource-acl:private` 将 private visibility 与普通 read 分离，guest baseline 只能查看六类公开资源，不能创建资源或读取/执行任务；OAuth/OIDC 首次自动建号默认 guest，管理员可在 Authentication 设置中切换为普通 user，邀请用户不受影响。shared 穷尽目录与双语自动 UI、迁移 0162/0163、RFC-294 `identity-access` 单 writer、revision CAS/audit/current authority/WS fence、用户弹窗与 permission-shaped UI 全部落地。实现后继 `aad4085e` 的 detached gate 7m44s 全绿（shared 2132 / frontend 6474 / backend 10931 pass，35 skip，0 fail），架构锁 12/12；exact-SHA CI 31886814586（36/36 jobs）、视觉回归 31886814578（44/44）、WebKit 31886829866（8/8 jobs）终态成功。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-306 工作流条件分支（端口级激活）](design/RFC-306-workflow-conditional-branching/proposal.md)** —— 输出端口可在 agent/script 端口配置里标记为「分支端口」，运行时以 `<port name="p" active="false">理由</port>` 显式关闭该端口的**全部出边**，下游子图以 `skipped` 结算（不是失败），任务照常 `done`。**不采用**「端口缺失 / envelope 缺失即断链」（会把漏写与模型跑飞洗成正常决策）；未标记一律激活，存量工作流零行为变化，越权标记按协议违规 `branch-port-not-declared` 同 session 重问。默认 OR 汇合、节点可切 `joinMode:'all'`；跳过沿 wrapper-loop / fanout / git 与 call 边界继承传播；上游重跑后跳过可被推翻（与 `done` 同一 freshness 语义 ⇒ **结算口径从 done-only 扩为 done ∪ skipped**，是本 RFC 最大的存量语义改动）；新增 `port-inactive` 退出条件、`port-empty` 兼容未激活；fanout 只有活跃分片进入聚合；review/clarify 跟随跳过不弹人工；不变量 T3 放宽为 done ∨ skipped；画布以灰虚线/置灰呈现运行轨迹（轨迹只由后端 `getTaskBranchTrace` 下发，前端不得重算），`skipped` 节点可人工「仍然执行」。按 RFC-294 落 `task-execution` 的 `domain/application/public`，偏离项（调用点仍在 `services/scheduler.ts`）已在 design §1.2 呈报。三件套 + 实现 + 测试 + E2E 全部落地。五轮反问逐条拍板见 proposal §6。

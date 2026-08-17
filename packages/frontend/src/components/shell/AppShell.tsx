@@ -16,9 +16,9 @@ import {
 import { useTranslation } from 'react-i18next'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
 import { UserMenu } from '@/components/UserMenu'
-import { usePermission } from '@/hooks/useActor'
+import { useCurrentPermissions, usePermission } from '@/hooks/useActor'
 import { useAuthoritySync } from '@/hooks/useAuthoritySync'
-import { resolveActiveNav, type ActiveNav, type SubNavItem } from '@/lib/nav'
+import { navPermissionForPath, resolveActiveNav, type ActiveNav, type SubNavItem } from '@/lib/nav'
 import { setInboxOpen, toggleInboxOpen, useInboxOpen } from '@/stores/inbox'
 import { CompactTopBar } from './CompactTopBar'
 import { InboxDrawer } from './InboxDrawer'
@@ -60,6 +60,13 @@ export function AppShell({ pathname, children }: AppShellProps) {
   useAuthoritySync()
   const compact = useCompactShell()
   const active = resolveActiveNav(pathname)
+  const permissions = useCurrentPermissions()
+  const destinationPermission = navPermissionForPath(pathname)
+  // RFC-305 guest follow-up: navigation remains a complete discovery surface,
+  // but a destination without its catalog read capability must not mount route
+  // children (and therefore must not start queries that can only return 403).
+  const canReadDestination =
+    destinationPermission === null || permissions.has(destinationPermission)
   const canReadTasks = usePermission('tasks:read')
   const inboxOpen = useInboxOpen()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -152,7 +159,7 @@ export function AppShell({ pathname, children }: AppShellProps) {
       )}
 
       <main ref={mainRef} className="content" tabIndex={-1} data-testid="app-shell-main">
-        {children}
+        {canReadDestination ? children : null}
       </main>
 
       <RouteCommitFocus

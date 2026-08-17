@@ -47,6 +47,7 @@ import {
   type SplitBusyRelease,
 } from '@/components/split/splitDirty'
 import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
+import { usePermission } from '@/hooks/useActor'
 import { TabBar } from '@/components/TabBar'
 import { TabPanels } from '@/components/split/TabPanels'
 import { mergeAgentImport } from '@/lib/agent-import-merge'
@@ -79,6 +80,7 @@ function AgentCreatePage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
+  const canReadRuntime = usePermission('runtime:read')
   const [draft, setDraft] = useState(emptyAgent)
   const [createMode, setCreateMode] = useState<CreateMode>('manual')
   const [packageDirty, setPackageDirty] = useState(false)
@@ -295,6 +297,7 @@ function AgentCreatePage() {
                   onJsonDraftChange={setJsonDraft}
                   focusJsonField={jsonFocusTarget}
                   onJsonFocusHandled={clearJsonFocusTarget}
+                  runtimeRegistryReadable={canReadRuntime}
                 />
               </>
             ),

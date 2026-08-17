@@ -20,6 +20,10 @@
 //     A single enabled runtime still supports inherit <-> explicit pin, while
 //     initial registry loading/error keeps a visible but inoperable selector;
 //     errors surface a retryable shared ErrorBanner.
+//  7. RFC-305 guest follow-up: a public agent remains readable without
+//     `runtime:read`; the form neither requests nor consumes a cached runtime
+//     registry and therefore never turns the expected permission boundary into
+//     a runtime-load error.
 //
 // The ModelSelect runtime-namespace behavior (#1/#2) still matters — RFC-113's
 // RuntimeFormDialog reuses <ModelSelect> per protocol — so those tests stay.
@@ -352,6 +356,38 @@ describe('AgentForm — runtime selector (RFC-111 / RFC-250)', () => {
     await waitFor(() => expect(runtimeAttempts).toBe(2))
     await waitFor(() => expect(trigger.disabled).toBe(false))
     expect(screen.queryByTestId('agent-runtime-load-error')).toBeNull()
+  })
+
+  test('unreadable registry stays request-free and ignores a cached privileged snapshot', () => {
+    const client = newClient()
+    client.setQueryData(['runtimes'], {
+      runtimes: [
+        {
+          name: 'private-runtime',
+          protocol: 'opencode',
+          enabled: true,
+          isDefault: true,
+          model: 'private/model',
+        },
+      ],
+    })
+    const initial: CreateAgent = {
+      ...emptyAgent(),
+      name: 'public-agent',
+      runtime: 'saved-runtime-name',
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <AgentForm value={initial} onChange={() => {}} runtimeRegistryReadable={false} />
+      </QueryClientProvider>,
+    )
+
+    const trigger = screen.getByRole('combobox', { name: /^Runtime$/ }) as HTMLButtonElement
+    expect(trigger.disabled).toBe(true)
+    expect(trigger.textContent).toContain('saved-runtime-name')
+    expect(trigger.textContent).not.toContain('private-runtime')
+    expect(screen.queryByTestId('agent-runtime-load-error')).toBeNull()
+    expect(fetchUrls.filter((url) => url.includes('/api/runtimes'))).toEqual([])
   })
 
   // With no claude runtime, the selector is the ONLY way to assign a custom
