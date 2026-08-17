@@ -69,6 +69,14 @@ export interface CodeWorkItemProjection {
   epoch: number
   /** Rounds newest first — the one someone is watching is the newest. */
   rounds: readonly CodeRoundProjection[]
+  /**
+   * How many rounds exist beyond the ones returned (T66).
+   *
+   * Always present, zero included. A truncated list that does not say it is
+   * truncated is the failure §11.7 names: a reader on an eighty-round merge
+   * request sees three and concludes that is all there was.
+   */
+  roundsHidden: number
 }
 
 export interface CodeRoundProjection {
@@ -226,6 +234,16 @@ export interface CodeWorkItemFilter {
 
 export interface CodeWorkItemProjectionQuery {
   page(
-    input: CodeWorkItemFilter & { limit?: number; cursor?: string | null },
+    input: CodeWorkItemFilter & {
+      limit?: number
+      cursor?: string | null
+      /**
+       * Rounds per item (T66). Defaults to the LIST bound; a caller looking at
+       * one item may widen it to the round window, and the query caps it there
+       * either way — twenty rounds across twenty items is the response size the
+       * bound exists to prevent.
+       */
+      roundLimit?: number
+    },
   ): Promise<CodeWorkItemPage>
 }

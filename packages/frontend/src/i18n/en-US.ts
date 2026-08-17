@@ -576,6 +576,9 @@ export const enUS: Resources = {
     enabled: 'Enabled',
     round: 'Round {{seq}}',
     roundPicker: 'Which round to show',
+    roundsHidden_one: '{{count}} earlier round is not shown.',
+    roundsHidden_other: '{{count}} earlier rounds are not shown.',
+    roundsShowMore: 'Show more rounds',
     bindingLabel: 'Which group configuration to use',
     bindingHint:
       'A capability with no configuration can never become ready — it has no agent to do the work.',

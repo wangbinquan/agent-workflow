@@ -26,6 +26,7 @@ import {
 } from '../src/db/schema'
 import {
   ROUNDS_PER_ITEM,
+  ROUND_WINDOW,
   createCodeMatrixQuery,
   createCodeRoundAttemptsQuery,
   createCodeWorkItemProjectionQuery,
@@ -235,6 +236,95 @@ describe('RFC-304 — the work-item projection', () => {
     await seedItem('monitor', NOW + 1, 'mr-monitor')
     const page = await createCodeWorkItemProjectionQuery(db).page({ capability: 'mr-review' })
     expect(page.items.map((i) => i.workItemId)).toEqual(['review'])
+  })
+
+  test('a truncated round list SAYS how many it is hiding', async () => {
+    // T66's own module header names this failure: "a view that renders 20 while
+    // the query returns 3 shows a truncated list with no indication it was
+    // truncated". That was the state of things — the page rendered whatever
+    // arrived and a reader on an 80-round merge request saw three and had no
+    // way to know there were seventy-seven more.
+    //
+    // Naming the number rather than saying "recent rounds": a count cannot be
+    // misread as completeness, and a phrase can.
+    await seedItem('busy', NOW)
+    await db.insert(codeWorkRounds).values(
+      Array.from({ length: 12 }, (_, i) => ({
+        id: `h${String(i)}`,
+        workItemId: 'busy',
+        roundSeq: i + 1,
+        epoch: 1,
+        outcome: 'published' as const,
+        startedAt: NOW + i,
+        endedAt: NOW + i + 1,
+      })),
+    )
+
+    const page = await createCodeWorkItemProjectionQuery(db).page({})
+    expect(page.items[0]?.roundsHidden).toBe(12 - ROUNDS_PER_ITEM)
+  })
+
+  test('an item whose rounds all fit hides nothing, and says so with a zero', async () => {
+    // Zero rather than absent, so a caller that renders the field
+    // unconditionally cannot accidentally suppress the truncation notice by
+    // treating "no key" as "nothing hidden".
+    await seedItem('quiet', NOW)
+    await db.insert(codeWorkRounds).values({
+      id: 'only',
+      workItemId: 'quiet',
+      roundSeq: 1,
+      epoch: 1,
+      outcome: 'published',
+      startedAt: NOW,
+      endedAt: NOW + 1,
+    })
+
+    const page = await createCodeWorkItemProjectionQuery(db).page({})
+    expect(page.items[0]?.roundsHidden).toBe(0)
+  })
+
+  test('one item may be expanded to the full round WINDOW, still bounded', async () => {
+    // The list stays at three per item — twenty rounds each across twenty items
+    // is the response size T66 exists to bound. Asking about ONE item is the
+    // different question, and the design answers it with "current + last 20".
+    await seedItem('busy', NOW)
+    await db.insert(codeWorkRounds).values(
+      Array.from({ length: 30 }, (_, i) => ({
+        id: `w${String(i)}`,
+        workItemId: 'busy',
+        roundSeq: i + 1,
+        epoch: 1,
+        outcome: 'published' as const,
+        startedAt: NOW + i,
+        endedAt: NOW + i + 1,
+      })),
+    )
+
+    const page = await createCodeWorkItemProjectionQuery(db).page({ roundLimit: ROUND_WINDOW })
+    expect(page.items[0]?.rounds).toHaveLength(ROUND_WINDOW)
+    expect(page.items[0]?.rounds[0]?.roundSeq).toBe(30)
+    expect(page.items[0]?.roundsHidden).toBe(10)
+  })
+
+  test('a caller cannot ask for more than the window — the cap is the query’s, not the caller’s', async () => {
+    // Otherwise the bound is advisory: one `?rounds=5000` and the response
+    // carries a merge request's entire history, which is the shape §11.4's
+    // arithmetic says will exist by the third month.
+    await seedItem('busy', NOW)
+    await db.insert(codeWorkRounds).values(
+      Array.from({ length: 30 }, (_, i) => ({
+        id: `c${String(i)}`,
+        workItemId: 'busy',
+        roundSeq: i + 1,
+        epoch: 1,
+        outcome: 'published' as const,
+        startedAt: NOW + i,
+        endedAt: NOW + i + 1,
+      })),
+    )
+
+    const page = await createCodeWorkItemProjectionQuery(db).page({ roundLimit: 5_000 })
+    expect(page.items[0]?.rounds).toHaveLength(ROUND_WINDOW)
   })
 
   test('a long-lived merge request returns its LATEST rounds, not all of them', async () => {

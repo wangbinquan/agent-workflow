@@ -1336,6 +1336,9 @@ export interface Resources {
     enabled: string
     round: string
     roundPicker: string
+    roundsHidden_one: string
+    roundsHidden_other: string
+    roundsShowMore: string
     bindingLabel: string
     bindingHint: string
     bindingNone: string
@@ -7025,6 +7028,11 @@ export const zhCN: Resources = {
     enabled: '已启用',
     round: '第 {{seq}} 轮',
     roundPicker: '查看哪一轮',
+    // 中文没有单复数变化，两个键给同一句——i18next 仍会按 count 选键，
+    // 少一个就会在 count===1 时回落到英文。
+    roundsHidden_one: '还有 {{count}} 轮未显示。',
+    roundsHidden_other: '还有 {{count}} 轮未显示。',
+    roundsShowMore: '显示更多轮次',
     bindingLabel: '使用哪个小组层模板',
     bindingHint: '没选模板的能力永远不会就绪——它不知道该用哪个 agent 干活。',
     bindingNone: '（未选择）',

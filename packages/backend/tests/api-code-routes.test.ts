@@ -238,6 +238,26 @@ describe('RFC-304 — listing work items', () => {
     expect(JSON.stringify(await res.json())).toContain('code-limit-invalid')
   })
 
+  test('a non-numeric round count is refused by its own name (T66)', async () => {
+    // Its own code rather than `code-limit-invalid`: two numeric parameters on
+    // one endpoint, and a caller told "limit is invalid" while `rounds` is the
+    // mistyped one goes looking in the wrong place.
+    const { app } = buildApp()
+    const res = await app.request('/api/code/work-items?rounds=all', { headers: auth })
+    expect(res.status).toBeGreaterThanOrEqual(400)
+    expect(JSON.stringify(await res.json())).toContain('code-rounds-invalid')
+  })
+
+  test('an empty page still reports how many rounds it is hiding', async () => {
+    // Zero, not absent. The page renders the notice from this field
+    // unconditionally, so a missing key would read as "nothing hidden" on every
+    // item — which is the silent truncation T66 exists to end.
+    const { app } = buildApp()
+    const res = await app.request('/api/code/work-items?rounds=20', { headers: auth })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ items: [], nextCursor: null })
+  })
+
   test('without a bearer token it is refused', async () => {
     const { app } = buildApp()
     expect((await app.request('/api/code/work-items')).status).toBe(401)

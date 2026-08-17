@@ -110,6 +110,8 @@ interface WorkItemRow {
   status: string
   epoch: number
   rounds: RoundRow[]
+  /** T66 — rounds beyond the ones sent. Always present, zero included. */
+  roundsHidden: number
 }
 
 /**
@@ -360,10 +362,17 @@ function MatrixPanel() {
  */
 function ActivityPanel() {
   const { t } = useTranslation()
+  // T66 — the list asks for a few rounds per item; opening one asks for the
+  // window. Widening is per work item rather than global: twenty rounds across
+  // twenty items is the response size the bound exists to prevent, and one
+  // person reading one merge request should not enlarge everybody else's.
+  const [widened, setWidened] = useState<string | null>(null)
   const items = useQuery({
-    queryKey: ['code-work-items'],
+    queryKey: ['code-work-items', widened],
     queryFn: () =>
-      api.get<{ items: WorkItemRow[]; nextCursor: string | null }>('/api/code/work-items'),
+      api.get<{ items: WorkItemRow[]; nextCursor: string | null }>(
+        widened === null ? '/api/code/work-items' : '/api/code/work-items?rounds=20',
+      ),
   })
 
   if (items.isPending) return <LoadingState />
@@ -383,7 +392,10 @@ function ActivityPanel() {
               </strong>
               <StatusChip kind="info">{item.status}</StatusChip>
             </div>
-            <WorkItemRounds item={item} />
+            <WorkItemRounds
+              item={item}
+              {...(widened === null ? { onShowMore: () => setWidened(item.workItemId) } : {})}
+            />
           </li>
         ))}
       </ul>
@@ -402,7 +414,14 @@ function ActivityPanel() {
  *
  * The newest round is selected by default because that is the one in flight.
  */
-function WorkItemRounds({ item }: { item: WorkItemRow }): ReactElement | null {
+function WorkItemRounds({
+  item,
+  onShowMore,
+}: {
+  item: WorkItemRow
+  /** Widens the request to the full round window; absent once already widened. */
+  onShowMore?: () => void
+}): ReactElement | null {
   const { t } = useTranslation()
   // Rounds arrive newest first, which is also the order the switcher shows
   // them — most recent on the left, where the eye starts.
@@ -432,6 +451,22 @@ function WorkItemRounds({ item }: { item: WorkItemRow }): ReactElement | null {
         <span>{t('code.round', { seq: round.roundSeq })}</span>
         <StatusChip kind={roundKind(round.status)}>{round.status}</StatusChip>
       </div>
+
+      {/* T66 — say what is not shown, and name the number.
+          A switcher listing three rounds on a merge request with eighty is a
+          truncated list that looks complete; "showing recent rounds" is the
+          phrasing that lets a reader believe they have seen everything, so this
+          states the count instead. */}
+      {item.roundsHidden > 0 && (
+        <p className="page__section" data-testid={`code-rounds-hidden-${item.workItemId}`}>
+          {t('code.roundsHidden', { count: item.roundsHidden })}{' '}
+          {onShowMore !== undefined && (
+            <button type="button" className="btn btn--xs" onClick={onShowMore}>
+              {t('code.roundsShowMore')}
+            </button>
+          )}
+        </p>
+      )}
 
       <ol data-testid={`code-stages-${round.roundId}`}>
         {round.stages.map((stage) => (

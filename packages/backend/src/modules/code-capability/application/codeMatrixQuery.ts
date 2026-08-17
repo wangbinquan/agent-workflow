@@ -4,7 +4,7 @@
 // is the pairing the page needs: a readiness state next to the specific missing
 // piece next to where that piece is configured.
 
-import { and, desc, eq, lt, type SQL } from 'drizzle-orm'
+import { and, desc, eq, lt, sql, type SQL } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { codeAiAttempts, codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
 import {
@@ -17,6 +17,12 @@ import { listCapabilityCells } from '@/modules/code-capability/infrastructure/sq
 import { gatherReadinessFacts } from '@/modules/code-capability/application/readinessFacts'
 import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
 import { repairActionsFor } from '@/modules/code-capability/domain/repairActions'
+export {
+  ROUND_WINDOW,
+  ATTEMPT_PAGE,
+  VIRTUALISE_THRESHOLD,
+} from '@/modules/code-capability/domain/stateViewScale'
+import { ROUND_WINDOW, roundWindow } from '@/modules/code-capability/domain/stateViewScale'
 import { deriveReadiness } from '@/modules/code-capability/domain/templateLayers'
 import type {
   CodeAiAttemptProjection,
@@ -198,9 +204,15 @@ export function createCodeWorkItemProjectionQuery(db: DbClient): CodeWorkItemPro
         // query — and without claiming there is one when the last page is full.
         .limit(limit + 1)
 
+      // The caller may widen this to the full window when it is looking at ONE
+      // item; the LIST stays narrow, because twenty rounds across twenty items
+      // is the response size T66 exists to bound.
+      const roundLimit = Math.max(1, Math.min(input.roundLimit ?? ROUNDS_PER_ITEM, ROUND_WINDOW))
+
       const page = rows.slice(0, limit)
       const items: CodeWorkItemProjection[] = []
       for (const row of page) {
+        const projected = await projectRounds(db, row.id, roundLimit)
         items.push({
           workItemId: row.id,
           capability: row.capability,
@@ -208,7 +220,11 @@ export function createCodeWorkItemProjectionQuery(db: DbClient): CodeWorkItemPro
           anchorId: row.anchorId,
           status: row.status,
           epoch: row.epoch,
-          rounds: await projectRounds(db, row.id),
+          rounds: projected.rounds,
+          // Always present, even at zero: a caller that renders it
+          // unconditionally cannot accidentally suppress the notice by reading
+          // a missing key as "nothing hidden".
+          roundsHidden: projected.hidden,
         })
       }
 
@@ -240,13 +256,26 @@ export function deriveRoundStatus(outcome: string | null, endedAt: number | null
   return endedAt === null ? 'settling' : outcome
 }
 
-async function projectRounds(db: DbClient, workItemId: string): Promise<CodeRoundProjection[]> {
+async function projectRounds(
+  db: DbClient,
+  workItemId: string,
+  limit: number,
+): Promise<{ rounds: CodeRoundProjection[]; hidden: number }> {
+  // The total first, because the count is the point: T66's failure is a
+  // truncated list that looks complete, and a reader on an eighty-round merge
+  // request seeing three has no way to tell which they are looking at.
+  const [counted] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(codeWorkRounds)
+    .where(eq(codeWorkRounds.workItemId, workItemId))
+  const total = counted?.n ?? 0
+
   const rounds = await db
     .select()
     .from(codeWorkRounds)
     .where(eq(codeWorkRounds.workItemId, workItemId))
     .orderBy(desc(codeWorkRounds.roundSeq))
-    .limit(ROUNDS_PER_ITEM)
+    .limit(limit)
 
   const out: CodeRoundProjection[] = []
   for (const round of rounds) {
@@ -279,7 +308,12 @@ async function projectRounds(db: DbClient, workItemId: string): Promise<CodeRoun
       ),
     })
   }
-  return out
+
+  // `roundWindow` rather than arithmetic here: the page and the query must not
+  // be able to disagree about the bound, which is exactly why the constants and
+  // the slice live in one domain module.
+  const window = roundWindow({ total, limit })
+  return { rounds: out, hidden: window.hidden }
 }
 
 /**

@@ -154,6 +154,15 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
       const capability = c.req.query('capability')
       const cursor = c.req.query('cursor')
 
+      // T66 — how many rounds each item carries. The page asks for more when a
+      // person opens ONE work item; the query caps it at the round window
+      // either way, so this widens the answer without unbounding it.
+      const roundsRaw = c.req.query('rounds')
+      const roundLimit = roundsRaw === undefined ? undefined : Number(roundsRaw)
+      if (roundLimit !== undefined && !Number.isFinite(roundLimit)) {
+        throw new ValidationError('code-rounds-invalid', `'${String(roundsRaw)}' is not a number`)
+      }
+
       return c.json(
         await projection.page({
           ...(endpointId !== undefined ? { codeHostEndpointId: endpointId } : {}),
@@ -161,6 +170,7 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
           ...(capability !== undefined ? { capability } : {}),
           ...(limit !== undefined ? { limit } : {}),
           ...(cursor !== undefined ? { cursor } : {}),
+          ...(roundLimit !== undefined ? { roundLimit } : {}),
         }),
       )
     },
