@@ -319,7 +319,8 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 - **`when` 接合成轴**（上条 +86400000），别用真实 `Date.now()`——否则 drizzle 对既有安装静默跳过，之后每查 `no such column`，从零建库看不见。
 - **手写多语句要 `--> statement-breakpoint`**（精确这个字面量，仓库迁移器只认它），否则只应用第一条。
 - **加迁移必 bump `upgrade-rolling.test.ts` 的 journal-count 锁**（N→N+1）；1 个本地 bun-test 红别当 flaky，先定位 `(fail)`。
-- **已应用的迁移被追改，drizzle 永不重放** → daemon 健康但起任务 500 `no-such-column`；要补 ALTER 用**新迁移**别追改旧的、别删记账行。
+- **已应用的迁移被追改，drizzle 永不重放** → daemon 健康但起任务 500 `no-such-column`；要补 ALTER 用**新迁移**别追改旧的、别删记账行。RFC-275 admission 上线后症状前移：`bun dev` 直接 `migration-history-preflight … hash differs (<库里> != <文件>)` 拒启，vite 永远停在 `waiting for daemon to publish .daemon.info`。
+- **「追改」也包括开发期改自己那条还没提交的迁移——本机 dev DB 已经吃过草稿版**（2026-08-17，RFC-309 0174 实证）：草稿 0174 在真实 `~/.agent-workflow` 上跑过一次，随后作者修掉了「rebuild `code_findings` 时漏抄 0165 加的 4 列」再提交，于是本机既有**对不上的记账 hash**、又有**任何迁移链都产不出的物理表**（缺 `resolved_at`/`code_changed_at`/`resolved_round_id`/`code_changed_round_id`，且 cid 顺序偏移连带 `idx_code_findings_seen` 不一致）。**别急着重建库**（这类 dev home 往往攒着上百个 task / workflow）：①用 `schemaAdmission.ts` 的 `readExpectedMigrationChain` + `collectPhysicalSchemaManifest` + `diffPhysicalSchema`，把「migrations 目录裁到库里已应用的最后一条」replay 进 `:memory:` 再和真库对，先分清「只是 hash 错」还是「物理 schema 真的不同」；②物理有差就照**规范文件里那几条语句原样重放**（含 `__new_*` 建表 + RENAME，别自己手写 `ALTER ADD COLUMN`——admission 连 cid 顺序和 CREATE 文本都比）；③最后才把该条记账 hash 改成规范文件的 sha256（`LEGACY_MIGRATION_HASHES` 是给生产库历史字节的白名单，**不要**往里塞本机草稿 hash）；④动手前 `cp db.sqlite db.sqlite.bak-pre-<slug>-<ts>`。根因侧：带迁移的未定稿代码一律先 `AGENT_WORKFLOW_HOME=~/aw-<slug>` 跑（见下文 dev-env 条）。
 - **加任何 `tasks` 列会破「冻结旧迁移」的测试**（drizzle INSERT emit 所有 HEAD 列 → `no column named …`）；fixture 用显式列 raw SQL 修。
 - **推 `migrations/`/`_journal.json` 前跑完整 backend `bun test`**（不只迁移子集）——journal↔files 失配（含并发 orphan 条目）级联数千 DB 测试红而子集绿。
 - **表达式唯一索引**（如 `COALESCE(owner,'')`,name）用 `PRAGMA index_list`/`index_xinfo`/`sqlite_master` 验证，**不能**用 `table_info`。
