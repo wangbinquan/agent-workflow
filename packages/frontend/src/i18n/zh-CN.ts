@@ -1336,6 +1336,21 @@ export interface Resources {
     enabled: string
     round: string
     roundPicker: string
+    bulk: {
+      open: string
+      title: string
+      repos: string
+      reposHint: string
+      capability: string
+      binding: string
+      enabled: string
+      preview: string
+      apply: string
+      undo_one: string
+      undo_other: string
+      failures_one: string
+      failures_other: string
+    }
     roundsHidden_one: string
     roundsHidden_other: string
     roundsShowMore: string
@@ -7028,6 +7043,21 @@ export const zhCN: Resources = {
     enabled: '已启用',
     round: '第 {{seq}} 轮',
     roundPicker: '查看哪一轮',
+    bulk: {
+      open: '批量修改多个仓库',
+      title: '把一项能力变更应用到多个仓库',
+      repos: '仓库',
+      reposHint: '一个仓库 id 一个标签。每个都会被显式写入——没有「继承值」需要事后去别处查。',
+      capability: '能力',
+      binding: '小组配置',
+      enabled: '开启该能力',
+      preview: '预览',
+      apply: '应用',
+      undo_one: '撤销（{{count}} 个仓库）',
+      undo_other: '撤销（{{count}} 个仓库）',
+      failures_one: '{{count}} 个失败',
+      failures_other: '{{count}} 个失败',
+    },
     // 中文没有单复数变化，两个键给同一句——i18next 仍会按 count 选键，
     // 少一个就会在 count===1 时回落到英文。
     roundsHidden_one: '还有 {{count}} 轮未显示。',

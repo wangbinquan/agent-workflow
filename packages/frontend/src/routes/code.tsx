@@ -29,6 +29,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
+import { ChipsInput } from '@/components/ChipsInput'
 import { Dialog } from '@/components/Dialog'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
@@ -216,6 +217,7 @@ function MatrixPanel() {
   const navigate = Route.useNavigate()
   const queryClient = useQueryClient()
   const [repoDraft, setRepoDraft] = useState(search.repo ?? '')
+  const [bulkOpen, setBulkOpen] = useState(false)
   const repoId = search.repo ?? ''
 
   const matrix = useQuery({
@@ -273,7 +275,20 @@ function MatrixPanel() {
         <button type="submit" className="btn btn--primary btn--sm">
           {t('code.load')}
         </button>
+        {/* T63 — the same change across many repositories. Beside the single-repo
+            form on purpose: it is the same edit, and separating them into
+            different places invites two ways to configure a cell. */}
+        <button
+          type="button"
+          className="btn btn--sm"
+          data-testid="code-bulk-open"
+          onClick={() => setBulkOpen(true)}
+        >
+          {t('code.bulk.open')}
+        </button>
       </form>
+
+      <BulkEnableDialog open={bulkOpen} onClose={() => setBulkOpen(false)} />
 
       {repoId === '' ? (
         <EmptyState title={t('code.pickRepo')} />
@@ -738,6 +753,192 @@ interface BindingRow {
  * and a script editor; starting from one that works and adjusting the binding
  * is what a team actually does, and it needs neither.
  */
+/**
+ * T63 — one capability change, applied to many repositories.
+ *
+ * The design rejected inheritance, so this is not "set it at the org level": it
+ * is an explicit write to each named cell, and the matrix goes on answering
+ * "why is this repository doing that?" locally. Which is exactly why preview
+ * and revert are here rather than promised later — a bulk edit is a real edit,
+ * a few hundred of them.
+ *
+ * Repository ids as chips rather than a server-side selector: a selector puts
+ * "which repositories did this actually match?" back out of the author's reach,
+ * and that question is what preview exists to answer.
+ */
+function BulkEnableDialog({ open, onClose }: { open: boolean; onClose: () => void }): ReactElement {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  // Self-contained: the dialog asks for what it renders rather than having the
+  // matrix panel thread three lists through. Both are cached by the same query
+  // keys the rest of the page uses, so this costs nothing extra.
+  const capabilities = useQuery({
+    queryKey: ['code-capabilities'],
+    queryFn: () => api.get<{ items: CapabilityCatalogRow[] }>('/api/code/capabilities'),
+  })
+  const bindings = useQuery({
+    queryKey: ['capability-bindings'],
+    queryFn: () => api.get<BindingRow[]>('/api/capability-bindings'),
+  })
+  const frameworks = useQuery({
+    queryKey: ['capability-frameworks'],
+    queryFn: () => api.get<FrameworkRow[]>('/api/capability-frameworks'),
+  })
+  const [repoIds, setRepoIds] = useState<string[]>([])
+  const [capability, setCapability] = useState('')
+  const [bindingId, setBindingId] = useState('')
+  const [enabled, setEnabled] = useState(true)
+  const [preview, setPreview] = useState<BulkPreviewResponse | null>(null)
+  const [undo, setUndo] = useState<readonly CellChangeRow[] | null>(null)
+
+  const call = useMutation({
+    mutationFn: (input: { preview: boolean; changes?: readonly CellChangeRow[] }) =>
+      api.post<BulkPreviewResponse>('/api/code/matrix/bulk', {
+        repoIds: input.changes?.map((c) => c.repoId) ?? repoIds,
+        capability,
+        // A revert re-applies the recorded `before`; every change in one batch
+        // shares it, so the first entry carries the whole answer.
+        enabled: input.changes?.[0]?.after.enabled ?? enabled,
+        bindingId: input.changes?.[0]?.after.bindingId ?? (bindingId === '' ? null : bindingId),
+        preview: input.preview,
+      }),
+    onSuccess: (data, input) => {
+      setPreview(data)
+      if (!input.preview) {
+        setUndo(data.undo ?? null)
+        void queryClient.invalidateQueries({ queryKey: ['code-matrix'] })
+      }
+    },
+  })
+
+  const close = (): void => {
+    setPreview(null)
+    setUndo(null)
+    onClose()
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onClose={close}
+      title={t('code.bulk.title')}
+      footer={
+        <>
+          <button type="button" className="btn btn--sm" onClick={close}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--sm"
+            data-testid="code-bulk-preview"
+            disabled={repoIds.length === 0 || capability === '' || call.isPending}
+            onClick={() => call.mutate({ preview: true })}
+          >
+            {t('code.bulk.preview')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--sm btn--primary"
+            data-testid="code-bulk-apply"
+            // Apply is reachable only AFTER a preview: the author has to have
+            // been shown the counts before several hundred cells move.
+            disabled={preview === null || call.isPending}
+            onClick={() => call.mutate({ preview: false })}
+          >
+            {t('code.bulk.apply')}
+          </button>
+        </>
+      }
+    >
+      <Field label={t('code.bulk.repos')} hint={t('code.bulk.reposHint')}>
+        <ChipsInput value={repoIds} onChange={setRepoIds} testidPrefix="code-bulk-repo" />
+      </Field>
+      <Field label={t('code.bulk.capability')} required>
+        <Select
+          value={capability}
+          onChange={setCapability}
+          options={(capabilities.data?.items ?? []).map((c) => ({
+            value: c.capability,
+            label: c.capability,
+          }))}
+          ariaLabel={t('code.bulk.capability')}
+        />
+      </Field>
+      <Field label={t('code.bulk.binding')}>
+        <Select
+          value={bindingId}
+          onChange={setBindingId}
+          options={[
+            { value: '', label: t('code.bindingNone') },
+            // Filtered to the chosen capability, through the binding's
+            // framework. Offering every binding invites pointing `ci-fix` at a
+            // review binding — which the round would only discover at its first
+            // AI stage, on somebody's merge request.
+            ...(bindings.data ?? [])
+              .filter(
+                (b) =>
+                  capability === '' ||
+                  (frameworks.data ?? []).find((f) => f.id === b.frameworkId)?.capability ===
+                    capability,
+              )
+              .map((b) => ({ value: b.id, label: b.name })),
+          ]}
+          ariaLabel={t('code.bulk.binding')}
+        />
+      </Field>
+      <Switch checked={enabled} onChange={setEnabled} label={t('code.bulk.enabled')} />
+
+      {call.isError && <ErrorBanner error={call.error} />}
+
+      {preview !== null && (
+        <p data-testid="code-bulk-summary">
+          {/* The counts, separately. "This will change 12" reads very
+              differently from "matched 200, 188 already set" — and the second
+              is what tells the author their list is wider than they meant. */}
+          {preview.preview.message}
+          {preview.failures.length > 0 && (
+            <>
+              {' '}
+              <StatusChip kind="danger" size="sm">
+                {t('code.bulk.failures', { count: preview.failures.length })}
+              </StatusChip>
+            </>
+          )}
+        </p>
+      )}
+
+      {undo !== null && undo.length > 0 && (
+        <button
+          type="button"
+          className="btn btn--sm btn--danger"
+          data-testid="code-bulk-undo"
+          onClick={() => call.mutate({ preview: false, changes: undo })}
+        >
+          {t('code.bulk.undo', { count: undo.length })}
+        </button>
+      )}
+    </Dialog>
+  )
+}
+
+interface CellChangeRow {
+  repoId: string
+  capability: string
+  before: { enabled: boolean; bindingId: string | null } | null
+  after: { enabled: boolean; bindingId: string | null }
+}
+
+interface BulkPreviewResponse {
+  preview: {
+    creates: CellChangeRow[]
+    updates: CellChangeRow[]
+    noOps: CellChangeRow[]
+    message: string
+  }
+  undo?: readonly CellChangeRow[]
+  failures: ReadonlyArray<{ repoId: string; message: string }>
+}
+
 function TemplatesPanel(): ReactElement {
   const { t } = useTranslation()
   const queryClient = useQueryClient()

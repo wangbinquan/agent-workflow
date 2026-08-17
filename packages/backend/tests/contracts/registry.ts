@@ -168,6 +168,11 @@ export const ENDPOINTS: EndpointSpec[] = [
   // `scripts:author`。
   { method: 'GET', path: '/api/code/matrix/:repoId' },
   { method: 'PUT', path: '/api/code/matrix/:repoId' },
+  // RFC-304 T63 — the same cell change across many repositories. POST rather
+  // than PUT because it is not addressed at one resource, and one endpoint with
+  // a `preview` flag rather than two so the preview cannot describe something
+  // the apply does not do.
+  { method: 'POST', path: '/api/code/matrix/bulk' },
   { method: 'GET', path: '/api/code/work-items' },
   // RFC-304 T61 — the troubleshooting chain's read side.
   { method: 'GET', path: '/api/code/deliveries' },

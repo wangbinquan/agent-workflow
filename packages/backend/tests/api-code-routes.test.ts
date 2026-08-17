@@ -221,6 +221,57 @@ describe('RFC-304 T61 — the troubleshooting chain over HTTP', () => {
   })
 })
 
+describe('RFC-304 T63 — the bulk endpoint', () => {
+  test('it PREVIEWS by default — a caller who forgets the flag does not write 200 cells', async () => {
+    // The safe direction for a missing field. The opposite default turns a
+    // typo in a script into a configuration change nobody reviewed.
+    const { app } = buildApp()
+    const res = await app.request('/api/code/matrix/bulk', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ repoIds: ['r1'], capability: 'mr-review', enabled: true }),
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { preview: { creates: unknown[] }; undo?: unknown }
+    expect(body.preview.creates).toHaveLength(1)
+    // No `undo`, because nothing was applied — offering one would imply it was.
+    expect(body.undo).toBeUndefined()
+  })
+
+  test('an empty repository list is refused rather than treated as "all"', async () => {
+    // The most dangerous possible interpretation of an omission.
+    const { app } = buildApp()
+    const res = await app.request('/api/code/matrix/bulk', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ repoIds: [], capability: 'mr-review', enabled: true }),
+    })
+    expect(res.status).toBeGreaterThanOrEqual(400)
+    expect(JSON.stringify(await res.json())).toContain('code-bulk-invalid')
+  })
+
+  test('an unknown capability is refused by name', async () => {
+    const { app } = buildApp()
+    const res = await app.request('/api/code/matrix/bulk', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ repoIds: ['r1'], capability: 'mr-invented', enabled: true }),
+    })
+    expect(res.status).toBeGreaterThanOrEqual(400)
+    expect(JSON.stringify(await res.json())).toContain('code-unknown-capability')
+  })
+
+  test('without a bearer token it is refused', async () => {
+    const { app } = buildApp()
+    const res = await app.request('/api/code/matrix/bulk', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ repoIds: ['r1'], capability: 'mr-review', enabled: true }),
+    })
+    expect(res.status).toBe(401)
+  })
+})
+
 describe('RFC-304 — listing work items', () => {
   test('an empty deployment returns an empty page with no cursor', async () => {
     const { app } = buildApp()

@@ -196,7 +196,9 @@ const OVERLAY_CALLSITES = {
   // all: a department framework, and the group binding that names which agent
   // fills each of its AI slots. Before them the matrix could switch a
   // capability on but never point it at a configuration.
-  'routes/code.tsx': { family: 'resource-management', count: 2 },
+  // T63 added the bulk-change dialog: preview → apply → undo, all in one
+  // overlay because they are one decision the author is making.
+  'routes/code.tsx': { family: 'resource-management', count: 3 },
   'routes/reviews.detail.tsx': { family: 'review-and-clarify', count: 1 },
 
   'components/fusion/FuseDialog.tsx': { family: 'memory-and-fusion', count: 1 },

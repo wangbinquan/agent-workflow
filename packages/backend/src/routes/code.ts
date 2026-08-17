@@ -29,6 +29,7 @@ import {
   createCodeWorkItemProjectionQuery,
 } from '@/modules/code-capability/application/codeMatrixQuery'
 import { createCodeMetricsQuery } from '@/modules/code-capability/application/codeMetricsQuery'
+import { createBulkEnableCommand } from '@/modules/code-capability/application/bulkEnableCommand'
 import { createEnableCommand } from '@/modules/code-capability/application/enableCommand'
 import { CODE_CAPABILITIES } from '@/modules/code-capability/domain/stageContract'
 import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
@@ -43,6 +44,19 @@ const EnableBodySchema = z.object({
   enabled: z.boolean(),
   bindingId: z.string().nullable().optional(),
   triggerConfig: z.record(z.unknown()).optional(),
+})
+
+const BulkBodySchema = z.object({
+  // A list, not a selector expression: the design's bulk change is an explicit
+  // write to each named cell, and a server-side selector would put the "which
+  // repositories did this actually match" question back out of the author's
+  // reach — the thing preview exists to answer.
+  repoIds: z.array(z.string().min(1)).min(1),
+  capability: z.string().min(1),
+  enabled: z.boolean(),
+  bindingId: z.string().nullable().optional(),
+  /** Defaults to a preview: the safe direction when a caller forgets the flag. */
+  preview: z.boolean().optional(),
 })
 
 export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
@@ -173,6 +187,51 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
           ...(roundLimit !== undefined ? { roundLimit } : {}),
         }),
       )
+    },
+  )
+
+  // RFC-304 T63 — the same cell write, applied to many repositories at once.
+  //
+  // One endpoint with a `preview` flag rather than two: preview and apply take
+  // exactly the same input and differ only in whether they write, and two
+  // endpoints would let them drift so that the preview describes something the
+  // apply does not do.
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/matrix/bulk',
+      permissions: ['repos:update'],
+      tokenAccess: 'allow',
+      summary: 'Preview or apply one capability change across many repositories',
+    },
+    async (c) => {
+      const parsed = BulkBodySchema.safeParse(await safeJsonOrThrowInvalid(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError(
+          'code-bulk-invalid',
+          parsed.error.issues[0]?.message ?? 'invalid body',
+        )
+      }
+
+      const result = await createBulkEnableCommand(deps.db).run({
+        repoIds: parsed.data.repoIds,
+        capability: parsed.data.capability,
+        enabled: parsed.data.enabled,
+        actorUserId: actorOf(c).user.id,
+        preview: parsed.data.preview ?? true,
+        ...(parsed.data.bindingId !== undefined ? { bindingId: parsed.data.bindingId } : {}),
+      })
+
+      if (!result.ok) {
+        // Spelled out rather than interpolated, so both codes are greppable and
+        // the route-error guard can see them.
+        throw new ValidationError(
+          result.code === 'unknown-capability' ? 'code-unknown-capability' : 'code-too-many-repos',
+          result.message,
+        )
+      }
+      return c.json(result)
     },
   )
 
