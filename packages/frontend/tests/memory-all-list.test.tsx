@@ -83,7 +83,7 @@ afterEach(() => {
 })
 
 describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', () => {
-  test('Approved / Archived is a filter radiogroup, not page-tab semantics', async () => {
+  test('Approved / Archived reuses the task-list view switch without page-tab semantics', async () => {
     installFetch(
       () =>
         new Response(JSON.stringify({ items: [mkMem()] }), {
@@ -94,7 +94,10 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
     wrap()
     await screen.findByTestId('memory-all-mem_1-archive')
 
-    expect(screen.getByRole('radiogroup')).toBeTruthy()
+    const switcher = screen.getByRole('radiogroup')
+    expect(switcher.classList.contains('list-view-switch')).toBe(true)
+    expect(switcher.parentElement?.classList.contains('page-filter')).toBe(true)
+    expect(switcher.parentElement?.classList.contains('memory-all__filter')).toBe(true)
     expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.getByTestId('memory-all-filter-approved').getAttribute('role')).toBe('radio')
     expect(screen.getByTestId('memory-all-filter-approved').getAttribute('aria-checked')).toBe(

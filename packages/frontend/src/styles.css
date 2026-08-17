@@ -22537,7 +22537,9 @@ button.status-chip {
   border-bottom: 1px solid var(--border);
 }
 
-.operations-toolbar > .segmented {
+/* Low-emphasis list-view switch shared by operational lists and the Memory
+   library. Keep it visually quieter than form-oriented segmented controls. */
+.list-view-switch {
   flex: 0 1 auto;
   max-width: 100%;
   overflow-x: auto;
@@ -22548,7 +22550,7 @@ button.status-chip {
   scrollbar-width: thin;
 }
 
-.operations-toolbar > .segmented .segmented__option {
+.list-view-switch .segmented__option {
   flex: 0 0 auto;
   min-height: 36px;
   padding: 0 11px;
@@ -22558,8 +22560,8 @@ button.status-chip {
   font-weight: 600;
 }
 
-.operations-toolbar > .segmented .segmented__option--active,
-.operations-toolbar > .segmented .segmented__option--active:hover {
+.list-view-switch .segmented__option--active,
+.list-view-switch .segmented__option--active:hover {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
 }
@@ -22989,7 +22991,7 @@ button.status-chip {
     padding: 0 16px 14px;
   }
 
-  .operations-toolbar > .segmented {
+  .operations-toolbar > .list-view-switch {
     display: flex;
     width: 100%;
   }

@@ -59,6 +59,7 @@ export function OperationsToolbar<V extends string>(props: OperationsToolbarProp
   return (
     <div className="operations-toolbar">
       <Segmented<V>
+        className="list-view-switch"
         value={props.view}
         onChange={props.onViewChange}
         ariaLabel={props.viewAria}

@@ -169,17 +169,19 @@ export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllL
 
   return (
     <div className="memory-all" data-testid="memory-all">
-      <Segmented<MemoryAllView>
-        className="memory-all__filter"
-        options={(['approved', 'archived'] as const).map((v) => ({
-          value: v,
-          label: t(`memory.status.${v}`),
-          testid: `memory-all-filter-${v}`,
-        }))}
-        value={view}
-        onChange={setView}
-        ariaLabel={t('memory.tab.all')}
-      />
+      <div className="page-filter memory-all__filter">
+        <Segmented<MemoryAllView>
+          className="list-view-switch"
+          options={(['approved', 'archived'] as const).map((v) => ({
+            value: v,
+            label: t(`memory.status.${v}`),
+            testid: `memory-all-filter-${v}`,
+          }))}
+          value={view}
+          onChange={setView}
+          ariaLabel={t('memory.tab.all')}
+        />
+      </div>
 
       {view === 'approved' && selected.size > 0 && (
         <div className="memory-all__bulk page__actions">

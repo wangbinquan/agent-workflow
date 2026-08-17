@@ -12,6 +12,7 @@ const TASKS = read('routes/tasks.tsx')
 const SCHEDULED = read('routes/scheduled.tsx')
 const REPOS = read('routes/repos.tsx')
 const TOOLBAR = read('components/operations/OperationsToolbar.tsx')
+const MEMORY_ALL = read('components/memory/MemoryAllList.tsx')
 const CSS = read('styles.css')
 
 describe('RFC-246 shared operations surfaces', () => {
@@ -31,6 +32,17 @@ describe('RFC-246 shared operations surfaces', () => {
     expect(CSS).toMatch(/\.scheduled-operations__row\s*\{[^}]*cursor:\s*pointer/)
     expect(CSS).not.toMatch(/\.repo-operations__row\s*\{[^}]*cursor:\s*pointer/)
     expect(CSS).toMatch(/\.operations-toolbar__count\s*\{[^}]*opacity:\s*1/)
+  })
+
+  test('task operations and the Memory library share one view-switch chrome', () => {
+    expect(TOOLBAR).toContain('className="list-view-switch"')
+    expect(MEMORY_ALL).toContain('className="page-filter memory-all__filter"')
+    expect(MEMORY_ALL).toContain('className="list-view-switch"')
+    expect(CSS).toMatch(/\.list-view-switch\s*\{[^}]*background:\s*transparent/)
+    expect(CSS).toMatch(/\.page-filter\s*\{[^}]*margin-bottom:\s*var\(--space-4\)/)
+    expect(CSS).toMatch(
+      /\.list-view-switch \.segmented__option--active,[\s\S]*?background:\s*color-mix\(in srgb, var\(--accent\) 12%, transparent\)/,
+    )
   })
 
   test('mobile reflows the same table rows and suppresses horizontal scrolling', () => {
