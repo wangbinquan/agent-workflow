@@ -2,15 +2,30 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC：[RFC-308 任务 Git 提交、平台工作目录与自动排除规则归一](design/RFC-308-unified-task-git-commit-exclusions/proposal.md)**
-> ——用户要求先统一任务提交能力、考虑 RFC-294，再接 Gitignore 风格黑名单；随后追加硬裁决：系统内置 ignore 全部收编，
-> 平台目录只保留一套约定名，今后**不得修改代码仓 `.gitignore`，直接使用平台 ignore**。Draft 强序为 A「canonical
-> `/.agent-workflow/{inputs,runs,fusion}/` + per-worktree `WorkspaceExcludeManager` 取代 RFC-248 `.gitignore` preset/Fusion
-> `.git/info/exclude`，并统一 RFC-075/RFC-304 提交机制」→ B「全局 `taskCommitExcludePatterns` + strict
-> tracked/history/submodule 防线」→ C「Settings Git、详情与真实远端 E2E」。架构按
-> `code-capability → task-execution.public → source-control.public` 单向收口；canonical root 与动态 mounts 是不可反选 hard deny。
-> 用户明确旧名字无人使用、不要兼容读取：cutover inventory 先证明四旧目录/`gitignoreCommit` 非终态消费者=0，再直接删除
-> writer/reader/fallback/wire/列，不迁移、不双读。**当前等待用户批准，未授权生产实现。**
+> 🚧 **进行中 RFC：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
+> —— RFC-307 之后用户连提三问：「流程和模版两个页签什么关系」「是不是应该在模版里配置流程，大家直接用模版就行了」
+> 「如果我要基于模版创建一个需求开发任务，入口在哪」。第三问查实为**实锤缺口**：`/api/code/*` 全是 GET，
+> `openRound` 三个调用者上溯唯一起点是 `webhookDispatch`——平台内**没有任何发起入口**，RFC-304 `plan.md` T46b
+> 自己记着「三入口只通了 issue 标签，`/code` 与 API 待做」。三件事合成一个 RFC：①两张模板表**真合并**为
+> `capability_templates`（迁移以绑定为主体、模板 id 延用绑定 id ⇒ 矩阵指针零漂移，`upstream_id` 指向原框架，
+> 把「共享上层」翻译成 RFC-304 **T64 上游四态 + 三方差异**——该域层实现早已写好且零生产导入，本 RFC 为它接线）；
+> ②模板详情即流程图，独立「流程」页签删除，能力级流程降为只读（保住 RFC-307 AC-1）；③新增 `POST /api/code/rounds`，
+> 四条能力可从模板起跑，`requirement` 用新增 `anchorKind: 'platform'`。**关键裁决**：合并对象不合并权限
+> （写 `scripts`/`hooks` 仍需 `scripts:author`，否则模板写权 = daemon 执行权且首次 token 可达）；手动发起不要求矩阵启用；
+> 权限闭集 81→78、存量 grant 直接丢弃（用户裁决）。**能力收缩已按仓规 §7 呈报**：「部门改一次脚本、各组自动生效」
+> 被移除，换成显式上游合并。**当前等待用户批准，未授权生产实现。**
+
+> ✅ **已完成 RFC（Done，2026-08-17）：[RFC-308 任务 Git 提交、平台工作目录与自动排除规则归一](design/RFC-308-unified-task-git-commit-exclusions/proposal.md)**
+> ——按用户强序先统一提交底座，再接平台 ignore：普通 RFC-075 auto-publish 与 RFC-304 code-capability 现在共用
+> source-control 的 candidate/temp-index/commit/publish/outgoing-history 机制；task-execution 暴露 path-free 四方法 participant，
+> code-capability production 对 source-control internal import=0，hook/non-FF/repair 与 artifact/CAS/new-branch 差异保留。
+> 仓内平台运行物只落 `/.agent-workflow/{inputs,runs,fusion}/`；RFC-248/Fusion 改用唯一 per-worktree profile，业务仓
+> `.gitignore` 与 common `.git/info/exclude` 不再被平台写入。全局 `taskCommitExcludePatterns` 已接 Settings → Git，严格覆盖
+> untracked/tracked/staged/rename/submodule 与尚未推送历史；全排除、混合、历史拒推在任务详情可见。用户确认旧名字无人使用且
+> 禁止兼容读取后，migration 0173 与 source ratchet 直接删除四旧目录语义、preset writer/test、`gitignoreCommit` wire/列；无
+> fallback/双读/runtime 探测。RFC-294 W5 仍保留正式 `WorkspaceRef` 与 facade 文件搬迁，现有 absolute path 只经有账的
+> composition binder，不升级为 public API。发布前完整 `bun run gate:local` 用时 7m08s 全绿：backend 12004 pass / 35 skip、
+> shared 2186 pass、frontend 6571 pass，typecheck/lint/format/depcheck 同步通过。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-307 能力流程可见可改](design/RFC-307-capability-flow-visible-editable/proposal.md)**
 > —— 起因是用户原话「这个工作流，我现在又没有一个可以执行可以看的流程，都不知道实际是什么样的，甚至我都不知道应该怎么去编排这个流程」。
