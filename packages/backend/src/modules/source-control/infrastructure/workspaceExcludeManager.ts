@@ -7,7 +7,7 @@ import {
   renameSync,
   writeFileSync,
 } from 'node:fs'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { runGit } from '@/util/git'
 import { DomainError } from '@/util/errors'
 import { planWorkspaceExcludeProfile } from '../domain/workspaceExcludeProfile'
@@ -42,15 +42,37 @@ async function gitOutput(worktreePath: string, args: string[], stage: string): P
   return result.stdout.trim()
 }
 
+function normalizeGitPath(raw: string): string {
+  if (process.platform !== 'win32') return raw
+  if (/^\/[A-Za-z]:[\\/]/.test(raw)) return raw.slice(1)
+  const msysDrive = /^\/([A-Za-z])(?:[\\/]|$)/.exec(raw)
+  return msysDrive === null ? raw : `${msysDrive[1]}:${raw.slice(2)}`
+}
+
+function configuredPath(worktreePath: string, raw: string): string {
+  const normalized = normalizeGitPath(raw)
+  return isAbsolute(normalized) ? resolve(normalized) : resolve(worktreePath, normalized)
+}
+
 function resolveGitPath(worktreePath: string, raw: string): string {
-  return realpathSync(isAbsolute(raw) ? raw : resolve(worktreePath, raw))
+  return realpathSync(configuredPath(worktreePath, raw))
 }
 
 const PROFILE_MARKER = '# agent-workflow platform excludes v1'
 const PROFILE_HEADER = `${PROFILE_MARKER}\n# managed outside the business repository; do not edit\n/.agent-workflow/\n`
 
-function configuredPath(worktreePath: string, raw: string): string {
-  return isAbsolute(raw) ? resolve(raw) : resolve(worktreePath, raw)
+function pathKey(path: string): string {
+  const absolute = resolve(path)
+  return process.platform === 'win32' ? absolute.toLowerCase() : absolute
+}
+
+function normalizedRelative(path: string): string {
+  return path.replace(/\\/g, '/')
+}
+
+function escapesRoot(path: string): boolean {
+  const normalized = normalizedRelative(path)
+  return normalized === '..' || normalized.startsWith('../') || isAbsolute(path)
 }
 
 /**
@@ -67,8 +89,8 @@ function inheritedFromPlatformProfile(path: string, commonDir: string): string |
   const common = realpathSync(commonDir)
   const actual = realpathSync(path)
   const rel = relative(common, actual)
-  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return null
-  const parts = rel.split(sep)
+  if (escapesRoot(rel)) return null
+  const parts = normalizedRelative(rel).split('/')
   const canonicalShape =
     (parts.length === 3 &&
       parts[0] === 'agent-workflow' &&
@@ -93,7 +115,7 @@ function assertOwnedBy(worktreePath: string, appHome?: string): void {
   const root = realpathSync(appHome)
   const wt = realpathSync(worktreePath)
   const wtRel = relative(root, wt)
-  if (wtRel === '..' || wtRel.startsWith(`..${sep}`) || isAbsolute(wtRel)) {
+  if (escapesRoot(wtRel)) {
     throw new DomainError(
       'workspace-exclude-owner-mismatch',
       'worktree is outside the platform home',
@@ -109,13 +131,13 @@ export async function ensureWorkspaceExcludeProfile(input: {
 }): Promise<WorkspaceExcludeProfileReceipt> {
   const gitDirRaw = await gitOutput(
     input.worktreePath,
-    ['rev-parse', '--git-dir'],
+    ['rev-parse', '--path-format=absolute', '--git-dir'],
     'resolve git dir',
   )
   const gitDir = resolveGitPath(input.worktreePath, gitDirRaw)
   const commonDirRaw = await gitOutput(
     input.worktreePath,
-    ['rev-parse', '--git-common-dir'],
+    ['rev-parse', '--path-format=absolute', '--git-common-dir'],
     'resolve common git dir',
   )
   const commonDir = resolveGitPath(input.worktreePath, commonDirRaw)
@@ -153,29 +175,32 @@ export async function ensureWorkspaceExcludeProfile(input: {
       'core.excludesFile',
     ])
     if (effective.exitCode === 0) {
-      const inheritedPath = effective.stdout.trim()
-      if (inheritedPath !== '' && existsSync(inheritedPath)) {
-        const stat = lstatSync(inheritedPath)
-        if (!stat.isFile() || stat.size > 1024 * 1024) {
-          throw new DomainError(
-            'workspace-exclude-inherited-invalid',
-            'existing core.excludesFile is not a bounded regular file',
-            409,
-          )
+      const inheritedRaw = effective.stdout.trim()
+      if (inheritedRaw !== '') {
+        const inheritedPath = configuredPath(input.worktreePath, inheritedRaw)
+        if (existsSync(inheritedPath)) {
+          const stat = lstatSync(inheritedPath)
+          if (!stat.isFile() || stat.size > 1024 * 1024) {
+            throw new DomainError(
+              'workspace-exclude-inherited-invalid',
+              'existing core.excludesFile is not a bounded regular file',
+              409,
+            )
+          }
+          inherited = readFileSync(inheritedPath, 'utf8')
         }
-        inherited = readFileSync(inheritedPath, 'utf8')
       }
     }
   } else {
     const existingPath = configuredPath(input.worktreePath, existingWorktreeExclude.stdout.trim())
-    if (resolve(existingPath) === resolve(profilePath)) {
+    if (pathKey(existingPath) === pathKey(profilePath)) {
       inherited = inheritedFromPlatformProfile(existingPath, commonDir) ?? ''
     } else {
       const copiedPlatformInheritance = inheritedFromPlatformProfile(existingPath, commonDir)
       if (copiedPlatformInheritance === null) {
         throw new DomainError(
           'workspace-exclude-config-conflict',
-          'worktree already has a non-platform core.excludesFile',
+          `worktree already has a non-platform core.excludesFile (configured='${existingPath}', common='${commonDir}', desired='${profilePath}')`,
           409,
         )
       }

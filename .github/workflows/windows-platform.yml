@@ -32,10 +32,12 @@ on:
       - 'packages/backend/src/util/process.ts'
       - 'packages/backend/src/util/git.ts'
       - 'packages/backend/src/util/gitHardening.ts'
+      - 'packages/backend/src/modules/source-control/**'
       - 'packages/shared/src/platformEnv.ts'
       - 'packages/backend/src/services/scriptRun.ts'
       - 'packages/backend/tests/rfc254-*.test.ts'
       - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
+      - 'packages/backend/tests/rfc308-workspace-exclude.test.ts'
       - 'packages/backend/src/util/windowsJobObject.ts'
       - 'packages/system-mocks/**'
       - 'scripts/build-binary.ts'
@@ -51,10 +53,12 @@ on:
       - 'packages/backend/src/util/process.ts'
       - 'packages/backend/src/util/git.ts'
       - 'packages/backend/src/util/gitHardening.ts'
+      - 'packages/backend/src/modules/source-control/**'
       - 'packages/shared/src/platformEnv.ts'
       - 'packages/backend/src/services/scriptRun.ts'
       - 'packages/backend/tests/rfc254-*.test.ts'
       - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
+      - 'packages/backend/tests/rfc308-workspace-exclude.test.ts'
       - 'packages/backend/src/util/windowsJobObject.ts'
       - 'packages/system-mocks/**'
       - 'scripts/build-binary.ts'
@@ -123,6 +127,13 @@ jobs:
       # path quoted) is verified on the real Windows machine — see STATE/plan.
       - name: RFC-254 T20 — git credential subcommand
         run: bun test --isolate packages/backend/tests/rfc205-git-credential.test.ts
+
+      # RFC-308: Git copies the source worktree's config.worktree into a new
+      # linked worktree. Prove on a real Windows kernel that the copied
+      # platform exclude path is recognized, safely rebound, and an arbitrary
+      # external core.excludesFile still fails closed.
+      - name: RFC-308 — per-worktree platform excludes
+        run: bun test --isolate packages/backend/tests/rfc308-workspace-exclude.test.ts --test-name-pattern 'rebinds a platform profile copied|still rejects a worktree profile outside'
 
       # RFC-254 T28b — the e2e model stand-in used to be nine `#!/bin/sh` files,
       # which is why it had to become one compiled program. These two suites are
