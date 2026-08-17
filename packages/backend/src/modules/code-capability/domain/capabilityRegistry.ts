@@ -241,6 +241,10 @@ export const MR_COMMENT_FIX_CONTRACT: StageContract = {
       name: 'publish-suggestion',
       requires: ['form', 'threadAnchor', 'target'],
       produces: ['published'],
+      // Terminal because this is a BRANCH end, not the array end: `decide-form`
+      // sends the round down either this tail or the `post-patch` one, and the
+      // stages that follow in the array belong to the other tail.
+      terminal: ['published'],
     },
     // The patch path: freeze the change as an artifact, post the diff carrying
     // its digest, and wait. Freezing here rather than at confirmation time is
@@ -328,6 +332,10 @@ export const REQUIREMENT_CONTRACT: StageContract = {
       name: 'clarify',
       requires: ['understanding', 'requirement'],
       produces: ['clarification'],
+      // Terminal because the ROUND ends here: asking settles it `awaiting`, and
+      // the answer resumes at `comprehend` in a later round rather than flowing
+      // to a later stage in this one.
+      terminal: ['clarification'],
     },
     {
       kind: 'ai',
@@ -436,6 +444,10 @@ export const CI_FIX_CONTRACT: StageContract = {
       scriptSlot: 'select',
       requires: ['workPackage'],
       produces: ['agentPlan'],
+      // Terminal because the consumer is not a stage: the plan says WHICH agent
+      // the `fix` stage runs, so the dispatcher reads it (`monitorLoop` →
+      // `openRound` / `dispatch`) before the sequence gets that far.
+      terminal: ['agentPlan'],
     },
     {
       kind: 'program',

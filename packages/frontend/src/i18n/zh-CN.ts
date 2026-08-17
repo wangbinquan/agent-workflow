@@ -18,6 +18,24 @@ export interface Resources {
     scrollStart: string
     scrollEnd: string
   }
+  // RFC-307 — rendering a capability's stage sequence as a flow.
+  capabilityFlow: {
+    kind: { program: string; script: string; ai: string; invoke: string }
+    parallel: string
+    agentSlot: string
+    scriptSlot: string
+    invokes: string
+    noContract: string
+    noContractHint: string
+    staleContract: string
+    empty: string
+    loading: string
+    requires: string
+    produces: string
+    terminal: string
+    injectable: string
+    injectableNone: string
+  }
   intent: {
     title: string
     description: string
@@ -1325,7 +1343,30 @@ export interface Resources {
   code: {
     title: string
     subtitle: string
-    tab: { matrix: string; activity: string; metrics: string; templates: string }
+    tab: { matrix: string; activity: string; flow: string; metrics: string; templates: string }
+    flow: {
+      capability: string
+      binding: string
+      bindingHint: string
+      bindingNone: string
+      hint: string
+      sharedSlot: string
+      agent: string
+      agentNone: string
+      prompt: string
+      script: string
+      scriptLanguage: string
+      scriptRedacted: string
+      params: string
+      saveParams: string
+      hooks: string
+      noHooks: string
+      hookPhase: string
+      hookPre: string
+      hookPost: string
+      hookScript: string
+      addHook: string
+    }
     repoLabel: string
     repoHint: string
     load: string
@@ -5894,6 +5935,24 @@ export const zhCN: Resources = {
     scrollStart: '向前查看更多分区',
     scrollEnd: '向后查看更多分区',
   },
+  capabilityFlow: {
+    kind: { program: '程序步', script: '脚本步', ai: 'AI 步', invoke: '子序列' },
+    parallel: '并行分片',
+    agentSlot: '代理槽位：{{slot}}',
+    scriptSlot: '脚本槽位：{{slot}}',
+    invokes: '内联执行 {{capability}}',
+    noContract: '这条能力不由阶段序列驱动',
+    noContractHint: '它是常驻的监视循环，负责发现该做事的时机并派发轮次，本身没有固定步骤。',
+    staleContract:
+      '这一轮跑的是第 {{ran}} 版合同，当前是第 {{current}} 版——图按当前版绘制，两者可能不一致。',
+    empty: '先选一条能力，即可查看它的完整流程。',
+    loading: '正在载入流程…',
+    requires: '读取',
+    produces: '产出',
+    terminal: '流程在此结束',
+    injectable: '此处的钩子可回传：{{keys}}',
+    injectableNone: '此处的钩子不能回传数据，只能读写工作树或中止。',
+  },
   intent: {
     title: '意图构建',
     description: '用自然语言描述目标，AI 生成/修改工作流、工作组、代理与技能，确认后落库。',
@@ -7032,7 +7091,31 @@ export const zhCN: Resources = {
   code: {
     title: '代码能力',
     subtitle: '每个仓库启用了哪些能力，以及它们做过什么',
-    tab: { matrix: '仓库', activity: '活动', metrics: '成效', templates: '模板' },
+    tab: { matrix: '仓库', activity: '活动', flow: '流程', metrics: '成效', templates: '模板' },
+    flow: {
+      capability: '能力',
+      binding: '配置哪一份绑定',
+      bindingHint: '流程结构由平台固定；这里选的是它用哪套代理 / 提示词 / 参数。',
+      bindingNone: '（不选，只看结构）',
+      hint: '点任意一步即可查看并修改它实际用到的配置。结构（有哪些步、怎么连）由平台固定。',
+      sharedSlot: '此槽位同时被另外 {{count}} 步使用（{{stages}}）——在这里改动会一并影响它们。',
+      agent: '代理',
+      agentNone: '（未指定）',
+      prompt: '提示词',
+      script: '脚本',
+      scriptLanguage: '解释器',
+      scriptRedacted:
+        '你没有查看脚本正文的权限（需要 scripts:author）。这里留空是「未展示」，不是「没有脚本」。',
+      params: '参数',
+      saveParams: '保存参数',
+      hooks: '钩子',
+      noHooks: '这一步的前后还没有挂任何钩子。',
+      hookPhase: '挂在哪一侧',
+      hookPre: '这一步之前',
+      hookPost: '这一步之后',
+      hookScript: '钩子脚本',
+      addHook: '新增钩子',
+    },
     repoLabel: '仓库',
     repoHint: '事件所属的项目路径，例如 group/project',
     load: '查看',

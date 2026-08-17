@@ -21,7 +21,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute } from '@tanstack/react-router'
-import { useState, type ReactElement } from 'react'
+import { useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
@@ -40,9 +40,12 @@ import { TableViewport } from '@/components/TableViewport'
 import { Switch } from '@/components/Form'
 import { TabPanels } from '@/components/split/TabPanels'
 import { TabBar } from '@/components/TabBar'
+import { CapabilityFlow, type StageRunStatus } from '@/components/code/CapabilityFlow'
+import { readGraph, type CapabilityGraphResponse } from '@/components/code/graphResponse'
+import { CapabilityFlowPanel as FlowPanel } from '@/components/code/CapabilityFlowPanel'
 import { Route as RootRoute } from './__root'
 
-export type CodeTab = 'matrix' | 'activity' | 'metrics' | 'templates'
+export type CodeTab = 'matrix' | 'activity' | 'flow' | 'metrics' | 'templates'
 
 interface CodeSearch extends Record<string, unknown> {
   tab?: CodeTab
@@ -50,7 +53,13 @@ interface CodeSearch extends Record<string, unknown> {
 }
 
 function isCodeTab(value: unknown): value is CodeTab {
-  return value === 'matrix' || value === 'activity' || value === 'metrics' || value === 'templates'
+  return (
+    value === 'matrix' ||
+    value === 'activity' ||
+    value === 'flow' ||
+    value === 'metrics' ||
+    value === 'templates'
+  )
 }
 
 /** Unknown values are dropped rather than rendered — same rule as /webhooks. */
@@ -99,8 +108,24 @@ interface RoundRow {
   roundSeq: number
   status: string
   outcome: string | null
+  /** RFC-307 — which contract version ran, so the flow can flag a stale picture. */
+  stageContractVer: number
   baselineSha: string | null
   stages: StageRow[]
+}
+
+function useCapabilityGraph(capability: string | null) {
+  return useQuery({
+    queryKey: ['code-capability-graph', capability],
+    queryFn: () =>
+      api.get<CapabilityGraphResponse>(
+        `/api/code/capabilities/${encodeURIComponent(capability ?? '')}/graph`,
+      ),
+    enabled: capability !== null && capability !== '',
+    // The contract is compiled into the binary — it cannot change under a
+    // running daemon, so refetching it is pure waste.
+    staleTime: Infinity,
+  })
 }
 
 interface WorkItemRow {
@@ -183,6 +208,7 @@ function CodePage() {
         tabs={[
           { key: 'matrix', label: t('code.tab.matrix') },
           { key: 'activity', label: t('code.tab.activity') },
+          { key: 'flow', label: t('code.tab.flow') },
           { key: 'metrics', label: t('code.tab.metrics') },
           { key: 'templates', label: t('code.tab.templates') },
         ]}
@@ -203,6 +229,11 @@ function CodePage() {
         panels={[
           { key: 'matrix', testid: 'code-panel-matrix', content: <MatrixPanel /> },
           { key: 'activity', testid: 'code-panel-activity', content: <ActivityPanel /> },
+          {
+            key: 'flow',
+            testid: 'code-panel-flow',
+            content: <FlowPanel active={tab === 'flow'} />,
+          },
           { key: 'metrics', testid: 'code-panel-metrics', content: <MetricsPanel /> },
           { key: 'templates', testid: 'code-panel-templates', content: <TemplatesPanel /> },
         ]}
@@ -483,6 +514,13 @@ function WorkItemRounds({
         </p>
       )}
 
+      {/* RFC-307 — the same picture the template view draws, with this round's
+          state on it. Kept ABOVE the list rather than replacing it: the graph
+          answers "where did this get to and what feeds what", the list carries
+          the error text and the per-stage model calls, and neither does the
+          other's job well. */}
+      <RoundFlow item={item} round={round} />
+
       <ol data-testid={`code-stages-${round.roundId}`}>
         {round.stages.map((stage) => (
           <li key={stage.stageName}>
@@ -498,6 +536,80 @@ function WorkItemRounds({
       </ol>
     </div>
   )
+}
+
+/**
+ * RFC-307 — one round's progress, on the capability's own flow.
+ *
+ * Two things it deliberately does NOT do:
+ *
+ *   · it does not derive the picture from the round. Drawing only the stages
+ *     that have rows would make a round in flight look like a three-step
+ *     capability, and a round that failed at step two look like it was always
+ *     going to stop there. The sequence comes from the contract and is always
+ *     whole; only the colour is partial.
+ *   · it does not quietly drop a stage it cannot place. A round that ran an
+ *     older contract can name stages this picture has no node for, and hiding
+ *     them would make an old round look like it skipped work it actually did —
+ *     so the version mismatch is stated instead.
+ */
+function RoundFlow({ item, round }: { item: WorkItemRow; round: RoundRow }): ReactElement | null {
+  const { t } = useTranslation()
+  const graph = useCapabilityGraph(item.capability)
+
+  const statuses = useMemo(() => {
+    const out: Record<string, { status: StageRunStatus; error?: string | null }> = {}
+    for (const stage of round.stages) {
+      out[stage.stageName] = {
+        status: asStageRunStatus(stage.status),
+        error: stage.error,
+      }
+    }
+    return out
+  }, [round.stages])
+
+  // Read through `readGraph` rather than testing for the `reason` arm: "not the
+  // no-contract answer" is not the same as "a graph arrived", and reading
+  // `.nodes` off anything else throws inside render.
+  const answer = readGraph(graph.data)
+  if (answer.kind !== 'graph') return null
+
+  const drawn = new Set(answer.nodes.map((n) => n.name))
+  const unplaceable = round.stages.filter((s) => !drawn.has(s.stageName))
+  const stale = round.stageContractVer !== answer.stageContractVer
+
+  return (
+    <div className="page__section" data-testid={`code-flow-${round.roundId}`}>
+      {(stale || unplaceable.length > 0) && (
+        <p className="page__section" data-testid={`code-flow-stale-${round.roundId}`}>
+          {t('capabilityFlow.staleContract', {
+            ran: round.stageContractVer,
+            current: answer.stageContractVer,
+          })}
+          {unplaceable.length > 0 && ` (${unplaceable.map((s) => s.stageName).join(', ')})`}
+        </p>
+      )}
+      <CapabilityFlow nodes={answer.nodes} edges={answer.edges} statuses={statuses} />
+    </div>
+  )
+}
+
+/**
+ * The stage statuses the flow knows how to colour.
+ *
+ * Anything else lands on `pending` rather than being passed through: the card
+ * reads `data-status` straight into a CSS selector, so an unrecognised value
+ * would silently render as the neutral default anyway — this makes that the
+ * stated behaviour instead of an accident.
+ */
+function asStageRunStatus(status: string): StageRunStatus {
+  return status === 'running' ||
+    status === 'done' ||
+    status === 'failed' ||
+    status === 'canceled' ||
+    status === 'skipped'
+    ? status
+    : 'pending'
 }
 
 /**

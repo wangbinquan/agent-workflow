@@ -292,6 +292,14 @@ async function projectRounds(
       roundSeq: round.roundSeq,
       status: deriveRoundStatus(round.outcome, round.endedAt),
       outcome: round.outcome,
+      // RFC-307 — which contract version this round actually ran.
+      //
+      // The flow view draws the CURRENT contract, so a round from before a
+      // contract bump can name stages the picture does not have. Sending the
+      // version lets the UI say "this round ran v3, you are looking at v4"
+      // instead of silently dropping the stages it cannot place, which would
+      // make an old round look like it skipped work it in fact did.
+      stageContractVer: round.stageContractVer,
       baselineSha: round.baselineSha,
       startedAt: round.startedAt,
       endedAt: round.endedAt,

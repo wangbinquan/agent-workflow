@@ -84,6 +84,8 @@ export interface CodeRoundProjection {
   roundSeq: number
   status: string
   outcome: string | null
+  /** RFC-307 — the contract version this round ran, for the flow view's staleness notice. */
+  stageContractVer: number
   baselineSha: string | null
   startedAt: number
   endedAt: number | null
@@ -246,4 +248,59 @@ export interface CodeWorkItemProjectionQuery {
       roundLimit?: number
     },
   ): Promise<CodeWorkItemPage>
+}
+
+// RFC-307 — the capability's stage sequence as a graph, for rendering.
+//
+// DECLARED here rather than re-exported from `domain/stageGraph`. The first
+// attempt did re-export, and the RFC-294 preflight rejected it with
+// "StageGraph: unsafe/open type TypeQuery" — correctly: the domain type's
+// `capability` resolves through `typeof CODE_CAPABILITIES`, and a public
+// contract that reaches into a runtime constant for its shape is open in a way
+// a contract must not be. Every other capability field on this surface is a
+// plain `string` for the same reason.
+//
+// The cost is two declarations that must agree, so the domain projection is
+// checked against this shape by a type-level assertion in
+// `tests/rfc307-stage-graph.test.ts` — drift fails to compile rather than
+// reaching a caller.
+
+export type StageGraphNodeKind = 'program' | 'script' | 'ai' | 'invoke'
+
+export interface StageGraphNode {
+  name: string
+  kind: StageGraphNodeKind
+  /** Position in the sequence, so a renderer can lay stages out in run order. */
+  index: number
+  requires: readonly string[]
+  produces: readonly string[]
+  parallel: boolean
+  /** Keys a `pre` hook here may inject. Empty is an answer: "none". */
+  injectable: readonly string[]
+  /** Artifacts that intentionally leave the sequence (branch end, round end). */
+  terminal: readonly string[]
+  agentSlot?: string
+  scriptSlot?: string
+  invokes?: {
+    capability: string
+    from: string
+    to: string
+    stages: readonly string[]
+  }
+}
+
+export interface StageGraphEdge {
+  id: string
+  from: string
+  to: string
+  /** The artifact that makes this an edge — what actually flows along it. */
+  artifact: string
+}
+
+export interface StageGraph {
+  capability: string
+  /** The contract version this picture was projected from. */
+  version: number
+  nodes: readonly StageGraphNode[]
+  edges: readonly StageGraphEdge[]
 }

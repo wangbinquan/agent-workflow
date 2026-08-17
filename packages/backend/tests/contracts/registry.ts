@@ -184,6 +184,11 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/code/metrics' },
   // RFC-304 — the capability catalog the configuration UI derives from.
   { method: 'GET', path: '/api/code/capabilities' },
+  // RFC-307 — the stage sequence as a DAG. Same permission as the catalog it
+  // expands, and deliberately free of any repository or round: the question it
+  // answers is "what does this capability do", which someone needs answered
+  // BEFORE they enable it anywhere.
+  { method: 'GET', path: '/api/code/capabilities/:capability/graph' },
 
   // RFC-304 T57 — the two capability template layers. Separate resources with
   // separate permission points, because the department layer carries scripts

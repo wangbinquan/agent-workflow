@@ -2,6 +2,23 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC：[RFC-308 任务 Git 提交能力归一与自动提交排除规则](design/RFC-308-unified-task-git-commit-exclusions/proposal.md)**
+> ——用户要求先统一任务提交能力，再按推荐方案增加 Gitignore 风格黑名单，并明确要求考虑 RFC-294。三件套已落 Draft，
+> 强序为 A「统一 RFC-075 普通任务与 RFC-304 代码能力的任务工作区提交机制，零排除行为」→ B「全局
+> `taskCommitExcludePatterns` + strict tracked/history/submodule 防线 + hard deny `/.aw-run/`」→ C「Settings Git、任务详情、
+> 双语与真实远端 E2E」。架构按 `code-capability → task-execution.public → source-control.public` 单向收口：task 拥有
+> workspace authority/fence/NodeRun/消息，source-control 拥有 candidate/index/commit/push，保留 RFC-075 hook/non-FF/repair 与
+> RFC-304 frozen artifact/CAS/new-branch 的领域差异。**当前等待用户批准，未授权生产实现。**
+
+> 🚧 **进行中 RFC：[RFC-307 能力流程可见可改](design/RFC-307-capability-flow-visible-editable/proposal.md)** —— 起因是用户原话
+> 「这个工作流，我现在又没有一个可以执行可以看的流程，都不知道实际是什么样的，甚至我都不知道应该怎么去编排这个流程」。
+> RFC-304 交付的五条能力（45 步：program 32 / ai 7 / script 4 / invoke 2）在界面上是**一个不透明方块**：跑之前只有能力名 + agent 槽位，
+> 跑起来后是纯文本 `<ol>`，画布上只有一个 `code-round` 合成节点。但**可配面其实早就建好了**——`agentSlot` / `scriptSlot` / `paramSchema` /
+> 钩子 + `injectable` 白名单全在合同里，只是配置入口是一堆 JSON 表单、与「这一步在流程里的位置」完全脱节。本 RFC 把两者接起来：
+> `domain/stageGraph.ts` 把 `requires`/`produces` 投影成 DAG → 复用既有 `WorkflowCanvas` 只读模式渲染 → 图上点节点直接改配置并写回既有两层模板
+> （**不新增写端点、不新增权限点、零 schema 变更、零执行面改动**）→ 幂等播种 demo 框架/绑定/工作流/已完成轮次供上手体验。
+> **不打破 RFC-304 的 D3**（投影只在读侧，不落 `workflow_definitions`）；结构编辑（增删步骤、重连边）明确列为非目标。
+
 > ✅ **RFC-305 游客 UI follow-up（Done，2026-08-17）** —— 按用户实报修复三条并加固目录边界：①只读 Workflow 不再为未渲染的
 > palette/inspector 保留 grid rail，单轨 canvas 占满可用宽度；②所有已认证账户始终看到完整 `NAV_GROUPS`，同一目录项的 permission
 > 只作为 AppShell 内容挂载门，guest 无权目标页为空且不发数据请求，后端 gate 不变；③公开 Agent 详情缺少 `runtime:read` 时不请求也不

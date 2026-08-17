@@ -592,6 +592,20 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }
 
+  // 5e-bis. RFC-307: sample content, ONCE per install. Marker-gated rather
+  // than existence-gated — a user who deletes the samples means it, and
+  // re-seeding on the next restart would be the platform arguing. Never fatal:
+  // no samples is exactly the state every install before this RFC was in.
+  try {
+    const { seedDemoContent } = await import('@/services/demoSeed')
+    const result = await seedDemoContent(db)
+    if (result.seeded) log.info('demo content seeded (delete it and it stays deleted)')
+  } catch (err) {
+    log.warn('demo content seed on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   // 5f. RFC-112/153: on FIRST startup (empty runtimes table) seed opencode /
   // claude-code as ordinary rows so agents / config.defaultRuntime can reference
   // them by name and the Settings list shows them out of the box. RFC-153: they

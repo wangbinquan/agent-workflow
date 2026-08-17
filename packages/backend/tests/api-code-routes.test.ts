@@ -314,3 +314,53 @@ describe('RFC-304 — listing work items', () => {
     expect((await app.request('/api/code/work-items')).status).toBe(401)
   })
 })
+
+describe('RFC-307 — the stage graph over HTTP', () => {
+  test('a capability answers with its flow WITHOUT any repository configured', async () => {
+    // The whole reason this endpoint takes no repository: the user needs to see
+    // what a capability does before deciding whether to enable it anywhere. An
+    // endpoint that required a configured repo would answer a later question.
+    const { app } = buildApp()
+    const res = await app.request('/api/code/capabilities/mr-review/graph', { headers: auth })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      capability: string
+      stageContractVer: number
+      nodes: { name: string; kind: string }[]
+      edges: { from: string; to: string; artifact: string }[]
+    }
+    expect(body.capability).toBe('mr-review')
+    expect(body.stageContractVer).toBeGreaterThan(0)
+    expect(body.nodes).toHaveLength(13)
+    expect(body.edges.length).toBeGreaterThan(0)
+    // Kinds survive serialization — the UI draws four different node shapes
+    // from this field, so an object that lost it would render as one grey box,
+    // which is the state this RFC exists to end.
+    expect(body.nodes.filter((n) => n.kind === 'ai').map((n) => n.name)).toEqual([
+      'review-shard',
+      'review-global',
+    ])
+  })
+
+  test('mr-monitor answers 200 with a REASON, not 404', async () => {
+    // It ships as a capability but is a main loop rather than a sequence. 404
+    // is the answer to "no such capability", and giving it here would send a
+    // user looking for a typo that is not there.
+    const { app } = buildApp()
+    const res = await app.request('/api/code/capabilities/mr-monitor/graph', { headers: auth })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ capability: 'mr-monitor', reason: 'no-stage-contract' })
+  })
+
+  test('a capability the platform does not ship is 404', async () => {
+    const { app } = buildApp()
+    const res = await app.request('/api/code/capabilities/mr-invented/graph', { headers: auth })
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'unknown-capability' })
+  })
+
+  test('without a bearer token it is refused', async () => {
+    const { app } = buildApp()
+    expect((await app.request('/api/code/capabilities/mr-review/graph')).status).toBe(401)
+  })
+})

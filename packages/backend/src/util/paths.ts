@@ -45,6 +45,17 @@ export const Paths = {
   get controlFile() {
     return join(appHome(), '.daemon.control')
   },
+  /**
+   * RFC-307 — marks that the demo content has been offered on this install.
+   *
+   * A file rather than a row because the fact is about the INSTALL, not the
+   * domain: "we have already shown this person the samples". Checking whether
+   * the demo rows exist would not do — a user who deletes them means it, and
+   * re-seeding on the next restart would be the platform arguing.
+   */
+  get demoSeedMarker() {
+    return join(appHome(), '.demo-seeded')
+  },
   get logsDir() {
     return join(appHome(), 'logs')
   },

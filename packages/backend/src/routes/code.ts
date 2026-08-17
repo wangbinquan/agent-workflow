@@ -31,8 +31,12 @@ import {
 import { createCodeMetricsQuery } from '@/modules/code-capability/application/codeMetricsQuery'
 import { createBulkEnableCommand } from '@/modules/code-capability/application/bulkEnableCommand'
 import { createEnableCommand } from '@/modules/code-capability/application/enableCommand'
-import { CODE_CAPABILITIES } from '@/modules/code-capability/domain/stageContract'
+import {
+  CODE_CAPABILITIES,
+  parseCodeCapabilityId,
+} from '@/modules/code-capability/domain/stageContract'
 import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
+import { projectStageGraph } from '@/modules/code-capability/domain/stageGraph'
 import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
 import { registerRoute } from '@/routes/registry'
 import type { AppDeps } from '@/server'
@@ -338,6 +342,47 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
           ],
         })),
       }),
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/code/capabilities/:capability/graph',
+      permissions: ['repos:read'],
+      tokenAccess: 'allow',
+      summary: "One capability's stage sequence as a DAG, for rendering the flow",
+    },
+    // RFC-307. A pure projection of the platform contract: no database, no
+    // repository, no round. That is deliberate and is the whole point of the
+    // endpoint — the user's complaint was that they could not see what a
+    // capability does BEFORE deciding whether to enable it anywhere, and an
+    // endpoint that needed a configured repository would answer the wrong
+    // question.
+    async (c) => {
+      const capability = parseCodeCapabilityId(c.req.param('capability'))
+      if (capability === undefined) {
+        return c.json({ error: 'unknown-capability' }, 404)
+      }
+      const contract = lookupStageContract(capability)
+      if (contract === undefined) {
+        // `mr-monitor` is a real capability with no stage sequence — it is the
+        // monitor's main loop. 404 would read as "you typed the name wrong",
+        // so the absence is stated instead, and the UI says so in words rather
+        // than drawing an empty canvas.
+        return c.json({ capability, reason: 'no-stage-contract' as const }, 200)
+      }
+      // Spelled out rather than spread: the projection also carries `version`,
+      // and shipping both it and `stageContractVer` would put two names on one
+      // number for readers to reconcile.
+      const graph = projectStageGraph(contract, lookupStageContract)
+      return c.json({
+        capability,
+        stageContractVer: graph.version,
+        nodes: graph.nodes,
+        edges: graph.edges,
+      })
+    },
   )
 
   registerRoute(

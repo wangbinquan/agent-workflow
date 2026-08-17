@@ -10,6 +10,25 @@ export const enUS: Resources = {
     scrollStart: 'Show more sections before',
     scrollEnd: 'Show more sections after',
   },
+  capabilityFlow: {
+    kind: { program: 'Program', script: 'Script', ai: 'AI', invoke: 'Sub-sequence' },
+    parallel: 'Sharded',
+    agentSlot: 'Agent slot: {{slot}}',
+    scriptSlot: 'Script slot: {{slot}}',
+    invokes: 'Runs {{capability}} inline',
+    noContract: 'This capability is not driven by a stage sequence',
+    noContractHint:
+      'It is the standing monitor loop — it decides when there is work and dispatches a round, and has no fixed steps of its own.',
+    staleContract:
+      'This round ran contract v{{ran}}; the current one is v{{current}}. The picture shows the current one, so the two may differ.',
+    empty: 'Pick a capability to see its full flow.',
+    loading: 'Loading the flow…',
+    requires: 'Reads',
+    produces: 'Writes',
+    terminal: 'The flow ends here',
+    injectable: 'A hook here may return: {{keys}}',
+    injectableNone: 'A hook here cannot return data — it may read or write the worktree, or abort.',
+  },
   intent: {
     title: 'Intent Builder',
     description:
@@ -563,8 +582,35 @@ export const enUS: Resources = {
     tab: {
       matrix: 'Repositories',
       activity: 'Activity',
+      flow: 'Flow',
       metrics: 'Results',
       templates: 'Templates',
+    },
+    flow: {
+      capability: 'Capability',
+      binding: 'Which binding to configure',
+      bindingHint:
+        'The structure is fixed by the platform; this picks which agents, prompts and parameters it runs with.',
+      bindingNone: '(none — just show the structure)',
+      hint: 'Click any step to see and change what it actually uses. The structure — which steps exist and how they connect — is fixed by the platform.',
+      sharedSlot:
+        'This slot is also used by {{count}} other step(s) ({{stages}}) — changing it here changes them too.',
+      agent: 'Agent',
+      agentNone: '(unset)',
+      prompt: 'Prompt',
+      script: 'Script',
+      scriptLanguage: 'Interpreter',
+      scriptRedacted:
+        'You do not have permission to see script bodies (scripts:author). Blank here means "not shown", not "no script".',
+      params: 'Parameters',
+      saveParams: 'Save parameters',
+      hooks: 'Hooks',
+      noHooks: 'No hooks are mounted on either side of this step yet.',
+      hookPhase: 'Which side',
+      hookPre: 'Before this step',
+      hookPost: 'After this step',
+      hookScript: 'Hook script',
+      addHook: 'Add hook',
     },
     repoLabel: 'Repository',
     repoHint: 'The project path events arrive for, e.g. group/project',

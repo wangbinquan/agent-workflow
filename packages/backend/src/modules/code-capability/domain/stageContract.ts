@@ -83,6 +83,32 @@ export interface StageBase {
   /** Artifacts this stage publishes for downstream stages. */
   produces: readonly string[]
   /**
+   * The subset of `produces` that intentionally LEAVES the sequence — nothing
+   * downstream reads it, and that is correct.
+   *
+   * Added by RFC-307, when drawing the sequence made the question askable for
+   * the first time. Projecting the contract into a graph turns "produces
+   * something nobody reads" from an invisible property into a node with no
+   * outgoing edge, and the three the platform ships turned out to be three
+   * DIFFERENT legitimate shapes:
+   *
+   *   · a branch terminus — `mr-comment-fix` splits on `form` into a suggestion
+   *     tail and a patch tail; `published` ends the first one while the array
+   *     continues into the second;
+   *   · a round terminus — `requirement`'s `clarify` settles the round
+   *     `awaiting` and the human's answer resumes at `comprehend` in the NEXT
+   *     round, so `clarification` has no downstream stage by construction;
+   *   · consumed off-channel — `ci-fix`'s `select` hands `agentPlan` to the
+   *     dispatcher (which agent the `fix` stage runs), not to a later stage.
+   *
+   * Declaring them is what keeps the check meaningful. Exempting every
+   * unconsumed artifact would make it fire never; requiring a declaration means
+   * a consumer dropped in a refactor still gets caught, because the artifact
+   * would be neither read nor declared. The renderer also uses this to draw an
+   * endpoint instead of a dangling node.
+   */
+  terminal?: readonly string[]
+  /**
    * Keys a `pre` hook on this stage may inject (design §4.3 F6 — e.g.
    * `promptSuffix`, `extraContext`). Absent means a hook here may still write
    * the worktree and abort, but may not hand data back.
