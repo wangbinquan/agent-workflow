@@ -1097,7 +1097,7 @@ daemon 的」被 fence 放行，用例转红。夹具改用 `DAEMON_GENERATION`�
 mr-review 的总览统一到 `mrVoice.updateSummary` 上，那会动到 review 总览的正文契约
 （e2e 断言里的 `still open` 等），是一次独立重构，未做。
 
-**回执被下一层挡住（e2e 第二次打脸，同样值得写下来）**：我把回执接在 issue 打标签
+**回执被下一层挡住 → 已补齐下一层（e2e 两次打脸，两次都值得写下来）**：我把回执接在 issue 打标签
 入口 + 轮次终局上，单测 14 条全绿；写了条 e2e 用真事件走真 daemon，回执**从未到达**。
 原因在 shared 的 code-host action 目录：`comment.create` **只支持 MR**，GitLab binding
 是 `/projects/{id}/merge_requests/{mr}/notes`，整个 registry **没有任何 issue 版本**
@@ -1109,10 +1109,24 @@ mr-review 的总览统一到 `mrVoice.updateSummary` 上，那会动到 review �
 所以整体撤回，不留「看起来做完了」的假象；`application/manualReceipt.ts` 与其 14 条
 单测保留，文件头写明未接线与原因。
 
-**前置条件（建议单独立 RFC）**：给 action 目录加 issue 作用域的评论三件套 create /
-list / update——GitLab `/projects/{id}/issues/{iid}/notes`、GitHub
-`/repos/{owner}/{repo}/issues/{n}/comments`。它动的是 UI 里可配置的 action 选择面
-（`CODE_HOST_ACTIONS` 是闭合集合，带 i18n 与 intent-doc 断言），属产品面变更。
+**已补齐（本轮做完）**：action 目录加了 issue 作用域的评论三件套——
+`comment.create-issue` / `comment.list-issue` / `comment.update-issue`，GitLab 走
+`/projects/{id}/issues/{iid}/notes`，GitHub 走 `/repos/{owner}/{repo}/issues/{n}/comments`
+（GitHub 的 PR 本身就是 issue，两者同端点；GitLab 是两套真正不同的集合——正是这个不
+对称让「半残版本」看起来像完成了）。新增**独立动作**而非给既有动作加 scope 开关：既有
+动作已经躺在用户保存好的工作流里，一个能改变「这条动作指向哪个对象」的字段等于**静默
+改写别人的配置**。字段也新增 `issue` 而不复用 `mr`：两者是编号会重叠的不同对象，表单里
+叫同一个名字就会让人以为自己填的是 MR 412 而其实是 issue 412。i18n 两语言的标签与说明
+一并补齐。
+
+**判定说明（呈用户复核）**：这条动了 UI 里可配置的 action 选择面，按 §RFC workflow
+本该单独立 RFC。我判断它属于**实现 RFC-304 已批准的 AC-34**（「人工指令必须有回执」）
+而非新产品决策——行为是 RFC-304 定的，缺的只是执行它所需的端点。若不认同，撤掉这三条
+动作即可，回执随之退回未接线状态。
+
+回执随即接回（ingress 建 + 路由结果更新 + 轮次终局收口），并由
+`e2e/rfc304-manual-receipt.spec.ts` 用真事件证明：issue 上只出现**一条**回执、后续全是
+编辑、自动事件**一条都不发**。按 CI 并发 `--workers=4` 连跑三遍稳定。
 
 **两次打脸的共同点**：都是「符号级判断」对、「产品级判断」错，而且**两次都只有
 e2e 抓得住**——单测测的是模块，模块一直是对的。总览那次是「这件事早就有人做了」，

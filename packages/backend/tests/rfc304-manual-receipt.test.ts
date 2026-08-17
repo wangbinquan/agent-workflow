@@ -1,6 +1,4 @@
-// RFC-304 §11.2 T59 — the receipt module, and the reason it still has no caller.
-//
-// ⚠️ NOT WIRED. Read this before concluding the platform sends receipts.
+// RFC-304 §11.2 T59/AC-34 — the receipt, and the two ways it was broken.
 //
 // The rule exists because silence on the manual paths does not reduce noise, it
 // multiplies it: a reviewer @-mentions the platform, hears nothing for half an
@@ -14,30 +12,26 @@
 // event never is, and the closing update finds the receipt by the same
 // correlation id the troubleshooting chain uses rather than by guessing.
 //
-// ## Why nothing calls this yet
+// ## Two failures, both invisible to unit tests
 //
-// It WAS wired — ingress plus round-finalize — and an e2e driving a real
-// `issue_labeled` event through a real daemon showed the receipt never arrived.
-// The cause is one layer down: `comment.create` in the shared code-host catalog
-// is merge-request-only. Its GitLab binding is
-// `/projects/{id}/merge_requests/{mr}/notes`, and there is no issue equivalent
-// anywhere in the registry, so a receipt on an ISSUE cannot be posted at all.
-// (GitHub happens to be able to — its issue and PR comments are one endpoint —
-// which is exactly the kind of asymmetry that makes a half-working feature look
-// finished.)
+// It had no caller at all: `mrVoice.answer` was complete, correct and covered,
+// so every case here passed while no person had ever received a receipt.
 //
-// Comments were deliberately excluded as a receipt source (`mr-comment-fix`
+// Then, once wired, it could not work. `comment.create` in the shared catalog
+// is merge-request-only — GitLab binds `/merge_requests/{mr}/notes` — so
+// answering on an ISSUE reached nothing. The first wiring logged a warning and
+// returned: wiring that silently does nothing, which reads as done. An e2e
+// driving a real `issue_labeled` event found it; the catalog then gained
+// `comment.{create,list,update}-issue` (GitLab has two genuinely different
+// collections; GitHub serves both from `/issues/{n}/comments`, which is exactly
+// the asymmetry that made the half-working version look finished).
+//
+// Comments remain deliberately excluded as a receipt source: `mr-comment-fix`
 // wakes on any note, so acknowledging each would reply under every line of a
-// human conversation), and issue labels were the one source left. With no issue
-// endpoint, the wiring could only log a warning and return — wiring that
-// silently does nothing, which is the exact defect class this RFC has been
-// clearing out. So it was taken back out rather than left looking done.
+// human conversation — the feed §11.1 exists to prevent.
 //
-// Delivering T59 needs an issue-scoped comment action in the catalog
-// (GitLab `/projects/{id}/issues/{iid}/notes`, GitHub
-// `/repos/{owner}/{repo}/issues/{n}/comments`) for create, list and update.
-// That is a change to the configurable action surface the UI renders, so it
-// belongs to its own RFC rather than to this one's cleanup.
+// The end-to-end proof lives in `e2e/rfc304-manual-receipt.spec.ts`; these
+// cases pin the module's own rules.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'

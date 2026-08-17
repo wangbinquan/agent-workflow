@@ -50,6 +50,30 @@ export interface MrVoiceEnv {
   budget?: number
   /** Records a notification so the budget survives the round. */
   onNotified?: () => Promise<void> | void
+  /**
+   * Which code-host actions address this thread.
+   *
+   * Defaults to the merge-request ones. An ISSUE needs different actions, not
+   * just a different parameter: `comment.create` binds to
+   * `/merge_requests/{mr}/notes` on GitLab, so addressing an issue through it
+   * reaches a different object or nothing at all. Passing the wrong set here
+   * fails on the far side of the wire, where the person waiting never sees it.
+   */
+  actions?: {
+    list: 'comment.list' | 'comment.list-issue'
+    create: 'comment.create' | 'comment.create-issue'
+    update: 'comment.update' | 'comment.update-issue'
+  }
+}
+
+const MR_ACTIONS = {
+  list: 'comment.list',
+  create: 'comment.create',
+  update: 'comment.update',
+} as const
+
+function actionsOf(env: MrVoiceEnv): NonNullable<MrVoiceEnv['actions']> {
+  return env.actions ?? MR_ACTIONS
 }
 
 /**
@@ -88,7 +112,10 @@ interface HostComment {
  * than losing the work that produced it.
  */
 async function listComments(env: MrVoiceEnv): Promise<HostComment[]> {
-  const res = await env.codeHost.call({ action: 'comment.list', params: { ...env.target } })
+  const res = await env.codeHost.call({
+    action: actionsOf(env).list,
+    params: { ...env.target },
+  })
   if (!res.ok) return []
   try {
     const parsed: unknown = JSON.parse(res.body)
@@ -113,14 +140,14 @@ async function editOrCreate(
 ): Promise<{ ok: boolean; created: boolean }> {
   if (existing !== undefined) {
     const res = await env.codeHost.call({
-      action: 'comment.update',
+      action: actionsOf(env).update,
       params: { ...env.target, comment: existing.id, body },
     })
     // An edit notifies nobody on either host, so it is never budgeted.
     return { ok: res.ok, created: false }
   }
   const res = await env.codeHost.call({
-    action: 'comment.create',
+    action: actionsOf(env).create,
     params: { ...env.target, body },
   })
   return { ok: res.ok, created: true }

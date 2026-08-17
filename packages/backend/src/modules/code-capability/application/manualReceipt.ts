@@ -73,16 +73,30 @@ export async function answerManualInstruction(input: {
     return { answered: false, reason: 'the endpoint this arrived on no longer exists' }
   }
 
+  // The anchor decides BOTH the field name and the action. Answering a merge
+  // request instruction on an issue thread — or the reverse — is a 404 the
+  // person never sees, because the failure is on our side of the wire.
+  //
+  // The issue actions exist because they had to: `comment.create` and its
+  // siblings are merge-request-only (GitLab's binding is
+  // `/merge_requests/{mr}/notes`), so the first version of this could not post
+  // on a GitLab issue at all and quietly did nothing. That is why AC-34 was
+  // unreachable, and why the catalog gained `comment.*-issue`.
+  const onIssue = input.anchorKind === 'issue'
   const result = await answer(
     {
       codeHost: input.codeHost ?? createCodeHostAdapter({ db, provider: endpoint.provider }),
-      // Explicit param names, and the anchor decides which one: answering a
-      // merge request instruction on an issue thread (or the reverse) is a 404
-      // the person never sees, because the failure is on our side of the wire.
       target: {
         project: input.stableProjectId,
-        ...(input.anchorKind === 'mr' ? { mr: input.anchorId } : { issue: input.anchorId }),
+        ...(onIssue ? { issue: input.anchorId } : { mr: input.anchorId }),
       },
+      actions: onIssue
+        ? {
+            list: 'comment.list-issue',
+            create: 'comment.create-issue',
+            update: 'comment.update-issue',
+          }
+        : undefined,
     },
     input.operationId,
     input.state,

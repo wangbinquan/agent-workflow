@@ -32,6 +32,19 @@ export const CODE_HOST_ACTIONS = [
   'comment.create',
   'comment.create-inline',
   'comment.update',
+  // RFC-304 AC-34 — the ISSUE equivalents of the three above.
+  //
+  // Separate actions rather than a scope switch on the existing ones, because
+  // the existing ones are already configured in people's workflows and a field
+  // that changes what a saved action addresses is a silent rewrite of their
+  // configuration. The hosts differ here too: GitHub serves issue and pull
+  // comments from ONE endpoint (`/issues/{n}/comments` — a pull request is an
+  // issue), while GitLab has two genuinely different collections. Without
+  // these, the platform could not comment on a GitLab issue at all, which is
+  // what left `requirement` unable to answer the person who labelled it.
+  'comment.create-issue',
+  'comment.list-issue',
+  'comment.update-issue',
   'thread.resolve',
   // RFC-304 — batch review publication. Deliberately three actions rather than
   // one "publish a review", because the two hosts are not the same shape:
@@ -79,6 +92,12 @@ export type CodeHostAction = (typeof CODE_HOST_ACTIONS)[number]
 export const CODE_HOST_FIELDS = [
   'project',
   'mr',
+  // RFC-304: the issue number, kept distinct from `mr` on purpose. They are
+  // different objects with overlapping numbering, and a form that called both
+  // "mr" would let somebody address issue 412 believing they addressed merge
+  // request 412 — which fails as a 404 at best and comments on a stranger's
+  // change at worst.
+  'issue',
   'thread',
   'comment',
   'comment_scope',
@@ -211,6 +230,7 @@ const BOTH: readonly CodeHostProvider[] = ['gitlab', 'github']
 const PROJECT: CodeHostFieldDef = { name: 'project', control: 'text', requiredFor: [] }
 const MR_REQUIRED: CodeHostFieldDef = { name: 'mr', control: 'text', requiredFor: BOTH }
 const BODY_REQUIRED: CodeHostFieldDef = { name: 'body', control: 'textarea', requiredFor: BOTH }
+const ISSUE_REQUIRED: CodeHostFieldDef = { name: 'issue', control: 'text', requiredFor: BOTH }
 
 export const CODE_HOST_ACTION_DEFS = {
   // -------------------------------------------------------------------------
@@ -323,6 +343,64 @@ export const CODE_HOST_ACTION_DEFS = {
       github: {
         method: 'PATCH',
         path: '/repos/{__project__}/{comment_scope}/comments/{comment}',
+        body: [{ api: 'body', from: { field: 'body' } }],
+      },
+    },
+  },
+  'comment.create-issue': {
+    group: 'comment',
+    fields: [PROJECT, ISSUE_REQUIRED, BODY_REQUIRED],
+    bindings: {
+      gitlab: {
+        method: 'POST',
+        path: '/projects/{__project__}/issues/{issue}/notes',
+        body: [{ api: 'body', from: { field: 'body' } }],
+      },
+      github: {
+        // The same endpoint `comment.create` uses for a pull request: on GitHub
+        // a pull request IS an issue, so one path serves both. Kept as its own
+        // action anyway, because the FIELD differs — this one takes an issue
+        // number — and sharing the action would mean sharing the field name.
+        method: 'POST',
+        path: '/repos/{__project__}/issues/{issue}/comments',
+        body: [{ api: 'body', from: { field: 'body' } }],
+      },
+    },
+  },
+  'comment.list-issue': {
+    group: 'read',
+    fields: [PROJECT, ISSUE_REQUIRED, { name: 'per_page', control: 'text', requiredFor: [] }],
+    bindings: {
+      // Plain notes rather than discussions: an issue has no diff, so there are
+      // no review threads to fold — and `notes` returns the note id that
+      // `comment.update-issue` needs, which the discussion listing does not.
+      gitlab: {
+        method: 'GET',
+        path: '/projects/{__project__}/issues/{issue}/notes',
+      },
+      github: { method: 'GET', path: '/repos/{__project__}/issues/{issue}/comments' },
+    },
+  },
+  'comment.update-issue': {
+    group: 'comment',
+    fields: [
+      PROJECT,
+      ISSUE_REQUIRED,
+      { name: 'comment', control: 'text', requiredFor: BOTH },
+      BODY_REQUIRED,
+    ],
+    bindings: {
+      gitlab: {
+        method: 'PUT',
+        path: '/projects/{__project__}/issues/{issue}/notes/{comment}',
+        body: [{ api: 'body', from: { field: 'body' } }],
+      },
+      github: {
+        // GitHub addresses an issue comment by its own id, with no issue number
+        // in the path — the number is still required on the form so the action
+        // reads the same as its siblings and the caller cannot mix objects.
+        method: 'PATCH',
+        path: '/repos/{__project__}/issues/comments/{comment}',
         body: [{ api: 'body', from: { field: 'body' } }],
       },
     },

@@ -5906,6 +5906,9 @@ export const enUS: Resources = {
     comment_create: 'Post general MR/PR comment',
     'comment_create-inline': 'Start inline review discussion',
     comment_update: 'Update comment content',
+    'comment_create-issue': 'Post issue comment',
+    'comment_list-issue': 'List issue comments',
+    'comment_update-issue': 'Update issue comment',
     thread_resolve: 'Resolve review discussion',
     'commit-status_set': 'Set commit status',
     label_add: 'Add labels',
@@ -5938,6 +5941,12 @@ export const enUS: Resources = {
       'Start an inline review discussion on an MR/PR diff using position JSON in the platform format.',
     comment_update:
       'Update existing comment text. GitLab supports general MR notes here; on GitHub, choose a general or inline review comment.',
+    'comment_create-issue':
+      'Post a comment on an issue. Separate from the MR/PR action because an issue is a different object — on GitHub the endpoint happens to be shared, on GitLab it is not.',
+    'comment_list-issue':
+      'List the comments on an issue, with the comment IDs needed to update one.',
+    'comment_update-issue':
+      'Update the text of an existing issue comment, addressed by its comment ID.',
     thread_resolve:
       'Mark an existing GitLab MR review discussion as resolved; GitHub has no equivalent REST endpoint.',
     'commit-status_set':
@@ -5982,6 +5991,7 @@ export const enUS: Resources = {
   codeHostField: {
     project: 'Project',
     mr: 'MR / PR number',
+    issue: 'Issue number',
     thread: 'Discussion / root comment ID',
     comment: 'Comment ID',
     comment_scope: 'Comment type',

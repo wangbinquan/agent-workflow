@@ -5048,6 +5048,9 @@ export interface Resources {
     comment_create: string
     'comment_create-inline': string
     comment_update: string
+    'comment_create-issue': string
+    'comment_list-issue': string
+    'comment_update-issue': string
     thread_resolve: string
     'commit-status_set': string
     label_add: string
@@ -5076,6 +5079,9 @@ export interface Resources {
     comment_create: string
     'comment_create-inline': string
     comment_update: string
+    'comment_create-issue': string
+    'comment_list-issue': string
+    'comment_update-issue': string
     thread_resolve: string
     'commit-status_set': string
     label_add: string
@@ -5102,6 +5108,7 @@ export interface Resources {
   codeHostField: {
     project: string
     mr: string
+    issue: string
     thread: string
     comment: string
     comment_scope: string
@@ -11383,6 +11390,9 @@ export const zhCN: Resources = {
     comment_create: '发布普通 MR/PR 评论',
     'comment_create-inline': '新建行内评审讨论',
     comment_update: '更新评论内容',
+    'comment_create-issue': '在 issue 上发评论',
+    'comment_list-issue': '列出 issue 的评论',
+    'comment_update-issue': '更新 issue 评论',
     thread_resolve: '解决评审讨论',
     'commit-status_set': '设置提交状态',
     label_add: '添加标签',
@@ -11413,6 +11423,10 @@ export const zhCN: Resources = {
     'comment_create-inline': '在 MR/PR 的代码差异上新建行内评审讨论，需要提供平台格式的位置 JSON。',
     comment_update:
       '更新已有评论正文。GitLab 仅适用于普通 MR 评论；GitHub 还需选择普通评论或行内评审评论。',
+    'comment_create-issue':
+      '在 issue 上发评论。与 MR/PR 那条分开，因为 issue 是另一类对象——GitHub 恰好共用同一个端点，GitLab 不共用。',
+    'comment_list-issue': '列出某个 issue 的评论，含更新评论所需的评论 ID。',
+    'comment_update-issue': '按评论 ID 更新某条 issue 评论的正文。',
     thread_resolve: '将 GitLab MR 的已有评审讨论标记为已解决；GitHub REST 没有对等接口。',
     'commit-status_set': '为指定提交写入进行中、通过或不通过状态，可附状态名称与详情链接。',
     label_add: '向指定 MR/PR 追加一个或多个标签，不移除已有标签。',
@@ -11447,6 +11461,7 @@ export const zhCN: Resources = {
   codeHostField: {
     project: '项目',
     mr: 'MR / PR 编号',
+    issue: 'Issue 编号',
     thread: '评审讨论 / 顶层评论 ID',
     comment: '评论 ID',
     comment_scope: '评论类型',
