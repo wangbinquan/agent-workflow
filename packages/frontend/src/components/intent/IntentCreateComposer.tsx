@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from 'react'
-import { createPortal } from 'react-dom'
 import {
   INTENT_MESSAGE_MAX,
   IntentSessionSummarySchema,
@@ -8,6 +7,7 @@ import {
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type ApiError } from '@/api/client'
+import { AppPortal } from '@/components/AppPortal'
 import { ChoiceCards } from '@/components/ChoiceCards'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextArea } from '@/components/Form'
@@ -256,9 +256,9 @@ export function IntentCreateComposer(props: {
         </div>
       )}
       {props.footerTarget === undefined ? footer : null}
-      {props.footerTarget !== undefined && props.footerTarget !== null
-        ? createPortal(footer, props.footerTarget)
-        : null}
+      {props.footerTarget !== undefined && props.footerTarget !== null ? (
+        <AppPortal target={props.footerTarget}>{footer}</AppPortal>
+      ) : null}
     </form>
   )
 }

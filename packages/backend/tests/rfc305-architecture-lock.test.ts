@@ -574,8 +574,14 @@ describe('RFC-305 permission catalog architecture', () => {
       resolve(FRONTEND_SRC, 'components', 'shell', 'AppShell.tsx'),
       'utf8',
     )
+    const appPortal = readFileSync(resolve(FRONTEND_SRC, 'components', 'AppPortal.tsx'), 'utf8')
     const memoryBadge = readFileSync(
       resolve(FRONTEND_SRC, 'components', 'shell', 'MemoryPendingBadge.tsx'),
+      'utf8',
+    )
+    const taskWizard = readFileSync(resolve(FRONTEND_SRC, 'routes', 'tasks.new.tsx'), 'utf8')
+    const repoSourceRow = readFileSync(
+      resolve(FRONTEND_SRC, 'components', 'launch', 'RepoSourceRow.tsx'),
       'utf8',
     )
     const agentForm = readFileSync(resolve(FRONTEND_SRC, 'components', 'AgentForm.tsx'), 'utf8')
@@ -594,6 +600,15 @@ describe('RFC-305 permission catalog architecture', () => {
     expect(appShell).toContain('navPermissionForPath(pathname)')
     expect(appShell).toContain('lastAuthorizedDestinationRef')
     expect(appShell).toContain('mountDestination &&')
+    expect(appShell).toContain('<Activity')
+    expect(appShell).toContain('<RoutePortalScope active={destinationGranted}>')
+    expect(appPortal).toContain('RoutePortalActiveContext')
+    expect(appPortal).toContain('return createPortal(children, target ?? document.body)')
+    expect(
+      sourceFiles(FRONTEND_SRC, ['.ts', '.tsx'])
+        .filter((file) => readFileSync(file, 'utf8').includes("from 'react-dom'"))
+        .map(relativeToRepo),
+    ).toEqual(['packages/frontend/src/components/AppPortal.tsx'])
     expect(appShell).toContain("permissions.has('memory:read')")
     expect(memoryBadge).toContain("usePermission('memory:read')")
     expect(memoryBadge).toContain('enabled: canReadMemory')
@@ -611,6 +626,16 @@ describe('RFC-305 permission catalog architecture', () => {
     expect(workflowEditor).toContain(
       'editorLayoutClass(selection?.id ?? null, workspaceMode, canUpdate)',
     )
+    expect(taskWizard).toContain("usePermission('repos:read')")
+    expect(taskWizard).toContain("usePermission('scheduled-tasks:create')")
+    expect(taskWizard).toContain("usePermission('users:search')")
+    expect(taskWizard).toContain('enabled: canReadRepos')
+    expect(taskWizard).toContain('enabled: isRelaunch && canReadTasks')
+    expect(taskWizard).toContain(
+      'enabled: isEdit && canReadScheduledTasks && canUpdateScheduledTasks',
+    )
+    expect(repoSourceRow).toContain('enabled: catalogEnabled')
+    expect(repoSourceRow).toContain('enabled: catalogEnabled && onSelectGroup !== undefined')
   })
 })
 

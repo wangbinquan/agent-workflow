@@ -18,8 +18,8 @@
 // and all key handling live in this component's own IME-guarded keydown.
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { AppPortal } from '@/components/AppPortal'
 import { usePopoverPosition } from '@/hooks/usePopoverPosition'
 import { useChipsCommit } from './ChipsInput'
 
@@ -299,9 +299,8 @@ export function MultiSelect(props: MultiSelectProps) {
           ▾
         </span>
       </div>
-      {open &&
-        popPos !== null &&
-        createPortal(
+      {open && popPos !== null && (
+        <AppPortal>
           <ul
             id={listId}
             ref={listRef}
@@ -375,9 +374,9 @@ export function MultiSelect(props: MultiSelectProps) {
                 )
               })
             )}
-          </ul>,
-          document.body,
-        )}
+          </ul>
+        </AppPortal>
+      )}
     </div>
   )
 }

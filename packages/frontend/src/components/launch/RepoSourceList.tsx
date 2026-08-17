@@ -43,6 +43,8 @@ export interface RepoSourceListProps {
   /** RFC-249: selected group remains represented by the first shared row. */
   selectedGroupId?: string
   selectedGroupDetails?: ReactNode
+  /** Whether protected cached-repo / repo-group catalogs may be queried. */
+  catalogEnabled?: boolean
 }
 
 export function RepoSourceList({
@@ -53,6 +55,7 @@ export function RepoSourceList({
   onSelectGroup,
   selectedGroupId,
   selectedGroupDetails,
+  catalogEnabled = true,
 }: RepoSourceListProps) {
   const { t } = useTranslation()
   const max = maxCount ?? MULTI_REPO_MAX
@@ -81,8 +84,9 @@ export function RepoSourceList({
           showRemove={isMulti}
           onRemove={() => removeAt(i)}
           previewDirName={isMulti ? (previewNames[i] ?? null) : null}
-          {...(onSelectGroup !== undefined && i === 0 ? { onSelectGroup } : {})}
-          {...(selectedGroupId !== undefined && i === 0
+          catalogEnabled={catalogEnabled}
+          {...(catalogEnabled && onSelectGroup !== undefined && i === 0 ? { onSelectGroup } : {})}
+          {...(catalogEnabled && selectedGroupId !== undefined && i === 0
             ? { selectedGroupId, details: selectedGroupDetails }
             : {})}
         />

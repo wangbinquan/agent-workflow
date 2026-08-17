@@ -12,8 +12,8 @@
 // callers.
 
 import { useEffect, useId, useRef, type ReactElement, type ReactNode, type RefObject } from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { AppPortal } from '@/components/AppPortal'
 
 export type DialogSize = 'sm' | 'md' | 'lg' | 'full'
 
@@ -421,5 +421,5 @@ export function Dialog(props: DialogProps): ReactElement | null {
 
   // happy-dom (vitest environment) still has `document.body`, so the
   // portal works in tests too.
-  return createPortal(overlay, document.body)
+  return <AppPortal>{overlay}</AppPortal>
 }

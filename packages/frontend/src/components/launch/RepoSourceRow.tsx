@@ -42,6 +42,8 @@ export interface RepoSourceRowProps {
   details?: ReactNode
   /** Keeps the shared selector selected while the parent space is a repo group. */
   selectedGroupId?: string
+  /** Fail-closed switch for the repos:read-protected catalogs. */
+  catalogEnabled?: boolean
 }
 
 /** 下拉里区分「组条目」与「仓库条目」的值前缀（仓库值是裸 ULID）。 */
@@ -58,6 +60,7 @@ export function RepoSourceRow({
   onRemove,
   previewDirName,
   index,
+  catalogEnabled = true,
 }: RepoSourceRowProps) {
   const { t } = useTranslation()
   // RFC-248: 仓库组与仓库同列在这一个下拉里——用户视角「就是从仓库列表里选
@@ -66,11 +69,12 @@ export function RepoSourceRow({
   const groups = useQuery<{ items: RepoGroup[] }>({
     queryKey: ['repo-groups'],
     queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
-    enabled: onSelectGroup !== undefined,
+    enabled: catalogEnabled && onSelectGroup !== undefined,
   })
   const cached = useQuery<{ items: CachedRepo[] }>({
     queryKey: ['cached-repos'],
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
+    enabled: catalogEnabled,
   })
 
   const idxSuffix = typeof index === 'number' ? `-${index}` : ''

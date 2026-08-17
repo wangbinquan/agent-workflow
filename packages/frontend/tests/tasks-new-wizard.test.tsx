@@ -34,17 +34,23 @@ import { setBaseUrl, setToken } from '../src/stores/auth'
 import { taskWizardDraftKey, taskWizardNewDraftSourceId } from '../src/lib/task-wizard-draft'
 import '../src/i18n'
 
+const permissionHarness = vi.hoisted(() => ({
+  permissions: new Set<string>(),
+}))
+
 vi.mock('../src/hooks/useActor', () => ({
   useActor: () => ({
     data: {
       user: { id: 'me', username: 'me', displayName: 'Me', role: 'user', status: 'active' },
       source: 'session',
-      permissions: [],
+      permissions: [...permissionHarness.permissions],
       linkedIdentities: [],
       pats: [],
     },
+    status: 'success',
+    fetchStatus: 'idle',
   }),
-  usePermission: () => false,
+  usePermission: (permission: string) => permissionHarness.permissions.has(permission),
 }))
 
 interface FetchCall {
@@ -206,6 +212,15 @@ function stubDelegatingSessionStorage(overrides: Partial<Storage>): void {
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
+  permissionHarness.permissions = new Set([
+    'tasks:read',
+    'tasks:execute',
+    'repos:read',
+    'scheduled-tasks:read',
+    'scheduled-tasks:create',
+    'scheduled-tasks:update',
+    'users:search',
+  ])
   window.localStorage.clear()
   window.sessionStorage.clear()
 })
@@ -394,6 +409,60 @@ async function chooseManualRepoUrl() {
 }
 
 describe('RFC-165 T12 — /tasks/new wizard', () => {
+  test('tasks:execute alone keeps launch usable without probing or exposing extra capabilities', async () => {
+    permissionHarness.permissions = new Set(['tasks:execute'])
+    const calls = installFetch()
+    await renderWizard(AGENT_NEW_URL)
+
+    fireEvent.click(await screen.findByTestId('wizard-space-remote'))
+    const repoUrl = await screen.findByTestId('repo-source-url-0')
+    fireEvent.change(repoUrl, { target: { value: 'https://github.com/public/example.git' } })
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+
+    expect(screen.queryByTestId('wizard-collaborators-input')).toBeNull()
+    fireEvent.change(await screen.findByTestId('wizard-task-name'), {
+      target: { value: 'Public task' },
+    })
+    fireEvent.change(screen.getByTestId('wizard-description'), {
+      target: { value: 'Read and summarize the public repository' },
+    })
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+
+    expect(await screen.findByTestId('wizard-launch')).toBeTruthy()
+    expect(screen.queryByTestId('wizard-save-scheduled')).toBeNull()
+    expect(
+      calls.filter((call) =>
+        [
+          '/api/cached-repos',
+          '/api/repo-groups',
+          '/api/scheduled-tasks',
+          '/api/users/search',
+          '/api/users/lookup',
+        ].some((path) => call.url.includes(path)),
+      ),
+    ).toEqual([])
+  })
+
+  test.each([
+    ['/tasks/new?editScheduled=sched-a', '/api/scheduled-tasks/sched-a'],
+    ['/tasks/new?relaunchFrom=relaunch-task', '/api/tasks/relaunch-task'],
+    ['/tasks/new?schedule=1', '/api/scheduled-tasks'],
+  ])('an unauthorized capability deep link %s is request-free', async (url, protectedPath) => {
+    permissionHarness.permissions = new Set(['tasks:execute'])
+    const calls = installFetch()
+    await renderWizard(url, { waitForWizard: false })
+
+    expect(await screen.findByTestId('wizard-capability-error')).toBeTruthy()
+    expect(screen.queryByTestId('task-wizard')).toBeNull()
+    expect(calls.some((call) => call.url.includes(protectedPath))).toBe(false)
+  })
+
   test('W1+W4+W5: workflow arm — gating, backlink, launch POST /api/tasks', async () => {
     const calls = installFetch()
     await renderWizard('/tasks/new')

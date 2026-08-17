@@ -5,6 +5,7 @@
 // their separate 720px stacking contract in CSS.
 
 import {
+  Activity,
   useCallback,
   useEffect,
   useRef,
@@ -15,6 +16,7 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { RoutePortalScope } from '@/components/AppPortal'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
 import { LoadingState } from '@/components/LoadingState'
 import { UserMenu } from '@/components/UserMenu'
@@ -84,8 +86,11 @@ export function AppShell({ pathname, children }: AppShellProps) {
   // A WS-driven /me refresh must fail closed immediately, but unmounting the
   // routed subtree throws away unsaved local drafts without consulting that
   // route's navigation guard. Preserve only the exact path that was already
-  // authorized, keep it non-rendered while authority is unsettled, and unmount
-  // it once a fresh successful snapshot explicitly denies the permission.
+  // authorized inside React's Activity boundary: hidden mode keeps component
+  // state, hides ordinary host nodes, and disconnects effects so a stale-
+  // authority page cannot keep polling. RoutePortalScope separately removes
+  // body-level portals, which sit outside Activity's host tree. A fresh
+  // explicit denial still unmounts the subtree entirely.
   const destinationKey = `${pathname}\u0000${destinationPermission ?? 'public'}`
   const destinationAuthorityUnsettled =
     destinationPermission !== null &&
@@ -191,15 +196,22 @@ export function AppShell({ pathname, children }: AppShellProps) {
 
       <main ref={mainRef} className="content" tabIndex={-1} data-testid="app-shell-main">
         {mountDestination && (
-          <div
-            className={`app-shell__route-content${
-              destinationGranted ? '' : ' app-shell__route-content--suspended'
-            }`}
-            data-testid="app-shell-route-content"
-            aria-hidden={destinationGranted ? undefined : true}
+          <Activity
+            mode={destinationGranted ? 'visible' : 'hidden'}
+            name="app-shell-route-authority"
           >
-            {children}
-          </div>
+            <RoutePortalScope active={destinationGranted}>
+              <div
+                className={`app-shell__route-content${
+                  destinationGranted ? '' : ' app-shell__route-content--suspended'
+                }`}
+                data-testid="app-shell-route-content"
+                aria-hidden={destinationGranted ? undefined : true}
+              >
+                {children}
+              </div>
+            </RoutePortalScope>
+          </Activity>
         )}
         {!destinationGranted &&
           destinationAuthorityUnsettled &&

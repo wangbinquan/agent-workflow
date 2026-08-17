@@ -28,9 +28,9 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { createPortal } from 'react-dom'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { AppPortal } from '@/components/AppPortal'
 import { getTour, isTourId, type TourId, type TourStep } from './tourScript'
 
 interface TourState {
@@ -469,5 +469,5 @@ function SpotlightOverlay({ pathname, state }: { pathname: string; state: TourSt
     </div>
   )
 
-  return createPortal(body, document.body)
+  return <AppPortal>{body}</AppPortal>
 }

@@ -2,9 +2,10 @@
 // member lists, task members panel). RFC-036 planned this component but the
 // UI never shipped; this is the canonical implementation.
 //
-// Search hits GET /api/users/search (users:search — available to every
-// logged-in user, public fields only) with a 200 ms debounce; selected users
-// render as removable chips (same .chip primitives as ChipsInput).
+// Search hits GET /api/users/search (users:search — only when the owning
+// surface has that capability, public fields only) with a 200 ms debounce;
+// selected users render as removable chips (same .chip primitives as
+// ChipsInput).
 //
 // The results list is PORTALED to document.body and positioned from the
 // field's bounding rect — the same pattern as <Select>'s listbox — so it
@@ -17,10 +18,10 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState, type AriaAttributes, type KeyboardEvent } from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { UserPublic } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { AppPortal } from '@/components/AppPortal'
 import { usePopoverPosition } from '@/hooks/usePopoverPosition'
 
 interface UserPickerProps {
@@ -246,10 +247,8 @@ export function UserPicker({
           }}
         />
       </div>
-      {open &&
-        !disabled &&
-        popPos !== null &&
-        createPortal(
+      {open && !disabled && popPos !== null && (
+        <AppPortal>
           <ul
             id={listId}
             ref={listRef}
@@ -291,9 +290,9 @@ export function UserPicker({
                 </li>
               ))
             )}
-          </ul>,
-          document.body,
-        )}
+          </ul>
+        </AppPortal>
+      )}
     </div>
   )
 }

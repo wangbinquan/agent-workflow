@@ -18,8 +18,8 @@ import {
   type ReactNode,
   type Ref,
 } from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { AppPortal } from '@/components/AppPortal'
 import { usePopoverPosition } from '@/hooks/usePopoverPosition'
 
 export interface SelectOption<V extends string> {
@@ -409,9 +409,8 @@ export function Select<V extends string>(props: Props<V>) {
           ▾
         </span>
       </button>
-      {open &&
-        popPos &&
-        createPortal(
+      {open && popPos && (
+        <AppPortal>
           <ul
             id={popoverId}
             ref={listRef}
@@ -552,9 +551,9 @@ export function Select<V extends string>(props: Props<V>) {
                 </Fragment>
               )
             })}
-          </ul>,
-          document.body,
-        )}
+          </ul>
+        </AppPortal>
+      )}
     </div>
   )
 }

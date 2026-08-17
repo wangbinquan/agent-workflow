@@ -1,6 +1,6 @@
 // RFC-198 PR2 — rendered responsive-shell and focus lifecycle contract.
 
-import type { AnchorHTMLAttributes, ReactNode } from 'react'
+import { useEffect, type AnchorHTMLAttributes, type ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -215,6 +215,7 @@ vi.mock('@/components/shell/MemoryPendingBadge', async () => {
 })
 
 import i18n from '../src/i18n'
+import { AppPortal } from '../src/components/AppPortal'
 import { AppShell } from '../src/components/shell/AppShell'
 import { RootShell } from '../src/routes/__root'
 import { setInboxOpen } from '../src/stores/inbox'
@@ -315,16 +316,37 @@ describe('RFC-198 responsive AppShell', () => {
     expect(screen.queryByTestId('memory-badge')).toBeNull()
   })
 
-  test('authority refresh hides but preserves a routed draft until exact permission settles', () => {
+  test('authority refresh pauses effects and portals while preserving the exact routed draft', () => {
     vi.stubGlobal('matchMedia', undefined)
+    let activeRouteEffects = 0
+    function ProtectedRoute() {
+      useEffect(() => {
+        activeRouteEffects += 1
+        return () => {
+          activeRouteEffects -= 1
+        }
+      }, [])
+      return (
+        <>
+          <input data-testid="routed-draft" defaultValue="seed" />
+          <AppPortal>
+            <button type="button" data-testid="routed-portal">
+              Protected overlay
+            </button>
+          </AppPortal>
+        </>
+      )
+    }
     const route = () => (
       <AppShell pathname="/agents/new">
-        <input data-testid="routed-draft" defaultValue="seed" />
+        <ProtectedRoute />
       </AppShell>
     )
     const view = render(route())
     const draft = screen.getByTestId('routed-draft') as HTMLInputElement
     fireEvent.change(draft, { target: { value: 'unsaved local draft' } })
+    expect(activeRouteEffects).toBe(1)
+    expect(screen.getByRole('button', { name: 'Protected overlay' })).toBeTruthy()
 
     harness.permissionAllowed = false
     harness.actorFetchStatus = 'fetching'
@@ -334,6 +356,9 @@ describe('RFC-198 responsive AppShell', () => {
     expect(screen.getByTestId('app-shell-route-content').className).toContain(
       'app-shell__route-content--suspended',
     )
+    expect(activeRouteEffects).toBe(0)
+    expect(screen.queryByRole('button', { name: 'Protected overlay' })).toBeNull()
+    expect(screen.queryByTestId('routed-portal')).toBeNull()
 
     harness.actorFetchStatus = 'idle'
     harness.actorStatus = 'error'
@@ -342,6 +367,8 @@ describe('RFC-198 responsive AppShell', () => {
     expect(screen.getByTestId('routed-draft')).toBe(draft)
     expect(draft.value).toBe('unsaved local draft')
     expect(screen.getByTestId('authority-refresh-error')).toBeTruthy()
+    expect(activeRouteEffects).toBe(0)
+    expect(screen.queryByRole('button', { name: 'Protected overlay' })).toBeNull()
 
     harness.permissionAllowed = true
     harness.actorStatus = 'success'
@@ -352,10 +379,14 @@ describe('RFC-198 responsive AppShell', () => {
     expect(screen.getByTestId('app-shell-route-content').className).not.toContain(
       'app-shell__route-content--suspended',
     )
+    expect(activeRouteEffects).toBe(1)
+    expect(screen.getByRole('button', { name: 'Protected overlay' })).toBeTruthy()
 
     harness.permissionAllowed = false
     view.rerender(route())
     expect(screen.queryByTestId('routed-draft')).toBeNull()
+    expect(screen.queryByTestId('routed-portal')).toBeNull()
+    expect(activeRouteEffects).toBe(0)
   })
 
   test('an unsettled authority snapshot never reuses a prior grant for a different route', () => {

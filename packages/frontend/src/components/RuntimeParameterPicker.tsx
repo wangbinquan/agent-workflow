@@ -10,9 +10,9 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
+import { AppPortal } from './AppPortal'
 import { TextInput } from './Form'
 import { useManagedLiveRegion } from './ManagedLiveRegion'
 import {
@@ -510,8 +510,8 @@ export function RuntimeParameterPicker({
           {error}
         </span>
       ) : null}
-      {open &&
-        createPortal(
+      {open && (
+        <AppPortal>
           <div
             id={popoverId}
             ref={popoverRef}
@@ -636,9 +636,9 @@ export function RuntimeParameterPicker({
                 )
               })}
             </div>
-          </div>,
-          document.body,
-        )}
+          </div>
+        </AppPortal>
+      )}
     </div>
   )
 }

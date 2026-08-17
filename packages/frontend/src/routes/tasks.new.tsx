@@ -58,7 +58,7 @@ import { RepoLayoutTree } from '@/components/repos/RepoLayoutTree'
 import { StatusChip } from '@/components/StatusChip'
 import { UploadPicker } from '@/components/launch/UploadPicker'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
-import { useActor } from '@/hooks/useActor'
+import { useActor, usePermission } from '@/hooks/useActor'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { defaultRepoSource, resolveUrlRepoPath, validateRepoUrl } from '@/lib/launch-repo-source'
 import { buildResourceOptionLabeler } from '@/lib/resource-option-label'
@@ -190,9 +190,27 @@ function TaskWizardPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const actor = useActor()
+  const canReadTasks = usePermission('tasks:read')
+  const canReadRepos = usePermission('repos:read')
+  const canReadScheduledTasks = usePermission('scheduled-tasks:read')
+  const canCreateScheduledTasks = usePermission('scheduled-tasks:create')
+  const canUpdateScheduledTasks = usePermission('scheduled-tasks:update')
+  const canSearchUsers = usePermission('users:search')
   const isEdit = search.editScheduled !== undefined
   // RFC-175: "relaunch" pre-fills from a terminal task (editScheduled wins if both).
   const isRelaunch = search.relaunchFrom !== undefined && !isEdit
+  const missingCapabilityPermission =
+    actor.status === 'success' && actor.fetchStatus === 'idle'
+      ? isEdit && !canReadScheduledTasks
+        ? 'scheduled-tasks:read'
+        : isEdit && !canUpdateScheduledTasks
+          ? 'scheduled-tasks:update'
+          : isRelaunch && !canReadTasks
+            ? 'tasks:read'
+            : search.schedule === true && !canCreateScheduledTasks
+              ? 'scheduled-tasks:create'
+              : null
+      : null
 
   // --- Step 1 state: execution kind + object -------------------------------
   const deepObject =
@@ -374,7 +392,7 @@ function TaskWizardPage() {
     queryKey: TASK_QUERY_KEYS.detail(search.relaunchFrom ?? null),
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(search.relaunchFrom ?? '')}`, undefined, signal),
-    enabled: isRelaunch,
+    enabled: isRelaunch && canReadTasks,
     staleTime: 0,
     refetchOnMount: 'always',
   })
@@ -386,7 +404,7 @@ function TaskWizardPage() {
         undefined,
         signal,
       ),
-    enabled: isRelaunch,
+    enabled: isRelaunch && canReadTasks,
     staleTime: 0,
     refetchOnMount: 'always',
   })
@@ -435,6 +453,7 @@ function TaskWizardPage() {
   const cachedRepos = useQuery<{ items: CachedRepo[] }>({
     queryKey: ['cached-repos'],
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
+    enabled: canReadRepos,
   })
 
   // RFC-175: apply a reconstructed WizardSeed to the field state — shared by the
@@ -470,7 +489,7 @@ function TaskWizardPage() {
         undefined,
         signal,
       ),
-    enabled: isEdit,
+    enabled: isEdit && canReadScheduledTasks && canUpdateScheduledTasks,
   })
   const seededRef = useRef(false)
   const seedCollabIds = useRef<string[]>([])
@@ -949,7 +968,7 @@ function TaskWizardPage() {
   const repoGroups = useQuery<{ items: RepoGroup[] }>({
     queryKey: ['repo-groups'],
     queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
-    enabled: space.kind !== 'scratch',
+    enabled: canReadRepos && space.kind !== 'scratch',
   })
   const selectedGroup =
     space.kind === 'group' ? repoGroups.data?.items.find((g) => g.id === space.groupId) : undefined
@@ -959,7 +978,7 @@ function TaskWizardPage() {
     queryKey: ['repo-group-layout', selectedGroupId],
     queryFn: ({ signal }) =>
       api.get(`/api/repo-groups/${encodeURIComponent(selectedGroupId)}/layout`, undefined, signal),
-    enabled: selectedGroupId !== '',
+    enabled: canReadRepos && selectedGroupId !== '',
   })
 
   const stepModeReady = selectedObject !== ''
@@ -969,7 +988,7 @@ function TaskWizardPage() {
   const sourceReady =
     space.kind === 'scratch' ||
     // RFC-248: 组空间选中即就绪——布局与各仓 ref 都由服务端从组定义展平。
-    (space.kind === 'group' && space.groupId !== '') ||
+    (space.kind === 'group' && canReadRepos && space.groupId !== '') ||
     // RFC-248 H9: 重放空间选中即就绪——布局来自源任务的冻结快照。
     (space.kind === 'replay' && space.sourceTaskId !== '') ||
     (space.kind === 'remote' &&
@@ -1329,7 +1348,9 @@ function TaskWizardPage() {
 
   // --- Submission -------------------------------------------------------------
   const collectAdvanced = () => ({
-    ...(collaborators.length > 0 ? { collaboratorUserIds: collaborators.map((u) => u.id) } : {}),
+    ...(collaborators.length > 0
+      ? { collaboratorUserIds: collaborators.map((user) => user.id) }
+      : {}),
     ...(gitBoth ? { gitUserName: gitNameTrim, gitUserEmail: gitEmailTrim } : {}),
     ...(workingBranchTrim !== '' ? { workingBranch: workingBranchTrim } : {}),
     ...(autoCommitPush ? { autoCommitPush: true } : {}),
@@ -1624,11 +1645,13 @@ function TaskWizardPage() {
   }
 
   const runSaveConfig = (): void => {
+    if (!canReadScheduledTasks || !canUpdateScheduledTasks) return
     if (!beginSubmission('save-scheduled-config')) return
     saveConfig.mutate()
   }
 
   const runCreateSchedule = (request: ScheduleCreateRequest): void => {
+    if (!canCreateScheduledTasks) return
     if (!beginSubmission('create-scheduled-task')) return
     createSchedule.mutate(request)
   }
@@ -1711,6 +1734,25 @@ function TaskWizardPage() {
     : search.schedule === true
       ? t('taskWizard.titleScheduled')
       : t('taskWizard.title')
+
+  if (missingCapabilityPermission !== null) {
+    return (
+      <div className="page">
+        <PageHeader title={pageTitle} />
+        <ErrorBanner
+          error={
+            new ApiError(
+              403,
+              'permission-required',
+              `missing permission: ${missingCapabilityPermission}`,
+              { requiredPermission: missingCapabilityPermission },
+            )
+          }
+          testid="wizard-capability-error"
+        />
+      </div>
+    )
+  }
 
   // An edit draft seeds exactly once. Before that barrier, loading/error are
   // full-page initial states; after it, a background refetch failure must not
@@ -1912,17 +1954,18 @@ function TaskWizardPage() {
           </div>
         )}
 
-        {kind === 'workflow' && (search.schedule === true || isEdit) && (
-          <div data-testid="wizard-scheduled-workflow-policy">
-            <NoticeBanner
-              tone="info"
-              size="compact"
-              title={t('taskWizard.scheduledWorkflowLatestTitle')}
-            >
-              {t('taskWizard.scheduledWorkflowLatestBody')}
-            </NoticeBanner>
-          </div>
-        )}
+        {kind === 'workflow' &&
+          ((search.schedule === true && canCreateScheduledTasks) || isEdit) && (
+            <div data-testid="wizard-scheduled-workflow-policy">
+              <NoticeBanner
+                tone="info"
+                size="compact"
+                title={t('taskWizard.scheduledWorkflowLatestTitle')}
+              >
+                {t('taskWizard.scheduledWorkflowLatestBody')}
+              </NoticeBanner>
+            </div>
+          )}
 
         {/* RFC-203 PR-2 实现门 P1：workflow/agent 启动失败改走富横幅——launch 的
             workflow-invalid 带 details.issues（节点/边定位），字符串壳会把它们
@@ -1965,7 +2008,7 @@ function TaskWizardPage() {
                 >
                   {saveConfig.isPending ? t('scheduled.saving') : t('taskWizard.saveConfig')}
                 </button>
-              ) : search.schedule === true ? (
+              ) : search.schedule === true && canCreateScheduledTasks ? (
                 <>
                   <button
                     type="button"
@@ -2000,16 +2043,18 @@ function TaskWizardPage() {
                   >
                     {start.isPending ? t('launch.starting') : t('taskWizard.launch')}
                   </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setSaveScheduledOpen(true)}
-                    disabled={!canSubmit || scheduleUnsupported}
-                    title={scheduleUnsupported ? t('scheduled.uploadUnsupported') : undefined}
-                    data-testid="wizard-save-scheduled"
-                  >
-                    {t('taskWizard.saveScheduled')}
-                  </button>
+                  {canCreateScheduledTasks && (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setSaveScheduledOpen(true)}
+                      disabled={!canSubmit || scheduleUnsupported}
+                      title={scheduleUnsupported ? t('scheduled.uploadUnsupported') : undefined}
+                      data-testid="wizard-save-scheduled"
+                    >
+                      {t('taskWizard.saveScheduled')}
+                    </button>
+                  )}
                 </>
               )}
               {start.isPending && space.kind === 'remote' && (
@@ -2176,8 +2221,11 @@ function TaskWizardPage() {
                   // the exact control where the choice was made.
                   repos={space.kind === 'remote' ? space.repos : [defaultRepoSource()]}
                   onChange={(repos) => setSpace({ kind: 'remote', repos })}
-                  onSelectGroup={(groupId) => setSpace({ kind: 'group', groupId })}
                   selectedGroupId={space.kind === 'group' ? space.groupId : undefined}
+                  catalogEnabled={canReadRepos}
+                  onSelectGroup={
+                    canReadRepos ? (groupId) => setSpace({ kind: 'group', groupId }) : undefined
+                  }
                   selectedGroupDetails={
                     space.kind === 'group' ? (
                       <section className="wizard-space-layout" data-testid="wizard-space-group">
@@ -2369,7 +2417,8 @@ function TaskWizardPage() {
               <details className="launch-collapsible" data-testid="wizard-advanced">
                 <summary>{t('taskWizard.advanced')}</summary>
                 <div className="launch-collapsible__body">
-                  {actor.data !== null &&
+                  {canSearchUsers &&
+                    actor.data !== null &&
                     actor.data !== undefined &&
                     actor.data.source !== 'daemon' && (
                       <Field label={t('members.users')} hint={t('members.hint')}>
@@ -2559,7 +2608,9 @@ function TaskWizardPage() {
                   <dd data-testid="wizard-summary-advanced">
                     {[
                       collaborators.length > 0
-                        ? t('taskWizard.summaryCollaborators', { count: collaborators.length })
+                        ? t('taskWizard.summaryCollaborators', {
+                            count: collaborators.length,
+                          })
                         : null,
                       gitBoth ? `${gitNameTrim} <${gitEmailTrim}>` : null,
                       space.kind === 'remote' && workingBranchTrim !== ''
@@ -2587,7 +2638,7 @@ function TaskWizardPage() {
         </Stepper>
       </fieldset>
 
-      {!isEdit && (
+      {!isEdit && canCreateScheduledTasks && (
         <ScheduleDialog
           open={saveScheduledOpen}
           onClose={() => {
