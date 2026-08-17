@@ -82,6 +82,59 @@ describe('RFC-308 workspace exclude profile', () => {
     )
   })
 
+  test('rebinds a platform profile copied by git worktree add', async () => {
+    const { home, worktree } = await fixture()
+    await bindWorkspaceExcludeParticipant({ worktreePath: worktree, appHome: home }).ensure()
+    const parentProfile = (
+      await runGit(worktree, ['config', '--worktree', '--path', '--get', 'core.excludesFile'])
+    ).stdout.trim()
+
+    const child = join(home, 'worktrees', 'child')
+    const created = await runGit(worktree, [
+      'worktree',
+      'add',
+      '-q',
+      '-b',
+      'task-child',
+      child,
+      'HEAD',
+    ])
+    expect(created.exitCode).toBe(0)
+    const copiedProfile = (
+      await runGit(child, ['config', '--worktree', '--path', '--get', 'core.excludesFile'])
+    ).stdout.trim()
+    expect(resolve(copiedProfile)).toBe(resolve(parentProfile))
+
+    await bindWorkspaceExcludeParticipant({ worktreePath: child, appHome: home }).ensure()
+    const reboundProfile = (
+      await runGit(child, ['config', '--worktree', '--path', '--get', 'core.excludesFile'])
+    ).stdout.trim()
+    const childGitDir = (await runGit(child, ['rev-parse', '--git-dir'])).stdout.trim()
+    expect(resolve(reboundProfile)).toBe(
+      resolve(child, childGitDir, 'agent-workflow', 'excludes', 'v1'),
+    )
+    expect(resolve(reboundProfile)).not.toBe(resolve(parentProfile))
+
+    mkdirSync(join(child, '.agent-workflow', 'runs'), { recursive: true })
+    writeFileSync(join(child, '.agent-workflow', 'runs', 'trace.json'), '{}')
+    expect((await runGit(child, ['status', '--porcelain'])).stdout.trim()).toBe('')
+  })
+
+  test('still rejects a worktree profile outside Git platform storage', async () => {
+    const { home, worktree } = await fixture()
+    const foreign = join(home, 'foreign-excludes')
+    writeFileSync(
+      foreign,
+      '# agent-workflow platform excludes v1\n# managed outside the business repository; do not edit\n/.agent-workflow/\n',
+    )
+    await runGit(worktree, ['config', 'extensions.worktreeConfig', 'true'])
+    await runGit(worktree, ['config', '--worktree', 'core.excludesFile', foreign])
+
+    await expect(
+      bindWorkspaceExcludeParticipant({ worktreePath: worktree, appHome: home }).ensure(),
+    ).rejects.toThrow('non-platform core.excludesFile')
+  })
+
   test('fails closed when business ignore precedence negates the hard root', async () => {
     const { home, worktree } = await fixture()
     writeFileSync(join(worktree, '.gitignore'), 'dist/\n!/.agent-workflow/\n')

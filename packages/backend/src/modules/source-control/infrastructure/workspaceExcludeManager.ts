@@ -46,6 +46,48 @@ function resolveGitPath(worktreePath: string, raw: string): string {
   return realpathSync(isAbsolute(raw) ? raw : resolve(worktreePath, raw))
 }
 
+const PROFILE_MARKER = '# agent-workflow platform excludes v1'
+const PROFILE_HEADER = `${PROFILE_MARKER}\n# managed outside the business repository; do not edit\n/.agent-workflow/\n`
+
+function configuredPath(worktreePath: string, raw: string): string {
+  return isAbsolute(raw) ? resolve(raw) : resolve(worktreePath, raw)
+}
+
+/**
+ * `git worktree add` copies the source worktree's `config.worktree`, including
+ * its platform-owned `core.excludesFile`. Accept only that exact Git-admin
+ * shape, recover its user prefix, then rebind the new worktree to its own
+ * profile. An arbitrary repository/user path remains a hard conflict.
+ */
+function inheritedFromPlatformProfile(path: string, commonDir: string): string | null {
+  if (!existsSync(path)) return null
+  const stat = lstatSync(path)
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 1024 * 1024) return null
+
+  const common = realpathSync(commonDir)
+  const actual = realpathSync(path)
+  const rel = relative(common, actual)
+  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return null
+  const parts = rel.split(sep)
+  const canonicalShape =
+    (parts.length === 3 &&
+      parts[0] === 'agent-workflow' &&
+      parts[1] === 'excludes' &&
+      parts[2] === 'v1') ||
+    (parts.length === 5 &&
+      parts[0] === 'worktrees' &&
+      parts[1] !== '' &&
+      parts[2] === 'agent-workflow' &&
+      parts[3] === 'excludes' &&
+      parts[4] === 'v1')
+  if (!canonicalShape) return null
+
+  const content = readFileSync(actual, 'utf8')
+  const at = content.lastIndexOf(PROFILE_HEADER)
+  if (at < 0 || (at > 0 && content[at - 1] !== '\n')) return null
+  return at === 0 ? '' : content.slice(0, at).replace(/\n+$/, '')
+}
+
 function assertOwnedBy(worktreePath: string, appHome?: string): void {
   if (appHome === undefined) return
   const root = realpathSync(appHome)
@@ -71,6 +113,12 @@ export async function ensureWorkspaceExcludeProfile(input: {
     'resolve git dir',
   )
   const gitDir = resolveGitPath(input.worktreePath, gitDirRaw)
+  const commonDirRaw = await gitOutput(
+    input.worktreePath,
+    ['rev-parse', '--git-common-dir'],
+    'resolve common git dir',
+  )
+  const commonDir = resolveGitPath(input.worktreePath, commonDirRaw)
   assertOwnedBy(input.worktreePath, input.appHome)
 
   const worktreeConfig = await runGit(input.worktreePath, [
@@ -96,17 +144,6 @@ export async function ensureWorkspaceExcludeProfile(input: {
     '--get',
     'core.excludesFile',
   ])
-  if (
-    existingWorktreeExclude.exitCode === 0 &&
-    resolve(existingWorktreeExclude.stdout.trim()) !== resolve(profilePath)
-  ) {
-    throw new DomainError(
-      'workspace-exclude-config-conflict',
-      'worktree already has a non-platform core.excludesFile',
-      409,
-    )
-  }
-
   let inherited = ''
   if (existingWorktreeExclude.exitCode !== 0) {
     const effective = await runGit(input.worktreePath, [
@@ -129,11 +166,21 @@ export async function ensureWorkspaceExcludeProfile(input: {
         inherited = readFileSync(inheritedPath, 'utf8')
       }
     }
-  } else if (existsSync(profilePath)) {
-    const current = readFileSync(profilePath, 'utf8')
-    const marker = '# agent-workflow platform excludes v1'
-    const at = current.indexOf(marker)
-    inherited = at > 0 ? current.slice(0, at).replace(/\n+$/, '') : ''
+  } else {
+    const existingPath = configuredPath(input.worktreePath, existingWorktreeExclude.stdout.trim())
+    if (resolve(existingPath) === resolve(profilePath)) {
+      inherited = inheritedFromPlatformProfile(existingPath, commonDir) ?? ''
+    } else {
+      const copiedPlatformInheritance = inheritedFromPlatformProfile(existingPath, commonDir)
+      if (copiedPlatformInheritance === null) {
+        throw new DomainError(
+          'workspace-exclude-config-conflict',
+          'worktree already has a non-platform core.excludesFile',
+          409,
+        )
+      }
+      inherited = copiedPlatformInheritance
+    }
   }
 
   const plan = planWorkspaceExcludeProfile({
