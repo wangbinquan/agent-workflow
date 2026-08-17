@@ -4,6 +4,27 @@
 
 ## 测试 / CI
 
+- **分离 worktree 里用 `ln -s` 借 node_modules，会让「跨包解析」类的用例假红（2026-08-17 实测）**：
+  为了绕开他人在共享树上的在途改动，我 `git worktree add` 了一份只含自己改动的树，node_modules
+  用软链指回主树。3/4 分片绿，第 4 片红在 `rfc199-…-ratchet`：它用 TS compiler program 找语义
+  来源，期望里的两个文件都在 `packages/shared`——因为 `@agent-workflow/shared` 顺着软链解析回
+  **主树路径**，`relative(REPO_ROOT, …)` 算出来的相对路径对不上，于是被过滤掉了。
+  定式：分离 worktree 要么**老老实实 `bun install`**，要么只信「不跨 workspace 包」的用例。
+  判据：假红集中在「用 compiler program / import.meta / 相对路径反查文件清单」的那类棘轮，
+  且缺的正好是别的 workspace 包里的文件 ⇒ 先怀疑 node_modules 的解析路径，别改棘轮清单。
+  另注：`gate:local` 有**跨 worktree 的单实例锁**，同机另一个 worktree 在跑就直接拒绝——
+  多人（多 agent）并发时这是特性不是故障，等它跑完即可。
+
+- **本地跑过 Playwright 之后再跑 `gate:local`，backend 会红在四条毫不相干的用例上（2026-08-17 实测）**：
+  症状是 `error: Test leaked 1 entry into its working directory (…): - test-results`，
+  然后随机四条 backend 用例 `(fail)`——它们只是恰好是「第一个发现工作目录多了个条目」的那几条。
+  真因：Playwright 失败时会在**仓库根**写 `test-results/`（gitignore 了，但目录还在），
+  而 `packages/backend/tests/setup.ts` 的工作目录泄漏守卫会把它算成本次测试泄漏出来的。
+  定式：**跑完 e2e、跑 gate 之前先 `rm -rf test-results`**（本仓的典型顺序正好是
+  build:binary:e2e → playwright → gate:local，天然踩得到）。判据：backend 红的那几条彼此
+  毫无关系、且报错里出现 `Test leaked` 与一个你没写过的目录名 ⇒ 先看仓库根有没有工具残留，
+  别去读那几条用例。
+
 - **`bun run gate:local | tail -40` 的退出码是 `tail` 的，永远是 0——门禁红了你也看到「exit 0」（2026-08-17 实测，红代码直接进了主干）**：
   管道的退出码取**最后一个**命令。把门禁/typecheck/lint 接到 `tail` / `head` / `grep` 后面看输出，
   等于把它们的成败**丢掉**：后台跑一条 `bun run gate:local 2>&1 | tail -40`，通知里回报 `exit code 0`，

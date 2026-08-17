@@ -12,6 +12,7 @@ import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import { resumeSupersedingWorkItems } from '@/services/codeCapabilitySupersede'
 import { reclaimCodeLeasesOnBoot } from '@/services/codeRoundLease'
 import { clearStalePublishSections } from '@/modules/code-capability/infrastructure/sqliteWorkItemStore'
+import { recoverPublishIntentsOnBoot } from '@/modules/code-capability/application/recoverPublishIntentsOnBoot'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -701,6 +702,30 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
     .catch((err: unknown) => {
       log.warn('clearing stale publish sections failed', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+
+  // RFC-304 §7.2 — reconcile publish batches a dead daemon left mid-flight.
+  //
+  // The per-round path already prevents the harm the design names (a second
+  // round re-posting an already-published batch), because it reconciles before
+  // every publish. What it cannot reach is the merge request that never gets
+  // another round: its intent row stays pending for good and its orphan drafts
+  // sit there, with nobody reviewing it to notice.
+  //
+  // Bounded and best-effort. Each anchor costs one read of its merge request,
+  // so an unbounded sweep would be a slow boot and a burst aimed at the code
+  // host; what it defers is logged rather than silently dropped, and recovers
+  // the ordinary way when a round next runs there.
+  await recoverPublishIntentsOnBoot({ db })
+    .then((result) => {
+      if (result.recovered > 0 || result.deferred > 0) {
+        log.info('reconciled interrupted publish batches', { ...result })
+      }
+    })
+    .catch((err: unknown) => {
+      log.warn('reconciling interrupted publish batches failed', {
         error: err instanceof Error ? err.message : String(err),
       })
     })
