@@ -40,8 +40,20 @@ const countOf = (haystack: string, needle: string): number => haystack.split(nee
  * `useRepos` 都会误命中，把守卫变成永远红的噪声。负向 lookbehind 排掉前面接
  * 词字符或连字符的情况。
  */
+/**
+ * Comments stripped before matching.
+ *
+ * The ratchet bans these names as OBJECT KEYS in launch payloads. It does not
+ * ban the words, and prose is where they legitimately appear — `repos:read` is
+ * the name of a permission, and a doc comment mentioning it was reading as a
+ * retired `repos:` key and turning main red (2026-08-17). Rewording the comment
+ * would have been fixing the wrong thing: the sentence was accurate.
+ */
+const stripComments = (src: string): string =>
+  src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ')
+
 const mentionsAsKey = (src: string, key: string): boolean =>
-  new RegExp(String.raw`(?<![\w-])${key}\s*:`).test(src)
+  new RegExp(String.raw`(?<![\w-])${key}\s*:`).test(stripComments(src))
 
 // RFC-165 的三个 path-mode 键 + RFC-248 退役的顶层 `repos`。
 const KEYS = ['repoPath', 'baseBranch', 'fetchBeforeLaunch', 'repos'] as const
@@ -158,6 +170,17 @@ describe('RFC-165 — frontend launch builders emit no retired keys', () => {
     expect(wiz.includes("from './launch-repo-source'")).toBe(true)
     const wg = read('packages/frontend/src/lib/workgroup-launch.ts')
     for (const k of KEYS) expect(mentionsAsKey(wg, k)).toBe(false)
+  })
+
+  test('the comment strip does not blunt the ratchet — a real key in CODE still fires', () => {
+    // Guards the fix itself: stripping comments must not become "stripping
+    // everything". A retired key in actual code is still caught, and one inside
+    // prose is not.
+    expect(mentionsAsKey('const x = { repoPath: "/tmp" }', 'repoPath')).toBe(true)
+    expect(mentionsAsKey('/** repos:read protects the catalog */', 'repos')).toBe(false)
+    expect(mentionsAsKey('// baseBranch: was retired by RFC-165', 'baseBranch')).toBe(false)
+    // A key on the line AFTER a comment is code, and still caught.
+    expect(mentionsAsKey('// note\nconst y = { baseBranch: "main" }', 'baseBranch')).toBe(true)
   })
 
   test('RepoSourceRow.tsx is URL-only (no retired keys, no recent-repos query)', () => {

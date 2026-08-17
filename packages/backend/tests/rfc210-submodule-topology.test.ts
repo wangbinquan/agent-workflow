@@ -133,25 +133,25 @@ describe('RFC-210 ref naming safety', () => {
     const hostile = ['vendor', 'vendor/inner', 'dir with space', 'weird.lock', '.hidden', 'a~b^c:d']
     const refs = hostile.flatMap((p) => [poolRefName('T1', 'N1', p), worktreeRefName('T1', p)])
 
-    // Concurrently, and with a budget that fits the work. Twelve independent
-    // process spawns, and `check-ref-format` either accepts a name or does not
-    // — there is no timing component in the assertion at all, only in how long
-    // twelve spawns take.
+    // ONE process, not twelve. Two failed attempts before this one, both
+    // recorded because the reasoning matters more than the fix:
     //
-    // History, because the first fix was wrong: awaited serially these took
-    // 5002ms against bun's default 5000ms and went red on macOS (2026-08-16).
-    // Making them concurrent looked like it removed the marginality — and it
-    // did not: 5000.74ms on the very next loaded macOS shard. Four backend
-    // shards contending for one runner is simply slower than five seconds' worth of
-    // process spawns, however they are ordered.
+    //   · serial spawns, default 5s budget — 5002ms on a loaded macOS runner;
+    //   · the SAME spawns made concurrent, still 5s — 5000.74ms, so
+    //     concurrency did not remove the marginality it was supposed to;
+    //   · concurrent with a 30s budget — 30039ms. Twelve simultaneous process
+    //     creations on a runner already hosting four shards are SLOWER than
+    //     twelve sequential ones, not faster.
     //
-    // So the budget is raised HERE, which is legitimate precisely because the
-    // outcome cannot change with time: this is not a race being papered over
-    // (the case the repo rule warns about), it is a fixed amount of work that
-    // needed more than the default allowance. Every check is still made.
-    const codes = await Promise.all(refs.map((ref) => runCli('git', ['check-ref-format', ref])))
+    // The work was never the checking; it was the spawning. So the loop moves
+    // into one shell: `check-ref-format` still judges every name, twelve times,
+    // and the test pays for one process instead of twelve. `set -e` makes the
+    // first rejection the exit code, which is the assertion.
+    const script = refs.map((ref) => `git check-ref-format ${JSON.stringify(ref)}`).join('\n')
+    const codes = [await runCli('sh', ['-ec', script])]
 
-    expect(codes).toEqual(refs.map(() => 0))
+    // One exit code now: zero means every name was accepted.
+    expect(codes).toEqual([0])
   }, 30_000)
 
   test('pool ref is node-scoped, worktree ref is not', () => {
