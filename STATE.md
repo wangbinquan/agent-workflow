@@ -2,22 +2,29 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC：[RFC-308 任务 Git 提交能力归一与自动提交排除规则](design/RFC-308-unified-task-git-commit-exclusions/proposal.md)**
-> ——用户要求先统一任务提交能力，再按推荐方案增加 Gitignore 风格黑名单，并明确要求考虑 RFC-294。三件套已落 Draft，
-> 强序为 A「统一 RFC-075 普通任务与 RFC-304 代码能力的任务工作区提交机制，零排除行为」→ B「全局
-> `taskCommitExcludePatterns` + strict tracked/history/submodule 防线 + hard deny `/.aw-run/`」→ C「Settings Git、任务详情、
-> 双语与真实远端 E2E」。架构按 `code-capability → task-execution.public → source-control.public` 单向收口：task 拥有
-> workspace authority/fence/NodeRun/消息，source-control 拥有 candidate/index/commit/push，保留 RFC-075 hook/non-FF/repair 与
-> RFC-304 frozen artifact/CAS/new-branch 的领域差异。**当前等待用户批准，未授权生产实现。**
+> 🚧 **进行中 RFC：[RFC-308 任务 Git 提交、平台工作目录与自动排除规则归一](design/RFC-308-unified-task-git-commit-exclusions/proposal.md)**
+> ——用户要求先统一任务提交能力、考虑 RFC-294，再接 Gitignore 风格黑名单；随后追加硬裁决：系统内置 ignore 全部收编，
+> 平台目录只保留一套约定名，今后**不得修改代码仓 `.gitignore`，直接使用平台 ignore**。Draft 强序为 A「canonical
+> `/.agent-workflow/{inputs,runs,fusion}/` + per-worktree `WorkspaceExcludeManager` 取代 RFC-248 `.gitignore` preset/Fusion
+> `.git/info/exclude`，并统一 RFC-075/RFC-304 提交机制」→ B「全局 `taskCommitExcludePatterns` + strict
+> tracked/history/submodule 防线」→ C「Settings Git、详情与真实远端 E2E」。架构按
+> `code-capability → task-execution.public → source-control.public` 单向收口；canonical root 与动态 mounts 是不可反选 hard deny。
+> 用户明确旧名字无人使用、不要兼容读取：cutover inventory 先证明四旧目录/`gitignoreCommit` 非终态消费者=0，再直接删除
+> writer/reader/fallback/wire/列，不迁移、不双读。**当前等待用户批准，未授权生产实现。**
 
-> 🚧 **进行中 RFC：[RFC-307 能力流程可见可改](design/RFC-307-capability-flow-visible-editable/proposal.md)** —— 起因是用户原话
-> 「这个工作流，我现在又没有一个可以执行可以看的流程，都不知道实际是什么样的，甚至我都不知道应该怎么去编排这个流程」。
-> RFC-304 交付的五条能力（45 步：program 32 / ai 7 / script 4 / invoke 2）在界面上是**一个不透明方块**：跑之前只有能力名 + agent 槽位，
-> 跑起来后是纯文本 `<ol>`，画布上只有一个 `code-round` 合成节点。但**可配面其实早就建好了**——`agentSlot` / `scriptSlot` / `paramSchema` /
-> 钩子 + `injectable` 白名单全在合同里，只是配置入口是一堆 JSON 表单、与「这一步在流程里的位置」完全脱节。本 RFC 把两者接起来：
-> `domain/stageGraph.ts` 把 `requires`/`produces` 投影成 DAG → 复用既有 `WorkflowCanvas` 只读模式渲染 → 图上点节点直接改配置并写回既有两层模板
-> （**不新增写端点、不新增权限点、零 schema 变更、零执行面改动**）→ 幂等播种 demo 框架/绑定/工作流/已完成轮次供上手体验。
-> **不打破 RFC-304 的 D3**（投影只在读侧，不落 `workflow_definitions`）；结构编辑（增删步骤、重连边）明确列为非目标。
+> ✅ **已完成 RFC（Done，2026-08-17）：[RFC-307 能力流程可见可改](design/RFC-307-capability-flow-visible-editable/proposal.md)**
+> —— 起因是用户原话「这个工作流，我现在又没有一个可以执行可以看的流程，都不知道实际是什么样的，甚至我都不知道应该怎么去编排这个流程」。
+> RFC-304 交付的四条能力（实测 **44 步**：program 32 / ai 6 / script 4 / invoke 2）在界面上是一个不透明方块，
+> 但**可配面早就建好了**——只是配置入口是一堆 JSON 表单、与「这一步在流程里的位置」完全脱节。本 RFC 把两者接起来：
+> `domain/stageGraph.ts` 把 `requires`/`produces` 投影成 DAG → `/code` 新增「流程」页签渲染 → 点节点直接改
+> agent / prompt / 脚本 / 参数 / 钩子并写回既有两层模板（**不新增写端点、不新增权限点、零 schema 变更、零执行面改动**），
+> 同槽位的其它步骤一并高亮并明说「改这里会影响那几步」，钩子按 `injectable` 白名单如实告知此处能回传什么；
+> 活动页每一轮叠同一张图的运行态。幂等播种 demo 框架 / 绑定 / agent / 已完成轮次 / 两条工作流，零外部依赖、**删掉不重播**。
+> 不打破 RFC-304 的 D3（投影只在读侧）；结构编辑（增删步骤、重连边）明确列为非目标。
+> **T2 的合同健全性检查确有产出**（照出三处「产出无人消费」，逐条核实都是合法形状但分属三种，故加 `terminal` 显式声明）；
+> **四个既有护栏各抓到一次真回归**；**跑起来 / CI 才照出五条**（`builtin` 语义抄错、假端点成为选择器默认值、
+> 示例钩子回传白名单外的键、后台重取关掉编辑中的抽屉、demo 内容让全新安装再也见不到首次引导）。
+> 逐项账目见 plan.md §0；开放项 Q-D（demo 轮次计入 `/code` 指标）保持零 schema 变更未排除。
 
 > ✅ **RFC-305 游客 UI follow-up（Done，2026-08-17）** —— 按用户实报修复三条并加固目录边界：①只读 Workflow 不再为未渲染的
 > palette/inspector 保留 grid rail，单轨 canvas 占满可用宽度；②所有已认证账户始终看到完整 `NAV_GROUPS`，同一目录项的 permission
@@ -45,7 +52,6 @@
 > **2026-08-16 收尾两步（`8313a7d4` / `f1e394e1`）**：①**实现完整性审视**——按源码逐条对账扫「两半都对、就是没接上」，全模块「零生产引用」普查 8 个模块，接上 T45 失效 / T62 数据 GC / `mrVoice` 三处「写完了没人调」；②**system-mock E2E**（`e2e/rfc304-capability-platform.spec.ts`，8 条全绿）——一条签名 webhook 打进编译后 daemon，立刻照出三处单测永远看不见的断链（轮次起在 scratch 空间 ⇒ `prepare-worktree` 必死；`repoId` 传了文件路径 ⇒ AI 阶段全拒、团队钩子从未触发；没有人给轮次写终态 ⇒ 永远 `running`），均已修。现在 **mr-review 十三阶段全绿、outcome=published、MR 上真的出现行级评论**（draft_notes + 一次 bulk_publish）。
 >
 > **追加（`5566b1f2` / `dbad7f1e`）：ci-fix 也跑通了**——连拆五道闸，每道都被前一道挡着：①阶段引擎 `script` 种类未实现；②`hasWakeSource` 硬编码 false；③arm trigger 死锁（只容忍 `no-trigger`，而 `no-wake-source` 恰恰要靠 arm 才能满足）；④`syncCapabilityTrigger` 缺省回退到 MR-review 事件集，ci-fix 的 trigger 不含 pipeline 事件；⑤arm 后 re-derive 只补 `hasTrigger` 没补 `hasWakeSource`。第②条**我此前误判为待裁决**：proposal §6ter-H1 早已结掉（GitLab CI 触发、链路天然成立、wake 入口降为可选且「PR-9 范围不变」），那只是个比裁决活得久的过期占位符。
->
 >
 > **续（`0c64fb69` / `2615ff3a` / `236b4838`）：五条能力现在都能跑完一轮**。①gate 改走平台唯一进程入口 `runManagedProcess`（自起 spawn 撞 RFC-284 棘轮，且手写版只 SIGKILL 外层 shell、gate 拉起的编译器/测试进程整棵子树会漏）；②**`self-review` 的 invoke 接上**——`invokedStages` 此前零调用方，ci-fix 与 requirement 都卡在这一步跑不完；契约按 design 要求补齐输入侧（`worktreeFrom` / `diffLeftFrom`，产物回流沿用既有 `collect`，形状经用户确认并写进 design.md §invoke），进 invoke 前把父工作树冻成 `refs/aw/self-review/<round>` 快照作 diff 右侧（否则各 shard 从基线建树、审的是修复前的代码），keep-ref 由 runner 在子序列后释放（既有「不得残留 ref」断言抓出来的泄漏）；新增本地 diff → FileDiff[] 切分。③**监视器派发 ci-fix 时把已定的答案交给轮次**（`ciFixResumeArtifacts` / `CI_FIX_RESUME_STAGE` 此前零调用方）——否则轮内把四个脚本再跑一遍、可能拿到不同答案，最后修的不是它被派发去修的那次失败；两个纯数据 helper 顺带从 composition 迁到 domain（调用方是 application 层，反向依赖是 RFC-294 唯一禁止的方向）。ci-fix e2e 现在跑完 `anti-cheat-check` / `push` / `ledger`——红流水线进、验证过的修复出。**新发现待拍板（任务 #29）**：§11.1 噪音上限从未生效，`notificationsSpent` 生产路径无人赋值，`say()` 永远判「已花 0」；三条候选口径与倾向见任务描述。
 > **场景化 E2E 与「两半都对、没接上」第二轮（`e63c7609` / `f5ae704e` / `1507ec2e` / `05c10557`）**：把 e2e 从「可达性套件」推成**场景验收**，每写一条场景就照出一批断链，共修 13 处生产缺陷。①**三条能力根本到不了模型**——note 事件没映射 `commitSha`（mr-comment-fix 死在第一阶段）；五处 params 键名写成路径占位符 `__project__`（mr-comment-fix 读不到讨论、requirement 开不了 MR、ci-fix 全部发声失败）；端口在「protocol block / caller / guard」三处各传各的，scheduler 把 mr-review 的 `findings` 发给了所有能力 ⇒ 连报六次 envelope-missing。②**状态机说不、调用方照开**（awaiting 上的普通评论照样开轮）、**workItemId 传的是 roundId**（确认路径永远查不到「等待中的改动」，回答「no change waiting」给刚被平台要求回复 `/aw apply` 的人）、**resume 跳过阶段却不交接产物**（确认轮第一个活阶段就 `stage artifact 'target' is missing`）。③**§2.2 抢占整条没人执行**——`request-round-cancel` / `start-round` 零调用方、`hasLiveRound` 硬编码 false ⇒ 连推三次就是三个并发轮次；补齐抢占驱动（含 boot 扫描与「下一条投递自愈」）、发布临界区首次接上调用方、被杀轮次的行与 MR 租约的回收。④**CI 修复终于能证明自己**——gate runner 与 gate 文档发现全部接上（此前 `runGateCommand('')`），`node` 补进已知 runner。⑤冻结改动依赖机器 git 身份（CI 上 `Author identity unknown`）；五个 spec 共用一份 system-mock 却各自 `reset()` 互删项目。新增 e2e：`rfc304-confirm-and-push` / `rfc304-supersede` / `rfc304-review-reconcile` / `rfc304-ci-fix-gate`（五 spec 并行 32/32 绿），新增单测 5 个文件（RFC-304 单测 1421 pass）。**已知边界**：`self-review` 的 `invoke` 接线未做——`invokedStages` 是运行器入参、scheduler 未提供，ci-fix 与 requirement 都在这一步按名失败；接线需先补 design 的 invoke 契约（diff 左右侧 / 工作树根 / 产物回流）与父工作树快照语义，并决定自审用哪个 binding 的 reviewer，**待用户拍板**。
