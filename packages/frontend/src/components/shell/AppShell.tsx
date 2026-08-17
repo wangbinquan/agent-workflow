@@ -15,6 +15,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useBlocker } from '@tanstack/react-router'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { RoutePortalScope } from '@/components/AppPortal'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
@@ -82,6 +83,7 @@ export function AppShell({ pathname, children }: AppShellProps) {
   const pendingNavigationRef = useRef<string | null>(null)
   const previousCompactRef = useRef(compact)
   const lastAuthorizedDestinationRef = useRef<string | null>(null)
+  const authorityNavigationBlockedRef = useRef(false)
 
   // A WS-driven /me refresh must fail closed immediately, but unmounting the
   // routed subtree throws away unsaved local drafts without consulting that
@@ -111,6 +113,22 @@ export function AppShell({ pathname, children }: AppShellProps) {
     destinationAuthorityUnsettled &&
     lastAuthorizedDestinationRef.current === destinationKey
   const mountDestination = destinationGranted || preserveDestination
+  authorityNavigationBlockedRef.current = preserveDestination
+
+  // Activity deliberately disconnects descendant effects while current
+  // authority is unsettled. That also disconnects a draft page's own
+  // UnsavedChangesGuard, so keep a stable shell-level blocker installed for
+  // the entire lifetime of AppShell. During the suspension it cancels both
+  // in-app history transitions and beforeunload; after authority settles the
+  // route guard reconnects and resumes its normal discard/save UX.
+  const blockWhileAuthorityIsUnsettled = useCallback(
+    () => authorityNavigationBlockedRef.current,
+    [],
+  )
+  useBlocker({
+    shouldBlockFn: blockWhileAuthorityIsUnsettled,
+    enableBeforeUnload: blockWhileAuthorityIsUnsettled,
+  })
 
   const renderBadge = useCallback(
     (item: SubNavItem) => (item.to === '/memory' && canReadMemory ? <MemoryPendingBadge /> : null),

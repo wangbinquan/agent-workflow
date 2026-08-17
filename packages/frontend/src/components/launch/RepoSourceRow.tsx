@@ -76,6 +76,11 @@ export function RepoSourceRow({
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
     enabled: catalogEnabled,
   })
+  // `enabled:false` prevents new I/O but React Query may still expose a cache
+  // populated by an earlier, more privileged authority snapshot. Shape the
+  // read projection as well as the request.
+  const cachedItems = catalogEnabled ? (cached.data?.items ?? []) : []
+  const groupItems = catalogEnabled ? (groups.data?.items ?? []) : []
 
   const idxSuffix = typeof index === 'number' ? `-${index}` : ''
   const groupSelected = selectedGroupId !== undefined && selectedGroupId !== ''
@@ -94,8 +99,8 @@ export function RepoSourceRow({
       (manualUrlActive && source.repoUrl.trim() !== ''))
   const showSourcePicker =
     onSelectGroup !== undefined
-      ? cached.data !== undefined || groups.data !== undefined
-      : (cached.data?.items.length ?? 0) > 0
+      ? catalogEnabled && (cached.data !== undefined || groups.data !== undefined)
+      : cachedItems.length > 0
 
   return (
     <div className="repo-source-row" data-testid={`repo-source-row${idxSuffix}`}>
@@ -179,7 +184,7 @@ export function RepoSourceRow({
                 setManualUrl(false)
                 // RFC-204: reuse by id — the credentialed URL is never sent to
                 // the client, so we carry the id and show the redacted label.
-                const hit = cached.data?.items.find((it) => it.id === id)
+                const hit = cachedItems.find((it) => it.id === id)
                 onChange({
                   kind: 'url',
                   repoUrl: hit?.urlRedacted ?? '',
@@ -196,12 +201,12 @@ export function RepoSourceRow({
                     ? t('launch.repoSource.recentUrlsPlaceholder')
                     : t('launch.repoSource.spacePlaceholder'),
               },
-              ...(cached.data?.items ?? []).map((it) => ({
+              ...cachedItems.map((it) => ({
                 value: it.id,
                 label: it.urlRedacted,
               })),
               ...(onSelectGroup !== undefined
-                ? (groups.data?.items ?? []).map((g) => ({
+                ? groupItems.map((g) => ({
                     value: `${GROUP_OPTION_PREFIX}${g.id}`,
                     label: t('launch.repoSource.groupOption', {
                       name: g.name,

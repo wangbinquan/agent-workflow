@@ -455,6 +455,7 @@ function TaskWizardPage() {
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
     enabled: canReadRepos,
   })
+  const readableCachedRepos = canReadRepos ? (cachedRepos.data?.items ?? []) : []
 
   // RFC-175: apply a reconstructed WizardSeed to the field state — shared by the
   // ?editScheduled= and ?relaunchFrom= seed paths (does NOT touch kind / subject
@@ -970,8 +971,11 @@ function TaskWizardPage() {
     queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
     enabled: canReadRepos && space.kind !== 'scratch',
   })
+  const readableRepoGroups = canReadRepos ? (repoGroups.data?.items ?? []) : []
   const selectedGroup =
-    space.kind === 'group' ? repoGroups.data?.items.find((g) => g.id === space.groupId) : undefined
+    space.kind === 'group'
+      ? readableRepoGroups.find((group) => group.id === space.groupId)
+      : undefined
   // 选中组后拉一次展平布局，供启动前预览（见「已选仓库组」卡片）。
   const selectedGroupId = space.kind === 'group' ? space.groupId : ''
   const groupLayout = useQuery<RepoGroupLayoutResponse>({
@@ -980,6 +984,7 @@ function TaskWizardPage() {
       api.get(`/api/repo-groups/${encodeURIComponent(selectedGroupId)}/layout`, undefined, signal),
     enabled: canReadRepos && selectedGroupId !== '',
   })
+  const readableGroupLayout = canReadRepos ? groupLayout.data : undefined
 
   const stepModeReady = selectedObject !== ''
   // Impl-gate F2: `[].every()` is vacuously true, so a zero-repo remote space
@@ -2242,14 +2247,14 @@ function TaskWizardPage() {
                         {/* RFC-248（实现门 P2）：启动前展示完整挂载布局。 */}
                         <QueryState
                           query={groupLayout}
-                          data={groupLayout.data?.nodes ?? groupLayout.data?.repos ?? []}
+                          data={readableGroupLayout?.nodes ?? readableGroupLayout?.repos ?? []}
                           emptyText={t('repoGroups.layout.empty')}
                           testid="wizard-space-group-layout-state"
                         >
                           {() => (
                             <RepoLayoutTree
-                              nodes={groupLayout.data?.nodes ?? []}
-                              repos={groupLayout.data?.repos ?? []}
+                              nodes={readableGroupLayout?.nodes ?? []}
+                              repos={readableGroupLayout?.repos ?? []}
                               testidPrefix="wizard-space-group-layout"
                               compact
                             />
@@ -2402,7 +2407,7 @@ function TaskWizardPage() {
                           space.kind === 'remote'
                             ? resolveUrlRepoPath(
                                 space.repos[0] ?? { kind: 'url', repoUrl: '', ref: '' },
-                                cachedRepos.data?.items ?? [],
+                                readableCachedRepos,
                               )
                             : ''
                         }
@@ -2553,8 +2558,8 @@ function TaskWizardPage() {
                       : space.kind === 'group'
                         ? t('taskWizard.spaceGroupSummary', {
                             name:
-                              repoGroups.data?.items.find((g) => g.id === space.groupId)?.name ??
-                              space.groupId,
+                              readableRepoGroups.find((group) => group.id === space.groupId)
+                                ?.name ?? space.groupId,
                           })
                         : space.repos
                             .map((r) => `${r.repoUrl}${r.ref ? ` @ ${r.ref}` : ''}`)

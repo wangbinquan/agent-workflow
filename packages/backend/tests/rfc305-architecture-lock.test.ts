@@ -602,6 +602,8 @@ describe('RFC-305 permission catalog architecture', () => {
     expect(appShell).toContain('mountDestination &&')
     expect(appShell).toContain('<Activity')
     expect(appShell).toContain('<RoutePortalScope active={destinationGranted}>')
+    expect(appShell).toContain('authorityNavigationBlockedRef.current = preserveDestination')
+    expect(appShell).toContain('shouldBlockFn: blockWhileAuthorityIsUnsettled')
     expect(appPortal).toContain('RoutePortalActiveContext')
     expect(appPortal).toContain('return createPortal(children, target ?? document.body)')
     expect(
@@ -636,6 +638,9 @@ describe('RFC-305 permission catalog architecture', () => {
     )
     expect(repoSourceRow).toContain('enabled: catalogEnabled')
     expect(repoSourceRow).toContain('enabled: catalogEnabled && onSelectGroup !== undefined')
+    expect(repoSourceRow).toContain('const cachedItems = catalogEnabled ?')
+    const userLookup = readFileSync(resolve(FRONTEND_SRC, 'hooks', 'useUserLookup.ts'), 'utf8')
+    expect(userLookup).toContain('canSearchUsers ? (query.data ?? []) : []')
   })
 })
 

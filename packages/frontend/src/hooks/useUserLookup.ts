@@ -27,7 +27,9 @@ export function useUserLookup(ids: ReadonlyArray<string | null | undefined>) {
     enabled: wanted.length > 0 && canSearchUsers,
     staleTime: 5 * 60_000,
   })
-  const byId = new Map((query.data ?? []).map((u) => [u.id, u]))
+  // A disabled query may retain data from before a permission downgrade. Do
+  // not project those cached public identities without current users:search.
+  const byId = new Map((canSearchUsers ? (query.data ?? []) : []).map((u) => [u.id, u]))
   return {
     /** Resolve one id to its public row, or undefined while loading / unknown. */
     get: (id: string | null | undefined): UserPublic | undefined => (id ? byId.get(id) : undefined),

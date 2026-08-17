@@ -412,10 +412,31 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
   test('tasks:execute alone keeps launch usable without probing or exposing extra capabilities', async () => {
     permissionHarness.permissions = new Set(['tasks:execute'])
     const calls = installFetch()
-    await renderWizard(AGENT_NEW_URL)
+    await renderWizard(AGENT_NEW_URL, {
+      seedQueries: (qc) => {
+        // Permission loss must fence previously cached privileged projections,
+        // not merely disable their next network request.
+        qc.setQueryData(['cached-repos'], {
+          items: [{ id: 'cached-secret', urlRedacted: 'https://private.example/secret.git' }],
+        })
+        qc.setQueryData(
+          ['users', 'lookup', ['owner-agent', 'owner-workflow', 'owner-workgroup']],
+          [
+            {
+              id: 'owner-agent',
+              username: 'secret-owner',
+              displayName: 'Secret Owner',
+              role: 'user',
+              status: 'active',
+            },
+          ],
+        )
+      },
+    })
 
     fireEvent.click(await screen.findByTestId('wizard-space-remote'))
     const repoUrl = await screen.findByTestId('repo-source-url-0')
+    expect(screen.queryByTestId('repo-source-recent-urls-0')).toBeNull()
     fireEvent.change(repoUrl, { target: { value: 'https://github.com/public/example.git' } })
     await waitFor(() =>
       expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
@@ -436,6 +457,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
 
     expect(await screen.findByTestId('wizard-launch')).toBeTruthy()
     expect(screen.queryByTestId('wizard-save-scheduled')).toBeNull()
+    expect(screen.queryByText(/Secret Owner/)).toBeNull()
     expect(
       calls.filter((call) =>
         [

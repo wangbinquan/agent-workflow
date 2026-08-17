@@ -20,6 +20,7 @@ const harness = vi.hoisted(() => ({
   actorFetchStatus: 'idle' as 'idle' | 'fetching' | 'paused',
   actorError: null as unknown,
   actorRefetchCalls: 0,
+  navigationBlocker: null as null | (() => boolean | Promise<boolean>),
   linkClicks: [] as Array<{ to: string; focusedTestId: string | null }>,
   settingsClicks: [] as Array<{ focusedTestId: string | null }>,
 }))
@@ -53,7 +54,8 @@ vi.mock('@tanstack/react-router', async () => {
             : to,
         onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
           onClick?.(event)
-          if (!event.defaultPrevented) {
+          const blocked = harness.navigationBlocker?.() === true
+          if (!event.defaultPrevented && !blocked) {
             harness.linkClicks.push({ to, focusedTestId: focusedTestId() })
           }
           event.preventDefault()
@@ -70,6 +72,9 @@ vi.mock('@tanstack/react-router', async () => {
     redirect: (options: unknown) => options,
     useRouterState: ({ select }: { select: (state: unknown) => unknown }) =>
       select({ location: { pathname: harness.pathname } }),
+    useBlocker: ({ shouldBlockFn }: { shouldBlockFn: () => boolean | Promise<boolean> }) => {
+      harness.navigationBlocker = shouldBlockFn
+    },
   }
 })
 
@@ -274,6 +279,7 @@ beforeEach(async () => {
   harness.actorFetchStatus = 'idle'
   harness.actorError = null
   harness.actorRefetchCalls = 0
+  harness.navigationBlocker = null
   harness.linkClicks.length = 0
   harness.settingsClicks.length = 0
   act(() => setInboxOpen(false))
@@ -359,6 +365,8 @@ describe('RFC-198 responsive AppShell', () => {
     expect(activeRouteEffects).toBe(0)
     expect(screen.queryByRole('button', { name: 'Protected overlay' })).toBeNull()
     expect(screen.queryByTestId('routed-portal')).toBeNull()
+    fireEvent.click(screen.getByRole('link', { name: 'Tasks', exact: true }))
+    expect(harness.linkClicks).toEqual([])
 
     harness.actorFetchStatus = 'idle'
     harness.actorStatus = 'error'
@@ -369,6 +377,8 @@ describe('RFC-198 responsive AppShell', () => {
     expect(screen.getByTestId('authority-refresh-error')).toBeTruthy()
     expect(activeRouteEffects).toBe(0)
     expect(screen.queryByRole('button', { name: 'Protected overlay' })).toBeNull()
+    fireEvent.click(screen.getByRole('link', { name: 'Tasks', exact: true }))
+    expect(harness.linkClicks).toEqual([])
 
     harness.permissionAllowed = true
     harness.actorStatus = 'success'
@@ -381,6 +391,8 @@ describe('RFC-198 responsive AppShell', () => {
     )
     expect(activeRouteEffects).toBe(1)
     expect(screen.getByRole('button', { name: 'Protected overlay' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('link', { name: 'Tasks', exact: true }))
+    expect(harness.linkClicks.map((click) => click.to)).toEqual(['/tasks'])
 
     harness.permissionAllowed = false
     view.rerender(route())
