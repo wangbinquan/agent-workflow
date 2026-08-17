@@ -42,6 +42,7 @@ import {
   UnsavedChangesGuard,
 } from '../src/components/split/UnsavedChangesGuard'
 import { useReportSplitDirty, useSplitDirty } from '../src/components/split/splitDirty'
+import { withFullAccessActorFetch } from './unexpectedNetwork'
 import '../src/i18n'
 
 const ITEMS: ResourceCardItem[] = [
@@ -87,7 +88,7 @@ function SyncClearDetail() {
 
 function renderGuard(opts: { initial: string; Detail: () => ReactElement }) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
-    async () => new Response('not found', { status: 404 }),
+    withFullAccessActorFetch(async () => new Response('not found', { status: 404 })),
   )
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const layoutRoute = createRoute({

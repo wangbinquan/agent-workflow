@@ -29,6 +29,7 @@ import {
   type SplitBusyRelease,
   type SplitDiscardHandler,
 } from '../src/components/split/splitDirty'
+import { withFullAccessActorFetch } from './unexpectedNetwork'
 import '../src/i18n'
 
 const ITEMS: ResourceCardItem[] = [
@@ -54,7 +55,7 @@ const ITEMS: ResourceCardItem[] = [
 
 function mockFetch() {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
-    async () => new Response('not found', { status: 404 }),
+    withFullAccessActorFetch(async () => new Response('not found', { status: 404 })),
   )
 }
 

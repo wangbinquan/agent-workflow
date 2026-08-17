@@ -34,6 +34,7 @@ import { Route as RootRoute } from '../src/routes/__root'
 import { IndexRoute as agentsIndexRoute, Route as agentsRoute } from '../src/routes/agents'
 import { Route as agentDetailRoute } from '../src/routes/agents.detail'
 import { Route as agentNewRoute } from '../src/routes/agents.new'
+import { withFullAccessActorFetch } from './unexpectedNetwork'
 import '../src/i18n'
 
 function json(body: unknown, status = 200): Response {
@@ -67,7 +68,7 @@ let posted: string[]
 
 function installFetch() {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
+    withFullAccessActorFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
       const path = url.replace(/^https?:\/\/[^/]+/, '')
@@ -97,7 +98,7 @@ function installFetch() {
       if (method === 'POST' && path.endsWith('/api/users/lookup')) return json([])
       if (method === 'GET' && /\/api\/(skills|mcps|plugins)/.test(path)) return json([])
       return json({ error: 'unhandled' }, 404)
-    },
+    }),
   )
 }
 
