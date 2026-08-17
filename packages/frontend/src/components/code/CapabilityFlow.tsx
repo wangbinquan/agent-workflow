@@ -20,7 +20,7 @@
 // comes from `GET /api/code/capabilities/:capability/graph`, which is a pure
 // projection of the platform contract. There is no second copy to drift.
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Background,
@@ -28,6 +28,7 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
@@ -37,6 +38,7 @@ import {
   STAGE_CARD_WIDTH,
   edgeHandles,
   layoutStageGraph,
+  shouldFitOnResize,
   type StageLayoutKind,
   type StageLayoutNode,
 } from './stageLayout'
@@ -170,6 +172,48 @@ function StageNode({ data }: NodeProps) {
 
 const NODE_TYPES = { stage: StageNode }
 
+/**
+ * Re-fit the viewport the moment this canvas stops being hidden.
+ *
+ * Must live INSIDE `ReactFlowProvider` — `useReactFlow` reads the store the
+ * provider owns. See `shouldFitOnResize` for why this exists at all: the panel
+ * is mounted while its tab is hidden, so ReactFlow's own `fitView` runs against
+ * a 0×0 container and the graph ends up jammed into a corner.
+ */
+function FitOnReveal({ host }: { host: RefObject<HTMLDivElement | null> }): null {
+  const flow = useReactFlow()
+  const previous = useRef<{ width: number; height: number } | null>(null)
+
+  useEffect(() => {
+    // THIS instance's wrapper, passed by ref rather than found with a document
+    // query. Several of these are mounted at once — the Flow tab plus one per
+    // round on the Activity tab — so a selector would hand every observer the
+    // same first element and leave the rest never re-fitting.
+    const element = host.current
+    if (element === null || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect
+      if (box === undefined) return
+      const next = { width: box.width, height: box.height }
+      if (shouldFitOnResize(previous.current, next)) {
+        // Deferred a frame: ReactFlow measures its own nodes on the same tick
+        // the container gains size, and fitting before that measurement lands
+        // reproduces the very bug this is here to fix.
+        requestAnimationFrame(() => {
+          void flow.fitView({ padding: 0.15 })
+        })
+      }
+      previous.current = next
+    })
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+    }
+  }, [flow, host])
+
+  return null
+}
+
 export function CapabilityFlow({
   nodes,
   edges,
@@ -181,6 +225,7 @@ export function CapabilityFlow({
   testidPrefix = 'stage-node',
 }: Props) {
   const { t } = useTranslation()
+  const host = useRef<HTMLDivElement | null>(null)
 
   const layout = useMemo(
     () => layoutStageGraph({ nodes, edges: edges.map((e) => ({ ...e })) }),
@@ -246,7 +291,7 @@ export function CapabilityFlow({
   }, [layout])
 
   return (
-    <div className="stage-flow" style={{ height }} data-testid={`${testidPrefix}-flow`}>
+    <div ref={host} className="stage-flow" style={{ height }} data-testid={`${testidPrefix}-flow`}>
       <ReactFlowProvider>
         <ReactFlow
           nodes={flowNodes}
@@ -264,6 +309,7 @@ export function CapabilityFlow({
           }}
         >
           <Background />
+          <FitOnReveal host={host} />
         </ReactFlow>
       </ReactFlowProvider>
     </div>

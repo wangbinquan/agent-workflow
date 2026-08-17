@@ -17,6 +17,7 @@ import {
   STAGE_Y_PITCH,
   edgeHandles,
   layoutStageGraph,
+  shouldFitOnResize,
   type StageLayoutKind,
 } from '../src/components/code/stageLayout'
 
@@ -128,5 +129,34 @@ describe('RFC-307 edge handles', () => {
       source: 'bottom',
       target: 'top',
     })
+  })
+})
+
+describe('RFC-307 re-fit on reveal', () => {
+  // Regression, reported from the running product: opening `/code` and CLICKING
+  // through to the Activity tab showed the graph jammed into the top-left
+  // corner with most of it cut off, while the same tab opened directly by URL
+  // rendered correctly. RFC-169 keeps inactive panels MOUNTED, so the canvas
+  // was first measured at 0×0; ReactFlow fits once at mount and never revisits.
+
+  test('a canvas measured while hidden is not fitted', () => {
+    // Fitting at 0×0 is the original bug, not the fix.
+    expect(shouldFitOnResize(null, { width: 0, height: 0 })).toBe(false)
+    expect(shouldFitOnResize({ width: 0, height: 0 }, { width: 800, height: 0 })).toBe(false)
+  })
+
+  test('the first real measurement fits', () => {
+    expect(shouldFitOnResize(null, { width: 800, height: 460 })).toBe(true)
+  })
+
+  test('the hidden → visible transition fits — this is the reported bug', () => {
+    expect(shouldFitOnResize({ width: 0, height: 0 }, { width: 900, height: 460 })).toBe(true)
+  })
+
+  test('an ordinary resize does NOT fit, so panning and zooming survive', () => {
+    // A canvas that re-fits on every container change would yank the viewport
+    // back the moment a sidebar animates or the window is dragged.
+    expect(shouldFitOnResize({ width: 900, height: 460 }, { width: 700, height: 460 })).toBe(false)
+    expect(shouldFitOnResize({ width: 900, height: 460 }, { width: 900, height: 520 })).toBe(false)
   })
 })

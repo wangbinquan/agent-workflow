@@ -108,3 +108,30 @@ export function edgeHandles(
   if (to.x >= from.x) return { source: 'right', target: 'left' }
   return { source: 'left', target: 'right' }
 }
+
+/**
+ * Whether a size change means "this canvas just became visible" and should be
+ * re-fitted.
+ *
+ * Extracted as a rule rather than written inline because it is the fix for a
+ * real defect and the wrong version of it is worse than none. RFC-169 keeps
+ * inactive tab panels MOUNTED (hidden), so a flow inside the Activity tab is
+ * first measured at 0×0 while the Repositories tab is showing. ReactFlow runs
+ * `fitView` once at mount, computes a viewport from those zero dimensions, and
+ * never revisits it — so clicking through to the tab shows the graph jammed
+ * into a corner with most of it cut off. Opening the same tab by URL works,
+ * which is why this survived review.
+ *
+ * Fit ONLY on the zero → non-zero transition, never on ordinary resizes: a
+ * canvas that re-fits whenever its container moves would yank the viewport back
+ * every time the user pans or zooms.
+ */
+export function shouldFitOnResize(
+  previous: { width: number; height: number } | null,
+  next: { width: number; height: number },
+): boolean {
+  // Still hidden — measuring it now would repeat the original mistake.
+  if (next.width === 0 || next.height === 0) return false
+  // First real measurement, or the moment it stopped being hidden.
+  return previous === null || previous.width === 0 || previous.height === 0
+}
