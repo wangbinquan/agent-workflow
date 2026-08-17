@@ -713,6 +713,25 @@ describe('RFC-309 — the templates tab', () => {
     expect(await screen.findByTestId('code-capability-structure')).toBeTruthy()
   })
 
+  test('a capability with no sequence SAYS so rather than showing nothing', async () => {
+    // `mr-monitor` is the standing monitor loop. Rendering nothing would read
+    // as "the picture failed to load" on the one screen where somebody is
+    // choosing which capability to build a template for.
+    installFetch({
+      templates: [],
+      catalog: [{ capability: 'mr-monitor', agentSlots: [] }],
+      graph: { capability: 'mr-monitor', reason: 'no-stage-contract' },
+    })
+    await renderPage('/code?tab=templates')
+    fireEvent.click(await screen.findByTestId('code-new-template'))
+
+    fireEvent.click(screen.getByTestId('code-template-capability'))
+    fireEvent.mouseDown(await screen.findByRole('option', { name: /monitor/i }))
+
+    expect(await screen.findByTestId('code-capability-structure-none')).toBeTruthy()
+    expect(screen.queryByTestId('code-capability-structure')).toBeNull()
+  })
+
   test('creating a template is offered from the list itself', async () => {
     // RFC-309 D2: with the layers merged there is exactly one create action,
     // and it is where the templates are — not two, split by a permission the

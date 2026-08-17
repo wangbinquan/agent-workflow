@@ -1319,7 +1319,22 @@ function CapabilityStructurePreview({ capability }: { capability: string }): Rea
   const { t } = useTranslation()
   const graph = useCapabilityGraph(capability)
   const answer = readGraph(graph.data)
-  if (answer.kind !== 'graph') return <></>
+
+  // A real answer in words, not an absence. `mr-monitor` is the standing
+  // monitor loop and genuinely has no sequence; rendering nothing here would
+  // read as "the picture failed to load" on the one screen where somebody is
+  // deciding which capability to build a template for.
+  if (answer.kind !== 'graph') {
+    return (
+      <div className="page__section" data-testid="code-capability-structure-none">
+        <EmptyState
+          title={t('capabilityFlow.noContract')}
+          description={t('capabilityFlow.noContractHint')}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="page__section" data-testid="code-capability-structure">
       <p>{t('code.flow.hint')}</p>

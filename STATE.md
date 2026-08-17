@@ -2,20 +2,28 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
-> —— 起因是 RFC-307 之后用户连提三问。**PR-1 已上库（`1a19e145`，CI 待核）**；PR-2/PR-3 已实现待提交。
-> ①**一套模板**：迁移 `0174` 把 `capability_frameworks` + `capability_bindings` 真合并为 `capability_templates`，
-> **模板 id 延用绑定 id** ⇒ `repo_capability_config.binding_id` 只改名不改值、矩阵指针零漂移；权限点 8→4 +
-> `code-rounds:launch`（闭集 81→78），存量 grant 由迁移删除（用户裁决）。合并的是**对象**不是权限：写
-> `scripts`/`hooks` 仍需 `scripts:author`，改为**字段级**门槛。
-> ②**模板即流程**：新增 `/code/templates/$id`（详情即流程图，点某步就地配置写回该模板），独立「流程」页签删除，
-> 能力级只读流程移入新建模板向导（保住 RFC-307 AC-1）；RFC-304 **T64** 上游四态 + 三方差异 + 「只合并未被覆盖
-> 的字段」首次接线（迁移 `0175` 补 `base_snapshot_json`——只有摘要答不了「是谁改的」）。
-> ③**从模板起跑**：`POST /api/code/rounds` 补齐 RFC-304 **T46b** 欠账。**实现期发现三层缺接线**（见
-> `design.md §11`）：`openRound` 不会让任何东西跑起来（补 `StartRoundTask` 端口 + 回执带 `taskId`）；工作项状态机
-> 没有「人按了按钮」这一事件（新增 `platform-launch`，运行中再发一次一律拒绝）；调度器要求冻结的 webhook 上下文
-> 而平台发起没有（抽出中性 `CodeContextFields`，并把写死的 `input: null` / issue-origin 开成可选口，默认不变）。
-> **剩余**：T25 e2e 已写待跑、T28 收尾。
+> ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
+> —— 起因是 RFC-307 之后用户连提三问，三问三答：
+> ①「流程和模版两个页签什么关系」→ **它们本来就是同一件事被输入了两遍**（一遍是图、一遍是 JSON）。
+> 迁移 `0174` 把 `capability_frameworks` + `capability_bindings` 真合并为 `capability_templates`，
+> **模板 id 延用绑定 id** ⇒ `repo_capability_config.binding_id` 只改名不改值，「矩阵指针漂移」这个
+> 失败模式**不存在**而非「被测住」；权限点 8→4 + `code-rounds:launch`（闭集 81→78），合并的是
+> **对象**不是权限——写 `scripts`/`hooks` 仍需 `scripts:author`，改为字段级门槛。
+> ②「是不是应该在模版里配置流程」→ 是。`/code/templates/$id` 详情即流程图，点第五步就改第五步；
+> 独立「流程」页签删除，能力级只读流程移入新建模板向导（RFC-307 AC-1 不回归）。同时把 RFC-304
+> **T64** 上游四态 + 三方差异 + 「只合并未被覆盖的字段」**首次接线**（它自 RFC-304 起正确且零生产
+> 导入），迁移 `0175` 补 `base_snapshot_json`——摘要答得了「改没改」、答不了「是谁改的」。
+> ③「基于模版建需求任务的入口在哪」→ 此前**没有**。`POST /api/code/rounds` 结清 RFC-304 **T46b**。
+>
+> **实现期照出「开单 ≠ 这件事在跑」的三层缺接线**（每一层都不报错，详见 `design.md §11`，定式已进
+> `docs/dev-gotchas.md`）：`openRound` 只写两行库不启动任何任务；工作项状态机没有「人按了按钮」
+> 这一事件（新增 `platform-launch`，运行中再发一次拒绝）；调度器那支要求冻结的 webhook 上下文，
+> 而 `requirement` 的 `input`/`origin` 是写死的——它会对着一份就躺在轮次里的正文回答「这是引用、
+> 我取不到」，并用「请改从平台提交」拒绝一个正是从平台提交的请求。
+> **已知取舍**（`design.md §12` 逐条）：手动发起的 `stable_project_id` 用缓存仓 id，同一 MR 上与
+> webhook 轮次不去重（后果是重复劳动而非数据损坏）；迁移存量模板一律呈 `orphaned`。
+> 门禁：`gate:local` 全绿（backend 四分片 12053 / frontend 6589 / shared 2186）；CI 上
+> `rfc309-template-launch.spec.ts` **7/7 全绿**。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-308 任务 Git 提交、平台工作目录与自动排除规则归一](design/RFC-308-unified-task-git-commit-exclusions/proposal.md)**
 > ——按用户强序先统一提交底座，再接平台 ignore：普通 RFC-075 auto-publish 与 RFC-304 code-capability 现在共用
