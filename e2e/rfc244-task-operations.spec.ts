@@ -54,8 +54,12 @@ async function postJson<T>(path: string, body: unknown, token?: string): Promise
   return requestJson<T>(path, { method: 'POST', body: JSON.stringify(body) }, token)
 }
 
-async function waitFor<T>(read: () => Promise<T>, accept: (value: T) => boolean): Promise<T> {
-  const deadline = Date.now() + 20_000
+async function waitFor<T>(
+  read: () => Promise<T>,
+  accept: (value: T) => boolean,
+  timeoutMs = 20_000,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs
   for (;;) {
     const value = await read()
     if (accept(value)) return value
@@ -437,7 +441,13 @@ test('390×844 and 390×568 reflow the same nested list without horizontal scrol
 })
 
 test('real session, PAT, schedule, and webhook launches filter exactly and scheduled children inherit', async () => {
-  type TaskWire = { id: string; [key: string]: unknown }
+  type TaskWire = {
+    id: string
+    status?: string
+    errorSummary?: string | null
+    errorMessage?: string | null
+    [key: string]: unknown
+  }
   type OperationsPage = { items: TaskWire[] }
   type WorkflowWire = { id: string; name: string }
 
@@ -582,10 +592,27 @@ test('real session, PAT, schedule, and webhook launches filter exactly and sched
     (page) => page.items.length === 1,
   )
   const middleTaskId = scheduledChildren.items[0]!.id
-  const scheduledGrandchildren = await waitFor(
-    () => pageFor('scheduled', middleTaskId),
-    (page) => page.items.length === 1,
+  const terminalTaskStatuses = new Set(['done', 'failed', 'canceled', 'interrupted'])
+  const scheduledGrandchildState = await waitFor(
+    async () => {
+      const [page, parent] = await Promise.all([
+        pageFor('scheduled', middleTaskId),
+        requestJson<TaskWire>(`/api/tasks/${middleTaskId}`),
+      ])
+      return { page, parent }
+    },
+    ({ page, parent }) => page.items.length === 1 || terminalTaskStatuses.has(parent.status ?? ''),
+    60_000,
   )
+  expect(
+    scheduledGrandchildState.page.items,
+    `scheduled middle task settled before launching its child: ${JSON.stringify({
+      status: scheduledGrandchildState.parent.status,
+      errorSummary: scheduledGrandchildState.parent.errorSummary,
+      errorMessage: scheduledGrandchildState.parent.errorMessage,
+    })}`,
+  ).toHaveLength(1)
+  const scheduledGrandchildren = scheduledGrandchildState.page
   expect(scheduledGrandchildren.items).toHaveLength(1)
 
   for (const page of [manualPage, apiPage, webhookPage, scheduledRootPage, scheduledChildren]) {
