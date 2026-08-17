@@ -1014,6 +1014,19 @@ runner 打崩了」，而单独跑那个文件是绿的。要么**把 ssh 会话
   `injectable` 白名单是 `extraContext` ⇒ 运行时必拒。第一个例子跑不通会教错两次
   （一次关于钩子，一次关于「示例能不能信」）。写测试从合同里取白名单去校验示例本身。
 
+## 混合文件一起提交前，先确认**对方那半边引用的东西也在仓库里**（RFC-307 实测，2026-08-17）
+
+仓规允许「同一文件混了多人改动可以一起 commit，只在 message 里写自己的部分」。
+但有一类改动一行就打穿全仓构建：`packages/shared/src/index.ts` 里并发 RFC 加的
+`export * from './workspaceConvention'`，而 `workspaceConvention.ts` **还未被
+`git add`**。本地看不出任何异常（文件就在工作树里），推上去后 CI 上每个依赖 shared
+的包都挂在 `Failed to resolve import`——一次 20 个 job 红。
+
+处置：提交共享 barrel / index / 注册表这类**含 `export * from`、`import`、路径引用**
+的混合文件前，对别人那几行跑一遍 `git ls-files <被引用文件>`，空输出就说明它还没进
+仓库。此时**只移除自己误发的那一行**（对方本地文件原样不动，等作者连同模块一起提），
+不要顺手把别人未完成的文件也 `git add` 进来。
+
 ## 多处编辑的脚本中途抛错 = 前面几处**一并丢失**（RFC-307 实测）
 
 用一个 python/sed 脚本做 N 处替换时，若第 N 处的 anchor 断言失败而**写文件在最后**，
