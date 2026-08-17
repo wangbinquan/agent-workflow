@@ -298,30 +298,20 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
   // a group could import a package somebody handed them and nobody could hand
   // one over.
   //
-  // Exporting a BINDING pulls its framework in with it, which is what makes the
-  // package usable at the far end — a binding alone names a template the
-  // destination does not have.
+  // RFC-309 — one export. The old pair existed because a binding alone named a
+  // framework the destination did not have, so exporting one had to pull the
+  // other along. A merged template carries both halves, so the closure that
+  // used to reach across layers has nothing left to reach for.
   registerRoute(
     app,
     {
       method: 'GET',
-      path: '/api/capability-frameworks/:id/export-package',
-      permissions: ['capability-frameworks:read'],
+      path: '/api/capability-templates/:id/export-package',
+      permissions: ['capability-templates:read'],
       tokenAccess: 'allow',
-      summary: 'Export a capability framework (config package)',
+      summary: 'Export a capability template (config package)',
     },
-    exportHandler('capability_framework', deps),
-  )
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/capability-bindings/:id/export-package',
-      permissions: ['capability-bindings:read'],
-      tokenAccess: 'allow',
-      summary: 'Export a capability binding with its framework (config package)',
-    },
-    exportHandler('capability_binding', deps),
+    exportHandler('capability_template', deps),
   )
 
   registerRoute(

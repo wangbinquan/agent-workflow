@@ -23,15 +23,13 @@ export const ACL_RESOURCE_TYPES = [
   'plugin',
   'workflow',
   'workgroup', // RFC-164 — sixth resource type
-  // RFC-304 T13/T57 — the two capability template layers. Both tables have
-  // carried the owner/visibility/acl_revision columns since PR-2, but the type
-  // was never added here, so no ACL helper could be called for them: the
-  // columns existed and the closure did not. They are separate types rather
-  // than one because the department layer carries scripts that run as the
-  // daemon and the group layer deliberately cannot — granting one must never
-  // grant the other.
-  'capability_framework',
-  'capability_binding',
+  // RFC-304 T13/T57 → RFC-309 — ONE capability template type. RFC-304 kept two
+  // because the department layer carried scripts that run as the daemon and the
+  // group layer deliberately could not, so granting one had to not grant the
+  // other. That property now lives one level down, as a field-level
+  // `scripts:author` check inside a single row, which is what lets this be one
+  // ACL type without handing template owners the daemon.
+  'capability_template',
 ] as const
 
 /**
@@ -52,14 +50,12 @@ export const BUNDLE_RESOURCE_TYPES = [
   'plugin',
   'workflow',
   'workgroup',
-  // RFC-304 T17a — config packages now carry the two capability template
-  // layers. Importing a FRAMEWORK is host code execution on the destination
-  // instance (its payload holds script bodies), so the import path requires
-  // `scripts:author` on top of the ordinary create/update point — the same
-  // two-factor rule the HTTP route enforces, because a package is only another
-  // way to write the same row.
-  'capability_framework',
-  'capability_binding',
+  // RFC-304 T17a → RFC-309 — one packaged template type. Importing one is host
+  // code execution on the destination instance when its payload holds script
+  // bodies, so the import path applies the same field-level `scripts:author`
+  // check the HTTP route does — a package is only another way to write the same
+  // row, and must not be a way around the rule.
+  'capability_template',
 ] as const
 export type BundleResourceType = (typeof BUNDLE_RESOURCE_TYPES)[number]
 // `ResourcePackageType` in `./resourcePackage` is this same set, derived from

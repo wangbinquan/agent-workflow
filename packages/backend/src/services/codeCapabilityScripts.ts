@@ -17,7 +17,7 @@
 
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { capabilityBindings, capabilityFrameworks, repoCapabilityConfig } from '@/db/schema'
+import { capabilityTemplates, repoCapabilityConfig } from '@/db/schema'
 import { SCRIPT_LANGUAGES, type ScriptLanguage } from '@agent-workflow/shared'
 import {
   MONITOR_SCRIPTS,
@@ -88,7 +88,7 @@ export async function resolveMonitorScripts(
   input: { repoId: string; capability: string },
 ): Promise<ResolvedMonitorScripts> {
   const [cell] = await db
-    .select({ bindingId: repoCapabilityConfig.bindingId })
+    .select({ templateId: repoCapabilityConfig.templateId })
     .from(repoCapabilityConfig)
     .where(
       // `and(...)`, never `&&` — a JS `&&` between two drizzle conditions
@@ -101,20 +101,18 @@ export async function resolveMonitorScripts(
       ),
     )
   if (cell === undefined) return { ok: false, problem: 'this repository has no such capability' }
-  if (cell.bindingId == null) return { ok: false, problem: 'no binding is selected' }
+  if (cell.templateId == null) return { ok: false, problem: 'no binding is selected' }
 
-  const [binding] = await db
-    .select({ frameworkId: capabilityBindings.frameworkId })
-    .from(capabilityBindings)
-    .where(eq(capabilityBindings.id, cell.bindingId))
-  if (binding === undefined) return { ok: false, problem: 'the selected binding no longer exists' }
-
+  // RFC-309 — one hop. This used to be cell → binding → framework, and the
+  // middle step could fail on its own ("the binding's framework no longer
+  // exists"), which was a state a person could reach by deleting a row they did
+  // not know anything pointed at. A merged template cannot be half-missing.
   const [framework] = await db
-    .select({ scriptsJson: capabilityFrameworks.scriptsJson })
-    .from(capabilityFrameworks)
-    .where(eq(capabilityFrameworks.id, binding.frameworkId))
+    .select({ scriptsJson: capabilityTemplates.scriptsJson })
+    .from(capabilityTemplates)
+    .where(eq(capabilityTemplates.id, cell.templateId))
   if (framework === undefined) {
-    return { ok: false, problem: "the binding's framework no longer exists" }
+    return { ok: false, problem: 'the selected template no longer exists' }
   }
 
   let parsed: unknown

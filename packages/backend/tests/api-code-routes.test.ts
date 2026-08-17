@@ -13,12 +13,7 @@ import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  agents,
-  capabilityBindings,
-  capabilityFrameworks,
-  webhookEndpoints,
-} from '../src/db/schema'
+import { agents, capabilityTemplates, webhookEndpoints } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
@@ -63,20 +58,13 @@ const seedBinding = async (db: DbClient) => {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await db.insert(capabilityFrameworks).values({
-    id: 'fw-1',
-    name: 'f',
-    capability: 'mr-review',
-    createdAt: NOW,
-    updatedAt: NOW,
-  })
-  await db.insert(capabilityBindings).values({
+  await db.insert(capabilityTemplates).values({
     id: 'binding-1',
     name: 'b',
-    frameworkId: 'fw-1',
     agentBySlotJson: JSON.stringify({ reviewer: 'agent-1' }),
     createdAt: NOW,
     updatedAt: NOW,
+    capability: 'mr-review',
   })
 }
 
@@ -142,7 +130,7 @@ describe('RFC-304 — enabling a capability over HTTP', () => {
     const res = await app.request('/api/code/matrix/group%2Fproject', {
       method: 'PUT',
       headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ capability: 'mr-review', enabled: true, bindingId: 'binding-1' }),
+      body: JSON.stringify({ capability: 'mr-review', enabled: true, templateId: 'binding-1' }),
     })
     expect(res.status).toBe(200)
     const body = (await res.json()) as { row: { readiness: string; enabled: boolean } }
@@ -160,7 +148,7 @@ describe('RFC-304 — enabling a capability over HTTP', () => {
     await app.request('/api/code/matrix/group%2Fproject', {
       method: 'PUT',
       headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ capability: 'mr-review', enabled: true, bindingId: 'binding-1' }),
+      body: JSON.stringify({ capability: 'mr-review', enabled: true, templateId: 'binding-1' }),
     })
     const res = await app.request('/api/code/matrix/group%2Fproject', { headers: auth })
     const body = (await res.json()) as { rows: Array<{ capability: string }> }

@@ -40,39 +40,29 @@ interface Recorded {
 }
 
 /**
- * A framework/binding as the API actually returns them.
+ * A template as the API actually returns it.
  *
- * Named apart from the per-describe `FRAMEWORK` fixtures below on purpose:
- * `TabPanels` mounts EVERY panel, so the templates list renders even while the
- * matrix tab is the visible one — and a partial fixture there crashes tests
- * that are nominally about the matrix (a missing `paramSchema` took down three).
+ * Named apart from the per-describe fixtures below on purpose: `TabPanels`
+ * mounts EVERY panel, so the templates list renders even while the matrix tab
+ * is the visible one — and a partial fixture there crashes tests that are
+ * nominally about the matrix (a missing `paramSchema` took down three).
+ *
+ * RFC-309 collapsed the two fixtures this replaced. There was an `API_FRAMEWORK`
+ * and an `API_BINDING` that only meant anything as a pair, which is the shape
+ * of the product problem the merge fixed.
  */
-const API_FRAMEWORK = {
-  id: 'fw-1',
-  name: 'Review framework',
+const API_TEMPLATE = {
+  id: 'bd-1',
+  name: 'Our reviewers',
   description: null,
   capability: 'mr-review',
   scriptsRedacted: false,
   paramSchema: [],
   paramDefaults: {},
-  stageContractVer: 1,
-  ownerUserId: null,
-  visibility: 'private',
-  builtin: false,
-  aclRevision: 1,
-  upstream: null,
-  createdAt: 1,
-  updatedAt: 1,
-}
-
-const API_BINDING = {
-  id: 'bd-1',
-  name: 'Our reviewers',
-  description: null,
-  frameworkId: 'fw-1',
   agentBySlot: {},
   promptBySlot: {},
   params: {},
+  stageContractVer: 1,
   ownerUserId: null,
   visibility: 'private',
   builtin: false,
@@ -87,8 +77,7 @@ function installFetch(handlers: {
   workItems?: unknown[]
   attempts?: unknown[]
   metrics?: unknown
-  frameworks?: unknown[]
-  bindings?: unknown[]
+  templates?: unknown[]
   catalog?: unknown[]
   agents?: unknown[]
 }): Recorded {
@@ -104,13 +93,9 @@ function installFetch(handlers: {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
-      if (url.includes('/api/capability-frameworks')) {
-        if (method === 'POST') return json({ id: 'fw-copy', name: 'x copy' })
-        return json(handlers.frameworks ?? [])
-      }
-      if (url.includes('/api/capability-bindings')) {
-        if (method === 'POST') return json({ id: 'bd-copy', name: 'y copy' })
-        return json(handlers.bindings ?? [])
+      if (url.includes('/api/capability-templates')) {
+        if (method === 'POST') return json({ id: 'tpl-copy', name: 'x copy' })
+        return json(handlers.templates ?? [])
       }
       if (url.includes('/api/code/capabilities')) {
         return json({ items: handlers.catalog ?? [] })
@@ -168,7 +153,7 @@ const READY_ROW = {
   readiness: 'ready',
   issues: [],
   repairActions: [],
-  bindingId: 'binding-1',
+  templateId: 'binding-1',
 }
 
 const MISCONFIGURED_ROW = {
@@ -184,7 +169,7 @@ const MISCONFIGURED_ROW = {
     { code: 'no-binding', label: 'Choose a configuration', route: '/code/bindings' },
     { code: 'code-host-unconfigured', label: 'Add a code host', route: '/settings/code-hosts' },
   ],
-  bindingId: null,
+  templateId: null,
 }
 
 describe('RFC-304 — the capability matrix', () => {
@@ -595,164 +580,139 @@ describe('RFC-304 T58 — the results tab', () => {
   })
 })
 
-// RFC-304 T57(a) — the two template layers, listed.
+// RFC-309 T30 — one list of templates.
 //
-// The page must keep the layers apart, because the difference between them is
-// who may edit what: a framework carries scripts that run as the daemon, a
-// binding carries none, and that is the whole reason a group lead can own one
-// and not the other.
-describe('RFC-304 T57 — the templates tab', () => {
-  const FRAMEWORK = {
-    id: 'fw-1',
+// RFC-304 shipped two, and this block used to assert they stayed apart: a
+// framework carried scripts that run as the daemon, a binding carried none, and
+// the split was how a group lead could own one and not the other. The user
+// overturned it — 「不需要区分组织模版和小组模版了，就是一套模版，大家可以复制
+// 修改就行了」 — so what these tests now lock is that the permission survived
+// the merge as a FIELD-level rule (`scriptsRedacted`) rather than as a second
+// list. A template a reader may not see the scripts of is still shown, still
+// copyable, and still says why part of it is missing.
+describe('RFC-309 — the templates tab', () => {
+  const TEMPLATE = {
+    ...API_TEMPLATE,
+    id: 'tpl-1',
     name: 'gitlab standard',
     description: 'the shipped review pipeline',
-    capability: 'mr-review',
     scriptsRedacted: true,
     paramSchema: [{ name: 'maxFindings', kind: 'number' }],
     paramDefaults: { maxFindings: 20 },
-    stageContractVer: 1,
-    ownerUserId: null,
-    visibility: 'public',
-    builtin: true,
-    aclRevision: 0,
-    upstream: null,
-    updatedAt: 1000,
-  }
-
-  const BINDING = {
-    id: 'bd-1',
-    name: 'platform team review',
-    description: null,
-    frameworkId: 'fw-1',
     agentBySlot: { reviewer: 'auditor' },
-    params: {},
-    ownerUserId: 'u-1',
-    visibility: 'private',
-    builtin: false,
-    aclRevision: 0,
-    // T64 — this one is a copy, so the page shows its origin.
-    upstream: { upstreamId: 'fw-1', upstreamVersion: 900, baseDigest: 'd0' },
-    updatedAt: 1000,
-  }
-
-  test('a redacted framework SAYS its scripts are hidden', async () => {
-    // Without this the reader sees a template with no scripts and concludes it
-    // is broken. The label is the difference between "you may not see this" and
-    // "there is nothing here".
-    installFetch({ frameworks: [FRAMEWORK], bindings: [] })
-    await renderPage('/code?tab=templates')
-    expect(await screen.findByText(/scripts hidden/i)).toBeTruthy()
-  })
-
-  test('a binding shows the framework NAME, not its id', async () => {
-    // A binding is understood by what it points at. An opaque ULID means
-    // opening another page to find out what this template even does.
-    installFetch({ frameworks: [FRAMEWORK], bindings: [BINDING] })
-    await renderPage('/code?tab=templates')
-
-    const row = await screen.findByTestId('code-binding-bd-1')
-    expect(row.textContent).toContain('gitlab standard')
-    expect(row.textContent).not.toContain('fw-1')
-  })
-
-  test('a binding whose framework is gone says so rather than showing a bare id', async () => {
-    installFetch({ frameworks: [], bindings: [BINDING] })
-    await renderPage('/code?tab=templates')
-
-    const row = await screen.findByTestId('code-binding-bd-1')
-    expect(row.textContent).toContain('Template missing')
-  })
-
-  test('copying posts to the copy endpoint for the right layer', async () => {
-    // Two endpoints, not one with a type field: the layers have different
-    // permissions, and a shared endpoint would have to decide which to enforce.
-    const rec = installFetch({ frameworks: [FRAMEWORK], bindings: [BINDING] })
-    await renderPage('/code?tab=templates')
-    await screen.findByTestId('code-framework-fw-1')
-
-    fireEvent.click(screen.getByTestId('code-framework-copy-fw-1'))
-    await waitFor(() =>
-      expect(
-        rec.calls.some(
-          (c) => c.method === 'POST' && c.url.includes('/api/capability-frameworks/fw-1/copy'),
-        ),
-      ).toBe(true),
-    )
-
-    fireEvent.click(screen.getByTestId('code-binding-copy-bd-1'))
-    await waitFor(() =>
-      expect(
-        rec.calls.some(
-          (c) => c.method === 'POST' && c.url.includes('/api/capability-bindings/bd-1/copy'),
-        ),
-      ).toBe(true),
-    )
-  })
-
-  test('the two layers are listed separately', async () => {
-    // Not one merged list with a "layer" column — that invites exactly the
-    // mental model ("these are two kinds of the same thing") the split exists
-    // to prevent.
-    installFetch({ frameworks: [FRAMEWORK], bindings: [BINDING] })
-    await renderPage('/code?tab=templates')
-
-    expect(await screen.findByTestId('code-frameworks')).toBeTruthy()
-    expect(screen.getByTestId('code-bindings')).toBeTruthy()
-  })
-})
-
-// RFC-304 T57(b)/(c) — export and origin, unblocked once T17a and T64 landed.
-describe('RFC-304 T57 — export and upstream state', () => {
-  const FRAMEWORK = {
-    id: 'fw-1',
-    name: 'gitlab standard',
-    description: null,
-    capability: 'mr-review',
-    scriptsRedacted: true,
-    paramSchema: [],
-    paramDefaults: {},
-    stageContractVer: 1,
-    ownerUserId: null,
     visibility: 'public',
-    builtin: true,
-    aclRevision: 0,
-    upstream: null,
     updatedAt: 1000,
   }
 
   const COPY = {
-    ...FRAMEWORK,
-    id: 'fw-2',
+    ...TEMPLATE,
+    id: 'tpl-2',
+    name: 'platform team review',
+    description: null,
+    scriptsRedacted: false,
+    visibility: 'private',
+    ownerUserId: 'u-1',
+    // T64 — this one is a copy, so the page shows its origin.
+    upstream: { upstreamId: 'tpl-1', upstreamVersion: 900, baseDigest: 'd0' },
+  }
+
+  test('a template whose scripts are hidden SAYS so', async () => {
+    // Without this the reader sees a template with no scripts and concludes it
+    // is broken. The label is the difference between "you may not see this" and
+    // "there is nothing here" — and after RFC-309 it is the ONLY thing left
+    // marking the daemon-grade fields, so it carries more weight than before.
+    installFetch({ templates: [TEMPLATE] })
+    await renderPage('/code?tab=templates')
+    expect(await screen.findByText(/scripts hidden/i)).toBeTruthy()
+  })
+
+  test('a template says which capability it drives and which agent fills each slot', async () => {
+    // The pair a person needs to answer "is this the one I want?". Before the
+    // merge it took two rows and a lookup by id to learn both.
+    installFetch({ templates: [TEMPLATE] })
+    await renderPage('/code?tab=templates')
+
+    const row = await screen.findByTestId('code-template-tpl-1')
+    expect(row.textContent).toContain('mr-review')
+    expect(row.textContent).toContain('reviewer → auditor')
+  })
+
+  test('copying posts to the one copy endpoint', async () => {
+    // One endpoint after the merge, not one per layer. Copy is now how a team
+    // GETS a template — there is no shared department row to point at.
+    const rec = installFetch({ templates: [TEMPLATE, COPY] })
+    await renderPage('/code?tab=templates')
+    await screen.findByTestId('code-template-tpl-1')
+
+    fireEvent.click(screen.getByTestId('code-template-copy-tpl-1'))
+    await waitFor(() =>
+      expect(
+        rec.calls.some(
+          (c) => c.method === 'POST' && c.url.includes('/api/capability-templates/tpl-1/copy'),
+        ),
+      ).toBe(true),
+    )
+  })
+
+  test('every template is in ONE list, whatever its scripts say', async () => {
+    // The regression this guards is the merge being undone by accident: a
+    // `scriptsRedacted` template quietly sorted into its own section would put
+    // the old two-layer mental model back without anyone deciding to.
+    installFetch({ templates: [TEMPLATE, COPY] })
+    await renderPage('/code?tab=templates')
+
+    const list = await screen.findByTestId('code-templates')
+    expect(list.querySelectorAll('li[data-testid^="code-template-"]').length).toBe(2)
+    expect(screen.queryByTestId('code-frameworks')).toBeNull()
+    expect(screen.queryByTestId('code-bindings')).toBeNull()
+  })
+
+  test('creating a template is offered from the list itself', async () => {
+    // RFC-309 D2: with the layers merged there is exactly one create action,
+    // and it is where the templates are — not two, split by a permission the
+    // person could not see.
+    installFetch({ templates: [] })
+    await renderPage('/code?tab=templates')
+    expect(await screen.findByTestId('code-new-template')).toBeTruthy()
+  })
+})
+
+// RFC-304 T57(b)/(c) — export and origin, unblocked once T17a and T64 landed.
+describe('RFC-309 — export and upstream state', () => {
+  const TEMPLATE = { ...API_TEMPLATE, id: 'tpl-1', name: 'gitlab standard', updatedAt: 1000 }
+
+  const COPY = {
+    ...TEMPLATE,
+    id: 'tpl-2',
     name: 'my copy',
-    builtin: false,
-    upstream: { upstreamId: 'fw-1', upstreamVersion: 900, baseDigest: 'd0' },
+    upstream: { upstreamId: 'tpl-1', upstreamVersion: 900, baseDigest: 'd0' },
   }
 
   test('a template nobody copied shows NO origin badge', async () => {
     // A badge on every original would be noise on the common case, which is
     // how a badge stops being read at all.
-    installFetch({ frameworks: [FRAMEWORK], bindings: [] })
+    installFetch({ templates: [TEMPLATE] })
     await renderPage('/code?tab=templates')
-    await screen.findByTestId('code-framework-fw-1')
+    await screen.findByTestId('code-template-tpl-1')
     expect(screen.queryByText(/copied from/i)).toBeNull()
   })
 
   test('a copy shows where it came from', async () => {
-    installFetch({ frameworks: [COPY], bindings: [] })
+    installFetch({ templates: [COPY] })
     await renderPage('/code?tab=templates')
     expect(await screen.findByText(/copied from/i)).toBeTruthy()
   })
 
-  test('export is offered for both layers', async () => {
-    installFetch({ frameworks: [FRAMEWORK], bindings: [] })
+  test('export is offered for a template', async () => {
+    installFetch({ templates: [TEMPLATE] })
     await renderPage('/code?tab=templates')
-    const row = await screen.findByTestId('code-framework-fw-1')
+    const row = await screen.findByTestId('code-template-tpl-1')
     // The shared export primitive, not a hand-rolled link: it carries the
     // fence, the filename and the error handling every other resource gets.
     expect(row.textContent?.toLowerCase()).toContain('export')
   })
 
-  test('the matrix can POINT a capability at a binding — the step that was missing', async () => {
+  test('the matrix can POINT a capability at a template — the step that was missing', async () => {
     // The page could switch a capability ON but never give it one, so the cell
     // sat `misconfigured` forever and the only way to configure the platform
     // was the HTTP API. This is that gap, closed.
@@ -769,28 +729,29 @@ describe('RFC-304 T57 — export and upstream state', () => {
           repairActions: [
             { code: 'no-binding', label: 'Choose one', route: '/code?tab=templates' },
           ],
-          bindingId: null,
+          templateId: null,
         },
       ],
-      frameworks: [API_FRAMEWORK],
-      bindings: [API_BINDING],
+      templates: [API_TEMPLATE],
     })
     await renderPage('/code?repo=repo-1')
 
     // The repo's Select idiom: click the combobox, then mouseDown the option.
-    fireEvent.click(await screen.findByTestId('code-binding-mr-review'))
+    fireEvent.click(await screen.findByTestId('code-template-pick-mr-review'))
     fireEvent.mouseDown(await screen.findByRole('option', { name: 'Our reviewers' }))
 
     await waitFor(() => {
       const put = rec.calls.find((c) => c.method === 'PUT' && c.url.includes('/api/code/matrix'))
-      expect(put?.body).toMatchObject({ capability: 'mr-review', bindingId: 'bd-1' })
+      expect(put?.body).toMatchObject({ capability: 'mr-review', templateId: 'bd-1' })
     })
   })
 
-  test('only bindings for THIS capability are offered', async () => {
-    // A binding belongs to one capability through its framework. Offering a
-    // review binding for `ci-fix` would produce a cell that reads `ready` and
-    // fails at its first AI stage, on the merge request, in front of the author.
+  test('only templates for THIS capability are offered', async () => {
+    // A template names its capability directly after RFC-309 — before the merge
+    // it inherited one through its framework, which is how a review binding
+    // could be offered for `ci-fix` at all. Doing so would produce a cell that
+    // reads `ready` and fails at its first AI stage, on the merge request, in
+    // front of the author.
     installFetch({
       rows: [
         {
@@ -800,27 +761,23 @@ describe('RFC-304 T57 — export and upstream state', () => {
           readiness: 'misconfigured',
           issues: [],
           repairActions: [],
-          bindingId: null,
+          templateId: null,
         },
       ],
-      frameworks: [
-        FRAMEWORK,
-        { ...FRAMEWORK, id: 'fw-2', name: 'CI framework', capability: 'ci-fix' },
-      ],
-      bindings: [
-        API_BINDING,
-        { ...API_BINDING, id: 'bd-2', name: 'Our CI fixers', frameworkId: 'fw-2' },
+      templates: [
+        API_TEMPLATE,
+        { ...API_TEMPLATE, id: 'tpl-ci', name: 'Our CI fixers', capability: 'ci-fix' },
       ],
     })
     await renderPage('/code?repo=repo-1')
 
-    fireEvent.click(await screen.findByTestId('code-binding-ci-fix'))
+    fireEvent.click(await screen.findByTestId('code-template-pick-ci-fix'))
     expect(await screen.findByRole('option', { name: 'Our CI fixers' })).toBeTruthy()
     expect(screen.queryByRole('option', { name: 'Our reviewers' })).toBeNull()
   })
 
-  test('toggling enabled KEEPS the chosen binding', async () => {
-    // The server takes the cell as sent. A toggle that omitted `bindingId`
+  test('toggling enabled KEEPS the chosen template', async () => {
+    // The server takes the cell as sent. A toggle that omitted `templateId`
     // would silently clear a configuration somebody had just made — and the
     // capability would go back to `misconfigured` for no visible reason.
     const rec = installFetch({
@@ -832,11 +789,10 @@ describe('RFC-304 T57 — export and upstream state', () => {
           readiness: 'ready',
           issues: [],
           repairActions: [],
-          bindingId: 'bd-1',
+          templateId: 'bd-1',
         },
       ],
-      frameworks: [API_FRAMEWORK],
-      bindings: [API_BINDING],
+      templates: [API_TEMPLATE],
     })
     await renderPage('/code?repo=repo-1')
 
@@ -844,7 +800,7 @@ describe('RFC-304 T57 — export and upstream state', () => {
 
     await waitFor(() => {
       const put = rec.calls.find((c) => c.method === 'PUT' && c.url.includes('/api/code/matrix'))
-      expect(put?.body).toMatchObject({ enabled: true, bindingId: 'bd-1' })
+      expect(put?.body).toMatchObject({ enabled: true, templateId: 'bd-1' })
     })
   })
 })

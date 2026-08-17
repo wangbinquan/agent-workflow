@@ -79,7 +79,7 @@ let project: { projectId: string; repoHttpUrl: string; number: number }
 let repoId = ''
 let reviewerAgentId = ''
 let frameworkId = ''
-let bindingId = ''
+let templateId = ''
 
 test.beforeAll(async () => {
   mocks = new SystemMockClient(
@@ -171,7 +171,7 @@ test('a framework and a binding configure a capability, and the binding REFUSES 
   // T57's two-layer split, asserted where it is enforced rather than where it
   // is declared. `rejectFrameworkOnlyFields` existed with zero callers for
   // several PRs — a rule that is only unit-tested cannot tell you that.
-  const framework = await requestJson<{ id: string }>('/api/capability-frameworks', {
+  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e review framework',
@@ -184,7 +184,7 @@ test('a framework and a binding configure a capability, and the binding REFUSES 
   })
   frameworkId = framework.id
 
-  const binding = await requestJson<{ id: string }>('/api/capability-bindings', {
+  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e review binding',
@@ -194,13 +194,13 @@ test('a framework and a binding configure a capability, and the binding REFUSES 
       params: {},
     },
   })
-  bindingId = binding.id
+  templateId = binding.id
 
   // The load-bearing half: a binding carrying a script must be REJECTED, not
   // quietly stripped. Silently dropping a hook is how a team comes to believe
   // their gate runs when it never did — and they would only find out from the
   // absence of failures.
-  const refused = await rawRequest('/api/capability-bindings', {
+  const refused = await rawRequest('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e binding with a script',
@@ -222,12 +222,12 @@ test('enabling a capability round-trips, and the matrix reports READINESS not ju
   // The matrix is where that difference has to be visible.
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'mr-review', enabled: true, bindingId },
+    body: { capability: 'mr-review', enabled: true, templateId },
   })
 
   const row = await matrixRow()
   expect(row.enabled).toBe(true)
-  expect(row.bindingId).toBe(bindingId)
+  expect(row.templateId).toBe(templateId)
 
   // Not asserted as a bare `ready`: when it is not ready the failure message
   // should say WHICH piece is missing, which is the whole point of `issues`
@@ -242,7 +242,7 @@ test('a cell whose binding names no agent reports the missing piece and a repair
   // The negative half, and the one that matters operationally: an unready cell
   // must say what to do about it. A bare `blocked` sends somebody hunting
   // through five screens for a binding they never made.
-  const empty = await requestJson<{ id: string }>('/api/capability-bindings', {
+  const empty = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e binding with no agent',
@@ -254,7 +254,7 @@ test('a cell whose binding names no agent reports the missing piece and a repair
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'mr-comment-fix', enabled: true, bindingId: empty.id },
+    body: { capability: 'mr-comment-fix', enabled: true, templateId: empty.id },
   })
 
   const row = await matrixRow('mr-comment-fix')
@@ -268,7 +268,7 @@ test('a cell whose binding names no agent reports the missing piece and a repair
   // every later assertion about `mr-review` ambiguous.
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'mr-comment-fix', enabled: false, bindingId: empty.id },
+    body: { capability: 'mr-comment-fix', enabled: false, templateId: empty.id },
   })
 })
 
@@ -424,7 +424,7 @@ test('a SECOND capability is reachable too — ci-fix opens a round with real st
       bodyMd: 'Fix the pipeline.',
     },
   })
-  const framework = await requestJson<{ id: string }>('/api/capability-frameworks', {
+  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e ci-fix framework',
@@ -438,7 +438,7 @@ test('a SECOND capability is reachable too — ci-fix opens a round with real st
       paramDefaults: {},
     },
   })
-  const binding = await requestJson<{ id: string }>('/api/capability-bindings', {
+  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e ci-fix binding',
@@ -450,7 +450,7 @@ test('a SECOND capability is reachable too — ci-fix opens a round with real st
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'ci-fix', enabled: true, bindingId: binding.id },
+    body: { capability: 'ci-fix', enabled: true, templateId: binding.id },
   })
 
   // Asserted BEFORE delivering: a `misconfigured` cell is never woken, so
@@ -519,7 +519,7 @@ test('a THIRD capability is reachable — mr-comment-fix wakes on a note', async
       bodyMd: 'Apply the requested change.',
     },
   })
-  const framework = await requestJson<{ id: string }>('/api/capability-frameworks', {
+  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e comment-fix framework',
@@ -530,7 +530,7 @@ test('a THIRD capability is reachable — mr-comment-fix wakes on a note', async
       paramDefaults: {},
     },
   })
-  const binding = await requestJson<{ id: string }>('/api/capability-bindings', {
+  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e comment-fix binding',
@@ -542,7 +542,7 @@ test('a THIRD capability is reachable — mr-comment-fix wakes on a note', async
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'mr-comment-fix', enabled: true, bindingId: binding.id },
+    body: { capability: 'mr-comment-fix', enabled: true, templateId: binding.id },
   })
 
   const cell = await matrixRow('mr-comment-fix')
@@ -594,7 +594,7 @@ test('a FOURTH capability is reachable — requirement wakes on an ISSUE label',
       bodyMd: 'Understand the requirement.',
     },
   })
-  const framework = await requestJson<{ id: string }>('/api/capability-frameworks', {
+  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e requirement framework',
@@ -605,7 +605,7 @@ test('a FOURTH capability is reachable — requirement wakes on an ISSUE label',
       paramDefaults: {},
     },
   })
-  const binding = await requestJson<{ id: string }>('/api/capability-bindings', {
+  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e requirement binding',
@@ -617,7 +617,7 @@ test('a FOURTH capability is reachable — requirement wakes on an ISSUE label',
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'requirement', enabled: true, bindingId: binding.id },
+    body: { capability: 'requirement', enabled: true, templateId: binding.id },
   })
 
   const cell = await matrixRow('requirement')
@@ -671,7 +671,7 @@ test('the FIFTH capability — mr-monitor observes and stays SILENT (AC-33)', as
   // recorded — which is exactly why `noop` is a real outcome in the union
   // rather than an empty result. A monitor that opened a round per event would
   // pass a naive "did something happen" check and be catastrophically wrong.
-  const framework = await requestJson<{ id: string }>('/api/capability-frameworks', {
+  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e monitor framework',
@@ -694,7 +694,7 @@ test('the FIFTH capability — mr-monitor observes and stays SILENT (AC-33)', as
       paramDefaults: {},
     },
   })
-  const binding = await requestJson<{ id: string }>('/api/capability-bindings', {
+  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'e2e monitor binding',
@@ -706,7 +706,7 @@ test('the FIFTH capability — mr-monitor observes and stays SILENT (AC-33)', as
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'mr-monitor', enabled: true, bindingId: binding.id },
+    body: { capability: 'mr-monitor', enabled: true, templateId: binding.id },
   })
 
   const before = (await requestJson<{ items: unknown[] }>('/api/tasks?limit=50')).items?.length ?? 0
@@ -823,7 +823,7 @@ interface MatrixRow {
   readiness: string
   issues: unknown[]
   repairActions: unknown[]
-  bindingId: string | null
+  templateId: string | null
 }
 
 async function matrixRow(capability = 'mr-review'): Promise<MatrixRow> {

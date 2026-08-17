@@ -642,17 +642,18 @@ const RESOURCE_ROUTES: Partial<Record<McpResourceKind, ResourceRoutes>> = {
       'Repos are imported in batches: `create` takes a batch payload, not one repo. There is no update — ' +
       'a mirror is refreshed, not edited.',
   },
-  'capability-bindings': {
-    list: { method: 'GET', path: '/api/capability-bindings' },
-    get: { method: 'GET', path: '/api/capability-bindings/:id' },
-    create: { method: 'POST', path: '/api/capability-bindings' },
-    update: { method: 'PUT', path: '/api/capability-bindings/:id' },
-    delete: { method: 'DELETE', path: '/api/capability-bindings/:id' },
+  'capability-templates': {
+    list: { method: 'GET', path: '/api/capability-templates' },
+    get: { method: 'GET', path: '/api/capability-templates/:id' },
+    create: { method: 'POST', path: '/api/capability-templates' },
+    update: { method: 'PUT', path: '/api/capability-templates/:id' },
+    delete: { method: 'DELETE', path: '/api/capability-templates/:id' },
     note:
-      'RFC-304: a capability binding is the GROUP-layer template — it picks one department ' +
-      'framework and says which agent and prompt fills each AI slot, plus parameter overrides. ' +
-      'It carries NO scripts and NO hooks: a payload naming `scripts` or `hooks` is rejected, ' +
-      'because those belong to the framework, which runs them with the daemon’s own credentials. ' +
+      'RFC-309: a capability template is the whole configuration for one capability — the ' +
+      'scripts and hooks it runs, the parameters it declares, and which agent and prompt fills ' +
+      'each AI slot. Writing `scripts` or `hooks` additionally requires `scripts:author`: those ' +
+      'run with the daemon’s own credentials, and a write that changes them without it is ' +
+      'rejected whole rather than silently stripped. ' +
       'There is deliberately no tool for capability FRAMEWORKS — authoring one is host code ' +
       'execution, gated on `scripts:author`, and never reachable from a tool surface.',
   },
@@ -702,7 +703,7 @@ const RESOURCE_KINDS = [
   // RFC-304 — the GROUP layer only. `capability-frameworks` is deliberately
   // absent: authoring one is host code execution, and an agent editing the
   // templates that configure agents is a loop nobody asked for.
-  'capability-bindings',
+  'capability-templates',
   'memory',
 ] as const
 

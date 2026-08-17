@@ -48,13 +48,16 @@ describe('code capability i18n', () => {
     expect(i18n.t('code.capability.requirement')).toContain('issue')
   })
 
-  test('the binding picker explains why an unset one is not a valid resting state', () => {
-    // A capability with no binding can never become `ready`. An empty selector
+  test('the template picker explains why an unset one is not a valid resting state', () => {
+    // A capability with no template can never become `ready`. An empty selector
     // that looked like a neutral default is how somebody switches a capability
     // on, sees no error, and waits for a review that can never run.
+    // RFC-309 renamed the keys with the merge — one list of templates, so the
+    // picker no longer says "binding", a word that only meant anything as half
+    // of a pair.
     for (const lang of ['zh-CN', 'en-US'] as const) {
       setLanguage(lang)
-      for (const key of ['code.bindingLabel', 'code.bindingHint', 'code.bindingNone']) {
+      for (const key of ['code.templateLabel', 'code.templateHint', 'code.templateNone']) {
         expect(i18n.t(key), `${lang}:${key}`).not.toBe(key)
       }
     }

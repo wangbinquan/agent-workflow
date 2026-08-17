@@ -12,6 +12,7 @@ import { z } from 'zod'
 import {
   BundleAgentPayloadSchema,
   BundleCapabilityBindingPayloadSchema,
+  BundleCapabilityTemplatePayloadSchema,
   BundleCapabilityFrameworkPayloadSchema,
   BundleMcpPayloadSchema,
   BundlePluginPayloadSchema,
@@ -108,6 +109,10 @@ export const BundleOpSchema = z.discriminatedUnion('kind', [
   updateOp('capability-framework-update', BundleCapabilityFrameworkPayloadSchema, AgentExpect),
   createOp('capability-binding-create', BundleCapabilityBindingPayloadSchema),
   updateOp('capability-binding-update', BundleCapabilityBindingPayloadSchema, AgentExpect),
+  // RFC-309 — the merged template. The four ops above are kept so packages
+  // exported before the merge still import (AC-12); only this one is produced.
+  createOp('capability-template-create', BundleCapabilityTemplatePayloadSchema),
+  updateOp('capability-template-update', BundleCapabilityTemplatePayloadSchema, AgentExpect),
 ])
 export type BundleOp = z.infer<typeof BundleOpSchema>
 
@@ -128,5 +133,7 @@ export const BUNDLE_OP_KINDS = [
   'capability-framework-update',
   'capability-binding-create',
   'capability-binding-update',
+  'capability-template-create',
+  'capability-template-update',
 ] as const
 export type BundleOpKind = (typeof BUNDLE_OP_KINDS)[number]

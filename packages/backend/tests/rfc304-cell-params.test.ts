@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { capabilityBindings, capabilityFrameworks, repoCapabilityConfig } from '../src/db/schema'
+import { capabilityTemplates, repoCapabilityConfig } from '../src/db/schema'
 import { resolveCellParams } from '../src/services/codeCapabilityParams'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -43,28 +43,21 @@ describe('RFC-304 T47 — resolving a cell’s parameters', () => {
     paramDefaultsJson?: string
     paramsJson?: string
   }): Promise<void> => {
-    await db.insert(capabilityFrameworks).values({
-      id: 'framework-1',
-      name: 'framework-1',
-      capability: 'requirement',
-      paramSchemaJson: over.paramSchemaJson ?? TABLE,
-      paramDefaultsJson: over.paramDefaultsJson ?? '{}',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    await db.insert(capabilityBindings).values({
+    await db.insert(capabilityTemplates).values({
       id: 'binding-1',
       name: 'binding-1',
-      frameworkId: 'framework-1',
       paramsJson: over.paramsJson ?? '{}',
       createdAt: NOW,
       updatedAt: NOW,
+      capability: 'requirement',
+      paramSchemaJson: over.paramSchemaJson ?? TABLE,
+      paramDefaultsJson: over.paramDefaultsJson ?? '{}',
     })
     await db.insert(repoCapabilityConfig).values({
       id: ulid(),
       repoId: REPO,
       capability: 'requirement',
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       enabled: true,
       readiness: 'ready',
       createdAt: NOW,

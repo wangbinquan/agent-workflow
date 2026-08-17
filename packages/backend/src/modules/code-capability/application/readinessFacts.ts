@@ -14,7 +14,7 @@
 
 import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { capabilityBindings, capabilityFrameworks } from '@/db/schema'
+import { capabilityTemplates } from '@/db/schema'
 import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
 import { parseCodeCapabilityId } from '@/modules/code-capability/domain/stageContract'
 import type { ReadinessInput } from '@/modules/code-capability/domain/templateLayers'
@@ -38,8 +38,8 @@ export interface GatherFactsInput {
   capability: string
   /** The endpoint this repository's events arrive on. */
   endpointId: string
-  /** The binding about to be saved, when checking a not-yet-written cell. */
-  bindingId: string | null
+  /** The template about to be saved, when checking a not-yet-written cell. */
+  templateId: string | null
   enabled: boolean
   provider?: 'gitlab' | 'github'
 }
@@ -53,23 +53,21 @@ export interface GatherFactsInput {
  */
 export async function gatherReadinessFacts(input: GatherFactsInput): Promise<ReadinessInput> {
   const { db } = input
-  const hasBinding = input.bindingId !== null && input.bindingId !== ''
+  const hasBinding = input.templateId !== null && input.templateId !== ''
 
+  // RFC-309 — one lookup, not two. The old pair asked "does the binding exist"
+  // and then "does the framework it names exist", because a cell could point at
+  // a binding whose framework had been deleted underneath it. A merged template
+  // cannot be half-missing, so `frameworkExists` is now simply "the template
+  // this cell points at is still there".
   let frameworkExists = false
   if (hasBinding) {
-    const [binding] = await db
-      .select({ frameworkId: capabilityBindings.frameworkId })
-      .from(capabilityBindings)
-      .where(eq(capabilityBindings.id, input.bindingId as string))
+    const [template] = await db
+      .select({ id: capabilityTemplates.id })
+      .from(capabilityTemplates)
+      .where(eq(capabilityTemplates.id, input.templateId as string))
       .limit(1)
-    if (binding !== undefined) {
-      const [framework] = await db
-        .select({ id: capabilityFrameworks.id })
-        .from(capabilityFrameworks)
-        .where(eq(capabilityFrameworks.id, binding.frameworkId))
-        .limit(1)
-      frameworkExists = framework !== undefined
-    }
+    frameworkExists = template !== undefined
   }
 
   const trigger = await findCapabilityTriggerRow(db, {
@@ -130,11 +128,11 @@ async function invisibleSlots(db: DbClient, input: GatherFactsInput): Promise<st
   // On a first save nothing is stored yet, so reading the cell reported every
   // slot invisible and the capability could only become ready on a SECOND save
   // — "press it twice", with nothing on screen explaining why.
-  if (input.bindingId === null || input.bindingId === '') return [...slots]
+  if (input.templateId === null || input.templateId === '') return [...slots]
 
   const invisible: string[] = []
   for (const slot of slots) {
-    const resolved = await resolveAgentForBinding(db, { bindingId: input.bindingId, slot })
+    const resolved = await resolveAgentForBinding(db, { templateId: input.templateId, slot })
     if (!resolved.ok) invisible.push(slot)
   }
   return invisible

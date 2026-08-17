@@ -198,7 +198,9 @@ const OVERLAY_CALLSITES = {
   // capability on but never point it at a configuration.
   // T63 added the bulk-change dialog: preview → apply → undo, all in one
   // overlay because they are one decision the author is making.
-  'routes/code.tsx': { family: 'resource-management', count: 3 },
+  // RFC-309 — two dialogs, not three: the framework and binding creators
+  // merged with the resources they create.
+  'routes/code.tsx': { family: 'resource-management', count: 2 },
   // RFC-307 — the stage drawer. An overlay rather than an inline panel because
   // it is a focused edit on ONE step of a sequence the user is looking at: the
   // flow behind it is the context, and pushing it out of view to make room

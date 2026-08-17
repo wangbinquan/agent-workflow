@@ -154,7 +154,7 @@ function collectExternalRefs(
   // RFC-304 T17a — a binding points at its framework and at one agent per slot.
   // Both are refs for the same reason every other cross-resource pointer is:
   // an id from the source instance means nothing here.
-  take('capability_framework', payload.frameworkRef)
+  take('capability_template', payload.frameworkRef)
   for (const slotRef of Object.values(
     (payload.agentBySlot as Record<string, unknown> | undefined) ?? {},
   )) {
@@ -238,7 +238,7 @@ async function lowerPayload(
     case 'capability-binding-update': {
       payload.frameworkId = await resolveIdentityRef(
         String(payload.frameworkRef ?? ''),
-        'capability_framework',
+        'capability_template',
         ctx,
       )
       delete payload.frameworkRef

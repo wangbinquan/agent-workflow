@@ -84,7 +84,7 @@ function identityRefWireFor(expectedType: AclResourceType) {
 }
 
 const BundleAgentIdentityRefWireSchema = identityRefWireFor('agent')
-const BundleFrameworkIdentityRefWireSchema = identityRefWireFor('capability_framework')
+const BundleFrameworkIdentityRefWireSchema = identityRefWireFor('capability_template')
 const BundleMcpIdentityRefWireSchema = identityRefWireFor('mcp')
 const BundlePluginIdentityRefWireSchema = identityRefWireFor('plugin')
 
@@ -392,3 +392,33 @@ export const BundleCapabilityBindingPayloadSchema = z
   })
   .strict()
 export type BundleCapabilityBindingPayload = z.infer<typeof BundleCapabilityBindingPayloadSchema>
+
+/**
+ * RFC-309 T10 — the merged template in a config package.
+ *
+ * Carries both halves, because a template IS both halves now. The two legacy
+ * payloads above are KEPT and still importable (AC-12): a package exported
+ * before the merge is a file somebody already has, and refusing it would make
+ * this RFC delete their backups. Export only ever produces this one.
+ *
+ * Scripts and hooks travel in it, so importing one can be host code execution
+ * on the destination instance — the apply path runs the same field-level
+ * `scripts:author` check the HTTP route does. A package must be another way to
+ * write the same row, never a way around the rule.
+ */
+export const BundleCapabilityTemplatePayloadSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    description: z.string().max(4096).default(''),
+    capability: z.string().min(1).max(64),
+    scripts: z.record(z.string(), z.unknown()).default({}),
+    hooks: z.array(z.record(z.string(), z.unknown())).max(64).default([]),
+    paramSchema: z.array(z.record(z.string(), z.unknown())).max(50).default([]),
+    paramDefaults: z.record(z.string(), z.unknown()).default({}),
+    agentBySlot: z.record(z.string(), BundleAgentIdentityRefWireSchema).default({}),
+    promptBySlot: z.record(z.string(), z.string()).default({}),
+    params: z.record(z.string(), z.unknown()).default({}),
+    stageContractVer: z.number().int().positive().default(1),
+  })
+  .strict()
+export type BundleCapabilityTemplatePayload = z.infer<typeof BundleCapabilityTemplatePayloadSchema>

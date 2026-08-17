@@ -28,8 +28,8 @@ export interface CellChange {
   repoId: string
   capability: string
   /** What the cell holds now; null when the cell does not exist yet. */
-  before: { enabled: boolean; bindingId: string | null } | null
-  after: { enabled: boolean; bindingId: string | null }
+  before: { enabled: boolean; templateId: string | null } | null
+  after: { enabled: boolean; templateId: string | null }
 }
 
 export type ChangeKind = 'create' | 'update' | 'no-op'
@@ -38,7 +38,7 @@ export function classifyChange(change: CellChange): ChangeKind {
   if (change.before === null) return 'create'
   if (
     change.before.enabled === change.after.enabled &&
-    change.before.bindingId === change.after.bindingId
+    change.before.templateId === change.after.templateId
   ) {
     return 'no-op'
   }
@@ -100,7 +100,7 @@ export function invertBatch(applied: readonly CellChange[]): CellChange[] {
       repoId: c.repoId,
       capability: c.capability,
       before: c.after,
-      after: c.before ?? { enabled: false, bindingId: null },
+      after: c.before ?? { enabled: false, templateId: null },
     }))
 }
 
@@ -117,7 +117,7 @@ export interface EffectiveCapabilityConfig {
   repoId: string
   capability: string
   enabled: boolean
-  bindingId: string | null
+  templateId: string | null
   /** Where each value came from — the answer to "why is it this?". */
   source: 'cell'
 }
@@ -126,7 +126,7 @@ export function effectiveConfig(cell: {
   repoId: string
   capability: string
   enabled: boolean
-  bindingId: string | null
+  templateId: string | null
 }): EffectiveCapabilityConfig {
   // `source` is a constant today and is stated anyway: it is the field that
   // would have to grow values if inheritance were ever added, and its presence

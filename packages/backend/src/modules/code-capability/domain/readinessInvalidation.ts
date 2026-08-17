@@ -19,7 +19,7 @@
 
 /** A thing a cell's readiness depends on. */
 export type ReadinessDependency =
-  | { kind: 'binding'; bindingId: string }
+  | { kind: 'binding'; templateId: string }
   | { kind: 'framework'; frameworkId: string }
   | { kind: 'agent'; agentId: string }
   | { kind: 'trigger'; repoId: string }
@@ -30,7 +30,7 @@ export type ReadinessDependency =
 export interface CellDependencySnapshot {
   cellId: string
   repoId: string
-  bindingId: string | null
+  templateId: string | null
   frameworkId: string | null
   /** Agent ids referenced by the binding's slots. */
   agentIds: readonly string[]
@@ -52,7 +52,7 @@ export function cellsInvalidatedBy(
   const hit = (cell: CellDependencySnapshot): boolean => {
     switch (change.kind) {
       case 'binding':
-        return cell.bindingId === change.bindingId
+        return cell.templateId === change.templateId
       case 'framework':
         // Cells reach a framework THROUGH their binding, so a framework change
         // has to match on the resolved id rather than on the binding — a cell

@@ -18,11 +18,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { Actor } from '../src/auth/actor'
-import {
-  copyFramework,
-  createFramework,
-  frameworkDigest,
-} from '../src/services/capabilityTemplates'
+import { copyTemplate, createTemplate, templateDigest } from '../src/services/capabilityTemplates'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 import {
@@ -209,7 +205,7 @@ describe('RFC-304 T64 — copying records the origin', () => {
 
   const AUTHOR = {
     user: { id: 'u-1', name: 'u-1', role: 'user' },
-    permissions: new Set(['capability-frameworks:create', 'scripts:author']),
+    permissions: new Set(['capability-templates:create', 'scripts:author']),
     source: 'session',
   } as unknown as Actor
 
@@ -221,27 +217,30 @@ describe('RFC-304 T64 — copying records the origin', () => {
     hooks: [],
     paramSchema: [],
     paramDefaults: {},
+    agentBySlot: {},
+    promptBySlot: {},
+    params: {},
     stageContractVer: 1,
   }
 
   test('a fresh template has NO origin — that is a state, not missing data', async () => {
-    const row = await createFramework(db, FRAMEWORK, AUTHOR, 1000)
+    const row = await createTemplate(db, FRAMEWORK, AUTHOR, 1000)
     expect(row.upstreamId).toBeNull()
     expect(row.baseDigest).toBeNull()
   })
 
   test('a copy records source, version and base digest together', async () => {
-    const source = await createFramework(db, FRAMEWORK, AUTHOR, 1000)
-    const copy = await copyFramework(db, source, AUTHOR, 'mine', 2000)
+    const source = await createTemplate(db, FRAMEWORK, AUTHOR, 1000)
+    const copy = await copyTemplate(db, source, AUTHOR, 'mine', 2000)
 
     expect(copy.upstreamId).toBe(source.id)
     expect(copy.upstreamVersion).toBe(source.updatedAt)
-    expect(copy.baseDigest).toBe(frameworkDigest(source))
+    expect(copy.baseDigest).toBe(templateDigest(source))
   })
 
   test('the base digest matches the source at copy time, so a fresh copy is CURRENT', async () => {
-    const source = await createFramework(db, FRAMEWORK, AUTHOR, 1000)
-    const copy = await copyFramework(db, source, AUTHOR, 'mine', 2000)
+    const source = await createTemplate(db, FRAMEWORK, AUTHOR, 1000)
+    const copy = await copyTemplate(db, source, AUTHOR, 'mine', 2000)
 
     const status = judgeUpstream({
       link: {
@@ -250,7 +249,7 @@ describe('RFC-304 T64 — copying records the origin', () => {
         baseDigest: copy.baseDigest!,
       },
       upstreamVersionNow: source.updatedAt,
-      localDigest: frameworkDigest(copy),
+      localDigest: templateDigest(copy),
       localOverrides: [],
     })
     expect(status.state).toBe('current')
@@ -259,14 +258,14 @@ describe('RFC-304 T64 — copying records the origin', () => {
   test('the digest ignores the ACL, so a visibility change is not a body change', async () => {
     // Otherwise every grant edit upstream would mark healthy copies
     // `conflicted`, and the state would stop meaning anything.
-    const source = await createFramework(db, FRAMEWORK, AUTHOR, 1000)
+    const source = await createTemplate(db, FRAMEWORK, AUTHOR, 1000)
     const withDifferentAcl = { ...source, visibility: 'public' as const, aclRevision: 7 }
-    expect(frameworkDigest(withDifferentAcl)).toBe(frameworkDigest(source))
+    expect(templateDigest(withDifferentAcl)).toBe(templateDigest(source))
   })
 
   test('the digest DOES change when a script body changes', async () => {
-    const source = await createFramework(db, FRAMEWORK, AUTHOR, 1000)
+    const source = await createTemplate(db, FRAMEWORK, AUTHOR, 1000)
     const edited = { ...source, scriptsJson: JSON.stringify({ collect: { script: 'other' } }) }
-    expect(frameworkDigest(edited)).not.toBe(frameworkDigest(source))
+    expect(templateDigest(edited)).not.toBe(templateDigest(source))
   })
 })

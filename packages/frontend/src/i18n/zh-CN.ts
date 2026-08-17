@@ -1357,6 +1357,7 @@ export interface Resources {
       script: string
       scriptLanguage: string
       scriptRedacted: string
+      scriptsRedactedChip: string
       params: string
       saveParams: string
       hooks: string
@@ -1383,7 +1384,7 @@ export interface Resources {
       repos: string
       reposHint: string
       capability: string
-      binding: string
+      template: string
       enabled: string
       preview: string
       apply: string
@@ -1395,9 +1396,9 @@ export interface Resources {
     roundsHidden_one: string
     roundsHidden_other: string
     roundsShowMore: string
-    bindingLabel: string
-    bindingHint: string
-    bindingNone: string
+    templateLabel: string
+    templateHint: string
+    templateNone: string
     capability: {
       'mr-review': string
       'mr-comment-fix': string
@@ -1406,26 +1407,20 @@ export interface Resources {
       'mr-monitor': string
     }
     templates: {
-      newFramework: string
-      newBinding: string
+      newTemplate: string
       createAction: string
       nameLabel: string
       capabilityLabel: string
-      frameworkLabel: string
       slotLabel: string
-      frameworksTitle: string
-      frameworksHint: string
-      bindingsTitle: string
-      bindingsHint: string
-      noFrameworks: string
-      noBindings: string
+      title: string
+      hint: string
+      none: string
       builtin: string
       scriptsHidden: string
       copy: string
       copiedFrom: string
       params: string
       slots: string
-      frameworkMissing: string
     }
     metrics: {
       empty: string
@@ -7115,6 +7110,7 @@ export const zhCN: Resources = {
       scriptLanguage: '解释器',
       scriptRedacted:
         '你没有查看脚本正文的权限（需要 scripts:author）。这里留空是「未展示」，不是「没有脚本」。',
+      scriptsRedactedChip: '脚本未展示',
       params: '参数',
       saveParams: '保存参数',
       hooks: '钩子',
@@ -7141,7 +7137,7 @@ export const zhCN: Resources = {
       repos: '仓库',
       reposHint: '一个仓库 id 一个标签。每个都会被显式写入——没有「继承值」需要事后去别处查。',
       capability: '能力',
-      binding: '小组配置',
+      template: '模板',
       enabled: '开启该能力',
       preview: '预览',
       apply: '应用',
@@ -7155,9 +7151,9 @@ export const zhCN: Resources = {
     roundsHidden_one: '还有 {{count}} 轮未显示。',
     roundsHidden_other: '还有 {{count}} 轮未显示。',
     roundsShowMore: '显示更多轮次',
-    bindingLabel: '使用哪个小组层模板',
-    bindingHint: '没选模板的能力永远不会就绪——它不知道该用哪个 agent 干活。',
-    bindingNone: '（未选择）',
+    templateLabel: '使用哪份模板',
+    templateHint: '没选模板的能力永远不会就绪——它不知道该用哪个 agent 干活。',
+    templateNone: '（未选择）',
     capability: {
       'mr-review': 'MR 检视',
       'mr-comment-fix': '评论驱动改码',
@@ -7167,27 +7163,19 @@ export const zhCN: Resources = {
     },
     templates: {
       createAction: '创建',
-      newFramework: '新建部门层模板',
-      newBinding: '新建小组层模板',
+      newTemplate: '新建模板',
       nameLabel: '名称',
       capabilityLabel: '驱动哪条能力',
-      frameworkLabel: '基于哪个部门层模板',
       slotLabel: '「{{slot}}」这一步用哪个 agent',
-      frameworksTitle: '部门层模板',
-      frameworksHint:
-        '它装的是能力实际运行的脚本。改它需要「脚本编写」权限——那些脚本是以平台自己的身份跑的。',
-      bindingsTitle: '小组层模板',
-      bindingsHint:
-        '它挑一个部门层模板，并指定每一步用哪个 agent、哪段提示词。不带任何脚本——这正是小组能自己拥有它的原因。',
-      noFrameworks: '你还看不到任何部门层模板',
-      noBindings: '还没有小组层模板',
+      title: '模板',
+      hint: '一份模板就是一条能力的全部配置：跑什么脚本、挂什么钩子、每一步用哪个 agent 和提示词。复制一份改成自己的即可；改脚本另需「脚本编写」权限——那些脚本是以平台自己的身份跑的。',
+      none: '还没有模板',
       builtin: '内置',
       scriptsHidden: '脚本已隐藏',
       copy: '复制一份',
       copiedFrom: '复制自另一个模板',
       params: '参数：{{names}}',
       slots: 'agent：{{pairs}}',
-      frameworkMissing: '模板已不存在',
     },
     metrics: {
       empty: '还没有可统计的数据',

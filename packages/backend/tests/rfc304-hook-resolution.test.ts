@@ -15,7 +15,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { capabilityBindings, capabilityFrameworks, repoCapabilityConfig } from '../src/db/schema'
+import { capabilityTemplates, repoCapabilityConfig } from '../src/db/schema'
 import { hooksFor, resolveCapabilityHooks } from '../src/services/codeCapabilityHooks'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -37,29 +37,22 @@ async function seed(
     hooksJson?: string
     frameworkVer?: number
     frameworkId?: string
-    bindingId?: string
+    templateId?: string
   } = {},
 ) {
-  const frameworkId = over.frameworkId ?? 'fw-1'
-  const bindingId = over.bindingId ?? 'bd-1'
+  // RFC-309 — hooks live on the template the cell points at. This used to be a
+  // framework row plus a binding row pointing at it, and the resolution had to
+  // hop through the middle; the merge removed the hop and the class of failure
+  // where the middle row went missing on its own.
+  const templateId = over.templateId ?? 'bd-1'
   await db
-    .insert(capabilityFrameworks)
+    .insert(capabilityTemplates)
     .values({
-      id: frameworkId,
-      name: `framework-${frameworkId}`,
+      id: templateId,
+      name: `template-${templateId}`,
       capability: over.capability ?? 'mr-review',
       hooksJson: over.hooksJson ?? JSON.stringify([HOOK]),
       stageContractVer: over.frameworkVer ?? 4,
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    .onConflictDoNothing()
-  await db
-    .insert(capabilityBindings)
-    .values({
-      id: bindingId,
-      name: `binding-${bindingId}`,
-      frameworkId,
       createdAt: NOW,
       updatedAt: NOW,
     })
@@ -68,7 +61,7 @@ async function seed(
     id: `cell-${over.repoId ?? 'repo-a'}-${over.capability ?? 'mr-review'}`,
     repoId: over.repoId ?? 'repo-a',
     capability: over.capability ?? 'mr-review',
-    bindingId,
+    templateId,
     enabled: true,
     createdAt: NOW,
     updatedAt: NOW,
@@ -124,11 +117,10 @@ describe('RFC-304 — resolving a repository’s hooks', () => {
   })
 
   test('two repositories keep their own hooks', async () => {
-    await seed(db, { repoId: 'repo-a', frameworkId: 'fw-a', bindingId: 'bd-a' })
+    await seed(db, { repoId: 'repo-a', frameworkId: 'fw-a', templateId: 'bd-a' })
     await seed(db, {
       repoId: 'repo-b',
-      frameworkId: 'fw-b',
-      bindingId: 'bd-b',
+      templateId: 'bd-b',
       hooksJson: JSON.stringify([{ ...HOOK, stage: 'gate' }]),
     })
     const a = await resolveCapabilityHooks(db, { repoId: 'repo-a', capability: 'mr-review' })

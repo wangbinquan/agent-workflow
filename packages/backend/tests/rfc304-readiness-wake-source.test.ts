@@ -77,7 +77,7 @@ describe('RFC-304 — a ci-fix cell’s wake source is its pipeline event', () =
       repoId: REPO,
       capability,
       endpointId: ENDPOINT,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       enabled: true,
       provider: 'gitlab',
     })

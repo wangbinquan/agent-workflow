@@ -165,7 +165,7 @@ test.beforeAll(async () => {
 
   // The department layer: four scripts that adapt this team's pipeline. Written
   // as a framework author would write them — deterministic, no model anywhere.
-  const framework = await requestJson<{ id: string }>('/api/capability-frameworks', {
+  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'ci-fix gate framework',
@@ -203,7 +203,7 @@ test.beforeAll(async () => {
       paramDefaults: {},
     },
   })
-  const binding = await requestJson<{ id: string }>('/api/capability-bindings', {
+  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'ci-fix gate binding',
@@ -215,7 +215,7 @@ test.beforeAll(async () => {
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'ci-fix', enabled: true, bindingId: binding.id },
+    body: { capability: 'ci-fix', enabled: true, templateId: binding.id },
   })
 })
 

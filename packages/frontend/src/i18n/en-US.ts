@@ -602,6 +602,7 @@ export const enUS: Resources = {
       scriptLanguage: 'Interpreter',
       scriptRedacted:
         'You do not have permission to see script bodies (scripts:author). Blank here means "not shown", not "no script".',
+      scriptsRedactedChip: 'Scripts not shown',
       params: 'Parameters',
       saveParams: 'Save parameters',
       hooks: 'Hooks',
@@ -629,7 +630,7 @@ export const enUS: Resources = {
       reposHint:
         'One repository id per chip. Each one is written explicitly — there is no inherited value to look up later.',
       capability: 'Capability',
-      binding: 'Group configuration',
+      template: 'Template',
       enabled: 'Turn the capability on',
       preview: 'Preview',
       apply: 'Apply',
@@ -641,10 +642,10 @@ export const enUS: Resources = {
     roundsHidden_one: '{{count}} earlier round is not shown.',
     roundsHidden_other: '{{count}} earlier rounds are not shown.',
     roundsShowMore: 'Show more rounds',
-    bindingLabel: 'Which group configuration to use',
-    bindingHint:
-      'A capability with no configuration can never become ready — it has no agent to do the work.',
-    bindingNone: '(none selected)',
+    templateLabel: 'Which template to run',
+    templateHint:
+      'A capability with no template can never become ready — it has no agent to do the work.',
+    templateNone: '(none selected)',
     capability: {
       'mr-review': 'Merge request review',
       'mr-comment-fix': 'Comment-driven fix',
@@ -654,27 +655,19 @@ export const enUS: Resources = {
     },
     templates: {
       createAction: 'Create',
-      newFramework: 'New department template',
-      newBinding: 'New group template',
+      newTemplate: 'New template',
       nameLabel: 'Name',
       capabilityLabel: 'Which capability it drives',
-      frameworkLabel: 'Based on which department template',
       slotLabel: 'Agent for the “{{slot}}” step',
-      frameworksTitle: 'Department templates',
-      frameworksHint:
-        'These carry the scripts a capability runs. Editing one needs the script-author permission, because those scripts run with the platform’s own credentials.',
-      bindingsTitle: 'Team templates',
-      bindingsHint:
-        'These pick a department template and say which agent and prompt fills each step. No scripts — that is what lets a team own one.',
-      noFrameworks: 'No department template is visible to you',
-      noBindings: 'No team template yet',
+      title: 'Templates',
+      hint: 'A template is the whole configuration for one capability: the scripts it runs, the hooks it mounts, and which agent and prompt fills each step. Copy one and make it yours; editing its scripts additionally needs the script-author permission, because those run with the platform’s own credentials.',
+      none: 'No template yet',
       builtin: 'Built in',
       scriptsHidden: 'Scripts hidden',
       copy: 'Copy',
       copiedFrom: 'Copied from another template',
       params: 'Parameters: {{names}}',
       slots: 'Agents: {{pairs}}',
-      frameworkMissing: 'Template missing',
     },
     metrics: {
       empty: 'Nothing to measure yet',

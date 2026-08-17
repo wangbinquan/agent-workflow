@@ -504,16 +504,7 @@ export const resourceGrants = sqliteTable(
       // RFC-304 added the two capability template layers. No migration: this
       // column is plain `text` in SQL with no CHECK, so the closed set lives
       // in the type system only.
-      enum: [
-        'agent',
-        'skill',
-        'mcp',
-        'plugin',
-        'workflow',
-        'workgroup',
-        'capability_framework',
-        'capability_binding',
-      ],
+      enum: ['agent', 'skill', 'mcp', 'plugin', 'workflow', 'workgroup', 'capability_template'],
     }).notNull(),
     resourceId: text('resource_id').notNull(),
     userId: text('user_id')
@@ -3910,7 +3901,15 @@ export const codeFindings = sqliteTable(
     id: text('id').primaryKey(),
     codeHostEndpointId: text('code_host_endpoint_id').notNull(),
     stableProjectId: text('stable_project_id').notNull(),
-    anchorKind: text('anchor_kind', { enum: ['mr', 'issue', 'pipeline'] }).notNull(),
+    /**
+     * RFC-309 — `platform` is a round started from the platform's own UI or
+     * API, which has no code-host anchor at all. Its `anchor_id` is a ULID
+     * minted at launch, so two manual launches of the same requirement are two
+     * pieces of work rather than one deduplicated by a shared identity. Reusing
+     * `issue` with a synthetic id would make every query on `anchor_idx` treat
+     * it as a real issue.
+     */
+    anchorKind: text('anchor_kind', { enum: ['mr', 'issue', 'pipeline', 'platform'] }).notNull(),
     anchorId: text('anchor_id').notNull(),
     capability: text('capability').notNull(),
     /** Stable across a rebase; changes when the surrounding code does. */
@@ -3972,7 +3971,15 @@ export const codeWorkItems = sqliteTable(
     codeHostEndpointId: text('code_host_endpoint_id').notNull(),
     stableProjectId: text('stable_project_id').notNull(),
     capability: text('capability').notNull(),
-    anchorKind: text('anchor_kind', { enum: ['mr', 'issue', 'pipeline'] }).notNull(),
+    /**
+     * RFC-309 — `platform` is a round started from the platform's own UI or
+     * API, which has no code-host anchor at all. Its `anchor_id` is a ULID
+     * minted at launch, so two manual launches of the same requirement are two
+     * pieces of work rather than one deduplicated by a shared identity. Reusing
+     * `issue` with a synthetic id would make every query on `anchor_idx` treat
+     * it as a real issue.
+     */
+    anchorKind: text('anchor_kind', { enum: ['mr', 'issue', 'pipeline', 'platform'] }).notNull(),
     anchorId: text('anchor_id').notNull(),
     status: text('status', {
       enum: [
@@ -4421,91 +4428,65 @@ export const codePublishIntents = sqliteTable(
 )
 
 /**
- * RFC-304 §2.5 — the DEPARTMENT layer template.
+ * RFC-309 §2 — the capability template. ONE row, not two layers.
  *
- * Carries the scripts (entry / collect / classify / arbitrate) and the stage
- * hooks. That content is the reason its write permission additionally requires
- * `scripts:author`: a script here runs as the daemon, with the daemon's full
- * credential surface (proposal C2). A group lead editing their own binding must
- * not be able to reach it, which is enforced at the service layer by refusing
- * these fields on the binding path rather than by hoping nobody sends them.
+ * RFC-304 split this into a department `capability_frameworks` (scripts +
+ * hooks) and a group `capability_bindings` (agents + prompts + params). The
+ * split was a permission model wearing the clothes of a data model, and it cost
+ * a concept: a usable configuration was always the PAIR, so every list, copy
+ * and export existed twice while neither half was usable alone.
+ *
+ * The permission property the split existed for survives, one level down.
+ * Scripts and hooks run as the daemon with its whole credential surface, so
+ * writing `scripts_json` / `hooks_json` still requires `scripts:author` — now
+ * checked per FIELD (`assertTemplateFieldsAllowed`) rather than by living in a
+ * table an ordinary user cannot write. Changing which agent a step uses no
+ * longer requires handing anyone the daemon.
+ *
+ * What the merge gives up is stated in the RFC's capability-impact list: one
+ * framework shared by many bindings is gone, so a department fixing a script no
+ * longer changes every group's behaviour automatically. That relation becomes
+ * the T64 upstream link below — visible, three-way, applied when the group
+ * chooses.
  */
-export const capabilityFrameworks = sqliteTable(
-  'capability_frameworks',
+export const capabilityTemplates = sqliteTable(
+  'capability_templates',
   {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
     description: text('description'),
-    /** Which capability this framework implements. */
+    /** Which capability this template implements. */
     capability: text('capability').notNull(),
-    /** JSON: {entry, collect, classify, arbitrate} script bodies + languages. */
+    /** JSON: {entry, collect, classify, arbitrate, select} bodies + languages. */
     scriptsJson: text('scripts_json').notNull().default('{}'),
-    /** JSON array of {stage, phase, script, language, blocking}. */
+    /** JSON array of stage hooks. */
     hooksJson: text('hooks_json').notNull().default('[]'),
-    /** JSON Schema (derived from zod at author time) describing `params`. */
-    paramSchemaJson: text('param_schema_json').notNull().default('{}'),
-    /** JSON defaults for the params a binding may override. */
+    /** JSON: the parameter table this template declares. */
+    paramSchemaJson: text('param_schema_json').notNull().default('[]'),
+    /** JSON: defaults for the declared params. */
     paramDefaultsJson: text('param_defaults_json').notNull().default('{}'),
-    /** Which stage-contract version its hooks were written against (T8). */
-    stageContractVer: integer('stage_contract_ver').notNull().default(1),
-    /**
-     * RFC-304 T64 — where this was copied from, when it was copied, and what it
-     * looked like then. All three are written at COPY time because none can be
-     * reconstructed later; `base_digest` in particular is what makes an update
-     * a three-way merge instead of a guess.
-     */
-    upstreamId: text('upstream_id'),
-    upstreamVersion: integer('upstream_version'),
-    baseDigest: text('base_digest'),
-    // Standard resource ACL block (RFC-099/231), same shape as agents/skills.
-    ownerUserId: text('owner_user_id'),
-    visibility: text('visibility', { enum: ['private', 'public'] })
-      .notNull()
-      .default('public'),
-    aclRevision: integer('acl_revision').notNull().default(0),
-    builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false),
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
-  },
-  (t) => ({
-    ownerNameUq: uniqueIndex('capability_frameworks_owner_name_unique').on(t.ownerUserId, t.name),
-    capabilityIdx: index('idx_capability_frameworks_capability').on(t.capability),
-  }),
-)
-
-/**
- * RFC-304 §2.5 — the GROUP layer template.
- *
- * Selects one framework and says which agent and prompt each AI slot uses, plus
- * parameter overrides. Deliberately carries NO scripts and NO hooks: that is
- * the whole point of the split, and the reason a group lead can be given write
- * access here without being given the daemon's credential surface.
- */
-export const capabilityBindings = sqliteTable(
-  'capability_bindings',
-  {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
-    description: text('description'),
-    /** Exactly one framework — a capability references one, never a chain. */
-    frameworkId: text('framework_id').notNull(),
     /** JSON: which agent fills each `agentSlot` of the stage contract. */
     agentBySlotJson: text('agent_by_slot_json').notNull().default('{}'),
     /** JSON: per-slot prompt overrides. */
     promptBySlotJson: text('prompt_by_slot_json').notNull().default('{}'),
-    /** JSON: overrides for the framework's `paramDefaults`, validated against its schema. */
+    /** JSON: values chosen for the declared params. */
     paramsJson: text('params_json').notNull().default('{}'),
+    /** Which stage-contract version its hooks were written against (T8). */
+    stageContractVer: integer('stage_contract_ver').notNull().default(1),
     /**
-     * RFC-304 T64 — where this was copied from, when it was copied, and what it
-     * looked like then. All three are written at COPY time because none can be
-     * reconstructed later; `base_digest` in particular is what makes an update
-     * a three-way merge instead of a guess.
+     * RFC-304 T64 — where this was copied from, when, and what it looked like.
+     *
+     * All three are written at COPY time because none can be reconstructed
+     * later; `base_digest` in particular is what makes an update a three-way
+     * merge instead of a guess. RFC-309 makes this load-bearing rather than
+     * optional: copying IS how a team gets a template now, so this is the only
+     * record that two templates came from the same place.
      */
     upstreamId: text('upstream_id'),
     upstreamVersion: integer('upstream_version'),
     baseDigest: text('base_digest'),
     ownerUserId: text('owner_user_id'),
-    visibility: text('visibility', { enum: ['private', 'public'] })
+    visibility: text('visibility', { enum: ['public', 'private'] })
       .notNull()
       .default('public'),
     aclRevision: integer('acl_revision').notNull().default(0),
@@ -4514,8 +4495,9 @@ export const capabilityBindings = sqliteTable(
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => ({
-    ownerNameUq: uniqueIndex('capability_bindings_owner_name_unique').on(t.ownerUserId, t.name),
-    frameworkIdx: index('idx_capability_bindings_framework').on(t.frameworkId),
+    ownerNameUq: uniqueIndex('capability_templates_owner_name_unique').on(t.ownerUserId, t.name),
+    capabilityIdx: index('idx_capability_templates_capability').on(t.capability),
+    upstreamIdx: index('idx_capability_templates_upstream').on(t.upstreamId),
   }),
 )
 
@@ -4535,7 +4517,8 @@ export const repoCapabilityConfig = sqliteTable(
     id: text('id').primaryKey(),
     repoId: text('repo_id').notNull(),
     capability: text('capability').notNull(),
-    bindingId: text('binding_id'),
+    /** RFC-309: was `binding_id`; renamed with the merge, values unchanged. */
+    templateId: text('template_id'),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
     /** JSON: per-repo trigger configuration (which events wake this cell). */
     triggerConfigJson: text('trigger_config_json').notNull().default('{}'),
@@ -4552,7 +4535,7 @@ export const repoCapabilityConfig = sqliteTable(
   },
   (t) => ({
     cellUq: uniqueIndex('uniq_repo_capability_cell').on(t.repoId, t.capability),
-    bindingIdx: index('idx_repo_capability_binding').on(t.bindingId),
+    templateIdx: index('idx_repo_capability_template').on(t.templateId),
     readinessIdx: index('idx_repo_capability_readiness').on(t.readiness),
   }),
 )

@@ -16,8 +16,7 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
-  capabilityBindings,
-  capabilityFrameworks,
+  capabilityTemplates,
   codeAiAttempts,
   codeRoundStages,
   codeWorkItems,
@@ -80,26 +79,26 @@ describe('RFC-304 — the capability matrix a page renders', () => {
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(capabilityFrameworks).values({
+    await db.insert(capabilityTemplates).values({
       id: 'fw-1',
       name: 'f',
       capability: 'mr-review',
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(capabilityBindings).values({
+    await db.insert(capabilityTemplates).values({
       id: 'binding-1',
       name: 'b',
-      frameworkId: 'fw-1',
       agentBySlotJson: JSON.stringify({ reviewer: 'agent-1' }),
       createdAt: NOW,
       updatedAt: NOW,
+      capability: 'mr-review',
     })
     const enabled = await createEnableCommand({ db, endpointId: ENDPOINT, now: () => NOW }).enable({
       repoId: REPO,
       capability: 'mr-review',
       enabled: true,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       actorUserId: 'user-1',
     })
     expect(enabled.ok).toBe(true)
@@ -114,7 +113,7 @@ describe('RFC-304 — the capability matrix a page renders', () => {
     await upsertCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-review',
-      bindingId: null,
+      templateId: null,
       enabled: true,
       facts: { ...READY_FACTS, hasBinding: false, frameworkExists: false },
       dependencyRevision: 1,
@@ -137,7 +136,7 @@ describe('RFC-304 — the capability matrix a page renders', () => {
     await upsertCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-review',
-      bindingId: null,
+      templateId: null,
       enabled: true,
       facts: READY_FACTS,
       dependencyRevision: 1,
@@ -474,20 +473,20 @@ describe('RFC-304 — enabling a capability', () => {
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(capabilityFrameworks).values({
+    await db.insert(capabilityTemplates).values({
       id: 'fw-1',
       name: 'f',
       capability: 'mr-review',
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(capabilityBindings).values({
+    await db.insert(capabilityTemplates).values({
       id: 'binding-1',
       name: 'b',
-      frameworkId: 'fw-1',
       agentBySlotJson: JSON.stringify({ reviewer: agentId }),
       createdAt: NOW,
       updatedAt: NOW,
+      capability: 'mr-review',
     })
     // Saved twice on purpose — not because one is insufficient (see the
     // single-save test below), but because re-saving an already-ready cell must
@@ -496,14 +495,14 @@ describe('RFC-304 — enabling a capability', () => {
       repoId: REPO,
       capability: 'mr-review',
       enabled: true,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       actorUserId: 'user-1',
     })
     const result = await command().enable({
       repoId: REPO,
       capability: 'mr-review',
       enabled: true,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       actorUserId: 'user-1',
     })
 
@@ -527,26 +526,19 @@ describe('RFC-304 — enabling a capability', () => {
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(capabilityFrameworks).values({
-      id: 'fw-1',
-      name: 'f',
-      capability: 'mr-review',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    await db.insert(capabilityBindings).values({
+    await db.insert(capabilityTemplates).values({
       id: 'binding-1',
       name: 'b',
-      frameworkId: 'fw-1',
       agentBySlotJson: JSON.stringify({ reviewer: agentId }),
       createdAt: NOW,
       updatedAt: NOW,
+      capability: 'mr-review',
     })
     await command().enable({
       repoId: REPO,
       capability: 'mr-review',
       enabled: true,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       actorUserId: 'user-1',
     })
     // Ready as saved — the baseline, so the assertion below cannot pass merely
@@ -554,10 +546,15 @@ describe('RFC-304 — enabling a capability', () => {
     const before = await createCodeMatrixQuery(db).forRepo(REPO)
     expect(before[0]?.readiness).toBe('ready')
 
-    // Somebody removes the framework. Nothing touches the cell: no save, no
-    // event, no revision bump — which is precisely why a stored answer goes
-    // stale and a derived one cannot.
-    await db.delete(capabilityFrameworks).where(eq(capabilityFrameworks.id, 'fw-1'))
+    // Somebody removes the TEMPLATE this cell points at. Nothing touches the
+    // cell: no save, no event, no revision bump — which is precisely why a
+    // stored answer goes stale and a derived one cannot.
+    //
+    // RFC-309: this used to delete the framework the binding named, one hop
+    // further away. The merge removed the hop; the property under test — a
+    // `ready` that cannot run is worse than a red one, because it stops the
+    // search — is unchanged.
+    await db.delete(capabilityTemplates).where(eq(capabilityTemplates.id, 'binding-1'))
 
     const after = await createCodeMatrixQuery(db).forRepo(REPO)
     expect(after[0]?.readiness).toBe('misconfigured')
@@ -584,27 +581,20 @@ describe('RFC-304 — enabling a capability', () => {
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(capabilityFrameworks).values({
-      id: 'fw-solo',
-      name: 'f',
-      capability: 'mr-review',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    await db.insert(capabilityBindings).values({
+    await db.insert(capabilityTemplates).values({
       id: 'binding-solo',
       name: 'b',
-      frameworkId: 'fw-solo',
       agentBySlotJson: JSON.stringify({ reviewer: agentId }),
       createdAt: NOW,
       updatedAt: NOW,
+      capability: 'mr-review',
     })
 
     const result = await command().enable({
       repoId: 'solo/repo',
       capability: 'mr-review',
       enabled: true,
-      bindingId: 'binding-solo',
+      templateId: 'binding-solo',
       actorUserId: 'user-1',
     })
 

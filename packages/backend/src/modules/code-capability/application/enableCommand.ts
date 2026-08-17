@@ -42,13 +42,13 @@ export function createEnableCommand(deps: EnableCommandDeps): EnableCommand {
         }
       }
 
-      const bindingId = input.bindingId ?? null
+      const templateId = input.templateId ?? null
       const facts = await gatherReadinessFacts({
         db: deps.db,
         repoId: input.repoId,
         capability,
         endpointId: deps.endpointId,
-        bindingId,
+        templateId,
         enabled: input.enabled,
         ...(deps.provider !== undefined ? { provider: deps.provider } : {}),
       })
@@ -57,11 +57,11 @@ export function createEnableCommand(deps: EnableCommandDeps): EnableCommand {
       // would produce a cell whose readiness says `framework-missing`, sending
       // somebody to restore a framework when the real problem is that they
       // picked a binding id that was never there.
-      if (bindingId !== null && bindingId !== '' && !facts.frameworkExists && !facts.hasBinding) {
+      if (templateId !== null && templateId !== '' && !facts.frameworkExists && !facts.hasBinding) {
         return {
           ok: false,
           code: 'unknown-binding',
-          message: `no binding '${bindingId}' exists, so this capability was not enabled`,
+          message: `no binding '${templateId}' exists, so this capability was not enabled`,
         }
       }
 
@@ -76,7 +76,7 @@ export function createEnableCommand(deps: EnableCommandDeps): EnableCommand {
         ownerUserId: input.actorUserId,
         repoId: input.repoId,
         capability,
-        bindingId,
+        templateId,
         enabled: input.enabled,
         facts: factsWithoutEnabled,
         // Bumped per write so a later dependency change (an agent deleted, a
@@ -101,7 +101,7 @@ export function createEnableCommand(deps: EnableCommandDeps): EnableCommand {
           readiness: result.cell.readiness,
           issues: result.cell.readinessIssues,
           repairActions: repairActionsFor(result.cell.readinessIssues),
-          bindingId: result.cell.bindingId,
+          templateId: result.cell.templateId,
         },
       }
     },

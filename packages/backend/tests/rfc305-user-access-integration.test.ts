@@ -250,11 +250,15 @@ describe('RFC-305 identity-access integration', () => {
   test('a user preset plus every explicit grant has the full catalog without a role bypass', async () => {
     const f = await fixture()
     const grants = grantableAdditionalPermissions('user')
-    // RFC-304 +3: the three DEPARTMENT-layer write points. Individually
-    // grantable to a user account like every other preset difference — the
-    // point is that they are not in the user PRESET, not that they are
-    // unreachable.
-    expect(grants).toHaveLength(27)
+    // RFC-304 made it 27 by adding the three DEPARTMENT-layer write points as
+    // preset differences. RFC-309 merged the template layers and put the single
+    // write point in the USER BASELINE, so those three stopped being
+    // differences: 78 catalog points − 54 baseline = 24.
+    //
+    // What a user still cannot do without a grant is author SCRIPTS — which is
+    // a field inside a template rather than a template verb, and is still in
+    // this list as `scripts:author`.
+    expect(grants).toHaveLength(24)
     await f.update(0, [...grants])
 
     const actor = await buildInheritedActor(db, f.userId)

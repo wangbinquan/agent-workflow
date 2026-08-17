@@ -47,7 +47,7 @@ export interface EnableCapabilityInput {
   capability: string
   enabled: boolean
   /** Which group-layer binding runs it; required to reach `ready`. */
-  bindingId?: string | null
+  templateId?: string | null
   /** Per-cell trigger settings. Closed on purpose — see `CodeTriggerConfig`. */
   triggerConfig?: CodeTriggerConfig
   /** Who is asking — the cell is written under their authority. */

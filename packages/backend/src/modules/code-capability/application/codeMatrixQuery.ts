@@ -130,7 +130,7 @@ export function createCodeMatrixQuery(db: DbClient): CodeMatrixQuery {
             repoId,
             capability: cell.capability,
             endpointId: endpoint.ok ? endpoint.endpointId : '',
-            bindingId: cell.bindingId,
+            templateId: cell.templateId,
             enabled: cell.enabled,
             ...(endpoint.ok ? { provider: endpoint.provider } : {}),
           })
@@ -144,7 +144,7 @@ export function createCodeMatrixQuery(db: DbClient): CodeMatrixQuery {
             issues: derived.issues,
             // Paired positionally with `issues` — see `repairActionsFor`.
             repairActions: repairActionsFor(derived.issues),
-            bindingId: cell.bindingId,
+            templateId: cell.templateId,
           }
         }),
       )

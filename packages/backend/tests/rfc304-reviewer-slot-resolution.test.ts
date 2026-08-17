@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { capabilityBindings, capabilityFrameworks, agents } from '../src/db/schema'
+import { capabilityTemplates, agents } from '../src/db/schema'
 import { resolveReviewerAgent } from '../src/services/codeReviewAgentCaller'
 import { upsertCapabilityCell } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
 
@@ -52,29 +52,22 @@ describe('RFC-304 — resolving the reviewer slot', () => {
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(capabilityFrameworks).values({
-      id: 'fw-1',
-      name: 'default review',
-      capability: 'mr-review',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
   })
   afterEach(() => db.$client.close())
 
   const bindWith = async (agentBySlotJson: string) => {
-    await db.insert(capabilityBindings).values({
+    await db.insert(capabilityTemplates).values({
       id: 'binding-1',
       name: 'team binding',
-      frameworkId: 'fw-1',
       agentBySlotJson,
       createdAt: NOW,
       updatedAt: NOW,
+      capability: 'mr-review',
     })
     await upsertCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-review',
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       enabled: true,
       facts,
       dependencyRevision: 1,
@@ -106,26 +99,19 @@ describe('RFC-304 — resolving the reviewer slot', () => {
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(capabilityFrameworks).values({
-      id: 'fw-monitor',
-      name: 'monitor',
-      capability: 'mr-monitor',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    await db.insert(capabilityBindings).values({
+    await db.insert(capabilityTemplates).values({
       id: 'binding-monitor',
       name: 'monitor binding',
-      frameworkId: 'fw-monitor',
       agentBySlotJson: JSON.stringify({ reviewer: otherAgentId }),
       createdAt: NOW,
       updatedAt: NOW,
+      capability: 'mr-monitor',
     })
     // Written FIRST, so it is the row a repo-only query is most likely to hit.
     await upsertCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-monitor',
-      bindingId: 'binding-monitor',
+      templateId: 'binding-monitor',
       enabled: true,
       facts,
       dependencyRevision: 1,
@@ -151,7 +137,7 @@ describe('RFC-304 — resolving the reviewer slot', () => {
     await upsertCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-review',
-      bindingId: null,
+      templateId: null,
       enabled: true,
       facts: { ...facts, hasBinding: false },
       dependencyRevision: 1,
@@ -192,7 +178,7 @@ describe('RFC-304 — resolving the reviewer slot', () => {
 
   test('a deleted binding is distinguished from an unmapped slot', async () => {
     await bindWith(JSON.stringify({ reviewer: agentId }))
-    await db.delete(capabilityBindings)
+    await db.delete(capabilityTemplates)
     const result = await ask(db)
     expect(!result.ok && result.message).toContain('no longer exists')
   })

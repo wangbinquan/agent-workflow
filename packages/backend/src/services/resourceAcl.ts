@@ -50,8 +50,7 @@ import type { DbClient } from '@/db/client'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
 import {
   agents,
-  capabilityBindings,
-  capabilityFrameworks,
+  capabilityTemplates,
   mcps,
   plugins,
   resourceGrants,
@@ -127,8 +126,7 @@ export const ACL_TABLES = {
   plugin: plugins,
   workflow: workflows,
   workgroup: workgroups, // RFC-164
-  capability_framework: capabilityFrameworks, // RFC-304
-  capability_binding: capabilityBindings, // RFC-304
+  capability_template: capabilityTemplates, // RFC-304 → RFC-309 (merged)
 } as const
 
 /** RFC-223: these five resource types have owner-scoped display-name uniqueness.
@@ -144,8 +142,7 @@ export const OWNER_NAME_UNIQUE_TYPES: ReadonlySet<AclResourceType> = new Set([
   // here is what turns a transfer into an occupied name bucket into the typed
   // 409 every other owner-scoped type gives; without it the constraint still
   // fires, as a raw SQLite error the route reports as a 500.
-  'capability_framework',
-  'capability_binding',
+  'capability_template',
 ])
 
 /** RFC-234/RFC-305 — cross-owner Intent audit is a dedicated permission. */

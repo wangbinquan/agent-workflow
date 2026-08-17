@@ -31,7 +31,7 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 import { cachedRepos, tasks } from '../src/db/schema'
 import { wakeCapabilitiesForDelivery } from '../src/services/codeCapabilityWake'
 import { upsertCapabilityCell } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
-import { capabilityBindings, capabilityFrameworks } from '../src/db/schema'
+import { capabilityTemplates } from '../src/db/schema'
 import type { TriggerContext } from '@agent-workflow/shared'
 import { isTaskActive } from '../src/services/task'
 
@@ -99,7 +99,7 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
     upsertCapabilityCell(db, {
       repoId: REPO,
       capability,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       enabled: true,
       facts: readyFacts,
       dependencyRevision: 1,
@@ -107,25 +107,15 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
       ...over,
     })
 
-  /** A real framework + binding, so script resolution has something to read. */
+  /** A real template, so script resolution has something to read. */
   const seedTemplate = async (scriptsJson: string): Promise<void> => {
     await db
-      .insert(capabilityFrameworks)
-      .values({
-        id: 'framework-1',
-        name: 'framework-1',
-        capability: 'mr-monitor',
-        scriptsJson,
-        createdAt: NOW,
-        updatedAt: NOW,
-      })
-      .onConflictDoNothing()
-    await db
-      .insert(capabilityBindings)
+      .insert(capabilityTemplates)
       .values({
         id: 'binding-1',
         name: 'binding-1',
-        frameworkId: 'framework-1',
+        capability: 'mr-monitor',
+        scriptsJson,
         createdAt: NOW,
         updatedAt: NOW,
       })

@@ -154,7 +154,7 @@ test('a department exports its framework and binding as one package', async () =
     },
   })
 
-  const framework = await api<{ id: string }>(source, '/api/capability-frameworks', {
+  const framework = await api<{ id: string }>(source, '/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'department ci-fix template',
@@ -192,7 +192,7 @@ test('a department exports its framework and binding as one package', async () =
     },
   })
 
-  const binding = await api<{ id: string }>(source, '/api/capability-bindings', {
+  const binding = await api<{ id: string }>(source, '/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'department binding',
@@ -204,7 +204,7 @@ test('a department exports its framework and binding as one package', async () =
   })
 
   const res = await fetch(
-    `${source.baseUrl}/api/capability-bindings/${binding.id}/export-package`,
+    `${source.baseUrl}/api/capability-templates/${binding.id}/export-package`,
     {
       headers: { authorization: `Bearer ${source.token}` },
     },
@@ -228,8 +228,8 @@ test('the receiving instance previews BOTH layers before writing anything', asyn
   })
   const text = await res.text()
   expect(res.status, text).toBe(200)
-  expect(text).toContain('capability_framework')
-  expect(text).toContain('capability_binding')
+  expect(text).toContain('capability_template')
+  expect(text).toContain('capability_template')
   const preview = JSON.parse(text) as {
     previewToken: string
     entries: typeof previewEntries
@@ -287,7 +287,7 @@ test('importing it writes both rows, and the agent slot binds to THIS instance',
 
   const bindings = await api<
     { items?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>
-  >(dest, '/api/capability-bindings')
+  >(dest, '/api/capability-templates')
   const rows = Array.isArray(bindings) ? bindings : (bindings.items ?? [])
   const imported = rows.find((b) => b.name === 'department binding')
   expect(imported, `binding did not arrive: ${JSON.stringify(rows).slice(0, 300)}`).toBeDefined()
@@ -313,7 +313,7 @@ test('the IMPORTED template drives a real round — scripts and all', async () =
   const repoId = await importRepo(dest, project.repoHttpUrl)
   await api(dest, `/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'ci-fix', enabled: true, bindingId: importedBindingId },
+    body: { capability: 'ci-fix', enabled: true, templateId: importedBindingId },
   })
 
   await mocks.deliverWebhook({

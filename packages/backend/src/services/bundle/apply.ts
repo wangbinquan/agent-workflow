@@ -40,12 +40,9 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { plugins, resourceBundleApplies, skillOperations } from '@/db/schema'
 import {
-  commitBindingInTx,
-  commitFrameworkInTx,
-  prepareBindingFromBundle,
-  prepareFrameworkFromBundle,
-  type PreparedBindingWrite,
-  type PreparedFrameworkWrite,
+  commitTemplateInTx,
+  prepareTemplateFromBundle,
+  type PreparedTemplateWrite,
 } from '@/services/capabilityTemplates'
 import { ACL_TABLES, initialPrivateResourceAcl } from '@/services/resourceAcl'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
@@ -175,8 +172,7 @@ type PreparedOp =
   | { op: LoweredOp; kind: 'workflow-update'; prepared: PreparedWorkflowSave }
   | { op: LoweredOp; kind: 'workgroup-create'; prepared: PreparedWorkgroupCreate }
   | { op: LoweredOp; kind: 'workgroup-update'; prepared: PreparedWorkgroupSave }
-  | { op: LoweredOp; kind: 'capability-framework'; prepared: PreparedFrameworkWrite }
-  | { op: LoweredOp; kind: 'capability-binding'; prepared: PreparedBindingWrite }
+  | { op: LoweredOp; kind: 'capability-template'; prepared: PreparedTemplateWrite }
 
 export async function applyResourceBundle(
   deps: BundleApplyDeps,
@@ -708,28 +704,26 @@ async function prepareOne(
     // RFC-304 T17b — create and update collapse into one prepared kind because
     // the row builder is the same either way; `existing` is what distinguishes
     // them, and it is a fact about the database rather than about the op.
+    // RFC-309 — one prepared kind for all six op names. The four legacy ones
+    // are kept so a package exported before the merge still imports (AC-12):
+    // a `capability-framework-*` op lands as a template with no agents filled
+    // in, and a `capability-binding-*` op as one with no scripts, which is
+    // exactly what each half carried. Whichever arrives, the field-level
+    // `scripts:author` check inside `prepareTemplateFromBundle` applies — an
+    // import must not be a way around the rule the HTTP route enforces.
     case 'capability-framework-create':
-    case 'capability-framework-update': {
-      const prepared = await prepareFrameworkFromBundle(
-        db,
-        { ...(op.payload as Record<string, unknown>), id: op.resourceId } as never,
-        actor,
-        op.kind === 'capability-framework-update' ? op.resourceId : null,
-      )
-      return { op, kind: 'capability-framework', prepared }
-    }
+    case 'capability-framework-update':
     case 'capability-binding-create':
-    case 'capability-binding-update': {
-      const prepared = await prepareBindingFromBundle(
+    case 'capability-binding-update':
+    case 'capability-template-create':
+    case 'capability-template-update': {
+      const prepared = await prepareTemplateFromBundle(
         db,
         { ...(op.payload as Record<string, unknown>), id: op.resourceId } as never,
         actor,
-        op.kind === 'capability-binding-update' ? op.resourceId : null,
-        undefined,
-        // The framework may be arriving in this very package.
-        ctx.pendingIds,
+        op.kind.endsWith('-update') ? op.resourceId : null,
       )
-      return { op, kind: 'capability-binding', prepared }
+      return { op, kind: 'capability-template', prepared }
     }
     case 'workgroup-update': {
       const expect = op.expect as { expectedVersion: number }
@@ -885,11 +879,8 @@ function commitOne(
       }
       return
     }
-    case 'capability-framework':
-      commitFrameworkInTx(tx, item.prepared)
-      return
-    case 'capability-binding':
-      commitBindingInTx(tx, item.prepared)
+    case 'capability-template':
+      commitTemplateInTx(tx, item.prepared)
       return
   }
 }

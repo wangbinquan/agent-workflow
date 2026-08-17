@@ -42,7 +42,7 @@ const enable = (db: DbClient, over: Record<string, unknown> = {}) =>
   upsertCapabilityCell(db, {
     repoId: 'repo-1',
     capability: 'mr-review',
-    bindingId: 'binding-1',
+    templateId: 'binding-1',
     enabled: true,
     facts: goodFacts,
     dependencyRevision: 7,
@@ -64,7 +64,7 @@ describe('RFC-304 — turning a capability on', () => {
     expect(cell).toMatchObject({
       repoId: 'repo-1',
       capability: 'mr-review',
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       enabled: true,
       readiness: 'ready',
     })
@@ -126,10 +126,10 @@ describe('RFC-304 — one cell per (repo, capability)', () => {
     // Two rows for one cell would eventually disagree about whether the
     // capability is on, and which one wins would depend on query order.
     await enable(db)
-    await enable(db, { bindingId: 'binding-2' })
+    await enable(db, { templateId: 'binding-2' })
     const rows = await db.select().from(repoCapabilityConfig)
     expect(rows).toHaveLength(1)
-    expect(rows[0]?.bindingId).toBe('binding-2')
+    expect(rows[0]?.templateId).toBe('binding-2')
   })
 
   test('two capabilities on one repo are separate cells', async () => {
@@ -165,7 +165,7 @@ describe('RFC-304 — turning a capability off', () => {
     // turns a two-second toggle into redoing the setup.
     await enable(db, { triggerConfig: { events: ['mr_opened'] } })
     const cell = await disableCapabilityCell(db, 'repo-1', 'mr-review', NOW + 1)
-    expect(cell).toMatchObject({ enabled: false, readiness: 'disabled', bindingId: 'binding-1' })
+    expect(cell).toMatchObject({ enabled: false, readiness: 'disabled', templateId: 'binding-1' })
     expect(cell?.triggerConfig).toEqual({ events: ['mr_opened'] })
   })
 

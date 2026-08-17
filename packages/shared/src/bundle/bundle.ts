@@ -68,12 +68,15 @@ export function resourceTypeOfBundleOp(op: BundleOp): AclResourceType {
     case 'workgroup-create':
     case 'workgroup-update':
       return 'workgroup'
+    // RFC-309 — all four legacy ops and the merged one write the same type now.
+    // The legacy kinds stay so pre-merge packages still import (AC-12).
     case 'capability-framework-create':
     case 'capability-framework-update':
-      return 'capability_framework'
     case 'capability-binding-create':
     case 'capability-binding-update':
-      return 'capability_binding'
+    case 'capability-template-create':
+    case 'capability-template-update':
+      return 'capability_template'
   }
 }
 

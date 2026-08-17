@@ -92,7 +92,7 @@ interface MatrixRow {
   readiness: 'disabled' | 'misconfigured' | 'ready'
   issues: Array<{ code: string; detail: string }>
   repairActions: RepairAction[]
-  bindingId: string | null
+  templateId: string | null
 }
 
 interface StageRow {
@@ -259,32 +259,29 @@ function MatrixPanel() {
     enabled: repoId !== '',
   })
 
-  // The bindings a capability can be pointed at. Without this the page could
-  // switch a capability ON and never give it a binding — which is what it did:
-  // the cell then sits `misconfigured` forever with no way forward from the UI.
-  const bindings = useQuery({
-    queryKey: ['capability-bindings'],
-    queryFn: () => api.get<BindingRow[]>('/api/capability-bindings'),
-  })
-  const frameworks = useQuery({
-    queryKey: ['capability-frameworks'],
-    queryFn: () => api.get<FrameworkRow[]>('/api/capability-frameworks'),
+  // The templates a capability can be pointed at. Without this the page could
+  // switch a capability ON and never give it one — which is what it did: the
+  // cell then sits `misconfigured` forever with no way forward from the UI.
+  const templates = useQuery({
+    queryKey: ['capability-templates'],
+    queryFn: () => api.get<TemplateRow[]>('/api/capability-templates'),
   })
 
   const toggle = useMutation({
-    mutationFn: (row: { capability: string; enabled: boolean; bindingId?: string | null }) =>
+    mutationFn: (row: { capability: string; enabled: boolean; templateId?: string | null }) =>
       api.put<{ row: MatrixRow }>(`/api/code/matrix/${encodeURIComponent(repoId)}`, row),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['code-matrix', repoId] }),
   })
 
-  // A binding belongs to exactly one capability, through its framework. Showing
-  // every binding would invite pointing `ci-fix` at a review binding, which the
-  // round would only discover at its first AI stage.
-  const capabilityOfFramework = new Map(
-    (frameworks.data ?? []).map((f) => [f.id, f.capability] as const),
-  )
-  const bindingsFor = (capability: string): BindingRow[] =>
-    (bindings.data ?? []).filter((b) => capabilityOfFramework.get(b.frameworkId) === capability)
+  // A template belongs to exactly one capability. Showing every template would
+  // invite pointing `ci-fix` at a review template, which the round would only
+  // discover at its first AI stage.
+  //
+  // RFC-309 makes this a direct field read; it used to be a join through the
+  // framework, because the capability lived on the layer the binding pointed at
+  // rather than on the binding itself.
+  const templatesFor = (capability: string): TemplateRow[] =>
+    (templates.data ?? []).filter((t) => t.capability === capability)
 
   return (
     <section className="page__section">
@@ -346,8 +343,8 @@ function MatrixPanel() {
                       enabled,
                       // Carried on every write: the server takes the cell as
                       // sent, so omitting it on a toggle would silently clear a
-                      // binding somebody had chosen.
-                      bindingId: row.bindingId,
+                      // template somebody had chosen.
+                      templateId: row.templateId,
                     })
                   }
                   label={t('code.enabled')}
@@ -355,26 +352,26 @@ function MatrixPanel() {
                 />
               </div>
 
-              {/* Which configuration this repository runs. Empty is not a
-                  neutral default — a capability with no binding cannot become
-                  `ready`, so the empty option says so rather than looking like
-                  a legitimate choice. */}
-              <Field label={t('code.bindingLabel')} hint={t('code.bindingHint')}>
+              {/* Which template this repository runs. Empty is not a neutral
+                  default — a capability with no template cannot become `ready`,
+                  so the empty option says so rather than looking like a
+                  legitimate choice. */}
+              <Field label={t('code.templateLabel')} hint={t('code.templateHint')}>
                 <Select<string>
-                  value={row.bindingId ?? ''}
+                  value={row.templateId ?? ''}
                   options={[
-                    { value: '', label: t('code.bindingNone') },
-                    ...bindingsFor(row.capability).map((b) => ({ value: b.id, label: b.name })),
+                    { value: '', label: t('code.templateNone') },
+                    ...templatesFor(row.capability).map((b) => ({ value: b.id, label: b.name })),
                   ]}
-                  onChange={(bindingId) =>
+                  onChange={(templateId) =>
                     toggle.mutate({
                       capability: row.capability,
                       enabled: row.enabled,
-                      bindingId: bindingId === '' ? null : bindingId,
+                      templateId: templateId === '' ? null : templateId,
                     })
                   }
-                  ariaLabel={t('code.bindingLabel')}
-                  data-testid={`code-binding-${row.capability}`}
+                  ariaLabel={t('code.templateLabel')}
+                  data-testid={`code-template-pick-${row.capability}`}
                 />
               </Field>
 
@@ -828,7 +825,7 @@ interface UpstreamLinkWire {
   baseDigest: string
 }
 
-interface FrameworkRow {
+interface TemplateRow {
   id: string
   name: string
   description: string | null
@@ -836,6 +833,8 @@ interface FrameworkRow {
   scriptsRedacted: boolean
   paramSchema: Array<{ name: string; kind: string; required?: boolean }>
   paramDefaults: Record<string, unknown>
+  agentBySlot: Record<string, string>
+  params: Record<string, unknown>
   stageContractVer: number
   ownerUserId: string | null
   visibility: 'private' | 'public'
@@ -845,34 +844,6 @@ interface FrameworkRow {
   updatedAt: number
 }
 
-interface BindingRow {
-  id: string
-  name: string
-  description: string | null
-  frameworkId: string
-  agentBySlot: Record<string, string>
-  params: Record<string, unknown>
-  ownerUserId: string | null
-  visibility: 'private' | 'public'
-  builtin: boolean
-  aclRevision: number
-  upstream: UpstreamLinkWire | null
-  updatedAt: number
-}
-
-/**
- * T57(a) — the two template layers, listed and copyable.
- *
- * Two lists rather than one, because they are not two kinds of the same thing:
- * a framework carries scripts that run as the daemon, a binding deliberately
- * carries none, and that difference is what decides who may edit which. A
- * single merged list with a "layer" column would invite exactly the mental
- * model the split exists to prevent.
- *
- * Copy is the primary action here. Editing a framework needs `scripts:author`
- * and a script editor; starting from one that works and adjusting the binding
- * is what a team actually does, and it needs neither.
- */
 /**
  * T63 — one capability change, applied to many repositories.
  *
@@ -896,17 +867,13 @@ function BulkEnableDialog({ open, onClose }: { open: boolean; onClose: () => voi
     queryKey: ['code-capabilities'],
     queryFn: () => api.get<{ items: CapabilityCatalogRow[] }>('/api/code/capabilities'),
   })
-  const bindings = useQuery({
-    queryKey: ['capability-bindings'],
-    queryFn: () => api.get<BindingRow[]>('/api/capability-bindings'),
-  })
-  const frameworks = useQuery({
-    queryKey: ['capability-frameworks'],
-    queryFn: () => api.get<FrameworkRow[]>('/api/capability-frameworks'),
+  const templates = useQuery({
+    queryKey: ['capability-templates'],
+    queryFn: () => api.get<TemplateRow[]>('/api/capability-templates'),
   })
   const [repoIds, setRepoIds] = useState<string[]>([])
   const [capability, setCapability] = useState('')
-  const [bindingId, setBindingId] = useState('')
+  const [templateId, setTemplateId] = useState('')
   const [enabled, setEnabled] = useState(true)
   const [preview, setPreview] = useState<BulkPreviewResponse | null>(null)
   const [undo, setUndo] = useState<readonly CellChangeRow[] | null>(null)
@@ -919,7 +886,7 @@ function BulkEnableDialog({ open, onClose }: { open: boolean; onClose: () => voi
         // A revert re-applies the recorded `before`; every change in one batch
         // shares it, so the first entry carries the whole answer.
         enabled: input.changes?.[0]?.after.enabled ?? enabled,
-        bindingId: input.changes?.[0]?.after.bindingId ?? (bindingId === '' ? null : bindingId),
+        templateId: input.changes?.[0]?.after.templateId ?? (templateId === '' ? null : templateId),
         preview: input.preview,
       }),
     onSuccess: (data, input) => {
@@ -984,26 +951,23 @@ function BulkEnableDialog({ open, onClose }: { open: boolean; onClose: () => voi
           ariaLabel={t('code.bulk.capability')}
         />
       </Field>
-      <Field label={t('code.bulk.binding')}>
+      <Field label={t('code.bulk.template')}>
         <Select
-          value={bindingId}
-          onChange={setBindingId}
+          value={templateId}
+          onChange={setTemplateId}
           options={[
-            { value: '', label: t('code.bindingNone') },
-            // Filtered to the chosen capability, through the binding's
-            // framework. Offering every binding invites pointing `ci-fix` at a
-            // review binding — which the round would only discover at its first
-            // AI stage, on somebody's merge request.
-            ...(bindings.data ?? [])
-              .filter(
-                (b) =>
-                  capability === '' ||
-                  (frameworks.data ?? []).find((f) => f.id === b.frameworkId)?.capability ===
-                    capability,
-              )
-              .map((b) => ({ value: b.id, label: b.name })),
+            { value: '', label: t('code.templateNone') },
+            // Filtered to the chosen capability. Offering every template
+            // invites pointing `ci-fix` at a review template — which the round
+            // would only discover at its first AI stage, on somebody's merge
+            // request.
+            // RFC-309 — a direct filter; the capability is a field of the
+            // template now rather than of the framework it used to point at.
+            ...(templates.data ?? [])
+              .filter((t) => capability === '' || t.capability === capability)
+              .map((t) => ({ value: t.id, label: t.name })),
           ]}
-          ariaLabel={t('code.bulk.binding')}
+          ariaLabel={t('code.bulk.template')}
         />
       </Field>
       <Switch checked={enabled} onChange={setEnabled} label={t('code.bulk.enabled')} />
@@ -1044,8 +1008,8 @@ function BulkEnableDialog({ open, onClose }: { open: boolean; onClose: () => voi
 interface CellChangeRow {
   repoId: string
   capability: string
-  before: { enabled: boolean; bindingId: string | null } | null
-  after: { enabled: boolean; bindingId: string | null }
+  before: { enabled: boolean; templateId: string | null } | null
+  after: { enabled: boolean; templateId: string | null }
 }
 
 interface BulkPreviewResponse {
@@ -1059,89 +1023,76 @@ interface BulkPreviewResponse {
   failures: ReadonlyArray<{ repoId: string; message: string }>
 }
 
+/**
+ * T57(a) → RFC-309 — the template list.
+ *
+ * This used to be TWO lists, and the comment here argued for keeping them
+ * apart: a framework carried scripts that run as the daemon, a binding
+ * carried none, and a merged list with a "layer" column would invite exactly
+ * the mental model the split existed to prevent.
+ *
+ * The user overturned it: 「不需要区分组织模版和小组模版了，就是一套模版，
+ * 大家可以复制修改就行了」. What replaced the split is not a weaker rule but a
+ * narrower one — the daemon-grade fields carry their own `scripts:author`
+ * check, so the list can be one without the permission being one.
+ *
+ * Copy is the primary action, and after the merge it is how a team gets a
+ * template at all: there is no shared department row to point at any more, so
+ * "everyone runs the same scripts" is now "everyone copied from the same place
+ * and can see when it moves" (T64's upstream link).
+ */
 function TemplatesPanel(): ReactElement {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const frameworks = useQuery({
-    queryKey: ['capability-frameworks'],
-    queryFn: () => api.get<FrameworkRow[]>('/api/capability-frameworks'),
-  })
-  const bindings = useQuery({
-    queryKey: ['capability-bindings'],
-    queryFn: () => api.get<BindingRow[]>('/api/capability-bindings'),
+  const templates = useQuery({
+    queryKey: ['capability-templates'],
+    queryFn: () => api.get<TemplateRow[]>('/api/capability-templates'),
   })
 
   const catalog = useQuery({
     queryKey: ['code-capabilities'],
     queryFn: () => api.get<{ items: CapabilityCatalogRow[] }>('/api/code/capabilities'),
   })
-  const [newFramework, setNewFramework] = useState(false)
-  const [newBinding, setNewBinding] = useState(false)
+  const [newTemplate, setNewTemplate] = useState(false)
 
   const copy = useMutation({
-    mutationFn: (input: { kind: 'frameworks' | 'bindings'; id: string }) =>
-      api.post<FrameworkRow | BindingRow>(
-        `/api/capability-${input.kind}/${encodeURIComponent(input.id)}/copy`,
-        {},
-      ),
-    onSuccess: (_row, input) =>
-      void queryClient.invalidateQueries({
-        queryKey: [input.kind === 'frameworks' ? 'capability-frameworks' : 'capability-bindings'],
-      }),
+    mutationFn: (input: { id: string }) =>
+      api.post<TemplateRow>(`/api/capability-templates/${encodeURIComponent(input.id)}/copy`, {}),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['capability-templates'] }),
   })
 
-  if (frameworks.isPending || bindings.isPending) return <LoadingState />
-  if (frameworks.isError) {
-    return <ErrorBanner error={frameworks.error} onRetry={() => void frameworks.refetch()} />
+  if (templates.isPending) return <LoadingState />
+  if (templates.isError) {
+    return <ErrorBanner error={templates.error} onRetry={() => void templates.refetch()} />
   }
-  if (bindings.isError) {
-    return <ErrorBanner error={bindings.error} onRetry={() => void bindings.refetch()} />
-  }
-
-  const frameworkNames = new Map((frameworks.data ?? []).map((f) => [f.id, f.name]))
 
   return (
     <section className="page__section">
-      <NewFrameworkDialog
-        open={newFramework}
-        onClose={() => setNewFramework(false)}
-        capabilities={catalog.data?.items ?? []}
-      />
-      <NewBindingDialog
-        open={newBinding}
-        onClose={() => setNewBinding(false)}
-        frameworks={frameworks.data ?? []}
+      <NewTemplateDialog
+        open={newTemplate}
+        onClose={() => setNewTemplate(false)}
         capabilities={catalog.data?.items ?? []}
       />
 
       <div className="page__header--row">
-        <h3>{t('code.templates.frameworksTitle')}</h3>
+        <h3>{t('code.templates.title')}</h3>
         <button
           type="button"
           className="btn btn--sm btn--primary"
-          onClick={() => setNewFramework(true)}
-          data-testid="code-new-framework"
+          onClick={() => setNewTemplate(true)}
+          data-testid="code-new-template"
         >
-          {t('code.templates.newFramework')}
-        </button>
-        <button
-          type="button"
-          className="btn btn--sm"
-          onClick={() => setNewBinding(true)}
-          disabled={(frameworks.data?.length ?? 0) === 0}
-          data-testid="code-new-binding"
-        >
-          {t('code.templates.newBinding')}
+          {t('code.templates.newTemplate')}
         </button>
       </div>
-      <p>{t('code.templates.frameworksHint')}</p>
-      {(frameworks.data?.length ?? 0) === 0 ? (
-        <EmptyState title={t('code.templates.noFrameworks')} />
+      <p>{t('code.templates.hint')}</p>
+      {(templates.data?.length ?? 0) === 0 ? (
+        <EmptyState title={t('code.templates.none')} />
       ) : (
-        <ul data-testid="code-frameworks">
-          {frameworks.data?.map((row) => (
-            <li key={row.id} className="card" data-testid={`code-framework-${row.id}`}>
+        <ul data-testid="code-templates">
+          {templates.data?.map((row) => (
+            <li key={row.id} className="card" data-testid={`code-template-${row.id}`}>
               <div className="page__header--row">
                 <strong>{row.name}</strong>
                 <StatusChip kind="info" size="sm">
@@ -1162,7 +1113,9 @@ function TemplatesPanel(): ReactElement {
                 )}
                 {/* T57(c) — the upstream state. Shown only for a copy: a
                     template nobody copied has no origin, and a badge saying so
-                    on every original would be noise on the common case. */}
+                    on every original would be noise on the common case.
+                    RFC-309 makes this the normal case rather than the rare one
+                    — copying is now how a team gets a template at all. */}
                 {row.upstream !== null && (
                   <StatusChip kind="neutral" size="sm">
                     {t('code.templates.copiedFrom')}
@@ -1171,8 +1124,8 @@ function TemplatesPanel(): ReactElement {
                 <button
                   type="button"
                   className="btn btn--sm"
-                  onClick={() => copy.mutate({ kind: 'frameworks', id: row.id })}
-                  data-testid={`code-framework-copy-${row.id}`}
+                  onClick={() => copy.mutate({ id: row.id })}
+                  data-testid={`code-template-copy-${row.id}`}
                 >
                   {t('code.templates.copy')}
                 </button>
@@ -1182,7 +1135,7 @@ function TemplatesPanel(): ReactElement {
                     and silently has none is worse off than one who gets an
                     error. */}
                 <ResourcePackageExportButton
-                  type="capability_framework"
+                  type="capability_template"
                   id={row.id}
                   name={row.name}
                   fence={{
@@ -1200,51 +1153,6 @@ function TemplatesPanel(): ReactElement {
                   })}
                 </p>
               )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <h3>{t('code.templates.bindingsTitle')}</h3>
-      <p>{t('code.templates.bindingsHint')}</p>
-      {(bindings.data?.length ?? 0) === 0 ? (
-        <EmptyState title={t('code.templates.noBindings')} />
-      ) : (
-        <ul data-testid="code-bindings">
-          {bindings.data?.map((row) => (
-            <li key={row.id} className="card" data-testid={`code-binding-${row.id}`}>
-              <div className="page__header--row">
-                <strong>{row.name}</strong>
-                {/* The framework NAME, not its id: a binding is understood by
-                    what it points at, and an opaque ULID means opening another
-                    page to find out. */}
-                <StatusChip kind="info" size="sm">
-                  {frameworkNames.get(row.frameworkId) ?? t('code.templates.frameworkMissing')}
-                </StatusChip>
-                {row.upstream !== null && (
-                  <StatusChip kind="neutral" size="sm">
-                    {t('code.templates.copiedFrom')}
-                  </StatusChip>
-                )}
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => copy.mutate({ kind: 'bindings', id: row.id })}
-                  data-testid={`code-binding-copy-${row.id}`}
-                >
-                  {t('code.templates.copy')}
-                </button>
-                <ResourcePackageExportButton
-                  type="capability_binding"
-                  id={row.id}
-                  name={row.name}
-                  fence={{
-                    expectedUpdatedAt: row.updatedAt,
-                    expectedAclRevision: row.aclRevision,
-                  }}
-                  variant="action"
-                />
-              </div>
               {Object.keys(row.agentBySlot).length > 0 && (
                 <p>
                   {t('code.templates.slots', {
@@ -1275,15 +1183,20 @@ interface AgentRow {
 }
 
 /**
- * Create a framework (department layer) — name + which capability it drives.
+ * Create a template — name, capability, and which agent fills each AI slot.
  *
- * Scripts are deliberately NOT collected here. They run as the daemon, so
- * authoring one needs `scripts:author` and a proper editor; a team that only
- * needs "review my merge requests" should never be asked for a script to get
- * started. A framework with no scripts is valid for every capability whose
- * contract has no script stage — which today is all of them but `ci-fix`.
+ * RFC-309 merged the two creation dialogs this replaced. Scripts are still
+ * deliberately NOT collected here: they run as the daemon, so authoring one
+ * needs `scripts:author` and a proper editor, and a team that only wants
+ * "review my merge requests" should never be asked for a script to get started.
+ * A template with no scripts is valid for every capability whose contract has
+ * no script stage — which today is all of them but `ci-fix`.
+ *
+ * The slots come from the catalog rather than a list written here: a capability
+ * that gains a slot must show it without a frontend change, which is the whole
+ * reason that endpoint derives from the stage contracts.
  */
-function NewFrameworkDialog(props: {
+function NewTemplateDialog(props: {
   open: boolean
   onClose: () => void
   capabilities: CapabilityCatalogRow[]
@@ -1292,88 +1205,6 @@ function NewFrameworkDialog(props: {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [capability, setCapability] = useState('')
-
-  const create = useMutation({
-    mutationFn: () =>
-      api.post<FrameworkRow>('/api/capability-frameworks', {
-        name,
-        capability,
-        scripts: {},
-        hooks: [],
-        paramSchema: [],
-        paramDefaults: {},
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['capability-frameworks'] })
-      setName('')
-      setCapability('')
-      props.onClose()
-    },
-  })
-
-  const ready = name.trim() !== '' && capability !== ''
-
-  return (
-    <Dialog
-      open={props.open}
-      onClose={props.onClose}
-      title={t('code.templates.newFramework')}
-      footer={
-        <>
-          <button type="button" className="btn btn--sm" onClick={props.onClose}>
-            {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--sm btn--primary"
-            disabled={!ready || create.isPending}
-            onClick={() => create.mutate()}
-            data-testid="code-framework-create"
-          >
-            {t('code.templates.createAction')}
-          </button>
-        </>
-      }
-    >
-      <Field label={t('code.templates.nameLabel')} required>
-        <TextInput value={name} onChange={setName} data-testid="code-framework-name" />
-      </Field>
-      <Field label={t('code.templates.capabilityLabel')} required>
-        <Select<string>
-          value={capability}
-          options={props.capabilities.map((row) => ({
-            value: row.capability,
-            label: t(`code.capability.${row.capability}`),
-          }))}
-          onChange={setCapability}
-          placeholder={t('code.templates.capabilityLabel')}
-          ariaLabel={t('code.templates.capabilityLabel')}
-          data-testid="code-framework-capability"
-        />
-      </Field>
-      {create.isError && <ErrorBanner error={create.error} />}
-    </Dialog>
-  )
-}
-
-/**
- * Create a binding (group layer) — which agent fills each of the capability's
- * AI slots.
- *
- * The slots come from the catalog rather than a list written here: a capability
- * that gains a slot must show it without a frontend change, which is the whole
- * reason that endpoint derives from the stage contracts.
- */
-function NewBindingDialog(props: {
-  open: boolean
-  onClose: () => void
-  frameworks: FrameworkRow[]
-  capabilities: CapabilityCatalogRow[]
-}): ReactElement {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const [name, setName] = useState('')
-  const [frameworkId, setFrameworkId] = useState('')
   const [agentBySlot, setAgentBySlot] = useState<Record<string, string>>({})
 
   const agents = useQuery({
@@ -1382,22 +1213,25 @@ function NewBindingDialog(props: {
     enabled: props.open,
   })
 
-  const capabilityOf = props.frameworks.find((f) => f.id === frameworkId)?.capability ?? ''
-  const slots = props.capabilities.find((c) => c.capability === capabilityOf)?.agentSlots ?? []
+  const slots = props.capabilities.find((c) => c.capability === capability)?.agentSlots ?? []
 
   const create = useMutation({
     mutationFn: () =>
-      api.post<BindingRow>('/api/capability-bindings', {
+      api.post<TemplateRow>('/api/capability-templates', {
         name,
-        frameworkId,
+        capability,
+        scripts: {},
+        hooks: [],
+        paramSchema: [],
+        paramDefaults: {},
         agentBySlot,
         promptBySlot: {},
         params: {},
       }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['capability-bindings'] })
+      void queryClient.invalidateQueries({ queryKey: ['capability-templates'] })
       setName('')
-      setFrameworkId('')
+      setCapability('')
       setAgentBySlot({})
       props.onClose()
     },
@@ -1405,13 +1239,13 @@ function NewBindingDialog(props: {
 
   // Every slot filled, not just some: a round whose second AI stage has no
   // agent fails halfway, after it has already taken the merge-request lease.
-  const ready = name.trim() !== '' && frameworkId !== '' && slots.every((s) => agentBySlot[s])
+  const ready = name.trim() !== '' && capability !== '' && slots.every((slot) => agentBySlot[slot])
 
   return (
     <Dialog
       open={props.open}
       onClose={props.onClose}
-      title={t('code.templates.newBinding')}
+      title={t('code.templates.newTemplate')}
       footer={
         <>
           <button type="button" className="btn btn--sm" onClick={props.onClose}>
@@ -1422,7 +1256,7 @@ function NewBindingDialog(props: {
             className="btn btn--sm btn--primary"
             disabled={!ready || create.isPending}
             onClick={() => create.mutate()}
-            data-testid="code-binding-create"
+            data-testid="code-template-create"
           >
             {t('code.templates.createAction')}
           </button>
@@ -1430,25 +1264,25 @@ function NewBindingDialog(props: {
       }
     >
       <Field label={t('code.templates.nameLabel')} required>
-        <TextInput value={name} onChange={setName} data-testid="code-binding-name" />
+        <TextInput value={name} onChange={setName} data-testid="code-template-name" />
       </Field>
-      <Field label={t('code.templates.frameworkLabel')} required>
+      <Field label={t('code.templates.capabilityLabel')} required>
         <Select<string>
-          value={frameworkId}
-          options={props.frameworks.map((f) => ({
-            value: f.id,
-            label: `${f.name} · ${t(`code.capability.${f.capability}`)}`,
+          value={capability}
+          options={props.capabilities.map((row) => ({
+            value: row.capability,
+            label: t(`code.capability.${row.capability}`),
           }))}
-          onChange={(id) => {
-            setFrameworkId(id)
+          onChange={(next) => {
+            setCapability(next)
             // Slots belong to the capability; keeping the old picks would carry
-            // a reviewer into a ci-fix binding under a slot name that no longer
-            // exists.
+            // a reviewer into a ci-fix template under a slot name that no
+            // longer exists.
             setAgentBySlot({})
           }}
-          placeholder={t('code.templates.frameworkLabel')}
-          ariaLabel={t('code.templates.frameworkLabel')}
-          data-testid="code-binding-framework"
+          placeholder={t('code.templates.capabilityLabel')}
+          ariaLabel={t('code.templates.capabilityLabel')}
+          data-testid="code-template-capability"
         />
       </Field>
       {slots.map((slot) => (
@@ -1459,7 +1293,7 @@ function NewBindingDialog(props: {
             onChange={(agentId) => setAgentBySlot((prev) => ({ ...prev, [slot]: agentId }))}
             placeholder={t('code.templates.slotLabel', { slot })}
             ariaLabel={t('code.templates.slotLabel', { slot })}
-            data-testid={`code-binding-slot-${slot}`}
+            data-testid={`code-template-slot-${slot}`}
           />
         </Field>
       ))}

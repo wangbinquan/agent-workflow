@@ -11,11 +11,14 @@
 // So the flow IS the configuration surface: click the step you mean, and edit
 // what that step actually uses. The two-layer split survives intact —
 //
-//   binding (group layer)     agent, prompt, params  → capability-bindings:update
-//   framework (dept layer)    scripts, hooks         → + scripts:author
+//   name / agent / prompt / params  → capability-templates:update
+//   scripts / hooks                 → + scripts:author
 //
-// — because they are different permissions over different blast radii, and
-// merging them in the UI would be the first step toward merging them for real.
+// RFC-309 merged the two template layers into one row, and the boundary above
+// is what survived: it is a FIELD-level check now, because scripts run as the
+// daemon while choosing an agent does not. The drawer greys out what a reader
+// may not write rather than hiding it — someone who cannot author scripts must
+// still be able to see that a step runs one.
 //
 // Structure is NOT editable here (adding, removing or rewiring steps). That is
 // RFC-304's D3, and the reason survives contact with this surface: five of the
@@ -26,7 +29,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { CapabilityBindingWire, CapabilityFrameworkWire } from '@agent-workflow/shared'
+import type { CapabilityTemplateWire } from '@agent-workflow/shared'
 
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -58,7 +61,7 @@ type ScriptLanguage = (typeof SCRIPT_LANGUAGES)[number]
 export function CapabilityFlowPanel({ active = true }: { active?: boolean }): React.ReactElement {
   const { t } = useTranslation()
   const [capability, setCapability] = useState('mr-review')
-  const [bindingId, setBindingId] = useState<string | null>(null)
+  const [templateId, setTemplateId] = useState<string | null>(null)
   const [openStage, setOpenStage] = useState<string | null>(null)
 
   const catalog = useQuery({
@@ -77,26 +80,19 @@ export function CapabilityFlowPanel({ active = true }: { active?: boolean }): Re
     // Compiled into the binary — it cannot change under a running daemon.
     staleTime: Infinity,
   })
-  const bindings = useQuery({
-    queryKey: ['capability-bindings'],
-    queryFn: () => api.get<CapabilityBindingWire[]>('/api/capability-bindings'),
-    enabled: active,
-  })
-  const frameworks = useQuery({
-    queryKey: ['capability-frameworks'],
-    queryFn: () => api.get<CapabilityFrameworkWire[]>('/api/capability-frameworks'),
+  const templates = useQuery({
+    queryKey: ['capability-templates'],
+    queryFn: () => api.get<CapabilityTemplateWire[]>('/api/capability-templates'),
     enabled: active,
   })
 
-  // Bindings whose framework serves this capability. A binding for `ci-fix`
-  // cannot fill an `mr-review` slot, and offering it would produce a saved
-  // configuration that silently never applies.
-  const candidates = useMemo(() => {
-    const forCapability = new Set(
-      (frameworks.data ?? []).filter((f) => f.capability === capability).map((f) => f.id),
-    )
-    return (bindings.data ?? []).filter((b) => forCapability.has(b.frameworkId))
-  }, [bindings.data, frameworks.data, capability])
+  // Templates for this capability. RFC-309 makes this a direct filter — it used
+  // to be a two-step join through the framework, which is exactly the kind of
+  // indirection the merge removed.
+  const candidates = useMemo(
+    () => (templates.data ?? []).filter((t) => t.capability === capability),
+    [templates.data, capability],
+  )
 
   // Keyed on the candidate IDS, not the array. `candidates` is rebuilt whenever
   // either query returns — including a background refetch that changed nothing
@@ -109,7 +105,7 @@ export function CapabilityFlowPanel({ active = true }: { active?: boolean }): Re
     // `''.split(',')` is `['']`, not `[]` — without this guard an empty
     // candidate list would select the empty string rather than nothing.
     const ids = candidateKey === '' ? [] : candidateKey.split(',')
-    setBindingId((current) =>
+    setTemplateId((current) =>
       current !== null && ids.includes(current) ? current : (ids[0] ?? null),
     )
   }, [candidateKey])
@@ -120,8 +116,7 @@ export function CapabilityFlowPanel({ active = true }: { active?: boolean }): Re
     setOpenStage(null)
   }, [capability])
 
-  const binding = candidates.find((b) => b.id === bindingId) ?? null
-  const framework = (frameworks.data ?? []).find((f) => f.id === binding?.frameworkId) ?? null
+  const template = candidates.find((t) => t.id === templateId) ?? null
 
   if (!active) return <></>
   if (catalog.isPending || graph.isPending) return <LoadingState />
@@ -171,9 +166,9 @@ export function CapabilityFlowPanel({ active = true }: { active?: boolean }): Re
           <div className="page__header--row">
             <Field label={t('code.flow.binding')} hint={t('code.flow.bindingHint')}>
               <Select
-                value={bindingId ?? ''}
+                value={templateId ?? ''}
                 onChange={(next) => {
-                  setBindingId(next === '' ? null : next)
+                  setTemplateId(next === '' ? null : next)
                 }}
                 ariaLabel={t('code.flow.binding')}
                 data-testid="code-flow-binding"
@@ -183,9 +178,9 @@ export function CapabilityFlowPanel({ active = true }: { active?: boolean }): Re
                 ]}
               />
             </Field>
-            {framework !== null && (
-              <StatusChip kind="info" size="sm">
-                {framework.name}
+            {template !== null && template.scriptsRedacted && (
+              <StatusChip kind="neutral" size="sm">
+                {t('code.flow.scriptsRedactedChip')}
               </StatusChip>
             )}
           </div>
@@ -207,8 +202,7 @@ export function CapabilityFlowPanel({ active = true }: { active?: boolean }): Re
             <StageDrawer
               stage={stage}
               siblings={siblings}
-              binding={binding}
-              framework={framework}
+              template={template}
               onClose={() => {
                 setOpenStage(null)
               }}
@@ -230,20 +224,17 @@ export function CapabilityFlowPanel({ active = true }: { active?: boolean }): Re
 function StageDrawer({
   stage,
   siblings,
-  binding,
-  framework,
+  template,
   onClose,
 }: {
   stage: CapabilityGraphNode
   siblings: readonly string[]
-  binding: CapabilityBindingWire | null
-  framework: CapabilityFrameworkWire | null
+  template: CapabilityTemplateWire | null
   onClose: () => void
 }): React.ReactElement {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const canEditBinding = usePermission('capability-bindings:update')
-  const canEditFramework = usePermission('capability-frameworks:update')
+  const canEditTemplate = usePermission('capability-templates:update')
   const canAuthorScripts = usePermission('scripts:author')
 
   const agents = useQuery({
@@ -262,13 +253,13 @@ function StageDrawer({
   // Without this, opening a second stage would show the first one's text and a
   // save would write it to the wrong slot.
   useEffect(() => {
-    setAgentId(stage.agentSlot !== undefined ? (binding?.agentBySlot[stage.agentSlot] ?? '') : '')
-    setPrompt(stage.agentSlot !== undefined ? (binding?.promptBySlot[stage.agentSlot] ?? '') : '')
+    setAgentId(stage.agentSlot !== undefined ? (template?.agentBySlot[stage.agentSlot] ?? '') : '')
+    setPrompt(stage.agentSlot !== undefined ? (template?.promptBySlot[stage.agentSlot] ?? '') : '')
     const script =
       stage.scriptSlot !== undefined
-        ? (
-            framework?.scripts as Record<string, { language: string; script: string }> | undefined
-          )?.[stage.scriptSlot]
+        ? (template?.scripts as Record<string, { language: string; script: string }> | undefined)?.[
+            stage.scriptSlot
+          ]
         : undefined
     setScriptBody(script?.script ?? '')
     setScriptLanguage(
@@ -276,49 +267,47 @@ function StageDrawer({
     )
     setParams(
       Object.fromEntries(
-        (framework?.paramSchema ?? []).map((p) => [
+        (template?.paramSchema ?? []).map((p) => [
           p.name,
-          String(binding?.params[p.name] ?? framework?.paramDefaults[p.name] ?? ''),
+          String(template?.params[p.name] ?? template?.paramDefaults[p.name] ?? ''),
         ]),
       ),
     )
-  }, [stage, binding, framework])
+  }, [stage, template])
 
-  const saveBinding = useMutation({
-    mutationFn: (next: Partial<CapabilityBindingWire>) => {
-      if (binding === null) throw new Error('no binding selected')
-      return api.put<CapabilityBindingWire>(`/api/capability-bindings/${binding.id}`, {
-        name: binding.name,
-        description: binding.description,
-        frameworkId: binding.frameworkId,
-        agentBySlot: binding.agentBySlot,
-        promptBySlot: binding.promptBySlot,
-        params: binding.params,
+  /**
+   * One save, one invalidation.
+   *
+   * RFC-309 collapsed the two mutations this replaced. The important detail is
+   * `scripts`/`hooks`: they are ALWAYS sent from the loaded template, so a save
+   * that only changes a prompt still round-trips them unchanged and the
+   * server's field-level check sees no change — which is what lets someone
+   * without `scripts:author` edit the rest. When the reader is redacted those
+   * fields are `undefined` here, and the ROUTE re-fills them from the stored
+   * row rather than reading the absence as a delete.
+   */
+  const saveTemplate = useMutation({
+    mutationFn: (next: Partial<CapabilityTemplateWire>) => {
+      if (template === null) throw new Error('no template selected')
+      return api.put<CapabilityTemplateWire>(`/api/capability-templates/${template.id}`, {
+        name: template.name,
+        description: template.description,
+        capability: template.capability,
+        ...(template.scripts === undefined ? {} : { scripts: template.scripts }),
+        ...(template.hooks === undefined ? {} : { hooks: template.hooks }),
+        paramSchema: template.paramSchema,
+        paramDefaults: template.paramDefaults,
+        agentBySlot: template.agentBySlot,
+        promptBySlot: template.promptBySlot,
+        params: template.params,
+        stageContractVer: template.stageContractVer,
         ...next,
       })
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['capability-bindings'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['capability-templates'] }),
   })
 
-  const saveFramework = useMutation({
-    mutationFn: (next: Partial<CapabilityFrameworkWire>) => {
-      if (framework === null) throw new Error('no framework selected')
-      return api.put<CapabilityFrameworkWire>(`/api/capability-frameworks/${framework.id}`, {
-        name: framework.name,
-        description: framework.description,
-        capability: framework.capability,
-        scripts: framework.scripts ?? {},
-        hooks: framework.hooks ?? [],
-        paramSchema: framework.paramSchema,
-        paramDefaults: framework.paramDefaults,
-        stageContractVer: framework.stageContractVer,
-        ...next,
-      })
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['capability-frameworks'] }),
-  })
-
-  const hooksHere = (framework?.hooks ?? []).filter((h) => h.stage === stage.name)
+  const hooksHere = (template?.hooks ?? []).filter((h) => h.stage === stage.name)
 
   return (
     <Dialog
@@ -373,7 +362,7 @@ function StageDrawer({
             <Select
               value={agentId}
               onChange={setAgentId}
-              disabled={binding === null || !canEditBinding}
+              disabled={template === null || !canEditTemplate}
               ariaLabel={t('code.flow.agent')}
               data-testid={`stage-agent-${stage.name}`}
               options={[
@@ -388,7 +377,7 @@ function StageDrawer({
               onChange={setPrompt}
               monospace
               rows={6}
-              disabled={binding === null || !canEditBinding}
+              disabled={template === null || !canEditTemplate}
               data-testid={`stage-prompt-${stage.name}`}
             />
           </Field>
@@ -396,26 +385,26 @@ function StageDrawer({
             <button
               type="button"
               className="btn btn--sm btn--primary"
-              data-testid={`stage-save-binding-${stage.name}`}
-              disabled={binding === null || !canEditBinding || saveBinding.isPending}
+              data-testid={`stage-save-agent-${stage.name}`}
+              disabled={template === null || !canEditTemplate || saveTemplate.isPending}
               onClick={() => {
-                if (stage.agentSlot === undefined || binding === null) return
-                saveBinding.mutate({
-                  agentBySlot: { ...binding.agentBySlot, [stage.agentSlot]: agentId },
-                  promptBySlot: { ...binding.promptBySlot, [stage.agentSlot]: prompt },
+                if (stage.agentSlot === undefined || template === null) return
+                saveTemplate.mutate({
+                  agentBySlot: { ...template.agentBySlot, [stage.agentSlot]: agentId },
+                  promptBySlot: { ...template.promptBySlot, [stage.agentSlot]: prompt },
                 })
               }}
             >
               {t('common.save')}
             </button>
           </div>
-          {saveBinding.isError && <ErrorBanner error={saveBinding.error} />}
+          {saveTemplate.isError && <ErrorBanner error={saveTemplate.error} />}
         </div>
       )}
 
       {stage.kind === 'script' && stage.scriptSlot !== undefined && (
         <div className="page__section form-grid" data-testid={`stage-script-${stage.name}`}>
-          {framework?.scriptsRedacted === true ? (
+          {template?.scriptsRedacted === true ? (
             // Absent, not empty — an empty editor would invite someone to save
             // over a script they were never shown.
             <p data-testid={`stage-script-redacted-${stage.name}`}>
@@ -429,7 +418,7 @@ function StageDrawer({
                   onChange={(next) => {
                     setScriptLanguage(next as ScriptLanguage)
                   }}
-                  disabled={framework === null || !canEditFramework || !canAuthorScripts}
+                  disabled={template === null || !canEditTemplate || !canAuthorScripts}
                   ariaLabel={t('code.flow.scriptLanguage')}
                   data-testid={`stage-script-language-${stage.name}`}
                   options={SCRIPT_LANGUAGES.map((l) => ({ value: l, label: l }))}
@@ -444,7 +433,7 @@ function StageDrawer({
                   onChange={setScriptBody}
                   monospace
                   rows={12}
-                  disabled={framework === null || !canEditFramework || !canAuthorScripts}
+                  disabled={template === null || !canEditTemplate || !canAuthorScripts}
                   data-testid={`stage-script-body-${stage.name}`}
                 />
               </Field>
@@ -454,25 +443,25 @@ function StageDrawer({
                   className="btn btn--sm btn--primary"
                   data-testid={`stage-save-script-${stage.name}`}
                   disabled={
-                    framework === null ||
-                    !canEditFramework ||
+                    template === null ||
+                    !canEditTemplate ||
                     !canAuthorScripts ||
-                    saveFramework.isPending
+                    saveTemplate.isPending
                   }
                   onClick={() => {
-                    if (stage.scriptSlot === undefined || framework === null) return
-                    saveFramework.mutate({
+                    if (stage.scriptSlot === undefined || template === null) return
+                    saveTemplate.mutate({
                       scripts: {
-                        ...(framework.scripts ?? {}),
+                        ...(template.scripts ?? {}),
                         [stage.scriptSlot]: { language: scriptLanguage, script: scriptBody },
-                      } as CapabilityFrameworkWire['scripts'],
+                      } as CapabilityTemplateWire['scripts'],
                     })
                   }}
                 >
                   {t('common.save')}
                 </button>
               </div>
-              {saveFramework.isError && <ErrorBanner error={saveFramework.error} />}
+              {saveTemplate.isError && <ErrorBanner error={saveTemplate.error} />}
             </>
           )}
         </div>
@@ -488,17 +477,17 @@ function StageDrawer({
       {/* Params belong to the framework's declared table and are overridden per
             binding, so they appear on every stage rather than being guessed at
             per-kind: the contract does not say which stage reads which param. */}
-      {(framework?.paramSchema.length ?? 0) > 0 && (
+      {(template?.paramSchema.length ?? 0) > 0 && (
         <div className="page__section form-grid" data-testid={`stage-params-${stage.name}`}>
           <h4>{t('code.flow.params')}</h4>
-          {framework?.paramSchema.map((param) => (
+          {template?.paramSchema.map((param) => (
             <Field key={param.name} label={param.name} hint={param.kind}>
               <TextInput
                 value={params[param.name] ?? ''}
                 onChange={(next) => {
                   setParams((prev) => ({ ...prev, [param.name]: next }))
                 }}
-                disabled={binding === null || !canEditBinding}
+                disabled={template === null || !canEditTemplate}
                 data-testid={`stage-param-${param.name}`}
               />
             </Field>
@@ -508,9 +497,9 @@ function StageDrawer({
               type="button"
               className="btn btn--sm"
               data-testid={`stage-save-params-${stage.name}`}
-              disabled={binding === null || !canEditBinding || saveBinding.isPending}
+              disabled={template === null || !canEditTemplate || saveTemplate.isPending}
               onClick={() => {
-                saveBinding.mutate({ params: coerceParams(params, framework?.paramSchema ?? []) })
+                saveTemplate.mutate({ params: coerceParams(params, template?.paramSchema ?? []) })
               }}
             >
               {t('code.flow.saveParams')}
@@ -521,13 +510,13 @@ function StageDrawer({
 
       <StageHooks
         stage={stage}
-        framework={framework}
+        template={template}
         hooks={hooksHere}
-        canEdit={canEditFramework && canAuthorScripts}
+        canEdit={canEditTemplate && canAuthorScripts}
         onSave={(hooks) => {
-          saveFramework.mutate({ hooks })
+          saveTemplate.mutate({ hooks })
         }}
-        pending={saveFramework.isPending}
+        pending={saveTemplate.isPending}
       />
     </Dialog>
   )
@@ -544,17 +533,17 @@ function StageDrawer({
  */
 function StageHooks({
   stage,
-  framework,
+  template,
   hooks,
   canEdit,
   onSave,
   pending,
 }: {
   stage: CapabilityGraphNode
-  framework: CapabilityFrameworkWire | null
-  hooks: NonNullable<CapabilityFrameworkWire['hooks']>
+  template: CapabilityTemplateWire | null
+  hooks: NonNullable<CapabilityTemplateWire['hooks']>
   canEdit: boolean
-  onSave: (hooks: NonNullable<CapabilityFrameworkWire['hooks']>) => void
+  onSave: (hooks: NonNullable<CapabilityTemplateWire['hooks']>) => void
   pending: boolean
 }): React.ReactElement {
   const { t } = useTranslation()
@@ -589,7 +578,7 @@ function StageHooks({
                   disabled={pending}
                   onClick={() => {
                     onSave(
-                      (framework?.hooks ?? []).filter(
+                      (template?.hooks ?? []).filter(
                         (h) => !(h.stage === stage.name && h === hook),
                       ),
                     )
@@ -641,10 +630,10 @@ function StageHooks({
         type="button"
         className="btn btn--sm"
         data-testid={`stage-hook-add-${stage.name}`}
-        disabled={!canEdit || pending || body.trim() === '' || framework === null}
+        disabled={!canEdit || pending || body.trim() === '' || template === null}
         onClick={() => {
           onSave([
-            ...(framework?.hooks ?? []),
+            ...(template?.hooks ?? []),
             {
               stage: stage.name,
               phase,
@@ -654,7 +643,7 @@ function StageHooks({
               // Stamped with the version the author wrote against, which is what
               // `hookRunner` compares before running it — an unstamped hook
               // would keep running after a contract change that invalidated it.
-              stageContractVer: framework?.stageContractVer ?? 1,
+              stageContractVer: template?.stageContractVer ?? 1,
             },
           ])
           setBody('')
@@ -675,7 +664,7 @@ function StageHooks({
  */
 function coerceParams(
   draft: Record<string, string>,
-  schema: CapabilityFrameworkWire['paramSchema'],
+  schema: CapabilityTemplateWire['paramSchema'],
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const param of schema) {

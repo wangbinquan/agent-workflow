@@ -231,16 +231,13 @@ export function directRefsOf(
     }
     return out
   }
-  if (type === 'capability_binding') {
-    // RFC-304 T17b — a binding references its framework AND the agents filling
-    // its slots. Without this arm the walker returns nothing for a binding, the
-    // export produces a package whose binding points at a framework that is not
-    // in it, and the import refuses — a defect the compiler cannot see, because
-    // the extractor's default is an empty list rather than a missing case.
-    const frameworkId = row.frameworkId
-    if (typeof frameworkId === 'string' && frameworkId.length > 0) {
-      out.push({ type: 'capability_framework', id: frameworkId })
-    }
+  if (type === 'capability_template') {
+    // RFC-309 — a template references only the AGENTS filling its slots. The
+    // old binding arm also had to pull in its framework, and forgetting that
+    // produced a package whose binding pointed at a template that was not in it
+    // — a defect the compiler could not see, because the extractor's default is
+    // an empty list rather than a missing case. The merge deletes that class of
+    // failure: the scripts travel in the same row.
     for (const agentId of Object.values(parseJsonObject(row.agentBySlotJson))) {
       if (typeof agentId === 'string' && agentId.length > 0) {
         out.push({ type: 'agent', id: agentId })
@@ -248,10 +245,6 @@ export function directRefsOf(
     }
     return out
   }
-  // A FRAMEWORK references nothing: its scripts are self-contained bodies and
-  // its parameter table is a declaration. That is why it can be the leaf of a
-  // closure, and why `TYPE_RANK` may place it before bindings unconditionally.
-  if (type === 'capability_framework') return out
   if (type === 'workgroup') {
     // `row.members` 由 `attachWorkgroupMembers` 在装载层补上（成员是独立表）。
     for (const raw of parseJsonArray(row.members)) {

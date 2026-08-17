@@ -27,7 +27,7 @@
 
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { capabilityBindings, repoCapabilityConfig } from '@/db/schema'
+import { capabilityTemplates, repoCapabilityConfig } from '@/db/schema'
 import { getAgentById } from '@/services/agent'
 import { mintNodeRun, resolveFrozenRuntime } from '@/services/nodeRunMint'
 import { runNode, type ResolvedSkill } from '@/services/runner'
@@ -70,7 +70,7 @@ export async function resolveReviewerAgent(
   input: { repoId: string; capability: string; slot: string },
 ): Promise<ReviewerResolution> {
   const [cell] = await db
-    .select({ bindingId: repoCapabilityConfig.bindingId })
+    .select({ templateId: repoCapabilityConfig.templateId })
     .from(repoCapabilityConfig)
     // BOTH keys. Filtering on `repoId` alone resolved the binding from
     // whichever cell sorted first, so a repository running `mr-review` AND
@@ -92,7 +92,7 @@ export async function resolveReviewerAgent(
       message: `no capability configuration exists for this repository, so '${input.capability}' has no agent to run its ${input.slot} stage`,
     }
   }
-  if (cell.bindingId === null) {
+  if (cell.templateId === null) {
     return {
       ok: false,
       message: `the '${input.capability}' cell for this repository has no binding selected, so no agent is mapped to the '${input.slot}' slot`,
@@ -100,7 +100,7 @@ export async function resolveReviewerAgent(
   }
 
   return await resolveAgentForBinding(db, {
-    bindingId: cell.bindingId,
+    templateId: cell.templateId,
     slot: input.slot,
   })
 }
@@ -116,12 +116,12 @@ export async function resolveReviewerAgent(
  */
 export async function resolveAgentForBinding(
   db: DbClient,
-  input: { bindingId: string; slot: string },
+  input: { templateId: string; slot: string },
 ): Promise<ReviewerResolution> {
   const [binding] = await db
-    .select({ agentBySlotJson: capabilityBindings.agentBySlotJson })
-    .from(capabilityBindings)
-    .where(eq(capabilityBindings.id, input.bindingId))
+    .select({ agentBySlotJson: capabilityTemplates.agentBySlotJson })
+    .from(capabilityTemplates)
+    .where(eq(capabilityTemplates.id, input.templateId))
     .limit(1)
 
   if (binding === undefined) {

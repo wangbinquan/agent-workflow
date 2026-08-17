@@ -31,6 +31,8 @@ import {
 import { createCodeMetricsQuery } from '@/modules/code-capability/application/codeMetricsQuery'
 import { createBulkEnableCommand } from '@/modules/code-capability/application/bulkEnableCommand'
 import { createEnableCommand } from '@/modules/code-capability/application/enableCommand'
+import { createLaunchRoundCommand } from '@/modules/code-capability/application/launchRoundCommand'
+import { LaunchInputSchema } from '@/modules/code-capability/domain/launchInput'
 import {
   CODE_CAPABILITIES,
   parseCodeCapabilityId,
@@ -46,8 +48,21 @@ import { safeJsonOrThrowInvalid } from '@/util/http'
 const EnableBodySchema = z.object({
   capability: z.string().min(1),
   enabled: z.boolean(),
-  bindingId: z.string().nullable().optional(),
+  templateId: z.string().nullable().optional(),
   triggerConfig: z.record(z.unknown()).optional(),
+})
+
+/**
+ * RFC-309 — the launch body.
+ *
+ * `input` is the discriminated union from the domain, so a payload naming the
+ * wrong starting point for its capability is rejected here rather than three
+ * stages later with "target could not be resolved".
+ */
+const LaunchBodySchema = z.object({
+  repoId: z.string().min(1),
+  templateId: z.string().min(1),
+  input: LaunchInputSchema,
 })
 
 const BulkBodySchema = z.object({
@@ -58,7 +73,7 @@ const BulkBodySchema = z.object({
   repoIds: z.array(z.string().min(1)).min(1),
   capability: z.string().min(1),
   enabled: z.boolean(),
-  bindingId: z.string().nullable().optional(),
+  templateId: z.string().nullable().optional(),
   /** Defaults to a preview: the safe direction when a caller forgets the flag. */
   preview: z.boolean().optional(),
 })
@@ -124,7 +139,7 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
         capability: parsed.data.capability,
         enabled: parsed.data.enabled,
         actorUserId: actorOf(c).user.id,
-        ...(parsed.data.bindingId !== undefined ? { bindingId: parsed.data.bindingId } : {}),
+        ...(parsed.data.templateId !== undefined ? { templateId: parsed.data.templateId } : {}),
         ...(parsed.data.triggerConfig !== undefined
           ? { triggerConfig: parsed.data.triggerConfig }
           : {}),
@@ -224,7 +239,7 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
         enabled: parsed.data.enabled,
         actorUserId: actorOf(c).user.id,
         preview: parsed.data.preview ?? true,
-        ...(parsed.data.bindingId !== undefined ? { bindingId: parsed.data.bindingId } : {}),
+        ...(parsed.data.templateId !== undefined ? { templateId: parsed.data.templateId } : {}),
       })
 
       if (!result.ok) {
@@ -382,6 +397,58 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
         nodes: graph.nodes,
         edges: graph.edges,
       })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/rounds',
+      permissions: ['code-rounds:launch'],
+      tokenAccess: 'allow',
+      summary: 'Start a capability round from a template (RFC-309)',
+    },
+    // RFC-309 — the entrance RFC-304 promised and did not ship. Until this
+    // route existed the only way to start any round was a real webhook
+    // delivery, so "use this template" had no answer inside the platform.
+    async (c) => {
+      const parsed = LaunchBodySchema.safeParse(await safeJsonOrThrowInvalid(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError(
+          'code-launch-invalid',
+          parsed.error.issues[0]?.message ?? 'invalid body',
+        )
+      }
+      const result = await createLaunchRoundCommand(deps.db).run({
+        repoId: parsed.data.repoId,
+        templateId: parsed.data.templateId,
+        input: parsed.data.input,
+        actor: actorOf(c),
+      })
+      if (!result.ok) {
+        // Spelled out rather than interpolated: `code-${result.code}` is
+        // ungreppable, and the guard that requires every route error code to be
+        // named by a test cannot see it either.
+        throw new ValidationError(
+          result.code === 'repo-unresolvable'
+            ? 'code-launch-repo-unresolvable'
+            : result.code === 'template-not-visible'
+              ? 'code-launch-template-not-found'
+              : result.code === 'template-capability-mismatch'
+                ? 'code-launch-capability-mismatch'
+                : result.code === 'template-incomplete'
+                  ? 'code-launch-template-incomplete'
+                  : 'code-launch-agent-not-visible',
+          result.message,
+        )
+      }
+      // The receipt (RFC-304 AC-34): a human instruction must come back with
+      // something to follow, immediately.
+      return c.json(
+        { workItemId: result.workItemId, roundId: result.roundId, roundSeq: result.roundSeq },
+        201,
+      )
     },
   )
 

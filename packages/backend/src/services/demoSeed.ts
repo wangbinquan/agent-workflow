@@ -51,8 +51,7 @@ import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import {
   agents,
-  capabilityBindings,
-  capabilityFrameworks,
+  capabilityTemplates,
   codeRoundStages,
   codeWorkItems,
   codeWorkRounds,
@@ -74,8 +73,8 @@ const log = createLogger('demo-seed')
  * would let the two drift silently.
  */
 export const DEMO_AGENT_ID = `${DEMO_RESOURCE_ID_PREFIX}reviewer`
-export const DEMO_FRAMEWORK_ID = `${DEMO_RESOURCE_ID_PREFIX}framework-mr-review`
-export const DEMO_BINDING_ID = `${DEMO_RESOURCE_ID_PREFIX}binding-mr-review`
+/** RFC-309: one template. `DEMO_TEMPLATE_ID` replaces the framework/binding pair. */
+export const DEMO_TEMPLATE_ID = `${DEMO_RESOURCE_ID_PREFIX}template-mr-review`
 /** Opaque code-host identity for the demo round. NOT a `webhook_endpoints` row — see `seedDemoRound`. */
 export const DEMO_ENDPOINT_ID = `${DEMO_RESOURCE_ID_PREFIX}endpoint`
 export const DEMO_WORK_ITEM_ID = `${DEMO_RESOURCE_ID_PREFIX}work-item`
@@ -159,14 +158,14 @@ async function seedCapabilityTemplates(db: DbClient): Promise<void> {
   }
 
   await db
-    .insert(capabilityFrameworks)
+    .insert(capabilityTemplates)
     .values({
-      id: DEMO_FRAMEWORK_ID,
-      name: '[demo] MR review framework',
-      description: `Department-layer sample: scripts, hooks and the parameter table. ${DEMO_NOTE}`,
+      id: DEMO_TEMPLATE_ID,
+      name: '[demo] MR review template',
+      description: `The whole configuration for one capability: scripts, hooks, parameters, and which agent fills each AI slot. ${DEMO_NOTE}`,
       capability: 'mr-review',
-      // One readable script and one hook, because an empty framework teaches
-      // nothing about what the two layers are for.
+      // One readable script and one hook, because a template with neither
+      // teaches nothing about what the flow view's script and hook steps are.
       scriptsJson: JSON.stringify({
         collect: {
           language: 'bash',
@@ -206,21 +205,6 @@ async function seedCapabilityTemplates(db: DbClient): Promise<void> {
         { name: 'skipDraft', kind: 'boolean', required: false },
       ]),
       paramDefaultsJson: JSON.stringify({ maxFindings: 20, skipDraft: true }),
-      stageContractVer: lookupStageContract('mr-review')?.version ?? 1,
-      ownerUserId: SYSTEM_USER_ID,
-      visibility: 'public',
-      createdAt: DEMO_AT,
-      updatedAt: DEMO_AT,
-    })
-    .onConflictDoNothing()
-
-  await db
-    .insert(capabilityBindings)
-    .values({
-      id: DEMO_BINDING_ID,
-      name: '[demo] MR review binding',
-      description: `Group-layer sample: which agent fills each slot, and the prompts. ${DEMO_NOTE}`,
-      frameworkId: DEMO_FRAMEWORK_ID,
       // Both AI stages of `mr-review` share the `reviewer` slot — which is
       // exactly the case the flow view highlights when you click either one.
       agentBySlotJson: JSON.stringify({ reviewer: DEMO_AGENT_ID }),
@@ -228,6 +212,7 @@ async function seedCapabilityTemplates(db: DbClient): Promise<void> {
         reviewer: 'Review the diff. Report only findings you can point at a line for.',
       }),
       paramsJson: JSON.stringify({ maxFindings: 10 }),
+      stageContractVer: lookupStageContract('mr-review')?.version ?? 1,
       ownerUserId: SYSTEM_USER_ID,
       visibility: 'public',
       createdAt: DEMO_AT,

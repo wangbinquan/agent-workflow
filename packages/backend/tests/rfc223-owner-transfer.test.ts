@@ -6,8 +6,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
-  capabilityBindings,
-  capabilityFrameworks,
+  capabilityTemplates,
   mcps,
   plugins,
   resourceGrants,
@@ -31,8 +30,7 @@ const OWNER_SCOPED_TYPES = [
   'mcp',
   'plugin',
   'workgroup',
-  'capability_framework',
-  'capability_binding',
+  'capability_template',
 ] as const
 
 function actor(id: string, role: 'admin' | 'user'): Actor {
@@ -89,21 +87,11 @@ async function seedResource(
     case 'workgroup':
       await db.insert(workgroups).values({ id, name, ...acl })
       break
-    case 'capability_framework':
-      await db.insert(capabilityFrameworks).values({
+    case 'capability_template':
+      await db.insert(capabilityTemplates).values({
         id,
         name,
         capability: 'mr-review',
-        createdAt: 1,
-        updatedAt: 1,
-        ...acl,
-      })
-      break
-    case 'capability_binding':
-      await db.insert(capabilityBindings).values({
-        id,
-        name,
-        frameworkId: 'fw-any',
         createdAt: 1,
         updatedAt: 1,
         ...acl,
@@ -148,8 +136,7 @@ describe('RFC-223 owner transfer and fresh-ACL fences', () => {
         skill: skills,
         mcp: mcps,
         plugin: plugins,
-        capability_framework: capabilityFrameworks,
-        capability_binding: capabilityBindings,
+        capability_template: capabilityTemplates,
         workgroup: workgroups,
       }[type]
       expect(

@@ -207,11 +207,11 @@ describe('API contract registry coverage', () => {
         '/api/workgroups/:id',
         '/api/plugins/:id',
         '/api/workflows/:id',
-        // RFC-304 — the seventh and eighth ACL resource types. Two, not one:
-        // the department layer carries scripts that run as the daemon and the
-        // group layer carries none, so granting one must never grant the other.
-        '/api/capability-frameworks/:id',
-        '/api/capability-bindings/:id',
+        // RFC-304 → RFC-309 — the seventh ACL resource type. It was two until
+        // the merge: the department layer carried scripts that run as the
+        // daemon and the group layer carried none, so granting one had to not
+        // grant the other. That is a field-level check inside one row now.
+        '/api/capability-templates/:id',
       ]
         .flatMap((base) => [`GET ${base}/acl`, `PUT ${base}/acl`])
         .sort(),

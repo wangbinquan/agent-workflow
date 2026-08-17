@@ -44,10 +44,11 @@ export const MATRIX_RESOURCES = [
   'plugins',
   'workflows',
   'workgroups',
-  // RFC-304 — the GROUP layer only. `capability-frameworks` is deliberately
-  // absent: its writes are system-domain (script bodies run as the daemon), so
-  // it must never appear as a tickable box on the token matrix.
-  'capability-bindings',
+  // RFC-309 — one template type. The dangerous half (script and hook bodies,
+  // which run as the daemon) is fenced by a FIELD-level `scripts:author` check
+  // rather than by living in a second resource type, so this box may be ticked
+  // without handing anyone the daemon.
+  'capability-templates',
   'tasks',
   'scheduled-tasks',
   'repos',
@@ -82,8 +83,7 @@ export const PERMISSIONS = [
   // time, the same shape as token redaction on plugins. Gating the whole read
   // instead would make the group layer unusable without handing out the
   // department layer, which is the split's entire purpose.
-  'capability-frameworks:read',
-  'capability-bindings:read',
+  'capability-templates:read',
   'scheduled-tasks:read',
   // RFC-260/RFC-283/RFC-305 — webhook 读面在 user 预设；写与跨 owner
   // 能力由具体权限组合决定。两个 read 点都在 USER_BASELINE
@@ -121,8 +121,7 @@ export const PERMISSIONS = [
   'workgroups:create',
   // Framework writes are SYSTEM-domain (below): a framework carries scripts
   // that run as the daemon. Binding writes are ordinary matrix points.
-  'capability-frameworks:create',
-  'capability-bindings:create',
+  'capability-templates:create',
   'scheduled-tasks:create',
   'webhook-triggers:create',
   'repos:create',
@@ -138,8 +137,7 @@ export const PERMISSIONS = [
   'plugins:update',
   'workflows:update',
   'workgroups:update',
-  'capability-frameworks:update',
-  'capability-bindings:update',
+  'capability-templates:update',
   'scheduled-tasks:update',
   'webhook-triggers:update',
   'memory:update',
@@ -160,8 +158,7 @@ export const PERMISSIONS = [
   'plugins:delete',
   'workflows:delete',
   'workgroups:delete',
-  'capability-frameworks:delete',
-  'capability-bindings:delete',
+  'capability-templates:delete',
   'scheduled-tasks:delete',
   'webhook-triggers:delete',
   'repos:delete',
@@ -176,6 +173,12 @@ export const PERMISSIONS = [
   'workflows:execute',
   'scheduled-tasks:execute',
   'repos:execute',
+  // RFC-309 — starting a capability round from the platform (`POST
+  // /api/code/rounds`). Deliberately NOT folded into `repos:write`: launching
+  // spends model budget and writes to a code host, which is not the same act as
+  // being allowed to change a repository's configuration, and should not be
+  // granted as a side effect of it.
+  'code-rounds:launch',
   'tasks:execute',
   // NOTE: no `skills:execute` — no execute-semantics route in the skills domain.
   //
@@ -334,11 +337,7 @@ const permissionCatalog = {
     group: 'resources',
     constraints: resourceAcl,
   }),
-  'capability-frameworks:read': catalogEntry('capability-frameworks:read', {
-    group: 'resources',
-    constraints: resourceAcl,
-  }),
-  'capability-bindings:read': catalogEntry('capability-bindings:read', {
+  'capability-templates:read': catalogEntry('capability-templates:read', {
     group: 'resources',
     constraints: resourceAcl,
   }),
@@ -379,13 +378,9 @@ const permissionCatalog = {
     group: 'resources',
     constraints: resourceAcl,
   }),
-  'capability-frameworks:create': catalogEntry('capability-frameworks:create', {
+  'capability-templates:create': catalogEntry('capability-templates:create', {
     group: 'resources',
     risk: 'elevated',
-    constraints: resourceAcl,
-  }),
-  'capability-bindings:create': catalogEntry('capability-bindings:create', {
-    group: 'resources',
     constraints: resourceAcl,
   }),
   'scheduled-tasks:create': catalogEntry('scheduled-tasks:create', { group: 'tasks' }),
@@ -414,13 +409,9 @@ const permissionCatalog = {
     group: 'resources',
     constraints: resourceAcl,
   }),
-  'capability-frameworks:update': catalogEntry('capability-frameworks:update', {
+  'capability-templates:update': catalogEntry('capability-templates:update', {
     group: 'resources',
     risk: 'elevated',
-    constraints: resourceAcl,
-  }),
-  'capability-bindings:update': catalogEntry('capability-bindings:update', {
-    group: 'resources',
     constraints: resourceAcl,
   }),
   'scheduled-tasks:update': catalogEntry('scheduled-tasks:update', { group: 'tasks' }),
@@ -465,12 +456,7 @@ const permissionCatalog = {
     risk: 'elevated',
     constraints: resourceAcl,
   }),
-  'capability-frameworks:delete': catalogEntry('capability-frameworks:delete', {
-    group: 'resources',
-    risk: 'elevated',
-    constraints: resourceAcl,
-  }),
-  'capability-bindings:delete': catalogEntry('capability-bindings:delete', {
+  'capability-templates:delete': catalogEntry('capability-templates:delete', {
     group: 'resources',
     risk: 'elevated',
     constraints: resourceAcl,
@@ -514,6 +500,10 @@ const permissionCatalog = {
     risk: 'elevated',
   }),
   'repos:execute': catalogEntry('repos:execute', { group: 'repositories', risk: 'critical' }),
+  'code-rounds:launch': catalogEntry('code-rounds:launch', {
+    group: 'repositories',
+    risk: 'elevated',
+  }),
   'tasks:execute': catalogEntry('tasks:execute', {
     group: 'tasks',
     risk: 'elevated',
@@ -643,14 +633,18 @@ export const SYSTEM_DOMAIN_POINTS: ReadonlyArray<Permission> = [
   // RFC-253 — see the catalog entry: host code execution is a system-domain
   // capability, so no token may carry it (AC-26).
   'scripts:author',
-  // RFC-304 — a capability FRAMEWORK carries script bodies that run as the
-  // daemon, so writing one is the same capability as `scripts:author` wearing a
-  // CRUD verb. A leaked PAT holding every matrix grant still cannot author one.
-  // The framework READ point is not here: it is an ordinary matrix read whose
-  // response redacts script bodies from non-authors.
-  'capability-frameworks:create',
-  'capability-frameworks:update',
-  'capability-frameworks:delete',
+  // RFC-309 — the template write points are NOT here, and that is the whole
+  // design of the merge. RFC-304 put the framework writes in this list because
+  // a framework WAS script bodies; a merged template is mostly agents, prompts
+  // and parameters, and locking the object would have taken those away from
+  // ordinary users along with the scripts.
+  //
+  // The dangerous half is fenced one level down instead: writing `scripts` or
+  // `hooks` requires `scripts:author`, which IS still system-domain (above), so
+  // a leaked PAT carrying every matrix grant still cannot author a script. What
+  // it can do is change which agent a step uses — which is exactly the line the
+  // two-layer split was drawing, now drawn around the fields that matter rather
+  // than around the whole row.
   // RFC-269 — see the catalog entry: acting on the code host as the platform's
   // bot identity is a system-domain capability, so no token may carry it.
   'code-host-calls:author',
@@ -747,8 +741,7 @@ const USER_RESOURCE_READS: ReadonlyArray<Permission> = [
   // requires seeing which frameworks exist; the script bodies inside them are
   // redacted from non-authors at serialization rather than by withholding the
   // whole read.
-  'capability-frameworks:read',
-  'capability-bindings:read',
+  'capability-templates:read',
   'scheduled-tasks:read',
   'repos:read',
   'runtime:read',
@@ -777,12 +770,13 @@ const USER_RESOURCE_WRITES: ReadonlyArray<Permission> = [
   'workflows:update',
   'workflows:delete',
   'workgroups:create',
-  // RFC-304 — the GROUP layer. Any user may create one and modify their own;
-  // the per-row check is the resource ACL, as with every other type here.
-  // Framework writes are deliberately NOT in this list: they are system-domain.
-  'capability-bindings:create',
-  'capability-bindings:update',
-  'capability-bindings:delete',
+  // RFC-309 — templates. Any user may create one and modify their own; the
+  // per-row check is the resource ACL, as with every other type here. Script
+  // and hook bodies inside a template are a separate, field-level gate
+  // (`scripts:author`), so having this point does not confer them.
+  'capability-templates:create',
+  'capability-templates:update',
+  'capability-templates:delete',
   'workgroups:update',
   'workgroups:delete',
   // Creating / editing a schedule arms a future launch, so it sat behind
@@ -801,6 +795,12 @@ const USER_EXECUTE: ReadonlyArray<Permission> = [
   'plugins:execute',
   'workflows:execute',
   'scheduled-tasks:execute',
+  // RFC-309 — starting a capability round from a template. Sits with the other
+  // execute-semantics points in the baseline rather than with `repos:execute`
+  // (manager+): the act is "run this configured thing", the same shape as
+  // running a workflow, and the whole point of the template merge is that an
+  // ordinary group member can pick one and start work.
+  'code-rounds:launch',
   'tasks:execute',
 ]
 
@@ -840,14 +840,8 @@ const MANAGER_EXTRA: ReadonlyArray<Permission> = [
   // be granted explicitly to any account. The system domain bounds the TOKEN
   // surface, not the account-grant surface.
   'scripts:author',
-  // RFC-304 — authoring the DEPARTMENT layer. Same reach as `scripts:author`
-  // (a framework is where those scripts live), so it sits in the same preset
-  // and can likewise be granted explicitly. The route additionally requires
-  // BOTH this and `scripts:author`: either one alone would be a way around the
-  // other (see `canWriteFramework`).
-  'capability-frameworks:create',
-  'capability-frameworks:update',
-  'capability-frameworks:delete',
+  // RFC-309 — template writes moved to the user baseline; what stays here is
+  // `scripts:author` above, which is what actually governs the script bodies.
   // RFC-269/RFC-305 — same shape as script authoring: preset default plus
   // explicit account grant; never available to PATs.
   'code-host-calls:author',

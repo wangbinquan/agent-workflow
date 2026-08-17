@@ -130,7 +130,7 @@ test.beforeAll(async () => {
 
   repoId = await importRepo(project.repoHttpUrl)
 
-  const framework = await requestJson<{ id: string }>('/api/capability-frameworks', {
+  const framework = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'confirm framework',
@@ -141,7 +141,7 @@ test.beforeAll(async () => {
       paramDefaults: {},
     },
   })
-  const binding = await requestJson<{ id: string }>('/api/capability-bindings', {
+  const binding = await requestJson<{ id: string }>('/api/capability-templates', {
     method: 'POST',
     body: {
       name: 'confirm binding',
@@ -153,7 +153,7 @@ test.beforeAll(async () => {
   })
   await requestJson(`/api/code/matrix/${repoId}`, {
     method: 'PUT',
-    body: { capability: 'mr-comment-fix', enabled: true, bindingId: binding.id },
+    body: { capability: 'mr-comment-fix', enabled: true, templateId: binding.id },
   })
 })
 

@@ -1212,6 +1212,13 @@
       "when": 1788278410037,
       "tag": "0173_rfc308_workspace_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 173,
+      "version": "6",
+      "when": 1788278411037,
+      "tag": "0174_rfc309_capability_templates",
+      "breakpoints": true
     }
   ]
 }

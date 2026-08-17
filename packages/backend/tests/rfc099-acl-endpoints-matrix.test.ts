@@ -40,8 +40,7 @@ import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
-  capabilityBindings,
-  capabilityFrameworks,
+  capabilityTemplates,
   mcps,
   plugins,
   skills,
@@ -236,18 +235,23 @@ const CASES: ResourceCase[] = [
     },
   },
   {
-    // RFC-304 — the DEPARTMENT layer. Enrolled here rather than trusted to its
-    // own file: this matrix is what checks 404-not-403 for a non-owner, owner
-    // transfer, and grant editing, and those are exactly the properties a new
-    // resource type is most likely to get subtly wrong.
-    type: 'capability_framework',
-    base: '/api/capability-frameworks',
+    // RFC-304 → RFC-309 — the capability template. Enrolled here rather than
+    // trusted to its own file: this matrix is what checks 404-not-403 for a
+    // non-owner, owner transfer, and grant editing, and those are exactly the
+    // properties a resource type is most likely to get subtly wrong.
+    //
+    // One row now, not two. The pair existed because the department layer's
+    // ACL had to be independent of the group layer's; after the merge the
+    // dangerous half is a FIELD behind `scripts:author`, not a second row with
+    // its own owner.
+    type: 'capability_template',
+    base: '/api/capability-templates',
     keyOf: (s) => s.id,
     missingKey: ulid(),
     ownerActor: 'dept',
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(capabilityFrameworks).values({
+      await db.insert(capabilityTemplates).values({
         ...row,
         description: 'acl matrix subject',
         capability: 'mr-review',
@@ -255,29 +259,10 @@ const CASES: ResourceCase[] = [
         hooksJson: '[]',
         paramSchemaJson: '[]',
         paramDefaultsJson: '{}',
-        stageContractVer: 1,
-        ownerUserId,
-        visibility: 'private',
-        createdAt: now,
-        updatedAt: now,
-      })
-      return row
-    },
-  },
-  {
-    type: 'capability_binding',
-    base: '/api/capability-bindings',
-    keyOf: (s) => s.id,
-    missingKey: ulid(),
-    seed: async (db, ownerUserId) => {
-      const row = { id: ulid(), name: KEY }
-      await db.insert(capabilityBindings).values({
-        ...row,
-        description: 'acl matrix subject',
-        frameworkId: ulid(),
         agentBySlotJson: '{}',
         promptBySlotJson: '{}',
         paramsJson: '{}',
+        stageContractVer: 1,
         ownerUserId,
         visibility: 'private',
         createdAt: now,

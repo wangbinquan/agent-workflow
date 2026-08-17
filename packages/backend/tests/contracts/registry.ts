@@ -173,6 +173,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   // a `preview` flag rather than two so the preview cannot describe something
   // the apply does not do.
   { method: 'POST', path: '/api/code/matrix/bulk' },
+  // RFC-309 — start a round from a template. The entrance RFC-304 promised
+  // (T46b) and shipped only the issue-label half of.
+  { method: 'POST', path: '/api/code/rounds' },
   { method: 'GET', path: '/api/code/work-items' },
   // RFC-304 T61 — the troubleshooting chain's read side.
   { method: 'GET', path: '/api/code/deliveries' },
@@ -190,27 +193,19 @@ export const ENDPOINTS: EndpointSpec[] = [
   // BEFORE they enable it anywhere.
   { method: 'GET', path: '/api/code/capabilities/:capability/graph' },
 
-  // RFC-304 T57 — the two capability template layers. Separate resources with
-  // separate permission points, because the department layer carries scripts
-  // that run as the daemon and the group layer deliberately carries none:
-  // granting one must never grant the other. The framework WRITE points are
-  // system-domain, so no token carries them however its owner is granted.
-  { method: 'GET', path: '/api/capability-frameworks' },
-  { method: 'POST', path: '/api/capability-frameworks' },
-  { method: 'GET', path: '/api/capability-frameworks/:id' },
-  { method: 'PUT', path: '/api/capability-frameworks/:id' },
-  { method: 'DELETE', path: '/api/capability-frameworks/:id' },
-  { method: 'POST', path: '/api/capability-frameworks/:id/copy' },
-  { method: 'GET', path: '/api/capability-frameworks/:id/acl' },
-  { method: 'PUT', path: '/api/capability-frameworks/:id/acl' },
-  { method: 'GET', path: '/api/capability-bindings' },
-  { method: 'POST', path: '/api/capability-bindings' },
-  { method: 'GET', path: '/api/capability-bindings/:id' },
-  { method: 'PUT', path: '/api/capability-bindings/:id' },
-  { method: 'DELETE', path: '/api/capability-bindings/:id' },
-  { method: 'POST', path: '/api/capability-bindings/:id/copy' },
-  { method: 'GET', path: '/api/capability-bindings/:id/acl' },
-  { method: 'PUT', path: '/api/capability-bindings/:id/acl' },
+  // RFC-304 T57 → RFC-309 — ONE capability template resource. The pair this
+  // replaced had separate permission points because the department layer
+  // carried scripts that run as the daemon; that boundary is now a field-level
+  // `scripts:author` check inside the row, so the endpoints are one family and
+  // an ordinary token may carry them without gaining script authorship.
+  { method: 'GET', path: '/api/capability-templates' },
+  { method: 'POST', path: '/api/capability-templates' },
+  { method: 'GET', path: '/api/capability-templates/:id' },
+  { method: 'PUT', path: '/api/capability-templates/:id' },
+  { method: 'DELETE', path: '/api/capability-templates/:id' },
+  { method: 'POST', path: '/api/capability-templates/:id/copy' },
+  { method: 'GET', path: '/api/capability-templates/:id/acl' },
+  { method: 'PUT', path: '/api/capability-templates/:id/acl' },
 
   // ---- oidc-auth (mixed: providers list + login flow are public) ----
   { method: 'GET', path: '/api/auth/oidc/providers', public: true },
@@ -472,8 +467,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/workflows/:id/export-package' },
   { method: 'GET', path: '/api/workgroups/:id/export-package' },
   // RFC-304 T17a — the two capability template layers travel as packages too.
-  { method: 'GET', path: '/api/capability-frameworks/:id/export-package' },
-  { method: 'GET', path: '/api/capability-bindings/:id/export-package' },
+  { method: 'GET', path: '/api/capability-templates/:id/export-package' },
   { method: 'POST', path: '/api/resource-packages/preview' },
   { method: 'POST', path: '/api/resource-packages/commit' },
   { method: 'POST', path: '/api/workgroups' },

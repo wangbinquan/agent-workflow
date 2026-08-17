@@ -125,7 +125,7 @@ test('a prompt edited on the graph is saved and still there after a reload', asy
   await prompt.fill(edited)
   await page.getByTestId('stage-save-binding-review-shard').click()
 
-  // Round-trips through `PUT /api/capability-bindings/:id` and comes back from
+  // Round-trips through `PUT /api/capability-templates/:id` and comes back from
   // the database, not from local state.
   await page.reload()
   await expect(page.getByTestId('stage-node-review-shard')).toBeVisible({ timeout: 30_000 })

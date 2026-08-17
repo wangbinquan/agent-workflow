@@ -33,8 +33,8 @@ import {
 const change = (over: Partial<CellChange> = {}): CellChange => ({
   repoId: 'repo-1',
   capability: 'mr-review',
-  before: { enabled: false, bindingId: null },
-  after: { enabled: true, bindingId: 'binding-1' },
+  before: { enabled: false, templateId: null },
+  after: { enabled: true, templateId: 'binding-1' },
   ...over,
 })
 
@@ -47,8 +47,8 @@ describe('RFC-304 T65 — a bulk edit is explicit writes', () => {
     expect(
       classifyChange(
         change({
-          before: { enabled: true, bindingId: 'binding-1' },
-          after: { enabled: true, bindingId: 'binding-1' },
+          before: { enabled: true, templateId: 'binding-1' },
+          after: { enabled: true, templateId: 'binding-1' },
         }),
       ),
     ).toBe('no-op')
@@ -64,8 +64,8 @@ describe('RFC-304 T65 — a bulk edit is explicit writes', () => {
       change({ repoId: 'b' }),
       change({
         repoId: 'c',
-        before: { enabled: true, bindingId: 'binding-1' },
-        after: { enabled: true, bindingId: 'binding-1' },
+        before: { enabled: true, templateId: 'binding-1' },
+        after: { enabled: true, templateId: 'binding-1' },
       }),
     ])
     expect(preview.creates).toHaveLength(1)
@@ -86,8 +86,8 @@ describe('RFC-304 T65 — revert restores exactly what was changed', () => {
     // before restores this batch and nothing else.
     const applied = [change({ repoId: 'a' })]
     const inverse = invertBatch(applied)
-    expect(inverse[0]?.after).toEqual({ enabled: false, bindingId: null })
-    expect(inverse[0]?.before).toEqual({ enabled: true, bindingId: 'binding-1' })
+    expect(inverse[0]?.after).toEqual({ enabled: false, templateId: null })
+    expect(inverse[0]?.before).toEqual({ enabled: true, templateId: 'binding-1' })
   })
 
   test('a created cell reverts by DISABLING, not by deletion', () => {
@@ -95,14 +95,14 @@ describe('RFC-304 T65 — revert restores exactly what was changed', () => {
     // create brought along. A revert that destroys more than the thing it
     // reverses is not one.
     const inverse = invertBatch([change({ before: null })])
-    expect(inverse[0]?.after).toEqual({ enabled: false, bindingId: null })
+    expect(inverse[0]?.after).toEqual({ enabled: false, templateId: null })
   })
 
   test('no-ops are not inverted — they changed nothing', () => {
     const inverse = invertBatch([
       change({
-        before: { enabled: true, bindingId: 'b' },
-        after: { enabled: true, bindingId: 'b' },
+        before: { enabled: true, templateId: 'b' },
+        after: { enabled: true, templateId: 'b' },
       }),
     ])
     expect(inverse).toEqual([])
@@ -118,7 +118,7 @@ describe('RFC-304 T65 — one read model', () => {
       repoId: 'r',
       capability: 'mr-review',
       enabled: true,
-      bindingId: 'b',
+      templateId: 'b',
     })
     expect(cfg.source).toBe('cell')
   })

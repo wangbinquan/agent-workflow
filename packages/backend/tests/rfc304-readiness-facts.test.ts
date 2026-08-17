@@ -19,12 +19,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  agents,
-  capabilityBindings,
-  capabilityFrameworks,
-  webhookEndpoints,
-} from '../src/db/schema'
+import { agents, capabilityTemplates, webhookEndpoints } from '../src/db/schema'
 import { gatherReadinessFacts } from '../src/modules/code-capability/application/readinessFacts'
 import { deriveReadiness } from '../src/modules/code-capability/domain/templateLayers'
 import { upsertCapabilityCell } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
@@ -56,40 +51,33 @@ describe('RFC-304 — gathering readiness facts from the database', () => {
       secretEnc: 'sealed',
       enabled: true,
     })
-    await db.insert(capabilityFrameworks).values({
-      id: 'fw-1',
-      name: 'default review',
-      capability: 'mr-review',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    await db.insert(capabilityBindings).values({
+    await db.insert(capabilityTemplates).values({
       id: 'binding-1',
       name: 'team binding',
-      frameworkId: 'fw-1',
       agentBySlotJson: JSON.stringify({ reviewer: agentId }),
       createdAt: NOW,
       updatedAt: NOW,
+      capability: 'mr-review',
     })
   })
   afterEach(() => db.$client.close())
 
-  const ask = (over: { bindingId?: string | null } = {}) =>
+  const ask = (over: { templateId?: string | null } = {}) =>
     gatherReadinessFacts({
       db,
       repoId: REPO,
       capability: 'mr-review',
       endpointId: ENDPOINT,
-      bindingId: over.bindingId === undefined ? 'binding-1' : over.bindingId,
+      templateId: over.templateId === undefined ? 'binding-1' : over.templateId,
       enabled: true,
     })
 
   /** The cell must exist for slot resolution to find its binding. */
-  const seedCell = async (bindingId: string | null = 'binding-1') => {
+  const seedCell = async (templateId: string | null = 'binding-1') => {
     await upsertCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-review',
-      bindingId,
+      templateId,
       enabled: true,
       facts: {
         hasBinding: true,
@@ -116,7 +104,7 @@ describe('RFC-304 — gathering readiness facts from the database', () => {
 
   test('no binding is reported, not assumed', async () => {
     await seedCell(null)
-    const facts = await ask({ bindingId: null })
+    const facts = await ask({ templateId: null })
     expect(facts.hasBinding).toBe(false)
   })
 
@@ -125,7 +113,7 @@ describe('RFC-304 — gathering readiness facts from the database', () => {
     // built on is gone. Sending them to pick a binding again would be the wrong
     // instruction — the binding is fine.
     await seedCell()
-    await db.delete(capabilityFrameworks)
+    await db.delete(capabilityTemplates)
     const facts = await ask()
     expect(facts.hasBinding).toBe(true)
     expect(facts.frameworkExists).toBe(false)
@@ -143,9 +131,9 @@ describe('RFC-304 — gathering readiness facts from the database', () => {
 
   test('an unmapped slot is invisible too', async () => {
     await db
-      .update(capabilityBindings)
+      .update(capabilityTemplates)
       .set({ agentBySlotJson: '{}' })
-      .where(eq(capabilityBindings.id, 'binding-1'))
+      .where(eq(capabilityTemplates.id, 'binding-1'))
     await seedCell()
     const facts = await ask()
     expect(facts.invisibleAgentSlots).toEqual(['reviewer'])
@@ -171,7 +159,7 @@ describe('RFC-304 — gathering readiness facts from the database', () => {
       repoId: REPO,
       capability: 'ci-fix',
       endpointId: ENDPOINT,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       enabled: true,
     })
     expect(facts.requiresWakeSource).toBe(true)
@@ -194,7 +182,7 @@ describe('RFC-304 — facts feed the verdict', () => {
       repoId: 'never-configured',
       capability: 'mr-review',
       endpointId: 'ep-none',
-      bindingId: null,
+      templateId: null,
       enabled: true,
     })
     const { state, issues } = deriveReadiness(facts)
@@ -213,7 +201,7 @@ describe('RFC-304 — facts feed the verdict', () => {
       repoId: 'never-configured',
       capability: 'mr-review',
       endpointId: 'ep-none',
-      bindingId: null,
+      templateId: null,
       enabled: false,
     })
     expect(deriveReadiness(facts).state).toBe('disabled')

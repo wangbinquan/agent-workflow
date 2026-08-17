@@ -34,11 +34,11 @@ describe('RFC-305 user permission view model', () => {
       locale: 'en-US',
       translate,
     })
-    // RFC-304 +8: two capability template layers × four verbs. The user
-    // baseline gains 5 of them (both reads + the three GROUP-layer writes);
-    // the three DEPARTMENT-layer writes are system-domain, so they show as
-    // grantable rows rather than baseline ones.
-    expect(model.permissions).toHaveLength(81)
+    // RFC-304 made it 81 with two template layers × four verbs. RFC-309 merged
+    // them (−8 +4) and added `code-rounds:launch` (+1) ⇒ 78. The user baseline
+    // is unchanged at 54 + 1 explicit grant: it lost one read point when the two
+    // reads became one, and gained the launch point.
+    expect(model.permissions).toHaveLength(78)
     expect(model.effectiveCount).toBe(55)
     expect(model.additionalCount).toBe(1)
     expect(model.permissions.find((row) => row.permission === 'agents:read')).toMatchObject({

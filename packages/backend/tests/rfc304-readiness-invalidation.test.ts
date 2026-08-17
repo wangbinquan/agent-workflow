@@ -27,7 +27,7 @@ import {
 const cell = (over: Partial<CellDependencySnapshot> = {}): CellDependencySnapshot => ({
   cellId: 'cell-1',
   repoId: 'repo-1',
-  bindingId: 'binding-1',
+  templateId: 'binding-1',
   frameworkId: 'framework-1',
   agentIds: ['agent-1'],
   codeHostEndpointId: 'ep_7',
@@ -40,7 +40,7 @@ describe('RFC-304 T16c — what a change invalidates', () => {
     cell({ cellId: 'b' }),
     cell({
       cellId: 'c',
-      bindingId: 'binding-2',
+      templateId: 'binding-2',
       frameworkId: 'framework-2',
       agentIds: ['agent-2'],
     }),
@@ -50,7 +50,7 @@ describe('RFC-304 T16c — what a change invalidates', () => {
   test('a shared binding change invalidates every cell using it — and only those', () => {
     // The headline case: one deleted binding, hundreds of cells still claiming
     // `ready` until an event arrives.
-    expect(cellsInvalidatedBy({ kind: 'binding', bindingId: 'binding-1' }, cells)).toEqual([
+    expect(cellsInvalidatedBy({ kind: 'binding', templateId: 'binding-1' }, cells)).toEqual([
       'a',
       'b',
       'd',
@@ -88,12 +88,12 @@ describe('RFC-304 T16c — what a change invalidates', () => {
   test('an unrelated change invalidates nothing', () => {
     // Reverse assertion: an implementation that invalidated everything would
     // satisfy every test above while making the cache useless.
-    expect(cellsInvalidatedBy({ kind: 'binding', bindingId: 'binding-99' }, cells)).toEqual([])
+    expect(cellsInvalidatedBy({ kind: 'binding', templateId: 'binding-99' }, cells)).toEqual([])
   })
 
   test('a cell with no binding is unaffected by binding changes', () => {
-    const orphan = [cell({ cellId: 'x', bindingId: null, frameworkId: null })]
-    expect(cellsInvalidatedBy({ kind: 'binding', bindingId: 'binding-1' }, orphan)).toEqual([])
+    const orphan = [cell({ cellId: 'x', templateId: null, frameworkId: null })]
+    expect(cellsInvalidatedBy({ kind: 'binding', templateId: 'binding-1' }, orphan)).toEqual([])
     // …but a repo-scoped change still reaches it: it is still a cell of that
     // repo, and its readiness still says "no binding selected".
     expect(cellsInvalidatedBy({ kind: 'trigger', repoId: 'repo-1' }, orphan)).toEqual(['x'])

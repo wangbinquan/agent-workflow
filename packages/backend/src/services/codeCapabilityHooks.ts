@@ -26,7 +26,7 @@
 
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { capabilityBindings, capabilityFrameworks, repoCapabilityConfig } from '@/db/schema'
+import { capabilityTemplates, repoCapabilityConfig } from '@/db/schema'
 import type { CapabilityHook } from '@/modules/code-capability/application/hookRunner'
 
 export interface ResolvedHooks {
@@ -113,7 +113,7 @@ export async function resolveCapabilityHooks(
   input: { repoId: string; capability: string },
 ): Promise<ResolvedHooks> {
   const [cell] = await db
-    .select({ bindingId: repoCapabilityConfig.bindingId })
+    .select({ templateId: repoCapabilityConfig.templateId })
     .from(repoCapabilityConfig)
     .where(
       // `and(...)`, never `&&`: a JS `&&` between two drizzle conditions
@@ -124,21 +124,16 @@ export async function resolveCapabilityHooks(
         eq(repoCapabilityConfig.capability, input.capability),
       ),
     )
-  if (cell?.bindingId == null) return NONE
+  if (cell?.templateId == null) return NONE
 
-  const [binding] = await db
-    .select({ frameworkId: capabilityBindings.frameworkId })
-    .from(capabilityBindings)
-    .where(eq(capabilityBindings.id, cell.bindingId))
-  if (binding === undefined) return NONE
-
+  // RFC-309 — one hop: the hooks live on the template the cell points at.
   const [framework] = await db
     .select({
-      hooksJson: capabilityFrameworks.hooksJson,
-      stageContractVer: capabilityFrameworks.stageContractVer,
+      hooksJson: capabilityTemplates.hooksJson,
+      stageContractVer: capabilityTemplates.stageContractVer,
     })
-    .from(capabilityFrameworks)
-    .where(eq(capabilityFrameworks.id, binding.frameworkId))
+    .from(capabilityTemplates)
+    .where(eq(capabilityTemplates.id, cell.templateId))
   if (framework === undefined) return NONE
 
   let parsed: unknown

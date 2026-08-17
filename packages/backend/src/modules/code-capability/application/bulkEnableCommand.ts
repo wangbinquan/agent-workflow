@@ -63,7 +63,7 @@ export interface BulkEnableInput {
   repoIds: readonly string[]
   capability: string
   enabled: boolean
-  bindingId?: string | null
+  templateId?: string | null
   actorUserId: string
   /** True to answer what WOULD happen without writing anything. */
   preview: boolean
@@ -74,15 +74,15 @@ async function currentCell(
   db: DbClient,
   repoId: string,
   capability: string,
-): Promise<{ enabled: boolean; bindingId: string | null } | null> {
+): Promise<{ enabled: boolean; templateId: string | null } | null> {
   const [match] = await db
-    .select({ enabled: repoCapabilityConfig.enabled, bindingId: repoCapabilityConfig.bindingId })
+    .select({ enabled: repoCapabilityConfig.enabled, templateId: repoCapabilityConfig.templateId })
     .from(repoCapabilityConfig)
     .where(
       and(eq(repoCapabilityConfig.repoId, repoId), eq(repoCapabilityConfig.capability, capability)),
     )
     .limit(1)
-  return match === undefined ? null : { enabled: match.enabled, bindingId: match.bindingId }
+  return match === undefined ? null : { enabled: match.enabled, templateId: match.templateId }
 }
 
 export function createBulkEnableCommand(db: DbClient, now?: () => number) {
@@ -104,7 +104,7 @@ export function createBulkEnableCommand(db: DbClient, now?: () => number) {
         }
       }
 
-      const after = { enabled: input.enabled, bindingId: input.bindingId ?? null }
+      const after = { enabled: input.enabled, templateId: input.templateId ?? null }
       const changes: CellChange[] = []
       for (const repoId of [...new Set(input.repoIds)]) {
         changes.push({
@@ -135,7 +135,7 @@ export function createBulkEnableCommand(db: DbClient, now?: () => number) {
             repoId: change.repoId,
             capability: input.capability,
             endpointId: endpoint.endpointId,
-            bindingId: change.after.bindingId,
+            templateId: change.after.templateId,
             enabled: change.after.enabled,
             provider: endpoint.provider,
           })
@@ -146,7 +146,7 @@ export function createBulkEnableCommand(db: DbClient, now?: () => number) {
             ownerUserId: input.actorUserId,
             repoId: change.repoId,
             capability: input.capability,
-            bindingId: change.after.bindingId,
+            templateId: change.after.templateId,
             enabled: change.after.enabled,
             facts: factsWithoutEnabled,
             dependencyRevision: 1,

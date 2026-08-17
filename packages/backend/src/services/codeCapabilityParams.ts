@@ -17,7 +17,7 @@
 
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { capabilityBindings, capabilityFrameworks, repoCapabilityConfig } from '@/db/schema'
+import { capabilityTemplates, repoCapabilityConfig } from '@/db/schema'
 import {
   parseCapabilityParamTable,
   resolveCapabilityParams,
@@ -55,7 +55,7 @@ export async function resolveCellParams(
   input: { repoId: string; capability: string },
 ): Promise<ResolvedCapabilityParams> {
   const [cell] = await db
-    .select({ bindingId: repoCapabilityConfig.bindingId })
+    .select({ templateId: repoCapabilityConfig.templateId })
     .from(repoCapabilityConfig)
     .where(
       // `and(...)`, never `&&`: a JS `&&` between two drizzle conditions
@@ -66,25 +66,21 @@ export async function resolveCellParams(
         eq(repoCapabilityConfig.capability, input.capability),
       ),
     )
-  if (cell?.bindingId == null) return { ok: true, table: [], params: {} }
+  if (cell?.templateId == null) return { ok: true, table: [], params: {} }
 
-  const [binding] = await db
-    .select({
-      frameworkId: capabilityBindings.frameworkId,
-      paramsJson: capabilityBindings.paramsJson,
-    })
-    .from(capabilityBindings)
-    .where(eq(capabilityBindings.id, cell.bindingId))
-  if (binding === undefined) return { ok: true, table: [], params: {} }
-
+  // RFC-309 — one hop. The declared table and the chosen values used to live on
+  // two rows that could disagree about which framework was in play; now they
+  // are columns of the same row and cannot.
   const [framework] = await db
     .select({
-      paramSchemaJson: capabilityFrameworks.paramSchemaJson,
-      paramDefaultsJson: capabilityFrameworks.paramDefaultsJson,
+      paramSchemaJson: capabilityTemplates.paramSchemaJson,
+      paramDefaultsJson: capabilityTemplates.paramDefaultsJson,
+      paramsJson: capabilityTemplates.paramsJson,
     })
-    .from(capabilityFrameworks)
-    .where(eq(capabilityFrameworks.id, binding.frameworkId))
+    .from(capabilityTemplates)
+    .where(eq(capabilityTemplates.id, cell.templateId))
   if (framework === undefined) return { ok: true, table: [], params: {} }
+  const binding = framework
 
   const parsed = parseCapabilityParamTable(framework.paramSchemaJson)
   if (!parsed.ok) return { ok: false, issues: parsed.issues }

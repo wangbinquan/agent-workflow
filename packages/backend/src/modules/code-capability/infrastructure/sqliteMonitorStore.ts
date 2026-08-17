@@ -27,7 +27,13 @@ export interface WorkItemIdentity {
   codeHostEndpointId: string
   stableProjectId: string
   capability: string
-  anchorKind: 'mr' | 'issue' | 'pipeline'
+  /**
+   * RFC-309 — `platform` is a round started from the platform's own UI or API,
+   * which has no code-host anchor at all. Its `anchorId` is minted at launch,
+   * so two manual launches are two pieces of work rather than one deduplicated
+   * by a shared identity.
+   */
+  anchorKind: 'mr' | 'issue' | 'pipeline' | 'platform'
   anchorId: string
 }
 

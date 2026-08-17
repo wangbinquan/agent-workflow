@@ -20,12 +20,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  agents,
-  capabilityBindings,
-  capabilityFrameworks,
-  webhookEndpoints,
-} from '../src/db/schema'
+import { agents, capabilityTemplates, webhookEndpoints } from '../src/db/schema'
 import {
   BULK_REPO_LIMIT,
   createBulkEnableCommand,
@@ -55,20 +50,13 @@ describe('RFC-304 T63 — bulk enable', () => {
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(capabilityFrameworks).values({
-      id: 'fw-1',
-      name: 'f',
-      capability: 'mr-review',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    await db.insert(capabilityBindings).values({
+    await db.insert(capabilityTemplates).values({
       id: 'binding-1',
       name: 'b',
-      frameworkId: 'fw-1',
       agentBySlotJson: JSON.stringify({ reviewer: 'agent-1' }),
       createdAt: NOW,
       updatedAt: NOW,
+      capability: 'mr-review',
     })
   })
   afterEach(() => db.$client.close())
@@ -80,7 +68,7 @@ describe('RFC-304 T63 — bulk enable', () => {
       repoIds: ['repo-a', 'repo-b', 'repo-c'],
       capability: 'mr-review',
       enabled: true,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       actorUserId: 'user-1',
       preview: false,
       ...over,
@@ -104,7 +92,7 @@ describe('RFC-304 T63 — bulk enable', () => {
       repoIds: ['repo-a', 'repo-b', 'repo-new'],
       capability: 'mr-review',
       enabled: true,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       actorUserId: 'user-1',
       preview: true,
     })
@@ -127,7 +115,7 @@ describe('RFC-304 T63 — bulk enable', () => {
       const [row] = await createCodeMatrixQuery(db).forRepo(repoId)
       expect(row?.capability).toBe('mr-review')
       expect(row?.enabled).toBe(true)
-      expect(row?.bindingId).toBe('binding-1')
+      expect(row?.templateId).toBe('binding-1')
     }
   })
 
@@ -152,7 +140,7 @@ describe('RFC-304 T63 — bulk enable', () => {
       repoIds: ['repo-c'],
       capability: 'mr-review',
       enabled: false,
-      bindingId: null,
+      templateId: null,
       actorUserId: 'user-2',
       preview: false,
     })
@@ -165,7 +153,7 @@ describe('RFC-304 T63 — bulk enable', () => {
       // deleting it — deletion would also discard the trigger configuration the
       // create brought along, and a revert that destroys more than it reverses
       // is not one.
-      expect(change.after).toEqual({ enabled: false, bindingId: null })
+      expect(change.after).toEqual({ enabled: false, templateId: null })
     }
   })
 
@@ -226,7 +214,7 @@ describe('RFC-304 T63 — bulk enable', () => {
       repoIds: ['repo-a', 'repo-a', 'repo-a'],
       capability: 'mr-review',
       enabled: true,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       actorUserId: 'user-1',
       preview: true,
     })
@@ -241,7 +229,7 @@ describe('RFC-304 T63 — bulk enable', () => {
       repoIds: ['repo-a', 'repo-b', 'repo-c'],
       capability: 'mr-review',
       enabled: false,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       actorUserId: 'user-1',
       preview: true,
     })

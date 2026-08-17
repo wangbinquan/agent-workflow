@@ -36,7 +36,7 @@ export interface CapabilityCell {
   id: string
   repoId: string
   capability: string
-  bindingId: string | null
+  templateId: string | null
   enabled: boolean
   triggerConfig: Readonly<Record<string, unknown>>
   readiness: ReadinessState
@@ -59,7 +59,7 @@ function toCell(row: typeof repoCapabilityConfig.$inferSelect): CapabilityCell {
     id: row.id,
     repoId: row.repoId,
     capability: row.capability,
-    bindingId: row.bindingId,
+    templateId: row.templateId,
     enabled: row.enabled,
     triggerConfig: parseJson<Record<string, unknown>>(row.triggerConfigJson, {}),
     readiness: row.readiness,
@@ -94,7 +94,7 @@ export async function listCapabilityCells(db: DbClient, repoId: string): Promise
 export interface UpsertCellInput {
   repoId: string
   capability: string
-  bindingId: string | null
+  templateId: string | null
   enabled: boolean
   triggerConfig?: Readonly<Record<string, unknown>>
   /** The facts readiness is derived from, gathered by the caller. */
@@ -126,7 +126,7 @@ export async function upsertCapabilityCell(
       id: ulid(),
       repoId: input.repoId,
       capability: input.capability,
-      bindingId: input.bindingId,
+      templateId: input.templateId,
       enabled: input.enabled,
       triggerConfigJson,
       readiness: derived.state,
@@ -142,7 +142,7 @@ export async function upsertCapabilityCell(
       // disagree about whether it is on.
       target: [repoCapabilityConfig.repoId, repoCapabilityConfig.capability],
       set: {
-        bindingId: input.bindingId,
+        templateId: input.templateId,
         enabled: input.enabled,
         triggerConfigJson,
         readiness: derived.state,
@@ -161,7 +161,7 @@ export async function upsertCapabilityCell(
 /**
  * Turn a capability off without forgetting how it was configured.
  *
- * Keeps `bindingId` and the trigger config: switching off and back on is a
+ * Keeps `templateId` and the trigger config: switching off and back on is a
  * routine thing to do while diagnosing, and making it destructive turns a
  * two-second toggle into re-doing the setup.
  */

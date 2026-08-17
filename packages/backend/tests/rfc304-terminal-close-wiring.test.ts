@@ -397,7 +397,7 @@ describe('RFC-304 §3.1 — the dispatcher wakes capability cells', () => {
     await upsertCapabilityCell(db, {
       repoId: REPO_ID,
       capability,
-      bindingId: 'binding-1',
+      templateId: 'binding-1',
       enabled: true,
       facts: {
         hasBinding: true,

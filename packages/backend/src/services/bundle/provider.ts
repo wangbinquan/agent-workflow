@@ -142,10 +142,12 @@ const RESOURCE_OF_KIND: Record<BundleOpKind, BundleResourceType> = {
   'workflow-update': 'workflow',
   'workgroup-create': 'workgroup',
   'workgroup-update': 'workgroup',
-  'capability-framework-create': 'capability_framework',
-  'capability-framework-update': 'capability_framework',
-  'capability-binding-create': 'capability_binding',
-  'capability-binding-update': 'capability_binding',
+  'capability-framework-create': 'capability_template',
+  'capability-framework-update': 'capability_template',
+  'capability-binding-create': 'capability_template',
+  'capability-binding-update': 'capability_template',
+  'capability-template-create': 'capability_template',
+  'capability-template-update': 'capability_template',
 }
 
 export function resourceTypeOfOp(op: BundleOp): BundleResourceType {
@@ -178,8 +180,7 @@ const TYPE_RANK: Record<BundleResourceType, number> = {
   // agents filling its slots, so it sorts after agents (3) and after the
   // framework — the same reference-direction rule as everything above, not a
   // preference.
-  capability_framework: 4,
-  capability_binding: 5,
+  capability_template: 4,
 }
 
 export class BundleCycleError extends Error {

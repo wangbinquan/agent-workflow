@@ -313,35 +313,14 @@ export function serializeClosure(
       // rejected its own output with `bundle-dangling-root`. The feature was
       // complete in both directions except for the step that puts the rows on
       // the wire.
-      case 'capability_framework': {
-        ops.push({
-          opId: nextOpId(),
-          kind: 'capability-framework-create',
-          slug,
-          payload: {
-            name: r.name,
-            description: String(row.description ?? ''),
-            capability: String(row.capability ?? ''),
-            // The `*Json` column names, not the API's field names: this reads
-            // the ROW, and a mismatch here is silent — `parseJson(undefined,
-            // {})` returns an empty object, so the package would import a
-            // framework with no scripts and fail at round time with "the
-            // framework's scripts could not be resolved".
-            scripts: parseJson(row.scriptsJson, {}),
-            hooks: parseJson(row.hooksJson, []),
-            paramSchema: parseJson(row.paramSchemaJson, []),
-            paramDefaults: parseJson(row.paramDefaultsJson, {}),
-            stageContractVer: Number(row.stageContractVer ?? 1),
-          },
-        } as unknown as BundleOp)
-        break
-      }
-      case 'capability_binding': {
+      // RFC-309 — one op. The pair above existed because a usable package
+      // needed both rows and a `frameworkRef` tying them together; a merged
+      // template carries both halves, so the ref (and the class of failure
+      // where it dangled at the far end) is gone.
+      case 'capability_template': {
         // `agentBySlot` holds local agent ids; every one becomes a ref so the
         // destination binds to ITS agent of that name rather than to an id that
-        // means nothing there. Same reason `frameworkRef` is a ref: a binding
-        // whose framework pointer survived as a raw id would name a template the
-        // destination does not have.
+        // means nothing there.
         const agentBySlot: Record<string, string> = {}
         for (const [slotName, agentId] of Object.entries(
           parseJson(row.agentBySlotJson, {}) as Record<string, unknown>,
@@ -350,15 +329,25 @@ export function serializeClosure(
         }
         ops.push({
           opId: nextOpId(),
-          kind: 'capability-binding-create',
+          kind: 'capability-template-create',
           slug,
           payload: {
             name: r.name,
             description: String(row.description ?? ''),
-            frameworkRef: refWire(slugOfId, String(row.frameworkId ?? ''), builtinOfId),
+            capability: String(row.capability ?? ''),
+            // The `*Json` column names, not the API's field names: this reads
+            // the ROW, and a mismatch here is silent — `parseJson(undefined,
+            // {})` returns an empty object, so the package would import a
+            // template with no scripts and fail at round time with "the
+            // template's scripts could not be resolved".
+            scripts: parseJson(row.scriptsJson, {}),
+            hooks: parseJson(row.hooksJson, []),
+            paramSchema: parseJson(row.paramSchemaJson, []),
+            paramDefaults: parseJson(row.paramDefaultsJson, {}),
             agentBySlot,
             promptBySlot: parseJson(row.promptBySlotJson, {}),
             params: parseJson(row.paramsJson, {}),
+            stageContractVer: Number(row.stageContractVer ?? 1),
           },
         } as unknown as BundleOp)
         break

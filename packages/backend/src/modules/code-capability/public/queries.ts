@@ -32,7 +32,7 @@ export interface CodeMatrixRow {
   issues: readonly ReadinessIssue[]
   /** Where to go to fix each issue, in the same order. */
   repairActions: readonly CodeRepairAction[]
-  bindingId: string | null
+  templateId: string | null
 }
 
 /**

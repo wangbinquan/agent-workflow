@@ -82,15 +82,15 @@ describe('RFC-304 T17a — the bundle union admits both layers', () => {
   })
 
   test('op kinds map to the right resource types', () => {
-    expect(resourceTypeOfOp(BundleOpSchema.parse(frameworkCreate))).toBe('capability_framework')
-    expect(resourceTypeOfOp(BundleOpSchema.parse(bindingCreate))).toBe('capability_binding')
+    expect(resourceTypeOfOp(BundleOpSchema.parse(frameworkCreate))).toBe('capability_template')
+    expect(resourceTypeOfOp(BundleOpSchema.parse(bindingCreate))).toBe('capability_template')
   })
 })
 
 describe('RFC-304 T17a — the two type sets have genuinely diverged', () => {
   test('packages carry the template layers', () => {
-    expect(BUNDLE_RESOURCE_TYPES).toContain('capability_framework')
-    expect(BUNDLE_RESOURCE_TYPES).toContain('capability_binding')
+    expect(BUNDLE_RESOURCE_TYPES).toContain('capability_template')
+    expect(BUNDLE_RESOURCE_TYPES).toContain('capability_template')
   })
 
   test('Intent sessions still cannot create them', () => {
@@ -99,9 +99,9 @@ describe('RFC-304 T17a — the two type sets have genuinely diverged', () => {
     // of the bundle guard, with a note saying it would become a real function
     // the day they diverged. This is that day, and it was a one-line change
     // rather than a hunt through every "bundle" call that meant "intent".
-    expect(INTENT_RESOURCE_TYPES).not.toContain('capability_framework')
-    expect(INTENT_RESOURCE_TYPES).not.toContain('capability_binding')
-    expect(asIntentResourceType('capability_framework')).toBeNull()
+    expect(INTENT_RESOURCE_TYPES).not.toContain('capability_template')
+    expect(INTENT_RESOURCE_TYPES).not.toContain('capability_template')
+    expect(asIntentResourceType('capability_template')).toBeNull()
     expect(asIntentResourceType('agent')).toBe('agent')
   })
 })
@@ -113,7 +113,7 @@ describe('RFC-304 T17b — importing a framework needs scripts:author', () => {
     // The package path never passes through the HTTP route, so leaving the
     // two-factor rule to the route would make an import a way around it.
     const required = requiredImportPermissions(BundleOpSchema.parse(frameworkCreate), 'new')
-    expect(has(required, 'capability-frameworks:create')).toBe(true)
+    expect(has(required, 'capability-templates:create')).toBe(true)
     expect(has(required, 'scripts:author')).toBe(true)
   })
 
@@ -126,7 +126,7 @@ describe('RFC-304 T17b — importing a framework needs scripts:author', () => {
       payload: frameworkCreate.payload,
     })
     const required = requiredImportPermissions(op, 'overwrite')
-    expect(has(required, 'capability-frameworks:update')).toBe(true)
+    expect(has(required, 'capability-templates:update')).toBe(true)
     expect(has(required, 'scripts:author')).toBe(true)
   })
 
@@ -134,7 +134,7 @@ describe('RFC-304 T17b — importing a framework needs scripts:author', () => {
     // A group lead must be able to import a team template without being handed
     // the daemon's credential surface, or the two layers collapse into one.
     const required = requiredImportPermissions(BundleOpSchema.parse(bindingCreate), 'new')
-    expect(has(required, 'capability-bindings:create')).toBe(true)
+    expect(has(required, 'capability-templates:create')).toBe(true)
     expect(has(required, 'scripts:author')).toBe(false)
   })
 

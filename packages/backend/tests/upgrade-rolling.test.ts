@@ -437,7 +437,13 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 则合并退化成两路，「上游说 A、本地说 B」分不清是谁改的）。
     // RFC-306 T10 bumped to 172 with 0172_rfc306_branch_activation。
     // RFC-308 hard cut bumped to 173 with 0173_rfc308_workspace_profile。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(173)
+    // RFC-309 bumped to 174 with 0174_rfc309_capability_templates（两层模板合一：
+    // 每个绑定成为一份模板并继承其框架的脚本，**模板 id 延用绑定 id** 使
+    // `repo_capability_config` 那一列只需改名不需改值——迁移里最容易错的一环
+    // 「矩阵单元格指向漂移」因此不存在；原框架成为各模板的 T64 上游。
+    // 顺带把 `anchor_kind` 放宽出 `platform`（平台自己发起的轮次没有代码托管侧
+    // 锚点），SQLite 改不了 CHECK，故 code_work_items 与 code_findings 重建）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(174)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {
