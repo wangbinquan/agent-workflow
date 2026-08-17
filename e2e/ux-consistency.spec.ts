@@ -337,7 +337,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
       ['limits', 3],
       ['recovery', 2],
       ['gc', 4],
-      ['git', 2],
+      ['git', 3],
       ['codeHosts', 2],
       ['network', 2],
       ['appearance', 1],
