@@ -205,6 +205,8 @@ opencode 是本平台驱动的 CLI，行为细节须以源码为准、不靠记�
 
 读取方式：直接用 Read / Bash(grep|rg) 即可——这是公开源码、纯只读、零副作用。读完在回复里**引用具体文件:行号**，让用户能追溯依据。
 
+**引用一律写成纯文本 `path/to/file.ts:120-148`，禁止写成 GitHub 外链**（2026-08-17 实测）：落进 `design/**/*.md` 的 `https://github.com/…/opencode/blob/<tag>/…#L120-L148` 会被 CI 的「Markdown link check」逐条请求；该仓对 workflow token 解析不到（404），于是**每次 CI 都红一格**，而红的原因与提交者本次改动毫无关系——曾连红三个提交、各自作者都要先花时间排除自己。纯文本引用同样满足上面的可追溯要求（本机 checkout 路径见下），且不依赖任一外部仓库保持公开或 tag 不动。
+
 跨 session 也一样：新接手任务时若 RFC / design 里出现了对 opencode 行为的断言（例如 "opencode 合并 config 时 inline JSON 优先级最高"），上手前先去源码验证一遍再继续，避免基于过期假设写代码。
 
 本机 opencode 源码具体路径由 Claude 从 per-user memory 解析。

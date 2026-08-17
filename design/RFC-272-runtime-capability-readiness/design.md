@@ -18,10 +18,10 @@
 
 外部行为基线钉 OpenCode 1.18.14（tag 源码，不是当前 dev 分支）：
 
-- [`httpapi/groups/mcp.ts:28-48`](https://github.com/anomalyco/opencode/blob/v1.18.14/packages/opencode/src/server/routes/instance/httpapi/groups/mcp.ts#L28-L48)：status 路由为 `GET /mcp`；
-- [`mcp/index.ts:78-100`](https://github.com/anomalyco/opencode/blob/v1.18.14/packages/opencode/src/mcp/index.ts#L78-L100)：status 是 connected / disabled / failed / needs_auth / needs_client_registration 闭集；
-- [`mcp/index.ts:316-385`](https://github.com/anomalyco/opencode/blob/v1.18.14/packages/opencode/src/mcp/index.ts#L316-L385)：local transport 失败和 tool-list 失败都收敛为 failed，只有完成适用的 tool list 才保留 connected；
-- [`mcp/index.ts:458-493`](https://github.com/anomalyco/opencode/blob/v1.18.14/packages/opencode/src/mcp/index.ts#L458-L493) 与 [`:551-567`](https://github.com/anomalyco/opencode/blob/v1.18.14/packages/opencode/src/mcp/index.ts#L551-L567)：首次 status 读取经 `InstanceState.get` 等待配置中的 MCP 并发初始化完成后返回闭集状态。
+- `server/routes/instance/httpapi/groups/mcp.ts:28-48`：status 路由为 `GET /mcp`；
+- `mcp/index.ts:78-100`：status 是 connected / disabled / failed / needs_auth / needs_client_registration 闭集；
+- `mcp/index.ts:316-385`：local transport 失败和 tool-list 失败都收敛为 failed，只有完成适用的 tool list 才保留 connected；
+- `mcp/index.ts:458-493` 与 `mcp/index.ts:551-567`：首次 status 读取经 `InstanceState.get` 等待配置中的 MCP 并发初始化完成后返回闭集状态。
 
 接手实现时必须对实际 vendored/支持版本重跑这些引用；RFC 文本不是永久替代源码证明。
 

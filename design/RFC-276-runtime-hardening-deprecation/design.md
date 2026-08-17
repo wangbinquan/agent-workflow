@@ -29,17 +29,17 @@ identity/binary/store provenance 要删，single-writer lease 与 task/test-sess
 
 实现开始时必须按实际支持版本重验；本 RFC 的当前基线固定为 OpenCode 1.18.14：
 
-- [`run --auto` 的定义](https://github.com/anomalyco/opencode/blob/v1.18.14/packages/opencode/src/cli/cmd/run.ts#L120-L148)：
+- `run --auto` 的定义（`cli/cmd/run.ts:120-148`）：
   自动批准“未被显式 deny”的权限；因此平台可保留用户显式 deny 而不建权限应答通道。
-- [非交互 `run` 自己给 session 加 `question/plan_enter/plan_exit` deny](https://github.com/anomalyco/opencode/blob/v1.18.14/packages/opencode/src/cli/cmd/run.ts#L412-L430)：
+- 非交互 `run` 自己给 session 加 `question/plan_enter/plan_exit` deny（`cli/cmd/run.ts:412-430`）：
   自然路径不需要平台再注入一份 `AW_GLOBAL_PERMISSION` 来处理 headless 问答死锁。
-- [global → project → config directories → `OPENCODE_CONFIG_CONTENT` 的加载顺序](https://github.com/anomalyco/opencode/blob/v1.18.14/packages/opencode/src/config/config.ts#L370-L440)：
+- global → project → config directories → `OPENCODE_CONFIG_CONTENT` 的加载顺序（`config/config.ts:370-440`）：
   平台 inline overlay 可以与机器/项目配置共存，并在后加载。
-- [skill discovery](https://github.com/anomalyco/opencode/blob/v1.18.14/packages/opencode/src/skill/index.ts#L238-L280)：
+- skill discovery（`skill/index.ts:238-280`）：
   上游扫描机器/项目的 `.claude/.agents` skills、config directories 的 `{skill,skills}/**/SKILL.md`
   以及显式 `skills.paths/urls`。
-- [permission last-match 规则](https://github.com/anomalyco/opencode/blob/v1.18.14/packages/opencode/src/permission/index.ts#L25-L34)
-  与 [config → ruleset/disabled tools](https://github.com/anomalyco/opencode/blob/v1.18.14/packages/opencode/src/permission/index.ts#L169-L198)：
+- permission last-match 规则（`permission/index.ts:25-34`）
+  与 config → ruleset/disabled tools（`permission/index.ts:169-198`）：
   显式 permission 的顺序与覆盖必须用真实 E2E/变异锁住。
 
 外部链接只是设计依据，不替代实现时的 vendored/source probe。版本升级若改变这些行为，走普通
