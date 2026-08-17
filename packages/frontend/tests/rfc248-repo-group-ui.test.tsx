@@ -4,7 +4,9 @@
 //
 //  1. **行为**：`/repos` 的分段在两个视图间切换、组列表把展平仓数与绑定记忆数
 //     显示出来、编辑 / 删除按钮把 id 传出去。
-//  2. **源代码层兜底**（CLAUDE.md 强制条款的机器化）：新界面不得自造 modal
+//  2. **视觉间距**：仓库组搜索行必须和远端仓工具条共用 22px 内容栅格，避免输入框
+//     再次紧贴 operations 卡片左边（2026-08-17 用户实报回归）。
+//  3. **源代码层兜底**（CLAUDE.md 强制条款的机器化）：新界面不得自造 modal
 //     chrome / 表单原语 / 原生 `<select>` / 自写空态。这类回归在运行时看起来
 //     「能用」，只有对着源码才查得出来——所以留一条文本断言。
 
@@ -37,6 +39,7 @@ const BULK_SRC = readFileSync(
   'utf8',
 )
 const REPOS_SRC = readFileSync(resolve(__dirname, '..', 'src', 'routes', 'repos.tsx'), 'utf8')
+const STYLES_SRC = readFileSync(resolve(__dirname, '..', 'src', 'styles.css'), 'utf8')
 
 /**
  * 剥掉 `//` 行注释后再做「不得出现某个原生标签」的匹配。
@@ -153,6 +156,11 @@ describe('RepoGroupsPane —— 列表行为', () => {
     })
     expect(screen.queryByTestId('repo-group-row-g1')).toBeNull()
     expect(screen.getByTestId('repo-group-row-g2')).toBeTruthy()
+  })
+
+  test('搜索框与远端仓工具条对齐到同一 22px 内容栅格', () => {
+    const rule = STYLES_SRC.match(/\.repo-groups-pane__toolbar\s*\{[^}]*\}/)?.[0]
+    expect(rule).toContain('margin: 0 22px var(--space-3);')
   })
 
   test('搜不到 ⇒ noMatches 空态（给清空搜索，不是给新建）', () => {
