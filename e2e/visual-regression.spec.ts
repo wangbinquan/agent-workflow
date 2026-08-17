@@ -41,7 +41,7 @@ import {
 import { routeTaskOperationsFixture } from './task-operations-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 35
+const EXPECTED_VISUAL_SCENE_COUNT = 36
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
 const VISUAL_RUNTIME_STATUS = {
   runtimes: [
@@ -179,6 +179,8 @@ async function setStableNetworkPort(): Promise<void> {
   }
 }
 
+// `clean` means no test-authored resources. Platform-owned demo rows are part
+// of the default product surface and deliberately remain visible.
 type SceneFixture = 'clean' | 'seeded-resources'
 
 interface SeededResources {
@@ -791,6 +793,21 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await page.goto(`${requireDaemon().baseUrl}/workflows`)
     await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible()
     await waitForStableAuthenticatedShell(page)
+    await expect(page.locator('.page__actions')).toHaveCount(1)
+    await expect(page.getByTestId('gallery-grid')).toBeVisible()
+    await expect(page).toHaveScreenshot('workflows.png', SNAPSHOT_OPTS)
+  })
+
+  test('/workflows genuine empty state', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await page.route(/\/api\/workflows(?:\?.*)?$/, async (route) => {
+      if (route.request().method() !== 'GET') return route.continue()
+      await route.fulfill({ json: [] })
+    })
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/workflows`)
+    await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
     // Package import is a creation method now. A genuinely empty gallery keeps
     // one primary CTA in EmptyState and must not resurrect a header action row.
     await expect(page.locator('.page__actions')).toHaveCount(0)
@@ -798,7 +815,6 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
       'empty-state.png',
       COMPONENT_SNAPSHOT_OPTS,
     )
-    await expect(page).toHaveScreenshot('workflows.png', SNAPSHOT_OPTS)
   })
 
   test('/repos list', async ({ page }) => {

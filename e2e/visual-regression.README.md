@@ -28,10 +28,11 @@ Threshold: `maxDiffPixelRatio: 0.002` (0.2%) per RFC-054 plan §risk 9.
 | 736×900 compact  | RFC-249 repository-group inline node settings                                                                                                                                                               |
 | 390×844 mobile   | seeded home + navigation, workflow gallery, agent split detail, settings Network, settings OIDC card dialog, task detail, editor modes, open Webhook runtime-parameter picker, RFC-249 batch mode           |
 
-The 35 scenes each own a full-page baseline. Five focused locator baselines lock
-mobile navigation open, a real overflowing TableViewport edge, an empty state, a
-Dialog footer, and the deterministic dynamic-workflow preview canvas so the
-full-page 0.2% threshold cannot hide a small but important local regression.
+The canonical suite has 36 scenes: 35 own a full-page baseline, while the genuine-empty
+workflow scene keeps the existing EmptyState component lock separate from the platform-demo
+gallery. Five focused locator baselines lock mobile navigation open, a real overflowing
+TableViewport edge, that empty state, a Dialog footer, and the deterministic dynamic-workflow
+preview canvas so the full-page 0.2% threshold cannot hide a small but important local regression.
 
 RFC-250 adds nine populated high-risk baselines: PAT permission matrix and masked reveal; Task
 Wizard dirty guard at desktop and 390px; complex Workflow readable and explicit-overview cameras;
