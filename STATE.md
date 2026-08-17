@@ -24,7 +24,7 @@
 > untracked/tracked/staged/rename/submodule 与尚未推送历史；全排除、混合、历史拒推在任务详情可见。用户确认旧名字无人使用且
 > 禁止兼容读取后，migration 0173 与 source ratchet 直接删除四旧目录语义、preset writer/test、`gitignoreCommit` wire/列；无
 > fallback/双读/runtime 探测。RFC-294 W5 仍保留正式 `WorkspaceRef` 与 facade 文件搬迁，现有 absolute path 只经有账的
-> composition binder，不升级为 public API。发布前完整 `bun run gate:local` 用时 7m08s 全绿：backend 12004 pass / 35 skip、
+> composition binder，不升级为 public API。发布前完整 `bun run gate:local` 用时 7m27s 全绿：backend 12007 pass / 35 skip、
 > shared 2186 pass、frontend 6571 pass，typecheck/lint/format/depcheck 同步通过。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-307 能力流程可见可改](design/RFC-307-capability-flow-visible-editable/proposal.md)**

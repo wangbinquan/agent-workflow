@@ -608,6 +608,17 @@ physical restore 不适用本回滚。
 
 ## 9. W5：剩余依赖图债与 Source-control 边界
 
+> **RFC-308 协调账（Done，2026-08-17）**：
+> [RFC-308](../RFC-308-unified-task-git-commit-exclusions/proposal.md) 已提前交付 W5 的“平台工作目录 + per-worktree exclude
+> profile + 任务工作区 preview/freeze/commit/publish/history”vertical slice：`source-control` 成为 workspace convention/
+> hard-exclude/candidate/index/commit/push/submodule/outgoing-history 的唯一机制 owner；RFC-248/Fusion 不再写业务 `.gitignore`
+> 或 common `.git/info/exclude`；`task-execution` 暴露四方法 path-free participant，`code-capability` production 对 SC internal
+> import=0。Fusion 在正式 `InternalWorkspacePreparationPort` 落地前保留一条 composition-only profile adapter。
+> 该批**不**代表 W5 的 repo/cache/group/worktree/content/SCC 全部完成，W5 指标与退出门一项不减。当前 absolute
+> `repoPath/worktreePath` 仍只经有账的 composition binder 进入 SC；W5 `WorkspaceRef` cutover 必须删除 binder，不能把它升级成
+> public path API，也不能重建第二套 task commit engine。普通 auto-publish orchestrator 的文件物理搬迁也留在 W5；其 Git
+> mechanism 已归 SC，不再构成第二实现。
+
 **动作（每族独立 commit）**：
 
 - [ ] util/git 改纯参数/port 注入，销 git circular 5 + util→services 3；

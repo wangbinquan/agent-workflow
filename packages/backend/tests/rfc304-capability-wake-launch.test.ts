@@ -33,6 +33,7 @@ import { wakeCapabilitiesForDelivery } from '../src/services/codeCapabilityWake'
 import { upsertCapabilityCell } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
 import { capabilityBindings, capabilityFrameworks } from '../src/db/schema'
 import type { TriggerContext } from '@agent-workflow/shared'
+import { isTaskActive } from '../src/services/task'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 /** RFC-304 2ter.1: a reuse-by-id launch unseals the cached repo's URL. */
@@ -80,7 +81,16 @@ describe('RFC-304 — a delivery wakes the capabilities a repo switched on', () 
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc304-wake-'))
     await seedCachedRepo(db, REPO)
   })
-  afterEach(() => {
+  afterEach(async () => {
+    const launched = await db.select({ id: tasks.id }).from(tasks)
+    for (
+      let attempt = 0;
+      attempt < 500 && launched.some((row) => isTaskActive(row.id));
+      attempt++
+    ) {
+      await Bun.sleep(10)
+    }
+    expect(launched.filter((row) => isTaskActive(row.id)).map((row) => row.id)).toEqual([])
     db.$client.close()
     rmSync(appHome, { recursive: true, force: true })
   })

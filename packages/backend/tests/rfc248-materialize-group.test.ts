@@ -178,6 +178,26 @@ beforeAll(async () => {
 })
 
 describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8）', () => {
+  test('RFC-308: a tracked canonical workspace root blocks single-repo launch', async () => {
+    const repo = seedRepo('occupied-platform-root', {
+      '.agent-workflow/business.txt': 'this belongs to the repository',
+    })
+    const gid = await makeGroup('occupied root', [{ cachedRepoId: repo.id, mountPath: '' }])
+    expect(await codeOfAsync(() => materialize(gid))).toBe('platform-workspace-root-occupied')
+  })
+
+  test('RFC-308: every group member is checked for a tracked canonical root', async () => {
+    const outer = seedRepo('outer-occupied-platform-root', {
+      '.agent-workflow/business.txt': 'tracked',
+    })
+    const inner = seedRepo('inner-clean-platform-root', { 'inner.txt': 'clean' })
+    const gid = await makeGroup('occupied group root', [
+      { cachedRepoId: outer.id, mountPath: '' },
+      { cachedRepoId: inner.id, mountPath: 'vendor/inner' },
+    ])
+    expect(await codeOfAsync(() => materialize(gid))).toBe('platform-workspace-root-occupied')
+  })
+
   test('五个 worktree：挂根 + 只读 + 三层嵌套 + sparse + 同仓两份', async () => {
     const app = seedRepo('app', { 'src/main.ts': 'orig', 'package.json': '{}' })
     const sdk = seedRepo('sdk', { 'lib/sdk.ts': 'orig', 'README.md': 'r' })
@@ -226,12 +246,10 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     expect(byMount.get('')!.branch).not.toBe(byMount.get('compare/main')!.branch)
     expect(byMount.get('compare/main')!.branch).toMatch(/-2$/)
 
-    // ⑥ 有子挂载点的仓拿到预置 commit，且 base_commit 指向它；叶子仓没有。
-    expect(byMount.get('')!.gitignoreCommit).not.toBeNull()
-    expect(byMount.get('')!.baseCommit).toBe(byMount.get('')!.gitignoreCommit)
-    expect(byMount.get('vendor/sdk')!.gitignoreCommit).not.toBeNull() // 只读也造（D21）
-    expect(byMount.get('vendor/sdk/ext')!.gitignoreCommit).toBeNull() // 叶子
-    expect(byMount.get('compare/main')!.gitignoreCommit).toBeNull()
+    // ⑥ RFC-308: platform profiles replace .gitignore preset commits.
+    for (const r of space.repos) {
+      expect(git(r.worktreePath, 'rev-list', '--count', 'HEAD').trim()).toBe('1')
+    }
 
     // ⑦ 只读标记落到了记录上。
     expect(byMount.get('vendor/sdk')!.readonly).toBe(true)
@@ -309,7 +327,6 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     expect(space.repos).toHaveLength(1)
     expect(space.repos[0]!.mountPath).toBe('')
     // 单仓没有嵌套子成员 ⇒ 不该有预置 commit。
-    expect(space.repos[0]!.gitignoreCommit).toBeNull()
     expect(space.nodePaths).toEqual([''])
   }, 60_000)
 
@@ -470,13 +487,12 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     ])
     const space = await materialize(gid)
     expect(space.kind).toBe('group')
-    // `.gitignore` 是**平台预置**的（D1）：组空间的上传物落在任务根下的
-    // `.agent-workflow-inputs/`，而挂根成员的工作树根就是任务根。未跟踪文件
-    // **不受 sparse 规则约束**，不排除就会出现在这个仓的 `git status` 里、被
-    // `add -A` 吞进自动提交。所以哪怕是 sparse 成员也要有这一笔。
-    // （对应 `commitGitignorePreset` 的 `git add --sparse`——仓根 .gitignore
-    //   落在 sparse 集之外，不带那个 flag git 会直接拒。）
-    expect(lsVisible(space.worktreePath).sort()).toEqual(['.gitignore', 'guides'])
+    // RFC-308 installs a per-worktree profile even for sparse members; no
+    // platform .gitignore file/commit appears in the business tree.
+    expect(lsVisible(space.worktreePath).sort()).toEqual(['guides'])
+    expect(git(space.worktreePath, 'config', '--worktree', '--get', 'core.excludesFile')).toContain(
+      'agent-workflow/excludes/v1',
+    )
   }, 60_000)
 
   test('没有仓挂根时 cwd 是不属于任何仓的普通父目录', async () => {

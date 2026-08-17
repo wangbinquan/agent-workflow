@@ -4,7 +4,7 @@
 // drives the built-in writer agent (aw-skill-merger) inside an EPHEMERAL git
 // repo seeded from the target skill's files/. The agent must clarify ≥1 round
 // (mandatory ask-back is automatic when the self-clarify channel is wired),
-// then edits the skill files in place and writes __fusion__/result.json. When
+// then edits the skill files in place and writes .agent-workflow/fusion/result.json. When
 // the engine task settles (lazy-reconciled on fetch + a periodic tick — no
 // scheduler surgery), the proposed change is the worktree diff vs its baseline
 // commit; the merger approves (atomic skill version bump + memory fuse) or
@@ -18,11 +18,11 @@ import { and, desc, eq, isNull } from 'drizzle-orm'
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
-  writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
@@ -35,12 +35,19 @@ import type {
 } from '@agent-workflow/shared'
 import {
   FusionResultManifestSchema,
+  PLATFORM_FUSION_DIR,
+  PLATFORM_FUSION_MANIFEST,
+  PLATFORM_WORKSPACE_DIR,
   TERMINAL_TASK_STATUSES,
   WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DirectTaskInitiator } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { SYSTEM_USER_ID } from '@/auth/actor'
+import {
+  bindWorkspaceExcludeParticipant,
+  ensureBoundPlatformWorkspaceDirectory,
+} from '@/modules/source-control/composition'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { agents, fusions, memories, skills, skillVersions, workflows } from '@/db/schema'
@@ -67,9 +74,9 @@ import {
   SKILL_MERGER_AGENT_NAME,
 } from '@/services/systemResources'
 import { DAEMON_CADENCE } from './daemonCadence'
-/** Reserved scaffolding dir inside the fusion worktree; never written to the skill. */
-const SCAFFOLD = '__fusion__'
-const MANIFEST_REL = `${SCAFFOLD}/result.json`
+/** Reserved scaffolding inside the fusion worktree; never written to the skill. */
+const SCAFFOLD = PLATFORM_FUSION_DIR
+const MANIFEST_REL = PLATFORM_FUSION_MANIFEST
 
 type FusionRow = typeof fusions.$inferSelect
 
@@ -458,7 +465,11 @@ function fusionWorkDir(appHome: string, fusionId: string, iteration: number): st
 }
 
 /** git init the work dir, commit a baseline, return the baseline (root) sha. */
-async function seedWorktree(workDir: string, git: typeof runGit = runGit): Promise<string> {
+async function seedWorktree(
+  workDir: string,
+  appHome: string,
+  git: typeof runGit = runGit,
+): Promise<string> {
   const checkedGit = async (stage: string, args: string[]) => {
     const result = await git(workDir, args)
     if (result.exitCode !== 0) {
@@ -469,9 +480,8 @@ async function seedWorktree(workDir: string, git: typeof runGit = runGit): Promi
   }
 
   await checkedGit('initialize', ['init', '-b', 'fusion'])
-  // Exclude the scaffolding dir from the diff via .git/info/exclude (NOT a
-  // tracked .gitignore — keeps the skill's own files untouched).
-  writeFileSync(join(workDir, '.git', 'info', 'exclude'), `${SCAFFOLD}/\n`, 'utf-8')
+  await bindWorkspaceExcludeParticipant({ worktreePath: workDir, appHome }).ensure()
+  ensureBoundPlatformWorkspaceDirectory({ worktreePath: workDir, kind: 'fusion' })
   await checkedGit('stage baseline for', [
     '-c',
     'user.name=agent-workflow',
@@ -501,7 +511,7 @@ async function seedWorktree(workDir: string, git: typeof runGit = runGit): Promi
 function copyWorktreeContent(src: string, dst: string): void {
   mkdirSync(dst, { recursive: true })
   for (const entry of readdirSync(src)) {
-    if (entry === '.git' || entry === SCAFFOLD) continue
+    if (entry === '.git' || entry === PLATFORM_WORKSPACE_DIR) continue
     cpSync(join(src, entry), join(dst, entry), { recursive: true })
   }
 }
@@ -595,7 +605,7 @@ export async function createFusion(
     // RFC-170 T6 (Codex F10/F11): seed from the token's immutable snapshot with a
     // generation (skillId) check; discard the worktree if it can't be seeded safely.
     await seedFusionFromSnapshot(db, appHome, skill.id, preconditionToken, workDir)
-    const baseCommit = await seedWorktree(workDir, deps.seedGit)
+    const baseCommit = await seedWorktree(workDir, appHome, deps.seedGit)
 
     // 4. Launch the engine task (preCreatedWorktree bypasses worktree creation;
     //    repoPath = the ephemeral repo so the StartTask schema is satisfied).
@@ -725,9 +735,15 @@ export async function reconcileFusion(deps: FusionDeps, id: string): Promise<voi
   try {
     const rootSha = (await runGit(workDir, ['rev-list', '--max-parents=0', 'HEAD'])).stdout.trim()
     const diff = await gitDiffSnapshot(workDir, rootSha)
+    ensureBoundPlatformWorkspaceDirectory({ worktreePath: workDir, kind: 'fusion' })
     const manifestPath = join(workDir, MANIFEST_REL)
     if (!existsSync(manifestPath)) {
       reconcileFail('agent did not write the fusion result manifest')
+      return
+    }
+    const manifestStat = lstatSync(manifestPath)
+    if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) {
+      reconcileFail('fusion result manifest is not a plain file')
       return
     }
     const parsed = FusionResultManifestSchema.safeParse(
@@ -1540,7 +1556,7 @@ export async function rejectFusion(
       // with a generation (skillId) check (the claim above verified the token, but
       // re-verify around the copy for a same-name recreate). A throw is caught below.
       await seedFusionFromSnapshot(db, appHome, row.skillId, row.preconditionToken, workDir)
-      const baseCommit = await seedWorktree(workDir, deps.seedGit)
+      const baseCommit = await seedWorktree(workDir, appHome, deps.seedGit)
       // Then overlay the PRIOR proposal as uncommitted working changes, so the
       // agent refines its last attempt while the diff vs baseline stays full.
       if (row.proposedWorktreePath !== null && existsSync(row.proposedWorktreePath)) {

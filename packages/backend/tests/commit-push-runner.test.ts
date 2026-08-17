@@ -196,6 +196,54 @@ describe('runCommitPush', () => {
     expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
   })
 
+  test('RFC-308 mixed changes commit only allowed paths and expose a bounded receipt', async () => {
+    f = await build()
+    writeFileSync(join(f.repo, 'a.txt'), 'must stay local\n')
+    writeFileSync(join(f.repo, 'b.txt'), 'publish me\n')
+    const { meta } = await runCommitPush(baseParams(f, { excludePatterns: ['/a.txt'] }), {
+      db: f.db,
+    })
+
+    expect(meta.pushOutcome).toBe('pushed')
+    expect(meta.exclusions).toMatchObject({ count: 1, paths: ['a.txt'], historyBlocked: false })
+    expect((await runGit(f.repo, ['show', '--format=', '--name-only', 'HEAD'])).stdout).toContain(
+      'b.txt',
+    )
+    expect((await runGit(f.repo, ['show', 'HEAD:a.txt'])).stdout).toBe('original\n')
+    expect((await runGit(f.repo, ['status', '--short'])).stdout).toContain('a.txt')
+  })
+
+  test('RFC-308 all candidates excluded → skipped-excluded, no commit or push', async () => {
+    f = await build()
+    writeFileSync(join(f.repo, 'a.txt'), 'must stay local\n')
+    const before = (await runGit(f.repo, ['rev-parse', 'HEAD'])).stdout.trim()
+    const { meta } = await runCommitPush(baseParams(f, { excludePatterns: ['/a.txt'] }), {
+      db: f.db,
+    })
+
+    expect(meta.pushOutcome).toBe('skipped-excluded')
+    expect(meta.exclusions?.paths).toEqual(['a.txt'])
+    expect((await runGit(f.repo, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(before)
+    expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
+  })
+
+  test('RFC-308 local ancestor leak blocks the later platform push', async () => {
+    f = await build()
+    writeFileSync(join(f.repo, 'leak.trace'), 'secret\n')
+    await runGit(f.repo, ['add', '-A'])
+    await runGit(f.repo, ['commit', '-q', '-m', 'agent local commit'])
+    writeFileSync(join(f.repo, 'b.txt'), 'otherwise publishable\n')
+
+    const { nodeRunId, meta } = await runCommitPush(
+      baseParams(f, { excludePatterns: ['*.trace'] }),
+      { db: f.db },
+    )
+    expect(meta.pushOutcome).toBe('commit-local-excluded-history')
+    expect(meta.exclusions).toMatchObject({ paths: ['leak.trace'], historyBlocked: true })
+    expect((await readMeta(f, nodeRunId)).status).toBe('failed')
+    expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
+  })
+
   test('git add failure is never misreported as skipped-empty', async () => {
     f = await build()
     writeFileSync(join(f.repo, 'b.txt'), 'must remain visible\n')
@@ -317,7 +365,9 @@ describe('runCommitPush', () => {
 
     // Local commit on the stale feature/x → first push is non-FF.
     writeFileSync(join(f.repo, 'local-side.txt'), 'from local\n')
-    const { meta } = await runCommitPush(baseParams(f), { db: f.db })
+    const { meta } = await runCommitPush(baseParams(f, { excludePatterns: ['/remote-side.txt'] }), {
+      db: f.db,
+    })
     expect(meta.pushOutcome).toBe('pushed')
     expect(meta.repairAttempts).toBe(1) // one non-FF merge cycle
     // Remote now has both files reachable from feature/x.

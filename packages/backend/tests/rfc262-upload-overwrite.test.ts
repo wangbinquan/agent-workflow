@@ -29,6 +29,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { PLATFORM_INPUTS_DIR } from '@agent-workflow/shared'
 import {
   applyUploadsToWorktree,
   DEFAULT_UPLOAD_LIMITS,
@@ -306,9 +307,9 @@ describe('RFC-262 同批同名判重（D4：对所有 upload 输入生效）', (
 })
 
 describe('RFC-262 多仓（RFC-248 inputsSubdir）与覆盖策略共存', () => {
-  test('组空间下覆盖仍发生在 .agent-workflow-inputs/ 保留目录内', async () => {
-    mkdirSync(join(root, '.agent-workflow-inputs/spec'), { recursive: true })
-    writeFileSync(join(root, '.agent-workflow-inputs/spec/api.yaml'), 'old')
+  test('组空间下覆盖发生在 .agent-workflow/inputs/ 保留目录内', async () => {
+    mkdirSync(join(root, PLATFORM_INPUTS_DIR, 'spec'), { recursive: true })
+    writeFileSync(join(root, PLATFORM_INPUTS_DIR, 'spec/api.yaml'), 'old')
 
     const out = await applyUploadsToWorktree(
       plan(
@@ -323,11 +324,11 @@ describe('RFC-262 多仓（RFC-248 inputsSubdir）与覆盖策略共存', () => 
       plan(
         [{ key: 'spec2', targetDir: 'spec', onConflict: 'overwrite' }],
         [fileOf('spec2', 'api.yaml', 'grouped')],
-        { inputsSubdir: '.agent-workflow-inputs' },
+        { inputsSubdir: PLATFORM_INPUTS_DIR },
       ),
     )
-    expect(grouped.packedByKey.get('spec2')).toEqual(['spec/api.yaml'])
-    expect(readFileSync(join(root, '.agent-workflow-inputs/spec/api.yaml'), 'utf8')).toBe('grouped')
+    expect(grouped.packedByKey.get('spec2')).toEqual(['.agent-workflow/inputs/spec/api.yaml'])
+    expect(readFileSync(join(root, PLATFORM_INPUTS_DIR, 'spec/api.yaml'), 'utf8')).toBe('grouped')
   })
 })
 

@@ -24,7 +24,11 @@ import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { resolveEffectiveAccountPermissions } from '@agent-workflow/shared'
+import {
+  PLATFORM_FUSION_DIR,
+  PLATFORM_FUSION_MANIFEST,
+  resolveEffectiveAccountPermissions,
+} from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
@@ -325,9 +329,9 @@ describe('launch → reconcile → approve', () => {
       pjoin(wt, 'SKILL.md'),
       '---\nname: lint\ndescription: d\n---\nfused body (2 spaces)',
     )
-    mkdirSync(pjoin(wt, '__fusion__'), { recursive: true })
+    mkdirSync(pjoin(wt, PLATFORM_FUSION_DIR), { recursive: true })
     writeFileSync(
-      pjoin(wt, '__fusion__', 'result.json'),
+      pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({
         incorporatedMemoryIds: [memA],
         skipped: [{ memoryId: memB, reason: 'redundant with existing content' }],
@@ -348,7 +352,7 @@ describe('launch → reconcile → approve', () => {
     expect(ready!.skipped?.[0]?.memoryId).toBe(memB)
     expect(ready!.proposedDiff).toContain('diff --git a/SKILL.md b/SKILL.md')
     expect(ready!.proposedDiff).toContain('fused body')
-    expect(ready!.proposedDiff).not.toContain('__fusion__') // scaffold excluded
+    expect(ready!.proposedDiff).not.toContain('.agent-workflow') // scaffold excluded
 
     // Approve → skill v2 + memA fused (provenance), memB still approved.
     const done = await approveFusion(h.deps, fusion.id, adminActor)
@@ -384,9 +388,9 @@ describe('launch → reconcile → approve', () => {
     expect(taskOriginOf(h.db, fusion.currentTaskId!)).toBe('api')
     const wt = task!.worktreePath
     writeFileSync(pjoin(wt, 'SKILL.md'), '---\nname: lint\ndescription: d\n---\nproposed')
-    mkdirSync(pjoin(wt, '__fusion__'), { recursive: true })
+    mkdirSync(pjoin(wt, PLATFORM_FUSION_DIR), { recursive: true })
     writeFileSync(
-      pjoin(wt, '__fusion__', 'result.json'),
+      pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [mem], skipped: [], changelog: 'x' }),
     )
     h.db
@@ -438,10 +442,10 @@ describe('launch → reconcile → approve', () => {
     const task = await getTask(h.db, fusion.currentTaskId!)
     const wt = task!.worktreePath
     writeFileSync(pjoin(wt, 'SKILL.md'), '---\nname: lint\ndescription: d\n---\nproposed')
-    mkdirSync(pjoin(wt, '__fusion__'), { recursive: true })
+    mkdirSync(pjoin(wt, PLATFORM_FUSION_DIR), { recursive: true })
     // memB is in NEITHER incorporated nor skipped → contract violation.
     writeFileSync(
-      pjoin(wt, '__fusion__', 'result.json'),
+      pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [memA], skipped: [], changelog: 'x' }),
     )
     h.db
@@ -477,9 +481,9 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     const task = await getTask(h.db, fusion.currentTaskId!)
     const wt = task!.worktreePath
     writeFileSync(pjoin(wt, 'SKILL.md'), `---\nname: ${skillName}\ndescription: d\n---\nproposed`)
-    mkdirSync(pjoin(wt, '__fusion__'), { recursive: true })
+    mkdirSync(pjoin(wt, PLATFORM_FUSION_DIR), { recursive: true })
     writeFileSync(
-      pjoin(wt, '__fusion__', 'result.json'),
+      pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [memId], skipped: [], changelog: 'x' }),
     )
     h.db

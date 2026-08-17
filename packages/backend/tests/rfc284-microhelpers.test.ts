@@ -81,6 +81,9 @@ describe('RFC-284 T7 — 唯一性文本锁', () => {
         'services/skillHash.ts',
         'services/structuralDiff/digest.ts',
         'services/codeIntel/snapshot.ts',
+        // RFC-308 policy/profile content-addressed receipts:
+        'modules/source-control/domain/taskCommitPolicy.ts',
+        'modules/source-control/domain/workspaceExcludeProfile.ts',
         // raw digest（base64url(digest()) 非 hex idiom）：
         'auth/oidc/flow.ts',
         // shared 无 node:crypto 的 16 行镜像桥（设计门确认保留）：

@@ -290,7 +290,7 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
   })),
   // no-util-to-upper：util/git.ts 的三条反向值边（惰性 import 民俗）。与上面
   // no-circular 的 git 环族同一批边、同一个 removeWhen——规则维度不同故各记一次。
-  ...(['gitRepoCache', 'gitSubmodule', 'repoGroupGitignore'] as const).map((svc) => ({
+  ...(['gitRepoCache', 'gitSubmodule'] as const).map((svc) => ({
     rule: 'no-util-to-upper' as const,
     from: `${B}/util/git.ts`,
     to: `${B}/services/${svc}.ts`,

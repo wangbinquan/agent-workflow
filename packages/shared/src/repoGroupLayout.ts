@@ -6,8 +6,8 @@
 //   mountPath  相对任务根（cwd）的路径；'' = 挂在根（cwd 本身就是那个仓的
 //              worktree）。至多一个成员可以是 ''（D2）。
 //   container  某个挂载点的最长严格前缀。'' 是所有其它挂载点的容器。
-//   排除计划    仓 P 要写进自己 .gitignore 的路径 = P 的**直接**子挂载点
-//              （相对 P）。只排直接子就够——更深的已经在被排掉的子树里。
+//   排除计划    仓 P 的 per-worktree platform profile 要排除的路径 = P 的
+//              **直接**子挂载点（相对 P）。更深的已经在被排掉的子树里。
 
 import {
   MAX_FLAT_NODES,
@@ -20,9 +20,10 @@ import {
   type RepoGroupNodeInput,
   type RepoGroupStructureError,
 } from './schemas/repoGroup'
+import { PLATFORM_INPUTS_DIR, PLATFORM_WORKSPACE_DIR } from './workspaceConvention'
 
-/** 上传输入的固定落点（D12）。有仓挂根时要连带写进它的排除规则。 */
-export const UPLOAD_INPUTS_DIR = '.agent-workflow-inputs'
+/** RFC-308 canonical upload root; kept as an export while consumers rename. */
+export const UPLOAD_INPUTS_DIR = PLATFORM_INPUTS_DIR
 
 export class RepoGroupLayoutError extends Error {
   constructor(
@@ -90,12 +91,12 @@ export function normalizeMountPath(raw: string): string {
   // 折叠后不可能为空：非空且不以 '/' 开头的串必然至少有一个非空段（全是斜杠
   // 的串会先在上面被 mount-path-absolute 挡掉）。曾经有过一个
   // `mount-path-empty` 分支，实测不可达，已删。
-  // D12 的上传目录是任务根下的保留名。允许成员挂到它上面的话，上传物会直接落进
-  // 那个成员仓的工作树、进它的审计 diff 与自动提交。
-  if (segments[0] === UPLOAD_INPUTS_DIR) {
+  // RFC-308 reserves the complete platform namespace, not one historical
+  // upload-only spelling. A repo mounted here would collide with inputs/runs.
+  if (segments[0] === PLATFORM_WORKSPACE_DIR) {
     throw new RepoGroupLayoutError(
       'mount-path-unsafe-char',
-      `'${UPLOAD_INPUTS_DIR}' is reserved for uploaded inputs and cannot be a mount path root`,
+      `'${PLATFORM_WORKSPACE_DIR}' is reserved for platform workspace files and cannot be a mount path root`,
       { mountPath: raw },
     )
   }
@@ -189,18 +190,12 @@ export function directChildren(p: string, all: readonly string[]): string[] {
 }
 
 /**
- * 仓 P 的排除清单——写进它 `.gitignore` 的路径，均相对 P 自己的工作树根。
- *
- * `includeUploadDir` 只在「多仓任务 ∧ P 挂根」时为 true（D12：上传物落在 cwd
- * 根下的固定目录，不属于任何仓，但若有仓挂根就落在它工作树里了）。
+ * 仓 P 的动态排除清单——写进 per-worktree platform profile，均相对 P
+ * 自己的工作树根。Canonical `.agent-workflow/` hard root 由 profile owner
+ * 恒定加入，不属于这份布局代数。
  */
-export function exclusionPlanFor(
-  p: string,
-  all: readonly string[],
-  opts: { includeUploadDir?: boolean } = {},
-): string[] {
+export function exclusionPlanFor(p: string, all: readonly string[]): string[] {
   const rels = directChildren(p, all).map((c) => (p === '' ? c : c.slice(p.length + 1)))
-  if (opts.includeUploadDir === true && p === '') rels.push(UPLOAD_INPUTS_DIR)
   return rels.sort()
 }
 
@@ -686,8 +681,8 @@ export function parseRepoKeyWire(wire: string): string {
  * 按**已知 key 集合**做最长前缀匹配，不是猜。根 key（`''`）永远最后兜底。
  * 这样做无歧义是有**构造性**保证的：容器仓不可能产出落在某个挂载点前缀下的
  * 路径——挂载点在启动期已被证明不存在于容器仓（`git worktree add` 到已存在
- * 非空目录直接 fatal ⇒ `repo-group-mount-occupied`），之后又被 `.gitignore`
- * 预置 commit 排除。见 design §6.3。
+ * 非空目录直接 fatal ⇒ `repo-group-mount-occupied`），之后又被 per-worktree
+ * platform profile 排除。见 design §6.3。
  */
 export function splitRepoPrefix(
   fullPath: string,

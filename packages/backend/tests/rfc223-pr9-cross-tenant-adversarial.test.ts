@@ -361,9 +361,9 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
         join(worktree, 'SKILL.md'),
         '---\nname: shared-skill\ndescription: A\n---\nTENANT_A_FUSED',
       )
-      mkdirSync(join(worktree, '__fusion__'), { recursive: true })
+      mkdirSync(join(worktree, '.agent-workflow', 'fusion'), { recursive: true })
       writeFileSync(
-        join(worktree, '__fusion__', 'result.json'),
+        join(worktree, '.agent-workflow', 'fusion', 'result.json'),
         JSON.stringify({
           incorporatedMemoryIds: [memoryId],
           skipped: [],

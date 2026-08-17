@@ -18,6 +18,7 @@ export function resolveCommitPushConfig(configPath: string):
       runtime?: string
       maxRepairRetries?: number
       diffMaxBytes?: number
+      excludePatterns: readonly string[]
       lang?: Language
     }
   | undefined {
@@ -28,8 +29,9 @@ export function resolveCommitPushConfig(configPath: string):
       runtime?: string
       maxRepairRetries?: number
       diffMaxBytes?: number
+      excludePatterns: readonly string[]
       lang?: Language
-    } = {}
+    } = { excludePatterns: cfg.taskCommitExcludePatterns }
     if (cfg.commitPushModel !== undefined) out.model = cfg.commitPushModel
     // RFC-117: commit agent runtime profile (wins over the deprecated model).
     if (cfg.commitPushRuntime !== undefined) out.runtime = cfg.commitPushRuntime
@@ -72,6 +74,7 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     runtime?: string
     maxRepairRetries?: number
     diffMaxBytes?: number
+    excludePatterns: readonly string[]
     lang?: Language
   }
   maxConcurrentNodes?: number
@@ -99,6 +102,7 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
       runtime?: string
       maxRepairRetries?: number
       diffMaxBytes?: number
+      excludePatterns: readonly string[]
     }
     maxConcurrentNodes?: number
     maxConcurrentScriptNodes?: number // RFC-266

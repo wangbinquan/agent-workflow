@@ -37,6 +37,7 @@ import {
   redactPushError,
   truncateDiff,
 } from '@/services/commitPush'
+import { bindRepositoryCommitParticipant } from '@/modules/source-control/composition'
 
 type RunGit = typeof realRunGit
 
@@ -93,6 +94,8 @@ export interface CommitPushParams {
   gitUserEmail: string | null
   maxRepairRetries: number
   diffMaxBytes: number
+  /** RFC-308: one immutable config slice for this whole publication attempt. */
+  excludePatterns?: readonly string[]
   generateMessage: (ctx: GenerateMessageCtx) => Promise<GeneratedMessage>
   generateRepair: (ctx: GenerateRepairCtx) => Promise<GeneratedMessage>
   /**
@@ -164,6 +167,9 @@ export async function runCommitPush(
   // path — threading it through each call site individually is how the happy
   // path silently lost it the first time.
   let subrepos: SubrepoPushResult[] = []
+  const excludedPaths = new Set<string>()
+  let exclusionPolicyDigest: string | null = null
+  let exclusionHistoryBlocked = false
 
   const finalize = async (
     outcome: CommitPushOutcome,
@@ -190,6 +196,17 @@ export async function runCommitPush(
       repairAttempts: extra.repairAttempts ?? 0,
       pushOutcome: outcome,
       pushError: extra.pushError ?? null,
+      ...(exclusionPolicyDigest !== null
+        ? {
+            exclusions: {
+              count: excludedPaths.size,
+              paths: [...excludedPaths].sort().slice(0, 100),
+              truncated: excludedPaths.size > 100,
+              policyDigest: exclusionPolicyDigest,
+              historyBlocked: exclusionHistoryBlocked,
+            },
+          }
+        : {}),
       ...(subrepos.length > 0 ? { subrepos } : {}),
     }
     // `commit-local-failed` is the only failed status; everything else
@@ -199,7 +216,9 @@ export async function runCommitPush(
     // FAILED row too — the node produced work that never reached the remote, and
     // showing it as done would hide that.
     const status =
-      outcome === 'commit-local-failed' || outcome === 'commit-local-subrepo-failed'
+      outcome === 'commit-local-failed' ||
+      outcome === 'commit-local-subrepo-failed' ||
+      outcome === 'commit-local-excluded-history'
         ? 'failed'
         : 'done'
     await db
@@ -227,6 +246,12 @@ export async function runCommitPush(
     branch: params.repoBranch,
     remote,
     idEnv,
+    excludePatterns: params.excludePatterns ?? [],
+    recordExclusion: (receipt) => {
+      exclusionPolicyDigest = receipt.policyDigest
+      for (const path of receipt.excludedPaths) excludedPaths.add(path)
+      if (receipt.historyBlocked === true) exclusionHistoryBlocked = true
+    },
     acquireWrite: params.acquireWrite,
   })
   const failedSub = subrepos.find((r) => r.error !== null)
@@ -251,12 +276,18 @@ export async function runCommitPush(
   let stat: string
   let diffRaw: string
   try {
-    const staged = await g(['add', '-A'])
-    if (staged.exitCode !== 0) {
+    const prepared = await bindRepositoryCommitParticipant({
+      repoPath: W,
+      configuredPatterns: params.excludePatterns ?? [],
+      runGit,
+    }).prepare()
+    if (!prepared.ok) {
       return await finalize('commit-local-failed', {
-        pushError: `git add failed: ${redactPushError(staged.stderr)}`,
+        pushError: redactPushError(prepared.error),
       })
     }
+    exclusionPolicyDigest = prepared.receipt.policyDigest
+    for (const path of prepared.receipt.excludedPaths) excludedPaths.add(path)
     const numstatResult = await g(['diff', '--cached', '--numstat'])
     if (numstatResult.exitCode !== 0) {
       return await finalize('commit-local-failed', {
@@ -287,7 +318,9 @@ export async function runCommitPush(
     // RFC-210: reaching here with committed submodules would mean their gitlink
     // bump produced no parent-level change, which cannot happen — but report the
     // results either way so the UI never loses them.
-    return finalize('skipped-empty', { filesChanged: 0 })
+    return finalize(excludedPaths.size > 0 ? 'skipped-excluded' : 'skipped-empty', {
+      filesChanged: 0,
+    })
   }
   const diffTruncated = truncateDiff(diffRaw, params.diffMaxBytes)
 
@@ -335,44 +368,80 @@ export async function runCommitPush(
   }
 
   // 4. Commit locally with the task identity.
-  const commit = await gc(['commit', '-m', message])
-  if (commit.exitCode !== 0) {
+  const commit = await bindRepositoryCommitParticipant({
+    repoPath: W,
+    configuredPatterns: params.excludePatterns ?? [],
+    runGit,
+  }).commitPrepared({
+    message,
+    verification: 'normal',
+    authorName: params.gitUserName,
+    authorEmail: params.gitUserEmail,
+  })
+  if (!commit.ok) {
     // A failed commit is unusual (e.g. unknown identity, hook). Surface it as a
     // failed node but keep the staged changes for the user.
-    log.warn('git commit failed', { nodeRunId, stderr: commit.stderr.trim() })
+    const error = commit.reason === 'no-changes' ? 'prepared index became empty' : commit.error
+    log.warn('git commit failed', { nodeRunId, error })
     return finalize('commit-local-failed', {
       filesChanged,
       insertions,
       deletions,
       messageSource,
-      pushError: redactPushError(commit.stderr),
+      pushError: redactPushError(error),
     })
   }
-  const commitSha = (await g(['rev-parse', 'HEAD'])).stdout.trim()
+  const commitSha = commit.commitSha
 
   // 5. Push, with a bounded repair / non-FF-merge loop.
   let attempts = 0
   while (true) {
+    const tipResult = await g(['rev-parse', '--verify', 'HEAD^{commit}'])
+    const tipSha = tipResult.stdout.trim()
+    const publisher = bindRepositoryCommitParticipant({
+      repoPath: W,
+      configuredPatterns: params.excludePatterns ?? [],
+      runGit,
+    })
+    const pushBase = await publisher.resolvePushBase({
+      remote,
+      branch: params.repoBranch,
+      fallbackRef: params.baseRef,
+    })
+    if (tipResult.exitCode !== 0 || tipSha === '' || pushBase === null) {
+      return finalize('commit-local-failed', {
+        commitSha,
+        filesChanged,
+        insertions,
+        deletions,
+        messageSource,
+        repairAttempts: attempts,
+        pushError: 'cannot resolve outgoing history range; push refused',
+      })
+    }
     const pushLease = await leasePushCredential(params.taskId)
-    let push: Awaited<ReturnType<typeof g>>
+    let publication: Awaited<ReturnType<typeof publisher.publish>>
     try {
-      push = await runGit(
-        W,
-        [
-          ...(pushLease?.leadingArgs ?? []),
-          'push',
-          '-u',
+      publication = await bindRepositoryCommitParticipant({
+        repoPath: W,
+        configuredPatterns: params.excludePatterns ?? [],
+        runGit,
+        ...(pushLease !== null ? { gitOptions: { env: pushLease.env } } : {}),
+      }).publish({
+        baseSha: pushBase,
+        tipSha,
+        mode: {
+          kind: 'normal',
           remote,
-          `${params.repoBranch}:${params.repoBranch}`,
-        ],
-        {
-          ...(pushLease !== null ? { env: pushLease.env } : {}),
+          branch: params.repoBranch,
+          leadingArgs: pushLease?.leadingArgs ?? [],
         },
-      )
+      })
     } finally {
       pushLease?.cleanup()
     }
-    if (push.exitCode === 0) {
+    if (publication.ok) {
+      exclusionPolicyDigest = publication.policyDigest
       return finalize('pushed', {
         commitSha,
         filesChanged,
@@ -382,7 +451,21 @@ export async function runCommitPush(
         repairAttempts: attempts,
       })
     }
-    const stderr = push.stderr
+    if (publication.reason === 'excluded-history') {
+      exclusionPolicyDigest = publication.policyDigest
+      exclusionHistoryBlocked = true
+      for (const path of publication.excludedPaths) excludedPaths.add(path)
+      return finalize('commit-local-excluded-history', {
+        commitSha,
+        filesChanged,
+        insertions,
+        deletions,
+        messageSource,
+        repairAttempts: attempts,
+        pushError: `push blocked: outgoing history contains ${publication.excludedPaths.length} excluded path(s)`,
+      })
+    }
+    const stderr = publication.error
     const cls = classifyPushFailure(stderr)
     if (cls === 'auth') {
       // Can't fix credentials — keep the local commit, warn, continue.
@@ -560,6 +643,12 @@ async function commitPushSubmodules(args: {
   branch: string
   remote: string
   idEnv: Record<string, string>
+  excludePatterns: readonly string[]
+  recordExclusion?: (receipt: {
+    policyDigest: string
+    excludedPaths: readonly string[]
+    historyBlocked?: true
+  }) => void
   acquireWrite?: (() => Promise<() => void>) | undefined
   log?: Logger
 }): Promise<SubrepoPushResult[]> {
@@ -576,7 +665,6 @@ async function commitPushSubmodules(args: {
   for (const s of subs) {
     const dir = join(worktreePath, s.path)
     const sg = (a: string[]) => runGit(dir, a)
-    const sgc = (a: string[]) => runGit(dir, a, { env: idEnv })
     const entry: SubrepoPushResult = {
       path: s.path,
       fromSha: s.headSha,
@@ -611,6 +699,21 @@ async function commitPushSubmodules(args: {
     const parent = directParentOf(s.path, subs)
     const parentDir = parent === null ? worktreePath : join(worktreePath, parent.path)
     const relInParent = parent === null ? s.path : s.path.slice(parent.path.length + 1)
+    const parentPolicy = bindRepositoryCommitParticipant({
+      repoPath: parentDir,
+      configuredPatterns: args.excludePatterns,
+    })
+    const parentPathPolicy = await parentPolicy.classifyPath({
+      path: relInParent,
+      directory: true,
+    })
+    if (parentPathPolicy.excluded) {
+      args.recordExclusion?.({
+        policyDigest: parentPathPolicy.policyDigest,
+        excludedPaths: [s.path],
+      })
+      continue
+    }
     const recorded = await runGit(parentDir, ['rev-parse', `HEAD:${relInParent}`])
     const dirty = await sg(['status', '--porcelain', '--untracked-files=all'])
     const isDirty = dirty.exitCode === 0 && dirty.stdout.trim() !== ''
@@ -628,15 +731,35 @@ async function commitPushSubmodules(args: {
           out.push(entry)
           break
         }
-        const staged = await sg(['add', '-A'])
-        if (staged.exitCode !== 0) {
-          entry.error = redactPushError(staged.stderr)
+        const prepared = await bindRepositoryCommitParticipant({
+          repoPath: dir,
+          configuredPatterns: args.excludePatterns,
+        }).prepare()
+        if (!prepared.ok) {
+          entry.error = redactPushError(prepared.error)
           out.push(entry)
           break
         }
-        const committed = await sgc(['commit', '-q', '-m', `aw: submodule changes (${branch})`])
-        if (committed.exitCode !== 0) {
-          entry.error = redactPushError(committed.stderr)
+        args.recordExclusion?.({
+          policyDigest: prepared.receipt.policyDigest,
+          excludedPaths: prepared.receipt.excludedPaths.map((path) => `${s.path}/${path}`),
+        })
+        const stagedDirty = await sg(['diff', '--cached', '--quiet', '--exit-code'])
+        if (stagedDirty.exitCode === 0) continue
+        const committed = await bindRepositoryCommitParticipant({
+          repoPath: dir,
+          configuredPatterns: args.excludePatterns,
+        }).commitPrepared({
+          message: `aw: submodule changes (${branch})`,
+          verification: 'normal',
+          authorName: idEnv.GIT_AUTHOR_NAME,
+          authorEmail: idEnv.GIT_AUTHOR_EMAIL,
+        })
+        if (!committed.ok) {
+          entry.error =
+            committed.reason === 'no-changes'
+              ? 'prepared submodule index became empty'
+              : redactPushError(committed.error)
           out.push(entry)
           break
         }
@@ -660,8 +783,36 @@ async function commitPushSubmodules(args: {
     }
 
     // --- network push, outside the lock ---
-    const pushed = await sg(['push', '-u', remote, `${branch}:${branch}`])
-    if (pushed.exitCode !== 0) {
+    let historyBase = recorded.exitCode === 0 ? recorded.stdout.trim() : ''
+    if (historyBase === '') {
+      const parentSha = await sg(['rev-parse', '--verify', `${entry.toSha}^`])
+      historyBase = parentSha.exitCode === 0 ? parentSha.stdout.trim() : ''
+    }
+    if (historyBase === '') {
+      entry.error = 'cannot resolve submodule outgoing history range; push refused'
+      out.push(entry)
+      break
+    }
+    const publication = await bindRepositoryCommitParticipant({
+      repoPath: dir,
+      configuredPatterns: args.excludePatterns,
+    }).publish({
+      baseSha: historyBase,
+      tipSha: entry.toSha,
+      mode: { kind: 'normal', remote, branch },
+    })
+    if (!publication.ok) {
+      entry.error =
+        publication.reason === 'excluded-history'
+          ? `push blocked: outgoing history contains ${publication.excludedPaths.length} excluded path(s)`
+          : redactPushError(publication.error)
+      if (publication.reason === 'excluded-history') {
+        args.recordExclusion?.({
+          policyDigest: publication.policyDigest,
+          excludedPaths: publication.excludedPaths.map((path) => `${s.path}/${path}`),
+          historyBlocked: true,
+        })
+      }
       // NO fetch+merge repair here, deliberately — this used to mirror the
       // parent's non-fast-forward repair, and inside a submodule that is
       // destructive. Measured: superproject pins `vendor` at v1, upstream has
@@ -673,7 +824,6 @@ async function commitPushSubmodules(args: {
       // asked for a submodule bump — exactly the drift `gitSubmoduleRemote` is
       // defaulted off to prevent. A non-FF in a submodule means that branch is
       // not ours; report it and let a human decide.
-      entry.error = redactPushError(pushed.stderr)
       args.log?.warn('submodule push failed — withholding parent gitlink', {
         subPath: s.path,
         error: entry.error ?? '',

@@ -30,6 +30,7 @@ import {
   assignBranchNames,
   directChildren,
   exclusionPlanFor,
+  PLATFORM_WORKSPACE_DIR,
   mountDepth,
   orderForMaterialize,
   CommitPushMetaSchema,
@@ -132,7 +133,6 @@ import {
   resolveCachedRepo,
 } from '@/services/gitRepoCache'
 import {
-  commitGitignorePreset,
   findTrackedPathUnderMounts,
   cleanupCreatedWorktree,
   createWorktree,
@@ -145,6 +145,7 @@ import {
   runGit,
   withWorktreeRegistryLock,
 } from '@/util/git'
+import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
 import { isFileSchemeUrl, redactGitUrl } from '@agent-workflow/shared'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { readArchivedEvents } from '@/services/eventsArchive'
@@ -279,6 +280,11 @@ async function releaseTaskDriverAndFinalizeWorkspace(
   taskId: string,
   controller: AbortController,
 ): Promise<void> {
+  // Duplicate/stale finally paths are expected (deferred prep has an outer
+  // compensation finally). Check ownership before touching DB: after the real
+  // owner released, a test/daemon shutdown may close this handle or a successor
+  // may already own the task, and the stale callback has no evidence to read.
+  if (taskDriverRegistry.controllerOf(taskId) !== controller) return
   const unreaped = depsUnreapedProcessCode(db, taskId)
   if (
     !taskDriverRegistry.release(
@@ -415,6 +421,7 @@ export interface StartTaskDeps {
     runtime?: string
     maxRepairRetries?: number
     diffMaxBytes?: number
+    excludePatterns?: readonly string[]
     lang?: Language
   }
   /**
@@ -1061,8 +1068,9 @@ interface MaterializedRepo {
   subdir: string
   /** RFC-248 D11: 只读成员不快照 / 不进 diff / 不推送。 */
   readonly: boolean
-  /** RFC-248 D1: 平台预置 commit 的 sha；null = 本仓没有嵌套子成员。 */
-  gitignoreCommit: string | null
+  /** RFC-308: installed per-worktree platform exclude profile receipt. */
+  workspaceProfileVersion?: 1 | null
+  workspaceProfileDigest?: string | null
   submoduleInitOk: boolean
   submoduleInitError: string | null
   hasSubmodules: boolean
@@ -1187,6 +1195,9 @@ export function runtimeConfigOpts(
       : {}),
     ...(deps.commitPush?.diffMaxBytes !== undefined
       ? { commitPushDiffMaxBytes: deps.commitPush.diffMaxBytes }
+      : {}),
+    ...(deps.commitPush?.excludePatterns !== undefined
+      ? { commitPushExcludePatterns: deps.commitPush.excludePatterns }
       : {}),
     // RFC-157: commit-message output language (undefined ≡ en-US downstream).
     ...(deps.commitPush?.lang !== undefined ? { commitPushLang: deps.commitPush.lang } : {}),
@@ -1592,9 +1603,8 @@ function ensureExplicitDirectoryNodes(groupRoot: string, nodePaths: readonly str
  *
  * 顺序约束是**硬的**（design §4.2）：
  *  1. 挂载深度升序建 worktree——内层要落进外层的工作树里，外层必须先在。
- *  2. 建完某一层之后、建下一层之前，给该层里**有直接子挂载点**的仓写
- *     `.gitignore` 预置 commit。反过来的话，`git add .gitignore` 会把已经落在
- *     那里的内层 worktree 当未跟踪目录一起吞进索引（proposal E2）。
+ *  2. 建完某一层之后、建下一层之前，给该层仓安装 per-worktree platform
+ *     exclude profile。它必须先于内层 worktree，且绝不修改业务 `.gitignore`。
  *
  * 回收按挂载深度**倒序**（design §4.3）。实测（proposal E9）正序也不会坏账
  * ——git 会把内层注册标 `prunable` 并在后续 remove 时自愈——但倒序不依赖那条
@@ -1625,9 +1635,8 @@ async function materializeGroupSpace(opts: {
   const branchNames = assignBranchNames(ordered, taskId, opts.workingBranch)
   const rootMounted = allMounts.includes('')
   const groupRoot = join(appHome, 'worktrees', 'group', taskId)
-  // （原来这里有个 `multiRepo = ordered.length > 1`，只服务于排除计划的
-  //   `includeUploadDir`。它已改成恒 true——组空间一律用保留上传目录，
-  //   与展平出几个仓无关，见 writePresetCommitsForDepth 的注释。）
+  // RFC-308: every repo gets a profile, including leaves, because the canonical
+  // `.agent-workflow/` root is always platform-reserved.
 
   const cleanup = createMaterializedSpaceCleanup(taskId, groupRoot)
   try {
@@ -1642,12 +1651,21 @@ async function materializeGroupSpace(opts: {
     for (let i = 0; i < orderedPairs.length; i++) {
       const p = orderedPairs[i]!.p
       const kids = directChildren(p.mountPath, allMounts)
-      if (kids.length === 0) continue
-      const rels = kids.map((c) => (p.mountPath === '' ? c : c.slice(p.mountPath.length + 1)))
+      const rels = [
+        PLATFORM_WORKSPACE_DIR,
+        ...kids.map((c) => (p.mountPath === '' ? c : c.slice(p.mountPath.length + 1))),
+      ]
       const src = orderedPairs[i]!.src
       const ref = src.baseBranch ?? 'HEAD'
       const hit = await findTrackedPathUnderMounts(src.repoPath, ref, rels)
       if (hit !== null) {
+        if (hit.mountRel === PLATFORM_WORKSPACE_DIR) {
+          throw new ValidationError(
+            'platform-workspace-root-occupied',
+            `reserved platform workspace '${PLATFORM_WORKSPACE_DIR}' is already tracked at ref '${ref}' (${hit.trackedPath})`,
+            { mountPath: p.mountPath, trackedPath: hit.trackedPath, ref },
+          )
+        }
         throw new ValidationError(
           'repo-group-mount-occupied',
           `mount path '${p.mountPath === '' ? hit.mountRel : `${p.mountPath}/${hit.mountRel}`}' is already tracked by the enclosing repo at ref '${ref}' (${hit.trackedPath})`,
@@ -1669,8 +1687,8 @@ async function materializeGroupSpace(opts: {
       const src = orderedPairs[i]!.src
       const d = mountDepth(p.mountPath)
       if (d !== depth) {
-        // 进入新的一层：先给**上一层**里有子挂载点的仓写预置 commit。
-        if (depth >= 0) await writePresetCommitsForDepth(depth)
+        // 进入新的一层：先给上一层 worktree 安装 platform profile。
+        if (depth >= 0) await installExcludeProfilesForDepth(depth)
         depth = d
       }
       const abs = p.mountPath === '' ? groupRoot : join(groupRoot, p.mountPath)
@@ -1742,7 +1760,8 @@ async function materializeGroupSpace(opts: {
         mountPath: p.mountPath,
         subdir: p.subdir,
         readonly: p.readonly,
-        gitignoreCommit: null,
+        workspaceProfileVersion: null,
+        workspaceProfileDigest: null,
         submoduleInitOk: wt.submoduleInitOk,
         submoduleInitError: wt.submoduleInitError,
         hasSubmodules: wt.hasSubmodules,
@@ -1750,44 +1769,18 @@ async function materializeGroupSpace(opts: {
       repos.push(rec)
       byMount.set(p.mountPath, rec)
     }
-    // 最后一层的预置 commit（循环里只在**进入下一层**时写）。
-    if (depth >= 0) await writePresetCommitsForDepth(depth)
+    // Install the final depth's per-worktree profile too.
+    if (depth >= 0) await installExcludeProfilesForDepth(depth)
 
-    async function writePresetCommitsForDepth(d: number): Promise<void> {
+    async function installExcludeProfilesForDepth(d: number): Promise<void> {
       for (const rec of repos) {
         if (mountDepth(rec.mountPath) !== d) continue
-        if (rec.gitignoreCommit !== null) continue
-        const rels = exclusionPlanFor(rec.mountPath, allMounts, {
-          // D12: 上传物落在任务根下的固定目录；有仓挂根时它就落在那个仓的
-          // 工作树里，必须一并排除。
-          //
-          // **恒为 true**：走到 `materializeGroupSpace` 的都是组空间，上传一律
-          // 用保留目录。曾经写的是 `multiRepo`（= 展平后 >1 个仓），于是「单成员
-          // 但挂了 sparse 子目录」的组不排除该目录 ⇒ 上传物落进那个仓的工作树、
-          // 进它的审计 diff、甚至被自动推送（Codex 实现门 P1）。
-          includeUploadDir: true,
-        })
-        if (rels.length === 0) continue
-        const preset = await commitGitignorePreset({
+        const receipt = await bindWorkspaceExcludeParticipant({
           worktreePath: rec.worktreePath,
-          relMountPaths: rels,
-          taskId,
-          gitUserName: opts.gitUserName,
-          gitUserEmail: opts.gitUserEmail,
-        })
-        if (preset.commitSha !== null) {
-          rec.gitignoreCommit = preset.commitSha
-          // D1: base_commit 指向预置 commit ⇒ 审计 diff 里没有 .gitignore 那一笔。
-          rec.baseCommit = preset.commitSha
-          // `worktree add` 时记下的 CAS 终值是原始 base commit；预置
-          // commit 是平台自己对同一分支做的后续移动，回滚所有权也要
-          // 跟着移到新 HEAD。否则此后任何失败都会因 expected SHA 过时
-          // 而拒绝删除 launch-owned 临时分支。
-          const provenance = cleanup.worktrees.find(
-            (item) => item.worktreePath === rec.worktreePath,
-          )
-          if (provenance !== undefined) provenance.branchAfter = preset.commitSha
-        }
+          appHome,
+        }).ensure({ directChildMounts: exclusionPlanFor(rec.mountPath, allMounts) })
+        rec.workspaceProfileVersion = receipt.version
+        rec.workspaceProfileDigest = receipt.digest
       }
     }
 
@@ -1864,6 +1857,10 @@ export async function materializeSpace(
         : {}),
     })
     if (init.ok) {
+      const profile = await bindWorkspaceExcludeParticipant({
+        worktreePath: scratchDir,
+        appHome,
+      }).ensure()
       return {
         kind: 'scratch',
         spaceKind: 'scratch',
@@ -1889,7 +1886,8 @@ export async function materializeSpace(
             mountPath: '',
             subdir: '',
             readonly: false,
-            gitignoreCommit: null,
+            workspaceProfileVersion: profile.version,
+            workspaceProfileDigest: profile.digest,
             submoduleInitOk: true,
             submoduleInitError: null,
             hasSubmodules: false,
@@ -2041,6 +2039,17 @@ export async function materializeSpace(
   // this comment so a future refactor cannot silently delete the branch.
   if (repoSpecs.length === 1) {
     const source = resolvedSources[0]!
+    const selectedRef = source.baseBranch ?? 'HEAD'
+    const occupied = await findTrackedPathUnderMounts(source.repoPath, selectedRef, [
+      PLATFORM_WORKSPACE_DIR,
+    ])
+    if (occupied !== null) {
+      throw new ValidationError(
+        'platform-workspace-root-occupied',
+        `reserved platform workspace '${PLATFORM_WORKSPACE_DIR}' is already tracked at ref '${selectedRef}' (${occupied.trackedPath})`,
+        { mountPath: '', trackedPath: occupied.trackedPath, ref: selectedRef },
+      )
+    }
     const wt = await materializeWorktree({
       repoPath: source.repoPath,
       baseBranch: source.baseBranch,
@@ -2061,6 +2070,16 @@ export async function materializeSpace(
         worktreePath: wt.worktreePath,
         stderr: wt.submoduleInitError ?? '',
       })
+    }
+    let workspaceProfileVersion: 1 | null = null
+    let workspaceProfileDigest: string | null = null
+    if (wt.earlyError === null) {
+      const profile = await bindWorkspaceExcludeParticipant({
+        worktreePath: wt.worktreePath,
+        appHome,
+      }).ensure()
+      workspaceProfileVersion = profile.version
+      workspaceProfileDigest = profile.digest
     }
 
     if (
@@ -2110,7 +2129,8 @@ export async function materializeSpace(
           mountPath: '',
           subdir: '',
           readonly: false,
-          gitignoreCommit: null,
+          workspaceProfileVersion,
+          workspaceProfileDigest,
           submoduleInitOk: wt.submoduleInitOk,
           submoduleInitError: wt.submoduleInitError,
           hasSubmodules: wt.hasSubmodules,
@@ -2277,7 +2297,8 @@ function taskRepoRowsFor(
     subdir: r.subdir,
     readonly: r.readonly,
     readonlyDirtyCount: null,
-    gitignoreCommit: r.gitignoreCommit,
+    workspaceProfileVersion: r.workspaceProfileVersion ?? null,
+    workspaceProfileDigest: r.workspaceProfileDigest ?? null,
     hasSubmodules: r.hasSubmodules,
     submoduleInitOk: r.submoduleInitOk,
     submoduleInitError: r.submoduleInitError,
@@ -2372,8 +2393,8 @@ async function startTaskImpl(
   //   - wrapper-git 现在逐仓快照、逐仓 diff，路径用挂载路径前缀化后合并成一个
   //     `list<path>`（scheduler.ts runGitWrapperNode）。不解除的话仓库组永远
   //     用不了平台的 Code → Audit → Fix 主链路。
-  //   - 上传输入落到任务根下的固定目录 `.agent-workflow-inputs/`，不属于任何仓；
-  //     有仓挂根时该目录进它的 `.gitignore` 预置 commit（services/task.ts 物化）。
+  //   - 上传输入落到任务根下的 `.agent-workflow/inputs/`，由 per-worktree
+  //     platform profile 排除，不属于任何成员仓。
 
   // Static validation gate (proposal.md §静态校验): "校验失败不阻止保存，但阻止启动 task".
   // Run the same 5-rule check the editor uses, against the live agent/skill set,
@@ -2481,6 +2502,22 @@ async function startTaskImpl(
       )
     }
     const pre = deps.preCreatedWorktree
+    const occupied = await findTrackedPathUnderMounts(
+      source.repoPath,
+      pre.baseCommit ?? source.baseBranch ?? 'HEAD',
+      [PLATFORM_WORKSPACE_DIR],
+    )
+    if (occupied !== null) {
+      throw new ValidationError(
+        'platform-workspace-root-occupied',
+        `reserved platform workspace '${PLATFORM_WORKSPACE_DIR}' is already tracked (${occupied.trackedPath})`,
+        { mountPath: '', trackedPath: occupied.trackedPath, ref: pre.baseCommit },
+      )
+    }
+    const profile = await bindWorkspaceExcludeParticipant({
+      worktreePath: pre.worktreePath,
+      appHome,
+    }).ensure()
     space = {
       kind: 'single',
       spaceKind:
@@ -2511,7 +2548,8 @@ async function startTaskImpl(
           mountPath: '',
           subdir: '',
           readonly: false,
-          gitignoreCommit: null,
+          workspaceProfileVersion: profile.version,
+          workspaceProfileDigest: profile.digest,
           submoduleInitOk: true,
           submoduleInitError: null,
           hasSubmodules: false,
@@ -3934,6 +3972,7 @@ async function resumeKick(
     ...runtimeConfigOpts(deps),
     log,
     signal: controller.signal,
+    ensureWorkspaceProfiles: true,
   })
     .catch((err) => {
       log.error(`runTask threw on ${opts.verb}`, {
@@ -6466,7 +6505,6 @@ function mapTaskRepoRow(row: typeof taskRepos.$inferSelect): TaskRepo {
     readonly: row.readonly,
     // RFC-248 AC-19: 只读成员被丢弃的改动处数（null = 从未检查）。
     readonlyDirtyCount: row.readonlyDirtyCount ?? null,
-    gitignoreCommit: row.gitignoreCommit ?? null,
     hasSubmodules: row.hasSubmodules ?? null,
     submoduleInitOk: row.submoduleInitOk ?? null,
     submoduleInitError: row.submoduleInitError ?? null,
@@ -6504,7 +6542,6 @@ function synthesizeRepoFromTaskRow(row: typeof tasks.$inferSelect): TaskRepo {
     subdir: '',
     readonly: false,
     readonlyDirtyCount: null,
-    gitignoreCommit: null,
     hasSubmodules: null,
     submoduleInitOk: null,
     submoduleInitError: null,

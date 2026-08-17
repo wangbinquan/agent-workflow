@@ -64,7 +64,14 @@ import {
   splitMarkdownDocs,
   stringifyKind,
   tryParseKind,
+  exclusionPlanFor,
 } from '@agent-workflow/shared'
+import {
+  bindRepositoryCommitParticipant,
+  bindWorkspaceExcludeParticipant,
+  ensureBoundPlatformWorkspaceDirectory,
+} from '@/modules/source-control/composition'
+import { bindTaskWorkspaceCommitParticipant } from '@/modules/task-execution/composition/taskWorkspaceCommit'
 import {
   applyAutoPromote,
   computeShardScope,
@@ -461,6 +468,10 @@ export interface RunTaskOptions {
   commitPushMaxRepairRetries?: number
   /** RFC-075: diff byte cap for the commit-message prompt; falls back to DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES. */
   commitPushDiffMaxBytes?: number
+  /** RFC-308: immutable exclusion settings slice for this scheduler operation. */
+  commitPushExcludePatterns?: readonly string[]
+  /** RFC-308: resume/retry asks the scheduler to rebuild persisted worktree profiles. */
+  ensureWorkspaceProfiles?: boolean
   /** RFC-157: commit-message output language (initial + repair); undefined ≡ en-US. */
   commitPushLang?: Language
   /**
@@ -507,6 +518,9 @@ export const INHERITABLE_RUN_CONFIG_KEYS = [
   'maxActiveChildTasks',
   'maxInvocationDepth',
   'subagentLiveCapture',
+  // RFC-308: a child task remains in the same launch operation and must not
+  // lose the platform publication policy at the call boundary.
+  'commitPushExcludePatterns',
   // RFC-284 T30 修配（用户拍板转正）：RFC-253 两键此前根任务即断线（launch 臂
   // runtime 携带、类型缺席、漏斗丢弃）——修通根侧的同时按拍板下传子任务。
   'scriptInterpreters',
@@ -635,6 +649,19 @@ function freezeBinaryConfig(
   }
 }
 
+/** RFC-308: one immutable settings slice per commit/freeze operation. */
+export function readCommitExcludePatterns(opts: RunTaskOptions): readonly string[] {
+  if (opts.configPath !== undefined && opts.configPath !== '') {
+    try {
+      return [...loadConfig(opts.configPath).taskCommitExcludePatterns]
+    } catch {
+      // Launch-time snapshot is the safe fallback when a concurrent manual
+      // edit leaves config temporarily unreadable.
+    }
+  }
+  return [...(opts.commitPushExcludePatterns ?? [])]
+}
+
 export async function runTask(opts: RunTaskOptions): Promise<void> {
   // RFC-098 B1: the per-task write-lock registry entry is gc'd here and ONLY
   // here (taskWriteLocks.ts lifecycle — an HTTP-side gc would split-brain the
@@ -698,6 +725,42 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
             baseCommit: task.baseCommit,
           },
         ]
+
+  // RFC-308: resume/retry/recovery never trust a profile left by the prior
+  // process or by an agent. Rebuild the exact per-worktree profile before any
+  // runner can observe or mutate the workspace.
+  if (
+    repoRows.length > 0 &&
+    (opts.ensureWorkspaceProfiles === true ||
+      repoRows.some(
+        (row) => row.workspaceProfileVersion !== 1 || row.workspaceProfileDigest === null,
+      ))
+  ) {
+    try {
+      const allMounts = repos.map((repo) => repo.mountPath)
+      for (const repo of repos) {
+        const receipt = await bindWorkspaceExcludeParticipant({
+          worktreePath: repo.worktreePath,
+          appHome: opts.appHome ?? Paths.root,
+        }).ensure({ directChildMounts: exclusionPlanFor(repo.mountPath, allMounts) })
+        await db
+          .update(taskRepos)
+          .set({
+            workspaceProfileVersion: receipt.version,
+            workspaceProfileDigest: receipt.digest,
+          })
+          .where(and(eq(taskRepos.taskId, taskId), eq(taskRepos.repoIndex, repo.repoIndex)))
+      }
+    } catch (error) {
+      await failTask(
+        db,
+        taskId,
+        'workspace-exclude-profile-failed',
+        error instanceof Error ? error.message : String(error),
+      )
+      return
+    }
+  }
 
   // 2. Parse workflow snapshot.
   let definition: WorkflowDefinition
@@ -2272,6 +2335,7 @@ async function maybeRunCommitPush(
         maxRepairRetries:
           state.opts.commitPushMaxRepairRetries ?? DEFAULT_COMMIT_PUSH_MAX_REPAIR_RETRIES,
         diffMaxBytes: state.opts.commitPushDiffMaxBytes ?? DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES,
+        excludePatterns: readCommitExcludePatterns(state.opts),
         // RFC-076 C4: capture the staged snapshot only when no writer node is
         // mid-write. Writers hold this same Semaphore(1) for their whole run, so
         // under the race loop this serializes the commit's `git add` against
@@ -4119,7 +4183,6 @@ async function launchCallChild(
       mountPath: r.worktreeDirName,
       subdir: '',
       readonly: false,
-      gitignoreCommit: null,
       submoduleInitOk: true,
       submoduleInitError: null,
       hasSubmodules: false,
@@ -4277,7 +4340,6 @@ async function launchCallWorkgroupChild(
       mountPath: r.worktreeDirName,
       subdir: '',
       readonly: false,
-      gitignoreCommit: null,
       baseBranch: r.baseBranch,
     })),
   })
@@ -4331,7 +4393,6 @@ async function launchCallWorkgroupChild(
       mountPath: r.worktreeDirName,
       subdir: '',
       readonly: false,
-      gitignoreCommit: null,
       submoduleInitOk: true,
       submoduleInitError: null,
       hasSubmodules: false,
@@ -4684,6 +4745,17 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
   const envelopeNonce = await loadRunEnvelopeNonce(db, nodeRunId)
   const identity = await roundIdentity(db, task.codeRoundId)
   const roundInherited = await inheritedArtifactsForRound(db, task.codeRoundId)
+  const commitExcludePatterns = readCommitExcludePatterns(opts)
+  const taskCommit = bindTaskWorkspaceCommitParticipant({
+    candidate: bindRepositoryCommitParticipant({
+      repoPath: state.scopeRoot,
+      configuredPatterns: commitExcludePatterns,
+    }),
+    publication: bindRepositoryCommitParticipant({
+      repoPath: task.repoPath,
+      configuredPatterns: commitExcludePatterns,
+    }),
+  })
   const wiring =
     capability === 'mr-review' && state.triggerContext !== null
       ? await buildMrReviewWiring({
@@ -4693,6 +4765,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
           worktreePath: state.scopeRoot,
           nonce: envelopeNonce,
           roundId: task.codeRoundId ?? taskId,
+          taskCommit,
           // The work item and the epoch this round belongs to — what the
           // publish critical section is claimed against. Passed for the first
           // time here: the ledger hardcoded epoch 1 and the section had no
@@ -4772,6 +4845,13 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             // the artifact ledger is keyed by the item.
             roundSeq: identity?.roundSeq ?? 1,
             workItemId: identity?.workItemId ?? task.codeRoundId ?? taskId,
+            taskCommit,
+            ensureRunDir: (stageName) =>
+              ensureBoundPlatformWorkspaceDirectory({
+                worktreePath: state.scopeRoot,
+                kind: 'runs',
+                segments: ['code-capability', task.codeRoundId ?? taskId, stageName],
+              }),
             // The patch generation a confirmation has to name. Same value the
             // wait handle records, so Guard 2 compares like with like.
             generation: identity?.epoch ?? 1,
@@ -5032,7 +5112,7 @@ async function runCodeRoundNode(state: SchedulerState, args: OneNodeArgs): Promi
             // failed at that stage with "whose stage implementations were not
             // supplied to the runner". Neither could finish a round.
             ...(invokedReviewStages === null ? {} : { invokedStages: invokedReviewStages }),
-            git: createGitAdapter(),
+            git: createGitAdapter({ taskCommit }),
           }
         : {}),
       ...(hookWiring !== null ? { hooks: hookWiring } : {}),
@@ -7179,7 +7259,6 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
             mountPath: r.worktreeDirName,
             subdir: '',
             readonly: false,
-            gitignoreCommit: null,
             baseBranch: r.baseBranch,
           })),
         },
@@ -9095,7 +9174,6 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
                 mountPath: r.worktreeDirName,
                 subdir: '',
                 readonly: false,
-                gitignoreCommit: null,
                 error: err instanceof Error ? err.message : String(err),
               })
             }
@@ -9152,7 +9230,6 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
               mountPath: r.worktreeDirName,
               subdir: '',
               readonly: false,
-              gitignoreCommit: null,
               baseBranch: r.baseBranch,
             })),
           },
@@ -9649,7 +9726,6 @@ async function dispatchFanoutAggregatorAttempt(
               mountPath: r.worktreeDirName,
               subdir: '',
               readonly: false,
-              gitignoreCommit: null,
               baseBranch: r.baseBranch,
             })),
           },
@@ -10312,7 +10388,6 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
           mountPath: r.worktreeDirName,
           subdir: '',
           readonly: false,
-          gitignoreCommit: null,
           baseBranch: r.baseBranch,
           // RFC-187 §4 — a wrapper-iso repo's base is the commit it forked from.
           baseCommit: r.baseSnapshot,

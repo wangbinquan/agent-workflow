@@ -122,6 +122,9 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   // RFC-305 delegated-authority architecture lock verifies the three reviewed
   // scheduler launch sources while keeping the underlying behavior fixtures.
   'rfc305-architecture-lock.test.ts',
+  // RFC-308: locks task-execution → source-control participant wiring and the
+  // absence of a second add/commit/push implementation in code-capability.
+  'rfc308-source-cutover.test.ts',
   'runner-injected-memories.test.ts',
   'runner-resume-session-flag.test.ts',
   'scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts',

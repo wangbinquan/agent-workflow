@@ -31,3 +31,56 @@ export interface TaskSourceTerminationParticipant {
     input: TaskSourceTerminationEffectInput,
   ): Promise<readonly TaskSourceTerminationReceipt[]>
 }
+
+/** RFC-308 task-owned, path-free workspace commit capability for code tasks. */
+export type TaskWorkspaceCommitPreviewResult =
+  | {
+      readonly ok: true
+      readonly diff: string
+      readonly policyDigest: string
+      readonly excludedPaths: readonly string[]
+    }
+  | { readonly ok: false; readonly error: string }
+
+export type TaskWorkspaceCommitPublishResult =
+  | { readonly ok: true; readonly policyDigest: string }
+  | {
+      readonly ok: false
+      readonly reason: 'excluded-history'
+      readonly policyDigest: string
+      readonly excludedPaths: readonly string[]
+    }
+  | { readonly ok: false; readonly reason: 'failed'; readonly error: string }
+
+export type TaskWorkspaceCommitFreezeResult =
+  | {
+      readonly ok: true
+      readonly commitSha: string
+      readonly policyDigest: string
+      readonly excludedPaths: readonly string[]
+    }
+  | {
+      readonly ok: false
+      readonly reason: 'no-changes'
+      readonly policyDigest: string
+      readonly excludedPaths: readonly string[]
+    }
+  | { readonly ok: false; readonly reason: 'failed'; readonly error: string }
+
+export interface TaskWorkspaceCommitParticipant {
+  preview(): Promise<TaskWorkspaceCommitPreviewResult>
+  freeze(input: {
+    message: string
+    keepRef: string
+    authorName?: string
+    authorEmail?: string
+  }): Promise<TaskWorkspaceCommitFreezeResult>
+  publish(input: {
+    mode: 'cas' | 'new'
+    baseSha: string
+    tipSha: string
+    remote: string
+    branch: string
+  }): Promise<TaskWorkspaceCommitPublishResult>
+  release(input: { ref: string }): Promise<{ ok: true } | { ok: false; error: string }>
+}

@@ -72,7 +72,6 @@ function inheritedSpace(h: Harness, taskId: string, failBeforeScheduler = true):
         mountPath: '',
         subdir: '',
         readonly: false,
-        gitignoreCommit: null,
         submoduleInitOk: true,
         submoduleInitError: null,
         hasSubmodules: false,

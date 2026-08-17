@@ -75,7 +75,7 @@ export const FusionPendingCountSchema = z.object({ count: z.number().int().nonne
 export type FusionPendingCount = z.infer<typeof FusionPendingCountSchema>
 
 /**
- * The manifest the skill-merger agent writes to `__fusion__/result.json` in
+ * The manifest the skill-merger agent writes to `.agent-workflow/fusion/result.json` in
  * its worktree, declaring which selected memories it incorporated vs skipped.
  * The framework validates incorporated ⊆ selected and ∩ skipped = ∅.
  */

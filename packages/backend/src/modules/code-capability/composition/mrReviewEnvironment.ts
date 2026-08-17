@@ -45,6 +45,7 @@ import {
 } from '@/modules/code-capability/composition/mrReviewStages'
 import { createCodeHostAdapter } from '@/modules/code-capability/infrastructure/codeHostAdapter'
 import { createGitAdapter } from '@/modules/code-capability/infrastructure/gitAdapter'
+import type { TaskWorkspaceCommitParticipant } from '@/modules/task-execution/public/participants'
 import { createSqliteFindingLedger } from '@/modules/code-capability/infrastructure/sqliteFindingLedger'
 import { createSqliteAttemptRecorder } from '@/modules/code-capability/infrastructure/sqliteAttemptRecorder'
 import type { CodeHostConnectionsService, FetchLike } from '@/services/codeHost/connections'
@@ -96,6 +97,7 @@ export interface MrReviewWiringInput {
    * not empty.
    */
   unresolvedAgentReason?: string
+  taskCommit?: TaskWorkspaceCommitParticipant
 }
 
 /**
@@ -286,7 +288,7 @@ export async function buildMrReviewWiring(input: MrReviewWiringInput): Promise<M
         : {}),
       ...(input.codeHostFetch !== undefined ? { fetchImpl: input.codeHostFetch } : {}),
     }),
-    git: createGitAdapter(),
+    git: createGitAdapter(input.taskCommit === undefined ? {} : { taskCommit: input.taskCommit }),
     webhook: input.webhook,
     codeHostEndpointId: endpointId,
     repoPath: input.repoPath,

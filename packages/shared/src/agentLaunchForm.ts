@@ -16,13 +16,14 @@
 import type { AgentInputPort } from './schemas/agent'
 import type { WorkflowInput } from './schemas/workflow'
 import { tryParseKind, type ParsedKind } from './kindParser'
+import { platformWorkspacePath } from './workspaceConvention'
 
 /** Per-value wire cap (mirrors StartAgentTaskSchema description/inputs). */
 export const AGENT_LAUNCH_INPUT_MAX_LEN = 65536
 
 /** Where a `path<ext>` port's uploaded files land inside the task worktree. */
 export function agentInputUploadDir(portName: string): string {
-  return `.agent-inputs/${portName}`
+  return platformWorkspacePath('inputs', 'agent', portName)
 }
 
 export type AgentLaunchBlocker =

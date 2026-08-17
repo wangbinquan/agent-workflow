@@ -17,8 +17,8 @@ import { describe, expect, test } from 'bun:test'
 import {
   MAX_FLAT_REPOS,
   MAX_GROUP_DEPTH,
+  PLATFORM_WORKSPACE_DIR,
   RepoGroupLayoutError,
-  UPLOAD_INPUTS_DIR,
   assertMountPathSet,
   assignBranchNames,
   containerOf,
@@ -234,13 +234,13 @@ describe('设计门二轮 P1 回归锁', () => {
     }
   })
 
-  test(`H6c: 保留首段 ${UPLOAD_INPUTS_DIR}——挂到它上面会让上传物落进那个成员仓`, () => {
-    expect(codeOf(() => normalizeMountPath(UPLOAD_INPUTS_DIR))).toBe('mount-path-unsafe-char')
-    expect(codeOf(() => normalizeMountPath(`${UPLOAD_INPUTS_DIR}/sub`))).toBe(
+  test(`RFC-308: 保留首段 ${PLATFORM_WORKSPACE_DIR}`, () => {
+    expect(codeOf(() => normalizeMountPath(PLATFORM_WORKSPACE_DIR))).toBe('mount-path-unsafe-char')
+    expect(codeOf(() => normalizeMountPath(`${PLATFORM_WORKSPACE_DIR}/sub`))).toBe(
       'mount-path-unsafe-char',
     )
     // 只保留**首段**——深层同名目录无害。
-    expect(normalizeMountPath(`a/${UPLOAD_INPUTS_DIR}`)).toBe(`a/${UPLOAD_INPUTS_DIR}`)
+    expect(normalizeMountPath(`a/${PLATFORM_WORKSPACE_DIR}`)).toBe(`a/${PLATFORM_WORKSPACE_DIR}`)
   })
 
   test('H6b: 包含关系必须大小写折叠——否则 macOS 上真嵌套却被当兄弟', () => {
@@ -348,13 +348,9 @@ describe('exclusionPlanFor', () => {
     expect(exclusionPlanFor('vendor/sdk/ext', all)).toEqual([])
   })
 
-  test('多仓任务里挂根的仓要连带排除上传目录（D12）', () => {
-    expect(exclusionPlanFor('', ['', 'a'], { includeUploadDir: true })).toEqual([
-      UPLOAD_INPUTS_DIR,
-      'a',
-    ])
-    // 非根仓不加上传目录——上传物落在 cwd 根下，不在它工作树里。
-    expect(exclusionPlanFor('a', ['', 'a', 'a/b'], { includeUploadDir: true })).toEqual(['b'])
+  test('canonical platform root is owned by the profile, not the dynamic plan', () => {
+    expect(exclusionPlanFor('', ['', 'a'])).toEqual(['a'])
+    expect(exclusionPlanFor('a', ['', 'a', 'a/b'])).toEqual(['b'])
   })
 })
 

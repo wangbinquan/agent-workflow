@@ -565,7 +565,7 @@ describe('RFC-107 — URL launch + multipart upload', () => {
   test('RFC-248 D12：多仓 + 上传**不再**被拒（上传物落任务根下的固定目录）', async () => {
     // 这条**翻转**了。RFC-066/107 当年拒绝这个组合，理由是「上传管道往单一
     // worktree 写文件，N 个兄弟 worktree 下没有明显目标」。RFC-248 给了明显
-    // 目标：任务根下的 `.agent-workflow-inputs/`，不属于任何成员仓——所以它
+    // 目标：任务根下的 `.agent-workflow/inputs/`，不属于任何成员仓——所以它
     // 既不会变成某个仓的未跟踪改动，也不会进那个仓的审计 diff 与自动提交。
     const h = await buildHarness()
     // RFC-248 T32: wire 上的 `repos[]` 已退役，多仓一律经 repoGroupId。这里
@@ -605,7 +605,7 @@ describe('RFC-107 — URL launch + multipart upload', () => {
 
     const taskRow = h.db.select().from(tasksTable).where(eqOp(tasksTable.id, body.id)).get()
     const root = taskRow!.worktreePath
-    // 上传物在 `<任务根>/.agent-workflow-inputs/<targetDir>/…` 下（targetDir 由
+    // 上传物在 `<任务根>/.agent-workflow/inputs/<targetDir>/…` 下（targetDir 由
     // 输入定义给出），这里只断言它确实落在这个保留目录内。
     const inputsRoot = join(root, UPLOAD_INPUTS_DIR)
     expect(existsSync(inputsRoot)).toBe(true)

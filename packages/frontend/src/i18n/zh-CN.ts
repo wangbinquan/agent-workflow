@@ -1611,6 +1611,8 @@ export interface Resources {
       recoverySafetyHint: string
       gitCheckoutTitle: string
       gitCheckoutHint: string
+      gitAutoCommitTitle: string
+      gitAutoCommitHint: string
       gitRefreshTitle: string
       gitRefreshHint: string
       gcWorktreesTitle: string
@@ -3274,9 +3276,13 @@ export interface Resources {
     commitOutcomeLocalAuth: string
     commitOutcomeLocalFailed: string
     commitOutcomeSubrepoFailed: string
+    commitOutcomeSkippedExcluded: string
+    commitOutcomeExcludedHistory: string
     subrepoPushed: string
     subrepoNotPushed: string
     commitOutcomeSkippedEmpty: string
+    commitExclusions: string
+    commitExclusionsHistory: string
     commitFiles: string
     metaStarted: string
     metaFinished: string
@@ -4879,6 +4885,9 @@ export interface Resources {
     commitPushMaxRepairRetriesHint: string
     commitPushDiffMaxBytes: string
     commitPushDiffMaxBytesHint: string
+    taskCommitExcludePatterns: string
+    taskCommitExcludePatternsHint: string
+    taskCommitExcludePatternsError: string
     mergeAgentRuntime: string
     mergeAgentRuntimeHint: string
     maxConcurrentNodes: string
@@ -7357,7 +7366,7 @@ export const zhCN: Resources = {
       limits: '设置任务、token、超时与并发边界。',
       recovery: '创建备份并配置恢复行为。',
       gc: '控制数据保留与自动清理。',
-      git: '控制 submodule 的递归、并行度与后台刷新。',
+      git: '控制平台代理提交排除、submodule 与后台刷新。',
       codeHosts: '配置 GitLab / GitHub 的出站凭据',
       network: '设置 daemon 监听地址与端口。',
       appearance: '选择主题与界面语言。',
@@ -7377,6 +7386,8 @@ export const zhCN: Resources = {
       recoverySafetyHint: '设置恢复尝试的重试次数与超时边界。',
       gitCheckoutTitle: '检出与子模块',
       gitCheckoutHint: '定义任务工作树如何拉取并初始化仓库内容。',
+      gitAutoCommitTitle: '平台代理提交排除规则',
+      gitAutoCommitHint: '阻止平台运行物与管理员指定路径进入提交及待推送历史。',
       gitRefreshTitle: '后台刷新',
       gitRefreshHint: 'daemon 运行期间持续保持仓库引用为最新状态。',
       gcWorktreesTitle: '工作树清理',
@@ -9582,9 +9593,13 @@ export const zhCN: Resources = {
     commitOutcomeLocalAuth: '仅本地提交（推送受限）',
     commitOutcomeLocalFailed: '仅本地提交（推送失败）',
     commitOutcomeSubrepoFailed: '子模块推送失败，父仓未推送',
+    commitOutcomeSkippedExcluded: '只有被排除的改动',
+    commitOutcomeExcludedHistory: '待推送历史含排除路径，已阻止推送',
     subrepoPushed: '已推送',
     subrepoNotPushed: '未推送',
     commitOutcomeSkippedEmpty: '无改动',
+    commitExclusions: '平台规则已排除 {{count}} 个路径',
+    commitExclusionsHistory: '待推送本地历史命中 {{count}} 个排除路径',
     commitFiles: '{{files}} 个文件，+{{ins}}/-{{del}}',
     metaStarted: '开始',
     metaFinished: '完成',
@@ -11282,6 +11297,11 @@ export const zhCN: Resources = {
     commitPushDiffMaxBytes: 'commit message diff 字节上限',
     commitPushDiffMaxBytesHint:
       '喂给生成 commit message 的 diff 截断阈值（默认 16384；0 表示只用 --stat）。',
+    taskCommitExcludePatterns: '任务自动提交排除规则',
+    taskCommitExcludePatternsHint:
+      '每行一条 Gitignore 规则。作用于平台发起的普通任务和代码能力提交，已跟踪文件及待推送本地历史同样受限；不会删除文件。/.agent-workflow/ 永久排除且不能反选。',
+    taskCommitExcludePatternsError:
+      '最多 256 条单行仓库相对规则；每条不超过 1024 UTF-8 字节、合计不超过 64 KiB，不能包含主机绝对路径、NUL 或 ../。',
     mergeAgentRuntime: '合并冲突运行时',
     mergeAgentRuntimeHint:
       '内置合并冲突解决 agent 运行的运行时 profile，其 model 来自该 profile；留空则继承全局默认运行时。',

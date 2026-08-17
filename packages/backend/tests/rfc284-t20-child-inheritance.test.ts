@@ -73,7 +73,9 @@ const DISPOSITION = {
   commitPushRuntime: 'dropped-registered',
   commitPushMaxRepairRetries: 'dropped-registered',
   commitPushDiffMaxBytes: 'dropped-registered',
+  commitPushExcludePatterns: 'inherit',
   commitPushLang: 'dropped-registered',
+  ensureWorkspaceProfiles: 'dropped-registered',
   mergeAgentModel: 'dropped-registered',
   mergeAgentRuntime: 'dropped-registered',
 } as const satisfies Record<keyof RunTaskOptions, Disposition>
@@ -104,13 +106,14 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'commitPushMaxRepairRetries',
         'commitPushDiffMaxBytes',
         'commitPushLang',
+        'ensureWorkspaceProfiles',
         'mergeAgentModel',
         'mergeAgentRuntime',
       ].sort(),
     )
   })
 
-  test('picker 与登记面同构：全值透传 18 键（T30 修配 +2、RFC-304 +1）、undefined 不落键、appHome 恒在', () => {
+  test('picker 与登记面同构：全值透传含 RFC-308 policy，undefined 不落键', () => {
     const full: RunTaskOptions = {
       daemonGeneration: 'gen-1',
       taskId: 't1',
@@ -133,6 +136,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
       // T30 修配转正两键（RFC-253）：现在必须出现在 picker 输出里
       scriptInterpreters: { python: '/py' },
       scriptDepsInstallTimeoutMs: 13,
+      commitPushExcludePatterns: ['*.trace'],
       // dropped 侧给值：绝不能出现在 picker 输出里
       fanoutMaxShardTotal: 99,
       commitPushModel: 'm',

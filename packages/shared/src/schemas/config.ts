@@ -5,6 +5,15 @@
 import { z } from 'zod'
 import { SETTINGS_NUMERIC_BOUNDS, type SettingsNumericPath } from '../settingsNumericBounds'
 
+function utf8ByteLength(value: string): number {
+  let bytes = 0
+  for (const char of value) {
+    const point = char.codePointAt(0)!
+    bytes += point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4
+  }
+  return bytes
+}
+
 function boundedSettingsInteger(path: SettingsNumericPath) {
   const bound = SETTINGS_NUMERIC_BOUNDS[path]
   const schema = z.number().int().min(bound.min).max(bound.max)
@@ -54,6 +63,42 @@ export const UploadLimitsSchema = z.object({
   perRequest: z.number().int().positive(),
   perCount: z.number().int().positive(),
 })
+
+const TaskCommitExcludePatternSchema = z
+  .string()
+  .min(1)
+  .refine((value) => utf8ByteLength(value) <= 1024, {
+    message: 'task commit exclude pattern must be at most 1024 UTF-8 bytes',
+  })
+  .superRefine((value, ctx) => {
+    if (/\0|\r|\n/.test(value)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'pattern must be one line without NUL' })
+    }
+    const body = value.startsWith('!') ? value.slice(1) : value
+    if (/^[A-Za-z]:[\\/]/.test(body) || body.startsWith('\\\\')) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'host absolute paths are not allowed' })
+    }
+    if (/(^|\/)\.\.(\/|$)/.test(body)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'pattern must stay inside the repository',
+      })
+    }
+  })
+
+/** RFC-308: Gitignore-compatible rules applied only to platform-owned commits. */
+export const TaskCommitExcludePatternsSchema = z
+  .array(TaskCommitExcludePatternSchema)
+  .max(256)
+  .superRefine((patterns, ctx) => {
+    const bytes = utf8ByteLength(patterns.join('\n'))
+    if (bytes > 64 * 1024) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'task commit exclude patterns must be at most 64 KiB in total',
+      })
+    }
+  })
 
 export const ConfigSchema = z.object({
   $schema_version: z.literal(CONFIG_SCHEMA_VERSION),
@@ -423,6 +468,13 @@ export const ConfigSchema = z.object({
    */
   gitSubmoduleRemote: z.boolean().optional(),
 
+  /**
+   * RFC-308: administrator-owned Gitignore syntax for platform auto commits.
+   * The canonical `.agent-workflow/` hard rule is always added separately and
+   * cannot be negated by this list.
+   */
+  taskCommitExcludePatterns: TaskCommitExcludePatternsSchema.default([]),
+
   // --- RFC-210 recursive submodule isolation ---
   /**
    * Periodic background refresh of cached repos + their submodules. Without it
@@ -628,6 +680,7 @@ export const DEFAULT_CONFIG: Config = {
   language: 'zh-CN',
   theme: 'system',
   logLevel: 'info',
+  taskCommitExcludePatterns: [],
 }
 
 /**
@@ -701,6 +754,7 @@ export const ConfigPatchSchema = ConfigSchema.partial()
     bindPort: boundedSettingsInteger('bindPort').optional(),
     commitPushMaxRepairRetries: boundedSettingsInteger('commitPushMaxRepairRetries').optional(),
     commitPushDiffMaxBytes: boundedSettingsInteger('commitPushDiffMaxBytes').optional(),
+    taskCommitExcludePatterns: TaskCommitExcludePatternsSchema.nullable().optional(),
     memoryDistillRuntime: z.string().min(1).nullable().optional(),
     changeNarrativeRuntime: z.string().min(1).nullable().optional(),
     commitPushRuntime: z.string().min(1).nullable().optional(),

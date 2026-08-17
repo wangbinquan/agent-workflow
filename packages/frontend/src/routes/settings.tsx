@@ -63,6 +63,11 @@ import { describeApiError, setLanguage, type SupportedLanguage } from '@/i18n'
 import { isSupportedLanguage } from '@/hooks/useLanguage'
 import { queryConfig, useConfigQueryKey } from '@/lib/config-resource'
 import { appQueryClient } from '@/lib/query-client'
+import {
+  taskCommitExcludePatternsAreValid,
+  taskCommitExcludePatternsFromText,
+  taskCommitExcludePatternsToText,
+} from '@/lib/task-commit-excludes'
 import { meQueryOptions, usePermission, type MeResponse } from '@/hooks/useActor'
 import { getToken } from '@/stores/auth'
 import {
@@ -774,6 +779,8 @@ function GitTab({ config }: TabProps) {
   const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.git, config)
   const { state, setState, save } = draft
   const refresh = state.submoduleAutoRefresh
+  const excludePatterns = state.taskCommitExcludePatterns ?? []
+  const excludePatternsValid = taskCommitExcludePatternsAreValid(excludePatterns)
   return (
     <SectionForm
       onSave={save.mutate}
@@ -782,6 +789,37 @@ function GitTab({ config }: TabProps) {
       success={save.isSuccess && save.error === null ? 'saved' : null}
       editState={draft}
     >
+      <SettingsCard
+        title={t('settings.cardGroups.gitAutoCommitTitle')}
+        hint={t('settings.cardGroups.gitAutoCommitHint')}
+      >
+        <Field
+          label={t('settingsForm.taskCommitExcludePatterns')}
+          hint={t('settingsForm.taskCommitExcludePatternsHint')}
+          error={
+            excludePatternsValid ? undefined : t('settingsForm.taskCommitExcludePatternsError')
+          }
+          errorId="task-commit-exclude-patterns-error"
+        >
+          <TextArea
+            value={taskCommitExcludePatternsToText(excludePatterns)}
+            onChange={(value) =>
+              setState({
+                ...state,
+                taskCommitExcludePatterns: taskCommitExcludePatternsFromText(value),
+              })
+            }
+            rows={8}
+            monospace
+            placeholder={'# runtime scratch\n/.cache-agent/\n*.trace\n!generated/schema.ts'}
+            aria-invalid={!excludePatternsValid}
+            aria-errormessage={
+              excludePatternsValid ? undefined : 'task-commit-exclude-patterns-error'
+            }
+            data-testid="settings-task-commit-exclude-patterns"
+          />
+        </Field>
+      </SettingsCard>
       <SettingsCard
         title={t('settings.cardGroups.gitCheckoutTitle')}
         hint={t('settings.cardGroups.gitCheckoutHint')}

@@ -33,7 +33,12 @@ const LEGACY_SNAPSHOT = {
 const PORTED_SNAPSHOT = {
   inputs: [
     { kind: 'text', key: 'report', label: 'report' },
-    { kind: 'upload', key: 'docs', label: 'docs', targetDir: '.agent-inputs/docs' },
+    {
+      kind: 'upload',
+      key: 'docs',
+      label: 'docs',
+      targetDir: '.agent-workflow/inputs/agent/docs',
+    },
   ],
   nodes: [
     { id: '__agent_input_0__', kind: 'input' },
@@ -136,7 +141,7 @@ describe('B4 taskToLaunchPayload agent arm', () => {
     const { payload } = taskToLaunchPayload(
       agentTask({
         workflowSnapshot: PORTED_SNAPSHOT,
-        inputs: { report: 'old body', docs: '.agent-inputs/docs/a.md' },
+        inputs: { report: 'old body', docs: '.agent-workflow/inputs/agent/docs/a.md' },
       }),
     )
     expect(payload.agentId).toBe('agent-a')

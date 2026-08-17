@@ -97,7 +97,13 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
   // minimal-write allowlist, so a key missing from it gets silently dropped on
   // save. It is also `satisfies Record<keyof SETTINGS_CONFIG_SCOPE_IDS, …>`,
   // which is why the scope id above has to exist first.
-  git: ['gitRecurseSubmodules', 'gitSubmoduleJobs', 'gitSubmoduleRemote', 'submoduleAutoRefresh'],
+  git: [
+    'gitRecurseSubmodules',
+    'gitSubmoduleJobs',
+    'gitSubmoduleRemote',
+    'submoduleAutoRefresh',
+    'taskCommitExcludePatterns',
+  ],
   // RFC-247 — the external-access surface switch lives with the other network
   // knobs: it governs whether the outside world can drive this platform at all.
   network: ['bindHost', 'bindPort', 'mcpSurfaceEnabled'],

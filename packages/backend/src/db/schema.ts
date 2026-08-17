@@ -1602,13 +1602,9 @@ export const taskRepos = sqliteTable(
      * 真实可能发生的事。只落 log.warn 等于静默——这一列让任务详情看得见。
      */
     readonlyDirtyCount: integer('readonly_dirty_count'),
-    /**
-     * RFC-248 D1: 平台预置 commit 的 sha——把嵌套挂载点写进本仓 `.gitignore`
-     * 并提交的那一笔，`base_commit` 指向它。单独存一列，让「这一笔到底是不是
-     * 平台造的」在排错与 UI 上一眼可判，也让「它的父提交才是真 base tip」可推导。
-     * NULL = 本仓没有嵌套子成员，未产生预置 commit。
-     */
-    gitignoreCommit: text('gitignore_commit'),
+    /** RFC-308: durable receipt for the per-worktree platform exclude profile. */
+    workspaceProfileVersion: integer('workspace_profile_version'),
+    workspaceProfileDigest: text('workspace_profile_digest'),
     /** RFC-034: per-repo submodule init telemetry. NULL for legacy rows. */
     hasSubmodules: integer('has_submodules', { mode: 'boolean' }),
     submoduleInitOk: integer('submodule_init_ok', { mode: 'boolean' }),

@@ -68,7 +68,7 @@ describe('RFC-210 settings git scope registration', () => {
     expect(SETTINGS_CONFIG_SCOPE_IDS.git).toBe('settings.git')
   })
 
-  it('owns exactly the four submodule-related config keys', () => {
+  it('owns the submodule settings and RFC-308 auto-commit policy', () => {
     // This list IS the minimal-write allowlist — a key missing here is silently
     // dropped when the section saves.
     expect([...SETTINGS_CONFIG_SCOPE_KEYS.git].sort()).toEqual([
@@ -76,6 +76,7 @@ describe('RFC-210 settings git scope registration', () => {
       'gitSubmoduleJobs',
       'gitSubmoduleRemote',
       'submoduleAutoRefresh',
+      'taskCommitExcludePatterns',
     ])
   })
 

@@ -180,7 +180,6 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
           mountPath: '',
           subdir: '',
           readonly: false,
-          gitignoreCommit: null,
           submoduleInitOk: true,
           submoduleInitError: null,
           hasSubmodules: false,

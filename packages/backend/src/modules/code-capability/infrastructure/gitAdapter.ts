@@ -10,9 +10,9 @@
 // never actually checked — the same class of bug as trusting a moving MR ref,
 // arriving through a different door.
 
-import { AW_INTERNAL_GIT_IDENTITY } from '@/util/git'
 import { runGit, withWorktreeRegistryLock } from '@/util/git'
 import type { GitFetchResult, GitPort } from '@/modules/code-capability/ports/gitPort'
+import type { TaskWorkspaceCommitParticipant } from '@/modules/task-execution/public/participants'
 
 /** What a fetch failure should say when git wrote nothing useful. */
 function describeGitFailure(stderr: string, exitCode: number): string {
@@ -26,6 +26,8 @@ export interface GitAdapterDeps {
   remote?: string
   signal?: AbortSignal
   timeoutMs?: number
+  /** RFC-308: task-execution-minted authority for this round workspace. */
+  taskCommit?: TaskWorkspaceCommitParticipant
 }
 
 export function createGitAdapter(deps: GitAdapterDeps = {}): GitPort {
@@ -98,96 +100,25 @@ export function createGitAdapter(deps: GitAdapterDeps = {}): GitPort {
         : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }
     },
 
-    async commitWorktree({ repoPath, worktreePath, message, keepRef, authorName, authorEmail }) {
-      // `add -A` rather than `add -u`: an agent's fix routinely adds a file
-      // (a new test, an extracted module), and staging only tracked paths would
-      // freeze a commit that does not build.
-      const staged = await runGit(worktreePath, ['add', '-A'], opts)
-      if (staged.exitCode !== 0) {
+    async commitWorktree({ message, keepRef, authorName, authorEmail }) {
+      if (deps.taskCommit === undefined) {
         return {
           ok: false,
           reason: 'failed',
-          error: describeGitFailure(staged.stderr, staged.exitCode),
+          error: 'task workspace commit participant is not wired',
         }
       }
-
-      // `--quiet --exit-code` reports 1 when something is staged. An empty
-      // commit is not an error here — the agent looked and changed nothing —
-      // but it must not be posted as a patch, so it comes back as `no-changes`.
-      const dirty = await runGit(worktreePath, ['diff', '--cached', '--quiet', '--exit-code'], opts)
-      if (dirty.exitCode === 0) return { ok: false, reason: 'no-changes' }
-
-      // An identity is ALWAYS supplied, never inherited.
-      //
-      // A task worktree cloned from a URL carries no local `user.*`, and a host
-      // can have no global identity either — GitHub's runners do not, and
-      // cannot auto-detect one. Setting these only when the caller named an
-      // author therefore meant "works on the developer's laptop, fails on the
-      // server": freezing a patch died with `Author identity unknown; *** Please
-      // tell me who you are.` after the agent had already made the change, so
-      // the round failed at the last step with a message about git configuration
-      // that has nothing to do with the review.
-      //
-      // Same fixed identity the platform's other internal commits use
-      // (`AW_INTERNAL_GIT_IDENTITY`, RFC-130) — a fallback, not a preference:
-      // when the caller names the author (the person whose branch this is), that
-      // wins.
-      const name =
-        authorName !== undefined && authorName !== ''
-          ? authorName
-          : AW_INTERNAL_GIT_IDENTITY.GIT_AUTHOR_NAME
-      const email =
-        authorEmail !== undefined && authorEmail !== ''
-          ? authorEmail
-          : AW_INTERNAL_GIT_IDENTITY.GIT_AUTHOR_EMAIL
-      const identity: string[] = [
-        '-c',
-        `user.name=${name}`,
-        '-c',
-        `author.name=${name}`,
-        '-c',
-        `user.email=${email}`,
-        '-c',
-        `author.email=${email}`,
-      ]
-
-      const committed = await runGit(
-        worktreePath,
-        [...identity, 'commit', '--no-verify', '--no-gpg-sign', '-m', message],
-        opts,
-      )
-      if (committed.exitCode !== 0) {
-        return {
-          ok: false,
-          reason: 'failed',
-          error: describeGitFailure(committed.stderr, committed.exitCode),
-        }
-      }
-
-      const resolved = await runGit(worktreePath, ['rev-parse', '--verify', 'HEAD^{commit}'], opts)
-      const commitSha = resolved.stdout.trim()
-      if (resolved.exitCode !== 0 || commitSha === '') {
-        return {
-          ok: false,
-          reason: 'failed',
-          error: `committed but could not resolve HEAD: ${describeGitFailure(resolved.stderr, resolved.exitCode)}`,
-        }
-      }
-
-      // The keep-alive ref, written into the COMMON repository rather than the
-      // worktree: the worktree is about to be deleted, and a commit reachable
-      // only from its detached HEAD is prunable by `git gc` while a human is
-      // still deciding whether to accept it.
-      const kept = await runGit(repoPath, ['update-ref', keepRef, commitSha], opts)
-      if (kept.exitCode !== 0) {
-        return {
-          ok: false,
-          reason: 'failed',
-          error: `froze ${commitSha.slice(0, 12)} but could not keep it alive: ${describeGitFailure(kept.stderr, kept.exitCode)}`,
-        }
-      }
-
-      return { ok: true, commitSha }
+      const frozen = await deps.taskCommit.freeze({
+        message,
+        keepRef,
+        ...(authorName !== undefined ? { authorName } : {}),
+        ...(authorEmail !== undefined ? { authorEmail } : {}),
+      })
+      return frozen.ok
+        ? { ok: true, commitSha: frozen.commitSha }
+        : frozen.reason === 'no-changes'
+          ? { ok: false, reason: 'no-changes' }
+          : { ok: false, reason: 'failed', error: frozen.error }
     },
 
     async readCommitDiff({ repoPath, commitSha }) {
@@ -203,76 +134,87 @@ export function createGitAdapter(deps: GitAdapterDeps = {}): GitPort {
         : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }
     },
 
-    async readWorktreeDiff({ worktreePath }) {
-      // `add -A --intent-to-add` first, then `diff` — the only way `git diff`
-      // reports a NEW file. Without it an agent that added a module shows a
-      // diff missing the module, which reads as a change that cannot compile.
-      // `--intent-to-add` records the path without staging content, so the
-      // tree is left exactly as the agent left it.
-      const marked = await runGit(worktreePath, ['add', '-A', '--intent-to-add'], opts)
-      if (marked.exitCode !== 0) {
-        return { ok: false, error: describeGitFailure(marked.stderr, marked.exitCode) }
-      }
-
-      const result = await runGit(worktreePath, ['diff', '--no-color', '--unified=3'], opts)
-      return result.exitCode === 0
-        ? { ok: true, diff: result.stdout }
-        : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }
+    async readWorktreeDiff({ worktreePath: _worktreePath }) {
+      const result =
+        deps.taskCommit === undefined
+          ? { ok: false as const, error: 'task workspace commit participant is not wired' }
+          : await deps.taskCommit.preview()
+      return result.ok ? { ok: true, diff: result.diff } : result
     },
 
-    async pushCommit({ repoPath, commitSha, branch, expectedRemoteSha }) {
-      // A compare-and-swap push. Plain `push` would succeed by fast-forwarding
-      // over whatever arrived while the platform was waiting for a human, and
-      // `--force` would discard it outright; `--force-with-lease=<ref>:<sha>`
-      // refuses unless the remote is still exactly where it was checked.
-      const result = await runGit(
-        repoPath,
-        [
-          'push',
-          `--force-with-lease=refs/heads/${branch}:${expectedRemoteSha}`,
-          remote,
-          `${commitSha}:refs/heads/${branch}`,
-        ],
-        opts,
-      )
-      if (result.exitCode === 0) return { ok: true }
-
-      const error = describeGitFailure(result.stderr, result.exitCode)
-      // git reports a lease failure as `stale info` / `rejected`. Distinguished
-      // because the two need different words on the merge request: a stale
-      // branch is "somebody pushed, here is a fresh one", while a real failure
-      // is "this needs a person".
-      const stale = /stale info|non-fast-forward|rejected/i.test(error)
-      return stale ? { ok: false, reason: 'stale', error } : { ok: false, reason: 'failed', error }
+    async pushCommit({ repoPath: _repoPath, commitSha, branch, expectedRemoteSha }) {
+      if (deps.taskCommit === undefined) {
+        return {
+          ok: false,
+          reason: 'failed',
+          error: 'task workspace commit participant is not wired',
+        }
+      }
+      const publication = await deps.taskCommit.publish({
+        mode: 'cas',
+        baseSha: expectedRemoteSha,
+        tipSha: commitSha,
+        remote,
+        branch,
+      })
+      if (!publication.ok) {
+        const error =
+          publication.reason === 'excluded-history'
+            ? `push blocked: outgoing history contains ${publication.excludedPaths.length} excluded path(s)`
+            : publication.error
+        const stale = /stale info|non-fast-forward|rejected/i.test(error)
+        return {
+          ok: false,
+          reason: publication.reason === 'failed' && stale ? 'stale' : 'failed',
+          error,
+        }
+      }
+      return { ok: true }
     },
 
     async pushNewBranch({ repoPath, commitSha, branch }) {
-      // No `--force` and no lease: creating a ref that does not exist needs
-      // neither, and a plain push is refused by the remote if it does exist and
-      // this is not a fast-forward — which is the outcome we want to hear about
-      // rather than override.
-      const result = await runGit(
-        repoPath,
-        ['push', remote, `${commitSha}:refs/heads/${branch}`],
-        opts,
-      )
-      if (result.exitCode === 0) return { ok: true }
-
-      const error = describeGitFailure(result.stderr, result.exitCode)
-      // A name collision is ordinary — two rounds on one issue, or a leftover
-      // branch from a previous attempt — and the caller renames rather than
-      // treating it as a failure needing a person.
-      const exists = /already exists|non-fast-forward|fetch first|rejected/i.test(error)
-      return exists
-        ? { ok: false, reason: 'exists', error }
-        : { ok: false, reason: 'failed', error }
+      const parent = await runGit(repoPath, ['rev-parse', '--verify', `${commitSha}^`], opts)
+      const baseSha = parent.stdout.trim()
+      if (parent.exitCode !== 0 || baseSha === '') {
+        return {
+          ok: false,
+          reason: 'failed',
+          error: 'cannot resolve artifact parent; push refused',
+        }
+      }
+      if (deps.taskCommit === undefined) {
+        return {
+          ok: false,
+          reason: 'failed',
+          error: 'task workspace commit participant is not wired',
+        }
+      }
+      const publication = await deps.taskCommit.publish({
+        mode: 'new',
+        baseSha,
+        tipSha: commitSha,
+        remote,
+        branch,
+      })
+      if (!publication.ok) {
+        const error =
+          publication.reason === 'excluded-history'
+            ? `push blocked: outgoing history contains ${publication.excludedPaths.length} excluded path(s)`
+            : publication.error
+        const exists = /already exists|non-fast-forward|fetch first|rejected/i.test(error)
+        return {
+          ok: false,
+          reason: publication.reason === 'failed' && exists ? 'exists' : 'failed',
+          error,
+        }
+      }
+      return { ok: true }
     },
 
-    async deleteRef({ repoPath, ref }) {
-      const result = await runGit(repoPath, ['update-ref', '-d', ref], opts)
-      return result.exitCode === 0
-        ? { ok: true }
-        : { ok: false, error: describeGitFailure(result.stderr, result.exitCode) }
+    async deleteRef({ repoPath: _repoPath, ref }) {
+      return deps.taskCommit === undefined
+        ? { ok: false, error: 'task workspace commit participant is not wired' }
+        : deps.taskCommit.release({ ref })
     },
   }
 }

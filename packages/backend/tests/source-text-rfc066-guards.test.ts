@@ -97,7 +97,7 @@ describe('RFC-066 PR-A — source guards', () => {
     // 与「多仓 + 上传」，原断言锁的是那两个错误码存在。RFC-248 解除了两条禁令：
     //   - wrapper-git 现在逐仓快照、逐仓 diff，路径按挂载路径前缀化后合并成
     //     `list<path>`。不解除的话仓库组永远用不了 Code → Audit → Fix 主链路。
-    //   - 上传物落到任务根下的 `.agent-workflow-inputs/`，不属于任何成员仓。
+    //   - 上传物落到任务根下的 `.agent-workflow/inputs/`，不属于任何成员仓。
     // 断言改成「这两个码在生产代码里彻底消失」——留一个就意味着某条路径上禁令
     // 还在，组任务会在那里撞墙。
     expect(TASK_SRC.includes("'multi-repo-wrapper-git-unsupported'")).toBe(false)

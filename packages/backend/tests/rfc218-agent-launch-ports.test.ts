@@ -13,7 +13,7 @@
 //       (incl. literal `{{...}}` — injected via ports, never re-expanded);
 //       frozen snapshot is the ported shape.
 //   B5  multipart route (/api/agents/:id/tasks): files land in
-//       `.agent-inputs/{port}` and the port value packs newline-joined
+//       `.agent-workflow/inputs/agent/{port}` and the port value packs newline-joined
 //       relative paths — same machinery as POST /api/tasks (shared
 //       launchMultipart skeleton). Client-sent text for the upload key is
 //       overwritten by the server-written paths (D14).
@@ -401,7 +401,7 @@ function agentFormData(payload: object, files: Array<[string, string, string]>):
 }
 
 describe('B5/B6 — multipart agent launch route', () => {
-  test('B5 files land in .agent-inputs/{port}; port packs newline paths; client text overwritten', async () => {
+  test('B5 files land in canonical inputs/agent/{port}; port packs newline paths', async () => {
     const h = await buildHarness()
     const fd = agentFormData(
       {
@@ -422,9 +422,13 @@ describe('B5/B6 — multipart agent launch route', () => {
     expect(res.status).toBe(201)
     const body = (await res.json()) as { worktreePath: string; inputs: Record<string, string> }
     expect(body.inputs.brief).toBe('summarize')
-    expect(body.inputs.docs).toBe('.agent-inputs/docs/a.md\n.agent-inputs/docs/b.md')
-    expect(readFileSync(join(body.worktreePath, '.agent-inputs/docs/a.md'), 'utf8')).toBe('# alpha')
-    expect(existsSync(join(body.worktreePath, '.agent-inputs/docs/b.md'))).toBe(true)
+    expect(body.inputs.docs).toBe(
+      '.agent-workflow/inputs/agent/docs/a.md\n.agent-workflow/inputs/agent/docs/b.md',
+    )
+    expect(
+      readFileSync(join(body.worktreePath, '.agent-workflow/inputs/agent/docs/a.md'), 'utf8'),
+    ).toBe('# alpha')
+    expect(existsSync(join(body.worktreePath, '.agent-workflow/inputs/agent/docs/b.md'))).toBe(true)
   })
 
   test('JSON launch for an upload-port agent → 422 (multipart-only)', async () => {

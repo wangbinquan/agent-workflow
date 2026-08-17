@@ -148,6 +148,7 @@ export * from './changeGroups'
 // 零 fs 依赖，前端编辑与后端物化共用，两边不可能算出不同的布局。
 export * from './schemas/repoGroup'
 export * from './repoGroupLayout'
+export * from './workspaceConvention' // RFC-308 — canonical in-repo platform workspace
 export * from './platformEnv'
 // RFC-257 — 代码平台 webhook 触发器：事件信封 / 触发器规则 / 三形态启动参数
 // 模板封套 / 投递与触发 closed enum，以及模板变量的纯函数面（保存期静态校验

@@ -1519,7 +1519,7 @@ export const enUS: Resources = {
       limits: 'Set task, token, timeout, and concurrency guardrails.',
       recovery: 'Create backups and configure recovery behavior.',
       gc: 'Control retention and automatic cleanup.',
-      git: 'Control submodule recursion, parallelism, and background refresh.',
+      git: 'Control platform commit exclusions, submodules, and background refresh.',
       codeHosts: 'Outbound credentials for GitLab / GitHub',
       network: 'Set the daemon bind address and listening port.',
       appearance: 'Choose the theme and interface language.',
@@ -1542,6 +1542,9 @@ export const enUS: Resources = {
       recoverySafetyHint: 'Set retry and timeout boundaries for recovery attempts.',
       gitCheckoutTitle: 'Checkout & submodules',
       gitCheckoutHint: 'Define how task worktrees fetch and initialize repository content.',
+      gitAutoCommitTitle: 'Platform auto-commit exclusions',
+      gitAutoCommitHint:
+        'Keep platform runtime files and administrator-selected paths out of commits and outgoing history.',
       gitRefreshTitle: 'Background refresh',
       gitRefreshHint: 'Keep repository references current while the daemon is running.',
       gcWorktreesTitle: 'Worktree cleanup',
@@ -3900,9 +3903,13 @@ export const enUS: Resources = {
     commitOutcomeLocalAuth: 'Committed locally (push blocked)',
     commitOutcomeLocalFailed: 'Committed locally (push failed)',
     commitOutcomeSubrepoFailed: 'Submodule push failed; parent not pushed',
+    commitOutcomeSkippedExcluded: 'Only excluded changes',
+    commitOutcomeExcludedHistory: 'Push blocked by excluded local history',
     subrepoPushed: 'pushed',
     subrepoNotPushed: 'not pushed',
     commitOutcomeSkippedEmpty: 'No changes',
+    commitExclusions: '{{count}} path(s) excluded by platform policy',
+    commitExclusionsHistory: '{{count}} excluded path(s) found in outgoing local history',
     commitFiles: '{{files}} files, +{{ins}}/-{{del}}',
     metaStarted: 'Started',
     metaFinished: 'Finished',
@@ -5722,6 +5729,11 @@ export const enUS: Resources = {
     commitPushDiffMaxBytes: 'Commit-message diff byte cap',
     commitPushDiffMaxBytesHint:
       'Truncation cap for the diff fed to the commit-message session (default 16384; 0 = --stat only).',
+    taskCommitExcludePatterns: 'Task auto-commit exclude rules',
+    taskCommitExcludePatternsHint:
+      'One Gitignore rule per line. Applies to platform-owned task and code-capability commits, including tracked files and outgoing local history. Files are not deleted. /.agent-workflow/ is always excluded and cannot be re-included.',
+    taskCommitExcludePatternsError:
+      'Use at most 256 single-line repository-relative rules (1,024 UTF-8 bytes each; 64 KiB total). Host paths, NUL, and ../ are not allowed.',
     mergeAgentRuntime: 'Merge-conflict runtime',
     mergeAgentRuntimeHint:
       'Runtime profile the built-in merge-conflict resolver runs on (its model comes from that profile); leave empty to inherit the global default runtime.',

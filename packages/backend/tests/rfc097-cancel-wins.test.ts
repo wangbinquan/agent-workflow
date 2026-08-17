@@ -16,7 +16,7 @@
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -24,7 +24,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { trySetTaskStatus } from '../src/services/lifecycle'
 import { enforceLimits } from '../src/services/limits'
-import { cancelTask, resumeTask } from '../src/services/task'
+import { cancelTask, isTaskActive, resumeTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -208,6 +208,10 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
       .sort((a, b) => (a.id > b.id ? -1 : 1))[0]!
     expect(latest.status).toBe('canceled')
     expect(rows.some((r) => r.status === 'done')).toBe(false)
+    // cancelTask linearizes the terminal row before the scheduler's finally
+    // releases its driver. Do not let this file's in-memory DB disappear while
+    // that finally is still reading the child-process outcome.
+    await waitFor(() => !isTaskActive(h.taskId), 'task driver release')
   }, 30000)
 
   test('limits：已 done 的任务不进扫描——errorSummary/errorMessage 保持原值', async () => {
@@ -261,5 +265,18 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
     expect(t.errorSummary).toBeNull() // 不是 'task-time-limit-exceeded'
     expect(t.errorMessage).toBeNull()
     expect(t.finishedAt).toBe(finishedAt)
+  })
+
+  test('stale/duplicate driver finally checks ownership before reading DB', () => {
+    const source = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
+      'utf8',
+    )
+    const start = source.indexOf('async function releaseTaskDriverAndFinalizeWorkspace')
+    const body = source.slice(start, source.indexOf('function depsUnreapedProcessCode', start))
+    expect(body.indexOf('taskDriverRegistry.controllerOf(taskId)')).toBeGreaterThan(-1)
+    expect(body.indexOf('taskDriverRegistry.controllerOf(taskId)')).toBeLessThan(
+      body.indexOf('depsUnreapedProcessCode'),
+    )
   })
 })

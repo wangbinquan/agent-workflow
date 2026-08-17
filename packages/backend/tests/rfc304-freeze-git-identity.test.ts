@@ -25,6 +25,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createGitAdapter } from '../src/modules/code-capability/infrastructure/gitAdapter'
+import { bindTaskWorkspaceCommitParticipant } from '../src/modules/task-execution/composition/taskWorkspaceCommit'
+import { bindRepositoryCommitParticipant } from '../src/modules/source-control/composition'
 import { runGit } from '../src/util/git'
 
 const scratch: string[] = []
@@ -70,6 +72,15 @@ async function repoWithoutIdentity(): Promise<string> {
   return dir
 }
 
+function adapterFor(repo: string) {
+  return createGitAdapter({
+    taskCommit: bindTaskWorkspaceCommitParticipant({
+      candidate: bindRepositoryCommitParticipant({ repoPath: repo }),
+      publication: bindRepositoryCommitParticipant({ repoPath: repo }),
+    }),
+  })
+}
+
 describe('RFC-304 — freezing a change on a host with no git identity', () => {
   test('the commit succeeds and is attributed to the platform', async () => {
     const repo = await repoWithoutIdentity()
@@ -89,7 +100,7 @@ describe('RFC-304 — freezing a change on a host with no git identity', () => {
 
     try {
       writeFileSync(join(repo, 'app.ts'), 'export const guard = () => true\n')
-      const frozen = await createGitAdapter().commitWorktree({
+      const frozen = await adapterFor(repo).commitWorktree({
         repoPath: repo,
         worktreePath: repo,
         message: 'apply the requested change',
@@ -116,7 +127,7 @@ describe('RFC-304 — freezing a change on a host with no git identity', () => {
     // that to `agent-workflow` would misattribute the change in `git log`.
     const repo = await repoWithoutIdentity()
     writeFileSync(join(repo, 'app.ts'), 'export const guard = () => true\n')
-    const frozen = await createGitAdapter().commitWorktree({
+    const frozen = await adapterFor(repo).commitWorktree({
       repoPath: repo,
       worktreePath: repo,
       message: 'apply the requested change',

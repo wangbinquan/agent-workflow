@@ -150,6 +150,20 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-path-prefix',
+    file: 'modules/source-control/domain/taskCommitPolicy.ts',
+    match: '`${PLATFORM_WORKSPACE_DIR}/`',
+    count: 1,
+    why: 'operand is a normalized repository-relative Git path, not a host filesystem path; Git name-status uses `/` on every platform and core.ignoreCase is applied by the matcher (RFC-308)',
+  },
+  {
+    rule: 'posix-path-prefix',
+    file: 'modules/source-control/domain/taskCommitPolicy.ts',
+    match: '`${normalized}/`',
+    count: 1,
+    why: 'appends the Gitignore directory marker to an already-normalized repository-relative path; this value is passed to the matcher and never opened as a host path (RFC-308)',
+  },
+  {
+    rule: 'posix-path-prefix',
     file: 'services/codeHost/url.ts',
     match: '`${basePath}/`',
     count: 1,

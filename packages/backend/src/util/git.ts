@@ -5,7 +5,7 @@
 // will not survive lsFiles, which we accept as a v1 limitation.
 
 import type { GitRef } from '@agent-workflow/shared'
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, realpath, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
@@ -953,90 +953,6 @@ export async function findTrackedPathUnderMounts(
   if (first === undefined) return null
   const hit = mountRels.find((m) => first === m || first.startsWith(`${m}/`)) ?? mountRels[0]!
   return { mountRel: hit, trackedPath: first }
-}
-
-/**
- * RFC-248 D1 —— 把嵌套挂载点写进本仓 `.gitignore` 并提交成一笔**平台预置
- * commit**，返回它的 sha；规则已全部存在时返回 null（幂等，不产生空 commit）。
- *
- * 为什么必须是 commit 而不是未提交的工作区改动（proposal E1–E3 实测）：
- * - 不排除的话，`git add -A`（RFC-075 自动提交推送用的正是它）会把嵌套仓
- *   **当作 gitlink 加入索引**并告警，推上去就是一个指向不存在子模块的坏指针。
- * - 排除规则若留成工作区改动，`M .gitignore` 会出现在**每一份**审计 diff 里，
- *   并被 `add -A` 一起提交推走；而 ignore 只作用于未跟踪文件，没有办法
- *   「让 .gitignore 忽略自己的修改」。
- * - `.git/info/exclude` 不能用：它是 **common-dir 级**的，会污染同一个镜像的
- *   所有任务 worktree。
- * 做成 `base_commit` 之前的一笔，审计 diff（`base_commit..工作树`）就彻底干净。
- *
- * 幂等是硬要求：RFC-075 的 `workingBranch` 允许复用一条真实开发分支，同一条
- * 分支上连跑多个任务不能累积多个相同 commit。
- */
-export async function commitGitignorePreset(opts: {
-  worktreePath: string
-  /** 相对本仓工作树根的挂载点路径（不含前后斜杠）。 */
-  relMountPaths: readonly string[]
-  taskId: string
-  gitUserName?: string | null
-  gitUserEmail?: string | null
-}): Promise<{ commitSha: string | null; addedRules: string[] }> {
-  const { buildGitignoreBlock } = await import('@/services/repoGroupGitignore')
-  const file = join(opts.worktreePath, '.gitignore')
-  const existing = existsSync(file) ? readFileSync(file, 'utf8') : ''
-  const plan = buildGitignoreBlock(existing, opts.relMountPaths, opts.taskId)
-  if (plan.added.length === 0) return { commitSha: null, addedRules: [] }
-
-  writeFileSync(file, plan.nextContent, 'utf8')
-  // `--sparse`：**sparse 成员**（挂载时只检出仓内某个子目录）的仓根 `.gitignore`
-  // 落在 sparse 集之外，不带这个 flag 时 `git add` 直接拒（"paths … outside of
-  // your sparse-checkout definition"）。而这条 .gitignore 恰恰是**必须**写的
-  // ——未跟踪文件不受 sparse 规则约束，嵌套挂载点与上传目录照样会出现在它的
-  // `git status` 里、被 `add -A` 吞掉。sparse-checkout 是工作树概念，提交里带上
-  // 集合外的路径完全正当。非 sparse 仓上这个 flag 是 no-op。
-  const add = await runGit(opts.worktreePath, ['add', '--sparse', '--', '.gitignore'])
-  if (add.exitCode !== 0) {
-    throw new DomainError(
-      'gitignore-preset-failed',
-      `git add .gitignore failed: ${add.stderr.trim()}`,
-      500,
-    )
-  }
-  // RFC-067 的任务身份；缺省时回落到一个明确的平台身份，绝不让 git 去猜用户的
-  // 全局 user.name（那会把任务提交署成运维本人）。
-  const name =
-    opts.gitUserName != null && opts.gitUserName !== '' ? opts.gitUserName : 'agent-workflow'
-  const email =
-    opts.gitUserEmail != null && opts.gitUserEmail !== ''
-      ? opts.gitUserEmail
-      : 'agent-workflow@localhost'
-  const commit = await runGit(opts.worktreePath, [
-    '-c',
-    `user.name=${name}`,
-    '-c',
-    `user.email=${email}`,
-    '-c',
-    'commit.gpgsign=false',
-    'commit',
-    '--no-verify',
-    '-m',
-    'chore(agent-workflow): exclude nested repo mounts',
-  ])
-  if (commit.exitCode !== 0) {
-    throw new DomainError(
-      'gitignore-preset-failed',
-      `git commit of .gitignore preset failed: ${commit.stderr.trim()}`,
-      500,
-    )
-  }
-  const head = await runGit(opts.worktreePath, ['rev-parse', 'HEAD'])
-  if (head.exitCode !== 0) {
-    throw new DomainError(
-      'gitignore-preset-failed',
-      `cannot read HEAD after .gitignore preset commit: ${head.stderr.trim()}`,
-      500,
-    )
-  }
-  return { commitSha: head.stdout.trim(), addedRules: plan.added }
 }
 
 export async function createWorktree(opts: CreateWorktreeOptions): Promise<CreatedWorktree> {

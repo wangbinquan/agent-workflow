@@ -178,6 +178,59 @@ describe('RFC-210 recursive commit & push', () => {
     expect(onRemote.stdout.trim()).toBe(sha)
   }, 120_000)
 
+  test('RFC-308 parent mount exclusion skips the whole dirty submodule tree', async () => {
+    const { parent, subOrigin } = await fixture(true)
+    writeFileSync(join(parent, 'vendor', 'a.txt'), 'must stay local\n')
+    const before = (await runGit(subOrigin, ['rev-parse', 'refs/heads/main'])).stdout.trim()
+
+    const res = await runCommitPush(
+      { ...baseParams, worktreePath: parent, excludePatterns: ['/vendor/'] },
+      { db: await db(parent) },
+    )
+    expect(res.meta.pushOutcome).toBe('skipped-excluded')
+    expect(res.meta.exclusions?.paths).toEqual(['vendor'])
+    expect((await runGit(subOrigin, ['rev-parse', 'refs/heads/main'])).stdout.trim()).toBe(before)
+    expect(
+      (await runGit(subOrigin, ['show-ref', '--verify', 'refs/heads/agent-workflow/t1'])).exitCode,
+    ).not.toBe(0)
+  }, 120_000)
+
+  test('RFC-308 child-root rules exclude submodule files before commit', async () => {
+    const { parent, subOrigin } = await fixture(true)
+    writeFileSync(join(parent, 'vendor', 'secret.tmp'), 'must stay local\n')
+
+    const res = await runCommitPush(
+      { ...baseParams, worktreePath: parent, excludePatterns: ['*.tmp'] },
+      { db: await db(parent) },
+    )
+    expect(res.meta.pushOutcome).toBe('skipped-excluded')
+    expect(res.meta.exclusions?.paths).toEqual(['vendor/secret.tmp'])
+    expect(
+      (await runGit(subOrigin, ['show-ref', '--verify', 'refs/heads/agent-workflow/t1'])).exitCode,
+    ).not.toBe(0)
+  }, 120_000)
+
+  test('RFC-308 excluded pre-committed submodule history is visible and withheld', async () => {
+    const { parent, subOrigin } = await fixture(true)
+    const sub = join(parent, 'vendor')
+    writeFileSync(join(sub, 'leak.trace'), 'already committed by agent\n')
+    await runGit(sub, ['add', '-A'])
+    await runGit(sub, ['commit', '-q', '-m', 'agent leak'])
+
+    const res = await runCommitPush(
+      { ...baseParams, worktreePath: parent, excludePatterns: ['*.trace'] },
+      { db: await db(parent) },
+    )
+    expect(res.meta.pushOutcome).toBe('commit-local-subrepo-failed')
+    expect(res.meta.exclusions).toMatchObject({
+      paths: ['vendor/leak.trace'],
+      historyBlocked: true,
+    })
+    expect(
+      (await runGit(subOrigin, ['show-ref', '--verify', 'refs/heads/agent-workflow/t1'])).exitCode,
+    ).not.toBe(0)
+  }, 120_000)
+
   test('a submodule that cannot be pushed WITHHOLDS the parent (no dangling gitlink)', async () => {
     const { parent } = await fixture(false)
     writeFileSync(join(parent, 'vendor', 'a.txt'), 'cannot-publish\n')

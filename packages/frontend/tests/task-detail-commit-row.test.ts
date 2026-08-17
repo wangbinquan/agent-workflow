@@ -43,10 +43,20 @@ describe('tasks.detail.tsx — RFC-075 commit&push row wiring', () => {
       "'tasks.commitOutcomePushed'",
       "'tasks.commitOutcomeLocalAuth'",
       "'tasks.commitOutcomeLocalFailed'",
+      "'tasks.commitOutcomeSubrepoFailed'",
+      "'tasks.commitOutcomeSkippedExcluded'",
+      "'tasks.commitOutcomeExcludedHistory'",
       "'tasks.commitOutcomeSkippedEmpty'",
     ]) {
       expect(DETAIL_SRC).toContain(key)
     }
+  })
+
+  test('RFC-308 renders the bounded path receipt and distinguishes history blocks', () => {
+    expect(DETAIL_SRC).toContain('data-testid="commit-push-exclusions"')
+    expect(DETAIL_SRC).toContain('cp.exclusions.historyBlocked')
+    expect(DETAIL_SRC).toContain('tasks.commitExclusionsHistory')
+    expect(DETAIL_SRC).toContain('cp.exclusions.paths.map')
   })
 })
 

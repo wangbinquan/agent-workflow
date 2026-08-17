@@ -20,7 +20,7 @@
 // configure. A stage that refuses BY NAME — naming the slot, the repository,
 // the missing endpoint — puts the resolution failure where somebody reads it.
 
-import { buildProtocolBlock } from '@agent-workflow/shared'
+import { buildProtocolBlock, type WebhookTriggerFields } from '@agent-workflow/shared'
 import { resolveTarget } from '@/modules/code-capability/domain/resolveTarget'
 import { findGateCommand, GATE_DOC_CANDIDATES } from '@/modules/code-capability/domain/targetGate'
 import type { AiCaller, RetryBudget } from '@/modules/code-capability/application/determinismGuard'
@@ -51,10 +51,9 @@ import { resolveCodeHostEndpointId } from '@/modules/code-capability/composition
 import { buildScriptStages } from '@/modules/code-capability/composition/scriptStages'
 import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
 import { resolveMonitorScripts } from '@/services/codeCapabilityScripts'
-import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import type { CodeHostConnectionsService, FetchLike } from '@/services/codeHost/connections'
-import type { WebhookTriggerFields } from '@agent-workflow/shared'
+import type { TaskWorkspaceCommitParticipant } from '@/modules/task-execution/public/participants'
 
 /** Conservative by default, like the review budget. */
 export const DEFAULT_CAPABILITY_BUDGET: RetryBudget = { sameSession: 2, freshSession: 1 }
@@ -137,6 +136,8 @@ export interface CapabilityWiringInput {
   /** Where a script stage runs; defaults to the round's worktree. */
   scriptRunDir?: string
   interpreterPath?: string
+  taskCommit?: TaskWorkspaceCommitParticipant
+  ensureRunDir?: (stageName: string) => string
 }
 
 /** Stage names per capability, so a refusal can name every one of them. */
@@ -258,7 +259,9 @@ export async function buildCapabilityWiring(
     ...(input.codeHostConnections !== undefined ? { connections: input.codeHostConnections } : {}),
     ...(input.codeHostFetch !== undefined ? { fetchImpl: input.codeHostFetch } : {}),
   })
-  const git = createGitAdapter()
+  const git = createGitAdapter(
+    input.taskCommit === undefined ? {} : { taskCommit: input.taskCommit },
+  )
 
   // Absent `makeCaller` means no agent is bound to this capability's slot. The
   // program stages still run for real — worktree, diff, gate, push are all
@@ -441,7 +444,12 @@ export async function buildCapabilityWiring(
               scripts: resolvedScripts.scripts,
               makeEnv: (stageName) => ({
                 worktreePath: input.worktreePath,
-                runDir: input.scriptRunDir ?? join(input.worktreePath, '.aw-run', stageName),
+                runDir:
+                  input.scriptRunDir ??
+                  input.ensureRunDir?.(stageName) ??
+                  (() => {
+                    throw new Error('task execution did not bind a platform run directory')
+                  })(),
                 repos: [],
                 interpreterPath: input.interpreterPath ?? '',
                 workItem: {

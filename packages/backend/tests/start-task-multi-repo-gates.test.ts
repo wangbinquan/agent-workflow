@@ -89,7 +89,7 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
   //   - wrapper-git 现在逐仓快照、逐仓 diff，路径按挂载路径前缀化后合并成
   //     `list<path>`（scheduler.ts runGitWrapperNode / diffableRepos）。不解除的话
   //     仓库组永远用不了平台的 Code → Audit → Fix 主链路——那正是本 RFC 的目的。
-  //   - 上传物落到任务根下的 `.agent-workflow-inputs/`，不属于任何成员仓
+  //   - 上传物落到任务根下的 `.agent-workflow/inputs/`，不属于任何成员仓
   //     （applyUploadsToWorktree 的 inputsSubdir）。
   //
   // 断言从「抛 422」翻成「**能启动**」。留着旧断言等于把禁令又焊回来。

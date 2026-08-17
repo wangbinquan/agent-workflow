@@ -207,8 +207,6 @@ export const TaskRepoSchema = z.object({
    * 真实可能的。任务详情据此在那个成员旁边给出提示，而不是让它静默。
    */
   readonlyDirtyCount: z.number().int().nonnegative().nullish().default(null),
-  /** RFC-248 D1: 平台预置 commit 的 sha；null = 本仓没有嵌套子成员。 */
-  gitignoreCommit: z.string().nullable().default(null),
   /** RFC-034: post-`worktree add` submodule init telemetry per repo. */
   hasSubmodules: z.boolean().nullable(),
   submoduleInitOk: z.boolean().nullable(),
@@ -1161,6 +1159,10 @@ export const COMMIT_PUSH_OUTCOME = [
   'commit-local-failed',
   /** no net change since the last commit → nothing committed */
   'skipped-empty',
+  /** changes existed, but every candidate matched the platform exclusion policy */
+  'skipped-excluded',
+  /** an outgoing local commit touched an excluded path, so push was blocked */
+  'commit-local-excluded-history',
   /**
    * RFC-210: a SUBMODULE of this repo could not be pushed, so the parent's
    * gitlink bump was deliberately withheld. Committing the parent anyway would
@@ -1231,6 +1233,17 @@ export const SubrepoPushResultSchema = z.object({
 })
 export type SubrepoPushResult = z.infer<typeof SubrepoPushResultSchema>
 
+export const TaskCommitExclusionSummarySchema = z.object({
+  /** Total unique repo-relative paths excluded from the candidate/history. */
+  count: z.number().int().nonnegative(),
+  /** Bounded, actor-visible sample. */
+  paths: z.array(z.string()).max(100),
+  truncated: z.boolean(),
+  policyDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  historyBlocked: z.boolean(),
+})
+export type TaskCommitExclusionSummary = z.infer<typeof TaskCommitExclusionSummarySchema>
+
 export const CommitPushMetaSchema = z.object({
   /** Absolute path to the repo worktree this commit row targets. */
   repoPath: z.string(),
@@ -1252,6 +1265,8 @@ export const CommitPushMetaSchema = z.object({
   pushOutcome: CommitPushOutcomeSchema,
   /** Redacted push stderr summary, or null. */
   pushError: z.string().nullable(),
+  /** RFC-308 strict platform exclusion receipt. Optional for historical rows. */
+  exclusions: TaskCommitExclusionSummarySchema.optional(),
   /**
    * RFC-210: per-submodule results, deepest path first. Optional so pre-RFC-210
    * rows keep parsing — and note the schema is non-strict, so a field that is

@@ -1880,6 +1880,10 @@ function commitOutcomeKey(outcome: string): string {
     // what happened. The switch has a default, so typecheck cannot catch it.
     case 'commit-local-subrepo-failed':
       return 'tasks.commitOutcomeSubrepoFailed'
+    case 'skipped-excluded':
+      return 'tasks.commitOutcomeSkippedExcluded'
+    case 'commit-local-excluded-history':
+      return 'tasks.commitOutcomeExcludedHistory'
     default:
       return 'tasks.commitOutcomeSkippedEmpty'
   }
@@ -1907,6 +1911,25 @@ function CommitRunRow({ run, allRuns }: { run: NodeRun; allRuns: NodeRun[] }) {
         <StatusChip kind={nodeRunStatusToKind(run.status)} data-testid="commit-push-outcome">
           {t(commitOutcomeKey(cp.pushOutcome))}
         </StatusChip>{' '}
+        {cp.exclusions !== undefined && cp.exclusions.count > 0 && (
+          <div className="task-detail__commit-exclusions" data-testid="commit-push-exclusions">
+            <span className="data-table__muted">
+              {t(
+                cp.exclusions.historyBlocked
+                  ? 'tasks.commitExclusionsHistory'
+                  : 'tasks.commitExclusions',
+                { count: cp.exclusions.count },
+              )}
+            </span>
+            <ul className="task-detail__subrepos">
+              {cp.exclusions.paths.map((path) => (
+                <li key={path}>
+                  <code>{path}</code>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {/* RFC-210: per-submodule results. Without this the only visible signal
             for a withheld parent is the outcome chip, which says nothing about
             WHICH submodule blocked it. */}

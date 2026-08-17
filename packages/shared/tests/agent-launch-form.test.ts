@@ -61,12 +61,12 @@ describe('deriveAgentLaunchForm — kind mapping matrix (§2.2)', () => {
       required: true,
       agentKind: 'path<pdf>',
       kind: 'upload',
-      targetDir: '.agent-inputs/attachment',
+      targetDir: '.agent-workflow/inputs/agent/attachment',
       accept: ['.pdf'],
       maxCount: 1,
       minCount: 1,
     })
-    expect(agentInputUploadDir('attachment')).toBe('.agent-inputs/attachment')
+    expect(agentInputUploadDir('attachment')).toBe('.agent-workflow/inputs/agent/attachment')
   })
 
   test('path<*> → upload without accept filter; optional → minCount 0', () => {

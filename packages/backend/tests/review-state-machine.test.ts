@@ -31,6 +31,7 @@ import {
 import { runTask as runTaskBase } from '../src/services/scheduler'
 import {
   abortAllActiveTasks,
+  isTaskActive,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
 } from '../src/services/task'
 import { runTestGit } from './helpers/testCommand'
@@ -225,6 +226,10 @@ async function buildHarness(): Promise<Harness> {
     reviewNodeRunId: reviewRuns[0]!.id,
     cleanup: async () => {
       try {
+        for (let attempt = 0; attempt < 500 && isTaskActive(task.id); attempt++) {
+          await Bun.sleep(10)
+        }
+        expect(isTaskActive(task.id), 'review scheduler driver leaked past cleanup').toBe(false)
         db.$client.close()
       } finally {
         rmSync(tmp, { recursive: true, force: true })

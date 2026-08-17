@@ -140,7 +140,7 @@ export async function handleMultipartTaskStart(
   // 4. Materialize the space first so we have a real path to write into.
   const appHome = Paths.root
   // RFC-248 D12: RFC-066 的「多仓 + 上传」禁令已解除——上传物落到任务根下的
-  // 固定目录 `.agent-workflow-inputs/`，不属于任何成员仓（见 applyUploadsToWorktree
+  // 固定目录 `.agent-workflow/inputs/`，不属于任何成员仓（见 applyUploadsToWorktree
   // 的 inputsSubdir）。原本这里与 services/task.ts 各有一道 422 门，两处一并删除。
   // RFC-107 (Codex design-gate F1): run the SAME static workflow validation
   // startTask runs (services/task.ts) BEFORE resolving/cloning the repo. JSON
