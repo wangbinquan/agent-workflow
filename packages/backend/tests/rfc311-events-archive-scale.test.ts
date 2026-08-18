@@ -69,14 +69,19 @@ async function seedRun(db: Db, taskId: string, runId: string): Promise<void> {
   })
 }
 
-async function insertEvents(db: Db, runId: string, n: number): Promise<void> {
+async function insertEvents(
+  db: Db,
+  runId: string,
+  n: number,
+  payloadOf: (i: number) => string = (i) => `line-${i}`,
+): Promise<void> {
   const CHUNK = 2_000
   for (let i = 0; i < n; i += CHUNK) {
     const batch = Array.from({ length: Math.min(CHUNK, n - i) }, (_, j) => ({
       nodeRunId: runId,
       ts: 1_000 + i + j,
       kind: 'stderr' as const,
-      payload: `line-${i + j}`,
+      payload: payloadOf(i + j),
     }))
     await db.insert(nodeRunEvents).values(batch)
   }
@@ -142,6 +147,36 @@ describe('RFC-311 — events archiver at backlog scale', () => {
       const third = await archiveEvents(db, { eventsArchiveThresholds: thresholds }, logsDir)
       expect(third.perGroupArchived).toBe(200)
       expect(await eventCount(db)).toBe(600)
+    } finally {
+      rmSync(logsDir, { recursive: true, force: true })
+    }
+  })
+
+  test('byte watermark fires while the ROW watermark is still far away (proposal C3)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const logsDir = mkdtempSync(join(tmpdir(), 'rfc311-arch-bytes-'))
+    try {
+      await seedRun(db, 't1', 'run1')
+      // 5000 × 1KiB ≈ 5MB — far under the 1M-row watermark, well over 2MB.
+      await insertEvents(db, 'run1', 5_000, () => 'x'.repeat(1024))
+      const result = await archiveEvents(
+        db,
+        {
+          eventsArchiveThresholds: {
+            perNodeRunRows: 1_000_000,
+            globalRows: 1_000_000,
+            perNodeRunBytes: 0,
+            globalBytes: 2 * 1024 * 1024,
+          },
+        },
+        logsDir,
+      )
+      // Derived rows = 2MiB / (1024B payload + fixed-overhead estimate):
+      // exact value tracks the sampling constant, so pin a tolerance band.
+      const remaining = await eventCount(db)
+      expect(result.globalArchived).toBeGreaterThan(2_500)
+      expect(remaining).toBeGreaterThanOrEqual(1_000)
+      expect(remaining).toBeLessThanOrEqual(2_200)
     } finally {
       rmSync(logsDir, { recursive: true, force: true })
     }

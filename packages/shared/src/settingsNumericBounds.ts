@@ -84,6 +84,9 @@ export const SETTINGS_NUMERIC_BOUNDS = {
   'worktreeAutoGc.olderThanDays': { min: 1, max: 3_650, unit: 'days' },
   'eventsArchiveThresholds.perNodeRunRows': { min: 1_000, max: JS_TIMER_MAX_MS },
   'eventsArchiveThresholds.globalRows': { min: 10_000, max: JS_TIMER_MAX_MS },
+  // RFC-311：字节维度水位，0 = 关闭（行数阈值继续兜底）。
+  'eventsArchiveThresholds.perNodeRunBytes': { min: 0, max: JS_TIMER_MAX_MS },
+  'eventsArchiveThresholds.globalBytes': { min: 0, max: JS_TIMER_MAX_MS },
   webhookDeliveryBodyRetentionDays: { min: 1, max: 3_650, unit: 'days' },
   webhookDeliveryRowRetentionDays: { min: 1, max: 3_650, unit: 'days' },
   bindPort: { min: 0, max: 65_535 },

@@ -45,12 +45,48 @@ const HIGH_WATER_KEY = 'events_archive_high_water'
 /**
  * One archival pass. Returns counters for tests / log lines.
  */
+/** RFC-311（proposal C3）——把字节预算折算成有效行数阈值：按最近 1000 行的
+ *  平均 payload 宽度采样（O(1000)，零写放大），与行数阈值取 min。生产事故
+ *  形态正是「行数没到水位、字节已到 2.2GB」。每行外加 ~48B 固定列开销。 */
+interface ArchiveThresholds {
+  perNodeRunRows: number
+  globalRows: number
+  /** 可选：既有调用方/测试仍可传二键形态（bytes 视为关闭）。 */
+  perNodeRunBytes?: number
+  globalBytes?: number
+}
+
+async function effectiveRowThresholds(
+  db: DbClient,
+  thresholds: ArchiveThresholds,
+): Promise<{ perNodeRunRows: number; globalRows: number }> {
+  const { perNodeRunRows, globalRows } = thresholds
+  const perNodeRunBytes = thresholds.perNodeRunBytes ?? 0
+  const globalBytes = thresholds.globalBytes ?? 0
+  if (perNodeRunBytes <= 0 && globalBytes <= 0) return { perNodeRunRows, globalRows }
+  const sampled = (await db.all(
+    sql`SELECT AVG(LENGTH(payload)) AS avg FROM (
+      SELECT payload FROM node_run_events ORDER BY id DESC LIMIT 1000
+    )`,
+  )) as Array<{ avg: number | null }>
+  const avgRowBytes = Math.max(64, Math.round(sampled[0]?.avg ?? 0) + 48)
+  const derive = (bytes: number, rows: number): number =>
+    bytes > 0 ? Math.min(rows, Math.max(1_000, Math.floor(bytes / avgRowBytes))) : rows
+  return {
+    perNodeRunRows: derive(perNodeRunBytes, perNodeRunRows),
+    globalRows: derive(globalBytes, globalRows),
+  }
+}
+
 export async function archiveEvents(
   db: DbClient,
-  config: Pick<Config, 'eventsArchiveThresholds'>,
+  config: { eventsArchiveThresholds: ArchiveThresholds },
   logsDir: string,
 ): Promise<ArchiveRunResult> {
-  const { perNodeRunRows, globalRows } = config.eventsArchiveThresholds
+  const { perNodeRunRows, globalRows } = await effectiveRowThresholds(
+    db,
+    config.eventsArchiveThresholds,
+  )
   const result: ArchiveRunResult = { perGroupArchived: 0, globalArchived: 0, files: [] }
   const touched = new Set<string>()
   let budget = ARCHIVE_TICK_BUDGET_ROWS

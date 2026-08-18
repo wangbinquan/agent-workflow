@@ -58,6 +58,7 @@ import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { startEventsArchiver } from '@/services/eventsArchive'
+import { startRetentionSweeper } from '@/services/maintenanceRetention'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import {
   finishClaimedWebhookWorkspacePrune,
@@ -877,6 +878,15 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // （默认 30 天置空 body、90 天删行），getter 每次 sweep 读取 → 热生效。
   const webhookGcTicker = startWebhookDeliveryGc(db, () => loadConfig(Paths.config))
   const archiveTicker = startEventsArchiver(db, () => loadConfig(Paths.config), Paths.logsDir)
+  // RFC-311（proposal C6）：无界流水表（事件三胞胎/trigger fires/access audit/
+  // probes）的 hourly 保留期清理。
+  const retentionTicker = startRetentionSweeper(db, () => {
+    const cfg = loadConfig(Paths.config)
+    return {
+      eventStreamRetentionDays: cfg.eventStreamRetentionDays,
+      webhookTriggerFiresRetentionDays: cfg.webhookTriggerFiresRetentionDays,
+    }
+  })
   // RFC-213: scheduled backup + retention (disabled by default — backupIntervalMs=0).
   const backupTicker = startBackupScheduler({
     db,
@@ -1246,6 +1256,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     gcTicker.stop()
     webhookGcTicker.stop()
     archiveTicker.stop()
+    retentionTicker.stop()
     backupTicker.stop()
     walCheckpointTicker.stop()
     submoduleRefreshTicker.stop()

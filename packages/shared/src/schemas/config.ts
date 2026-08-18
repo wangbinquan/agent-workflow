@@ -39,6 +39,19 @@ export const WorktreeGcSchema = z.object({
 export const EventsArchiveThresholdsSchema = z.object({
   perNodeRunRows: z.number().int().positive(),
   globalRows: z.number().int().positive(),
+  /** RFC-311（proposal C3）：字节维度水位。行数阈值在 payload 变大时会失控
+   *  （生产 2.2GB ≈ 88 万行,还没碰到 100 万行的旧水位）；归档器按最近 1000
+   *  行的平均行宽把字节预算折算成有效行数阈值,与行数阈值取 min。0 = 关。 */
+  perNodeRunBytes: z
+    .number()
+    .int()
+    .nonnegative()
+    .default(8 * 1024 * 1024),
+  globalBytes: z
+    .number()
+    .int()
+    .nonnegative()
+    .default(256 * 1024 * 1024),
 })
 
 /**
@@ -273,6 +286,13 @@ export const ConfigSchema = z.object({
   webhookDeliveryBodyRetentionDays: z.number().int().min(1).max(3650).default(30),
   /** 投递整行删除天数（审计窗口）。见 webhookDeliveryBodyRetentionDays。 */
   webhookDeliveryRowRetentionDays: z.number().int().min(1).max(3650).default(90),
+
+  // --- RFC-311 无界流水表保留（proposal C6，各键 0 = 不清理）---
+  /** memory_distill_events / intent_turn_events / mcp_runtime_test_events 三张
+   *  事件流水按行时间戳过期。 */
+  eventStreamRetentionDays: z.number().int().min(0).max(3650).default(30),
+  /** webhook_trigger_fires 保留天数。 */
+  webhookTriggerFiresRetentionDays: z.number().int().min(0).max(3650).default(90),
 
   /** Take a raw (byte-copy) pre-migration backup before applying pending
    *  migrations on boot, so a botched upgrade can be rolled back. */
@@ -684,6 +704,8 @@ export const DEFAULT_CONFIG: Config = {
   // RFC-261 webhook 投递保留
   webhookDeliveryBodyRetentionDays: 30,
   webhookDeliveryRowRetentionDays: 90,
+  eventStreamRetentionDays: 30,
+  webhookTriggerFiresRetentionDays: 90,
   backupOnMigration: true,
   sqliteSynchronous: 'NORMAL',
   walCheckpointIntervalMs: 600_000,
@@ -695,6 +717,8 @@ export const DEFAULT_CONFIG: Config = {
   eventsArchiveThresholds: {
     perNodeRunRows: 50_000,
     globalRows: 1_000_000,
+    perNodeRunBytes: 8 * 1024 * 1024,
+    globalBytes: 256 * 1024 * 1024,
   },
   submoduleAutoRefresh: { enabled: true },
   largeOutputThresholdBytes: 1_048_576, // 1 MB
@@ -765,6 +789,10 @@ export const ConfigPatchSchema = ConfigSchema.partial()
       .object({
         perNodeRunRows: boundedSettingsInteger('eventsArchiveThresholds.perNodeRunRows'),
         globalRows: boundedSettingsInteger('eventsArchiveThresholds.globalRows'),
+        perNodeRunBytes: boundedSettingsInteger(
+          'eventsArchiveThresholds.perNodeRunBytes',
+        ).optional(),
+        globalBytes: boundedSettingsInteger('eventsArchiveThresholds.globalBytes').optional(),
       })
       .optional(),
     webhookDeliveryBodyRetentionDays: boundedSettingsInteger(
