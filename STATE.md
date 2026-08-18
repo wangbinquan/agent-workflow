@@ -152,6 +152,16 @@
 >   skipped-legacy-admission-frozen，shared+DB enum+双语文案）+ adoptActiveMr（外部真相建 mission、
 >   merged/closed 记 authoritative terminal 零 claim、同 MR 重放幂等）。测试 19+11 case 全绿；诚实边界
 >   （preflight 独立 probe/soak 只读化/wake replay 命令）记 plan.md 交付注记，T112 出账。
+>   **PR-10（T104–T109 完成；T110–T112 收口中）**：legacy 删除波 + 全旅程自证。T109 全旅程 E2E
+>   （system mock，除 Agent 外全真件）两条旅程绿——create-MR 全生命周期走到外部 merged 终态、
+>   cutover adopt 起点同语义收场；**该 E2E 抓出并修复 4 个生产级缺陷**（mr fact 前置引用让
+>   mission deduped 卡死 / feedback 计数陈旧致重复发射 / 修复轮 candidate 永不发布 / 修复轮基线
+>   错致 push 被拒）。T104/T105：code-capability 102→19 文件（纯读面），writer 家族/composition/
+>   ports/scheduler runCodeRoundNode/三条写路由/webhook code-round 全链/executor 臂/前端两写面
+>   tab 与模板详情路由/code-rounds:launch 权限点/88 个 writer 测试全删，**存储层写函数一并清零**
+>   （读面测试改自持种子 helper）。T106 Git identity 负扫描 0、T107 cross-context import 双向零、
+>   T108 裁决**不 drop 任何 legacy 表**（6 张零消费者表带审计价值，清理随 RFC-311 保留期治理；
+>   新增棘轮锁定零消费者 + 已删文件不得复活 + 模块零写动词）。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：
