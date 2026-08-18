@@ -74,7 +74,7 @@ function spaceFor(taskId: string, root: string): MaterializedSpace {
     ],
     nodePaths: [],
     cleanup: { taskId, ownedRoot: null, worktrees: [], state: 'owned', report: null },
-  } as MaterializedSpace
+  } as unknown as MaterializedSpace
 }
 
 describe('RFC-311 — branch_started_at is maintained by the real paths', () => {
