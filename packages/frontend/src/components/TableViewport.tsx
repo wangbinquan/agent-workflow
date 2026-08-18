@@ -5,7 +5,6 @@
 // the real scroll container and the overflow-edge affordance state.
 
 import {
-  isValidElement,
   useCallback,
   useEffect,
   useLayoutEffect,
