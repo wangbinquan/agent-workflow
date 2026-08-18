@@ -16,6 +16,7 @@ import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
 import { doctorCommand, formatDoctor } from './cli/doctor'
 import { migrateCommand } from './cli/migrate'
+import { migrationReportCommand } from './cli/migrationReport'
 import { startCommand } from './cli/start'
 import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
@@ -131,6 +132,12 @@ async function main(): Promise<void> {
       break
     }
 
+    case 'migration-report': {
+      const { output } = await migrationReportCommand(Bun.argv.slice(3))
+      process.stdout.write(output)
+      break
+    }
+
     case 'version':
       // RFC-213 impl-gate P1-3: real binary identity (build-time injected tag;
       // dev prints 0.0.0-dev) — the same value the pre-migration restore gate
@@ -194,6 +201,9 @@ async function main(): Promise<void> {
         '  config set <key> <value>          update a config field; value is parsed as JSON if possible',
       )
       console.log('  migrate                           apply pending DB migrations')
+      console.log(
+        '  migration-report [--json]         RFC-310 legacy asset migration analysis (read-only)',
+      )
       console.log(
         '  backup                            write a tar.gz snapshot under ~/.agent-workflow/backups/',
       )

@@ -72,8 +72,8 @@ describe('PERMISSIONS catalog', () => {
     // read/update（+2）⇒ **100**。危险字段（adapter 的 executable/secret）沿
     // RFC-309 字段级门先例仍走 `scripts:author`，不新设系统域点。
     // RFC-310 PR-2 +5（development-missions launch/read/interact/cancel/retry）⇒ 105；
-    // PR-7b +3（handoff/attach/resume）⇒ 108。
-    expect(PERMISSIONS.length).toBe(108)
+    // PR-7b +3（handoff/attach/resume）⇒ 108；PR-9 +1（cutover runbook）⇒ 109。
+    expect(PERMISSIONS.length).toBe(109)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -227,7 +227,7 @@ describe('PERMISSIONS catalog', () => {
     }
   })
 
-  test('user preset excludes exactly its 27 individually grantable differences', () => {
+  test('user preset excludes exactly its 28 individually grantable differences', () => {
     const userPresetMissing: Permission[] = [
       // RFC-099/RFC-305: repos stay OUT of the ownership ACL model — the repos
       // write verbs are absent from the user preset but individually grantable.
@@ -237,6 +237,8 @@ describe('PERMISSIONS catalog', () => {
       'repos:update',
       'repos:delete',
       'repos:execute',
+      // RFC-310 PR-9 —— cutover runbook 是全局 admission 切换，admin 档。
+      'development-missions:cutover',
       'users:read',
       'users:write',
       'settings:read',

@@ -48,6 +48,7 @@ describe('RFC-305 exhaustive permission catalog', () => {
       'repos:delete',
       'tasks:delete',
       'repos:execute',
+      'development-missions:cutover', // RFC-310 PR-9（admin 档 runbook 点）
       'users:read',
       'users:write',
       'settings:read',
@@ -68,7 +69,7 @@ describe('RFC-305 exhaustive permission catalog', () => {
     // 78 points − 7 guest baseline = 71.
     // RFC-304 had made it 74 (81 − 7) when the two template layers were eight
     // points; RFC-309 merged them to four and added `code-rounds:launch`.
-    expect(grantableAdditionalPermissions('guest')).toHaveLength(101) // RFC-310 +22+5、PR-7b +3
+    expect(grantableAdditionalPermissions('guest')).toHaveLength(102) // RFC-310 +22+5、PR-7b +3、PR-9 +1
     expect(grantableAdditionalPermissions('guest')).toContain('resource-acl:private')
     expect(grantableAdditionalPermissions('guest')).toContain('tasks:execute')
   })

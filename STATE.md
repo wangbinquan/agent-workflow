@@ -129,7 +129,21 @@
 > 对拍锁；fork X：mission 时间线/handoff·attach·resume 控件/upgrade 徽标/evidence 分段续读 browser；
 > 主 session：assignments 三级指派页 + detail pipeline 投影 + handover 命令上提 composition（真 agent
 > cancel）。前端新测 21 绿 + 双 inventory 棘轮绿。T93 余量：RFC-310 页面的浏览器级 E2E/visual 归
-> PR-10 T109。PR-7b 绿证：910f2103 CI success。
+> PR-10 T109。PR-7b 绿证：910f2103 CI success。PR-8 提交 119c775c 的 worktree gate 抓出 4 个设计系统
+> 棘轮红（TableViewport ×3/--surface token/NumberInput 计数/unused import）——修复 a37073e1；该 gate
+> 同时暴露 RFC-311 并行 session 的半边分离与三处归属红，已跨 session 协调收敛（对方补齐 shared/backend
+> 半边 f64f0db3 + settings-bounds 修复 8ee9fc8d，我方顺手修 S-14 快照与 gallery fixture 并注明归属）。
+> **PR-9（T94–T103）已完成**：迁移与单 writer cutover。fork Y：migration analyzer（逐项 mappable/
+> partial/blocked+复跑稳定 digest、adapter/assignment 只出 proposal 不落库、arbitrate/select/hook 全
+> blocked 绝不 AI 翻译、矩阵五格闭包才产 employee draft）+ materialize（既有创建命令建 unpublished
+> draft、幂等、报告持久化 maintenance_state）+ CLI migration-report；主 session：cutover 状态机
+> （domain 纯转移 pre→frozen→live、rollback 仅 frozen、flip 后 typed 拒）+ CutoverStore port/sqlite 实现
+>
+> - HTTP 5 端点（GET 对账读面=state+现算 preflight+persisted）+ 权限点 cutover（108→109 全链计数锁）
+> - legacy 双入口 gate（rounds POST 409 legacy-admission-frozen；webhook code-round fire 落
+>   skipped-legacy-admission-frozen，shared+DB enum+双语文案）+ adoptActiveMr（外部真相建 mission、
+>   merged/closed 记 authoritative terminal 零 claim、同 MR 重放幂等）。测试 19+11 case 全绿；诚实边界
+>   （preflight 独立 probe/soak 只读化/wake replay 命令）记 plan.md 交付注记，T112 出账。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

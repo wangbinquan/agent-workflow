@@ -54,6 +54,7 @@ import {
   buildDevelopmentDeliveryDeps,
   buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
+  resolveRepoClaimKey,
 } from '@/services/developmentDeliveryDeps'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { ulid } from 'ulid'
@@ -64,7 +65,17 @@ import {
   EVIDENCE_READ_MAX_BYTES,
   readEvidenceFileRange,
 } from '@/modules/development-automation/application/pipelineEvidenceRead'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/util/http'
+import {
+  runCutoverCommand,
+  adoptActiveMr,
+} from '@/modules/development-automation/application/cutover'
+import { createSqliteCutoverStore } from '@/modules/development-automation/infrastructure/sqliteCutoverStore'
+import {
+  runMigrationAnalysis,
+  materializeMigrationCandidates,
+  readPersistedMigrationRun,
+} from '@/modules/development-automation/infrastructure/migrationAssets'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { readFileSync } from 'node:fs'
@@ -724,6 +735,145 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
       log.info('mission resume', { missionId, userId: actorOf(c).user.id })
       fireReconcile(missionId)
       return c.json({ missionId, ...result })
+    },
+  )
+
+  // ---- PR-9 T97–T103：cutover runbook（analyze/materialize/freeze/flip/
+  // rollback/adopt-mr + 读面）。全部走 development-missions:cutover——影响面
+  // 是整个 legacy 入口而非单条 mission 的一次性运维操作。
+  const cutoverStore = createSqliteCutoverStore(deps.db)
+  const cutoverDeps = {
+    cutoverStore,
+    now: () => Date.now(),
+    mintId: () => ulid(),
+  }
+  // adopt 只需要 observe——与 composition 内绑的同一构造（同 db 语义等价）。
+  const adoptPorts = { mrEffects: buildDevelopmentDeliveryDeps(deps.db, deps.secretBox).mrEffects }
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/code/cutover',
+      permissions: ['development-missions:cutover'],
+      tokenAccess: 'allow',
+      summary: 'Cutover state + freshly computed migration preflight report (T97 reconciliation)',
+    },
+    async (c) => {
+      // preflight 现算保证新鲜（legacy 表量级小）；persisted 是上次
+      // materialize 的落库结果（没跑过为 null）。两者并示即 T97 对账面。
+      const preflight = await runMigrationAnalysis(deps.db, Date.now())
+      return c.json({
+        state: cutoverStore.readState(),
+        preflight,
+        persisted: await readPersistedMigrationRun(deps.db),
+      })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/cutover/materialize',
+      permissions: ['development-missions:cutover'],
+      tokenAccess: 'allow',
+      summary: 'Materialize migration candidates as unpublished drafts (T95, idempotent)',
+    },
+    async (c) => {
+      const report = await runMigrationAnalysis(deps.db, Date.now())
+      const result = await materializeMigrationCandidates(deps.db, report)
+      log.info('cutover materialize', {
+        userId: actorOf(c).user.id,
+        created: result.created.length,
+        skipped: result.skipped.length,
+      })
+      return c.json({ report, ...result })
+    },
+  )
+
+  for (const command of ['freeze', 'flip', 'rollback'] as const) {
+    registerRoute(
+      app,
+      {
+        method: 'POST',
+        path: `/api/code/cutover/${command}`,
+        permissions: ['development-missions:cutover'],
+        tokenAccess: 'allow',
+        summary:
+          command === 'freeze'
+            ? 'Freeze legacy admission (T99: rounds API + code-round webhooks reject new work)'
+            : command === 'flip'
+              ? 'Flip the writer generation to missions (T101)'
+              : 'Roll back a frozen cutover to pre (T102; refused after flip)',
+      },
+      async (c) => {
+        const result = runCutoverCommand(cutoverDeps, command)
+        if (!result.ok) {
+          throw new ConflictError(
+            result.code === 'cutover-rollback-after-flip'
+              ? 'cutover-rollback-after-flip'
+              : 'cutover-phase-invalid',
+            result.detail,
+          )
+        }
+        log.info('cutover command', { command, userId: actorOf(c).user.id, state: result.state })
+        return c.json({ state: result.state })
+      },
+    )
+  }
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/cutover/adopt-mr',
+      permissions: ['development-missions:cutover'],
+      tokenAccess: 'allow',
+      summary: 'Adopt an externally open MR as a watching mission (T100; runbook step 4/5)',
+    },
+    async (c) => {
+      const body = z
+        .object({
+          repositoryId: z.string().min(1),
+          mrIid: z.string().min(1),
+          employee: z.object({ id: z.string(), revision: z.number().int() }).nullish(),
+          policy: z.object({ id: z.string(), revision: z.number().int() }).nullish(),
+          legacyWorkItemId: z.string().nullish(),
+          legacyRoundId: z.string().nullish(),
+        })
+        .parse(await safeJsonOrThrowInvalid(c.req.raw))
+      const claimKey = resolveRepoClaimKey(deps.db, deps.secretBox, body.repositoryId)
+      if (claimKey === null) {
+        throw new ValidationError(
+          'cutover-repo-binding-missing',
+          'repository has no resolvable code-host binding',
+        )
+      }
+      const result = await adoptActiveMr(
+        { store: missionStore, ports: adoptPorts, ...cutoverDeps },
+        {
+          repositoryId: body.repositoryId,
+          mrIid: body.mrIid,
+          codeHostEndpointRef: claimKey.codeHostEndpointRef,
+          stableProjectRef: claimKey.stableProjectRef,
+          employee: body.employee ?? null,
+          policy: body.policy ?? null,
+          legacyWorkItemId: body.legacyWorkItemId ?? null,
+          legacyRoundId: body.legacyRoundId ?? null,
+          actorUserId: actorOf(c).user.id,
+        },
+      )
+      if (!result.ok) {
+        throw new ConflictError('cutover-adopt-rejected', `${result.code}: ${result.detail}`)
+      }
+      log.info('cutover adopt-mr', {
+        userId: actorOf(c).user.id,
+        missionId: result.missionId,
+        terminal: result.terminal,
+      })
+      if (result.terminal === null) fireReconcile(result.missionId)
+      return c.json(result)
     },
   )
 }

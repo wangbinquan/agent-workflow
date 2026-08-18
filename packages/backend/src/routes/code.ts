@@ -41,11 +41,13 @@ import {
 import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
 import { projectStageGraph } from '@/modules/code-capability/domain/stageGraph'
 import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
+import { legacyAdmissionAllowedIn } from '@/modules/development-automation/domain/cutover'
+import { createSqliteCutoverStore } from '@/modules/development-automation/infrastructure/sqliteCutoverStore'
 import { registerRoute } from '@/routes/registry'
 import { startCodeRoundTask } from '@/services/codeRoundLaunch'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import type { AppDeps } from '@/server'
-import { ValidationError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/util/errors'
 import { safeJsonOrThrowInvalid } from '@/util/http'
 
 const EnableBodySchema = z.object({
@@ -416,6 +418,14 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
     // route existed the only way to start any round was a real webhook
     // delivery, so "use this template" had no answer inside the platform.
     async (c) => {
+      // RFC-310 cutover：freeze/live 后旧 code-round writer 拒新（409）。放在
+      // body 解析前——冻结不是「你的表单有问题」，是入口整体关闭。
+      if (!legacyAdmissionAllowedIn(createSqliteCutoverStore(deps.db).readState())) {
+        throw new ConflictError(
+          'legacy-admission-frozen',
+          'legacy code-round admission is frozen by the RFC-310 cutover; launch a development mission instead',
+        )
+      }
       const parsed = LaunchBodySchema.safeParse(await safeJsonOrThrowInvalid(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError(

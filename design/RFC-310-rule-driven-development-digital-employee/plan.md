@@ -268,11 +268,11 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
   effects 台账（`PIPELINE_EFFECT_KINDS` 同发布链 guard 豁免；响应丢失由 adapter adopt 语义兜底）；触发/重跑后
   `__pipeline.collectedAt=0` 强制 recollect。
 - **T63**：integration `developmentAdapterRunner` 扩 pipeline 三 op（`--collect-pipeline/--trigger-pipeline/
-  --rerun-pipeline` + `AW_PIPELINE_*` env）+ `developmentPipelineAdapter`（purpose/operations 运行时对拍，
+--rerun-pipeline` + `AW_PIPELINE_*` env）+ `developmentPipelineAdapter`（purpose/operations 运行时对拍，
   `operation-not-declared` typed 拒）+ `composition/pipelineEvidence.ts`；DA 端口胶水在装配点
   （`services/developmentDeliveryDeps.ts` buildDevelopmentPipelineDeps：sink 生命周期归平台、receipt 压平）。
 - **T64/T66 判定语义**（fork Q 裁决，测试锁定）：fence 优先级按可达性 `head-moved > target-moved >
-  expected-head-mismatch > provider-head-mismatch`（指令原排序会让 head-moved 数学不可达）；skipped 归
+expected-head-mismatch > provider-head-mismatch`（指令原排序会让 head-moved 数学不可达）；skipped 归
   failing（非 pass 非进行中的 required gate 一律 failing）；queued/running 两 set 都不进（由 anyRunning+wait
   兜）；policy required 集是权威（manifest.required 只是 adapter 转述）。provider 无 head 绑定 ⇒ envelope
   providerHeadSha=null ⇒ completeness 强制 partial（fence 跳过 providerHead 对拍，facts 面恒不 pass）。
@@ -323,7 +323,7 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
   `collect-mr-facts`；apply 结算的 dispositions（orchestrator 冻结 `__feedback.lastDispositions`）逐 thread →
   `reply-feedback`（effect 台账 `reply:<mission>:<thread>:<revision>`，只回复绝不 resolve，正文含 self marker
   =missionId）+ 台账 addressed/needs-human 推进；selectable feedback 无规则接手 → 诚实 `wait(feedback-awaiting-
-  policy)`（不代替 policy 决定）；watching + requiredGatesAllPass → `publish-readiness`（既有 arm 推进状态）。
+policy)`（不代替 policy 决定）；watching + requiredGatesAllPass → `publish-readiness`（既有 arm 推进状态）。
   terminal 由 fixed guard 派 mark-terminal（不在链内）。
 - **T72**：integration `mrFacts.ts` 三读 fence collector（head 漂移 `mr-facts-head-race` 整组丢弃；threads 单页
   100 超限 typed 拒不冒充完整；approvals 读不到 = null 不伪造；github REST 无 thread resolve 面 ⇒ resolved 恒
@@ -351,15 +351,15 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
 ### PR-7 后半交付注记（2026-08-18，T77/T79/T80/T83；T78 部分）
 
 - **T77**：source-control `conflictMerge.ts`——prepare（临时 clone → merge target into source `--no-commit
-  --no-ff`；干净合并 = `no-conflict` typed 拒【facts 过期信号，重采而非重试】；冲突态保留 markers+MERGE_HEAD）
-  + finish（「已解决」按工作树 marker 内容检测而非索引 unmerged——Agent 无 Git，add 是 finish 的职责；只
-  add 冲突集，顺手改动 `conflict-extra-changes` 拒不收编；平台身份 merge commit 双 parent；零 push——发布
-  归 deliverCandidate CAS）。`bindConflictMergeParticipant` 已入 composition 与两装配点。
+--no-ff`；干净合并 = `no-conflict` typed 拒【facts 过期信号，重采而非重试】；冲突态保留 markers+MERGE_HEAD）
+  - finish（「已解决」按工作树 marker 内容检测而非索引 unmerged——Agent 无 Git，add 是 finish 的职责；只
+    add 冲突集，顺手改动 `conflict-extra-changes` 拒不收编；平台身份 merge commit 双 parent；零 push——发布
+    归 deliverCandidate CAS）。`bindConflictMergeParticipant` 已入 composition 与两装配点。
 - **T78 部分（🚧）**：conflict 决策面已接（care 链 §4.7 顺序 2：report-only 呈现于 readiness；repair 模式
   typed block `conflict-repair-agent-surface-not-wired`）；**Agent 执行面欠三件**——workspaceValidator 的
   edit-conflicts profile（冲突集 writablePrefixes）、orchestrator 的 merge-workspace 物化分支（prepare 的
   workspace 含 .git，不同于 actionWorkspace）、conflictRefs 闭集注入。validator 的 `conflict-path-outside-
-  markers` code 与 envelope 成员 PR-4 已备。归 PR-8 或专项。
+markers` code 与 envelope 成员 PR-4 已备。归 PR-8 或专项。
 - **T79**：conflict shortcut 负锁（source-control 禁 `-X ours/theirs`/`--strategy=ours|theirs`/rebase）+
   T84 主扫描的 force 面 + policy `conflict.mode` 默认 report-only/maxRepairAttempts 既有。
 - **T80**：handoff（bumpEpoch+fence → 撤在途 action → prepared invalidate → dispatched 留 settleFence
@@ -428,19 +428,47 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
 
 | 编号 | 任务                                                                                | 依赖        | 状态 |
 | ---- | ----------------------------------------------------------------------------------- | ----------- | ---- |
-| T94  | migration analyzer：模板/矩阵/script/hook/arbitrate/select 逐项分类与 source digest | T0,T13-T16  | ⏳   |
-| T95  | 生成 ActionTemplate/DigitalEmployee/Policy/Adapter candidates；无法映射显式 blocked | T94         | ⏳   |
-| T96  | migration report UI/CLI：旧 id/ACL/upstream、差异、缺项、publish gate               | T85-T90,T95 | ⏳   |
-| T97  | schema expand/backfill verify/backup-restore；legacy rows 尚不 drop                 | T21,T95     | ⏳   |
-| T98  | cutover preflight：每 repo employee/policy/adapter/no-Git probe/dry decision 全绿   | T52,T96,T97 | ⏳   |
-| T99  | freeze old admission + delivery backlog + quiesce/cancel old rounds                 | T98         | ⏳   |
-| T100 | 从 external truth 建 Mission、legacy link、active MR claim；旧未发布 workspace 废弃 | T99         | ⏳   |
-| T101 | writer generation flip + replay wake backlog + per-MR single-writer verification    | T100        | ⏳   |
-| T102 | rollback drill：无 side effect 前回退；有 side effect 后 stop/reconcile/handoff     | T101        | ⏳   |
-| T103 | soak 后 legacy API/UI/worker 只读化；查询仍可追溯                                   | T101,T102   | ⏳   |
+| T94  | migration analyzer：模板/矩阵/script/hook/arbitrate/select 逐项分类与 source digest | T0,T13-T16  | ✅   |
+| T95  | 生成 ActionTemplate/DigitalEmployee/Policy/Adapter candidates；无法映射显式 blocked | T94         | ✅   |
+| T96  | migration report UI/CLI：旧 id/ACL/upstream、差异、缺项、publish gate               | T85-T90,T95 | ✅   |
+| T97  | schema expand/backfill verify/backup-restore；legacy rows 尚不 drop                 | T21,T95     | ✅   |
+| T98  | cutover preflight：每 repo employee/policy/adapter/no-Git probe/dry decision 全绿   | T52,T96,T97 | ✅   |
+| T99  | freeze old admission + delivery backlog + quiesce/cancel old rounds                 | T98         | ✅   |
+| T100 | 从 external truth 建 Mission、legacy link、active MR claim；旧未发布 workspace 废弃 | T99         | ✅   |
+| T101 | writer generation flip + replay wake backlog + per-MR single-writer verification    | T100        | ✅   |
+| T102 | rollback drill：无 side effect 前回退；有 side effect 后 stop/reconcile/handoff     | T101        | ✅   |
+| T103 | soak 后 legacy API/UI/worker 只读化；查询仍可追溯                                   | T101,T102   | ✅   |
 
 cutover 的验收样本必须包含：无 MR 的 requirement、已有 MR/绿、已有 MR/红、feedback 待处理、冲突、运行中
 Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
+
+### PR-9 交付注记（2026-08-18）
+
+- **T94/T95/T96**：`application/migrationAnalyzer.ts`（纯分析器：逐项 mappable/partial/blocked +
+  typed blockedReasons + 复跑稳定 sourceDigest）+ `infrastructure/migrationAssets.ts`（legacy 两表
+  只读采集、materialize 经既有创建命令建 **unpublished draft**、幂等 skipped、报告+结果持久化
+  `maintenance_state` key `rfc310-migration-report`）+ CLI `agent-workflow migration-report [--json]`。
+  契约要点：legacy 能力/slot 名钉本地常量（PR-10 删 legacy 后报告仍可解释）；adapter/assignment
+  targets 只出 proposal 不落库（`manual-authoring-required` / `proposal-only`）；arbitrate/select/hook
+  全 blocked 绝不 AI 翻译；矩阵五格闭包（非 blocked 引用）才产 employee draft；legacy `public` 行
+  ACL 以 migration-only 直写恢复。
+- **T97–T103 机制面**：`domain/cutover.ts`（纯状态机 pre→frozen→live + rollback 判定）+
+  `application/cutover.ts`（runCutoverCommand / adoptActiveMr 经 CutoverStore port）+
+  `infrastructure/sqliteCutoverStore.ts`（maintenance_state key `rfc310-cutover-state` + legacy link
+  台账）。HTTP 面 5 端点（GET cutover 读面=T97 对账：state+现算 preflight+persisted materialize 结果；
+  materialize/freeze/flip/rollback/adopt-mr），权限点 `development-missions:cutover`（admin 档，
+  目录 108→109 全链计数锁同步）。legacy 双入口 gate：`/api/code/rounds` POST 在 frozen/live 409
+  `legacy-admission-frozen`（body 解析前）；webhook code-round fire 在 supersede 之前短路落
+  `skipped-legacy-admission-frozen`（shared enum + DB schema enum + zh/en outcome 文案）。adopt：
+  observe 外部真相→createMission(adopt)→active claim→legacy link（receipt=观察快照）；merged/closed
+  记 authoritative terminal 零 claim 零 action；同 MR 重放幂等（cutover launch key）。
+- **测试**：`rfc310-pr9-cutover.test.ts` 19 case（状态机矩阵/持久化重读/双入口 gate 正反/adopt 六
+  样本）+ `rfc310-pr9-migration-analyzer.test.ts` 11 case；route error code ratchet 五码点名。
+- **诚实边界（不阻塞，T112 出账）**：T98 preflight 为对账读面（per-repo dry decision probe 未做
+  独立命令，能力由 GET cutover 的 preflight + policy simulator 覆盖）；T99 的「cancel 运行中旧
+  rounds」与 T103 的 soak 只读化是 runbook 人工步骤（机内 gate 已挡新入，存量 round 自然收敛，
+  legacy 写面删除在 PR-10 T104/T105）；T101 的 wake backlog replay 依赖既有 30s sweep（无独立
+  replay 命令）；writer generation 值当前只入 state/审计，未做 per-effect generation 对拍。
 
 ## 12. PR-10：收口、删除与发布
 

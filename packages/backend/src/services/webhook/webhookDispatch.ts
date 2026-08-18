@@ -11,6 +11,8 @@
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { startCodeRoundTask } from '@/services/codeRoundLaunch'
+import { legacyAdmissionAllowedIn } from '@/modules/development-automation/domain/cutover'
+import { createSqliteCutoverStore } from '@/modules/development-automation/infrastructure/sqliteCutoverStore'
 
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import { buildInheritedActor } from '@/auth/actor'
@@ -799,6 +801,19 @@ async function fireTrigger(
         })
         return
       }
+    }
+
+    // RFC-310 cutover：freeze/live 后旧 code-round writer 不再收新工作。放在
+    // supersede 之前——冻结期连「取消旧任务」这步都不做（webhook 只留 delivery
+    // 痕 + fire 行，Mission 面经 MR claim 的 wake hint 自行采集，见 routes/
+    // webhooks.ts T82）。仅拦 code-round：agent/workflow/workgroup 触发与
+    // cutover 无关。
+    if (
+      effectiveTrigger.launchKind === 'code-round' &&
+      !legacyAdmissionAllowedIn(createSqliteCutoverStore(db).readState())
+    ) {
+      await recordFire(db, { ...base, outcome: 'skipped-legacy-admission-frozen' })
+      return
     }
 
     // supersede（D8/D21）：同流最近一次 launched 的任务未终态 → 取消。

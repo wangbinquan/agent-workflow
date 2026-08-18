@@ -220,6 +220,8 @@ export const PERMISSIONS = [
   'development-missions:handoff',
   'development-missions:attach',
   'development-missions:resume',
+  // RFC-310 PR-9 —— cutover runbook 操作面（freeze/flip/rollback/adopt-mr）。
+  'development-missions:cutover',
   'tasks:execute',
   // NOTE: no `skills:execute` — no execute-semantics route in the skills domain.
   //
@@ -661,6 +663,12 @@ const permissionCatalog = {
     group: 'repositories',
   }),
   'development-missions:resume': catalogEntry('development-missions:resume', {
+    group: 'repositories',
+    risk: 'elevated',
+  }),
+  // cutover 改全局 admission gate 并接管外部 MR——一次性的 runbook 操作，
+  // 影响面是整个 legacy 入口而非单条 mission。
+  'development-missions:cutover': catalogEntry('development-missions:cutover', {
     group: 'repositories',
     risk: 'elevated',
   }),

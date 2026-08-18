@@ -10,12 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type {
-  CreateWorkflow,
-  Workflow,
-  WorkflowDetail,
-  WorkflowListItem,
-} from '@agent-workflow/shared'
+import type { CreateWorkflow, WorkflowDetail, WorkflowListItem } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useResourceList } from '@/hooks/useResourceList'
 import { describeApiError } from '@/i18n'

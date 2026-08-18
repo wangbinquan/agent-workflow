@@ -117,6 +117,7 @@ const EN_ACTIONS = {
   handoff: 'Hand off',
   attach: 'Attach',
   resume: 'Resume',
+  cutover: 'Cut over',
 } satisfies Record<PermissionAction, string>
 
 const ZH_ACTIONS = {
@@ -144,6 +145,7 @@ const ZH_ACTIONS = {
   handoff: '交接',
   attach: '挂接',
   resume: '恢复',
+  cutover: '切换',
 } satisfies Record<PermissionAction, string>
 
 const SPECIAL: Record<Locale, Partial<Record<Permission, PermissionCatalogTranslation>>> = {

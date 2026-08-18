@@ -1362,6 +1362,7 @@ export const webhookTriggerFires = sqliteTable(
         'skipped-mr-stream-terminal',
         'skipped-mr-stream-identity-missing',
         'skipped-trigger-invalid',
+        'skipped-legacy-admission-frozen', // RFC-310 cutover freeze 后旧 code-round writer 拒新
       ],
     }).notNull(),
     supersededTaskId: text('superseded_task_id'), // 本次 fire 取消的旧任务

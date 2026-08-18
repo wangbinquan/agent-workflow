@@ -557,6 +557,7 @@ export const WEBHOOK_FIRE_OUTCOMES = [
   'skipped-mr-stream-terminal', // RFC-303：launch guard 被更晚终态 revision 撤销
   'skipped-mr-stream-identity-missing', // RFC-303：无法建立可终止的稳定 MR binding
   'skipped-trigger-invalid', // RFC-303：存量/并发坏行违反 terminal-policy 组合约束
+  'skipped-legacy-admission-frozen', // RFC-310：cutover freeze 后旧 code-round writer 拒新（delivery 留痕，Mission 面接管）
 ] as const
 export const WebhookFireOutcomeSchema = z.enum(WEBHOOK_FIRE_OUTCOMES)
 export type WebhookFireOutcome = z.infer<typeof WebhookFireOutcomeSchema>

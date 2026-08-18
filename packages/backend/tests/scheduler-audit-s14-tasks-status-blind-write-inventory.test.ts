@@ -93,7 +93,10 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // 'canceled-by-parent-cascade'（WHERE status='canceled' 守卫，绝不翻状态）。
   // RFC-287 G7 — 延后仓库准备成功后，在同一事务只回填 worktreePath / branch /
   // baseCommit / repoPath；任务状态仍由 lifecycle CAS 写点独占。
-  'services/task.ts': 2,
+  // RFC-311 PR-4 — 祖先链 branchStartedAt 维护（MAX(branchStartedAt, now) 单
+  // 伴随列，keyset 快路径的排序锚），永不触碰 status（归属 51e15833，锁由
+  // RFC-310 session 顺手同步）。
+  'services/task.ts': 3,
   // RFC-167: persistDwState writes workgroup_config_json only (dw phase /
   // attempts / generatedDef on the task's config copy) — never `status`
   // (workgroupRunner persistGate 同款).
