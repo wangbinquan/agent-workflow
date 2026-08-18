@@ -16,11 +16,9 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
-import type { MissionRow } from '../src/modules/development-automation/application/ports/missionStore'
 import type {
   CandidateDeliveryPort,
   MrEffectsPort,
-  ReconcilerPorts,
 } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 import {

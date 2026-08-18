@@ -114,6 +114,9 @@ const EN_ACTIONS = {
   interact: 'Interact',
   cancel: 'Cancel',
   retry: 'Retry',
+  handoff: 'Hand off',
+  attach: 'Attach',
+  resume: 'Resume',
 } satisfies Record<PermissionAction, string>
 
 const ZH_ACTIONS = {
@@ -138,6 +141,9 @@ const ZH_ACTIONS = {
   interact: '交互',
   cancel: '取消',
   retry: '重试',
+  handoff: '交接',
+  attach: '挂接',
+  resume: '恢复',
 } satisfies Record<PermissionAction, string>
 
 const SPECIAL: Record<Locale, Partial<Record<Permission, PermissionCatalogTranslation>>> = {
