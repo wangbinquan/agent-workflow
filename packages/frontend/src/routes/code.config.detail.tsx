@@ -23,6 +23,7 @@ import { Field, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusChip } from '@/components/StatusChip'
+import { TableViewport } from '@/components/TableViewport'
 import { AclPanel } from '@/components/AclPanel'
 import { usePermission } from '@/hooks/useActor'
 import { CONFIG_KIND_SPECS, isConfigKind, type ConfigKind } from './code.config'
@@ -280,35 +281,37 @@ function EmployeeSummary(props: { draft: Record<string, unknown> }): ReactElemen
       {routes.length === 0 ? (
         <p>{t('code.config.noRoutes')}</p>
       ) : (
-        <table data-testid="config-employee-routes">
-          <thead>
-            <tr>
-              <th>{t('code.config.colCapability')}</th>
-              <th>{t('code.config.colRules')}</th>
-              <th>{t('code.config.colFallback')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {routes.map((route, index) => {
-              const r = route as {
-                capabilityId?: string
-                rules?: unknown[]
-                fallbackTemplateRef?: string | null
-              }
-              return (
-                <tr key={r.capabilityId ?? index}>
-                  <td>
-                    <code>{r.capabilityId ?? '—'}</code>
-                  </td>
-                  <td>{Array.isArray(r.rules) ? r.rules.length : 0}</td>
-                  <td>
-                    <code>{r.fallbackTemplateRef ?? '—'}</code>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <TableViewport label={t('code.config.routesTitle')}>
+          <table data-testid="config-employee-routes">
+            <thead>
+              <tr>
+                <th>{t('code.config.colCapability')}</th>
+                <th>{t('code.config.colRules')}</th>
+                <th>{t('code.config.colFallback')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {routes.map((route, index) => {
+                const r = route as {
+                  capabilityId?: string
+                  rules?: unknown[]
+                  fallbackTemplateRef?: string | null
+                }
+                return (
+                  <tr key={r.capabilityId ?? index}>
+                    <td>
+                      <code>{r.capabilityId ?? '—'}</code>
+                    </td>
+                    <td>{Array.isArray(r.rules) ? r.rules.length : 0}</td>
+                    <td>
+                      <code>{r.fallbackTemplateRef ?? '—'}</code>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </TableViewport>
       )}
       <h4>{t('code.config.bindingsTitle')}</h4>
       <dl className="mission-kv">
@@ -395,38 +398,42 @@ function ProfileSummary(props: { draft: Record<string, unknown> }): ReactElement
       {steps.length === 0 ? (
         <p>{t('code.config.noSteps')}</p>
       ) : (
-        <table data-testid="config-profile-steps">
-          <thead>
-            <tr>
-              <th>{t('code.config.colStep')}</th>
-              <th>{t('code.config.colProgram')}</th>
-              <th>{t('code.config.colTimeout')}</th>
-              <th>{t('code.config.colExitCodes')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {steps.map((step, index) => {
-              const s = step as {
-                stepId?: string
-                programRef?: string
-                timeoutMs?: number
-                successExitCodes?: number[]
-              }
-              return (
-                <tr key={s.stepId ?? index}>
-                  <td>
-                    <code>{s.stepId ?? '—'}</code>
-                  </td>
-                  <td>
-                    <code>{s.programRef ?? '—'}</code>
-                  </td>
-                  <td>{typeof s.timeoutMs === 'number' ? `${s.timeoutMs} ms` : '—'}</td>
-                  <td>{Array.isArray(s.successExitCodes) ? s.successExitCodes.join(', ') : '—'}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <TableViewport label={t('code.config.colStep')}>
+          <table data-testid="config-profile-steps">
+            <thead>
+              <tr>
+                <th>{t('code.config.colStep')}</th>
+                <th>{t('code.config.colProgram')}</th>
+                <th>{t('code.config.colTimeout')}</th>
+                <th>{t('code.config.colExitCodes')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {steps.map((step, index) => {
+                const s = step as {
+                  stepId?: string
+                  programRef?: string
+                  timeoutMs?: number
+                  successExitCodes?: number[]
+                }
+                return (
+                  <tr key={s.stepId ?? index}>
+                    <td>
+                      <code>{s.stepId ?? '—'}</code>
+                    </td>
+                    <td>
+                      <code>{s.programRef ?? '—'}</code>
+                    </td>
+                    <td>{typeof s.timeoutMs === 'number' ? `${s.timeoutMs} ms` : '—'}</td>
+                    <td>
+                      {Array.isArray(s.successExitCodes) ? s.successExitCodes.join(', ') : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </TableViewport>
       )}
     </Card>
   )

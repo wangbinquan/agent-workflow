@@ -61,12 +61,18 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function wf(name: string, overrides: Partial<Workflow> = {}): Workflow {
+function wf(
+  name: string,
+  overrides: Partial<Workflow & { nodeCount: number }> = {},
+): Workflow & { nodeCount: number } {
   return {
     id: `wf_${name}`,
     name,
     description: '',
     definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+    // RFC-311 (C2): the list wire carries a server-computed nodeCount; the
+    // gallery reads it instead of definition.nodes.length.
+    nodeCount: 0,
     version: 1,
     schemaVersion: 1,
     createdAt: 1,
@@ -541,12 +547,7 @@ describe('/workflows gallery assembly (T3)', () => {
       wf('code-audit', {
         description: 'audit pipeline',
         version: 7,
-        definition: {
-          $schema_version: 1,
-          inputs: [],
-          nodes: [{ id: 'n1' } as never],
-          edges: [],
-        },
+        nodeCount: 1,
         updatedAt: Date.now() - 3_600_000,
       }),
       wf('docs-sync', { updatedAt: Date.now() - 7_200_000 }),

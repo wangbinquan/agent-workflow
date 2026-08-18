@@ -24990,7 +24990,7 @@ button.status-chip {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
-  background: var(--surface);
+  background: var(--panel);
 }
 .policy-builder__rule-head {
   display: flex;

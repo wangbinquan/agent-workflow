@@ -20,6 +20,7 @@ import { Field } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
 import { Select } from '@/components/Select'
+import { TableViewport } from '@/components/TableViewport'
 import { TextInput } from '@/components/Form'
 import { Route as RootRoute } from './__root'
 
@@ -143,52 +144,54 @@ export function CodeAssignmentsPage(): ReactElement {
           return (
             <section key={scope} className="page__section">
               <h3>{t(`code.assignments.scope.${scope}`)}</h3>
-              <table className="table" data-testid={`assignments-${scope}`}>
-                <thead>
-                  <tr>
-                    <th>{t('code.assignments.colScope')}</th>
-                    <th>{t('code.assignments.colEmployee')}</th>
-                    <th>{t('code.assignments.colSelectionPolicy')}</th>
-                    <th>{t('code.assignments.colExecutionPolicy')}</th>
-                    <th>{t('code.assignments.colSourceKey')}</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={`${row.scopeKind}:${row.scopeRef ?? 'global'}`}>
-                      <td>{row.scopeRef ?? t('code.assignments.globalScope')}</td>
-                      <td>
-                        {employeeName(row.employeeId)}
-                        {unpublishedWarnings(row).map((w) => (
-                          <span key={w} className="chip chip--warn" title={w}>
-                            ⚠
-                          </span>
-                        ))}
-                      </td>
-                      <td>{policyName(row.selectionPolicyId)}</td>
-                      <td>{policyName(row.executionPolicyId)}</td>
-                      <td>{row.defaultRequirementSourceKey ?? '—'}</td>
-                      <td className="page__actions">
-                        <button
-                          type="button"
-                          className="btn btn--xs"
-                          onClick={() => setEditing(row)}
-                        >
-                          {t('common.edit')}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--xs btn--danger"
-                          onClick={() => remove.mutate(row)}
-                        >
-                          {t('common.delete')}
-                        </button>
-                      </td>
+              <TableViewport label={t(`code.assignments.scope.${scope}`)}>
+                <table className="table" data-testid={`assignments-${scope}`}>
+                  <thead>
+                    <tr>
+                      <th>{t('code.assignments.colScope')}</th>
+                      <th>{t('code.assignments.colEmployee')}</th>
+                      <th>{t('code.assignments.colSelectionPolicy')}</th>
+                      <th>{t('code.assignments.colExecutionPolicy')}</th>
+                      <th>{t('code.assignments.colSourceKey')}</th>
+                      <th />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={`${row.scopeKind}:${row.scopeRef ?? 'global'}`}>
+                        <td>{row.scopeRef ?? t('code.assignments.globalScope')}</td>
+                        <td>
+                          {employeeName(row.employeeId)}
+                          {unpublishedWarnings(row).map((w) => (
+                            <span key={w} className="chip chip--warn" title={w}>
+                              ⚠
+                            </span>
+                          ))}
+                        </td>
+                        <td>{policyName(row.selectionPolicyId)}</td>
+                        <td>{policyName(row.executionPolicyId)}</td>
+                        <td>{row.defaultRequirementSourceKey ?? '—'}</td>
+                        <td className="page__actions">
+                          <button
+                            type="button"
+                            className="btn btn--xs"
+                            onClick={() => setEditing(row)}
+                          >
+                            {t('common.edit')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--xs btn--danger"
+                            onClick={() => remove.mutate(row)}
+                          >
+                            {t('common.delete')}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableViewport>
             </section>
           )
         })

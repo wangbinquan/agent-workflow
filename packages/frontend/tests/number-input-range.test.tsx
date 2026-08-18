@@ -152,7 +152,7 @@ describe('RFC-290 NumberInput range hint', () => {
     )
   })
 
-  test('all nine bounded NumberInput callers show the hint except compact Pagination', () => {
+  test('all sixteen bounded NumberInput callers show the hint except compact Pagination', () => {
     const bounded = sourceTsxFiles().flatMap((path) => {
       const file = relative(SRC_ROOT, path).split(sep).join('/')
       const source = readFileSync(path, 'utf8')
@@ -162,8 +162,10 @@ describe('RFC-290 NumberInput range hint', () => {
     })
     const optedOut = bounded.filter(({ tag }) => tag.includes('rangeHint={false}'))
 
-    expect(bounded).toHaveLength(9)
-    expect(bounded.length - optedOut.length).toBe(8)
+    // 9 → 16: RFC-310 PR-8 added seven policy hard-cap inputs
+    // (code.policies.$id.tsx), all showing the default range hint.
+    expect(bounded).toHaveLength(16)
+    expect(bounded.length - optedOut.length).toBe(15)
     expect(optedOut.map(({ file }) => file)).toEqual(['components/Pagination.tsx'])
   })
 })
