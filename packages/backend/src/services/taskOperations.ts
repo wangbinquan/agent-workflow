@@ -645,6 +645,180 @@ async function mapRows(
   }))
 }
 
+/** RFC-311 — the default (filter-free) view is the page users land on and the
+ *  one WS invalidation re-fetches; only IT can use the pure keyset fast path,
+ *  because with no predicate every task self-matches, the qualified tree
+ *  equals the whole tree and the branch sort key equals the materialized
+ *  `tasks.branch_started_at`. Any active filter changes the branch aggregate's
+ *  member set, so filtered queries keep the exhaustive pipeline. */
+function isDefaultView(actor: Actor, filters: TaskOperationsFilters): boolean {
+  // The fast path serves ONLY tasks:read:all actors on the untouched default
+  // view. Two reasons (both verified by the rfc311 fast-path oracle):
+  //  - a restricted actor's branch aggregates (sort key included!) are
+  //    computed over the VISIBILITY-PRUNED tree — an invisible descendant
+  //    contributes neither recency nor counts — while the materialized
+  //    `branch_started_at` is the global subtree max, so no shared index can
+  //    answer their ordering;
+  //  - an admin narrowing scope to mine/shared can surface context-ancestor
+  //    roots that only the exhaustive pipeline models.
+  // Restricted actors' default view is O(their own visible set) under the old
+  // pipeline, which is the acceptable size by construction.
+  return (
+    actor.permissions.has('tasks:read:all') &&
+    filters.scope === 'all' &&
+    filters.view === 'all' &&
+    filters.q === undefined &&
+    filters.statuses.length === 0 &&
+    filters.subject === 'all' &&
+    filters.origin === 'all'
+  )
+}
+
+/**
+ * RFC-311 fast path (audit L2-1): the old shape MATERIALIZED every authorized
+ * task (with a correlated alert-count subquery and a json_extract per row),
+ * walked two recursive CTEs over the whole forest and only then applied
+ * LIMIT — every page requested paid O(all tasks). This path scans the
+ * `(branch_started_at, id)` index in order, stops at limit+1 roots, and
+ * enriches ONLY the returned page. Facets stay exact (4 indexed counts over
+ * the authorized set). Wire shape, cursor encoding and item shape are
+ * byte-identical; the rfc311 page oracle pins new === old on random forests.
+ */
+function fastDefaultRootQuery(db: DbClient, actor: Actor, parsed: ParsedTaskOperationsQuery): SQL {
+  const auth = taskAuthorizationCondition(
+    db,
+    { id: sql.raw('t.id'), ownerUserId: sql.raw('t.owner_user_id') },
+    actor,
+  )
+  const scope = taskOwnershipScopeCondition(
+    db,
+    { id: sql.raw('t.id'), ownerUserId: sql.raw('t.owner_user_id') },
+    actor.user.id,
+    parsed.filters.scope,
+  )
+  const parentAuth = taskAuthorizationCondition(
+    db,
+    { id: sql.raw('p.id'), ownerUserId: sql.raw('p.owner_user_id') },
+    actor,
+  )
+  const boundary =
+    parsed.cursor === undefined
+      ? sql`1 = 1`
+      : sql`(
+          t.branch_started_at < ${parsed.cursor.branchStartedAt}
+          OR (t.branch_started_at = ${parsed.cursor.branchStartedAt} AND t.id < ${parsed.cursor.taskId})
+        )`
+  // Roots: top-level tasks, plus tasks whose parent this actor cannot see
+  // (their branch re-roots at the first visible ancestor — same rule the
+  // exhaustive pipeline's `roots` CTE applies).
+  const paged = sql`
+    SELECT
+      t.id,
+      t.name,
+      t.workflow_id,
+      w.name AS workflow_name,
+      t.repo_path,
+      t.repo_url,
+      t.cached_repo_id,
+      t.status,
+      t.started_at,
+      t.running_ms,
+      t.running_since,
+      t.finished_at,
+      t.error_summary,
+      t.failed_node_id,
+      t.repo_count,
+      (
+        SELECT COUNT(*) FROM lifecycle_alerts la
+        WHERE la.task_id = t.id AND la.resolved_at IS NULL
+      ) AS open_alert_count,
+      t.scheduled_task_id,
+      t.launch_origin,
+      t.workgroup_id,
+      CASE WHEN json_valid(t.workgroup_config_json) THEN
+        CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') = 'text'
+          THEN NULLIF(json_extract(t.workgroup_config_json, '$.workgroupName'), '')
+          ELSE NULL
+        END
+      ELSE NULL END AS workgroup_name,
+      t.space_kind,
+      t.parent_task_id,
+      t.invocation_depth,
+      t.source_agent_name,
+      t.source_agent_id,
+      t.owner_user_id,
+      t.branch_started_at,
+      'self' AS match_kind,
+      (
+        SELECT COUNT(*) FROM tasks c
+        WHERE c.parent_task_id = t.id AND ${taskAuthorizationCondition(
+          db,
+          { id: sql.raw('c.id'), ownerUserId: sql.raw('c.owner_user_id') },
+          actor,
+        )}
+      ) AS qualifying_child_count,
+      (
+        WITH RECURSIVE walk(id, depth) AS (
+          SELECT d.id, 1 FROM tasks d WHERE d.parent_task_id = t.id
+          UNION ALL
+          SELECT d2.id, walk.depth + 1 FROM tasks d2
+          JOIN walk ON d2.parent_task_id = walk.id
+          WHERE walk.depth < ${MAX_TREE_DEPTH}
+        )
+        SELECT COUNT(*) FROM walk
+      ) AS matching_descendant_count
+    FROM tasks t
+    LEFT JOIN workflows w ON w.id = t.workflow_id
+    WHERE ${auth} AND ${scope} AND ${boundary}
+      AND (
+        t.parent_task_id IS NULL
+        OR NOT EXISTS (
+          SELECT 1 FROM tasks p WHERE p.id = t.parent_task_id AND ${parentAuth}
+        )
+      )
+    ORDER BY t.branch_started_at DESC, t.id DESC
+    LIMIT ${parsed.limit + 1}
+  `
+  return sql`
+    WITH facet_values AS (
+      SELECT
+        COUNT(*) AS facet_all,
+        COALESCE(SUM(CASE WHEN t.status IN (${list(TASK_LIST_ACTIVE_STATUSES)}) THEN 1 ELSE 0 END), 0)
+          AS facet_active,
+        COALESCE(SUM(CASE
+          WHEN t.status IN (${list(TASK_LIST_ATTENTION_STATUSES)})
+            OR EXISTS (
+              SELECT 1 FROM lifecycle_alerts la
+              WHERE la.task_id = t.id AND la.resolved_at IS NULL
+            )
+          THEN 1 ELSE 0 END), 0) AS facet_attention,
+        COALESCE(SUM(CASE WHEN t.status IN (${list(TASK_LIST_FINISHED_STATUSES)}) THEN 1 ELSE 0 END), 0)
+          AS facet_finished
+      FROM tasks t
+      WHERE ${taskAuthorizationCondition(
+        db,
+        { id: sql.raw('t.id'), ownerUserId: sql.raw('t.owner_user_id') },
+        actor,
+      )} AND ${taskOwnershipScopeCondition(
+        db,
+        { id: sql.raw('t.id'), ownerUserId: sql.raw('t.owner_user_id') },
+        actor.user.id,
+        parsed.filters.scope,
+      )}
+    ),
+    paged AS (${paged})
+    SELECT
+      p.*,
+      f.facet_all,
+      f.facet_active,
+      f.facet_attention,
+      f.facet_finished
+    FROM facet_values f
+    LEFT JOIN paged p ON 1 = 1
+    ORDER BY p.branch_started_at DESC, p.id DESC
+  `
+}
+
 export async function listTaskOperationsPage(
   db: DbClient,
   actor: Actor,
@@ -655,7 +829,9 @@ export async function listTaskOperationsPage(
 
   const rawRows = (await db.all(
     parsed.parentId === undefined
-      ? rootQuery(db, actor, parsed)
+      ? isDefaultView(actor, parsed.filters)
+        ? fastDefaultRootQuery(db, actor, parsed)
+        : rootQuery(db, actor, parsed)
       : childQuery(db, actor, { ...parsed, parentId: parsed.parentId }),
   )) as OperationsSqlRow[]
 

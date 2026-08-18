@@ -66,6 +66,7 @@ import {
   isNotNull,
   isNull,
   like,
+  sql,
   type SQL,
 } from 'drizzle-orm'
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
@@ -2946,8 +2947,31 @@ async function startTaskImpl(
           // 只是「还没建」，打了墓碑会让 retryNode 再也 CAS 不回 pending，于是
           // 「重试准备仓库」这条 G7 的核心语义直接失效。
           workspacePrunedAt: earlyError !== null && worktreePath === '' ? now : null,
+          // RFC-311：本行自身即其（暂时只有自己的）子树 max(started_at)。
+          branchStartedAt: now,
         })
         .run()
+
+      // RFC-311 — /api/tasks/page 的 keyset 排序键维护：新任务把自己的
+      // started_at 沿父链向上推进（分支最新活动时间是聚合值,列表只按 root
+      // 行取页）。链长受调度树深度约束（MAX_TREE_DEPTH=64 同款上限）;这是
+      // 唯一铸行点,invariants 的自愈规则兜住历史漂移。
+      {
+        let cursor: string | null = deps.callLaunch?.parentTaskId ?? null
+        for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
+          const parent = tx
+            .select({ id: tasks.id, parentTaskId: tasks.parentTaskId })
+            .from(tasks)
+            .where(eq(tasks.id, cursor))
+            .get()
+          if (parent === undefined) break
+          tx.update(tasks)
+            .set({ branchStartedAt: sql`MAX(${tasks.branchStartedAt}, ${now})` })
+            .where(eq(tasks.id, parent.id))
+            .run()
+          cursor = parent.parentTaskId
+        }
+      }
 
       // RFC-066: persist per-repo metadata. Single-repo tasks land one row at
       // repo_index=0 mirroring the legacy columns above; multi-repo tasks land
