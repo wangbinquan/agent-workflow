@@ -448,7 +448,10 @@ export function WorkflowEditorLoaded({
         updatedAt: revision.updatedAt,
       }
     })
-    void qc.invalidateQueries({ queryKey: ['workflows'], exact: true })
+    // RFC-311 C2 起解析器的定义缓存挂在 ['workflows','with-definition'] 上,
+    // exact 失效够不到它——去掉 exact,前缀失效同时刷新列表与子工作流端口预览
+    // (实现门 P2-9)。
+    void qc.invalidateQueries({ queryKey: ['workflows'] })
   }, [controller.state.server, controller.state.serverRevision, initial, qc, workflowId])
 
   const [selection, setSelection] = useState<CanvasSelection | null>(null)
@@ -759,7 +762,10 @@ export function WorkflowEditorLoaded({
         abort.signal,
       )
       qc.setQueryData(['workflows', created.id], created)
-      void qc.invalidateQueries({ queryKey: ['workflows'], exact: true })
+      // RFC-311 C2 起解析器的定义缓存挂在 ['workflows','with-definition'] 上,
+      // exact 失效够不到它——去掉 exact,前缀失效同时刷新列表与子工作流端口预览
+      // (实现门 P2-9)。
+      void qc.invalidateQueries({ queryKey: ['workflows'] })
       setModalSurface('none')
       unsafeNavigationRef.current = null
       await navigate({ to: '/workflows/$id', params: { id: created.id } })

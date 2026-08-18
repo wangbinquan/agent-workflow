@@ -98,6 +98,7 @@ export function VirtualList<T>(props: VirtualListProps<T>): ReactElement {
     onReachEndRef.current = props.onReachEnd
   })
   const threshold = props.endThresholdPx ?? 400
+  const handleScrollRef = useRef<() => void>(() => {})
   const handleScroll = (): void => {
     const el = scrollRef.current
     if (el === null || onReachEndRef.current === undefined) return
@@ -105,8 +106,17 @@ export function VirtualList<T>(props: VirtualListProps<T>): ReactElement {
       onReachEndRef.current()
     }
   }
+  handleScrollRef.current = handleScroll
 
   const virtualItems = virtualizer.getVirtualItems()
+  const totalSize = virtualizer.getTotalSize()
+  // 实现门 P2-8:哨兵只挂在 onScroll 上,内容不足以产生滚动条时(视口比首页高、
+  // 过滤后只剩几行但仍有 nextCursor)它永远不触发,而组件文档把 onReachEnd 描述为
+  // 「替代手动 Load more」——后续按此接入且不带兜底按钮的调用方会静默无法翻页。
+  // 行数/总高变化后自检一次。
+  useEffect(() => {
+    handleScrollRef.current()
+  }, [props.items.length, totalSize])
   const RowTag = props.rowTag ?? 'div'
   return (
     <div

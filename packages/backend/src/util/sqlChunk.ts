@@ -1,10 +1,13 @@
 // RFC-311 — bounded IN-list execution.
 //
-// SQLite rejects statements with more than SQLITE_MAX_VARIABLE_NUMBER (32766)
-// bound parameters; an unchunked `inArray(col, ids)` over a production-sized id
-// set is a hard runtime error, not just slow (the events archiver died exactly
-// this way — audit L3-4). Every call site that feeds a caller-sized array into
-// `inArray` goes through here.
+// SQLite rejects statements past SQLITE_MAX_VARIABLE_NUMBER bound parameters;
+// an unchunked `inArray(col, ids)` over a production-sized id set is a hard
+// runtime error, not just slow (the events archiver died this way — audit L3-4).
+// Every call site that feeds a caller-sized array into `inArray` goes through here.
+//
+// 关于那个上限的**实测更正**(实现门 P0-1):它随构建而变——bun 1.3.13 打包的
+// SQLite 3.51 在 5 万参数下不报错、10 万才抛,而其他构建仍可能是 32766 或 999。
+// 所以别把「某个具体数字」写进判据,按最保守构建取一个远低的块大小即可。
 
 /** Conservative chunk size: far below the 32766 hard limit, leaving room for
  *  other bound parameters in the same statement. */

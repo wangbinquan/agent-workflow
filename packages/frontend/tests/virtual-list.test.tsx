@@ -59,6 +59,9 @@ describe('VirtualList', () => {
     renderList(1_000, { onReachEnd, endThresholdPx: 400 })
     await screen.findByTestId('row-it-0')
     const el = screen.getByTestId('vl')
+    // 挂载后的一次自检(实现门 P2-8:内容撑不出滚动条时哨兵永不触发)在 jsdom 下
+    // 必然命中——几何全是 0。这里要验的是滚动语义,先清掉那一次。
+    onReachEnd.mockClear()
     // jsdom 不做布局,滚动几何手工注入。
     Object.defineProperty(el, 'scrollHeight', { value: 50_000, configurable: true })
     Object.defineProperty(el, 'clientHeight', { value: 800, configurable: true })
@@ -102,5 +105,14 @@ describe('VirtualList', () => {
       />,
     )
     expect(scrollTo).toHaveBeenCalledWith({ top: 0 })
+  })
+
+  test('the sentinel also fires when the content is too short to scroll', async () => {
+    // 实现门 P2-8:视口比首页高、或过滤后只剩几行但仍有 nextCursor 时,onScroll
+    // 永远不会触发——不带兜底按钮的调用方会静默无法翻页。
+    const onReachEnd = vi.fn()
+    renderList(2, { onReachEnd })
+    await screen.findByTestId('row-it-0')
+    expect(onReachEnd).toHaveBeenCalled()
   })
 })

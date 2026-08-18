@@ -65,7 +65,13 @@ export function defaultTaskAuthorizationRef(): TaskAuthorizationRef {
  * `canViewTask` = tasks:read:all ∨ owner=me ∨ collaborator (its SYSTEM branch
  * is a subset of owner=me), which is exactly `taskAuthorizationCondition`.
  * Ids with no task row are absent from the result, matching the callers'
- * existing "look up rows first, then filter" behavior.
+ * existing "look up rows first, then filter" behavior — **including the
+ * tasks:read:all branch**: it used to short-circuit by echoing the input ids
+ * back, which made an admin's result include ids that do not exist while a
+ * restricted actor's did not (实现门 P2-6:两个分支语义不同,而文档描述的是其中
+ * 一个;当前调用方都先取行再过滤所以没发散,下一个调用方就会拿到 admin/非 admin
+ * 计数不一致)。The admin branch now runs the same existence filter, minus the
+ * authorization predicate.
  */
 export async function visibleTaskIdsOf(
   db: DbClient,
@@ -73,16 +79,18 @@ export async function visibleTaskIdsOf(
   taskIds: readonly string[],
 ): Promise<Set<string>> {
   if (taskIds.length === 0) return new Set()
-  if (actor.permissions.has('tasks:read:all')) return new Set(taskIds)
+  const readsAll = actor.permissions.has('tasks:read:all')
   const rows = await chunkedAll(taskIds, (chunk) =>
     db
       .select({ id: tasks.id })
       .from(tasks)
       .where(
-        and(
-          inArray(tasks.id, chunk),
-          taskAuthorizationCondition(db, defaultTaskAuthorizationRef(), actor),
-        ),
+        readsAll
+          ? inArray(tasks.id, chunk)
+          : and(
+              inArray(tasks.id, chunk),
+              taskAuthorizationCondition(db, defaultTaskAuthorizationRef(), actor),
+            ),
       ),
   )
   return new Set(rows.map((row) => row.id))
