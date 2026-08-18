@@ -6,6 +6,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { handleCodeHostApi } from './code-host/stateful-http'
+import {
+  RequirementProviderMock,
+  type MockRequirementSeed,
+} from './development/requirement-provider'
 import { CodeHostStore } from './code-host/stateful-store'
 import { SystemMockClient } from './client'
 import {
@@ -51,6 +55,7 @@ export interface StartedSystemMockSuite {
 class SystemMockGateway {
   readonly #journal = new RequestJournal()
   readonly #faults = new FaultRegistry()
+  readonly #developmentRequirement = new RequirementProviderMock()
   readonly #mcp = new McpHttpMock()
   readonly #server: Server
   readonly #controlToken = randomBytes(24).toString('base64url')
@@ -161,6 +166,14 @@ class SystemMockGateway {
       await this.#codeHosts.syncRefsFromGit()
       return
     }
+    if (service === 'development-requirement') {
+      const stripped = url.pathname.replace(/^\/development-requirement/, '') || '/'
+      if (this.#developmentRequirement.handle(request, response, stripped, body.toString('utf8')))
+        return
+      response.writeHead(404, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ error: 'unknown-route' }))
+      return
+    }
     if (service === 'gitlab' || service === 'github') {
       await handleCodeHostApi({
         provider: service,
@@ -223,6 +236,7 @@ class SystemMockGateway {
       this.#oauth.reset()
       this.#registries.reset()
       this.#externalHttp.reset()
+      this.#developmentRequirement.reset()
       this.#faults.clear()
       this.#journal.clear()
       response.writeHead(204)
@@ -253,6 +267,30 @@ class SystemMockGateway {
       this.#oauth.configure({ users: parseJsonBody<{ users: MockOidcUser[] }>(body).users })
       response.writeHead(204)
       response.end()
+      return
+    }
+    if (path === '/development-requirement/seed' && request.method === 'POST') {
+      this.#developmentRequirement.seed(parseJsonBody<MockRequirementSeed>(body))
+      response.writeHead(204)
+      response.end()
+      return
+    }
+    if (path === '/development-requirement/answers' && request.method === 'POST') {
+      const input = parseJsonBody<{
+        correlationId: string
+        answers: { questionId: string; answer: string }[]
+        answerRevision?: string
+      }>(body)
+      const ok = this.#developmentRequirement.seedAnswers(
+        input.correlationId,
+        input.answers,
+        input.answerRevision,
+      )
+      writeJson(response, ok ? 200 : 404, { ok })
+      return
+    }
+    if (path === '/development-requirement/question-sets' && request.method === 'GET') {
+      writeJson(response, 200, { items: this.#developmentRequirement.listQuestionSets() })
       return
     }
     if (path === '/code-hosts' && request.method === 'POST') {
@@ -325,6 +363,7 @@ function endpointsFor(baseUrl: string): SystemMockEndpoints {
     gitlabApiBaseUrl: `${baseUrl}/gitlab/api/v4`,
     githubApiBaseUrl: `${baseUrl}/github/api/v3`,
     externalHttpBaseUrl: `${baseUrl}/external`,
+    developmentRequirementBaseUrl: `${baseUrl}/development-requirement`,
     oauthIssuerUrl: `${baseUrl}/oauth`,
     oidcIssuerUrl: `${baseUrl}/oidc`,
     mcpStreamableUrl: `${baseUrl}/mcp`,
@@ -347,6 +386,7 @@ function environmentFor(
     AW_SYSTEM_MOCK_GITLAB_API_BASE_URL: endpoints.gitlabApiBaseUrl,
     AW_SYSTEM_MOCK_GITHUB_API_BASE_URL: endpoints.githubApiBaseUrl,
     AW_SYSTEM_MOCK_EXTERNAL_HTTP_BASE_URL: endpoints.externalHttpBaseUrl,
+    AW_REQUIREMENT_MOCK_URL: endpoints.developmentRequirementBaseUrl,
     AW_SYSTEM_MOCK_OAUTH_ISSUER_URL: endpoints.oauthIssuerUrl,
     AW_SYSTEM_MOCK_OIDC_ISSUER_URL: endpoints.oidcIssuerUrl,
     AW_SYSTEM_MOCK_MCP_URL: endpoints.mcpStreamableUrl,
@@ -361,6 +401,7 @@ function serviceFor(path: string): SystemMockService {
   if (path.startsWith('/git/')) return 'git'
   if (path.startsWith('/gitlab/api/v4')) return 'gitlab'
   if (path.startsWith('/github/api/v3')) return 'github'
+  if (path.startsWith('/development-requirement')) return 'development-requirement'
   if (path.startsWith('/external')) return 'external'
   if (path.startsWith('/oauth')) return 'oauth'
   if (path.startsWith('/oidc')) return 'oidc'

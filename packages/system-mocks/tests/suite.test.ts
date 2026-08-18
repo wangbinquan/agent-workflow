@@ -293,3 +293,55 @@ test('SCIP executable accepts every indexer output flag shape', async () => {
     expect((await readFile(args.at(-1)!)).length).toBeGreaterThan(10)
   }
 })
+
+describe('development-requirement service inside the unified suite (RFC-310 PR-3)', () => {
+  test('control-plane seed → data-plane fetch → Q&A round trip → reset clears', async () => {
+    await suite.client.seedRequirement({
+      externalId: 'REQ-S1',
+      revision: 'r9',
+      title: 'suite demand',
+      files: [
+        { fileId: 'f1', name: 'body.md', role: 'body', mediaType: 'text/markdown', content: 'x\n' },
+      ],
+    })
+    // 环境面：adapter 子进程拿 AW_REQUIREMENT_MOCK_URL 即可直达数据面。
+    expect(suite.env.AW_REQUIREMENT_MOCK_URL).toBe(suite.endpoints.developmentRequirementBaseUrl)
+    const meta = (await (
+      await fetch(`${suite.endpoints.developmentRequirementBaseUrl}/requirements/REQ-S1`)
+    ).json()) as { revision: string; title: string }
+    expect(meta).toMatchObject({ revision: 'r9', title: 'suite demand' })
+
+    const posted = await fetch(
+      `${suite.endpoints.developmentRequirementBaseUrl}/requirements/REQ-S1/questions`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ questions: [{ questionId: 'q1', text: 'when?' }] }),
+      },
+    )
+    expect(posted.status).toBe(201)
+    const { correlationId } = (await posted.json()) as { correlationId: string }
+    const listed = await suite.client.listRequirementQuestionSets()
+    expect(listed.items.some((s) => s.correlationId === correlationId)).toBe(true)
+
+    const seeded = await suite.client.seedRequirementAnswers({
+      correlationId,
+      answers: [{ questionId: 'q1', answer: 'now' }],
+      answerRevision: 'a5',
+    })
+    expect(seeded.ok).toBe(true)
+    const answers = (await (
+      await fetch(
+        `${suite.endpoints.developmentRequirementBaseUrl}/requirements/REQ-S1/questions/${correlationId}/answers`,
+      )
+    ).json()) as { complete: boolean; answerRevision: string }
+    expect(answers).toMatchObject({ complete: true, answerRevision: 'a5' })
+
+    // reset 合同：seed 与 correlation 全部归零。
+    await suite.client.reset()
+    expect(
+      (await fetch(`${suite.endpoints.developmentRequirementBaseUrl}/requirements/REQ-S1`)).status,
+    ).toBe(404)
+    expect((await suite.client.listRequirementQuestionSets()).items).toHaveLength(0)
+  })
+})

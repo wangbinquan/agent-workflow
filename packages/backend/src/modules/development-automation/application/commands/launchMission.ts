@@ -10,6 +10,7 @@
 import { ulid } from 'ulid'
 import { z } from 'zod'
 
+import { automationPolicyContentSchema } from '../../domain/automationPolicy'
 import { canonicalDigest } from '../../domain/canonicalJson'
 import { digitalEmployeeContentSchema } from '../../domain/digitalEmployee'
 import { buildFactSnapshot, type FactCellValue } from '../../domain/facts'
@@ -23,18 +24,52 @@ import {
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { AdmissionLookup } from '../ports/admissionLookup'
 import type { MissionRow, MissionStore } from '../ports/missionStore'
+import type { UploadSessionRow, UploadSessionStore } from '../ports/uploadSessionStore'
+import {
+  defaultUploadPolicyOf,
+  previewUploadDispositions,
+  resolveUploadPlanEntries,
+  type BaselineFileReader,
+  type PersistUploadPlanInput,
+  type UploadDisposition,
+  type UploadPlanRequestEntry,
+} from '../uploadPlan'
 
 const versionedRefSchema = z
   .object({ id: z.string().min(1), revision: z.number().int().positive() })
   .strict()
 
+function refineUploadList(
+  uploads: readonly { uploadRef: string; repositoryTargetPath: string }[],
+  ctx: z.RefinementCtx,
+  basePath: readonly (string | number)[],
+): void {
+  const seenTargets = new Set<string>()
+  const seenRefs = new Set<string>()
+  uploads.forEach((upload, index) => {
+    if (seenTargets.has(upload.repositoryTargetPath)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `duplicate repository target path: ${upload.repositoryTargetPath}`,
+        path: [...basePath, index, 'repositoryTargetPath'],
+      })
+    }
+    seenTargets.add(upload.repositoryTargetPath)
+    if (seenRefs.has(upload.uploadRef)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `duplicate upload ref: ${upload.uploadRef}`,
+        path: [...basePath, index, 'uploadRef'],
+      })
+    }
+    seenRefs.add(upload.uploadRef)
+  })
+}
+
 const directUploadSchema = z
   .object({
-    fileName: z.string().min(1).max(255),
-    sha256: z
-      .string()
-      .regex(/^[0-9a-f]{64}$/)
-      .nullable(),
+    /** POST /api/code/mission-input-uploads 返回的 upload 会话 id；bytes/sha256 从行取。 */
+    uploadRef: z.string().min(1).max(64),
     repositoryTargetPath: repoRelativePathSchema,
     collisionMode: z.enum(['create-only', 'replace-existing']).optional(),
     contentPolicy: z.enum(['preserve-upload', 'agent-editable']).optional(),
@@ -90,25 +125,33 @@ export const launchMissionInputSchema = z
         path: ['submission'],
       })
     }
-    const seen = new Set<string>()
-    uploads.forEach((upload, index) => {
-      if (seen.has(upload.repositoryTargetPath)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `duplicate repository target path: ${upload.repositoryTargetPath}`,
-          path: ['submission', 'uploads', index, 'repositoryTargetPath'],
-        })
-      }
-      seen.add(upload.repositoryTargetPath)
-    })
+    refineUploadList(uploads, ctx, ['submission', 'uploads'])
   })
 
 export type LaunchMissionInput = z.infer<typeof launchMissionInputSchema>
+
+/** 冻结的上传 baseline 上下文（composition 从 repository 域解析）。 */
+export interface UploadBaselineContext {
+  readonly repositoryRef: string
+  readonly baselineSnapshotRef: string
+  readonly baselineSha: string
+  readonly reader: BaselineFileReader
+}
+
+/** upload admission 接线：缺席时带 uploads 的 direct launch 老实 blocked。 */
+export interface UploadAdmissionDeps {
+  readonly sessions: UploadSessionStore
+  /** launch 事务边界（生产 = drizzle db.transaction 嵌套安全；测试可传直调）。 */
+  readonly transact: <T>(fn: () => T) => T
+  readonly resolveBaseline: (repositoryId: string) => Promise<UploadBaselineContext | null>
+  readonly persistPlan: (plan: PersistUploadPlanInput) => void
+}
 
 export interface LaunchDeps {
   readonly store: MissionStore
   readonly lookup: AdmissionLookup
   readonly now: () => number
+  readonly uploadAdmission?: UploadAdmissionDeps
 }
 
 export interface LaunchResult {
@@ -118,22 +161,75 @@ export interface LaunchResult {
   readonly blockCode: string | null
 }
 
+/**
+ * direct 内容 digest（内容寻址：不掺随机 uploadRef，只掺行内容与落点语义）。
+ * upload store 未接线时行数据不可得 ⇒ null（不伪造 digest）。
+ */
 function directContentDigest(
   submission: Extract<LaunchMissionInput['submission'], { kind: 'direct' }>,
-): string {
+  uploadRows: readonly UploadSessionRow[] | null,
+): string | null {
+  if (submission.uploads.length > 0 && uploadRows === null) return null
   return canonicalDigest({
     title: submission.title.trim(),
     body: submission.body?.trim() ?? null,
     uploads: submission.uploads.map((u, ordinal) => ({
       ordinal,
-      fileName: u.fileName,
-      sha256: u.sha256,
+      fileName: uploadRows![ordinal]!.originalName,
+      sha256: uploadRows![ordinal]!.sha256,
       targetPath: u.repositoryTargetPath,
       collisionMode: u.collisionMode ?? 'create-only',
       contentPolicy: u.contentPolicy ?? 'preserve-upload',
       fileMode: u.fileMode ?? 'regular',
     })),
   })
+}
+
+/** 事务内 createMission 撞 idempotency 赢家时用于整体回滚 + 重放返回。 */
+class IdempotentReplay {
+  constructor(readonly mission: MissionRow) {}
+}
+
+type DirectUploadRequest = z.infer<typeof directUploadSchema>
+
+/**
+ * 预读上传行：存在/归属/可用的快速失败（他人 ref 与不存在同形，§12.3）。
+ * 原子判定仍由 launch 事务内的 claim 兜底；preview 走同一校验。
+ */
+function readPendingUploadRows(
+  ua: UploadAdmissionDeps,
+  uploads: readonly DirectUploadRequest[],
+  actorUserId: string | null,
+  now: number,
+): UploadSessionRow[] {
+  return uploads.map((u) => {
+    const row = ua.sessions.getUpload(u.uploadRef)
+    if (row === null || row.actorUserId !== actorUserId) {
+      throw new NotFoundError('upload-not-found', `upload not found: ${u.uploadRef}`)
+    }
+    if (row.state === 'claimed') {
+      throw new ConflictError('upload-already-claimed', `upload claimed elsewhere: ${u.uploadRef}`)
+    }
+    if (row.state !== 'pending' || row.expiresAt <= now) {
+      throw new ConflictError('upload-not-claimable', `upload expired or unusable: ${u.uploadRef}`)
+    }
+    return row
+  })
+}
+
+function toPlanRequests(
+  uploads: readonly DirectUploadRequest[],
+  rows: readonly UploadSessionRow[],
+): UploadPlanRequestEntry[] {
+  return uploads.map((u, index) => ({
+    uploadRef: u.uploadRef,
+    sha256: rows[index]!.sha256,
+    bytes: rows[index]!.bytes,
+    repositoryTargetPath: u.repositoryTargetPath,
+    ...(u.collisionMode !== undefined ? { collisionMode: u.collisionMode } : {}),
+    ...(u.contentPolicy !== undefined ? { contentPolicy: u.contentPolicy } : {}),
+    ...(u.fileMode !== undefined ? { fileMode: u.fileMode } : {}),
+  }))
 }
 
 function parseEmployeeRef(ref: string): { id: string; revision: number } {
@@ -165,19 +261,37 @@ async function loadEmployeeContent(
   return digitalEmployeeContentSchema.parse(raw) as unknown as EmployeeContent
 }
 
-export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promise<LaunchResult> {
-  const input = launchMissionInputSchema.parse(rawInput)
-  const existing = deps.store.findByIdempotencyKey(input.idempotencyKey)
-  if (existing !== null) {
-    return {
-      missionId: existing.id,
-      status: existing.status,
-      created: false,
-      blockCode: existing.blockCode,
-    }
-  }
-  const now = deps.now()
+type AssignmentContext = Awaited<ReturnType<AdmissionLookup['resolveAssignment']>>
 
+type AdmissionOutcome =
+  | {
+      readonly kind: 'blocked'
+      readonly blockCode: string
+      readonly blockDetail: string | null
+      readonly employee: { readonly id: string; readonly revision: number } | null
+    }
+  | {
+      readonly kind: 'selected'
+      readonly employee: { readonly id: string; readonly revision: number }
+      readonly employeeContent: EmployeeContent
+      readonly policyRef: { readonly id: string; readonly revision: number }
+      readonly policyContent: unknown
+    }
+
+/**
+ * launch 与 preview 共用的选择器链（design §12.1：preview 必须跑与 launch 同一套
+ * repository facts → employee → policy 解析，不得用全局默认替代）。
+ */
+async function resolveEmployeeAndPolicy(
+  deps: LaunchDeps,
+  input: {
+    readonly repositoryId: string
+    readonly repositoryGroupId: string | null
+    readonly requestedEmployee: { id: string; revision: number } | null
+    readonly requestedPolicy: { id: string; revision: number } | null
+    readonly now: number
+  },
+): Promise<{ readonly assignment: AssignmentContext; readonly outcome: AdmissionOutcome }> {
   // 1) assignment（可选上下文）。
   const assignment = await deps.lookup.resolveAssignment({
     repositoryId: input.repositoryId,
@@ -192,7 +306,7 @@ export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promis
   }
   const snapshot = buildFactSnapshot({
     missionRevision: 0,
-    capturedAt: new Date(now).toISOString().replace('Z', '+00:00'),
+    capturedAt: new Date(input.now).toISOString().replace('Z', '+00:00'),
     cells: {
       'repository.languages': unknownCell,
       'repository.buildSystems': unknownCell,
@@ -239,6 +353,113 @@ export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promis
     snapshot,
   })
 
+  if (selection.outcome === 'blocked') {
+    return {
+      assignment,
+      outcome: {
+        kind: 'blocked',
+        blockCode:
+          selection.reason === 'no-employee-match'
+            ? 'no-employee-match'
+            : 'selection-indeterminate',
+        blockDetail: selection.indeterminateFact,
+        employee: null,
+      },
+    }
+  }
+  const employee = parseEmployeeRef(selection.employeeRef)
+  const content = await loadEmployeeContent(deps.lookup, employee.id, employee.revision)
+  if (content === null) {
+    return {
+      assignment,
+      outcome: {
+        kind: 'blocked',
+        blockCode: 'employee-revision-missing',
+        blockDetail: selection.employeeRef,
+        employee: null,
+      },
+    }
+  }
+  // execution policy：explicit > assignment > employee default；必须存在。
+  const policyRef =
+    input.requestedPolicy ??
+    (assignment?.executionPolicyId != null && assignment.executionPolicyRevision != null
+      ? { id: assignment.executionPolicyId, revision: assignment.executionPolicyRevision }
+      : content.defaultPolicyRef)
+  const policyContent = await deps.lookup.getPolicyRevisionContent(policyRef.id, policyRef.revision)
+  if (policyContent === null) {
+    return {
+      assignment,
+      outcome: {
+        kind: 'blocked',
+        blockCode: 'policy-revision-missing',
+        blockDetail: `${policyRef.id}@${policyRef.revision}`,
+        employee,
+      },
+    }
+  }
+  return {
+    assignment,
+    outcome: { kind: 'selected', employee, employeeContent: content, policyRef, policyContent },
+  }
+}
+
+/** 裸 ZodError 到中央 handler 会渲染成 500——统一折成 typed 422（仓内定式）。 */
+function parseOr422<T>(
+  schema: { safeParse: (v: unknown) => z.SafeParseReturnType<unknown, T> },
+  rawInput: unknown,
+): T {
+  const parsed = schema.safeParse(rawInput)
+  if (!parsed.success) {
+    throw new ValidationError(
+      'mission-input-invalid',
+      parsed.error.issues
+        .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+        .join('; ')
+        .slice(0, 500),
+    )
+  }
+  return parsed.data
+}
+
+export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promise<LaunchResult> {
+  const input = parseOr422(launchMissionInputSchema, rawInput)
+  const existing = deps.store.findByIdempotencyKey(input.idempotencyKey)
+  if (existing !== null) {
+    return {
+      missionId: existing.id,
+      status: existing.status,
+      created: false,
+      blockCode: existing.blockCode,
+    }
+  }
+  const now = deps.now()
+
+  // 0) direct uploads：预读行。store 未接线 ⇒ uploadRows 保持 null，后面老实 blocked。
+  let uploadRows: UploadSessionRow[] | null = null
+  if (
+    input.submission.kind === 'direct' &&
+    input.submission.uploads.length > 0 &&
+    deps.uploadAdmission !== undefined
+  ) {
+    uploadRows = readPendingUploadRows(
+      deps.uploadAdmission,
+      input.submission.uploads,
+      input.actorUserId,
+      now,
+    )
+  }
+  let pendingPlan: PersistUploadPlanInput | null = null
+
+  // 1–3) assignment → facts → employee/policy 选择器（与 preview 共用同一条链）。
+  const { assignment, outcome } = await resolveEmployeeAndPolicy(deps, {
+    repositoryId: input.repositoryId,
+    repositoryGroupId: input.repositoryGroupId,
+    requestedEmployee: input.requestedEmployee,
+    requestedPolicy: input.requestedPolicy,
+    now,
+  })
+
   const base = {
     id: ulid(),
     revision: 0,
@@ -248,7 +469,7 @@ export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promis
     repositoryId: input.repositoryId,
     sourceKind: input.submission.kind,
     sourceContentDigest:
-      input.submission.kind === 'direct' ? directContentDigest(input.submission) : null,
+      input.submission.kind === 'direct' ? directContentDigest(input.submission, uploadRows) : null,
     requestedSourceKey:
       input.submission.kind === 'external-reference' ? (input.submission.sourceKey ?? null) : null,
     externalId: input.submission.kind === 'external-reference' ? input.submission.externalId : null,
@@ -268,7 +489,7 @@ export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promis
     policyRevision: null as number | null,
     requirementBundleRef: null,
     repositoryFactsRef: null,
-    uploadPlanRef: null,
+    uploadPlanRef: null as string | null,
     uploadPlacementRef: null,
     uploadPublicationRef: null,
     mrClaimId: null,
@@ -286,113 +507,236 @@ export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promis
   }
 
   let status: MissionStatus
-  if (selection.outcome === 'blocked') {
+  if (outcome.kind === 'blocked') {
     status = 'blocked'
-    base.blockCode =
-      selection.reason === 'no-employee-match' ? 'no-employee-match' : 'selection-indeterminate'
-    base.blockDetail = selection.indeterminateFact
+    base.blockCode = outcome.blockCode
+    base.blockDetail = outcome.blockDetail
+    if (outcome.employee !== null) {
+      base.employeeId = outcome.employee.id
+      base.employeeRevision = outcome.employee.revision
+    }
   } else {
-    const employee = parseEmployeeRef(selection.employeeRef)
-    const content = await loadEmployeeContent(deps.lookup, employee.id, employee.revision)
-    if (content === null) {
-      status = 'blocked'
-      base.blockCode = 'employee-revision-missing'
-      base.blockDetail = selection.employeeRef
-    } else {
-      base.employeeId = employee.id
-      base.employeeRevision = employee.revision
+    base.employeeId = outcome.employee.id
+    base.employeeRevision = outcome.employee.revision
+    base.policyId = outcome.policyRef.id
+    base.policyRevision = outcome.policyRef.revision
 
-      // execution policy：explicit > assignment > employee default；必须存在。
-      const policyRef =
-        input.requestedPolicy ??
-        (assignment?.executionPolicyId != null && assignment.executionPolicyRevision != null
-          ? { id: assignment.executionPolicyId, revision: assignment.executionPolicyRevision }
-          : content.defaultPolicyRef)
-      const policyContent = await deps.lookup.getPolicyRevisionContent(
-        policyRef.id,
-        policyRef.revision,
-      )
-      if (policyContent === null) {
+    if (input.submission.kind === 'direct') {
+      if (input.submission.uploads.length === 0) {
+        status = 'working'
+      } else if (uploadRows === null) {
         status = 'blocked'
-        base.blockCode = 'policy-revision-missing'
-        base.blockDetail = `${policyRef.id}@${policyRef.revision}`
+        base.blockCode = 'upload-admission-not-wired'
+        base.blockDetail = 'uploads present but upload admission deps are not wired'
       } else {
-        base.policyId = policyRef.id
-        base.policyRevision = policyRef.revision
-
-        if (input.submission.kind === 'direct') {
-          status = 'working'
+        const baseline = await deps.uploadAdmission!.resolveBaseline(input.repositoryId)
+        const parsedPolicy = automationPolicyContentSchema.safeParse(outcome.policyContent)
+        if (baseline === null) {
+          status = 'blocked'
+          base.blockCode = 'baseline-reader-not-wired'
+          base.blockDetail = `no baseline reader for repository ${input.repositoryId}`
+        } else if (!parsedPolicy.success) {
+          status = 'blocked'
+          base.blockCode = 'policy-content-invalid'
+          base.blockDetail = `${outcome.policyRef.id}@${outcome.policyRef.revision}`
         } else {
-          // requirement source 解析：requested > assignment default > 员工唯一 default。
-          const candidates = content.requirementSources
-          const requested = input.submission.sourceKey ?? null
-          const byKey = (key: string) => candidates.find((c) => c.sourceKey === key) ?? null
-          let resolved: (typeof candidates)[number] | null = null
-          if (requested !== null) {
-            resolved = byKey(requested)
-            if (resolved === null) {
-              status = 'blocked'
-              base.blockCode = 'requirement-source-unresolved'
-              base.blockDetail = `requested key '${requested}' not offered by employee`
-            }
-          } else if (
-            assignment?.defaultRequirementSourceKey != null &&
-            byKey(assignment.defaultRequirementSourceKey) !== null
-          ) {
-            resolved = byKey(assignment.defaultRequirementSourceKey)
-          } else {
-            const defaults = candidates.filter((c) => c.isDefault)
-            if (defaults.length === 1) resolved = defaults[0]!
-            else if (candidates.length === 1) resolved = candidates[0]!
+          // 任一 blocked ⇒ ValidationError('upload-plan-blocked') 透传：零 mission、
+          // 零 claim（uploads 保持 pending 可复用；改 plan = 修正后重新 launch）。
+          const resolved = await resolveUploadPlanEntries({
+            uploads: toPlanRequests(input.submission.uploads, uploadRows),
+            policy: defaultUploadPolicyOf(parsedPolicy.data),
+            baseline: baseline.reader,
+          })
+          base.uploadPlanRef = resolved.planId
+          pendingPlan = {
+            planId: resolved.planId,
+            missionId: base.id,
+            missionRevision: 0,
+            repositoryId: input.repositoryId,
+            baselineSnapshotRef: baseline.baselineSnapshotRef,
+            baselineSha: baseline.baselineSha,
+            planDigest: resolved.planDigest({
+              repositoryRef: baseline.repositoryRef,
+              snapshotRef: baseline.baselineSnapshotRef,
+              headSha: baseline.baselineSha,
+            }),
+            entries: resolved.entries,
+            createdAt: now,
           }
-          if (resolved !== null) {
-            base.resolvedSourceKey = resolved.sourceKey
-            base.resolvedAdapterId = resolved.adapterRef.id
-            base.resolvedAdapterRevision = resolved.adapterRef.revision
-            status = 'working'
-          } else if (base.blockCode === null) {
-            if (candidates.length === 0) {
-              status = 'blocked'
-              base.blockCode = 'requirement-source-unresolved'
-              base.blockDetail = 'employee offers no requirement source'
-            } else {
-              // 多候选且无默认：交互选择（AC-5）。
-              status = 'awaiting-information'
-              base.blockDetail = JSON.stringify(candidates.map((c) => c.sourceKey))
-            }
-          } else {
-            status = 'blocked'
-          }
+          status = 'working'
         }
+      }
+    } else {
+      // requirement source 解析：requested > assignment default > 员工唯一 default。
+      const candidates = outcome.employeeContent.requirementSources
+      const requested = input.submission.sourceKey ?? null
+      const byKey = (key: string) => candidates.find((c) => c.sourceKey === key) ?? null
+      let resolved: (typeof candidates)[number] | null = null
+      if (requested !== null) {
+        resolved = byKey(requested)
+        if (resolved === null) {
+          status = 'blocked'
+          base.blockCode = 'requirement-source-unresolved'
+          base.blockDetail = `requested key '${requested}' not offered by employee`
+        }
+      } else if (
+        assignment?.defaultRequirementSourceKey != null &&
+        byKey(assignment.defaultRequirementSourceKey) !== null
+      ) {
+        resolved = byKey(assignment.defaultRequirementSourceKey)
+      } else {
+        const defaults = candidates.filter((c) => c.isDefault)
+        if (defaults.length === 1) resolved = defaults[0]!
+        else if (candidates.length === 1) resolved = candidates[0]!
+      }
+      if (resolved !== null) {
+        base.resolvedSourceKey = resolved.sourceKey
+        base.resolvedAdapterId = resolved.adapterRef.id
+        base.resolvedAdapterRevision = resolved.adapterRef.revision
+        status = 'working'
+      } else if (base.blockCode === null) {
+        if (candidates.length === 0) {
+          status = 'blocked'
+          base.blockCode = 'requirement-source-unresolved'
+          base.blockDetail = 'employee offers no requirement source'
+        } else {
+          // 多候选且无默认：交互选择（AC-5）。
+          status = 'awaiting-information'
+          base.blockDetail = JSON.stringify(candidates.map((c) => c.sourceKey))
+        }
+      } else {
+        status = 'blocked'
       }
     }
   }
 
   const row: MissionRow = { ...base, status }
-  const { created, mission } = deps.store.createMission(row)
-  if (created) {
-    deps.store.insertMissionSource({
-      id: ulid(),
-      missionId: row.id,
-      generation: 1,
-      sourceKind: row.sourceKind,
-      externalId: row.externalId,
-      adapterId: row.resolvedAdapterId,
-      adapterRevision: row.resolvedAdapterRevision,
-      sourceRevision: null,
-      bundleRef: null,
-      manifestDigest: row.sourceContentDigest,
-      fileCount: input.submission.kind === 'direct' ? input.submission.uploads.length : null,
-      totalBytes: null,
-      state: 'active',
-      createdAt: now,
+  // launch 事务：mission 行 → claim → plan 落库 → source 行，任何失败整体回滚
+  // （零 mission、零 upload 消费）。撞 idempotency 赢家用哨兵回滚后重放返回。
+  const ua = deps.uploadAdmission
+  const runTx: <T>(fn: () => T) => T = ua !== undefined ? ua.transact : (fn) => fn()
+  try {
+    const mission = runTx(() => {
+      const result = deps.store.createMission(row)
+      if (!result.created) throw new IdempotentReplay(result.mission)
+      if (pendingPlan !== null) {
+        ua!.sessions.claimUploads({
+          missionId: row.id,
+          actorUserId: input.actorUserId,
+          uploadRefs: pendingPlan.entries.map((e) => e.fileId),
+          now,
+        })
+        ua!.persistPlan(pendingPlan)
+      }
+      deps.store.insertMissionSource({
+        id: ulid(),
+        missionId: row.id,
+        generation: 1,
+        sourceKind: row.sourceKind,
+        externalId: row.externalId,
+        adapterId: row.resolvedAdapterId,
+        adapterRevision: row.resolvedAdapterRevision,
+        sourceRevision: null,
+        bundleRef: null,
+        manifestDigest: row.sourceContentDigest,
+        fileCount: input.submission.kind === 'direct' ? input.submission.uploads.length : null,
+        totalBytes: uploadRows === null ? null : uploadRows.reduce((sum, r) => sum + r.bytes, 0),
+        state: 'active',
+        createdAt: now,
+      })
+      return result.mission
     })
+    return {
+      missionId: mission.id,
+      status: mission.status,
+      created: true,
+      blockCode: mission.blockCode,
+    }
+  } catch (error) {
+    if (error instanceof IdempotentReplay) {
+      return {
+        missionId: error.mission.id,
+        status: error.mission.status,
+        created: false,
+        blockCode: error.mission.blockCode,
+      }
+    }
+    throw error
   }
+}
+
+export const previewDirectInputSchema = z
+  .object({
+    repositoryId: z.string().min(1),
+    repositoryGroupId: z.string().min(1).nullable(),
+    uploads: z.array(directUploadSchema).min(1).max(100),
+    requestedEmployee: versionedRefSchema.nullable(),
+    requestedPolicy: versionedRefSchema.nullable(),
+    actorUserId: z.string().nullable(),
+  })
+  .strict()
+  .superRefine((input, ctx) => {
+    refineUploadList(input.uploads, ctx, ['uploads'])
+  })
+
+export interface DirectInputPreview {
+  readonly employee: { readonly id: string; readonly revision: number }
+  readonly policy: { readonly id: string; readonly revision: number }
+  readonly baseline: { readonly snapshotRef: string; readonly sha: string }
+  readonly dispositions: readonly UploadDisposition[]
+}
+
+/**
+ * direct 上传落点 preview（design §12.1）：跑与 launch 同一条 employee/policy
+ * 选择链，在当前 baseline 上返回逐项 disposition。不写 workspace、不建 Mission、
+ * 不 claim；launch 时仍会冻结 baseline 重验，preview 结果不被信任复用。
+ */
+export async function previewDirectInput(
+  deps: LaunchDeps,
+  rawInput: unknown,
+): Promise<DirectInputPreview> {
+  const input = parseOr422(previewDirectInputSchema, rawInput)
+  const ua = deps.uploadAdmission
+  if (ua === undefined) {
+    throw new ValidationError('upload-admission-not-wired', 'upload admission deps are not wired')
+  }
+  const now = deps.now()
+  const rows = readPendingUploadRows(ua, input.uploads, input.actorUserId, now)
+  const { outcome } = await resolveEmployeeAndPolicy(deps, {
+    repositoryId: input.repositoryId,
+    repositoryGroupId: input.repositoryGroupId,
+    requestedEmployee: input.requestedEmployee,
+    requestedPolicy: input.requestedPolicy,
+    now,
+  })
+  if (outcome.kind === 'blocked') {
+    // 选择不唯一/配置缺失：直接配置阻断，不能用全局默认顶替未选出的策略。
+    throw new ValidationError(outcome.blockCode, outcome.blockDetail ?? outcome.blockCode)
+  }
+  const baseline = await ua.resolveBaseline(input.repositoryId)
+  if (baseline === null) {
+    throw new ValidationError(
+      'baseline-reader-not-wired',
+      `no baseline reader for repository ${input.repositoryId}`,
+    )
+  }
+  const parsedPolicy = automationPolicyContentSchema.safeParse(outcome.policyContent)
+  if (!parsedPolicy.success) {
+    throw new ValidationError(
+      'policy-content-invalid',
+      `${outcome.policyRef.id}@${outcome.policyRef.revision}`,
+    )
+  }
+  const dispositions = await previewUploadDispositions({
+    uploads: toPlanRequests(input.uploads, rows),
+    policy: defaultUploadPolicyOf(parsedPolicy.data),
+    baseline: baseline.reader,
+  })
   return {
-    missionId: mission.id,
-    status: mission.status,
-    created,
-    blockCode: mission.blockCode,
+    employee: outcome.employee,
+    policy: outcome.policyRef,
+    baseline: { snapshotRef: baseline.baselineSnapshotRef, sha: baseline.baselineSha },
+    dispositions,
   }
 }
 

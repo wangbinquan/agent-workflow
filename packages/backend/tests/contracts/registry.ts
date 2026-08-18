@@ -191,6 +191,16 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/code/missions/:id/cancel' },
   { method: 'POST', path: '/api/code/missions/:id/retry' },
   { method: 'GET', path: '/api/code/missions/:id/decision-trace' },
+  // RFC-310 PR-3 — direct 输入上传会话与落点 preview。
+  { method: 'POST', path: '/api/code/mission-input-uploads' },
+  { method: 'DELETE', path: '/api/code/mission-input-uploads/:uploadRef' },
+  { method: 'POST', path: '/api/code/missions/direct-input/preview' },
+  // RFC-310 PR-3 — requirement bundle 读面 / 平台答复 / 外部源 refresh。
+  { method: 'GET', path: '/api/code/missions/:id/requirement-manifest' },
+  { method: 'GET', path: '/api/code/missions/:id/requirement-files/:sha256' },
+  { method: 'POST', path: '/api/code/missions/:id/answers' },
+  { method: 'POST', path: '/api/code/missions/:id/source-refresh/preview' },
+  { method: 'POST', path: '/api/code/missions/:id/source-refresh' },
   { method: 'GET', path: '/api/code/work-items' },
   // RFC-304 T61 — the troubleshooting chain's read side.
   { method: 'GET', path: '/api/code/deliveries' },

@@ -81,6 +81,12 @@ describe('RFC-284 T7 — 唯一性文本锁', () => {
         'services/skillHash.ts',
         'services/structuralDiff/digest.ts',
         'services/codeIntel/snapshot.ts',
+        // RFC-310 evidence/baseline/workspace 流式 hash（64KB chunk 循环 update，
+        // 峰值内存有界——Bun fetch 不背压教训，见 dev-gotchas）：
+        'modules/development-automation/infrastructure/evidenceStore.ts',
+        'modules/development-automation/infrastructure/gitBaselineReader.ts',
+        'modules/development-automation/infrastructure/actionWorkspace.ts',
+        'modules/development-automation/infrastructure/uploadPlacement.ts',
         // RFC-308 policy/profile content-addressed receipts:
         'modules/source-control/domain/taskCommitPolicy.ts',
         'modules/source-control/domain/workspaceExcludeProfile.ts',

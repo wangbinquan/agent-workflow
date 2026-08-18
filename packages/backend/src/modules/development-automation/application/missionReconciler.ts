@@ -34,6 +34,7 @@ import {
   type MissionStatus,
 } from '../domain/mission'
 import { computeReadiness, type ReadinessInput } from '../domain/readiness'
+import { backoffDelayMs, DEFAULT_TRANSIENT_BACKOFF } from '../domain/operationFailure'
 import { digitalEmployeeContentSchema } from '../domain/digitalEmployee'
 import {
   canonicalDecisionDigest,
@@ -359,7 +360,7 @@ export async function runMissionReconcile(
   const guards = projectGuards(mission, unsettled, cells)
   const policy = await loadPolicyContent(deps.lookup, mission)
   if (policy === null) {
-    return await commitAndHandle(deps, mission, snapshot, {
+    return await commitAndHandle(deps, mission, snapshot, guards, {
       selected: { kind: 'block', reason: 'policy-content-missing' },
       selectedBy: 'guard',
       matchedRuleId: null,
@@ -405,7 +406,95 @@ export async function runMissionReconcile(
     }
   }
 
-  return await commitAndHandle(deps, mission, snapshot, { ...evaluation, selected })
+  // ---- requirement 重派（PR-3 T33/T38a）------------------------------------
+  // evaluatePolicy 的 COLLECT_BY_GROUP 对 requirement 组注明「交由上层重派」：
+  // 规则读 requirement fact 撞 indeterminate 时这里按 sourceKind 派
+  // materialize/collect；澄清闭环（问题集 pending / 已发布待答）是 closed
+  // 平台步骤，优先于动作规则的选择。
+  selected = redispatchRequirement(mission, cells, selected)
+
+  return await commitAndHandle(deps, mission, snapshot, guards, { ...evaluation, selected })
+}
+
+function knownString(
+  cells: Readonly<Record<string, FactCell<FactCellValue>>>,
+  id: string,
+): string | null {
+  const cell = cells[id]
+  return cell !== undefined && cell.state === 'known' && typeof cell.value === 'string'
+    ? cell.value
+    : null
+}
+
+function knownNumber(
+  cells: Readonly<Record<string, FactCell<FactCellValue>>>,
+  id: string,
+): number | null {
+  const cell = cells[id]
+  return cell !== undefined && cell.state === 'known' && typeof cell.value === 'number'
+    ? cell.value
+    : null
+}
+
+function adapterBindingRefOf(mission: MissionRow): string | null {
+  return mission.resolvedAdapterId !== null && mission.resolvedAdapterRevision !== null
+    ? `${mission.resolvedAdapterId}@${mission.resolvedAdapterRevision}`
+    : null
+}
+
+function redispatchRequirement(
+  mission: MissionRow,
+  cells: Record<string, FactCell<FactCellValue>>,
+  selected: NextDecision,
+): NextDecision {
+  // 1) 澄清闭环：pending 问题集 / 已发布待答优先于 block 与新动作（未澄清的
+  //    需求不该起 writable 动作）；guard 产生的 wait/terminal/collect 不动。
+  if (selected.kind === 'block' || selected.kind === 'run-agent-action') {
+    const pendingQuestionSetRef = knownString(cells, '__requirement.pendingQuestionSetRef')
+    const clarificationState = knownString(cells, 'requirement.clarificationState')
+    const channel = knownString(cells, '__requirement.questionChannel')
+    if (pendingQuestionSetRef !== null && clarificationState === 'none') {
+      return {
+        kind: 'publish-requirement-questions',
+        questionSetRef: pendingQuestionSetRef,
+        channel: channel === 'requirement-source' ? 'requirement-source' : 'platform',
+      }
+    }
+    if (pendingQuestionSetRef !== null && clarificationState === 'questions-published') {
+      if (channel === 'platform') {
+        // 平台渠道等人答（submitMissionAnswers 命令收口）；不是故障，不 block。
+        return {
+          kind: 'wait',
+          reason: 'awaiting-platform-answers',
+          resumeAt: null,
+          wakeSources: ['manual', 'requirement'],
+          attemptOrdinal: 0,
+        }
+      }
+      const binding = adapterBindingRefOf(mission)
+      if (binding === null) return { kind: 'block', reason: 'requirement-adapter-unresolved' }
+      return {
+        kind: 'collect-requirement-answers',
+        questionSetRef: pendingQuestionSetRef,
+        adapterBindingRef: binding,
+      }
+    }
+  }
+  // 2) 取件重派：requirement fact indeterminate 且 bundle 尚未物化。
+  if (selected.kind !== 'block' || !selected.reason.startsWith('fact-unavailable:requirement.')) {
+    return selected
+  }
+  const bundleCell = cells['requirement.bundleComplete']
+  if (bundleCell !== undefined && bundleCell.state === 'known') return selected
+  if (mission.sourceKind === 'direct') {
+    return mission.sourceContentDigest !== null
+      ? { kind: 'materialize-direct-requirement', submissionRef: mission.sourceContentDigest }
+      : { kind: 'block', reason: 'direct-submission-digest-missing' }
+  }
+  const binding = adapterBindingRefOf(mission)
+  return binding !== null
+    ? { kind: 'collect-external-requirement', adapterBindingRef: binding }
+    : { kind: 'block', reason: 'requirement-adapter-unresolved' }
 }
 
 interface EvaluationLike {
@@ -420,6 +509,7 @@ async function commitAndHandle(
   deps: ReconcileDeps,
   mission: MissionRow,
   snapshot: MissionFactSnapshot,
+  guards: FixedGuardInput,
   evaluation: EvaluationLike,
 ): Promise<ReconcileOutcome> {
   const now = deps.now()
@@ -438,8 +528,13 @@ async function commitAndHandle(
   // 去重键用 cells 的**内容** digest：snapshot.digest 含 missionRevision 与
   // capturedAt（readiness 落盘也会 bump revision），拿它当键会让同 facts 的
   // 重复 reconcile 永不去重。内容不变 ⇒ 决策输入不变 ⇒ 去重。
+  // guards 必须一并入键（2026-08-18 journey 实红修复，rfc310-pr3-journey
+  // body+file 用例锁定）：placement/effect/fence/action 只改 mission 行不改
+  // cells——只按 cells 去重会把 guard 面变化后的新决策误吞（实测 placement
+  // 翻 uploadSeed pending→seeded 后 mission 永久 deduped 卡 working）。
   const decisionInputDigest = canonicalDigest({
     cellsDigest: canonicalDigest(snapshot.cells),
+    guards,
     policyId: mission.policyId,
     policyRevision: mission.policyRevision,
     employeeId: mission.employeeId,
@@ -507,6 +602,42 @@ function blockMission(
     blockCode: code,
     blockDetail: detail,
     currentActionRunId: null,
+  })
+}
+
+/**
+ * requirement cells 的落盘通道：与既有 requirement 快照合并 → 新快照 →
+ * requirementBundleRef 指向它（mergeCollectedCells 下一轮读回）。失败重试的
+ * attempt ordinal 也走这里——cells 变化 ⇒ decisionInputDigest 变化 ⇒ retry
+ * 后不会被去重卡死（facts 不变则去重是设计行为）。
+ */
+function persistRequirementCells(
+  deps: ReconcileDeps,
+  missionId: string,
+  patch: Record<string, FactCell<FactCellValue>>,
+  refs: unknown,
+): void {
+  const mission = deps.store.getMission(missionId)
+  if (mission === null) return
+  const base =
+    mission.requirementBundleRef === null
+      ? {}
+      : (deps.snapshots.getCells(mission.requirementBundleRef) ?? {})
+  const merged = { ...base, ...patch }
+  const now = deps.now()
+  const snapshotId = ulid()
+  deps.store.insertFactSnapshot({
+    id: snapshotId,
+    missionId,
+    missionRevision: mission.revision,
+    capturedAt: new Date(now).toISOString().replace('Z', '+00:00'),
+    cellsJson: canonicalStringify(merged),
+    refsJson: canonicalStringify(refs),
+    digest: canonicalDigest(merged),
+    now,
+  })
+  deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+    requirementBundleRef: snapshotId,
   })
 }
 
@@ -772,11 +903,224 @@ async function handleDecision(
       }
       return 'readiness-published'
     }
-    // ---- 未到批次的 arm：typed block，绝不静默 ------------------------------
+    // ---- requirement 取件/物化（PR-3 T33/T35）--------------------------------
     case 'materialize-direct-requirement':
-    case 'collect-external-requirement':
-    case 'publish-requirement-questions':
-    case 'collect-requirement-answers':
+    case 'collect-external-requirement': {
+      const port = deps.ports.requirementMaterialize
+      if (port === undefined) {
+        blockMission(deps, mission.id, 'requirement-port-not-wired', null)
+        return 'blocked'
+      }
+      const attempts = (knownNumber(snapshot.cells, '__requirement.acquireAttempts') ?? 0) + 1
+      const failed = (code: string, remediation: string): 'blocked' => {
+        persistRequirementCells(
+          deps,
+          mission.id,
+          {
+            '__requirement.acquireAttempts': knownCell(attempts),
+            '__requirement.lastAcquireFailure': knownCell(code),
+          },
+          { kind: 'requirement-failure', code },
+        )
+        blockMission(deps, mission.id, `requirement-acquire-failed:${code}`, remediation)
+        return 'blocked'
+      }
+      let bundle: {
+        bundleRef: string
+        manifestDigest: string
+        fileCount: number
+        totalBytes: number
+        sourceRevision: string
+        complete: boolean
+      }
+      if (selected.kind === 'materialize-direct-requirement') {
+        const out = await port.materializeDirect({
+          missionId: mission.id,
+          submissionRef: selected.submissionRef,
+        })
+        if (!out.ok) return failed(out.failure.code, out.failure.remediation)
+        bundle = { ...out, complete: true }
+      } else {
+        if (mission.externalId === null)
+          return failed('external-id-missing', 'mission has no external id')
+        const out = await port.acquireExternal({
+          missionId: mission.id,
+          adapterBindingRef: selected.adapterBindingRef,
+          externalId: mission.externalId,
+        })
+        if (!out.ok) return failed(out.failure.code, out.failure.remediation)
+        bundle = out
+      }
+      deps.store.insertMissionSource({
+        id: ulid(),
+        missionId: mission.id,
+        generation: deps.store.listMissionSources(mission.id).length + 1,
+        sourceKind:
+          selected.kind === 'materialize-direct-requirement' ? 'direct' : 'external-reference',
+        externalId: mission.externalId,
+        adapterId: mission.resolvedAdapterId,
+        adapterRevision: mission.resolvedAdapterRevision,
+        sourceRevision: bundle.sourceRevision,
+        bundleRef: bundle.bundleRef,
+        manifestDigest: bundle.manifestDigest,
+        fileCount: bundle.fileCount,
+        totalBytes: bundle.totalBytes,
+        state: 'materialized',
+        createdAt: now,
+      })
+      persistRequirementCells(
+        deps,
+        mission.id,
+        {
+          'requirement.bundleComplete': knownCell(bundle.complete),
+          'requirement.clarificationState': knownCell('none'),
+        },
+        { kind: 'requirement', bundleRef: bundle.bundleRef, manifestDigest: bundle.manifestDigest },
+      )
+      return 'collected'
+    }
+    // ---- 澄清闭环（PR-3 T38a）------------------------------------------------
+    case 'publish-requirement-questions': {
+      const port = deps.ports.requirementMaterialize
+      if (port === undefined) {
+        blockMission(deps, mission.id, 'requirement-port-not-wired', null)
+        return 'blocked'
+      }
+      const binding = adapterBindingRefOf(mission)
+      if (selected.channel === 'requirement-source' && binding === null) {
+        blockMission(deps, mission.id, 'requirement-adapter-unresolved', null)
+        return 'blocked'
+      }
+      const out = await port.publishQuestions({
+        missionId: mission.id,
+        questionSetRef: selected.questionSetRef,
+        channel: selected.channel,
+        adapterBindingRef: selected.channel === 'requirement-source' ? binding : null,
+      })
+      if (!out.ok) {
+        const attempts = (knownNumber(snapshot.cells, '__requirement.publishAttempts') ?? 0) + 1
+        persistRequirementCells(
+          deps,
+          mission.id,
+          { '__requirement.publishAttempts': knownCell(attempts) },
+          { kind: 'requirement-questions-failure', code: out.failure.code },
+        )
+        blockMission(
+          deps,
+          mission.id,
+          `requirement-questions-failed:${out.failure.code}`,
+          out.failure.remediation,
+        )
+        return 'blocked'
+      }
+      persistRequirementCells(
+        deps,
+        mission.id,
+        {
+          'requirement.clarificationState': knownCell('questions-published'),
+          '__requirement.questionCorrelationRef': knownCell(out.correlationRef),
+        },
+        {
+          kind: 'requirement-questions',
+          questionSetRef: selected.questionSetRef,
+          correlationRef: out.correlationRef,
+        },
+      )
+      if (selected.channel === 'platform') {
+        const fresh = deps.store.getMission(mission.id)
+        if (fresh !== null && fresh.status !== 'awaiting-information') {
+          const verdict = checkMissionTransition({
+            from: fresh.status,
+            to: 'awaiting-information',
+            fence: fresh.transitionFence,
+          })
+          if (verdict.ok) {
+            deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+              status: 'awaiting-information',
+            })
+          }
+        }
+      }
+      return 'collected'
+    }
+    case 'collect-requirement-answers': {
+      const port = deps.ports.requirementMaterialize
+      if (port === undefined) {
+        blockMission(deps, mission.id, 'requirement-port-not-wired', null)
+        return 'blocked'
+      }
+      const correlationRef = knownString(snapshot.cells, '__requirement.questionCorrelationRef')
+      if (correlationRef === null) {
+        blockMission(deps, mission.id, 'question-correlation-missing', null)
+        return 'blocked'
+      }
+      const out = await port.collectAnswers({
+        missionId: mission.id,
+        questionSetRef: selected.questionSetRef,
+        adapterBindingRef: selected.adapterBindingRef,
+        correlationRef,
+      })
+      if (!out.ok) {
+        const attempts = (knownNumber(snapshot.cells, '__requirement.answerPolls') ?? 0) + 1
+        persistRequirementCells(
+          deps,
+          mission.id,
+          { '__requirement.answerPolls': knownCell(attempts) },
+          { kind: 'requirement-answers-failure', code: out.failure.code },
+        )
+        blockMission(
+          deps,
+          mission.id,
+          `requirement-answers-failed:${out.failure.code}`,
+          out.failure.remediation,
+        )
+        return 'blocked'
+      }
+      if (!out.complete) {
+        // 常态轮询未齐：poll ordinal 落 cells（新 digest ⇒ 下轮新 decision 再收），
+        // durable wake 兜底 timer 唤醒；early 唤醒不清零 ordinal（deferredWake 语义）。
+        const polls = (knownNumber(snapshot.cells, '__requirement.answerPolls') ?? 0) + 1
+        persistRequirementCells(
+          deps,
+          mission.id,
+          { '__requirement.answerPolls': knownCell(polls) },
+          { kind: 'requirement-answers-pending', poll: polls },
+        )
+        if (deps.store.getWake(mission.id, decisionId) === null) {
+          deps.store.armWake({
+            id: ulid(),
+            missionId: mission.id,
+            decisionId,
+            reason: 'requirement-answers-pending',
+            resumeAt:
+              now +
+              (backoffDelayMs(DEFAULT_TRANSIENT_BACKOFF, polls - 1) ??
+                DEFAULT_TRANSIENT_BACKOFF.maxMs),
+            wakeSources: ['requirement', 'timer'],
+            attemptOrdinal: polls,
+            now,
+          })
+        }
+        return 'wake-armed'
+      }
+      persistRequirementCells(
+        deps,
+        mission.id,
+        {
+          'requirement.clarificationState': knownCell('answers-committed'),
+          '__requirement.answerRevision': knownCell(out.answerRevision ?? ''),
+          '__requirement.answerSetRef': knownCell(out.answerSetRef ?? ''),
+        },
+        {
+          kind: 'requirement-answers',
+          questionSetRef: selected.questionSetRef,
+          answerSetRef: out.answerSetRef,
+          answerRevision: out.answerRevision,
+        },
+      )
+      return 'collected'
+    }
+    // ---- 未到批次的 arm：typed block，绝不静默 ------------------------------
     case 'collect-pipeline-evidence':
     case 'run-verification':
     case 'request-human-decision':

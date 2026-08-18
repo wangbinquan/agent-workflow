@@ -5140,3 +5140,30 @@ export const legacyCodeWorkItemLinks = sqliteTable('legacy_code_work_item_links'
   cutoverReceiptJson: text('cutover_receipt_json').notNull(),
   createdAt: integer('created_at').notNull(),
 })
+
+// RFC-310 PR-3 —— mission 输入上传会话（migration 0178）：actor-scoped、TTL、
+// launch 事务一次性原子 claim；bytes 在 EvidenceStore（内容寻址 blob），DB
+// 只存 ref/digest/元数据。
+export const missionInputUploads = sqliteTable(
+  'mission_input_uploads',
+  {
+    id: text('id').primaryKey(), // ULID = uploadRef
+    actorUserId: text('actor_user_id'),
+    originalName: text('original_name').notNull(),
+    bytes: integer('bytes').notNull(),
+    sha256: text('sha256').notNull(),
+    blobRef: text('blob_ref').notNull(),
+    state: text('state').notNull().default('pending'),
+    claimedByMissionId: text('claimed_by_mission_id'),
+    uploadIdempotencyKey: text('upload_idempotency_key'),
+    expiresAt: integer('expires_at').notNull(),
+    createdAt: integer('created_at').notNull(),
+    claimedAt: integer('claimed_at'),
+  },
+  (t) => ({
+    idemUq: uniqueIndex('mission_input_uploads_idem_unique')
+      .on(t.actorUserId, t.uploadIdempotencyKey)
+      .where(sql`${t.uploadIdempotencyKey} IS NOT NULL`),
+    stateIdx: index('idx_mission_input_uploads_state').on(t.state, t.expiresAt),
+  }),
+)

@@ -1,3 +1,4 @@
+import type { MockQuestionSetRecord, MockRequirementSeed } from './development/requirement-provider'
 import type {
   MockCodeHostMutationInput,
   MockCodeHostProject,
@@ -91,6 +92,22 @@ export class SystemMockClient {
     deliveryId: string
   }> {
     return await this.#request('POST', '/webhooks/deliver', input)
+  }
+
+  async seedRequirement(seed: MockRequirementSeed): Promise<void> {
+    await this.#request('POST', '/development-requirement/seed', seed)
+  }
+
+  async seedRequirementAnswers(input: {
+    correlationId: string
+    answers: { questionId: string; answer: string }[]
+    answerRevision?: string
+  }): Promise<{ ok: boolean }> {
+    return await this.#request('POST', '/development-requirement/answers', input)
+  }
+
+  async listRequirementQuestionSets(): Promise<{ items: MockQuestionSetRecord[] }> {
+    return await this.#request('GET', '/development-requirement/question-sets')
   }
 
   async #request<T>(method: string, path: string, body?: unknown): Promise<T> {

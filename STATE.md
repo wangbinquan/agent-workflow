@@ -42,6 +42,20 @@
 > readiness 每轮落盘（unknown 永不折算 pass）、T31a preview/apply（原子 repin+bump epoch）、Mission HTTP 七端点+权限
 > 五点（105 点目录）+read models。**CI 修复**：PR-1B 首扫照出 4 个错误码未点名（git ls-files 型守卫的 untracked 盲区
 > 再证）与 e2e 权限计数（105/25）——随本批修复。facts digest 改内容寻址（revision/时间不入 digest）。
+> **PR-3（T32–T40）已完成**：EvidenceStore（内容寻址 blob+bundle 清单、safe-walk、流式 hash）、requirement
+> materializer（direct stash/materialize、外部 acquire→manifest、问题集/答案集台账、T38 refresh preview/apply）、
+> actor-scoped 上传会话（TTL/原子 claim，migration 0178）、UploadPlan/placement→SeedChangeRef、action workspace
+> byte-identical 重建、T39 安全负向面（traversal/symlink/预算/win32 反斜杠拒收）、integration adapter 真子进程
+> runner（空环境+一行 envelope）+system-mocks requirement provider（Q&A/reset 控制面）。**收口接线**：
+> `composeDevelopmentAutomation` 纯装配（sweep/recover 逻辑归 application 层，架构锁「无业务分支」强制），消费者=
+> routes/developmentMissions.ts + cli/start.ts（direct 正文 launch 后路由层 stash+失败补偿 cancel；mutation 后
+> fire-and-forget reconcile；30s wake sweep/hourly 上传 TTL/启动 recover，DAEMON_CADENCE+2）；外部取件 runner 由
+> integration 侧组装注入（跨模块零内部 import，preflight 债务零增长）；HTTP +5 端点（manifest 读/逐文件 ranged 流
+> 式读 206/416+归属检查/answers/source-refresh preview·apply）。**journey E2E（rfc310-pr3-journey）揪出并修复一个
+> 生产 bug**：决策去重键漏 guard 面——placement 等只改 mission 行不改 cells 的推进会被误去重、mission 永久卡
+> working；修复把 FixedGuardInput 纳入 decision_input_digest（该用例锁定）。三形态（正文/文件/外部 ID）经真 HTTP+
+> 真 adapter 子进程+mock provider 全链绿，终态诚实 blocked `collector-not-wired:repository`（facts collector 属
+> PR-5）。PR-5 债记 plan.md 交付注记（manifest repositoryPlacement 对齐、retry 重生成 plan、preview delivery head）。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

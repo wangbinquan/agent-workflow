@@ -4,6 +4,7 @@ export const SYSTEM_MOCK_SERVICES = [
   'gitlab',
   'github',
   'external',
+  'development-requirement', // RFC-310 自建需求系统 mock
   'oauth',
   'oidc',
   'mcp',
@@ -55,6 +56,8 @@ export interface SystemMockEndpoints {
   githubApiBaseUrl: string
   /** Generic script-adapter upstream, for CI/document/issue systems RFCs do not know. */
   externalHttpBaseUrl: string
+  /** RFC-310 —— 自建需求系统 mock（adapter CLI 的上游）。 */
+  developmentRequirementBaseUrl: string
   oauthIssuerUrl: string
   oidcIssuerUrl: string
   mcpStreamableUrl: string

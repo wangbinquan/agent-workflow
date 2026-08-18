@@ -18,6 +18,9 @@ export const repoRelativePathSchema = z
     (p) =>
       !p.startsWith('/') &&
       !p.includes('\0') &&
+      // 反斜杠一律拒：POSIX 上是合法文件名字符，但 Windows 上是路径分隔符——
+      // `..\x` 会在 win32 placement/join 时逃逸 staging（RFC-310 PR-3 T39）。
+      !p.includes('\\') &&
       !/^[a-zA-Z]:[\\/]/.test(p) &&
       p.split('/').every((seg) => seg.length > 0 && seg !== '.' && seg !== '..'),
     { message: 'must be a normalized repo-relative path' },

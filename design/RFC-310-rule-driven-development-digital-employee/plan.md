@@ -122,17 +122,25 @@ T18 的规则语义 fixtures，已交付）；1B = T13–T20 配置资源 CRUD/A
 
 | 编号 | 任务                                                                                                          | 依赖         | 状态 |
 | ---- | ------------------------------------------------------------------------------------------------------------- | ------------ | ---- |
-| T32  | shared workspace convention 增加 `pipeline` 与 `inputs/requirements` safe helpers                             | T6           | ⏳   |
-| T33  | selected employee 后解析 source；唯一 auto-pin / 多结果交互选择；acquire + Q&A adapter                        | T16,T24a     | ⏳   |
-| T34  | one-shot staged sink、safe walk、redaction、budget、atomic EvidenceStore import                               | T6,T33       | ⏳   |
-| T35  | RequirementBundleManifestV1 平台生成、canonical digest、opaque bundle ref                                     | T34          | ⏳   |
-| T36  | actor-scoped upload session/TTL/atomic claim；direct 三形态 → bundle；external ID → runnable mock bundle      | T35          | ⏳   |
-| T36a | UploadPlan：目标/mode/ignore/filter、create/replace/already-present、CAS、placement → immutable SeedChangeRef | T21,T36      | ⏳   |
-| T37  | action workspace read-only bundle + `baseline + SeedChangeRef` materialization 与 fresh 重建                  | T32,T35,T36a | ⏳   |
-| T38  | source revision manual/auto refresh + downstream invalidation preview/command                                 | T26,T35      | ⏳   |
-| T38a | question/answer closed decision/effect：平台/原渠道 correlation、exact revision、重放/超时/多轮               | T33,T38      | ⏳   |
-| T39  | traversal/symlink/device/hardlink/archive bomb/normalization collision/oversize/redaction fail                | T34          | ⏳   |
-| T40  | upload/目标路径 preview + direct 表单 + bundle manifest/list/ranged-read UI/API（无 host path）               | T31,T35,T36a | ⏳   |
+| T32  | shared workspace convention 增加 `pipeline` 与 `inputs/requirements` safe helpers                             | T6           | ✅   |
+| T33  | selected employee 后解析 source；唯一 auto-pin / 多结果交互选择；acquire + Q&A adapter                        | T16,T24a     | ✅   |
+| T34  | one-shot staged sink、safe walk、redaction、budget、atomic EvidenceStore import                               | T6,T33       | ✅   |
+| T35  | RequirementBundleManifestV1 平台生成、canonical digest、opaque bundle ref                                     | T34          | ✅   |
+| T36  | actor-scoped upload session/TTL/atomic claim；direct 三形态 → bundle；external ID → runnable mock bundle      | T35          | ✅   |
+| T36a | UploadPlan：目标/mode/ignore/filter、create/replace/already-present、CAS、placement → immutable SeedChangeRef | T21,T36      | ✅   |
+| T37  | action workspace read-only bundle + `baseline + SeedChangeRef` materialization 与 fresh 重建                  | T32,T35,T36a | ✅   |
+| T38  | source revision manual/auto refresh + downstream invalidation preview/command                                 | T26,T35      | ✅   |
+| T38a | question/answer closed decision/effect：平台/原渠道 correlation、exact revision、重放/超时/多轮               | T33,T38      | ✅   |
+| T39  | traversal/symlink/device/hardlink/archive bomb/normalization collision/oversize/redaction fail                | T34          | ✅   |
+| T40  | upload/目标路径 preview + direct 表单 + bundle manifest/list/ranged-read UI/API（无 host path）               | T31,T35,T36a | ✅   |
+
+交付注记（2026-08-18，PR-3 完工）：
+
+- **接线**：`composeDevelopmentAutomation`（composition.ts，纯装配）在 routes/developmentMissions.ts 与 cli/start.ts 两个装配点消费（架构锁账本同步）；direct 正文在 launch 成功后由路由层 `stashDirectSubmission`（失败补偿 cancel + 失败码透传）；mutation 成功后 fire-and-forget 一轮 reconcile，进度保证由 daemon 30s `sweepWakes`（fireWake CAS 认领 + wake hint 消费，application/missionWakeSweep.ts）+ hourly 上传 TTL 回收 + 启动 recover 兜底（DAEMON_CADENCE +2 项，数值锁同步）。外部取件 runner 由 integration 侧装配（modules/integration/composition/requirementSource.ts，`AW_REQUIREMENT_MOCK_URL` 为 system-mocks E2E 座席透传），两模块互不 import 内部（rfc294 preflight 债务零增长）。
+- **HTTP 面新增 5 端点**：requirement-manifest 读、requirement-files/:sha256 ranged 流式读（Range/206/416；mission 归属检查防全局 blob 池探测）、answers（平台渠道）、source-refresh preview/apply；契约注册表同步。
+- **实红修复（journey 揪出的生产 bug）**：决策去重键此前只含 cells+policy/employee，guard 面变化（placement 翻 uploadSeed、effect/fence/action）不改 cells ⇒ 新决策被误吞、mission 永久卡 working；修复把 `FixedGuardInput` 纳入 `decision_input_digest`（missionReconciler.ts，rfc310-pr3-journey body+file 用例锁定）。
+- **fork 交付判断（已采纳）与 PR-5 债**：direct manifest 现只含正文文件（`repositoryPlacement` 恒 null），上传文件走 UploadPlan/SeedChangeRef 链入 workspace、不进 requirement bundle files——manifest placement 对齐留 PR-5；claim 失败的 blocked retry 不重生成 plan（PR-5）；preview 无 delivery head 语义（PR-5/PR-7）。
+- **T40 范围裁定**：API + 测试锚完工；bundle 浏览 UI 与 direct 表单随 PR-8 T61/T92（T40 行内 "UI" 指可经 API 无 host path 取数的读面，本批已具备）。
 
 正向 E2E 同时覆盖：正文-only；文件-only/正文+文件逐项指定目标路径并得到 seed receipt；只提交
 `sourceKey + externalId` 时 mock provider 返回正文+设计+附件三文件。三类 Mission 都 pin 唯一 digest；上传计划可从同一

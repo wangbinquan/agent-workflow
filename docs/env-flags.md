@@ -18,11 +18,14 @@
 
 ## 框架 ↔ 子进程契约（daemon 写入、child 读取）
 
-| 变量                                    | 写入点                                                    | 语义                                                                     |
-| --------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `AW_ENVELOPE_NONCE`                     | `backend/src/services/scriptRun.ts`                       | script 节点输出信封 nonce（防内容伪造信封；转义坑见 `envelope.ts` 注释） |
-| `OPENCODE_AW_INVENTORY_OUT`             | `packages/shared/src/inventory.ts`（协议常量）            | opencode dump 插件把启动 inventory JSON 写到该路径，框架运行后读回       |
-| `AW_GIT_CRED_HOST` / `AW_GIT_CRED_FILE` | `backend/src/main.ts`（credential-helper 子命令模式读取） | 内部 git credential helper 通道（路径/host 而非明文密钥，RFC-205）       |
+| 变量                                    | 写入点                                                                                    | 语义                                                                                                                                                        |
+| --------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AW_ENVELOPE_NONCE`                     | `backend/src/services/scriptRun.ts`                                                       | script 节点输出信封 nonce（防内容伪造信封；转义坑见 `envelope.ts` 注释）                                                                                    |
+| `OPENCODE_AW_INVENTORY_OUT`             | `packages/shared/src/inventory.ts`（协议常量）                                            | opencode dump 插件把启动 inventory JSON 写到该路径，框架运行后读回                                                                                          |
+| `AW_GIT_CRED_HOST` / `AW_GIT_CRED_FILE` | `backend/src/main.ts`（credential-helper 子命令模式读取）                                 | 内部 git credential helper 通道（路径/host 而非明文密钥，RFC-205）                                                                                          |
+| `AW_ADAPTER_SINK` / `AW_EXTERNAL_ID`    | `backend/src/modules/integration/infrastructure/developmentAdapterRunner.ts`              | RFC-310 requirement adapter 子进程契约：one-shot staged sink 目录 + 外部需求 ID（env 从空对象构造，只含 PATH/HOME/TMPDIR + 本族）                           |
+| `AW_ADAPTER_QUESTIONS`                  | 同上（questions.writeback 操作时）                                                        | 问题集 JSON 随 env 传给 adapter（小 payload；大字节仍走 sink 文件）                                                                                         |
+| `AW_REQUIREMENT_MOCK_URL`               | `backend/src/modules/integration/composition/requirementSource.ts`（透传）；mock CLI 读取 | system-mocks E2E 座席：平台进程 env 存在该名时透传给 adapter 子进程，供 requirement-adapter-cli 找到 mock 上游；真实 adapter 走 connectionRef，不依赖此透传 |
 
 ### script 节点上下文族（`backend/src/services/scriptRun.ts` 组装）
 

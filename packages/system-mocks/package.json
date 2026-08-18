@@ -13,7 +13,8 @@
     "./scip": "./src/scip/cli.ts",
     "./tool": "./src/tool.ts",
     "./development/requirement-provider": "./src/development/requirement-provider.ts",
-    "./development/pipeline-provider": "./src/development/pipeline-provider.ts"
+    "./development/pipeline-provider": "./src/development/pipeline-provider.ts",
+    "./development/requirement-adapter-cli": "./src/development/requirement-adapter-cli.ts"
   },
   "scripts": {
     "start": "bun run src/cli.ts",

@@ -150,6 +150,27 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-path-prefix',
+    file: 'modules/development-automation/application/uploadPlan.ts',
+    match: '`${target}/`',
+    count: 1,
+    why: 'operands are canonical REPO-relative target paths, never host paths: repoRelativePathSchema rejects `\\` and absolute forms at admission, so `/` is the only separator on every platform (RFC-310 upload plan ancestor/descendant collision check)',
+  },
+  {
+    rule: 'posix-path-prefix',
+    file: 'modules/development-automation/application/uploadPlan.ts',
+    match: '`${other}/`',
+    count: 1,
+    why: 'same canonical repo-relative contract as `${target}/` above — the symmetric side of the ancestor/descendant collision check (RFC-310)',
+  },
+  {
+    rule: 'posix-path-prefix',
+    file: 'modules/development-automation/application/uploadPlan.ts',
+    match: '`${p}/`',
+    count: 1,
+    why: 'policy allowedTargetPrefixes are authored as repo-relative `/` paths against the same schema-normalized targets (RFC-310)',
+  },
+  {
+    rule: 'posix-path-prefix',
     file: 'modules/source-control/domain/taskCommitPolicy.ts',
     match: '`${PLATFORM_WORKSPACE_DIR}/`',
     count: 1,

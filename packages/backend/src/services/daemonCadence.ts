@@ -29,4 +29,8 @@ export const DAEMON_CADENCE = {
   intentScratchGc: HOUR_MS,
   /** token 审计日志 GC（cli/start.ts）。 */
   tokenAuditGc: HOUR_MS,
+  /** RFC-310 mission wake sweep（到期 durable wake + 未消费 wake hint）。 */
+  developmentWakeSweep: 30_000,
+  /** RFC-310 未 claim mission 上传的 TTL 回收。 */
+  developmentUploadGc: HOUR_MS,
 } as const satisfies Record<string, number>

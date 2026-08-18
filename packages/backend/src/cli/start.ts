@@ -13,6 +13,8 @@ import { resumeSupersedingWorkItems } from '@/services/codeCapabilitySupersede'
 import { reclaimCodeLeasesOnBoot } from '@/services/codeRoundLease'
 import { clearStalePublishSections } from '@/modules/code-capability/infrastructure/sqliteWorkItemStore'
 import { recoverPublishIntentsOnBoot } from '@/modules/code-capability/application/recoverPublishIntentsOnBoot'
+import { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
+import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -969,6 +971,49 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       err: err instanceof Error ? err.message : String(err),
     })
   }
+  // RFC-310 PR-3 —— development-automation 装配：启动恢复（fence 悬挂 / epoch
+  // 过期 effect / 到期 wake，与 sweep 同一 reconcile 机制）+ 30s wake sweep +
+  // hourly 未 claim 上传 TTL 回收。路由侧另有同参装配（无共享可变状态，
+  // 同 db/appHome 下两实例语义等价）；消费者账本见 rfc310-architecture-lock。
+  const developmentAutomation = composeDevelopmentAutomation({
+    db,
+    appHome: Paths.root,
+    requirementSource: composeRequirementSourceRunner(db),
+  })
+  try {
+    const recovered = await developmentAutomation.recover()
+    if (
+      recovered.settledFences > 0 ||
+      recovered.invalidatedEffects > 0 ||
+      recovered.firedWakes > 0
+    ) {
+      log.info('development mission recovery on boot', recovered)
+    }
+  } catch (err) {
+    log.warn('development mission boot recovery failed', {
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+  const developmentWakeTimer = setInterval(() => {
+    void developmentAutomation.sweepWakes().catch((err: unknown) => {
+      log.warn('development wake sweep failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    })
+  }, DAEMON_CADENCE.developmentWakeSweep)
+  developmentWakeTimer.unref?.()
+  const developmentUploadGcTimer = setInterval(() => {
+    try {
+      const swept = developmentAutomation.sweepUploads()
+      if (swept.swept > 0) log.info('mission input uploads swept', swept)
+    } catch (err) {
+      log.warn('mission upload sweep failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }, DAEMON_CADENCE.developmentUploadGc)
+  developmentUploadGcTimer.unref?.()
+
   const intentGcTimer = setInterval(() => {
     try {
       const retention = loadConfig(Paths.config).intentBuilderScratchRetentionHours ?? 24

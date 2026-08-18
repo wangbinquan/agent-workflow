@@ -85,6 +85,21 @@ const ALLOWLIST: Record<string, { count: number; why: string }> = {
     count: 2,
     why: 'SCIP runIndexer 的 SpawnFn 注入缝（别名绑定 + 调用）；T17 已换树杀（stub 无 pid 走原 kill 缝）。',
   },
+  'modules/development-automation/infrastructure/gitBaselineReader.ts': {
+    count: 1,
+    why:
+      'RFC-310 PR-3 baseline blob 读取：`git cat-file blob` 的 stdout 必须直连文件（Bun.file）' +
+      '流式落盘再 hash——runGit 走 text() 会把二进制字节按 utf8 解码损坏，无法复用；' +
+      '只读 git 对象、nonInteractiveGitEnv、用后即删临时目录。',
+  },
+  'modules/integration/infrastructure/developmentAdapterRunner.ts': {
+    count: 1,
+    why:
+      'RFC-310 adapter runner：外部 adapter 程序的唯一执行点——one-shot staged sink 为 cwd、' +
+      '空对象起 env（PATH/HOME/TMPDIR + AW_* 票据 + 声明的 secret projection），不继承 daemon 环境，' +
+      '超时 SIGKILL、stdout 只收 256KB envelope。不能走 runAgentProcess：adapter 非 agent 会话，' +
+      '需要空环境与 sink-cwd 语义。',
+  },
 }
 
 function walkTsFiles(dir: string, acc: string[] = []): string[] {

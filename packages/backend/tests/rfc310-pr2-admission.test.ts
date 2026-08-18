@@ -11,8 +11,14 @@
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
+import { eq } from 'drizzle-orm'
+
 import { createInMemoryDb } from '../src/db/client'
 import type { DbClient } from '../src/db/client'
+import {
+  developmentRepositoryUploadPlanEntries,
+  developmentRepositoryUploadPlans,
+} from '../src/db/schema'
 import {
   createActionTemplate,
   publishActionTemplate,
@@ -32,6 +38,9 @@ import {
 } from '../src/modules/development-automation/infrastructure/sqliteAssignmentStore'
 import { createEmployeePublishLookup } from '../src/modules/development-automation/infrastructure/publishLookup'
 import { createSqliteMissionStore } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createSqliteUploadSessionStore } from '../src/modules/development-automation/infrastructure/sqliteUploadSessionStore'
+import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/sqliteUploadPlanStore'
+import type { UploadSessionStore } from '../src/modules/development-automation/application/ports/uploadSessionStore'
 import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
@@ -54,6 +63,7 @@ interface Fixture {
   deps: LaunchDeps
   employees: { single: string; multi: string; none: string }
   policyId: string
+  uploads: UploadSessionStore
 }
 
 function lookupOf(db: DbClient): AdmissionLookup {
@@ -201,12 +211,42 @@ async function buildFixture(): Promise<Fixture> {
   const none = await mkEmployee('emp-none', [])
 
   const store = createSqliteMissionStore(db)
+  const uploads = createSqliteUploadSessionStore(db)
   return {
     db,
-    deps: { store, lookup: lookupOf(db), now },
+    deps: {
+      store,
+      lookup: lookupOf(db),
+      now,
+      uploadAdmission: {
+        sessions: uploads,
+        transact: (fn) => db.transaction(() => fn()),
+        // PR-2 admission 测试只关心 admission 链；baseline 一律「文件缺席」。
+        resolveBaseline: async () => ({
+          repositoryRef: 'repo-1',
+          baselineSnapshotRef: `git:${'f'.repeat(40)}`,
+          baselineSha: 'f'.repeat(40),
+          reader: { stat: async () => 'missing' as const },
+        }),
+        persistPlan: (plan) => insertUploadPlan(db, plan),
+      },
+    },
     employees: { single, multi, none },
     policyId: policy.id,
+    uploads,
   }
+}
+
+function mkUpload(store: UploadSessionStore, name: string): string {
+  return store.createUpload({
+    actorUserId: 'u-1',
+    originalName: name,
+    bytes: 4,
+    sha256: 'a'.repeat(64),
+    blobRef: 'a'.repeat(64),
+    idempotencyKey: null,
+    now: Date.now(),
+  }).id
 }
 
 function directInput(
@@ -230,11 +270,6 @@ function directInput(
 describe('rfc310 pr2 admission', () => {
   test('direct body-only / files-only / body+files all admit to working; idempotent replay', async () => {
     const f = await buildFixture()
-    const upload = {
-      fileName: 'spec.md',
-      sha256: 'a'.repeat(64),
-      repositoryTargetPath: 'docs/spec.md',
-    }
     const bodyOnly = await launchMission(
       f.deps,
       directInput('idem-body-only-1', f.employees.single, 'do it'),
@@ -242,12 +277,16 @@ describe('rfc310 pr2 admission', () => {
     expect(bodyOnly).toMatchObject({ status: 'working', created: true, blockCode: null })
     const filesOnly = await launchMission(
       f.deps,
-      directInput('idem-files-only-1', f.employees.single, null, [upload]),
+      directInput('idem-files-only-1', f.employees.single, null, [
+        { uploadRef: mkUpload(f.uploads, 'spec.md'), repositoryTargetPath: 'docs/spec.md' },
+      ]),
     )
     expect(filesOnly).toMatchObject({ status: 'working', created: true })
     const both = await launchMission(
       f.deps,
-      directInput('idem-both-1', f.employees.single, 'and this', [upload]),
+      directInput('idem-both-1', f.employees.single, 'and this', [
+        { uploadRef: mkUpload(f.uploads, 'spec2.md'), repositoryTargetPath: 'docs/spec.md' },
+      ]),
     )
     expect(both).toMatchObject({ status: 'working', created: true })
 
@@ -263,18 +302,107 @@ describe('rfc310 pr2 admission', () => {
     expect(mission.sourceContentDigest).toMatch(/^[0-9a-f]{64}$/)
   })
 
+  test('working launch with uploads claims rows, persists the plan, and backfills uploadPlanRef', async () => {
+    const f = await buildFixture()
+    const ref = mkUpload(f.uploads, 'spec.md')
+    const result = await launchMission(
+      f.deps,
+      directInput('idem-plan-persist-1', f.employees.single, null, [
+        { uploadRef: ref, repositoryTargetPath: 'docs/spec.md' },
+      ]),
+    )
+    expect(result.status).toBe('working')
+    const claimed = f.uploads.getUpload(ref)!
+    expect(claimed.state).toBe('claimed')
+    expect(claimed.claimedByMissionId).toBe(result.missionId)
+    const mission = f.deps.store.getMission(result.missionId)!
+    expect(mission.uploadPlanRef).not.toBeNull()
+    const plan = f.db
+      .select()
+      .from(developmentRepositoryUploadPlans)
+      .where(eq(developmentRepositoryUploadPlans.id, mission.uploadPlanRef!))
+      .get()!
+    expect(plan.missionId).toBe(result.missionId)
+    expect(plan.planDigest).toMatch(/^[0-9a-f]{64}$/)
+    const entries = f.db
+      .select()
+      .from(developmentRepositoryUploadPlanEntries)
+      .where(eq(developmentRepositoryUploadPlanEntries.planId, plan.id))
+      .all()
+    expect(entries).toHaveLength(1)
+    expect(entries[0]!.fileId).toBe(ref)
+    expect(entries[0]!.expectedTargetKind).toBe('absent')
+  })
+
+  test('launch transaction is atomic: in-transaction claim failure rolls back the mission row', async () => {
+    const f = await buildFixture()
+    const ok = mkUpload(f.uploads, 'a.md')
+    const stolen = mkUpload(f.uploads, 'b.md')
+    f.uploads.claimUploads({
+      missionId: 'm-thief',
+      actorUserId: 'u-1',
+      uploadRefs: [stolen],
+      now: Date.now(),
+    })
+    // TOCTOU 注入：预读谎报 stolen 仍 pending，让失败落在事务内的真实 claim 上。
+    const lyingSessions = {
+      ...f.uploads,
+      getUpload: (id: string) => {
+        const row = f.uploads.getUpload(id)
+        return row !== null && row.id === stolen
+          ? { ...row, state: 'pending', claimedByMissionId: null }
+          : row
+      },
+    }
+    const deps = {
+      ...f.deps,
+      uploadAdmission: { ...f.deps.uploadAdmission!, sessions: lyingSessions },
+    }
+    try {
+      await launchMission(
+        deps,
+        directInput('idem-atomic-1', f.employees.single, null, [
+          { uploadRef: ok, repositoryTargetPath: 'docs/a.md' },
+          { uploadRef: stolen, repositoryTargetPath: 'docs/b.md' },
+        ]),
+      )
+      throw new Error('should have thrown')
+    } catch (error) {
+      expect((error as { code?: string }).code).toBe('upload-already-claimed')
+    }
+    // 整体回滚：零 mission、零 plan、ok 行零消费、stolen 归属不变。
+    expect(f.deps.store.findByIdempotencyKey('idem-atomic-1')).toBeNull()
+    expect(f.db.select().from(developmentRepositoryUploadPlans).all()).toHaveLength(0)
+    expect(f.uploads.getUpload(ok)!.state).toBe('pending')
+    expect(f.uploads.getUpload(stolen)!.claimedByMissionId).toBe('m-thief')
+  })
+
+  test('upload admission not wired blocks honestly instead of pretending', async () => {
+    const f = await buildFixture()
+    const bare = { store: f.deps.store, lookup: f.deps.lookup, now: f.deps.now }
+    const result = await launchMission(
+      bare,
+      directInput('idem-not-wired-1', f.employees.single, null, [
+        { uploadRef: 'whatever', repositoryTargetPath: 'docs/x.md' },
+      ]),
+    )
+    expect(result).toMatchObject({ status: 'blocked', blockCode: 'upload-admission-not-wired' })
+    const mission = f.deps.store.getMission(result.missionId)!
+    expect(mission.sourceContentDigest).toBeNull()
+  })
+
   test('direct with empty body and no uploads is rejected at the schema layer', async () => {
     const f = await buildFixture()
     await expect(
       launchMission(f.deps, directInput('idem-empty-1', f.employees.single, '   ')),
     ).rejects.toThrow()
     const dup = directInput('idem-dup-path-1', f.employees.single, null, [
-      { fileName: 'a.md', sha256: null, repositoryTargetPath: 'docs/a.md' },
-      { fileName: 'b.md', sha256: null, repositoryTargetPath: 'docs/a.md' },
+      { uploadRef: 'ref-a', repositoryTargetPath: 'docs/a.md' },
+      { uploadRef: 'ref-b', repositoryTargetPath: 'docs/a.md' },
     ])
     await expect(launchMission(f.deps, dup)).rejects.toThrow()
     const traversal = directInput('idem-trav-1', f.employees.single, null, [
-      { fileName: 'x', sha256: null, repositoryTargetPath: '../escape.md' },
+      { uploadRef: 'ref-c', repositoryTargetPath: '../escape.md' },
     ])
     await expect(launchMission(f.deps, traversal)).rejects.toThrow()
   })

@@ -60,10 +60,71 @@ export interface FactSnapshotReader {
   getCells(snapshotId: string): Record<string, FactCell<FactCellValue>> | null
 }
 
+/**
+ * RFC-310 PR-3 T33/T35/T38a —— 需求取件/物化端口。实现在
+ * infrastructure/requirementMaterializer.ts（EvidenceStore safe import +
+ * 平台生成 manifest；外部程序执行经 integration 的 adapter runner 注入）。
+ * DTO 只携 opaque ref/digest/closed 枚举——大字节永远留在 evidence。
+ */
+export interface RequirementMaterializePort {
+  /** direct 提交 → 平台 RequirementBundleManifestV1（stash 的 digest 必须对得上 submissionRef）。 */
+  materializeDirect(input: { readonly missionId: string; readonly submissionRef: string }): Promise<
+    PortOutcome<{
+      readonly bundleRef: string
+      readonly manifestDigest: string
+      readonly fileCount: number
+      readonly totalBytes: number
+      readonly sourceRevision: string
+    }>
+  >
+  /** 外部需求系统取件：adapter 落 one-shot sink → safe import → manifest。 */
+  acquireExternal(input: {
+    readonly missionId: string
+    readonly adapterBindingRef: string
+    readonly externalId: string
+  }): Promise<
+    PortOutcome<{
+      readonly bundleRef: string
+      readonly manifestDigest: string
+      readonly fileCount: number
+      readonly totalBytes: number
+      readonly sourceRevision: string
+      readonly complete: boolean
+    }>
+  >
+  /** 问题集投递：platform 渠道零外呼；requirement-source 渠道经 adapter 写回。 */
+  publishQuestions(input: {
+    readonly missionId: string
+    readonly questionSetRef: string
+    readonly channel: 'platform' | 'requirement-source'
+    readonly adapterBindingRef: string | null
+  }): Promise<PortOutcome<{ readonly correlationRef: string }>>
+  /** 原渠道答案收取：complete=false 是常态轮询结果，不算失败。 */
+  collectAnswers(input: {
+    readonly missionId: string
+    readonly questionSetRef: string
+    readonly adapterBindingRef: string
+    readonly correlationRef: string
+  }): Promise<
+    PortOutcome<{
+      readonly complete: boolean
+      readonly answerRevision: string | null
+      readonly answerSetRef: string | null
+    }>
+  >
+  /** 平台渠道答案提交（submitMissionAnswers 命令用；correlate + stash + exact revision）。 */
+  stashAnswerSet(input: {
+    readonly missionId: string
+    readonly questionSetRef: string
+    readonly answers: readonly { readonly questionId: string; readonly answer: string }[]
+  }): Promise<PortOutcome<{ readonly answerSetRef: string; readonly answerRevision: string }>>
+}
+
 export interface ReconcilerPorts {
   readonly repositoryFacts?: RepositoryFactsCollectorPort
   readonly mergeRequestFacts?: MergeRequestFactsCollectorPort
   readonly effectExecutor?: MissionEffectExecutorPort
   readonly agentLauncher?: AgentActionLauncherPort
   readonly uploadPlacement?: UploadPlacementPort
+  readonly requirementMaterialize?: RequirementMaterializePort
 }

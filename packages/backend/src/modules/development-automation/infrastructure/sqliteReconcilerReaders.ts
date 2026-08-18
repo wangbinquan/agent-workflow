@@ -4,10 +4,15 @@
 // 纯读查询：fact snapshot cells 读回、fence 扫描、prepared-effect 扫描。
 // 全部只读、无业务分支——留在 infrastructure，经装配点注入。
 
-import { eq, inArray, ne } from 'drizzle-orm'
+import { eq, inArray, isNull, ne } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import { developmentEffects, developmentFactSnapshots, developmentMissions } from '@/db/schema'
+import {
+  developmentEffects,
+  developmentFactSnapshots,
+  developmentMissions,
+  developmentWakeHints,
+} from '@/db/schema'
 import type { FactCellValue } from '../domain/facts'
 import type { FactCell } from '../domain/factCell'
 import type { FactSnapshotReader } from '../application/ports/reconcilerPorts'
@@ -51,6 +56,16 @@ export function listPreparedEffectRows(db: DbClient): {
     .from(developmentEffects)
     .where(eq(developmentEffects.state, 'prepared'))
     .all()
+}
+
+/** wake sweep 读侧：有未消费 wake hint 的 mission id（去重）。 */
+export function listUnconsumedWakeHintMissionIds(db: DbClient): string[] {
+  const rows = db
+    .select({ missionId: developmentWakeHints.missionId })
+    .from(developmentWakeHints)
+    .where(isNull(developmentWakeHints.consumedAt))
+    .all()
+  return [...new Set(rows.map((row) => row.missionId))]
 }
 
 /** 给定 mission 集合的当前 epoch（recovery 对拍 effect.epoch 用）。 */
