@@ -50,6 +50,9 @@ export interface VirtualListProps<T> {
   }
   /** 行容器元素标签(默认 'div';配合外层 ol 可用 'li' 保语义)。 */
   rowTag?: 'div' | 'li'
+  /** 行容器的 ARIA role(如 'listitem')。renderItem 自带 listitem 时省略,
+   *  避免嵌套双重语义。 */
+  rowRole?: string
   /** 数据集切换(过滤变化)时传新值可把滚动位置重置到顶部。 */
   scrollResetKey?: string
 }
@@ -135,6 +138,7 @@ export function VirtualList<T>(props: VirtualListProps<T>): ReactElement {
               key={virtualRow.key}
               ref={virtualizer.measureElement}
               data-index={virtualRow.index}
+              role={props.rowRole}
               aria-setsize={props.items.length}
               aria-posinset={virtualRow.index + 1}
               style={style}

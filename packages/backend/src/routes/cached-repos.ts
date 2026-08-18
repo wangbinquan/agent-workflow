@@ -7,6 +7,7 @@
 //                                       the "referenced by N tasks" guard)
 
 import {
+  CachedRepoPageQuerySchema,
   RetryBatchImportRowRequestSchema,
   StartBatchImportRequestSchema,
 } from '@agent-workflow/shared'
@@ -21,6 +22,7 @@ import {
   CachedRepoHasReferencesError,
   deleteCachedRepo,
   listCachedRepos,
+  listCachedReposPage,
   refreshCachedRepo,
 } from '@/services/gitRepoCache'
 import { getBatchSnapshot, retryBatchRow, startBatchImport } from '@/services/repoBatchImport'
@@ -38,8 +40,29 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List cached repo mirrors',
     },
     async (c) => {
-      const items = await listCachedRepos(deps.db)
-      return c.json({ items })
+      // RFC-311 T28 / proposal §5 C7:带任一分页参数 → O(页) 封套
+      // `{items, nextCursor, facets}`;无参调用保持旧全量 `{items}` 形状
+      // (7 个 repo picker 消费方 + 外部脚本零改动)。
+      const raw = {
+        q: c.req.query('q'),
+        view: c.req.query('view'),
+        submodules: c.req.query('submodules'),
+        autoRefresh: c.req.query('auto_refresh'),
+        cursor: c.req.query('cursor'),
+        limit: c.req.query('limit'),
+      }
+      if (Object.values(raw).every((v) => v === undefined)) {
+        const items = await listCachedRepos(deps.db)
+        return c.json({ items })
+      }
+      const parsed = CachedRepoPageQuerySchema.safeParse(raw)
+      if (!parsed.success) {
+        throw new ValidationError(
+          'invalid_query',
+          parsed.error.issues[0]?.message ?? 'invalid query',
+        )
+      }
+      return c.json(await listCachedReposPage(deps.db, parsed.data))
     },
   )
 

@@ -1,11 +1,12 @@
 // RFC-024 → RFC-246 — cached-repo operations surface. The wire remains
 // redacted and every refresh/delete/batch-import behavior is preserved.
 
-import type {
-  CachedRepo,
-  DeleteRepoGroupResponse,
-  ListCachedReposResponse,
-  RepoGroup,
+import {
+  CachedRepoPageSchema,
+  type CachedRepo,
+  type CachedRepoPage,
+  type DeleteRepoGroupResponse,
+  type RepoGroup,
 } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { createRoute, useRouterState } from '@tanstack/react-router'
@@ -30,13 +31,14 @@ import { TabBar, tabDomIds } from '@/components/TabBar'
 import { RepoGroupEditor } from '@/components/repos/RepoGroupEditor'
 import { RepoGroupsPane } from '@/components/repos/RepoGroupsPane'
 import { TableViewport } from '@/components/TableViewport'
+import { VirtualList } from '@/components/VirtualList'
 import { FOLDER_ICON, REPO_ICON } from '@/components/icons/resourceIcons'
 import { ACTOR_QUERY_KEY, useActor, type MeResponse } from '@/hooks/useActor'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { usePagedList } from '@/hooks/usePagedList'
 import { getToken } from '@/stores/auth'
 import {
   REPO_OPERATIONS_VIEWS,
-  filterRepoOperations,
-  repoOperationsFacets,
   type RepoAutoRefreshFilter,
   type RepoOperationsView,
   type RepoSubmoduleFilter,
@@ -141,11 +143,6 @@ function ReposPage() {
   const routeLocation = useRouterState({
     select: (state) => state.resolvedLocation ?? state.location,
   })
-  const list = useQuery<ListCachedReposResponse>({
-    queryKey: ['cached-repos'],
-    queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
-  })
-
   const refresh = useMutation({
     mutationFn: async (id: string) => {
       if (!hasRepoPermission('repos:execute')) throw new Error('repos:execute permission required')
@@ -190,17 +187,41 @@ function ReposPage() {
   const searchRef = useRef<HTMLInputElement | null>(null)
   const filterButtonRef = useRef<HTMLButtonElement | null>(null)
 
-  const items = useMemo(() => list.data?.items ?? [], [list.data?.items])
-  const facets = useMemo(() => repoOperationsFacets(items), [items])
-  const filtered = useMemo(
-    () => filterRepoOperations(items, { view, q: search, submodules, autoRefresh }),
-    [autoRefresh, items, search, submodules, view],
+  // RFC-311 T28:过滤/搜索/facets 全部下推服务端(/api/cached-repos 分页封套,
+  // C7 无参兼容面留给 repo picker 消费方)。搜索 350ms 去抖;条件变化 =
+  // queryKey 变化 = 自动回首页。
+  const debouncedSearch = useDebouncedValue(search.trim(), 350)
+  const pageFilters = useMemo(
+    () => ({ view, q: debouncedSearch, submodules, autoRefresh }),
+    [autoRefresh, debouncedSearch, submodules, view],
   )
+  const list = usePagedList<CachedRepoPage>({
+    queryKey: ['cached-repos', 'page', pageFilters],
+    keepPreviousData: true,
+    fetchPage: async (cursor, signal) => {
+      const payload = await api.get<unknown>(
+        '/api/cached-repos',
+        {
+          // limit 恒发:空 query 会落回旧全量形状(buildUrl 丢弃空串/undefined)。
+          limit: 50,
+          view: view === 'all' ? undefined : view,
+          q: debouncedSearch === '' ? undefined : debouncedSearch,
+          submodules: submodules === 'all' ? undefined : submodules,
+          auto_refresh: autoRefresh === 'all' ? undefined : autoRefresh,
+          cursor: cursor ?? undefined,
+        },
+        signal,
+      )
+      return CachedRepoPageSchema.parse(payload)
+    },
+  })
+
+  const items = useMemo(() => list.data?.pages.flatMap((page) => page.items) ?? [], [list.data])
+  const facets = list.data?.pages[0]?.facets ?? { all: 0, referenced: 0, attention: 0, unused: 0 }
   const advancedFilterCount = Number(submodules !== 'all') + Number(autoRefresh !== 'all')
   const hasAnyFilter = view !== 'all' || search.trim() !== '' || advancedFilterCount > 0
-  const isInitialEmpty = !list.isLoading && list.data !== undefined && items.length === 0
-  const noMatches =
-    !list.isLoading && list.error == null && items.length > 0 && filtered.length === 0
+  const isInitialEmpty = !list.isLoading && list.data !== undefined && facets.all === 0
+  const noMatches = !list.isLoading && list.error == null && facets.all > 0 && items.length === 0
 
   const clearFilters = () => {
     setView('all')
@@ -575,28 +596,51 @@ function ReposPage() {
                 data-testid="repos-no-matches"
               />
             )}
-            {filtered.length > 0 && (
+            {items.length > 0 && (
               <TableViewport label={t('repos.title')}>
-                <table
-                  className="data-table operations-table repo-operations"
-                  data-testid="repos-table"
-                >
-                  <thead>
-                    <tr>
-                      <th>{t('repos.operations.columns.repository')}</th>
-                      <th>{t('repos.operations.columns.freshness')}</th>
-                      <th>{t('repos.operations.columns.usage')}</th>
-                      <th>{t('repos.colActions')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((item) => (
-                      <tr
-                        key={item.id}
-                        className="repo-operations__row"
-                        data-testid={`repos-row-${item.id}`}
-                      >
-                        <td className="repo-operations__repo">
+                {/* RFC-311 T28:<table>/<tr> 换 role 化 div 网格 + VirtualList
+                    窗口化(绝对定位行不能作 table-row 参与表格布局);列网格
+                    声明不变,行内结构与行为逐一保留。 */}
+                <div className="operations-table repo-operations" data-testid="repos-table">
+                  <div className="repo-operations__head" aria-hidden="true">
+                    <span>{t('repos.operations.columns.repository')}</span>
+                    <span>{t('repos.operations.columns.freshness')}</span>
+                    <span>{t('repos.operations.columns.usage')}</span>
+                    <span>{t('repos.colActions')}</span>
+                  </div>
+                  <VirtualList<CachedRepo>
+                    items={items}
+                    itemKey={(item) => item.id}
+                    estimateSize={72}
+                    scrollResetKey={JSON.stringify(pageFilters)}
+                    onReachEnd={() => {
+                      if (list.hasNextPage && !list.isFetchingNextPage) void list.fetchNextPage()
+                    }}
+                    rowRole="listitem"
+                    containerProps={{
+                      className: 'repo-operations__list',
+                      role: 'list',
+                      'aria-label': t('repos.title'),
+                    }}
+                    tail={
+                      list.hasNextPage ? (
+                        <div className="repo-operations__more" role="presentation">
+                          <button
+                            type="button"
+                            className="btn btn--sm"
+                            disabled={list.isFetchingNextPage}
+                            onClick={() => void list.fetchNextPage()}
+                          >
+                            {list.isFetchingNextPage
+                              ? t('repos.operations.loadingMore')
+                              : t('repos.operations.loadMore')}
+                          </button>
+                        </div>
+                      ) : null
+                    }
+                    renderItem={(item) => (
+                      <div className="repo-operations__row" data-testid={`repos-row-${item.id}`}>
+                        <div className="repo-operations__repo">
                           <span className="operations-table__mobile-label">
                             {t('repos.operations.columns.repository')}：
                           </span>
@@ -621,8 +665,8 @@ function ReposPage() {
                               </>
                             )}
                           </div>
-                        </td>
-                        <td className="repo-operations__freshness">
+                        </div>
+                        <div className="repo-operations__freshness">
                           <span className="operations-table__mobile-label">
                             {t('repos.operations.columns.freshness')}：
                           </span>
@@ -648,15 +692,15 @@ function ReposPage() {
                               <RelativeTime ts={item.lastAutoRefreshAt} />
                             )}
                           </span>
-                        </td>
-                        <td className="repo-operations__usage">
+                        </div>
+                        <div className="repo-operations__usage">
                           <span className="operations-table__mobile-label">
                             {t('repos.operations.columns.usage')}：
                           </span>
                           <strong>{item.referencingTaskCount}</strong>
                           <span>{t('repos.operations.referencingTasks')}</span>
-                        </td>
-                        <td className="repo-operations__actions">
+                        </div>
+                        <div className="repo-operations__actions">
                           <span className="operations-table__mobile-label">
                             {t('common.ariaActions')}：
                           </span>
@@ -690,11 +734,11 @@ function ReposPage() {
                             )}
                             {!canExecute && !canDelete && t('common.emDash')}
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+                    )}
+                  />
+                </div>
               </TableViewport>
             )}
           </>

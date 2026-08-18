@@ -102,7 +102,14 @@ function installFetch(
       if (url.pathname === '/api/auth/me') {
         body = permissions === null ? { source: 'session' } : actorPayload(permissions)
       } else if (url.pathname === '/api/cached-repos' && method === 'GET') {
-        body = { items: [cachedRepo] }
+        // RFC-311 T28:带 limit = 分页封套;无参 = 旧全量形状(C7)。
+        body = url.searchParams.has('limit')
+          ? {
+              items: [cachedRepo],
+              nextCursor: null,
+              facets: { all: 1, referenced: 1, attention: 0, unused: 0 },
+            }
+          : { items: [cachedRepo] }
       } else if (url.pathname === '/api/repo-groups' && method === 'GET') {
         body = { items: [repoGroup] }
       } else if (url.pathname.endsWith('/layout')) {

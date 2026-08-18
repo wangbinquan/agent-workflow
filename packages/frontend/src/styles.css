@@ -23355,12 +23355,44 @@ button.status-chip {
   stroke-linejoin: round;
 }
 
-.repo-operations thead tr,
+.repo-operations__head,
 .repo-operations__row {
   display: grid;
   grid-template-columns: minmax(330px, 1.7fr) minmax(210px, 0.82fr) minmax(105px, 0.45fr) auto;
   align-items: center;
   column-gap: 18px;
+}
+
+/* RFC-311 T28:<table> → role 化 div 网格 + VirtualList 窗口化(同
+   .task-operations 定式)。原 .operations-table thead/tbody tr 元素规则不再
+   命中,块级视觉在此显式声明。 */
+.repo-operations__head {
+  min-height: 32px;
+  padding: 8px 22px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.repo-operations__list {
+  max-height: calc(100vh - 300px);
+  min-height: 240px;
+}
+
+.repo-operations__row {
+  min-height: 56px;
+  padding: 7px 22px;
+  border-top: 1px solid var(--border);
+}
+
+.repo-operations__more {
+  display: flex;
+  justify-content: center;
+  padding: 10px 22px;
+  border-top: 1px solid var(--border);
 }
 
 .repo-operations__repo,
@@ -23475,7 +23507,7 @@ button.status-chip {
     padding-inline: 14px;
   }
 
-  .repo-operations thead tr,
+  .repo-operations__head,
   .repo-operations__row {
     grid-template-columns: minmax(250px, 1.55fr) minmax(170px, 0.8fr) 86px auto;
     column-gap: 10px;
@@ -23483,7 +23515,8 @@ button.status-chip {
 }
 
 @media (max-width: 720px) {
-  .operations-table thead {
+  .operations-table thead,
+  .repo-operations__head {
     display: none;
   }
 

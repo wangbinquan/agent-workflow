@@ -1764,6 +1764,8 @@ export const enUS: Resources = {
       neverFetched: 'Never synced',
       autoRefresh: 'Auto-refresh',
       referencingTasks: 'referencing tasks',
+      loadMore: 'Load more repositories',
+      loadingMore: 'Loading…',
     },
     loading: 'Loading…',
     empty: 'No cached repos yet',

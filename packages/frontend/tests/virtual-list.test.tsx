@@ -45,10 +45,11 @@ describe('VirtualList', () => {
   })
 
   test('rows carry aria-setsize/aria-posinset and the container keeps caller semantics', async () => {
-    renderList(40)
+    renderList(40, { rowRole: 'listitem' })
     const first = await screen.findByTestId('row-it-0')
     expect(screen.getByTestId('vl').getAttribute('role')).toBe('list')
     const row = first.parentElement!
+    expect(row.getAttribute('role')).toBe('listitem')
     expect(row.getAttribute('aria-setsize')).toBe('40')
     expect(row.getAttribute('aria-posinset')).toBe('1')
   })

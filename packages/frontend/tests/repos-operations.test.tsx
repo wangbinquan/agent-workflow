@@ -22,6 +22,13 @@ vi.mock('@/components/repos/RepoGroupEditor', () => ({
 
 import '../src/i18n'
 import {
+  filterRepoOperations,
+  repoOperationsFacets,
+  type RepoAutoRefreshFilter,
+  type RepoOperationsView,
+  type RepoSubmoduleFilter,
+} from '../src/lib/operations-filters'
+import {
   ReposRoute,
   shouldNormalizeRepoResourceLocation,
   validateReposSearch,
@@ -57,6 +64,13 @@ function installFetch(items: CachedRepo[]): RecordedCall[] {
       const url = request.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
       calls.push({ url, method })
+      const parsed = new URL(url)
+      // RFC-311 T28:页面走服务端分页封套;mock 用 lib 的 filterRepoOperations /
+      // repoOperationsFacets 充当服务端语义参考实现(与后端 oracle 同源)。
+      const isPagedList =
+        parsed.pathname === '/api/cached-repos' &&
+        method === 'GET' &&
+        parsed.searchParams.has('limit')
       const body = url.endsWith('/api/auth/me')
         ? {
             permissions: [
@@ -67,9 +81,21 @@ function installFetch(items: CachedRepo[]): RecordedCall[] {
               'repos:execute',
             ],
           }
-        : method === 'GET'
-          ? { items }
-          : { ok: true }
+        : isPagedList
+          ? {
+              items: filterRepoOperations(items, {
+                view: (parsed.searchParams.get('view') ?? 'all') as RepoOperationsView,
+                q: parsed.searchParams.get('q') ?? '',
+                submodules: (parsed.searchParams.get('submodules') ?? 'all') as RepoSubmoduleFilter,
+                autoRefresh: (parsed.searchParams.get('auto_refresh') ??
+                  'all') as RepoAutoRefreshFilter,
+              }),
+              nextCursor: null,
+              facets: repoOperationsFacets(items),
+            }
+          : method === 'GET'
+            ? { items }
+            : { ok: true }
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -169,22 +195,28 @@ describe('/repos operations surface (RFC-246)', () => {
     renderPage()
     await screen.findByTestId('repos-row-used')
 
+    // RFC-311 T28:过滤/搜索下推服务端后,切换是异步往返(keepPreviousData
+    // 保留旧行直到新页返回)——断言改为等待收敛;搜索经 350ms 去抖。
     fireEvent.click(screen.getByTestId('repos-view-referenced'))
+    await waitFor(() => expect(screen.queryByTestId('repos-row-unused')).toBeNull())
     expect(screen.getByTestId('repos-row-used')).toBeTruthy()
-    expect(screen.queryByTestId('repos-row-unused')).toBeNull()
 
     fireEvent.click(screen.getByTestId('repos-view-all'))
     fireEvent.change(screen.getByTestId('repos-search'), { target: { value: 'release/next' } })
+    await waitFor(() => expect(screen.queryByTestId('repos-row-used')).toBeNull(), {
+      timeout: 3000,
+    })
     expect(screen.getByTestId('repos-row-attention')).toBeTruthy()
-    expect(screen.queryByTestId('repos-row-used')).toBeNull()
 
     fireEvent.change(screen.getByTestId('repos-search'), { target: { value: '' } })
     fireEvent.click(screen.getByTestId('repos-filter-button'))
     const dialog = await screen.findByTestId('repos-filter-dialog')
     fireEvent.click(within(dialog).getByRole('radio', { name: 'With' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Apply filters' }))
+    await waitFor(() => expect(screen.queryByTestId('repos-row-unused')).toBeNull(), {
+      timeout: 3000,
+    })
     expect(screen.getByTestId('repos-row-attention')).toBeTruthy()
-    expect(screen.queryByTestId('repos-row-unused')).toBeNull()
   })
 
   test('refresh, direct delete, and referenced force-delete keep their endpoints', async () => {

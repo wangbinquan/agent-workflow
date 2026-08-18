@@ -841,7 +841,9 @@ export const cachedRepos = sqliteTable(
     lastAutoRefreshAt: integer('last_auto_refresh_at'),
   },
   (t) => ({
-    lastFetchedIdx: index('idx_cached_repos_last_fetched').on(t.lastFetchedAt),
+    // RFC-311 T28（migration 0181）:分页排序键 (last_fetched_at, id) 的复合
+    // 索引,keyset 断点要求全序;按前缀规则覆盖并替换了旧单列索引。
+    lastFetchedIdIdx: index('idx_cached_repos_fetched_id').on(t.lastFetchedAt, t.id),
   }),
 )
 

@@ -1835,6 +1835,8 @@ export interface Resources {
       neverFetched: string
       autoRefresh: string
       referencingTasks: string
+      loadMore: string
+      loadingMore: string
     }
     loading: string
     empty: string
@@ -7968,6 +7970,8 @@ export const zhCN: Resources = {
       neverFetched: '从未同步',
       autoRefresh: '自动刷新',
       referencingTasks: '个关联任务',
+      loadMore: '加载更多仓库',
+      loadingMore: '正在加载…',
     },
     loading: '加载中…',
     empty: '还没有远端仓缓存',

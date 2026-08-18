@@ -15,9 +15,13 @@ function read(rel: string): string {
 }
 
 describe('RFC-035 .data-table推广 grep guard', () => {
-  test('routes/repos.tsx renders .data-table for its list', () => {
+  test('routes/repos.tsx renders the shared operations grid for its list', () => {
+    // RFC-311 T28:/repos 从 .data-table 表格换成 operations 网格 + VirtualList
+    // 窗口化(与 .task-operations 同定式)——视觉仍由共享 class 持有,
+    // 本 guard 的意图(禁 bespoke 样式)不变,锚点随之更新。
     const body = read('routes/repos.tsx')
-    expect(body).toMatch(/className="data-table\s[^"]*repo-operations"/)
+    expect(body).toMatch(/className="operations-table repo-operations"/)
+    expect(body.includes('<VirtualList<CachedRepo>'), 'windowed rows').toBe(true)
     expect(body.includes("<TableViewport label={t('repos.title')}>"), 'responsive wrapper').toBe(
       true,
     )

@@ -37,7 +37,14 @@ vi.mock('../src/api/client', async () => {
                   'repos:execute',
                 ],
               }
-            : { items: [] },
+            : path === '/api/cached-repos'
+              ? // RFC-311 T28:列表走分页封套(空库 facets 全 0)。
+                {
+                  items: [],
+                  nextCursor: null,
+                  facets: { all: 0, referenced: 0, attention: 0, unused: 0 },
+                }
+              : { items: [] },
         ),
       ),
       post: vi.fn(),

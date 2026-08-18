@@ -18,6 +18,10 @@
 
 import {
   type CachedRepo,
+  type CachedRepoPage,
+  type RepoAutoRefreshFilter,
+  type RepoListView,
+  type RepoSubmoduleFilter,
   gitUrlCacheKeyWith,
   isFileSchemeUrl,
   gitUrlLegacyFileCacheKeyWith,
@@ -1163,6 +1167,207 @@ export async function listCachedRepos(db: DbClient): Promise<CachedRepo[]> {
     a.lastFetchedAt > b.lastFetchedAt ? -1 : a.lastFetchedAt < b.lastFetchedAt ? 1 : 0,
   )
   return out
+}
+
+// --- RFC-311 T28: O(页) 分页查询 ---------------------------------------------
+// /repos 在十万仓下不能再整表返回。过滤/排序全部下推 SQL,keyset 走
+// (last_fetched_at DESC, id DESC)(migration 0181 复合索引);每页 ≤ limit 行
+// 的 referencingTaskCount 只对页内 id 计算。语义与前端 filterRepoOperations /
+// repoOperationsFacets 逐项对齐,oracle 测试锁死等价性。
+//
+// 与 JS 版的两处已知偏差(测试注记):
+//   - q 匹配:SQL LIKE 对 ASCII 大小写不敏感(NOCASE),JS 用
+//     toLocaleLowerCase——非 ASCII 大小写折叠(如土耳其 İ)行为不同;仓库
+//     URL/路径/分支名实际均为 ASCII 面。
+//   - localPath 在 SQL 里匹配的是存储原值,wire 上匹配的是 redact 后的值;
+//     只在「搜索词恰好命中被 redact 的凭据子串」时可见差异(返回行本身仍
+//     redacted,不构成泄露)。
+
+export interface CachedRepoPageOptions {
+  q?: string
+  view?: RepoListView
+  submodules?: RepoSubmoduleFilter
+  autoRefresh?: RepoAutoRefreshFilter
+  /** `${lastFetchedAtMs}.${id}`(上一页末行),由本函数的 nextCursor 发出。 */
+  cursor?: string
+  limit?: number
+}
+
+const REPO_PAGE_DEFAULT_LIMIT = 50
+const REPO_PAGE_MAX_LIMIT = 200
+
+function decodeRepoCursor(raw: string): { lastFetchedAt: number; id: string } {
+  const dot = raw.indexOf('.')
+  const ts = dot > 0 ? Number(raw.slice(0, dot)) : Number.NaN
+  const id = dot > 0 ? raw.slice(dot + 1) : ''
+  if (!Number.isSafeInteger(ts) || ts < 0 || id === '') {
+    throw new ValidationError('invalid_cursor', 'cursor is malformed')
+  }
+  return { lastFetchedAt: ts, id }
+}
+
+/** scheduled_tasks 引用面:整表单遍抽取 payload 里提到的镜像 id(与
+ *  listCachedRepos 同一 regex 语义)。行数以十计,不参与分页缩放。 */
+function scheduledReferencedRepoIds(db: DbClient): Set<string> {
+  const ids = new Set<string>()
+  const refPattern = /"cachedRepoId":"([^"\\]+)"/g
+  for (const row of db
+    .select({ launchPayload: scheduledTasks.launchPayload })
+    .from(scheduledTasks)
+    .all()) {
+    for (const match of row.launchPayload.matchAll(refPattern)) ids.add(match[1]!)
+  }
+  return ids
+}
+
+function escapeLike(term: string): string {
+  return term.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
+}
+
+/** referenced 视图的三源 OR(task_repos ∪ 无 task_repos 行的 tasks ∪
+ *  scheduled payload 提及),前两源走索引 EXISTS,第三源用预抽取 id 集。 */
+function referencedCondition(schedIds: Set<string>): ReturnType<typeof sql> {
+  const schedLeg =
+    schedIds.size === 0
+      ? sql`0`
+      : sql`${cachedRepos.id} in (${sql.join(
+          [...schedIds].map((id) => sql`${id}`),
+          sql`, `,
+        )})`
+  return sql`(
+    exists (select 1 from ${taskRepos} where ${taskRepos.cachedRepoId} = ${cachedRepos.id})
+    or exists (
+      select 1 from ${tasks} where ${tasks.cachedRepoId} = ${cachedRepos.id}
+        and not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})
+    )
+    or ${schedLeg}
+  )`
+}
+
+const attentionCondition = sql`(${cachedRepos.hasSubmodules} = 1 and ${cachedRepos.lastSubmoduleSyncOk} = 0)`
+
+export async function listCachedReposPage(
+  db: DbClient,
+  options: CachedRepoPageOptions = {},
+): Promise<CachedRepoPage> {
+  const limit = Math.max(1, Math.min(options.limit ?? REPO_PAGE_DEFAULT_LIMIT, REPO_PAGE_MAX_LIMIT))
+  const schedIds = scheduledReferencedRepoIds(db)
+
+  const conds: ReturnType<typeof sql>[] = []
+  const q = options.q?.trim() ?? ''
+  if (q !== '') {
+    const pattern = `%${escapeLike(q)}%`
+    conds.push(sql`(
+      ${cachedRepos.urlRedacted} like ${pattern} escape '\\'
+      or ${cachedRepos.localPath} like ${pattern} escape '\\'
+      or ${cachedRepos.defaultBranch} like ${pattern} escape '\\'
+    )`)
+  }
+  if (options.submodules === 'with') conds.push(sql`${cachedRepos.hasSubmodules} = 1`)
+  if (options.submodules === 'without') conds.push(sql`${cachedRepos.hasSubmodules} = 0`)
+  if (options.autoRefresh === 'refreshed') {
+    conds.push(sql`${cachedRepos.lastAutoRefreshAt} is not null`)
+  }
+  if (options.autoRefresh === 'never') conds.push(sql`${cachedRepos.lastAutoRefreshAt} is null`)
+  const view = options.view ?? 'all'
+  if (view === 'referenced') conds.push(referencedCondition(schedIds))
+  if (view === 'unused') conds.push(sql`not ${referencedCondition(schedIds)}`)
+  if (view === 'attention') conds.push(attentionCondition)
+  if (options.cursor !== undefined) {
+    const c = decodeRepoCursor(options.cursor)
+    conds.push(sql`(
+      ${cachedRepos.lastFetchedAt} < ${c.lastFetchedAt}
+      or (${cachedRepos.lastFetchedAt} = ${c.lastFetchedAt} and ${cachedRepos.id} < ${c.id})
+    )`)
+  }
+
+  const rows = db
+    .select()
+    .from(cachedRepos)
+    .where(and(...conds))
+    .orderBy(sql`${cachedRepos.lastFetchedAt} desc`, sql`${cachedRepos.id} desc`)
+    .limit(limit + 1)
+    .all()
+  const pageRows = rows.slice(0, limit)
+  const nextCursor =
+    rows.length > limit && pageRows.length > 0
+      ? `${pageRows[pageRows.length - 1]!.lastFetchedAt}.${pageRows[pageRows.length - 1]!.id}`
+      : null
+
+  // 页内富化:三源 referencingTaskCount 只对 ≤ limit 个 id 计算。
+  const pageIds = pageRows.map((r) => r.id)
+  const counts = new Map<string, number>()
+  const bump = (repoId: string, n: number): void => {
+    counts.set(repoId, (counts.get(repoId) ?? 0) + n)
+  }
+  if (pageIds.length > 0) {
+    const idSet = sql.join(
+      pageIds.map((id) => sql`${id}`),
+      sql`, `,
+    )
+    for (const r of db
+      .select({
+        cachedRepoId: taskRepos.cachedRepoId,
+        n: sql<number>`count(distinct ${taskRepos.taskId})`.as('n'),
+      })
+      .from(taskRepos)
+      .where(sql`${taskRepos.cachedRepoId} in (${idSet})`)
+      .groupBy(taskRepos.cachedRepoId)
+      .all()) {
+      if (r.cachedRepoId !== null) bump(r.cachedRepoId, r.n)
+    }
+    for (const r of db
+      .select({ cachedRepoId: tasks.cachedRepoId, n: sql<number>`count(*)`.as('n') })
+      .from(tasks)
+      .where(
+        and(
+          sql`${tasks.cachedRepoId} in (${idSet})`,
+          sql`not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})`,
+        ),
+      )
+      .groupBy(tasks.cachedRepoId)
+      .all()) {
+      if (r.cachedRepoId !== null) bump(r.cachedRepoId, r.n)
+    }
+    const refPattern = /"cachedRepoId":"([^"\\]+)"/g
+    const pageIdSet = new Set(pageIds)
+    for (const schedRow of db
+      .select({ launchPayload: scheduledTasks.launchPayload })
+      .from(scheduledTasks)
+      .all()) {
+      const seen = new Set<string>()
+      for (const match of schedRow.launchPayload.matchAll(refPattern)) {
+        const id = match[1]!
+        if (pageIdSet.has(id)) seen.add(id)
+      }
+      for (const id of seen) bump(id, 1)
+    }
+  }
+
+  // facets 恒为全量视角(不受任何过滤影响)——镜像既有前端
+  // repoOperationsFacets(items) 对全量 items 计数的行为。
+  const countWhere = (cond?: ReturnType<typeof sql>): number => {
+    const r = db
+      .select({ count: sql<number>`count(*)`.as('count') })
+      .from(cachedRepos)
+      .where(cond)
+      .all()
+    return r[0]?.count ?? 0
+  }
+  const all = countWhere()
+  const referenced = countWhere(referencedCondition(schedIds))
+  const facets = {
+    all,
+    referenced,
+    attention: countWhere(attentionCondition),
+    unused: all - referenced,
+  }
+
+  return {
+    items: pageRows.map((row) => rowToCached(row, counts.get(row.id) ?? 0)),
+    nextCursor,
+    facets,
+  }
 }
 
 export interface RefreshCachedRepoResult {
