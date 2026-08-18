@@ -358,6 +358,7 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 - **SQLite 的 partial index「蕴含判断」不认 `col = 'x'` ⊂ `col IN ('x','y')`**（2026-08-18 RFC-311 实测）：给 `node_runs` 建 `WHERE status IN ('pending','running')` 的 partial 索引后，`WHERE status = 'running'` 的查询**不会**用它（EXPLAIN 仍 SCAN）——SQLite 只认查询谓词与索引 WHERE **字面等价**或非常有限的蕴含形式。partial 索引想被命中，查询侧谓词要与索引 WHERE 写成同一字面（`= 'pending'` 对 `WHERE decision='pending'` ✓）；谓词形态多样的列（等值/IN 混用）老实建普通复合索引。每个新索引配一条 `EXPLAIN QUERY PLAN` 断言（`rfc311-perf-foundation.test.ts` 模式，先例 `migration-0128-…`），别靠肉眼确信。
 
+- **keyset 分页的断点必须写成行值比较 `(a, id) < (?, ?)`,不能写展开式 `a < ? OR (a = ? AND id < ?)`**（2026-08-18 RFC-311 十万任务基准库实测）：展开式在**绑定参数**下让 SQLite 选 `MULTI-INDEX OR` 并回落 `USE TEMP B-TREE FOR ORDER BY`——把全部候选行物化排序一遍（实测 `/api/tasks/page` 首页 30ms、翻页 **197ms**；改行值后 41ms）。**最阴的地方:用字面量跑 `EXPLAIN QUERY PLAN` 复现不出来**——字面量下 SQLite 反而选对索引走有序 seek,只有把常量换成 `?` 占位符才看得到 MULTI-INDEX OR + TEMP B-TREE。定式:①断点一律行值形式;②plan 断言**必须用 `?` 占位符**写(先例 `rfc311-task-page-fastpath.test.ts` 的「no TEMP B-TREE」条),另配一条源码层守卫防止有人改回展开式;③排序键与索引列序、DESC/ASC 要对齐,否则同样落临时 B 树。
 - **`when` 接合成轴**（上条 +86400000），别用真实 `Date.now()`——否则 drizzle 对既有安装静默跳过，之后每查 `no such column`，从零建库看不见。
 - **手写多语句要 `--> statement-breakpoint`**（精确这个字面量，仓库迁移器只认它），否则只应用第一条。
 - **加迁移必 bump `upgrade-rolling.test.ts` 的 journal-count 锁**（N→N+1）；1 个本地 bun-test 红别当 flaky，先定位 `(fail)`。
