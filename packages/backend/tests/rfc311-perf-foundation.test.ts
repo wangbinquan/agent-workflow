@@ -197,6 +197,21 @@ describe('migration 0180 — RFC-311 index batch', () => {
   })
 })
 
+// 实现门 P3-13:Proxy 的 get 陷阱若把 receiver 传给 Reflect.get,native class 的
+// 取值器会抛「Cannot access invalid private field」——开了慢查询计时才炸,关掉不炸。
+describe('RFC-311 slow-query proxy keeps native statement getters usable', () => {
+  test('columnNames / paramsCount read through the wrapper', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const sqlite = (db as unknown as { $client: Database }).$client
+    instrumentSlowStatements(sqlite, 50, () => {})
+    const stmt = sqlite.query('SELECT 1 AS a, 2 AS b')
+    expect(() => stmt.columnNames).not.toThrow()
+    expect(stmt.columnNames).toEqual(['a', 'b'])
+    expect(() => stmt.paramsCount).not.toThrow()
+    expect(stmt.all()).toEqual([{ a: 1, b: 2 }])
+  })
+})
+
 describe('RFC-311 capacity PRAGMAs (openDb)', () => {
   test('openDb applies cache/mmap/temp_store and they are configurable', () => {
     const dir = mkdtempSync(join(tmpdir(), 'rfc311-pragma-'))

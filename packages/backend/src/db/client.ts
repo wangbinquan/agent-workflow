@@ -87,8 +87,13 @@ export function instrumentSlowStatements(
   }
   const wrapStatement = (stmt: object, sql: string): object =>
     new Proxy(stmt, {
-      get(target, prop, receiver) {
-        const value = Reflect.get(target, prop, receiver) as unknown
+      get(target, prop) {
+        // 取值时**不能**把 receiver 传下去:bun:sqlite 的 Statement 是 native
+        // class,它的取值器(columnNames / paramsCount / native)要读私有字段,
+        // receiver 是 Proxy 时直接抛 "Cannot access invalid private field"。
+        // 当前 drizzle 只调方法所以没炸,但任何人读一次 columnNames 就会在
+        // **开了慢查询计时的生产**上炸、关掉时不炸(实现门 P3-13)。
+        const value = Reflect.get(target, prop) as unknown
         if (typeof value !== 'function') return value
         const bound = (value as (...a: unknown[]) => unknown).bind(target)
         if (prop === 'all' || prop === 'get' || prop === 'run' || prop === 'values') {
