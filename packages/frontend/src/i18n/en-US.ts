@@ -3782,6 +3782,7 @@ export const enUS: Resources = {
       'skipped-mr-stream-terminal': 'Skipped: terminal event won the launch race',
       'skipped-mr-stream-identity-missing': 'Skipped: stable MR / PR identity is missing',
       'skipped-trigger-invalid': 'Skipped: terminal-protection configuration is invalid',
+      'skipped-legacy-admission-frozen': 'Skipped: legacy entry is frozen (cut over to missions)',
     },
     flow: { scope: 'Repo scope', events: 'Respond to', target: 'Launch target' },
     steps: { scope: 'Scope', events: 'Events', target: 'Launch', review: 'Review' },
@@ -6179,6 +6180,12 @@ export const enUS: Resources = {
     archivePerNodeRunHint: 'When a node_run accumulates this many event rows, archive to JSONL.',
     archiveGlobal: 'Events archive — global rows',
     archiveGlobalHint: 'DB-wide event row cap before background archival runs.',
+    archivePerNodeRunBytes: 'Events archive — per-node-run bytes',
+    archivePerNodeRunBytesHint:
+      'Converted to a row threshold via sampled average row width; the stricter of the two applies. 0 disables the byte watermark. Default 8 MiB.',
+    archiveGlobalBytes: 'Events archive — global bytes',
+    archiveGlobalBytesHint:
+      'DB-wide event byte cap (same conversion). 0 disables. Default 256 MiB.',
     webhookBodyRetention: 'Webhook delivery body retention (days)',
     webhookBodyRetentionHint:
       'Raw payloads older than this are pruned (replay unavailable); the rows stay. Lower it on high-volume deployments to cap disk usage.',

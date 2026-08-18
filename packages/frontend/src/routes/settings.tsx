@@ -1006,6 +1006,38 @@ export function GcTab({ config }: TabProps) {
             }
           />
         </Field>
+        {/* RFC-311 T17 — 字节水位:采样平均行宽折算成行数阈值,与行数阈值取
+          更严者。0 = 关闭字节水位(仅按行数)。 */}
+        <Field
+          label={t('settingsForm.archivePerNodeRunBytes')}
+          hint={t('settingsForm.archivePerNodeRunBytesHint')}
+        >
+          <SettingsNumberInput
+            setting="eventsArchiveThresholds.perNodeRunBytes"
+            value={thresholds?.perNodeRunBytes}
+            onChange={(v) =>
+              setState({
+                ...state,
+                eventsArchiveThresholds: { ...thresholds!, perNodeRunBytes: v ?? 0 },
+              })
+            }
+          />
+        </Field>
+        <Field
+          label={t('settingsForm.archiveGlobalBytes')}
+          hint={t('settingsForm.archiveGlobalBytesHint')}
+        >
+          <SettingsNumberInput
+            setting="eventsArchiveThresholds.globalBytes"
+            value={thresholds?.globalBytes}
+            onChange={(v) =>
+              setState({
+                ...state,
+                eventsArchiveThresholds: { ...thresholds!, globalBytes: v ?? 0 },
+              })
+            }
+          />
+        </Field>
       </SettingsCard>
       <SettingsCard
         title={t('settings.cardGroups.gcWebhooksTitle')}

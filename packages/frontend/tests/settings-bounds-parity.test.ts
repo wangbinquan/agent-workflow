@@ -33,17 +33,36 @@ function patchFor(path: SettingsNumericPath, value: number): unknown {
       return { eventsArchiveThresholds: { perNodeRunRows: value, globalRows: 1_000_000 } }
     case 'eventsArchiveThresholds.globalRows':
       return { eventsArchiveThresholds: { perNodeRunRows: 50_000, globalRows: value } }
+    // RFC-311 T17 — 嵌套路径必须显式构造 patch:default 分支的扁平带点 key 是
+    // 未知字段,会被非 strict 的 ConfigPatchSchema 直接剥掉,断言退化为恒 true。
+    case 'eventsArchiveThresholds.perNodeRunBytes':
+      return {
+        eventsArchiveThresholds: {
+          perNodeRunRows: 50_000,
+          globalRows: 1_000_000,
+          perNodeRunBytes: value,
+        },
+      }
+    case 'eventsArchiveThresholds.globalBytes':
+      return {
+        eventsArchiveThresholds: {
+          perNodeRunRows: 50_000,
+          globalRows: 1_000_000,
+          globalBytes: value,
+        },
+      }
     default:
       return { [path]: value }
   }
 }
 
 describe('Settings numeric bounds parity', () => {
-  test('all 28 Config-backed numeric controls use the shared adapter exactly once', () => {
+  test('all 30 Config-backed numeric controls use the shared adapter exactly once', () => {
     expect(SETTINGS_SOURCE).not.toMatch(/<NumberInput\b/)
     // RFC-287 T10：25 → 28，补齐 maxConcurrentCodeHostCalls / maxActiveChildTasks /
     // maxInvocationDepth 三项配额（此前只能改配置文件）。
-    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(28)
+    // RFC-311 T17：28 → 30，事件归档字节水位 perNodeRunBytes / globalBytes。
+    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(30)
     for (const path of Object.keys(SETTINGS_NUMERIC_BOUNDS) as SettingsNumericPath[]) {
       const matches = SETTINGS_SOURCE.match(
         new RegExp(`setting="${path.replaceAll('.', '\\.')}"`, 'g'),

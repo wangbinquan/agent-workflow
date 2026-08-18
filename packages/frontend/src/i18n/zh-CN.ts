@@ -3250,6 +3250,7 @@ export interface Resources {
       'skipped-mr-stream-terminal': string
       'skipped-mr-stream-identity-missing': string
       'skipped-trigger-invalid': string
+      'skipped-legacy-admission-frozen': string
     }
     flow: { scope: string; events: string; target: string }
     steps: { scope: string; events: string; target: string; review: string }
@@ -5303,6 +5304,10 @@ export interface Resources {
     archivePerNodeRunHint: string
     archiveGlobal: string
     archiveGlobalHint: string
+    archivePerNodeRunBytes: string
+    archivePerNodeRunBytesHint: string
+    archiveGlobalBytes: string
+    archiveGlobalBytesHint: string
     webhookBodyRetention: string
     webhookBodyRetentionHint: string
     webhookRowRetention: string
@@ -9853,6 +9858,7 @@ export const zhCN: Resources = {
       'skipped-mr-stream-terminal': '已跳过：终态事件先完成启动封锁',
       'skipped-mr-stream-identity-missing': '已跳过：缺少稳定的 MR / PR 标识',
       'skipped-trigger-invalid': '已跳过：终态保护配置无效',
+      'skipped-legacy-admission-frozen': '已跳过：旧版入口已冻结（切换到数字员工任务）',
     },
     flow: { scope: '仓库范围', events: '响应事件', target: '启动目标' },
     steps: { scope: '范围', events: '事件', target: '执行', review: '复核' },
@@ -12090,6 +12096,11 @@ export const zhCN: Resources = {
     archivePerNodeRunHint: '当某个 node_run 累计到此行数，归档为 JSONL。',
     archiveGlobal: '事件归档 — 全局行数',
     archiveGlobalHint: 'DB 全表事件行数上限；超过会触发归档。',
+    archivePerNodeRunBytes: '事件归档 — 单 node_run 字节水位',
+    archivePerNodeRunBytesHint:
+      '按采样平均行宽折算成行数阈值，与行数阈值取更严者。0 = 关闭字节水位。默认 8 MiB。',
+    archiveGlobalBytes: '事件归档 — 全局字节水位',
+    archiveGlobalBytesHint: '全表事件字节上限（同上折算）。0 = 关闭。默认 256 MiB。',
     webhookBodyRetention: 'Webhook 投递 body 保留（天）',
     webhookBodyRetentionHint:
       '超期投递的原始 payload 置空（重放不可用），行仍保留。高流量部署可调小以控制磁盘占用。',
