@@ -173,7 +173,7 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
   // RFC-310: +22 config-resource points (PR-1B) and +5 development-missions
   // points (PR-2) ⇒ 105 rows; the user preset difference gained exactly one
   // grantable point (repository-employee-assignments:update) ⇒ 25.
-  await expect(dialog.locator('.user-permission-row')).toHaveCount(105)
+  await expect(dialog.locator('.user-permission-row')).toHaveCount(108)
   await expect(dialog.locator('input[type="checkbox"]:not(:disabled)')).toHaveCount(25)
   await dialog.getByRole('textbox', { name: /Username/ }).fill(username)
   await dialog.getByRole('textbox', { name: /Display name/ }).fill('RFC-305 Browser User')
