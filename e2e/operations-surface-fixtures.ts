@@ -174,7 +174,49 @@ export async function routeOperationsSurfaceFixtures(page: Page): Promise<void> 
   })
   await page.route(/\/api\/cached-repos(?:\?.*)?$/, async (route) => {
     if (route.request().method() === 'GET') {
-      await route.fulfill({ json: { items: repoOperationsFixture() } })
+      const items = repoOperationsFixture()
+      const url = new URL(route.request().url())
+      // RFC-311 T28:带 limit = 分页封套(页面);无参 = 旧全量形状(picker,C7)。
+      if (url.searchParams.has('limit')) {
+        const view = url.searchParams.get('view') ?? 'all'
+        const q = (url.searchParams.get('q') ?? '').trim().toLowerCase()
+        const submodules = url.searchParams.get('submodules') ?? 'all'
+        const autoRefresh = url.searchParams.get('auto_refresh') ?? 'all'
+        const filtered = items.filter((r) => {
+          if (view === 'referenced' && r.referencingTaskCount === 0) return false
+          if (view === 'unused' && r.referencingTaskCount > 0) return false
+          if (
+            view === 'attention' &&
+            !(r.hasSubmodules === true && r.lastSubmoduleSyncOk === false)
+          )
+            return false
+          if (submodules === 'with' && r.hasSubmodules !== true) return false
+          if (submodules === 'without' && r.hasSubmodules !== false) return false
+          if (autoRefresh === 'refreshed' && r.lastAutoRefreshAt === null) return false
+          if (autoRefresh === 'never' && r.lastAutoRefreshAt !== null) return false
+          if (q === '') return true
+          return [r.urlRedacted, r.localPath, r.defaultBranch].some(
+            (v) => v?.toLowerCase().includes(q) === true,
+          )
+        })
+        const referenced = items.filter((r) => r.referencingTaskCount > 0).length
+        await route.fulfill({
+          json: {
+            items: filtered,
+            nextCursor: null,
+            facets: {
+              all: items.length,
+              referenced,
+              attention: items.filter(
+                (r) => r.hasSubmodules === true && r.lastSubmoduleSyncOk === false,
+              ).length,
+              unused: items.length - referenced,
+            },
+          },
+        })
+        return
+      }
+      await route.fulfill({ json: { items } })
       return
     }
     await route.continue()

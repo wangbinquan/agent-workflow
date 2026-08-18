@@ -104,13 +104,22 @@ test('desktop Scheduled and Repos keep dense rows, business views, and no overfl
 
   await page.goto(`${requireDaemon().baseUrl}/repos`)
   await expect(page.getByTestId('repos-row-repo-ux-02')).toBeVisible()
-  await expect(page.locator('.repo-operations__row')).toHaveCount(28)
+  // RFC-311 T28:列表窗口化(VirtualList)后 DOM 只保留可视区 ± overscan,
+  // 「全量 28 行都在 DOM」不再成立——总量断言改走 view chip 的 facets 计数,
+  // 视图过滤断言改「被过滤行消失」。
+  await expect(page.getByTestId('repos-view-all')).toContainText('28')
+  const renderedRows = await page.locator('.repo-operations__row').count()
+  expect(renderedRows).toBeGreaterThan(0)
+  expect(renderedRows).toBeLessThanOrEqual(28)
   const repoRow = await page.getByTestId('repos-row-repo-ux-02').boundingBox()
   expect(repoRow).not.toBeNull()
   expect(repoRow!.height).toBeGreaterThanOrEqual(56)
   expect(repoRow!.height).toBeLessThanOrEqual(64)
   await page.getByTestId('repos-view-referenced').click()
-  await expect(page.locator('.repo-operations__row')).toHaveCount(22)
+  await expect(page.getByTestId('repos-view-referenced')).toContainText('22')
+  // repo-ux-01(referencingTaskCount=0)被 referenced 视图过滤掉;02 仍在首屏。
+  await expect(page.getByTestId('repos-row-repo-ux-01')).toBeHidden()
+  await expect(page.getByTestId('repos-row-repo-ux-02')).toBeVisible()
   await page.getByTestId('repos-view-all').click()
   await page.getByTestId('repos-search').fill('release-coordination')
   await expect(page.locator('.repo-operations__row')).toHaveCount(1)
