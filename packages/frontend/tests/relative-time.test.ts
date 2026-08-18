@@ -11,7 +11,7 @@
 //    30 s ticker advancing labels on pages with no refetch of their own.
 
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createElement } from 'react'
 import { relativeTimeToken, toEpochMs } from '../src/lib/relative-time'
 import { formatRelativeTime } from '../src/lib/homepage'
@@ -109,6 +109,10 @@ describe('<RelativeTime>', () => {
     const el = screen.getByTestId('rt')
     expect(el.tagName).toBe('TIME')
     expect(el.getAttribute('dateTime')).toBe(new Date(NOW - 50_000).toISOString())
+    // RFC-311(T26):title 的 toLocaleString 惰性化——hover 前不计算,
+    // mouseenter 后出现绝对时间 tooltip。
+    expect(el.getAttribute('title')).toBeNull()
+    fireEvent.mouseEnter(el)
     expect(el.getAttribute('title')).toBe(new Date(NOW - 50_000).toLocaleString())
     expect(el.textContent).toBe('just now')
 

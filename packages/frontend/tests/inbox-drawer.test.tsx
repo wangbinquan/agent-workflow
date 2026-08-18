@@ -478,6 +478,8 @@ describe('RFC-195 InboxDrawer', () => {
     const time = row.querySelector('time')
     expect(time).not.toBeNull()
     expect(time?.getAttribute('datetime')).toBe(new Date(createdAt).toISOString())
+    // RFC-311(T26):tooltip 惰性化——hover 后才计算绝对时间。
+    fireEvent.mouseEnter(time!)
     expect(time?.getAttribute('title')).toBeTruthy()
     expect(row.textContent ?? '').toContain('Customer migration')
     expect(row.textContent ?? '').toContain('Release workflow')
