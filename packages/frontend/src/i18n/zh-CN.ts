@@ -1344,6 +1344,72 @@ export interface Resources {
     title: string
     subtitle: string
     tab: { matrix: string; activity: string; metrics: string; templates: string }
+    missions: {
+      title: string
+      subtitle: string
+      backToCode: string
+      backToList: string
+      launch: string
+      launching: string
+      launchTitle: string
+      emptyTitle: string
+      emptyBody: string
+      colMission: string
+      colStatus: string
+      colRepository: string
+      colSource: string
+      colBlock: string
+      colUpdated: string
+      sourceDirect: string
+      sourceExternal: string
+      formKind: string
+      kindBody: string
+      kindUploads: string
+      kindExternal: string
+      formRepository: string
+      pickRepository: string
+      formEmployee: string
+      employeeHint: string
+      pickEmployee: string
+      formTitle: string
+      formBody: string
+      formExternalId: string
+      formSourceKey: string
+      sourceKeyHint: string
+      formUploads: string
+      uploadsHint: string
+      detailTitle: string
+      retry: string
+      blockTitle: string
+      questionsTitle: string
+      submitAnswers: string
+      actionTitle: string
+      actionOutcome: string
+      actionCapability: string
+      actionCandidate: string
+      sourcesTitle: string
+      refreshPreview: string
+      refreshChanged: string
+      refreshApply: string
+      refreshUnchanged: string
+      noSources: string
+      colGeneration: string
+      colRevision: string
+      colState: string
+      manifestTitle: string
+      noManifest: string
+      colFile: string
+      colRole: string
+      colBytes: string
+      colActions: string
+      viewFile: string
+      effectsTitle: string
+      noEffects: string
+      colEffect: string
+      colCreated: string
+      readinessTitle: string
+      noReadiness: string
+    }
     flow: {
       capability: string
       hint: string
@@ -7130,6 +7196,72 @@ export const zhCN: Resources = {
     title: '代码能力',
     subtitle: '每个仓库启用了哪些能力，以及它们做过什么',
     tab: { matrix: '仓库', activity: '活动', metrics: '成效', templates: '模板' },
+    missions: {
+      title: '研发任务（Mission）',
+      subtitle: '规则驱动的数字员工任务：从需求到 Merge Request',
+      backToCode: '← 代码能力',
+      backToList: '← 任务列表',
+      launch: '发起任务',
+      launching: '发起中…',
+      launchTitle: '发起研发任务',
+      emptyTitle: '还没有任务',
+      emptyBody: '用需求正文、上传文件或外部需求 ID 发起一条任务。',
+      colMission: '任务',
+      colStatus: '状态',
+      colRepository: '仓库',
+      colSource: '来源',
+      colBlock: '阻塞',
+      colUpdated: '更新时间',
+      sourceDirect: '直接输入',
+      sourceExternal: '外部',
+      formKind: '输入形态',
+      kindBody: '正文',
+      kindUploads: '文件',
+      kindExternal: '外部 ID',
+      formRepository: '仓库',
+      pickRepository: '选择仓库…',
+      formEmployee: '数字员工',
+      employeeHint: '仅已发布员工；留空则使用仓库指派。',
+      pickEmployee: '选择员工…',
+      formTitle: '标题',
+      formBody: '需求正文',
+      formExternalId: '外部需求 ID',
+      formSourceKey: '需求源 key',
+      sourceKeyHint: '可选；缺省用员工的默认需求源。',
+      formUploads: '文件与仓库目标路径',
+      uploadsHint: '每个文件都必须指定仓库相对目标路径。',
+      detailTitle: '任务 {{id}}',
+      retry: '重试',
+      blockTitle: '阻塞中',
+      questionsTitle: '待回答的问题',
+      submitAnswers: '提交答案',
+      actionTitle: 'Agent 动作',
+      actionOutcome: '最近结果',
+      actionCapability: '能力',
+      actionCandidate: '变更候选',
+      sourcesTitle: '需求来源',
+      refreshPreview: '检查上游变化',
+      refreshChanged: '有变化 → {{revision}}',
+      refreshApply: '应用刷新',
+      refreshUnchanged: '已是最新',
+      noSources: '还没有需求来源代际。',
+      colGeneration: '代际',
+      colRevision: '版本',
+      colState: '状态',
+      manifestTitle: '需求包',
+      noManifest: '还没有物化的需求包。',
+      colFile: '文件',
+      colRole: '角色',
+      colBytes: '字节',
+      colActions: '操作',
+      viewFile: '查看',
+      effectsTitle: '平台副作用',
+      noEffects: '还没有副作用记录。',
+      colEffect: '副作用',
+      colCreated: '创建时间',
+      readinessTitle: '就绪度',
+      noReadiness: '还没有就绪度快照。',
+    },
     flow: {
       capability: '能力',
       hint: '点任意一步即可查看并修改它实际用到的配置。结构（有哪些步、怎么连）由平台固定。',

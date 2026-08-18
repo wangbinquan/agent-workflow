@@ -587,6 +587,28 @@ export const ROUTE_UX_INVENTORY = {
       primitive: 'PageHeader',
     },
   },
+  // RFC-310 —— DevelopmentMission 列表与详情（launch 三形态 / questions /
+  // action / effects / readiness；平台永不自动 merge）。
+  '@/routes/code.missions#Route': {
+    surface: '/code/missions',
+    classification: 'standard',
+    owners: [rendered('code-missions-page.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/code.missions.tsx',
+      primitive: 'PageHeader',
+    },
+  },
+  '@/routes/code.missions.$id#Route': {
+    surface: '/code/missions/$missionId',
+    classification: 'standard',
+    owners: [source('code-missions-page.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/code.missions.$id.tsx',
+      primitive: 'PageHeader',
+    },
+  },
   // RFC-234 intent builder.
   '@/routes/intent#Route': {
     surface: '/intent',

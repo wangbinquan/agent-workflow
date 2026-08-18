@@ -91,10 +91,72 @@ export const agentChangedResultSchema = z.discriminatedUnion('capabilityId', [
     .strict(),
 ])
 
+/**
+ * RFC-310 PR-5 T54 —— read-only 能力的完成 outcome（§7.4「只读能力有自己的
+ * outcome union，不得使用 changed」）。首个成员：requirement.analyze 的
+ * RequirementAnalysisResult（§8.2：coverage、经 module catalog 对拍的
+ * affectedModuleRefs、scopeDisposition；不含 employee/template id——那是平台
+ * route 的职权）。scopeDisposition 只有 ready/already-satisfied-candidate 两
+ * 值：需要更多信息时 Agent 必须用 `needs-information` outcome 走问题集闭环，
+ * 不许把「不确定」伪装成分析结论（semantic validator 双向锁）。
+ */
+export const agentReadOnlyResultSchema = z.discriminatedUnion('capabilityId', [
+  z
+    .object({
+      capabilityId: z.literal('requirement.analyze'),
+      summary: z.string().min(1),
+      requirementCoverage: z
+        .array(
+          z
+            .object({
+              itemRef: z.string().min(1),
+              disposition: z.enum(['in-scope', 'not-applicable']),
+            })
+            .strict(),
+        )
+        .min(1),
+      affectedModuleRefs: z.array(z.string().min(1)).max(64),
+      scopeDisposition: z.enum(['ready', 'already-satisfied-candidate']),
+    })
+    .strict(),
+  // PR-5 T58 —— change.review：对 immutable candidate snapshot 的结构化审阅。
+  // findings 是素材不是裁决（§设计「findings 不能让 Agent 自己决定通过」）：
+  // 平台按 closed severity/disposition 与 policy 决定 implement/repair/放行/
+  // block。reviewedCandidateRef 必须命中当前 candidateRef（semantic validator
+  // 对拍）——陈旧树的审阅整体无效。findings 允许为空（clean review）。
+  z
+    .object({
+      capabilityId: z.literal('change.review'),
+      summary: z.string().min(1),
+      reviewedCandidateRef: z.string().regex(/^[0-9a-f]{64}$/),
+      findings: z
+        .array(
+          z
+            .object({
+              findingId: z.string().min(1).max(120),
+              path: z.string().min(1).max(500),
+              severity: z.enum(['blocker', 'major', 'minor', 'info']),
+              disposition: z.enum(['must-fix', 'should-fix', 'note']),
+              summary: z.string().min(1).max(2000),
+            })
+            .strict(),
+        )
+        .max(200),
+    })
+    .strict(),
+])
+
 export const agentOutcomeEnvelopeSchema = z
   .discriminatedUnion('outcome', [
     z
       .object({ ...headerShape, outcome: z.literal('changed'), result: agentChangedResultSchema })
+      .strict(),
+    z
+      .object({
+        ...headerShape,
+        outcome: z.literal('completed'),
+        result: agentReadOnlyResultSchema,
+      })
       .strict(),
     z
       .object({
@@ -121,10 +183,13 @@ export const agentOutcomeEnvelopeSchema = z
   // changed 分支的 header.capabilityId 必须与 result.capabilityId 一致，
   // 防止「header 报 A 能力、payload 冒充 B 能力」绕过 per-capability validator。
   .superRefine((value, ctx) => {
-    if (value.outcome === 'changed' && value.result.capabilityId !== value.capabilityId) {
+    if (
+      (value.outcome === 'changed' || value.outcome === 'completed') &&
+      value.result.capabilityId !== value.capabilityId
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `changed result capability '${value.result.capabilityId}' does not match header '${value.capabilityId}'`,
+        message: `${value.outcome} result capability '${value.result.capabilityId}' does not match header '${value.capabilityId}'`,
         path: ['result', 'capabilityId'],
       })
     }

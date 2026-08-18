@@ -106,58 +106,87 @@ function clearBusinessTree(root: string): void {
   }
 }
 
+/**
+ * 派生与发布共用的 stage 半：clone baseline → 清业务树 → 拷 overlay（排除
+ * `.git`/`.agent-workflow`、拒 symlink）→ add（gitignore 语义 + 上传目标
+ * add -f）→ write-tree。发布侧（deliverCandidate）用它对 pinned receipt 重放
+ * 对拍（§9.2「commit 前重新 preview；prepare 后 workspace 改变 = digest
+ * mismatch 整个作废」）——两处 add 规则漂移会让重放恒 mismatch，所以只有
+ * 这一份实现。调用方负责 cleanup()（成功路径也要）。
+ */
+export async function stageCandidateTree(input: {
+  readonly baselineRepoPath: string
+  readonly baselineSha: string
+  readonly overlayRoot: string
+  readonly uploadPlan?: {
+    readonly entries: readonly Pick<UploadLineageEntry, 'targetPath' | 'disposition'>[]
+  } | null
+  readonly runGit?: RepositoryGit
+}): Promise<
+  | { readonly ok: true; readonly ws: string; readonly treeOid: string; cleanup(): void }
+  | {
+      readonly ok: false
+      readonly code: 'candidate-workspace-failed' | 'overlay-symlink'
+      readonly detail: string
+    }
+> {
+  const runGit = input.runGit ?? defaultRunGit
+  const parent = mkdtempSync(join(tmpdir(), 'aw-candidate-'))
+  const ws = join(parent, 'ws')
+  const cleanup = (): void => rmSync(parent, { recursive: true, force: true })
+  const fail = (
+    code: 'candidate-workspace-failed' | 'overlay-symlink',
+    detail: string,
+  ): { ok: false; code: typeof code; detail: string } => {
+    cleanup()
+    return { ok: false, code, detail }
+  }
+  const clone = await runGit(parent, [
+    'clone',
+    '--no-hardlinks',
+    '--quiet',
+    input.baselineRepoPath,
+    ws,
+  ])
+  if (clone.exitCode !== 0) {
+    return fail('candidate-workspace-failed', clone.stderr.slice(0, 300))
+  }
+  const checkout = await runGit(ws, ['checkout', '--quiet', '--detach', input.baselineSha])
+  if (checkout.exitCode !== 0) {
+    return fail('candidate-workspace-failed', checkout.stderr.slice(0, 300))
+  }
+  clearBusinessTree(ws)
+  const copied = copyOverlay(input.overlayRoot, ws)
+  if (copied.symlink !== null) return fail('overlay-symlink', copied.symlink)
+  // 普通业务文件尊重仓库 .gitignore（Agent 的构建垃圾不进 candidate）；
+  // 上传目标逐个 `add -f`——§9.2：非 already-present 上传不得因 ignore 消失。
+  const add = await runGit(ws, ['add', '-A', '.'])
+  if (add.exitCode !== 0) return fail('candidate-workspace-failed', add.stderr.slice(0, 300))
+  for (const entry of input.uploadPlan?.entries ?? []) {
+    if (entry.disposition === 'already-present') continue
+    // 目标缺失不在这里定性——交给 lineage 验证给出 typed code。
+    const st = lstatSync(join(ws, entry.targetPath), { throwIfNoEntry: false })
+    if (!st || !st.isFile()) continue
+    const forced = await runGit(ws, ['add', '-f', '--', entry.targetPath])
+    if (forced.exitCode !== 0) {
+      return fail('candidate-workspace-failed', forced.stderr.slice(0, 300))
+    }
+  }
+  const writeTree = await runGit(ws, ['write-tree'])
+  if (writeTree.exitCode !== 0) {
+    return fail('candidate-workspace-failed', writeTree.stderr.slice(0, 300))
+  }
+  return { ok: true, ws, treeOid: writeTree.stdout.trim(), cleanup }
+}
+
 export async function deriveChangeCandidate(
   input: DeriveChangeCandidateInput,
 ): Promise<DeriveChangeCandidateResult> {
   const runGit = input.runGit ?? defaultRunGit
-  const parent = mkdtempSync(join(tmpdir(), 'aw-candidate-'))
-  const ws = join(parent, 'ws')
+  const staged = await stageCandidateTree(input)
+  if (!staged.ok) return staged
+  const ws = staged.ws
   try {
-    const clone = await runGit(parent, [
-      'clone',
-      '--no-hardlinks',
-      '--quiet',
-      input.baselineRepoPath,
-      ws,
-    ])
-    if (clone.exitCode !== 0) {
-      return { ok: false, code: 'candidate-workspace-failed', detail: clone.stderr.slice(0, 300) }
-    }
-    const checkout = await runGit(ws, ['checkout', '--quiet', '--detach', input.baselineSha])
-    if (checkout.exitCode !== 0) {
-      return {
-        ok: false,
-        code: 'candidate-workspace-failed',
-        detail: checkout.stderr.slice(0, 300),
-      }
-    }
-
-    clearBusinessTree(ws)
-    const copied = copyOverlay(input.overlayRoot, ws)
-    if (copied.symlink !== null) {
-      return { ok: false, code: 'overlay-symlink', detail: copied.symlink }
-    }
-
-    // 普通业务文件尊重仓库 .gitignore（Agent 的构建垃圾不进 candidate）；
-    // 上传目标逐个 `add -f`——§9.2：非 already-present 上传不得因 ignore 消失。
-    const add = await runGit(ws, ['add', '-A', '.'])
-    if (add.exitCode !== 0) {
-      return { ok: false, code: 'candidate-workspace-failed', detail: add.stderr.slice(0, 300) }
-    }
-    for (const entry of input.uploadPlan?.entries ?? []) {
-      if (entry.disposition === 'already-present') continue
-      // 目标缺失不在这里定性——交给 lineage 验证给出 typed code。
-      const st = lstatSync(join(ws, entry.targetPath), { throwIfNoEntry: false })
-      if (!st || !st.isFile()) continue
-      const forced = await runGit(ws, ['add', '-f', '--', entry.targetPath])
-      if (forced.exitCode !== 0) {
-        return {
-          ok: false,
-          code: 'candidate-workspace-failed',
-          detail: forced.stderr.slice(0, 300),
-        }
-      }
-    }
     // --no-renames：lineage 验证按 A/M/D 对拍 target path，rename 折叠会让
     // created entry 从 changed 集合里消失。
     const diff = await runGit(ws, [
@@ -224,17 +253,9 @@ export async function deriveChangeCandidate(
       }
     }
 
-    const writeTree = await runGit(ws, ['write-tree'])
-    if (writeTree.exitCode !== 0) {
-      return {
-        ok: false,
-        code: 'candidate-workspace-failed',
-        detail: writeTree.stderr.slice(0, 300),
-      }
-    }
     const core = {
       baselineSnapshotRef: `git:${input.baselineSha}`,
-      treeOid: writeTree.stdout.trim(),
+      treeOid: staged.treeOid,
       changed: summary,
       excludePolicyDigest: input.excludePolicyDigest,
       agentOutcomeRef: input.agentOutcomeRef,
@@ -242,6 +263,6 @@ export async function deriveChangeCandidate(
     }
     return { ok: true, receipt: { candidateRef: candidateReceiptRef(core), ...core } }
   } finally {
-    rmSync(parent, { recursive: true, force: true })
+    staged.cleanup()
   }
 }

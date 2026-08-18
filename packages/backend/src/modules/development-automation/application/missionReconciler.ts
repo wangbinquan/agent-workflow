@@ -51,6 +51,15 @@ import {
   publicFactsSummary,
   type CollectAgentAttemptOutcome,
 } from './agentActionOrchestrator'
+import { invalidateInFlightAction } from './actionInvalidation'
+import {
+  DELIVERY_EFFECT_KINDS,
+  handleCommitAndPublish,
+  handleEnsureMergeRequest,
+  handleRunVerification,
+  redispatchDelivery,
+  type DeliveryChainDeps,
+} from './missionDeliveryChain'
 import type { AdmissionLookup } from './ports/admissionLookup'
 import type { EffectRow, MissionRow, MissionStore } from './ports/missionStore'
 import type { FactSnapshotReader, ReconcilerPorts } from './ports/reconcilerPorts'
@@ -372,7 +381,13 @@ export async function runMissionReconcile(
   })
 
   // ---- guards + rules -------------------------------------------------------
-  const guards = projectGuards(mission, unsettled, cells)
+  // 发布链的 effect（commit/push/mr-ensure）由链自身按 idempotencyKey 撞回重放
+  // 结算，不进 effect-unsettled guard（否则悬挂行会让 guard 永久 wait）。
+  const guards = projectGuards(
+    mission,
+    unsettled.filter((e) => !DELIVERY_EFFECT_KINDS.has(e.effectKind)),
+    cells,
+  )
   const policy = await loadPolicyContent(deps.lookup, mission)
   if (policy === null) {
     return await commitAndHandle(deps, mission, snapshot, guards, {
@@ -428,7 +443,46 @@ export async function runMissionReconcile(
   // 平台步骤，优先于动作规则的选择。
   selected = redispatchRequirement(mission, cells, selected)
 
+  // ---- no-change 收束重派（PR-5 T55a）--------------------------------------
+  // §8.2 尾段：analyze already-satisfied-candidate / implement no-change 且尚
+  // 无 MR 时，按 policy 打开 no-change-confirmation human gate；只有 receipt
+  // 才能进入 completed-no-change。upload plan 有 created/replaced entry 时
+  // 不许以 no-change 跳过 seed（gate 不开，正常链继续把 seed 送发布）。
+  selected = redispatchNoChangeGate(deps, mission, cells, policy, selected)
+
+  // ---- candidate 发布链重派（PR-5 T56/T57/T59）------------------------------
+  // candidate 已派生且规则无话可说时，依 `__delivery.*` 进度派 verification →
+  // commit/push → ensure-MR；MR 建立后 block 改写为诚实 wait（MR care 属 PR-7）。
+  selected = redispatchDelivery(mission, cells, policy, selected)
+
   return await commitAndHandle(deps, mission, snapshot, guards, { ...evaluation, selected })
+}
+
+function redispatchNoChangeGate(
+  deps: ReconcileDeps,
+  mission: MissionRow,
+  cells: Readonly<Record<string, FactCell<FactCellValue>>>,
+  policy: AutomationPolicyContent,
+  selected: NextDecision,
+): NextDecision {
+  if (selected.kind !== 'block') return selected
+  if (mission.mrClaimId !== null) return selected
+  if (policy.requirement.noChangeConfirmation !== 'human-confirmation') return selected
+  const scope = knownString(cells, 'requirement.scopeDisposition')
+  const lastOutcome = knownString(cells, 'action.lastOutcome')
+  const noChangeShape = scope === 'already-satisfied-candidate' || lastOutcome === 'no-change'
+  if (!noChangeShape) return selected
+  // gate 已挂起（等确认命令）时不重复派。
+  if (knownString(cells, '__gate.pendingHumanDecision') === 'no-change-confirmation') {
+    return selected
+  }
+  if (mission.uploadPlanRef !== null) {
+    const plan = deps.ports.uploadPlanReader?.read(mission.uploadPlanRef) ?? null
+    // plan 不可读 = 保守不开 gate（indeterminate 语义：宁可停在原 block）。
+    if (plan === null) return selected
+    if (plan.entries.some((entry) => entry.disposition !== 'already-present')) return selected
+  }
+  return { kind: 'request-human-decision', gate: 'no-change-confirmation' }
 }
 
 function knownString(
@@ -656,6 +710,16 @@ function persistRequirementCells(
   })
 }
 
+function deliveryDeps(deps: ReconcileDeps): DeliveryChainDeps {
+  return {
+    store: deps.store,
+    ports: deps.ports,
+    now: deps.now,
+    persistCells: (missionId, patch, refs) => persistRequirementCells(deps, missionId, patch, refs),
+    block: (missionId, code, detail) => blockMission(deps, missionId, code, detail),
+  }
+}
+
 async function handleDecision(
   deps: ReconcileDeps,
   mission: MissionRow,
@@ -849,6 +913,12 @@ async function handleDecision(
         templateRevision: template.revision,
         rerunSeq: 0,
         factsSummary: publicFactsSummary(snapshot.cells),
+        ...((): { candidateRef?: string } => {
+          const cell = snapshot.cells['__action.candidateRef']
+          return cell !== undefined && cell.state === 'known' && typeof cell.value === 'string'
+            ? { candidateRef: cell.value }
+            : {}
+        })(),
       })
       if (!launchOutcome.ok) {
         deps.store.settleActionRun({
@@ -1107,6 +1177,9 @@ async function handleDecision(
         }
         return 'wake-armed'
       }
+      // PR-5 T55：原渠道答案收齐 = 新 answer revision——in-flight 动作输入
+      // 过期，先失效（cancel 尽力 + discarded + run failed）再落 cells。
+      await invalidateInFlightAction(deps, mission, 'input-invalidated')
       persistRequirementCells(
         deps,
         mission.id,
@@ -1124,13 +1197,63 @@ async function handleDecision(
       )
       return 'collected'
     }
+    // ---- no-change human gate（PR-5 T55a）----------------------------------
+    case 'request-human-decision': {
+      // 现阶段唯一 gate 形态：no-change-confirmation（decision schema 钉死）。
+      // mission → awaiting-information（等人），gate 标记入 cells；确认走
+      // confirmNoChange 命令（唯一能进入 completed-no-change 的通道）。
+      persistRequirementCells(
+        deps,
+        mission.id,
+        { '__gate.pendingHumanDecision': knownCell('no-change-confirmation') },
+        { kind: 'human-gate', gate: selected.gate },
+      )
+      const fresh = deps.store.getMission(mission.id)
+      if (fresh !== null && fresh.status !== 'awaiting-information') {
+        const verdict = checkMissionTransition({
+          from: fresh.status,
+          to: 'awaiting-information',
+          fence: fresh.transitionFence,
+        })
+        if (verdict.ok) {
+          deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+            status: 'awaiting-information',
+            blockCode: null,
+            blockDetail: 'no-change-confirmation pending',
+          })
+        }
+      }
+      return 'collected'
+    }
+    // ---- 发布链 arm（PR-5，实现在 missionDeliveryChain.ts）------------------
+    case 'run-verification': {
+      return await handleRunVerification(
+        deliveryDeps(deps),
+        mission,
+        snapshot.cells,
+        selected.profileRef,
+      )
+    }
+    case 'commit-and-publish-candidate': {
+      const policy = await loadPolicyContent(deps.lookup, mission)
+      if (policy === null) {
+        blockMission(deps, mission.id, 'policy-content-missing', null)
+        return 'blocked'
+      }
+      return await handleCommitAndPublish(
+        deliveryDeps(deps),
+        mission,
+        snapshot.cells,
+        policy,
+        selected.publicationMode,
+      )
+    }
+    case 'ensure-merge-request': {
+      return await handleEnsureMergeRequest(deliveryDeps(deps), mission)
+    }
     // ---- 未到批次的 arm：typed block，绝不静默 ------------------------------
     case 'collect-pipeline-evidence':
-    case 'run-verification':
-    case 'request-human-decision':
     case 'prepare-change-candidate':
-    case 'commit-and-publish-candidate':
-    case 'ensure-merge-request':
     case 'reply-feedback':
     case 'trigger-pipeline':
     case 'rerun-pipeline':

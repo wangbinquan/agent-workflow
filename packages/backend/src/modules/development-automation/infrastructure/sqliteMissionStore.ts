@@ -217,6 +217,24 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
         .where(eq(developmentMrClaims.id, claimId))
         .run()
     },
+    findMrClaim(input) {
+      const row = db
+        .select({
+          id: developmentMrClaims.id,
+          missionId: developmentMrClaims.missionId,
+          state: developmentMrClaims.state,
+        })
+        .from(developmentMrClaims)
+        .where(
+          and(
+            eq(developmentMrClaims.codeHostEndpointRef, input.codeHostEndpointRef),
+            eq(developmentMrClaims.stableProjectRef, input.stableProjectRef),
+            eq(developmentMrClaims.mrIid, input.mrIid),
+          ),
+        )
+        .get()
+      return row ?? null
+    },
 
     recordWakeHint(input) {
       try {

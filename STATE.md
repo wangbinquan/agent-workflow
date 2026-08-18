@@ -70,6 +70,23 @@
 > workspace/validator/candidate 链正向+攻击回退（写 .git/evidence → boundary discarded → fresh 重建 digest 相等→
 > 二轮干净结算）。**呈报缺口**：same-session 反馈 N 次未接（runner 无 continue 面，预算强制 0，PR-5）；evidence
 > 树在 iso cwd 不可见（三候选机制 PR-5 拍板）；launch 端口 workspacePath 直传（path-free 化 PR-5）。rfc310 全家族 +守卫 689/0。
+> **PR-5（T53–T62）已完成**：第一价值链 requirement → Java 实现 → verification → commit/CAS push → MR → watching。
+> fork L：T53 repositoryFacts collector（Java/maven 启发式+catalog/context projection）、T54 `requirement.analyze`
+> （read-only `completed` outcome union+coverage/module 闭集 validator+默认 analyze 规则）、T55 answers 失效
+> in-flight action、T55a no-change human gate+`confirmNoChange` 命令（唯一进入 completed-no-change 通道）。
+> fork M：source-control `deliverCandidate`（durable commit 落 `refs/aw/mission/<id>/candidate`、(tree,parent) 幂等、
+> exact-head CAS 普通 push 无 force 形态）+ integration `mrEnsure`（先查后建，RFC-269 executeCodeHostCall）。
+> 主 session：**发布链 `missionDeliveryChain.ts`**（redispatch 接管 derived+block 静止态；`__delivery.*` cells 全部
+> 绑定 treeOid，换树自动重启；commit/push/mr-ensure 单轮一 effect 走台账，intent canonicalDigest 对拍、悬挂行按
+> idempotencyKey 幂等重放、`DELIVERY_EFFECT_KINDS` 不进 effect-unsettled guard；MR 建立后诚实 `wait(mr-care-not-wired)`，
+> mission working→publishing→watching）；T57 verificationRunner（exit code 唯一判据/输出直连文件/TERM→KILL/evidence
+> blob）；T58 review 契约（envelope+validator+candidateRef 对拍锚，排程与 verification.repair 同欠 fact 升级，PR-6）；
+> T60 集成（claimMr 撞唯一 `findMrClaim` 消歧）；T61 missions UI 全栈（列表/launch 三形态/详情 questions·action·
+> effects·readiness+confirm/answers）；装配（composition 模块内绑五端口+`services/developmentDeliveryDeps.ts` 装配点
+> 注入 repoRemote/mrEffects，凭据解封只在装配点）；confirm-no-change HTTP 面+契约登记。**T62 Java E2E**：除 Agent 外
+> 全真件打 system-mock（真 collector/workspace/candidate/verification 子进程/commit/CAS push/mrEnsure→mock GitLab，
+> mock 侧断言 MR+分支真实存在）。新增坑：部分开发机拦「子进程→回环 HTTP」（git/curl 超时而同进程 fetch 通）——
+> E2E git 面走 mock 磁盘 bare 仓路径，已记 dev-gotchas。PR-4 三缺口顺延 PR-6/专项（plan.md 交付注记）。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

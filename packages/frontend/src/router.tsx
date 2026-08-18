@@ -13,6 +13,8 @@ import { Route as usersRoute } from '@/routes/users'
 import { Route as rootRoute } from '@/routes/__root'
 import { Route as settingsRoute } from '@/routes/settings'
 import { Route as codeRoute } from '@/routes/code'
+import { Route as codeMissionsRoute } from '@/routes/code.missions'
+import { Route as codeMissionDetailRoute } from '@/routes/code.missions.$id'
 import { Route as codeTemplateDetailRoute } from '@/routes/code.templates.$id'
 import { IndexRoute as mcpsIndexRoute, Route as mcpsRoute } from '@/routes/mcps'
 import { Route as mcpDetailRoute } from '@/routes/mcps.detail'
@@ -138,6 +140,9 @@ const routeTree = rootRoute.addChildren([
   fusionDetailRoute,
   // RFC-309: '/code/templates/$id' literal must precede '/code'.
   codeTemplateDetailRoute,
+  // RFC-310 T61: mission detail precedes list precedes '/code'.
+  codeMissionDetailRoute,
+  codeMissionsRoute,
   codeRoute,
   settingsRoute,
   // RFC-247 — the generated API & MCP wiki. Reachable from /account (where a

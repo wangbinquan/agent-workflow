@@ -19,11 +19,19 @@ import {
   type ReconcileOutcome,
 } from './application/missionReconciler'
 import { recoverMissions } from './application/missionRecovery'
+import { confirmNoChange, type ConfirmNoChangeResult } from './application/commands/confirmNoChange'
+import {
+  submitMissionAnswers,
+  type SubmitAnswersResult,
+} from './application/commands/submitMissionAnswers'
 import { sweepMissionWakes } from './application/missionWakeSweep'
 import type {
   AgentActionLauncherPort,
+  CandidateDeliveryPort,
   ChangeCandidatePort,
+  MrEffectsPort,
   ReconcilerPorts,
+  RepoRemotePort,
 } from './application/ports/reconcilerPorts'
 import {
   createAttemptContextStore,
@@ -46,7 +54,17 @@ import {
   missionEpochsOf,
 } from './infrastructure/sqliteReconcilerReaders'
 import { createSqliteMissionStore } from './infrastructure/sqliteMissionStore'
-import { createSqliteActionTemplateStore } from './infrastructure/sqliteConfigResourceStore'
+import {
+  createSqliteActionTemplateStore,
+  createSqliteVerificationProfileStore,
+} from './infrastructure/sqliteConfigResourceStore'
+import { createRepositoryFactsCollector } from './infrastructure/repositoryFactsCollector'
+import { recordUploadPublicationReceipt } from './infrastructure/uploadPublicationReceipt'
+import {
+  createRepoScriptResolver,
+  runVerificationProfile,
+} from './infrastructure/verificationRunner'
+import { verificationProfileContentSchema } from './domain/verificationProfile'
 import { readUploadPlan } from './infrastructure/sqliteUploadPlanStore'
 import { createSqliteUploadSessionStore } from './infrastructure/sqliteUploadSessionStore'
 import { createUploadPlacementProvider } from './infrastructure/uploadPlacement'
@@ -55,6 +73,10 @@ export interface DevelopmentAutomationModule {
   readonly materializer: RequirementMaterializer
   readonly evidence: EvidenceStore
   reconcile(missionId: string): Promise<ReconcileOutcome>
+  /** T55a：no-change 人工确认（唯一能进入 completed-no-change 的通道）。 */
+  confirmNoChange(rawInput: unknown): Promise<ConfirmNoChangeResult>
+  /** 平台渠道答题（T55：新 revision 会失效 in-flight action）。 */
+  submitAnswers(rawInput: unknown): Promise<SubmitAnswersResult>
   /** 30s 级 sweep：到期 durable wake（fireWake CAS 认领）+ 未消费 wake hint。 */
   sweepWakes(): Promise<{ reconciled: number }>
   /** hourly：未 claim 上传的 TTL 回收。 */
@@ -72,6 +94,12 @@ export function composeDevelopmentAutomation(deps: {
   readonly agentLauncher?: AgentActionLauncherPort
   /** source-control 模块组装的 candidate 派生；不注入 = changed 结算诚实 blocked。 */
   readonly changeCandidate?: ChangeCandidatePort
+  /** source-control 模块组装的发布链（stage/commit/push）；不注入 = 发布诚实 blocked。 */
+  readonly candidateDelivery?: CandidateDeliveryPort
+  /** 装配点解析 repository remote（凭据 URL 解封在装配点）；不注入 = push/MR 诚实 blocked。 */
+  readonly repoRemote?: RepoRemotePort
+  /** integration 模块组装的 code-host MR effects；不注入 = ensure-MR 诚实 blocked。 */
+  readonly mrEffects?: MrEffectsPort
 }): DevelopmentAutomationModule {
   const now = (): number => Date.now()
   const store = createSqliteMissionStore(deps.db)
@@ -90,6 +118,7 @@ export function composeDevelopmentAutomation(deps: {
   const uploads = createSqliteUploadSessionStore(deps.db)
   const seedsRoot = join(deps.appHome, 'evidence', 'seeds')
   const templates = createSqliteActionTemplateStore(deps.db)
+  const verificationProfiles = createSqliteVerificationProfileStore(deps.db)
   const ports: ReconcilerPorts = {
     requirementMaterialize: materializer,
     uploadPlacement: createUploadPlacementProvider({
@@ -118,6 +147,29 @@ export function composeDevelopmentAutomation(deps: {
       },
     },
     workspaceValidation: createWorkspaceValidationAdapter(),
+    repositoryFacts: createRepositoryFactsCollector(deps.db),
+    ...(deps.candidateDelivery === undefined ? {} : { candidateDelivery: deps.candidateDelivery }),
+    ...(deps.repoRemote === undefined ? {} : { repoRemote: deps.repoRemote }),
+    ...(deps.mrEffects === undefined ? {} : { mrEffects: deps.mrEffects }),
+    verificationProfiles: {
+      content: (id, revision) => {
+        const row = verificationProfiles.getRevision(id, revision)
+        return row === null ? null : (JSON.parse(row.contentJson) as unknown)
+      },
+    },
+    verificationExecution: {
+      run: (input) =>
+        runVerificationProfile(
+          { evidence, resolver: createRepoScriptResolver() },
+          {
+            workspacePath: input.workspacePath,
+            profile: verificationProfileContentSchema.parse(input.profile),
+          },
+        ),
+    },
+    uploadPublication: {
+      record: (input) => recordUploadPublicationReceipt(deps.db, input),
+    },
   }
   const reconcileDeps: ReconcileDeps = { store, lookup, snapshots, ports, now }
 
@@ -125,6 +177,9 @@ export function composeDevelopmentAutomation(deps: {
     materializer,
     evidence,
     reconcile: (missionId) => runMissionReconcile(reconcileDeps, missionId),
+    confirmNoChange: (rawInput) => confirmNoChange(reconcileDeps, rawInput),
+    submitAnswers: (rawInput) =>
+      submitMissionAnswers({ store, snapshots, requirement: materializer, ports, now }, rawInput),
     sweepWakes: () =>
       sweepMissionWakes(reconcileDeps, {
         listUnconsumedWakeHintMissionIds: () => listUnconsumedWakeHintMissionIds(deps.db),

@@ -92,6 +92,13 @@ const ALLOWLIST: Record<string, { count: number; why: string }> = {
       '流式落盘再 hash——runGit 走 text() 会把二进制字节按 utf8 解码损坏，无法复用；' +
       '只读 git 对象、nonInteractiveGitEnv、用后即删临时目录。',
   },
+  'modules/development-automation/infrastructure/verificationRunner.ts': {
+    count: 1,
+    why:
+      'RFC-310 PR-5 T57 verification 程序执行点：disposable workspace 内跑受管 build/test，' +
+      'stdout/stderr 直连文件（管道会被脚本的长命孙进程钉住不闭合）、timeout TERM→KILL、' +
+      '空 env（PATH/HOME/TMPDIR）+ platformSpawnOptionsForHost；receipt 只信 exit code。',
+  },
   'modules/integration/infrastructure/developmentAdapterRunner.ts': {
     count: 1,
     why:

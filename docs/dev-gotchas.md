@@ -1029,6 +1029,20 @@ runner 打崩了」，而单独跑那个文件是绿的。要么**把 ssh 会话
   `git cherry-pick` 就能捞回来。真要长时间持有未提交改动，先 `git stash push -m`
   或 `cp` 一份到 /tmp。
 
+## 子进程连 system-mock 回环 HTTP 会在部分开发机上超时（RFC-310 实测，2026-08-18）
+
+现象：`startSystemMockSuite()` 起的 mock server（127.0.0.1:随机端口），**同进程 Bun fetch 全通**
+（seedCodeHost/snapshot/mrEnsure 正常），但**子进程**（`git clone`、`curl`）打同一 URL 一律超时
+0 字节——设 `NO_PROXY` 也救不了（不是代理问题），CI 上无此现象。判定是本机安全策略拦「子进程发起
+的回环连接」一类差异。写依赖 mock git smart HTTP 的测试时不要死磕传输层：
+
+- **git 面（clone/push/CAS）改用 mock 服务端的磁盘 bare 仓路径**——`MockCodeHostProject.repoHttpUrl`
+  的 `/git/` 后段相对 `realpathSync(tmpdir())` 解析即 `repositoryPath`（file remote 完全等价，push
+  后 `syncRefsFromGit` 一样能看到分支）；**API 面（MR ensure/observe）保持真 HTTP**（同进程 fetch 通）。
+  样例：`packages/backend/tests/rfc310-pr5-e2e-java.test.ts` 的 `mockRepoDiskPath`。
+- 排查此类问题时管道也会骗你：`bun … | tail` / `| head` 在进程未退出前**看不到任何增量输出**（全缓冲），
+  会把「挂在 clone」误读成「挂在启动」。后台落文件（`> log 2>&1 &`）再 cat 才是可信的进度面。
+
 ## 播种「示例 / 内置」数据（RFC-307 实测，2026-08-17）
 
 装好即有样例是好产品，但**往共享表里播行**牵动的面比想象的宽。四条，全部是跑起来

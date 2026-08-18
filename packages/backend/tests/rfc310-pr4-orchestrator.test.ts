@@ -239,10 +239,12 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
     expect(run.status).toBe('settled')
     const mission = fx.store.getMission(missionId)!
     expect(mission.currentActionRunId).toBeNull()
-    expect(mission.status).toBe('blocked')
-    expect(mission.blockCode).toBe('action-stage-complete:changed')
+    // PR-5 起 changed 不再打 stage block：candidateState='derived' 落 cells，
+    // mission 保持 working，发布链（missionDeliveryChain）下轮接管。
+    expect(mission.status).toBe('working')
     const cells = fx.snapshots.getCells(mission.requirementBundleRef!)!
     expect(cells['action.lastOutcome']).toMatchObject({ state: 'known', value: 'changed' })
+    expect(cells['__action.candidateState']).toMatchObject({ state: 'known', value: 'derived' })
     expect(cells['__action.candidateRef']).toMatchObject({ state: 'known', value: 'c'.repeat(64) })
   })
 

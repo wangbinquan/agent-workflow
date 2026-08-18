@@ -17,12 +17,16 @@ import { composeDevelopmentAutomation } from '@/modules/development-automation/c
 import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
 import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
 import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
-import { bindChangeCandidateParticipant } from '@/modules/source-control/composition'
+import {
+  bindCandidateDeliveryParticipant,
+  bindChangeCandidateParticipant,
+} from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { ulid } from 'ulid'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { buildDevelopmentDeliveryDeps } from '@/services/developmentDeliveryDeps'
 import { startWebhookDeliveryGc } from '@/services/webhook/webhookGc'
 import { openDb, DbCorruptionError } from '@/db/client'
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
@@ -988,6 +992,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     appHome: Paths.root,
     requirementSource: composeRequirementSourceRunner(db),
     changeCandidate: bindChangeCandidateParticipant(),
+    candidateDelivery: bindCandidateDeliveryParticipant(),
+    ...buildDevelopmentDeliveryDeps(db, secretBox),
     agentLauncher: composeAgentActionExecution({
       db,
       startDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),

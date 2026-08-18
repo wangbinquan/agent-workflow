@@ -18,7 +18,12 @@ import {
 } from '../../domain/mission'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { MissionStore } from '../ports/missionStore'
-import type { FactSnapshotReader, RequirementMaterializePort } from '../ports/reconcilerPorts'
+import type {
+  FactSnapshotReader,
+  ReconcilerPorts,
+  RequirementMaterializePort,
+} from '../ports/reconcilerPorts'
+import { invalidateInFlightAction } from '../actionInvalidation'
 
 export const submitMissionAnswersInputSchema = z
   .object({
@@ -37,6 +42,8 @@ export interface SubmitAnswersDeps {
   readonly store: MissionStore
   readonly snapshots: FactSnapshotReader
   readonly requirement: RequirementMaterializePort
+  /** PR-5 T55：新 answer revision 使 in-flight action 失效（cancel 走 launcher）。 */
+  readonly ports?: ReconcilerPorts
   readonly now: () => number
 }
 
@@ -85,6 +92,11 @@ export async function submitMissionAnswers(
   if (!stashed.ok) {
     throw new ValidationError(stashed.failure.code, stashed.failure.remediation)
   }
+
+  // PR-5 T55：答案已换代——in-flight Agent 动作的输入过期，立即失效收束
+  //（cancel 尽力 + attempt discarded + run failed(input-invalidated)），
+  // 后续轮以新 answers facts 重新开动作，不计旧预算。
+  await invalidateInFlightAction(deps, mission, 'input-invalidated')
 
   // cells：answers-committed + exact revision；status：awaiting-information → working。
   const now = deps.now()

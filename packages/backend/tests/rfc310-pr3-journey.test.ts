@@ -267,8 +267,10 @@ describe('rfc310 pr3 journey — direct body-only', () => {
     // 已 409，能走到这里即配对成立）。
     expect(fx.store.getMission(missionId)!.sourceContentDigest).toMatch(/^[0-9a-f]{64}$/)
 
+    // PR-5 起 repositoryFacts collector 已接线：真 collector 对测试仓收集出
+    // 空 Java 集 → implement 规则（set-contains-any java）诚实失配 block。
     const blocked = await pumpUntil(missionId, (m) => m.status === 'blocked')
-    expect(blocked.blockCode).toBe('collector-not-wired:repository')
+    expect(blocked.blockCode).toBe('no-policy-match')
 
     const manifestRes = await reqAs(`/api/code/missions/${missionId}/requirement-manifest`)
     expect(manifestRes.status).toBe(200)
@@ -423,8 +425,10 @@ describe('rfc310 pr3 journey — external reference + source refresh', () => {
     expect(res.status).toBe(201)
     const missionId = ((await res.json()) as { missionId: string }).missionId
 
+    // PR-5 起 repositoryFacts collector 已接线：真 collector 对测试仓收集出
+    // 空 Java 集 → implement 规则（set-contains-any java）诚实失配 block。
     const blocked = await pumpUntil(missionId, (m) => m.status === 'blocked')
-    expect(blocked.blockCode).toBe('collector-not-wired:repository')
+    expect(blocked.blockCode).toBe('no-policy-match')
 
     const manifestRes = await reqAs(`/api/code/missions/${missionId}/requirement-manifest`)
     expect(manifestRes.status).toBe(200)
@@ -534,6 +538,20 @@ describe('rfc310 pr3 journey — platform-channel answers over HTTP', () => {
     expect(stashed.ok).toBe(true)
     if (!stashed.ok) return
     await pumpUntil(missionId, (m) => m.status === 'awaiting-information')
+
+    // T61 detail 投影：awaiting-information 时 GET 详情带出待答问题集与
+    // action/effects 区块（UI 的数据面锚）。
+    const detailRes = await reqAs(`/api/code/missions/${missionId}`)
+    expect(detailRes.status).toBe(200)
+    const detail = (await detailRes.json()) as {
+      questions: { questionSetRef: string; items: { questionId: string }[] } | null
+      action: { lastOutcome: string | null }
+      effects: unknown[]
+    }
+    expect(detail.questions).not.toBeNull()
+    expect(detail.questions!.questionSetRef).toBe(stashed.questionSetRef)
+    expect(detail.questions!.items.map((q) => q.questionId)).toEqual(['q1', 'q2'])
+    expect(Array.isArray(detail.effects)).toBe(true)
 
     const wrongRef = await reqAs(`/api/code/missions/${missionId}/answers`, {
       method: 'POST',

@@ -29,6 +29,12 @@ export interface SemanticRejection {
     | 'failure-ref-outside-bundle'
     | 'conflict-path-outside-markers'
     | 'question-duplicate-id'
+    | 'write-capability-cannot-use-completed'
+    | 'read-only-must-use-completed'
+    | 'module-ref-outside-catalog'
+    | 'analysis-empty-modules'
+    | 'review-candidate-mismatch'
+    | 'review-finding-duplicate'
   readonly jsonPointer: string | null
   readonly expected: string | null
   readonly observedSummary: string
@@ -43,6 +49,10 @@ export interface SemanticClosedRefs {
   readonly requirementItemRefs?: readonly string[]
   readonly pipelineIssueRefs?: readonly string[]
   readonly conflictPaths?: readonly string[]
+  /** PR-5 T54：repository module catalog（analyze 的 affectedModuleRefs 闭集）。 */
+  readonly repositoryModuleIds?: readonly string[]
+  /** PR-5 T58：当前 candidate 的 receipt digest（review 对拍锚）。 */
+  readonly candidateRef?: string
 }
 
 function fail(
@@ -79,6 +89,92 @@ export function runCapabilitySemanticValidator(input: {
         })
       }
       seen.add(q.questionId)
+    }
+    return { ok: true }
+  }
+
+  // PR-5 T54 —— read-only 完成 outcome：write 能力不许用（双向：read-only 用
+  // changed 在下方拒），analyze 的认知结论逐项对拍平台闭集。
+  if (envelope.outcome === 'completed') {
+    if (definition.workspaceMode !== 'read-only') {
+      return fail(
+        'write-capability-cannot-use-completed',
+        `capability '${manifest.capabilityId}' is ${definition.workspaceMode}; 'completed' is reserved for read-only capabilities`,
+        { jsonPointer: '/outcome', expected: 'changed | no-change | needs-information | blocked' },
+      )
+    }
+    const result = envelope.result
+    if (result.capabilityId === 'requirement.analyze') {
+      const closedItems = closed.requirementItemRefs
+      if (closedItems === undefined) {
+        return fail('validator-input-missing', 'requirement item index was not provided')
+      }
+      const expectedSet = new Set(closedItems)
+      const seen = new Set<string>()
+      for (const [index, row] of result.requirementCoverage.entries()) {
+        if (!expectedSet.has(row.itemRef)) {
+          return fail('coverage-unknown-item', `itemRef '${row.itemRef}' is not in the index`, {
+            jsonPointer: `/result/requirementCoverage/${index}/itemRef`,
+          })
+        }
+        if (seen.has(row.itemRef)) {
+          return fail('coverage-duplicate-item', `itemRef '${row.itemRef}' covered twice`, {
+            jsonPointer: `/result/requirementCoverage/${index}/itemRef`,
+          })
+        }
+        seen.add(row.itemRef)
+      }
+      for (const itemRef of closedItems) {
+        if (!seen.has(itemRef)) {
+          return fail('coverage-missing-item', `itemRef '${itemRef}' has no disposition`, {
+            jsonPointer: '/result/requirementCoverage',
+          })
+        }
+      }
+      const moduleCatalog = closed.repositoryModuleIds
+      if (moduleCatalog === undefined) {
+        return fail('validator-input-missing', 'repository module catalog was not provided')
+      }
+      const catalogSet = new Set(moduleCatalog)
+      for (const [index, moduleRef] of result.affectedModuleRefs.entries()) {
+        if (!catalogSet.has(moduleRef)) {
+          return fail(
+            'module-ref-outside-catalog',
+            `module '${moduleRef}' is not in the repository module catalog`,
+            { jsonPointer: `/result/affectedModuleRefs/${index}` },
+          )
+        }
+      }
+      if (result.scopeDisposition === 'ready' && result.affectedModuleRefs.length === 0) {
+        return fail(
+          'analysis-empty-modules',
+          "scopeDisposition 'ready' with no affected modules is not an analysis",
+          { jsonPointer: '/result/affectedModuleRefs' },
+        )
+      }
+    }
+    if (result.capabilityId === 'change.review') {
+      // T58：审阅锚必须是当前 candidate——陈旧树的 findings 整体无效。
+      const anchor = closed.candidateRef
+      if (anchor === undefined) {
+        return fail('validator-input-missing', 'current candidate ref was not provided')
+      }
+      if (result.reviewedCandidateRef !== anchor) {
+        return fail(
+          'review-candidate-mismatch',
+          `review anchored to '${result.reviewedCandidateRef}'`,
+          { jsonPointer: '/result/reviewedCandidateRef', expected: anchor },
+        )
+      }
+      const seenFindings = new Set<string>()
+      for (const [index, finding] of result.findings.entries()) {
+        if (seenFindings.has(finding.findingId)) {
+          return fail('review-finding-duplicate', `findingId '${finding.findingId}' repeated`, {
+            jsonPointer: `/result/findings/${index}/findingId`,
+          })
+        }
+        seenFindings.add(finding.findingId)
+      }
     }
     return { ok: true }
   }

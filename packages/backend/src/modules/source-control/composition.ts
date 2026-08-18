@@ -16,7 +16,8 @@ import {
   type RepositoryGit,
 } from './application/repositoryCommit'
 import { ensurePlatformWorkspaceDirectory } from './infrastructure/platformWorkspaceDirectory'
-import { deriveChangeCandidate } from './application/changeCandidate'
+import { deriveChangeCandidate, stageCandidateTree } from './application/changeCandidate'
+import { commitCandidate, pushCandidate } from './application/deliverCandidate'
 import type { PlatformWorkspaceKind } from '@agent-workflow/shared'
 
 /** RFC-308 temporary composition seam until RFC-294 W5 owns durable WorkspaceRef. */
@@ -96,4 +97,17 @@ export function bindChangeCandidateParticipant(): {
   derive: typeof deriveChangeCandidate
 } {
   return { derive: deriveChangeCandidate }
+}
+
+/**
+ * RFC-310 PR-5 T59：candidate 发布链的 source-control 半（stage 重放 + durable
+ * commit + exact-head CAS push）。结构同形注入 development-automation（同
+ * changeCandidate 先例）；Mission 侧永不直接调 Git。
+ */
+export function bindCandidateDeliveryParticipant(): {
+  stage: typeof stageCandidateTree
+  commit: typeof commitCandidate
+  push: typeof pushCandidate
+} {
+  return { stage: stageCandidateTree, commit: commitCandidate, push: pushCandidate }
 }

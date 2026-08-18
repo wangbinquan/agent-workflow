@@ -24871,3 +24871,43 @@ button.status-chip {
   font-size: 10px;
   fill: var(--muted);
 }
+
+/* RFC-310 T61 — mission pages (namespace: .mission-*) */
+.mission-kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+.mission-kv dt {
+  color: var(--muted);
+}
+.mission-kv dd {
+  margin: 0;
+}
+.mission-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.mission-upload-row__name {
+  flex: 0 0 auto;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.mission-upload-row > :last-child {
+  flex: 1;
+}
+.mission-readiness,
+.mission-file-preview {
+  max-height: 320px;
+  overflow: auto;
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+}

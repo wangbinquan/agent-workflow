@@ -119,6 +119,7 @@ export interface RequirementMaterializePort {
   >
   /** PR-4：attempt 编排读 requirement index（coverage 闭集）——同步读侧。 */
   getRequirementManifest(missionId: string): {
+    readonly title: string
     readonly files: readonly { readonly fileId: string }[]
   } | null
   /** PR-4：Agent needs-information 的问题集入台账（origin 'agent'）。 */
@@ -221,7 +222,17 @@ export interface ChangeCandidatePort {
   }): Promise<
     | {
         readonly ok: true
-        readonly receipt: { readonly candidateRef: string; readonly treeOid: string }
+        readonly receipt: {
+          readonly candidateRef: string
+          readonly treeOid: string
+          readonly uploadLineage: {
+            readonly planDigest: string
+            readonly finalDigests: readonly {
+              readonly targetPath: string
+              readonly sha256: string
+            }[]
+          } | null
+        }
       }
     | { readonly ok: false; readonly code: string; readonly detail: string }
   >
@@ -269,6 +280,132 @@ export interface WorkspaceValidationPort {
       }
 }
 
+/** PR-5 —— repo remote 定位（push 目标与默认 target 分支；URL 解封在装配点）。 */
+export interface RepoRemotePort {
+  resolve(repositoryId: string): {
+    readonly remoteUrl: string
+    readonly defaultBranch: string | null
+  } | null
+}
+
+/** PR-5 T59 —— source-control 发布链（stage/commit/push 结构同形注入）。 */
+export interface CandidateDeliveryPort {
+  stage(input: {
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly overlayRoot: string
+    readonly uploadPlan?: {
+      readonly entries: readonly {
+        readonly targetPath: string
+        readonly disposition: 'create' | 'replace' | 'already-present'
+      }[]
+    } | null
+  }): Promise<
+    | { readonly ok: true; readonly ws: string; readonly treeOid: string; cleanup(): void }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+  commit(input: {
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly overlayRoot: string
+    readonly expectedTreeOid: string
+    readonly missionId: string
+    readonly summarySource: string
+    readonly uploadPlan?: {
+      readonly entries: readonly {
+        readonly targetPath: string
+        readonly disposition: 'create' | 'replace' | 'already-present'
+      }[]
+    } | null
+  }): Promise<
+    | {
+        readonly ok: true
+        readonly commitSha: string
+        readonly localRef: string
+        readonly reused: boolean
+      }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+  push(input: {
+    readonly baselineRepoPath: string
+    readonly commitSha: string
+    readonly remoteUrl: string
+    readonly branch: string
+    readonly expectedRemoteSha: string | null
+    readonly expectedTreeOid: string
+    readonly baselineSha: string
+  }): Promise<
+    | {
+        readonly ok: true
+        readonly receipt: {
+          readonly remoteRef: string
+          readonly oldSha: string | null
+          readonly newSha: string
+          readonly reused: boolean
+        }
+      }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+}
+
+/** PR-5 T57 —— verification profile 内容读侧 + 程序执行（runner 结构同形）。 */
+export interface VerificationProfileContentPort {
+  content(id: string, revision: number): unknown | null
+}
+export interface VerificationExecutionPort {
+  run(input: { readonly workspacePath: string; readonly profile: unknown }): Promise<{
+    readonly ok: boolean
+    readonly receiptDigest: string
+    readonly steps: readonly {
+      readonly stepId: string
+      readonly ok: boolean
+      readonly exitCode: number | null
+      readonly timedOut: boolean
+      readonly outputTailRef: string | null
+    }[]
+  }>
+}
+
+/** PR-5 T59 —— upload plan 的 publication receipt 落账（push 即 published）。 */
+export interface UploadPublicationPort {
+  record(input: {
+    readonly planId: string
+    readonly baselineSnapshotRef: string
+    readonly seedChangeRef: string | null
+    readonly seedTreeDigest: string | null
+    readonly commitSha: string
+    readonly entries: readonly { readonly targetPath: string; readonly sha256: string }[]
+    readonly now: number
+  }): { readonly created: boolean; readonly receiptId: string }
+}
+
+/** PR-5 T60 —— code-host MR effects（integration 组装的结构同形）。 */
+export interface MrEffectsPort {
+  ensure(
+    repositoryId: string,
+    input: {
+      readonly missionId: string
+      readonly sourceBranch: string
+      readonly targetBranch: string
+      readonly title: string
+      readonly description?: string
+    },
+  ): Promise<
+    | {
+        readonly ok: true
+        readonly mr: {
+          readonly mrRef: string
+          readonly webUrl: string | null
+          readonly state: 'opened' | 'merged' | 'closed'
+          readonly sourceSha: string | null
+          readonly created: boolean
+          readonly providerCorrelationRef: string
+        }
+      }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+}
+
 export interface ReconcilerPorts {
   readonly repositoryFacts?: RepositoryFactsCollectorPort
   readonly mergeRequestFacts?: MergeRequestFactsCollectorPort
@@ -283,4 +420,10 @@ export interface ReconcilerPorts {
   readonly attemptContext?: AttemptContextStorePort
   readonly actionTemplates?: ActionTemplateContentPort
   readonly workspaceValidation?: WorkspaceValidationPort
+  readonly repoRemote?: RepoRemotePort
+  readonly candidateDelivery?: CandidateDeliveryPort
+  readonly verificationProfiles?: VerificationProfileContentPort
+  readonly verificationExecution?: VerificationExecutionPort
+  readonly mrEffects?: MrEffectsPort
+  readonly uploadPublication?: UploadPublicationPort
 }

@@ -127,7 +127,16 @@ export const FACT_CATALOG: readonly FactLeafSpec[] = [
     phases: POST_ADMISSION,
   }),
   leaf('action.lastOutcome', 'action', 'enum', {
-    vocabulary: ['none', 'changed', 'no-change', 'needs-information', 'blocked', 'failed'],
+    // PR-5 T54：'completed' = read-only 能力（analyze/review）的完成 outcome。
+    vocabulary: [
+      'none',
+      'changed',
+      'no-change',
+      'needs-information',
+      'blocked',
+      'failed',
+      'completed',
+    ],
     phases: POST_ADMISSION,
   }),
   leaf('action.lastFailureCategory', 'action', 'enum', {

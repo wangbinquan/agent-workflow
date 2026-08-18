@@ -64,7 +64,7 @@ export const ADAPTER_CLI = Bun.resolveSync(
 export interface Pr3PolicyRule {
   readonly ruleId: string
   readonly when: readonly unknown[]
-  readonly capabilityId: 'change.implement'
+  readonly capabilityId: 'change.implement' | 'requirement.analyze'
 }
 
 /** 默认规则：requirement.bundleComplete → 才轮到 repository.languages → 动作。 */
@@ -83,6 +83,10 @@ export interface Pr3FixtureOptions {
   readonly rules?: readonly Pr3PolicyRule[]
   /** journey/HTTP 测试：在已有 db（createApp harness 同一实例）上铺配置。 */
   readonly db?: DbClient
+  /** PR-5 T54：员工加 requirement.analyze 只读路由（含专用模板）。 */
+  readonly analyzeRoute?: boolean
+  /** PR-5 T55a：policy 的 no-change 收束模式（默认 program-proof）。 */
+  readonly noChangeConfirmation?: 'program-proof' | 'human-confirmation'
   /** 外部源：发布真实 adapter（CLI 子进程）并挂到员工 requirementSources。 */
   readonly external?: {
     readonly mockUrl: string
@@ -169,9 +173,48 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
   )
   publishActionTemplate({ store: templates, now }, { id: template.id, actorUserId: 'admin' })
 
+  let analyzeTemplateId: string | null = null
+  if (options.analyzeRoute === true) {
+    const analyzeTemplate = createActionTemplate(
+      { store: templates, now },
+      {
+        actorUserId: 'admin',
+        name: 'analyze-generic',
+        capabilityId: 'requirement.analyze',
+        draft: {
+          schemaVersion: 1,
+          capabilityId: 'requirement.analyze',
+          capabilityContractVersion: 1,
+          labels: [],
+          compatibility: [],
+          executor: { kind: 'agent', agentRef: 'agent-1@1' },
+          runtimeProfileRef: 'rt',
+          promptSupplement: 'analyze only',
+          skillRefs: [],
+          mcpRefs: [],
+          readOnlyResourceRefs: [],
+          contextProfileRef: null,
+          writablePathPolicyRef: null,
+          additionalProtectedPathClasses: [],
+          verificationProfileRef: 'vp',
+          retryDefaults: { sameSession: 2, freshSession: 1 },
+        },
+      },
+    )
+    publishActionTemplate(
+      { store: templates, now },
+      { id: analyzeTemplate.id, actorUserId: 'admin' },
+    )
+    analyzeTemplateId = analyzeTemplate.id
+  }
+
   const policyContent = defaultAutomationPolicyContent()
   const customPolicy = {
     ...policyContent,
+    requirement: {
+      ...policyContent.requirement,
+      noChangeConfirmation: options.noChangeConfirmation ?? 'program-proof',
+    },
     actionPriority: { rules: [...(options.rules ?? DEFAULT_PR3_RULES)] },
   }
   const policy = await createAutomationPolicy(db, {
@@ -245,6 +288,15 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
           ],
           fallbackTemplateRef: null,
         },
+        ...(analyzeTemplateId === null
+          ? []
+          : [
+              {
+                capabilityId: 'requirement.analyze',
+                rules: [],
+                fallbackTemplateRef: { id: analyzeTemplateId, revision: 1 },
+              },
+            ]),
       ],
       requirementSources:
         adapterId === null
@@ -353,4 +405,6 @@ export const PR3_JAVA_CELLS = {
   'repository.languages': { state: 'known', value: ['java'], sourceRevision: 'probe-1' },
   'repository.buildSystems': { state: 'known', value: ['maven'], sourceRevision: 'probe-1' },
   'repository.moduleIds': { state: 'known', value: ['app'], sourceRevision: 'probe-1' },
+  // PR-5 T54：默认 analyze 规则读它（真 collector 恒产出该 leaf）。
+  'repository.defaultBranchKnown': { state: 'known', value: true, sourceRevision: 'probe-1' },
 } as const

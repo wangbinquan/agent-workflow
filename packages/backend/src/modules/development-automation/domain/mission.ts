@@ -127,6 +127,7 @@ export type MissionCommandKind =
   | 'attach-merge-request'
   | 'retry-blocked'
   | 'configuration-upgrade'
+  | 'confirm-no-change'
 
 export interface CommandAdmissibilityInput {
   readonly command: MissionCommandKind
@@ -151,6 +152,14 @@ export function checkCommandAdmissible(input: CommandAdmissibilityInput): Comman
         ? { ok: true }
         : { ok: false, code: 'not-awaiting-information' }
     case 'submit-answers':
+      return input.status === 'awaiting-information'
+        ? { ok: true }
+        : { ok: false, code: 'not-awaiting-information' }
+    case 'confirm-no-change':
+      // PR-5 T55a：no-change human gate 的确认——只在 awaiting-information、
+      // active、无 fence 时可用；gate 是否真的挂起由命令层对 cells 复核。
+      if (input.fence !== 'none') return { ok: false, code: 'transition-fence-pending' }
+      if (input.automationMode !== 'active') return { ok: false, code: 'tracking-only' }
       return input.status === 'awaiting-information'
         ? { ok: true }
         : { ok: false, code: 'not-awaiting-information' }

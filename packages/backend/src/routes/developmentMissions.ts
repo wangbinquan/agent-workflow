@@ -27,7 +27,6 @@ import {
   selectMissionRequirementSource,
   type LaunchDeps,
 } from '@/modules/development-automation/application/commands/launchMission'
-import { submitMissionAnswers } from '@/modules/development-automation/application/commands/submitMissionAnswers'
 import { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
 import { createRepositoryBaselineResolver } from '@/modules/development-automation/infrastructure/gitBaselineReader'
 import { createSqliteAdmissionLookup } from '@/modules/development-automation/infrastructure/sqliteAdmissionLookup'
@@ -37,15 +36,20 @@ import { insertUploadPlan } from '@/modules/development-automation/infrastructur
 import {
   getDecisionTrace,
   getMissionDetail,
+  listMissionEffects,
   listMissionSummaries,
 } from '@/modules/development-automation/infrastructure/missionReadModels'
 import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
 import type { OperationFailureReceipt } from '@/modules/development-automation/domain/operationFailure'
 import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
-import { bindChangeCandidateParticipant } from '@/modules/source-control/composition'
+import {
+  bindCandidateDeliveryParticipant,
+  bindChangeCandidateParticipant,
+} from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { buildDevelopmentDeliveryDeps } from '@/services/developmentDeliveryDeps'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { ulid } from 'ulid'
 import type { AppDeps } from '@/server'
@@ -76,6 +80,8 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     appHome: Paths.root,
     requirementSource: composeRequirementSourceRunner(deps.db),
     changeCandidate: bindChangeCandidateParticipant(),
+    candidateDelivery: bindCandidateDeliveryParticipant(),
+    ...buildDevelopmentDeliveryDeps(deps.db, deps.secretBox),
     // PR-4：路由实例与 daemon 实例注入同一形状的 runner（同 db 下语义等价；
     // SYSTEM_USER_ID——数字员工任务是 mission 自动化产物，不是 HTTP actor 的
     // 个人任务）。终态回调落 wake hint（deliveryKey 幂等），30s sweep 收取。
@@ -224,9 +230,47 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Read one development mission (sources, readiness, block detail)',
     },
     async (c) => {
-      const detail = getMissionDetail(deps.db, c.req.param('id'))
+      const missionId = c.req.param('id')
+      const detail = getMissionDetail(deps.db, missionId)
       if (detail === null) throw new NotFoundError('mission-not-found', 'mission not found')
-      return c.json(detail)
+      // T61 —— UI 需要但不进 summary 的三块投影：待答问题集（cells 的
+      // pending ref → 台账原文）、action 结果（outcome/candidateRef 白名单
+      // cells）、effect 台账。nonce/host path/raw 正文照旧不出（§12.4）。
+      const mission = missionStore.getMission(missionId)
+      const cells =
+        mission?.requirementBundleRef == null
+          ? null
+          : snapshots.getCells(mission.requirementBundleRef)
+      const knownString = (id: string): string | null => {
+        const cell = cells?.[id]
+        return cell !== undefined && cell.state === 'known' && typeof cell.value === 'string'
+          ? cell.value
+          : null
+      }
+      const pendingQuestionSetRef = knownString('__requirement.pendingQuestionSetRef')
+      const questions =
+        pendingQuestionSetRef === null
+          ? null
+          : automation.materializer.loadQuestionSet(pendingQuestionSetRef)
+      return c.json({
+        ...detail,
+        questions:
+          questions === null || pendingQuestionSetRef === null
+            ? null
+            : {
+                questionSetRef: pendingQuestionSetRef,
+                origin: questions.origin,
+                channel: questions.channel,
+                items: questions.questions,
+              },
+        action: {
+          lastOutcome: knownString('action.lastOutcome'),
+          lastCapability: knownString('action.lastCapability'),
+          candidateRef: knownString('__action.candidateRef'),
+          clarificationState: knownString('requirement.clarificationState'),
+        },
+        effects: listMissionEffects(deps.db, missionId),
+      })
     },
   )
 
@@ -360,15 +404,27 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const missionId = c.req.param('id')
       const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await submitMissionAnswers(
-        {
-          store: launchDeps.store,
-          snapshots,
-          requirement: automation.materializer,
-          now: launchDeps.now,
-        },
-        { ...body, missionId },
-      )
+      const result = await automation.submitAnswers({ ...body, missionId })
+      fireReconcile(missionId)
+      return c.json({ missionId, ...result })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/missions/:id/confirm-no-change',
+      permissions: ['development-missions:interact'],
+      tokenAccess: 'allow',
+      summary: 'Confirm the pending no-change gate (the only path into completed-no-change)',
+    },
+    async (c) => {
+      const missionId = c.req.param('id')
+      const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
+      const result = await automation.confirmNoChange({ ...body, missionId })
+      // 归属只进 route 层审计日志，不进 receipt cells（rfc099 prompt 隔离纪律）。
+      log.info('mission no-change confirmed', { missionId, userId: actorOf(c).user.id })
       fireReconcile(missionId)
       return c.json({ missionId, ...result })
     },

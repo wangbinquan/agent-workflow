@@ -199,7 +199,15 @@ function CodePage() {
 
   return (
     <div className="page">
-      <PageHeader title={t('code.title')} meta={t('code.subtitle')} />
+      <PageHeader
+        title={t('code.title')}
+        meta={t('code.subtitle')}
+        actions={
+          <Link to="/code/missions" className="btn btn--sm" data-testid="code-missions-link">
+            {t('code.missions.title')}
+          </Link>
+        }
+      />
       <TabBar<CodeTab>
         tabs={[
           { key: 'matrix', label: t('code.tab.matrix') },

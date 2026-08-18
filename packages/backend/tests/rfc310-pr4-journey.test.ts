@@ -210,11 +210,15 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
     const attempt = fx.store.listAttempts(actionRunId)[0]!
     expect(attempt.status).toBe('validated')
     expect(attempt.outcomeRef).toMatch(/^[0-9a-f]{64}$/)
+    // PR-5 起 changed 不再打 stage block：candidateState='derived' 落 cells，
+    // mission 保持 working，发布链（missionDeliveryChain）下轮接管。
     const mission = fx.store.getMission(missionId)!
-    expect(mission.status).toBe('blocked')
-    expect(mission.blockCode).toBe('action-stage-complete:changed')
+    expect(mission.status).toBe('working')
     const cells = fx.snapshots.getCells(mission.requirementBundleRef!)!
     expect(cells['__action.candidateRef']).toMatchObject({ state: 'known' })
+    expect(cells['__action.candidateState']).toMatchObject({ state: 'known', value: 'derived' })
+    expect(cells['__action.candidateTreeOid']).toMatchObject({ state: 'known' })
+    expect(cells['__action.runId']).toMatchObject({ state: 'known', value: actionRunId })
   })
 
   test('attack + rollback: .git/evidence writes are detected, attempt discarded, fresh workspace byte-identical', async () => {

@@ -301,6 +301,49 @@ export function extractErrorBody(
  * default. The browser fills in the boundary header automatically when we
  * leave Content-Type unset; manually setting it would strip the boundary.
  */
+/**
+ * RFC-310 T61 —— raw 字节 POST（mission 输入上传端点收未包封的 body +
+ * `x-upload-name` 头；multipart 会把整个信封当文件内容存坏）。预算按真实
+ * 字节数取，形制与 apiPostMultipart 一致。
+ */
+export async function apiPostBytes<T>(
+  path: string,
+  bytes: ArrayBuffer,
+  extraHeaders: Record<string, string>,
+  opts?: { signal?: AbortSignal; deadlineMs?: number },
+): Promise<T> {
+  const token = getToken()
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'content-type': 'application/octet-stream',
+    ...extraHeaders,
+  }
+  if (token !== null) headers.Authorization = `Bearer ${token}`
+  const { signal, deadline } = withDeadline(
+    opts?.signal,
+    opts?.deadlineMs ?? payloadDeadlineMs(bytes.byteLength),
+  )
+  const res = await fetchOrNetworkError(buildUrl(path), {
+    method: 'POST',
+    headers,
+    body: bytes,
+    signal,
+  })
+  if (res.status === 401) clearToken()
+  const isJson = res.headers.get('content-type')?.includes('application/json') ?? false
+  const payload: unknown = isJson
+    ? await readWithDeadline(res, deadline, () => res.json()).catch((err: unknown) => {
+        if (err instanceof ApiError) throw err
+        return null
+      })
+    : null
+  if (!res.ok) {
+    const err = extractErrorBody(payload, res)
+    throw new ApiError(res.status, err.code, err.message, err.details)
+  }
+  return payload as T
+}
+
 export async function apiPostMultipart<T>(
   path: string,
   body: FormData,
@@ -396,6 +439,7 @@ export const api = {
   post: <T>(path: string, body?: unknown, signal?: AbortSignal) =>
     apiRequest<T>(path, { method: 'POST', body, signal }),
   postMultipart: apiPostMultipart,
+  postBytes: apiPostBytes,
   getBlob: apiGetBlob,
   put: <T>(path: string, body?: unknown, signal?: AbortSignal) =>
     apiRequest<T>(path, { method: 'PUT', body, signal }),

@@ -149,6 +149,12 @@ export interface MissionStore {
     readonly now: number
   }): { readonly ok: true } | { readonly ok: false; readonly code: 'mr-owned-by-another-mission' }
   releaseMr(claimId: string, now: number): void
+  /** claim 撞唯一后的消歧读面：该 (endpoint,project,iid) 现归谁。 */
+  findMrClaim(input: {
+    readonly codeHostEndpointRef: string
+    readonly stableProjectRef: string
+    readonly mrIid: string
+  }): { readonly id: string; readonly missionId: string; readonly state: string } | null
 
   /** delivery_key 幂等：同键第二次记录返回 accepted=false。 */
   recordWakeHint(input: {

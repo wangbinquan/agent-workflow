@@ -199,6 +199,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/code/missions/:id/requirement-manifest' },
   { method: 'GET', path: '/api/code/missions/:id/requirement-files/:sha256' },
   { method: 'POST', path: '/api/code/missions/:id/answers' },
+  { method: 'POST', path: '/api/code/missions/:id/confirm-no-change' },
   { method: 'POST', path: '/api/code/missions/:id/source-refresh/preview' },
   { method: 'POST', path: '/api/code/missions/:id/source-refresh' },
   { method: 'GET', path: '/api/code/work-items' },

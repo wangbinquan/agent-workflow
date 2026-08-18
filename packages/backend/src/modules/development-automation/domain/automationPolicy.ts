@@ -305,6 +305,22 @@ export function defaultAutomationPolicyContent(): AutomationPolicyContent {
     employeeSelection: { rules: [] },
     actionPriority: {
       rules: [
+        // PR-5 T54：默认链先 analyze 后 implement（§8.2 首次实现链）。
+        // lastOutcome 'none' = 尚未跑过任何动作 ⇒ 先做只读分析；analyze 完成
+        // 写 lastOutcome='completed' + scopeDisposition，后续轮由下一条规则
+        // 按已验证 facts 路由 implement。
+        {
+          ruleId: 'default-analyze',
+          when: [
+            { kind: 'boolean-is', fact: 'requirement.bundleComplete', value: true },
+            // repository 谓词让 facts 缺席时先老实 COLLECT（§8.2 顺序：
+            // repository.inspect → analyze——module catalog 是 analyze 结论的
+            // 对拍闭集，必须先于分析就绪）。
+            { kind: 'boolean-is', fact: 'repository.defaultBranchKnown', value: true },
+            { kind: 'enum-equals', fact: 'action.lastOutcome', value: 'none' },
+          ],
+          capabilityId: 'requirement.analyze',
+        },
         {
           ruleId: 'default-implement',
           when: [

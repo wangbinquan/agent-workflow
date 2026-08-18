@@ -7,7 +7,12 @@
 import { desc, eq } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import { developmentDecisions, developmentMissions, developmentMissionSources } from '@/db/schema'
+import {
+  developmentDecisions,
+  developmentEffects,
+  developmentMissions,
+  developmentMissionSources,
+} from '@/db/schema'
 
 export interface MissionSummaryView {
   id: string
@@ -92,6 +97,25 @@ export function getMissionDetail(
     readiness: row.readinessJson === null ? null : (JSON.parse(row.readinessJson) as unknown),
     blockDetail: row.blockDetail,
   }
+}
+
+/** PR-5 T61 —— effect 台账投影（outbox 状态可见；intent digest 只作指纹）。 */
+export function listMissionEffects(db: DbClient, missionId: string): unknown[] {
+  return db
+    .select()
+    .from(developmentEffects)
+    .where(eq(developmentEffects.missionId, missionId))
+    .orderBy(desc(developmentEffects.createdAt))
+    .all()
+    .map((e) => ({
+      id: e.id,
+      effectKind: e.effectKind,
+      state: e.state,
+      intentDigest: e.intentDigest,
+      epoch: e.epoch,
+      createdAt: e.createdAt,
+      settledAt: e.settledAt,
+    }))
 }
 
 export function getDecisionTrace(db: DbClient, missionId: string): unknown[] {

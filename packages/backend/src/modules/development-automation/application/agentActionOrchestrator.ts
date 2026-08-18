@@ -40,6 +40,7 @@ import {
   type AgentInputManifestV1,
 } from '../domain/agentInputManifest'
 import { capabilityDefinition, type CapabilityId } from '../domain/capabilityDefinition'
+import { projectAnalysisCells } from '../domain/requirementAnalysis'
 import type { FactCell } from '../domain/factCell'
 import type { FactCellValue } from '../domain/facts'
 import { assembleAgentPrompt } from '../engine/prompt/assembleAgentPrompt'
@@ -84,7 +85,13 @@ interface AttemptPreState {
   readonly untrustedIndex: readonly { readonly label: string; readonly text: string }[]
   readonly taskBrief: string
   readonly factsSummary: readonly { readonly factId: string; readonly value: string }[]
-  readonly closedRefs: { readonly requirementItemRefs: readonly string[] }
+  readonly closedRefs: {
+    readonly requirementItemRefs: readonly string[]
+    /** PR-5 T54：repository module catalog（analyze affectedModuleRefs 闭集）。 */
+    readonly repositoryModuleIds?: readonly string[]
+    /** PR-5 T58：review 对拍锚（launch 冻结）。 */
+    readonly candidateRef?: string
+  }
 }
 
 function requiredPortsMissing(deps: ReconcileDeps): string | null {
@@ -127,6 +134,8 @@ export interface LaunchAgentAttemptInput {
   /** prompt 的公开 facts 摘要（arm 侧 publicFactsSummary(snapshot.cells)；
    *  fresh rerun 用 pre-state 冻结的同一份——同输入合同）。 */
   readonly factsSummary: readonly { readonly factId: string; readonly value: string }[]
+  /** T58 review 的对拍锚：launch 时冻结的当前 candidateRef（cells 投影）。 */
+  readonly candidateRef?: string
   /** fresh rerun 的同输入合同：manifest.missionRevision 冻结在 action 创建时
    *  （mission.revision 随结算前进，不冻结会让 rerun 的 inputDigest 漂移）。 */
   readonly missionRevisionPin?: number
@@ -296,6 +305,19 @@ export async function launchAgentAttempt(
   const requirementItemRefs =
     ports.requirementMaterialize?.getRequirementManifest(mission.id)?.files.map((f) => f.fileId) ??
     []
+  // analyze 的 module catalog 闭集：launch 时从 facts 摘要冻结（repository.moduleIds
+  // 是 known string-set 时其 value 已在 factsSummary 序列化——直接从入参 cells 冻结
+  // 更准确，但 arm 只传 factsSummary；此处从 JSON 摘要还原，投影失败取空集）。
+  const repositoryModuleIds = ((): readonly string[] => {
+    const row = input.factsSummary.find((f) => f.factId === 'repository.moduleIds')
+    if (row === undefined) return []
+    try {
+      const parsed = JSON.parse(row.value) as unknown
+      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
+    } catch {
+      return []
+    }
+  })()
 
   const source = sources[0]
   const untrustedIndex: { label: string; text: string }[] = []
@@ -354,7 +376,11 @@ export async function launchAgentAttempt(
     untrustedIndex,
     taskBrief,
     factsSummary,
-    closedRefs: { requirementItemRefs },
+    closedRefs: {
+      requirementItemRefs,
+      repositoryModuleIds,
+      ...(input.candidateRef === undefined ? {} : { candidateRef: input.candidateRef }),
+    },
   }
   const preSnapshotRef = await ports.attemptContext!.save(JSON.stringify(preState))
 
@@ -411,6 +437,7 @@ export type CollectAgentAttemptOutcome =
       readonly disposition:
         | 'validated-changed'
         | 'validated-no-change'
+        | 'analysis-completed'
         | 'needs-information'
         | 'agent-blocked'
     }
@@ -665,7 +692,13 @@ export async function collectAgentAttempt(
   const semantic = runCapabilitySemanticValidator({
     manifest: manifest.data,
     envelope,
-    closedRefs: { requirementItemRefs: preState.closedRefs.requirementItemRefs },
+    closedRefs: {
+      requirementItemRefs: preState.closedRefs.requirementItemRefs,
+      repositoryModuleIds: preState.closedRefs.repositoryModuleIds,
+      ...(preState.closedRefs.candidateRef === undefined
+        ? {}
+        : { candidateRef: preState.closedRefs.candidateRef }),
+    },
   })
   if (!semantic.ok) {
     return await failAttempt('protocol', semantic.rejection, semantic.rejection.code)
@@ -675,7 +708,8 @@ export async function collectAgentAttempt(
   const validated = ports.workspaceValidation.validate({
     workspacePath: preState.workspacePath,
     preStateJson: preState.preStateJson,
-    outcome: envelope.outcome,
+    // completed（read-only 完成）对现场的要求与 no-change 相同：必须 clean。
+    outcome: envelope.outcome === 'completed' ? 'no-change' : envelope.outcome,
     workspaceMode: capabilityDefinition(preState.capabilityId as CapabilityId).workspaceMode,
     writablePrefixes: [],
     preservePaths: preState.preservePaths,
@@ -699,6 +733,10 @@ export async function collectAgentAttempt(
 
   // 步骤 8：changed ⇒ 派生 immutable ChangeCandidate（独立 diff）。
   let candidateRef: string | null = null
+  let candidateTreeOid: string | null = null
+  let candidateUploadLineage: {
+    readonly finalDigests: readonly { readonly targetPath: string; readonly sha256: string }[]
+  } | null = null
   if (envelope.outcome === 'changed') {
     const derived = await ports.changeCandidate!.derive({
       baselineRepoPath: preState.baselineRepoPath,
@@ -722,6 +760,8 @@ export async function collectAgentAttempt(
       )
     }
     candidateRef = derived.receipt.candidateRef
+    candidateTreeOid = derived.receipt.treeOid
+    candidateUploadLineage = derived.receipt.uploadLineage
   }
 
   // 结算：attempt validated + run validated + cells + 清 currentActionRunId。
@@ -748,19 +788,39 @@ export async function collectAgentAttempt(
   persistActionCells(deps, mission, {
     'action.lastOutcome': known(envelope.outcome),
     'action.lastCapability': known(preState.capabilityId),
+    '__action.runId': known(actionRunId),
     ...(candidateRef === null ? {} : { '__action.candidateRef': known(candidateRef) }),
+    // PR-5 发布链（missionDeliveryChain）的接管信号与 stage 重放对拍锚：
+    // candidateState='derived' + treeOid 由 redispatchDelivery 读取。
+    ...(candidateRef === null || candidateTreeOid === null
+      ? {}
+      : {
+          '__action.candidateState': known('derived'),
+          '__action.candidateTreeOid': known(candidateTreeOid),
+        }),
+    // push 后记 upload publication receipt 的 lineage（finalDigests）在此冻结。
+    ...(candidateUploadLineage === null
+      ? {}
+      : { '__delivery.uploadLineage': known(JSON.stringify(candidateUploadLineage)) }),
+    // PR-5 T54：analyze 完成 → 经 validator 的认知结论投影为 agent-validated
+    // facts（affectedModuleIds/scopeDisposition），驱动后续 implement 路由。
+    ...(envelope.outcome === 'completed' ? projectAnalysisCells(envelope, attempt.id) : {}),
   })
 
   const disposition =
     envelope.outcome === 'changed'
       ? ('validated-changed' as const)
-      : envelope.outcome === 'no-change'
-        ? ('validated-no-change' as const)
-        : envelope.outcome === 'needs-information'
-          ? ('needs-information' as const)
-          : ('agent-blocked' as const)
+      : envelope.outcome === 'completed'
+        ? ('analysis-completed' as const)
+        : envelope.outcome === 'no-change'
+          ? ('validated-no-change' as const)
+          : envelope.outcome === 'needs-information'
+            ? ('needs-information' as const)
+            : ('agent-blocked' as const)
 
   if (envelope.outcome === 'blocked') {
+    // completed（read-only 分析）不 block：scopeDisposition facts 已就位，
+    // 下轮规则立即据此路由 implement / no-change gate。
     blockMissionDirect(
       deps,
       mission.id,
@@ -784,11 +844,14 @@ export async function collectAgentAttempt(
     if (stashed === undefined || !stashed.ok) {
       blockMissionDirect(deps, mission.id, 'agent-questions-stash-failed', null)
     }
-  } else {
-    // validated（changed/no-change）：下一阶段（verification/candidate 发布链）
-    // 属 PR-5/PR-6——不静默重复选同一动作，以 typed block 停住（「开单 ≠
-    // 在跑」同款诚实边界；candidateRef 已在 cells/attempt 台账可查）。
-    blockMissionDirect(deps, mission.id, `action-stage-complete:${envelope.outcome}`, candidateRef)
+  } else if (envelope.outcome === 'no-change') {
+    // validated no-change（write 能力跑完零业务改动）：收束判定属 no-change
+    // gate/后续批次——不静默重复选同一动作，以 typed block 停住（「开单 ≠
+    // 在跑」同款诚实边界）。changed 不再 block：candidateState='derived' 已
+    // 落 cells，下轮 reconcile 由发布链（missionDeliveryChain redispatch）
+    // 接管 verification → commit/publish → MR。completed（read-only 分析）
+    // 也不 block：scopeDisposition facts 就位后规则立即续路由。
+    blockMissionDirect(deps, mission.id, 'action-stage-complete:no-change', candidateRef)
   }
 
   return { kind: 'action-collected', actionRunId, disposition }

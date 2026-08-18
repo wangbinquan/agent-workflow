@@ -201,6 +201,9 @@ const OVERLAY_CALLSITES = {
   // RFC-309 — two dialogs, not three: the framework and binding creators
   // merged with the resources they create.
   'routes/code.tsx': { family: 'resource-management', count: 2 },
+  // RFC-310 — mission launch dialog（三输入形态）与 requirement 文件预览。
+  'routes/code.missions.tsx': { family: 'task-execution', count: 1 },
+  'routes/code.missions.$id.tsx': { family: 'task-execution', count: 1 },
   // RFC-307 — the stage drawer. An overlay rather than an inline panel because
   // it is a focused edit on ONE step of a sequence the user is looking at: the
   // flow behind it is the context, and pushing it out of view to make room

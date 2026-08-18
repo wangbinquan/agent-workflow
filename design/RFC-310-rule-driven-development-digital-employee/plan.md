@@ -189,20 +189,54 @@ MR → watching。此批不含自建 pipeline repair 和完整 feedback 自动�
 
 | 编号 | 任务                                                                                                | 依赖         | 状态 |
 | ---- | --------------------------------------------------------------------------------------------------- | ------------ | ---- |
-| T53  | repository facts refresh/失效 + module catalog/contributor-instruction context projection           | T24a,T26     | ⏳   |
-| T54  | `requirement.analyze` + coverage/affectedModuleRefs；polyglot 两阶段路由无循环                      | T45-T47,T53  | ⏳   |
-| T55  | platform/requirement-source answers 回流，answer revision 与 action invalidation                    | T24,T38a,T54 | ⏳   |
-| T55a | no-change verification/human confirmation receipt + `completed-no-change`                           | T29,T54      | ⏳   |
-| T56  | `change.implement` Java/route-selected path；文件-only direct 与 seed+Agent candidate               | T48,T53-T55a | ⏳   |
-| T57  | `verification.run` program profile、evidence receipt、`verification.repair` loop/budget             | T56          | ⏳   |
-| T58  | `change.review` immutable candidate snapshot + findings/coverage validator                          | T56,T57      | ⏳   |
-| T59  | DeliveryPolicy：branch/human push、upload precondition、seed 吸收 receipt + exact-head CAS publish  | T48,T57,T58  | ⏳   |
-| T60  | mr.ensure new/adopt/attach、terminal observe、source pushability、idempotent effect/claim           | T28,T59      | ⏳   |
-| T61  | minimal Mission UI：正文/上传目标/外部 ID launch、source/answers、upload/candidate/effect/readiness | T31,T40,T60  | ⏳   |
-| T62  | Java E2E：direct 与 provider 输入 → seed/real Agent → real Git remote → code-host mock MR           | T53-T61      | ⏳   |
+| T53  | repository facts refresh/失效 + module catalog/contributor-instruction context projection           | T24a,T26     | ✅   |
+| T54  | `requirement.analyze` + coverage/affectedModuleRefs；polyglot 两阶段路由无循环                      | T45-T47,T53  | ✅   |
+| T55  | platform/requirement-source answers 回流，answer revision 与 action invalidation                    | T24,T38a,T54 | ✅   |
+| T55a | no-change verification/human confirmation receipt + `completed-no-change`                           | T29,T54      | ✅   |
+| T56  | `change.implement` Java/route-selected path；文件-only direct 与 seed+Agent candidate               | T48,T53-T55a | ✅   |
+| T57  | `verification.run` program profile、evidence receipt、`verification.repair` loop/budget             | T56          | ✅   |
+| T58  | `change.review` immutable candidate snapshot + findings/coverage validator                          | T56,T57      | ✅   |
+| T59  | DeliveryPolicy：branch/human push、upload precondition、seed 吸收 receipt + exact-head CAS publish  | T48,T57,T58  | ✅   |
+| T60  | mr.ensure new/adopt/attach、terminal observe、source pushability、idempotent effect/claim           | T28,T59      | ✅   |
+| T61  | minimal Mission UI：正文/上传目标/外部 ID launch、source/answers、upload/candidate/effect/readiness | T31,T40,T60  | ✅   |
+| T62  | Java E2E：direct 与 provider 输入 → seed/real Agent → real Git remote → code-host mock MR           | T53-T61      | ✅   |
 
 PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 source-control participant，Agent runtime trace 中
 没有成功的 Git metadata mutation。
+
+### PR-5 交付注记（2026-08-18）
+
+- **发布链落位**：`application/missionDeliveryChain.ts`——`redispatchDelivery` 只接管「candidate derived +
+  规则无话可说（block）」静止态，进度 cells（`__delivery.*`）全部绑定 treeOid（repair/重跑换树自动重启链）；
+  commit/push/mr-ensure 三类外发副作用逐个走 effects 台账（prepare→dispatch→执行→confirm，intent 载荷不落表、
+  canonicalDigest 对拍 `intent_digest`，drift 即 fail+block），单轮一 effect；dispatched 悬挂行按 idempotencyKey
+  撞回重放（三执行体天然幂等），发布链 kinds 不进 effect-unsettled guard（`DELIVERY_EFFECT_KINDS` 过滤）。
+  push 永远普通 push + exact-head CAS（new-branch=expectedRemoteSha null；无任何 force 形态）。MR 建立
+  （claimMr，撞唯一经 `findMrClaim` 消歧自我重放）后链使命完成：block 改写为诚实 `wait(mr-care-not-wired)`
+  （MR care 属 PR-7），mission `publishing→watching`。
+- **T58 范围**：review 的 envelope/validator 契约完整（read-only completed union 成员、reviewedCandidateRef
+  必须命中 launch 冻结的当前 candidateRef、findingId 唯一、findings 是素材不是裁决）；**链驱动的自动 review
+  排程与 `verification.repair` 规则闭环同欠一个前置**——verification/review 结果尚未升为 catalog fact，规则
+  谓词读不到（`__delivery.*` 是内部 cells）。verification failed 现为 typed block
+  （`verification-failed:<profile>`）。fact 升级 + repair/review 排程记 PR-6。
+- **verification**：policy `verification.requiredProfileRefs` 逐个派发（treeOid 绑定进度表）；执行器
+  `infrastructure/verificationRunner.ts`（exit code ∈ successExitCodes 唯一判据、stdout/stderr 直连文件、
+  TERM→KILL、file-glob evidence 进内容寻址 blob）；profile 解析 `repo:<相对路径>` 形态（受管 scripts 资源表
+  随 PR-8）。
+- **upload publication receipt**：orchestrator 结算时把 candidate lineage 冻结进 `__delivery.uploadLineage`
+  cells，push 成功即 `recordUploadPublicationReceipt`（不 re-derive）。
+- **装配**：composition 内绑定 repositoryFacts/verificationProfiles/verificationExecution/uploadPublication；
+  candidateDelivery（source-control `bindCandidateDeliveryParticipant`）、repoRemote 与 mrEffects
+  （integration `composeDevelopmentMrEffects` + RFC-269 connections）由装配点注入
+  （`services/developmentDeliveryDeps.ts`，routes 与 cli 共用；repo 凭据 URL 解封只在装配点）。
+- **T62 E2E**（`rfc310-pr5-e2e-java.test.ts`）：除 Agent 进程外全真件（真 collector Java 启发式、真
+  workspace/validator、真 git candidate、真 verification 子进程、真 durable commit + CAS push、真 mrEnsure
+  打 system-mock GitLab API），mock 侧断言 MR/分支真实存在。git 面用 mock 服务端磁盘 bare 仓路径
+  （部分开发机拦「子进程→回环 HTTP」，见 dev-gotchas）。
+- **本批遗留（除既有 PR-5 债外）**：same-session continue 面、evidence-in-iso 三候选拍板、launch 端口
+  path-free 化——原 PR-5 注记项均未消化，顺延 PR-6/专项；`change.implement` 的 route-selected 多模板
+  路由已具备（L 交付 analyze route 先例），文件-only direct candidate 走 uploadPlan+seed 链已在 T48/T59
+  覆盖。
 
 ## 8. PR-6：PipelineEvidence 与自建门禁
 
