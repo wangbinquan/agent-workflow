@@ -94,7 +94,13 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
             'workflow',
             excludeBuiltinWorkflows(await listWorkflows(deps.db)),
           )
-        ).map((wf) => serializeWorkflowFor(wf, workflowReadLensFor(actorOf(c)))),
+        ).map((wf) => {
+          // RFC-311 (proposal C2): the list carried every workflow's FULL
+          // definition JSON — the transport bulk of this endpoint — while the
+          // list UI only renders a node count. Detail keeps the definition.
+          const { definition, ...rest } = serializeWorkflowFor(wf, workflowReadLensFor(actorOf(c)))
+          return { ...rest, nodeCount: definition.nodes.length }
+        }),
       ),
   )
 

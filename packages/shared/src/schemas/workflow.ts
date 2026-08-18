@@ -366,6 +366,13 @@ export const WorkflowSchema = z.object({
 })
 export type Workflow = z.infer<typeof WorkflowSchema>
 
+/**
+ * RFC-311（proposal C2）：`GET /api/workflows` 列表项——完整 `definition`
+ * 不再随列表下发（每个工作流整份画布 JSON × 全量列表曾是该端点的传输大头，
+ * 列表 UI 只消费节点数）。需要定义的场景一律走既有详情端点。
+ */
+export type WorkflowListItem = Omit<Workflow, 'definition'> & { nodeCount: number }
+
 // --- request payloads ---
 
 /** RFC-199: canonical 128-bit ULID used to correlate one submitted intent. */

@@ -81,3 +81,12 @@
 - [ ] 全部 oracle/EXPLAIN/参数上限回归绿;`bun run gate:local` 全绿;exact-SHA CI 36 作业绿
 - [ ] `docs/dev-gotchas.md` 补"同步 SQLite 连接上的查询预算"与"count 化/窄投影"定式
 - [ ] STATE.md / design/plan.md 收口更新
+
+## 交付注记(实现期滚动更新)
+
+- **PR-1 ✅**(`b8688851` + 格式/lint 补丁 `a606bcd3`/`2cbfdf7a`,CI 绿证 `2cbfdf7a` 31 checks):T1-T8 全交付。落地修正:`idx_node_runs_status_active` 因 SQLite partial-index 蕴含限制(`= ⊄ IN`,实测)改普通复合索引,判据进 dev-gotchas 与 foundation plan 断言。
+- **PR-2 ✅**(`60a84f2f`→rebase `e8ba3bc1`)+ **PR-2b ✅**(`7f1fd5fe`):T9-T16 主体。取舍:limits 的 token SUM 不降频(避免取消延迟的行为变化,投影后成本已可控);**T15 的 seal 闸门延后**(400 行凭据擦洗函数,改错代价>>收益;安全检查段本就须每次执行);invariants 七规则集合化延后(分块+让出已消坏死与长冻结)。
+- **PR-3a ✅**:T17 字节水位(采样折算,行数阈值取 min)+ T18 保留 sweeper。**两处审计误报经落地检验修正并以测试锁定**:`user_access_audit` 带 append-only 触发器(RFC-305 防篡改),不清理;`mcp_probes` 是 UNIQUE(mcp_id) 的 upsert 单行表,非流水。proposal §5 C6 按此勘误(其余四表照批生效)。
+- **PR-4 ✅**:T22-T24。**范围修正(oracle 实测驱动)**:fast path 仅服务 `tasks:read:all` + 全默认过滤——受限 actor 的分支聚合(含排序键)按可见性裁剪树计算,共享物化列无法回答其排序;受限 actor 默认视图 = O(自身可见集),旧管线即可。admin 默认视图(生产 2000 任务卡顿主场景)O(页)。维护点挂唯一铸行点(task.ts)同事务向上传播;invariants 自愈规则与真启动路径集成断言列遗留(oracle 已锁回填算法=快路径假设)。
+- **PR-5(进行中)**:已交付 useWsInvalidation leading+trailing 合并窗(1s)、workflows 列表投影瘦身(C2,`WorkflowListItem`)、reviews/clarify 列表轮询 10s→30s+focus。**待办**:@tanstack/react-virtual + VirtualList 原语、/tasks 虚拟化+tick 收敛、/repos 分页 API+虚拟表(C7)、usePagedList、perf-seed harness(T30)。
+- **遗留(不阻塞收口,记账)**:T19 任务归档(用户已拍板方向,体量大,列 PR-6);T20 维护入口;T21 prompt_text 外置;/code work-items nextCursor 修复(该文件在 RFC-310 前端批在制中,避让);sessionView 上限、getNodeRunStdout 截断;development retention_state sweeper 与 code rollup 表(归属 RFC-310/code-capability 域)。
