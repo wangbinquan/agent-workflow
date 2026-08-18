@@ -110,14 +110,6 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
   },
   {
     rule: 'no-circular',
-    from: `${B}/services/codeRoundLaunch.ts`,
-    to: `${B}/services/task.ts`,
-    why: 'RFC-304 第四种 execution kind 的启动服务，与 agentLaunch / workgroup·launch / fusion **同一环族**（codeRoundLaunch → task.ts → scheduler → executor → codeRoundLaunch）。这条边拆不掉：不调 startTask 它就不是启动服务。**能拆的两条已经拆了**——常量与快照合成抽进无依赖叶子 `services/codeRoundContract.ts`，让 execution/outcome.ts 与 execution/types.ts 只依赖叶子，不新增环。',
-    removeWhen:
-      'RFC-294 §16.2 / W2：A1 断后与同族三条一起消失——W2 收编的是四种 kind（已登记进 RFC-294 plan.md §6 的 W2 输入清单），本条不构成额外收口负担。',
-  },
-  {
-    rule: 'no-circular',
     from: `${B}/services/gc.ts`,
     to: `${B}/services/structuralDiff/callGraph/expandService.ts`,
     why: 'gc → expandService → task.ts → gc。gc 需要任务读模型判断工作区可否回收，task.ts 又需要 gc 的 workspace_pruning_at 复活门。',

@@ -565,6 +565,62 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 | AC-34 cancel reconcile/adopt pushability                | T24,T28,T59,T60,T81,T83                                      |
 | AC-35 上传计划/seed/candidate/fulfillment 完整性        | T21,T36,T36a,T37-T40,T42,T47,T48,T56,T59,T61,T62,T80,T81,T83 |
 
+## 13a. T112 交付出账（2026-08-18）
+
+### RFC-304/309 转出账
+
+| legacy 资产                                     | 去向                                                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 五能力 stage sequence 与执行器                  | **删除**（T104）。能力语义由 `development-automation` 的 capability catalog + ActionTemplate 承载 |
+| enable/bulk-enable 写面                         | **删除**（T105）。配置面由数字员工 assignment（`/code/assignments`）取代                          |
+| `POST /api/code/rounds`                         | **删除**。起跑入口是 `POST /api/code/missions`                                                    |
+| code-round webhook 触发                         | **退役**：历史 trigger 行 fire 落 `skipped-trigger-invalid`，新建被 typed 拒                      |
+| arbitrate/select/hook 决策脚本                  | **删除**且不迁移（migrationAnalyzer 一律 blocked，绝不 AI 翻译）——由 typed policy 取代            |
+| capability 模板资源                             | **保留**（CRUD 路由 + migrationAnalyzer 读它出报告）；退役是 PR-10 之后的独立决策                 |
+| matrix / work-items / metrics / deliveries 读面 | **保留**（T103「查询仍可追溯」）；`/code` 收缩为 activity + metrics 两 tab                        |
+| 14 张 legacy 表                                 | **全部保留**（T108 裁决）；6 张零消费者表加棘轮锁定，清理随 RFC-311 保留期治理                    |
+
+### AC 证据索引（逐条可复跑）
+
+- **AC-1/2/3/4**（规则确定性、多语言模板、缺项阻断、pin 与升级）：`rfc310-pr1a-policy-kernel`
+  （100 次重放 byte-identical）、`rfc310-pr1b-*`（13 种 publish 违规）、PR-8 的 policy
+  simulator 前端对拍锁。
+- **AC-5/7/26**（三形态输入、bundle 安全面、澄清闭环）：`rfc310-pr3-*` 全家 + `rfc310-pr3-journey`
+  （真 HTTP + 真 adapter 子进程 + mock provider）。
+- **AC-6/8/31**（pipeline 大日志、exact-head、missing trigger/rerun）：`rfc310-pr6-*`。
+- **AC-9/10/11/12/13**（envelope 协议、重试、写边界、零凭据、outcome 对拍）：`rfc310-pr4-*` +
+  `rfc310-pr0-detect-rollback-probe`（真子进程攻击全检出、回退 byte-identical）。
+- **AC-14/25/35**（平台独占 commit/push/CAS、new/adopt、上传完整性）：`rfc310-pr5-*` +
+  **`rfc310-t109-full-journey-e2e`**（真 git remote、CAS push、clone 对拍分支内容）。
+- **AC-15/18**（无 merge/approve/resolve 类型面、不自动 resolve）：`rfc310-pr7-no-merge-capability-scan`
+  （含源码快照）。
+- **AC-16/17/33/34**（feedback/CI/conflict guards、ready 回退、durable wait、cancel/adopt）：
+  `rfc310-pr7-*` + `rfc310-pr7b-*` + T109 旅程 A（feedback 修复轮真实推回 MR 分支后才回帖）。
+- **AC-19**（临界区 crash 恢复）：`rfc310-pr7b-crash-matrix`（三窗）+ 决策去重吞悬挂 effect 的
+  修复锁。
+- **AC-20/21/22**（RFC-294 分层、exact public、唯一执行链）：`rfc310-architecture-lock`（8 条，
+  含 PR-10 新增两条退役棘轮）。
+- **AC-23**（cutover、历史只读、无双 writer）：`rfc310-pr9-cutover`（18 条）+
+  `rfc310-pr9-migration-analyzer`（11 条）+ T109 旅程 B（adopt 起点同语义收场）。
+- **AC-24**（能力收缩、migration、真实 E2E、gate）：本节转出账 + T109 两旅程 + PR-10 退役棘轮 +
+  `gate:local` 全绿 + hosted CI exact SHA。
+- **AC-27/28/29/30/32**（polyglot 两阶段、no-change、review、readiness、tracking-only）：
+  `rfc310-pr5-analyze` / `rfc310-pr5-no-change` / `rfc310-pr5-review` / `rfc310-pr7b-handover`。
+
+### 未竟项（如实登记，不阻塞 Done）
+
+1. **T78 conflict repair 的 Agent 执行面**（edit-conflicts validator / merge-workspace 物化 /
+   conflictRefs 注入）——当前 repair 模式 typed block `conflict-repair-agent-surface-not-wired`，
+   端口已备；report-only 模式完整可用。
+2. **T71 retention GC + GB 级 nightly**、**T82 out-of-order webhook 矩阵**、**T93 浏览器级
+   visual regression**（T109 覆盖了功能面 E2E，未做像素快照）。
+3. **mission 列表全表无分页**（`listMissionSummaries`）——已移交 RFC-311 性能治理面。
+4. **`/code` work-items 的 nextCursor 未接翻页**——已与 RFC-311 session 交接（其 T29 余项）。
+5. **verification/review 结果尚未升为 catalog fact**——repair/review 规则排程的前置。
+6. **cutover preflight 的 per-repo dry decision probe** 未做独立命令（能力由 `GET /api/code/cutover`
+   的 preflight + policy simulator 覆盖）；T99 的「cancel 运行中旧 rounds」与 T103 的 soak
+   只读化是 runbook 人工步骤。
+
 ## 14. 风险与停止条件
 
 | 风险                                                                          | 预防/停止条件                                                                                                              |
