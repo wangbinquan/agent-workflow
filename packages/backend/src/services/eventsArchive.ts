@@ -231,7 +231,20 @@ async function archiveOldestForNode(
     if (rows.length === 0) break
     let buf = ''
     for (const r of rows) {
-      buf += JSON.stringify({ id: r.id, ts: r.ts, kind: r.kind, payload: r.payload }) + '\n'
+      // 实现门 P1-4:sessionId / parentSessionId **必须**跟着落盘。会话树
+      // (services/sessionView.ts 的 parseSessionTree)完全靠这两列建树,丢了它们
+      // 就不只是「少了历史」——deriveRootSessionId 会退化成「取残留事件里的第一个
+      // sessionId」,那通常是子代理会话,于是整棵对话树以子代理为根渲染。
+      // 字节水位把归档从「生产从未触发」变成长会话常态,这条不能等。
+      buf +=
+        JSON.stringify({
+          id: r.id,
+          ts: r.ts,
+          kind: r.kind,
+          payload: r.payload,
+          sessionId: r.sessionId,
+          parentSessionId: r.parentSessionId,
+        }) + '\n'
     }
     // Append BEFORE delete: a crash between the two duplicates rows into the
     // JSONL (the reader tolerates that — ids are monotonic and consumers
@@ -260,32 +273,102 @@ export async function readArchivedEvents(
   nodeRunId: string,
   since: number,
   limit: number,
-): Promise<Array<{ id: number; ts: number; kind: string; payload: string }>> {
+): Promise<
+  Array<{
+    id: number
+    ts: number
+    kind: string
+    payload: string
+    sessionId: string | null
+    parentSessionId: string | null
+  }>
+> {
   const file = jsonlPath(logsDir, taskId, nodeRunId)
   if (!existsSync(file)) return []
-  const text = await Bun.file(file).text()
-  const out: Array<{ id: number; ts: number; kind: string; payload: string }> = []
-  let cursor = 0
-  while (cursor < text.length && out.length < limit) {
-    const nl = text.indexOf('\n', cursor)
-    const end = nl === -1 ? text.length : nl
-    const line = text.slice(cursor, end)
-    cursor = end + 1
-    if (line === '') continue
-    try {
-      const obj = JSON.parse(line) as {
-        id: number
-        ts: number
-        kind: string
-        payload: string
-      }
-      if (obj.id <= since) continue
-      out.push({ id: obj.id, ts: obj.ts, kind: obj.kind, payload: obj.payload })
-    } catch {
-      // skip corrupt line
+  // 实现门 P1-2:此前 `Bun.file(file).text()` 把整个 JSONL 读成一个字符串,`limit`
+  // 再小也不能少读一个字节。字节水位(C3)把 per-run 有效阈值从 5 万行压到几千行,
+  // 于是「几十 MB 的归档文件」从罕见变成常态,而这条路径每次列表/详情请求都会走
+  // ——同步单连接的 daemon 上,这就是本 RFC 要治的那类「一次大搬运卡住全站」。
+  // 改成流式按行消费 + 到 limit 立刻停(提前 return 会 cancel 流)。
+  return await readJsonlLines(file, since, limit)
+}
+
+async function readJsonlLines(
+  file: string,
+  since: number,
+  limit: number,
+): Promise<
+  Array<{
+    id: number
+    ts: number
+    kind: string
+    payload: string
+    sessionId: string | null
+    parentSessionId: string | null
+  }>
+> {
+  const out: Array<{
+    id: number
+    ts: number
+    kind: string
+    payload: string
+    sessionId: string | null
+    parentSessionId: string | null
+  }> = []
+  const decoder = new TextDecoder()
+  let pending = ''
+  for await (const chunk of Bun.file(file).stream()) {
+    pending += decoder.decode(chunk, { stream: true })
+    let nl = pending.indexOf('\n')
+    while (nl !== -1) {
+      const line = pending.slice(0, nl)
+      pending = pending.slice(nl + 1)
+      pushLine(line, since, limit, out)
+      if (out.length >= limit) return out
+      nl = pending.indexOf('\n')
     }
   }
+  pending += decoder.decode()
+  if (pending !== '' && out.length < limit) pushLine(pending, since, limit, out)
   return out
+}
+
+function pushLine(
+  line: string,
+  since: number,
+  limit: number,
+  out: Array<{
+    id: number
+    ts: number
+    kind: string
+    payload: string
+    sessionId: string | null
+    parentSessionId: string | null
+  }>,
+): void {
+  if (line === '' || out.length >= limit) return
+  try {
+    const obj = JSON.parse(line) as {
+      id: number
+      ts: number
+      kind: string
+      payload: string
+      sessionId?: string | null
+      parentSessionId?: string | null
+    }
+    if (obj.id <= since) return
+    out.push({
+      id: obj.id,
+      ts: obj.ts,
+      kind: obj.kind,
+      payload: obj.payload,
+      // 老归档文件没有这两个键 ⇒ null(向后兼容,不需要迁移已落盘的 JSONL)。
+      sessionId: obj.sessionId ?? null,
+      parentSessionId: obj.parentSessionId ?? null,
+    })
+  } catch {
+    // skip corrupt line
+  }
 }
 
 function jsonlPath(logsDir: string, taskId: string, nodeRunId: string): string {

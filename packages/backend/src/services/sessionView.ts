@@ -19,7 +19,13 @@ import {
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRuns, tasks } from '@/db/schema'
+import { readArchivedEvents } from '@/services/eventsArchive'
 import { DomainError, NotFoundError } from '@/util/errors'
+import { Paths } from '@/util/paths'
+
+/** 会话树是「读全历史」的视图,但仍要有界:单个 node_run 的归档回读封顶,
+ *  避免一次请求把整份 JSONL 拉进内存(实现门 P1-2 的同源约束)。 */
+const ARCHIVED_SESSION_EVENT_CAP = 20_000
 
 /**
  * Workflow node kinds for which an opencode session exists (everything
@@ -93,6 +99,7 @@ export async function getSessionTree(
     }
   }
 
+  const logsDir = Paths.logsDir
   const rows = await db
     .select({
       id: nodeRunEvents.id,
@@ -106,14 +113,36 @@ export async function getSessionTree(
     .where(inArray(nodeRunEvents.nodeRunId, targetNodeRunIds))
     .orderBy(asc(nodeRunEvents.ts), asc(nodeRunEvents.id))
 
-  const events: ParseSessionInputEvent[] = rows.map((r) => ({
-    id: r.id,
-    ts: r.ts,
-    kind: r.kind,
-    sessionId: r.sessionId,
-    parentSessionId: r.parentSessionId,
-    payload: r.payload,
-  }))
+  // 实现门 P1-4:RFC-311 的字节水位把事件归档从「生产从未触发」变成长会话常态,
+  // 而这条路径此前只读 DB——归档掉的前半段会话一旦消失,deriveRootSessionId 会
+  // 退化成「取残留事件里的第一个 sessionId」(通常是**子代理**会话),整棵对话树
+  // 就以子代理为根渲染:不是少了历史,是渲染出错误结构。归档 JSONL 现在同样落
+  // sessionId/parentSessionId,这里按 node_run 逐个补回并与 DB 行合并。
+  const archivedEvents: ParseSessionInputEvent[] = []
+  for (const id of targetNodeRunIds) {
+    const archived = await readArchivedEvents(logsDir, taskId, id, 0, ARCHIVED_SESSION_EVENT_CAP)
+    for (const a of archived) {
+      archivedEvents.push({
+        id: a.id,
+        ts: a.ts,
+        kind: a.kind,
+        sessionId: a.sessionId,
+        parentSessionId: a.parentSessionId,
+        payload: a.payload,
+      })
+    }
+  }
+  const events: ParseSessionInputEvent[] = [
+    ...archivedEvents,
+    ...rows.map((r) => ({
+      id: r.id,
+      ts: r.ts,
+      kind: r.kind,
+      sessionId: r.sessionId,
+      parentSessionId: r.parentSessionId,
+      payload: r.payload,
+    })),
+  ].sort((a, b) => (a.ts === b.ts ? a.id - b.id : a.ts - b.ts))
 
   const rootSessionId = deriveRootSessionId(events)
 

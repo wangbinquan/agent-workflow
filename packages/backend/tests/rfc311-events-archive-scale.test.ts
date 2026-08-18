@@ -16,7 +16,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive'
 import { readMaintenanceNumber } from '../src/services/maintenanceState'
-import { count , max } from 'drizzle-orm'
+import { count, max } from 'drizzle-orm'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

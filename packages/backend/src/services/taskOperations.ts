@@ -650,7 +650,11 @@ async function mapRows(
  *  equals the whole tree and the branch sort key equals the materialized
  *  `tasks.branch_started_at`. Any active filter changes the branch aggregate's
  *  member set, so filtered queries keep the exhaustive pipeline. */
-function isDefaultView(actor: Actor, filters: TaskOperationsFilters): boolean {
+/** Exported for the fast-path oracle: without a direct assertion the whole
+ *  O(page) path can be switched off (`isDefaultView` → false) and every test
+ *  still passes, because the oracle degenerates into slow-vs-slow (实现门 P0-2 /
+ *  变异 #2a). */
+export function isDefaultView(actor: Actor, filters: TaskOperationsFilters): boolean {
   // The fast path serves ONLY tasks:read:all actors on the untouched default
   // view. Two reasons (both verified by the rfc311 fast-path oracle):
   //  - a restricted actor's branch aggregates (sort key included!) are
