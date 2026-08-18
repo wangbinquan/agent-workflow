@@ -10,7 +10,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { CreateWorkflow, Workflow, WorkflowDetail } from '@agent-workflow/shared'
+import type {
+  CreateWorkflow,
+  Workflow,
+  WorkflowDetail,
+  WorkflowListItem,
+} from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useResourceList } from '@/hooks/useResourceList'
 import { describeApiError } from '@/i18n'
@@ -71,7 +76,7 @@ function WorkflowsPage() {
   const canWriteIntent = usePermission('intent:write')
   // RFC-151 PR-3 — shared list shell: query + owner lookup. The delete
   // mutation is unused here since RFC-191 (delete lives in the editor header).
-  const { data, isLoading, error, owners } = useResourceList<Workflow>({
+  const { data, isLoading, error, owners } = useResourceList<WorkflowListItem>({
     queryKey: ['workflows'],
     endpoint: '/api/workflows',
   })
@@ -136,8 +141,8 @@ function WorkflowsPage() {
     })
   }, [authoritySettled, openCreate, routeNavigate, search.create])
 
-  // Gallery items — updatedAt desc (freshest first). Node count derives from
-  // the definition the list API already returns (schema defaults nodes: []).
+  // Gallery items — updatedAt desc (freshest first). RFC-311 (C2): the list
+  // API now sends a server-computed nodeCount instead of every definition.
   const items = useMemo<GalleryCardItem[] | undefined>(
     () =>
       data === undefined
@@ -152,7 +157,7 @@ function WorkflowsPage() {
               subtitle: w.description === '' ? undefined : w.description,
               searchText: [
                 `v${w.version}`,
-                t('workflows.cardNodes', { count: w.definition.nodes.length }),
+                t('workflows.cardNodes', { count: w.nodeCount }),
                 w.visibility === 'private' ? t('acl.privateChip') : '',
                 w.ownerUserId != null
                   ? (owners.get(w.ownerUserId)?.displayName ?? w.ownerUserId)
@@ -169,7 +174,7 @@ function WorkflowsPage() {
               meta: (
                 <>
                   <span className="chip chip--tight">
-                    {t('workflows.cardNodes', { count: w.definition.nodes.length })}
+                    {t('workflows.cardNodes', { count: w.nodeCount })}
                   </span>
                   <span className="chip chip--tight">v{w.version}</span>
                 </>

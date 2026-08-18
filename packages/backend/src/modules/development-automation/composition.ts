@@ -24,6 +24,11 @@ import {
   submitMissionAnswers,
   type SubmitAnswersResult,
 } from './application/commands/submitMissionAnswers'
+import {
+  attachMergeRequest,
+  handoffMission,
+  resumeMission,
+} from './application/commands/missionHandover'
 import { sweepMissionWakes } from './application/missionWakeSweep'
 import type {
   AgentActionLauncherPort,
@@ -88,6 +93,10 @@ export interface DevelopmentAutomationModule {
   confirmNoChange(rawInput: unknown): Promise<ConfirmNoChangeResult>
   /** 平台渠道答题（T55：新 revision 会失效 in-flight action）。 */
   submitAnswers(rawInput: unknown): Promise<SubmitAnswersResult>
+  /** T80：交接三命令（完整 ports——handoff 撤销含真 agent cancel）。 */
+  handoff(rawInput: unknown): ReturnType<typeof handoffMission>
+  attachMr(rawInput: unknown): ReturnType<typeof attachMergeRequest>
+  resume(rawInput: unknown): ReturnType<typeof resumeMission>
   /** 30s 级 sweep：到期 durable wake（fireWake CAS 认领）+ 未消费 wake hint。 */
   sweepWakes(): Promise<{ reconciled: number }>
   /** hourly：未 claim 上传的 TTL 回收。 */
@@ -199,6 +208,9 @@ export function composeDevelopmentAutomation(deps: {
     evidence,
     reconcile: (missionId) => runMissionReconcile(reconcileDeps, missionId),
     confirmNoChange: (rawInput) => confirmNoChange(reconcileDeps, rawInput),
+    handoff: (rawInput) => handoffMission(reconcileDeps, rawInput),
+    attachMr: (rawInput) => attachMergeRequest(reconcileDeps, rawInput),
+    resume: (rawInput) => resumeMission(reconcileDeps, rawInput),
     submitAnswers: (rawInput) =>
       submitMissionAnswers({ store, snapshots, requirement: materializer, ports, now }, rawInput),
     sweepWakes: () =>

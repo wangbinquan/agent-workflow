@@ -203,9 +203,29 @@ function CodePage() {
         title={t('code.title')}
         meta={t('code.subtitle')}
         actions={
-          <Link to="/code/missions" className="btn btn--sm" data-testid="code-missions-link">
-            {t('code.missions.title')}
-          </Link>
+          <>
+            <Link
+              to="/code/config/$kind"
+              params={{ kind: 'employees' }}
+              className="btn btn--sm"
+              data-testid="code-config-link"
+            >
+              {t('code.config.title')}
+            </Link>
+            <Link to="/code/missions" className="btn btn--sm" data-testid="code-missions-link">
+              {t('code.missions.title')}
+            </Link>
+            <Link
+              to="/code/assignments"
+              className="btn btn--sm"
+              data-testid="code-assignments-link"
+            >
+              {t('code.assignments.title')}
+            </Link>
+            <Link to="/code/policies" className="btn btn--sm" data-testid="code-policies-link">
+              {t('code.policies.title')}
+            </Link>
+          </>
         }
       />
       <TabBar<CodeTab>

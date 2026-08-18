@@ -12,11 +12,18 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { Field, TextArea } from '@/components/Form'
+import { Field, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
+import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
+import { EvidenceBrowser, type PipelineEvidenceSummary } from '@/components/code/EvidenceBrowser'
+import {
+  MissionTimeline,
+  type TimelineDecision,
+  type TimelineEffect,
+} from '@/components/code/MissionTimeline'
 import { usePermission } from '@/hooks/useActor'
 import { missionStatusKind } from './code.missions'
 import { Route as RootRoute } from './__root'
@@ -76,6 +83,9 @@ interface MissionDetail {
     createdAt: number
     settledAt: number | null
   }[]
+  /** PR-8 T92 合同：detail 投影的 pipeline evidence 摘要（主 session 接线；
+   *  缺席（undefined/null）= 尚未采集或投影未接，区块优雅降级。 */
+  pipeline?: PipelineEvidenceSummary | null
 }
 
 interface ManifestFile {
@@ -93,6 +103,10 @@ function MissionDetailPage(): ReactElement {
   const canInteract = usePermission('development-missions:interact')
   const canCancel = usePermission('development-missions:cancel')
   const canRetry = usePermission('development-missions:retry')
+  const canHandoff = usePermission('development-missions:handoff')
+  const canAttach = usePermission('development-missions:attach')
+  const canResume = usePermission('development-missions:resume')
+  const [attachOpen, setAttachOpen] = useState(false)
 
   const detail = useQuery<MissionDetail>({
     queryKey: ['code-mission', missionId],
@@ -139,6 +153,34 @@ function MissionDetailPage(): ReactElement {
       api.post(`/api/code/missions/${encodeURIComponent(missionId)}/source-refresh`, {}),
     onSuccess: invalidate,
   })
+  const handoff = useMutation({
+    mutationFn: () => api.post(`/api/code/missions/${encodeURIComponent(missionId)}/handoff`, {}),
+    onSuccess: invalidate,
+  })
+  const resume = useMutation({
+    mutationFn: () => api.post(`/api/code/missions/${encodeURIComponent(missionId)}/resume`, {}),
+    onSuccess: invalidate,
+  })
+  const trace = useQuery<{ items: TimelineDecision[] }>({
+    queryKey: ['code-mission-trace', missionId],
+    queryFn: ({ signal }) =>
+      api.get(
+        `/api/code/missions/${encodeURIComponent(missionId)}/decision-trace`,
+        undefined,
+        signal,
+      ),
+    refetchInterval: 15_000,
+  })
+  // T91 configuration upgrade 呈现：policy 已有新发布 revision 时提示（升级
+  // 执行面属 PR-9，这里只示人不动作）。
+  const policyId = detail.data?.policyId ?? null
+  const policyIdentity = useQuery<{ publishedRevision: number | null }>({
+    queryKey: ['code-mission-policy', policyId],
+    queryFn: ({ signal }) =>
+      api.get(`/api/code/automation-policies/${encodeURIComponent(policyId!)}`, undefined, signal),
+    enabled: policyId !== null,
+    retry: false,
+  })
 
   if (detail.isLoading) return <LoadingState />
   if (detail.isError) return <ErrorBanner error={detail.error} />
@@ -176,6 +218,38 @@ function MissionDetailPage(): ReactElement {
                 {t('code.missions.retry')}
               </button>
             ) : null}
+            {canHandoff && !terminal && mission.automationMode === 'active' ? (
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={handoff.isPending}
+                onClick={() => handoff.mutate()}
+                data-testid="mission-handoff"
+              >
+                {t('code.missions.handoff')}
+              </button>
+            ) : null}
+            {canResume && !terminal && mission.automationMode === 'tracking-only' ? (
+              <button
+                type="button"
+                className="btn btn--sm btn--primary"
+                disabled={resume.isPending}
+                onClick={() => resume.mutate()}
+                data-testid="mission-resume"
+              >
+                {t('code.missions.resume')}
+              </button>
+            ) : null}
+            {canAttach && !terminal && mission.automationMode === 'tracking-only' ? (
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => setAttachOpen(true)}
+                data-testid="mission-attach-open"
+              >
+                {t('code.missions.attachMr')}
+              </button>
+            ) : null}
             {canCancel && !terminal ? (
               <button
                 type="button"
@@ -190,8 +264,35 @@ function MissionDetailPage(): ReactElement {
           </>
         }
       />
+      {attachOpen ? (
+        <AttachMrDialog
+          missionId={mission.id}
+          onClose={() => setAttachOpen(false)}
+          onAttached={() => {
+            setAttachOpen(false)
+            invalidate()
+          }}
+        />
+      ) : null}
       {cancel.isError ? <ErrorBanner error={cancel.error} /> : null}
       {retry.isError ? <ErrorBanner error={retry.error} /> : null}
+      {handoff.isError ? <ErrorBanner error={handoff.error} /> : null}
+      {resume.isError ? <ErrorBanner error={resume.error} /> : null}
+
+      {policyIdentity.data !== undefined &&
+      policyIdentity.data.publishedRevision !== null &&
+      mission.policyRevision !== null &&
+      policyIdentity.data.publishedRevision > mission.policyRevision ? (
+        <section className="page__section" data-testid="mission-config-upgrade">
+          <StatusChip kind="warn" size="sm">
+            {t('code.missions.configOutdated', {
+              pinned: mission.policyRevision,
+              published: policyIdentity.data.publishedRevision,
+            })}
+          </StatusChip>{' '}
+          <span>{t('code.missions.configUpgradeHint')}</span>
+        </section>
+      ) : null}
 
       {mission.blockCode !== null ? (
         <section className="page__section" data-testid="mission-block">
@@ -345,6 +446,23 @@ function MissionDetailPage(): ReactElement {
       </section>
 
       <section className="page__section">
+        <h3>{t('code.missions.evidenceTitle')}</h3>
+        {mission.pipeline === undefined || mission.pipeline === null ? (
+          <p data-testid="evidence-not-collected">{t('code.missions.evidenceNone')}</p>
+        ) : (
+          <EvidenceBrowser missionId={mission.id} pipeline={mission.pipeline} />
+        )}
+      </section>
+
+      <section className="page__section">
+        <h3>{t('code.missions.timelineTitle')}</h3>
+        <MissionTimeline
+          decisions={trace.data?.items ?? []}
+          effects={mission.effects as TimelineEffect[]}
+        />
+      </section>
+
+      <section className="page__section">
         <h3>{t('code.missions.readinessTitle')}</h3>
         {mission.readiness === null ? (
           <p>{t('code.missions.noReadiness')}</p>
@@ -403,6 +521,69 @@ function AnswersSection(props: {
         {t('code.missions.submitAnswers')}
       </button>
     </section>
+  )
+}
+
+function AttachMrDialog(props: {
+  missionId: string
+  onClose: () => void
+  onAttached: () => void
+}): ReactElement {
+  const { t } = useTranslation()
+  const [mrIid, setMrIid] = useState('')
+  const [endpoint, setEndpoint] = useState<'auto' | 'gitlab' | 'github'>('auto')
+  const [project, setProject] = useState('')
+  const attach = useMutation({
+    mutationFn: () =>
+      api.post(`/api/code/missions/${encodeURIComponent(props.missionId)}/attach-mr`, {
+        mrIid: mrIid.trim(),
+        ...(endpoint === 'auto' ? {} : { codeHostEndpointRef: endpoint }),
+        ...(project.trim() === '' ? {} : { stableProjectRef: project.trim() }),
+      }),
+    onSuccess: props.onAttached,
+  })
+  return (
+    <Dialog
+      open
+      title={t('code.missions.attachTitle')}
+      onClose={props.onClose}
+      footer={
+        <>
+          <button type="button" className="btn btn--sm" onClick={props.onClose}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--sm btn--primary"
+            disabled={mrIid.trim() === '' || attach.isPending}
+            onClick={() => attach.mutate()}
+            data-testid="mission-attach-submit"
+          >
+            {t('code.missions.attachSubmit')}
+          </button>
+        </>
+      }
+    >
+      {attach.isError ? <ErrorBanner error={attach.error} /> : null}
+      <p>{t('code.missions.attachHint')}</p>
+      <Field label={t('code.missions.attachMrIid')} required>
+        <TextInput value={mrIid} onChange={setMrIid} data-testid="mission-attach-iid" />
+      </Field>
+      <Field label={t('code.missions.attachEndpoint')}>
+        <Select<'auto' | 'gitlab' | 'github'>
+          value={endpoint}
+          onChange={setEndpoint}
+          options={[
+            { value: 'auto', label: t('code.missions.attachEndpointAuto') },
+            { value: 'gitlab', label: 'GitLab' },
+            { value: 'github', label: 'GitHub' },
+          ]}
+        />
+      </Field>
+      <Field label={t('code.missions.attachProject')} hint={t('code.missions.attachProjectHint')}>
+        <TextInput value={project} onChange={setProject} data-testid="mission-attach-project" />
+      </Field>
+    </Dialog>
   )
 }
 

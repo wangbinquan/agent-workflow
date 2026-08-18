@@ -227,3 +227,40 @@ describe('useWsInvalidation — same-path socket sharing (D5 refcount)', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['rotated'] })
   })
 })
+
+describe('RFC-311 — leading+trailing invalidation coalescing', () => {
+  test('a burst on one key invalidates once now and once on the trailing edge', () => {
+    vi.useFakeTimers()
+    try {
+      const { invalidateSpy } = mountProbe('/ws/probe', {
+        ping: () => [['list']],
+      })
+      const sock = MockSocket.instances[MockSocket.instances.length - 1]!
+      const listCalls = () =>
+        invalidateSpy.mock.calls.filter(
+          (c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey) === '["list"]',
+        ).length
+
+      act(() => {
+        for (let n = 0; n < 8; n += 1) sock.fireMessage({ type: 'ping', n })
+      })
+      // Leading edge: exactly one immediate invalidate for the whole burst.
+      expect(listCalls()).toBe(1)
+
+      act(() => {
+        vi.advanceTimersByTime(1_100)
+      })
+      // Trailing edge: the coalesced remainder fires exactly once.
+      expect(listCalls()).toBe(2)
+
+      // A later isolated frame (outside the window) is immediate again.
+      act(() => {
+        vi.advanceTimersByTime(2_000)
+        sock.fireMessage({ type: 'ping', n: 99 })
+      })
+      expect(listCalls()).toBe(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

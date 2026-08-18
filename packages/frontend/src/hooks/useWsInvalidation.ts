@@ -41,6 +41,13 @@ export interface WsInvalidationOptions<Ctx> {
   reconcileOnOpen?: (ctx: Ctx | undefined) => readonly QueryKey[]
 }
 
+/** RFC-311（audit L5/P1-5）：leading + trailing 合并——同一 queryKey 的首次
+ *  失效立即执行（低频面零延迟、既有语义不变），窗口内的后续失效合并为一次
+ *  尾沿 invalidate。高频事件面（蒸馏批量产出、intent turn 流、scheduled
+ *  fired）此前每条消息都立即 refetch 整张列表——每秒可达多次全量重拉。
+ *  reconcileOnOpen 不经合并（重连须立即补齐）。 */
+const INVALIDATE_COALESCE_MS = 1_000
+
 export function useWsInvalidation<M extends { type: string }, Ctx = void>(
   path: string | null,
   rules: WsInvalidationRules<M, Ctx>,
@@ -56,6 +63,30 @@ export function useWsInvalidation<M extends { type: string }, Ctx = void>(
     ctxRef.current = ctx
     reconcileOnOpenRef.current = options?.reconcileOnOpen
   })
+  const pendingKeysRef = useRef(new Map<string, QueryKey>())
+  const lastSentAtRef = useRef(new Map<string, number>())
+  const flushTimerRef = useRef<number | null>(null)
+  const flushPending = () => {
+    flushTimerRef.current = null
+    const keys = [...pendingKeysRef.current.entries()]
+    pendingKeysRef.current.clear()
+    const now = Date.now()
+    for (const [hash, key] of keys) {
+      lastSentAtRef.current.set(hash, now)
+      void qc.invalidateQueries({ queryKey: key })
+    }
+  }
+  useEffect(
+    () => () => {
+      // Unmount: fire what's queued so a navigation right after a WS frame
+      // cannot strand a stale list for the next visit.
+      if (flushTimerRef.current !== null) {
+        window.clearTimeout(flushTimerRef.current)
+        flushPending()
+      }
+    },
+    [],
+  )
   const connectionState = useWebSocket({
     path: path ?? '',
     enabled: path !== null && path !== '',
@@ -67,8 +98,19 @@ export function useWsInvalidation<M extends { type: string }, Ctx = void>(
       if (rule === undefined) return
       const keys = rule(raw, ctxRef.current)
       if (keys === undefined) return
+      const now = Date.now()
       for (const key of keys) {
-        void qc.invalidateQueries({ queryKey: key })
+        const hash = JSON.stringify(key)
+        const lastSentAt = lastSentAtRef.current.get(hash)
+        if (lastSentAt === undefined || now - lastSentAt >= INVALIDATE_COALESCE_MS) {
+          lastSentAtRef.current.set(hash, now)
+          void qc.invalidateQueries({ queryKey: key })
+        } else {
+          pendingKeysRef.current.set(hash, key)
+        }
+      }
+      if (pendingKeysRef.current.size > 0 && flushTimerRef.current === null) {
+        flushTimerRef.current = window.setTimeout(flushPending, INVALIDATE_COALESCE_MS)
       }
     },
   })

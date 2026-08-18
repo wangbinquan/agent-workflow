@@ -29,6 +29,7 @@ import type {
   Workflow,
   WorkflowDefinition,
   Workgroup,
+  WorkflowListItem,
 } from '@agent-workflow/shared'
 import {
   deriveAgentLaunchForm,
@@ -369,7 +370,7 @@ function TaskWizardPage() {
   const restoreButtonRef = useRef<HTMLButtonElement | null>(null)
 
   // --- Object lists (Step 1) -------------------------------------------------
-  const workflowsQ = useQuery<Workflow[]>({
+  const workflowsQ = useQuery<WorkflowListItem[]>({
     queryKey: ['workflows'],
     queryFn: ({ signal }) => api.get('/api/workflows', undefined, signal),
   })

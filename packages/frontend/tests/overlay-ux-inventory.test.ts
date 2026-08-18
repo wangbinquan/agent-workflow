@@ -203,7 +203,16 @@ const OVERLAY_CALLSITES = {
   'routes/code.tsx': { family: 'resource-management', count: 2 },
   // RFC-310 — mission launch dialog（三输入形态）与 requirement 文件预览。
   'routes/code.missions.tsx': { family: 'task-execution', count: 1 },
-  'routes/code.missions.$id.tsx': { family: 'task-execution', count: 1 },
+  // RFC-310 PR-8 T90 — assignment 编辑 Dialog。
+  'routes/code.assignments.tsx': { family: 'resource-management', count: 1 },
+  // RFC-310 PR-8 T87 — policy 创建对话框。
+  'routes/code.policies.tsx': { family: 'resource-management', count: 1 },
+  // RFC-310 PR-8 — +attach-MR dialog（T80 挂接命令的输入面）。
+  'routes/code.missions.$id.tsx': { family: 'task-execution', count: 2 },
+  // RFC-310 PR-8 — 配置资源的创建 Dialog（列表）与编辑/ACL Dialog + 归档
+  // ConfirmDialog（详情）。
+  'routes/code.config.tsx': { family: 'resource-management', count: 1 },
+  'routes/code.config.detail.tsx': { family: 'resource-management', count: 3 },
   // RFC-307 — the stage drawer. An overlay rather than an inline panel because
   // it is a focused edit on ONE step of a sequence the user is looking at: the
   // flow behind it is the context, and pushing it out of view to make room

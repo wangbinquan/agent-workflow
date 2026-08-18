@@ -27,11 +27,6 @@ import {
   selectMissionRequirementSource,
   type LaunchDeps,
 } from '@/modules/development-automation/application/commands/launchMission'
-import {
-  attachMergeRequest,
-  handoffMission,
-  resumeMission,
-} from '@/modules/development-automation/application/commands/missionHandover'
 import { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
 import { createRepositoryBaselineResolver } from '@/modules/development-automation/infrastructure/gitBaselineReader'
 import { createSqliteAdmissionLookup } from '@/modules/development-automation/infrastructure/sqliteAdmissionLookup'
@@ -73,6 +68,7 @@ import {
 import { safeJsonOrEmpty } from '@/util/http'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
+import { readFileSync } from 'node:fs'
 
 const log = createLogger('development-missions')
 
@@ -289,6 +285,43 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
           clarificationState: knownString('requirement.clarificationState'),
         },
         effects: listMissionEffects(deps.db, missionId),
+        // PR-8 T92：pipeline evidence 摘要投影（manifest 从内容寻址 blob 读回；
+        // 大字节仍走 ranged 端点，这里只出 gates/files 目录级摘要）。
+        pipeline: ((): unknown => {
+          const manifestRef = knownString('__pipeline.manifestRef')
+          if (manifestRef === null) return null
+          const blob = automation.evidence.blobPath(manifestRef)
+          try {
+            const parsed = pipelineEvidenceManifestV1Schema.safeParse(
+              JSON.parse(readFileSync(blob, 'utf8')),
+            )
+            if (!parsed.success) return null
+            const m = parsed.data
+            return {
+              bundleId: m.bundleId,
+              headSha: m.headSha,
+              completeness: m.completeness,
+              collectedAt: knownString('__pipeline.collectedAt'),
+              gates: m.gates.map((g) => ({
+                gateKey: g.gateKey,
+                required: g.required,
+                status: g.status,
+                runRef: g.runRef,
+                attempt: g.attempt,
+                failureCategories: g.failureCategories,
+              })),
+              files: m.files.map((f) => ({
+                fileId: f.fileId,
+                relativePath: f.relativePath,
+                mediaType: f.mediaType,
+                bytes: f.bytes,
+                sha256: f.sha256,
+              })),
+            }
+          } catch {
+            return null
+          }
+        })(),
       })
     },
   )
@@ -630,15 +663,6 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     },
   )
   // ---- PR-7b T80：handoff / attach-mr / resume（交接三命令）-----------------
-  const handoverDeps = () => ({
-    store: missionStore,
-    snapshots,
-    ports: { mrEffects: buildDevelopmentDeliveryDeps(deps.db, deps.secretBox).mrEffects },
-    now: () => Date.now(),
-    repoBinding: (repositoryId: string) =>
-      resolveRepoClaimKey(deps.db, deps.secretBox, repositoryId),
-  })
-
   registerRoute(
     app,
     {
@@ -651,7 +675,7 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const missionId = c.req.param('id')
       const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await handoffMission(handoverDeps(), { ...body, missionId })
+      const result = await automation.handoff({ ...body, missionId })
       log.info('mission handoff', {
         missionId,
         userId: actorOf(c).user.id,
@@ -674,7 +698,7 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const missionId = c.req.param('id')
       const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await attachMergeRequest(handoverDeps(), { ...body, missionId })
+      const result = await automation.attachMr({ ...body, missionId })
       log.info('mission attach-mr', {
         missionId,
         userId: actorOf(c).user.id,
@@ -697,7 +721,7 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const missionId = c.req.param('id')
       z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await resumeMission(handoverDeps(), { missionId })
+      const result = await automation.resume({ missionId })
       log.info('mission resume', { missionId, userId: actorOf(c).user.id })
       fireReconcile(missionId)
       return c.json({ missionId, ...result })

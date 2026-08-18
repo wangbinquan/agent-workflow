@@ -7,6 +7,13 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 export default defineConfig({
   resolve: {
     alias: {
+      // RFC-310 PR-8: code-policy-pages.test.tsx imports backend
+      // development-automation domain modules (pure zod) to cross-check the
+      // frontend's static policy catalog. One of them (canonicalJson) uses the
+      // backend's `@/util/hash` alias; map that exact specifier to the backend
+      // file. Must precede the frontend '@' entry — alias entries match in
+      // insertion order and '@' would otherwise capture it.
+      '@/util/hash': path.resolve(here, '../backend/src/util/hash.ts'),
       '@': path.resolve(here, 'src'),
     },
   },

@@ -123,6 +123,13 @@
 > 物化，注记债）、T83 crash matrix 三窗并**修复决策去重吞悬挂 effect 的真实卡死缺陷**（去重命中但有
 > dispatched 自治 effect 时照常重放 handler）。PR-7a 绿证：superseding CI success（2cbfdf7a 含
 > 2f3747f9+c794e734）。
+> **PR-8（T85–T92；T93 部分）已完成**：完整配置与活动 UI。fork V：参数化配置四族页（violations 逐条/
+> 字段级权限/secret 只名不值）；fork W：policy rule builder（first-match 显式序、谓词控件化、组合子
+> JSON 保真）+ simulator（preview-decision→trace 逐条+no-match 诊断）+ 前端目录静态镜像的后端直接
+> 对拍锁；fork X：mission 时间线/handoff·attach·resume 控件/upgrade 徽标/evidence 分段续读 browser；
+> 主 session：assignments 三级指派页 + detail pipeline 投影 + handover 命令上提 composition（真 agent
+> cancel）。前端新测 21 绿 + 双 inventory 棘轮绿。T93 余量：RFC-310 页面的浏览器级 E2E/visual 归
+> PR-10 T109。PR-7b 绿证：910f2103 CI success。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

@@ -433,6 +433,48 @@ function formDataByteLength(body: FormData): number {
   return total
 }
 
+/**
+ * RFC-310 PR-8 T92 —— pipeline evidence 的有界续读（后端 `x-evidence-*` 三
+ * 响应头即续读协议：nextOffset 非 null 表示还有内容）。文本按 UTF-8 解码给
+ * 只读预览；错误仍走共享的结构化解码器。
+ */
+export interface EvidenceRange {
+  readonly text: string
+  readonly totalBytes: number
+  readonly truncated: boolean
+  readonly nextOffset: number | null
+}
+
+export async function apiGetEvidenceRange(
+  path: string,
+  query?: RequestOptions['query'],
+  opts?: { signal?: AbortSignal },
+): Promise<EvidenceRange> {
+  const token = getToken()
+  const headers: Record<string, string> = { Accept: '*/*' }
+  if (token !== null) headers.Authorization = `Bearer ${token}`
+  const { signal, deadline } = withDeadline(opts?.signal, CLIENT_HARD_DEADLINE_MS)
+  const res = await fetchOrNetworkError(buildUrl(path, query), { method: 'GET', headers, signal })
+  if (res.status === 401) clearToken()
+  if (!res.ok) {
+    const isJson = res.headers.get('content-type')?.includes('application/json') ?? false
+    const payload: unknown = isJson
+      ? await readWithDeadline(res, deadline, () => res.json()).catch(() => null)
+      : null
+    const err = extractErrorBody(payload, res)
+    throw new ApiError(res.status, err.code, err.message, err.details)
+  }
+  const text = await readWithDeadline(res, deadline, () => res.text())
+  const totalRaw = res.headers.get('x-evidence-total-bytes')
+  const nextRaw = res.headers.get('x-evidence-next-offset')
+  return {
+    text,
+    totalBytes: totalRaw === null ? text.length : Number.parseInt(totalRaw, 10),
+    truncated: res.headers.get('x-evidence-truncated') === 'true',
+    nextOffset: nextRaw === null ? null : Number.parseInt(nextRaw, 10),
+  }
+}
+
 export const api = {
   get: <T>(path: string, query?: RequestOptions['query'], signal?: AbortSignal) =>
     apiRequest<T>(path, { query, signal }),
@@ -441,6 +483,7 @@ export const api = {
   postMultipart: apiPostMultipart,
   postBytes: apiPostBytes,
   getBlob: apiGetBlob,
+  getEvidenceRange: apiGetEvidenceRange,
   put: <T>(path: string, body?: unknown, signal?: AbortSignal) =>
     apiRequest<T>(path, { method: 'PUT', body, signal }),
   patch: <T>(path: string, body?: unknown, signal?: AbortSignal) =>

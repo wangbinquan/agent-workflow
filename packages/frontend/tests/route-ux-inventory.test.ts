@@ -609,6 +609,60 @@ export const ROUTE_UX_INVENTORY = {
       primitive: 'PageHeader',
     },
   },
+  // RFC-310 PR-8 T87 —— 自动化策略列表与详情（rule builder + 模拟器）。
+  '@/routes/code.policies#Route': {
+    surface: '/code/policies',
+    classification: 'standard',
+    owners: [rendered('code-policy-pages.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/code.policies.tsx',
+      primitive: 'PageHeader',
+    },
+  },
+  '@/routes/code.policies.$id#Route': {
+    surface: '/code/policies/$policyId',
+    classification: 'standard',
+    owners: [rendered('code-policy-pages.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/code.policies.$id.tsx',
+      primitive: 'PageHeader',
+    },
+  },
+  // RFC-310 PR-8 —— 员工配置四族（employees/action-templates/verification-
+  // profiles/adapters）共用一对参数化路由。
+  '@/routes/code.config#Route': {
+    surface: '/code/config/$kind',
+    classification: 'standard',
+    owners: [rendered('code-config-pages.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/code.config.tsx',
+      primitive: 'PageHeader',
+    },
+  },
+  '@/routes/code.config.detail#Route': {
+    surface: '/code/config/$kind/$id',
+    classification: 'standard',
+    owners: [rendered('code-config-pages.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/code.config.detail.tsx',
+      primitive: 'PageHeader',
+    },
+  },
+  // RFC-310 PR-8 T90 —— 三级数字员工 assignment（旧五格矩阵的替代入口）。
+  '@/routes/code.assignments#Route': {
+    surface: '/code/assignments',
+    classification: 'standard',
+    owners: [rendered('code-assignments-page.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/code.assignments.tsx',
+      primitive: 'PageHeader',
+    },
+  },
   // RFC-234 intent builder.
   '@/routes/intent#Route': {
     surface: '/intent',

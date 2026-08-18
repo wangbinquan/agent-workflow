@@ -13,7 +13,12 @@ import { Route as usersRoute } from '@/routes/users'
 import { Route as rootRoute } from '@/routes/__root'
 import { Route as settingsRoute } from '@/routes/settings'
 import { Route as codeRoute } from '@/routes/code'
+import { Route as codeConfigRoute } from '@/routes/code.config'
+import { Route as codeConfigDetailRoute } from '@/routes/code.config.detail'
 import { Route as codeMissionsRoute } from '@/routes/code.missions'
+import { Route as codeAssignmentsRoute } from '@/routes/code.assignments'
+import { Route as codePoliciesRoute } from '@/routes/code.policies'
+import { Route as codePolicyDetailRoute } from '@/routes/code.policies.$id'
 import { Route as codeMissionDetailRoute } from '@/routes/code.missions.$id'
 import { Route as codeTemplateDetailRoute } from '@/routes/code.templates.$id'
 import { IndexRoute as mcpsIndexRoute, Route as mcpsRoute } from '@/routes/mcps'
@@ -143,6 +148,12 @@ const routeTree = rootRoute.addChildren([
   // RFC-310 T61: mission detail precedes list precedes '/code'.
   codeMissionDetailRoute,
   codeMissionsRoute,
+  codeAssignmentsRoute,
+  // RFC-310 PR-8 T87: policy detail precedes list precedes '/code'.
+  codePolicyDetailRoute,
+  codePoliciesRoute,
+  codeConfigDetailRoute,
+  codeConfigRoute,
   codeRoute,
   settingsRoute,
   // RFC-247 — the generated API & MCP wiki. Reachable from /account (where a

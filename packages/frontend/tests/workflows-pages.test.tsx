@@ -78,8 +78,12 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function wf(name: string, overrides: Partial<Workflow> = {}): Workflow {
+function wf(name: string, overrides: Partial<Workflow> = {}): Workflow & { nodeCount: number } {
   return {
+    // RFC-311 (C2): the list wire now carries nodeCount instead of definition;
+    // the fixture keeps definition for the create-flow echo below and adds the
+    // list projection field the gallery actually renders.
+    nodeCount: 0,
     id: `wf_${name}`,
     name,
     description: '',

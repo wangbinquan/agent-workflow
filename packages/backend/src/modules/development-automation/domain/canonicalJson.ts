@@ -6,7 +6,7 @@
 // 不做任何浮点归一（合同层禁止非整数预算，schema 已挡）。
 // hash 走 util/hash 的单步 idiom（RFC-284 T7 锁），domain 白名单精确放行该纯函数。
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '../../../util/hash'
 
 export type CanonicalJsonValue =
   | null

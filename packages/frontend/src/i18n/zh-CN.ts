@@ -1344,6 +1344,103 @@ export interface Resources {
     title: string
     subtitle: string
     tab: { matrix: string; activity: string; metrics: string; templates: string }
+    config: {
+      title: string
+      subtitle: string
+      kindSwitch: string
+      kind: {
+        employees: string
+        actionTemplates: string
+        verificationProfiles: string
+        adapters: string
+      }
+      backToList: string
+      colName: string
+      colDetail: string
+      colRevision: string
+      colVisibility: string
+      notPublished: string
+      archived: string
+      emptyTitle: string
+      emptyBody: string
+      create: string
+      creating: string
+      createTitle: string
+      name: string
+      capability: string
+      purpose: string
+      edit: string
+      editTitle: string
+      save: string
+      saving: string
+      publish: string
+      publishing: string
+      publishBlocked: string
+      archive: string
+      archiveTitle: string
+      archiveBody: string
+      acl: string
+      draftJsonTitle: string
+      draftJsonHint: string
+      draftInvalidJson: string
+      description: string
+      promptSupplement: string
+      promptHint: string
+      employeeSummary: string
+      routesTitle: string
+      noRoutes: string
+      colCapability: string
+      colRules: string
+      colFallback: string
+      bindingsTitle: string
+      defaultPolicy: string
+      requirementSources: string
+      pipelineProviders: string
+      templateSummary: string
+      executor: string
+      verificationProfile: string
+      retryDefaults: string
+      retryText: string
+      profileSummary: string
+      stopPolicy: string
+      noSteps: string
+      colStep: string
+      colProgram: string
+      colTimeout: string
+      colExitCodes: string
+      adapterSummary: string
+      operations: string
+      executable: string
+      connection: string
+      secretProjection: string
+      outputBudget: string
+      budgetText: string
+      timeout: string
+      scriptsAuthorHint: string
+    }
+    assignments: {
+      title: string
+      description: string
+      create: string
+      empty: string
+      dialogTitle: string
+      globalScope: string
+      repoRef: string
+      groupRef: string
+      publishedOnly: string
+      warnEmployeeUnpublished: string
+      warnPolicyUnpublished: string
+      colScope: string
+      colEmployee: string
+      colSelectionPolicy: string
+      colExecutionPolicy: string
+      colSourceKey: string
+      scope: {
+        repository: string
+        'repository-group': string
+        'global-default': string
+      }
+    }
     missions: {
       title: string
       subtitle: string
@@ -1409,6 +1506,169 @@ export interface Resources {
       colCreated: string
       readinessTitle: string
       noReadiness: string
+      handoff: string
+      resume: string
+      attachMr: string
+      attachTitle: string
+      attachHint: string
+      attachMrIid: string
+      attachEndpoint: string
+      attachEndpointAuto: string
+      attachProject: string
+      attachProjectHint: string
+      attachSubmit: string
+      configOutdated: string
+      configUpgradeHint: string
+      timelineTitle: string
+      timelineEmpty: string
+      timelineDecision: string
+      timelineEffect: string
+      timelineExpand: string
+      timelineCollapse: string
+      evidenceTitle: string
+      evidenceNone: string
+      evidenceHead: string
+      evidenceCollectedAt: string
+      evidenceGatesTitle: string
+      evidenceFilesTitle: string
+      evidenceNoFiles: string
+      evidenceUntrusted: string
+      evidenceLoaded: string
+      evidenceLoadMore: string
+      colGate: string
+      colRun: string
+    }
+    policies: {
+      title: string
+      subtitle: string
+      backToCode: string
+      backToList: string
+      create: string
+      createTitle: string
+      createHint: string
+      nameLabel: string
+      namePlaceholder: string
+      emptyTitle: string
+      emptyBody: string
+      colName: string
+      colPublished: string
+      colVisibility: string
+      colUpdated: string
+      draftOnly: string
+      revisionN: string
+      save: string
+      saved: string
+      publish: string
+      publishNeedsSave: string
+      neverPublished: string
+      publishedAt: string
+      violationsTitle: string
+      tabRules: string
+      tabSettings: string
+      tabSimulate: string
+      tabsLabel: string
+      fixedGuardsTitle: string
+      fixedGuardsHint: string
+      actionRulesTitle: string
+      selectionRulesTitle: string
+      selectionRulesHint: string
+      firstMatchHint: string
+      noRules: string
+      ruleId: string
+      ruleIdPlaceholder: string
+      capability: string
+      employeeRef: string
+      employeeRefPlaceholder: string
+      moveUp: string
+      moveDown: string
+      predicatesN: string
+      removeRule: string
+      addRule: string
+      addPredicate: string
+      removePredicate: string
+      predicateKind: string
+      predicateFact: string
+      predicateValue: string
+      predicateOp: string
+      predicateValuesPlaceholder: string
+      predicateJson: string
+      predicateJsonHint: string
+      predicateJsonError: string
+      requirementJson: string
+      requirementJsonHint: string
+      requirementJsonError: string
+      secAdmission: string
+      admissionDirect: string
+      admissionExternal: string
+      admissionDuplicate: string
+      secFeedback: string
+      feedbackClass: string
+      feedbackBatch: string
+      feedbackLatest: string
+      secPipeline: string
+      pipelineStale: string
+      gateKey: string
+      gateRequired: string
+      gateDisposition: string
+      gateCategories: string
+      gateMaxReruns: string
+      gateRemove: string
+      gateAdd: string
+      secConflict: string
+      conflictMode: string
+      conflictAttempts: string
+      secDelivery: string
+      deliveryPrefix: string
+      deliveryCollision: string
+      deliveryDraft: string
+      deliveryHumanPush: string
+      secVerification: string
+      verificationProfiles: string
+      verificationProfilesHint: string
+      verificationStop: string
+      secRetry: string
+      retry_sameSessionRetries: string
+      retry_freshSessionReruns: string
+      retry_actionRunsPerMission: string
+      retry_commitsPerMission: string
+      retry_missionWallTimeMs: string
+      secReadiness: string
+      readinessGates: string
+      readinessFeedback: string
+      secNotification: string
+      notificationOverview: string
+      notificationEscalation: string
+      secRetention: string
+      retention_requirementBundleTerminalTtlDays: string
+      retention_pipelineBundleTerminalTtlDays: string
+      retention_attemptLedgerTtlDays: string
+      secRequirement: string
+      simGuards: string
+      simGuardTerminal: string
+      simGuardActiveAction: string
+      simGuardUnsettled: string
+      simGuardMrTerminal: string
+      simGuardMode: string
+      simGuardUploadSeed: string
+      simCells: string
+      simCellsHint: string
+      simCellFact: string
+      simCellValue: string
+      simCellValuePlaceholder: string
+      simCellRemove: string
+      simCellAdd: string
+      simRun: string
+      simSelected: string
+      simNoMatch: string
+      simNoMatchHint: string
+      simGuardTrace: string
+      simRuleTrace: string
+      simRuleTraceEmpty: string
+      simMatched: string
+      simMissed: string
+      simSelectionTitle: string
+      simSelectionEmployee: string
+      simSelectionRun: string
     }
     flow: {
       capability: string
@@ -7196,6 +7456,104 @@ export const zhCN: Resources = {
     title: '代码能力',
     subtitle: '每个仓库启用了哪些能力，以及它们做过什么',
     tab: { matrix: '仓库', activity: '活动', metrics: '成效', templates: '模板' },
+    config: {
+      title: '员工配置',
+      subtitle: '数字员工、动作模板、验证 profile 与 adapter',
+      kindSwitch: '配置类型',
+      kind: {
+        employees: '数字员工',
+        actionTemplates: '动作模板',
+        verificationProfiles: '验证 profile',
+        adapters: 'Adapter',
+      },
+      backToList: '← 员工配置',
+      colName: '名称',
+      colDetail: '类型信息',
+      colRevision: '发布',
+      colVisibility: '可见性',
+      notPublished: '仅草稿',
+      archived: '已归档',
+      emptyTitle: '还没有配置',
+      emptyBody: '创建一个资源，开始配置数字员工。',
+      create: '创建',
+      creating: '创建中…',
+      createTitle: '创建{{kind}}',
+      name: '名称',
+      capability: '能力',
+      purpose: '用途',
+      edit: '编辑草稿',
+      editTitle: '编辑草稿',
+      save: '保存',
+      saving: '保存中…',
+      publish: '发布',
+      publishing: '发布中…',
+      publishBlocked: '发布被拒——先修复以下问题',
+      archive: '归档',
+      archiveTitle: '归档这个资源？',
+      archiveBody: '“{{name}}”对既有引用仍可解析，但不再出现在选择器里。',
+      acl: '访问控制',
+      draftJsonTitle: '草稿内容（JSON）',
+      draftJsonHint: '发布时会做完整 schema 与闭包校验；错误逐条列出。',
+      draftInvalidJson: '草稿不是合法 JSON',
+      description: '描述',
+      promptSupplement: '提示词补充',
+      promptHint: '追加在固定协议块之前的领域知识；不能改变运行合同。',
+      employeeSummary: '员工画像',
+      routesTitle: '能力路由',
+      noRoutes: '还没有能力路由——发布至少需要一条。',
+      colCapability: '能力',
+      colRules: '规则数',
+      colFallback: '兜底模板',
+      bindingsTitle: '绑定',
+      defaultPolicy: '默认策略',
+      requirementSources: '需求源',
+      pipelineProviders: '门禁 provider',
+      templateSummary: '模板合同',
+      executor: '执行 Agent',
+      verificationProfile: '验证 profile',
+      retryDefaults: '重试默认',
+      retryText: '同会话 {{same}} 次，全新会话 {{fresh}} 次',
+      profileSummary: '验证步骤',
+      stopPolicy: '停止策略',
+      noSteps: '还没有定义步骤。',
+      colStep: '步骤',
+      colProgram: '程序',
+      colTimeout: '超时',
+      colExitCodes: '成功退出码',
+      adapterSummary: 'Adapter 合同',
+      operations: '操作',
+      executable: '可执行程序',
+      connection: '连接',
+      secretProjection: '密钥（仅显示名称）',
+      outputBudget: '输出预算',
+      budgetText: '{{files}} 个文件，共 {{bytes}} 字节',
+      timeout: '超时',
+      scriptsAuthorHint:
+        '编辑 adapter 草稿需要 scripts:author 权限（可执行程序与密钥投影是 daemon 级字段）。',
+    },
+    assignments: {
+      title: '员工指派',
+      description: '仓库 / 仓库组 / 全局三级的数字员工绑定',
+      create: '新建指派',
+      empty: '暂无指派',
+      dialogTitle: '编辑指派',
+      globalScope: '全局默认',
+      repoRef: '仓库',
+      groupRef: '仓库组',
+      publishedOnly: '只提供已发布的资源',
+      warnEmployeeUnpublished: '员工没有已发布修订',
+      warnPolicyUnpublished: '策略没有已发布修订',
+      colScope: '范围',
+      colEmployee: '数字员工',
+      colSelectionPolicy: '选择策略',
+      colExecutionPolicy: '执行策略',
+      colSourceKey: '默认需求源',
+      scope: {
+        repository: '仓库',
+        'repository-group': '仓库组',
+        'global-default': '全局默认',
+      },
+    },
     missions: {
       title: '研发任务（Mission）',
       subtitle: '规则驱动的数字员工任务：从需求到 Merge Request',
@@ -7261,6 +7619,171 @@ export const zhCN: Resources = {
       colCreated: '创建时间',
       readinessTitle: '就绪度',
       noReadiness: '还没有就绪度快照。',
+      handoff: '交接',
+      resume: '恢复自动化',
+      attachMr: '挂接 MR',
+      attachTitle: '挂接已有的合并请求',
+      attachHint:
+        '平台会先向代码托管方核实这个 MR——仓库、分支与当前 head 以托管方读取为准，不信表单自述。',
+      attachMrIid: 'MR 编号（iid）',
+      attachEndpoint: '代码托管方',
+      attachEndpointAuto: '按仓库推导',
+      attachProject: '项目路径覆盖',
+      attachProjectHint: '留空则从仓库绑定推导。',
+      attachSubmit: '挂接',
+      configOutdated: '策略钉在 r{{pinned}}，已发布 r{{published}}',
+      configUpgradeHint:
+        '策略已有新版本。运行中任务的配置升级随迁移批次（PR-9）交付；在那之前本任务继续使用钉定版本。',
+      timelineTitle: '时间线',
+      timelineEmpty: '还没有决策或外发副作用记录。',
+      timelineDecision: '决策',
+      timelineEffect: '副作用',
+      timelineExpand: '轨迹',
+      timelineCollapse: '收起',
+      evidenceTitle: '流水线证据',
+      evidenceNone: '本任务还没有采集到流水线证据。',
+      evidenceHead: '采集时的 head',
+      evidenceCollectedAt: '采集时间',
+      evidenceGatesTitle: '门禁',
+      evidenceFilesTitle: '证据文件',
+      evidenceNoFiles: '证据包中没有文件。',
+      evidenceUntrusted: '外部程序输出——不可信内容。只以纯文本展示，链接与标记永不渲染。',
+      evidenceLoaded: '已加载 {{loaded}} / {{total}} 字节',
+      evidenceLoadMore: '继续加载',
+      colGate: '门禁',
+      colRun: '运行',
+    },
+    policies: {
+      title: '自动化策略',
+      subtitle: '驱动数字员工的 first-match 规则、预算与交付设置',
+      backToCode: '← 代码能力',
+      backToList: '← 策略列表',
+      create: '新建策略',
+      createTitle: '创建自动化策略',
+      createHint: '策略从平台默认模板起步；编辑并发布后才能被任务使用。',
+      nameLabel: '名称',
+      namePlaceholder: '例如 java-service-default',
+      emptyTitle: '还没有策略',
+      emptyBody: '创建一个策略来配置数字员工如何选择与执行动作。',
+      colName: '名称',
+      colPublished: '发布',
+      colVisibility: '可见性',
+      colUpdated: '更新时间',
+      draftOnly: '草稿',
+      revisionN: '第 {{n}} 版',
+      save: '保存草稿',
+      saved: '已保存',
+      publish: '发布',
+      publishNeedsSave: '发布前请先保存草稿',
+      neverPublished: '从未发布——任务还无法固定使用此策略。',
+      publishedAt: '已发布第 {{n}} 版。运行中的任务仍使用其固定的旧版本。',
+      violationsTitle: '发布被拒',
+      tabRules: '规则',
+      tabSettings: '设置',
+      tabSimulate: '模拟',
+      tabsLabel: '策略分区',
+      fixedGuardsTitle: '固定守卫（只读）',
+      fixedGuardsHint: '守卫按此顺序先于所有规则执行；它们是产品不变量，不可配置。',
+      actionRulesTitle: '动作优先级（首条命中即停）',
+      selectionRulesTitle: '员工选择规则',
+      selectionRulesHint: '可选；当仓库指派按规则选择员工时使用。',
+      firstMatchHint: '规则自上而下求值；谓词全部满足的第一条规则胜出。',
+      noRules: '还没有规则。',
+      ruleId: '规则 id',
+      ruleIdPlaceholder: 'rule-id',
+      capability: '能力',
+      employeeRef: '员工引用',
+      employeeRefPlaceholder: 'employee-id@rev',
+      moveUp: '上移',
+      moveDown: '下移',
+      predicatesN: '{{n}} 个谓词',
+      removeRule: '删除规则',
+      addRule: '添加规则',
+      addPredicate: '添加谓词',
+      removePredicate: '删除谓词',
+      predicateKind: '谓词类型',
+      predicateFact: '事实',
+      predicateValue: '值',
+      predicateOp: '比较符',
+      predicateValuesPlaceholder: '输入一个值…',
+      predicateJson: '组合谓词（JSON）',
+      predicateJsonHint: 'all / any / not 组合子以原始 JSON 编辑。',
+      predicateJsonError: '规则 {{rule}}：谓词 JSON 无效',
+      requirementJson: '需求段（JSON）',
+      requirementJsonHint: '需求 / 上传段嵌套较深，这里以原始 JSON 编辑。',
+      requirementJsonError: '需求段：JSON 无效',
+      secAdmission: '准入',
+      admissionDirect: '允许直接提交',
+      admissionExternal: '允许外部需求 ID',
+      admissionDuplicate: '外部 ID 重复时',
+      secFeedback: '反馈',
+      feedbackClass: '处理 {{cls}} 反馈',
+      feedbackBatch: '批量上限',
+      feedbackLatest: '只处理最新线程修订',
+      secPipeline: '流水线门禁',
+      pipelineStale: '证据过期时间（毫秒）',
+      gateKey: '门禁键',
+      gateRequired: '必需',
+      gateDisposition: '缺少运行时',
+      gateCategories: '可重跑的失败类别',
+      gateMaxReruns: '最大重跑次数',
+      gateRemove: '删除门禁',
+      gateAdd: '添加门禁',
+      secConflict: '冲突',
+      conflictMode: '模式',
+      conflictAttempts: '最大修复次数',
+      secDelivery: '交付',
+      deliveryPrefix: '源分支前缀',
+      deliveryCollision: '分支冲突时',
+      deliveryDraft: '以草稿开 MR',
+      deliveryHumanPush: '人工推送到源分支时',
+      secVerification: '验证',
+      verificationProfiles: '必需的验证档案',
+      verificationProfilesHint: 'profile-id@revision；全部通过才发布 candidate。',
+      verificationStop: '停止策略',
+      secRetry: '重试与预算',
+      retry_sameSessionRetries: '同会话重试',
+      retry_freshSessionReruns: '全新会话重跑',
+      retry_actionRunsPerMission: '每任务动作上限',
+      retry_commitsPerMission: '每任务提交上限',
+      retry_missionWallTimeMs: '任务墙钟时间（毫秒）',
+      secReadiness: '就绪判定',
+      readinessGates: '额外必需门禁键',
+      readinessFeedback: '未解决反馈阻塞就绪',
+      secNotification: '通知',
+      notificationOverview: 'MR 总览评论',
+      notificationEscalation: '升级提醒间隔（毫秒）',
+      secRetention: '保留',
+      retention_requirementBundleTerminalTtlDays: '需求包保留（天）',
+      retention_pipelineBundleTerminalTtlDays: '流水线包保留（天）',
+      retention_attemptLedgerTtlDays: '尝试台账保留（天）',
+      secRequirement: '需求与上传',
+      simGuards: '守卫夹具',
+      simGuardTerminal: '任务已终态',
+      simGuardActiveAction: '可写动作进行中',
+      simGuardUnsettled: '有未结算 effect',
+      simGuardMrTerminal: 'MR 终态',
+      simGuardMode: '自动化模式',
+      simGuardUploadSeed: '上传种子状态',
+      simCells: '事实夹具',
+      simCellsHint: '未列出的事实视为 indeterminate——读它的规则会老实停下。',
+      simCellFact: '事实',
+      simCellValue: '值',
+      simCellValuePlaceholder: '值（集合用逗号分隔）',
+      simCellRemove: '删除事实',
+      simCellAdd: '添加事实',
+      simRun: '运行模拟',
+      simSelected: '选中的决策',
+      simNoMatch: '无规则命中',
+      simNoMatchHint: '守卫全部通过但没有规则命中——生产中该任务会以 no-policy-match 阻塞。',
+      simGuardTrace: '守卫轨迹',
+      simRuleTrace: '规则轨迹',
+      simRuleTraceEmpty: '守卫在任何规则求值前已停止。',
+      simMatched: '命中',
+      simMissed: '未中',
+      simSelectionTitle: '员工选择预览',
+      simSelectionEmployee: '显式员工引用',
+      simSelectionRun: '预览选择',
     },
     flow: {
       capability: '能力',

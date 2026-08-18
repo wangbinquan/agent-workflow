@@ -24902,9 +24902,181 @@ button.status-chip {
 .mission-upload-row > :last-child {
   flex: 1;
 }
+/* RFC-310 PR-8 T91/T92 —— mission 时间线与 pipeline 证据浏览。 */
+.mission-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.mission-timeline__item {
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+}
+.mission-timeline__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.mission-timeline__summary {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.mission-timeline__time {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-left: auto;
+}
+.mission-timeline__trace {
+  margin: 0.5rem 0 0;
+  max-height: 20rem;
+  overflow: auto;
+  font-size: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem;
+}
+.evidence-browser {
+  display: grid;
+  gap: 0.75rem;
+}
+.evidence-browser__preview {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+.evidence-browser__warning {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--warn-fg);
+}
+.evidence-browser__meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: normal;
+}
+.evidence-browser__content {
+  margin: 0;
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 0.78rem;
+}
+
 .mission-readiness,
 .mission-file-preview {
   max-height: 320px;
+  overflow: auto;
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+}
+
+/* ---- RFC-310 PR-8 T87/T88 — policy rule builder & simulator ------------- */
+.policy-builder__rules {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.policy-builder__rule {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+}
+.policy-builder__rule-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.policy-builder__rule-head > :nth-child(2) {
+  flex: 1 1 160px;
+  min-width: 140px;
+}
+.policy-builder__order {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted, var(--muted));
+  font-size: 0.85rem;
+}
+.policy-builder__rule-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.policy-builder__predicates {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+}
+.policy-builder__predicate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.policy-builder__guards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding-left: 1.2em;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.policy-builder__gate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+.policy-simulator__guards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 16px;
+}
+.policy-simulator__cell-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.policy-simulator__cell-row > :nth-child(2) {
+  flex: 1 1 180px;
+}
+.policy-simulator__trace {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.policy-simulator__trace-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+.policy-simulator__selected pre,
+.policy-simulator__selection {
+  max-height: 280px;
   overflow: auto;
   background: var(--bg);
   border-radius: 6px;

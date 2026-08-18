@@ -17,7 +17,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import type { Agent, Workflow } from '@agent-workflow/shared'
+import type { Agent, WorkflowListItem } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
@@ -69,9 +69,9 @@ export function MemoryDialogShell(props: MemoryDialogShellProps) {
     queryFn: ({ signal }) => api.get<Agent[]>('/api/agents', undefined, signal),
     enabled: props.open && props.contentState === undefined,
   })
-  const workflows = useQuery<Workflow[]>({
+  const workflows = useQuery<WorkflowListItem[]>({
     queryKey: ['workflows'],
-    queryFn: ({ signal }) => api.get<Workflow[]>('/api/workflows', undefined, signal),
+    queryFn: ({ signal }) => api.get<WorkflowListItem[]>('/api/workflows', undefined, signal),
     enabled: props.open && props.contentState === undefined,
   })
   const repos = useQuery<{ items: CachedRepoListEntry[] }>({
@@ -181,7 +181,7 @@ function agentsToOptions(
 }
 
 function workflowsToOptions(
-  workflows: Workflow[] | undefined,
+  workflows: WorkflowListItem[] | undefined,
   ownerLabel: (ownerUserId: string | null | undefined) => string | undefined,
 ): ScopeOption[] {
   if (!workflows) return []

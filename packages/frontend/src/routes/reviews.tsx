@@ -65,7 +65,10 @@ export function ReviewsListPage() {
   const list = useQuery<ReviewSummary[]>({
     queryKey: [...REVIEW_QUERY_KEYS.list(), filter], // WS 失效按 list() 前缀命中本子 key
     queryFn: ({ signal }) => api.get(`/api/reviews?status=${filter}`, undefined, signal),
-    refetchInterval: 10000,
+    // RFC-311（audit L5/P1-6）：整表轮询 10s→30s——badge 已是 15s 的
+    // 索引 count，本列表页是低频操作面；窗口重获焦点仍即时刷新。
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   })
 
   // Group by task. RFC-037: capture both workflowName (kept as muted

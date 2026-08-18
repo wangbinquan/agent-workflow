@@ -383,15 +383,41 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
 
 | 编号 | 任务                                                                                       | 依赖         | 状态 |
 | ---- | ------------------------------------------------------------------------------------------ | ------------ | ---- |
-| T85  | 数字员工列表/详情：能力闭包、Java/C++ routes、adapter、policy、readiness                   | T14,T18      | ⏳   |
-| T86  | ActionTemplate/VerificationProfile：阶段图、锁定字段、隔离/程序/证据 refs                  | T13,T13a,T45 | ⏳   |
-| T87  | policy rule builder：first-match 排序、fixed guards、budgets、shadow/no-match diagnostics  | T15,T19      | ⏳   |
-| T88  | policy/employee fixture simulator 与 exact DecisionTrace                                   | T19          | ⏳   |
-| T89  | adapter 页面：purpose/contract/connection/secret projection 名称/probe；字段级权限         | T16,T33,T63  | ⏳   |
-| T90  | repo/repo-group assignment，替代旧五格矩阵；冲突与缺能力逐条提示                           | T17,T85      | ⏳   |
-| T91  | Mission timeline + configuration upgrade + pending transition + handoff/attach/resume 控件 | T31a,T61,T80 | ⏳   |
-| T92  | evidence manifest/browser/ranged-read UX；明确不可信数据与截断                             | T40,T67      | ⏳   |
-| T93  | i18n、responsive、只读权限、错误恢复、visual regression、真实浏览器 E2E                    | T85-T92      | ⏳   |
+| T85  | 数字员工列表/详情：能力闭包、Java/C++ routes、adapter、policy、readiness                   | T14,T18      | ✅   |
+| T86  | ActionTemplate/VerificationProfile：阶段图、锁定字段、隔离/程序/证据 refs                  | T13,T13a,T45 | ✅   |
+| T87  | policy rule builder：first-match 排序、fixed guards、budgets、shadow/no-match diagnostics  | T15,T19      | ✅   |
+| T88  | policy/employee fixture simulator 与 exact DecisionTrace                                   | T19          | ✅   |
+| T89  | adapter 页面：purpose/contract/connection/secret projection 名称/probe；字段级权限         | T16,T33,T63  | ✅   |
+| T90  | repo/repo-group assignment，替代旧五格矩阵；冲突与缺能力逐条提示                           | T17,T85      | ✅   |
+| T91  | Mission timeline + configuration upgrade + pending transition + handoff/attach/resume 控件 | T31a,T61,T80 | ✅   |
+| T92  | evidence manifest/browser/ranged-read UX；明确不可信数据与截断                             | T40,T67      | ✅   |
+| T93  | i18n、responsive、只读权限、错误恢复、visual regression、真实浏览器 E2E                    | T85-T92      | 🚧   |
+
+### PR-8 交付注记（2026-08-18，T85–T92；T93 部分）
+
+- **T85/T86/T89（fork V）**：参数化配置页 `/code/config/$kind`（四族共用列表+详情：employees /
+  action-templates / verification-profiles / adapters）——publish violations 逐条示人、adapter 高危字段按
+  `scripts:author` 双向隐藏、secret projection 只显示 key 名、AclPanel/ConfirmDialog 复用零新 CSS。
+  JSON-only 余量：员工 routes/模板 refs/profile steps/adapter operations 的**编辑**仍 JSON 兜底（publish
+  校验保合法），深度表单随 rule builder 先例演进。「阶段图」降级为 capability 元信息卡——完整流程条需
+  capability 目录只读端点（注记）。
+- **T87/T88（fork W）**：`/code/policies` rule builder（有序规则=first-match 显式呈现、谓词按 kind 切换
+  控件、组合子 JSON 行保真+parse 失败阻止保存）+ simulator（guards 面板+cells 表→preview-decision→
+  guard/rule trace 逐条+no-match 显式诊断）。前端 fact/predicate/capability/模板目录为静态镜像，
+  **测试直接相对路径 import 后端 domain 逐条对拍**（漂移一步即红；vitest 加精确 `@/util/hash` alias，
+  backend canonicalJson 已改纯相对 import 消除 tsc 跨包缝）。十三 policy 段中十二段结构化，仅
+  requirement 段 JSON 兜底。
+- **T90（主 session）**：`/code/assignments` 三级指派页（scope 分组、未发布引用逐条警示、编辑 Dialog
+  只提供已发布资源并 pin revision、scoped DELETE）。
+- **T91/T92（fork X）**：mission 详情时间线（decision trace+effects 合并叙事、trace 可展开原样示人）、
+  handoff/attach/resume 三控件（可见性=automationMode×权限、attach auto 端点不硬造键）、config
+  upgrade 徽标（published>pinned 才现，升级执行属 PR-9）、evidence browser（gate 摘要+文件清单+
+  256KB 分段续读按 x-evidence-next-offset、不可信内容警示、绝不渲染 HTML）。后端 detail 投影补
+  pipeline 摘要块。handoff 三命令上提 composition（完整 ports——真 agent cancel 接通）。
+- **T93 部分（🚧）**：i18n 双语/权限双向/错误恢复/inventory 棘轮全绿；**visual regression 快照与真实
+  浏览器 Playwright E2E 未新增**（既有 e2e 家族覆盖旧面；RFC-310 页面的浏览器级 E2E 归 PR-10 T109
+  一并）。
+- 新增前端测试 21 个全绿（config 4 / policy 8 / assignments 2 / mission-ux 7）+ 双 inventory 棘轮。
 
 ## 11. PR-9：迁移与单 writer cutover
 

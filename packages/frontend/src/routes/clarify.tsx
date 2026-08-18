@@ -169,7 +169,10 @@ export function ClarifyListPage() {
       q.set('status', filterToStatus(filter))
       return api.get<ClarifyRoundSummary[]>(`/api/clarify?${q.toString()}`, undefined, signal)
     },
-    refetchInterval: 10000,
+    // RFC-311（audit L5/P1-6）：整表轮询 10s→30s——badge 已是 15s 的
+    // 索引 count，本列表页是低频操作面；窗口重获焦点仍即时刷新。
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   })
 
   // Group rows by task for a section-by-task layout.

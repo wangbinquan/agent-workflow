@@ -14,7 +14,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { isDemoResourceId, type Agent, type Workflow } from '@agent-workflow/shared'
+import { isDemoResourceId, type Agent } from '@agent-workflow/shared'
+import type { WorkflowListItem } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { CapabilityGrid } from '@/components/home/CapabilityGrid'
@@ -38,7 +39,7 @@ export interface OnboardingProbe {
  */
 export function computeIsFirstRun(opts: {
   agents: Agent[] | undefined
-  workflows: Workflow[] | undefined
+  workflows: WorkflowListItem[] | undefined
   isLoading: boolean
   error: unknown
 }): boolean {
@@ -58,7 +59,7 @@ export function useOnboardingProbe(): OnboardingProbe {
     queryKey: ['agents'],
     queryFn: ({ signal }) => api.get('/api/agents', undefined, signal),
   })
-  const workflows = useQuery<Workflow[]>({
+  const workflows = useQuery<WorkflowListItem[]>({
     queryKey: ['workflows'],
     queryFn: ({ signal }) => api.get('/api/workflows', undefined, signal),
   })
