@@ -87,6 +87,10 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-217 T2 — gate 写改走 workgroup_task_state CAS，仅剩 config PUT 一处；
   // T4/T6 把该写点随 handler 本体下沉 services/workgroup/configActions.ts
   // （updateTaskConfig 是 workgroupConfigJson 的唯一 UPDATE 属主）。
+  // RFC-311 —— 删除路径上的祖先链 branchStartedAt 重算（与 task.ts 的维护写点
+  // 同族：单伴随列，永不触碰 status；归属 RFC-311 session，锁由 RFC-310
+  // session 顺手同步）。
+  'services/taskDelete.ts': 1,
   'services/workgroup/configActions.ts': 1,
   // RFC-243 §4.3 — cancelTask 的级联标记补写：cascade 收尾在行已 canceled
   // （status 由调度器或 fallback CAS 落定）之后，把 errorMessage 幂等改写为

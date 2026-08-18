@@ -1163,3 +1163,26 @@ del lines[a:b+1]
   的信息销毁。无 writer 的表不再增长，清理更适合走统一的保留期治理而不是一刀
   `DROP TABLE`。裁决写进 plan.md，并**加一条「零生产消费者」棘轮**——重新出现
   消费者是 writer 复活的唯一早期信号。
+
+## 共享工作树上，`git reset --hard` / `git stash pop` 等于删除他人在制工作（2026-08-18 实测，双向各踩一次）
+
+同一 checkout 上多 session 并发时，**所有全树操作都不区分「我的脏改动」和
+「别人的脏改动」**。一天之内两个方向各出一次事故：
+
+- **`git stash pop` 弹错条目**：共享树上 `git stash list` 里可能压着别的 session
+  几小时前的 WIP。不带参数的 `pop` 弹的是 `stash@{0}`——一次炸出 14 个 `UU`
+  冲突。要么别用 stash，要么先 `git stash list` 确认再 `git stash pop stash@{n}`。
+- **用 `git reset --hard HEAD` 收场**：它把工作树恢复到 HEAD，**连同别人尚未
+  提交的改动一起抹掉**。本次抹掉了对方一处实现门修复+配套测试，症状极隐蔽：
+  对方的 commit message 照常描述了那条修复，`git show --stat` 却只有 2 个文件
+  而不是 4 个——**内容没了，描述还在**。正确收场是逐文件
+  `git checkout --ours/--theirs <冲突文件>`，或 `git checkout HEAD -- <只属于自己的路径>`。
+
+配套的两条自检（互补，一起用）：
+
+1. **commit 后立刻 `git show --stat HEAD`，核对文件数是否等于自己列出的路径数**
+   ——少了就是被谁的全树操作吃掉了，多了就是卷进了别人的在制文件。
+2. **`git show --stat <自己的 commit> | grep <对方 RFC 关键词>`**——两秒扫一眼，
+   比等 gate 红再回溯便宜得多。反向卷入（把对方未提交的半成品带进自己的 commit）
+   的典型症状是 typecheck 报「模块声明了 X 但未导出」：测试半边进了提交树、
+   `export` 半边还在对方工作树。
