@@ -42,6 +42,12 @@ import {
 import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
 import type { OperationFailureReceipt } from '@/modules/development-automation/domain/operationFailure'
 import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
+import { bindChangeCandidateParticipant } from '@/modules/source-control/composition'
+import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
+import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
+import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
+import { ulid } from 'ulid'
 import type { AppDeps } from '@/server'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -64,13 +70,33 @@ function refreshFailureError(failure: OperationFailureReceipt): DomainError {
 export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
   const uploadSessions = createSqliteUploadSessionStore(deps.db)
   const snapshots = createSqliteFactSnapshotReader(deps.db)
+  const missionStore = createSqliteMissionStore(deps.db)
   const automation = composeDevelopmentAutomation({
     db: deps.db,
     appHome: Paths.root,
     requirementSource: composeRequirementSourceRunner(deps.db),
+    changeCandidate: bindChangeCandidateParticipant(),
+    // PR-4：路由实例与 daemon 实例注入同一形状的 runner（同 db 下语义等价；
+    // SYSTEM_USER_ID——数字员工任务是 mission 自动化产物，不是 HTTP actor 的
+    // 个人任务）。终态回调落 wake hint（deliveryKey 幂等），30s sweep 收取。
+    agentLauncher: composeAgentActionExecution({
+      db: deps.db,
+      startDeps: buildStartTaskDeps(deps.db, deps.configPath, SYSTEM_USER_ID, deps.secretBox),
+      onTerminal: (executionRef) => {
+        const missionId = missionIdOfExecutionRef(deps.db, executionRef)
+        if (missionId === null) return
+        missionStore.recordWakeHint({
+          id: ulid(),
+          missionId,
+          source: 'agent-execution',
+          deliveryKey: `agent-exec:${executionRef}`,
+          now: Date.now(),
+        })
+      },
+    }),
   })
   const launchDeps: LaunchDeps = {
-    store: createSqliteMissionStore(deps.db),
+    store: missionStore,
     lookup: createSqliteAdmissionLookup(deps.db),
     now: () => Date.now(),
     uploadAdmission: {

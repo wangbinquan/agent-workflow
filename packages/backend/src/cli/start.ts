@@ -14,7 +14,12 @@ import { reclaimCodeLeasesOnBoot } from '@/services/codeRoundLease'
 import { clearStalePublishSections } from '@/modules/code-capability/infrastructure/sqliteWorkItemStore'
 import { recoverPublishIntentsOnBoot } from '@/modules/code-capability/application/recoverPublishIntentsOnBoot'
 import { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
+import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
+import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
 import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
+import { bindChangeCandidateParticipant } from '@/modules/source-control/composition'
+import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
+import { ulid } from 'ulid'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -971,14 +976,33 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       err: err instanceof Error ? err.message : String(err),
     })
   }
-  // RFC-310 PR-3 —— development-automation 装配：启动恢复（fence 悬挂 / epoch
-  // 过期 effect / 到期 wake，与 sweep 同一 reconcile 机制）+ 30s wake sweep +
-  // hourly 未 claim 上传 TTL 回收。路由侧另有同参装配（无共享可变状态，
-  // 同 db/appHome 下两实例语义等价）；消费者账本见 rfc310-architecture-lock。
+  // RFC-310 PR-3/PR-4 —— development-automation 装配：启动恢复（fence 悬挂 /
+  // epoch 过期 effect / 到期 wake，与 sweep 同一 reconcile 机制）+ 30s wake
+  // sweep + hourly 未 claim 上传 TTL 回收 + agent 执行 runner（task-execution
+  // 侧组装；终态回调经反查落 wake hint，让 30s sweep 立即收取结果）。路由侧
+  // 另有同参装配（无共享可变状态，同 db/appHome 下两实例语义等价）；消费者
+  // 账本见 rfc310-architecture-lock。
+  const developmentMissionStore = createSqliteMissionStore(db)
   const developmentAutomation = composeDevelopmentAutomation({
     db,
     appHome: Paths.root,
     requirementSource: composeRequirementSourceRunner(db),
+    changeCandidate: bindChangeCandidateParticipant(),
+    agentLauncher: composeAgentActionExecution({
+      db,
+      startDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),
+      onTerminal: (executionRef) => {
+        const missionId = missionIdOfExecutionRef(db, executionRef)
+        if (missionId === null) return
+        developmentMissionStore.recordWakeHint({
+          id: ulid(),
+          missionId,
+          source: 'agent-execution',
+          deliveryKey: `agent-exec:${executionRef}`,
+          now: Date.now(),
+        })
+      },
+    }),
   })
   try {
     const recovered = await developmentAutomation.recover()

@@ -5048,6 +5048,8 @@ export const developmentAgentAttempts = sqliteTable(
     status: text('status').notNull(),
     rejectionJson: text('rejection_json'),
     outcomeRef: text('outcome_ref'),
+    /** RFC-310 PR-4：attempt pre-state 上下文（evidence JSON blob ref）。 */
+    preSnapshotRef: text('pre_snapshot_ref'),
     createdAt: integer('created_at').notNull(),
     settledAt: integer('settled_at'),
   },

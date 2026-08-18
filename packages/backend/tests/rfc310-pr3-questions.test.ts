@@ -26,6 +26,7 @@ import {
   questionSetV1Schema,
 } from '../src/modules/development-automation/domain/questionSet'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
+import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 
 setDefaultTimeout(120_000)
 
@@ -80,11 +81,7 @@ describe('rfc310 pr3 — requirement-source clarification loop', () => {
           return { cells: { ...PR3_JAVA_CELLS }, factsRef: 'probe-1' }
         },
       },
-      agentLauncher: {
-        async launch() {
-          return { ok: true, executionRef: 'exec-1' }
-        },
-      },
+      ...fakeAgentActionPorts({ db: fx.db }),
     })
 
     await runMissionReconcile(deps, missionId) // 物化 bundle

@@ -20,8 +20,18 @@ import {
 } from './application/missionReconciler'
 import { recoverMissions } from './application/missionRecovery'
 import { sweepMissionWakes } from './application/missionWakeSweep'
-import type { ReconcilerPorts } from './application/ports/reconcilerPorts'
+import type {
+  AgentActionLauncherPort,
+  ChangeCandidatePort,
+  ReconcilerPorts,
+} from './application/ports/reconcilerPorts'
+import {
+  createAttemptContextStore,
+  createWorkspaceValidationAdapter,
+} from './infrastructure/attemptSupport'
+import { discardWorkspace, materializeActionWorkspace } from './infrastructure/actionWorkspace'
 import { EvidenceStore } from './infrastructure/evidenceStore'
+import { resolveActionBaseline } from './infrastructure/gitBaselineReader'
 import {
   createRequirementMaterializer,
   type RequirementMaterializer,
@@ -36,6 +46,8 @@ import {
   missionEpochsOf,
 } from './infrastructure/sqliteReconcilerReaders'
 import { createSqliteMissionStore } from './infrastructure/sqliteMissionStore'
+import { createSqliteActionTemplateStore } from './infrastructure/sqliteConfigResourceStore'
+import { readUploadPlan } from './infrastructure/sqliteUploadPlanStore'
 import { createSqliteUploadSessionStore } from './infrastructure/sqliteUploadSessionStore'
 import { createUploadPlacementProvider } from './infrastructure/uploadPlacement'
 
@@ -56,6 +68,10 @@ export function composeDevelopmentAutomation(deps: {
   readonly appHome: string
   /** integration 模块组装的外部需求源 runner；不注入 = 外部取件诚实 blocked。 */
   readonly requirementSource?: RequirementSourceRunnerDep
+  /** task-execution 模块组装的 agent 执行 runner；不注入 = 动作发射诚实 blocked。 */
+  readonly agentLauncher?: AgentActionLauncherPort
+  /** source-control 模块组装的 candidate 派生；不注入 = changed 结算诚实 blocked。 */
+  readonly changeCandidate?: ChangeCandidatePort
 }): DevelopmentAutomationModule {
   const now = (): number => Date.now()
   const store = createSqliteMissionStore(deps.db)
@@ -72,14 +88,36 @@ export function composeDevelopmentAutomation(deps: {
     now,
   })
   const uploads = createSqliteUploadSessionStore(deps.db)
+  const seedsRoot = join(deps.appHome, 'evidence', 'seeds')
+  const templates = createSqliteActionTemplateStore(deps.db)
   const ports: ReconcilerPorts = {
     requirementMaterialize: materializer,
     uploadPlacement: createUploadPlacementProvider({
       db: deps.db,
       evidence,
-      seedsRoot: join(deps.appHome, 'evidence', 'seeds'),
+      seedsRoot,
       now,
     }),
+    ...(deps.agentLauncher === undefined ? {} : { agentLauncher: deps.agentLauncher }),
+    ...(deps.changeCandidate === undefined ? {} : { changeCandidate: deps.changeCandidate }),
+    actionBaseline: { resolve: resolveActionBaseline(deps.db) },
+    actionWorkspace: {
+      materialize: (input) =>
+        materializeActionWorkspace(
+          { evidence, seedsRoot, workspacesRoot: join(deps.appHome, 'workspaces', 'actions') },
+          input,
+        ),
+      discard: discardWorkspace,
+    },
+    uploadPlanReader: { read: (planId) => readUploadPlan(deps.db, planId) },
+    attemptContext: createAttemptContextStore(evidence),
+    actionTemplates: {
+      content: (id, revision) => {
+        const row = templates.getRevision(id, revision)
+        return row === null ? null : (JSON.parse(row.contentJson) as unknown)
+      },
+    },
+    workspaceValidation: createWorkspaceValidationAdapter(),
   }
   const reconcileDeps: ReconcileDeps = { store, lookup, snapshots, ports, now }
 

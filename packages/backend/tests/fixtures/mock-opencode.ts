@@ -46,6 +46,11 @@
 //                                    temperature } pulled from OPENCODE_CONFIG_CONTENT.
 //                                    Lets tests assert per-node overrides survived the
 //                                    scheduler → runner → env-var → subprocess hop.
+//   MOCK_OPENCODE_CAPTURE_ENV_TO     path; appends one JSON line per invocation with
+//                                    { cwd, GIT_AUTHOR/COMMITTER_*, SSH_AUTH_SOCK }
+//                                    (value-or-null). RFC-310 PR-4 T44: digital-employee
+//                                    launches prove zero Git-identity injection while
+//                                    RFC-067 workflow launches prove injection survives.
 //   MOCK_OPENCODE_CAPTURE_CONFIG_JSON_TO  path; if set, the mock writes the RAW
 //                                    OPENCODE_CONFIG_CONTENT string verbatim (overwrite,
 //                                    not append). RFC-073 tests assert the TOP-LEVEL
@@ -204,6 +209,29 @@ if (env.MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV) {
     )
   } catch (e) {
     fail(`MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV write failed: ${(e as Error).message}`)
+  }
+}
+
+// RFC-310 PR-4 (T44): capture the REAL child cwd + Git-identity env surface so
+// digital-employee host launches can prove "zero identity injection" end to end
+// (spawn assembly → env var → subprocess), and RFC-067 workflow tasks can prove
+// the injection path stayed alive. Keys are recorded as value-or-null so an
+// assertion can distinguish "absent" from "empty".
+if (env.MOCK_OPENCODE_CAPTURE_ENV_TO) {
+  try {
+    appendFileSync(
+      env.MOCK_OPENCODE_CAPTURE_ENV_TO,
+      JSON.stringify({
+        cwd: process.cwd(),
+        GIT_AUTHOR_NAME: env.GIT_AUTHOR_NAME ?? null,
+        GIT_AUTHOR_EMAIL: env.GIT_AUTHOR_EMAIL ?? null,
+        GIT_COMMITTER_NAME: env.GIT_COMMITTER_NAME ?? null,
+        GIT_COMMITTER_EMAIL: env.GIT_COMMITTER_EMAIL ?? null,
+        SSH_AUTH_SOCK: env.SSH_AUTH_SOCK ?? null,
+      }) + '\n',
+    )
+  } catch (e) {
+    fail(`MOCK_OPENCODE_CAPTURE_ENV_TO write failed: ${(e as Error).message}`)
   }
 }
 

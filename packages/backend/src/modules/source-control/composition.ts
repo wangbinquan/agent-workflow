@@ -16,6 +16,7 @@ import {
   type RepositoryGit,
 } from './application/repositoryCommit'
 import { ensurePlatformWorkspaceDirectory } from './infrastructure/platformWorkspaceDirectory'
+import { deriveChangeCandidate } from './application/changeCandidate'
 import type { PlatformWorkspaceKind } from '@agent-workflow/shared'
 
 /** RFC-308 temporary composition seam until RFC-294 W5 owns durable WorkspaceRef. */
@@ -85,4 +86,14 @@ export function ensureBoundPlatformWorkspaceDirectory(input: {
   segments?: readonly string[]
 }): string {
   return ensurePlatformWorkspaceDirectory(input)
+}
+
+/**
+ * RFC-310 PR-4 T48 —— ChangeCandidate 派生的组装（development-automation 以
+ * 结构同形端口接收；两模块互不 import 对方内部，同 requirementSource 先例）。
+ */
+export function bindChangeCandidateParticipant(): {
+  derive: typeof deriveChangeCandidate
+} {
+  return { derive: deriveChangeCandidate }
 }

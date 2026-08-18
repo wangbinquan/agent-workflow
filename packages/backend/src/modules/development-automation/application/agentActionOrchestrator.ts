@@ -1,0 +1,795 @@
+// RFC-310 PR-4 —— AgentAttempt 编排（launch 半 + collect 半）。
+//
+// launch（run-agent-action arm 内）：baseline 解析 → workspace 物化（baseline
+// + seed + evidence bundles）→ input manifest（content-addressed，nonce 不入
+// digest）→ prompt（不可覆盖 protocol block）→ launcher.launch → attempt 台账
+// （nonce 只落 digest；pre-state 上下文冻结为内容寻址 JSON blob）。
+//
+// collect（reconcile 顶部插桩，guards 之前）：fetchOutcome → §7.5 流水线
+// （transport parse → capability semantic → workspace 对拍）→ changed 则经
+// source-control 派生 immutable ChangeCandidate → settle validated + cells。
+// 任一失败按 §7.7 分类（planNextAttempt）：fresh rerun = 整树废弃 + exact
+// 输入重物化 + 新 nonce；耗尽 = blocked(agent-contract-exhausted)。
+//
+// 已知缺口（如实呈报，PR-5 接续）：same-session 结构化反馈需要 runner 的
+// session-continue 面（host-task 形态一次性），当前 sameSession 预算强制 0，
+// 协议/语义失败直接走 fresh rerun；requirement evidence 树在 iso 隔离 cwd 内
+// 不可见（三个候选机制记 plan.md），prompt 以 untrusted index 携带需求正文。
+
+import { randomBytes } from 'node:crypto'
+import { ulid } from 'ulid'
+
+import { sha256Hex } from '@/util/hash'
+import { requirementBundlePath } from '@agent-workflow/shared'
+import {
+  canonicalDigest,
+  canonicalStringify,
+  type CanonicalJsonValue,
+} from '../domain/canonicalJson'
+import { actionTemplateContentSchema } from '../domain/actionTemplate'
+import {
+  encodeAgentAttemptBaselineRef,
+  nonceDigestOf,
+  planNextAttempt,
+  type AttemptBudget,
+  type AttemptFailureKind,
+} from '../domain/agentAttempt'
+import {
+  computeAgentInputDigest,
+  agentInputManifestV1Schema,
+  type AgentInputManifestV1,
+} from '../domain/agentInputManifest'
+import { capabilityDefinition, type CapabilityId } from '../domain/capabilityDefinition'
+import type { FactCell } from '../domain/factCell'
+import type { FactCellValue } from '../domain/facts'
+import { assembleAgentPrompt } from '../engine/prompt/assembleAgentPrompt'
+import { parseAgentFrame } from '../engine/envelope/parseAgentFrame'
+import { runCapabilitySemanticValidator } from '../engine/envelope/semanticValidators'
+import type { MissionRow, MissionStore } from './ports/missionStore'
+import type { ReconcileDeps } from './missionReconciler'
+
+/** 预算硬上限（policy 级配置接线归 PR-5；先取保守常量并入 pre-state 冻结）。 */
+export const ATTEMPT_WORKSPACE_BUDGET = {
+  maxChangedFiles: 2000,
+  maxTotalBytes: 64 * 1024 * 1024,
+} as const
+
+/** same-session 反馈通道未接（runner 无 continue 面）：预算强制 0 ⇒ 恒走 fresh。 */
+export const SAME_SESSION_BUDGET_PR4 = 0
+
+interface AttemptPreState {
+  readonly schemaVersion: 1
+  readonly missionId: string
+  readonly actionRunId: string
+  readonly capabilityId: string
+  readonly templateId: string
+  readonly templateRevision: number
+  readonly agentId: string
+  readonly templateSupplement: string | null
+  readonly budget: AttemptBudget
+  readonly baselineRepoPath: string
+  readonly baselineSha: string
+  readonly seedRef: string | null
+  readonly bundles: readonly { readonly bundleId: string; readonly mountPath: string }[]
+  readonly workspacePath: string
+  readonly businessTreeDigest: string
+  /** WorkspaceValidationPort.capturePreState 的 opaque JSON。 */
+  readonly preStateJson: string
+  /** manifest 本体（含 protocol.nonce 占位 digest 化前的字段）——nonce 明文以外的全部。 */
+  readonly manifestSansNonce: Omit<AgentInputManifestV1, 'protocol'> & {
+    readonly protocol: { readonly port: 'agent-result'; readonly outcomeSchemaId: string }
+  }
+  readonly preservePaths: readonly string[]
+  readonly editablePaths: readonly string[]
+  readonly untrustedIndex: readonly { readonly label: string; readonly text: string }[]
+  readonly taskBrief: string
+  readonly factsSummary: readonly { readonly factId: string; readonly value: string }[]
+  readonly closedRefs: { readonly requirementItemRefs: readonly string[] }
+}
+
+function requiredPortsMissing(deps: ReconcileDeps): string | null {
+  const ports = deps.ports
+  if (ports.agentLauncher === undefined) return 'agent-launcher-not-wired'
+  if (ports.actionBaseline === undefined) return 'action-baseline-not-wired'
+  if (ports.actionWorkspace === undefined) return 'action-workspace-not-wired'
+  if (ports.attemptContext === undefined) return 'attempt-context-not-wired'
+  if (ports.actionTemplates === undefined) return 'action-templates-not-wired'
+  if (ports.workspaceValidation === undefined) return 'workspace-validation-not-wired'
+  if (ports.changeCandidate === undefined) return 'change-candidate-not-wired'
+  return null
+}
+
+export function publicFactsSummary(
+  cells: Readonly<Record<string, FactCell<FactCellValue>>>,
+): { factId: string; value: string }[] {
+  const out: { factId: string; value: string }[] = []
+  for (const factId of Object.keys(cells).sort()) {
+    if (factId.startsWith('__')) continue
+    const cell = cells[factId]!
+    if (cell.state !== 'known') continue
+    out.push({ factId, value: JSON.stringify(cell.value).slice(0, 200) })
+  }
+  return out
+}
+
+function agentIdOf(agentRef: string): string {
+  const at = agentRef.lastIndexOf('@')
+  return at > 0 ? agentRef.slice(0, at) : agentRef
+}
+
+export interface LaunchAgentAttemptInput {
+  readonly actionRunId: string
+  readonly capabilityId: string
+  readonly templateId: string
+  readonly templateRevision: number
+  /** fresh rerun 时由 collect 侧递增；首启 0/0。 */
+  readonly rerunSeq: number
+  /** prompt 的公开 facts 摘要（arm 侧 publicFactsSummary(snapshot.cells)；
+   *  fresh rerun 用 pre-state 冻结的同一份——同输入合同）。 */
+  readonly factsSummary: readonly { readonly factId: string; readonly value: string }[]
+  /** fresh rerun 的同输入合同：manifest.missionRevision 冻结在 action 创建时
+   *  （mission.revision 随结算前进，不冻结会让 rerun 的 inputDigest 漂移）。 */
+  readonly missionRevisionPin?: number
+}
+
+export type LaunchAgentAttemptOutcome =
+  | { readonly ok: true; readonly executionRef: string }
+  | { readonly ok: false; readonly blockCode: string; readonly detail: string | null }
+
+/**
+ * launch 半：物化 → manifest → prompt → launcher → attempt 台账。
+ * 失败一律 typed blockCode（调用方 settle run + blockMission）。
+ */
+export async function launchAgentAttempt(
+  deps: ReconcileDeps,
+  mission: MissionRow,
+  input: LaunchAgentAttemptInput,
+): Promise<LaunchAgentAttemptOutcome> {
+  const missing = requiredPortsMissing(deps)
+  if (missing !== null) return { ok: false, blockCode: missing, detail: null }
+  const ports = deps.ports
+
+  const rawTemplate = ports.actionTemplates!.content(input.templateId, input.templateRevision)
+  if (rawTemplate === null) {
+    return {
+      ok: false,
+      blockCode: 'action-template-content-missing',
+      detail: `${input.templateId}@${input.templateRevision}`,
+    }
+  }
+  const template = actionTemplateContentSchema.safeParse(rawTemplate)
+  if (!template.success) {
+    return {
+      ok: false,
+      blockCode: 'action-template-content-invalid',
+      detail: `${input.templateId}@${input.templateRevision}`,
+    }
+  }
+  if (template.data.executor.kind !== 'agent') {
+    return {
+      ok: false,
+      blockCode: 'action-executor-not-agent',
+      detail: template.data.executor.kind,
+    }
+  }
+
+  const baseline = await ports.actionBaseline!.resolve(mission.repositoryId)
+  if (baseline === null) {
+    return { ok: false, blockCode: 'action-baseline-unavailable', detail: mission.repositoryId }
+  }
+
+  // seed：mission 行存 seedTreeDigest；seeds 目录按 planDigest 命名（placement
+  // 的落盘约定）——必须经 plan 行换算，直接拿 uploadPlacementRef 当目录名会
+  // 静默空 seed（fork 缝合实测）。
+  let seedRef: string | null = null
+  let uploadEntries: ReturnType<NonNullable<ReconcileDeps['ports']['uploadPlanReader']>['read']> =
+    null
+  if (mission.uploadPlanRef !== null && mission.uploadPlacementRef !== null) {
+    uploadEntries = ports.uploadPlanReader?.read(mission.uploadPlanRef) ?? null
+    if (uploadEntries === null) {
+      return { ok: false, blockCode: 'upload-plan-unreadable', detail: mission.uploadPlanRef }
+    }
+    seedRef = uploadEntries.planDigest
+  }
+
+  const sources = deps.store.listMissionSources(mission.id)
+  const requirementSource = sources
+    .filter((s) => s.bundleRef !== null && s.state === 'materialized')
+    .sort((a, b) => b.generation - a.generation)[0]
+  const bundles =
+    requirementSource === undefined
+      ? []
+      : [
+          {
+            bundleId: requirementSource.bundleRef!,
+            mountPath: requirementBundlePath(requirementSource.bundleRef!),
+          },
+        ]
+
+  const workspace = await ports.actionWorkspace!.materialize({
+    baselineRepoPath: baseline.repoPath,
+    baselineSha: baseline.headSha,
+    seedRef,
+    bundles,
+  })
+  const discard = (): void => {
+    try {
+      ports.actionWorkspace!.discard(workspace.workspacePath)
+    } catch {
+      // 废弃失败不掩盖主错误；孤儿目录由 GC 兜底。
+    }
+  }
+
+  const preservePaths =
+    uploadEntries?.entries
+      .filter((e) => e.contentPolicy === 'preserve-upload' && e.disposition !== 'already-present')
+      .map((e) => e.targetPath) ?? []
+  const editablePaths =
+    uploadEntries?.entries
+      .filter((e) => e.contentPolicy === 'agent-editable' && e.disposition !== 'already-present')
+      .map((e) => e.targetPath) ?? []
+
+  const definition = capabilityDefinition(input.capabilityId as CapabilityId)
+  const nonce = randomBytes(24).toString('hex')
+  const manifestCore = {
+    schemaVersion: 1 as const,
+    actionRunRef: input.actionRunId,
+    capabilityId: input.capabilityId as AgentInputManifestV1['capabilityId'],
+    capabilityContractVersion: definition.contractVersion,
+    templateRevision: input.templateRevision,
+    missionRevision: input.missionRevisionPin ?? mission.revision,
+    baseHeadSha: baseline.headSha,
+    requirementBundle:
+      requirementSource === undefined
+        ? null
+        : {
+            bundleId: requirementSource.bundleRef!,
+            manifestDigest: requirementSource.manifestDigest!,
+            mountPath: requirementBundlePath(requirementSource.bundleRef!),
+            fileCount: requirementSource.fileCount ?? 0,
+            totalBytes: requirementSource.totalBytes ?? 0,
+          },
+    repositoryUploads:
+      uploadEntries === null || uploadEntries.entries.length === 0
+        ? null
+        : {
+            planDigest: uploadEntries.planDigest,
+            placementDigest: mission.uploadPlacementRef!,
+            entries: uploadEntries.entries.map((e) => ({
+              ordinal: e.ordinal,
+              targetPath: e.targetPath,
+              contentPolicy: e.contentPolicy,
+              fileMode: e.fileMode,
+              originalEvidenceFileId: e.fileId,
+            })),
+          },
+    pipelineBundle: null,
+    feedbackSnapshot: null,
+    verificationEvidence: null,
+    writablePathClasses: [],
+    protectedRoots: [],
+  }
+  const inputDigest = computeAgentInputDigest({
+    ...manifestCore,
+    protocol: {
+      nonce,
+      port: 'agent-result' as const,
+      outcomeSchemaId: definition.outputSchemaId,
+    },
+  })
+  const manifestParsed = agentInputManifestV1Schema.safeParse({
+    ...manifestCore,
+    inputDigest,
+    protocol: { nonce, port: 'agent-result', outcomeSchemaId: definition.outputSchemaId },
+  })
+  if (!manifestParsed.success) {
+    discard()
+    return {
+      ok: false,
+      blockCode: 'agent-input-manifest-invalid',
+      detail: manifestParsed.error.issues[0]?.message ?? null,
+    }
+  }
+  const manifest = manifestParsed.data
+
+  // coverage 闭集：requirement manifest 的 fileId 集（semantic validator 对拍）。
+  const requirementItemRefs =
+    ports.requirementMaterialize?.getRequirementManifest(mission.id)?.files.map((f) => f.fileId) ??
+    []
+
+  const source = sources[0]
+  const untrustedIndex: { label: string; text: string }[] = []
+  if (mission.sourceKind === 'direct') {
+    untrustedIndex.push({
+      label: 'requirement',
+      text: `direct submission (digest ${mission.sourceContentDigest ?? 'n/a'})`,
+    })
+  } else if (source !== undefined && source.externalId !== null) {
+    untrustedIndex.push({
+      label: 'requirement',
+      text: `external ${source.externalId} @ ${source.sourceRevision ?? 'unknown'}`,
+    })
+  }
+
+  const taskBrief = [
+    `Capability: ${input.capabilityId} (contract v${definition.contractVersion}).`,
+    `Repository baseline: ${baseline.headSha}.`,
+    'Implement the requirement inside this workspace. Edit business files only.',
+  ].join('\n')
+  const factsSummary = input.factsSummary
+  const prompt = assembleAgentPrompt({
+    taskBrief,
+    factsSummary,
+    templateSupplement: template.data.promptSupplement,
+    manifest,
+    untrustedIndex,
+  })
+
+  const preState: AttemptPreState = {
+    schemaVersion: 1,
+    missionId: mission.id,
+    actionRunId: input.actionRunId,
+    capabilityId: input.capabilityId,
+    templateId: input.templateId,
+    templateRevision: input.templateRevision,
+    agentId: agentIdOf(template.data.executor.agentRef),
+    templateSupplement: template.data.promptSupplement,
+    budget: {
+      sameSession: SAME_SESSION_BUDGET_PR4,
+      freshSession: template.data.retryDefaults.freshSession,
+    },
+    baselineRepoPath: baseline.repoPath,
+    baselineSha: baseline.headSha,
+    seedRef,
+    bundles,
+    workspacePath: workspace.workspacePath,
+    businessTreeDigest: workspace.businessTreeDigest,
+    preStateJson: ports.workspaceValidation!.capturePreState(workspace.workspacePath),
+    manifestSansNonce: {
+      ...manifest,
+      protocol: { port: 'agent-result', outcomeSchemaId: manifest.protocol.outcomeSchemaId },
+    },
+    preservePaths,
+    editablePaths,
+    untrustedIndex,
+    taskBrief,
+    factsSummary,
+    closedRefs: { requirementItemRefs },
+  }
+  const preSnapshotRef = await ports.attemptContext!.save(JSON.stringify(preState))
+
+  const launched = await ports.agentLauncher!.launch({
+    actionRunId: input.actionRunId,
+    capabilityId: input.capabilityId,
+    agentId: preState.agentId,
+    prompt,
+    workspacePath: workspace.workspacePath,
+    baselineSha: baseline.headSha,
+    wallTimeMs: null,
+  })
+  if (!launched.ok) {
+    discard()
+    return {
+      ok: false,
+      blockCode: `agent-launch-failed:${launched.failure.code}`,
+      detail: launched.failure.remediation,
+    }
+  }
+
+  const claim = deps.store.claimAttempt({
+    id: ulid(),
+    actionRunId: input.actionRunId,
+    rerunSeq: input.rerunSeq,
+    attemptSeq: 0,
+    executionRef: launched.executionRef,
+    baselineRef: encodeAgentAttemptBaselineRef({
+      repositorySnapshotRef: `git:${baseline.headSha}`,
+      seedChangeRef: seedRef,
+      priorChangeSetRefs: [],
+    }),
+    nonceDigest: nonceDigestOf(nonce),
+    inputDigest: manifest.inputDigest,
+    preSnapshotRef,
+    now: deps.now(),
+  })
+  if (!claim.ok) {
+    // ordinal 撞行 = 并发 reconciler 已抢先 launch；本次执行成为多余进程，
+    // 直接取消（launcher 幂等 cancel），不 block mission。
+    await ports.agentLauncher!.cancel(launched.executionRef)
+    discard()
+    return { ok: false, blockCode: 'attempt-ordinal-taken', detail: null }
+  }
+  return { ok: true, executionRef: launched.executionRef }
+}
+
+export type CollectAgentAttemptOutcome =
+  | { readonly kind: 'no-op' }
+  | { readonly kind: 'still-running' }
+  | {
+      readonly kind: 'action-collected'
+      readonly actionRunId: string
+      readonly disposition:
+        | 'validated-changed'
+        | 'validated-no-change'
+        | 'needs-information'
+        | 'agent-blocked'
+    }
+  | { readonly kind: 'action-retry'; readonly actionRunId: string; readonly rerunSeq: number }
+  | { readonly kind: 'action-failed'; readonly actionRunId: string; readonly blockCode: string }
+
+function parsePreState(json: string | null): AttemptPreState | null {
+  if (json === null) return null
+  try {
+    const value = JSON.parse(json) as AttemptPreState
+    return value.schemaVersion === 1 ? value : null
+  } catch {
+    return null
+  }
+}
+
+function settleRunAndBlock(
+  deps: ReconcileDeps,
+  mission: MissionRow,
+  actionRunId: string,
+  blockCode: string,
+  detail: string | null,
+): void {
+  deps.store.settleActionRun({
+    id: actionRunId,
+    status: 'failed',
+    resultRef: null,
+    failureJson: JSON.stringify({
+      category: 'agent-contract',
+      code: blockCode,
+      retryability: 'never',
+      attemptOrdinal: 0,
+      remediation: detail ?? blockCode,
+      evidenceRef: null,
+    }),
+    now: deps.now(),
+  })
+  clearCurrentAction(deps.store, mission)
+  blockMissionDirect(deps, mission.id, blockCode, detail)
+}
+
+function clearCurrentAction(store: MissionStore, mission: MissionRow): void {
+  const fresh = store.getMission(mission.id)
+  if (fresh !== null && fresh.currentActionRunId !== null) {
+    store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { currentActionRunId: null })
+  }
+}
+
+function blockMissionDirect(
+  deps: ReconcileDeps,
+  missionId: string,
+  code: string,
+  detail: string | null,
+): void {
+  const fresh = deps.store.getMission(missionId)
+  if (fresh === null) return
+  if (fresh.status !== 'blocked') {
+    deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+      status: 'blocked',
+      blockCode: code,
+      blockDetail: detail,
+    })
+  } else {
+    deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+      blockCode: code,
+      blockDetail: detail,
+    })
+  }
+}
+
+function persistActionCells(
+  deps: ReconcileDeps,
+  mission: MissionRow,
+  cells: Record<string, FactCell<FactCellValue>>,
+): void {
+  const fresh = deps.store.getMission(mission.id)
+  if (fresh === null) return
+  const base =
+    fresh.requirementBundleRef === null
+      ? {}
+      : (deps.snapshots.getCells(fresh.requirementBundleRef) ?? {})
+  const merged = { ...base, ...cells }
+  const snapshotId = ulid()
+  const now = deps.now()
+  deps.store.insertFactSnapshot({
+    id: snapshotId,
+    missionId: fresh.id,
+    missionRevision: fresh.revision,
+    capturedAt: new Date(now).toISOString().replace('Z', '+00:00'),
+    cellsJson: canonicalStringify(merged as unknown as CanonicalJsonValue),
+    refsJson: canonicalStringify({ kind: 'agent-action' }),
+    digest: canonicalDigest(merged as unknown as CanonicalJsonValue),
+    now,
+  })
+  deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+    requirementBundleRef: snapshotId,
+  })
+}
+
+/**
+ * collect 半（reconcile 顶部插桩）：currentActionRunId 存在且 launcher 可用时
+ * 收取执行结果。返回 no-op 时 reconcile 继续正常流程（guards 会因
+ * active-action wait）。
+ */
+export async function collectAgentAttempt(
+  deps: ReconcileDeps,
+  mission: MissionRow,
+): Promise<CollectAgentAttemptOutcome> {
+  const ports = deps.ports
+  const launcher = ports.agentLauncher
+  const actionRunId = mission.currentActionRunId
+  if (launcher === undefined || actionRunId === null) return { kind: 'no-op' }
+  const attempts = deps.store.listAttempts(actionRunId)
+  const attempt = attempts[attempts.length - 1]
+  if (attempt === undefined) return { kind: 'no-op' }
+  if (attempt.status !== 'claimed' && attempt.status !== 'running') return { kind: 'no-op' }
+  if (attempt.executionRef === null) return { kind: 'no-op' }
+
+  const snapshot = await launcher.fetchOutcome(attempt.executionRef)
+  if (snapshot.kind === 'pending') return { kind: 'still-running' }
+
+  const preState = parsePreState(ports.attemptContext?.load(attempt.preSnapshotRef ?? '') ?? null)
+  const now = deps.now()
+
+  const failAttempt = async (
+    failure: AttemptFailureKind,
+    rejection: unknown,
+    detailForBlock: string,
+  ): Promise<CollectAgentAttemptOutcome> => {
+    deps.store.settleAttempt({
+      id: attempt.id,
+      status: failure === 'boundary-violation' ? 'discarded' : 'rejected',
+      rejectionJson: JSON.stringify(rejection),
+      outcomeRef: null,
+      now,
+    })
+    // 现场按分类处置：boundary/fresh 都整树废弃（same-session 通道未接）。
+    if (preState !== null) {
+      try {
+        ports.actionWorkspace?.discard(preState.workspacePath)
+      } catch {
+        // GC 兜底。
+      }
+    }
+    const plan = planNextAttempt({
+      failure,
+      budget: preState?.budget ?? { sameSession: 0, freshSession: 1 },
+      rerunSeq: attempt.rerunSeq,
+      attemptSeq: attempt.attemptSeq,
+    })
+    if (plan.kind === 'fresh-session' && preState !== null) {
+      const relaunched = await launchAgentAttempt(deps, mission, {
+        actionRunId,
+        capabilityId: preState.capabilityId,
+        templateId: preState.templateId,
+        templateRevision: preState.templateRevision,
+        rerunSeq: plan.rerunSeq,
+        factsSummary: preState.factsSummary,
+        missionRevisionPin: preState.manifestSansNonce.missionRevision,
+      })
+      if (relaunched.ok) return { kind: 'action-retry', actionRunId, rerunSeq: plan.rerunSeq }
+      settleRunAndBlock(deps, mission, actionRunId, relaunched.blockCode, relaunched.detail)
+      return { kind: 'action-failed', actionRunId, blockCode: relaunched.blockCode }
+    }
+    const blockCode =
+      plan.kind === 'exhausted' || plan.kind === 'forbidden'
+        ? plan.blockCode
+        : `agent-retry-unavailable:${detailForBlock}`
+    settleRunAndBlock(deps, mission, actionRunId, blockCode, detailForBlock)
+    return { kind: 'action-failed', actionRunId, blockCode }
+  }
+
+  if (snapshot.kind === 'not-found') {
+    return await failAttempt(
+      'runtime-transient',
+      { code: 'execution-not-found' },
+      'execution-not-found',
+    )
+  }
+
+  // exited —— 先按任务终态分类。
+  if (snapshot.taskStatus === 'canceled') {
+    deps.store.settleAttempt({
+      id: attempt.id,
+      status: 'discarded',
+      rejectionJson: JSON.stringify({ code: 'execution-canceled' }),
+      outcomeRef: null,
+      now,
+    })
+    if (preState !== null) {
+      try {
+        ports.actionWorkspace?.discard(preState.workspacePath)
+      } catch {
+        // GC 兜底。
+      }
+    }
+    settleRunAndBlock(deps, mission, actionRunId, 'agent-execution-canceled', null)
+    return { kind: 'action-failed', actionRunId, blockCode: 'agent-execution-canceled' }
+  }
+  if (snapshot.taskStatus === 'interrupted') {
+    return await failAttempt(
+      'runtime-transient',
+      { code: 'execution-interrupted' },
+      'execution-interrupted',
+    )
+  }
+  if (snapshot.taskStatus === 'failed' && snapshot.resultText === null) {
+    return await failAttempt(
+      'runtime-transient',
+      { code: 'execution-failed', errorSummary: snapshot.errorSummary },
+      snapshot.errorSummary ?? 'execution-failed',
+    )
+  }
+
+  if (preState === null || ports.workspaceValidation === undefined) {
+    return await failAttempt(
+      'evidence-unavailable',
+      { code: 'attempt-pre-state-unavailable' },
+      'attempt-pre-state-unavailable',
+    )
+  }
+
+  // §7.5 步骤 1-3：transport parse（nonce digest 对拍）。
+  const parsed = parseAgentFrame(snapshot.resultText ?? '', {
+    nonceDigest: attempt.nonceDigest,
+    actionRunRef: actionRunId,
+    inputDigest: attempt.inputDigest,
+    capabilityId: preState.capabilityId,
+  })
+  if (!parsed.ok) {
+    return await failAttempt('protocol', parsed.rejection, parsed.rejection.code)
+  }
+  const envelope = parsed.envelope
+
+  // 步骤 4：capability semantic。
+  const manifest = agentInputManifestV1Schema.safeParse({
+    ...preState.manifestSansNonce,
+    protocol: {
+      // parser 已按 digest 对拍过 nonce；此处用回显明文重建完整 manifest。
+      nonce: envelope.nonce,
+      port: 'agent-result',
+      outcomeSchemaId: preState.manifestSansNonce.protocol.outcomeSchemaId,
+    },
+  })
+  if (!manifest.success) {
+    return await failAttempt(
+      'evidence-unavailable',
+      { code: 'attempt-manifest-unrebuildable' },
+      'attempt-manifest-unrebuildable',
+    )
+  }
+  const semantic = runCapabilitySemanticValidator({
+    manifest: manifest.data,
+    envelope,
+    closedRefs: { requirementItemRefs: preState.closedRefs.requirementItemRefs },
+  })
+  if (!semantic.ok) {
+    return await failAttempt('protocol', semantic.rejection, semantic.rejection.code)
+  }
+
+  // 步骤 5-7：workspace 对拍。
+  const validated = ports.workspaceValidation.validate({
+    workspacePath: preState.workspacePath,
+    preStateJson: preState.preStateJson,
+    outcome: envelope.outcome,
+    workspaceMode: capabilityDefinition(preState.capabilityId as CapabilityId).workspaceMode,
+    writablePrefixes: [],
+    preservePaths: preState.preservePaths,
+    editablePaths: preState.editablePaths,
+    budget: ATTEMPT_WORKSPACE_BUDGET,
+  })
+  if (!validated.ok) {
+    if (validated.kind === 'boundary') {
+      return await failAttempt(
+        'boundary-violation',
+        { code: validated.code, paths: validated.paths, detail: validated.detail },
+        validated.code,
+      )
+    }
+    return await failAttempt(
+      'protocol',
+      { code: validated.code, detail: validated.detail },
+      validated.code,
+    )
+  }
+
+  // 步骤 8：changed ⇒ 派生 immutable ChangeCandidate（独立 diff）。
+  let candidateRef: string | null = null
+  if (envelope.outcome === 'changed') {
+    const derived = await ports.changeCandidate!.derive({
+      baselineRepoPath: preState.baselineRepoPath,
+      baselineSha: preState.baselineSha,
+      overlayRoot: preState.workspacePath,
+      excludePolicyDigest: sha256Hex('rfc308:platform-workspace-exclude@1'),
+      agentOutcomeRef: attempt.id,
+      protectedRoots: [],
+      uploadPlan:
+        mission.uploadPlanRef !== null
+          ? (ports.uploadPlanReader?.read(mission.uploadPlanRef) ?? null)
+          : null,
+    })
+    if (!derived.ok) {
+      const isBoundary =
+        derived.code === 'candidate-forbidden-path' || derived.code === 'overlay-symlink'
+      return await failAttempt(
+        isBoundary ? 'boundary-violation' : 'protocol',
+        { code: derived.code, detail: derived.detail },
+        derived.code,
+      )
+    }
+    candidateRef = derived.receipt.candidateRef
+  }
+
+  // 结算：attempt validated + run validated + cells + 清 currentActionRunId。
+  deps.store.settleAttempt({
+    id: attempt.id,
+    status: 'validated',
+    rejectionJson: null,
+    outcomeRef: candidateRef,
+    now,
+  })
+  deps.store.settleActionRun({
+    id: actionRunId,
+    status: 'settled',
+    resultRef: candidateRef,
+    failureJson: null,
+    now,
+  })
+  clearCurrentAction(deps.store, mission)
+  const known = (value: FactCellValue): FactCell<FactCellValue> => ({
+    state: 'known',
+    value,
+    sourceRevision: attempt.id,
+  })
+  persistActionCells(deps, mission, {
+    'action.lastOutcome': known(envelope.outcome),
+    'action.lastCapability': known(preState.capabilityId),
+    ...(candidateRef === null ? {} : { '__action.candidateRef': known(candidateRef) }),
+  })
+
+  const disposition =
+    envelope.outcome === 'changed'
+      ? ('validated-changed' as const)
+      : envelope.outcome === 'no-change'
+        ? ('validated-no-change' as const)
+        : envelope.outcome === 'needs-information'
+          ? ('needs-information' as const)
+          : ('agent-blocked' as const)
+
+  if (envelope.outcome === 'blocked') {
+    blockMissionDirect(
+      deps,
+      mission.id,
+      `agent-blocked:${envelope.result.code}`,
+      envelope.result.explanation,
+    )
+  } else if (envelope.outcome === 'needs-information') {
+    // Agent 问题集入台账（origin 'agent'、平台渠道），下轮 reconcile 的澄清
+    // 重派会 publish → awaiting-information → answers 闭环 → 重新选动作。
+    const stashed = await ports.requirementMaterialize?.stashQuestionSet({
+      missionId: mission.id,
+      origin: 'agent',
+      channel: 'platform',
+      questions: envelope.result.questions.map((q) => ({
+        questionId: q.questionId,
+        text: q.text,
+        answerKind: 'text' as const,
+        choices: null,
+      })),
+    })
+    if (stashed === undefined || !stashed.ok) {
+      blockMissionDirect(deps, mission.id, 'agent-questions-stash-failed', null)
+    }
+  } else {
+    // validated（changed/no-change）：下一阶段（verification/candidate 发布链）
+    // 属 PR-5/PR-6——不静默重复选同一动作，以 typed block 停住（「开单 ≠
+    // 在跑」同款诚实边界；candidateRef 已在 cells/attempt 台账可查）。
+    blockMissionDirect(deps, mission.id, `action-stage-complete:${envelope.outcome}`, candidateRef)
+  }
+
+  return { kind: 'action-collected', actionRunId, disposition }
+}

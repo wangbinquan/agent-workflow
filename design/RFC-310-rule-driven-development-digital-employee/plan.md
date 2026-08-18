@@ -155,18 +155,26 @@ baseline byte-identical 重建，尚不 commit/push。
 
 | 编号 | 任务                                                                                                                       | 依赖      | 状态 |
 | ---- | -------------------------------------------------------------------------------------------------------------------------- | --------- | ---- |
-| T41  | `AgentActionExecutionPort` + task-execution provider adapter；保持唯一四级 execution chain                                 | T1,T22    | ⏳   |
-| T42  | path-free baseline/input/seed/workspace/protocol refs 与 task composition binder                                           | T37,T41   | ⏳   |
-| T43  | 正式 digital-employee runtime profile：separate writer、快照检测/违规快退接线（无 OS 沙箱，按裁决）                        | T4,T5,T42 | ⏳   |
-| T44  | 移除 digital-employee 路径 Git identity 注入；connection/code-host/pipeline secret 不入 Agent env/文件（env 继承现状保留） | T43       | ⏳   |
-| T45  | capability-specific AgentInputManifest + prompt assembler/untrusted delimiter/protocol block                               | T9,T42    | ⏳   |
-| T46  | nonce/named-port/strict closed outcome parser；禁止 fake platform facts                                                    | T3,T45    | ⏳   |
-| T47  | semantic/workspace validator + preserve/editable、mode 与 commit-checkout round-trip consistency                           | T46       | ⏳   |
-| T48  | source-control 从 baseline+seed+overlay 派生 candidate；上传 entry/发布后 lineage 不得漏失                                 | T47       | ⏳   |
-| T49  | same-session structured feedback N 次 + persistent attempt ledger                                                          | T46,T47   | ⏳   |
-| T50  | whole-workspace discard/rematerialize + fresh session/new nonce M 次                                                       | T42,T49   | ⏳   |
-| T51  | boundary violation 快退、capability revoke、悬挂进程/attempt recovery                                                      | T43,T50   | ⏳   |
-| T52  | 所有 runtime 的检测/回退/credential/rollback 真实子进程测试进入常规 gate                                                   | T43-T51   | ⏳   |
+| T41  | `AgentActionExecutionPort` + task-execution provider adapter；保持唯一四级 execution chain                                 | T1,T22    | ✅   |
+| T42  | path-free baseline/input/seed/workspace/protocol refs 与 task composition binder                                           | T37,T41   | ✅   |
+| T43  | 正式 digital-employee runtime profile：separate writer、快照检测/违规快退接线（无 OS 沙箱，按裁决）                        | T4,T5,T42 | ✅   |
+| T44  | 移除 digital-employee 路径 Git identity 注入；connection/code-host/pipeline secret 不入 Agent env/文件（env 继承现状保留） | T43       | ✅   |
+| T45  | capability-specific AgentInputManifest + prompt assembler/untrusted delimiter/protocol block                               | T9,T42    | ✅   |
+| T46  | nonce/named-port/strict closed outcome parser；禁止 fake platform facts                                                    | T3,T45    | ✅   |
+| T47  | semantic/workspace validator + preserve/editable、mode 与 commit-checkout round-trip consistency                           | T46       | ✅   |
+| T48  | source-control 从 baseline+seed+overlay 派生 candidate；上传 entry/发布后 lineage 不得漏失                                 | T47       | ✅   |
+| T49  | same-session structured feedback N 次 + persistent attempt ledger                                                          | T46,T47   | 🚧   |
+| T50  | whole-workspace discard/rematerialize + fresh session/new nonce M 次                                                       | T42,T49   | ✅   |
+| T51  | boundary violation 快退、capability revoke、悬挂进程/attempt recovery                                                      | T43,T50   | ✅   |
+| T52  | 所有 runtime 的检测/回退/credential/rollback 真实子进程测试进入常规 gate                                                   | T43-T51   | ✅   |
+
+交付注记（2026-08-18，PR-4 完工；T49 部分——见末条）：
+
+- **执行链（T41/T43/T44，fork J）**：digital-employee host task（codeRoundLaunch 同款 anchor+synthesized snapshot+StartTaskSchema funnel；`internalSource`+`preCreatedWorktree{cleanup:'borrowed'}`）；`modules/task-execution/composition/agentActionExecution.ts` 组装 `{launch,fetchOutcome,cancel}` runner，executionRef=taskId（durable）；终态 `onTerminal` 回调由装配点反查（`missionIdOfExecutionRef`）落 wake hint。零 Git identity/零凭据：StartTask 不带 gitUserName/Email（spawn either-empty-skip 分支即不注入；RFC-067 普通任务注入面不动，对照组测试锁双向）。真 mock-opencode 子进程 9 测（done/协议缺失/四类 launch 校验/cancel 幂等/interrupted 经普通 reapOrphanRuns 收敛）。
+- **域内合同（T45/T46/T47 + T42/T49 域半，fork K）**：AgentInputManifestV1（content-addressed，digest 排除 nonce）、prompt assembler（固定顺序+untrusted delimiter 哨兵转义+英文不可覆盖 protocol block）、`<agent-result nonce>` 信封 exactly-one parser（**nonce 对拍 digest 化**——collect 轮平台只有 attempt.nonceDigest，明文由 Agent 回显）、capability semantic validator（coverage 双射/feedback 恰一 disposition/闭集/read-only 禁 changed）、workspace validator（protectedSnapshot 生产化+escape/预算/outcome↔现场一致性）、attempt 状态机+`ab1:` baseline codec+structured feedback。
+- **T48 candidate（source-control）**：临时 clone 独立 diff（`write-tree` oid 即内容寻址身份；gitignore 尊重 + 上传目标 `add -f` 保全；`.agent-workflow/` 按 RFC-308 exclude 语义从 overlay 排除——journey 实红修正：evidence mount 是平台放的，不是业务变更；baseline 里 tracked 平台路径进 diff 仍固定阻断）、上传 lineage 四规则、同输入 byte-identical。`bindChangeCandidateParticipant` 组装、DA 以结构同形端口消费。
+- **编排（orchestrator，主 session）**：launch 半（baseline→workspace(+seed planDigest 换算——mission 行存 seedTreeDigest 而 seeds 目录名是 planDigest，fork 缝合 bug 已修)→manifest/nonce/prompt→launcher→台账+pre-state evidence blob〔migration 0179 `pre_snapshot_ref`〕）；collect 半（reconcile 顶部插桩，guards 之前）：§7.5 全流水线→§7.7 `planNextAttempt` 分类（boundary=discarded+整树废弃+fresh；协议/语义→fresh；耗尽=blocked(agent-contract-exhausted)）；fresh rerun 同输入合同（missionRevision 冻结在 action 创建时、nonce 不入 digest）；validated 结算=candidate cell+run settled+currentActionRunId 清+**诚实 `action-stage-complete:<outcome>` block**（verification/发布链属 PR-5/PR-6，不静默重复启动作）；needs-information→agent 问题集入台账→既有澄清闭环（publish→awaiting-information→answers）。coverage 闭集从 requirement manifest 冻结进 pre-state。
+- **已知缺口/偏离（呈报）**：①**T49 same-session 结构化反馈 N 次未接**——host-task 形态一次性、runner 无 session-continue 面，sameSession 预算强制 0、协议失败直走 fresh；PR-5 需给 runner 增 continue 面后接通。②**requirement evidence 树在 RFC-130 iso 隔离 cwd 内不可见**（`.agent-workflow/` git-excluded 不进快照分支）——prompt 以 untrusted index 携带需求语境；三个候选机制（forcedContainerPaths 注入面 / runtime staging 挂点 / DE host iso 禁用面）随 PR-5 T42 余项专项拍板。③`AgentActionLauncherPort.launch` 经内部端口直传 workspacePath（不入 DB/prompt/event）；§7.2 严格 path-free 化同随 PR-5。④对拍现场 = action workspace（agent 真实 cwd 是 iso worktree，其污染由 task-execution merge-back/discard 机制先行隔离；回流 action workspace 的任何 Git/protected/evidence 差异由快照对拍检出）。
 
 这里的关键完成定义不是“git 命令返回失败”（首版无 OS 阻断），而是任意 Git/protected/evidence 写入攻击都被前后
 快照对拍检出为 boundary violation，旧 session/workspace capability 已不可达、现场从 exact baseline byte-identical

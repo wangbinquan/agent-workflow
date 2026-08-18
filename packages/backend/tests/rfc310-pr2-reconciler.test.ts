@@ -24,6 +24,7 @@ import {
   developmentDecisions,
 } from '../src/db/schema'
 import { buildPr2Fixture, JAVA_CELLS } from './helpers/rfc310Pr2Fixture'
+import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 
 const repoCollector: RepositoryFactsCollectorPort = {
   async collect() {
@@ -35,13 +36,22 @@ const okLauncher: AgentActionLauncherPort = {
   async launch() {
     return { ok: true, executionRef: 'exec-001' }
   },
+  async fetchOutcome(executionRef: string) {
+    return { kind: 'pending' as const, executionRef, taskStatus: 'running' }
+  },
+  async cancel() {
+    return { settled: 'already-terminal' as const }
+  },
 }
 
 describe('rfc310 pr2 reconciler', () => {
   test('collect-then-implement journey: indeterminate → collect → route-completed action', async () => {
     const f = await buildPr2Fixture()
     const missionId = await f.launch('idem-journey-1')
-    const deps = f.deps({ repositoryFacts: repoCollector, agentLauncher: okLauncher })
+    const deps = f.deps({
+      repositoryFacts: repoCollector,
+      ...fakeAgentActionPorts({ db: f.db, overrides: { agentLauncher: okLauncher } }),
+    })
 
     const first = await runMissionReconcile(deps, missionId)
     expect(first).toMatchObject({

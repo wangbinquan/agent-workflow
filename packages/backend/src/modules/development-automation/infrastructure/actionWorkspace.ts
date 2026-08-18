@@ -28,6 +28,12 @@ import type { EvidenceStore } from './evidenceStore'
 export interface WorkspaceDeps {
   readonly evidence: EvidenceStore
   readonly seedsRoot: string
+  /**
+   * workspace 宿主根。生产必须落 appHome 之下（RFC-308 exclude participant
+   * 对平台家外的 worktree 抛 owner-mismatch，task 启动会失败——PR-4 fork J
+   * 实测）；缺省 tmpdir 仅供纯 workspace 单测。
+   */
+  readonly workspacesRoot?: string
 }
 
 export interface MaterializeInput {
@@ -94,7 +100,13 @@ export async function materializeActionWorkspace(
   deps: WorkspaceDeps,
   input: MaterializeInput,
 ): Promise<MaterializedWorkspace> {
-  const parent = mkdtempSync(join(tmpdir(), 'aw-action-ws-'))
+  let parent: string
+  if (deps.workspacesRoot === undefined) {
+    parent = mkdtempSync(join(tmpdir(), 'aw-action-ws-'))
+  } else {
+    mkdirSync(deps.workspacesRoot, { recursive: true })
+    parent = mkdtempSync(join(deps.workspacesRoot, 'action-'))
+  }
   const ws = join(parent, 'ws')
   const clone = await runGit(parent, [
     'clone',

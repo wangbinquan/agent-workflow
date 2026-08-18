@@ -39,13 +39,38 @@ export interface MissionEffectExecutorPort {
   }): Promise<PortOutcome<{ readonly receiptRef: string }>>
 }
 
+/**
+ * PR-4 T41 —— task-execution 侧 runner 的结构同形端口（launch/收取/取消）。
+ * 执行是长过程：launch 只换 durable executionRef；终态由 wake hint 提示、
+ * fetchOutcome 收取（机制层只搬运 `agent-result` 端口原文，envelope 的
+ * nonce/schema 判定归本模块 parser——§7.1 职责拆分）。
+ */
+export type AgentExecutionSnapshot =
+  | { readonly kind: 'not-found'; readonly executionRef: string }
+  | { readonly kind: 'pending'; readonly executionRef: string; readonly taskStatus: string }
+  | {
+      readonly kind: 'exited'
+      readonly executionRef: string
+      readonly taskStatus: 'done' | 'failed' | 'canceled' | 'interrupted'
+      readonly resultText: string | null
+      readonly errorSummary: string | null
+      readonly errorMessage: string | null
+    }
+
 export interface AgentActionLauncherPort {
   launch(input: {
     readonly actionRunId: string
     readonly capabilityId: string
-    readonly templateId: string
-    readonly templateRevision: number
+    readonly agentId: string
+    readonly prompt: string
+    readonly workspacePath: string
+    readonly baselineSha: string
+    readonly wallTimeMs: number | null
   }): Promise<PortOutcome<{ readonly executionRef: string }>>
+  fetchOutcome(executionRef: string): Promise<AgentExecutionSnapshot>
+  cancel(executionRef: string): Promise<{
+    readonly settled: 'canceled' | 'already-terminal' | 'not-found'
+  }>
 }
 
 export interface UploadPlacementPort {
@@ -92,6 +117,22 @@ export interface RequirementMaterializePort {
       readonly complete: boolean
     }>
   >
+  /** PR-4：attempt 编排读 requirement index（coverage 闭集）——同步读侧。 */
+  getRequirementManifest(missionId: string): {
+    readonly files: readonly { readonly fileId: string }[]
+  } | null
+  /** PR-4：Agent needs-information 的问题集入台账（origin 'agent'）。 */
+  stashQuestionSet(input: {
+    readonly missionId: string
+    readonly origin: 'platform' | 'agent'
+    readonly channel: 'platform' | 'requirement-source'
+    readonly questions: readonly {
+      readonly questionId: string
+      readonly text: string
+      readonly answerKind: 'text' | 'single-choice'
+      readonly choices: readonly string[] | null
+    }[]
+  }): Promise<PortOutcome<{ readonly questionSetRef: string }>>
   /** 问题集投递：platform 渠道零外呼；requirement-source 渠道经 adapter 写回。 */
   publishQuestions(input: {
     readonly missionId: string
@@ -120,6 +161,114 @@ export interface RequirementMaterializePort {
   }): Promise<PortOutcome<{ readonly answerSetRef: string; readonly answerRevision: string }>>
 }
 
+/** PR-4 —— action baseline 解析：repositoryId → 本地缓存 checkout + exact head。 */
+export interface ActionBaselinePort {
+  resolve(
+    repositoryId: string,
+  ): Promise<{ readonly repoPath: string; readonly headSha: string } | null>
+}
+
+/** PR-4 —— action workspace 物化/整树废弃（infrastructure/actionWorkspace 的结构同形）。 */
+export interface ActionWorkspacePort {
+  materialize(input: {
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly seedRef: string | null
+    readonly bundles: readonly { readonly bundleId: string; readonly mountPath: string }[]
+  }): Promise<{ readonly workspacePath: string; readonly businessTreeDigest: string }>
+  discard(workspacePath: string): void
+}
+
+/** PR-4 —— upload plan 读侧（seed 定位用 planDigest、validator/candidate 用 entries）。 */
+export interface UploadPlanReaderPort {
+  read(planId: string): {
+    readonly planDigest: string
+    readonly entries: readonly {
+      readonly ordinal: number
+      readonly fileId: string
+      readonly targetPath: string
+      readonly contentPolicy: 'preserve-upload' | 'agent-editable'
+      readonly fileMode: 'regular' | 'executable'
+      readonly disposition: 'create' | 'replace' | 'already-present'
+      readonly uploadSha256: string
+    }[]
+  } | null
+}
+
+/** PR-4 —— action template 发布内容读侧（executor/prompt supplement/重试默认）。 */
+export interface ActionTemplateContentPort {
+  content(id: string, revision: number): unknown | null
+}
+
+/** PR-4 T48 —— source-control 的 candidate 派生（结构同形注入，跨模块零内部 import）。 */
+export interface ChangeCandidatePort {
+  derive(input: {
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly overlayRoot: string
+    readonly excludePolicyDigest: string
+    readonly agentOutcomeRef: string
+    readonly protectedRoots?: readonly string[]
+    readonly uploadPlan?: {
+      readonly planDigest: string
+      readonly entries: readonly {
+        readonly targetPath: string
+        readonly contentPolicy: 'preserve-upload' | 'agent-editable'
+        readonly disposition: 'create' | 'replace' | 'already-present'
+        readonly uploadSha256: string | null
+      }[]
+    } | null
+  }): Promise<
+    | {
+        readonly ok: true
+        readonly receipt: { readonly candidateRef: string; readonly treeOid: string }
+      }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+}
+
+/**
+ * PR-4 —— attempt pre-state 上下文的持久面（内容寻址 JSON，evidence 池实现；
+ * Agent workspace 之外，Agent 不可达——伪造 pre 快照即伪造回退基准）。
+ */
+export interface AttemptContextStorePort {
+  save(json: string): Promise<string>
+  load(ref: string): string | null
+}
+
+/**
+ * PR-4 T47 —— workspace 对拍面（infrastructure/workspaceValidator 的结构同形；
+ * pre-state 以 opaque JSON 跨 reconcile 轮传递）。
+ */
+export interface WorkspaceValidationPort {
+  capturePreState(workspacePath: string): string
+  validate(input: {
+    readonly workspacePath: string
+    readonly preStateJson: string
+    readonly outcome: 'changed' | 'no-change' | 'needs-information' | 'blocked'
+    readonly workspaceMode: string
+    readonly writablePrefixes: readonly string[]
+    readonly preservePaths: readonly string[]
+    readonly editablePaths: readonly string[]
+    readonly budget: { readonly maxChangedFiles: number; readonly maxTotalBytes: number }
+  }):
+    | { readonly ok: true; readonly kind: 'clean' }
+    | { readonly ok: true; readonly kind: 'changed'; readonly changedPaths: readonly string[] }
+    | {
+        readonly ok: false
+        readonly kind: 'boundary'
+        readonly code: string
+        readonly paths: readonly string[]
+        readonly detail: string
+      }
+    | {
+        readonly ok: false
+        readonly kind: 'semantic'
+        readonly code: string
+        readonly detail: string
+      }
+}
+
 export interface ReconcilerPorts {
   readonly repositoryFacts?: RepositoryFactsCollectorPort
   readonly mergeRequestFacts?: MergeRequestFactsCollectorPort
@@ -127,4 +276,11 @@ export interface ReconcilerPorts {
   readonly agentLauncher?: AgentActionLauncherPort
   readonly uploadPlacement?: UploadPlacementPort
   readonly requirementMaterialize?: RequirementMaterializePort
+  readonly actionBaseline?: ActionBaselinePort
+  readonly actionWorkspace?: ActionWorkspacePort
+  readonly uploadPlanReader?: UploadPlanReaderPort
+  readonly changeCandidate?: ChangeCandidatePort
+  readonly attemptContext?: AttemptContextStorePort
+  readonly actionTemplates?: ActionTemplateContentPort
+  readonly workspaceValidation?: WorkspaceValidationPort
 }

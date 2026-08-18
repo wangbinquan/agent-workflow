@@ -76,6 +76,12 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       // forwards whatever deps the executor derived from the invoker, so the
       // ownership rule this ratchet protects is unchanged by the fourth kind.
       'services/codeRoundLaunch.ts': 1,
+      // RFC-310 PR-4: the digital-employee host launch adapter (fork J,
+      // reviewed in the PR-4 integration pass). Mirrors codeRoundLaunch step
+      // for step — anchor seed + synthesized snapshot + StartTaskSchema
+      // funnel; provenance comes from the injected startDeps (SYSTEM user at
+      // both assembly sites), never invented here.
+      'modules/task-execution/composition/agentActionExecution.ts': 1,
       'services/execution/executor.ts': 1,
       'services/fusion.ts': 2,
       'services/task.ts': 1,

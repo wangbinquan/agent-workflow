@@ -104,6 +104,22 @@ export interface ActionRunRow {
   readonly status: string
 }
 
+/** RFC-310 PR-4 —— attempt 台账读侧行（重试编排与恢复扫描共用）。 */
+export interface AgentAttemptRow {
+  readonly id: string
+  readonly actionRunId: string
+  readonly rerunSeq: number
+  readonly attemptSeq: number
+  readonly executionRef: string | null
+  readonly baselineRef: string
+  readonly nonceDigest: string
+  readonly inputDigest: string
+  readonly status: string
+  readonly rejectionJson: string | null
+  readonly outcomeRef: string | null
+  readonly preSnapshotRef: string | null
+}
+
 export interface MissionStore {
   /** launchIdempotencyKey 撞唯一索引 ⇒ 返回既有行（HTTP 重试幂等）。 */
   createMission(row: MissionRow): { readonly created: boolean; readonly mission: MissionRow }
@@ -226,6 +242,8 @@ export interface MissionStore {
     readonly baselineRef: string
     readonly nonceDigest: string
     readonly inputDigest: string
+    /** PR-4：attempt pre-state 上下文的 evidence blob ref（collect/重建用）。 */
+    readonly preSnapshotRef?: string | null
     readonly now: number
   }): { readonly ok: true } | { readonly ok: false; readonly code: 'attempt-ordinal-taken' }
   settleAttempt(input: {
@@ -235,6 +253,8 @@ export interface MissionStore {
     readonly outcomeRef: string | null
     readonly now: number
   }): void
+  /** (rerunSeq, attemptSeq) 升序——重试编排读预算、恢复扫描找悬挂 attempt。 */
+  listAttempts(actionRunId: string): AgentAttemptRow[]
 
   /** idempotency key 撞唯一 ⇒ 返回既有行（不重复准备同一 effect）。 */
   prepareEffect(input: {

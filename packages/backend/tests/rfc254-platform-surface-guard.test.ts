@@ -171,6 +171,13 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-path-prefix',
+    file: 'modules/source-control/domain/changeCandidate.ts',
+    match: '`${root}/`',
+    count: 1,
+    why: 'operands are git name-status output paths and repo-relative protected roots — git speaks `/` on every platform, no host path ever enters this check (RFC-310 T48)',
+  },
+  {
+    rule: 'posix-path-prefix',
     file: 'modules/source-control/domain/taskCommitPolicy.ts',
     match: '`${PLATFORM_WORKSPACE_DIR}/`',
     count: 1,

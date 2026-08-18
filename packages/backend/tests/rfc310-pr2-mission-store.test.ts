@@ -278,6 +278,56 @@ describe('rfc310 pr2 mission store', () => {
     expect(claim('att-2')).toEqual({ ok: false, code: 'attempt-ordinal-taken' })
   })
 
+  test('listAttempts returns the ledger in (rerunSeq, attemptSeq) order with settle fields (PR-4)', () => {
+    const { store, missionId } = newStore()
+    store.createActionRun({
+      id: 'run-l',
+      missionId,
+      missionRevision: 0,
+      decisionId: 'dec-l',
+      capabilityId: 'change.implement',
+      capabilityContractVersion: 1,
+      templateId: null,
+      templateRevision: null,
+      workSetDigest: null,
+      inputFactDigest: 'f'.repeat(64),
+      baselineRef: null,
+      writable: true,
+      now: Date.now(),
+    })
+    const claim = (id: string, rerunSeq: number, attemptSeq: number) =>
+      store.claimAttempt({
+        id,
+        actionRunId: 'run-l',
+        rerunSeq,
+        attemptSeq,
+        executionRef: `exec-${id}`,
+        baselineRef: 'base-1',
+        nonceDigest: 'n'.repeat(64),
+        inputDigest: 'g'.repeat(64),
+        now: Date.now(),
+      })
+    // 乱序 claim，读回必须按 (rerunSeq, attemptSeq) 升序。
+    expect(claim('att-b', 1, 0)).toEqual({ ok: true })
+    expect(claim('att-a', 0, 1)).toEqual({ ok: true })
+    expect(claim('att-0', 0, 0)).toEqual({ ok: true })
+    store.settleAttempt({
+      id: 'att-a',
+      status: 'rejected',
+      rejectionJson: '{"code":"schema"}',
+      outcomeRef: null,
+      now: Date.now(),
+    })
+    const rows = store.listAttempts('run-l')
+    expect(rows.map((r) => r.id)).toEqual(['att-0', 'att-a', 'att-b'])
+    expect(rows[1]).toMatchObject({
+      status: 'rejected',
+      rejectionJson: '{"code":"schema"}',
+      executionRef: 'exec-att-a',
+    })
+    expect(store.listAttempts('run-none')).toEqual([])
+  })
+
   test('effect idempotency + closed state machine', () => {
     const { store, missionId } = newStore()
     const prepare = (id: string) =>

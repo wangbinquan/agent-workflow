@@ -56,6 +56,20 @@
 > working；修复把 FixedGuardInput 纳入 decision_input_digest（该用例锁定）。三形态（正文/文件/外部 ID）经真 HTTP+
 > 真 adapter 子进程+mock provider 全链绿，终态诚实 blocked `collector-not-wired:repository`（facts collector 属
 > PR-5）。PR-5 债记 plan.md 交付注记（manifest repositoryPlacement 对齐、retry 重生成 plan、preview delivery head）。
+> 提交 `66a79be2`；CI 首扫 gitleaks 红 = 测试幂等/去重键字面量误报，修复中一度 Write 覆盖了仓库既有 33 行
+> `.gitleaksignore` 存量豁免（教训已进 dev-gotchas），`fd58a8c6` 恢复+追加后 **CI 绿证：31 checks 全绿零取消**。
+> **PR-4（T41–T52）已完成（T49 部分）**：AgentAttempt no-Git 执行链全接线。fork J（执行链）：digital-employee
+> host task（anchor+synthesized snapshot 先例）、`composeAgentActionExecution` runner（launch/fetchOutcome/cancel，
+> executionRef=taskId durable，onTerminal→wake hint）、零 Git identity/零凭据（RFC-067 普通面不动，双向锁测）、真
+> mock-opencode 子进程 9 测；fork K（域内合同）：input manifest（digest 排 nonce）、prompt assembler（untrusted
+> delimiter+不可覆盖英文协议块）、`<agent-result>` exactly-one parser（nonce 对拍 digest 化）、semantic validator、
+> workspace validator（probe 生产化）、attempt 状态机+`ab1:` codec；主 session：T48 candidate（source-control 临时
+> clone 独立 diff+write-tree oid+lineage 四规则+`.agent-workflow` exclude 语义修正）、orchestrator（launch/collect
+> 两半、§7.7 分类重试、fresh rerun byte-identical、pre-state evidence blob〔migration 0179〕、validated 后诚实
+> `action-stage-complete` block、needs-information→澄清闭环）、composition/双装配点/账本。journey：真
+> workspace/validator/candidate 链正向+攻击回退（写 .git/evidence → boundary discarded → fresh 重建 digest 相等→
+> 二轮干净结算）。**呈报缺口**：same-session 反馈 N 次未接（runner 无 continue 面，预算强制 0，PR-5）；evidence
+> 树在 iso cwd 不可见（三候选机制 PR-5 拍板）；launch 端口 workspacePath 直传（path-free 化 PR-5）。rfc310 全家族 +守卫 689/0。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

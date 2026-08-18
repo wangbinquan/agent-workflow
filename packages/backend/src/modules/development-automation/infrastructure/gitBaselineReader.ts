@@ -35,6 +35,25 @@ async function sha256OfFile(absPath: string): Promise<string> {
  * exact HEAD sha 冻结为 baseline。仓库未缓存/HEAD 不可解析 ⇒ null（launch 侧
  * 老实 blocked('baseline-reader-not-wired')，不猜默认分支）。
  */
+/** PR-4 —— attempt 编排的 baseline 定位（repoPath + exact head；无 reader）。 */
+export function resolveActionBaseline(
+  db: DbClient,
+): (repositoryId: string) => Promise<{ repoPath: string; headSha: string } | null> {
+  return async (repositoryId) => {
+    const row = db
+      .select({ localPath: cachedRepos.localPath })
+      .from(cachedRepos)
+      .where(eq(cachedRepos.id, repositoryId))
+      .get()
+    if (row === undefined) return null
+    const head = await runGit(row.localPath, ['rev-parse', 'HEAD'])
+    if (head.exitCode !== 0) return null
+    const sha = head.stdout.trim()
+    if (!/^[0-9a-f]{40}$/.test(sha)) return null
+    return { repoPath: row.localPath, headSha: sha }
+  }
+}
+
 export function createRepositoryBaselineResolver(
   db: DbClient,
 ): (repositoryId: string) => Promise<UploadBaselineContext | null> {

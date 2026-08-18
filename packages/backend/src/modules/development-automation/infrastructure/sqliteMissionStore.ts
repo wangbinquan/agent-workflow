@@ -444,6 +444,7 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
             baselineRef: input.baselineRef,
             nonceDigest: input.nonceDigest,
             inputDigest: input.inputDigest,
+            preSnapshotRef: input.preSnapshotRef ?? null,
             status: 'claimed',
             createdAt: input.now,
           })
@@ -464,6 +465,28 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
         })
         .where(eq(developmentAgentAttempts.id, input.id))
         .run()
+    },
+    listAttempts(actionRunId) {
+      return db
+        .select()
+        .from(developmentAgentAttempts)
+        .where(eq(developmentAgentAttempts.actionRunId, actionRunId))
+        .orderBy(asc(developmentAgentAttempts.rerunSeq), asc(developmentAgentAttempts.attemptSeq))
+        .all()
+        .map((row) => ({
+          id: row.id,
+          actionRunId: row.actionRunId,
+          rerunSeq: row.rerunSeq,
+          attemptSeq: row.attemptSeq,
+          executionRef: row.executionRef,
+          baselineRef: row.baselineRef,
+          nonceDigest: row.nonceDigest,
+          inputDigest: row.inputDigest,
+          status: row.status,
+          rejectionJson: row.rejectionJson,
+          outcomeRef: row.outcomeRef,
+          preSnapshotRef: row.preSnapshotRef,
+        }))
     },
 
     prepareEffect(input) {

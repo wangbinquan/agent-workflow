@@ -17,7 +17,6 @@
 
 import { ulid } from 'ulid'
 
-import { sha256Hex } from '@/util/hash'
 import {
   automationPolicyContentSchema,
   type AutomationPolicyContent,
@@ -46,6 +45,12 @@ import {
   type PolicyRule,
 } from '../engine/policy/evaluatePolicy'
 import { selectActionTemplate, type CapabilityRouteRule } from '../engine/policy/workSelection'
+import {
+  collectAgentAttempt,
+  launchAgentAttempt,
+  publicFactsSummary,
+  type CollectAgentAttemptOutcome,
+} from './agentActionOrchestrator'
 import type { AdmissionLookup } from './ports/admissionLookup'
 import type { EffectRow, MissionRow, MissionStore } from './ports/missionStore'
 import type { FactSnapshotReader, ReconcilerPorts } from './ports/reconcilerPorts'
@@ -64,6 +69,7 @@ export type ReconcileOutcome =
   | { readonly kind: 'fence-pending'; readonly unsettled: number }
   | { readonly kind: 'fence-settled'; readonly result: 'canceled' | 'tracking-only' }
   | { readonly kind: 'deduped'; readonly decisionId: string }
+  | { readonly kind: 'action-collect'; readonly result: CollectAgentAttemptOutcome }
   | {
       readonly kind: 'decided'
       readonly decisionId: string
@@ -345,6 +351,15 @@ export async function runMissionReconcile(
   }
 
   deps.store.consumeWakeHints(mission.id, now)
+
+  // ---- PR-4：进行中 Agent action 的结果收取（guards 之前——active-action
+  // guard 会 wait，收取必须先于它；pending 则落回正常流程）。 ----------------
+  if (mission.currentActionRunId !== null) {
+    const collected = await collectAgentAttempt(deps, mission)
+    if (collected.kind !== 'no-op' && collected.kind !== 'still-running') {
+      return { kind: 'action-collect', result: collected }
+    }
+  }
 
   // ---- facts 组装 -----------------------------------------------------------
   const cells = projectRowCells(mission)
@@ -825,53 +840,42 @@ async function handleDecision(
           })
         }
       }
-      const launcher = deps.ports.agentLauncher
-      if (launcher === undefined) {
+      // PR-4：完整 attempt 编排（workspace 物化 → manifest/nonce/prompt →
+      // launcher → 台账；失败一律 typed block，端口缺席细分 *-not-wired）。
+      const launchOutcome = await launchAgentAttempt(deps, mission, {
+        actionRunId,
+        capabilityId: selected.capabilityId,
+        templateId: template.id,
+        templateRevision: template.revision,
+        rerunSeq: 0,
+        factsSummary: publicFactsSummary(snapshot.cells),
+      })
+      if (!launchOutcome.ok) {
         deps.store.settleActionRun({
           id: actionRunId,
           status: 'failed',
           resultRef: null,
           failureJson: JSON.stringify({
             category: 'configuration',
-            code: 'agent-launcher-not-wired',
+            code: launchOutcome.blockCode,
             retryability: 'after-configuration',
             attemptOrdinal: 0,
-            remediation: 'wire AgentActionLauncherPort (PR-4/PR-5)',
+            remediation: launchOutcome.detail ?? launchOutcome.blockCode,
             evidenceRef: null,
           }),
           now,
         })
-        blockMission(deps, mission.id, 'agent-launcher-not-wired', null)
+        {
+          const fresh = deps.store.getMission(mission.id)
+          if (fresh !== null && fresh.currentActionRunId === actionRunId) {
+            deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+              currentActionRunId: null,
+            })
+          }
+        }
+        blockMission(deps, mission.id, launchOutcome.blockCode, launchOutcome.detail)
         return 'action-launch-failed'
       }
-      const launched = await launcher.launch({
-        actionRunId,
-        capabilityId: selected.capabilityId,
-        templateId: template.id,
-        templateRevision: template.revision,
-      })
-      if (!launched.ok) {
-        deps.store.settleActionRun({
-          id: actionRunId,
-          status: 'failed',
-          resultRef: null,
-          failureJson: JSON.stringify(launched.failure),
-          now,
-        })
-        blockMission(deps, mission.id, `agent-launch-failed:${launched.failure.code}`, null)
-        return 'action-launch-failed'
-      }
-      deps.store.claimAttempt({
-        id: ulid(),
-        actionRunId,
-        rerunSeq: 0,
-        attemptSeq: 0,
-        executionRef: launched.executionRef,
-        baselineRef: 'baseline-pending',
-        nonceDigest: sha256Hex(`${actionRunId}:0:0`),
-        inputDigest: snapshot.digest,
-        now,
-      })
       return 'action-launched'
     }
     case 'publish-readiness': {

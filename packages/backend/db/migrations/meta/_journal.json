@@ -1247,6 +1247,13 @@
       "when": 1788537612037,
       "tag": "0178_rfc310_mission_input_uploads",
       "breakpoints": true
+    },
+    {
+      "idx": 178,
+      "version": "6",
+      "when": 1788537612038,
+      "tag": "0179_rfc310_attempt_pre_snapshot",
+      "breakpoints": true
     }
   ]
 }

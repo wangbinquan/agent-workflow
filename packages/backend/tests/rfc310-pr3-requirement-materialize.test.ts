@@ -19,6 +19,7 @@ import { retryBlockedMission } from '../src/modules/development-automation/appli
 import { canonicalDigest } from '../src/modules/development-automation/domain/canonicalJson'
 import { directSubmissionDigest } from '../src/modules/development-automation/infrastructure/requirementMaterializer'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
+import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 
 setDefaultTimeout(60_000)
 
@@ -61,12 +62,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
           return { cells: { ...PR3_JAVA_CELLS }, factsRef: 'probe-1' }
         },
       },
-      agentLauncher: {
-        async launch(input) {
-          launches.push(input.capabilityId)
-          return { ok: true, executionRef: 'exec-1' }
-        },
-      },
+      ...fakeAgentActionPorts({ db: fx.db, launches }),
     })
 
     // 轮 1：requirement.bundleComplete indeterminate → 重派 materialize。

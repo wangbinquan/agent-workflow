@@ -631,6 +631,15 @@ export interface StartTaskDeps {
    */
   codeRoundLaunch?: { roundId: string; capability: string; snapshotJson: string }
   /**
+   * RFC-310 PR-4: this task materializes ONE digital-employee AgentAttempt.
+   * `snapshotJson` is the synthesized input→agent→output host snapshot
+   * (modules/task-execution/domain/digitalEmployeeHost.ts)。任务无自有
+   * `inputs[]` 表单（prompt 经 task inputs 注入，跳过 anchor 空定义校验），
+   * kind 判别保持 'workflow'（snapshot 自带 output 节点，RFC-243 outcome
+   * 投影零新增分支）。与其他 launch payload 互斥（同一任务只属一个执行主体）。
+   */
+  digitalEmployeeLaunch?: { actionRunId: string; snapshotJson: string }
+  /**
    * RFC-199 T6.5 deterministic race seam. Production callers never set this;
    * backend regressions use it to linearize workflow delete/version writers
    * immediately before or after the task-row transaction without sleeps.
@@ -2453,7 +2462,8 @@ async function startTaskImpl(
   if (
     deps.agentLaunch === undefined &&
     deps.workgroupLaunch === undefined &&
-    deps.codeRoundLaunch === undefined
+    deps.codeRoundLaunch === undefined &&
+    deps.digitalEmployeeLaunch === undefined
   ) {
     // RFC-243: child launches validate against the FROZEN definition's inputs
     // (identical map semantics — the call node wired them from its ports).
@@ -2843,6 +2853,7 @@ async function startTaskImpl(
             deps.workgroupLaunch?.snapshotJson ??
             deps.agentLaunch?.snapshotJson ??
             deps.codeRoundLaunch?.snapshotJson ??
+            deps.digitalEmployeeLaunch?.snapshotJson ??
             JSON.stringify(workflow.definition),
           workflowVersion: workflow.version, // RFC-109: record the version this snapshot froze
           repoPath: headRepoPath,

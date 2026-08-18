@@ -451,7 +451,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-309 T16 再 bump 到 175 with 0175_rfc309_template_base_snapshot（复制
     // 时留下基线**取值**而非只留摘要——摘要只答得了「改没改」，答不了「是谁改的」，
     // 而三方合并要的正是后者）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(178)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(179)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

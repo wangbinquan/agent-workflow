@@ -19,6 +19,7 @@ import {
 
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import { buildPr3Fixture, PR3_JAVA_CELLS, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 
 setDefaultTimeout(120_000)
 
@@ -93,11 +94,7 @@ describe('rfc310 pr3 — external requirement acquisition via real adapter subpr
           return { cells: { ...PR3_JAVA_CELLS }, factsRef: 'probe-1' }
         },
       },
-      agentLauncher: {
-        async launch() {
-          return { ok: true, executionRef: 'exec-1' }
-        },
-      },
+      ...fakeAgentActionPorts({ db: fx.db }),
     })
 
     const round1 = await runMissionReconcile(deps, missionId)

@@ -140,7 +140,8 @@
   墙钟从 12 轮延迟变成 1 轮。抬 timeout 只是把同一个 race 推给下一台更忙的机器。
 
 - **`git ls-files` 型源码守卫对**未追踪的新文件**是盲的 —— 新增文件的 RFC「本地全绿」不等于 CI 绿**（RFC-269 实例）：`route-error-code-coverage.test.ts`（还有别的同类守卫）用 `git ls-files` 枚举 `src/routes/*.ts` 再扫错误码。新写的 `routes/codeHosts.ts` 在 commit 前是 untracked，`git ls-files` 根本不列它 ⇒ **连跑六次 `gate:local` 全绿**，push 之后 CI 第一次扫到它，两个未被测试点名的错误码当场红。gitleaks 同理（本地门禁压根不跑密钥扫描）。定式：**新增文件的改动，先 `git add -N <新文件>`（intent-to-add，只登记路径不暂存内容）再跑门禁**，让这类守卫看得见；或者提交后立刻补跑一次。判据：本地绿而 CI 红、且红在一个**本次新增**的文件上 ⇒ 先怀疑守卫的枚举源是 git 而不是文件系统。
-- **测试夹具别长得像真凭据**（同一实例）：`glpat-` / `ghp_` 前缀的假 token 会命中 gitleaks 的 `gitlab-pat` / `generic-api-key` 规则，让 CI 的 Static scans 红。假凭据用中性前缀（`aw-fixture-…`），需要断言尾号时把有意义的尾巴留在后面即可。
+- **测试夹具别长得像真凭据**（同一实例）：`glpat-` / `ghp_` 前缀的假 token 会命中 gitleaks 的 `gitlab-pat` / `generic-api-key` 规则，让 CI 的 Static scans 红。假凭据用中性前缀（`aw-fixture-…`），需要断言尾号时把有意义的尾巴留在后面即可。补充（2026-08-18，RFC-310 实锤三连）：①`idempotencyKey: '...'` / `deliveryKey: '...'` 这类**字段名带 Key 的普通字面量**同样命中 `generic-api-key`——豁免定式是**双保险**：当前行加行内 `// gitleaks:allow`（管未来编辑）+ `.gitleaksignore` 按 fingerprint 钉已推送的历史 commit（`detect` 扫全历史，改当前文件消不掉）；②`.gitleaksignore` 自己的**注释**也别写 `xxxKey: '值'` 完整形态——它进了历史后同样在 diff 扫描里命中规则，得再豁免自己（真实发生，连环两次修复 commit）；③**在仓库根新建通用名文件（`.gitleaksignore` 之类）前先 `git ls-files <名字>` 查存在**——Write 类工具对已存在文件会静默整文件覆盖，本次把仓库既有的 33 行历史豁免全部覆盖删除、CI 反而多红一轮才发现。
+- **`bun test --randomize` 会打乱同一 describe 内的 test 顺序——journey 式测试的先后步骤必须收在同一个 `test()` 里**（2026-08-18 RFC-310 实锤）：`describe` 里第一个 test launch mission、第二个 test 拿共享 `missionId` 断言下一步，本地裸跑绿、gate 的 shard（强制 `--isolate --randomize`）里第二个先跑 ⇒ `missionId` 是空串、稳定红。定式：跨步骤共享可变状态的用例合并成单个 test；describe 级共享只放**只读**fixture（beforeAll 建好、任何 test 不再推进它）。
 - **后台跑门禁时别接 `| tail`（或任何管道）—— 管道的退出码会把门禁的红吞成绿**
   （2026-08-11 实测踩坑）：`bun run gate:local 2>&1 | tail -40` 放后台，收到的完成
   通知是 `exit code 0`，因为 shell 取的是**管道最后一个命令**（`tail`）的退出码，而

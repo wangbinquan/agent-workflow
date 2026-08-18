@@ -8,6 +8,8 @@ import { eq, inArray, isNull, ne } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import {
+  developmentActionRuns,
+  developmentAgentAttempts,
   developmentEffects,
   developmentFactSnapshots,
   developmentMissions,
@@ -56,6 +58,20 @@ export function listPreparedEffectRows(db: DbClient): {
     .from(developmentEffects)
     .where(eq(developmentEffects.state, 'prepared'))
     .all()
+}
+
+/** PR-4 —— agent execution 终态回调的反查：executionRef → missionId。 */
+export function missionIdOfExecutionRef(db: DbClient, executionRef: string): string | null {
+  const row = db
+    .select({ missionId: developmentActionRuns.missionId })
+    .from(developmentAgentAttempts)
+    .innerJoin(
+      developmentActionRuns,
+      eq(developmentAgentAttempts.actionRunId, developmentActionRuns.id),
+    )
+    .where(eq(developmentAgentAttempts.executionRef, executionRef))
+    .get()
+  return row?.missionId ?? null
 }
 
 /** wake sweep 读侧：有未消费 wake hint 的 mission id（去重）。 */
