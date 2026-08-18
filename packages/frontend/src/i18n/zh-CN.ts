@@ -1369,6 +1369,8 @@ export interface Resources {
       name: string
       capability: string
       purpose: string
+      executableRef: string
+      executableRefHint: string
       edit: string
       editTitle: string
       save: string
@@ -1978,6 +1980,8 @@ export interface Resources {
       gcEventsHint: string
       gcRetentionTitle: string
       gcRetentionHint: string
+      taskArchiveTitle: string
+      taskArchiveHint: string
       gcWebhooksTitle: string
       gcWebhooksHint: string
       networkListenerTitle: string
@@ -2020,6 +2024,13 @@ export interface Resources {
     backupTitle: string
     backupHint: string
     backupCreate: string
+    taskArchiveRunNow: string
+    taskArchiveScanning: string
+    taskArchiveNothing: string
+    taskArchiveConfirmTitle: string
+    taskArchiveConfirmBody: string
+    taskArchiveConfirmAction: string
+    taskArchiveDone: string
     backupRunning: string
     backupSavedAs: string
     restoreHint: string
@@ -5318,6 +5329,9 @@ export interface Resources {
     eventStreamRetentionDaysHint: string
     webhookTriggerFiresRetentionDays: string
     webhookTriggerFiresRetentionDaysHint: string
+    taskArchiveEnabled: string
+    taskArchiveRetentionDays: string
+    taskArchiveRetentionDaysHint: string
     webhookBodyRetention: string
     webhookBodyRetentionHint: string
     webhookRowRetention: string
@@ -7496,6 +7510,9 @@ export const zhCN: Resources = {
       name: '名称',
       capability: '能力',
       purpose: '用途',
+      executableRef: '可执行引用',
+      executableRefHint:
+        'daemon 为该适配器执行的程序。创建时必填——适配器写入即严格校验，不能以空草稿保存。本用途的操作：{{operations}}。',
       edit: '编辑草稿',
       editTitle: '编辑草稿',
       save: '保存',
@@ -8127,6 +8144,9 @@ export const zhCN: Resources = {
       gcEventsHint: '按固定周期移除已过期的工作流与投递事件。',
       gcRetentionTitle: '保留期与清理',
       gcRetentionHint: '这些旋钮会真的删文件 / 删行,且守护进程启动即生效。0 一律表示不清理。',
+      taskArchiveTitle: '终态任务归档(会让任务从界面消失)',
+      taskArchiveHint:
+        '把久远的已完成任务整树导出到归档目录并从库中删除,以控制数据库体积。默认关闭。',
       gcWebhooksTitle: 'Webhook 清理',
       gcWebhooksHint: '独立于任务数据保留并清理 Webhook 投递历史。',
       networkListenerTitle: 'Daemon 监听',
@@ -8173,6 +8193,14 @@ export const zhCN: Resources = {
     backupHint:
       '将 db.sqlite + config.json + skills/ + workflows YAML 打包为 tarball，存放到 ~/.agent-workflow/backups/。不含 worktrees / runs / logs / token。',
     backupCreate: '创建备份',
+    taskArchiveRunNow: '立即归档…',
+    taskArchiveScanning: '扫描中…',
+    taskArchiveNothing: '没有可归档的任务树(保留期 {{days}} 天以内的都保留)。',
+    taskArchiveConfirmTitle: '归档并删除这些任务?',
+    taskArchiveConfirmBody:
+      '将把 {{trees}} 棵任务树(共 {{tasks}} 个任务,最近完成时间早于 {{days}} 天)导出到 ~/.agent-workflow/archive/tasks/,并从数据库删除。归档后它们在列表 / 详情 / 搜索里一律不可见,且不提供在线回看。',
+    taskArchiveConfirmAction: '归档并删除',
+    taskArchiveDone: '已归档 {{trees}} 棵任务树,共 {{tasks}} 个任务。',
     backupRunning: '正在创建备份…',
     backupSavedAs: '已保存 ',
     restoreHint:
@@ -12124,6 +12152,10 @@ export const zhCN: Resources = {
     webhookTriggerFiresRetentionDays: 'Webhook 触发记录保留(天)',
     webhookTriggerFiresRetentionDaysHint:
       '超期的触发记录会被删除;其启动的任务仍未终态时该行始终保留(supersede 依赖它)。0 = 不清理。',
+    taskArchiveEnabled: '启用终态任务自动归档',
+    taskArchiveRetentionDays: '归档保留期(天)',
+    taskArchiveRetentionDaysHint:
+      '整棵任务树全部终态、且最近完成时间早于该天数时,导出到 ~/.agent-workflow/archive/tasks/ 并从数据库删除——归档后任务在列表 / 详情 / 搜索里一律不可见(与不存在同形),不提供在线回看。0 = 不归档。',
     webhookBodyRetention: 'Webhook 投递 body 保留（天）',
     webhookBodyRetentionHint:
       '超期投递的原始 payload 置空（重放不可用），行仍保留。高流量部署可调小以控制磁盘占用。',

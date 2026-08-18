@@ -610,6 +610,9 @@ export const enUS: Resources = {
       name: 'Name',
       capability: 'Capability',
       purpose: 'Purpose',
+      executableRef: 'Executable ref',
+      executableRefHint:
+        'The program the daemon runs for this adapter. Required at creation — an adapter is parsed strictly on write, so it cannot be saved as an empty draft. Operations for this purpose: {{operations}}.',
       edit: 'Edit draft',
       editTitle: 'Edit draft',
       save: 'Save',
@@ -1924,6 +1927,9 @@ export const enUS: Resources = {
       gcRetentionTitle: 'Retention & cleanup',
       gcRetentionHint:
         'These knobs really delete files/rows and take effect as soon as the daemon starts. 0 always means never clean up.',
+      taskArchiveTitle: 'Settled-task archive (removes tasks from the UI)',
+      taskArchiveHint:
+        'Export long-settled task trees to the archive directory and delete them from the database to bound its size. Off by default.',
       gcWebhooksTitle: 'Webhook cleanup',
       gcWebhooksHint: 'Retain and purge webhook delivery history independently from task data.',
       networkListenerTitle: 'Daemon listener',
@@ -1970,6 +1976,14 @@ export const enUS: Resources = {
     backupHint:
       'Bundles db.sqlite + config.json + skills/ + workflows YAML into a tarball under ~/.agent-workflow/backups/. Excludes worktrees, runs, logs, token.',
     backupCreate: 'Create backup',
+    taskArchiveRunNow: 'Archive now…',
+    taskArchiveScanning: 'Scanning…',
+    taskArchiveNothing: 'No task tree is old enough to archive (retention: {{days}} days).',
+    taskArchiveConfirmTitle: 'Archive and delete these tasks?',
+    taskArchiveConfirmBody:
+      'This exports {{trees}} task tree(s) — {{tasks}} task(s) settled more than {{days}} days ago — to ~/.agent-workflow/archive/tasks/ and deletes them from the database. Archived tasks disappear from lists, detail pages and search, with no online replay.',
+    taskArchiveConfirmAction: 'Archive and delete',
+    taskArchiveDone: 'Archived {{trees}} task tree(s), {{tasks}} task(s) in total.',
     backupRunning: 'Creating backup…',
     backupSavedAs: 'Saved ',
     restoreHint:
@@ -6200,6 +6214,10 @@ export const enUS: Resources = {
     webhookTriggerFiresRetentionDays: 'Webhook trigger fires retention (days)',
     webhookTriggerFiresRetentionDaysHint:
       'Expired fire rows are deleted; a row whose launched task is still non-terminal is always kept (supersede depends on it). 0 disables.',
+    taskArchiveEnabled: 'Archive settled tasks automatically',
+    taskArchiveRetentionDays: 'Archive retention (days)',
+    taskArchiveRetentionDaysHint:
+      'When every task in a tree is settled and the newest completion is older than this, the tree is exported to ~/.agent-workflow/archive/tasks/ and DELETED from the database — archived tasks disappear from lists, detail pages and search (404, same as never existing) with no online replay. 0 disables.',
     webhookBodyRetention: 'Webhook delivery body retention (days)',
     webhookBodyRetentionHint:
       'Raw payloads older than this are pruned (replay unavailable); the rows stay. Lower it on high-volume deployments to cap disk usage.',

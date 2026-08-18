@@ -259,6 +259,62 @@ describe('/code/config/$kind list', () => {
       void rec2
     })
   })
+
+  test('creating an adapter submits COMPLETE content — the backend parses it strictly on write', async () => {
+    // 用户实测的 bug：创建对话框只发 { name, purpose }，而 adapter 的后端契约是
+    // 「写入即 strict parse」（可执行引用不允许以草稿形态潜伏），于是必填字段
+    // 全缺 → `adapter content failed schema: Invalid literal value, expected 1`
+    // （第一条 issue 是 schemaVersion）。adapter 因此**根本无法从 UI 创建**，而
+    // 当时没有任何用例覆盖这条创建路径。
+    installFetch({})
+    await renderConfig('/code/config/adapters')
+    await screen.findByTestId('config-create-open')
+
+    fireEvent.click(screen.getByTestId('config-create-open'))
+    fireEvent.change(await screen.findByTestId('config-create-name'), {
+      target: { value: 'jira-source' },
+    })
+    // executableRef 必填：空值时提交按钮禁用（不替用户编造可执行引用）。
+    expect((screen.getByTestId('config-create-submit') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByTestId('config-create-executable-ref'), {
+      target: { value: '/opt/adapters/jira.ts' },
+    })
+    expect((screen.getByTestId('config-create-submit') as HTMLButtonElement).disabled).toBe(false)
+
+    fireEvent.click(screen.getByTestId('config-create-submit'))
+    await waitFor(() => {
+      const post = (globalThis.fetch as unknown as ReturnType<typeof vi.spyOn>).mock.calls.find(
+        (call: unknown[]) =>
+          String(call[0]).includes('/api/integrations/development-adapters') &&
+          (call[1] as RequestInit | undefined)?.method === 'POST',
+      )
+      expect(post).toBeTruthy()
+      const body = JSON.parse(String((post![1] as RequestInit).body)) as {
+        name: string
+        purpose: string
+        draft: Record<string, unknown>
+      }
+      expect(body.name).toBe('jira-source')
+      expect(body.purpose).toBe('requirement-source')
+      // 逐字段对拍后端 strict schema 的必填面（缺任意一个都会整条拒）。
+      expect(body.draft).toEqual({
+        schemaVersion: 1,
+        contractVersion: 1,
+        purpose: 'requirement-source',
+        operations: ['acquire'],
+        executableRef: '/opt/adapters/jira.ts',
+        parameterSchemaRef: null,
+        connectionRef: null,
+        secretProjection: [],
+        outputBudget: {
+          maxFiles: 200,
+          maxFileBytes: 32 * 1024 * 1024,
+          maxTotalBytes: 256 * 1024 * 1024,
+        },
+        timeoutMs: 120_000,
+      })
+    })
+  })
 })
 
 describe('/code/config detail', () => {
@@ -292,11 +348,14 @@ describe('/code/config detail', () => {
       permissions: ALL_PERMS.filter((p) => p !== 'scripts:author'),
     })
     await renderConfig(`/code/config/adapters/${ADAPTER_DETAIL.id}`)
-    await screen.findByTestId('config-summary-adapter')
+    // 摘要卡片的出现**不代表 draft 已到**：DraftSummary 用 `props.draft ?? {}`
+    // 渲染，所以卡片会先带空 draft 挂出来（secretProjection 空 ⇒ 显示 '—'）。
+    // 同步读内容因此是负载敏感的：本文件单跑必绿，而 gate:local 里后端分片并发
+    // 抢 CPU 时这条会红（RFC-311 收口实测）。锚在数据本身上等。
+    const secrets = await screen.findByTestId('config-adapter-secrets')
+    await waitFor(() => expect(secrets.textContent).toContain('JIRA_TOKEN'))
     expect(screen.queryByTestId('config-edit-open')).toBeNull()
     expect(screen.getByTestId('config-scripts-author-hint')).toBeTruthy()
-    const secrets = screen.getByTestId('config-adapter-secrets')
-    expect(secrets.textContent).toContain('JIRA_TOKEN')
     // 值绝不出现（fixture 里也没有值——断言 executableRef 正常显示以证明摘要渲染了）。
     expect(screen.getByText('/opt/adapters/jira.ts')).toBeTruthy()
 

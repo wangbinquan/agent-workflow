@@ -90,6 +90,24 @@ export const AGENT_CAPABILITY_IDS = [
 
 const ADAPTER_PURPOSES = ['requirement-source', 'pipeline-gate', 'pipeline-classifier'] as const
 
+/**
+ * purpose → **必需** operations（后端 `PURPOSE_OPERATIONS[...].required` 的镜像；
+ * 可选项在详情页的 JSON 编辑器里加）。adapter 与其它四类不同：后端在 create 期
+ * 就 strict parse——「可执行引用不允许以草稿形态潜伏」，所以创建对话框必须一次
+ * 交出完整合法内容，不能先建空壳。
+ */
+const ADAPTER_REQUIRED_OPERATIONS: Record<(typeof ADAPTER_PURPOSES)[number], readonly string[]> = {
+  'requirement-source': ['acquire'],
+  'pipeline-gate': ['collect'],
+  'pipeline-classifier': ['classify'],
+}
+
+/** 新建 adapter 的最小合法内容里的预算/超时缺省（都在 schema 上下界内）。 */
+const ADAPTER_DEFAULTS = {
+  outputBudget: { maxFiles: 200, maxFileBytes: 32 * 1024 * 1024, maxTotalBytes: 256 * 1024 * 1024 },
+  timeoutMs: 120_000,
+} as const
+
 export interface ConfigIdentityRow {
   id: string
   name: string
@@ -222,14 +240,34 @@ function CreateDialog(props: { kind: ConfigKind; onClose: () => void }): ReactEl
   const spec = CONFIG_KIND_SPECS[props.kind]
   const [name, setName] = useState('')
   const [capabilityId, setCapabilityId] = useState<string>(AGENT_CAPABILITY_IDS[1])
-  const [purpose, setPurpose] = useState<string>(ADAPTER_PURPOSES[0])
+  const [purpose, setPurpose] = useState<(typeof ADAPTER_PURPOSES)[number]>(ADAPTER_PURPOSES[0])
+  // executableRef 由**用户**填：机械造一个占位值等于产出一个说不出话的资源
+  // （迁移分析器对同一字段做过同样的裁决——宁可标 manual-authoring-required）。
+  const [executableRef, setExecutableRef] = useState('')
 
   const create = useMutation({
     mutationFn: () =>
       api.post(spec.apiBase, {
         name,
         ...(props.kind === 'action-templates' ? { capabilityId } : {}),
-        ...(props.kind === 'adapters' ? { purpose } : {}),
+        ...(props.kind === 'adapters'
+          ? {
+              purpose,
+              // 完整最小内容：后端 create 期 strict parse，缺一个字段整条拒。
+              draft: {
+                schemaVersion: 1,
+                contractVersion: 1,
+                purpose,
+                operations: ADAPTER_REQUIRED_OPERATIONS[purpose],
+                executableRef: executableRef.trim(),
+                parameterSchemaRef: null,
+                connectionRef: null,
+                secretProjection: [],
+                outputBudget: ADAPTER_DEFAULTS.outputBudget,
+                timeoutMs: ADAPTER_DEFAULTS.timeoutMs,
+              },
+            }
+          : {}),
       }) as Promise<ConfigIdentityRow>,
     onSuccess: (created) => {
       void qc.invalidateQueries({ queryKey: ['code-config', props.kind] })
@@ -253,7 +291,11 @@ function CreateDialog(props: { kind: ConfigKind; onClose: () => void }): ReactEl
           <button
             type="button"
             className="btn btn--sm btn--primary"
-            disabled={name.trim() === '' || create.isPending}
+            disabled={
+              name.trim() === '' ||
+              create.isPending ||
+              (props.kind === 'adapters' && executableRef.trim() === '')
+            }
             onClick={() => create.mutate()}
             data-testid="config-create-submit"
           >
@@ -278,15 +320,30 @@ function CreateDialog(props: { kind: ConfigKind; onClose: () => void }): ReactEl
         </Field>
       ) : null}
       {props.kind === 'adapters' ? (
-        <Field label={t('code.config.purpose')} required>
-          <Select
-            value={purpose}
-            onChange={(v) => setPurpose(v)}
-            options={ADAPTER_PURPOSES.map((p) => ({ value: p, label: p }))}
-            ariaLabel={t('code.config.purpose')}
-            data-testid="config-create-purpose"
-          />
-        </Field>
+        <>
+          <Field label={t('code.config.purpose')} required>
+            <Select
+              value={purpose}
+              onChange={(v) => setPurpose(v as (typeof ADAPTER_PURPOSES)[number])}
+              options={ADAPTER_PURPOSES.map((p) => ({ value: p, label: p }))}
+              ariaLabel={t('code.config.purpose')}
+              data-testid="config-create-purpose"
+            />
+          </Field>
+          <Field
+            label={t('code.config.executableRef')}
+            hint={t('code.config.executableRefHint', {
+              operations: ADAPTER_REQUIRED_OPERATIONS[purpose].join(', '),
+            })}
+            required
+          >
+            <TextInput
+              value={executableRef}
+              onChange={setExecutableRef}
+              data-testid="config-create-executable-ref"
+            />
+          </Field>
+        </>
       ) : null}
     </Dialog>
   )
