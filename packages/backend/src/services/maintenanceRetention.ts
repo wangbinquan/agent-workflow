@@ -5,19 +5,28 @@
 // webhook_trigger_fires、user_access_audit、mcp_probes。生产按十万级 webhook
 // 投递的节奏增长,永不回收。
 //
-// 判据取舍（proposal C6 已批）：事件三胞胎按**行时间戳**直接过期,不 JOIN 各自
-// 宿主的终态——30 天前仍 active 的蒸馏 job / intent turn / runtime-test 会话在
-// 本系统不存在（各自的执行窗口都是分钟级）,损失面只是「超期流水的详情回放」。
+// 判据（design.md §7.2 + 实现门 P2-11 修正）：事件三胞胎按**行时间戳过期 且
+// 宿主已终态**才删。首版只看行时间戳,理由是「30 天前仍 active 的宿主不存在」——
+// 但宿主行上的计数/状态列并不会跟着消失,于是一个仍在进行(或异常滞留)的会话会
+// 呈现成「complete · 42 events」而面板空白;蒸馏详情更会因为标记行被删而把
+// 「抓取失败」反转成「没有抓取问题」。宿主终态判据:distill job 三终态 /
+// intent session archived / runtime-test session ended。
 // ts 列无专用索引:治理生效后各表稳态 = 保留窗口大小,hourly 扫窗口规模可控,
 // 不为此再开 migration。删除一律分批（chunkedAll 的 500 上限之下）防长写锁。
 
-import { asc, inArray, lt } from 'drizzle-orm'
+import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
+import { and, asc, inArray, lt, sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import {
+  intentSessions,
   intentTurnEvents,
+  intentTurns,
   mcpRuntimeTestEvents,
+  mcpRuntimeTestSessions,
   memoryDistillEvents,
+  memoryDistillJobs,
   webhookTriggerFires,
+  tasks,
 } from '@/db/schema'
 import { createLogger } from '@/util/log'
 
@@ -45,13 +54,18 @@ async function deleteExpiredByTs(
   db: DbClient,
   target: typeof memoryDistillEvents | typeof intentTurnEvents | typeof mcpRuntimeTestEvents,
   cutoff: number,
+  /** 宿主终态判据。design.md §7.2 写的是「宿主终态后 30 天」,而首版实现只看行
+   *  时间戳——实现门 P2-11:清掉一个**仍在进行**的会话/任务的事件流,而宿主行上的
+   *  计数与状态列还在,UI 就会正面宣称「complete · 42 events」而面板空白,蒸馏
+   *  详情页更会把「抓取失败」标记行一并删掉、把诊断信号反转成「没有抓取问题」。 */
+  hostSettled: ReturnType<typeof sql>,
 ): Promise<number> {
   let total = 0
   for (;;) {
     const batch = await db
       .select({ id: target.id })
       .from(target)
-      .where(lt(target.ts, cutoff))
+      .where(and(lt(target.ts, cutoff), hostSettled))
       .orderBy(asc(target.id))
       .limit(DELETE_BATCH)
     if (batch.length === 0) return total
@@ -82,9 +96,35 @@ export async function runRetentionSweep(
 
   if (config.eventStreamRetentionDays > 0) {
     const cutoff = now - config.eventStreamRetentionDays * DAY_MS
-    result.distillEvents = await deleteExpiredByTs(db, memoryDistillEvents, cutoff)
-    result.intentTurnEvents = await deleteExpiredByTs(db, intentTurnEvents, cutoff)
-    result.mcpRuntimeTestEvents = await deleteExpiredByTs(db, mcpRuntimeTestEvents, cutoff)
+    result.distillEvents = await deleteExpiredByTs(
+      db,
+      memoryDistillEvents,
+      cutoff,
+      sql`exists (
+        select 1 from ${memoryDistillJobs} j
+        where j.id = ${memoryDistillEvents.distillJobId}
+          and j.status in ('done', 'failed', 'canceled')
+      )`,
+    )
+    result.intentTurnEvents = await deleteExpiredByTs(
+      db,
+      intentTurnEvents,
+      cutoff,
+      sql`exists (
+        select 1 from ${intentTurns} t
+        join ${intentSessions} s on s.id = t.session_id
+        where t.id = ${intentTurnEvents.turnId} and s.status = 'archived'
+      )`,
+    )
+    result.mcpRuntimeTestEvents = await deleteExpiredByTs(
+      db,
+      mcpRuntimeTestEvents,
+      cutoff,
+      sql`exists (
+        select 1 from ${mcpRuntimeTestSessions} s
+        where s.id = ${mcpRuntimeTestEvents.testSessionId} and s.status = 'ended'
+      )`,
+    )
   }
 
   if (config.webhookTriggerFiresRetentionDays > 0) {
@@ -93,7 +133,24 @@ export async function runRetentionSweep(
       const batch = await db
         .select({ id: webhookTriggerFires.id })
         .from(webhookTriggerFires)
-        .where(lt(webhookTriggerFires.firedAt, cutoff))
+        .where(
+          and(
+            lt(webhookTriggerFires.firedAt, cutoff),
+            // 实现门 P1-3:这张表是 webhook supersede(D8/D21「同流最近一次
+            // launched 的任务未终态 ⇒ 取消」)的**唯一事实源**,没有任何回退。
+            // 一个卡在 awaiting_human 的任务超过保留期后,它的 fire 行被删 ⇒
+            // 下一次同流触发不再取消它,同一 MR 上两个活任务在同一分支上互相踩。
+            // 保留期不得吃掉仍未终态的那一行。
+            sql`not exists (
+              select 1 from ${tasks} t
+              where t.id = ${webhookTriggerFires.taskId}
+                and t.status not in (${sql.join(
+                  TERMINAL_TASK_STATUSES.map((v) => sql`${v}`),
+                  sql`, `,
+                )})
+            )`,
+          ),
+        )
         .orderBy(asc(webhookTriggerFires.id))
         .limit(DELETE_BATCH)
       if (batch.length === 0) break

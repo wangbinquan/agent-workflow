@@ -9,7 +9,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { count } from 'drizzle-orm'
+import { count, eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '../src/db/client'
 import {
@@ -22,9 +22,11 @@ import {
   intentSessions,
   intentTurnEvents,
   intentTurns,
+  tasks,
   webhookEndpoints,
   webhookTriggerFires,
   webhookTriggers,
+  workflows,
 } from '../src/db/schema'
 import { runRetentionSweep, type RetentionConfig } from '../src/services/maintenanceRetention'
 
@@ -199,6 +201,55 @@ describe('RFC-311 C6 — webhook_trigger_fires retention', () => {
     expect(await fireCount(db)).toBe(2)
   })
 
+  // 实现门 P1-3:这张表是 webhook supersede 的唯一事实源(同流最近一次 launched
+  // 的任务未终态 ⇒ 取消)。一个卡在 awaiting_human 的任务超期后 fire 行被删,下次
+  // 同流触发就不再取消它——同一 MR 上两个活任务在同一分支互相踩,而代码里没有
+  // 任何地方承认这个 90 天的界。保留期必须豁免仍未终态的那一行。
+  test('a fire whose launched task is still non-terminal survives the window', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedUser(db, 'u1')
+    await seedFires(db, [200, 150])
+    await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
+    const mkTask = async (id: string, status: 'awaiting_human' | 'done'): Promise<void> => {
+      await db.insert(tasks).values({
+        id,
+        name: id,
+        workflowId: 'wf1',
+        workflowSnapshot: '{}',
+        repoPath: '/tmp/x',
+        worktreePath: '/tmp/x',
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
+        status,
+        inputs: '{}',
+        startedAt: NOW - 200 * DAY,
+        finishedAt: status === 'done' ? NOW - 199 * DAY : null,
+        runningMs: 0,
+        ownerUserId: 'u1',
+        launchOrigin: 'webhook',
+      })
+    }
+    await mkTask('stuck', 'awaiting_human')
+    await mkTask('settled', 'done')
+    await db
+      .update(webhookTriggerFires)
+      .set({ taskId: 'stuck' })
+      .where(eq(webhookTriggerFires.id, 'fire-0'))
+    await db
+      .update(webhookTriggerFires)
+      .set({ taskId: 'settled' })
+      .where(eq(webhookTriggerFires.id, 'fire-1'))
+
+    const result = await runRetentionSweep(
+      db,
+      { ...OFF, webhookTriggerFiresRetentionDays: 90 },
+      NOW,
+    )
+    expect(result.webhookTriggerFires).toBe(1)
+    const left = await db.select({ id: webhookTriggerFires.id }).from(webhookTriggerFires)
+    expect(left.map((r) => r.id)).toEqual(['fire-0'])
+  })
+
   test('0 disables the stage', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedUser(db, 'u1')
@@ -236,6 +287,13 @@ describe('RFC-311 C6 — the other two event streams share the window', () => {
     expect(await counted()).toBe(5)
     expect((await runRetentionSweep(db, OFF, NOW)).intentTurnEvents).toBe(0)
     expect(await counted()).toBe(5)
+    // 会话仍 active ⇒ 即便超期也一条不删(否则 UI 会「N events」而面板空白)。
+    expect(
+      (await runRetentionSweep(db, { ...OFF, eventStreamRetentionDays: 30 }, NOW)).intentTurnEvents,
+    ).toBe(0)
+    expect(await counted()).toBe(5)
+
+    await db.update(intentSessions).set({ status: 'archived' }).where(eq(intentSessions.id, 's1'))
     const result = await runRetentionSweep(db, { ...OFF, eventStreamRetentionDays: 30 }, NOW)
     expect(result.intentTurnEvents).toBe(3)
     expect(await counted()).toBe(2)
@@ -250,7 +308,11 @@ describe('RFC-311 C6 — the other two event streams share the window', () => {
       'utf8',
     )
     for (const table of ['memoryDistillEvents', 'intentTurnEvents', 'mcpRuntimeTestEvents']) {
-      expect(src).toContain(`deleteExpiredByTs(db, ${table}, cutoff)`)
+      expect(src).toMatch(new RegExp(`deleteExpiredByTs\\(\\s*db,\\s*${table},\\s*cutoff,`))
     }
+    // 且三条腿都带宿主终态判据(实现门 P2-11)。
+    expect(src).toContain("j.status in ('done', 'failed', 'canceled')")
+    expect(src).toContain("s.status = 'archived'")
+    expect(src).toContain("s.status = 'ended'")
   })
 })
